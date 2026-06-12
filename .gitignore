@@ -1,0 +1,7 @@
+.DS_Store
+# Eagle auto-backups
+*.s#?
+*.b#?
+# Fusion exports / fab outputs (regenerate, don't track)
+gerbers/
+*.zip

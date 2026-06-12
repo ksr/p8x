@@ -1,0 +1,652 @@
+;==============================================================================
+; P8XMON — ROM Monitor for the P8X TTL Computer
+;
+; Resides at $0000 (EEPROM). Runs at reset (P0 cleared to $0000 by hardware).
+; Serial console: 6850 ACIA at $FF04/05, 9600 8N1.
+;
+; COMMANDS (single letter, hex args, case-insensitive intent — use caps):
+;   E aaaa     Examine/modify. Shows "aaaa: vv ". Type two hex digits to
+;              replace and advance, plain CR to advance, '.' to exit.
+;   D aaaa     Dump 256 bytes from aaaa, hex + ASCII, 16 per line.
+;   I          Init CF: SET FEATURES 8-bit mode, IDENTIFY, print model.
+;   F          Format CF as P8XFS (boot block + zeroed directory). Asks Y/N.
+;   B          Boot: load OS image from CF to $8000 and jump. Falls back
+;              to the monitor prompt if no card / no signature / OSCNT=0.
+;   G aaaa     Go: JSR to aaaa. Program returns to monitor via RTS.
+;   ?          Help.
+;
+; REGISTER/ISA NOTES
+;   Uses the P8X set as defined in the design docs. Conventions:
+;     CMP  = A - B, C=1 when A >= B (no borrow), Z=1 when equal
+;     SHL/ROL shift through carry
+;   TWO NEW OPCODES REQUIRED (add to microcode):
+;     JMP (P1)  ; P1 -> P0 via T/T2          (5 microcycles)
+;     JSR (P1)  ; push P0, then P1 -> P0     (9 microcycles)
+;   Microcode for JMP (P1):
+;     0: fetch
+;     1: PSEL=P1, DOE=PTRL, DLD=T
+;     2: PSEL=P1, DOE=PTRH, DLD=T2
+;     3: PSEL=P0, DOE=T2,  DLD=PTRH
+;     4: PSEL=P0, DOE=T,   DLD=PTRL, uRESET
+;   (JSR (P1) prepends the 4-cycle return-address push from JSR abs.)
+;
+; RAM USE (below the OS area; TPA $A000+ is never touched):
+;   $9D00-$9D3F  line buffer
+;   $9D40-       variables (see equates)
+;   $9E00-$9FFF  512-byte sector buffer (shared with OS when it loads)
+;   $FE00-$FEFF  stack (P3), grows down from $FEFF
+;==============================================================================
+
+; ---------------- Equates ----------------------------------------------------
+ACIAS   EQU  $FF04          ; ACIA status (rd) / control (wr)
+ACIAD   EQU  $FF05          ; ACIA data
+CFDATA  EQU  $FF10          ; CF task file
+CFFEAT  EQU  $FF11
+CFSCNT  EQU  $FF12
+CFLBA0  EQU  $FF13
+CFLBA1  EQU  $FF14
+CFLBA2  EQU  $FF15
+CFHEAD  EQU  $FF16          ; $E0 = LBA mode, drive 0
+CFCMD   EQU  $FF17          ; command (wr) / status (rd)
+CFSTAT  EQU  $FF17
+
+LBUF    EQU  $9D00          ; input line buffer
+ADDRL   EQU  $9D40          ; parsed address
+ADDRH   EQU  $9D41
+HEXL    EQU  $9D42          ; hex accumulator
+HEXH    EQU  $9D43
+TMP     EQU  $9D44
+TMP2    EQU  $9D45
+CNT     EQU  $9D46          ; loop counter
+LBA     EQU  $9D47          ; current LBA (low byte; LBA1-3 written as 0)
+SBUF    EQU  $9E00          ; sector buffer
+STKTOP  EQU  $FEFF
+
+CR      EQU  $0D
+LF      EQU  $0A
+BS      EQU  $08
+
+        ORG  $0000
+RESET:  JMP  COLD
+
+; ---------------- Cold start -------------------------------------------------
+COLD:   LDP3 #STKTOP        ; stack
+        LDA  #$03           ; ACIA master reset
+        STA  ACIAS
+        LDA  #$15           ; /16 clock, 8N1, no IRQ
+        STA  ACIAS
+        LDP1 #MBANNER
+        JSR  PUTS
+
+; ---------------- Main loop --------------------------------------------------
+PROMPT: LDP1 #MPROMPT
+        JSR  PUTS
+        JSR  GETLINE        ; line -> LBUF, P2 left at LBUF
+        LDP2 #LBUF
+        JSR  SKIPSP
+        LDA  (P2)+          ; command char
+        JZ   PROMPT         ; empty line
+        STA  TMP2
+        LDB  #'E'
+        CMP
+        JZ   CMD_E
+        LDA  TMP2
+        LDB  #'D'
+        CMP
+        JZ   CMD_D
+        LDA  TMP2
+        LDB  #'I'
+        CMP
+        JZ   CMD_I
+        LDA  TMP2
+        LDB  #'F'
+        CMP
+        JZ   CMD_F
+        LDA  TMP2
+        LDB  #'B'
+        CMP
+        JZ   CMD_B
+        LDA  TMP2
+        LDB  #'G'
+        CMP
+        JZ   CMD_G
+        LDA  TMP2
+        LDB  #'?'
+        CMP
+        JZ   CMD_H
+ERR:    LDP1 #MWHAT
+        JSR  PUTS
+        JMP  PROMPT
+
+; ---------------- E aaaa : examine / modify ----------------------------------
+CMD_E:  JSR  GETADDR        ; ADDR <- hex arg (errors -> ERR)
+        JC   ERR
+        JSR  A2P1           ; P1 <- ADDR
+EXLOOP: JSR  PRADDR         ; "aaaa: vv "
+        LDA  #':'
+        JSR  PUTC
+        JSR  SPACE
+        LDA  (P1)
+        JSR  PRBYTE
+        JSR  SPACE
+        JSR  GETC           ; first key
+        LDB  #CR
+        CMP
+        JZ   EXNEXT         ; CR = keep, advance
+        LDA  TMP            ; (GETC leaves char in TMP too)
+        LDB  #'.'
+        CMP
+        JZ   EXDONE
+        JSR  PUTC           ; echo first hex digit
+        JSR  NIBBLE         ; -> low 4 of A, C=1 invalid
+        JC   EXBAD
+        STA  TMP2           ; high nibble (so far)
+        JSR  GETC
+        JSR  PUTC
+        JSR  NIBBLE
+        JC   EXBAD
+        STA  TMP            ; low nibble
+        LDA  TMP2
+        SHL
+        SHL
+        SHL
+        SHL
+        LDB  TMP
+        OR
+        STA  (P1)           ; write new value
+EXNEXT: INP1
+        JSR  CRLF
+        JMP  EXLOOP
+EXBAD:  LDA  #'?'
+        JSR  PUTC
+        JSR  CRLF
+        JMP  EXLOOP
+EXDONE: JSR  CRLF
+        JMP  PROMPT
+
+; ---------------- D aaaa : dump 256 bytes ------------------------------------
+CMD_D:  JSR  GETADDR
+        JC   ERR
+        JSR  A2P1
+        LDA  #16            ; 16 lines
+        STA  CNT
+DLINE:  JSR  PRADDR
+        JSR  SPACE
+        JSR  P1TOP2         ; save line start for ASCII pass
+        LDA  #16
+        STA  TMP2
+DHEX:   LDA  (P1)+
+        JSR  PRBYTE
+        JSR  SPACE
+        LDA  TMP2
+        DEC
+        STA  TMP2
+        JNZ  DHEX
+        JSR  SPACE
+        LDA  #16
+        STA  TMP2
+DASC:   LDA  (P2)+
+        LDB  #$20           ; below space -> '.'
+        CMP
+        JNC  DDOT
+        LDB  #$7F           ; DEL and above -> '.'
+        CMP
+        JC   DDOT
+        JMP  DPUT
+DDOT:   LDA  #'.'
+DPUT:   JSR  PUTC
+        LDA  TMP2
+        DEC
+        STA  TMP2
+        JNZ  DASC
+        JSR  CRLF
+        LDA  CNT
+        DEC
+        STA  CNT
+        JNZ  DLINE
+        JMP  PROMPT
+
+; ---------------- I : init CF + identify -------------------------------------
+CMD_I:  JSR  CFINIT
+        JC   CFFAIL
+        JSR  CFWAIT
+        LDA  #$EC           ; IDENTIFY DEVICE
+        STA  CFCMD
+        JSR  CFDRQ
+        LDP1 #SBUF
+        JSR  CFRD512
+        LDP1 #MCFOK
+        JSR  PUTS
+        LDP1 #SBUF+54       ; model string: words 27-46, byte-swapped
+        LDA  #20            ; 20 word pairs
+        STA  CNT
+IDLOOP: LDA  (P1)+          ; byte 0 of pair prints second
+        STA  TMP2
+        LDA  (P1)+
+        JSR  PUTC
+        LDA  TMP2
+        JSR  PUTC
+        LDA  CNT
+        DEC
+        STA  CNT
+        JNZ  IDLOOP
+        JSR  CRLF
+        JMP  PROMPT
+CFFAIL: LDP1 #MCFERR
+        JSR  PUTS
+        JMP  PROMPT
+
+; ---------------- F : format P8XFS -------------------------------------------
+CMD_F:  LDP1 #MSURE
+        JSR  PUTS
+        JSR  GETC
+        JSR  PUTC
+        JSR  CRLF
+        LDB  #'Y'
+        CMP
+        JNZ  PROMPT
+        JSR  CFINIT
+        JC   CFFAIL
+        JSR  ZSBUF          ; zero the sector buffer
+        LDA  #'P'           ; boot block: signature, ver, oscnt, free ptr
+        STA  SBUF+0
+        LDA  #'8'
+        STA  SBUF+1
+        LDA  #1             ; version
+        STA  SBUF+2
+        LDA  #0             ; OSCNT = 0 (no OS image yet)
+        STA  SBUF+3
+        LDA  #65            ; free pointer = LBA 65 (lo)
+        STA  SBUF+4
+        LDA  #0
+        STA  SBUF+5
+        LDA  #0
+        STA  LBA
+        JSR  CFWRSEC        ; write LBA 0
+        JSR  ZSBUF
+        LDA  #33            ; zero directory, LBA 33..64
+FDIR:   STA  LBA
+        JSR  CFWRSEC
+        LDA  LBA
+        INC
+        LDB  #65
+        CMP
+        JNC  FDIR
+        LDP1 #MFMTOK
+        JSR  PUTS
+        JMP  PROMPT
+
+; ---------------- B : boot from CF -------------------------------------------
+CMD_B:  JSR  CFINIT
+        JC   CFFAIL
+        LDA  #0
+        STA  LBA
+        LDP1 #SBUF
+        JSR  CFRDSEC        ; boot block -> SBUF
+        LDA  SBUF+0
+        LDB  #'P'
+        CMP
+        JNZ  NOBOOT
+        LDA  SBUF+1
+        LDB  #'8'
+        CMP
+        JNZ  NOBOOT
+        LDA  SBUF+3         ; OSCNT
+        JZ   NOBOOT
+        STA  CNT
+        LDA  #1
+        STA  LBA
+        LDP1 #$8000         ; OS load address
+BLOOP:  JSR  CFRDSEC        ; reads 512 bytes, advances P1
+        LDA  LBA
+        INC
+        STA  LBA
+        LDA  CNT
+        DEC
+        STA  CNT
+        JNZ  BLOOP
+        JMP  $8000          ; hand off to the OS
+NOBOOT: LDP1 #MNOOS
+        JSR  PUTS
+        JMP  PROMPT
+
+; ---------------- G aaaa : run program ---------------------------------------
+CMD_G:  JSR  GETADDR
+        JC   ERR
+        JSR  A2P1
+        JSR  CRLF
+        JSR  (P1)           ; program RTS -> here
+        JSR  CRLF
+        JMP  PROMPT
+
+; ---------------- ? : help ----------------------------------------------------
+CMD_H:  LDP1 #MHELP
+        JSR  PUTS
+        JMP  PROMPT
+
+;==============================================================================
+; CF DRIVER
+;==============================================================================
+CFWAIT: LDA  CFSTAT         ; spin while BSY
+        LDB  #$80
+        AND
+        JNZ  CFWAIT
+        RTS
+
+CFDRQ:  LDA  CFSTAT         ; spin until DRQ
+        LDB  #$08
+        AND
+        JZ   CFDRQ
+        RTS
+
+CFINIT: JSR  CFWAIT
+        LDA  #$E0           ; LBA mode, drive 0
+        STA  CFHEAD
+        LDA  #$01           ; feature: enable 8-bit transfers
+        STA  CFFEAT
+        LDA  #$EF           ; SET FEATURES
+        STA  CFCMD
+        JSR  CFWAIT
+        LDA  CFSTAT         ; C=1 on ERR
+        LDB  #$01
+        AND
+        JZ   CFI_OK
+        SEC                 ; (SEC/CLC = set/clear carry; 1-byte micro-ops)
+        RTS
+CFI_OK: CLC
+        RTS
+
+CFSETL: LDA  LBA            ; LBA -> task file (sectors 0..255 used by mon)
+        STA  CFLBA0
+        LDA  #0
+        STA  CFLBA1
+        STA  CFLBA2
+        LDA  #$E0
+        STA  CFHEAD
+        LDA  #1
+        STA  CFSCNT
+        RTS
+
+CFRDSEC:                    ; read sector LBA -> (P1), P1 advances 512
+        JSR  CFWAIT
+        JSR  CFSETL
+        LDA  #$20           ; READ SECTORS
+        STA  CFCMD
+        JSR  CFDRQ
+CFRD512:                    ; (entry used by IDENTIFY too)
+        LDA  #0
+        STA  TMP
+RD1:    LDA  CFDATA
+        STA  (P1)+
+        LDA  TMP
+        INC
+        STA  TMP
+        JNZ  RD1            ; 256 bytes
+        LDA  #0
+        STA  TMP
+RD2:    LDA  CFDATA
+        STA  (P1)+
+        LDA  TMP
+        INC
+        STA  TMP
+        JNZ  RD2            ; 512 total
+        RTS
+
+CFWRSEC:                    ; write SBUF -> sector LBA
+        JSR  CFWAIT
+        JSR  CFSETL
+        LDA  #$30           ; WRITE SECTORS
+        STA  CFCMD
+        JSR  CFDRQ
+        LDP1 #SBUF
+        LDA  #0
+        STA  TMP
+WR1:    LDA  (P1)+
+        STA  CFDATA
+        LDA  TMP
+        INC
+        STA  TMP
+        JNZ  WR1
+        LDA  #0
+        STA  TMP
+WR2:    LDA  (P1)+
+        STA  CFDATA
+        LDA  TMP
+        INC
+        STA  TMP
+        JNZ  WR2
+        JSR  CFWAIT
+        RTS
+
+ZSBUF:  LDP1 #SBUF          ; zero 512-byte buffer
+        LDA  #0
+        STA  TMP
+ZS1:    LDA  #0
+        STA  (P1)+
+        LDA  TMP
+        INC
+        STA  TMP
+        JNZ  ZS1
+        LDA  #0
+        STA  TMP
+ZS2:    LDA  #0
+        STA  (P1)+
+        LDA  TMP
+        INC
+        STA  TMP
+        JNZ  ZS2
+        RTS
+
+;==============================================================================
+; CONSOLE & PARSING SUPPORT
+;==============================================================================
+PUTC:   PHA
+PUTC1:  LDA  ACIAS
+        LDB  #$02           ; TDRE
+        AND
+        JZ   PUTC1
+        PLA
+        STA  ACIAD
+        RTS
+
+GETC:   LDA  ACIAS
+        LDB  #$01           ; RDRF
+        AND
+        JZ   GETC
+        LDA  ACIAD
+        STA  TMP            ; convenience copy
+        RTS
+
+PUTS:   LDA  (P1)+          ; print zero-terminated string at (P1)
+        JZ   PUTSX
+        JSR  PUTC
+        JMP  PUTS
+PUTSX:  RTS
+
+CRLF:   LDA  #CR
+        JSR  PUTC
+        LDA  #LF
+        JSR  PUTC
+        RTS
+
+SPACE:  LDA  #' '
+        JSR  PUTC
+        RTS
+
+GETLINE:                    ; line w/ echo + backspace -> LBUF, 0-terminated
+        LDP2 #LBUF
+GL1:    JSR  GETC
+        LDB  #CR
+        CMP
+        JZ   GLDONE
+        LDA  TMP
+        LDB  #BS
+        CMP
+        JZ   GLBS
+        LDA  TMP
+        LDB  #$7F
+        CMP
+        JZ   GLBS
+        LDA  TMP
+        JSR  PUTC           ; echo
+        STA  (P2)+
+        JMP  GL1
+GLBS:   TPA2L               ; backspace if buffer non-empty (check low byte)
+        LDB  #LBUF&$FF      ; assembler: low byte of LBUF
+        CMP
+        JZ   GL1
+        DEP2
+        LDA  #BS
+        JSR  PUTC
+        JSR  SPACE
+        LDA  #BS
+        JSR  PUTC
+        JMP  GL1
+GLDONE: LDA  #0
+        STA  (P2)
+        JSR  CRLF
+        RTS
+
+SKIPSP: LDA  (P2)           ; advance P2 past spaces
+        LDB  #' '
+        CMP
+        JNZ  SKX
+        INP2
+        JMP  SKIPSP
+SKX:    RTS
+
+NIBBLE: LDB  #'0'           ; ASCII in A -> value 0-15; C=1 if invalid
+        SUB
+        JNC  NBAD           ; below '0'
+        LDB  #10
+        CMP
+        JNC  NOK            ; 0-9
+        LDB  #7             ; 'A'-'F' -> 10-15
+        SUB
+        LDB  #10
+        CMP
+        JNC  NBAD           ; gap between '9' and 'A'
+        LDB  #16
+        CMP
+        JC   NBAD
+NOK:    CLC
+        RTS
+NBAD:   SEC
+        RTS
+
+GETADDR:                    ; parse 4 hex digits at (P2) -> ADDRH/L; C=1 err
+        JSR  SKIPSP
+        LDA  #0
+        STA  HEXL
+        STA  HEXH
+        STA  TMP2           ; digit count
+GH1:    LDA  (P2)
+        JZ   GHEND          ; end of line
+        LDB  #' '
+        CMP
+        JZ   GHEND
+        INP2
+        JSR  NIBBLE
+        JC   GHERR
+        STA  CNT            ; nibble value
+        LDA  HEXL           ; 16-bit left shift by 4
+        SHL
+        STA  HEXL
+        LDA  HEXH
+        ROL
+        STA  HEXH
+        LDA  HEXL
+        SHL
+        STA  HEXL
+        LDA  HEXH
+        ROL
+        STA  HEXH
+        LDA  HEXL
+        SHL
+        STA  HEXL
+        LDA  HEXH
+        ROL
+        STA  HEXH
+        LDA  HEXL
+        SHL
+        STA  HEXL
+        LDA  HEXH
+        ROL
+        STA  HEXH
+        LDA  HEXL
+        LDB  CNT
+        OR
+        STA  HEXL
+        LDA  TMP2
+        INC
+        STA  TMP2
+        JMP  GH1
+GHEND:  LDA  TMP2
+        JZ   GHERR          ; no digits at all
+        LDA  HEXL
+        STA  ADDRL
+        LDA  HEXH
+        STA  ADDRH
+        CLC
+        RTS
+GHERR:  SEC
+        RTS
+
+A2P1:   LDA  ADDRL          ; ADDR -> P1
+        TAP1L
+        LDA  ADDRH
+        TAP1H
+        RTS
+
+P1TOP2: TPA1L               ; P1 -> P2
+        TAP2L
+        TPA1H
+        TAP2H
+        RTS
+
+PRADDR: TPA1H               ; print P1 as 4 hex digits
+        JSR  PRBYTE
+        TPA1L
+        JSR  PRBYTE
+        RTS
+
+PRBYTE: PHA
+        SHR
+        SHR
+        SHR
+        SHR
+        JSR  PRNIB
+        PLA
+PRNIB:  LDB  #$0F
+        AND
+        LDB  #10
+        CMP
+        JC   PRA
+        LDB  #'0'
+        ADD
+        JMP  PRP
+PRA:    LDB  #'7'           ; 'A'-10
+        ADD
+PRP:    JSR  PUTC
+        RTS
+
+;==============================================================================
+; MESSAGES
+;==============================================================================
+MBANNER: DB CR,LF,"P8X MONITOR V1.0",CR,LF
+         DB "? FOR HELP",CR,LF,0
+MPROMPT: DB "* ",0
+MWHAT:   DB "?",CR,LF,0
+MCFOK:   DB "CF OK: ",0
+MCFERR:  DB "CF ERROR",CR,LF,0
+MSURE:   DB "FORMAT CF - SURE? (Y/N) ",0
+MFMTOK:  DB "FORMATTED",CR,LF,0
+MNOOS:   DB "NO OS ON CARD",CR,LF,0
+MHELP:   DB "E AAAA  EXAMINE/MODIFY (HEX=NEW, CR=NEXT, .=EXIT)",CR,LF
+         DB "D AAAA  DUMP 256 BYTES",CR,LF
+         DB "I       INIT CF + IDENTIFY",CR,LF
+         DB "F       FORMAT CF (P8XFS)",CR,LF
+         DB "B       BOOT OS FROM CF",CR,LF
+         DB "G AAAA  RUN AT AAAA (RTS RETURNS)",CR,LF,0
+
+        END
