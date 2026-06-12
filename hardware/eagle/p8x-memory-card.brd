@@ -233,6 +233,16 @@
 <pad name="28" x="15.24" y="-0.00" drill="0.8128" diameter="1.6"/>
 <text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
 </package>
+<package name="LED5">
+<pad name="2" x="0.00" y="0.00" drill="0.9" diameter="1.8"/>
+<pad name="1" x="2.54" y="0.00" drill="0.9" diameter="1.8"/>
+<text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
+</package>
+<package name="R_AXIAL">
+<pad name="1" x="0.00" y="0.00" drill="0.8" diameter="1.6"/>
+<pad name="2" x="10.16" y="0.00" drill="0.8" diameter="1.6"/>
+<text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
+</package>
 </packages>
 </library></libraries>
 <classes><class number="0" name="default" width="0" drill="0"/></classes>
@@ -248,10 +258,22 @@
 <element name="U7" library="p8x" package="DIP14" value="74HCT00" x="43.18" y="35.56"/>
 <element name="U8" library="p8x" package="DIP14" value="74HCT32" x="68.58" y="35.56"/>
 <element name="U9" library="p8x" package="DIP14" value="74HCT08" x="88.90" y="35.56"/>
+<element name="RP1" library="p8x" package="R_AXIAL" value="1K" x="127.00" y="96.52"/>
+<element name="LED3" library="p8x" package="LED5" value="PWR-GRN" x="142.24" y="96.52"/>
+<element name="RS1" library="p8x" package="R_AXIAL" value="1K" x="127.00" y="91.44"/>
+<element name="LED2" library="p8x" package="LED5" value="ROM-YEL" x="142.24" y="91.44"/>
+<element name="RS2" library="p8x" package="R_AXIAL" value="1K" x="127.00" y="86.36"/>
+<element name="LED4" library="p8x" package="LED5" value="RAM-YEL" x="142.24" y="86.36"/>
+<element name="RS3" library="p8x" package="R_AXIAL" value="1K" x="127.00" y="81.28"/>
+<element name="LED5" library="p8x" package="LED5" value="RD-GRN" x="142.24" y="81.28"/>
+<element name="RS4" library="p8x" package="R_AXIAL" value="1K" x="127.00" y="76.20"/>
+<element name="LED6" library="p8x" package="LED5" value="WR-RED" x="142.24" y="76.20"/>
 </elements><signals>
 <signal name="-BOE">
 <contactref element="U9" pad="3"/>
 <contactref element="U3" pad="19"/>
+<contactref element="U8" pad="5"/>
+<contactref element="U8" pad="10"/>
 </signal>
 <signal name="-IOPG">
 <contactref element="U4" pad="8"/>
@@ -261,10 +283,13 @@
 <contactref element="U6" pad="7"/>
 <contactref element="U8" pad="1"/>
 <contactref element="U9" pad="2"/>
+<contactref element="U9" pad="9"/>
+<contactref element="U9" pad="10"/>
 </signal>
 <signal name="-RAMCE">
 <contactref element="U7" pad="3"/>
 <contactref element="U2" pad="20"/>
+<contactref element="U8" pad="4"/>
 </signal>
 <signal name="-RD">
 <contactref element="U5" pad="7"/>
@@ -272,6 +297,8 @@
 <contactref element="U2" pad="22"/>
 <contactref element="U3" pad="1"/>
 <contactref element="U9" pad="1"/>
+<contactref element="U9" pad="4"/>
+<contactref element="U9" pad="5"/>
 </signal>
 <signal name="-WE">
 <contactref element="U8" pad="3"/>
@@ -323,6 +350,7 @@
 <contactref element="U4" pad="12"/>
 <contactref element="U1" pad="20"/>
 <contactref element="U7" pad="1"/>
+<contactref element="U8" pad="9"/>
 </signal>
 <signal name="A2">
 <contactref element="J1" pad="C5"/>
@@ -486,24 +514,37 @@
 <contactref element="U7" pad="10"/>
 <contactref element="U7" pad="12"/>
 <contactref element="U7" pad="13"/>
-<contactref element="U8" pad="4"/>
-<contactref element="U8" pad="5"/>
-<contactref element="U8" pad="9"/>
-<contactref element="U8" pad="10"/>
 <contactref element="U8" pad="12"/>
 <contactref element="U8" pad="13"/>
-<contactref element="U9" pad="4"/>
-<contactref element="U9" pad="5"/>
-<contactref element="U9" pad="9"/>
-<contactref element="U9" pad="10"/>
 <contactref element="U9" pad="12"/>
 <contactref element="U9" pad="13"/>
+<contactref element="LED3" pad="1"/>
 <polygon width="0.254" layer="2" isolate="0.3" rank="1">
 <vertex x="0" y="0"/>
 <vertex x="160" y="0"/>
 <vertex x="160" y="100"/>
 <vertex x="0" y="100"/>
 </polygon>
+</signal>
+<signal name="LEDP">
+<contactref element="RP1" pad="2"/>
+<contactref element="LED3" pad="2"/>
+</signal>
+<signal name="LEDRA">
+<contactref element="RS2" pad="2"/>
+<contactref element="LED4" pad="2"/>
+</signal>
+<signal name="LEDRD">
+<contactref element="RS3" pad="2"/>
+<contactref element="LED5" pad="2"/>
+</signal>
+<signal name="LEDRO">
+<contactref element="RS1" pad="2"/>
+<contactref element="LED2" pad="2"/>
+</signal>
+<signal name="LEDWR">
+<contactref element="RS4" pad="2"/>
+<contactref element="LED6" pad="2"/>
 </signal>
 <signal name="MD0">
 <contactref element="U3" pad="18"/>
@@ -545,6 +586,18 @@
 <contactref element="U1" pad="19"/>
 <contactref element="U2" pad="19"/>
 </signal>
+<signal name="RAMK">
+<contactref element="U8" pad="6"/>
+<contactref element="LED4" pad="1"/>
+</signal>
+<signal name="RDK">
+<contactref element="U9" pad="6"/>
+<contactref element="LED5" pad="1"/>
+</signal>
+<signal name="ROMK">
+<contactref element="U8" pad="8"/>
+<contactref element="LED2" pad="1"/>
+</signal>
 <signal name="VCC">
 <contactref element="J1" pad="A1"/>
 <contactref element="J1" pad="B1"/>
@@ -563,11 +616,20 @@
 <contactref element="U7" pad="14"/>
 <contactref element="U8" pad="14"/>
 <contactref element="U9" pad="14"/>
+<contactref element="RP1" pad="1"/>
+<contactref element="RS1" pad="1"/>
+<contactref element="RS2" pad="1"/>
+<contactref element="RS3" pad="1"/>
+<contactref element="RS4" pad="1"/>
 <polygon width="0.254" layer="15" isolate="0.3" rank="1">
 <vertex x="0" y="0"/>
 <vertex x="160" y="0"/>
 <vertex x="160" y="100"/>
 <vertex x="0" y="100"/>
 </polygon>
+</signal>
+<signal name="WRK">
+<contactref element="U9" pad="8"/>
+<contactref element="LED6" pad="1"/>
 </signal>
 </signals></board></drawing></eagle>

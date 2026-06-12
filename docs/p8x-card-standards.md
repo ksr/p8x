@@ -92,7 +92,31 @@ Memory card rev C is the reference implementation of these standards.
 - Pin 1 markers on every IC; connector A1/C32 corners labeled
 - Designators readable after assembly (not under sockets)
 
-## 9. Assembly & Test Provisions
+## 9. Status LEDs (required on every card)
+
+- **PWR LED (green)**: top-right corner of the card, 1 kΩ from +5V, LED to
+  GND. Visible with the card installed
+- **SEL LED (yellow)**: directly below the PWR LED. Lights whenever the card
+  is *selected* — defined per card as the union of its decoded DOE/DLD codes
+  (and address decode for memory-mapped cards). A card may instead provide a
+  **finer-grained LED set whose union covers SEL's meaning** — the memory
+  card does this with four: ROM access, RAM access, read cycle, write cycle.
+  Select-type LEDs must gate raw chip-select/address decode with the
+  bus-access qualifier (e.g. -BOE) so they indicate real accesses, not idle
+  address-bus residue
+- **Drive rules**: never hang an LED directly on a bus or decoded control
+  net — buffer it through a spare gate (which cards have anyway; this is the
+  approved exception to the tie-unused-inputs-to-GND rule: a repurposed gate's
+  inputs go to the signal instead). Sink configuration: +5V → 1 kΩ → LED →
+  gate output; lights when the buffered active-low select is low
+- **Brightness semantics**: at full speed the SEL LED's brightness is duty
+  cycle — it reads as an activity meter. At single-step it's a static "this
+  card is on the bus this microcycle" indicator, which is the debugging
+  payoff. If single-pulse visibility at full speed is ever wanted, a pulse
+  stretcher (RC + transistor or 74123) may be added per card; note it as a
+  deviation
+
+## 10. Assembly & Test Provisions
 
 - **All ICs socketed** (machined-pin) — this is a hobby machine; chips will
   be swapped and probed for years
@@ -105,7 +129,7 @@ Memory card rev C is the reference implementation of these standards.
 - Bring-up note on each schematic: the one-line test that proves the card
   alive (memory card example: "monitor reads $FF17, RDY set")
 
-## 10. Fab Checklist (per card, before Gerbers)
+## 11. Fab Checklist (per card, before Gerbers)
 
 - [ ] Pour planes, run DRC clean at 0.3/0.4 rules
 - [ ] Zero airwires
@@ -113,4 +137,5 @@ Memory card rev C is the reference implementation of these standards.
 - [ ] Every pin netted/tied/NC-accounted
 - [ ] Decoupling count = IC count
 - [ ] Silkscreen: name, rev, pin-1 marks
+- [ ] PWR + SEL LEDs present, top-right, buffered per section 9
 - [ ] Gerber + drill reviewed in an independent viewer

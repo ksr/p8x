@@ -17,7 +17,10 @@ Last updated: 2026-06-11
       run DRC, confirm zero airwires
 - [ ] Verify DIN 41612 footprints against physical connectors in stock
       (row A/C orientation when mated, mounting holes, press-fit vs solder)
-- [ ] Add mounting holes to backplane (6× M3, clear of planes or stitched to GND)
+- [ ] Add mounting holes to backplane board (6× M3, clear of planes or
+      stitched to GND)
+- [ ] Add DIN connector mounting/flange holes at every backplane slot per
+      connector datasheet (mechanical retention against card insertion force)
 - [ ] Route memory card signals in Fusion (planes already done)
 - [ ] Generate remaining five card schematics/boards from the generator:
       register bank, ALU, control/microcode, I/O, CF-IDE
@@ -60,6 +63,8 @@ Last updated: 2026-06-11
       columns — confirm against house DRC rules
 - [ ] Backplane CLK at far slot on scope after bring-up → decide whether to
       populate RC terminators (RT1/CT1, RT2/CT2 shipped DNP)
+- [ ] Backplane PWR LED: already in design (RL1 + LED1, currently bottom-left)
+      — confirm placement or move top-right to match card standard §9
 - [ ] EEPROM write protection: decide if WE̅ to 28C256 should be jumpered off
       after monitor is stable (protects ROM from runaway code)
 - [ ] PSU sizing: ~75 LS/HCT chips, measure actual draw at bring-up vs 4–5 A
