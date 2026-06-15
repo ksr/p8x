@@ -13,6 +13,13 @@ Last updated: 2026-06-11
 
 ## NEXT
 
+- **Monitor port**: reconcile p8xmon.asm with the implemented instruction
+  set (it predates the final opcodes), add any missing microcode ops
+  (JMP (P1), more addressing modes as needed), assemble it, boot it in
+  the emulator over the ACIA console.
+- **Emulator: CF-IDE model** ($FF10-17, sector buffer against a P8XFS disk
+  image file) so the OS/filesystem work can run emulated end to end.
+
 - **Decoupling caps**: no card netlist includes per-IC 100nF decoupling yet
   (standards sec.5 requires them). Add a generator pass that drops one cap per
   IC into every card's netlist + board before any fab order.
@@ -63,6 +70,11 @@ Last updated: 2026-06-11
 
 ## VERIFY
 
+- **C flag polarity**: the flag register latches the RAW 74181 Cn+4 pin,
+  which is active-LOW carry (1 = no carry). Emulator matches hardware.
+  Decide: add an inverter on the ALU card (rev B) or adopt the convention
+  in the assembler/monitor (6502-style borrow flavour).
+
 - Control card single-step circuit (7474 one-pulse + self-clear NAND): verify
   one-clock-per-press behaviour at bring-up; refine debounce RC if needed.
 - ALU card V flag is unimplemented in rev A (FV driven low). Rev B: derive
@@ -86,6 +98,18 @@ Last updated: 2026-06-11
       budget
 
 ## DONE
+
+- **Assembler (p8xasm.py)**: two-pass, imports the opcode table from
+  genucode.py (single source of truth). Labels, expressions with <lo/>hi,
+  .org/.byte/.word/.ascii(z)/.fill/equates, LDPn #imm16 pseudo-op,
+  listing output. mktest.py retired; tests are now .asm files
+  (message print / JSR-RTS / CMP-BZ countdown), all passing via make test.
+
+- **Emulator v1 + microcode toolchain**: genucode.py emits the four 28C64
+  images; p8xemu.c interprets the same images cycle-by-cycle (74181
+  active-high tables, shifter stages, pipeline FCOND timing, ACIA on
+  stdin/stdout). 35 opcodes defined. Verified: message print via ACIA
+  (580 cycles) and JSR (P1)/RTS push-pop round trip (30 cycles).
 
 - Bus rev C2: SPARE0-3 reallocated as flag lines FC/FZ/FN/FV (A27-A30,
   ALU card to control card). SPARE8-11 opened on B27-B30 (guard now B3-B26);
