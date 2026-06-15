@@ -10,13 +10,13 @@ def busnet(pin):
     r,n=pin[0],int(pin[1:])
     if n in (1,2): return "VCC"
     if n in (31,32): return "GND"
-    if r=="B": return "GND"
+    if r=="B": return "SPARE%d"%(n-19) if 27<=n<=30 else "GND"
     if r=="A":
         if 3<=n<=10: return "D%d"%(n-3)
         if n==11: return "-RES"
         if 12<=n<=15: return "DOE%d"%(n-12)
         if 16<=n<=19: return "DLD%d"%(n-16)
-        return {20:"PSEL0",21:"PSEL1",22:"PINC",23:"PDEC",24:"CLK",25:"CLKB",26:"LDF"}.get(n,"SPARE%d"%(n-27))
+        return {20:"PSEL0",21:"PSEL1",22:"PINC",23:"PDEC",24:"CLK",25:"CLKB",26:"LDF",27:"FC",28:"FZ",29:"FN",30:"FV"}.get(n)
     if 3<=int(pin[1:])<=18: return "A%d"%(n-3)
     if 19<=n<=22: return "ALUS%d"%(n-19)
     return {23:"ALUM",24:"CIN",25:"SH0",26:"SH1"}.get(n,"SPARE%d"%(n-27+4))
@@ -219,7 +219,12 @@ mc_parts={
  "U3":("74245","74HCT245",309.88,38.10),"U4":("7430","74HCT30",398.78,38.10),
  "U9":("GATES14","74HCT08",487.68,38.10),"U5":("74138","74HCT138-DOE",132.08,-76.20),
  "U6":("74138","74HCT138-DLD",220.98,-76.20),"U7":("GATES14","74HCT00",309.88,-76.20),
- "U8":("GATES14","74HCT32",398.78,-76.20)}
+ "U8":("GATES14","74HCT32",398.78,-76.20),
+ "RP1":("RES","1K",553.72,38.10),"LED3":("LED","PWR-GRN",604.52,38.10),
+ "RS1":("RES","1K",553.72,7.62),"LED2":("LED","ROM-YEL",604.52,7.62),
+ "RS2":("RES","1K",553.72,-22.86),"LED4":("LED","RAM-YEL",604.52,-22.86),
+ "RS3":("RES","1K",553.72,-53.34),"LED5":("LED","RD-GRN",604.52,-53.34),
+ "RS4":("RES","1K",553.72,-83.82),"LED6":("LED","WR-RED",604.52,-83.82)}
 # Eagle sch is y-up; rows: top row y=38.10, second row y=-76.20
 mcn={}
 def mnet(n,*p): mcn.setdefault(n,[]).extend(p)
@@ -246,10 +251,25 @@ mnet("VCC",*[("J1",p) for p in("A1","B1","C1","A2","B2","C2")],
   ("U1","VCC"),("U2","VCC"),("U3","VCC"),("U4","VCC"),("U5","VCC"),("U5","G1"),
   ("U6","VCC"),("U6","G1"),("U7","VCC"),("U8","VCC"),("U9","VCC"))
 mnet("GND",*[("J1",p) for p in("A31","B31","C31","A32","B32","C32")],
-  *[("J1","B%d"%i) for i in range(3,31)],
+  *[("J1","B%d"%i) for i in range(3,27)],
   ("U1","GND"),("U2","GND"),("U3","GND"),("U4","GND"),("U5","GND"),("U5","!G2B"),
   ("U6","GND"),("U6","!G2B"),("U7","GND"),("U8","GND"),("U9","GND"),
-  *[(u,p) for u in("U7","U8","U9") for p in("2A","2B","3A","3B","4A","4B")])
+  *[(u,p) for u in("U7",) for p in("2A","2B","3A","3B","4A","4B")],
+  ("U8","4A"),("U8","4B"),("U9","4A"),("U9","4B"),
+  ("LED3","K"))
+# status LEDs (standards sec.9, extended per deviation note): PWR + ROM/RAM/RD/WR
+# select LEDs gate chip-select with -BOE so they light on real accesses only
+mnet("-BOE",("U8","2B"),("U8","3B"))           # access qualifier into both selects
+mnet("-RAMCE",("U8","2A"))                     # U8B: low = RAM access
+mnet("A15",("U8","3A"))                        # U8C: low = ROM access (CE=A15)
+mnet("-RD",("U9","2A"),("U9","2B"))            # U9B buffers read strobe
+mnet("-MEMW",("U9","3A"),("U9","3B"))          # U9C buffers write strobe
+mnet("LEDP",("RP1","2"),("LED3","A"))
+mnet("LEDRO",("RS1","2"),("LED2","A")); mnet("ROMK",("U8","3Y"),("LED2","K"))
+mnet("LEDRA",("RS2","2"),("LED4","A")); mnet("RAMK",("U8","2Y"),("LED4","K"))
+mnet("LEDRD",("RS3","2"),("LED5","A")); mnet("RDK",("U9","2Y"),("LED5","K"))
+mnet("LEDWR",("RS4","2"),("LED6","A")); mnet("WRK",("U9","3Y"),("LED6","K"))
+mnet("VCC",("RP1","1"),("RS1","1"),("RS2","1"),("RS3","1"),("RS4","1"))
 write_sch("p8x-memory-card.sch","P8X MEMORY CARD REV C",mc_parts,mcn)
 validate("p8x-memory-card.sch",mc_parts,mcn)
 mcb_parts={
@@ -258,7 +278,12 @@ mcb_parts={
  "U3":("74245","74HCT245",68.58,83.82),"U4":("7430","74HCT30",88.90,83.82),
  "U5":("74138","74HCT138-DOE",109.22,83.82),"U6":("74138","74HCT138-DLD",17.78,35.56),
  "U7":("GATES14","74HCT00",43.18,35.56),"U8":("GATES14","74HCT32",68.58,35.56),
- "U9":("GATES14","74HCT08",88.90,35.56)}
+ "U9":("GATES14","74HCT08",88.90,35.56),
+ "RP1":("RES","1K",127.00,96.52),"LED3":("LED","PWR-GRN",142.24,96.52),
+ "RS1":("RES","1K",127.00,91.44),"LED2":("LED","ROM-YEL",142.24,91.44),
+ "RS2":("RES","1K",127.00,86.36),"LED4":("LED","RAM-YEL",142.24,86.36),
+ "RS3":("RES","1K",127.00,81.28),"LED5":("LED","RD-GRN",142.24,81.28),
+ "RS4":("RES","1K",127.00,76.20),"LED6":("LED","WR-RED",142.24,76.20)}
 write_brd("p8x-memory-card.brd","P8X MEMORY CARD REV C",mcb_parts,mcn,{},
           {"GND":[(2,)],"VCC":[(15,)]},160,100)
 validate("p8x-memory-card.brd",mcb_parts,mcn)
@@ -325,6 +350,12 @@ wadd("CLKB",(sx(9),py(25),240.50,py(25),16,0.4),
 vadd("CLKB",(240.50,106.68))
 wadd("CLKB_T",(228.60,106.68,213.36,106.68,1,0.4))
 wadd("LED_A",(25.40,7.62,30.48,7.62,1,0.4))
+# SPARE8-11 (B27-B30): horizontal runs offset -1.27 from the pin row, stubbed
+for nn in range(27,31):
+    y=py(nn); net="SPARE%d"%(nn-19)
+    wadd(net,(sx(0)-2.54,y-1.27,sx(9)-2.54,y-1.27,1,0.4))
+    for i in range(10):
+        wadd(net,(sx(i)-2.54,y,sx(i)-2.54,y-1.27,1,0.4))
 write_brd("p8x-backplane.brd","P8X 10-SLOT BACKPLANE REV C COMPACT",bpb,bpn,wires,
           {"GND":[(2,)],"VCC":[(15,)]},248.92,109.22,viad)
 validate("p8x-backplane.brd",bpb,bpn)

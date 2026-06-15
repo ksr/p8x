@@ -14,18 +14,22 @@ def busnet(pin):
     r,n=pin[0],int(pin[1:])
     if n in (1,2): return "+5V"
     if n in (31,32): return "GND"
-    if r=="B": return "GND"
+    if r=="B": return "SPARE%d"%(n-19) if 27<=n<=30 else "GND"
     if r=="A":
         if 3<=n<=10: return "D%d"%(n-3)
         if n==11: return "-RES"
         if 12<=n<=15: return "DOE%d"%(n-12)
         if 16<=n<=19: return "DLD%d"%(n-16)
-        return {20:"PSEL0",21:"PSEL1",22:"PINC",23:"PDEC",24:"CLK",25:"CLKB",26:"LDF"}.get(n,"SPARE%d"%(n-27))
+        return {20:"PSEL0",21:"PSEL1",22:"PINC",23:"PDEC",24:"CLK",25:"CLKB",26:"LDF",27:"FC",28:"FZ",29:"FN",30:"FV"}.get(n)
     if 3<=n<=18: return "A%d"%(n-3)
     if 19<=n<=22: return "ALUS%d"%(n-19)
     return {23:"ALUM",24:"CIN",25:"SH0",26:"SH1"}.get(n,"SPARE%d"%(n-27+4))
 
 DESC={
+ "FC":"Flag: Carry. Driven continuously by the ALU card flag register; read by the control card condition mux for conditional branches",
+ "FZ":"Flag: Zero. ALU card to control card, as FC",
+ "FN":"Flag: Negative (result bit 7). ALU card to control card, as FC",
+ "FV":"Flag: oVerflow. ALU card to control card; rev A ALU card drives 0 (V unimplemented, see backlog)",
  "+5V":"Power, 6 pins total","GND":"Ground / row-B guard",
  "-RES":"System reset, active low","CLK":"System clock","CLKB":"Inverted clock",
  "LDF":"Latch flags (ALU card)","PINC":"Selected pointer increment",
@@ -95,7 +99,7 @@ leg=[["Acronym","Meaning","Acronym","Meaning"],
  ["ALUS0-3","74181 ALU function Select lines","ALUM","74181 Mode: logic vs arithmetic"],
  ["CIN","ALU Carry IN","SH0-1","SHifter control (pass/left/right/rotate)"],
  ["LDF","LoaD Flags: latch C,Z,N,V from ALU","-RES","RESet, active low (_N = active low)"],
- ["CLK / CLKB","System CLocK and its complement\n(CLK-Bar); loads on rising CLK,\nwrite strobes gated by CLKB","SPAREn","Unassigned, bused to all 10 slots,\nreserved for future use"]]
+ ["CLK / CLKB","System CLocK and its complement\n(CLK-Bar); loads on rising CLK,\nwrite strobes gated by CLKB","SPAREn","Unassigned, bused to all 10 slots,\nreserved for future use","FC FZ FN FV","ALU flags to control card\n(condition mux), allocated from\nformer SPARE0-3"]]
 leg=[[c.replace("\n","<br/>") if isinstance(c,str) else c for c in row] for row in leg]
 legP=[[Paragraph(c,SM) if i>0 else Paragraph("<font color=white><b>%s</b></font>"%c,SM) for c in row] for i,row in enumerate(leg)]
 tl=Table(legP,colWidths=[22*mm,58*mm,24*mm,58*mm],repeatRows=1)
@@ -120,7 +124,8 @@ order=(["D%d"%i for i in range(8)]+["A%d"%i for i in range(16)]
  +["DOE%d"%i for i in range(4)]+["DLD%d"%i for i in range(4)]
  +["PSEL0","PSEL1","PINC","PDEC","LDF","ALUS0","ALUS1","ALUS2","ALUS3","ALUM",
    "CIN","SH0","SH1","CLK","CLKB","-RES"]
- +["SPARE%d"%i for i in range(8)]+["+5V","GND"])
+ +["FC","FZ","FN","FV"]
+ +["SPARE%d"%i for i in range(4,12)]+["+5V","GND"])
 rows=[["Signal","Pin(s)","Dir*","Description"]]
 DIR={"CLK":"C>","CLKB":"C>","-RES":"C>","+5V":"PWR","GND":"PWR"}
 def sigdir(net):
@@ -128,6 +133,7 @@ def sigdir(net):
     if net.startswith("D"): return "<>"
     if net.startswith("A") and net[1:].isdigit(): return "RB>"
     if net.startswith("SPARE"): return "n/a"
+    if net in ("FC","FZ","FN","FV"): return "ALU>"
     return "C>"
 for net in order:
     rows.append([net,pinlist(seen[net]),sigdir(net),desc(net)])
@@ -145,6 +151,7 @@ story.append(Paragraph("Dir Field Legend",H2))
 dleg=[["Symbol","Meaning"],
  ["C>","Driven by the Control card; received by all other cards"],
  ["RB>","Driven by the Register Bank card (sole address-bus driver)"],
+ ["ALU>","Driven by the ALU card (flag register outputs)"],
  ["<>","Bidirectional: exactly one driver per microcycle, enforced by one-hot DOE decode"],
  ["PWR","Power distribution pin (+5V or GND planes)"],
  ["n/a","Spare: bused across all slots, no driver assigned"]]
@@ -184,7 +191,9 @@ for note in [
  "2. D0-D7 carry 10k pull-ups on the backplane only; cards never add bus conditioning.",
  "3. Loads occur on rising CLK; write strobes are gated with CLKB (second half-cycle).",
  "4. Address bus is driven exclusively by the register-bank card (selected pointer).",
- "5. SPARE0-7 are bused across all slots and reserved for future allocation.",
+ "5. SPARE4-7 (row C) and SPARE8-11 (row B27-B30) are bused across all slots, reserved for future allocation.",
+ "5b. SPARE0-3 were reallocated as flag lines FC/FZ/FN/FV (A27-A30). SPARE numbering therefore starts at 4.",
+ "5c. Row B ground guard now spans B3-B26; B27-B30 carry SPARE8-11.",
  "6. Verify row A/C orientation against physical DIN connectors before first fab."]:
     story.append(Paragraph(note,N))
 doc.build(story)

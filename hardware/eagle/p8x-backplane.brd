@@ -779,6 +779,58 @@
 <contactref element="J10" pad="A15"/>
 <wire x1="15.24" y1="58.42" x2="243.84" y2="58.42" width="0.4" layer="1"/>
 </signal>
+<signal name="FC">
+<contactref element="J1" pad="A27"/>
+<contactref element="J2" pad="A27"/>
+<contactref element="J3" pad="A27"/>
+<contactref element="J4" pad="A27"/>
+<contactref element="J5" pad="A27"/>
+<contactref element="J6" pad="A27"/>
+<contactref element="J7" pad="A27"/>
+<contactref element="J8" pad="A27"/>
+<contactref element="J9" pad="A27"/>
+<contactref element="J10" pad="A27"/>
+<wire x1="15.24" y1="27.94" x2="243.84" y2="27.94" width="0.4" layer="1"/>
+</signal>
+<signal name="FN">
+<contactref element="J1" pad="A29"/>
+<contactref element="J2" pad="A29"/>
+<contactref element="J3" pad="A29"/>
+<contactref element="J4" pad="A29"/>
+<contactref element="J5" pad="A29"/>
+<contactref element="J6" pad="A29"/>
+<contactref element="J7" pad="A29"/>
+<contactref element="J8" pad="A29"/>
+<contactref element="J9" pad="A29"/>
+<contactref element="J10" pad="A29"/>
+<wire x1="15.24" y1="22.86" x2="243.84" y2="22.86" width="0.4" layer="1"/>
+</signal>
+<signal name="FV">
+<contactref element="J1" pad="A30"/>
+<contactref element="J2" pad="A30"/>
+<contactref element="J3" pad="A30"/>
+<contactref element="J4" pad="A30"/>
+<contactref element="J5" pad="A30"/>
+<contactref element="J6" pad="A30"/>
+<contactref element="J7" pad="A30"/>
+<contactref element="J8" pad="A30"/>
+<contactref element="J9" pad="A30"/>
+<contactref element="J10" pad="A30"/>
+<wire x1="15.24" y1="20.32" x2="243.84" y2="20.32" width="0.4" layer="1"/>
+</signal>
+<signal name="FZ">
+<contactref element="J1" pad="A28"/>
+<contactref element="J2" pad="A28"/>
+<contactref element="J3" pad="A28"/>
+<contactref element="J4" pad="A28"/>
+<contactref element="J5" pad="A28"/>
+<contactref element="J6" pad="A28"/>
+<contactref element="J7" pad="A28"/>
+<contactref element="J8" pad="A28"/>
+<contactref element="J9" pad="A28"/>
+<contactref element="J10" pad="A28"/>
+<wire x1="15.24" y1="25.40" x2="243.84" y2="25.40" width="0.4" layer="1"/>
+</signal>
 <signal name="GND">
 <contactref element="J1" pad="A31"/>
 <contactref element="J1" pad="A32"/>
@@ -806,10 +858,6 @@
 <contactref element="J1" pad="B24"/>
 <contactref element="J1" pad="B25"/>
 <contactref element="J1" pad="B26"/>
-<contactref element="J1" pad="B27"/>
-<contactref element="J1" pad="B28"/>
-<contactref element="J1" pad="B29"/>
-<contactref element="J1" pad="B30"/>
 <contactref element="J1" pad="B31"/>
 <contactref element="J1" pad="B32"/>
 <contactref element="J1" pad="C31"/>
@@ -840,10 +888,6 @@
 <contactref element="J2" pad="B24"/>
 <contactref element="J2" pad="B25"/>
 <contactref element="J2" pad="B26"/>
-<contactref element="J2" pad="B27"/>
-<contactref element="J2" pad="B28"/>
-<contactref element="J2" pad="B29"/>
-<contactref element="J2" pad="B30"/>
 <contactref element="J2" pad="B31"/>
 <contactref element="J2" pad="B32"/>
 <contactref element="J2" pad="C31"/>
@@ -874,10 +918,6 @@
 <contactref element="J3" pad="B24"/>
 <contactref element="J3" pad="B25"/>
 <contactref element="J3" pad="B26"/>
-<contactref element="J3" pad="B27"/>
-<contactref element="J3" pad="B28"/>
-<contactref element="J3" pad="B29"/>
-<contactref element="J3" pad="B30"/>
 <contactref element="J3" pad="B31"/>
 <contactref element="J3" pad="B32"/>
 <contactref element="J3" pad="C31"/>
@@ -908,10 +948,6 @@
 <contactref element="J4" pad="B24"/>
 <contactref element="J4" pad="B25"/>
 <contactref element="J4" pad="B26"/>
-<contactref element="J4" pad="B27"/>
-<contactref element="J4" pad="B28"/>
-<contactref element="J4" pad="B29"/>
-<contactref element="J4" pad="B30"/>
 <contactref element="J4" pad="B31"/>
 <contactref element="J4" pad="B32"/>
 <contactref element="J4" pad="C31"/>
@@ -942,10 +978,6 @@
 <contactref element="J5" pad="B24"/>
 <contactref element="J5" pad="B25"/>
 <contactref element="J5" pad="B26"/>
-<contactref element="J5" pad="B27"/>
-<contactref element="J5" pad="B28"/>
-<contactref element="J5" pad="B29"/>
-<contactref element="J5" pad="B30"/>
 <contactref element="J5" pad="B31"/>
 <contactref element="J5" pad="B32"/>
 <contactref element="J5" pad="C31"/>
@@ -976,10 +1008,6 @@
 <contactref element="J6" pad="B24"/>
 <contactref element="J6" pad="B25"/>
 <contactref element="J6" pad="B26"/>
-<contactref element="J6" pad="B27"/>
-<contactref element="J6" pad="B28"/>
-<contactref element="J6" pad="B29"/>
-<contactref element="J6" pad="B30"/>
 <contactref element="J6" pad="B31"/>
 <contactref element="J6" pad="B32"/>
 <contactref element="J6" pad="C31"/>
@@ -1010,10 +1038,6 @@
 <contactref element="J7" pad="B24"/>
 <contactref element="J7" pad="B25"/>
 <contactref element="J7" pad="B26"/>
-<contactref element="J7" pad="B27"/>
-<contactref element="J7" pad="B28"/>
-<contactref element="J7" pad="B29"/>
-<contactref element="J7" pad="B30"/>
 <contactref element="J7" pad="B31"/>
 <contactref element="J7" pad="B32"/>
 <contactref element="J7" pad="C31"/>
@@ -1044,10 +1068,6 @@
 <contactref element="J8" pad="B24"/>
 <contactref element="J8" pad="B25"/>
 <contactref element="J8" pad="B26"/>
-<contactref element="J8" pad="B27"/>
-<contactref element="J8" pad="B28"/>
-<contactref element="J8" pad="B29"/>
-<contactref element="J8" pad="B30"/>
 <contactref element="J8" pad="B31"/>
 <contactref element="J8" pad="B32"/>
 <contactref element="J8" pad="C31"/>
@@ -1078,10 +1098,6 @@
 <contactref element="J9" pad="B24"/>
 <contactref element="J9" pad="B25"/>
 <contactref element="J9" pad="B26"/>
-<contactref element="J9" pad="B27"/>
-<contactref element="J9" pad="B28"/>
-<contactref element="J9" pad="B29"/>
-<contactref element="J9" pad="B30"/>
 <contactref element="J9" pad="B31"/>
 <contactref element="J9" pad="B32"/>
 <contactref element="J9" pad="C31"/>
@@ -1112,10 +1128,6 @@
 <contactref element="J10" pad="B24"/>
 <contactref element="J10" pad="B25"/>
 <contactref element="J10" pad="B26"/>
-<contactref element="J10" pad="B27"/>
-<contactref element="J10" pad="B28"/>
-<contactref element="J10" pad="B29"/>
-<contactref element="J10" pad="B30"/>
 <contactref element="J10" pad="B31"/>
 <contactref element="J10" pad="B32"/>
 <contactref element="J10" pad="C31"/>
@@ -1240,57 +1252,51 @@
 <contactref element="J10" pad="C26"/>
 <wire x1="10.16" y1="30.48" x2="238.76" y2="30.48" width="0.4" layer="16"/>
 </signal>
-<signal name="SPARE0">
-<contactref element="J1" pad="A27"/>
-<contactref element="J2" pad="A27"/>
-<contactref element="J3" pad="A27"/>
-<contactref element="J4" pad="A27"/>
-<contactref element="J5" pad="A27"/>
-<contactref element="J6" pad="A27"/>
-<contactref element="J7" pad="A27"/>
-<contactref element="J8" pad="A27"/>
-<contactref element="J9" pad="A27"/>
-<contactref element="J10" pad="A27"/>
-<wire x1="15.24" y1="27.94" x2="243.84" y2="27.94" width="0.4" layer="1"/>
+<signal name="SPARE10">
+<contactref element="J1" pad="B29"/>
+<contactref element="J2" pad="B29"/>
+<contactref element="J3" pad="B29"/>
+<contactref element="J4" pad="B29"/>
+<contactref element="J5" pad="B29"/>
+<contactref element="J6" pad="B29"/>
+<contactref element="J7" pad="B29"/>
+<contactref element="J8" pad="B29"/>
+<contactref element="J9" pad="B29"/>
+<contactref element="J10" pad="B29"/>
+<wire x1="12.70" y1="21.59" x2="241.30" y2="21.59" width="0.4" layer="1"/>
+<wire x1="12.70" y1="22.86" x2="12.70" y2="21.59" width="0.4" layer="1"/>
+<wire x1="38.10" y1="22.86" x2="38.10" y2="21.59" width="0.4" layer="1"/>
+<wire x1="63.50" y1="22.86" x2="63.50" y2="21.59" width="0.4" layer="1"/>
+<wire x1="88.90" y1="22.86" x2="88.90" y2="21.59" width="0.4" layer="1"/>
+<wire x1="114.30" y1="22.86" x2="114.30" y2="21.59" width="0.4" layer="1"/>
+<wire x1="139.70" y1="22.86" x2="139.70" y2="21.59" width="0.4" layer="1"/>
+<wire x1="165.10" y1="22.86" x2="165.10" y2="21.59" width="0.4" layer="1"/>
+<wire x1="190.50" y1="22.86" x2="190.50" y2="21.59" width="0.4" layer="1"/>
+<wire x1="215.90" y1="22.86" x2="215.90" y2="21.59" width="0.4" layer="1"/>
+<wire x1="241.30" y1="22.86" x2="241.30" y2="21.59" width="0.4" layer="1"/>
 </signal>
-<signal name="SPARE1">
-<contactref element="J1" pad="A28"/>
-<contactref element="J2" pad="A28"/>
-<contactref element="J3" pad="A28"/>
-<contactref element="J4" pad="A28"/>
-<contactref element="J5" pad="A28"/>
-<contactref element="J6" pad="A28"/>
-<contactref element="J7" pad="A28"/>
-<contactref element="J8" pad="A28"/>
-<contactref element="J9" pad="A28"/>
-<contactref element="J10" pad="A28"/>
-<wire x1="15.24" y1="25.40" x2="243.84" y2="25.40" width="0.4" layer="1"/>
-</signal>
-<signal name="SPARE2">
-<contactref element="J1" pad="A29"/>
-<contactref element="J2" pad="A29"/>
-<contactref element="J3" pad="A29"/>
-<contactref element="J4" pad="A29"/>
-<contactref element="J5" pad="A29"/>
-<contactref element="J6" pad="A29"/>
-<contactref element="J7" pad="A29"/>
-<contactref element="J8" pad="A29"/>
-<contactref element="J9" pad="A29"/>
-<contactref element="J10" pad="A29"/>
-<wire x1="15.24" y1="22.86" x2="243.84" y2="22.86" width="0.4" layer="1"/>
-</signal>
-<signal name="SPARE3">
-<contactref element="J1" pad="A30"/>
-<contactref element="J2" pad="A30"/>
-<contactref element="J3" pad="A30"/>
-<contactref element="J4" pad="A30"/>
-<contactref element="J5" pad="A30"/>
-<contactref element="J6" pad="A30"/>
-<contactref element="J7" pad="A30"/>
-<contactref element="J8" pad="A30"/>
-<contactref element="J9" pad="A30"/>
-<contactref element="J10" pad="A30"/>
-<wire x1="15.24" y1="20.32" x2="243.84" y2="20.32" width="0.4" layer="1"/>
+<signal name="SPARE11">
+<contactref element="J1" pad="B30"/>
+<contactref element="J2" pad="B30"/>
+<contactref element="J3" pad="B30"/>
+<contactref element="J4" pad="B30"/>
+<contactref element="J5" pad="B30"/>
+<contactref element="J6" pad="B30"/>
+<contactref element="J7" pad="B30"/>
+<contactref element="J8" pad="B30"/>
+<contactref element="J9" pad="B30"/>
+<contactref element="J10" pad="B30"/>
+<wire x1="12.70" y1="19.05" x2="241.30" y2="19.05" width="0.4" layer="1"/>
+<wire x1="12.70" y1="20.32" x2="12.70" y2="19.05" width="0.4" layer="1"/>
+<wire x1="38.10" y1="20.32" x2="38.10" y2="19.05" width="0.4" layer="1"/>
+<wire x1="63.50" y1="20.32" x2="63.50" y2="19.05" width="0.4" layer="1"/>
+<wire x1="88.90" y1="20.32" x2="88.90" y2="19.05" width="0.4" layer="1"/>
+<wire x1="114.30" y1="20.32" x2="114.30" y2="19.05" width="0.4" layer="1"/>
+<wire x1="139.70" y1="20.32" x2="139.70" y2="19.05" width="0.4" layer="1"/>
+<wire x1="165.10" y1="20.32" x2="165.10" y2="19.05" width="0.4" layer="1"/>
+<wire x1="190.50" y1="20.32" x2="190.50" y2="19.05" width="0.4" layer="1"/>
+<wire x1="215.90" y1="20.32" x2="215.90" y2="19.05" width="0.4" layer="1"/>
+<wire x1="241.30" y1="20.32" x2="241.30" y2="19.05" width="0.4" layer="1"/>
 </signal>
 <signal name="SPARE4">
 <contactref element="J1" pad="C27"/>
@@ -1343,6 +1349,52 @@
 <contactref element="J9" pad="C30"/>
 <contactref element="J10" pad="C30"/>
 <wire x1="10.16" y1="20.32" x2="238.76" y2="20.32" width="0.4" layer="16"/>
+</signal>
+<signal name="SPARE8">
+<contactref element="J1" pad="B27"/>
+<contactref element="J2" pad="B27"/>
+<contactref element="J3" pad="B27"/>
+<contactref element="J4" pad="B27"/>
+<contactref element="J5" pad="B27"/>
+<contactref element="J6" pad="B27"/>
+<contactref element="J7" pad="B27"/>
+<contactref element="J8" pad="B27"/>
+<contactref element="J9" pad="B27"/>
+<contactref element="J10" pad="B27"/>
+<wire x1="12.70" y1="26.67" x2="241.30" y2="26.67" width="0.4" layer="1"/>
+<wire x1="12.70" y1="27.94" x2="12.70" y2="26.67" width="0.4" layer="1"/>
+<wire x1="38.10" y1="27.94" x2="38.10" y2="26.67" width="0.4" layer="1"/>
+<wire x1="63.50" y1="27.94" x2="63.50" y2="26.67" width="0.4" layer="1"/>
+<wire x1="88.90" y1="27.94" x2="88.90" y2="26.67" width="0.4" layer="1"/>
+<wire x1="114.30" y1="27.94" x2="114.30" y2="26.67" width="0.4" layer="1"/>
+<wire x1="139.70" y1="27.94" x2="139.70" y2="26.67" width="0.4" layer="1"/>
+<wire x1="165.10" y1="27.94" x2="165.10" y2="26.67" width="0.4" layer="1"/>
+<wire x1="190.50" y1="27.94" x2="190.50" y2="26.67" width="0.4" layer="1"/>
+<wire x1="215.90" y1="27.94" x2="215.90" y2="26.67" width="0.4" layer="1"/>
+<wire x1="241.30" y1="27.94" x2="241.30" y2="26.67" width="0.4" layer="1"/>
+</signal>
+<signal name="SPARE9">
+<contactref element="J1" pad="B28"/>
+<contactref element="J2" pad="B28"/>
+<contactref element="J3" pad="B28"/>
+<contactref element="J4" pad="B28"/>
+<contactref element="J5" pad="B28"/>
+<contactref element="J6" pad="B28"/>
+<contactref element="J7" pad="B28"/>
+<contactref element="J8" pad="B28"/>
+<contactref element="J9" pad="B28"/>
+<contactref element="J10" pad="B28"/>
+<wire x1="12.70" y1="24.13" x2="241.30" y2="24.13" width="0.4" layer="1"/>
+<wire x1="12.70" y1="25.40" x2="12.70" y2="24.13" width="0.4" layer="1"/>
+<wire x1="38.10" y1="25.40" x2="38.10" y2="24.13" width="0.4" layer="1"/>
+<wire x1="63.50" y1="25.40" x2="63.50" y2="24.13" width="0.4" layer="1"/>
+<wire x1="88.90" y1="25.40" x2="88.90" y2="24.13" width="0.4" layer="1"/>
+<wire x1="114.30" y1="25.40" x2="114.30" y2="24.13" width="0.4" layer="1"/>
+<wire x1="139.70" y1="25.40" x2="139.70" y2="24.13" width="0.4" layer="1"/>
+<wire x1="165.10" y1="25.40" x2="165.10" y2="24.13" width="0.4" layer="1"/>
+<wire x1="190.50" y1="25.40" x2="190.50" y2="24.13" width="0.4" layer="1"/>
+<wire x1="215.90" y1="25.40" x2="215.90" y2="24.13" width="0.4" layer="1"/>
+<wire x1="241.30" y1="25.40" x2="241.30" y2="24.13" width="0.4" layer="1"/>
 </signal>
 <signal name="VCC">
 <contactref element="J1" pad="A1"/>

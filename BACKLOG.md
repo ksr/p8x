@@ -13,6 +13,14 @@ Last updated: 2026-06-11
 
 ## NEXT
 
+- **Decoupling caps**: no card netlist includes per-IC 100nF decoupling yet
+  (standards sec.5 requires them). Add a generator pass that drops one cap per
+  IC into every card's netlist + board before any fab order.
+- **Datasheet pinout verification**: ~25 device definitions were added to the
+  generator for the five new cards (74161/169/374/377/151/74/02/10/139/157/
+  175/244/257/260/181/182, 28C64, 6850, MAX232, osc cans, IDE40, arrays).
+  Pin numbers came from memory; verify every one against datasheets before fab.
+
 - [ ] Fusion import acceptance test: open backplane .sch/.brd pair, pour planes,
       run DRC, confirm zero airwires
 - [ ] Verify DIN 41612 footprints against physical connectors in stock
@@ -55,6 +63,13 @@ Last updated: 2026-06-11
 
 ## VERIFY
 
+- Control card single-step circuit (7474 one-pulse + self-clear NAND): verify
+  one-clock-per-press behaviour at bring-up; refine debounce RC if needed.
+- ALU card V flag is unimplemented in rev A (FV driven low). Rev B: derive
+  V from carry-into vs carry-out-of bit 7 (one 7486 XOR).
+- I/O card SEL LED is source-driven from a gate output (deviation from the
+  sink-drive standard) - noted on schematic; confirm brightness acceptable.
+
 - [ ] Two new opcodes required by monitor: JMP (P1), JSR (P1) — fold into the
       official ISA table when the assembler exists
 - [ ] CF card 8-bit mode support — buy 2–3 candidates (SanDisk/industrial),
@@ -71,6 +86,12 @@ Last updated: 2026-06-11
       budget
 
 ## DONE
+
+- Bus rev C2: SPARE0-3 reallocated as flag lines FC/FZ/FN/FV (A27-A30,
+  ALU card to control card). SPARE8-11 opened on B27-B30 (guard now B3-B26);
+  eight official spares total (4-11). Backplane routes the B-row spares.
+- Eagle sch+brd generated and validated for all five remaining cards
+  (control, register bank, ALU, I/O, CF-IDE) + netlist-style PDF each.
 
 - [x] Architecture: P8X — 8-bit, microcoded, 4×16-bit pointer bank (74169s),
       PC/SP/MAR unified into pointers
