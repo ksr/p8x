@@ -9,3 +9,4 @@ gerbers/
 emulator/p8xemu
 emulator/*.o
 emulator/test/*.bin
+emulator/test/*.out
