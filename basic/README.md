@@ -10,14 +10,19 @@ the same toolchain and I/O the [ROM monitor](../firmware/p8xmon.asm) uses.
 
 ## Direction
 
-Aiming at a **Tiny-BASIC-class** interpreter (per the BACKLOG idea): integer-only,
-line-numbered, interactive. This fits the machine — a few KB of ROM, the pointer
-bank makes a text pointer (P1/P2) and the indirect addressing modes natural for
-an interpreter inner loop.
+A **richer Microsoft-style subset, integer-only** (decided 2026-06-16). Line-
+numbered and interactive, with immediate mode (no line number → execute now).
+This fits the machine well — the pointer bank makes a text pointer (P1/P2) and
+the indirect addressing modes natural for the interpreter inner loop; integers
+keep it tractable on this ISA (floats are a large lift, deferred).
 
-Target language core (first milestone): `PRINT`, `LET`, `IF/THEN`, `GOTO`,
-`GOSUB/RETURN`, `INPUT`, `END`, line numbers, integer expressions with `+ - * /`
-and comparisons, and immediate-mode (no line number → execute now).
+Target language:
+- **Statements:** `PRINT`, `LET` (and implicit let), `IF/THEN`, `FOR/NEXT`,
+  `GOTO`, `GOSUB/RETURN`, `INPUT`, `REM`, `END`, `RUN`, `LIST`, `NEW`
+- **Lines:** multiple statements per line separated by `:`
+- **Expressions:** integer `+ - * /`, parens, comparisons (`= <> < > <= >=`),
+  numeric variables A–Z (and A0–Z9), plus string variables (`A$`) for PRINT/INPUT
+- **Functions:** `ABS`, `RND`, `PEEK`/`POKE` (memory + I/O access — the P8X hook)
 
 ## Build & run
 
@@ -51,12 +56,11 @@ lines straight into the terminal. Use a cycle cap `-l N` to bound EOF spin.)
    `INPUT`, `RUN`.
 5. **Polish** — error messages, `REM`, multi-statement lines, `RND`/`PEEK`/`POKE`.
 
-## Open decisions (to settle before milestone 2)
+## Open decisions
 
-- **Dialect/subset** — Tiny BASIC (minimal) vs a richer Microsoft-ish subset?
-- **Numbers** — integer-only to start (recommended); floats are a big lift on this ISA.
+Settled: dialect = richer MS-style subset; numbers = integer-only. Still open:
+
 - **Storage** — store source text verbatim, or tokenize keywords to single bytes?
+  (Tokenizing saves space and speeds the run loop; decide at milestone 2.)
 - **Relationship to the system** — standalone ROM image (current, easiest to test),
   vs launched from the monitor's `G`, vs loaded from CF by the OS.
-
-These don't block the skeleton; they shape milestone 2 onward.
