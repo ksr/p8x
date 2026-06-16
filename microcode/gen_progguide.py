@@ -134,22 +134,22 @@ E.append(t)
 
 E.append(Paragraph("Notes",H2))
 E.append(Paragraph(
- "<b>(1) Shifts:</b> the shift-in bit is wired to the microcode CIN line and is 0 for "
- "SHL/SHR. The C flag latches the 74181 carry chain, not the shifted-out bit, in rev A.",NOTE))
+ "<b>(1) Shifts &amp; rotates:</b> SHL/SHR shift in 0 and latch the shifted-out bit "
+ "into C. ROL/ROR rotate through C (the shifted-in bit is the current C). This makes "
+ "multi-byte shifts work the conventional way (SHL low byte, then ROL high byte).",NOTE))
 E.append(Spacer(1,3))
 E.append(Paragraph(
- "<b>(2) C flag polarity:</b> the flag register latches the RAW 74181 Cn+4 pin, which "
- "is an ACTIVE-LOW carry: after ADD, C=0 means a carry occurred; after SUB/CMP, C=0 "
- "means no borrow (A &gt;= B). BCP branches on the pin being HIGH. This matches the "
- "rev A ALU card exactly; a rev B inverter (or embracing the convention) is an open "
- "BACKLOG item. The emulator reproduces it faithfully.",NOTE))
+ "<b>(2) C flag (rev B):</b> CONVENTIONAL active-high carry. After ADD, C=1 means a "
+ "carry occurred; after SUB/CMP, C=1 means no borrow (A &gt;= B). JC/BCP branch on C=1, "
+ "JNC on C=0. CLC/SEC clear/set C without disturbing Z/N/V. (Rev A latched the raw "
+ "active-low 74181 Cn+4 pin; rev B embraces the conventional convention.)",NOTE))
 E.append(Spacer(1,3))
 E.append(Paragraph(
  "<b>(3) Stack:</b> JSR pushes the return address high byte then low byte, "
  "decrementing after each write (empty-descending). RTS increments then reads. "
  "Software must initialise P3 (e.g. LDP3 #$FEFF) before the first JSR. "
- "<b>(4) V flag:</b> reads 0 in rev A. <b>(5) JSR addressing:</b> only (P1) - load the "
- "target into P1 first; an absolute-JSR opcode is a natural future addition.",NOTE))
+ "<b>(4) V flag:</b> reads 0 in rev A. <b>(5) Absolute addressing:</b> LDA/LDB/STA/JSR "
+ "accept an absolute address; the hardware forms it in the hidden PT scratch pointer.",NOTE))
 
 E.append(Paragraph("Assembler quick reference (p8xasm.py)",H2))
 E.append(Preformatted(
