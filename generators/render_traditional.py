@@ -8,7 +8,7 @@ from reportlab.lib.colors import Color
 MM=2.83465; G=2.54; PIN=5.08; HALFW=12.7; PINX=17.78
 BLK=Color(0,0,0); GRN=Color(0,0.42,0); RED=Color(0.72,0.08,0.08); BLU=Color(0,0,0.65)
 
-# ---- canonical netlist (memory card, identical to gen_eagle_full.py) --------
+# ---- canonical netlist (memory card, identical to gen_eagle.py) --------
 DEV={
  "MEM28K8":dict(L=["A%d"%i for i in range(15)],R=["IO%d"%i for i in range(8)]+["!CE","!OE","!WE","VCC","GND"]),
  "74245":dict(L=["DIR"]+["A%d"%i for i in range(8)]+["!OE"],R=["B%d"%i for i in range(8)]+["VCC","GND"]),
