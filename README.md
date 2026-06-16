@@ -49,8 +49,7 @@ make test
 # run them from hardware/eagle/.
 cd ../hardware/eagle
 python3 ../../generators/gen_eagle.py                # all 14 .sch/.brd files
-python3 ../../generators/render_traditional.py       # memory card schematic PDF
-python3 ../../generators/render_traditional_auto.py  # 5 plug-in card schematic PDFs
+python3 ../../generators/render_traditional_auto.py  # all 6 card schematic PDFs
 
 # These are standalone (write straight to docs/) and run from anywhere:
 python3 ../../generators/gen_bus_pdf.py              # bus definition

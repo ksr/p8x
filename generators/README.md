@@ -17,8 +17,7 @@ pip3 install reportlab
 | Script | Produces | Output dir | Run from |
 |--------|----------|------------|----------|
 | `gen_eagle.py` | All 14 Eagle files (7 boards × `.sch`+`.brd`) | `hardware/eagle/` | `hardware/eagle/` |
-| `render_traditional_auto.py` | 5 plug-in-card schematic PDFs | `docs/<card>/` | `hardware/eagle/` |
-| `render_traditional.py` | Memory-card schematic PDF | `docs/memory-card/` | `hardware/eagle/` |
+| `render_traditional_auto.py` | All 6 card schematic PDFs | `docs/<card>/` | `hardware/eagle/` |
 | `gen_bus_pdf.py` | Bus-definition PDF | `docs/backplane/` | anywhere |
 | `render_bp_traditional.py` | Backplane schematic PDF | `docs/backplane/` | anywhere |
 
@@ -43,18 +42,13 @@ It also exposes its netlists for other scripts to import (`DEV`, `busnet`,
 `ALLPINS`, `CARDS`, `mcn`) — so the renderers below draw from the same data the
 boards are built from, and can't drift out of sync.
 
-### `render_traditional_auto.py` — auto-drafted card schematics
+### `render_traditional_auto.py` — card schematics
 Imports `gen_eagle` and algorithmically lays out a traditional-style schematic
-(bus spines, junction dots, power-rail glyphs, NC marks) for each of the five
-plug-in cards in `gen_eagle.CARDS`. Best-effort automatic placement — functional
-rather than hand-polished. Because it imports `gen_eagle`, running it regenerates
-the board files too, so run it from `hardware/eagle/`.
-
-### `render_traditional.py` — hand-tuned memory-card schematic
-A bespoke, presentation-grade schematic for the memory card with manually placed
-parts and bus spines. It imports the memory-card netlist and device library from
-`gen_eagle` (single source of truth) and only keeps the hand-tuned *layout* local.
-Run from `hardware/eagle/` (it imports `gen_eagle`).
+(bus spines, junction dots, power-rail glyphs, NC marks) for every card in
+`gen_eagle.CARDS` — all six (control, register-bank, ALU, I/O, CF, and memory).
+Automatic placement: functional rather than hand-polished, but covers every card
+from one run. Because it imports `gen_eagle`, running it regenerates the board
+files too, so run it from `hardware/eagle/`.
 
 ### `gen_bus_pdf.py` / `render_bp_traditional.py` — backplane docs
 Standalone scripts (no `gen_eagle` import) that write straight to `docs/backplane/`
@@ -68,8 +62,7 @@ via absolute paths, so they run from anywhere:
 ```sh
 cd hardware/eagle
 python3 ../../generators/gen_eagle.py                # 14 .sch/.brd files
-python3 ../../generators/render_traditional.py       # memory-card schematic PDF
-python3 ../../generators/render_traditional_auto.py  # 5 plug-in-card schematic PDFs
+python3 ../../generators/render_traditional_auto.py  # all 6 card schematic PDFs
 python3 ../../generators/gen_bus_pdf.py              # bus-definition PDF
 python3 ../../generators/render_bp_traditional.py    # backplane schematic PDF
 python3 ../../microcode/gen_progguide.py             # programmer's guide PDF

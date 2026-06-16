@@ -218,7 +218,8 @@ def draw_card(name,title,parts,nets,outpdf):
 
 if __name__=="__main__":
     CARD_DIRS={"control-card":"control-card","regbank-card":"reg-bank",
-               "alu-card":"alu-card","io-card":"io-card","cf-card":"cf-card"}
+               "alu-card":"alu-card","io-card":"io-card","cf-card":"cf-card",
+               "memory-card":"memory-card"}
     for name,(title,parts,nets) in G.CARDS.items():
         subdir=CARD_DIRS.get(name,name)
         outpdf=_os.path.join(_DOCS,subdir,"p8x-%s-schematic.pdf"%name)

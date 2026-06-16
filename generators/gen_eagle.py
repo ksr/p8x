@@ -806,6 +806,10 @@ mnet("LEDWR",("RS4","2"),("LED6","A")); mnet("WRK",("U9","3Y"),("LED6","K"))
 mnet("VCC",("RP1","1"),("RS1","1"),("RS2","1"),("RS3","1"),("RS4","1"))
 write_sch("p8x-memory-card.sch","P8X MEMORY CARD REV C",mc_parts,mcn)
 validate("p8x-memory-card.sch",mc_parts,mcn)
+# Register the memory card for the schematic renderer (render_traditional_auto.py),
+# alongside the five plug-in cards. mc_parts carries (dev,val,x,y) and includes J1;
+# the renderer reads only dev/val and filters J1, so this format is compatible.
+CARDS["memory-card"]=("P8X MEMORY CARD REV C",mc_parts,mcn)
 mcb_parts={
  "J1":("DIN96","DIN41612-96M",147.32,88.90),
  "U1":("MEM28K8","28C256-15",17.78,83.82),"U2":("MEM28K8","62256-70",43.18,83.82),
