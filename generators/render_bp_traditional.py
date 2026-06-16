@@ -2,11 +2,12 @@
 """Traditional-style backplane schematic: one representative connector
 (all 10 slots are wired pin-for-pin in parallel) + support circuitry
 drawn with real wires."""
+import os as _os; _DOCS=_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),"docs")
 from reportlab.pdfgen import canvas as pdfc
 from reportlab.lib.colors import Color
 MM=2.83465; G=2.54; HALFW=12.7; PINX=17.78
 BLK=Color(0,0,0); GRN=Color(0,0.42,0); RED=Color(0.72,0.08,0.08); BLU=Color(0,0,0.65)
-c=pdfc.Canvas("/mnt/user-data/outputs/p8x-backplane-schematic.pdf",pagesize=(842,1190))
+c=pdfc.Canvas(_os.path.join(_DOCS,"p8x-backplane-schematic.pdf"),pagesize=(842,1190))
 minx,maxx,miny,maxy=-25,235,-272,42
 s=min((842-40)/((maxx-minx)*MM),(1190-90)/((maxy-miny)*MM))*MM
 def X(x): return 20+(x-minx)*s

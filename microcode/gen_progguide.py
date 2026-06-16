@@ -76,7 +76,7 @@ GROUPS=[("System",["NOP","HLT"]),
  ("Pointer registers",["LPL1","LPH1","LPL2","LPH2","LPL3","LPH3"]),
  ("Control flow",["JMP","JSR","RTS","BZ","BNZ","BCP"])]
 
-doc=SimpleDocTemplate("/mnt/user-data/outputs/p8x-programmers-guide.pdf",
+doc=SimpleDocTemplate(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),"docs","p8x-programmers-guide.pdf"),
     pagesize=A4,leftMargin=14*mm,rightMargin=14*mm,topMargin=13*mm,bottomMargin=13*mm)
 E=[]
 E.append(Paragraph("P8X Programmer's Guide",H1))

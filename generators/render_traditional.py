@@ -2,6 +2,7 @@
 """Traditional-style schematic PDFs for the P8X boards: drawn wires, bus
 spines with angled entries, junction dots, power rail glyphs, NC marks.
 Drawing data is derived from the canonical netlists and verified against them."""
+import os as _os; _DOCS=_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),"docs")
 from reportlab.pdfgen import canvas as pdfc
 from reportlab.lib.colors import Color
 MM=2.83465; G=2.54; PIN=5.08; HALFW=12.7; PINX=17.78
@@ -107,7 +108,7 @@ def pinxy(ref,pin):
 
 def disp(p): return p.replace("!","-")
 
-c=pdfc.Canvas("/mnt/user-data/outputs/p8x-memory-card-schematic.pdf",pagesize=(1683,1190))
+c=pdfc.Canvas(_os.path.join(_DOCS,"p8x-memory-card-schematic.pdf"),pagesize=(1683,1190))
 minx,maxx,miny,maxy=-25,440,-252,108
 s=min((1683-40)/((maxx-minx)*MM),(1190-70)/((maxy-miny)*MM))*MM
 def X(x): return 20+(x-minx)*s

@@ -3,9 +3,11 @@
 Style: bus rails across the top with taps dropping into column gaps;
 discrete nets on bottom track channels; rail glyphs for power; junction
 dots; NC marks. Net data comes from the generator netlists (canonical)."""
-import sys, re
-sys.path.insert(0,"/home/claude/eagle2")
+import sys, re, os as _os
+_HERE=_os.path.dirname(_os.path.abspath(__file__))
+sys.path.insert(0,_HERE)
 import gen_p8x_cards as G          # regenerates + provides DEV, busnet, ALLPINS, CARDNETS
+_DOCS=_os.path.join(_os.path.dirname(_HERE),"docs")
 from reportlab.pdfgen import canvas as pdfc
 from reportlab.lib.colors import Color
 MM=2.83465; GR=2.54; HALFW=12.7; PINX=17.78
@@ -213,4 +215,9 @@ def draw_card(name,title,parts,nets,outpdf):
     missing=want-drawn
     assert not missing, ("undrawn pins",sorted(missing)[:8])
     c.save()
-    print(outpdf.split("/")[-1],"drawn,",len(parts),"parts,",len(buses),"buses,",len(tracks),"tracks")
+
+if __name__=="__main__":
+    for name,(title,parts,nets) in G.CARDS.items():
+        outpdf=_os.path.join(_DOCS,"p8x-%s-schematic.pdf"%name)
+        draw_card(name,title,parts,nets,outpdf)
+        print("wrote",_os.path.basename(outpdf))
