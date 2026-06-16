@@ -39,8 +39,15 @@ TOKEN  = $8078          ; token matched by MATCHKW
 MATCHF = $8079          ; 1 if MATCHKW found a keyword
 TMPC   = $807A          ; byte scratch
 TOKW   = $807B          ; token being uncrunched
+RESULT = $807C          ; 16-bit expression result
+ACC    = $807E          ; 16-bit mul/div accumulator
+MCNT   = $8080          ; mul/div bit counter
+REM    = $8082          ; 16-bit division remainder
+VARS   = $80C0          ; variables A-Z: 26 x 2 bytes ($80C0..$80F3)
 
 ; keyword tokens (>= $80 so they never collide with text or the 00 terminator)
+TOK_PRINT = $80
+TOK_LET  = $81
 TOK_LIST = $8E
 TOK_NEW  = $8F
 
@@ -68,32 +75,399 @@ REPL:   JSR  GETLINE         ; line -> LBUF
         JZ   REPL            ; blank line
         LDB  #'0'            ; leading digit -> line entry
         SUB
-        JNC  RCMD            ; ch < '0'
+        JNC  RSTMT           ; ch < '0'
         LDB  #10
         CMP
-        JC   RCMD            ; ch > '9'
+        JC   RSTMT           ; ch > '9'
         JMP  DOLINE
-RCMD:   LDA  (P2)            ; immediate command = a leading token byte
+RSTMT:  JSR  STMT            ; immediate statement
+        JMP  REPL
+
+; STMT — execute the statement at (P2).  RTS when done (reusable by RUN later).
+STMT:   JSR  SKIPSP
+        LDA  (P2)
+        LDB  #TOK_PRINT
+        CMP
+        JZ   DOPRINT
+        LDA  (P2)
+        LDB  #TOK_LET
+        CMP
+        JZ   DOLET
+        LDA  (P2)
         LDB  #TOK_LIST
         CMP
-        JZ   DOLIST
+        JZ   st_list
         LDA  (P2)
         LDB  #TOK_NEW
         CMP
-        JZ   DONEW
-        LDP1 #MWHAT
+        JZ   st_new
+        LDA  (P2)            ; bare variable -> implicit LET
+        LDB  #'A'
+        SUB
+        JNC  st_err
+        LDB  #26
+        CMP
+        JC   st_err
+        JMP  DOLET
+st_list: JSR LIST
+        LDP1 #MOK
+        JSR  PUTS
+        RTS
+st_new: JSR  NEWPROG
+        LDP1 #MOK
+        JSR  PUTS
+        RTS
+st_err: LDP1 #MWHAT
+        JSR  PUTS
+        RTS
+
+; SYNERR — abort current statement to the prompt (resets the stack)
+SYNERR: LDP3 #STKTOP
+        LDP1 #MSYN
         JSR  PUTS
         JMP  REPL
 
-DONEW:  JSR  NEWPROG
-        LDP1 #MOK
-        JSR  PUTS
-        JMP  REPL
+;==============================================================================
+; STATEMENTS
+;==============================================================================
+; PRINT <expr> | PRINT "string" | PRINT
+DOPRINT: INP2                       ; skip PRINT token
+        JSR  SKIPSP
+        LDA  (P2)
+        JZ   dp_nl
+        LDB  #'"'
+        CMP
+        JZ   dp_str
+        JSR  EXPR                   ; RESULT = value
+        LDA  RESULT
+        STA  LNUM
+        LDA  RESULT+1
+        STA  LNUM+1
+        JSR  PRDEC
+        JSR  CRLF
+        RTS
+dp_str: INP2                        ; skip opening quote
+ds_l:   LDA  (P2)
+        JZ   dp_nl
+        LDB  #'"'
+        CMP
+        JZ   ds_e
+        LDA  (P2)
+        JSR  PUTC
+        INP2
+        JMP  ds_l
+ds_e:   INP2
+dp_nl:  JSR  CRLF
+        RTS
 
-DOLIST: JSR  LIST
-        LDP1 #MOK
-        JSR  PUTS
-        JMP  REPL
+; LET [LET] <var> = <expr>   (LET token optional -> implicit assignment)
+DOLET:  LDA  (P2)
+        LDB  #TOK_LET
+        CMP
+        JNZ  dl_var
+        INP2                        ; skip LET token
+        JSR  SKIPSP
+dl_var: LDA  (P2)
+        STA  TMPC
+        LDB  #'A'
+        SUB
+        JNC  dl_err
+        LDB  #26
+        CMP
+        JC   dl_err
+        LDA  TMPC
+        JSR  VARADDR                ; P1 = &var
+        INP2                        ; consume letter
+        TPA1L                       ; save var address across EXPR (uses P1)
+        STA  SAVE1
+        TPA1H
+        STA  SAVE1+1
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #'='
+        CMP
+        JNZ  dl_err
+        INP2
+        JSR  EXPR                   ; RESULT = value
+        LDA  SAVE1
+        TAP1L
+        LDA  SAVE1+1
+        TAP1H
+        LDA  RESULT
+        STA  (P1)
+        INP1
+        LDA  RESULT+1
+        STA  (P1)
+        RTS
+dl_err: JMP  SYNERR
+
+;==============================================================================
+; EXPRESSION EVALUATOR (recursive descent) — result -> RESULT
+;   EXPR   = TERM   (('+'|'-') TERM)*
+;   TERM   = FACTOR (('*'|'/') FACTOR)*
+;   FACTOR = number | variable | '(' EXPR ')'
+; The running left value is pushed (lo,hi) across the recursive call.
+;==============================================================================
+EXPR:   JSR  TERM
+ex_l:   JSR  SKIPSP
+        LDA  (P2)
+        LDB  #'+'
+        CMP
+        JZ   ex_add
+        LDA  (P2)
+        LDB  #'-'
+        CMP
+        JZ   ex_sub
+        RTS
+ex_add: INP2
+        LDA  RESULT
+        PHA
+        LDA  RESULT+1
+        PHA
+        JSR  TERM
+        PLA
+        STA  NUM1+1
+        PLA
+        STA  NUM1
+        LDA  RESULT
+        STA  NUM2
+        LDA  RESULT+1
+        STA  NUM2+1
+        JSR  ADD16
+        JMP  ex_store
+ex_sub: INP2
+        LDA  RESULT
+        PHA
+        LDA  RESULT+1
+        PHA
+        JSR  TERM
+        PLA
+        STA  NUM1+1
+        PLA
+        STA  NUM1
+        LDA  RESULT
+        STA  NUM2
+        LDA  RESULT+1
+        STA  NUM2+1
+        JSR  SUB16
+ex_store: LDA NUM1
+        STA  RESULT
+        LDA  NUM1+1
+        STA  RESULT+1
+        JMP  ex_l
+
+TERM:   JSR  FACTOR
+tm_l:   JSR  SKIPSP
+        LDA  (P2)
+        LDB  #'*'
+        CMP
+        JZ   tm_mul
+        LDA  (P2)
+        LDB  #'/'
+        CMP
+        JZ   tm_div
+        RTS
+tm_mul: INP2
+        LDA  RESULT
+        PHA
+        LDA  RESULT+1
+        PHA
+        JSR  FACTOR
+        PLA
+        STA  NUM1+1
+        PLA
+        STA  NUM1
+        LDA  RESULT
+        STA  NUM2
+        LDA  RESULT+1
+        STA  NUM2+1
+        JSR  MUL16
+        JMP  tm_store
+tm_div: INP2
+        LDA  RESULT
+        PHA
+        LDA  RESULT+1
+        PHA
+        JSR  FACTOR
+        PLA
+        STA  NUM1+1
+        PLA
+        STA  NUM1
+        LDA  RESULT
+        STA  NUM2
+        LDA  RESULT+1
+        STA  NUM2+1
+        JSR  DIV16
+tm_store: LDA NUM1
+        STA  RESULT
+        LDA  NUM1+1
+        STA  RESULT+1
+        JMP  tm_l
+
+FACTOR: JSR  SKIPSP
+        LDA  (P2)
+        LDB  #'('
+        CMP
+        JZ   fa_par
+        LDA  (P2)               ; digit?
+        LDB  #'0'
+        SUB
+        JNC  fa_var
+        LDB  #10
+        CMP
+        JC   fa_var
+        JSR  PARSEDEC           ; number -> LNUM
+        LDA  LNUM
+        STA  RESULT
+        LDA  LNUM+1
+        STA  RESULT+1
+        RTS
+fa_var: LDA  (P2)               ; variable A-Z?
+        STA  TMPC
+        LDB  #'A'
+        SUB
+        JNC  fa_err
+        LDB  #26
+        CMP
+        JC   fa_err
+        LDA  TMPC
+        JSR  VARADDR            ; P1 = &var
+        INP2
+        LDA  (P1)
+        STA  RESULT
+        INP1
+        LDA  (P1)
+        STA  RESULT+1
+        RTS
+fa_par: INP2                    ; '('
+        JSR  EXPR
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #')'
+        CMP
+        JNZ  fa_err
+        INP2
+        RTS
+fa_err: JMP  SYNERR
+
+; VARADDR — A = variable letter; sets P1 = VARS + (letter-'A')*2
+VARADDR: LDB #'A'
+        SUB
+        SHL                     ; *2 (index 0..25 -> 0..50, no carry)
+        LDB  #<VARS
+        ADD
+        TAP1L
+        LDA  #>VARS
+        TAP1H
+        RTS
+
+;==============================================================================
+; 16-bit multiply / divide (shift-add / restoring) — operands NUM1,NUM2
+;==============================================================================
+; MUL16 — NUM1 = NUM1 * NUM2 (low 16 bits)
+MUL16:  LDA  #0
+        STA  ACC
+        STA  ACC+1
+        LDA  #16
+        STA  MCNT
+mu_l:   LDA  NUM2
+        LDB  #1
+        AND
+        JZ   mu_sk
+        LDA  ACC                ; ACC += NUM1
+        LDB  NUM1
+        ADD
+        STA  ACC
+        LDA  #0
+        JNC  mu_c0
+        LDA  #1
+mu_c0:  STA  CYTMP
+        LDA  ACC+1
+        LDB  NUM1+1
+        ADD
+        LDB  CYTMP
+        ADD
+        STA  ACC+1
+mu_sk:  JSR  SHL16              ; NUM1 <<= 1
+        LDA  NUM2+1             ; NUM2 >>= 1
+        SHR
+        STA  NUM2+1
+        LDA  NUM2
+        ROR
+        STA  NUM2
+        LDA  MCNT
+        DEC
+        STA  MCNT
+        JNZ  mu_l
+        LDA  ACC
+        STA  NUM1
+        LDA  ACC+1
+        STA  NUM1+1
+        RTS
+
+; DIV16 — NUM1 = NUM1 / NUM2 (quotient); remainder left in REM. /0 -> 0
+DIV16:  LDA  NUM2
+        LDB  NUM2+1
+        OR
+        JNZ  dv_ok
+        LDA  #0
+        STA  NUM1
+        STA  NUM1+1
+        RTS
+dv_ok:  LDA  #0
+        STA  REM
+        STA  REM+1
+        LDA  #16
+        STA  MCNT
+dv_l:   LDA  NUM1               ; dividend <<= 1, MSB -> C
+        SHL
+        STA  NUM1
+        LDA  NUM1+1
+        ROL
+        STA  NUM1+1
+        LDA  REM                ; REM = (REM<<1) | C
+        ROL
+        STA  REM
+        LDA  REM+1
+        ROL
+        STA  REM+1
+        LDA  REM+1              ; compare REM vs NUM2
+        LDB  NUM2+1
+        CMP
+        JNZ  dv_hi
+        LDA  REM
+        LDB  NUM2
+        CMP
+        JC   dv_ge
+        JMP  dv_lt
+dv_hi:  JC   dv_ge
+        JMP  dv_lt
+dv_ge:  LDA  REM                ; REM -= NUM2
+        LDB  NUM2
+        SUB
+        STA  REM
+        LDA  #0
+        JC   dv_g0
+        LDA  #1
+dv_g0:  STA  CYTMP
+        LDA  REM+1
+        LDB  NUM2+1
+        SUB
+        STA  REM+1
+        LDA  CYTMP
+        JZ   dv_g1
+        LDA  REM+1
+        DEC
+        STA  REM+1
+dv_g1:  LDA  NUM1               ; set quotient bit 0
+        LDB  #1
+        OR
+        STA  NUM1
+dv_lt:  LDA  MCNT
+        DEC
+        STA  MCNT
+        JNZ  dv_l
+        RTS
 
 ; ---- enter / replace / delete a numbered line ----
 DOLINE: JSR  PARSEDEC        ; LNUM = number (P2 advanced past digits)
@@ -654,3 +1028,5 @@ BANNER: .byte CR,LF
 MOK:    .ascii "Ok"
         .byte CR,LF,0
 MWHAT:  .byte $3F,CR,LF,0
+MSYN:   .ascii "?SYNTAX ERROR"
+        .byte CR,LF,0
