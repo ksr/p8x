@@ -25,7 +25,7 @@
 #include <fcntl.h>
 
 static uint8_t rom[4][8192], eeprom[0x8000], ram[0x7F00];
-static uint16_t P[4];                 /* P0=PC P1 P2 P3=SP */
+static uint16_t P[5];                 /* P0=PC P1 P2 P3=SP P4=PT (hidden scratch) */
 static uint8_t A,B,T,T2,IR;
 static int stp, fC=1,fZ,fN,fV;        /* fC = raw Cn+4 pin (1 = no carry) */
 static int prev_fcond=0, halted=0, trace=0;
@@ -95,7 +95,7 @@ int main(int argc,char**argv){
     char fn[64];
     for(int k=0;k<4;k++){ sprintf(fn,"u%d.bin",k); load(fn,rom[k],8192); }
     load(ee,eeprom,0x8000);
-    P[0]=0; P[1]=P[2]=0; P[3]=0xFEFF; stp=0; IR=0;   /* reset: P0 forced 0 */
+    P[0]=0; P[1]=P[2]=0; P[3]=0xFEFF; P[4]=0; stp=0; IR=0;   /* reset: P0 forced 0 */
     while(!halted && cycles<lim){
         /* condition mux: FCOND of the word currently in the pipeline */
         int cond;
@@ -107,10 +107,11 @@ int main(int argc,char**argv){
         int ad = IR | stp<<8 | cond<<12;
         uint32_t cw = rom[0][ad] | rom[1][ad]<<8 | rom[2][ad]<<16
                     | ((uint32_t)rom[3][ad])<<24;
-        int doe=cw&15, dld=(cw>>4)&15, psel=(cw>>8)&3;
-        int pinc=(cw>>10)&1, pdec=(cw>>11)&1, alus=(cw>>12)&15;
-        int m=(cw>>16)&1, cinp=(cw>>17)&1, sh0=(cw>>18)&1, sh1=(cw>>19)&1;
-        int ldf=(cw>>20)&1, fcond=(cw>>21)&7, urst=(cw>>24)&1, halt=(cw>>25)&1;
+        int doe=cw&15, dld=(cw>>4)&15, psel=(cw>>8)&7;   /* PSEL now 3 bits (P0-P3 + PT=4) */
+        int pinc=(cw>>11)&1, pdec=(cw>>12)&1, alus=(cw>>13)&15;
+        int m=(cw>>17)&1, cinp=(cw>>18)&1, sh0=(cw>>19)&1, sh1=(cw>>20)&1;
+        int ldf=(cw>>21)&1, fcond=(cw>>22)&7, urst=(cw>>25)&1, halt=(cw>>26)&1;
+        int ldzn=(cw>>27)&1;
         /* combinational ALU + shifter from CURRENT register state */
         int cn4; uint8_t f=alu181(A,B,alus,m,cinp,&cn4);
         uint8_t g = sh0 ? (uint8_t)((f<<1)|(cinp&1)) : f;     /* stage 1: left  */
@@ -146,6 +147,7 @@ int main(int argc,char**argv){
         if(pinc) P[psel]++;
         if(pdec) P[psel]--;
         if(ldf){ fC=nC; fZ=nZ; fN=nN; fV=nV; }
+        else if(ldzn){ fZ=(bus==0); fN=(bus>>7)&1; }   /* loads set Z,N from the byte */
         prev_fcond=fcond;
         stp = urst ? 0 : (stp+1)&15;
         if(halt) halted=1;

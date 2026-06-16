@@ -13,10 +13,27 @@ Last updated: 2026-06-11
 
 ## NEXT
 
-- **Monitor port**: reconcile p8xmon.asm with the implemented instruction
-  set (it predates the final opcodes), add any missing microcode ops
-  (JMP (P1), more addressing modes as needed), assemble it, boot it in
-  the emulator over the ACIA console.
+- **Monitor port (rev B ISA expansion — IN PROGRESS)**: the monitor assumes a
+  conventional accumulator ISA. Reconciling it is being done by expanding the
+  ISA (option 1). Done so far (software/emulator, Phase 1):
+    - microcode word widened to 3-bit PSEL + PT hidden scratch pointer (PSEL=4)
+    - absolute addressing via PT: LDA/LDB/STA/JSR `a`
+    - loads set Z/N (LDZN control bit, bit 27)
+    - new opcodes: LDA (Pn) non-inc, INP1-3/DEP1-3, TAP/TPA n L/H, PHA/PLA,
+      JZ/JNZ (aliases of BZ/BNZ)
+  Remaining (gated on the carry-polarity decision):
+    - CLC/SEC, JC/JNC, carry-coupled shifter (SHL captures bit7->C, ROL shifts
+      C in) — all depend on whether we adopt conventional active-high carry
+      (rev B) vs the deliberate rev-A active-low Cn+4 quirk
+    - then assemble p8xmon.asm and boot it in the emulator over the ACIA
+- **Monitor port — Phase 2 (hardware, after sim works)**: realize the rev B
+  microcode-word changes in the CAD generators —
+    - control card: pipeline-latch remap for the new PSEL2 bit + LDZN
+    - reg-bank card: add the 5th (PT) pointer + widen PSEL decode (74139->74138)
+    - backplane: route PSEL2 on a SPARE line; update bus-definition
+    - ALU card: carry-coupled shifter path (C flag <-> shifter shift in/out)
+  regenerate all CAD + PDFs; the microcode word format currently leads the
+  hardware design.
 - **Emulator: CF-IDE model** ($FF10-17, sector buffer against a P8XFS disk
   image file) so the OS/filesystem work can run emulated end to end.
 
