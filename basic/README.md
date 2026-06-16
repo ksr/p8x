@@ -4,9 +4,11 @@ A small BASIC interpreter for the P8X, written in P8X assembly, assembled by
 [`p8xasm.py`](../assembler/p8xasm.py) and run over the 6850 ACIA serial console —
 the same toolchain and I/O the [ROM monitor](../firmware/p8xmon.asm) uses.
 
-> **Status: skeleton.** `p8xbasic.asm` currently boots, prints a banner, and runs
-> a read-line REPL loop (line input + echo). No tokenizing, storage, or execution
-> yet — that's the work ahead. It assembles and runs in the emulator today.
+> **Status: line editor (milestone 2).** `p8xbasic.asm` boots and runs a REPL
+> with a working program editor: enter numbered lines (stored sorted; same
+> number replaces, a bare number deletes), `LIST`, `NEW`. Line numbers are full
+> 16-bit integers. Verified in the emulator. Tokenizing and execution (`RUN`,
+> statements, expressions) are the next milestones.
 
 ## Direction
 
@@ -29,13 +31,14 @@ Target language:
 ```sh
 # from the repo root
 python3 assembler/p8xasm.py basic/p8xbasic.asm -o /tmp/basic.bin
-cd emulator && make ucode            # build u0-u3.bin microcode
-cp microcode/../microcode/u?.bin .   # (the emulator loads u?.bin from its cwd)
-./p8xemu /tmp/basic.bin
+(cd microcode && python3 genucode.py)      # build u0-u3.bin microcode
+cp microcode/u?.bin .                       # emulator loads u?.bin from its cwd
+emulator/p8xemu /tmp/basic.bin
 ```
 
 (The emulator reads the ACIA from stdin and writes to stdout, so you type BASIC
-lines straight into the terminal. Use a cycle cap `-l N` to bound EOF spin.)
+lines straight into the terminal. Use a cycle cap `-l N` to bound EOF spin. Try:
+`printf '20 PRINT "B"\r10 PRINT "A"\rLIST\r' | emulator/p8xemu -l 8000000 /tmp/basic.bin`)
 
 ## Planned layout (proposed — see open decisions)
 
@@ -48,9 +51,9 @@ lines straight into the terminal. Use a cycle cap `-l N` to bound EOF spin.)
 
 ## Milestones
 
-1. **REPL skeleton** — banner + line input/echo. ✅ (current)
-2. **Line editor** — store numbered lines in a program buffer (insert/replace/
-   delete by line number), `LIST`, `NEW`.
+1. **REPL skeleton** — banner + line input/echo. ✅
+2. **Line editor** — store numbered lines sorted (insert/replace/delete by line
+   number), `LIST`, `NEW`. ✅ (rebuild-via-scratch-buffer; 16-bit decimal I/O)
 3. **Expression evaluator** — integer `+ - * /`, parens, variables, comparisons.
 4. **Statements** — `PRINT`, `LET`, `GOTO`, `IF/THEN`, `GOSUB/RETURN`, `END`,
    `INPUT`, `RUN`.
