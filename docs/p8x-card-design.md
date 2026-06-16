@@ -1,6 +1,6 @@
 # P8X: An 8-Bit TTL CPU — Bus/Backplane Card Architecture
 
-Revision 2 of the SAP-8X design, reorganized around a passive backplane with five plug-in cards and the 4×16-bit pointer register bank as the architectural centerpiece. The PC, SP, and MAR of the original design are all subsumed by the pointer bank.
+Reorganized around a passive backplane with six plug-in cards and the 4×16-bit pointer register bank as the architectural centerpiece. The PC, SP, and MAR of the original SAP-8X design are all subsumed by the pointer bank.
 
 **Cards:**
 1. Control / Microcode card (clock, reset, sequencer, microcode EPROMs, IR, front-panel run controls)
@@ -8,6 +8,7 @@ Revision 2 of the SAP-8X design, reorganized around a passive backplane with fiv
 3. ALU card (A, B, T, T2 registers, 74181 ALU, shifter, flags)
 4. Memory card (ROM, RAM, address decode)
 5. I/O card (toggle-switch input port, LED output port, RS-232 via 6850 ACIA)
+6. CF-IDE card (CompactFlash in 8-bit True IDE mode, memory-mapped at $FF10–$FF17)
 
 Total: ~75 logic ICs across the cards. Each card is independently testable on the backplane.
 
@@ -40,7 +41,7 @@ Reset forces P0 to $0000 (pointer clear via 74169 synchronous load of zeros — 
 
 ## 2. Backplane
 
-Passive backplane, **DIN 41612 64-pin (rows a+c)** connectors — cheap, robust, and you can buy prototyping cards (100×160 mm Eurocard) with the connector footprint already laid out. Every 4th pin grounded for signal integrity.
+Passive backplane, **DIN 41612 96-pin (rows A/B/C)** connectors on 100×160 mm Eurocards. Row B is a solid ground guard between the signal rows (B3–B26 = GND); B27–B30 carry SPARE8–11. See [p8x-bus-definition.md](p8x-bus-definition.md) for the full pin map.
 
 ### 2.1 Bus signals
 
@@ -52,14 +53,14 @@ Passive backplane, **DIN 41612 64-pin (rows a+c)** connectors — cheap, robust,
 | Data destination select | DLD0–3 | 4 | Control card |
 | Pointer select | PSEL0–1 | 2 | Control card |
 | Pointer count | PINC, PDEC | 2 | Control card |
-| ALU function | S0–S3, M, CIN | 6 | Control card |
+| ALU function | ALUS0–3, ALUM, CIN | 6 | Control card |
 | Shifter | SH0–SH1 | 2 | Control card |
 | Flag latch | LDF | 1 | Control card |
 | Clock | CLK, CLK̄ | 2 | Control card |
 | Reset | RES̄ | 1 | Control card |
 | Power | +5 V, GND | rest | PSU |
 
-≈ 48 signals + power/ground — fits the 64-pin connector comfortably.
+≈ 48 signals + power/ground, plus FC/FZ/FN/FV flag lines and 8 spares — fits the 96-pin connector with room to spare.
 
 ### 2.2 Distributed field decoding
 
@@ -311,6 +312,6 @@ Opcode space is wide open (256 slots, ~50 used).
 
 ## 11. Power & Practical Notes
 - ~75 LS-TTL chips ≈ 1.5–2 A at 5 V; size the PSU at 4–5 A with per-card 10 µF bulk + 0.1 µF per chip
-- Keep CLK/CLK̄ on adjacent backplane pins with ground between; terminate at the far end (220/330 Ω Thevenin) if you see ringing
+- Keep CLK/CLKB on adjacent backplane pins with guard traces; AC termination (100 Ω + 150 pF to GND) footprints are provided DNP at the far slot — populate only if scope shows ringing. Do not use Thevenin termination: it biases lines into the HCT threshold region and wastes 25 mA per line at idle (see p8x-backplane-design.md §3)
 - Wire-wrap or PCB both fine at ≤4 MHz; keep the 74181 carry chain and the 74169 RCO cascades short
 - 74169 vs 74193: 74169 is fully synchronous (single clock + direction pin), which is why it's specified here; 74193's dual-clock scheme is glitch-prone in this application

@@ -1,5 +1,7 @@
 # SAP-8X: An 8-Bit TTL CPU Design
 
+> **Historical reference — predecessor to P8X.** This document describes the original SAP-8X design, which uses a conventional PC + MAR + X-register architecture. The actual P8X replaces all of these with the 4×16-bit pointer bank (P0–P3), drops the separate MAR entirely, uses 96-pin DIN 41612 connectors instead of 64-pin, and is organized across six cards on a passive backplane. See [p8x-card-design.md](p8x-card-design.md) for the current architecture. This document is kept as design history.
+
 A complete, buildable 8-bit CPU using only 74-series TTL logic, plus standard SRAM/EEPROM for memory and microcode. Roughly 45 logic ICs. Target clock: 2–4 MHz with 74LS, faster with 74F or 74HCT.
 
 ---

@@ -1,31 +1,29 @@
 # P8X 10-Slot Backplane — Rev C Design Notes
 
-## 1. Rev C Bus Pinout (DIN 41612, 96-pin, rows A/B/C)
+## 1. Bus Pinout
 
-Power per Ken's spec: **6 pins of +5V at the top, 6 pins of GND at the bottom**,
-plus the entire middle of row B as a ground guard between the two signal rows.
+The authoritative human-readable bus pinout is in **[p8x-bus-definition.md](p8x-bus-definition.md)**,
+which is generated from the same `busnet()` function as the Eagle CAD files.
+The machine-authoritative source is `generators/gen_eagle_full.py`.
+
+Summary for quick reference (rev C2):
 
 | Pin | Row A | Row B | Row C |
-|----|-------|-------|-------|
-| 1  | +5V | +5V | +5V |
-| 2  | +5V | +5V | +5V |
+|-----|-------|-------|-------|
+| 1–2 | +5V | +5V | +5V |
 | 3–10 | D0–D7 | GND | A0–A7 |
-| 11 | RES̄ | GND | A8 |
+| 11 | -RES | GND | A8 |
 | 12–15 | DOE0–3 | GND | A9–A12 |
-| 16–19 | DLD0–3 | GND | A13–A15, ALUS0 (C16=A13, C17=A14, C18=A15) |
-| 19–22 | (A19=DLD3) | GND | ALUS0–ALUS3 (C19–C22) |
-| 20–21 | PSEL0–1 | GND | — |
-| 22 | PINC | GND | — |
-| 23 | PDEC | GND | ALUM |
-| 24 | CLK | GND | CIN |
-| 25 | CLKB | GND | SH0 |
-| 26 | LDF | GND | SH1 |
-| 27–30 | SPARE0–3 | GND | SPARE4–7 |
-| 31 | GND | GND | GND |
-| 32 | GND | GND | GND |
+| 16–19 | DLD0–3 | GND | A13–A15, ALUS0 |
+| 20–21 | PSEL0–1 | GND | ALUS1–2 |
+| 22–23 | PINC, PDEC | GND | ALUS3, ALUM |
+| 24–25 | CLK, CLKB | GND | CIN, SH0 |
+| 26–27 | LDF, FC | GND | SH1, SPARE4 |
+| 28–30 | FZ, FN, FV | SPARE8–10 | SPARE5–7 |
+| 31–32 | GND | GND/SPARE11 | GND |
 
-(Authoritative mapping is the `busnet()` function in the generator —
-the table above is the human-readable view; trust the code.)
+A27–A30 = FC/FZ/FN/FV (flag lines; were SPARE0–3 in rev C1).
+B27–B30 = SPARE8–11. SPARE numbering starts at 4; there are no SPARE0–3.
 
 Signal positions are unchanged from rev B wherever they existed, so only the
 power pins moved. **Rev B cards are incompatible** (rev B grounded B2; rev C
