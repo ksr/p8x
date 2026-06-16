@@ -25,6 +25,13 @@
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <termios.h>
+#include <signal.h>
+
+static int interactive=0;             /* stdin is a TTY: raw + blocking console */
+static int peeked=-1;                 /* one-char lookahead for ACIA status/data */
+static struct termios g_orig;
+static int g_raw=0;
 
 static uint8_t rom[4][8192], eeprom[0x8000], ram[0x7F00];
 static uint16_t P[5];                 /* P0=PC P1 P2 P3=SP P4=PT (hidden scratch) */
@@ -66,13 +73,31 @@ static int stdin_pending(void){
     fd_set s; struct timeval tv={0,0}; FD_ZERO(&s); FD_SET(0,&s);
     return select(1,&s,0,0,&tv)>0;
 }
+static void term_restore(void){ if(g_raw){ tcsetattr(0,TCSANOW,&g_orig); g_raw=0; } }
+static void on_sig(int s){ (void)s; term_restore(); _exit(0); }
+/* console RX: interactive blocks (no cycle burn) and exits cleanly on EOF;
+   non-interactive keeps the old non-blocking poll / getchar behaviour. */
+static int rx_ready(void){
+    if(!interactive) return stdin_pending();
+    if(peeked>=0) return 1;
+    unsigned char c;
+    if(read(0,&c,1)==1){ peeked=c; return 1; }
+    term_restore(); exit(0);            /* EOF / error */
+}
+static int rx_char(void){
+    if(peeked>=0){ int c=peeked; peeked=-1; return c; }
+    if(!interactive){ int ch=getchar(); return ch<0?0:ch; }
+    unsigned char c;
+    if(read(0,&c,1)==1) return c;
+    term_restore(); exit(0);
+}
 static uint8_t memrd(uint16_t ad){
     if(ad<0x8000) return eeprom[ad];
     if(ad<0xFF00) return ram[ad-0x8000];
     switch(ad){
     case 0xFF00: return 0x00;                                 /* switches */
-    case 0xFF04: return 0x02 | (stdin_pending()?0x01:0x00);   /* TDRE|RDRF */
-    case 0xFF05: { int ch=getchar(); return ch<0?0:ch; }
+    case 0xFF04: return 0x02 | (rx_ready()?0x01:0x00);        /* TDRE|RDRF */
+    case 0xFF05: return rx_char();
     default: return 0xFF;
     }
 }
@@ -97,6 +122,17 @@ int main(int argc,char**argv){
     char fn[64];
     for(int k=0;k<4;k++){ sprintf(fn,"u%d.bin",k); load(fn,rom[k],8192); }
     load(ee,eeprom,0x8000);
+    if(isatty(0) && tcgetattr(0,&g_orig)==0){       /* interactive console */
+        interactive=1;
+        struct termios t=g_orig;
+        t.c_lflag &= ~(ICANON|ECHO);                /* char-at-a-time, BASIC echoes */
+        t.c_iflag &= ~(ICRNL);                      /* Enter -> CR (not NL) */
+        t.c_cc[VMIN]=1; t.c_cc[VTIME]=0;
+        tcsetattr(0,TCSANOW,&t); g_raw=1;
+        atexit(term_restore);
+        signal(SIGINT,on_sig); signal(SIGTERM,on_sig);
+        lim=~0ULL;                                  /* no cycle cap while typing */
+    }
     P[0]=0; P[1]=P[2]=0; P[3]=0xFEFF; P[4]=0; stp=0; IR=0;   /* reset: P0 forced 0 */
     while(!halted && cycles<lim){
         /* condition mux: FCOND of the word currently in the pipeline */

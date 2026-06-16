@@ -29,17 +29,29 @@ Target language:
 
 ## Build & run
 
+**Interactive — type BASIC at a live prompt:**
+
 ```sh
-# from the repo root
-python3 assembler/p8xasm.py basic/p8xbasic.asm -o /tmp/basic.bin
-(cd microcode && python3 genucode.py)      # build u0-u3.bin microcode
-cp microcode/u?.bin .                       # emulator loads u?.bin from its cwd
-emulator/p8xemu /tmp/basic.bin
+./basic/run.sh
 ```
 
-(The emulator reads the ACIA from stdin and writes to stdout, so you type BASIC
-lines straight into the terminal. Use a cycle cap `-l N` to bound EOF spin. Try:
-`printf '20 PRINT "B"\r10 PRINT "A"\rLIST\r' | emulator/p8xemu -l 8000000 /tmp/basic.bin`)
+This assembles the interpreter, builds the microcode, compiles the emulator, and
+launches it attached to your terminal. The emulator detects the TTY and runs the
+console in raw/blocking mode (no cycle cap, no busy-spin), so you can type lines
+directly. Quit with Ctrl-C, or Ctrl-D at the prompt.
+
+**Scripted — pipe a session (for tests/demos):**
+
+```sh
+python3 assembler/p8xasm.py basic/p8xbasic.asm -o /tmp/basic.bin
+(cd microcode && python3 genucode.py)       # build u0-u3.bin
+cp microcode/u?.bin /tmp/
+printf '20 PRINT "B"\r10 PRINT "A"\rLIST\r' | (cd /tmp && \
+    "$OLDPWD/emulator/p8xemu" -l 8000000 basic.bin)
+```
+
+Lines are terminated by CR (`\r`). In scripted mode use a cycle cap `-l N` to
+bound the spin after end-of-input.
 
 ## Planned layout (proposed — see open decisions)
 
