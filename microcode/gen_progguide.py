@@ -66,15 +66,37 @@ for p in (1,2,3):
     DESC[("LDA","(P%d)+"%p)]=("-","A := memory at P%d, then P%d := P%d + 1."%(p,p,p))
     DESC[("STA","(P%d)+"%p)]=("-","Memory at P%d := A, then P%d := P%d + 1."%(p,p,p))
     DESC[("STA","(P%d)"%p)]=("-","Memory at P%d := A."%p)
+    DESC[("LDA","(P%d)"%p)]=("Z N","A := memory at P%d (P%d unchanged)."%(p,p))
     DESC[("LPL%d"%p,"#")]=("-","Low byte of P%d := immediate."%p)
     DESC[("LPH%d"%p,"#")]=("-","High byte of P%d := immediate."%p)
+    DESC[("INP%d"%p,"")]=("-","P%d := P%d + 1."%(p,p))
+    DESC[("DEP%d"%p,"")]=("-","P%d := P%d - 1."%(p,p))
+    DESC[("TAP%dL"%p,"")]=("-","Low byte of P%d := A."%p)
+    DESC[("TAP%dH"%p,"")]=("-","High byte of P%d := A."%p)
+    DESC[("TPA%dL"%p,"")]=("Z N","A := low byte of P%d."%p)
+    DESC[("TPA%dH"%p,"")]=("Z N","A := high byte of P%d."%p)
+DESC[("LDA","a")]=("Z N","A := byte at addr (absolute).")
+DESC[("LDB","a")]=("Z N","B := byte at addr (absolute).")
+DESC[("STA","a")]=("-","Byte at addr := A (absolute).")
+DESC[("JSR","a")]=("-","Push return address, then P0 := addr (absolute call).")
+DESC[("PHA","")]=("-","Push A onto the P3 stack.")
+DESC[("PLA","")]=("Z N","Pop A from the P3 stack.")
+DESC[("CLC","")]=("C","C := 0.")
+DESC[("SEC","")]=("C","C := 1.")
+DESC[("ROL","")]=("C Z N","Rotate A left through carry.")
+DESC[("ROR","")]=("C Z N","Rotate A right through carry.")
+DESC[("JNC","a")]=("-","Branch to addr if C=0. (JC/JZ/JNZ are aliases of BCP/BZ/BNZ.)")
 
-GROUPS=[("System",["NOP","HLT"]),
+GROUPS=[("System",["NOP","HLT","CLC","SEC"]),
  ("Load / store",["LDA","LDB","STA"]),
  ("ALU  (operands A,B; result to A unless noted)",
-  ["ADD","SUB","AND","OR","XOR","CMP","INC","DEC","SHL","SHR"]),
- ("Pointer registers",["LPL1","LPH1","LPL2","LPH2","LPL3","LPH3"]),
- ("Control flow",["JMP","JSR","RTS","BZ","BNZ","BCP"])]
+  ["ADD","SUB","AND","OR","XOR","CMP","INC","DEC","SHL","SHR","ROL","ROR"]),
+ ("Pointer registers",["LPL1","LPH1","LPL2","LPH2","LPL3","LPH3",
+  "INP1","INP2","INP3","DEP1","DEP2","DEP3",
+  "TAP1L","TAP1H","TAP2L","TAP2H","TAP3L","TAP3H",
+  "TPA1L","TPA1H","TPA2L","TPA2H","TPA3L","TPA3H"]),
+ ("Stack",["PHA","PLA"]),
+ ("Control flow",["JMP","JSR","RTS","BZ","BNZ","BCP","JNC"])]
 
 doc=SimpleDocTemplate(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),"docs","p8x-programmers-guide.pdf"),  # stays at docs/ root
     pagesize=A4,leftMargin=14*mm,rightMargin=14*mm,topMargin=13*mm,bottomMargin=13*mm)
