@@ -66,6 +66,19 @@ python3 ../microcode/gen_progguide.py  # programmer's guide
 | [docs/p8x-programmers-guide.pdf](docs/p8x-programmers-guide.pdf) | Generated instruction set reference |
 | [BACKLOG.md](BACKLOG.md) | NEXT / IDEAS / VERIFY / DONE |
 
+### Per-card guides
+
+Each card has a README explaining how its circuit works, chip by chip:
+
+| Card | Guide |
+|------|-------|
+| Control / Microcode | [docs/control-card/README.md](docs/control-card/README.md) |
+| Register Bank | [docs/reg-bank/README.md](docs/reg-bank/README.md) |
+| ALU | [docs/alu-card/README.md](docs/alu-card/README.md) |
+| Memory | [docs/memory-card/README.md](docs/memory-card/README.md) |
+| I/O | [docs/io-card/README.md](docs/io-card/README.md) |
+| CF-IDE | [docs/cf-card/README.md](docs/cf-card/README.md) |
+
 ## Status
 
 - Emulator working: 35 opcodes, ACIA on stdin/stdout, verified against microcode images
