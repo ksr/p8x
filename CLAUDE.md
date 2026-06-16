@@ -56,6 +56,7 @@ memory, I/O, CF-IDE.
 - microcode/    — genucode.py + u0-u3.bin images + gen_progguide.py
 - assembler/    — p8xasm.py (two-pass assembler)
 - firmware/     — p8xmon.asm (ROM monitor source)
+- basic/        — p8xbasic.asm (BASIC interpreter; skeleton REPL so far)
 - emulator/     — p8xemu.c, Makefile, test/
   (p8xasm.py and gen_progguide.py locate genucode.py automatically; the
    emulator Makefile's UC variable points at the microcode directory)

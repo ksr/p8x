@@ -31,6 +31,8 @@ All six cards plug into a passive 10-slot backplane over a 96-pin DIN 41612 bus 
 | `microcode/genucode.py` | `microcode/` | Microcode generator → `u0–u3.bin` EPROM images |
 | `assembler/p8xasm.py` | `assembler/` | Two-pass assembler, shares opcode table with genucode.py |
 | `emulator/p8xemu.c` | `emulator/` | Cycle-accurate emulator, interprets the same u0–u3.bin images |
+| `firmware/p8xmon.asm` | `firmware/` | ROM monitor (E/D/I/F/B/G commands) over the ACIA console |
+| `basic/p8xbasic.asm` | `basic/` | BASIC interpreter ([skeleton](basic/README.md)) |
 | `generators/gen_eagle.py` | `generators/` | Generates Eagle schematics + boards for all 7 boards (backplane + 6 cards) |
 
 **Generators are canon.** Never hand-edit Eagle `.sch`/`.brd` files or ROM binaries — they are build artifacts. Edit the generator and regenerate. See [generators/README.md](generators/README.md) for what each script does and how to run it.
