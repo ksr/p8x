@@ -4,13 +4,22 @@ A small BASIC interpreter for the P8X, written in P8X assembly, assembled by
 [`p8xasm.py`](../assembler/p8xasm.py) and run over the 6850 ACIA serial console —
 the same toolchain and I/O the [ROM monitor](../firmware/p8xmon.asm) uses.
 
-> **Status: immediate-mode calculator.** Editor (enter/replace/delete numbered
-> lines, `LIST`, `NEW`) + keyword tokenizer, plus a working **integer expression
-> evaluator** with `PRINT` and `LET`. At the prompt you can type e.g.
-> `PRINT 2+3*4` → `14`, `LET A=5` / `PRINT A*A` → `25`, `B=10` (implicit LET),
-> `PRINT (2+3)*4`, `PRINT 100/7`, `PRINT "HI"`. Verified in the emulator.
-> Still to come: `RUN` + control flow (`GOTO`/`IF`/`FOR`), signed integers,
-> unary minus, multi-item `PRINT`.
+> **Status: runs programs.** Editor + tokenizer + integer expression evaluator,
+> and stored programs now **execute**: `RUN`, `GOTO`, `IF…THEN <stmt|line>`,
+> `END`, plus comparisons (`= <> < > <= >=`), `PRINT`, `LET`. A real branching
+> program works, e.g.:
+>
+> ```
+> 10 LET I=5
+> 20 PRINT I
+> 30 LET I=I-1
+> 40 IF I>0 THEN 20
+> 50 END
+> RUN        ->  5 4 3 2 1
+> ```
+>
+> Verified in the emulator. Still to come: `FOR/NEXT`, `GOSUB/RETURN`, `INPUT`,
+> multi-statement lines (`:`), signed integers + unary minus, multi-item `PRINT`.
 
 ## Direction
 
@@ -70,8 +79,9 @@ bound the spin after end-of-input.
    number), `LIST`, `NEW`. ✅ (rebuild-via-scratch-buffer; 16-bit decimal I/O)
 3. **Expression evaluator** — integer `+ - * /`, parens, variables (A–Z).
    ✅ recursive-descent; 16-bit mul/div helpers. Wired to immediate `PRINT`/`LET`.
-4. **Statements + RUN** — execute the stored program: `RUN`, `GOTO`, `IF/THEN`,
-   `FOR/NEXT`, `GOSUB/RETURN`, `END`, `INPUT`; comparisons; multi-item `PRINT`.
+4. **Statements + RUN** — execute the stored program.
+   ✅ `RUN`, `GOTO`, `IF/THEN`, `END`, comparisons. Still to add: `FOR/NEXT`,
+   `GOSUB/RETURN`, `INPUT`, multi-statement lines, multi-item `PRINT`.
 5. **Polish** — error messages, `REM`, multi-statement lines, `RND`/`PEEK`/`POKE`.
 
 ## Open decisions

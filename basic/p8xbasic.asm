@@ -43,11 +43,25 @@ RESULT = $807C          ; 16-bit expression result
 ACC    = $807E          ; 16-bit mul/div accumulator
 MCNT   = $8080          ; mul/div bit counter
 REM    = $8082          ; 16-bit division remainder
+CURLINE= $8084          ; RUN: pointer to current program line record
+BRANCHF= $8086          ; RUN: 1 if a GOTO target is pending
+ENDF   = $8087          ; RUN: 1 to stop the program
+BRANCHN= $8088          ; RUN: pending GOTO target line number
+RELOP  = $808A          ; comparison operator code (0..5)
+GEF    = $808B          ; compare: left >= right
+EQF    = $808C          ; compare: left == right
+LFT    = $808D          ; comparison left operand (2)
+FNDF   = $808F          ; FINDLINE: 1 if line found
 VARS   = $80C0          ; variables A-Z: 26 x 2 bytes ($80C0..$80F3)
 
 ; keyword tokens (>= $80 so they never collide with text or the 00 terminator)
 TOK_PRINT = $80
 TOK_LET  = $81
+TOK_IF   = $82
+TOK_THEN = $83
+TOK_GOTO = $87
+TOK_END  = $8C
+TOK_RUN  = $8D
 TOK_LIST = $8E
 TOK_NEW  = $8F
 
@@ -94,6 +108,22 @@ STMT:   JSR  SKIPSP
         CMP
         JZ   DOLET
         LDA  (P2)
+        LDB  #TOK_RUN
+        CMP
+        JZ   DORUN
+        LDA  (P2)
+        LDB  #TOK_GOTO
+        CMP
+        JZ   DOGOTO
+        LDA  (P2)
+        LDB  #TOK_IF
+        CMP
+        JZ   DOIF
+        LDA  (P2)
+        LDB  #TOK_END
+        CMP
+        JZ   DOEND
+        LDA  (P2)
         LDB  #TOK_LIST
         CMP
         JZ   st_list
@@ -138,7 +168,7 @@ DOPRINT: INP2                       ; skip PRINT token
         LDB  #'"'
         CMP
         JZ   dp_str
-        JSR  EXPR                   ; RESULT = value
+        JSR  EVAL                   ; RESULT = value (expr, optional comparison)
         LDA  RESULT
         STA  LNUM
         LDA  RESULT+1
@@ -188,7 +218,7 @@ dl_var: LDA  (P2)
         CMP
         JNZ  dl_err
         INP2
-        JSR  EXPR                   ; RESULT = value
+        JSR  EVAL                   ; RESULT = value (expr, optional comparison)
         LDA  SAVE1
         TAP1L
         LDA  SAVE1+1
@@ -202,12 +232,287 @@ dl_var: LDA  (P2)
 dl_err: JMP  SYNERR
 
 ;==============================================================================
+; PROGRAM EXECUTION (RUN, GOTO, IF/THEN, END)
+;==============================================================================
+; RUN — execute the stored program from the lowest line number
+DORUN:  LDA  #0
+        STA  ENDF
+        LDA  #<PROG
+        STA  CURLINE
+        LDA  #>PROG
+        STA  CURLINE+1
+run_l:  LDA  CURLINE
+        TAP1L
+        LDA  CURLINE+1
+        TAP1H
+        LDA  (P1)+
+        STA  NUM1
+        LDA  (P1)+
+        STA  NUM1+1
+        LDA  NUM1
+        LDB  NUM1+1
+        OR
+        JZ   run_done               ; 00,00 marker = end of program
+        TPA1L                       ; P2 = P1 (line text)
+        TAP2L
+        TPA1H
+        TAP2H
+        LDA  #0
+        STA  BRANCHF
+        JSR  STMT
+        LDA  ENDF
+        JNZ  run_done
+        LDA  BRANCHF
+        JNZ  run_goto
+        LDA  CURLINE                ; advance to next record
+        TAP1L
+        LDA  CURLINE+1
+        TAP1H
+        INP1
+        INP1
+rn_sk:  LDA  (P1)+
+        JNZ  rn_sk
+        TPA1L
+        STA  CURLINE
+        TPA1H
+        STA  CURLINE+1
+        JMP  run_l
+run_goto: JSR FINDLINE
+        LDA  FNDF
+        JZ   run_undef
+        TPA1L
+        STA  CURLINE
+        TPA1H
+        STA  CURLINE+1
+        JMP  run_l
+run_undef: LDP1 #MUNDEF
+        JSR  PUTS
+        RTS
+run_done: LDP1 #MOK
+        JSR  PUTS
+        RTS
+
+; FINDLINE — find the program line numbered BRANCHN; FNDF=1, P1=record start
+FINDLINE: LDA #<PROG
+        TAP1L
+        LDA  #>PROG
+        TAP1H
+fl_l:   TPA1L
+        STA  RP
+        TPA1H
+        STA  RP+1
+        LDA  (P1)+
+        STA  NUM1
+        LDA  (P1)+
+        STA  NUM1+1
+        LDA  NUM1
+        LDB  NUM1+1
+        OR
+        JZ   fl_no
+        LDA  BRANCHN
+        STA  NUM2
+        LDA  BRANCHN+1
+        STA  NUM2+1
+        JSR  CMP16
+        JZ   fl_found
+fl_sk:  LDA  (P1)+
+        JNZ  fl_sk
+        JMP  fl_l
+fl_found: LDA RP
+        TAP1L
+        LDA  RP+1
+        TAP1H
+        LDA  #1
+        STA  FNDF
+        RTS
+fl_no:  LDA  #0
+        STA  FNDF
+        RTS
+
+; GOTO <line>
+DOGOTO: INP2
+        JSR  SKIPSP
+DOGOTON: JSR PARSEDEC
+        LDA  LNUM
+        STA  BRANCHN
+        LDA  LNUM+1
+        STA  BRANCHN+1
+        LDA  #1
+        STA  BRANCHF
+        RTS
+
+; IF <expr> THEN <statement | line-number>
+DOIF:   INP2
+        JSR  EVAL
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #TOK_THEN
+        CMP
+        JNZ  if_err
+        INP2
+        LDA  RESULT
+        LDB  RESULT+1
+        OR
+        JZ   if_false               ; false -> skip rest of line
+        JSR  SKIPSP
+        LDA  (P2)                   ; digit after THEN -> implicit GOTO
+        LDB  #'0'
+        SUB
+        JNC  if_stmt
+        LDB  #10
+        CMP
+        JC   if_stmt
+        JMP  DOGOTON
+if_stmt: JMP  STMT
+if_false: RTS
+if_err: JMP  SYNERR
+
+; END — stop the running program
+DOEND:  INP2
+        LDA  #1
+        STA  ENDF
+        RTS
+
+;==============================================================================
 ; EXPRESSION EVALUATOR (recursive descent) — result -> RESULT
 ;   EXPR   = TERM   (('+'|'-') TERM)*
 ;   TERM   = FACTOR (('*'|'/') FACTOR)*
 ;   FACTOR = number | variable | '(' EXPR ')'
 ; The running left value is pushed (lo,hi) across the recursive call.
 ;==============================================================================
+; EVAL — an arithmetic EXPR, then an optional comparison -> RESULT (1=true/0=false)
+EVAL:   JSR  EXPR
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #'='
+        CMP
+        JZ   ev_eq
+        LDA  (P2)
+        LDB  #'<'
+        CMP
+        JZ   ev_lt
+        LDA  (P2)
+        LDB  #'>'
+        CMP
+        JZ   ev_gt
+        RTS                         ; no comparison: RESULT is the arithmetic value
+ev_eq:  INP2
+        LDA  #0
+        STA  RELOP
+        JMP  ev_rhs
+ev_lt:  INP2
+        LDA  (P2)
+        LDB  #'='
+        CMP
+        JZ   ev_le
+        LDA  (P2)
+        LDB  #'>'
+        CMP
+        JZ   ev_ne
+        LDA  #1
+        STA  RELOP
+        JMP  ev_rhs
+ev_le:  INP2
+        LDA  #3
+        STA  RELOP
+        JMP  ev_rhs
+ev_ne:  INP2
+        LDA  #5
+        STA  RELOP
+        JMP  ev_rhs
+ev_gt:  INP2
+        LDA  (P2)
+        LDB  #'='
+        CMP
+        JZ   ev_ge
+        LDA  #2
+        STA  RELOP
+        JMP  ev_rhs
+ev_ge:  INP2
+        LDA  #4
+        STA  RELOP
+ev_rhs: LDA  RESULT                 ; left operand
+        STA  LFT
+        LDA  RESULT+1
+        STA  LFT+1
+        JSR  EXPR                   ; right -> RESULT
+        LDA  LFT
+        STA  NUM1
+        LDA  LFT+1
+        STA  NUM1+1
+        LDA  RESULT
+        STA  NUM2
+        LDA  RESULT+1
+        STA  NUM2+1
+        JSR  CMP16                  ; Z=equal, C=left>=right
+        JZ   ev_ceq
+        JC   ev_cgt
+        LDA  #0                     ; left < right
+        STA  GEF
+        STA  EQF
+        JMP  ev_disp
+ev_cgt: LDA  #1
+        STA  GEF
+        LDA  #0
+        STA  EQF
+        JMP  ev_disp
+ev_ceq: LDA  #1
+        STA  GEF
+        STA  EQF
+ev_disp: LDA #0
+        STA  RESULT+1
+        LDA  RELOP
+        JZ   ev_req                 ; '='  -> EQF
+        LDB  #1
+        CMP
+        JZ   ev_rlt                 ; '<'  -> !GEF
+        LDA  RELOP
+        LDB  #2
+        CMP
+        JZ   ev_rgt                 ; '>'  -> GEF & !EQF
+        LDA  RELOP
+        LDB  #3
+        CMP
+        JZ   ev_rle                 ; '<=' -> !GEF | EQF
+        LDA  RELOP
+        LDB  #4
+        CMP
+        JZ   ev_rge                 ; '>=' -> GEF
+        LDA  EQF                    ; '<>' -> !EQF
+        LDB  #1
+        XOR
+        STA  RESULT
+        RTS
+ev_req: LDA  EQF
+        STA  RESULT
+        RTS
+ev_rge: LDA  GEF
+        STA  RESULT
+        RTS
+ev_rlt: LDA  GEF
+        LDB  #1
+        XOR
+        STA  RESULT
+        RTS
+ev_rgt: LDA  EQF
+        LDB  #1
+        XOR
+        STA  TMPC
+        LDA  GEF
+        LDB  TMPC
+        AND
+        STA  RESULT
+        RTS
+ev_rle: LDA  GEF
+        LDB  #1
+        XOR
+        STA  TMPC
+        LDA  EQF
+        LDB  TMPC
+        OR
+        STA  RESULT
+        RTS
+
 EXPR:   JSR  TERM
 ex_l:   JSR  SKIPSP
         LDA  (P2)
@@ -1029,4 +1334,6 @@ MOK:    .ascii "Ok"
         .byte CR,LF,0
 MWHAT:  .byte $3F,CR,LF,0
 MSYN:   .ascii "?SYNTAX ERROR"
+        .byte CR,LF,0
+MUNDEF: .ascii "?UNDEF'D LINE"
         .byte CR,LF,0
