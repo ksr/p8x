@@ -4,11 +4,12 @@ A small BASIC interpreter for the P8X, written in P8X assembly, assembled by
 [`p8xasm.py`](../assembler/p8xasm.py) and run over the 6850 ACIA serial console —
 the same toolchain and I/O the [ROM monitor](../firmware/p8xmon.asm) uses.
 
-> **Status: line editor (milestone 2).** `p8xbasic.asm` boots and runs a REPL
-> with a working program editor: enter numbered lines (stored sorted; same
-> number replaces, a bare number deletes), `LIST`, `NEW`. Line numbers are full
-> 16-bit integers. Verified in the emulator. Tokenizing and execution (`RUN`,
-> statements, expressions) are the next milestones.
+> **Status: line editor + tokenizer.** `p8xbasic.asm` boots and runs a REPL with
+> a working program editor: enter numbered lines (stored sorted; same number
+> replaces, a bare number deletes), `LIST`, `NEW`. Keywords are tokenized to
+> single bytes on entry and expanded by `LIST`. Line numbers are full 16-bit
+> integers. Verified in the emulator. Execution (`RUN`, statements, expression
+> evaluation) is the next milestone.
 
 ## Direction
 
@@ -61,9 +62,9 @@ lines straight into the terminal. Use a cycle cap `-l N` to bound EOF spin. Try:
 
 ## Open decisions
 
-Settled: dialect = richer MS-style subset; numbers = integer-only. Still open:
+Settled: dialect = richer MS-style subset; numbers = integer-only;
+**storage = keywords tokenized to single bytes** (≥$80), strings/text left
+literal — crunch on entry, uncrunch in `LIST`. Still open:
 
-- **Storage** — store source text verbatim, or tokenize keywords to single bytes?
-  (Tokenizing saves space and speeds the run loop; decide at milestone 2.)
 - **Relationship to the system** — standalone ROM image (current, easiest to test),
   vs launched from the monitor's `G`, vs loaded from CF by the OS.

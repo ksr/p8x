@@ -33,6 +33,16 @@ PCNT   = $8070
 CYTMP  = $8071
 INSF   = $8072          ; 1 once the new line has been emitted
 TXTMT  = $8073          ; 1 if entered line has empty text (delete)
+WP     = $8074          ; crunch write pointer
+RP     = $8076          ; pointer save (match / uncrunch)
+TOKEN  = $8078          ; token matched by MATCHKW
+MATCHF = $8079          ; 1 if MATCHKW found a keyword
+TMPC   = $807A          ; byte scratch
+TOKW   = $807B          ; token being uncrunched
+
+; keyword tokens (>= $80 so they never collide with text or the 00 terminator)
+TOK_LIST = $8E
+TOK_NEW  = $8F
 
 PROG   = $8100          ; program storage
 PBUF   = $C000          ; rebuild scratch buffer
@@ -51,6 +61,7 @@ STKTOP = $FEFF
 
 ; ---------------- REPL -------------------------------------------------------
 REPL:   JSR  GETLINE         ; line -> LBUF
+        JSR  CRUNCH          ; tokenize keywords in place
         LDP2 #LBUF
         JSR  SKIPSP
         LDA  (P2)
@@ -62,11 +73,13 @@ REPL:   JSR  GETLINE         ; line -> LBUF
         CMP
         JC   RCMD            ; ch > '9'
         JMP  DOLINE
-RCMD:   LDP1 #KWLIST
-        JSR  MATCH
+RCMD:   LDA  (P2)            ; immediate command = a leading token byte
+        LDB  #TOK_LIST
+        CMP
         JZ   DOLIST
-        LDP1 #KWNEW
-        JSR  MATCH
+        LDA  (P2)
+        LDB  #TOK_NEW
+        CMP
         JZ   DONEW
         LDP1 #MWHAT
         JSR  PUTS
@@ -226,10 +239,34 @@ ls_l:   LDA  (P1)+
         TAP1H
         LDA  #' '
         JSR  PUTC
-        JSR  PUTS            ; print text; leaves P1 at next record
+        JSR  PRTEXT          ; print tokenized text; leaves P1 at next record
         JSR  CRLF
         JMP  ls_l
 ls_done: RTS
+
+; PRTEXT — print tokenized text at (P1), expanding token bytes back to keywords;
+;          leaves P1 just past the 00 terminator.
+PRTEXT: LDA  (P1)+
+        JZ   pt_done
+        STA  TMPC
+        LDB  #$80
+        AND
+        JZ   pt_lit
+        TPA1L                ; token: save program ptr, print keyword, restore
+        STA  SAVE2
+        TPA1H
+        STA  SAVE2+1
+        LDA  TMPC
+        JSR  PRKW
+        LDA  SAVE2
+        TAP1L
+        LDA  SAVE2+1
+        TAP1H
+        JMP  PRTEXT
+pt_lit: LDA  TMPC
+        JSR  PUTC
+        JMP  PRTEXT
+pt_done: RTS
 
 ;==============================================================================
 ; 16-bit helpers — operands NUM1/NUM2 (lo,hi); results in NUM1
@@ -365,28 +402,185 @@ prsk:   LDA  PCNT
 POW10:  .word 10000,1000,100,10,1
 
 ;==============================================================================
-; MATCH — does (P2) start with keyword (P1, 0-term)?  Z=1 match (P2 advanced),
-;         Z=0 no match (P2 restored).
+; TOKENIZER
 ;==============================================================================
-MATCH:  TPA2L
-        STA  SAVE2
-        TPA2H
-        STA  SAVE2+1
-ma_l:   LDA  (P1)+
-        JZ   ma_ok
-        STA  RNUM            ; expected char
-        LDA  (P2)+
-        LDB  RNUM
+; CRUNCH — tokenize LBUF in place: keywords -> single token bytes, strings and
+; everything else left literal. (Output never overtakes input since tokens
+; shrink, so in-place is safe.)
+CRUNCH: LDP1 #LBUF                  ; read pointer
+        LDA  #<LBUF
+        STA  WP                     ; write pointer
+        LDA  #>LBUF
+        STA  WP+1
+cr_lp:  LDA  (P1)
+        JZ   cr_end
+        LDB  #'"'
         CMP
-        JZ   ma_l
-        LDA  SAVE2           ; mismatch -> restore P2
+        JZ   cr_str
+        JSR  MATCHKW                ; keyword at (P1)?
+        LDA  MATCHF
+        JZ   cr_chr
+        LDA  TOKEN                  ; yes: emit token byte
+        JSR  CR_PUTW
+        JMP  cr_lp
+cr_chr: LDA  (P1)+                  ; no: copy one char
+        JSR  CR_PUTW
+        JMP  cr_lp
+cr_str: LDA  (P1)+                  ; copy quote + body + closing quote literally
+        JSR  CR_PUTW
+cr_s1:  LDA  (P1)
+        JZ   cr_end
+        LDA  (P1)+
+        JSR  CR_PUTW
+        LDB  #'"'
+        CMP
+        JNZ  cr_s1
+        JMP  cr_lp
+cr_end: LDA  #0                     ; terminator
+        JSR  CR_PUTW
+        RTS
+
+CR_PUTW: STA TMPC                   ; write A to (WP), WP++
+        LDA  WP
         TAP2L
-        LDA  SAVE2+1
+        LDA  WP+1
         TAP2H
-        LDA  #1              ; Z=0
+        LDA  TMPC
+        STA  (P2)
+        INP2
+        TPA2L
+        STA  WP
+        TPA2H
+        STA  WP+1
         RTS
-ma_ok:  LDA  #0              ; Z=1
+
+; MATCHKW — keyword at (P1)? sets MATCHF=1 + TOKEN and advances P1 past it,
+;           else MATCHF=0 and P1 unchanged.  Uses P2 to walk KWTAB.
+MATCHKW: TPA1L                      ; save input position
+        STA  RP
+        TPA1H
+        STA  RP+1
+        LDA  #<KWTAB
+        TAP2L
+        LDA  #>KWTAB
+        TAP2H
+mk_e:   LDA  (P2)
+        JZ   mk_no                  ; end of table
+mk_in:  LDA  (P2)
+        STA  TMPC
+        LDB  #$80
+        AND
+        JNZ  mk_hit                 ; reached token byte -> all letters matched
+        LDA  (P1)                   ; compare input vs table letter
+        LDB  TMPC
+        CMP
+        JNZ  mk_sk
+        INP1
+        INP2
+        JMP  mk_in
+mk_hit: LDA  TMPC
+        STA  TOKEN
+        LDA  #1
+        STA  MATCHF
         RTS
+mk_sk:  LDA  (P2)                   ; skip rest of this entry (letters + token)
+        STA  TMPC
+        INP2
+        LDB  #$80
+        AND
+        JZ   mk_sk
+        LDA  RP                     ; restore input, try next entry
+        TAP1L
+        LDA  RP+1
+        TAP1H
+        JMP  mk_e
+mk_no:  LDA  #0
+        STA  MATCHF
+        LDA  RP
+        TAP1L
+        LDA  RP+1
+        TAP1H
+        RTS
+
+; PRKW — print the keyword whose token == A (>= $80).  Uses P1 to walk KWTAB.
+PRKW:   STA  TOKW
+        LDA  #<KWTAB
+        TAP1L
+        LDA  #>KWTAB
+        TAP1H
+pk_e:   TPA1L                       ; remember this entry's letter start
+        STA  RP
+        TPA1H
+        STA  RP+1
+pk_sc:  LDA  (P1)+
+        STA  TMPC
+        LDB  #$80
+        AND
+        JZ   pk_sc                  ; skip letters to the token byte
+        LDA  TMPC
+        LDB  TOKW
+        CMP
+        JZ   pk_pr                  ; this entry's token matches
+        LDA  (P1)
+        JZ   pk_d                   ; table end
+        JMP  pk_e
+pk_pr:  LDA  RP                     ; re-walk letters from start, printing
+        TAP1L
+        LDA  RP+1
+        TAP1H
+pk_pl:  LDA  (P1)+
+        STA  TMPC
+        LDB  #$80
+        AND
+        JNZ  pk_d                   ; reached token -> done
+        LDA  TMPC
+        JSR  PUTC
+        JMP  pk_pl
+pk_d:   RTS
+
+; keyword table: each entry = ASCII letters then the token byte (>= $80);
+; a 00 ends the table.  (Token byte doubles as the entry's end marker.)
+KWTAB:  .ascii "PRINT"
+        .byte $80
+        .ascii "LET"
+        .byte $81
+        .ascii "IF"
+        .byte $82
+        .ascii "THEN"
+        .byte $83
+        .ascii "FOR"
+        .byte $84
+        .ascii "TO"
+        .byte $85
+        .ascii "NEXT"
+        .byte $86
+        .ascii "GOTO"
+        .byte $87
+        .ascii "GOSUB"
+        .byte $88
+        .ascii "RETURN"
+        .byte $89
+        .ascii "INPUT"
+        .byte $8A
+        .ascii "REM"
+        .byte $8B
+        .ascii "END"
+        .byte $8C
+        .ascii "RUN"
+        .byte $8D
+        .ascii "LIST"
+        .byte $8E
+        .ascii "NEW"
+        .byte $8F
+        .ascii "ABS"
+        .byte $90
+        .ascii "RND"
+        .byte $91
+        .ascii "PEEK"
+        .byte $92
+        .ascii "POKE"
+        .byte $93
+        .byte $00
 
 ;==============================================================================
 ; Console
@@ -460,7 +654,3 @@ BANNER: .byte CR,LF
 MOK:    .ascii "Ok"
         .byte CR,LF,0
 MWHAT:  .byte $3F,CR,LF,0
-KWLIST: .ascii "LIST"
-        .byte 0
-KWNEW:  .ascii "NEW"
-        .byte 0
