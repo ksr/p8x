@@ -6,7 +6,7 @@ dots; NC marks. Net data comes from the generator netlists (canonical)."""
 import sys, re, os as _os
 _HERE=_os.path.dirname(_os.path.abspath(__file__))
 sys.path.insert(0,_HERE)
-import gen_p8x_cards as G          # regenerates + provides DEV, busnet, ALLPINS, CARDNETS
+import gen_eagle as G              # regenerates all boards, provides DEV, busnet, ALLPINS, CARDS
 _DOCS=_os.path.join(_os.path.dirname(_HERE),"docs")
 from reportlab.pdfgen import canvas as pdfc
 from reportlab.lib.colors import Color
