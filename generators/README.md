@@ -16,10 +16,10 @@ pip3 install reportlab
 
 | Script | Produces | Output dir | Run from |
 |--------|----------|------------|----------|
-| `gen_eagle.py` | All 14 Eagle files (7 boards × `.sch`+`.brd`) | `hardware/eagle/<board>/` | `hardware/eagle/` |
-| `render_traditional_auto.py` | All 6 card schematic PDFs | `docs/<card>/` | `hardware/eagle/` |
-| `gen_bus_pdf.py` | Bus-definition PDF | `docs/backplane/` | anywhere |
-| `render_bp_traditional.py` | Backplane schematic PDF | `docs/backplane/` | anywhere |
+| `gen_eagle.py` | All 14 Eagle files (7 boards × `.sch`+`.brd`) | `hardware/<board>/` | `hardware/` |
+| `render_traditional_auto.py` | All 6 card schematic PDFs | `hardware/<board>/` | `hardware/` |
+| `gen_bus_pdf.py` | Bus-definition PDF | `hardware/backplane/` | anywhere |
+| `render_bp_traditional.py` | Backplane schematic PDF | `hardware/backplane/` | anywhere |
 
 (The programmer's guide PDF is generated separately by
 [`microcode/gen_progguide.py`](../microcode/gen_progguide.py).)
@@ -33,10 +33,10 @@ validated after generation (pin/pad names checked, no pin wired to two nets).
 
 It writes each board's `.sch`/`.brd` pair into its **own subdirectory** of the
 current directory (e.g. `control-card/p8x-control-card.sch`), creating the
-subdirectories as needed, so run it from `hardware/eagle/`:
+subdirectories as needed, so run it from `hardware/`:
 
 ```sh
-cd hardware/eagle && python3 ../../generators/gen_eagle.py
+cd hardware && python3 ../generators/gen_eagle.py
 ```
 
 It also exposes its netlists for other scripts to import (`DEV`, `busnet`,
@@ -48,12 +48,13 @@ Imports `gen_eagle` and algorithmically lays out a traditional-style schematic
 (bus spines, junction dots, power-rail glyphs, NC marks) for every card in
 `gen_eagle.CARDS` — all six (control, register-bank, ALU, I/O, CF, and memory).
 Automatic placement: functional rather than hand-polished, but covers every card
-from one run. Because it imports `gen_eagle`, running it regenerates the board
-files too, so run it from `hardware/eagle/`.
+from one run. Each card's PDF lands in its own `hardware/<board>/` directory.
+Because it imports `gen_eagle`, running it regenerates the board files too, so run
+it from `hardware/`.
 
 ### `gen_bus_pdf.py` / `render_bp_traditional.py` — backplane docs
-Standalone scripts (no `gen_eagle` import) that write straight to `docs/backplane/`
-via absolute paths, so they run from anywhere:
+Standalone scripts (no `gen_eagle` import) that write straight to
+`hardware/backplane/` via absolute paths, so they run from anywhere:
 - `gen_bus_pdf.py` — the bus-definition reference PDF (pinout, DOE/DLD tables,
   microcode word layout).
 - `render_bp_traditional.py` — the backplane schematic PDF.
@@ -61,10 +62,10 @@ via absolute paths, so they run from anywhere:
 ## Regenerate everything
 
 ```sh
-cd hardware/eagle
-python3 ../../generators/gen_eagle.py                # 14 .sch/.brd files
-python3 ../../generators/render_traditional_auto.py  # all 6 card schematic PDFs
-python3 ../../generators/gen_bus_pdf.py              # bus-definition PDF
-python3 ../../generators/render_bp_traditional.py    # backplane schematic PDF
-python3 ../../microcode/gen_progguide.py             # programmer's guide PDF
+cd hardware
+python3 ../generators/gen_eagle.py                # 14 .sch/.brd files
+python3 ../generators/render_traditional_auto.py  # all 6 card schematic PDFs
+python3 ../generators/gen_bus_pdf.py              # bus-definition PDF
+python3 ../generators/render_bp_traditional.py    # backplane schematic PDF
+python3 ../microcode/gen_progguide.py             # programmer's guide PDF
 ```

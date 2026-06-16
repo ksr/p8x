@@ -7,7 +7,7 @@ import sys, re, os as _os
 _HERE=_os.path.dirname(_os.path.abspath(__file__))
 sys.path.insert(0,_HERE)
 import gen_eagle as G              # regenerates all boards, provides DEV, busnet, ALLPINS, CARDS
-_DOCS=_os.path.join(_os.path.dirname(_HERE),"docs")
+_HW=_os.path.join(_os.path.dirname(_HERE),"hardware")  # per-board dirs hold CAD + docs + PDFs
 from reportlab.pdfgen import canvas as pdfc
 from reportlab.lib.colors import Color
 MM=2.83465; GR=2.54; HALFW=12.7; PINX=17.78
@@ -217,11 +217,8 @@ def draw_card(name,title,parts,nets,outpdf):
     c.save()
 
 if __name__=="__main__":
-    CARD_DIRS={"control-card":"control-card","regbank-card":"reg-bank",
-               "alu-card":"alu-card","io-card":"io-card","cf-card":"cf-card",
-               "memory-card":"memory-card"}
+    # each card's PDF goes in its own hardware/<board>/ dir (name matches the board)
     for name,(title,parts,nets) in G.CARDS.items():
-        subdir=CARD_DIRS.get(name,name)
-        outpdf=_os.path.join(_DOCS,subdir,"p8x-%s-schematic.pdf"%name)
+        outpdf=_os.path.join(_HW,name,"p8x-%s-schematic.pdf"%name)
         draw_card(name,title,parts,nets,outpdf)
         print("wrote",_os.path.basename(outpdf))

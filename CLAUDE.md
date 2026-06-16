@@ -46,9 +46,13 @@ memory, I/O, CF-IDE.
   (message print; JSR/RTS round trip in emulator/test/).
 
 ## Layout
-- docs/         — design docs, bus definition PDF, schematic PDFs, standards
-- hardware/eagle/<board>/ — generated CAD, one subdirectory per board (artifacts; see rule 1)
-- generators/   — Python generators for CAD + schematic PDF renderers
+- hardware/<board>/ — everything for one board in one place: generated CAD
+  (.sch/.brd, artifacts; see rule 1) + schematic PDF + README + design docs.
+  One dir per board: backplane, memory-card, control-card, regbank-card,
+  alu-card, io-card, cf-card
+- docs/         — cross-cutting docs only: p8x-system-design.md,
+  p8x-card-standards.md, p8x-programmers-guide.pdf
+- generators/   — Python generators for CAD + schematic PDF renderers (run from hardware/)
 - microcode/    — genucode.py + u0-u3.bin images + gen_progguide.py
 - assembler/    — p8xasm.py (two-pass assembler)
 - firmware/     — p8xmon.asm (ROM monitor source)

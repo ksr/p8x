@@ -10,7 +10,7 @@ own subdirectory:
   cf-card/p8x-cf-card.sch/.brd
 Board stack: Top(1) signals / Route2(2) GND plane / Route15(15) +5V plane / Bottom(16) signals.
 Output: each board's .sch/.brd pair goes in its own subdirectory of the current
-working directory (e.g. control-card/p8x-control-card.sch), so run from hardware/eagle/.
+working directory (e.g. control-card/p8x-control-card.sch), so run from hardware/.
 NOTE: new device pin numbers require a datasheet verification pass before fab (tracked in BACKLOG)."""
 
 import os

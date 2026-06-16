@@ -13,7 +13,7 @@ A0–A15, optionally increment/decrement at the clock edge."
 
 > This README describes the circuit as actually built in
 > [`generators/gen_eagle.py`](../../generators/gen_eagle.py). See
-> [p8x-system-design.md §4](../p8x-system-design.md) for the architecture and
+> [p8x-system-design.md §4](../../docs/p8x-system-design.md) for the architecture and
 > [p8x-bus-definition.md](../backplane/p8x-bus-definition.md) for bus pins.
 
 ## Chip inventory

@@ -12,7 +12,7 @@ and generates a clean write strobe.
 
 > This README describes the circuit as actually built in
 > [`generators/gen_eagle.py`](../../generators/gen_eagle.py). See
-> [p8x-system-design.md §6](../p8x-system-design.md) for the overview and
+> [p8x-system-design.md §6](../../docs/p8x-system-design.md) for the overview and
 > [p8x-bus-definition.md](../backplane/p8x-bus-definition.md) for bus pins.
 
 ## Chip inventory

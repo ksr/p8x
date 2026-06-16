@@ -45,43 +45,46 @@ cd emulator && make
 make test
 
 # Regenerate the Eagle boards + schematic PDFs. The schematic renderers import
-# gen_eagle.py, which writes the .sch/.brd files into the current directory, so
-# run them from hardware/eagle/.
-cd ../hardware/eagle
-python3 ../../generators/gen_eagle.py                # all 14 .sch/.brd files
-python3 ../../generators/render_traditional_auto.py  # all 6 card schematic PDFs
+# gen_eagle.py, which writes the .sch/.brd files into per-board subdirectories of
+# the current directory, so run them from hardware/.
+cd ../hardware
+python3 ../generators/gen_eagle.py                # all 14 .sch/.brd files (hardware/<board>/)
+python3 ../generators/render_traditional_auto.py  # all 6 card schematic PDFs (hardware/<board>/)
 
-# These are standalone (write straight to docs/) and run from anywhere:
-python3 ../../generators/gen_bus_pdf.py              # bus definition
-python3 ../../generators/render_bp_traditional.py    # backplane schematic
-python3 ../../microcode/gen_progguide.py             # programmer's guide
+# These write straight to hardware/backplane/ (and docs/) and run from anywhere:
+python3 ../generators/gen_bus_pdf.py              # bus definition PDF
+python3 ../generators/render_bp_traditional.py    # backplane schematic PDF
+python3 ../microcode/gen_progguide.py             # programmer's guide (-> docs/)
 ```
 
 ## Documentation
 
 | Document | Description |
 |----------|-------------|
-| [docs/backplane/p8x-bus-definition.md](docs/backplane/p8x-bus-definition.md) | Authoritative 96-pin bus pinout, signal descriptions, DOE/DLD encoding, microcode word layout |
-| [docs/backplane/p8x-backplane-design.md](docs/backplane/p8x-backplane-design.md) | PCB stackup, termination analysis, BOM |
+| [hardware/backplane/p8x-bus-definition.md](hardware/backplane/p8x-bus-definition.md) | Authoritative 96-pin bus pinout, signal descriptions, DOE/DLD encoding, microcode word layout |
+| [hardware/backplane/p8x-backplane-design.md](hardware/backplane/p8x-backplane-design.md) | PCB stackup, termination analysis, BOM |
 | [docs/p8x-card-standards.md](docs/p8x-card-standards.md) | Design rules that apply to every plug-in card |
 | [docs/p8x-system-design.md](docs/p8x-system-design.md) | System and card-by-card architecture reference |
-| [docs/cf-card/p8x-cf-os-design.md](docs/cf-card/p8x-cf-os-design.md) | CF-IDE hardware + P8X/OS design |
-| [docs/cf-card/p8xfs-v2-hierarchical.md](docs/cf-card/p8xfs-v2-hierarchical.md) | P8XFS v2 hierarchical filesystem spec |
+| [hardware/cf-card/p8x-cf-os-design.md](hardware/cf-card/p8x-cf-os-design.md) | CF-IDE hardware + P8X/OS design |
+| [hardware/cf-card/p8xfs-v2-hierarchical.md](hardware/cf-card/p8xfs-v2-hierarchical.md) | P8XFS v2 hierarchical filesystem spec |
 | [docs/p8x-programmers-guide.pdf](docs/p8x-programmers-guide.pdf) | Generated instruction set reference |
 | [BACKLOG.md](BACKLOG.md) | NEXT / IDEAS / VERIFY / DONE |
 
 ### Per-card guides
 
-Each card has a README explaining how its circuit works, chip by chip:
+Each board has its own directory under `hardware/` holding everything about it —
+the Eagle `.sch`/`.brd`, the schematic PDF, a README explaining how the circuit
+works chip by chip, and any board-specific design docs:
 
-| Card | Guide |
-|------|-------|
-| Control / Microcode | [docs/control-card/README.md](docs/control-card/README.md) |
-| Register Bank | [docs/reg-bank/README.md](docs/reg-bank/README.md) |
-| ALU | [docs/alu-card/README.md](docs/alu-card/README.md) |
-| Memory | [docs/memory-card/README.md](docs/memory-card/README.md) |
-| I/O | [docs/io-card/README.md](docs/io-card/README.md) |
-| CF-IDE | [docs/cf-card/README.md](docs/cf-card/README.md) |
+| Card | Directory |
+|------|-----------|
+| Control / Microcode | [hardware/control-card/](hardware/control-card/README.md) |
+| Register Bank | [hardware/regbank-card/](hardware/regbank-card/README.md) |
+| ALU | [hardware/alu-card/](hardware/alu-card/README.md) |
+| Memory | [hardware/memory-card/](hardware/memory-card/README.md) |
+| I/O | [hardware/io-card/](hardware/io-card/README.md) |
+| CF-IDE | [hardware/cf-card/](hardware/cf-card/README.md) |
+| Backplane | [hardware/backplane/](hardware/backplane/p8x-backplane-design.md) |
 
 ## Status
 

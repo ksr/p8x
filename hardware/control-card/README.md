@@ -9,7 +9,7 @@ originated here.
 > This README describes the circuit as actually built in
 > [`generators/gen_eagle.py`](../../generators/gen_eagle.py) (the canonical
 > source). For the architectural overview see
-> [p8x-system-design.md §3](../p8x-system-design.md); for bus pin assignments see
+> [p8x-system-design.md §3](../../docs/p8x-system-design.md); for bus pin assignments see
 > [p8x-bus-definition.md](../backplane/p8x-bus-definition.md).
 
 ## Chip inventory
@@ -77,7 +77,7 @@ without any extra sequencing logic — the condition literally selects a differe
 ROM page.
 
 ## Control word layout (32 bits)
-See [p8x-system-design.md §3.2](../p8x-system-design.md) for the full bit map. In
+See [p8x-system-design.md §3.2](../../docs/p8x-system-design.md) for the full bit map. In
 brief: bits 0–3 DOE, 4–7 DLD, 8–9 PSEL, 10 PINC, 11 PDEC, 12–16 ALU S0–3+M,
 17 CIN, 18–19 SH, 20 LDF, 21–23 FCOND, 24 µRESET, 25 HALT, 26–31 spare.
 

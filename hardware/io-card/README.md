@@ -13,7 +13,7 @@ that turns the machine into an Altair-style "watch it think" front panel.
 
 > This README describes the circuit as actually built in
 > [`generators/gen_eagle.py`](../../generators/gen_eagle.py). See
-> [p8x-system-design.md §7](../p8x-system-design.md) for the overview and
+> [p8x-system-design.md §7](../../docs/p8x-system-design.md) for the overview and
 > [p8x-bus-definition.md](../backplane/p8x-bus-definition.md) for bus pins.
 
 ## Chip inventory
