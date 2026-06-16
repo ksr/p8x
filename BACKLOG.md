@@ -21,11 +21,13 @@ Last updated: 2026-06-11
     - loads set Z/N (LDZN control bit, bit 27)
     - new opcodes: LDA (Pn) non-inc, INP1-3/DEP1-3, TAP/TPA n L/H, PHA/PLA,
       JZ/JNZ (aliases of BZ/BNZ)
-  Remaining (gated on the carry-polarity decision):
-    - CLC/SEC, JC/JNC, carry-coupled shifter (SHL captures bit7->C, ROL shifts
-      C in) — all depend on whether we adopt conventional active-high carry
-      (rev B) vs the deliberate rev-A active-low Cn+4 quirk
-    - then assemble p8xmon.asm and boot it in the emulator over the ACIA
+  DONE (Phase 1 complete — monitor assembles & boots in the emulator):
+    - adopted CONVENTIONAL active-high carry (rev B): C=1 = carry / A>=B
+    - CLC/SEC (SETC/CLRC bits), JC/JNC, ROL/ROR + carry-coupled shifter
+      (SHL/SHR latch shifted-out bit -> C; SHCIN shifts C in for rotates)
+    - assembler: char literals may contain space/+/- (tokenizer fix)
+    - firmware/p8xmon.asm converted to p8xasm dialect (EQU->=, DB->.byte/
+      .ascii, ORG->.org); assembles to 101 symbols; banner, ?, D dump all work
 - **Monitor port — Phase 2 (hardware, after sim works)**: realize the rev B
   microcode-word changes in the CAD generators —
     - control card: pipeline-latch remap for the new PSEL2 bit + LDZN

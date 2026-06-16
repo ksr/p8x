@@ -3,16 +3,18 @@
  * Interprets the SAME microcode ROM images (u0-u3.bin) that are burned to
  * the control card 28C64s, so emulator and hardware cannot drift.
  *
- * Fidelity notes (deliberate, matches rev A hardware):
- *  - 74181 modelled with active-high data: CIN pin and Cn+4 are ACTIVE-LOW
- *    carries. The C flag latches the RAW Cn+4 pin (1 = no carry out).
+ * Fidelity notes:
+ *  - 74181 modelled with active-high data. The CIN pin is active-low at the
+ *    silicon pin, but the C FLAG is CONVENTIONAL (rev B): C=1 means carry-out
+ *    (ADD) / no-borrow i.e. A>=B (SUB/CMP).
  *  - Carry chain computed regardless of M (as in silicon), so LDF during
  *    logic ops latches the same C the hardware would.
  *  - V flag is hardwired 0 (rev A ALU card drives FV low).
- *  - Shifter: stage1 SH0 = left (CIN pin is the shift-in bit),
- *    stage2 SH1 = right. Pipeline/condition timing per control card:
- *    the FCOND field of the word in the pipeline selects ROM A12 for the
- *    NEXT lookup.
+ *  - Shifter: stage1 SH0 = left, stage2 SH1 = right; the shifted-out bit is
+ *    latched into C, and with SHCIN the shifted-in bit is the current C
+ *    (rotate through carry). SETC/CLRC force C only (SEC/CLC).
+ *  - Pipeline/condition timing per control card: the FCOND field of the word
+ *    in the pipeline selects ROM A12 for the NEXT lookup.
  *
  * Memory map: 0000-7FFF EEPROM | 8000-FEFF RAM | FF00-FFFF I/O
  *   FF00 switches(r)  FF02 LEDs(w)  FF04 ACIA status(r)  FF05 ACIA data(rw)
@@ -27,7 +29,7 @@
 static uint8_t rom[4][8192], eeprom[0x8000], ram[0x7F00];
 static uint16_t P[5];                 /* P0=PC P1 P2 P3=SP P4=PT (hidden scratch) */
 static uint8_t A,B,T,T2,IR;
-static int stp, fC=1,fZ,fN,fV;        /* fC = raw Cn+4 pin (1 = no carry) */
+static int stp, fC,fZ,fN,fV;          /* fC = conventional carry (1 = carry / A>=B) */
 static int prev_fcond=0, halted=0, trace=0;
 static unsigned long long cycles=0;
 static uint8_t leds=0;
@@ -47,7 +49,7 @@ static uint8_t alu181(uint8_t a,uint8_t b,int s,int m,int cinpin,int*cn4){
     case 0xE: r=(a|(~b&0xFF))+a; break;         default: r=a+0xFF; break;
     }
     r+=c;
-    *cn4 = !((r>>8)&1);                    /* pin: low = carry generated */
+    *cn4 = (r>>8)&1;                       /* rev B: conventional carry-out (1 = carry / A>=B) */
     if(!m) return r&0xFF;
     switch(s){                             /* M=1: logic, carries inhibited */
     case 0x0: return ~a;        case 0x1: return ~(a|b);
@@ -111,12 +113,15 @@ int main(int argc,char**argv){
         int pinc=(cw>>11)&1, pdec=(cw>>12)&1, alus=(cw>>13)&15;
         int m=(cw>>17)&1, cinp=(cw>>18)&1, sh0=(cw>>19)&1, sh1=(cw>>20)&1;
         int ldf=(cw>>21)&1, fcond=(cw>>22)&7, urst=(cw>>25)&1, halt=(cw>>26)&1;
-        int ldzn=(cw>>27)&1;
+        int ldzn=(cw>>27)&1, shcin=(cw>>28)&1, setc=(cw>>29)&1, clrc=(cw>>30)&1;
         /* combinational ALU + shifter from CURRENT register state */
-        int cn4; uint8_t f=alu181(A,B,alus,m,cinp,&cn4);
-        uint8_t g = sh0 ? (uint8_t)((f<<1)|(cinp&1)) : f;     /* stage 1: left  */
-        uint8_t r = sh1 ? (uint8_t)((g>>1)|((cinp&1)<<7)) : g;/* stage 2: right */
-        int nC=cn4, nZ=(r==0), nN=(r>>7)&1, nV=0;
+        int cout; uint8_t f=alu181(A,B,alus,m,cinp,&cout);   /* cout = conventional carry */
+        int sin = shcin ? (fC&1) : 0;                        /* shift-in: C for rotate, else 0 */
+        uint8_t g = sh0 ? (uint8_t)((f<<1)|sin) : f;         /* stage 1: left  */
+        uint8_t r = sh1 ? (uint8_t)((g>>1)|(sin<<7)) : g;    /* stage 2: right */
+        int shout = sh0 ? ((f>>7)&1) : (sh1 ? (f&1) : 0);    /* bit shifted out */
+        int nC = (sh0||sh1) ? shout : cout;                  /* shift ops latch shifted-out bit */
+        int nZ=(r==0), nN=(r>>7)&1, nV=0;
         uint16_t addr=P[psel];
         /* bus source */
         uint8_t bus=0xFF;
@@ -148,6 +153,8 @@ int main(int argc,char**argv){
         if(pdec) P[psel]--;
         if(ldf){ fC=nC; fZ=nZ; fN=nN; fV=nV; }
         else if(ldzn){ fZ=(bus==0); fN=(bus>>7)&1; }   /* loads set Z,N from the byte */
+        if(setc) fC=1;                                 /* SEC: force C, leave Z/N/V */
+        if(clrc) fC=0;                                 /* CLC */
         prev_fcond=fcond;
         stp = urst ? 0 : (stp+1)&15;
         if(halt) halted=1;

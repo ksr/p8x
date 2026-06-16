@@ -38,35 +38,35 @@
 ;==============================================================================
 
 ; ---------------- Equates ----------------------------------------------------
-ACIAS   EQU  $FF04          ; ACIA status (rd) / control (wr)
-ACIAD   EQU  $FF05          ; ACIA data
-CFDATA  EQU  $FF10          ; CF task file
-CFFEAT  EQU  $FF11
-CFSCNT  EQU  $FF12
-CFLBA0  EQU  $FF13
-CFLBA1  EQU  $FF14
-CFLBA2  EQU  $FF15
-CFHEAD  EQU  $FF16          ; $E0 = LBA mode, drive 0
-CFCMD   EQU  $FF17          ; command (wr) / status (rd)
-CFSTAT  EQU  $FF17
+ACIAS   = $FF04          ; ACIA status (rd) / control (wr)
+ACIAD   = $FF05          ; ACIA data
+CFDATA  = $FF10          ; CF task file
+CFFEAT  = $FF11
+CFSCNT  = $FF12
+CFLBA0  = $FF13
+CFLBA1  = $FF14
+CFLBA2  = $FF15
+CFHEAD  = $FF16          ; $E0 = LBA mode, drive 0
+CFCMD   = $FF17          ; command (wr) / status (rd)
+CFSTAT  = $FF17
 
-LBUF    EQU  $9D00          ; input line buffer
-ADDRL   EQU  $9D40          ; parsed address
-ADDRH   EQU  $9D41
-HEXL    EQU  $9D42          ; hex accumulator
-HEXH    EQU  $9D43
-TMP     EQU  $9D44
-TMP2    EQU  $9D45
-CNT     EQU  $9D46          ; loop counter
-LBA     EQU  $9D47          ; current LBA (low byte; LBA1-3 written as 0)
-SBUF    EQU  $9E00          ; sector buffer
-STKTOP  EQU  $FEFF
+LBUF    = $9D00          ; input line buffer
+ADDRL   = $9D40          ; parsed address
+ADDRH   = $9D41
+HEXL    = $9D42          ; hex accumulator
+HEXH    = $9D43
+TMP     = $9D44
+TMP2    = $9D45
+CNT     = $9D46          ; loop counter
+LBA     = $9D47          ; current LBA (low byte; LBA1-3 written as 0)
+SBUF    = $9E00          ; sector buffer
+STKTOP  = $FEFF
 
-CR      EQU  $0D
-LF      EQU  $0A
-BS      EQU  $08
+CR      = $0D
+LF      = $0A
+BS      = $08
 
-        ORG  $0000
+        .org $0000
 RESET:  JMP  COLD
 
 ; ---------------- Cold start -------------------------------------------------
@@ -492,7 +492,7 @@ GL1:    JSR  GETC
         STA  (P2)+
         JMP  GL1
 GLBS:   TPA2L               ; backspace if buffer non-empty (check low byte)
-        LDB  #LBUF&$FF      ; assembler: low byte of LBUF
+        LDB  #<LBUF      ; assembler: low byte of LBUF
         CMP
         JZ   GL1
         DEP2
@@ -633,20 +633,35 @@ PRP:    JSR  PUTC
 ;==============================================================================
 ; MESSAGES
 ;==============================================================================
-MBANNER: DB CR,LF,"P8X MONITOR V1.0",CR,LF
-         DB "? FOR HELP",CR,LF,0
-MPROMPT: DB "* ",0
-MWHAT:   DB "?",CR,LF,0
-MCFOK:   DB "CF OK: ",0
-MCFERR:  DB "CF ERROR",CR,LF,0
-MSURE:   DB "FORMAT CF - SURE? (Y/N) ",0
-MFMTOK:  DB "FORMATTED",CR,LF,0
-MNOOS:   DB "NO OS ON CARD",CR,LF,0
-MHELP:   DB "E AAAA  EXAMINE/MODIFY (HEX=NEW, CR=NEXT, .=EXIT)",CR,LF
-         DB "D AAAA  DUMP 256 BYTES",CR,LF
-         DB "I       INIT CF + IDENTIFY",CR,LF
-         DB "F       FORMAT CF (P8XFS)",CR,LF
-         DB "B       BOOT OS FROM CF",CR,LF
-         DB "G AAAA  RUN AT AAAA (RTS RETURNS)",CR,LF,0
+MBANNER: .byte CR,LF
+        .ascii "P8X MONITOR V1.0"
+        .byte CR,LF
+         .ascii "? FOR HELP"
+         .byte CR,LF,0
+MPROMPT: .ascii "* "
+        .byte 0
+MWHAT:  .ascii "?"
+        .byte CR,LF,0
+MCFOK:  .ascii "CF OK: "
+        .byte 0
+MCFERR: .ascii "CF ERROR"
+        .byte CR,LF,0
+MSURE:  .ascii "FORMAT CF - SURE? (Y/N) "
+        .byte 0
+MFMTOK: .ascii "FORMATTED"
+        .byte CR,LF,0
+MNOOS:  .ascii "NO OS ON CARD"
+        .byte CR,LF,0
+MHELP:  .ascii "E AAAA  EXAMINE/MODIFY (HEX=NEW, CR=NEXT, .=EXIT)"
+        .byte CR,LF
+         .ascii "D AAAA  DUMP 256 BYTES"
+         .byte CR,LF
+         .ascii "I       INIT CF + IDENTIFY"
+         .byte CR,LF
+         .ascii "F       FORMAT CF (P8XFS)"
+         .byte CR,LF
+         .ascii "B       BOOT OS FROM CF"
+         .byte CR,LF
+         .ascii "G AAAA  RUN AT AAAA (RTS RETURNS)"
+         .byte CR,LF,0
 
-        END

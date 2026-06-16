@@ -5,28 +5,33 @@ Control word layout (matches control card pipeline mapping exactly):
   bits 0-3 DOE | 4-7 DLD | 8-10 PSEL (P0-P3 + PT scratch=4) | 11 PINC |
   12 PDEC | 13-16 ALUS | 17 ALUM | 18 CIN(pin, active-low carry) |
   19 SH0 | 20 SH1 | 21 LDF | 22-24 FCOND | 25 uRST | 26 HALT |
-  27 LDZN (latch Z,N only, from the loaded byte) | 28-31 spare
+  27 LDZN (latch Z,N only) | 28 SHCIN (shifter shift-in = C flag, for rotates) |
+  29 SETC (force C=1) | 30 CLRC (force C=0) | 31 spare
 PSEL is 3 bits (rev: was 2). PT (=4) is a hidden microcode-only scratch pointer
 used for absolute addressing; not programmer-visible.
 LDZN gives loads conventional set-Z/N-from-loaded-value behaviour without
 touching C/V (LDF latches all four flags from the ALU; LDZN only Z and N).
+CARRY (rev B): the C flag is CONVENTIONAL active-high — C=1 means carry-out
+(ADD) / no-borrow i.e. A>=B (SUB/CMP). Shift ops latch the shifted-out bit into
+C; with SHCIN the shifted-in bit is the current C (rotate through carry).
+SETC/CLRC force C only, leaving Z/N/V untouched (for SEC/CLC).
 ROM address: A0-7 = IR, A8-11 = step, A12 = condition mux output.
 Step 0 of every opcode is the fetch cycle (MEM@P0 -> IR, P0+)."""
 import struct
 
 DOE=dict(idle=0,A=1,B=2,T=3,T2=4,ALU=5,FLAGS=6,MEM=7,PTRL=8,PTRH=9)
 DLD=dict(none=0,A=1,B=2,T=3,T2=4,FLAGS=5,IR=6,MEMW=7,PTRL=8,PTRH=9)
-FC=dict(never=0,always=1,C=2,Z=3,N=4,V=5)   # C = raw 74181 Cn+4 pin (1 = no carry!)
+FC=dict(never=0,always=1,C=2,Z=3,N=4,V=5)   # C = conventional carry (rev B): 1 = carry / A>=B
 PT=4   # hidden microcode-only scratch pointer (PSEL=4), for absolute addressing
 
 def w(doe=0,dld=0,psel=0,pinc=0,pdec=0,alus=0,m=0,cin=1,sh0=0,sh1=0,
-      ldf=0,fcond=0,urst=0,halt=0,ldzn=0):
+      ldf=0,fcond=0,urst=0,halt=0,ldzn=0,shcin=0,setc=0,clrc=0):
     return (DOE[doe] if isinstance(doe,str) else doe) \
         | (DLD[dld] if isinstance(dld,str) else dld)<<4 \
         | psel<<8 | pinc<<11 | pdec<<12 | alus<<13 | m<<17 | cin<<18 \
         | sh0<<19 | sh1<<20 | ldf<<21 \
         | (FC[fcond] if isinstance(fcond,str) else fcond)<<22 | urst<<25 | halt<<26 \
-        | ldzn<<27
+        | ldzn<<27 | shcin<<28 | setc<<29 | clrc<<30
 
 FETCH=w(doe="MEM",dld="IR",psel=0,pinc=1)
 
@@ -69,6 +74,9 @@ op(0x24,"XOR","", alu("XOR")); op(0x25,"CMP","", alu("SUB",dld="none"))
 op(0x26,"INC","", alu("INC")); op(0x27,"DEC","", alu("DEC"))
 op(0x28,"SHL","", w(doe="ALU",dld="A",alus=0b1111,m=1,cin=0,sh0=1,ldf=1,urst=1))
 op(0x29,"SHR","", w(doe="ALU",dld="A",alus=0b1111,m=1,cin=0,sh1=1,ldf=1,urst=1))
+# rotates through carry: shift-in = current C (SHCIN), shifted-out bit -> C
+op(0x2A,"ROL","", w(doe="ALU",dld="A",alus=0b1111,m=1,sh0=1,shcin=1,ldf=1,urst=1))
+op(0x2B,"ROR","", w(doe="ALU",dld="A",alus=0b1111,m=1,sh1=1,shcin=1,ldf=1,urst=1))
 # pointer byte loads: LPLn #imm / LPHn #imm  (via T: mem read uses P0)
 for p in (1,2,3):
     op(0x30+p,"LPL%d"%p,"#", w(doe="MEM",dld="T",psel=0,pinc=1),
@@ -119,6 +127,8 @@ for p in (1,2,3):
     op(0x67+p*2,"TPA%dH"%p,"", w(doe="PTRH",dld="A",psel=p,ldzn=1,urst=1))  # Pn high -> A
 op(0x70,"PHA","", w(doe="A",dld="MEMW",psel=3,pdec=1,urst=1))          # push A, SP--
 op(0x71,"PLA","", w(psel=3,pinc=1), w(doe="MEM",dld="A",psel=3,ldzn=1,urst=1))  # SP++, A=[SP]
+op(0x72,"CLC","", w(clrc=1,urst=1))    # C := 0
+op(0x73,"SEC","", w(setc=1,urst=1))    # C := 1
 
 # conditional branches abs: Bcc addr. FCOND emitted while fetching operand;
 # cond plane 1 = take (load P0 from T/T2), plane 0 = fall through.
@@ -134,10 +144,11 @@ def branch_inv(code,name,flag):   # taken when flag==0 (plane swap)
              ( w(doe="T",dld="PTRL",psel=0,fcond=flag), w(urst=1,fcond=flag) ),
              ( w(doe="T2",dld="PTRH",psel=0,urst=1), NOP ))
 branch(0x48,"BZ","Z")
-branch(0x4A,"BCP","C")  # branch if Cn+4 PIN set (pin high = NO carry!)
+branch(0x4A,"BCP","C")  # branch if carry set (rev B: C is conventional active-high)
 branch_inv(0x49,"BNZ","Z")
-# JZ/JNZ are conventional aliases for BZ/BNZ (same opcodes)
-OPC[("JZ","a")]=0x48; OPC[("JNZ","a")]=0x49
+branch_inv(0x4C,"JNC","C")   # branch if carry clear
+# conventional aliases (same opcodes): JZ=BZ, JNZ=BNZ, JC=BCP
+OPC[("JZ","a")]=0x48; OPC[("JNZ","a")]=0x49; OPC[("JC","a")]=0x4A
 
 # ---- assemble images ----------------------------------------------------------
 def build_images(outdir="."):

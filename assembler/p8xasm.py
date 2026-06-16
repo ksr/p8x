@@ -58,7 +58,7 @@ class Asm:
         if e.startswith("<"): return self.expr(e[1:],ln,line,pass2)&0xFF
         if e.startswith(">"): return (self.expr(e[1:],ln,line,pass2)>>8)&0xFF
         tot,sign=0,1
-        for tok in re.findall(r"[+-]|[^+\-\s]+",e):
+        for tok in re.findall(r"'.'|[+-]|[^+\-\s]+",e):   # 'c' first: char literals may hold space/+/-
             if tok=="+": sign=1; continue
             if tok=="-": sign=-1; continue
             if re.fullmatch(r"\$[0-9A-Fa-f]+",tok): v=int(tok[1:],16)
