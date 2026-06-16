@@ -50,7 +50,8 @@ memory, I/O, CF-IDE.
 - hardware/eagle/ — generated CAD (artifacts; see rule 1)
 - generators/   — Python generators for CAD + schematic PDF renderers
 - microcode/    — genucode.py + u0-u3.bin images + gen_progguide.py
-- firmware/     — p8xmon.asm (ROM monitor), p8xasm.py (assembler)
+- assembler/    — p8xasm.py (two-pass assembler)
+- firmware/     — p8xmon.asm (ROM monitor source)
 - emulator/     — p8xemu.c, Makefile, test/
   (p8xasm.py and gen_progguide.py locate genucode.py automatically; the
    emulator Makefile's UC variable points at the microcode directory)

@@ -29,7 +29,7 @@ All six cards plug into a passive 10-slot backplane over a 96-pin DIN 41612 bus 
 | Tool | Location | Purpose |
 |------|----------|---------|
 | `microcode/genucode.py` | `microcode/` | Microcode generator → `u0–u3.bin` EPROM images |
-| `firmware/p8xasm.py` | `firmware/` | Two-pass assembler, shares opcode table with genucode.py |
+| `assembler/p8xasm.py` | `assembler/` | Two-pass assembler, shares opcode table with genucode.py |
 | `emulator/p8xemu.c` | `emulator/` | Cycle-accurate emulator, interprets the same u0–u3.bin images |
 | `generators/gen_eagle.py` | `generators/` | Generates Eagle schematics + boards for all 7 boards (backplane + 6 cards) |
 

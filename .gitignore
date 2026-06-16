@@ -5,3 +5,7 @@
 # Fusion exports / fab outputs (regenerate, don't track)
 gerbers/
 *.zip
+# Build / test artifacts (regenerate with `make`)
+emulator/p8xemu
+emulator/*.o
+emulator/test/*.bin
