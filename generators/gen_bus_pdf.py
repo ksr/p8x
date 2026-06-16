@@ -50,7 +50,7 @@ def desc(net):
 styles=getSampleStyleSheet()
 H1=styles["Title"]; H2=styles["Heading2"]; N=styles["Normal"]
 SM=ParagraphStyle("sm",parent=N,fontSize=8,leading=10)
-import os as _os; _DOCS=_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),"docs")
+import os as _os; _DOCS=_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),"docs","backplane")
 doc=SimpleDocTemplate(_os.path.join(_DOCS,"p8x-bus-definition.pdf"),
     pagesize=letter,topMargin=18*mm,bottomMargin=16*mm,
     title="P8X Bus Definition Rev C",author="P8X Project")

@@ -2,7 +2,7 @@
 """Traditional-style schematic PDFs for the P8X boards: drawn wires, bus
 spines with angled entries, junction dots, power rail glyphs, NC marks.
 Drawing data is derived from the canonical netlists and verified against them."""
-import os as _os; _DOCS=_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),"docs")
+import os as _os; _DOCS=_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),"docs","memory-card")
 from reportlab.pdfgen import canvas as pdfc
 from reportlab.lib.colors import Color
 MM=2.83465; G=2.54; PIN=5.08; HALFW=12.7; PINX=17.78

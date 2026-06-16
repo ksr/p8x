@@ -57,12 +57,12 @@ python3 ../microcode/gen_progguide.py  # programmer's guide
 
 | Document | Description |
 |----------|-------------|
-| [docs/p8x-bus-definition.md](docs/p8x-bus-definition.md) | Authoritative 96-pin bus pinout, signal descriptions, DOE/DLD encoding, microcode word layout |
-| [docs/p8x-backplane-design.md](docs/p8x-backplane-design.md) | PCB stackup, termination analysis, BOM |
+| [docs/backplane/p8x-bus-definition.md](docs/backplane/p8x-bus-definition.md) | Authoritative 96-pin bus pinout, signal descriptions, DOE/DLD encoding, microcode word layout |
+| [docs/backplane/p8x-backplane-design.md](docs/backplane/p8x-backplane-design.md) | PCB stackup, termination analysis, BOM |
 | [docs/p8x-card-standards.md](docs/p8x-card-standards.md) | Design rules that apply to every plug-in card |
 | [docs/p8x-card-design.md](docs/p8x-card-design.md) | Card-by-card architecture reference |
-| [docs/p8x-cf-os-design.md](docs/p8x-cf-os-design.md) | CF-IDE hardware + P8X/OS design |
-| [docs/p8xfs-v2-hierarchical.md](docs/p8xfs-v2-hierarchical.md) | P8XFS v2 hierarchical filesystem spec |
+| [docs/cf-card/p8x-cf-os-design.md](docs/cf-card/p8x-cf-os-design.md) | CF-IDE hardware + P8X/OS design |
+| [docs/cf-card/p8xfs-v2-hierarchical.md](docs/cf-card/p8xfs-v2-hierarchical.md) | P8XFS v2 hierarchical filesystem spec |
 | [docs/p8x-programmers-guide.pdf](docs/p8x-programmers-guide.pdf) | Generated instruction set reference |
 | [BACKLOG.md](BACKLOG.md) | NEXT / IDEAS / VERIFY / DONE |
 

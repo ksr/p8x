@@ -217,7 +217,10 @@ def draw_card(name,title,parts,nets,outpdf):
     c.save()
 
 if __name__=="__main__":
+    CARD_DIRS={"control-card":"control-card","regbank-card":"reg-bank",
+               "alu-card":"alu-card","io-card":"io-card","cf-card":"cf-card"}
     for name,(title,parts,nets) in G.CARDS.items():
-        outpdf=_os.path.join(_DOCS,"p8x-%s-schematic.pdf"%name)
+        subdir=CARD_DIRS.get(name,name)
+        outpdf=_os.path.join(_DOCS,subdir,"p8x-%s-schematic.pdf"%name)
         draw_card(name,title,parts,nets,outpdf)
         print("wrote",_os.path.basename(outpdf))
