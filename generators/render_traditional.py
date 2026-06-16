@@ -1,57 +1,29 @@
 #!/usr/bin/env python3
-"""Traditional-style schematic PDFs for the P8X boards: drawn wires, bus
+"""Traditional-style schematic PDF for the P8X memory card: drawn wires, bus
 spines with angled entries, junction dots, power rail glyphs, NC marks.
-Drawing data is derived from the canonical netlists and verified against them."""
-import os as _os; _DOCS=_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),"docs","memory-card")
+The netlist and device library are imported from gen_eagle.py (the single
+source of truth); only the hand-tuned drawing layout lives here.
+Run from hardware/eagle/ — importing gen_eagle regenerates the board files
+into the current directory (same as render_traditional_auto.py)."""
+import sys, os as _os
+_HERE=_os.path.dirname(_os.path.abspath(__file__))
+sys.path.insert(0,_HERE)
+import gen_eagle as GE          # aliased GE: local G is the 2.54 mm grid constant
+_DOCS=_os.path.join(_os.path.dirname(_HERE),"docs","memory-card")
 from reportlab.pdfgen import canvas as pdfc
 from reportlab.lib.colors import Color
 MM=2.83465; G=2.54; PIN=5.08; HALFW=12.7; PINX=17.78
 BLK=Color(0,0,0); GRN=Color(0,0.42,0); RED=Color(0.72,0.08,0.08); BLU=Color(0,0,0.65)
 
-# ---- canonical netlist (memory card, identical to gen_eagle.py) --------
-DEV={
- "MEM28K8":dict(L=["A%d"%i for i in range(15)],R=["IO%d"%i for i in range(8)]+["!CE","!OE","!WE","VCC","GND"]),
- "74245":dict(L=["DIR"]+["A%d"%i for i in range(8)]+["!OE"],R=["B%d"%i for i in range(8)]+["VCC","GND"]),
- "7430":dict(L=list("ABCDEFGH"),R=["Y","VCC","GND"]),
- "74138":dict(L=["A","B","C","G1","!G2A","!G2B"],R=["Y%d"%i for i in range(8)]+["VCC","GND"]),
- "GATES14":dict(L=["1A","1B","2A","2B","3A","3B","4A","4B"],R=["1Y","2Y","3Y","4Y","VCC","GND"]),
- "RES":dict(L=["1"],R=["2"]),"LED":dict(L=["A"],R=["K"]),
-}
-mcn={}
-def mnet(n,*p): mcn.setdefault(n,[]).extend(p)
-for i in range(8):
-    mnet("D%d"%i,("J1","A%d"%(3+i)),("U3","A%d"%i))
-    mnet("MD%d"%i,("U3","B%d"%i),("U1","IO%d"%i),("U2","IO%d"%i))
-for i in range(16):
-    pins=[("J1","C%d"%(3+i))]
-    if i<15: pins+=[("U1","A%d"%i),("U2","A%d"%i)]
-    if 8<=i<=14: pins.append(("U4","ABCDEFG"[i-8]))
-    if i==15: pins+=[("U4","H"),("U1","!CE"),("U7","1A")]
-    mnet("A%d"%i,*pins)
-mnet("-IOPG",("U4","Y"),("U7","1B"))
-mnet("-RAMCE",("U7","1Y"),("U2","!CE"))
-for i in range(4):
-    mnet("DOE%d"%i,("J1","A%d"%(12+i)),("U5",["A","B","C","!G2A"][i]))
-    mnet("DLD%d"%i,("J1","A%d"%(16+i)),("U6",["A","B","C","!G2A"][i]))
-mnet("-RD",("U5","Y7"),("U1","!OE"),("U2","!OE"),("U3","DIR"),("U9","1A"))
-mnet("-MEMW",("U6","Y7"),("U8","1A"),("U9","1B"))
-mnet("CLK",("J1","A24"),("U8","1B"))
-mnet("-WE",("U8","1Y"),("U1","!WE"),("U2","!WE"))
-mnet("-BOE",("U9","1Y"),("U3","!OE"),("U8","2B"),("U8","3B"))
-mnet("-RAMCE",("U8","2A")); mnet("A15",("U8","3A"))
-mnet("-RD",("U9","2A"),("U9","2B")); mnet("-MEMW",("U9","3A"),("U9","3B"))
-mnet("LEDP",("RP1","2"),("LED3","A"))
-mnet("LEDRO",("RS1","2"),("LED2","A")); mnet("ROMK",("U8","3Y"),("LED2","K"))
-mnet("LEDRA",("RS2","2"),("LED4","A")); mnet("RAMK",("U8","2Y"),("LED4","K"))
-mnet("LEDRD",("RS3","2"),("LED5","A")); mnet("RDK",("U9","2Y"),("LED5","K"))
-mnet("LEDWR",("RS4","2"),("LED6","A")); mnet("WRK",("U9","3Y"),("LED6","K"))
-mnet("VCC",("U1","VCC"),("U2","VCC"),("U3","VCC"),("U4","VCC"),("U5","VCC"),("U5","G1"),
-  ("U6","VCC"),("U6","G1"),("U7","VCC"),("U8","VCC"),("U9","VCC"),
-  ("RP1","1"),("RS1","1"),("RS2","1"),("RS3","1"),("RS4","1"))
-mnet("GND",("U1","GND"),("U2","GND"),("U3","GND"),("U4","GND"),("U5","GND"),("U5","!G2B"),
-  ("U6","GND"),("U6","!G2B"),("U7","GND"),("U8","GND"),("U9","GND"),("LED3","K"),
-  *[(u,p) for u in("U7",) for p in("2A","2B","3A","3B","4A","4B")],
-  ("U8","4A"),("U8","4B"),("U9","4A"),("U9","4B"))
+# ---- canonical netlist + device library, imported from gen_eagle.py ---------
+# gen_eagle.DEV carries pin maps and packages too; this drawing only reads the
+# L/R pin-order lists, which match exactly.
+DEV=GE.DEV
+# GE.mcn is the memory-card netlist. Strip the J1 power/ground connector pins:
+# this drawing renders +5V/GND via the consolidated J1 power rows and rail
+# glyphs rather than per-pin connector entries, so those pins must not be routed.
+mcn={net:[(r,p) for (r,p) in pins if not (r=="J1" and net in("VCC","GND"))]
+     for net,pins in GE.mcn.items()}
 PIN2NET={}
 for n,ps in mcn.items():
     for rp in ps: PIN2NET[rp]=n

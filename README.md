@@ -44,13 +44,18 @@ cd emulator && make
 # Run the smoke tests (message print, JSR/RTS round-trip, branch countdown)
 make test
 
-# Regenerate all PDFs in docs/
-cd ../generators
-python3 gen_bus_pdf.py               # bus definition
-python3 render_bp_traditional.py     # backplane schematic
-python3 render_traditional.py        # memory card schematic
-python3 render_traditional_auto.py   # all five plug-in card schematics
-python3 ../microcode/gen_progguide.py  # programmer's guide
+# Regenerate the Eagle boards + schematic PDFs. The schematic renderers import
+# gen_eagle.py, which writes the .sch/.brd files into the current directory, so
+# run them from hardware/eagle/.
+cd ../hardware/eagle
+python3 ../../generators/gen_eagle.py                # all 14 .sch/.brd files
+python3 ../../generators/render_traditional.py       # memory card schematic PDF
+python3 ../../generators/render_traditional_auto.py  # 5 plug-in card schematic PDFs
+
+# These are standalone (write straight to docs/) and run from anywhere:
+python3 ../../generators/gen_bus_pdf.py              # bus definition
+python3 ../../generators/render_bp_traditional.py    # backplane schematic
+python3 ../../microcode/gen_progguide.py             # programmer's guide
 ```
 
 ## Documentation
