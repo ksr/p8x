@@ -18,9 +18,9 @@ Summary for quick reference (rev C2):
 | 20–21 | PSEL0–1 | GND | ALUS1–2 |
 | 22–23 | PINC, PDEC | GND | ALUS3, ALUM |
 | 24–25 | CLK, CLKB | GND | CIN, SH0 |
-| 26–27 | LDF, FC | GND | SH1, SPARE4 |
-| 28–30 | FZ, FN, FV | SPARE8–10 | SPARE5–7 |
-| 31–32 | GND | GND/SPARE11 | GND |
+| 26–27 | LDF, FC | GND, SPARE8 | SH1, SPARE4 |
+| 28–30 | FZ, FN, FV | SPARE9–11 | SPARE5–7 |
+| 31–32 | GND | GND | GND |
 
 A27–A30 = FC/FZ/FN/FV (flag lines; were SPARE0–3 in rev C1).
 B27–B30 = SPARE8–11. SPARE numbering starts at 4; there are no SPARE0–3.
