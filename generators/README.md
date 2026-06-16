@@ -16,7 +16,7 @@ pip3 install reportlab
 
 | Script | Produces | Output dir | Run from |
 |--------|----------|------------|----------|
-| `gen_eagle.py` | All 14 Eagle files (7 boards × `.sch`+`.brd`) | `hardware/eagle/` | `hardware/eagle/` |
+| `gen_eagle.py` | All 14 Eagle files (7 boards × `.sch`+`.brd`) | `hardware/eagle/<board>/` | `hardware/eagle/` |
 | `render_traditional_auto.py` | All 6 card schematic PDFs | `docs/<card>/` | `hardware/eagle/` |
 | `gen_bus_pdf.py` | Bus-definition PDF | `docs/backplane/` | anywhere |
 | `render_bp_traditional.py` | Backplane schematic PDF | `docs/backplane/` | anywhere |
@@ -31,8 +31,9 @@ every board, then emits Autodesk Eagle schematic + board files for all seven:
 backplane, memory, control, register-bank, ALU, I/O, and CF-IDE. Each board is
 validated after generation (pin/pad names checked, no pin wired to two nets).
 
-It writes the `.sch`/`.brd` files into the **current directory**, so run it from
-`hardware/eagle/`:
+It writes each board's `.sch`/`.brd` pair into its **own subdirectory** of the
+current directory (e.g. `control-card/p8x-control-card.sch`), creating the
+subdirectories as needed, so run it from `hardware/eagle/`:
 
 ```sh
 cd hardware/eagle && python3 ../../generators/gen_eagle.py

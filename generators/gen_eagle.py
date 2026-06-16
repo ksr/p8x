@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
-"""P8X Eagle generator. Emits schematic+board pairs for all 7 boards:
-  p8x-backplane.sch/.brd      (rev C, 10 slots, fully routed 4-layer)
-  p8x-memory-card.sch/.brd    (rev C, placed + planes, signals unrouted)
-  p8x-control-card.sch/.brd
-  p8x-regbank-card.sch/.brd
-  p8x-alu-card.sch/.brd
-  p8x-io-card.sch/.brd
-  p8x-cf-card.sch/.brd
+"""P8X Eagle generator. Emits schematic+board pairs for all 7 boards, each in its
+own subdirectory:
+  backplane/p8x-backplane.sch/.brd      (rev C, 10 slots, fully routed 4-layer)
+  memory-card/p8x-memory-card.sch/.brd  (rev C, placed + planes, signals unrouted)
+  control-card/p8x-control-card.sch/.brd
+  regbank-card/p8x-regbank-card.sch/.brd
+  alu-card/p8x-alu-card.sch/.brd
+  io-card/p8x-io-card.sch/.brd
+  cf-card/p8x-cf-card.sch/.brd
 Board stack: Top(1) signals / Route2(2) GND plane / Route15(15) +5V plane / Bottom(16) signals.
+Output: each board's .sch/.brd pair goes in its own subdirectory of the current
+working directory (e.g. control-card/p8x-control-card.sch), so run from hardware/eagle/.
 NOTE: new device pin numbers require a datasheet verification pass before fab (tracked in BACKLOG)."""
 
+import os
 G=2.54; PIN_X=17.78; STUB=5.08
 
 # ===================== BUS =====================================================
@@ -281,6 +285,7 @@ def write_sch(fn,title,parts,nets):
             o.append(f'<label x="{x2:.2f}" y="{gy+0.508:.2f}" size="1.778" layer="95"/></segment>')
         o.append('</net>')
     o.append('</nets></sheet></sheets></schematic></drawing></eagle>')
+    os.makedirs(os.path.dirname(fn) or ".",exist_ok=True)
     open(fn,"w").write("\n".join(o)+"\n")
 
 def write_brd(fn,title,parts,nets,wires,polys,W,H,vias=None):
@@ -316,6 +321,7 @@ def write_brd(fn,title,parts,nets,wires,polys,W,H,vias=None):
             o.append('</polygon>')
         o.append('</signal>')
     o.append('</signals></board></drawing></eagle>')
+    os.makedirs(os.path.dirname(fn) or ".",exist_ok=True)
     open(fn,"w").write("\n".join(o)+"\n")
 
 def validate(fn,parts,nets):
@@ -361,10 +367,11 @@ def card(name,title,parts_ic,parts_small,nets,used_bus):
         brd[ref]=(dev,val,5.08+10.16*(i%14),96.52-(5.08 if i>=14 else 0))
     allp=dict(parts_ic); allp.update(parts_small)
     CARDS[name]=(title,allp,nets)
-    write_sch("p8x-%s.sch"%name,title,sch,nets)
-    validate("p8x-%s.sch"%name,sch,nets)
-    write_brd("p8x-%s.brd"%name,title,brd,nets,{},{"GND":[(2,)],"VCC":[(15,)]},160,100)
-    validate("p8x-%s.brd"%name,brd,nets)
+    base="%s/p8x-%s"%(name,name)   # each board in its own subdirectory
+    write_sch(base+".sch",title,sch,nets)
+    validate(base+".sch",sch,nets)
+    write_brd(base+".brd",title,brd,nets,{},{"GND":[(2,)],"VCC":[(15,)]},160,100)
+    validate(base+".brd",brd,nets)
 
 def N(nets,n,*p): nets.setdefault(n,[]).extend(p)
 
@@ -804,8 +811,8 @@ mnet("LEDRA",("RS2","2"),("LED4","A")); mnet("RAMK",("U8","2Y"),("LED4","K"))
 mnet("LEDRD",("RS3","2"),("LED5","A")); mnet("RDK",("U9","2Y"),("LED5","K"))
 mnet("LEDWR",("RS4","2"),("LED6","A")); mnet("WRK",("U9","3Y"),("LED6","K"))
 mnet("VCC",("RP1","1"),("RS1","1"),("RS2","1"),("RS3","1"),("RS4","1"))
-write_sch("p8x-memory-card.sch","P8X MEMORY CARD REV C",mc_parts,mcn)
-validate("p8x-memory-card.sch",mc_parts,mcn)
+write_sch("memory-card/p8x-memory-card.sch","P8X MEMORY CARD REV C",mc_parts,mcn)
+validate("memory-card/p8x-memory-card.sch",mc_parts,mcn)
 # Register the memory card for the schematic renderer (render_traditional_auto.py),
 # alongside the five plug-in cards. mc_parts carries (dev,val,x,y) and includes J1;
 # the renderer reads only dev/val and filters J1, so this format is compatible.
@@ -822,9 +829,9 @@ mcb_parts={
  "RS2":("RES","1K",127.00,86.36),"LED4":("LED","RAM-YEL",142.24,86.36),
  "RS3":("RES","1K",127.00,81.28),"LED5":("LED","RD-GRN",142.24,81.28),
  "RS4":("RES","1K",127.00,76.20),"LED6":("LED","WR-RED",142.24,76.20)}
-write_brd("p8x-memory-card.brd","P8X MEMORY CARD REV C",mcb_parts,mcn,{},
+write_brd("memory-card/p8x-memory-card.brd","P8X MEMORY CARD REV C",mcb_parts,mcn,{},
           {"GND":[(2,)],"VCC":[(15,)]},160,100)
-validate("p8x-memory-card.brd",mcb_parts,mcn)
+validate("memory-card/p8x-memory-card.brd",mcb_parts,mcn)
 
 # ===================== BACKPLANE rev C ========================================
 bps={}
@@ -847,8 +854,8 @@ for b in range(8): bnet("D%d"%b,("RN1","R%d"%(b+1)))
 bnet("CLK",("RT1","1")); bnet("CLK_T",("RT1","2"),("CT1","1"))
 bnet("CLKB",("RT2","1")); bnet("CLKB_T",("RT2","2"),("CT2","1"))
 bnet("LED_A",("RL1","2"),("LED1","A"))
-write_sch("p8x-backplane.sch","P8X 10-SLOT BACKPLANE REV C",bps,bpn)
-validate("p8x-backplane.sch",bps,bpn)
+write_sch("backplane/p8x-backplane.sch","P8X 10-SLOT BACKPLANE REV C",bps,bpn)
+validate("backplane/p8x-backplane.sch",bps,bpn)
 X0=15.24; P=25.4
 def sx(i): return X0+P*i
 def py(n): return G*(38-n)
@@ -888,8 +895,8 @@ for nn in range(27,31):
     wadd(net,(sx(0)-2.54,y-1.27,sx(9)-2.54,y-1.27,1,0.4))
     for i in range(10):
         wadd(net,(sx(i)-2.54,y,sx(i)-2.54,y-1.27,1,0.4))
-write_brd("p8x-backplane.brd","P8X 10-SLOT BACKPLANE REV C COMPACT",bpb,bpn,wires,
+write_brd("backplane/p8x-backplane.brd","P8X 10-SLOT BACKPLANE REV C COMPACT",bpb,bpn,wires,
           {"GND":[(2,)],"VCC":[(15,)]},248.92,109.22,viad)
-validate("p8x-backplane.brd",bpb,bpn)
+validate("backplane/p8x-backplane.brd",bpb,bpn)
 
 print("ALL 7 BOARDS GENERATED")

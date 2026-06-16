@@ -47,7 +47,7 @@ memory, I/O, CF-IDE.
 
 ## Layout
 - docs/         — design docs, bus definition PDF, schematic PDFs, standards
-- hardware/eagle/ — generated CAD (artifacts; see rule 1)
+- hardware/eagle/<board>/ — generated CAD, one subdirectory per board (artifacts; see rule 1)
 - generators/   — Python generators for CAD + schematic PDF renderers
 - microcode/    — genucode.py + u0-u3.bin images + gen_progguide.py
 - assembler/    — p8xasm.py (two-pass assembler)
