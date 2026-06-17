@@ -17,7 +17,7 @@ by `generators/gen_bus_pdf.py`. When any conflict exists, trust the generator co
 | Mating orientation | VERIFY against physical connectors before first fab |
 
 Rows A and C carry signals. Row B is a **solid ground guard** between them
-(B3–B26 = GND), with the exception of B27–B30 which carry SPARE8–11.
+(B3–B26 = GND), with the exception of B27 (CLRC) and B28–B30 (SPARE9–11).
 
 ---
 
@@ -53,18 +53,19 @@ Pins 1–2 are power; pins 31–32 are ground. Signals occupy pins 3–30.
 | 24 | CLK | GND | CIN |
 | 25 | CLKB | GND | SH0 |
 | 26 | LDF | GND | SH1 |
-| 27 | FC | SPARE8 | SPARE4 |
-| 28 | FZ | SPARE9 | SPARE5 |
-| 29 | FN | SPARE10 | SPARE6 |
-| 30 | FV | SPARE11 | SPARE7 |
+| 27 | FC | CLRC | PSEL2 |
+| 28 | FZ | SPARE9 | LDZN |
+| 29 | FN | SPARE10 | SHCIN |
+| 30 | FV | SPARE11 | SETC |
 | 31 | GND | GND | GND |
 | 32 | GND | GND | GND |
 
 **Notes:**
 - A27–A30 were reallocated from SPARE0–3 to flag lines FC/FZ/FN/FV (rev C2).
   SPARE numbering therefore starts at 4. There are no SPARE0–3.
-- B3–B26 = GND (ground guard). B27–B30 = SPARE8–11.
-- SPARE4–11 are bused across all 10 slots, reserved for future allocation.
+- B3–B26 = GND (ground guard).
+- rev C3 allocated the rev-B control signals: C27–C30 = PSEL2/LDZN/SHCIN/SETC
+  (were SPARE4–7) and B27 = CLRC (was SPARE8). SPARE9–11 remain on B28–B30.
 
 ---
 
@@ -197,11 +198,21 @@ restores FLAGS from the data bus.
 System reset, active-low. Drives all cards to a known state. The control card
 generates -RES from the front-panel reset button and power-on RC circuit.
 
-### 3.12 SPARE4–11
+### 3.12 rev-B control signals (PSEL2, LDZN, SHCIN, SETC, CLRC) and SPARE9–11
 
-Eight spare lines bused across all 10 slots, reserved for future allocation.
-SPARE4–7 are on row C (C27–C30); SPARE8–11 are on row B (B27–B30). No card
-may use these without a formal allocation recorded in this document.
+Allocated from spares in rev C3 to carry the rev-B microcode-word additions,
+all driven by the control card's pipeline latches:
+
+| Signal | Pin | Consumer | Function |
+|--------|-----|----------|----------|
+| PSEL2 | C27 | Reg-bank | 3rd pointer-select bit (P0–P3 + PT scratch=4) |
+| LDZN | C28 | ALU | Latch Z,N from the data bus on loads (without touching C/V) |
+| SHCIN | C29 | ALU | Shifter shift-in = current C flag (rotate through carry) |
+| SETC | C30 | ALU | Force C = 1 (SEC) |
+| CLRC | B27 | ALU | Force C = 0 (CLC) |
+
+SPARE9–11 (B28–B30) remain bused across all 10 slots, reserved; no card may use
+them without a formal allocation recorded here.
 
 ---
 
@@ -218,22 +229,32 @@ A[12]   = condition flag selected by FCOND of the *previous* step (pipeline)
 
 Step 0 of every opcode is the fetch cycle: MEM@P0 → IR, P0+.
 
+Layout updated for rev B (3-bit PSEL + new flag/shift control bits):
+
 | Bits | Field | Description |
 |------|-------|-------------|
 | 3:0 | DOE | Data output enable (see §3.3) |
 | 7:4 | DLD | Data load destination (see §3.4) |
-| 9:8 | PSEL | Pointer select |
-| 10 | PINC | Pointer increment |
-| 11 | PDEC | Pointer decrement |
-| 15:12 | ALUS | ALU function select S0–S3 |
-| 16 | ALUM | ALU mode (0=arithmetic, 1=logic) |
-| 17 | CIN | Carry input (active-low, passed to 74181 Cn) |
-| 18 | SH0 | Shift left |
-| 19 | SH1 | Shift right |
-| 20 | LDF | Load flags from ALU result |
-| 21 | URST | Micro-step reset (return to step 0 = next fetch) |
-| 23:22 | FCOND | Selects which flag drives A12 for the *next* ROM lookup |
-| 31:24 | — | Reserved |
+| 10:8 | PSEL | Pointer select (3 bits: P0–P3 + PT scratch = 4) |
+| 11 | PINC | Pointer increment |
+| 12 | PDEC | Pointer decrement |
+| 16:13 | ALUS | ALU function select S0–S3 |
+| 17 | ALUM | ALU mode (0=arithmetic, 1=logic) |
+| 18 | CIN | Carry input (active-low pin, passed to 74181 Cn) |
+| 19 | SH0 | Shift left |
+| 20 | SH1 | Shift right |
+| 21 | LDF | Load all four flags from the ALU result |
+| 24:22 | FCOND | Selects which flag drives A12 for the *next* ROM lookup |
+| 25 | URST | Micro-step reset (return to step 0 = next fetch) |
+| 26 | HALT | Halt the clock |
+| 27 | LDZN | Latch Z,N only, from the loaded byte (loads set flags) |
+| 28 | SHCIN | Shifter shift-in = C flag (rotate through carry) |
+| 29 | SETC | Force C = 1 |
+| 30 | CLRC | Force C = 0 |
+| 31 | — | Reserved |
+
+The C flag is **conventional active-high** in rev B (C=1 = carry-out / A≥B); the
+ALU card inverts the raw 74181 Cn+4 pin. SETC/CLRC force the C latch directly.
 
 FCOND encoding: 0=C, 1=Z, 2=N, 3=V (selects which flag pin drives A12).
 
@@ -294,3 +315,4 @@ document before building.
 | C | — | Power rearranged: 6×+5V top (A1–C2), 6×GND bottom (A31–C32); row B3–B26 full GND guard |
 | C1 | — | SPARE0–3 on A27–A30 |
 | C2 | 2026-06 | A27–A30 reallocated to FC/FZ/FN/FV; SPARE8–11 opened on B27–B30; eight official spares (SPARE4–11) |
+| C3 | 2026-06 | rev-B control signals allocated: C27–C30 = PSEL2/LDZN/SHCIN/SETC, B27 = CLRC (were SPARE4–8); SPARE9–11 remain on B28–B30 |

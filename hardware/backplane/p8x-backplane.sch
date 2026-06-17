@@ -2647,7 +2647,7 @@
 <wire x1="510.54" y1="-723.90" x2="515.62" y2="-723.90" width="0.1524" layer="91"/>
 <label x="515.62" y="-723.39" size="1.778" layer="95"/></segment>
 </net>
-<net name="SPARE8" class="0">
+<net name="CLRC" class="0">
 <segment><pinref part="J1" gate="G$1" pin="B27"/>
 <wire x1="17.78" y1="-109.22" x2="12.70" y2="-109.22" width="0.1524" layer="91"/>
 <label x="12.70" y="-108.71" size="1.778" layer="95"/></segment>
@@ -3543,7 +3543,7 @@
 <wire x1="459.74" y1="-307.34" x2="464.82" y2="-307.34" width="0.1524" layer="91"/>
 <label x="464.82" y="-306.83" size="1.778" layer="95"/></segment>
 </net>
-<net name="SPARE4" class="0">
+<net name="PSEL2" class="0">
 <segment><pinref part="J1" gate="G$1" pin="C27"/>
 <wire x1="53.34" y1="-27.94" x2="58.42" y2="-27.94" width="0.1524" layer="91"/>
 <label x="58.42" y="-27.43" size="1.778" layer="95"/></segment>
@@ -3575,7 +3575,7 @@
 <wire x1="459.74" y1="-309.88" x2="464.82" y2="-309.88" width="0.1524" layer="91"/>
 <label x="464.82" y="-309.37" size="1.778" layer="95"/></segment>
 </net>
-<net name="SPARE5" class="0">
+<net name="LDZN" class="0">
 <segment><pinref part="J1" gate="G$1" pin="C28"/>
 <wire x1="53.34" y1="-30.48" x2="58.42" y2="-30.48" width="0.1524" layer="91"/>
 <label x="58.42" y="-29.97" size="1.778" layer="95"/></segment>
@@ -3607,7 +3607,7 @@
 <wire x1="459.74" y1="-312.42" x2="464.82" y2="-312.42" width="0.1524" layer="91"/>
 <label x="464.82" y="-311.91" size="1.778" layer="95"/></segment>
 </net>
-<net name="SPARE6" class="0">
+<net name="SHCIN" class="0">
 <segment><pinref part="J1" gate="G$1" pin="C29"/>
 <wire x1="53.34" y1="-33.02" x2="58.42" y2="-33.02" width="0.1524" layer="91"/>
 <label x="58.42" y="-32.51" size="1.778" layer="95"/></segment>
@@ -3639,7 +3639,7 @@
 <wire x1="459.74" y1="-314.96" x2="464.82" y2="-314.96" width="0.1524" layer="91"/>
 <label x="464.82" y="-314.45" size="1.778" layer="95"/></segment>
 </net>
-<net name="SPARE7" class="0">
+<net name="SETC" class="0">
 <segment><pinref part="J1" gate="G$1" pin="C30"/>
 <wire x1="53.34" y1="-35.56" x2="58.42" y2="-35.56" width="0.1524" layer="91"/>
 <label x="58.42" y="-35.05" size="1.778" layer="95"/></segment>

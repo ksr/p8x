@@ -14,7 +14,7 @@ def busnet(pin):
     r,n=pin[0],int(pin[1:])
     if n in (1,2): return "+5V"
     if n in (31,32): return "GND"
-    if r=="B": return "SPARE%d"%(n-19) if 27<=n<=30 else "GND"
+    if r=="B": return {27:"CLRC",28:"SPARE9",29:"SPARE10",30:"SPARE11"}.get(n,"GND")
     if r=="A":
         if 3<=n<=10: return "D%d"%(n-3)
         if n==11: return "-RES"
@@ -23,7 +23,8 @@ def busnet(pin):
         return {20:"PSEL0",21:"PSEL1",22:"PINC",23:"PDEC",24:"CLK",25:"CLKB",26:"LDF",27:"FC",28:"FZ",29:"FN",30:"FV"}.get(n)
     if 3<=n<=18: return "A%d"%(n-3)
     if 19<=n<=22: return "ALUS%d"%(n-19)
-    return {23:"ALUM",24:"CIN",25:"SH0",26:"SH1"}.get(n,"SPARE%d"%(n-27+4))
+    return {23:"ALUM",24:"CIN",25:"SH0",26:"SH1",
+            27:"PSEL2",28:"LDZN",29:"SHCIN",30:"SETC"}.get(n,"SPARE%d"%(n-27+4))
 
 DESC={
  "FC":"Flag: Carry. Driven continuously by the ALU card flag register; read by the control card condition mux for conditional branches",
@@ -35,6 +36,11 @@ DESC={
  "LDF":"Latch flags (ALU card)","PINC":"Selected pointer increment",
  "PDEC":"Selected pointer decrement","ALUM":"74181 mode (logic/arith)",
  "CIN":"ALU carry in","SH0":"Shifter control 0","SH1":"Shifter control 1",
+ "PSEL2":"Pointer-select bit 2 (rev B: P0-P3 + PT scratch=4); to reg-bank",
+ "LDZN":"Latch Z,N from the data bus on loads (rev B); to ALU card",
+ "SHCIN":"Shifter shift-in = C flag, for rotate-through-carry (rev B); to ALU card",
+ "SETC":"Force C flag = 1 (SEC, rev B); to ALU card",
+ "CLRC":"Force C flag = 0 (CLC, rev B); to ALU card",
 }
 def desc(net):
     if net in DESC: return DESC[net]
@@ -123,10 +129,10 @@ def pinlist(p):
     return ", ".join(p) if len(p)<=6 else "%s ... %s (%d pins)"%(p[0],p[-1],len(p))
 order=(["D%d"%i for i in range(8)]+["A%d"%i for i in range(16)]
  +["DOE%d"%i for i in range(4)]+["DLD%d"%i for i in range(4)]
- +["PSEL0","PSEL1","PINC","PDEC","LDF","ALUS0","ALUS1","ALUS2","ALUS3","ALUM",
-   "CIN","SH0","SH1","CLK","CLKB","-RES"]
+ +["PSEL0","PSEL1","PSEL2","PINC","PDEC","LDF","ALUS0","ALUS1","ALUS2","ALUS3","ALUM",
+   "CIN","SH0","SH1","CLK","CLKB","-RES","LDZN","SHCIN","SETC","CLRC"]
  +["FC","FZ","FN","FV"]
- +["SPARE%d"%i for i in range(4,12)]+["+5V","GND"])
+ +["SPARE%d"%i for i in range(9,12)]+["+5V","GND"])
 rows=[["Signal","Pin(s)","Dir*","Description"]]
 DIR={"CLK":"C>","CLKB":"C>","-RES":"C>","+5V":"PWR","GND":"PWR"}
 def sigdir(net):
@@ -192,7 +198,7 @@ for note in [
  "2. D0-D7 carry 10k pull-ups on the backplane only; cards never add bus conditioning.",
  "3. Loads occur on rising CLK; write strobes are gated with CLKB (second half-cycle).",
  "4. Address bus is driven exclusively by the register-bank card (selected pointer).",
- "5. SPARE4-7 (row C) and SPARE8-11 (row B27-B30) are bused across all slots, reserved for future allocation.",
+ "5. rev C3: C27-C30 = PSEL2/LDZN/SHCIN/SETC and B27 = CLRC (were SPARE4-8). SPARE9-11 (B28-B30) remain reserved.",
  "5b. SPARE0-3 were reallocated as flag lines FC/FZ/FN/FV (A27-A30). SPARE numbering therefore starts at 4.",
  "5c. Row B ground guard now spans B3-B26; B27-B30 carry SPARE8-11.",
  "6. Verify row A/C orientation against physical DIN connectors before first fab."]:

@@ -21,7 +21,7 @@ def busnet(pin):
     r,n=pin[0],int(pin[1:])
     if n in (1,2): return "VCC"
     if n in (31,32): return "GND"
-    if r=="B": return "SPARE%d"%(n-19) if 27<=n<=30 else "GND"
+    if r=="B": return {27:"CLRC",28:"SPARE9",29:"SPARE10",30:"SPARE11"}.get(n,"GND")
     if r=="A":
         if 3<=n<=10: return "D%d"%(n-3)
         if n==11: return "-RES"
@@ -31,7 +31,9 @@ def busnet(pin):
                 27:"FC",28:"FZ",29:"FN",30:"FV"}.get(n)
     if 3<=n<=18: return "A%d"%(n-3)
     if 19<=n<=22: return "ALUS%d"%(n-19)
-    return {23:"ALUM",24:"CIN",25:"SH0",26:"SH1"}.get(n,"SPARE%d"%(n-27+4))
+    # rev C3: C27-30 + B27 carry the rev-B control signals; SPARE9-11 remain on B28-30
+    return {23:"ALUM",24:"CIN",25:"SH0",26:"SH1",
+            27:"PSEL2",28:"LDZN",29:"SHCIN",30:"SETC"}.get(n,"SPARE%d"%(n-27+4))
 
 ALLPINS=["%s%d"%(r,n) for r in "ABC" for n in range(1,33)]
 
