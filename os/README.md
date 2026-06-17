@@ -5,36 +5,36 @@ CompactFlash to `$8000` by the ROM monitor's `B` command. Written in P8X
 assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 [`p8xasm.py`](../assembler/p8xasm.py).
 
-> **Status: v0.3 — boots and runs a shell with file commands, including
-> on-target file creation.**
+> **Status: v0.6 — shell with file commands and directory navigation.**
+> Reads both P8XFS v1 (flat) and v2 (hierarchical) volumes — the layout is
+> chosen at cold start from the boot block's version byte.
 >
 > | Command | Effect |
 > |---------|--------|
-> | `DIR` | list the flat P8XFS v1 directory (name + hex size) |
+> | `DIR [path]` | list the current directory, or a given one |
+> | `CD path` | change directory (absolute `/a/b`, relative, `.`/`..`) |
 > | `LOAD name` | read a file into its stored load address |
 > | `RUN name` | `LOAD` it, then `JSR` its exec address (program `RTS` → shell) |
 > | `SAVE name start end` | write memory `[start,end)` to a new file (hex addrs) |
 > | `DEL name` | mark the directory entry deleted (`$FF`) and write it back |
 > | `DUMP addr` | show 256 bytes from `addr` (hex + ASCII) |
 > | `DEP addr b b ...` | deposit hex byte values starting at `addr` |
-> | `PACK` | compact the data area, reclaiming the extents `DEL` left behind |
+> | `PACK` | compact the data area (flat v1 volumes only for now) |
 > | `HELP` | list commands |
 >
-> Commands are matched as whole words; the filename argument is upcased and
-> space-padded to 12 chars; `SAVE`/`DUMP`/`DEP` parse hex addresses/bytes.
-> `SAVE` allocates at the boot-block free pointer, copies the range into
-> successive sectors, writes a directory entry (load = exec = `start`), and
-> bumps the free pointer — all persisted, so files survive a reboot and
-> round-trip through `p8xfs.py get`. Together `DEP`+`SAVE`+`RUN` let the machine
-> author and run its own programs (deposit machine code, save it, run it).
-> Because `SAVE` always allocates at the free pointer and `DEL` only tombstones,
-> deleted extents leak until **`PACK`** reclaims them: it repeatedly finds the
-> live file with the lowest start LBA at-or-above the running free pointer,
-> copies its extent down, fixes the directory entry, and finally lowers the free
-> pointer. Verify a volume host-side with **`p8xfs.py fsck`** (checks bounds,
-> overlap, and the free pointer; reports reclaimable space). Still to come: the
-> v2 hierarchy (`CD`/`MKDIR`/`TREE`). See the design in
-> [hardware/cf-card/p8x-cf-os-design.md](../hardware/cf-card/p8x-cf-os-design.md).
+> A file/dir argument may be a **path**. Directory scanning works on any extent
+> — a `(start LBA, sector count)` pair — so the current directory and any
+> resolved path share one code path; path resolution walks components via the
+> on-disk `.`/`..` entries. The prompt shows the current path (e.g. `/BIN> `).
+> `SAVE`/`DUMP`/`DEP` parse hex; `SAVE` allocates at the boot-block free pointer,
+> writes a directory entry into the current (or resolved) directory, and bumps
+> the free pointer. Together `DEP`+`SAVE`+`RUN` let the machine author and run
+> its own programs. **`PACK`** reclaims the extents `DEL` tombstones (flat
+> volumes for now — v2 tree compaction is pending). Verify a volume host-side
+> with **`p8xfs.py fsck`**. Still to come on-target: `MKDIR`/`RMDIR`, `TREE`,
+> and v2-aware `PACK`. See the design in
+> [hardware/cf-card/p8x-cf-os-design.md](../hardware/cf-card/p8x-cf-os-design.md)
+> and [p8xfs-v2-hierarchical.md](../hardware/cf-card/p8xfs-v2-hierarchical.md).
 
 ## How it fits together
 

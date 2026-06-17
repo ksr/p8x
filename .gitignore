@@ -12,9 +12,11 @@ emulator/test/*.bin
 emulator/test/*.out
 emulator/test/cf.img
 emulator/test/os.img
+emulator/test/v2.img
 emulator/test/bas.img
 emulator/test/tinyos.asm
 emulator/test/prog.asm
+emulator/test/v2prog.asm
 emulator/test/*.tmp
 # combined monitor+BASIC ROM (rebuild with tools/build_basic_rom.py)
 /p8x-rom-basic.bin

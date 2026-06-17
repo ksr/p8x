@@ -40,18 +40,20 @@ Last updated: 2026-06-11
     - NB: pin/pad-validated only, not DRC'd; the rev-B *behaviour* is proven in
       the emulator (make test-isa). A full Eagle DRC + airwire check before fab
       remains on the VERIFY list.
-- **P8XFS v2 hierarchy (IN PROGRESS)**: host side is done — p8xfs.py does v2
-  format (`create --v2`), mkdir, path-based put/get/ls, tree, and a tree-walking
-  fsck that checks `..` links (see DONE). Remaining is the on-target OS work:
-    - generalize OS directory scanning from the fixed LBA 33-64 region to a
-      (start LBA, sector count) pair, fed by the current directory
-    - CWDLBA/CWDPATH state + a RESOLVE routine; CD; DIR takes a path; prompt
-      shows the CWD path
-    - MKDIR/RMDIR on-target; LOAD/RUN/SAVE/DEL resolve a path argument
-    - TREE; rework PACK to repoint parent entries + child `..` when moving dir
-      extents; re-verify with v2 fsck
-    - flip the monitor F command (or an OS FORMAT) + os_test to the v2 layout
-      once the OS can read it (monitor B is unchanged — only reads sig+OSCNT)
+- **P8XFS v2 hierarchy (IN PROGRESS)**: host side + OS navigation are done
+  (see DONE — the OS now reads v1 and v2 and does CD/DIR[path]/paths). Remaining:
+    - **MKDIR/RMDIR on-target**: MKDIR allocates a 4-sector extent at the free
+      pointer, writes its `.`/`..`, and adds an entry to the parent (FINDSLOT +
+      WRENT already generalized to the current dir). RMDIR refuses a non-empty
+      dir (scan finds something past `.`/`..`).
+    - **TREE**: depth-first indented listing — recurse over subdirectory extents
+      (needs a small explicit stack of (dir LBA, entry index); CONFIG depth ~8).
+    - **v2-aware PACK**: currently flat-only (guarded). A v2 PACK must walk the
+      tree and, when moving a directory extent, repoint the parent's entry AND
+      that dir's own `.` plus every child's `..`. Re-verify with v2 fsck.
+    - **on-target FORMAT** (optional): monitor F still writes v1; either teach it
+      v2 or add an OS FORMAT so a card can be made bootable without the host.
+      (Monitor B is unchanged — it only reads sig+OSCNT.)
 - **P8XFS v2 hierarchy**: upgrade the flat directory to subdirectories
   (directory-is-a-file, `.`/`..`, path resolve) per p8xfs-v2-hierarchical.md —
   CD/MKDIR/RMDIR/TREE. Monitor ROM unchanged (B only reads sig+OSCNT); move
@@ -160,6 +162,19 @@ Last updated: 2026-06-11
 
 ## DONE
 
+- **P8X/OS v0.6 — directory navigation (reads v1 + v2).** Generalized directory
+  scanning from the fixed LBA 33-64 region to a (start LBA, sector count) pair,
+  so the current directory and any resolved path share one code path (FINDENT,
+  DIR, FINDSLOT). Cold start reads the boot-block version byte and sets the
+  layout (v1: root 33/32 sectors, data @65; v2: root 33/4, data @37) + CWD =
+  root. Added a RESOLVE routine (walks path components via the on-disk `.`/`..`
+  entries; absolute `/...` vs relative), `CD` (with a best-effort CWD-path
+  prompt), `DIR [path]`, and made LOAD/RUN/SAVE/DEL accept a path. PACK guarded
+  to flat (v1) volumes. Fixed a P2-clobber bug (FINDENT walks SBUF with P2, so
+  DESCEND now saves/restores the caller's path cursor). New regression
+  os_v2_test.sh: host-builds a v2 disk with a subdir + program, boots, and
+  checks CD/DIR/RUN (cwd + absolute path) + a rejected bad CD; v1 os_test still
+  green.
 - **P8XFS v2 host support (p8xfs.py).** `create --v2` lays a hierarchical
   volume (version 2, 4-sector root directory at LBA 33, data from LBA 37); a
   directory is a file whose extent holds entries with `.` (entry 0) and `..`

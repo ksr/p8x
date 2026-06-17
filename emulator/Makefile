@@ -38,6 +38,7 @@ test-cf: p8xemu ucode
 # P8X/OS boot: build a P8XFS image with the OS + files, boot it, run DIR.
 test-os: p8xemu ucode
 	sh test/os_test.sh
+	sh test/os_v2_test.sh
 
 # BASIC: launch ROM BASIC from the monitor (X), and boot disk BASIC (B).
 test-basic: p8xemu ucode

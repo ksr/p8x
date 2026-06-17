@@ -1,4 +1,4 @@
-; p8xos.asm - P8X/OS v0.5, a RAM-resident disk operating system.
+; p8xos.asm - P8X/OS v0.6, a RAM-resident disk operating system.
 ;
 ; Loaded from CompactFlash to $8000 and entered by the ROM monitor's B command
 ; (which reads OSCNT sectors from LBA 1 and JMPs to $8000). The OS does NOT
@@ -9,19 +9,21 @@
 ;   python3 assembler/p8xasm.py os/p8xos.asm -o p8xos.bin --base 0x8000
 ; then install on a P8XFS image with:  tools/p8xfs.py boot disk.img p8xos.bin
 ;
-; v0.5 shell:
-;   DIR                list the flat P8XFS v1 directory
+; v0.6 shell (reads P8XFS v1 flat OR v2 hierarchical, chosen from the boot
+; block's version byte at cold start):
+;   DIR [path]         list the current directory, or a given one
+;   CD  path           change directory (absolute /a/b, relative, '.'/'..')
 ;   LOAD name          read a file into its stored load address
 ;   RUN  name          LOAD it, then JSR its exec address (program RTS -> shell)
 ;   SAVE name start end write memory [start,end) to a new file (hex addresses)
 ;   DEL  name          mark the directory entry deleted ($FF) and write it back
 ;   DUMP addr          show 256 bytes from addr (hex + ASCII)
 ;   DEP  addr b b ...  deposit hex byte values starting at addr
-;   PACK               compact the data area, reclaiming DEL'd extents
+;   PACK               compact the data area (flat v1 volumes only for now)
 ;   HELP
-; Commands are matched as whole words; a filename argument is parsed, upcased
-; and space-padded to 12 chars; SAVE/DUMP/DEP parse hex addresses/bytes.
-; Verify a volume host-side with tools/p8xfs.py fsck. See p8x-cf-os-design.md.
+; A file/dir argument may be a path; directory scanning works on any extent
+; (start LBA + sector count), so CWD and resolved paths share one code path.
+; The prompt shows the current path. Verify a volume with p8xfs.py fsck.
 
 ; ---- BIOS jump table (stable ABI, in ROM) ----------------------------------
 CONIN   = $0100          ; wait for key, char -> A
@@ -40,8 +42,9 @@ SBUF    = $9E00          ; 512-byte sector buffer
 ; ---- P8XFS v1 on-disk layout -----------------------------------------------
 DIRLBA  = 33             ; directory: LBA 33..64, 32-byte entries
 DATALBA = 65             ; first data LBA (directory scan stops here)
-F_FILE  = $01            ; entry flag: regular file ($00 end, $02 dir, $FF del)
-F_DEL   = $FF
+F_FILE  = $01            ; entry flag: regular file ($00 end marker)
+F_DIR   = $02            ; subdirectory (its extent holds entries)
+F_DEL   = $FF            ; deleted
 
 ; ---- OS RAM variables (below the kernel, clear of BIOS $9D44+ and SBUF) -----
 LINEBUF = $9000          ; shell input line (64 bytes)
@@ -93,6 +96,19 @@ DSTL    = $9089          ; copy dest LBA
 CPYN    = $908A          ; sectors left to copy
 CANDL   = $908B          ; current entry's start-field pointer
 CANDH   = $908C
+; ---- directory / path working set (v1 + v2) ----
+ROOTN   = $908D          ; root directory sector count (32 on v1, 4 on v2)
+DATABASE= $908E          ; first data LBA (65 on v1, 37 on v2)
+CWDL    = $908F          ; current directory: start LBA
+CWDN    = $9090          ;                    sector count
+SDIRL   = $9091          ; directory being scanned this op (start LBA)
+SDIRN   = $9092          ;                                 sector count
+SCNT    = $9093          ; sectors-left counter while scanning a directory
+LSL     = $9094          ; SETPATH: pointer to the last '/' in CWDPATH
+LSH     = $9095
+PATHL   = $9096          ; saved path cursor across DESCEND (FINDENT clobbers P2)
+PATHH   = $9097
+CWDPATH = $90A0          ; textual CWD path for the prompt (up to 48 bytes)
 
 CR      = $0D
 LF      = $0A
@@ -103,9 +119,35 @@ STKTOP  = $FEFF
 COLD:   LDP3 #STKTOP
         LDP1 #MBANNER
         JSR  PUTS
+        ; pick the on-disk layout from the boot-block version byte
+        LDP1 #SBUF
+        LDA  #0
+        STA  LBA
+        JSR  CFREAD
+        LDA  SBUF+2
+        LDB  #2
+        CMP
+        JZ   CB_V2
+        LDA  #32                ; v1: flat root LBA 33..64, data @ 65
+        STA  ROOTN
+        LDA  #65
+        STA  DATABASE
+        JMP  CB_SET
+CB_V2:  LDA  #4                 ; v2: root LBA 33..36, data @ 37
+        STA  ROOTN
+        LDA  #37
+        STA  DATABASE
+CB_SET: LDA  #33                ; CWD = root
+        STA  CWDL
+        LDA  ROOTN
+        STA  CWDN
+        JSR  PATHROOT           ; CWDPATH = "/"
 
 ; ---------------- Shell main loop --------------------------------------------
-SHELL:  LDP1 #MPROMPT
+SHELL:  JSR  CRLF
+        LDP1 #CWDPATH           ; prompt = "<path>> "
+        JSR  PUTS
+        LDP1 #MPROMPT
         JSR  PUTS
         JSR  GETLN              ; line -> LINEBUF (null-terminated)
         LDP2 #LINEBUF
@@ -144,6 +186,9 @@ SHELL:  LDP1 #MPROMPT
         LDP1 #KW_PACK
         JSR  CMPCMD
         JNZ  DOPACK
+        LDP1 #KW_CD
+        JSR  CMPCMD
+        JNZ  DOCD
         LDP1 #MUNK              ; unknown command
         JSR  PUTS
         JMP  SHELL
@@ -161,11 +206,25 @@ DOHELP: LDP1 #MHELP
         JMP  SHELL
 
 ; ---------------- DIR : list the P8XFS directory -----------------------------
-DODIR:  LDP1 #MDIRHDR
+DODIR:  JSR  ARG2P2             ; optional path arg -> directory to list
+        JSR  SKIPSPC
+        LDA  (P2)
+        JZ   DD_CWD             ; no arg: list the current directory
+        JSR  CDPATH             ; resolve the path as a directory
+        LDA  MATCH
+        JZ   NOFILE
+        JMP  DD_GO
+DD_CWD: LDA  CWDL
+        STA  SDIRL
+        LDA  CWDN
+        STA  SDIRN
+DD_GO:  LDP1 #MDIRHDR
         JSR  PUTS
         JSR  CRLF
-        LDA  #DIRLBA
+        LDA  SDIRL
         STA  DLBA
+        LDA  SDIRN
+        STA  SCNT
 DSEC:   LDP1 #SBUF              ; read one directory sector -> SBUF
         LDA  DLBA
         STA  LBA
@@ -176,27 +235,10 @@ DSEC:   LDP1 #SBUF              ; read one directory sector -> SBUF
 DENT:   JSR  RDENT              ; name->NAMEBUF, length->LENLO/HI, flag->FLAGS
         LDA  FLAGS
         JZ   DDONE              ; $00 = end of directory
-        LDB  #F_FILE
+        LDB  #F_DEL             ; skip deleted slots
         CMP
-        JNZ  DNEXT              ; skip non-file entries (deleted / dir)
-        LDP1 #NAMEBUF           ; print "NAME........  hhhh"
-        LDA  #12
-        STA  TMP
-DPRN:   LDA  (P1)+
-        JSR  CONOUT
-        LDA  TMP
-        DEC
-        STA  TMP
-        JNZ  DPRN
-        LDA  #' '
-        JSR  CONOUT
-        LDA  #' '
-        JSR  CONOUT
-        LDA  LENHI
-        JSR  PHEX8
-        LDA  LENLO
-        JSR  PHEX8
-        JSR  CRLF
+        JZ   DNEXT
+        JSR  DPRENT             ; print this entry (file or <DIR>)
 DNEXT:  LDA  ECNT
         DEC
         STA  ECNT
@@ -204,11 +246,41 @@ DNEXT:  LDA  ECNT
         LDA  DLBA               ; next directory sector
         INC
         STA  DLBA
-        LDB  #DATALBA
-        CMP                     ; DLBA >= 65 (C=1) -> ran past directory
-        JC   DDONE
-        JMP  DSEC
+        LDA  SCNT               ; sectors left in this directory extent
+        DEC
+        STA  SCNT
+        JNZ  DSEC
 DDONE:  JMP  SHELL
+
+; DPRENT - print one directory entry: name, then size, then <DIR> for dirs.
+; Skips the '.' and '..' self/parent entries. FLAGS/NAMEBUF/LEN already loaded.
+DPRENT: LDA  NAMEBUF            ; hide '.' and '..'
+        LDB  #'.'
+        CMP
+        JZ   dp_ret
+        LDP1 #NAMEBUF
+        LDA  #12
+        STA  TMP
+dp_nm:  LDA  (P1)+
+        JSR  CONOUT
+        LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  dp_nm
+        LDA  #' '
+        JSR  CONOUT
+        LDA  LENHI
+        JSR  PHEX8
+        LDA  LENLO
+        JSR  PHEX8
+        LDA  FLAGS
+        LDB  #F_DIR
+        CMP
+        JNZ  dp_crlf
+        LDP1 #MDIRTAG           ; " <DIR>"
+        JSR  PUTS
+dp_crlf:JSR  CRLF
+dp_ret: RTS
 
 ; ---------------- LOAD name --------------------------------------------------
 DOLOAD: JSR  FINDARG            ; parse name, scan directory
@@ -249,12 +321,25 @@ NOFILE: LDP1 #MNOFILE
         JSR  PUTS
         JMP  SHELL
 
-; FINDARG - parse a filename argument and locate it. Returns Z set (A=0) when
-; no file was found, Z clear when FINDENT filled the entry fields.
+; FINDARG - resolve a path argument to a regular file. Returns A=0 (Z set) on
+; failure (bad directory path, not found, or it's a directory), A=1 with the
+; entry fields filled on success.
 FINDARG:JSR  ARG2P2             ; P2 -> argument text
-        JSR  PARSEN             ; NAMEBUF <- upcased, space-padded name
-        JSR  FINDENT            ; sets MATCH + fields + ENTPL/H + DLBA
+        JSR  RESOLVE            ; SDIR = parent dir, NAMEBUF = leaf
         LDA  MATCH
+        JZ   FA_NO
+        JSR  FINDENT            ; scan SDIR for NAMEBUF
+        LDA  MATCH
+        JZ   FA_NO
+        LDA  FLAGS              ; must be a regular file (not a directory)
+        LDB  #F_FILE
+        CMP
+        JNZ  FA_NO
+        LDA  #1
+        STA  MATCH
+        RTS
+FA_NO:  LDA  #0
+        STA  MATCH
         RTS
 
 ; ARG2P2 - point P2 at the saved argument position in LINEBUF.
@@ -262,6 +347,279 @@ ARG2P2: LDA  ARGPL
         TAP2L
         LDA  ARGPH
         TAP2H
+        RTS
+
+; ---------------- path resolution --------------------------------------------
+; SKIPSPC - advance P2 past spaces.
+SKIPSPC:LDA  (P2)
+        LDB  #' '
+        CMP
+        JNZ  sks_d
+        INP2
+        JMP  SKIPSPC
+sks_d:  RTS
+
+; RV_START - begin a walk: skip spaces, then set SDIR to the root directory and
+; consume a leading '/' (absolute path) or to the current directory (relative).
+RV_START:JSR SKIPSPC
+        LDA  (P2)
+        LDB  #'/'
+        CMP
+        JNZ  rvs_cwd
+        INP2                    ; consume leading '/'
+        LDA  #33
+        STA  SDIRL
+        LDA  ROOTN
+        STA  SDIRN
+        RTS
+rvs_cwd:LDA  CWDL
+        STA  SDIRL
+        LDA  CWDN
+        STA  SDIRN
+        RTS
+
+; PARSECOMP - copy one path component from (P2) into NAMEBUF (upcased, 12,
+; space-padded), stopping at '/', space, or null WITHOUT consuming it.
+PARSECOMP:LDP1 #NAMEBUF
+        LDA  #12
+        STA  TMP
+pc_fz:  LDA  #' '
+        STA  (P1)+
+        LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  pc_fz
+        LDP1 #NAMEBUF
+        LDA  #12
+        STA  CNT
+pc_lp:  LDA  (P2)
+        JZ   pc_end
+        LDB  #' '
+        CMP
+        JZ   pc_end
+        LDB  #'/'
+        CMP
+        JZ   pc_end
+        LDA  CNT
+        JZ   pc_end
+        LDA  (P2)
+        JSR  UPCASE
+        STA  (P1)
+        INP1
+        INP2
+        LDA  CNT
+        DEC
+        STA  CNT
+        JMP  pc_lp
+pc_end: RTS
+
+; DESCEND - find the directory named in NAMEBUF inside SDIR; on success set
+; SDIR to its extent (start LBA + sector count) and MATCH=1, else MATCH=0.
+; Preserves P2 (the caller's path cursor) — FINDENT walks SBUF with P2.
+DESCEND:TPA2L
+        STA  PATHL
+        TPA2H
+        STA  PATHH
+        JSR  FINDENT
+        LDA  PATHL
+        TAP2L
+        LDA  PATHH
+        TAP2H
+        LDA  MATCH
+        JZ   dsc_no
+        LDA  FLAGS
+        LDB  #F_DIR
+        CMP
+        JNZ  dsc_no
+        LDA  STARTLO
+        STA  SDIRL
+        JSR  SECCOUNT           ; sectors from the dir's length field
+        LDA  SECCNT
+        STA  SDIRN
+        LDA  #1
+        STA  MATCH
+        RTS
+dsc_no: LDA  #0
+        STA  MATCH
+        RTS
+
+; RESOLVE - walk a path leaving SDIR = the containing directory and NAMEBUF =
+; the final (leaf) component. MATCH=0 if an intermediate component is missing
+; or not a directory.
+RESOLVE:JSR  RV_START
+rv_lp:  JSR  PARSECOMP
+        LDA  (P2)               ; delimiter after the component
+        LDB  #'/'
+        CMP
+        JNZ  rv_done            ; not '/': NAMEBUF is the leaf
+        INP2                    ; consume '/'; NAMEBUF is an intermediate dir
+        JSR  DESCEND
+        LDA  MATCH
+        JZ   rv_bad
+        JMP  rv_lp
+rv_done:LDA  #1
+        STA  MATCH
+        RTS
+rv_bad: LDA  #0
+        STA  MATCH
+        RTS
+
+; CDPATH - walk a path treating every component as a directory; on success
+; SDIR = the target directory and MATCH=1.
+CDPATH: JSR  RV_START
+cd_lp:  JSR  PARSECOMP
+        LDA  NAMEBUF            ; empty component (e.g. "/" alone) -> SDIR is it
+        LDB  #' '
+        CMP
+        JZ   cd_done
+        JSR  DESCEND
+        LDA  MATCH
+        JZ   cd_bad
+        LDA  (P2)
+        LDB  #'/'
+        CMP
+        JNZ  cd_done            ; no more components
+        INP2
+        JMP  cd_lp
+cd_done:LDA  #1
+        STA  MATCH
+        RTS
+cd_bad: LDA  #0
+        STA  MATCH
+        RTS
+
+; ---------------- CD path ----------------------------------------------------
+DOCD:   JSR  ARG2P2
+        JSR  CDPATH             ; resolve to a directory -> SDIR
+        LDA  MATCH
+        JZ   NODIR
+        LDA  SDIRL              ; commit it as the working directory
+        STA  CWDL
+        LDA  SDIRN
+        STA  CWDN
+        JSR  SETPATH            ; update the displayed path (cosmetic)
+        JMP  SHELL
+NODIR:  LDP1 #MNODIR
+        JSR  PUTS
+        JMP  SHELL
+
+; PATHROOT - CWDPATH = "/".
+PATHROOT:LDP1 #CWDPATH
+        LDA  #'/'
+        STA  (P1)+
+        LDA  #0
+        STA  (P1)
+        RTS
+
+; SETPATH - best-effort update of the displayed CWD path from the CD argument:
+;   absolute  -> copy it;  ".." -> pop a component;  else -> append "/arg".
+; (CWDL/CWDN are always exact; this only affects the prompt text.)
+SETPATH:JSR  ARG2P2
+        JSR  SKIPSPC
+        LDA  (P2)
+        LDB  #'/'
+        CMP
+        JZ   sp_abs
+        LDA  (P2)
+        LDB  #'.'
+        CMP
+        JNZ  sp_app
+        INP2                    ; maybe ".."
+        LDA  (P2)
+        LDB  #'.'
+        CMP
+        JNZ  sp_app
+        INP2
+        LDA  (P2)               ; ".." must be the whole component
+        JZ   sp_pop
+        LDB  #' '
+        CMP
+        JZ   sp_pop
+        JMP  sp_app             ; "../..." compound -> just append (approximate)
+sp_pop: JSR  PATHPOP
+        RTS
+sp_abs: JSR  ARG2P2             ; copy the absolute path verbatim (upcased)
+        JSR  SKIPSPC
+        LDP1 #CWDPATH
+sa_lp:  LDA  (P2)
+        JZ   sa_end
+        LDB  #' '
+        CMP
+        JZ   sa_end
+        JSR  UPCASE
+        STA  (P1)
+        INP1
+        INP2
+        JMP  sa_lp
+sa_end: LDA  #0
+        STA  (P1)
+        RTS
+sp_app: JSR  ARG2P2
+        JSR  SKIPSPC
+        LDA  CWDPATH+1          ; at root ("/")? then write name after the '/'
+        JNZ  sap_walk
+        LDP1 #CWDPATH
+        INP1
+        JMP  sap_copy
+sap_walk:LDP1 #CWDPATH          ; else walk to end and add a '/'
+sap_e:  LDA  (P1)
+        JZ   sap_sl
+        INP1
+        JMP  sap_e
+sap_sl: LDA  #'/'
+        STA  (P1)
+        INP1
+sap_copy:LDA (P2)
+        JZ   sap_end
+        LDB  #' '
+        CMP
+        JZ   sap_end
+        JSR  UPCASE
+        STA  (P1)
+        INP1
+        INP2
+        JMP  sap_copy
+sap_end:LDA  #0
+        STA  (P1)
+        RTS
+
+; PATHPOP - drop the last component of CWDPATH (truncate at the last '/',
+; leaving at least "/").
+PATHPOP:LDA  #<CWDPATH
+        STA  LSL
+        LDA  #>CWDPATH
+        STA  LSH
+        LDP1 #CWDPATH
+pp_lp:  LDA  (P1)
+        JZ   pp_done
+        LDB  #'/'
+        CMP
+        JNZ  pp_adv
+        TPA1L
+        STA  LSL
+        TPA1H
+        STA  LSH
+pp_adv: INP1
+        JMP  pp_lp
+pp_done:LDA  LSL                ; last '/' at the very start -> keep "/"
+        LDB  #<CWDPATH
+        CMP
+        JNZ  pp_cut
+        LDA  LSH
+        LDB  #>CWDPATH
+        CMP
+        JNZ  pp_cut
+        LDP1 #CWDPATH
+        INP1
+        LDA  #0
+        STA  (P1)
+        RTS
+pp_cut: LDA  LSL
+        TAP1L
+        LDA  LSH
+        TAP1H
+        LDA  #0
+        STA  (P1)
         RTS
 
 ; SECCOUNT - SECCNT = ceil(LENLO:LENHI / 512) = (LENHI>>1) rounded up when any
@@ -308,7 +666,9 @@ LF_END: RTS
 ; allocate at the boot-block free pointer, copy memory into successive sectors,
 ; add a directory entry, and advance the free pointer.
 DOSAVE: JSR  ARG2P2             ; P2 -> argument text
-        JSR  PARSEN             ; NAMEBUF <- filename (P2 left after the name)
+        JSR  RESOLVE            ; SDIR = parent dir, NAMEBUF = leaf name
+        LDA  MATCH
+        JZ   SV_ERR
         JSR  GETHEX             ; start address
         LDA  MATCH
         JZ   SV_ERR
@@ -454,7 +814,11 @@ DP_ERR: LDP1 #MDPER
 ; ascending-by-start order guarantees a moved extent never overwrites one not
 ; yet processed (dst <= src, low-to-high copy only revisits already-moved
 ; sectors). 1-byte LBAs (volumes <= 256 sectors), matching the rest of the OS.
-DOPACK: LDA  #DATALBA
+DOPACK: LDA  ROOTN              ; flat (v1) volumes only for now; v2 compaction
+        LDB  #32                ; must walk the directory tree (TODO)
+        CMP
+        JNZ  PK_NOSUP
+        LDA  #DATALBA
         STA  NF
 PK_PASS:LDA  #0
         STA  PFOUND
@@ -606,6 +970,9 @@ PK_FIN: LDP1 #SBUF              ; write the new free pointer into the boot block
         LDP1 #MPACKED
         JSR  PUTS
         JMP  SHELL
+PK_NOSUP:LDP1 #MNOPACK
+        JSR  PUTS
+        JMP  SHELL
 
 ; SAVECORE - allocate + write data + directory entry. Returns MATCH=0 if the
 ; directory is full (data already written, but no entry made).
@@ -693,11 +1060,13 @@ CS2:    LDA  (P1)+
         STA  SRCHI
         RTS
 
-; FINDSLOT - scan the directory for a free entry ($00 end or $FF deleted).
-; On success MATCH=1, ENTPL/H -> entry start in SBUF, DLBA = that sector,
-; sector left in SBUF. Directory full -> MATCH=0.
-FINDSLOT:LDA #DIRLBA
+; FINDSLOT - scan the directory (SDIRL, SDIRN) for a free entry ($00 end or
+; $FF deleted). On success MATCH=1, ENTPL/H -> entry start in SBUF, DLBA = that
+; sector, sector left in SBUF. Directory full -> MATCH=0.
+FINDSLOT:LDA SDIRL
         STA  DLBA
+        LDA  SDIRN
+        STA  SCNT
 FS_SEC: LDP1 #SBUF
         LDA  DLBA
         STA  LBA
@@ -737,14 +1106,14 @@ FS_SP:  LDA  (P2)+
         LDA  DLBA
         INC
         STA  DLBA
-        LDB  #DATALBA
-        CMP
-        JC   FS_FULL
-        JMP  FS_SEC
-FS_OK:  LDA  #1
+        LDA  SCNT
+        DEC
+        STA  SCNT
+        JNZ  FS_SEC
+FS_FULL:LDA  #0
         STA  MATCH
         RTS
-FS_FULL:LDA  #0
+FS_OK:  LDA  #1
         STA  MATCH
         RTS
 
@@ -885,12 +1254,15 @@ HV_BAD: LDA  #0
         STA  MATCH
         RTS
 
-; FINDENT - search the directory for the file named in NAMEBUF.
-; On a match: MATCH=1, fields filled, ENTPL/H -> the entry's flag byte in SBUF
-; (the matching sector is left in SBUF), DLBA = that sector's LBA.
+; FINDENT - search the directory (SDIRL, SDIRN) for the entry named in NAMEBUF.
+; On a match: MATCH=1, fields filled (incl. FLAGS so the caller knows file vs
+; directory), ENTPL/H -> the entry's flag byte in SBUF (sector left in SBUF),
+; DLBA = that sector's LBA. Skips deleted slots; stops at the $00 end marker.
 ; On miss / end-of-directory: MATCH=0.
-FINDENT:LDA  #DIRLBA
+FINDENT:LDA  SDIRL
         STA  DLBA
+        LDA  SDIRN
+        STA  SCNT
 FE_SEC: LDP1 #SBUF
         LDA  DLBA
         STA  LBA
@@ -951,12 +1323,12 @@ FE_C1:  LDA  TMP
         JZ   FE_NF              ; $00 end marker -> stop, not found
         LDA  MATCH
         JZ   FE_NEXT            ; name mismatch
-        LDA  FLAGS              ; matched name; require it be a live file
-        LDB  #F_FILE
+        LDA  FLAGS              ; matched name; ignore deleted slots
+        LDB  #F_DEL
         CMP
-        JNZ  FE_NEXT
+        JZ   FE_NEXT
         LDA  #1
-        STA  MATCH
+        STA  MATCH              ; found (FLAGS = file or dir)
         RTS
 FE_NEXT:LDA  ECNT
         DEC
@@ -965,10 +1337,10 @@ FE_NEXT:LDA  ECNT
         LDA  DLBA
         INC
         STA  DLBA
-        LDB  #DATALBA
-        CMP
-        JC   FE_NF
-        JMP  FE_SEC
+        LDA  SCNT               ; sectors left in this directory extent
+        DEC
+        STA  SCNT
+        JNZ  FE_SEC
 FE_NF:  LDA  #0
         STA  MATCH
         RTS
@@ -1130,13 +1502,12 @@ CRLF:   LDA  #CR
 
 ; ---------------- strings ----------------------------------------------------
 MBANNER: .byte CR,LF
-         .asciiz "P8X/OS v0.5"
-MPROMPT: .byte CR,LF
-         .asciiz "> "
+         .asciiz "P8X/OS v0.6"
+MPROMPT: .asciiz "> "
 MHELP:   .byte CR,LF
-         .asciiz "commands: DIR  LOAD f  RUN f  SAVE f s e  DEL f"
+         .asciiz "commands: DIR [p]  CD p  LOAD f  RUN f  SAVE f s e  DEL f"
          .byte CR,LF
-         .asciiz "          DUMP a  DEP a b...  PACK  HELP"
+         .asciiz "          DUMP a  DEP a b...  PACK  HELP   (f/p may be paths)"
 MDIRHDR: .byte CR,LF
          .asciiz "NAME            SIZE"
 MUNK:    .byte CR,LF
@@ -1161,6 +1532,11 @@ MDPER:   .byte CR,LF
          .asciiz "?DEP addr byte..."
 MPACKED: .byte CR,LF
          .asciiz "PACKED"
+MNOPACK: .byte CR,LF
+         .asciiz "?PACK: flat (v1) volumes only"
+MNODIR:  .byte CR,LF
+         .asciiz "?NO DIR"
+MDIRTAG: .asciiz " <DIR>"
 
 KW_DIR:  .asciiz "DIR"
 KW_HELP: .asciiz "HELP"
@@ -1171,3 +1547,4 @@ KW_SAVE: .asciiz "SAVE"
 KW_DUMP: .asciiz "DUMP"
 KW_DEP:  .asciiz "DEP"
 KW_PACK: .asciiz "PACK"
+KW_CD:   .asciiz "CD"
