@@ -40,7 +40,7 @@
 <wire x1="160" y1="0" x2="160" y2="100" width="0" layer="20"/>
 <wire x1="160" y1="100" x2="0" y2="100" width="0" layer="20"/>
 <wire x1="0" y1="100" x2="0" y2="0" width="0" layer="20"/>
-<text x="4" y="94" size="2.54" layer="21">P8X CONTROL/MICROCODE CARD REV A</text>
+<text x="4" y="94" size="2.54" layer="21">P8X CONTROL/MICROCODE CARD REV B</text>
 </plain>
 <libraries><library name="p8x">
 <packages>
@@ -323,27 +323,27 @@
 <contactref element="U18" pad="9"/>
 </signal>
 <signal name="ALUM">
-<contactref element="U16" pad="2"/>
+<contactref element="U16" pad="5"/>
 <contactref element="J1" pad="C23"/>
 </signal>
 <signal name="ALUS0">
-<contactref element="U15" pad="12"/>
+<contactref element="U15" pad="15"/>
 <contactref element="J1" pad="C19"/>
 </signal>
 <signal name="ALUS1">
-<contactref element="U15" pad="15"/>
+<contactref element="U15" pad="16"/>
 <contactref element="J1" pad="C20"/>
 </signal>
 <signal name="ALUS2">
-<contactref element="U15" pad="16"/>
+<contactref element="U15" pad="19"/>
 <contactref element="J1" pad="C21"/>
 </signal>
 <signal name="ALUS3">
-<contactref element="U15" pad="19"/>
+<contactref element="U16" pad="2"/>
 <contactref element="J1" pad="C22"/>
 </signal>
 <signal name="CIN">
-<contactref element="U16" pad="5"/>
+<contactref element="U16" pad="6"/>
 <contactref element="J1" pad="C24"/>
 </signal>
 <signal name="CLK">
@@ -370,6 +370,10 @@
 <contactref element="U3" pad="3"/>
 <contactref element="U3" pad="11"/>
 <contactref element="U5" pad="1"/>
+</signal>
+<signal name="CLRC">
+<contactref element="U17" pad="16"/>
+<contactref element="J1" pad="B27"/>
 </signal>
 <signal name="CONDY">
 <contactref element="U9" pad="5"/>
@@ -459,15 +463,15 @@
 <contactref element="J1" pad="A27"/>
 </signal>
 <signal name="FCOND0">
-<contactref element="U16" pad="15"/>
+<contactref element="U16" pad="16"/>
 <contactref element="U9" pad="11"/>
 </signal>
 <signal name="FCOND1">
-<contactref element="U16" pad="16"/>
+<contactref element="U16" pad="19"/>
 <contactref element="U9" pad="10"/>
 </signal>
 <signal name="FCOND2">
-<contactref element="U16" pad="19"/>
+<contactref element="U17" pad="2"/>
 <contactref element="U9" pad="9"/>
 </signal>
 <signal name="FN">
@@ -563,7 +567,7 @@
 </signal>
 <signal name="HALT">
 <contactref element="U2" pad="1"/>
-<contactref element="U17" pad="5"/>
+<contactref element="U17" pad="6"/>
 </signal>
 <signal name="HALTK">
 <contactref element="U4" pad="11"/>
@@ -630,8 +634,12 @@
 <contactref element="U13" pad="3"/>
 </signal>
 <signal name="LDF">
-<contactref element="U16" pad="12"/>
+<contactref element="U16" pad="15"/>
 <contactref element="J1" pad="A26"/>
+</signal>
+<signal name="LDZN">
+<contactref element="U17" pad="9"/>
+<contactref element="J1" pad="C28"/>
 </signal>
 <signal name="LEDHL">
 <contactref element="R5" pad="2"/>
@@ -754,12 +762,32 @@
 <contactref element="U17" pad="4"/>
 <contactref element="U13" pad="12"/>
 </signal>
+<signal name="P17B2">
+<contactref element="U17" pad="7"/>
+<contactref element="U13" pad="13"/>
+</signal>
+<signal name="P17B3">
+<contactref element="U17" pad="8"/>
+<contactref element="U13" pad="15"/>
+</signal>
+<signal name="P17B4">
+<contactref element="U17" pad="13"/>
+<contactref element="U13" pad="16"/>
+</signal>
+<signal name="P17B5">
+<contactref element="U17" pad="14"/>
+<contactref element="U13" pad="17"/>
+</signal>
+<signal name="P17B6">
+<contactref element="U17" pad="17"/>
+<contactref element="U13" pad="18"/>
+</signal>
 <signal name="PDEC">
-<contactref element="U15" pad="9"/>
+<contactref element="U15" pad="12"/>
 <contactref element="J1" pad="A23"/>
 </signal>
 <signal name="PINC">
-<contactref element="U15" pad="6"/>
+<contactref element="U15" pad="9"/>
 <contactref element="J1" pad="A22"/>
 </signal>
 <signal name="PSEL0">
@@ -769,6 +797,10 @@
 <signal name="PSEL1">
 <contactref element="U15" pad="5"/>
 <contactref element="J1" pad="A21"/>
+</signal>
+<signal name="PSEL2">
+<contactref element="U15" pad="6"/>
+<contactref element="J1" pad="C27"/>
 </signal>
 <signal name="RSTP">
 <contactref element="U2" pad="8"/>
@@ -801,13 +833,21 @@
 <contactref element="R3" pad="2"/>
 <contactref element="U5" pad="4"/>
 </signal>
+<signal name="SETC">
+<contactref element="U17" pad="15"/>
+<contactref element="J1" pad="C30"/>
+</signal>
 <signal name="SH0">
-<contactref element="U16" pad="6"/>
+<contactref element="U16" pad="9"/>
 <contactref element="J1" pad="C25"/>
 </signal>
 <signal name="SH1">
-<contactref element="U16" pad="9"/>
+<contactref element="U16" pad="12"/>
 <contactref element="J1" pad="C26"/>
+</signal>
+<signal name="SHCIN">
+<contactref element="U17" pad="12"/>
+<contactref element="J1" pad="C29"/>
 </signal>
 <signal name="SQ0">
 <contactref element="U18" pad="14"/>
@@ -861,7 +901,7 @@
 <contactref element="U2" pad="3"/>
 </signal>
 <signal name="URST">
-<contactref element="U17" pad="2"/>
+<contactref element="U17" pad="5"/>
 <contactref element="U4" pad="4"/>
 <contactref element="U4" pad="5"/>
 </signal>

@@ -437,10 +437,12 @@ for i in range(4):
 N(n,"CONDY",("U9","Y"),*[("U%d"%k,"A12") for k in (10,11,12,13)])
 for f,d in (("FC","D2"),("FZ","D3"),("FN","D4"),("FV","D5")):
     N(n,f,("U9",d))
+# rev B 32-bit control word -> pipeline latches U14..U17 (8 bits each).
+# Word bit b is latch U[14 + b//8], output Q[(b%8)+1].
 PIPE={14:["DOE0","DOE1","DOE2","DOE3","DLD0","DLD1","DLD2","DLD3"],
- 15:["PSEL0","PSEL1","PINC","PDEC","ALUS0","ALUS1","ALUS2","ALUS3"],
- 16:["ALUM","CIN","SH0","SH1","LDF","FCOND0","FCOND1","FCOND2"],
- 17:["URST","HALT"]}
+ 15:["PSEL0","PSEL1","PSEL2","PINC","PDEC","ALUS0","ALUS1","ALUS2"],
+ 16:["ALUS3","ALUM","CIN","SH0","SH1","LDF","FCOND0","FCOND1"],
+ 17:["FCOND2","URST","HALT","LDZN","SHCIN","SETC","CLRC"]}
 for k,sigs in PIPE.items():
     for b,sig in enumerate(sigs):
         N(n,"P%dB%d"%(k,b),("U%d"%k,"D%d"%(b+1)),("U%d"%(k-4),"IO%d"%b))
@@ -451,10 +453,10 @@ N(n,"URST",("U4","2A"),("U4","2B"))
 N(n,"-USTL",("U4","2Y"),("U18","!LOAD"))
 N(n,"LEDP",("RP1","2"),("LED3","A"))
 N(n,"LEDRN",("R4","2"),("LED4","A")); N(n,"LEDHL",("R5","2"),("LED5","A"))
-card("control-card","P8X CONTROL/MICROCODE CARD REV A",ic,sm,n,
+card("control-card","P8X CONTROL/MICROCODE CARD REV B",ic,sm,n,
  {"D%d"%i for i in range(8)}|{"DOE%d"%i for i in range(4)}|{"DLD%d"%i for i in range(4)}|
- {"PSEL0","PSEL1","PINC","PDEC","ALUS0","ALUS1","ALUS2","ALUS3","ALUM","CIN","SH0","SH1",
-  "LDF","CLK","CLKB","-RES","FC","FZ","FN","FV"})
+ {"PSEL0","PSEL1","PSEL2","PINC","PDEC","ALUS0","ALUS1","ALUS2","ALUS3","ALUM","CIN","SH0","SH1",
+  "LDF","CLK","CLKB","-RES","FC","FZ","FN","FV","LDZN","SHCIN","SETC","CLRC"})
 
 # ===================== REGISTER BANK CARD =====================================
 n={}; ic={}
