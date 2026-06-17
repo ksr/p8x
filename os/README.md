@@ -5,20 +5,25 @@ CompactFlash to `$8000` by the ROM monitor's `B` command. Written in P8X
 assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 [`p8xasm.py`](../assembler/p8xasm.py).
 
-> **Status: v0.2 — boots and runs a shell with file commands.**
+> **Status: v0.3 — boots and runs a shell with file commands, including
+> on-target file creation.**
 >
 > | Command | Effect |
 > |---------|--------|
 > | `DIR` | list the flat P8XFS v1 directory (name + hex size) |
 > | `LOAD name` | read a file into its stored load address |
 > | `RUN name` | `LOAD` it, then `JSR` its exec address (program `RTS` → shell) |
+> | `SAVE name start end` | write memory `[start,end)` to a new file (hex addrs) |
 > | `DEL name` | mark the directory entry deleted (`$FF`) and write it back |
 > | `HELP` | list commands |
 >
 > Commands are matched as whole words; the filename argument is upcased and
-> space-padded to 12 chars. Still to come: `SAVE` (create a file — needs hex
-> arguments + a free-space allocator), `PACK`, and the v2 hierarchy
-> (`CD`/`MKDIR`/`TREE`). See the design in
+> space-padded to 12 chars; `SAVE` parses two hex addresses. `SAVE` allocates
+> at the boot-block free pointer, copies the range into successive sectors,
+> writes a directory entry (load = exec = `start`), and bumps the free pointer
+> — all persisted, so files survive a reboot and round-trip through
+> `p8xfs.py get`. Still to come: `DUMP`/`DEP`, `PACK` (compaction), and the v2
+> hierarchy (`CD`/`MKDIR`/`TREE`). See the design in
 > [hardware/cf-card/p8x-cf-os-design.md](../hardware/cf-card/p8x-cf-os-design.md).
 
 ## How it fits together

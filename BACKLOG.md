@@ -40,13 +40,13 @@ Last updated: 2026-06-11
     - NB: pin/pad-validated only, not DRC'd; the rev-B *behaviour* is proven in
       the emulator (make test-isa). A full Eagle DRC + airwire check before fab
       remains on the VERIFY list.
-- **P8X/OS — SAVE + remaining shell commands**: DIR/LOAD/RUN/DEL are in (see
-  DONE). Next: SAVE (write a memory range to a new file + directory entry — the
-  first command that allocates: parse two hex addresses, 16-bit length, find a
-  free/`$FF` dir slot, copy memory->SBUF sector by sector via CFWRITE, bump the
-  boot-block free pointer). Then DUMP/DEP (hex view/deposit) and PACK
-  (compaction) once SAVE/DEL churn the free list. SAVE needs a 16-bit hex
-  parser and 16-bit subtract — small, but the allocator is the real work.
+- **P8X/OS — remaining shell commands**: DIR/LOAD/RUN/SAVE/DEL are in (see
+  DONE). Next: DUMP addr (hex/ASCII view) and DEP addr b b b... (deposit bytes)
+  — together they make the OS self-sufficient for poking memory without the
+  monitor. Then PACK (compaction): SAVE always allocates at the free pointer
+  and DEL only tombstones, so deleted extents leak until PACK reclaims them by
+  copying live extents down and repointing directory entries (the design's
+  most intricate routine — write it last, test on a scratch image).
 - **P8XFS v2 hierarchy**: upgrade the flat directory to subdirectories
   (directory-is-a-file, `.`/`..`, path resolve) per p8xfs-v2-hierarchical.md —
   CD/MKDIR/RMDIR/TREE. Monitor ROM unchanged (B only reads sig+OSCNT); move
@@ -148,6 +148,15 @@ Last updated: 2026-06-11
 
 ## DONE
 
+- **P8X/OS v0.3 — SAVE (on-target file create).** SAVE name start end: parse
+  two hex addresses (GETHEX/HEXVAL; 16-bit accumulate via SHL/ROL), 16-bit
+  length = end - start (SUB + borrow into the high byte), sector count, then
+  allocate at the boot-block free pointer, copy memory -> SBUF -> CFWRITE per
+  sector, write a directory entry into the first free/$FF slot (FINDSLOT +
+  WRENT, load=exec=start), and bump the free pointer. Verified: files persist
+  across reboot, consecutive SAVEs allocate consecutive LBAs, and a SAVE'd
+  range round-trips byte-identical through `p8xfs.py get`. test-os now also
+  SAVEs and checks the bytes.
 - **P8X/OS v0.2 — shell with file commands.** Added LOAD (read a file into its
   stored load address; sector count = ceil(len/512)), RUN (LOAD + JSR exec
   address, program RTS returns to the shell), and DEL (mark the entry $FF and

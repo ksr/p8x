@@ -2,10 +2,12 @@
 # P8X/OS boot + shell test. Builds a P8XFS image with the OS, a runnable
 # program (PROG.BIN, prints "RAN" then RTS to the shell), and a data file
 # (HELLO.TXT), boots it through the ROM monitor (B), then exercises the shell:
-#   DIR            -> lists both files
-#   RUN PROG.BIN   -> prints RAN (program loaded to $A000 and JSR'd)
-#   DEL HELLO.TXT  -> marks the entry deleted and writes the sector back
-#   DIR            -> re-read from disk shows HELLO.TXT gone, PROG.BIN kept
+#   DIR              -> lists both files
+#   RUN PROG.BIN     -> prints RAN (program loaded to $A000 and JSR'd)
+#   DEL HELLO.TXT    -> marks the entry deleted and writes the sector back
+#   SAVE C.BIN 8000 8010 -> create a file from memory ($8000 = the OS image)
+#   DIR              -> re-read from disk: HELLO.TXT gone, PROG.BIN + C.BIN kept
+# Then on the host: get C.BIN back and confirm its bytes equal p8xos.bin[0:16].
 # Exercises the whole stack: assembler --base, p8xfs.py, the BIOS jump table,
 # the CF model, and the OS shell / filesystem code.
 set -e
@@ -43,18 +45,26 @@ printf 'hi' > os_h.tmp
 python3 $ROOT/tools/p8xfs.py put os.img os_h.tmp --name HELLO.TXT >/dev/null
 rm -f os_h.tmp prog.asm
 
-out=$(printf 'B\rDIR\rRUN PROG.BIN\rDEL HELLO.TXT\rDIR\r' | \
-      ../p8xemu -l 60000000 -c os.img eeprom.bin 2>/dev/null | tr -d '\0')
+out=$(printf 'B\rDIR\rRUN PROG.BIN\rDEL HELLO.TXT\rSAVE C.BIN 8000 8010\rDIR\r' | \
+      ../p8xemu -l 80000000 -c os.img eeprom.bin 2>/dev/null | tr -d '\0')
 
 fail() { echo "OS TEST: FAIL — $1"; echo "$out" | sed -n '/P8X\/OS/,$p'; exit 1; }
-echo "$out" | grep -q 'P8X/OS v0.2' || fail "OS did not boot"
+echo "$out" | grep -q 'P8X/OS v0.3' || fail "OS did not boot"
 echo "$out" | grep -q 'PROG.BIN'    || fail "DIR missing PROG.BIN"
 echo "$out" | grep -q 'HELLO.TXT'   || fail "DIR missing HELLO.TXT"
 echo "$out" | grep -q 'RAN'         || fail "RUN did not execute the program"
 echo "$out" | grep -q 'DELETED'     || fail "DEL did not report success"
-# After DEL, the final DIR (re-read from disk) must not list HELLO.TXT.
-echo "$out" | sed -n '/DELETED/,$p' | grep -q 'HELLO.TXT' && \
-    fail "HELLO.TXT still listed after DEL" || true
-echo "$out" | sed -n '/DELETED/,$p' | grep -q 'PROG.BIN' || \
-    fail "PROG.BIN lost after DEL"
+echo "$out" | grep -q 'SAVED'       || fail "SAVE did not report success"
+# After DEL+SAVE, the final DIR (re-read from disk): HELLO.TXT gone, C.BIN added.
+tail=$(echo "$out" | sed -n '/SAVED/,$p')
+echo "$tail" | grep -q 'HELLO.TXT' && fail "HELLO.TXT still listed after DEL" || true
+echo "$tail" | grep -q 'PROG.BIN'  || fail "PROG.BIN lost"
+echo "$tail" | grep -q 'C.BIN'     || fail "SAVE'd C.BIN not in DIR"
+
+# Host round-trip: SAVE'd C.BIN must equal the first 16 bytes of the OS image
+# (it was saved straight from $8000, where the OS image is loaded verbatim).
+python3 $ROOT/tools/p8xfs.py get os.img C.BIN --out os_c.tmp >/dev/null
+head -c 16 p8xos.bin > os_exp.tmp
+cmp -s os_c.tmp os_exp.tmp || fail "SAVE'd bytes != memory at \$8000"
+rm -f os_c.tmp os_exp.tmp
 echo "OS TEST: PASS"

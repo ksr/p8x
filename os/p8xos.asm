@@ -59,10 +59,22 @@ EXECHI  = $906C
 DLBA    = $906D          ; directory sector being scanned
 SECCNT  = $906E          ; sectors left to transfer
 CURLBA  = $906F          ; current data LBA
-ENTPL   = $9070          ; pointer to the matched entry's flag byte (in SBUF)
-ENTPH   = $9071
+ENTPL   = $9070          ; pointer to a directory entry (in SBUF):
+ENTPH   = $9071          ;   flag byte for DEL, entry start for SAVE
 ARGPL   = $9072          ; saved arg position in LINEBUF
 ARGPH   = $9073
+; ---- SAVE working set ----
+HXLO    = $9074          ; GETHEX result
+HXHI    = $9075
+DIGIT   = $9076          ; HEXVAL digit value
+SHCNT   = $9077          ; shift counter
+SVSTLO  = $9078          ; SAVE source start address
+SVSTHI  = $9079
+FREELO  = $907A          ; boot-block free pointer (next data LBA)
+FREEHI  = $907B
+SRCLO   = $907C          ; running source pointer during the copy
+SRCHI   = $907D
+REM     = $907E          ; sectors remaining in the SAVE write loop
 
 CR      = $0D
 LF      = $0A
@@ -102,6 +114,9 @@ SHELL:  LDP1 #MPROMPT
         LDP1 #KW_DEL
         JSR  CMPCMD
         JNZ  DODEL
+        LDP1 #KW_SAVE
+        JSR  CMPCMD
+        JNZ  DOSAVE
         LDP1 #MUNK              ; unknown command
         JSR  PUTS
         JMP  SHELL
@@ -209,30 +224,39 @@ NOFILE: LDP1 #MNOFILE
 
 ; FINDARG - parse a filename argument and locate it. Returns Z set (A=0) when
 ; no file was found, Z clear when FINDENT filled the entry fields.
-FINDARG:LDA  ARGPL              ; restore P2 to the argument text
-        TAP2L
-        LDA  ARGPH
-        TAP2H
+FINDARG:JSR  ARG2P2             ; P2 -> argument text
         JSR  PARSEN             ; NAMEBUF <- upcased, space-padded name
         JSR  FINDENT            ; sets MATCH + fields + ENTPL/H + DLBA
         LDA  MATCH
         RTS
 
-; LOADF - read the located file (STARTLO / LENLO:LENHI / LOADLO:LOADHI) into
-; memory. Sector count = ceil(length / 512) = (LENHI>>1) + round-up.
-LOADF:  LDA  LENHI
+; ARG2P2 - point P2 at the saved argument position in LINEBUF.
+ARG2P2: LDA  ARGPL
+        TAP2L
+        LDA  ARGPH
+        TAP2H
+        RTS
+
+; SECCOUNT - SECCNT = ceil(LENLO:LENHI / 512) = (LENHI>>1) rounded up when any
+; low bits remain. Used by LOAD and SAVE.
+SECCOUNT:LDA LENHI
         SHR
         STA  SECCNT
         LDA  LENHI
         LDB  #1
         AND                     ; high byte odd -> 256-byte tail -> round up
-        JNZ  LF_RND
+        JNZ  SC_RND
         LDA  LENLO
-        JZ   LF_GO              ; exact multiple of 512
-LF_RND: LDA  SECCNT
+        JZ   SC_GO              ; exact multiple of 512
+SC_RND: LDA  SECCNT
         INC
         STA  SECCNT
-LF_GO:  LDA  LOADLO             ; P1 <- load address
+SC_GO:  RTS
+
+; LOADF - read the located file (STARTLO / LENLO:LENHI / LOADLO:LOADHI) into
+; memory at its load address.
+LOADF:  JSR  SECCOUNT
+        LDA  LOADLO             ; P1 <- load address
         TAP1L
         LDA  LOADHI
         TAP1H
@@ -251,6 +275,333 @@ LF_LP:  LDA  SECCNT
         STA  SECCNT
         JMP  LF_LP
 LF_END: RTS
+
+; ---------------- SAVE name start end ----------------------------------------
+; Write the memory range [start,end) to a new file: length = end - start,
+; allocate at the boot-block free pointer, copy memory into successive sectors,
+; add a directory entry, and advance the free pointer.
+DOSAVE: JSR  ARG2P2             ; P2 -> argument text
+        JSR  PARSEN             ; NAMEBUF <- filename (P2 left after the name)
+        JSR  GETHEX             ; start address
+        LDA  MATCH
+        JZ   SV_ERR
+        LDA  HXLO
+        STA  SVSTLO
+        LDA  HXHI
+        STA  SVSTHI
+        JSR  GETHEX             ; end address
+        LDA  MATCH
+        JZ   SV_ERR
+        ; length = end - start (16-bit), into LENLO:LENHI
+        LDA  HXLO
+        LDB  SVSTLO
+        SUB                     ; C=1 when no borrow (end_lo >= start_lo)
+        STA  LENLO
+        JC   SV_HI
+        LDA  HXHI               ; borrow: high = end_hi - start_hi - 1
+        LDB  SVSTHI
+        SUB
+        STA  LENHI
+        LDA  LENHI
+        LDB  #1
+        SUB
+        STA  LENHI
+        JMP  SV_LEN
+SV_HI:  LDA  HXHI
+        LDB  SVSTHI
+        SUB
+        STA  LENHI
+SV_LEN: JSR  SECCOUNT           ; SECCNT = sectors needed
+        JSR  SAVECORE
+        LDA  MATCH
+        JZ   SV_FULL
+        LDP1 #MSAVED
+        JSR  PUTS
+        JMP  SHELL
+SV_ERR: LDP1 #MSVERR
+        JSR  PUTS
+        JMP  SHELL
+SV_FULL:LDP1 #MDIRFUL
+        JSR  PUTS
+        JMP  SHELL
+
+; SAVECORE - allocate + write data + directory entry. Returns MATCH=0 if the
+; directory is full (data already written, but no entry made).
+SAVECORE:LDP1 #SBUF             ; read boot block -> free pointer
+        LDA  #0
+        STA  LBA
+        JSR  CFREAD
+        LDA  SBUF+4
+        STA  FREELO
+        LDA  SBUF+5
+        STA  FREEHI
+        LDA  SVSTLO             ; source pointer = start address
+        STA  SRCLO
+        LDA  SVSTHI
+        STA  SRCHI
+        LDA  FREELO             ; data LBA starts at the free pointer
+        STA  CURLBA
+        LDA  SECCNT
+        STA  REM
+SV_WL:  LDA  REM
+        JZ   SV_WD
+        JSR  CPYSEC             ; copy 512 bytes SRC -> SBUF, advance SRC
+        LDA  CURLBA
+        STA  LBA
+        JSR  CFWRITE            ; SBUF -> data sector
+        LDA  CURLBA
+        INC
+        STA  CURLBA
+        LDA  REM
+        DEC
+        STA  REM
+        JMP  SV_WL
+SV_WD:  JSR  FINDSLOT           ; locate a free directory slot (sector in SBUF)
+        LDA  MATCH
+        JZ   SVC_RET            ; directory full -> MATCH=0, bail
+        JSR  WRENT              ; build the 32-byte entry in SBUF
+        LDA  DLBA
+        STA  LBA
+        JSR  CFWRITE            ; persist the directory sector
+        LDP1 #SBUF              ; reload boot block, bump free pointer
+        LDA  #0
+        STA  LBA
+        JSR  CFREAD
+        LDA  FREELO
+        LDB  SECCNT
+        ADD                     ; new free = old free + sectors written
+        STA  SBUF+4
+        LDA  FREEHI
+        JNC  SVC_NC
+        INC
+SVC_NC: STA  SBUF+5
+        LDA  #0
+        STA  LBA
+        JSR  CFWRITE
+        LDA  #1
+        STA  MATCH
+SVC_RET:RTS
+
+; CPYSEC - copy 512 bytes from SRCLO:SRCHI into SBUF, then save the advanced
+; source pointer back (CFWRITE will clobber P1).
+CPYSEC: LDA  SRCLO
+        TAP1L
+        LDA  SRCHI
+        TAP1H
+        LDP2 #SBUF
+        LDA  #0
+        STA  TMP
+CS1:    LDA  (P1)+
+        STA  (P2)+
+        LDA  TMP
+        INC
+        STA  TMP
+        JNZ  CS1
+        LDA  #0
+        STA  TMP
+CS2:    LDA  (P1)+
+        STA  (P2)+
+        LDA  TMP
+        INC
+        STA  TMP
+        JNZ  CS2
+        TPA1L
+        STA  SRCLO
+        TPA1H
+        STA  SRCHI
+        RTS
+
+; FINDSLOT - scan the directory for a free entry ($00 end or $FF deleted).
+; On success MATCH=1, ENTPL/H -> entry start in SBUF, DLBA = that sector,
+; sector left in SBUF. Directory full -> MATCH=0.
+FINDSLOT:LDA #DIRLBA
+        STA  DLBA
+FS_SEC: LDP1 #SBUF
+        LDA  DLBA
+        STA  LBA
+        JSR  CFREAD
+        LDP2 #SBUF
+        LDA  #16
+        STA  ECNT
+FS_ENT: TPA2L                   ; remember entry start
+        STA  ENTPL
+        TPA2H
+        STA  ENTPH
+        LDA  #24                ; skip name+start+len+load+exec to the flag byte
+        STA  TMP
+FS_SK:  LDA  (P2)+
+        LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  FS_SK
+        LDA  (P2)+              ; flag byte (offset 24)
+        STA  FLAGS
+        LDA  #7                 ; skip spare -> next entry
+        STA  TMP
+FS_SP:  LDA  (P2)+
+        LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  FS_SP
+        LDA  FLAGS
+        JZ   FS_OK              ; $00 end marker -> free
+        LDB  #F_DEL
+        CMP
+        JZ   FS_OK              ; $FF deleted -> free
+        LDA  ECNT
+        DEC
+        STA  ECNT
+        JNZ  FS_ENT
+        LDA  DLBA
+        INC
+        STA  DLBA
+        LDB  #DATALBA
+        CMP
+        JC   FS_FULL
+        JMP  FS_SEC
+FS_OK:  LDA  #1
+        STA  MATCH
+        RTS
+FS_FULL:LDA  #0
+        STA  MATCH
+        RTS
+
+; WRENT - write a 32-byte file entry at ENTPL/H (in SBUF): NAMEBUF, start LBA =
+; FREELO (4 bytes), length (4), load=exec=SVST (2+2), flag=file, spare zeros.
+WRENT:  LDA  ENTPL
+        TAP1L
+        LDA  ENTPH
+        TAP1H
+        LDP2 #NAMEBUF           ; name (12)
+        LDA  #12
+        STA  TMP
+WE_NM:  LDA  (P2)+
+        STA  (P1)+
+        LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  WE_NM
+        LDA  FREELO             ; start LBA (4)
+        STA  (P1)+
+        LDA  FREEHI
+        STA  (P1)+
+        LDA  #0
+        STA  (P1)+
+        STA  (P1)+
+        LDA  LENLO              ; length (4)
+        STA  (P1)+
+        LDA  LENHI
+        STA  (P1)+
+        LDA  #0
+        STA  (P1)+
+        STA  (P1)+
+        LDA  SVSTLO             ; load (2)
+        STA  (P1)+
+        LDA  SVSTHI
+        STA  (P1)+
+        LDA  SVSTLO             ; exec (2) = load
+        STA  (P1)+
+        LDA  SVSTHI
+        STA  (P1)+
+        LDA  #F_FILE            ; flag
+        STA  (P1)+
+        LDA  #7                 ; spare (7)
+        STA  TMP
+WE_SP:  LDA  #0
+        STA  (P1)+
+        LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  WE_SP
+        RTS
+
+; GETHEX - parse a hex number from (P2) into HXLO:HXHI. Skips leading spaces,
+; consumes hex digits (0-9 A-F, upcased), stops at the first non-hex char.
+; MATCH=1 if at least one digit was read, else MATCH=0.
+GETHEX: LDA  #0
+        STA  HXLO
+        STA  HXHI
+        STA  CNT                ; digit count
+GH_SK:  LDA  (P2)
+        LDB  #' '
+        CMP
+        JNZ  GH_LP
+        INP2
+        JMP  GH_SK
+GH_LP:  LDA  (P2)
+        JSR  HEXVAL             ; -> DIGIT, MATCH
+        LDA  MATCH
+        JZ   GH_END
+        LDA  #4                 ; accumulator <<= 4 (16-bit)
+        STA  SHCNT
+GH_SHL: LDA  HXLO
+        SHL                     ; C = bit7
+        STA  HXLO
+        LDA  HXHI
+        ROL                     ; shift carry in
+        STA  HXHI
+        LDA  SHCNT
+        DEC
+        STA  SHCNT
+        JNZ  GH_SHL
+        LDA  HXLO               ; accumulator |= digit (add, carry to high)
+        LDB  DIGIT
+        ADD
+        STA  HXLO
+        LDA  HXHI
+        JNC  GH_NC
+        INC
+GH_NC:  STA  HXHI
+        INP2
+        LDA  CNT
+        INC
+        STA  CNT
+        JMP  GH_LP
+GH_END: LDA  CNT
+        JZ   GH_ERR
+        LDA  #1
+        STA  MATCH
+        RTS
+GH_ERR: LDA  #0
+        STA  MATCH
+        RTS
+
+; HEXVAL - A holds a candidate hex char. If valid, DIGIT = 0..15 and MATCH=1;
+; else MATCH=0. Upcases first.
+HEXVAL: JSR  UPCASE
+        STA  TMP
+        LDB  #'0'
+        CMP                     ; A >= '0' ?
+        JNC  HV_BAD
+        LDB  #$3A               ; '9' + 1
+        CMP                     ; A > '9' ?
+        JC   HV_AF
+        LDA  TMP                ; digit 0-9
+        LDB  #'0'
+        SUB
+        STA  DIGIT
+        LDA  #1
+        STA  MATCH
+        RTS
+HV_AF:  LDA  TMP
+        LDB  #'A'
+        CMP                     ; A >= 'A' ?
+        JNC  HV_BAD
+        LDB  #$47               ; 'F' + 1
+        CMP                     ; A > 'F' ?
+        JC   HV_BAD
+        LDA  TMP                ; digit A-F = char - 'A' + 10
+        LDB  #'A'
+        SUB
+        LDB  #10
+        ADD
+        STA  DIGIT
+        LDA  #1
+        STA  MATCH
+        RTS
+HV_BAD: LDA  #0
+        STA  MATCH
+        RTS
 
 ; FINDENT - search the directory for the file named in NAMEBUF.
 ; On a match: MATCH=1, fields filled, ENTPL/H -> the entry's flag byte in SBUF
@@ -497,11 +848,11 @@ CRLF:   LDA  #CR
 
 ; ---------------- strings ----------------------------------------------------
 MBANNER: .byte CR,LF
-         .asciiz "P8X/OS v0.2"
+         .asciiz "P8X/OS v0.3"
 MPROMPT: .byte CR,LF
          .asciiz "> "
 MHELP:   .byte CR,LF
-         .asciiz "commands: DIR  LOAD f  RUN f  DEL f  HELP"
+         .asciiz "commands: DIR  LOAD f  RUN f  SAVE f s e  DEL f  HELP"
 MDIRHDR: .byte CR,LF
          .asciiz "NAME            SIZE"
 MUNK:    .byte CR,LF
@@ -512,9 +863,16 @@ MLOADED: .byte CR,LF
          .asciiz "LOADED"
 MDELETED: .byte CR,LF
          .asciiz "DELETED"
+MSAVED:  .byte CR,LF
+         .asciiz "SAVED"
+MSVERR:  .byte CR,LF
+         .asciiz "?SAVE f start end"
+MDIRFUL: .byte CR,LF
+         .asciiz "?DIR FULL"
 
 KW_DIR:  .asciiz "DIR"
 KW_HELP: .asciiz "HELP"
 KW_LOAD: .asciiz "LOAD"
 KW_RUN:  .asciiz "RUN"
 KW_DEL:  .asciiz "DEL"
+KW_SAVE: .asciiz "SAVE"
