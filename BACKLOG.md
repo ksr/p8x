@@ -70,6 +70,19 @@ Last updated: 2026-06-11
 
 ## IDEAS
 
+- [ ] **Housekeeping (from 2026-06 consistency audit; not yet decided):**
+    - Tracked generated binaries: `microcode/u0-u3.bin` are committed but
+      regenerate byte-identically from genucode.py. Consider gitignoring them
+      and letting `make` build them. (Lean keep — project frames them as the
+      canonical EPROM images, burned *and* interpreted.)
+    - `busnet()` is duplicated in gen_eagle.py and gen_bus_pdf.py (kept in sync
+      by hand; drift risk). De-dup is awkward because gen_bus_pdf is meant to be
+      standalone — importing gen_eagle regenerates all boards as a side effect.
+      A clean fix would guard gen_eagle's board-writing under `if __name__ ==
+      "__main__"` so it's importable without side effects.
+    - Smoke tests test1-3.asm overlap test_isa.asm (per-opcode). They give
+      higher-level scenario coverage (banner, JSR/RTS, countdown); keep as
+      complementary unless trimming.
 - [ ] Assembler for P8X syntax (Python, shares opcode table with microcode
       generator — single source of truth for the ISA)
 - [ ] Microcode generator → EPROM images (same shared table)
