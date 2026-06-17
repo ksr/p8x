@@ -40,13 +40,18 @@ Last updated: 2026-06-11
     - NB: pin/pad-validated only, not DRC'd; the rev-B *behaviour* is proven in
       the emulator (make test-isa). A full Eagle DRC + airwire check before fab
       remains on the VERIFY list.
-- **P8XFS v2 hierarchy**: the flat-FS command set is complete (DIR/LOAD/RUN/
-  SAVE/DEL/DUMP/DEP/PACK + host fsck, see DONE). Next big step is
-  subdirectories per p8xfs-v2-hierarchical.md: directory-is-a-file with `.`/`..`,
-  a shared path-resolve, and CD/MKDIR/RMDIR/TREE; DIR/everything takes a path.
-  Monitor ROM unchanged (B only reads sig+OSCNT); move FORMAT policy onto the
-  OS. p8xfs.py grows mkdir/tree and fsck learns to check `..` links. PACK gets
-  harder (must repoint parents + child `..`), so re-verify it under v2.
+- **P8XFS v2 hierarchy (IN PROGRESS)**: host side is done — p8xfs.py does v2
+  format (`create --v2`), mkdir, path-based put/get/ls, tree, and a tree-walking
+  fsck that checks `..` links (see DONE). Remaining is the on-target OS work:
+    - generalize OS directory scanning from the fixed LBA 33-64 region to a
+      (start LBA, sector count) pair, fed by the current directory
+    - CWDLBA/CWDPATH state + a RESOLVE routine; CD; DIR takes a path; prompt
+      shows the CWD path
+    - MKDIR/RMDIR on-target; LOAD/RUN/SAVE/DEL resolve a path argument
+    - TREE; rework PACK to repoint parent entries + child `..` when moving dir
+      extents; re-verify with v2 fsck
+    - flip the monitor F command (or an OS FORMAT) + os_test to the v2 layout
+      once the OS can read it (monitor B is unchanged — only reads sig+OSCNT)
 - **P8XFS v2 hierarchy**: upgrade the flat directory to subdirectories
   (directory-is-a-file, `.`/`..`, path resolve) per p8xfs-v2-hierarchical.md —
   CD/MKDIR/RMDIR/TREE. Monitor ROM unchanged (B only reads sig+OSCNT); move
@@ -155,6 +160,15 @@ Last updated: 2026-06-11
 
 ## DONE
 
+- **P8XFS v2 host support (p8xfs.py).** `create --v2` lays a hierarchical
+  volume (version 2, 4-sector root directory at LBA 33, data from LBA 37); a
+  directory is a file whose extent holds entries with `.` (entry 0) and `..`
+  (entry 1). Added path resolution, `mkdir` (allocates a 4-sector extent, writes
+  `.`/`..`), path-based `put`/`get`/`ls [path]`, `tree`, and a version-aware
+  `fsck` that walks the tree and verifies every `..` points at its true parent
+  (negative-tested: a corrupted `..` is flagged). v1 (flat) volumes still work
+  and remain the default, so the v1 OS + emulator tests are unaffected. This is
+  the host reference + disk-builder for the on-target v2 work to come.
 - **P8X/OS v0.5 — PACK + host fsck.** PACK compacts the data area: each pass
   scans the directory for the live file with the smallest start LBA >= the
   running free pointer, copies its extent down to the free pointer (low-to-high
