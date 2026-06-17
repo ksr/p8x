@@ -61,6 +61,7 @@ CNT     = $9D46          ; loop counter
 LBA     = $9D47          ; current LBA (low byte; LBA1-3 written as 0)
 SBUF    = $9E00          ; sector buffer
 STKTOP  = $FEFF
+BASIC   = $2000          ; ROM BASIC cold-start (overlaid by the ROM build)
 
 CR      = $0D
 LF      = $0A
@@ -130,6 +131,10 @@ PROMPT: LDP1 #MPROMPT
         LDB  #'G'
         CMP
         JZ   CMD_G
+        LDA  TMP2
+        LDB  #'X'
+        CMP
+        JZ   CMD_X
         LDA  TMP2
         LDB  #'?'
         CMP
@@ -339,6 +344,12 @@ CMD_G:  JSR  GETADDR
         JSR  (P1)           ; program RTS -> here
         JSR  CRLF
         JMP  PROMPT
+
+; ---------------- X : launch ROM BASIC ---------------------------------------
+; BASIC is assembled to $2000 (its cold start) and overlaid into this EEPROM
+; image by the ROM build (see basic/README.md). One-way: BASIC takes over the
+; console; reset returns to the monitor.
+CMD_X:  JMP  BASIC
 
 ; ---------------- ? : help ----------------------------------------------------
 CMD_H:  LDP1 #MHELP
@@ -689,5 +700,7 @@ MHELP:  .ascii "E AAAA  EXAMINE/MODIFY (HEX=NEW, CR=NEXT, .=EXIT)"
          .ascii "B       BOOT OS FROM CF"
          .byte CR,LF
          .ascii "G AAAA  RUN AT AAAA (RTS RETURNS)"
+         .byte CR,LF
+         .ascii "X       RUN ROM BASIC (RESET TO EXIT)"
          .byte CR,LF,0
 

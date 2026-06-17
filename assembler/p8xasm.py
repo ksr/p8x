@@ -51,13 +51,18 @@ def parse_operand(opnd):
     return "a",opnd
 
 class Asm:
-    def __init__(self,base=0,cap=0x8000):
+    def __init__(self,base=0,cap=0x8000,defines=None):
         # img spans the full 64K; `base` is where the output blob starts and
         # `cap` is the highest legal address+1 (0x8000 for a ROM, 0x10000 for a
         # RAM-resident image assembled with --base). hi tracks the high-water
         # mark so a RAM image emits only its own bytes.
         self.sym={}; self.img=bytearray(0x10000); self.lst=[]
         self.base=base; self.cap=cap; self.hi=base
+        # -D NAME=VALUE defines: pre-seed and lock so a source `NAME = ...`
+        # default is overridden (the source keeps its own default when no -D).
+        self.locked=set()
+        for nm,val in (defines or {}).items():
+            self.sym[nm]=val; self.locked.add(nm)
     def expr(self,e,ln,line,pass2):
         e=e.strip()
         if e.startswith("<"): return self.expr(e[1:],ln,line,pass2)&0xFF
@@ -90,7 +95,8 @@ class Asm:
                 continue
             m=re.match(r"^\s*(\w+)\s*=\s*(.+)$",line)
             if m:
-                self.sym[m.group(1)]=self.expr(m.group(2),ln,line,pass2)
+                if m.group(1) not in self.locked:        # -D defines win
+                    self.sym[m.group(1)]=self.expr(m.group(2),ln,line,pass2)
                 if pass2: self.lst.append((pc,[],raw))
                 continue
             parts=line.split(None,1)
@@ -143,19 +149,26 @@ class Asm:
             if pass2: self.lst.append((pc-len(emitted),emitted,raw))
 def main():
     a=sys.argv[1:]
-    src=a[0]; out="eeprom.bin"; lstf=None; base=None
+    src=a[0]; out="eeprom.bin"; lstf=None; base=None; defs={}
     if "-o" in a: out=a[a.index("-o")+1]
     if "-l" in a: lstf=a[a.index("-l")+1]
     if "--base" in a: base=int(a[a.index("--base")+1],0)
+    # -D NAME=VALUE (repeatable): override a source default symbol. VALUE may be
+    # decimal, 0x.. or $.. hex.
+    for i,t in enumerate(a):
+        if t=="-D":
+            nm,_,val=a[i+1].partition("=")
+            val=val.strip()
+            defs[nm.strip()]=int(val[1:],16) if val.startswith("$") else int(val,0)
     lines=tokenize(open(src).read())
     # --base: RAM-resident blob (e.g. an OS loaded to $8000); emit only the
     # bytes from base..hi. No --base: 32K ROM image from $0000.
     if base is not None:
-        A=Asm(base=base,cap=0x10000); A.run(lines,False); A.run(lines,True)
+        A=Asm(base=base,cap=0x10000,defines=defs); A.run(lines,False); A.run(lines,True)
         open(out,"wb").write(A.img[base:A.hi])
         size="%d bytes @ $%04X"%(A.hi-base,base)
     else:
-        A=Asm(); A.run(lines,False); A.run(lines,True)
+        A=Asm(defines=defs); A.run(lines,False); A.run(lines,True)
         open(out,"wb").write(A.img[:0x8000])
         size="32K"
     if lstf:

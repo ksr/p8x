@@ -1,10 +1,14 @@
 ;==============================================================================
 ; P8X BASIC — interpreter for the P8X TTL computer
 ;
-; Boots at $0000 (EEPROM), 6850 ACIA console at $FF04/05.
-; Milestone 2 — line editor: enter numbered lines (stored sorted; same number
-; replaces, a bare number deletes), LIST, NEW. Integer 16-bit line numbers.
-; Tokenizing and execution (RUN, statements) are TODO — see basic/README.md.
+; 6850 ACIA console at $FF04/05. Self-contained (own console + RAM), so it can
+; run standalone, from ROM (launched by the monitor), or be booted from disk.
+;
+; Build targets differ only in two -D symbols (see basic/README.md):
+;   BASORG  code origin   ($0000 standalone, $2000 in monitor ROM, $8000 disk)
+;   BASRAM  data base      ($8000 standalone, $A000 when code lives in low RAM)
+; PBUF (rebuild scratch) is fixed at $C000 for all. Defaults below give the
+; standalone $0000/$8000 build; the disk/ROM builds pass -D to relocate.
 ;
 ; Program storage (PROG): a sorted sequence of records
 ;     [num-lo][num-hi][text bytes ...][00]
@@ -13,61 +17,64 @@
 ; simplest correct approach for variable-length records on this ISA.
 ;==============================================================================
 
+BASORG = $0000          ; code origin (override with -D BASORG=...)
+BASRAM = $8000          ; data base   (override with -D BASRAM=...)
+
 ACIAS  = $FF04
 ACIAD  = $FF05
 CR     = $0D
 LF     = $0A
 BS     = $08
 
-LBUF   = $8000          ; input line buffer
-NUM1   = $8060          ; 16-bit math operands / results
-NUM2   = $8062
-LNUM   = $8064          ; entered/printed line number
-RNUM   = $8066          ; record line number during scan
-TSRC   = $8068          ; address of entered line text (in LBUF)
-SAVE1  = $806A          ; pointer save slots
-SAVE2  = $806C
-DIG    = $806E
-LZ     = $806F
-PCNT   = $8070
-CYTMP  = $8071
-INSF   = $8072          ; 1 once the new line has been emitted
-TXTMT  = $8073          ; 1 if entered line has empty text (delete)
-WP     = $8074          ; crunch write pointer
-RP     = $8076          ; pointer save (match / uncrunch)
-TOKEN  = $8078          ; token matched by MATCHKW
-MATCHF = $8079          ; 1 if MATCHKW found a keyword
-TMPC   = $807A          ; byte scratch
-TOKW   = $807B          ; token being uncrunched
-RESULT = $807C          ; 16-bit expression result
-ACC    = $807E          ; 16-bit mul/div accumulator
-MCNT   = $8080          ; mul/div bit counter
-REM    = $8082          ; 16-bit division remainder
-CURLINE= $8084          ; RUN: pointer to current program line record
-BRANCHF= $8086          ; RUN: 1 if a GOTO target is pending
-ENDF   = $8087          ; RUN: 1 to stop the program
-BRANCHN= $8088          ; RUN: pending GOTO target line number
-RELOP  = $808A          ; comparison operator code (0..5)
-GEF    = $808B          ; compare: left >= right
-EQF    = $808C          ; compare: left == right
-LFT    = $808D          ; comparison left operand (2)
-FNDF   = $808F          ; FINDLINE: 1 if line found
-GSTK   = $8090          ; GOSUB return stack (3 x 4 bytes: line record + text ptr)
-GSP    = $809C          ; GOSUB stack depth
-JUMPF  = $809D          ; RUN: 1 -> set CURLINE = JUMPADDR directly
-JUMPADDR= $809E         ; direct jump target (line record pointer)
-GTMP   = $80A0          ; scratch (2)
-FSP    = $80A2          ; FOR stack depth
-FFP    = $80A3          ; pointer to top FOR frame (2)
-FSTK   = $80A5          ; FOR frames (2 x 9): letter, limit(2), step(2), LR(2), TP(2)
-FORVAR = $80B7          ; FOR/NEXT scratch: loop variable letter
-FLIM   = $80B8          ; FOR/NEXT scratch: limit (2)
-FSTEP  = $80BA          ; FOR/NEXT scratch: step (2)
-FLR    = $80BC          ; FOR/NEXT scratch: loop-back line record (2)
-FTP    = $80BE          ; FOR/NEXT scratch: loop-back text pointer (2)
-VARS   = $80C0          ; variables A-Z: 26 x 2 bytes ($80C0..$80F3)
-SEED   = $80F4          ; RND state (2)
-POKEA  = $80F6          ; POKE address (2)
+LBUF   = BASRAM+$00          ; input line buffer
+NUM1   = BASRAM+$60          ; 16-bit math operands / results
+NUM2   = BASRAM+$62
+LNUM   = BASRAM+$64          ; entered/printed line number
+RNUM   = BASRAM+$66          ; record line number during scan
+TSRC   = BASRAM+$68          ; address of entered line text (in LBUF)
+SAVE1  = BASRAM+$6A          ; pointer save slots
+SAVE2  = BASRAM+$6C
+DIG    = BASRAM+$6E
+LZ     = BASRAM+$6F
+PCNT   = BASRAM+$70
+CYTMP  = BASRAM+$71
+INSF   = BASRAM+$72          ; 1 once the new line has been emitted
+TXTMT  = BASRAM+$73          ; 1 if entered line has empty text (delete)
+WP     = BASRAM+$74          ; crunch write pointer
+RP     = BASRAM+$76          ; pointer save (match / uncrunch)
+TOKEN  = BASRAM+$78          ; token matched by MATCHKW
+MATCHF = BASRAM+$79          ; 1 if MATCHKW found a keyword
+TMPC   = BASRAM+$7A          ; byte scratch
+TOKW   = BASRAM+$7B          ; token being uncrunched
+RESULT = BASRAM+$7C          ; 16-bit expression result
+ACC    = BASRAM+$7E          ; 16-bit mul/div accumulator
+MCNT   = BASRAM+$80          ; mul/div bit counter
+REM    = BASRAM+$82          ; 16-bit division remainder
+CURLINE= BASRAM+$84          ; RUN: pointer to current program line record
+BRANCHF= BASRAM+$86          ; RUN: 1 if a GOTO target is pending
+ENDF   = BASRAM+$87          ; RUN: 1 to stop the program
+BRANCHN= BASRAM+$88          ; RUN: pending GOTO target line number
+RELOP  = BASRAM+$8A          ; comparison operator code (0..5)
+GEF    = BASRAM+$8B          ; compare: left >= right
+EQF    = BASRAM+$8C          ; compare: left == right
+LFT    = BASRAM+$8D          ; comparison left operand (2)
+FNDF   = BASRAM+$8F          ; FINDLINE: 1 if line found
+GSTK   = BASRAM+$90          ; GOSUB return stack (3 x 4 bytes: line record + text ptr)
+GSP    = BASRAM+$9C          ; GOSUB stack depth
+JUMPF  = BASRAM+$9D          ; RUN: 1 -> set CURLINE = JUMPADDR directly
+JUMPADDR= BASRAM+$9E         ; direct jump target (line record pointer)
+GTMP   = BASRAM+$A0          ; scratch (2)
+FSP    = BASRAM+$A2          ; FOR stack depth
+FFP    = BASRAM+$A3          ; pointer to top FOR frame (2)
+FSTK   = BASRAM+$A5          ; FOR frames (2 x 9): letter, limit(2), step(2), LR(2), TP(2)
+FORVAR = BASRAM+$B7          ; FOR/NEXT scratch: loop variable letter
+FLIM   = BASRAM+$B8          ; FOR/NEXT scratch: limit (2)
+FSTEP  = BASRAM+$BA          ; FOR/NEXT scratch: step (2)
+FLR    = BASRAM+$BC          ; FOR/NEXT scratch: loop-back line record (2)
+FTP    = BASRAM+$BE          ; FOR/NEXT scratch: loop-back text pointer (2)
+VARS   = BASRAM+$C0          ; variables A-Z: 26 x 2 bytes ($80C0..$80F3)
+SEED   = BASRAM+$F4          ; RND state (2)
+POKEA  = BASRAM+$F6          ; POKE address (2)
 
 ; keyword tokens (>= $80 so they never collide with text or the 00 terminator)
 TOK_PRINT = $80
@@ -92,12 +99,12 @@ TOK_PEEK = $92
 TOK_POKE = $93
 TOK_STEP = $94
 
-PROG   = $8100          ; program storage
+PROG   = BASRAM+$100          ; program storage
 PBUF   = $C000          ; rebuild scratch buffer
 STKTOP = $FEFF
 
 ;==============================================================================
-        .org $0000
+        .org BASORG
         LDP3 #STKTOP
         LDA  #$03            ; ACIA master reset
         STA  ACIAS

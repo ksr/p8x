@@ -81,6 +81,45 @@ printf '20 PRINT "B"\r10 PRINT "A"\rLIST\r' | (cd /tmp && \
 Lines are terminated by CR (`\r`). In scripted mode use a cycle cap `-l N` to
 bound the spin after end-of-input.
 
+## Three build targets (one source)
+
+BASIC is self-contained (its own ACIA console + RAM), so the *same* source
+builds three ways. The only differences are two `-D` symbols — `BASORG` (code
+origin) and `BASRAM` (data base); `PBUF` (rebuild scratch) is fixed at `$C000`.
+
+| Target | `BASORG` | `BASRAM` | How it runs |
+|--------|----------|----------|-------------|
+| Standalone | `$0000` | `$8000` | burned as the whole ROM; `run.sh` / scripted tests |
+| ROM-in-monitor | `$2000` | `$A000` | overlaid into the monitor ROM; launched by the monitor `X` command |
+| Disk | `$8000` | `$A000` | installed on a P8XFS image; booted by the monitor `B` command |
+
+The standalone build takes no `-D` (the source defaults are `$0000`/`$8000`)
+and is byte-identical to before this split.
+
+**ROM-in-monitor** — build the combined monitor+BASIC EEPROM and launch with `X`:
+
+```sh
+python3 tools/build_basic_rom.py p8x-rom-basic.bin   # monitor + BASIC @ $2000
+# boot it; at the monitor '*' prompt press X to enter BASIC (reset to exit)
+./emulator/p8xemu p8x-rom-basic.bin                  # (needs u0-u3.bin alongside)
+```
+
+**Disk** — assemble at `$8000`, install as a bootable image, boot with `B`:
+
+```sh
+python3 assembler/p8xasm.py basic/p8xbasic.asm -o basicdisk.bin \
+        --base 0x8000 -D BASORG=0x8000 -D BASRAM=0xA000
+python3 tools/p8xfs.py create disk.img
+python3 tools/p8xfs.py boot   disk.img basicdisk.bin
+./emulator/p8xemu -c disk.img eeprom.bin             # at '*' press B
+```
+
+Both paths are covered by regression tests: `make test-basic` (in `emulator/`)
+launches ROM BASIC via `X` and boots disk BASIC via `B`, running a program in
+each. The relocated builds put code in low RAM/ROM and data at `$A000`
+(variables/program) + `$C000` (rebuild buffer); code is ~4 KB so it clears the
+`$A000` data with room to spare.
+
 ## Planned layout (proposed — see open decisions)
 
 | Region | Use |

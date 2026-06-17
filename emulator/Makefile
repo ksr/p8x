@@ -20,6 +20,7 @@ test: p8xemu ucode
 	$(MAKE) test-isa
 	$(MAKE) test-cf
 	$(MAKE) test-os
+	$(MAKE) test-basic
 
 # Per-instruction self-checking regression: halts with A=00 on success,
 # or A=<test id> at the first failing check.
@@ -38,4 +39,9 @@ test-cf: p8xemu ucode
 test-os: p8xemu ucode
 	sh test/os_test.sh
 
-.PHONY: all ucode test test-isa test-cf test-os
+# BASIC: launch ROM BASIC from the monitor (X), and boot disk BASIC (B).
+test-basic: p8xemu ucode
+	sh test/basic_rom_test.sh
+	sh test/basic_disk_test.sh
+
+.PHONY: all ucode test test-isa test-cf test-os test-basic
