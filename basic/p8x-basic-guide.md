@@ -21,6 +21,23 @@ at a live prompt. Type lines and press **Enter**. Quit with **Ctrl-C** (or
 **Ctrl-D**). The terminal runs raw/no-echo (BASIC echoes), so it behaves like a
 real serial console.
 
+### Versions of BASIC
+
+The same interpreter ships three ways (identical language; they differ only in
+where the code and its data live and how you start it):
+
+| Build | Code | Data | Invoked by |
+|-------|------|------|------------|
+| Standalone | `$0000` | `$8000` | burned as the whole ROM; `run.sh` / tests |
+| ROM-in-monitor | `$2000` | `$A000` | the monitor's `X` command; type `BYE` to return to the monitor |
+| Disk | `$8000` | `$A000` | a bootable P8XFS image, started with the monitor's `B` command |
+
+`Code` is where the interpreter runs and `Data` is the base of its variables and
+program storage; everything else about the language is the same. From the
+monitor, **`X`** drops into ROM BASIC and **`BYE`** comes back; a BASIC disk
+boots with **`B`**. Build commands for the disk and ROM images are in the
+[README](README.md#three-build-targets-one-source).
+
 ## The two modes
 
 - **Immediate mode** — a line with *no* leading line number runs at once:
@@ -115,7 +132,8 @@ FOR I=1 TO 3 : PRINT I; : NEXT   ->  123
 
 ## Commands (immediate mode)
 
-`RUN` (execute the stored program from the lowest line), `LIST`, `NEW`.
+`RUN` (execute the stored program from the lowest line), `LIST`, `NEW`, and
+`BYE` (leave BASIC — returns to the monitor in the ROM/disk builds).
 
 ## Memory & hardware access
 

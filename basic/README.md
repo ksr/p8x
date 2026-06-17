@@ -87,14 +87,16 @@ BASIC is self-contained (its own ACIA console + RAM), so the *same* source
 builds three ways. The only differences are two `-D` symbols — `BASORG` (code
 origin) and `BASRAM` (data base); `PBUF` (rebuild scratch) is fixed at `$C000`.
 
-| Target | `BASORG` | `BASRAM` | How it runs |
-|--------|----------|----------|-------------|
+| Build | Code (`BASORG`) | Data (`BASRAM`) | Invoked by |
+|-------|-----------------|-----------------|------------|
 | Standalone | `$0000` | `$8000` | burned as the whole ROM; `run.sh` / scripted tests |
-| ROM-in-monitor | `$2000` | `$A000` | overlaid into the monitor ROM; launched by the monitor `X` command, `BYE` returns to the monitor |
-| Disk | `$8000` | `$A000` | installed on a P8XFS image; booted by the monitor `B` command |
+| ROM-in-monitor | `$2000` | `$A000` | monitor `X` command (BASIC's `BYE` returns to the monitor) |
+| Disk | `$8000` | `$A000` | installed on a P8XFS image, booted by the monitor `B` command |
 
-The standalone build takes no `-D` (the source defaults are `$0000`/`$8000`)
-and is byte-identical to before this split.
+`Code` is where the interpreter runs (low ROM, monitor ROM, or low RAM); `Data`
+is the base of its variables + program text (rebuild scratch `PBUF` is fixed at
+`$C000` for all three). The standalone build takes no `-D` (the source defaults
+are `$0000`/`$8000`) and is byte-identical to before this split.
 
 **ROM-in-monitor** — build the combined monitor+BASIC EEPROM and launch with `X`:
 
