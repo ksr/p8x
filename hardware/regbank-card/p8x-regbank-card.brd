@@ -40,7 +40,7 @@
 <wire x1="160" y1="0" x2="160" y2="100" width="0" layer="20"/>
 <wire x1="160" y1="100" x2="0" y2="100" width="0" layer="20"/>
 <wire x1="0" y1="100" x2="0" y2="0" width="0" layer="20"/>
-<text x="4" y="94" size="2.54" layer="21">P8X REGISTER BANK CARD REV A (P0=PC P3=SP)</text>
+<text x="4" y="94" size="2.54" layer="21">P8X REGISTER BANK CARD REV B (P0=PC P3=SP, PT scratch)</text>
 </plain>
 <libraries><library name="p8x">
 <packages>
@@ -250,12 +250,18 @@
 <element name="U30" library="p8x" package="DIP16" value="DLD DEC" x="133.35" y="38.10"/>
 <element name="U31" library="p8x" package="DIP16" value="DOE DEC" x="7.62" y="12.70"/>
 <element name="U32" library="p8x" package="DIP16" value="LOAD DEC" x="21.59" y="12.70"/>
-<element name="U33" library="p8x" package="DIP16" value="SEL+CNT DEC" x="35.56" y="12.70"/>
+<element name="U33" library="p8x" package="DIP16" value="SEL DEC" x="35.56" y="12.70"/>
 <element name="U34" library="p8x" package="DIP14" value="74HCT02" x="49.53" y="12.70"/>
 <element name="U35" library="p8x" package="DIP14" value="74HCT14" x="63.50" y="12.70"/>
 <element name="U36" library="p8x" package="DIP20" value="ZERO P0" x="77.47" y="12.70"/>
 <element name="U37" library="p8x" package="DIP14" value="74HCT08" x="91.44" y="12.70"/>
 <element name="U38" library="p8x" package="DIP14" value="74HCT08" x="105.41" y="12.70"/>
+<element name="U39" library="p8x" package="DIP16" value="CNT DEC" x="119.38" y="12.70"/>
+<element name="U40" library="p8x" package="DIP14" value="74HCT32" x="133.35" y="12.70"/>
+<element name="U41" library="p8x" package="DIP20" value="PT LO" x="7.62" y="-12.70"/>
+<element name="U42" library="p8x" package="DIP20" value="PT HI" x="21.59" y="-12.70"/>
+<element name="U43" library="p8x" package="DIP20" value="PT SEL LO" x="35.56" y="-12.70"/>
+<element name="U44" library="p8x" package="DIP20" value="PT SEL HI" x="49.53" y="-12.70"/>
 <element name="RP1" library="p8x" package="R_AXIAL" value="1K" x="5.08" y="96.52"/>
 <element name="LED3" library="p8x" package="LED5" value="PWR-GRN" x="15.24" y="96.52"/>
 <element name="R4" library="p8x" package="R_AXIAL" value="1K" x="25.40" y="96.52"/>
@@ -269,7 +275,7 @@
 <contactref element="U2" pad="7"/>
 <contactref element="U3" pad="7"/>
 <contactref element="U4" pad="7"/>
-<contactref element="U33" pad="12"/>
+<contactref element="U39" pad="4"/>
 </signal>
 <signal name="-CNT1">
 <contactref element="U5" pad="7"/>
@@ -277,7 +283,7 @@
 <contactref element="U6" pad="7"/>
 <contactref element="U7" pad="7"/>
 <contactref element="U8" pad="7"/>
-<contactref element="U33" pad="11"/>
+<contactref element="U39" pad="5"/>
 </signal>
 <signal name="-CNT2">
 <contactref element="U9" pad="7"/>
@@ -285,7 +291,7 @@
 <contactref element="U10" pad="7"/>
 <contactref element="U11" pad="7"/>
 <contactref element="U12" pad="7"/>
-<contactref element="U33" pad="10"/>
+<contactref element="U39" pad="6"/>
 </signal>
 <signal name="-CNT3">
 <contactref element="U13" pad="7"/>
@@ -293,11 +299,12 @@
 <contactref element="U14" pad="7"/>
 <contactref element="U15" pad="7"/>
 <contactref element="U16" pad="7"/>
-<contactref element="U33" pad="9"/>
+<contactref element="U39" pad="7"/>
 </signal>
 <signal name="-LDH">
 <contactref element="U30" pad="14"/>
-<contactref element="U32" pad="15"/>
+<contactref element="U40" pad="4"/>
+<contactref element="U40" pad="12"/>
 <contactref element="U37" pad="13"/>
 </signal>
 <signal name="-LDH0">
@@ -324,9 +331,18 @@
 <contactref element="U16" pad="9"/>
 <contactref element="U32" pad="9"/>
 </signal>
+<signal name="-LDH4">
+<contactref element="U40" pad="11"/>
+<contactref element="U42" pad="1"/>
+</signal>
+<signal name="-LDHG">
+<contactref element="U40" pad="6"/>
+<contactref element="U32" pad="15"/>
+</signal>
 <signal name="-LDL">
 <contactref element="U30" pad="15"/>
-<contactref element="U32" pad="1"/>
+<contactref element="U40" pad="1"/>
+<contactref element="U40" pad="9"/>
 <contactref element="U37" pad="12"/>
 </signal>
 <signal name="-LDL0">
@@ -352,6 +368,14 @@
 <contactref element="U13" pad="9"/>
 <contactref element="U14" pad="9"/>
 <contactref element="U32" pad="7"/>
+</signal>
+<signal name="-LDL4">
+<contactref element="U40" pad="8"/>
+<contactref element="U41" pad="1"/>
+</signal>
+<signal name="-LDLG">
+<contactref element="U40" pad="3"/>
+<contactref element="U32" pad="1"/>
 </signal>
 <signal name="-LDP">
 <contactref element="U37" pad="11"/>
@@ -386,28 +410,37 @@
 <contactref element="U17" pad="19"/>
 <contactref element="U18" pad="1"/>
 <contactref element="U18" pad="19"/>
-<contactref element="U33" pad="4"/>
+<contactref element="U33" pad="15"/>
 </signal>
 <signal name="-SEL1">
 <contactref element="U19" pad="1"/>
 <contactref element="U19" pad="19"/>
 <contactref element="U20" pad="1"/>
 <contactref element="U20" pad="19"/>
-<contactref element="U33" pad="5"/>
+<contactref element="U33" pad="14"/>
 </signal>
 <signal name="-SEL2">
 <contactref element="U21" pad="1"/>
 <contactref element="U21" pad="19"/>
 <contactref element="U22" pad="1"/>
 <contactref element="U22" pad="19"/>
-<contactref element="U33" pad="6"/>
+<contactref element="U33" pad="13"/>
 </signal>
 <signal name="-SEL3">
 <contactref element="U23" pad="1"/>
 <contactref element="U23" pad="19"/>
 <contactref element="U24" pad="1"/>
 <contactref element="U24" pad="19"/>
-<contactref element="U33" pad="7"/>
+<contactref element="U33" pad="12"/>
+</signal>
+<signal name="-SEL4">
+<contactref element="U40" pad="10"/>
+<contactref element="U40" pad="13"/>
+<contactref element="U33" pad="11"/>
+<contactref element="U43" pad="1"/>
+<contactref element="U43" pad="19"/>
+<contactref element="U44" pad="1"/>
+<contactref element="U44" pad="19"/>
 </signal>
 <signal name="A0">
 <contactref element="U25" pad="18"/>
@@ -490,11 +523,13 @@
 <contactref element="U14" pad="2"/>
 <contactref element="U15" pad="2"/>
 <contactref element="U16" pad="2"/>
+<contactref element="U41" pad="11"/>
+<contactref element="U42" pad="11"/>
 <contactref element="J1" pad="A24"/>
 </signal>
 <signal name="CNTN">
 <contactref element="U34" pad="1"/>
-<contactref element="U33" pad="15"/>
+<contactref element="U39" pad="1"/>
 </signal>
 <signal name="D0">
 <contactref element="U1" pad="3"/>
@@ -507,6 +542,8 @@
 <contactref element="U15" pad="3"/>
 <contactref element="U29" pad="18"/>
 <contactref element="U36" pad="18"/>
+<contactref element="U41" pad="3"/>
+<contactref element="U42" pad="3"/>
 <contactref element="J1" pad="A3"/>
 </signal>
 <signal name="D1">
@@ -520,6 +557,8 @@
 <contactref element="U15" pad="4"/>
 <contactref element="U29" pad="16"/>
 <contactref element="U36" pad="16"/>
+<contactref element="U41" pad="4"/>
+<contactref element="U42" pad="4"/>
 <contactref element="J1" pad="A4"/>
 </signal>
 <signal name="D2">
@@ -533,6 +572,8 @@
 <contactref element="U15" pad="5"/>
 <contactref element="U29" pad="14"/>
 <contactref element="U36" pad="14"/>
+<contactref element="U41" pad="7"/>
+<contactref element="U42" pad="7"/>
 <contactref element="J1" pad="A5"/>
 </signal>
 <signal name="D3">
@@ -546,6 +587,8 @@
 <contactref element="U15" pad="6"/>
 <contactref element="U29" pad="12"/>
 <contactref element="U36" pad="12"/>
+<contactref element="U41" pad="8"/>
+<contactref element="U42" pad="8"/>
 <contactref element="J1" pad="A6"/>
 </signal>
 <signal name="D4">
@@ -559,6 +602,8 @@
 <contactref element="U16" pad="3"/>
 <contactref element="U29" pad="9"/>
 <contactref element="U36" pad="9"/>
+<contactref element="U41" pad="13"/>
+<contactref element="U42" pad="13"/>
 <contactref element="J1" pad="A7"/>
 </signal>
 <signal name="D5">
@@ -572,6 +617,8 @@
 <contactref element="U16" pad="4"/>
 <contactref element="U29" pad="7"/>
 <contactref element="U36" pad="7"/>
+<contactref element="U41" pad="14"/>
+<contactref element="U42" pad="14"/>
 <contactref element="J1" pad="A8"/>
 </signal>
 <signal name="D6">
@@ -585,6 +632,8 @@
 <contactref element="U16" pad="5"/>
 <contactref element="U29" pad="5"/>
 <contactref element="U36" pad="5"/>
+<contactref element="U41" pad="17"/>
+<contactref element="U42" pad="17"/>
 <contactref element="J1" pad="A9"/>
 </signal>
 <signal name="D7">
@@ -598,6 +647,8 @@
 <contactref element="U16" pad="6"/>
 <contactref element="U29" pad="3"/>
 <contactref element="U36" pad="3"/>
+<contactref element="U41" pad="18"/>
+<contactref element="U42" pad="18"/>
 <contactref element="J1" pad="A10"/>
 </signal>
 <signal name="DLD0">
@@ -643,7 +694,10 @@
 <contactref element="U30" pad="5"/>
 <contactref element="U31" pad="4"/>
 <contactref element="U31" pad="5"/>
-<contactref element="U33" pad="1"/>
+<contactref element="U33" pad="4"/>
+<contactref element="U33" pad="5"/>
+<contactref element="U39" pad="14"/>
+<contactref element="U39" pad="13"/>
 <contactref element="U34" pad="5"/>
 <contactref element="U34" pad="6"/>
 <contactref element="U34" pad="8"/>
@@ -727,6 +781,7 @@
 <contactref element="U23" pad="18"/>
 <contactref element="U25" pad="2"/>
 <contactref element="U27" pad="2"/>
+<contactref element="U43" pad="18"/>
 </signal>
 <signal name="PB1">
 <contactref element="U17" pad="16"/>
@@ -735,6 +790,7 @@
 <contactref element="U23" pad="16"/>
 <contactref element="U25" pad="4"/>
 <contactref element="U27" pad="5"/>
+<contactref element="U43" pad="16"/>
 </signal>
 <signal name="PB10">
 <contactref element="U18" pad="14"/>
@@ -743,6 +799,7 @@
 <contactref element="U24" pad="14"/>
 <contactref element="U26" pad="6"/>
 <contactref element="U27" pad="10"/>
+<contactref element="U44" pad="14"/>
 </signal>
 <signal name="PB11">
 <contactref element="U18" pad="12"/>
@@ -751,6 +808,7 @@
 <contactref element="U24" pad="12"/>
 <contactref element="U26" pad="8"/>
 <contactref element="U27" pad="13"/>
+<contactref element="U44" pad="12"/>
 </signal>
 <signal name="PB12">
 <contactref element="U18" pad="9"/>
@@ -759,6 +817,7 @@
 <contactref element="U24" pad="9"/>
 <contactref element="U26" pad="11"/>
 <contactref element="U28" pad="3"/>
+<contactref element="U44" pad="9"/>
 </signal>
 <signal name="PB13">
 <contactref element="U18" pad="7"/>
@@ -767,6 +826,7 @@
 <contactref element="U24" pad="7"/>
 <contactref element="U26" pad="13"/>
 <contactref element="U28" pad="6"/>
+<contactref element="U44" pad="7"/>
 </signal>
 <signal name="PB14">
 <contactref element="U18" pad="5"/>
@@ -775,6 +835,7 @@
 <contactref element="U24" pad="5"/>
 <contactref element="U26" pad="15"/>
 <contactref element="U28" pad="10"/>
+<contactref element="U44" pad="5"/>
 </signal>
 <signal name="PB15">
 <contactref element="U18" pad="3"/>
@@ -783,6 +844,7 @@
 <contactref element="U24" pad="3"/>
 <contactref element="U26" pad="17"/>
 <contactref element="U28" pad="13"/>
+<contactref element="U44" pad="3"/>
 </signal>
 <signal name="PB2">
 <contactref element="U17" pad="14"/>
@@ -791,6 +853,7 @@
 <contactref element="U23" pad="14"/>
 <contactref element="U25" pad="6"/>
 <contactref element="U27" pad="11"/>
+<contactref element="U43" pad="14"/>
 </signal>
 <signal name="PB3">
 <contactref element="U17" pad="12"/>
@@ -799,6 +862,7 @@
 <contactref element="U23" pad="12"/>
 <contactref element="U25" pad="8"/>
 <contactref element="U27" pad="14"/>
+<contactref element="U43" pad="12"/>
 </signal>
 <signal name="PB4">
 <contactref element="U17" pad="9"/>
@@ -807,6 +871,7 @@
 <contactref element="U23" pad="9"/>
 <contactref element="U25" pad="11"/>
 <contactref element="U28" pad="2"/>
+<contactref element="U43" pad="9"/>
 </signal>
 <signal name="PB5">
 <contactref element="U17" pad="7"/>
@@ -815,6 +880,7 @@
 <contactref element="U23" pad="7"/>
 <contactref element="U25" pad="13"/>
 <contactref element="U28" pad="5"/>
+<contactref element="U43" pad="7"/>
 </signal>
 <signal name="PB6">
 <contactref element="U17" pad="5"/>
@@ -823,6 +889,7 @@
 <contactref element="U23" pad="5"/>
 <contactref element="U25" pad="15"/>
 <contactref element="U28" pad="11"/>
+<contactref element="U43" pad="5"/>
 </signal>
 <signal name="PB7">
 <contactref element="U17" pad="3"/>
@@ -831,6 +898,7 @@
 <contactref element="U23" pad="3"/>
 <contactref element="U25" pad="17"/>
 <contactref element="U28" pad="14"/>
+<contactref element="U43" pad="3"/>
 </signal>
 <signal name="PB8">
 <contactref element="U18" pad="18"/>
@@ -839,6 +907,7 @@
 <contactref element="U24" pad="18"/>
 <contactref element="U26" pad="2"/>
 <contactref element="U27" pad="3"/>
+<contactref element="U44" pad="18"/>
 </signal>
 <signal name="PB9">
 <contactref element="U18" pad="16"/>
@@ -847,6 +916,7 @@
 <contactref element="U24" pad="16"/>
 <contactref element="U26" pad="4"/>
 <contactref element="U27" pad="6"/>
+<contactref element="U44" pad="16"/>
 </signal>
 <signal name="PDEC">
 <contactref element="U34" pad="3"/>
@@ -1120,17 +1190,87 @@
 </signal>
 <signal name="PSEL0">
 <contactref element="U32" pad="2"/>
-<contactref element="U33" pad="2"/>
 <contactref element="U32" pad="14"/>
-<contactref element="U33" pad="14"/>
+<contactref element="U33" pad="1"/>
+<contactref element="U39" pad="2"/>
 <contactref element="J1" pad="A20"/>
 </signal>
 <signal name="PSEL1">
 <contactref element="U32" pad="3"/>
-<contactref element="U33" pad="3"/>
 <contactref element="U32" pad="13"/>
-<contactref element="U33" pad="13"/>
+<contactref element="U33" pad="2"/>
+<contactref element="U39" pad="3"/>
 <contactref element="J1" pad="A21"/>
+</signal>
+<signal name="PSEL2">
+<contactref element="U40" pad="2"/>
+<contactref element="U40" pad="5"/>
+<contactref element="U33" pad="3"/>
+<contactref element="J1" pad="C27"/>
+</signal>
+<signal name="PTQ0_0">
+<contactref element="U41" pad="2"/>
+<contactref element="U43" pad="2"/>
+</signal>
+<signal name="PTQ0_1">
+<contactref element="U41" pad="5"/>
+<contactref element="U43" pad="4"/>
+</signal>
+<signal name="PTQ0_2">
+<contactref element="U41" pad="6"/>
+<contactref element="U43" pad="6"/>
+</signal>
+<signal name="PTQ0_3">
+<contactref element="U41" pad="9"/>
+<contactref element="U43" pad="8"/>
+</signal>
+<signal name="PTQ0_4">
+<contactref element="U41" pad="12"/>
+<contactref element="U43" pad="11"/>
+</signal>
+<signal name="PTQ0_5">
+<contactref element="U41" pad="15"/>
+<contactref element="U43" pad="13"/>
+</signal>
+<signal name="PTQ0_6">
+<contactref element="U41" pad="16"/>
+<contactref element="U43" pad="15"/>
+</signal>
+<signal name="PTQ0_7">
+<contactref element="U41" pad="19"/>
+<contactref element="U43" pad="17"/>
+</signal>
+<signal name="PTQ1_0">
+<contactref element="U42" pad="2"/>
+<contactref element="U44" pad="2"/>
+</signal>
+<signal name="PTQ1_1">
+<contactref element="U42" pad="5"/>
+<contactref element="U44" pad="4"/>
+</signal>
+<signal name="PTQ1_2">
+<contactref element="U42" pad="6"/>
+<contactref element="U44" pad="6"/>
+</signal>
+<signal name="PTQ1_3">
+<contactref element="U42" pad="9"/>
+<contactref element="U44" pad="8"/>
+</signal>
+<signal name="PTQ1_4">
+<contactref element="U42" pad="12"/>
+<contactref element="U44" pad="11"/>
+</signal>
+<signal name="PTQ1_5">
+<contactref element="U42" pad="15"/>
+<contactref element="U44" pad="13"/>
+</signal>
+<signal name="PTQ1_6">
+<contactref element="U42" pad="16"/>
+<contactref element="U44" pad="15"/>
+</signal>
+<signal name="PTQ1_7">
+<contactref element="U42" pad="19"/>
+<contactref element="U44" pad="17"/>
 </signal>
 <signal name="RB0">
 <contactref element="U27" pad="4"/>
@@ -1236,6 +1376,8 @@
 <contactref element="U35" pad="2"/>
 </signal>
 <signal name="VCC">
+<contactref element="U33" pad="6"/>
+<contactref element="U39" pad="15"/>
 <contactref element="RP1" pad="1"/>
 <contactref element="R4" pad="1"/>
 <contactref element="R5" pad="1"/>

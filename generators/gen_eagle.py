@@ -467,8 +467,12 @@ for k in range(8): ic["U%d"%(17+k)]=("74244","PTR SEL %d"%k)
 ic.update({"U25":("74244","ADDR LO"),"U26":("74244","ADDR HI"),
  "U27":("74257","RDBK LO"),"U28":("74257","RDBK HI"),"U29":("74244","RDBK OUT"),
  "U30":("74138","DLD DEC"),"U31":("74138","DOE DEC"),"U32":("74139","LOAD DEC"),
- "U33":("74139","SEL+CNT DEC"),"U34":("7402","74HCT02"),"U35":("HEX14","74HCT14"),
- "U36":("74244","ZERO P0"),"U37":("GATES14","74HCT08"),"U38":("GATES14","74HCT08")})
+ "U33":("74138","SEL DEC"),"U34":("7402","74HCT02"),"U35":("HEX14","74HCT14"),
+ "U36":("74244","ZERO P0"),"U37":("GATES14","74HCT08"),"U38":("GATES14","74HCT08"),
+ # rev B: PT (5th pointer, PSEL=4) + 3-bit decode support
+ "U39":("74139","CNT DEC"),"U40":("GATES14","74HCT32"),
+ "U41":("74377V2","PT LO"),"U42":("74377V2","PT HI"),
+ "U43":("74244","PT SEL LO"),"U44":("74244","PT SEL HI")})
 sm={"RP1":("RES","1K"),"LED3":("LED","PWR-GRN"),
  "R4":("RES","1K"),"LED4":("LED","RD-GRN"),"R5":("RES","1K"),"LED5":("LED","LD-YEL")}
 for p in range(4):
@@ -511,17 +515,31 @@ for b in range(8):
 for u,f in (("U30","DLD"),("U31","DOE")):
     for i,pn in enumerate(("A","B","C")): N(n,"%s%d"%(f,i),(u,pn))
     N(n,"%s3"%f,(u,"G1")); N(n,"GND",(u,"!G2A"),(u,"!G2B"))
-N(n,"-LDL",("U30","Y0"),("U32","!G1")); N(n,"-LDH",("U30","Y1"),("U32","!G2"))
+# load-decode enables are gated with PSEL2 (off for PT); U40 also derives the
+# PT load strobes. -LDLG/-LDHG = -LDL|PSEL2 / -LDH|PSEL2 ; -LDL4/-LDH4 = -LDL|-SEL4 etc.
+N(n,"-LDL",("U30","Y0"),("U40","1A"),("U40","3A"))
+N(n,"-LDH",("U30","Y1"),("U40","2A"),("U40","4A"))
+N(n,"PSEL2",("U40","1B"),("U40","2B"))
+N(n,"-SEL4",("U40","3B"),("U40","4B"))
+N(n,"-LDLG",("U40","1Y"),("U32","!G1")); N(n,"-LDHG",("U40","2Y"),("U32","!G2"))
+N(n,"-LDL4",("U40","3Y")); N(n,"-LDH4",("U40","4Y"))
 N(n,"-POEL",("U31","Y0"),("U37","3A")); N(n,"-POEH",("U31","Y1"),("U37","3B"),("U35","2A"))
 N(n,"POEHP",("U35","2Y"))
 N(n,"-POE",("U37","3Y"),("U38","1A"),("U38","1B"))
-for i,pn in enumerate(("A1","B1")): N(n,"PSEL%d"%i,("U32",pn),("U33",pn))
-for i,pn in enumerate(("A2","B2")): N(n,"PSEL%d"%i,("U32",pn),("U33",pn))
+# U32 load decoder (74139): PSEL0/1 on both gates -> -LDL0..3 / -LDH0..3
+for i,pn in enumerate(("A1","B1","A2","B2")): N(n,"PSEL%d"%(i%2),("U32",pn))
 for p in range(4):
     N(n,"-LDL%d"%p,("U32","1Y%d"%p)); N(n,"-LDH%d"%p,("U32","2Y%d"%p))
-    N(n,"-SEL%d"%p,("U33","1Y%d"%p)); N(n,"-CNT%d"%p,("U33","2Y%d"%p))
-N(n,"GND",("U33","!G1"))
-N(n,"CNTN",("U34","1Y"),("U33","!G2"))
+# U33 select decoder (74138, 3-bit PSEL): -SEL0..4 (P0-P3 + PT)
+N(n,"PSEL0",("U33","A")); N(n,"PSEL1",("U33","B")); N(n,"PSEL2",("U33","C"))
+N(n,"VCC",("U33","G1")); N(n,"GND",("U33","!G2A"),("U33","!G2B"))
+for p in range(4): N(n,"-SEL%d"%p,("U33","Y%d"%p))
+N(n,"-SEL4",("U33","Y4"))
+# U39 count decoder (74139 gate1): PSEL0/1, enabled by CNTN (P0-P3 only)
+N(n,"PSEL0",("U39","A1")); N(n,"PSEL1",("U39","B1"))
+for p in range(4): N(n,"-CNT%d"%p,("U39","1Y%d"%p))
+N(n,"VCC",("U39","!G2")); N(n,"GND",("U39","A2"),("U39","B2"))
+N(n,"CNTN",("U34","1Y"),("U39","!G1"))
 N(n,"PINC",("U34","1A")); N(n,"PDEC",("U34","1B"),("U35","1A"))
 N(n,"UDB",("U35","1Y"))
 N(n,"GND",*[("U34",p) for p in ("2A","2B","3A","3B","4A","4B")],
@@ -538,11 +556,22 @@ N(n,"RDK",("U38","1Y"),("LED4","K")); N(n,"LDK",("U38","2Y"),("LED5","K"))
 N(n,"VCC",("RP1","1"),("R4","1"),("R5","1"))
 N(n,"LEDP",("RP1","2"),("LED3","A"))
 N(n,"LEDRD",("R4","2"),("LED4","A")); N(n,"LEDLD",("R5","2"),("LED5","A"))
+# PT scratch pointer (PSEL=4): 74377 latches loaded from D0-7 on -LDL4/-LDH4,
+# driven onto the pointer bus PB via 74244 buffers when -SEL4.
+for half,ureg,ubuf,lds in ((0,"U41","U43","-LDL4"),(1,"U42","U44","-LDH4")):
+    N(n,"CLK",(ureg,"CLK"))
+    N(n,lds,(ureg,"!E"))
+    for b in range(8):
+        N(n,"D%d"%b,(ureg,"D%d"%(b+1)))
+        N(n,"PTQ%d_%d"%(half,b),(ureg,"Q%d"%(b+1)),(ubuf,"A%d"%(b+1)))
+    N(n,"-SEL4",(ubuf,"!G1"),(ubuf,"!G2"))
+    for b in range(8):
+        N(n,"PB%d"%(half*8+b),(ubuf,"Y%d"%(b+1)))
 n={k:v for k,v in n.items() if v}
-card("regbank-card","P8X REGISTER BANK CARD REV A (P0=PC P3=SP)",ic,sm,n,
+card("regbank-card","P8X REGISTER BANK CARD REV B (P0=PC P3=SP, PT scratch)",ic,sm,n,
  {"D%d"%i for i in range(8)}|{"A%d"%i for i in range(16)}|
  {"DLD%d"%i for i in range(4)}|{"DOE%d"%i for i in range(4)}|
- {"PSEL0","PSEL1","PINC","PDEC","CLK","-RES"})
+ {"PSEL0","PSEL1","PSEL2","PINC","PDEC","CLK","-RES"})
 
 # ===================== ALU CARD ===============================================
 n={}
