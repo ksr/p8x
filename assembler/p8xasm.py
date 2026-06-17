@@ -8,7 +8,14 @@ Syntax:  label:  MNEMONIC operand   ; comment
   directives: .org e | .byte e,... | .word e,... | .ascii "s" | .asciiz "s"
               .fill n[,v] | NAME = expr  (or .equ NAME, expr)
   pseudo:    LDPn #expr16  ->  LPLn #<expr, LPHn #>expr
-Output: 32K eeprom image + listing."""
+
+Usage: p8xasm.py src.asm [-o out] [-l listing] [--base ADDR] [-D NAME=VAL ...]
+  default    -> 32K ROM image from $0000 (cap $8000)
+  --base A   -> RAM-resident blob: labels resolve to the run address A and only
+                the bytes A..high are written (e.g. an OS/program loaded to $8000)
+  -D N=V     -> define+lock symbol N (decimal / 0x.. / $..); overrides a source
+                `N = default`, so one source builds at several orgs/data bases.
+Output: with --base, the A..high blob; otherwise the 32K ROM image (+listing)."""
 import sys, re, os
 import sys, os
 def _find_genucode():

@@ -1,4 +1,4 @@
-; p8xos.asm - P8X/OS v0.2, a RAM-resident disk operating system.
+; p8xos.asm - P8X/OS v0.3, a RAM-resident disk operating system.
 ;
 ; Loaded from CompactFlash to $8000 and entered by the ROM monitor's B command
 ; (which reads OSCNT sectors from LBA 1 and JMPs to $8000). The OS does NOT
@@ -9,15 +9,16 @@
 ;   python3 assembler/p8xasm.py os/p8xos.asm -o p8xos.bin --base 0x8000
 ; then install on a P8XFS image with:  tools/p8xfs.py boot disk.img p8xos.bin
 ;
-; v0.2 shell:
-;   DIR            list the flat P8XFS v1 directory
-;   LOAD name      read a file into its stored load address
-;   RUN  name      LOAD it, then JSR its exec address (program RTS -> shell)
-;   DEL  name      mark the directory entry deleted ($FF) and write it back
+; v0.3 shell:
+;   DIR                list the flat P8XFS v1 directory
+;   LOAD name          read a file into its stored load address
+;   RUN  name          LOAD it, then JSR its exec address (program RTS -> shell)
+;   SAVE name start end write memory [start,end) to a new file (hex addresses)
+;   DEL  name          mark the directory entry deleted ($FF) and write it back
 ;   HELP
 ; Commands are matched as whole words; a filename argument is parsed, upcased
-; and space-padded to 12 chars. SAVE (create a file) is the next step and needs
-; hex-argument parsing + a free-space allocator. See p8x-cf-os-design.md sec 2.5.
+; and space-padded to 12 chars; SAVE also parses two hex addresses. Next up:
+; DUMP/DEP and PACK (compaction). See p8x-cf-os-design.md sec 2.5.
 
 ; ---- BIOS jump table (stable ABI, in ROM) ----------------------------------
 CONIN   = $0100          ; wait for key, char -> A
