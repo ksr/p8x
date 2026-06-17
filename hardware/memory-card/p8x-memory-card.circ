@@ -1,0 +1,1593 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<project version="1.0" source="3.9.0">
+  <lib desc="#Wiring" name="0"/>
+  <lib desc="#Base" name="1"/>
+  <main name="memory-card"/>
+  <circuit name="memory-card">
+    <a name="circuit" val="memory-card"/>
+    <comp lib="1" loc="(100,50)" name="Text">
+      <a name="text" val="J1 DIN41612-96M (DIN96)"/>
+    </comp>
+    <comp lib="1" loc="(100,80)" name="Text">
+      <a name="text" val="A1"/>
+    </comp>
+    <comp lib="0" loc="(190,80)" name="Tunnel">
+      <a name="label" val="VCC"/>
+    </comp>
+    <comp lib="1" loc="(100,110)" name="Text">
+      <a name="text" val="A2"/>
+    </comp>
+    <comp lib="0" loc="(190,110)" name="Tunnel">
+      <a name="label" val="VCC"/>
+    </comp>
+    <comp lib="1" loc="(100,140)" name="Text">
+      <a name="text" val="A3"/>
+    </comp>
+    <comp lib="0" loc="(190,140)" name="Tunnel">
+      <a name="label" val="D0"/>
+    </comp>
+    <comp lib="1" loc="(100,170)" name="Text">
+      <a name="text" val="A4"/>
+    </comp>
+    <comp lib="0" loc="(190,170)" name="Tunnel">
+      <a name="label" val="D1"/>
+    </comp>
+    <comp lib="1" loc="(100,200)" name="Text">
+      <a name="text" val="A5"/>
+    </comp>
+    <comp lib="0" loc="(190,200)" name="Tunnel">
+      <a name="label" val="D2"/>
+    </comp>
+    <comp lib="1" loc="(100,230)" name="Text">
+      <a name="text" val="A6"/>
+    </comp>
+    <comp lib="0" loc="(190,230)" name="Tunnel">
+      <a name="label" val="D3"/>
+    </comp>
+    <comp lib="1" loc="(100,260)" name="Text">
+      <a name="text" val="A7"/>
+    </comp>
+    <comp lib="0" loc="(190,260)" name="Tunnel">
+      <a name="label" val="D4"/>
+    </comp>
+    <comp lib="1" loc="(100,290)" name="Text">
+      <a name="text" val="A8"/>
+    </comp>
+    <comp lib="0" loc="(190,290)" name="Tunnel">
+      <a name="label" val="D5"/>
+    </comp>
+    <comp lib="1" loc="(100,320)" name="Text">
+      <a name="text" val="A9"/>
+    </comp>
+    <comp lib="0" loc="(190,320)" name="Tunnel">
+      <a name="label" val="D6"/>
+    </comp>
+    <comp lib="1" loc="(100,350)" name="Text">
+      <a name="text" val="A10"/>
+    </comp>
+    <comp lib="0" loc="(190,350)" name="Tunnel">
+      <a name="label" val="D7"/>
+    </comp>
+    <comp lib="1" loc="(100,380)" name="Text">
+      <a name="text" val="A11"/>
+    </comp>
+    <comp lib="1" loc="(100,410)" name="Text">
+      <a name="text" val="A12"/>
+    </comp>
+    <comp lib="0" loc="(190,410)" name="Tunnel">
+      <a name="label" val="DOE0"/>
+    </comp>
+    <comp lib="1" loc="(100,440)" name="Text">
+      <a name="text" val="A13"/>
+    </comp>
+    <comp lib="0" loc="(190,440)" name="Tunnel">
+      <a name="label" val="DOE1"/>
+    </comp>
+    <comp lib="1" loc="(100,470)" name="Text">
+      <a name="text" val="A14"/>
+    </comp>
+    <comp lib="0" loc="(190,470)" name="Tunnel">
+      <a name="label" val="DOE2"/>
+    </comp>
+    <comp lib="1" loc="(100,500)" name="Text">
+      <a name="text" val="A15"/>
+    </comp>
+    <comp lib="0" loc="(190,500)" name="Tunnel">
+      <a name="label" val="DOE3"/>
+    </comp>
+    <comp lib="1" loc="(100,530)" name="Text">
+      <a name="text" val="A16"/>
+    </comp>
+    <comp lib="0" loc="(190,530)" name="Tunnel">
+      <a name="label" val="DLD0"/>
+    </comp>
+    <comp lib="1" loc="(100,560)" name="Text">
+      <a name="text" val="A17"/>
+    </comp>
+    <comp lib="0" loc="(190,560)" name="Tunnel">
+      <a name="label" val="DLD1"/>
+    </comp>
+    <comp lib="1" loc="(100,590)" name="Text">
+      <a name="text" val="A18"/>
+    </comp>
+    <comp lib="0" loc="(190,590)" name="Tunnel">
+      <a name="label" val="DLD2"/>
+    </comp>
+    <comp lib="1" loc="(100,620)" name="Text">
+      <a name="text" val="A19"/>
+    </comp>
+    <comp lib="0" loc="(190,620)" name="Tunnel">
+      <a name="label" val="DLD3"/>
+    </comp>
+    <comp lib="1" loc="(100,650)" name="Text">
+      <a name="text" val="A20"/>
+    </comp>
+    <comp lib="1" loc="(100,680)" name="Text">
+      <a name="text" val="A21"/>
+    </comp>
+    <comp lib="1" loc="(100,710)" name="Text">
+      <a name="text" val="A22"/>
+    </comp>
+    <comp lib="1" loc="(100,740)" name="Text">
+      <a name="text" val="A23"/>
+    </comp>
+    <comp lib="1" loc="(100,770)" name="Text">
+      <a name="text" val="A24"/>
+    </comp>
+    <comp lib="0" loc="(190,770)" name="Tunnel">
+      <a name="label" val="CLK"/>
+    </comp>
+    <comp lib="1" loc="(100,800)" name="Text">
+      <a name="text" val="A25"/>
+    </comp>
+    <comp lib="1" loc="(100,830)" name="Text">
+      <a name="text" val="A26"/>
+    </comp>
+    <comp lib="1" loc="(100,860)" name="Text">
+      <a name="text" val="A27"/>
+    </comp>
+    <comp lib="1" loc="(100,890)" name="Text">
+      <a name="text" val="A28"/>
+    </comp>
+    <comp lib="1" loc="(100,920)" name="Text">
+      <a name="text" val="A29"/>
+    </comp>
+    <comp lib="1" loc="(100,950)" name="Text">
+      <a name="text" val="A30"/>
+    </comp>
+    <comp lib="1" loc="(100,980)" name="Text">
+      <a name="text" val="A31"/>
+    </comp>
+    <comp lib="0" loc="(190,980)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(100,1010)" name="Text">
+      <a name="text" val="A32"/>
+    </comp>
+    <comp lib="0" loc="(190,1010)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(100,1040)" name="Text">
+      <a name="text" val="B1"/>
+    </comp>
+    <comp lib="0" loc="(190,1040)" name="Tunnel">
+      <a name="label" val="VCC"/>
+    </comp>
+    <comp lib="1" loc="(100,1070)" name="Text">
+      <a name="text" val="B2"/>
+    </comp>
+    <comp lib="0" loc="(190,1070)" name="Tunnel">
+      <a name="label" val="VCC"/>
+    </comp>
+    <comp lib="1" loc="(100,1100)" name="Text">
+      <a name="text" val="B3"/>
+    </comp>
+    <comp lib="0" loc="(190,1100)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(100,1130)" name="Text">
+      <a name="text" val="B4"/>
+    </comp>
+    <comp lib="0" loc="(190,1130)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(100,1160)" name="Text">
+      <a name="text" val="B5"/>
+    </comp>
+    <comp lib="0" loc="(190,1160)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(100,1190)" name="Text">
+      <a name="text" val="B6"/>
+    </comp>
+    <comp lib="0" loc="(190,1190)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(100,1220)" name="Text">
+      <a name="text" val="B7"/>
+    </comp>
+    <comp lib="0" loc="(190,1220)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(100,1250)" name="Text">
+      <a name="text" val="B8"/>
+    </comp>
+    <comp lib="0" loc="(190,1250)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(100,1280)" name="Text">
+      <a name="text" val="B9"/>
+    </comp>
+    <comp lib="0" loc="(190,1280)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(100,1310)" name="Text">
+      <a name="text" val="B10"/>
+    </comp>
+    <comp lib="0" loc="(190,1310)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(100,1340)" name="Text">
+      <a name="text" val="B11"/>
+    </comp>
+    <comp lib="0" loc="(190,1340)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(100,1370)" name="Text">
+      <a name="text" val="B12"/>
+    </comp>
+    <comp lib="0" loc="(190,1370)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(100,1400)" name="Text">
+      <a name="text" val="B13"/>
+    </comp>
+    <comp lib="0" loc="(190,1400)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(100,1430)" name="Text">
+      <a name="text" val="B14"/>
+    </comp>
+    <comp lib="0" loc="(190,1430)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(100,1460)" name="Text">
+      <a name="text" val="B15"/>
+    </comp>
+    <comp lib="0" loc="(190,1460)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(100,1490)" name="Text">
+      <a name="text" val="B16"/>
+    </comp>
+    <comp lib="0" loc="(190,1490)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(100,1520)" name="Text">
+      <a name="text" val="B17"/>
+    </comp>
+    <comp lib="0" loc="(190,1520)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(100,1550)" name="Text">
+      <a name="text" val="B18"/>
+    </comp>
+    <comp lib="0" loc="(190,1550)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(100,1580)" name="Text">
+      <a name="text" val="B19"/>
+    </comp>
+    <comp lib="0" loc="(190,1580)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(100,1610)" name="Text">
+      <a name="text" val="B20"/>
+    </comp>
+    <comp lib="0" loc="(190,1610)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(100,1640)" name="Text">
+      <a name="text" val="B21"/>
+    </comp>
+    <comp lib="0" loc="(190,1640)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(100,1670)" name="Text">
+      <a name="text" val="B22"/>
+    </comp>
+    <comp lib="0" loc="(190,1670)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(100,1700)" name="Text">
+      <a name="text" val="B23"/>
+    </comp>
+    <comp lib="0" loc="(190,1700)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(100,1730)" name="Text">
+      <a name="text" val="B24"/>
+    </comp>
+    <comp lib="0" loc="(190,1730)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(100,1760)" name="Text">
+      <a name="text" val="B25"/>
+    </comp>
+    <comp lib="0" loc="(190,1760)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(100,1790)" name="Text">
+      <a name="text" val="B26"/>
+    </comp>
+    <comp lib="0" loc="(190,1790)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(100,1820)" name="Text">
+      <a name="text" val="B27"/>
+    </comp>
+    <comp lib="1" loc="(100,1850)" name="Text">
+      <a name="text" val="B28"/>
+    </comp>
+    <comp lib="1" loc="(100,1880)" name="Text">
+      <a name="text" val="B29"/>
+    </comp>
+    <comp lib="1" loc="(100,1910)" name="Text">
+      <a name="text" val="B30"/>
+    </comp>
+    <comp lib="1" loc="(100,1940)" name="Text">
+      <a name="text" val="B31"/>
+    </comp>
+    <comp lib="0" loc="(190,1940)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(100,1970)" name="Text">
+      <a name="text" val="B32"/>
+    </comp>
+    <comp lib="0" loc="(190,1970)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(100,2000)" name="Text">
+      <a name="text" val="C1"/>
+    </comp>
+    <comp lib="0" loc="(190,2000)" name="Tunnel">
+      <a name="label" val="VCC"/>
+    </comp>
+    <comp lib="1" loc="(100,2030)" name="Text">
+      <a name="text" val="C2"/>
+    </comp>
+    <comp lib="0" loc="(190,2030)" name="Tunnel">
+      <a name="label" val="VCC"/>
+    </comp>
+    <comp lib="1" loc="(100,2060)" name="Text">
+      <a name="text" val="C3"/>
+    </comp>
+    <comp lib="0" loc="(190,2060)" name="Tunnel">
+      <a name="label" val="A0"/>
+    </comp>
+    <comp lib="1" loc="(100,2090)" name="Text">
+      <a name="text" val="C4"/>
+    </comp>
+    <comp lib="0" loc="(190,2090)" name="Tunnel">
+      <a name="label" val="A1"/>
+    </comp>
+    <comp lib="1" loc="(100,2120)" name="Text">
+      <a name="text" val="C5"/>
+    </comp>
+    <comp lib="0" loc="(190,2120)" name="Tunnel">
+      <a name="label" val="A2"/>
+    </comp>
+    <comp lib="1" loc="(100,2150)" name="Text">
+      <a name="text" val="C6"/>
+    </comp>
+    <comp lib="0" loc="(190,2150)" name="Tunnel">
+      <a name="label" val="A3"/>
+    </comp>
+    <comp lib="1" loc="(100,2180)" name="Text">
+      <a name="text" val="C7"/>
+    </comp>
+    <comp lib="0" loc="(190,2180)" name="Tunnel">
+      <a name="label" val="A4"/>
+    </comp>
+    <comp lib="1" loc="(100,2210)" name="Text">
+      <a name="text" val="C8"/>
+    </comp>
+    <comp lib="0" loc="(190,2210)" name="Tunnel">
+      <a name="label" val="A5"/>
+    </comp>
+    <comp lib="1" loc="(100,2240)" name="Text">
+      <a name="text" val="C9"/>
+    </comp>
+    <comp lib="0" loc="(190,2240)" name="Tunnel">
+      <a name="label" val="A6"/>
+    </comp>
+    <comp lib="1" loc="(100,2270)" name="Text">
+      <a name="text" val="C10"/>
+    </comp>
+    <comp lib="0" loc="(190,2270)" name="Tunnel">
+      <a name="label" val="A7"/>
+    </comp>
+    <comp lib="1" loc="(100,2300)" name="Text">
+      <a name="text" val="C11"/>
+    </comp>
+    <comp lib="0" loc="(190,2300)" name="Tunnel">
+      <a name="label" val="A8"/>
+    </comp>
+    <comp lib="1" loc="(100,2330)" name="Text">
+      <a name="text" val="C12"/>
+    </comp>
+    <comp lib="0" loc="(190,2330)" name="Tunnel">
+      <a name="label" val="A9"/>
+    </comp>
+    <comp lib="1" loc="(100,2360)" name="Text">
+      <a name="text" val="C13"/>
+    </comp>
+    <comp lib="0" loc="(190,2360)" name="Tunnel">
+      <a name="label" val="A10"/>
+    </comp>
+    <comp lib="1" loc="(100,2390)" name="Text">
+      <a name="text" val="C14"/>
+    </comp>
+    <comp lib="0" loc="(190,2390)" name="Tunnel">
+      <a name="label" val="A11"/>
+    </comp>
+    <comp lib="1" loc="(100,2420)" name="Text">
+      <a name="text" val="C15"/>
+    </comp>
+    <comp lib="0" loc="(190,2420)" name="Tunnel">
+      <a name="label" val="A12"/>
+    </comp>
+    <comp lib="1" loc="(100,2450)" name="Text">
+      <a name="text" val="C16"/>
+    </comp>
+    <comp lib="0" loc="(190,2450)" name="Tunnel">
+      <a name="label" val="A13"/>
+    </comp>
+    <comp lib="1" loc="(100,2480)" name="Text">
+      <a name="text" val="C17"/>
+    </comp>
+    <comp lib="0" loc="(190,2480)" name="Tunnel">
+      <a name="label" val="A14"/>
+    </comp>
+    <comp lib="1" loc="(100,2510)" name="Text">
+      <a name="text" val="C18"/>
+    </comp>
+    <comp lib="0" loc="(190,2510)" name="Tunnel">
+      <a name="label" val="A15"/>
+    </comp>
+    <comp lib="1" loc="(100,2540)" name="Text">
+      <a name="text" val="C19"/>
+    </comp>
+    <comp lib="1" loc="(100,2570)" name="Text">
+      <a name="text" val="C20"/>
+    </comp>
+    <comp lib="1" loc="(100,2600)" name="Text">
+      <a name="text" val="C21"/>
+    </comp>
+    <comp lib="1" loc="(100,2630)" name="Text">
+      <a name="text" val="C22"/>
+    </comp>
+    <comp lib="1" loc="(100,2660)" name="Text">
+      <a name="text" val="C23"/>
+    </comp>
+    <comp lib="1" loc="(100,2690)" name="Text">
+      <a name="text" val="C24"/>
+    </comp>
+    <comp lib="1" loc="(100,2720)" name="Text">
+      <a name="text" val="C25"/>
+    </comp>
+    <comp lib="1" loc="(100,2750)" name="Text">
+      <a name="text" val="C26"/>
+    </comp>
+    <comp lib="1" loc="(100,2780)" name="Text">
+      <a name="text" val="C27"/>
+    </comp>
+    <comp lib="1" loc="(100,2810)" name="Text">
+      <a name="text" val="C28"/>
+    </comp>
+    <comp lib="1" loc="(100,2840)" name="Text">
+      <a name="text" val="C29"/>
+    </comp>
+    <comp lib="1" loc="(100,2870)" name="Text">
+      <a name="text" val="C30"/>
+    </comp>
+    <comp lib="1" loc="(100,2900)" name="Text">
+      <a name="text" val="C31"/>
+    </comp>
+    <comp lib="0" loc="(190,2900)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(100,2930)" name="Text">
+      <a name="text" val="C32"/>
+    </comp>
+    <comp lib="0" loc="(190,2930)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(320,50)" name="Text">
+      <a name="text" val="U1 28C256-15 (MEM28K8)"/>
+    </comp>
+    <comp lib="1" loc="(320,80)" name="Text">
+      <a name="text" val="A0"/>
+    </comp>
+    <comp lib="0" loc="(410,80)" name="Tunnel">
+      <a name="label" val="A0"/>
+    </comp>
+    <comp lib="1" loc="(320,110)" name="Text">
+      <a name="text" val="A1"/>
+    </comp>
+    <comp lib="0" loc="(410,110)" name="Tunnel">
+      <a name="label" val="A1"/>
+    </comp>
+    <comp lib="1" loc="(320,140)" name="Text">
+      <a name="text" val="A2"/>
+    </comp>
+    <comp lib="0" loc="(410,140)" name="Tunnel">
+      <a name="label" val="A2"/>
+    </comp>
+    <comp lib="1" loc="(320,170)" name="Text">
+      <a name="text" val="A3"/>
+    </comp>
+    <comp lib="0" loc="(410,170)" name="Tunnel">
+      <a name="label" val="A3"/>
+    </comp>
+    <comp lib="1" loc="(320,200)" name="Text">
+      <a name="text" val="A4"/>
+    </comp>
+    <comp lib="0" loc="(410,200)" name="Tunnel">
+      <a name="label" val="A4"/>
+    </comp>
+    <comp lib="1" loc="(320,230)" name="Text">
+      <a name="text" val="A5"/>
+    </comp>
+    <comp lib="0" loc="(410,230)" name="Tunnel">
+      <a name="label" val="A5"/>
+    </comp>
+    <comp lib="1" loc="(320,260)" name="Text">
+      <a name="text" val="A6"/>
+    </comp>
+    <comp lib="0" loc="(410,260)" name="Tunnel">
+      <a name="label" val="A6"/>
+    </comp>
+    <comp lib="1" loc="(320,290)" name="Text">
+      <a name="text" val="A7"/>
+    </comp>
+    <comp lib="0" loc="(410,290)" name="Tunnel">
+      <a name="label" val="A7"/>
+    </comp>
+    <comp lib="1" loc="(320,320)" name="Text">
+      <a name="text" val="A8"/>
+    </comp>
+    <comp lib="0" loc="(410,320)" name="Tunnel">
+      <a name="label" val="A8"/>
+    </comp>
+    <comp lib="1" loc="(320,350)" name="Text">
+      <a name="text" val="A9"/>
+    </comp>
+    <comp lib="0" loc="(410,350)" name="Tunnel">
+      <a name="label" val="A9"/>
+    </comp>
+    <comp lib="1" loc="(320,380)" name="Text">
+      <a name="text" val="A10"/>
+    </comp>
+    <comp lib="0" loc="(410,380)" name="Tunnel">
+      <a name="label" val="A10"/>
+    </comp>
+    <comp lib="1" loc="(320,410)" name="Text">
+      <a name="text" val="A11"/>
+    </comp>
+    <comp lib="0" loc="(410,410)" name="Tunnel">
+      <a name="label" val="A11"/>
+    </comp>
+    <comp lib="1" loc="(320,440)" name="Text">
+      <a name="text" val="A12"/>
+    </comp>
+    <comp lib="0" loc="(410,440)" name="Tunnel">
+      <a name="label" val="A12"/>
+    </comp>
+    <comp lib="1" loc="(320,470)" name="Text">
+      <a name="text" val="A13"/>
+    </comp>
+    <comp lib="0" loc="(410,470)" name="Tunnel">
+      <a name="label" val="A13"/>
+    </comp>
+    <comp lib="1" loc="(320,500)" name="Text">
+      <a name="text" val="A14"/>
+    </comp>
+    <comp lib="0" loc="(410,500)" name="Tunnel">
+      <a name="label" val="A14"/>
+    </comp>
+    <comp lib="1" loc="(320,530)" name="Text">
+      <a name="text" val="IO0"/>
+    </comp>
+    <comp lib="0" loc="(410,530)" name="Tunnel">
+      <a name="label" val="MD0"/>
+    </comp>
+    <comp lib="1" loc="(320,560)" name="Text">
+      <a name="text" val="IO1"/>
+    </comp>
+    <comp lib="0" loc="(410,560)" name="Tunnel">
+      <a name="label" val="MD1"/>
+    </comp>
+    <comp lib="1" loc="(320,590)" name="Text">
+      <a name="text" val="IO2"/>
+    </comp>
+    <comp lib="0" loc="(410,590)" name="Tunnel">
+      <a name="label" val="MD2"/>
+    </comp>
+    <comp lib="1" loc="(320,620)" name="Text">
+      <a name="text" val="IO3"/>
+    </comp>
+    <comp lib="0" loc="(410,620)" name="Tunnel">
+      <a name="label" val="MD3"/>
+    </comp>
+    <comp lib="1" loc="(320,650)" name="Text">
+      <a name="text" val="IO4"/>
+    </comp>
+    <comp lib="0" loc="(410,650)" name="Tunnel">
+      <a name="label" val="MD4"/>
+    </comp>
+    <comp lib="1" loc="(320,680)" name="Text">
+      <a name="text" val="IO5"/>
+    </comp>
+    <comp lib="0" loc="(410,680)" name="Tunnel">
+      <a name="label" val="MD5"/>
+    </comp>
+    <comp lib="1" loc="(320,710)" name="Text">
+      <a name="text" val="IO6"/>
+    </comp>
+    <comp lib="0" loc="(410,710)" name="Tunnel">
+      <a name="label" val="MD6"/>
+    </comp>
+    <comp lib="1" loc="(320,740)" name="Text">
+      <a name="text" val="IO7"/>
+    </comp>
+    <comp lib="0" loc="(410,740)" name="Tunnel">
+      <a name="label" val="MD7"/>
+    </comp>
+    <comp lib="1" loc="(320,770)" name="Text">
+      <a name="text" val="!CE"/>
+    </comp>
+    <comp lib="0" loc="(410,770)" name="Tunnel">
+      <a name="label" val="A15"/>
+    </comp>
+    <comp lib="1" loc="(320,800)" name="Text">
+      <a name="text" val="!OE"/>
+    </comp>
+    <comp lib="0" loc="(410,800)" name="Tunnel">
+      <a name="label" val="-RD"/>
+    </comp>
+    <comp lib="1" loc="(320,830)" name="Text">
+      <a name="text" val="!WE"/>
+    </comp>
+    <comp lib="0" loc="(410,830)" name="Tunnel">
+      <a name="label" val="-WE"/>
+    </comp>
+    <comp lib="1" loc="(320,860)" name="Text">
+      <a name="text" val="VCC"/>
+    </comp>
+    <comp lib="0" loc="(410,860)" name="Tunnel">
+      <a name="label" val="VCC"/>
+    </comp>
+    <comp lib="1" loc="(320,890)" name="Text">
+      <a name="text" val="GND"/>
+    </comp>
+    <comp lib="0" loc="(410,890)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(540,50)" name="Text">
+      <a name="text" val="U2 62256-70 (MEM28K8)"/>
+    </comp>
+    <comp lib="1" loc="(540,80)" name="Text">
+      <a name="text" val="A0"/>
+    </comp>
+    <comp lib="0" loc="(630,80)" name="Tunnel">
+      <a name="label" val="A0"/>
+    </comp>
+    <comp lib="1" loc="(540,110)" name="Text">
+      <a name="text" val="A1"/>
+    </comp>
+    <comp lib="0" loc="(630,110)" name="Tunnel">
+      <a name="label" val="A1"/>
+    </comp>
+    <comp lib="1" loc="(540,140)" name="Text">
+      <a name="text" val="A2"/>
+    </comp>
+    <comp lib="0" loc="(630,140)" name="Tunnel">
+      <a name="label" val="A2"/>
+    </comp>
+    <comp lib="1" loc="(540,170)" name="Text">
+      <a name="text" val="A3"/>
+    </comp>
+    <comp lib="0" loc="(630,170)" name="Tunnel">
+      <a name="label" val="A3"/>
+    </comp>
+    <comp lib="1" loc="(540,200)" name="Text">
+      <a name="text" val="A4"/>
+    </comp>
+    <comp lib="0" loc="(630,200)" name="Tunnel">
+      <a name="label" val="A4"/>
+    </comp>
+    <comp lib="1" loc="(540,230)" name="Text">
+      <a name="text" val="A5"/>
+    </comp>
+    <comp lib="0" loc="(630,230)" name="Tunnel">
+      <a name="label" val="A5"/>
+    </comp>
+    <comp lib="1" loc="(540,260)" name="Text">
+      <a name="text" val="A6"/>
+    </comp>
+    <comp lib="0" loc="(630,260)" name="Tunnel">
+      <a name="label" val="A6"/>
+    </comp>
+    <comp lib="1" loc="(540,290)" name="Text">
+      <a name="text" val="A7"/>
+    </comp>
+    <comp lib="0" loc="(630,290)" name="Tunnel">
+      <a name="label" val="A7"/>
+    </comp>
+    <comp lib="1" loc="(540,320)" name="Text">
+      <a name="text" val="A8"/>
+    </comp>
+    <comp lib="0" loc="(630,320)" name="Tunnel">
+      <a name="label" val="A8"/>
+    </comp>
+    <comp lib="1" loc="(540,350)" name="Text">
+      <a name="text" val="A9"/>
+    </comp>
+    <comp lib="0" loc="(630,350)" name="Tunnel">
+      <a name="label" val="A9"/>
+    </comp>
+    <comp lib="1" loc="(540,380)" name="Text">
+      <a name="text" val="A10"/>
+    </comp>
+    <comp lib="0" loc="(630,380)" name="Tunnel">
+      <a name="label" val="A10"/>
+    </comp>
+    <comp lib="1" loc="(540,410)" name="Text">
+      <a name="text" val="A11"/>
+    </comp>
+    <comp lib="0" loc="(630,410)" name="Tunnel">
+      <a name="label" val="A11"/>
+    </comp>
+    <comp lib="1" loc="(540,440)" name="Text">
+      <a name="text" val="A12"/>
+    </comp>
+    <comp lib="0" loc="(630,440)" name="Tunnel">
+      <a name="label" val="A12"/>
+    </comp>
+    <comp lib="1" loc="(540,470)" name="Text">
+      <a name="text" val="A13"/>
+    </comp>
+    <comp lib="0" loc="(630,470)" name="Tunnel">
+      <a name="label" val="A13"/>
+    </comp>
+    <comp lib="1" loc="(540,500)" name="Text">
+      <a name="text" val="A14"/>
+    </comp>
+    <comp lib="0" loc="(630,500)" name="Tunnel">
+      <a name="label" val="A14"/>
+    </comp>
+    <comp lib="1" loc="(540,530)" name="Text">
+      <a name="text" val="IO0"/>
+    </comp>
+    <comp lib="0" loc="(630,530)" name="Tunnel">
+      <a name="label" val="MD0"/>
+    </comp>
+    <comp lib="1" loc="(540,560)" name="Text">
+      <a name="text" val="IO1"/>
+    </comp>
+    <comp lib="0" loc="(630,560)" name="Tunnel">
+      <a name="label" val="MD1"/>
+    </comp>
+    <comp lib="1" loc="(540,590)" name="Text">
+      <a name="text" val="IO2"/>
+    </comp>
+    <comp lib="0" loc="(630,590)" name="Tunnel">
+      <a name="label" val="MD2"/>
+    </comp>
+    <comp lib="1" loc="(540,620)" name="Text">
+      <a name="text" val="IO3"/>
+    </comp>
+    <comp lib="0" loc="(630,620)" name="Tunnel">
+      <a name="label" val="MD3"/>
+    </comp>
+    <comp lib="1" loc="(540,650)" name="Text">
+      <a name="text" val="IO4"/>
+    </comp>
+    <comp lib="0" loc="(630,650)" name="Tunnel">
+      <a name="label" val="MD4"/>
+    </comp>
+    <comp lib="1" loc="(540,680)" name="Text">
+      <a name="text" val="IO5"/>
+    </comp>
+    <comp lib="0" loc="(630,680)" name="Tunnel">
+      <a name="label" val="MD5"/>
+    </comp>
+    <comp lib="1" loc="(540,710)" name="Text">
+      <a name="text" val="IO6"/>
+    </comp>
+    <comp lib="0" loc="(630,710)" name="Tunnel">
+      <a name="label" val="MD6"/>
+    </comp>
+    <comp lib="1" loc="(540,740)" name="Text">
+      <a name="text" val="IO7"/>
+    </comp>
+    <comp lib="0" loc="(630,740)" name="Tunnel">
+      <a name="label" val="MD7"/>
+    </comp>
+    <comp lib="1" loc="(540,770)" name="Text">
+      <a name="text" val="!CE"/>
+    </comp>
+    <comp lib="0" loc="(630,770)" name="Tunnel">
+      <a name="label" val="-RAMCE"/>
+    </comp>
+    <comp lib="1" loc="(540,800)" name="Text">
+      <a name="text" val="!OE"/>
+    </comp>
+    <comp lib="0" loc="(630,800)" name="Tunnel">
+      <a name="label" val="-RD"/>
+    </comp>
+    <comp lib="1" loc="(540,830)" name="Text">
+      <a name="text" val="!WE"/>
+    </comp>
+    <comp lib="0" loc="(630,830)" name="Tunnel">
+      <a name="label" val="-WE"/>
+    </comp>
+    <comp lib="1" loc="(540,860)" name="Text">
+      <a name="text" val="VCC"/>
+    </comp>
+    <comp lib="0" loc="(630,860)" name="Tunnel">
+      <a name="label" val="VCC"/>
+    </comp>
+    <comp lib="1" loc="(540,890)" name="Text">
+      <a name="text" val="GND"/>
+    </comp>
+    <comp lib="0" loc="(630,890)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(760,50)" name="Text">
+      <a name="text" val="U3 74HCT245 (74245)"/>
+    </comp>
+    <comp lib="1" loc="(760,80)" name="Text">
+      <a name="text" val="DIR"/>
+    </comp>
+    <comp lib="0" loc="(850,80)" name="Tunnel">
+      <a name="label" val="-RD"/>
+    </comp>
+    <comp lib="1" loc="(760,110)" name="Text">
+      <a name="text" val="A0"/>
+    </comp>
+    <comp lib="0" loc="(850,110)" name="Tunnel">
+      <a name="label" val="D0"/>
+    </comp>
+    <comp lib="1" loc="(760,140)" name="Text">
+      <a name="text" val="A1"/>
+    </comp>
+    <comp lib="0" loc="(850,140)" name="Tunnel">
+      <a name="label" val="D1"/>
+    </comp>
+    <comp lib="1" loc="(760,170)" name="Text">
+      <a name="text" val="A2"/>
+    </comp>
+    <comp lib="0" loc="(850,170)" name="Tunnel">
+      <a name="label" val="D2"/>
+    </comp>
+    <comp lib="1" loc="(760,200)" name="Text">
+      <a name="text" val="A3"/>
+    </comp>
+    <comp lib="0" loc="(850,200)" name="Tunnel">
+      <a name="label" val="D3"/>
+    </comp>
+    <comp lib="1" loc="(760,230)" name="Text">
+      <a name="text" val="A4"/>
+    </comp>
+    <comp lib="0" loc="(850,230)" name="Tunnel">
+      <a name="label" val="D4"/>
+    </comp>
+    <comp lib="1" loc="(760,260)" name="Text">
+      <a name="text" val="A5"/>
+    </comp>
+    <comp lib="0" loc="(850,260)" name="Tunnel">
+      <a name="label" val="D5"/>
+    </comp>
+    <comp lib="1" loc="(760,290)" name="Text">
+      <a name="text" val="A6"/>
+    </comp>
+    <comp lib="0" loc="(850,290)" name="Tunnel">
+      <a name="label" val="D6"/>
+    </comp>
+    <comp lib="1" loc="(760,320)" name="Text">
+      <a name="text" val="A7"/>
+    </comp>
+    <comp lib="0" loc="(850,320)" name="Tunnel">
+      <a name="label" val="D7"/>
+    </comp>
+    <comp lib="1" loc="(760,350)" name="Text">
+      <a name="text" val="!OE"/>
+    </comp>
+    <comp lib="0" loc="(850,350)" name="Tunnel">
+      <a name="label" val="-BOE"/>
+    </comp>
+    <comp lib="1" loc="(760,380)" name="Text">
+      <a name="text" val="B0"/>
+    </comp>
+    <comp lib="0" loc="(850,380)" name="Tunnel">
+      <a name="label" val="MD0"/>
+    </comp>
+    <comp lib="1" loc="(760,410)" name="Text">
+      <a name="text" val="B1"/>
+    </comp>
+    <comp lib="0" loc="(850,410)" name="Tunnel">
+      <a name="label" val="MD1"/>
+    </comp>
+    <comp lib="1" loc="(760,440)" name="Text">
+      <a name="text" val="B2"/>
+    </comp>
+    <comp lib="0" loc="(850,440)" name="Tunnel">
+      <a name="label" val="MD2"/>
+    </comp>
+    <comp lib="1" loc="(760,470)" name="Text">
+      <a name="text" val="B3"/>
+    </comp>
+    <comp lib="0" loc="(850,470)" name="Tunnel">
+      <a name="label" val="MD3"/>
+    </comp>
+    <comp lib="1" loc="(760,500)" name="Text">
+      <a name="text" val="B4"/>
+    </comp>
+    <comp lib="0" loc="(850,500)" name="Tunnel">
+      <a name="label" val="MD4"/>
+    </comp>
+    <comp lib="1" loc="(760,530)" name="Text">
+      <a name="text" val="B5"/>
+    </comp>
+    <comp lib="0" loc="(850,530)" name="Tunnel">
+      <a name="label" val="MD5"/>
+    </comp>
+    <comp lib="1" loc="(760,560)" name="Text">
+      <a name="text" val="B6"/>
+    </comp>
+    <comp lib="0" loc="(850,560)" name="Tunnel">
+      <a name="label" val="MD6"/>
+    </comp>
+    <comp lib="1" loc="(760,590)" name="Text">
+      <a name="text" val="B7"/>
+    </comp>
+    <comp lib="0" loc="(850,590)" name="Tunnel">
+      <a name="label" val="MD7"/>
+    </comp>
+    <comp lib="1" loc="(760,620)" name="Text">
+      <a name="text" val="VCC"/>
+    </comp>
+    <comp lib="0" loc="(850,620)" name="Tunnel">
+      <a name="label" val="VCC"/>
+    </comp>
+    <comp lib="1" loc="(760,650)" name="Text">
+      <a name="text" val="GND"/>
+    </comp>
+    <comp lib="0" loc="(850,650)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(980,50)" name="Text">
+      <a name="text" val="U4 74HCT30 (7430)"/>
+    </comp>
+    <comp lib="1" loc="(980,80)" name="Text">
+      <a name="text" val="A"/>
+    </comp>
+    <comp lib="0" loc="(1070,80)" name="Tunnel">
+      <a name="label" val="A8"/>
+    </comp>
+    <comp lib="1" loc="(980,110)" name="Text">
+      <a name="text" val="B"/>
+    </comp>
+    <comp lib="0" loc="(1070,110)" name="Tunnel">
+      <a name="label" val="A9"/>
+    </comp>
+    <comp lib="1" loc="(980,140)" name="Text">
+      <a name="text" val="C"/>
+    </comp>
+    <comp lib="0" loc="(1070,140)" name="Tunnel">
+      <a name="label" val="A10"/>
+    </comp>
+    <comp lib="1" loc="(980,170)" name="Text">
+      <a name="text" val="D"/>
+    </comp>
+    <comp lib="0" loc="(1070,170)" name="Tunnel">
+      <a name="label" val="A11"/>
+    </comp>
+    <comp lib="1" loc="(980,200)" name="Text">
+      <a name="text" val="E"/>
+    </comp>
+    <comp lib="0" loc="(1070,200)" name="Tunnel">
+      <a name="label" val="A12"/>
+    </comp>
+    <comp lib="1" loc="(980,230)" name="Text">
+      <a name="text" val="F"/>
+    </comp>
+    <comp lib="0" loc="(1070,230)" name="Tunnel">
+      <a name="label" val="A13"/>
+    </comp>
+    <comp lib="1" loc="(980,260)" name="Text">
+      <a name="text" val="G"/>
+    </comp>
+    <comp lib="0" loc="(1070,260)" name="Tunnel">
+      <a name="label" val="A14"/>
+    </comp>
+    <comp lib="1" loc="(980,290)" name="Text">
+      <a name="text" val="H"/>
+    </comp>
+    <comp lib="0" loc="(1070,290)" name="Tunnel">
+      <a name="label" val="A15"/>
+    </comp>
+    <comp lib="1" loc="(980,320)" name="Text">
+      <a name="text" val="Y"/>
+    </comp>
+    <comp lib="0" loc="(1070,320)" name="Tunnel">
+      <a name="label" val="-IOPG"/>
+    </comp>
+    <comp lib="1" loc="(980,350)" name="Text">
+      <a name="text" val="VCC"/>
+    </comp>
+    <comp lib="0" loc="(1070,350)" name="Tunnel">
+      <a name="label" val="VCC"/>
+    </comp>
+    <comp lib="1" loc="(980,380)" name="Text">
+      <a name="text" val="GND"/>
+    </comp>
+    <comp lib="0" loc="(1070,380)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(1200,50)" name="Text">
+      <a name="text" val="U9 74HCT08 (GATES14)"/>
+    </comp>
+    <comp lib="1" loc="(1200,80)" name="Text">
+      <a name="text" val="1A"/>
+    </comp>
+    <comp lib="0" loc="(1290,80)" name="Tunnel">
+      <a name="label" val="-RD"/>
+    </comp>
+    <comp lib="1" loc="(1200,110)" name="Text">
+      <a name="text" val="1B"/>
+    </comp>
+    <comp lib="0" loc="(1290,110)" name="Tunnel">
+      <a name="label" val="-MEMW"/>
+    </comp>
+    <comp lib="1" loc="(1200,140)" name="Text">
+      <a name="text" val="2A"/>
+    </comp>
+    <comp lib="0" loc="(1290,140)" name="Tunnel">
+      <a name="label" val="-RD"/>
+    </comp>
+    <comp lib="1" loc="(1200,170)" name="Text">
+      <a name="text" val="2B"/>
+    </comp>
+    <comp lib="0" loc="(1290,170)" name="Tunnel">
+      <a name="label" val="-RD"/>
+    </comp>
+    <comp lib="1" loc="(1200,200)" name="Text">
+      <a name="text" val="3A"/>
+    </comp>
+    <comp lib="0" loc="(1290,200)" name="Tunnel">
+      <a name="label" val="-MEMW"/>
+    </comp>
+    <comp lib="1" loc="(1200,230)" name="Text">
+      <a name="text" val="3B"/>
+    </comp>
+    <comp lib="0" loc="(1290,230)" name="Tunnel">
+      <a name="label" val="-MEMW"/>
+    </comp>
+    <comp lib="1" loc="(1200,260)" name="Text">
+      <a name="text" val="4A"/>
+    </comp>
+    <comp lib="0" loc="(1290,260)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(1200,290)" name="Text">
+      <a name="text" val="4B"/>
+    </comp>
+    <comp lib="0" loc="(1290,290)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(1200,320)" name="Text">
+      <a name="text" val="1Y"/>
+    </comp>
+    <comp lib="0" loc="(1290,320)" name="Tunnel">
+      <a name="label" val="-BOE"/>
+    </comp>
+    <comp lib="1" loc="(1200,350)" name="Text">
+      <a name="text" val="2Y"/>
+    </comp>
+    <comp lib="0" loc="(1290,350)" name="Tunnel">
+      <a name="label" val="RDK"/>
+    </comp>
+    <comp lib="1" loc="(1200,380)" name="Text">
+      <a name="text" val="3Y"/>
+    </comp>
+    <comp lib="0" loc="(1290,380)" name="Tunnel">
+      <a name="label" val="WRK"/>
+    </comp>
+    <comp lib="1" loc="(1200,410)" name="Text">
+      <a name="text" val="4Y"/>
+    </comp>
+    <comp lib="1" loc="(1200,440)" name="Text">
+      <a name="text" val="VCC"/>
+    </comp>
+    <comp lib="0" loc="(1290,440)" name="Tunnel">
+      <a name="label" val="VCC"/>
+    </comp>
+    <comp lib="1" loc="(1200,470)" name="Text">
+      <a name="text" val="GND"/>
+    </comp>
+    <comp lib="0" loc="(1290,470)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(1420,50)" name="Text">
+      <a name="text" val="U5 74HCT138-DOE (74138)"/>
+    </comp>
+    <comp lib="1" loc="(1420,80)" name="Text">
+      <a name="text" val="A"/>
+    </comp>
+    <comp lib="0" loc="(1510,80)" name="Tunnel">
+      <a name="label" val="DOE0"/>
+    </comp>
+    <comp lib="1" loc="(1420,110)" name="Text">
+      <a name="text" val="B"/>
+    </comp>
+    <comp lib="0" loc="(1510,110)" name="Tunnel">
+      <a name="label" val="DOE1"/>
+    </comp>
+    <comp lib="1" loc="(1420,140)" name="Text">
+      <a name="text" val="C"/>
+    </comp>
+    <comp lib="0" loc="(1510,140)" name="Tunnel">
+      <a name="label" val="DOE2"/>
+    </comp>
+    <comp lib="1" loc="(1420,170)" name="Text">
+      <a name="text" val="G1"/>
+    </comp>
+    <comp lib="0" loc="(1510,170)" name="Tunnel">
+      <a name="label" val="VCC"/>
+    </comp>
+    <comp lib="1" loc="(1420,200)" name="Text">
+      <a name="text" val="!G2A"/>
+    </comp>
+    <comp lib="0" loc="(1510,200)" name="Tunnel">
+      <a name="label" val="DOE3"/>
+    </comp>
+    <comp lib="1" loc="(1420,230)" name="Text">
+      <a name="text" val="!G2B"/>
+    </comp>
+    <comp lib="0" loc="(1510,230)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(1420,260)" name="Text">
+      <a name="text" val="Y0"/>
+    </comp>
+    <comp lib="1" loc="(1420,290)" name="Text">
+      <a name="text" val="Y1"/>
+    </comp>
+    <comp lib="1" loc="(1420,320)" name="Text">
+      <a name="text" val="Y2"/>
+    </comp>
+    <comp lib="1" loc="(1420,350)" name="Text">
+      <a name="text" val="Y3"/>
+    </comp>
+    <comp lib="1" loc="(1420,380)" name="Text">
+      <a name="text" val="Y4"/>
+    </comp>
+    <comp lib="1" loc="(1420,410)" name="Text">
+      <a name="text" val="Y5"/>
+    </comp>
+    <comp lib="1" loc="(1420,440)" name="Text">
+      <a name="text" val="Y6"/>
+    </comp>
+    <comp lib="1" loc="(1420,470)" name="Text">
+      <a name="text" val="Y7"/>
+    </comp>
+    <comp lib="0" loc="(1510,470)" name="Tunnel">
+      <a name="label" val="-RD"/>
+    </comp>
+    <comp lib="1" loc="(1420,500)" name="Text">
+      <a name="text" val="VCC"/>
+    </comp>
+    <comp lib="0" loc="(1510,500)" name="Tunnel">
+      <a name="label" val="VCC"/>
+    </comp>
+    <comp lib="1" loc="(1420,530)" name="Text">
+      <a name="text" val="GND"/>
+    </comp>
+    <comp lib="0" loc="(1510,530)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(1640,50)" name="Text">
+      <a name="text" val="U6 74HCT138-DLD (74138)"/>
+    </comp>
+    <comp lib="1" loc="(1640,80)" name="Text">
+      <a name="text" val="A"/>
+    </comp>
+    <comp lib="0" loc="(1730,80)" name="Tunnel">
+      <a name="label" val="DLD0"/>
+    </comp>
+    <comp lib="1" loc="(1640,110)" name="Text">
+      <a name="text" val="B"/>
+    </comp>
+    <comp lib="0" loc="(1730,110)" name="Tunnel">
+      <a name="label" val="DLD1"/>
+    </comp>
+    <comp lib="1" loc="(1640,140)" name="Text">
+      <a name="text" val="C"/>
+    </comp>
+    <comp lib="0" loc="(1730,140)" name="Tunnel">
+      <a name="label" val="DLD2"/>
+    </comp>
+    <comp lib="1" loc="(1640,170)" name="Text">
+      <a name="text" val="G1"/>
+    </comp>
+    <comp lib="0" loc="(1730,170)" name="Tunnel">
+      <a name="label" val="VCC"/>
+    </comp>
+    <comp lib="1" loc="(1640,200)" name="Text">
+      <a name="text" val="!G2A"/>
+    </comp>
+    <comp lib="0" loc="(1730,200)" name="Tunnel">
+      <a name="label" val="DLD3"/>
+    </comp>
+    <comp lib="1" loc="(1640,230)" name="Text">
+      <a name="text" val="!G2B"/>
+    </comp>
+    <comp lib="0" loc="(1730,230)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(1640,260)" name="Text">
+      <a name="text" val="Y0"/>
+    </comp>
+    <comp lib="1" loc="(1640,290)" name="Text">
+      <a name="text" val="Y1"/>
+    </comp>
+    <comp lib="1" loc="(1640,320)" name="Text">
+      <a name="text" val="Y2"/>
+    </comp>
+    <comp lib="1" loc="(1640,350)" name="Text">
+      <a name="text" val="Y3"/>
+    </comp>
+    <comp lib="1" loc="(1640,380)" name="Text">
+      <a name="text" val="Y4"/>
+    </comp>
+    <comp lib="1" loc="(1640,410)" name="Text">
+      <a name="text" val="Y5"/>
+    </comp>
+    <comp lib="1" loc="(1640,440)" name="Text">
+      <a name="text" val="Y6"/>
+    </comp>
+    <comp lib="1" loc="(1640,470)" name="Text">
+      <a name="text" val="Y7"/>
+    </comp>
+    <comp lib="0" loc="(1730,470)" name="Tunnel">
+      <a name="label" val="-MEMW"/>
+    </comp>
+    <comp lib="1" loc="(1640,500)" name="Text">
+      <a name="text" val="VCC"/>
+    </comp>
+    <comp lib="0" loc="(1730,500)" name="Tunnel">
+      <a name="label" val="VCC"/>
+    </comp>
+    <comp lib="1" loc="(1640,530)" name="Text">
+      <a name="text" val="GND"/>
+    </comp>
+    <comp lib="0" loc="(1730,530)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(1860,50)" name="Text">
+      <a name="text" val="U7 74HCT00 (GATES14)"/>
+    </comp>
+    <comp lib="1" loc="(1860,80)" name="Text">
+      <a name="text" val="1A"/>
+    </comp>
+    <comp lib="0" loc="(1950,80)" name="Tunnel">
+      <a name="label" val="A15"/>
+    </comp>
+    <comp lib="1" loc="(1860,110)" name="Text">
+      <a name="text" val="1B"/>
+    </comp>
+    <comp lib="0" loc="(1950,110)" name="Tunnel">
+      <a name="label" val="-IOPG"/>
+    </comp>
+    <comp lib="1" loc="(1860,140)" name="Text">
+      <a name="text" val="2A"/>
+    </comp>
+    <comp lib="0" loc="(1950,140)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(1860,170)" name="Text">
+      <a name="text" val="2B"/>
+    </comp>
+    <comp lib="0" loc="(1950,170)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(1860,200)" name="Text">
+      <a name="text" val="3A"/>
+    </comp>
+    <comp lib="0" loc="(1950,200)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(1860,230)" name="Text">
+      <a name="text" val="3B"/>
+    </comp>
+    <comp lib="0" loc="(1950,230)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(1860,260)" name="Text">
+      <a name="text" val="4A"/>
+    </comp>
+    <comp lib="0" loc="(1950,260)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(1860,290)" name="Text">
+      <a name="text" val="4B"/>
+    </comp>
+    <comp lib="0" loc="(1950,290)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(1860,320)" name="Text">
+      <a name="text" val="1Y"/>
+    </comp>
+    <comp lib="0" loc="(1950,320)" name="Tunnel">
+      <a name="label" val="-RAMCE"/>
+    </comp>
+    <comp lib="1" loc="(1860,350)" name="Text">
+      <a name="text" val="2Y"/>
+    </comp>
+    <comp lib="1" loc="(1860,380)" name="Text">
+      <a name="text" val="3Y"/>
+    </comp>
+    <comp lib="1" loc="(1860,410)" name="Text">
+      <a name="text" val="4Y"/>
+    </comp>
+    <comp lib="1" loc="(1860,440)" name="Text">
+      <a name="text" val="VCC"/>
+    </comp>
+    <comp lib="0" loc="(1950,440)" name="Tunnel">
+      <a name="label" val="VCC"/>
+    </comp>
+    <comp lib="1" loc="(1860,470)" name="Text">
+      <a name="text" val="GND"/>
+    </comp>
+    <comp lib="0" loc="(1950,470)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(2080,50)" name="Text">
+      <a name="text" val="U8 74HCT32 (GATES14)"/>
+    </comp>
+    <comp lib="1" loc="(2080,80)" name="Text">
+      <a name="text" val="1A"/>
+    </comp>
+    <comp lib="0" loc="(2170,80)" name="Tunnel">
+      <a name="label" val="-MEMW"/>
+    </comp>
+    <comp lib="1" loc="(2080,110)" name="Text">
+      <a name="text" val="1B"/>
+    </comp>
+    <comp lib="0" loc="(2170,110)" name="Tunnel">
+      <a name="label" val="CLK"/>
+    </comp>
+    <comp lib="1" loc="(2080,140)" name="Text">
+      <a name="text" val="2A"/>
+    </comp>
+    <comp lib="0" loc="(2170,140)" name="Tunnel">
+      <a name="label" val="-RAMCE"/>
+    </comp>
+    <comp lib="1" loc="(2080,170)" name="Text">
+      <a name="text" val="2B"/>
+    </comp>
+    <comp lib="0" loc="(2170,170)" name="Tunnel">
+      <a name="label" val="-BOE"/>
+    </comp>
+    <comp lib="1" loc="(2080,200)" name="Text">
+      <a name="text" val="3A"/>
+    </comp>
+    <comp lib="0" loc="(2170,200)" name="Tunnel">
+      <a name="label" val="A15"/>
+    </comp>
+    <comp lib="1" loc="(2080,230)" name="Text">
+      <a name="text" val="3B"/>
+    </comp>
+    <comp lib="0" loc="(2170,230)" name="Tunnel">
+      <a name="label" val="-BOE"/>
+    </comp>
+    <comp lib="1" loc="(2080,260)" name="Text">
+      <a name="text" val="4A"/>
+    </comp>
+    <comp lib="0" loc="(2170,260)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(2080,290)" name="Text">
+      <a name="text" val="4B"/>
+    </comp>
+    <comp lib="0" loc="(2170,290)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(2080,320)" name="Text">
+      <a name="text" val="1Y"/>
+    </comp>
+    <comp lib="0" loc="(2170,320)" name="Tunnel">
+      <a name="label" val="-WE"/>
+    </comp>
+    <comp lib="1" loc="(2080,350)" name="Text">
+      <a name="text" val="2Y"/>
+    </comp>
+    <comp lib="0" loc="(2170,350)" name="Tunnel">
+      <a name="label" val="RAMK"/>
+    </comp>
+    <comp lib="1" loc="(2080,380)" name="Text">
+      <a name="text" val="3Y"/>
+    </comp>
+    <comp lib="0" loc="(2170,380)" name="Tunnel">
+      <a name="label" val="ROMK"/>
+    </comp>
+    <comp lib="1" loc="(2080,410)" name="Text">
+      <a name="text" val="4Y"/>
+    </comp>
+    <comp lib="1" loc="(2080,440)" name="Text">
+      <a name="text" val="VCC"/>
+    </comp>
+    <comp lib="0" loc="(2170,440)" name="Tunnel">
+      <a name="label" val="VCC"/>
+    </comp>
+    <comp lib="1" loc="(2080,470)" name="Text">
+      <a name="text" val="GND"/>
+    </comp>
+    <comp lib="0" loc="(2170,470)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(2300,50)" name="Text">
+      <a name="text" val="RP1 1K (RES)"/>
+    </comp>
+    <comp lib="1" loc="(2300,80)" name="Text">
+      <a name="text" val="1"/>
+    </comp>
+    <comp lib="0" loc="(2390,80)" name="Tunnel">
+      <a name="label" val="VCC"/>
+    </comp>
+    <comp lib="1" loc="(2300,110)" name="Text">
+      <a name="text" val="2"/>
+    </comp>
+    <comp lib="0" loc="(2390,110)" name="Tunnel">
+      <a name="label" val="LEDP"/>
+    </comp>
+    <comp lib="1" loc="(2520,50)" name="Text">
+      <a name="text" val="LED3 PWR-GRN (LED)"/>
+    </comp>
+    <comp lib="1" loc="(2520,80)" name="Text">
+      <a name="text" val="A"/>
+    </comp>
+    <comp lib="0" loc="(2610,80)" name="Tunnel">
+      <a name="label" val="LEDP"/>
+    </comp>
+    <comp lib="1" loc="(2520,110)" name="Text">
+      <a name="text" val="K"/>
+    </comp>
+    <comp lib="0" loc="(2610,110)" name="Tunnel">
+      <a name="label" val="GND"/>
+    </comp>
+    <comp lib="1" loc="(2740,50)" name="Text">
+      <a name="text" val="RS1 1K (RES)"/>
+    </comp>
+    <comp lib="1" loc="(2740,80)" name="Text">
+      <a name="text" val="1"/>
+    </comp>
+    <comp lib="0" loc="(2830,80)" name="Tunnel">
+      <a name="label" val="VCC"/>
+    </comp>
+    <comp lib="1" loc="(2740,110)" name="Text">
+      <a name="text" val="2"/>
+    </comp>
+    <comp lib="0" loc="(2830,110)" name="Tunnel">
+      <a name="label" val="LEDRO"/>
+    </comp>
+    <comp lib="1" loc="(2960,50)" name="Text">
+      <a name="text" val="LED2 ROM-YEL (LED)"/>
+    </comp>
+    <comp lib="1" loc="(2960,80)" name="Text">
+      <a name="text" val="A"/>
+    </comp>
+    <comp lib="0" loc="(3050,80)" name="Tunnel">
+      <a name="label" val="LEDRO"/>
+    </comp>
+    <comp lib="1" loc="(2960,110)" name="Text">
+      <a name="text" val="K"/>
+    </comp>
+    <comp lib="0" loc="(3050,110)" name="Tunnel">
+      <a name="label" val="ROMK"/>
+    </comp>
+    <comp lib="1" loc="(3180,50)" name="Text">
+      <a name="text" val="RS2 1K (RES)"/>
+    </comp>
+    <comp lib="1" loc="(3180,80)" name="Text">
+      <a name="text" val="1"/>
+    </comp>
+    <comp lib="0" loc="(3270,80)" name="Tunnel">
+      <a name="label" val="VCC"/>
+    </comp>
+    <comp lib="1" loc="(3180,110)" name="Text">
+      <a name="text" val="2"/>
+    </comp>
+    <comp lib="0" loc="(3270,110)" name="Tunnel">
+      <a name="label" val="LEDRA"/>
+    </comp>
+    <comp lib="1" loc="(3400,50)" name="Text">
+      <a name="text" val="LED4 RAM-YEL (LED)"/>
+    </comp>
+    <comp lib="1" loc="(3400,80)" name="Text">
+      <a name="text" val="A"/>
+    </comp>
+    <comp lib="0" loc="(3490,80)" name="Tunnel">
+      <a name="label" val="LEDRA"/>
+    </comp>
+    <comp lib="1" loc="(3400,110)" name="Text">
+      <a name="text" val="K"/>
+    </comp>
+    <comp lib="0" loc="(3490,110)" name="Tunnel">
+      <a name="label" val="RAMK"/>
+    </comp>
+    <comp lib="1" loc="(3620,50)" name="Text">
+      <a name="text" val="RS3 1K (RES)"/>
+    </comp>
+    <comp lib="1" loc="(3620,80)" name="Text">
+      <a name="text" val="1"/>
+    </comp>
+    <comp lib="0" loc="(3710,80)" name="Tunnel">
+      <a name="label" val="VCC"/>
+    </comp>
+    <comp lib="1" loc="(3620,110)" name="Text">
+      <a name="text" val="2"/>
+    </comp>
+    <comp lib="0" loc="(3710,110)" name="Tunnel">
+      <a name="label" val="LEDRD"/>
+    </comp>
+    <comp lib="1" loc="(3840,50)" name="Text">
+      <a name="text" val="LED5 RD-GRN (LED)"/>
+    </comp>
+    <comp lib="1" loc="(3840,80)" name="Text">
+      <a name="text" val="A"/>
+    </comp>
+    <comp lib="0" loc="(3930,80)" name="Tunnel">
+      <a name="label" val="LEDRD"/>
+    </comp>
+    <comp lib="1" loc="(3840,110)" name="Text">
+      <a name="text" val="K"/>
+    </comp>
+    <comp lib="0" loc="(3930,110)" name="Tunnel">
+      <a name="label" val="RDK"/>
+    </comp>
+    <comp lib="1" loc="(4060,50)" name="Text">
+      <a name="text" val="RS4 1K (RES)"/>
+    </comp>
+    <comp lib="1" loc="(4060,80)" name="Text">
+      <a name="text" val="1"/>
+    </comp>
+    <comp lib="0" loc="(4150,80)" name="Tunnel">
+      <a name="label" val="VCC"/>
+    </comp>
+    <comp lib="1" loc="(4060,110)" name="Text">
+      <a name="text" val="2"/>
+    </comp>
+    <comp lib="0" loc="(4150,110)" name="Tunnel">
+      <a name="label" val="LEDWR"/>
+    </comp>
+    <comp lib="1" loc="(4280,50)" name="Text">
+      <a name="text" val="LED6 WR-RED (LED)"/>
+    </comp>
+    <comp lib="1" loc="(4280,80)" name="Text">
+      <a name="text" val="A"/>
+    </comp>
+    <comp lib="0" loc="(4370,80)" name="Tunnel">
+      <a name="label" val="LEDWR"/>
+    </comp>
+    <comp lib="1" loc="(4280,110)" name="Text">
+      <a name="text" val="K"/>
+    </comp>
+    <comp lib="0" loc="(4370,110)" name="Tunnel">
+      <a name="label" val="WRK"/>
+    </comp>
+  </circuit>
+</project>
