@@ -69,6 +69,26 @@ BS      = $08
         .org $0000
 RESET:  JMP  COLD
 
+;==============================================================================
+; BIOS JUMP TABLE  — stable entry points for RAM-resident programs (P8X/OS).
+; These addresses are an ABI: never reorder or insert, or every OS image on
+; every card breaks. See hardware/cf-card/p8x-cf-os-design.md sec 2.2.
+; Shared ABI state: LBA byte at $9D47, 512-byte sector buffer SBUF at $9E00.
+;==============================================================================
+        .org $0100
+        JMP  GETC           ; $0100 CONIN   wait for key, char -> A
+        JMP  PUTC           ; $0103 CONOUT  A -> serial
+        JMP  CONST          ; $0106 CONST   A=RDRF bit; Z=1 when no key waiting
+        JMP  CFINIT         ; $0109 CFINIT  reset + 8-bit mode; C=1 on error
+        JMP  CFRDSEC        ; $010C CFREAD  sector LBA -> (P1); P1 += 512
+        JMP  CFWRSEC        ; $010F CFWRITE SBUF -> sector LBA
+        JMP  PUTS           ; $0112 PUTS    print (P1)+ until $00
+        JMP  PRBYTE         ; $0115 PHEX8   print A as two hex digits
+
+;==============================================================================
+; Monitor body (relocated above the BIOS table; reset vectors here).
+;==============================================================================
+        .org $0130
 ; ---------------- Cold start -------------------------------------------------
 COLD:   LDP3 #STKTOP        ; stack
         LDA  #$03           ; ACIA master reset
@@ -456,6 +476,11 @@ GETC:   LDA  ACIAS
         JZ   GETC
         LDA  ACIAD
         STA  TMP            ; convenience copy
+        RTS
+
+CONST:  LDA  ACIAS          ; console status: A = RDRF bit, Z=1 when no key
+        LDB  #$01
+        AND
         RTS
 
 PUTS:   LDA  (P1)+          ; print zero-terminated string at (P1)

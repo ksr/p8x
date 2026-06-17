@@ -19,6 +19,7 @@ test: p8xemu ucode
 	python3 ../../assembler/p8xasm.py test3.asm -o t3.bin && ../p8xemu t3.bin
 	$(MAKE) test-isa
 	$(MAKE) test-cf
+	$(MAKE) test-os
 
 # Per-instruction self-checking regression: halts with A=00 on success,
 # or A=<test id> at the first failing check.
@@ -33,4 +34,8 @@ test-isa: p8xemu ucode
 test-cf: p8xemu ucode
 	sh test/cf_test.sh
 
-.PHONY: all ucode test test-isa test-cf
+# P8X/OS boot: build a P8XFS image with the OS + files, boot it, run DIR.
+test-os: p8xemu ucode
+	sh test/os_test.sh
+
+.PHONY: all ucode test test-isa test-cf test-os

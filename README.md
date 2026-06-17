@@ -31,7 +31,9 @@ All six cards plug into a passive 10-slot backplane over a 96-pin DIN 41612 bus 
 | `microcode/genucode.py` | `microcode/` | Microcode generator → `u0–u3.bin` EPROM images |
 | `assembler/p8xasm.py` | `assembler/` | Two-pass assembler, shares opcode table with genucode.py |
 | `emulator/p8xemu.c` | `emulator/` | Cycle-accurate emulator, interprets the same u0–u3.bin images |
-| `firmware/p8xmon.asm` | `firmware/` | ROM monitor (E/D/I/F/B/G commands) over the ACIA console |
+| `firmware/p8xmon.asm` | `firmware/` | ROM monitor (E/D/I/F/B/G commands) + BIOS jump table at `$0100` |
+| `os/p8xos.asm` | `os/` | P8X/OS, RAM-resident disk OS booted from CF ([guide](os/README.md)) |
+| `tools/p8xfs.py` | `tools/` | Host-side P8XFS disk-image tool (create/boot/put/get/ls) |
 | `basic/p8xbasic.asm` | `basic/` | BASIC interpreter ([skeleton](basic/README.md)) |
 | `generators/gen_eagle.py` | `generators/` | Generates Eagle schematics + boards for all 7 boards (backplane + 6 cards) |
 
@@ -95,4 +97,5 @@ works chip by chip, and any board-specific design docs:
 - Assembler working: two-pass, full expression support, shares opcode table with microcode generator
 - Eagle schematics + boards generated for all 6 cards and backplane
 - ROM monitor boots in the emulator; its filesystem hooks (`I`/`F`/`B`) run end to end against a CF image (`make test-cf`)
-- **Next:** P8X/OS bring-up on the card; Mac-side `p8xfs` tool
+- P8X/OS v0.1 boots from CF and runs a shell (`HELP`, `DIR`); host-side `p8xfs.py` builds disk images (`make test-os`)
+- **Next:** OS `LOAD`/`RUN`/`SAVE`/`DEL`; P8XFS v2 hierarchy (`CD`/`MKDIR`/`TREE`)

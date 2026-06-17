@@ -51,8 +51,13 @@ def parse_operand(opnd):
     return "a",opnd
 
 class Asm:
-    def __init__(self):
-        self.sym={}; self.img=bytearray(0x8000); self.lst=[]
+    def __init__(self,base=0,cap=0x8000):
+        # img spans the full 64K; `base` is where the output blob starts and
+        # `cap` is the highest legal address+1 (0x8000 for a ROM, 0x10000 for a
+        # RAM-resident image assembled with --base). hi tracks the high-water
+        # mark so a RAM image emits only its own bytes.
+        self.sym={}; self.img=bytearray(0x10000); self.lst=[]
+        self.base=base; self.cap=cap; self.hi=base
     def expr(self,e,ln,line,pass2):
         e=e.strip()
         if e.startswith("<"): return self.expr(e[1:],ln,line,pass2)&0xFF
@@ -94,8 +99,12 @@ class Asm:
                 nonlocal pc
                 for b in bs:
                     if pass2:
-                        if pc>=0x8000: err(ln,line,"address past EEPROM")
+                        if pc>=self.cap:
+                            err(ln,line,"address past %s"%
+                                ("EEPROM" if self.cap==0x8000 else "64K"))
+                        if pc<self.base: err(ln,line,"address below --base")
                         self.img[pc]=b&0xFF; emitted.append(b&0xFF)
+                        if pc+1>self.hi: self.hi=pc+1
                     pc+=1
             if mn==".ORG":
                 pc=self.expr(opnd,ln,line,pass2)
@@ -134,15 +143,24 @@ class Asm:
             if pass2: self.lst.append((pc-len(emitted),emitted,raw))
 def main():
     a=sys.argv[1:]
-    src=a[0]; out="eeprom.bin"; lstf=None
+    src=a[0]; out="eeprom.bin"; lstf=None; base=None
     if "-o" in a: out=a[a.index("-o")+1]
     if "-l" in a: lstf=a[a.index("-l")+1]
+    if "--base" in a: base=int(a[a.index("--base")+1],0)
     lines=tokenize(open(src).read())
-    A=Asm(); A.run(lines,False); A.run(lines,True)
-    open(out,"wb").write(A.img)
+    # --base: RAM-resident blob (e.g. an OS loaded to $8000); emit only the
+    # bytes from base..hi. No --base: 32K ROM image from $0000.
+    if base is not None:
+        A=Asm(base=base,cap=0x10000); A.run(lines,False); A.run(lines,True)
+        open(out,"wb").write(A.img[base:A.hi])
+        size="%d bytes @ $%04X"%(A.hi-base,base)
+    else:
+        A=Asm(); A.run(lines,False); A.run(lines,True)
+        open(out,"wb").write(A.img[:0x8000])
+        size="32K"
     if lstf:
         with open(lstf,"w") as f:
             for pc,bs,raw in A.lst:
                 f.write("%04X  %-12s %s\n"%(pc," ".join("%02X"%b for b in bs),raw))
-    print("%s: %d symbols -> %s (32K)"%(src,len(A.sym),out))
+    print("%s: %d symbols -> %s (%s)"%(src,len(A.sym),out,size))
 if __name__=="__main__": main()

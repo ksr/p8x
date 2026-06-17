@@ -40,11 +40,20 @@ Last updated: 2026-06-11
     - NB: pin/pad-validated only, not DRC'd; the rev-B *behaviour* is proven in
       the emulator (make test-isa). A full Eagle DRC + airwire check before fab
       remains on the VERIFY list.
-- **P8X/OS bring-up**: with the CF model now in the emulator (see DONE), the
-  next filesystem step is an actual OS image on the card — BIOS jump table,
-  P8XFS directory walk / file open-read, a shell — installed at LBA 1.. and
-  booted via the monitor's `B`. A Mac-side `p8xfs` tool (put/get/ls) to lay
-  files onto a disk image pairs naturally with this.
+- **P8X/OS — shell commands**: v0.1 boots and runs HELP/DIR (see DONE). Next,
+  the CP/M-grade file commands from the design (sec 2.5): LOAD (read a file's
+  extent into its load address), RUN (LOAD + JSR exec address, RTS back to the
+  shell), SAVE (write a memory range to a new file + directory entry — needs an
+  on-target allocator that bumps the free pointer), DEL (mark entry $FF), DUMP/
+  DEP. Then PACK (compaction) once SAVE/DEL exist.
+- **P8XFS v2 hierarchy**: upgrade the flat directory to subdirectories
+  (directory-is-a-file, `.`/`..`, path resolve) per p8xfs-v2-hierarchical.md —
+  CD/MKDIR/RMDIR/TREE. Monitor ROM unchanged (B only reads sig+OSCNT); move
+  FORMAT policy onto the OS. p8xfs.py grows mkdir/tree/fsck.
+- **CFREAD ABI is 1-byte LBA**: the BIOS CFREAD/CFWRITE only set LBA0 (LBA1-3
+  zeroed in the monitor's CFSETL), capping addressable sectors at 256. Fine for
+  small images today; widen to a multi-byte LBA in CFSETL + the BIOS contract
+  before volumes exceed 128 KB.
 
 - **Decoupling caps**: no card netlist includes per-IC 100nF decoupling yet
   (standards sec.5 requires them). Add a generator pass that drops one cap per
@@ -137,6 +146,20 @@ Last updated: 2026-06-11
       budget
 
 ## DONE
+
+- **P8X/OS v0.1 — boots from CF, runs a shell.** RAM-resident OS
+  (os/p8xos.asm) assembled with the new `--base 0x8000` mode, installed at
+  LBA 1 by p8xfs.py and booted via the monitor's `B`. Calls the monitor's
+  BIOS jump table at $0100 (CONIN/CONOUT/CONST/CFINIT/CFREAD/CFWRITE/PUTS/
+  PHEX8 — a stable ABI; monitor body relocated to $0130). Shell: HELP and
+  DIR (walks the flat P8XFS v1 directory LBA 33-64, prints name + hex size).
+  Regression: `make test-os`.
+- **Host tool p8xfs.py** (tools/): create/format a P8XFS v1 image, `boot`
+  (install an OS image + set OSCNT), `put`/`get`/`ls`. Matches the monitor's
+  on-disk layout (dir 33-64, data 65+).
+- **Assembler --base**: emit a RAM-resident blob (labels resolved to the run
+  address, only base..hi bytes written) for OS/program images that live above
+  $8000. No --base = unchanged 32K ROM image.
 
 - **Emulator: CF-IDE model** ($FF10-17). 8-bit True IDE task file backed by a
   flat sector-image file, attached with `p8xemu -c <img>` (auto-created +
