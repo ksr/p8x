@@ -200,7 +200,7 @@ for note in [
  "4. Address bus is driven exclusively by the register-bank card (selected pointer).",
  "5. rev C3: C27-C30 = PSEL2/LDZN/SHCIN/SETC and B27 = CLRC (were SPARE4-8). SPARE9-11 (B28-B30) remain reserved.",
  "5b. SPARE0-3 were reallocated as flag lines FC/FZ/FN/FV (A27-A30). SPARE numbering therefore starts at 4.",
- "5c. Row B ground guard now spans B3-B26; B27-B30 carry SPARE8-11.",
+ "5c. Row B ground guard spans B3-B26; B27 = CLRC, B28-B30 = SPARE9-11 (rev C3).",
  "6. Verify row A/C orientation against physical DIN connectors before first fab."]:
     story.append(Paragraph(note,N))
 doc.build(story)

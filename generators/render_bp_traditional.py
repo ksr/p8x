@@ -36,7 +36,7 @@ c.setFont("Helvetica-Bold",18); c.setFillColor(BLK)
 c.drawString(20,1190-26,"P8X 10-SLOT BACKPLANE REV C - SCHEMATIC (traditional wiring)")
 c.setFont("Helvetica",9.5)
 c.drawString(20,1190-42,"J1-J10: ALL TEN SLOTS ARE WIRED PIN-FOR-PIN IN PARALLEL - drawn once below. Decoupling C1-C10: one per slot.")
-c.drawString(20,1190-55,"Rail glyphs = +5V / GND planes (inner layers). RT/CT clock terminators ship DNP. FC/FZ/FN/FV = ALU flags to control card (ex SPARE0-3). SPARE8-11 on B27-B30.")
+c.drawString(20,1190-55,"Rail glyphs = +5V / GND planes (inner layers). RT/CT clock terminators ship DNP. FC/FZ/FN/FV = ALU flags (ex SPARE0-3). rev C3: C27-30=PSEL2/LDZN/SHCIN/SETC, B27=CLRC; SPARE9-11 on B28-30.")
 # representative connector rows
 ROWS=( [("D%d"%i,"D") for i in range(8)]+[None]
       +[("A%d"%i,"S") for i in range(16)]+[None]

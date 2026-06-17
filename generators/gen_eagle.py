@@ -927,7 +927,7 @@ vadd("CLKB",(240.50,106.68))
 wadd("CLKB_T",(228.60,106.68,213.36,106.68,1,0.4))
 wadd("LED_A",(25.40,7.62,30.48,7.62,1,0.4))
 for nn in range(27,31):
-    y=py(nn); net="SPARE%d"%(nn-19)
+    y=py(nn); net=busnet("B%d"%nn)   # B27=CLRC, B28-30=SPARE9-11 (rev C3)
     wadd(net,(sx(0)-2.54,y-1.27,sx(9)-2.54,y-1.27,1,0.4))
     for i in range(10):
         wadd(net,(sx(i)-2.54,y,sx(i)-2.54,y-1.27,1,0.4))

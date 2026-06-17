@@ -574,6 +574,17 @@
 <contactref element="J8" pad="B27"/>
 <contactref element="J9" pad="B27"/>
 <contactref element="J10" pad="B27"/>
+<wire x1="12.70" y1="26.67" x2="241.30" y2="26.67" width="0.4" layer="1"/>
+<wire x1="12.70" y1="27.94" x2="12.70" y2="26.67" width="0.4" layer="1"/>
+<wire x1="38.10" y1="27.94" x2="38.10" y2="26.67" width="0.4" layer="1"/>
+<wire x1="63.50" y1="27.94" x2="63.50" y2="26.67" width="0.4" layer="1"/>
+<wire x1="88.90" y1="27.94" x2="88.90" y2="26.67" width="0.4" layer="1"/>
+<wire x1="114.30" y1="27.94" x2="114.30" y2="26.67" width="0.4" layer="1"/>
+<wire x1="139.70" y1="27.94" x2="139.70" y2="26.67" width="0.4" layer="1"/>
+<wire x1="165.10" y1="27.94" x2="165.10" y2="26.67" width="0.4" layer="1"/>
+<wire x1="190.50" y1="27.94" x2="190.50" y2="26.67" width="0.4" layer="1"/>
+<wire x1="215.90" y1="27.94" x2="215.90" y2="26.67" width="0.4" layer="1"/>
+<wire x1="241.30" y1="27.94" x2="241.30" y2="26.67" width="0.4" layer="1"/>
 </signal>
 <signal name="D0">
 <contactref element="J1" pad="A3"/>
@@ -1361,19 +1372,6 @@
 <wire x1="190.50" y1="20.32" x2="190.50" y2="19.05" width="0.4" layer="1"/>
 <wire x1="215.90" y1="20.32" x2="215.90" y2="19.05" width="0.4" layer="1"/>
 <wire x1="241.30" y1="20.32" x2="241.30" y2="19.05" width="0.4" layer="1"/>
-</signal>
-<signal name="SPARE8">
-<wire x1="12.70" y1="26.67" x2="241.30" y2="26.67" width="0.4" layer="1"/>
-<wire x1="12.70" y1="27.94" x2="12.70" y2="26.67" width="0.4" layer="1"/>
-<wire x1="38.10" y1="27.94" x2="38.10" y2="26.67" width="0.4" layer="1"/>
-<wire x1="63.50" y1="27.94" x2="63.50" y2="26.67" width="0.4" layer="1"/>
-<wire x1="88.90" y1="27.94" x2="88.90" y2="26.67" width="0.4" layer="1"/>
-<wire x1="114.30" y1="27.94" x2="114.30" y2="26.67" width="0.4" layer="1"/>
-<wire x1="139.70" y1="27.94" x2="139.70" y2="26.67" width="0.4" layer="1"/>
-<wire x1="165.10" y1="27.94" x2="165.10" y2="26.67" width="0.4" layer="1"/>
-<wire x1="190.50" y1="27.94" x2="190.50" y2="26.67" width="0.4" layer="1"/>
-<wire x1="215.90" y1="27.94" x2="215.90" y2="26.67" width="0.4" layer="1"/>
-<wire x1="241.30" y1="27.94" x2="241.30" y2="26.67" width="0.4" layer="1"/>
 </signal>
 <signal name="SPARE9">
 <contactref element="J1" pad="B28"/>
