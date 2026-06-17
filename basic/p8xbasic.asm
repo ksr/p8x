@@ -66,6 +66,8 @@ FSTEP  = $80BA          ; FOR/NEXT scratch: step (2)
 FLR    = $80BC          ; FOR/NEXT scratch: loop-back line record (2)
 FTP    = $80BE          ; FOR/NEXT scratch: loop-back text pointer (2)
 VARS   = $80C0          ; variables A-Z: 26 x 2 bytes ($80C0..$80F3)
+SEED   = $80F4          ; RND state (2)
+POKEA  = $80F6          ; POKE address (2)
 
 ; keyword tokens (>= $80 so they never collide with text or the 00 terminator)
 TOK_PRINT = $80
@@ -79,10 +81,15 @@ TOK_GOTO = $87
 TOK_GOSUB = $88
 TOK_RETURN = $89
 TOK_INPUT = $8A
+TOK_REM  = $8B
 TOK_END  = $8C
 TOK_RUN  = $8D
 TOK_LIST = $8E
 TOK_NEW  = $8F
+TOK_ABS  = $90
+TOK_RND  = $91
+TOK_PEEK = $92
+TOK_POKE = $93
 TOK_STEP = $94
 
 PROG   = $8100          ; program storage
@@ -97,6 +104,10 @@ STKTOP = $FEFF
         LDA  #$15            ; /16 clock, 8N1
         STA  ACIAS
         JSR  NEWPROG         ; empty program
+        LDA  #$E1            ; seed the RNG
+        STA  SEED
+        LDA  #$AC
+        STA  SEED+1
         LDP1 #BANNER
         JSR  PUTS
 
@@ -175,6 +186,14 @@ STMT:   JSR  SKIPSP
         LDB  #TOK_INPUT
         CMP
         JZ   DOINPUT
+        LDA  (P2)
+        LDB  #TOK_POKE
+        CMP
+        JZ   DOPOKE
+        LDA  (P2)
+        LDB  #TOK_REM
+        CMP
+        JZ   DOREM
         LDA  (P2)
         LDB  #TOK_IF
         CMP
@@ -520,6 +539,36 @@ DOINPUT: INP2
         TAP2H
         RTS
 in_err: JMP  SYNERR
+
+; POKE <addr>, <val> — write the low byte of val to memory (I/O via memory map)
+DOPOKE: INP2
+        JSR  EVAL
+        LDA  RESULT
+        STA  POKEA
+        LDA  RESULT+1
+        STA  POKEA+1
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #','
+        CMP
+        JNZ  pk_err
+        INP2
+        JSR  EVAL
+        LDA  POKEA
+        TAP1L
+        LDA  POKEA+1
+        TAP1H
+        LDA  RESULT
+        STA  (P1)
+        RTS
+pk_err: JMP  SYNERR
+
+; REM — comment: ignore the rest of the line
+DOREM:  LDA  (P2)
+        JZ   rem_d
+        INP2
+        JMP  DOREM
+rem_d:  RTS
 
 ; GOSUB <line> — push return (line after this one), then branch to <line>
 DOGOSUB: INP2
@@ -1103,6 +1152,18 @@ FACTOR: JSR  SKIPSP
         CMP
         JZ   fa_plus
         LDA  (P2)
+        LDB  #TOK_ABS
+        CMP
+        JZ   fa_abs
+        LDA  (P2)
+        LDB  #TOK_RND
+        CMP
+        JZ   fa_rnd
+        LDA  (P2)
+        LDB  #TOK_PEEK
+        CMP
+        JZ   fa_peek
+        LDA  (P2)
         LDB  #'('
         CMP
         JZ   fa_par
@@ -1167,6 +1228,111 @@ fa_neg: INP2                    ; unary minus: parse factor, negate RESULT
         STA  RESULT+1
 fa_nd:  RTS
 fa_err: JMP  SYNERR
+
+; functions: ABS(x), RND(n), PEEK(addr) — RESULT set
+fa_abs: INP2
+        JSR  PARGET
+        LDA  RESULT+1
+        LDB  #$80
+        AND
+        JZ   fa_abd              ; non-negative
+        LDA  RESULT
+        LDB  #$FF
+        XOR
+        STA  RESULT
+        LDA  RESULT+1
+        LDB  #$FF
+        XOR
+        STA  RESULT+1
+        LDA  RESULT
+        LDB  #1
+        ADD
+        STA  RESULT
+        JNC  fa_abd
+        LDA  RESULT+1
+        INC
+        STA  RESULT+1
+fa_abd: RTS
+fa_peek: INP2
+        JSR  PARGET              ; RESULT = address
+        LDA  RESULT
+        TAP1L
+        LDA  RESULT+1
+        TAP1H
+        LDA  (P1)                ; read byte (I/O handled by memory map)
+        STA  RESULT
+        LDA  #0
+        STA  RESULT+1
+        RTS
+fa_rnd: INP2
+        JSR  PARGET              ; RESULT = n
+        LDA  RESULT
+        LDB  RESULT+1
+        OR
+        JZ   fa_rz               ; RND(0) -> 0
+        LDA  RESULT
+        STA  LFT
+        LDA  RESULT+1
+        STA  LFT+1
+        JSR  RANDOM              ; NUM1 = random 16-bit
+        LDA  LFT
+        STA  NUM2
+        LDA  LFT+1
+        STA  NUM2+1
+        JSR  DIV16               ; REM = random mod n
+        LDA  REM                 ; RESULT = REM + 1  (range 1..n)
+        LDB  #1
+        ADD
+        STA  RESULT
+        LDA  REM+1
+        STA  RESULT+1
+        JNC  fa_rd
+        LDA  RESULT+1
+        INC
+        STA  RESULT+1
+fa_rd:  RTS
+fa_rz:  LDA  #0
+        STA  RESULT
+        STA  RESULT+1
+        RTS
+
+; PARGET — parse '(' EXPR ')' into RESULT
+PARGET: JSR  SKIPSP
+        LDA  (P2)
+        LDB  #'('
+        CMP
+        JNZ  pg_err
+        INP2
+        JSR  EXPR
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #')'
+        CMP
+        JNZ  pg_err
+        INP2
+        RTS
+pg_err: JMP  SYNERR
+
+; RANDOM — LCG: SEED = SEED*25173 + 13849; result in NUM1
+RANDOM: LDA  SEED
+        STA  NUM1
+        LDA  SEED+1
+        STA  NUM1+1
+        LDA  #$55               ; 25173 = $6255
+        STA  NUM2
+        LDA  #$62
+        STA  NUM2+1
+        JSR  MUL16
+        LDA  #$19               ; 13849 = $3619
+        STA  NUM2
+        LDA  #$36
+        STA  NUM2+1
+        JSR  ADD16
+        LDA  NUM1
+        STA  SEED
+        LDA  NUM1+1
+        STA  SEED+1
+        RTS
 
 ; VARADDR — A = variable letter; sets P1 = VARS + (letter-'A')*2
 VARADDR: LDB #'A'

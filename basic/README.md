@@ -29,9 +29,9 @@ the same toolchain and I/O the [ROM monitor](../firmware/p8xmon.asm) uses.
 > ```
 >
 > Plus `INPUT`, multi-statement lines (`A=1 : PRINT A`), multi-item `PRINT`
-> (`PRINT A, B; C`), single-line loops, and **signed 16-bit integers** with
-> unary minus (`PRINT -5`, `IF A<0`). Verified in the emulator. Still to come:
-> functions (`ABS/RND/PEEK/POKE`), `REM`.
+> (`PRINT A, B; C`), single-line loops, **signed 16-bit integers** with unary
+> minus, `REM`, and functions `ABS`, `RND`, `PEEK`, `POKE` (memory + I/O, so
+> `POKE 65282,n` drives the LED port). The full MS-style subset is in.
 >
 > Limits: FOR nesting 2 deep, GOSUB 3 deep.
 
@@ -96,8 +96,8 @@ bound the spin after end-of-input.
 4. **Statements + RUN** — execute the stored program.
    ✅ `RUN`, `GOTO`, `IF/THEN`, `END`, comparisons, `FOR/NEXT` (+`STEP`),
    `GOSUB/RETURN`, `INPUT`, multi-statement lines (`:`), multi-item `PRINT`.
-5. **Polish** — signed integers + unary minus, functions (`ABS/RND/PEEK/POKE`),
-   `REM`. (`REM`/functions tokenize already; not yet evaluated/executed.)
+5. **Polish** — ✅ signed integers + unary minus, `REM`, functions `ABS`,
+   `RND` (LCG), `PEEK`/`POKE` (memory + memory-mapped I/O).
 5. **Polish** — error messages, `REM`, multi-statement lines, `RND`/`PEEK`/`POKE`.
 
 ## Open decisions
