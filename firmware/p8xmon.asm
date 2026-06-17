@@ -13,7 +13,12 @@
 ;   B          Boot: load OS image from CF to $8000 and jump. Falls back
 ;              to the monitor prompt if no card / no signature / OSCNT=0.
 ;   G aaaa     Go: JSR to aaaa. Program returns to monitor via RTS.
+;   X          Run ROM BASIC (JMP $2000, overlaid by tools/build_basic_rom.py).
+;              BASIC's BYE command jumps to reset ($0000) to return here.
 ;   ?          Help.
+;
+; Also publishes a BIOS jump table at $0100 (CONIN/CONOUT/CONST/CFINIT/CFREAD/
+; CFWRITE/PUTS/PHEX8) — a stable ABI for RAM-resident programs (P8X/OS).
 ;
 ; REGISTER/ISA NOTES
 ;   Uses the P8X set as defined in the design docs. Conventions:
