@@ -584,7 +584,11 @@ ic={"U1":("74377V2","A REG"),"U2":("74244","A OUT"),"U3":("74377V2","B REG"),
  "U16":("74244","ALU OUT"),"U17":("74175","FLAGS"),"U18":("74260","Z DET"),
  "U19":("GATES14","74HCT08"),"U20":("74138","DOE DEC"),"U21":("74138","DLD DEC"),
  "U22":("74157","FLAG MUX"),"U23":("74244","FLAG OUT"),
- "U24":("GATES14","74HCT32"),"U25":("GATES14","74HCT00")}
+ "U24":("GATES14","74HCT32"),"U25":("GATES14","74HCT00"),
+ # rev B flag-register redesign (split C; LDZN Z/N; SETC/CLRC; carry-coupled shifter)
+ "U26":("7474","C FLAG FF"),"U27":("74260","BUS Z-DET"),
+ "U28":("74157","SHIFT-OUT MUX"),"U29":("74157","C-SRC MUX"),
+ "U30":("74157","SHIN MUX"),"U31":("GATES14","74HCT08 CLK/FORCE")}
 sm={"RP1":("RES","1K"),"LED3":("LED","PWR-GRN"),
  "R4":("RES","1K"),"LED4":("LED","ALU-GRN"),"R5":("RES","1K"),"LED5":("LED","LDF-YEL")}
 REGS=(("U1","U2","A","Y1"),("U3","U4","B","Y2"),("U5","U6","T","Y3"),("U7","U8","T2","Y4"))
@@ -601,7 +605,7 @@ for b in range(4):
 for u in ("U9","U10"):
     for s in range(4): N(n,"ALUS%d"%s,(u,"S%d"%s))
     N(n,"ALUM",(u,"M"))
-N(n,"CIN",("U9","CN"),("U11","CN"),("U12","B1"),("U15","B4"))
+N(n,"CIN",("U9","CN"),("U11","CN"),("U30","A1"))   # ALU carry-in + shifter shift-in mux (A)
 N(n,"CP0",("U9","!P"),("U11","!P0")); N(n,"CG0",("U9","!G"),("U11","!G0"))
 N(n,"CP1",("U10","!P"),("U11","!P1")); N(n,"CG1",("U10","!G"),("U11","!G1"))
 N(n,"CNX",("U11","CNX"),("U10","CN"))
@@ -609,7 +613,7 @@ N(n,"VCC",("U11","!P2"),("U11","!G2"),("U11","!P3"),("U11","!G3"))
 # rev B: C flag is conventional active-high -> invert the raw 74181 Cn+4
 # (active-low) with a spare U25 NAND gate before the flag mux.
 N(n,"CFLG",("U10","CN4"),("U25","2A"),("U25","2B"))
-N(n,"CFLGI",("U25","2Y"),("U22","A1"))
+N(n,"CFLGI",("U25","2Y"),("U29","A1"))   # inverted Cn+4 -> C-source mux (non-shift input)
 for b in range(8):
     u="U12" if b<4 else "U13"; i=b%4+1
     N(n,"F%d"%b,("U9" if b<4 else "U10","F%d"%(b%4)),(u,"A%d"%i))
@@ -628,20 +632,49 @@ for b in range(5): N(n,"R%d"%b,("U18",["A1","B1","C1","D1","E1"][b]))
 for b in range(3): N(n,"R%d"%(5+b),("U18",["A2","B2","C2"][b]))
 N(n,"GND",("U18","D2"),("U18","E2"))
 N(n,"ZL",("U18","Y1"),("U19","1A")); N(n,"ZH",("U18","Y2"),("U19","1B"))
-N(n,"ZFLG",("U19","1Y"),("U22","A2"))
-N(n,"R7",("U22","A3"))
-N(n,"GND",("U22","A4"))
-for b in range(4): N(n,"D%d"%b,("U22","B%d"%(b+1)))
-N(n,"-FREST",("U21","Y5"),("U25","1A"),("U25","1B"))
-N(n,"FRESP",("U25","1Y"),("U22","S"),("U24","1B"))
-N(n,"GND",("U22","!G"))
-N(n,"LDF",("U24","1A"),("U25","3A"),("U25","3B"))
-N(n,"FEN",("U24","1Y"),("U19","2B")); N(n,"CLK",("U19","2A"))
-N(n,"CLKF",("U19","2Y"),("U17","CLK"))
+# ---- rev B flag register ----------------------------------------------------
+# Z/N source mux U22 (74157, S=LDZN): A=ALU result flags, B=bus-derived (loads)
+N(n,"ZFLG",("U19","1Y"),("U22","A1"))            # ALU zero (U18 -> U19 gate1)
+N(n,"R7",("U22","A2"))                            # ALU result bit 7
+N(n,"ZBUS",("U22","B1")); N(n,"D7",("U22","B2"))  # bus all-zero / bus bit 7
+N(n,"LDZN",("U22","S")); N(n,"GND",("U22","!G"))
+N(n,"ZSRC",("U22","Y1")); N(n,"NSRC",("U22","Y2"))
+# bus zero-detect U27 (74260 dual 5-in NOR): ZBUS = NOR(D0-4) & NOR(D5-7)
+for b in range(5): N(n,"D%d"%b,("U27",["A1","B1","C1","D1","E1"][b]))
+for b in range(3): N(n,"D%d"%(5+b),("U27",["A2","B2","C2"][b]))
+N(n,"GND",("U27","D2"),("U27","E2"))
+N(n,"ZBL",("U27","Y1"),("U19","2A")); N(n,"ZBH",("U27","Y2"),("U19","2B"))
+N(n,"ZBUS",("U19","2Y"))
+# Z,N,V flip-flops in U17 (74175), clocked on (LDF|LDZN); V hardwired 0
+N(n,"ZSRC",("U17","D1")); N(n,"NSRC",("U17","D2")); N(n,"GND",("U17","D3"))
 N(n,"-RES",("U17","!CLR"))
-for i in range(4): N(n,"FM%d"%i,("U22","Y%d"%(i+1)),("U17","D%d"%(i+1)))
-for i,f in enumerate(("FQC","FQZ","FQN","FQV")):
-    N(n,f,("U17","Q%d"%(i+1)),("U23","A%d"%(i+1)),("U23","A%d"%(i+5)))
+# C-flag source: shift-out when shifting else inverted Cn+4
+N(n,"SH0",("U28","S")); N(n,"F0",("U28","A1")); N(n,"F7",("U28","B1"))
+N(n,"SHOUT",("U28","Y1")); N(n,"GND",("U28","!G"))
+N(n,"SH0",("U24","2A")); N(n,"SH1",("U24","2B")); N(n,"SHANY",("U24","2Y"))
+N(n,"SHANY",("U29","S")); N(n,"SHOUT",("U29","B1"))   # CFLGI on A1 (wired above)
+N(n,"NC",("U29","Y1")); N(n,"GND",("U29","!G"))
+# C flag in its own 7474 (U26): clocked on LDF; SETC/CLRC force via preset/clear
+N(n,"NC",("U26","1D")); N(n,"CLKFC",("U26","1CLK"))
+N(n,"-SETCb",("U26","!1PRE")); N(n,"-CCLR",("U26","!1CLR"))
+N(n,"VCC",("U26","!2PRE"),("U26","!2CLR")); N(n,"GND",("U26","2D"),("U26","2CLK"))
+# shifter shift-in mux U30 (74157, S=SHCIN): CIN (A1) else current C (B1)
+N(n,"SHCIN",("U30","S")); N(n,"FQC",("U30","B1"))
+N(n,"SHIN",("U30","Y1"),("U12","B1"),("U15","B4")); N(n,"GND",("U30","!G"))
+# clock gates (U31 AND) and flag forces (U24 OR / U25 NAND inverters)
+N(n,"LDF",("U24","1A"),("U31","1B"),("U25","3A"),("U25","3B")); N(n,"LDZN",("U24","1B"))
+N(n,"FENZN",("U24","1Y"),("U31","2A"))            # LDF | LDZN
+N(n,"SETC",("U25","1A"),("U25","1B")); N(n,"-SETCb",("U25","1Y"))
+N(n,"CLRC",("U25","4A"),("U25","4B")); N(n,"-CLRCb",("U25","4Y"))
+N(n,"CLK",("U31","1A"),("U31","2B")); N(n,"CLKFC",("U31","1Y"))   # CLK & LDF
+N(n,"CLKFZN",("U31","2Y"),("U17","CLK"))          # CLK & (LDF|LDZN)
+N(n,"-RES",("U31","3A")); N(n,"-CLRCb",("U31","3B")); N(n,"-CCLR",("U31","3Y"))
+N(n,"GND",("U31","4A"),("U31","4B"))
+# flag outputs -> U23 buffer: FQC from U26, FQZ/FQN/FQV from U17
+N(n,"FQC",("U26","1Q"),("U23","A1"),("U23","A5"))
+N(n,"FQZ",("U17","Q1"),("U23","A2"),("U23","A6"))
+N(n,"FQN",("U17","Q2"),("U23","A3"),("U23","A7"))
+N(n,"FQV",("U17","Q3"),("U23","A4"),("U23","A8"))
 for i in range(4): N(n,"D%d"%i,("U23","Y%d"%(i+1)))
 for i,f in enumerate(("FC","FZ","FN","FV")): N(n,f,("U23","Y%d"%(i+5)))
 N(n,"-DOEFLG",("U20","Y6"),("U23","!G1"))
@@ -651,16 +684,15 @@ for u,fld in (("U20","DOE"),("U21","DLD")):
     N(n,"%s3"%fld,(u,"!G2A")); N(n,"VCC",(u,"G1")); N(n,"GND",(u,"!G2B"))
 N(n,"ALUK",("U19","3Y"),("LED4","K"))
 N(n,"LDFK",("U25","3Y"),("LED5","K"))
-N(n,"GND",("U19","4A"),("U19","4B"),("U24","2A"),("U24","2B"),("U24","3A"),
-  ("U24","3B"),("U24","4A"),("U24","4B"),
-  ("U25","4A"),("U25","4B"),("LED3","K"))
+N(n,"GND",("U19","4A"),("U19","4B"),("U24","3A"),
+  ("U24","3B"),("U24","4A"),("U24","4B"),("LED3","K"))
 N(n,"VCC",("RP1","1"),("R4","1"),("R5","1"))
 N(n,"LEDP",("RP1","2"),("LED3","A"))
 N(n,"LEDAL",("R4","2"),("LED4","A")); N(n,"LEDLF",("R5","2"),("LED5","A"))
-card("alu-card","P8X ALU CARD REV B-partial (carry conventional; flag-reg redesign pending - BACKLOG)",ic,sm,n,
+card("alu-card","P8X ALU CARD REV B (conventional carry, LDZN, SETC/CLRC, carry-coupled shifter)",ic,sm,n,
  {"D%d"%i for i in range(8)}|{"DOE%d"%i for i in range(4)}|{"DLD%d"%i for i in range(4)}|
  {"ALUS0","ALUS1","ALUS2","ALUS3","ALUM","CIN","SH0","SH1","LDF","CLK","-RES",
-  "FC","FZ","FN","FV"})
+  "FC","FZ","FN","FV","LDZN","SHCIN","SETC","CLRC"})
 
 # ===================== I/O CARD ===============================================
 n={}
