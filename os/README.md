@@ -5,10 +5,21 @@ CompactFlash to `$8000` by the ROM monitor's `B` command. Written in P8X
 assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 [`p8xasm.py`](../assembler/p8xasm.py).
 
-> **Status: v0.1 — boots and runs a shell.** `HELP` and `DIR` (lists the flat
-> P8XFS v1 directory). The next commands — `LOAD`/`RUN`/`SAVE`/`DEL` and the
-> v2 hierarchy (`CD`/`MKDIR`/`TREE`) — build on this skeleton. See the design
-> in [hardware/cf-card/p8x-cf-os-design.md](../hardware/cf-card/p8x-cf-os-design.md).
+> **Status: v0.2 — boots and runs a shell with file commands.**
+>
+> | Command | Effect |
+> |---------|--------|
+> | `DIR` | list the flat P8XFS v1 directory (name + hex size) |
+> | `LOAD name` | read a file into its stored load address |
+> | `RUN name` | `LOAD` it, then `JSR` its exec address (program `RTS` → shell) |
+> | `DEL name` | mark the directory entry deleted (`$FF`) and write it back |
+> | `HELP` | list commands |
+>
+> Commands are matched as whole words; the filename argument is upcased and
+> space-padded to 12 chars. Still to come: `SAVE` (create a file — needs hex
+> arguments + a free-space allocator), `PACK`, and the v2 hierarchy
+> (`CD`/`MKDIR`/`TREE`). See the design in
+> [hardware/cf-card/p8x-cf-os-design.md](../hardware/cf-card/p8x-cf-os-design.md).
 
 ## How it fits together
 

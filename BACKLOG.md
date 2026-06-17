@@ -40,12 +40,13 @@ Last updated: 2026-06-11
     - NB: pin/pad-validated only, not DRC'd; the rev-B *behaviour* is proven in
       the emulator (make test-isa). A full Eagle DRC + airwire check before fab
       remains on the VERIFY list.
-- **P8X/OS — shell commands**: v0.1 boots and runs HELP/DIR (see DONE). Next,
-  the CP/M-grade file commands from the design (sec 2.5): LOAD (read a file's
-  extent into its load address), RUN (LOAD + JSR exec address, RTS back to the
-  shell), SAVE (write a memory range to a new file + directory entry — needs an
-  on-target allocator that bumps the free pointer), DEL (mark entry $FF), DUMP/
-  DEP. Then PACK (compaction) once SAVE/DEL exist.
+- **P8X/OS — SAVE + remaining shell commands**: DIR/LOAD/RUN/DEL are in (see
+  DONE). Next: SAVE (write a memory range to a new file + directory entry — the
+  first command that allocates: parse two hex addresses, 16-bit length, find a
+  free/`$FF` dir slot, copy memory->SBUF sector by sector via CFWRITE, bump the
+  boot-block free pointer). Then DUMP/DEP (hex view/deposit) and PACK
+  (compaction) once SAVE/DEL churn the free list. SAVE needs a 16-bit hex
+  parser and 16-bit subtract — small, but the allocator is the real work.
 - **P8XFS v2 hierarchy**: upgrade the flat directory to subdirectories
   (directory-is-a-file, `.`/`..`, path resolve) per p8xfs-v2-hierarchical.md —
   CD/MKDIR/RMDIR/TREE. Monitor ROM unchanged (B only reads sig+OSCNT); move
@@ -147,6 +148,14 @@ Last updated: 2026-06-11
 
 ## DONE
 
+- **P8X/OS v0.2 — shell with file commands.** Added LOAD (read a file into its
+  stored load address; sector count = ceil(len/512)), RUN (LOAD + JSR exec
+  address, program RTS returns to the shell), and DEL (mark the entry $FF and
+  write the directory sector back via CFWRITE — verified by re-reading DIR).
+  Whole-word command matching + a filename parser (upcase, space-pad to 12,
+  peek/INP2 so the line terminator isn't over-consumed); FINDENT walks the
+  directory and captures a pointer to the matched entry's flag byte. Regression
+  `make test-os` now boots, runs a program, deletes a file, and re-lists.
 - **P8X/OS v0.1 — boots from CF, runs a shell.** RAM-resident OS
   (os/p8xos.asm) assembled with the new `--base 0x8000` mode, installed at
   LBA 1 by p8xfs.py and booted via the monitor's `B`. Calls the monitor's
