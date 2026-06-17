@@ -40,8 +40,11 @@ Last updated: 2026-06-11
     - NB: pin/pad-validated only, not DRC'd; the rev-B *behaviour* is proven in
       the emulator (make test-isa). A full Eagle DRC + airwire check before fab
       remains on the VERIFY list.
-- **Emulator: CF-IDE model** ($FF10-17, sector buffer against a P8XFS disk
-  image file) so the OS/filesystem work can run emulated end to end.
+- **P8X/OS bring-up**: with the CF model now in the emulator (see DONE), the
+  next filesystem step is an actual OS image on the card — BIOS jump table,
+  P8XFS directory walk / file open-read, a shell — installed at LBA 1.. and
+  booted via the monitor's `B`. A Mac-side `p8xfs` tool (put/get/ls) to lay
+  files onto a disk image pairs naturally with this.
 
 - **Decoupling caps**: no card netlist includes per-IC 100nF decoupling yet
   (standards sec.5 requires them). Add a generator pass that drops one cap per
@@ -134,6 +137,17 @@ Last updated: 2026-06-11
       budget
 
 ## DONE
+
+- **Emulator: CF-IDE model** ($FF10-17). 8-bit True IDE task file backed by a
+  flat sector-image file, attached with `p8xemu -c <img>` (auto-created +
+  zero-filled to 256 sectors if absent). Models SET FEATURES/IDENTIFY/READ
+  SECTORS/WRITE SECTORS with the BSY/DRQ handshake the monitor's driver spins
+  on; IDENTIFY returns a byte-swapped model string. The monitor's filesystem
+  hooks now run emulated end to end — `I` (init), `F` (format P8XFS boot block
+  + directory), `B` (boot OS from LBA 1 to $8000). Regression: `make test-cf`
+  (formats a card, plants a tiny OS at LBA 1, boots it). Surfaced + fixed a
+  latent monitor bug: `CMD_F` compared `A` to `'Y'` *after* `CRLF` clobbered
+  it, so format always aborted; reload the key from GETC's `TMP` copy.
 
 - **Assembler (p8xasm.py)**: two-pass, imports the opcode table from
   genucode.py (single source of truth). Labels, expressions with <lo/>hi,

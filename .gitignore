@@ -10,5 +10,7 @@ emulator/p8xemu
 emulator/*.o
 emulator/test/*.bin
 emulator/test/*.out
+emulator/test/cf.img
+emulator/test/tinyos.asm
 # stray microcode images if a generator is run from the repo root
 /u?.bin

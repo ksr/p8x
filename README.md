@@ -91,7 +91,8 @@ works chip by chip, and any board-specific design docs:
 
 ## Status
 
-- Emulator working: 35 opcodes, ACIA on stdin/stdout, verified against microcode images
+- Emulator working: 67 opcodes, ACIA on stdin/stdout, CF-IDE disk model (`-c <img>`), verified against microcode images
 - Assembler working: two-pass, full expression support, shares opcode table with microcode generator
 - Eagle schematics + boards generated for all 6 cards and backplane
-- **Next:** boot the ROM monitor in the emulator; CF-IDE emulation
+- ROM monitor boots in the emulator; its filesystem hooks (`I`/`F`/`B`) run end to end against a CF image (`make test-cf`)
+- **Next:** P8X/OS bring-up on the card; Mac-side `p8xfs` tool

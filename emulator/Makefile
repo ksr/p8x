@@ -18,6 +18,7 @@ test: p8xemu ucode
 	python3 ../../assembler/p8xasm.py test2.asm -o t2.bin && ../p8xemu t2.bin && \
 	python3 ../../assembler/p8xasm.py test3.asm -o t3.bin && ../p8xemu t3.bin
 	$(MAKE) test-isa
+	$(MAKE) test-cf
 
 # Per-instruction self-checking regression: halts with A=00 on success,
 # or A=<test id> at the first failing check.
@@ -28,4 +29,8 @@ test-isa: p8xemu ucode
 	grep -q ' A=00 ' tisa.out && echo "ISA TEST: PASS" || \
 	  { echo "ISA TEST: FAIL —"; tail -1 tisa.out; exit 1; }
 
-.PHONY: all ucode test test-isa
+# Filesystem round-trip: monitor F (format) + B (boot) against the CF model.
+test-cf: p8xemu ucode
+	sh test/cf_test.sh
+
+.PHONY: all ucode test test-isa test-cf

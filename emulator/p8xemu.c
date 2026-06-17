@@ -18,6 +18,10 @@
  *
  * Memory map: 0000-7FFF EEPROM | 8000-FEFF RAM | FF00-FFFF I/O
  *   FF00 switches(r)  FF02 LEDs(w)  FF04 ACIA status(r)  FF05 ACIA data(rw)
+ *   FF10-FF17 CF-IDE task file (8-bit True IDE), modelled when -c <img> given:
+ *     FF10 data  FF11 feature  FF12 sector-count  FF13-15 LBA0-2
+ *     FF16 head/dev  FF17 command(w)/status(r)  [BSY7 DRQ3 ERR0]
+ *   Backs a flat sector-image file (LBA*512); SET FEATURES/IDENTIFY/READ/WRITE.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,6 +44,54 @@ static int stp, fC,fZ,fN,fV;          /* fC = conventional carry (1 = carry / A>
 static int prev_fcond=0, halted=0, trace=0;
 static unsigned long long cycles=0;
 static uint8_t leds=0;
+
+/* ---- CF-IDE model (active only when a disk image is attached with -c) ----
+   The monitor's driver (firmware/p8xmon.asm) drives a CompactFlash in 8-bit
+   True IDE mode: it writes LBA0-2/head/sector-count, issues a command to FF17,
+   spins on BSY/DRQ in the status register, then streams 512 bytes through the
+   data port FF10. We model exactly that handshake. BSY is never asserted (the
+   transfer is instantaneous here); DRQ is raised while a 512-byte buffer is
+   being streamed and dropped when it drains. */
+static FILE *cf_img=NULL;
+static uint8_t cf_buf[512];
+static int cf_idx=0, cf_drq=0, cf_err=0, cf_write=0;
+static uint8_t cf_feat=0, cf_lba0=0, cf_lba1=0, cf_lba2=0;
+static long cf_lba(void){ return ((long)cf_lba2<<16)|((long)cf_lba1<<8)|cf_lba0; }
+static void cf_seek(void){ if(cf_img) fseek(cf_img, cf_lba()*512L, SEEK_SET); }
+/* ATA IDENTIFY: words 27-46 (bytes 54..) hold a byte-swapped model string,
+   which is what the monitor's I command prints. */
+static void cf_identify(void){
+    const char *m="P8X-CF EMULATOR                         "; /* 40 chars */
+    memset(cf_buf,0,512);
+    for(int i=0;i<40;i+=2){ cf_buf[54+i]=m[i+1]; cf_buf[54+i+1]=m[i]; }
+    cf_idx=0; cf_drq=1; cf_err=0; cf_write=0;
+}
+static void cf_readsec(void){
+    memset(cf_buf,0,512);
+    cf_seek(); if(cf_img) fread(cf_buf,1,512,cf_img);
+    cf_idx=0; cf_drq=1; cf_err=0; cf_write=0;
+}
+static void cf_cmd(uint8_t c){
+    switch(c){
+    case 0xEF: cf_err=0; cf_drq=0; break;                    /* SET FEATURES   */
+    case 0xEC: cf_identify(); break;                         /* IDENTIFY       */
+    case 0x20: cf_readsec(); break;                          /* READ SECTORS   */
+    case 0x30: cf_idx=0; cf_drq=1; cf_err=0; cf_write=1; break; /* WRITE SECTORS */
+    default:   cf_err=1; cf_drq=0; break;
+    }
+}
+static uint8_t cf_data_rd(void){
+    uint8_t v=cf_buf[cf_idx++];
+    if(cf_idx>=512){ cf_idx=0; cf_drq=0; }
+    return v;
+}
+static void cf_data_wr(uint8_t v){
+    cf_buf[cf_idx++]=v;
+    if(cf_idx>=512){
+        if(cf_write && cf_img){ cf_seek(); fwrite(cf_buf,1,512,cf_img); fflush(cf_img); }
+        cf_idx=0; cf_drq=0; cf_write=0;
+    }
+}
 
 /* ---- 74181, active-high data. Returns F; *cn4 gets the RAW pin level. */
 static uint8_t alu181(uint8_t a,uint8_t b,int s,int m,int cinpin,int*cn4){
@@ -98,6 +150,8 @@ static uint8_t memrd(uint16_t ad){
     case 0xFF00: return 0x00;                                 /* switches */
     case 0xFF04: return 0x02 | (rx_ready()?0x01:0x00);        /* TDRE|RDRF */
     case 0xFF05: return rx_char();
+    case 0xFF10: return cf_img? cf_data_rd() : 0xFF;          /* CF data    */
+    case 0xFF17: return cf_img? (0x40|(cf_drq?0x08:0)|(cf_err?0x01:0)) : 0xFF; /* CF status: RDY, !BSY */
     default: return 0xFF;
     }
 }
@@ -106,6 +160,15 @@ static void memwr(uint16_t ad,uint8_t v){
     if(ad<0xFF00){ ram[ad-0x8000]=v; return; }
     if(ad==0xFF02){ leds=v; return; }
     if(ad==0xFF05){ putchar(v); fflush(stdout); return; }
+    if(cf_img) switch(ad){                                   /* CF task file */
+    case 0xFF10: cf_data_wr(v); return;
+    case 0xFF11: cf_feat=v; return;
+    case 0xFF13: cf_lba0=v; return;
+    case 0xFF14: cf_lba1=v; return;
+    case 0xFF15: cf_lba2=v; return;
+    case 0xFF17: cf_cmd(v); return;
+    /* FF12 sector-count, FF16 head/dev: accepted, single-sector model */
+    }
 }
 static void load(const char*fn,uint8_t*buf,size_t n){
     FILE*f=fopen(fn,"rb");
@@ -113,15 +176,26 @@ static void load(const char*fn,uint8_t*buf,size_t n){
     fread(buf,1,n,f); fclose(f);
 }
 int main(int argc,char**argv){
-    const char*ee="eeprom.bin"; unsigned long long lim=200000000ULL;
+    const char*ee="eeprom.bin"; const char*cfn=0; unsigned long long lim=200000000ULL;
     for(int i=1;i<argc;i++){
         if(!strcmp(argv[i],"-t")) trace=1;
         else if(!strcmp(argv[i],"-l")) lim=strtoull(argv[++i],0,0);
+        else if(!strcmp(argv[i],"-c")) cfn=argv[++i];
         else ee=argv[i];
     }
     char fn[64];
     for(int k=0;k<4;k++){ sprintf(fn,"u%d.bin",k); load(fn,rom[k],8192); }
     load(ee,eeprom,0x8000);
+    if(cfn){                                        /* attach CF disk image */
+        cf_img=fopen(cfn,"r+b");
+        if(!cf_img){                                /* create + zero-fill 256 sectors */
+            cf_img=fopen(cfn,"w+b");
+            if(!cf_img){ perror(cfn); exit(1); }
+            static uint8_t z[512]={0};
+            for(int s=0;s<256;s++) fwrite(z,1,512,cf_img);
+            fflush(cf_img);
+        }
+    }
     if(isatty(0) && tcgetattr(0,&g_orig)==0){       /* interactive console */
         interactive=1;
         struct termios t=g_orig;

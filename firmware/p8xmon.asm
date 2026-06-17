@@ -242,6 +242,7 @@ CMD_F:  LDP1 #MSURE
         JSR  GETC
         JSR  PUTC
         JSR  CRLF
+        LDA  TMP            ; CRLF clobbered A; reload the key (GETC's TMP copy)
         LDB  #'Y'
         CMP
         JNZ  PROMPT
