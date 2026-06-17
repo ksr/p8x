@@ -70,6 +70,7 @@ python3 ../microcode/gen_progguide.py             # programmer's guide (-> docs/
 | [hardware/cf-card/p8x-cf-os-design.md](hardware/cf-card/p8x-cf-os-design.md) | CF-IDE hardware + P8X/OS design |
 | [hardware/cf-card/p8xfs-v2-hierarchical.md](hardware/cf-card/p8xfs-v2-hierarchical.md) | P8XFS v2 hierarchical filesystem spec |
 | [docs/p8x-programmers-guide.pdf](docs/p8x-programmers-guide.pdf) | Generated instruction set reference |
+| [basic/p8x-basic-guide.md](basic/p8x-basic-guide.md) | P8X BASIC language reference (statements, expressions, examples) |
 | [BACKLOG.md](BACKLOG.md) | NEXT / IDEAS / VERIFY / DONE |
 
 ### Per-card guides

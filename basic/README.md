@@ -4,6 +4,10 @@ A small BASIC interpreter for the P8X, written in P8X assembly, assembled by
 [`p8xasm.py`](../assembler/p8xasm.py) and run over the 6850 ACIA serial console —
 the same toolchain and I/O the [ROM monitor](../firmware/p8xmon.asm) uses.
 
+**Using the language?** See the **[P8X BASIC Programmer's Guide](p8x-basic-guide.md)**
+— statements, expressions, functions, memory access, and example programs. This
+README covers build internals and milestones.
+
 > **Status: runs programs.** Editor + tokenizer + integer expression evaluator,
 > and stored programs now **execute**: `RUN`, `GOTO`, `IF…THEN <stmt|line>`,
 > `END`, plus comparisons (`= <> < > <= >=`), `PRINT`, `LET`. A real branching
