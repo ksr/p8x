@@ -52,6 +52,17 @@ GEF    = $808B          ; compare: left >= right
 EQF    = $808C          ; compare: left == right
 LFT    = $808D          ; comparison left operand (2)
 FNDF   = $808F          ; FINDLINE: 1 if line found
+GSTK   = $8090          ; GOSUB return-line-pointer stack (6 x 2 bytes)
+GSP    = $809C          ; GOSUB stack depth
+JUMPF  = $809D          ; RUN: 1 -> set CURLINE = JUMPADDR directly
+JUMPADDR= $809E         ; direct jump target (line record pointer)
+GTMP   = $80A0          ; scratch (2)
+FSP    = $80A2          ; FOR stack depth
+FFP    = $80A3          ; pointer to top FOR frame (2)
+FSTK   = $80A5          ; FOR frames (3 x 7): letter, limit(2), step(2), loopline(2)
+FORVAR = $80BA          ; FOR/NEXT scratch: loop variable letter
+FLIM   = $80BB          ; FOR/NEXT scratch: limit (2)
+FSTEP  = $80BD          ; FOR/NEXT scratch: step (2)
 VARS   = $80C0          ; variables A-Z: 26 x 2 bytes ($80C0..$80F3)
 
 ; keyword tokens (>= $80 so they never collide with text or the 00 terminator)
@@ -59,11 +70,17 @@ TOK_PRINT = $80
 TOK_LET  = $81
 TOK_IF   = $82
 TOK_THEN = $83
+TOK_FOR  = $84
+TOK_TO   = $85
+TOK_NEXT = $86
 TOK_GOTO = $87
+TOK_GOSUB = $88
+TOK_RETURN = $89
 TOK_END  = $8C
 TOK_RUN  = $8D
 TOK_LIST = $8E
 TOK_NEW  = $8F
+TOK_STEP = $94
 
 PROG   = $8100          ; program storage
 PBUF   = $C000          ; rebuild scratch buffer
@@ -115,6 +132,22 @@ STMT:   JSR  SKIPSP
         LDB  #TOK_GOTO
         CMP
         JZ   DOGOTO
+        LDA  (P2)
+        LDB  #TOK_GOSUB
+        CMP
+        JZ   DOGOSUB
+        LDA  (P2)
+        LDB  #TOK_RETURN
+        CMP
+        JZ   DORET
+        LDA  (P2)
+        LDB  #TOK_FOR
+        CMP
+        JZ   DOFOR
+        LDA  (P2)
+        LDB  #TOK_NEXT
+        CMP
+        JZ   DONEXT
         LDA  (P2)
         LDB  #TOK_IF
         CMP
@@ -237,6 +270,8 @@ dl_err: JMP  SYNERR
 ; RUN — execute the stored program from the lowest line number
 DORUN:  LDA  #0
         STA  ENDF
+        STA  GSP                    ; reset GOSUB and FOR stacks
+        STA  FSP
         LDA  #<PROG
         STA  CURLINE
         LDA  #>PROG
@@ -259,9 +294,12 @@ run_l:  LDA  CURLINE
         TAP2H
         LDA  #0
         STA  BRANCHF
+        STA  JUMPF
         JSR  STMT
         LDA  ENDF
         JNZ  run_done
+        LDA  JUMPF
+        JNZ  run_jump
         LDA  BRANCHF
         JNZ  run_goto
         LDA  CURLINE                ; advance to next record
@@ -283,6 +321,11 @@ run_goto: JSR FINDLINE
         TPA1L
         STA  CURLINE
         TPA1H
+        STA  CURLINE+1
+        JMP  run_l
+run_jump: LDA JUMPADDR             ; direct jump (RETURN, NEXT loop-back)
+        STA  CURLINE
+        LDA  JUMPADDR+1
         STA  CURLINE+1
         JMP  run_l
 run_undef: LDP1 #MUNDEF
@@ -372,6 +415,275 @@ DOEND:  INP2
         LDA  #1
         STA  ENDF
         RTS
+
+; GOSUB <line> — push return (line after this one), then branch to <line>
+DOGOSUB: INP2
+        JSR  SKIPSP
+        JSR  DOGOTON                ; target -> BRANCHN, BRANCHF; P2 past number
+        LDA  CURLINE                ; return = line after current record
+        TAP1L
+        LDA  CURLINE+1
+        TAP1H
+        INP1
+        INP1
+gs_sk:  LDA  (P1)+
+        JNZ  gs_sk
+        TPA1L
+        STA  GTMP
+        TPA1H
+        STA  GTMP+1
+        LDA  GSP                    ; push GTMP -> GSTK[GSP]
+        SHL
+        LDB  #<GSTK
+        ADD
+        TAP2L
+        LDA  #>GSTK
+        TAP2H
+        LDA  GTMP
+        STA  (P2)
+        INP2
+        LDA  GTMP+1
+        STA  (P2)
+        LDA  GSP
+        INC
+        STA  GSP
+        RTS
+
+; RETURN — pop a return line and jump to it
+DORET:  INP2
+        LDA  GSP
+        JZ   ret_err
+        DEC
+        STA  GSP
+        SHL
+        LDB  #<GSTK
+        ADD
+        TAP2L
+        LDA  #>GSTK
+        TAP2H
+        LDA  (P2)
+        STA  JUMPADDR
+        INP2
+        LDA  (P2)
+        STA  JUMPADDR+1
+        LDA  #1
+        STA  JUMPF
+        RTS
+ret_err: LDP1 #MRG
+        JSR  PUTS
+        LDA  #1
+        STA  ENDF
+        RTS
+
+; FOR <var> = <start> TO <limit> [STEP <n>]
+DOFOR:  INP2
+        JSR  SKIPSP
+        LDA  (P2)
+        STA  TMPC
+        LDB  #'A'
+        SUB
+        JNC  for_err
+        LDB  #26
+        CMP
+        JC   for_err
+        LDA  TMPC
+        STA  FORVAR
+        JSR  VARADDR
+        INP2
+        TPA1L
+        STA  SAVE1
+        TPA1H
+        STA  SAVE1+1
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #'='
+        CMP
+        JNZ  for_err
+        INP2
+        JSR  EVAL                   ; start value
+        LDA  SAVE1
+        TAP1L
+        LDA  SAVE1+1
+        TAP1H
+        LDA  RESULT
+        STA  (P1)
+        INP1
+        LDA  RESULT+1
+        STA  (P1)
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #TOK_TO
+        CMP
+        JNZ  for_err
+        INP2
+        JSR  EVAL                   ; limit
+        LDA  RESULT
+        STA  FLIM
+        LDA  RESULT+1
+        STA  FLIM+1
+        LDA  #1                     ; default STEP 1
+        STA  FSTEP
+        LDA  #0
+        STA  FSTEP+1
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #TOK_STEP
+        CMP
+        JNZ  for_push
+        INP2
+        JSR  EVAL
+        LDA  RESULT
+        STA  FSTEP
+        LDA  RESULT+1
+        STA  FSTEP+1
+for_push: LDA CURLINE               ; loopline = line after FOR's line
+        TAP1L
+        LDA  CURLINE+1
+        TAP1H
+        INP1
+        INP1
+fp_sk:  LDA  (P1)+
+        JNZ  fp_sk
+        TPA1L
+        STA  GTMP
+        TPA1H
+        STA  GTMP+1
+        LDA  FSP                    ; advance FFP to a fresh frame
+        JNZ  fp_adv
+        LDA  #<FSTK
+        STA  FFP
+        LDA  #>FSTK
+        STA  FFP+1
+        JMP  fp_w
+fp_adv: LDA  FFP
+        LDB  #7
+        ADD
+        STA  FFP
+        JNC  fp_w
+        LDA  FFP+1
+        INC
+        STA  FFP+1
+fp_w:   LDA  FFP                    ; write the frame
+        TAP1L
+        LDA  FFP+1
+        TAP1H
+        LDA  FORVAR
+        STA  (P1)
+        INP1
+        LDA  FLIM
+        STA  (P1)
+        INP1
+        LDA  FLIM+1
+        STA  (P1)
+        INP1
+        LDA  FSTEP
+        STA  (P1)
+        INP1
+        LDA  FSTEP+1
+        STA  (P1)
+        INP1
+        LDA  GTMP
+        STA  (P1)
+        INP1
+        LDA  GTMP+1
+        STA  (P1)
+        LDA  FSP
+        INC
+        STA  FSP
+        RTS
+for_err: JMP  SYNERR
+
+; NEXT [<var>] — step the top FOR loop; loop back or pop the frame
+DONEXT: INP2
+        JSR  SKIPSP
+        LDA  (P2)                   ; optional variable name -> skip it
+        LDB  #'A'
+        SUB
+        JNC  nx_go
+        LDB  #26
+        CMP
+        JC   nx_go
+        INP2
+nx_go:  LDA  FSP
+        JZ   nx_err
+        LDA  FFP                    ; read frame fields
+        TAP1L
+        LDA  FFP+1
+        TAP1H
+        LDA  (P1)
+        STA  FORVAR
+        INP1
+        LDA  (P1)
+        STA  FLIM
+        INP1
+        LDA  (P1)
+        STA  FLIM+1
+        INP1
+        LDA  (P1)
+        STA  FSTEP
+        INP1
+        LDA  (P1)
+        STA  FSTEP+1
+        INP1
+        LDA  (P1)
+        STA  GTMP
+        INP1
+        LDA  (P1)
+        STA  GTMP+1
+        LDA  FORVAR                 ; var = var + step
+        JSR  VARADDR
+        TPA1L
+        STA  SAVE1
+        TPA1H
+        STA  SAVE1+1
+        LDA  (P1)
+        STA  NUM1
+        INP1
+        LDA  (P1)
+        STA  NUM1+1
+        LDA  FSTEP
+        STA  NUM2
+        LDA  FSTEP+1
+        STA  NUM2+1
+        JSR  ADD16
+        LDA  SAVE1
+        TAP1L
+        LDA  SAVE1+1
+        TAP1H
+        LDA  NUM1
+        STA  (P1)
+        INP1
+        LDA  NUM1+1
+        STA  (P1)
+        LDA  FLIM                   ; compare var (NUM1) vs limit
+        STA  NUM2
+        LDA  FLIM+1
+        STA  NUM2+1
+        JSR  CMP16                  ; Z=equal, C=var>=limit
+        JZ   nx_loop                ; var == limit -> loop once more
+        JC   nx_done                ; var > limit -> finished
+        JMP  nx_loop                ; var < limit -> loop
+nx_loop: LDA GTMP
+        STA  JUMPADDR
+        LDA  GTMP+1
+        STA  JUMPADDR+1
+        LDA  #1
+        STA  JUMPF
+        RTS
+nx_done: LDA FSP                    ; pop the frame
+        DEC
+        STA  FSP
+        JZ   nx_ret
+        LDA  FFP
+        LDB  #7
+        SUB
+        STA  FFP
+        JC   nx_ret
+        LDA  FFP+1
+        DEC
+        STA  FFP+1
+nx_ret: RTS
+nx_err: JMP  SYNERR
 
 ;==============================================================================
 ; EXPRESSION EVALUATOR (recursive descent) — result -> RESULT
@@ -1259,6 +1571,8 @@ KWTAB:  .ascii "PRINT"
         .byte $92
         .ascii "POKE"
         .byte $93
+        .ascii "STEP"
+        .byte $94
         .byte $00
 
 ;==============================================================================
@@ -1336,4 +1650,6 @@ MWHAT:  .byte $3F,CR,LF,0
 MSYN:   .ascii "?SYNTAX ERROR"
         .byte CR,LF,0
 MUNDEF: .ascii "?UNDEF'D LINE"
+        .byte CR,LF,0
+MRG:    .ascii "?RETURN WITHOUT GOSUB"
         .byte CR,LF,0

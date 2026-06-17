@@ -18,8 +18,18 @@ the same toolchain and I/O the [ROM monitor](../firmware/p8xmon.asm) uses.
 > RUN        ->  5 4 3 2 1
 > ```
 >
-> Verified in the emulator. Still to come: `FOR/NEXT`, `GOSUB/RETURN`, `INPUT`,
-> multi-statement lines (`:`), signed integers + unary minus, multi-item `PRINT`.
+> Plus `FOR/NEXT` (with `STEP`), `GOSUB/RETURN`. A real program runs:
+>
+> ```
+> 10 LET S=0
+> 20 FOR I=1 TO 5
+> 30 LET S=S+I
+> 40 NEXT I
+> 50 PRINT S      ->  15
+> ```
+>
+> Verified in the emulator. Still to come: `INPUT`, multi-statement lines (`:`),
+> signed integers + unary minus, multi-item `PRINT`, more functions.
 
 ## Direction
 
@@ -80,8 +90,9 @@ bound the spin after end-of-input.
 3. **Expression evaluator** — integer `+ - * /`, parens, variables (A–Z).
    ✅ recursive-descent; 16-bit mul/div helpers. Wired to immediate `PRINT`/`LET`.
 4. **Statements + RUN** — execute the stored program.
-   ✅ `RUN`, `GOTO`, `IF/THEN`, `END`, comparisons. Still to add: `FOR/NEXT`,
-   `GOSUB/RETURN`, `INPUT`, multi-statement lines, multi-item `PRINT`.
+   ✅ `RUN`, `GOTO`, `IF/THEN`, `END`, comparisons, `FOR/NEXT` (+`STEP`),
+   `GOSUB/RETURN`. Still to add: `INPUT`, multi-statement lines, multi-item
+   `PRINT`, signed integers.
 5. **Polish** — error messages, `REM`, multi-statement lines, `RND`/`PEEK`/`POKE`.
 
 ## Open decisions
