@@ -100,6 +100,13 @@ Last updated: 2026-06-11
       (ideally interprets the same EPROM images the hardware will burn, so
       microcode bugs surface in software first); memory map, ACIA-to-stdio,
       CF image file backing; test bed for monitor/OS/BASIC before hardware
+- [ ] **Simple text editor** — a P8X/OS program (TPA at $A000) for editing text
+      files: load a file via the BIOS into a RAM buffer, line-oriented edit
+      (insert/delete/list/replace by line, like the BASIC editor), save back
+      with the OS SAVE path. Serial-console friendly (no cursor addressing
+      needed); a screen/visual mode is a later stretch. Pairs naturally with
+      RUN — write source, save, assemble off-target for now. Could share the
+      line-buffer/rebuild approach already proven in p8xbasic.asm.
 - [ ] Tiny BASIC port (after Forth? Forth kernel is smaller and self-hosting)
 - [ ] Forth kernel — pointer bank makes NEXT 4 cycles; arguably the native
       language of this machine
