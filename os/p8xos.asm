@@ -1,4 +1,4 @@
-; p8xos.asm - P8X/OS v0.3, a RAM-resident disk operating system.
+; p8xos.asm - P8X/OS v0.4, a RAM-resident disk operating system.
 ;
 ; Loaded from CompactFlash to $8000 and entered by the ROM monitor's B command
 ; (which reads OSCNT sectors from LBA 1 and JMPs to $8000). The OS does NOT
@@ -9,16 +9,18 @@
 ;   python3 assembler/p8xasm.py os/p8xos.asm -o p8xos.bin --base 0x8000
 ; then install on a P8XFS image with:  tools/p8xfs.py boot disk.img p8xos.bin
 ;
-; v0.3 shell:
+; v0.4 shell:
 ;   DIR                list the flat P8XFS v1 directory
 ;   LOAD name          read a file into its stored load address
 ;   RUN  name          LOAD it, then JSR its exec address (program RTS -> shell)
 ;   SAVE name start end write memory [start,end) to a new file (hex addresses)
 ;   DEL  name          mark the directory entry deleted ($FF) and write it back
+;   DUMP addr          show 256 bytes from addr (hex + ASCII)
+;   DEP  addr b b ...  deposit hex byte values starting at addr
 ;   HELP
 ; Commands are matched as whole words; a filename argument is parsed, upcased
-; and space-padded to 12 chars; SAVE also parses two hex addresses. Next up:
-; DUMP/DEP and PACK (compaction). See p8x-cf-os-design.md sec 2.5.
+; and space-padded to 12 chars; SAVE/DUMP/DEP parse hex addresses/bytes. Next
+; up: PACK (compaction). See p8x-cf-os-design.md sec 2.5.
 
 ; ---- BIOS jump table (stable ABI, in ROM) ----------------------------------
 CONIN   = $0100          ; wait for key, char -> A
@@ -118,6 +120,12 @@ SHELL:  LDP1 #MPROMPT
         LDP1 #KW_SAVE
         JSR  CMPCMD
         JNZ  DOSAVE
+        LDP1 #KW_DUMP
+        JSR  CMPCMD
+        JNZ  DODUMP
+        LDP1 #KW_DEP
+        JSR  CMPCMD
+        JNZ  DODEP
         LDP1 #MUNK              ; unknown command
         JSR  PUTS
         JMP  SHELL
@@ -323,6 +331,99 @@ SV_ERR: LDP1 #MSVERR
         JSR  PUTS
         JMP  SHELL
 SV_FULL:LDP1 #MDIRFUL
+        JSR  PUTS
+        JMP  SHELL
+
+; ---------------- DUMP addr --------------------------------------------------
+; Show 256 bytes from addr: 16 lines of "AAAA: bb bb ... |ascii|".
+DODUMP: JSR  ARG2P2
+        JSR  GETHEX
+        LDA  MATCH
+        JZ   DU_ERR
+        LDA  HXLO
+        TAP1L
+        LDA  HXHI
+        TAP1H
+        LDA  #16                ; 16 lines
+        STA  CNT
+DU_LINE:TPA1H                   ; "AAAA: "
+        JSR  PHEX8
+        TPA1L
+        JSR  PHEX8
+        LDA  #':'
+        JSR  CONOUT
+        LDA  #' '
+        JSR  CONOUT
+        TPA1L                   ; remember line start for the ASCII pass
+        STA  SRCLO
+        TPA1H
+        STA  SRCHI
+        LDA  #16                ; 16 hex bytes
+        STA  TMP
+DU_HEX: LDA  (P1)+
+        JSR  PHEX8
+        LDA  #' '
+        JSR  CONOUT
+        LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  DU_HEX
+        LDA  #' '
+        JSR  CONOUT
+        LDA  SRCLO              ; rewind to line start for the ASCII column
+        TAP1L
+        LDA  SRCHI
+        TAP1H
+        LDA  #16
+        STA  TMP
+DU_ASC: LDA  (P1)+
+        STA  TMP2
+        LDB  #' '
+        CMP                     ; printable range $20..$7E
+        JNC  DU_DOT
+        LDA  TMP2
+        LDB  #$7F
+        CMP
+        JC   DU_DOT
+        LDA  TMP2
+        JMP  DU_PUT
+DU_DOT: LDA  #'.'
+DU_PUT: JSR  CONOUT
+        LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  DU_ASC
+        JSR  CRLF
+        LDA  CNT
+        DEC
+        STA  CNT
+        JNZ  DU_LINE
+        JMP  SHELL
+DU_ERR: LDP1 #MDUER
+        JSR  PUTS
+        JMP  SHELL
+
+; ---------------- DEP addr b b b... ------------------------------------------
+; Deposit a series of hex byte values starting at addr (low byte of each
+; parsed value is stored). No values = no-op.
+DODEP:  JSR  ARG2P2
+        JSR  GETHEX             ; address
+        LDA  MATCH
+        JZ   DP_ERR
+        LDA  HXLO
+        TAP1L
+        LDA  HXHI
+        TAP1H
+DP_LP:  JSR  GETHEX             ; next byte value
+        LDA  MATCH
+        JZ   DP_END             ; no more values
+        LDA  HXLO
+        STA  (P1)+
+        JMP  DP_LP
+DP_END: LDP1 #MDEPOK
+        JSR  PUTS
+        JMP  SHELL
+DP_ERR: LDP1 #MDPER
         JSR  PUTS
         JMP  SHELL
 
@@ -849,11 +950,13 @@ CRLF:   LDA  #CR
 
 ; ---------------- strings ----------------------------------------------------
 MBANNER: .byte CR,LF
-         .asciiz "P8X/OS v0.3"
+         .asciiz "P8X/OS v0.4"
 MPROMPT: .byte CR,LF
          .asciiz "> "
 MHELP:   .byte CR,LF
-         .asciiz "commands: DIR  LOAD f  RUN f  SAVE f s e  DEL f  HELP"
+         .asciiz "commands: DIR  LOAD f  RUN f  SAVE f s e  DEL f"
+         .byte CR,LF
+         .asciiz "          DUMP a  DEP a b...  HELP"
 MDIRHDR: .byte CR,LF
          .asciiz "NAME            SIZE"
 MUNK:    .byte CR,LF
@@ -870,6 +973,12 @@ MSVERR:  .byte CR,LF
          .asciiz "?SAVE f start end"
 MDIRFUL: .byte CR,LF
          .asciiz "?DIR FULL"
+MDEPOK:  .byte CR,LF
+         .asciiz "OK"
+MDUER:   .byte CR,LF
+         .asciiz "?DUMP addr"
+MDPER:   .byte CR,LF
+         .asciiz "?DEP addr byte..."
 
 KW_DIR:  .asciiz "DIR"
 KW_HELP: .asciiz "HELP"
@@ -877,3 +986,5 @@ KW_LOAD: .asciiz "LOAD"
 KW_RUN:  .asciiz "RUN"
 KW_DEL:  .asciiz "DEL"
 KW_SAVE: .asciiz "SAVE"
+KW_DUMP: .asciiz "DUMP"
+KW_DEP:  .asciiz "DEP"

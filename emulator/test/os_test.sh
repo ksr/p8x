@@ -45,16 +45,19 @@ printf 'hi' > os_h.tmp
 python3 $ROOT/tools/p8xfs.py put os.img os_h.tmp --name HELLO.TXT >/dev/null
 rm -f os_h.tmp prog.asm
 
-out=$(printf 'B\rDIR\rRUN PROG.BIN\rDEL HELLO.TXT\rSAVE C.BIN 8000 8010\rDIR\r' | \
-      ../p8xemu -l 80000000 -c os.img eeprom.bin 2>/dev/null | tr -d '\0')
+out=$(printf 'B\rDIR\rRUN PROG.BIN\rDEL HELLO.TXT\rSAVE C.BIN 8000 8010\rDEP B000 41 42 43\rDUMP B000\rDIR\r' | \
+      ../p8xemu -l 80000000 -c os.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0')
 
 fail() { echo "OS TEST: FAIL — $1"; echo "$out" | sed -n '/P8X\/OS/,$p'; exit 1; }
-echo "$out" | grep -q 'P8X/OS v0.3' || fail "OS did not boot"
+echo "$out" | grep -q 'P8X/OS v0.4' || fail "OS did not boot"
 echo "$out" | grep -q 'PROG.BIN'    || fail "DIR missing PROG.BIN"
 echo "$out" | grep -q 'HELLO.TXT'   || fail "DIR missing HELLO.TXT"
 echo "$out" | grep -q 'RAN'         || fail "RUN did not execute the program"
 echo "$out" | grep -q 'DELETED'     || fail "DEL did not report success"
 echo "$out" | grep -q 'SAVED'       || fail "SAVE did not report success"
+# DEP B000 41 42 43, then DUMP B000 -> the row shows the bytes and ASCII "ABC".
+echo "$out" | grep -q 'B000: 41 42 43' || fail "DEP/DUMP did not show deposited bytes"
+echo "$out" | grep -q 'ABC'            || fail "DUMP ASCII column wrong"
 # After DEL+SAVE, the final DIR (re-read from disk): HELLO.TXT gone, C.BIN added.
 tail=$(echo "$out" | sed -n '/SAVED/,$p')
 echo "$tail" | grep -q 'HELLO.TXT' && fail "HELLO.TXT still listed after DEL" || true

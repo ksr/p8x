@@ -15,15 +15,19 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > | `RUN name` | `LOAD` it, then `JSR` its exec address (program `RTS` → shell) |
 > | `SAVE name start end` | write memory `[start,end)` to a new file (hex addrs) |
 > | `DEL name` | mark the directory entry deleted (`$FF`) and write it back |
+> | `DUMP addr` | show 256 bytes from `addr` (hex + ASCII) |
+> | `DEP addr b b ...` | deposit hex byte values starting at `addr` |
 > | `HELP` | list commands |
 >
 > Commands are matched as whole words; the filename argument is upcased and
-> space-padded to 12 chars; `SAVE` parses two hex addresses. `SAVE` allocates
-> at the boot-block free pointer, copies the range into successive sectors,
-> writes a directory entry (load = exec = `start`), and bumps the free pointer
-> — all persisted, so files survive a reboot and round-trip through
-> `p8xfs.py get`. Still to come: `DUMP`/`DEP`, `PACK` (compaction), and the v2
-> hierarchy (`CD`/`MKDIR`/`TREE`). See the design in
+> space-padded to 12 chars; `SAVE`/`DUMP`/`DEP` parse hex addresses/bytes.
+> `SAVE` allocates at the boot-block free pointer, copies the range into
+> successive sectors, writes a directory entry (load = exec = `start`), and
+> bumps the free pointer — all persisted, so files survive a reboot and
+> round-trip through `p8xfs.py get`. Together `DEP`+`SAVE`+`RUN` let the machine
+> author and run its own programs (deposit machine code, save it, run it). Still
+> to come: `PACK` (compaction) and the v2 hierarchy (`CD`/`MKDIR`/`TREE`). See
+> the design in
 > [hardware/cf-card/p8x-cf-os-design.md](../hardware/cf-card/p8x-cf-os-design.md).
 
 ## How it fits together

@@ -40,13 +40,12 @@ Last updated: 2026-06-11
     - NB: pin/pad-validated only, not DRC'd; the rev-B *behaviour* is proven in
       the emulator (make test-isa). A full Eagle DRC + airwire check before fab
       remains on the VERIFY list.
-- **P8X/OS — remaining shell commands**: DIR/LOAD/RUN/SAVE/DEL are in (see
-  DONE). Next: DUMP addr (hex/ASCII view) and DEP addr b b b... (deposit bytes)
-  — together they make the OS self-sufficient for poking memory without the
-  monitor. Then PACK (compaction): SAVE always allocates at the free pointer
-  and DEL only tombstones, so deleted extents leak until PACK reclaims them by
-  copying live extents down and repointing directory entries (the design's
-  most intricate routine — write it last, test on a scratch image).
+- **P8X/OS — PACK (compaction)**: DIR/LOAD/RUN/SAVE/DEL/DUMP/DEP are in (see
+  DONE). SAVE always allocates at the free pointer and DEL only tombstones, so
+  deleted extents leak until PACK reclaims them by copying live extents down
+  and repointing directory entries (the design's most intricate routine —
+  write it last, test on a scratch image; the host p8xfs.py should grow an
+  fsck to verify a volume before trusting PACK).
 - **P8XFS v2 hierarchy**: upgrade the flat directory to subdirectories
   (directory-is-a-file, `.`/`..`, path resolve) per p8xfs-v2-hierarchical.md —
   CD/MKDIR/RMDIR/TREE. Monitor ROM unchanged (B only reads sig+OSCNT); move
@@ -155,6 +154,12 @@ Last updated: 2026-06-11
 
 ## DONE
 
+- **P8X/OS v0.4 — DUMP + DEP.** DUMP addr shows 256 bytes (16 x "AAAA: 16 hex
+  bytes  ASCII"); DEP addr b b ... deposits a series of hex byte values from
+  addr (reusing the SAVE hex parser + the BIOS PHEX8). Makes the OS
+  self-sufficient for inspecting/poking memory, and closes a self-hosting loop:
+  DEP machine code -> SAVE it -> RUN it (verified end to end — a DEP'd 6-byte
+  program saved and run prints its char). test-os now exercises DEP+DUMP.
 - **BASIC — three build targets from one source.** Parameterized the
   interpreter on BASORG (code origin) + BASRAM (data base); PBUF fixed at
   $C000. Standalone (default $0000/$8000) is byte-identical to before.

@@ -98,6 +98,6 @@ works chip by chip, and any board-specific design docs:
 - Assembler working: two-pass, full expression support, shares opcode table with microcode generator
 - Eagle schematics + boards generated for all 6 cards and backplane
 - ROM monitor boots in the emulator; its filesystem hooks (`I`/`F`/`B`) run end to end against a CF image (`make test-cf`)
-- P8X/OS v0.3 boots from CF: shell with `DIR`/`LOAD`/`RUN`/`SAVE`/`DEL`/`HELP` (creates files on-target); host-side `p8xfs.py` builds disk images (`make test-os`)
+- P8X/OS v0.4 boots from CF: shell with `DIR`/`LOAD`/`RUN`/`SAVE`/`DEL`/`DUMP`/`DEP`/`HELP`; `DEP`+`SAVE`+`RUN` author and run programs on-target; host-side `p8xfs.py` builds disk images (`make test-os`)
 - BASIC builds three ways from one source: standalone, disk-bootable (`B`), and ROM-in-monitor (launched by `X`) (`make test-basic`)
-- **Next:** OS `DUMP`/`DEP` + `PACK` (compaction); P8XFS v2 hierarchy (`CD`/`MKDIR`/`TREE`)
+- **Next:** OS `PACK` (compaction); P8XFS v2 hierarchy (`CD`/`MKDIR`/`TREE`)
