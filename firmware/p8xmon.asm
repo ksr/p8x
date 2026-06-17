@@ -347,8 +347,8 @@ CMD_G:  JSR  GETADDR
 
 ; ---------------- X : launch ROM BASIC ---------------------------------------
 ; BASIC is assembled to $2000 (its cold start) and overlaid into this EEPROM
-; image by the ROM build (see basic/README.md). One-way: BASIC takes over the
-; console; reset returns to the monitor.
+; image by the ROM build (see basic/README.md). BASIC's BYE command jumps back
+; to the reset vector ($0000), returning here.
 CMD_X:  JMP  BASIC
 
 ; ---------------- ? : help ----------------------------------------------------
@@ -701,6 +701,6 @@ MHELP:  .ascii "E AAAA  EXAMINE/MODIFY (HEX=NEW, CR=NEXT, .=EXIT)"
          .byte CR,LF
          .ascii "G AAAA  RUN AT AAAA (RTS RETURNS)"
          .byte CR,LF
-         .ascii "X       RUN ROM BASIC (RESET TO EXIT)"
+         .ascii "X       RUN ROM BASIC (BYE TO EXIT)"
          .byte CR,LF,0
 

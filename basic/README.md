@@ -90,7 +90,7 @@ origin) and `BASRAM` (data base); `PBUF` (rebuild scratch) is fixed at `$C000`.
 | Target | `BASORG` | `BASRAM` | How it runs |
 |--------|----------|----------|-------------|
 | Standalone | `$0000` | `$8000` | burned as the whole ROM; `run.sh` / scripted tests |
-| ROM-in-monitor | `$2000` | `$A000` | overlaid into the monitor ROM; launched by the monitor `X` command |
+| ROM-in-monitor | `$2000` | `$A000` | overlaid into the monitor ROM; launched by the monitor `X` command, `BYE` returns to the monitor |
 | Disk | `$8000` | `$A000` | installed on a P8XFS image; booted by the monitor `B` command |
 
 The standalone build takes no `-D` (the source defaults are `$0000`/`$8000`)
@@ -100,7 +100,7 @@ and is byte-identical to before this split.
 
 ```sh
 python3 tools/build_basic_rom.py p8x-rom-basic.bin   # monitor + BASIC @ $2000
-# boot it; at the monitor '*' prompt press X to enter BASIC (reset to exit)
+# boot it; at the monitor '*' prompt press X to enter BASIC; type BYE to return
 ./emulator/p8xemu p8x-rom-basic.bin                  # (needs u0-u3.bin alongside)
 ```
 

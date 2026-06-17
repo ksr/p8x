@@ -98,6 +98,9 @@ TOK_RND  = $91
 TOK_PEEK = $92
 TOK_POKE = $93
 TOK_STEP = $94
+TOK_BYE  = $95
+
+MONITOR = $0000          ; reset vector — BYE returns here
 
 PROG   = BASRAM+$100          ; program storage
 PBUF   = $C000          ; rebuild scratch buffer
@@ -217,6 +220,10 @@ STMT:   JSR  SKIPSP
         LDB  #TOK_NEW
         CMP
         JZ   st_new
+        LDA  (P2)
+        LDB  #TOK_BYE
+        CMP
+        JZ   DOBYE
         LDA  (P2)            ; bare variable -> implicit LET
         LDB  #'A'
         SUB
@@ -233,6 +240,10 @@ st_new: JSR  NEWPROG
         LDP1 #MOK
         JSR  PUTS
         RTS
+; BYE — leave BASIC by jumping to the reset vector ($0000). In the ROM and
+; disk builds that re-enters the monitor (its ROM lives at $0000); standalone,
+; it just restarts BASIC.
+DOBYE:  JMP  MONITOR
 st_err: LDP1 #MWHAT
         JSR  PUTS
 stmt_nop: RTS
@@ -1973,6 +1984,8 @@ KWTAB:  .ascii "PRINT"
         .byte $93
         .ascii "STEP"
         .byte $94
+        .ascii "BYE"
+        .byte $95
         .byte $00
 
 ;==============================================================================

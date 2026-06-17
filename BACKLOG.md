@@ -153,8 +153,9 @@ Last updated: 2026-06-11
   $C000. Standalone (default $0000/$8000) is byte-identical to before.
   Disk build ($8000/$A000) installs as a bootable P8XFS image and runs via the
   monitor's B; ROM build ($2000/$A000) is overlaid into the monitor EEPROM by
-  tools/build_basic_rom.py and launched by a new monitor X command (one-way;
-  reset to exit). Needed a new assembler `-D NAME=VALUE` (CLI defines that win
+  tools/build_basic_rom.py and launched by a new monitor X command; BASIC's
+  BYE command jumps to the reset vector to return to the monitor. Needed a new
+  assembler `-D NAME=VALUE` (CLI defines that win
   over source `=` defaults). Regression: `make test-basic` (X launches ROM
   BASIC; B boots disk BASIC; a program runs in each). BASIC code is ~4 KB so
   it clears the $A000 data region in both relocated builds.
