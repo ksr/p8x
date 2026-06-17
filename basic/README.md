@@ -28,12 +28,12 @@ the same toolchain and I/O the [ROM monitor](../firmware/p8xmon.asm) uses.
 > 50 PRINT S      ->  15
 > ```
 >
-> Plus `INPUT`, multi-statement lines (`A=1 : PRINT A`), and multi-item `PRINT`
-> (`PRINT A, B; C`). Single-line loops like `FOR I=1 TO 5 : PRINT I; : NEXT`
-> work. Verified in the emulator. Still to come: signed integers + unary minus,
-> functions (`ABS/RND/PEEK/POKE`).
+> Plus `INPUT`, multi-statement lines (`A=1 : PRINT A`), multi-item `PRINT`
+> (`PRINT A, B; C`), single-line loops, and **signed 16-bit integers** with
+> unary minus (`PRINT -5`, `IF A<0`). Verified in the emulator. Still to come:
+> functions (`ABS/RND/PEEK/POKE`), `REM`.
 >
-> Limits: FOR nesting 2 deep, GOSUB 3 deep; integers are unsigned 16-bit.
+> Limits: FOR nesting 2 deep, GOSUB 3 deep.
 
 ## Direction
 

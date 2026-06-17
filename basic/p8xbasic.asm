@@ -807,9 +807,17 @@ nx_go:  LDA  FSP
         INP1
         LDA  NUM1+1
         STA  (P1)
-        LDA  FLIM                   ; compare var (NUM1) vs limit
+        LDA  FLIM                   ; compare var (NUM1) vs limit (signed)
         STA  NUM2
         LDA  FLIM+1
+        STA  NUM2+1
+        LDA  NUM1+1
+        LDB  #$80
+        XOR
+        STA  NUM1+1
+        LDA  NUM2+1
+        LDB  #$80
+        XOR
         STA  NUM2+1
         JSR  CMP16                  ; Z=equal, C=var>=limit
         JZ   nx_loop                ; var == limit -> loop once more
@@ -912,7 +920,15 @@ ev_rhs: LDA  RESULT                 ; left operand
         STA  NUM2
         LDA  RESULT+1
         STA  NUM2+1
-        JSR  CMP16                  ; Z=equal, C=left>=right
+        LDA  NUM1+1                  ; bias by $8000 -> signed ordering
+        LDB  #$80
+        XOR
+        STA  NUM1+1
+        LDA  NUM2+1
+        LDB  #$80
+        XOR
+        STA  NUM2+1
+        JSR  CMP16                  ; Z=equal, C=left>=right (signed)
         JZ   ev_ceq
         JC   ev_cgt
         LDA  #0                     ; left < right
@@ -1079,6 +1095,14 @@ tm_store: LDA NUM1
 
 FACTOR: JSR  SKIPSP
         LDA  (P2)
+        LDB  #'-'                ; unary minus
+        CMP
+        JZ   fa_neg
+        LDA  (P2)
+        LDB  #'+'                ; unary plus (no-op)
+        CMP
+        JZ   fa_plus
+        LDA  (P2)
         LDB  #'('
         CMP
         JZ   fa_par
@@ -1121,6 +1145,27 @@ fa_par: INP2                    ; '('
         JNZ  fa_err
         INP2
         RTS
+fa_plus: INP2                   ; unary plus: skip and parse the factor
+        JMP  FACTOR
+fa_neg: INP2                    ; unary minus: parse factor, negate RESULT
+        JSR  FACTOR
+        LDA  RESULT
+        LDB  #$FF
+        XOR
+        STA  RESULT
+        LDA  RESULT+1
+        LDB  #$FF
+        XOR
+        STA  RESULT+1
+        LDA  RESULT
+        LDB  #1
+        ADD
+        STA  RESULT
+        JNC  fa_nd
+        LDA  RESULT+1
+        INC
+        STA  RESULT+1
+fa_nd:  RTS
 fa_err: JMP  SYNERR
 
 ; VARADDR — A = variable letter; sets P1 = VARS + (letter-'A')*2
@@ -1379,7 +1424,7 @@ ls_l:   LDA  (P1)+
         STA  SAVE1
         TPA1H
         STA  SAVE1+1
-        JSR  PRDEC           ; print LNUM
+        JSR  PRDECU          ; line numbers are unsigned
         LDA  SAVE1
         TAP1L
         LDA  SAVE1+1
@@ -1504,8 +1549,31 @@ pd1:    LDA  (P2)
         JMP  pd1
 pdd:    RTS
 
-; PRDEC — print LNUM as unsigned decimal (no leading zeros)
-PRDEC:  LDA  LNUM
+; PRDEC — print LNUM as SIGNED decimal ('-' for negatives), then magnitude
+PRDEC:  LDA  LNUM+1
+        LDB  #$80
+        AND
+        JZ   PRDECU                 ; positive -> just print
+        LDA  #'-'
+        JSR  PUTC
+        LDA  LNUM                   ; LNUM = -LNUM (two's complement)
+        LDB  #$FF
+        XOR
+        STA  LNUM
+        LDA  LNUM+1
+        LDB  #$FF
+        XOR
+        STA  LNUM+1
+        LDA  LNUM
+        LDB  #1
+        ADD
+        STA  LNUM
+        JNC  PRDECU
+        LDA  LNUM+1
+        INC
+        STA  LNUM+1
+; PRDECU — print LNUM as UNSIGNED decimal (no leading zeros)
+PRDECU: LDA  LNUM
         STA  NUM1
         LDA  LNUM+1
         STA  NUM1+1
@@ -1573,15 +1641,18 @@ cr_lp:  LDA  (P1)
 cr_chr: LDA  (P1)+                  ; no: copy one char
         JSR  CR_PUTW
         JMP  cr_lp
-cr_str: LDA  (P1)+                  ; copy quote + body + closing quote literally
+cr_str: LDA  (P1)+                  ; copy opening quote
         JSR  CR_PUTW
 cr_s1:  LDA  (P1)
         JZ   cr_end
+        LDB  #'"'                   ; closing quote? test BEFORE CR_PUTW clobbers A
+        CMP
+        JZ   cr_sx
         LDA  (P1)+
         JSR  CR_PUTW
-        LDB  #'"'
-        CMP
-        JNZ  cr_s1
+        JMP  cr_s1
+cr_sx:  LDA  (P1)+                  ; copy the closing quote and resume tokenizing
+        JSR  CR_PUTW
         JMP  cr_lp
 cr_end: LDA  #0                     ; terminator
         JSR  CR_PUTW
