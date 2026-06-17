@@ -606,7 +606,10 @@ N(n,"CP0",("U9","!P"),("U11","!P0")); N(n,"CG0",("U9","!G"),("U11","!G0"))
 N(n,"CP1",("U10","!P"),("U11","!P1")); N(n,"CG1",("U10","!G"),("U11","!G1"))
 N(n,"CNX",("U11","CNX"),("U10","CN"))
 N(n,"VCC",("U11","!P2"),("U11","!G2"),("U11","!P3"),("U11","!G3"))
-N(n,"CFLG",("U10","CN4"),("U22","A1"))
+# rev B: C flag is conventional active-high -> invert the raw 74181 Cn+4
+# (active-low) with a spare U25 NAND gate before the flag mux.
+N(n,"CFLG",("U10","CN4"),("U25","2A"),("U25","2B"))
+N(n,"CFLGI",("U25","2Y"),("U22","A1"))
 for b in range(8):
     u="U12" if b<4 else "U13"; i=b%4+1
     N(n,"F%d"%b,("U9" if b<4 else "U10","F%d"%(b%4)),(u,"A%d"%i))
@@ -649,12 +652,12 @@ for u,fld in (("U20","DOE"),("U21","DLD")):
 N(n,"ALUK",("U19","3Y"),("LED4","K"))
 N(n,"LDFK",("U25","3Y"),("LED5","K"))
 N(n,"GND",("U19","4A"),("U19","4B"),("U24","2A"),("U24","2B"),("U24","3A"),
-  ("U24","3B"),("U24","4A"),("U24","4B"),("U25","2A"),("U25","2B"),
+  ("U24","3B"),("U24","4A"),("U24","4B"),
   ("U25","4A"),("U25","4B"),("LED3","K"))
 N(n,"VCC",("RP1","1"),("R4","1"),("R5","1"))
 N(n,"LEDP",("RP1","2"),("LED3","A"))
 N(n,"LEDAL",("R4","2"),("LED4","A")); N(n,"LEDLF",("R5","2"),("LED5","A"))
-card("alu-card","P8X ALU CARD REV A (V FLAG UNIMPLEMENTED - SEE BACKLOG)",ic,sm,n,
+card("alu-card","P8X ALU CARD REV B-partial (carry conventional; flag-reg redesign pending - BACKLOG)",ic,sm,n,
  {"D%d"%i for i in range(8)}|{"DOE%d"%i for i in range(4)}|{"DLD%d"%i for i in range(4)}|
  {"ALUS0","ALUS1","ALUS2","ALUS3","ALUM","CIN","SH0","SH1","LDF","CLK","-RES",
   "FC","FZ","FN","FV"})

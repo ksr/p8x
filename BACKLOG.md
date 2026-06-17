@@ -28,14 +28,22 @@ Last updated: 2026-06-11
     - assembler: char literals may contain space/+/- (tokenizer fix)
     - firmware/p8xmon.asm converted to p8xasm dialect (EQU->=, DB->.byte/
       .ascii, ORG->.org); assembles to 101 symbols; banner, ?, D dump all work
-- **Monitor port — Phase 2 (hardware, after sim works)**: realize the rev B
-  microcode-word changes in the CAD generators —
-    - control card: pipeline-latch remap for the new PSEL2 bit + LDZN
-    - reg-bank card: add the 5th (PT) pointer + widen PSEL decode (74139->74138)
-    - backplane: route PSEL2 on a SPARE line; update bus-definition
-    - ALU card: carry-coupled shifter path (C flag <-> shifter shift in/out)
-  regenerate all CAD + PDFs; the microcode word format currently leads the
-  hardware design.
+- **Monitor port — Phase 2 (hardware)**: realize the rev B microcode-word
+  changes in the CAD generators. DONE: backplane bus allocation (rev C3);
+  control-card pipeline-latch remap; reg-bank 3-bit PSEL decode + PT pointer;
+  ALU conventional-carry inverter on Cn+4.
+  REMAINING — **ALU flag-register redesign** (one interlocking circuit-design
+  task; deferred because it can only be pin-validated here, not DRC'd):
+    - split the C flag onto its own flip-flop (e.g. 7474) with async
+      preset/clear driven by SETC/CLRC; the 74175 can't force one flag.
+    - clock Z,N on (LDF | LDZN); on LDZN take Z from a data-bus zero-detect
+      (8-input NOR on D0-7) and N from D7, via a source mux (ALU vs bus).
+    - carry-coupled shifter: C-flag source mux = shifted-out bit when shifting
+      (F7 if SH0, F0 if SH1) else inverted Cn+4; shifter shift-in mux = current
+      C when SHCIN else CIN (feeds U12.B1 / U15.B4).
+    - then add LDZN/SHCIN/SETC/CLRC to the ALU card's bus set.
+  (Functional behaviour is already proven in the emulator; this just makes the
+  schematic match.)
 - **Emulator: CF-IDE model** ($FF10-17, sector buffer against a P8XFS disk
   image file) so the OS/filesystem work can run emulated end to end.
 

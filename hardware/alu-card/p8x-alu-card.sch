@@ -897,7 +897,7 @@
 <part name="R5" library="p8x" deviceset="RES" device="" value="1K"/>
 <part name="LED5" library="p8x" deviceset="LED" device="" value="LDF-YEL"/>
 </parts><sheets><sheet><plain>
-<text x="0" y="40" size="3.81" layer="97">P8X ALU CARD REV A (V FLAG UNIMPLEMENTED - SEE BACKLOG)</text>
+<text x="0" y="40" size="3.81" layer="97">P8X ALU CARD REV B-partial (carry conventional; flag-reg redesign pending - BACKLOG)</text>
 </plain><instances>
 <instance part="J1" gate="G$1" x="0" y="38.1"/>
 <instance part="U1" gate="G$1" x="140.0" y="38.1"/>
@@ -1775,6 +1775,17 @@
 <segment><pinref part="U10" gate="G$1" pin="CN4"/>
 <wire x1="259.38" y1="-251.46" x2="264.46" y2="-251.46" width="0.1524" layer="91"/>
 <label x="264.46" y="-250.95" size="1.778" layer="95"/></segment>
+<segment><pinref part="U25" gate="G$1" pin="2A"/>
+<wire x1="122.22" y1="-805.18" x2="117.14" y2="-805.18" width="0.1524" layer="91"/>
+<label x="117.14" y="-804.67" size="1.778" layer="95"/></segment>
+<segment><pinref part="U25" gate="G$1" pin="2B"/>
+<wire x1="122.22" y1="-807.72" x2="117.14" y2="-807.72" width="0.1524" layer="91"/>
+<label x="117.14" y="-807.21" size="1.778" layer="95"/></segment>
+</net>
+<net name="CFLGI" class="0">
+<segment><pinref part="U25" gate="G$1" pin="2Y"/>
+<wire x1="157.78" y1="-802.64" x2="162.86" y2="-802.64" width="0.1524" layer="91"/>
+<label x="162.86" y="-802.13" size="1.778" layer="95"/></segment>
 <segment><pinref part="U22" gate="G$1" pin="A1"/>
 <wire x1="223.82" y1="-662.94" x2="218.74" y2="-662.94" width="0.1524" layer="91"/>
 <label x="218.74" y="-662.43" size="1.778" layer="95"/></segment>
@@ -2109,12 +2120,6 @@
 <segment><pinref part="U24" gate="G$1" pin="4B"/>
 <wire x1="427.02" y1="-678.18" x2="421.94" y2="-678.18" width="0.1524" layer="91"/>
 <label x="421.94" y="-677.67" size="1.778" layer="95"/></segment>
-<segment><pinref part="U25" gate="G$1" pin="2A"/>
-<wire x1="122.22" y1="-805.18" x2="117.14" y2="-805.18" width="0.1524" layer="91"/>
-<label x="117.14" y="-804.67" size="1.778" layer="95"/></segment>
-<segment><pinref part="U25" gate="G$1" pin="2B"/>
-<wire x1="122.22" y1="-807.72" x2="117.14" y2="-807.72" width="0.1524" layer="91"/>
-<label x="117.14" y="-807.21" size="1.778" layer="95"/></segment>
 <segment><pinref part="U25" gate="G$1" pin="4A"/>
 <wire x1="122.22" y1="-815.34" x2="117.14" y2="-815.34" width="0.1524" layer="91"/>
 <label x="117.14" y="-814.83" size="1.778" layer="95"/></segment>

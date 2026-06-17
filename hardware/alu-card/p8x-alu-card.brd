@@ -40,7 +40,7 @@
 <wire x1="160" y1="0" x2="160" y2="100" width="0" layer="20"/>
 <wire x1="160" y1="100" x2="0" y2="100" width="0" layer="20"/>
 <wire x1="0" y1="100" x2="0" y2="0" width="0" layer="20"/>
-<text x="4" y="94" size="2.54" layer="21">P8X ALU CARD REV A (V FLAG UNIMPLEMENTED - SEE BACKLOG)</text>
+<text x="4" y="94" size="2.54" layer="21">P8X ALU CARD REV B-partial (carry conventional; flag-reg redesign pending - BACKLOG)</text>
 </plain>
 <libraries><library name="p8x">
 <packages>
@@ -444,6 +444,11 @@
 </signal>
 <signal name="CFLG">
 <contactref element="U10" pad="16"/>
+<contactref element="U25" pad="4"/>
+<contactref element="U25" pad="5"/>
+</signal>
+<signal name="CFLGI">
+<contactref element="U25" pad="6"/>
 <contactref element="U22" pad="2"/>
 </signal>
 <signal name="CG0">
@@ -780,8 +785,6 @@
 <contactref element="U24" pad="10"/>
 <contactref element="U24" pad="12"/>
 <contactref element="U24" pad="13"/>
-<contactref element="U25" pad="4"/>
-<contactref element="U25" pad="5"/>
 <contactref element="U25" pad="12"/>
 <contactref element="U25" pad="13"/>
 <contactref element="LED3" pad="1"/>
