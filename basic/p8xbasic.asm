@@ -52,17 +52,19 @@ GEF    = $808B          ; compare: left >= right
 EQF    = $808C          ; compare: left == right
 LFT    = $808D          ; comparison left operand (2)
 FNDF   = $808F          ; FINDLINE: 1 if line found
-GSTK   = $8090          ; GOSUB return-line-pointer stack (6 x 2 bytes)
+GSTK   = $8090          ; GOSUB return stack (3 x 4 bytes: line record + text ptr)
 GSP    = $809C          ; GOSUB stack depth
 JUMPF  = $809D          ; RUN: 1 -> set CURLINE = JUMPADDR directly
 JUMPADDR= $809E         ; direct jump target (line record pointer)
 GTMP   = $80A0          ; scratch (2)
 FSP    = $80A2          ; FOR stack depth
 FFP    = $80A3          ; pointer to top FOR frame (2)
-FSTK   = $80A5          ; FOR frames (3 x 7): letter, limit(2), step(2), loopline(2)
-FORVAR = $80BA          ; FOR/NEXT scratch: loop variable letter
-FLIM   = $80BB          ; FOR/NEXT scratch: limit (2)
-FSTEP  = $80BD          ; FOR/NEXT scratch: step (2)
+FSTK   = $80A5          ; FOR frames (2 x 9): letter, limit(2), step(2), LR(2), TP(2)
+FORVAR = $80B7          ; FOR/NEXT scratch: loop variable letter
+FLIM   = $80B8          ; FOR/NEXT scratch: limit (2)
+FSTEP  = $80BA          ; FOR/NEXT scratch: step (2)
+FLR    = $80BC          ; FOR/NEXT scratch: loop-back line record (2)
+FTP    = $80BE          ; FOR/NEXT scratch: loop-back text pointer (2)
 VARS   = $80C0          ; variables A-Z: 26 x 2 bytes ($80C0..$80F3)
 
 ; keyword tokens (>= $80 so they never collide with text or the 00 terminator)
@@ -76,6 +78,7 @@ TOK_NEXT = $86
 TOK_GOTO = $87
 TOK_GOSUB = $88
 TOK_RETURN = $89
+TOK_INPUT = $8A
 TOK_END  = $8C
 TOK_RUN  = $8D
 TOK_LIST = $8E
@@ -111,11 +114,31 @@ REPL:   JSR  GETLINE         ; line -> LBUF
         CMP
         JC   RSTMT           ; ch > '9'
         JMP  DOLINE
-RSTMT:  JSR  STMT            ; immediate statement
+RSTMT:  JSR  STMTLINE        ; immediate statement(s)
         JMP  REPL
 
-; STMT — execute the statement at (P2).  RTS when done (reusable by RUN later).
+; STMTLINE — execute a line: ':'-separated statements until end-of-line or a
+; pending branch/jump/end. Used by RUN and immediate mode.
+STMTLINE: JSR STMT
+        LDA  ENDF
+        JNZ  sl_d
+        LDA  BRANCHF
+        JNZ  sl_d
+        LDA  JUMPF
+        JNZ  sl_d
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #':'
+        CMP
+        JNZ  sl_d
+        INP2
+        JMP  STMTLINE
+sl_d:   RTS
+
+; STMT — execute the statement at (P2).  RTS when done.
 STMT:   JSR  SKIPSP
+        LDA  (P2)
+        JZ   stmt_nop               ; empty statement (end of line / after ':')
         LDA  (P2)
         LDB  #TOK_PRINT
         CMP
@@ -148,6 +171,10 @@ STMT:   JSR  SKIPSP
         LDB  #TOK_NEXT
         CMP
         JZ   DONEXT
+        LDA  (P2)
+        LDB  #TOK_INPUT
+        CMP
+        JZ   DOINPUT
         LDA  (P2)
         LDB  #TOK_IF
         CMP
@@ -182,7 +209,7 @@ st_new: JSR  NEWPROG
         RTS
 st_err: LDP1 #MWHAT
         JSR  PUTS
-        RTS
+stmt_nop: RTS
 
 ; SYNERR — abort current statement to the prompt (resets the stack)
 SYNERR: LDP3 #STKTOP
@@ -195,21 +222,23 @@ SYNERR: LDP3 #STKTOP
 ;==============================================================================
 ; PRINT <expr> | PRINT "string" | PRINT
 DOPRINT: INP2                       ; skip PRINT token
-        JSR  SKIPSP
+dp_item: JSR  SKIPSP
         LDA  (P2)
+        JZ   dp_nl                  ; end of statement -> newline
+        LDB  #':'
+        CMP
         JZ   dp_nl
         LDB  #'"'
         CMP
         JZ   dp_str
-        JSR  EVAL                   ; RESULT = value (expr, optional comparison)
+        JSR  EVAL                   ; numeric item
         LDA  RESULT
         STA  LNUM
         LDA  RESULT+1
         STA  LNUM+1
         JSR  PRDEC
-        JSR  CRLF
-        RTS
-dp_str: INP2                        ; skip opening quote
+        JMP  dp_sep
+dp_str: INP2                        ; string literal
 ds_l:   LDA  (P2)
         JZ   dp_nl
         LDB  #'"'
@@ -220,8 +249,29 @@ ds_l:   LDA  (P2)
         INP2
         JMP  ds_l
 ds_e:   INP2
+dp_sep: JSR  SKIPSP
+        LDA  (P2)
+        LDB  #$3B                   ; ';' (byte value: ';' can't be a char literal here)
+        CMP
+        JZ   dp_semi
+        LDB  #','
+        CMP
+        JZ   dp_comma
+        JMP  dp_nl                  ; no separator -> newline
+dp_semi: INP2
+        JMP  dp_more
+dp_comma: INP2
+        LDA  #' '
+        JSR  PUTC
+dp_more: JSR  SKIPSP
+        LDA  (P2)
+        JZ   dp_done                ; trailing separator -> suppress newline
+        LDB  #':'
+        CMP
+        JZ   dp_done
+        JMP  dp_item
 dp_nl:  JSR  CRLF
-        RTS
+dp_done: RTS
 
 ; LET [LET] <var> = <expr>   (LET token optional -> implicit assignment)
 DOLET:  LDA  (P2)
@@ -292,10 +342,10 @@ run_l:  LDA  CURLINE
         TAP2L
         TPA1H
         TAP2H
-        LDA  #0
+run_exec: LDA #0                    ; entry point with P2 already positioned
         STA  BRANCHF
         STA  JUMPF
-        JSR  STMT
+        JSR  STMTLINE
         LDA  ENDF
         JNZ  run_done
         LDA  JUMPF
@@ -323,11 +373,20 @@ run_goto: JSR FINDLINE
         TPA1H
         STA  CURLINE+1
         JMP  run_l
-run_jump: LDA JUMPADDR             ; direct jump (RETURN, NEXT loop-back)
+run_jump: LDA JUMPF                ; 1 = jump to line record; 2 = resume at text ptr
+        LDB  #2
+        CMP
+        JZ   run_resume
+        LDA  JUMPADDR               ; mode 1 (RETURN): CURLINE = JUMPADDR
         STA  CURLINE
         LDA  JUMPADDR+1
         STA  CURLINE+1
         JMP  run_l
+run_resume: LDA JUMPADDR            ; mode 2 (FOR loop-back): P2 = TP, CURLINE preset
+        TAP2L
+        LDA  JUMPADDR+1
+        TAP2H
+        JMP  run_exec
 run_undef: LDP1 #MUNDEF
         JSR  PUTS
         RTS
@@ -406,7 +465,7 @@ DOIF:   INP2
         CMP
         JC   if_stmt
         JMP  DOGOTON
-if_stmt: JMP  STMT
+if_stmt: JMP  STMTLINE        ; THEN clause = rest of the line
 if_false: RTS
 if_err: JMP  SYNERR
 
@@ -416,29 +475,80 @@ DOEND:  INP2
         STA  ENDF
         RTS
 
+; INPUT <var> — prompt "? ", read a number from the console into <var>
+DOINPUT: INP2
+        JSR  SKIPSP
+        LDA  (P2)
+        STA  TMPC
+        LDB  #'A'
+        SUB
+        JNC  in_err
+        LDB  #26
+        CMP
+        JC   in_err
+        LDA  TMPC
+        JSR  VARADDR                ; P1 = &var
+        INP2
+        TPA1L
+        STA  SAVE1
+        TPA1H
+        STA  SAVE1+1
+        TPA2L                       ; save program text pointer
+        STA  GTMP
+        TPA2H
+        STA  GTMP+1
+        LDA  #'?'
+        JSR  PUTC
+        LDA  #' '
+        JSR  PUTC
+        JSR  GETLINE                ; read reply -> LBUF
+        LDP2 #LBUF
+        JSR  SKIPSP
+        JSR  PARSEDEC               ; LNUM = entered value
+        LDA  SAVE1
+        TAP1L
+        LDA  SAVE1+1
+        TAP1H
+        LDA  LNUM
+        STA  (P1)
+        INP1
+        LDA  LNUM+1
+        STA  (P1)
+        LDA  GTMP                   ; restore program text pointer
+        TAP2L
+        LDA  GTMP+1
+        TAP2H
+        RTS
+in_err: JMP  SYNERR
+
 ; GOSUB <line> — push return (line after this one), then branch to <line>
 DOGOSUB: INP2
         JSR  SKIPSP
         JSR  DOGOTON                ; target -> BRANCHN, BRANCHF; P2 past number
-        LDA  CURLINE                ; return = line after current record
-        TAP1L
-        LDA  CURLINE+1
-        TAP1H
-        INP1
-        INP1
-gs_sk:  LDA  (P1)+
-        JNZ  gs_sk
-        TPA1L
+        JSR  SKIPSP                 ; return point = next statement after GOSUB
+        LDA  (P2)
+        LDB  #':'
+        CMP
+        JNZ  gs_tp
+        INP2                        ; skip ':' so resume lands on the next statement
+gs_tp:  TPA2L
         STA  GTMP
-        TPA1H
+        TPA2H
         STA  GTMP+1
-        LDA  GSP                    ; push GTMP -> GSTK[GSP]
+        LDA  GSP                    ; GSTK entry addr = GSTK + GSP*4 -> P2
+        SHL
         SHL
         LDB  #<GSTK
         ADD
         TAP2L
         LDA  #>GSTK
         TAP2H
+        LDA  CURLINE                ; entry = (CURLINE, return-text-ptr)
+        STA  (P2)
+        INP2
+        LDA  CURLINE+1
+        STA  (P2)
+        INP2
         LDA  GTMP
         STA  (P2)
         INP2
@@ -449,12 +559,13 @@ gs_sk:  LDA  (P1)+
         STA  GSP
         RTS
 
-; RETURN — pop a return line and jump to it
+; RETURN — pop a return point and resume just after the GOSUB
 DORET:  INP2
         LDA  GSP
         JZ   ret_err
         DEC
         STA  GSP
+        SHL
         SHL
         LDB  #<GSTK
         ADD
@@ -462,11 +573,17 @@ DORET:  INP2
         LDA  #>GSTK
         TAP2H
         LDA  (P2)
+        STA  CURLINE
+        INP2
+        LDA  (P2)
+        STA  CURLINE+1
+        INP2
+        LDA  (P2)
         STA  JUMPADDR
         INP2
         LDA  (P2)
         STA  JUMPADDR+1
-        LDA  #1
+        LDA  #2
         STA  JUMPF
         RTS
 ret_err: LDP1 #MRG
@@ -536,7 +653,13 @@ DOFOR:  INP2
         STA  FSTEP
         LDA  RESULT+1
         STA  FSTEP+1
-for_push: LDA CURLINE               ; loopline = line after FOR's line
+for_push: JSR SKIPSP                ; loop-back = the statement after FOR
+        LDA  (P2)
+        LDB  #':'
+        CMP
+        JZ   fp_same                ; more on this line -> loop back mid-line
+        ; FOR ends the line -> loop back to the next line
+        LDA  CURLINE
         TAP1L
         LDA  CURLINE+1
         TAP1H
@@ -544,11 +667,28 @@ for_push: LDA CURLINE               ; loopline = line after FOR's line
         INP1
 fp_sk:  LDA  (P1)+
         JNZ  fp_sk
-        TPA1L
-        STA  GTMP
+        TPA1L                       ; P1 = next line record
+        STA  FLR
         TPA1H
-        STA  GTMP+1
-        LDA  FSP                    ; advance FFP to a fresh frame
+        STA  FLR+1
+        INP1
+        INP1
+        TPA1L                       ; TP = its text
+        STA  FTP
+        TPA1H
+        STA  FTP+1
+        JMP  fp_alloc
+fp_same: INP2                       ; advance past ':'
+        TPA2L                       ; loop-back text = right after the ':'
+        STA  FTP
+        TPA2H
+        STA  FTP+1
+        DEP2                        ; leave P2 on the ':' so STMTLINE keeps going now
+        LDA  CURLINE
+        STA  FLR
+        LDA  CURLINE+1
+        STA  FLR+1
+fp_alloc: LDA FSP                   ; advance FFP to a fresh frame
         JNZ  fp_adv
         LDA  #<FSTK
         STA  FFP
@@ -556,14 +696,14 @@ fp_sk:  LDA  (P1)+
         STA  FFP+1
         JMP  fp_w
 fp_adv: LDA  FFP
-        LDB  #7
+        LDB  #9
         ADD
         STA  FFP
         JNC  fp_w
         LDA  FFP+1
         INC
         STA  FFP+1
-fp_w:   LDA  FFP                    ; write the frame
+fp_w:   LDA  FFP                    ; write the 9-byte frame
         TAP1L
         LDA  FFP+1
         TAP1H
@@ -582,10 +722,16 @@ fp_w:   LDA  FFP                    ; write the frame
         LDA  FSTEP+1
         STA  (P1)
         INP1
-        LDA  GTMP
+        LDA  FLR
         STA  (P1)
         INP1
-        LDA  GTMP+1
+        LDA  FLR+1
+        STA  (P1)
+        INP1
+        LDA  FTP
+        STA  (P1)
+        INP1
+        LDA  FTP+1
         STA  (P1)
         LDA  FSP
         INC
@@ -626,10 +772,16 @@ nx_go:  LDA  FSP
         STA  FSTEP+1
         INP1
         LDA  (P1)
-        STA  GTMP
+        STA  FLR
         INP1
         LDA  (P1)
-        STA  GTMP+1
+        STA  FLR+1
+        INP1
+        LDA  (P1)
+        STA  FTP
+        INP1
+        LDA  (P1)
+        STA  FTP+1
         LDA  FORVAR                 ; var = var + step
         JSR  VARADDR
         TPA1L
@@ -663,11 +815,15 @@ nx_go:  LDA  FSP
         JZ   nx_loop                ; var == limit -> loop once more
         JC   nx_done                ; var > limit -> finished
         JMP  nx_loop                ; var < limit -> loop
-nx_loop: LDA GTMP
+nx_loop: LDA FLR                    ; resume at loop-back (CURLINE=LR, P2=TP)
+        STA  CURLINE
+        LDA  FLR+1
+        STA  CURLINE+1
+        LDA  FTP
         STA  JUMPADDR
-        LDA  GTMP+1
+        LDA  FTP+1
         STA  JUMPADDR+1
-        LDA  #1
+        LDA  #2
         STA  JUMPF
         RTS
 nx_done: LDA FSP                    ; pop the frame
@@ -675,7 +831,7 @@ nx_done: LDA FSP                    ; pop the frame
         STA  FSP
         JZ   nx_ret
         LDA  FFP
-        LDB  #7
+        LDB  #9
         SUB
         STA  FFP
         JC   nx_ret
