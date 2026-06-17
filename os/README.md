@@ -17,6 +17,7 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > | `DEL name` | mark the directory entry deleted (`$FF`) and write it back |
 > | `DUMP addr` | show 256 bytes from `addr` (hex + ASCII) |
 > | `DEP addr b b ...` | deposit hex byte values starting at `addr` |
+> | `PACK` | compact the data area, reclaiming the extents `DEL` left behind |
 > | `HELP` | list commands |
 >
 > Commands are matched as whole words; the filename argument is upcased and
@@ -25,9 +26,14 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > successive sectors, writes a directory entry (load = exec = `start`), and
 > bumps the free pointer — all persisted, so files survive a reboot and
 > round-trip through `p8xfs.py get`. Together `DEP`+`SAVE`+`RUN` let the machine
-> author and run its own programs (deposit machine code, save it, run it). Still
-> to come: `PACK` (compaction) and the v2 hierarchy (`CD`/`MKDIR`/`TREE`). See
-> the design in
+> author and run its own programs (deposit machine code, save it, run it).
+> Because `SAVE` always allocates at the free pointer and `DEL` only tombstones,
+> deleted extents leak until **`PACK`** reclaims them: it repeatedly finds the
+> live file with the lowest start LBA at-or-above the running free pointer,
+> copies its extent down, fixes the directory entry, and finally lowers the free
+> pointer. Verify a volume host-side with **`p8xfs.py fsck`** (checks bounds,
+> overlap, and the free pointer; reports reclaimable space). Still to come: the
+> v2 hierarchy (`CD`/`MKDIR`/`TREE`). See the design in
 > [hardware/cf-card/p8x-cf-os-design.md](../hardware/cf-card/p8x-cf-os-design.md).
 
 ## How it fits together

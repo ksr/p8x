@@ -40,12 +40,13 @@ Last updated: 2026-06-11
     - NB: pin/pad-validated only, not DRC'd; the rev-B *behaviour* is proven in
       the emulator (make test-isa). A full Eagle DRC + airwire check before fab
       remains on the VERIFY list.
-- **P8X/OS — PACK (compaction)**: DIR/LOAD/RUN/SAVE/DEL/DUMP/DEP are in (see
-  DONE). SAVE always allocates at the free pointer and DEL only tombstones, so
-  deleted extents leak until PACK reclaims them by copying live extents down
-  and repointing directory entries (the design's most intricate routine —
-  write it last, test on a scratch image; the host p8xfs.py should grow an
-  fsck to verify a volume before trusting PACK).
+- **P8XFS v2 hierarchy**: the flat-FS command set is complete (DIR/LOAD/RUN/
+  SAVE/DEL/DUMP/DEP/PACK + host fsck, see DONE). Next big step is
+  subdirectories per p8xfs-v2-hierarchical.md: directory-is-a-file with `.`/`..`,
+  a shared path-resolve, and CD/MKDIR/RMDIR/TREE; DIR/everything takes a path.
+  Monitor ROM unchanged (B only reads sig+OSCNT); move FORMAT policy onto the
+  OS. p8xfs.py grows mkdir/tree and fsck learns to check `..` links. PACK gets
+  harder (must repoint parents + child `..`), so re-verify it under v2.
 - **P8XFS v2 hierarchy**: upgrade the flat directory to subdirectories
   (directory-is-a-file, `.`/`..`, path resolve) per p8xfs-v2-hierarchical.md —
   CD/MKDIR/RMDIR/TREE. Monitor ROM unchanged (B only reads sig+OSCNT); move
@@ -154,6 +155,18 @@ Last updated: 2026-06-11
 
 ## DONE
 
+- **P8X/OS v0.5 — PACK + host fsck.** PACK compacts the data area: each pass
+  scans the directory for the live file with the smallest start LBA >= the
+  running free pointer, copies its extent down to the free pointer (low-to-high
+  sector copy via SBUF — safe because dst <= src and extents are processed in
+  ascending start order), rewrites that entry's start LBA, and advances the
+  free pointer; finally the boot-block free pointer is lowered. Handles the
+  tricky case where a SAVE reused an early directory slot so directory order
+  != start-LBA order (min-find, not directory order). tools/p8xfs.py fsck
+  verifies a volume (signature, every extent in-bounds, no overlaps, free
+  pointer past the last extent) and reports reclaimable sectors. Verified:
+  create/DEL/PACK leaves fsck-clean volumes with data intact across the moves;
+  test-os runs PACK and fsck-checks the result.
 - **P8X/OS v0.4 — DUMP + DEP.** DUMP addr shows 256 bytes (16 x "AAAA: 16 hex
   bytes  ASCII"); DEP addr b b ... deposits a series of hex byte values from
   addr (reusing the SAVE hex parser + the BIOS PHEX8). Makes the OS

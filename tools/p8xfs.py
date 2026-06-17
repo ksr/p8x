@@ -19,6 +19,7 @@ Usage:
     p8xfs.py put     img file [--name N] [--load A] [--exec A]
     p8xfs.py get     img name [--out path]
     p8xfs.py ls      img
+    p8xfs.py fsck    img                        verify; report reclaimable space
 """
 import sys, os, struct, argparse, math
 
@@ -185,6 +186,60 @@ def cmd_ls(a):
     print("%d file(s)" % n)
 
 
+def cmd_fsck(a):
+    img = read_img(a.img)
+    total = len(img) // SEC
+    errs = []
+    if bytes(img[0:2]) != b"P8":
+        errs.append("bad boot signature %r (want 'P8')" % bytes(img[0:2]))
+    free = get_free(img)
+
+    # Collect live extents (flag $01) as (start, sectors, name).
+    live = []
+    ndel = 0
+    for i in range(DIR_SECS * ENT_PER_SEC):
+        e = unpack_entry(img, i)
+        if e["flags"] == F_END:
+            break
+        if e["flags"] == F_DEL:
+            ndel += 1
+            continue
+        if e["flags"] != F_FILE:
+            continue
+        nm = e["name"].decode("latin1").rstrip()
+        secs = max(1, (e["length"] + SEC - 1) // SEC)
+        s, end = e["start"], e["start"] + secs
+        if s < DATA_LBA:
+            errs.append("%s: start LBA %d below first data LBA %d" % (nm, s, DATA_LBA))
+        if end > total:
+            errs.append("%s: extent %d..%d runs past volume end %d" % (nm, s, end - 1, total))
+        live.append((s, secs, nm))
+
+    # Overlap check (sort by start LBA).
+    live.sort()
+    for (s1, n1, nm1), (s2, n2, nm2) in zip(live, live[1:]):
+        if s1 + n1 > s2:
+            errs.append("overlap: %s (%d..%d) and %s (%d..%d)" %
+                        (nm1, s1, s1 + n1 - 1, nm2, s2, s2 + n2 - 1))
+
+    used = sum(n for _, n, _ in live)
+    hi = max((s + n for s, n, _ in live), default=DATA_LBA)
+    if free < hi:
+        errs.append("free pointer %d < end of last extent %d" % (free, hi))
+    # Sectors between DATA_LBA and the free pointer that no live file occupies
+    # are leaked by DEL and reclaimable by PACK.
+    leaked = (free - DATA_LBA) - used
+
+    print("Volume %s: %d live file(s), %d deleted slot(s)" % (a.img, len(live), ndel))
+    print("  free pointer LBA %d, %d data sector(s) used, %d reclaimable by PACK"
+          % (free, used, max(0, leaked)))
+    if errs:
+        for e in errs:
+            print("  FAIL: " + e)
+        raise SystemExit(1)
+    print("  OK")
+
+
 def main():
     p = argparse.ArgumentParser(prog="p8xfs", description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -205,6 +260,8 @@ def main():
     c.add_argument("--out"); c.set_defaults(fn=cmd_get)
 
     c = sub.add_parser("ls"); c.add_argument("img"); c.set_defaults(fn=cmd_ls)
+
+    c = sub.add_parser("fsck"); c.add_argument("img"); c.set_defaults(fn=cmd_fsck)
 
     a = p.parse_args()
     a.fn(a)

@@ -1,4 +1,4 @@
-; p8xos.asm - P8X/OS v0.4, a RAM-resident disk operating system.
+; p8xos.asm - P8X/OS v0.5, a RAM-resident disk operating system.
 ;
 ; Loaded from CompactFlash to $8000 and entered by the ROM monitor's B command
 ; (which reads OSCNT sectors from LBA 1 and JMPs to $8000). The OS does NOT
@@ -9,7 +9,7 @@
 ;   python3 assembler/p8xasm.py os/p8xos.asm -o p8xos.bin --base 0x8000
 ; then install on a P8XFS image with:  tools/p8xfs.py boot disk.img p8xos.bin
 ;
-; v0.4 shell:
+; v0.5 shell:
 ;   DIR                list the flat P8XFS v1 directory
 ;   LOAD name          read a file into its stored load address
 ;   RUN  name          LOAD it, then JSR its exec address (program RTS -> shell)
@@ -17,10 +17,11 @@
 ;   DEL  name          mark the directory entry deleted ($FF) and write it back
 ;   DUMP addr          show 256 bytes from addr (hex + ASCII)
 ;   DEP  addr b b ...  deposit hex byte values starting at addr
+;   PACK               compact the data area, reclaiming DEL'd extents
 ;   HELP
 ; Commands are matched as whole words; a filename argument is parsed, upcased
-; and space-padded to 12 chars; SAVE/DUMP/DEP parse hex addresses/bytes. Next
-; up: PACK (compaction). See p8x-cf-os-design.md sec 2.5.
+; and space-padded to 12 chars; SAVE/DUMP/DEP parse hex addresses/bytes.
+; Verify a volume host-side with tools/p8xfs.py fsck. See p8x-cf-os-design.md.
 
 ; ---- BIOS jump table (stable ABI, in ROM) ----------------------------------
 CONIN   = $0100          ; wait for key, char -> A
@@ -78,6 +79,20 @@ FREEHI  = $907B
 SRCLO   = $907C          ; running source pointer during the copy
 SRCHI   = $907D
 REM     = $907E          ; sectors remaining in the SAVE write loop
+; ---- PACK working set ----
+NF      = $9080          ; running next-free LBA
+PFOUND  = $9081          ; 1 if this pass found an unpacked extent
+MINSTRT = $9082          ; smallest start LBA >= NF this pass
+MINSEC  = $9083          ; that extent's sector count
+MINPL   = $9084          ; pointer to that entry's start-LBA field (in SBUF)
+MINPH   = $9085
+MINDL   = $9086          ; that entry's directory sector LBA
+ESTART  = $9087          ; current entry start LBA (low byte)
+SRCL    = $9088          ; copy source LBA
+DSTL    = $9089          ; copy dest LBA
+CPYN    = $908A          ; sectors left to copy
+CANDL   = $908B          ; current entry's start-field pointer
+CANDH   = $908C
 
 CR      = $0D
 LF      = $0A
@@ -126,6 +141,9 @@ SHELL:  LDP1 #MPROMPT
         LDP1 #KW_DEP
         JSR  CMPCMD
         JNZ  DODEP
+        LDP1 #KW_PACK
+        JSR  CMPCMD
+        JNZ  DOPACK
         LDP1 #MUNK              ; unknown command
         JSR  PUTS
         JMP  SHELL
@@ -424,6 +442,168 @@ DP_END: LDP1 #MDEPOK
         JSR  PUTS
         JMP  SHELL
 DP_ERR: LDP1 #MDPER
+        JSR  PUTS
+        JMP  SHELL
+
+; ---------------- PACK : compact the data area -------------------------------
+; SAVE always allocates at the free pointer and DEL only tombstones, so deleted
+; extents leak. PACK reclaims them: repeatedly find the live file with the
+; smallest start LBA >= the running free pointer (NF), copy its extent down to
+; NF, fix its directory entry, and advance NF; finally rewrite the boot-block
+; free pointer. Each pass re-scans the directory (entry count is small), and
+; ascending-by-start order guarantees a moved extent never overwrites one not
+; yet processed (dst <= src, low-to-high copy only revisits already-moved
+; sectors). 1-byte LBAs (volumes <= 256 sectors), matching the rest of the OS.
+DOPACK: LDA  #DATALBA
+        STA  NF
+PK_PASS:LDA  #0
+        STA  PFOUND
+        LDA  #DIRLBA
+        STA  DLBA
+PK_SEC: LDP1 #SBUF
+        LDA  DLBA
+        STA  LBA
+        JSR  CFREAD
+        LDP2 #SBUF
+        LDA  #16
+        STA  ECNT
+PK_ENT: LDA  #12                ; skip the 12 name bytes
+        STA  TMP
+PK_NM:  LDA  (P2)+
+        LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  PK_NM
+        TPA2L                   ; remember pointer to the start-LBA field
+        STA  CANDL
+        TPA2H
+        STA  CANDH
+        LDA  (P2)+              ; start LBA (low byte kept, 3 skipped)
+        STA  ESTART
+        LDA  (P2)+
+        LDA  (P2)+
+        LDA  (P2)+
+        LDA  (P2)+              ; length low 16 (for the sector count)
+        STA  LENLO
+        LDA  (P2)+
+        STA  LENHI
+        LDA  (P2)+              ; length high 16 (skip)
+        LDA  (P2)+
+        LDA  (P2)+              ; load + exec (skip 4)
+        LDA  (P2)+
+        LDA  (P2)+
+        LDA  (P2)+
+        LDA  (P2)+              ; flag byte
+        STA  FLAGS
+        LDA  #7                 ; skip spare -> next entry
+        STA  TMP
+PK_SP:  LDA  (P2)+
+        LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  PK_SP
+        LDA  FLAGS
+        JZ   PK_AFTER           ; $00 end marker -> directory scan complete
+        LDB  #F_FILE
+        CMP
+        JNZ  PK_NEXT            ; deleted / non-file -> skip
+        LDA  ESTART             ; live file: already packed (start < NF)?
+        LDB  NF
+        CMP
+        JNC  PK_NEXT            ; ESTART < NF -> skip
+        JSR  SECCOUNT           ; SECCNT = sectors for this extent
+        LDA  PFOUND
+        JZ   PK_TAKE            ; first candidate this pass
+        LDA  ESTART             ; else keep the smaller start
+        LDB  MINSTRT
+        CMP
+        JC   PK_NEXT            ; ESTART >= MINSTRT -> not smaller
+PK_TAKE:LDA  #1
+        STA  PFOUND
+        LDA  ESTART
+        STA  MINSTRT
+        LDA  SECCNT
+        STA  MINSEC
+        LDA  CANDL
+        STA  MINPL
+        LDA  CANDH
+        STA  MINPH
+        LDA  DLBA
+        STA  MINDL
+PK_NEXT:LDA  ECNT
+        DEC
+        STA  ECNT
+        JNZ  PK_ENT
+        LDA  DLBA
+        INC
+        STA  DLBA
+        LDB  #DATALBA
+        CMP                     ; DLBA >= 65 -> scanned the whole directory
+        JC   PK_AFTER
+        JMP  PK_SEC
+PK_AFTER:LDA PFOUND
+        JZ   PK_FIN             ; nothing left to move
+        LDA  MINSTRT
+        LDB  NF
+        CMP
+        JZ   PK_ADV             ; extent already at NF
+        LDA  MINSTRT            ; copy MINSEC sectors  src=MINSTRT -> dst=NF
+        STA  SRCL
+        LDA  NF
+        STA  DSTL
+        LDA  MINSEC
+        STA  CPYN
+PK_CPY: LDP1 #SBUF
+        LDA  SRCL
+        STA  LBA
+        JSR  CFREAD             ; src sector -> SBUF
+        LDA  DSTL
+        STA  LBA
+        JSR  CFWRITE            ; SBUF -> dst sector
+        LDA  SRCL
+        INC
+        STA  SRCL
+        LDA  DSTL
+        INC
+        STA  DSTL
+        LDA  CPYN
+        DEC
+        STA  CPYN
+        JNZ  PK_CPY
+        LDP1 #SBUF              ; rewrite the entry's start LBA = NF
+        LDA  MINDL
+        STA  LBA
+        JSR  CFREAD
+        LDA  MINPL
+        TAP1L
+        LDA  MINPH
+        TAP1H
+        LDA  NF
+        STA  (P1)+
+        LDA  #0
+        STA  (P1)+
+        STA  (P1)+
+        STA  (P1)+
+        LDA  MINDL
+        STA  LBA
+        JSR  CFWRITE
+PK_ADV: LDA  NF                 ; NF += MINSEC
+        LDB  MINSEC
+        ADD
+        STA  NF
+        JMP  PK_PASS
+PK_FIN: LDP1 #SBUF              ; write the new free pointer into the boot block
+        LDA  #0
+        STA  LBA
+        JSR  CFREAD
+        LDA  NF
+        STA  SBUF+4
+        LDA  #0
+        STA  SBUF+5
+        LDA  #0
+        STA  LBA
+        JSR  CFWRITE
+        LDP1 #MPACKED
         JSR  PUTS
         JMP  SHELL
 
@@ -950,13 +1130,13 @@ CRLF:   LDA  #CR
 
 ; ---------------- strings ----------------------------------------------------
 MBANNER: .byte CR,LF
-         .asciiz "P8X/OS v0.4"
+         .asciiz "P8X/OS v0.5"
 MPROMPT: .byte CR,LF
          .asciiz "> "
 MHELP:   .byte CR,LF
          .asciiz "commands: DIR  LOAD f  RUN f  SAVE f s e  DEL f"
          .byte CR,LF
-         .asciiz "          DUMP a  DEP a b...  HELP"
+         .asciiz "          DUMP a  DEP a b...  PACK  HELP"
 MDIRHDR: .byte CR,LF
          .asciiz "NAME            SIZE"
 MUNK:    .byte CR,LF
@@ -979,6 +1159,8 @@ MDUER:   .byte CR,LF
          .asciiz "?DUMP addr"
 MDPER:   .byte CR,LF
          .asciiz "?DEP addr byte..."
+MPACKED: .byte CR,LF
+         .asciiz "PACKED"
 
 KW_DIR:  .asciiz "DIR"
 KW_HELP: .asciiz "HELP"
@@ -988,3 +1170,4 @@ KW_DEL:  .asciiz "DEL"
 KW_SAVE: .asciiz "SAVE"
 KW_DUMP: .asciiz "DUMP"
 KW_DEP:  .asciiz "DEP"
+KW_PACK: .asciiz "PACK"
