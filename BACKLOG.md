@@ -185,25 +185,26 @@ Last updated: 2026-06-11
 - [ ] FAT-style cluster allocation to eliminate PACK (P8XFS v3, entry format
       already compatible)
 - [ ] DS1302 RTC on I/O card → file timestamps
-- [ ] Interrupt support — HARDWARE CONTROLLER (architecture done, see DONE).
-      The microcode/emulator/ISA side is implemented and tested (EI/DI/RTI, $08
-      IRQ entry, vector $0808, $FF06 raises IRQ in the emulator). What remains is
-      the physical control-card circuit, which is BIGGER than the old "one 74244"
-      note — it's a bus-critical, partly cross-card subsystem:
-        - 74244 forcing buffer (hardwired $08) onto the data bus
-        - IE flip-flop + IRQ-pending latch (7474)
-        - opcode decode for EI/DI/RTI (drives IE) + a fetch/step-0 detector
-        - service sequencer so the buffer drives $08 at the injected fetch AND
-          during the two PTR-load steps (DOE=idle) -> P0=$0808
+- [ ] Interrupt support — HARDWARE CONTROLLER WIRING (architecture done +
+      footprints provisioned DNP, see DONE). The microcode/emulator/ISA side is
+      implemented and tested (EI/DI/RTI, $08 IRQ entry, vector $0808, $FF06
+      raises IRQ in the emulator). The control card now carries DNP footprints
+      U20 (74244 forcing buffer) + U21 (7474 IE/pending FF) and B29 = IRQ is a
+      reserved bus line; the safe connections are wired (buffer inputs = $08,
+      outputs forced high-Z, IRQ -> FF). What remains is the BUS-CRITICAL wiring,
+      to design with DRC/breadboard before populating:
+        - connect U20 outputs (Y1-8) onto the data bus (currently unwired)
+        - opcode decode for EI/DI/RTI (drives the IE FF) + a fetch/step-0 detector
+        - service sequencer so the buffer enable (!G) asserts at the injected
+          fetch AND during the two PTR-load steps (DOE=idle) -> P0=$0808, and is
+          off otherwise (currently !G is tied high = permanently disabled)
         - SUPPRESS the memory read during the injected fetch (cross-card: gate
           the memory card's -RD/-OE with the IRQ-service signal) so the buffer
           isn't fighting the EEPROM on the bus
-        - IRQ input on a spare bus line (B29 free)
       RISK: it drives the shared data bus; a wiring error = bus contention = dead
       machine, and there's no DRC backstop in the generator. Recommend designing
-      it deliberately (breadboard/DRC, or a small daughtercard) rather than
-      blind-adding to a board about to be fabbed. Monitor needs an ORG $0808 stub
-      (JMP to a handler / RAM trampoline) once the hardware exists.
+      it deliberately (breadboard/DRC, or a small daughtercard). Monitor needs an
+      ORG $0808 stub (JMP to a handler / RAM trampoline) once the hardware exists.
 - [ ] p8x.pretty KiCad footprint lib if ever returning to KiCad round-trip
 - [ ] **I/O card in the emulator** — make the switches/LEDs interactive. The
       emulator stubs them: $FF00 (switches) always reads 0 and $FF02 (LEDs) is

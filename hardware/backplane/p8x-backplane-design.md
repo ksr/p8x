@@ -19,13 +19,14 @@ Summary for quick reference (rev C2):
 | 22–23 | PINC, PDEC | GND | ALUS3, ALUM |
 | 24–25 | CLK, CLKB | GND | CIN, SH0 |
 | 26–27 | LDF, FC | GND, CLRC | SH1, PSEL2 |
-| 28–30 | FZ, FN, FV | BSEL, SPARE10–11 | LDZN, SHCIN, SETC |
+| 28–30 | FZ, FN, FV | BSEL, IRQ, SPARE11 | LDZN, SHCIN, SETC |
 | 31–32 | GND | GND | GND |
 
 A27–A30 = FC/FZ/FN/FV (flag lines; were SPARE0–3 in rev C1).
 rev C3: C27–C30 = PSEL2/LDZN/SHCIN/SETC and B27 = CLRC (were SPARE4–8).
-rev C: B28 = BSEL (ALU B-input mux select, was SPARE9); SPARE10–11 remain on
-B29–B30. See p8x-bus-definition.md for the authoritative map.
+rev C: B28 = BSEL (ALU B-input mux select, was SPARE9), B29 = IRQ (interrupt
+request, was SPARE10); SPARE11 remains on B30. See p8x-bus-definition.md for the
+authoritative map.
 
 Signal positions are unchanged from rev B wherever they existed, so only the
 power pins moved. **Rev B cards are incompatible** (rev B grounded B2; rev C

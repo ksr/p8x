@@ -2711,7 +2711,7 @@
 <wire x1="424.18" y1="-393.70" x2="419.10" y2="-393.70" width="0.1524" layer="91"/>
 <label x="419.10" y="-393.19" size="1.778" layer="95"/></segment>
 </net>
-<net name="SPARE10" class="0">
+<net name="IRQ" class="0">
 <segment><pinref part="J1" gate="G$1" pin="B29"/>
 <wire x1="17.78" y1="-114.30" x2="12.70" y2="-114.30" width="0.1524" layer="91"/>
 <label x="12.70" y="-113.79" size="1.778" layer="95"/></segment>

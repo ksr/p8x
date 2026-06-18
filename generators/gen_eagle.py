@@ -21,7 +21,7 @@ def busnet(pin):
     r,n=pin[0],int(pin[1:])
     if n in (1,2): return "VCC"
     if n in (31,32): return "GND"
-    if r=="B": return {27:"CLRC",28:"BSEL",29:"SPARE10",30:"SPARE11"}.get(n,"GND")
+    if r=="B": return {27:"CLRC",28:"BSEL",29:"IRQ",30:"SPARE11"}.get(n,"GND")
     if r=="A":
         if 3<=n<=10: return "D%d"%(n-3)
         if n==11: return "-RES"
@@ -32,7 +32,8 @@ def busnet(pin):
     if 3<=n<=18: return "A%d"%(n-3)
     if 19<=n<=22: return "ALUS%d"%(n-19)
     # rev C3: C27-30 + B27 carry the rev-B control signals. B28=BSEL (rev C: ALU
-    # B-input mux select); SPARE10-11 remain on B29-30
+    # B-input mux select); B29=IRQ (rev C, reserved for the interrupt controller);
+    # SPARE11 remains on B30
     return {23:"ALUM",24:"CIN",25:"SH0",26:"SH1",
             27:"PSEL2",28:"LDZN",29:"SHCIN",30:"SETC"}.get(n,"SPARE%d"%(n-27+4))
 
@@ -401,7 +402,13 @@ ic={"U1":("74161","CLK DIV"),"U2":("HEX14","74HCT14"),"U3":("7474","74HCT74"),
  "U12":("28C64","UCODE ROM2"),"U13":("28C64","UCODE ROM3"),
  "U14":("74374","PIPE0"),"U15":("74374","PIPE1"),"U16":("74374","PIPE2"),
  "U17":("74374","PIPE3"),"U18":("74161","STEP CNT"),
- "U19":("GATES14","74HCT86 NV-XOR")}   # rev C: N^V for signed-compare cond mux
+ "U19":("GATES14","74HCT86 NV-XOR"),   # rev C: N^V for signed-compare cond mux
+ # rev C: interrupt-controller footprints, provisioned DNP (Do Not Populate).
+ # Pads + the IRQ bus line exist so the controller can be built post-fab WITHOUT
+ # a respin, but the bus-critical bits (the forcing-buffer OUTPUTS onto the data
+ # bus, the service/enable sequencer, and the memory -RD suppression) are
+ # deliberately NOT wired here — they must be designed with DRC/breadboard first.
+ "U20":("74244","IRQ-FORCE DNP"),"U21":("7474","IRQ/IE FF DNP")}
 sm={"X1":("OSC","4MHZ"),"JP1":("HDR4","CLKSEL"),
  "SWR":("SW2","RUN/HALT"),"SWS":("SW2","STEP"),"SWT":("SW2","RESET"),
  "R1":("RES","10K"),"R2":("RES","10K"),"R3":("RES","10K"),"C1":("CAP","1U"),
@@ -460,6 +467,19 @@ N(n,"NV",("U9","D6"))
 N(n,"NV",("U6","4A")); N(n,"FZ",("U6","4B")); N(n,"NVZ",("U6","4Y"))
 N(n,"NVZ",("U9","D7"))
 N(n,"GND",("U19","2A"),("U19","2B"),("U19","3A"),("U19","3B"),("U19","4A"),("U19","4B"))
+# rev C interrupt-controller footprints (DNP): only the SAFE, populate-ready
+# connections. The forcing buffer holds its outputs DISABLED (high-Z) and carries
+# the fixed $08 pattern on its inputs; the IRQ bus line reaches the FF. The buffer
+# OUTPUTS (Y1-8 onto the data bus), the service/enable sequencer, the EI/DI/RTI
+# opcode decode, and the memory -RD suppression are intentionally NOT wired here.
+N(n,"VCC",("U20","!G1"),("U20","!G2"))                 # outputs forced high-Z
+N(n,"VCC",("U20","A4"))                                # $08 input pattern: bit3 high
+N(n,"GND",("U20","A1"),("U20","A2"),("U20","A3"),
+          ("U20","A5"),("U20","A6"),("U20","A7"),("U20","A8"))
+N(n,"IRQ",("U21","1D"))                                # reserved IRQ line (B29) -> pending FF
+N(n,"-RES",("U21","!1CLR"),("U21","!2CLR"))            # power-up reset (safe if populated)
+N(n,"VCC",("U21","!1PRE"),("U21","!2PRE"))
+N(n,"GND",("U21","1CLK"),("U21","2D"),("U21","2CLK"))  # inactive defaults
 # rev B 32-bit control word -> pipeline latches U14..U17 (8 bits each).
 # Word bit b is latch U[14 + b//8], output Q[(b%8)+1].
 PIPE={14:["DOE0","DOE1","DOE2","DOE3","DLD0","DLD1","DLD2","DLD3"],
@@ -479,7 +499,7 @@ N(n,"LEDRN",("R4","2"),("LED4","A")); N(n,"LEDHL",("R5","2"),("LED5","A"))
 card("control-card","P8X CONTROL/MICROCODE CARD REV B",ic,sm,n,
  {"D%d"%i for i in range(8)}|{"DOE%d"%i for i in range(4)}|{"DLD%d"%i for i in range(4)}|
  {"PSEL0","PSEL1","PSEL2","PINC","PDEC","ALUS0","ALUS1","ALUS2","ALUS3","ALUM","CIN","SH0","SH1",
-  "LDF","CLK","CLKB","-RES","FC","FZ","FN","FV","LDZN","SHCIN","SETC","CLRC","BSEL"})
+  "LDF","CLK","CLKB","-RES","FC","FZ","FN","FV","LDZN","SHCIN","SETC","CLRC","BSEL","IRQ"})
 
 # ===================== REGISTER BANK CARD =====================================
 n={}; ic={}
@@ -1021,7 +1041,7 @@ vadd("CLKB",(240.50,106.68))
 wadd("CLKB_T",(228.60,106.68,213.36,106.68,1,0.4))
 wadd("LED_A",(25.40,7.62,30.48,7.62,1,0.4))
 for nn in range(27,31):
-    y=py(nn); net=busnet("B%d"%nn)   # B27=CLRC, B28=BSEL (rev C), B29-30=SPARE10-11
+    y=py(nn); net=busnet("B%d"%nn)   # B27=CLRC, B28=BSEL, B29=IRQ (rev C), B30=SPARE11
     wadd(net,(sx(0)-2.54,y-1.27,sx(9)-2.54,y-1.27,1,0.4))
     for i in range(10):
         wadd(net,(sx(i)-2.54,y,sx(i)-2.54,y-1.27,1,0.4))

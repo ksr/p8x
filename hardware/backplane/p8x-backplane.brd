@@ -1202,6 +1202,29 @@
 <vertex x="0" y="109.22"/>
 </polygon>
 </signal>
+<signal name="IRQ">
+<contactref element="J1" pad="B29"/>
+<contactref element="J2" pad="B29"/>
+<contactref element="J3" pad="B29"/>
+<contactref element="J4" pad="B29"/>
+<contactref element="J5" pad="B29"/>
+<contactref element="J6" pad="B29"/>
+<contactref element="J7" pad="B29"/>
+<contactref element="J8" pad="B29"/>
+<contactref element="J9" pad="B29"/>
+<contactref element="J10" pad="B29"/>
+<wire x1="12.70" y1="21.59" x2="241.30" y2="21.59" width="0.4" layer="1"/>
+<wire x1="12.70" y1="22.86" x2="12.70" y2="21.59" width="0.4" layer="1"/>
+<wire x1="38.10" y1="22.86" x2="38.10" y2="21.59" width="0.4" layer="1"/>
+<wire x1="63.50" y1="22.86" x2="63.50" y2="21.59" width="0.4" layer="1"/>
+<wire x1="88.90" y1="22.86" x2="88.90" y2="21.59" width="0.4" layer="1"/>
+<wire x1="114.30" y1="22.86" x2="114.30" y2="21.59" width="0.4" layer="1"/>
+<wire x1="139.70" y1="22.86" x2="139.70" y2="21.59" width="0.4" layer="1"/>
+<wire x1="165.10" y1="22.86" x2="165.10" y2="21.59" width="0.4" layer="1"/>
+<wire x1="190.50" y1="22.86" x2="190.50" y2="21.59" width="0.4" layer="1"/>
+<wire x1="215.90" y1="22.86" x2="215.90" y2="21.59" width="0.4" layer="1"/>
+<wire x1="241.30" y1="22.86" x2="241.30" y2="21.59" width="0.4" layer="1"/>
+</signal>
 <signal name="LDF">
 <contactref element="J1" pad="A26"/>
 <contactref element="J2" pad="A26"/>
@@ -1349,29 +1372,6 @@
 <contactref element="J9" pad="C29"/>
 <contactref element="J10" pad="C29"/>
 <wire x1="10.16" y1="22.86" x2="238.76" y2="22.86" width="0.4" layer="16"/>
-</signal>
-<signal name="SPARE10">
-<contactref element="J1" pad="B29"/>
-<contactref element="J2" pad="B29"/>
-<contactref element="J3" pad="B29"/>
-<contactref element="J4" pad="B29"/>
-<contactref element="J5" pad="B29"/>
-<contactref element="J6" pad="B29"/>
-<contactref element="J7" pad="B29"/>
-<contactref element="J8" pad="B29"/>
-<contactref element="J9" pad="B29"/>
-<contactref element="J10" pad="B29"/>
-<wire x1="12.70" y1="21.59" x2="241.30" y2="21.59" width="0.4" layer="1"/>
-<wire x1="12.70" y1="22.86" x2="12.70" y2="21.59" width="0.4" layer="1"/>
-<wire x1="38.10" y1="22.86" x2="38.10" y2="21.59" width="0.4" layer="1"/>
-<wire x1="63.50" y1="22.86" x2="63.50" y2="21.59" width="0.4" layer="1"/>
-<wire x1="88.90" y1="22.86" x2="88.90" y2="21.59" width="0.4" layer="1"/>
-<wire x1="114.30" y1="22.86" x2="114.30" y2="21.59" width="0.4" layer="1"/>
-<wire x1="139.70" y1="22.86" x2="139.70" y2="21.59" width="0.4" layer="1"/>
-<wire x1="165.10" y1="22.86" x2="165.10" y2="21.59" width="0.4" layer="1"/>
-<wire x1="190.50" y1="22.86" x2="190.50" y2="21.59" width="0.4" layer="1"/>
-<wire x1="215.90" y1="22.86" x2="215.90" y2="21.59" width="0.4" layer="1"/>
-<wire x1="241.30" y1="22.86" x2="241.30" y2="21.59" width="0.4" layer="1"/>
 </signal>
 <signal name="SPARE11">
 <contactref element="J1" pad="B30"/>
