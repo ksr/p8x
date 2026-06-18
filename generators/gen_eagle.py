@@ -863,7 +863,10 @@ mc_parts={
  "RS1":("RES","1K",553.72,7.62),"LED2":("LED","ROM-YEL",604.52,7.62),
  "RS2":("RES","1K",553.72,-22.86),"LED4":("LED","RAM-YEL",604.52,-22.86),
  "RS3":("RES","1K",553.72,-53.34),"LED5":("LED","RD-GRN",604.52,-53.34),
- "RS4":("RES","1K",553.72,-83.82),"LED6":("LED","WR-RED",604.52,-83.82)}
+ "RS4":("RES","1K",553.72,-83.82),"LED6":("LED","WR-RED",604.52,-83.82),
+ # rev C: ROM write-protect jumper. 3-pin select on the 28C256 !WE only:
+ # 1-2 = -WE (writable, default), 2-3 = VCC (write-protected). RAM stays on -WE.
+ "JWP":("HDR3","ROM-WP",487.68,-76.20)}
 mcn={}
 def mnet(n,*p): mcn.setdefault(n,[]).extend(p)
 for i in range(8):
@@ -883,7 +886,11 @@ for i in range(4):
 mnet("-RD",("U5","Y7"),("U1","!OE"),("U2","!OE"),("U3","DIR"),("U9","1A"))
 mnet("-MEMW",("U6","Y7"),("U8","1A"),("U9","1B"))
 mnet("CLK",("J1","A24"),("U8","1B"))
-mnet("-WE",("U8","1Y"),("U1","!WE"),("U2","!WE"))
+# RAM !WE is always on -WE; ROM !WE routes through the JWP select header so it
+# can be write-protected (jumper 2-3 -> VCC) without affecting RAM writes.
+mnet("-WE",("U8","1Y"),("U2","!WE"),("JWP","1"))
+mnet("ROMWE",("JWP","2"),("U1","!WE"))   # header centre -> 28C256 !WE
+mnet("VCC",("JWP","3"))                   # protect position: !WE held high
 mnet("-BOE",("U9","1Y"),("U3","!OE"))
 mnet("VCC",*[("J1",p) for p in("A1","B1","C1","A2","B2","C2")],
   ("U1","VCC"),("U2","VCC"),("U3","VCC"),("U4","VCC"),("U5","VCC"),("U5","G1"),
@@ -928,7 +935,8 @@ mcb_parts={
  "RS1":("RES","1K",127.00,91.44),"LED2":("LED","ROM-YEL",142.24,91.44),
  "RS2":("RES","1K",127.00,86.36),"LED4":("LED","RAM-YEL",142.24,86.36),
  "RS3":("RES","1K",127.00,81.28),"LED5":("LED","RD-GRN",142.24,81.28),
- "RS4":("RES","1K",127.00,76.20),"LED6":("LED","WR-RED",142.24,76.20)}
+ "RS4":("RES","1K",127.00,76.20),"LED6":("LED","WR-RED",142.24,76.20),
+ "JWP":("HDR3","ROM-WP",128.00,35.56)}   # rev C: ROM write-protect jumper
 for i,u in enumerate(MCIC):                      # decoupling cap beside each IC
     dev,val,x,y=mcb_parts[u]
     mcb_parts["CD%d"%(i+1)]=("CAP","100N",x,y-10.16)

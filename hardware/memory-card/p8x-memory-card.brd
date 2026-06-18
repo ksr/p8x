@@ -238,6 +238,12 @@
 <pad name="28" x="15.24" y="-0.00" drill="0.8128" diameter="1.6"/>
 <text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
 </package>
+<package name="HDR3">
+<pad name="1" x="0.00" y="-0.00" drill="0.9" diameter="1.8"/>
+<pad name="2" x="0.00" y="-2.54" drill="0.9" diameter="1.8"/>
+<pad name="3" x="0.00" y="-5.08" drill="0.9" diameter="1.8"/>
+<text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
+</package>
 <package name="LED5">
 <pad name="2" x="0.00" y="0.00" drill="0.9" diameter="1.8"/>
 <pad name="1" x="2.54" y="0.00" drill="0.9" diameter="1.8"/>
@@ -273,6 +279,7 @@
 <element name="LED5" library="p8x" package="LED5" value="RD-GRN" x="142.24" y="81.28"/>
 <element name="RS4" library="p8x" package="R_AXIAL" value="1K" x="127.00" y="76.20"/>
 <element name="LED6" library="p8x" package="LED5" value="WR-RED" x="142.24" y="76.20"/>
+<element name="JWP" library="p8x" package="HDR3" value="ROM-WP" x="128.00" y="35.56"/>
 <element name="CD1" library="p8x" package="C_DISC" value="100N" x="17.78" y="73.66"/>
 <element name="CD2" library="p8x" package="C_DISC" value="100N" x="43.18" y="73.66"/>
 <element name="CD3" library="p8x" package="C_DISC" value="100N" x="68.58" y="73.66"/>
@@ -316,8 +323,8 @@
 </signal>
 <signal name="-WE">
 <contactref element="U8" pad="3"/>
-<contactref element="U1" pad="27"/>
 <contactref element="U2" pad="27"/>
+<contactref element="JWP" pad="1"/>
 </signal>
 <signal name="A0">
 <contactref element="J1" pad="C3"/>
@@ -617,7 +624,12 @@
 <contactref element="U8" pad="8"/>
 <contactref element="LED2" pad="1"/>
 </signal>
+<signal name="ROMWE">
+<contactref element="JWP" pad="2"/>
+<contactref element="U1" pad="27"/>
+</signal>
 <signal name="VCC">
+<contactref element="JWP" pad="3"/>
 <contactref element="J1" pad="A1"/>
 <contactref element="J1" pad="B1"/>
 <contactref element="J1" pad="C1"/>

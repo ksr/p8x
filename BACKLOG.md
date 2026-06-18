@@ -228,12 +228,18 @@ Last updated: 2026-06-11
       populate RC terminators (RT1/CT1, RT2/CT2 shipped DNP)
 - [ ] Backplane PWR LED: already in design (RL1 + LED1, currently bottom-left)
       — confirm placement or move top-right to match card standard §9
-- [ ] EEPROM write protection: decide if WE̅ to 28C256 should be jumpered off
-      after monitor is stable (protects ROM from runaway code)
 - [ ] PSU sizing: ~75 LS/HCT chips, measure actual draw at bring-up vs 4–5 A
       budget
 
 ## DONE
+
+- **EEPROM ROM write-protect jumper (rev C).** Added a 3-pin select header
+  `JWP` (HDR3) on the memory card in the 28C256 `!WE` path: jumper 1-2 routes
+  `!WE` to the live `-WE` net (writable, the default), 2-3 ties it to VCC
+  (write-protected, immune to runaway-code writes). The 62256 RAM stays on
+  `-WE` unconditionally, so write-protecting the ROM doesn't touch RAM. Memory
+  card regenerates with 0 validation errors. Assembly note: a jumper must be
+  installed (1-2 by default) — leaving the header open floats the ROM `!WE`.
 
 - **Second ALU-input mux (rev C) — B-side can take T.** Added a 2:1 mux on the
   ALU card B-operand path (U32/U33, 74157 ×2): B register when `BSEL=0`, T
