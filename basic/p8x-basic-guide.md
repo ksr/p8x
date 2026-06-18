@@ -69,8 +69,13 @@ tokenized on entry (stored as single bytes) and expanded again by `LIST`.
 - **Numbers** are **signed 16-bit integers**, range **−32768 to 32767**, written
   in decimal *or* hex with a `0x` prefix (`0x1F`, `0xFF`, up to `0xFFFF`).
   Arithmetic wraps modulo 65536, so `0xFFFF` prints as `-1`.
-- **Variables** are the **26 single letters `A`–`Z`**. Each holds one integer.
-  All variables start at 0. (No multi-character names, no arrays.)
+- **Variables** have **names** that start with a letter and continue with
+  letters or digits (e.g. `X`, `I`, `COUNT`, `X1`, `TOTAL`). Names are
+  case-insensitive and **significant to 6 characters** (`COUNTER` and `COUNTED`
+  are the same variable); up to 32 distinct variables. Each holds one integer
+  and starts at 0 on first use. A name may begin with a keyword (`TOTAL`,
+  `FORK`) as long as it's followed by more letters/digits — `TO X` is the `TO`
+  keyword, `TOTAL` is a variable. (No arrays.)
 - **Strings** exist only as **literals inside `PRINT`** (`PRINT "HI"`). There are
   no string variables.
 
@@ -210,7 +215,8 @@ On any error the running program stops and returns to the prompt.
 ## Limits (current implementation)
 
 - Integers only (16-bit signed); no floating point.
-- Variables `A`–`Z` only; no arrays, no string variables.
+- Variables: integer only, names ≤ 6 significant chars, up to 32; no arrays,
+  no string variables.
 - `FOR` loops nest **2 deep**; `GOSUB` nests **3 deep**.
 - No `DATA`/`READ`, `DIM`, `DEF FN`, `ON…GOTO`, `WHILE`, string functions, or
   file/disk I/O.

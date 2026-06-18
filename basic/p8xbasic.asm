@@ -66,15 +66,21 @@ JUMPADDR= BASRAM+$9E         ; direct jump target (line record pointer)
 GTMP   = BASRAM+$A0          ; scratch (2)
 FSP    = BASRAM+$A2          ; FOR stack depth
 FFP    = BASRAM+$A3          ; pointer to top FOR frame (2)
-FSTK   = BASRAM+$A5          ; FOR frames (2 x 9): letter, limit(2), step(2), LR(2), TP(2)
-FORVAR = BASRAM+$B7          ; FOR/NEXT scratch: loop variable letter
+FSTK   = BASRAM+$A5          ; FOR frames (2 x 9): var-index, limit(2), step(2), LR(2), TP(2)
+FORIDX = BASRAM+$B7          ; FOR: loop variable's table index (saved across EVAL)
 FLIM   = BASRAM+$B8          ; FOR/NEXT scratch: limit (2)
 FSTEP  = BASRAM+$BA          ; FOR/NEXT scratch: step (2)
 FLR    = BASRAM+$BC          ; FOR/NEXT scratch: loop-back line record (2)
 FTP    = BASRAM+$BE          ; FOR/NEXT scratch: loop-back text pointer (2)
-VARS   = BASRAM+$C0          ; variables A-Z: 26 x 2 bytes ($80C0..$80F3)
+; variables are a name->value symbol table (replaces the old 26-letter array):
+VARCNT = BASRAM+$C0          ; number of variables defined (0..NVARS)
+VARIDX = BASRAM+$C1          ; VARGET result: the variable's table index
+NMBUF  = BASRAM+$C2          ; parsed variable name, NAMLEN chars, space-padded
 SEED   = BASRAM+$F4          ; RND state (2)
 POKEA  = BASRAM+$F6          ; POKE address (2)
+NAMLEN = 6                   ; significant variable-name length
+NVARS  = 32                  ; symbol-table capacity (entry = NAMLEN+2 = 8 bytes)
+VARTAB = BASRAM+$100         ; NVARS x 8 = 256 bytes ($x100..$x1FF)
 
 ; keyword tokens (>= $80 so they never collide with text or the 00 terminator)
 TOK_PRINT = $80
@@ -103,7 +109,7 @@ TOK_HELP = $96
 
 MONITOR = $0000          ; reset vector — BYE returns here
 
-PROG   = BASRAM+$100          ; program storage
+PROG   = BASRAM+$200          ; program storage (VARTAB occupies $100..$1FF)
 PBUF   = $C000          ; rebuild scratch buffer
 STKTOP = $FEFF
 
@@ -325,17 +331,9 @@ DOLET:  LDA  (P2)
         JNZ  dl_var
         INP2                        ; skip LET token
         JSR  SKIPSP
-dl_var: LDA  (P2)
-        STA  TMPC
-        LDB  #'A'
-        SUB
-        JNC  dl_err
-        LDB  #26
-        CMP
-        JC   dl_err
-        LDA  TMPC
-        JSR  VARADDR                ; P1 = &var
-        INP2                        ; consume letter
+dl_var: JSR  VARGET                  ; parse name, look up/create -> P1 = &value
+        LDA  MATCHF
+        JZ   dl_err
         TPA1L                       ; save var address across EXPR (uses P1)
         STA  SAVE1
         TPA1H
@@ -523,17 +521,9 @@ DOEND:  INP2
 ; INPUT <var> — prompt "? ", read a number from the console into <var>
 DOINPUT: INP2
         JSR  SKIPSP
-        LDA  (P2)
-        STA  TMPC
-        LDB  #'A'
-        SUB
-        JNC  in_err
-        LDB  #26
-        CMP
-        JC   in_err
-        LDA  TMPC
-        JSR  VARADDR                ; P1 = &var
-        INP2
+        JSR  VARGET                 ; parse name, look up/create -> P1 = &value
+        LDA  MATCHF
+        JZ   in_err
         TPA1L
         STA  SAVE1
         TPA1H
@@ -670,18 +660,11 @@ ret_err: LDP1 #MRG
 ; FOR <var> = <start> TO <limit> [STEP <n>]
 DOFOR:  INP2
         JSR  SKIPSP
-        LDA  (P2)
-        STA  TMPC
-        LDB  #'A'
-        SUB
-        JNC  for_err
-        LDB  #26
-        CMP
-        JC   for_err
-        LDA  TMPC
-        STA  FORVAR
-        JSR  VARADDR
-        INP2
+        JSR  VARGET                 ; loop variable -> P1 = &value, VARIDX
+        LDA  MATCHF
+        JZ   for_err
+        LDA  VARIDX                 ; save its index for the frame (EVAL below
+        STA  FORIDX                 ;   calls VARGET again and clobbers VARIDX)
         TPA1L
         STA  SAVE1
         TPA1H
@@ -782,7 +765,7 @@ fp_w:   LDA  FFP                    ; write the 9-byte frame
         TAP1L
         LDA  FFP+1
         TAP1H
-        LDA  FORVAR
+        LDA  FORIDX                 ; frame[0] = loop variable's table index
         STA  (P1)
         INP1
         LDA  FLIM
@@ -817,14 +800,15 @@ for_err: JMP  SYNERR
 ; NEXT [<var>] — step the top FOR loop; loop back or pop the frame
 DONEXT: INP2
         JSR  SKIPSP
-        LDA  (P2)                   ; optional variable name -> skip it
+        LDA  (P2)                   ; optional variable name -> consume it
+        JSR  UPCHAR
         LDB  #'A'
         SUB
         JNC  nx_go
         LDB  #26
         CMP
         JC   nx_go
-        INP2
+        JSR  VARGET                 ; consume the whole name (result ignored)
 nx_go:  LDA  FSP
         JZ   nx_err
         LDA  FFP                    ; read frame fields
@@ -832,7 +816,7 @@ nx_go:  LDA  FSP
         LDA  FFP+1
         TAP1H
         LDA  (P1)
-        STA  FORVAR
+        STA  VARIDX                 ; frame[0] = loop variable's index
         INP1
         LDA  (P1)
         STA  FLIM
@@ -857,8 +841,7 @@ nx_go:  LDA  FSP
         INP1
         LDA  (P1)
         STA  FTP+1
-        LDA  FORVAR                 ; var = var + step
-        JSR  VARADDR
+        JSR  IDXADDR                ; var = var + step (P1 = &value, from VARIDX)
         TPA1L
         STA  SAVE1
         TPA1H
@@ -1256,17 +1239,9 @@ fa_dec: JSR  PARSEDEC           ; number -> LNUM
         LDA  LNUM+1
         STA  RESULT+1
         RTS
-fa_var: LDA  (P2)               ; variable A-Z?
-        STA  TMPC
-        LDB  #'A'
-        SUB
-        JNC  fa_err
-        LDB  #26
-        CMP
-        JC   fa_err
-        LDA  TMPC
-        JSR  VARADDR            ; P1 = &var
-        INP2
+fa_var: JSR  VARGET            ; parse name, look up/create -> P1 = &value
+        LDA  MATCHF
+        JZ   fa_err
         LDA  (P1)
         STA  RESULT
         INP1
@@ -1410,14 +1385,184 @@ RANDOM: LDA  SEED
         STA  SEED+1
         RTS
 
-; VARADDR — A = variable letter; sets P1 = VARS + (letter-'A')*2
-VARADDR: LDB #'A'
+; UPCHAR — A: if 'a'..'z', clear bit 5 to uppercase; else leave A.
+UPCHAR: LDB  #'a'
+        CMP                     ; C=1 if A >= 'a'
+        JNC  uc_ret
+        LDB  #$7B               ; 'z' + 1
+        CMP                     ; C=1 if A > 'z'
+        JC   uc_ret
+        LDB  #$DF
+        AND
+uc_ret: RTS
+
+; ISALNUM — MATCHF=1 if A (upcased) is a letter A-Z or digit 0-9, else 0.
+; Uses only A (preserved by CMP) and B.
+ISALNUM: JSR UPCHAR
+        LDB  #'0'
+        CMP                     ; A >= '0' ?
+        JNC  ia_no
+        LDB  #$3A               ; '9' + 1
+        CMP
+        JNC  ia_yes             ; '0'..'9'
+        LDB  #'A'
+        CMP                     ; A >= 'A' ?
+        JNC  ia_no
+        LDB  #$5B               ; 'Z' + 1
+        CMP
+        JC   ia_no              ; > 'Z'
+ia_yes: LDA  #1
+        STA  MATCHF
+        RTS
+ia_no:  LDA  #0
+        STA  MATCHF
+        RTS
+
+; VARGET — parse a variable name at (P2) (consuming it), look it up (creating a
+; new zeroed entry on first use), and set P1 = &value and VARIDX = its index.
+; MATCHF=1 if (P2) started a valid name (letter), else 0 (P2 unchanged).
+VARGET: LDA  (P2)               ; first char must be a letter
+        JSR  UPCHAR
+        LDB  #'A'
         SUB
-        SHL                     ; *2 (index 0..25 -> 0..50, no carry)
-        LDB  #<VARS
+        JNC  vg_bad
+        LDB  #26
+        CMP
+        JC   vg_bad
+        LDP1 #NMBUF             ; blank the name field
+        LDA  #NAMLEN
+        STA  TMPC
+vg_fz:  LDA  #' '
+        STA  (P1)
+        INP1
+        LDA  TMPC
+        DEC
+        STA  TMPC
+        JNZ  vg_fz
+        LDP1 #NMBUF            ; copy identifier chars (letters/digits), upcased
+        LDA  #NAMLEN
+        STA  TMPC
+vg_cp:  LDA  (P2)
+        JSR  ISALNUM
+        LDA  MATCHF
+        JZ   vg_end            ; non-alnum -> end of name
+        LDA  TMPC
+        JZ   vg_skip           ; name field full -> consume but don't store
+        LDA  (P2)
+        JSR  UPCHAR
+        STA  (P1)
+        INP1
+        LDA  TMPC
+        DEC
+        STA  TMPC
+vg_skip: INP2                  ; consume the char
+        JMP  vg_cp
+vg_end: JSR  VARFIND           ; P1 = &value, VARIDX = index
+        LDA  #1
+        STA  MATCHF
+        RTS
+vg_bad: LDA  #0
+        STA  MATCHF
+        RTS
+
+; VARFIND — look up NMBUF in VARTAB; on a match P1 = &value, VARIDX = index.
+; If absent, append a new entry (name = NMBUF, value = 0) and return its &value.
+; Saves the input cursor (P2) on the stack while it walks the table with P2.
+VARFIND: TPA2L
+        PHA
+        TPA2H
+        PHA
+        LDA  #0
+        STA  PCNT               ; i = 0
+vf_lp:  LDA  PCNT
+        LDB  VARCNT
+        CMP
+        JZ   vf_new             ; i == VARCNT -> not found
+        LDA  PCNT               ; P1 = VARTAB + i*8
+        SHL
+        SHL
+        SHL
+        TAP1L
+        LDA  #>VARTAB
+        TAP1H
+        LDP2 #NMBUF             ; compare NAMLEN name bytes
+        LDA  #NAMLEN
+        STA  TMPC
+        LDA  #1
+        STA  MATCHF
+vf_cmp: LDA  (P1)
+        STA  CYTMP
+        LDA  (P2)
+        LDB  CYTMP
+        CMP
+        JZ   vf_c1
+        LDA  #0
+        STA  MATCHF
+vf_c1:  INP1
+        INP2
+        LDA  TMPC
+        DEC
+        STA  TMPC
+        JNZ  vf_cmp
+        LDA  MATCHF
+        JNZ  vf_hit             ; P1 now at &value (entry+NAMLEN)
+        LDA  PCNT
+        INC
+        STA  PCNT
+        JMP  vf_lp
+vf_hit: LDA  PCNT
+        STA  VARIDX
+        JMP  vf_done
+vf_new: LDA  VARCNT             ; create entry at index VARCNT
+        STA  VARIDX
+        SHL
+        SHL
+        SHL
+        TAP1L
+        LDA  #>VARTAB
+        TAP1H
+        LDP2 #NMBUF             ; copy the name in
+        LDA  #NAMLEN
+        STA  TMPC
+vf_cp:  LDA  (P2)
+        STA  (P1)
+        INP1
+        INP2
+        LDA  TMPC
+        DEC
+        STA  TMPC
+        JNZ  vf_cp
+        LDA  #0                 ; zero the value (P1 now at &value)
+        STA  (P1)
+        TPA1L                   ; remember &value across the second store
+        STA  RP
+        TPA1H
+        STA  RP+1
+        INP1
+        LDA  #0
+        STA  (P1)
+        LDA  VARCNT
+        INC
+        STA  VARCNT
+        LDA  RP                 ; P1 = &value
+        TAP1L
+        LDA  RP+1
+        TAP1H
+vf_done: PLA                    ; restore the input cursor
+        TAP2H
+        PLA
+        TAP2L
+        RTS
+
+; IDXADDR — VARIDX -> P1 = &value of that variable (VARTAB + VARIDX*8 + NAMLEN).
+IDXADDR: LDA  VARIDX
+        SHL
+        SHL
+        SHL
+        LDB  #NAMLEN
         ADD
         TAP1L
-        LDA  #>VARS
+        LDA  #>VARTAB
         TAP1H
         RTS
 
@@ -1648,6 +1793,7 @@ pp_done: RTS
 NEWPROG: LDA #0              ; empty program = bare 00,00 marker at PROG
         STA  PROG
         STA  PROG+1
+        STA  VARCNT          ; and no variables defined
         RTS
 
 ;==============================================================================
@@ -2003,7 +2149,11 @@ mk_in:  LDA  (P2)
         INP1
         INP2
         JMP  mk_in
-mk_hit: LDA  TMPC
+mk_hit: LDA  (P1)                   ; char right after the matched keyword
+        JSR  ISALNUM                ; if a letter/digit, this is really a longer
+        LDA  MATCHF                 ;   identifier (e.g. TOTAL, FORK) -> not a kw
+        JNZ  mk_no
+        LDA  TMPC
         STA  TOKEN
         LDA  #1
         STA  MATCHF
