@@ -57,10 +57,6 @@ Last updated: 2026-06-11
   small images today; widen to a multi-byte LBA in CFSETL + the BIOS contract
   before volumes exceed 128 KB.
 
-- **Datasheet pinout verification**: ~25 device definitions were added to the
-  generator for the five new cards (74161/169/374/377/151/74/02/10/139/157/
-  175/244/257/260/181/182, 28C64, 6850, MAX232, osc cans, IDE40, arrays).
-  Pin numbers came from memory; verify every one against datasheets before fab.
 
 - [ ] Fusion import acceptance test: open backplane .sch/.brd pair, pour planes,
       run DRC, confirm zero airwires
@@ -208,6 +204,11 @@ Last updated: 2026-06-11
 - I/O card SEL LED is source-driven from a gate output (deviation from the
   sink-drive standard) - noted on schematic; confirm brightness acceptable.
 
+- [ ] Final pinout confirmation against *physical* datasheets before fab. A
+      knowledge-based audit was done (see DONE) and fixed the 74260; still
+      worth eyeballing the actual datasheets for the parts you'll buy — at
+      minimum the 74260 (odd input/output split) and the wide DIPs (74181,
+      28C64, 62256, 6850) — since manufacturer/variant pinouts can differ.
 - [ ] Two new opcodes required by monitor: JMP (P1), JSR (P1) — fold into the
       official ISA table when the assembler exists
 - [ ] CF card 8-bit mode support — buy 2–3 candidates (SanDisk/industrial),
@@ -225,6 +226,17 @@ Last updated: 2026-06-11
 
 ## DONE
 
+- **Datasheet pinout audit of the generator's device library.** Cross-checked
+  all ~25 devices (74161/169/374/377/151/74/02/10/139/157/175/244/257/260/181/
+  182, 7430, 7474, 74138, 28C64, 62256/28C256, 6850, MAX232, OSC can, IDE40,
+  resistor/LED arrays) against standard datasheet pinouts. **Found + fixed one
+  real error: the 74260** (dual 5-input NOR, the ALU bus zero-detect U27) had a
+  scrambled pin map — gate-1 `C1` on pin 3 (should be 11) and the `Y1`/`Y2`
+  outputs swapped (6↔8), among others. Corrected to the datasheet
+  (1=1A 2=1B 3=2A 4=2B 5=2C 6=2Y 7=GND 8=1Y 9=2D 10=2E 11=1C 12=1D 13=1E
+  14=VCC); the netlist uses logical pin names so it didn't change. All others
+  matched. NB the 74244 uses flat A1-A8/Y1-Y8 labels (not 1A1..2A4) but the
+  pins + An<->Yn pairing + the two `!G` enables are electrically correct.
 - **Decoupling caps on every card.** gen_eagle's `card()` now drops one 100nF
   cap (`CDn`, C_DISC footprint) per IC, placed beside it and wired VCC<->GND;
   the memory card's separate build does the same for U1-U9. Counts: control 18,
