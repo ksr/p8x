@@ -260,6 +260,10 @@ Last updated: 2026-06-11
 
 ## DONE
 
+> Convention: substantial features get a **bold-title** prose entry (what was
+> done + why + caveats). The original foundation milestones are a terse tick
+> list under *Early milestones* at the end of this section.
+
 - **RTC + CF-fallback footprints provisioned (rev C, DNP).** The last two
   pre-fab board items, both as Do-Not-Populate so the options exist post-fab
   without a respin:
@@ -492,6 +496,11 @@ Last updated: 2026-06-11
   eight official spares total (4-11). Backplane routes the B-row spares.
 - Eagle sch+brd generated and validated for all five remaining cards
   (control, register bank, ALU, I/O, CF-IDE) + netlist-style PDF each.
+
+### Early milestones (original checklist)
+
+The foundational tick list from the project's first phase — kept as-is for the
+record. Newer work is logged as bold-title entries above.
 
 - [x] Architecture: P8X — 8-bit, microcoded, 4×16-bit pointer bank (74169s),
       PC/SP/MAR unified into pointers
