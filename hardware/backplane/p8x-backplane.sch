@@ -2679,7 +2679,7 @@
 <wire x1="424.18" y1="-391.16" x2="419.10" y2="-391.16" width="0.1524" layer="91"/>
 <label x="419.10" y="-390.65" size="1.778" layer="95"/></segment>
 </net>
-<net name="SPARE9" class="0">
+<net name="BSEL" class="0">
 <segment><pinref part="J1" gate="G$1" pin="B28"/>
 <wire x1="17.78" y1="-111.76" x2="12.70" y2="-111.76" width="0.1524" layer="91"/>
 <label x="12.70" y="-111.25" size="1.778" layer="95"/></segment>

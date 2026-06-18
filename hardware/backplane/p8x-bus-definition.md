@@ -17,7 +17,7 @@ by `generators/gen_bus_pdf.py`. When any conflict exists, trust the generator co
 | Mating orientation | VERIFY against physical connectors before first fab |
 
 Rows A and C carry signals. Row B is a **solid ground guard** between them
-(B3–B26 = GND), with the exception of B27 (CLRC) and B28–B30 (SPARE9–11).
+(B3–B26 = GND), with the exception of B27 (CLRC), B28 (BSEL) and B29–B30 (SPARE10–11).
 
 ---
 
@@ -54,7 +54,7 @@ Pins 1–2 are power; pins 31–32 are ground. Signals occupy pins 3–30.
 | 25 | CLKB | GND | SH0 |
 | 26 | LDF | GND | SH1 |
 | 27 | FC | CLRC | PSEL2 |
-| 28 | FZ | SPARE9 | LDZN |
+| 28 | FZ | BSEL | LDZN |
 | 29 | FN | SPARE10 | SHCIN |
 | 30 | FV | SPARE11 | SETC |
 | 31 | GND | GND | GND |
@@ -65,7 +65,8 @@ Pins 1–2 are power; pins 31–32 are ground. Signals occupy pins 3–30.
   SPARE numbering therefore starts at 4. There are no SPARE0–3.
 - B3–B26 = GND (ground guard).
 - rev C3 allocated the rev-B control signals: C27–C30 = PSEL2/LDZN/SHCIN/SETC
-  (were SPARE4–7) and B27 = CLRC (was SPARE8). SPARE9–11 remain on B28–B30.
+  (were SPARE4–7) and B27 = CLRC (was SPARE8). rev C added B28 = BSEL (ALU
+  B-input mux select, was SPARE9); SPARE10–11 remain on B29–B30.
 
 ---
 
@@ -198,10 +199,10 @@ restores FLAGS from the data bus.
 System reset, active-low. Drives all cards to a known state. The control card
 generates -RES from the front-panel reset button and power-on RC circuit.
 
-### 3.12 rev-B control signals (PSEL2, LDZN, SHCIN, SETC, CLRC) and SPARE9–11
+### 3.12 rev-B/C control signals (PSEL2, LDZN, SHCIN, SETC, CLRC, BSEL) and SPARE10–11
 
-Allocated from spares in rev C3 to carry the rev-B microcode-word additions,
-all driven by the control card's pipeline latches:
+Allocated from spares in rev C3 (and rev C for BSEL) to carry the rev-B/C
+microcode-word additions, all driven by the control card's pipeline latches:
 
 | Signal | Pin | Consumer | Function |
 |--------|-----|----------|----------|
@@ -210,8 +211,9 @@ all driven by the control card's pipeline latches:
 | SHCIN | C29 | ALU | Shifter shift-in = current C flag (rotate through carry) |
 | SETC | C30 | ALU | Force C = 1 (SEC) |
 | CLRC | B27 | ALU | Force C = 0 (CLC) |
+| BSEL | B28 | ALU | ALU B-input mux select: 0 = B register, 1 = T register (microcode word bit 31, pipe U17.Q8; drives ALU-card U32/U33) |
 
-SPARE9–11 (B28–B30) remain bused across all 10 slots, reserved; no card may use
+SPARE10–11 (B29–B30) remain bused across all 10 slots, reserved; no card may use
 them without a formal allocation recorded here.
 
 ---
@@ -316,3 +318,4 @@ document before building.
 | C1 | — | SPARE0–3 on A27–A30 |
 | C2 | 2026-06 | A27–A30 reallocated to FC/FZ/FN/FV; SPARE8–11 opened on B27–B30; eight official spares (SPARE4–11) |
 | C3 | 2026-06 | rev-B control signals allocated: C27–C30 = PSEL2/LDZN/SHCIN/SETC, B27 = CLRC (were SPARE4–8); SPARE9–11 remain on B28–B30 |
+| C  | 2026-06 | 2nd ALU-input mux added: B28 = BSEL (was SPARE9), ALU B-side selects B reg / T reg; SPARE10–11 remain on B29–B30 |

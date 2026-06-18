@@ -6,7 +6,8 @@ Control word layout (matches control card pipeline mapping exactly):
   12 PDEC | 13-16 ALUS | 17 ALUM | 18 CIN(pin, active-low carry) |
   19 SH0 | 20 SH1 | 21 LDF | 22-24 FCOND | 25 uRST | 26 HALT |
   27 LDZN (latch Z,N only) | 28 SHCIN (shifter shift-in = C flag, for rotates) |
-  29 SETC (force C=1) | 30 CLRC (force C=0) | 31 spare
+  29 SETC (force C=1) | 30 CLRC (force C=0) |
+  31 BSEL (ALU B-input mux: 0=B register, 1=T register)
 PSEL is 3 bits (rev: was 2). PT (=4) is a hidden microcode-only scratch pointer
 used for absolute addressing; not programmer-visible.
 LDZN gives loads conventional set-Z/N-from-loaded-value behaviour without
@@ -25,13 +26,13 @@ FC=dict(never=0,always=1,C=2,Z=3,N=4,V=5)   # C = conventional carry (rev B): 1 
 PT=4   # hidden microcode-only scratch pointer (PSEL=4), for absolute addressing
 
 def w(doe=0,dld=0,psel=0,pinc=0,pdec=0,alus=0,m=0,cin=1,sh0=0,sh1=0,
-      ldf=0,fcond=0,urst=0,halt=0,ldzn=0,shcin=0,setc=0,clrc=0):
+      ldf=0,fcond=0,urst=0,halt=0,ldzn=0,shcin=0,setc=0,clrc=0,bsel=0):
     return (DOE[doe] if isinstance(doe,str) else doe) \
         | (DLD[dld] if isinstance(dld,str) else dld)<<4 \
         | psel<<8 | pinc<<11 | pdec<<12 | alus<<13 | m<<17 | cin<<18 \
         | sh0<<19 | sh1<<20 | ldf<<21 \
         | (FC[fcond] if isinstance(fcond,str) else fcond)<<22 | urst<<25 | halt<<26 \
-        | ldzn<<27 | shcin<<28 | setc<<29 | clrc<<30
+        | ldzn<<27 | shcin<<28 | setc<<29 | clrc<<30 | bsel<<31
 
 FETCH=w(doe="MEM",dld="IR",psel=0,pinc=1)
 
@@ -77,6 +78,17 @@ op(0x29,"SHR","", w(doe="ALU",dld="A",alus=0b1111,m=1,cin=0,sh1=1,ldf=1,urst=1))
 # rotates through carry: shift-in = current C (SHCIN), shifted-out bit -> C
 op(0x2A,"ROL","", w(doe="ALU",dld="A",alus=0b1111,m=1,sh0=1,shcin=1,ldf=1,urst=1))
 op(0x2B,"ROR","", w(doe="ALU",dld="A",alus=0b1111,m=1,sh1=1,shcin=1,ldf=1,urst=1))
+# T-operand ALU ops (rev C: 2nd ALU-input mux selects T as the B operand via
+# BSEL). Same operations as 0x20-0x25 but second operand = T register, so e.g.
+# ADDT computes A = A + T in one step without shuffling T through B.
+op(0x80,"ADDT","", alu("ADD",bsel=1)); op(0x81,"SUBT","", alu("SUB",bsel=1))
+op(0x82,"ANDT","", alu("AND",bsel=1)); op(0x83,"ORT","",  alu("OR", bsel=1))
+op(0x84,"XORT","", alu("XOR",bsel=1)); op(0x85,"CMPT","", alu("SUB",dld="none",bsel=1))
+# T is otherwise microcode-scratch only; these expose it as a loadable operand
+# so the T-mux ops above are actually usable. (No flags touched: T isn't the
+# accumulator.) LDT a reuses the PT-scratch operand-fetch like LDA a.
+op(0x86,"LDT","#", w(doe="MEM",dld="T",psel=0,pinc=1,urst=1))
+op(0x87,"LDT","a", *_ld_pt(), w(doe="MEM",dld="T",psel=PT,urst=1))
 # pointer byte loads: LPLn #imm / LPHn #imm  (via T: mem read uses P0)
 for p in (1,2,3):
     op(0x30+p,"LPL%d"%p,"#", w(doe="MEM",dld="T",psel=0,pinc=1),

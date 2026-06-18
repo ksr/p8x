@@ -21,7 +21,7 @@ def busnet(pin):
     r,n=pin[0],int(pin[1:])
     if n in (1,2): return "VCC"
     if n in (31,32): return "GND"
-    if r=="B": return {27:"CLRC",28:"SPARE9",29:"SPARE10",30:"SPARE11"}.get(n,"GND")
+    if r=="B": return {27:"CLRC",28:"BSEL",29:"SPARE10",30:"SPARE11"}.get(n,"GND")
     if r=="A":
         if 3<=n<=10: return "D%d"%(n-3)
         if n==11: return "-RES"
@@ -31,7 +31,8 @@ def busnet(pin):
                 27:"FC",28:"FZ",29:"FN",30:"FV"}.get(n)
     if 3<=n<=18: return "A%d"%(n-3)
     if 19<=n<=22: return "ALUS%d"%(n-19)
-    # rev C3: C27-30 + B27 carry the rev-B control signals; SPARE9-11 remain on B28-30
+    # rev C3: C27-30 + B27 carry the rev-B control signals. B28=BSEL (rev C: ALU
+    # B-input mux select); SPARE10-11 remain on B29-30
     return {23:"ALUM",24:"CIN",25:"SH0",26:"SH1",
             27:"PSEL2",28:"LDZN",29:"SHCIN",30:"SETC"}.get(n,"SPARE%d"%(n-27+4))
 
@@ -456,7 +457,7 @@ for f,d in (("FC","D2"),("FZ","D3"),("FN","D4"),("FV","D5")):
 PIPE={14:["DOE0","DOE1","DOE2","DOE3","DLD0","DLD1","DLD2","DLD3"],
  15:["PSEL0","PSEL1","PSEL2","PINC","PDEC","ALUS0","ALUS1","ALUS2"],
  16:["ALUS3","ALUM","CIN","SH0","SH1","LDF","FCOND0","FCOND1"],
- 17:["FCOND2","URST","HALT","LDZN","SHCIN","SETC","CLRC"]}
+ 17:["FCOND2","URST","HALT","LDZN","SHCIN","SETC","CLRC","BSEL"]}
 for k,sigs in PIPE.items():
     for b,sig in enumerate(sigs):
         N(n,"P%dB%d"%(k,b),("U%d"%k,"D%d"%(b+1)),("U%d"%(k-4),"IO%d"%b))
@@ -470,7 +471,7 @@ N(n,"LEDRN",("R4","2"),("LED4","A")); N(n,"LEDHL",("R5","2"),("LED5","A"))
 card("control-card","P8X CONTROL/MICROCODE CARD REV B",ic,sm,n,
  {"D%d"%i for i in range(8)}|{"DOE%d"%i for i in range(4)}|{"DLD%d"%i for i in range(4)}|
  {"PSEL0","PSEL1","PSEL2","PINC","PDEC","ALUS0","ALUS1","ALUS2","ALUS3","ALUM","CIN","SH0","SH1",
-  "LDF","CLK","CLKB","-RES","FC","FZ","FN","FV","LDZN","SHCIN","SETC","CLRC"})
+  "LDF","CLK","CLKB","-RES","FC","FZ","FN","FV","LDZN","SHCIN","SETC","CLRC","BSEL"})
 
 # ===================== REGISTER BANK CARD =====================================
 n={}; ic={}
@@ -602,7 +603,9 @@ ic={"U1":("74377V2","A REG"),"U2":("74244","A OUT"),"U3":("74377V2","B REG"),
  # rev B flag-register redesign (split C; LDZN Z/N; SETC/CLRC; carry-coupled shifter)
  "U26":("7474","C FLAG FF"),"U27":("74260","BUS Z-DET"),
  "U28":("74157","SHIFT-OUT MUX"),"U29":("74157","C-SRC MUX"),
- "U30":("74157","SHIN MUX"),"U31":("GATES14","74HCT08 CLK/FORCE")}
+ "U30":("74157","SHIN MUX"),"U31":("GATES14","74HCT08 CLK/FORCE"),
+ # rev C: 2nd ALU-input mux. B-side operand = B register (BSEL=0) or T (BSEL=1).
+ "U32":("74157","B-MUX LO"),"U33":("74157","B-MUX HI")}
 sm={"RP1":("RES","1K"),"LED3":("LED","PWR-GRN"),
  "R4":("RES","1K"),"LED4":("LED","ALU-GRN"),"R5":("RES","1K"),"LED5":("LED","LDF-YEL")}
 REGS=(("U1","U2","A","Y1"),("U3","U4","B","Y2"),("U5","U6","T","Y3"),("U7","U8","T2","Y4"))
@@ -613,9 +616,18 @@ for i,(ur,ub,nm,doey) in enumerate(REGS):
         N(n,"D%d"%b,(ur,"D%d"%(b+1)),(ub,"Y%d"%(b+1)))
         N(n,"%sQ%d"%(nm,b),(ur,"Q%d"%(b+1)),(ub,"A%d"%(b+1)))
     N(n,"-DOE%s"%nm,(ub,"!G1"),(ub,"!G2"),("U20",doey))
+# A operand: A register straight to 74181 A inputs. B operand: routed through
+# the rev-C B-mux (U32/U33, 74157) which selects B register (BSEL=0, on the A
+# legs) or T register (BSEL=1, on the B legs); muxed result BMX -> 74181 B.
 for b in range(4):
-    N(n,"AQ%d"%b,("U9","A%d"%b)); N(n,"BQ%d"%b,("U9","B%d"%b))
-    N(n,"AQ%d"%(4+b),("U10","A%d"%b)); N(n,"BQ%d"%(4+b),("U10","B%d"%b))
+    N(n,"AQ%d"%b,("U9","A%d"%b)); N(n,"BMX%d"%b,("U9","B%d"%b))
+    N(n,"AQ%d"%(4+b),("U10","A%d"%b)); N(n,"BMX%d"%(4+b),("U10","B%d"%b))
+for mux,base in (("U32",0),("U33",4)):
+    N(n,"BSEL",(mux,"S")); N(n,"GND",(mux,"!G"))
+    for k in range(4):
+        N(n,"BQ%d"%(base+k),(mux,"A%d"%(k+1)))   # BSEL=0 -> B register
+        N(n,"TQ%d"%(base+k),(mux,"B%d"%(k+1)))   # BSEL=1 -> T register
+        N(n,"BMX%d"%(base+k),(mux,"Y%d"%(k+1)))  # muxed operand -> 74181 B
 for u in ("U9","U10"):
     for s in range(4): N(n,"ALUS%d"%s,(u,"S%d"%s))
     N(n,"ALUM",(u,"M"))
@@ -706,7 +718,7 @@ N(n,"LEDAL",("R4","2"),("LED4","A")); N(n,"LEDLF",("R5","2"),("LED5","A"))
 card("alu-card","P8X ALU CARD REV B (conventional carry, LDZN, SETC/CLRC, carry-coupled shifter)",ic,sm,n,
  {"D%d"%i for i in range(8)}|{"DOE%d"%i for i in range(4)}|{"DLD%d"%i for i in range(4)}|
  {"ALUS0","ALUS1","ALUS2","ALUS3","ALUM","CIN","SH0","SH1","LDF","CLK","-RES",
-  "FC","FZ","FN","FV","LDZN","SHCIN","SETC","CLRC"})
+  "FC","FZ","FN","FV","LDZN","SHCIN","SETC","CLRC","BSEL"})
 
 # ===================== I/O CARD ===============================================
 n={}
@@ -982,7 +994,7 @@ vadd("CLKB",(240.50,106.68))
 wadd("CLKB_T",(228.60,106.68,213.36,106.68,1,0.4))
 wadd("LED_A",(25.40,7.62,30.48,7.62,1,0.4))
 for nn in range(27,31):
-    y=py(nn); net=busnet("B%d"%nn)   # B27=CLRC, B28-30=SPARE9-11 (rev C3)
+    y=py(nn); net=busnet("B%d"%nn)   # B27=CLRC, B28=BSEL (rev C), B29-30=SPARE10-11
     wadd(net,(sx(0)-2.54,y-1.27,sx(9)-2.54,y-1.27,1,0.4))
     for i in range(10):
         wadd(net,(sx(i)-2.54,y,sx(i)-2.54,y-1.27,1,0.4))

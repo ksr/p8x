@@ -73,6 +73,16 @@ Last updated: 2026-06-11
 
 ## IDEAS
 
+- [ ] **Optimize monitor/OS/BASIC hot paths with the rev-C T-operand ALU ops**
+      (`LDT`/`ADDT`/`SUBT`/`CMPT`/etc.): these let you compute `A := A ⟨op⟩ T`
+      without first shuffling the operand through B, so spots that currently do
+      "save B, load operand into B, ALU, restore B" can collapse. Purely an
+      optimization — the firmware is already correct as-is (the new ops are
+      additive; existing code is byte-identical). **Do this only after the ALU
+      card is built and the B-mux is verified in hardware** — code using the
+      T-operand ops won't run on bare metal until the 74157 mux (U32/U33) is
+      actually populated, so until then it would only work in the emulator.
+
 - [ ] **Unix-like I/O redirection + pipes in the OS shell**: a command's
       output defaults to the terminal but can go to a file (`DIR >LIST.TXT`) or
       feed another command (`CAT BIG | MORE`).
@@ -177,7 +187,6 @@ Last updated: 2026-06-11
 - [ ] DS1302 RTC on I/O card → file timestamps
 - [ ] Interrupt support: latch IRQ, force opcode $FF at fetch, microcode pushes
       PC + vectors (one 74244 forcing the bus)
-- [ ] Second ALU-input mux so ALU B-side can take X/T → cleaner indexed math
 - [ ] p8x.pretty KiCad footprint lib if ever returning to KiCad round-trip
 - [ ] **I/O card in the emulator** — make the switches/LEDs interactive. The
       emulator stubs them: $FF00 (switches) always reads 0 and $FF02 (LEDs) is
@@ -225,6 +234,20 @@ Last updated: 2026-06-11
       budget
 
 ## DONE
+
+- **Second ALU-input mux (rev C) — B-side can take T.** Added a 2:1 mux on the
+  ALU card B-operand path (U32/U33, 74157 ×2): B register when `BSEL=0`, T
+  register when `BSEL=1`. `BSEL` is microcode-word bit 31 (was the lone spare),
+  latched in control-card pipe U17.Q8 and carried to the ALU card on backplane
+  B28 (was SPARE9). New opcodes `ADDT/SUBT/ANDT/ORT/XORT/CMPT` (0x80-0x85) run
+  the usual ALU ops with T as the second operand — so e.g. `A := A + T` in one
+  step, **B preserved**. Also added `LDT #imm`/`LDT a` (0x86/0x87) since T was
+  otherwise microcode-scratch-only and had no programmer-visible load. Modelled
+  in the emulator (bit 31 selects the B operand), covered by new ISA tests
+  (ADDT/SUBT/CMPT/ANDT/ORT/XORT/LDT, all green), and documented in the
+  programmer's guide. All 7 boards regenerate with 0 validation errors. The mux
+  delay stacks ahead of the 74181/74182 carry path — confirm timing margin when
+  bringing up the ALU card.
 
 - **Datasheet pinout audit of the generator's device library.** Cross-checked
   all ~25 devices (74161/169/374/377/151/74/02/10/139/157/175/244/257/260/181/

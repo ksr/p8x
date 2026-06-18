@@ -7,6 +7,7 @@
 ; are not directly testable from software.
 
 TID = $9000        ; current test id (RAM)
+VAL = $9001        ; scratch byte (RAM) for LDT a
 
         .org 0
         LDP3 #$FEFF                 ; stack
@@ -317,6 +318,69 @@ c1:     CLC
         JNC c2
         JMP fail            ; JNC should branch when C=0
 c2:
+; ---- 20: ADDT (A + T via B-mux; B must NOT be the operand) ----
+; B is set to the EXPECTED result as a sentinel: if ADDT wrongly used B
+; instead of T the result would differ and the CMP would fail.
+        LDA #$20
+        STA TID
+        LDB #$08            ; sentinel = expected result (and wrong-operand bait)
+        LDA #$05
+        LDT #$03
+        ADDT                ; A = A + T = 5 + 3 = 8  (must use T, not B)
+        CMP                 ; A(8) vs B(8) -> Z if correct
+        JNZ fail
+; ---- 21: SUBT ----
+        LDA #$21
+        STA TID
+        LDB #$02            ; wrong-operand bait
+        LDA #$0A
+        LDT #$04
+        SUBT                ; A = 10 - 4 = 6
+        LDB #$06
+        CMP
+        JNZ fail
+; ---- 22: CMPT (compare A with T; A unchanged, Z when equal) ----
+        LDA #$22
+        STA TID
+        LDA #$07
+        LDT #$07
+        CMPT                ; 7 - 7 -> Z=1, A unchanged
+        JNZ fail
+        LDB #$07
+        CMP                 ; confirm A still 7
+        JNZ fail
+; ---- 23: ANDT / ORT / XORT ----
+        LDA #$23
+        STA TID
+        LDA #$F0
+        LDT #$3C
+        ANDT                ; F0 & 3C = 30
+        LDB #$30
+        CMP
+        JNZ fail
+        LDA #$F0
+        LDT #$0F
+        ORT                 ; F0 | 0F = FF
+        LDB #$FF
+        CMP
+        JNZ fail
+        LDA #$FF
+        LDT #$0F
+        XORT                ; FF ^ 0F = F0
+        LDB #$F0
+        CMP
+        JNZ fail
+; ---- 24: LDT a (load T from memory), then ADDT ----
+        LDA #$24
+        STA TID
+        LDA #$5A
+        STA VAL
+        LDT VAL             ; T = [VAL] = 5A  (absolute)
+        LDA #$A5
+        ADDT                ; A5 + 5A = FF
+        LDB #$FF
+        CMP
+        JNZ fail
 ; ---- all passed ----
         LDA #$00
         HLT

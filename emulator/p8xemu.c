@@ -238,8 +238,10 @@ int main(int argc,char**argv){
         int m=(cw>>17)&1, cinp=(cw>>18)&1, sh0=(cw>>19)&1, sh1=(cw>>20)&1;
         int ldf=(cw>>21)&1, fcond=(cw>>22)&7, urst=(cw>>25)&1, halt=(cw>>26)&1;
         int ldzn=(cw>>27)&1, shcin=(cw>>28)&1, setc=(cw>>29)&1, clrc=(cw>>30)&1;
+        int bsel=(cw>>31)&1;                                 /* ALU B-input mux: 0=B reg, 1=T reg */
         /* combinational ALU + shifter from CURRENT register state */
-        int cout; uint8_t f=alu181(A,B,alus,m,cinp,&cout);   /* cout = conventional carry */
+        uint8_t bop = bsel ? T : B;                          /* B-side operand (2nd ALU-input mux) */
+        int cout; uint8_t f=alu181(A,bop,alus,m,cinp,&cout); /* cout = conventional carry */
         int sin = shcin ? (fC&1) : 0;                        /* shift-in: C for rotate, else 0 */
         uint8_t g = sh0 ? (uint8_t)((f<<1)|sin) : f;         /* stage 1: left  */
         uint8_t r = sh1 ? (uint8_t)((g>>1)|(sin<<7)) : g;    /* stage 2: right */

@@ -2548,6 +2548,22 @@
 <wire x1="-17.78" y1="-109.22" x2="-22.86" y2="-109.22" width="0.1524" layer="91"/>
 <label x="-22.86" y="-108.71" size="1.778" layer="95"/></segment>
 </net>
+<net name="P17B7" class="0">
+<segment><pinref part="U17" gate="G$1" pin="D8"/>
+<wire x1="122.22" y1="-543.56" x2="117.14" y2="-543.56" width="0.1524" layer="91"/>
+<label x="117.14" y="-543.05" size="1.778" layer="95"/></segment>
+<segment><pinref part="U13" gate="G$1" pin="IO7"/>
+<wire x1="157.78" y1="-398.78" x2="162.86" y2="-398.78" width="0.1524" layer="91"/>
+<label x="162.86" y="-398.27" size="1.778" layer="95"/></segment>
+</net>
+<net name="BSEL" class="0">
+<segment><pinref part="U17" gate="G$1" pin="Q8"/>
+<wire x1="157.78" y1="-538.48" x2="162.86" y2="-538.48" width="0.1524" layer="91"/>
+<label x="162.86" y="-537.97" size="1.778" layer="95"/></segment>
+<segment><pinref part="J1" gate="G$1" pin="B28"/>
+<wire x1="-17.78" y1="-111.76" x2="-22.86" y2="-111.76" width="0.1524" layer="91"/>
+<label x="-22.86" y="-111.25" size="1.778" layer="95"/></segment>
+</net>
 <net name="-USTL" class="0">
 <segment><pinref part="U4" gate="G$1" pin="2Y"/>
 <wire x1="462.58" y1="35.56" x2="467.66" y2="35.56" width="0.1524" layer="91"/>

@@ -86,11 +86,22 @@ DESC[("SEC","")]=("C","C := 1.")
 DESC[("ROL","")]=("C Z N","Rotate A left through carry.")
 DESC[("ROR","")]=("C Z N","Rotate A right through carry.")
 DESC[("JNC","a")]=("-","Branch to addr if C=0. (JC/JZ/JNZ are aliases of BCP/BZ/BNZ.)")
+# rev C: T-operand ALU ops (B-input mux selects T) + the LDT loads that make T usable
+DESC[("LDT","#")]=("-","T := immediate byte. (No flags.)")
+DESC[("LDT","a")]=("-","T := byte at addr (absolute). (No flags.)")
+DESC[("ADDT","")]=("C Z N","A := A + T. (B preserved.)")
+DESC[("SUBT","")]=("C Z N","A := A - T. (B preserved.)")
+DESC[("ANDT","")]=("C Z N","A := A AND T. (B preserved.)")
+DESC[("ORT","")] =("C Z N","A := A OR T. (B preserved.)")
+DESC[("XORT","")]=("C Z N","A := A XOR T. (B preserved.)")
+DESC[("CMPT","")]=("C Z N","Flags from A - T; A and B unchanged.")
 
 GROUPS=[("System",["NOP","HLT","CLC","SEC"]),
  ("Load / store",["LDA","LDB","STA"]),
  ("ALU  (operands A,B; result to A unless noted)",
   ["ADD","SUB","AND","OR","XOR","CMP","INC","DEC","SHL","SHR","ROL","ROR"]),
+ ("ALU with T (rev C; 2nd operand = T register via B-mux; B preserved)",
+  ["LDT","ADDT","SUBT","ANDT","ORT","XORT","CMPT"]),
  ("Pointer registers",["LPL1","LPH1","LPL2","LPH2","LPL3","LPH3",
   "INP1","INP2","INP3","DEP1","DEP2","DEP3",
   "TAP1L","TAP1H","TAP2L","TAP2H","TAP3L","TAP3H",

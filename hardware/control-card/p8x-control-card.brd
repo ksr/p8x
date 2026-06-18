@@ -360,6 +360,10 @@
 <contactref element="U16" pad="2"/>
 <contactref element="J1" pad="C22"/>
 </signal>
+<signal name="BSEL">
+<contactref element="U17" pad="19"/>
+<contactref element="J1" pad="B28"/>
+</signal>
 <signal name="CIN">
 <contactref element="U16" pad="6"/>
 <contactref element="J1" pad="C24"/>
@@ -817,6 +821,10 @@
 <signal name="P17B6">
 <contactref element="U17" pad="17"/>
 <contactref element="U13" pad="18"/>
+</signal>
+<signal name="P17B7">
+<contactref element="U17" pad="18"/>
+<contactref element="U13" pad="19"/>
 </signal>
 <signal name="PDEC">
 <contactref element="U15" pad="12"/>

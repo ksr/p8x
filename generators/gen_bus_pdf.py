@@ -14,7 +14,7 @@ def busnet(pin):
     r,n=pin[0],int(pin[1:])
     if n in (1,2): return "+5V"
     if n in (31,32): return "GND"
-    if r=="B": return {27:"CLRC",28:"SPARE9",29:"SPARE10",30:"SPARE11"}.get(n,"GND")
+    if r=="B": return {27:"CLRC",28:"BSEL",29:"SPARE10",30:"SPARE11"}.get(n,"GND")
     if r=="A":
         if 3<=n<=10: return "D%d"%(n-3)
         if n==11: return "-RES"
@@ -41,6 +41,7 @@ DESC={
  "SHCIN":"Shifter shift-in = C flag, for rotate-through-carry (rev B); to ALU card",
  "SETC":"Force C flag = 1 (SEC, rev B); to ALU card",
  "CLRC":"Force C flag = 0 (CLC, rev B); to ALU card",
+ "BSEL":"ALU B-input mux select (rev C): 0=B register, 1=T register; to ALU card",
 }
 def desc(net):
     if net in DESC: return DESC[net]
@@ -130,9 +131,9 @@ def pinlist(p):
 order=(["D%d"%i for i in range(8)]+["A%d"%i for i in range(16)]
  +["DOE%d"%i for i in range(4)]+["DLD%d"%i for i in range(4)]
  +["PSEL0","PSEL1","PSEL2","PINC","PDEC","LDF","ALUS0","ALUS1","ALUS2","ALUS3","ALUM",
-   "CIN","SH0","SH1","CLK","CLKB","-RES","LDZN","SHCIN","SETC","CLRC"]
+   "CIN","SH0","SH1","CLK","CLKB","-RES","LDZN","SHCIN","SETC","CLRC","BSEL"]
  +["FC","FZ","FN","FV"]
- +["SPARE%d"%i for i in range(9,12)]+["+5V","GND"])
+ +["SPARE%d"%i for i in range(10,12)]+["+5V","GND"])
 rows=[["Signal","Pin(s)","Dir*","Description"]]
 DIR={"CLK":"C>","CLKB":"C>","-RES":"C>","+5V":"PWR","GND":"PWR"}
 def sigdir(net):
@@ -198,9 +199,9 @@ for note in [
  "2. D0-D7 carry 10k pull-ups on the backplane only; cards never add bus conditioning.",
  "3. Loads occur on rising CLK; write strobes are gated with CLKB (second half-cycle).",
  "4. Address bus is driven exclusively by the register-bank card (selected pointer).",
- "5. rev C3: C27-C30 = PSEL2/LDZN/SHCIN/SETC and B27 = CLRC (were SPARE4-8). SPARE9-11 (B28-B30) remain reserved.",
+ "5. rev C3: C27-C30 = PSEL2/LDZN/SHCIN/SETC and B27 = CLRC (were SPARE4-8). rev C: B28 = BSEL (ALU B-input mux select, was SPARE9); SPARE10-11 (B29-B30) remain reserved.",
  "5b. SPARE0-3 were reallocated as flag lines FC/FZ/FN/FV (A27-A30). SPARE numbering therefore starts at 4.",
- "5c. Row B ground guard spans B3-B26; B27 = CLRC, B28-B30 = SPARE9-11 (rev C3).",
+ "5c. Row B ground guard spans B3-B26; B27 = CLRC, B28 = BSEL, B29-B30 = SPARE10-11.",
  "6. Verify row A/C orientation against physical DIN connectors before first fab."]:
     story.append(Paragraph(note,N))
 doc.build(story)
