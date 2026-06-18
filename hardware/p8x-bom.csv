@@ -1,0 +1,60 @@
+Qty,Part (generic — verify on DigiKey),Package,Category,Populate,Notes,RefDes
+1,CR2032 coin-cell holder,CP_RADIAL,Battery,yes,,io:BT1
+144,Ceramic cap 100N,C_DISC,Capacitor,yes,,alu:CD1 alu:CD10 alu:CD11 alu:CD12 alu:CD13 alu:CD14 alu:CD15 alu:CD16 alu:CD17 alu:CD18 alu:CD19 alu:CD2 alu:CD20 alu:CD21 alu:CD22 alu:CD23 alu:CD24 alu:CD25 alu:CD26 alu:CD27 alu:CD28 alu:CD29 alu:CD3 alu:CD30 alu:CD31 alu:CD32 alu:CD33 alu:CD34 alu:CD35 alu:CD4 alu:CD5 alu:CD6 alu:CD7 alu:CD8 alu:CD9 backplane:C1 backplane:C10 backplane:C2 backplane:C3 backplane:C4 backplane:C5 backplane:C6 backplane:C7 backplane:C8 backplane:C9 cf:CD1 cf:CD2 cf:CD3 cf:CD4 cf:CD5 cf:CD6 cf:CD7 cf:CD8 cf:CD9 control:CD1 control:CD10 control:CD11 control:CD12 control:CD13 control:CD14 control:CD15 control:CD16 control:CD17 control:CD18 control:CD19 control:CD2 control:CD20 control:CD21 control:CD3 control:CD4 control:CD5 control:CD6 control:CD7 control:CD8 control:CD9 io:CD1 io:CD10 io:CD11 io:CD12 io:CD13 io:CD14 io:CD15 io:CD16 io:CD2 io:CD3 io:CD4 io:CD5 io:CD6 io:CD7 io:CD8 io:CD9 memory:CD1 memory:CD2 memory:CD3 memory:CD4 memory:CD5 memory:CD6 memory:CD7 memory:CD8 memory:CD9 regbank:CD1 regbank:CD10 regbank:CD11 regbank:CD12 regbank:CD13 regbank:CD14 regbank:CD15 regbank:CD16 regbank:CD17 regbank:CD18 regbank:CD19 regbank:CD2 regbank:CD20 regbank:CD21 regbank:CD22 regbank:CD23 regbank:CD24 regbank:CD25 regbank:CD26 regbank:CD27 regbank:CD28 regbank:CD29 regbank:CD3 regbank:CD30 regbank:CD31 regbank:CD32 regbank:CD33 regbank:CD34 regbank:CD35 regbank:CD36 regbank:CD37 regbank:CD38 regbank:CD39 regbank:CD4 regbank:CD40 regbank:CD41 regbank:CD42 regbank:CD43 regbank:CD44 regbank:CD5 regbank:CD6 regbank:CD7 regbank:CD8 regbank:CD9
+2,Ceramic cap 150P,C_DISC,Capacitor,yes,,backplane:CT1 backplane:CT2
+5,Ceramic cap 1U,C_DISC,Capacitor,yes,,control:C1 io:C2 io:C3 io:C4 io:C5
+2,Electrolytic cap 470U,CP_RADIAL,Capacitor,yes,,backplane:CB1 backplane:CB2
+1,"40-pin boxed header (IDC, CF/IDE)",HDR40,Connector,yes,,cf:J2
+10,DIN41612 96-pin female R/A (backplane),DIN96,Connector,yes,,backplane:J1 backplane:J10 backplane:J2 backplane:J3 backplane:J4 backplane:J5 backplane:J6 backplane:J7 backplane:J8 backplane:J9
+1,DIN41612 96-pin male R/A (card),DIN96,Connector,yes,,memory:J1
+3,Pin header 3-pin 0.1in,HDR3,Connector,yes,,io:J2 io:J3 memory:JWP
+1,Pin header 4-pin 0.1in,HDR4,Connector,yes,,control:JP1
+1,"Terminal block, 4-pos 5mm",TB4,Connector,yes,,backplane:J11
+1,32.768kHz crystal,C_DISC,Crystal,yes,,io:X3
+12,LED 3mm green,LED5,LED,yes,,alu:LED3 alu:LED4 backplane:LED1 cf:LED3 cf:LED5 control:LED3 control:LED4 io:LED3 memory:LED3 memory:LED5 regbank:LED3 regbank:LED4
+2,LED 3mm red,LED5,LED,yes,,control:LED5 memory:LED6
+6,LED 3mm yellow,LED5,LED,yes,,alu:LED5 cf:LED4 io:LED4 memory:LED2 memory:LED4 regbank:LED5
+4,"LED bar array, 8-segment (DIP)",DIP16,LED,yes,,io:LA1 io:LM1 io:LM2 io:LM3
+4,74HCT00,DIP14,Logic IC,yes,,alu:U25 control:U4 io:U15 memory:U7
+1,74HCT02,DIP14,Logic IC,yes,,regbank:U34
+9,74HCT08,DIP14,Logic IC,yes,,alu:U19 alu:U31 alu:U35 cf:U8 control:U5 io:U6 memory:U9 regbank:U37 regbank:U38
+2,74HCT10,DIP14,Logic IC,yes,,cf:U6 cf:U7
+13,74HCT138,DIP16,Logic IC,yes,,alu:U20 alu:U21 cf:U3 cf:U4 control:U8 io:U2 io:U3 io:U4 memory:U5 memory:U6 regbank:U30 regbank:U31 regbank:U33
+2,74HCT139,DIP16,Logic IC,yes,,regbank:U32 regbank:U39
+3,74HCT14,DIP14,Logic IC,yes,,cf:U5 control:U2 regbank:U35
+1,74HCT151,DIP16,Logic IC,yes,,control:U9
+10,74HCT157,DIP16,Logic IC,yes,,alu:U12 alu:U13 alu:U14 alu:U15 alu:U22 alu:U28 alu:U29 alu:U30 alu:U32 alu:U33
+3,74HCT161,DIP16,Logic IC,yes,,control:U1 control:U18 io:U7
+16,74HCT169,DIP16,Logic IC,yes,,regbank:U1 regbank:U10 regbank:U11 regbank:U12 regbank:U13 regbank:U14 regbank:U15 regbank:U16 regbank:U2 regbank:U3 regbank:U4 regbank:U5 regbank:U6 regbank:U7 regbank:U8 regbank:U9
+1,74HCT175,DIP16,Logic IC,yes,,alu:U17
+2,74HCT181,DIP24W,Logic IC,yes,ALU slice — HCT uncommon; may need 74F181/NOS,alu:U10 alu:U9
+1,74HCT182,DIP16,Logic IC,yes,look-ahead carry — uncommon; 74F182/NOS,alu:U11
+24,74HCT244,DIP20,Logic IC,yes,,alu:U16 alu:U2 alu:U23 alu:U4 alu:U6 alu:U8 io:U11 io:U12 io:U13 io:U9 regbank:U17 regbank:U18 regbank:U19 regbank:U20 regbank:U21 regbank:U22 regbank:U23 regbank:U24 regbank:U25 regbank:U26 regbank:U29 regbank:U36 regbank:U43 regbank:U44
+2,74HCT245,DIP20,Logic IC,yes,,cf:U1 memory:U3
+2,74HCT257,DIP16,Logic IC,yes,,regbank:U27 regbank:U28
+2,74HCT260,DIP14,Logic IC,yes,dual 5-in NOR — uncommon; verify HCT avail or NOS,alu:U18 alu:U27
+3,74HCT30,DIP14,Logic IC,yes,,cf:U2 io:U1 memory:U4
+5,74HCT32,DIP14,Logic IC,yes,,alu:U24 control:U6 io:U5 memory:U8 regbank:U40
+5,74HCT374,DIP20,Logic IC,yes,,control:U14 control:U15 control:U16 control:U17 io:U10
+7,74HCT377,DIP20,Logic IC,yes,,alu:U1 alu:U3 alu:U5 alu:U7 control:U7 regbank:U41 regbank:U42
+2,74HCT74,DIP14,Logic IC,yes,,alu:U26 control:U3
+2,74HCT86,DIP14,Logic IC,yes,,alu:U34 control:U19
+1,62256 SRAM,DIP28W,Memory IC,yes,32Kx8 SRAM (e.g. AS6C62256-55),memory:U2
+1,AT28C256,DIP28W,Memory IC,yes,"parallel EEPROM 32Kx8, 150ns",memory:U1
+4,AT28C64,DIP28W,Memory IC,yes,parallel EEPROM 8Kx8 (microcode ROMs),control:U10 control:U11 control:U12 control:U13
+1,2.4576MHZ full-can oscillator,OSC4,Oscillator,yes,,io:X2
+1,4MHZ full-can oscillator,OSC4,Oscillator,yes,,control:X1
+1,MAX232,DIP16,Peripheral IC,yes,RS-232 level shifter (+ its 1uF caps),io:U8
+1,MC6850,DIP24W,Peripheral IC,yes,"ACIA — OBSOLETE, source NOS (eBay/specialist)",io:U14
+2,Resistor 100R,R_AXIAL,Resistor,yes,,backplane:RT1 backplane:RT2
+3,Resistor 10K,R_AXIAL,Resistor,yes,,control:R1 control:R2 control:R3
+19,Resistor 1K,R_AXIAL,Resistor,yes,,alu:R4 alu:R5 alu:RP1 backplane:RL1 cf:R4 cf:RP1 control:R4 control:R5 control:RP1 io:R4 io:RP1 memory:RP1 memory:RS1 memory:RS2 memory:RS3 memory:RS4 regbank:R4 regbank:R5 regbank:RP1
+1,Resistor 330R,R_AXIAL,Resistor,yes,,cf:R5
+3,"Resistor network 8X10K (bussed, 9-pin SIP)",SIP9,Resistor network,yes,,backplane:RN1 cf:RN1 io:RNP
+4,"Resistor network 8X330R (isolated, SIP)",SIP16,Resistor network,yes,,io:RL1 io:RM1 io:RM2 io:RM3
+1,"DIP switch, 8-position",DIP16,Switch,yes,,io:SW1
+3,Switch SPST (momentary/toggle),SW2P,Switch,yes,,control:SWR control:SWS control:SWT
+1,74HCT244,DIP20,Logic IC,DNP,,control:U20
+1,74HCT374,DIP20,Logic IC,DNP,,cf:U9
+1,74HCT74,DIP14,Logic IC,DNP,,control:U21
+1,DS1302,DIP8,Peripheral IC,DNP,RTC (DNP option),io:U16
