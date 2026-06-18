@@ -123,6 +123,16 @@ Last updated: 2026-06-11
       (ideally interprets the same EPROM images the hardware will burn, so
       microcode bugs surface in software first); memory map, ACIA-to-stdio,
       CF image file backing; test bed for monitor/OS/BASIC before hardware
+- [ ] **On-target assembler** (a P8X/OS program or built-in) — makes the
+      machine self-hosting for machine code: edit a `.asm` text file with EDIT,
+      assemble it on-target to a runnable file, then RUN it. Two-pass like
+      p8xasm.py (labels, the LDPn pseudo, .byte/.word/.org), reading source
+      from a file and writing a binary file via the OS. The opcode table is the
+      catch: it can't import genucode.py, so generate a compact on-target
+      mnemonic->opcode table from the same ISA source (a genucode.py emitter)
+      so the host and target assemblers can't drift. Scope: integer-only,
+      modest program sizes; pairs with EDIT + RUN to close the write/assemble/
+      run loop entirely on the P8X. (Host p8xasm.py stays the primary tool.)
 - [ ] **Simple text editor** for editing text files: load a file into a RAM
       buffer, line-oriented edit (insert/delete/list/replace by line, like the
       BASIC editor), save back. Serial-console friendly (no cursor addressing);
