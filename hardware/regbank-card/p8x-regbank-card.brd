@@ -222,7 +222,7 @@
 <classes><class number="0" name="default" width="0" drill="0"/></classes>
 <designrules name="default"><param name="layerSetup" value="(1*2*15*16)"/></designrules>
 <elements>
-<element name="J1" library="p8x" package="DIN96" value="DIN41612-96M" x="4.85" y="95.15"/>
+<element name="J1" library="p8x" package="DIN96" value="FABC96R" x="4.85" y="95.15"/>
 <element name="U1" library="p8x" package="DIP16" value="P0 L0" x="16.78" y="95.20"/>
 <element name="CD1" library="p8x" package="C_DISC" value="100N" x="28.70" y="95.10"/>
 <element name="U2" library="p8x" package="DIP16" value="P0 L1" x="33.00" y="95.20"/>

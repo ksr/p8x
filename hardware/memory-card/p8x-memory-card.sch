@@ -733,7 +733,7 @@
 </library></libraries>
 <classes><class number="0" name="default" width="0" drill="0"/></classes>
 <parts>
-<part name="J1" library="p8x" deviceset="DIN96" device="" value="DIN41612-96M"/>
+<part name="J1" library="p8x" deviceset="DIN96" device="" value="FABC96R"/>
 <part name="U1" library="p8x" deviceset="MEM28K8" device="" value="28C256-15"/>
 <part name="U2" library="p8x" deviceset="MEM28K8" device="" value="62256-70"/>
 <part name="U3" library="p8x" deviceset="74245" device="" value="74HCT245"/>

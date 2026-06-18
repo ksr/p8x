@@ -1015,7 +1015,7 @@
 </library></libraries>
 <classes><class number="0" name="default" width="0" drill="0"/></classes>
 <parts>
-<part name="J1" library="p8x" deviceset="DIN96" device="" value="DIN41612-96M"/>
+<part name="J1" library="p8x" deviceset="DIN96" device="" value="FABC96R"/>
 <part name="U1" library="p8x" deviceset="74161" device="" value="CLK DIV"/>
 <part name="U2" library="p8x" deviceset="HEX14" device="" value="74HCT14"/>
 <part name="U3" library="p8x" deviceset="7474" device="" value="74HCT74"/>

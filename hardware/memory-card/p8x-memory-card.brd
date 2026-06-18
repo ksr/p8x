@@ -259,7 +259,7 @@
 <classes><class number="0" name="default" width="0" drill="0"/></classes>
 <designrules name="default"><param name="layerSetup" value="(1*2*15*16)"/></designrules>
 <elements>
-<element name="J1" library="p8x" package="DIN96" value="DIN41612-96M" x="147.32" y="88.90"/>
+<element name="J1" library="p8x" package="DIN96" value="FABC96R" x="147.32" y="88.90"/>
 <element name="U1" library="p8x" package="DIP28W" value="28C256-15" x="17.78" y="83.82"/>
 <element name="U2" library="p8x" package="DIP28W" value="62256-70" x="43.18" y="83.82"/>
 <element name="U3" library="p8x" package="DIP20" value="74HCT245" x="68.58" y="83.82"/>

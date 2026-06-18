@@ -398,7 +398,7 @@ def card(name,title,parts_ic,parts_small,nets,used_bus):
         decap[c]=("CAP","100N")
         nets.setdefault("VCC",[]).append((c,"1"))
         nets.setdefault("GND",[]).append((c,"2"))
-    parts={"J1":("DIN96","DIN41612-96M")}
+    parts={"J1":("DIN96","FABC96R")}
     parts.update(parts_ic); parts.update(parts_small); parts.update(decap)
     sch={}; order=[r for r in parts if r!="J1"]
     sch["J1"]=("DIN96",parts["J1"][1],0,38.10)
@@ -428,7 +428,10 @@ def card(name,title,parts_ic,parts_small,nets,used_bus):
             cx=x0; cyt-=rowh+GAP; rowh=0.0
         brd[ref]=(dev,val,cx-ox,cyt-h-oy)     # top-left of this part at (cx,cyt)
         cx+=w+GAP; rowh=max(rowh,h)
-    allp=dict(parts_ic); allp.update(parts_small); allp.update(decap)
+    # include J1 so CARDS is the full board (the BOM counts it; the schematic
+    # renderer filters J1 by name). Without it the card edge connectors were
+    # missing from the BOM.
+    allp={"J1":("DIN96",parts["J1"][1])}; allp.update(parts_ic); allp.update(parts_small); allp.update(decap)
     CARDS[name]=(title,allp,nets)
     base="%s/p8x-%s"%(name,name)   # each board in its own subdirectory
     write_sch(base+".sch",title,sch,nets)
@@ -964,7 +967,7 @@ card("cf-card","P8X CF-IDE CARD REV A - 8-BIT TRUE IDE AT 0xFF10",ic,sm,n,
 
 # ===================== MEMORY CARD rev C ======================================
 mc_parts={
- "J1":("DIN96","DIN41612-96M",35.56,38.10),
+ "J1":("DIN96","FABC96R",35.56,38.10),
  "U1":("MEM28K8","28C256-15",132.08,38.10),"U2":("MEM28K8","62256-70",220.98,38.10),
  "U3":("74245","74HCT245",309.88,38.10),"U4":("7430","74HCT30",398.78,38.10),
  "U9":("GATES14","74HCT08",487.68,38.10),"U5":("74138","74HCT138-DOE",132.08,-76.20),
@@ -1036,7 +1039,7 @@ validate("memory-card/p8x-memory-card.sch",mc_parts,mcn)
 # the renderer reads only dev/val and filters J1, so this format is compatible.
 CARDS["memory-card"]=("P8X MEMORY CARD REV C",mc_parts,mcn)
 mcb_parts={
- "J1":("DIN96","DIN41612-96M",147.32,88.90),
+ "J1":("DIN96","FABC96R",147.32,88.90),
  "U1":("MEM28K8","28C256-15",17.78,83.82),"U2":("MEM28K8","62256-70",43.18,83.82),
  "U3":("74245","74HCT245",68.58,83.82),"U4":("7430","74HCT30",88.90,83.82),
  "U5":("74138","74HCT138-DOE",109.22,83.82),"U6":("74138","74HCT138-DLD",17.78,35.56),

@@ -916,7 +916,7 @@
 </library></libraries>
 <classes><class number="0" name="default" width="0" drill="0"/></classes>
 <parts>
-<part name="J1" library="p8x" deviceset="DIN96" device="" value="DIN41612-96M"/>
+<part name="J1" library="p8x" deviceset="DIN96" device="" value="FABC96R"/>
 <part name="U1" library="p8x" deviceset="74245" device="" value="DATA BUF"/>
 <part name="U2" library="p8x" deviceset="7430" device="" value="IO PAGE"/>
 <part name="U3" library="p8x" deviceset="74138" device="" value="DOE DEC"/>
