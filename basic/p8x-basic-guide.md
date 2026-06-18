@@ -80,7 +80,7 @@ Operators, highest precedence first:
 | Level | Operators | Notes |
 |-------|-----------|-------|
 | unary | `-` `+` | `-5`, `--A` (both apply to the following factor) |
-| 1 | `*` `/` | integer multiply / divide (`/` truncates toward zero) |
+| 1 | `*` `/` `%` | integer multiply / divide (`/` truncates toward zero) / modulus (remainder of `/`) |
 | 2 | `+` `-` | add / subtract |
 | 3 | `=` `<>` `<` `>` `<=` `>=` | comparisons; yield **1** (true) or **0** (false) |
 
@@ -132,8 +132,9 @@ FOR I=1 TO 3 : PRINT I; : NEXT   ->  123
 
 ## Commands (immediate mode)
 
-`RUN` (execute the stored program from the lowest line), `LIST`, `NEW`, and
-`BYE` (leave BASIC — returns to the monitor in the ROM/disk builds).
+`RUN` (execute the stored program from the lowest line), `LIST`, `NEW`,
+`HELP` (print the supported statements, commands, functions, and operators),
+and `BYE` (leave BASIC — returns to the monitor in the ROM/disk builds).
 
 ## Memory & hardware access
 

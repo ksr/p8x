@@ -99,6 +99,7 @@ TOK_PEEK = $92
 TOK_POKE = $93
 TOK_STEP = $94
 TOK_BYE  = $95
+TOK_HELP = $96
 
 MONITOR = $0000          ; reset vector — BYE returns here
 
@@ -224,6 +225,10 @@ STMT:   JSR  SKIPSP
         LDB  #TOK_BYE
         CMP
         JZ   DOBYE
+        LDA  (P2)
+        LDB  #TOK_HELP
+        CMP
+        JZ   st_help
         LDA  (P2)            ; bare variable -> implicit LET
         LDB  #'A'
         SUB
@@ -238,6 +243,9 @@ st_list: JSR LIST
         RTS
 st_new: JSR  NEWPROG
         LDP1 #MOK
+        JSR  PUTS
+        RTS
+st_help: LDP1 #MHELP
         JSR  PUTS
         RTS
 ; BYE — leave BASIC by jumping to the reset vector ($0000). In the ROM and
@@ -1122,6 +1130,10 @@ tm_l:   JSR  SKIPSP
         LDB  #'/'
         CMP
         JZ   tm_div
+        LDA  (P2)
+        LDB  #'%'
+        CMP
+        JZ   tm_mod
         RTS
 tm_mul: INP2
         LDA  RESULT
@@ -1157,6 +1169,26 @@ tm_div: INP2
 tm_store: LDA NUM1
         STA  RESULT
         LDA  NUM1+1
+        STA  RESULT+1
+        JMP  tm_l
+tm_mod: INP2                    ; '%' modulus: RESULT = left mod right (DIV16 REM)
+        LDA  RESULT
+        PHA
+        LDA  RESULT+1
+        PHA
+        JSR  FACTOR
+        PLA
+        STA  NUM1+1
+        PLA
+        STA  NUM1
+        LDA  RESULT
+        STA  NUM2
+        LDA  RESULT+1
+        STA  NUM2+1
+        JSR  DIV16
+        LDA  REM
+        STA  RESULT
+        LDA  REM+1
         STA  RESULT+1
         JMP  tm_l
 
@@ -1986,6 +2018,8 @@ KWTAB:  .ascii "PRINT"
         .byte $94
         .ascii "BYE"
         .byte $95
+        .ascii "HELP"
+        .byte $96
         .byte $00
 
 ;==============================================================================
@@ -2056,6 +2090,17 @@ gldone: LDA  #0
 ;==============================================================================
 BANNER: .byte CR,LF
         .ascii "P8X BASIC V0"
+        .byte CR,LF,0
+MHELP:  .byte CR,LF
+        .ascii "STATEMENTS: PRINT LET IF/THEN FOR/TO/STEP NEXT"
+        .byte CR,LF
+        .ascii "  GOTO GOSUB RETURN INPUT POKE REM END"
+        .byte CR,LF
+        .ascii "COMMANDS: RUN LIST NEW HELP BYE"
+        .byte CR,LF
+        .ascii "FUNCTIONS: ABS(x) RND(n) PEEK(a)"
+        .byte CR,LF
+        .ascii "OPERATORS: + - * / %  = <> < > <= >="
         .byte CR,LF,0
 MOK:    .ascii "Ok"
         .byte CR,LF,0
