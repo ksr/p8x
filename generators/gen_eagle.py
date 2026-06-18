@@ -350,6 +350,23 @@ def validate(fn,parts,nets):
             dev=parts[cr.get("element")][0]
             pads={p[0] for p in PKG[DEV[dev]["pkg"]]}
             if cr.get("pad") not in pads: errs+=1; print("bad pad",cr.get("element"),cr.get("pad"))
+        # footprint overlap guard (board only): rotation-aware AABBs over the pads
+        def _rot(px,py,r): return {"R90":(-py,px),"R180":(-px,-py),"R270":(py,-px)}.get(r,(px,py))
+        bxs=[]
+        for ref,pv in parts.items():
+            ps=PKG[DEV[pv[0]]["pkg"]]; d=max(p[4] for p in ps); rt=pv[4] if len(pv)>4 else "R0"
+            xs=[];ys=[]
+            for (_n,px,py,_dr,_di) in ps:
+                rx,ry=_rot(px,py,rt); xs.append(pv[2]+rx); ys.append(pv[3]+ry)
+            bxs.append((ref,min(xs)-d/2,min(ys)-d/2,max(xs)+d/2,max(ys)+d/2))
+        ov=0
+        for i in range(len(bxs)):
+            for j in range(i+1,len(bxs)):
+                a,b=bxs[i],bxs[j]
+                if a[1]<b[3]-0.05 and b[1]<a[3]-0.05 and a[2]<b[4]-0.05 and b[2]<a[4]-0.05:
+                    ov+=1
+                    if ov<=3: print("  overlap:",a[0],"<->",b[0])
+        if ov: print("  WARNING: %d footprint overlap(s) in %s — fix placement"%(ov,fn))
     seen=set()
     for nn,pins in nets.items():
         for rp in pins:
@@ -358,6 +375,12 @@ def validate(fn,parts,nets):
 
 # ===================== CARD BUILDER ============================================
 CARDS={}  # name -> (title, parts, nets) — used by render_traditional_auto.py
+
+def fp_box(pkg):
+    """Footprint bounding box from the pad geometry: (w,h,ox,oy) where ox,oy is
+    the bbox bottom-left relative to the part origin (pad dia included)."""
+    pads=PKG[pkg]; xs=[p[1] for p in pads]; ys=[p[2] for p in pads]; d=max(p[4] for p in pads)
+    return (max(xs)-min(xs)+d, max(ys)-min(ys)+d, min(xs)-d/2, min(ys)-d/2)
 
 def card(name,title,parts_ic,parts_small,nets,used_bus):
     """Build sch+brd for one plug-in card."""
@@ -382,15 +405,29 @@ def card(name,title,parts_ic,parts_small,nets,used_bus):
     for i,ref in enumerate(order):
         dev,val=parts[ref]
         sch[ref]=(dev,val,140+(i%4)*101.6,38.10-(i//4)*139.7)
-    brd={}; brd["J1"]=("DIN96",parts["J1"][1],147.32,88.90)
-    for i,ref in enumerate(icrefs):
-        dev,val=parts_ic[ref]
-        x=7.62+13.97*(i%10); y=88.90-25.40*(i//10)
-        brd[ref]=(dev,val,x,y)
-        brd["CD%d"%(i+1)]=("CAP","100N",x,y-10.16)   # decoupling cap by its IC
-    for i,ref in enumerate(parts_small):
-        dev,val=parts_small[ref]
-        brd[ref]=(dev,val,5.08+10.16*(i%14),96.52-(5.08 if i>=14 else 0))
+    # Footprint-aware placement: J1 (the DIN96 edge connector) hugs the left
+    # edge; everything else flows left-to-right in rows sized to each part's real
+    # pad-extent + clearance, wrapping at the board width and stacking downward.
+    # This guarantees NO OVERLAPS. Dense cards may run past the board outline
+    # (they genuinely don't fit 160x100 at safe pitch) — arrange by hand when
+    # routing; the placement-view PDF flags the overflow.
+    BW,BH,EDGE,GAP=160.0,100.0,4.0,2.6
+    brd={}
+    j1w,j1h,j1ox,j1oy=fp_box("DIN96")
+    brd["J1"]=("DIN96",parts["J1"][1],EDGE-j1ox,BH-EDGE-j1h-j1oy)
+    flow=[]                                   # (ref,dev,val,pkg) in placement order
+    for i,ref in enumerate(icrefs):           # each IC immediately followed by its cap
+        dev,val=parts_ic[ref]; flow.append((ref,dev,val,DEV[dev]["pkg"]))
+        flow.append(("CD%d"%(i+1),"CAP","100N",DEV["CAP"]["pkg"]))
+    for ref in parts_small:
+        dev,val=parts_small[ref]; flow.append((ref,dev,val,DEV[dev]["pkg"]))
+    x0=EDGE+j1w+GAP*2; cx=x0; cyt=BH-EDGE; rowh=0.0
+    for ref,dev,val,pkg in flow:
+        w,h,ox,oy=fp_box(pkg)
+        if cx+w>BW-EDGE and cx>x0:            # wrap to next row
+            cx=x0; cyt-=rowh+GAP; rowh=0.0
+        brd[ref]=(dev,val,cx-ox,cyt-h-oy)     # top-left of this part at (cx,cyt)
+        cx+=w+GAP; rowh=max(rowh,h)
     allp=dict(parts_ic); allp.update(parts_small); allp.update(decap)
     CARDS[name]=(title,allp,nets)
     base="%s/p8x-%s"%(name,name)   # each board in its own subdirectory
@@ -1011,9 +1048,10 @@ mcb_parts={
  "RS3":("RES","1K",127.00,81.28),"LED5":("LED","RD-GRN",142.24,81.28),
  "RS4":("RES","1K",127.00,76.20),"LED6":("LED","WR-RED",142.24,76.20),
  "JWP":("HDR3","ROM-WP",128.00,35.56)}   # rev C: ROM write-protect jumper
-for i,u in enumerate(MCIC):                      # decoupling cap beside each IC
-    dev,val,x,y=mcb_parts[u]
-    mcb_parts["CD%d"%(i+1)]=("CAP","100N",x,y-10.16)
+# decoupling caps in a clear strip along the bottom edge (the ICs are tall
+# DIP-28W, so placing caps directly under them overlapped — see board PDF)
+for i,u in enumerate(MCIC):
+    mcb_parts["CD%d"%(i+1)]=("CAP","100N",17.78+8.0*i,7.0)
 write_brd("memory-card/p8x-memory-card.brd","P8X MEMORY CARD REV C",mcb_parts,mcn,{},
           {"GND":[(2,)],"VCC":[(15,)]},160,100)
 validate("memory-card/p8x-memory-card.brd",mcb_parts,mcn)

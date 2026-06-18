@@ -280,15 +280,15 @@
 <element name="RS4" library="p8x" package="R_AXIAL" value="1K" x="127.00" y="76.20"/>
 <element name="LED6" library="p8x" package="LED5" value="WR-RED" x="142.24" y="76.20"/>
 <element name="JWP" library="p8x" package="HDR3" value="ROM-WP" x="128.00" y="35.56"/>
-<element name="CD1" library="p8x" package="C_DISC" value="100N" x="17.78" y="73.66"/>
-<element name="CD2" library="p8x" package="C_DISC" value="100N" x="43.18" y="73.66"/>
-<element name="CD3" library="p8x" package="C_DISC" value="100N" x="68.58" y="73.66"/>
-<element name="CD4" library="p8x" package="C_DISC" value="100N" x="88.90" y="73.66"/>
-<element name="CD5" library="p8x" package="C_DISC" value="100N" x="109.22" y="73.66"/>
-<element name="CD6" library="p8x" package="C_DISC" value="100N" x="17.78" y="25.40"/>
-<element name="CD7" library="p8x" package="C_DISC" value="100N" x="43.18" y="25.40"/>
-<element name="CD8" library="p8x" package="C_DISC" value="100N" x="68.58" y="25.40"/>
-<element name="CD9" library="p8x" package="C_DISC" value="100N" x="88.90" y="25.40"/>
+<element name="CD1" library="p8x" package="C_DISC" value="100N" x="17.78" y="7.00"/>
+<element name="CD2" library="p8x" package="C_DISC" value="100N" x="25.78" y="7.00"/>
+<element name="CD3" library="p8x" package="C_DISC" value="100N" x="33.78" y="7.00"/>
+<element name="CD4" library="p8x" package="C_DISC" value="100N" x="41.78" y="7.00"/>
+<element name="CD5" library="p8x" package="C_DISC" value="100N" x="49.78" y="7.00"/>
+<element name="CD6" library="p8x" package="C_DISC" value="100N" x="57.78" y="7.00"/>
+<element name="CD7" library="p8x" package="C_DISC" value="100N" x="65.78" y="7.00"/>
+<element name="CD8" library="p8x" package="C_DISC" value="100N" x="73.78" y="7.00"/>
+<element name="CD9" library="p8x" package="C_DISC" value="100N" x="81.78" y="7.00"/>
 </elements><signals>
 <signal name="-BOE">
 <contactref element="U9" pad="3"/>

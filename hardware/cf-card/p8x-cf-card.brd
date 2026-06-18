@@ -277,33 +277,33 @@
 <classes><class number="0" name="default" width="0" drill="0"/></classes>
 <designrules name="default"><param name="layerSetup" value="(1*2*15*16)"/></designrules>
 <elements>
-<element name="J1" library="p8x" package="DIN96" value="DIN41612-96M" x="147.32" y="88.90"/>
-<element name="U1" library="p8x" package="DIP20" value="DATA BUF" x="7.62" y="88.90"/>
-<element name="CD1" library="p8x" package="C_DISC" value="100N" x="7.62" y="78.74"/>
-<element name="U2" library="p8x" package="DIP14" value="IO PAGE" x="21.59" y="88.90"/>
-<element name="CD2" library="p8x" package="C_DISC" value="100N" x="21.59" y="78.74"/>
-<element name="U3" library="p8x" package="DIP16" value="DOE DEC" x="35.56" y="88.90"/>
-<element name="CD3" library="p8x" package="C_DISC" value="100N" x="35.56" y="78.74"/>
-<element name="U4" library="p8x" package="DIP16" value="DLD DEC" x="49.53" y="88.90"/>
-<element name="CD4" library="p8x" package="C_DISC" value="100N" x="49.53" y="78.74"/>
-<element name="U5" library="p8x" package="DIP14" value="74HCT14" x="63.50" y="88.90"/>
-<element name="CD5" library="p8x" package="C_DISC" value="100N" x="63.50" y="78.74"/>
-<element name="U6" library="p8x" package="DIP14" value="74HCT10" x="77.47" y="88.90"/>
-<element name="CD6" library="p8x" package="C_DISC" value="100N" x="77.47" y="78.74"/>
-<element name="U7" library="p8x" package="DIP14" value="74HCT10" x="91.44" y="88.90"/>
-<element name="CD7" library="p8x" package="C_DISC" value="100N" x="91.44" y="78.74"/>
-<element name="U8" library="p8x" package="DIP14" value="74HCT08" x="105.41" y="88.90"/>
-<element name="CD8" library="p8x" package="C_DISC" value="100N" x="105.41" y="78.74"/>
-<element name="U9" library="p8x" package="DIP20" value="CF HI-BYTE DNP" x="119.38" y="88.90"/>
-<element name="CD9" library="p8x" package="C_DISC" value="100N" x="119.38" y="78.74"/>
-<element name="J2" library="p8x" package="HDR40" value="CF/IDE 40P" x="5.08" y="96.52"/>
-<element name="RN1" library="p8x" package="SIP9" value="8X10K" x="15.24" y="96.52"/>
-<element name="RP1" library="p8x" package="R_AXIAL" value="1K" x="25.40" y="96.52"/>
-<element name="LED3" library="p8x" package="LED5" value="PWR-GRN" x="35.56" y="96.52"/>
-<element name="R4" library="p8x" package="R_AXIAL" value="1K" x="45.72" y="96.52"/>
-<element name="LED4" library="p8x" package="LED5" value="ACT-YEL" x="55.88" y="96.52"/>
-<element name="R5" library="p8x" package="R_AXIAL" value="330R" x="66.04" y="96.52"/>
-<element name="LED5" library="p8x" package="LED5" value="DASP-GRN" x="76.20" y="96.52"/>
+<element name="J1" library="p8x" package="DIN96" value="DIN41612-96M" x="4.85" y="95.15"/>
+<element name="U1" library="p8x" package="DIP20" value="DATA BUF" x="16.78" y="95.20"/>
+<element name="CD1" library="p8x" package="C_DISC" value="100N" x="28.70" y="95.10"/>
+<element name="U2" library="p8x" package="DIP14" value="IO PAGE" x="33.00" y="95.20"/>
+<element name="CD2" library="p8x" package="C_DISC" value="100N" x="44.92" y="95.10"/>
+<element name="U3" library="p8x" package="DIP16" value="DOE DEC" x="49.22" y="95.20"/>
+<element name="CD3" library="p8x" package="C_DISC" value="100N" x="61.14" y="95.10"/>
+<element name="U4" library="p8x" package="DIP16" value="DLD DEC" x="65.44" y="95.20"/>
+<element name="CD4" library="p8x" package="C_DISC" value="100N" x="77.36" y="95.10"/>
+<element name="U5" library="p8x" package="DIP14" value="74HCT14" x="81.66" y="95.20"/>
+<element name="CD5" library="p8x" package="C_DISC" value="100N" x="93.58" y="95.10"/>
+<element name="U6" library="p8x" package="DIP14" value="74HCT10" x="97.88" y="95.20"/>
+<element name="CD6" library="p8x" package="C_DISC" value="100N" x="109.80" y="95.10"/>
+<element name="U7" library="p8x" package="DIP14" value="74HCT10" x="114.10" y="95.20"/>
+<element name="CD7" library="p8x" package="C_DISC" value="100N" x="126.02" y="95.10"/>
+<element name="U8" library="p8x" package="DIP14" value="74HCT08" x="130.32" y="95.20"/>
+<element name="CD8" library="p8x" package="C_DISC" value="100N" x="142.24" y="95.10"/>
+<element name="U9" library="p8x" package="DIP20" value="CF HI-BYTE DNP" x="146.54" y="95.20"/>
+<element name="CD9" library="p8x" package="C_DISC" value="100N" x="16.88" y="68.04"/>
+<element name="J2" library="p8x" package="HDR40" value="CF/IDE 40P" x="21.23" y="68.09"/>
+<element name="RN1" library="p8x" package="SIP9" value="8X10K" x="28.02" y="68.14"/>
+<element name="RP1" library="p8x" package="R_AXIAL" value="1K" x="32.22" y="68.14"/>
+<element name="LED3" library="p8x" package="LED5" value="PWR-GRN" x="46.68" y="68.04"/>
+<element name="R4" library="p8x" package="R_AXIAL" value="1K" x="53.52" y="68.14"/>
+<element name="LED4" library="p8x" package="LED5" value="ACT-YEL" x="67.98" y="68.04"/>
+<element name="R5" library="p8x" package="R_AXIAL" value="330R" x="74.82" y="68.14"/>
+<element name="LED5" library="p8x" package="LED5" value="DASP-GRN" x="89.28" y="68.04"/>
 </elements><signals>
 <signal name="-CFOE">
 <contactref element="U8" pad="6"/>
