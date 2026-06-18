@@ -64,9 +64,22 @@ there. No card / bad signature falls back to the monitor prompt.
 
 ## Build & run
 
-The OS is a RAM image, so it's assembled with `--base 0x8000` (the assembler
-emits only the bytes from `$8000` up, with labels resolved to their run
-address):
+**Interactive — easiest way to try it:**
+
+```sh
+./os/run.sh
+```
+
+Builds the monitor, OS, microcode, and emulator, makes a ready-to-boot P8XFS v2
+disk (OS installed plus a small sample tree: `/BIN/HI.BIN`, `/README.TXT`), and
+launches it attached to your terminal. You start in the **monitor** (`*`
+prompt) — type `?` for monitor help, then **`B`** to boot P8X/OS (`HELP` lists
+its commands). The disk persists at `os/run-disk.img`, so files you `SAVE`
+survive across runs (delete it to start fresh; quit with Ctrl-C).
+
+**Manual build** — the OS is a RAM image, so it's assembled with `--base 0x8000`
+(the assembler emits only the bytes from `$8000` up, with labels resolved to
+their run address):
 
 ```sh
 # assemble the OS

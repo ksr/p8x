@@ -22,3 +22,4 @@ emulator/test/*.tmp
 /p8x-rom-basic.bin
 # stray microcode images if a generator is run from the repo root
 /u?.bin
+/os/run-disk.img
