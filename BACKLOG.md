@@ -184,7 +184,13 @@ Last updated: 2026-06-11
 - [ ] RESIZE for growable directories (P8XFS v3)
 - [ ] FAT-style cluster allocation to eliminate PACK (P8XFS v3, entry format
       already compatible)
-- [ ] DS1302 RTC on I/O card → file timestamps
+- [ ] DS1302 RTC on I/O card → file timestamps. Footprints provisioned (see
+      DONE): DS1302 (U16) + 32.768kHz crystal (X3) + coin cell (BT1) + a 3-wire
+      breakout header (J3), all DNP. Remaining: connect the 3-wire to a CPU port
+      (reserved $FF08 / PORT DEC U2 Y3) — jumper J3 to spare port bits or add a
+      small latch/buffer — write the bit-banged DS1302 driver, and VERIFY the
+      crystal + coin-cell land patterns against the real parts (placeholder THT
+      footprints used).
 - [ ] Interrupt support — HARDWARE CONTROLLER WIRING (architecture done +
       footprints provisioned DNP, see DONE). The microcode/emulator/ISA side is
       implemented and tested (EI/DI/RTI, $08 IRQ entry, vector $0808, $FF06
@@ -237,7 +243,11 @@ Last updated: 2026-06-11
 - [ ] Two new opcodes required by monitor: JMP (P1), JSR (P1) — fold into the
       official ISA table when the assembler exists
 - [ ] CF card 8-bit mode support — buy 2–3 candidates (SanDisk/industrial),
-      test SET FEATURES $EF/$01 early; latch fallback adds 2 chips if needed
+      test SET FEATURES $EF/$01 early. Fallback latch footprint provisioned DNP
+      (see DONE): U9 (74374) with the CF high data byte D8-15 wired to its inputs,
+      output high-Z and clock grounded. Only populate if a card refuses 8-bit
+      mode; then wire the Q outputs onto D0-7 + a decoded read/latch-clock (design
+      with DRC — it drives the data bus).
 - [ ] Clock-channel verticals on backplane: ~0.6 mm clearance to slot-10 pad
       columns — confirm against house DRC rules
 - [ ] Backplane CLK at far slot on scope after bring-up → decide whether to
@@ -248,6 +258,20 @@ Last updated: 2026-06-11
       budget
 
 ## DONE
+
+- **RTC + CF-fallback footprints provisioned (rev C, DNP).** The last two
+  pre-fab board items, both as Do-Not-Populate so the options exist post-fab
+  without a respin:
+  - I/O card: DS1302 RTC (U16) + 32.768kHz crystal (X3) + backup coin cell (BT1)
+    + a 3-wire breakout header (J3). Fully isolated peripheral — crystal across
+    X1/X2, VCC1 from +5, VCC2 from the cell, CE/SCLK/IO to J3. No bus contention
+    possible. Reserved I/O address $FF08 (PORT DEC U2 Y3). VERIFY the crystal +
+    coin-cell land patterns against real parts before fab (placeholder THT pkgs).
+  - CF card: 8-bit-mode fallback latch (U9, 74374). The CF high data byte
+    (D8-15) is wired to its inputs; output forced high-Z and clock grounded, so
+    it's inert. Populate + wire the bus output + decode only if a CF card refuses
+    8-bit mode (see NEXT). New device defs: DS1302/XTAL32/COIN + a DIP8 package.
+    All 7 boards regenerate with 0 validation errors.
 
 - **Interrupt ARCHITECTURE (rev C) — microcode/emulator/ISA (hardware pending).**
   Implemented and tested the whole interrupt model end to end in emulation;

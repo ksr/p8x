@@ -294,6 +294,8 @@
 <element name="CD7" library="p8x" package="C_DISC" value="100N" x="91.44" y="78.74"/>
 <element name="U8" library="p8x" package="DIP14" value="74HCT08" x="105.41" y="88.90"/>
 <element name="CD8" library="p8x" package="C_DISC" value="100N" x="105.41" y="78.74"/>
+<element name="U9" library="p8x" package="DIP20" value="CF HI-BYTE DNP" x="119.38" y="88.90"/>
+<element name="CD9" library="p8x" package="C_DISC" value="100N" x="119.38" y="78.74"/>
 <element name="J2" library="p8x" package="HDR40" value="CF/IDE 40P" x="5.08" y="96.52"/>
 <element name="RN1" library="p8x" package="SIP9" value="8X10K" x="15.24" y="96.52"/>
 <element name="RP1" library="p8x" package="R_AXIAL" value="1K" x="25.40" y="96.52"/>
@@ -425,6 +427,30 @@
 <contactref element="U1" pad="17"/>
 <contactref element="J2" pad="15"/>
 </signal>
+<signal name="CFD10">
+<contactref element="U9" pad="7"/>
+<contactref element="J2" pad="8"/>
+</signal>
+<signal name="CFD11">
+<contactref element="U9" pad="8"/>
+<contactref element="J2" pad="10"/>
+</signal>
+<signal name="CFD12">
+<contactref element="U9" pad="13"/>
+<contactref element="J2" pad="12"/>
+</signal>
+<signal name="CFD13">
+<contactref element="U9" pad="14"/>
+<contactref element="J2" pad="14"/>
+</signal>
+<signal name="CFD14">
+<contactref element="U9" pad="17"/>
+<contactref element="J2" pad="16"/>
+</signal>
+<signal name="CFD15">
+<contactref element="U9" pad="18"/>
+<contactref element="J2" pad="18"/>
+</signal>
 <signal name="CFD2">
 <contactref element="U1" pad="16"/>
 <contactref element="J2" pad="13"/>
@@ -448,6 +474,14 @@
 <signal name="CFD7">
 <contactref element="U1" pad="11"/>
 <contactref element="J2" pad="3"/>
+</signal>
+<signal name="CFD8">
+<contactref element="U9" pad="3"/>
+<contactref element="J2" pad="4"/>
+</signal>
+<signal name="CFD9">
+<contactref element="U9" pad="4"/>
+<contactref element="J2" pad="6"/>
 </signal>
 <signal name="CLKB">
 <contactref element="U7" pad="13"/>
@@ -539,6 +573,7 @@
 <contactref element="U7" pad="10"/>
 <contactref element="U7" pad="11"/>
 <contactref element="U5" pad="13"/>
+<contactref element="U9" pad="11"/>
 <contactref element="J1" pad="A31"/>
 <contactref element="J1" pad="A32"/>
 <contactref element="J1" pad="B3"/>
@@ -577,6 +612,7 @@
 <contactref element="CD6" pad="2"/>
 <contactref element="CD7" pad="2"/>
 <contactref element="CD8" pad="2"/>
+<contactref element="CD9" pad="2"/>
 <polygon width="0.254" layer="2" isolate="0.3" rank="1">
 <vertex x="0" y="0"/>
 <vertex x="160" y="0"/>
@@ -626,6 +662,7 @@
 <contactref element="RP1" pad="1"/>
 <contactref element="R4" pad="1"/>
 <contactref element="R5" pad="1"/>
+<contactref element="U9" pad="1"/>
 <contactref element="J1" pad="A1"/>
 <contactref element="J1" pad="A2"/>
 <contactref element="J1" pad="B1"/>
@@ -640,6 +677,7 @@
 <contactref element="CD6" pad="1"/>
 <contactref element="CD7" pad="1"/>
 <contactref element="CD8" pad="1"/>
+<contactref element="CD9" pad="1"/>
 <polygon width="0.254" layer="15" isolate="0.3" rank="1">
 <vertex x="0" y="0"/>
 <vertex x="160" y="0"/>

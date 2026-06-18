@@ -44,6 +44,11 @@
 </plain>
 <libraries><library name="p8x">
 <packages>
+<package name="CP_RADIAL">
+<pad name="1" x="0.00" y="0.00" drill="0.9" diameter="1.8"/>
+<pad name="2" x="0.00" y="-5.08" drill="0.9" diameter="1.8"/>
+<text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
+</package>
 <package name="C_DISC">
 <pad name="1" x="0.00" y="0.00" drill="0.9" diameter="1.8"/>
 <pad name="2" x="0.00" y="-5.08" drill="0.9" diameter="1.8"/>
@@ -234,6 +239,17 @@
 <pad name="24" x="15.24" y="-0.00" drill="0.8128" diameter="1.6"/>
 <text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
 </package>
+<package name="DIP8">
+<pad name="1" x="0.00" y="-0.00" drill="0.8128" diameter="1.6"/>
+<pad name="2" x="0.00" y="-2.54" drill="0.8128" diameter="1.6"/>
+<pad name="3" x="0.00" y="-5.08" drill="0.8128" diameter="1.6"/>
+<pad name="4" x="0.00" y="-7.62" drill="0.8128" diameter="1.6"/>
+<pad name="5" x="7.62" y="-7.62" drill="0.8128" diameter="1.6"/>
+<pad name="6" x="7.62" y="-5.08" drill="0.8128" diameter="1.6"/>
+<pad name="7" x="7.62" y="-2.54" drill="0.8128" diameter="1.6"/>
+<pad name="8" x="7.62" y="-0.00" drill="0.8128" diameter="1.6"/>
+<text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
+</package>
 <package name="HDR3">
 <pad name="1" x="0.00" y="-0.00" drill="0.9" diameter="1.8"/>
 <pad name="2" x="0.00" y="-2.54" drill="0.9" diameter="1.8"/>
@@ -324,6 +340,8 @@
 <element name="CD14" library="p8x" package="C_DISC" value="100N" x="49.53" y="53.34"/>
 <element name="U15" library="p8x" package="DIP14" value="74HCT00" x="63.50" y="63.50"/>
 <element name="CD15" library="p8x" package="C_DISC" value="100N" x="63.50" y="53.34"/>
+<element name="U16" library="p8x" package="DIP8" value="RTC DNP" x="77.47" y="63.50"/>
+<element name="CD16" library="p8x" package="C_DISC" value="100N" x="77.47" y="53.34"/>
 <element name="X2" library="p8x" package="OSC4" value="2.4576MHZ" x="5.08" y="96.52"/>
 <element name="SW1" library="p8x" package="DIP16" value="INPUT" x="15.24" y="96.52"/>
 <element name="RNP" library="p8x" package="SIP9" value="8X10K" x="25.40" y="96.52"/>
@@ -344,6 +362,9 @@
 <element name="LED3" library="p8x" package="LED5" value="PWR-GRN" x="35.56" y="91.44"/>
 <element name="R4" library="p8x" package="R_AXIAL" value="1K" x="45.72" y="91.44"/>
 <element name="LED4" library="p8x" package="LED5" value="IOSEL-YEL" x="55.88" y="91.44"/>
+<element name="X3" library="p8x" package="C_DISC" value="32.768KHZ" x="66.04" y="91.44"/>
+<element name="BT1" library="p8x" package="CP_RADIAL" value="CR2032" x="76.20" y="91.44"/>
+<element name="J3" library="p8x" package="HDR3" value="RTC 3-WIRE" x="86.36" y="91.44"/>
 </elements><signals>
 <signal name="-MEMW">
 <contactref element="U4" pad="7"/>
@@ -655,6 +676,8 @@
 <contactref element="LM3" pad="9"/>
 <contactref element="U6" pad="1"/>
 <contactref element="U6" pad="2"/>
+<contactref element="U16" pad="4"/>
+<contactref element="BT1" pad="2"/>
 <contactref element="J1" pad="A31"/>
 <contactref element="J1" pad="A32"/>
 <contactref element="J1" pad="B3"/>
@@ -700,6 +723,7 @@
 <contactref element="CD13" pad="2"/>
 <contactref element="CD14" pad="2"/>
 <contactref element="CD15" pad="2"/>
+<contactref element="CD16" pad="2"/>
 <polygon width="0.254" layer="2" isolate="0.3" rank="1">
 <vertex x="0" y="0"/>
 <vertex x="160" y="0"/>
@@ -993,6 +1017,26 @@
 <contactref element="U15" pad="6"/>
 <contactref element="U6" pad="4"/>
 </signal>
+<signal name="RTCCE">
+<contactref element="U16" pad="5"/>
+<contactref element="J3" pad="1"/>
+</signal>
+<signal name="RTCIO">
+<contactref element="U16" pad="6"/>
+<contactref element="J3" pad="3"/>
+</signal>
+<signal name="RTCSCLK">
+<contactref element="U16" pad="7"/>
+<contactref element="J3" pad="2"/>
+</signal>
+<signal name="RTCX1">
+<contactref element="U16" pad="2"/>
+<contactref element="X3" pad="1"/>
+</signal>
+<signal name="RTCX2">
+<contactref element="U16" pad="3"/>
+<contactref element="X3" pad="2"/>
+</signal>
 <signal name="RXD">
 <contactref element="U14" pad="2"/>
 <contactref element="U8" pad="12"/>
@@ -1053,6 +1097,10 @@
 <contactref element="U14" pad="6"/>
 <contactref element="U8" pad="11"/>
 </signal>
+<signal name="VBAT">
+<contactref element="U16" pad="1"/>
+<contactref element="BT1" pad="1"/>
+</signal>
 <signal name="VCC">
 <contactref element="U2" pad="6"/>
 <contactref element="U3" pad="6"/>
@@ -1066,6 +1114,7 @@
 <contactref element="U7" pad="9"/>
 <contactref element="U7" pad="1"/>
 <contactref element="RP1" pad="1"/>
+<contactref element="U16" pad="8"/>
 <contactref element="J1" pad="A1"/>
 <contactref element="J1" pad="A2"/>
 <contactref element="J1" pad="B1"/>
@@ -1087,6 +1136,7 @@
 <contactref element="CD13" pad="1"/>
 <contactref element="CD14" pad="1"/>
 <contactref element="CD15" pad="1"/>
+<contactref element="CD16" pad="1"/>
 <polygon width="0.254" layer="15" isolate="0.3" rank="1">
 <vertex x="0" y="0"/>
 <vertex x="160" y="0"/>

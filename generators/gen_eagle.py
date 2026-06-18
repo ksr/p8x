@@ -49,6 +49,7 @@ def dip_pads(n,rowsep):
     return p
 
 PKG={
+ "DIP8":  dip_pads(8,7.62),
  "DIP14": dip_pads(14,7.62), "DIP16": dip_pads(16,7.62),
  "DIP20": dip_pads(20,7.62), "DIP24W": dip_pads(24,15.24),
  "DIP28W": dip_pads(28,15.24),
@@ -97,6 +98,13 @@ DEV={
    R=["C%d"%i for i in range(1,33)],pm={p:p for p in ALLPINS},pkg="DIN96"),
  "CAP":  dict(L=["1"],R=["2"],pm={"1":"1","2":"2"},pkg="C_DISC"),
  "CAPP": dict(L=["+"],R=["-"],pm={"+":"1","-":"2"},pkg="CP_RADIAL"),
+ # rev C RTC (DS1302, DIP8) + its 32.768kHz tuning-fork crystal and backup coin
+ # cell. XTAL32/COIN reuse generic 2-pin THT footprints as placeholders — VERIFY
+ # the physical land pattern against the parts you buy before fab.
+ "DS1302": dict(L=["X1","X2","CE","IO","SCLK"],R=["VCC2","GND","VCC1"],
+   pm={"VCC2":"1","X1":"2","X2":"3","GND":"4","CE":"5","IO":"6","SCLK":"7","VCC1":"8"},pkg="DIP8"),
+ "XTAL32": dict(L=["1"],R=["2"],pm={"1":"1","2":"2"},pkg="C_DISC"),
+ "COIN":   dict(L=["+"],R=["-"],pm={"+":"1","-":"2"},pkg="CP_RADIAL"),
  "RES":  dict(L=["1"],R=["2"],pm={"1":"1","2":"2"},pkg="R_AXIAL"),
  "SIP9": dict(L=["COM"],R=["R%d"%i for i in range(1,9)],
    pm=dict([("COM","1")]+[("R%d"%i,str(i+1)) for i in range(1,9)]),pkg="SIP9"),
@@ -765,7 +773,8 @@ ic={"U1":("7430","IO PAGE"),"U2":("74138","PORT DEC"),"U3":("74138","DOE DEC"),
  "U4":("74138","DLD DEC"),"U5":("GATES14","74HCT32"),"U6":("GATES14","74HCT08"),
  "U7":("74161","BAUD DIV"),"U8":("MAX232","RS232"),"U9":("74244","SW IN"),
  "U10":("74374","LED PORT"),"U11":("74244","MON A-LO"),"U12":("74244","MON A-HI"),
- "U13":("74244","MON D"),"U14":("6850","ACIA"),"U15":("GATES14","74HCT00")}
+ "U13":("74244","MON D"),"U14":("6850","ACIA"),"U15":("GATES14","74HCT00"),
+ "U16":("DS1302","RTC DNP")}   # rev C: real-time clock, provisioned DNP
 sm={"X2":("OSC","2.4576MHZ"),"SW1":("DIP8SW","INPUT"),"RNP":("SIP9","8X10K"),
  "RL1":("RNISO8","8X330R"),"LA1":("LEDARR8","PORT LEDS"),
  "RM1":("RNISO8","8X330R"),"LM1":("LEDARR8","A0-7"),
@@ -773,7 +782,11 @@ sm={"X2":("OSC","2.4576MHZ"),"SW1":("DIP8SW","INPUT"),"RNP":("SIP9","8X10K"),
  "RM3":("RNISO8","8X330R"),"LM3":("LEDARR8","D0-7"),
  "J2":("HDR3","SERIAL"),"C2":("CAP","1U"),"C3":("CAP","1U"),"C4":("CAP","1U"),
  "C5":("CAP","1U"),"RP1":("RES","1K"),"LED3":("LED","PWR-GRN"),
- "R4":("RES","1K"),"LED4":("LED","IOSEL-YEL")}
+ "R4":("RES","1K"),"LED4":("LED","IOSEL-YEL"),
+ # rev C RTC support parts (DNP): 32.768kHz crystal, backup coin cell, and a
+ # 3-pin header breaking out the DS1302 3-wire (CE/SCLK/IO) so it can be jumpered
+ # to a port during bring-up. Reserved I/O address: $FF08 (PORT DEC U2 Y3).
+ "X3":("XTAL32","32.768KHZ"),"BT1":("COIN","CR2032"),"J3":("HDR3","RTC 3-WIRE")}
 for i in range(8): N(n,"A%d"%(8+i),("U1","ABCDEFGH"[i]))
 N(n,"IOPG",("U1","Y"),("U2","!G2A"),("U15","3A"),("U15","3B"))
 for i,pn in enumerate(("A","B","C")): N(n,"A%d"%(i+1),("U2",pn))
@@ -838,6 +851,16 @@ for arr,(rm,lm,pre) in enumerate((("RM1","LM1","MA"),("RM2","LM2","MA"),("RM3","
 N(n,"VCC",("RP1","1"))
 N(n,"LEDP",("RP1","2"),("LED3","A"))
 N(n,"GND",("U6","1A"),("U6","1B"))
+# rev C RTC (DS1302) — fully isolated 3-wire peripheral, safe to wire (no bus
+# contention possible). Crystal across X1/X2, VCC1 from +5, VCC2 from the coin
+# cell, and the 3-wire (CE/SCLK/IO) brought to header J3. Connecting the 3-wire
+# to a CPU port (reserved $FF08) is left for bring-up — jumper J3 to spare port
+# bits, or add a small DNP latch/buffer once the protocol is validated.
+N(n,"RTCX1",("U16","X1"),("X3","1")); N(n,"RTCX2",("U16","X2"),("X3","2"))
+N(n,"VCC",("U16","VCC1")); N(n,"VBAT",("U16","VCC2"),("BT1","+"))
+N(n,"GND",("U16","GND"),("BT1","-"))
+N(n,"RTCCE",("U16","CE"),("J3","1")); N(n,"RTCSCLK",("U16","SCLK"),("J3","2"))
+N(n,"RTCIO",("U16","IO"),("J3","3"))
 card("io-card","P8X I/O CARD REV A - ACIA + SWITCHES + LEDS + BUS MONITOR",ic,sm,n,
  {"D%d"%i for i in range(8)}|{"A%d"%i for i in range(16)}|
  {"DOE%d"%i for i in range(4)}|{"DLD%d"%i for i in range(4)}|{"CLKB","-RES"})
@@ -846,7 +869,11 @@ card("io-card","P8X I/O CARD REV A - ACIA + SWITCHES + LEDS + BUS MONITOR",ic,sm
 n={}
 ic={"U1":("74245","DATA BUF"),"U2":("7430","IO PAGE"),"U3":("74138","DOE DEC"),
  "U4":("74138","DLD DEC"),"U5":("HEX14","74HCT14"),"U6":("7410","74HCT10"),
- "U7":("7410","74HCT10"),"U8":("GATES14","74HCT08")}
+ "U7":("7410","74HCT10"),"U8":("GATES14","74HCT08"),
+ # rev C: 8-bit-mode fallback latch (DNP). Only needed if a CF card refuses True
+ # IDE 8-bit mode; it captures the CF high data byte (D8-15) so it can be read
+ # back separately. Provisioned DNP — inputs wired, outputs/clock/decode deferred.
+ "U9":("74374","CF HI-BYTE DNP")}
 sm={"J2":("IDE40","CF/IDE 40P"),"RN1":("SIP9","8X10K"),
  "RP1":("RES","1K"),"LED3":("LED","PWR-GRN"),
  "R4":("RES","1K"),"LED4":("LED","ACT-YEL"),
@@ -886,6 +913,14 @@ N(n,"GND",("J2","28"),*[("J2",p) for p in ("2","19","22","24","26","30","40")],
 N(n,"VCC",("RP1","1"),("R4","1"),("R5","1"))
 N(n,"LEDP",("RP1","2"),("LED3","A"))
 N(n,"LEDAC",("R4","2"),("LED4","A")); N(n,"LEDDA",("R5","2"),("LED5","A"))
+# rev C 8-bit fallback latch (DNP). Capture the CF high data byte D8-15 (J2 even
+# data pins) into U9; safe wiring only: inputs from the CF connector, output
+# enable held high (high-Z) and clock grounded (never latches). The bus-critical
+# parts — Q outputs onto D0-7 and a decoded read/clock — are deferred (design
+# with DRC). Only populate if 8-bit-mode testing shows a card needs it.
+for b,pin in enumerate(("4","6","8","10","12","14","16","18")):
+    N(n,"CFD%d"%(8+b),("U9","D%d"%(b+1)),("J2",pin))
+N(n,"VCC",("U9","!OC")); N(n,"GND",("U9","CLK"))   # outputs high-Z, no clocking (safe)
 card("cf-card","P8X CF-IDE CARD REV A - 8-BIT TRUE IDE AT 0xFF10",ic,sm,n,
  {"D%d"%i for i in range(8)}|{"A0","A1","A2","A3","A4"}|{"A%d"%i for i in range(8,16)}|
  {"DOE%d"%i for i in range(4)}|{"DLD%d"%i for i in range(4)}|{"CLKB","-RES"})
