@@ -13,35 +13,7 @@ Last updated: 2026-06-11
 
 ## NEXT
 
-- **Monitor port (rev B ISA expansion — IN PROGRESS)**: the monitor assumes a
-  conventional accumulator ISA. Reconciling it is being done by expanding the
-  ISA (option 1). Done so far (software/emulator, Phase 1):
-    - microcode word widened to 3-bit PSEL + PT hidden scratch pointer (PSEL=4)
-    - absolute addressing via PT: LDA/LDB/STA/JSR `a`
-    - loads set Z/N (LDZN control bit, bit 27)
-    - new opcodes: LDA (Pn) non-inc, INP1-3/DEP1-3, TAP/TPA n L/H, PHA/PLA,
-      JZ/JNZ (aliases of BZ/BNZ)
-  DONE (Phase 1 complete — monitor assembles & boots in the emulator):
-    - adopted CONVENTIONAL active-high carry (rev B): C=1 = carry / A>=B
-    - CLC/SEC (SETC/CLRC bits), JC/JNC, ROL/ROR + carry-coupled shifter
-      (SHL/SHR latch shifted-out bit -> C; SHCIN shifts C in for rotates)
-    - assembler: char literals may contain space/+/- (tokenizer fix)
-    - firmware/p8xmon.asm converted to p8xasm dialect (EQU->=, DB->.byte/
-      .ascii, ORG->.org); assembles to 101 symbols; banner, ?, D dump all work
-- **Monitor port — Phase 2 (hardware): DONE.** All rev-B microcode-word
-  changes are realized in the CAD generators:
-    - backplane bus allocation (rev C3); control-card pipeline-latch remap;
-      reg-bank 3-bit PSEL decode + PT pointer.
-    - ALU flag-register redesign: C split onto a 7474 (U26) with SETC/CLRC
-      async preset/clear; Z/N source-muxed on LDZN (U22) with a 74260 bus
-      zero-detect (U27); carry-coupled shifter (U28/U29 mux shift-out F7/F0 vs
-      inverted Cn+4; U30 muxes the shift-in CIN vs C on SHCIN); U31 gates the
-      C and Z/N/V clocks (CLK&LDF, CLK&(LDF|LDZN)).
-    - NB: pin/pad-validated only, not DRC'd; the rev-B *behaviour* is proven in
-      the emulator (make test-isa). A full Eagle DRC + airwire check before fab
-      remains on the VERIFY list.
-- **P8XFS v2 hierarchy — DONE** (host + OS navigation + MKDIR/RMDIR + TREE +
-  v2-aware PACK, all in; see DONE). Loose ends, none blocking:
+- **P8XFS v2 — remaining loose ends** (the hierarchy itself is DONE; see DONE):
     - **on-target FORMAT** (optional): monitor F still writes v1; either teach it
       v2 or add an OS FORMAT so a card can be made bootable without the host.
       (Monitor B is unchanged — it only reads sig+OSCNT.)
@@ -63,8 +35,6 @@ Last updated: 2026-06-11
 - [ ] Add DIN connector mounting/flange holes at every backplane slot per
       connector datasheet (mechanical retention against card insertion force)
 - [ ] Route memory card signals in Fusion (planes already done)
-- [ ] Generate remaining five card schematics/boards from the generator:
-      register bank, ALU, control/microcode, I/O, CF-IDE
 - [ ] Order backplane PCB first as the cheap validation article
 
 ## IDEAS
@@ -247,6 +217,24 @@ Last updated: 2026-06-11
 > Convention: substantial features get a **bold-title** prose entry (what was
 > done + why + caveats). The original foundation milestones are a terse tick
 > list under *Early milestones* at the end of this section.
+
+- **Monitor port (rev B ISA expansion) — DONE.** The monitor assumed a
+  conventional accumulator ISA; reconciled by expanding the ISA. Phase 1
+  (software/emulator): 3-bit PSEL + PT hidden scratch pointer; absolute
+  addressing via PT (LDA/LDB/STA/JSR `a`); loads set Z/N (LDZN); LDA (Pn),
+  INP/DEP, TAP/TPA, PHA/PLA, JZ/JNZ; CONVENTIONAL active-high carry (C=1 =
+  carry / A>=B); CLC/SEC, JC/JNC, ROL/ROR + carry-coupled shifter; assembler
+  char-literal tokenizer fix; firmware/p8xmon.asm converted to the p8xasm
+  dialect — assembles and boots in the emulator (banner, `?`, `D` dump work).
+
+- **Monitor port — Phase 2 (hardware) — DONE.** All rev-B microcode-word
+  changes realized in the CAD generators: backplane bus allocation (rev C3);
+  control-card pipeline-latch remap; reg-bank 3-bit PSEL decode + PT pointer;
+  ALU flag-register redesign — C split onto a 7474 (U26) with SETC/CLRC async
+  preset/clear; Z/N source-muxed on LDZN (U22) with a 74260 bus zero-detect
+  (U27); carry-coupled shifter (U28/U29/U30); U31 gates the C and Z/N/V clocks.
+  NB: pin/pad-validated only, not DRC'd; the rev-B *behaviour* is proven in the
+  emulator (make test-isa). A full Eagle DRC + airwire check stays on VERIFY.
 
 - **Monitor D paging + OS EXIT-to-monitor.** Two software-only quality-of-life
   items: (1) the monitor `D` (dump) command now pages — after each 256-byte
