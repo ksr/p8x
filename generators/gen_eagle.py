@@ -53,7 +53,13 @@ PKG={
  "DIP14": dip_pads(14,7.62), "DIP16": dip_pads(16,7.62),
  "DIP20": dip_pads(20,7.62), "DIP24W": dip_pads(24,15.24),
  "DIP28W": dip_pads(28,15.24),
+ # Backplane receptacle: 96 signal pins only.
  "DIN96": [(pin,{"A":5.08,"B":2.54,"C":0}[pin[0]],-G*(int(pin[1:])-1),1.0,1.7) for pin in ALLPINS],
+ # Card edge connector (FABC96R): the same 96 pins PLUS the two standard DIN 41612
+ # mounting holes (MHn) — centreline x=2.54, spaced 94.0mm (7.63mm beyond pin 1 and
+ # pin 32), drill 2.8mm for M2.5. VERIFY the spacing/⌀ against the FABC96R datasheet.
+ "DIN96C": [(pin,{"A":5.08,"B":2.54,"C":0}[pin[0]],-G*(int(pin[1:])-1),1.0,1.7) for pin in ALLPINS]
+           + [("MH1",2.54,7.63,2.8,2.8),("MH2",2.54,-86.37,2.8,2.8)],
  "SIP9":  [(str(k),0,-G*(k-1),0.8,1.6) for k in range(1,10)],
  "SIP16": [(str(k),0,-2.54*k,0.8,1.6) for k in range(1,17)],
  "R_AXIAL": [("1",0,0,0.8,1.6),("2",10.16,0,0.8,1.6)],
@@ -113,6 +119,10 @@ DEV={
 }
 
 def D(name,L,R,pm,pkg): DEV[name]=dict(L=L,R=R,pm=pm,pkg=pkg)
+
+# Card edge connector: same electrical part as the backplane DIN96, but its own
+# package (DIN96C) which carries the FABC96R mounting holes.
+DEV["DIN96C"]={**DEV["DIN96"],"pkg":"DIN96C"}
 
 D("74161",["!CLR","CLK","A","B","C","D","ENP","!LOAD","ENT"],
   ["QA","QB","QC","QD","RCO","VCC","GND"],
@@ -238,7 +248,10 @@ def lib_xml(devnames, for_board):
     for pk in pkgs:
         o.append(f'<package name="{pk}">')
         for (nm,x,y,dr,sz) in PKG[pk]:
-            o.append(f'<pad name="{nm}" x="{x:.2f}" y="{y:.2f}" drill="{dr}" diameter="{sz}"/>')
+            if nm.startswith("MH"):      # mounting hole: non-plated mechanical hole, not a pad
+                o.append(f'<hole x="{x:.2f}" y="{y:.2f}" drill="{dr}"/>')
+            else:
+                o.append(f'<pad name="{nm}" x="{x:.2f}" y="{y:.2f}" drill="{dr}" diameter="{sz}"/>')
         o.append('<text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>')
         o.append('</package>')
     o.append('</packages>')
@@ -398,7 +411,7 @@ def card(name,title,parts_ic,parts_small,nets,used_bus):
         decap[c]=("CAP","100N")
         nets.setdefault("VCC",[]).append((c,"1"))
         nets.setdefault("GND",[]).append((c,"2"))
-    parts={"J1":("DIN96","FABC96R")}
+    parts={"J1":("DIN96C","FABC96R")}
     parts.update(parts_ic); parts.update(parts_small); parts.update(decap)
     sch={}; order=[r for r in parts if r!="J1"]
     sch["J1"]=("DIN96",parts["J1"][1],0,38.10)
@@ -413,8 +426,10 @@ def card(name,title,parts_ic,parts_small,nets,used_bus):
     # routing; the placement-view PDF flags the overflow.
     BW,BH,EDGE,GAP=160.0,100.0,4.0,2.6
     brd={}
-    j1w,j1h,j1ox,j1oy=fp_box("DIN96")
-    brd["J1"]=("DIN96",parts["J1"][1],EDGE-j1ox,BH-EDGE-j1h-j1oy)
+    j1dev=parts["J1"][0]                       # DIN96C (card edge connector, has mounting holes)
+    j1pkg=DEV[j1dev]["pkg"]
+    j1w,j1h,j1ox,j1oy=fp_box(j1pkg)
+    brd["J1"]=(j1dev,parts["J1"][1],EDGE-j1ox,BH-EDGE-j1h-j1oy)
     flow=[]                                   # (ref,dev,val,pkg) in placement order
     for i,ref in enumerate(icrefs):           # each IC immediately followed by its cap
         dev,val=parts_ic[ref]; flow.append((ref,dev,val,DEV[dev]["pkg"]))
@@ -431,7 +446,7 @@ def card(name,title,parts_ic,parts_small,nets,used_bus):
     # include J1 so CARDS is the full board (the BOM counts it; the schematic
     # renderer filters J1 by name). Without it the card edge connectors were
     # missing from the BOM.
-    allp={"J1":("DIN96",parts["J1"][1])}; allp.update(parts_ic); allp.update(parts_small); allp.update(decap)
+    allp={"J1":parts["J1"]}; allp.update(parts_ic); allp.update(parts_small); allp.update(decap)
     CARDS[name]=(title,allp,nets)
     base="%s/p8x-%s"%(name,name)   # each board in its own subdirectory
     write_sch(base+".sch",title,sch,nets)
@@ -967,7 +982,7 @@ card("cf-card","P8X CF-IDE CARD REV A - 8-BIT TRUE IDE AT 0xFF10",ic,sm,n,
 
 # ===================== MEMORY CARD rev C ======================================
 mc_parts={
- "J1":("DIN96","FABC96R",35.56,38.10),
+ "J1":("DIN96C","FABC96R",35.56,38.10),
  "U1":("MEM28K8","28C256-15",132.08,38.10),"U2":("MEM28K8","62256-70",220.98,38.10),
  "U3":("74245","74HCT245",309.88,38.10),"U4":("7430","74HCT30",398.78,38.10),
  "U9":("GATES14","74HCT08",487.68,38.10),"U5":("74138","74HCT138-DOE",132.08,-76.20),
@@ -1039,7 +1054,7 @@ validate("memory-card/p8x-memory-card.sch",mc_parts,mcn)
 # the renderer reads only dev/val and filters J1, so this format is compatible.
 CARDS["memory-card"]=("P8X MEMORY CARD REV C",mc_parts,mcn)
 mcb_parts={
- "J1":("DIN96","FABC96R",147.32,88.90),
+ "J1":("DIN96C","FABC96R",147.32,88.90),
  "U1":("MEM28K8","28C256-15",17.78,83.82),"U2":("MEM28K8","62256-70",43.18,83.82),
  "U3":("74245","74HCT245",68.58,83.82),"U4":("7430","74HCT30",88.90,83.82),
  "U5":("74138","74HCT138-DOE",109.22,83.82),"U6":("74138","74HCT138-DLD",17.78,35.56),

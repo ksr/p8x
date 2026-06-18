@@ -6,7 +6,7 @@ Qty,Part (generic — verify on DigiKey),Package,Category,Populate,Notes,RefDes
 2,Electrolytic cap 470U,CP_RADIAL,Capacitor,yes,,backplane:CB1 backplane:CB2
 1,"40-pin boxed header (IDC, CF/IDE)",HDR40,Connector,yes,,cf:J2
 10,"DIN41612 96-pin (backplane receptacle, mates FABC96R)",DIN96,Connector,yes,,backplane:J1 backplane:J10 backplane:J2 backplane:J3 backplane:J4 backplane:J5 backplane:J6 backplane:J7 backplane:J8 backplane:J9
-6,"DIN41612 96-pin, FABC96R (card edge connector)",DIN96,Connector,yes,,alu:J1 cf:J1 control:J1 io:J1 memory:J1 regbank:J1
+6,"DIN41612 96-pin, FABC96R (card edge connector, +M2.5 mounting holes)",DIN96C,Connector,yes,,alu:J1 cf:J1 control:J1 io:J1 memory:J1 regbank:J1
 3,Pin header 3-pin 0.1in,HDR3,Connector,yes,,io:J2 io:J3 memory:JWP
 1,Pin header 4-pin 0.1in,HDR4,Connector,yes,,control:JP1
 1,"Terminal block, 4-pos 5mm",TB4,Connector,yes,,backplane:J11

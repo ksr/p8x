@@ -54,7 +54,7 @@
 <pad name="2" x="0.00" y="-5.08" drill="0.9" diameter="1.8"/>
 <text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
 </package>
-<package name="DIN96">
+<package name="DIN96C">
 <pad name="A1" x="5.08" y="-0.00" drill="1.0" diameter="1.7"/>
 <pad name="A2" x="5.08" y="-2.54" drill="1.0" diameter="1.7"/>
 <pad name="A3" x="5.08" y="-5.08" drill="1.0" diameter="1.7"/>
@@ -151,6 +151,8 @@
 <pad name="C30" x="0.00" y="-73.66" drill="1.0" diameter="1.7"/>
 <pad name="C31" x="0.00" y="-76.20" drill="1.0" diameter="1.7"/>
 <pad name="C32" x="0.00" y="-78.74" drill="1.0" diameter="1.7"/>
+<hole x="2.54" y="7.63" drill="2.8"/>
+<hole x="2.54" y="-86.37" drill="2.8"/>
 <text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
 </package>
 <package name="DIP14">
@@ -309,62 +311,62 @@
 <classes><class number="0" name="default" width="0" drill="0"/></classes>
 <designrules name="default"><param name="layerSetup" value="(1*2*15*16)"/></designrules>
 <elements>
-<element name="J1" library="p8x" package="DIN96" value="FABC96R" x="4.85" y="95.15"/>
-<element name="U1" library="p8x" package="DIP14" value="IO PAGE" x="16.78" y="95.20"/>
-<element name="CD1" library="p8x" package="C_DISC" value="100N" x="28.70" y="95.10"/>
-<element name="U2" library="p8x" package="DIP16" value="PORT DEC" x="33.00" y="95.20"/>
-<element name="CD2" library="p8x" package="C_DISC" value="100N" x="44.92" y="95.10"/>
-<element name="U3" library="p8x" package="DIP16" value="DOE DEC" x="49.22" y="95.20"/>
-<element name="CD3" library="p8x" package="C_DISC" value="100N" x="61.14" y="95.10"/>
-<element name="U4" library="p8x" package="DIP16" value="DLD DEC" x="65.44" y="95.20"/>
-<element name="CD4" library="p8x" package="C_DISC" value="100N" x="77.36" y="95.10"/>
-<element name="U5" library="p8x" package="DIP14" value="74HCT32" x="81.66" y="95.20"/>
-<element name="CD5" library="p8x" package="C_DISC" value="100N" x="93.58" y="95.10"/>
-<element name="U6" library="p8x" package="DIP14" value="74HCT08" x="97.88" y="95.20"/>
-<element name="CD6" library="p8x" package="C_DISC" value="100N" x="109.80" y="95.10"/>
-<element name="U7" library="p8x" package="DIP16" value="BAUD DIV" x="114.10" y="95.20"/>
-<element name="CD7" library="p8x" package="C_DISC" value="100N" x="126.02" y="95.10"/>
-<element name="U8" library="p8x" package="DIP16" value="RS232" x="130.32" y="95.20"/>
-<element name="CD8" library="p8x" package="C_DISC" value="100N" x="142.24" y="95.10"/>
-<element name="U9" library="p8x" package="DIP20" value="SW IN" x="146.54" y="95.20"/>
-<element name="CD9" library="p8x" package="C_DISC" value="100N" x="16.88" y="68.04"/>
-<element name="U10" library="p8x" package="DIP20" value="LED PORT" x="21.18" y="68.14"/>
-<element name="CD10" library="p8x" package="C_DISC" value="100N" x="33.10" y="68.04"/>
-<element name="U11" library="p8x" package="DIP20" value="MON A-LO" x="37.40" y="68.14"/>
-<element name="CD11" library="p8x" package="C_DISC" value="100N" x="49.32" y="68.04"/>
-<element name="U12" library="p8x" package="DIP20" value="MON A-HI" x="53.62" y="68.14"/>
-<element name="CD12" library="p8x" package="C_DISC" value="100N" x="65.54" y="68.04"/>
-<element name="U13" library="p8x" package="DIP20" value="MON D" x="69.84" y="68.14"/>
-<element name="CD13" library="p8x" package="C_DISC" value="100N" x="81.76" y="68.04"/>
-<element name="U14" library="p8x" package="DIP24W" value="ACIA" x="86.06" y="68.14"/>
-<element name="CD14" library="p8x" package="C_DISC" value="100N" x="105.60" y="68.04"/>
-<element name="U15" library="p8x" package="DIP14" value="74HCT00" x="109.90" y="68.14"/>
-<element name="CD15" library="p8x" package="C_DISC" value="100N" x="121.82" y="68.04"/>
-<element name="U16" library="p8x" package="DIP8" value="RTC DNP" x="126.12" y="68.14"/>
-<element name="CD16" library="p8x" package="C_DISC" value="100N" x="138.04" y="68.04"/>
-<element name="X2" library="p8x" package="OSC4" value="2.4576MHZ" x="142.34" y="68.14"/>
-<element name="SW1" library="p8x" package="DIP16" value="INPUT" x="16.78" y="36.00"/>
-<element name="RNP" library="p8x" package="SIP9" value="8X10K" x="28.60" y="36.00"/>
-<element name="RL1" library="p8x" package="SIP16" value="8X330R" x="32.80" y="38.54"/>
-<element name="LA1" library="p8x" package="DIP16" value="PORT LEDS" x="37.00" y="36.00"/>
-<element name="RM1" library="p8x" package="SIP16" value="8X330R" x="48.82" y="38.54"/>
-<element name="LM1" library="p8x" package="DIP16" value="A0-7" x="53.02" y="36.00"/>
-<element name="RM2" library="p8x" package="SIP16" value="8X330R" x="64.84" y="38.54"/>
-<element name="LM2" library="p8x" package="DIP16" value="A8-15" x="69.04" y="36.00"/>
-<element name="RM3" library="p8x" package="SIP16" value="8X330R" x="80.86" y="38.54"/>
-<element name="LM3" library="p8x" package="DIP16" value="D0-7" x="85.06" y="36.00"/>
-<element name="J2" library="p8x" package="HDR3" value="SERIAL" x="96.98" y="35.90"/>
-<element name="C2" library="p8x" package="C_DISC" value="1U" x="101.38" y="35.90"/>
-<element name="C3" library="p8x" package="C_DISC" value="1U" x="105.78" y="35.90"/>
-<element name="C4" library="p8x" package="C_DISC" value="1U" x="110.18" y="35.90"/>
-<element name="C5" library="p8x" package="C_DISC" value="1U" x="114.58" y="35.90"/>
-<element name="RP1" library="p8x" package="R_AXIAL" value="1K" x="118.88" y="36.00"/>
-<element name="LED3" library="p8x" package="LED5" value="PWR-GRN" x="133.34" y="35.90"/>
-<element name="R4" library="p8x" package="R_AXIAL" value="1K" x="140.18" y="36.00"/>
-<element name="LED4" library="p8x" package="LED5" value="IOSEL-YEL" x="16.88" y="-6.40"/>
-<element name="X3" library="p8x" package="C_DISC" value="32.768KHZ" x="23.82" y="-6.40"/>
-<element name="BT1" library="p8x" package="CP_RADIAL" value="CR2032" x="28.22" y="-6.40"/>
-<element name="J3" library="p8x" package="HDR3" value="RTC 3-WIRE" x="32.62" y="-6.40"/>
+<element name="J1" library="p8x" package="DIN96C" value="FABC96R" x="5.40" y="86.97"/>
+<element name="U1" library="p8x" package="DIP14" value="IO PAGE" x="17.88" y="95.20"/>
+<element name="CD1" library="p8x" package="C_DISC" value="100N" x="29.80" y="95.10"/>
+<element name="U2" library="p8x" package="DIP16" value="PORT DEC" x="34.10" y="95.20"/>
+<element name="CD2" library="p8x" package="C_DISC" value="100N" x="46.02" y="95.10"/>
+<element name="U3" library="p8x" package="DIP16" value="DOE DEC" x="50.32" y="95.20"/>
+<element name="CD3" library="p8x" package="C_DISC" value="100N" x="62.24" y="95.10"/>
+<element name="U4" library="p8x" package="DIP16" value="DLD DEC" x="66.54" y="95.20"/>
+<element name="CD4" library="p8x" package="C_DISC" value="100N" x="78.46" y="95.10"/>
+<element name="U5" library="p8x" package="DIP14" value="74HCT32" x="82.76" y="95.20"/>
+<element name="CD5" library="p8x" package="C_DISC" value="100N" x="94.68" y="95.10"/>
+<element name="U6" library="p8x" package="DIP14" value="74HCT08" x="98.98" y="95.20"/>
+<element name="CD6" library="p8x" package="C_DISC" value="100N" x="110.90" y="95.10"/>
+<element name="U7" library="p8x" package="DIP16" value="BAUD DIV" x="115.20" y="95.20"/>
+<element name="CD7" library="p8x" package="C_DISC" value="100N" x="127.12" y="95.10"/>
+<element name="U8" library="p8x" package="DIP16" value="RS232" x="131.42" y="95.20"/>
+<element name="CD8" library="p8x" package="C_DISC" value="100N" x="143.34" y="95.10"/>
+<element name="U9" library="p8x" package="DIP20" value="SW IN" x="17.88" y="73.22"/>
+<element name="CD9" library="p8x" package="C_DISC" value="100N" x="29.80" y="73.12"/>
+<element name="U10" library="p8x" package="DIP20" value="LED PORT" x="34.10" y="73.22"/>
+<element name="CD10" library="p8x" package="C_DISC" value="100N" x="46.02" y="73.12"/>
+<element name="U11" library="p8x" package="DIP20" value="MON A-LO" x="50.32" y="73.22"/>
+<element name="CD11" library="p8x" package="C_DISC" value="100N" x="62.24" y="73.12"/>
+<element name="U12" library="p8x" package="DIP20" value="MON A-HI" x="66.54" y="73.22"/>
+<element name="CD12" library="p8x" package="C_DISC" value="100N" x="78.46" y="73.12"/>
+<element name="U13" library="p8x" package="DIP20" value="MON D" x="82.76" y="73.22"/>
+<element name="CD13" library="p8x" package="C_DISC" value="100N" x="94.68" y="73.12"/>
+<element name="U14" library="p8x" package="DIP24W" value="ACIA" x="98.98" y="73.22"/>
+<element name="CD14" library="p8x" package="C_DISC" value="100N" x="118.52" y="73.12"/>
+<element name="U15" library="p8x" package="DIP14" value="74HCT00" x="122.82" y="73.22"/>
+<element name="CD15" library="p8x" package="C_DISC" value="100N" x="134.74" y="73.12"/>
+<element name="U16" library="p8x" package="DIP8" value="RTC DNP" x="139.04" y="73.22"/>
+<element name="CD16" library="p8x" package="C_DISC" value="100N" x="150.96" y="73.12"/>
+<element name="X2" library="p8x" package="OSC4" value="2.4576MHZ" x="17.88" y="41.08"/>
+<element name="SW1" library="p8x" package="DIP16" value="INPUT" x="29.70" y="41.08"/>
+<element name="RNP" library="p8x" package="SIP9" value="8X10K" x="41.52" y="41.08"/>
+<element name="RL1" library="p8x" package="SIP16" value="8X330R" x="45.72" y="43.62"/>
+<element name="LA1" library="p8x" package="DIP16" value="PORT LEDS" x="49.92" y="41.08"/>
+<element name="RM1" library="p8x" package="SIP16" value="8X330R" x="61.74" y="43.62"/>
+<element name="LM1" library="p8x" package="DIP16" value="A0-7" x="65.94" y="41.08"/>
+<element name="RM2" library="p8x" package="SIP16" value="8X330R" x="77.76" y="43.62"/>
+<element name="LM2" library="p8x" package="DIP16" value="A8-15" x="81.96" y="41.08"/>
+<element name="RM3" library="p8x" package="SIP16" value="8X330R" x="93.78" y="43.62"/>
+<element name="LM3" library="p8x" package="DIP16" value="D0-7" x="97.98" y="41.08"/>
+<element name="J2" library="p8x" package="HDR3" value="SERIAL" x="109.90" y="40.98"/>
+<element name="C2" library="p8x" package="C_DISC" value="1U" x="114.30" y="40.98"/>
+<element name="C3" library="p8x" package="C_DISC" value="1U" x="118.70" y="40.98"/>
+<element name="C4" library="p8x" package="C_DISC" value="1U" x="123.10" y="40.98"/>
+<element name="C5" library="p8x" package="C_DISC" value="1U" x="127.50" y="40.98"/>
+<element name="RP1" library="p8x" package="R_AXIAL" value="1K" x="131.80" y="41.08"/>
+<element name="LED3" library="p8x" package="LED5" value="PWR-GRN" x="146.26" y="40.98"/>
+<element name="R4" library="p8x" package="R_AXIAL" value="1K" x="17.88" y="-1.22"/>
+<element name="LED4" library="p8x" package="LED5" value="IOSEL-YEL" x="32.34" y="-1.32"/>
+<element name="X3" library="p8x" package="C_DISC" value="32.768KHZ" x="39.28" y="-1.32"/>
+<element name="BT1" library="p8x" package="CP_RADIAL" value="CR2032" x="43.68" y="-1.32"/>
+<element name="J3" library="p8x" package="HDR3" value="RTC 3-WIRE" x="48.08" y="-1.32"/>
 </elements><signals>
 <signal name="-MEMW">
 <contactref element="U4" pad="7"/>

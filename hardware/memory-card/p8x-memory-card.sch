@@ -22,7 +22,7 @@
 <pad name="2" x="0.00" y="-5.08" drill="0.9" diameter="1.8"/>
 <text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
 </package>
-<package name="DIN96">
+<package name="DIN96C">
 <pad name="A1" x="5.08" y="-0.00" drill="1.0" diameter="1.7"/>
 <pad name="A2" x="5.08" y="-2.54" drill="1.0" diameter="1.7"/>
 <pad name="A3" x="5.08" y="-5.08" drill="1.0" diameter="1.7"/>
@@ -119,6 +119,8 @@
 <pad name="C30" x="0.00" y="-73.66" drill="1.0" diameter="1.7"/>
 <pad name="C31" x="0.00" y="-76.20" drill="1.0" diameter="1.7"/>
 <pad name="C32" x="0.00" y="-78.74" drill="1.0" diameter="1.7"/>
+<hole x="2.54" y="7.63" drill="2.8"/>
+<hole x="2.54" y="-86.37" drill="2.8"/>
 <text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
 </package>
 <package name="DIP14">
@@ -310,7 +312,7 @@
 <pin name="1" x="-17.78" y="-0.00" length="middle"/>
 <pin name="2" x="17.78" y="-0.00" length="middle" rot="R180"/>
 </symbol>
-<symbol name="DIN96">
+<symbol name="DIN96C">
 <wire x1="-12.7" y1="2.54" x2="12.7" y2="2.54" width="0.254" layer="94"/>
 <wire x1="12.7" y1="2.54" x2="12.7" y2="-162.56" width="0.254" layer="94"/>
 <wire x1="12.7" y1="-162.56" x2="-12.7" y2="-162.56" width="0.254" layer="94"/>
@@ -566,8 +568,8 @@
 <connect gate="G$1" pin="1" pad="1"/>
 <connect gate="G$1" pin="2" pad="2"/>
 </connects><technologies><technology name=""/></technologies></device></devices></deviceset>
-<deviceset name="DIN96" prefix="U"><gates><gate name="G$1" symbol="DIN96" x="0" y="0"/></gates>
-<devices><device name="" package="DIN96"><connects>
+<deviceset name="DIN96C" prefix="U"><gates><gate name="G$1" symbol="DIN96C" x="0" y="0"/></gates>
+<devices><device name="" package="DIN96C"><connects>
 <connect gate="G$1" pin="A1" pad="A1"/>
 <connect gate="G$1" pin="A2" pad="A2"/>
 <connect gate="G$1" pin="A3" pad="A3"/>
@@ -733,7 +735,7 @@
 </library></libraries>
 <classes><class number="0" name="default" width="0" drill="0"/></classes>
 <parts>
-<part name="J1" library="p8x" deviceset="DIN96" device="" value="FABC96R"/>
+<part name="J1" library="p8x" deviceset="DIN96C" device="" value="FABC96R"/>
 <part name="U1" library="p8x" deviceset="MEM28K8" device="" value="28C256-15"/>
 <part name="U2" library="p8x" deviceset="MEM28K8" device="" value="62256-70"/>
 <part name="U3" library="p8x" deviceset="74245" device="" value="74HCT245"/>

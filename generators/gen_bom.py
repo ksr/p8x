@@ -54,8 +54,8 @@ def part(dev,val):
     if dev=="LEDARR8": return "LED bar array, 8-segment (DIP)","LED",pkg
     if dev=="DIP8SW":  return "DIP switch, 8-position","Switch",pkg
     if dev=="SW2":     return "Switch SPST (momentary/toggle)","Switch",pkg
-    if dev=="DIN96":   return ("DIN41612 96-pin (backplane receptacle, mates FABC96R)" if "SLOT" in v else
-                               "DIN41612 96-pin, FABC96R (card edge connector)"),"Connector",pkg
+    if dev=="DIN96C":  return "DIN41612 96-pin, FABC96R (card edge connector, +M2.5 mounting holes)","Connector",pkg
+    if dev=="DIN96":   return "DIN41612 96-pin (backplane receptacle, mates FABC96R)","Connector",pkg
     if dev=="IDE40":   return "40-pin boxed header (IDC, CF/IDE)","Connector",pkg
     if dev in ("HDR3","HDR4","HDR40"): return "Pin header %s-pin 0.1in"%dev[3:],"Connector",pkg
     if dev=="TB4":     return "Terminal block, 4-pos 5mm","Connector",pkg
