@@ -96,9 +96,6 @@ Last updated: 2026-06-11
         stream (MORE/WC/GREP-style) — none exist yet. RAM-bound buffer size.
       Scope it as: OUTCH refactor -> `>` redirect -> a filter command or two ->
       `|`. The refactor alone is worthwhile (also enables the EDIT/MORE ideas).
-- [ ] **P8X/OS DUMP — interactive paging**: give the OS `DUMP` command the same
-      CR=next-block / `.`=exit paging the monitor `D` now has (see DONE). DODUMP
-      is separate code from the monitor's CMD_D.
 - [ ] **Housekeeping (from 2026-06 consistency audit; not yet decided):**
     - Tracked generated binaries: `microcode/u0-u3.bin` are committed but
       regenerate byte-identically from genucode.py. Consider gitignoring them
@@ -259,7 +256,8 @@ Last updated: 2026-06-11
   via `JMP $0000`, mirroring BASIC's `BYE` — so the monitor can now launch the
   OS (`B`), launch ROM BASIC (`X`), and both can get back. Tested: BASIC-ROM
   test exercises D paging (rows 00F0 then 0100); OS test confirms the monitor
-  banner reappears after EXIT. (OS `DUMP` paging left as a follow-up — see NEXT.)
+  banner reappears after EXIT. The OS `DUMP` command pages the same way (CR=next
+  block, `.`=exit; DODUMP — separate code from CMD_D); OS test pages to row B100.
 
 - **RTC + CF-fallback footprints provisioned (rev C, DNP).** The last two
   pre-fab board items, both as Do-Not-Populate so the options exist post-fab

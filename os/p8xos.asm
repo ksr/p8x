@@ -1299,7 +1299,7 @@ DODUMP: JSR  ARG2P2
         TAP1L
         LDA  HXHI
         TAP1H
-        LDA  #16                ; 16 lines
+DU_PAGE:LDA  #16                ; 16 lines = one 256-byte block
         STA  CNT
 DU_LINE:TPA1H                   ; "AAAA: "
         JSR  PHEX8
@@ -1353,7 +1353,11 @@ DU_PUT: JSR  CONOUT
         DEC
         STA  CNT
         JNZ  DU_LINE
-        JMP  SHELL
+        JSR  CONIN              ; page: '.' = exit to shell, CR/any = next block
+        LDB  #'.'
+        CMP
+        JZ   SHELL
+        JMP  DU_PAGE            ; P1 already points at the next 256 bytes
 DU_ERR: LDP1 #MDUER
         JSR  PUTS
         JMP  SHELL
@@ -2404,7 +2408,7 @@ MHELP:   .byte CR,LF
          .byte CR,LF
          .ascii "DEL path      delete a file"
          .byte CR,LF
-         .ascii "DUMP a        show 256 bytes at hex addr a"
+         .ascii "DUMP a        dump 256 bytes at a (CR=next block, .=exit)"
          .byte CR,LF
          .ascii "DEP a b b...  store hex bytes b... at hex addr a"
          .byte CR,LF

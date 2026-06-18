@@ -45,7 +45,9 @@ printf 'hi' > os_h.tmp
 python3 $ROOT/tools/p8xfs.py put os.img os_h.tmp --name HELLO.TXT >/dev/null
 rm -f os_h.tmp prog.asm
 
-out=$(printf 'B\rDIR\rRUN PROG.BIN\rDEL HELLO.TXT\rSAVE C.BIN 8000 8010\rDEP B000 41 42 43\rDUMP B000\rPACK\rDIR\rEXIT\r' | \
+# DUMP B000 now pages: CR advances to the next block (B100), '.' exits — so feed
+# '\r.' after the address (else PACK's letters would be eaten as paging keys).
+out=$(printf 'B\rDIR\rRUN PROG.BIN\rDEL HELLO.TXT\rSAVE C.BIN 8000 8010\rDEP B000 41 42 43\rDUMP B000\r\r.PACK\rDIR\rEXIT\r' | \
       ../p8xemu -l 80000000 -c os.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0')
 
 fail() { echo "OS TEST: FAIL — $1"; echo "$out" | sed -n '/P8X\/OS/,$p'; exit 1; }
@@ -58,6 +60,8 @@ echo "$out" | grep -q 'SAVED'       || fail "SAVE did not report success"
 # DEP B000 41 42 43, then DUMP B000 -> the row shows the bytes and ASCII "ABC".
 echo "$out" | grep -q 'B000: 41 42 43' || fail "DEP/DUMP did not show deposited bytes"
 echo "$out" | grep -q 'ABC'            || fail "DUMP ASCII column wrong"
+# DUMP paging: CR after the first block advanced to the next one (rows at B100).
+echo "$out" | grep -q 'B100'           || fail "DUMP paging (CR=next block) did not advance"
 echo "$out" | grep -q 'PACKED'       || fail "PACK did not report success"
 # After DEL+SAVE+PACK, the final DIR (re-read from disk): HELLO.TXT gone, C.BIN
 # kept. (DEL HELLO left a gap that PACK reclaims by moving C.BIN down.)
