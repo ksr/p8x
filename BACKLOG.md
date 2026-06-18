@@ -123,6 +123,18 @@ Last updated: 2026-06-11
       (ideally interprets the same EPROM images the hardware will burn, so
       microcode bugs surface in software first); memory map, ACIA-to-stdio,
       CF image file backing; test bed for monitor/OS/BASIC before hardware
+- [ ] **C compiler (cross, then native)** — a big, long-horizon goal. Start
+      with a **cross-compiler** on the host: a small-C subset (int/char/pointers,
+      functions, if/while/for, basic expressions — no float, limited structs)
+      emitting P8X assembly that feeds p8xasm.py. The 8-bit/16-bit-pointer ISA
+      and the pointer bank shape the codegen (P0-P3 as frame/stack/scratch; a
+      software call stack via P3). A **native** compiler on P8X/OS is the
+      stretch goal once there's an on-target assembler + editor and enough RAM
+      — likely an even smaller subset, possibly multi-pass through temp files.
+      Depends on: a stable calling convention/ABI, the on-target assembler, and
+      a C runtime (startup, multiply/divide/shift helpers, minimal libc over
+      the BIOS). Sequence after Forth/assembler land; reference small-C / SubC
+      style compilers for the subset and codegen approach.
 - [ ] **On-target assembler** (a P8X/OS program or built-in) — makes the
       machine self-hosting for machine code: edit a `.asm` text file with EDIT,
       assemble it on-target to a runnable file, then RUN it. Two-pass like
