@@ -353,21 +353,33 @@ def card(name,title,parts_ic,parts_small,nets,used_bus):
         net=busnet(pin)
         if net in ("VCC","GND") or net in used_bus:
             nets.setdefault(net,[]).append(("J1",pin))
+    # one 100nF decoupling cap per IC (card standards sec.5), each across
+    # VCC<->GND and placed next to its IC. Named CDn to avoid clashing with any
+    # functional caps a card already declares (C1, C2, ...).
+    decap={}
+    icrefs=list(parts_ic)
+    for i,ref in enumerate(icrefs):
+        c="CD%d"%(i+1)
+        decap[c]=("CAP","100N")
+        nets.setdefault("VCC",[]).append((c,"1"))
+        nets.setdefault("GND",[]).append((c,"2"))
     parts={"J1":("DIN96","DIN41612-96M")}
-    parts.update(parts_ic); parts.update(parts_small)
+    parts.update(parts_ic); parts.update(parts_small); parts.update(decap)
     sch={}; order=[r for r in parts if r!="J1"]
     sch["J1"]=("DIN96",parts["J1"][1],0,38.10)
     for i,ref in enumerate(order):
         dev,val=parts[ref]
         sch[ref]=(dev,val,140+(i%4)*101.6,38.10-(i//4)*139.7)
     brd={}; brd["J1"]=("DIN96",parts["J1"][1],147.32,88.90)
-    for i,ref in enumerate(parts_ic):
+    for i,ref in enumerate(icrefs):
         dev,val=parts_ic[ref]
-        brd[ref]=(dev,val,7.62+13.97*(i%10),88.90-25.40*(i//10))
+        x=7.62+13.97*(i%10); y=88.90-25.40*(i//10)
+        brd[ref]=(dev,val,x,y)
+        brd["CD%d"%(i+1)]=("CAP","100N",x,y-10.16)   # decoupling cap by its IC
     for i,ref in enumerate(parts_small):
         dev,val=parts_small[ref]
         brd[ref]=(dev,val,5.08+10.16*(i%14),96.52-(5.08 if i>=14 else 0))
-    allp=dict(parts_ic); allp.update(parts_small)
+    allp=dict(parts_ic); allp.update(parts_small); allp.update(decap)
     CARDS[name]=(title,allp,nets)
     base="%s/p8x-%s"%(name,name)   # each board in its own subdirectory
     write_sch(base+".sch",title,sch,nets)
@@ -879,6 +891,12 @@ mnet("LEDRA",("RS2","2"),("LED4","A")); mnet("RAMK",("U8","2Y"),("LED4","K"))
 mnet("LEDRD",("RS3","2"),("LED5","A")); mnet("RDK",("U9","2Y"),("LED5","K"))
 mnet("LEDWR",("RS4","2"),("LED6","A")); mnet("WRK",("U9","3Y"),("LED6","K"))
 mnet("VCC",("RP1","1"),("RS1","1"),("RS2","1"),("RS3","1"),("RS4","1"))
+# per-IC 100nF decoupling caps (card standards sec.5)
+MCIC=["U1","U2","U3","U4","U5","U6","U7","U8","U9"]
+for i,u in enumerate(MCIC):
+    c="CD%d"%(i+1)
+    mc_parts[c]=("CAP","100N",132.08+88.9*(i%5),-160.02-38.10*(i//5))
+    mnet("VCC",(c,"1")); mnet("GND",(c,"2"))
 write_sch("memory-card/p8x-memory-card.sch","P8X MEMORY CARD REV C",mc_parts,mcn)
 validate("memory-card/p8x-memory-card.sch",mc_parts,mcn)
 # Register the memory card for the schematic renderer (render_traditional_auto.py),
@@ -897,6 +915,9 @@ mcb_parts={
  "RS2":("RES","1K",127.00,86.36),"LED4":("LED","RAM-YEL",142.24,86.36),
  "RS3":("RES","1K",127.00,81.28),"LED5":("LED","RD-GRN",142.24,81.28),
  "RS4":("RES","1K",127.00,76.20),"LED6":("LED","WR-RED",142.24,76.20)}
+for i,u in enumerate(MCIC):                      # decoupling cap beside each IC
+    dev,val,x,y=mcb_parts[u]
+    mcb_parts["CD%d"%(i+1)]=("CAP","100N",x,y-10.16)
 write_brd("memory-card/p8x-memory-card.brd","P8X MEMORY CARD REV C",mcb_parts,mcn,{},
           {"GND":[(2,)],"VCC":[(15,)]},160,100)
 validate("memory-card/p8x-memory-card.brd",mcb_parts,mcn)

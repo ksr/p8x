@@ -17,6 +17,11 @@
 <schematic xreflabel="%F%N/%S.%C%R" xrefpart="/%S.%C%R">
 <libraries><library name="p8x">
 <packages>
+<package name="C_DISC">
+<pad name="1" x="0.00" y="0.00" drill="0.9" diameter="1.8"/>
+<pad name="2" x="0.00" y="-5.08" drill="0.9" diameter="1.8"/>
+<text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
+</package>
 <package name="DIN96">
 <pad name="A1" x="5.08" y="-0.00" drill="1.0" diameter="1.7"/>
 <pad name="A2" x="5.08" y="-2.54" drill="1.0" diameter="1.7"/>
@@ -442,6 +447,16 @@
 <pin name="VCC" x="17.78" y="-10.16" length="middle" rot="R180"/>
 <pin name="GND" x="17.78" y="-12.70" length="middle" rot="R180"/>
 </symbol>
+<symbol name="CAP">
+<wire x1="-12.7" y1="2.54" x2="12.7" y2="2.54" width="0.254" layer="94"/>
+<wire x1="12.7" y1="2.54" x2="12.7" y2="-2.54" width="0.254" layer="94"/>
+<wire x1="12.7" y1="-2.54" x2="-12.7" y2="-2.54" width="0.254" layer="94"/>
+<wire x1="-12.7" y1="-2.54" x2="-12.7" y2="2.54" width="0.254" layer="94"/>
+<text x="-12.7" y="3.81" size="1.778" layer="95">&gt;NAME</text>
+<text x="-12.7" y="-6.35" size="1.778" layer="96">&gt;VALUE</text>
+<pin name="1" x="-17.78" y="-0.00" length="middle"/>
+<pin name="2" x="17.78" y="-0.00" length="middle" rot="R180"/>
+</symbol>
 <symbol name="DIN96">
 <wire x1="-12.7" y1="2.54" x2="12.7" y2="2.54" width="0.254" layer="94"/>
 <wire x1="12.7" y1="2.54" x2="12.7" y2="-162.56" width="0.254" layer="94"/>
@@ -773,6 +788,11 @@
 <connect gate="G$1" pin="!2CLR" pad="13"/>
 <connect gate="G$1" pin="VCC" pad="14"/>
 </connects><technologies><technology name=""/></technologies></device></devices></deviceset>
+<deviceset name="CAP" prefix="U"><gates><gate name="G$1" symbol="CAP" x="0" y="0"/></gates>
+<devices><device name="" package="C_DISC"><connects>
+<connect gate="G$1" pin="1" pad="1"/>
+<connect gate="G$1" pin="2" pad="2"/>
+</connects><technologies><technology name=""/></technologies></device></devices></deviceset>
 <deviceset name="DIN96" prefix="U"><gates><gate name="G$1" symbol="DIN96" x="0" y="0"/></gates>
 <devices><device name="" package="DIN96"><connects>
 <connect gate="G$1" pin="A1" pad="A1"/>
@@ -941,6 +961,37 @@
 <part name="LED4" library="p8x" deviceset="LED" device="" value="ALU-GRN"/>
 <part name="R5" library="p8x" deviceset="RES" device="" value="1K"/>
 <part name="LED5" library="p8x" deviceset="LED" device="" value="LDF-YEL"/>
+<part name="CD1" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD2" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD3" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD4" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD5" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD6" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD7" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD8" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD9" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD10" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD11" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD12" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD13" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD14" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD15" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD16" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD17" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD18" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD19" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD20" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD21" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD22" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD23" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD24" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD25" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD26" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD27" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD28" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD29" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD30" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD31" library="p8x" deviceset="CAP" device="" value="100N"/>
 </parts><sheets><sheet><plain>
 <text x="0" y="40" size="3.81" layer="97">P8X ALU CARD REV B (conventional carry, LDZN, SETC/CLRC, carry-coupled shifter)</text>
 </plain><instances>
@@ -982,6 +1033,37 @@
 <instance part="LED4" gate="G$1" x="343.2" y="-1079.5"/>
 <instance part="R5" gate="G$1" x="444.79999999999995" y="-1079.5"/>
 <instance part="LED5" gate="G$1" x="140.0" y="-1219.2"/>
+<instance part="CD1" gate="G$1" x="241.6" y="-1219.2"/>
+<instance part="CD2" gate="G$1" x="343.2" y="-1219.2"/>
+<instance part="CD3" gate="G$1" x="444.79999999999995" y="-1219.2"/>
+<instance part="CD4" gate="G$1" x="140.0" y="-1358.9"/>
+<instance part="CD5" gate="G$1" x="241.6" y="-1358.9"/>
+<instance part="CD6" gate="G$1" x="343.2" y="-1358.9"/>
+<instance part="CD7" gate="G$1" x="444.79999999999995" y="-1358.9"/>
+<instance part="CD8" gate="G$1" x="140.0" y="-1498.6"/>
+<instance part="CD9" gate="G$1" x="241.6" y="-1498.6"/>
+<instance part="CD10" gate="G$1" x="343.2" y="-1498.6"/>
+<instance part="CD11" gate="G$1" x="444.79999999999995" y="-1498.6"/>
+<instance part="CD12" gate="G$1" x="140.0" y="-1638.3"/>
+<instance part="CD13" gate="G$1" x="241.6" y="-1638.3"/>
+<instance part="CD14" gate="G$1" x="343.2" y="-1638.3"/>
+<instance part="CD15" gate="G$1" x="444.79999999999995" y="-1638.3"/>
+<instance part="CD16" gate="G$1" x="140.0" y="-1778.0"/>
+<instance part="CD17" gate="G$1" x="241.6" y="-1778.0"/>
+<instance part="CD18" gate="G$1" x="343.2" y="-1778.0"/>
+<instance part="CD19" gate="G$1" x="444.79999999999995" y="-1778.0"/>
+<instance part="CD20" gate="G$1" x="140.0" y="-1917.6999999999998"/>
+<instance part="CD21" gate="G$1" x="241.6" y="-1917.6999999999998"/>
+<instance part="CD22" gate="G$1" x="343.2" y="-1917.6999999999998"/>
+<instance part="CD23" gate="G$1" x="444.79999999999995" y="-1917.6999999999998"/>
+<instance part="CD24" gate="G$1" x="140.0" y="-2057.4"/>
+<instance part="CD25" gate="G$1" x="241.6" y="-2057.4"/>
+<instance part="CD26" gate="G$1" x="343.2" y="-2057.4"/>
+<instance part="CD27" gate="G$1" x="444.79999999999995" y="-2057.4"/>
+<instance part="CD28" gate="G$1" x="140.0" y="-2197.1"/>
+<instance part="CD29" gate="G$1" x="241.6" y="-2197.1"/>
+<instance part="CD30" gate="G$1" x="343.2" y="-2197.1"/>
+<instance part="CD31" gate="G$1" x="444.79999999999995" y="-2197.1"/>
 </instances><busses/><nets>
 <net name="CLK" class="0">
 <segment><pinref part="U1" gate="G$1" pin="CLK"/>
@@ -1842,6 +1924,99 @@
 <segment><pinref part="J1" gate="G$1" pin="C2"/>
 <wire x1="17.78" y1="35.56" x2="22.86" y2="35.56" width="0.1524" layer="91"/>
 <label x="22.86" y="36.07" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD1" gate="G$1" pin="1"/>
+<wire x1="223.82" y1="-1219.20" x2="218.74" y2="-1219.20" width="0.1524" layer="91"/>
+<label x="218.74" y="-1218.69" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD2" gate="G$1" pin="1"/>
+<wire x1="325.42" y1="-1219.20" x2="320.34" y2="-1219.20" width="0.1524" layer="91"/>
+<label x="320.34" y="-1218.69" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD3" gate="G$1" pin="1"/>
+<wire x1="427.02" y1="-1219.20" x2="421.94" y2="-1219.20" width="0.1524" layer="91"/>
+<label x="421.94" y="-1218.69" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD4" gate="G$1" pin="1"/>
+<wire x1="122.22" y1="-1358.90" x2="117.14" y2="-1358.90" width="0.1524" layer="91"/>
+<label x="117.14" y="-1358.39" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD5" gate="G$1" pin="1"/>
+<wire x1="223.82" y1="-1358.90" x2="218.74" y2="-1358.90" width="0.1524" layer="91"/>
+<label x="218.74" y="-1358.39" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD6" gate="G$1" pin="1"/>
+<wire x1="325.42" y1="-1358.90" x2="320.34" y2="-1358.90" width="0.1524" layer="91"/>
+<label x="320.34" y="-1358.39" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD7" gate="G$1" pin="1"/>
+<wire x1="427.02" y1="-1358.90" x2="421.94" y2="-1358.90" width="0.1524" layer="91"/>
+<label x="421.94" y="-1358.39" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD8" gate="G$1" pin="1"/>
+<wire x1="122.22" y1="-1498.60" x2="117.14" y2="-1498.60" width="0.1524" layer="91"/>
+<label x="117.14" y="-1498.09" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD9" gate="G$1" pin="1"/>
+<wire x1="223.82" y1="-1498.60" x2="218.74" y2="-1498.60" width="0.1524" layer="91"/>
+<label x="218.74" y="-1498.09" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD10" gate="G$1" pin="1"/>
+<wire x1="325.42" y1="-1498.60" x2="320.34" y2="-1498.60" width="0.1524" layer="91"/>
+<label x="320.34" y="-1498.09" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD11" gate="G$1" pin="1"/>
+<wire x1="427.02" y1="-1498.60" x2="421.94" y2="-1498.60" width="0.1524" layer="91"/>
+<label x="421.94" y="-1498.09" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD12" gate="G$1" pin="1"/>
+<wire x1="122.22" y1="-1638.30" x2="117.14" y2="-1638.30" width="0.1524" layer="91"/>
+<label x="117.14" y="-1637.79" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD13" gate="G$1" pin="1"/>
+<wire x1="223.82" y1="-1638.30" x2="218.74" y2="-1638.30" width="0.1524" layer="91"/>
+<label x="218.74" y="-1637.79" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD14" gate="G$1" pin="1"/>
+<wire x1="325.42" y1="-1638.30" x2="320.34" y2="-1638.30" width="0.1524" layer="91"/>
+<label x="320.34" y="-1637.79" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD15" gate="G$1" pin="1"/>
+<wire x1="427.02" y1="-1638.30" x2="421.94" y2="-1638.30" width="0.1524" layer="91"/>
+<label x="421.94" y="-1637.79" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD16" gate="G$1" pin="1"/>
+<wire x1="122.22" y1="-1778.00" x2="117.14" y2="-1778.00" width="0.1524" layer="91"/>
+<label x="117.14" y="-1777.49" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD17" gate="G$1" pin="1"/>
+<wire x1="223.82" y1="-1778.00" x2="218.74" y2="-1778.00" width="0.1524" layer="91"/>
+<label x="218.74" y="-1777.49" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD18" gate="G$1" pin="1"/>
+<wire x1="325.42" y1="-1778.00" x2="320.34" y2="-1778.00" width="0.1524" layer="91"/>
+<label x="320.34" y="-1777.49" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD19" gate="G$1" pin="1"/>
+<wire x1="427.02" y1="-1778.00" x2="421.94" y2="-1778.00" width="0.1524" layer="91"/>
+<label x="421.94" y="-1777.49" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD20" gate="G$1" pin="1"/>
+<wire x1="122.22" y1="-1917.70" x2="117.14" y2="-1917.70" width="0.1524" layer="91"/>
+<label x="117.14" y="-1917.19" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD21" gate="G$1" pin="1"/>
+<wire x1="223.82" y1="-1917.70" x2="218.74" y2="-1917.70" width="0.1524" layer="91"/>
+<label x="218.74" y="-1917.19" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD22" gate="G$1" pin="1"/>
+<wire x1="325.42" y1="-1917.70" x2="320.34" y2="-1917.70" width="0.1524" layer="91"/>
+<label x="320.34" y="-1917.19" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD23" gate="G$1" pin="1"/>
+<wire x1="427.02" y1="-1917.70" x2="421.94" y2="-1917.70" width="0.1524" layer="91"/>
+<label x="421.94" y="-1917.19" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD24" gate="G$1" pin="1"/>
+<wire x1="122.22" y1="-2057.40" x2="117.14" y2="-2057.40" width="0.1524" layer="91"/>
+<label x="117.14" y="-2056.89" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD25" gate="G$1" pin="1"/>
+<wire x1="223.82" y1="-2057.40" x2="218.74" y2="-2057.40" width="0.1524" layer="91"/>
+<label x="218.74" y="-2056.89" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD26" gate="G$1" pin="1"/>
+<wire x1="325.42" y1="-2057.40" x2="320.34" y2="-2057.40" width="0.1524" layer="91"/>
+<label x="320.34" y="-2056.89" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD27" gate="G$1" pin="1"/>
+<wire x1="427.02" y1="-2057.40" x2="421.94" y2="-2057.40" width="0.1524" layer="91"/>
+<label x="421.94" y="-2056.89" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD28" gate="G$1" pin="1"/>
+<wire x1="122.22" y1="-2197.10" x2="117.14" y2="-2197.10" width="0.1524" layer="91"/>
+<label x="117.14" y="-2196.59" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD29" gate="G$1" pin="1"/>
+<wire x1="223.82" y1="-2197.10" x2="218.74" y2="-2197.10" width="0.1524" layer="91"/>
+<label x="218.74" y="-2196.59" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD30" gate="G$1" pin="1"/>
+<wire x1="325.42" y1="-2197.10" x2="320.34" y2="-2197.10" width="0.1524" layer="91"/>
+<label x="320.34" y="-2196.59" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD31" gate="G$1" pin="1"/>
+<wire x1="427.02" y1="-2197.10" x2="421.94" y2="-2197.10" width="0.1524" layer="91"/>
+<label x="421.94" y="-2196.59" size="1.778" layer="95"/></segment>
 </net>
 <net name="CFLG" class="0">
 <segment><pinref part="U10" gate="G$1" pin="CN4"/>
@@ -2318,6 +2493,99 @@
 <segment><pinref part="J1" gate="G$1" pin="C32"/>
 <wire x1="17.78" y1="-40.64" x2="22.86" y2="-40.64" width="0.1524" layer="91"/>
 <label x="22.86" y="-40.13" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD1" gate="G$1" pin="2"/>
+<wire x1="259.38" y1="-1219.20" x2="264.46" y2="-1219.20" width="0.1524" layer="91"/>
+<label x="264.46" y="-1218.69" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD2" gate="G$1" pin="2"/>
+<wire x1="360.98" y1="-1219.20" x2="366.06" y2="-1219.20" width="0.1524" layer="91"/>
+<label x="366.06" y="-1218.69" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD3" gate="G$1" pin="2"/>
+<wire x1="462.58" y1="-1219.20" x2="467.66" y2="-1219.20" width="0.1524" layer="91"/>
+<label x="467.66" y="-1218.69" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD4" gate="G$1" pin="2"/>
+<wire x1="157.78" y1="-1358.90" x2="162.86" y2="-1358.90" width="0.1524" layer="91"/>
+<label x="162.86" y="-1358.39" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD5" gate="G$1" pin="2"/>
+<wire x1="259.38" y1="-1358.90" x2="264.46" y2="-1358.90" width="0.1524" layer="91"/>
+<label x="264.46" y="-1358.39" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD6" gate="G$1" pin="2"/>
+<wire x1="360.98" y1="-1358.90" x2="366.06" y2="-1358.90" width="0.1524" layer="91"/>
+<label x="366.06" y="-1358.39" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD7" gate="G$1" pin="2"/>
+<wire x1="462.58" y1="-1358.90" x2="467.66" y2="-1358.90" width="0.1524" layer="91"/>
+<label x="467.66" y="-1358.39" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD8" gate="G$1" pin="2"/>
+<wire x1="157.78" y1="-1498.60" x2="162.86" y2="-1498.60" width="0.1524" layer="91"/>
+<label x="162.86" y="-1498.09" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD9" gate="G$1" pin="2"/>
+<wire x1="259.38" y1="-1498.60" x2="264.46" y2="-1498.60" width="0.1524" layer="91"/>
+<label x="264.46" y="-1498.09" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD10" gate="G$1" pin="2"/>
+<wire x1="360.98" y1="-1498.60" x2="366.06" y2="-1498.60" width="0.1524" layer="91"/>
+<label x="366.06" y="-1498.09" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD11" gate="G$1" pin="2"/>
+<wire x1="462.58" y1="-1498.60" x2="467.66" y2="-1498.60" width="0.1524" layer="91"/>
+<label x="467.66" y="-1498.09" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD12" gate="G$1" pin="2"/>
+<wire x1="157.78" y1="-1638.30" x2="162.86" y2="-1638.30" width="0.1524" layer="91"/>
+<label x="162.86" y="-1637.79" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD13" gate="G$1" pin="2"/>
+<wire x1="259.38" y1="-1638.30" x2="264.46" y2="-1638.30" width="0.1524" layer="91"/>
+<label x="264.46" y="-1637.79" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD14" gate="G$1" pin="2"/>
+<wire x1="360.98" y1="-1638.30" x2="366.06" y2="-1638.30" width="0.1524" layer="91"/>
+<label x="366.06" y="-1637.79" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD15" gate="G$1" pin="2"/>
+<wire x1="462.58" y1="-1638.30" x2="467.66" y2="-1638.30" width="0.1524" layer="91"/>
+<label x="467.66" y="-1637.79" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD16" gate="G$1" pin="2"/>
+<wire x1="157.78" y1="-1778.00" x2="162.86" y2="-1778.00" width="0.1524" layer="91"/>
+<label x="162.86" y="-1777.49" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD17" gate="G$1" pin="2"/>
+<wire x1="259.38" y1="-1778.00" x2="264.46" y2="-1778.00" width="0.1524" layer="91"/>
+<label x="264.46" y="-1777.49" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD18" gate="G$1" pin="2"/>
+<wire x1="360.98" y1="-1778.00" x2="366.06" y2="-1778.00" width="0.1524" layer="91"/>
+<label x="366.06" y="-1777.49" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD19" gate="G$1" pin="2"/>
+<wire x1="462.58" y1="-1778.00" x2="467.66" y2="-1778.00" width="0.1524" layer="91"/>
+<label x="467.66" y="-1777.49" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD20" gate="G$1" pin="2"/>
+<wire x1="157.78" y1="-1917.70" x2="162.86" y2="-1917.70" width="0.1524" layer="91"/>
+<label x="162.86" y="-1917.19" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD21" gate="G$1" pin="2"/>
+<wire x1="259.38" y1="-1917.70" x2="264.46" y2="-1917.70" width="0.1524" layer="91"/>
+<label x="264.46" y="-1917.19" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD22" gate="G$1" pin="2"/>
+<wire x1="360.98" y1="-1917.70" x2="366.06" y2="-1917.70" width="0.1524" layer="91"/>
+<label x="366.06" y="-1917.19" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD23" gate="G$1" pin="2"/>
+<wire x1="462.58" y1="-1917.70" x2="467.66" y2="-1917.70" width="0.1524" layer="91"/>
+<label x="467.66" y="-1917.19" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD24" gate="G$1" pin="2"/>
+<wire x1="157.78" y1="-2057.40" x2="162.86" y2="-2057.40" width="0.1524" layer="91"/>
+<label x="162.86" y="-2056.89" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD25" gate="G$1" pin="2"/>
+<wire x1="259.38" y1="-2057.40" x2="264.46" y2="-2057.40" width="0.1524" layer="91"/>
+<label x="264.46" y="-2056.89" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD26" gate="G$1" pin="2"/>
+<wire x1="360.98" y1="-2057.40" x2="366.06" y2="-2057.40" width="0.1524" layer="91"/>
+<label x="366.06" y="-2056.89" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD27" gate="G$1" pin="2"/>
+<wire x1="462.58" y1="-2057.40" x2="467.66" y2="-2057.40" width="0.1524" layer="91"/>
+<label x="467.66" y="-2056.89" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD28" gate="G$1" pin="2"/>
+<wire x1="157.78" y1="-2197.10" x2="162.86" y2="-2197.10" width="0.1524" layer="91"/>
+<label x="162.86" y="-2196.59" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD29" gate="G$1" pin="2"/>
+<wire x1="259.38" y1="-2197.10" x2="264.46" y2="-2197.10" width="0.1524" layer="91"/>
+<label x="264.46" y="-2196.59" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD30" gate="G$1" pin="2"/>
+<wire x1="360.98" y1="-2197.10" x2="366.06" y2="-2197.10" width="0.1524" layer="91"/>
+<label x="366.06" y="-2196.59" size="1.778" layer="95"/></segment>
+<segment><pinref part="CD31" gate="G$1" pin="2"/>
+<wire x1="462.58" y1="-2197.10" x2="467.66" y2="-2197.10" width="0.1524" layer="91"/>
+<label x="467.66" y="-2196.59" size="1.778" layer="95"/></segment>
 </net>
 <net name="SH1" class="0">
 <segment><pinref part="U14" gate="G$1" pin="S"/>

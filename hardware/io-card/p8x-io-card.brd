@@ -295,20 +295,35 @@
 <elements>
 <element name="J1" library="p8x" package="DIN96" value="DIN41612-96M" x="147.32" y="88.90"/>
 <element name="U1" library="p8x" package="DIP14" value="IO PAGE" x="7.62" y="88.90"/>
+<element name="CD1" library="p8x" package="C_DISC" value="100N" x="7.62" y="78.74"/>
 <element name="U2" library="p8x" package="DIP16" value="PORT DEC" x="21.59" y="88.90"/>
+<element name="CD2" library="p8x" package="C_DISC" value="100N" x="21.59" y="78.74"/>
 <element name="U3" library="p8x" package="DIP16" value="DOE DEC" x="35.56" y="88.90"/>
+<element name="CD3" library="p8x" package="C_DISC" value="100N" x="35.56" y="78.74"/>
 <element name="U4" library="p8x" package="DIP16" value="DLD DEC" x="49.53" y="88.90"/>
+<element name="CD4" library="p8x" package="C_DISC" value="100N" x="49.53" y="78.74"/>
 <element name="U5" library="p8x" package="DIP14" value="74HCT32" x="63.50" y="88.90"/>
+<element name="CD5" library="p8x" package="C_DISC" value="100N" x="63.50" y="78.74"/>
 <element name="U6" library="p8x" package="DIP14" value="74HCT08" x="77.47" y="88.90"/>
+<element name="CD6" library="p8x" package="C_DISC" value="100N" x="77.47" y="78.74"/>
 <element name="U7" library="p8x" package="DIP16" value="BAUD DIV" x="91.44" y="88.90"/>
+<element name="CD7" library="p8x" package="C_DISC" value="100N" x="91.44" y="78.74"/>
 <element name="U8" library="p8x" package="DIP16" value="RS232" x="105.41" y="88.90"/>
+<element name="CD8" library="p8x" package="C_DISC" value="100N" x="105.41" y="78.74"/>
 <element name="U9" library="p8x" package="DIP20" value="SW IN" x="119.38" y="88.90"/>
+<element name="CD9" library="p8x" package="C_DISC" value="100N" x="119.38" y="78.74"/>
 <element name="U10" library="p8x" package="DIP20" value="LED PORT" x="133.35" y="88.90"/>
+<element name="CD10" library="p8x" package="C_DISC" value="100N" x="133.35" y="78.74"/>
 <element name="U11" library="p8x" package="DIP20" value="MON A-LO" x="7.62" y="63.50"/>
+<element name="CD11" library="p8x" package="C_DISC" value="100N" x="7.62" y="53.34"/>
 <element name="U12" library="p8x" package="DIP20" value="MON A-HI" x="21.59" y="63.50"/>
+<element name="CD12" library="p8x" package="C_DISC" value="100N" x="21.59" y="53.34"/>
 <element name="U13" library="p8x" package="DIP20" value="MON D" x="35.56" y="63.50"/>
+<element name="CD13" library="p8x" package="C_DISC" value="100N" x="35.56" y="53.34"/>
 <element name="U14" library="p8x" package="DIP24W" value="ACIA" x="49.53" y="63.50"/>
+<element name="CD14" library="p8x" package="C_DISC" value="100N" x="49.53" y="53.34"/>
 <element name="U15" library="p8x" package="DIP14" value="74HCT00" x="63.50" y="63.50"/>
+<element name="CD15" library="p8x" package="C_DISC" value="100N" x="63.50" y="53.34"/>
 <element name="X2" library="p8x" package="OSC4" value="2.4576MHZ" x="5.08" y="96.52"/>
 <element name="SW1" library="p8x" package="DIP16" value="INPUT" x="15.24" y="96.52"/>
 <element name="RNP" library="p8x" package="SIP9" value="8X10K" x="25.40" y="96.52"/>
@@ -670,6 +685,21 @@
 <contactref element="J1" pad="B32"/>
 <contactref element="J1" pad="C31"/>
 <contactref element="J1" pad="C32"/>
+<contactref element="CD1" pad="2"/>
+<contactref element="CD2" pad="2"/>
+<contactref element="CD3" pad="2"/>
+<contactref element="CD4" pad="2"/>
+<contactref element="CD5" pad="2"/>
+<contactref element="CD6" pad="2"/>
+<contactref element="CD7" pad="2"/>
+<contactref element="CD8" pad="2"/>
+<contactref element="CD9" pad="2"/>
+<contactref element="CD10" pad="2"/>
+<contactref element="CD11" pad="2"/>
+<contactref element="CD12" pad="2"/>
+<contactref element="CD13" pad="2"/>
+<contactref element="CD14" pad="2"/>
+<contactref element="CD15" pad="2"/>
 <polygon width="0.254" layer="2" isolate="0.3" rank="1">
 <vertex x="0" y="0"/>
 <vertex x="160" y="0"/>
@@ -1042,6 +1072,21 @@
 <contactref element="J1" pad="B2"/>
 <contactref element="J1" pad="C1"/>
 <contactref element="J1" pad="C2"/>
+<contactref element="CD1" pad="1"/>
+<contactref element="CD2" pad="1"/>
+<contactref element="CD3" pad="1"/>
+<contactref element="CD4" pad="1"/>
+<contactref element="CD5" pad="1"/>
+<contactref element="CD6" pad="1"/>
+<contactref element="CD7" pad="1"/>
+<contactref element="CD8" pad="1"/>
+<contactref element="CD9" pad="1"/>
+<contactref element="CD10" pad="1"/>
+<contactref element="CD11" pad="1"/>
+<contactref element="CD12" pad="1"/>
+<contactref element="CD13" pad="1"/>
+<contactref element="CD14" pad="1"/>
+<contactref element="CD15" pad="1"/>
 <polygon width="0.254" layer="15" isolate="0.3" rank="1">
 <vertex x="0" y="0"/>
 <vertex x="160" y="0"/>

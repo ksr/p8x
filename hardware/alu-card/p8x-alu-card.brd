@@ -44,6 +44,11 @@
 </plain>
 <libraries><library name="p8x">
 <packages>
+<package name="C_DISC">
+<pad name="1" x="0.00" y="0.00" drill="0.9" diameter="1.8"/>
+<pad name="2" x="0.00" y="-5.08" drill="0.9" diameter="1.8"/>
+<text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
+</package>
 <package name="DIN96">
 <pad name="A1" x="5.08" y="-0.00" drill="1.0" diameter="1.7"/>
 <pad name="A2" x="5.08" y="-2.54" drill="1.0" diameter="1.7"/>
@@ -246,36 +251,67 @@
 <elements>
 <element name="J1" library="p8x" package="DIN96" value="DIN41612-96M" x="147.32" y="88.90"/>
 <element name="U1" library="p8x" package="DIP20" value="A REG" x="7.62" y="88.90"/>
+<element name="CD1" library="p8x" package="C_DISC" value="100N" x="7.62" y="78.74"/>
 <element name="U2" library="p8x" package="DIP20" value="A OUT" x="21.59" y="88.90"/>
+<element name="CD2" library="p8x" package="C_DISC" value="100N" x="21.59" y="78.74"/>
 <element name="U3" library="p8x" package="DIP20" value="B REG" x="35.56" y="88.90"/>
+<element name="CD3" library="p8x" package="C_DISC" value="100N" x="35.56" y="78.74"/>
 <element name="U4" library="p8x" package="DIP20" value="B OUT" x="49.53" y="88.90"/>
+<element name="CD4" library="p8x" package="C_DISC" value="100N" x="49.53" y="78.74"/>
 <element name="U5" library="p8x" package="DIP20" value="T REG" x="63.50" y="88.90"/>
+<element name="CD5" library="p8x" package="C_DISC" value="100N" x="63.50" y="78.74"/>
 <element name="U6" library="p8x" package="DIP20" value="T OUT" x="77.47" y="88.90"/>
+<element name="CD6" library="p8x" package="C_DISC" value="100N" x="77.47" y="78.74"/>
 <element name="U7" library="p8x" package="DIP20" value="T2 REG" x="91.44" y="88.90"/>
+<element name="CD7" library="p8x" package="C_DISC" value="100N" x="91.44" y="78.74"/>
 <element name="U8" library="p8x" package="DIP20" value="T2 OUT" x="105.41" y="88.90"/>
+<element name="CD8" library="p8x" package="C_DISC" value="100N" x="105.41" y="78.74"/>
 <element name="U9" library="p8x" package="DIP24W" value="ALU LO" x="119.38" y="88.90"/>
+<element name="CD9" library="p8x" package="C_DISC" value="100N" x="119.38" y="78.74"/>
 <element name="U10" library="p8x" package="DIP24W" value="ALU HI" x="133.35" y="88.90"/>
+<element name="CD10" library="p8x" package="C_DISC" value="100N" x="133.35" y="78.74"/>
 <element name="U11" library="p8x" package="DIP16" value="CLA" x="7.62" y="63.50"/>
+<element name="CD11" library="p8x" package="C_DISC" value="100N" x="7.62" y="53.34"/>
 <element name="U12" library="p8x" package="DIP16" value="SH1 LO" x="21.59" y="63.50"/>
+<element name="CD12" library="p8x" package="C_DISC" value="100N" x="21.59" y="53.34"/>
 <element name="U13" library="p8x" package="DIP16" value="SH1 HI" x="35.56" y="63.50"/>
+<element name="CD13" library="p8x" package="C_DISC" value="100N" x="35.56" y="53.34"/>
 <element name="U14" library="p8x" package="DIP16" value="SH2 LO" x="49.53" y="63.50"/>
+<element name="CD14" library="p8x" package="C_DISC" value="100N" x="49.53" y="53.34"/>
 <element name="U15" library="p8x" package="DIP16" value="SH2 HI" x="63.50" y="63.50"/>
+<element name="CD15" library="p8x" package="C_DISC" value="100N" x="63.50" y="53.34"/>
 <element name="U16" library="p8x" package="DIP20" value="ALU OUT" x="77.47" y="63.50"/>
+<element name="CD16" library="p8x" package="C_DISC" value="100N" x="77.47" y="53.34"/>
 <element name="U17" library="p8x" package="DIP16" value="FLAGS" x="91.44" y="63.50"/>
+<element name="CD17" library="p8x" package="C_DISC" value="100N" x="91.44" y="53.34"/>
 <element name="U18" library="p8x" package="DIP14" value="Z DET" x="105.41" y="63.50"/>
+<element name="CD18" library="p8x" package="C_DISC" value="100N" x="105.41" y="53.34"/>
 <element name="U19" library="p8x" package="DIP14" value="74HCT08" x="119.38" y="63.50"/>
+<element name="CD19" library="p8x" package="C_DISC" value="100N" x="119.38" y="53.34"/>
 <element name="U20" library="p8x" package="DIP16" value="DOE DEC" x="133.35" y="63.50"/>
+<element name="CD20" library="p8x" package="C_DISC" value="100N" x="133.35" y="53.34"/>
 <element name="U21" library="p8x" package="DIP16" value="DLD DEC" x="7.62" y="38.10"/>
+<element name="CD21" library="p8x" package="C_DISC" value="100N" x="7.62" y="27.94"/>
 <element name="U22" library="p8x" package="DIP16" value="FLAG MUX" x="21.59" y="38.10"/>
+<element name="CD22" library="p8x" package="C_DISC" value="100N" x="21.59" y="27.94"/>
 <element name="U23" library="p8x" package="DIP20" value="FLAG OUT" x="35.56" y="38.10"/>
+<element name="CD23" library="p8x" package="C_DISC" value="100N" x="35.56" y="27.94"/>
 <element name="U24" library="p8x" package="DIP14" value="74HCT32" x="49.53" y="38.10"/>
+<element name="CD24" library="p8x" package="C_DISC" value="100N" x="49.53" y="27.94"/>
 <element name="U25" library="p8x" package="DIP14" value="74HCT00" x="63.50" y="38.10"/>
+<element name="CD25" library="p8x" package="C_DISC" value="100N" x="63.50" y="27.94"/>
 <element name="U26" library="p8x" package="DIP14" value="C FLAG FF" x="77.47" y="38.10"/>
+<element name="CD26" library="p8x" package="C_DISC" value="100N" x="77.47" y="27.94"/>
 <element name="U27" library="p8x" package="DIP14" value="BUS Z-DET" x="91.44" y="38.10"/>
+<element name="CD27" library="p8x" package="C_DISC" value="100N" x="91.44" y="27.94"/>
 <element name="U28" library="p8x" package="DIP16" value="SHIFT-OUT MUX" x="105.41" y="38.10"/>
+<element name="CD28" library="p8x" package="C_DISC" value="100N" x="105.41" y="27.94"/>
 <element name="U29" library="p8x" package="DIP16" value="C-SRC MUX" x="119.38" y="38.10"/>
+<element name="CD29" library="p8x" package="C_DISC" value="100N" x="119.38" y="27.94"/>
 <element name="U30" library="p8x" package="DIP16" value="SHIN MUX" x="133.35" y="38.10"/>
+<element name="CD30" library="p8x" package="C_DISC" value="100N" x="133.35" y="27.94"/>
 <element name="U31" library="p8x" package="DIP14" value="74HCT08 CLK/FORCE" x="7.62" y="12.70"/>
+<element name="CD31" library="p8x" package="C_DISC" value="100N" x="7.62" y="2.54"/>
 <element name="RP1" library="p8x" package="R_AXIAL" value="1K" x="5.08" y="96.52"/>
 <element name="LED3" library="p8x" package="LED5" value="PWR-GRN" x="15.24" y="96.52"/>
 <element name="R4" library="p8x" package="R_AXIAL" value="1K" x="25.40" y="96.52"/>
@@ -833,6 +869,37 @@
 <contactref element="J1" pad="B32"/>
 <contactref element="J1" pad="C31"/>
 <contactref element="J1" pad="C32"/>
+<contactref element="CD1" pad="2"/>
+<contactref element="CD2" pad="2"/>
+<contactref element="CD3" pad="2"/>
+<contactref element="CD4" pad="2"/>
+<contactref element="CD5" pad="2"/>
+<contactref element="CD6" pad="2"/>
+<contactref element="CD7" pad="2"/>
+<contactref element="CD8" pad="2"/>
+<contactref element="CD9" pad="2"/>
+<contactref element="CD10" pad="2"/>
+<contactref element="CD11" pad="2"/>
+<contactref element="CD12" pad="2"/>
+<contactref element="CD13" pad="2"/>
+<contactref element="CD14" pad="2"/>
+<contactref element="CD15" pad="2"/>
+<contactref element="CD16" pad="2"/>
+<contactref element="CD17" pad="2"/>
+<contactref element="CD18" pad="2"/>
+<contactref element="CD19" pad="2"/>
+<contactref element="CD20" pad="2"/>
+<contactref element="CD21" pad="2"/>
+<contactref element="CD22" pad="2"/>
+<contactref element="CD23" pad="2"/>
+<contactref element="CD24" pad="2"/>
+<contactref element="CD25" pad="2"/>
+<contactref element="CD26" pad="2"/>
+<contactref element="CD27" pad="2"/>
+<contactref element="CD28" pad="2"/>
+<contactref element="CD29" pad="2"/>
+<contactref element="CD30" pad="2"/>
+<contactref element="CD31" pad="2"/>
 <polygon width="0.254" layer="2" isolate="0.3" rank="1">
 <vertex x="0" y="0"/>
 <vertex x="160" y="0"/>
@@ -1034,6 +1101,37 @@
 <contactref element="J1" pad="B2"/>
 <contactref element="J1" pad="C1"/>
 <contactref element="J1" pad="C2"/>
+<contactref element="CD1" pad="1"/>
+<contactref element="CD2" pad="1"/>
+<contactref element="CD3" pad="1"/>
+<contactref element="CD4" pad="1"/>
+<contactref element="CD5" pad="1"/>
+<contactref element="CD6" pad="1"/>
+<contactref element="CD7" pad="1"/>
+<contactref element="CD8" pad="1"/>
+<contactref element="CD9" pad="1"/>
+<contactref element="CD10" pad="1"/>
+<contactref element="CD11" pad="1"/>
+<contactref element="CD12" pad="1"/>
+<contactref element="CD13" pad="1"/>
+<contactref element="CD14" pad="1"/>
+<contactref element="CD15" pad="1"/>
+<contactref element="CD16" pad="1"/>
+<contactref element="CD17" pad="1"/>
+<contactref element="CD18" pad="1"/>
+<contactref element="CD19" pad="1"/>
+<contactref element="CD20" pad="1"/>
+<contactref element="CD21" pad="1"/>
+<contactref element="CD22" pad="1"/>
+<contactref element="CD23" pad="1"/>
+<contactref element="CD24" pad="1"/>
+<contactref element="CD25" pad="1"/>
+<contactref element="CD26" pad="1"/>
+<contactref element="CD27" pad="1"/>
+<contactref element="CD28" pad="1"/>
+<contactref element="CD29" pad="1"/>
+<contactref element="CD30" pad="1"/>
+<contactref element="CD31" pad="1"/>
 <polygon width="0.254" layer="15" isolate="0.3" rank="1">
 <vertex x="0" y="0"/>
 <vertex x="160" y="0"/>

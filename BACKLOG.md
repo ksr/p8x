@@ -57,9 +57,6 @@ Last updated: 2026-06-11
   small images today; widen to a multi-byte LBA in CFSETL + the BIOS contract
   before volumes exceed 128 KB.
 
-- **Decoupling caps**: no card netlist includes per-IC 100nF decoupling yet
-  (standards sec.5 requires them). Add a generator pass that drops one cap per
-  IC into every card's netlist + board before any fab order.
 - **Datasheet pinout verification**: ~25 device definitions were added to the
   generator for the five new cards (74161/169/374/377/151/74/02/10/139/157/
   175/244/257/260/181/182, 28C64, 6850, MAX232, osc cans, IDE40, arrays).
@@ -228,6 +225,12 @@ Last updated: 2026-06-11
 
 ## DONE
 
+- **Decoupling caps on every card.** gen_eagle's `card()` now drops one 100nF
+  cap (`CDn`, C_DISC footprint) per IC, placed beside it and wired VCC<->GND;
+  the memory card's separate build does the same for U1-U9. Counts: control 18,
+  regbank 44, alu 31, io 15, cf 8, memory 9 (backplane already had its 10 +
+  bulk). All 7 boards regenerate with 0 validation errors; schematic PDFs
+  refreshed. (Placement is approximate pending Fusion routing.)
 - **P8X/OS v1.0 — v2-aware PACK (filesystem complete).** Compacts hierarchical
   volumes in two phases. PHASE 1: a tree-walk min-find repeatedly picks the
   live file/dir extent with the smallest start LBA >= the running free pointer

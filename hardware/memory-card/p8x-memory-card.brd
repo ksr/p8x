@@ -44,6 +44,11 @@
 </plain>
 <libraries><library name="p8x">
 <packages>
+<package name="C_DISC">
+<pad name="1" x="0.00" y="0.00" drill="0.9" diameter="1.8"/>
+<pad name="2" x="0.00" y="-5.08" drill="0.9" diameter="1.8"/>
+<text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
+</package>
 <package name="DIN96">
 <pad name="A1" x="5.08" y="-0.00" drill="1.0" diameter="1.7"/>
 <pad name="A2" x="5.08" y="-2.54" drill="1.0" diameter="1.7"/>
@@ -268,6 +273,15 @@
 <element name="LED5" library="p8x" package="LED5" value="RD-GRN" x="142.24" y="81.28"/>
 <element name="RS4" library="p8x" package="R_AXIAL" value="1K" x="127.00" y="76.20"/>
 <element name="LED6" library="p8x" package="LED5" value="WR-RED" x="142.24" y="76.20"/>
+<element name="CD1" library="p8x" package="C_DISC" value="100N" x="17.78" y="73.66"/>
+<element name="CD2" library="p8x" package="C_DISC" value="100N" x="43.18" y="73.66"/>
+<element name="CD3" library="p8x" package="C_DISC" value="100N" x="68.58" y="73.66"/>
+<element name="CD4" library="p8x" package="C_DISC" value="100N" x="88.90" y="73.66"/>
+<element name="CD5" library="p8x" package="C_DISC" value="100N" x="109.22" y="73.66"/>
+<element name="CD6" library="p8x" package="C_DISC" value="100N" x="17.78" y="25.40"/>
+<element name="CD7" library="p8x" package="C_DISC" value="100N" x="43.18" y="25.40"/>
+<element name="CD8" library="p8x" package="C_DISC" value="100N" x="68.58" y="25.40"/>
+<element name="CD9" library="p8x" package="C_DISC" value="100N" x="88.90" y="25.40"/>
 </elements><signals>
 <signal name="-BOE">
 <contactref element="U9" pad="3"/>
@@ -515,6 +529,15 @@
 <contactref element="U9" pad="12"/>
 <contactref element="U9" pad="13"/>
 <contactref element="LED3" pad="1"/>
+<contactref element="CD1" pad="2"/>
+<contactref element="CD2" pad="2"/>
+<contactref element="CD3" pad="2"/>
+<contactref element="CD4" pad="2"/>
+<contactref element="CD5" pad="2"/>
+<contactref element="CD6" pad="2"/>
+<contactref element="CD7" pad="2"/>
+<contactref element="CD8" pad="2"/>
+<contactref element="CD9" pad="2"/>
 <polygon width="0.254" layer="2" isolate="0.3" rank="1">
 <vertex x="0" y="0"/>
 <vertex x="160" y="0"/>
@@ -617,6 +640,15 @@
 <contactref element="RS2" pad="1"/>
 <contactref element="RS3" pad="1"/>
 <contactref element="RS4" pad="1"/>
+<contactref element="CD1" pad="1"/>
+<contactref element="CD2" pad="1"/>
+<contactref element="CD3" pad="1"/>
+<contactref element="CD4" pad="1"/>
+<contactref element="CD5" pad="1"/>
+<contactref element="CD6" pad="1"/>
+<contactref element="CD7" pad="1"/>
+<contactref element="CD8" pad="1"/>
+<contactref element="CD9" pad="1"/>
 <polygon width="0.254" layer="15" isolate="0.3" rank="1">
 <vertex x="0" y="0"/>
 <vertex x="160" y="0"/>
