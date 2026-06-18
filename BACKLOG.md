@@ -137,6 +137,13 @@ Last updated: 2026-06-11
         - Or a standalone P8X/OS program (TPA at $A000) launched by RUN, using
           the BIOS vectors — keeps the kernel small but needs installing on
           each disk.
+- [ ] **BASIC variable limits are tunable** — names are significant to 6 chars
+      (`NAMLEN`) and capped at 32 variables (`NVARS`, 8-byte entries in the
+      256-byte `VARTAB` at `$x100`). Both are constants in p8xbasic.asm; bump
+      them if programs need longer names or more variables (grows the symbol
+      table and may require nudging `VARTAB`/`PROG` placement). Also: names
+      longer than 6 chars silently alias on their first 6 — could warn/error
+      instead.
 - [ ] **BASIC string-valued variables** (e.g. `A$ = "HELLO"`): add a string
       type alongside integers — string literals, `$`-suffixed variables,
       `PRINT`/`INPUT` of strings, and concatenation. Needs string storage
