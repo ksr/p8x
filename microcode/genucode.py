@@ -55,6 +55,36 @@ def op(code,name,shape,*steps):
 NOP=w(urst=1)
 op(0x00,"NOP","", NOP)
 op(0x01,"HLT","", w(halt=1,urst=1))
+# ---- interrupts (rev C) -------------------------------------------------------
+# EI/DI just toggle the interrupt-enable latch (driven by an opcode decode on the
+# control card, not a microcode bit); their microcode is a plain NOP.
+op(0x02,"EI","", NOP)              # enable maskable interrupts
+op(0x03,"DI","", NOP)              # disable maskable interrupts
+# IRQ entry: the forcing buffer injects opcode $08 at fetch (which still did P0++)
+# AND drives $08 on the bus whenever this opcode is running with DOE=idle, so the
+# two PTR loads below build P0 = $0808 (the ROM vector). Sequence: undo the
+# fetch's P0++, push return PC (hi,lo) and flags onto P3, then vector to $0808.
+op(0x08,"IRQ","",
+   w(psel=0,pdec=1),                              # P0 = return address (undo fetch P0++)
+   w(doe="PTRH",dld="T",psel=0),
+   w(doe="T",dld="MEMW",psel=3,pdec=1),           # push return hi
+   w(doe="PTRL",dld="T",psel=0),
+   w(doe="T",dld="MEMW",psel=3,pdec=1),           # push return lo
+   w(doe="FLAGS",dld="T",psel=0),
+   w(doe="T",dld="MEMW",psel=3,pdec=1),           # push flags
+   w(doe="idle",dld="PTRH",psel=0),               # P0.hi = $08 (forcing buffer)
+   w(doe="idle",dld="PTRL",psel=0,urst=1))        # P0.lo = $08 -> P0 = $0808
+# RTI: pop flags then return PC; re-enables interrupts (IE set by opcode decode).
+op(0x04,"RTI","",
+   w(psel=3,pinc=1),
+   w(doe="MEM",dld="T",psel=3),                   # T = saved flags
+   w(doe="T",dld="FLAGS",psel=0),                 # restore C/Z/N/V
+   w(psel=3,pinc=1),
+   w(doe="MEM",dld="T",psel=3),                   # T = return lo
+   w(psel=3,pinc=1),
+   w(doe="MEM",dld="T2",psel=3),                  # T2 = return hi
+   w(doe="T",dld="PTRL",psel=0),
+   w(doe="T2",dld="PTRH",psel=0,urst=1))
 op(0x10,"LDA","#", w(doe="MEM",dld="A",psel=0,pinc=1,ldzn=1,urst=1))
 op(0x11,"LDB","#", w(doe="MEM",dld="B",psel=0,pinc=1,ldzn=1,urst=1))
 # absolute addressing: operand lo,hi -> PT scratch pointer, then access via PT

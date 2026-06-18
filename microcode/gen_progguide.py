@@ -102,7 +102,13 @@ DESC[("ORT","")] =("C Z N","A := A OR T. (B preserved.)")
 DESC[("XORT","")]=("C Z N","A := A XOR T. (B preserved.)")
 DESC[("CMPT","")]=("C Z N","Flags from A - T; A and B unchanged.")
 
+DESC[("EI","")]=("-","Enable maskable interrupts (IE := 1).")
+DESC[("DI","")]=("-","Disable maskable interrupts (IE := 0).")
+DESC[("RTI","")]=("-","Return from interrupt: pop flags then PC; re-enables IE.")
+DESC[("IRQ","")]=("-","Software interrupt: push PC+flags, vector to $0808. Also the "
+                 "opcode the hardware forcing buffer injects on a maskable IRQ.")
 GROUPS=[("System",["NOP","HLT","CLC","SEC"]),
+ ("Interrupts (rev C)",["EI","DI","RTI","IRQ"]),
  ("Load / store",["LDA","LDB","STA"]),
  ("ALU  (operands A,B; result to A unless noted)",
   ["ADD","SUB","AND","OR","XOR","CMP","INC","DEC","SHL","SHR","ROL","ROR"]),

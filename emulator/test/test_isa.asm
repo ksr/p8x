@@ -8,6 +8,8 @@
 
 TID = $9000        ; current test id (RAM)
 VAL = $9001        ; scratch byte (RAM) for LDT a
+IRQFLAG = $9002     ; set by the IRQ handler (rev C interrupt test)
+MARK = $9003        ; written by the instruction that was preempted by the IRQ
 
         .org 0
         LDP3 #$FEFF                 ; stack
@@ -446,6 +448,25 @@ n32b:
         LDB #$96
         CMP                     ; A == $96 ?
         JNZ fail
+; ---- 40: interrupt — EI, raise IRQ, handler at $0808 runs, RTI resumes ----
+        LDA #$40
+        STA TID
+        LDA #$00
+        STA IRQFLAG          ; handler will set this to $55
+        EI                   ; enable maskable interrupts
+        LDA #$01
+        STA $FF06            ; raise IRQ -> next fetch injects $08 -> handler
+        LDA #$AA             ; <- this fetch is preempted; runs AFTER RTI returns
+        STA MARK
+        DI                   ; done; mask again
+        LDA IRQFLAG          ; handler must have run
+        LDB #$55
+        CMP
+        JNZ fail
+        LDA MARK             ; preempted instruction must have completed after RTI
+        LDB #$AA
+        CMP
+        JNZ fail
 ; ---- all passed ----
         LDA #$00
         HLT
@@ -457,3 +478,10 @@ subr:   LDA #$99
         RTS
 subr2:  LDA #$77
         RTS
+
+; rev C interrupt handler — the forcing buffer vectors here ($0808). It sets a
+; flag and returns; RTI pops flags+PC so the interrupted program resumes intact.
+        .org $0808
+IRQH:   LDA #$55
+        STA IRQFLAG
+        RTI

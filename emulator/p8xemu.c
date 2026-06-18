@@ -44,6 +44,7 @@ static uint16_t P[5];                 /* P0=PC P1 P2 P3=SP P4=PT (hidden scratch
 static uint8_t A,B,T,T2,IR;
 static int stp, fC,fZ,fN,fV;          /* fC = conventional carry (1 = carry / A>=B) */
 static int prev_fcond=0, halted=0, trace=0;
+static int IE=0, irq_pending=0;   /* rev C: interrupt-enable latch + pending IRQ */
 static unsigned long long cycles=0;
 static uint8_t leds=0;
 
@@ -175,6 +176,7 @@ static void memwr(uint16_t ad,uint8_t v){
     if(ad<0x8000){ fprintf(stderr,"[warn] write to EEPROM %04X\n",ad); return; }
     if(ad<0xFF00){ ram[ad-0x8000]=v; return; }
     if(ad==0xFF02){ leds=v; return; }
+    if(ad==0xFF06){ irq_pending=1; return; }   /* rev C: raise a maskable IRQ (models a device) */
     if(ad==0xFF05){ putchar(v); fflush(stdout); rx_misses=0; return; }
     if(cf_img) switch(ad){                                   /* CF task file */
     case 0xFF10: cf_data_wr(v); return;
@@ -272,6 +274,13 @@ int main(int argc,char**argv){
         case 7: bus=memrd(addr); break;
         case 8: bus=addr&0xFF; break;  case 9: bus=addr>>8; break;
         }
+        /* rev C interrupt forcing buffer. At fetch (step 0) with IE set and an IRQ
+         * pending, it injects opcode $08 (overriding the memory read) and the
+         * interrupt is acknowledged (pending clear, IE masked). While the $08
+         * micro-routine runs with DOE=idle it drives $08 again, so the two PTR
+         * loads build P0 = $0808 (the ROM vector). */
+        if(stp==0 && doe==7 && IE && irq_pending){ bus=0x08; irq_pending=0; IE=0; }
+        else if(IR==0x08 && doe==0) bus=0x08;
         if(trace)
             printf("%9llu IR=%02X st=%X cd=%d | DOE=%X DLD=%X P%d=%04X "
                    "bus=%02X A=%02X B=%02X T=%02X%02X F=%c%c%c%c%s%s\n",
@@ -294,6 +303,9 @@ int main(int argc,char**argv){
         else if(ldzn){ fZ=(bus==0); fN=(bus>>7)&1; }   /* loads set Z,N from the byte */
         if(setc) fC=1;                                 /* SEC: force C, leave Z/N/V */
         if(clrc) fC=0;                                 /* CLC */
+        /* rev C: EI/DI/RTI manage the interrupt-enable latch (an opcode decode on
+         * the control card, not a microcode bit). Applied as the opcode retires. */
+        if(urst){ if(IR==0x02||IR==0x04) IE=1; else if(IR==0x03) IE=0; }
         prev_fcond=fcond;
         stp = urst ? 0 : (stp+1)&15;
         if(halt) halted=1;

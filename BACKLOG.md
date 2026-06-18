@@ -185,8 +185,25 @@ Last updated: 2026-06-11
 - [ ] FAT-style cluster allocation to eliminate PACK (P8XFS v3, entry format
       already compatible)
 - [ ] DS1302 RTC on I/O card → file timestamps
-- [ ] Interrupt support: latch IRQ, force opcode $FF at fetch, microcode pushes
-      PC + vectors (one 74244 forcing the bus)
+- [ ] Interrupt support — HARDWARE CONTROLLER (architecture done, see DONE).
+      The microcode/emulator/ISA side is implemented and tested (EI/DI/RTI, $08
+      IRQ entry, vector $0808, $FF06 raises IRQ in the emulator). What remains is
+      the physical control-card circuit, which is BIGGER than the old "one 74244"
+      note — it's a bus-critical, partly cross-card subsystem:
+        - 74244 forcing buffer (hardwired $08) onto the data bus
+        - IE flip-flop + IRQ-pending latch (7474)
+        - opcode decode for EI/DI/RTI (drives IE) + a fetch/step-0 detector
+        - service sequencer so the buffer drives $08 at the injected fetch AND
+          during the two PTR-load steps (DOE=idle) -> P0=$0808
+        - SUPPRESS the memory read during the injected fetch (cross-card: gate
+          the memory card's -RD/-OE with the IRQ-service signal) so the buffer
+          isn't fighting the EEPROM on the bus
+        - IRQ input on a spare bus line (B29 free)
+      RISK: it drives the shared data bus; a wiring error = bus contention = dead
+      machine, and there's no DRC backstop in the generator. Recommend designing
+      it deliberately (breadboard/DRC, or a small daughtercard) rather than
+      blind-adding to a board about to be fabbed. Monitor needs an ORG $0808 stub
+      (JMP to a handler / RAM trampoline) once the hardware exists.
 - [ ] p8x.pretty KiCad footprint lib if ever returning to KiCad round-trip
 - [ ] **I/O card in the emulator** — make the switches/LEDs interactive. The
       emulator stubs them: $FF00 (switches) always reads 0 and $FF02 (LEDs) is
@@ -230,6 +247,26 @@ Last updated: 2026-06-11
       budget
 
 ## DONE
+
+- **Interrupt ARCHITECTURE (rev C) — microcode/emulator/ISA (hardware pending).**
+  Implemented and tested the whole interrupt model end to end in emulation;
+  only the physical control-card circuit remains (see NEXT, and the risk note
+  there). Design: a maskable IRQ with an interrupt-enable latch (IE), reset off.
+  - Instructions: `EI`/`DI` (set/clear IE), `RTI` (pop flags+PC, re-enable IE),
+    and `IRQ`/$08 (push PC+flags, vector to $0808) — $08 is also the opcode the
+    hardware forcing buffer injects on a real IRQ, so it doubles as a software
+    interrupt.
+  - Vector: fixed ROM $0808. The forcing buffer's hardwired byte ($08) is BOTH
+    the injected opcode AND both vector bytes — high $08, low $08 -> $0808 — so
+    one pattern, one buffer, no separate zero-source. $0808 is just past the
+    monitor code.
+  - PC handling: the injected fetch still does P0++, so the $08 micro-routine
+    starts with DEP0 to recover the true return address before pushing it.
+  - Emulator: IE + irq_pending state; writing $FF06 raises an IRQ (models a
+    device); injection at fetch when IE & pending (acknowledged: pending clear,
+    IE masked); forcing buffer drives $08 while $08 runs with DOE=idle.
+  - Test: ISA case 40 enables interrupts, raises one, confirms the $0808 handler
+    ran and the preempted instruction completed after RTI. All 6 suites pass.
 
 - **V flag + signed comparison (rev C).** Implemented the overflow flag and
   signed-compare branches end to end. NOTE: the old "one 7486 from carry-into
