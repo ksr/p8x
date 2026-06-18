@@ -2012,9 +2012,36 @@ MBANNER: .byte CR,LF
          .asciiz "P8X/OS v0.8"
 MPROMPT: .asciiz "> "
 MHELP:   .byte CR,LF
-         .asciiz "commands: DIR [p]  CD p  MKDIR p  RMDIR p  TREE  LOAD f  RUN f"
+         .ascii "P8X/OS COMMANDS:"
          .byte CR,LF
-         .asciiz "          SAVE f s e  DEL f  DUMP a  DEP a b...  PACK  HELP"
+         .ascii "DIR [path]    list a directory (default: current)"
+         .byte CR,LF
+         .ascii "CD path       change directory (/abs, rel, .., .)"
+         .byte CR,LF
+         .ascii "MKDIR path    create a subdirectory"
+         .byte CR,LF
+         .ascii "RMDIR path    remove an empty subdirectory"
+         .byte CR,LF
+         .ascii "TREE          show the whole directory tree"
+         .byte CR,LF
+         .ascii "LOAD path     read a file to its load address"
+         .byte CR,LF
+         .ascii "RUN path      load a file, call its exec address"
+         .byte CR,LF
+         .ascii "SAVE path s e save memory [s,e) to a new file"
+         .byte CR,LF
+         .ascii "DEL path      delete a file"
+         .byte CR,LF
+         .ascii "DUMP a        show 256 bytes at hex addr a"
+         .byte CR,LF
+         .ascii "DEP a b b...  store hex bytes b... at hex addr a"
+         .byte CR,LF
+         .ascii "PACK          reclaim deleted space (v1 only)"
+         .byte CR,LF
+         .ascii "HELP          this help"
+         .byte CR,LF
+         .ascii "  path=file/dir, s e a=hex addr, b=hex byte"
+         .byte CR,LF,0
 MDIRHDR: .byte CR,LF
          .asciiz "NAME            SIZE"
 MUNK:    .byte CR,LF

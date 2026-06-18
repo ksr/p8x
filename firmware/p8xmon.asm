@@ -144,6 +144,10 @@ PROMPT: LDP1 #MPROMPT
         LDB  #'?'
         CMP
         JZ   CMD_H
+        LDA  TMP2
+        LDB  #'H'           ; H = ? = help
+        CMP
+        JZ   CMD_H
 ERR:    LDP1 #MWHAT
         JSR  PUTS
         JMP  PROMPT
@@ -694,18 +698,22 @@ MFMTOK: .ascii "FORMATTED"
         .byte CR,LF,0
 MNOOS:  .ascii "NO OS ON CARD"
         .byte CR,LF,0
-MHELP:  .ascii "E AAAA  EXAMINE/MODIFY (HEX=NEW, CR=NEXT, .=EXIT)"
+MHELP:  .ascii "P8XMON COMMANDS  (AAAA = 4 HEX DIGITS):"
         .byte CR,LF
-         .ascii "D AAAA  DUMP 256 BYTES"
+         .ascii "E AAAA  EXAMINE/MODIFY FROM AAAA (TYPE HEX=SET, CR=NEXT, .=EXIT)"
          .byte CR,LF
-         .ascii "I       INIT CF + IDENTIFY"
+         .ascii "D AAAA  DUMP 256 BYTES FROM AAAA (HEX + ASCII)"
          .byte CR,LF
-         .ascii "F       FORMAT CF (P8XFS)"
+         .ascii "I       INIT CF: SET 8-BIT, IDENTIFY, PRINT MODEL"
          .byte CR,LF
-         .ascii "B       BOOT OS FROM CF"
+         .ascii "F       FORMAT CF AS P8XFS (ASKS Y/N)"
          .byte CR,LF
-         .ascii "G AAAA  RUN AT AAAA (RTS RETURNS)"
+         .ascii "B       BOOT OS IMAGE FROM CF TO $8000"
          .byte CR,LF
-         .ascii "X       RUN ROM BASIC (BYE TO EXIT)"
+         .ascii "G AAAA  CALL AAAA (JSR, RTS RETURNS HERE)"
+         .byte CR,LF
+         .ascii "X       RUN ROM BASIC (BASIC 'BYE' RETURNS HERE)"
+         .byte CR,LF
+         .ascii "? / H   THIS HELP"
          .byte CR,LF,0
 
