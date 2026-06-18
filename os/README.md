@@ -5,7 +5,7 @@ CompactFlash to `$8000` by the ROM monitor's `B` command. Written in P8X
 assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 [`p8xasm.py`](../assembler/p8xasm.py).
 
-> **Status: v0.7 — shell with file commands and a working directory tree.**
+> **Status: v0.9 — shell with file commands and a working directory tree.**
 > Reads both P8XFS v1 (flat) and v2 (hierarchical) volumes — the layout is
 > chosen at cold start from the boot block's version byte.
 >
@@ -13,6 +13,8 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > |---------|--------|
 > | `DIR [path]` | list the current directory, or a given one |
 > | `CD path` | change directory (absolute `/a/b`, relative, `.`/`..`) |
+> | `PWD` | print the working-directory path |
+> | `CAT path` | print a file's contents to the console |
 > | `MKDIR path` | create a subdirectory (v2) |
 > | `RMDIR path` | remove an empty subdirectory (v2) |
 > | `TREE` | depth-first indented listing of the whole tree (v2) |

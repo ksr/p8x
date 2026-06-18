@@ -39,10 +39,12 @@ rm -f v2r.tmp v2prog.asm
 # Navigate + manipulate: list root, cd into BIN, run from CWD and via absolute
 # path, cd back, reject a bad cd; then make a directory on-target, save a file
 # into it, reject RMDIR on the non-empty dir, delete the file, and RMDIR it.
-out=$(printf 'B\rDIR\rTREE\rCD BIN\rRUN HELLO.BIN\rRUN /BIN/HELLO.BIN\rCD ..\rCD NOPE\rMKDIR /TMP\rCD TMP\rDEP A000 7A\rSAVE T.BIN A000 A010\rCD ..\rRMDIR TMP\rDEL /TMP/T.BIN\rRMDIR TMP\rDIR\r' | \
-      ../p8xemu -l 300000000 -c v2.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0')
-fail() { echo "OS-V2 TEST: FAIL — $1"; echo "$out" | sed -n '/v0.8/,$p'; exit 1; }
-echo "$out" | grep -q 'P8X/OS v0.8'   || fail "OS did not boot"
+out=$(printf 'B\rDIR\rTREE\rCAT /README\rCD BIN\rPWD\rRUN HELLO.BIN\rRUN /BIN/HELLO.BIN\rCD ..\rCD NOPE\rMKDIR /TMP\rCD TMP\rDEP A000 7A\rSAVE T.BIN A000 A010\rCD ..\rRMDIR TMP\rDEL /TMP/T.BIN\rRMDIR TMP\rDIR\r' | \
+      ../p8xemu -l 300000000 -c v2.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r')
+fail() { echo "OS-V2 TEST: FAIL — $1"; echo "$out" | sed -n '/v0.9/,$p'; exit 1; }
+echo "$out" | grep -q 'P8X/OS v0.9'   || fail "OS did not boot"
+echo "$out" | grep -q '^readme'       || fail "CAT did not print file contents"
+echo "$out" | grep -q '^/BIN$'        || fail "PWD did not print the working path"
 echo "$out" | grep -q 'BIN.*<DIR>'    || fail "root DIR missing BIN <DIR>"
 # TREE indents the hierarchy: BIN/ under root, HELLO.BIN deeper still.
 echo "$out" | grep -q '^  BIN/'       || fail "TREE missing indented BIN/"
