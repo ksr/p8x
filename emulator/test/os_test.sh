@@ -45,7 +45,7 @@ printf 'hi' > os_h.tmp
 python3 $ROOT/tools/p8xfs.py put os.img os_h.tmp --name HELLO.TXT >/dev/null
 rm -f os_h.tmp prog.asm
 
-out=$(printf 'B\rDIR\rRUN PROG.BIN\rDEL HELLO.TXT\rSAVE C.BIN 8000 8010\rDEP B000 41 42 43\rDUMP B000\rPACK\rDIR\r' | \
+out=$(printf 'B\rDIR\rRUN PROG.BIN\rDEL HELLO.TXT\rSAVE C.BIN 8000 8010\rDEP B000 41 42 43\rDUMP B000\rPACK\rDIR\rEXIT\r' | \
       ../p8xemu -l 80000000 -c os.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0')
 
 fail() { echo "OS TEST: FAIL — $1"; echo "$out" | sed -n '/P8X\/OS/,$p'; exit 1; }
@@ -65,6 +65,9 @@ tail=$(echo "$out" | sed -n '/PACKED/,$p')
 echo "$tail" | grep -q 'HELLO.TXT' && fail "HELLO.TXT still listed after DEL" || true
 echo "$tail" | grep -q 'PROG.BIN'  || fail "PROG.BIN lost"
 echo "$tail" | grep -q 'C.BIN'     || fail "C.BIN lost after PACK"
+# EXIT leaves the OS and cold-restarts the monitor: its banner shows a 2nd time
+# (once for the initial B-boot, once after EXIT).
+[ "$(echo "$out" | grep -c 'P8X MONITOR')" -ge 2 ] || fail "EXIT did not return to the monitor"
 
 # Host round-trip: SAVE'd C.BIN must equal the first 16 bytes of the OS image
 # (it was saved straight from $8000, where the OS image is loaded verbatim) —

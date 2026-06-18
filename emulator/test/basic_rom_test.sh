@@ -11,9 +11,15 @@ python3 $ROOT/tools/build_basic_rom.py eeprom.bin >/dev/null
 
 # X launches BASIC, run a program, then BYE returns to the monitor where a
 # monitor command (?) works again.
-out=$(printf 'X\r10 PRINT "ROM BASIC OK"\r20 PRINT 6*7\rRUN\rPRINT 17%%5\rPRINT 0xFF\rLET COUNT=100\rPRINT COUNT+TOTAL+11\rHELP\rBYE\r?\r' | \
+# Lead with a monitor D (dump) paging exercise: dump $0000, CR pages to the next
+# block ($0100), '.' exits — then the BASIC sequence as before.
+out=$(printf 'D 0000\r\r.X\r10 PRINT "ROM BASIC OK"\r20 PRINT 6*7\rRUN\rPRINT 17%%5\rPRINT 0xFF\rLET COUNT=100\rPRINT COUNT+TOTAL+11\rHELP\rBYE\r?\r' | \
       ../p8xemu -l 90000000 eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0')
 fail() { echo "BASIC-ROM TEST: FAIL — $1"; echo "$out"; exit 1; }
+# D paging: first block ends at row 00F0, then CR paged into the next block
+# (row 0100) before '.' exited — both row labels must appear.
+echo "$out" | grep -q '00F0'         || fail "D dump first block incomplete"
+echo "$out" | grep -q '0100'         || fail "D paging (CR=next block) did not advance"
 echo "$out" | grep -q 'P8X BASIC'    || fail "X did not launch BASIC"
 echo "$out" | grep -q 'ROM BASIC OK' || fail "program did not print"
 echo "$out" | grep -q '42'           || fail "6*7 != 42"

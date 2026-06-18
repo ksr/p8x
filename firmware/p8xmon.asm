@@ -202,7 +202,7 @@ EXDONE: JSR  CRLF
 CMD_D:  JSR  GETADDR
         JC   ERR
         JSR  A2P1
-        LDA  #16            ; 16 lines
+DPAGE:  LDA  #16            ; 16 lines = one 256-byte block
         STA  CNT
 DLINE:  JSR  PRADDR
         JSR  SPACE
@@ -238,7 +238,11 @@ DPUT:   JSR  PUTC
         DEC
         STA  CNT
         JNZ  DLINE
-        JMP  PROMPT
+        JSR  GETC           ; page: '.' = exit to prompt, CR/any = next block
+        LDB  #'.'
+        CMP
+        JZ   PROMPT
+        JMP  DPAGE          ; P1 already points at the next 256 bytes
 
 ; ---------------- I : init CF + identify -------------------------------------
 CMD_I:  JSR  CFINIT
@@ -702,7 +706,7 @@ MHELP:  .ascii "P8XMON COMMANDS  (AAAA = 4 HEX DIGITS):"
         .byte CR,LF
          .ascii "E AAAA  EXAMINE/MODIFY FROM AAAA (TYPE HEX=SET, CR=NEXT, .=EXIT)"
          .byte CR,LF
-         .ascii "D AAAA  DUMP 256 BYTES FROM AAAA (HEX + ASCII)"
+         .ascii "D AAAA  DUMP 256 BYTES FROM AAAA (CR=NEXT BLOCK, .=EXIT)"
          .byte CR,LF
          .ascii "I       INIT CF: SET 8-BIT, IDENTIFY, PRINT MODEL"
          .byte CR,LF

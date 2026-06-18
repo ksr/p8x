@@ -71,14 +71,6 @@ Last updated: 2026-06-11
       register bank, ALU, control/microcode, I/O, CF-IDE
 - [ ] Order backplane PCB first as the cheap validation article
 
-- **OS: exit back to the monitor.** The OS shell (entered by the monitor's `B`
-  command) currently has no way out — add an `EXIT`/`MON` command that returns
-  to the ROM monitor, mirroring BASIC's `BYE` (which does `JMP $0000`, the reset
-  vector — see basic/p8xbasic.asm DOBYE). Simplest is the same cold-reset jump;
-  if a warm return (preserve nothing but skip full re-init) is wanted later,
-  that needs a monitor re-entry point that doesn't re-run cold start. Pairs with
-  the monitor already being able to launch the OS (`B`) and ROM BASIC (`X`).
-
 ## IDEAS
 
 - [ ] **Optimize monitor/OS/BASIC hot paths with the rev-C T-operand ALU ops**
@@ -108,11 +100,9 @@ Last updated: 2026-06-11
         stream (MORE/WC/GREP-style) — none exist yet. RAM-bound buffer size.
       Scope it as: OUTCH refactor -> `>` redirect -> a filter command or two ->
       `|`. The refactor alone is worthwhile (also enables the EDIT/MORE ideas).
-- [ ] **Monitor D (dump) — interactive paging**: after dumping a 256-byte
-      block, wait for a key — CR/Enter dumps the *next* block (continue from
-      where it left off), '.' returns to the prompt. Mirrors the E command's
-      CR=next / .=exit convention; keep a running address so successive Enters
-      walk forward through memory. (Same paging would be nice in P8X/OS DUMP.)
+- [ ] **P8X/OS DUMP — interactive paging**: give the OS `DUMP` command the same
+      CR=next-block / `.`=exit paging the monitor `D` now has (see DONE). DODUMP
+      is separate code from the monitor's CMD_D.
 - [ ] **Housekeeping (from 2026-06 consistency audit; not yet decided):**
     - Tracked generated binaries: `microcode/u0-u3.bin` are committed but
       regenerate byte-identically from genucode.py. Consider gitignoring them
@@ -271,6 +261,16 @@ Last updated: 2026-06-11
 > Convention: substantial features get a **bold-title** prose entry (what was
 > done + why + caveats). The original foundation milestones are a terse tick
 > list under *Early milestones* at the end of this section.
+
+- **Monitor D paging + OS EXIT-to-monitor.** Two software-only quality-of-life
+  items: (1) the monitor `D` (dump) command now pages — after each 256-byte
+  block it waits for a key, CR/Enter dumps the next block (P1 keeps walking
+  forward), `.` returns to the prompt (mirrors the `E` command's convention).
+  (2) The OS shell gained `EXIT`/`MON`, which cold-restarts into the ROM monitor
+  via `JMP $0000`, mirroring BASIC's `BYE` — so the monitor can now launch the
+  OS (`B`), launch ROM BASIC (`X`), and both can get back. Tested: BASIC-ROM
+  test exercises D paging (rows 00F0 then 0100); OS test confirms the monitor
+  banner reappears after EXIT. (OS `DUMP` paging left as a follow-up — see NEXT.)
 
 - **RTC + CF-fallback footprints provisioned (rev C, DNP).** The last two
   pre-fab board items, both as Do-Not-Populate so the options exist post-fab

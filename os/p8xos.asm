@@ -229,6 +229,12 @@ SHELL:  JSR  CRLF
         LDP1 #KW_CAT
         JSR  CMPCMD
         JNZ  DOCAT
+        LDP1 #KW_EXIT
+        JSR  CMPCMD
+        JNZ  DOEXIT
+        LDP1 #KW_MON
+        JSR  CMPCMD
+        JNZ  DOEXIT
         LDP1 #MUNK              ; unknown command
         JSR  PUTS
         JMP  SHELL
@@ -250,6 +256,10 @@ DOPWD:  LDP1 #CWDPATH
         JSR  PUTS
         JSR  CRLF
         JMP  SHELL
+
+; EXIT / MON - leave the OS and cold-restart into the ROM monitor (reset vector
+; $0000), mirroring BASIC's BYE. The monitor re-inits the ACIA and prompts.
+DOEXIT: JMP  $0000
 
 ; ---------------- CAT name : print a file's contents -------------------------
 ; Resolve to a file, then stream its bytes (LEN bytes from STARTLO) to the
@@ -2402,6 +2412,8 @@ MHELP:   .byte CR,LF
          .byte CR,LF
          .ascii "HELP          this help"
          .byte CR,LF
+         .ascii "EXIT / MON    return to the ROM monitor"
+         .byte CR,LF
          .ascii "  path=file/dir, s e a=hex addr, b=hex byte"
          .byte CR,LF,0
 MDIRHDR: .byte CR,LF
@@ -2459,3 +2471,5 @@ KW_RMDIR:.asciiz "RMDIR"
 KW_TREE: .asciiz "TREE"
 KW_PWD:  .asciiz "PWD"
 KW_CAT:  .asciiz "CAT"
+KW_EXIT: .asciiz "EXIT"
+KW_MON:  .asciiz "MON"
