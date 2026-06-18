@@ -254,7 +254,8 @@ Last updated: 2026-06-11
       populate RC terminators (RT1/CT1, RT2/CT2 shipped DNP)
 - [ ] Backplane PWR LED: already in design (RL1 + LED1, currently bottom-left)
       — confirm placement or move top-right to match card standard §9
-- [ ] PSU sizing: ~75 LS/HCT chips, measure actual draw at bring-up vs 4–5 A
+- [ ] PSU sizing: ~130 HCT chips (per gen_bom.py — far more than the old ~75
+      estimate; regbank alone is 44 ICs), measure actual draw at bring-up vs 4–5 A
       budget
 
 ## DONE
