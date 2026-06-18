@@ -71,6 +71,14 @@ Last updated: 2026-06-11
       register bank, ALU, control/microcode, I/O, CF-IDE
 - [ ] Order backplane PCB first as the cheap validation article
 
+- **OS: exit back to the monitor.** The OS shell (entered by the monitor's `B`
+  command) currently has no way out — add an `EXIT`/`MON` command that returns
+  to the ROM monitor, mirroring BASIC's `BYE` (which does `JMP $0000`, the reset
+  vector — see basic/p8xbasic.asm DOBYE). Simplest is the same cold-reset jump;
+  if a warm return (preserve nothing but skip full re-init) is wanted later,
+  that needs a monitor re-entry point that doesn't re-run cold start. Pairs with
+  the monitor already being able to launch the OS (`B`) and ROM BASIC (`X`).
+
 ## IDEAS
 
 - [ ] **Optimize monitor/OS/BASIC hot paths with the rev-C T-operand ALU ops**
