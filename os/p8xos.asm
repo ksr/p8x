@@ -1,4 +1,4 @@
-; p8xos.asm - P8X/OS v0.7, a RAM-resident disk operating system.
+; p8xos.asm - P8X/OS v0.8, a RAM-resident disk operating system.
 ;
 ; Loaded from CompactFlash to $8000 and entered by the ROM monitor's B command
 ; (which reads OSCNT sectors from LBA 1 and JMPs to $8000). The OS does NOT
@@ -9,12 +9,13 @@
 ;   python3 assembler/p8xasm.py os/p8xos.asm -o p8xos.bin --base 0x8000
 ; then install on a P8XFS image with:  tools/p8xfs.py boot disk.img p8xos.bin
 ;
-; v0.7 shell (reads P8XFS v1 flat OR v2 hierarchical, chosen from the boot
+; v0.8 shell (reads P8XFS v1 flat OR v2 hierarchical, chosen from the boot
 ; block's version byte at cold start):
 ;   DIR [path]         list the current directory, or a given one
 ;   CD  path           change directory (absolute /a/b, relative, '.'/'..')
 ;   MKDIR path         create a subdirectory (v2; allocates a SUBSECS extent)
 ;   RMDIR path         remove an empty subdirectory (v2)
+;   TREE               depth-first indented listing of the whole tree (v2)
 ;   LOAD name          read a file into its stored load address
 ;   RUN  name          LOAD it, then JSR its exec address (program RTS -> shell)
 ;   SAVE name start end write memory [start,end) to a new file (hex addresses)
@@ -117,7 +118,14 @@ PSL     = $9699          ; MKDIR: parent dir start LBA / sector count
 PSN     = $969A
 EFLAG   = $969B          ; flag byte WRENT stamps (F_FILE for SAVE, F_DIR for MKDIR)
 RMDL    = $969C          ; RMDIR: parent directory sector holding the entry
-CWDPATH = $96A0          ; textual CWD path for the prompt (up to 48 bytes)
+; ---- TREE working set ----
+CDST    = $969D          ; current directory: start LBA / sectors / entry index
+CDSC    = $969E
+CIDX    = $969F
+TSP     = $96E0          ; tree stack depth (0 = at root level)
+TI      = $96E1          ; scratch loop counter for the frame stack
+TFRAME  = $96E2          ; 8 frames x 3 bytes (dst,dsc,idx): $96E2..$96F9
+CWDPATH = $9700          ; textual CWD path for the prompt (up to 48 bytes)
 
 CR      = $0D
 LF      = $0A
@@ -204,6 +212,9 @@ SHELL:  JSR  CRLF
         LDP1 #KW_RMDIR
         JSR  CMPCMD
         JNZ  DORMDIR
+        LDP1 #KW_TREE
+        JSR  CMPCMD
+        JNZ  DOTREE
         LDP1 #MUNK              ; unknown command
         JSR  PUTS
         JMP  SHELL
@@ -926,6 +937,210 @@ de_mt:  LDA  #1
         RTS
 de_no:  LDA  #0
         STA  MATCH
+        RTS
+
+; ---------------- TREE -------------------------------------------------------
+; Depth-first indented listing of the whole tree from root. Iterative, with an
+; explicit RAM stack of (dir start, dir sectors, next entry index) frames — one
+; shared sector buffer rules out recursion, so on return from a child we just
+; re-read the parent's sector and resume. v2 only (a v1 root has 32 sectors,
+; whose entry-count overflows a byte, and no subdirectories anyway).
+DOTREE: LDA  ROOTN
+        LDB  #32
+        CMP
+        JZ   MK_NOV2
+        LDA  #'/'               ; print the root
+        JSR  CONOUT
+        JSR  CRLF
+        LDA  #33                ; current = root
+        STA  CDST
+        LDA  ROOTN
+        STA  CDSC
+        LDA  #0
+        STA  CIDX
+        STA  TSP
+TR_ENT: LDA  CDSC               ; end of this directory? (CIDX >= CDSC*16)
+        SHL
+        SHL
+        SHL
+        SHL
+        STA  TMP                ; max entries = CDSC*16 (<=64 on v2)
+        LDA  CIDX
+        LDB  TMP
+        CMP
+        JC   TR_ASC             ; CIDX >= max -> ascend
+        JSR  READCUR            ; read entry CIDX -> NAMEBUF/STARTLO/LEN/FLAGS
+        LDA  FLAGS
+        JZ   TR_ASC             ; $00 end marker
+        LDA  CIDX               ; advance to the next entry for our return
+        INC
+        STA  CIDX
+        LDA  FLAGS
+        LDB  #F_DEL
+        CMP
+        JZ   TR_ENT             ; deleted slot
+        LDA  NAMEBUF            ; '.' / '..' both start with '.'
+        LDB  #'.'
+        CMP
+        JZ   TR_ENT
+        LDA  TSP                ; indent = (TSP+1)*2 spaces
+        INC
+        SHL
+        STA  TMP
+tr_ind: LDA  TMP
+        JZ   tr_pn
+        LDA  #' '
+        JSR  CONOUT
+        LDA  TMP
+        DEC
+        STA  TMP
+        JMP  tr_ind
+tr_pn:  LDP1 #NAMEBUF           ; print the name (trim trailing spaces)
+        LDA  #12
+        STA  TMP
+tr_nm:  LDA  (P1)
+        LDB  #' '
+        CMP
+        JZ   tr_nd
+        JSR  CONOUT
+        INP1
+        LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  tr_nm
+tr_nd:  LDA  FLAGS              ; directories get a trailing '/'
+        LDB  #F_DIR
+        CMP
+        JNZ  tr_eol
+        LDA  #'/'
+        JSR  CONOUT
+tr_eol: JSR  CRLF
+        LDA  FLAGS              ; descend into subdirectories
+        LDB  #F_DIR
+        CMP
+        JNZ  TR_ENT
+        LDA  TSP                ; depth limit (8 frames) -> don't descend deeper
+        LDB  #7
+        CMP
+        JC   TR_ENT
+        JSR  TR_PUSH            ; save current frame, then make the child current
+        LDA  STARTLO
+        STA  CDST
+        JSR  SECCOUNT
+        LDA  SECCNT
+        STA  CDSC
+        LDA  #0
+        STA  CIDX
+        JMP  TR_ENT
+TR_ASC: LDA  TSP
+        JZ   TR_DONE            ; back at root -> finished
+        JSR  TR_POP
+        JMP  TR_ENT
+TR_DONE:JMP  SHELL
+
+; READCUR - read entry CIDX of the current directory (CDST) into NAMEBUF /
+; STARTLO / LENLO:LENHI / FLAGS. Reads the containing sector into SBUF.
+READCUR:LDA  CIDX               ; sector = CDST + CIDX/16
+        SHR
+        SHR
+        SHR
+        SHR
+        LDB  CDST
+        ADD
+        STA  LBA
+        LDP1 #SBUF
+        JSR  CFREAD
+        LDP2 #SBUF              ; advance P2 to slot (CIDX & 15) * 32 bytes
+        LDA  CIDX
+        LDB  #15
+        AND
+        STA  TI
+rc_pos: LDA  TI
+        JZ   rc_rd
+        LDA  #32
+        STA  TMP
+rc_p2:  INP2
+        LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  rc_p2
+        LDA  TI
+        DEC
+        STA  TI
+        JMP  rc_pos
+rc_rd:  LDP1 #NAMEBUF           ; read the 32-byte entry at (P2)
+        LDA  #12
+        STA  TMP
+rf_nm:  LDA  (P2)+
+        STA  (P1)+
+        LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  rf_nm
+        LDA  (P2)+              ; start LBA (low byte kept)
+        STA  STARTLO
+        LDA  (P2)+
+        LDA  (P2)+
+        LDA  (P2)+
+        LDA  (P2)+              ; length low 16
+        STA  LENLO
+        LDA  (P2)+
+        STA  LENHI
+        LDA  (P2)+
+        LDA  (P2)+
+        LDA  (P2)+              ; load + exec
+        LDA  (P2)+
+        LDA  (P2)+
+        LDA  (P2)+
+        LDA  (P2)+              ; flag
+        STA  FLAGS
+        RTS
+
+; TR_PUSH / TR_POP - save/restore the current (CDST,CDSC,CIDX) frame in the
+; depth stack at TFRAME + TSP*3.
+TR_PUSH:LDP1 #TFRAME
+        LDA  TSP
+        STA  TI
+tp_a:   LDA  TI
+        JZ   tp_w
+        INP1
+        INP1
+        INP1
+        LDA  TI
+        DEC
+        STA  TI
+        JMP  tp_a
+tp_w:   LDA  CDST
+        STA  (P1)+
+        LDA  CDSC
+        STA  (P1)+
+        LDA  CIDX
+        STA  (P1)
+        LDA  TSP
+        INC
+        STA  TSP
+        RTS
+TR_POP: LDA  TSP
+        DEC
+        STA  TSP
+        LDP1 #TFRAME
+        LDA  TSP
+        STA  TI
+to_a:   LDA  TI
+        JZ   to_r
+        INP1
+        INP1
+        INP1
+        LDA  TI
+        DEC
+        STA  TI
+        JMP  to_a
+to_r:   LDA  (P1)+
+        STA  CDST
+        LDA  (P1)+
+        STA  CDSC
+        LDA  (P1)
+        STA  CIDX
         RTS
 
 ; LOADF - read the located file (STARTLO / LENLO:LENHI / LOADLO:LOADHI) into
@@ -1794,10 +2009,10 @@ CRLF:   LDA  #CR
 
 ; ---------------- strings ----------------------------------------------------
 MBANNER: .byte CR,LF
-         .asciiz "P8X/OS v0.7"
+         .asciiz "P8X/OS v0.8"
 MPROMPT: .asciiz "> "
 MHELP:   .byte CR,LF
-         .asciiz "commands: DIR [p]  CD p  MKDIR p  RMDIR p  LOAD f  RUN f"
+         .asciiz "commands: DIR [p]  CD p  MKDIR p  RMDIR p  TREE  LOAD f  RUN f"
          .byte CR,LF
          .asciiz "          SAVE f s e  DEL f  DUMP a  DEP a b...  PACK  HELP"
 MDIRHDR: .byte CR,LF
@@ -1854,3 +2069,4 @@ KW_PACK: .asciiz "PACK"
 KW_CD:   .asciiz "CD"
 KW_MKDIR:.asciiz "MKDIR"
 KW_RMDIR:.asciiz "RMDIR"
+KW_TREE: .asciiz "TREE"

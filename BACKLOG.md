@@ -40,11 +40,8 @@ Last updated: 2026-06-11
     - NB: pin/pad-validated only, not DRC'd; the rev-B *behaviour* is proven in
       the emulator (make test-isa). A full Eagle DRC + airwire check before fab
       remains on the VERIFY list.
-- **P8XFS v2 hierarchy (IN PROGRESS)**: host side, OS navigation, and MKDIR/
-  RMDIR are done (see DONE — the OS reads v1+v2 and does CD/DIR[path]/MKDIR/
-  RMDIR with path resolution). Remaining:
-    - **TREE**: depth-first indented listing — recurse over subdirectory extents
-      (needs a small explicit stack of (dir LBA, entry index); CONFIG depth ~8).
+- **P8XFS v2 hierarchy (IN PROGRESS)**: host side, OS navigation, MKDIR/RMDIR,
+  and TREE are done (see DONE). Remaining:
     - **v2-aware PACK**: currently flat-only (guarded). A v2 PACK must walk the
       tree and, when moving a directory extent, repoint the parent's entry AND
       that dir's own `.` plus every child's `..`. Re-verify with v2 fsck.
@@ -162,6 +159,13 @@ Last updated: 2026-06-11
 
 ## DONE
 
+- **P8X/OS v0.8 — TREE.** Depth-first indented listing of the whole tree from
+  root, iterative with an explicit RAM stack of (dir start, dir sectors, next
+  entry index) frames (depth 8) — the single shared sector buffer rules out
+  recursion, so on return from a child the parent's sector is re-read and the
+  scan resumes. v2 only (a v1 root's 32-sector entry count overflows a byte,
+  and flat volumes have no tree). Output matches the host `p8xfs tree`;
+  os_v2_test asserts the indented hierarchy.
 - **P8X/OS v0.7 — MKDIR / RMDIR on-target.** MKDIR resolves the parent, checks
   the name is free, allocates a SUBSECS (4) extent at the free pointer, writes
   its '.'/'..' (MKEXT), and adds a F_DIR entry to the parent (FINDSLOT+WRENT,

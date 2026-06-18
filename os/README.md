@@ -15,6 +15,7 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > | `CD path` | change directory (absolute `/a/b`, relative, `.`/`..`) |
 > | `MKDIR path` | create a subdirectory (v2) |
 > | `RMDIR path` | remove an empty subdirectory (v2) |
+> | `TREE` | depth-first indented listing of the whole tree (v2) |
 > | `LOAD name` | read a file into its stored load address |
 > | `RUN name` | `LOAD` it, then `JSR` its exec address (program `RTS` → shell) |
 > | `SAVE name start end` | write memory `[start,end)` to a new file (hex addrs) |
@@ -35,8 +36,9 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > volumes for now — v2 tree compaction is pending). Verify a volume host-side
 > with **`p8xfs.py fsck`**. `MKDIR` allocates a 4-sector extent at the free
 > pointer and writes its `.`/`..`; `RMDIR` refuses a directory that still holds
-> entries past `.`/`..`. Still to come on-target: `TREE` and a v2-aware `PACK`.
-> See the design in
+> entries past `.`/`..`. `TREE` walks the tree depth-first with an explicit RAM
+> stack (the single shared sector buffer rules out recursion). Still to come
+> on-target: a v2-aware `PACK`. See the design in
 > [hardware/cf-card/p8x-cf-os-design.md](../hardware/cf-card/p8x-cf-os-design.md)
 > and [p8xfs-v2-hierarchical.md](../hardware/cf-card/p8xfs-v2-hierarchical.md).
 

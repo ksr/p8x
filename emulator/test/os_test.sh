@@ -49,7 +49,7 @@ out=$(printf 'B\rDIR\rRUN PROG.BIN\rDEL HELLO.TXT\rSAVE C.BIN 8000 8010\rDEP B00
       ../p8xemu -l 80000000 -c os.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0')
 
 fail() { echo "OS TEST: FAIL — $1"; echo "$out" | sed -n '/P8X\/OS/,$p'; exit 1; }
-echo "$out" | grep -q 'P8X/OS v0.7' || fail "OS did not boot"
+echo "$out" | grep -q 'P8X/OS v0.8' || fail "OS did not boot"
 echo "$out" | grep -q 'PROG.BIN'    || fail "DIR missing PROG.BIN"
 echo "$out" | grep -q 'HELLO.TXT'   || fail "DIR missing HELLO.TXT"
 echo "$out" | grep -q 'RAN'         || fail "RUN did not execute the program"
