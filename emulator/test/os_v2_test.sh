@@ -36,17 +36,22 @@ printf 'readme' > v2r.tmp
 python3 $ROOT/tools/p8xfs.py put    v2.img v2r.tmp --name /README >/dev/null
 rm -f v2r.tmp v2prog.asm
 
-# Navigate: list root, cd into BIN, run from CWD, run via absolute path,
-# cd back up, and confirm a bad cd is rejected.
-out=$(printf 'B\rDIR\rCD BIN\rRUN HELLO.BIN\rRUN /BIN/HELLO.BIN\rCD ..\rCD NOPE\rDIR\r' | \
-      ../p8xemu -l 150000000 -c v2.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0')
-fail() { echo "OS-V2 TEST: FAIL — $1"; echo "$out" | sed -n '/v0.6/,$p'; exit 1; }
-echo "$out" | grep -q 'P8X/OS v0.6'   || fail "OS did not boot"
+# Navigate + manipulate: list root, cd into BIN, run from CWD and via absolute
+# path, cd back, reject a bad cd; then make a directory on-target, save a file
+# into it, reject RMDIR on the non-empty dir, delete the file, and RMDIR it.
+out=$(printf 'B\rDIR\rCD BIN\rRUN HELLO.BIN\rRUN /BIN/HELLO.BIN\rCD ..\rCD NOPE\rMKDIR /TMP\rCD TMP\rDEP A000 7A\rSAVE T.BIN A000 A010\rCD ..\rRMDIR TMP\rDEL /TMP/T.BIN\rRMDIR TMP\rDIR\r' | \
+      ../p8xemu -l 300000000 -c v2.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0')
+fail() { echo "OS-V2 TEST: FAIL — $1"; echo "$out" | sed -n '/v0.7/,$p'; exit 1; }
+echo "$out" | grep -q 'P8X/OS v0.7'   || fail "OS did not boot"
 echo "$out" | grep -q 'BIN.*<DIR>'    || fail "root DIR missing BIN <DIR>"
 echo "$out" | grep -q '/BIN> '        || fail "CD BIN: prompt path not updated"
 # RUN from CWD and via absolute path should each print V2 (two occurrences).
 [ "$(echo "$out" | grep -c '^V2')" -ge 2 ] || fail "RUN (cwd and absolute) did not both run"
 echo "$out" | grep -q '?NO DIR'       || fail "bad CD not rejected"
-# After CD .. the prompt returns to root.
-echo "$out" | sed -n '/NO DIR/,$p' | grep -q '/> '  || fail "CD .. did not return to root"
+echo "$out" | grep -q 'DIR CREATED'   || fail "MKDIR failed"
+echo "$out" | grep -q '?DIR NOT EMPTY' || fail "RMDIR did not refuse a non-empty dir"
+echo "$out" | grep -q 'DIR REMOVED'   || fail "RMDIR (empty) failed"
 echo "OS-V2 TEST: PASS"
+# Final volume must be consistent.
+python3 $ROOT/tools/p8xfs.py fsck v2.img >v2_fsck.tmp 2>&1 || { cat v2_fsck.tmp; echo "OS-V2 TEST: FAIL — fsck"; exit 1; }
+rm -f v2_fsck.tmp

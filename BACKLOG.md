@@ -40,12 +40,9 @@ Last updated: 2026-06-11
     - NB: pin/pad-validated only, not DRC'd; the rev-B *behaviour* is proven in
       the emulator (make test-isa). A full Eagle DRC + airwire check before fab
       remains on the VERIFY list.
-- **P8XFS v2 hierarchy (IN PROGRESS)**: host side + OS navigation are done
-  (see DONE — the OS now reads v1 and v2 and does CD/DIR[path]/paths). Remaining:
-    - **MKDIR/RMDIR on-target**: MKDIR allocates a 4-sector extent at the free
-      pointer, writes its `.`/`..`, and adds an entry to the parent (FINDSLOT +
-      WRENT already generalized to the current dir). RMDIR refuses a non-empty
-      dir (scan finds something past `.`/`..`).
+- **P8XFS v2 hierarchy (IN PROGRESS)**: host side, OS navigation, and MKDIR/
+  RMDIR are done (see DONE — the OS reads v1+v2 and does CD/DIR[path]/MKDIR/
+  RMDIR with path resolution). Remaining:
     - **TREE**: depth-first indented listing — recurse over subdirectory extents
       (needs a small explicit stack of (dir LBA, entry index); CONFIG depth ~8).
     - **v2-aware PACK**: currently flat-only (guarded). A v2 PACK must walk the
@@ -54,6 +51,9 @@ Last updated: 2026-06-11
     - **on-target FORMAT** (optional): monitor F still writes v1; either teach it
       v2 or add an OS FORMAT so a card can be made bootable without the host.
       (Monitor B is unchanged — it only reads sig+OSCNT.)
+    - **watch the OS code size**: the image is ~4.1 KB at $8000; OS variables
+      were moved to $9600 to clear it (RUN'd programs still load at the $A000
+      TPA). If code approaches $9600, bump the var base again.
 - **P8XFS v2 hierarchy**: upgrade the flat directory to subdirectories
   (directory-is-a-file, `.`/`..`, path resolve) per p8xfs-v2-hierarchical.md —
   CD/MKDIR/RMDIR/TREE. Monitor ROM unchanged (B only reads sig+OSCNT); move
@@ -162,6 +162,16 @@ Last updated: 2026-06-11
 
 ## DONE
 
+- **P8X/OS v0.7 — MKDIR / RMDIR on-target.** MKDIR resolves the parent, checks
+  the name is free, allocates a SUBSECS (4) extent at the free pointer, writes
+  its '.'/'..' (MKEXT), and adds a F_DIR entry to the parent (FINDSLOT+WRENT,
+  now stamping a parameterized EFLAG). RMDIR resolves the dir, confirms it's a
+  directory and empty (DIREMPTY: nothing past '.'/'..'), then tombstones the
+  parent entry. Verified end to end (create / save-into / refuse-non-empty /
+  delete / remove) with a fsck-clean result; os_v2_test exercises it. Also
+  fixed a real collision the growth exposed: the OS image had reached ~4.1 KB
+  ($8000-$9009) and overran its own variables at LINEBUF=$9000 (typed lines
+  clobbered the tail of KW_MKDIR) — moved the OS variable block to $9600.
 - **P8X/OS v0.6 — directory navigation (reads v1 + v2).** Generalized directory
   scanning from the fixed LBA 33-64 region to a (start LBA, sector count) pair,
   so the current directory and any resolved path share one code path (FINDENT,

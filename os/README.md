@@ -5,7 +5,7 @@ CompactFlash to `$8000` by the ROM monitor's `B` command. Written in P8X
 assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 [`p8xasm.py`](../assembler/p8xasm.py).
 
-> **Status: v0.6 — shell with file commands and directory navigation.**
+> **Status: v0.7 — shell with file commands and a working directory tree.**
 > Reads both P8XFS v1 (flat) and v2 (hierarchical) volumes — the layout is
 > chosen at cold start from the boot block's version byte.
 >
@@ -13,6 +13,8 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > |---------|--------|
 > | `DIR [path]` | list the current directory, or a given one |
 > | `CD path` | change directory (absolute `/a/b`, relative, `.`/`..`) |
+> | `MKDIR path` | create a subdirectory (v2) |
+> | `RMDIR path` | remove an empty subdirectory (v2) |
 > | `LOAD name` | read a file into its stored load address |
 > | `RUN name` | `LOAD` it, then `JSR` its exec address (program `RTS` → shell) |
 > | `SAVE name start end` | write memory `[start,end)` to a new file (hex addrs) |
@@ -31,8 +33,10 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > the free pointer. Together `DEP`+`SAVE`+`RUN` let the machine author and run
 > its own programs. **`PACK`** reclaims the extents `DEL` tombstones (flat
 > volumes for now — v2 tree compaction is pending). Verify a volume host-side
-> with **`p8xfs.py fsck`**. Still to come on-target: `MKDIR`/`RMDIR`, `TREE`,
-> and v2-aware `PACK`. See the design in
+> with **`p8xfs.py fsck`**. `MKDIR` allocates a 4-sector extent at the free
+> pointer and writes its `.`/`..`; `RMDIR` refuses a directory that still holds
+> entries past `.`/`..`. Still to come on-target: `TREE` and a v2-aware `PACK`.
+> See the design in
 > [hardware/cf-card/p8x-cf-os-design.md](../hardware/cf-card/p8x-cf-os-design.md)
 > and [p8xfs-v2-hierarchical.md](../hardware/cf-card/p8xfs-v2-hierarchical.md).
 
