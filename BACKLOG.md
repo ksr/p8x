@@ -137,6 +137,13 @@ Last updated: 2026-06-11
         - Or a standalone P8X/OS program (TPA at $A000) launched by RUN, using
           the BIOS vectors — keeps the kernel small but needs installing on
           each disk.
+- [ ] **BASIC string-valued variables** (e.g. `A$ = "HELLO"`): add a string
+      type alongside integers — string literals, `$`-suffixed variables,
+      `PRINT`/`INPUT` of strings, and concatenation. Needs string storage
+      (fixed per-variable buffers are simplest on this machine; a heap +
+      compaction is the general but heavier route) and type tracking in the
+      expression evaluator. Orthogonal to (and larger than) multi-character
+      variable names — best layered on after those land.
 - [ ] Tiny BASIC port (after Forth? Forth kernel is smaller and self-hosting)
 - [ ] Forth kernel — pointer bank makes NEXT 4 cycles; arguably the native
       language of this machine
