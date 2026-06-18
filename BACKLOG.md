@@ -83,6 +83,23 @@ Last updated: 2026-06-11
 
 ## IDEAS
 
+- [ ] **Unix-like I/O redirection + pipes in the OS shell**: a command's
+      output defaults to the terminal but can go to a file (`DIR >LIST.TXT`) or
+      feed another command (`CAT BIG | MORE`).
+      Prerequisite — **route all command output through one OS sink** instead
+      of calling the BIOS CONOUT directly: an OUTCH routine that switches
+      between (a) console, (b) append-to-open-file, (c) a pipe buffer. Today
+      DIR/CAT/TREE/DUMP/PWD/HELP call CONOUT inline, so step one is the refactor.
+      - `>file` (moderate): parse a trailing `>name` in the shell, open/allocate
+        the file, point OUTCH at it (buffer a sector at a time -> CFWRITE, like
+        SAVE), close + write the directory entry when the command returns.
+      - `|` (hard): no multitasking, so run sequentially — capture cmd1's output
+        into a RAM (or temp-file) buffer, then run cmd2 with its *input* sourced
+        from that buffer. Needs a matching input indirection (an INCH the
+        consumer reads) and, to be useful, filter commands that actually read a
+        stream (MORE/WC/GREP-style) — none exist yet. RAM-bound buffer size.
+      Scope it as: OUTCH refactor -> `>` redirect -> a filter command or two ->
+      `|`. The refactor alone is worthwhile (also enables the EDIT/MORE ideas).
 - [ ] **Monitor D (dump) — interactive paging**: after dumping a 256-byte
       block, wait for a key — CR/Enter dumps the *next* block (continue from
       where it left off), '.' returns to the prompt. Mirrors the E command's
