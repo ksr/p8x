@@ -150,6 +150,13 @@ Last updated: 2026-06-11
       PC + vectors (one 74244 forcing the bus)
 - [ ] Second ALU-input mux so ALU B-side can take X/T → cleaner indexed math
 - [ ] p8x.pretty KiCad footprint lib if ever returning to KiCad round-trip
+- [ ] **I/O card in the emulator** — make the switches/LEDs interactive. The
+      emulator stubs them: $FF00 (switches) always reads 0 and $FF02 (LEDs) is
+      written to a `leds` var that's never shown. So BASIC `PEEK(65280)` /
+      `POKE 65282,n` and the monitor/OS have nothing to observe. Add a way to
+      set the switch byte (CLI flag and/or a hotkey) and to surface LED writes
+      (print on change, or a small status line), so the I/O card is exercisable
+      end to end. Pairs with the front-panel idea below.
 - [ ] Front-panel bus-monitor LED card (passive, address + data, great demo)
 - [ ] Faster clock experiments once stable: 74F/74AHCT in critical paths,
       measure where it breaks
