@@ -83,6 +83,11 @@ Last updated: 2026-06-11
 
 ## IDEAS
 
+- [ ] **Monitor D (dump) — interactive paging**: after dumping a 256-byte
+      block, wait for a key — CR/Enter dumps the *next* block (continue from
+      where it left off), '.' returns to the prompt. Mirrors the E command's
+      CR=next / .=exit convention; keep a running address so successive Enters
+      walk forward through memory. (Same paging would be nice in P8X/OS DUMP.)
 - [ ] **Housekeeping (from 2026-06 consistency audit; not yet decided):**
     - Tracked generated binaries: `microcode/u0-u3.bin` are committed but
       regenerate byte-identically from genucode.py. Consider gitignoring them
