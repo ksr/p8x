@@ -40,17 +40,14 @@ Last updated: 2026-06-11
     - NB: pin/pad-validated only, not DRC'd; the rev-B *behaviour* is proven in
       the emulator (make test-isa). A full Eagle DRC + airwire check before fab
       remains on the VERIFY list.
-- **P8XFS v2 hierarchy (IN PROGRESS)**: host side, OS navigation, MKDIR/RMDIR,
-  and TREE are done (see DONE). Remaining:
-    - **v2-aware PACK**: currently flat-only (guarded). A v2 PACK must walk the
-      tree and, when moving a directory extent, repoint the parent's entry AND
-      that dir's own `.` plus every child's `..`. Re-verify with v2 fsck.
+- **P8XFS v2 hierarchy — DONE** (host + OS navigation + MKDIR/RMDIR + TREE +
+  v2-aware PACK, all in; see DONE). Loose ends, none blocking:
     - **on-target FORMAT** (optional): monitor F still writes v1; either teach it
       v2 or add an OS FORMAT so a card can be made bootable without the host.
       (Monitor B is unchanged — it only reads sig+OSCNT.)
-    - **watch the OS code size**: the image is ~4.1 KB at $8000; OS variables
-      were moved to $9600 to clear it (RUN'd programs still load at the $A000
-      TPA). If code approaches $9600, bump the var base again.
+    - **watch the OS code size**: the image is ~5.9 KB at $8000; OS variables
+      live at $9A00 (RUN'd programs load at the $A000 TPA). ~680 bytes of code
+      headroom — bump the var base again before a big addition like EDIT.
 - **P8XFS v2 hierarchy**: upgrade the flat directory to subdirectories
   (directory-is-a-file, `.`/`..`, path resolve) per p8xfs-v2-hierarchical.md —
   CD/MKDIR/RMDIR/TREE. Monitor ROM unchanged (B only reads sig+OSCNT); move
@@ -188,6 +185,19 @@ Last updated: 2026-06-11
 
 ## DONE
 
+- **P8X/OS v1.0 — v2-aware PACK (filesystem complete).** Compacts hierarchical
+  volumes in two phases. PHASE 1: a tree-walk min-find repeatedly picks the
+  live file/dir extent with the smallest start LBA >= the running free pointer
+  and copies it down, updating only the one parent directory entry that points
+  to it (the walk reaches each extent via that entry, so the location is in
+  hand; re-walking each pass reflects prior moves, and a moved directory
+  carries its child *listing* verbatim so child pointers stay valid). PHASE 2:
+  re-walk the compacted tree and rewrite every directory's '.' (=self) and '..'
+  (=parent) from final positions, so CD/.. and fsck stay correct. Verified the
+  hard case — a freed low extent forces A and its subdir SUB to move; after
+  PACK, CD .. walks SUB->A->root correctly, CAT of the moved file is intact,
+  and fsck reports 0 reclaimable. Also bumped the OS var base to $9A00 for code
+  headroom. os_v2_test now PACKs and asserts a fully-compacted, navigable tree.
 - **P8X/OS v0.8 — TREE.** Depth-first indented listing of the whole tree from
   root, iterative with an explicit RAM stack of (dir start, dir sectors, next
   entry index) frames (depth 8) — the single shared sector buffer rules out

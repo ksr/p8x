@@ -1,4 +1,4 @@
-; p8xos.asm - P8X/OS v0.9, a RAM-resident disk operating system.
+; p8xos.asm - P8X/OS v1.0, a RAM-resident disk operating system.
 ;
 ; Loaded from CompactFlash to $8000 and entered by the ROM monitor's B command
 ; (which reads OSCNT sectors from LBA 1 and JMPs to $8000). The OS does NOT
@@ -24,12 +24,12 @@
 ;   DEL  name          mark the directory entry deleted ($FF) and write it back
 ;   DUMP addr          show 256 bytes from addr (hex + ASCII)
 ;   DEP  addr b b ...  deposit hex byte values starting at addr
-;   PACK               compact the data area (flat v1 volumes only for now)
+;   PACK               compact the data area, reclaiming deleted extents
 ;   HELP
 ; A file/dir argument may be a path; directory scanning works on any extent
 ; (start LBA + sector count), so CWD and resolved paths share one code path.
 ; The prompt shows the current path. Verify a volume with p8xfs.py fsck.
-; NB: OS RAM variables live at $9600+ (above the ~4 KB code image at $8000).
+; NB: OS RAM variables live at $9A00+ (above the ~4 KB code image at $8000).
 
 ; ---- BIOS jump table (stable ABI, in ROM) ----------------------------------
 CONIN   = $0100          ; wait for key, char -> A
@@ -54,80 +54,86 @@ F_DEL   = $FF            ; deleted
 SUBSECS = 4              ; sectors allocated for a new subdirectory (64 entries)
 
 ; ---- OS RAM variables (below the kernel, clear of BIOS $9D44+ and SBUF) -----
-LINEBUF = $9600          ; shell input line (64 bytes)
-CMDBUF  = $9640          ; parsed command word (16 bytes)
-NAMEBUF = $9650          ; 12-byte filename (search key / DIR scratch)
-TMP     = $9660
-TMP2    = $9661
-CNT     = $9662
-ECNT    = $9663          ; entries-left-in-sector counter
-FLAGS   = $9664          ; current entry flag byte
-MATCH   = $9665          ; 1 = name matched / strings equal
-LENLO   = $9666          ; entry length, low 16 bits
-LENHI   = $9667
-STARTLO = $9668          ; entry start LBA (low byte)
-LOADLO  = $9669          ; entry load address
-LOADHI  = $966A
-EXECLO  = $966B          ; entry exec address
-EXECHI  = $966C
-DLBA    = $966D          ; directory sector being scanned
-SECCNT  = $966E          ; sectors left to transfer
-CURLBA  = $966F          ; current data LBA
-ENTPL   = $9670          ; pointer to a directory entry (in SBUF):
-ENTPH   = $9671          ;   flag byte for DEL, entry start for SAVE
-ARGPL   = $9672          ; saved arg position in LINEBUF
-ARGPH   = $9673
+LINEBUF = $9A00          ; shell input line (64 bytes)
+CMDBUF  = $9A40          ; parsed command word (16 bytes)
+NAMEBUF = $9A50          ; 12-byte filename (search key / DIR scratch)
+TMP     = $9A60
+TMP2    = $9A61
+CNT     = $9A62
+ECNT    = $9A63          ; entries-left-in-sector counter
+FLAGS   = $9A64          ; current entry flag byte
+MATCH   = $9A65          ; 1 = name matched / strings equal
+LENLO   = $9A66          ; entry length, low 16 bits
+LENHI   = $9A67
+STARTLO = $9A68          ; entry start LBA (low byte)
+LOADLO  = $9A69          ; entry load address
+LOADHI  = $9A6A
+EXECLO  = $9A6B          ; entry exec address
+EXECHI  = $9A6C
+DLBA    = $9A6D          ; directory sector being scanned
+SECCNT  = $9A6E          ; sectors left to transfer
+CURLBA  = $9A6F          ; current data LBA
+ENTPL   = $9A70          ; pointer to a directory entry (in SBUF):
+ENTPH   = $9A71          ;   flag byte for DEL, entry start for SAVE
+ARGPL   = $9A72          ; saved arg position in LINEBUF
+ARGPH   = $9A73
 ; ---- SAVE working set ----
-HXLO    = $9674          ; GETHEX result
-HXHI    = $9675
-DIGIT   = $9676          ; HEXVAL digit value
-SHCNT   = $9677          ; shift counter
-SVSTLO  = $9678          ; SAVE source start address
-SVSTHI  = $9679
-FREELO  = $967A          ; boot-block free pointer (next data LBA)
-FREEHI  = $967B
-SRCLO   = $967C          ; running source pointer during the copy
-SRCHI   = $967D
-REM     = $967E          ; sectors remaining in the SAVE write loop
+HXLO    = $9A74          ; GETHEX result
+HXHI    = $9A75
+DIGIT   = $9A76          ; HEXVAL digit value
+SHCNT   = $9A77          ; shift counter
+SVSTLO  = $9A78          ; SAVE source start address
+SVSTHI  = $9A79
+FREELO  = $9A7A          ; boot-block free pointer (next data LBA)
+FREEHI  = $9A7B
+SRCLO   = $9A7C          ; running source pointer during the copy
+SRCHI   = $9A7D
+REM     = $9A7E          ; sectors remaining in the SAVE write loop
 ; ---- PACK working set ----
-NF      = $9680          ; running next-free LBA
-PFOUND  = $9681          ; 1 if this pass found an unpacked extent
-MINSTRT = $9682          ; smallest start LBA >= NF this pass
-MINSEC  = $9683          ; that extent's sector count
-MINPL   = $9684          ; pointer to that entry's start-LBA field (in SBUF)
-MINPH   = $9685
-MINDL   = $9686          ; that entry's directory sector LBA
-ESTART  = $9687          ; current entry start LBA (low byte)
-SRCL    = $9688          ; copy source LBA
-DSTL    = $9689          ; copy dest LBA
-CPYN    = $968A          ; sectors left to copy
-CANDL   = $968B          ; current entry's start-field pointer
-CANDH   = $968C
+NF      = $9A80          ; running next-free LBA
+PFOUND  = $9A81          ; 1 if this pass found an unpacked extent
+MINSTRT = $9A82          ; smallest start LBA >= NF this pass
+MINSEC  = $9A83          ; that extent's sector count
+MINPL   = $9A84          ; pointer to that entry's start-LBA field (in SBUF)
+MINPH   = $9A85
+MINDL   = $9A86          ; that entry's directory sector LBA
+ESTART  = $9A87          ; current entry start LBA (low byte)
+SRCL    = $9A88          ; copy source LBA
+DSTL    = $9A89          ; copy dest LBA
+CPYN    = $9A8A          ; sectors left to copy
+CANDL   = $9A8B          ; current entry's start-field pointer
+CANDH   = $9A8C
 ; ---- directory / path working set (v1 + v2) ----
-ROOTN   = $968D          ; root directory sector count (32 on v1, 4 on v2)
-DATABASE= $968E          ; first data LBA (65 on v1, 37 on v2)
-CWDL    = $968F          ; current directory: start LBA
-CWDN    = $9690          ;                    sector count
-SDIRL   = $9691          ; directory being scanned this op (start LBA)
-SDIRN   = $9692          ;                                 sector count
-SCNT    = $9693          ; sectors-left counter while scanning a directory
-LSL     = $9694          ; SETPATH: pointer to the last '/' in CWDPATH
-LSH     = $9695
-PATHL   = $9696          ; saved path cursor across DESCEND (FINDENT clobbers P2)
-PATHH   = $9697
-NEWLBA  = $9698          ; MKDIR: LBA of the new directory extent
-PSL     = $9699          ; MKDIR: parent dir start LBA / sector count
-PSN     = $969A
-EFLAG   = $969B          ; flag byte WRENT stamps (F_FILE for SAVE, F_DIR for MKDIR)
-RMDL    = $969C          ; RMDIR: parent directory sector holding the entry
+ROOTN   = $9A8D          ; root directory sector count (32 on v1, 4 on v2)
+DATABASE= $9A8E          ; first data LBA (65 on v1, 37 on v2)
+CWDL    = $9A8F          ; current directory: start LBA
+CWDN    = $9A90          ;                    sector count
+SDIRL   = $9A91          ; directory being scanned this op (start LBA)
+SDIRN   = $9A92          ;                                 sector count
+SCNT    = $9A93          ; sectors-left counter while scanning a directory
+LSL     = $9A94          ; SETPATH: pointer to the last '/' in CWDPATH
+LSH     = $9A95
+PATHL   = $9A96          ; saved path cursor across DESCEND (FINDENT clobbers P2)
+PATHH   = $9A97
+NEWLBA  = $9A98          ; MKDIR: LBA of the new directory extent
+PSL     = $9A99          ; MKDIR: parent dir start LBA / sector count
+PSN     = $9A9A
+EFLAG   = $9A9B          ; flag byte WRENT stamps (F_FILE for SAVE, F_DIR for MKDIR)
+RMDL    = $9A9C          ; RMDIR: parent directory sector holding the entry
 ; ---- TREE working set ----
-CDST    = $969D          ; current directory: start LBA / sectors / entry index
-CDSC    = $969E
-CIDX    = $969F
-TSP     = $96E0          ; tree stack depth (0 = at root level)
-TI      = $96E1          ; scratch loop counter for the frame stack
-TFRAME  = $96E2          ; 8 frames x 3 bytes (dst,dsc,idx): $96E2..$96F9
-CWDPATH = $9700          ; textual CWD path for the prompt (up to 48 bytes)
+CDST    = $9A9D          ; current directory: start LBA / sectors / entry index
+CDSC    = $9A9E
+CIDX    = $9A9F
+TSP     = $9AE0          ; tree stack depth (0 = at root level)
+TI      = $9AE1          ; scratch loop counter for the frame stack
+TFRAME  = $9AE2          ; 8 frames x 3 bytes (dst,dsc,idx): $9AE2..$9AF9
+; ---- v2 PACK working set ----
+PPSEC   = $9AFA          ; chosen extent's parent-entry: dir sector LBA / slot
+PPSLOT  = $9AFB
+CANDSEC = $9AFC          ; candidate entry's location during the find walk
+CANDSLOT= $9AFD
+PARST   = $9AFE          ; PK2FIX: parent directory start LBA (for '..')
+CWDPATH = $9B00          ; textual CWD path for the prompt (up to 48 bytes)
 
 CR      = $0D
 LF      = $0A
@@ -1375,10 +1381,10 @@ DP_ERR: LDP1 #MDPER
 ; ascending-by-start order guarantees a moved extent never overwrites one not
 ; yet processed (dst <= src, low-to-high copy only revisits already-moved
 ; sectors). 1-byte LBAs (volumes <= 256 sectors), matching the rest of the OS.
-DOPACK: LDA  ROOTN              ; flat (v1) volumes only for now; v2 compaction
-        LDB  #32                ; must walk the directory tree (TODO)
+DOPACK: LDA  ROOTN              ; flat (v1) uses the simple scan; v2 walks the tree
+        LDB  #32
         CMP
-        JNZ  PK_NOSUP
+        JNZ  DOPACK2
         LDA  #DATALBA
         STA  NF
 PK_PASS:LDA  #0
@@ -1531,9 +1537,305 @@ PK_FIN: LDP1 #SBUF              ; write the new free pointer into the boot block
         LDP1 #MPACKED
         JSR  PUTS
         JMP  SHELL
-PK_NOSUP:LDP1 #MNOPACK
+; ---------------- v2 PACK ----------------------------------------------------
+; Two phases. PHASE 1 compacts every extent (files AND directory extents) down
+; to a running free pointer, ascending by start LBA, updating ONLY the one
+; parent directory entry that points to each (the find-walk reaches each extent
+; via that entry, so it has the location in hand; re-walking each pass reflects
+; prior moves). Moving a directory carries its child *listing* verbatim, so
+; child pointers stay valid; navigation during the walk uses parent listings,
+; not '.'/'..', so stale './..' don't matter here. PHASE 2 then re-walks the
+; (now compacted) tree and rewrites every directory's '.' (=self) and '..'
+; (=parent) from final positions. Root (LBA 33..36) never moves.
+DOPACK2:LDA  DATABASE           ; first data LBA (37 on v2)
+        STA  NF
+P2_PASS:JSR  PK2FIND            ; PFOUND + MINSTRT/MINSEC + PPSEC/PPSLOT
+        LDA  PFOUND
+        JZ   P2_FIX
+        LDA  MINSTRT            ; already at NF? just advance
+        LDB  NF
+        CMP
+        JZ   P2_ADV
+        JSR  PK2MOVE            ; copy extent down, repoint the parent entry
+P2_ADV: LDA  NF
+        LDB  MINSEC
+        ADD
+        STA  NF
+        JMP  P2_PASS
+P2_FIX: JSR  PK2FIX             ; phase 2: repair every dir's '.' and '..'
+        LDP1 #SBUF              ; write the new free pointer
+        LDA  #0
+        STA  LBA
+        JSR  CFREAD
+        LDA  NF
+        STA  SBUF+4
+        LDA  #0
+        STA  SBUF+5
+        LDA  #0
+        STA  LBA
+        JSR  CFWRITE
+        LDP1 #MPACKED
         JSR  PUTS
         JMP  SHELL
+
+; PK2FIND - tree-walk; find the live file/dir extent with the smallest start
+; LBA >= NF. Sets PFOUND, MINSTRT, MINSEC, and PPSEC/PPSLOT = the dir sector +
+; slot of the entry that points to it (its parent reference).
+PK2FIND:LDA  #0
+        STA  PFOUND
+        LDA  #33
+        STA  CDST
+        LDA  ROOTN
+        STA  CDSC
+        LDA  #0
+        STA  CIDX
+        STA  TSP
+pf_ent: LDA  CDSC               ; end of this directory?
+        SHL
+        SHL
+        SHL
+        SHL
+        STA  TMP
+        LDA  CIDX
+        LDB  TMP
+        CMP
+        JC   pf_asc
+        LDA  CIDX               ; record this entry's location before reading
+        SHR
+        SHR
+        SHR
+        SHR
+        LDB  CDST
+        ADD
+        STA  CANDSEC
+        LDA  CIDX
+        LDB  #15
+        AND
+        STA  CANDSLOT
+        JSR  READCUR            ; NAMEBUF / STARTLO / LEN / FLAGS
+        LDA  FLAGS
+        JZ   pf_asc             ; $00 end marker
+        LDA  CIDX
+        INC
+        STA  CIDX
+        LDA  FLAGS
+        LDB  #F_DEL
+        CMP
+        JZ   pf_ent             ; deleted
+        LDA  NAMEBUF            ; skip '.' / '..'
+        LDB  #'.'
+        CMP
+        JZ   pf_ent
+        LDA  STARTLO            ; candidate only if start >= NF
+        LDB  NF
+        CMP
+        JNC  pf_dir             ; < NF (already packed) — but still descend dirs
+        LDA  PFOUND
+        JZ   pf_take
+        LDA  STARTLO
+        LDB  MINSTRT
+        CMP
+        JC   pf_dir             ; not smaller than the current min
+pf_take:LDA  #1
+        STA  PFOUND
+        LDA  STARTLO
+        STA  MINSTRT
+        JSR  SECCOUNT
+        LDA  SECCNT
+        STA  MINSEC
+        LDA  CANDSEC
+        STA  PPSEC
+        LDA  CANDSLOT
+        STA  PPSLOT
+pf_dir: LDA  FLAGS              ; descend into subdirectories regardless
+        LDB  #F_DIR
+        CMP
+        JNZ  pf_ent
+        LDA  TSP
+        LDB  #7
+        CMP
+        JC   pf_ent             ; depth limit
+        JSR  TR_PUSH
+        LDA  STARTLO
+        STA  CDST
+        JSR  SECCOUNT
+        LDA  SECCNT
+        STA  CDSC
+        LDA  #0
+        STA  CIDX
+        JMP  pf_ent
+pf_asc: LDA  TSP
+        JZ   pf_done
+        JSR  TR_POP
+        JMP  pf_ent
+pf_done:RTS
+
+; PK2MOVE - copy MINSEC sectors from MINSTRT down to NF, then set the parent
+; entry (sector PPSEC, slot PPSLOT) start LBA = NF.
+PK2MOVE:LDA  MINSTRT
+        STA  SRCL
+        LDA  NF
+        STA  DSTL
+        LDA  MINSEC
+        STA  CPYN
+pm2_cp: LDP1 #SBUF
+        LDA  SRCL
+        STA  LBA
+        JSR  CFREAD
+        LDA  DSTL
+        STA  LBA
+        JSR  CFWRITE
+        LDA  SRCL
+        INC
+        STA  SRCL
+        LDA  DSTL
+        INC
+        STA  DSTL
+        LDA  CPYN
+        DEC
+        STA  CPYN
+        JNZ  pm2_cp
+        LDP1 #SBUF              ; repoint the parent entry's start LBA to NF
+        LDA  PPSEC
+        STA  LBA
+        JSR  CFREAD
+        LDA  PPSLOT             ; P1 -> entry start field (slot*32 + 12)
+        STA  TMP
+        LDP1 #SBUF
+pm2_sl: LDA  TMP
+        JZ   pm2_f
+        LDA  #32
+        STA  TMP2
+pm2_a:  INP1
+        LDA  TMP2
+        DEC
+        STA  TMP2
+        JNZ  pm2_a
+        LDA  TMP
+        DEC
+        STA  TMP
+        JMP  pm2_sl
+pm2_f:  LDA  #12                ; skip name(12) to the start-LBA field
+        STA  TMP
+pm2_a2: INP1
+        LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  pm2_a2
+        LDA  NF
+        STA  (P1)+
+        LDA  #0
+        STA  (P1)+
+        STA  (P1)+
+        STA  (P1)
+        LDA  PPSEC
+        STA  LBA
+        JSR  CFWRITE
+        RTS
+
+; PK2FIX - phase 2: tree-walk; rewrite every directory's '.' (=its own start)
+; and '..' (=parent start) from the compacted positions. Fixes root first,
+; then each child directory as it is descended into.
+PK2FIX: LDA  #33                ; root: '.' and '..' both = 33
+        STA  CDST
+        STA  PARST
+        JSR  PK2DD              ; write CDST's '.'=CDST, '..'=PARST
+        LDA  #33
+        STA  CDST
+        LDA  ROOTN
+        STA  CDSC
+        LDA  #0
+        STA  CIDX
+        STA  TSP
+fx_ent: LDA  CDSC
+        SHL
+        SHL
+        SHL
+        SHL
+        STA  TMP
+        LDA  CIDX
+        LDB  TMP
+        CMP
+        JC   fx_asc
+        JSR  READCUR
+        LDA  FLAGS
+        JZ   fx_asc
+        LDA  CIDX
+        INC
+        STA  CIDX
+        LDA  FLAGS
+        LDB  #F_DEL
+        CMP
+        JZ   fx_ent
+        LDA  NAMEBUF
+        LDB  #'.'
+        CMP
+        JZ   fx_ent
+        LDA  FLAGS              ; only directories need fixing/descending
+        LDB  #F_DIR
+        CMP
+        JNZ  fx_ent
+        LDA  TSP                ; depth limit
+        LDB  #7
+        CMP
+        JC   fx_ent
+        ; child dir at STARTLO, parent = CDST. Write its '.'=STARTLO, '..'=CDST.
+        LDA  CDST
+        STA  PARST              ; parent start (for PK2DD '..')
+        JSR  TR_PUSH
+        LDA  STARTLO
+        STA  CDST
+        JSR  SECCOUNT
+        LDA  SECCNT
+        STA  CDSC
+        LDA  #0
+        STA  CIDX
+        JSR  PK2DD              ; write this dir's '.' = CDST, '..' = PARST
+        JMP  fx_ent
+fx_asc: LDA  TSP
+        JZ   fx_done
+        JSR  TR_POP
+        JMP  fx_ent
+fx_done:RTS
+
+; PK2DD - in the directory whose extent starts at CDST, set entry 0 ('.') start
+; = CDST and entry 1 ('..') start = PARST. Reads/writes the first sector.
+PK2DD:  LDP1 #SBUF
+        LDA  CDST
+        STA  LBA
+        JSR  CFREAD
+        LDP1 #SBUF              ; entry 0 start field at offset 12
+        LDA  #12
+        STA  TMP
+dd_a0:  INP1
+        LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  dd_a0
+        LDA  CDST
+        STA  (P1)+
+        LDA  #0
+        STA  (P1)+
+        STA  (P1)+
+        STA  (P1)
+        LDP1 #SBUF              ; entry 1 start field at offset 32+12 = 44
+        LDA  #44
+        STA  TMP
+dd_a1:  INP1
+        LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  dd_a1
+        LDA  PARST
+        STA  (P1)+
+        LDA  #0
+        STA  (P1)+
+        STA  (P1)+
+        STA  (P1)
+        LDA  CDST
+        STA  LBA
+        JSR  CFWRITE
+        RTS
 
 ; SAVECORE - allocate + write data + directory entry. Returns MATCH=0 if the
 ; directory is full (data already written, but no entry made).
@@ -2065,7 +2367,7 @@ CRLF:   LDA  #CR
 
 ; ---------------- strings ----------------------------------------------------
 MBANNER: .byte CR,LF
-         .asciiz "P8X/OS v0.9"
+         .asciiz "P8X/OS v1.0"
 MPROMPT: .asciiz "> "
 MHELP:   .byte CR,LF
          .ascii "P8X/OS COMMANDS:"
@@ -2096,7 +2398,7 @@ MHELP:   .byte CR,LF
          .byte CR,LF
          .ascii "DEP a b b...  store hex bytes b... at hex addr a"
          .byte CR,LF
-         .ascii "PACK          reclaim deleted space (v1 only)"
+         .ascii "PACK          reclaim deleted space"
          .byte CR,LF
          .ascii "HELP          this help"
          .byte CR,LF
@@ -2126,8 +2428,6 @@ MDPER:   .byte CR,LF
          .asciiz "?DEP addr byte..."
 MPACKED: .byte CR,LF
          .asciiz "PACKED"
-MNOPACK: .byte CR,LF
-         .asciiz "?PACK: flat (v1) volumes only"
 MNODIR:  .byte CR,LF
          .asciiz "?NO DIR"
 MDIRTAG: .asciiz " <DIR>"

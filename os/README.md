@@ -5,7 +5,7 @@ CompactFlash to `$8000` by the ROM monitor's `B` command. Written in P8X
 assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 [`p8xasm.py`](../assembler/p8xasm.py).
 
-> **Status: v0.9 — shell with file commands and a working directory tree.**
+> **Status: v1.0 — full shell over a hierarchical filesystem.**
 > Reads both P8XFS v1 (flat) and v2 (hierarchical) volumes — the layout is
 > chosen at cold start from the boot block's version byte.
 >
@@ -24,7 +24,7 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > | `DEL name` | mark the directory entry deleted (`$FF`) and write it back |
 > | `DUMP addr` | show 256 bytes from `addr` (hex + ASCII) |
 > | `DEP addr b b ...` | deposit hex byte values starting at `addr` |
-> | `PACK` | compact the data area (flat v1 volumes only for now) |
+> | `PACK` | compact the data area, reclaiming `DEL`/`RMDIR`'d extents |
 > | `HELP` | list commands |
 >
 > A file/dir argument may be a **path**. Directory scanning works on any extent
@@ -34,13 +34,15 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > `SAVE`/`DUMP`/`DEP` parse hex; `SAVE` allocates at the boot-block free pointer,
 > writes a directory entry into the current (or resolved) directory, and bumps
 > the free pointer. Together `DEP`+`SAVE`+`RUN` let the machine author and run
-> its own programs. **`PACK`** reclaims the extents `DEL` tombstones (flat
-> volumes for now — v2 tree compaction is pending). Verify a volume host-side
-> with **`p8xfs.py fsck`**. `MKDIR` allocates a 4-sector extent at the free
-> pointer and writes its `.`/`..`; `RMDIR` refuses a directory that still holds
-> entries past `.`/`..`. `TREE` walks the tree depth-first with an explicit RAM
-> stack (the single shared sector buffer rules out recursion). Still to come
-> on-target: a v2-aware `PACK`. See the design in
+> its own programs. `MKDIR` allocates a 4-sector extent at the free pointer and
+> writes its `.`/`..`; `RMDIR` refuses a directory that still holds entries past
+> `.`/`..`. `TREE` walks the tree depth-first with an explicit RAM stack (the
+> single shared sector buffer rules out recursion). **`PACK`** reclaims every
+> extent `DEL`/`RMDIR` left behind: a two-phase tree walk compacts all file and
+> directory extents down (updating each one's parent entry), then repairs every
+> directory's `.`/`..` from the final positions — so navigation and fsck stay
+> correct after compaction. Verify a volume host-side with **`p8xfs.py fsck`**.
+> See the design in
 > [hardware/cf-card/p8x-cf-os-design.md](../hardware/cf-card/p8x-cf-os-design.md)
 > and [p8xfs-v2-hierarchical.md](../hardware/cf-card/p8xfs-v2-hierarchical.md).
 

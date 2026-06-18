@@ -98,6 +98,6 @@ works chip by chip, and any board-specific design docs:
 - Assembler working: two-pass, full expression support, shares opcode table with microcode generator
 - Eagle schematics + boards generated for all 6 cards and backplane
 - ROM monitor boots in the emulator; its filesystem hooks (`I`/`F`/`B`) run end to end against a CF image (`make test-cf`)
-- P8X/OS v0.9 reads flat **and hierarchical (P8XFS v2)** volumes: shell with `DIR [path]`/`CD`/`PWD`/`CAT`/`MKDIR`/`RMDIR`/`TREE`/`LOAD`/`RUN`/`SAVE`/`DEL`/`DUMP`/`DEP`/`PACK`; path resolution + CWD-path prompt; host-side `p8xfs.py` builds (`--v2`), navigates, and `fsck`s disk images (`make test-os`)
+- P8X/OS v1.0 — full shell over flat **and hierarchical (P8XFS v2)** volumes: `DIR [path]`/`CD`/`PWD`/`CAT`/`MKDIR`/`RMDIR`/`TREE`/`LOAD`/`RUN`/`SAVE`/`DEL`/`DUMP`/`DEP`/`PACK`; path resolution + CWD-path prompt; **`PACK` now compacts the directory tree** (repointing parents + `.`/`..`); host-side `p8xfs.py` builds (`--v2`), navigates, and `fsck`s images (`make test-os`)
 - BASIC builds three ways from one source: standalone, disk-bootable (`B`), and ROM-in-monitor (launched by `X`) (`make test-basic`)
-- **Next:** v2-aware `PACK` (the flat-volume version is in; the tree version must repoint parents + child `..`)
+- **Next:** OS niceties (built-in `EDIT`, output redirection/pipes, dump paging); hardware bring-up checklist
