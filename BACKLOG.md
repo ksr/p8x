@@ -48,10 +48,6 @@ Last updated: 2026-06-11
     - **watch the OS code size**: the image is ~5.9 KB at $8000; OS variables
       live at $9A00 (RUN'd programs load at the $A000 TPA). ~680 bytes of code
       headroom — bump the var base again before a big addition like EDIT.
-- **P8XFS v2 hierarchy**: upgrade the flat directory to subdirectories
-  (directory-is-a-file, `.`/`..`, path resolve) per p8xfs-v2-hierarchical.md —
-  CD/MKDIR/RMDIR/TREE. Monitor ROM unchanged (B only reads sig+OSCNT); move
-  FORMAT policy onto the OS. p8xfs.py grows mkdir/tree/fsck.
 - **CFREAD ABI is 1-byte LBA**: the BIOS CFREAD/CFWRITE only set LBA0 (LBA1-3
   zeroed in the monitor's CFSETL), capping addressable sectors at 256. Fine for
   small images today; widen to a multi-byte LBA in CFSETL + the BIOS contract
@@ -116,10 +112,6 @@ Last updated: 2026-06-11
     - Smoke tests test1-3.asm overlap test_isa.asm (per-opcode). They give
       higher-level scenario coverage (banner, JSR/RTS, countdown); keep as
       complementary unless trimming.
-- [ ] Assembler for P8X syntax (Python, shares opcode table with microcode
-      generator — single source of truth for the ISA)
-- [ ] Microcode generator → EPROM images (same shared table)
-- [ ] Mac-side p8xfs tool (put/get/ls/mkdir/tree/fsck via USB CF reader)
 - [ ] **C compiler (cross, then native)** — a big, long-horizon goal. Start
       with a **cross-compiler** on the host: a small-C subset (int/char/pointers,
       functions, if/while/for, basic expressions — no float, limited structs)
@@ -234,8 +226,9 @@ Last updated: 2026-06-11
       worth eyeballing the actual datasheets for the parts you'll buy — at
       minimum the 74260 (odd input/output split) and the wide DIPs (74181,
       28C64, 62256, 6850) — since manufacturer/variant pinouts can differ.
-- [ ] Two new opcodes required by monitor: JMP (P1), JSR (P1) — fold into the
-      official ISA table when the assembler exists
+- [x] Opcodes the monitor needed: `JSR (P1)` is in the ISA (0x41) and the
+      assembler exists. `JMP (P1)` turned out unnecessary — the monitor uses
+      absolute JMP/JSR and never emits it (comment-only); not implemented.
 - [ ] CF card 8-bit mode support — buy 2–3 candidates (SanDisk/industrial),
       test SET FEATURES $EF/$01 early. Fallback latch footprint provisioned DNP
       (see DONE): U9 (74374) with the CF high data byte D8-15 wired to its inputs,
