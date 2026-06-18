@@ -22,7 +22,10 @@ import struct
 
 DOE=dict(idle=0,A=1,B=2,T=3,T2=4,ALU=5,FLAGS=6,MEM=7,PTRL=8,PTRH=9)
 DLD=dict(none=0,A=1,B=2,T=3,T2=4,FLAGS=5,IR=6,MEMW=7,PTRL=8,PTRH=9)
-FC=dict(never=0,always=1,C=2,Z=3,N=4,V=5)   # C = conventional carry (rev B): 1 = carry / A>=B
+FC=dict(never=0,always=1,C=2,Z=3,N=4,V=5,LT=6,LE=7)
+#   C = conventional carry (rev B): 1 = carry / A>=B (unsigned ordering)
+#   LT = N^V (signed A<B), LE = (N^V)|Z (signed A<=B) — rev C signed compares.
+#   The condition mux gets N^V on input 6 and (N^V)|Z on input 7 (control card).
 PT=4   # hidden microcode-only scratch pointer (PSEL=4), for absolute addressing
 
 def w(doe=0,dld=0,psel=0,pinc=0,pdec=0,alus=0,m=0,cin=1,sh0=0,sh1=0,
@@ -161,6 +164,11 @@ branch_inv(0x49,"BNZ","Z")
 branch_inv(0x4C,"JNC","C")   # branch if carry clear
 # conventional aliases (same opcodes): JZ=BZ, JNZ=BNZ, JC=BCP
 OPC[("JZ","a")]=0x48; OPC[("JNZ","a")]=0x49; OPC[("JC","a")]=0x4A
+# signed comparison branches (rev C): use after CMP/SUB. LT = N^V, LE = (N^V)|Z.
+branch(0x44,"BLT","LT")          # signed A <  B
+branch_inv(0x45,"BGE","LT")      # signed A >= B
+branch(0x46,"BLE","LE")          # signed A <= B
+branch_inv(0x47,"BGT","LE")      # signed A >  B
 
 # ---- assemble images ----------------------------------------------------------
 def build_images(outdir="."):

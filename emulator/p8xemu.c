@@ -9,7 +9,9 @@
  *    (ADD) / no-borrow i.e. A>=B (SUB/CMP).
  *  - Carry chain computed regardless of M (as in silicon), so LDF during
  *    logic ops latches the same C the hardware would.
- *  - V flag is hardwired 0 (rev A ALU card drives FV low).
+ *  - V flag (rev C): signed overflow by the sign-bit method (see nV below);
+ *    valid after ADD/SUB/CMP. FCOND 6/7 expose N^V and (N^V)|Z for the signed
+ *    branches BLT/BGE/BLE/BGT.
  *  - Shifter: stage1 SH0 = left, stage2 SH1 = right; the shifted-out bit is
  *    latched into C, and with SHCIN the shifted-in bit is the current C
  *    (rotate through carry). SETC/CLRC force C only (SEC/CLC).
@@ -228,7 +230,10 @@ int main(int argc,char**argv){
         switch(prev_fcond){
         case 1: cond=1; break;       case 2: cond=fC; break;
         case 3: cond=fZ; break;      case 4: cond=fN; break;
-        case 5: cond=fV; break;      default: cond=0;
+        case 5: cond=fV; break;
+        case 6: cond=fN^fV; break;            /* signed less-than (BLT) */
+        case 7: cond=(fN^fV)|fZ; break;       /* signed less-or-equal (BLE) */
+        default: cond=0;
         }
         int ad = IR | stp<<8 | cond<<12;
         uint32_t cw = rom[0][ad] | rom[1][ad]<<8 | rom[2][ad]<<16
@@ -247,7 +252,15 @@ int main(int argc,char**argv){
         uint8_t r = sh1 ? (uint8_t)((g>>1)|(sin<<7)) : g;    /* stage 2: right */
         int shout = sh0 ? ((f>>7)&1) : (sh1 ? (f&1) : 0);    /* bit shifted out */
         int nC = (sh0||sh1) ? shout : cout;                  /* shift ops latch shifted-out bit */
-        int nZ=(r==0), nN=(r>>7)&1, nV=0;
+        int nZ=(r==0), nN=(r>>7)&1;
+        /* V (signed overflow), sign-bit method — matches the ALU-card net exactly
+         * (U34 XOR + U35 AND): V = (A7 ^ F7) & (A7 ^ B7 ^ isADD), isADD = ~ALUS2
+         * (add-like ops have S2=0: ADD=1001, INC=0000; sub-like S2=1: SUB=0110,
+         * DEC=1111). F7 is the raw ALU result sign (pre-shifter). Ungated by M, so
+         * defined for every op but only MEANINGFUL after ADD/SUB/CMP — the signed
+         * branches are documented for use after CMP. */
+        int a7=(A>>7)&1, b7=(bop>>7)&1, f7=(f>>7)&1, isadd=!((alus>>2)&1);
+        int nV = (a7^f7) & (a7^b7^isadd);
         uint16_t addr=P[psel];
         /* bus source */
         uint8_t bus=0xFF;

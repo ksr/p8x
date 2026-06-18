@@ -86,6 +86,12 @@ DESC[("SEC","")]=("C","C := 1.")
 DESC[("ROL","")]=("C Z N","Rotate A left through carry.")
 DESC[("ROR","")]=("C Z N","Rotate A right through carry.")
 DESC[("JNC","a")]=("-","Branch to addr if C=0. (JC/JZ/JNZ are aliases of BCP/BZ/BNZ.)")
+# rev C signed-comparison branches — use after CMP/SUB. C gives UNSIGNED ordering
+# (BCP/JNC); these give SIGNED ordering via N^V (and Z).
+DESC[("BLT","a")]=("-","Branch if signed A <  B (N^V=1). Use after CMP.")
+DESC[("BGE","a")]=("-","Branch if signed A >= B (N^V=0). Use after CMP.")
+DESC[("BLE","a")]=("-","Branch if signed A <= B ((N^V)|Z). Use after CMP.")
+DESC[("BGT","a")]=("-","Branch if signed A >  B (not (N^V)|Z). Use after CMP.")
 # rev C: T-operand ALU ops (B-input mux selects T) + the LDT loads that make T usable
 DESC[("LDT","#")]=("-","T := immediate byte. (No flags.)")
 DESC[("LDT","a")]=("-","T := byte at addr (absolute). (No flags.)")
@@ -107,7 +113,8 @@ GROUPS=[("System",["NOP","HLT","CLC","SEC"]),
   "TAP1L","TAP1H","TAP2L","TAP2H","TAP3L","TAP3H",
   "TPA1L","TPA1H","TPA2L","TPA2H","TPA3L","TPA3H"]),
  ("Stack",["PHA","PLA"]),
- ("Control flow",["JMP","JSR","RTS","BZ","BNZ","BCP","JNC"])]
+ ("Control flow",["JMP","JSR","RTS","BZ","BNZ","BCP","JNC"]),
+ ("Signed branches (rev C; after CMP — N^V/Z)",["BLT","BGE","BLE","BGT"])]
 
 doc=SimpleDocTemplate(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),"docs","p8x-programmers-guide.pdf"),  # stays at docs/ root
     pagesize=A4,leftMargin=14*mm,rightMargin=14*mm,topMargin=13*mm,bottomMargin=13*mm)

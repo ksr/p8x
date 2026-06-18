@@ -400,7 +400,8 @@ ic={"U1":("74161","CLK DIV"),"U2":("HEX14","74HCT14"),"U3":("7474","74HCT74"),
  "U10":("28C64","UCODE ROM0"),"U11":("28C64","UCODE ROM1"),
  "U12":("28C64","UCODE ROM2"),"U13":("28C64","UCODE ROM3"),
  "U14":("74374","PIPE0"),"U15":("74374","PIPE1"),"U16":("74374","PIPE2"),
- "U17":("74374","PIPE3"),"U18":("74161","STEP CNT")}
+ "U17":("74374","PIPE3"),"U18":("74161","STEP CNT"),
+ "U19":("GATES14","74HCT86 NV-XOR")}   # rev C: N^V for signed-compare cond mux
 sm={"X1":("OSC","4MHZ"),"JP1":("HDR4","CLKSEL"),
  "SWR":("SW2","RUN/HALT"),"SWS":("SW2","STEP"),"SWT":("SW2","RESET"),
  "R1":("RES","10K"),"R2":("RES","10K"),"R3":("RES","10K"),"C1":("CAP","1U"),
@@ -415,10 +416,10 @@ N(n,"VCC",("U1","ENP"),("U1","ENT"),("U1","!LOAD"),("U3","!1PRE"),("U3","!2PRE")
   ("U8","G1"),("RP1","1"),("R4","1"),("R5","1"),
   *[("U%d"%k,"!WE") for k in (10,11,12,13)])
 N(n,"GND",("U1","A"),("U1","B"),("U1","C"),("U1","D"),("U18","A"),("U18","B"),
-  ("U18","C"),("U18","D"),("U9","D0"),("U9","D6"),("U9","D7"),("U9","!G"),
+  ("U18","C"),("U18","D"),("U9","D0"),("U9","!G"),
   ("U8","!G2B"),("X1","GND"),("SWR","1"),("SWS","1"),("SWT","1"),("C1","2"),
   ("LED3","K"),("U5","3A"),("U5","3B"),("U5","4A"),("U5","4B"),
-  ("U6","2A"),("U6","2B"),("U6","3A"),("U6","3B"),("U6","4A"),("U6","4B"),
+  ("U6","2A"),("U6","2B"),("U6","3A"),("U6","3B"),
   *[("U%d"%k,"!CE") for k in (10,11,12,13)],*[("U%d"%k,"!OE") for k in (10,11,12,13)],
   *[("U%d"%k,"!OC") for k in (14,15,16,17)])
 N(n,"VCC",("U9","D1"))
@@ -452,6 +453,13 @@ for i in range(4):
 N(n,"CONDY",("U9","Y"),*[("U%d"%k,"A12") for k in (10,11,12,13)])
 for f,d in (("FC","D2"),("FZ","D3"),("FN","D4"),("FV","D5")):
     N(n,f,("U9",d))
+# rev C signed-compare conditions: NV = FN^FV (U19, 74HCT86) -> mux D6 (FCOND 6,
+# signed LT); NVZ = NV | FZ (spare U6 OR gate 4) -> mux D7 (FCOND 7, signed LE).
+N(n,"FN",("U19","1A")); N(n,"FV",("U19","1B")); N(n,"NV",("U19","1Y"))
+N(n,"NV",("U9","D6"))
+N(n,"NV",("U6","4A")); N(n,"FZ",("U6","4B")); N(n,"NVZ",("U6","4Y"))
+N(n,"NVZ",("U9","D7"))
+N(n,"GND",("U19","2A"),("U19","2B"),("U19","3A"),("U19","3B"),("U19","4A"),("U19","4B"))
 # rev B 32-bit control word -> pipeline latches U14..U17 (8 bits each).
 # Word bit b is latch U[14 + b//8], output Q[(b%8)+1].
 PIPE={14:["DOE0","DOE1","DOE2","DOE3","DLD0","DLD1","DLD2","DLD3"],
@@ -605,7 +613,10 @@ ic={"U1":("74377V2","A REG"),"U2":("74244","A OUT"),"U3":("74377V2","B REG"),
  "U28":("74157","SHIFT-OUT MUX"),"U29":("74157","C-SRC MUX"),
  "U30":("74157","SHIN MUX"),"U31":("GATES14","74HCT08 CLK/FORCE"),
  # rev C: 2nd ALU-input mux. B-side operand = B register (BSEL=0) or T (BSEL=1).
- "U32":("74157","B-MUX LO"),"U33":("74157","B-MUX HI")}
+ "U32":("74157","B-MUX LO"),"U33":("74157","B-MUX HI"),
+ # rev C: V (signed overflow) derivation — sign-bit method, ungated by M
+ # (valid after ADD/SUB/CMP). U34 XORs, U35 ANDs.
+ "U34":("GATES14","74HCT86 V-XOR"),"U35":("GATES14","74HCT08 V-AND")}
 sm={"RP1":("RES","1K"),"LED3":("LED","PWR-GRN"),
  "R4":("RES","1K"),"LED4":("LED","ALU-GRN"),"R5":("RES","1K"),"LED5":("LED","LDF-YEL")}
 REGS=(("U1","U2","A","Y1"),("U3","U4","B","Y2"),("U5","U6","T","Y3"),("U7","U8","T2","Y4"))
@@ -672,7 +683,15 @@ N(n,"GND",("U27","D2"),("U27","E2"))
 N(n,"ZBL",("U27","Y1"),("U19","2A")); N(n,"ZBH",("U27","Y2"),("U19","2B"))
 N(n,"ZBUS",("U19","2Y"))
 # Z,N,V flip-flops in U17 (74175), clocked on (LDF|LDZN); V hardwired 0
-N(n,"ZSRC",("U17","D1")); N(n,"NSRC",("U17","D2")); N(n,"GND",("U17","D3"))
+N(n,"ZSRC",("U17","D1")); N(n,"NSRC",("U17","D2")); N(n,"VSRC",("U17","D3"))
+# rev C: V (signed overflow). V = (A7^F7) & (A7^B7^~ALUS2). A7=AQ7, B7=BMX7
+# (muxed B operand), F7=raw ALU result sign. U34 (74HCT86) XORs, U35 (74HCT08) AND.
+N(n,"AQ7",("U34","1A"));   N(n,"F7",("U34","1B"));    N(n,"VX1",("U34","1Y"))   # A7^F7
+N(n,"AQ7",("U34","2A"));   N(n,"BMX7",("U34","2B"));  N(n,"VX2",("U34","2Y"))   # A7^B7
+N(n,"ALUS2",("U34","3A")); N(n,"VCC",("U34","3B"));   N(n,"NS2",("U34","3Y"))   # ~S2 = S2^1
+N(n,"VX2",("U34","4A"));   N(n,"NS2",("U34","4B"));   N(n,"VX4",("U34","4Y"))   # A7^B7^~S2
+N(n,"VX1",("U35","1A"));   N(n,"VX4",("U35","1B"));   N(n,"VSRC",("U35","1Y"))  # V = VX1 & VX4
+N(n,"GND",("U35","2A"),("U35","2B"),("U35","3A"),("U35","3B"),("U35","4A"),("U35","4B"))
 N(n,"-RES",("U17","!CLR"))
 # C-flag source: shift-out when shifting else inverted Cn+4
 N(n,"SH0",("U28","S")); N(n,"F0",("U28","A1")); N(n,"F7",("U28","B1"))

@@ -316,6 +316,10 @@
 <element name="CD32" library="p8x" package="C_DISC" value="100N" x="21.59" y="2.54"/>
 <element name="U33" library="p8x" package="DIP16" value="B-MUX HI" x="35.56" y="12.70"/>
 <element name="CD33" library="p8x" package="C_DISC" value="100N" x="35.56" y="2.54"/>
+<element name="U34" library="p8x" package="DIP14" value="74HCT86 V-XOR" x="49.53" y="12.70"/>
+<element name="CD34" library="p8x" package="C_DISC" value="100N" x="49.53" y="2.54"/>
+<element name="U35" library="p8x" package="DIP14" value="74HCT08 V-AND" x="63.50" y="12.70"/>
+<element name="CD35" library="p8x" package="C_DISC" value="100N" x="63.50" y="2.54"/>
 <element name="RP1" library="p8x" package="R_AXIAL" value="1K" x="5.08" y="96.52"/>
 <element name="LED3" library="p8x" package="LED5" value="PWR-GRN" x="15.24" y="96.52"/>
 <element name="R4" library="p8x" package="R_AXIAL" value="1K" x="25.40" y="96.52"/>
@@ -409,6 +413,7 @@
 <signal name="ALUS2">
 <contactref element="U9" pad="4"/>
 <contactref element="U10" pad="4"/>
+<contactref element="U34" pad="9"/>
 <contactref element="J1" pad="C21"/>
 </signal>
 <signal name="ALUS3">
@@ -455,6 +460,8 @@
 <contactref element="U1" pad="19"/>
 <contactref element="U2" pad="17"/>
 <contactref element="U10" pad="19"/>
+<contactref element="U34" pad="1"/>
+<contactref element="U34" pad="4"/>
 </signal>
 <signal name="BMX0">
 <contactref element="U9" pad="1"/>
@@ -487,6 +494,7 @@
 <signal name="BMX7">
 <contactref element="U10" pad="18"/>
 <contactref element="U33" pad="12"/>
+<contactref element="U34" pad="5"/>
 </signal>
 <signal name="BQ0">
 <contactref element="U3" pad="2"/>
@@ -770,6 +778,7 @@
 <signal name="F7">
 <contactref element="U10" pad="13"/>
 <contactref element="U13" pad="14"/>
+<contactref element="U34" pad="2"/>
 <contactref element="U28" pad="3"/>
 </signal>
 <signal name="FC">
@@ -864,7 +873,12 @@
 <contactref element="U22" pad="15"/>
 <contactref element="U27" pad="9"/>
 <contactref element="U27" pad="10"/>
-<contactref element="U17" pad="12"/>
+<contactref element="U35" pad="4"/>
+<contactref element="U35" pad="5"/>
+<contactref element="U35" pad="9"/>
+<contactref element="U35" pad="10"/>
+<contactref element="U35" pad="12"/>
+<contactref element="U35" pad="13"/>
 <contactref element="U28" pad="15"/>
 <contactref element="U29" pad="15"/>
 <contactref element="U26" pad="12"/>
@@ -945,6 +959,8 @@
 <contactref element="CD31" pad="2"/>
 <contactref element="CD32" pad="2"/>
 <contactref element="CD33" pad="2"/>
+<contactref element="CD34" pad="2"/>
+<contactref element="CD35" pad="2"/>
 <polygon width="0.254" layer="2" isolate="0.3" rank="1">
 <vertex x="0" y="0"/>
 <vertex x="160" y="0"/>
@@ -983,6 +999,10 @@
 <signal name="NC">
 <contactref element="U29" pad="4"/>
 <contactref element="U26" pad="2"/>
+</signal>
+<signal name="NS2">
+<contactref element="U34" pad="8"/>
+<contactref element="U34" pad="13"/>
 </signal>
 <signal name="NSRC">
 <contactref element="U22" pad="7"/>
@@ -1141,6 +1161,7 @@
 <contactref element="U11" pad="15"/>
 <contactref element="U11" pad="6"/>
 <contactref element="U11" pad="5"/>
+<contactref element="U34" pad="10"/>
 <contactref element="U26" pad="10"/>
 <contactref element="U26" pad="13"/>
 <contactref element="U20" pad="6"/>
@@ -1187,12 +1208,30 @@
 <contactref element="CD31" pad="1"/>
 <contactref element="CD32" pad="1"/>
 <contactref element="CD33" pad="1"/>
+<contactref element="CD34" pad="1"/>
+<contactref element="CD35" pad="1"/>
 <polygon width="0.254" layer="15" isolate="0.3" rank="1">
 <vertex x="0" y="0"/>
 <vertex x="160" y="0"/>
 <vertex x="160" y="100"/>
 <vertex x="0" y="100"/>
 </polygon>
+</signal>
+<signal name="VSRC">
+<contactref element="U17" pad="12"/>
+<contactref element="U35" pad="3"/>
+</signal>
+<signal name="VX1">
+<contactref element="U34" pad="3"/>
+<contactref element="U35" pad="1"/>
+</signal>
+<signal name="VX2">
+<contactref element="U34" pad="6"/>
+<contactref element="U34" pad="12"/>
+</signal>
+<signal name="VX4">
+<contactref element="U34" pad="11"/>
+<contactref element="U35" pad="2"/>
 </signal>
 <signal name="ZBH">
 <contactref element="U27" pad="6"/>

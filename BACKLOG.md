@@ -208,8 +208,6 @@ Last updated: 2026-06-11
 
 - Control card single-step circuit (7474 one-pulse + self-clear NAND): verify
   one-clock-per-press behaviour at bring-up; refine debounce RC if needed.
-- ALU card V flag is unimplemented in rev A (FV driven low). Rev B: derive
-  V from carry-into vs carry-out-of bit 7 (one 7486 XOR).
 - I/O card SEL LED is source-driven from a gate output (deviation from the
   sink-drive standard) - noted on schematic; confirm brightness acceptable.
 
@@ -232,6 +230,25 @@ Last updated: 2026-06-11
       budget
 
 ## DONE
+
+- **V flag + signed comparison (rev C).** Implemented the overflow flag and
+  signed-compare branches end to end. NOTE: the old "one 7486 from carry-into
+  vs carry-out-of bit 7" plan was **not feasible** — a 74181 handles a 4-bit
+  group and doesn't expose carry-into-bit-7. Used the **sign-bit method**
+  instead: `V = (A7 ^ F7) & (A7 ^ B7 ^ ~ALUS2)` (B7 = muxed B operand, F7 = raw
+  ALU result sign; isADD = ~S2 since add-like ops have S2=0, sub-like S2=1).
+  Ungated by M, so V is *valid after ADD/SUB/CMP* (documented convention).
+  - ALU card: U34 (74HCT86) XORs + U35 (74HCT08) AND derive V into the flag
+    register (was tied low). No bus change — FV is already bused.
+  - Control card: U19 (74HCT86) computes N^V -> cond-mux D6; a spare U6 OR gate
+    does (N^V)|Z -> D7 (D6/D7 were grounded). FCOND 6/7 select them.
+  - Microcode: `BLT/BGE/BLE/BGT` (0x44-0x47) via FC LT=6 (N^V), LE=7 ((N^V)|Z).
+    C still gives unsigned ordering (BCP/JNC); these give signed.
+  - Emulator computes V by the identical Boolean; new ISA tests cover the
+    sign-boundary cases where unsigned C would mislead (e.g. -128 < 1). All 6
+    suites pass; all 7 boards regenerate with 0 validation errors.
+  - Bring-up: confirm V/sign-compare on real silicon; the XOR/AND chain adds a
+    little delay off the flag path (not the ALU critical path).
 
 - **EEPROM ROM write-protect jumper (rev C).** Added a 3-pin select header
   `JWP` (HDR3) on the memory card in the 28C256 `!WE` path: jumper 1-2 routes

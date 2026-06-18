@@ -309,6 +309,8 @@
 <element name="CD17" library="p8x" package="C_DISC" value="100N" x="91.44" y="53.34"/>
 <element name="U18" library="p8x" package="DIP16" value="STEP CNT" x="105.41" y="63.50"/>
 <element name="CD18" library="p8x" package="C_DISC" value="100N" x="105.41" y="53.34"/>
+<element name="U19" library="p8x" package="DIP14" value="74HCT86 NV-XOR" x="119.38" y="63.50"/>
+<element name="CD19" library="p8x" package="C_DISC" value="100N" x="119.38" y="53.34"/>
 <element name="X1" library="p8x" package="OSC4" value="4MHZ" x="5.08" y="96.52"/>
 <element name="JP1" library="p8x" package="HDR4" value="CLKSEL" x="15.24" y="96.52"/>
 <element name="SWR" library="p8x" package="SW2P" value="RUN/HALT" x="25.40" y="96.52"/>
@@ -498,14 +500,17 @@
 </signal>
 <signal name="FN">
 <contactref element="U9" pad="15"/>
+<contactref element="U19" pad="1"/>
 <contactref element="J1" pad="A29"/>
 </signal>
 <signal name="FV">
 <contactref element="U9" pad="14"/>
+<contactref element="U19" pad="2"/>
 <contactref element="J1" pad="A30"/>
 </signal>
 <signal name="FZ">
 <contactref element="U9" pad="1"/>
+<contactref element="U6" pad="13"/>
 <contactref element="J1" pad="A28"/>
 </signal>
 <signal name="GND">
@@ -518,8 +523,6 @@
 <contactref element="U18" pad="5"/>
 <contactref element="U18" pad="6"/>
 <contactref element="U9" pad="4"/>
-<contactref element="U9" pad="13"/>
-<contactref element="U9" pad="12"/>
 <contactref element="U9" pad="7"/>
 <contactref element="U8" pad="5"/>
 <contactref element="X1" pad="7"/>
@@ -536,8 +539,6 @@
 <contactref element="U6" pad="5"/>
 <contactref element="U6" pad="9"/>
 <contactref element="U6" pad="10"/>
-<contactref element="U6" pad="12"/>
-<contactref element="U6" pad="13"/>
 <contactref element="U10" pad="20"/>
 <contactref element="U11" pad="20"/>
 <contactref element="U12" pad="20"/>
@@ -550,6 +551,12 @@
 <contactref element="U15" pad="1"/>
 <contactref element="U16" pad="1"/>
 <contactref element="U17" pad="1"/>
+<contactref element="U19" pad="4"/>
+<contactref element="U19" pad="5"/>
+<contactref element="U19" pad="9"/>
+<contactref element="U19" pad="10"/>
+<contactref element="U19" pad="12"/>
+<contactref element="U19" pad="13"/>
 <contactref element="J1" pad="A31"/>
 <contactref element="J1" pad="A32"/>
 <contactref element="J1" pad="B3"/>
@@ -598,6 +605,7 @@
 <contactref element="CD16" pad="2"/>
 <contactref element="CD17" pad="2"/>
 <contactref element="CD18" pad="2"/>
+<contactref element="CD19" pad="2"/>
 <polygon width="0.254" layer="2" isolate="0.3" rank="1">
 <vertex x="0" y="0"/>
 <vertex x="160" y="0"/>
@@ -692,6 +700,15 @@
 <signal name="LEDRN">
 <contactref element="R4" pad="2"/>
 <contactref element="LED4" pad="2"/>
+</signal>
+<signal name="NV">
+<contactref element="U19" pad="3"/>
+<contactref element="U9" pad="13"/>
+<contactref element="U6" pad="12"/>
+</signal>
+<signal name="NVZ">
+<contactref element="U6" pad="11"/>
+<contactref element="U9" pad="12"/>
 </signal>
 <signal name="OSCO">
 <contactref element="X1" pad="8"/>
@@ -994,6 +1011,7 @@
 <contactref element="CD16" pad="1"/>
 <contactref element="CD17" pad="1"/>
 <contactref element="CD18" pad="1"/>
+<contactref element="CD19" pad="1"/>
 <polygon width="0.254" layer="15" isolate="0.3" rank="1">
 <vertex x="0" y="0"/>
 <vertex x="160" y="0"/>

@@ -381,6 +381,71 @@ c2:
         LDB #$FF
         CMP
         JNZ fail
+; ---- 30: signed BLT/BGE — (-128) < (1), the case unsigned C gets wrong ----
+; -128 = $80, 1 = $01. Signed: -128 < 1. Unsigned: 128 > 1. Must use N^V.
+        LDA #$30
+        STA TID
+        LDA #$80
+        LDB #$01
+        CMP
+        BLT n30                 ; signed A<B -> must branch
+        JMP fail
+n30:    LDA #$80                ; (reload; CMP left flags, branches don't touch them)
+        LDB #$01
+        CMP
+        BGE fail                ; A>=B is false -> must NOT branch
+; ---- 31: signed BGT/BGE — 127 > (-1) ----
+        LDA #$31
+        STA TID
+        LDA #$7F
+        LDB #$FF                ; -1
+        CMP
+        BGT n31                 ; signed A>B -> must branch
+        JMP fail
+n31:    LDA #$7F
+        LDB #$FF
+        CMP
+        BLE fail                ; A<=B false -> must NOT branch
+        LDA #$7F
+        LDB #$FF
+        CMP
+        BGE n31b                ; A>=B true -> must branch
+        JMP fail
+n31b:
+; ---- 32: signed equal — BLE/BGE taken, BLT/BGT not ----
+        LDA #$32
+        STA TID
+        LDA #$05
+        LDB #$05
+        CMP
+        BLT fail                ; not <
+        LDA #$05
+        LDB #$05
+        CMP
+        BGT fail                ; not >
+        LDA #$05
+        LDB #$05
+        CMP
+        BLE n32                 ; <= true (equal)
+        JMP fail
+n32:    LDA #$05
+        LDB #$05
+        CMP
+        BGE n32b                ; >= true (equal)
+        JMP fail
+n32b:
+; ---- 33: ADD signed overflow sets V (100 + 50 -> -106) ----
+; This is detectable: after the overflowing ADD the result looks negative
+; while both inputs were positive. We confirm via BLT after a compare that
+; exercises V independently above; here just confirm the ADD result value.
+        LDA #$33
+        STA TID
+        LDA #$64                ; 100
+        LDB #$32                ; 50
+        ADD                     ; = 150 = $96 (signed -106), V should be set
+        LDB #$96
+        CMP                     ; A == $96 ?
+        JNZ fail
 ; ---- all passed ----
         LDA #$00
         HLT
