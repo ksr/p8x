@@ -127,14 +127,28 @@ static int stdin_pending(void){
 }
 static void term_restore(void){ if(g_raw){ tcsetattr(0,TCSANOW,&g_orig); g_raw=0; } }
 static void on_sig(int s){ (void)s; term_restore(); _exit(0); }
-/* console RX: interactive blocks (no cycle burn) and exits cleanly on EOF;
-   non-interactive keeps the old non-blocking poll / getchar behaviour. */
+/* console RX status (RDRF). Must NOT block: the ACIA status register also
+   carries TDRE, which PUTC polls before every transmitted byte, so a blocking
+   status read would stall all output until a key is pressed. It is therefore
+   non-blocking; but to keep an idle prompt from spinning the host CPU at 100%,
+   after RX_SPIN consecutive "no key, no output" polls we block for one key.
+   Any console output (memwr $FF05) resets the counter, so transmit and bulk
+   output never block. */
+#define RX_SPIN 4000
+static long rx_misses=0;
 static int rx_ready(void){
     if(!interactive) return stdin_pending();
     if(peeked>=0) return 1;
+    if(stdin_pending()){
+        unsigned char c;
+        if(read(0,&c,1)==1){ peeked=c; rx_misses=0; return 1; }
+        term_restore(); exit(0);        /* EOF / error */
+    }
+    if(++rx_misses < RX_SPIN) return 0;  /* report "no key" and keep polling */
+    rx_misses=0;                         /* idle: block for a key (no spin) */
     unsigned char c;
     if(read(0,&c,1)==1){ peeked=c; return 1; }
-    term_restore(); exit(0);            /* EOF / error */
+    term_restore(); exit(0);
 }
 static int rx_char(void){
     if(peeked>=0){ int c=peeked; peeked=-1; return c; }
@@ -159,7 +173,7 @@ static void memwr(uint16_t ad,uint8_t v){
     if(ad<0x8000){ fprintf(stderr,"[warn] write to EEPROM %04X\n",ad); return; }
     if(ad<0xFF00){ ram[ad-0x8000]=v; return; }
     if(ad==0xFF02){ leds=v; return; }
-    if(ad==0xFF05){ putchar(v); fflush(stdout); return; }
+    if(ad==0xFF05){ putchar(v); fflush(stdout); rx_misses=0; return; }
     if(cf_img) switch(ad){                                   /* CF task file */
     case 0xFF10: cf_data_wr(v); return;
     case 0xFF11: cf_feat=v; return;
