@@ -67,7 +67,8 @@ tokenized on entry (stored as single bytes) and expanded again by `LIST`.
 ## Numbers, variables, strings
 
 - **Numbers** are **signed 16-bit integers**, range **−32768 to 32767**, written
-  in decimal (no hex/binary). Arithmetic wraps modulo 65536.
+  in decimal *or* hex with a `0x` prefix (`0x1F`, `0xFF`, up to `0xFFFF`).
+  Arithmetic wraps modulo 65536, so `0xFFFF` prints as `-1`.
 - **Variables** are the **26 single letters `A`–`Z`**. Each holds one integer.
   All variables start at 0. (No multi-character names, no arrays.)
 - **Strings** exist only as **literals inside `PRINT`** (`PRINT "HI"`). There are

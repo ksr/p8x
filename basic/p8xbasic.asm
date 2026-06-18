@@ -1224,7 +1224,33 @@ FACTOR: JSR  SKIPSP
         LDB  #10
         CMP
         JC   fa_var
-        JSR  PARSEDEC           ; number -> LNUM
+        LDA  (P2)               ; leading '0' -> maybe "0x" hex
+        LDB  #'0'
+        CMP
+        JNZ  fa_dec
+        TPA2L                   ; peek the char after '0' (save P2 on the stack)
+        PHA
+        TPA2H
+        PHA
+        INP2
+        LDA  (P2)
+        LDB  #'x'
+        CMP
+        JZ   fa_hex
+        LDB  #'X'
+        CMP
+        JZ   fa_hex
+        PLA                     ; not hex: restore P2 to the '0', parse decimal
+        TAP2H
+        PLA
+        TAP2L
+        JMP  fa_dec
+fa_hex: PLA                     ; keep the advanced P2; drop the saved copy
+        PLA
+        INP2                    ; consume the 'x'
+        JSR  PARSEHEX           ; hex digits -> RESULT
+        RTS
+fa_dec: JSR  PARSEDEC           ; number -> LNUM
         LDA  LNUM
         STA  RESULT
         LDA  LNUM+1
@@ -1764,6 +1790,71 @@ pd1:    LDA  (P2)
         STA  LNUM+1
         JMP  pd1
 pdd:    RTS
+
+; PARSEHEX — parse hex digits at (P2) (after the "0x") -> RESULT. Accumulates
+; LNUM = LNUM*16 + digit (16-bit, wraps past 4 digits). Stops at a non-hex char.
+PARSEHEX: LDA #0
+        STA  LNUM
+        STA  LNUM+1
+px1:    JSR  HEXDIG             ; (P2) -> DIG, MATCHF=1 if a hex digit
+        LDA  MATCHF
+        JZ   pxd
+        LDA  LNUM               ; NUM1 = LNUM, then x16 (four left shifts)
+        STA  NUM1
+        LDA  LNUM+1
+        STA  NUM1+1
+        JSR  SHL16
+        JSR  SHL16
+        JSR  SHL16
+        JSR  SHL16
+        LDA  DIG                ; NUM2 = digit
+        STA  NUM2
+        LDA  #0
+        STA  NUM2+1
+        JSR  ADD16              ; NUM1 = NUM1 + digit
+        LDA  NUM1
+        STA  LNUM
+        LDA  NUM1+1
+        STA  LNUM+1
+        INP2                    ; consume the hex digit
+        JMP  px1
+pxd:    LDA  LNUM
+        STA  RESULT
+        LDA  LNUM+1
+        STA  RESULT+1
+        RTS
+
+; HEXDIG — classify the char at (P2) (not consumed). If a hex digit, DIG = its
+; value 0..15 and MATCHF=1; else MATCHF=0. Accepts 0-9, A-F, a-f.
+HEXDIG: LDA  (P2)
+        LDB  #'0'
+        SUB                     ; A = c - '0'; C=1 if c >= '0'
+        JNC  hd_bad
+        LDB  #10
+        CMP                     ; C=1 if A >= 10 (letter range)
+        JC   hd_alpha
+        STA  DIG                ; 0-9
+        LDA  #1
+        STA  MATCHF
+        RTS
+hd_alpha: LDA (P2)
+        LDB  #$DF
+        AND                     ; upcase a letter
+        LDB  #'A'
+        SUB                     ; A = upc - 'A'
+        JNC  hd_bad
+        LDB  #6
+        CMP                     ; C=1 if A >= 6 -> not A..F
+        JC   hd_bad
+        LDB  #10                ; digit = (upc-'A') + 10
+        ADD
+        STA  DIG
+        LDA  #1
+        STA  MATCHF
+        RTS
+hd_bad: LDA  #0
+        STA  MATCHF
+        RTS
 
 ; PRDEC — print LNUM as SIGNED decimal ('-' for negatives), then magnitude
 PRDEC:  LDA  LNUM+1
