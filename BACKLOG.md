@@ -178,11 +178,6 @@ Last updated: 2026-06-11
 
 ## VERIFY
 
-- **C flag polarity**: the flag register latches the RAW 74181 Cn+4 pin,
-  which is active-LOW carry (1 = no carry). Emulator matches hardware.
-  Decide: add an inverter on the ALU card (rev B) or adopt the convention
-  in the assembler/monitor (6502-style borrow flavour).
-
 - Control card single-step circuit (7474 one-pulse + self-clear NAND): verify
   one-clock-per-press behaviour at bring-up; refine debounce RC if needed.
 - I/O card SEL LED is source-driven from a gate output (deviation from the
@@ -206,17 +201,27 @@ Last updated: 2026-06-11
       columns — confirm against house DRC rules
 - [ ] Backplane CLK at far slot on scope after bring-up → decide whether to
       populate RC terminators (RT1/CT1, RT2/CT2 shipped DNP)
-- [ ] Backplane PWR LED: already in design (RL1 + LED1, currently bottom-left)
-      — confirm placement or move top-right to match card standard §9
-- [ ] PSU sizing: ~130 HCT chips (per gen_bom.py — far more than the old ~75
-      estimate; regbank alone is 44 ICs), measure actual draw at bring-up vs 4–5 A
-      budget
+- [x] Backplane PWR LED: kept bottom-left, beside the +5V terminal block. Card
+      standard §9 (PWR LED top-right) is *card*-specific; the backplane's
+      top-right is occupied by the clock terminators (RT1/RT2/CT1/CT2/RN1), and
+      placing the LED by the power entry is sensible. No move.
+- [ ] PSU sizing — measure actual draw at bring-up vs the 4–5 A budget. ESTIMATE
+      (~130 HCT chips + ~52 LEDs): HCT dynamic draw at a few MHz is a handful of
+      mA/chip → ~1 A logic; LEDs (bus-monitor arrays via 330R + status LEDs via
+      1K) ~0.3–0.4 A; memory/ACIA ~0.1 A ⇒ **~1.5 A typical, ~2 A worst case** —
+      comfortable margin under 4–5 A. Confirm with a meter at bring-up.
 
 ## DONE
 
 > Convention: substantial features get a **bold-title** prose entry (what was
 > done + why + caveats). The original foundation milestones are a terse tick
 > list under *Early milestones* at the end of this section.
+
+- **C flag polarity — RESOLVED (rev B).** Chose conventional active-high carry
+  (C=1 = carry / A≥B for SUB/CMP). The raw active-low 74181 Cn+4 is inverted by
+  a spare U25 NAND on the ALU card before the C-flag mux, and the microcode,
+  emulator, and monitor all use the conventional sense (BCP/JNC, CLC/SEC). The
+  old "add an inverter or adopt a borrow convention" was a rev-A open question.
 
 - **Monitor port (rev B ISA expansion) — DONE.** The monitor assumed a
   conventional accumulator ISA; reconciled by expanding the ISA. Phase 1
