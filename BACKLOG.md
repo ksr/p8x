@@ -120,10 +120,6 @@ Last updated: 2026-06-11
       generator — single source of truth for the ISA)
 - [ ] Microcode generator → EPROM images (same shared table)
 - [ ] Mac-side p8xfs tool (put/get/ls/mkdir/tree/fsck via USB CF reader)
-- [ ] **C-based P8X CPU emulator** — cycle-accurate against the microcode
-      (ideally interprets the same EPROM images the hardware will burn, so
-      microcode bugs surface in software first); memory map, ACIA-to-stdio,
-      CF image file backing; test bed for monitor/OS/BASIC before hardware
 - [ ] **C compiler (cross, then native)** — a big, long-horizon goal. Start
       with a **cross-compiler** on the host: a small-C subset (int/char/pointers,
       functions, if/while/for, basic expressions — no float, limited structs)
