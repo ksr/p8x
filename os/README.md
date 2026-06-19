@@ -25,6 +25,7 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > | `DUMP addr` | show 256 bytes from `addr` (hex + ASCII) |
 > | `DEP addr b b ...` | deposit hex byte values starting at `addr` |
 > | `PACK` | compact the data area, reclaiming `DEL`/`RMDIR`'d extents |
+> | `FSCK` | check filesystem integrity (read-only) |
 > | `HELP` | list commands |
 >
 > A file/dir argument may be a **path**. Directory scanning works on any extent
@@ -41,7 +42,12 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > extent `DEL`/`RMDIR` left behind: a two-phase tree walk compacts all file and
 > directory extents down (updating each one's parent entry), then repairs every
 > directory's `.`/`..` from the final positions — so navigation and fsck stay
-> correct after compaction. Verify a volume host-side with **`p8xfs.py fsck`**.
+> correct after compaction. **`FSCK`** is a read-only on-target consistency
+> check that mirrors the host tool: it verifies the `P8` boot signature, that
+> every live extent sits in the data area and at/below the free pointer, and
+> (v2) that every directory's `..` points at its real parent — printing counts
+> and an `FSCK OK` / `FSCK: PROBLEMS=n` verdict. Exhaustive cross-extent overlap
+> and volume-end checks remain in the host **`p8xfs.py fsck`**.
 > See the design in
 > [hardware/cf-card/p8x-cf-os-design.md](../hardware/cf-card/p8x-cf-os-design.md)
 > and [p8xfs-v2-hierarchical.md](../hardware/cf-card/p8xfs-v2-hierarchical.md).

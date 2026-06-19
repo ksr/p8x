@@ -41,7 +41,7 @@ rm -f v2r.tmp v2prog.asm
 # into it, reject RMDIR on the non-empty dir, delete the file, and RMDIR it.
 # ...then PACK to reclaim the leaked TMP/T.BIN extents, and confirm the kept
 # tree still navigates (CD into BIN, RUN HELLO.BIN -> a 3rd "V2") after the move.
-out=$(printf 'B\rDIR\rTREE\rCAT /README\rCD BIN\rPWD\rRUN HELLO.BIN\rRUN /BIN/HELLO.BIN\rCD ..\rCD NOPE\rMKDIR /TMP\rCD TMP\rDEP B000 7A\rSAVE T.BIN B000 B010\rCD ..\rRMDIR TMP\rDEL /TMP/T.BIN\rRMDIR TMP\rPACK\rRUN /BIN/HELLO.BIN\rTREE\rDIR\r' | \
+out=$(printf 'B\rDIR\rTREE\rCAT /README\rCD BIN\rPWD\rRUN HELLO.BIN\rRUN /BIN/HELLO.BIN\rCD ..\rCD NOPE\rMKDIR /TMP\rCD TMP\rDEP B000 7A\rSAVE T.BIN B000 B010\rCD ..\rRMDIR TMP\rDEL /TMP/T.BIN\rRMDIR TMP\rPACK\rFSCK\rRUN /BIN/HELLO.BIN\rTREE\rDIR\r' | \
       ../p8xemu -l 400000000 -c v2.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r')
 fail() { echo "OS-V2 TEST: FAIL — $1"; echo "$out" | sed -n '/v1.0/,$p'; exit 1; }
 echo "$out" | grep -q 'P8X/OS v1.0'   || fail "OS did not boot"
@@ -59,6 +59,8 @@ echo "$out" | grep -q 'DIR CREATED'   || fail "MKDIR failed"
 echo "$out" | grep -q '?DIR NOT EMPTY' || fail "RMDIR did not refuse a non-empty dir"
 echo "$out" | grep -q 'DIR REMOVED'   || fail "RMDIR (empty) failed"
 echo "$out" | grep -q 'PACKED'        || fail "PACK did not run"
+# on-target FSCK must pass on the clean (post-PACK) volume
+echo "$out" | grep -q 'FSCK OK'       || fail "FSCK reported problems on a clean volume"
 # RUN must still work after PACK relocated extents (3rd V2 in the output).
 [ "$(echo "$out" | grep -c '^V2')" -ge 3 ] || fail "RUN failed after PACK (relocation broke a file)"
 echo "OS-V2 TEST: PASS"
@@ -67,3 +69,11 @@ echo "OS-V2 TEST: PASS"
 python3 $ROOT/tools/p8xfs.py fsck v2.img >v2_fsck.tmp 2>&1 || { cat v2_fsck.tmp; echo "OS-V2 TEST: FAIL — fsck"; exit 1; }
 grep -q '0 reclaimable' v2_fsck.tmp || { cat v2_fsck.tmp; echo "OS-V2 TEST: FAIL — PACK left reclaimable space"; exit 1; }
 rm -f v2_fsck.tmp
+
+# Negative: corrupt the boot-block free pointer and confirm on-target FSCK
+# flags it (proves FSCK isn't trivially always-OK).
+cp v2.img v2bad.img
+printf '\001' | dd of=v2bad.img bs=1 seek=4 count=1 conv=notrunc 2>/dev/null
+bad=$(printf 'B\rFSCK\r' | ../p8xemu -l 400000000 -c v2bad.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r')
+echo "$bad" | grep -q 'FSCK: PROBLEMS' || { echo "OS-V2 TEST: FAIL — FSCK did not flag a corrupted volume"; exit 1; }
+rm -f v2bad.img

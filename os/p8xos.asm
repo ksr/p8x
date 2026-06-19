@@ -134,7 +134,16 @@ RS2H    = $A0A3
 RPTRL   = $A0A4          ; OUTCH: next free byte in the capture buffer
 RPTRH   = $A0A5
 RHX     = $A0A6          ; OPHEX8 scratch
-REDNAME = $A0A7          ; redirect target filename (null-terminated, <=48)
+REDNAME = $A0A7          ; redirect target filename (null-terminated, <=48): $A0A7..$A0D6
+; FSCK counters/scratch ($A0D7..$A0DE) - safely above REDNAME, below the tree stack
+FNDIR   = $A0D7          ; directories counted
+FNFIL   = $A0D8          ; files counted
+FNDEL   = $A0D9          ; deleted slots counted
+FMAXE   = $A0DA          ; highest extent end LBA seen (data area only)
+FUSED   = $A0DB          ; data sectors occupied by live extents
+FERR    = $A0DC          ; problems found (0 = clean)
+FCHILD  = $A0DD          ; CHKDD: directory whose '..' is being checked
+FEXP    = $A0DE          ; CHKDD: expected parent LBA
 RBUF    = $B000          ; capture buffer = the TPA (free during a built-in cmd)
 TSP     = $A0E0          ; tree stack depth (0 = at root level)
 TI      = $A0E1          ; scratch loop counter for the frame stack
@@ -239,6 +248,9 @@ SHELL:  JSR  FLUSHRED           ; if the previous command was redirected, write 
         LDP1 #KW_TREE
         JSR  CMPCMD
         JNZ  DOTREE
+        LDP1 #KW_FSCK
+        JSR  CMPCMD
+        JNZ  DOFSCK
         LDP1 #KW_PWD
         JSR  CMPCMD
         JNZ  DOPWD
@@ -1125,6 +1137,216 @@ TR_ASC: LDA  TSP
         JSR  TR_POP
         JMP  TR_ENT
 TR_DONE:JMP  SHELL
+
+; ---------------- FSCK (read-only consistency check) ------------------------
+; Walks the directory tree (v2) or the flat root (v1) WITHOUT modifying the
+; disk, and verifies: the boot signature 'P8'; every live extent starts in the
+; data area and ends at/below the free pointer; and (v2) every directory's
+; '..' points at its real parent. Prints counts and a verdict. Exhaustive
+; cross-extent overlap and volume-end checks remain in the host tool
+; (p8xfs.py fsck) - this is a quick on-target integrity check.
+DOFSCK: LDA  #0
+        STA  FNDIR
+        STA  FNFIL
+        STA  FNDEL
+        STA  FMAXE
+        STA  FUSED
+        STA  FERR
+        ; --- boot block: signature + free pointer ---
+        LDP1 #SBUF
+        LDA  #0
+        STA  LBA
+        JSR  CFREAD
+        LDA  SBUF+4             ; free pointer (low byte; LBAs are 8-bit)
+        STA  FREELO
+        LDA  SBUF
+        LDB  #'P'
+        CMP
+        JNZ  FK_SIG
+        LDA  SBUF+1
+        LDB  #'8'
+        CMP
+        JZ   FK_RDD            ; signature OK
+FK_SIG: LDP1 #MFKSIG
+        JSR  OPUTS
+        JSR  CRLF
+        JSR  FK_BUMP
+FK_RDD: ; --- v2: root's '..' must point at the root (LBA 33) ---
+        LDA  ROOTN
+        LDB  #32
+        CMP
+        JZ   FK_W0            ; v1 has no '.'/'..'
+        LDA  #33
+        STA  FCHILD
+        LDA  #33
+        STA  FEXP
+        JSR  CHKDD
+FK_W0:  ; --- walk from the root ---
+        LDA  #33
+        STA  CDST
+        LDA  ROOTN
+        STA  CDSC
+        LDA  #0
+        STA  CIDX
+        STA  TSP
+FK_ENT: LDA  CDSC              ; max entries in this directory = CDSC * 16
+        SHL
+        SHL
+        SHL
+        SHL
+        STA  TMP
+        LDA  CIDX
+        LDB  TMP
+        CMP
+        JC   FK_ASC            ; CIDX >= max -> ascend
+        JSR  READCUR
+        LDA  FLAGS
+        JZ   FK_ASC            ; $00 end marker
+        LDA  CIDX              ; advance for our eventual return
+        INC
+        STA  CIDX
+        LDA  FLAGS
+        LDB  #F_DEL
+        CMP
+        JZ   FK_DEL
+        LDA  NAMEBUF           ; '.' and '..' both start with '.'
+        LDB  #'.'
+        CMP
+        JZ   FK_ENT
+        ; --- live file or directory: per-extent checks ---
+        JSR  SECCOUNT          ; SECCNT = sectors for this extent
+        LDA  STARTLO           ; start must be in the data area
+        LDB  DATABASE
+        CMP                    ; C=1 when start >= DATABASE
+        JC   FK_INB
+        LDP1 #MFKLOW
+        JSR  OPUTS
+        LDA  STARTLO
+        JSR  OPHEX8
+        JSR  CRLF
+        JSR  FK_BUMP
+FK_INB: LDA  STARTLO           ; end = start + sectors; track max + used
+        LDB  SECCNT
+        ADD
+        STA  TMP
+        LDB  FMAXE
+        CMP                    ; C=1 when end >= FMAXE
+        JNC  FK_NMX
+        LDA  TMP
+        STA  FMAXE
+FK_NMX: LDA  FUSED
+        LDB  SECCNT
+        ADD
+        STA  FUSED
+        LDA  FLAGS
+        LDB  #F_DIR
+        CMP
+        JNZ  FK_FIL
+        ; --- directory: count, check '..', descend ---
+        LDA  FNDIR
+        INC
+        STA  FNDIR
+        LDA  STARTLO
+        STA  FCHILD
+        LDA  CDST              ; this directory is the child's parent
+        STA  FEXP
+        JSR  CHKDD
+        LDA  TSP               ; depth limit (8 frames) -> don't descend deeper
+        LDB  #7
+        CMP
+        JC   FK_ENT
+        JSR  TR_PUSH
+        LDA  STARTLO
+        STA  CDST
+        JSR  SECCOUNT
+        LDA  SECCNT
+        STA  CDSC
+        LDA  #0
+        STA  CIDX
+        JMP  FK_ENT
+FK_FIL: LDA  FNFIL
+        INC
+        STA  FNFIL
+        JMP  FK_ENT
+FK_DEL: LDA  FNDEL
+        INC
+        STA  FNDEL
+        JMP  FK_ENT
+FK_ASC: LDA  TSP
+        JZ   FK_REP
+        JSR  TR_POP
+        JMP  FK_ENT
+; --- report ---
+FK_REP: LDA  FMAXE             ; free pointer must cover the highest extent
+        LDB  FREELO
+        CMP                    ; C=1 when FMAXE >= FREELO
+        JNC  FK_FOK            ; FMAXE < FREELO -> fine
+        JZ   FK_FOK            ; FMAXE == FREELO -> fine (free just past it)
+        LDP1 #MFKFRE
+        JSR  OPUTS
+        JSR  CRLF
+        JSR  FK_BUMP
+FK_FOK: LDP1 #MFKD             ; "DIRS="
+        JSR  OPUTS
+        LDA  FNDIR
+        JSR  OPHEX8
+        LDP1 #MFKF             ; " FILES="
+        JSR  OPUTS
+        LDA  FNFIL
+        JSR  OPHEX8
+        LDP1 #MFKX             ; " DEL="
+        JSR  OPUTS
+        LDA  FNDEL
+        JSR  OPHEX8
+        LDP1 #MFKR             ; " FREE="
+        JSR  OPUTS
+        LDA  FREELO
+        JSR  OPHEX8
+        LDP1 #MFKU             ; " USED="
+        JSR  OPUTS
+        LDA  FUSED
+        JSR  OPHEX8
+        JSR  CRLF
+        LDA  FERR
+        JZ   FK_GOOD
+        LDP1 #MFKBAD           ; "FSCK: PROBLEMS="
+        JSR  OPUTS
+        LDA  FERR
+        JSR  OPHEX8
+        JSR  CRLF
+        JMP  SHELL
+FK_GOOD:LDP1 #MFKOK
+        JSR  OPUTS
+        JSR  CRLF
+        JMP  SHELL
+
+; FK_BUMP - count one problem (saturates at 255).
+FK_BUMP:LDA  FERR
+        LDB  #$FF
+        CMP
+        JZ   fkb_r
+        LDA  FERR
+        INC
+        STA  FERR
+fkb_r:  RTS
+
+; CHKDD - verify the '..' entry (slot 1) of directory FCHILD points at FEXP.
+; Reads FCHILD's first sector; slot 1's start-LBA byte is at SBUF + 32 + 12 = 44.
+CHKDD:  LDA  FCHILD
+        STA  LBA
+        LDP1 #SBUF
+        JSR  CFREAD
+        LDA  SBUF+44
+        LDB  FEXP
+        CMP
+        JZ   cd_ok
+        LDP1 #MFKPAR
+        JSR  OPUTS
+        LDA  FCHILD
+        JSR  OPHEX8
+        JSR  CRLF
+        JSR  FK_BUMP
+cd_ok:  RTS
 
 ; READCUR - read entry CIDX of the current directory (CDST) into NAMEBUF /
 ; STARTLO / LENLO:LENHI / FLAGS. Reads the containing sector into SBUF.
@@ -2578,6 +2800,8 @@ MHELP:   .byte CR,LF
          .byte CR,LF
          .ascii "PACK          reclaim deleted space"
          .byte CR,LF
+         .ascii "FSCK          check filesystem integrity (read-only)"
+         .byte CR,LF
          .ascii "HELP          this help"
          .byte CR,LF
          .ascii "EXIT / MON    return to the ROM monitor"
@@ -2625,6 +2849,24 @@ MNOTDIR: .byte CR,LF
          .asciiz "?NOT A DIR"
 MNOTMT:  .byte CR,LF
          .asciiz "?DIR NOT EMPTY"
+MFKSIG:  .byte CR,LF
+         .asciiz "?BAD SIGNATURE"
+MFKLOW:  .byte CR,LF
+         .asciiz "?EXTENT BELOW DATA LBA "
+MFKFRE:  .byte CR,LF
+         .asciiz "?FREE PTR BELOW LAST EXTENT"
+MFKPAR:  .byte CR,LF
+         .asciiz "?BAD PARENT IN DIR LBA "
+MFKD:    .byte CR,LF
+         .asciiz "DIRS="
+MFKF:    .asciiz " FILES="
+MFKX:    .asciiz " DEL="
+MFKR:    .asciiz " FREE="
+MFKU:    .asciiz " USED="
+MFKBAD:  .byte CR,LF
+         .asciiz "FSCK: PROBLEMS="
+MFKOK:   .byte CR,LF
+         .asciiz "FSCK OK"
 
 KW_DIR:  .asciiz "DIR"
 KW_HELP: .asciiz "HELP"
@@ -2639,6 +2881,7 @@ KW_CD:   .asciiz "CD"
 KW_MKDIR:.asciiz "MKDIR"
 KW_RMDIR:.asciiz "RMDIR"
 KW_TREE: .asciiz "TREE"
+KW_FSCK: .asciiz "FSCK"
 KW_PWD:  .asciiz "PWD"
 KW_CAT:  .asciiz "CAT"
 KW_EXIT: .asciiz "EXIT"

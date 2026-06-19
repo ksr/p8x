@@ -29,3 +29,4 @@ emulator/test/*.hex
 microcode/u?.hex
 emulator/test/io.asm
 emulator/u?.bin
+emulator/test/v2bad.img

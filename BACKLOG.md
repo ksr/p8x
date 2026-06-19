@@ -230,6 +230,20 @@ Last updated: 2026-06-19
   NB: pin/pad-validated only, not DRC'd; the rev-B *behaviour* is proven in the
   emulator (make test-isa). A full Eagle DRC + airwire check stays on VERIFY.
 
+- **OS FSCK — read-only on-target consistency check.** Mirrors the host
+  `p8xfs.py fsck`: verifies the `P8` boot signature, that every live extent
+  starts in the data area and ends at/below the boot-block free pointer, and
+  (v2) that every directory's `..` points at its true parent — via the same
+  read-only tree walk `TREE`/`PACK` use (shared sector buffer + explicit RAM
+  stack). Prints counts (dirs/files/deleted, free ptr, used sectors) and an
+  `FSCK OK` / `FSCK: PROBLEMS=n` verdict; output is redirectable (`FSCK >LOG`).
+  Read-only by design — no repair. Exhaustive cross-extent overlap and
+  volume-end checks stay in the host tool (8-bit on-target LBAs and the single
+  sector buffer make full overlap detection impractical on-target). On-target
+  verdict matches the host on the same image; os_test (v1) and os_v2_test assert
+  `FSCK OK` on a clean volume, and os_v2_test also corrupts the free pointer and
+  asserts FSCK flags it. OS grew to ~$9BFD (still under the ~$9D00 ceiling).
+
 - **I/O card in the emulator — switches + LEDs.** The emulator used to stub the
   I/O card ($FF00 always read 0; $FF02 writes went to an unseen var), so the
   switches/LEDs couldn't be exercised. Now `-s NN` sets the byte the switches

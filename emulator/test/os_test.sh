@@ -51,7 +51,7 @@ rm -f os_h.tmp prog.asm
 # redirection), and EXIT returns to the monitor.
 # Also: SAVE over an existing name must be rejected (?EXISTS), and a redirected
 # command's error must still reach the console (CAT NOPE >X -> ?NO FILE on screen).
-out=$(printf 'B\rDIR\rRUN PROG.BIN\rDEL HELLO.TXT\rSAVE C.BIN 8000 8010\rDEP B000 41 42 43\rDUMP B000\r\r.PACK\rDIR\rDIR >DLIST\rSAVE PROG.BIN 8000 8001\rCAT NOPE >X\rEXIT\r' | \
+out=$(printf 'B\rDIR\rRUN PROG.BIN\rDEL HELLO.TXT\rSAVE C.BIN 8000 8010\rDEP B000 41 42 43\rDUMP B000\r\r.PACK\rFSCK\rDIR\rDIR >DLIST\rSAVE PROG.BIN 8000 8001\rCAT NOPE >X\rEXIT\r' | \
       ../p8xemu -l 80000000 -c os.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0')
 
 fail() { echo "OS TEST: FAIL — $1"; echo "$out" | sed -n '/P8X\/OS/,$p'; exit 1; }
@@ -67,6 +67,7 @@ echo "$out" | grep -q 'ABC'            || fail "DUMP ASCII column wrong"
 # DUMP paging: CR after the first block advanced to the next one (rows at B100).
 echo "$out" | grep -q 'B100'           || fail "DUMP paging (CR=next block) did not advance"
 echo "$out" | grep -q 'PACKED'       || fail "PACK did not report success"
+echo "$out" | grep -q 'FSCK OK'      || fail "FSCK reported problems on a clean v1 volume"
 # After DEL+SAVE+PACK, the final DIR (re-read from disk): HELLO.TXT gone, C.BIN
 # kept. (DEL HELLO left a gap that PACK reclaims by moving C.BIN down.)
 tail=$(echo "$out" | sed -n '/PACKED/,$p')
