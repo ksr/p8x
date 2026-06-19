@@ -162,6 +162,68 @@ The word burned to the 4× 28C64 EPROMs and interpreted by the emulator. Bit map
 
 ---
 
+## Generator footprint & device codes (`generators/gen_eagle.py`)
+
+| Code | Meaning |
+|------|---------|
+| **DEV** | Device table — logical pin names + pin→pad map + package, per part type. |
+| **PKG** | Package table — pad geometry (name, x, y, drill, dia) per footprint. |
+| **DIP8/14/16/20/24W/28W** | Dual In-line Package, N pins. `W` = wide (0.6″ row spacing). |
+| **SIP9/16** | Single In-line Package (resistor networks). |
+| **DIN96 / DIN96C** | DIN 41612 96-pin: backplane receptacle / card edge connector (the `C` variant carries the FABC96R mounting holes). |
+| **HDR3/4/40** | 0.1″ pin headers, N pins. |
+| **TB4** | 4-position terminal block. |
+| **LED5 / LEDARR8** | 3 mm LED footprint / 8-segment LED bar array (DIP). |
+| **OSC4** | Full-can oscillator (4-pin DIP-style). |
+| **SW2P / SW2** | 2-pin switch footprint / device (RESET/RUN/STEP). |
+| **RNISO8** | Isolated 8-resistor network (SIP). |
+| **R_AXIAL** | Axial-lead resistor. |
+| **C_DISC / CP_RADIAL** | Disc ceramic cap / radial polarised (electrolytic) cap. |
+| **MEM28K8** | The wide memory footprint shared by the 28C256 EEPROM and 62256 SRAM. |
+| **GATES14 / HEX14** | Generic 14-pin quad-gate (74HCT00/08/32/86) / hex inverter (74HCT14). |
+| **MHn** | Mounting Hole — non-plated mechanical hole (e.g. on `DIN96C`). |
+| **CDn** | The per-IC 100 nF decoupling **C**ap, one beside each chip (`CD1`, `CD2`, …). |
+| **Un / Jn / Xn** | Reference designators: IC / connector / crystal-or-oscillator. |
+| **busnet() / mnet() / card() / fp_box()** | Generator helpers: bus-pin→net map / memory-card net add / build-a-card / footprint bounding box. |
+
+## Hardware register / protocol bits
+
+| Bit | Meaning |
+|-----|---------|
+| **RDRF** | ACIA Receive Data Register Full — a byte arrived (read `$FF04` status). |
+| **TDRE** | ACIA Transmit Data Register Empty — OK to send the next byte. |
+| **RW / RS / CS / E** | ACIA Read/Write, Register Select, Chip Select, Enable control lines. |
+| **BSY** | CF/IDE Busy — drive is processing; poll before access. |
+| **DRQ** | CF/IDE Data Request — drive ready to transfer a data word. |
+| **DRDY / DASP / PDIAG / IORDY** | CF/IDE drive-ready / drive-active-slave-present / passed-diagnostic / I/O-ready. |
+| **PC / SP / MAR** | Program Counter / Stack Pointer / Memory Address Register — the classic roles, all subsumed by the P0–P3 pointer bank here (no separate MAR). |
+| **UART** | Universal Asynchronous Receiver/Transmitter — the serial-port role the 6850 ACIA fills. |
+
+## BASIC internals (`basic/p8xbasic.asm`)
+
+| Term | Meaning |
+|------|---------|
+| **BASORG / BASRAM** | Build parameters: code origin / data (variables + program text) base. |
+| **PBUF** | Rebuild scratch buffer (fixed at `$C000`). |
+| **VARTAB** | Variable symbol table. |
+| **NAMLEN / NVARS** | Tunable limits: significant chars per name (6) / max variables (32). |
+| **CRUNCH / MATCHKW** | Tokenizer: crush a line to tokens / match a keyword. |
+| **EVAL / TERM / FACTOR** | Recursive-descent expression parser levels. |
+| **TOK_xxx** | Keyword token bytes (e.g. `TOK_FOR`, `TOK_BYE`). |
+| **LCG** | Linear Congruential Generator — the `RND()` pseudo-random algorithm. |
+
+## Code identifiers & internal abbreviations (OS / monitor)
+
+| Term | Meaning |
+|------|---------|
+| **CWD / CWDPATH** | Current Working Directory / its textual path (for the prompt). |
+| **REDIRF** | Redirect Flag — 1 while OS output is being captured to a file. |
+| **OUTCH / OPUTS / OPHEX8** | The OS output sink and its string / hex-byte helpers (route through it for redirection). |
+| **SDIR / DLBA / ECNT / ENTP** | Directory op state: scanned-dir start/count / dir-sector LBA / entries-left / entry pointer. |
+| **FREELO/FREEHI / SECCNT** | Boot-block free pointer (next free LBA) / sector count for a transfer. |
+| **RESOLVE / DESCEND / FINDENT / FINDSLOT / WRENT / MKEXT / SAVECORE** | OS directory routines: split a path → parent+leaf / walk into a subdir / find an entry by name / find a free slot / write an entry / init a new dir extent / copy memory→file. |
+| **GETHEX / GETLN / PARSEW / CONIN/CONOUT** | parse a hex arg / read a line / parse the command word / BIOS console I/O. |
+
 ## Toolchain
 
 | Tool | Role |
