@@ -93,7 +93,7 @@ Call them with `JSR $0103` etc. (P8X/OS is built entirely on this table.)
 | Range | Use |
 |-------|-----|
 | `$0000–$7FFF` | EEPROM — monitor at `$0000`, ROM BASIC at `$2000` (combined ROM) |
-| `$8000–$FEFF` | RAM — P8X/OS loads at `$8000`; the `G`/loaded programs live here |
+| `$8000–$FEFF` | RAM. P8X/OS code at `$8000`; OS variables at `$A000`; sector buffer `SBUF` at `$9E00` and the CF `LBA` byte at `$9D47` (both fixed by the BIOS); user programs / `RUN` (the TPA) at `$B000`; stack (P3) grows down from `$FEFF` |
 | `$FF00` | switch input port (read) |
 | `$FF02` | LED output port (write) |
 | `$FF04 / $FF05` | 6850 ACIA status / data |

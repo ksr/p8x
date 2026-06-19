@@ -29,7 +29,9 @@
 ; A file/dir argument may be a path; directory scanning works on any extent
 ; (start LBA + sector count), so CWD and resolved paths share one code path.
 ; The prompt shows the current path. Verify a volume with p8xfs.py fsck.
-; NB: OS RAM variables live at $9A00+ (above the ~4 KB code image at $8000).
+; RAM layout: code $8000..~$9D00 | CF LBA $9D47, SBUF $9E00 (both fixed by the
+; BIOS) | OS variables $A000.. | user programs / RUN / ">" capture (the TPA)
+; $B000.. | stack (P3) grows down from $FEFF.
 
 ; ---- BIOS jump table (stable ABI, in ROM) ----------------------------------
 CONIN   = $0100          ; wait for key, char -> A
@@ -54,96 +56,96 @@ F_DEL   = $FF            ; deleted
 SUBSECS = 4              ; sectors allocated for a new subdirectory (64 entries)
 
 ; ---- OS RAM variables (below the kernel, clear of BIOS $9D44+ and SBUF) -----
-LINEBUF = $9A00          ; shell input line (64 bytes)
-CMDBUF  = $9A40          ; parsed command word (16 bytes)
-NAMEBUF = $9A50          ; 12-byte filename (search key / DIR scratch)
-TMP     = $9A60
-TMP2    = $9A61
-CNT     = $9A62
-ECNT    = $9A63          ; entries-left-in-sector counter
-FLAGS   = $9A64          ; current entry flag byte
-MATCH   = $9A65          ; 1 = name matched / strings equal
-LENLO   = $9A66          ; entry length, low 16 bits
-LENHI   = $9A67
-STARTLO = $9A68          ; entry start LBA (low byte)
-LOADLO  = $9A69          ; entry load address
-LOADHI  = $9A6A
-EXECLO  = $9A6B          ; entry exec address
-EXECHI  = $9A6C
-DLBA    = $9A6D          ; directory sector being scanned
-SECCNT  = $9A6E          ; sectors left to transfer
-CURLBA  = $9A6F          ; current data LBA
-ENTPL   = $9A70          ; pointer to a directory entry (in SBUF):
-ENTPH   = $9A71          ;   flag byte for DEL, entry start for SAVE
-ARGPL   = $9A72          ; saved arg position in LINEBUF
-ARGPH   = $9A73
+LINEBUF = $A000          ; shell input line (64 bytes)
+CMDBUF  = $A040          ; parsed command word (16 bytes)
+NAMEBUF = $A050          ; 12-byte filename (search key / DIR scratch)
+TMP     = $A060
+TMP2    = $A061
+CNT     = $A062
+ECNT    = $A063          ; entries-left-in-sector counter
+FLAGS   = $A064          ; current entry flag byte
+MATCH   = $A065          ; 1 = name matched / strings equal
+LENLO   = $A066          ; entry length, low 16 bits
+LENHI   = $A067
+STARTLO = $A068          ; entry start LBA (low byte)
+LOADLO  = $A069          ; entry load address
+LOADHI  = $A06A
+EXECLO  = $A06B          ; entry exec address
+EXECHI  = $A06C
+DLBA    = $A06D          ; directory sector being scanned
+SECCNT  = $A06E          ; sectors left to transfer
+CURLBA  = $A06F          ; current data LBA
+ENTPL   = $A070          ; pointer to a directory entry (in SBUF):
+ENTPH   = $A071          ;   flag byte for DEL, entry start for SAVE
+ARGPL   = $A072          ; saved arg position in LINEBUF
+ARGPH   = $A073
 ; ---- SAVE working set ----
-HXLO    = $9A74          ; GETHEX result
-HXHI    = $9A75
-DIGIT   = $9A76          ; HEXVAL digit value
-SHCNT   = $9A77          ; shift counter
-SVSTLO  = $9A78          ; SAVE source start address
-SVSTHI  = $9A79
-FREELO  = $9A7A          ; boot-block free pointer (next data LBA)
-FREEHI  = $9A7B
-SRCLO   = $9A7C          ; running source pointer during the copy
-SRCHI   = $9A7D
-REM     = $9A7E          ; sectors remaining in the SAVE write loop
+HXLO    = $A074          ; GETHEX result
+HXHI    = $A075
+DIGIT   = $A076          ; HEXVAL digit value
+SHCNT   = $A077          ; shift counter
+SVSTLO  = $A078          ; SAVE source start address
+SVSTHI  = $A079
+FREELO  = $A07A          ; boot-block free pointer (next data LBA)
+FREEHI  = $A07B
+SRCLO   = $A07C          ; running source pointer during the copy
+SRCHI   = $A07D
+REM     = $A07E          ; sectors remaining in the SAVE write loop
 ; ---- PACK working set ----
-NF      = $9A80          ; running next-free LBA
-PFOUND  = $9A81          ; 1 if this pass found an unpacked extent
-MINSTRT = $9A82          ; smallest start LBA >= NF this pass
-MINSEC  = $9A83          ; that extent's sector count
-MINPL   = $9A84          ; pointer to that entry's start-LBA field (in SBUF)
-MINPH   = $9A85
-MINDL   = $9A86          ; that entry's directory sector LBA
-ESTART  = $9A87          ; current entry start LBA (low byte)
-SRCL    = $9A88          ; copy source LBA
-DSTL    = $9A89          ; copy dest LBA
-CPYN    = $9A8A          ; sectors left to copy
-CANDL   = $9A8B          ; current entry's start-field pointer
-CANDH   = $9A8C
+NF      = $A080          ; running next-free LBA
+PFOUND  = $A081          ; 1 if this pass found an unpacked extent
+MINSTRT = $A082          ; smallest start LBA >= NF this pass
+MINSEC  = $A083          ; that extent's sector count
+MINPL   = $A084          ; pointer to that entry's start-LBA field (in SBUF)
+MINPH   = $A085
+MINDL   = $A086          ; that entry's directory sector LBA
+ESTART  = $A087          ; current entry start LBA (low byte)
+SRCL    = $A088          ; copy source LBA
+DSTL    = $A089          ; copy dest LBA
+CPYN    = $A08A          ; sectors left to copy
+CANDL   = $A08B          ; current entry's start-field pointer
+CANDH   = $A08C
 ; ---- directory / path working set (v1 + v2) ----
-ROOTN   = $9A8D          ; root directory sector count (32 on v1, 4 on v2)
-DATABASE= $9A8E          ; first data LBA (65 on v1, 37 on v2)
-CWDL    = $9A8F          ; current directory: start LBA
-CWDN    = $9A90          ;                    sector count
-SDIRL   = $9A91          ; directory being scanned this op (start LBA)
-SDIRN   = $9A92          ;                                 sector count
-SCNT    = $9A93          ; sectors-left counter while scanning a directory
-LSL     = $9A94          ; SETPATH: pointer to the last '/' in CWDPATH
-LSH     = $9A95
-PATHL   = $9A96          ; saved path cursor across DESCEND (FINDENT clobbers P2)
-PATHH   = $9A97
-NEWLBA  = $9A98          ; MKDIR: LBA of the new directory extent
-PSL     = $9A99          ; MKDIR: parent dir start LBA / sector count
-PSN     = $9A9A
-EFLAG   = $9A9B          ; flag byte WRENT stamps (F_FILE for SAVE, F_DIR for MKDIR)
-RMDL    = $9A9C          ; RMDIR: parent directory sector holding the entry
+ROOTN   = $A08D          ; root directory sector count (32 on v1, 4 on v2)
+DATABASE= $A08E          ; first data LBA (65 on v1, 37 on v2)
+CWDL    = $A08F          ; current directory: start LBA
+CWDN    = $A090          ;                    sector count
+SDIRL   = $A091          ; directory being scanned this op (start LBA)
+SDIRN   = $A092          ;                                 sector count
+SCNT    = $A093          ; sectors-left counter while scanning a directory
+LSL     = $A094          ; SETPATH: pointer to the last '/' in CWDPATH
+LSH     = $A095
+PATHL   = $A096          ; saved path cursor across DESCEND (FINDENT clobbers P2)
+PATHH   = $A097
+NEWLBA  = $A098          ; MKDIR: LBA of the new directory extent
+PSL     = $A099          ; MKDIR: parent dir start LBA / sector count
+PSN     = $A09A
+EFLAG   = $A09B          ; flag byte WRENT stamps (F_FILE for SAVE, F_DIR for MKDIR)
+RMDL    = $A09C          ; RMDIR: parent directory sector holding the entry
 ; ---- TREE working set ----
-CDST    = $9A9D          ; current directory: start LBA / sectors / entry index
-CDSC    = $9A9E
-CIDX    = $9A9F
+CDST    = $A09D          ; current directory: start LBA / sectors / entry index
+CDSC    = $A09E
+CIDX    = $A09F
 ; ---- output redirection ("> file") ----
-REDIRF  = $9AA0          ; 0 = console, 1 = capturing to RBUF
-RCH     = $9AA1          ; OUTCH: byte being emitted
-RS2L    = $9AA2          ; OUTCH: saved caller P2
-RS2H    = $9AA3
-RPTRL   = $9AA4          ; OUTCH: next free byte in the capture buffer
-RPTRH   = $9AA5
-RHX     = $9AA6          ; OPHEX8 scratch
-REDNAME = $9AA7          ; redirect target filename (null-terminated, <=48)
-RBUF    = $A000          ; capture buffer = the TPA (free during a built-in cmd)
-TSP     = $9AE0          ; tree stack depth (0 = at root level)
-TI      = $9AE1          ; scratch loop counter for the frame stack
-TFRAME  = $9AE2          ; 8 frames x 3 bytes (dst,dsc,idx): $9AE2..$9AF9
+REDIRF  = $A0A0          ; 0 = console, 1 = capturing to RBUF
+RCH     = $A0A1          ; OUTCH: byte being emitted
+RS2L    = $A0A2          ; OUTCH: saved caller P2
+RS2H    = $A0A3
+RPTRL   = $A0A4          ; OUTCH: next free byte in the capture buffer
+RPTRH   = $A0A5
+RHX     = $A0A6          ; OPHEX8 scratch
+REDNAME = $A0A7          ; redirect target filename (null-terminated, <=48)
+RBUF    = $B000          ; capture buffer = the TPA (free during a built-in cmd)
+TSP     = $A0E0          ; tree stack depth (0 = at root level)
+TI      = $A0E1          ; scratch loop counter for the frame stack
+TFRAME  = $A0E2          ; 8 frames x 3 bytes (dst,dsc,idx): $A0E2..$A0F9
 ; ---- v2 PACK working set ----
-PPSEC   = $9AFA          ; chosen extent's parent-entry: dir sector LBA / slot
-PPSLOT  = $9AFB
-CANDSEC = $9AFC          ; candidate entry's location during the find walk
-CANDSLOT= $9AFD
-PARST   = $9AFE          ; PK2FIX: parent directory start LBA (for '..')
-CWDPATH = $9B00          ; textual CWD path for the prompt (up to 48 bytes)
+PPSEC   = $A0FA          ; chosen extent's parent-entry: dir sector LBA / slot
+PPSLOT  = $A0FB
+CANDSEC = $A0FC          ; candidate entry's location during the find walk
+CANDSLOT= $A0FD
+PARST   = $A0FE          ; PK2FIX: parent directory start LBA (for '..')
+CWDPATH = $A100          ; textual CWD path for the prompt (up to 48 bytes)
 
 CR      = $0D
 LF      = $0A

@@ -14,7 +14,7 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o p8xos.bin --base 0x8000 
 
 # A position-independent program at $A000: print "V2" then RTS.
 cat > v2prog.asm <<'EOF'
-        .org $A000
+        .org $B000
         LDA  #'V'
         JSR  $0103
         LDA  #'2'
@@ -25,7 +25,7 @@ cat > v2prog.asm <<'EOF'
         JSR  $0103
         RTS
 EOF
-python3 $ROOT/assembler/p8xasm.py v2prog.asm -o v2prog.bin --base 0xA000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py v2prog.asm -o v2prog.bin --base 0xB000 >/dev/null
 
 rm -f v2.img
 python3 $ROOT/tools/p8xfs.py create v2.img --v2 >/dev/null

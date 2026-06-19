@@ -17,9 +17,11 @@ Last updated: 2026-06-11
     - **on-target FORMAT** (optional): monitor F still writes v1; either teach it
       v2 or add an OS FORMAT so a card can be made bootable without the host.
       (Monitor B is unchanged — it only reads sig+OSCNT.)
-    - **watch the OS code size**: the image is ~5.9 KB at $8000; OS variables
-      live at $9A00 (RUN'd programs load at the $A000 TPA). ~680 bytes of code
-      headroom — bump the var base again before a big addition like EDIT.
+    - **OS code size**: ~6.4 KB at $8000. The TPA was moved to $B000 and the OS
+      var block relocated to $A000 (above the BIOS-pinned LBA $9D47 / SBUF
+      $9E00), so code can now grow to ~$9D00 (~1.1 KB headroom) and vars have
+      ~3.5 KB at $A000. To go beyond ~$9D00, code would need a second segment
+      above SBUF ($A200+, below the $B000 TPA), since LBA/SBUF are fixed.
 - **CFREAD ABI is 1-byte LBA**: the BIOS CFREAD/CFWRITE only set LBA0 (LBA1-3
   zeroed in the monitor's CFSETL), capping addressable sectors at 256. Fine for
   small images today; widen to a multi-byte LBA in CFSETL + the BIOS contract

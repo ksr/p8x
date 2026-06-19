@@ -511,8 +511,8 @@ def main():
     c.set_defaults(fn=cmd_boot)
 
     c = sub.add_parser("put"); c.add_argument("img"); c.add_argument("file")
-    c.add_argument("--name"); c.add_argument("--load", type=lambda x: int(x, 0), default=0xA000)
-    c.add_argument("--exec", type=lambda x: int(x, 0), default=0xA000)
+    c.add_argument("--name"); c.add_argument("--load", type=lambda x: int(x, 0), default=0xB000)
+    c.add_argument("--exec", type=lambda x: int(x, 0), default=0xB000)
     c.set_defaults(fn=cmd_put)
 
     c = sub.add_parser("get"); c.add_argument("img"); c.add_argument("name")

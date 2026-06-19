@@ -3,7 +3,7 @@
 # program (PROG.BIN, prints "RAN" then RTS to the shell), and a data file
 # (HELLO.TXT), boots it through the ROM monitor (B), then exercises the shell:
 #   DIR              -> lists both files
-#   RUN PROG.BIN     -> prints RAN (program loaded to $A000 and JSR'd)
+#   RUN PROG.BIN     -> prints RAN (program loaded to $B000 and JSR'd)
 #   DEL HELLO.TXT    -> marks the entry deleted and writes the sector back
 #   SAVE C.BIN 8000 8010 -> create a file from memory ($8000 = the OS image)
 #   DIR              -> re-read from disk: HELLO.TXT gone, PROG.BIN + C.BIN kept
@@ -19,10 +19,10 @@ cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o p8xos.bin --base 0x8000 >/dev/null
 
-# A position-independent program at its load address $A000: print "RAN\r\n"
+# A position-independent program at its load address $B000: print "RAN\r\n"
 # via the BIOS CONOUT vector, then RTS back to the shell.
 cat > prog.asm <<'EOF'
-        .org $A000
+        .org $B000
         LDA  #'R'
         JSR  $0103
         LDA  #'A'
@@ -35,7 +35,7 @@ cat > prog.asm <<'EOF'
         JSR  $0103
         RTS
 EOF
-python3 $ROOT/assembler/p8xasm.py prog.asm -o prog.bin --base 0xA000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py prog.asm -o prog.bin --base 0xB000 >/dev/null
 
 rm -f os.img
 python3 $ROOT/tools/p8xfs.py create os.img >/dev/null
