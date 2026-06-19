@@ -76,6 +76,11 @@ EEPROM programmer:
 - **Any other binary** — `python3 tools/bin2hex.py in.bin out.hex [base]`
   (e.g. a plain monitor built with `p8xasm.py`).
 
+For a ready-to-burn set at fixed paths, run `cd emulator && make rom` (or
+`sh tools/build_rom.sh`). It refreshes the four control-store EPROMs in
+`microcode/` and writes the program ROM to `rom/p8x-prog-rom.{bin,hex}`. Both
+are committed; see [rom/README.md](rom/README.md) for the chip map.
+
 ## Documentation
 
 | Document | Description |

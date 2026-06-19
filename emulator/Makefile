@@ -12,6 +12,11 @@ p8xemu: p8xemu.c
 ucode:
 	cd $(UC) && python3 genucode.py
 
+# Build the persistent burnable image set (control-store EPROMs + program ROM)
+# into microcode/ and rom/ — see rom/README.md for the chip map.
+rom:
+	sh ../tools/build_rom.sh
+
 test: p8xemu ucode
 	cd test && cp ../$(UC)/u?.bin . && \
 	python3 ../../assembler/p8xasm.py test1.asm -o t1.bin && ../p8xemu t1.bin && \
@@ -45,4 +50,4 @@ test-basic: p8xemu ucode
 	sh test/basic_rom_test.sh
 	sh test/basic_disk_test.sh
 
-.PHONY: all ucode test test-isa test-cf test-os test-basic
+.PHONY: all ucode rom test test-isa test-cf test-os test-basic
