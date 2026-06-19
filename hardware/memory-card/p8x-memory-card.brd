@@ -261,36 +261,36 @@
 <classes><class number="0" name="default" width="0" drill="0"/></classes>
 <designrules name="default"><param name="layerSetup" value="(1*2*15*16)"/></designrules>
 <elements>
-<element name="J1" library="p8x" package="DIN96C" value="FABC96R" x="147.32" y="88.90"/>
-<element name="U1" library="p8x" package="DIP28W" value="28C256-15" x="17.78" y="83.82"/>
-<element name="U2" library="p8x" package="DIP28W" value="62256-70" x="43.18" y="83.82"/>
-<element name="U3" library="p8x" package="DIP20" value="74HCT245" x="68.58" y="83.82"/>
-<element name="U4" library="p8x" package="DIP14" value="74HCT30" x="88.90" y="83.82"/>
-<element name="U5" library="p8x" package="DIP16" value="74HCT138-DOE" x="109.22" y="83.82"/>
-<element name="U6" library="p8x" package="DIP16" value="74HCT138-DLD" x="17.78" y="35.56"/>
-<element name="U7" library="p8x" package="DIP14" value="74HCT00" x="43.18" y="35.56"/>
-<element name="U8" library="p8x" package="DIP14" value="74HCT32" x="68.58" y="35.56"/>
-<element name="U9" library="p8x" package="DIP14" value="74HCT08" x="88.90" y="35.56"/>
-<element name="RP1" library="p8x" package="R_AXIAL" value="1K" x="127.00" y="96.52"/>
-<element name="LED3" library="p8x" package="LED5" value="PWR-GRN" x="142.24" y="96.52"/>
-<element name="RS1" library="p8x" package="R_AXIAL" value="1K" x="127.00" y="91.44"/>
-<element name="LED2" library="p8x" package="LED5" value="ROM-YEL" x="142.24" y="91.44"/>
-<element name="RS2" library="p8x" package="R_AXIAL" value="1K" x="127.00" y="86.36"/>
-<element name="LED4" library="p8x" package="LED5" value="RAM-YEL" x="142.24" y="86.36"/>
-<element name="RS3" library="p8x" package="R_AXIAL" value="1K" x="127.00" y="81.28"/>
-<element name="LED5" library="p8x" package="LED5" value="RD-GRN" x="142.24" y="81.28"/>
-<element name="RS4" library="p8x" package="R_AXIAL" value="1K" x="127.00" y="76.20"/>
-<element name="LED6" library="p8x" package="LED5" value="WR-RED" x="142.24" y="76.20"/>
-<element name="JWP" library="p8x" package="HDR3" value="ROM-WP" x="128.00" y="35.56"/>
-<element name="CD1" library="p8x" package="C_DISC" value="100N" x="17.78" y="7.00"/>
-<element name="CD2" library="p8x" package="C_DISC" value="100N" x="25.78" y="7.00"/>
-<element name="CD3" library="p8x" package="C_DISC" value="100N" x="33.78" y="7.00"/>
-<element name="CD4" library="p8x" package="C_DISC" value="100N" x="41.78" y="7.00"/>
-<element name="CD5" library="p8x" package="C_DISC" value="100N" x="49.78" y="7.00"/>
-<element name="CD6" library="p8x" package="C_DISC" value="100N" x="57.78" y="7.00"/>
-<element name="CD7" library="p8x" package="C_DISC" value="100N" x="65.78" y="7.00"/>
-<element name="CD8" library="p8x" package="C_DISC" value="100N" x="73.78" y="7.00"/>
-<element name="CD9" library="p8x" package="C_DISC" value="100N" x="81.78" y="7.00"/>
+<element name="J1" library="p8x" package="DIN96C" value="FABC96R" x="5.40" y="86.97"/>
+<element name="U1" library="p8x" package="DIP28W" value="28C256-15" x="17.88" y="95.20"/>
+<element name="CD1" library="p8x" package="C_DISC" value="100N" x="37.42" y="95.10"/>
+<element name="U2" library="p8x" package="DIP28W" value="62256-70" x="41.72" y="95.20"/>
+<element name="CD2" library="p8x" package="C_DISC" value="100N" x="61.26" y="95.10"/>
+<element name="U3" library="p8x" package="DIP20" value="74HCT245" x="65.56" y="95.20"/>
+<element name="CD3" library="p8x" package="C_DISC" value="100N" x="77.48" y="95.10"/>
+<element name="U4" library="p8x" package="DIP14" value="74HCT30" x="81.78" y="95.20"/>
+<element name="CD4" library="p8x" package="C_DISC" value="100N" x="93.70" y="95.10"/>
+<element name="U5" library="p8x" package="DIP16" value="74HCT138-DOE" x="98.00" y="95.20"/>
+<element name="CD5" library="p8x" package="C_DISC" value="100N" x="109.92" y="95.10"/>
+<element name="U6" library="p8x" package="DIP16" value="74HCT138-DLD" x="114.22" y="95.20"/>
+<element name="CD6" library="p8x" package="C_DISC" value="100N" x="126.14" y="95.10"/>
+<element name="U7" library="p8x" package="DIP14" value="74HCT00" x="130.44" y="95.20"/>
+<element name="CD7" library="p8x" package="C_DISC" value="100N" x="142.36" y="95.10"/>
+<element name="U8" library="p8x" package="DIP14" value="74HCT32" x="146.66" y="95.20"/>
+<element name="CD8" library="p8x" package="C_DISC" value="100N" x="17.98" y="57.88"/>
+<element name="U9" library="p8x" package="DIP14" value="74HCT08" x="22.28" y="57.98"/>
+<element name="CD9" library="p8x" package="C_DISC" value="100N" x="34.20" y="57.88"/>
+<element name="RP1" library="p8x" package="R_AXIAL" value="1K" x="38.50" y="57.98"/>
+<element name="LED3" library="p8x" package="LED5" value="PWR-GRN" x="52.96" y="57.88"/>
+<element name="RS1" library="p8x" package="R_AXIAL" value="1K" x="59.80" y="57.98"/>
+<element name="LED2" library="p8x" package="LED5" value="ROM-YEL" x="74.26" y="57.88"/>
+<element name="RS2" library="p8x" package="R_AXIAL" value="1K" x="81.10" y="57.98"/>
+<element name="LED4" library="p8x" package="LED5" value="RAM-YEL" x="95.56" y="57.88"/>
+<element name="RS3" library="p8x" package="R_AXIAL" value="1K" x="102.40" y="57.98"/>
+<element name="LED5" library="p8x" package="LED5" value="RD-GRN" x="116.86" y="57.88"/>
+<element name="RS4" library="p8x" package="R_AXIAL" value="1K" x="123.70" y="57.98"/>
+<element name="LED6" library="p8x" package="LED5" value="WR-RED" x="138.16" y="57.88"/>
+<element name="JWP" library="p8x" package="HDR3" value="ROM-WP" x="145.10" y="57.88"/>
 </elements><signals>
 <signal name="-BOE">
 <contactref element="U9" pad="3"/>
@@ -329,204 +329,165 @@
 <contactref element="JWP" pad="1"/>
 </signal>
 <signal name="A0">
-<contactref element="J1" pad="C3"/>
 <contactref element="U1" pad="10"/>
 <contactref element="U2" pad="10"/>
+<contactref element="J1" pad="C3"/>
 </signal>
 <signal name="A1">
-<contactref element="J1" pad="C4"/>
 <contactref element="U1" pad="9"/>
 <contactref element="U2" pad="9"/>
+<contactref element="J1" pad="C4"/>
 </signal>
 <signal name="A10">
-<contactref element="J1" pad="C13"/>
 <contactref element="U1" pad="21"/>
 <contactref element="U2" pad="21"/>
 <contactref element="U4" pad="3"/>
+<contactref element="J1" pad="C13"/>
 </signal>
 <signal name="A11">
-<contactref element="J1" pad="C14"/>
 <contactref element="U1" pad="23"/>
 <contactref element="U2" pad="23"/>
 <contactref element="U4" pad="4"/>
+<contactref element="J1" pad="C14"/>
 </signal>
 <signal name="A12">
-<contactref element="J1" pad="C15"/>
 <contactref element="U1" pad="2"/>
 <contactref element="U2" pad="2"/>
 <contactref element="U4" pad="5"/>
+<contactref element="J1" pad="C15"/>
 </signal>
 <signal name="A13">
-<contactref element="J1" pad="C16"/>
 <contactref element="U1" pad="26"/>
 <contactref element="U2" pad="26"/>
 <contactref element="U4" pad="6"/>
+<contactref element="J1" pad="C16"/>
 </signal>
 <signal name="A14">
-<contactref element="J1" pad="C17"/>
 <contactref element="U1" pad="1"/>
 <contactref element="U2" pad="1"/>
 <contactref element="U4" pad="11"/>
+<contactref element="J1" pad="C17"/>
 </signal>
 <signal name="A15">
-<contactref element="J1" pad="C18"/>
 <contactref element="U4" pad="12"/>
 <contactref element="U1" pad="20"/>
 <contactref element="U7" pad="1"/>
 <contactref element="U8" pad="9"/>
+<contactref element="J1" pad="C18"/>
 </signal>
 <signal name="A2">
-<contactref element="J1" pad="C5"/>
 <contactref element="U1" pad="8"/>
 <contactref element="U2" pad="8"/>
+<contactref element="J1" pad="C5"/>
 </signal>
 <signal name="A3">
-<contactref element="J1" pad="C6"/>
 <contactref element="U1" pad="7"/>
 <contactref element="U2" pad="7"/>
+<contactref element="J1" pad="C6"/>
 </signal>
 <signal name="A4">
-<contactref element="J1" pad="C7"/>
 <contactref element="U1" pad="6"/>
 <contactref element="U2" pad="6"/>
+<contactref element="J1" pad="C7"/>
 </signal>
 <signal name="A5">
-<contactref element="J1" pad="C8"/>
 <contactref element="U1" pad="5"/>
 <contactref element="U2" pad="5"/>
+<contactref element="J1" pad="C8"/>
 </signal>
 <signal name="A6">
-<contactref element="J1" pad="C9"/>
 <contactref element="U1" pad="4"/>
 <contactref element="U2" pad="4"/>
+<contactref element="J1" pad="C9"/>
 </signal>
 <signal name="A7">
-<contactref element="J1" pad="C10"/>
 <contactref element="U1" pad="3"/>
 <contactref element="U2" pad="3"/>
+<contactref element="J1" pad="C10"/>
 </signal>
 <signal name="A8">
-<contactref element="J1" pad="C11"/>
 <contactref element="U1" pad="25"/>
 <contactref element="U2" pad="25"/>
 <contactref element="U4" pad="1"/>
+<contactref element="J1" pad="C11"/>
 </signal>
 <signal name="A9">
-<contactref element="J1" pad="C12"/>
 <contactref element="U1" pad="24"/>
 <contactref element="U2" pad="24"/>
 <contactref element="U4" pad="2"/>
+<contactref element="J1" pad="C12"/>
 </signal>
 <signal name="CLK">
-<contactref element="J1" pad="A24"/>
 <contactref element="U8" pad="2"/>
+<contactref element="J1" pad="A24"/>
 </signal>
 <signal name="D0">
-<contactref element="J1" pad="A3"/>
 <contactref element="U3" pad="2"/>
+<contactref element="J1" pad="A3"/>
 </signal>
 <signal name="D1">
-<contactref element="J1" pad="A4"/>
 <contactref element="U3" pad="3"/>
+<contactref element="J1" pad="A4"/>
 </signal>
 <signal name="D2">
-<contactref element="J1" pad="A5"/>
 <contactref element="U3" pad="4"/>
+<contactref element="J1" pad="A5"/>
 </signal>
 <signal name="D3">
-<contactref element="J1" pad="A6"/>
 <contactref element="U3" pad="5"/>
+<contactref element="J1" pad="A6"/>
 </signal>
 <signal name="D4">
-<contactref element="J1" pad="A7"/>
 <contactref element="U3" pad="6"/>
+<contactref element="J1" pad="A7"/>
 </signal>
 <signal name="D5">
-<contactref element="J1" pad="A8"/>
 <contactref element="U3" pad="7"/>
+<contactref element="J1" pad="A8"/>
 </signal>
 <signal name="D6">
-<contactref element="J1" pad="A9"/>
 <contactref element="U3" pad="8"/>
+<contactref element="J1" pad="A9"/>
 </signal>
 <signal name="D7">
-<contactref element="J1" pad="A10"/>
 <contactref element="U3" pad="9"/>
+<contactref element="J1" pad="A10"/>
 </signal>
 <signal name="DLD0">
-<contactref element="J1" pad="A16"/>
 <contactref element="U6" pad="1"/>
+<contactref element="J1" pad="A16"/>
 </signal>
 <signal name="DLD1">
-<contactref element="J1" pad="A17"/>
 <contactref element="U6" pad="2"/>
+<contactref element="J1" pad="A17"/>
 </signal>
 <signal name="DLD2">
-<contactref element="J1" pad="A18"/>
 <contactref element="U6" pad="3"/>
+<contactref element="J1" pad="A18"/>
 </signal>
 <signal name="DLD3">
-<contactref element="J1" pad="A19"/>
 <contactref element="U6" pad="4"/>
+<contactref element="J1" pad="A19"/>
 </signal>
 <signal name="DOE0">
-<contactref element="J1" pad="A12"/>
 <contactref element="U5" pad="1"/>
+<contactref element="J1" pad="A12"/>
 </signal>
 <signal name="DOE1">
-<contactref element="J1" pad="A13"/>
 <contactref element="U5" pad="2"/>
+<contactref element="J1" pad="A13"/>
 </signal>
 <signal name="DOE2">
-<contactref element="J1" pad="A14"/>
 <contactref element="U5" pad="3"/>
+<contactref element="J1" pad="A14"/>
 </signal>
 <signal name="DOE3">
-<contactref element="J1" pad="A15"/>
 <contactref element="U5" pad="4"/>
+<contactref element="J1" pad="A15"/>
 </signal>
 <signal name="GND">
-<contactref element="J1" pad="A31"/>
-<contactref element="J1" pad="B31"/>
-<contactref element="J1" pad="C31"/>
-<contactref element="J1" pad="A32"/>
-<contactref element="J1" pad="B32"/>
-<contactref element="J1" pad="C32"/>
-<contactref element="J1" pad="B3"/>
-<contactref element="J1" pad="B4"/>
-<contactref element="J1" pad="B5"/>
-<contactref element="J1" pad="B6"/>
-<contactref element="J1" pad="B7"/>
-<contactref element="J1" pad="B8"/>
-<contactref element="J1" pad="B9"/>
-<contactref element="J1" pad="B10"/>
-<contactref element="J1" pad="B11"/>
-<contactref element="J1" pad="B12"/>
-<contactref element="J1" pad="B13"/>
-<contactref element="J1" pad="B14"/>
-<contactref element="J1" pad="B15"/>
-<contactref element="J1" pad="B16"/>
-<contactref element="J1" pad="B17"/>
-<contactref element="J1" pad="B18"/>
-<contactref element="J1" pad="B19"/>
-<contactref element="J1" pad="B20"/>
-<contactref element="J1" pad="B21"/>
-<contactref element="J1" pad="B22"/>
-<contactref element="J1" pad="B23"/>
-<contactref element="J1" pad="B24"/>
-<contactref element="J1" pad="B25"/>
-<contactref element="J1" pad="B26"/>
-<contactref element="U1" pad="14"/>
-<contactref element="U2" pad="14"/>
-<contactref element="U3" pad="10"/>
-<contactref element="U4" pad="7"/>
-<contactref element="U5" pad="8"/>
 <contactref element="U5" pad="5"/>
-<contactref element="U6" pad="8"/>
 <contactref element="U6" pad="5"/>
-<contactref element="U7" pad="7"/>
-<contactref element="U8" pad="7"/>
-<contactref element="U9" pad="7"/>
 <contactref element="U7" pad="4"/>
 <contactref element="U7" pad="5"/>
 <contactref element="U7" pad="9"/>
@@ -538,6 +499,24 @@
 <contactref element="U9" pad="12"/>
 <contactref element="U9" pad="13"/>
 <contactref element="LED3" pad="1"/>
+<contactref element="J1" pad="A31"/>
+<contactref element="J1" pad="A32"/>
+<contactref element="J1" pad="B3"/>
+<contactref element="J1" pad="B5"/>
+<contactref element="J1" pad="B7"/>
+<contactref element="J1" pad="B9"/>
+<contactref element="J1" pad="B11"/>
+<contactref element="J1" pad="B13"/>
+<contactref element="J1" pad="B15"/>
+<contactref element="J1" pad="B17"/>
+<contactref element="J1" pad="B19"/>
+<contactref element="J1" pad="B21"/>
+<contactref element="J1" pad="B23"/>
+<contactref element="J1" pad="B25"/>
+<contactref element="J1" pad="B31"/>
+<contactref element="J1" pad="B32"/>
+<contactref element="J1" pad="C31"/>
+<contactref element="J1" pad="C32"/>
 <contactref element="CD1" pad="2"/>
 <contactref element="CD2" pad="2"/>
 <contactref element="CD3" pad="2"/>
@@ -547,6 +526,15 @@
 <contactref element="CD7" pad="2"/>
 <contactref element="CD8" pad="2"/>
 <contactref element="CD9" pad="2"/>
+<contactref element="U1" pad="14"/>
+<contactref element="U2" pad="14"/>
+<contactref element="U3" pad="10"/>
+<contactref element="U4" pad="7"/>
+<contactref element="U5" pad="8"/>
+<contactref element="U6" pad="8"/>
+<contactref element="U7" pad="7"/>
+<contactref element="U8" pad="7"/>
+<contactref element="U9" pad="7"/>
 <polygon width="0.254" layer="2" isolate="0.3" rank="1">
 <vertex x="0" y="0"/>
 <vertex x="160" y="0"/>
@@ -632,28 +620,19 @@
 </signal>
 <signal name="VCC">
 <contactref element="JWP" pad="3"/>
-<contactref element="J1" pad="A1"/>
-<contactref element="J1" pad="B1"/>
-<contactref element="J1" pad="C1"/>
-<contactref element="J1" pad="A2"/>
-<contactref element="J1" pad="B2"/>
-<contactref element="J1" pad="C2"/>
-<contactref element="U1" pad="28"/>
-<contactref element="U2" pad="28"/>
-<contactref element="U3" pad="20"/>
-<contactref element="U4" pad="14"/>
-<contactref element="U5" pad="16"/>
 <contactref element="U5" pad="6"/>
-<contactref element="U6" pad="16"/>
 <contactref element="U6" pad="6"/>
-<contactref element="U7" pad="14"/>
-<contactref element="U8" pad="14"/>
-<contactref element="U9" pad="14"/>
 <contactref element="RP1" pad="1"/>
 <contactref element="RS1" pad="1"/>
 <contactref element="RS2" pad="1"/>
 <contactref element="RS3" pad="1"/>
 <contactref element="RS4" pad="1"/>
+<contactref element="J1" pad="A1"/>
+<contactref element="J1" pad="A2"/>
+<contactref element="J1" pad="B1"/>
+<contactref element="J1" pad="B2"/>
+<contactref element="J1" pad="C1"/>
+<contactref element="J1" pad="C2"/>
 <contactref element="CD1" pad="1"/>
 <contactref element="CD2" pad="1"/>
 <contactref element="CD3" pad="1"/>
@@ -663,6 +642,15 @@
 <contactref element="CD7" pad="1"/>
 <contactref element="CD8" pad="1"/>
 <contactref element="CD9" pad="1"/>
+<contactref element="U1" pad="28"/>
+<contactref element="U2" pad="28"/>
+<contactref element="U3" pad="20"/>
+<contactref element="U4" pad="14"/>
+<contactref element="U5" pad="16"/>
+<contactref element="U6" pad="16"/>
+<contactref element="U7" pad="14"/>
+<contactref element="U8" pad="14"/>
+<contactref element="U9" pad="14"/>
 <polygon width="0.254" layer="15" isolate="0.3" rank="1">
 <vertex x="0" y="0"/>
 <vertex x="160" y="0"/>

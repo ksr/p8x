@@ -1004,28 +1004,30 @@ card("cf-card","P8X CF-IDE CARD REV A - 8-BIT TRUE IDE AT 0xFF10",ic,sm,n,
  {"DOE%d"%i for i in range(4)}|{"DLD%d"%i for i in range(4)}|{"CLKB","-RES"})
 
 # ===================== MEMORY CARD rev C ======================================
-mc_parts={
- "J1":("DIN96C","FABC96R",35.56,38.10),
- "U1":("MEM28K8","28C256-15",132.08,38.10),"U2":("MEM28K8","62256-70",220.98,38.10),
- "U3":("74245","74HCT245",309.88,38.10),"U4":("7430","74HCT30",398.78,38.10),
- "U9":("GATES14","74HCT08",487.68,38.10),"U5":("74138","74HCT138-DOE",132.08,-76.20),
- "U6":("74138","74HCT138-DLD",220.98,-76.20),"U7":("GATES14","74HCT00",309.88,-76.20),
- "U8":("GATES14","74HCT32",398.78,-76.20),
- "RP1":("RES","1K",553.72,38.10),"LED3":("LED","PWR-GRN",604.52,38.10),
- "RS1":("RES","1K",553.72,7.62),"LED2":("LED","ROM-YEL",604.52,7.62),
- "RS2":("RES","1K",553.72,-22.86),"LED4":("LED","RAM-YEL",604.52,-22.86),
- "RS3":("RES","1K",553.72,-53.34),"LED5":("LED","RD-GRN",604.52,-53.34),
- "RS4":("RES","1K",553.72,-83.82),"LED6":("LED","WR-RED",604.52,-83.82),
- # rev C: ROM write-protect jumper. 3-pin select on the 28C256 !WE only:
- # 1-2 = -WE (writable, default), 2-3 = VCC (write-protected). RAM stays on -WE.
- "JWP":("HDR3","ROM-WP",487.68,-76.20)}
+# Built through the shared card() helper like every other logic card (placement
+# is auto — final layout is done in Fusion/Eagle). card() supplies J1, the per-IC
+# decoupling caps, the IC power pins, and the J1 bus/power wiring derived from
+# used_bus + busnet(). So this only declares the functional netlist — and routing
+# J1 via busnet() means the rev-D even-pin spares are no longer tied to GND.
+ic={"U1":("MEM28K8","28C256-15"),"U2":("MEM28K8","62256-70"),
+ "U3":("74245","74HCT245"),"U4":("7430","74HCT30"),
+ "U5":("74138","74HCT138-DOE"),"U6":("74138","74HCT138-DLD"),
+ "U7":("GATES14","74HCT00"),"U8":("GATES14","74HCT32"),"U9":("GATES14","74HCT08")}
+sm={"RP1":("RES","1K"),"LED3":("LED","PWR-GRN"),
+ "RS1":("RES","1K"),"LED2":("LED","ROM-YEL"),
+ "RS2":("RES","1K"),"LED4":("LED","RAM-YEL"),
+ "RS3":("RES","1K"),"LED5":("LED","RD-GRN"),
+ "RS4":("RES","1K"),"LED6":("LED","WR-RED"),
+ # ROM write-protect jumper (3-pin select on the 28C256 !WE: 1-2 = -WE writable
+ # [default], 2-3 = VCC write-protected; RAM stays on -WE).
+ "JWP":("HDR3","ROM-WP")}
 mcn={}
 def mnet(n,*p): mcn.setdefault(n,[]).extend(p)
 for i in range(8):
-    mnet("D%d"%i,("J1","A%d"%(3+i)),("U3","A%d"%i))
+    mnet("D%d"%i,("U3","A%d"%i))
     mnet("MD%d"%i,("U3","B%d"%i),("U1","IO%d"%i),("U2","IO%d"%i))
 for i in range(16):
-    pins=[("J1","C%d"%(3+i))]
+    pins=[]
     if i<15: pins+=[("U1","A%d"%i),("U2","A%d"%i)]
     if 8<=i<=14: pins.append(("U4","ABCDEFG"[i-8]))
     if i==15: pins+=[("U4","H"),("U1","!CE"),("U7","1A")]
@@ -1033,25 +1035,22 @@ for i in range(16):
 mnet("-IOPG",("U4","Y"),("U7","1B"))
 mnet("-RAMCE",("U7","1Y"),("U2","!CE"))
 for i in range(4):
-    mnet("DOE%d"%i,("J1","A%d"%(12+i)),("U5",["A","B","C","!G2A"][i]))
-    mnet("DLD%d"%i,("J1","A%d"%(16+i)),("U6",["A","B","C","!G2A"][i]))
+    mnet("DOE%d"%i,("U5",["A","B","C","!G2A"][i]))
+    mnet("DLD%d"%i,("U6",["A","B","C","!G2A"][i]))
 mnet("-RD",("U5","Y7"),("U1","!OE"),("U2","!OE"),("U3","DIR"),("U9","1A"))
 mnet("-MEMW",("U6","Y7"),("U8","1A"),("U9","1B"))
-mnet("CLK",("J1","A24"),("U8","1B"))
+mnet("CLK",("U8","1B"))
 # RAM !WE is always on -WE; ROM !WE routes through the JWP select header so it
 # can be write-protected (jumper 2-3 -> VCC) without affecting RAM writes.
 mnet("-WE",("U8","1Y"),("U2","!WE"),("JWP","1"))
 mnet("ROMWE",("JWP","2"),("U1","!WE"))   # header centre -> 28C256 !WE
 mnet("VCC",("JWP","3"))                   # protect position: !WE held high
 mnet("-BOE",("U9","1Y"),("U3","!OE"))
-mnet("VCC",*[("J1",p) for p in("A1","B1","C1","A2","B2","C2")],
-  ("U1","VCC"),("U2","VCC"),("U3","VCC"),("U4","VCC"),("U5","VCC"),("U5","G1"),
-  ("U6","VCC"),("U6","G1"),("U7","VCC"),("U8","VCC"),("U9","VCC"))
-mnet("GND",*[("J1",p) for p in("A31","B31","C31","A32","B32","C32")],
-  *[("J1","B%d"%i) for i in range(3,27)],
-  ("U1","GND"),("U2","GND"),("U3","GND"),("U4","GND"),("U5","GND"),("U5","!G2B"),
-  ("U6","GND"),("U6","!G2B"),("U7","GND"),("U8","GND"),("U9","GND"),
-  *[(u,p) for u in("U7",) for p in("2A","2B","3A","3B","4A","4B")],
+# functional ties only; card() adds the J1 power/bus pins (via busnet, so the
+# even-pin spares stay OFF GND) plus every IC's own VCC/GND supply pin.
+mnet("VCC",("U5","G1"),("U6","G1"))
+mnet("GND",("U5","!G2B"),("U6","!G2B"),
+  *[("U7",p) for p in("2A","2B","3A","3B","4A","4B")],
   ("U8","4A"),("U8","4B"),("U9","4A"),("U9","4B"),("LED3","K"))
 mnet("-BOE",("U8","2B"),("U8","3B"))
 mnet("-RAMCE",("U8","2A"))
@@ -1064,40 +1063,9 @@ mnet("LEDRA",("RS2","2"),("LED4","A")); mnet("RAMK",("U8","2Y"),("LED4","K"))
 mnet("LEDRD",("RS3","2"),("LED5","A")); mnet("RDK",("U9","2Y"),("LED5","K"))
 mnet("LEDWR",("RS4","2"),("LED6","A")); mnet("WRK",("U9","3Y"),("LED6","K"))
 mnet("VCC",("RP1","1"),("RS1","1"),("RS2","1"),("RS3","1"),("RS4","1"))
-# per-IC 100nF decoupling caps (card standards sec.5)
-MCIC=["U1","U2","U3","U4","U5","U6","U7","U8","U9"]
-for i,u in enumerate(MCIC):
-    c="CD%d"%(i+1)
-    mc_parts[c]=("CAP","100N",132.08+88.9*(i%5),-160.02-38.10*(i//5))
-    mnet("VCC",(c,"1")); mnet("GND",(c,"2"))
-if EMIT:
-    write_sch("memory-card/p8x-memory-card.sch","P8X MEMORY CARD REV C",mc_parts,mcn)
-    validate("memory-card/p8x-memory-card.sch",mc_parts,mcn)
-# Register the memory card for the schematic renderer (render_traditional_auto.py),
-# alongside the five plug-in cards. mc_parts carries (dev,val,x,y) and includes J1;
-# the renderer reads only dev/val and filters J1, so this format is compatible.
-CARDS["memory-card"]=("P8X MEMORY CARD REV C",mc_parts,mcn)
-mcb_parts={
- "J1":("DIN96C","FABC96R",147.32,88.90),
- "U1":("MEM28K8","28C256-15",17.78,83.82),"U2":("MEM28K8","62256-70",43.18,83.82),
- "U3":("74245","74HCT245",68.58,83.82),"U4":("7430","74HCT30",88.90,83.82),
- "U5":("74138","74HCT138-DOE",109.22,83.82),"U6":("74138","74HCT138-DLD",17.78,35.56),
- "U7":("GATES14","74HCT00",43.18,35.56),"U8":("GATES14","74HCT32",68.58,35.56),
- "U9":("GATES14","74HCT08",88.90,35.56),
- "RP1":("RES","1K",127.00,96.52),"LED3":("LED","PWR-GRN",142.24,96.52),
- "RS1":("RES","1K",127.00,91.44),"LED2":("LED","ROM-YEL",142.24,91.44),
- "RS2":("RES","1K",127.00,86.36),"LED4":("LED","RAM-YEL",142.24,86.36),
- "RS3":("RES","1K",127.00,81.28),"LED5":("LED","RD-GRN",142.24,81.28),
- "RS4":("RES","1K",127.00,76.20),"LED6":("LED","WR-RED",142.24,76.20),
- "JWP":("HDR3","ROM-WP",128.00,35.56)}   # rev C: ROM write-protect jumper
-# decoupling caps in a clear strip along the bottom edge (the ICs are tall
-# DIP-28W, so placing caps directly under them overlapped — see board PDF)
-for i,u in enumerate(MCIC):
-    mcb_parts["CD%d"%(i+1)]=("CAP","100N",17.78+8.0*i,7.0)
-if EMIT:
-    write_brd("memory-card/p8x-memory-card.brd","P8X MEMORY CARD REV C",mcb_parts,mcn,{},
-              {"GND":[(2,)],"VCC":[(15,)]},160,100)
-    validate("memory-card/p8x-memory-card.brd",mcb_parts,mcn)
+card("memory-card","P8X MEMORY CARD REV C",ic,sm,mcn,
+ {"D%d"%i for i in range(8)}|{"A%d"%i for i in range(16)}|
+ {"DOE%d"%i for i in range(4)}|{"DLD%d"%i for i in range(4)}|{"CLK"})
 
 # ===================== BACKPLANE rev C ========================================
 bps={}

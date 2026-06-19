@@ -237,7 +237,8 @@ Trace a generic instruction at full speed:
 - **IC power pins:** *fixed* — the `card()` helper now connects every IC's
   dedicated VCC/GND supply pin to the power pours (the review found it previously
   wired only functional pins and the decoupling caps). Verified: every IC on this
-  card has both rails. (The hand-built memory card was the reference model.)
+  card has both rails. (The memory card's original hand-wired power pins were the
+  reference for the fix; it is now `card()`-built too.)
 - **Single-step one-pulse:** bench-verify one edge per press (§4.3).
 - **Pipeline timing:** confirm the microcode EPROM access time fits inside the
   `CLK`→`CLKB` half-cycle at the intended clock rate; if not, slow the clock with
