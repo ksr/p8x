@@ -46,6 +46,12 @@ def busnet(pin):
 
 ALLPINS=["%s%d"%(r,n) for r in "ABC" for n in range(1,33)]
 
+# Only write/validate the .sch/.brd files when this module is RUN directly.
+# Importing it (renderers use busnet/DEV/CARDS) must have NO filesystem side
+# effects — otherwise an `import gen_eagle` from any CWD scatters board files.
+# The net/CARDS data is still built on import; only the file emission is gated.
+EMIT = (__name__ == "__main__")
+
 # ===================== PACKAGES ================================================
 def dip_pads(n,rowsep):
     half=n//2; p=[]
@@ -465,10 +471,11 @@ def card(name,title,parts_ic,parts_small,nets,used_bus):
     allp={"J1":parts["J1"]}; allp.update(parts_ic); allp.update(parts_small); allp.update(decap)
     CARDS[name]=(title,allp,nets)
     base="%s/p8x-%s"%(name,name)   # each board in its own subdirectory
-    write_sch(base+".sch",title,sch,nets)
-    validate(base+".sch",sch,nets)
-    write_brd(base+".brd",title,brd,nets,{},{"GND":[(2,)],"VCC":[(15,)]},160,100)
-    validate(base+".brd",brd,nets)
+    if EMIT:
+        write_sch(base+".sch",title,sch,nets)
+        validate(base+".sch",sch,nets)
+        write_brd(base+".brd",title,brd,nets,{},{"GND":[(2,)],"VCC":[(15,)]},160,100)
+        validate(base+".brd",brd,nets)
 
 def N(nets,n,*p): nets.setdefault(n,[]).extend(p)
 
@@ -1063,8 +1070,9 @@ for i,u in enumerate(MCIC):
     c="CD%d"%(i+1)
     mc_parts[c]=("CAP","100N",132.08+88.9*(i%5),-160.02-38.10*(i//5))
     mnet("VCC",(c,"1")); mnet("GND",(c,"2"))
-write_sch("memory-card/p8x-memory-card.sch","P8X MEMORY CARD REV C",mc_parts,mcn)
-validate("memory-card/p8x-memory-card.sch",mc_parts,mcn)
+if EMIT:
+    write_sch("memory-card/p8x-memory-card.sch","P8X MEMORY CARD REV C",mc_parts,mcn)
+    validate("memory-card/p8x-memory-card.sch",mc_parts,mcn)
 # Register the memory card for the schematic renderer (render_traditional_auto.py),
 # alongside the five plug-in cards. mc_parts carries (dev,val,x,y) and includes J1;
 # the renderer reads only dev/val and filters J1, so this format is compatible.
@@ -1086,9 +1094,10 @@ mcb_parts={
 # DIP-28W, so placing caps directly under them overlapped — see board PDF)
 for i,u in enumerate(MCIC):
     mcb_parts["CD%d"%(i+1)]=("CAP","100N",17.78+8.0*i,7.0)
-write_brd("memory-card/p8x-memory-card.brd","P8X MEMORY CARD REV C",mcb_parts,mcn,{},
-          {"GND":[(2,)],"VCC":[(15,)]},160,100)
-validate("memory-card/p8x-memory-card.brd",mcb_parts,mcn)
+if EMIT:
+    write_brd("memory-card/p8x-memory-card.brd","P8X MEMORY CARD REV C",mcb_parts,mcn,{},
+              {"GND":[(2,)],"VCC":[(15,)]},160,100)
+    validate("memory-card/p8x-memory-card.brd",mcb_parts,mcn)
 
 # ===================== BACKPLANE rev C ========================================
 bps={}
@@ -1111,8 +1120,9 @@ for b in range(8): bnet("D%d"%b,("RN1","R%d"%(b+1)))
 bnet("CLK",("RT1","1")); bnet("CLK_T",("RT1","2"),("CT1","1"))
 bnet("CLKB",("RT2","1")); bnet("CLKB_T",("RT2","2"),("CT2","1"))
 bnet("LED_A",("RL1","2"),("LED1","A"))
-write_sch("backplane/p8x-backplane.sch","P8X 10-SLOT BACKPLANE REV C",bps,bpn)
-validate("backplane/p8x-backplane.sch",bps,bpn)
+if EMIT:
+    write_sch("backplane/p8x-backplane.sch","P8X 10-SLOT BACKPLANE REV C",bps,bpn)
+    validate("backplane/p8x-backplane.sch",bps,bpn)
 X0=15.24; P=25.4
 def sx(i): return X0+P*i
 def py(n): return G*(38-n)
@@ -1157,9 +1167,10 @@ for nn in range(3,31):
     wadd(net,(sx(0)-2.54,y-1.27,sx(9)-2.54,y-1.27,1,0.4))
     for i in range(10):
         wadd(net,(sx(i)-2.54,y,sx(i)-2.54,y-1.27,1,0.4))
-write_brd("backplane/p8x-backplane.brd","P8X 10-SLOT BACKPLANE REV C COMPACT",bpb,bpn,wires,
-          {"GND":[(2,)],"VCC":[(15,)]},248.92,109.22,viad)
-validate("backplane/p8x-backplane.brd",bpb,bpn)
+if EMIT:
+    write_brd("backplane/p8x-backplane.brd","P8X 10-SLOT BACKPLANE REV C COMPACT",bpb,bpn,wires,
+              {"GND":[(2,)],"VCC":[(15,)]},248.92,109.22,viad)
+    validate("backplane/p8x-backplane.brd",bpb,bpn)
 
 # ===================== LED OUTPUT CARD (test / CAD-workflow trial) ============
 # A minimal memory-mapped output card: write a byte to $FF0C and its 8 bits
@@ -1205,4 +1216,4 @@ card("led-card","P8X LED OUTPUT CARD (test - write-only 8 LEDs at $FF0C)",ic,sm,
  {"D%d"%i for i in range(8)}|{"A1","A2","A3","A4"}|{"A%d"%i for i in range(8,16)}|
  {"DLD%d"%i for i in range(4)}|{"CLKB"})
 
-print("ALL 8 BOARDS GENERATED")
+if EMIT: print("ALL 8 BOARDS GENERATED")

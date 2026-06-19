@@ -85,11 +85,12 @@ Last updated: 2026-06-19
       is RESOLVED: the burnable Intel HEX now lives only in `rom/` (see DONE),
       and `microcode/u?.hex` were untracked + gitignored — `microcode/` holds
       just the `.bin` the emulator/tests load.
-    - `busnet()` is duplicated in gen_eagle.py and gen_bus_pdf.py (kept in sync
-      by hand; drift risk). De-dup is awkward because gen_bus_pdf is meant to be
-      standalone — importing gen_eagle regenerates all boards as a side effect.
-      A clean fix would guard gen_eagle's board-writing under `if __name__ ==
-      "__main__"` so it's importable without side effects.
+    - `busnet()` is duplicated in gen_eagle.py, gen_bus_pdf.py, and gen_bus_card.py
+      (kept in sync by hand; drift risk). De-dup is now feasible: gen_eagle's
+      file-writing is gated behind `EMIT = (__name__ == "__main__")` (DONE), so it
+      is importable WITHOUT side effects — the other scripts could import its
+      busnet instead of keeping their own copies. (The import-scatters-board-files
+      footgun itself is fixed.)
     - Smoke tests test1-3.asm overlap test_isa.asm (per-opcode). They give
       higher-level scenario coverage (banner, JSR/RTS, countdown); keep as
       complementary unless trimming.
