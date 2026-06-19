@@ -59,6 +59,14 @@ Last updated: 2026-06-19
       INCH the consumer reads) and, to be useful, filter commands that actually
       read a stream (MORE/WC/GREP-style) — none exist yet. RBUF is RAM-bound
       (~the TPA, $B000..). Scope: add INCH + one filter (e.g. MORE) -> `|`.
+- [ ] **Man-page-style OS command reference in os/README.md.** The OS README
+      currently has a one-line-per-command table. Expand it into per-command
+      "man" entries — NAME / SYNOPSIS / DESCRIPTION / EXAMPLES, plus notes on
+      paths, hex args, redirection, and error messages (`?EXISTS`, `?NO FILE`,
+      `?NO DIR`, `FSCK: PROBLEMS=n`, etc.). Keep the quick table at the top as a
+      summary and put the detailed entries below. Source of truth stays the
+      on-target `HELP` text + the assembly; the README is the long-form companion.
+      (Doc-only — no code change.)
 - [ ] **Housekeeping (from 2026-06 consistency audit; not yet decided):**
     - Tracked generated binaries: `microcode/u0-u3.bin` are committed but
       regenerate byte-identically from genucode.py. Consider gitignoring them
