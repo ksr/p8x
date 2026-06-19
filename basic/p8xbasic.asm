@@ -156,11 +156,13 @@ STMTLINE: JSR STMT
         JNZ  sl_d
         JSR  SKIPSP
         LDA  (P2)
+        JZ   sl_d                   ; end of line -> done
         LDB  #':'
         CMP
-        JNZ  sl_d
+        JNZ  sl_err                 ; not ':' and not EOL -> leftover garbage
         INP2
         JMP  STMTLINE
+sl_err: JMP  SYNERR                 ; e.g. an unsupported operator like '^'
 sl_d:   RTS
 
 ; STMT — execute the statement at (P2).  RTS when done.
