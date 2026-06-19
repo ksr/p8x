@@ -101,7 +101,8 @@ The word burned to the 4× 28C64 EPROMs and interpreted by the emulator. Bit map
 | **CLK, CLKB** | System clock and its complement (CLKB = "CLK-bar"; write strobes gate on it). |
 | **-RES / RES̄** | System reset, active low. |
 | **IRQ** | Maskable interrupt request (rev C, B29; controller is DNP). |
-| **SPARE11** | Last uncommitted bus line (B30). |
+| **SPARE11** | Uncommitted bus line on B30. |
+| **SPARE12–SPARE23** | 12 uncommitted bus lines on the even row-B pins B4,B6,…,B26 (rev D; the odd B pins stay GND guards). |
 
 > Naming: a leading `-` (or overbar) means active-low (e.g. `-RES`, `-RD`, `!OE`).
 

@@ -43,7 +43,7 @@ Reset forces P0 to $0000 (pointer clear via 74169 synchronous load of zeros — 
 
 ## 2. Backplane
 
-Passive backplane, **DIN 41612 96-pin (rows A/B/C)** connectors on 100×160 mm Eurocards. Row B is a solid ground guard between the signal rows (B3–B26 = GND); B27 = CLRC, B28 = BSEL, B29 = IRQ (rev C), B30 = SPARE11. See [p8x-bus-definition.md](../hardware/backplane/p8x-bus-definition.md) for the full pin map.
+Passive backplane, **DIN 41612 96-pin (rows A/B/C)** connectors on 100×160 mm Eurocards. Row B is mostly ground guard between the signal rows, but B3–B26 alternate: odd pins are GND, even pins are spare bus lines SPARE12–SPARE23 (rev D); B27 = CLRC, B28 = BSEL, B29 = IRQ (rev C), B30 = SPARE11. See [p8x-bus-definition.md](../hardware/backplane/p8x-bus-definition.md) for the full pin map.
 
 ### 2.1 Bus signals
 
@@ -62,7 +62,7 @@ Passive backplane, **DIN 41612 96-pin (rows A/B/C)** connectors on 100×160 mm E
 | Reset | RES̄ | 1 | Control card |
 | Power | +5 V, GND | rest | PSU |
 
-≈ 48 signals + power/ground, plus FC/FZ/FN/FV flag lines and 8 spares — fits the 96-pin connector with room to spare.
+≈ 48 signals + power/ground, plus FC/FZ/FN/FV flag lines and 20 spares (SPARE4–11 plus the rev-D row-B SPARE12–23) — fits the 96-pin connector with room to spare.
 
 ### 2.2 Distributed field decoding
 

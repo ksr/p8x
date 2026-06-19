@@ -35,7 +35,7 @@ Memory card rev C is the reference implementation of these standards.
 
 - 100 nF ceramic per IC, placed within 5 mm of its VCC pin, via straight to both planes
 - One 10 µF bulk per card near the connector power pins
-- Power pins per rev C bus: +5V = A1, B1, C1, A2, B2, C2; GND = A31, B31, C31, A32, B32, C32; row B3–B30 = GND (stitch every row-B pin straight into the GND plane — free stitching grid)
+- Power pins per rev C/D bus: +5V = A1, B1, C1, A2, B2, C2; GND = A31, B31, C31, A32, B32, C32, plus the **odd** row-B guard pins B3, B5, …, B25 (stitch these straight into the GND plane). **Do NOT stitch B4, B6, …, B26 — those are spare bus lines SPARE12–SPARE23 — nor B27–B30 (CLRC/BSEL/IRQ/SPARE11), which are signals.**
 - Budget: declare expected current draw on the schematic title block (rule of thumb ~20 mA per HCT IC average, more for LS or anything driving LEDs)
 
 ## 4. Logic Family & Unused Pins
@@ -76,7 +76,7 @@ Memory card rev C is the reference implementation of these standards.
 
 - Net names match the bus pinout document exactly (D0–D7, A0–A15, DOE0–3,
   DLD0–3, PSEL0–1, PINC, PDEC, CLK, CLKB, -RES, LDF, ALUS0–3, ALUM, CIN,
-  SH0–1, SPARE0–7). Active-low signals are prefixed with a dash
+  SH0–1, SPARE4–23). Active-low signals are prefixed with a dash
   (e.g. -RES, -RD, -MEMW)
 - Reference designators: U = ICs, J = connectors, C = caps, R/RN = resistors/
   networks, D/LED as usual. J1 is always the bus connector
