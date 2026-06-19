@@ -11,6 +11,8 @@ Reorganized around a passive backplane with six plug-in cards and the 4×16-bit 
 6. CF-IDE card (CompactFlash in 8-bit True IDE mode, memory-mapped at $FF10–$FF17)
 
 Total: ~130 logic ICs across the cards. Each card is independently testable on the backplane.
+(The per-card "≈ N chips" notes below are original design estimates; the
+authoritative live count is `generators/gen_bom.py` → `hardware/p8x-bom.csv`.)
 
 ---
 
@@ -112,21 +114,30 @@ Note `MEMW` is just another destination: the Memory and I/O cards decode DLD=7 a
 
 ### 3.2 Control word (32 bits, 4× 28C64 EPROM)
 
+As implemented (rev C). The authoritative bit map is the `w()` encoder + header
+comment in `microcode/genucode.py`; this table mirrors it.
+
 | Bits | Field |
 |---|---|
 | 0–3 | DOE |
 | 4–7 | DLD |
-| 8–9 | PSEL |
-| 10 | PINC |
-| 11 | PDEC |
-| 12–16 | ALU S0–S3, M |
-| 17 | CIN |
-| 18–19 | SH (pass / left / right / rotate) |
-| 20 | LDF |
-| 21–23 | FCOND (condition mux select) |
-| 24 | µRESET (step counter → 0, ends instruction) |
-| 25 | HALT (gates clock off; resume via front panel) |
-| 26–31 | spare |
+| 8–10 | PSEL (P0–P3 + PT hidden scratch = 4; 3-bit since rev B) |
+| 11 | PINC |
+| 12 | PDEC |
+| 13–16 | ALU S0–S3 |
+| 17 | ALU M |
+| 18 | CIN (pin, active-low carry) |
+| 19 | SH0 (shift left) |
+| 20 | SH1 (shift right) |
+| 21 | LDF (latch all four flags) |
+| 22–24 | FCOND (condition mux: never/always/C/Z/N/V/LT=N^V/LE=(N^V)\|Z) |
+| 25 | µRESET (step counter → 0, ends instruction) |
+| 26 | HALT (gates clock off; resume via front panel) |
+| 27 | LDZN (latch Z,N from the bus on loads) |
+| 28 | SHCIN (shifter shift-in = C, for rotates) |
+| 29 | SETC (force C=1) |
+| 30 | CLRC (force C=0) |
+| 31 | BSEL (ALU B-input mux: 0=B register, 1=T register) |
 
 **Pipeline latch:** the 32 EPROM outputs are registered in 4× **74374** clocked on the opposite edge (CLK̄), so glitching ROM outputs never reach the backplane. Non-negotiable for reliability.
 
