@@ -42,4 +42,4 @@ fi
 
 echo "--- starting emulator: you are in the MONITOR (* prompt). Type B to boot P8X/OS. ---"
 cd "$build"
-exec ./p8xemu -c "$disk" eeprom.bin   # writes persist to the disk image
+exec ./p8xemu -L -c "$disk" eeprom.bin   # writes persist to the disk image
