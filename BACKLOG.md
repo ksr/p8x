@@ -1,7 +1,7 @@
 # P8X Project Backlog
 
 Add ideas as they come; move items between sections as they progress.
-Last updated: 2026-06-11
+Last updated: 2026-06-19
 
 ## How to use
 - **NEXT** — committed, in rough priority order
@@ -63,7 +63,10 @@ Last updated: 2026-06-11
     - Tracked generated binaries: `microcode/u0-u3.bin` are committed but
       regenerate byte-identically from genucode.py. Consider gitignoring them
       and letting `make` build them. (Lean keep — project frames them as the
-      canonical EPROM images, burned *and* interpreted.)
+      canonical EPROM images, burned *and* interpreted.) NB the `.hex` question
+      is RESOLVED: the burnable Intel HEX now lives only in `rom/` (see DONE),
+      and `microcode/u?.hex` were untracked + gitignored — `microcode/` holds
+      just the `.bin` the emulator/tests load.
     - `busnet()` is duplicated in gen_eagle.py and gen_bus_pdf.py (kept in sync
       by hand; drift risk). De-dup is awkward because gen_bus_pdf is meant to be
       standalone — importing gen_eagle regenerates all boards as a side effect.
@@ -158,13 +161,6 @@ Last updated: 2026-06-11
       it deliberately (breadboard/DRC, or a small daughtercard). Monitor needs an
       ORG $0808 stub (JMP to a handler / RAM trampoline) once the hardware exists.
 - [ ] p8x.pretty KiCad footprint lib if ever returning to KiCad round-trip
-- [ ] **I/O card in the emulator** — make the switches/LEDs interactive. The
-      emulator stubs them: $FF00 (switches) always reads 0 and $FF02 (LEDs) is
-      written to a `leds` var that's never shown. So BASIC `PEEK(65280)` /
-      `POKE 65282,n` and the monitor/OS have nothing to observe. Add a way to
-      set the switch byte (CLI flag and/or a hotkey) and to surface LED writes
-      (print on change, or a small status line), so the I/O card is exercisable
-      end to end. Pairs with the front-panel idea below.
 - [ ] Front-panel bus-monitor LED card (passive, address + data, great demo)
 - [ ] Faster clock experiments once stable: 74F/74AHCT in critical paths,
       measure where it breaks
@@ -233,6 +229,24 @@ Last updated: 2026-06-11
   (U27); carry-coupled shifter (U28/U29/U30); U31 gates the C and Z/N/V clocks.
   NB: pin/pad-validated only, not DRC'd; the rev-B *behaviour* is proven in the
   emulator (make test-isa). A full Eagle DRC + airwire check stays on VERIFY.
+
+- **I/O card in the emulator — switches + LEDs.** The emulator used to stub the
+  I/O card ($FF00 always read 0; $FF02 writes went to an unseen var), so the
+  switches/LEDs couldn't be exercised. Now `-s NN` sets the byte the switches
+  present at $FF00 (so BASIC `PEEK(65280)` and monitor/OS reads see it), and
+  `-L` traces every $FF02 LED write to stderr as it changes (`$NN  *.*..*.*`,
+  `*` = lit); the final LED byte is also in the halt status line. New regression
+  `make test-io` copies switches->LEDs and asserts both the value path and the
+  trace. A runtime switch hotkey is still possible later (raw-mode stdin already
+  feeds the ACIA, so it needs care) — the CLI flag covers the need for now.
+
+- **Burnable images persist in rom/ + Intel HEX (build).** `genucode.py` and
+  `tools/build_basic_rom.py` emit Intel HEX for an EEPROM programmer, and
+  `tools/build_rom.sh` (`make rom`) builds the whole burn set into `rom/`:
+  `p8x-ucode0..3.{bin,hex}` (the four 28C64 control-store EPROMs) and
+  `p8x-prog-rom.{bin,hex}` (the 28C256 monitor + ROM BASIC). `rom/` is the single
+  grab-and-burn folder and the sole home for the `.hex`; `microcode/` keeps the
+  `u?.bin` the emulator/tests load. Round-trip verified for every image.
 
 - **Reject duplicate names + errors bypass redirection (OS).** Two filesystem
   polish fixes: (1) **no duplicate names** — SAVE and `>FILE` redirection now
