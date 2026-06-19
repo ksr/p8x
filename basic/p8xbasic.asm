@@ -245,15 +245,18 @@ STMT:   JSR  SKIPSP
         CMP
         JC   st_err
         JMP  DOLET
-st_list: JSR LIST
+st_list: INP2               ; consume the LIST token (so STMTLINE sees end-of-line)
+        JSR  LIST
         LDP1 #MOK
         JSR  PUTS
         RTS
-st_new: JSR  NEWPROG
+st_new: INP2                ; consume the NEW token
+        JSR  NEWPROG
         LDP1 #MOK
         JSR  PUTS
         RTS
-st_help: LDP1 #MHELP
+st_help: INP2               ; consume the HELP token
+        LDP1 #MHELP
         JSR  PUTS
         RTS
 ; BYE — leave BASIC by jumping to the reset vector ($0000). In the ROM and

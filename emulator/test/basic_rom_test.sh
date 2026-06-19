@@ -13,7 +13,7 @@ python3 $ROOT/tools/build_basic_rom.py eeprom.bin >/dev/null
 # monitor command (?) works again.
 # Lead with a monitor D (dump) paging exercise: dump $0000, CR pages to the next
 # block ($0100), '.' exits — then the BASIC sequence as before.
-out=$(printf 'D 0000\r\r.X\r10 PRINT "ROM BASIC OK"\r20 PRINT 6*7\rRUN\rPRINT 17%%5\rPRINT 0xFF\rLET COUNT=100\rPRINT COUNT+TOTAL+11\rPRINT 2^3\rPRINT 5*9\rHELP\rBYE\r?\r' | \
+out=$(printf 'D 0000\r\r.X\r10 PRINT "ROM BASIC OK"\r20 PRINT 6*7\rRUN\rPRINT 17%%5\rPRINT 0xFF\rLET COUNT=100\rPRINT COUNT+TOTAL+11\rPRINT 2^3\rPRINT 5*9\rLIST\rHELP\rBYE\r?\r' | \
       ../p8xemu -l 90000000 eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0')
 fail() { echo "BASIC-ROM TEST: FAIL — $1"; echo "$out"; exit 1; }
 # D paging: first block ends at row 00F0, then CR paged into the next block
@@ -31,6 +31,9 @@ echo "$out" | grep -q '^111'         || fail "multi-char variable name failed"
 # off the end of the line — and the interpreter must recover (5*9 = 45 after).
 echo "$out" | grep -q '?SYNTAX ERROR' || fail "2^3 did not report ?SYNTAX ERROR"
 echo "$out" | grep -q '^45'           || fail "interpreter did not recover after syntax error"
+# exactly ONE syntax error: LIST/HELP must NOT spuriously trip the stricter
+# end-of-statement check (they don't consume their token via an expression).
+[ "$(echo "$out" | grep -c '?SYNTAX ERROR')" -eq 1 ] || fail "LIST/HELP spuriously reported ?SYNTAX ERROR"
 echo "$out" | grep -q 'STATEMENTS:'  || fail "HELP did not print"
 # BYE should re-enter the monitor: its banner appears a second time, and the
 # help text (only the monitor prints it) shows up after BYE.
