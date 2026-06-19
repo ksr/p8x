@@ -25,7 +25,10 @@ def busnet(pin):
     r, n = pin[0], int(pin[1:])
     if n in (1, 2): return "+5V"
     if n in (31, 32): return "GND"
-    if r == "B": return {27: "CLRC", 28: "BSEL", 29: "IRQ", 30: "SPARE11"}.get(n, "GND")
+    if r == "B":
+        if n in (27, 28, 29, 30): return {27: "CLRC", 28: "BSEL", 29: "IRQ", 30: "SPARE11"}[n]
+        if 3 <= n <= 26 and n % 2 == 0: return "SPARE%d" % (12 + (n - 4) // 2)  # even -> SPARE12..23
+        return "GND"   # odd pins stay ground guards
     if r == "A":
         if 3 <= n <= 10: return "D%d" % (n - 3)
         if n == 11: return "-RES"

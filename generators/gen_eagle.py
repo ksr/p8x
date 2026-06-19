@@ -21,7 +21,14 @@ def busnet(pin):
     r,n=pin[0],int(pin[1:])
     if n in (1,2): return "VCC"
     if n in (31,32): return "GND"
-    if r=="B": return {27:"CLRC",28:"BSEL",29:"IRQ",30:"SPARE11"}.get(n,"GND")
+    if r=="B":
+        if n in (27,28,29,30): return {27:"CLRC",28:"BSEL",29:"IRQ",30:"SPARE11"}[n]
+        # B3-26: alternate ground guard (odd pins) / spare line (even pins). The
+        # odd-pin grounds still shield between the data bus (row A) and address
+        # bus (row C); the 12 even pins are SPARE12..23 — usable later with no
+        # backplane respin.
+        if 3<=n<=26 and n%2==0: return "SPARE%d"%(12+(n-4)//2)
+        return "GND"
     if r=="A":
         if 3<=n<=10: return "D%d"%(n-3)
         if n==11: return "-RES"
@@ -1140,8 +1147,13 @@ wadd("CLKB",(sx(9),py(25),240.50,py(25),16,0.4),
 vadd("CLKB",(240.50,106.68))
 wadd("CLKB_T",(228.60,106.68,213.36,106.68,1,0.4))
 wadd("LED_A",(25.40,7.62,30.48,7.62,1,0.4))
-for nn in range(27,31):
-    y=py(nn); net=busnet("B%d"%nn)   # B27=CLRC, B28=BSEL, B29=IRQ (rev C), B30=SPARE11
+# Route the non-ground B-row signals slot-to-slot: B27=CLRC, B28=BSEL, B29=IRQ,
+# B30=SPARE11, plus the rev-D even-pin spares B4..B26 (SPARE12..23). Odd B pins
+# stay ground guards (handled by the GND pour).
+for nn in range(3,31):
+    net=busnet("B%d"%nn)
+    if net in ("GND","VCC"): continue
+    y=py(nn)
     wadd(net,(sx(0)-2.54,y-1.27,sx(9)-2.54,y-1.27,1,0.4))
     for i in range(10):
         wadd(net,(sx(i)-2.54,y,sx(i)-2.54,y-1.27,1,0.4))

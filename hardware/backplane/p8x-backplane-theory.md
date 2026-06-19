@@ -40,17 +40,20 @@ A DIN 41612 connector has three rows (A, B, C) × 32 pins. The mapping:
   A16..19  = DLD0..3        C24     = CIN             B28   = BSEL  (rev C)
   A20,21   = PSEL0,1        C25,26  = SH0,SH1         B29   = IRQ   (rev C)
   A22      = PINC           C27     = PSEL2           B30   = SPARE11
-  A23      = PDEC           C28     = LDZN            (all other B = GND guard)
-  A24      = CLK            C29     = SHCIN
-  A25      = CLKB           C30     = SETC
-  A26      = LDF            (spares: SPARE4..)
+  A23      = PDEC           C28     = LDZN            B4,6,..26 = SPARE12..23
+  A24      = CLK            C29     = SHCIN                       (even pins)
+  A25      = CLKB           C30     = SETC            B3,5,..25 = GND guard
+  A26      = LDF            (spares: SPARE4..)                    (odd pins)
   A27..30  = FC,FZ,FN,FV
 ```
 
 Three observations explain the layout:
-- **Row B is mostly ground.** Apart from four control lines (B27–B30), every B pin
-  is GND. Interleaving a ground plane of pins between the active A/C signal rows
-  reduces crosstalk on a backplane that carries fast edges over 10 slots.
+- **Row B alternates ground guard and spare.** Apart from the control lines
+  (B27–B30), B3–B26 alternate: odd pins are GND, even pins are spare bus lines
+  (SPARE12–23). The interleaved ground pins still sit between most A/C signal
+  pairs to limit crosstalk, while the 12 spares give room to add signals later
+  without re-spinning the backplane. (A solid ground guard on all of B3–B26 would
+  shield slightly better — the trade was made deliberately for expansion room.)
 - **The data bus (A3–A10) and address bus (C3–C18) are on opposite rows**, again
   to keep the two busiest buses apart.
 - **The flags (FC/FZ/FN/FV on A27–30)** travel from the ALU card to the control

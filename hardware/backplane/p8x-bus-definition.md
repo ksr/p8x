@@ -16,8 +16,11 @@ by `generators/gen_bus_pdf.py`. When any conflict exists, trust the generator co
 | Card edge | Male right-angle DIN 41612; row A nearest board surface |
 | Mating orientation | VERIFY against physical connectors before first fab |
 
-Rows A and C carry signals. Row B is a **solid ground guard** between them
-(B3–B26 = GND), with the exception of B27 (CLRC), B28 (BSEL), B29 (IRQ) and B30 (SPARE11).
+Rows A and C carry signals. Row B is mostly ground guard between them, but B3–B26
+now **alternate**: the odd pins (B3,B5,…,B25) stay GND (a guard between each
+signal pair), and the even pins (B4,B6,…,B26) are **spare bus lines SPARE12–SPARE23**
+— routed slot-to-slot so they can be used later without re-spinning the backplane.
+B27 (CLRC), B28 (BSEL), B29 (IRQ) and B30 (SPARE11) are unchanged.
 
 ---
 
@@ -30,29 +33,29 @@ Pins 1–2 are power; pins 31–32 are ground. Signals occupy pins 3–30.
 | 1 | +5V | +5V | +5V |
 | 2 | +5V | +5V | +5V |
 | 3 | D0 | GND | A0 |
-| 4 | D1 | GND | A1 |
+| 4 | D1 | SPARE12 | A1 |
 | 5 | D2 | GND | A2 |
-| 6 | D3 | GND | A3 |
+| 6 | D3 | SPARE13 | A3 |
 | 7 | D4 | GND | A4 |
-| 8 | D5 | GND | A5 |
+| 8 | D5 | SPARE14 | A5 |
 | 9 | D6 | GND | A6 |
-| 10 | D7 | GND | A7 |
+| 10 | D7 | SPARE15 | A7 |
 | 11 | -RES | GND | A8 |
-| 12 | DOE0 | GND | A9 |
+| 12 | DOE0 | SPARE16 | A9 |
 | 13 | DOE1 | GND | A10 |
-| 14 | DOE2 | GND | A11 |
+| 14 | DOE2 | SPARE17 | A11 |
 | 15 | DOE3 | GND | A12 |
-| 16 | DLD0 | GND | A13 |
+| 16 | DLD0 | SPARE18 | A13 |
 | 17 | DLD1 | GND | A14 |
-| 18 | DLD2 | GND | A15 |
+| 18 | DLD2 | SPARE19 | A15 |
 | 19 | DLD3 | GND | ALUS0 |
-| 20 | PSEL0 | GND | ALUS1 |
+| 20 | PSEL0 | SPARE20 | ALUS1 |
 | 21 | PSEL1 | GND | ALUS2 |
-| 22 | PINC | GND | ALUS3 |
+| 22 | PINC | SPARE21 | ALUS3 |
 | 23 | PDEC | GND | ALUM |
-| 24 | CLK | GND | CIN |
+| 24 | CLK | SPARE22 | CIN |
 | 25 | CLKB | GND | SH0 |
-| 26 | LDF | GND | SH1 |
+| 26 | LDF | SPARE23 | SH1 |
 | 27 | FC | CLRC | PSEL2 |
 | 28 | FZ | BSEL | LDZN |
 | 29 | FN | IRQ | SHCIN |
@@ -63,7 +66,9 @@ Pins 1–2 are power; pins 31–32 are ground. Signals occupy pins 3–30.
 **Notes:**
 - A27–A30 were reallocated from SPARE0–3 to flag lines FC/FZ/FN/FV (rev C2).
   SPARE numbering therefore starts at 4. There are no SPARE0–3.
-- B3–B26 = GND (ground guard).
+- B3–B26 alternate: odd pins = GND (ground guard between signal pairs), even
+  pins = SPARE12–SPARE23 (12 spare bus lines, routed slot-to-slot for future use
+  without a backplane re-spin).
 - rev C3 allocated the rev-B control signals: C27–C30 = PSEL2/LDZN/SHCIN/SETC
   (were SPARE4–7) and B27 = CLRC (was SPARE8). rev C added B28 = BSEL (ALU
   B-input mux select, was SPARE9). rev C also took B29 = IRQ (interrupt request,

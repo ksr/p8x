@@ -13,29 +13,34 @@ Summary for quick reference (rev C2):
 | Pin | Row A | Row B | Row C |
 |-----|-------|-------|-------|
 | 1–2 | +5V | +5V | +5V |
-| 3–10 | D0–D7 | GND | A0–A7 |
-| 11 | -RES | GND | A8 |
-| 12–15 | DOE0–3 | GND | A9–A12 |
-| 16–19 | DLD0–3 | GND | A13–A15, ALUS0 |
-| 20–21 | PSEL0–1 | GND | ALUS1–2 |
-| 22–23 | PINC, PDEC | GND | ALUS3, ALUM |
-| 24–25 | CLK, CLKB | GND | CIN, SH0 |
-| 26–27 | LDF, FC | GND, CLRC | SH1, PSEL2 |
+| 3–10 | D0–D7 | GND/SPARE (alt) | A0–A7 |
+| 11 | -RES | GND/SPARE (alt) | A8 |
+| 12–15 | DOE0–3 | GND/SPARE (alt) | A9–A12 |
+| 16–19 | DLD0–3 | GND/SPARE (alt) | A13–A15, ALUS0 |
+| 20–21 | PSEL0–1 | GND/SPARE (alt) | ALUS1–2 |
+| 22–23 | PINC, PDEC | GND/SPARE (alt) | ALUS3, ALUM |
+| 24–25 | CLK, CLKB | GND/SPARE (alt) | CIN, SH0 |
+| 26–27 | LDF, FC | GND/SPARE, CLRC | SH1, PSEL2 |
 | 28–30 | FZ, FN, FV | BSEL, IRQ, SPARE11 | LDZN, SHCIN, SETC |
 | 31–32 | GND | GND | GND |
 
 A27–A30 = FC/FZ/FN/FV (flag lines; were SPARE0–3 in rev C1).
 rev C3: C27–C30 = PSEL2/LDZN/SHCIN/SETC and B27 = CLRC (were SPARE4–8).
 rev C: B28 = BSEL (ALU B-input mux select, was SPARE9), B29 = IRQ (interrupt
-request, was SPARE10); SPARE11 remains on B30. See p8x-bus-definition.md for the
-authoritative map.
+request, was SPARE10); SPARE11 remains on B30.
+**rev D: B3–B26 alternate** — odd pins stay GND (guard between signal pairs),
+even pins (B4,B6,…,B26) are spare bus lines SPARE12–SPARE23, routed slot-to-slot
+for future expansion without a backplane re-spin. See p8x-bus-definition.md for
+the authoritative per-pin map.
 
 Signal positions are unchanged from rev B wherever they existed, so only the
 power pins moved. **Rev B cards are incompatible** (rev B grounded B2; rev C
 puts +5V there). The memory card schematic has been regenerated as rev C.
 
 Current budget: DIN 41612 pins are rated ~2 A each → 6 parallel +5V pins and
-6+28 ground pins carry a 3–4 A system with large margin and low connector drop.
+~18 ground pins (the 6 pins on rows 31–32 plus the 12 odd-pin B-row guards; rev D
+reassigned the 12 even B-row pins from GND to spare lines) carry a 3–4 A system
+with comfortable margin and low connector drop.
 
 ## 2. PCB Construction — this is where the crosstalk battle is won
 
