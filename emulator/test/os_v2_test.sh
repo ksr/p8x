@@ -12,7 +12,7 @@ cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o p8xos.bin --base 0x8000 >/dev/null
 
-# A position-independent program at $A000: print "V2" then RTS.
+# A position-independent program at $B000: print "V2" then RTS.
 cat > v2prog.asm <<'EOF'
         .org $B000
         LDA  #'V'
@@ -41,7 +41,7 @@ rm -f v2r.tmp v2prog.asm
 # into it, reject RMDIR on the non-empty dir, delete the file, and RMDIR it.
 # ...then PACK to reclaim the leaked TMP/T.BIN extents, and confirm the kept
 # tree still navigates (CD into BIN, RUN HELLO.BIN -> a 3rd "V2") after the move.
-out=$(printf 'B\rDIR\rTREE\rCAT /README\rCD BIN\rPWD\rRUN HELLO.BIN\rRUN /BIN/HELLO.BIN\rCD ..\rCD NOPE\rMKDIR /TMP\rCD TMP\rDEP A000 7A\rSAVE T.BIN A000 A010\rCD ..\rRMDIR TMP\rDEL /TMP/T.BIN\rRMDIR TMP\rPACK\rRUN /BIN/HELLO.BIN\rTREE\rDIR\r' | \
+out=$(printf 'B\rDIR\rTREE\rCAT /README\rCD BIN\rPWD\rRUN HELLO.BIN\rRUN /BIN/HELLO.BIN\rCD ..\rCD NOPE\rMKDIR /TMP\rCD TMP\rDEP B000 7A\rSAVE T.BIN B000 B010\rCD ..\rRMDIR TMP\rDEL /TMP/T.BIN\rRMDIR TMP\rPACK\rRUN /BIN/HELLO.BIN\rTREE\rDIR\r' | \
       ../p8xemu -l 400000000 -c v2.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r')
 fail() { echo "OS-V2 TEST: FAIL — $1"; echo "$out" | sed -n '/v1.0/,$p'; exit 1; }
 echo "$out" | grep -q 'P8X/OS v1.0'   || fail "OS did not boot"

@@ -2493,7 +2493,7 @@ RDS_CL: LDA  (P1)+
         JNZ  RDS_CL
         LDA  #1
         STA  REDIRF
-        LDA  #<RBUF            ; capture pointer = RBUF ($A000)
+        LDA  #<RBUF            ; capture pointer = RBUF ($B000)
         STA  RPTRL
         LDA  #>RBUF
         STA  RPTRH

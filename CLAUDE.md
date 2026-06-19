@@ -1,6 +1,6 @@
 # P8X — 8-bit TTL homebrew CPU
 
-Hand-built 8-bit CPU, ~75 chips of 74HCT logic, microcoded, on a 10-slot
+Hand-built 8-bit CPU, ~130 chips of 74HCT logic, microcoded, on a 10-slot
 DIN41612 backplane. Six cards: control/microcode, register bank, ALU,
 memory, I/O, CF-IDE.
 

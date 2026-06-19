@@ -10,7 +10,7 @@ Reorganized around a passive backplane with six plug-in cards and the 4×16-bit 
 5. I/O card (toggle-switch input port, LED output port, RS-232 via 6850 ACIA)
 6. CF-IDE card (CompactFlash in 8-bit True IDE mode, memory-mapped at $FF10–$FF17)
 
-Total: ~75 logic ICs across the cards. Each card is independently testable on the backplane.
+Total: ~130 logic ICs across the cards. Each card is independently testable on the backplane.
 
 ---
 
@@ -311,7 +311,7 @@ Opcode space is wide open (256 slots, ~50 used).
 7. **Monitor program** in ROM (`$0000`, serial console): examine/modify (`E`), dump (`D`), CF init/format/boot (`I`/`F`/`B`), go (`G`), run ROM BASIC (`X`), help (`?`/`H`), plus a BIOS jump table at `$0100` — from there everything else is software. See [p8x-monitor.md](p8x-monitor.md) for the full command reference.
 
 ## 11. Power & Practical Notes
-- ~75 LS-TTL chips ≈ 1.5–2 A at 5 V; size the PSU at 4–5 A with per-card 10 µF bulk + 0.1 µF per chip
+- ~130 LS-TTL chips ≈ 1.5–2 A at 5 V; size the PSU at 4–5 A with per-card 10 µF bulk + 0.1 µF per chip
 - Keep CLK/CLKB on adjacent backplane pins with guard traces; AC termination (100 Ω + 150 pF to GND) footprints are provided DNP at the far slot — populate only if scope shows ringing. Do not use Thevenin termination: it biases lines into the HCT threshold region and wastes 25 mA per line at idle (see p8x-backplane-design.md §3)
 - Wire-wrap or PCB both fine at ≤4 MHz; keep the 74181 carry chain and the 74169 RCO cascades short
 - 74169 vs 74193: 74169 is fully synchronous (single clock + direction pin), which is why it's specified here; 74193's dual-clock scheme is glitch-prone in this application

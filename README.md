@@ -1,6 +1,6 @@
 # P8X — Hand-Built 8-Bit TTL CPU
 
-A from-scratch 8-bit CPU built from ~75 74HCT logic chips on a 10-slot DIN41612 backplane. Fully microcoded; the microcode ROM images burned to the EPROMs are the same images the emulator interprets.
+A from-scratch 8-bit CPU built from ~130 74HCT logic chips on a 10-slot DIN41612 backplane. Fully microcoded; the microcode ROM images burned to the EPROMs are the same images the emulator interprets.
 
 ## Architecture
 

@@ -58,7 +58,7 @@ Last updated: 2026-06-11
       *input* sourced from that buffer. Needs a matching input indirection (an
       INCH the consumer reads) and, to be useful, filter commands that actually
       read a stream (MORE/WC/GREP-style) — none exist yet. RBUF is RAM-bound
-      (~the TPA, $A000..). Scope: add INCH + one filter (e.g. MORE) -> `|`.
+      (~the TPA, $B000..). Scope: add INCH + one filter (e.g. MORE) -> `|`.
 - [ ] **Housekeeping (from 2026-06 consistency audit; not yet decided):**
     - Tracked generated binaries: `microcode/u0-u3.bin` are committed but
       regenerate byte-identically from genucode.py. Consider gitignoring them
@@ -103,9 +103,9 @@ Last updated: 2026-06-11
         - **Built into the OS** as an EDIT command (preferred) — directly uses
           the resolved path + the existing LOAD/SAVE machinery and the OS's
           line buffer; no separate image to install. Watch the OS code size
-          (already ~5.3 KB, ~330 bytes under the $9600 var base — bump the var
-          base first, as planned for v2 PACK).
-        - Or a standalone P8X/OS program (TPA at $A000) launched by RUN, using
+          (OS ~6.4 KB; code can grow to ~$9D00 now that vars moved to $A000 — see
+          the OS-code-size note in NEXT).
+        - Or a standalone P8X/OS program (TPA at $B000) launched by RUN, using
           the BIOS vectors — keeps the kernel small but needs installing on
           each disk.
 - [ ] **BASIC variable limits are tunable** — names are significant to 6 chars
@@ -250,7 +250,7 @@ Last updated: 2026-06-11
   flows through an OS sink (`OUTCH`, plus `OPUTS`/`OPHEX8` replacing the BIOS
   `PUTS`/`PHEX8` that called ROM `CONOUT` directly — 46 call sites rerouted).
   The shell (`REDSCAN`) splits a trailing `>name` off the command line, arms
-  capture (`REDIRF`, buffer at the TPA `$A000`), runs the command with its
+  capture (`REDIRF`, buffer at the TPA `$B000`), runs the command with its
   output captured, then at the next prompt (`FLUSHRED`) writes the buffer to a
   new file via `SAVECORE`. So `DIR >L`, `CAT a >b`, `TREE >t`, etc. all work and
   the file has the exact captured length. Test: os_test does `DIR >DLIST` and

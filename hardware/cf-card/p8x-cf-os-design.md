@@ -59,11 +59,12 @@ A two-stage system: a permanent **BIOS in EEPROM**, and the **OS proper loaded f
 |---|---|
 | $0000–$1FFF | BIOS ROM: drivers, boot loader, syscall jump table |
 | $2000–$7FFF | ROM: monitor, native Forth/BASIC if desired |
-| $8000–$8FFF | OS RAM: P8X/OS kernel + shell (loaded from CF) |
-| $9000–$9DFF | OS buffers, directory cache, variables |
-| $9E00–$9EFF | Sector buffer (512 bytes spans $9E00–$9FFF) |
-| $A000–$FDFF | **TPA** — transient program area (~23.5 KB) |
-| $FE00–$FEFF | Stack page (P3) |
+| $8000–$9D46 | OS RAM: P8X/OS kernel + shell (loaded from CF), ~6.4 KB today |
+| $9D47 | CF LBA byte (fixed by the BIOS) |
+| $9E00–$9FFF | Sector buffer SBUF (512 bytes, fixed by the BIOS) |
+| $A000–$AFFF | OS variables (relocated above SBUF; ~3.5 KB) |
+| $B000–$FDFF | **TPA** — transient program area (~20 KB; RUN load addr + `>` capture) |
+| $FE00–$FEFF | Stack page (P3, grows down from $FEFF) |
 | $FF00–$FFFF | I/O |
 
 ### 2.2 Layer 1 — BIOS (in ROM, ~1.5 KB)
