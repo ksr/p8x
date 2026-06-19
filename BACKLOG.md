@@ -20,6 +20,14 @@ Last updated: 2026-06-11
     - **watch the OS code size**: the image is ~5.9 KB at $8000; OS variables
       live at $9A00 (RUN'd programs load at the $A000 TPA). ~680 bytes of code
       headroom — bump the var base again before a big addition like EDIT.
+- **Reject duplicate names within a directory**: SAVE, MKDIR, and `>FILE`
+  redirection all create a new directory entry without checking whether the
+  name already exists in the target directory — so you can end up with two
+  entries of the same name (the second shadows the first; PACK/DEL/RESOLVE get
+  confused). Add a name-exists check before allocating: scan the parent dir
+  (the FINDENT/RESOLVE machinery already walks entries) and fail with an error
+  (or, decide: overwrite/replace?) if the leaf name is already present. Applies
+  to MKEXT/WRENT/SAVECORE create paths and the FLUSHRED redirect write.
 - **CFREAD ABI is 1-byte LBA**: the BIOS CFREAD/CFWRITE only set LBA0 (LBA1-3
   zeroed in the monitor's CFSETL), capping addressable sectors at 256. Fine for
   small images today; widen to a multi-byte LBA in CFSETL + the BIOS contract
