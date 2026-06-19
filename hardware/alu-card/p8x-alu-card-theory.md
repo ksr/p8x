@@ -168,8 +168,9 @@ mux reads for branches.
 
 ## 5. Known issues / verify (from the design review)
 
-- **IC power pins:** built by the generator `card()` helper, which currently does
-  not net IC VCC/GND supply pins to the pours — **fix before fab** (see BACKLOG).
+- **IC power pins:** *fixed* — `card()` now nets every IC's VCC/GND supply pin to
+  the power pours (the review found it previously omitted them). Verified: every
+  IC on this board has both rails.
 - **Timing (bring-up):** the rev-C B-mux (`U32/U33`) adds a 74157 delay *ahead* of
   the 74181/74182 carry path, and the V-flag XOR/AND chain adds delay off the flag
   path. Confirm the worst-case combinational path (operand → B-mux → 74181 →

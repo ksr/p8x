@@ -125,10 +125,10 @@ active; `DLD = 7` → `-MEMW`; `AND(CLK)` → `-WE` pulses; `U3` drives bus → 
 
 ## 5. Known issues / verify (from the design review)
 
-- **Power pins: this card is the *correct* model.** Because it is hand-built
-  (`mnet`), it explicitly nets every IC's VCC/GND to the rails — unlike the five
-  `card()`-built boards. (The fix for those is to make `card()` do what this card
-  already does.)
+- **Power pins: this card was the *reference model*.** Because it is hand-built
+  (`mnet`), it always explicitly netted every IC's VCC/GND to the rails. The
+  review found the five `card()`-built boards did *not*; `card()` was then fixed
+  to do what this card already does, so all boards now connect their IC power pins.
 - **I/O-page carve-out:** the `-RAMCE = NAND(A15, -IOPG)` logic is what prevents
   the RAM from driving the bus during `$FFxx` accesses; confirm on the bench that
   RAM is truly silent in the I/O page so it can't contend with the I/O / CF cards.

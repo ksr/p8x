@@ -124,8 +124,9 @@ needs it.
 
 ## 5. Known issues / verify (from the design review)
 
-- **IC power pins:** built by the generator `card()` helper, which currently does
-  not net IC VCC/GND supply pins to the pours — **fix before fab** (see BACKLOG).
+- **IC power pins:** *fixed* — `card()` now nets every IC's VCC/GND supply pin to
+  the power pours (the review found it previously omitted them). Verified: every
+  IC on this board has both rails.
 - **8-bit mode (the big unknown):** confirm a real CF card honors SET FEATURES
   `$EF/$01` for 8-bit transfers early at bring-up; only if it refuses do you
   populate/complete the `U9` fallback (design its bus-drive path with DRC — it

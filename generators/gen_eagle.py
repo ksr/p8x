@@ -411,6 +411,15 @@ def card(name,title,parts_ic,parts_small,nets,used_bus):
         decap[c]=("CAP","100N")
         nets.setdefault("VCC",[]).append((c,"1"))
         nets.setdefault("GND",[]).append((c,"2"))
+    # Every IC's dedicated supply pins must be members of the VCC/GND nets — a
+    # copper pour only connects pads that belong to the net, so without this the
+    # chips sit unpowered next to the rails. (The hand-built memory card does this
+    # explicitly; this loop gives the card()-built boards the same.)
+    for ref,(dev,_val) in parts_ic.items():
+        pins=DEV[dev]["L"]+DEV[dev]["R"]
+        for rail in ("VCC","GND"):
+            if rail in pins and (ref,rail) not in nets.get(rail,[]):
+                nets.setdefault(rail,[]).append((ref,rail))   # skip if already wired by hand
     parts={"J1":("DIN96C","FABC96R")}
     parts.update(parts_ic); parts.update(parts_small); parts.update(decap)
     sch={}; order=[r for r in parts if r!="J1"]

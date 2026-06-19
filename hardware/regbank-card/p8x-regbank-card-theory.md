@@ -154,10 +154,9 @@ one of those actions is just a combination of `PSEL`, `PINC/PDEC`, `DLD`, and
 
 ## 5. Known issues / verify (from the design review)
 
-- **IC power pins:** built by the generator `card()` helper, which currently does
-  not net each IC's VCC/GND supply pin to the pours — **fix before fab** (see the
-  control-card theory doc and BACKLOG). This card has 44 ICs, so it is the most
-  affected.
+- **IC power pins:** *fixed* — `card()` now nets every IC's VCC/GND supply pin to
+  the power pours (the review found it previously omitted them). This card has 44
+  ICs and was the most affected; verified all 44 now have both rails.
 - **Address bus floats for PSEL = 5, 6, 7:** `U33` is always enabled and only
   decodes 0–4; for codes 5–7 no pointer drives PB, yet the always-on address
   drivers (`U25/U26`) still push an undefined PB value onto `A0–15`. Safe **only

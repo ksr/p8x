@@ -28,16 +28,6 @@ Last updated: 2026-06-19
   before volumes exceed 128 KB.
 
 
-- [ ] **CRITICAL (blocks fab): connect IC power pins on the card()-built boards.**
-      From the 2026-06 schematic review: the generator's `card()` helper
-      (generators/gen_eagle.py) wires J1 power pins and the decoupling caps to the
-      VCC/GND nets but NEVER adds each IC's own VCC/GND supply pin. So on control,
-      regbank, ALU, I/O, and CF the chips' power pads aren't members of the VCC/GND
-      pours and won't be powered. (Only the hand-built memory card — which nets
-      ("Ux","VCC")/("Ux","GND") explicitly — and the IC-less backplane are correct.)
-      validate() can't catch it (it checks pin-name legality, not connectivity).
-      Fix: in card(), loop over parts_ic and append (ref,"VCC")/(ref,"GND") to the
-      VCC/GND nets for every IC, then regenerate all five boards and re-validate.
 - [ ] Fusion import acceptance test: open backplane .sch/.brd pair, pour planes,
       run DRC, confirm zero airwires
 - [ ] Verify DIN 41612 footprints against physical connectors in stock
@@ -260,6 +250,18 @@ Last updated: 2026-06-19
   (U27); carry-coupled shifter (U28/U29/U30); U31 gates the C and Z/N/V clocks.
   NB: pin/pad-validated only, not DRC'd; the rev-B *behaviour* is proven in the
   emulator (make test-isa). A full Eagle DRC + airwire check stays on VERIFY.
+
+- **Connect IC power pins on the card()-built boards (schematic-review fix).**
+  The 2026-06 review found that the generator's `card()` helper wired the
+  connector and decoupling-cap pins to VCC/GND but never added each IC's own
+  VCC/GND supply pin — so on control, regbank, ALU, I/O, and CF the chips' power
+  pads weren't members of the power pours and wouldn't have been powered. (The
+  hand-built memory card already did this; the backplane has no ICs.) `validate()`
+  couldn't catch it — it checks pin-name legality, not connectivity. Fixed by a
+  loop in `card()` that appends `(ref,"VCC")`/`(ref,"GND")` for every IC, skipping
+  any pin already wired by hand (idempotent, so the few pre-existing ones don't
+  duplicate). Regenerated all 7 boards (0 validation errors); a board-level audit
+  confirms every IC on every card now has both VCC and GND on the power signals.
 
 - **OS FSCK — read-only on-target consistency check.** Mirrors the host
   `p8xfs.py fsck`: verifies the `P8` boot signature, that every live extent

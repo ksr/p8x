@@ -133,8 +133,9 @@ switch byte onto `D0–7`, which the CPU loads.
 
 ## 5. Known issues / verify (from the design review)
 
-- **IC power pins:** built by the generator `card()` helper, which currently does
-  not net IC VCC/GND supply pins to the pours — **fix before fab** (see BACKLOG).
+- **IC power pins:** *fixed* — `card()` now nets every IC's VCC/GND supply pin to
+  the power pours (the review found it previously omitted them). Verified: every
+  IC on this board has both rails.
 - **SEL LED drive:** the I/O-select LED is source-driven from a gate output (a
   deviation from the sink-drive standard, noted on the schematic) — confirm
   brightness is acceptable at bring-up.

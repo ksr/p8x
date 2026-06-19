@@ -615,6 +615,15 @@
 <contactref element="CD7" pad="2"/>
 <contactref element="CD8" pad="2"/>
 <contactref element="CD9" pad="2"/>
+<contactref element="U1" pad="10"/>
+<contactref element="U2" pad="7"/>
+<contactref element="U3" pad="8"/>
+<contactref element="U4" pad="8"/>
+<contactref element="U5" pad="7"/>
+<contactref element="U6" pad="7"/>
+<contactref element="U7" pad="7"/>
+<contactref element="U8" pad="7"/>
+<contactref element="U9" pad="10"/>
 <polygon width="0.254" layer="2" isolate="0.3" rank="1">
 <vertex x="0" y="0"/>
 <vertex x="160" y="0"/>
@@ -680,6 +689,15 @@
 <contactref element="CD7" pad="1"/>
 <contactref element="CD8" pad="1"/>
 <contactref element="CD9" pad="1"/>
+<contactref element="U1" pad="20"/>
+<contactref element="U2" pad="14"/>
+<contactref element="U3" pad="16"/>
+<contactref element="U4" pad="16"/>
+<contactref element="U5" pad="14"/>
+<contactref element="U6" pad="14"/>
+<contactref element="U7" pad="14"/>
+<contactref element="U8" pad="14"/>
+<contactref element="U9" pad="20"/>
 <polygon width="0.254" layer="15" isolate="0.3" rank="1">
 <vertex x="0" y="0"/>
 <vertex x="160" y="0"/>

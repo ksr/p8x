@@ -234,11 +234,10 @@ Trace a generic instruction at full speed:
 
 ## 6. Known issues / verify (from the design review)
 
-- **IC power pins:** this card is built by the generator's `card()` helper, which
-  (as of this writing) does not connect each IC's dedicated VCC/GND supply pin to
-  the power pours — only functional pins and the decoupling caps reach the rails.
-  **Must be fixed before fab** (the memory card, built by hand, does this
-  correctly and is the model). Tracked in BACKLOG.
+- **IC power pins:** *fixed* — the `card()` helper now connects every IC's
+  dedicated VCC/GND supply pin to the power pours (the review found it previously
+  wired only functional pins and the decoupling caps). Verified: every IC on this
+  card has both rails. (The hand-built memory card was the reference model.)
 - **Single-step one-pulse:** bench-verify one edge per press (§4.3).
 - **Pipeline timing:** confirm the microcode EPROM access time fits inside the
   `CLK`→`CLKB` half-cycle at the intended clock rate; if not, slow the clock with
