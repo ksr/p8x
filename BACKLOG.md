@@ -28,6 +28,16 @@ Last updated: 2026-06-19
   before volumes exceed 128 KB.
 
 
+- [ ] **CRITICAL (blocks fab): connect IC power pins on the card()-built boards.**
+      From the 2026-06 schematic review: the generator's `card()` helper
+      (generators/gen_eagle.py) wires J1 power pins and the decoupling caps to the
+      VCC/GND nets but NEVER adds each IC's own VCC/GND supply pin. So on control,
+      regbank, ALU, I/O, and CF the chips' power pads aren't members of the VCC/GND
+      pours and won't be powered. (Only the hand-built memory card — which nets
+      ("Ux","VCC")/("Ux","GND") explicitly — and the IC-less backplane are correct.)
+      validate() can't catch it (it checks pin-name legality, not connectivity).
+      Fix: in card(), loop over parts_ic and append (ref,"VCC")/(ref,"GND") to the
+      VCC/GND nets for every IC, then regenerate all five boards and re-validate.
 - [ ] Fusion import acceptance test: open backplane .sch/.brd pair, pour planes,
       run DRC, confirm zero airwires
 - [ ] Verify DIN 41612 footprints against physical connectors in stock
@@ -175,6 +185,19 @@ Last updated: 2026-06-19
 
 ## VERIFY
 
+- **Register bank: address bus floats for PSEL = 5, 6, 7** (2026-06 review). U33
+  (74138) is always enabled and decodes only PSEL 0-4 (P0-P3 + PT); the address
+  drivers U25/U26 are always on. For PSEL 5-7 no pointer drives the internal
+  pointer bus, so an undefined value reaches A0-15. Safe ONLY if microcode never
+  emits PSEL > 4 (PT = 4 is the max). Confirm the microcode constraint, or add a
+  default-select / pull so the bus can't float.
+- **System-wide data-bus arbitration is one-hot** (2026-06 review). Bus drivers
+  are distributed: ALU U20 decodes DOE 1-6 (reg/ALU/flags); at DOE = 7 exactly one
+  of memory/IO/CF should drive based on address decode. No check enforces "no
+  DOE/address combination enables two drivers" across cards. In particular confirm
+  the memory card is fully silent in the $FF00-$FFFF I/O page (via -IOPG) so it
+  can't fight the I/O / CF cards on a read. (Backplane RN1 10k pull-ups hold the
+  bus at $FF when nothing drives, so a no-driver case is defined.)
 - Control card single-step circuit (7474 one-pulse + self-clear NAND): verify
   one-clock-per-press behaviour at bring-up; refine debounce RC if needed.
 - I/O card SEL LED is source-driven from a gate output (deviation from the
