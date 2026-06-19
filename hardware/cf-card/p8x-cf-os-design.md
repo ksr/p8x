@@ -124,17 +124,26 @@ Files are allocated at the free pointer and grow it; deletion marks the entry de
 
 Serial command line at 9600 8N1:
 
+(Authoritative command reference: [os/README.md](../../os/README.md).)
+
 ```
-P8X/OS v0.1
-> DIR                     list directory
-> LOAD GAME.BIN           → load address from dir entry
-> RUN GAME.BIN            load + JSR exec address
-> SAVE DUMP.BIN A000 C000 save memory range
-> DEL  OLD.BIN
-> DUMP A000               hex/ASCII display
-> DEP  A000 3E 41 ...     deposit bytes
-> PACK                    compact free space
-> BOOT                    re-read OS from card
+/> DIR [path]             list a directory
+/> CD path                change directory (/abs, rel, .., .)
+/> PWD                    print the working directory
+/> TREE                   indented listing of the whole tree (v2)
+/> MKDIR path             create a subdirectory (v2)
+/> RMDIR path             remove an empty subdirectory (v2)
+/> CAT path               print a file
+/> LOAD GAME.BIN          → load address from dir entry
+/> RUN GAME.BIN           load + JSR exec address
+/> SAVE DUMP.BIN A000 C000 save memory range
+/> DEL  OLD.BIN
+/> DUMP A000              hex/ASCII display
+/> DEP  A000 3E 41 ...    deposit bytes
+/> PACK                   compact free space
+/> FSCK                   check filesystem integrity (read-only)
+/> EXIT                   return to the ROM monitor
+/> cmd >FILE              redirect a command's output to a file
 ```
 
 Programs return to the shell with RTS (shell calls via JSR) and may call any BIOS vector. That convention — fixed entry table + TPA + RTS-to-shell — is the CP/M model, and it's all the "OS contract" a machine like this needs.

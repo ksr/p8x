@@ -114,10 +114,10 @@ works chip by chip, and any board-specific design docs:
 
 ## Status
 
-- Emulator working: 67 opcodes, ACIA on stdin/stdout, CF-IDE disk model (`-c <img>`), verified against microcode images
+- Emulator working: 83 opcodes, ACIA on stdin/stdout, CF-IDE disk model (`-c <img>`), interactive I/O card (switches `-s`, LED trace `-L`), verified against microcode images
 - Assembler working: two-pass, full expression support, shares opcode table with microcode generator
 - Eagle schematics + boards generated for all 6 cards and backplane
 - ROM monitor boots in the emulator; its filesystem hooks (`I`/`F`/`B`) run end to end against a CF image (`make test-cf`)
-- P8X/OS v1.0 — full shell over flat **and hierarchical (P8XFS v2)** volumes: `DIR [path]`/`CD`/`PWD`/`CAT`/`MKDIR`/`RMDIR`/`TREE`/`LOAD`/`RUN`/`SAVE`/`DEL`/`DUMP`/`DEP`/`PACK`; path resolution + CWD-path prompt; **`PACK` now compacts the directory tree** (repointing parents + `.`/`..`); host-side `p8xfs.py` builds (`--v2`), navigates, and `fsck`s images (`make test-os`)
+- P8X/OS v1.0 — full shell over flat **and hierarchical (P8XFS v2)** volumes: `DIR [path]`/`CD`/`PWD`/`CAT`/`MKDIR`/`RMDIR`/`TREE`/`LOAD`/`RUN`/`SAVE`/`DEL`/`DUMP`/`DEP`/`PACK`/`FSCK`/`EXIT`; path resolution + CWD-path prompt; output redirection (`cmd >FILE`); **`PACK` compacts the directory tree** (repointing parents + `.`/`..`) and **`FSCK`** checks integrity on-target; host-side `p8xfs.py` builds (`--v2`), navigates, and `fsck`s images (`make test-os`)
 - BASIC builds three ways from one source: standalone, disk-bootable (`B`), and ROM-in-monitor (launched by `X`) (`make test-basic`)
-- **Next:** OS niceties (built-in `EDIT`, output redirection/pipes, dump paging); hardware bring-up checklist
+- **Next:** OS niceties (built-in `EDIT`, pipes `|`); hardware bring-up checklist (Fusion DRC, footprint confirmation, order backplane first)

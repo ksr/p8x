@@ -130,7 +130,7 @@ The word burned to the 4× 28C64 EPROMs and interpreted by the emulator. Bit map
 | **boot block** | LBA 0 — signature, version byte, OS sector count, free pointer. |
 | **extent** | A file/directory's contiguous run of data sectors. |
 | **PACK** | Compaction — reclaim the gaps left by deleted files by sliding extents down. |
-| **fsck** | Filesystem consistency check (host tool `p8xfs.py fsck`). |
+| **fsck** | Filesystem consistency check — host tool `p8xfs.py fsck` (exhaustive) and the on-target OS `FSCK` command (read-only quick check). |
 | **F_FILE / F_DIR** | Directory-entry flag bytes: regular file ($01) / subdirectory ($02). ($FF = deleted.) |
 | **OS / monitor / BASIC** | P8X/OS (disk shell), the ROM monitor (`$0000`), and the integer BASIC interpreter. |
 
