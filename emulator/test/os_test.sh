@@ -47,7 +47,9 @@ rm -f os_h.tmp prog.asm
 
 # DUMP B000 now pages: CR advances to the next block (B100), '.' exits — so feed
 # '\r.' after the address (else PACK's letters would be eaten as paging keys).
-out=$(printf 'B\rDIR\rRUN PROG.BIN\rDEL HELLO.TXT\rSAVE C.BIN 8000 8010\rDEP B000 41 42 43\rDUMP B000\r\r.PACK\rDIR\rEXIT\r' | \
+# ...then 'DIR >DLIST' captures the directory listing into a file (output
+# redirection), and EXIT returns to the monitor.
+out=$(printf 'B\rDIR\rRUN PROG.BIN\rDEL HELLO.TXT\rSAVE C.BIN 8000 8010\rDEP B000 41 42 43\rDUMP B000\r\r.PACK\rDIR\rDIR >DLIST\rEXIT\r' | \
       ../p8xemu -l 80000000 -c os.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0')
 
 fail() { echo "OS TEST: FAIL — $1"; echo "$out" | sed -n '/P8X\/OS/,$p'; exit 1; }
@@ -80,6 +82,11 @@ python3 $ROOT/tools/p8xfs.py get os.img C.BIN --out os_c.tmp >/dev/null
 head -c 16 p8xos.bin > os_exp.tmp
 cmp -s os_c.tmp os_exp.tmp || fail "C.BIN bytes wrong after PACK"
 rm -f os_c.tmp os_exp.tmp
+# Output redirection: 'DIR >DLIST' must have created DLIST holding the captured
+# directory listing (so it contains a known entry name, PROG.BIN).
+python3 $ROOT/tools/p8xfs.py get os.img DLIST --out os_dl.tmp >/dev/null || fail "redirect: DLIST not created"
+LC_ALL=C tr -d '\0\r' < os_dl.tmp | grep -q 'PROG.BIN' || { echo "--- DLIST ---"; cat os_dl.tmp; fail "redirect: DLIST missing captured listing"; }
+rm -f os_dl.tmp
 # PACK must leave a consistent volume with nothing reclaimable.
 python3 $ROOT/tools/p8xfs.py fsck os.img >os_fsck.tmp 2>&1 || { cat os_fsck.tmp; fail "fsck failed after PACK"; }
 grep -q '0 reclaimable' os_fsck.tmp || { cat os_fsck.tmp; fail "PACK left reclaimable space"; }

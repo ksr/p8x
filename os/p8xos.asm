@@ -124,6 +124,16 @@ RMDL    = $9A9C          ; RMDIR: parent directory sector holding the entry
 CDST    = $9A9D          ; current directory: start LBA / sectors / entry index
 CDSC    = $9A9E
 CIDX    = $9A9F
+; ---- output redirection ("> file") ----
+REDIRF  = $9AA0          ; 0 = console, 1 = capturing to RBUF
+RCH     = $9AA1          ; OUTCH: byte being emitted
+RS2L    = $9AA2          ; OUTCH: saved caller P2
+RS2H    = $9AA3
+RPTRL   = $9AA4          ; OUTCH: next free byte in the capture buffer
+RPTRH   = $9AA5
+RHX     = $9AA6          ; OPHEX8 scratch
+REDNAME = $9AA7          ; redirect target filename (null-terminated, <=48)
+RBUF    = $A000          ; capture buffer = the TPA (free during a built-in cmd)
 TSP     = $9AE0          ; tree stack depth (0 = at root level)
 TI      = $9AE1          ; scratch loop counter for the frame stack
 TFRAME  = $9AE2          ; 8 frames x 3 bytes (dst,dsc,idx): $9AE2..$9AF9
@@ -142,8 +152,10 @@ STKTOP  = $FEFF
         .org $8000
 ; ---------------- Cold start -------------------------------------------------
 COLD:   LDP3 #STKTOP
+        LDA  #0                 ; output goes to the console until a "> file" redirect
+        STA  REDIRF
         LDP1 #MBANNER
-        JSR  PUTS
+        JSR  OPUTS
         ; pick the on-disk layout from the boot-block version byte
         LDP1 #SBUF
         LDA  #0
@@ -169,12 +181,14 @@ CB_SET: LDA  #33                ; CWD = root
         JSR  PATHROOT           ; CWDPATH = "/"
 
 ; ---------------- Shell main loop --------------------------------------------
-SHELL:  JSR  CRLF
+SHELL:  JSR  FLUSHRED           ; if the previous command was redirected, write its file
+        JSR  CRLF
         LDP1 #CWDPATH           ; prompt = "<path>> "
-        JSR  PUTS
+        JSR  OPUTS
         LDP1 #MPROMPT
-        JSR  PUTS
+        JSR  OPUTS
         JSR  GETLN              ; line -> LINEBUF (null-terminated)
+        JSR  REDSCAN            ; split off a trailing "> name" and arm capture
         LDP2 #LINEBUF
         LDP1 #CMDBUF
         JSR  PARSEW             ; CMDBUF = upcased command word; P2 -> args
@@ -236,7 +250,7 @@ SHELL:  JSR  CRLF
         JSR  CMPCMD
         JNZ  DOEXIT
         LDP1 #MUNK              ; unknown command
-        JSR  PUTS
+        JSR  OPUTS
         JMP  SHELL
 
 ; CMPCMD - compare CMDBUF to the keyword at (P1); returns A!=0 (and Z clear)
@@ -248,12 +262,12 @@ CMPCMD: LDP2 #CMDBUF
 
 ; ---------------- HELP -------------------------------------------------------
 DOHELP: LDP1 #MHELP
-        JSR  PUTS
+        JSR  OPUTS
         JMP  SHELL
 
 ; ---------------- PWD : print the working directory --------------------------
 DOPWD:  LDP1 #CWDPATH
-        JSR  PUTS
+        JSR  OPUTS
         JSR  CRLF
         JMP  SHELL
 
@@ -282,7 +296,7 @@ ct_b:   LDA  LENLO              ; remaining == 0 -> done mid-sector
         LDA  LENHI
         JZ   ct_end
 ct_pb:  LDA  (P2)+
-        JSR  CONOUT
+        JSR  OUTCH
         LDA  LENLO              ; remaining-- (16-bit borrow)
         JNZ  ct_lo
         LDA  LENHI
@@ -317,7 +331,7 @@ DD_CWD: LDA  CWDL
         LDA  CWDN
         STA  SDIRN
 DD_GO:  LDP1 #MDIRHDR
-        JSR  PUTS
+        JSR  OPUTS
         JSR  CRLF
         LDA  SDIRL
         STA  DLBA
@@ -360,23 +374,23 @@ DPRENT: LDA  NAMEBUF            ; hide '.' and '..'
         LDA  #12
         STA  TMP
 dp_nm:  LDA  (P1)+
-        JSR  CONOUT
+        JSR  OUTCH
         LDA  TMP
         DEC
         STA  TMP
         JNZ  dp_nm
         LDA  #' '
-        JSR  CONOUT
+        JSR  OUTCH
         LDA  LENHI
-        JSR  PHEX8
+        JSR  OPHEX8
         LDA  LENLO
-        JSR  PHEX8
+        JSR  OPHEX8
         LDA  FLAGS
         LDB  #F_DIR
         CMP
         JNZ  dp_crlf
         LDP1 #MDIRTAG           ; " <DIR>"
-        JSR  PUTS
+        JSR  OPUTS
 dp_crlf:JSR  CRLF
 dp_ret: RTS
 
@@ -385,7 +399,7 @@ DOLOAD: JSR  FINDARG            ; parse name, scan directory
         JZ   NOFILE
         JSR  LOADF              ; read the file into its load address
         LDP1 #MLOADED
-        JSR  PUTS
+        JSR  OPUTS
         JMP  SHELL
 
 ; ---------------- RUN name ---------------------------------------------------
@@ -412,11 +426,11 @@ DODEL:  JSR  FINDARG
         STA  LBA
         JSR  CFWRITE
         LDP1 #MDELETED
-        JSR  PUTS
+        JSR  OPUTS
         JMP  SHELL
 
 NOFILE: LDP1 #MNOFILE
-        JSR  PUTS
+        JSR  OPUTS
         JMP  SHELL
 
 ; FINDARG - resolve a path argument to a regular file. Returns A=0 (Z set) on
@@ -598,7 +612,7 @@ DOCD:   JSR  ARG2P2
         JSR  SETPATH            ; update the displayed path (cosmetic)
         JMP  SHELL
 NODIR:  LDP1 #MNODIR
-        JSR  PUTS
+        JSR  OPUTS
         JMP  SHELL
 
 ; PATHROOT - CWDPATH = "/".
@@ -795,13 +809,13 @@ mk_nc:  STA  SBUF+5
         STA  LBA
         JSR  CFWRITE
         LDP1 #MMKOK
-        JSR  PUTS
+        JSR  OPUTS
         JMP  SHELL
 MK_NOV2:LDP1 #MNOV2
-        JSR  PUTS
+        JSR  OPUTS
         JMP  SHELL
 MK_EXIST:LDP1 #MEXIST
-        JSR  PUTS
+        JSR  OPUTS
         JMP  SHELL
 
 ; MKEXT - initialize the directory extent at NEWLBA: entry 0 = '.', entry 1 =
@@ -961,13 +975,13 @@ DORMDIR:LDA  ROOTN
         STA  LBA
         JSR  CFWRITE
         LDP1 #MRMOK
-        JSR  PUTS
+        JSR  OPUTS
         JMP  SHELL
 RM_NOTDIR:LDP1 #MNOTDIR
-        JSR  PUTS
+        JSR  OPUTS
         JMP  SHELL
 RM_NOTMT:LDP1 #MNOTMT
-        JSR  PUTS
+        JSR  OPUTS
         JMP  SHELL
 
 ; DIREMPTY - MATCH=1 if directory (SDIRL,SDIRN) holds only '.'/'..' (and the end
@@ -1022,7 +1036,7 @@ DOTREE: LDA  ROOTN
         CMP
         JZ   MK_NOV2
         LDA  #'/'               ; print the root
-        JSR  CONOUT
+        JSR  OUTCH
         JSR  CRLF
         LDA  #33                ; current = root
         STA  CDST
@@ -1062,7 +1076,7 @@ TR_ENT: LDA  CDSC               ; end of this directory? (CIDX >= CDSC*16)
 tr_ind: LDA  TMP
         JZ   tr_pn
         LDA  #' '
-        JSR  CONOUT
+        JSR  OUTCH
         LDA  TMP
         DEC
         STA  TMP
@@ -1074,7 +1088,7 @@ tr_nm:  LDA  (P1)
         LDB  #' '
         CMP
         JZ   tr_nd
-        JSR  CONOUT
+        JSR  OUTCH
         INP1
         LDA  TMP
         DEC
@@ -1085,7 +1099,7 @@ tr_nd:  LDA  FLAGS              ; directories get a trailing '/'
         CMP
         JNZ  tr_eol
         LDA  #'/'
-        JSR  CONOUT
+        JSR  OUTCH
 tr_eol: JSR  CRLF
         LDA  FLAGS              ; descend into subdirectories
         LDB  #F_DIR
@@ -1280,13 +1294,13 @@ SV_LEN: JSR  SECCOUNT           ; SECCNT = sectors needed
         LDA  MATCH
         JZ   SV_FULL
         LDP1 #MSAVED
-        JSR  PUTS
+        JSR  OPUTS
         JMP  SHELL
 SV_ERR: LDP1 #MSVERR
-        JSR  PUTS
+        JSR  OPUTS
         JMP  SHELL
 SV_FULL:LDP1 #MDIRFUL
-        JSR  PUTS
+        JSR  OPUTS
         JMP  SHELL
 
 ; ---------------- DUMP addr --------------------------------------------------
@@ -1302,13 +1316,13 @@ DODUMP: JSR  ARG2P2
 DU_PAGE:LDA  #16                ; 16 lines = one 256-byte block
         STA  CNT
 DU_LINE:TPA1H                   ; "AAAA: "
-        JSR  PHEX8
+        JSR  OPHEX8
         TPA1L
-        JSR  PHEX8
+        JSR  OPHEX8
         LDA  #':'
-        JSR  CONOUT
+        JSR  OUTCH
         LDA  #' '
-        JSR  CONOUT
+        JSR  OUTCH
         TPA1L                   ; remember line start for the ASCII pass
         STA  SRCLO
         TPA1H
@@ -1316,15 +1330,15 @@ DU_LINE:TPA1H                   ; "AAAA: "
         LDA  #16                ; 16 hex bytes
         STA  TMP
 DU_HEX: LDA  (P1)+
-        JSR  PHEX8
+        JSR  OPHEX8
         LDA  #' '
-        JSR  CONOUT
+        JSR  OUTCH
         LDA  TMP
         DEC
         STA  TMP
         JNZ  DU_HEX
         LDA  #' '
-        JSR  CONOUT
+        JSR  OUTCH
         LDA  SRCLO              ; rewind to line start for the ASCII column
         TAP1L
         LDA  SRCHI
@@ -1343,7 +1357,7 @@ DU_ASC: LDA  (P1)+
         LDA  TMP2
         JMP  DU_PUT
 DU_DOT: LDA  #'.'
-DU_PUT: JSR  CONOUT
+DU_PUT: JSR  OUTCH
         LDA  TMP
         DEC
         STA  TMP
@@ -1359,7 +1373,7 @@ DU_PUT: JSR  CONOUT
         JZ   SHELL
         JMP  DU_PAGE            ; P1 already points at the next 256 bytes
 DU_ERR: LDP1 #MDUER
-        JSR  PUTS
+        JSR  OPUTS
         JMP  SHELL
 
 ; ---------------- DEP addr b b b... ------------------------------------------
@@ -1380,10 +1394,10 @@ DP_LP:  JSR  GETHEX             ; next byte value
         STA  (P1)+
         JMP  DP_LP
 DP_END: LDP1 #MDEPOK
-        JSR  PUTS
+        JSR  OPUTS
         JMP  SHELL
 DP_ERR: LDP1 #MDPER
-        JSR  PUTS
+        JSR  OPUTS
         JMP  SHELL
 
 ; ---------------- PACK : compact the data area -------------------------------
@@ -1549,7 +1563,7 @@ PK_FIN: LDP1 #SBUF              ; write the new free pointer into the boot block
         STA  LBA
         JSR  CFWRITE
         LDP1 #MPACKED
-        JSR  PUTS
+        JSR  OPUTS
         JMP  SHELL
 ; ---------------- v2 PACK ----------------------------------------------------
 ; Two phases. PHASE 1 compacts every extent (files AND directory extents) down
@@ -1589,7 +1603,7 @@ P2_FIX: JSR  PK2FIX             ; phase 2: repair every dir's '.' and '..'
         STA  LBA
         JSR  CFWRITE
         LDP1 #MPACKED
-        JSR  PUTS
+        JSR  OPUTS
         JMP  SHELL
 
 ; PK2FIND - tree-walk; find the live file/dir extent with the smallest start
@@ -2365,7 +2379,7 @@ GL1:    JSR  CONIN
         CMP
         JZ   GLEND
         LDA  TMP
-        JSR  CONOUT             ; echo (CONOUT preserves A)
+        JSR  OUTCH             ; echo (CONOUT preserves A)
         STA  (P2)+
         JMP  GL1
 GLEND:  JSR  CRLF
@@ -2374,10 +2388,131 @@ GLEND:  JSR  CRLF
         RTS
 
 CRLF:   LDA  #CR
-        JSR  CONOUT
+        JSR  OUTCH
         LDA  #LF
-        JSR  CONOUT
+        JSR  OUTCH
         RTS
+
+; ---- output sink -----------------------------------------------------------
+; OUTCH: emit A. REDIRF=0 -> console (BIOS CONOUT); REDIRF=1 -> append to the
+; capture buffer at RPTR (advancing it). Preserves the caller's P1 and P2
+; (P2 is saved/restored; P1 is untouched), clobbers A like CONOUT does.
+OUTCH:  STA  RCH
+        LDA  REDIRF
+        JZ   OUTTTY
+        TPA2L                   ; save caller P2
+        STA  RS2L
+        TPA2H
+        STA  RS2H
+        LDA  RPTRL              ; P2 = capture pointer
+        TAP2L
+        LDA  RPTRH
+        TAP2H
+        LDA  RCH
+        STA  (P2)+              ; append byte, advance
+        TPA2L                   ; write the pointer back
+        STA  RPTRL
+        TPA2H
+        STA  RPTRH
+        LDA  RS2L               ; restore caller P2
+        TAP2L
+        LDA  RS2H
+        TAP2H
+        RTS
+OUTTTY: LDA  RCH
+        JMP  CONOUT             ; tail call: CONOUT RTSs to OUTCH's caller
+
+; OPUTS: print the null-terminated string at (P1) through OUTCH. Uses P1 only
+; (OUTCH preserves it), so redirection works for every string the OS prints.
+OPUTS:  LDA  (P1)+
+        JZ   OPRET
+        JSR  OUTCH
+        JMP  OPUTS
+OPRET:  RTS
+
+; OPHEX8: print A as two uppercase hex digits through OUTCH.
+OPHEX8: STA  RHX
+        SHR
+        SHR
+        SHR
+        SHR
+        JSR  ONIB              ; high nibble
+        LDA  RHX
+        LDB  #$0F
+        AND
+        JMP  ONIB             ; low nibble (tail call)
+ONIB:   LDB  #10
+        CMP                   ; nibble - 10; C=1 when nibble >= 10
+        JC   ONHEX
+        LDB  #'0'
+        ADD
+        JMP  OUTCH
+ONHEX:  LDB  #$37             ; 'A' - 10
+        ADD
+        JMP  OUTCH
+
+; ---- "> file" output redirection -------------------------------------------
+; REDSCAN: if LINEBUF holds a '>', cut the command there, copy the target name
+; to REDNAME, and arm capture (REDIRF=1, RPTR=RBUF). No '>' -> leaves REDIRF 0.
+REDSCAN:LDP1 #LINEBUF
+RDS_LP: LDA  (P1)
+        JZ   RDS_NO
+        LDB  #'>'
+        CMP
+        JZ   RDS_HIT
+        INP1
+        JMP  RDS_LP
+RDS_HIT:LDA  #0
+        STA  (P1)              ; command text ends at the '>'
+        INP1
+RDS_SK: LDA  (P1)              ; skip spaces before the filename
+        LDB  #' '
+        CMP
+        JNZ  RDS_CP
+        INP1
+        JMP  RDS_SK
+RDS_CP: LDP2 #REDNAME
+RDS_CL: LDA  (P1)+
+        STA  (P2)+
+        JNZ  RDS_CL
+        LDA  #1
+        STA  REDIRF
+        LDA  #<RBUF            ; capture pointer = RBUF ($A000)
+        STA  RPTRL
+        LDA  #>RBUF
+        STA  RPTRH
+RDS_NO: RTS
+
+; FLUSHRED: called at the shell prompt. If a redirect was armed, write the
+; captured bytes [RBUF, RPTR) to the file REDNAME (via SAVECORE), then disarm.
+FLUSHRED:LDA REDIRF
+        JZ   FR_RET
+        LDA  #0
+        STA  REDIRF            ; console again (flush errors print normally)
+        LDP2 #REDNAME
+        JSR  RESOLVE
+        LDA  MATCH
+        JZ   FR_ERR
+        LDA  #<RBUF
+        STA  SVSTLO
+        LDA  #>RBUF
+        STA  SVSTHI
+        LDA  RPTRL             ; length = RPTR - RBUF
+        STA  LENLO
+        LDA  RPTRH
+        LDB  #>RBUF
+        SUB
+        STA  LENHI
+        JSR  SECCOUNT
+        JSR  SAVECORE
+        LDA  MATCH
+        JZ   FR_ERR
+FR_RET: RTS
+FR_ERR: LDP1 #MREDERR
+        JSR  OPUTS
+        JSR  CRLF
+        RTS
+MREDERR:.asciiz "?REDIRECT"
 
 ; ---------------- strings ----------------------------------------------------
 MBANNER: .byte CR,LF
@@ -2417,6 +2552,8 @@ MHELP:   .byte CR,LF
          .ascii "HELP          this help"
          .byte CR,LF
          .ascii "EXIT / MON    return to the ROM monitor"
+         .byte CR,LF
+         .ascii "any cmd >FILE send its output to FILE instead of the screen"
          .byte CR,LF
          .ascii "  path=file/dir, s e a=hex addr, b=hex byte"
          .byte CR,LF,0

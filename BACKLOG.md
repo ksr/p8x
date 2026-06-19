@@ -49,23 +49,14 @@ Last updated: 2026-06-11
       T-operand ops won't run on bare metal until the 74157 mux (U32/U33) is
       actually populated, so until then it would only work in the emulator.
 
-- [ ] **Unix-like I/O redirection + pipes in the OS shell**: a command's
-      output defaults to the terminal but can go to a file (`DIR >LIST.TXT`) or
-      feed another command (`CAT BIG | MORE`).
-      Prerequisite — **route all command output through one OS sink** instead
-      of calling the BIOS CONOUT directly: an OUTCH routine that switches
-      between (a) console, (b) append-to-open-file, (c) a pipe buffer. Today
-      DIR/CAT/TREE/DUMP/PWD/HELP call CONOUT inline, so step one is the refactor.
-      - `>file` (moderate): parse a trailing `>name` in the shell, open/allocate
-        the file, point OUTCH at it (buffer a sector at a time -> CFWRITE, like
-        SAVE), close + write the directory entry when the command returns.
-      - `|` (hard): no multitasking, so run sequentially — capture cmd1's output
-        into a RAM (or temp-file) buffer, then run cmd2 with its *input* sourced
-        from that buffer. Needs a matching input indirection (an INCH the
-        consumer reads) and, to be useful, filter commands that actually read a
-        stream (MORE/WC/GREP-style) — none exist yet. RAM-bound buffer size.
-      Scope it as: OUTCH refactor -> `>` redirect -> a filter command or two ->
-      `|`. The refactor alone is worthwhile (also enables the EDIT/MORE ideas).
+- [ ] **Unix-like pipes in the OS shell** (`|`): output-to-file `>` redirection
+      is DONE (see DONE — OUTCH sink + shell `>name` capture). The remaining,
+      harder piece is `|`: with no multitasking, run sequentially — capture
+      cmd1's output into the RBUF buffer (already built), then run cmd2 with its
+      *input* sourced from that buffer. Needs a matching input indirection (an
+      INCH the consumer reads) and, to be useful, filter commands that actually
+      read a stream (MORE/WC/GREP-style) — none exist yet. RBUF is RAM-bound
+      (~the TPA, $A000..). Scope: add INCH + one filter (e.g. MORE) -> `|`.
 - [ ] **Housekeeping (from 2026-06 consistency audit; not yet decided):**
     - Tracked generated binaries: `microcode/u0-u3.bin` are committed but
       regenerate byte-identically from genucode.py. Consider gitignoring them
@@ -240,6 +231,16 @@ Last updated: 2026-06-11
   (U27); carry-coupled shifter (U28/U29/U30); U31 gates the C and Z/N/V clocks.
   NB: pin/pad-validated only, not DRC'd; the rev-B *behaviour* is proven in the
   emulator (make test-isa). A full Eagle DRC + airwire check stays on VERIFY.
+
+- **OS output redirection to a file (`cmd >FILE`).** All command output now
+  flows through an OS sink (`OUTCH`, plus `OPUTS`/`OPHEX8` replacing the BIOS
+  `PUTS`/`PHEX8` that called ROM `CONOUT` directly — 46 call sites rerouted).
+  The shell (`REDSCAN`) splits a trailing `>name` off the command line, arms
+  capture (`REDIRF`, buffer at the TPA `$A000`), runs the command with its
+  output captured, then at the next prompt (`FLUSHRED`) writes the buffer to a
+  new file via `SAVECORE`. So `DIR >L`, `CAT a >b`, `TREE >t`, etc. all work and
+  the file has the exact captured length. Test: os_test does `DIR >DLIST` and
+  verifies (host-side) DLIST holds the listing. Pipes (`|`) remain — see NEXT.
 
 - **Monitor D paging + OS EXIT-to-monitor.** Two software-only quality-of-life
   items: (1) the monitor `D` (dump) command now pages — after each 256-byte
