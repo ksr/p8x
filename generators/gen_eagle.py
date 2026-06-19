@@ -1149,4 +1149,48 @@ write_brd("backplane/p8x-backplane.brd","P8X 10-SLOT BACKPLANE REV C COMPACT",bp
           {"GND":[(2,)],"VCC":[(15,)]},248.92,109.22,viad)
 validate("backplane/p8x-backplane.brd",bpb,bpn)
 
-print("ALL 7 BOARDS GENERATED")
+# ===================== LED OUTPUT CARD (test / CAD-workflow trial) ============
+# A minimal memory-mapped output card: write a byte to $FF0C and its 8 bits
+# appear on 8 LEDs (write-only; no readback). Built with the shared card()
+# helper so it gets the standard DIN96C edge connector, per-IC decoupling, and
+# IC power-pin wiring automatically. Decode: I/O page (A8-15 all high) + A4=0
+# region, port select A1-3 -> Y6 = $FF0C; latched on a write (DLD=7 -> -MEMW)
+# phased by CLKB. NOTE: like the other I/O cards it does not decode A5-7, so the
+# port aliases every 32 bytes within the page (fine for a scratch test card).
+n={}
+ic={"U1":("7430","IO PAGE"),"U2":("74138","ADDR DEC"),"U3":("74138","DLD DEC"),
+ "U4":("GATES14","74HCT32"),"U5":("HEX14","74HCT14"),"U6":("74374","LED LATCH")}
+sm={"RL1":("RNISO8","8X330R"),"LA1":("LEDARR8","OUT LEDS"),
+ "RP1":("RES","1K"),"LED3":("LED","PWR-GRN"),
+ "R4":("RES","1K"),"LED4":("LED","WR-YEL")}
+for i in range(8): N(n,"A%d"%(8+i),("U1","ABCDEFGH"[i]))   # I/O page: A8-15 -> IOPG
+N(n,"IOPG",("U1","Y"),("U2","!G2A"))
+for i,pn in enumerate(("A","B","C")): N(n,"A%d"%(i+1),("U2",pn))  # port select A1-3
+N(n,"VCC",("U2","G1")); N(n,"A4",("U2","!G2B"))            # require A4=0 ($FF00-0F region)
+N(n,"-SEL",("U2","Y6"))                                    # Y6 -> $FF0C
+for i,pn in enumerate(("A","B","C")): N(n,"DLD%d"%i,("U3",pn))    # DLD decode -> -MEMW
+N(n,"DLD3",("U3","!G2A")); N(n,"VCC",("U3","G1")); N(n,"GND",("U3","!G2B"))
+N(n,"-MEMW",("U3","Y7"))
+# latch clock: WRSEL low only on a write to our port; LCK = WRSEL OR ~CLKB so a
+# clean rising edge captures D0-7 into the 74374 as the write cycle completes.
+N(n,"-SEL",("U4","1A")); N(n,"-MEMW",("U4","1B"))
+N(n,"WRSEL",("U4","1Y"),("U4","2A"),("LED4","K"))          # WR LED on while WRSEL low
+N(n,"CLKB",("U5","1A")); N(n,"CLKBN",("U5","1Y"),("U4","2B"))
+N(n,"LCK",("U4","2Y"),("U6","CLK"))
+N(n,"GND",("U6","!OC"))                                    # latch outputs always enabled
+for b in range(8):
+    N(n,"D%d"%b,("U6","D%d"%(b+1)))
+    N(n,"LP%d"%b,("U6","Q%d"%(b+1)),("RL1","A%d"%(b+1)))
+    N(n,"LR%d"%b,("RL1","B%d"%(b+1)),("LA1","A%d"%(b+1)))
+    N(n,"GND",("LA1","K%d"%(b+1)))
+# spare gates tied off (U4 OR gates 3,4; U5 unused inverters 2-6)
+N(n,"GND",("U4","3A"),("U4","3B"),("U4","4A"),("U4","4B"),
+  ("U5","2A"),("U5","3A"),("U5","4A"),("U5","5A"),("U5","6A"))
+N(n,"VCC",("RP1","1"),("R4","1"))
+N(n,"LEDP",("RP1","2"),("LED3","A")); N(n,"GND",("LED3","K"))
+N(n,"LEDWR",("R4","2"),("LED4","A"))
+card("led-card","P8X LED OUTPUT CARD (test - write-only 8 LEDs at $FF0C)",ic,sm,n,
+ {"D%d"%i for i in range(8)}|{"A1","A2","A3","A4"}|{"A%d"%i for i in range(8,16)}|
+ {"DLD%d"%i for i in range(4)}|{"CLKB"})
+
+print("ALL 8 BOARDS GENERATED")

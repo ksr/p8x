@@ -1,0 +1,563 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE eagle SYSTEM "eagle.dtd">
+<eagle version="9.6.2">
+<drawing>
+<settings><setting alwaysvectorfont="no"/><setting verticaltext="up"/></settings>
+<grid distance="0.1" unitdist="inch" unit="inch" style="lines" multiple="1" display="no" altdistance="0.01" altunitdist="inch" altunit="inch"/>
+<layers>
+<layer number="1" name="Top" color="4" fill="1" visible="yes" active="yes"/>
+<layer number="2" name="Route2" color="1" fill="1" visible="yes" active="yes"/>
+<layer number="15" name="Route15" color="4" fill="1" visible="yes" active="yes"/>
+<layer number="16" name="Bottom" color="1" fill="1" visible="yes" active="yes"/>
+<layer number="17" name="Pads" color="2" fill="1" visible="yes" active="yes"/>
+<layer number="18" name="Vias" color="2" fill="1" visible="yes" active="yes"/>
+<layer number="19" name="Unrouted" color="6" fill="1" visible="yes" active="yes"/>
+<layer number="20" name="Dimension" color="24" fill="1" visible="yes" active="yes"/>
+<layer number="21" name="tPlace" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="22" name="bPlace" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="23" name="tOrigins" color="15" fill="1" visible="yes" active="yes"/>
+<layer number="24" name="bOrigins" color="15" fill="1" visible="yes" active="yes"/>
+<layer number="25" name="tNames" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="26" name="bNames" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="27" name="tValues" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="28" name="bValues" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="39" name="tKeepout" color="4" fill="1" visible="yes" active="yes"/>
+<layer number="40" name="bKeepout" color="1" fill="1" visible="yes" active="yes"/>
+<layer number="41" name="tRestrict" color="4" fill="1" visible="yes" active="yes"/>
+<layer number="42" name="bRestrict" color="1" fill="1" visible="yes" active="yes"/>
+<layer number="43" name="vRestrict" color="2" fill="1" visible="yes" active="yes"/>
+<layer number="44" name="Drills" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="45" name="Holes" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="46" name="Milling" color="3" fill="1" visible="yes" active="yes"/>
+<layer number="47" name="Measures" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="48" name="Document" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="49" name="Reference" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="51" name="tDocu" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="52" name="bDocu" color="7" fill="1" visible="yes" active="yes"/>
+</layers>
+<board><plain>
+<wire x1="0" y1="0" x2="160" y2="0" width="0" layer="20"/>
+<wire x1="160" y1="0" x2="160" y2="100" width="0" layer="20"/>
+<wire x1="160" y1="100" x2="0" y2="100" width="0" layer="20"/>
+<wire x1="0" y1="100" x2="0" y2="0" width="0" layer="20"/>
+<text x="4" y="94" size="2.54" layer="21">P8X LED OUTPUT CARD (test - write-only 8 LEDs at $FF0C)</text>
+</plain>
+<libraries><library name="p8x">
+<packages>
+<package name="C_DISC">
+<pad name="1" x="0.00" y="0.00" drill="0.9" diameter="1.8"/>
+<pad name="2" x="0.00" y="-5.08" drill="0.9" diameter="1.8"/>
+<text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
+</package>
+<package name="DIN96C">
+<pad name="A1" x="5.08" y="-0.00" drill="1.0" diameter="1.7"/>
+<pad name="A2" x="5.08" y="-2.54" drill="1.0" diameter="1.7"/>
+<pad name="A3" x="5.08" y="-5.08" drill="1.0" diameter="1.7"/>
+<pad name="A4" x="5.08" y="-7.62" drill="1.0" diameter="1.7"/>
+<pad name="A5" x="5.08" y="-10.16" drill="1.0" diameter="1.7"/>
+<pad name="A6" x="5.08" y="-12.70" drill="1.0" diameter="1.7"/>
+<pad name="A7" x="5.08" y="-15.24" drill="1.0" diameter="1.7"/>
+<pad name="A8" x="5.08" y="-17.78" drill="1.0" diameter="1.7"/>
+<pad name="A9" x="5.08" y="-20.32" drill="1.0" diameter="1.7"/>
+<pad name="A10" x="5.08" y="-22.86" drill="1.0" diameter="1.7"/>
+<pad name="A11" x="5.08" y="-25.40" drill="1.0" diameter="1.7"/>
+<pad name="A12" x="5.08" y="-27.94" drill="1.0" diameter="1.7"/>
+<pad name="A13" x="5.08" y="-30.48" drill="1.0" diameter="1.7"/>
+<pad name="A14" x="5.08" y="-33.02" drill="1.0" diameter="1.7"/>
+<pad name="A15" x="5.08" y="-35.56" drill="1.0" diameter="1.7"/>
+<pad name="A16" x="5.08" y="-38.10" drill="1.0" diameter="1.7"/>
+<pad name="A17" x="5.08" y="-40.64" drill="1.0" diameter="1.7"/>
+<pad name="A18" x="5.08" y="-43.18" drill="1.0" diameter="1.7"/>
+<pad name="A19" x="5.08" y="-45.72" drill="1.0" diameter="1.7"/>
+<pad name="A20" x="5.08" y="-48.26" drill="1.0" diameter="1.7"/>
+<pad name="A21" x="5.08" y="-50.80" drill="1.0" diameter="1.7"/>
+<pad name="A22" x="5.08" y="-53.34" drill="1.0" diameter="1.7"/>
+<pad name="A23" x="5.08" y="-55.88" drill="1.0" diameter="1.7"/>
+<pad name="A24" x="5.08" y="-58.42" drill="1.0" diameter="1.7"/>
+<pad name="A25" x="5.08" y="-60.96" drill="1.0" diameter="1.7"/>
+<pad name="A26" x="5.08" y="-63.50" drill="1.0" diameter="1.7"/>
+<pad name="A27" x="5.08" y="-66.04" drill="1.0" diameter="1.7"/>
+<pad name="A28" x="5.08" y="-68.58" drill="1.0" diameter="1.7"/>
+<pad name="A29" x="5.08" y="-71.12" drill="1.0" diameter="1.7"/>
+<pad name="A30" x="5.08" y="-73.66" drill="1.0" diameter="1.7"/>
+<pad name="A31" x="5.08" y="-76.20" drill="1.0" diameter="1.7"/>
+<pad name="A32" x="5.08" y="-78.74" drill="1.0" diameter="1.7"/>
+<pad name="B1" x="2.54" y="-0.00" drill="1.0" diameter="1.7"/>
+<pad name="B2" x="2.54" y="-2.54" drill="1.0" diameter="1.7"/>
+<pad name="B3" x="2.54" y="-5.08" drill="1.0" diameter="1.7"/>
+<pad name="B4" x="2.54" y="-7.62" drill="1.0" diameter="1.7"/>
+<pad name="B5" x="2.54" y="-10.16" drill="1.0" diameter="1.7"/>
+<pad name="B6" x="2.54" y="-12.70" drill="1.0" diameter="1.7"/>
+<pad name="B7" x="2.54" y="-15.24" drill="1.0" diameter="1.7"/>
+<pad name="B8" x="2.54" y="-17.78" drill="1.0" diameter="1.7"/>
+<pad name="B9" x="2.54" y="-20.32" drill="1.0" diameter="1.7"/>
+<pad name="B10" x="2.54" y="-22.86" drill="1.0" diameter="1.7"/>
+<pad name="B11" x="2.54" y="-25.40" drill="1.0" diameter="1.7"/>
+<pad name="B12" x="2.54" y="-27.94" drill="1.0" diameter="1.7"/>
+<pad name="B13" x="2.54" y="-30.48" drill="1.0" diameter="1.7"/>
+<pad name="B14" x="2.54" y="-33.02" drill="1.0" diameter="1.7"/>
+<pad name="B15" x="2.54" y="-35.56" drill="1.0" diameter="1.7"/>
+<pad name="B16" x="2.54" y="-38.10" drill="1.0" diameter="1.7"/>
+<pad name="B17" x="2.54" y="-40.64" drill="1.0" diameter="1.7"/>
+<pad name="B18" x="2.54" y="-43.18" drill="1.0" diameter="1.7"/>
+<pad name="B19" x="2.54" y="-45.72" drill="1.0" diameter="1.7"/>
+<pad name="B20" x="2.54" y="-48.26" drill="1.0" diameter="1.7"/>
+<pad name="B21" x="2.54" y="-50.80" drill="1.0" diameter="1.7"/>
+<pad name="B22" x="2.54" y="-53.34" drill="1.0" diameter="1.7"/>
+<pad name="B23" x="2.54" y="-55.88" drill="1.0" diameter="1.7"/>
+<pad name="B24" x="2.54" y="-58.42" drill="1.0" diameter="1.7"/>
+<pad name="B25" x="2.54" y="-60.96" drill="1.0" diameter="1.7"/>
+<pad name="B26" x="2.54" y="-63.50" drill="1.0" diameter="1.7"/>
+<pad name="B27" x="2.54" y="-66.04" drill="1.0" diameter="1.7"/>
+<pad name="B28" x="2.54" y="-68.58" drill="1.0" diameter="1.7"/>
+<pad name="B29" x="2.54" y="-71.12" drill="1.0" diameter="1.7"/>
+<pad name="B30" x="2.54" y="-73.66" drill="1.0" diameter="1.7"/>
+<pad name="B31" x="2.54" y="-76.20" drill="1.0" diameter="1.7"/>
+<pad name="B32" x="2.54" y="-78.74" drill="1.0" diameter="1.7"/>
+<pad name="C1" x="0.00" y="-0.00" drill="1.0" diameter="1.7"/>
+<pad name="C2" x="0.00" y="-2.54" drill="1.0" diameter="1.7"/>
+<pad name="C3" x="0.00" y="-5.08" drill="1.0" diameter="1.7"/>
+<pad name="C4" x="0.00" y="-7.62" drill="1.0" diameter="1.7"/>
+<pad name="C5" x="0.00" y="-10.16" drill="1.0" diameter="1.7"/>
+<pad name="C6" x="0.00" y="-12.70" drill="1.0" diameter="1.7"/>
+<pad name="C7" x="0.00" y="-15.24" drill="1.0" diameter="1.7"/>
+<pad name="C8" x="0.00" y="-17.78" drill="1.0" diameter="1.7"/>
+<pad name="C9" x="0.00" y="-20.32" drill="1.0" diameter="1.7"/>
+<pad name="C10" x="0.00" y="-22.86" drill="1.0" diameter="1.7"/>
+<pad name="C11" x="0.00" y="-25.40" drill="1.0" diameter="1.7"/>
+<pad name="C12" x="0.00" y="-27.94" drill="1.0" diameter="1.7"/>
+<pad name="C13" x="0.00" y="-30.48" drill="1.0" diameter="1.7"/>
+<pad name="C14" x="0.00" y="-33.02" drill="1.0" diameter="1.7"/>
+<pad name="C15" x="0.00" y="-35.56" drill="1.0" diameter="1.7"/>
+<pad name="C16" x="0.00" y="-38.10" drill="1.0" diameter="1.7"/>
+<pad name="C17" x="0.00" y="-40.64" drill="1.0" diameter="1.7"/>
+<pad name="C18" x="0.00" y="-43.18" drill="1.0" diameter="1.7"/>
+<pad name="C19" x="0.00" y="-45.72" drill="1.0" diameter="1.7"/>
+<pad name="C20" x="0.00" y="-48.26" drill="1.0" diameter="1.7"/>
+<pad name="C21" x="0.00" y="-50.80" drill="1.0" diameter="1.7"/>
+<pad name="C22" x="0.00" y="-53.34" drill="1.0" diameter="1.7"/>
+<pad name="C23" x="0.00" y="-55.88" drill="1.0" diameter="1.7"/>
+<pad name="C24" x="0.00" y="-58.42" drill="1.0" diameter="1.7"/>
+<pad name="C25" x="0.00" y="-60.96" drill="1.0" diameter="1.7"/>
+<pad name="C26" x="0.00" y="-63.50" drill="1.0" diameter="1.7"/>
+<pad name="C27" x="0.00" y="-66.04" drill="1.0" diameter="1.7"/>
+<pad name="C28" x="0.00" y="-68.58" drill="1.0" diameter="1.7"/>
+<pad name="C29" x="0.00" y="-71.12" drill="1.0" diameter="1.7"/>
+<pad name="C30" x="0.00" y="-73.66" drill="1.0" diameter="1.7"/>
+<pad name="C31" x="0.00" y="-76.20" drill="1.0" diameter="1.7"/>
+<pad name="C32" x="0.00" y="-78.74" drill="1.0" diameter="1.7"/>
+<hole x="2.54" y="7.63" drill="2.8"/>
+<hole x="2.54" y="-86.37" drill="2.8"/>
+<text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
+</package>
+<package name="DIP14">
+<pad name="1" x="0.00" y="-0.00" drill="0.8128" diameter="1.6"/>
+<pad name="2" x="0.00" y="-2.54" drill="0.8128" diameter="1.6"/>
+<pad name="3" x="0.00" y="-5.08" drill="0.8128" diameter="1.6"/>
+<pad name="4" x="0.00" y="-7.62" drill="0.8128" diameter="1.6"/>
+<pad name="5" x="0.00" y="-10.16" drill="0.8128" diameter="1.6"/>
+<pad name="6" x="0.00" y="-12.70" drill="0.8128" diameter="1.6"/>
+<pad name="7" x="0.00" y="-15.24" drill="0.8128" diameter="1.6"/>
+<pad name="8" x="7.62" y="-15.24" drill="0.8128" diameter="1.6"/>
+<pad name="9" x="7.62" y="-12.70" drill="0.8128" diameter="1.6"/>
+<pad name="10" x="7.62" y="-10.16" drill="0.8128" diameter="1.6"/>
+<pad name="11" x="7.62" y="-7.62" drill="0.8128" diameter="1.6"/>
+<pad name="12" x="7.62" y="-5.08" drill="0.8128" diameter="1.6"/>
+<pad name="13" x="7.62" y="-2.54" drill="0.8128" diameter="1.6"/>
+<pad name="14" x="7.62" y="-0.00" drill="0.8128" diameter="1.6"/>
+<text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
+</package>
+<package name="DIP16">
+<pad name="1" x="0.00" y="-0.00" drill="0.8128" diameter="1.6"/>
+<pad name="2" x="0.00" y="-2.54" drill="0.8128" diameter="1.6"/>
+<pad name="3" x="0.00" y="-5.08" drill="0.8128" diameter="1.6"/>
+<pad name="4" x="0.00" y="-7.62" drill="0.8128" diameter="1.6"/>
+<pad name="5" x="0.00" y="-10.16" drill="0.8128" diameter="1.6"/>
+<pad name="6" x="0.00" y="-12.70" drill="0.8128" diameter="1.6"/>
+<pad name="7" x="0.00" y="-15.24" drill="0.8128" diameter="1.6"/>
+<pad name="8" x="0.00" y="-17.78" drill="0.8128" diameter="1.6"/>
+<pad name="9" x="7.62" y="-17.78" drill="0.8128" diameter="1.6"/>
+<pad name="10" x="7.62" y="-15.24" drill="0.8128" diameter="1.6"/>
+<pad name="11" x="7.62" y="-12.70" drill="0.8128" diameter="1.6"/>
+<pad name="12" x="7.62" y="-10.16" drill="0.8128" diameter="1.6"/>
+<pad name="13" x="7.62" y="-7.62" drill="0.8128" diameter="1.6"/>
+<pad name="14" x="7.62" y="-5.08" drill="0.8128" diameter="1.6"/>
+<pad name="15" x="7.62" y="-2.54" drill="0.8128" diameter="1.6"/>
+<pad name="16" x="7.62" y="-0.00" drill="0.8128" diameter="1.6"/>
+<text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
+</package>
+<package name="DIP20">
+<pad name="1" x="0.00" y="-0.00" drill="0.8128" diameter="1.6"/>
+<pad name="2" x="0.00" y="-2.54" drill="0.8128" diameter="1.6"/>
+<pad name="3" x="0.00" y="-5.08" drill="0.8128" diameter="1.6"/>
+<pad name="4" x="0.00" y="-7.62" drill="0.8128" diameter="1.6"/>
+<pad name="5" x="0.00" y="-10.16" drill="0.8128" diameter="1.6"/>
+<pad name="6" x="0.00" y="-12.70" drill="0.8128" diameter="1.6"/>
+<pad name="7" x="0.00" y="-15.24" drill="0.8128" diameter="1.6"/>
+<pad name="8" x="0.00" y="-17.78" drill="0.8128" diameter="1.6"/>
+<pad name="9" x="0.00" y="-20.32" drill="0.8128" diameter="1.6"/>
+<pad name="10" x="0.00" y="-22.86" drill="0.8128" diameter="1.6"/>
+<pad name="11" x="7.62" y="-22.86" drill="0.8128" diameter="1.6"/>
+<pad name="12" x="7.62" y="-20.32" drill="0.8128" diameter="1.6"/>
+<pad name="13" x="7.62" y="-17.78" drill="0.8128" diameter="1.6"/>
+<pad name="14" x="7.62" y="-15.24" drill="0.8128" diameter="1.6"/>
+<pad name="15" x="7.62" y="-12.70" drill="0.8128" diameter="1.6"/>
+<pad name="16" x="7.62" y="-10.16" drill="0.8128" diameter="1.6"/>
+<pad name="17" x="7.62" y="-7.62" drill="0.8128" diameter="1.6"/>
+<pad name="18" x="7.62" y="-5.08" drill="0.8128" diameter="1.6"/>
+<pad name="19" x="7.62" y="-2.54" drill="0.8128" diameter="1.6"/>
+<pad name="20" x="7.62" y="-0.00" drill="0.8128" diameter="1.6"/>
+<text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
+</package>
+<package name="LED5">
+<pad name="2" x="0.00" y="0.00" drill="0.9" diameter="1.8"/>
+<pad name="1" x="2.54" y="0.00" drill="0.9" diameter="1.8"/>
+<text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
+</package>
+<package name="R_AXIAL">
+<pad name="1" x="0.00" y="0.00" drill="0.8" diameter="1.6"/>
+<pad name="2" x="10.16" y="0.00" drill="0.8" diameter="1.6"/>
+<text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
+</package>
+<package name="SIP16">
+<pad name="1" x="0.00" y="-2.54" drill="0.8" diameter="1.6"/>
+<pad name="2" x="0.00" y="-5.08" drill="0.8" diameter="1.6"/>
+<pad name="3" x="0.00" y="-7.62" drill="0.8" diameter="1.6"/>
+<pad name="4" x="0.00" y="-10.16" drill="0.8" diameter="1.6"/>
+<pad name="5" x="0.00" y="-12.70" drill="0.8" diameter="1.6"/>
+<pad name="6" x="0.00" y="-15.24" drill="0.8" diameter="1.6"/>
+<pad name="7" x="0.00" y="-17.78" drill="0.8" diameter="1.6"/>
+<pad name="8" x="0.00" y="-20.32" drill="0.8" diameter="1.6"/>
+<pad name="9" x="0.00" y="-22.86" drill="0.8" diameter="1.6"/>
+<pad name="10" x="0.00" y="-25.40" drill="0.8" diameter="1.6"/>
+<pad name="11" x="0.00" y="-27.94" drill="0.8" diameter="1.6"/>
+<pad name="12" x="0.00" y="-30.48" drill="0.8" diameter="1.6"/>
+<pad name="13" x="0.00" y="-33.02" drill="0.8" diameter="1.6"/>
+<pad name="14" x="0.00" y="-35.56" drill="0.8" diameter="1.6"/>
+<pad name="15" x="0.00" y="-38.10" drill="0.8" diameter="1.6"/>
+<pad name="16" x="0.00" y="-40.64" drill="0.8" diameter="1.6"/>
+<text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
+</package>
+</packages>
+</library></libraries>
+<classes><class number="0" name="default" width="0" drill="0"/></classes>
+<designrules name="default"><param name="layerSetup" value="(1*2*15*16)"/></designrules>
+<elements>
+<element name="J1" library="p8x" package="DIN96C" value="FABC96R" x="5.40" y="86.97"/>
+<element name="U1" library="p8x" package="DIP14" value="IO PAGE" x="17.88" y="95.20"/>
+<element name="CD1" library="p8x" package="C_DISC" value="100N" x="29.80" y="95.10"/>
+<element name="U2" library="p8x" package="DIP16" value="ADDR DEC" x="34.10" y="95.20"/>
+<element name="CD2" library="p8x" package="C_DISC" value="100N" x="46.02" y="95.10"/>
+<element name="U3" library="p8x" package="DIP16" value="DLD DEC" x="50.32" y="95.20"/>
+<element name="CD3" library="p8x" package="C_DISC" value="100N" x="62.24" y="95.10"/>
+<element name="U4" library="p8x" package="DIP14" value="74HCT32" x="66.54" y="95.20"/>
+<element name="CD4" library="p8x" package="C_DISC" value="100N" x="78.46" y="95.10"/>
+<element name="U5" library="p8x" package="DIP14" value="74HCT14" x="82.76" y="95.20"/>
+<element name="CD5" library="p8x" package="C_DISC" value="100N" x="94.68" y="95.10"/>
+<element name="U6" library="p8x" package="DIP20" value="LED LATCH" x="98.98" y="95.20"/>
+<element name="CD6" library="p8x" package="C_DISC" value="100N" x="110.90" y="95.10"/>
+<element name="RL1" library="p8x" package="SIP16" value="8X330R" x="115.20" y="97.74"/>
+<element name="LA1" library="p8x" package="DIP16" value="OUT LEDS" x="119.40" y="95.20"/>
+<element name="RP1" library="p8x" package="R_AXIAL" value="1K" x="131.22" y="95.20"/>
+<element name="LED3" library="p8x" package="LED5" value="PWR-GRN" x="145.68" y="95.10"/>
+<element name="R4" library="p8x" package="R_AXIAL" value="1K" x="17.88" y="52.90"/>
+<element name="LED4" library="p8x" package="LED5" value="WR-YEL" x="32.34" y="52.80"/>
+</elements><signals>
+<signal name="-MEMW">
+<contactref element="U3" pad="7"/>
+<contactref element="U4" pad="2"/>
+</signal>
+<signal name="-SEL">
+<contactref element="U2" pad="9"/>
+<contactref element="U4" pad="1"/>
+</signal>
+<signal name="A1">
+<contactref element="U2" pad="1"/>
+<contactref element="J1" pad="C4"/>
+</signal>
+<signal name="A10">
+<contactref element="U1" pad="3"/>
+<contactref element="J1" pad="C13"/>
+</signal>
+<signal name="A11">
+<contactref element="U1" pad="4"/>
+<contactref element="J1" pad="C14"/>
+</signal>
+<signal name="A12">
+<contactref element="U1" pad="5"/>
+<contactref element="J1" pad="C15"/>
+</signal>
+<signal name="A13">
+<contactref element="U1" pad="6"/>
+<contactref element="J1" pad="C16"/>
+</signal>
+<signal name="A14">
+<contactref element="U1" pad="11"/>
+<contactref element="J1" pad="C17"/>
+</signal>
+<signal name="A15">
+<contactref element="U1" pad="12"/>
+<contactref element="J1" pad="C18"/>
+</signal>
+<signal name="A2">
+<contactref element="U2" pad="2"/>
+<contactref element="J1" pad="C5"/>
+</signal>
+<signal name="A3">
+<contactref element="U2" pad="3"/>
+<contactref element="J1" pad="C6"/>
+</signal>
+<signal name="A4">
+<contactref element="U2" pad="5"/>
+<contactref element="J1" pad="C7"/>
+</signal>
+<signal name="A8">
+<contactref element="U1" pad="1"/>
+<contactref element="J1" pad="C11"/>
+</signal>
+<signal name="A9">
+<contactref element="U1" pad="2"/>
+<contactref element="J1" pad="C12"/>
+</signal>
+<signal name="CLKB">
+<contactref element="U5" pad="1"/>
+<contactref element="J1" pad="A25"/>
+</signal>
+<signal name="CLKBN">
+<contactref element="U5" pad="2"/>
+<contactref element="U4" pad="5"/>
+</signal>
+<signal name="D0">
+<contactref element="U6" pad="3"/>
+<contactref element="J1" pad="A3"/>
+</signal>
+<signal name="D1">
+<contactref element="U6" pad="4"/>
+<contactref element="J1" pad="A4"/>
+</signal>
+<signal name="D2">
+<contactref element="U6" pad="7"/>
+<contactref element="J1" pad="A5"/>
+</signal>
+<signal name="D3">
+<contactref element="U6" pad="8"/>
+<contactref element="J1" pad="A6"/>
+</signal>
+<signal name="D4">
+<contactref element="U6" pad="13"/>
+<contactref element="J1" pad="A7"/>
+</signal>
+<signal name="D5">
+<contactref element="U6" pad="14"/>
+<contactref element="J1" pad="A8"/>
+</signal>
+<signal name="D6">
+<contactref element="U6" pad="17"/>
+<contactref element="J1" pad="A9"/>
+</signal>
+<signal name="D7">
+<contactref element="U6" pad="18"/>
+<contactref element="J1" pad="A10"/>
+</signal>
+<signal name="DLD0">
+<contactref element="U3" pad="1"/>
+<contactref element="J1" pad="A16"/>
+</signal>
+<signal name="DLD1">
+<contactref element="U3" pad="2"/>
+<contactref element="J1" pad="A17"/>
+</signal>
+<signal name="DLD2">
+<contactref element="U3" pad="3"/>
+<contactref element="J1" pad="A18"/>
+</signal>
+<signal name="DLD3">
+<contactref element="U3" pad="4"/>
+<contactref element="J1" pad="A19"/>
+</signal>
+<signal name="GND">
+<contactref element="U3" pad="5"/>
+<contactref element="U6" pad="1"/>
+<contactref element="LA1" pad="16"/>
+<contactref element="LA1" pad="15"/>
+<contactref element="LA1" pad="14"/>
+<contactref element="LA1" pad="13"/>
+<contactref element="LA1" pad="12"/>
+<contactref element="LA1" pad="11"/>
+<contactref element="LA1" pad="10"/>
+<contactref element="LA1" pad="9"/>
+<contactref element="U4" pad="9"/>
+<contactref element="U4" pad="10"/>
+<contactref element="U4" pad="12"/>
+<contactref element="U4" pad="13"/>
+<contactref element="U5" pad="3"/>
+<contactref element="U5" pad="5"/>
+<contactref element="U5" pad="9"/>
+<contactref element="U5" pad="11"/>
+<contactref element="U5" pad="13"/>
+<contactref element="LED3" pad="1"/>
+<contactref element="J1" pad="A31"/>
+<contactref element="J1" pad="A32"/>
+<contactref element="J1" pad="B3"/>
+<contactref element="J1" pad="B4"/>
+<contactref element="J1" pad="B5"/>
+<contactref element="J1" pad="B6"/>
+<contactref element="J1" pad="B7"/>
+<contactref element="J1" pad="B8"/>
+<contactref element="J1" pad="B9"/>
+<contactref element="J1" pad="B10"/>
+<contactref element="J1" pad="B11"/>
+<contactref element="J1" pad="B12"/>
+<contactref element="J1" pad="B13"/>
+<contactref element="J1" pad="B14"/>
+<contactref element="J1" pad="B15"/>
+<contactref element="J1" pad="B16"/>
+<contactref element="J1" pad="B17"/>
+<contactref element="J1" pad="B18"/>
+<contactref element="J1" pad="B19"/>
+<contactref element="J1" pad="B20"/>
+<contactref element="J1" pad="B21"/>
+<contactref element="J1" pad="B22"/>
+<contactref element="J1" pad="B23"/>
+<contactref element="J1" pad="B24"/>
+<contactref element="J1" pad="B25"/>
+<contactref element="J1" pad="B26"/>
+<contactref element="J1" pad="B31"/>
+<contactref element="J1" pad="B32"/>
+<contactref element="J1" pad="C31"/>
+<contactref element="J1" pad="C32"/>
+<contactref element="CD1" pad="2"/>
+<contactref element="CD2" pad="2"/>
+<contactref element="CD3" pad="2"/>
+<contactref element="CD4" pad="2"/>
+<contactref element="CD5" pad="2"/>
+<contactref element="CD6" pad="2"/>
+<contactref element="U1" pad="7"/>
+<contactref element="U2" pad="8"/>
+<contactref element="U3" pad="8"/>
+<contactref element="U4" pad="7"/>
+<contactref element="U5" pad="7"/>
+<contactref element="U6" pad="10"/>
+<polygon width="0.254" layer="2" isolate="0.3" rank="1">
+<vertex x="0" y="0"/>
+<vertex x="160" y="0"/>
+<vertex x="160" y="100"/>
+<vertex x="0" y="100"/>
+</polygon>
+</signal>
+<signal name="IOPG">
+<contactref element="U1" pad="8"/>
+<contactref element="U2" pad="4"/>
+</signal>
+<signal name="LCK">
+<contactref element="U4" pad="6"/>
+<contactref element="U6" pad="11"/>
+</signal>
+<signal name="LEDP">
+<contactref element="RP1" pad="2"/>
+<contactref element="LED3" pad="2"/>
+</signal>
+<signal name="LEDWR">
+<contactref element="R4" pad="2"/>
+<contactref element="LED4" pad="2"/>
+</signal>
+<signal name="LP0">
+<contactref element="U6" pad="2"/>
+<contactref element="RL1" pad="1"/>
+</signal>
+<signal name="LP1">
+<contactref element="U6" pad="5"/>
+<contactref element="RL1" pad="3"/>
+</signal>
+<signal name="LP2">
+<contactref element="U6" pad="6"/>
+<contactref element="RL1" pad="5"/>
+</signal>
+<signal name="LP3">
+<contactref element="U6" pad="9"/>
+<contactref element="RL1" pad="7"/>
+</signal>
+<signal name="LP4">
+<contactref element="U6" pad="12"/>
+<contactref element="RL1" pad="9"/>
+</signal>
+<signal name="LP5">
+<contactref element="U6" pad="15"/>
+<contactref element="RL1" pad="11"/>
+</signal>
+<signal name="LP6">
+<contactref element="U6" pad="16"/>
+<contactref element="RL1" pad="13"/>
+</signal>
+<signal name="LP7">
+<contactref element="U6" pad="19"/>
+<contactref element="RL1" pad="15"/>
+</signal>
+<signal name="LR0">
+<contactref element="RL1" pad="2"/>
+<contactref element="LA1" pad="1"/>
+</signal>
+<signal name="LR1">
+<contactref element="RL1" pad="4"/>
+<contactref element="LA1" pad="2"/>
+</signal>
+<signal name="LR2">
+<contactref element="RL1" pad="6"/>
+<contactref element="LA1" pad="3"/>
+</signal>
+<signal name="LR3">
+<contactref element="RL1" pad="8"/>
+<contactref element="LA1" pad="4"/>
+</signal>
+<signal name="LR4">
+<contactref element="RL1" pad="10"/>
+<contactref element="LA1" pad="5"/>
+</signal>
+<signal name="LR5">
+<contactref element="RL1" pad="12"/>
+<contactref element="LA1" pad="6"/>
+</signal>
+<signal name="LR6">
+<contactref element="RL1" pad="14"/>
+<contactref element="LA1" pad="7"/>
+</signal>
+<signal name="LR7">
+<contactref element="RL1" pad="16"/>
+<contactref element="LA1" pad="8"/>
+</signal>
+<signal name="VCC">
+<contactref element="U2" pad="6"/>
+<contactref element="U3" pad="6"/>
+<contactref element="RP1" pad="1"/>
+<contactref element="R4" pad="1"/>
+<contactref element="J1" pad="A1"/>
+<contactref element="J1" pad="A2"/>
+<contactref element="J1" pad="B1"/>
+<contactref element="J1" pad="B2"/>
+<contactref element="J1" pad="C1"/>
+<contactref element="J1" pad="C2"/>
+<contactref element="CD1" pad="1"/>
+<contactref element="CD2" pad="1"/>
+<contactref element="CD3" pad="1"/>
+<contactref element="CD4" pad="1"/>
+<contactref element="CD5" pad="1"/>
+<contactref element="CD6" pad="1"/>
+<contactref element="U1" pad="14"/>
+<contactref element="U2" pad="16"/>
+<contactref element="U3" pad="16"/>
+<contactref element="U4" pad="14"/>
+<contactref element="U5" pad="14"/>
+<contactref element="U6" pad="20"/>
+<polygon width="0.254" layer="15" isolate="0.3" rank="1">
+<vertex x="0" y="0"/>
+<vertex x="160" y="0"/>
+<vertex x="160" y="100"/>
+<vertex x="0" y="100"/>
+</polygon>
+</signal>
+<signal name="WRSEL">
+<contactref element="U4" pad="3"/>
+<contactref element="U4" pad="4"/>
+<contactref element="LED4" pad="1"/>
+</signal>
+</signals></board></drawing></eagle>
