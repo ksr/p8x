@@ -20,14 +20,6 @@ Last updated: 2026-06-11
     - **watch the OS code size**: the image is ~5.9 KB at $8000; OS variables
       live at $9A00 (RUN'd programs load at the $A000 TPA). ~680 bytes of code
       headroom — bump the var base again before a big addition like EDIT.
-- **Reject duplicate names within a directory**: SAVE, MKDIR, and `>FILE`
-  redirection all create a new directory entry without checking whether the
-  name already exists in the target directory — so you can end up with two
-  entries of the same name (the second shadows the first; PACK/DEL/RESOLVE get
-  confused). Add a name-exists check before allocating: scan the parent dir
-  (the FINDENT/RESOLVE machinery already walks entries) and fail with an error
-  (or, decide: overwrite/replace?) if the leaf name is already present. Applies
-  to MKEXT/WRENT/SAVECORE create paths and the FLUSHRED redirect write.
 - **CFREAD ABI is 1-byte LBA**: the BIOS CFREAD/CFWRITE only set LBA0 (LBA1-3
   zeroed in the monitor's CFSETL), capping addressable sectors at 256. Fine for
   small images today; widen to a multi-byte LBA in CFSETL + the BIOS contract
@@ -57,14 +49,6 @@ Last updated: 2026-06-11
       T-operand ops won't run on bare metal until the 74157 mux (U32/U33) is
       actually populated, so until then it would only work in the emulator.
 
-- [ ] **Separate stderr so errors bypass `>FILE` redirection**: today a
-      redirected command's error messages are captured into the file along with
-      its output (one OUTCH sink, no stderr). Add an error sink — e.g. `ERROUT`
-      that always goes to the console (BIOS CONOUT) regardless of REDIRF — and
-      route the OS error/`?...` messages (MUNK, SV/RESOLVE failures,
-      `?REDIRECT`, etc.) through it instead of OUTCH/OPUTS. Then `DIR >L` of a
-      bad command leaves the error on screen and a clean/empty file. (Cheap now
-      that the sink split exists.)
 - [ ] **Unix-like pipes in the OS shell** (`|`): output-to-file `>` redirection
       is DONE (see DONE — OUTCH sink + shell `>name` capture). The remaining,
       harder piece is `|`: with no multitasking, run sequentially — capture
@@ -247,6 +231,18 @@ Last updated: 2026-06-11
   (U27); carry-coupled shifter (U28/U29/U30); U31 gates the C and Z/N/V clocks.
   NB: pin/pad-validated only, not DRC'd; the rev-B *behaviour* is proven in the
   emulator (make test-isa). A full Eagle DRC + airwire check stays on VERIFY.
+
+- **Reject duplicate names + errors bypass redirection (OS).** Two filesystem
+  polish fixes: (1) **no duplicate names** — SAVE and `>FILE` redirection now
+  run a `FINDENT` check on the parent directory before creating, and fail with
+  `?EXISTS` if the leaf name is already present (MKDIR already did this). In
+  SAVE the check is placed *before* the length calc because FINDENT clobbers
+  `LENLO/HI` (and P2, which is saved/restored). (2) **errors go to the console,
+  not the file** — the 12 OS error messages (`?...`) now print via the BIOS
+  `PUTS` (always console) instead of the redirectable `OPUTS` sink, so e.g.
+  `CAT missing >F` leaves the error on screen; and an empty capture creates no
+  file at all (was a degenerate 0-length entry that failed fsck). os_test
+  covers both. All 6 suites pass.
 
 - **OS output redirection to a file (`cmd >FILE`).** All command output now
   flows through an OS sink (`OUTCH`, plus `OPUTS`/`OPHEX8` replacing the BIOS

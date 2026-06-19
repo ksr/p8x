@@ -49,7 +49,9 @@ rm -f os_h.tmp prog.asm
 # '\r.' after the address (else PACK's letters would be eaten as paging keys).
 # ...then 'DIR >DLIST' captures the directory listing into a file (output
 # redirection), and EXIT returns to the monitor.
-out=$(printf 'B\rDIR\rRUN PROG.BIN\rDEL HELLO.TXT\rSAVE C.BIN 8000 8010\rDEP B000 41 42 43\rDUMP B000\r\r.PACK\rDIR\rDIR >DLIST\rEXIT\r' | \
+# Also: SAVE over an existing name must be rejected (?EXISTS), and a redirected
+# command's error must still reach the console (CAT NOPE >X -> ?NO FILE on screen).
+out=$(printf 'B\rDIR\rRUN PROG.BIN\rDEL HELLO.TXT\rSAVE C.BIN 8000 8010\rDEP B000 41 42 43\rDUMP B000\r\r.PACK\rDIR\rDIR >DLIST\rSAVE PROG.BIN 8000 8001\rCAT NOPE >X\rEXIT\r' | \
       ../p8xemu -l 80000000 -c os.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0')
 
 fail() { echo "OS TEST: FAIL — $1"; echo "$out" | sed -n '/P8X\/OS/,$p'; exit 1; }
@@ -87,6 +89,10 @@ rm -f os_c.tmp os_exp.tmp
 python3 $ROOT/tools/p8xfs.py get os.img DLIST --out os_dl.tmp >/dev/null || fail "redirect: DLIST not created"
 LC_ALL=C tr -d '\0\r' < os_dl.tmp | grep -q 'PROG.BIN' || { echo "--- DLIST ---"; cat os_dl.tmp; fail "redirect: DLIST missing captured listing"; }
 rm -f os_dl.tmp
+# Duplicate name rejected: SAVE PROG.BIN (already exists) -> ?EXISTS.
+echo "$out" | grep -q 'EXISTS'  || fail "duplicate SAVE not rejected (?EXISTS missing)"
+# stderr: a redirected command's error still prints on the console.
+echo "$out" | grep -q 'NO FILE' || fail "redirected command's error did not reach the console"
 # PACK must leave a consistent volume with nothing reclaimable.
 python3 $ROOT/tools/p8xfs.py fsck os.img >os_fsck.tmp 2>&1 || { cat os_fsck.tmp; fail "fsck failed after PACK"; }
 grep -q '0 reclaimable' os_fsck.tmp || { cat os_fsck.tmp; fail "PACK left reclaimable space"; }

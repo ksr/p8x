@@ -250,7 +250,7 @@ SHELL:  JSR  FLUSHRED           ; if the previous command was redirected, write 
         JSR  CMPCMD
         JNZ  DOEXIT
         LDP1 #MUNK              ; unknown command
-        JSR  OPUTS
+        JSR  PUTS
         JMP  SHELL
 
 ; CMPCMD - compare CMDBUF to the keyword at (P1); returns A!=0 (and Z clear)
@@ -430,7 +430,7 @@ DODEL:  JSR  FINDARG
         JMP  SHELL
 
 NOFILE: LDP1 #MNOFILE
-        JSR  OPUTS
+        JSR  PUTS
         JMP  SHELL
 
 ; FINDARG - resolve a path argument to a regular file. Returns A=0 (Z set) on
@@ -612,7 +612,7 @@ DOCD:   JSR  ARG2P2
         JSR  SETPATH            ; update the displayed path (cosmetic)
         JMP  SHELL
 NODIR:  LDP1 #MNODIR
-        JSR  OPUTS
+        JSR  PUTS
         JMP  SHELL
 
 ; PATHROOT - CWDPATH = "/".
@@ -812,10 +812,10 @@ mk_nc:  STA  SBUF+5
         JSR  OPUTS
         JMP  SHELL
 MK_NOV2:LDP1 #MNOV2
-        JSR  OPUTS
+        JSR  PUTS
         JMP  SHELL
 MK_EXIST:LDP1 #MEXIST
-        JSR  OPUTS
+        JSR  PUTS
         JMP  SHELL
 
 ; MKEXT - initialize the directory extent at NEWLBA: entry 0 = '.', entry 1 =
@@ -978,10 +978,10 @@ DORMDIR:LDA  ROOTN
         JSR  OPUTS
         JMP  SHELL
 RM_NOTDIR:LDP1 #MNOTDIR
-        JSR  OPUTS
+        JSR  PUTS
         JMP  SHELL
 RM_NOTMT:LDP1 #MNOTMT
-        JSR  OPUTS
+        JSR  PUTS
         JMP  SHELL
 
 ; DIREMPTY - MATCH=1 if directory (SDIRL,SDIRN) holds only '.'/'..' (and the end
@@ -1260,6 +1260,17 @@ DOSAVE: JSR  ARG2P2             ; P2 -> argument text
         JSR  RESOLVE            ; SDIR = parent dir, NAMEBUF = leaf name
         LDA  MATCH
         JZ   SV_ERR
+        TPA2L                   ; reject a duplicate name. FINDENT clobbers P2 and
+        STA  RS2L               ; LENLO/HI, so do it now (before the length calc)
+        TPA2H                   ; and save/restore the arg cursor for GETHEX.
+        STA  RS2H
+        JSR  FINDENT
+        LDA  MATCH
+        JNZ  SV_EXIST
+        LDA  RS2L
+        TAP2L
+        LDA  RS2H
+        TAP2H
         JSR  GETHEX             ; start address
         LDA  MATCH
         JZ   SV_ERR
@@ -1297,10 +1308,13 @@ SV_LEN: JSR  SECCOUNT           ; SECCNT = sectors needed
         JSR  OPUTS
         JMP  SHELL
 SV_ERR: LDP1 #MSVERR
-        JSR  OPUTS
+        JSR  PUTS
+        JMP  SHELL
+SV_EXIST:LDP1 #MEXIST
+        JSR  PUTS
         JMP  SHELL
 SV_FULL:LDP1 #MDIRFUL
-        JSR  OPUTS
+        JSR  PUTS
         JMP  SHELL
 
 ; ---------------- DUMP addr --------------------------------------------------
@@ -1373,7 +1387,7 @@ DU_PUT: JSR  OUTCH
         JZ   SHELL
         JMP  DU_PAGE            ; P1 already points at the next 256 bytes
 DU_ERR: LDP1 #MDUER
-        JSR  OPUTS
+        JSR  PUTS
         JMP  SHELL
 
 ; ---------------- DEP addr b b b... ------------------------------------------
@@ -1397,7 +1411,7 @@ DP_END: LDP1 #MDEPOK
         JSR  OPUTS
         JMP  SHELL
 DP_ERR: LDP1 #MDPER
-        JSR  OPUTS
+        JSR  PUTS
         JMP  SHELL
 
 ; ---------------- PACK : compact the data area -------------------------------
@@ -2489,10 +2503,19 @@ FLUSHRED:LDA REDIRF
         JZ   FR_RET
         LDA  #0
         STA  REDIRF            ; console again (flush errors print normally)
-        LDP2 #REDNAME
+        LDA  RPTRH             ; nothing captured (RPTR still at RBUF)? -> no file
+        LDB  #>RBUF
+        CMP
+        JNZ  FR_GO
+        LDA  RPTRL
+        JZ   FR_RET
+FR_GO:  LDP2 #REDNAME
         JSR  RESOLVE
         LDA  MATCH
         JZ   FR_ERR
+        JSR  FINDENT            ; refuse to clobber an existing file
+        LDA  MATCH
+        JNZ  FR_EXIST
         LDA  #<RBUF
         STA  SVSTLO
         LDA  #>RBUF
@@ -2509,7 +2532,11 @@ FLUSHRED:LDA REDIRF
         JZ   FR_ERR
 FR_RET: RTS
 FR_ERR: LDP1 #MREDERR
-        JSR  OPUTS
+        JSR  PUTS
+        JSR  CRLF
+        RTS
+FR_EXIST:LDP1 #MEXIST
+        JSR  PUTS
         JSR  CRLF
         RTS
 MREDERR:.asciiz "?REDIRECT"
