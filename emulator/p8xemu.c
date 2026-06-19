@@ -19,7 +19,8 @@
  *    in the pipeline selects ROM A12 for the NEXT lookup.
  *
  * Memory map: 0000-7FFF EEPROM | 8000-FEFF RAM | FF00-FFFF I/O
- *   FF00 switches(r)  FF02 LEDs(w)  FF04 ACIA status(r)  FF05 ACIA data(rw)
+ *   FF00 switches(r, set with -s)  FF02 LEDs(w, trace with -L)
+ *   FF04 ACIA status(r)  FF05 ACIA data(rw)
  *   FF10-FF17 CF-IDE task file (8-bit True IDE), modelled when -c <img> given:
  *     FF10 data  FF11 feature  FF12 sector-count  FF13-15 LBA0-2
  *     FF16 head/dev  FF17 command(w)/status(r)  [BSY7 DRQ3 ERR0]
@@ -47,6 +48,8 @@ static int prev_fcond=0, halted=0, trace=0;
 static int IE=0, irq_pending=0;   /* rev C: interrupt-enable latch + pending IRQ */
 static unsigned long long cycles=0;
 static uint8_t leds=0;
+static uint8_t switches=0;             /* $FF00 input byte, set with -s */
+static int led_trace=0;                /* -L: print $FF02 writes as they change */
 
 /* ---- CF-IDE model (active only when a disk image is attached with -c) ----
    The monitor's driver (firmware/p8xmon.asm) drives a CompactFlash in 8-bit
@@ -164,7 +167,7 @@ static uint8_t memrd(uint16_t ad){
     if(ad<0x8000) return eeprom[ad];
     if(ad<0xFF00) return ram[ad-0x8000];
     switch(ad){
-    case 0xFF00: return 0x00;                                 /* switches */
+    case 0xFF00: return switches;                             /* switches (-s) */
     case 0xFF04: return 0x02 | (rx_ready()?0x01:0x00);        /* TDRE|RDRF */
     case 0xFF05: return rx_char();
     case 0xFF10: return cf_img? cf_data_rd() : 0xFF;          /* CF data    */
@@ -175,7 +178,13 @@ static uint8_t memrd(uint16_t ad){
 static void memwr(uint16_t ad,uint8_t v){
     if(ad<0x8000){ fprintf(stderr,"[warn] write to EEPROM %04X\n",ad); return; }
     if(ad<0xFF00){ ram[ad-0x8000]=v; return; }
-    if(ad==0xFF02){ leds=v; return; }
+    if(ad==0xFF02){                                          /* LEDs */
+        if(led_trace && v!=leds)
+            fprintf(stderr,"[LED $FF02] $%02X  %c%c%c%c%c%c%c%c\n", v,
+                (v&0x80)?'*':'.',(v&0x40)?'*':'.',(v&0x20)?'*':'.',(v&0x10)?'*':'.',
+                (v&0x08)?'*':'.',(v&0x04)?'*':'.',(v&0x02)?'*':'.',(v&0x01)?'*':'.');
+        leds=v; return;
+    }
     if(ad==0xFF06){ irq_pending=1; return; }   /* rev C: raise a maskable IRQ (models a device) */
     if(ad==0xFF05){ putchar(v); fflush(stdout); rx_misses=0; return; }
     if(cf_img) switch(ad){                                   /* CF task file */
@@ -199,6 +208,16 @@ int main(int argc,char**argv){
         if(!strcmp(argv[i],"-t")) trace=1;
         else if(!strcmp(argv[i],"-l")) lim=strtoull(argv[++i],0,0);
         else if(!strcmp(argv[i],"-c")) cfn=argv[++i];
+        else if(!strcmp(argv[i],"-s")) switches=(uint8_t)strtoul(argv[++i],0,0);  /* $FF00 input byte */
+        else if(!strcmp(argv[i],"-L")) led_trace=1;                               /* trace $FF02 writes */
+        else if(!strcmp(argv[i],"-h")||!strcmp(argv[i],"--help")){
+            fprintf(stderr,"usage: p8xemu [-t] [-l cycles] [-c disk.img] "
+                "[-s switches] [-L] [rom.bin]\n"
+                "  -s NN  value read at $FF00 (e.g. -s 0xA5); default 0\n"
+                "  -L     print $FF02 LED writes to stderr as they change\n"
+                "  -t trace  -l limit cycles  -c attach CF image\n");
+            return 0;
+        }
         else ee=argv[i];
     }
     char fn[64];

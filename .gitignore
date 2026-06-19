@@ -27,3 +27,4 @@ emulator/test/*.hex
 /u?.hex
 /p8x-rom-basic.hex
 microcode/u?.hex
+emulator/test/io.asm

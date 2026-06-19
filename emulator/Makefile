@@ -26,6 +26,7 @@ test: p8xemu ucode
 	$(MAKE) test-cf
 	$(MAKE) test-os
 	$(MAKE) test-basic
+	$(MAKE) test-io
 
 # Per-instruction self-checking regression: halts with A=00 on success,
 # or A=<test id> at the first failing check.
@@ -50,4 +51,8 @@ test-basic: p8xemu ucode
 	sh test/basic_rom_test.sh
 	sh test/basic_disk_test.sh
 
-.PHONY: all ucode rom test test-isa test-cf test-os test-basic
+# I/O card model: switch input (-s) -> $FF00 and LED writes ($FF02, -L).
+test-io: p8xemu ucode
+	sh test/io_test.sh
+
+.PHONY: all ucode rom test test-isa test-cf test-os test-basic test-io
