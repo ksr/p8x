@@ -57,6 +57,14 @@ Last updated: 2026-06-11
       T-operand ops won't run on bare metal until the 74157 mux (U32/U33) is
       actually populated, so until then it would only work in the emulator.
 
+- [ ] **Separate stderr so errors bypass `>FILE` redirection**: today a
+      redirected command's error messages are captured into the file along with
+      its output (one OUTCH sink, no stderr). Add an error sink — e.g. `ERROUT`
+      that always goes to the console (BIOS CONOUT) regardless of REDIRF — and
+      route the OS error/`?...` messages (MUNK, SV/RESOLVE failures,
+      `?REDIRECT`, etc.) through it instead of OUTCH/OPUTS. Then `DIR >L` of a
+      bad command leaves the error on screen and a clean/empty file. (Cheap now
+      that the sink split exists.)
 - [ ] **Unix-like pipes in the OS shell** (`|`): output-to-file `>` redirection
       is DONE (see DONE — OUTCH sink + shell `>name` capture). The remaining,
       harder piece is `|`: with no multitasking, run sequentially — capture
