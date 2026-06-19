@@ -1,5 +1,7 @@
 # Memory Card
 
+> **Theory of operation:** [p8x-memory-card-theory.md](p8x-memory-card-theory.md) — deep walkthrough of inputs/outputs, signal flow, and logic.
+
 Provides the system's ROM and RAM and gates them onto the data bus. It decodes the
 address bus to pick ROM vs RAM, keeps both off the data bus during I/O accesses,
 and generates a clean write strobe.

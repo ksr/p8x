@@ -1,5 +1,7 @@
 # I/O Card
 
+> **Theory of operation:** [p8x-io-card-theory.md](p8x-io-card-theory.md) — deep walkthrough of inputs/outputs, signal flow, and logic.
+
 All memory-mapped I/O lives here: an 8-switch input port, an 8-LED output port, an
 RS-232 serial channel via a 6850 ACIA, and a passive **bus-monitor** LED display
 that turns the machine into an Altair-style "watch it think" front panel.

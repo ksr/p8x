@@ -1,5 +1,7 @@
 # Control / Microcode Card
 
+> **Theory of operation:** [p8x-control-card-theory.md](p8x-control-card-theory.md) — deep walkthrough of inputs/outputs, signal flow, and logic.
+
 The brain of the P8X. It generates the clock, handles reset and the front-panel
 run controls, holds the instruction register, and — most importantly — runs the
 **microcode engine** that drives every other card over the backplane. If a signal

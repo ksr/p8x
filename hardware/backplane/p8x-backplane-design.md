@@ -1,5 +1,7 @@
 # P8X 10-Slot Backplane — Rev C Design Notes
 
+> **Theory of operation:** [p8x-backplane-theory.md](p8x-backplane-theory.md) — deep walkthrough of the bus map, signal integrity, and power.
+
 ## 1. Bus Pinout
 
 The authoritative human-readable bus pinout is in **[p8x-bus-definition.md](p8x-bus-definition.md)**,

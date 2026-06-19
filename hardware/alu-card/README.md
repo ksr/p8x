@@ -1,5 +1,7 @@
 # ALU Card
 
+> **Theory of operation:** [p8x-alu-card-theory.md](p8x-alu-card-theory.md) — deep walkthrough of inputs/outputs, signal flow, and logic.
+
 Holds the two ALU operand registers (**A**, **B**), the two hidden microcode
 temporaries (**T**, **T2**), the **74181-based ALU** with a post-ALU shifter, and
 the **FLAGS** register. All arithmetic and logic happens here.

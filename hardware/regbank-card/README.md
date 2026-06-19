@@ -1,5 +1,7 @@
 # Register Bank Card
 
+> **Theory of operation:** [p8x-regbank-card-theory.md](p8x-regbank-card-theory.md) — deep walkthrough of inputs/outputs, signal flow, and logic.
+
 The largest card and the architectural centerpiece of the P8X. It holds the four
 16-bit pointer registers **P0–P3** and **always drives the address bus** — there
 is no separate MAR. Every memory access is "select a pointer, drive its value on

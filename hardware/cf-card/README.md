@@ -1,5 +1,7 @@
 # CF-IDE Card
 
+> **Theory of operation:** [p8x-cf-card-theory.md](p8x-cf-card-theory.md) — deep walkthrough of inputs/outputs, signal flow, and logic.
+
 Adds mass storage: a CompactFlash card running in **8-bit True IDE mode**,
 memory-mapped into the I/O page at **$FF10–$FF17**. This is what lets the P8X load
 an OS and a filesystem from removable media instead of living entirely in ROM.
