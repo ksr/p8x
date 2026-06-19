@@ -2,6 +2,8 @@
 
 A from-scratch 8-bit CPU built from ~130 74HCT logic chips on a 10-slot DIN41612 backplane. Fully microcoded; the microcode ROM images burned to the EPROMs are the same images the emulator interprets.
 
+New to the abbreviations and signal names? See [GLOSSARY.md](GLOSSARY.md).
+
 ## Architecture
 
 - **8-bit data bus, 16-bit address bus**
