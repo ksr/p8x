@@ -14,14 +14,24 @@ Last updated: 2026-06-19
 ## NEXT
 
 - **P8XFS v2 — remaining loose ends** (the hierarchy itself is DONE; see DONE):
-    - **on-target FORMAT** (optional): monitor F still writes v1; either teach it
-      v2 or add an OS FORMAT so a card can be made bootable without the host.
-      (Monitor B is unchanged — it only reads sig+OSCNT.)
-    - **OS code size**: ~6.4 KB at $8000. The TPA was moved to $B000 and the OS
-      var block relocated to $A000 (above the BIOS-pinned LBA $9D47 / SBUF
-      $9E00), so code can now grow to ~$9D00 (~1.1 KB headroom) and vars have
-      ~3.5 KB at $A000. To go beyond ~$9D00, code would need a second segment
-      above SBUF ($A200+, below the $B000 TPA), since LBA/SBUF are fixed.
+    - **on-target FORMAT — DEFERRED (blocked on OS code size).** A working v2
+      FORMAT was prototyped (rewrite boot block: 'P8' + version 2 + preserved
+      OSCNT + free=37; lay a fresh root extent at LBA 33 via MKEXT; adopt the v2
+      layout in RAM). The logic is correct and cheap (~290 B, reusing MKEXT), BUT
+      it does not fit: the OS is already at the hard 14-sector boot ceiling (see
+      below), so adding FORMAT breaks boot. Revisit once the OS gains a second
+      code segment, or — the cheaper alternative — add v2 FORMAT to the **monitor**
+      (ROM has room; it already has the v1 'F' + CFREAD/CFWRITE), so a card can be
+      formatted before booting. (Monitor B is unchanged — it only reads sig+OSCNT.)
+    - **OS code size — at the HARD ceiling.** The monitor's boot loader (CMD_B)
+      reads the OS image directly to $8000 upward, and the CF LBA pointer lives at
+      the BIOS-pinned $9D47. So the OS image must stay **below the sector that
+      contains $9D47** — i.e. end at/below $9BFF = **14 sectors = 7168 bytes max**;
+      a 15th sector ($9C00-$9DFF) would overwrite the LBA pointer mid-load and boot
+      fails. The OS is currently **7165 B (14 sectors, ~3 B free)** — effectively
+      full. To grow, code needs a second segment above SBUF ($A200+, below the
+      $B000 TPA; LBA/SBUF/vars are fixed), or the boot loader must stage through a
+      buffer instead of loading straight over $9D47.
 - **CFREAD ABI is 1-byte LBA**: the BIOS CFREAD/CFWRITE only set LBA0 (LBA1-3
   zeroed in the monitor's CFSETL), capping addressable sectors at 256. Fine for
   small images today; widen to a multi-byte LBA in CFSETL + the BIOS contract
