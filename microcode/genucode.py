@@ -214,10 +214,13 @@ def build_images(outdir="."):
                 put(ir | s<<8 | 1<<12, w1)
             for s in range(len(steps)+1,16):       # safety: rail to fetch
                 put(ir | s<<8, w(urst=1)); put(ir | s<<8 | 1<<12, w(urst=1))
-    import os
+    import os, sys
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools"))
+    import bin2hex
     for k in range(4):
         open(os.path.join(outdir,"u%d.bin"%k),"wb").write(roms[k])
-    print("u0-u3.bin written:",", ".join("%d bytes"%len(r) for r in roms))
+        bin2hex.write(roms[k], os.path.join(outdir,"u%d.hex"%k))   # for EEPROM programmers
+    print("u0-u3.bin + .hex written:",", ".join("%d bytes"%len(r) for r in roms))
     print("defined opcodes:",len(U))
 
 if __name__=="__main__":

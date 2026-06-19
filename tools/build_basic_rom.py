@@ -36,7 +36,12 @@ def main():
                      "BASIC would overwrite it" % (BASE, end - 1))
         rom[BASE:end] = bas
         open(out, "wb").write(rom)
-        print("wrote %s: monitor + BASIC (%d bytes @ $%04X)" % (out, len(bas), BASE))
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import bin2hex
+        hexout = out[:-4] + ".hex" if out.endswith(".bin") else out + ".hex"
+        bin2hex.write(rom, hexout)            # for EEPROM programmers (28C256 @ $0000)
+        print("wrote %s (+ %s): monitor + BASIC (%d bytes @ $%04X)"
+              % (out, os.path.basename(hexout), len(bas), BASE))
 
 if __name__ == "__main__":
     main()

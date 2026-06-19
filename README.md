@@ -64,6 +64,18 @@ python3 ../generators/render_bp_traditional.py    # backplane schematic PDF
 python3 ../microcode/gen_progguide.py             # programmer's guide (-> docs/)
 ```
 
+### EEPROM / programmer images
+
+Both build paths emit **Intel HEX** alongside the raw `.bin`, for loading into an
+EEPROM programmer:
+
+- **Microcode** — `microcode/genucode.py` writes `u0–u3.bin` *and* `u0–u3.hex`
+  (the four 28C64 control-store EPROMs).
+- **Program ROM** — `tools/build_basic_rom.py out.bin` writes `out.bin` *and*
+  `out.hex` (monitor + ROM BASIC for the 28C256 at `$0000`).
+- **Any other binary** — `python3 tools/bin2hex.py in.bin out.hex [base]`
+  (e.g. a plain monitor built with `p8xasm.py`).
+
 ## Documentation
 
 | Document | Description |
