@@ -1,0 +1,1597 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE eagle SYSTEM "eagle.dtd">
+<eagle version="9.6.2">
+<drawing>
+<settings><setting alwaysvectorfont="no"/><setting verticaltext="up"/></settings>
+<grid distance="0.1" unitdist="inch" unit="inch" style="lines" multiple="1" display="no" altdistance="0.01" altunitdist="inch" altunit="inch"/>
+<layers>
+<layer number="1" name="Top" color="4" fill="1" visible="yes" active="yes"/>
+<layer number="2" name="Route2" color="1" fill="1" visible="yes" active="yes"/>
+<layer number="3" name="Route3" color="4" fill="1" visible="yes" active="yes"/>
+<layer number="4" name="Route4" color="1" fill="1" visible="yes" active="yes"/>
+<layer number="5" name="Route5" color="4" fill="1" visible="yes" active="yes"/>
+<layer number="6" name="Route6" color="1" fill="1" visible="yes" active="yes"/>
+<layer number="7" name="Route7" color="4" fill="1" visible="yes" active="yes"/>
+<layer number="8" name="Route8" color="1" fill="1" visible="yes" active="yes"/>
+<layer number="9" name="Route9" color="4" fill="1" visible="yes" active="yes"/>
+<layer number="10" name="Route10" color="1" fill="1" visible="yes" active="yes"/>
+<layer number="11" name="Route11" color="4" fill="1" visible="yes" active="yes"/>
+<layer number="12" name="Route12" color="1" fill="1" visible="yes" active="yes"/>
+<layer number="13" name="Route13" color="4" fill="1" visible="yes" active="yes"/>
+<layer number="14" name="Route14" color="1" fill="1" visible="yes" active="yes"/>
+<layer number="15" name="Route15" color="4" fill="1" visible="yes" active="yes"/>
+<layer number="16" name="Bottom" color="1" fill="1" visible="yes" active="yes"/>
+<layer number="17" name="Pads" color="2" fill="1" visible="yes" active="yes"/>
+<layer number="18" name="Vias" color="2" fill="1" visible="yes" active="yes"/>
+<layer number="19" name="Unrouted" color="6" fill="1" visible="yes" active="yes"/>
+<layer number="20" name="Dimension" color="24" fill="1" visible="yes" active="yes"/>
+<layer number="21" name="tPlace" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="22" name="bPlace" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="23" name="tOrigins" color="15" fill="1" visible="yes" active="yes"/>
+<layer number="24" name="bOrigins" color="15" fill="1" visible="yes" active="yes"/>
+<layer number="25" name="tNames" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="26" name="bNames" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="27" name="tValues" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="28" name="bValues" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="29" name="tStop" color="7" fill="3" visible="yes" active="yes"/>
+<layer number="30" name="bStop" color="7" fill="6" visible="yes" active="yes"/>
+<layer number="31" name="tCream" color="7" fill="4" visible="yes" active="yes"/>
+<layer number="32" name="bCream" color="7" fill="5" visible="yes" active="yes"/>
+<layer number="33" name="tFinish" color="6" fill="3" visible="yes" active="yes"/>
+<layer number="34" name="bFinish" color="6" fill="6" visible="yes" active="yes"/>
+<layer number="35" name="tGlue" color="7" fill="4" visible="yes" active="yes"/>
+<layer number="36" name="bGlue" color="7" fill="5" visible="yes" active="yes"/>
+<layer number="37" name="tTest" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="38" name="bTest" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="39" name="tKeepout" color="4" fill="11" visible="yes" active="yes"/>
+<layer number="40" name="bKeepout" color="1" fill="11" visible="yes" active="yes"/>
+<layer number="41" name="tRestrict" color="4" fill="10" visible="yes" active="yes"/>
+<layer number="42" name="bRestrict" color="1" fill="10" visible="yes" active="yes"/>
+<layer number="43" name="vRestrict" color="2" fill="10" visible="yes" active="yes"/>
+<layer number="44" name="Drills" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="45" name="Holes" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="46" name="Milling" color="3" fill="1" visible="yes" active="yes"/>
+<layer number="47" name="Measures" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="48" name="Document" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="49" name="Reference" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="51" name="tDocu" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="52" name="bDocu" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="88" name="SimResults" color="9" fill="1" visible="yes" active="yes"/>
+<layer number="89" name="SimProbes" color="9" fill="1" visible="yes" active="yes"/>
+<layer number="90" name="Modules" color="5" fill="1" visible="yes" active="yes"/>
+<layer number="91" name="Nets" color="2" fill="1" visible="yes" active="yes"/>
+<layer number="92" name="Busses" color="1" fill="1" visible="yes" active="yes"/>
+<layer number="93" name="Pins" color="2" fill="1" visible="yes" active="yes"/>
+<layer number="94" name="Symbols" color="4" fill="1" visible="yes" active="yes"/>
+<layer number="95" name="Names" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="96" name="Values" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="97" name="Info" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="98" name="Guide" color="6" fill="1" visible="yes" active="yes"/>
+</layers>
+<board><plain>
+<wire x1="0" y1="0" x2="160" y2="0" width="0" layer="20"/>
+<wire x1="160" y1="0" x2="160" y2="100" width="0" layer="20"/>
+<wire x1="160" y1="100" x2="0" y2="100" width="0" layer="20"/>
+<wire x1="0" y1="100" x2="0" y2="0" width="0" layer="20"/>
+<text x="4" y="94" size="2.54" layer="21">P8X ALU CARD REV B (conventional carry, LDZN, SETC/CLRC, carry-coupled shifter) (FULL)</text>
+</plain>
+<libraries><library name="p8x">
+<packages>
+<package name="C_DISC">
+<pad name="1" x="0.00" y="0.00" drill="0.9" diameter="1.8"/>
+<pad name="2" x="0.00" y="-5.08" drill="0.9" diameter="1.8"/>
+<text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
+<text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
+</package>
+<package name="DIN96C">
+<pad name="A1" x="5.08" y="-0.00" drill="1.0" diameter="1.7"/>
+<pad name="A2" x="5.08" y="-2.54" drill="1.0" diameter="1.7"/>
+<pad name="A3" x="5.08" y="-5.08" drill="1.0" diameter="1.7"/>
+<pad name="A4" x="5.08" y="-7.62" drill="1.0" diameter="1.7"/>
+<pad name="A5" x="5.08" y="-10.16" drill="1.0" diameter="1.7"/>
+<pad name="A6" x="5.08" y="-12.70" drill="1.0" diameter="1.7"/>
+<pad name="A7" x="5.08" y="-15.24" drill="1.0" diameter="1.7"/>
+<pad name="A8" x="5.08" y="-17.78" drill="1.0" diameter="1.7"/>
+<pad name="A9" x="5.08" y="-20.32" drill="1.0" diameter="1.7"/>
+<pad name="A10" x="5.08" y="-22.86" drill="1.0" diameter="1.7"/>
+<pad name="A11" x="5.08" y="-25.40" drill="1.0" diameter="1.7"/>
+<pad name="A12" x="5.08" y="-27.94" drill="1.0" diameter="1.7"/>
+<pad name="A13" x="5.08" y="-30.48" drill="1.0" diameter="1.7"/>
+<pad name="A14" x="5.08" y="-33.02" drill="1.0" diameter="1.7"/>
+<pad name="A15" x="5.08" y="-35.56" drill="1.0" diameter="1.7"/>
+<pad name="A16" x="5.08" y="-38.10" drill="1.0" diameter="1.7"/>
+<pad name="A17" x="5.08" y="-40.64" drill="1.0" diameter="1.7"/>
+<pad name="A18" x="5.08" y="-43.18" drill="1.0" diameter="1.7"/>
+<pad name="A19" x="5.08" y="-45.72" drill="1.0" diameter="1.7"/>
+<pad name="A20" x="5.08" y="-48.26" drill="1.0" diameter="1.7"/>
+<pad name="A21" x="5.08" y="-50.80" drill="1.0" diameter="1.7"/>
+<pad name="A22" x="5.08" y="-53.34" drill="1.0" diameter="1.7"/>
+<pad name="A23" x="5.08" y="-55.88" drill="1.0" diameter="1.7"/>
+<pad name="A24" x="5.08" y="-58.42" drill="1.0" diameter="1.7"/>
+<pad name="A25" x="5.08" y="-60.96" drill="1.0" diameter="1.7"/>
+<pad name="A26" x="5.08" y="-63.50" drill="1.0" diameter="1.7"/>
+<pad name="A27" x="5.08" y="-66.04" drill="1.0" diameter="1.7"/>
+<pad name="A28" x="5.08" y="-68.58" drill="1.0" diameter="1.7"/>
+<pad name="A29" x="5.08" y="-71.12" drill="1.0" diameter="1.7"/>
+<pad name="A30" x="5.08" y="-73.66" drill="1.0" diameter="1.7"/>
+<pad name="A31" x="5.08" y="-76.20" drill="1.0" diameter="1.7"/>
+<pad name="A32" x="5.08" y="-78.74" drill="1.0" diameter="1.7"/>
+<pad name="B1" x="2.54" y="-0.00" drill="1.0" diameter="1.7"/>
+<pad name="B2" x="2.54" y="-2.54" drill="1.0" diameter="1.7"/>
+<pad name="B3" x="2.54" y="-5.08" drill="1.0" diameter="1.7"/>
+<pad name="B4" x="2.54" y="-7.62" drill="1.0" diameter="1.7"/>
+<pad name="B5" x="2.54" y="-10.16" drill="1.0" diameter="1.7"/>
+<pad name="B6" x="2.54" y="-12.70" drill="1.0" diameter="1.7"/>
+<pad name="B7" x="2.54" y="-15.24" drill="1.0" diameter="1.7"/>
+<pad name="B8" x="2.54" y="-17.78" drill="1.0" diameter="1.7"/>
+<pad name="B9" x="2.54" y="-20.32" drill="1.0" diameter="1.7"/>
+<pad name="B10" x="2.54" y="-22.86" drill="1.0" diameter="1.7"/>
+<pad name="B11" x="2.54" y="-25.40" drill="1.0" diameter="1.7"/>
+<pad name="B12" x="2.54" y="-27.94" drill="1.0" diameter="1.7"/>
+<pad name="B13" x="2.54" y="-30.48" drill="1.0" diameter="1.7"/>
+<pad name="B14" x="2.54" y="-33.02" drill="1.0" diameter="1.7"/>
+<pad name="B15" x="2.54" y="-35.56" drill="1.0" diameter="1.7"/>
+<pad name="B16" x="2.54" y="-38.10" drill="1.0" diameter="1.7"/>
+<pad name="B17" x="2.54" y="-40.64" drill="1.0" diameter="1.7"/>
+<pad name="B18" x="2.54" y="-43.18" drill="1.0" diameter="1.7"/>
+<pad name="B19" x="2.54" y="-45.72" drill="1.0" diameter="1.7"/>
+<pad name="B20" x="2.54" y="-48.26" drill="1.0" diameter="1.7"/>
+<pad name="B21" x="2.54" y="-50.80" drill="1.0" diameter="1.7"/>
+<pad name="B22" x="2.54" y="-53.34" drill="1.0" diameter="1.7"/>
+<pad name="B23" x="2.54" y="-55.88" drill="1.0" diameter="1.7"/>
+<pad name="B24" x="2.54" y="-58.42" drill="1.0" diameter="1.7"/>
+<pad name="B25" x="2.54" y="-60.96" drill="1.0" diameter="1.7"/>
+<pad name="B26" x="2.54" y="-63.50" drill="1.0" diameter="1.7"/>
+<pad name="B27" x="2.54" y="-66.04" drill="1.0" diameter="1.7"/>
+<pad name="B28" x="2.54" y="-68.58" drill="1.0" diameter="1.7"/>
+<pad name="B29" x="2.54" y="-71.12" drill="1.0" diameter="1.7"/>
+<pad name="B30" x="2.54" y="-73.66" drill="1.0" diameter="1.7"/>
+<pad name="B31" x="2.54" y="-76.20" drill="1.0" diameter="1.7"/>
+<pad name="B32" x="2.54" y="-78.74" drill="1.0" diameter="1.7"/>
+<pad name="C1" x="0.00" y="-0.00" drill="1.0" diameter="1.7"/>
+<pad name="C2" x="0.00" y="-2.54" drill="1.0" diameter="1.7"/>
+<pad name="C3" x="0.00" y="-5.08" drill="1.0" diameter="1.7"/>
+<pad name="C4" x="0.00" y="-7.62" drill="1.0" diameter="1.7"/>
+<pad name="C5" x="0.00" y="-10.16" drill="1.0" diameter="1.7"/>
+<pad name="C6" x="0.00" y="-12.70" drill="1.0" diameter="1.7"/>
+<pad name="C7" x="0.00" y="-15.24" drill="1.0" diameter="1.7"/>
+<pad name="C8" x="0.00" y="-17.78" drill="1.0" diameter="1.7"/>
+<pad name="C9" x="0.00" y="-20.32" drill="1.0" diameter="1.7"/>
+<pad name="C10" x="0.00" y="-22.86" drill="1.0" diameter="1.7"/>
+<pad name="C11" x="0.00" y="-25.40" drill="1.0" diameter="1.7"/>
+<pad name="C12" x="0.00" y="-27.94" drill="1.0" diameter="1.7"/>
+<pad name="C13" x="0.00" y="-30.48" drill="1.0" diameter="1.7"/>
+<pad name="C14" x="0.00" y="-33.02" drill="1.0" diameter="1.7"/>
+<pad name="C15" x="0.00" y="-35.56" drill="1.0" diameter="1.7"/>
+<pad name="C16" x="0.00" y="-38.10" drill="1.0" diameter="1.7"/>
+<pad name="C17" x="0.00" y="-40.64" drill="1.0" diameter="1.7"/>
+<pad name="C18" x="0.00" y="-43.18" drill="1.0" diameter="1.7"/>
+<pad name="C19" x="0.00" y="-45.72" drill="1.0" diameter="1.7"/>
+<pad name="C20" x="0.00" y="-48.26" drill="1.0" diameter="1.7"/>
+<pad name="C21" x="0.00" y="-50.80" drill="1.0" diameter="1.7"/>
+<pad name="C22" x="0.00" y="-53.34" drill="1.0" diameter="1.7"/>
+<pad name="C23" x="0.00" y="-55.88" drill="1.0" diameter="1.7"/>
+<pad name="C24" x="0.00" y="-58.42" drill="1.0" diameter="1.7"/>
+<pad name="C25" x="0.00" y="-60.96" drill="1.0" diameter="1.7"/>
+<pad name="C26" x="0.00" y="-63.50" drill="1.0" diameter="1.7"/>
+<pad name="C27" x="0.00" y="-66.04" drill="1.0" diameter="1.7"/>
+<pad name="C28" x="0.00" y="-68.58" drill="1.0" diameter="1.7"/>
+<pad name="C29" x="0.00" y="-71.12" drill="1.0" diameter="1.7"/>
+<pad name="C30" x="0.00" y="-73.66" drill="1.0" diameter="1.7"/>
+<pad name="C31" x="0.00" y="-76.20" drill="1.0" diameter="1.7"/>
+<pad name="C32" x="0.00" y="-78.74" drill="1.0" diameter="1.7"/>
+<hole x="2.54" y="7.63" drill="2.8"/>
+<hole x="2.54" y="-86.37" drill="2.8"/>
+<text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
+<text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
+</package>
+<package name="DIP14">
+<pad name="1" x="0.00" y="-0.00" drill="0.8128" diameter="1.6"/>
+<pad name="2" x="0.00" y="-2.54" drill="0.8128" diameter="1.6"/>
+<pad name="3" x="0.00" y="-5.08" drill="0.8128" diameter="1.6"/>
+<pad name="4" x="0.00" y="-7.62" drill="0.8128" diameter="1.6"/>
+<pad name="5" x="0.00" y="-10.16" drill="0.8128" diameter="1.6"/>
+<pad name="6" x="0.00" y="-12.70" drill="0.8128" diameter="1.6"/>
+<pad name="7" x="0.00" y="-15.24" drill="0.8128" diameter="1.6"/>
+<pad name="8" x="7.62" y="-15.24" drill="0.8128" diameter="1.6"/>
+<pad name="9" x="7.62" y="-12.70" drill="0.8128" diameter="1.6"/>
+<pad name="10" x="7.62" y="-10.16" drill="0.8128" diameter="1.6"/>
+<pad name="11" x="7.62" y="-7.62" drill="0.8128" diameter="1.6"/>
+<pad name="12" x="7.62" y="-5.08" drill="0.8128" diameter="1.6"/>
+<pad name="13" x="7.62" y="-2.54" drill="0.8128" diameter="1.6"/>
+<pad name="14" x="7.62" y="-0.00" drill="0.8128" diameter="1.6"/>
+<text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
+<text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
+</package>
+<package name="DIP16">
+<pad name="1" x="0.00" y="-0.00" drill="0.8128" diameter="1.6"/>
+<pad name="2" x="0.00" y="-2.54" drill="0.8128" diameter="1.6"/>
+<pad name="3" x="0.00" y="-5.08" drill="0.8128" diameter="1.6"/>
+<pad name="4" x="0.00" y="-7.62" drill="0.8128" diameter="1.6"/>
+<pad name="5" x="0.00" y="-10.16" drill="0.8128" diameter="1.6"/>
+<pad name="6" x="0.00" y="-12.70" drill="0.8128" diameter="1.6"/>
+<pad name="7" x="0.00" y="-15.24" drill="0.8128" diameter="1.6"/>
+<pad name="8" x="0.00" y="-17.78" drill="0.8128" diameter="1.6"/>
+<pad name="9" x="7.62" y="-17.78" drill="0.8128" diameter="1.6"/>
+<pad name="10" x="7.62" y="-15.24" drill="0.8128" diameter="1.6"/>
+<pad name="11" x="7.62" y="-12.70" drill="0.8128" diameter="1.6"/>
+<pad name="12" x="7.62" y="-10.16" drill="0.8128" diameter="1.6"/>
+<pad name="13" x="7.62" y="-7.62" drill="0.8128" diameter="1.6"/>
+<pad name="14" x="7.62" y="-5.08" drill="0.8128" diameter="1.6"/>
+<pad name="15" x="7.62" y="-2.54" drill="0.8128" diameter="1.6"/>
+<pad name="16" x="7.62" y="-0.00" drill="0.8128" diameter="1.6"/>
+<text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
+<text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
+</package>
+<package name="DIP20">
+<pad name="1" x="0.00" y="-0.00" drill="0.8128" diameter="1.6"/>
+<pad name="2" x="0.00" y="-2.54" drill="0.8128" diameter="1.6"/>
+<pad name="3" x="0.00" y="-5.08" drill="0.8128" diameter="1.6"/>
+<pad name="4" x="0.00" y="-7.62" drill="0.8128" diameter="1.6"/>
+<pad name="5" x="0.00" y="-10.16" drill="0.8128" diameter="1.6"/>
+<pad name="6" x="0.00" y="-12.70" drill="0.8128" diameter="1.6"/>
+<pad name="7" x="0.00" y="-15.24" drill="0.8128" diameter="1.6"/>
+<pad name="8" x="0.00" y="-17.78" drill="0.8128" diameter="1.6"/>
+<pad name="9" x="0.00" y="-20.32" drill="0.8128" diameter="1.6"/>
+<pad name="10" x="0.00" y="-22.86" drill="0.8128" diameter="1.6"/>
+<pad name="11" x="7.62" y="-22.86" drill="0.8128" diameter="1.6"/>
+<pad name="12" x="7.62" y="-20.32" drill="0.8128" diameter="1.6"/>
+<pad name="13" x="7.62" y="-17.78" drill="0.8128" diameter="1.6"/>
+<pad name="14" x="7.62" y="-15.24" drill="0.8128" diameter="1.6"/>
+<pad name="15" x="7.62" y="-12.70" drill="0.8128" diameter="1.6"/>
+<pad name="16" x="7.62" y="-10.16" drill="0.8128" diameter="1.6"/>
+<pad name="17" x="7.62" y="-7.62" drill="0.8128" diameter="1.6"/>
+<pad name="18" x="7.62" y="-5.08" drill="0.8128" diameter="1.6"/>
+<pad name="19" x="7.62" y="-2.54" drill="0.8128" diameter="1.6"/>
+<pad name="20" x="7.62" y="-0.00" drill="0.8128" diameter="1.6"/>
+<text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
+<text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
+</package>
+<package name="DIP24W">
+<pad name="1" x="0.00" y="-0.00" drill="0.8128" diameter="1.6"/>
+<pad name="2" x="0.00" y="-2.54" drill="0.8128" diameter="1.6"/>
+<pad name="3" x="0.00" y="-5.08" drill="0.8128" diameter="1.6"/>
+<pad name="4" x="0.00" y="-7.62" drill="0.8128" diameter="1.6"/>
+<pad name="5" x="0.00" y="-10.16" drill="0.8128" diameter="1.6"/>
+<pad name="6" x="0.00" y="-12.70" drill="0.8128" diameter="1.6"/>
+<pad name="7" x="0.00" y="-15.24" drill="0.8128" diameter="1.6"/>
+<pad name="8" x="0.00" y="-17.78" drill="0.8128" diameter="1.6"/>
+<pad name="9" x="0.00" y="-20.32" drill="0.8128" diameter="1.6"/>
+<pad name="10" x="0.00" y="-22.86" drill="0.8128" diameter="1.6"/>
+<pad name="11" x="0.00" y="-25.40" drill="0.8128" diameter="1.6"/>
+<pad name="12" x="0.00" y="-27.94" drill="0.8128" diameter="1.6"/>
+<pad name="13" x="15.24" y="-27.94" drill="0.8128" diameter="1.6"/>
+<pad name="14" x="15.24" y="-25.40" drill="0.8128" diameter="1.6"/>
+<pad name="15" x="15.24" y="-22.86" drill="0.8128" diameter="1.6"/>
+<pad name="16" x="15.24" y="-20.32" drill="0.8128" diameter="1.6"/>
+<pad name="17" x="15.24" y="-17.78" drill="0.8128" diameter="1.6"/>
+<pad name="18" x="15.24" y="-15.24" drill="0.8128" diameter="1.6"/>
+<pad name="19" x="15.24" y="-12.70" drill="0.8128" diameter="1.6"/>
+<pad name="20" x="15.24" y="-10.16" drill="0.8128" diameter="1.6"/>
+<pad name="21" x="15.24" y="-7.62" drill="0.8128" diameter="1.6"/>
+<pad name="22" x="15.24" y="-5.08" drill="0.8128" diameter="1.6"/>
+<pad name="23" x="15.24" y="-2.54" drill="0.8128" diameter="1.6"/>
+<pad name="24" x="15.24" y="-0.00" drill="0.8128" diameter="1.6"/>
+<text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
+<text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
+</package>
+<package name="LED5">
+<pad name="2" x="0.00" y="0.00" drill="0.9" diameter="1.8"/>
+<pad name="1" x="2.54" y="0.00" drill="0.9" diameter="1.8"/>
+<text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
+<text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
+</package>
+<package name="R_AXIAL">
+<pad name="1" x="0.00" y="0.00" drill="0.8" diameter="1.6"/>
+<pad name="2" x="10.16" y="0.00" drill="0.8" diameter="1.6"/>
+<text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
+<text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
+</package>
+</packages>
+</library></libraries>
+<attributes></attributes><variantdefs></variantdefs>
+<classes><class number="0" name="default" width="0" drill="0"/></classes>
+<designrules name="default"><param name="layerSetup" value="(1*2*15*16)"/></designrules>
+<elements>
+<element name="J1" library="p8x" package="DIN96C" value="FABC96R" x="5.40" y="86.97" smashed="yes">
+<attribute name="NAME" x="5.40" y="89.51" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="5.40" y="84.43" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U1" library="p8x" package="DIP20" value="74HCT377" x="17.88" y="95.20" smashed="yes">
+<attribute name="NAME" x="17.88" y="97.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="17.88" y="92.66" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD1" library="p8x" package="C_DISC" value="100N" x="29.80" y="95.10" smashed="yes">
+<attribute name="NAME" x="29.80" y="97.64" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="29.80" y="92.56" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U2" library="p8x" package="DIP20" value="74HCT244" x="34.10" y="95.20" smashed="yes">
+<attribute name="NAME" x="34.10" y="97.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="34.10" y="92.66" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD2" library="p8x" package="C_DISC" value="100N" x="46.02" y="95.10" smashed="yes">
+<attribute name="NAME" x="46.02" y="97.64" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="46.02" y="92.56" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U3" library="p8x" package="DIP20" value="74HCT377" x="50.32" y="95.20" smashed="yes">
+<attribute name="NAME" x="50.32" y="97.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="50.32" y="92.66" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD3" library="p8x" package="C_DISC" value="100N" x="62.24" y="95.10" smashed="yes">
+<attribute name="NAME" x="62.24" y="97.64" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="62.24" y="92.56" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U4" library="p8x" package="DIP20" value="74HCT244" x="66.54" y="95.20" smashed="yes">
+<attribute name="NAME" x="66.54" y="97.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="66.54" y="92.66" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD4" library="p8x" package="C_DISC" value="100N" x="78.46" y="95.10" smashed="yes">
+<attribute name="NAME" x="78.46" y="97.64" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="78.46" y="92.56" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U5" library="p8x" package="DIP20" value="74HCT377" x="82.76" y="95.20" smashed="yes">
+<attribute name="NAME" x="82.76" y="97.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="82.76" y="92.66" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD5" library="p8x" package="C_DISC" value="100N" x="94.68" y="95.10" smashed="yes">
+<attribute name="NAME" x="94.68" y="97.64" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="94.68" y="92.56" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U6" library="p8x" package="DIP20" value="74HCT244" x="98.98" y="95.20" smashed="yes">
+<attribute name="NAME" x="98.98" y="97.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="98.98" y="92.66" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD6" library="p8x" package="C_DISC" value="100N" x="110.90" y="95.10" smashed="yes">
+<attribute name="NAME" x="110.90" y="97.64" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="110.90" y="92.56" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U7" library="p8x" package="DIP20" value="74HCT377" x="115.20" y="95.20" smashed="yes">
+<attribute name="NAME" x="115.20" y="97.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="115.20" y="92.66" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD7" library="p8x" package="C_DISC" value="100N" x="127.12" y="95.10" smashed="yes">
+<attribute name="NAME" x="127.12" y="97.64" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="127.12" y="92.56" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U8" library="p8x" package="DIP20" value="74HCT244" x="131.42" y="95.20" smashed="yes">
+<attribute name="NAME" x="131.42" y="97.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="131.42" y="92.66" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD8" library="p8x" package="C_DISC" value="100N" x="143.34" y="95.10" smashed="yes">
+<attribute name="NAME" x="143.34" y="97.64" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="143.34" y="92.56" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U9" library="p8x" package="DIP24W" value="74HCT181" x="17.88" y="68.14" smashed="yes">
+<attribute name="NAME" x="17.88" y="70.68" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="17.88" y="65.60" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD9" library="p8x" package="C_DISC" value="100N" x="37.42" y="68.04" smashed="yes">
+<attribute name="NAME" x="37.42" y="70.58" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="37.42" y="65.50" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U10" library="p8x" package="DIP24W" value="74HCT181" x="41.72" y="68.14" smashed="yes">
+<attribute name="NAME" x="41.72" y="70.68" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="41.72" y="65.60" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD10" library="p8x" package="C_DISC" value="100N" x="61.26" y="68.04" smashed="yes">
+<attribute name="NAME" x="61.26" y="70.58" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="61.26" y="65.50" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U11" library="p8x" package="DIP16" value="74HCT182" x="65.56" y="68.14" smashed="yes">
+<attribute name="NAME" x="65.56" y="70.68" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="65.56" y="65.60" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD11" library="p8x" package="C_DISC" value="100N" x="77.48" y="68.04" smashed="yes">
+<attribute name="NAME" x="77.48" y="70.58" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="77.48" y="65.50" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U12" library="p8x" package="DIP16" value="74HCT157" x="81.78" y="68.14" smashed="yes">
+<attribute name="NAME" x="81.78" y="70.68" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="81.78" y="65.60" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD12" library="p8x" package="C_DISC" value="100N" x="93.70" y="68.04" smashed="yes">
+<attribute name="NAME" x="93.70" y="70.58" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="93.70" y="65.50" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U13" library="p8x" package="DIP16" value="74HCT157" x="98.00" y="68.14" smashed="yes">
+<attribute name="NAME" x="98.00" y="70.68" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="98.00" y="65.60" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD13" library="p8x" package="C_DISC" value="100N" x="109.92" y="68.04" smashed="yes">
+<attribute name="NAME" x="109.92" y="70.58" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="109.92" y="65.50" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U14" library="p8x" package="DIP16" value="74HCT157" x="114.22" y="68.14" smashed="yes">
+<attribute name="NAME" x="114.22" y="70.68" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="114.22" y="65.60" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD14" library="p8x" package="C_DISC" value="100N" x="126.14" y="68.04" smashed="yes">
+<attribute name="NAME" x="126.14" y="70.58" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="126.14" y="65.50" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U15" library="p8x" package="DIP16" value="74HCT157" x="130.44" y="68.14" smashed="yes">
+<attribute name="NAME" x="130.44" y="70.68" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="130.44" y="65.60" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD15" library="p8x" package="C_DISC" value="100N" x="142.36" y="68.04" smashed="yes">
+<attribute name="NAME" x="142.36" y="70.58" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="142.36" y="65.50" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U16" library="p8x" package="DIP20" value="74HCT244" x="146.66" y="68.14" smashed="yes">
+<attribute name="NAME" x="146.66" y="70.68" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="146.66" y="65.60" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD16" library="p8x" package="C_DISC" value="100N" x="17.98" y="35.90" smashed="yes">
+<attribute name="NAME" x="17.98" y="38.44" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="17.98" y="33.36" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U17" library="p8x" package="DIP16" value="FLAGS" x="22.28" y="36.00" smashed="yes">
+<attribute name="NAME" x="22.28" y="38.54" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="22.28" y="33.46" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD17" library="p8x" package="C_DISC" value="100N" x="34.20" y="35.90" smashed="yes">
+<attribute name="NAME" x="34.20" y="38.44" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="34.20" y="33.36" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U18" library="p8x" package="DIP14" value="74HCT260" x="38.50" y="36.00" smashed="yes">
+<attribute name="NAME" x="38.50" y="38.54" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="38.50" y="33.46" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD18" library="p8x" package="C_DISC" value="100N" x="50.42" y="35.90" smashed="yes">
+<attribute name="NAME" x="50.42" y="38.44" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="50.42" y="33.36" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U19" library="p8x" package="DIP14" value="74HCT08" x="54.72" y="36.00" smashed="yes">
+<attribute name="NAME" x="54.72" y="38.54" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="54.72" y="33.46" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD19" library="p8x" package="C_DISC" value="100N" x="66.64" y="35.90" smashed="yes">
+<attribute name="NAME" x="66.64" y="38.44" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="66.64" y="33.36" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U20" library="p8x" package="DIP16" value="74HCT138" x="70.94" y="36.00" smashed="yes">
+<attribute name="NAME" x="70.94" y="38.54" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="70.94" y="33.46" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD20" library="p8x" package="C_DISC" value="100N" x="82.86" y="35.90" smashed="yes">
+<attribute name="NAME" x="82.86" y="38.44" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="82.86" y="33.36" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U21" library="p8x" package="DIP16" value="74HCT138" x="87.16" y="36.00" smashed="yes">
+<attribute name="NAME" x="87.16" y="38.54" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="87.16" y="33.46" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD21" library="p8x" package="C_DISC" value="100N" x="99.08" y="35.90" smashed="yes">
+<attribute name="NAME" x="99.08" y="38.44" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="99.08" y="33.36" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U22" library="p8x" package="DIP16" value="74HCT157" x="103.38" y="36.00" smashed="yes">
+<attribute name="NAME" x="103.38" y="38.54" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="103.38" y="33.46" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD22" library="p8x" package="C_DISC" value="100N" x="115.30" y="35.90" smashed="yes">
+<attribute name="NAME" x="115.30" y="38.44" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="115.30" y="33.36" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U23" library="p8x" package="DIP20" value="74HCT244" x="119.60" y="36.00" smashed="yes">
+<attribute name="NAME" x="119.60" y="38.54" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="119.60" y="33.46" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD23" library="p8x" package="C_DISC" value="100N" x="131.52" y="35.90" smashed="yes">
+<attribute name="NAME" x="131.52" y="38.44" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="131.52" y="33.36" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U24" library="p8x" package="DIP14" value="74HCT32" x="135.82" y="36.00" smashed="yes">
+<attribute name="NAME" x="135.82" y="38.54" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="135.82" y="33.46" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD24" library="p8x" package="C_DISC" value="100N" x="147.74" y="35.90" smashed="yes">
+<attribute name="NAME" x="147.74" y="38.44" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="147.74" y="33.36" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U25" library="p8x" package="DIP14" value="74HCT00" x="17.88" y="8.94" smashed="yes">
+<attribute name="NAME" x="17.88" y="11.48" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="17.88" y="6.40" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD25" library="p8x" package="C_DISC" value="100N" x="29.80" y="8.84" smashed="yes">
+<attribute name="NAME" x="29.80" y="11.38" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="29.80" y="6.30" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U26" library="p8x" package="DIP14" value="74HCT74" x="34.10" y="8.94" smashed="yes">
+<attribute name="NAME" x="34.10" y="11.48" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="34.10" y="6.40" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD26" library="p8x" package="C_DISC" value="100N" x="46.02" y="8.84" smashed="yes">
+<attribute name="NAME" x="46.02" y="11.38" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="46.02" y="6.30" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U27" library="p8x" package="DIP14" value="74HCT260" x="50.32" y="8.94" smashed="yes">
+<attribute name="NAME" x="50.32" y="11.48" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="50.32" y="6.40" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD27" library="p8x" package="C_DISC" value="100N" x="62.24" y="8.84" smashed="yes">
+<attribute name="NAME" x="62.24" y="11.38" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="62.24" y="6.30" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U28" library="p8x" package="DIP16" value="74HCT157" x="66.54" y="8.94" smashed="yes">
+<attribute name="NAME" x="66.54" y="11.48" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="66.54" y="6.40" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD28" library="p8x" package="C_DISC" value="100N" x="78.46" y="8.84" smashed="yes">
+<attribute name="NAME" x="78.46" y="11.38" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="78.46" y="6.30" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U29" library="p8x" package="DIP16" value="74HCT157" x="82.76" y="8.94" smashed="yes">
+<attribute name="NAME" x="82.76" y="11.48" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="82.76" y="6.40" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD29" library="p8x" package="C_DISC" value="100N" x="94.68" y="8.84" smashed="yes">
+<attribute name="NAME" x="94.68" y="11.38" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="94.68" y="6.30" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U30" library="p8x" package="DIP16" value="74HCT157" x="98.98" y="8.94" smashed="yes">
+<attribute name="NAME" x="98.98" y="11.48" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="98.98" y="6.40" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD30" library="p8x" package="C_DISC" value="100N" x="110.90" y="8.84" smashed="yes">
+<attribute name="NAME" x="110.90" y="11.38" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="110.90" y="6.30" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U31" library="p8x" package="DIP14" value="74HCT08" x="115.20" y="8.94" smashed="yes">
+<attribute name="NAME" x="115.20" y="11.48" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="115.20" y="6.40" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD31" library="p8x" package="C_DISC" value="100N" x="127.12" y="8.84" smashed="yes">
+<attribute name="NAME" x="127.12" y="11.38" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="127.12" y="6.30" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U32" library="p8x" package="DIP16" value="74HCT157" x="131.42" y="8.94" smashed="yes">
+<attribute name="NAME" x="131.42" y="11.48" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="131.42" y="6.40" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD32" library="p8x" package="C_DISC" value="100N" x="143.34" y="8.84" smashed="yes">
+<attribute name="NAME" x="143.34" y="11.38" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="143.34" y="6.30" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U33" library="p8x" package="DIP16" value="74HCT157" x="17.88" y="-13.04" smashed="yes">
+<attribute name="NAME" x="17.88" y="-10.50" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="17.88" y="-15.58" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD33" library="p8x" package="C_DISC" value="100N" x="29.80" y="-13.14" smashed="yes">
+<attribute name="NAME" x="29.80" y="-10.60" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="29.80" y="-15.68" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U34" library="p8x" package="DIP14" value="74HCT86" x="34.10" y="-13.04" smashed="yes">
+<attribute name="NAME" x="34.10" y="-10.50" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="34.10" y="-15.58" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD34" library="p8x" package="C_DISC" value="100N" x="46.02" y="-13.14" smashed="yes">
+<attribute name="NAME" x="46.02" y="-10.60" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="46.02" y="-15.68" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U35" library="p8x" package="DIP14" value="74HCT08" x="50.32" y="-13.04" smashed="yes">
+<attribute name="NAME" x="50.32" y="-10.50" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="50.32" y="-15.58" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD35" library="p8x" package="C_DISC" value="100N" x="62.24" y="-13.14" smashed="yes">
+<attribute name="NAME" x="62.24" y="-10.60" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="62.24" y="-15.68" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="RP1" library="p8x" package="R_AXIAL" value="1K" x="66.54" y="-13.04" smashed="yes">
+<attribute name="NAME" x="66.54" y="-10.50" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="66.54" y="-15.58" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="LED3" library="p8x" package="LED5" value="GRN" x="81.00" y="-13.14" smashed="yes">
+<attribute name="NAME" x="81.00" y="-10.60" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="81.00" y="-15.68" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="R4" library="p8x" package="R_AXIAL" value="1K" x="87.84" y="-13.04" smashed="yes">
+<attribute name="NAME" x="87.84" y="-10.50" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="87.84" y="-15.58" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="LED4" library="p8x" package="LED5" value="GRN" x="102.30" y="-13.14" smashed="yes">
+<attribute name="NAME" x="102.30" y="-10.60" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="102.30" y="-15.68" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="R5" library="p8x" package="R_AXIAL" value="1K" x="109.14" y="-13.04" smashed="yes">
+<attribute name="NAME" x="109.14" y="-10.50" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="109.14" y="-15.58" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="LED5" library="p8x" package="LED5" value="YEL" x="123.60" y="-13.14" smashed="yes">
+<attribute name="NAME" x="123.60" y="-10.60" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="123.60" y="-15.68" size="1.778" layer="27" ratio="10"/>
+</element>
+</elements><signals>
+<signal name="-CCLR">
+<contactref element="U26" pad="1"/>
+<contactref element="U31" pad="8"/>
+</signal>
+<signal name="-CLRCb">
+<contactref element="U25" pad="11"/>
+<contactref element="U31" pad="10"/>
+</signal>
+<signal name="-DOEA">
+<contactref element="U2" pad="1"/>
+<contactref element="U2" pad="19"/>
+<contactref element="U20" pad="14"/>
+</signal>
+<signal name="-DOEALU">
+<contactref element="U16" pad="1"/>
+<contactref element="U16" pad="19"/>
+<contactref element="U20" pad="10"/>
+<contactref element="U19" pad="9"/>
+<contactref element="U19" pad="10"/>
+</signal>
+<signal name="-DOEB">
+<contactref element="U4" pad="1"/>
+<contactref element="U4" pad="19"/>
+<contactref element="U20" pad="13"/>
+</signal>
+<signal name="-DOEFLG">
+<contactref element="U20" pad="9"/>
+<contactref element="U23" pad="1"/>
+</signal>
+<signal name="-DOET">
+<contactref element="U6" pad="1"/>
+<contactref element="U6" pad="19"/>
+<contactref element="U20" pad="12"/>
+</signal>
+<signal name="-DOET2">
+<contactref element="U8" pad="1"/>
+<contactref element="U8" pad="19"/>
+<contactref element="U20" pad="11"/>
+</signal>
+<signal name="-LDA">
+<contactref element="U1" pad="1"/>
+<contactref element="U21" pad="14"/>
+</signal>
+<signal name="-LDB">
+<contactref element="U3" pad="1"/>
+<contactref element="U21" pad="13"/>
+</signal>
+<signal name="-LDT">
+<contactref element="U5" pad="1"/>
+<contactref element="U21" pad="12"/>
+</signal>
+<signal name="-LDT2">
+<contactref element="U7" pad="1"/>
+<contactref element="U21" pad="11"/>
+</signal>
+<signal name="-RES">
+<contactref element="U17" pad="1"/>
+<contactref element="U31" pad="9"/>
+<contactref element="J1" pad="A11"/>
+</signal>
+<signal name="-SETCb">
+<contactref element="U26" pad="4"/>
+<contactref element="U25" pad="3"/>
+</signal>
+<signal name="ALUK">
+<contactref element="U19" pad="8"/>
+<contactref element="LED4" pad="1"/>
+</signal>
+<signal name="ALUM">
+<contactref element="U9" pad="8"/>
+<contactref element="U10" pad="8"/>
+<contactref element="J1" pad="C23"/>
+</signal>
+<signal name="ALUS0">
+<contactref element="U9" pad="6"/>
+<contactref element="U10" pad="6"/>
+<contactref element="J1" pad="C19"/>
+</signal>
+<signal name="ALUS1">
+<contactref element="U9" pad="5"/>
+<contactref element="U10" pad="5"/>
+<contactref element="J1" pad="C20"/>
+</signal>
+<signal name="ALUS2">
+<contactref element="U9" pad="4"/>
+<contactref element="U10" pad="4"/>
+<contactref element="U34" pad="9"/>
+<contactref element="J1" pad="C21"/>
+</signal>
+<signal name="ALUS3">
+<contactref element="U9" pad="3"/>
+<contactref element="U10" pad="3"/>
+<contactref element="J1" pad="C22"/>
+</signal>
+<signal name="AQ0">
+<contactref element="U1" pad="2"/>
+<contactref element="U2" pad="2"/>
+<contactref element="U9" pad="2"/>
+</signal>
+<signal name="AQ1">
+<contactref element="U1" pad="5"/>
+<contactref element="U2" pad="4"/>
+<contactref element="U9" pad="23"/>
+</signal>
+<signal name="AQ2">
+<contactref element="U1" pad="6"/>
+<contactref element="U2" pad="6"/>
+<contactref element="U9" pad="21"/>
+</signal>
+<signal name="AQ3">
+<contactref element="U1" pad="9"/>
+<contactref element="U2" pad="8"/>
+<contactref element="U9" pad="19"/>
+</signal>
+<signal name="AQ4">
+<contactref element="U1" pad="12"/>
+<contactref element="U2" pad="11"/>
+<contactref element="U10" pad="2"/>
+</signal>
+<signal name="AQ5">
+<contactref element="U1" pad="15"/>
+<contactref element="U2" pad="13"/>
+<contactref element="U10" pad="23"/>
+</signal>
+<signal name="AQ6">
+<contactref element="U1" pad="16"/>
+<contactref element="U2" pad="15"/>
+<contactref element="U10" pad="21"/>
+</signal>
+<signal name="AQ7">
+<contactref element="U1" pad="19"/>
+<contactref element="U2" pad="17"/>
+<contactref element="U10" pad="19"/>
+<contactref element="U34" pad="1"/>
+<contactref element="U34" pad="4"/>
+</signal>
+<signal name="BMX0">
+<contactref element="U9" pad="1"/>
+<contactref element="U32" pad="4"/>
+</signal>
+<signal name="BMX1">
+<contactref element="U9" pad="22"/>
+<contactref element="U32" pad="7"/>
+</signal>
+<signal name="BMX2">
+<contactref element="U9" pad="20"/>
+<contactref element="U32" pad="9"/>
+</signal>
+<signal name="BMX3">
+<contactref element="U9" pad="18"/>
+<contactref element="U32" pad="12"/>
+</signal>
+<signal name="BMX4">
+<contactref element="U10" pad="1"/>
+<contactref element="U33" pad="4"/>
+</signal>
+<signal name="BMX5">
+<contactref element="U10" pad="22"/>
+<contactref element="U33" pad="7"/>
+</signal>
+<signal name="BMX6">
+<contactref element="U10" pad="20"/>
+<contactref element="U33" pad="9"/>
+</signal>
+<signal name="BMX7">
+<contactref element="U10" pad="18"/>
+<contactref element="U33" pad="12"/>
+<contactref element="U34" pad="5"/>
+</signal>
+<signal name="BQ0">
+<contactref element="U3" pad="2"/>
+<contactref element="U4" pad="2"/>
+<contactref element="U32" pad="2"/>
+</signal>
+<signal name="BQ1">
+<contactref element="U3" pad="5"/>
+<contactref element="U4" pad="4"/>
+<contactref element="U32" pad="5"/>
+</signal>
+<signal name="BQ2">
+<contactref element="U3" pad="6"/>
+<contactref element="U4" pad="6"/>
+<contactref element="U32" pad="11"/>
+</signal>
+<signal name="BQ3">
+<contactref element="U3" pad="9"/>
+<contactref element="U4" pad="8"/>
+<contactref element="U32" pad="14"/>
+</signal>
+<signal name="BQ4">
+<contactref element="U3" pad="12"/>
+<contactref element="U4" pad="11"/>
+<contactref element="U33" pad="2"/>
+</signal>
+<signal name="BQ5">
+<contactref element="U3" pad="15"/>
+<contactref element="U4" pad="13"/>
+<contactref element="U33" pad="5"/>
+</signal>
+<signal name="BQ6">
+<contactref element="U3" pad="16"/>
+<contactref element="U4" pad="15"/>
+<contactref element="U33" pad="11"/>
+</signal>
+<signal name="BQ7">
+<contactref element="U3" pad="19"/>
+<contactref element="U4" pad="17"/>
+<contactref element="U33" pad="14"/>
+</signal>
+<signal name="BSEL">
+<contactref element="U32" pad="1"/>
+<contactref element="U33" pad="1"/>
+<contactref element="J1" pad="B28"/>
+</signal>
+<signal name="CFLG">
+<contactref element="U10" pad="16"/>
+<contactref element="U25" pad="4"/>
+<contactref element="U25" pad="5"/>
+</signal>
+<signal name="CFLGI">
+<contactref element="U25" pad="6"/>
+<contactref element="U29" pad="2"/>
+</signal>
+<signal name="CG0">
+<contactref element="U9" pad="17"/>
+<contactref element="U11" pad="3"/>
+</signal>
+<signal name="CG1">
+<contactref element="U10" pad="17"/>
+<contactref element="U11" pad="1"/>
+</signal>
+<signal name="CIN">
+<contactref element="U9" pad="7"/>
+<contactref element="U11" pad="13"/>
+<contactref element="U30" pad="2"/>
+<contactref element="J1" pad="C24"/>
+</signal>
+<signal name="CLK">
+<contactref element="U1" pad="11"/>
+<contactref element="U3" pad="11"/>
+<contactref element="U5" pad="11"/>
+<contactref element="U7" pad="11"/>
+<contactref element="U31" pad="1"/>
+<contactref element="U31" pad="5"/>
+<contactref element="J1" pad="A24"/>
+</signal>
+<signal name="CLKFC">
+<contactref element="U26" pad="3"/>
+<contactref element="U31" pad="3"/>
+</signal>
+<signal name="CLKFZN">
+<contactref element="U31" pad="6"/>
+<contactref element="U17" pad="9"/>
+</signal>
+<signal name="CLRC">
+<contactref element="U25" pad="12"/>
+<contactref element="U25" pad="13"/>
+<contactref element="J1" pad="B27"/>
+</signal>
+<signal name="CNX">
+<contactref element="U11" pad="12"/>
+<contactref element="U10" pad="7"/>
+</signal>
+<signal name="CP0">
+<contactref element="U9" pad="15"/>
+<contactref element="U11" pad="4"/>
+</signal>
+<signal name="CP1">
+<contactref element="U10" pad="15"/>
+<contactref element="U11" pad="2"/>
+</signal>
+<signal name="D0">
+<contactref element="U1" pad="3"/>
+<contactref element="U2" pad="18"/>
+<contactref element="U3" pad="3"/>
+<contactref element="U4" pad="18"/>
+<contactref element="U5" pad="3"/>
+<contactref element="U6" pad="18"/>
+<contactref element="U7" pad="3"/>
+<contactref element="U8" pad="18"/>
+<contactref element="U16" pad="18"/>
+<contactref element="U27" pad="1"/>
+<contactref element="U23" pad="18"/>
+<contactref element="J1" pad="A3"/>
+</signal>
+<signal name="D1">
+<contactref element="U1" pad="4"/>
+<contactref element="U2" pad="16"/>
+<contactref element="U3" pad="4"/>
+<contactref element="U4" pad="16"/>
+<contactref element="U5" pad="4"/>
+<contactref element="U6" pad="16"/>
+<contactref element="U7" pad="4"/>
+<contactref element="U8" pad="16"/>
+<contactref element="U16" pad="16"/>
+<contactref element="U27" pad="2"/>
+<contactref element="U23" pad="16"/>
+<contactref element="J1" pad="A4"/>
+</signal>
+<signal name="D2">
+<contactref element="U1" pad="7"/>
+<contactref element="U2" pad="14"/>
+<contactref element="U3" pad="7"/>
+<contactref element="U4" pad="14"/>
+<contactref element="U5" pad="7"/>
+<contactref element="U6" pad="14"/>
+<contactref element="U7" pad="7"/>
+<contactref element="U8" pad="14"/>
+<contactref element="U16" pad="14"/>
+<contactref element="U27" pad="11"/>
+<contactref element="U23" pad="14"/>
+<contactref element="J1" pad="A5"/>
+</signal>
+<signal name="D3">
+<contactref element="U1" pad="8"/>
+<contactref element="U2" pad="12"/>
+<contactref element="U3" pad="8"/>
+<contactref element="U4" pad="12"/>
+<contactref element="U5" pad="8"/>
+<contactref element="U6" pad="12"/>
+<contactref element="U7" pad="8"/>
+<contactref element="U8" pad="12"/>
+<contactref element="U16" pad="12"/>
+<contactref element="U27" pad="12"/>
+<contactref element="U23" pad="12"/>
+<contactref element="J1" pad="A6"/>
+</signal>
+<signal name="D4">
+<contactref element="U1" pad="13"/>
+<contactref element="U2" pad="9"/>
+<contactref element="U3" pad="13"/>
+<contactref element="U4" pad="9"/>
+<contactref element="U5" pad="13"/>
+<contactref element="U6" pad="9"/>
+<contactref element="U7" pad="13"/>
+<contactref element="U8" pad="9"/>
+<contactref element="U16" pad="9"/>
+<contactref element="U27" pad="13"/>
+<contactref element="J1" pad="A7"/>
+</signal>
+<signal name="D5">
+<contactref element="U1" pad="14"/>
+<contactref element="U2" pad="7"/>
+<contactref element="U3" pad="14"/>
+<contactref element="U4" pad="7"/>
+<contactref element="U5" pad="14"/>
+<contactref element="U6" pad="7"/>
+<contactref element="U7" pad="14"/>
+<contactref element="U8" pad="7"/>
+<contactref element="U16" pad="7"/>
+<contactref element="U27" pad="3"/>
+<contactref element="J1" pad="A8"/>
+</signal>
+<signal name="D6">
+<contactref element="U1" pad="17"/>
+<contactref element="U2" pad="5"/>
+<contactref element="U3" pad="17"/>
+<contactref element="U4" pad="5"/>
+<contactref element="U5" pad="17"/>
+<contactref element="U6" pad="5"/>
+<contactref element="U7" pad="17"/>
+<contactref element="U8" pad="5"/>
+<contactref element="U16" pad="5"/>
+<contactref element="U27" pad="4"/>
+<contactref element="J1" pad="A9"/>
+</signal>
+<signal name="D7">
+<contactref element="U1" pad="18"/>
+<contactref element="U2" pad="3"/>
+<contactref element="U3" pad="18"/>
+<contactref element="U4" pad="3"/>
+<contactref element="U5" pad="18"/>
+<contactref element="U6" pad="3"/>
+<contactref element="U7" pad="18"/>
+<contactref element="U8" pad="3"/>
+<contactref element="U16" pad="3"/>
+<contactref element="U22" pad="6"/>
+<contactref element="U27" pad="5"/>
+<contactref element="J1" pad="A10"/>
+</signal>
+<signal name="DLD0">
+<contactref element="U21" pad="1"/>
+<contactref element="J1" pad="A16"/>
+</signal>
+<signal name="DLD1">
+<contactref element="U21" pad="2"/>
+<contactref element="J1" pad="A17"/>
+</signal>
+<signal name="DLD2">
+<contactref element="U21" pad="3"/>
+<contactref element="J1" pad="A18"/>
+</signal>
+<signal name="DLD3">
+<contactref element="U21" pad="4"/>
+<contactref element="J1" pad="A19"/>
+</signal>
+<signal name="DOE0">
+<contactref element="U20" pad="1"/>
+<contactref element="J1" pad="A12"/>
+</signal>
+<signal name="DOE1">
+<contactref element="U20" pad="2"/>
+<contactref element="J1" pad="A13"/>
+</signal>
+<signal name="DOE2">
+<contactref element="U20" pad="3"/>
+<contactref element="J1" pad="A14"/>
+</signal>
+<signal name="DOE3">
+<contactref element="U20" pad="4"/>
+<contactref element="J1" pad="A15"/>
+</signal>
+<signal name="F0">
+<contactref element="U9" pad="9"/>
+<contactref element="U12" pad="2"/>
+<contactref element="U12" pad="6"/>
+<contactref element="U28" pad="2"/>
+</signal>
+<signal name="F1">
+<contactref element="U9" pad="10"/>
+<contactref element="U12" pad="5"/>
+<contactref element="U12" pad="10"/>
+</signal>
+<signal name="F2">
+<contactref element="U9" pad="11"/>
+<contactref element="U12" pad="11"/>
+<contactref element="U12" pad="13"/>
+</signal>
+<signal name="F3">
+<contactref element="U9" pad="13"/>
+<contactref element="U12" pad="14"/>
+<contactref element="U13" pad="3"/>
+</signal>
+<signal name="F4">
+<contactref element="U10" pad="9"/>
+<contactref element="U13" pad="2"/>
+<contactref element="U13" pad="6"/>
+</signal>
+<signal name="F5">
+<contactref element="U10" pad="10"/>
+<contactref element="U13" pad="5"/>
+<contactref element="U13" pad="10"/>
+</signal>
+<signal name="F6">
+<contactref element="U10" pad="11"/>
+<contactref element="U13" pad="11"/>
+<contactref element="U13" pad="13"/>
+</signal>
+<signal name="F7">
+<contactref element="U10" pad="13"/>
+<contactref element="U13" pad="14"/>
+<contactref element="U34" pad="2"/>
+<contactref element="U28" pad="3"/>
+</signal>
+<signal name="FC">
+<contactref element="U23" pad="9"/>
+<contactref element="J1" pad="A27"/>
+</signal>
+<signal name="FENZN">
+<contactref element="U24" pad="3"/>
+<contactref element="U31" pad="4"/>
+</signal>
+<signal name="FN">
+<contactref element="U23" pad="5"/>
+<contactref element="J1" pad="A29"/>
+</signal>
+<signal name="FQC">
+<contactref element="U30" pad="3"/>
+<contactref element="U26" pad="5"/>
+<contactref element="U23" pad="2"/>
+<contactref element="U23" pad="11"/>
+</signal>
+<signal name="FQN">
+<contactref element="U17" pad="7"/>
+<contactref element="U23" pad="6"/>
+<contactref element="U23" pad="15"/>
+</signal>
+<signal name="FQV">
+<contactref element="U17" pad="10"/>
+<contactref element="U23" pad="8"/>
+<contactref element="U23" pad="17"/>
+</signal>
+<signal name="FQZ">
+<contactref element="U17" pad="2"/>
+<contactref element="U23" pad="4"/>
+<contactref element="U23" pad="13"/>
+</signal>
+<signal name="FV">
+<contactref element="U23" pad="3"/>
+<contactref element="J1" pad="A30"/>
+</signal>
+<signal name="FZ">
+<contactref element="U23" pad="7"/>
+<contactref element="J1" pad="A28"/>
+</signal>
+<signal name="G0">
+<contactref element="U12" pad="4"/>
+<contactref element="U14" pad="2"/>
+</signal>
+<signal name="G1">
+<contactref element="U14" pad="3"/>
+<contactref element="U12" pad="7"/>
+<contactref element="U14" pad="5"/>
+</signal>
+<signal name="G2">
+<contactref element="U14" pad="6"/>
+<contactref element="U12" pad="9"/>
+<contactref element="U14" pad="11"/>
+</signal>
+<signal name="G3">
+<contactref element="U14" pad="10"/>
+<contactref element="U12" pad="12"/>
+<contactref element="U14" pad="14"/>
+</signal>
+<signal name="G4">
+<contactref element="U14" pad="13"/>
+<contactref element="U13" pad="4"/>
+<contactref element="U15" pad="2"/>
+</signal>
+<signal name="G5">
+<contactref element="U15" pad="3"/>
+<contactref element="U13" pad="7"/>
+<contactref element="U15" pad="5"/>
+</signal>
+<signal name="G6">
+<contactref element="U15" pad="6"/>
+<contactref element="U13" pad="9"/>
+<contactref element="U15" pad="11"/>
+</signal>
+<signal name="G7">
+<contactref element="U15" pad="10"/>
+<contactref element="U13" pad="12"/>
+<contactref element="U15" pad="14"/>
+</signal>
+<signal name="GND">
+<contactref element="U32" pad="15"/>
+<contactref element="U33" pad="15"/>
+<contactref element="U12" pad="15"/>
+<contactref element="U13" pad="15"/>
+<contactref element="U14" pad="15"/>
+<contactref element="U15" pad="15"/>
+<contactref element="U18" pad="9"/>
+<contactref element="U18" pad="10"/>
+<contactref element="U22" pad="15"/>
+<contactref element="U27" pad="9"/>
+<contactref element="U27" pad="10"/>
+<contactref element="U35" pad="4"/>
+<contactref element="U35" pad="5"/>
+<contactref element="U35" pad="9"/>
+<contactref element="U35" pad="10"/>
+<contactref element="U35" pad="12"/>
+<contactref element="U35" pad="13"/>
+<contactref element="U28" pad="15"/>
+<contactref element="U29" pad="15"/>
+<contactref element="U26" pad="12"/>
+<contactref element="U26" pad="11"/>
+<contactref element="U30" pad="15"/>
+<contactref element="U31" pad="12"/>
+<contactref element="U31" pad="13"/>
+<contactref element="U23" pad="19"/>
+<contactref element="U20" pad="5"/>
+<contactref element="U21" pad="5"/>
+<contactref element="U19" pad="12"/>
+<contactref element="U19" pad="13"/>
+<contactref element="U24" pad="9"/>
+<contactref element="U24" pad="10"/>
+<contactref element="U24" pad="12"/>
+<contactref element="U24" pad="13"/>
+<contactref element="LED3" pad="1"/>
+<contactref element="J1" pad="A31"/>
+<contactref element="J1" pad="A32"/>
+<contactref element="J1" pad="B3"/>
+<contactref element="J1" pad="B5"/>
+<contactref element="J1" pad="B7"/>
+<contactref element="J1" pad="B9"/>
+<contactref element="J1" pad="B11"/>
+<contactref element="J1" pad="B13"/>
+<contactref element="J1" pad="B15"/>
+<contactref element="J1" pad="B17"/>
+<contactref element="J1" pad="B19"/>
+<contactref element="J1" pad="B21"/>
+<contactref element="J1" pad="B23"/>
+<contactref element="J1" pad="B25"/>
+<contactref element="J1" pad="B31"/>
+<contactref element="J1" pad="B32"/>
+<contactref element="J1" pad="C31"/>
+<contactref element="J1" pad="C32"/>
+<contactref element="CD1" pad="2"/>
+<contactref element="CD2" pad="2"/>
+<contactref element="CD3" pad="2"/>
+<contactref element="CD4" pad="2"/>
+<contactref element="CD5" pad="2"/>
+<contactref element="CD6" pad="2"/>
+<contactref element="CD7" pad="2"/>
+<contactref element="CD8" pad="2"/>
+<contactref element="CD9" pad="2"/>
+<contactref element="CD10" pad="2"/>
+<contactref element="CD11" pad="2"/>
+<contactref element="CD12" pad="2"/>
+<contactref element="CD13" pad="2"/>
+<contactref element="CD14" pad="2"/>
+<contactref element="CD15" pad="2"/>
+<contactref element="CD16" pad="2"/>
+<contactref element="CD17" pad="2"/>
+<contactref element="CD18" pad="2"/>
+<contactref element="CD19" pad="2"/>
+<contactref element="CD20" pad="2"/>
+<contactref element="CD21" pad="2"/>
+<contactref element="CD22" pad="2"/>
+<contactref element="CD23" pad="2"/>
+<contactref element="CD24" pad="2"/>
+<contactref element="CD25" pad="2"/>
+<contactref element="CD26" pad="2"/>
+<contactref element="CD27" pad="2"/>
+<contactref element="CD28" pad="2"/>
+<contactref element="CD29" pad="2"/>
+<contactref element="CD30" pad="2"/>
+<contactref element="CD31" pad="2"/>
+<contactref element="CD32" pad="2"/>
+<contactref element="CD33" pad="2"/>
+<contactref element="CD34" pad="2"/>
+<contactref element="CD35" pad="2"/>
+<contactref element="U1" pad="10"/>
+<contactref element="U2" pad="10"/>
+<contactref element="U3" pad="10"/>
+<contactref element="U4" pad="10"/>
+<contactref element="U5" pad="10"/>
+<contactref element="U6" pad="10"/>
+<contactref element="U7" pad="10"/>
+<contactref element="U8" pad="10"/>
+<contactref element="U9" pad="12"/>
+<contactref element="U10" pad="12"/>
+<contactref element="U11" pad="8"/>
+<contactref element="U12" pad="8"/>
+<contactref element="U13" pad="8"/>
+<contactref element="U14" pad="8"/>
+<contactref element="U15" pad="8"/>
+<contactref element="U16" pad="10"/>
+<contactref element="U17" pad="8"/>
+<contactref element="U18" pad="7"/>
+<contactref element="U19" pad="7"/>
+<contactref element="U20" pad="8"/>
+<contactref element="U21" pad="8"/>
+<contactref element="U22" pad="8"/>
+<contactref element="U23" pad="10"/>
+<contactref element="U24" pad="7"/>
+<contactref element="U25" pad="7"/>
+<contactref element="U26" pad="7"/>
+<contactref element="U27" pad="7"/>
+<contactref element="U28" pad="8"/>
+<contactref element="U29" pad="8"/>
+<contactref element="U30" pad="8"/>
+<contactref element="U31" pad="7"/>
+<contactref element="U32" pad="8"/>
+<contactref element="U33" pad="8"/>
+<contactref element="U34" pad="7"/>
+<contactref element="U35" pad="7"/>
+<polygon width="0.254" layer="2" isolate="0.3" rank="1">
+<vertex x="0" y="0"/>
+<vertex x="160" y="0"/>
+<vertex x="160" y="100"/>
+<vertex x="0" y="100"/>
+</polygon>
+</signal>
+<signal name="LDF">
+<contactref element="U24" pad="1"/>
+<contactref element="U31" pad="2"/>
+<contactref element="U25" pad="9"/>
+<contactref element="U25" pad="10"/>
+<contactref element="J1" pad="A26"/>
+</signal>
+<signal name="LDFK">
+<contactref element="U25" pad="8"/>
+<contactref element="LED5" pad="1"/>
+</signal>
+<signal name="LDZN">
+<contactref element="U22" pad="1"/>
+<contactref element="U24" pad="2"/>
+<contactref element="J1" pad="C28"/>
+</signal>
+<signal name="LEDAL">
+<contactref element="R4" pad="2"/>
+<contactref element="LED4" pad="2"/>
+</signal>
+<signal name="LEDLF">
+<contactref element="R5" pad="2"/>
+<contactref element="LED5" pad="2"/>
+</signal>
+<signal name="LEDP">
+<contactref element="RP1" pad="2"/>
+<contactref element="LED3" pad="2"/>
+</signal>
+<signal name="NC">
+<contactref element="U29" pad="4"/>
+<contactref element="U26" pad="2"/>
+</signal>
+<signal name="NS2">
+<contactref element="U34" pad="8"/>
+<contactref element="U34" pad="13"/>
+</signal>
+<signal name="NSRC">
+<contactref element="U22" pad="7"/>
+<contactref element="U17" pad="5"/>
+</signal>
+<signal name="R0">
+<contactref element="U14" pad="4"/>
+<contactref element="U16" pad="2"/>
+<contactref element="U18" pad="1"/>
+</signal>
+<signal name="R1">
+<contactref element="U14" pad="7"/>
+<contactref element="U16" pad="4"/>
+<contactref element="U18" pad="2"/>
+</signal>
+<signal name="R2">
+<contactref element="U14" pad="9"/>
+<contactref element="U16" pad="6"/>
+<contactref element="U18" pad="11"/>
+</signal>
+<signal name="R3">
+<contactref element="U14" pad="12"/>
+<contactref element="U16" pad="8"/>
+<contactref element="U18" pad="12"/>
+</signal>
+<signal name="R4">
+<contactref element="U15" pad="4"/>
+<contactref element="U16" pad="11"/>
+<contactref element="U18" pad="13"/>
+</signal>
+<signal name="R5">
+<contactref element="U15" pad="7"/>
+<contactref element="U16" pad="13"/>
+<contactref element="U18" pad="3"/>
+</signal>
+<signal name="R6">
+<contactref element="U15" pad="9"/>
+<contactref element="U16" pad="15"/>
+<contactref element="U18" pad="4"/>
+</signal>
+<signal name="R7">
+<contactref element="U15" pad="12"/>
+<contactref element="U16" pad="17"/>
+<contactref element="U18" pad="5"/>
+<contactref element="U22" pad="5"/>
+</signal>
+<signal name="SETC">
+<contactref element="U25" pad="1"/>
+<contactref element="U25" pad="2"/>
+<contactref element="J1" pad="C30"/>
+</signal>
+<signal name="SH0">
+<contactref element="U12" pad="1"/>
+<contactref element="U13" pad="1"/>
+<contactref element="U28" pad="1"/>
+<contactref element="U24" pad="4"/>
+<contactref element="J1" pad="C25"/>
+</signal>
+<signal name="SH1">
+<contactref element="U14" pad="1"/>
+<contactref element="U15" pad="1"/>
+<contactref element="U24" pad="5"/>
+<contactref element="J1" pad="C26"/>
+</signal>
+<signal name="SHANY">
+<contactref element="U24" pad="6"/>
+<contactref element="U29" pad="1"/>
+</signal>
+<signal name="SHCIN">
+<contactref element="U30" pad="1"/>
+<contactref element="J1" pad="C29"/>
+</signal>
+<signal name="SHIN">
+<contactref element="U30" pad="4"/>
+<contactref element="U12" pad="3"/>
+<contactref element="U15" pad="13"/>
+</signal>
+<signal name="SHOUT">
+<contactref element="U28" pad="4"/>
+<contactref element="U29" pad="3"/>
+</signal>
+<signal name="T2Q0">
+<contactref element="U7" pad="2"/>
+<contactref element="U8" pad="2"/>
+</signal>
+<signal name="T2Q1">
+<contactref element="U7" pad="5"/>
+<contactref element="U8" pad="4"/>
+</signal>
+<signal name="T2Q2">
+<contactref element="U7" pad="6"/>
+<contactref element="U8" pad="6"/>
+</signal>
+<signal name="T2Q3">
+<contactref element="U7" pad="9"/>
+<contactref element="U8" pad="8"/>
+</signal>
+<signal name="T2Q4">
+<contactref element="U7" pad="12"/>
+<contactref element="U8" pad="11"/>
+</signal>
+<signal name="T2Q5">
+<contactref element="U7" pad="15"/>
+<contactref element="U8" pad="13"/>
+</signal>
+<signal name="T2Q6">
+<contactref element="U7" pad="16"/>
+<contactref element="U8" pad="15"/>
+</signal>
+<signal name="T2Q7">
+<contactref element="U7" pad="19"/>
+<contactref element="U8" pad="17"/>
+</signal>
+<signal name="TQ0">
+<contactref element="U5" pad="2"/>
+<contactref element="U6" pad="2"/>
+<contactref element="U32" pad="3"/>
+</signal>
+<signal name="TQ1">
+<contactref element="U5" pad="5"/>
+<contactref element="U6" pad="4"/>
+<contactref element="U32" pad="6"/>
+</signal>
+<signal name="TQ2">
+<contactref element="U5" pad="6"/>
+<contactref element="U6" pad="6"/>
+<contactref element="U32" pad="10"/>
+</signal>
+<signal name="TQ3">
+<contactref element="U5" pad="9"/>
+<contactref element="U6" pad="8"/>
+<contactref element="U32" pad="13"/>
+</signal>
+<signal name="TQ4">
+<contactref element="U5" pad="12"/>
+<contactref element="U6" pad="11"/>
+<contactref element="U33" pad="3"/>
+</signal>
+<signal name="TQ5">
+<contactref element="U5" pad="15"/>
+<contactref element="U6" pad="13"/>
+<contactref element="U33" pad="6"/>
+</signal>
+<signal name="TQ6">
+<contactref element="U5" pad="16"/>
+<contactref element="U6" pad="15"/>
+<contactref element="U33" pad="10"/>
+</signal>
+<signal name="TQ7">
+<contactref element="U5" pad="19"/>
+<contactref element="U6" pad="17"/>
+<contactref element="U33" pad="13"/>
+</signal>
+<signal name="VCC">
+<contactref element="U11" pad="14"/>
+<contactref element="U11" pad="15"/>
+<contactref element="U11" pad="6"/>
+<contactref element="U11" pad="5"/>
+<contactref element="U34" pad="10"/>
+<contactref element="U26" pad="10"/>
+<contactref element="U26" pad="13"/>
+<contactref element="U20" pad="6"/>
+<contactref element="U21" pad="6"/>
+<contactref element="RP1" pad="1"/>
+<contactref element="R4" pad="1"/>
+<contactref element="R5" pad="1"/>
+<contactref element="J1" pad="A1"/>
+<contactref element="J1" pad="A2"/>
+<contactref element="J1" pad="B1"/>
+<contactref element="J1" pad="B2"/>
+<contactref element="J1" pad="C1"/>
+<contactref element="J1" pad="C2"/>
+<contactref element="CD1" pad="1"/>
+<contactref element="CD2" pad="1"/>
+<contactref element="CD3" pad="1"/>
+<contactref element="CD4" pad="1"/>
+<contactref element="CD5" pad="1"/>
+<contactref element="CD6" pad="1"/>
+<contactref element="CD7" pad="1"/>
+<contactref element="CD8" pad="1"/>
+<contactref element="CD9" pad="1"/>
+<contactref element="CD10" pad="1"/>
+<contactref element="CD11" pad="1"/>
+<contactref element="CD12" pad="1"/>
+<contactref element="CD13" pad="1"/>
+<contactref element="CD14" pad="1"/>
+<contactref element="CD15" pad="1"/>
+<contactref element="CD16" pad="1"/>
+<contactref element="CD17" pad="1"/>
+<contactref element="CD18" pad="1"/>
+<contactref element="CD19" pad="1"/>
+<contactref element="CD20" pad="1"/>
+<contactref element="CD21" pad="1"/>
+<contactref element="CD22" pad="1"/>
+<contactref element="CD23" pad="1"/>
+<contactref element="CD24" pad="1"/>
+<contactref element="CD25" pad="1"/>
+<contactref element="CD26" pad="1"/>
+<contactref element="CD27" pad="1"/>
+<contactref element="CD28" pad="1"/>
+<contactref element="CD29" pad="1"/>
+<contactref element="CD30" pad="1"/>
+<contactref element="CD31" pad="1"/>
+<contactref element="CD32" pad="1"/>
+<contactref element="CD33" pad="1"/>
+<contactref element="CD34" pad="1"/>
+<contactref element="CD35" pad="1"/>
+<contactref element="U1" pad="20"/>
+<contactref element="U2" pad="20"/>
+<contactref element="U3" pad="20"/>
+<contactref element="U4" pad="20"/>
+<contactref element="U5" pad="20"/>
+<contactref element="U6" pad="20"/>
+<contactref element="U7" pad="20"/>
+<contactref element="U8" pad="20"/>
+<contactref element="U9" pad="24"/>
+<contactref element="U10" pad="24"/>
+<contactref element="U11" pad="16"/>
+<contactref element="U12" pad="16"/>
+<contactref element="U13" pad="16"/>
+<contactref element="U14" pad="16"/>
+<contactref element="U15" pad="16"/>
+<contactref element="U16" pad="20"/>
+<contactref element="U17" pad="16"/>
+<contactref element="U18" pad="14"/>
+<contactref element="U19" pad="14"/>
+<contactref element="U20" pad="16"/>
+<contactref element="U21" pad="16"/>
+<contactref element="U22" pad="16"/>
+<contactref element="U23" pad="20"/>
+<contactref element="U24" pad="14"/>
+<contactref element="U25" pad="14"/>
+<contactref element="U26" pad="14"/>
+<contactref element="U27" pad="14"/>
+<contactref element="U28" pad="16"/>
+<contactref element="U29" pad="16"/>
+<contactref element="U30" pad="16"/>
+<contactref element="U31" pad="14"/>
+<contactref element="U32" pad="16"/>
+<contactref element="U33" pad="16"/>
+<contactref element="U34" pad="14"/>
+<contactref element="U35" pad="14"/>
+<polygon width="0.254" layer="15" isolate="0.3" rank="1">
+<vertex x="0" y="0"/>
+<vertex x="160" y="0"/>
+<vertex x="160" y="100"/>
+<vertex x="0" y="100"/>
+</polygon>
+</signal>
+<signal name="VSRC">
+<contactref element="U17" pad="12"/>
+<contactref element="U35" pad="3"/>
+</signal>
+<signal name="VX1">
+<contactref element="U34" pad="3"/>
+<contactref element="U35" pad="1"/>
+</signal>
+<signal name="VX2">
+<contactref element="U34" pad="6"/>
+<contactref element="U34" pad="12"/>
+</signal>
+<signal name="VX4">
+<contactref element="U34" pad="11"/>
+<contactref element="U35" pad="2"/>
+</signal>
+<signal name="ZBH">
+<contactref element="U27" pad="6"/>
+<contactref element="U19" pad="5"/>
+</signal>
+<signal name="ZBL">
+<contactref element="U27" pad="8"/>
+<contactref element="U19" pad="4"/>
+</signal>
+<signal name="ZBUS">
+<contactref element="U22" pad="3"/>
+<contactref element="U19" pad="6"/>
+</signal>
+<signal name="ZFLG">
+<contactref element="U19" pad="3"/>
+<contactref element="U22" pad="2"/>
+</signal>
+<signal name="ZH">
+<contactref element="U18" pad="6"/>
+<contactref element="U19" pad="2"/>
+</signal>
+<signal name="ZL">
+<contactref element="U18" pad="8"/>
+<contactref element="U19" pad="1"/>
+</signal>
+<signal name="ZSRC">
+<contactref element="U22" pad="4"/>
+<contactref element="U17" pad="4"/>
+</signal>
+</signals></board></drawing></eagle>
