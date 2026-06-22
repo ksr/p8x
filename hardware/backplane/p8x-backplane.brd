@@ -360,9 +360,9 @@
 <attribute name="NAME" x="5.08" y="5.54" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="5.08" y="0.46" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="LED1" library="p8x" package="LED5" value="PWR" x="18.00" y="3.00" smashed="yes">
-<attribute name="NAME" x="18.00" y="5.54" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="18.00" y="0.46" size="1.778" layer="27" ratio="10"/>
+<element name="LED1" library="p8x" package="LED5" value="PWR" x="21.00" y="3.00" smashed="yes">
+<attribute name="NAME" x="21.00" y="5.54" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="21.00" y="0.46" size="1.778" layer="27" ratio="10"/>
 </element>
 </elements><signals>
 <signal name="-RES">
@@ -1279,7 +1279,7 @@
 <signal name="LED_A">
 <contactref element="RL1" pad="2"/>
 <contactref element="LED1" pad="2"/>
-<wire x1="15.24" y1="3.00" x2="18.00" y2="3.00" width="0.4" layer="1"/>
+<wire x1="15.24" y1="3.00" x2="21.00" y2="3.00" width="0.4" layer="1"/>
 </signal>
 <signal name="PDEC">
 <contactref element="J1" pad="A23"/>

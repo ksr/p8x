@@ -1250,7 +1250,7 @@ bpb["CT2"]=("CAP","150P",279.24,80.0)
 bpb["J11"]=("TB4","PWR-5V",5.08,95.0)
 bpb["CB1"]=("CAPP","470U",5.08,68.0); bpb["CB2"]=("CAPP","470U",5.08,45.0)
 for s in range(10): bpb["C%d"%(s+1)]=("CAP1","100N",sx(s)+G,109.0)   # up off the slot connectors
-bpb["RL1"]=("RES","1K",5.08,3.0); bpb["LED1"]=("LED","PWR",18.0,3.0)
+bpb["RL1"]=("RES","1K",5.08,3.0); bpb["LED1"]=("LED","PWR",21.0,3.0)
 wires={}; viad={}
 def wadd(n,*w): wires.setdefault(n,[]).extend(w)
 def vadd(n,*v): viad.setdefault(n,[]).extend(v)
@@ -1271,7 +1271,7 @@ wadd("CLKB",(padx(9,"A"),py(25),259.0,py(25),1,0.4),
             (259.0,py(25),259.0,80.0,1,0.4),
             (259.0,80.0,264.0,80.0,1,0.4))
 wadd("CLKB_T",(274.16,80.0,279.24,80.0,1,0.4))
-wadd("LED_A",(15.24,3.0,18.0,3.0,1,0.4))   # RL1 pad2 -> LED1 anode (both at front)
+wadd("LED_A",(15.24,3.0,21.0,3.0,1,0.4))   # RL1 pad2 -> LED1 anode (both at front)
 # Route the non-ground B-row signals slot-to-slot: B27=CLRC, B28=BSEL, B29=IRQ,
 # B30=SPARE11, plus the rev-D even-pin spares B4..B26 (SPARE12..23). Odd B pins
 # stay ground guards (handled by the GND pour).
