@@ -2,13 +2,15 @@
 """Traditional-style backplane schematic: one representative connector
 (all 10 slots are wired pin-for-pin in parallel) + support circuitry
 drawn with real wires."""
-import os as _os; _DOCS=_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),"hardware","backplane")
+import os as _os, sys as _sys; _DOCS=_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),"hardware","backplane")
+_sys.path.insert(0,_os.path.dirname(_os.path.abspath(__file__)))
+import gen_eagle as GE   # EMIT is False on import, so this writes nothing — we only borrow PASSIVE_ART
 from reportlab.pdfgen import canvas as pdfc
 from reportlab.lib.colors import Color
 MM=2.83465; G=2.54; HALFW=12.7; PINX=17.78
 BLK=Color(0,0,0); GRN=Color(0,0.42,0); RED=Color(0.72,0.08,0.08); BLU=Color(0,0,0.65)
 c=pdfc.Canvas(_os.path.join(_DOCS,"p8x-backplane-schematic.pdf"),pagesize=(842,1190))
-minx,maxx,miny,maxy=-25,235,-272,42
+minx,maxx,miny,maxy=-25,235,-284,42
 s=min((842-40)/((maxx-minx)*MM),(1190-90)/((maxy-miny)*MM))*MM
 def X(x): return 20+(x-minx)*s
 def Y(y): return 40+(y-miny)*s
@@ -86,13 +88,24 @@ def twopart(ref,val,x,y,p1,p2,w=10):
     txt(x,y+3.0,ref,2.2,RED,bold=True); txt(x,y-5.6,val,1.8,BLU)
     line(x-5.08,y,x,y,0.9,BLK); line(x+w,y,x+w+5.08,y,0.9,BLK)
     return (x-5.08,y),(x+w+5.08,y)
-for sig,rref,cref,drop in (("CLK","RT1","CT1",0),("CLKB","RT2","CT2",9)):
+def disc(kind,ref,val,x,y,w=10):
+    # Same footprint/pin geometry as twopart() so callers and wiring math are
+    # unchanged, but draws a US/ANSI symbol (G.PASSIVE_ART) instead of a box.
+    # PASSIVE_ART spans +/-12.7 in x (the pin ends); scale x so those ends land
+    # exactly on this part's pin stubs. y is true size (no vertical scaling).
+    a=x-5.08; b=x+w+5.08; cx=(a+b)/2.0; xs=((b-a)/2.0)/12.7
+    c.setStrokeColor(BLK); c.setLineWidth(0.9)
+    for (x1,y1,x2,y2) in GE.PASSIVE_ART[kind]:
+        line(cx+x1*xs,y+y1,cx+x2*xs,y+y2,0.9,BLK)
+    txt(x,y+4.4,ref,2.2,RED,bold=True); txt(x,y-5.6,val,1.8,BLU)
+    return (a,y),(b,y)
+for sig,rref,cref,drop in (("CLK","RT1","CT1",0),("CLKB","RT2","CT2",13)):
     py0=rowy[sig]; py=py0-drop
     if drop:
         line(PX,py0,PX+4,py0); line(PX+4,py0,PX+4,py); line(PX+4,py,55-5.08,py)
-    (a,_),(b,_)=twopart(rref,"100R (DNP)",55,py,"1","2")
+    (a,_),(b,_)=disc("RES",rref,"100R (DNP)",55,py)
     if not drop: line(PX,py,a,py)
-    (c1,_),(c2,_)=twopart(cref,"150P (DNP)",92,py,"1","2")
+    (c1,_),(c2,_)=disc("CAP",cref,"150P (DNP)",92,py)
     line(b,py,c1,py)
     gnd(c2,py,d=1)
     txt(122,py-0.7,"AC TERM - FIT ONLY IF %s RINGS AT FAR SLOT"%sig,1.5,BLU)
@@ -101,14 +114,14 @@ PYY=-225
 txt(0,PYY+10,"POWER SECTION",2.6,BLK,bold=True)
 (a,_),(b,_)=twopart("J11","SCREW TERM 4P: 1,2=+5V IN / 3,4=GND IN",10,PYY,"","",w=46)
 vcc(b,PYY,d=1,label="+5V"); gnd(a,PYY,d=-1)
-for i,(ref,val) in enumerate((("CB1","470uF"),("CB2","470uF"),("C1-C10","100nF x10, ONE PER SLOT"))):
-    py=PYY-12-9*i
-    (a,_),(b,_)=twopart(ref,val,30,py,"","",w=16)
+for i,(ref,val,kind) in enumerate((("CB1","470uF","CAPP"),("CB2","470uF","CAPP"),("C1-C10","100nF x10, ONE PER SLOT","CAP"))):
+    py=PYY-14-13*i
+    (a,_),(b,_)=disc(kind,ref,val,30,py,w=16)
     vcc(a,py,d=-1); gnd(b,py,d=1)
-py=PYY-42
-(a,_),(b,_)=twopart("RL1","1K",30,py,"","",w=14)
+py=PYY-53
+(a,_),(b,_)=disc("RES","RL1","1K",30,py,w=14)
 vcc(a,py,d=-1)
-(l1,_),(l2,_)=twopart("LED1","PWR GRN",70,py,"A","K",w=10)
+(l1,_),(l2,_)=disc("LED","LED1","PWR GRN",70,py,w=10)
 line(b,py,l1,py); gnd(l2,py,d=1)
 c.save()
 print("backplane traditional PDF written")
