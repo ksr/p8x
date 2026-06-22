@@ -30,3 +30,7 @@ microcode/u?.hex
 emulator/test/io.asm
 emulator/u?.bin
 emulator/test/v2bad.img
+
+# Eagle/ libraries + design rules ARE tracked (so the project is self-contained
+# for anyone reproducing it). Skip only the redundant pre-conversion binary backup.
+Eagle/Libraries/*.orig.lbr
