@@ -38,7 +38,7 @@ All six cards plug into a passive 10-slot backplane over a 96-pin DIN 41612 bus 
 | `tools/p8xfs.py` | `tools/` | Host-side P8XFS disk-image tool (create/boot/put/get/ls) |
 | `basic/p8xbasic.asm` | `basic/` | BASIC interpreter — standalone, disk, or ROM-in-monitor builds ([guide](basic/README.md)) |
 | `tools/build_basic_rom.py` | `tools/` | Build the combined monitor + ROM-BASIC EEPROM image |
-| `generators/gen_eagle.py` | `generators/` | Generates Eagle schematics + boards for all 7 boards (backplane + 6 cards) |
+| `generators/gen_eagle.py` | `generators/` | Generates Eagle schematics + boards for all 8 boards (backplane + 6 cards + LED test card) |
 
 **Generators are canon.** Never hand-edit Eagle `.sch`/`.brd` files or ROM binaries — they are build artifacts. Edit the generator and regenerate. See [generators/README.md](generators/README.md) for what each script does and how to run it.
 
@@ -55,8 +55,9 @@ make test
 # gen_eagle.py, which writes the .sch/.brd files into per-board subdirectories of
 # the current directory, so run them from hardware/.
 cd ../hardware
-python3 ../generators/gen_eagle.py                # all 14 .sch/.brd files (hardware/<board>/)
-python3 ../generators/render_traditional_auto.py  # all 6 card schematic PDFs (hardware/<board>/)
+python3 ../generators/gen_eagle.py                # all 23 .sch/.brd files (hardware/<board>/)
+python3 ../generators/render_traditional_auto.py  # all 7 card schematic PDFs (hardware/<board>/)
+python3 ../generators/render_board_pdf.py         # placement-view PDFs (hardware/<board>/)
 
 # These write straight to hardware/backplane/ (and docs/) and run from anywhere:
 python3 ../generators/gen_bus_pdf.py              # bus definition PDF

@@ -27,7 +27,8 @@ subdirectories *relative to the current directory*, so run the generators from
 
 ```sh
 python3 ../generators/gen_eagle.py                # all .sch/.brd (hardware/<board>/)
-python3 ../generators/render_traditional_auto.py  # all 6 card schematic PDFs
+python3 ../generators/render_traditional_auto.py  # all 7 card schematic PDFs
+python3 ../generators/render_board_pdf.py         # placement-view PDFs
 ```
 
 See [../generators/README.md](../generators/README.md) for the full list and
