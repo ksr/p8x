@@ -78,7 +78,8 @@ PKG={
  "SIP9":  [(str(k),0,-G*(k-1),0.8,1.6) for k in range(1,10)],
  "SIP16": [(str(k),0,-2.54*k,0.8,1.6) for k in range(1,17)],
  "R_AXIAL": [("1",0,0,0.8,1.6),("2",10.16,0,0.8,1.6)],
- "C_DISC":  [("1",0,0,0.9,1.8),("2",0,-5.08,0.9,1.8)],
+ "C_DISC":  [("1",0,0,0.9,1.8),("2",0,-5.08,0.9,1.8)],   # 0.2" (5.08mm) lead pitch
+ "C_DISC1": [("1",0,0,0.9,1.8),("2",0,-2.54,0.9,1.8)],   # 0.1" (2.54mm) lead pitch — 100nF bypass caps
  "CP_RADIAL":[("1",0,0,0.9,1.8),("2",0,-5.08,0.9,1.8)],
  "TB4":  [(str(k+1),0,-5.08*k,1.3,3.0) for k in range(4)],
  "LED5": [("2",0,0,0.9,1.8),("1",2.54,0,0.9,1.8)],
@@ -118,6 +119,8 @@ DEV={
  "DIN96": dict(L=["A%d"%i for i in range(1,33)]+["B%d"%i for i in range(1,33)],
    R=["C%d"%i for i in range(1,33)],pm={p:p for p in ALLPINS},pkg="FABC96S"),
  "CAP":  dict(L=["1"],R=["2"],pm={"1":"1","2":"2"},pkg="C_DISC"),
+ # 100nF bypass/decoupling caps: identical symbol to CAP, but 0.1" lead pitch.
+ "CAP1": dict(L=["1"],R=["2"],pm={"1":"1","2":"2"},pkg="C_DISC1"),
  "CAPP": dict(L=["+"],R=["-"],pm={"+":"1","-":"2"},pkg="CP_RADIAL"),
  # rev C RTC (DS1302, DIP8) + its 32.768kHz tuning-fork crystal and backup coin
  # cell. XTAL32/COIN reuse generic 2-pin THT footprints as placeholders — VERIFY
@@ -287,7 +290,7 @@ def _passive_art():
     xtal=[(-12.7,0,-3.81,0),(3.81,0,12.7,0),(-3.81,-3.81,-3.81,3.81),(3.81,-3.81,3.81,3.81),
           (-1.27,-2.54,1.27,-2.54),(1.27,-2.54,1.27,2.54),(1.27,2.54,-1.27,2.54),(-1.27,2.54,-1.27,-2.54)]
     coin=[(-12.7,0,-1.27,0),(1.27,0,12.7,0),(-1.27,-3.81,-1.27,3.81),(1.27,-1.91,1.27,1.91)]+plus
-    return {"RES":res,"CAP":cap,"CAPP":capp,"LED":led,"XTAL32":xtal,"COIN":coin}
+    return {"RES":res,"CAP":cap,"CAP1":cap,"CAPP":capp,"LED":led,"XTAL32":xtal,"COIN":coin}
 PASSIVE_ART=_passive_art()
 PASSIVE_SYM={dn:[_w(*seg) for seg in segs] for dn,segs in PASSIVE_ART.items()}
 
@@ -514,7 +517,7 @@ def card(name,title,parts_ic,parts_small,nets,used_bus,labels=None,
     icrefs=list(parts_ic)
     for i,ref in enumerate(icrefs):
         c="CD%d"%(i+1)
-        decap[c]=("CAP","100N")
+        decap[c]=("CAP1","100N")
         nets.setdefault("VCC",[]).append((c,"1"))
         nets.setdefault("GND",[]).append((c,"2"))
     # Every IC's dedicated supply pins must be members of the VCC/GND nets — a
@@ -563,7 +566,7 @@ def card(name,title,parts_ic,parts_small,nets,used_bus,labels=None,
     flow=[]                                   # (ref,dev,val,pkg) in placement order
     for i,ref in enumerate(icrefs):           # each IC immediately followed by its cap
         dev,val=parts[ref]; flow.append((ref,dev,val,DEV[dev]["pkg"]))
-        flow.append(("CD%d"%(i+1),"CAP","100N",DEV["CAP"]["pkg"]))
+        flow.append(("CD%d"%(i+1),"CAP1","100N",DEV["CAP1"]["pkg"]))
     for ref in parts_small:
         dev,val=parts[ref]; flow.append((ref,dev,val,DEV[dev]["pkg"]))
     x0=EDGE+j1w+GAP*2; cx=x0; cyt=BH-EDGE; rowh=0.0
@@ -1199,7 +1202,7 @@ bnet("VCC",("J11","1"),("J11","2"),("CB1","+"),("CB2","+"),("RN1","COM"),("RL1",
      *[("C%d"%(i+1),"1") for i in range(10)])
 bnet("GND",("J11","3"),("J11","4"),("CB1","-"),("CB2","-"),("LED1","K"),("CT1","2"),("CT2","2"),
      *[("C%d"%(i+1),"2") for i in range(10)])
-for i in range(10): bps["C%d"%(i+1)]=("CAP","100N",35.56+50.8*i,-723.9)
+for i in range(10): bps["C%d"%(i+1)]=("CAP1","100N",35.56+50.8*i,-723.9)
 for b in range(8): bnet("D%d"%b,("RN1","R%d"%(b+1)))
 bnet("CLK",("RT1","1")); bnet("CLK_T",("RT1","2"),("CT1","1"))
 bnet("CLKB",("RT2","1")); bnet("CLKB_T",("RT2","2"),("CT2","1"))
@@ -1225,7 +1228,7 @@ bpb["RT2"]=("RES","100R",238.76,106.5,"R180")
 bpb["CT2"]=("CAP","150P",207.0,106.5)
 bpb["J11"]=("TB4","PWR-5V",5.08,78.74)
 bpb["CB1"]=("CAPP","470U",5.08,55.88); bpb["CB2"]=("CAPP","470U",5.08,45.72)
-for s in range(10): bpb["C%d"%(s+1)]=("CAP","100N",sx(s)+G,104.14)
+for s in range(10): bpb["C%d"%(s+1)]=("CAP1","100N",sx(s)+G,104.14)
 bpb["RL1"]=("RES","1K",15.24,3.0); bpb["LED1"]=("LED","PWR",30.48,3.0)
 wires={}; viad={}
 def wadd(n,*w): wires.setdefault(n,[]).extend(w)

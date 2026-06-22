@@ -71,9 +71,9 @@
 <schematic xreflabel="%F%N/%S.%C%R" xrefpart="/%S.%C%R">
 <libraries><library name="p8x">
 <packages>
-<package name="C_DISC">
+<package name="C_DISC1">
 <pad name="1" x="0.00" y="0.00" drill="0.9" diameter="1.8"/>
-<pad name="2" x="0.00" y="-5.08" drill="0.9" diameter="1.8"/>
+<pad name="2" x="0.00" y="-2.54" drill="0.9" diameter="1.8"/>
 <text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
 <text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
 </package>
@@ -346,7 +346,7 @@
 <pin name="VCC" x="17.78" y="-20.32" length="middle" rot="R180"/>
 <pin name="GND" x="17.78" y="-22.86" length="middle" rot="R180"/>
 </symbol>
-<symbol name="CAP">
+<symbol name="CAP1">
 <wire x1="-12.7" y1="0" x2="-1.27" y2="0" width="0.254" layer="94"/>
 <wire x1="1.27" y1="0" x2="12.7" y2="0" width="0.254" layer="94"/>
 <wire x1="-1.27" y1="-3.81" x2="-1.27" y2="3.81" width="0.254" layer="94"/>
@@ -643,8 +643,8 @@
 <connect gate="G$1" pin="Q8" pad="19"/>
 <connect gate="G$1" pin="VCC" pad="20"/>
 </connects><technologies><technology name=""/></technologies></device></devices></deviceset>
-<deviceset name="CAP" prefix="U" uservalue="yes"><gates><gate name="G$1" symbol="CAP" x="0" y="0"/></gates>
-<devices><device name="" package="C_DISC"><connects>
+<deviceset name="CAP1" prefix="U" uservalue="yes"><gates><gate name="G$1" symbol="CAP1" x="0" y="0"/></gates>
+<devices><device name="" package="C_DISC1"><connects>
 <connect gate="G$1" pin="1" pad="1"/>
 <connect gate="G$1" pin="2" pad="2"/>
 </connects><technologies><technology name=""/></technologies></device></devices></deviceset>
@@ -846,12 +846,12 @@
 <part name="LED3" library="p8x" deviceset="LED" device="" value="GRN"/>
 <part name="R4" library="p8x" deviceset="RES" device="" value="1K"/>
 <part name="LED4" library="p8x" deviceset="LED" device="" value="YEL"/>
-<part name="CD1" library="p8x" deviceset="CAP" device="" value="100N"/>
-<part name="CD2" library="p8x" deviceset="CAP" device="" value="100N"/>
-<part name="CD3" library="p8x" deviceset="CAP" device="" value="100N"/>
-<part name="CD4" library="p8x" deviceset="CAP" device="" value="100N"/>
-<part name="CD5" library="p8x" deviceset="CAP" device="" value="100N"/>
-<part name="CD6" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="CD1" library="p8x" deviceset="CAP1" device="" value="100N"/>
+<part name="CD2" library="p8x" deviceset="CAP1" device="" value="100N"/>
+<part name="CD3" library="p8x" deviceset="CAP1" device="" value="100N"/>
+<part name="CD4" library="p8x" deviceset="CAP1" device="" value="100N"/>
+<part name="CD5" library="p8x" deviceset="CAP1" device="" value="100N"/>
+<part name="CD6" library="p8x" deviceset="CAP1" device="" value="100N"/>
 </parts><sheets><sheet><plain>
 <text x="0" y="40" size="3.81" layer="97">P8X LED OUTPUT CARD (test - write-only 8 LEDs at $FF0C)</text>
 <text x="127.30" y="47.64" size="1.778" layer="97">I/O PAGE DEC</text>

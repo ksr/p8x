@@ -83,6 +83,12 @@
 <text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
 <text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
 </package>
+<package name="C_DISC1">
+<pad name="1" x="0.00" y="0.00" drill="0.9" diameter="1.8"/>
+<pad name="2" x="0.00" y="-2.54" drill="0.9" diameter="1.8"/>
+<text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
+<text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
+</package>
 <package name="FABC96S">
 <pad name="A1" x="-2.54" y="39.37" drill="0.9144" diameter="1.524"/>
 <pad name="A2" x="-2.54" y="36.83" drill="0.9144" diameter="1.524"/>
@@ -221,6 +227,16 @@
 </packages>
 <symbols>
 <symbol name="CAP">
+<wire x1="-12.7" y1="0" x2="-1.27" y2="0" width="0.254" layer="94"/>
+<wire x1="1.27" y1="0" x2="12.7" y2="0" width="0.254" layer="94"/>
+<wire x1="-1.27" y1="-3.81" x2="-1.27" y2="3.81" width="0.254" layer="94"/>
+<wire x1="1.27" y1="-3.81" x2="1.27" y2="3.81" width="0.254" layer="94"/>
+<text x="-2.54" y="4.32" size="1.778" layer="95">&gt;NAME</text>
+<text x="-2.54" y="-6.6" size="1.778" layer="96">&gt;VALUE</text>
+<pin name="1" x="-17.78" y="0" length="middle"/>
+<pin name="2" x="17.78" y="0" length="middle" rot="R180"/>
+</symbol>
+<symbol name="CAP1">
 <wire x1="-12.7" y1="0" x2="-1.27" y2="0" width="0.254" layer="94"/>
 <wire x1="1.27" y1="0" x2="12.7" y2="0" width="0.254" layer="94"/>
 <wire x1="-1.27" y1="-3.81" x2="-1.27" y2="3.81" width="0.254" layer="94"/>
@@ -415,6 +431,11 @@
 <connect gate="G$1" pin="1" pad="1"/>
 <connect gate="G$1" pin="2" pad="2"/>
 </connects><technologies><technology name=""/></technologies></device></devices></deviceset>
+<deviceset name="CAP1" prefix="U" uservalue="yes"><gates><gate name="G$1" symbol="CAP1" x="0" y="0"/></gates>
+<devices><device name="" package="C_DISC1"><connects>
+<connect gate="G$1" pin="1" pad="1"/>
+<connect gate="G$1" pin="2" pad="2"/>
+</connects><technologies><technology name=""/></technologies></device></devices></deviceset>
 <deviceset name="CAPP" prefix="U" uservalue="yes"><gates><gate name="G$1" symbol="CAPP" x="0" y="0"/></gates>
 <devices><device name="" package="CP_RADIAL"><connects>
 <connect gate="G$1" pin="+" pad="1"/>
@@ -572,16 +593,16 @@
 <part name="CT2" library="p8x" deviceset="CAP" device="" value="150P"/>
 <part name="RL1" library="p8x" deviceset="RES" device="" value="1K"/>
 <part name="LED1" library="p8x" deviceset="LED" device="" value="PWR"/>
-<part name="C1" library="p8x" deviceset="CAP" device="" value="100N"/>
-<part name="C2" library="p8x" deviceset="CAP" device="" value="100N"/>
-<part name="C3" library="p8x" deviceset="CAP" device="" value="100N"/>
-<part name="C4" library="p8x" deviceset="CAP" device="" value="100N"/>
-<part name="C5" library="p8x" deviceset="CAP" device="" value="100N"/>
-<part name="C6" library="p8x" deviceset="CAP" device="" value="100N"/>
-<part name="C7" library="p8x" deviceset="CAP" device="" value="100N"/>
-<part name="C8" library="p8x" deviceset="CAP" device="" value="100N"/>
-<part name="C9" library="p8x" deviceset="CAP" device="" value="100N"/>
-<part name="C10" library="p8x" deviceset="CAP" device="" value="100N"/>
+<part name="C1" library="p8x" deviceset="CAP1" device="" value="100N"/>
+<part name="C2" library="p8x" deviceset="CAP1" device="" value="100N"/>
+<part name="C3" library="p8x" deviceset="CAP1" device="" value="100N"/>
+<part name="C4" library="p8x" deviceset="CAP1" device="" value="100N"/>
+<part name="C5" library="p8x" deviceset="CAP1" device="" value="100N"/>
+<part name="C6" library="p8x" deviceset="CAP1" device="" value="100N"/>
+<part name="C7" library="p8x" deviceset="CAP1" device="" value="100N"/>
+<part name="C8" library="p8x" deviceset="CAP1" device="" value="100N"/>
+<part name="C9" library="p8x" deviceset="CAP1" device="" value="100N"/>
+<part name="C10" library="p8x" deviceset="CAP1" device="" value="100N"/>
 </parts><sheets><sheet><plain>
 <text x="0" y="40" size="3.81" layer="97">P8X 10-SLOT BACKPLANE REV C</text>
 </plain><instances>
