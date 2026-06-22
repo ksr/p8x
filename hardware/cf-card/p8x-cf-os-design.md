@@ -58,7 +58,8 @@ A two-stage system: a permanent **BIOS in EEPROM**, and the **OS proper loaded f
 | Range | Contents |
 |---|---|
 | $0000–$1FFF | BIOS ROM: drivers, boot loader, syscall jump table |
-| $2000–$7FFF | ROM: monitor, native Forth/BASIC if desired |
+| $2000–$3FFF | ROM: monitor body + ROM BASIC (rev D: ROM is now 16 KB total) |
+| $4000–$7FFF | **RAM, 16 KB (rev D, currently unused)** — free for a future lower OS load address to lift the boot ceiling; the OS still loads at $8000 for now |
 | $8000–$9D46 | OS RAM: P8X/OS kernel + shell (loaded from CF), ~6.4 KB today |
 | $9D47–$9D49 | CF LBA, 24-bit little-endian (LBA0/LBA1/LBA2; fixed by the BIOS). LBA1/LBA2 default 0 after CFINIT — set them for sectors >255 |
 | $9E00–$9FFF | Sector buffer SBUF (512 bytes, fixed by the BIOS) |

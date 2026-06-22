@@ -234,6 +234,20 @@ Last updated: 2026-06-22
 > done + why + caveats). The original foundation milestones are a terse tick
 > list under *Early milestones* at the end of this section.
 
+- **Memory card rev D: 16 KB ROM + 48 KB RAM** (2026-06-22). Shrank the ROM
+  window to `$0000–$3FFF` (16 KB; the 28C256 stays, only its low half is now
+  addressed — monitor+BASIC end at $3307, well under 16 KB) and grew RAM to 48 KB
+  (`$4000–$FEFF`) by adding a second 62256 (U10) at `$4000–$7FFF`. New decode from
+  A15+A14: ROM `!CE=A15|A14`, U10 `!CE=NAND(!A15,A14)`, main RAM (U2) unchanged
+  (`NAND(A15,-IOPG)`, $8000–$FEFF). It reuses spare gates in U7/U8 — **no added
+  logic IC**; the only new parts are U10 + its 100 nF. Memory card is the *only*
+  board that changed (backplane, CF, I/O, control, regbank, ALU untouched).
+  Emulator memory map updated to match; **no firmware/OS change** — everything at
+  $8000+ stays put, so the new `$4000–$7FFF` is just unused RAM for now. This sets
+  up (but doesn't yet take) the future move of loading the OS lower to lift the
+  14-sector boot ceiling. Test: `make test-mem` (write+readback of $5000). Full
+  suite (ISA/CF/OS/BASIC/IO) still green. Docs: memory-card theory + README,
+  cf-os design map, top-level README.
 - **Multi-byte LBA in the CF BIOS ABI** (2026-06-22). CFREAD/CFWRITE were
   capped at 256 sectors (128 KB): CFSETL zeroed LBA1/LBA2. Widened to a 24-bit
   little-endian LBA at `$9D47..$9D49` (LBA0/LBA1/LBA2). `CFINIT` now zeros

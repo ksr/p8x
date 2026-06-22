@@ -18,7 +18,8 @@
  *  - Pipeline/condition timing per control card: the FCOND field of the word
  *    in the pipeline selects ROM A12 for the NEXT lookup.
  *
- * Memory map: 0000-7FFF EEPROM | 8000-FEFF RAM | FF00-FFFF I/O
+ * Memory map: 0000-3FFF ROM (16K) | 4000-FEFF RAM (48K) | FF00-FFFF I/O
+ *   (ROM = 28C256 low 16K; RAM = 2x 62256: 4000-7FFF + 8000-FEFF)
  *   FF00 switches(r, set with -s)  FF02 LEDs(w, trace with -L)
  *   FF04 ACIA status(r)  FF05 ACIA data(rw)
  *   FF10-FF17 CF-IDE task file (8-bit True IDE), modelled when -c <img> given:
@@ -40,7 +41,7 @@ static int peeked=-1;                 /* one-char lookahead for ACIA status/data
 static struct termios g_orig;
 static int g_raw=0;
 
-static uint8_t rom[4][8192], eeprom[0x8000], ram[0x7F00];
+static uint8_t rom[4][8192], eeprom[0x8000], ram[0xBF00];  /* RAM = $4000..$FEFF (48K) */
 static uint16_t P[5];                 /* P0=PC P1 P2 P3=SP P4=PT (hidden scratch) */
 static uint8_t A,B,T,T2,IR;
 static int stp, fC,fZ,fN,fV;          /* fC = conventional carry (1 = carry / A>=B) */
@@ -164,8 +165,8 @@ static int rx_char(void){
     term_restore(); exit(0);
 }
 static uint8_t memrd(uint16_t ad){
-    if(ad<0x8000) return eeprom[ad];
-    if(ad<0xFF00) return ram[ad-0x8000];
+    if(ad<0x4000) return eeprom[ad];
+    if(ad<0xFF00) return ram[ad-0x4000];
     switch(ad){
     case 0xFF00: return switches;                             /* switches (-s) */
     case 0xFF04: return 0x02 | (rx_ready()?0x01:0x00);        /* TDRE|RDRF */
@@ -176,8 +177,8 @@ static uint8_t memrd(uint16_t ad){
     }
 }
 static void memwr(uint16_t ad,uint8_t v){
-    if(ad<0x8000){ fprintf(stderr,"[warn] write to EEPROM %04X\n",ad); return; }
-    if(ad<0xFF00){ ram[ad-0x8000]=v; return; }
+    if(ad<0x4000){ fprintf(stderr,"[warn] write to EEPROM %04X\n",ad); return; }
+    if(ad<0xFF00){ ram[ad-0x4000]=v; return; }
     if(ad==0xFF02){                                          /* LEDs */
         if(led_trace && v!=leds)
             fprintf(stderr,"[LED $FF02] $%02X  %c%c%c%c%c%c%c%c\n", v,

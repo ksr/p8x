@@ -27,6 +27,7 @@ test: p8xemu ucode
 	$(MAKE) test-os
 	$(MAKE) test-basic
 	$(MAKE) test-io
+	$(MAKE) test-mem
 
 # Per-instruction self-checking regression: halts with A=00 on success,
 # or A=<test id> at the first failing check.
@@ -56,4 +57,11 @@ test-basic: p8xemu ucode
 test-io: p8xemu ucode
 	sh test/io_test.sh
 
-.PHONY: all ucode rom test test-isa test-cf test-os test-basic test-io
+# rev D memory map: $4000-$7FFF is now RAM (was ROM). Write+readback -> 'Y'.
+test-mem: p8xemu ucode
+	cd test && cp ../$(UC)/u?.bin . && \
+	python3 ../../assembler/p8xasm.py test_ram48.asm -o tmem.bin && \
+	../p8xemu -l 200000 tmem.bin 2>/dev/null | tr -d '\0' | grep -q Y && \
+	  echo "MEM48 TEST: PASS" || { echo "MEM48 TEST: FAIL"; exit 1; }
+
+.PHONY: all ucode rom test test-isa test-cf test-os test-basic test-io test-mem

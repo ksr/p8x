@@ -1,11 +1,23 @@
 # Memory Card — Theory of Operation
 
-The memory card is the P8X's address space: a 32 KB EEPROM (`$0000–$7FFF`, holding
-the monitor + ROM BASIC) and a 32 KB SRAM (`$8000–$FEFF`). It decodes the address
-bus to decide which chip — if any — responds, steers a bidirectional data buffer
-the right way for reads vs writes, and includes a jumper to write-protect the ROM.
+The memory card is the P8X's address space. **Rev D** map: a 16 KB EEPROM window
+(`$0000–$3FFF`, holding the monitor + ROM BASIC) and **48 KB of SRAM**
+(`$4000–$FEFF`) across two 62256 chips. It decodes the address bus to decide which
+chip — if any — responds, steers a bidirectional data buffer the right way for
+reads vs writes, and includes a jumper to write-protect the ROM.
 
-> Source of truth: the `# MEMORY CARD rev C` section of
+| Region | Range | Size | Chip | `!CE` decode |
+|--------|-------|------|------|--------------|
+| ROM | `$0000–$3FFF` | 16 KB | U1 28C256 (low half) | `A15 OR A14` |
+| RAM | `$4000–$7FFF` | 16 KB | U10 62256 (rev D, new) | `NAND(!A15, A14)` |
+| RAM | `$8000–$FEFF` | 32 KB | U2 62256 | `NAND(A15, -IOPG)` |
+| I/O | `$FF00–$FFFF` | — | (other cards) | — |
+
+> Rev D shrank the ROM window to 16 KB and added the second SRAM (U10) to grow RAM
+> to 48 KB — the EEPROM still holds the same image (only its low 16 KB is now
+> addressable), and the new decode reuses spare gates in U7/U8 (no added logic IC).
+
+> Source of truth: the `# MEMORY CARD rev D` section of
 > [`../../generators/gen_eagle.py`](../../generators/gen_eagle.py). Like every
 > other logic card it is now built through the shared `card()` helper; its
 > functional netlist is assembled with a local `mnet` helper and handed to
@@ -64,21 +76,28 @@ the right way for reads vs writes, and includes a jumper to write-protect the RO
 
 ## 3. How it works
 
-### 3.1 Address decode — who responds
-The single most important signal is **A15**: it splits the map in half. The 28C256
-EEPROM's chip-enable (`!CE`) is tied directly to `A15`, so the ROM responds for
-`$0000–$7FFF` (A15 = 0).
+### 3.1 Address decode — who responds (rev D)
+The top two address bits, **A15** and **A14**, pick the region:
 
-The top half (`$8000+`) is RAM *except* the I/O page. `U4` (a 7430 8-input NAND)
-asserts `-IOPG` low when address bits A8–A15 are all high — i.e. an `$FFxx`
-address. The RAM chip-enable `-RAMCE` is `NAND(A15, -IOPG)` (`U7`): the RAM
-responds when A15 = 1 **and** it is not the I/O page. That carve-out is what keeps
-the RAM from fighting the I/O and CF cards on accesses to `$FF00–$FFFF`.
+- **ROM** (`U1` 28C256): `!CE = A15 OR A14` (`U8` spare OR gate). Active-low only
+  when both are 0, so the EEPROM responds for `$0000–$3FFF`. Its A14 pin is then
+  always 0 when selected, so only the low 16 KB of the 32 KB part is used.
+- **New SRAM** (`U10` 62256): `!CE = NAND(!A15, A14)` (`U7` spare NAND gates — one
+  inverts A15, one ANDs it with A14). Responds for `$4000–$7FFF`.
+- **Main SRAM** (`U2` 62256): `!CE = -RAMCE = NAND(A15, -IOPG)`, unchanged. `U4`
+  (a 7430 8-input NAND) asserts `-IOPG` low for an `$FFxx` address (A8–A15 all
+  high); the RAM responds when A15 = 1 **and** it is not the I/O page. That
+  carve-out keeps the RAM from fighting the I/O and CF cards at `$FF00–$FFFF`.
 
-So the decode yields three regions:
-- `$0000–$7FFF` → EEPROM
-- `$8000–$FEFF` → SRAM
+So the decode yields four regions:
+- `$0000–$3FFF` → EEPROM (16 KB)
+- `$4000–$7FFF` → SRAM U10 (16 KB, rev D)
+- `$8000–$FEFF` → SRAM U2 (32 KB)
 - `$FF00–$FFFF` → neither responds here (the I/O and CF cards do)
+
+The new decode added **no logic chips** — it reuses spare gates already on the
+card (U7 had three unused NANDs, U8 a spare OR). The only added part is U10 (the
+second 62256) and its 100 nF decoupling cap.
 
 ### 3.2 Read vs write strobes
 The control word's `DOE` and `DLD` fields are decoded locally:

@@ -1134,7 +1134,7 @@ card("cf-card","P8X CF-IDE CARD REV A - 8-BIT TRUE IDE AT 0xFF10",ic,sm,n,
  {"D%d"%i for i in range(8)}|{"A0","A1","A2","A3","A4"}|{"A%d"%i for i in range(8,16)}|
  {"DOE%d"%i for i in range(4)}|{"DLD%d"%i for i in range(4)}|{"CLKB","-RES"})
 
-# ===================== MEMORY CARD rev C ======================================
+# ===================== MEMORY CARD rev D ======================================
 # Built through the shared card() helper like every other logic card (placement
 # is auto — final layout is done in Fusion/Eagle). card() supplies J1, the per-IC
 # decoupling caps, the IC power pins, and the J1 bus/power wiring derived from
@@ -1143,7 +1143,8 @@ card("cf-card","P8X CF-IDE CARD REV A - 8-BIT TRUE IDE AT 0xFF10",ic,sm,n,
 ic={"U1":("MEM28K8","28C256"),"U2":("MEM28K8","62256"),
  "U3":("74245","74HCT245"),"U4":("7430","74HCT30"),
  "U5":("74138","DOE DEC"),"U6":("74138","DLD DEC"),
- "U7":("GATES14","74HCT00"),"U8":("GATES14","74HCT32"),"U9":("GATES14","74HCT08")}
+ "U7":("GATES14","74HCT00"),"U8":("GATES14","74HCT32"),"U9":("GATES14","74HCT08"),
+ "U10":("MEM28K8","62256")}   # rev D: 2nd SRAM, RAM grows to 48K ($4000-$FEFF)
 sm={"RP1":("RES","1K"),"LED3":("LED","PWR-GRN"),
  "RS1":("RES","1K"),"LED2":("LED","ROM-YEL"),
  "RS2":("RES","1K"),"LED4":("LED","RAM-YEL"),
@@ -1156,24 +1157,32 @@ mcn={}
 def mnet(n,*p): mcn.setdefault(n,[]).extend(p)
 for i in range(8):
     mnet("D%d"%i,("U3","A%d"%i))
-    mnet("MD%d"%i,("U3","B%d"%i),("U1","IO%d"%i),("U2","IO%d"%i))
+    mnet("MD%d"%i,("U3","B%d"%i),("U1","IO%d"%i),("U2","IO%d"%i),("U10","IO%d"%i))
 for i in range(16):
     pins=[]
-    if i<15: pins+=[("U1","A%d"%i),("U2","A%d"%i)]
+    if i<15: pins+=[("U1","A%d"%i),("U2","A%d"%i),("U10","A%d"%i)]
     if 8<=i<=14: pins.append(("U4","ABCDEFG"[i-8]))
-    if i==15: pins+=[("U4","H"),("U1","!CE"),("U7","1A")]
+    if i==14: pins+=[("U8","4B"),("U7","3B")]                       # A14 -> ROM/RAM2 decode
+    if i==15: pins+=[("U4","H"),("U7","1A"),("U8","4A"),("U7","2A"),("U7","2B")]
     mnet("A%d"%i,*pins)
 mnet("-IOPG",("U4","Y"),("U7","1B"))
 mnet("-RAMCE",("U7","1Y"),("U2","!CE"))
+# rev D memory map: 16K ROM ($0000-$3FFF) + 48K RAM ($4000-$FEFF) across two 62256.
+#   U1  28C256 ROM   !CE = OR(A15,A14)   -> $0000-$3FFF   (low 16K of the EEPROM)
+#   U10 62256  RAM   !CE = NAND(!A15,A14) -> $4000-$7FFF  (the added 16K)
+#   U2  62256  RAM   !CE = -RAMCE          -> $8000-$FEFF (unchanged; I/O page carved out)
+mnet("ROMCE",("U8","4Y"),("U1","!CE"),("U8","3A"))   # U8.4 = OR(A15,A14); also ROM-LED select
+mnet("A15N",("U7","2Y"),("U7","3A"))                  # U7.2 = NAND(A15,A15) = !A15
+mnet("-RAM2CE",("U7","3Y"),("U10","!CE"))             # U7.3 = NAND(!A15,A14) -> U10 $4000-$7FFF
 for i in range(4):
     mnet("DOE%d"%i,("U5",["A","B","C","!G2A"][i]))
     mnet("DLD%d"%i,("U6",["A","B","C","!G2A"][i]))
-mnet("-RD",("U5","Y7"),("U1","!OE"),("U2","!OE"),("U3","DIR"),("U9","1A"))
+mnet("-RD",("U5","Y7"),("U1","!OE"),("U2","!OE"),("U10","!OE"),("U3","DIR"),("U9","1A"))
 mnet("-MEMW",("U6","Y7"),("U8","1A"),("U9","1B"))
 mnet("CLK",("U8","1B"))
 # RAM !WE is always on -WE; ROM !WE routes through the JWP select header so it
 # can be write-protected (jumper 2-3 -> VCC) without affecting RAM writes.
-mnet("-WE",("U8","1Y"),("U2","!WE"),("JWP","1"))
+mnet("-WE",("U8","1Y"),("U2","!WE"),("U10","!WE"),("JWP","1"))
 mnet("ROMWE",("JWP","2"),("U1","!WE"))   # header centre -> 28C256 !WE
 mnet("VCC",("JWP","3"))                   # protect position: !WE held high
 mnet("-BOE",("U9","1Y"),("U3","!OE"))
@@ -1181,11 +1190,10 @@ mnet("-BOE",("U9","1Y"),("U3","!OE"))
 # even-pin spares stay OFF GND) plus every IC's own VCC/GND supply pin.
 mnet("VCC",("U5","G1"),("U6","G1"))
 mnet("GND",("U5","!G2B"),("U6","!G2B"),
-  *[("U7",p) for p in("2A","2B","3A","3B","4A","4B")],
-  ("U8","4A"),("U8","4B"),("U9","4A"),("U9","4B"),("LED3","K"))
+  ("U7","4A"),("U7","4B"),         # U7 gates 2,3 now do the ROM/RAM2 decode (was spare)
+  ("U9","4A"),("U9","4B"),("LED3","K"))   # U8 gate 4 now ORs A15,A14 for ROMCE
 mnet("-BOE",("U8","2B"),("U8","3B"))
 mnet("-RAMCE",("U8","2A"))
-mnet("A15",("U8","3A"))
 mnet("-RD",("U9","2A"),("U9","2B"))
 mnet("-MEMW",("U9","3A"),("U9","3B"))
 mnet("LEDP",("RP1","2"),("LED3","A"))
@@ -1194,7 +1202,7 @@ mnet("LEDRA",("RS2","2"),("LED4","A")); mnet("RAMK",("U8","2Y"),("LED4","K"))
 mnet("LEDRD",("RS3","2"),("LED5","A")); mnet("RDK",("U9","2Y"),("LED5","K"))
 mnet("LEDWR",("RS4","2"),("LED6","A")); mnet("WRK",("U9","3Y"),("LED6","K"))
 mnet("VCC",("RP1","1"),("RS1","1"),("RS2","1"),("RS3","1"),("RS4","1"))
-card("memory-card","P8X MEMORY CARD REV C",ic,sm,mcn,
+card("memory-card","P8X MEMORY CARD REV D",ic,sm,mcn,
  {"D%d"%i for i in range(8)}|{"A%d"%i for i in range(16)}|
  {"DOE%d"%i for i in range(4)}|{"DLD%d"%i for i in range(4)}|{"CLK"})
 

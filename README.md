@@ -11,7 +11,7 @@ New to the abbreviations and signal names? See [GLOSSARY.md](GLOSSARY.md).
 - **Registers:** A, B (ALU operands), T/T2 (hidden microcode temporaries), FLAGS (C, Z, N, V)
 - **ALU:** 2 × 74181 + 74182 carry-lookahead, with a post-ALU shifter
 - **Microcoded control:** 4 × 28C64 EEPROMs; ROM address = IR | step<<8 | cond<<12
-- **Memory map:** `$0000–$7FFF` EEPROM, `$8000–$FEFF` RAM, `$FF00–$FFFF` I/O
+- **Memory map (rev D):** `$0000–$3FFF` ROM (16 KB), `$4000–$FEFF` RAM (48 KB, 2× 62256), `$FF00–$FFFF` I/O
 
 ## Cards (6)
 
