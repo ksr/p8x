@@ -1189,14 +1189,14 @@ def padx(i,row): return sx(i)+{"A":-5.08,"B":-2.54,"C":0.0}[row]   # FABC96S pad
 bpb={}
 for i in range(10): bpb["J%d"%(i+1)]=("DIN96","SLOT%d"%(i+1),sx(i)-2.54,EY)
 bpb["RN1"]=("SIP9","8X10K",246.38,91.44)
-bpb["RT1"]=("RES","100R",238.76,101.60,"R180")
-bpb["CT1"]=("CAP","150P",223.52,101.60)
-bpb["RT2"]=("RES","100R",238.76,106.68,"R180")
-bpb["CT2"]=("CAP","150P",213.36,106.68)
+bpb["RT1"]=("RES","100R",238.76,103.5,"R180")
+bpb["CT1"]=("CAP","150P",223.52,103.5)
+bpb["RT2"]=("RES","100R",238.76,106.5,"R180")
+bpb["CT2"]=("CAP","150P",207.0,106.5)
 bpb["J11"]=("TB4","PWR-5V",5.08,78.74)
 bpb["CB1"]=("CAPP","470U",5.08,55.88); bpb["CB2"]=("CAPP","470U",5.08,45.72)
 for s in range(10): bpb["C%d"%(s+1)]=("CAP","100N",sx(s)+G,104.14)
-bpb["RL1"]=("RES","1K",15.24,7.62); bpb["LED1"]=("LED","PWR",30.48,7.62)
+bpb["RL1"]=("RES","1K",15.24,3.0); bpb["LED1"]=("LED","PWR",30.48,3.0)
 wires={}; viad={}
 def wadd(n,*w): wires.setdefault(n,[]).extend(w)
 def vadd(n,*v): viad.setdefault(n,[]).extend(v)
@@ -1207,16 +1207,16 @@ for n in range(3,31):
     nC=busnet("C%d"%n)
     wadd(nC,(padx(0,"C"),y,padx(9,"C"),y,16,0.4))
 wadd("CLK",(padx(9,"A"),py(24),242.10,py(24),16,0.4),
-           (242.10,py(24),242.10,101.60,16,0.4),
-           (242.10,101.60,238.76,101.60,1,0.4))
-vadd("CLK",(242.10,101.60))
-wadd("CLK_T",(228.60,101.60,223.52,101.60,1,0.4))
+           (242.10,py(24),242.10,103.5,16,0.4),
+           (242.10,103.5,238.76,103.5,1,0.4))
+vadd("CLK",(242.10,103.5))
+wadd("CLK_T",(228.60,103.5,223.52,103.5,1,0.4))
 wadd("CLKB",(padx(9,"A"),py(25),240.50,py(25),16,0.4),
-            (240.50,py(25),240.50,106.68,16,0.4),
-            (240.50,106.68,238.76,106.68,1,0.4))
-vadd("CLKB",(240.50,106.68))
-wadd("CLKB_T",(228.60,106.68,213.36,106.68,1,0.4))
-wadd("LED_A",(25.40,7.62,30.48,7.62,1,0.4))
+            (240.50,py(25),240.50,106.5,16,0.4),
+            (240.50,106.5,238.76,106.5,1,0.4))
+vadd("CLKB",(240.50,106.5))
+wadd("CLKB_T",(228.60,106.5,207.0,106.5,1,0.4))
+wadd("LED_A",(25.40,3.0,30.48,3.0,1,0.4))
 # Route the non-ground B-row signals slot-to-slot: B27=CLRC, B28=BSEL, B29=IRQ,
 # B30=SPARE11, plus the rev-D even-pin spares B4..B26 (SPARE12..23). Odd B pins
 # stay ground guards (handled by the GND pour).
