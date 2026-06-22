@@ -1234,10 +1234,13 @@ bpb["RT1"]=("RES","100R",264.0,96.0)
 bpb["CT1"]=("CAP","150P",279.24,96.0)
 bpb["RT2"]=("RES","100R",264.0,80.0)
 bpb["CT2"]=("CAP","150P",279.24,80.0)
-bpb["J11"]=("TB4","PWR-5V",5.08,78.74)
-bpb["CB1"]=("CAPP","470U",5.08,55.88); bpb["CB2"]=("CAPP","470U",5.08,45.72)
+# Power-entry cluster, pinned to the front (left) edge in the front bay opened by
+# the XOFF shift below. CB1/CB2 spread to 23mm apart (was ~10). RL1/LED1 brought
+# forward toward the front edge. These five are excluded from the X/Y shifts.
+bpb["J11"]=("TB4","PWR-5V",5.08,95.0)
+bpb["CB1"]=("CAPP","470U",5.08,68.0); bpb["CB2"]=("CAPP","470U",5.08,45.0)
 for s in range(10): bpb["C%d"%(s+1)]=("CAP1","100N",sx(s)+G,104.14)
-bpb["RL1"]=("RES","1K",15.24,3.0); bpb["LED1"]=("LED","PWR",30.48,3.0)
+bpb["RL1"]=("RES","1K",5.08,3.0); bpb["LED1"]=("LED","PWR",18.0,3.0)
 wires={}; viad={}
 def wadd(n,*w): wires.setdefault(n,[]).extend(w)
 def vadd(n,*v): viad.setdefault(n,[]).extend(v)
@@ -1258,7 +1261,7 @@ wadd("CLKB",(padx(9,"A"),py(25),259.0,py(25),1,0.4),
             (259.0,py(25),259.0,80.0,1,0.4),
             (259.0,80.0,264.0,80.0,1,0.4))
 wadd("CLKB_T",(274.16,80.0,279.24,80.0,1,0.4))
-wadd("LED_A",(25.40,3.0,30.48,3.0,1,0.4))
+wadd("LED_A",(15.24,3.0,18.0,3.0,1,0.4))   # RL1 pad2 -> LED1 anode (both at front)
 # Route the non-ground B-row signals slot-to-slot: B27=CLRC, B28=BSEL, B29=IRQ,
 # B30=SPARE11, plus the rev-D even-pin spares B4..B26 (SPARE12..23). Odd B pins
 # stay ground guards (handled by the GND pour).
@@ -1269,23 +1272,24 @@ for nn in range(3,31):
     wadd(net,(sx(0)-2.54,y-1.27,sx(9)-2.54,y-1.27,1,0.4))
     for i in range(10):
         wadd(net,(sx(i)-2.54,y,sx(i)-2.54,y-1.27,1,0.4))
-# Lift the whole slot field + its routing up by YOFF to open a bottom margin so
-# the bottom mounting holes clear the bus connectors (their lowest mount hole was
-# only ~4.6mm above the holes). RL1/LED1 (power LED + bleed resistor) and their
-# LED_A net stay pinned to the bottom edge as before.
-YOFF=7.0; KEEP={"RL1","LED1"}
-bpb={r:(pv if r in KEEP else pv[:3]+(pv[3]+YOFF,)+pv[4:]) for r,pv in bpb.items()}
-wires={n:(segs if n=="LED_A" else [(a,b+YOFF,c,d+YOFF,ly,wd) for (a,b,c,d,ly,wd) in segs])
+# Shift the slot field + its routing right by XOFF (opens a front bay at the left
+# for the power connector and bulk caps) and up by YOFF (opens a bottom margin so
+# the bottom mounting holes clear the bus connectors). The power-entry cluster
+# (J11/CB1/CB2/RL1/LED1) and the LED_A net stay pinned to the front edge.
+YOFF=7.0; XOFF=16.0
+FRONT={"J11","CB1","CB2","RL1","LED1"}
+bpb={r:(pv if r in FRONT else pv[:2]+(pv[2]+XOFF,pv[3]+YOFF)+pv[4:]) for r,pv in bpb.items()}
+wires={n:(segs if n=="LED_A" else [(a+XOFF,b+YOFF,c+XOFF,d+YOFF,ly,wd) for (a,b,c,d,ly,wd) in segs])
        for n,segs in wires.items()}
-viad={n:[(vx,vy+YOFF) for (vx,vy) in vs] for n,vs in viad.items()}
+viad={n:[(vx+XOFF,vy+YOFF) for (vx,vy) in vs] for n,vs in viad.items()}
 if EMIT:
-    # M3 mounting holes: 3 evenly spaced (100mm pitch, symmetric) along each long
-    # (290mm) edge. Drill 3.2mm = M3 clearance. Board is 290 x 123: widened for the
-    # end-zone cluster, and the YOFF lift above gives the bottom holes (y=5) clean
-    # room below the connectors; top holes (y=118) clear the decoupling-cap row.
-    bpholes=[(x,y,3.2) for y in (5.0,118.0) for x in (40.0,140.0,240.0)]
+    # M3 mounting holes: 3 along each long (306mm) edge at 100mm pitch (shifted
+    # with the slot field by XOFF). Drill 3.2mm = M3 clearance. Board is 306 x 123:
+    # XOFF front bay + end-zone cluster on the width, the YOFF lift gives the bottom
+    # holes (y=5) room below the connectors; top holes (y=118) clear the cap row.
+    bpholes=[(x+XOFF,y,3.2) for y in (5.0,118.0) for x in (40.0,140.0,240.0)]
     write_brd("backplane/p8x-backplane.brd","P8X 10-SLOT BACKPLANE REV C COMPACT",bpb,bpn,wires,
-              {"GND":[(2,)],"VCC":[(15,)]},290.0,123.0,viad,holes=bpholes)
+              {"GND":[(2,)],"VCC":[(15,)]},306.0,123.0,viad,holes=bpholes)
     validate("backplane/p8x-backplane.brd",bpb,bpn)
 
 # ===================== LED OUTPUT CARD (test / CAD-workflow trial) ============
