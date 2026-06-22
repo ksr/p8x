@@ -106,6 +106,11 @@ def render(path,outpdf):
             else:
                 c.circle(cx,cy,rpad,stroke=1,fill=1)
             c.setFillColor(HOLE); c.circle(cx,cy,rhole,stroke=0,fill=1)
+        # silkscreen polarity '+' beside the positive pad (CP_RADIAL: pad 1 = +)
+        if e["pkg"]=="CP_RADIAL":
+            rx,ry=rot_xy(2.6,0,e["rot"])
+            c.setFillColor(DNPC if is_dnp else TXT); c.setFont("Helvetica-Bold",7)
+            c.drawCentredString(X(e["x"]+rx),Y(e["y"]+ry)-2.3,"+")
         # ref designator (bold-ish) + value, centred on the body
         c.setFillColor(DNPC if is_dnp else TXT)
         cxb,cyb=bx+bw/2,by+bh/2

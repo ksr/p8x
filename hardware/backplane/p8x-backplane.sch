@@ -76,6 +76,8 @@
 <pad name="2" x="0.00" y="-5.08" drill="0.9" diameter="1.8"/>
 <text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
 <text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
+<wire x1="1.90" y1="0" x2="3.30" y2="0" width="0.3048" layer="21"/>
+<wire x1="2.60" y1="-0.70" x2="2.60" y2="0.70" width="0.3048" layer="21"/>
 </package>
 <package name="C_DISC">
 <pad name="1" x="0.00" y="0.00" drill="0.9" diameter="1.8"/>

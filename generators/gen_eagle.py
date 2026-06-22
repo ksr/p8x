@@ -90,6 +90,15 @@ PKG={
  "HDR40": [(str(k+1),2.54*(k%2),-2.54*(k//2),0.9,1.7) for k in range(40)],
 }
 
+# Extra silkscreen geometry per package, beyond the standard >NAME/>VALUE text.
+# Layer 21 = tPlace (top silkscreen). CP_RADIAL gets a '+' beside pad 1 (the
+# positive pin, pm "+"->"1") so electrolytic / coin-cell polarity is on the board.
+PKG_SILK={
+ "CP_RADIAL":[
+   '<wire x1="1.90" y1="0" x2="3.30" y2="0" width="0.3048" layer="21"/>',
+   '<wire x1="2.60" y1="-0.70" x2="2.60" y2="0.70" width="0.3048" layer="21"/>'],
+}
+
 # ===================== DEVICES =================================================
 def gates14():
     return dict(L=["1A","1B","2A","2B","3A","3B","4A","4B"],
@@ -306,6 +315,7 @@ def lib_xml(devnames, for_board):
                 o.append(f'<pad name="{nm}" x="{x:.2f}" y="{y:.2f}" drill="{dr}" diameter="{sz}"/>')
         o.append('<text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>')    # silkscreen refdes
         o.append('<text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>')   # silkscreen value
+        o+=PKG_SILK.get(pk,[])                                                       # polarity marks, etc.
         o.append('</package>')
     o.append('</packages>')
     if not for_board:
@@ -1239,7 +1249,7 @@ bpb["CT2"]=("CAP","150P",279.24,80.0)
 # forward toward the front edge. These five are excluded from the X/Y shifts.
 bpb["J11"]=("TB4","PWR-5V",5.08,95.0)
 bpb["CB1"]=("CAPP","470U",5.08,68.0); bpb["CB2"]=("CAPP","470U",5.08,45.0)
-for s in range(10): bpb["C%d"%(s+1)]=("CAP1","100N",sx(s)+G,104.14)
+for s in range(10): bpb["C%d"%(s+1)]=("CAP1","100N",sx(s)+G,109.0)   # up off the slot connectors
 bpb["RL1"]=("RES","1K",5.08,3.0); bpb["LED1"]=("LED","PWR",18.0,3.0)
 wires={}; viad={}
 def wadd(n,*w): wires.setdefault(n,[]).extend(w)
@@ -1284,12 +1294,13 @@ wires={n:(segs if n=="LED_A" else [(a+XOFF,b+YOFF,c+XOFF,d+YOFF,ly,wd) for (a,b,
 viad={n:[(vx+XOFF,vy+YOFF) for (vx,vy) in vs] for n,vs in viad.items()}
 if EMIT:
     # M3 mounting holes: 3 along each long (306mm) edge at 100mm pitch (shifted
-    # with the slot field by XOFF). Drill 3.2mm = M3 clearance. Board is 306 x 123:
+    # with the slot field by XOFF). Drill 3.2mm = M3 clearance. Board is 306 x 128:
     # XOFF front bay + end-zone cluster on the width, the YOFF lift gives the bottom
-    # holes (y=5) room below the connectors; top holes (y=118) clear the cap row.
-    bpholes=[(x+XOFF,y,3.2) for y in (5.0,118.0) for x in (40.0,140.0,240.0)]
+    # holes (y=5) room below the connectors; top holes (y=123) clear the cap row
+    # (which moved up to y=109+YOFF off the connectors).
+    bpholes=[(x+XOFF,y,3.2) for y in (5.0,123.0) for x in (40.0,140.0,240.0)]
     write_brd("backplane/p8x-backplane.brd","P8X 10-SLOT BACKPLANE REV C COMPACT",bpb,bpn,wires,
-              {"GND":[(2,)],"VCC":[(15,)]},306.0,123.0,viad,holes=bpholes)
+              {"GND":[(2,)],"VCC":[(15,)]},306.0,128.0,viad,holes=bpholes)
     validate("backplane/p8x-backplane.brd",bpb,bpn)
 
 # ===================== LED OUTPUT CARD (test / CAD-workflow trial) ============
