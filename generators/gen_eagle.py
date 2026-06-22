@@ -1247,8 +1247,8 @@ bpb["CT2"]=("CAP","150P",279.24,80.0)
 # Power-entry cluster, pinned to the front (left) edge in the front bay opened by
 # the XOFF shift below. CB1/CB2 spread to 23mm apart (was ~10). RL1/LED1 brought
 # forward toward the front edge. These five are excluded from the X/Y shifts.
-bpb["J11"]=("TB4","PWR-5V",5.08,95.0)
-bpb["CB1"]=("CAPP","470U",5.08,68.0); bpb["CB2"]=("CAPP","470U",5.08,45.0)
+bpb["J11"]=("TB4","PWR-5V",9.0,95.0)
+bpb["CB1"]=("CAPP","470U",9.0,68.0); bpb["CB2"]=("CAPP","470U",9.0,45.0)
 for s in range(10): bpb["C%d"%(s+1)]=("CAP1","100N",sx(s)+G,109.0)   # up off the slot connectors
 bpb["RL1"]=("RES","1K",5.08,3.0); bpb["LED1"]=("LED","PWR",21.0,3.0)
 wires={}; viad={}
@@ -1286,21 +1286,21 @@ for nn in range(3,31):
 # for the power connector and bulk caps) and up by YOFF (opens a bottom margin so
 # the bottom mounting holes clear the bus connectors). The power-entry cluster
 # (J11/CB1/CB2/RL1/LED1) and the LED_A net stay pinned to the front edge.
-YOFF=7.0; XOFF=16.0
+YOFF=7.0; XOFF=10.0
 FRONT={"J11","CB1","CB2","RL1","LED1"}
 bpb={r:(pv if r in FRONT else pv[:2]+(pv[2]+XOFF,pv[3]+YOFF)+pv[4:]) for r,pv in bpb.items()}
 wires={n:(segs if n=="LED_A" else [(a+XOFF,b+YOFF,c+XOFF,d+YOFF,ly,wd) for (a,b,c,d,ly,wd) in segs])
        for n,segs in wires.items()}
 viad={n:[(vx+XOFF,vy+YOFF) for (vx,vy) in vs] for n,vs in viad.items()}
 if EMIT:
-    # M3 mounting holes: 3 along each long (306mm) edge at 100mm pitch (shifted
-    # with the slot field by XOFF). Drill 3.2mm = M3 clearance. Board is 306 x 128:
+    # M3 mounting holes: 3 along each long (300mm) edge at 100mm pitch (shifted
+    # with the slot field by XOFF). Drill 3.2mm = M3 clearance. Board is 300 x 128:
     # XOFF front bay + end-zone cluster on the width, the YOFF lift gives the bottom
     # holes (y=5) room below the connectors; top holes (y=123) clear the cap row
     # (which moved up to y=109+YOFF off the connectors).
     bpholes=[(x+XOFF,y,3.2) for y in (5.0,123.0) for x in (40.0,140.0,240.0)]
     write_brd("backplane/p8x-backplane.brd","P8X 10-SLOT BACKPLANE REV C COMPACT",bpb,bpn,wires,
-              {"GND":[(2,)],"VCC":[(15,)]},306.0,128.0,viad,holes=bpholes)
+              {"GND":[(2,)],"VCC":[(15,)]},300.0,128.0,viad,holes=bpholes)
     validate("backplane/p8x-backplane.brd",bpb,bpn)
 
 # ===================== LED OUTPUT CARD (test / CAD-workflow trial) ============
