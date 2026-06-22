@@ -83,108 +83,6 @@
 <text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
 <text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
 </package>
-<package name="DIN96C">
-<pad name="A1" x="5.08" y="-0.00" drill="1.0" diameter="1.7"/>
-<pad name="A2" x="5.08" y="-2.54" drill="1.0" diameter="1.7"/>
-<pad name="A3" x="5.08" y="-5.08" drill="1.0" diameter="1.7"/>
-<pad name="A4" x="5.08" y="-7.62" drill="1.0" diameter="1.7"/>
-<pad name="A5" x="5.08" y="-10.16" drill="1.0" diameter="1.7"/>
-<pad name="A6" x="5.08" y="-12.70" drill="1.0" diameter="1.7"/>
-<pad name="A7" x="5.08" y="-15.24" drill="1.0" diameter="1.7"/>
-<pad name="A8" x="5.08" y="-17.78" drill="1.0" diameter="1.7"/>
-<pad name="A9" x="5.08" y="-20.32" drill="1.0" diameter="1.7"/>
-<pad name="A10" x="5.08" y="-22.86" drill="1.0" diameter="1.7"/>
-<pad name="A11" x="5.08" y="-25.40" drill="1.0" diameter="1.7"/>
-<pad name="A12" x="5.08" y="-27.94" drill="1.0" diameter="1.7"/>
-<pad name="A13" x="5.08" y="-30.48" drill="1.0" diameter="1.7"/>
-<pad name="A14" x="5.08" y="-33.02" drill="1.0" diameter="1.7"/>
-<pad name="A15" x="5.08" y="-35.56" drill="1.0" diameter="1.7"/>
-<pad name="A16" x="5.08" y="-38.10" drill="1.0" diameter="1.7"/>
-<pad name="A17" x="5.08" y="-40.64" drill="1.0" diameter="1.7"/>
-<pad name="A18" x="5.08" y="-43.18" drill="1.0" diameter="1.7"/>
-<pad name="A19" x="5.08" y="-45.72" drill="1.0" diameter="1.7"/>
-<pad name="A20" x="5.08" y="-48.26" drill="1.0" diameter="1.7"/>
-<pad name="A21" x="5.08" y="-50.80" drill="1.0" diameter="1.7"/>
-<pad name="A22" x="5.08" y="-53.34" drill="1.0" diameter="1.7"/>
-<pad name="A23" x="5.08" y="-55.88" drill="1.0" diameter="1.7"/>
-<pad name="A24" x="5.08" y="-58.42" drill="1.0" diameter="1.7"/>
-<pad name="A25" x="5.08" y="-60.96" drill="1.0" diameter="1.7"/>
-<pad name="A26" x="5.08" y="-63.50" drill="1.0" diameter="1.7"/>
-<pad name="A27" x="5.08" y="-66.04" drill="1.0" diameter="1.7"/>
-<pad name="A28" x="5.08" y="-68.58" drill="1.0" diameter="1.7"/>
-<pad name="A29" x="5.08" y="-71.12" drill="1.0" diameter="1.7"/>
-<pad name="A30" x="5.08" y="-73.66" drill="1.0" diameter="1.7"/>
-<pad name="A31" x="5.08" y="-76.20" drill="1.0" diameter="1.7"/>
-<pad name="A32" x="5.08" y="-78.74" drill="1.0" diameter="1.7"/>
-<pad name="B1" x="2.54" y="-0.00" drill="1.0" diameter="1.7"/>
-<pad name="B2" x="2.54" y="-2.54" drill="1.0" diameter="1.7"/>
-<pad name="B3" x="2.54" y="-5.08" drill="1.0" diameter="1.7"/>
-<pad name="B4" x="2.54" y="-7.62" drill="1.0" diameter="1.7"/>
-<pad name="B5" x="2.54" y="-10.16" drill="1.0" diameter="1.7"/>
-<pad name="B6" x="2.54" y="-12.70" drill="1.0" diameter="1.7"/>
-<pad name="B7" x="2.54" y="-15.24" drill="1.0" diameter="1.7"/>
-<pad name="B8" x="2.54" y="-17.78" drill="1.0" diameter="1.7"/>
-<pad name="B9" x="2.54" y="-20.32" drill="1.0" diameter="1.7"/>
-<pad name="B10" x="2.54" y="-22.86" drill="1.0" diameter="1.7"/>
-<pad name="B11" x="2.54" y="-25.40" drill="1.0" diameter="1.7"/>
-<pad name="B12" x="2.54" y="-27.94" drill="1.0" diameter="1.7"/>
-<pad name="B13" x="2.54" y="-30.48" drill="1.0" diameter="1.7"/>
-<pad name="B14" x="2.54" y="-33.02" drill="1.0" diameter="1.7"/>
-<pad name="B15" x="2.54" y="-35.56" drill="1.0" diameter="1.7"/>
-<pad name="B16" x="2.54" y="-38.10" drill="1.0" diameter="1.7"/>
-<pad name="B17" x="2.54" y="-40.64" drill="1.0" diameter="1.7"/>
-<pad name="B18" x="2.54" y="-43.18" drill="1.0" diameter="1.7"/>
-<pad name="B19" x="2.54" y="-45.72" drill="1.0" diameter="1.7"/>
-<pad name="B20" x="2.54" y="-48.26" drill="1.0" diameter="1.7"/>
-<pad name="B21" x="2.54" y="-50.80" drill="1.0" diameter="1.7"/>
-<pad name="B22" x="2.54" y="-53.34" drill="1.0" diameter="1.7"/>
-<pad name="B23" x="2.54" y="-55.88" drill="1.0" diameter="1.7"/>
-<pad name="B24" x="2.54" y="-58.42" drill="1.0" diameter="1.7"/>
-<pad name="B25" x="2.54" y="-60.96" drill="1.0" diameter="1.7"/>
-<pad name="B26" x="2.54" y="-63.50" drill="1.0" diameter="1.7"/>
-<pad name="B27" x="2.54" y="-66.04" drill="1.0" diameter="1.7"/>
-<pad name="B28" x="2.54" y="-68.58" drill="1.0" diameter="1.7"/>
-<pad name="B29" x="2.54" y="-71.12" drill="1.0" diameter="1.7"/>
-<pad name="B30" x="2.54" y="-73.66" drill="1.0" diameter="1.7"/>
-<pad name="B31" x="2.54" y="-76.20" drill="1.0" diameter="1.7"/>
-<pad name="B32" x="2.54" y="-78.74" drill="1.0" diameter="1.7"/>
-<pad name="C1" x="0.00" y="-0.00" drill="1.0" diameter="1.7"/>
-<pad name="C2" x="0.00" y="-2.54" drill="1.0" diameter="1.7"/>
-<pad name="C3" x="0.00" y="-5.08" drill="1.0" diameter="1.7"/>
-<pad name="C4" x="0.00" y="-7.62" drill="1.0" diameter="1.7"/>
-<pad name="C5" x="0.00" y="-10.16" drill="1.0" diameter="1.7"/>
-<pad name="C6" x="0.00" y="-12.70" drill="1.0" diameter="1.7"/>
-<pad name="C7" x="0.00" y="-15.24" drill="1.0" diameter="1.7"/>
-<pad name="C8" x="0.00" y="-17.78" drill="1.0" diameter="1.7"/>
-<pad name="C9" x="0.00" y="-20.32" drill="1.0" diameter="1.7"/>
-<pad name="C10" x="0.00" y="-22.86" drill="1.0" diameter="1.7"/>
-<pad name="C11" x="0.00" y="-25.40" drill="1.0" diameter="1.7"/>
-<pad name="C12" x="0.00" y="-27.94" drill="1.0" diameter="1.7"/>
-<pad name="C13" x="0.00" y="-30.48" drill="1.0" diameter="1.7"/>
-<pad name="C14" x="0.00" y="-33.02" drill="1.0" diameter="1.7"/>
-<pad name="C15" x="0.00" y="-35.56" drill="1.0" diameter="1.7"/>
-<pad name="C16" x="0.00" y="-38.10" drill="1.0" diameter="1.7"/>
-<pad name="C17" x="0.00" y="-40.64" drill="1.0" diameter="1.7"/>
-<pad name="C18" x="0.00" y="-43.18" drill="1.0" diameter="1.7"/>
-<pad name="C19" x="0.00" y="-45.72" drill="1.0" diameter="1.7"/>
-<pad name="C20" x="0.00" y="-48.26" drill="1.0" diameter="1.7"/>
-<pad name="C21" x="0.00" y="-50.80" drill="1.0" diameter="1.7"/>
-<pad name="C22" x="0.00" y="-53.34" drill="1.0" diameter="1.7"/>
-<pad name="C23" x="0.00" y="-55.88" drill="1.0" diameter="1.7"/>
-<pad name="C24" x="0.00" y="-58.42" drill="1.0" diameter="1.7"/>
-<pad name="C25" x="0.00" y="-60.96" drill="1.0" diameter="1.7"/>
-<pad name="C26" x="0.00" y="-63.50" drill="1.0" diameter="1.7"/>
-<pad name="C27" x="0.00" y="-66.04" drill="1.0" diameter="1.7"/>
-<pad name="C28" x="0.00" y="-68.58" drill="1.0" diameter="1.7"/>
-<pad name="C29" x="0.00" y="-71.12" drill="1.0" diameter="1.7"/>
-<pad name="C30" x="0.00" y="-73.66" drill="1.0" diameter="1.7"/>
-<pad name="C31" x="0.00" y="-76.20" drill="1.0" diameter="1.7"/>
-<pad name="C32" x="0.00" y="-78.74" drill="1.0" diameter="1.7"/>
-<hole x="2.54" y="7.63" drill="2.8"/>
-<hole x="2.54" y="-86.37" drill="2.8"/>
-<text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
-<text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
-</package>
 <package name="DIP14">
 <pad name="1" x="0.00" y="-0.00" drill="0.8128" diameter="1.6"/>
 <pad name="2" x="0.00" y="-2.54" drill="0.8128" diameter="1.6"/>
@@ -253,6 +151,108 @@
 <text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
 <text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
 </package>
+<package name="MABC96R">
+<pad name="A1" x="-2.54" y="39.37" drill="0.9144" diameter="1.524"/>
+<pad name="A2" x="-2.54" y="36.83" drill="0.9144" diameter="1.524"/>
+<pad name="A3" x="-2.54" y="34.29" drill="0.9144" diameter="1.524"/>
+<pad name="A4" x="-2.54" y="31.75" drill="0.9144" diameter="1.524"/>
+<pad name="A5" x="-2.54" y="29.21" drill="0.9144" diameter="1.524"/>
+<pad name="A6" x="-2.54" y="26.67" drill="0.9144" diameter="1.524"/>
+<pad name="A7" x="-2.54" y="24.13" drill="0.9144" diameter="1.524"/>
+<pad name="A8" x="-2.54" y="21.59" drill="0.9144" diameter="1.524"/>
+<pad name="A9" x="-2.54" y="19.05" drill="0.9144" diameter="1.524"/>
+<pad name="A10" x="-2.54" y="16.51" drill="0.9144" diameter="1.524"/>
+<pad name="A11" x="-2.54" y="13.97" drill="0.9144" diameter="1.524"/>
+<pad name="A12" x="-2.54" y="11.43" drill="0.9144" diameter="1.524"/>
+<pad name="A13" x="-2.54" y="8.89" drill="0.9144" diameter="1.524"/>
+<pad name="A14" x="-2.54" y="6.35" drill="0.9144" diameter="1.524"/>
+<pad name="A15" x="-2.54" y="3.81" drill="0.9144" diameter="1.524"/>
+<pad name="A16" x="-2.54" y="1.27" drill="0.9144" diameter="1.524"/>
+<pad name="A17" x="-2.54" y="-1.27" drill="0.9144" diameter="1.524"/>
+<pad name="A18" x="-2.54" y="-3.81" drill="0.9144" diameter="1.524"/>
+<pad name="A19" x="-2.54" y="-6.35" drill="0.9144" diameter="1.524"/>
+<pad name="A20" x="-2.54" y="-8.89" drill="0.9144" diameter="1.524"/>
+<pad name="A21" x="-2.54" y="-11.43" drill="0.9144" diameter="1.524"/>
+<pad name="A22" x="-2.54" y="-13.97" drill="0.9144" diameter="1.524"/>
+<pad name="A23" x="-2.54" y="-16.51" drill="0.9144" diameter="1.524"/>
+<pad name="A24" x="-2.54" y="-19.05" drill="0.9144" diameter="1.524"/>
+<pad name="A25" x="-2.54" y="-21.59" drill="0.9144" diameter="1.524"/>
+<pad name="A26" x="-2.54" y="-24.13" drill="0.9144" diameter="1.524"/>
+<pad name="A27" x="-2.54" y="-26.67" drill="0.9144" diameter="1.524"/>
+<pad name="A28" x="-2.54" y="-29.21" drill="0.9144" diameter="1.524"/>
+<pad name="A29" x="-2.54" y="-31.75" drill="0.9144" diameter="1.524"/>
+<pad name="A30" x="-2.54" y="-34.29" drill="0.9144" diameter="1.524"/>
+<pad name="A31" x="-2.54" y="-36.83" drill="0.9144" diameter="1.524"/>
+<pad name="A32" x="-2.54" y="-39.37" drill="0.9144" diameter="1.524"/>
+<pad name="B1" x="0.00" y="39.37" drill="0.9144" diameter="1.524"/>
+<pad name="B2" x="0.00" y="36.83" drill="0.9144" diameter="1.524"/>
+<pad name="B3" x="0.00" y="34.29" drill="0.9144" diameter="1.524"/>
+<pad name="B4" x="0.00" y="31.75" drill="0.9144" diameter="1.524"/>
+<pad name="B5" x="0.00" y="29.21" drill="0.9144" diameter="1.524"/>
+<pad name="B6" x="0.00" y="26.67" drill="0.9144" diameter="1.524"/>
+<pad name="B7" x="0.00" y="24.13" drill="0.9144" diameter="1.524"/>
+<pad name="B8" x="0.00" y="21.59" drill="0.9144" diameter="1.524"/>
+<pad name="B9" x="0.00" y="19.05" drill="0.9144" diameter="1.524"/>
+<pad name="B10" x="0.00" y="16.51" drill="0.9144" diameter="1.524"/>
+<pad name="B11" x="0.00" y="13.97" drill="0.9144" diameter="1.524"/>
+<pad name="B12" x="0.00" y="11.43" drill="0.9144" diameter="1.524"/>
+<pad name="B13" x="0.00" y="8.89" drill="0.9144" diameter="1.524"/>
+<pad name="B14" x="0.00" y="6.35" drill="0.9144" diameter="1.524"/>
+<pad name="B15" x="0.00" y="3.81" drill="0.9144" diameter="1.524"/>
+<pad name="B16" x="0.00" y="1.27" drill="0.9144" diameter="1.524"/>
+<pad name="B17" x="0.00" y="-1.27" drill="0.9144" diameter="1.524"/>
+<pad name="B18" x="0.00" y="-3.81" drill="0.9144" diameter="1.524"/>
+<pad name="B19" x="0.00" y="-6.35" drill="0.9144" diameter="1.524"/>
+<pad name="B20" x="0.00" y="-8.89" drill="0.9144" diameter="1.524"/>
+<pad name="B21" x="0.00" y="-11.43" drill="0.9144" diameter="1.524"/>
+<pad name="B22" x="0.00" y="-13.97" drill="0.9144" diameter="1.524"/>
+<pad name="B23" x="0.00" y="-16.51" drill="0.9144" diameter="1.524"/>
+<pad name="B24" x="0.00" y="-19.05" drill="0.9144" diameter="1.524"/>
+<pad name="B25" x="0.00" y="-21.59" drill="0.9144" diameter="1.524"/>
+<pad name="B26" x="0.00" y="-24.13" drill="0.9144" diameter="1.524"/>
+<pad name="B27" x="0.00" y="-26.67" drill="0.9144" diameter="1.524"/>
+<pad name="B28" x="0.00" y="-29.21" drill="0.9144" diameter="1.524"/>
+<pad name="B29" x="0.00" y="-31.75" drill="0.9144" diameter="1.524"/>
+<pad name="B30" x="0.00" y="-34.29" drill="0.9144" diameter="1.524"/>
+<pad name="B31" x="0.00" y="-36.83" drill="0.9144" diameter="1.524"/>
+<pad name="B32" x="0.00" y="-39.37" drill="0.9144" diameter="1.524"/>
+<pad name="C1" x="2.54" y="39.37" drill="0.9144" diameter="1.524"/>
+<pad name="C2" x="2.54" y="36.83" drill="0.9144" diameter="1.524"/>
+<pad name="C3" x="2.54" y="34.29" drill="0.9144" diameter="1.524"/>
+<pad name="C4" x="2.54" y="31.75" drill="0.9144" diameter="1.524"/>
+<pad name="C5" x="2.54" y="29.21" drill="0.9144" diameter="1.524"/>
+<pad name="C6" x="2.54" y="26.67" drill="0.9144" diameter="1.524"/>
+<pad name="C7" x="2.54" y="24.13" drill="0.9144" diameter="1.524"/>
+<pad name="C8" x="2.54" y="21.59" drill="0.9144" diameter="1.524"/>
+<pad name="C9" x="2.54" y="19.05" drill="0.9144" diameter="1.524"/>
+<pad name="C10" x="2.54" y="16.51" drill="0.9144" diameter="1.524"/>
+<pad name="C11" x="2.54" y="13.97" drill="0.9144" diameter="1.524"/>
+<pad name="C12" x="2.54" y="11.43" drill="0.9144" diameter="1.524"/>
+<pad name="C13" x="2.54" y="8.89" drill="0.9144" diameter="1.524"/>
+<pad name="C14" x="2.54" y="6.35" drill="0.9144" diameter="1.524"/>
+<pad name="C15" x="2.54" y="3.81" drill="0.9144" diameter="1.524"/>
+<pad name="C16" x="2.54" y="1.27" drill="0.9144" diameter="1.524"/>
+<pad name="C17" x="2.54" y="-1.27" drill="0.9144" diameter="1.524"/>
+<pad name="C18" x="2.54" y="-3.81" drill="0.9144" diameter="1.524"/>
+<pad name="C19" x="2.54" y="-6.35" drill="0.9144" diameter="1.524"/>
+<pad name="C20" x="2.54" y="-8.89" drill="0.9144" diameter="1.524"/>
+<pad name="C21" x="2.54" y="-11.43" drill="0.9144" diameter="1.524"/>
+<pad name="C22" x="2.54" y="-13.97" drill="0.9144" diameter="1.524"/>
+<pad name="C23" x="2.54" y="-16.51" drill="0.9144" diameter="1.524"/>
+<pad name="C24" x="2.54" y="-19.05" drill="0.9144" diameter="1.524"/>
+<pad name="C25" x="2.54" y="-21.59" drill="0.9144" diameter="1.524"/>
+<pad name="C26" x="2.54" y="-24.13" drill="0.9144" diameter="1.524"/>
+<pad name="C27" x="2.54" y="-26.67" drill="0.9144" diameter="1.524"/>
+<pad name="C28" x="2.54" y="-29.21" drill="0.9144" diameter="1.524"/>
+<pad name="C29" x="2.54" y="-31.75" drill="0.9144" diameter="1.524"/>
+<pad name="C30" x="2.54" y="-34.29" drill="0.9144" diameter="1.524"/>
+<pad name="C31" x="2.54" y="-36.83" drill="0.9144" diameter="1.524"/>
+<pad name="C32" x="2.54" y="-39.37" drill="0.9144" diameter="1.524"/>
+<hole x="-0.30" y="45.00" drill="2.794"/>
+<hole x="-0.30" y="-45.00" drill="2.794"/>
+<text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
+<text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
+</package>
 <package name="R_AXIAL">
 <pad name="1" x="0.00" y="0.00" drill="0.8" diameter="1.6"/>
 <pad name="2" x="10.16" y="0.00" drill="0.8" diameter="1.6"/>
@@ -265,385 +265,385 @@
 <classes><class number="0" name="default" width="0" drill="0"/></classes>
 <designrules name="default"><param name="layerSetup" value="(1*2*15*16)"/></designrules>
 <elements>
-<element name="J1" library="p8x" package="DIN96C" value="FABC96R" x="5.40" y="86.97" smashed="yes">
-<attribute name="NAME" x="5.40" y="89.51" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="5.40" y="84.43" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U1" library="p8x" package="DIP16" value="74HCT169" x="17.88" y="95.20" smashed="yes">
-<attribute name="NAME" x="17.88" y="97.74" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="17.88" y="92.66" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD1" library="p8x" package="C_DISC" value="100N" x="29.80" y="95.10" smashed="yes">
-<attribute name="NAME" x="29.80" y="97.64" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="29.80" y="92.56" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U2" library="p8x" package="DIP16" value="74HCT169" x="34.10" y="95.20" smashed="yes">
-<attribute name="NAME" x="34.10" y="97.74" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="34.10" y="92.66" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD2" library="p8x" package="C_DISC" value="100N" x="46.02" y="95.10" smashed="yes">
-<attribute name="NAME" x="46.02" y="97.64" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="46.02" y="92.56" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U3" library="p8x" package="DIP16" value="74HCT169" x="50.32" y="95.20" smashed="yes">
-<attribute name="NAME" x="50.32" y="97.74" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="50.32" y="92.66" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD3" library="p8x" package="C_DISC" value="100N" x="62.24" y="95.10" smashed="yes">
-<attribute name="NAME" x="62.24" y="97.64" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="62.24" y="92.56" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U4" library="p8x" package="DIP16" value="74HCT169" x="66.54" y="95.20" smashed="yes">
-<attribute name="NAME" x="66.54" y="97.74" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="66.54" y="92.66" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD4" library="p8x" package="C_DISC" value="100N" x="78.46" y="95.10" smashed="yes">
-<attribute name="NAME" x="78.46" y="97.64" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="78.46" y="92.56" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U5" library="p8x" package="DIP16" value="74HCT169" x="82.76" y="95.20" smashed="yes">
-<attribute name="NAME" x="82.76" y="97.74" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="82.76" y="92.66" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD5" library="p8x" package="C_DISC" value="100N" x="94.68" y="95.10" smashed="yes">
-<attribute name="NAME" x="94.68" y="97.64" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="94.68" y="92.56" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U6" library="p8x" package="DIP16" value="74HCT169" x="98.98" y="95.20" smashed="yes">
-<attribute name="NAME" x="98.98" y="97.74" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="98.98" y="92.66" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD6" library="p8x" package="C_DISC" value="100N" x="110.90" y="95.10" smashed="yes">
-<attribute name="NAME" x="110.90" y="97.64" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="110.90" y="92.56" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U7" library="p8x" package="DIP16" value="74HCT169" x="115.20" y="95.20" smashed="yes">
-<attribute name="NAME" x="115.20" y="97.74" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="115.20" y="92.66" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD7" library="p8x" package="C_DISC" value="100N" x="127.12" y="95.10" smashed="yes">
-<attribute name="NAME" x="127.12" y="97.64" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="127.12" y="92.56" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U8" library="p8x" package="DIP16" value="74HCT169" x="131.42" y="95.20" smashed="yes">
-<attribute name="NAME" x="131.42" y="97.74" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="131.42" y="92.66" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD8" library="p8x" package="C_DISC" value="100N" x="143.34" y="95.10" smashed="yes">
-<attribute name="NAME" x="143.34" y="97.64" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="143.34" y="92.56" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U9" library="p8x" package="DIP16" value="74HCT169" x="17.88" y="73.22" smashed="yes">
-<attribute name="NAME" x="17.88" y="75.76" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="17.88" y="70.68" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD9" library="p8x" package="C_DISC" value="100N" x="29.80" y="73.12" smashed="yes">
-<attribute name="NAME" x="29.80" y="75.66" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="29.80" y="70.58" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U10" library="p8x" package="DIP16" value="74HCT169" x="34.10" y="73.22" smashed="yes">
-<attribute name="NAME" x="34.10" y="75.76" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="34.10" y="70.68" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD10" library="p8x" package="C_DISC" value="100N" x="46.02" y="73.12" smashed="yes">
-<attribute name="NAME" x="46.02" y="75.66" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="46.02" y="70.58" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U11" library="p8x" package="DIP16" value="74HCT169" x="50.32" y="73.22" smashed="yes">
-<attribute name="NAME" x="50.32" y="75.76" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="50.32" y="70.68" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD11" library="p8x" package="C_DISC" value="100N" x="62.24" y="73.12" smashed="yes">
-<attribute name="NAME" x="62.24" y="75.66" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="62.24" y="70.58" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U12" library="p8x" package="DIP16" value="74HCT169" x="66.54" y="73.22" smashed="yes">
-<attribute name="NAME" x="66.54" y="75.76" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="66.54" y="70.68" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD12" library="p8x" package="C_DISC" value="100N" x="78.46" y="73.12" smashed="yes">
-<attribute name="NAME" x="78.46" y="75.66" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="78.46" y="70.58" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U13" library="p8x" package="DIP16" value="74HCT169" x="82.76" y="73.22" smashed="yes">
-<attribute name="NAME" x="82.76" y="75.76" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="82.76" y="70.68" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD13" library="p8x" package="C_DISC" value="100N" x="94.68" y="73.12" smashed="yes">
-<attribute name="NAME" x="94.68" y="75.66" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="94.68" y="70.58" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U14" library="p8x" package="DIP16" value="74HCT169" x="98.98" y="73.22" smashed="yes">
-<attribute name="NAME" x="98.98" y="75.76" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="98.98" y="70.68" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD14" library="p8x" package="C_DISC" value="100N" x="110.90" y="73.12" smashed="yes">
-<attribute name="NAME" x="110.90" y="75.66" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="110.90" y="70.58" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U15" library="p8x" package="DIP16" value="74HCT169" x="115.20" y="73.22" smashed="yes">
-<attribute name="NAME" x="115.20" y="75.76" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="115.20" y="70.68" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD15" library="p8x" package="C_DISC" value="100N" x="127.12" y="73.12" smashed="yes">
-<attribute name="NAME" x="127.12" y="75.66" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="127.12" y="70.58" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U16" library="p8x" package="DIP16" value="74HCT169" x="131.42" y="73.22" smashed="yes">
-<attribute name="NAME" x="131.42" y="75.76" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="131.42" y="70.68" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD16" library="p8x" package="C_DISC" value="100N" x="143.34" y="73.12" smashed="yes">
-<attribute name="NAME" x="143.34" y="75.66" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="143.34" y="70.58" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U17" library="p8x" package="DIP20" value="74HCT244" x="17.88" y="51.24" smashed="yes">
-<attribute name="NAME" x="17.88" y="53.78" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="17.88" y="48.70" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD17" library="p8x" package="C_DISC" value="100N" x="29.80" y="51.14" smashed="yes">
-<attribute name="NAME" x="29.80" y="53.68" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="29.80" y="48.60" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U18" library="p8x" package="DIP20" value="74HCT244" x="34.10" y="51.24" smashed="yes">
-<attribute name="NAME" x="34.10" y="53.78" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="34.10" y="48.70" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD18" library="p8x" package="C_DISC" value="100N" x="46.02" y="51.14" smashed="yes">
-<attribute name="NAME" x="46.02" y="53.68" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="46.02" y="48.60" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U19" library="p8x" package="DIP20" value="74HCT244" x="50.32" y="51.24" smashed="yes">
-<attribute name="NAME" x="50.32" y="53.78" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="50.32" y="48.70" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD19" library="p8x" package="C_DISC" value="100N" x="62.24" y="51.14" smashed="yes">
-<attribute name="NAME" x="62.24" y="53.68" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="62.24" y="48.60" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U20" library="p8x" package="DIP20" value="74HCT244" x="66.54" y="51.24" smashed="yes">
-<attribute name="NAME" x="66.54" y="53.78" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="66.54" y="48.70" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD20" library="p8x" package="C_DISC" value="100N" x="78.46" y="51.14" smashed="yes">
-<attribute name="NAME" x="78.46" y="53.68" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="78.46" y="48.60" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U21" library="p8x" package="DIP20" value="74HCT244" x="82.76" y="51.24" smashed="yes">
-<attribute name="NAME" x="82.76" y="53.78" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="82.76" y="48.70" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD21" library="p8x" package="C_DISC" value="100N" x="94.68" y="51.14" smashed="yes">
-<attribute name="NAME" x="94.68" y="53.68" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="94.68" y="48.60" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U22" library="p8x" package="DIP20" value="74HCT244" x="98.98" y="51.24" smashed="yes">
-<attribute name="NAME" x="98.98" y="53.78" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="98.98" y="48.70" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD22" library="p8x" package="C_DISC" value="100N" x="110.90" y="51.14" smashed="yes">
-<attribute name="NAME" x="110.90" y="53.68" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="110.90" y="48.60" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U23" library="p8x" package="DIP20" value="74HCT244" x="115.20" y="51.24" smashed="yes">
-<attribute name="NAME" x="115.20" y="53.78" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="115.20" y="48.70" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD23" library="p8x" package="C_DISC" value="100N" x="127.12" y="51.14" smashed="yes">
-<attribute name="NAME" x="127.12" y="53.68" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="127.12" y="48.60" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U24" library="p8x" package="DIP20" value="74HCT244" x="131.42" y="51.24" smashed="yes">
-<attribute name="NAME" x="131.42" y="53.78" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="131.42" y="48.70" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD24" library="p8x" package="C_DISC" value="100N" x="143.34" y="51.14" smashed="yes">
-<attribute name="NAME" x="143.34" y="53.68" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="143.34" y="48.60" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U25" library="p8x" package="DIP20" value="74HCT244" x="17.88" y="24.18" smashed="yes">
-<attribute name="NAME" x="17.88" y="26.72" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="17.88" y="21.64" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD25" library="p8x" package="C_DISC" value="100N" x="29.80" y="24.08" smashed="yes">
-<attribute name="NAME" x="29.80" y="26.62" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="29.80" y="21.54" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U26" library="p8x" package="DIP20" value="74HCT244" x="34.10" y="24.18" smashed="yes">
-<attribute name="NAME" x="34.10" y="26.72" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="34.10" y="21.64" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD26" library="p8x" package="C_DISC" value="100N" x="46.02" y="24.08" smashed="yes">
-<attribute name="NAME" x="46.02" y="26.62" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="46.02" y="21.54" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U27" library="p8x" package="DIP16" value="74HCT257" x="50.32" y="24.18" smashed="yes">
-<attribute name="NAME" x="50.32" y="26.72" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="50.32" y="21.64" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD27" library="p8x" package="C_DISC" value="100N" x="62.24" y="24.08" smashed="yes">
-<attribute name="NAME" x="62.24" y="26.62" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="62.24" y="21.54" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U28" library="p8x" package="DIP16" value="74HCT257" x="66.54" y="24.18" smashed="yes">
-<attribute name="NAME" x="66.54" y="26.72" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="66.54" y="21.64" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD28" library="p8x" package="C_DISC" value="100N" x="78.46" y="24.08" smashed="yes">
-<attribute name="NAME" x="78.46" y="26.62" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="78.46" y="21.54" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U29" library="p8x" package="DIP20" value="74HCT244" x="82.76" y="24.18" smashed="yes">
-<attribute name="NAME" x="82.76" y="26.72" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="82.76" y="21.64" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD29" library="p8x" package="C_DISC" value="100N" x="94.68" y="24.08" smashed="yes">
-<attribute name="NAME" x="94.68" y="26.62" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="94.68" y="21.54" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U30" library="p8x" package="DIP16" value="74HCT138" x="98.98" y="24.18" smashed="yes">
-<attribute name="NAME" x="98.98" y="26.72" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="98.98" y="21.64" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD30" library="p8x" package="C_DISC" value="100N" x="110.90" y="24.08" smashed="yes">
-<attribute name="NAME" x="110.90" y="26.62" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="110.90" y="21.54" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U31" library="p8x" package="DIP16" value="74HCT138" x="115.20" y="24.18" smashed="yes">
-<attribute name="NAME" x="115.20" y="26.72" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="115.20" y="21.64" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD31" library="p8x" package="C_DISC" value="100N" x="127.12" y="24.08" smashed="yes">
-<attribute name="NAME" x="127.12" y="26.62" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="127.12" y="21.54" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U32" library="p8x" package="DIP16" value="74HCT139" x="131.42" y="24.18" smashed="yes">
-<attribute name="NAME" x="131.42" y="26.72" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="131.42" y="21.64" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD32" library="p8x" package="C_DISC" value="100N" x="143.34" y="24.08" smashed="yes">
-<attribute name="NAME" x="143.34" y="26.62" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="143.34" y="21.54" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U33" library="p8x" package="DIP16" value="74HCT138" x="17.88" y="-2.88" smashed="yes">
-<attribute name="NAME" x="17.88" y="-0.34" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="17.88" y="-5.42" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD33" library="p8x" package="C_DISC" value="100N" x="29.80" y="-2.98" smashed="yes">
-<attribute name="NAME" x="29.80" y="-0.44" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="29.80" y="-5.52" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U34" library="p8x" package="DIP14" value="74HCT02" x="34.10" y="-2.88" smashed="yes">
-<attribute name="NAME" x="34.10" y="-0.34" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="34.10" y="-5.42" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD34" library="p8x" package="C_DISC" value="100N" x="46.02" y="-2.98" smashed="yes">
-<attribute name="NAME" x="46.02" y="-0.44" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="46.02" y="-5.52" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U35" library="p8x" package="DIP14" value="74HCT14" x="50.32" y="-2.88" smashed="yes">
-<attribute name="NAME" x="50.32" y="-0.34" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="50.32" y="-5.42" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD35" library="p8x" package="C_DISC" value="100N" x="62.24" y="-2.98" smashed="yes">
-<attribute name="NAME" x="62.24" y="-0.44" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="62.24" y="-5.52" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U36" library="p8x" package="DIP20" value="74HCT244" x="66.54" y="-2.88" smashed="yes">
-<attribute name="NAME" x="66.54" y="-0.34" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="66.54" y="-5.42" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD36" library="p8x" package="C_DISC" value="100N" x="78.46" y="-2.98" smashed="yes">
-<attribute name="NAME" x="78.46" y="-0.44" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="78.46" y="-5.52" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U37" library="p8x" package="DIP14" value="74HCT08" x="82.76" y="-2.88" smashed="yes">
-<attribute name="NAME" x="82.76" y="-0.34" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="82.76" y="-5.42" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD37" library="p8x" package="C_DISC" value="100N" x="94.68" y="-2.98" smashed="yes">
-<attribute name="NAME" x="94.68" y="-0.44" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="94.68" y="-5.52" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U38" library="p8x" package="DIP14" value="74HCT08" x="98.98" y="-2.88" smashed="yes">
-<attribute name="NAME" x="98.98" y="-0.34" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="98.98" y="-5.42" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD38" library="p8x" package="C_DISC" value="100N" x="110.90" y="-2.98" smashed="yes">
-<attribute name="NAME" x="110.90" y="-0.44" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="110.90" y="-5.52" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U39" library="p8x" package="DIP16" value="74HCT139" x="115.20" y="-2.88" smashed="yes">
-<attribute name="NAME" x="115.20" y="-0.34" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="115.20" y="-5.42" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD39" library="p8x" package="C_DISC" value="100N" x="127.12" y="-2.98" smashed="yes">
-<attribute name="NAME" x="127.12" y="-0.44" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="127.12" y="-5.52" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U40" library="p8x" package="DIP14" value="74HCT32" x="131.42" y="-2.88" smashed="yes">
-<attribute name="NAME" x="131.42" y="-0.34" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="131.42" y="-5.42" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD40" library="p8x" package="C_DISC" value="100N" x="143.34" y="-2.98" smashed="yes">
-<attribute name="NAME" x="143.34" y="-0.44" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="143.34" y="-5.52" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U41" library="p8x" package="DIP20" value="74HCT377" x="17.88" y="-29.94" smashed="yes">
-<attribute name="NAME" x="17.88" y="-27.40" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="17.88" y="-32.48" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD41" library="p8x" package="C_DISC" value="100N" x="29.80" y="-30.04" smashed="yes">
-<attribute name="NAME" x="29.80" y="-27.50" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="29.80" y="-32.58" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U42" library="p8x" package="DIP20" value="74HCT377" x="34.10" y="-29.94" smashed="yes">
-<attribute name="NAME" x="34.10" y="-27.40" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="34.10" y="-32.48" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD42" library="p8x" package="C_DISC" value="100N" x="46.02" y="-30.04" smashed="yes">
-<attribute name="NAME" x="46.02" y="-27.50" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="46.02" y="-32.58" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U43" library="p8x" package="DIP20" value="74HCT244" x="50.32" y="-29.94" smashed="yes">
-<attribute name="NAME" x="50.32" y="-27.40" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="50.32" y="-32.48" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD43" library="p8x" package="C_DISC" value="100N" x="62.24" y="-30.04" smashed="yes">
-<attribute name="NAME" x="62.24" y="-27.50" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="62.24" y="-32.58" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="U44" library="p8x" package="DIP20" value="74HCT244" x="66.54" y="-29.94" smashed="yes">
-<attribute name="NAME" x="66.54" y="-27.40" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="66.54" y="-32.48" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="CD44" library="p8x" package="C_DISC" value="100N" x="78.46" y="-30.04" smashed="yes">
-<attribute name="NAME" x="78.46" y="-27.50" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="78.46" y="-32.58" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="RP1" library="p8x" package="R_AXIAL" value="1K" x="82.76" y="-29.94" smashed="yes">
-<attribute name="NAME" x="82.76" y="-27.40" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="82.76" y="-32.48" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="LED3" library="p8x" package="LED5" value="GRN" x="97.22" y="-30.04" smashed="yes">
-<attribute name="NAME" x="97.22" y="-27.50" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="97.22" y="-32.58" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="R4" library="p8x" package="R_AXIAL" value="1K" x="104.06" y="-29.94" smashed="yes">
-<attribute name="NAME" x="104.06" y="-27.40" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="104.06" y="-32.48" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="LED4" library="p8x" package="LED5" value="GRN" x="118.52" y="-30.04" smashed="yes">
-<attribute name="NAME" x="118.52" y="-27.50" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="118.52" y="-32.58" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="R5" library="p8x" package="R_AXIAL" value="1K" x="125.36" y="-29.94" smashed="yes">
-<attribute name="NAME" x="125.36" y="-27.40" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="125.36" y="-32.48" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="LED5" library="p8x" package="LED5" value="YEL" x="139.82" y="-30.04" smashed="yes">
-<attribute name="NAME" x="139.82" y="-27.50" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="139.82" y="-32.58" size="1.778" layer="27" ratio="10"/>
+<element name="J1" library="p8x" package="MABC96R" value="MABC96R" x="7.94" y="49.60" smashed="yes">
+<attribute name="NAME" x="7.94" y="52.14" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="7.94" y="47.06" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U1" library="p8x" package="DIP16" value="74HCT169" x="17.87" y="95.20" smashed="yes">
+<attribute name="NAME" x="17.87" y="97.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="17.87" y="92.66" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD1" library="p8x" package="C_DISC" value="100N" x="29.79" y="95.10" smashed="yes">
+<attribute name="NAME" x="29.79" y="97.64" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="29.79" y="92.56" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U2" library="p8x" package="DIP16" value="74HCT169" x="34.09" y="95.20" smashed="yes">
+<attribute name="NAME" x="34.09" y="97.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="34.09" y="92.66" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD2" library="p8x" package="C_DISC" value="100N" x="46.01" y="95.10" smashed="yes">
+<attribute name="NAME" x="46.01" y="97.64" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="46.01" y="92.56" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U3" library="p8x" package="DIP16" value="74HCT169" x="50.31" y="95.20" smashed="yes">
+<attribute name="NAME" x="50.31" y="97.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="50.31" y="92.66" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD3" library="p8x" package="C_DISC" value="100N" x="62.23" y="95.10" smashed="yes">
+<attribute name="NAME" x="62.23" y="97.64" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="62.23" y="92.56" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U4" library="p8x" package="DIP16" value="74HCT169" x="66.53" y="95.20" smashed="yes">
+<attribute name="NAME" x="66.53" y="97.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="66.53" y="92.66" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD4" library="p8x" package="C_DISC" value="100N" x="78.45" y="95.10" smashed="yes">
+<attribute name="NAME" x="78.45" y="97.64" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="78.45" y="92.56" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U5" library="p8x" package="DIP16" value="74HCT169" x="82.75" y="95.20" smashed="yes">
+<attribute name="NAME" x="82.75" y="97.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="82.75" y="92.66" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD5" library="p8x" package="C_DISC" value="100N" x="94.67" y="95.10" smashed="yes">
+<attribute name="NAME" x="94.67" y="97.64" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="94.67" y="92.56" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U6" library="p8x" package="DIP16" value="74HCT169" x="98.97" y="95.20" smashed="yes">
+<attribute name="NAME" x="98.97" y="97.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="98.97" y="92.66" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD6" library="p8x" package="C_DISC" value="100N" x="110.89" y="95.10" smashed="yes">
+<attribute name="NAME" x="110.89" y="97.64" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="110.89" y="92.56" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U7" library="p8x" package="DIP16" value="74HCT169" x="115.19" y="95.20" smashed="yes">
+<attribute name="NAME" x="115.19" y="97.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="115.19" y="92.66" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD7" library="p8x" package="C_DISC" value="100N" x="127.11" y="95.10" smashed="yes">
+<attribute name="NAME" x="127.11" y="97.64" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="127.11" y="92.56" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U8" library="p8x" package="DIP16" value="74HCT169" x="131.41" y="95.20" smashed="yes">
+<attribute name="NAME" x="131.41" y="97.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="131.41" y="92.66" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD8" library="p8x" package="C_DISC" value="100N" x="143.33" y="95.10" smashed="yes">
+<attribute name="NAME" x="143.33" y="97.64" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="143.33" y="92.56" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U9" library="p8x" package="DIP16" value="74HCT169" x="17.87" y="73.22" smashed="yes">
+<attribute name="NAME" x="17.87" y="75.76" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="17.87" y="70.68" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD9" library="p8x" package="C_DISC" value="100N" x="29.79" y="73.12" smashed="yes">
+<attribute name="NAME" x="29.79" y="75.66" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="29.79" y="70.58" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U10" library="p8x" package="DIP16" value="74HCT169" x="34.09" y="73.22" smashed="yes">
+<attribute name="NAME" x="34.09" y="75.76" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="34.09" y="70.68" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD10" library="p8x" package="C_DISC" value="100N" x="46.01" y="73.12" smashed="yes">
+<attribute name="NAME" x="46.01" y="75.66" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="46.01" y="70.58" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U11" library="p8x" package="DIP16" value="74HCT169" x="50.31" y="73.22" smashed="yes">
+<attribute name="NAME" x="50.31" y="75.76" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="50.31" y="70.68" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD11" library="p8x" package="C_DISC" value="100N" x="62.23" y="73.12" smashed="yes">
+<attribute name="NAME" x="62.23" y="75.66" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="62.23" y="70.58" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U12" library="p8x" package="DIP16" value="74HCT169" x="66.53" y="73.22" smashed="yes">
+<attribute name="NAME" x="66.53" y="75.76" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="66.53" y="70.68" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD12" library="p8x" package="C_DISC" value="100N" x="78.45" y="73.12" smashed="yes">
+<attribute name="NAME" x="78.45" y="75.66" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="78.45" y="70.58" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U13" library="p8x" package="DIP16" value="74HCT169" x="82.75" y="73.22" smashed="yes">
+<attribute name="NAME" x="82.75" y="75.76" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="82.75" y="70.68" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD13" library="p8x" package="C_DISC" value="100N" x="94.67" y="73.12" smashed="yes">
+<attribute name="NAME" x="94.67" y="75.66" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="94.67" y="70.58" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U14" library="p8x" package="DIP16" value="74HCT169" x="98.97" y="73.22" smashed="yes">
+<attribute name="NAME" x="98.97" y="75.76" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="98.97" y="70.68" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD14" library="p8x" package="C_DISC" value="100N" x="110.89" y="73.12" smashed="yes">
+<attribute name="NAME" x="110.89" y="75.66" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="110.89" y="70.58" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U15" library="p8x" package="DIP16" value="74HCT169" x="115.19" y="73.22" smashed="yes">
+<attribute name="NAME" x="115.19" y="75.76" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="115.19" y="70.68" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD15" library="p8x" package="C_DISC" value="100N" x="127.11" y="73.12" smashed="yes">
+<attribute name="NAME" x="127.11" y="75.66" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="127.11" y="70.58" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U16" library="p8x" package="DIP16" value="74HCT169" x="131.41" y="73.22" smashed="yes">
+<attribute name="NAME" x="131.41" y="75.76" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="131.41" y="70.68" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD16" library="p8x" package="C_DISC" value="100N" x="143.33" y="73.12" smashed="yes">
+<attribute name="NAME" x="143.33" y="75.66" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="143.33" y="70.58" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U17" library="p8x" package="DIP20" value="74HCT244" x="17.87" y="51.24" smashed="yes">
+<attribute name="NAME" x="17.87" y="53.78" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="17.87" y="48.70" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD17" library="p8x" package="C_DISC" value="100N" x="29.79" y="51.14" smashed="yes">
+<attribute name="NAME" x="29.79" y="53.68" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="29.79" y="48.60" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U18" library="p8x" package="DIP20" value="74HCT244" x="34.09" y="51.24" smashed="yes">
+<attribute name="NAME" x="34.09" y="53.78" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="34.09" y="48.70" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD18" library="p8x" package="C_DISC" value="100N" x="46.01" y="51.14" smashed="yes">
+<attribute name="NAME" x="46.01" y="53.68" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="46.01" y="48.60" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U19" library="p8x" package="DIP20" value="74HCT244" x="50.31" y="51.24" smashed="yes">
+<attribute name="NAME" x="50.31" y="53.78" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="50.31" y="48.70" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD19" library="p8x" package="C_DISC" value="100N" x="62.23" y="51.14" smashed="yes">
+<attribute name="NAME" x="62.23" y="53.68" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="62.23" y="48.60" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U20" library="p8x" package="DIP20" value="74HCT244" x="66.53" y="51.24" smashed="yes">
+<attribute name="NAME" x="66.53" y="53.78" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="66.53" y="48.70" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD20" library="p8x" package="C_DISC" value="100N" x="78.45" y="51.14" smashed="yes">
+<attribute name="NAME" x="78.45" y="53.68" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="78.45" y="48.60" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U21" library="p8x" package="DIP20" value="74HCT244" x="82.75" y="51.24" smashed="yes">
+<attribute name="NAME" x="82.75" y="53.78" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="82.75" y="48.70" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD21" library="p8x" package="C_DISC" value="100N" x="94.67" y="51.14" smashed="yes">
+<attribute name="NAME" x="94.67" y="53.68" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="94.67" y="48.60" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U22" library="p8x" package="DIP20" value="74HCT244" x="98.97" y="51.24" smashed="yes">
+<attribute name="NAME" x="98.97" y="53.78" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="98.97" y="48.70" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD22" library="p8x" package="C_DISC" value="100N" x="110.89" y="51.14" smashed="yes">
+<attribute name="NAME" x="110.89" y="53.68" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="110.89" y="48.60" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U23" library="p8x" package="DIP20" value="74HCT244" x="115.19" y="51.24" smashed="yes">
+<attribute name="NAME" x="115.19" y="53.78" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="115.19" y="48.70" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD23" library="p8x" package="C_DISC" value="100N" x="127.11" y="51.14" smashed="yes">
+<attribute name="NAME" x="127.11" y="53.68" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="127.11" y="48.60" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U24" library="p8x" package="DIP20" value="74HCT244" x="131.41" y="51.24" smashed="yes">
+<attribute name="NAME" x="131.41" y="53.78" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="131.41" y="48.70" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD24" library="p8x" package="C_DISC" value="100N" x="143.33" y="51.14" smashed="yes">
+<attribute name="NAME" x="143.33" y="53.68" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="143.33" y="48.60" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U25" library="p8x" package="DIP20" value="74HCT244" x="17.87" y="24.18" smashed="yes">
+<attribute name="NAME" x="17.87" y="26.72" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="17.87" y="21.64" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD25" library="p8x" package="C_DISC" value="100N" x="29.79" y="24.08" smashed="yes">
+<attribute name="NAME" x="29.79" y="26.62" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="29.79" y="21.54" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U26" library="p8x" package="DIP20" value="74HCT244" x="34.09" y="24.18" smashed="yes">
+<attribute name="NAME" x="34.09" y="26.72" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="34.09" y="21.64" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD26" library="p8x" package="C_DISC" value="100N" x="46.01" y="24.08" smashed="yes">
+<attribute name="NAME" x="46.01" y="26.62" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="46.01" y="21.54" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U27" library="p8x" package="DIP16" value="74HCT257" x="50.31" y="24.18" smashed="yes">
+<attribute name="NAME" x="50.31" y="26.72" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="50.31" y="21.64" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD27" library="p8x" package="C_DISC" value="100N" x="62.23" y="24.08" smashed="yes">
+<attribute name="NAME" x="62.23" y="26.62" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="62.23" y="21.54" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U28" library="p8x" package="DIP16" value="74HCT257" x="66.53" y="24.18" smashed="yes">
+<attribute name="NAME" x="66.53" y="26.72" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="66.53" y="21.64" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD28" library="p8x" package="C_DISC" value="100N" x="78.45" y="24.08" smashed="yes">
+<attribute name="NAME" x="78.45" y="26.62" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="78.45" y="21.54" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U29" library="p8x" package="DIP20" value="74HCT244" x="82.75" y="24.18" smashed="yes">
+<attribute name="NAME" x="82.75" y="26.72" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="82.75" y="21.64" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD29" library="p8x" package="C_DISC" value="100N" x="94.67" y="24.08" smashed="yes">
+<attribute name="NAME" x="94.67" y="26.62" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="94.67" y="21.54" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U30" library="p8x" package="DIP16" value="74HCT138" x="98.97" y="24.18" smashed="yes">
+<attribute name="NAME" x="98.97" y="26.72" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="98.97" y="21.64" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD30" library="p8x" package="C_DISC" value="100N" x="110.89" y="24.08" smashed="yes">
+<attribute name="NAME" x="110.89" y="26.62" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="110.89" y="21.54" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U31" library="p8x" package="DIP16" value="74HCT138" x="115.19" y="24.18" smashed="yes">
+<attribute name="NAME" x="115.19" y="26.72" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="115.19" y="21.64" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD31" library="p8x" package="C_DISC" value="100N" x="127.11" y="24.08" smashed="yes">
+<attribute name="NAME" x="127.11" y="26.62" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="127.11" y="21.54" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U32" library="p8x" package="DIP16" value="74HCT139" x="131.41" y="24.18" smashed="yes">
+<attribute name="NAME" x="131.41" y="26.72" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="131.41" y="21.64" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD32" library="p8x" package="C_DISC" value="100N" x="143.33" y="24.08" smashed="yes">
+<attribute name="NAME" x="143.33" y="26.62" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="143.33" y="21.54" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U33" library="p8x" package="DIP16" value="74HCT138" x="17.87" y="-2.88" smashed="yes">
+<attribute name="NAME" x="17.87" y="-0.34" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="17.87" y="-5.42" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD33" library="p8x" package="C_DISC" value="100N" x="29.79" y="-2.98" smashed="yes">
+<attribute name="NAME" x="29.79" y="-0.44" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="29.79" y="-5.52" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U34" library="p8x" package="DIP14" value="74HCT02" x="34.09" y="-2.88" smashed="yes">
+<attribute name="NAME" x="34.09" y="-0.34" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="34.09" y="-5.42" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD34" library="p8x" package="C_DISC" value="100N" x="46.01" y="-2.98" smashed="yes">
+<attribute name="NAME" x="46.01" y="-0.44" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="46.01" y="-5.52" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U35" library="p8x" package="DIP14" value="74HCT14" x="50.31" y="-2.88" smashed="yes">
+<attribute name="NAME" x="50.31" y="-0.34" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="50.31" y="-5.42" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD35" library="p8x" package="C_DISC" value="100N" x="62.23" y="-2.98" smashed="yes">
+<attribute name="NAME" x="62.23" y="-0.44" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="62.23" y="-5.52" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U36" library="p8x" package="DIP20" value="74HCT244" x="66.53" y="-2.88" smashed="yes">
+<attribute name="NAME" x="66.53" y="-0.34" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="66.53" y="-5.42" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD36" library="p8x" package="C_DISC" value="100N" x="78.45" y="-2.98" smashed="yes">
+<attribute name="NAME" x="78.45" y="-0.44" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="78.45" y="-5.52" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U37" library="p8x" package="DIP14" value="74HCT08" x="82.75" y="-2.88" smashed="yes">
+<attribute name="NAME" x="82.75" y="-0.34" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="82.75" y="-5.42" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD37" library="p8x" package="C_DISC" value="100N" x="94.67" y="-2.98" smashed="yes">
+<attribute name="NAME" x="94.67" y="-0.44" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="94.67" y="-5.52" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U38" library="p8x" package="DIP14" value="74HCT08" x="98.97" y="-2.88" smashed="yes">
+<attribute name="NAME" x="98.97" y="-0.34" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="98.97" y="-5.42" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD38" library="p8x" package="C_DISC" value="100N" x="110.89" y="-2.98" smashed="yes">
+<attribute name="NAME" x="110.89" y="-0.44" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="110.89" y="-5.52" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U39" library="p8x" package="DIP16" value="74HCT139" x="115.19" y="-2.88" smashed="yes">
+<attribute name="NAME" x="115.19" y="-0.34" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="115.19" y="-5.42" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD39" library="p8x" package="C_DISC" value="100N" x="127.11" y="-2.98" smashed="yes">
+<attribute name="NAME" x="127.11" y="-0.44" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="127.11" y="-5.52" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U40" library="p8x" package="DIP14" value="74HCT32" x="131.41" y="-2.88" smashed="yes">
+<attribute name="NAME" x="131.41" y="-0.34" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="131.41" y="-5.42" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD40" library="p8x" package="C_DISC" value="100N" x="143.33" y="-2.98" smashed="yes">
+<attribute name="NAME" x="143.33" y="-0.44" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="143.33" y="-5.52" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U41" library="p8x" package="DIP20" value="74HCT377" x="17.87" y="-29.94" smashed="yes">
+<attribute name="NAME" x="17.87" y="-27.40" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="17.87" y="-32.48" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD41" library="p8x" package="C_DISC" value="100N" x="29.79" y="-30.04" smashed="yes">
+<attribute name="NAME" x="29.79" y="-27.50" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="29.79" y="-32.58" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U42" library="p8x" package="DIP20" value="74HCT377" x="34.09" y="-29.94" smashed="yes">
+<attribute name="NAME" x="34.09" y="-27.40" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="34.09" y="-32.48" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD42" library="p8x" package="C_DISC" value="100N" x="46.01" y="-30.04" smashed="yes">
+<attribute name="NAME" x="46.01" y="-27.50" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="46.01" y="-32.58" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U43" library="p8x" package="DIP20" value="74HCT244" x="50.31" y="-29.94" smashed="yes">
+<attribute name="NAME" x="50.31" y="-27.40" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="50.31" y="-32.48" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD43" library="p8x" package="C_DISC" value="100N" x="62.23" y="-30.04" smashed="yes">
+<attribute name="NAME" x="62.23" y="-27.50" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="62.23" y="-32.58" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="U44" library="p8x" package="DIP20" value="74HCT244" x="66.53" y="-29.94" smashed="yes">
+<attribute name="NAME" x="66.53" y="-27.40" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="66.53" y="-32.48" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="CD44" library="p8x" package="C_DISC" value="100N" x="78.45" y="-30.04" smashed="yes">
+<attribute name="NAME" x="78.45" y="-27.50" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="78.45" y="-32.58" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="RP1" library="p8x" package="R_AXIAL" value="1K" x="82.75" y="-29.94" smashed="yes">
+<attribute name="NAME" x="82.75" y="-27.40" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="82.75" y="-32.48" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="LED3" library="p8x" package="LED5" value="GRN" x="97.21" y="-30.04" smashed="yes">
+<attribute name="NAME" x="97.21" y="-27.50" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="97.21" y="-32.58" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="R4" library="p8x" package="R_AXIAL" value="1K" x="104.05" y="-29.94" smashed="yes">
+<attribute name="NAME" x="104.05" y="-27.40" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="104.05" y="-32.48" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="LED4" library="p8x" package="LED5" value="GRN" x="118.51" y="-30.04" smashed="yes">
+<attribute name="NAME" x="118.51" y="-27.50" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="118.51" y="-32.58" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="R5" library="p8x" package="R_AXIAL" value="1K" x="125.35" y="-29.94" smashed="yes">
+<attribute name="NAME" x="125.35" y="-27.40" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="125.35" y="-32.48" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="LED5" library="p8x" package="LED5" value="YEL" x="139.81" y="-30.04" smashed="yes">
+<attribute name="NAME" x="139.81" y="-27.50" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="139.81" y="-32.58" size="1.778" layer="27" ratio="10"/>
 </element>
 </elements><signals>
 <signal name="-CNT0">

@@ -66,13 +66,15 @@ PKG={
  "DIP14": dip_pads(14,7.62), "DIP16": dip_pads(16,7.62),
  "DIP20": dip_pads(20,7.62), "DIP24W": dip_pads(24,15.24),
  "DIP28W": dip_pads(28,15.24),
- # Backplane receptacle: 96 signal pins only.
- "DIN96": [(pin,{"A":5.08,"B":2.54,"C":0}[pin[0]],-G*(int(pin[1:])-1),1.0,1.7) for pin in ALLPINS],
- # Card edge connector (FABC96R): the same 96 pins PLUS the two standard DIN 41612
- # mounting holes (MHn) — centreline x=2.54, spaced 94.0mm (7.63mm beyond pin 1 and
- # pin 32), drill 2.8mm for M2.5. VERIFY the spacing/⌀ against the FABC96R datasheet.
- "DIN96C": [(pin,{"A":5.08,"B":2.54,"C":0}[pin[0]],-G*(int(pin[1:])-1),1.0,1.7) for pin in ALLPINS]
-           + [("MH1",2.54,7.63,2.8,2.8),("MH2",2.54,-86.37,2.8,2.8)],
+ # DIN 41612 96-pin footprints from Eagle's con-vg library (geometry baked in so
+ # the generator stays self-contained). Rows A/B/C at x=-2.54/0/+2.54, 32 positions
+ # from y=+39.37 at 2.54mm pitch; octagon pads drill 0.9144 (round here — cosmetic);
+ # two mounting holes at x=-0.3048, y=±45.0, drill 2.794. Backplane = FABC96S
+ # (female vertical), card = MABC96R (male right-angle); both share this pad map.
+ "FABC96S": [(pin,{"A":-2.54,"B":0.0,"C":2.54}[pin[0]],39.37-G*(int(pin[1:])-1),0.9144,1.524) for pin in ALLPINS]
+            + [("MH1",-0.3048,45.0,2.794,2.794),("MH2",-0.3048,-45.0,2.794,2.794)],
+ "MABC96R": [(pin,{"A":-2.54,"B":0.0,"C":2.54}[pin[0]],39.37-G*(int(pin[1:])-1),0.9144,1.524) for pin in ALLPINS]
+            + [("MH1",-0.3048,45.0,2.794,2.794),("MH2",-0.3048,-45.0,2.794,2.794)],
  "SIP9":  [(str(k),0,-G*(k-1),0.8,1.6) for k in range(1,10)],
  "SIP16": [(str(k),0,-2.54*k,0.8,1.6) for k in range(1,17)],
  "R_AXIAL": [("1",0,0,0.8,1.6),("2",10.16,0,0.8,1.6)],
@@ -114,7 +116,7 @@ DEV={
        "Y4":"11","Y3":"12","Y2":"13","Y1":"14","Y0":"15","VCC":"16"},pkg="DIP16"),
  "GATES14": gates14(),
  "DIN96": dict(L=["A%d"%i for i in range(1,33)]+["B%d"%i for i in range(1,33)],
-   R=["C%d"%i for i in range(1,33)],pm={p:p for p in ALLPINS},pkg="DIN96"),
+   R=["C%d"%i for i in range(1,33)],pm={p:p for p in ALLPINS},pkg="FABC96S"),
  "CAP":  dict(L=["1"],R=["2"],pm={"1":"1","2":"2"},pkg="C_DISC"),
  "CAPP": dict(L=["+"],R=["-"],pm={"+":"1","-":"2"},pkg="CP_RADIAL"),
  # rev C RTC (DS1302, DIP8) + its 32.768kHz tuning-fork crystal and backup coin
@@ -133,9 +135,9 @@ DEV={
 
 def D(name,L,R,pm,pkg): DEV[name]=dict(L=L,R=R,pm=pm,pkg=pkg)
 
-# Card edge connector: same electrical part as the backplane DIN96, but its own
-# package (DIN96C) which carries the FABC96R mounting holes.
-DEV["DIN96C"]={**DEV["DIN96"],"pkg":"DIN96C"}
+# Card edge connector: same electrical part as the backplane DIN96, but the
+# MABC96R (male right-angle) footprint instead of FABC96S (female vertical).
+DEV["DIN96C"]={**DEV["DIN96"],"pkg":"MABC96R"}
 
 D("74161",["!CLR","CLK","A","B","C","D","ENP","!LOAD","ENT"],
   ["QA","QB","QC","QD","RCO","VCC","GND"],
@@ -494,7 +496,7 @@ def card(name,title,parts_ic,parts_small,nets,used_bus,labels=None,
         for rail in ("VCC","GND"):
             if rail in pins and (ref,rail) not in nets.get(rail,[]):
                 nets.setdefault(rail,[]).append((ref,rail))   # skip if already wired by hand
-    parts={"J1":("DIN96C","FABC96R")}
+    parts={"J1":("DIN96C","MABC96R")}
     parts.update(parts_ic); parts.update(parts_small); parts.update(decap)
     # Resolve the value field to the orderable part number (PN map wins for the
     # deterministic devices), and turn the original per-part text into a function
@@ -1178,8 +1180,14 @@ if EMIT:
 X0=15.24; P=25.4
 def sx(i): return X0+P*i
 def py(n): return G*(38-n)
+# FABC96S footprint centres its pad field on the element origin (pads y=+/-39.37,
+# rows A/B/C at x=-2.54/0/+2.54). Place each slot element at (sx(i)-2.54, EY) so
+# the pin field sits on the 109mm board and the A/B/C pads land at the columns
+# below; py(n) (the old pin-y) still matches because EY+39.37 = 93.98.
+EY=54.61
+def padx(i,row): return sx(i)+{"A":-5.08,"B":-2.54,"C":0.0}[row]   # FABC96S pad x for slot i
 bpb={}
-for i in range(10): bpb["J%d"%(i+1)]=("DIN96","SLOT%d"%(i+1),sx(i)-5.08,93.98)
+for i in range(10): bpb["J%d"%(i+1)]=("DIN96","SLOT%d"%(i+1),sx(i)-2.54,EY)
 bpb["RN1"]=("SIP9","8X10K",246.38,91.44)
 bpb["RT1"]=("RES","100R",238.76,101.60,"R180")
 bpb["CT1"]=("CAP","150P",223.52,101.60)
@@ -1194,16 +1202,16 @@ def wadd(n,*w): wires.setdefault(n,[]).extend(w)
 def vadd(n,*v): viad.setdefault(n,[]).extend(v)
 for n in range(3,31):
     y=py(n)
-    nA=busnet("A%d"%n); xe=246.38 if 3<=n<=10 else sx(9)
-    wadd(nA,(sx(0),y,xe,y,1,0.4))
+    nA=busnet("A%d"%n); xe=246.38 if 3<=n<=10 else padx(9,"A")
+    wadd(nA,(padx(0,"A"),y,xe,y,1,0.4))
     nC=busnet("C%d"%n)
-    wadd(nC,(sx(0)-5.08,y,sx(9)-5.08,y,16,0.4))
-wadd("CLK",(sx(9),py(24),242.10,py(24),16,0.4),
+    wadd(nC,(padx(0,"C"),y,padx(9,"C"),y,16,0.4))
+wadd("CLK",(padx(9,"A"),py(24),242.10,py(24),16,0.4),
            (242.10,py(24),242.10,101.60,16,0.4),
            (242.10,101.60,238.76,101.60,1,0.4))
 vadd("CLK",(242.10,101.60))
 wadd("CLK_T",(228.60,101.60,223.52,101.60,1,0.4))
-wadd("CLKB",(sx(9),py(25),240.50,py(25),16,0.4),
+wadd("CLKB",(padx(9,"A"),py(25),240.50,py(25),16,0.4),
             (240.50,py(25),240.50,106.68,16,0.4),
             (240.50,106.68,238.76,106.68,1,0.4))
 vadd("CLKB",(240.50,106.68))
