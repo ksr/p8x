@@ -269,6 +269,26 @@ def hdr(layers):
     o.append('</layers>')
     return o
 
+def _w(x1,y1,x2,y2): return f'<wire x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" width="0.254" layer="94"/>'
+def _build_passive_syms():
+    """ANSI/US schematic-symbol art (layer 94) for the 2-pin discretes, drawn
+    horizontally between the pin inner-ends at x=-12.7 / +12.7."""
+    zz=[(-7.62,0),(-6.35,1.78),(-3.81,-1.78),(-1.27,1.78),(1.27,-1.78),(3.81,1.78),(6.35,-1.78),(7.62,0)]
+    res=[_w(-12.7,0,-7.62,0),_w(7.62,0,12.7,0)]+[_w(*zz[i],*zz[i+1]) for i in range(len(zz)-1)]   # US zig-zag
+    cap=[_w(-12.7,0,-1.27,0),_w(1.27,0,12.7,0),_w(-1.27,-3.81,-1.27,3.81),_w(1.27,-3.81,1.27,3.81)]
+    plus=[_w(-5.59,3.81,-3.56,3.81),_w(-4.57,2.79,-4.57,4.83)]                                     # "+" mark
+    capp=[_w(-12.7,0,-1.27,0),_w(1.78,0,12.7,0),_w(-1.27,-3.81,-1.27,3.81),_w(1.78,-3.81,1.78,3.81)]+plus
+    led=[_w(-12.7,0,-2.54,0),_w(2.54,0,12.7,0),
+         _w(-2.54,2.54,-2.54,-2.54),_w(-2.54,2.54,2.54,0),_w(-2.54,-2.54,2.54,0),   # anode triangle ->
+         _w(2.54,-2.54,2.54,2.54),                                                  # cathode bar
+         _w(1.02,3.05,3.05,5.08),_w(3.05,5.08,2.03,4.83),_w(3.05,5.08,2.79,4.06),   # light arrow 1
+         _w(3.56,2.54,5.59,4.57),_w(5.59,4.57,4.57,4.32),_w(5.59,4.57,5.33,3.56)]   # light arrow 2
+    xtal=[_w(-12.7,0,-3.81,0),_w(3.81,0,12.7,0),_w(-3.81,-3.81,-3.81,3.81),_w(3.81,-3.81,3.81,3.81),
+          _w(-1.27,-2.54,1.27,-2.54),_w(1.27,-2.54,1.27,2.54),_w(1.27,2.54,-1.27,2.54),_w(-1.27,2.54,-1.27,-2.54)]
+    coin=[_w(-12.7,0,-1.27,0),_w(1.27,0,12.7,0),_w(-1.27,-3.81,-1.27,3.81),_w(1.27,-1.91,1.27,1.91)]+plus
+    return {"RES":res,"CAP":cap,"CAPP":capp,"LED":led,"XTAL32":xtal,"COIN":coin}
+PASSIVE_SYM=_build_passive_syms()
+
 def lib_xml(devnames, for_board):
     o=['<libraries><library name="p8x">','<packages>']
     pkgs=sorted({DEV[d]["pkg"] for d in devnames})
@@ -286,16 +306,24 @@ def lib_xml(devnames, for_board):
     if not for_board:
         o.append('<symbols>')
         for dn in sorted(set(devnames)):
-            d=DEV[dn]; L,R=d["L"],d["R"]; n=max(len(L),len(R)); y1=-G*(n-1)-G
+            d=DEV[dn]; L,R=d["L"],d["R"]
             o.append(f'<symbol name="{dn}">')
-            for (a,b,c,e) in [(-12.7,G,12.7,G),(12.7,G,12.7,y1),(12.7,y1,-12.7,y1),(-12.7,y1,-12.7,G)]:
-                o.append(f'<wire x1="{a}" y1="{b}" x2="{c}" y2="{e:.2f}" width="0.254" layer="94"/>')
-            o.append(f'<text x="-12.7" y="{G+1.27:.2f}" size="1.778" layer="95">&gt;NAME</text>')
-            o.append(f'<text x="-12.7" y="{y1-3.81:.2f}" size="1.778" layer="96">&gt;VALUE</text>')
-            for i,p in enumerate(L):
-                o.append(f'<pin name="{p}" x="{-PIN_X}" y="{-G*i:.2f}" length="middle"/>')
-            for i,p in enumerate(R):
-                o.append(f'<pin name="{p}" x="{PIN_X}" y="{-G*i:.2f}" length="middle" rot="R180"/>')
+            if dn in PASSIVE_SYM:                       # ANSI 2-pin discrete (R/C/LED/...)
+                o+=PASSIVE_SYM[dn]
+                o.append('<text x="-2.54" y="4.32" size="1.778" layer="95">&gt;NAME</text>')
+                o.append('<text x="-2.54" y="-6.6" size="1.778" layer="96">&gt;VALUE</text>')
+                o.append(f'<pin name="{L[0]}" x="{-PIN_X}" y="0" length="middle"/>')
+                o.append(f'<pin name="{R[0]}" x="{PIN_X}" y="0" length="middle" rot="R180"/>')
+            else:                                       # generic box for ICs / connectors / arrays
+                n=max(len(L),len(R)); y1=-G*(n-1)-G
+                for (a,b,c,e) in [(-12.7,G,12.7,G),(12.7,G,12.7,y1),(12.7,y1,-12.7,y1),(-12.7,y1,-12.7,G)]:
+                    o.append(f'<wire x1="{a}" y1="{b}" x2="{c}" y2="{e:.2f}" width="0.254" layer="94"/>')
+                o.append(f'<text x="-12.7" y="{G+1.27:.2f}" size="1.778" layer="95">&gt;NAME</text>')
+                o.append(f'<text x="-12.7" y="{y1-3.81:.2f}" size="1.778" layer="96">&gt;VALUE</text>')
+                for i,p in enumerate(L):
+                    o.append(f'<pin name="{p}" x="{-PIN_X}" y="{-G*i:.2f}" length="middle"/>')
+                for i,p in enumerate(R):
+                    o.append(f'<pin name="{p}" x="{PIN_X}" y="{-G*i:.2f}" length="middle" rot="R180"/>')
             o.append('</symbol>')
         o.append('</symbols>')
         o.append('<devicesets>')

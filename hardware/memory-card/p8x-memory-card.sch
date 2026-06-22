@@ -366,14 +366,14 @@
 <pin name="GND" x="17.78" y="-5.08" length="middle" rot="R180"/>
 </symbol>
 <symbol name="CAP">
-<wire x1="-12.7" y1="2.54" x2="12.7" y2="2.54" width="0.254" layer="94"/>
-<wire x1="12.7" y1="2.54" x2="12.7" y2="-2.54" width="0.254" layer="94"/>
-<wire x1="12.7" y1="-2.54" x2="-12.7" y2="-2.54" width="0.254" layer="94"/>
-<wire x1="-12.7" y1="-2.54" x2="-12.7" y2="2.54" width="0.254" layer="94"/>
-<text x="-12.7" y="3.81" size="1.778" layer="95">&gt;NAME</text>
-<text x="-12.7" y="-6.35" size="1.778" layer="96">&gt;VALUE</text>
-<pin name="1" x="-17.78" y="-0.00" length="middle"/>
-<pin name="2" x="17.78" y="-0.00" length="middle" rot="R180"/>
+<wire x1="-12.7" y1="0" x2="-1.27" y2="0" width="0.254" layer="94"/>
+<wire x1="1.27" y1="0" x2="12.7" y2="0" width="0.254" layer="94"/>
+<wire x1="-1.27" y1="-3.81" x2="-1.27" y2="3.81" width="0.254" layer="94"/>
+<wire x1="1.27" y1="-3.81" x2="1.27" y2="3.81" width="0.254" layer="94"/>
+<text x="-2.54" y="4.32" size="1.778" layer="95">&gt;NAME</text>
+<text x="-2.54" y="-6.6" size="1.778" layer="96">&gt;VALUE</text>
+<pin name="1" x="-17.78" y="0" length="middle"/>
+<pin name="2" x="17.78" y="0" length="middle" rot="R180"/>
 </symbol>
 <symbol name="DIN96">
 <wire x1="-12.7" y1="2.54" x2="12.7" y2="2.54" width="0.254" layer="94"/>
@@ -513,14 +513,22 @@
 <pin name="3" x="-17.78" y="-5.08" length="middle"/>
 </symbol>
 <symbol name="LED">
-<wire x1="-12.7" y1="2.54" x2="12.7" y2="2.54" width="0.254" layer="94"/>
-<wire x1="12.7" y1="2.54" x2="12.7" y2="-2.54" width="0.254" layer="94"/>
-<wire x1="12.7" y1="-2.54" x2="-12.7" y2="-2.54" width="0.254" layer="94"/>
-<wire x1="-12.7" y1="-2.54" x2="-12.7" y2="2.54" width="0.254" layer="94"/>
-<text x="-12.7" y="3.81" size="1.778" layer="95">&gt;NAME</text>
-<text x="-12.7" y="-6.35" size="1.778" layer="96">&gt;VALUE</text>
-<pin name="A" x="-17.78" y="-0.00" length="middle"/>
-<pin name="K" x="17.78" y="-0.00" length="middle" rot="R180"/>
+<wire x1="-12.7" y1="0" x2="-2.54" y2="0" width="0.254" layer="94"/>
+<wire x1="2.54" y1="0" x2="12.7" y2="0" width="0.254" layer="94"/>
+<wire x1="-2.54" y1="2.54" x2="-2.54" y2="-2.54" width="0.254" layer="94"/>
+<wire x1="-2.54" y1="2.54" x2="2.54" y2="0" width="0.254" layer="94"/>
+<wire x1="-2.54" y1="-2.54" x2="2.54" y2="0" width="0.254" layer="94"/>
+<wire x1="2.54" y1="-2.54" x2="2.54" y2="2.54" width="0.254" layer="94"/>
+<wire x1="1.02" y1="3.05" x2="3.05" y2="5.08" width="0.254" layer="94"/>
+<wire x1="3.05" y1="5.08" x2="2.03" y2="4.83" width="0.254" layer="94"/>
+<wire x1="3.05" y1="5.08" x2="2.79" y2="4.06" width="0.254" layer="94"/>
+<wire x1="3.56" y1="2.54" x2="5.59" y2="4.57" width="0.254" layer="94"/>
+<wire x1="5.59" y1="4.57" x2="4.57" y2="4.32" width="0.254" layer="94"/>
+<wire x1="5.59" y1="4.57" x2="5.33" y2="3.56" width="0.254" layer="94"/>
+<text x="-2.54" y="4.32" size="1.778" layer="95">&gt;NAME</text>
+<text x="-2.54" y="-6.6" size="1.778" layer="96">&gt;VALUE</text>
+<pin name="A" x="-17.78" y="0" length="middle"/>
+<pin name="K" x="17.78" y="0" length="middle" rot="R180"/>
 </symbol>
 <symbol name="MEM28K8">
 <wire x1="-12.7" y1="2.54" x2="12.7" y2="2.54" width="0.254" layer="94"/>
@@ -559,14 +567,19 @@
 <pin name="GND" x="17.78" y="-30.48" length="middle" rot="R180"/>
 </symbol>
 <symbol name="RES">
-<wire x1="-12.7" y1="2.54" x2="12.7" y2="2.54" width="0.254" layer="94"/>
-<wire x1="12.7" y1="2.54" x2="12.7" y2="-2.54" width="0.254" layer="94"/>
-<wire x1="12.7" y1="-2.54" x2="-12.7" y2="-2.54" width="0.254" layer="94"/>
-<wire x1="-12.7" y1="-2.54" x2="-12.7" y2="2.54" width="0.254" layer="94"/>
-<text x="-12.7" y="3.81" size="1.778" layer="95">&gt;NAME</text>
-<text x="-12.7" y="-6.35" size="1.778" layer="96">&gt;VALUE</text>
-<pin name="1" x="-17.78" y="-0.00" length="middle"/>
-<pin name="2" x="17.78" y="-0.00" length="middle" rot="R180"/>
+<wire x1="-12.7" y1="0" x2="-7.62" y2="0" width="0.254" layer="94"/>
+<wire x1="7.62" y1="0" x2="12.7" y2="0" width="0.254" layer="94"/>
+<wire x1="-7.62" y1="0" x2="-6.35" y2="1.78" width="0.254" layer="94"/>
+<wire x1="-6.35" y1="1.78" x2="-3.81" y2="-1.78" width="0.254" layer="94"/>
+<wire x1="-3.81" y1="-1.78" x2="-1.27" y2="1.78" width="0.254" layer="94"/>
+<wire x1="-1.27" y1="1.78" x2="1.27" y2="-1.78" width="0.254" layer="94"/>
+<wire x1="1.27" y1="-1.78" x2="3.81" y2="1.78" width="0.254" layer="94"/>
+<wire x1="3.81" y1="1.78" x2="6.35" y2="-1.78" width="0.254" layer="94"/>
+<wire x1="6.35" y1="-1.78" x2="7.62" y2="0" width="0.254" layer="94"/>
+<text x="-2.54" y="4.32" size="1.778" layer="95">&gt;NAME</text>
+<text x="-2.54" y="-6.6" size="1.778" layer="96">&gt;VALUE</text>
+<pin name="1" x="-17.78" y="0" length="middle"/>
+<pin name="2" x="17.78" y="0" length="middle" rot="R180"/>
 </symbol>
 </symbols>
 <devicesets>
