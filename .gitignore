@@ -13,6 +13,7 @@ emulator/test/*.out
 emulator/test/cf.img
 emulator/test/os.img
 emulator/test/v2.img
+emulator/test/cfbig.img
 emulator/test/bas.img
 emulator/test/tinyos.asm
 emulator/test/prog.asm

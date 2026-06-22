@@ -44,7 +44,9 @@ PUTS    = $0112          ; print (P1)+ until $00
 PHEX8   = $0115          ; print A as two hex digits
 
 ; ---- Shared ABI state (set by/for the BIOS) --------------------------------
-LBA     = $9D47          ; CFREAD/CFWRITE target LBA (low byte)
+LBA     = $9D47          ; CFREAD/CFWRITE target LBA, byte 0 (bits 7:0)
+LBA1    = $9D48          ; LBA byte 1 (bits 15:8)  — 0 after CFINIT unless set
+LBA2    = $9D49          ; LBA byte 2 (bits 23:16) — 0 after CFINIT unless set
 SBUF    = $9E00          ; 512-byte sector buffer
 
 ; ---- P8XFS v1 on-disk layout -----------------------------------------------

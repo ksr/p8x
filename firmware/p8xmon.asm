@@ -63,7 +63,9 @@ HEXH    = $9D43
 TMP     = $9D44
 TMP2    = $9D45
 CNT     = $9D46          ; loop counter
-LBA     = $9D47          ; current LBA (low byte; LBA1-3 written as 0)
+LBA     = $9D47          ; current LBA, byte 0 (bits 7:0)
+LBA1    = $9D48          ; LBA byte 1 (bits 15:8)  — 0 after CFINIT unless set
+LBA2    = $9D49          ; LBA byte 2 (bits 23:16) — 0 after CFINIT unless set
 SBUF    = $9E00          ; sector buffer
 STKTOP  = $FEFF
 BASIC   = $2000          ; ROM BASIC cold-start (overlaid by the ROM build)
@@ -79,7 +81,9 @@ RESET:  JMP  COLD
 ; BIOS JUMP TABLE  — stable entry points for RAM-resident programs (P8X/OS).
 ; These addresses are an ABI: never reorder or insert, or every OS image on
 ; every card breaks. See hardware/cf-card/p8x-cf-os-design.md sec 2.2.
-; Shared ABI state: LBA byte at $9D47, 512-byte sector buffer SBUF at $9E00.
+; Shared ABI state: 24-bit LBA at $9D47..$9D49 (LBA0/LBA1/LBA2, little-endian;
+; LBA1/LBA2 default 0 after CFINIT — set them for sectors >255), and the
+; 512-byte sector buffer SBUF at $9E00.
 ;==============================================================================
         .org $0100
         JMP  GETC           ; $0100 CONIN   wait for key, char -> A
@@ -384,7 +388,10 @@ CFDRQ:  LDA  CFSTAT         ; spin until DRQ
         JZ   CFDRQ
         RTS
 
-CFINIT: JSR  CFWAIT
+CFINIT: LDA  #0             ; default the high LBA bytes to 0 (legacy 1-byte
+        STA  LBA1           ; callers set only LBA0; CFSETL now reads LBA1/LBA2,
+        STA  LBA2           ; so init them here — set them only for sectors >255)
+        JSR  CFWAIT
         LDA  #$E0           ; LBA mode, drive 0
         STA  CFHEAD
         LDA  #$01           ; feature: enable 8-bit transfers
@@ -401,12 +408,13 @@ CFINIT: JSR  CFWAIT
 CFI_OK: CLC
         RTS
 
-CFSETL: LDA  LBA            ; LBA -> task file (sectors 0..255 used by mon)
+CFSETL: LDA  LBA            ; 24-bit LBA -> task file (LBA0/LBA1/LBA2)
         STA  CFLBA0
-        LDA  #0
+        LDA  LBA1
         STA  CFLBA1
+        LDA  LBA2
         STA  CFLBA2
-        LDA  #$E0
+        LDA  #$E0           ; LBA mode, drive 0, LBA[27:24]=0
         STA  CFHEAD
         LDA  #1
         STA  CFSCNT

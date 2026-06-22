@@ -1,7 +1,7 @@
 # P8X Project Backlog
 
 Add ideas as they come; move items between sections as they progress.
-Last updated: 2026-06-19
+Last updated: 2026-06-22
 
 ## How to use
 - **NEXT** — committed, in rough priority order
@@ -32,10 +32,6 @@ Last updated: 2026-06-19
       full. To grow, code needs a second segment above SBUF ($A200+, below the
       $B000 TPA; LBA/SBUF/vars are fixed), or the boot loader must stage through a
       buffer instead of loading straight over $9D47.
-- **CFREAD ABI is 1-byte LBA**: the BIOS CFREAD/CFWRITE only set LBA0 (LBA1-3
-  zeroed in the monitor's CFSETL), capping addressable sectors at 256. Fine for
-  small images today; widen to a multi-byte LBA in CFSETL + the BIOS contract
-  before volumes exceed 128 KB.
 
 
 - [ ] Fusion import acceptance test: open backplane .sch/.brd pair, pour planes,
@@ -237,6 +233,18 @@ Last updated: 2026-06-19
 > Convention: substantial features get a **bold-title** prose entry (what was
 > done + why + caveats). The original foundation milestones are a terse tick
 > list under *Early milestones* at the end of this section.
+
+- **Multi-byte LBA in the CF BIOS ABI** (2026-06-22). CFREAD/CFWRITE were
+  capped at 256 sectors (128 KB): CFSETL zeroed LBA1/LBA2. Widened to a 24-bit
+  little-endian LBA at `$9D47..$9D49` (LBA0/LBA1/LBA2). `CFINIT` now zeros
+  LBA1/LBA2, so the change is backward-compatible — legacy callers set only LBA0
+  and the high bytes stay 0, meaning **no OS code growth** (the OS is at its
+  14-sector boot ceiling). `CFSETL` reads all three bytes; the emulator already
+  assembled a 24-bit LBA, so no emulator change was needed. Test:
+  `emulator/test/cf_hilba_test.sh` reads sector 300 and writes sector 301 via the
+  BIOS on a 512-sector image, proving LBA1 is honoured (no mod-256 wrap). The
+  jump table at $0100 is unchanged — this is a compatible extension, not a
+  reorder. (To address >8 GB you'd also drive LBA3 in CFHEAD; not needed.)
 
 - **C flag polarity — RESOLVED (rev B).** Chose conventional active-high carry
   (C=1 = carry / A≥B for SUB/CMP). The raw active-low 74181 Cn+4 is inverted by
