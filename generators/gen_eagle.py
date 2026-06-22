@@ -235,14 +235,26 @@ D("IDE40",[str(k) for k in range(1,41,2)],[str(k) for k in range(2,41,2)],
   {str(k):str(k) for k in range(1,41)},"HDR40")
 
 # ===================== XML HELPERS =============================================
-SCH_LAYERS=[(91,"Nets",2),(92,"Busses",1),(93,"Pins",2),(94,"Symbols",4),(95,"Names",7),
- (96,"Values",7),(97,"Info",7),(98,"Guide",6)]
-BRD_LAYERS=[(1,"Top",4),(2,"Route2",1),(15,"Route15",4),(16,"Bottom",1),(17,"Pads",2),
- (18,"Vias",2),(19,"Unrouted",6),(20,"Dimension",24),(21,"tPlace",7),(22,"bPlace",7),
- (23,"tOrigins",15),(24,"bOrigins",15),(25,"tNames",7),(26,"bNames",7),(27,"tValues",7),
- (28,"bValues",7),(39,"tKeepout",4),(40,"bKeepout",1),(41,"tRestrict",4),(42,"bRestrict",1),
- (43,"vRestrict",2),(44,"Drills",7),(45,"Holes",7),(46,"Milling",3),(47,"Measures",7),
- (48,"Document",7),(49,"Reference",7),(51,"tDocu",7),(52,"bDocu",7)]
+# The COMPLETE standard EAGLE layer table (number, name, color, fill). Real
+# Eagle .sch/.brd files carry the full set in every drawing; emitting only a
+# subset makes Fusion remap on import (text lands on auto-named layers). Use the
+# same full table for both schematic and board so nothing is remapped.
+LAYERS=[(1,"Top",4,1),(2,"Route2",1,1),(3,"Route3",4,1),(4,"Route4",1,1),(5,"Route5",4,1),
+ (6,"Route6",1,1),(7,"Route7",4,1),(8,"Route8",1,1),(9,"Route9",4,1),(10,"Route10",1,1),
+ (11,"Route11",4,1),(12,"Route12",1,1),(13,"Route13",4,1),(14,"Route14",1,1),(15,"Route15",4,1),
+ (16,"Bottom",1,1),(17,"Pads",2,1),(18,"Vias",2,1),(19,"Unrouted",6,1),(20,"Dimension",24,1),
+ (21,"tPlace",7,1),(22,"bPlace",7,1),(23,"tOrigins",15,1),(24,"bOrigins",15,1),
+ (25,"tNames",7,1),(26,"bNames",7,1),(27,"tValues",7,1),(28,"bValues",7,1),
+ (29,"tStop",7,3),(30,"bStop",7,6),(31,"tCream",7,4),(32,"bCream",7,5),
+ (33,"tFinish",6,3),(34,"bFinish",6,6),(35,"tGlue",7,4),(36,"bGlue",7,5),
+ (37,"tTest",7,1),(38,"bTest",7,1),(39,"tKeepout",4,11),(40,"bKeepout",1,11),
+ (41,"tRestrict",4,10),(42,"bRestrict",1,10),(43,"vRestrict",2,10),(44,"Drills",7,1),
+ (45,"Holes",7,1),(46,"Milling",3,1),(47,"Measures",7,1),(48,"Document",7,1),
+ (49,"Reference",7,1),(51,"tDocu",7,1),(52,"bDocu",7,1),
+ (88,"SimResults",9,1),(89,"SimProbes",9,1),(90,"Modules",5,1),(91,"Nets",2,1),
+ (92,"Busses",1,1),(93,"Pins",2,1),(94,"Symbols",4,1),(95,"Names",7,1),(96,"Values",7,1),
+ (97,"Info",7,1),(98,"Guide",6,1)]
+SCH_LAYERS=BRD_LAYERS=LAYERS
 
 def hdr(layers):
     o=['<?xml version="1.0" encoding="utf-8"?>','<!DOCTYPE eagle SYSTEM "eagle.dtd">',
@@ -250,8 +262,8 @@ def hdr(layers):
        '<settings><setting alwaysvectorfont="no"/><setting verticaltext="up"/></settings>',
        '<grid distance="0.1" unitdist="inch" unit="inch" style="lines" multiple="1" display="no" altdistance="0.01" altunitdist="inch" altunit="inch"/>',
        '<layers>']
-    for n,nm,c in layers:
-        o.append(f'<layer number="{n}" name="{nm}" color="{c}" fill="1" visible="yes" active="yes"/>')
+    for n,nm,c,f in layers:
+        o.append(f'<layer number="{n}" name="{nm}" color="{c}" fill="{f}" visible="yes" active="yes"/>')
     o.append('</layers>')
     return o
 
@@ -265,7 +277,8 @@ def lib_xml(devnames, for_board):
                 o.append(f'<hole x="{x:.2f}" y="{y:.2f}" drill="{dr}"/>')
             else:
                 o.append(f'<pad name="{nm}" x="{x:.2f}" y="{y:.2f}" drill="{dr}" diameter="{sz}"/>')
-        o.append('<text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>')
+        o.append('<text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>')    # silkscreen refdes
+        o.append('<text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>')   # silkscreen value
         o.append('</package>')
     o.append('</packages>')
     if not for_board:
@@ -286,7 +299,7 @@ def lib_xml(devnames, for_board):
         o.append('<devicesets>')
         for dn in sorted(set(devnames)):
             d=DEV[dn]
-            o.append(f'<deviceset name="{dn}" prefix="U"><gates><gate name="G$1" symbol="{dn}" x="0" y="0"/></gates>')
+            o.append(f'<deviceset name="{dn}" prefix="U" uservalue="yes"><gates><gate name="G$1" symbol="{dn}" x="0" y="0"/></gates>')
             o.append(f'<devices><device name="" package="{d["pkg"]}"><connects>')
             for pin,pad in d["pm"].items():
                 o.append(f'<connect gate="G$1" pin="{pin}" pad="{pad}"/>')
@@ -300,7 +313,7 @@ def pinpos(dev,pin):
     if pin in d["L"]: return (-PIN_X,-G*d["L"].index(pin),"L")
     return (PIN_X,-G*d["R"].index(pin),"R")
 
-def write_sch(fn,title,parts,nets):
+def write_sch(fn,title,parts,nets,labels=None):
     o=hdr(SCH_LAYERS)
     o.append('<schematic xreflabel="%F%N/%S.%C%R" xrefpart="/%S.%C%R">')
     o+=lib_xml([p[0] for p in parts.values()],False)
@@ -310,6 +323,15 @@ def write_sch(fn,title,parts,nets):
         o.append(f'<part name="{ref}" library="p8x" deviceset="{dev}" device="" value="{val}"/>')
     o.append('</parts><sheets><sheet><plain>')
     o.append(f'<text x="0" y="40" size="3.81" layer="97">{title}</text>')
+    # Per-part annotations placed above each chip: the part NUMBER (= the Eagle
+    # 'value', also in the BOM) on the Values layer, and the logical FUNCTION on
+    # the Info layer. Placed explicitly so they're visible regardless of layer
+    # display settings (the symbol still carries >VALUE too).
+    for ref,fn_txt in (labels or {}).items():
+        if ref in parts:
+            _,val,x,y=parts[ref]
+            o.append(f'<text x="{x-12.7:.2f}" y="{y+G+7.0:.2f}" size="1.778" layer="97">{fn_txt}</text>')
+            o.append(f'<text x="{x-12.7:.2f}" y="{y+G+4.0:.2f}" size="2.032" layer="96">{val}</text>')
     o.append('</plain><instances>')
     for ref,(dev,val,x,y) in parts.items():
         o.append(f'<instance part="{ref}" gate="G$1" x="{x}" y="{y}"/>')
@@ -328,21 +350,44 @@ def write_sch(fn,title,parts,nets):
     os.makedirs(os.path.dirname(fn) or ".",exist_ok=True)
     open(fn,"w").write("\n".join(o)+"\n")
 
-def write_brd(fn,title,parts,nets,wires,polys,W,H,vias=None):
+def write_brd(fn,title,parts,nets,wires,polys,W,H,vias=None,outline_only=False,unplaced=False):
+    # unplaced: emit all parts (names+values) + the ratsnest (connectivity), but
+    # parked OFF the board outline with no routing/pours — ready to place by hand.
     vias=vias or {}
     o=hdr(BRD_LAYERS)
     o.append('<board><plain>')
     for (a,b,c,d) in [(0,0,W,0),(W,0,W,H),(W,H,0,H),(0,H,0,0)]:
         o.append(f'<wire x1="{a}" y1="{b}" x2="{c}" y2="{d}" width="0" layer="20"/>')
+    if outline_only:
+        # board dimensions only — no parts, copper, silk, pours, or signals.
+        # (The <layers> defs in the header stay; they're required for a valid file.)
+        o.append('</plain><libraries/>')
+        o.append('<classes><class number="0" name="default" width="0" drill="0"/></classes>')
+        o.append('<designrules name="default"><param name="layerSetup" value="(1*2*15*16)"/></designrules>')
+        o.append('<elements/><signals/></board></drawing></eagle>')
+        os.makedirs(os.path.dirname(fn) or ".",exist_ok=True)
+        open(fn,"w").write("\n".join(o)+"\n")
+        return
     o.append(f'<text x="4" y="{H-6}" size="2.54" layer="21">{title}</text>')
     o.append('</plain>')
     o+=lib_xml([p[0] for p in parts.values()],True)
+    o.append('<attributes></attributes><variantdefs></variantdefs>')   # std Eagle board sections
     o.append('<classes><class number="0" name="default" width="0" drill="0"/></classes>')
     o.append('<designrules name="default"><param name="layerSetup" value="(1*2*15*16)"/></designrules>')
     o.append('<elements>')
+    # unplaced: park every part in a tidy column to the RIGHT of the board so
+    # nothing sits on the outline; the ratsnest then guides manual placement.
+    offx = W+25.4 if unplaced else 0.0
     for ref,pv in parts.items():
         dev,val,x,y=pv[:4]; rot=f' rot="{pv[4]}"' if len(pv)>4 else ""
-        o.append(f'<element name="{ref}" library="p8x" package="{DEV[dev]["pkg"]}" value="{val}" x="{x:.2f}" y="{y:.2f}"{rot}/>')
+        ex,ey=x+offx,y
+        # Smashed element with explicit NAME (tNames/25) + VALUE (tValues/27)
+        # attributes — exactly how Eagle writes boards, so Fusion reliably shows
+        # the refdes + part number instead of remapping them to scratch layers.
+        o.append(f'<element name="{ref}" library="p8x" package="{DEV[dev]["pkg"]}" value="{val}" x="{ex:.2f}" y="{ey:.2f}"{rot} smashed="yes">')
+        o.append(f'<attribute name="NAME" x="{ex:.2f}" y="{ey+2.54:.2f}" size="1.778" layer="25" ratio="10"/>')
+        o.append(f'<attribute name="VALUE" x="{ex:.2f}" y="{ey-2.54:.2f}" size="1.778" layer="27" ratio="10"/>')
+        o.append('</element>')
     o.append('</elements><signals>')
     allnets=set(nets)|set(wires)|set(polys)
     for nn in sorted(allnets):
@@ -350,6 +395,7 @@ def write_brd(fn,title,parts,nets,wires,polys,W,H,vias=None):
         for ref,pin in nets.get(nn,[]):
             pad=DEV[parts[ref][0]]["pm"][pin]
             o.append(f'<contactref element="{ref}" pad="{pad}"/>')
+        if unplaced: o.append('</signal>'); continue   # ratsnest only — no copper/pours
         for (x1,y1,x2,y2,ly,wd) in wires.get(nn,[]):
             o.append(f'<wire x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" width="{wd}" layer="{ly}"/>')
         for (vx,vy) in vias.get(nn,[]):
@@ -408,8 +454,12 @@ def fp_box(pkg):
     pads=PKG[pkg]; xs=[p[1] for p in pads]; ys=[p[2] for p in pads]; d=max(p[4] for p in pads)
     return (max(xs)-min(xs)+d, max(ys)-min(ys)+d, min(xs)-d/2, min(ys)-d/2)
 
-def card(name,title,parts_ic,parts_small,nets,used_bus):
-    """Build sch+brd for one plug-in card."""
+def card(name,title,parts_ic,parts_small,nets,used_bus,labels=None,
+         brd_outline_only=False,brd_unplaced=False):
+    """Build sch+brd for one plug-in card. `labels` maps ref -> logical-function
+    text placed near the part on the schematic (the part's `value` is its part
+    number). `brd_outline_only` emits a .brd with just the board dimensions;
+    `brd_unplaced` emits all parts + ratsnest parked off the board (no routing)."""
     for pin in ALLPINS:
         net=busnet(pin)
         if net in ("VCC","GND") or net in used_bus:
@@ -472,10 +522,12 @@ def card(name,title,parts_ic,parts_small,nets,used_bus):
     CARDS[name]=(title,allp,nets)
     base="%s/p8x-%s"%(name,name)   # each board in its own subdirectory
     if EMIT:
-        write_sch(base+".sch",title,sch,nets)
+        write_sch(base+".sch",title,sch,nets,labels)
         validate(base+".sch",sch,nets)
-        write_brd(base+".brd",title,brd,nets,{},{"GND":[(2,)],"VCC":[(15,)]},160,100)
-        validate(base+".brd",brd,nets)
+        write_brd(base+".brd",title,brd,nets,{},{"GND":[(2,)],"VCC":[(15,)]},160,100,
+                  outline_only=brd_outline_only,unplaced=brd_unplaced)
+        if not brd_outline_only:
+            validate(base+".brd",brd,nets)
 
 def N(nets,n,*p): nets.setdefault(n,[]).extend(p)
 
@@ -1149,11 +1201,15 @@ if EMIT:
 # phased by CLKB. NOTE: like the other I/O cards it does not decode A5-7, so the
 # port aliases every 32 bytes within the page (fine for a scratch test card).
 n={}
-ic={"U1":("7430","IO PAGE"),"U2":("74138","ADDR DEC"),"U3":("74138","DLD DEC"),
- "U4":("GATES14","74HCT32"),"U5":("HEX14","74HCT14"),"U6":("74374","LED LATCH")}
-sm={"RL1":("RNISO8","8X330R"),"LA1":("LEDARR8","OUT LEDS"),
- "RP1":("RES","1K"),"LED3":("LED","PWR-GRN"),
- "R4":("RES","1K"),"LED4":("LED","WR-YEL")}
+# value = orderable part number; logical function is in `labels` (placed text).
+ic={"U1":("7430","74HCT30"),"U2":("74138","74HCT138"),"U3":("74138","74HCT138"),
+ "U4":("GATES14","74HCT32"),"U5":("HEX14","74HCT14"),"U6":("74374","74HCT374")}
+sm={"RL1":("RNISO8","8x330R"),"LA1":("LEDARR8","8-LED BAR"),
+ "RP1":("RES","1K"),"LED3":("LED","GRN"),
+ "R4":("RES","1K"),"LED4":("LED","YEL")}
+led_labels={"U1":"I/O PAGE DEC","U2":"PORT DEC $FF0C","U3":"DLD DEC",
+ "U4":"WRITE/CLK GATES","U5":"CLKB INVERT","U6":"LED LATCH",
+ "RL1":"LED Rs","LA1":"OUTPUT LEDS","LED3":"POWER","LED4":"WRITE ACT"}
 for i in range(8): N(n,"A%d"%(8+i),("U1","ABCDEFGH"[i]))   # I/O page: A8-15 -> IOPG
 N(n,"IOPG",("U1","Y"),("U2","!G2A"))
 for i,pn in enumerate(("A","B","C")): N(n,"A%d"%(i+1),("U2",pn))  # port select A1-3
@@ -1182,6 +1238,6 @@ N(n,"LEDP",("RP1","2"),("LED3","A")); N(n,"GND",("LED3","K"))
 N(n,"LEDWR",("R4","2"),("LED4","A"))
 card("led-card","P8X LED OUTPUT CARD (test - write-only 8 LEDs at $FF0C)",ic,sm,n,
  {"D%d"%i for i in range(8)}|{"A1","A2","A3","A4"}|{"A%d"%i for i in range(8,16)}|
- {"DLD%d"%i for i in range(4)}|{"CLKB"})
+ {"DLD%d"%i for i in range(4)}|{"CLKB"},labels=led_labels,brd_unplaced=True)
 
 if EMIT: print("ALL 8 BOARDS GENERATED")

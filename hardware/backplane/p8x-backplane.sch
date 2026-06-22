@@ -5,6 +5,60 @@
 <settings><setting alwaysvectorfont="no"/><setting verticaltext="up"/></settings>
 <grid distance="0.1" unitdist="inch" unit="inch" style="lines" multiple="1" display="no" altdistance="0.01" altunitdist="inch" altunit="inch"/>
 <layers>
+<layer number="1" name="Top" color="4" fill="1" visible="yes" active="yes"/>
+<layer number="2" name="Route2" color="1" fill="1" visible="yes" active="yes"/>
+<layer number="3" name="Route3" color="4" fill="1" visible="yes" active="yes"/>
+<layer number="4" name="Route4" color="1" fill="1" visible="yes" active="yes"/>
+<layer number="5" name="Route5" color="4" fill="1" visible="yes" active="yes"/>
+<layer number="6" name="Route6" color="1" fill="1" visible="yes" active="yes"/>
+<layer number="7" name="Route7" color="4" fill="1" visible="yes" active="yes"/>
+<layer number="8" name="Route8" color="1" fill="1" visible="yes" active="yes"/>
+<layer number="9" name="Route9" color="4" fill="1" visible="yes" active="yes"/>
+<layer number="10" name="Route10" color="1" fill="1" visible="yes" active="yes"/>
+<layer number="11" name="Route11" color="4" fill="1" visible="yes" active="yes"/>
+<layer number="12" name="Route12" color="1" fill="1" visible="yes" active="yes"/>
+<layer number="13" name="Route13" color="4" fill="1" visible="yes" active="yes"/>
+<layer number="14" name="Route14" color="1" fill="1" visible="yes" active="yes"/>
+<layer number="15" name="Route15" color="4" fill="1" visible="yes" active="yes"/>
+<layer number="16" name="Bottom" color="1" fill="1" visible="yes" active="yes"/>
+<layer number="17" name="Pads" color="2" fill="1" visible="yes" active="yes"/>
+<layer number="18" name="Vias" color="2" fill="1" visible="yes" active="yes"/>
+<layer number="19" name="Unrouted" color="6" fill="1" visible="yes" active="yes"/>
+<layer number="20" name="Dimension" color="24" fill="1" visible="yes" active="yes"/>
+<layer number="21" name="tPlace" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="22" name="bPlace" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="23" name="tOrigins" color="15" fill="1" visible="yes" active="yes"/>
+<layer number="24" name="bOrigins" color="15" fill="1" visible="yes" active="yes"/>
+<layer number="25" name="tNames" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="26" name="bNames" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="27" name="tValues" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="28" name="bValues" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="29" name="tStop" color="7" fill="3" visible="yes" active="yes"/>
+<layer number="30" name="bStop" color="7" fill="6" visible="yes" active="yes"/>
+<layer number="31" name="tCream" color="7" fill="4" visible="yes" active="yes"/>
+<layer number="32" name="bCream" color="7" fill="5" visible="yes" active="yes"/>
+<layer number="33" name="tFinish" color="6" fill="3" visible="yes" active="yes"/>
+<layer number="34" name="bFinish" color="6" fill="6" visible="yes" active="yes"/>
+<layer number="35" name="tGlue" color="7" fill="4" visible="yes" active="yes"/>
+<layer number="36" name="bGlue" color="7" fill="5" visible="yes" active="yes"/>
+<layer number="37" name="tTest" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="38" name="bTest" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="39" name="tKeepout" color="4" fill="11" visible="yes" active="yes"/>
+<layer number="40" name="bKeepout" color="1" fill="11" visible="yes" active="yes"/>
+<layer number="41" name="tRestrict" color="4" fill="10" visible="yes" active="yes"/>
+<layer number="42" name="bRestrict" color="1" fill="10" visible="yes" active="yes"/>
+<layer number="43" name="vRestrict" color="2" fill="10" visible="yes" active="yes"/>
+<layer number="44" name="Drills" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="45" name="Holes" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="46" name="Milling" color="3" fill="1" visible="yes" active="yes"/>
+<layer number="47" name="Measures" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="48" name="Document" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="49" name="Reference" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="51" name="tDocu" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="52" name="bDocu" color="7" fill="1" visible="yes" active="yes"/>
+<layer number="88" name="SimResults" color="9" fill="1" visible="yes" active="yes"/>
+<layer number="89" name="SimProbes" color="9" fill="1" visible="yes" active="yes"/>
+<layer number="90" name="Modules" color="5" fill="1" visible="yes" active="yes"/>
 <layer number="91" name="Nets" color="2" fill="1" visible="yes" active="yes"/>
 <layer number="92" name="Busses" color="1" fill="1" visible="yes" active="yes"/>
 <layer number="93" name="Pins" color="2" fill="1" visible="yes" active="yes"/>
@@ -20,12 +74,14 @@
 <package name="CP_RADIAL">
 <pad name="1" x="0.00" y="0.00" drill="0.9" diameter="1.8"/>
 <pad name="2" x="0.00" y="-5.08" drill="0.9" diameter="1.8"/>
-<text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
+<text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
+<text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
 </package>
 <package name="C_DISC">
 <pad name="1" x="0.00" y="0.00" drill="0.9" diameter="1.8"/>
 <pad name="2" x="0.00" y="-5.08" drill="0.9" diameter="1.8"/>
-<text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
+<text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
+<text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
 </package>
 <package name="DIN96">
 <pad name="A1" x="5.08" y="-0.00" drill="1.0" diameter="1.7"/>
@@ -124,17 +180,20 @@
 <pad name="C30" x="0.00" y="-73.66" drill="1.0" diameter="1.7"/>
 <pad name="C31" x="0.00" y="-76.20" drill="1.0" diameter="1.7"/>
 <pad name="C32" x="0.00" y="-78.74" drill="1.0" diameter="1.7"/>
-<text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
+<text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
+<text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
 </package>
 <package name="LED5">
 <pad name="2" x="0.00" y="0.00" drill="0.9" diameter="1.8"/>
 <pad name="1" x="2.54" y="0.00" drill="0.9" diameter="1.8"/>
-<text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
+<text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
+<text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
 </package>
 <package name="R_AXIAL">
 <pad name="1" x="0.00" y="0.00" drill="0.8" diameter="1.6"/>
 <pad name="2" x="10.16" y="0.00" drill="0.8" diameter="1.6"/>
-<text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
+<text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
+<text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
 </package>
 <package name="SIP9">
 <pad name="1" x="0.00" y="-0.00" drill="0.8" diameter="1.6"/>
@@ -146,14 +205,16 @@
 <pad name="7" x="0.00" y="-15.24" drill="0.8" diameter="1.6"/>
 <pad name="8" x="0.00" y="-17.78" drill="0.8" diameter="1.6"/>
 <pad name="9" x="0.00" y="-20.32" drill="0.8" diameter="1.6"/>
-<text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
+<text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
+<text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
 </package>
 <package name="TB4">
 <pad name="1" x="0.00" y="-0.00" drill="1.3" diameter="3.0"/>
 <pad name="2" x="0.00" y="-5.08" drill="1.3" diameter="3.0"/>
 <pad name="3" x="0.00" y="-10.16" drill="1.3" diameter="3.0"/>
 <pad name="4" x="0.00" y="-15.24" drill="1.3" diameter="3.0"/>
-<text x="0" y="2.54" size="1.27" layer="25">&gt;NAME</text>
+<text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
+<text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
 </package>
 </packages>
 <symbols>
@@ -332,17 +393,17 @@
 </symbol>
 </symbols>
 <devicesets>
-<deviceset name="CAP" prefix="U"><gates><gate name="G$1" symbol="CAP" x="0" y="0"/></gates>
+<deviceset name="CAP" prefix="U" uservalue="yes"><gates><gate name="G$1" symbol="CAP" x="0" y="0"/></gates>
 <devices><device name="" package="C_DISC"><connects>
 <connect gate="G$1" pin="1" pad="1"/>
 <connect gate="G$1" pin="2" pad="2"/>
 </connects><technologies><technology name=""/></technologies></device></devices></deviceset>
-<deviceset name="CAPP" prefix="U"><gates><gate name="G$1" symbol="CAPP" x="0" y="0"/></gates>
+<deviceset name="CAPP" prefix="U" uservalue="yes"><gates><gate name="G$1" symbol="CAPP" x="0" y="0"/></gates>
 <devices><device name="" package="CP_RADIAL"><connects>
 <connect gate="G$1" pin="+" pad="1"/>
 <connect gate="G$1" pin="-" pad="2"/>
 </connects><technologies><technology name=""/></technologies></device></devices></deviceset>
-<deviceset name="DIN96" prefix="U"><gates><gate name="G$1" symbol="DIN96" x="0" y="0"/></gates>
+<deviceset name="DIN96" prefix="U" uservalue="yes"><gates><gate name="G$1" symbol="DIN96" x="0" y="0"/></gates>
 <devices><device name="" package="DIN96"><connects>
 <connect gate="G$1" pin="A1" pad="A1"/>
 <connect gate="G$1" pin="A2" pad="A2"/>
@@ -441,17 +502,17 @@
 <connect gate="G$1" pin="C31" pad="C31"/>
 <connect gate="G$1" pin="C32" pad="C32"/>
 </connects><technologies><technology name=""/></technologies></device></devices></deviceset>
-<deviceset name="LED" prefix="U"><gates><gate name="G$1" symbol="LED" x="0" y="0"/></gates>
+<deviceset name="LED" prefix="U" uservalue="yes"><gates><gate name="G$1" symbol="LED" x="0" y="0"/></gates>
 <devices><device name="" package="LED5"><connects>
 <connect gate="G$1" pin="A" pad="2"/>
 <connect gate="G$1" pin="K" pad="1"/>
 </connects><technologies><technology name=""/></technologies></device></devices></deviceset>
-<deviceset name="RES" prefix="U"><gates><gate name="G$1" symbol="RES" x="0" y="0"/></gates>
+<deviceset name="RES" prefix="U" uservalue="yes"><gates><gate name="G$1" symbol="RES" x="0" y="0"/></gates>
 <devices><device name="" package="R_AXIAL"><connects>
 <connect gate="G$1" pin="1" pad="1"/>
 <connect gate="G$1" pin="2" pad="2"/>
 </connects><technologies><technology name=""/></technologies></device></devices></deviceset>
-<deviceset name="SIP9" prefix="U"><gates><gate name="G$1" symbol="SIP9" x="0" y="0"/></gates>
+<deviceset name="SIP9" prefix="U" uservalue="yes"><gates><gate name="G$1" symbol="SIP9" x="0" y="0"/></gates>
 <devices><device name="" package="SIP9"><connects>
 <connect gate="G$1" pin="COM" pad="1"/>
 <connect gate="G$1" pin="R1" pad="2"/>
@@ -463,7 +524,7 @@
 <connect gate="G$1" pin="R7" pad="8"/>
 <connect gate="G$1" pin="R8" pad="9"/>
 </connects><technologies><technology name=""/></technologies></device></devices></deviceset>
-<deviceset name="TB4" prefix="U"><gates><gate name="G$1" symbol="TB4" x="0" y="0"/></gates>
+<deviceset name="TB4" prefix="U" uservalue="yes"><gates><gate name="G$1" symbol="TB4" x="0" y="0"/></gates>
 <devices><device name="" package="TB4"><connects>
 <connect gate="G$1" pin="1" pad="1"/>
 <connect gate="G$1" pin="2" pad="2"/>
