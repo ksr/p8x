@@ -69,9 +69,9 @@
 <layer number="98" name="Guide" color="6" fill="1" visible="yes" active="yes"/>
 </layers>
 <board><plain>
-<wire x1="0" y1="0" x2="248.92" y2="0" width="0" layer="20"/>
-<wire x1="248.92" y1="0" x2="248.92" y2="109.22" width="0" layer="20"/>
-<wire x1="248.92" y1="109.22" x2="0" y2="109.22" width="0" layer="20"/>
+<wire x1="0" y1="0" x2="280.0" y2="0" width="0" layer="20"/>
+<wire x1="280.0" y1="0" x2="280.0" y2="109.22" width="0" layer="20"/>
+<wire x1="280.0" y1="109.22" x2="0" y2="109.22" width="0" layer="20"/>
 <wire x1="0" y1="109.22" x2="0" y2="0" width="0" layer="20"/>
 <text x="4" y="103.22" size="2.54" layer="21">P8X 10-SLOT BACKPLANE REV C COMPACT</text>
 </plain>
@@ -280,21 +280,21 @@
 <attribute name="NAME" x="246.38" y="93.98" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="246.38" y="88.90" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="RT1" library="p8x" package="R_AXIAL" value="100R" x="238.76" y="103.50" rot="R180" smashed="yes">
-<attribute name="NAME" x="238.76" y="106.04" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="238.76" y="100.96" size="1.778" layer="27" ratio="10"/>
+<element name="RT1" library="p8x" package="R_AXIAL" value="100R" x="256.00" y="96.00" smashed="yes">
+<attribute name="NAME" x="256.00" y="98.54" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="256.00" y="93.46" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="CT1" library="p8x" package="C_DISC" value="150P" x="223.52" y="103.50" smashed="yes">
-<attribute name="NAME" x="223.52" y="106.04" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="223.52" y="100.96" size="1.778" layer="27" ratio="10"/>
+<element name="CT1" library="p8x" package="C_DISC" value="150P" x="271.24" y="96.00" smashed="yes">
+<attribute name="NAME" x="271.24" y="98.54" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="271.24" y="93.46" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="RT2" library="p8x" package="R_AXIAL" value="100R" x="238.76" y="106.50" rot="R180" smashed="yes">
-<attribute name="NAME" x="238.76" y="109.04" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="238.76" y="103.96" size="1.778" layer="27" ratio="10"/>
+<element name="RT2" library="p8x" package="R_AXIAL" value="100R" x="256.00" y="80.00" smashed="yes">
+<attribute name="NAME" x="256.00" y="82.54" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="256.00" y="77.46" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="CT2" library="p8x" package="C_DISC" value="150P" x="207.00" y="106.50" smashed="yes">
-<attribute name="NAME" x="207.00" y="109.04" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="207.00" y="103.96" size="1.778" layer="27" ratio="10"/>
+<element name="CT2" library="p8x" package="C_DISC" value="150P" x="271.24" y="80.00" smashed="yes">
+<attribute name="NAME" x="271.24" y="82.54" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="271.24" y="77.46" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="J11" library="p8x" package="TB4" value="PWR-5V" x="5.08" y="78.74" smashed="yes">
 <attribute name="NAME" x="5.08" y="81.28" size="1.778" layer="25" ratio="10"/>
@@ -692,10 +692,9 @@
 <contactref element="J10" pad="A24"/>
 <contactref element="RT1" pad="1"/>
 <wire x1="10.16" y1="35.56" x2="238.76" y2="35.56" width="0.4" layer="1"/>
-<wire x1="238.76" y1="35.56" x2="242.10" y2="35.56" width="0.4" layer="16"/>
-<wire x1="242.10" y1="35.56" x2="242.10" y2="103.50" width="0.4" layer="16"/>
-<wire x1="242.10" y1="103.50" x2="238.76" y2="103.50" width="0.4" layer="1"/>
-<via x="242.10" y="103.50" extent="1-16" drill="0.4" diameter="0.8"/>
+<wire x1="238.76" y1="35.56" x2="250.00" y2="35.56" width="0.4" layer="1"/>
+<wire x1="250.00" y1="35.56" x2="250.00" y2="96.00" width="0.4" layer="1"/>
+<wire x1="250.00" y1="96.00" x2="256.00" y2="96.00" width="0.4" layer="1"/>
 </signal>
 <signal name="CLKB">
 <contactref element="J1" pad="A25"/>
@@ -710,20 +709,19 @@
 <contactref element="J10" pad="A25"/>
 <contactref element="RT2" pad="1"/>
 <wire x1="10.16" y1="33.02" x2="238.76" y2="33.02" width="0.4" layer="1"/>
-<wire x1="238.76" y1="33.02" x2="240.50" y2="33.02" width="0.4" layer="16"/>
-<wire x1="240.50" y1="33.02" x2="240.50" y2="106.50" width="0.4" layer="16"/>
-<wire x1="240.50" y1="106.50" x2="238.76" y2="106.50" width="0.4" layer="1"/>
-<via x="240.50" y="106.50" extent="1-16" drill="0.4" diameter="0.8"/>
+<wire x1="238.76" y1="33.02" x2="253.00" y2="33.02" width="0.4" layer="1"/>
+<wire x1="253.00" y1="33.02" x2="253.00" y2="80.00" width="0.4" layer="1"/>
+<wire x1="253.00" y1="80.00" x2="256.00" y2="80.00" width="0.4" layer="1"/>
 </signal>
 <signal name="CLKB_T">
 <contactref element="RT2" pad="2"/>
 <contactref element="CT2" pad="1"/>
-<wire x1="228.60" y1="106.50" x2="207.00" y2="106.50" width="0.4" layer="1"/>
+<wire x1="266.16" y1="80.00" x2="271.24" y2="80.00" width="0.4" layer="1"/>
 </signal>
 <signal name="CLK_T">
 <contactref element="RT1" pad="2"/>
 <contactref element="CT1" pad="1"/>
-<wire x1="228.60" y1="103.50" x2="223.52" y2="103.50" width="0.4" layer="1"/>
+<wire x1="266.16" y1="96.00" x2="271.24" y2="96.00" width="0.4" layer="1"/>
 </signal>
 <signal name="CLRC">
 <contactref element="J1" pad="B27"/>
@@ -1216,8 +1214,8 @@
 <contactref element="C10" pad="2"/>
 <polygon width="0.254" layer="2" isolate="0.3" rank="1">
 <vertex x="0" y="0"/>
-<vertex x="248.92" y="0"/>
-<vertex x="248.92" y="109.22"/>
+<vertex x="280.0" y="0"/>
+<vertex x="280.0" y="109.22"/>
 <vertex x="0" y="109.22"/>
 </polygon>
 </signal>
@@ -1770,8 +1768,8 @@
 <contactref element="C10" pad="1"/>
 <polygon width="0.254" layer="15" isolate="0.3" rank="1">
 <vertex x="0" y="0"/>
-<vertex x="248.92" y="0"/>
-<vertex x="248.92" y="109.22"/>
+<vertex x="280.0" y="0"/>
+<vertex x="280.0" y="109.22"/>
 <vertex x="0" y="109.22"/>
 </polygon>
 </signal>
