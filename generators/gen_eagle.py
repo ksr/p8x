@@ -1223,14 +1223,17 @@ EY=54.61
 def padx(i,row): return sx(i)+{"A":-5.08,"B":-2.54,"C":0.0}[row]   # FABC96S pad x for slot i
 bpb={}
 for i in range(10): bpb["J%d"%(i+1)]=("DIN96","SLOT%d"%(i+1),sx(i)-2.54,EY)
-bpb["RN1"]=("SIP9","8X10K",246.38,91.44)
+# RN1 pulled off the slot-10 connector into the end zone (was 246.38, hard up
+# against the C column at 243.84). Its R1..R8 pads still land on the row-3..10
+# A-row D-bus traces, which are extended to follow it (see xe below).
+bpb["RN1"]=("SIP9","8X10K",252.0,91.44)
 # Ring-reduction (clock AC termination) parked in the lengthened end zone, right
-# of RN1 and clear of every slot/bus column (x>=255). Each chain runs left->right:
+# of RN1 and clear of every slot/bus column (x>=263). Each chain runs left->right:
 # clock in -> RTn (R0, pad1=CLK side, pad2=node) -> CTn (node -> GND via pour).
-bpb["RT1"]=("RES","100R",256.0,96.0)
-bpb["CT1"]=("CAP","150P",271.24,96.0)
-bpb["RT2"]=("RES","100R",256.0,80.0)
-bpb["CT2"]=("CAP","150P",271.24,80.0)
+bpb["RT1"]=("RES","100R",264.0,96.0)
+bpb["CT1"]=("CAP","150P",279.24,96.0)
+bpb["RT2"]=("RES","100R",264.0,80.0)
+bpb["CT2"]=("CAP","150P",279.24,80.0)
 bpb["J11"]=("TB4","PWR-5V",5.08,78.74)
 bpb["CB1"]=("CAPP","470U",5.08,55.88); bpb["CB2"]=("CAPP","470U",5.08,45.72)
 for s in range(10): bpb["C%d"%(s+1)]=("CAP1","100N",sx(s)+G,104.14)
@@ -1240,21 +1243,21 @@ def wadd(n,*w): wires.setdefault(n,[]).extend(w)
 def vadd(n,*v): viad.setdefault(n,[]).extend(v)
 for n in range(3,31):
     y=py(n)
-    nA=busnet("A%d"%n); xe=246.38 if 3<=n<=10 else padx(9,"A")
+    nA=busnet("A%d"%n); xe=252.0 if 3<=n<=10 else padx(9,"A")   # rows 3..10 reach RN1
     wadd(nA,(padx(0,"A"),y,xe,y,1,0.4))
     nC=busnet("C%d"%n)
     wadd(nC,(padx(0,"C"),y,padx(9,"C"),y,16,0.4))
 # Clock taps to the end-zone terminators. Routed entirely on layer 1 in the free
 # channel right of the bus columns (A-row copper ends at 246.38, so x=250/253
 # risers cross no other net), straight to RTn pad1; no layer change/via needed.
-wadd("CLK",(padx(9,"A"),py(24),250.0,py(24),1,0.4),
-           (250.0,py(24),250.0,96.0,1,0.4),
-           (250.0,96.0,256.0,96.0,1,0.4))
-wadd("CLK_T",(266.16,96.0,271.24,96.0,1,0.4))
-wadd("CLKB",(padx(9,"A"),py(25),253.0,py(25),1,0.4),
-            (253.0,py(25),253.0,80.0,1,0.4),
-            (253.0,80.0,256.0,80.0,1,0.4))
-wadd("CLKB_T",(266.16,80.0,271.24,80.0,1,0.4))
+wadd("CLK",(padx(9,"A"),py(24),256.0,py(24),1,0.4),
+           (256.0,py(24),256.0,96.0,1,0.4),
+           (256.0,96.0,264.0,96.0,1,0.4))
+wadd("CLK_T",(274.16,96.0,279.24,96.0,1,0.4))
+wadd("CLKB",(padx(9,"A"),py(25),259.0,py(25),1,0.4),
+            (259.0,py(25),259.0,80.0,1,0.4),
+            (259.0,80.0,264.0,80.0,1,0.4))
+wadd("CLKB_T",(274.16,80.0,279.24,80.0,1,0.4))
 wadd("LED_A",(25.40,3.0,30.48,3.0,1,0.4))
 # Route the non-ground B-row signals slot-to-slot: B27=CLRC, B28=BSEL, B29=IRQ,
 # B30=SPARE11, plus the rev-D even-pin spares B4..B26 (SPARE12..23). Odd B pins
@@ -1266,14 +1269,23 @@ for nn in range(3,31):
     wadd(net,(sx(0)-2.54,y-1.27,sx(9)-2.54,y-1.27,1,0.4))
     for i in range(10):
         wadd(net,(sx(i)-2.54,y,sx(i)-2.54,y-1.27,1,0.4))
+# Lift the whole slot field + its routing up by YOFF to open a bottom margin so
+# the bottom mounting holes clear the bus connectors (their lowest mount hole was
+# only ~4.6mm above the holes). RL1/LED1 (power LED + bleed resistor) and their
+# LED_A net stay pinned to the bottom edge as before.
+YOFF=7.0; KEEP={"RL1","LED1"}
+bpb={r:(pv if r in KEEP else pv[:3]+(pv[3]+YOFF,)+pv[4:]) for r,pv in bpb.items()}
+wires={n:(segs if n=="LED_A" else [(a,b+YOFF,c,d+YOFF,ly,wd) for (a,b,c,d,ly,wd) in segs])
+       for n,segs in wires.items()}
+viad={n:[(vx,vy+YOFF) for (vx,vy) in vs] for n,vs in viad.items()}
 if EMIT:
     # M3 mounting holes: 3 evenly spaced (100mm pitch, symmetric) along each long
-    # (280mm) edge. Board height raised 109.22 -> 116.0 so the top-edge holes clear
-    # the decoupling-cap row (y=104.14); bottom holes sit in the margin below the
-    # slot pad field. Drill 3.2mm = M3 clearance.
-    bpholes=[(x,y,3.2) for y in (5.0,111.0) for x in (40.0,140.0,240.0)]
+    # (290mm) edge. Drill 3.2mm = M3 clearance. Board is 290 x 123: widened for the
+    # end-zone cluster, and the YOFF lift above gives the bottom holes (y=5) clean
+    # room below the connectors; top holes (y=118) clear the decoupling-cap row.
+    bpholes=[(x,y,3.2) for y in (5.0,118.0) for x in (40.0,140.0,240.0)]
     write_brd("backplane/p8x-backplane.brd","P8X 10-SLOT BACKPLANE REV C COMPACT",bpb,bpn,wires,
-              {"GND":[(2,)],"VCC":[(15,)]},280.0,116.0,viad,holes=bpholes)
+              {"GND":[(2,)],"VCC":[(15,)]},290.0,123.0,viad,holes=bpholes)
     validate("backplane/p8x-backplane.brd",bpb,bpn)
 
 # ===================== LED OUTPUT CARD (test / CAD-workflow trial) ============
