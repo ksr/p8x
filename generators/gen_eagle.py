@@ -466,7 +466,7 @@ def fp_box(pkg):
     return (max(xs)-min(xs)+d, max(ys)-min(ys)+d, min(xs)-d/2, min(ys)-d/2)
 
 def card(name,title,parts_ic,parts_small,nets,used_bus,labels=None,
-         brd_outline_only=False,brd_unplaced=False):
+         brd_outline_only=False,brd_unplaced=True):
     """Build sch+brd for one plug-in card. `labels` maps ref -> logical-function
     text placed near the part on the schematic (the part's `value` is its part
     number). `brd_outline_only` emits a .brd with just the board dimensions;
@@ -1266,6 +1266,6 @@ N(n,"LEDP",("RP1","2"),("LED3","A")); N(n,"GND",("LED3","K"))
 N(n,"LEDWR",("R4","2"),("LED4","A"))
 card("led-card","P8X LED OUTPUT CARD (test - write-only 8 LEDs at $FF0C)",ic,sm,n,
  {"D%d"%i for i in range(8)}|{"A1","A2","A3","A4"}|{"A%d"%i for i in range(8,16)}|
- {"DLD%d"%i for i in range(4)}|{"CLKB"},labels=led_labels,brd_unplaced=True)
+ {"DLD%d"%i for i in range(4)}|{"CLKB"},labels=led_labels)   # brd_unplaced is now the default
 
 if EMIT: print("ALL 8 BOARDS GENERATED")
