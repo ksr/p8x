@@ -105,9 +105,16 @@ def draw_card(name,title,parts,nets,outpdf):
         return (x+PINX,y-GR*d["R"].index(pin),"R")
     # ---- part boxes
     def box(ref):
-        d=G.DEV[parts[ref][0]]; x,y=pos[ref]; n=max(len(d["L"]),len(d["R"]))
-        yb=y-GR*(n-1)-GR
+        dev=parts[ref][0]; d=G.DEV[dev]; x,y=pos[ref]; n=max(len(d["L"]),len(d["R"]))
         c.setStrokeColor(BLK); c.setLineWidth(0.9)
+        if dev in G.PASSIVE_ART:                 # ANSI/US discrete symbol (R/C/LED/...)
+            for (ax,ay,bx,by) in G.PASSIVE_ART[dev]:
+                line(x+ax,y+ay,x+bx,y+by,0.9,BLK)
+            txt(x-HALFW,y+GR+1.0,ref,2.1,RED,bold=True)
+            txt(x-HALFW,y-GR-1.0,parts[ref][1],1.6,BLU)
+            line(x-PINX,y,x-HALFW,y,0.7,BLK); line(x+HALFW,y,x+PINX,y,0.7,BLK)  # pin stubs
+            return
+        yb=y-GR*(n-1)-GR
         c.rect(X(x-HALFW),Y(yb),2*HALFW*s,(y+GR-yb)*s,stroke=1,fill=0)
         txt(x-HALFW,y+GR+1.0,ref,2.1,RED,bold=True)
         txt(x-HALFW,yb-3.0,parts[ref][1],1.6,BLU)
