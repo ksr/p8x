@@ -385,7 +385,7 @@ def write_sch(fn,title,parts,nets,labels=None):
     os.makedirs(os.path.dirname(fn) or ".",exist_ok=True)
     open(fn,"w").write("\n".join(o)+"\n")
 
-def write_brd(fn,title,parts,nets,wires,polys,W,H,vias=None,outline_only=False,unplaced=False):
+def write_brd(fn,title,parts,nets,wires,polys,W,H,vias=None,outline_only=False,unplaced=False,holes=None):
     # unplaced: emit all parts (names+values) + the ratsnest (connectivity), but
     # parked OFF the board outline with no routing/pours — ready to place by hand.
     vias=vias or {}
@@ -404,6 +404,8 @@ def write_brd(fn,title,parts,nets,wires,polys,W,H,vias=None,outline_only=False,u
         open(fn,"w").write("\n".join(o)+"\n")
         return
     o.append(f'<text x="4" y="{H-6}" size="2.54" layer="21">{title}</text>')
+    for (hx,hy,hd) in (holes or []):                      # board mounting holes (mechanical, non-plated)
+        o.append(f'<hole x="{hx:.2f}" y="{hy:.2f}" drill="{hd}"/>')
     o.append('</plain>')
     o+=lib_xml([p[0] for p in parts.values()],True)
     o.append('<attributes></attributes><variantdefs></variantdefs>')   # std Eagle board sections
@@ -1265,8 +1267,13 @@ for nn in range(3,31):
     for i in range(10):
         wadd(net,(sx(i)-2.54,y,sx(i)-2.54,y-1.27,1,0.4))
 if EMIT:
+    # M3 mounting holes: 3 evenly spaced (100mm pitch, symmetric) along each long
+    # (280mm) edge. Board height raised 109.22 -> 116.0 so the top-edge holes clear
+    # the decoupling-cap row (y=104.14); bottom holes sit in the margin below the
+    # slot pad field. Drill 3.2mm = M3 clearance.
+    bpholes=[(x,y,3.2) for y in (5.0,111.0) for x in (40.0,140.0,240.0)]
     write_brd("backplane/p8x-backplane.brd","P8X 10-SLOT BACKPLANE REV C COMPACT",bpb,bpn,wires,
-              {"GND":[(2,)],"VCC":[(15,)]},280.0,109.22,viad)
+              {"GND":[(2,)],"VCC":[(15,)]},280.0,116.0,viad,holes=bpholes)
     validate("backplane/p8x-backplane.brd",bpb,bpn)
 
 # ===================== LED OUTPUT CARD (test / CAD-workflow trial) ============

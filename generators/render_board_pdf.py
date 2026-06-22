@@ -38,11 +38,13 @@ def parse_brd(path):
     title=""
     for t in root.findall(".//plain/text"):
         title=t.text or title
+    holes=[(float(h.get("x")),float(h.get("y")),float(h.get("drill")))
+           for h in root.findall(".//plain/hole")]   # board mounting holes
     els=[]
     for e in root.findall(".//elements/element"):
         els.append(dict(ref=e.get("name"),pkg=e.get("package"),val=e.get("value") or "",
                         x=float(e.get("x")),y=float(e.get("y")),rot=e.get("rot") or "R0"))
-    return title,W,H,els
+    return title,W,H,els,holes
 
 def rot_xy(px,py,rot):
     if rot=="R90":  return (-py,px)
@@ -51,7 +53,7 @@ def rot_xy(px,py,rot):
     return (px,py)
 
 def render(path,outpdf):
-    title,W,H,els=parse_brd(path)
+    title,W,H,els,holes=parse_brd(path)
     if W<=0 or H<=0: W,H=160.0,100.0
     # extent over the board rectangle AND every pad (the auto-placer can push the
     # densest cards' parts past the board edge — show them, don't clip).
@@ -111,6 +113,12 @@ def render(path,outpdf):
         c.setFont("Helvetica",4.6)
         v=e["val"][:22]
         c.drawCentredString(cxb,cyb-5.0,v)
+    # board mounting holes (mechanical): drilled hole + restring/keepout ring
+    for (hx,hy,hd) in holes:
+        cx,cy=X(hx),Y(hy); r=hd/2*MM
+        c.setStrokeColor(OUTLINE); c.setLineWidth(0.8)
+        c.setFillColor(HOLE); c.circle(cx,cy,r,stroke=1,fill=1)
+        c.setFillColor(HOLE); c.circle(cx,cy,r+1.4*MM,stroke=1,fill=0)
     # title strip (above the topmost content)
     ts=Y(max(H,maxy))+10
     c.setFillColor(ACCENT); c.setFont("Helvetica-Bold",11)

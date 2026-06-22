@@ -70,10 +70,16 @@
 </layers>
 <board><plain>
 <wire x1="0" y1="0" x2="280.0" y2="0" width="0" layer="20"/>
-<wire x1="280.0" y1="0" x2="280.0" y2="109.22" width="0" layer="20"/>
-<wire x1="280.0" y1="109.22" x2="0" y2="109.22" width="0" layer="20"/>
-<wire x1="0" y1="109.22" x2="0" y2="0" width="0" layer="20"/>
-<text x="4" y="103.22" size="2.54" layer="21">P8X 10-SLOT BACKPLANE REV C COMPACT</text>
+<wire x1="280.0" y1="0" x2="280.0" y2="116.0" width="0" layer="20"/>
+<wire x1="280.0" y1="116.0" x2="0" y2="116.0" width="0" layer="20"/>
+<wire x1="0" y1="116.0" x2="0" y2="0" width="0" layer="20"/>
+<text x="4" y="110.0" size="2.54" layer="21">P8X 10-SLOT BACKPLANE REV C COMPACT</text>
+<hole x="40.00" y="5.00" drill="3.2"/>
+<hole x="140.00" y="5.00" drill="3.2"/>
+<hole x="240.00" y="5.00" drill="3.2"/>
+<hole x="40.00" y="111.00" drill="3.2"/>
+<hole x="140.00" y="111.00" drill="3.2"/>
+<hole x="240.00" y="111.00" drill="3.2"/>
 </plain>
 <libraries><library name="p8x">
 <packages>
@@ -1215,8 +1221,8 @@
 <polygon width="0.254" layer="2" isolate="0.3" rank="1">
 <vertex x="0" y="0"/>
 <vertex x="280.0" y="0"/>
-<vertex x="280.0" y="109.22"/>
-<vertex x="0" y="109.22"/>
+<vertex x="280.0" y="116.0"/>
+<vertex x="0" y="116.0"/>
 </polygon>
 </signal>
 <signal name="IRQ">
@@ -1769,8 +1775,8 @@
 <polygon width="0.254" layer="15" isolate="0.3" rank="1">
 <vertex x="0" y="0"/>
 <vertex x="280.0" y="0"/>
-<vertex x="280.0" y="109.22"/>
-<vertex x="0" y="109.22"/>
+<vertex x="280.0" y="116.0"/>
+<vertex x="0" y="116.0"/>
 </polygon>
 </signal>
 </signals></board></drawing></eagle>
