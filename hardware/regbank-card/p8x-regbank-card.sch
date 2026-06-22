@@ -899,56 +899,56 @@
 <classes><class number="0" name="default" width="0" drill="0"/></classes>
 <parts>
 <part name="J1" library="p8x" deviceset="DIN96" device="" value="FABC96R"/>
-<part name="U1" library="p8x" deviceset="74169" device="" value="P0 L0"/>
-<part name="U2" library="p8x" deviceset="74169" device="" value="P0 L1"/>
-<part name="U3" library="p8x" deviceset="74169" device="" value="P0 H0"/>
-<part name="U4" library="p8x" deviceset="74169" device="" value="P0 H1"/>
-<part name="U5" library="p8x" deviceset="74169" device="" value="P1 L0"/>
-<part name="U6" library="p8x" deviceset="74169" device="" value="P1 L1"/>
-<part name="U7" library="p8x" deviceset="74169" device="" value="P1 H0"/>
-<part name="U8" library="p8x" deviceset="74169" device="" value="P1 H1"/>
-<part name="U9" library="p8x" deviceset="74169" device="" value="P2 L0"/>
-<part name="U10" library="p8x" deviceset="74169" device="" value="P2 L1"/>
-<part name="U11" library="p8x" deviceset="74169" device="" value="P2 H0"/>
-<part name="U12" library="p8x" deviceset="74169" device="" value="P2 H1"/>
-<part name="U13" library="p8x" deviceset="74169" device="" value="P3 L0"/>
-<part name="U14" library="p8x" deviceset="74169" device="" value="P3 L1"/>
-<part name="U15" library="p8x" deviceset="74169" device="" value="P3 H0"/>
-<part name="U16" library="p8x" deviceset="74169" device="" value="P3 H1"/>
-<part name="U17" library="p8x" deviceset="74244" device="" value="PTR SEL 0"/>
-<part name="U18" library="p8x" deviceset="74244" device="" value="PTR SEL 1"/>
-<part name="U19" library="p8x" deviceset="74244" device="" value="PTR SEL 2"/>
-<part name="U20" library="p8x" deviceset="74244" device="" value="PTR SEL 3"/>
-<part name="U21" library="p8x" deviceset="74244" device="" value="PTR SEL 4"/>
-<part name="U22" library="p8x" deviceset="74244" device="" value="PTR SEL 5"/>
-<part name="U23" library="p8x" deviceset="74244" device="" value="PTR SEL 6"/>
-<part name="U24" library="p8x" deviceset="74244" device="" value="PTR SEL 7"/>
-<part name="U25" library="p8x" deviceset="74244" device="" value="ADDR LO"/>
-<part name="U26" library="p8x" deviceset="74244" device="" value="ADDR HI"/>
-<part name="U27" library="p8x" deviceset="74257" device="" value="RDBK LO"/>
-<part name="U28" library="p8x" deviceset="74257" device="" value="RDBK HI"/>
-<part name="U29" library="p8x" deviceset="74244" device="" value="RDBK OUT"/>
-<part name="U30" library="p8x" deviceset="74138" device="" value="DLD DEC"/>
-<part name="U31" library="p8x" deviceset="74138" device="" value="DOE DEC"/>
-<part name="U32" library="p8x" deviceset="74139" device="" value="LOAD DEC"/>
-<part name="U33" library="p8x" deviceset="74138" device="" value="SEL DEC"/>
+<part name="U1" library="p8x" deviceset="74169" device="" value="74HCT169"/>
+<part name="U2" library="p8x" deviceset="74169" device="" value="74HCT169"/>
+<part name="U3" library="p8x" deviceset="74169" device="" value="74HCT169"/>
+<part name="U4" library="p8x" deviceset="74169" device="" value="74HCT169"/>
+<part name="U5" library="p8x" deviceset="74169" device="" value="74HCT169"/>
+<part name="U6" library="p8x" deviceset="74169" device="" value="74HCT169"/>
+<part name="U7" library="p8x" deviceset="74169" device="" value="74HCT169"/>
+<part name="U8" library="p8x" deviceset="74169" device="" value="74HCT169"/>
+<part name="U9" library="p8x" deviceset="74169" device="" value="74HCT169"/>
+<part name="U10" library="p8x" deviceset="74169" device="" value="74HCT169"/>
+<part name="U11" library="p8x" deviceset="74169" device="" value="74HCT169"/>
+<part name="U12" library="p8x" deviceset="74169" device="" value="74HCT169"/>
+<part name="U13" library="p8x" deviceset="74169" device="" value="74HCT169"/>
+<part name="U14" library="p8x" deviceset="74169" device="" value="74HCT169"/>
+<part name="U15" library="p8x" deviceset="74169" device="" value="74HCT169"/>
+<part name="U16" library="p8x" deviceset="74169" device="" value="74HCT169"/>
+<part name="U17" library="p8x" deviceset="74244" device="" value="74HCT244"/>
+<part name="U18" library="p8x" deviceset="74244" device="" value="74HCT244"/>
+<part name="U19" library="p8x" deviceset="74244" device="" value="74HCT244"/>
+<part name="U20" library="p8x" deviceset="74244" device="" value="74HCT244"/>
+<part name="U21" library="p8x" deviceset="74244" device="" value="74HCT244"/>
+<part name="U22" library="p8x" deviceset="74244" device="" value="74HCT244"/>
+<part name="U23" library="p8x" deviceset="74244" device="" value="74HCT244"/>
+<part name="U24" library="p8x" deviceset="74244" device="" value="74HCT244"/>
+<part name="U25" library="p8x" deviceset="74244" device="" value="74HCT244"/>
+<part name="U26" library="p8x" deviceset="74244" device="" value="74HCT244"/>
+<part name="U27" library="p8x" deviceset="74257" device="" value="74HCT257"/>
+<part name="U28" library="p8x" deviceset="74257" device="" value="74HCT257"/>
+<part name="U29" library="p8x" deviceset="74244" device="" value="74HCT244"/>
+<part name="U30" library="p8x" deviceset="74138" device="" value="74HCT138"/>
+<part name="U31" library="p8x" deviceset="74138" device="" value="74HCT138"/>
+<part name="U32" library="p8x" deviceset="74139" device="" value="74HCT139"/>
+<part name="U33" library="p8x" deviceset="74138" device="" value="74HCT138"/>
 <part name="U34" library="p8x" deviceset="7402" device="" value="74HCT02"/>
 <part name="U35" library="p8x" deviceset="HEX14" device="" value="74HCT14"/>
-<part name="U36" library="p8x" deviceset="74244" device="" value="ZERO P0"/>
+<part name="U36" library="p8x" deviceset="74244" device="" value="74HCT244"/>
 <part name="U37" library="p8x" deviceset="GATES14" device="" value="74HCT08"/>
 <part name="U38" library="p8x" deviceset="GATES14" device="" value="74HCT08"/>
-<part name="U39" library="p8x" deviceset="74139" device="" value="CNT DEC"/>
+<part name="U39" library="p8x" deviceset="74139" device="" value="74HCT139"/>
 <part name="U40" library="p8x" deviceset="GATES14" device="" value="74HCT32"/>
-<part name="U41" library="p8x" deviceset="74377V2" device="" value="PT LO"/>
-<part name="U42" library="p8x" deviceset="74377V2" device="" value="PT HI"/>
-<part name="U43" library="p8x" deviceset="74244" device="" value="PT SEL LO"/>
-<part name="U44" library="p8x" deviceset="74244" device="" value="PT SEL HI"/>
+<part name="U41" library="p8x" deviceset="74377V2" device="" value="74HCT377"/>
+<part name="U42" library="p8x" deviceset="74377V2" device="" value="74HCT377"/>
+<part name="U43" library="p8x" deviceset="74244" device="" value="74HCT244"/>
+<part name="U44" library="p8x" deviceset="74244" device="" value="74HCT244"/>
 <part name="RP1" library="p8x" deviceset="RES" device="" value="1K"/>
-<part name="LED3" library="p8x" deviceset="LED" device="" value="PWR-GRN"/>
+<part name="LED3" library="p8x" deviceset="LED" device="" value="GRN"/>
 <part name="R4" library="p8x" deviceset="RES" device="" value="1K"/>
-<part name="LED4" library="p8x" deviceset="LED" device="" value="RD-GRN"/>
+<part name="LED4" library="p8x" deviceset="LED" device="" value="GRN"/>
 <part name="R5" library="p8x" deviceset="RES" device="" value="1K"/>
-<part name="LED5" library="p8x" deviceset="LED" device="" value="LD-YEL"/>
+<part name="LED5" library="p8x" deviceset="LED" device="" value="YEL"/>
 <part name="CD1" library="p8x" deviceset="CAP" device="" value="100N"/>
 <part name="CD2" library="p8x" deviceset="CAP" device="" value="100N"/>
 <part name="CD3" library="p8x" deviceset="CAP" device="" value="100N"/>
@@ -995,6 +995,90 @@
 <part name="CD44" library="p8x" deviceset="CAP" device="" value="100N"/>
 </parts><sheets><sheet><plain>
 <text x="0" y="40" size="3.81" layer="97">P8X REGISTER BANK CARD REV B (P0=PC P3=SP, PT scratch)</text>
+<text x="127.30" y="47.64" size="1.778" layer="97">P0 L0</text>
+<text x="127.30" y="44.64" size="2.032" layer="96">74HCT169</text>
+<text x="228.90" y="47.64" size="1.778" layer="97">P0 L1</text>
+<text x="228.90" y="44.64" size="2.032" layer="96">74HCT169</text>
+<text x="330.50" y="47.64" size="1.778" layer="97">P0 H0</text>
+<text x="330.50" y="44.64" size="2.032" layer="96">74HCT169</text>
+<text x="432.10" y="47.64" size="1.778" layer="97">P0 H1</text>
+<text x="432.10" y="44.64" size="2.032" layer="96">74HCT169</text>
+<text x="127.30" y="-92.06" size="1.778" layer="97">P1 L0</text>
+<text x="127.30" y="-95.06" size="2.032" layer="96">74HCT169</text>
+<text x="228.90" y="-92.06" size="1.778" layer="97">P1 L1</text>
+<text x="228.90" y="-95.06" size="2.032" layer="96">74HCT169</text>
+<text x="330.50" y="-92.06" size="1.778" layer="97">P1 H0</text>
+<text x="330.50" y="-95.06" size="2.032" layer="96">74HCT169</text>
+<text x="432.10" y="-92.06" size="1.778" layer="97">P1 H1</text>
+<text x="432.10" y="-95.06" size="2.032" layer="96">74HCT169</text>
+<text x="127.30" y="-231.76" size="1.778" layer="97">P2 L0</text>
+<text x="127.30" y="-234.76" size="2.032" layer="96">74HCT169</text>
+<text x="228.90" y="-231.76" size="1.778" layer="97">P2 L1</text>
+<text x="228.90" y="-234.76" size="2.032" layer="96">74HCT169</text>
+<text x="330.50" y="-231.76" size="1.778" layer="97">P2 H0</text>
+<text x="330.50" y="-234.76" size="2.032" layer="96">74HCT169</text>
+<text x="432.10" y="-231.76" size="1.778" layer="97">P2 H1</text>
+<text x="432.10" y="-234.76" size="2.032" layer="96">74HCT169</text>
+<text x="127.30" y="-371.46" size="1.778" layer="97">P3 L0</text>
+<text x="127.30" y="-374.46" size="2.032" layer="96">74HCT169</text>
+<text x="228.90" y="-371.46" size="1.778" layer="97">P3 L1</text>
+<text x="228.90" y="-374.46" size="2.032" layer="96">74HCT169</text>
+<text x="330.50" y="-371.46" size="1.778" layer="97">P3 H0</text>
+<text x="330.50" y="-374.46" size="2.032" layer="96">74HCT169</text>
+<text x="432.10" y="-371.46" size="1.778" layer="97">P3 H1</text>
+<text x="432.10" y="-374.46" size="2.032" layer="96">74HCT169</text>
+<text x="127.30" y="-511.16" size="1.778" layer="97">PTR SEL 0</text>
+<text x="127.30" y="-514.16" size="2.032" layer="96">74HCT244</text>
+<text x="228.90" y="-511.16" size="1.778" layer="97">PTR SEL 1</text>
+<text x="228.90" y="-514.16" size="2.032" layer="96">74HCT244</text>
+<text x="330.50" y="-511.16" size="1.778" layer="97">PTR SEL 2</text>
+<text x="330.50" y="-514.16" size="2.032" layer="96">74HCT244</text>
+<text x="432.10" y="-511.16" size="1.778" layer="97">PTR SEL 3</text>
+<text x="432.10" y="-514.16" size="2.032" layer="96">74HCT244</text>
+<text x="127.30" y="-650.86" size="1.778" layer="97">PTR SEL 4</text>
+<text x="127.30" y="-653.86" size="2.032" layer="96">74HCT244</text>
+<text x="228.90" y="-650.86" size="1.778" layer="97">PTR SEL 5</text>
+<text x="228.90" y="-653.86" size="2.032" layer="96">74HCT244</text>
+<text x="330.50" y="-650.86" size="1.778" layer="97">PTR SEL 6</text>
+<text x="330.50" y="-653.86" size="2.032" layer="96">74HCT244</text>
+<text x="432.10" y="-650.86" size="1.778" layer="97">PTR SEL 7</text>
+<text x="432.10" y="-653.86" size="2.032" layer="96">74HCT244</text>
+<text x="127.30" y="-790.56" size="1.778" layer="97">ADDR LO</text>
+<text x="127.30" y="-793.56" size="2.032" layer="96">74HCT244</text>
+<text x="228.90" y="-790.56" size="1.778" layer="97">ADDR HI</text>
+<text x="228.90" y="-793.56" size="2.032" layer="96">74HCT244</text>
+<text x="330.50" y="-790.56" size="1.778" layer="97">RDBK LO</text>
+<text x="330.50" y="-793.56" size="2.032" layer="96">74HCT257</text>
+<text x="432.10" y="-790.56" size="1.778" layer="97">RDBK HI</text>
+<text x="432.10" y="-793.56" size="2.032" layer="96">74HCT257</text>
+<text x="127.30" y="-930.26" size="1.778" layer="97">RDBK OUT</text>
+<text x="127.30" y="-933.26" size="2.032" layer="96">74HCT244</text>
+<text x="228.90" y="-930.26" size="1.778" layer="97">DLD DEC</text>
+<text x="228.90" y="-933.26" size="2.032" layer="96">74HCT138</text>
+<text x="330.50" y="-930.26" size="1.778" layer="97">DOE DEC</text>
+<text x="330.50" y="-933.26" size="2.032" layer="96">74HCT138</text>
+<text x="432.10" y="-930.26" size="1.778" layer="97">LOAD DEC</text>
+<text x="432.10" y="-933.26" size="2.032" layer="96">74HCT139</text>
+<text x="127.30" y="-1069.96" size="1.778" layer="97">SEL DEC</text>
+<text x="127.30" y="-1072.96" size="2.032" layer="96">74HCT138</text>
+<text x="432.10" y="-1069.96" size="1.778" layer="97">ZERO P0</text>
+<text x="432.10" y="-1072.96" size="2.032" layer="96">74HCT244</text>
+<text x="330.50" y="-1209.66" size="1.778" layer="97">CNT DEC</text>
+<text x="330.50" y="-1212.66" size="2.032" layer="96">74HCT139</text>
+<text x="127.30" y="-1349.36" size="1.778" layer="97">PT LO</text>
+<text x="127.30" y="-1352.36" size="2.032" layer="96">74HCT377</text>
+<text x="228.90" y="-1349.36" size="1.778" layer="97">PT HI</text>
+<text x="228.90" y="-1352.36" size="2.032" layer="96">74HCT377</text>
+<text x="330.50" y="-1349.36" size="1.778" layer="97">PT SEL LO</text>
+<text x="330.50" y="-1352.36" size="2.032" layer="96">74HCT244</text>
+<text x="432.10" y="-1349.36" size="1.778" layer="97">PT SEL HI</text>
+<text x="432.10" y="-1352.36" size="2.032" layer="96">74HCT244</text>
+<text x="228.90" y="-1489.06" size="1.778" layer="97">PWR</text>
+<text x="228.90" y="-1492.06" size="2.032" layer="96">GRN</text>
+<text x="432.10" y="-1489.06" size="1.778" layer="97">RD</text>
+<text x="432.10" y="-1492.06" size="2.032" layer="96">GRN</text>
+<text x="228.90" y="-1628.76" size="1.778" layer="97">LD</text>
+<text x="228.90" y="-1631.76" size="2.032" layer="96">YEL</text>
 </plain><instances>
 <instance part="J1" gate="G$1" x="0" y="38.1"/>
 <instance part="U1" gate="G$1" x="140.0" y="38.1"/>

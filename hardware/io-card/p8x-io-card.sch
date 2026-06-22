@@ -1215,45 +1215,45 @@
 <classes><class number="0" name="default" width="0" drill="0"/></classes>
 <parts>
 <part name="J1" library="p8x" deviceset="DIN96" device="" value="FABC96R"/>
-<part name="U1" library="p8x" deviceset="7430" device="" value="IO PAGE"/>
-<part name="U2" library="p8x" deviceset="74138" device="" value="PORT DEC"/>
-<part name="U3" library="p8x" deviceset="74138" device="" value="DOE DEC"/>
-<part name="U4" library="p8x" deviceset="74138" device="" value="DLD DEC"/>
+<part name="U1" library="p8x" deviceset="7430" device="" value="74HCT30"/>
+<part name="U2" library="p8x" deviceset="74138" device="" value="74HCT138"/>
+<part name="U3" library="p8x" deviceset="74138" device="" value="74HCT138"/>
+<part name="U4" library="p8x" deviceset="74138" device="" value="74HCT138"/>
 <part name="U5" library="p8x" deviceset="GATES14" device="" value="74HCT32"/>
 <part name="U6" library="p8x" deviceset="GATES14" device="" value="74HCT08"/>
-<part name="U7" library="p8x" deviceset="74161" device="" value="BAUD DIV"/>
-<part name="U8" library="p8x" deviceset="MAX232" device="" value="RS232"/>
-<part name="U9" library="p8x" deviceset="74244" device="" value="SW IN"/>
-<part name="U10" library="p8x" deviceset="74374" device="" value="LED PORT"/>
-<part name="U11" library="p8x" deviceset="74244" device="" value="MON A-LO"/>
-<part name="U12" library="p8x" deviceset="74244" device="" value="MON A-HI"/>
-<part name="U13" library="p8x" deviceset="74244" device="" value="MON D"/>
-<part name="U14" library="p8x" deviceset="6850" device="" value="ACIA"/>
+<part name="U7" library="p8x" deviceset="74161" device="" value="74HCT161"/>
+<part name="U8" library="p8x" deviceset="MAX232" device="" value="MAX232"/>
+<part name="U9" library="p8x" deviceset="74244" device="" value="74HCT244"/>
+<part name="U10" library="p8x" deviceset="74374" device="" value="74HCT374"/>
+<part name="U11" library="p8x" deviceset="74244" device="" value="74HCT244"/>
+<part name="U12" library="p8x" deviceset="74244" device="" value="74HCT244"/>
+<part name="U13" library="p8x" deviceset="74244" device="" value="74HCT244"/>
+<part name="U14" library="p8x" deviceset="6850" device="" value="6850"/>
 <part name="U15" library="p8x" deviceset="GATES14" device="" value="74HCT00"/>
-<part name="U16" library="p8x" deviceset="DS1302" device="" value="RTC DNP"/>
+<part name="U16" library="p8x" deviceset="DS1302" device="" value="DS1302"/>
 <part name="X2" library="p8x" deviceset="OSC" device="" value="2.4576MHZ"/>
 <part name="SW1" library="p8x" deviceset="DIP8SW" device="" value="INPUT"/>
 <part name="RNP" library="p8x" deviceset="SIP9" device="" value="8X10K"/>
 <part name="RL1" library="p8x" deviceset="RNISO8" device="" value="8X330R"/>
-<part name="LA1" library="p8x" deviceset="LEDARR8" device="" value="PORT LEDS"/>
+<part name="LA1" library="p8x" deviceset="LEDARR8" device="" value="8-LED BAR"/>
 <part name="RM1" library="p8x" deviceset="RNISO8" device="" value="8X330R"/>
 <part name="LM1" library="p8x" deviceset="LEDARR8" device="" value="A0-7"/>
 <part name="RM2" library="p8x" deviceset="RNISO8" device="" value="8X330R"/>
 <part name="LM2" library="p8x" deviceset="LEDARR8" device="" value="A8-15"/>
 <part name="RM3" library="p8x" deviceset="RNISO8" device="" value="8X330R"/>
 <part name="LM3" library="p8x" deviceset="LEDARR8" device="" value="D0-7"/>
-<part name="J2" library="p8x" deviceset="HDR3" device="" value="SERIAL"/>
+<part name="J2" library="p8x" deviceset="HDR3" device="" value="1x3"/>
 <part name="C2" library="p8x" deviceset="CAP" device="" value="1U"/>
 <part name="C3" library="p8x" deviceset="CAP" device="" value="1U"/>
 <part name="C4" library="p8x" deviceset="CAP" device="" value="1U"/>
 <part name="C5" library="p8x" deviceset="CAP" device="" value="1U"/>
 <part name="RP1" library="p8x" deviceset="RES" device="" value="1K"/>
-<part name="LED3" library="p8x" deviceset="LED" device="" value="PWR-GRN"/>
+<part name="LED3" library="p8x" deviceset="LED" device="" value="GRN"/>
 <part name="R4" library="p8x" deviceset="RES" device="" value="1K"/>
-<part name="LED4" library="p8x" deviceset="LED" device="" value="IOSEL-YEL"/>
+<part name="LED4" library="p8x" deviceset="LED" device="" value="YEL"/>
 <part name="X3" library="p8x" deviceset="XTAL32" device="" value="32.768KHZ"/>
 <part name="BT1" library="p8x" deviceset="COIN" device="" value="CR2032"/>
-<part name="J3" library="p8x" deviceset="HDR3" device="" value="RTC 3-WIRE"/>
+<part name="J3" library="p8x" deviceset="HDR3" device="" value="1x3"/>
 <part name="CD1" library="p8x" deviceset="CAP" device="" value="100N"/>
 <part name="CD2" library="p8x" deviceset="CAP" device="" value="100N"/>
 <part name="CD3" library="p8x" deviceset="CAP" device="" value="100N"/>
@@ -1272,6 +1272,40 @@
 <part name="CD16" library="p8x" deviceset="CAP" device="" value="100N"/>
 </parts><sheets><sheet><plain>
 <text x="0" y="40" size="3.81" layer="97">P8X I/O CARD REV A - ACIA + SWITCHES + LEDS + BUS MONITOR</text>
+<text x="127.30" y="47.64" size="1.778" layer="97">IO PAGE</text>
+<text x="127.30" y="44.64" size="2.032" layer="96">74HCT30</text>
+<text x="228.90" y="47.64" size="1.778" layer="97">PORT DEC</text>
+<text x="228.90" y="44.64" size="2.032" layer="96">74HCT138</text>
+<text x="330.50" y="47.64" size="1.778" layer="97">DOE DEC</text>
+<text x="330.50" y="44.64" size="2.032" layer="96">74HCT138</text>
+<text x="432.10" y="47.64" size="1.778" layer="97">DLD DEC</text>
+<text x="432.10" y="44.64" size="2.032" layer="96">74HCT138</text>
+<text x="330.50" y="-92.06" size="1.778" layer="97">BAUD DIV</text>
+<text x="330.50" y="-95.06" size="2.032" layer="96">74HCT161</text>
+<text x="432.10" y="-92.06" size="1.778" layer="97">RS232</text>
+<text x="432.10" y="-95.06" size="2.032" layer="96">MAX232</text>
+<text x="127.30" y="-231.76" size="1.778" layer="97">SW IN</text>
+<text x="127.30" y="-234.76" size="2.032" layer="96">74HCT244</text>
+<text x="228.90" y="-231.76" size="1.778" layer="97">LED PORT</text>
+<text x="228.90" y="-234.76" size="2.032" layer="96">74HCT374</text>
+<text x="330.50" y="-231.76" size="1.778" layer="97">MON A-LO</text>
+<text x="330.50" y="-234.76" size="2.032" layer="96">74HCT244</text>
+<text x="432.10" y="-231.76" size="1.778" layer="97">MON A-HI</text>
+<text x="432.10" y="-234.76" size="2.032" layer="96">74HCT244</text>
+<text x="127.30" y="-371.46" size="1.778" layer="97">MON D</text>
+<text x="127.30" y="-374.46" size="2.032" layer="96">74HCT244</text>
+<text x="228.90" y="-371.46" size="1.778" layer="97">ACIA</text>
+<text x="228.90" y="-374.46" size="2.032" layer="96">6850</text>
+<text x="432.10" y="-371.46" size="1.778" layer="97">RTC DNP</text>
+<text x="432.10" y="-374.46" size="2.032" layer="96">DS1302</text>
+<text x="432.10" y="-790.56" size="1.778" layer="97">SERIAL</text>
+<text x="432.10" y="-793.56" size="2.032" layer="96">1x3</text>
+<text x="228.90" y="-1069.96" size="1.778" layer="97">PWR</text>
+<text x="228.90" y="-1072.96" size="2.032" layer="96">GRN</text>
+<text x="432.10" y="-1069.96" size="1.778" layer="97">IOSEL</text>
+<text x="432.10" y="-1072.96" size="2.032" layer="96">YEL</text>
+<text x="330.50" y="-1209.66" size="1.778" layer="97">RTC 3-WIRE</text>
+<text x="330.50" y="-1212.66" size="2.032" layer="96">1x3</text>
 </plain><instances>
 <instance part="J1" gate="G$1" x="0" y="38.1"/>
 <instance part="U1" gate="G$1" x="140.0" y="38.1"/>

@@ -1081,42 +1081,42 @@
 <classes><class number="0" name="default" width="0" drill="0"/></classes>
 <parts>
 <part name="J1" library="p8x" deviceset="DIN96" device="" value="FABC96R"/>
-<part name="U1" library="p8x" deviceset="74161" device="" value="CLK DIV"/>
+<part name="U1" library="p8x" deviceset="74161" device="" value="74HCT161"/>
 <part name="U2" library="p8x" deviceset="HEX14" device="" value="74HCT14"/>
 <part name="U3" library="p8x" deviceset="7474" device="" value="74HCT74"/>
 <part name="U4" library="p8x" deviceset="GATES14" device="" value="74HCT00"/>
 <part name="U5" library="p8x" deviceset="GATES14" device="" value="74HCT08"/>
 <part name="U6" library="p8x" deviceset="GATES14" device="" value="74HCT32"/>
-<part name="U7" library="p8x" deviceset="74377V2" device="" value="IR 74HCT377"/>
-<part name="U8" library="p8x" deviceset="74138" device="" value="DLD DEC"/>
-<part name="U9" library="p8x" deviceset="74151" device="" value="COND MUX"/>
-<part name="U10" library="p8x" deviceset="28C64" device="" value="UCODE ROM0"/>
-<part name="U11" library="p8x" deviceset="28C64" device="" value="UCODE ROM1"/>
-<part name="U12" library="p8x" deviceset="28C64" device="" value="UCODE ROM2"/>
-<part name="U13" library="p8x" deviceset="28C64" device="" value="UCODE ROM3"/>
-<part name="U14" library="p8x" deviceset="74374" device="" value="PIPE0"/>
-<part name="U15" library="p8x" deviceset="74374" device="" value="PIPE1"/>
-<part name="U16" library="p8x" deviceset="74374" device="" value="PIPE2"/>
-<part name="U17" library="p8x" deviceset="74374" device="" value="PIPE3"/>
-<part name="U18" library="p8x" deviceset="74161" device="" value="STEP CNT"/>
-<part name="U19" library="p8x" deviceset="GATES14" device="" value="74HCT86 NV-XOR"/>
-<part name="U20" library="p8x" deviceset="74244" device="" value="IRQ-FORCE DNP"/>
-<part name="U21" library="p8x" deviceset="7474" device="" value="IRQ/IE FF DNP"/>
+<part name="U7" library="p8x" deviceset="74377V2" device="" value="74HCT377"/>
+<part name="U8" library="p8x" deviceset="74138" device="" value="74HCT138"/>
+<part name="U9" library="p8x" deviceset="74151" device="" value="74HCT151"/>
+<part name="U10" library="p8x" deviceset="28C64" device="" value="28C64"/>
+<part name="U11" library="p8x" deviceset="28C64" device="" value="28C64"/>
+<part name="U12" library="p8x" deviceset="28C64" device="" value="28C64"/>
+<part name="U13" library="p8x" deviceset="28C64" device="" value="28C64"/>
+<part name="U14" library="p8x" deviceset="74374" device="" value="74HCT374"/>
+<part name="U15" library="p8x" deviceset="74374" device="" value="74HCT374"/>
+<part name="U16" library="p8x" deviceset="74374" device="" value="74HCT374"/>
+<part name="U17" library="p8x" deviceset="74374" device="" value="74HCT374"/>
+<part name="U18" library="p8x" deviceset="74161" device="" value="74HCT161"/>
+<part name="U19" library="p8x" deviceset="GATES14" device="" value="74HCT86"/>
+<part name="U20" library="p8x" deviceset="74244" device="" value="74HCT244"/>
+<part name="U21" library="p8x" deviceset="7474" device="" value="74HCT74"/>
 <part name="X1" library="p8x" deviceset="OSC" device="" value="4MHZ"/>
-<part name="JP1" library="p8x" deviceset="HDR4" device="" value="CLKSEL"/>
-<part name="SWR" library="p8x" deviceset="SW2" device="" value="RUN/HALT"/>
-<part name="SWS" library="p8x" deviceset="SW2" device="" value="STEP"/>
-<part name="SWT" library="p8x" deviceset="SW2" device="" value="RESET"/>
+<part name="JP1" library="p8x" deviceset="HDR4" device="" value="1x4"/>
+<part name="SWR" library="p8x" deviceset="SW2" device="" value="SPST"/>
+<part name="SWS" library="p8x" deviceset="SW2" device="" value="SPST"/>
+<part name="SWT" library="p8x" deviceset="SW2" device="" value="SPST"/>
 <part name="R1" library="p8x" deviceset="RES" device="" value="10K"/>
 <part name="R2" library="p8x" deviceset="RES" device="" value="10K"/>
 <part name="R3" library="p8x" deviceset="RES" device="" value="10K"/>
 <part name="C1" library="p8x" deviceset="CAP" device="" value="1U"/>
 <part name="RP1" library="p8x" deviceset="RES" device="" value="1K"/>
-<part name="LED3" library="p8x" deviceset="LED" device="" value="PWR-GRN"/>
+<part name="LED3" library="p8x" deviceset="LED" device="" value="GRN"/>
 <part name="R4" library="p8x" deviceset="RES" device="" value="1K"/>
-<part name="LED4" library="p8x" deviceset="LED" device="" value="RUN-GRN"/>
+<part name="LED4" library="p8x" deviceset="LED" device="" value="GRN"/>
 <part name="R5" library="p8x" deviceset="RES" device="" value="1K"/>
-<part name="LED5" library="p8x" deviceset="LED" device="" value="HALT-RED"/>
+<part name="LED5" library="p8x" deviceset="LED" device="" value="RED"/>
 <part name="CD1" library="p8x" deviceset="CAP" device="" value="100N"/>
 <part name="CD2" library="p8x" deviceset="CAP" device="" value="100N"/>
 <part name="CD3" library="p8x" deviceset="CAP" device="" value="100N"/>
@@ -1140,6 +1140,52 @@
 <part name="CD21" library="p8x" deviceset="CAP" device="" value="100N"/>
 </parts><sheets><sheet><plain>
 <text x="0" y="40" size="3.81" layer="97">P8X CONTROL/MICROCODE CARD REV B</text>
+<text x="330.50" y="-511.16" size="1.778" layer="97">N^V XOR</text>
+<text x="330.50" y="-514.16" size="2.032" layer="96">74HCT86</text>
+<text x="127.30" y="47.64" size="1.778" layer="97">CLK DIV</text>
+<text x="127.30" y="44.64" size="2.032" layer="96">74HCT161</text>
+<text x="330.50" y="-92.06" size="1.778" layer="97">INSTR REG</text>
+<text x="330.50" y="-95.06" size="2.032" layer="96">74HCT377</text>
+<text x="432.10" y="-92.06" size="1.778" layer="97">DLD DEC</text>
+<text x="432.10" y="-95.06" size="2.032" layer="96">74HCT138</text>
+<text x="127.30" y="-231.76" size="1.778" layer="97">COND MUX</text>
+<text x="127.30" y="-234.76" size="2.032" layer="96">74HCT151</text>
+<text x="228.90" y="-231.76" size="1.778" layer="97">UCODE ROM0</text>
+<text x="228.90" y="-234.76" size="2.032" layer="96">28C64</text>
+<text x="330.50" y="-231.76" size="1.778" layer="97">UCODE ROM1</text>
+<text x="330.50" y="-234.76" size="2.032" layer="96">28C64</text>
+<text x="432.10" y="-231.76" size="1.778" layer="97">UCODE ROM2</text>
+<text x="432.10" y="-234.76" size="2.032" layer="96">28C64</text>
+<text x="127.30" y="-371.46" size="1.778" layer="97">UCODE ROM3</text>
+<text x="127.30" y="-374.46" size="2.032" layer="96">28C64</text>
+<text x="228.90" y="-371.46" size="1.778" layer="97">PIPE0</text>
+<text x="228.90" y="-374.46" size="2.032" layer="96">74HCT374</text>
+<text x="330.50" y="-371.46" size="1.778" layer="97">PIPE1</text>
+<text x="330.50" y="-374.46" size="2.032" layer="96">74HCT374</text>
+<text x="432.10" y="-371.46" size="1.778" layer="97">PIPE2</text>
+<text x="432.10" y="-374.46" size="2.032" layer="96">74HCT374</text>
+<text x="127.30" y="-511.16" size="1.778" layer="97">PIPE3</text>
+<text x="127.30" y="-514.16" size="2.032" layer="96">74HCT374</text>
+<text x="228.90" y="-511.16" size="1.778" layer="97">STEP CNT</text>
+<text x="228.90" y="-514.16" size="2.032" layer="96">74HCT161</text>
+<text x="432.10" y="-511.16" size="1.778" layer="97">IRQ-FORCE DNP</text>
+<text x="432.10" y="-514.16" size="2.032" layer="96">74HCT244</text>
+<text x="127.30" y="-650.86" size="1.778" layer="97">IRQ/IE FF DNP</text>
+<text x="127.30" y="-653.86" size="2.032" layer="96">74HCT74</text>
+<text x="330.50" y="-650.86" size="1.778" layer="97">CLKSEL</text>
+<text x="330.50" y="-653.86" size="2.032" layer="96">1x4</text>
+<text x="432.10" y="-650.86" size="1.778" layer="97">RUN/HALT</text>
+<text x="432.10" y="-653.86" size="2.032" layer="96">SPST</text>
+<text x="127.30" y="-790.56" size="1.778" layer="97">STEP</text>
+<text x="127.30" y="-793.56" size="2.032" layer="96">SPST</text>
+<text x="228.90" y="-790.56" size="1.778" layer="97">RESET</text>
+<text x="228.90" y="-793.56" size="2.032" layer="96">SPST</text>
+<text x="432.10" y="-930.26" size="1.778" layer="97">PWR</text>
+<text x="432.10" y="-933.26" size="2.032" layer="96">GRN</text>
+<text x="228.90" y="-1069.96" size="1.778" layer="97">RUN</text>
+<text x="228.90" y="-1072.96" size="2.032" layer="96">GRN</text>
+<text x="432.10" y="-1069.96" size="1.778" layer="97">HALT</text>
+<text x="432.10" y="-1072.96" size="2.032" layer="96">RED</text>
 </plain><instances>
 <instance part="J1" gate="G$1" x="0" y="38.1"/>
 <instance part="U1" gate="G$1" x="140.0" y="38.1"/>

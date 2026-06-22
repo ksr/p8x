@@ -448,6 +448,17 @@ def validate(fn,parts,nets):
 # ===================== CARD BUILDER ============================================
 CARDS={}  # name -> (title, parts, nets) — used by render_traditional_auto.py
 
+# device -> orderable generic part number (the Eagle `value`). For these
+# deterministic devices card() sets the value automatically and turns the part's
+# original tuple text into its function label. Devices NOT listed (gate arrays,
+# memory size variants, oscillators, passives, connectors) keep their tuple value.
+PN={"74161":"74HCT161","74169":"74HCT169","74374":"74HCT374","74377V2":"74HCT377",
+ "74151":"74HCT151","74139":"74HCT139","74138":"74HCT138","74157":"74HCT157",
+ "74257":"74HCT257","74244":"74HCT244","74245":"74HCT245","7402":"74HCT02",
+ "7410":"74HCT10","7430":"74HCT30","7474":"74HCT74","74181":"74HCT181",
+ "74182":"74HCT182","74260":"74HCT260","28C64":"28C64","6850":"6850",
+ "MAX232":"MAX232","DS1302":"DS1302"}
+
 def fp_box(pkg):
     """Footprint bounding box from the pad geometry: (w,h,ox,oy) where ox,oy is
     the bbox bottom-left relative to the part origin (pad dia included)."""
@@ -485,6 +496,21 @@ def card(name,title,parts_ic,parts_small,nets,used_bus,labels=None,
                 nets.setdefault(rail,[]).append((ref,rail))   # skip if already wired by hand
     parts={"J1":("DIN96C","FABC96R")}
     parts.update(parts_ic); parts.update(parts_small); parts.update(decap)
+    # Resolve the value field to the orderable part number (PN map wins for the
+    # deterministic devices), and turn the original per-part text into a function
+    # label for those; an explicit `labels` entry always overrides.
+    lab=dict(labels or {})
+    for ref,(dev,raw) in list(parts.items()):
+        if dev in PN:                                  # deterministic logic/memory
+            val,fn = PN[dev], (raw if raw and raw!=PN[dev] else None)
+        elif dev=="LED" and "-" in raw:                # "FUNC-COLOR" -> value=color, label=FUNC
+            fn,val = raw.rsplit("-",1)
+        elif dev=="HDR3": val,fn = "1x3", (raw if raw not in ("1x3","") else None)
+        elif dev=="HDR4": val,fn = "1x4", (raw if raw not in ("1x4","") else None)
+        elif dev=="SW2":  val,fn = "SPST", (raw or None)
+        else:             val,fn = raw, None           # gates/passives/connectors keep their value
+        parts[ref]=(dev,val)
+        if fn and ref not in lab: lab[ref]=fn          # explicit labels always win
     sch={}; order=[r for r in parts if r!="J1"]
     sch["J1"]=("DIN96",parts["J1"][1],0,38.10)
     for i,ref in enumerate(order):
@@ -504,10 +530,10 @@ def card(name,title,parts_ic,parts_small,nets,used_bus,labels=None,
     brd["J1"]=(j1dev,parts["J1"][1],EDGE-j1ox,BH-EDGE-j1h-j1oy)
     flow=[]                                   # (ref,dev,val,pkg) in placement order
     for i,ref in enumerate(icrefs):           # each IC immediately followed by its cap
-        dev,val=parts_ic[ref]; flow.append((ref,dev,val,DEV[dev]["pkg"]))
+        dev,val=parts[ref]; flow.append((ref,dev,val,DEV[dev]["pkg"]))
         flow.append(("CD%d"%(i+1),"CAP","100N",DEV["CAP"]["pkg"]))
     for ref in parts_small:
-        dev,val=parts_small[ref]; flow.append((ref,dev,val,DEV[dev]["pkg"]))
+        dev,val=parts[ref]; flow.append((ref,dev,val,DEV[dev]["pkg"]))
     x0=EDGE+j1w+GAP*2; cx=x0; cyt=BH-EDGE; rowh=0.0
     for ref,dev,val,pkg in flow:
         w,h,ox,oy=fp_box(pkg)
@@ -518,11 +544,11 @@ def card(name,title,parts_ic,parts_small,nets,used_bus,labels=None,
     # include J1 so CARDS is the full board (the BOM counts it; the schematic
     # renderer filters J1 by name). Without it the card edge connectors were
     # missing from the BOM.
-    allp={"J1":parts["J1"]}; allp.update(parts_ic); allp.update(parts_small); allp.update(decap)
+    allp=dict(parts)   # resolved values (part numbers) for the BOM / renderer
     CARDS[name]=(title,allp,nets)
     base="%s/p8x-%s"%(name,name)   # each board in its own subdirectory
     if EMIT:
-        write_sch(base+".sch",title,sch,nets,labels)
+        write_sch(base+".sch",title,sch,nets,lab)
         validate(base+".sch",sch,nets)
         write_brd(base+".brd",title,brd,nets,{},{"GND":[(2,)],"VCC":[(15,)]},160,100,
                   outline_only=brd_outline_only,unplaced=brd_unplaced)
@@ -535,12 +561,12 @@ def N(nets,n,*p): nets.setdefault(n,[]).extend(p)
 n={}
 ic={"U1":("74161","CLK DIV"),"U2":("HEX14","74HCT14"),"U3":("7474","74HCT74"),
  "U4":("GATES14","74HCT00"),"U5":("GATES14","74HCT08"),"U6":("GATES14","74HCT32"),
- "U7":("74377V2","IR 74HCT377"),"U8":("74138","DLD DEC"),"U9":("74151","COND MUX"),
+ "U7":("74377V2","INSTR REG"),"U8":("74138","DLD DEC"),"U9":("74151","COND MUX"),
  "U10":("28C64","UCODE ROM0"),"U11":("28C64","UCODE ROM1"),
  "U12":("28C64","UCODE ROM2"),"U13":("28C64","UCODE ROM3"),
  "U14":("74374","PIPE0"),"U15":("74374","PIPE1"),"U16":("74374","PIPE2"),
  "U17":("74374","PIPE3"),"U18":("74161","STEP CNT"),
- "U19":("GATES14","74HCT86 NV-XOR"),   # rev C: N^V for signed-compare cond mux
+ "U19":("GATES14","74HCT86"),   # rev C: N^V for signed-compare cond mux
  # rev C: interrupt-controller footprints, provisioned DNP (Do Not Populate).
  # Pads + the IRQ bus line exist so the controller can be built post-fab WITHOUT
  # a respin, but the bus-critical bits (the forcing-buffer OUTPUTS onto the data
@@ -637,7 +663,8 @@ N(n,"LEDRN",("R4","2"),("LED4","A")); N(n,"LEDHL",("R5","2"),("LED5","A"))
 card("control-card","P8X CONTROL/MICROCODE CARD REV B",ic,sm,n,
  {"D%d"%i for i in range(8)}|{"DOE%d"%i for i in range(4)}|{"DLD%d"%i for i in range(4)}|
  {"PSEL0","PSEL1","PSEL2","PINC","PDEC","ALUS0","ALUS1","ALUS2","ALUS3","ALUM","CIN","SH0","SH1",
-  "LDF","CLK","CLKB","-RES","FC","FZ","FN","FV","LDZN","SHCIN","SETC","CLRC","BSEL","IRQ"})
+  "LDF","CLK","CLKB","-RES","FC","FZ","FN","FV","LDZN","SHCIN","SETC","CLRC","BSEL","IRQ"},
+ labels={"U19":"N^V XOR"})
 
 # ===================== REGISTER BANK CARD =====================================
 n={}; ic={}
@@ -769,12 +796,12 @@ ic={"U1":("74377V2","A REG"),"U2":("74244","A OUT"),"U3":("74377V2","B REG"),
  # rev B flag-register redesign (split C; LDZN Z/N; SETC/CLRC; carry-coupled shifter)
  "U26":("7474","C FLAG FF"),"U27":("74260","BUS Z-DET"),
  "U28":("74157","SHIFT-OUT MUX"),"U29":("74157","C-SRC MUX"),
- "U30":("74157","SHIN MUX"),"U31":("GATES14","74HCT08 CLK/FORCE"),
+ "U30":("74157","SHIN MUX"),"U31":("GATES14","74HCT08"),
  # rev C: 2nd ALU-input mux. B-side operand = B register (BSEL=0) or T (BSEL=1).
  "U32":("74157","B-MUX LO"),"U33":("74157","B-MUX HI"),
  # rev C: V (signed overflow) derivation — sign-bit method, ungated by M
  # (valid after ADD/SUB/CMP). U34 XORs, U35 ANDs.
- "U34":("GATES14","74HCT86 V-XOR"),"U35":("GATES14","74HCT08 V-AND")}
+ "U34":("GATES14","74HCT86"),"U35":("GATES14","74HCT08")}
 sm={"RP1":("RES","1K"),"LED3":("LED","PWR-GRN"),
  "R4":("RES","1K"),"LED4":("LED","ALU-GRN"),"R5":("RES","1K"),"LED5":("LED","LDF-YEL")}
 REGS=(("U1","U2","A","Y1"),("U3","U4","B","Y2"),("U5","U6","T","Y3"),("U7","U8","T2","Y4"))
@@ -895,7 +922,8 @@ N(n,"LEDAL",("R4","2"),("LED4","A")); N(n,"LEDLF",("R5","2"),("LED5","A"))
 card("alu-card","P8X ALU CARD REV B (conventional carry, LDZN, SETC/CLRC, carry-coupled shifter)",ic,sm,n,
  {"D%d"%i for i in range(8)}|{"DOE%d"%i for i in range(4)}|{"DLD%d"%i for i in range(4)}|
  {"ALUS0","ALUS1","ALUS2","ALUS3","ALUM","CIN","SH0","SH1","LDF","CLK","-RES",
-  "FC","FZ","FN","FV","LDZN","SHCIN","SETC","CLRC","BSEL"})
+  "FC","FZ","FN","FV","LDZN","SHCIN","SETC","CLRC","BSEL"},
+ labels={"U31":"CLK/FORCE GATES","U34":"V XOR","U35":"V AND"})
 
 # ===================== I/O CARD ===============================================
 n={}
@@ -906,7 +934,7 @@ ic={"U1":("7430","IO PAGE"),"U2":("74138","PORT DEC"),"U3":("74138","DOE DEC"),
  "U13":("74244","MON D"),"U14":("6850","ACIA"),"U15":("GATES14","74HCT00"),
  "U16":("DS1302","RTC DNP")}   # rev C: real-time clock, provisioned DNP
 sm={"X2":("OSC","2.4576MHZ"),"SW1":("DIP8SW","INPUT"),"RNP":("SIP9","8X10K"),
- "RL1":("RNISO8","8X330R"),"LA1":("LEDARR8","PORT LEDS"),
+ "RL1":("RNISO8","8X330R"),"LA1":("LEDARR8","8-LED BAR"),
  "RM1":("RNISO8","8X330R"),"LM1":("LEDARR8","A0-7"),
  "RM2":("RNISO8","8X330R"),"LM2":("LEDARR8","A8-15"),
  "RM3":("RNISO8","8X330R"),"LM3":("LEDARR8","D0-7"),
@@ -1004,7 +1032,7 @@ ic={"U1":("74245","DATA BUF"),"U2":("7430","IO PAGE"),"U3":("74138","DOE DEC"),
  # IDE 8-bit mode; it captures the CF high data byte (D8-15) so it can be read
  # back separately. Provisioned DNP — inputs wired, outputs/clock/decode deferred.
  "U9":("74374","CF HI-BYTE DNP")}
-sm={"J2":("IDE40","CF/IDE 40P"),"RN1":("SIP9","8X10K"),
+sm={"J2":("IDE40","IDE-40"),"RN1":("SIP9","8X10K"),
  "RP1":("RES","1K"),"LED3":("LED","PWR-GRN"),
  "R4":("RES","1K"),"LED4":("LED","ACT-YEL"),
  "R5":("RES","330R"),"LED5":("LED","DASP-GRN")}
@@ -1061,9 +1089,9 @@ card("cf-card","P8X CF-IDE CARD REV A - 8-BIT TRUE IDE AT 0xFF10",ic,sm,n,
 # decoupling caps, the IC power pins, and the J1 bus/power wiring derived from
 # used_bus + busnet(). So this only declares the functional netlist — and routing
 # J1 via busnet() means the rev-D even-pin spares are no longer tied to GND.
-ic={"U1":("MEM28K8","28C256-15"),"U2":("MEM28K8","62256-70"),
+ic={"U1":("MEM28K8","28C256"),"U2":("MEM28K8","62256"),
  "U3":("74245","74HCT245"),"U4":("7430","74HCT30"),
- "U5":("74138","74HCT138-DOE"),"U6":("74138","74HCT138-DLD"),
+ "U5":("74138","DOE DEC"),"U6":("74138","DLD DEC"),
  "U7":("GATES14","74HCT00"),"U8":("GATES14","74HCT32"),"U9":("GATES14","74HCT08")}
 sm={"RP1":("RES","1K"),"LED3":("LED","PWR-GRN"),
  "RS1":("RES","1K"),"LED2":("LED","ROM-YEL"),

@@ -980,23 +980,23 @@
 <classes><class number="0" name="default" width="0" drill="0"/></classes>
 <parts>
 <part name="J1" library="p8x" deviceset="DIN96" device="" value="FABC96R"/>
-<part name="U1" library="p8x" deviceset="74245" device="" value="DATA BUF"/>
-<part name="U2" library="p8x" deviceset="7430" device="" value="IO PAGE"/>
-<part name="U3" library="p8x" deviceset="74138" device="" value="DOE DEC"/>
-<part name="U4" library="p8x" deviceset="74138" device="" value="DLD DEC"/>
+<part name="U1" library="p8x" deviceset="74245" device="" value="74HCT245"/>
+<part name="U2" library="p8x" deviceset="7430" device="" value="74HCT30"/>
+<part name="U3" library="p8x" deviceset="74138" device="" value="74HCT138"/>
+<part name="U4" library="p8x" deviceset="74138" device="" value="74HCT138"/>
 <part name="U5" library="p8x" deviceset="HEX14" device="" value="74HCT14"/>
 <part name="U6" library="p8x" deviceset="7410" device="" value="74HCT10"/>
 <part name="U7" library="p8x" deviceset="7410" device="" value="74HCT10"/>
 <part name="U8" library="p8x" deviceset="GATES14" device="" value="74HCT08"/>
-<part name="U9" library="p8x" deviceset="74374" device="" value="CF HI-BYTE DNP"/>
-<part name="J2" library="p8x" deviceset="IDE40" device="" value="CF/IDE 40P"/>
+<part name="U9" library="p8x" deviceset="74374" device="" value="74HCT374"/>
+<part name="J2" library="p8x" deviceset="IDE40" device="" value="IDE-40"/>
 <part name="RN1" library="p8x" deviceset="SIP9" device="" value="8X10K"/>
 <part name="RP1" library="p8x" deviceset="RES" device="" value="1K"/>
-<part name="LED3" library="p8x" deviceset="LED" device="" value="PWR-GRN"/>
+<part name="LED3" library="p8x" deviceset="LED" device="" value="GRN"/>
 <part name="R4" library="p8x" deviceset="RES" device="" value="1K"/>
-<part name="LED4" library="p8x" deviceset="LED" device="" value="ACT-YEL"/>
+<part name="LED4" library="p8x" deviceset="LED" device="" value="YEL"/>
 <part name="R5" library="p8x" deviceset="RES" device="" value="330R"/>
-<part name="LED5" library="p8x" deviceset="LED" device="" value="DASP-GRN"/>
+<part name="LED5" library="p8x" deviceset="LED" device="" value="GRN"/>
 <part name="CD1" library="p8x" deviceset="CAP" device="" value="100N"/>
 <part name="CD2" library="p8x" deviceset="CAP" device="" value="100N"/>
 <part name="CD3" library="p8x" deviceset="CAP" device="" value="100N"/>
@@ -1008,6 +1008,22 @@
 <part name="CD9" library="p8x" deviceset="CAP" device="" value="100N"/>
 </parts><sheets><sheet><plain>
 <text x="0" y="40" size="3.81" layer="97">P8X CF-IDE CARD REV A - 8-BIT TRUE IDE AT 0xFF10</text>
+<text x="127.30" y="47.64" size="1.778" layer="97">DATA BUF</text>
+<text x="127.30" y="44.64" size="2.032" layer="96">74HCT245</text>
+<text x="228.90" y="47.64" size="1.778" layer="97">IO PAGE</text>
+<text x="228.90" y="44.64" size="2.032" layer="96">74HCT30</text>
+<text x="330.50" y="47.64" size="1.778" layer="97">DOE DEC</text>
+<text x="330.50" y="44.64" size="2.032" layer="96">74HCT138</text>
+<text x="432.10" y="47.64" size="1.778" layer="97">DLD DEC</text>
+<text x="432.10" y="44.64" size="2.032" layer="96">74HCT138</text>
+<text x="127.30" y="-231.76" size="1.778" layer="97">CF HI-BYTE DNP</text>
+<text x="127.30" y="-234.76" size="2.032" layer="96">74HCT374</text>
+<text x="127.30" y="-371.46" size="1.778" layer="97">PWR</text>
+<text x="127.30" y="-374.46" size="2.032" layer="96">GRN</text>
+<text x="330.50" y="-371.46" size="1.778" layer="97">ACT</text>
+<text x="330.50" y="-374.46" size="2.032" layer="96">YEL</text>
+<text x="127.30" y="-511.16" size="1.778" layer="97">DASP</text>
+<text x="127.30" y="-514.16" size="2.032" layer="96">GRN</text>
 </plain><instances>
 <instance part="J1" gate="G$1" x="0" y="38.1"/>
 <instance part="U1" gate="G$1" x="140.0" y="38.1"/>

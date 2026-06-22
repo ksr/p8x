@@ -797,26 +797,26 @@
 <classes><class number="0" name="default" width="0" drill="0"/></classes>
 <parts>
 <part name="J1" library="p8x" deviceset="DIN96" device="" value="FABC96R"/>
-<part name="U1" library="p8x" deviceset="MEM28K8" device="" value="28C256-15"/>
-<part name="U2" library="p8x" deviceset="MEM28K8" device="" value="62256-70"/>
+<part name="U1" library="p8x" deviceset="MEM28K8" device="" value="28C256"/>
+<part name="U2" library="p8x" deviceset="MEM28K8" device="" value="62256"/>
 <part name="U3" library="p8x" deviceset="74245" device="" value="74HCT245"/>
 <part name="U4" library="p8x" deviceset="7430" device="" value="74HCT30"/>
-<part name="U5" library="p8x" deviceset="74138" device="" value="74HCT138-DOE"/>
-<part name="U6" library="p8x" deviceset="74138" device="" value="74HCT138-DLD"/>
+<part name="U5" library="p8x" deviceset="74138" device="" value="74HCT138"/>
+<part name="U6" library="p8x" deviceset="74138" device="" value="74HCT138"/>
 <part name="U7" library="p8x" deviceset="GATES14" device="" value="74HCT00"/>
 <part name="U8" library="p8x" deviceset="GATES14" device="" value="74HCT32"/>
 <part name="U9" library="p8x" deviceset="GATES14" device="" value="74HCT08"/>
 <part name="RP1" library="p8x" deviceset="RES" device="" value="1K"/>
-<part name="LED3" library="p8x" deviceset="LED" device="" value="PWR-GRN"/>
+<part name="LED3" library="p8x" deviceset="LED" device="" value="GRN"/>
 <part name="RS1" library="p8x" deviceset="RES" device="" value="1K"/>
-<part name="LED2" library="p8x" deviceset="LED" device="" value="ROM-YEL"/>
+<part name="LED2" library="p8x" deviceset="LED" device="" value="YEL"/>
 <part name="RS2" library="p8x" deviceset="RES" device="" value="1K"/>
-<part name="LED4" library="p8x" deviceset="LED" device="" value="RAM-YEL"/>
+<part name="LED4" library="p8x" deviceset="LED" device="" value="YEL"/>
 <part name="RS3" library="p8x" deviceset="RES" device="" value="1K"/>
-<part name="LED5" library="p8x" deviceset="LED" device="" value="RD-GRN"/>
+<part name="LED5" library="p8x" deviceset="LED" device="" value="GRN"/>
 <part name="RS4" library="p8x" deviceset="RES" device="" value="1K"/>
-<part name="LED6" library="p8x" deviceset="LED" device="" value="WR-RED"/>
-<part name="JWP" library="p8x" deviceset="HDR3" device="" value="ROM-WP"/>
+<part name="LED6" library="p8x" deviceset="LED" device="" value="RED"/>
+<part name="JWP" library="p8x" deviceset="HDR3" device="" value="1x3"/>
 <part name="CD1" library="p8x" deviceset="CAP" device="" value="100N"/>
 <part name="CD2" library="p8x" deviceset="CAP" device="" value="100N"/>
 <part name="CD3" library="p8x" deviceset="CAP" device="" value="100N"/>
@@ -828,6 +828,22 @@
 <part name="CD9" library="p8x" deviceset="CAP" device="" value="100N"/>
 </parts><sheets><sheet><plain>
 <text x="0" y="40" size="3.81" layer="97">P8X MEMORY CARD REV C</text>
+<text x="127.30" y="-92.06" size="1.778" layer="97">DOE DEC</text>
+<text x="127.30" y="-95.06" size="2.032" layer="96">74HCT138</text>
+<text x="228.90" y="-92.06" size="1.778" layer="97">DLD DEC</text>
+<text x="228.90" y="-95.06" size="2.032" layer="96">74HCT138</text>
+<text x="330.50" y="-231.76" size="1.778" layer="97">PWR</text>
+<text x="330.50" y="-234.76" size="2.032" layer="96">GRN</text>
+<text x="127.30" y="-371.46" size="1.778" layer="97">ROM</text>
+<text x="127.30" y="-374.46" size="2.032" layer="96">YEL</text>
+<text x="330.50" y="-371.46" size="1.778" layer="97">RAM</text>
+<text x="330.50" y="-374.46" size="2.032" layer="96">YEL</text>
+<text x="127.30" y="-511.16" size="1.778" layer="97">RD</text>
+<text x="127.30" y="-514.16" size="2.032" layer="96">GRN</text>
+<text x="330.50" y="-511.16" size="1.778" layer="97">WR</text>
+<text x="330.50" y="-514.16" size="2.032" layer="96">RED</text>
+<text x="432.10" y="-511.16" size="1.778" layer="97">ROM-WP</text>
+<text x="432.10" y="-514.16" size="2.032" layer="96">1x3</text>
 </plain><instances>
 <instance part="J1" gate="G$1" x="0" y="38.1"/>
 <instance part="U1" gate="G$1" x="140.0" y="38.1"/>
