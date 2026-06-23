@@ -83,6 +83,12 @@ ROCNT   = $9D65          ; bytes left in ROBUF; 0 -> refill (2)
 WOLBA   = $9D67          ; current output sector LBA (3)
 WOPOS   = $9D6A          ; byte offset within SBUF; 512 -> flush (2)
 WOTOT   = $9D6C          ; total bytes written (-> FLEN at close) (2)
+; --- current directory extent for the file calls (path resolution sets it;
+;     defaults to the root and reverts there after each find) ---
+DIRLBA  = $9D6E          ; current directory start LBA (1; <256 like the OS CWD)
+DIRN    = $9D6F          ; current directory sector count (1)
+FFLAG   = $9D70          ; flag of the entry FSCAN matched (file $01 / dir $02)
+RPATH   = $9D71          ; FRESOLVE path cursor (2)
 SBUF    = $9E00          ; sector buffer
 STKTOP  = $FEFF
 BASIC   = $2000          ; ROM BASIC cold-start (overlaid by the ROM build)
@@ -120,6 +126,7 @@ RESET:  JMP  COLD
         JMP  FWOPEN         ; $012A FWOPEN  open a write stream at the free pointer (uses SBUF)
         JMP  FPUTB          ; $012D FPUTB   append byte A to the write stream
         JMP  FCLOSE         ; $0130 FCLOSE  flush + register file FNAME (len=bytes written); C=1 full
+        JMP  FRESOLVE       ; $0133 FRESOLVE resolve path (P1) -> dir extent + leaf FNAME; C=1 bad path
 
 ;==============================================================================
 ; Monitor body (relocated above the BIOS table; reset vectors here).
@@ -133,6 +140,10 @@ COLD:   LDP3 #STKTOP        ; stack
         STA  ACIAS
         LDA  #$15           ; /16 clock, 8N1, no IRQ
         STA  ACIAS
+        LDA  #33            ; file calls default to the root directory
+        STA  DIRLBA
+        LDA  #4
+        STA  DIRN
         LDP1 #MBANNER
         JSR  PUTS
 
@@ -570,10 +581,34 @@ WR2:    LDA  (P1)+
 ;==============================================================================
 ; FFIND - find regular file FNAME in the root.  C=0 + LBA(0..2)=start +
 ;   FLEN=length when found; C=1 if not.  Clobbers A,B,P1,P2,TMP,TMP2,CNT,ADDRL,HEXL,HEXH.
-FFIND:  LDA  #4
-        STA  CNT            ; 4 root sectors
-        LDA  #33
-        STA  ADDRL          ; current root LBA
+; FFIND - find regular file FNAME in the current directory (DIRLBA/DIRN, root by
+;   default); returns start LBA + FLEN, C=0. Reverts the current directory to
+;   root afterwards, so a plain FFIND with no preceding FRESOLVE always hits root.
+FFIND:  JSR  FSCAN
+        JC   FFI_NF         ; not found
+        LDA  FFLAG          ; FFIND returns FILES only
+        LDB  #$01
+        CMP
+        JNZ  FFI_NF         ; matched a dir/other -> report not found
+        CLC                 ; file found (CMP above clobbered carry)
+        JMP  FFI_R
+FFI_NF: SEC
+FFI_R:  JSR  FRESET         ; revert to root (LDA/STA preserve C)
+        RTS
+; FRESET - point the current directory at the root.
+FRESET: LDA  #33
+        STA  DIRLBA
+        LDA  #4
+        STA  DIRN
+        RTS
+; FSCAN - scan the current directory extent (DIRLBA/DIRN) for FNAME, matching any
+;   live entry (file or dir). Returns start LBA in LBA, length in FLEN, flag in
+;   FFLAG; C=0 found / C=1 not found. Leaves DIRLBA/DIRN untouched (FRESOLVE uses
+;   it to walk a path).
+FSCAN:  LDA  DIRN
+        STA  CNT
+        LDA  DIRLBA
+        STA  ADDRL
 FF_SEC: LDA  ADDRL
         STA  LBA
         LDA  #0
@@ -629,11 +664,16 @@ FF_SP:  LDA  (P2)+
         JNZ  FF_SP
         LDA  TMP2           ; flag
         JZ   FF_NO          ; $00 end-of-directory
+        STA  FFLAG          ; record this entry's flag
+        LDA  HEXH           ; name matched?
+        JZ   FF_NXT
+        LDA  FFLAG          ; live file or dir + name match -> hit
         LDB  #$01
         CMP
-        JNZ  FF_NXT         ; not a file
-        LDA  HEXH
-        JNZ  FF_HIT         ; file + name matched
+        JZ   FF_HIT
+        LDB  #$02
+        CMP
+        JZ   FF_HIT
 FF_NXT: LDA  TMP
         DEC
         STA  TMP
@@ -650,10 +690,95 @@ FF_NO:  SEC
 FF_HIT: CLC
         RTS
 
+; FRESOLVE - resolve a NUL-terminated path at P1 into a directory extent + leaf.
+;   Walks the intermediate components via FSCAN (each must be a directory),
+;   leaving DIRLBA/DIRN at the leaf's PARENT directory and FNAME = the leaf name;
+;   the following FFIND/FOPEN then runs in that directory. C=1 if an intermediate
+;   component is missing or is not a directory. A leading '/' is optional and the
+;   path is relative to the root. (Subdir LBAs assumed < 256, like the OS CWD.)
+FRESOLVE:
+        TPA1L
+        STA  RPATH
+        TPA1H
+        STA  RPATH+1
+        LDA  #33            ; start at the root
+        STA  DIRLBA
+        LDA  #4
+        STA  DIRN
+        LDA  RPATH          ; skip a leading '/'
+        TAP2L
+        LDA  RPATH+1
+        TAP2H
+        LDA  (P2)
+        LDB  #'/'
+        CMP
+        JNZ  RS_SAVE
+        INP2
+RS_SAVE:TPA2L
+        STA  RPATH
+        TPA2H
+        STA  RPATH+1
+RS_COMP:LDP1 #FNAME         ; FNAME = 12 spaces
+        LDA  #12
+        STA  HEXL
+RS_PAD: LDA  #' '
+        STA  (P1)+
+        LDA  HEXL
+        DEC
+        STA  HEXL
+        JNZ  RS_PAD
+        LDP1 #FNAME         ; copy a component into FNAME (<=12), advancing P2
+        LDA  RPATH
+        TAP2L
+        LDA  RPATH+1
+        TAP2H
+        LDA  #12
+        STA  HEXL
+RS_CP:  LDA  (P2)
+        JZ   RS_LEAF        ; end of string -> this is the leaf
+        LDB  #'/'
+        CMP
+        JZ   RS_SLASH       ; '/' -> intermediate directory
+        LDA  HEXL
+        JZ   RS_CPN         ; no room: consume but don't store
+        LDA  (P2)
+        STA  (P1)+
+        LDA  HEXL
+        DEC
+        STA  HEXL
+RS_CPN: INP2
+        JMP  RS_CP
+RS_LEAF:TPA2L               ; leaf in FNAME; DIRLBA/DIRN = its parent
+        STA  RPATH
+        TPA2H
+        STA  RPATH+1
+        CLC
+        RTS
+RS_SLASH:
+        INP2                ; consume '/'
+        TPA2L
+        STA  RPATH
+        TPA2H
+        STA  RPATH+1
+        JSR  FSCAN          ; find this directory in the current extent
+        JC   RS_NF
+        LDA  FFLAG
+        LDB  #$02
+        CMP
+        JNZ  RS_NF          ; component is not a directory
+        LDA  LBA            ; descend: subdir extent = (start LBA, 4 sectors)
+        STA  DIRLBA
+        LDA  #4
+        STA  DIRN
+        JMP  RS_COMP
+RS_NF:  SEC
+        RTS
+
 ; FCREATE - create regular file FNAME in the root from FSRC (FLEN bytes).
 ;   C=1 if the name already exists or the root is full; else writes the data +
 ;   directory entry, bumps the free pointer, C=0.
-FCREATE:LDA  FLEN           ; FFIND clobbers FLEN while scanning — save the
+FCREATE:JSR  FRESET         ; root-only (writes to subdirs is a later upgrade)
+        LDA  FLEN           ; FFIND clobbers FLEN while scanning — save the
         STA  FSAV           ; caller's requested length and restore it after
         LDA  FLEN+1
         STA  FSAV+1

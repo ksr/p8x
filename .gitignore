@@ -67,3 +67,5 @@ emulator/test/fo.img
 emulator/test/hopen.bin
 emulator/test/fw.img
 emulator/test/hwrite.bin
+emulator/test/fr.img
+emulator/test/hresolve.bin

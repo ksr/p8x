@@ -12,7 +12,7 @@ BASIC.
 
 ## Running it
 
-On reset the CPU jumps to `$0000`, which vectors to the monitor body at `$0130`;
+On reset the CPU jumps to `$0000`, which vectors to the monitor body at `$0160`;
 it resets the ACIA and prints the `P8X MONITOR` banner and a `*` prompt. In the
 emulator:
 
@@ -94,6 +94,7 @@ knowing the monitor's internal addresses. These entry points are **stable**:
 | `$012A` | FWOPEN | open a sequential write stream (streams to disk at the free pointer; uses `SBUF` as its buffer) |
 | `$012D` | FPUTB | append byte `A` to the write stream (flushes a full sector automatically) |
 | `$0130` | FCLOSE | flush the partial sector + register file `FNAME` (length = bytes written); `C=1` if root full |
+| `$0133` | FRESOLVE | resolve path at `P1` (`/a/b`) → set the directory extent + leaf `FNAME`; a following `FFIND`/`FOPEN` runs in that dir; `C=1` on a bad path |
 
 Call them with `JSR $0103` etc. (P8X/OS is built entirely on this table.)
 
@@ -101,12 +102,16 @@ Call them with `JSR $0103` etc. (P8X/OS is built entirely on this table.)
 place; they are reclaimed by the next `PACK`. To overwrite a file, `FDELETE`
 then `FCREATE`.
 
-**Filesystem calls** (`FFIND`/`FCREATE`/`FDELETE`) operate on the P8XFS v2 **root**
-directory (LBA 33) — flat file access shared by BASIC `SAVE`/`LOAD` and any RAM
-program; the hierarchical path layer lives in P8X/OS. Their parameters use fixed
-RAM: `FNAME` (`$9D4A`, 12-byte space-padded name), `FSRC` (`$9D56`, FCREATE
-source address), `FLEN` (`$9D58`, length in bytes — FCREATE input, FFIND output);
-`FFIND` returns the start LBA in the shared `LBA` (`$9D47`).
+**Directory:** the file calls operate on a *current directory extent* that
+defaults to the root (LBA 33) and reverts there after each `FFIND`. Call
+`FRESOLVE` first with a path to point `FFIND`/`FOPEN` at a subdirectory (it walks
+the `.`/`..` tree and leaves the leaf name in `FNAME`); so `FRESOLVE("/BIN/X")`
+then `FOPEN` reads `/BIN/X`. `FCREATE`/`FDELETE` are still **root-only** for now
+(writing into subdirectories is a later upgrade). Parameters use fixed RAM:
+`FNAME` (`$9D4A`, 12-byte space-padded name), `FSRC` (`$9D56`, FCREATE source
+address), `FLEN` (`$9D58`, length — FCREATE input, FFIND output); `FFIND` returns
+the start LBA in the shared `LBA` (`$9D47`). (Subdirectory LBAs are assumed
+< 256, matching the OS's current-directory convention.)
 
 ## Memory map
 
