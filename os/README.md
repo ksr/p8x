@@ -19,7 +19,7 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > | `RMDIR path` | remove an empty subdirectory (v2) |
 > | `TREE` | depth-first indented listing of the whole tree (v2) |
 > | `LOAD name` | read a file into its stored load address |
-> | `RUN name` | `LOAD` it, then `JSR` its exec address (program `RTS` → shell) |
+> | `RUN name [args]` | `LOAD` it, then `JSR` its exec address; `args` → `P2` (program `RTS` → shell) |
 > | `SAVE name start end` | write memory `[start,end)` to a new file (hex addrs) |
 > | `DEL name` | mark the directory entry deleted (`$FF`) and write it back |
 > | `DUMP addr` | show 256 bytes from `addr` (hex + ASCII) |
@@ -59,6 +59,31 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > See the design in
 > [hardware/cf-card/p8x-cf-os-design.md](../hardware/cf-card/p8x-cf-os-design.md)
 > and [p8xfs-v2-hierarchical.md](../hardware/cf-card/p8xfs-v2-hierarchical.md).
+
+## Programs (the program ABI)
+
+The OS ships only a shell + built-ins; bigger tools are **standalone programs**
+that load into the transient program area (TPA, `$B000`) and are launched with
+`RUN`. A fresh `os/run.sh` disk carries three under `/BIN`:
+
+| Program | Run as | What |
+|---------|--------|------|
+| BASIC | `RUN /BIN/BASIC.BIN` | BASIC interpreter (`BYE` returns to the OS) — see [basic/README.md](../basic/README.md) |
+| EDIT | `RUN /BIN/EDIT.BIN NAME.ASM` | line editor — see [apps/README.md](../apps/README.md) |
+| ASM | `RUN /BIN/ASM.BIN SRC.ASM OUT.BIN` | native assembler — see [apps/README.md](../apps/README.md) |
+
+Edit → assemble → run, all on the machine:
+`RUN /BIN/EDIT.BIN HELLO.ASM` → `RUN /BIN/ASM.BIN HELLO.ASM HELLO.BIN` → `RUN HELLO.BIN`.
+
+**Program ABI** (what `RUN` guarantees a program):
+- entered with a `JSR` to its exec address — **return to the shell with `RTS`**
+  (the current directory is preserved);
+- on entry **`P2` points at the argument tail** — the command text after the
+  program name, NUL-terminated (e.g. `RUN EDIT FOO.ASM` enters with `P2` → `"FOO.ASM"`);
+  programs that take no arguments just ignore `P2`;
+- a program built on-target (its entry's load/exec are `0`, as `FCREATE` writes)
+  is loaded at the TPA base `$B000`, so assemble with `.org $B000`. Host-installed
+  programs set explicit non-zero load/exec and load there instead.
 
 ## How it fits together
 

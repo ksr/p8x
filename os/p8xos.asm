@@ -2714,7 +2714,7 @@ MHELP:   .byte CR,LF
          .byte CR,LF
          .ascii "LOAD path     read a file to its load address"
          .byte CR,LF
-         .ascii "RUN path      load a file, call its exec address"
+         .ascii "RUN path args load+run a program (args in P2, RTS to exit)"
          .byte CR,LF
          .ascii "SAVE path s e save memory [s,e) to a new file"
          .byte CR,LF
@@ -2735,6 +2735,8 @@ MHELP:   .byte CR,LF
          .ascii "EXIT / MON    return to the ROM monitor"
          .byte CR,LF
          .ascii "any cmd >FILE send its output to FILE instead of the screen"
+         .byte CR,LF
+         .ascii "programs:     RUN /BIN/BASIC.BIN | EDIT.BIN f | ASM.BIN s o"
          .byte CR,LF
          .ascii "  path=file/dir, s e a=hex addr, b=hex byte"
          .byte CR,LF,0

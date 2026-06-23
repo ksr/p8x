@@ -87,6 +87,10 @@ START:  TPA3L                   ; save SP so an error can long-jump back to OS
         TPA3H
         STA  SP0+1
         JSR  PARSEARGS          ; FNAME <- SRC, OUTNAME <- OUT
+        LDA  OUTNAME            ; no output name given -> show usage
+        LDB  #' '
+        CMP
+        JZ   ST_USAGE
         JSR  FFIND
         JC   ST_NOSRC
         JSR  LOADSRC            ; SRC -> SRCBUF, NUL-terminated
@@ -132,6 +136,9 @@ ST_NB:  STA  TMP
         JSR  FCREATE
         JC   ST_WERR
         LDP1 #MOK
+        JSR  PUTS
+        RTS
+ST_USAGE:LDP1 #MUSAGE          ; balanced stack here -> plain RTS to the shell
         JSR  PUTS
         RTS
 ST_NOSRC:LDP1 #ENOSRC
@@ -1324,6 +1331,8 @@ AE_DONE:LDA  #CR
 ; Messages
 ; =============================================================================
 MOK:    .ascii "OK"
+        .byte CR,LF,0
+MUSAGE: .ascii "USAGE: ASM SRC.ASM OUT.BIN"
         .byte CR,LF,0
 ENOSRC: .asciiz "?no source: "
 EWRITE: .asciiz "?write: "

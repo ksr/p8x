@@ -38,6 +38,8 @@ All six cards plug into a passive 10-slot backplane over a 96-pin DIN 41612 bus 
 | `tools/p8xfs.py` | `tools/` | Host-side P8XFS disk-image tool (create/boot/put/get/ls) |
 | `basic/p8xbasic.asm` | `basic/` | BASIC interpreter — standalone, disk, or ROM-in-monitor builds ([guide](basic/README.md)) |
 | `tools/build_basic_rom.py` | `tools/` | Build the combined monitor + ROM-BASIC EEPROM image |
+| `apps/p8xedit.asm`, `apps/p8xasm.asm` | `apps/` | On-target toolchain: line editor + native two-pass assembler, as `/BIN` programs ([guide](apps/README.md)) |
+| `generators/gen_p8xopc.py` | `generators/` | Opcode table for the native assembler, generated from `genucode.OPC` |
 | `generators/gen_eagle.py` | `generators/` | Generates Eagle schematics + boards for all 8 boards (backplane + 6 cards + LED test card) |
 
 **Generators are canon.** Never hand-edit Eagle `.sch`/`.brd` files or ROM binaries — they are build artifacts. Edit the generator and regenerate. See [generators/README.md](generators/README.md) for what each script does and how to run it.
@@ -121,4 +123,5 @@ works chip by chip, and any board-specific design docs:
 - ROM monitor boots in the emulator; its filesystem hooks (`I`/`F`/`B`) run end to end against a CF image (`make test-cf`)
 - P8X/OS v1.0 — full shell over flat **and hierarchical (P8XFS v2)** volumes: `DIR [path]`/`CD`/`PWD`/`CAT`/`MKDIR`/`RMDIR`/`TREE`/`LOAD`/`RUN`/`SAVE`/`DEL`/`DUMP`/`DEP`/`PACK`/`FSCK`/`EXIT`; path resolution + CWD-path prompt; output redirection (`cmd >FILE`); **`PACK` compacts the directory tree** (repointing parents + `.`/`..`) and **`FSCK`** checks integrity on-target; host-side `p8xfs.py` builds (`--v2`), navigates, and `fsck`s images (`make test-os`)
 - BASIC builds three ways from one source: standalone, disk-bootable (`B`), and ROM-in-monitor (launched by `X`) (`make test-basic`)
-- **Next:** OS niceties (built-in `EDIT`, pipes `|`); hardware bring-up checklist (Fusion DRC, footprint confirmation, order backplane first)
+- On-target toolchain: **EDIT** (line editor) + **ASM** (native two-pass assembler) as `/BIN` programs — edit → assemble → run a program entirely on the machine; ASM output is byte-identical to the host assembler across the whole opcode table (`make test-os`, see [apps/](apps/README.md))
+- **Next:** OS niceties (pipes `|`, path-aware program saves); hardware bring-up checklist (Fusion DRC, footprint confirmation, order backplane first)
