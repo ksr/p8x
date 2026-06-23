@@ -55,6 +55,7 @@ test-basic: p8xemu ucode
 	sh test/basic_rom_test.sh
 	sh test/basic_disk_test.sh
 	sh test/basic_saveload_test.sh
+	sh test/os_basic_test.sh
 
 # I/O card model: switch input (-s) -> $FF00 and LED writes ($FF02, -L).
 test-io: p8xemu ucode
