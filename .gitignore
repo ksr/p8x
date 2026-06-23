@@ -51,3 +51,6 @@ emulator/test/prog.bin
 emulator/test/golden.bin
 emulator/test/PROG.BIN
 emulator/test/OUT.BIN
+emulator/test/cover.asm
+emulator/test/covgold.bin
+emulator/test/COVER.BIN
