@@ -127,7 +127,11 @@ ROM `!WE`.)
 
 ### 3.5 Status LEDs
 `U8` and `U9` spare gates also drive activity LEDs: ROM-select, RAM-select, RD, and
-WR, which is invaluable during bring-up to *see* the bus cycles.
+WR, which is invaluable during bring-up to *see* the bus cycles. **Rev D** adds a
+**RAM2** LED for the new `$4000–$7FFF` bank: `U7`'s last spare gate (a NAND wired
+as an inverter) flips `-RAM2CE` to active-high and sources the LED through `RS5`.
+Unlike the others it isn't `-BOE`-gated (no spare gate left for that), so it's a
+bank-*select* indicator — it lights whenever an address in `$4000–$7FFF` is driven.
 
 ---
 

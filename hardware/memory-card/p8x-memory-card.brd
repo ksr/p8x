@@ -428,9 +428,17 @@
 <attribute name="NAME" x="217.73" y="23.20" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="217.73" y="18.12" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="JWP" library="p8x" package="HDR3" value="1x3" x="224.67" y="20.66" smashed="yes">
-<attribute name="NAME" x="224.67" y="23.20" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="224.67" y="18.12" size="1.778" layer="27" ratio="10"/>
+<element name="RS5" library="p8x" package="R_AXIAL" value="1K" x="224.57" y="20.76" smashed="yes">
+<attribute name="NAME" x="224.57" y="23.30" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="224.57" y="18.22" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="LED7" library="p8x" package="LED5" value="YEL" x="239.03" y="20.66" smashed="yes">
+<attribute name="NAME" x="239.03" y="23.20" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="239.03" y="18.12" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="JWP" library="p8x" package="HDR3" value="1x3" x="245.97" y="20.66" smashed="yes">
+<attribute name="NAME" x="245.97" y="23.20" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="245.97" y="18.12" size="1.778" layer="27" ratio="10"/>
 </element>
 </elements><signals>
 <signal name="-BOE">
@@ -453,6 +461,8 @@
 <signal name="-RAM2CE">
 <contactref element="U7" pad="8"/>
 <contactref element="U10" pad="20"/>
+<contactref element="U7" pad="12"/>
+<contactref element="U7" pad="13"/>
 </signal>
 <signal name="-RAMCE">
 <contactref element="U7" pad="3"/>
@@ -657,11 +667,10 @@
 <signal name="GND">
 <contactref element="U5" pad="5"/>
 <contactref element="U6" pad="5"/>
-<contactref element="U7" pad="12"/>
-<contactref element="U7" pad="13"/>
 <contactref element="U9" pad="12"/>
 <contactref element="U9" pad="13"/>
 <contactref element="LED3" pad="1"/>
+<contactref element="LED7" pad="1"/>
 <contactref element="J1" pad="A31"/>
 <contactref element="J1" pad="A32"/>
 <contactref element="J1" pad="B3"/>
@@ -708,6 +717,10 @@
 <signal name="LEDRA">
 <contactref element="RS2" pad="2"/>
 <contactref element="LED4" pad="2"/>
+</signal>
+<signal name="LEDRA2">
+<contactref element="RS5" pad="2"/>
+<contactref element="LED7" pad="2"/>
 </signal>
 <signal name="LEDRD">
 <contactref element="RS3" pad="2"/>
@@ -768,6 +781,10 @@
 <contactref element="U1" pad="19"/>
 <contactref element="U2" pad="19"/>
 <contactref element="U10" pad="19"/>
+</signal>
+<signal name="RAM2ON">
+<contactref element="U7" pad="11"/>
+<contactref element="RS5" pad="1"/>
 </signal>
 <signal name="RAMK">
 <contactref element="U8" pad="6"/>

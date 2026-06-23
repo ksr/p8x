@@ -75,4 +75,7 @@ EEPROM programming is out of scope for normal operation).
 
 ## LEDs
 PWR (green), ROM (yellow), RAM (yellow), RD (green), WR (red) — show which region
-and direction is active each cycle.
+and direction is active each cycle. **RAM2 (yellow, rev D)** lights when the new
+`$4000–$7FFF` bank (U10) is addressed — a bank-select indicator (driven by U7's
+spare gate inverting `-RAM2CE`; not `-BOE`-gated like the others, as only one
+spare gate remained).
