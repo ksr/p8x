@@ -26,6 +26,7 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > | `DEP addr b b ...` | deposit hex byte values starting at `addr` |
 > | `PACK` | compact the data area, reclaiming `DEL`/`RMDIR`'d extents |
 > | `FSCK` | check filesystem integrity (read-only) |
+> | `FORMAT` | erase the card and lay a fresh P8XFS v2 volume (asks `Y/N`) |
 > | `HELP` | list commands |
 >
 > A file/dir argument may be a **path**. Directory scanning works on any extent
@@ -47,7 +48,14 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > every live extent sits in the data area and at/below the free pointer, and
 > (v2) that every directory's `..` points at its real parent — printing counts
 > and an `FSCK OK` / `FSCK: PROBLEMS=n` verdict. Exhaustive cross-extent overlap
-> and volume-end checks remain in the host **`p8xfs.py fsck`**.
+> and volume-end checks remain in the host **`p8xfs.py fsck`**. **`FORMAT`**
+> (asks `Y/N`) lays a fresh P8XFS **v2** volume on-target: it rewrites the boot
+> block (`P8`, version 2, free = 37) and a clean root extent at LBA 33 (reusing
+> the `MKDIR` extent builder), then adopts the new layout in RAM. It **preserves
+> OSCNT**, so the OS image at LBA 1–32 is untouched and the card stays bootable
+> (`EXIT` then `B` re-boots the same OS onto the clean volume). This became
+> possible once the OS load address moved to `$4000` (rev D) — it didn't fit
+> under the old `$8000` 14-sector ceiling.
 > See the design in
 > [hardware/cf-card/p8x-cf-os-design.md](../hardware/cf-card/p8x-cf-os-design.md)
 > and [p8xfs-v2-hierarchical.md](../hardware/cf-card/p8xfs-v2-hierarchical.md).

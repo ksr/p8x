@@ -131,11 +131,11 @@ scratch card, and have the Mac-side tool able to verify a volume (§6).
 
 - Boot block version byte = 2; the monitor's B command doesn't care (it only
   reads signature + OSCNT), so **the ROM does not change**
-- Monitor's F command: now writes version 2, zeroes LBAs 33–36 (root) and
-  writes free pointer = 37. Either update the ROM format routine or — better —
-  move formatting into an OS-level `FORMAT` command and let the monitor's F
-  write the minimal v2 boot block. The monitor stays frozen; policy lives on
-  disk where it's cheap to change
+- Formatting: **done as an OS-level `FORMAT` command** (P8X/OS, since the OS moved
+  to $4000 and had room). It writes the v2 boot block (version 2, free = 37) and a
+  fresh root extent at LBA 33 (4 sectors, `.`/`..`), preserving OSCNT so the card
+  stays bootable. The monitor's `F` still writes a **v1** volume — policy for v2
+  lives on disk where it's cheap to change, and the monitor stays frozen.
 - v1→v2 migration: none. Reformat and re-copy via the Mac tool — at these
   volume sizes that's a 10-second operation
 

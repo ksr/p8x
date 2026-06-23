@@ -30,6 +30,8 @@
 ;   DUMP addr          show 256 bytes from addr (hex + ASCII)
 ;   DEP  addr b b ...  deposit hex byte values starting at addr
 ;   PACK               compact the data area, reclaiming deleted extents
+;   FORMAT             erase the card and lay a fresh P8XFS v2 volume (asks Y/N;
+;                      OSCNT preserved so the card stays bootable)
 ;   HELP
 ; A file/dir argument may be a path; directory scanning works on any extent
 ; (start LBA + sector count), so CWD and resolved paths share one code path.
@@ -270,6 +272,9 @@ SHELL:  JSR  FLUSHRED           ; if the previous command was redirected, write 
         LDP1 #KW_MON
         JSR  CMPCMD
         JNZ  DOEXIT
+        LDP1 #KW_FORMAT
+        JSR  CMPCMD
+        JNZ  DOFORMAT
         LDP1 #MUNK              ; unknown command
         JSR  PUTS
         JMP  SHELL
@@ -933,6 +938,69 @@ mx_z:   JSR  ZSB
         STA  CNT
         JNZ  mx_z
         RTS
+
+; ---------------- FORMAT (on-target P8XFS v2) --------------------------------
+; Rewrite the volume as a fresh P8XFS v2: boot block ('P8', version 2, OSCNT
+; preserved so the card stays bootable, free pointer = 37) + a clean root extent
+; at LBA 33 (4 sectors) with '.'/'..' (reusing MKEXT). Asks Y/N first; on success
+; leaves RAM exactly as a freshly-booted v2 card (root = CWD). The OS image at
+; LBA 1..32 is untouched, so EXIT+B re-boots the same OS onto the clean volume.
+DOFORMAT:LDP1 #MFMTQ            ; "FORMAT: erase card as v2? (Y/N) "
+        JSR  OPUTS
+        JSR  CONIN              ; one key
+        STA  TMP2               ; save before the echo clobbers A
+        JSR  CONOUT             ; echo it
+        JSR  CRLF
+        LDA  TMP2
+        LDB  #'Y'
+        CMP
+        JZ   FMT_GO
+        LDB  #'y'
+        CMP
+        JNZ  FMT_AB
+FMT_GO: LDP1 #SBUF              ; read current boot block to keep OSCNT
+        LDA  #0
+        STA  LBA
+        JSR  CFREAD
+        LDA  SBUF+3             ; OSCNT (sectors of OS image at LBA 1..)
+        STA  TMP2               ; stash across ZSB
+        JSR  ZSB                ; clean boot sector
+        LDA  #'P'
+        STA  SBUF+0
+        LDA  #'8'
+        STA  SBUF+1
+        LDA  #2                 ; version 2 (hierarchical)
+        STA  SBUF+2
+        LDA  TMP2               ; OSCNT preserved (card stays bootable)
+        STA  SBUF+3
+        LDA  #37                ; free pointer = first v2 data LBA
+        STA  SBUF+4
+        LDA  #0
+        STA  SBUF+5
+        LDA  #0
+        STA  LBA
+        JSR  CFWRITE            ; write boot block (LBA 0)
+        LDA  #33                ; fresh root extent at LBA 33, parent = itself
+        STA  NEWLBA
+        STA  PSL
+        LDA  #SUBSECS           ; 4 sectors (= root size)
+        STA  PSN
+        JSR  MKEXT              ; write root '.'/'..' + zero LBAs 34..36
+        LDA  #4                 ; adopt the v2 layout in RAM (as COLD does)
+        STA  ROOTN
+        LDA  #37
+        STA  DATABASE
+        LDA  #33
+        STA  CWDL
+        LDA  #4
+        STA  CWDN
+        JSR  PATHROOT           ; CWDPATH = "/"
+        LDP1 #MFMTOK
+        JSR  OPUTS
+        JMP  SHELL
+FMT_AB: LDP1 #MFMTAB
+        JSR  OPUTS
+        JMP  SHELL
 
 ; ZSB - fill the 512-byte sector buffer with zeros.
 ZSB:    LDP1 #SBUF
@@ -2809,6 +2877,8 @@ MHELP:   .byte CR,LF
          .byte CR,LF
          .ascii "FSCK          check filesystem integrity (read-only)"
          .byte CR,LF
+         .ascii "FORMAT        erase card, make a fresh v2 volume (asks Y/N)"
+         .byte CR,LF
          .ascii "HELP          this help"
          .byte CR,LF
          .ascii "EXIT / MON    return to the ROM monitor"
@@ -2850,6 +2920,12 @@ MRMOK:   .byte CR,LF
          .asciiz "DIR REMOVED"
 MNOV2:   .byte CR,LF
          .asciiz "?NEEDS v2 VOLUME"
+MFMTQ:   .byte CR,LF
+         .asciiz "FORMAT: erase card as v2? (Y/N) "
+MFMTOK:  .byte CR,LF
+         .asciiz "FORMATTED"
+MFMTAB:  .byte CR,LF
+         .asciiz "ABORTED"
 MEXIST:  .byte CR,LF
          .asciiz "?EXISTS"
 MNOTDIR: .byte CR,LF
@@ -2893,3 +2969,4 @@ KW_PWD:  .asciiz "PWD"
 KW_CAT:  .asciiz "CAT"
 KW_EXIT: .asciiz "EXIT"
 KW_MON:  .asciiz "MON"
+KW_FORMAT:.asciiz "FORMAT"

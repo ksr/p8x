@@ -14,14 +14,8 @@ Last updated: 2026-06-22
 ## NEXT
 
 - **P8XFS v2 — remaining loose ends** (the hierarchy itself is DONE; see DONE):
-    - **on-target FORMAT — now UNBLOCKED** (was deferred on OS code size). A working
-      v2 FORMAT was prototyped (rewrite boot block: 'P8' + version 2 + preserved
-      OSCNT + free=37; lay a fresh root extent at LBA 33 via MKEXT; adopt the v2
-      layout in RAM), ~290 B reusing MKEXT. It didn't fit when the OS loaded at
-      $8000 (14-sector ceiling). **Since rev D the OS loads at $4000** (see DONE),
-      so the code ceiling is now ~46 sectors of RAM / 32 sectors on disk = **16 KB**
-      vs the 7 KB it was — FORMAT now fits with ~9 KB to spare. Just add it. (The
-      monitor-side v2 FORMAT alternative is still valid but no longer necessary.)
+    - **on-target FORMAT — DONE** (2026-06-22, see DONE). Added the `FORMAT`
+      command; it fit once the OS moved to $4000 (rev D).
     - **OS code size — ceiling lifted to 16 KB (rev D).** The boot loader (CMD_B)
       loads the OS to $4000 upward, and the CF LBA pointer is BIOS-pinned at $9D47,
       so the image must still end below $9D47 — but from $4000 that's ~23.8 KB (46
@@ -230,6 +224,18 @@ Last updated: 2026-06-22
 > done + why + caveats). The original foundation milestones are a terse tick
 > list under *Early milestones* at the end of this section.
 
+- **On-target FORMAT (P8XFS v2)** (2026-06-22). Added the OS `FORMAT` command:
+  asks Y/N, then rewrites the boot block (`P8`, version 2, free pointer 37) and a
+  clean root extent at LBA 33 (4 sectors, `.`/`..`) by reusing the `MKDIR` extent
+  builder (`MKEXT` with NEWLBA=PSL=33, PSN=4), and adopts the v2 layout in RAM
+  (ROOTN/DATABASE/CWDL/CWDN + `PATHROOT`) so it lands exactly where `COLD` would
+  after booting a fresh v2 card. **OSCNT is preserved** (read from the old boot
+  block, kept across the rewrite), so the OS image at LBA 1–32 is untouched and
+  the card stays bootable. ~288 B; the OS is now 7453 B (15 sectors) — would not
+  have fit under the old $8000 14-sector ceiling, fits easily at $4000 (32). Test:
+  `emulator/test/os_format_test.sh` formats a populated card, checks /OLD is gone
+  + a fresh /NEW + on-target FSCK OK, and host-verifies the boot block (version 2,
+  OSCNT preserved, free=41 after one MKDIR). Wired into `make test-os`.
 - **OS load address moved to $4000 (rev D)** (2026-06-22). With rev D putting RAM
   at $4000, the monitor's `CMD_B` now loads the OS image (and disk BASIC) to $4000
   and JMPs there, instead of $8000. This lifts the boot ceiling from ~7 KB (14
