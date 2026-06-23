@@ -134,16 +134,17 @@ Last updated: 2026-06-23
           the P8XFS root via the BIOS FFIND/FCREATE layer, so they can't save
           into `/BIN` etc. Folds into the "make the BIOS file routines
           hierarchy-aware" item above — once that lands, the tools inherit paths.
-        - **ASM capacity:** ~146 symbols, 12-char names, ~6.5 KB source, ~4 KB
-          output, single `.org`. Bump the symbol table / buffer placement if real
-          programs hit these; multiple `.org` needs the output indexed per-region
-          rather than one base offset.
+        - **ASM capacity — mostly lifted (2026-06-23).** Source + output are now
+          streamed to/from disk (bounded by the disk, not RAM); symbol table is
+          ~850 entries. Remaining caps: 12-char names, 127-char source lines,
+          single `.org` (backward `.org` rejected). Multiple `.org` would need
+          per-region output rather than one monotonic stream.
         - **ASM features not yet supported:** `.equ NAME,expr` form (only
           `NAME = expr`), string escapes in `.ascii` (raw chars only), and
           macros/conditional assembly (the host has none either).
-        - **Self-host check:** assemble ASM's *own* source on-target and diff
-          against the host build — the ultimate drift/coverage test (needs the
-          source to fit in the source buffer; may require splitting).
+        - **Self-host check — DONE (2026-06-23).** ASM assembles its own ~37 KB
+          source on-target to a binary byte-identical to the host build
+          (`make test-asm-selfhost`).
         - **EDIT:** 8-bit line count (≤255 lines), whole-file rewrite on `W`
           (orphans sectors until PACK), no search/replace or block ops.
 - [ ] **BASIC variable limits are tunable** — names are significant to 6 chars
