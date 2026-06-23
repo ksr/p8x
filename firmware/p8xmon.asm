@@ -66,6 +66,11 @@ CNT     = $9D46          ; loop counter
 LBA     = $9D47          ; current LBA, byte 0 (bits 7:0)
 LBA1    = $9D48          ; LBA byte 1 (bits 15:8)  — 0 after CFINIT unless set
 LBA2    = $9D49          ; LBA byte 2 (bits 23:16) — 0 after CFINIT unless set
+; ---- filesystem-call ABI (FFIND/FCREATE operate on the P8XFS v2 root, LBA 33) -
+FNAME   = $9D4A          ; 12-byte filename (space-padded) — in for both calls
+FSRC    = $9D56          ; FCREATE: source address of the file data (2 bytes)
+FLEN    = $9D58          ; file length in bytes (2 bytes): FCREATE in, FFIND out
+FSAV    = $9D5A          ; FCREATE scratch: requested length saved across FFIND
 SBUF    = $9E00          ; sector buffer
 STKTOP  = $FEFF
 BASIC   = $2000          ; ROM BASIC cold-start (overlaid by the ROM build)
@@ -94,6 +99,8 @@ RESET:  JMP  COLD
         JMP  CFWRSEC        ; $010F CFWRITE SBUF -> sector LBA
         JMP  PUTS           ; $0112 PUTS    print (P1)+ until $00
         JMP  PRBYTE         ; $0115 PHEX8   print A as two hex digits
+        JMP  FFIND          ; $0118 FFIND   root file FNAME -> LBA+FLEN; C=0 found
+        JMP  FCREATE        ; $011B FCREATE root file FNAME from FSRC/FLEN; C=1 err
 
 ;==============================================================================
 ; Monitor body (relocated above the BIOS table; reset vectors here).
@@ -507,12 +514,13 @@ RD2:    LDA  CFDATA
         RTS
 
 CFWRSEC:                    ; write SBUF -> sector LBA
+        LDP1 #SBUF
+CFWRP1:                     ; write 512 bytes from (P1) -> sector LBA (P1 += 512)
         JSR  CFWAIT
         JSR  CFSETL
         LDA  #$30           ; WRITE SECTORS
         STA  CFCMD
         JSR  CFDRQ
-        LDP1 #SBUF
         LDA  #0
         STA  TMP
 WR1:    LDA  (P1)+
@@ -530,6 +538,273 @@ WR2:    LDA  (P1)+
         STA  TMP
         JNZ  WR2
         JSR  CFWAIT
+        RTS
+
+;==============================================================================
+; FILESYSTEM CALLS — flat (root-only) file access on the P8XFS v2 root directory
+; (LBA 33..36), shared by BASIC SAVE/LOAD and any RAM program; the full
+; hierarchical path layer lives in P8X/OS. 32-byte entry: name 12 | start LBA 4 |
+; length 4 | load 2 | exec 2 | flag 1 ($00 end, $01 file, $02 dir, $FF del) |
+; spare 7. Free pointer = the 2-byte boot-block field at offset 4.
+;==============================================================================
+; FFIND - find regular file FNAME in the root.  C=0 + LBA(0..2)=start +
+;   FLEN=length when found; C=1 if not.  Clobbers A,B,P1,P2,TMP,TMP2,CNT,ADDRL,HEXL,HEXH.
+FFIND:  LDA  #4
+        STA  CNT            ; 4 root sectors
+        LDA  #33
+        STA  ADDRL          ; current root LBA
+FF_SEC: LDA  ADDRL
+        STA  LBA
+        LDA  #0
+        STA  LBA1
+        STA  LBA2
+        LDP1 #SBUF
+        JSR  CFRDSEC        ; root sector -> SBUF
+        LDP2 #SBUF
+        LDA  #16
+        STA  TMP            ; 16 entries / sector
+FF_ENT: LDP1 #FNAME         ; compare 12-byte name: (P2)=entry vs (P1)=FNAME
+        LDA  #1
+        STA  HEXH           ; match flag (1 until a byte differs)
+        LDA  #12
+        STA  HEXL           ; name byte counter
+FF_NM:  LDA  (P2)+
+        STA  TMP2
+        LDA  (P1)+
+        LDB  TMP2
+        CMP
+        JZ   FF_NE
+        LDA  #0
+        STA  HEXH
+FF_NE:  LDA  HEXL
+        DEC
+        STA  HEXL
+        JNZ  FF_NM
+        LDA  (P2)+          ; 12..15 start LBA (keep low 3)
+        STA  LBA
+        LDA  (P2)+
+        STA  LBA1
+        LDA  (P2)+
+        STA  LBA2
+        LDA  (P2)+
+        LDA  (P2)+          ; 16..19 length (keep low 2)
+        STA  FLEN
+        LDA  (P2)+
+        STA  FLEN+1
+        LDA  (P2)+
+        LDA  (P2)+
+        LDA  (P2)+          ; 20..23 load + exec
+        LDA  (P2)+
+        LDA  (P2)+
+        LDA  (P2)+
+        LDA  (P2)+          ; 24 flag
+        STA  TMP2
+        LDA  #7             ; skip 25..31 spare -> next entry
+        STA  HEXL
+FF_SP:  LDA  (P2)+
+        LDA  HEXL
+        DEC
+        STA  HEXL
+        JNZ  FF_SP
+        LDA  TMP2           ; flag
+        JZ   FF_NO          ; $00 end-of-directory
+        LDB  #$01
+        CMP
+        JNZ  FF_NXT         ; not a file
+        LDA  HEXH
+        JNZ  FF_HIT         ; file + name matched
+FF_NXT: LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  FF_ENT
+        LDA  ADDRL
+        INC
+        STA  ADDRL
+        LDA  CNT
+        DEC
+        STA  CNT
+        JNZ  FF_SEC
+FF_NO:  SEC
+        RTS
+FF_HIT: CLC
+        RTS
+
+; FCREATE - create regular file FNAME in the root from FSRC (FLEN bytes).
+;   C=1 if the name already exists or the root is full; else writes the data +
+;   directory entry, bumps the free pointer, C=0.
+FCREATE:LDA  FLEN           ; FFIND clobbers FLEN while scanning — save the
+        STA  FSAV           ; caller's requested length and restore it after
+        LDA  FLEN+1
+        STA  FSAV+1
+        JSR  FFIND
+        JNC  FC_ERR         ; already exists
+        LDA  FSAV
+        STA  FLEN
+        LDA  FSAV+1
+        STA  FLEN+1
+        LDA  #0             ; read boot block -> SBUF (free pointer at +4/+5)
+        STA  LBA
+        STA  LBA1
+        STA  LBA2
+        LDP1 #SBUF
+        JSR  CFRDSEC
+        LDA  SBUF+4         ; ADDRL/ADDRH = file start LBA = free pointer
+        STA  ADDRL
+        STA  LBA            ; LBA(0..2) = free pointer for the data write
+        LDA  SBUF+5
+        STA  ADDRH
+        STA  LBA1
+        LDA  #0
+        STA  LBA2
+        LDA  FSRC           ; P1 = data source
+        TAP1L
+        LDA  FSRC+1
+        TAP1H
+        LDA  #0
+        STA  CNT            ; sectors written
+        LDA  FLEN
+        STA  TMP            ; remaining bytes (lo)
+        LDA  FLEN+1
+        STA  TMP2           ; remaining bytes (hi)
+FC_WR:  LDA  TMP
+        LDB  TMP2
+        OR
+        JZ   FC_WROK        ; remaining == 0
+        JSR  CFWRP1         ; 512 from (P1) -> sector LBA; P1 += 512
+        LDA  LBA
+        INC
+        STA  LBA
+        JNZ  FC_WNC
+        LDA  LBA1
+        INC
+        STA  LBA1
+FC_WNC: LDA  CNT
+        INC
+        STA  CNT
+        LDA  TMP2           ; remaining -= 512 (floor 0)
+        LDB  #2
+        SUB
+        JNC  FC_WLST        ; hi < 2 -> this was the last (partial) sector
+        STA  TMP2
+        JMP  FC_WR
+FC_WLST:LDA  #0
+        STA  TMP
+        STA  TMP2
+        JMP  FC_WR
+FC_WROK:LDA  SBUF+4         ; bump free pointer by the sectors written
+        LDB  CNT
+        ADD
+        STA  SBUF+4
+        LDA  SBUF+5
+        JNC  FC_FNC
+        INC
+FC_FNC: STA  SBUF+5
+        LDA  #0
+        STA  LBA
+        STA  LBA1
+        STA  LBA2
+        JSR  CFWRSEC        ; write boot block back
+        LDA  #4             ; find a free slot in the root and write the entry
+        STA  CNT
+        LDA  #33
+        STA  HEXL           ; current root LBA
+FC_DSEC:LDA  HEXL
+        STA  LBA
+        LDA  #0
+        STA  LBA1
+        STA  LBA2
+        LDP1 #SBUF
+        JSR  CFRDSEC
+        LDP2 #SBUF
+        LDA  #16
+        STA  TMP
+FC_DENT:TPA2L               ; save entry-start pointer in FSRC (data ptr is done)
+        STA  FSRC
+        TPA2H
+        STA  FSRC+1
+        LDA  #24            ; peek the flag at offset 24
+        STA  HEXH
+FC_SK:  LDA  (P2)+
+        LDA  HEXH
+        DEC
+        STA  HEXH
+        JNZ  FC_SK
+        LDA  (P2)           ; flag
+        JZ   FC_SLOT        ; $00 end -> free slot
+        LDB  #$FF
+        CMP
+        JZ   FC_SLOT        ; $FF deleted -> reusable
+        LDA  #8             ; occupied: P2 at +24, advance to next entry (+32)
+        STA  HEXH
+FC_NXE: LDA  (P2)+
+        LDA  HEXH
+        DEC
+        STA  HEXH
+        JNZ  FC_NXE
+        LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  FC_DENT
+        LDA  HEXL
+        INC
+        STA  HEXL
+        LDA  CNT
+        DEC
+        STA  CNT
+        JNZ  FC_DSEC
+        SEC                 ; root directory full
+        RTS
+FC_SLOT:LDA  FSRC           ; re-point P2 at the slot start
+        TAP2L
+        LDA  FSRC+1
+        TAP2H
+        LDP1 #FNAME         ; name (12)
+        LDA  #12
+        STA  HEXH
+FC_WNM: LDA  (P1)+
+        STA  (P2)+
+        LDA  HEXH
+        DEC
+        STA  HEXH
+        JNZ  FC_WNM
+        LDA  ADDRL          ; start LBA (lo, hi, 0, 0)
+        STA  (P2)+
+        LDA  ADDRH
+        STA  (P2)+
+        LDA  #0
+        STA  (P2)+
+        STA  (P2)+
+        LDA  FLEN           ; length (lo, hi, 0, 0)
+        STA  (P2)+
+        LDA  FLEN+1
+        STA  (P2)+
+        LDA  #0
+        STA  (P2)+
+        STA  (P2)+
+        LDA  #0             ; load (2) + exec (2) = 0
+        STA  (P2)+
+        STA  (P2)+
+        STA  (P2)+
+        STA  (P2)+
+        LDA  #$01           ; flag = file
+        STA  (P2)+
+        LDA  #7             ; spare (7) = 0
+        STA  HEXH
+FC_WSP: LDA  #0
+        STA  (P2)+
+        LDA  HEXH
+        DEC
+        STA  HEXH
+        JNZ  FC_WSP
+        LDA  HEXL           ; write the updated root sector back
+        STA  LBA
+        LDA  #0
+        STA  LBA1
+        STA  LBA2
+        JSR  CFWRSEC
+        CLC
+        RTS
+FC_ERR: SEC
         RTS
 
 ZSBUF:  LDP1 #SBUF          ; zero 512-byte buffer
