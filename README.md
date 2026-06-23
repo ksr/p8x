@@ -39,6 +39,7 @@ All six cards plug into a passive 10-slot backplane over a 96-pin DIN 41612 bus 
 | `basic/p8xbasic.asm` | `basic/` | BASIC interpreter — standalone, disk, or ROM-in-monitor builds ([guide](basic/README.md)) |
 | `tools/build_basic_rom.py` | `tools/` | Build the combined monitor + ROM-BASIC EEPROM image |
 | `apps/p8xedit.asm`, `apps/p8xasm.asm` | `apps/` | On-target toolchain: line editor + native two-pass assembler, as `/BIN` programs ([guide](apps/README.md)) |
+| `compiler/p8cc.py` | `compiler/` | C cross-compiler (subset) → P8X asm → RUNnable `.BIN` ([guide](compiler/README.md)) |
 | `generators/gen_p8xopc.py` | `generators/` | Opcode table for the native assembler, generated from `genucode.OPC` |
 | `generators/gen_eagle.py` | `generators/` | Generates Eagle schematics + boards for all 8 boards (backplane + 6 cards + LED test card) |
 
@@ -124,4 +125,5 @@ works chip by chip, and any board-specific design docs:
 - P8X/OS v1.0 — full shell over flat **and hierarchical (P8XFS v2)** volumes: `DIR [path]`/`CD`/`PWD`/`CAT`/`MKDIR`/`RMDIR`/`TREE`/`LOAD`/`RUN`/`SAVE`/`DEL`/`DUMP`/`DEP`/`PACK`/`FSCK`/`EXIT`; path resolution + CWD-path prompt; output redirection (`cmd >FILE`); **`PACK` compacts the directory tree** (repointing parents + `.`/`..`) and **`FSCK`** checks integrity on-target; host-side `p8xfs.py` builds (`--v2`), navigates, and `fsck`s images (`make test-os`)
 - BASIC builds three ways from one source: standalone, disk-bootable (`B`), and ROM-in-monitor (launched by `X`) (`make test-basic`)
 - On-target toolchain: **EDIT** (line editor) + **ASM** (native two-pass assembler) as `/BIN` programs — edit → assemble → run a program entirely on the machine; ASM output is byte-identical to the host assembler across the whole opcode table (`make test-os`, see [apps/](apps/README.md))
+- **C cross-compiler** (`compiler/p8cc.py`, v0.1) — a C subset (`int`/`char`, `if`/`while`, arithmetic, `putchar`/`puts`) compiles to P8X asm and runs as a `/BIN` program; 16-bit pseudo-accumulator + runtime helpers (`make test-c`, see [compiler/](compiler/README.md))
 - **Next:** OS niceties (pipes `|`, path-aware program saves); hardware bring-up checklist (Fusion DRC, footprint confirmation, order backplane first)

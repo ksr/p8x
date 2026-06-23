@@ -54,3 +54,7 @@ emulator/test/OUT.BIN
 emulator/test/cover.asm
 emulator/test/covgold.bin
 emulator/test/COVER.BIN
+emulator/test/c.img
+emulator/test/ctest.c
+emulator/test/ctest.asm
+emulator/test/ctest.bin

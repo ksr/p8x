@@ -108,7 +108,15 @@ Last updated: 2026-06-23
     - Smoke tests test1-3.asm overlap test_isa.asm (per-opcode). They give
       higher-level scenario coverage (banner, JSR/RTS, countdown); keep as
       complementary unless trimming.
-- [ ] **C compiler (cross, then native)** — a big, long-horizon goal. Start
+- [ ] **C compiler (cross, then native)** — IN PROGRESS. v0.1 cross-compiler
+      landed (`compiler/p8cc.py`, see DONE): int/char, functions (no params),
+      if/while, `+ - *` and comparisons, putchar/puts, compiling to a RUNnable
+      `/BIN` program (`make test-c`). Remaining toward a usable C: stack frame
+      for params/locals + a calling convention (recursion/reentrancy), pointers/
+      arrays/`&`/`*`, `/ %` + shifts, `for`, `&&`/`||`, structs, a small libc
+      over the BIOS. **Native** (on-target) compiler stays the stretch goal once
+      the cross-compiler is solid + there's enough RAM. Original plan kept below.
+      Start
       with a **cross-compiler** on the host: a small-C subset (int/char/pointers,
       functions, if/while/for, basic expressions — no float, limited structs)
       emitting P8X assembly that feeds p8xasm.py. The 8-bit/16-bit-pointer ISA
@@ -246,6 +254,20 @@ Last updated: 2026-06-23
 > done + why + caveats). The original foundation milestones are a terse tick
 > list under *Early milestones* at the end of this section.
 
+- **C cross-compiler v0.1** (2026-06-23). `compiler/p8cc.py` — a tiny C compiler
+  on the host emitting P8X asm (for p8xasm.py), targeting the TPA so output is a
+  RUNnable `/BIN` program. Lexer + recursive-descent parser + codegen. Subset:
+  `int`(16)/`char`(8), function definitions (no params), global vars, `if`/`else`/
+  `while`/`return`, operators `= == != < > <= >= + - *` and unary `- !`, and the
+  `putchar`/`puts` builtins over the BIOS. Execution model: a 16-bit pseudo-
+  accumulator `AX` (memory word) since the machine has no 16-bit acc; the P3
+  hardware stack holds temporaries (PHA/PLA) + return addresses; binary ops are
+  compact runtime helper calls (`__add/__sub/__mul/__eq/__lt/__not`, emitted only
+  if used); `*` is a shift-add `__mul`. v0.1 gives every variable static storage
+  (no frame → no recursion/reentrancy, user funcs take no args) — the next phase
+  adds a stack frame + calling convention. Test `c_compile_test.sh` (`make
+  test-c`) compiles a while-loop + user-function program, assembles, RUNs it, and
+  checks the output (`12345`, `SQ-OK`). See IDEAS "C compiler" for the roadmap.
 - **Native toolchain: EDIT + ASM (on-target, self-hosting for machine code)**
   (2026-06-23). The P8X can now edit a `.asm` file and assemble it to a runnable
   binary without the host. Four pieces, all TPA programs / BIOS-only, tested:
