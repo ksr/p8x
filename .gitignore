@@ -75,3 +75,8 @@ emulator/test/fn.img
 emulator/test/hnorm.bin
 emulator/test/fx.img
 emulator/test/hdir.bin
+emulator/test/cl.img
+emulator/test/clibc.c
+emulator/test/clibc.asm
+emulator/test/clibc.bin
+emulator/test/osc.bin

@@ -428,6 +428,9 @@ class Gen:
             self.need("__not"); self.emit("        JSR __not")
 
     def gen_call(self, name, args):
+        if name == "getchar":                            # BIOS CONIN -> char
+            self.emit("        JSR $0100", "        STA __ax",
+                      "        LDA #0", "        STA __ax+1"); return
         if name == "putchar":
             self.gen_expr(args[0])
             self.emit("        LDA __ax", "        JSR $0103"); return

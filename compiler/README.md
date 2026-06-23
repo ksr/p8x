@@ -43,7 +43,13 @@ to the OS shell with `RTS` (startup inits `__csp` then `JSR _f_main`).
 | functions | parameters, **stack locals**, **recursion**, return value in `AX` |
 | pointers | `&lvalue`, `*ptr` (load/store), pointer +/- scaled by element size, `a[i]` |
 | primaries | int / char / string literals, identifiers, calls, `( )` |
-| builtins | `putchar(e)`, `puts(e)` (over the BIOS at `$0103` / `$0112`) |
+| builtins | `getchar()`, `putchar(e)`, `puts(e)` (over the BIOS at `$0100` / `$0103` / `$0112`) |
+
+**Library functions are written in C.** The only I/O builtins are the three
+above — `getchar` (BIOS `CONIN`, returns the next console byte in `AX`),
+`putchar`, and `puts`. Everything else a program needs (`strlen`, `getline`,
+`strcmp`, …) is ordinary C compiled alongside it, now that pointers, arrays, and
+`char` work. See the `strlen` in the test below for the pattern.
 
 `int` is 16-bit (comparisons and `/` `%` are **unsigned** 16-bit); `char` is
 8-bit. The compiler tracks types so a dereference loads/stores the right width
@@ -65,3 +71,8 @@ String literals are pooled and evaluate to their address.
 `emulator/test/c_compile_test.sh` (`make test-c`) compiles a C program, assembles
 it, RUNs it under P8X/OS, and checks the output: a `while` loop printing `12345`,
 then **recursive `fact(5)`** → `FACT-OK` and a two-arg `add` → `ADD-OK`.
+
+`emulator/test/c_libc_test.sh` exercises **input**: a program reads a line with
+`getchar()`, upper-cases it into a `char` buffer, `puts()` it, and prints its
+length using a `strlen()` written in C — end-to-end proof that the I/O builtins
+and C-source library functions work together.

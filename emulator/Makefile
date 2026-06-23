@@ -34,6 +34,7 @@ test: p8xemu ucode
 # p8cc C cross-compiler: compile -> assemble -> run -> check console output.
 test-c: p8xemu ucode
 	sh test/c_compile_test.sh
+	sh test/c_libc_test.sh
 
 # Native assembler self-host: assemble its own source on-target == host build.
 # Slow (37 KB through the emulated assembler twice); run on demand, not in `test`.
