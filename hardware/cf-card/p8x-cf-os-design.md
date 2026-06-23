@@ -105,14 +105,17 @@ CFRD1:  LDA  $FF17        ; status
 
 ### 2.4 Layer 3 — Filesystem: P8XFS
 
-Deliberately CP/M-grade, not FAT-grade. One directory, contiguous allocation — trivial to implement, trivial to fsck by eye in a hex dump:
+Deliberately CP/M-grade, not FAT-grade. Contiguous allocation — trivial to
+implement, trivial to fsck by eye in a hex dump. The layout is **P8XFS v2**
+(hierarchical; the flat v1 has been retired — see
+[p8xfs-v2-hierarchical.md](p8xfs-v2-hierarchical.md)):
 
 | LBA | Contents |
 |---|---|
-| 0 | Boot block + volume label + free-space pointer |
+| 0 | Boot block: `P8`, version (2), OSCNT, free-space pointer |
 | 1–32 | OS image (up to 16 KB) |
-| 33–64 | Directory: 512 entries × 32 bytes |
-| 65+ | File data, contiguous extents |
+| 33–36 | Root directory: 4-sector extent (entry 0 `.`, entry 1 `..`) |
+| 37+ | Files + subdirectory extents, contiguous (from the free pointer) |
 
 **Directory entry (32 bytes):** filename 12 (ASCII, space-padded) · start LBA 4 · length in bytes 4 · load address 2 · exec address 2 · flags 1 · spare 7.
 

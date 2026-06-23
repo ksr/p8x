@@ -224,6 +224,16 @@ Last updated: 2026-06-22
 > done + why + caveats). The original foundation milestones are a terse tick
 > list under *Early milestones* at the end of this section.
 
+- **P8XFS v1 retired — v2 is the only format** (2026-06-22). Removed all v1 (flat)
+  support now that v2 is mature and on-target FORMAT exists. Monitor `F` now writes
+  a v2 boot block + root extent at LBA 33 (inline `.`/`..` builder; host fsck
+  confirms it byte-for-byte). `p8xfs.py create` defaults to v2 (the `--v2` flag is
+  a no-op kept for compat); dropped the v1 constants, helper functions, and the
+  v1 branches in create/put/get/ls/fsck. OS dropped the COLD version-detect (sets
+  the v2 layout unconditionally), the `ROOTN==32` v1 guards in MKDIR/RMDIR/TREE/
+  FSCK, the `MK_NOV2`/`MNOV2` reject, and the entire single-pass v1 PACK path
+  (rename DOPACK2→DOPACK) — the OS shrank to 6967 B. Existing v1 cards no longer
+  mount (acceptable — solo project, no v1 cards in use). Full suite green.
 - **On-target FORMAT (P8XFS v2)** (2026-06-22). Added the OS `FORMAT` command:
   asks Y/N, then rewrites the boot block (`P8`, version 2, free pointer 37) and a
   clean root extent at LBA 33 (4 sectors, `.`/`..`) by reusing the `MKDIR` extent

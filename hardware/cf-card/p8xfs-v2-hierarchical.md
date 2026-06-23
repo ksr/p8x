@@ -1,8 +1,9 @@
 # P8XFS v2 — Hierarchical Filesystem for P8X/OS
 
-Upgrades the flat v1 filesystem to support subdirectories while keeping the
-property that makes v1 buildable: **contiguous allocation, one extent per
-file**. The trick that keeps hierarchy cheap is the oldest one in the book:
+**P8XFS v2 is the only filesystem format** — the original flat v1 has been
+retired (the monitor `F`, the OS `FORMAT`, and `p8xfs.py` all produce v2). v2
+adds subdirectories while keeping the property that made the flat layout
+buildable: **contiguous allocation, one extent per file**. The trick that keeps hierarchy cheap is the oldest one in the book:
 **a directory is just a file** whose contents are 32-byte entries and whose
 flag byte says "directory."
 

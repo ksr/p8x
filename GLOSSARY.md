@@ -127,7 +127,7 @@ The word burned to the 4× 28C64 EPROMs and interpreted by the emulator. Bit map
 
 | Term | Meaning |
 |------|---------|
-| **P8XFS** | The P8X File System on CompactFlash. v1 = flat directory; v2 = hierarchical (directories-are-files, `.`/`..`, paths). |
+| **P8XFS** | The P8X File System on CompactFlash. **v2** (hierarchical: directories-are-files, `.`/`..`, paths) is the only format; v1 (flat directory) has been retired. |
 | **boot block** | LBA 0 — signature, version byte, OS sector count, free pointer. |
 | **extent** | A file/directory's contiguous run of data sectors. |
 | **PACK** | Compaction — reclaim the gaps left by deleted files by sliding extents down. |

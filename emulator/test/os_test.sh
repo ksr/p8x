@@ -67,7 +67,7 @@ echo "$out" | grep -q 'ABC'            || fail "DUMP ASCII column wrong"
 # DUMP paging: CR after the first block advanced to the next one (rows at B100).
 echo "$out" | grep -q 'B100'           || fail "DUMP paging (CR=next block) did not advance"
 echo "$out" | grep -q 'PACKED'       || fail "PACK did not report success"
-echo "$out" | grep -q 'FSCK OK'      || fail "FSCK reported problems on a clean v1 volume"
+echo "$out" | grep -q 'FSCK OK'      || fail "FSCK reported problems on a clean v2 volume"
 # After DEL+SAVE+PACK, the final DIR (re-read from disk): HELLO.TXT gone, C.BIN
 # kept. (DEL HELLO left a gap that PACK reclaims by moving C.BIN down.)
 tail=$(echo "$out" | sed -n '/PACKED/,$p')

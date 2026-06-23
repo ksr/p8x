@@ -9,7 +9,7 @@
 ;              replace and advance, plain CR to advance, '.' to exit.
 ;   D aaaa     Dump 256 bytes from aaaa, hex + ASCII, 16 per line.
 ;   I          Init CF: SET FEATURES 8-bit mode, IDENTIFY, print model.
-;   F          Format CF as P8XFS (boot block + zeroed directory). Asks Y/N.
+;   F          Format CF as P8XFS v2 (boot block + root extent '.'/'..'). Asks Y/N.
 ;   B          Boot: load OS image from CF to $4000 and jump. Falls back
 ;              to the monitor prompt if no card / no signature / OSCNT=0.
 ;   G aaaa     Go: JSR to aaaa. Program returns to monitor via RTS.
@@ -295,29 +295,90 @@ CMD_F:  LDP1 #MSURE
         STA  SBUF+0
         LDA  #'8'
         STA  SBUF+1
-        LDA  #1             ; version
+        LDA  #2             ; version 2 (hierarchical) — the only P8XFS format
         STA  SBUF+2
         LDA  #0             ; OSCNT = 0 (no OS image yet)
         STA  SBUF+3
-        LDA  #65            ; free pointer = LBA 65 (lo)
+        LDA  #37            ; free pointer = LBA 37 (first v2 data sector)
         STA  SBUF+4
         LDA  #0
         STA  SBUF+5
         LDA  #0
         STA  LBA
-        JSR  CFWRSEC        ; write LBA 0
+        JSR  CFWRSEC        ; write boot block (LBA 0)
+        ; root directory extent at LBA 33 (4 sectors): '.' and '..', both -> root
         JSR  ZSBUF
-        LDA  #33            ; zero directory, LBA 33..64
+        LDP1 #SBUF
+        LDA  #'.'           ; entry 0 "." + 11 spaces
+        STA  (P1)+
+        LDA  #11
+        STA  TMP
+FNM0:   LDA  #' '
+        STA  (P1)+
+        LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  FNM0
+        JSR  FENT           ; start=33, len=2048, load/exec=0, flag=dir, 7 spare=0
+        LDA  #'.'           ; entry 1 ".." + 10 spaces
+        STA  (P1)+
+        LDA  #'.'
+        STA  (P1)+
+        LDA  #10
+        STA  TMP
+FNM1:   LDA  #' '
+        STA  (P1)+
+        LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  FNM1
+        JSR  FENT
+        LDA  #33            ; write the root's first sector -> LBA 33
+        STA  LBA
+        JSR  CFWRSEC
+        JSR  ZSBUF          ; zero the rest of the extent, LBA 34..36
+        LDA  #34
 FDIR:   STA  LBA
         JSR  CFWRSEC
         LDA  LBA
         INC
-        LDB  #65
+        LDB  #37
         CMP
         JNC  FDIR
         LDP1 #MFMTOK
         JSR  PUTS
         JMP  PROMPT
+; FENT - emit the 20 non-name bytes of a v2 root dir entry through (P1)+:
+;   start LBA 33, length 2048 (=4*512), load/exec 0, flag=directory, 7 spare 0.
+FENT:   LDA  #33            ; start LBA (33,0,0,0)
+        STA  (P1)+
+        LDA  #0
+        STA  (P1)+
+        STA  (P1)+
+        STA  (P1)+
+        LDA  #0             ; length 2048 = $0800 (lo,hi,0,0)
+        STA  (P1)+
+        LDA  #8
+        STA  (P1)+
+        LDA  #0
+        STA  (P1)+
+        STA  (P1)+
+        LDA  #0             ; load (2) + exec (2) = 0
+        STA  (P1)+
+        STA  (P1)+
+        STA  (P1)+
+        STA  (P1)+
+        LDA  #2             ; flag = directory
+        STA  (P1)+
+        LDA  #7             ; 7 spare bytes = 0
+        STA  TMP
+FENS:   LDA  #0
+        STA  (P1)+
+        LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  FENS
+        RTS
 
 ; ---------------- B : boot from CF -------------------------------------------
 CMD_B:  JSR  CFINIT

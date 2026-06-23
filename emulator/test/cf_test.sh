@@ -17,11 +17,16 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/
 printf "        LDA  #'K'\n        STA  \$FF05\n        LDA  #'!'\n        STA  \$FF05\n        HLT\n" > tinyos.asm
 python3 $ROOT/assembler/p8xasm.py tinyos.asm -o tinyos.bin >/dev/null
 
-# Format the card via the monitor, then verify the boot block signature.
+# Format the card via the monitor (now writes a P8XFS v2 volume), then verify
+# the boot block: 'P8' signature, version byte 2, and that the host fsck agrees
+# the monitor laid a valid v2 root extent.
 rm -f cf.img
 printf 'F\rY\r' | ../p8xemu -l 8000000 -c cf.img eeprom.bin >/dev/null 2>&1
 sig=$(xxd -l 2 -p cf.img)
 [ "$sig" = "5038" ] || { echo "CF TEST: FAIL — boot block signature '$sig' != '5038'"; exit 1; }
+ver=$(xxd -s 2 -l 1 -p cf.img)
+[ "$ver" = "02" ] || { echo "CF TEST: FAIL — monitor F wrote version '$ver' != '02' (v2)"; exit 1; }
+python3 $ROOT/tools/p8xfs.py fsck cf.img >/dev/null 2>&1 || { echo "CF TEST: FAIL — monitor F produced an invalid v2 volume"; exit 1; }
 
 # Plant the OS image at LBA 1 and set OSCNT.
 python3 - <<'PY'

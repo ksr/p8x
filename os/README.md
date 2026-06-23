@@ -6,8 +6,8 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 [`p8xasm.py`](../assembler/p8xasm.py).
 
 > **Status: v1.0 — full shell over a hierarchical filesystem.**
-> Reads both P8XFS v1 (flat) and v2 (hierarchical) volumes — the layout is
-> chosen at cold start from the boot block's version byte.
+> Reads/writes P8XFS **v2** (hierarchical) volumes. (v1, the old flat layout,
+> has been retired — v2 is the only format; `FORMAT` lays a fresh one.)
 >
 > | Command | Effect |
 > |---------|--------|
@@ -121,14 +121,17 @@ builds an image with the OS + two files, boots it, and asserts `DIR` lists
 them. See [tools/p8xfs.py](../tools/p8xfs.py) for the host-side filesystem
 tool (`create`/`boot`/`put`/`get`/`ls`).
 
-## P8XFS v1 on-disk layout
+## P8XFS v2 on-disk layout
 
 | LBA | Contents |
 |-----|----------|
-| 0 | Boot block: `P8`, version, OSCNT, free pointer |
+| 0 | Boot block: `P8`, version (2), OSCNT, free pointer |
 | 1–32 | OS image (loaded to `$4000`) |
-| 33–64 | Directory: 512 × 32-byte entries |
-| 65+ | File data, contiguous extents |
+| 33–36 | Root directory: 4-sector extent (entry 0 `.`, entry 1 `..`) |
+| 37+ | Files + subdirectory extents, contiguous (from the free pointer) |
 
-Directory entry (32 bytes): name 12 · start LBA 4 · length 4 · load 2 · exec 2
-· flags 1 (`$00` end, `$01` file, `$02` dir, `$FF` deleted) · spare 7.
+A directory is a file whose extent holds 32-byte entries; subdirectories nest
+via their own extents. Directory entry (32 bytes): name 12 · start LBA 4 ·
+length 4 · load 2 · exec 2 · flags 1 (`$00` end, `$01` file, `$02` dir, `$FF`
+deleted) · spare 7. See
+[../hardware/cf-card/p8xfs-v2-hierarchical.md](../hardware/cf-card/p8xfs-v2-hierarchical.md).

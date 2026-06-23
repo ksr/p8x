@@ -14,8 +14,7 @@
 ;   python3 assembler/p8xasm.py os/p8xos.asm -o p8xos.bin --base 0x4000
 ; then install on a P8XFS image with:  tools/p8xfs.py boot disk.img p8xos.bin
 ;
-; v0.9 shell (reads P8XFS v1 flat OR v2 hierarchical, chosen from the boot
-; block's version byte at cold start):
+; shell over a P8XFS v2 (hierarchical) volume:
 ;   DIR [path]         list the current directory, or a given one
 ;   CD  path           change directory (absolute /a/b, relative, '.'/'..')
 ;   PWD                print the working-directory path
@@ -56,9 +55,7 @@ LBA1    = $9D48          ; LBA byte 1 (bits 15:8)  — 0 after CFINIT unless set
 LBA2    = $9D49          ; LBA byte 2 (bits 23:16) — 0 after CFINIT unless set
 SBUF    = $9E00          ; 512-byte sector buffer
 
-; ---- P8XFS v1 on-disk layout -----------------------------------------------
-DIRLBA  = 33             ; directory: LBA 33..64, 32-byte entries
-DATALBA = 65             ; first data LBA (directory scan stops here)
+; ---- P8XFS v2 on-disk layout (root @ LBA 33, 4 secs; data @ 37) -------------
 F_FILE  = $01            ; entry flag: regular file ($00 end marker)
 F_DIR   = $02            ; subdirectory (its extent holds entries)
 F_DEL   = $FF            ; deleted
@@ -114,9 +111,9 @@ DSTL    = $A089          ; copy dest LBA
 CPYN    = $A08A          ; sectors left to copy
 CANDL   = $A08B          ; current entry's start-field pointer
 CANDH   = $A08C
-; ---- directory / path working set (v1 + v2) ----
-ROOTN   = $A08D          ; root directory sector count (32 on v1, 4 on v2)
-DATABASE= $A08E          ; first data LBA (65 on v1, 37 on v2)
+; ---- directory / path working set ----
+ROOTN   = $A08D          ; root directory sector count (4)
+DATABASE= $A08E          ; first data LBA (37)
 CWDL    = $A08F          ; current directory: start LBA
 CWDN    = $A090          ;                    sector count
 SDIRL   = $A091          ; directory being scanned this op (start LBA)
@@ -176,27 +173,14 @@ COLD:   LDP3 #STKTOP
         STA  REDIRF
         LDP1 #MBANNER
         JSR  OPUTS
-        ; pick the on-disk layout from the boot-block version byte
-        LDP1 #SBUF
-        LDA  #0
-        STA  LBA
-        JSR  CFREAD
-        LDA  SBUF+2
-        LDB  #2
-        CMP
-        JZ   CB_V2
-        LDA  #32                ; v1: flat root LBA 33..64, data @ 65
-        STA  ROOTN
-        LDA  #65
-        STA  DATABASE
-        JMP  CB_SET
-CB_V2:  LDA  #4                 ; v2: root LBA 33..36, data @ 37
+        ; P8XFS v2 layout (the only format): root LBA 33..36 (4 secs), data @ 37
+        LDA  #4
         STA  ROOTN
         LDA  #37
         STA  DATABASE
-CB_SET: LDA  #33                ; CWD = root
+        LDA  #33                ; CWD = root
         STA  CWDL
-        LDA  ROOTN
+        LDA  #4
         STA  CWDN
         JSR  PATHROOT           ; CWDPATH = "/"
 
@@ -779,11 +763,7 @@ SC_GO:  RTS
 ; ---------------- MKDIR path -------------------------------------------------
 ; Create a subdirectory: allocate a SUBSECS-sector extent at the free pointer,
 ; lay down its '.' / '..', and add an entry to the parent directory.
-DOMKDIR:LDA  ROOTN              ; v2 only (flat volumes have no subdirectories)
-        LDB  #32
-        CMP
-        JZ   MK_NOV2
-        JSR  ARG2P2
+DOMKDIR:JSR  ARG2P2
         JSR  RESOLVE            ; SDIR = parent, NAMEBUF = new dir name
         LDA  MATCH
         JZ   NODIR
@@ -836,9 +816,6 @@ mk_nc:  STA  SBUF+5
         JSR  CFWRITE
         LDP1 #MMKOK
         JSR  OPUTS
-        JMP  SHELL
-MK_NOV2:LDP1 #MNOV2
-        JSR  PUTS
         JMP  SHELL
 MK_EXIST:LDP1 #MEXIST
         JSR  PUTS
@@ -1025,11 +1002,7 @@ zsb2:   LDA  #0
 ; ---------------- RMDIR path -------------------------------------------------
 ; Remove an empty subdirectory: resolve it, confirm it's a directory and empty
 ; (nothing past '.'/'..'), then tombstone its entry in the parent.
-DORMDIR:LDA  ROOTN
-        LDB  #32
-        CMP
-        JZ   MK_NOV2
-        JSR  ARG2P2
+DORMDIR:JSR  ARG2P2
         JSR  RESOLVE
         LDA  MATCH
         JZ   NODIR
@@ -1118,13 +1091,8 @@ de_no:  LDA  #0
 ; Depth-first indented listing of the whole tree from root. Iterative, with an
 ; explicit RAM stack of (dir start, dir sectors, next entry index) frames — one
 ; shared sector buffer rules out recursion, so on return from a child we just
-; re-read the parent's sector and resume. v2 only (a v1 root has 32 sectors,
-; whose entry-count overflows a byte, and no subdirectories anyway).
-DOTREE: LDA  ROOTN
-        LDB  #32
-        CMP
-        JZ   MK_NOV2
-        LDA  #'/'               ; print the root
+; re-read the parent's sector and resume.
+DOTREE: LDA  #'/'               ; print the root
         JSR  OUTCH
         JSR  CRLF
         LDA  #33                ; current = root
@@ -1214,7 +1182,7 @@ TR_ASC: LDA  TSP
 TR_DONE:JMP  SHELL
 
 ; ---------------- FSCK (read-only consistency check) ------------------------
-; Walks the directory tree (v2) or the flat root (v1) WITHOUT modifying the
+; Walks the directory tree WITHOUT modifying the
 ; disk, and verifies: the boot signature 'P8'; every live extent starts in the
 ; data area and ends at/below the free pointer; and (v2) every directory's
 ; '..' points at its real parent. Prints counts and a verdict. Exhaustive
@@ -1246,17 +1214,13 @@ FK_SIG: LDP1 #MFKSIG
         JSR  OPUTS
         JSR  CRLF
         JSR  FK_BUMP
-FK_RDD: ; --- v2: root's '..' must point at the root (LBA 33) ---
-        LDA  ROOTN
-        LDB  #32
-        CMP
-        JZ   FK_W0            ; v1 has no '.'/'..'
+FK_RDD: ; root's '..' must point at the root (LBA 33)
         LDA  #33
         STA  FCHILD
         LDA  #33
         STA  FEXP
         JSR  CHKDD
-FK_W0:  ; --- walk from the root ---
+        ; --- walk from the root ---
         LDA  #33
         STA  CDST
         LDA  ROOTN
@@ -1714,172 +1678,9 @@ DP_ERR: LDP1 #MDPER
         JMP  SHELL
 
 ; ---------------- PACK : compact the data area -------------------------------
-; SAVE always allocates at the free pointer and DEL only tombstones, so deleted
-; extents leak. PACK reclaims them: repeatedly find the live file with the
-; smallest start LBA >= the running free pointer (NF), copy its extent down to
-; NF, fix its directory entry, and advance NF; finally rewrite the boot-block
-; free pointer. Each pass re-scans the directory (entry count is small), and
-; ascending-by-start order guarantees a moved extent never overwrites one not
-; yet processed (dst <= src, low-to-high copy only revisits already-moved
-; sectors). 1-byte LBAs (volumes <= 256 sectors), matching the rest of the OS.
-DOPACK: LDA  ROOTN              ; flat (v1) uses the simple scan; v2 walks the tree
-        LDB  #32
-        CMP
-        JNZ  DOPACK2
-        LDA  #DATALBA
-        STA  NF
-PK_PASS:LDA  #0
-        STA  PFOUND
-        LDA  #DIRLBA
-        STA  DLBA
-PK_SEC: LDP1 #SBUF
-        LDA  DLBA
-        STA  LBA
-        JSR  CFREAD
-        LDP2 #SBUF
-        LDA  #16
-        STA  ECNT
-PK_ENT: LDA  #12                ; skip the 12 name bytes
-        STA  TMP
-PK_NM:  LDA  (P2)+
-        LDA  TMP
-        DEC
-        STA  TMP
-        JNZ  PK_NM
-        TPA2L                   ; remember pointer to the start-LBA field
-        STA  CANDL
-        TPA2H
-        STA  CANDH
-        LDA  (P2)+              ; start LBA (low byte kept, 3 skipped)
-        STA  ESTART
-        LDA  (P2)+
-        LDA  (P2)+
-        LDA  (P2)+
-        LDA  (P2)+              ; length low 16 (for the sector count)
-        STA  LENLO
-        LDA  (P2)+
-        STA  LENHI
-        LDA  (P2)+              ; length high 16 (skip)
-        LDA  (P2)+
-        LDA  (P2)+              ; load + exec (skip 4)
-        LDA  (P2)+
-        LDA  (P2)+
-        LDA  (P2)+
-        LDA  (P2)+              ; flag byte
-        STA  FLAGS
-        LDA  #7                 ; skip spare -> next entry
-        STA  TMP
-PK_SP:  LDA  (P2)+
-        LDA  TMP
-        DEC
-        STA  TMP
-        JNZ  PK_SP
-        LDA  FLAGS
-        JZ   PK_AFTER           ; $00 end marker -> directory scan complete
-        LDB  #F_FILE
-        CMP
-        JNZ  PK_NEXT            ; deleted / non-file -> skip
-        LDA  ESTART             ; live file: already packed (start < NF)?
-        LDB  NF
-        CMP
-        JNC  PK_NEXT            ; ESTART < NF -> skip
-        JSR  SECCOUNT           ; SECCNT = sectors for this extent
-        LDA  PFOUND
-        JZ   PK_TAKE            ; first candidate this pass
-        LDA  ESTART             ; else keep the smaller start
-        LDB  MINSTRT
-        CMP
-        JC   PK_NEXT            ; ESTART >= MINSTRT -> not smaller
-PK_TAKE:LDA  #1
-        STA  PFOUND
-        LDA  ESTART
-        STA  MINSTRT
-        LDA  SECCNT
-        STA  MINSEC
-        LDA  CANDL
-        STA  MINPL
-        LDA  CANDH
-        STA  MINPH
-        LDA  DLBA
-        STA  MINDL
-PK_NEXT:LDA  ECNT
-        DEC
-        STA  ECNT
-        JNZ  PK_ENT
-        LDA  DLBA
-        INC
-        STA  DLBA
-        LDB  #DATALBA
-        CMP                     ; DLBA >= 65 -> scanned the whole directory
-        JC   PK_AFTER
-        JMP  PK_SEC
-PK_AFTER:LDA PFOUND
-        JZ   PK_FIN             ; nothing left to move
-        LDA  MINSTRT
-        LDB  NF
-        CMP
-        JZ   PK_ADV             ; extent already at NF
-        LDA  MINSTRT            ; copy MINSEC sectors  src=MINSTRT -> dst=NF
-        STA  SRCL
-        LDA  NF
-        STA  DSTL
-        LDA  MINSEC
-        STA  CPYN
-PK_CPY: LDP1 #SBUF
-        LDA  SRCL
-        STA  LBA
-        JSR  CFREAD             ; src sector -> SBUF
-        LDA  DSTL
-        STA  LBA
-        JSR  CFWRITE            ; SBUF -> dst sector
-        LDA  SRCL
-        INC
-        STA  SRCL
-        LDA  DSTL
-        INC
-        STA  DSTL
-        LDA  CPYN
-        DEC
-        STA  CPYN
-        JNZ  PK_CPY
-        LDP1 #SBUF              ; rewrite the entry's start LBA = NF
-        LDA  MINDL
-        STA  LBA
-        JSR  CFREAD
-        LDA  MINPL
-        TAP1L
-        LDA  MINPH
-        TAP1H
-        LDA  NF
-        STA  (P1)+
-        LDA  #0
-        STA  (P1)+
-        STA  (P1)+
-        STA  (P1)+
-        LDA  MINDL
-        STA  LBA
-        JSR  CFWRITE
-PK_ADV: LDA  NF                 ; NF += MINSEC
-        LDB  MINSEC
-        ADD
-        STA  NF
-        JMP  PK_PASS
-PK_FIN: LDP1 #SBUF              ; write the new free pointer into the boot block
-        LDA  #0
-        STA  LBA
-        JSR  CFREAD
-        LDA  NF
-        STA  SBUF+4
-        LDA  #0
-        STA  SBUF+5
-        LDA  #0
-        STA  LBA
-        JSR  CFWRITE
-        LDP1 #MPACKED
-        JSR  OPUTS
-        JMP  SHELL
-; ---------------- v2 PACK ----------------------------------------------------
-; Two phases. PHASE 1 compacts every extent (files AND directory extents) down
+; SAVE allocates at the free pointer and DEL/RMDIR only tombstone, so deleted
+; extents leak; PACK reclaims them. Two phases. PHASE 1 compacts every extent
+; (files AND directory extents) down
 ; to a running free pointer, ascending by start LBA, updating ONLY the one
 ; parent directory entry that points to each (the find-walk reaches each extent
 ; via that entry, so it has the location in hand; re-walking each pass reflects
@@ -1888,7 +1689,7 @@ PK_FIN: LDP1 #SBUF              ; write the new free pointer into the boot block
 ; not '.'/'..', so stale './..' don't matter here. PHASE 2 then re-walks the
 ; (now compacted) tree and rewrites every directory's '.' (=self) and '..'
 ; (=parent) from final positions. Root (LBA 33..36) never moves.
-DOPACK2:LDA  DATABASE           ; first data LBA (37 on v2)
+DOPACK: LDA  DATABASE           ; first data LBA (37)
         STA  NF
 P2_PASS:JSR  PK2FIND            ; PFOUND + MINSTRT/MINSEC + PPSEC/PPSLOT
         LDA  PFOUND
@@ -2918,8 +2719,6 @@ MMKOK:   .byte CR,LF
          .asciiz "DIR CREATED"
 MRMOK:   .byte CR,LF
          .asciiz "DIR REMOVED"
-MNOV2:   .byte CR,LF
-         .asciiz "?NEEDS v2 VOLUME"
 MFMTQ:   .byte CR,LF
          .asciiz "FORMAT: erase card as v2? (Y/N) "
 MFMTOK:  .byte CR,LF

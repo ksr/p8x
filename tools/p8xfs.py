@@ -1,32 +1,27 @@
 #!/usr/bin/env python3
-"""p8xfs - host-side tool for P8XFS v1 disk images (the flat filesystem the
-P8X ROM monitor formats and P8X/OS reads).
+"""p8xfs - host-side tool for P8XFS v2 (hierarchical) disk images, the
+filesystem the P8X ROM monitor formats and P8X/OS reads. (v1, the old flat
+layout, has been retired — v2 is the only format.)
 
-A P8XFS v1 volume is a flat sequence of 512-byte sectors (LBAs):
+A P8XFS v2 volume is a sequence of 512-byte sectors (LBAs):
 
-    LBA 0        boot block: 'P8', version, OSCNT, free-pointer
-    LBA 1..32    OS image (loaded to $8000 by the monitor's B command)
-    LBA 33..64   directory: 512 x 32-byte entries
-    LBA 65..     file data, contiguous extents (allocated at the free pointer)
+    LBA 0        boot block: 'P8', version=2, OSCNT, free-pointer
+    LBA 1..32    OS image (loaded to $4000 by the monitor's B command)
+    LBA 33..36   root directory (4-sector extent; entry 0='.', 1='..')
+    LBA 37..     files + subdirectory extents, contiguous (at the free pointer)
 
-This matches firmware/p8xmon.asm (F/B commands) and the on-disk format in
-hardware/cf-card/p8x-cf-os-design.md. The hierarchical v2 layout in
-p8xfs-v2-hierarchical.md is a later upgrade; this tool is v1.
+A directory is just a file whose extent holds 32-byte entries; subdirectories
+nest via their own extents. See hardware/cf-card/p8xfs-v2-hierarchical.md.
 
-Usage:
-    p8xfs.py create  img [--sectors N]          format a fresh volume
+Usage (paths are absolute /a/b or relative to the root):
+    p8xfs.py create  img [--sectors N]          format a fresh v2 volume
     p8xfs.py boot    img osimage.bin            install OS image at LBA 1
-    p8xfs.py put     img file [--name N] [--load A] [--exec A]
-    p8xfs.py get     img name [--out path]
-    p8xfs.py ls      img [path]
-    p8xfs.py fsck    img                        verify; report reclaimable space
-
-v2 (hierarchical) volumes — create with --v2; put/get/ls/mkdir take paths:
-    p8xfs.py create  img --v2
     p8xfs.py mkdir   img /BIN
-    p8xfs.py put     img file.bin --name /BIN/FILE.BIN
-    p8xfs.py ls      img /BIN
+    p8xfs.py put     img file [--name /BIN/F] [--load A] [--exec A]
+    p8xfs.py get     img /BIN/F [--out path]
+    p8xfs.py ls      img [path]
     p8xfs.py tree    img
+    p8xfs.py fsck    img                        verify; report reclaimable space
 """
 import sys, os, struct, argparse, math
 
@@ -36,11 +31,6 @@ OS_LBA   = 1
 OS_MAX   = 32            # OS image spans LBA 1..32 (16 KB)
 ENT      = 32           # directory entry size
 ENT_PER_SEC = SEC // ENT
-
-# v1 (flat) layout
-DIR_LBA  = 33
-DIR_SECS = 32           # LBA 33..64 -> 512 entries
-DATA_LBA = 65
 
 # v2 (hierarchical) layout: root is a 4-sector directory extent at LBA 33; a
 # directory is just a file whose extent holds 32-byte entries (entry 0 = '.',
@@ -108,30 +98,6 @@ def pack_at(img, off, name, start, length, load, exec_, flags):
     img[off:off + 12] = nm
     struct.pack_into("<IIHHB", img, off + 12, start, length, load, exec_, flags)
     # spare 25..31 left as-is (zeroed on format)
-
-
-# v1 wrappers (flat directory at DIR_LBA)
-def ent_off(i):
-    return ent_abs(DIR_LBA, i)
-
-
-def unpack_entry(img, i):
-    return unpack_at(img, ent_off(i))
-
-
-def pack_entry(img, i, name, start, length, load, exec_, flags):
-    pack_at(img, ent_off(i), name, start, length, load, exec_, flags)
-
-
-def find_free_slot(img):
-    """First $FF (deleted) or $00 (end) slot. Returns (index, is_end)."""
-    for i in range(DIR_SECS * ENT_PER_SEC):
-        f = img[ent_off(i) + 24]
-        if f == F_DEL:
-            return i, False
-        if f == F_END:
-            return i, True
-    raise SystemExit("p8xfs: directory full")
 
 
 # ---- v2 hierarchical directory machinery ------------------------------------
@@ -222,29 +188,17 @@ def require_v2(img):
 
 # ---- commands ---------------------------------------------------------------
 def cmd_create(a):
-    if a.v2:
-        nsec = max(a.sectors, DATA_V2)
-        img = bytearray(b"\x00" * (nsec * SEC))
-        b = sec(img, BOOT_LBA)
-        b[0:2] = b"P8"
-        b[2] = 2                   # version 2 (hierarchical)
-        b[3] = 0                   # OSCNT = 0
-        struct.pack_into("<H", img, 4, DATA_V2)        # free pointer
-        init_dir_extent(img, ROOT_LBA, ROOT_SECS, ROOT_LBA, ROOT_SECS)  # '..' -> self
-        write_img(a.img, img)
-        print("created %s (v2): %d sectors, root@LBA %d, free@LBA %d" %
-              (a.img, nsec, ROOT_LBA, DATA_V2))
-        return
-    nsec = max(a.sectors, DATA_LBA)
+    nsec = max(a.sectors, DATA_V2)
     img = bytearray(b"\x00" * (nsec * SEC))
     b = sec(img, BOOT_LBA)
     b[0:2] = b"P8"
-    b[2] = 1                       # version 1
+    b[2] = 2                       # version 2 (hierarchical) — the only format
     b[3] = 0                       # OSCNT = 0 (no OS yet)
-    struct.pack_into("<H", img, 4, DATA_LBA)   # free pointer
-    # directory region already zeroed -> first entry flag $00 = end
+    struct.pack_into("<H", img, 4, DATA_V2)            # free pointer
+    init_dir_extent(img, ROOT_LBA, ROOT_SECS, ROOT_LBA, ROOT_SECS)  # '..' -> self
     write_img(a.img, img)
-    print("created %s: %d sectors, free@LBA %d" % (a.img, nsec, DATA_LBA))
+    print("created %s (v2): %d sectors, root@LBA %d, free@LBA %d" %
+          (a.img, nsec, ROOT_LBA, DATA_V2))
 
 
 def cmd_boot(a):
@@ -265,50 +219,28 @@ def cmd_boot(a):
 def cmd_put(a):
     img = read_img(a.img)
     data = read_img(a.file)
-    if version(img) == 2:
-        dest = a.name or os.path.basename(a.file)
-        parent, leaf = split_path(dest)
-        pdir = resolve_dir(img, parent)
-        if find_in_dir(img, pdir[0], pdir[1], leaf):
-            raise SystemExit("p8xfs: %s already exists" % leaf)
-        nsec = max(1, math.ceil(len(data) / SEC))
-        start = alloc(img, nsec)
-        for s in range(nsec):
-            sec(img, start + s)[:] = data[s * SEC:(s + 1) * SEC].ljust(SEC, b"\x00")
-        add_entry(img, pdir[0], pdir[1], leaf, start, len(data), a.load, a.exec, F_FILE)
-        write_img(a.img, img)
-        print("put %s  %d bytes  LBA %d..%d" %
-              (dest, len(data), start, start + nsec - 1))
-        return
-    name = a.name or os.path.basename(a.file)
+    dest = a.name or os.path.basename(a.file)
+    parent, leaf = split_path(dest)
+    pdir = resolve_dir(img, parent)
+    if find_in_dir(img, pdir[0], pdir[1], leaf):
+        raise SystemExit("p8xfs: %s already exists" % leaf)
     nsec = max(1, math.ceil(len(data) / SEC))
-    start = get_free(img)
+    start = alloc(img, nsec)
     for s in range(nsec):
-        chunk = data[s * SEC:(s + 1) * SEC].ljust(SEC, b"\x00")
-        sec(img, start + s)[:] = chunk
-    i, _ = find_free_slot(img)
-    pack_entry(img, i, name, start, len(data), a.load, a.exec, F_FILE)
-    set_free(img, start + nsec)
+        sec(img, start + s)[:] = data[s * SEC:(s + 1) * SEC].ljust(SEC, b"\x00")
+    add_entry(img, pdir[0], pdir[1], leaf, start, len(data), a.load, a.exec, F_FILE)
     write_img(a.img, img)
-    print("put %-12s %5d bytes  LBA %d..%d  load=%04X exec=%04X" %
-          (name, len(data), start, start + nsec - 1, a.load, a.exec))
+    print("put %s  %d bytes  LBA %d..%d" %
+          (dest, len(data), start, start + nsec - 1))
 
 
 def cmd_get(a):
     img = read_img(a.img)
-    if version(img) == 2:
-        parent, leaf = split_path(a.name)
-        pdir = resolve_dir(img, parent)
-        e = find_in_dir(img, pdir[0], pdir[1], leaf)
-        if e is None or e["flags"] != F_FILE:
-            raise SystemExit("p8xfs: %s not found" % a.name)
-    else:
-        want = name12(a.name)
-        e = next((x for x in (unpack_entry(img, i) for i in
-                  range(DIR_SECS * ENT_PER_SEC)) if x["flags"] != F_END
-                  and x["flags"] == F_FILE and x["name"] == want), None)
-        if e is None:
-            raise SystemExit("p8xfs: %s not found" % a.name)
+    parent, leaf = split_path(a.name)
+    pdir = resolve_dir(img, parent)
+    e = find_in_dir(img, pdir[0], pdir[1], leaf)
+    if e is None or e["flags"] != F_FILE:
+        raise SystemExit("p8xfs: %s not found" % a.name)
     data = bytes(img[e["start"] * SEC: e["start"] * SEC + e["length"]])
     out = a.out or os.path.basename(a.name)
     write_img(out, bytearray(data))
@@ -335,12 +267,8 @@ def cmd_ls(a):
     img = read_img(a.img)
     print("Volume %s  version %d  OSCNT %d  free@LBA %d" %
           (a.img, version(img), get_oscnt(img), get_free(img)))
-    if version(img) == 2:
-        dlba, dsecs = resolve_dir(img, a.path or "/")
-        _print_dir(img, iter_dir(img, dlba, dsecs))
-        return
-    _print_dir(img, (unpack_entry(img, i) for i in range(DIR_SECS * ENT_PER_SEC)
-                     if unpack_entry(img, i)["flags"] != F_END))
+    dlba, dsecs = resolve_dir(img, a.path or "/")
+    _print_dir(img, iter_dir(img, dlba, dsecs))
 
 
 def cmd_mkdir(a):
@@ -442,59 +370,7 @@ def fsck_v2(img, imgname):
 
 def cmd_fsck(a):
     img = read_img(a.img)
-    if version(img) == 2:
-        fsck_v2(img, a.img)
-        return
-    total = len(img) // SEC
-    errs = []
-    if bytes(img[0:2]) != b"P8":
-        errs.append("bad boot signature %r (want 'P8')" % bytes(img[0:2]))
-    free = get_free(img)
-
-    # Collect live extents (flag $01) as (start, sectors, name).
-    live = []
-    ndel = 0
-    for i in range(DIR_SECS * ENT_PER_SEC):
-        e = unpack_entry(img, i)
-        if e["flags"] == F_END:
-            break
-        if e["flags"] == F_DEL:
-            ndel += 1
-            continue
-        if e["flags"] != F_FILE:
-            continue
-        nm = e["name"].decode("latin1").rstrip()
-        secs = max(1, (e["length"] + SEC - 1) // SEC)
-        s, end = e["start"], e["start"] + secs
-        if s < DATA_LBA:
-            errs.append("%s: start LBA %d below first data LBA %d" % (nm, s, DATA_LBA))
-        if end > total:
-            errs.append("%s: extent %d..%d runs past volume end %d" % (nm, s, end - 1, total))
-        live.append((s, secs, nm))
-
-    # Overlap check (sort by start LBA).
-    live.sort()
-    for (s1, n1, nm1), (s2, n2, nm2) in zip(live, live[1:]):
-        if s1 + n1 > s2:
-            errs.append("overlap: %s (%d..%d) and %s (%d..%d)" %
-                        (nm1, s1, s1 + n1 - 1, nm2, s2, s2 + n2 - 1))
-
-    used = sum(n for _, n, _ in live)
-    hi = max((s + n for s, n, _ in live), default=DATA_LBA)
-    if free < hi:
-        errs.append("free pointer %d < end of last extent %d" % (free, hi))
-    # Sectors between DATA_LBA and the free pointer that no live file occupies
-    # are leaked by DEL and reclaimable by PACK.
-    leaked = (free - DATA_LBA) - used
-
-    print("Volume %s: %d live file(s), %d deleted slot(s)" % (a.img, len(live), ndel))
-    print("  free pointer LBA %d, %d data sector(s) used, %d reclaimable by PACK"
-          % (free, used, max(0, leaked)))
-    if errs:
-        for e in errs:
-            print("  FAIL: " + e)
-        raise SystemExit(1)
-    print("  OK")
+    fsck_v2(img, a.img)
 
 
 def main():
@@ -504,7 +380,7 @@ def main():
 
     c = sub.add_parser("create"); c.add_argument("img")
     c.add_argument("--sectors", type=int, default=256)
-    c.add_argument("--v2", action="store_true", help="hierarchical (v2) volume")
+    c.add_argument("--v2", action="store_true", help=argparse.SUPPRESS)  # v2 is the only format; accepted for compatibility
     c.set_defaults(fn=cmd_create)
 
     c = sub.add_parser("boot"); c.add_argument("img"); c.add_argument("osimage")
