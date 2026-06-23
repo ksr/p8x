@@ -108,26 +108,45 @@ Last updated: 2026-06-23
     - Smoke tests test1-3.asm overlap test_isa.asm (per-opcode). They give
       higher-level scenario coverage (banner, JSR/RTS, countdown); keep as
       complementary unless trimming.
-- [ ] **C compiler (cross, then native)** — IN PROGRESS. v0.1 cross-compiler
-      landed (`compiler/p8cc.py`, see DONE): int/char, functions (no params),
-      if/while, `+ - *` and comparisons, putchar/puts, compiling to a RUNnable
-      `/BIN` program (`make test-c`). Remaining toward a usable C: stack frame
-      for params/locals + a calling convention (recursion/reentrancy), pointers/
-      arrays/`&`/`*`, `/ %` + shifts, `for`, `&&`/`||`, structs, a small libc
-      over the BIOS. **Native** (on-target) compiler stays the stretch goal once
-      the cross-compiler is solid + there's enough RAM. Original plan kept below.
-      Start
-      with a **cross-compiler** on the host: a small-C subset (int/char/pointers,
-      functions, if/while/for, basic expressions — no float, limited structs)
-      emitting P8X assembly that feeds p8xasm.py. The 8-bit/16-bit-pointer ISA
-      and the pointer bank shape the codegen (P0-P3 as frame/stack/scratch; a
-      software call stack via P3). A **native** compiler on P8X/OS is the
-      stretch goal once there's an on-target assembler + editor and enough RAM
-      — likely an even smaller subset, possibly multi-pass through temp files.
-      Depends on: a stable calling convention/ABI, the on-target assembler, and
-      a C runtime (startup, multiply/divide/shift helpers, minimal libc over
-      the BIOS). Sequence after Forth/assembler land; reference small-C / SubC
-      style compilers for the subset and codegen approach.
+- [ ] **C compiler — cross-compiler DONE; bootstrapping toward self-host is the
+      open work.** The host cross-compiler (`compiler/p8cc.py`) is solid through
+      v0.3 (#44–47, see DONE): int/char/pointers/arrays, functions with
+      params/locals/recursion, `if`/`while`, `+ - * / %`, comparisons, `& *`
+      indexing, and `getchar`/`putchar`/`puts` over the BIOS — with library
+      functions written in C. **It is written in Python and runs on the Mac.**
+      Two further milestones, in order, lead to "small C written in small C":
+
+      **(A) Rewrite p8cc's source in its own C subset (still cross-compiled on
+      the host).** This is the "written in small C" milestone — the compiler
+      compiles itself, but you still run it on the Mac. Prerequisites are subset
+      features p8cc needs to express a compiler, none of which exist yet:
+        - **structs/unions** (the AST nodes, symbol-table entries, type records
+          are all structs today) — the single biggest gap;
+        - **function return-type tracking** (currently everything defaults to
+          `int`; a compiler passes pointers-to-structs around constantly);
+        - **`for`, `&&`/`||` short-circuit, shifts + bitwise `& | ^ ~`** (lexer
+          and codegen lean on these);
+        - **global initializers + arrays of pointers** (keyword/opcode tables);
+        - **`switch`** (nice-to-have for the lexer/parser dispatch).
+      Then port lex/parse/codegen from Python to that subset. Reference SubC
+      (Nils Holm) — it is explicitly a self-compiling small-C and a good map for
+      both the subset boundary and the codegen shape.
+
+      **(B) Self-host: run the C-source compiler ON the P8X.** Strictly harder
+      than (A) and gated by RAM, exactly like the assembler was. The P8X has
+      ~48 KB RAM ($4000–$FEFF) and a compiler's working set (symbol table, AST,
+      type info) won't fit a whole translation unit in memory — so it needs the
+      same streaming/single-pass discipline we gave ASM (stream source in, emit
+      asm out, bounded tables), and it depends on the on-target assembler (DONE)
+      to turn that asm into a binary. Likely an even smaller subset than (A),
+      possibly multi-pass through temp files on disk.
+
+      Codegen is already shaped by the ISA (AX pseudo-acc; P3 hardware stack for
+      temps/returns; a software C-stack via `__csp`/`__fp` for frames) and a
+      runtime exists (`__add/__sub/__mul/__divmod/...`, emitted on demand).
+      Sequence: do (A)'s subset features incrementally (they're independently
+      useful for writing C on the P8X regardless of bootstrapping), then the
+      self-compile rewrite, then (B). Forth remains an orthogonal track.
 - [ ] **Native toolchain follow-ups** (EDIT + ASM landed — see DONE). Remaining
       polish on the on-target assembler/editor, none blocking:
         - **Tools write to the flat root only.** EDIT `W` and ASM output go to
@@ -255,6 +274,26 @@ Last updated: 2026-06-23
 > done + why + caveats). The original foundation milestones are a terse tick
 > list under *Early milestones* at the end of this section.
 
+- **C cross-compiler v0.2/v0.3 — params, recursion, pointers, I/O** (2026-06-23,
+  #45–47). Grew `p8cc.py` from the v0.1 skeleton into a usable small-C:
+    - **#45 calling convention.** A software C-stack (`__csp`, grows down from
+      $F800) holds call frames; `__fp` is the frame pointer; params at
+      `__fp+2,+4,…`, locals at `__fp-2,-4,…`; helpers `__enter`/`__leave`. So
+      functions take arguments and **recursion/reentrancy works** (e.g. `fact`).
+    - **#46 pointers, arrays, `& * [] / %`.** Type-aware codegen `(base,ptr,
+      count)`: dereference loads/stores the right width (int/ptr 2 B, char 1 B),
+      pointer arithmetic scales by element size, `gen_address` handles `&lvalue`/
+      `*e`/`a[i]`. Added unsigned 16-bit `/` and `%` (`__divmod`). (Fixed a
+      `__divmod` high-byte/quotient-bit bug — quotients had garbage high bytes.)
+    - **#47 input + libc-in-C.** `getchar()` builtin (BIOS CONIN $0100) gives
+      programs console input; the realization is that with pointers/arrays/char
+      working, the rest of a libc (`strlen`, `getline`, …) is just ordinary C
+      compiled alongside the program — so the builtin surface stays at three
+      I/O calls. Test `c_libc_test.sh` proves it end to end.
+    Suite grew to 26 (`c_compile_test` covers recursion/multi-arg/ptr-fill/`&`+
+    ptr-param/`/`+`%`; `c_libc_test` covers getchar+a C-written strlen). The
+    compiler is still host-Python — see IDEAS "C compiler" for the bootstrapping
+    roadmap (rewrite in its own subset, then self-host on the P8X).
 - **C cross-compiler v0.1** (2026-06-23). `compiler/p8cc.py` — a tiny C compiler
   on the host emitting P8X asm (for p8xasm.py), targeting the TPA so output is a
   RUNnable `/BIN` program. Lexer + recursive-descent parser + codegen. Subset:
