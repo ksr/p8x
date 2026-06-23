@@ -14,11 +14,12 @@
  * recursion, only getchar/putchar/puts for I/O.  EOF is c==0 (P8X CONIN at end
  * of stdin) or c==-1 (host getchar).
  *
- * Built incrementally; this stage is the lexer plus a single-pass code
- * generator for one `int main()` with the FULL expression operator set (the
- * precedence ladder + - * / % << >> < > <= >= == != & ^ | && || and unary
- * - ! ~), putchar(e), return, and statements/blocks.  Variables, control flow,
- * functions-with-args, pointers and structs come in later increments.
+ * Built incrementally.  Current language: multiple no-parameter functions and
+ * global int variables (optional constant initializer); the FULL expression
+ * operator set (precedence ladder + - * / % << >> < > <= >= == != & ^ | && ||
+ * and unary - ! ~); assignment to globals; putchar(e) and no-arg user calls;
+ * statements: block, if/else, while, for, return, expr.  Function parameters,
+ * locals, pointers and structs come in later increments.
  */
 #include <stdio.h>
 
@@ -253,6 +254,14 @@ int use_not = 0;
 int use_eq = 0;
 int use_lt = 0;
 
+/* ---- global variable table (single-pass, declared before use) ------------- */
+char gpool[1024];    /* packed NUL-terminated names */
+int gpooln = 0;
+int goff[64];        /* name offset in gpool */
+int ghas[64];        /* has a constant initializer? */
+int gini[64];        /* the initializer value */
+int gcount = 0;
+
 int emitstr(char *s) {
     while (*s != 0) { putchar(*s); s = s + 1; }
     return 0;
@@ -273,6 +282,22 @@ int emitdec(int v) {                 /* unsigned decimal (values are 0..65535) *
 int strcpy_(char *d, char *s) {
     while (*s != 0) { *d = *s; d = d + 1; s = s + 1; }
     *d = 0;
+    return 0;
+}
+
+int intern(char *s) {                /* copy a name into gpool, return its offset */
+    int off;
+    off = gpooln;
+    while (*s != 0) { gpool[gpooln] = *s; gpooln = gpooln + 1; s = s + 1; }
+    gpool[gpooln] = 0; gpooln = gpooln + 1;
+    return off;
+}
+
+int addglobal(char *nm, int hasi, int v) {
+    goff[gcount] = intern(nm);
+    ghas[gcount] = hasi;
+    gini[gcount] = v;
+    gcount = gcount + 1;
     return 0;
 }
 
@@ -323,6 +348,12 @@ int emitlabel(char *base, int n) {
 int emitjmp(char *op, char *base, int n) {                 /* op base<n> */
     emitstr("        "); emitstr(op); putchar(32);
     emitstr(base); emitdec(n); putchar(10);
+    return 0;
+}
+
+int test_jz(char *base, int n) {     /* if __ax == 0 jump to base<n> */
+    line("        LDA __ax"); line("        LDB __ax+1"); line("        OR");
+    emitjmp("JZ", base, n);
     return 0;
 }
 
@@ -470,12 +501,36 @@ int primary() {
     if (tok == T_NUM) { set_ax(tval); lex(); return 0; }
     if (is_punct("(")) { lex(); expr(); eat(")"); return 0; }
     if (tok == T_ID) {
-        strcpy_(nm, tname); lex(); eat("(");
-        expr();                                  /* the single argument */
-        eat(")");
-        if (streq(nm, "putchar")) {
-            line("        LDA __ax"); line("        JSR $0103");
+        strcpy_(nm, tname); lex();
+        if (is_punct("(")) {                     /* function call */
+            lex();
+            if (is_punct(")")) {                 /* no-arg call */
+                lex();
+                emitstr("        JSR _f_"); emitstr(nm); putchar(10);
+                return 0;
+            }
+            expr();                              /* single argument */
+            eat(")");
+            if (streq(nm, "putchar")) {
+                line("        LDA __ax"); line("        JSR $0103");
+            } else {
+                emitstr("        JSR _f_"); emitstr(nm); putchar(10);
+            }
+            return 0;
         }
+        if (is_punct("=")) {                     /* assignment to a global */
+            lex(); expr();
+            line("        LDA __ax");
+            emitstr("        STA _g_"); emitstr(nm); putchar(10);
+            line("        LDA __ax+1");
+            emitstr("        STA _g_"); emitstr(nm); emitstr("+1"); putchar(10);
+            return 0;
+        }
+        /* global variable load */
+        emitstr("        LDA _g_"); emitstr(nm); putchar(10);
+        line("        STA __ax");
+        emitstr("        LDA _g_"); emitstr(nm); emitstr("+1"); putchar(10);
+        line("        STA __ax+1");
         return 0;
     }
     line("; ERROR: bad primary");
@@ -659,12 +714,69 @@ int block() {
 }
 
 int stmt() {
+    int l1;
+    int l2;
+    int l3;
+    int l4;
     if (is_punct("{")) { block(); return 0; }
     if (tok == T_KW && streq(tname, "return")) {
         lex();
         if (is_punct(";") == 0) expr();
         eat(";");
         line("        RTS");
+        return 0;
+    }
+    if (tok == T_KW && streq(tname, "if")) {
+        lex(); eat("("); expr(); eat(")");
+        l1 = nlabel; nlabel = nlabel + 1;
+        l2 = nlabel; nlabel = nlabel + 1;
+        test_jz("Lif", l1);                       /* false -> else/end */
+        stmt();
+        if (tok == T_KW && streq(tname, "else")) {
+            emitjmp("JMP", "Lif", l2);
+            emitlabel("Lif", l1);
+            lex();
+            stmt();
+            emitlabel("Lif", l2);
+        } else {
+            emitlabel("Lif", l1);
+        }
+        return 0;
+    }
+    if (tok == T_KW && streq(tname, "while")) {
+        l1 = nlabel; nlabel = nlabel + 1;         /* top */
+        l2 = nlabel; nlabel = nlabel + 1;         /* end */
+        lex();
+        emitlabel("Lw", l1);
+        eat("("); expr(); eat(")");
+        test_jz("Lw", l2);
+        stmt();
+        emitjmp("JMP", "Lw", l1);
+        emitlabel("Lw", l2);
+        return 0;
+    }
+    if (tok == T_KW && streq(tname, "for")) {
+        /* layout: init; top: cond?JZ end; JMP body; post: post; JMP top;
+           body: BODY; JMP post; end:   (emits post before body, runtime loops) */
+        lex(); eat("(");
+        if (is_punct(";") == 0) expr();
+        eat(";");
+        l1 = nlabel; nlabel = nlabel + 1;         /* top  */
+        l2 = nlabel; nlabel = nlabel + 1;         /* post */
+        l3 = nlabel; nlabel = nlabel + 1;         /* body */
+        l4 = nlabel; nlabel = nlabel + 1;         /* end  */
+        emitlabel("Lf", l1);
+        if (is_punct(";") == 0) { expr(); test_jz("Lf", l4); }
+        eat(";");
+        emitjmp("JMP", "Lf", l3);
+        emitlabel("Lf", l2);
+        if (is_punct(")") == 0) expr();
+        eat(")");
+        emitjmp("JMP", "Lf", l1);
+        emitlabel("Lf", l3);
+        stmt();
+        emitjmp("JMP", "Lf", l2);
+        emitlabel("Lf", l4);
         return 0;
     }
     if (is_punct(";")) { lex(); return 0; }
@@ -698,6 +810,46 @@ int emit_runtime() {
     return 0;
 }
 
+int emit_globals() {
+    int i;
+    i = 0;
+    while (i < gcount) {
+        emitstr("_g_"); emitstr(gpool + goff[i]);
+        if (ghas[i]) { emitstr(":   .word "); emitdec(gini[i] & 65535); putchar(10); }
+        else { emitstr(":   .fill 2"); putchar(10); }
+        i = i + 1;
+    }
+    return 0;
+}
+
+/* ---- top-level declarations: functions (no params yet) and global vars ---- */
+int toplevel() {
+    char nm[64];
+    int hasi;
+    int v;
+    if (tok == T_KW) lex();                      /* type: int/char/void */
+    strcpy_(nm, tname); lex();                   /* declared name */
+    if (is_punct("(")) {                         /* function definition */
+        lex();                                   /* '(' */
+        eat(")");                                /* no parameters yet */
+        emitstr("_f_"); emitstr(nm); line(":");
+        block();
+        line("        RTS");                      /* fall-through return */
+        return 0;
+    }
+    hasi = 0; v = 0;                             /* global variable */
+    if (is_punct("=")) {
+        lex();
+        if (is_punct("-")) { lex(); v = 0 - tval; }
+        else v = tval;
+        lex();
+        hasi = 1;
+    }
+    eat(";");
+    addglobal(nm, hasi, v);
+    return 0;
+}
+
 /* ---- driver: compile one `int main() { ... }` to a runnable program -------- */
 int main() {
     slurp();
@@ -707,14 +859,9 @@ int main() {
     line("        JSR _f_main");
     line("        RTS");
 
-    if (tok == T_KW) lex();                      /* return type 'int' */
-    if (tok == T_ID) lex();                      /* function name (main) */
-    eat("(");
-    eat(")");
-    line("_f_main:");
-    block();
-    line("        RTS");                          /* fall-through return */
+    while (tok != T_EOF) toplevel();
 
     emit_runtime();
+    emit_globals();
     return 0;
 }

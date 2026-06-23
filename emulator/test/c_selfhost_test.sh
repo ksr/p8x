@@ -32,6 +32,13 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x4000 >/dev/null
 
 cat > diff.c <<'EOF'
+int s;
+int i;
+int compute() {                                        /* no-arg call + globals */
+    s = 0;
+    for (i = 0; i < 5; i = i + 1) s = s + i;           /* 0+1+2+3+4 = 10        */
+    return s;
+}
 int main() {
     putchar(48 + 3*4 - 11);                            /* 1: * - precedence    */
     putchar(48 + (17%5));                              /* 2: %                 */
@@ -41,6 +48,7 @@ int main() {
     putchar(48 + (3==3) + (5>2) + (1!=1) + 4);         /* 6: == > !=           */
     putchar(48 + ((1&&0)||1) + ((2<1)||(3>=3)) + 5);   /* 7: && || < >=        */
     putchar(48 + (~0 & 8));                            /* 8: ~ &               */
+    if (compute() == 10) putchar(89); else putchar(78);/* Y: for/if/call       */
     putchar(10);
     return 0;
 }
@@ -53,7 +61,7 @@ host_out=$(./p8cc_host < diff.c > d.asm; \
     python3 $ROOT/tools/p8xfs.py boot d.img osc.bin >/dev/null; \
     python3 $ROOT/tools/p8xfs.py put d.img d.bin --name D.BIN --load 0xB000 --exec 0xB000 >/dev/null; \
     printf 'B\rRUN D.BIN\r' | ../p8xemu -l 80000000 -c d.img eeprom.bin 2>/dev/null \
-        | LC_ALL=C tr -d '\0\r' | sed -n '/RUN D.BIN/,$p' | grep -v 'RUN D.BIN' | tr -dc '0-9')
+        | LC_ALL=C tr -d '\0\r' | sed -n '/RUN D.BIN/,$p' | grep -v 'RUN D.BIN' | tr -dc '0-9Y')
 
 py_out=$(python3 $ROOT/compiler/p8cc.py diff.c -o d.asm >/dev/null; \
     python3 $ROOT/assembler/p8xasm.py d.asm -o d.bin --base 0xB000 >/dev/null; \
@@ -61,10 +69,10 @@ py_out=$(python3 $ROOT/compiler/p8cc.py diff.c -o d.asm >/dev/null; \
     python3 $ROOT/tools/p8xfs.py boot d.img osc.bin >/dev/null; \
     python3 $ROOT/tools/p8xfs.py put d.img d.bin --name D.BIN --load 0xB000 --exec 0xB000 >/dev/null; \
     printf 'B\rRUN D.BIN\r' | ../p8xemu -l 80000000 -c d.img eeprom.bin 2>/dev/null \
-        | LC_ALL=C tr -d '\0\r' | sed -n '/RUN D.BIN/,$p' | grep -v 'RUN D.BIN' | tr -dc '0-9')
+        | LC_ALL=C tr -d '\0\r' | sed -n '/RUN D.BIN/,$p' | grep -v 'RUN D.BIN' | tr -dc '0-9Y')
 
-[ "$host_out" = "12345678" ] || fail "host bootstrap output '$host_out' != '12345678'"
-[ "$py_out" = "12345678" ]   || fail "p8cc.py output '$py_out' != '12345678'"
+[ "$host_out" = "12345678Y" ] || fail "host bootstrap output '$host_out' != '12345678Y'"
+[ "$py_out" = "12345678Y" ]   || fail "p8cc.py output '$py_out' != '12345678Y'"
 [ "$host_out" = "$py_out" ]  || fail "host '$host_out' != p8cc.py '$py_out' (differential)"
 
 echo "C-SELFHOST TEST: PASS"
