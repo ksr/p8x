@@ -71,6 +71,13 @@ FNAME   = $9D4A          ; 12-byte filename (space-padded) — in for both calls
 FSRC    = $9D56          ; FCREATE: source address of the file data (2 bytes)
 FLEN    = $9D58          ; file length in bytes (2 bytes): FCREATE in, FFIND out
 FSAV    = $9D5A          ; FCREATE scratch: requested length saved across FFIND
+; --- read-stream state (FOPEN/FGETB): a sequential byte reader over a file,
+;     using a caller-supplied 512-byte sector buffer (ROBUF) ---
+ROLBA   = $9D5C          ; next sector LBA to read (3)
+ROREM   = $9D5F          ; bytes remaining in the file (2)
+ROBUF   = $9D61          ; caller's 512-byte sector buffer address (2)
+ROPTR   = $9D63          ; read cursor within ROBUF (2)
+ROCNT   = $9D65          ; bytes left in ROBUF; 0 -> refill (2)
 SBUF    = $9E00          ; sector buffer
 STKTOP  = $FEFF
 BASIC   = $2000          ; ROM BASIC cold-start (overlaid by the ROM build)
@@ -103,6 +110,8 @@ RESET:  JMP  COLD
         JMP  FCREATE        ; $011B FCREATE root file FNAME from FSRC/FLEN; C=1 err
         JMP  FDELETE        ; $011E FDELETE tombstone root file FNAME; C=1 not found
         JMP  FCOMMIT        ; $0121 FCOMMIT register streamed file (entry+free); C=1 full
+        JMP  FOPEN          ; $0124 FOPEN   open root file FNAME for reading (P1=buf); C=1 missing
+        JMP  FGETB          ; $0127 FGETB   next byte -> A; C=1 at end of file
 
 ;==============================================================================
 ; Monitor body (relocated above the BIOS table; reset vectors here).
@@ -849,6 +858,119 @@ FCM_DN: LDA  #0            ; read boot block -> SBUF
         LDA  SBUF+5
         STA  ADDRH
         JMP  FC_WROK
+
+; FOPEN - open root file FNAME for sequential byte reading. P1 = a caller-owned
+;   512-byte sector buffer the stream will use. C=1 if the file is not found.
+;   Pairs with FGETB. (One read stream at a time.)
+FOPEN:  TPA1L
+        STA  ROBUF
+        TPA1H
+        STA  ROBUF+1
+        JSR  FFIND          ; sets LBA + FLEN if found
+        JC   FOP_NF
+        LDA  LBA
+        STA  ROLBA
+        LDA  LBA1
+        STA  ROLBA+1
+        LDA  LBA2
+        STA  ROLBA+2
+        LDA  FLEN
+        STA  ROREM
+        LDA  FLEN+1
+        STA  ROREM+1
+        LDA  #0            ; force a refill on the first FGETB
+        STA  ROCNT
+        STA  ROCNT+1
+        CLC
+        RTS
+FOP_NF: SEC
+        RTS
+
+; FGETB - return the next byte of the open read stream in A (C=0). C=1 at EOF.
+;   Refills the sector buffer from disk as needed. Clobbers P1 + TMP.
+FGETB:  LDA  ROREM
+        LDB  ROREM+1
+        OR
+        JNZ  FG_GO
+        SEC                ; no bytes left -> EOF
+        RTS
+FG_GO:  LDA  ROCNT
+        LDB  ROCNT+1
+        OR
+        JNZ  FG_RD
+        JSR  FG_FILL       ; buffer empty -> read next sector
+FG_RD:  LDA  ROPTR
+        TAP1L
+        LDA  ROPTR+1
+        TAP1H
+        LDA  (P1)+
+        STA  TMP
+        TPA1L
+        STA  ROPTR
+        TPA1H
+        STA  ROPTR+1
+        LDA  ROCNT         ; ROCNT--
+        LDB  #1
+        SUB
+        STA  ROCNT
+        JC   FG_R1
+        LDA  ROCNT+1
+        LDB  #1
+        SUB
+        STA  ROCNT+1
+FG_R1:  LDA  ROREM         ; ROREM--
+        LDB  #1
+        SUB
+        STA  ROREM
+        JC   FG_R2
+        LDA  ROREM+1
+        LDB  #1
+        SUB
+        STA  ROREM+1
+FG_R2:  LDA  TMP
+        CLC
+        RTS
+; FG_FILL - read the next sector into ROBUF; reset ROPTR; ROCNT = min(512,ROREM).
+FG_FILL:LDA  ROLBA
+        STA  LBA
+        LDA  ROLBA+1
+        STA  LBA1
+        LDA  ROLBA+2
+        STA  LBA2
+        LDA  ROBUF
+        TAP1L
+        LDA  ROBUF+1
+        TAP1H
+        JSR  CFRDSEC
+        LDA  ROLBA         ; ROLBA++ (24-bit)
+        INC
+        STA  ROLBA
+        JNZ  FF_1
+        LDA  ROLBA+1
+        INC
+        STA  ROLBA+1
+        JNZ  FF_1
+        LDA  ROLBA+2
+        INC
+        STA  ROLBA+2
+FF_1:   LDA  ROBUF
+        STA  ROPTR
+        LDA  ROBUF+1
+        STA  ROPTR+1
+        LDA  ROREM+1       ; ROCNT = min(512, ROREM)
+        LDB  #2
+        CMP
+        JC   FF_FULL       ; ROREM hi >= 2 -> >= 512
+        LDA  ROREM
+        STA  ROCNT
+        LDA  ROREM+1
+        STA  ROCNT+1
+        RTS
+FF_FULL:LDA  #0
+        STA  ROCNT
+        LDA  #2
+        STA  ROCNT+1       ; 512
+        RTS
 
 ; FDELETE - tombstone regular file FNAME in the root (entry flag -> $FF).
 ;   C=0 if found and deleted; C=1 if not found. The file's data sectors are

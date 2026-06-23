@@ -63,3 +63,5 @@ emulator/test/shopc.asm
 emulator/test/shfull.asm
 emulator/test/shgold.bin
 emulator/test/SELF.BIN
+emulator/test/fo.img
+emulator/test/hopen.bin
