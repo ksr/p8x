@@ -91,6 +91,9 @@ knowing the monitor's internal addresses. These entry points are **stable**:
 | `$0121` | FCOMMIT | register a streamed file: write a root entry for data already at the free pointer (`FNAME`, length `FLEN`, sectors `=ceil(FLEN/512)`) and bump the free pointer; `C=1` if root full |
 | `$0124` | FOPEN | open root file `FNAME` for sequential reading; `P1` = a caller-owned 512-byte sector buffer; `C=1` if not found |
 | `$0127` | FGETB | next byte of the open read stream → `A` (`C=0`); `C=1` at end of file (refills from disk as needed) |
+| `$012A` | FWOPEN | open a sequential write stream (streams to disk at the free pointer; uses `SBUF` as its buffer) |
+| `$012D` | FPUTB | append byte `A` to the write stream (flushes a full sector automatically) |
+| `$0130` | FCLOSE | flush the partial sector + register file `FNAME` (length = bytes written); `C=1` if root full |
 
 Call them with `JSR $0103` etc. (P8X/OS is built entirely on this table.)
 

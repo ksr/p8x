@@ -78,6 +78,11 @@ ROREM   = $9D5F          ; bytes remaining in the file (2)
 ROBUF   = $9D61          ; caller's 512-byte sector buffer address (2)
 ROPTR   = $9D63          ; read cursor within ROBUF (2)
 ROCNT   = $9D65          ; bytes left in ROBUF; 0 -> refill (2)
+; --- write-stream state (FWOPEN/FPUTB/FCLOSE): a sequential byte writer that
+;     streams to disk at the volume free pointer, using SBUF as its buffer ---
+WOLBA   = $9D67          ; current output sector LBA (3)
+WOPOS   = $9D6A          ; byte offset within SBUF; 512 -> flush (2)
+WOTOT   = $9D6C          ; total bytes written (-> FLEN at close) (2)
 SBUF    = $9E00          ; sector buffer
 STKTOP  = $FEFF
 BASIC   = $2000          ; ROM BASIC cold-start (overlaid by the ROM build)
@@ -112,11 +117,16 @@ RESET:  JMP  COLD
         JMP  FCOMMIT        ; $0121 FCOMMIT register streamed file (entry+free); C=1 full
         JMP  FOPEN          ; $0124 FOPEN   open root file FNAME for reading (P1=buf); C=1 missing
         JMP  FGETB          ; $0127 FGETB   next byte -> A; C=1 at end of file
+        JMP  FWOPEN         ; $012A FWOPEN  open a write stream at the free pointer (uses SBUF)
+        JMP  FPUTB          ; $012D FPUTB   append byte A to the write stream
+        JMP  FCLOSE         ; $0130 FCLOSE  flush + register file FNAME (len=bytes written); C=1 full
 
 ;==============================================================================
 ; Monitor body (relocated above the BIOS table; reset vectors here).
+; The BIOS jump table now runs to $0132 (FCLOSE), so the body starts at $0160
+; to leave headroom for further BIOS entries. RESET ($0000) jumps here by label.
 ;==============================================================================
-        .org $0130
+        .org $0160
 ; ---------------- Cold start -------------------------------------------------
 COLD:   LDP3 #STKTOP        ; stack
         LDA  #$03           ; ACIA master reset
@@ -970,6 +980,116 @@ FF_FULL:LDA  #0
         STA  ROCNT
         LDA  #2
         STA  ROCNT+1       ; 512
+        RTS
+
+; FWOPEN - open a sequential write stream. Data streams to disk starting at the
+;   volume free pointer; SBUF is the sector buffer. Pair with FPUTB + FCLOSE.
+;   (One write stream at a time.)
+FWOPEN: LDA  #0
+        STA  LBA
+        STA  LBA1
+        STA  LBA2
+        LDP1 #SBUF
+        JSR  CFRDSEC       ; boot block -> SBUF
+        LDA  SBUF+4        ; output starts at the free pointer
+        STA  WOLBA
+        LDA  SBUF+5
+        STA  WOLBA+1
+        LDA  #0
+        STA  WOLBA+2
+        STA  WOPOS
+        STA  WOPOS+1
+        STA  WOTOT
+        STA  WOTOT+1
+        JSR  FW_ZBUF       ; clear the first sector
+        RTS
+; FPUTB - append byte A to the write stream; flush a full sector at 512.
+;   Clobbers P1 + TMP.
+FPUTB:  STA  TMP
+        LDA  WOPOS         ; P1 = SBUF + WOPOS (SBUF low byte = 0)
+        TAP1L
+        LDA  #$9E
+        LDB  WOPOS+1
+        ADD
+        TAP1H
+        LDA  TMP
+        STA  (P1)
+        LDA  WOPOS         ; WOPOS++
+        LDB  #1
+        ADD
+        STA  WOPOS
+        LDA  WOPOS+1
+        JNC  FP_1
+        INC
+        STA  WOPOS+1
+FP_1:   LDA  WOTOT         ; WOTOT++
+        LDB  #1
+        ADD
+        STA  WOTOT
+        LDA  WOTOT+1
+        JNC  FP_2
+        INC
+        STA  WOTOT+1
+FP_2:   LDA  WOPOS+1       ; WOPOS == 512 -> flush
+        LDB  #2
+        CMP
+        JNZ  FP_R
+        JSR  FW_FLUSH
+FP_R:   RTS
+; FCLOSE - flush a partial sector, then register file FNAME (length = bytes
+;   written). C=1 if the root directory is full.
+FCLOSE: LDA  WOPOS
+        LDB  WOPOS+1
+        OR
+        JZ   FCL_R
+        JSR  FW_FLUSH
+FCL_R:  LDA  WOTOT
+        STA  FLEN
+        LDA  WOTOT+1
+        STA  FLEN+1
+        JSR  FDELETE       ; drop any old version (ignore not-found)
+        JMP  FCOMMIT       ; write dir entry + bump free; returns C
+; FW_FLUSH - write SBUF to WOLBA, advance, clear the buffer.
+FW_FLUSH:
+        LDA  WOLBA
+        STA  LBA
+        LDA  WOLBA+1
+        STA  LBA1
+        LDA  WOLBA+2
+        STA  LBA2
+        JSR  CFWRSEC
+        LDA  WOLBA         ; WOLBA++ (24-bit)
+        INC
+        STA  WOLBA
+        JNZ  FWF_1
+        LDA  WOLBA+1
+        INC
+        STA  WOLBA+1
+        JNZ  FWF_1
+        LDA  WOLBA+2
+        INC
+        STA  WOLBA+2
+FWF_1:  LDA  #0
+        STA  WOPOS
+        STA  WOPOS+1
+        JSR  FW_ZBUF
+        RTS
+; FW_ZBUF - zero the 512-byte SBUF write buffer.
+FW_ZBUF:LDP1 #SBUF
+        LDA  #2
+        STA  CNT
+FWZ_P:  LDA  #0
+        STA  TMP
+FWZ_I:  LDA  #0
+        STA  (P1)+
+        LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  FWZ_I
+        LDA  CNT
+        DEC
+        STA  CNT
+        JNZ  FWZ_P
         RTS
 
 ; FDELETE - tombstone regular file FNAME in the root (entry flag -> $FF).
