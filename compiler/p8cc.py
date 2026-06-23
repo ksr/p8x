@@ -8,6 +8,8 @@ Supported now:
   types        int (16-bit), char (8-bit), pointers (T *), arrays (T a[N]),
                struct/union (members of any supported type, incl. nesting)
   top level    struct/union definitions, function defs w/ params, global vars
+               with constant initializers (scalars, strings, {list}s, char[]
+               and pointer-array tables; [] length inferred from the init)
   statements   { }  decl  if/else  while  for(e;e;e)  return [e];  expr;  ;
   expressions  =  || &&  | ^ &  == !=  < > <= >=  << >>  + - * / %
                unary - ! ~ & *   a[i]  s.m  p->m   calls(args)
@@ -158,13 +160,31 @@ class P:
                 while self.accept(","): params.append(self.param())
             self.eat(")")
             return ("func", (base, ptr, 0), name, params, self.block())
-        count = 0
+        arr = False; count = 0
         if self.accept("["):
-            count = self.next()[1]; self.eat("]")
+            arr = True
+            count = None if self.val() == "]" else self.next()[1]   # [] = infer
+            self.eat("]")
         init = None
-        if self.accept("="): init = self.expr()
+        if self.accept("="): init = self.initializer()
         self.eat(";")
-        return ("gvar", (base, ptr, count), name, init)
+        return ("gvar", base, ptr, arr, count, name, init)
+
+    def initializer(self):              # constant global initializer
+        if self.accept("{"):
+            items = []
+            if self.val() != "}":
+                items.append(self.initializer())
+                while self.accept(","):
+                    if self.val() == "}": break              # trailing comma
+                    items.append(self.initializer())
+            self.eat("}")
+            return ("initlist", items)
+        if self.kind() == "str": return ("initstr", self.next()[1])
+        neg = self.accept("-")
+        if self.kind() == "num":
+            v = self.next()[1]; return ("initnum", -v if neg else v)
+        self.err("non-constant global initializer")
 
     def param(self):
         base, ptr = self.base_and_ptr()
@@ -688,11 +708,54 @@ class Gen:
         self.emit("_ret_%s:" % name)
         self.need("__leave"); self.emit("        JSR __leave", "        RTS")
 
-    def declare_global(self, base, ptr, count, name):
-        lab = "_g_" + name
-        self.globals[name] = (lab, base, ptr, count)
-        self.data.append("%s:    .fill %d" % (lab, (count * sizeof(base, ptr)) if count
-                                              else sizeof(base, ptr)))
+    def declare_global(self, base, ptr, arr, count, name, init):
+        lab = "_g_" + name; esz = sizeof(base, ptr)
+        if arr and count is None:                       # infer [] length from init
+            if init is None: sys.exit("p8cc: array %r needs a size or initializer" % name)
+            if init[0] == "initstr" and base == "char" and ptr == 0:
+                count = len(init[1]) + 1                 # + NUL
+            elif init[0] == "initlist": count = len(init[1])
+            else: sys.exit("p8cc: cannot infer size of %r" % name)
+        self.globals[name] = (lab, base, ptr, count if arr else 0)
+        if init is None:
+            total = (count * esz) if arr else esz
+            self.data.append("%s:    .fill %d" % (lab, total)); return
+        # Build the data first: const_data may pool string literals into
+        # self.data, which must land BEFORE this label so the label is
+        # immediately followed by its own bytes (not an interleaved string).
+        lines = self.const_data(base, ptr, arr, count, init)
+        self.data.append("%s:" % lab)
+        self.data.extend(lines)
+
+    def const_data(self, base, ptr, arr, count, init):  # -> asm data lines
+        esz = sizeof(base, ptr); out = []
+        word = lambda x: out.append("        .word %s" % x)
+        byte = lambda x: out.append("        .byte %s" % x)
+        if not arr:                                      # scalar global
+            if init[0] == "initstr":
+                if ptr == 0: sys.exit("p8cc: string initializer for non-pointer")
+                word(self.string(init[1]))
+            elif init[0] == "initnum":
+                (word if esz == 2 else byte)(init[1])
+            else: sys.exit("p8cc: brace initializer for scalar")
+            return out
+        if base == "char" and ptr == 0 and init[0] == "initstr":   # char s[] = "..."
+            bs = list(init[1])[:count] + [0] * max(0, count - len(init[1]))
+            out.append("        .byte " + ",".join(str(b) for b in bs[:count])); return out
+        if init[0] != "initlist":
+            sys.exit("p8cc: array needs a brace initializer or string")
+        items = init[1]
+        if len(items) > count: sys.exit("p8cc: too many initializers")
+        for it in items:
+            if it[0] == "initstr":
+                if ptr == 0: sys.exit("p8cc: string initializer for non-pointer element")
+                word(self.string(it[1]))
+            elif it[0] == "initnum":
+                (word if esz == 2 else byte)(it[1])
+            else: sys.exit("p8cc: nested brace initializer not supported")
+        rem = count - len(items)
+        if rem: out.append("        .fill %d" % (rem * esz))    # zero-pad the tail
+        return out
 
     def register_struct(self, kind, tag, members):
         # struct: members laid out sequentially; union: all at offset 0.
@@ -713,9 +776,8 @@ class Gen:
                 self.funcs[d[2]] = (d[1][0], d[1][1])   # name -> return (base, ptr)
         for d in decls:
             if d[0] == "gvar":
-                if d[3] is not None:
-                    sys.exit("p8cc: global initializers not supported")
-                self.declare_global(d[1][0], d[1][1], d[1][2], d[2])
+                _, base, ptr, arr, count, name, init = d
+                self.declare_global(base, ptr, arr, count, name, init)
         self.emit("        .org $B000",
                   "        LDA #%d" % (CSTACK_TOP & 0xFF), "        STA __csp",
                   "        LDA #%d" % (CSTACK_TOP >> 8), "        STA __csp+1",

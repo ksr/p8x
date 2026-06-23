@@ -63,11 +63,14 @@ String literals are pooled and evaluate to their address.
   returns, or whole-struct assignment (assign individual members, or pass a
   pointer). Union members all share offset 0; no bitfields; no `sizeof()`
   operator yet. Members are laid out with no padding (byte-addressed machine).
-- No global initializers yet — the last remaining prerequisite for rewriting
-  the compiler in its own subset (see the project backlog, "C compiler" →
-  milestone A). Function **return types are tracked** (a `T *`-returning call
-  participates correctly in pointer arithmetic and dereference); a call to an
-  undeclared function still defaults to `int`.
+- **Global initializers** are supported and must be compile-time constants:
+  scalar int/char, a string for a `char *` or `char[]` (length inferable from
+  `[]`), and brace lists for arrays — including string tables (`char *t[] =
+  {"a","b"}`). Not yet: `&global` address constants, nested-aggregate braces,
+  or initialized locals beyond a scalar expression.
+- Function **return types are tracked** (a `T *`-returning call participates
+  correctly in pointer arithmetic and dereference); a call to an undeclared
+  function still defaults to `int`.
 - `for`-init is an expression, not a declaration: locals are function-scoped, so
   declare the loop variable before the loop (`int i; for (i = 0; ...)`).
 - Locals are function-scoped (no per-block shadowing); the C-stack and the
@@ -90,3 +93,7 @@ and C-source library functions work together.
 `emulator/test/c_struct_test.sh` covers `struct`/`union`: a nested `struct Rect`
 of `struct Point`s, `.`/`->` access, pointer-to-struct, an array member, and a
 union — checking the rendered output `796A`.
+
+`emulator/test/c_global_test.sh` covers global initializers: a scalar, a
+`char *` string, an `int[]` list, a `char *[]` string table, and an inferred
+`char[]` — output `7HI` / `6CY` / `YO`.

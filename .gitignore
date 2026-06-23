@@ -84,3 +84,7 @@ emulator/test/cs.img
 emulator/test/cstruct.c
 emulator/test/cstruct.asm
 emulator/test/cstruct.bin
+emulator/test/cg.img
+emulator/test/cglob.c
+emulator/test/cglob.asm
+emulator/test/cglob.bin
