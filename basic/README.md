@@ -126,8 +126,9 @@ each. The relocated builds put code in low RAM/ROM and data at `$A000`
 
 | Region | Use |
 |--------|-----|
-| `$0000-$7FFF` | interpreter code (EEPROM) |
-| `$8000-…`     | tokenized program text |
+| `$0000-$3FFF` | interpreter code (EEPROM, 16 KB rev D) |
+| `$4000-$7FFF` | RAM (rev D) — unused by the standalone build |
+| `$8000-…`     | tokenized program text (standalone `BASRAM=$8000`) |
 | `…-$FDFF`     | variables (26 ints A–Z to start), string/eval scratch |
 | `$FE00-$FEFF` | stack (P3), incl. GOSUB return stack |
 

@@ -61,10 +61,11 @@ OS image stays tiny (~380 bytes today). Those addresses are an ABI — see the
 table in [firmware/p8xmon.asm](../firmware/p8xmon.asm).
 
 ```
-ROM (EEPROM $0000-$7FFF)            RAM ($8000+)
-  $0000 reset -> $0130 monitor        $8000 P8X/OS kernel + shell  (from CF)
+ROM (EEPROM $0000-$3FFF, rev D)     RAM ($4000-$FEFF, 48K)
+  $0000 reset -> $0130 monitor        $4000 free (rev D; OS still loads at $8000)
   $0100 BIOS jump table  <------------ JSR CONOUT / CFREAD / ...
-  $0130 monitor body                   $9000 OS variables
+  $0130 monitor body                   $8000 P8X/OS kernel + shell  (from CF)
+                                       $9000 OS variables
                                        $9E00 sector buffer (shared ABI)
 ```
 

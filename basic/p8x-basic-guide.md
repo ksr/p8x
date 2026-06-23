@@ -148,8 +148,8 @@ and `BYE` (leave BASIC — returns to the monitor in the ROM/disk builds).
 
 | Address (dec / hex) | What |
 |---------------------|------|
-| 0–32767 / `$0000–$7FFF` | EEPROM (the interpreter ROM — read-only) |
-| 32768–65279 / `$8000–$FEFF` | RAM (BASIC's program + variables live in the low part) |
+| 0–16383 / `$0000–$3FFF` | EEPROM (the interpreter ROM — read-only; 16 KB on rev-D hardware) |
+| 16384–65279 / `$4000–$FEFF` | RAM, 48 KB (BASIC's program + variables live around `$8000`/`$A000`) |
 | 65280 / `$FF00` | switch input port (`PEEK`) |
 | 65282 / `$FF02` | LED output port (`POKE`) |
 | 65284–65285 / `$FF04–05` | 6850 ACIA status / data |

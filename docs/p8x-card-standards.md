@@ -5,7 +5,7 @@ CF-IDE, and future cards). The backplane has its own design notes and is
 explicitly out of scope here. When a card deviates from a rule, the deviation
 and its reason go in that card's schematic notes — silent exceptions are bugs.
 
-Memory card rev C is the reference implementation of these standards.
+Memory card rev D is the reference implementation of these standards.
 
 ---
 

@@ -112,8 +112,8 @@ The word burned to the 4× 28C64 EPROMs and interpreted by the emulator. Bit map
 
 | Term | Meaning |
 |------|---------|
-| **EEPROM** | `$0000–$7FFF` — monitor at `$0000`, ROM BASIC at `$2000` (combined ROM). |
-| **SRAM / RAM** | `$8000–$FEFF`. |
+| **EEPROM** | `$0000–$3FFF` (16 KB, rev D) — monitor at `$0000`, ROM BASIC at `$2000` (combined ROM). |
+| **SRAM / RAM** | `$4000–$FEFF` (48 KB, rev D — 2× 62256). |
 | **SBUF** | 512-byte sector buffer at `$9E00` (fixed by the BIOS — `CFWRITE` reads from it). |
 | **LBA** | Logical Block Address — the CF sector number; the BIOS reads the target LBA byte from a fixed `$9D47`. |
 | **RBUF** | The OS's `>`-redirect capture buffer (= the TPA, `$B000`). |
