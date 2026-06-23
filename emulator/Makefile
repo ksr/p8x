@@ -35,6 +35,7 @@ test: p8xemu ucode
 test-c: p8xemu ucode
 	sh test/c_compile_test.sh
 	sh test/c_libc_test.sh
+	sh test/c_struct_test.sh
 
 # Native assembler self-host: assemble its own source on-target == host build.
 # Slow (37 KB through the emulated assembler twice); run on demand, not in `test`.

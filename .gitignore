@@ -80,3 +80,7 @@ emulator/test/clibc.c
 emulator/test/clibc.asm
 emulator/test/clibc.bin
 emulator/test/osc.bin
+emulator/test/cs.img
+emulator/test/cstruct.c
+emulator/test/cstruct.asm
+emulator/test/cstruct.bin

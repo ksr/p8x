@@ -36,10 +36,10 @@ to the OS shell with `RTS` (startup inits `__csp` then `JSR _f_main`).
 
 | area | supported |
 |------|-----------|
-| types | `int` (16-bit), `char` (8-bit), pointers `T *`, arrays `T a[N]` |
-| top level | function definitions **with parameters**, global variable declarations |
+| types | `int` (16-bit), `char` (8-bit), pointers `T *`, arrays `T a[N]`, `struct`/`union` (nestable) |
+| top level | `struct`/`union` definitions, function definitions **with parameters**, global variable declarations |
 | statements | `{ }`, declarations, `if`/`else`, `while`, `for (e; e; e)`, `return [e];`, `expr;`, `;` |
-| operators | `=`  `\|\|` `&&`  `\|` `^` `&`  `==` `!=`  `<` `>` `<=` `>=`  `<<` `>>`  `+` `-` `*` `/` `%`  unary `-` `!` `~` `&` `*` |
+| operators | `=`  `\|\|` `&&`  `\|` `^` `&`  `==` `!=`  `<` `>` `<=` `>=`  `<<` `>>`  `+` `-` `*` `/` `%`  unary `-` `!` `~` `&` `*`  member `.` `->` |
 | functions | parameters, **stack locals**, **recursion**, return value in `AX` |
 | pointers | `&lvalue`, `*ptr` (load/store), pointer +/- scaled by element size, `a[i]` |
 | primaries | int / char / string literals, identifiers, calls, `( )` |
@@ -59,11 +59,15 @@ String literals are pooled and evaluate to their address.
 
 ### Current limitations (next phases)
 
-- No structs/unions, no global initializers. These are the remaining
-  prerequisites for rewriting the compiler in its own subset — see the project
-  backlog ("C compiler" → milestone A). Function **return types are tracked**
-  (a `T *`-returning call participates correctly in pointer arithmetic and
-  dereference); a call to an undeclared function still defaults to `int`.
+- `struct`/`union` are used **by pointer**: no by-value struct parameters,
+  returns, or whole-struct assignment (assign individual members, or pass a
+  pointer). Union members all share offset 0; no bitfields; no `sizeof()`
+  operator yet. Members are laid out with no padding (byte-addressed machine).
+- No global initializers yet — the last remaining prerequisite for rewriting
+  the compiler in its own subset (see the project backlog, "C compiler" →
+  milestone A). Function **return types are tracked** (a `T *`-returning call
+  participates correctly in pointer arithmetic and dereference); a call to an
+  undeclared function still defaults to `int`.
 - `for`-init is an expression, not a declaration: locals are function-scoped, so
   declare the loop variable before the loop (`int i; for (i = 0; ...)`).
 - Locals are function-scoped (no per-block shadowing); the C-stack and the
@@ -82,3 +86,7 @@ bitwise `& | ^ ~`, and shifts `<< >>`.
 `getchar()`, upper-cases it into a `char` buffer, `puts()` it, and prints its
 length using a `strlen()` written in C — end-to-end proof that the I/O builtins
 and C-source library functions work together.
+
+`emulator/test/c_struct_test.sh` covers `struct`/`union`: a nested `struct Rect`
+of `struct Point`s, `.`/`->` access, pointer-to-struct, an array member, and a
+union — checking the rendered output `796A`.

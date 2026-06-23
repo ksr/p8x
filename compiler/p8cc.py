@@ -5,12 +5,16 @@ Emits P8X assembly (for assembler/p8xasm.py) targeting the OS transient program
 area ($B000), so the output is a RUNnable program. Grown in phases.
 
 Supported now:
-  types        int (16-bit), char (8-bit), pointers (T *), arrays (T a[N])
-  top level    function definitions with parameters, global var decls
+  types        int (16-bit), char (8-bit), pointers (T *), arrays (T a[N]),
+               struct/union (members of any supported type, incl. nesting)
+  top level    struct/union definitions, function defs w/ params, global vars
   statements   { }  decl  if/else  while  for(e;e;e)  return [e];  expr;  ;
   expressions  =  || &&  | ^ &  == !=  < > <= >=  << >>  + - * / %
-               unary - ! ~ & *   a[i]   calls(args)
+               unary - ! ~ & *   a[i]  s.m  p->m   calls(args)
                primaries: int/char/string literal, identifier, call
+  struct note  structs/unions are used by pointer: NO by-value struct params,
+               returns, or whole-struct assignment (assign members instead).
+               union members all sit at offset 0; no bitfields, no sizeof().
   builtins     getchar()  putchar(e)  puts(e)   (BIOS $0100 / $0103 / $0112)
   note         for-init is an expression, not a declaration (locals are
                function-scoped; declare the loop var before the loop)
@@ -35,9 +39,10 @@ CSTACK_TOP = 0xF800
 # --------------------------------------------------------------------------- #
 # Lexer
 # --------------------------------------------------------------------------- #
-KEYWORDS = {"int", "char", "void", "if", "else", "while", "for", "return"}
-PUNCT = ["==", "!=", "<=", ">=", "<<", ">>", "&&", "||",
-         "{", "}", "(", ")", "[", "]", ";", ",", "=",
+KEYWORDS = {"int", "char", "void", "struct", "union",
+            "if", "else", "while", "for", "return"}
+PUNCT = ["==", "!=", "<=", ">=", "<<", ">>", "&&", "||", "->",
+         "{", "}", "(", ")", "[", "]", ";", ",", "=", ".",
          "+", "-", "*", "/", "%", "<", ">", "!", "&", "|", "^", "~"]
 
 
@@ -112,12 +117,36 @@ class P:
         return d
 
     def base_and_ptr(self):
-        if self.val() not in ("int", "char", "void"): self.err("expected a type")
-        base = self.next()[1]; ptr = 0
+        if self.val() in ("struct", "union"):
+            self.next(); tag = self.next()                  # base = the tag name
+            if tag[0] != "id": self.err("expected struct/union tag")
+            base = tag[1]
+        elif self.val() in ("int", "char", "void"):
+            base = self.next()[1]
+        else:
+            self.err("expected a type")
+        ptr = 0
         while self.accept("*"): ptr += 1
         return base, ptr
 
+    def struct_def(self):                                   # struct/union T { ... };
+        kind = self.next()[1]                               # "struct" | "union"
+        tag = self.next()[1]; self.eat("{")
+        members = []
+        while self.val() != "}":
+            base, ptr = self.base_and_ptr()
+            nm = self.next()[1]; count = 0
+            if self.accept("["): count = self.next()[1]; self.eat("]")
+            self.eat(";")
+            members.append(((base, ptr, count), nm))
+        self.eat("}"); self.eat(";")
+        return ("structdef", kind, tag, members)
+
     def toplevel(self):
+        # `struct/union T {` is a type definition; otherwise it is a declaration
+        # that uses the type (variable or function).
+        if self.val() in ("struct", "union") and self.t[self.i + 2][1] == "{":
+            return self.struct_def()
         base, ptr = self.base_and_ptr()
         name = self.next()
         if name[0] != "id": self.err("expected name")
@@ -151,7 +180,7 @@ class P:
     def stmt(self):
         v = self.val()
         if v == "{": return self.block()
-        if v in ("int", "char"):
+        if v in ("int", "char", "struct", "union"):
             base, ptr = self.base_and_ptr()
             name = self.next()[1]; count = 0
             if self.accept("["):
@@ -229,6 +258,10 @@ class P:
             elif self.val() == "[":
                 self.next(); idx = self.expr(); self.eat("]")
                 e = ("index", e, idx)
+            elif self.val() == ".":
+                self.next(); e = ("member", e, self.next()[1])
+            elif self.val() == "->":
+                self.next(); e = ("arrow", e, self.next()[1])
             else:
                 return e
 
@@ -245,8 +278,14 @@ class P:
 # --------------------------------------------------------------------------- #
 # Code generator
 # --------------------------------------------------------------------------- #
+STRUCTS = {}      # tag -> {"size": n, "members": {name: (offset, base, ptr, count)}}
+
+
 def sizeof(base, ptr):
-    return 2 if (ptr > 0 or base == "int") else 1
+    if ptr > 0 or base == "int": return 2
+    if base == "char": return 1
+    if base in STRUCTS: return STRUCTS[base]["size"]   # struct/union by value
+    sys.exit("p8cc: unknown type %r" % base)
 
 
 class Gen:
@@ -272,9 +311,23 @@ class Gen:
             lab, base, ptr, count = self.globals[name]; return ("g", lab, base, ptr, count)
         sys.exit("p8cc: undeclared identifier %r" % name)
 
+    def struct_member(self, tag, mname):      # -> (offset, base, ptr, count)
+        if tag not in STRUCTS: sys.exit("p8cc: not a struct/union: %r" % tag)
+        ms = STRUCTS[tag]["members"]
+        if mname not in ms:
+            sys.exit("p8cc: %r has no member %r" % (tag, mname))
+        return ms[mname]
+
+    def member_tag(self, e):                  # struct tag of a `.`/`->` target
+        if e[0] == "member": return self.typeof_lval(e[1])[0]    # x.m  -> tag of x
+        return self.typeof(e[1])[0]                              # p->m -> tag *p points to
+
     def typeof(self, e):                      # -> (base, ptr) of e's value (arrays decay)
         k = e[0]
         if k == "num": return ("int", 0)
+        if k in ("member", "arrow"):
+            _, mb, mp, mc = self.struct_member(self.member_tag(e), e[2])
+            return (mb, mp + 1) if mc else (mb, mp)             # array member decays
         if k == "str": return ("char", 1)
         if k == "id":
             _, _, base, ptr, count = self.vinfo(e[1])
@@ -306,6 +359,9 @@ class Gen:
             b, p = self.typeof(e[2]); return (b, p - 1)
         if e[0] == "index":
             b, p = self.typeof(e[1]); return (b, p - 1)
+        if e[0] in ("member", "arrow"):
+            _, mb, mp, _ = self.struct_member(self.member_tag(e), e[2])
+            return (mb, mp)
         sys.exit("p8cc: not an lvalue")
 
     # ---- helpers ------------------------------------------------------------
@@ -329,6 +385,16 @@ class Gen:
     def ax_to_p1(self): self.emit("        LDA __ax", "        TAP1L",
                                   "        LDA __ax+1", "        TAP1H")
 
+    def add_const_ax(self, off):              # AX += off (16-bit constant)
+        off &= 0xFFFF
+        if off == 0: return
+        skip = self.lbl("Lac")
+        self.emit("        LDA __ax", "        LDB #%d" % (off & 0xFF), "        ADD",
+                  "        STA __ax", "        LDA #0", "        JNC %s" % skip,
+                  "        LDA #1", "%s:    STA __c" % skip,
+                  "        LDA __ax+1", "        LDB #%d" % (off >> 8), "        ADD",
+                  "        LDB __c", "        ADD", "        STA __ax+1")
+
     # ---- addresses (lvalues): result address in __ax -----------------------
     def gen_address(self, e):
         k = e[0]
@@ -344,6 +410,12 @@ class Gen:
                           "        LDA #>%s" % lab, "        STA __ax+1")
         elif k == "unary" and e[1] == "*":
             self.gen_expr(e[2])                          # AX = pointer value = address
+        elif k == "member":                              # &(x.m) = &x + offset
+            off = self.struct_member(self.member_tag(e), e[2])[0]
+            self.gen_address(e[1]); self.add_const_ax(off)
+        elif k == "arrow":                               # &(p->m) = p + offset
+            off = self.struct_member(self.member_tag(e), e[2])[0]
+            self.gen_expr(e[1]); self.add_const_ax(off)
         elif k == "index":
             self.gen_expr(e[1]); self.push_ax()          # base address
             self.gen_expr(e[2])                          # index
@@ -411,6 +483,10 @@ class Gen:
                           "        JSR __sub")
         elif k == "index":
             self.gen_address(e); self.load_deref(*self.typeof_lval(e))
+        elif k in ("member", "arrow"):
+            mc = self.struct_member(self.member_tag(e), e[2])[3]
+            if mc: self.gen_address(e)                   # array member decays to address
+            else: self.gen_address(e); self.load_deref(*self.typeof_lval(e))
         elif k == "assign": self.gen_assign(e[1], e[2])
         elif k == "logand": self.gen_logand(e[1], e[2])
         elif k == "logor": self.gen_logor(e[1], e[2])
@@ -419,11 +495,15 @@ class Gen:
         else: sys.exit("p8cc: cannot generate expr %r" % (k,))
 
     def gen_assign(self, lhs, rhs):
+        sz = sizeof(*self.typeof_lval(lhs))
+        if sz not in (1, 2):
+            sys.exit("p8cc: whole struct/array assignment not supported "
+                     "(assign members, or use pointers)")
         self.gen_expr(rhs); self.push_ax()               # value on P3
         self.gen_address(lhs)                            # AX = dest address
         self.ax_to_p1()                                  # P1 = dest
         self.pop_t()                                     # __t = value
-        if sizeof(*self.typeof_lval(lhs)) == 2:
+        if sz == 2:
             self.emit("        LDA __t", "        STA (P1)+",
                       "        LDA __t+1", "        STA (P1)")
         else:
@@ -578,16 +658,23 @@ class Gen:
         elif k == "for":
             yield from self.collect_decls(s[4])
 
+    def local_size(self, base, ptr, count):    # bytes a local/global occupies
+        if count: return count * sizeof(base, ptr)
+        if ptr == 0 and base in STRUCTS: return STRUCTS[base]["size"]
+        return 2                                # scalar/pointer: one 2-byte slot
+
     def compile_func(self, name, params, body):
         self.func = name; self.locals = {}
         for i, ((base, ptr, _), pnm) in enumerate(params):
+            if ptr == 0 and base in STRUCTS:
+                sys.exit("p8cc: struct/union passed by value (%r) not supported; "
+                         "pass a pointer" % pnm)
             self.locals[pnm] = (2 + 2 * i, base, ptr, 0)   # params: 2-byte slots
         loff = 0
         for d in self.collect_decls(body):
             (base, ptr, count), nm = d[1], d[2]
             if nm in self.locals: continue
-            size = (count * sizeof(base, ptr)) if count else 2
-            loff -= size
+            loff -= self.local_size(base, ptr, count)
             self.locals[nm] = (loff, base, ptr, count)
         localsize = -loff
         self.emit("_f_%s:" % name)
@@ -607,7 +694,20 @@ class Gen:
         self.data.append("%s:    .fill %d" % (lab, (count * sizeof(base, ptr)) if count
                                               else sizeof(base, ptr)))
 
+    def register_struct(self, kind, tag, members):
+        # struct: members laid out sequentially; union: all at offset 0.
+        off = 0; size = 0; m = {}
+        for (base, ptr, count), nm in members:
+            sz = (count * sizeof(base, ptr)) if count else sizeof(base, ptr)
+            m[nm] = (0 if kind == "union" else off, base, ptr, count)
+            if kind == "union": size = max(size, sz)
+            else: off += sz
+        STRUCTS[tag] = {"size": (size if kind == "union" else off), "members": m}
+
     def gen_program(self, decls):
+        STRUCTS.clear()
+        for d in decls:                                 # struct/union layouts first
+            if d[0] == "structdef": self.register_struct(d[1], d[2], d[3])
         for d in decls:
             if d[0] == "func":
                 self.funcs[d[2]] = (d[1][0], d[1][1])   # name -> return (base, ptr)
