@@ -74,11 +74,26 @@ LDPN    = $C824   ; LDPn pointer digit (survives EVAL, which trashes TMP/MNBUF)
 MNBUF   = $C830   ; upcased mnemonic/directive (8)
 NAMBUF  = $C840   ; identifier as written (16, 12 used)
 OUTNAME = $C850   ; output file name (12)
+SLBA    = $C860   ; streamed-source sector LBA (3)
+SREM    = $C863   ; source bytes remaining (2)
+SCNT    = $C865   ; bytes left in SECBUF (2)
+SPTR    = $C867   ; read cursor into SECBUF (2)
+SEOF    = $C869   ; 1 at end of source
+LEOF    = $C86A   ; 1 when NEXTLINE hits end of source
+SB      = $C86B   ; last byte from GETB
+LCNT    = $C86C   ; chars in the current line
+FSTART  = $C86D   ; source file start LBA, saved from FFIND (3)
+FLENS   = $C870   ; source file length, saved from FFIND (2)
 
 ; ---- buffers ----
-SYMTAB  = $C900   ; 14-byte entries: name[12] + value[2]
-SRCBUF  = $D100   ; source text (NUL-terminated after load)
-OUTBUF  = $EB00   ; assembled bytes, indexed by PC-ORGBASE
+; The source is streamed a line at a time from disk (no whole-file buffer), so
+; source size is bounded by the disk, not RAM. That frees the old 6.5 KB source
+; buffer for a much larger symbol table.
+SECBUF  = $C900   ; one streamed source sector (512)
+LINEBUF = $CB00   ; current source line (NUL-terminated, <=127 chars)
+SYMTAB  = $CC00   ; 14-byte entries: name[12] + value[2]  (~585 symbols)
+SYMEND  = $EC00   ; symbol-table limit (= OUTBUF)
+OUTBUF  = $EC00   ; assembled bytes, indexed by PC-ORGBASE
 
         .org $B000
 ; =============================================================================
@@ -93,7 +108,16 @@ START:  TPA3L                   ; save SP so an error can long-jump back to OS
         JZ   ST_USAGE
         JSR  FFIND
         JC   ST_NOSRC
-        JSR  LOADSRC            ; SRC -> SRCBUF, NUL-terminated
+        LDA  LBA                ; save start LBA + length to re-stream each pass
+        STA  FSTART
+        LDA  LBA1
+        STA  FSTART+1
+        LDA  LBA2
+        STA  FSTART+2
+        LDA  FLEN
+        STA  FLENS
+        LDA  FLEN+1
+        STA  FLENS+1
         ; ---- pass 1: build symbol table ----
         LDA  #0
         STA  PASS
@@ -157,29 +181,23 @@ INITPC: LDA  #0
 ; Line driver
 ; =============================================================================
 ASSEMBLE:
-        LDA  #<SRCBUF
-        STA  SRCP
-        LDA  #>SRCBUF
-        STA  SRCP+1
+        JSR  PASSINIT           ; (re)start the source stream at the first sector
 PROCLINE:
-        LDA  SRCP
+        JSR  NEXTLINE           ; LINEBUF <- next source line (NUL-terminated)
+        LDA  LEOF
+        JNZ  ASM_RET
+        LDA  #<LINEBUF          ; P1 = line cursor; LINEP = line start (for errors)
         TAP1L
         STA  LINEPL
-        LDA  SRCP+1
+        LDA  #>LINEBUF
         TAP1H
         STA  LINEPH
 PL_SOL: JSR  SKIPSP
         LDA  (P1)
-        JZ   ASM_RET
-        LDB  #LF
-        CMP
-        JZ   PL_NL
-        LDB  #CR
-        CMP
-        JZ   PL_NL
+        JZ   PROCLINE           ; blank line
         LDB  #$3B            ; ';'
         CMP
-        JZ   PL_CMT
+        JZ   PROCLINE           ; comment-only line
 PL_TOK: JSR  READTOK
         JSR  SKIPSP
         LDA  (P1)
@@ -201,34 +219,19 @@ PL_LABEL:
         JSR  SYMDEFVAL
 PL_LBSK:JSR  SKIPSP
         LDA  (P1)
-        JZ   ASM_RET
-        LDB  #LF
-        CMP
-        JZ   PL_NL
-        LDB  #CR
-        CMP
-        JZ   PL_NL
+        JZ   PROCLINE
         LDB  #$3B            ; ';'
         CMP
-        JZ   PL_CMT
+        JZ   PROCLINE
         JMP  PL_TOK             ; trailing instruction after label
 PL_EQU: INP1                    ; consume '='
         JSR  SKIPSP
         JSR  EVAL
         JSR  SYMDEFVAL
-        JMP  PL_AFTER
+        JMP  PROCLINE
 PL_INSTR:
         JSR  DOINSTR
-PL_AFTER:
-        JSR  SKIPTOEOL
-PL_NL:  JSR  EATNL
-        TPA1L
-        STA  SRCP
-        TPA1H
-        STA  SRCP+1
-        JMP  PROCLINE
-PL_CMT: JSR  SKIPTOEOL
-        JMP  PL_NL
+        JMP  PROCLINE           ; rest of line (incl. comment) is discarded
 ASM_RET:RTS
 
 ; =============================================================================
@@ -657,9 +660,9 @@ SYMDEFVAL:
         LDA  FOUND
         JNZ  SD_UPD
         LDA  SYMP+1            ; table full?
-        LDB  #>SRCBUF
+        LDB  #>SYMEND
         CMP
-        JC   SD_FULL          ; SYMP hi >= SRCBUF hi
+        JC   SD_FULL          ; SYMP hi >= SYMEND hi
         LDA  SYMP
         TAP2L
         LDA  SYMP+1
@@ -1019,49 +1022,143 @@ EM_OVER:LDP1 #ETOOBIG
 ; =============================================================================
 ; Source load + scanning helpers
 ; =============================================================================
-LOADSRC:LDP1 #SRCBUF
-        LDA  FLEN
-        STA  CNTL
-        LDA  FLEN+1
-        STA  CNTH
-LS_LP:  LDA  CNTL
-        LDB  CNTH
-        OR
-        JZ   LS_FIN
-        JSR  CFREAD
-        LDA  LBA
-        INC
-        STA  LBA
-        JNZ  LS_NC
-        LDA  LBA1
-        INC
-        STA  LBA1
-        JNZ  LS_NC
-        LDA  LBA2
-        INC
-        STA  LBA2
-LS_NC:  LDA  CNTH
-        LDB  #2
-        SUB
-        JNC  LS_LAST
-        STA  CNTH
-        JMP  LS_LP
-LS_LAST:LDA  #0
-        STA  CNTL
-        STA  CNTH
-        JMP  LS_LP
-LS_FIN: LDA  #<SRCBUF           ; NUL-terminate at SRCBUF + FLEN
-        LDB  FLEN
-        ADD
-        TAP1L
-        LDA  #>SRCBUF
-        JNC  LS_T
-        INC
-LS_T:   LDB  FLEN+1
-        ADD
-        TAP1H
+; ---- streamed source reader (a line at a time, from disk) -------------------
+; PASSINIT - restart the stream at the file's first sector (called per pass).
+PASSINIT:
+        LDA  FSTART
+        STA  SLBA
+        LDA  FSTART+1
+        STA  SLBA+1
+        LDA  FSTART+2
+        STA  SLBA+2
+        LDA  FLENS
+        STA  SREM
+        LDA  FLENS+1
+        STA  SREM+1
         LDA  #0
-        STA  (P1)
+        STA  SCNT
+        STA  SCNT+1
+        STA  SEOF
+        STA  LEOF
+        RTS
+; REFILL - load the next source sector into SECBUF; reset SPTR; SCNT=min(512,SREM)
+REFILL: LDA  SLBA
+        STA  LBA
+        LDA  SLBA+1
+        STA  LBA1
+        LDA  SLBA+2
+        STA  LBA2
+        LDP1 #SECBUF
+        JSR  CFREAD
+        LDA  SLBA              ; SLBA++ (24-bit)
+        INC
+        STA  SLBA
+        JNZ  RF_1
+        LDA  SLBA+1
+        INC
+        STA  SLBA+1
+        JNZ  RF_1
+        LDA  SLBA+2
+        INC
+        STA  SLBA+2
+RF_1:   LDA  #<SECBUF
+        STA  SPTR
+        LDA  #>SECBUF
+        STA  SPTR+1
+        LDA  SREM+1
+        LDB  #2
+        CMP
+        JC   RF_FULL           ; SREM hi >= 2 -> at least 512 left
+        LDA  SREM
+        STA  SCNT
+        LDA  SREM+1
+        STA  SCNT+1
+        RTS
+RF_FULL:LDA  #0
+        STA  SCNT
+        LDA  #2
+        STA  SCNT+1            ; 512
+        RTS
+; GETB - next source byte -> A with SEOF=0; or SEOF=1 at end of file.
+GETB:   LDA  SREM
+        LDB  SREM+1
+        OR
+        JNZ  GB_GO
+        LDA  #1
+        STA  SEOF
+        RTS
+GB_GO:  LDA  SCNT
+        LDB  SCNT+1
+        OR
+        JNZ  GB_RD
+        JSR  REFILL
+GB_RD:  LDA  SPTR
+        TAP1L
+        LDA  SPTR+1
+        TAP1H
+        LDA  (P1)+
+        STA  SB
+        TPA1L
+        STA  SPTR
+        TPA1H
+        STA  SPTR+1
+        LDA  SCNT             ; SCNT--
+        LDB  #1
+        SUB
+        STA  SCNT
+        JC   GB_S1
+        LDA  SCNT+1
+        LDB  #1
+        SUB
+        STA  SCNT+1
+GB_S1:  LDA  SREM             ; SREM--
+        LDB  #1
+        SUB
+        STA  SREM
+        JC   GB_S2
+        LDA  SREM+1
+        LDB  #1
+        SUB
+        STA  SREM+1
+GB_S2:  LDA  #0
+        STA  SEOF
+        LDA  SB
+        RTS
+; NEXTLINE - read one line into LINEBUF (NUL-terminated, newline stripped).
+;            LEOF=1 when the source is exhausted.
+NEXTLINE:
+        LDP2 #LINEBUF
+        LDA  #0
+        STA  LCNT
+NL_LP:  JSR  GETB
+        LDA  SEOF
+        JNZ  NL_EOF
+        LDA  SB
+        LDB  #LF
+        CMP
+        JZ   NL_DONE
+        LDB  #CR
+        CMP
+        JZ   NL_LP            ; drop CR (CRLF)
+        LDA  LCNT
+        LDB  #127
+        CMP
+        JC   NL_LP            ; line full -> consume but don't store
+        LDA  SB
+        STA  (P2)+
+        LDA  LCNT
+        INC
+        STA  LCNT
+        JMP  NL_LP
+NL_EOF: LDA  LCNT             ; EOF: process a final line with no trailing newline
+        JZ   NL_END
+NL_DONE:LDA  #0
+        STA  (P2)
+        LDA  #0
+        STA  LEOF
+        RTS
+NL_END: LDA  #1
+        STA  LEOF
         RTS
 
 ZEROOUT:LDP1 #OUTBUF

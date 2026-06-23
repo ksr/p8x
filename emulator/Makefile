@@ -27,12 +27,18 @@ test: p8xemu ucode
 	$(MAKE) test-os
 	$(MAKE) test-basic
 	$(MAKE) test-c
+	$(MAKE) test-asm-selfhost
 	$(MAKE) test-io
 	$(MAKE) test-mem
 
 # p8cc C cross-compiler: compile -> assemble -> run -> check console output.
 test-c: p8xemu ucode
 	sh test/c_compile_test.sh
+
+# Native assembler self-host: assemble its own source on-target == host build.
+# Slow (37 KB through the emulated assembler twice); run on demand, not in `test`.
+test-asm-selfhost: p8xemu ucode
+	sh test/asm_selfhost_test.sh
 
 # Per-instruction self-checking regression: halts with A=00 on success,
 # or A=<test id> at the first failing check.
@@ -77,4 +83,4 @@ test-mem: p8xemu ucode
 	../p8xemu -l 200000 tmem.bin 2>/dev/null | tr -d '\0' | grep -q Y && \
 	  echo "MEM48 TEST: PASS" || { echo "MEM48 TEST: FAIL"; exit 1; }
 
-.PHONY: all ucode rom test test-isa test-cf test-os test-basic test-io test-mem test-c
+.PHONY: all ucode rom test test-isa test-cf test-os test-basic test-io test-mem test-c test-asm-selfhost
