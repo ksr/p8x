@@ -93,6 +93,7 @@ RPATH   = $9D71          ; FRESOLVE path cursor (2)
 DILBA   = $9D73          ; iteration: current directory sector LBA (1)
 DICNT   = $9D74          ; iteration: sectors remaining (1)
 DIIDX   = $9D75          ; iteration: entry index within the sector (0..15)
+FLAREM  = $9D76          ; FLOADAT remaining-bytes counter (CFRDSEC clobbers TMP) (2)
 SBUF    = $9E00          ; sector buffer
 STKTOP  = $FEFF
 BASIC   = $2000          ; ROM BASIC cold-start (overlaid by the ROM build)
@@ -134,6 +135,7 @@ RESET:  JMP  COLD
         JMP  FNORM          ; $0136 FNORM    copy string (P1) -> FNAME, upcased + space-padded to 12
         JMP  FOPENDIR       ; $0139 FOPENDIR begin iterating directory at path (P1); C=1 bad path
         JMP  FNEXT          ; $013C FNEXT    next live entry -> FNAME/FFLAG/LBA/FLEN; C=1 at end
+        JMP  FLOADAT        ; $013F FLOADAT  read FLEN bytes from LBA into (P1) (whole sectors)
 
 ;==============================================================================
 ; Monitor body (relocated above the BIOS table; reset vectors here).
@@ -1282,6 +1284,42 @@ FF_FULL:LDA  #0
         LDA  #2
         STA  ROCNT+1       ; 512
         RTS
+
+; FLOADAT - bulk-read FLEN bytes starting at sector LBA straight into (P1),
+;   a whole sector at a time (P1 advances by 512 each). The fast "slurp a file"
+;   primitive shared by EDIT's load and the OS loader; the byte-at-a-time reader
+;   is FOPEN/FGETB. LBA is advanced; FLEN is preserved (counts down in TMP/TMP2).
+FLOADAT:LDA  FLEN           ; FLAREM = remaining bytes (TMP would be clobbered by
+        STA  FLAREM         ; CFRDSEC, so use a dedicated counter)
+        LDA  FLEN+1
+        STA  FLAREM+1
+FLA_LP: LDA  FLAREM
+        LDB  FLAREM+1
+        OR
+        JZ   FLA_DONE
+        JSR  CFRDSEC        ; sector LBA -> (P1); P1 += 512
+        LDA  LBA            ; LBA++ (24-bit)
+        INC
+        STA  LBA
+        JNZ  FLA_NC
+        LDA  LBA1
+        INC
+        STA  LBA1
+        JNZ  FLA_NC
+        LDA  LBA2
+        INC
+        STA  LBA2
+FLA_NC: LDA  FLAREM+1       ; remaining -= 512 (floor 0)
+        LDB  #2
+        SUB
+        JNC  FLA_LAST
+        STA  FLAREM+1
+        JMP  FLA_LP
+FLA_LAST:LDA #0
+        STA  FLAREM
+        STA  FLAREM+1
+        JMP  FLA_LP
+FLA_DONE:RTS
 
 ; FWOPEN - open a sequential write stream. Data streams to disk starting at the
 ;   volume free pointer; SBUF is the sector buffer. Pair with FPUTB + FCLOSE.

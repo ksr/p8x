@@ -48,11 +48,13 @@ CFREAD  = $010C          ; sector LBA -> (P1); P1 += 512
 CFWRITE = $010F          ; SBUF -> sector LBA
 PUTS    = $0112          ; print (P1)+ until $00
 PHEX8   = $0115          ; print A as two hex digits
+FLOADAT = $013F          ; bulk-read FLEN bytes from LBA into (P1)
 
 ; ---- Shared ABI state (set by/for the BIOS) --------------------------------
 LBA     = $9D47          ; CFREAD/CFWRITE target LBA, byte 0 (bits 7:0)
 LBA1    = $9D48          ; LBA byte 1 (bits 15:8)  — 0 after CFINIT unless set
 LBA2    = $9D49          ; LBA byte 2 (bits 23:16) — 0 after CFINIT unless set
+FLEN    = $9D58          ; BIOS file length param (used to drive FLOADAT)
 SBUF    = $9E00          ; 512-byte sector buffer
 
 ; ---- P8XFS v2 on-disk layout (root @ LBA 33, 4 secs; data @ 37) -------------
@@ -1544,26 +1546,20 @@ to_r:   LDA  (P1)+
 
 ; LOADF - read the located file (STARTLO / LENLO:LENHI / LOADLO:LOADHI) into
 ; memory at its load address.
-LOADF:  JSR  SECCOUNT
-        LDA  LOADLO             ; P1 <- load address
+LOADF:  LDA  STARTLO            ; set up the BIOS bulk read: LBA = start
+        STA  LBA
+        LDA  #0
+        STA  LBA1
+        STA  LBA2
+        LDA  LENLO              ; FLEN = length
+        STA  FLEN
+        LDA  LENHI
+        STA  FLEN+1
+        LDA  LOADLO             ; P1 = load address
         TAP1L
         LDA  LOADHI
         TAP1H
-        LDA  STARTLO
-        STA  CURLBA
-LF_LP:  LDA  SECCNT
-        JZ   LF_END
-        LDA  CURLBA
-        STA  LBA
-        JSR  CFREAD             ; sector -> (P1); P1 += 512
-        LDA  CURLBA
-        INC
-        STA  CURLBA
-        LDA  SECCNT
-        DEC
-        STA  SECCNT
-        JMP  LF_LP
-LF_END: RTS
+        JMP  FLOADAT            ; reads the whole file into (P1); RTSes to caller
 
 ; ---------------- SAVE name start end ----------------------------------------
 ; Write the memory range [start,end) to a new file: length = end - start,

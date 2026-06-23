@@ -23,7 +23,7 @@
 CONIN   = $0100         ; wait for key -> A
 CONOUT  = $0103         ; A -> console
 PUTS    = $0112         ; print (P1)+ until $00
-CFREAD  = $010C         ; sector LBA -> (P1); P1 += 512
+FLOADAT = $013F         ; bulk-read FLEN bytes from LBA into (P1)
 FFIND   = $0118         ; root file FNAME -> LBA+FLEN; C=1 not found
 FCREATE = $011B         ; create root file FNAME from FSRC/FLEN; C=1 err
 FDELETE = $011E         ; tombstone root file FNAME; C=1 not found
@@ -331,39 +331,12 @@ CW_NON: LDP1 #MNONAME
 ; =============================================================================
 
 ; ---- LOADFILE: read FLEN bytes (FFIND result) from LBA into TBUF -------------
+; LOADFILE - slurp the FFIND'd file (LBA + FLEN) into TBUF via the BIOS bulk
+; reader, then set TEND = TBUF + FLEN.
 LOADFILE:
         LDP1 #TBUF
-        LDA  FLEN
-        STA  CNTL
-        LDA  FLEN+1
-        STA  CNTH
-LD_LP:  LDA  CNTL               ; remaining bytes == 0?
-        LDB  CNTH
-        OR
-        JZ   LD_FIN
-        JSR  CFREAD             ; one sector -> (P1); P1 += 512
-        LDA  LBA                ; LBA++ (24-bit)
-        INC
-        STA  LBA
-        JNZ  LD_NC
-        LDA  LBA1
-        INC
-        STA  LBA1
-        JNZ  LD_NC
-        LDA  LBA2
-        INC
-        STA  LBA2
-LD_NC:  LDA  CNTH               ; remaining -= 512 (floor 0)
-        LDB  #2
-        SUB
-        JNC  LD_LAST            ; hi < 2 -> last (partial) sector
-        STA  CNTH
-        JMP  LD_LP
-LD_LAST:LDA  #0
-        STA  CNTL
-        STA  CNTH
-        JMP  LD_LP
-LD_FIN: LDA  #<TBUF             ; TEND = TBUF + FLEN
+        JSR  FLOADAT            ; read FLEN bytes from LBA into TBUF
+        LDA  #<TBUF             ; TEND = TBUF + FLEN
         LDB  FLEN
         ADD
         STA  TENDL

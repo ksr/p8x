@@ -98,6 +98,7 @@ knowing the monitor's internal addresses. These entry points are **stable**:
 | `$0136` | FNORM | format the string at `P1` into `FNAME` (≤12 chars, upper-cased, space-padded; stops at NUL/space) |
 | `$0139` | FOPENDIR | begin iterating the directory at path `P1` (`""`/`"/"` = root); `C=1` if not a directory |
 | `$013C` | FNEXT | next live entry → `FNAME`/`FFLAG`/`LBA`/`FLEN`; `C=1` at end (skips deleted entries) |
+| `$013F` | FLOADAT | bulk-read `FLEN` bytes from sector `LBA` into `(P1)`, a whole sector at a time (the fast "slurp a file" primitive; EDIT + the OS loader use it) |
 
 Call them with `JSR $0103` etc. (P8X/OS is built entirely on this table.)
 
