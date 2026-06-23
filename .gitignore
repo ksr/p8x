@@ -88,3 +88,6 @@ emulator/test/cg.img
 emulator/test/cglob.c
 emulator/test/cglob.asm
 emulator/test/cglob.bin
+emulator/test/p8cc_host
+emulator/test/pcc.asm
+emulator/test/pcc.bin

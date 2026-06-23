@@ -54,6 +54,8 @@ def lex(src):
         c = src[i]
         if c == "\n": line += 1; i += 1; continue
         if c in " \t\r": i += 1; continue
+        if c == "#":                       # ignore cpp lines (#include) - no preprocessor
+            i = src.find("\n", i); i = n if i < 0 else i; continue
         if src.startswith("//", i):
             i = src.find("\n", i); i = n if i < 0 else i; continue
         if src.startswith("/*", i):
