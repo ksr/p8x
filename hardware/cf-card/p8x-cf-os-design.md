@@ -59,8 +59,7 @@ A two-stage system: a permanent **BIOS in EEPROM**, and the **OS proper loaded f
 |---|---|
 | $0000–$1FFF | BIOS ROM: drivers, boot loader, syscall jump table |
 | $2000–$3FFF | ROM: monitor body + ROM BASIC (rev D: ROM is now 16 KB total) |
-| $4000–$7FFF | **RAM, 16 KB (rev D, currently unused)** — free for a future lower OS load address to lift the boot ceiling; the OS still loads at $8000 for now |
-| $8000–$9D46 | OS RAM: P8X/OS kernel + shell (loaded from CF), ~6.4 KB today |
+| $4000–$9D46 | OS RAM: P8X/OS kernel + shell, **loaded from CF to $4000 (rev D)**. ~7 KB today; can grow to the boot ceiling at $9D47 (~23.8 KB) or the on-disk OS region (LBA 1–32 = 16 KB), whichever is smaller — so **16 KB max**, up from ~7 KB when it loaded at $8000 |
 | $9D47–$9D49 | CF LBA, 24-bit little-endian (LBA0/LBA1/LBA2; fixed by the BIOS). LBA1/LBA2 default 0 after CFINIT — set them for sectors >255 |
 | $9E00–$9FFF | Sector buffer SBUF (512 bytes, fixed by the BIOS) |
 | $A000–$AFFF | OS variables (relocated above SBUF; ~3.5 KB) |
@@ -100,8 +99,8 @@ CFRD1:  LDA  $FF17        ; status
 
 1. Reset → BIOS init (ACIA, CFINIT)
 2. Read LBA 0; check signature bytes `P8` at offset 0
-3. Boot block says: load N sectors starting at LBA 1 → $8000
-4. JMP $8000 — OS is running
+3. Boot block says: load N sectors starting at LBA 1 → $4000 (rev D; was $8000)
+4. JMP $4000 — OS is running
 5. No card / bad signature → fall back to the ROM monitor prompt (machine is always usable)
 
 ### 2.4 Layer 3 — Filesystem: P8XFS

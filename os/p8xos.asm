@@ -1,12 +1,17 @@
 ; p8xos.asm - P8X/OS v1.0, a RAM-resident disk operating system.
 ;
-; Loaded from CompactFlash to $8000 and entered by the ROM monitor's B command
-; (which reads OSCNT sectors from LBA 1 and JMPs to $8000). The OS does NOT
+; Loaded from CompactFlash to $4000 and entered by the ROM monitor's B command
+; (which reads OSCNT sectors from LBA 1 and JMPs to $4000). The OS does NOT
 ; carry its own drivers: it calls the BIOS jump table the monitor publishes at
 ; $0100 (see firmware/p8xmon.asm), so console + CF access stay in one place.
 ;
-; Build (RAM image, assembled to run at $8000):
-;   python3 assembler/p8xasm.py os/p8xos.asm -o p8xos.bin --base 0x8000
+; rev D memory map (16K ROM / 48K RAM) put RAM at $4000, so the OS loads there
+; instead of $8000 — the code can now span $4000..$9D46 (~23.8K) before the BIOS
+; LBA pointer at $9D47, vs ~7K at $8000. The on-disk OS region (LBA 1..32) caps
+; it at 32 sectors / 16K. Data ($A000 vars, $9E00 SBUF, $9D47 LBA) is unchanged.
+;
+; Build (RAM image, assembled to run at $4000):
+;   python3 assembler/p8xasm.py os/p8xos.asm -o p8xos.bin --base 0x4000
 ; then install on a P8XFS image with:  tools/p8xfs.py boot disk.img p8xos.bin
 ;
 ; v0.9 shell (reads P8XFS v1 flat OR v2 hierarchical, chosen from the boot
@@ -29,7 +34,7 @@
 ; A file/dir argument may be a path; directory scanning works on any extent
 ; (start LBA + sector count), so CWD and resolved paths share one code path.
 ; The prompt shows the current path. Verify a volume with p8xfs.py fsck.
-; RAM layout: code $8000..~$9D00 | CF LBA $9D47, SBUF $9E00 (both fixed by the
+; RAM layout: code $4000..(<=$9D46) | CF LBA $9D47, SBUF $9E00 (both fixed by the
 ; BIOS) | OS variables $A000.. | user programs / RUN / ">" capture (the TPA)
 ; $B000.. | stack (P3) grows down from $FEFF.
 
@@ -162,7 +167,7 @@ CR      = $0D
 LF      = $0A
 STKTOP  = $FEFF
 
-        .org $8000
+        .org $4000          ; rev D: OS loads at $4000 (match the monitor's CMD_B + --base)
 ; ---------------- Cold start -------------------------------------------------
 COLD:   LDP3 #STKTOP
         LDA  #0                 ; output goes to the console until a "> file" redirect

@@ -14,24 +14,20 @@ Last updated: 2026-06-22
 ## NEXT
 
 - **P8XFS v2 — remaining loose ends** (the hierarchy itself is DONE; see DONE):
-    - **on-target FORMAT — DEFERRED (blocked on OS code size).** A working v2
-      FORMAT was prototyped (rewrite boot block: 'P8' + version 2 + preserved
+    - **on-target FORMAT — now UNBLOCKED** (was deferred on OS code size). A working
+      v2 FORMAT was prototyped (rewrite boot block: 'P8' + version 2 + preserved
       OSCNT + free=37; lay a fresh root extent at LBA 33 via MKEXT; adopt the v2
-      layout in RAM). The logic is correct and cheap (~290 B, reusing MKEXT), BUT
-      it does not fit: the OS is already at the hard 14-sector boot ceiling (see
-      below), so adding FORMAT breaks boot. Revisit once the OS gains a second
-      code segment, or — the cheaper alternative — add v2 FORMAT to the **monitor**
-      (ROM has room; it already has the v1 'F' + CFREAD/CFWRITE), so a card can be
-      formatted before booting. (Monitor B is unchanged — it only reads sig+OSCNT.)
-    - **OS code size — at the HARD ceiling.** The monitor's boot loader (CMD_B)
-      reads the OS image directly to $8000 upward, and the CF LBA pointer lives at
-      the BIOS-pinned $9D47. So the OS image must stay **below the sector that
-      contains $9D47** — i.e. end at/below $9BFF = **14 sectors = 7168 bytes max**;
-      a 15th sector ($9C00-$9DFF) would overwrite the LBA pointer mid-load and boot
-      fails. The OS is currently **7165 B (14 sectors, ~3 B free)** — effectively
-      full. To grow, code needs a second segment above SBUF ($A200+, below the
-      $B000 TPA; LBA/SBUF/vars are fixed), or the boot loader must stage through a
-      buffer instead of loading straight over $9D47.
+      layout in RAM), ~290 B reusing MKEXT. It didn't fit when the OS loaded at
+      $8000 (14-sector ceiling). **Since rev D the OS loads at $4000** (see DONE),
+      so the code ceiling is now ~46 sectors of RAM / 32 sectors on disk = **16 KB**
+      vs the 7 KB it was — FORMAT now fits with ~9 KB to spare. Just add it. (The
+      monitor-side v2 FORMAT alternative is still valid but no longer necessary.)
+    - **OS code size — ceiling lifted to 16 KB (rev D).** The boot loader (CMD_B)
+      loads the OS to $4000 upward, and the CF LBA pointer is BIOS-pinned at $9D47,
+      so the image must still end below $9D47 — but from $4000 that's ~23.8 KB (46
+      sectors). The tighter cap is the on-disk OS region (LBA 1–32), so **16 KB / 32
+      sectors max**. The OS is ~7165 B today, so there's now ~9 KB of headroom (was
+      ~3 B). LBA/SBUF/vars are unchanged ($9D47/$9E00/$A000).
 
 
 - [ ] Fusion import acceptance test: open backplane .sch/.brd pair, pour planes,
@@ -234,6 +230,17 @@ Last updated: 2026-06-22
 > done + why + caveats). The original foundation milestones are a terse tick
 > list under *Early milestones* at the end of this section.
 
+- **OS load address moved to $4000 (rev D)** (2026-06-22). With rev D putting RAM
+  at $4000, the monitor's `CMD_B` now loads the OS image (and disk BASIC) to $4000
+  and JMPs there, instead of $8000. This lifts the boot ceiling from ~7 KB (14
+  sectors) to **16 KB** (32-sector on-disk OS region; the RAM ceiling at $9D47 is
+  ~23.8 KB), unblocking on-target FORMAT/editor/bigger programs. The BIOS ABI is
+  untouched — `$0100` jump table in ROM, LBA `$9D47` and SBUF `$9E00` still in RAM
+  — so only the load address changed. Changes: `CMD_B` ($8000→$4000), the OS's
+  `.org` + `--base`, disk BASIC's `BASORG` ($8000→$4000); the emulator needed
+  nothing (rev D already made $4000 RAM). os_test's self-check SAVE addresses
+  moved $8000→$4000. Full suite (OS/OS-v2/BASIC-disk/CF/...) green. Docs swept:
+  cf-os design, monitor + system-design, os/basic READMEs, programmer's guide.
 - **Memory card rev D: 16 KB ROM + 48 KB RAM** (2026-06-22). Shrank the ROM
   window to `$0000–$3FFF` (16 KB; the 28C256 stays, only its low half is now
   addressed — monitor+BASIC end at $3307, well under 16 KB) and grew RAM to 48 KB

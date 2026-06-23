@@ -10,7 +10,7 @@ UC=../../microcode
 
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
-python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o p8xos.bin --base 0x8000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o p8xos.bin --base 0x4000 >/dev/null
 
 # A position-independent program at $B000: print "V2" then RTS.
 cat > v2prog.asm <<'EOF'

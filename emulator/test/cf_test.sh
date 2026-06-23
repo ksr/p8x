@@ -3,7 +3,7 @@
 # against the emulator's CF model (p8xemu -c <img>).
 #   1. F (format)  -> writes the 'P8' boot block + zeroed directory
 #   2. plant a tiny position-independent "OS" at LBA 1 and set OSCNT=1
-#   3. B (boot)    -> loads the OS to $8000, jumps; the OS prints "K!"
+#   3. B (boot)    -> loads the OS to $4000, jumps; the OS prints "K!"
 # Halts PASS only if the booted OS actually ran.
 set -e
 cd "$(dirname "$0")"

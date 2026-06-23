@@ -91,7 +91,7 @@ origin) and `BASRAM` (data base); `PBUF` (rebuild scratch) is fixed at `$C000`.
 |-------|-----------------|-----------------|------------|
 | Standalone | `$0000` | `$8000` | burned as the whole ROM; `run.sh` / scripted tests |
 | ROM-in-monitor | `$2000` | `$A000` | monitor `X` command (BASIC's `BYE` returns to the monitor) |
-| Disk | `$8000` | `$A000` | installed on a P8XFS image, booted by the monitor `B` command |
+| Disk | `$4000` | `$A000` | installed on a P8XFS image, booted by the monitor `B` command (rev D: loads at `$4000`) |
 
 `Code` is where the interpreter runs (low ROM, monitor ROM, or low RAM); `Data`
 is the base of its variables + program text (rebuild scratch `PBUF` is fixed at
@@ -106,11 +106,11 @@ python3 tools/build_basic_rom.py p8x-rom-basic.bin   # monitor + BASIC @ $2000
 ./emulator/p8xemu p8x-rom-basic.bin                  # (needs u0-u3.bin alongside)
 ```
 
-**Disk** — assemble at `$8000`, install as a bootable image, boot with `B`:
+**Disk** — assemble at `$4000` (rev D boot address), install as a bootable image, boot with `B`:
 
 ```sh
 python3 assembler/p8xasm.py basic/p8xbasic.asm -o basicdisk.bin \
-        --base 0x8000 -D BASORG=0x8000 -D BASRAM=0xA000
+        --base 0x4000 -D BASORG=0x4000 -D BASRAM=0xA000
 python3 tools/p8xfs.py create disk.img
 python3 tools/p8xfs.py boot   disk.img basicdisk.bin
 ./emulator/p8xemu -c disk.img eeprom.bin             # at '*' press B

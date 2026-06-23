@@ -1,7 +1,7 @@
 # P8X/OS
 
 A small RAM-resident disk operating system for the P8X, loaded from
-CompactFlash to `$8000` by the ROM monitor's `B` command. Written in P8X
+CompactFlash to `$4000` by the ROM monitor's `B` command. Written in P8X
 assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 [`p8xasm.py`](../assembler/p8xasm.py).
 
@@ -62,15 +62,14 @@ table in [firmware/p8xmon.asm](../firmware/p8xmon.asm).
 
 ```
 ROM (EEPROM $0000-$3FFF, rev D)     RAM ($4000-$FEFF, 48K)
-  $0000 reset -> $0130 monitor        $4000 free (rev D; OS still loads at $8000)
+  $0000 reset -> $0130 monitor        $4000 P8X/OS kernel + shell  (from CF, rev D)
   $0100 BIOS jump table  <------------ JSR CONOUT / CFREAD / ...
-  $0130 monitor body                   $8000 P8X/OS kernel + shell  (from CF)
-                                       $9000 OS variables
-                                       $9E00 sector buffer (shared ABI)
+  $0130 monitor body                   $9E00 sector buffer (shared ABI)
+                                       $A000 OS variables
 ```
 
 Boot path: monitor `B` reads the boot block (LBA 0), checks the `P8`
-signature + `OSCNT`, loads `OSCNT` sectors from LBA 1 to `$8000`, and `JMP`s
+signature + `OSCNT`, loads `OSCNT` sectors from LBA 1 to `$4000`, and `JMP`s
 there. No card / bad signature falls back to the monitor prompt.
 
 ## Build & run
@@ -88,13 +87,13 @@ prompt) — type `?` for monitor help, then **`B`** to boot P8X/OS (`HELP` lists
 its commands). The disk persists at `os/run-disk.img`, so files you `SAVE`
 survive across runs (delete it to start fresh; quit with Ctrl-C).
 
-**Manual build** — the OS is a RAM image, so it's assembled with `--base 0x8000`
-(the assembler emits only the bytes from `$8000` up, with labels resolved to
+**Manual build** — the OS is a RAM image, so it's assembled with `--base 0x4000`
+(the assembler emits only the bytes from `$4000` up, with labels resolved to
 their run address):
 
 ```sh
 # assemble the OS
-python3 assembler/p8xasm.py os/p8xos.asm -o p8xos.bin --base 0x8000
+python3 assembler/p8xasm.py os/p8xos.asm -o p8xos.bin --base 0x4000
 
 # build a P8XFS disk image, install the OS, add some files
 python3 tools/p8xfs.py create disk.img
@@ -119,7 +118,7 @@ tool (`create`/`boot`/`put`/`get`/`ls`).
 | LBA | Contents |
 |-----|----------|
 | 0 | Boot block: `P8`, version, OSCNT, free pointer |
-| 1–32 | OS image (loaded to `$8000`) |
+| 1–32 | OS image (loaded to `$4000`) |
 | 33–64 | Directory: 512 × 32-byte entries |
 | 65+ | File data, contiguous extents |
 

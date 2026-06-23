@@ -33,7 +33,7 @@ take an address read **4 hex digits** (`AAAA`) right after the letter.
 | **D** | `D AAAA` | **Dump** 256 bytes from `AAAA` as hex + ASCII. Pages (see below). |
 | **I** | `I` | **Init CF**: reset the card, set 8-bit mode, IDENTIFY, print the model string. |
 | **F** | `F` | **Format** the CF card as P8XFS (writes the boot block + root directory). Asks `Y/N`. |
-| **B** | `B` | **Boot** the OS image from the CF card into `$8000` and run it. |
+| **B** | `B` | **Boot** the OS image from the CF card into `$4000` and run it. |
 | **G** | `G AAAA` | **Go**: `JSR AAAA`. The called code returns to the monitor with `RTS`. |
 | **X** | `X` | **Run ROM BASIC** (in the combined ROM at `$2000`). BASIC's `BYE` returns here. |
 | **? / H** | `?` or `H` | Print the built-in command help. |
@@ -93,8 +93,8 @@ Call them with `JSR $0103` etc. (P8X/OS is built entirely on this table.)
 | Range | Use |
 |-------|-----|
 | `$0000–$3FFF` | EEPROM (16 KB, rev D) — monitor at `$0000`, ROM BASIC at `$2000` (combined ROM) |
-| `$4000–$7FFF` | RAM (16 KB, rev D) — currently unused (free for a future lower OS load) |
-| `$8000–$FEFF` | RAM. P8X/OS code at `$8000`; OS variables at `$A000`; sector buffer `SBUF` at `$9E00` and the CF `LBA` bytes at `$9D47–$9D49` (fixed by the BIOS); user programs / `RUN` (the TPA) at `$B000`; stack (P3) grows down from `$FEFF` |
+| `$4000–$7FFF` | RAM (16 KB, rev D). **P8X/OS loads here** (`$4000`) and runs. |
+| `$8000–$FEFF` | RAM. OS code continues up to `$9D46`; OS variables at `$A000`; sector buffer `SBUF` at `$9E00` and the CF `LBA` bytes at `$9D47–$9D49` (fixed by the BIOS); user programs / `RUN` (the TPA) at `$B000`; stack (P3) grows down from `$FEFF` |
 | `$FF00` | switch input port (read) |
 | `$FF02` | LED output port (write) |
 | `$FF04 / $FF05` | 6850 ACIA status / data |

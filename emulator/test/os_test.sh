@@ -5,7 +5,7 @@
 #   DIR              -> lists both files
 #   RUN PROG.BIN     -> prints RAN (program loaded to $B000 and JSR'd)
 #   DEL HELLO.TXT    -> marks the entry deleted and writes the sector back
-#   SAVE C.BIN 8000 8010 -> create a file from memory ($8000 = the OS image)
+#   SAVE C.BIN 4000 4010 -> create a file from memory ($4000 = the OS image)
 #   DIR              -> re-read from disk: HELLO.TXT gone, PROG.BIN + C.BIN kept
 # Then on the host: get C.BIN back and confirm its bytes equal p8xos.bin[0:16].
 # Exercises the whole stack: assembler --base, p8xfs.py, the BIOS jump table,
@@ -17,7 +17,7 @@ UC=../../microcode
 
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
-python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o p8xos.bin --base 0x8000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o p8xos.bin --base 0x4000 >/dev/null
 
 # A position-independent program at its load address $B000: print "RAN\r\n"
 # via the BIOS CONOUT vector, then RTS back to the shell.
@@ -51,7 +51,7 @@ rm -f os_h.tmp prog.asm
 # redirection), and EXIT returns to the monitor.
 # Also: SAVE over an existing name must be rejected (?EXISTS), and a redirected
 # command's error must still reach the console (CAT NOPE >X -> ?NO FILE on screen).
-out=$(printf 'B\rDIR\rRUN PROG.BIN\rDEL HELLO.TXT\rSAVE C.BIN 8000 8010\rDEP B000 41 42 43\rDUMP B000\r\r.PACK\rFSCK\rDIR\rDIR >DLIST\rSAVE PROG.BIN 8000 8001\rCAT NOPE >X\rEXIT\r' | \
+out=$(printf 'B\rDIR\rRUN PROG.BIN\rDEL HELLO.TXT\rSAVE C.BIN 4000 4010\rDEP B000 41 42 43\rDUMP B000\r\r.PACK\rFSCK\rDIR\rDIR >DLIST\rSAVE PROG.BIN 4000 4001\rCAT NOPE >X\rEXIT\r' | \
       ../p8xemu -l 80000000 -c os.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0')
 
 fail() { echo "OS TEST: FAIL — $1"; echo "$out" | sed -n '/P8X\/OS/,$p'; exit 1; }
@@ -79,7 +79,7 @@ echo "$tail" | grep -q 'C.BIN'     || fail "C.BIN lost after PACK"
 [ "$(echo "$out" | grep -c 'P8X MONITOR')" -ge 2 ] || fail "EXIT did not return to the monitor"
 
 # Host round-trip: SAVE'd C.BIN must equal the first 16 bytes of the OS image
-# (it was saved straight from $8000, where the OS image is loaded verbatim) —
+# (it was saved straight from $4000, where the OS image is loaded verbatim) —
 # and must still match AFTER PACK relocated its extent.
 python3 $ROOT/tools/p8xfs.py get os.img C.BIN --out os_c.tmp >/dev/null
 head -c 16 p8xos.bin > os_exp.tmp

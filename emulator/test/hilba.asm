@@ -1,4 +1,4 @@
-; High-LBA BIOS exerciser — planted as the "OS" at LBA 1 and booted to $8000.
+; High-LBA BIOS exerciser — planted as the "OS" at LBA 1 and booted to $4000.
 ; Proves the multi-byte LBA ABI: CFSETL must honour LBA1 ($9D48), so a sector
 ; number >255 reaches the right place instead of wrapping mod 256.
 ;   1. read sector 300 ($012C) — host seeds it with "LBAHI!" — and echo 6 bytes.

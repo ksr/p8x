@@ -10,7 +10,7 @@ UC=../../microcode
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
 python3 $ROOT/assembler/p8xasm.py $ROOT/basic/p8xbasic.asm -o basicdisk.bin \
-        --base 0x8000 -D BASORG=0x8000 -D BASRAM=0xA000 >/dev/null
+        --base 0x4000 -D BASORG=0x4000 -D BASRAM=0xA000 >/dev/null
 
 rm -f bas.img
 python3 $ROOT/tools/p8xfs.py create bas.img >/dev/null
