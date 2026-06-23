@@ -55,6 +55,21 @@ Last updated: 2026-06-23
       INCH the consumer reads) and, to be useful, filter commands that actually
       read a stream (MORE/WC/GREP-style) — none exist yet. RBUF is RAM-bound
       (~the TPA, $B000..). Scope: add INCH + one filter (e.g. MORE) -> `|`.
+- [ ] **Offload OS commands to loadable programs via the ROM FS routines.** Now
+      that the monitor publishes a shared filesystem API (`$0118 FFIND` /
+      `$011B FCREATE`, see DONE — BASIC SAVE/LOAD), the heavy/self-contained OS
+      commands can move OUT of the resident OS image into `.COM`-style programs
+      loaded into the TPA and `RUN` — shrinking the kernel and freeing boot-ceiling
+      space. Good candidates: **PACK** (~1 KB), **FSCK** (~0.5 KB), **TREE**,
+      **DUMP**, **DEP** — anything that mostly needs sector/file access rather than
+      live shell state. Two enablers: (a) widen the ROM FS API beyond flat root
+      files to what these need — directory *iteration*, delete/tombstone, free-
+      pointer read/write, ideally path resolution (or each program re-walks via
+      FFIND); (b) a stable program ABI for args (the OS already passes a command
+      tail). Net effect: the OS keeps only the shell, parser, path layer, and thin
+      built-ins; everything else lives on disk and shares one ROM FS layer with
+      BASIC and any user program. Sequence after the FS API grows those few calls;
+      pairs with the on-target assembler/editor ideas below.
 - [ ] **Man-page-style OS command reference in os/README.md.** The OS README
       currently has a one-line-per-command table. Expand it into per-command
       "man" entries — NAME / SYNOPSIS / DESCRIPTION / EXAMPLES, plus notes on
