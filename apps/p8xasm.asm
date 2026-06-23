@@ -2,9 +2,11 @@
 ; P8X ASM - native two-pass assembler (standalone TPA program)
 ; =============================================================================
 ;     RUN ASM.BIN SRC.ASM OUT.BIN
-; Reads source SRC.ASM from the disk, assembles it, and writes the binary OUT.
-; Output carries load/exec 0 (FCREATE), which the OS treats as the TPA base
-; $B000 — so a program written `.org $B000` is directly RUNnable after assembly.
+; Reads SRC.ASM from disk and writes the binary OUT. Source is streamed a line
+; at a time and output is streamed a sector at a time (registered with FCOMMIT),
+; so neither is bounded by RAM — the assembler even assembles its own source.
+; Output carries load/exec 0, which the OS treats as the TPA base $B000 — so a
+; program written `.org $B000` is directly RUNnable after assembly.
 ;
 ; Supported syntax (a subset of the host assembler, same encodings):
 ;   label:                 define label = PC
@@ -19,7 +21,7 @@
 ;
 ; Conventions: P1 is the source cursor (preserved across helper calls); P3 is
 ; the system stack (never touched); helpers needing a 2nd pointer save P1 first.
-; Limits: ~146 symbols, 12-char names, 6.5 KB source, 4 KB output.
+; Limits: ~850 symbols, 12-char names, 127-char source lines, single .org.
 ; =============================================================================
 
 ; ---- BIOS ----
