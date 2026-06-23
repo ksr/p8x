@@ -120,30 +120,24 @@ Last updated: 2026-06-23
       a C runtime (startup, multiply/divide/shift helpers, minimal libc over
       the BIOS). Sequence after Forth/assembler land; reference small-C / SubC
       style compilers for the subset and codegen approach.
-- [ ] **On-target assembler** (a P8X/OS program or built-in) — makes the
-      machine self-hosting for machine code: edit a `.asm` text file with EDIT,
-      assemble it on-target to a runnable file, then RUN it. Two-pass like
-      p8xasm.py (labels, the LDPn pseudo, .byte/.word/.org), reading source
-      from a file and writing a binary file via the OS. The opcode table is the
-      catch: it can't import genucode.py, so generate a compact on-target
-      mnemonic->opcode table from the same ISA source (a genucode.py emitter)
-      so the host and target assemblers can't drift. Scope: integer-only,
-      modest program sizes; pairs with EDIT + RUN to close the write/assemble/
-      run loop entirely on the P8X. (Host p8xasm.py stays the primary tool.)
-- [ ] **Simple text editor** for editing text files: load a file into a RAM
-      buffer, line-oriented edit (insert/delete/list/replace by line, like the
-      BASIC editor), save back. Serial-console friendly (no cursor addressing);
-      a screen/visual mode is a later stretch. Pairs naturally with RUN — write
-      source, save, assemble off-target for now. Could share the line-buffer/
-      rebuild approach already proven in p8xbasic.asm. Two ways to ship it:
-        - **Built into the OS** as an EDIT command (preferred) — directly uses
-          the resolved path + the existing LOAD/SAVE machinery and the OS's
-          line buffer; no separate image to install. Watch the OS code size
-          (OS ~6.4 KB; code can grow to ~$9D00 now that vars moved to $A000 — see
-          the OS-code-size note in NEXT).
-        - Or a standalone P8X/OS program (TPA at $B000) launched by RUN, using
-          the BIOS vectors — keeps the kernel small but needs installing on
-          each disk.
+- [ ] **Native toolchain follow-ups** (EDIT + ASM landed — see DONE). Remaining
+      polish on the on-target assembler/editor, none blocking:
+        - **Tools write to the flat root only.** EDIT `W` and ASM output go to
+          the P8XFS root via the BIOS FFIND/FCREATE layer, so they can't save
+          into `/BIN` etc. Folds into the "make the BIOS file routines
+          hierarchy-aware" item above — once that lands, the tools inherit paths.
+        - **ASM capacity:** ~146 symbols, 12-char names, ~6.5 KB source, ~4 KB
+          output, single `.org`. Bump the symbol table / buffer placement if real
+          programs hit these; multiple `.org` needs the output indexed per-region
+          rather than one base offset.
+        - **ASM features not yet supported:** `.equ NAME,expr` form (only
+          `NAME = expr`), string escapes in `.ascii` (raw chars only), and
+          macros/conditional assembly (the host has none either).
+        - **Self-host check:** assemble ASM's *own* source on-target and diff
+          against the host build — the ultimate drift/coverage test (needs the
+          source to fit in the source buffer; may require splitting).
+        - **EDIT:** 8-bit line count (≤255 lines), whole-file rewrite on `W`
+          (orphans sectors until PACK), no search/replace or block ops.
 - [ ] **BASIC variable limits are tunable** — names are significant to 6 chars
       (`NAMLEN`) and capped at 32 variables (`NVARS`, 8-byte entries in the
       256-byte `VARTAB` at `$x100`). Both are constants in p8xbasic.asm; bump
@@ -252,6 +246,31 @@ Last updated: 2026-06-23
 > done + why + caveats). The original foundation milestones are a terse tick
 > list under *Early milestones* at the end of this section.
 
+- **Native toolchain: EDIT + ASM (on-target, self-hosting for machine code)**
+  (2026-06-23). The P8X can now edit a `.asm` file and assemble it to a runnable
+  binary without the host. Four pieces, all TPA programs / BIOS-only, tested:
+    - **Program-arg ABI:** `DORUN` enters a program with `P2` -> the command tail
+      after the program name (`SKIPWORD` past the name+spaces), so
+      `RUN EDIT FOO.ASM` hands `FOO.ASM` to the program; programs `RTS` to the
+      shell. Test os_argv_test.sh.
+    - **BIOS `FDELETE` ($011E):** tombstones a root file (flag -> $FF) so a file
+      can be overwritten (FDELETE + FCREATE). Append-only jump-table slot.
+      Test fdelete_test.sh. (Also fixed: FDELETE was clobbering the caller's
+      FSRC via dead scratch — surfaced by ASM.)
+    - **EDIT** (apps/p8xedit.asm): line editor, `RUN EDIT.BIN NAME` -> 12 KB
+      LF-line buffer at $C000; L/A/I n/D n/W/Q/?. DELETE forward-copies the gap
+      closed, INSERT opens it with DEP-based backward copy. Test os_edit_test.sh.
+    - **ASM** (apps/p8xasm.asm): two-pass assembler, `RUN ASM.BIN SRC OUT`.
+      Labels, equates, all operand shapes, LDPn pseudo, .org/.byte/.word/.ascii/
+      .asciiz/.fill, $/decimal/'c'/symbol exprs with +/- and </>. Opcode table
+      generated from genucode.OPC (generators/gen_p8xopc.py) and concatenated at
+      build — can't drift from the microcode. P1=source cursor, P3=system stack
+      untouched, errors long-jump to the OS via a saved SP. Output load/exec 0,
+      which the OS maps to TPA base $B000 (DEFADDR in DORUN) so `.org $B000`
+      programs are directly RUNnable. Test os_asm_test.sh assembles on-target,
+      proves the bytes are byte-identical to the host assembler, and RUNs the
+      result. run.sh installs /BIN/EDIT.BIN + /BIN/ASM.BIN on the demo disk.
+      Remaining polish in IDEAS ("Native toolchain follow-ups").
 - **P8XFS v1 retired — v2 is the only format** (2026-06-22). Removed all v1 (flat)
   support now that v2 is mature and on-target FORMAT exists. Monitor `F` now writes
   a v2 boot block + root extent at LBA 33 (inline `.`/`..` builder; host fsck
