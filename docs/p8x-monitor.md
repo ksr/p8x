@@ -123,7 +123,7 @@ the start LBA in the shared `LBA` (`$9D47`). (Subdirectory LBAs are assumed
 |-------|-----|
 | `$0000–$3FFF` | EEPROM (16 KB, rev D) — monitor at `$0000`, ROM BASIC at `$2000` (combined ROM) |
 | `$4000–$7FFF` | RAM (16 KB, rev D). **P8X/OS loads here** (`$4000`) and runs. |
-| `$8000–$FEFF` | RAM. OS code continues up to `$9D46`; OS variables at `$A000`; sector buffer `SBUF` at `$9E00` and the CF `LBA` bytes at `$9D47–$9D49` (fixed by the BIOS); user programs / `RUN` (the TPA) at `$B000`; stack (P3) grows down from `$FEFF` |
+| `$8000–$FEFF` | RAM. OS variables at `$A000`; the BIOS parameter block + stream/iteration state occupy `$9D40–$9D75` (the CF `LBA` at `$9D47–$9D49`, `FNAME`/`FSRC`/`FLEN`, and the read/write/dir-iteration state) and the sector buffer `SBUF` at `$9E00` — all fixed by the BIOS; user programs / `RUN` (the TPA) at `$B000`; stack (P3) grows down from `$FEFF` |
 | `$FF00` | switch input port (read) |
 | `$FF02` | LED output port (write) |
 | `$FF04 / $FF05` | 6850 ACIA status / data |

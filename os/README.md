@@ -88,16 +88,18 @@ Edit → assemble → run, all on the machine:
 ## How it fits together
 
 The OS does **not** carry its own drivers. The monitor publishes a stable
-**BIOS jump table at `$0100`** (CONIN/CONOUT/CONST/CFINIT/CFREAD/CFWRITE/PUTS/
-PHEX8); the OS calls those, so console + CF access live in one place and the
-OS image stays tiny (~380 bytes today). Those addresses are an ABI — see the
-table in [firmware/p8xmon.asm](../firmware/p8xmon.asm).
+**BIOS jump table at `$0100`** — console + CF (CONIN/CONOUT/CONST/CFINIT/CFREAD/
+CFWRITE/PUTS/PHEX8) plus the filesystem calls (FFIND/FCREATE/FDELETE/FCOMMIT,
+the read/write streams FOPEN/FGETB/FWOPEN/FPUTB/FCLOSE, and FRESOLVE/FNORM/
+FOPENDIR/FNEXT). The OS calls these, so drivers + FS structure live in one
+place. Those addresses are an ABI — see the full table in
+[docs/p8x-monitor.md](../docs/p8x-monitor.md).
 
 ```
 ROM (EEPROM $0000-$3FFF, rev D)     RAM ($4000-$FEFF, 48K)
-  $0000 reset -> $0130 monitor        $4000 P8X/OS kernel + shell  (from CF, rev D)
+  $0000 reset -> $0160 monitor        $4000 P8X/OS kernel + shell  (from CF, rev D)
   $0100 BIOS jump table  <------------ JSR CONOUT / CFREAD / ...
-  $0130 monitor body                   $9E00 sector buffer (shared ABI)
+  $0160 monitor body                   $9E00 sector buffer (shared ABI)
                                        $A000 OS variables
 ```
 

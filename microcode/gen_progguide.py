@@ -235,8 +235,8 @@ E.append(Paragraph(
  "assembler's <font face='Courier'>--base 0xB000</font>, or assemble on-target "
  "with ASM. A file created on-target carries load/exec 0, which the OS maps to "
  "$B000, so it is directly RUNnable. The BIOS jump table at $0100 "
- "(CONIN/CONOUT/CONST/CFINIT/CFREAD/CFWRITE/PUTS/PHEX8/FFIND/FCREATE/FDELETE/"
- "FCOMMIT) "
+ "(console + CF, the FFIND/FCREATE/FDELETE/FCOMMIT file calls, the FOPEN/FGETB "
+ "and FWOPEN/FPUTB/FCLOSE byte streams, and FRESOLVE/FNORM/FOPENDIR/FNEXT) "
  "is the only entry point a program needs - it must not call into OS internals.",B))
 
 doc.build(E)
