@@ -130,7 +130,12 @@ Last updated: 2026-06-23
         - **`switch`** (nice-to-have for the lexer/parser dispatch).
       Then port lex/parse/codegen from Python to that subset. Reference SubC
       (Nils Holm) — it is explicitly a self-compiling small-C and a good map for
-      both the subset boundary and the codegen shape.
+      both the subset boundary and the codegen shape. **KEEP p8cc.py — the C
+      rewrite is added ALONGSIDE it (e.g. compiler/p8cc.c), never replacing it.**
+      The Python compiler is the host bootstrap that compiles the C-source
+      compiler in the first place (delete it and you need an already-working
+      p8cc to rebuild p8cc), and it stays the reference oracle for differential
+      testing the two against each other. Both stay built + tested in the suite.
 
       **(B) Self-host: run the C-source compiler ON the P8X.** Strictly harder
       than (A) and gated by RAM, exactly like the assembler was. The P8X has
