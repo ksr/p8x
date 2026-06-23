@@ -161,6 +161,8 @@ class P:
                 params.append(self.param())
                 while self.accept(","): params.append(self.param())
             self.eat(")")
+            if self.accept(";"):                       # prototype (forward decl)
+                return ("proto", (base, ptr, 0), name, params)
             return ("func", (base, ptr, 0), name, params, self.block())
         arr = False; count = 0
         if self.accept("["):
@@ -774,7 +776,7 @@ class Gen:
         for d in decls:                                 # struct/union layouts first
             if d[0] == "structdef": self.register_struct(d[1], d[2], d[3])
         for d in decls:
-            if d[0] == "func":
+            if d[0] in ("func", "proto"):               # prototypes declare too
                 self.funcs[d[2]] = (d[1][0], d[1][1])   # name -> return (base, ptr)
         for d in decls:
             if d[0] == "gvar":

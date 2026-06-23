@@ -91,3 +91,8 @@ emulator/test/cglob.bin
 emulator/test/p8cc_host
 emulator/test/pcc.asm
 emulator/test/pcc.bin
+emulator/test/selfacc.asm
+emulator/test/diff.c
+emulator/test/d.asm
+emulator/test/d.bin
+emulator/test/d.img

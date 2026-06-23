@@ -13,7 +13,11 @@
  * before use (gcc needs no implicit declarations), only getchar/putchar/puts
  * for I/O.  EOF is c==0 (P8X CONIN at end of stdin) or c==-1 (host getchar).
  *
- * Built incrementally; this stage is the lexer + a token-classification driver.
+ * Built incrementally; this stage is the lexer plus a single-pass parser/code-
+ * generator for a first language slice: one `int main()`, integer arithmetic
+ * (+ -), parentheses, putchar(e), return, and statements (block/if-free).  This
+ * establishes the full emit pipeline (startup, function, runtime helpers, data)
+ * and the host-vs-p8cc.py differential harness; the language grows from here.
  */
 #include <stdio.h>
 
@@ -232,18 +236,162 @@ int lex() {
     return tok;
 }
 
-/* ---- driver (this stage): classify every token as one character ----------- */
+/* ---- output helpers ------------------------------------------------------- */
+int use_add = 0;
+int use_sub = 0;
+
+int emitstr(char *s) {
+    while (*s != 0) { putchar(*s); s = s + 1; }
+    return 0;
+}
+
+int line(char *s) { emitstr(s); putchar(10); return 0; }
+
+int emitdec(int v) {                 /* unsigned decimal (values are 0..65535) */
+    char buf[6];
+    int n;
+    if (v == 0) { putchar(48); return 0; }
+    n = 0;
+    while (v != 0) { buf[n] = 48 + (v % 10); n = n + 1; v = v / 10; }
+    while (n != 0) { n = n - 1; putchar(buf[n]); }
+    return 0;
+}
+
+int strcpy_(char *d, char *s) {
+    while (*s != 0) { *d = *s; d = d + 1; s = s + 1; }
+    *d = 0;
+    return 0;
+}
+
+int is_punct(char *p) { return tok == T_PUNCT && streq(tname, p); }
+
+int eat(char *p) {
+    if (is_punct(p) == 0) { emitstr("; ERROR: expected "); line(p); }
+    lex();
+    return 0;
+}
+
+/* ---- codegen primitives (result of an expression lives in __ax) ----------- */
+int set_ax(int v) {                  /* __ax = constant v */
+    emitstr("        LDA #"); emitdec(v & 255); putchar(10);
+    line("        STA __ax");
+    emitstr("        LDA #"); emitdec((v >> 8) & 255); putchar(10);
+    line("        STA __ax+1");
+    return 0;
+}
+
+int push_ax() {                      /* push __ax onto the P3 hardware stack */
+    line("        LDA __ax"); line("        PHA");
+    line("        LDA __ax+1"); line("        PHA");
+    return 0;
+}
+
+int pop_t() {                        /* pop into __t */
+    line("        PLA"); line("        STA __t+1");
+    line("        PLA"); line("        STA __t");
+    return 0;
+}
+
+/* ---- runtime helpers (emitted only if used) ------------------------------- */
+int emit_add() {
+    line("__add:  LDA __t");    line("        LDB __ax");  line("        ADD");
+    line("        STA __ax");   line("        LDA #0");    line("        JNC __add1");
+    line("        LDA #1");     line("__add1: STA __c");   line("        LDA __t+1");
+    line("        LDB __ax+1"); line("        ADD");       line("        LDB __c");
+    line("        ADD");        line("        STA __ax+1");line("        RTS");
+    return 0;
+}
+
+int emit_sub() {
+    line("__sub:  LDA __t");    line("        LDB __ax");  line("        SUB");
+    line("        STA __ax");   line("        LDA #0");    line("        JC __sub1");
+    line("        LDA #1");     line("__sub1: STA __c");   line("        LDA __t+1");
+    line("        LDB __ax+1"); line("        SUB");       line("        STA __ax+1");
+    line("        LDA __c");    line("        JZ __sub2"); line("        LDA __ax+1");
+    line("        LDB #1");     line("        SUB");       line("        STA __ax+1");
+    line("__sub2: RTS");
+    return 0;
+}
+
+/* ---- expressions / statements (mutually recursive -> forward decls) -------- */
+int expr();
+int stmt();
+
+int primary() {
+    char nm[64];
+    if (tok == T_NUM) { set_ax(tval); lex(); return 0; }
+    if (is_punct("(")) { lex(); expr(); eat(")"); return 0; }
+    if (tok == T_ID) {
+        strcpy_(nm, tname); lex(); eat("(");
+        expr();                                  /* the single argument */
+        eat(")");
+        if (streq(nm, "putchar")) {
+            line("        LDA __ax"); line("        JSR $0103");
+        }
+        return 0;
+    }
+    line("; ERROR: bad primary");
+    return 0;
+}
+
+int expr() {                          /* primary (('+'|'-') primary)* */
+    int op;
+    primary();
+    while (is_punct("+") || is_punct("-")) {
+        op = tname[0];                           /* '+' = 43, '-' = 45 */
+        lex();
+        push_ax();
+        primary();
+        pop_t();
+        if (op == 43) { line("        JSR __add"); use_add = 1; }
+        else { line("        JSR __sub"); use_sub = 1; }
+    }
+    return 0;
+}
+
+int block() {
+    eat("{");
+    while (is_punct("}") == 0 && tok != T_EOF) stmt();
+    eat("}");
+    return 0;
+}
+
+int stmt() {
+    if (is_punct("{")) { block(); return 0; }
+    if (tok == T_KW && streq(tname, "return")) {
+        lex();
+        if (is_punct(";") == 0) expr();
+        eat(";");
+        line("        RTS");
+        return 0;
+    }
+    if (is_punct(";")) { lex(); return 0; }
+    expr();
+    eat(";");
+    return 0;
+}
+
+/* ---- driver: compile one `int main() { ... }` to a runnable program -------- */
 int main() {
     slurp();
-    lex();
-    while (tok != T_EOF) {
-        if (tok == T_NUM) putchar(110);         /* n */
-        else if (tok == T_ID) putchar(105);     /* i */
-        else if (tok == T_KW) putchar(107);     /* k */
-        else if (tok == T_STR) putchar(115);    /* s */
-        else putchar(112);                      /* p */
-        lex();
-    }
-    putchar(10);
+    lex();                                       /* prime the first token */
+
+    line("        .org $B000");
+    line("        JSR _f_main");
+    line("        RTS");
+
+    if (tok == T_KW) lex();                      /* return type 'int' */
+    if (tok == T_ID) lex();                      /* function name (main) */
+    eat("(");
+    eat(")");
+    line("_f_main:");
+    block();
+    line("        RTS");                          /* fall-through return */
+
+    if (use_add) emit_add();
+    if (use_sub) emit_sub();
+    line("__ax:   .fill 2");
+    line("__t:    .fill 2");
+    line("__c:    .fill 1");
     return 0;
 }
