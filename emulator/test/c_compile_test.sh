@@ -36,6 +36,12 @@ int main() {
     setv(&x, 7);                                     /* &local + ptr param */
     if (x == 7) puts("PTR-OK");
     if (17 / 5 == 3) { if (17 % 5 == 2) puts("DIV-OK"); }
+    x = 0;
+    for (i = 0; i < 5; i = i + 1) x = x + i;             /* for loop: 0..4 = 10 */
+    if (x == 10) puts("FOR-OK");
+    if ((1 && 1) && !(0 && 1)) { if (0 || 1) puts("LOG-OK"); }   /* short-circuit */
+    if ((6 & 3) == 2) { if ((5 | 2) == 7) { if ((5 ^ 1) == 4) puts("BIT-OK"); } }
+    if ((1 << 4) == 16) { if ((64 >> 3) == 8) { if ((255 & ~240) == 15) puts("SHIFT-OK"); } }
     return 0;
 }
 EOF
@@ -56,4 +62,8 @@ echo "$out" | grep -qx 'ADD-OK'  || fail "multi-parameter call failed"
 echo "$out" | grep -qx 'ABCDE'   || fail "char pointer/array fill failed"
 echo "$out" | grep -qx 'PTR-OK'  || fail "&local + pointer-param store failed"
 echo "$out" | grep -qx 'DIV-OK'  || fail "/ or % failed"
+echo "$out" | grep -qx 'FOR-OK'  || fail "for loop failed"
+echo "$out" | grep -qx 'LOG-OK'  || fail "short-circuit && / || failed"
+echo "$out" | grep -qx 'BIT-OK'  || fail "bitwise & | ^ failed"
+echo "$out" | grep -qx 'SHIFT-OK' || fail "shifts << >> or ~ failed"
 echo "C-COMPILE TEST: PASS"

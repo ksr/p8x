@@ -7,10 +7,13 @@ area ($B000), so the output is a RUNnable program. Grown in phases.
 Supported now:
   types        int (16-bit), char (8-bit), pointers (T *), arrays (T a[N])
   top level    function definitions with parameters, global var decls
-  statements   { }  decl  if/else  while  return [e];  expr;  ;
-  expressions  =  == != < > <= >=  + - * / %  unary - ! & *  a[i]  calls(args)
+  statements   { }  decl  if/else  while  for(e;e;e)  return [e];  expr;  ;
+  expressions  =  || &&  | ^ &  == !=  < > <= >=  << >>  + - * / %
+               unary - ! ~ & *   a[i]   calls(args)
                primaries: int/char/string literal, identifier, call
-  builtins     putchar(e)   puts(e)        (over the BIOS at $0103 / $0112)
+  builtins     getchar()  putchar(e)  puts(e)   (BIOS $0100 / $0103 / $0112)
+  note         for-init is an expression, not a declaration (locals are
+               function-scoped; declare the loop var before the loop)
 
 Execution model
   * 16-bit pseudo-accumulator AX (memory word __ax) holds every expression
@@ -32,10 +35,10 @@ CSTACK_TOP = 0xF800
 # --------------------------------------------------------------------------- #
 # Lexer
 # --------------------------------------------------------------------------- #
-KEYWORDS = {"int", "char", "void", "if", "else", "while", "return"}
-PUNCT = ["==", "!=", "<=", ">=", "&&", "||",
+KEYWORDS = {"int", "char", "void", "if", "else", "while", "for", "return"}
+PUNCT = ["==", "!=", "<=", ">=", "<<", ">>", "&&", "||",
          "{", "}", "(", ")", "[", "]", ";", ",", "=",
-         "+", "-", "*", "/", "%", "<", ">", "!", "&"]
+         "+", "-", "*", "/", "%", "<", ">", "!", "&", "|", "^", "~"]
 
 
 def lex(src):
@@ -163,6 +166,12 @@ class P:
         if v == "while":
             self.next(); self.eat("("); c = self.expr(); self.eat(")")
             return ("while", c, self.stmt())
+        if v == "for":
+            self.next(); self.eat("(")
+            init = None if self.val() == ";" else self.expr(); self.eat(";")
+            cond = None if self.val() == ";" else self.expr(); self.eat(";")
+            post = None if self.val() == ")" else self.expr(); self.eat(")")
+            return ("for", init, cond, post, self.stmt())
         if v == "return":
             self.next(); e = None if self.val() == ";" else self.expr()
             self.eat(";"); return ("return", e)
@@ -172,12 +181,25 @@ class P:
     def expr(self): return self.assign()
 
     def assign(self):
-        left = self.binary(0)
+        left = self.logic_or()
         if self.val() == "=":
             self.next(); return ("assign", left, self.assign())
         return left
 
-    LEVELS = [["==", "!="], ["<", ">", "<=", ">="], ["+", "-"], ["*", "/", "%"]]
+    def logic_or(self):
+        left = self.logic_and()
+        while self.val() == "||":
+            self.next(); left = ("logor", left, self.logic_and())
+        return left
+
+    def logic_and(self):
+        left = self.binary(0)
+        while self.val() == "&&":
+            self.next(); left = ("logand", left, self.binary(0))
+        return left
+
+    LEVELS = [["|"], ["^"], ["&"], ["==", "!="], ["<", ">", "<=", ">="],
+              ["<<", ">>"], ["+", "-"], ["*", "/", "%"]]
 
     def binary(self, lvl):
         if lvl >= len(self.LEVELS): return self.unary()
@@ -189,7 +211,7 @@ class P:
 
     def unary(self):
         v = self.val()
-        if v in ("-", "!", "&", "*"):
+        if v in ("-", "!", "&", "*", "~"):
             self.next(); return ("unary", v, self.unary())
         return self.postfix()
 
@@ -375,6 +397,11 @@ class Gen:
                 self.gen_expr(e[2]); self.load_deref(*self.typeof_lval(e))
             elif e[1] == "!":
                 self.gen_expr(e[2]); self.need("__not"); self.emit("        JSR __not")
+            elif e[1] == "~":                                # bitwise NOT: 255-byte each
+                self.gen_expr(e[2])
+                self.emit("        LDA #255", "        LDB __ax", "        SUB",
+                          "        STA __ax", "        LDA #255", "        LDB __ax+1",
+                          "        SUB", "        STA __ax+1")
             else:  # -e
                 self.gen_expr(e[2]); self.need("__sub")
                 self.emit("        LDA #0", "        STA __t", "        STA __t+1",
@@ -382,6 +409,8 @@ class Gen:
         elif k == "index":
             self.gen_address(e); self.load_deref(*self.typeof_lval(e))
         elif k == "assign": self.gen_assign(e[1], e[2])
+        elif k == "logand": self.gen_logand(e[1], e[2])
+        elif k == "logor": self.gen_logor(e[1], e[2])
         elif k == "bin": self.gen_bin(e[1], e[2], e[3])
         elif k == "call": self.gen_call(e[1], e[2])
         else: sys.exit("p8cc: cannot generate expr %r" % (k,))
@@ -405,7 +434,10 @@ class Gen:
                 "%": ("__mod", False, False), "==": ("__eq", False, False),
                 "!=": ("__eq", False, True), "<": ("__lt", False, False),
                 ">": ("__lt", True, False), "<=": ("__lt", True, True),
-                ">=": ("__lt", False, True)}[op]
+                ">=": ("__lt", False, True),
+                "&": ("__and", False, False), "|": ("__or", False, False),
+                "^": ("__xor", False, False), "<<": ("__shl", False, False),
+                ">>": ("__shr", False, False)}[op]
         helper, swap, neg = plan
         # pointer arithmetic: scale the integer operand by element size.
         scale = 0
@@ -426,6 +458,32 @@ class Gen:
         self.need(helper); self.emit("        JSR %s" % helper)
         if neg:
             self.need("__not"); self.emit("        JSR __not")
+
+    def gen_logand(self, a, b):                          # short-circuit && -> 0/1
+        false = self.lbl("Land0"); end = self.lbl("Lande")
+        self.gen_expr(a)
+        self.emit("        LDA __ax", "        LDB __ax+1", "        OR",
+                  "        JZ %s" % false)
+        self.gen_expr(b)
+        self.emit("        LDA __ax", "        LDB __ax+1", "        OR",
+                  "        JZ %s" % false,
+                  "        LDA #1", "        STA __ax", "        LDA #0",
+                  "        STA __ax+1", "        JMP %s" % end,
+                  "%s:    LDA #0" % false, "        STA __ax", "        STA __ax+1",
+                  "%s:" % end)
+
+    def gen_logor(self, a, b):                           # short-circuit || -> 0/1
+        true = self.lbl("Lor1"); end = self.lbl("Lore")
+        self.gen_expr(a)
+        self.emit("        LDA __ax", "        LDB __ax+1", "        OR",
+                  "        JNZ %s" % true)
+        self.gen_expr(b)
+        self.emit("        LDA __ax", "        LDB __ax+1", "        OR",
+                  "        JNZ %s" % true,
+                  "        LDA #0", "        STA __ax", "        STA __ax+1",
+                  "        JMP %s" % end,
+                  "%s:    LDA #1" % true, "        STA __ax", "        LDA #0",
+                  "        STA __ax+1", "%s:" % end)
 
     def gen_call(self, name, args):
         if name == "getchar":                            # BIOS CONIN -> char
@@ -480,6 +538,18 @@ class Gen:
                       "        JZ %s" % end)
             self.gen_stmt(s[2])
             self.emit("        JMP %s" % top, "%s:" % end)
+        elif k == "for":                                  # for(init; cond; post) body
+            init, cond, post, body = s[1], s[2], s[3], s[4]
+            top = self.lbl("Ltop"); end = self.lbl("Lend")
+            if init is not None: self.gen_expr(init)
+            self.emit("%s:" % top)
+            if cond is not None:
+                self.gen_expr(cond)
+                self.emit("        LDA __ax", "        LDB __ax+1", "        OR",
+                          "        JZ %s" % end)
+            self.gen_stmt(body)
+            if post is not None: self.gen_expr(post)
+            self.emit("        JMP %s" % top, "%s:" % end)
         else: sys.exit("p8cc: cannot generate stmt %r" % (k,))
 
     # ---- functions / top level ---------------------------------------------
@@ -502,6 +572,8 @@ class Gen:
             if s[3]: yield from self.collect_decls(s[3])
         elif k == "while":
             yield from self.collect_decls(s[2])
+        elif k == "for":
+            yield from self.collect_decls(s[4])
 
     def compile_func(self, name, params, body):
         self.func = name; self.locals = {}
@@ -547,8 +619,10 @@ class Gen:
         self.emit_runtime()
         self.emit("__ax:   .fill 2", "__t:    .fill 2", "__c:    .fill 1",
                   "__fp:   .fill 2", "__csp:  .fill 2", "__off:  .fill 2")
-        if {"__mul", "__div", "__mod"} & self.used:
-            self.emit("__r:    .fill 2", "__n:    .fill 1")
+        if "__mul" in self.used:
+            self.emit("__r:    .fill 2")
+        if {"__mul", "__div", "__mod", "__shl", "__shr"} & self.used:
+            self.emit("__n:    .fill 1")
         self.code.extend(self.data)
 
     # ---- runtime helpers ----------------------------------------------------
@@ -657,7 +731,32 @@ class Gen:
                       "        ADD", "        STA __t+1", "        LDA __t",
                       "        TAP1L", "        LDA __t+1", "        TAP1H",
                       "        RTS"]
+        R["__and"] = ["__and:  LDA __t", "        LDB __ax", "        AND",
+                      "        STA __ax", "        LDA __t+1", "        LDB __ax+1",
+                      "        AND", "        STA __ax+1", "        RTS"]
+        R["__or"] = ["__or:   LDA __t", "        LDB __ax", "        OR",
+                     "        STA __ax", "        LDA __t+1", "        LDB __ax+1",
+                     "        OR", "        STA __ax+1", "        RTS"]
+        R["__xor"] = ["__xor:  LDA __t", "        LDB __ax", "        XOR",
+                      "        STA __ax", "        LDA __t+1", "        LDB __ax+1",
+                      "        XOR", "        STA __ax+1", "        RTS"]
+        # __shl/__shr: shift value __t left/right by (__ax low byte) bits -> __ax.
+        R["__shl"] = ["__shl:  LDA __ax", "        STA __n", "        LDA __t",
+                      "        STA __ax", "        LDA __t+1", "        STA __ax+1",
+                      "__shl_l: LDA __n", "        JZ __shl_e",
+                      "        LDA __ax", "        SHL", "        STA __ax",
+                      "        LDA __ax+1", "        ROL", "        STA __ax+1",
+                      "        LDA __n", "        DEC", "        STA __n",
+                      "        JMP __shl_l", "__shl_e: RTS"]
+        R["__shr"] = ["__shr:  LDA __ax", "        STA __n", "        LDA __t",
+                      "        STA __ax", "        LDA __t+1", "        STA __ax+1",
+                      "__shr_l: LDA __n", "        JZ __shr_e",
+                      "        LDA __ax+1", "        SHR", "        STA __ax+1",
+                      "        LDA __ax", "        ROR", "        STA __ax",
+                      "        LDA __n", "        DEC", "        STA __n",
+                      "        JMP __shr_l", "__shr_e: RTS"]
         order = ["__add", "__sub", "__mul", "__div", "__mod", "__divmod",
+                 "__and", "__or", "__xor", "__shl", "__shr",
                  "__not", "__eq", "__lt", "__push", "__enter", "__leave", "__lea"]
         want = set(self.used)
         if {"__div", "__mod"} & want: want.add("__divmod")

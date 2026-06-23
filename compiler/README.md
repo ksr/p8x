@@ -38,8 +38,8 @@ to the OS shell with `RTS` (startup inits `__csp` then `JSR _f_main`).
 |------|-----------|
 | types | `int` (16-bit), `char` (8-bit), pointers `T *`, arrays `T a[N]` |
 | top level | function definitions **with parameters**, global variable declarations |
-| statements | `{ }`, declarations, `if`/`else`, `while`, `return [e];`, `expr;`, `;` |
-| operators | `=`  `==` `!=` `<` `>` `<=` `>=`  `+` `-` `*` `/` `%`  unary `-` `!` `&` `*` |
+| statements | `{ }`, declarations, `if`/`else`, `while`, `for (e; e; e)`, `return [e];`, `expr;`, `;` |
+| operators | `=`  `\|\|` `&&`  `\|` `^` `&`  `==` `!=`  `<` `>` `<=` `>=`  `<<` `>>`  `+` `-` `*` `/` `%`  unary `-` `!` `~` `&` `*` |
 | functions | parameters, **stack locals**, **recursion**, return value in `AX` |
 | pointers | `&lvalue`, `*ptr` (load/store), pointer +/- scaled by element size, `a[i]` |
 | primaries | int / char / string literals, identifiers, calls, `( )` |
@@ -59,9 +59,12 @@ String literals are pooled and evaluate to their address.
 
 ### Current limitations (next phases)
 
-- No `for`, no `&&`/`||` short-circuit, no shifts/bitwise, no structs/unions, no
-  global initializers, no multi-level type checking (e.g. function return types
-  default to `int`).
+- No structs/unions, no global initializers, no multi-level type checking
+  (function return types default to `int`). These are the prerequisites for
+  rewriting the compiler in its own subset — see the project backlog
+  ("C compiler" → milestone A).
+- `for`-init is an expression, not a declaration: locals are function-scoped, so
+  declare the loop variable before the loop (`int i; for (i = 0; ...)`).
 - Locals are function-scoped (no per-block shadowing); the C-stack and the
   hardware return stack are both in the TPA, so deep recursion is bounded by RAM.
   See the project backlog.
@@ -70,7 +73,9 @@ String literals are pooled and evaluate to their address.
 
 `emulator/test/c_compile_test.sh` (`make test-c`) compiles a C program, assembles
 it, RUNs it under P8X/OS, and checks the output: a `while` loop printing `12345`,
-then **recursive `fact(5)`** → `FACT-OK` and a two-arg `add` → `ADD-OK`.
+then **recursive `fact(5)`** → `FACT-OK`, a two-arg `add` → `ADD-OK`, and
+`FOR-OK`/`LOG-OK`/`BIT-OK`/`SHIFT-OK` covering `for`, short-circuit `&&`/`||`,
+bitwise `& | ^ ~`, and shifts `<< >>`.
 
 `emulator/test/c_libc_test.sh` exercises **input**: a program reads a line with
 `getchar()`, upper-cases it into a `char` buffer, `puts()` it, and prints its
