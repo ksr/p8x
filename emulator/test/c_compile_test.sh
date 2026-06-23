@@ -19,11 +19,13 @@ int fact(int n) {            /* recursion + parameter */
 }
 int add(int a, int b) { return a + b; }   /* multiple parameters */
 int setv(int *q, int v) { *q = v; return 0; }   /* store through a pointer */
+int *idp(int *a) { return a; }                   /* returns int* (return-type tracking) */
 int main() {
     char buf[8];
     char *p;
     int i;
     int x;
+    int ia[3];
     i = 1;
     while (i <= 5) { putchar(i + 48); i = i + 1; }   /* stack local + loop */
     putchar(10);
@@ -42,6 +44,8 @@ int main() {
     if ((1 && 1) && !(0 && 1)) { if (0 || 1) puts("LOG-OK"); }   /* short-circuit */
     if ((6 & 3) == 2) { if ((5 | 2) == 7) { if ((5 ^ 1) == 4) puts("BIT-OK"); } }
     if ((1 << 4) == 16) { if ((64 >> 3) == 8) { if ((255 & ~240) == 15) puts("SHIFT-OK"); } }
+    ia[0] = 1; ia[1] = 2; ia[2] = 3;
+    if (*(idp(ia) + 2) == 3) puts("RET-OK");            /* call result int*: +2 scales by 2 */
     return 0;
 }
 EOF
@@ -66,4 +70,5 @@ echo "$out" | grep -qx 'FOR-OK'  || fail "for loop failed"
 echo "$out" | grep -qx 'LOG-OK'  || fail "short-circuit && / || failed"
 echo "$out" | grep -qx 'BIT-OK'  || fail "bitwise & | ^ failed"
 echo "$out" | grep -qx 'SHIFT-OK' || fail "shifts << >> or ~ failed"
+echo "$out" | grep -qx 'RET-OK'  || fail "function return-type tracking (int* scaling) failed"
 echo "C-COMPILE TEST: PASS"

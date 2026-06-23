@@ -254,6 +254,7 @@ class Gen:
         self.code = []; self.data = []
         self.globals = {}     # name -> (label, base, ptr, count)
         self.locals = {}      # name -> (offset, base, ptr, count)
+        self.funcs = {}       # name -> (base, ptr) return type
         self.strings = {}
         self.used = set()
         self.nl = 0
@@ -287,7 +288,9 @@ class Gen:
         if k == "index":
             b, p = self.typeof(e[1]); return (b, p - 1)
         if k == "assign": return self.typeof_lval(e[1])
-        if k == "call": return ("int", 0)
+        if k == "call":
+            if e[1] == "getchar": return ("int", 0)
+            return self.funcs.get(e[1], ("int", 0))   # declared return type
         if k == "bin":
             if e[1] in ("+", "-"):
                 lt = self.typeof(e[2]); rt = self.typeof(e[3])
@@ -605,6 +608,9 @@ class Gen:
                                               else sizeof(base, ptr)))
 
     def gen_program(self, decls):
+        for d in decls:
+            if d[0] == "func":
+                self.funcs[d[2]] = (d[1][0], d[1][1])   # name -> return (base, ptr)
         for d in decls:
             if d[0] == "gvar":
                 if d[3] is not None:

@@ -59,10 +59,11 @@ String literals are pooled and evaluate to their address.
 
 ### Current limitations (next phases)
 
-- No structs/unions, no global initializers, no multi-level type checking
-  (function return types default to `int`). These are the prerequisites for
-  rewriting the compiler in its own subset — see the project backlog
-  ("C compiler" → milestone A).
+- No structs/unions, no global initializers. These are the remaining
+  prerequisites for rewriting the compiler in its own subset — see the project
+  backlog ("C compiler" → milestone A). Function **return types are tracked**
+  (a `T *`-returning call participates correctly in pointer arithmetic and
+  dereference); a call to an undeclared function still defaults to `int`.
 - `for`-init is an expression, not a declaration: locals are function-scoped, so
   declare the loop variable before the loop (`int i; for (i = 0; ...)`).
 - Locals are function-scoped (no per-block shadowing); the C-stack and the
