@@ -55,6 +55,19 @@ Last updated: 2026-06-23
       INCH the consumer reads) and, to be useful, filter commands that actually
       read a stream (MORE/WC/GREP-style) — none exist yet. RBUF is RAM-bound
       (~the TPA, $B000..). Scope: add INCH + one filter (e.g. MORE) -> `|`.
+- [ ] **Make the BIOS file routines hierarchy-aware (paths, not just root).** The
+      ROM FS calls (`$0118 FFIND` / `$011B FCREATE`) currently operate only on the
+      P8XFS v2 **root** directory (LBA 33), so BASIC `SAVE`/`LOAD` and any BIOS-FS
+      client are flat — they can't reach `/BIN/FOO`. Teach them to **resolve a
+      path** through the `.`/`..` entries (walk components, DESCEND into each
+      subdir extent) so a name like `/BIN/PROG` or a relative path works, matching
+      what P8X/OS already does internally. Open questions: (a) carry a notion of
+      "current directory" across calls (a CWD extent in the BIOS ABI) vs requiring
+      absolute paths; (b) ROM size — path resolution is ~the OS's RESOLVE/DESCEND
+      (a few hundred bytes), and ROM has room. This is the natural precursor to the
+      "offload OS commands" item below (those need dir iteration + paths too), and
+      it would let BASIC save into subdirectories. Keep the root-only fast path or
+      replace it. Update the BIOS ABI doc + a hierarchy round-trip test.
 - [ ] **Offload OS commands to loadable programs via the ROM FS routines.** Now
       that the monitor publishes a shared filesystem API (`$0118 FFIND` /
       `$011B FCREATE`, see DONE — BASIC SAVE/LOAD), the heavy/self-contained OS
