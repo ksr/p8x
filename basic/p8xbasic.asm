@@ -28,7 +28,7 @@ BS     = $08
 
 ; BIOS filesystem calls (monitor ROM at $0100). Available in the ROM-in-monitor
 ; and disk builds, where the monitor is resident; NOT in the standalone build.
-CFREAD  = $010C          ; read sector LBA -> (P1); P1 += 512
+FLOADAT = $013F          ; bulk-read FLEN bytes from LBA into (P1)
 FFIND   = $0118          ; find root file FNAME -> LBA + FLEN; C=1 if not found
 FCREATE = $011B          ; create root file FNAME from FSRC/FLEN; C=1 on error
 LBA     = $9D47          ; CFREAD target LBA (byte 0); LBA1 = byte 1
@@ -313,37 +313,9 @@ st_load:INP2                        ; consume the LOAD token
         JC   fs_serr
         JSR  FFIND                   ; -> LBA + FLEN, or C set if missing
         JC   ld_nf
-        LDA  #<PROG                  ; P1 = PROG (destination)
-        TAP1L
-        LDA  #>PROG
-        TAP1H
-        LDA  FLEN                    ; NUM1 = bytes remaining
-        STA  NUM1
-        LDA  FLEN+1
-        STA  NUM1+1
-ld_lp:  LDA  NUM1
-        LDB  NUM1+1
-        OR
-        JZ   ld_done                 ; all sectors read
-        JSR  CFREAD                  ; sector LBA -> (P1); P1 += 512
-        LDA  LBA                     ; LBA++ (carry into LBA1)
-        INC
-        STA  LBA
-        JNZ  ld_nc
-        LDA  LBA1
-        INC
-        STA  LBA1
-ld_nc:  LDA  NUM1+1                  ; remaining -= 512 (floor 0)
-        LDB  #2
-        SUB
-        JNC  ld_last
-        STA  NUM1+1
-        JMP  ld_lp
-ld_last:LDA  #0
-        STA  NUM1
-        STA  NUM1+1
-        JMP  ld_lp
-ld_done:LDP1 #MLOADED
+        LDP1 #PROG                   ; bulk-read the whole file into PROG
+        JSR  FLOADAT
+        LDP1 #MLOADED
         JSR  PUTS
         RTS
 ld_nf:  LDP1 #MNOFILE
