@@ -35,6 +35,8 @@ FFIND   = $0118
 FCREATE = $011B
 FDELETE = $011E
 FCOMMIT = $0121   ; register a streamed file: write dir entry + bump free
+FOPEN   = $0124   ; open FNAME for reading (P1 = 512-byte buffer)
+FGETB   = $0127   ; next source byte -> A; C=1 at EOF
 SBUF    = $9E00   ; BIOS sector buffer — reused as the output sector buffer
 LBA     = $9D47
 LBA1    = $9D48
@@ -79,16 +81,9 @@ LDPN    = $C824   ; LDPn pointer digit (survives EVAL, which trashes TMP/MNBUF)
 MNBUF   = $C830   ; upcased mnemonic/directive (8)
 NAMBUF  = $C840   ; identifier as written (16, 12 used)
 OUTNAME = $C850   ; output file name (12)
-SLBA    = $C860   ; streamed-source sector LBA (3)
-SREM    = $C863   ; source bytes remaining (2)
-SCNT    = $C865   ; bytes left in SECBUF (2)
-SPTR    = $C867   ; read cursor into SECBUF (2)
-SEOF    = $C869   ; 1 at end of source
 LEOF    = $C86A   ; 1 when NEXTLINE hits end of source
-SB      = $C86B   ; last byte from GETB
+SB      = $C86B   ; current source byte from FGETB
 LCNT    = $C86C   ; chars in the current line
-FSTART  = $C86D   ; source file start LBA, saved from FFIND (3)
-FLENS   = $C870   ; source file length, saved from FFIND (2)
 SB2     = $C872   ; EMIT: byte being emitted
 OUTLBA  = $C873   ; streamed-output write LBA (3)
 OSPOS   = $C876   ; byte offset within the output sector buffer (2)
@@ -123,18 +118,8 @@ START:  TPA3L                   ; save SP so an error can long-jump back to OS
         LDB  #' '
         CMP
         JZ   ST_USAGE
-        JSR  FFIND
+        JSR  FFIND              ; just to report a missing source cleanly
         JC   ST_NOSRC
-        LDA  LBA                ; save start LBA + length to re-stream each pass
-        STA  FSTART
-        LDA  LBA1
-        STA  FSTART+1
-        LDA  LBA2
-        STA  FSTART+2
-        LDA  FLEN
-        STA  FLENS
-        LDA  FLEN+1
-        STA  FLENS+1
         ; ---- pass 1: build symbol table ----
         LDA  #0
         STA  PASS
@@ -1169,107 +1154,17 @@ FO_NB:  STA  TMP
 ; =============================================================================
 ; Source load + scanning helpers
 ; =============================================================================
-; ---- streamed source reader (a line at a time, from disk) -------------------
-; PASSINIT - restart the stream at the file's first sector (called per pass).
+; ---- source reader: a line at a time, over the BIOS read stream ------------
+; The byte-level streaming (sector reads, refill, EOF) lives in the BIOS now
+; (FOPEN/FGETB); the assembler just re-opens the source each pass and assembles
+; lines into LINEBUF. SECBUF is the 512-byte buffer FOPEN/FGETB use.
+; PASSINIT - (re)open the source for a pass. FNAME is still the source name
+;            (SETFNOUT only runs at FINISHOUT, after both passes).
 PASSINIT:
-        LDA  FSTART
-        STA  SLBA
-        LDA  FSTART+1
-        STA  SLBA+1
-        LDA  FSTART+2
-        STA  SLBA+2
-        LDA  FLENS
-        STA  SREM
-        LDA  FLENS+1
-        STA  SREM+1
-        LDA  #0
-        STA  SCNT
-        STA  SCNT+1
-        STA  SEOF
-        STA  LEOF
-        RTS
-; REFILL - load the next source sector into SECBUF; reset SPTR; SCNT=min(512,SREM)
-REFILL: LDA  SLBA
-        STA  LBA
-        LDA  SLBA+1
-        STA  LBA1
-        LDA  SLBA+2
-        STA  LBA2
         LDP1 #SECBUF
-        JSR  CFREAD
-        LDA  SLBA              ; SLBA++ (24-bit)
-        INC
-        STA  SLBA
-        JNZ  RF_1
-        LDA  SLBA+1
-        INC
-        STA  SLBA+1
-        JNZ  RF_1
-        LDA  SLBA+2
-        INC
-        STA  SLBA+2
-RF_1:   LDA  #<SECBUF
-        STA  SPTR
-        LDA  #>SECBUF
-        STA  SPTR+1
-        LDA  SREM+1
-        LDB  #2
-        CMP
-        JC   RF_FULL           ; SREM hi >= 2 -> at least 512 left
-        LDA  SREM
-        STA  SCNT
-        LDA  SREM+1
-        STA  SCNT+1
-        RTS
-RF_FULL:LDA  #0
-        STA  SCNT
-        LDA  #2
-        STA  SCNT+1            ; 512
-        RTS
-; GETB - next source byte -> A with SEOF=0; or SEOF=1 at end of file.
-GETB:   LDA  SREM
-        LDB  SREM+1
-        OR
-        JNZ  GB_GO
-        LDA  #1
-        STA  SEOF
-        RTS
-GB_GO:  LDA  SCNT
-        LDB  SCNT+1
-        OR
-        JNZ  GB_RD
-        JSR  REFILL
-GB_RD:  LDA  SPTR
-        TAP1L
-        LDA  SPTR+1
-        TAP1H
-        LDA  (P1)+
-        STA  SB
-        TPA1L
-        STA  SPTR
-        TPA1H
-        STA  SPTR+1
-        LDA  SCNT             ; SCNT--
-        LDB  #1
-        SUB
-        STA  SCNT
-        JC   GB_S1
-        LDA  SCNT+1
-        LDB  #1
-        SUB
-        STA  SCNT+1
-GB_S1:  LDA  SREM             ; SREM--
-        LDB  #1
-        SUB
-        STA  SREM
-        JC   GB_S2
-        LDA  SREM+1
-        LDB  #1
-        SUB
-        STA  SREM+1
-GB_S2:  LDA  #0
-        STA  SEOF
-        LDA  SB
+        JSR  FOPEN             ; source existence already checked at startup
+        LDA  #0
+        STA  LEOF
         RTS
 ; NEXTLINE - read one line into LINEBUF (NUL-terminated, newline stripped).
 ;            LEOF=1 when the source is exhausted.
@@ -1277,10 +1172,9 @@ NEXTLINE:
         LDP2 #LINEBUF
         LDA  #0
         STA  LCNT
-NL_LP:  JSR  GETB
-        LDA  SEOF
-        JNZ  NL_EOF
-        LDA  SB
+NL_LP:  JSR  FGETB
+        JC   NL_EOF           ; C=1 -> end of file
+        STA  SB
         LDB  #LF
         CMP
         JZ   NL_DONE
