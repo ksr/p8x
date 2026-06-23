@@ -415,7 +415,8 @@ DOLOAD: JSR  FINDARG            ; parse name, scan directory
 ; ---------------- RUN name ---------------------------------------------------
 DORUN:  JSR  FINDARG
         JZ   NOFILE
-        JSR  LOADF
+        JSR  DEFADDR            ; load/exec 0 -> TPA base $B000 (on-target-built
+        JSR  LOADF              ; programs, e.g. ASM output, carry 0 from FCREATE)
         ; program-arg ABI: enter with P2 -> the command tail after the program
         ; name (null-terminated), so e.g. `RUN EDIT FOO.ASM` hands "FOO.ASM" to
         ; the program. Programs that don't take args just ignore P2.
@@ -427,6 +428,26 @@ DORUN:  JSR  FINDARG
         TAP1H
         JSR  (P1)               ; execute; program RTS returns here, P2 = arg tail
         JMP  SHELL
+; DEFADDR - a directory entry with load/exec == 0 (the value FCREATE writes for
+; files built on-target) is taken to mean "load at the TPA base $B000". Programs
+; installed from the host set explicit non-zero load/exec, so they are untouched.
+DEFADDR:LDA  LOADLO
+        LDB  LOADHI
+        OR
+        JNZ  DA_EX
+        LDA  #$00
+        STA  LOADLO
+        LDA  #$B0
+        STA  LOADHI
+DA_EX:  LDA  EXECLO
+        LDB  EXECHI
+        OR
+        JNZ  DA_RT
+        LDA  #$00
+        STA  EXECLO
+        LDA  #$B0
+        STA  EXECHI
+DA_RT:  RTS
 ; SKIPWORD - advance P2 past leading spaces, then one word, then trailing
 ; spaces, leaving P2 at the next argument (ARGP has a leading space).
 SKIPWORD:LDA  (P2)              ; skip leading spaces

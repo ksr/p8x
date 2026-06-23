@@ -39,4 +39,36 @@ Notes / current limits: line numbers are 8-bit (≤255 lines); `W` rewrites the
 whole file, orphaning the old data sectors until the next `PACK`; the editor
 reads/writes the **root** directory (the BIOS FS layer is flat — path-aware
 saves are a future item). Files use LF (`$0A`) line endings — the form the
-forthcoming on-target assembler (`ASM`) expects as input.
+on-target assembler (`ASM`) expects as input.
+
+## ASM — native two-pass assembler (`p8xasm.asm`)
+
+```
+RUN ASM.BIN SRC.ASM OUT.BIN
+```
+
+Assembles `SRC.ASM` (read from the disk) and writes the binary `OUT.BIN`. The
+output carries `load/exec = 0` from `FCREATE`, which the OS reads as the TPA
+base `$B000` — so a program written `.org $B000` is **directly RUNnable** right
+after assembling it. Pair with `EDIT` for a complete on-target edit → assemble →
+run loop.
+
+Accepted syntax is a subset of the host assembler, with identical encodings:
+
+| form | example |
+|------|---------|
+| label | `loop:` |
+| equate | `COUNT = 3` |
+| instruction | `LDA #COUNT` · `STA $C000` · `LDA (P1)+` · `JSR done` |
+| `LDPn` pseudo | `LDP1 #msg` → `LPL1 #<msg` ; `LPH1 #>msg` |
+| directives | `.org .byte .word .ascii .asciiz .fill` |
+| expressions | `$hex` · decimal · `'c'` · symbol, joined with `+`/`-`, optional `<`/`>` prefix |
+
+The opcode table is **generated** from `genucode.OPC` by
+`generators/gen_p8xopc.py` and concatenated after the assembler logic at build
+time, so the mnemonic/encoding map can never drift from the microcode.
+
+Correctness is checked by assembling a feature source both on-target and with
+the host assembler and comparing the bytes (`emulator/test/os_asm_test.sh`).
+Limits: ~146 symbols, 12-char names, ~6.5 KB source, ~4 KB output, single
+`.org` (use `.org $B000`).

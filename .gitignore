@@ -43,3 +43,11 @@ Eagle/Libraries/*.orig.lbr
 emulator/test/fd.img
 emulator/test/argv.asm
 emulator/test/ed.img
+emulator/test/as.img
+emulator/test/opctab.asm
+emulator/test/asmfull.asm
+emulator/test/prog.asm
+emulator/test/prog.bin
+emulator/test/golden.bin
+emulator/test/PROG.BIN
+emulator/test/OUT.BIN

@@ -43,6 +43,14 @@ if [ ! -f "$disk" ]; then
         --base 0xB000 >/dev/null
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/edit.bin" \
         --name /BIN/EDIT.BIN --load 0xB000 --exec 0xB000 >/dev/null
+    # ASM: native two-pass assembler (logic + generated opcode table) -> RUN
+    # /BIN/ASM.BIN SRC.ASM OUT.BIN.  Pair with EDIT for an on-target toolchain.
+    python3 "$root/generators/gen_p8xopc.py" "$build/opctab.asm"
+    cat "$root/apps/p8xasm.asm" "$build/opctab.asm" > "$build/asmfull.asm"
+    python3 "$root/assembler/p8xasm.py" "$build/asmfull.asm" -o "$build/asm.bin" \
+        --base 0xB000 >/dev/null
+    python3 "$root/tools/p8xfs.py" put "$disk" "$build/asm.bin" \
+        --name /BIN/ASM.BIN --load 0xB000 --exec 0xB000 >/dev/null
     printf 'hello from P8X/OS\n' > "$build/readme.txt"
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/readme.txt" --name /README.TXT >/dev/null
     echo "created fresh disk: $disk"

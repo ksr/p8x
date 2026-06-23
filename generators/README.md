@@ -21,6 +21,12 @@ pip3 install reportlab
 | `render_board_pdf.py` | Placement-view PDF for every `.brd` (incl. `-full`) | `hardware/<board>/` | anywhere |
 | `gen_bus_pdf.py` | Bus-definition PDF | `hardware/backplane/` | anywhere |
 | `render_bp_traditional.py` | Backplane schematic PDF | `hardware/backplane/` | anywhere |
+| `gen_p8xopc.py` | Opcode-table `.asm` for the native assembler (`OPCTAB`), from `genucode.OPC` | stdout / arg path | anywhere |
+
+`gen_p8xopc.py out.asm` emits the `(mnemonic, shape) → opcode` table that
+[`apps/p8xasm.asm`](../apps/p8xasm.asm) (the on-target assembler) is built with;
+the build concatenates it after the assembler logic. Sourcing it from
+`genucode.OPC` keeps the native assembler's encodings locked to the microcode.
 
 (The programmer's guide PDF is generated separately by
 [`microcode/gen_progguide.py`](../microcode/gen_progguide.py).)
