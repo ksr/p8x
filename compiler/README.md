@@ -36,25 +36,29 @@ to the OS shell with `RTS` (startup inits `__csp` then `JSR _f_main`).
 
 | area | supported |
 |------|-----------|
-| types | `int` (16-bit), `char` (8-bit) |
+| types | `int` (16-bit), `char` (8-bit), pointers `T *`, arrays `T a[N]` |
 | top level | function definitions **with parameters**, global variable declarations |
 | statements | `{ }`, declarations, `if`/`else`, `while`, `return [e];`, `expr;`, `;` |
-| operators | `=`  `==` `!=` `<` `>` `<=` `>=`  `+` `-`  `*`  unary `-` `!` |
+| operators | `=`  `==` `!=` `<` `>` `<=` `>=`  `+` `-` `*` `/` `%`  unary `-` `!` `&` `*` |
 | functions | parameters, **stack locals**, **recursion**, return value in `AX` |
+| pointers | `&lvalue`, `*ptr` (load/store), pointer +/- scaled by element size, `a[i]` |
 | primaries | int / char / string literals, identifiers, calls, `( )` |
 | builtins | `putchar(e)`, `puts(e)` (over the BIOS at `$0103` / `$0112`) |
 
-`int` is 16-bit (comparisons are currently **unsigned** 16-bit); `char` is 8-bit
-but on the stack each local/param occupies a 2-byte slot. String literals are
-pooled and evaluate to their address.
+`int` is 16-bit (comparisons and `/` `%` are **unsigned** 16-bit); `char` is
+8-bit. The compiler tracks types so a dereference loads/stores the right width
+(int/pointer = 2 bytes, char = 1) and pointer arithmetic scales by element size.
+Scalar locals/params occupy a 2-byte slot; arrays occupy `count * elemsize`.
+String literals are pooled and evaluate to their address.
 
 ### Current limitations (next phases)
 
-- No pointers/arrays/`&`/`*`, no `/` `%` or shifts, no `for`, no `&&`/`||`
-  short-circuit, no structs, no global initializers.
+- No `for`, no `&&`/`||` short-circuit, no shifts/bitwise, no structs/unions, no
+  global initializers, no multi-level type checking (e.g. function return types
+  default to `int`).
 - Locals are function-scoped (no per-block shadowing); the C-stack and the
-  hardware return stack are both in the TPA, so very deep recursion is bounded by
-  RAM. See the project backlog.
+  hardware return stack are both in the TPA, so deep recursion is bounded by RAM.
+  See the project backlog.
 
 ## Testing
 

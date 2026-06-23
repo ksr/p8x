@@ -1,8 +1,8 @@
 #!/bin/sh
 # p8cc (C cross-compiler) end to end: compile a C program to P8X asm, assemble
 # it, RUN it under P8X/OS, and check its console output. Exercises while/if,
-# arithmetic (+ * <=), assignment, stack locals, function PARAMETERS, RECURSION
-# (factorial), a multi-arg function, and the putchar/puts builtins.
+# arithmetic (+ - * / % <=), stack locals, parameters, RECURSION (factorial),
+# pointers + arrays + & + * + indexing, and the putchar/puts builtins.
 set -e
 cd "$(dirname "$0")"
 ROOT=../..
@@ -18,16 +18,24 @@ int fact(int n) {            /* recursion + parameter */
     return n * fact(n - 1);
 }
 int add(int a, int b) { return a + b; }   /* multiple parameters */
+int setv(int *q, int v) { *q = v; return 0; }   /* store through a pointer */
 int main() {
+    char buf[8];
+    char *p;
     int i;
+    int x;
     i = 1;
-    while (i <= 5) {         /* stack local + loop */
-        putchar(i + 48);
-        i = i + 1;
-    }
+    while (i <= 5) { putchar(i + 48); i = i + 1; }   /* stack local + loop */
     putchar(10);
-    if (fact(5) == 120) puts("FACT-OK");   /* 5! via recursion */
+    if (fact(5) == 120) puts("FACT-OK");             /* 5! via recursion */
     if (add(40, 9) == 49) puts("ADD-OK");
+    p = buf; i = 0;                                  /* fill via char pointer */
+    while (i < 5) { *p = 65 + i; p = p + 1; i = i + 1; }
+    *p = 0;
+    puts(buf);                                       /* "ABCDE" */
+    setv(&x, 7);                                     /* &local + ptr param */
+    if (x == 7) puts("PTR-OK");
+    if (17 / 5 == 3) { if (17 % 5 == 2) puts("DIV-OK"); }
     return 0;
 }
 EOF
@@ -45,4 +53,7 @@ fail() { echo "C-COMPILE TEST: FAIL — $1"; echo "$out" | sed -n '/RUN CT/,$p';
 echo "$out" | grep -qx '12345'   || fail "loop/arith output not '12345'"
 echo "$out" | grep -qx 'FACT-OK' || fail "recursion/parameter path failed"
 echo "$out" | grep -qx 'ADD-OK'  || fail "multi-parameter call failed"
+echo "$out" | grep -qx 'ABCDE'   || fail "char pointer/array fill failed"
+echo "$out" | grep -qx 'PTR-OK'  || fail "&local + pointer-param store failed"
+echo "$out" | grep -qx 'DIV-OK'  || fail "/ or % failed"
 echo "C-COMPILE TEST: PASS"

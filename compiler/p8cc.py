@@ -2,52 +2,48 @@
 """p8cc - a tiny C cross-compiler for the P8X.
 
 Emits P8X assembly (for assembler/p8xasm.py) targeting the OS transient program
-area ($B000), so the output is a RUNnable program. Grown in phases; this one
-adds a stack-frame calling convention (parameters, locals, recursion).
+area ($B000), so the output is a RUNnable program. Grown in phases.
 
 Supported now:
-  types        int (16-bit), char (8-bit)
-  top level    function definitions WITH parameters, global var decls
+  types        int (16-bit), char (8-bit), pointers (T *), arrays (T a[N])
+  top level    function definitions with parameters, global var decls
   statements   { }  decl  if/else  while  return [e];  expr;  ;
-  expressions  =  == != < > <= >=  + -  *  unary - !  calls(args)  ( )
+  expressions  =  == != < > <= >=  + - * / %  unary - ! & *  a[i]  calls(args)
                primaries: int/char/string literal, identifier, call
   builtins     putchar(e)   puts(e)        (over the BIOS at $0103 / $0112)
 
 Execution model
-  * A 16-bit pseudo-accumulator AX (memory word __ax) holds every expression
+  * 16-bit pseudo-accumulator AX (memory word __ax) holds every expression
     result (the machine has no 16-bit accumulator).
-  * The hardware stack (P3) holds expression temporaries (PHA/PLA) and call
-    return addresses (JSR/RTS).
-  * A separate software C-stack (__csp, grows down from $F800) holds call frames:
-    arguments, the saved frame pointer, and locals. __fp points at the saved
-    frame pointer of the current frame, so params live at __fp+2, __fp+4, ...
-    and locals at __fp-2, __fp-4, .... This makes functions reentrant, so
-    recursion works. Globals keep static storage.
-  Binary operators are compact runtime-helper calls, emitted only when used.
+  * Hardware stack (P3) holds expression temporaries (PHA/PLA) + return addrs.
+  * Software C-stack (__csp, grows down from $F800) holds call frames: args, the
+    saved frame pointer, and locals. __fp points at the saved FP, so params are
+    at __fp+2,+4,... and locals at __fp-2,-4,... -> reentrant -> recursion works.
+    Globals keep static storage.
+  Types are tracked so pointer arithmetic scales by element size and a
+  dereference loads/stores the right width (int/pointer = 2 bytes, char = 1).
 
-Usage:  p8cc.py prog.c [-o prog.asm]
-Then:   p8xasm.py prog.asm -o prog.bin --base 0xB000
+Usage:  p8cc.py prog.c [-o prog.asm]   then  p8xasm.py prog.asm -o prog.bin --base 0xB000
 """
 import sys
 
-CSTACK_TOP = 0xF800            # software C-stack grows down from here
+CSTACK_TOP = 0xF800
 
 # --------------------------------------------------------------------------- #
 # Lexer
 # --------------------------------------------------------------------------- #
 KEYWORDS = {"int", "char", "void", "if", "else", "while", "return"}
 PUNCT = ["==", "!=", "<=", ">=", "&&", "||",
-         "{", "}", "(", ")", ";", ",", "=", "+", "-", "*", "<", ">", "!"]
+         "{", "}", "(", ")", "[", "]", ";", ",", "=",
+         "+", "-", "*", "/", "%", "<", ">", "!", "&"]
 
 
 def lex(src):
     toks, i, n, line = [], 0, len(src), 1
     while i < n:
         c = src[i]
-        if c == "\n":
-            line += 1; i += 1; continue
-        if c in " \t\r":
-            i += 1; continue
+        if c == "\n": line += 1; i += 1; continue
+        if c in " \t\r": i += 1; continue
         if src.startswith("//", i):
             i = src.find("\n", i); i = n if i < 0 else i; continue
         if src.startswith("/*", i):
@@ -89,7 +85,8 @@ def lex(src):
 
 
 # --------------------------------------------------------------------------- #
-# Parser -> AST (tuples)
+# Parser -> AST.  A declared type is (base, ptr, count): base in {int,char},
+# ptr = pointer depth, count = array length (0 = scalar/pointer).
 # --------------------------------------------------------------------------- #
 class P:
     def __init__(self, toks): self.t = toks; self.i = 0
@@ -107,17 +104,18 @@ class P:
         return False
 
     def program(self):
-        decls = []
-        while self.kind() != "eof":
-            decls.append(self.toplevel())
-        return decls
+        d = []
+        while self.kind() != "eof": d.append(self.toplevel())
+        return d
 
-    def typespec(self):
-        if self.val() in ("int", "char", "void"): return self.next()[1]
-        self.err("expected a type")
+    def base_and_ptr(self):
+        if self.val() not in ("int", "char", "void"): self.err("expected a type")
+        base = self.next()[1]; ptr = 0
+        while self.accept("*"): ptr += 1
+        return base, ptr
 
     def toplevel(self):
-        ty = self.typespec()
+        base, ptr = self.base_and_ptr()
         name = self.next()
         if name[0] != "id": self.err("expected name")
         name = name[1]
@@ -127,34 +125,37 @@ class P:
                 params.append(self.param())
                 while self.accept(","): params.append(self.param())
             self.eat(")")
-            body = self.block()
-            return ("func", ty, name, params, body)
+            return ("func", (base, ptr, 0), name, params, self.block())
+        count = 0
+        if self.accept("["):
+            count = self.next()[1]; self.eat("]")
         init = None
         if self.accept("="): init = self.expr()
         self.eat(";")
-        return ("gvar", ty, name, init)
+        return ("gvar", (base, ptr, count), name, init)
 
     def param(self):
-        pty = self.typespec()
+        base, ptr = self.base_and_ptr()
         nm = self.next()
         if nm[0] != "id": self.err("expected parameter name")
-        return (pty, nm[1])
+        return ((base, ptr, 0), nm[1])
 
     def block(self):
-        self.eat("{")
-        stmts = []
-        while self.val() != "}":
-            stmts.append(self.stmt())
-        self.eat("}")
-        return ("block", stmts)
+        self.eat("{"); s = []
+        while self.val() != "}": s.append(self.stmt())
+        self.eat("}"); return ("block", s)
 
     def stmt(self):
         v = self.val()
         if v == "{": return self.block()
         if v in ("int", "char"):
-            ty = self.next()[1]; name = self.next()[1]; init = None
+            base, ptr = self.base_and_ptr()
+            name = self.next()[1]; count = 0
+            if self.accept("["):
+                count = self.next()[1]; self.eat("]")
+            init = None
             if self.accept("="): init = self.expr()
-            self.eat(";"); return ("decl", ty, name, init)
+            self.eat(";"); return ("decl", (base, ptr, count), name, init)
         if v == "if":
             self.next(); self.eat("("); c = self.expr(); self.eat(")")
             then = self.stmt(); els = self.stmt() if self.accept("else") else None
@@ -163,11 +164,9 @@ class P:
             self.next(); self.eat("("); c = self.expr(); self.eat(")")
             return ("while", c, self.stmt())
         if v == "return":
-            self.next()
-            e = None if self.val() == ";" else self.expr()
+            self.next(); e = None if self.val() == ";" else self.expr()
             self.eat(";"); return ("return", e)
-        if v == ";":
-            self.next(); return ("empty",)
+        if v == ";": self.next(); return ("empty",)
         e = self.expr(); self.eat(";"); return ("expr", e)
 
     def expr(self): return self.assign()
@@ -178,7 +177,7 @@ class P:
             self.next(); return ("assign", left, self.assign())
         return left
 
-    LEVELS = [["==", "!="], ["<", ">", "<=", ">="], ["+", "-"], ["*"]]
+    LEVELS = [["==", "!="], ["<", ">", "<=", ">="], ["+", "-"], ["*", "/", "%"]]
 
     def binary(self, lvl):
         if lvl >= len(self.LEVELS): return self.unary()
@@ -189,22 +188,27 @@ class P:
         return left
 
     def unary(self):
-        if self.val() in ("-", "!"):
-            op = self.next()[1]; return ("unary", op, self.unary())
+        v = self.val()
+        if v in ("-", "!", "&", "*"):
+            self.next(); return ("unary", v, self.unary())
         return self.postfix()
 
     def postfix(self):
         e = self.primary()
-        while self.val() == "(":
-            self.next()
-            args = []
-            if self.val() != ")":
-                args.append(self.expr())
-                while self.accept(","): args.append(self.expr())
-            self.eat(")")
-            if e[0] != "id": self.err("call of non-function")
-            e = ("call", e[1], args)
-        return e
+        while True:
+            if self.val() == "(":
+                self.next(); args = []
+                if self.val() != ")":
+                    args.append(self.expr())
+                    while self.accept(","): args.append(self.expr())
+                self.eat(")")
+                if e[0] != "id": self.err("call of non-function")
+                e = ("call", e[1], args)
+            elif self.val() == "[":
+                self.next(); idx = self.expr(); self.eat("]")
+                e = ("index", e, idx)
+            else:
+                return e
 
     def primary(self):
         k, v, _ = self.peek()
@@ -219,36 +223,68 @@ class P:
 # --------------------------------------------------------------------------- #
 # Code generator
 # --------------------------------------------------------------------------- #
+def sizeof(base, ptr):
+    return 2 if (ptr > 0 or base == "int") else 1
+
+
 class Gen:
     def __init__(self):
         self.code = []; self.data = []
-        self.globals = {}     # name -> (label, type)
-        self.locals = {}      # name -> (frame offset:int, type)  (per function)
-        self.strings = {}     # tuple(bytes) -> label
+        self.globals = {}     # name -> (label, base, ptr, count)
+        self.locals = {}      # name -> (offset, base, ptr, count)
+        self.strings = {}
         self.used = set()
         self.nl = 0
         self.func = None
 
-    def lbl(self, base="L"): self.nl += 1; return "%s%d" % (base, self.nl)
-    def emit(self, *lines): self.code.extend(lines)
+    def lbl(self, b="L"): self.nl += 1; return "%s%d" % (b, self.nl)
+    def emit(self, *l): self.code.extend(l)
     def need(self, h): self.used.add(h)
 
-    # ---- variables ----------------------------------------------------------
-    def declare_global(self, name, ty):
-        lab = "_g_" + name
-        self.globals[name] = (lab, ty)
-        self.data.append("%s:    .fill %d" % (lab, 2 if ty == "int" else 1))
+    # ---- types --------------------------------------------------------------
+    def vinfo(self, name):
+        if name in self.locals:
+            off, base, ptr, count = self.locals[name]; return ("l", off, base, ptr, count)
+        if name in self.globals:
+            lab, base, ptr, count = self.globals[name]; return ("g", lab, base, ptr, count)
+        sys.exit("p8cc: undeclared identifier %r" % name)
 
-    def string(self, bs):
-        key = tuple(bs)
-        if key not in self.strings:
-            lab = self.lbl("__s"); self.strings[key] = lab
-            body = ",".join(str(b) for b in bs)
-            self.data.append("%s:    .byte %s,0" % (lab, body) if bs
-                             else "%s:    .byte 0" % lab)
-        return self.strings[key]
+    def typeof(self, e):                      # -> (base, ptr) of e's value (arrays decay)
+        k = e[0]
+        if k == "num": return ("int", 0)
+        if k == "str": return ("char", 1)
+        if k == "id":
+            _, _, base, ptr, count = self.vinfo(e[1])
+            return (base, ptr + 1) if count else (base, ptr)
+        if k == "unary":
+            if e[1] == "&":
+                b, p = self.typeof_lval(e[2]); return (b, p + 1)
+            if e[1] == "*":
+                b, p = self.typeof(e[2]); return (b, p - 1)
+            return ("int", 0)
+        if k == "index":
+            b, p = self.typeof(e[1]); return (b, p - 1)
+        if k == "assign": return self.typeof_lval(e[1])
+        if k == "call": return ("int", 0)
+        if k == "bin":
+            if e[1] in ("+", "-"):
+                lt = self.typeof(e[2]); rt = self.typeof(e[3])
+                if lt[1] > 0: return lt
+                if rt[1] > 0: return rt
+            return ("int", 0)
+        return ("int", 0)
 
-    def lea(self, off):                       # P1 = __fp + off  (off signed)
+    def typeof_lval(self, e):                 # type as an lvalue (no array decay)
+        if e[0] == "id":
+            _, _, base, ptr, count = self.vinfo(e[1]); return (base, ptr)
+        if e[0] == "unary" and e[1] == "*":
+            b, p = self.typeof(e[2]); return (b, p - 1)
+        if e[0] == "index":
+            b, p = self.typeof(e[1]); return (b, p - 1)
+        sys.exit("p8cc: not an lvalue")
+
+    # ---- helpers ------------------------------------------------------------
+    def lea(self, off):                       # P1 = __fp + off
         o = off & 0xFFFF
         self.need("__lea")
         self.emit("        LDA #%d" % (o & 0xFF), "        STA __off",
@@ -260,47 +296,53 @@ class Gen:
         self.emit("        LDA #%d" % (v & 0xFF), "        STA __ax",
                   "        LDA #%d" % (v >> 8), "        STA __ax+1")
 
-    def load_var(self, name):
-        if name in self.locals:
-            off, ty = self.locals[name]
-            self.lea(off)
-            if ty == "int":
-                self.emit("        LDA (P1)+", "        STA __ax",
-                          "        LDA (P1)", "        STA __ax+1")
-            else:
-                self.emit("        LDA (P1)", "        STA __ax",
-                          "        LDA #0", "        STA __ax+1")
-        elif name in self.globals:
-            lab, ty = self.globals[name]
-            self.emit("        LDA %s" % lab, "        STA __ax")
-            self.emit(*(["        LDA %s+1" % lab, "        STA __ax+1"] if ty == "int"
-                        else ["        LDA #0", "        STA __ax+1"]))
-        else:
-            sys.exit("p8cc: undeclared identifier %r" % name)
+    def push_ax(self): self.emit("        LDA __ax", "        PHA",
+                                 "        LDA __ax+1", "        PHA")
+    def pop_t(self): self.emit("        PLA", "        STA __t+1",
+                              "        PLA", "        STA __t")
 
-    def store_var(self, name):                # __ax -> var
-        if name in self.locals:
-            off, ty = self.locals[name]
-            self.lea(off)                     # __lea preserves __ax
-            if ty == "int":
-                self.emit("        LDA __ax", "        STA (P1)+",
-                          "        LDA __ax+1", "        STA (P1)")
+    def ax_to_p1(self): self.emit("        LDA __ax", "        TAP1L",
+                                  "        LDA __ax+1", "        TAP1H")
+
+    # ---- addresses (lvalues): result address in __ax -----------------------
+    def gen_address(self, e):
+        k = e[0]
+        if k == "id":
+            kind = self.vinfo(e[1])
+            if kind[0] == "l":
+                self.lea(kind[1])                       # P1 = __fp+off
+                self.emit("        TPA1L", "        STA __ax",
+                          "        TPA1H", "        STA __ax+1")
             else:
-                self.emit("        LDA __ax", "        STA (P1)")
-        elif name in self.globals:
-            lab, ty = self.globals[name]
-            self.emit("        LDA __ax", "        STA %s" % lab)
-            if ty == "int":
-                self.emit("        LDA __ax+1", "        STA %s+1" % lab)
+                lab = kind[1]
+                self.emit("        LDA #<%s" % lab, "        STA __ax",
+                          "        LDA #>%s" % lab, "        STA __ax+1")
+        elif k == "unary" and e[1] == "*":
+            self.gen_expr(e[2])                          # AX = pointer value = address
+        elif k == "index":
+            self.gen_expr(e[1]); self.push_ax()          # base address
+            self.gen_expr(e[2])                          # index
+            esz = sizeof(*self.typeof(e[1]))             # element size (sizeof of decayed-pointer? )
+            # typeof(e[1]) is a pointer (b,p); element size = sizeof(b, p-1)
+            b, p = self.typeof(e[1]); esz = sizeof(b, p - 1)
+            if esz == 2:
+                self.emit("        LDA __ax", "        SHL", "        STA __ax",
+                          "        LDA __ax+1", "        ROL", "        STA __ax+1")
+            self.pop_t()                                 # __t = base
+            self.need("__add"); self.emit("        JSR __add")
         else:
-            sys.exit("p8cc: undeclared identifier %r" % name)
+            sys.exit("p8cc: not an lvalue")
+
+    def load_deref(self, base, ptr):          # AX = *(AX) of type (base,ptr)
+        self.ax_to_p1()
+        if sizeof(base, ptr) == 2:
+            self.emit("        LDA (P1)+", "        STA __ax",
+                      "        LDA (P1)", "        STA __ax+1")
+        else:
+            self.emit("        LDA (P1)", "        STA __ax",
+                      "        LDA #0", "        STA __ax+1")
 
     # ---- expressions (result in __ax) --------------------------------------
-    def push_ax(self): self.emit("        LDA __ax", "        PHA",
-                                  "        LDA __ax+1", "        PHA")
-    def pop_t(self): self.emit("        PLA", "        STA __t+1",
-                               "        PLA", "        STA __t")
-
     def gen_expr(self, e):
         k = e[0]
         if k == "num": self.set_ax_const(e[1])
@@ -308,32 +350,79 @@ class Gen:
             lab = self.string(e[1])
             self.emit("        LDA #<%s" % lab, "        STA __ax",
                       "        LDA #>%s" % lab, "        STA __ax+1")
-        elif k == "id": self.load_var(e[1])
-        elif k == "assign":
-            if e[1][0] != "id": sys.exit("p8cc: bad assignment target")
-            self.gen_expr(e[2]); self.store_var(e[1][1])
-        elif k == "unary":
-            self.gen_expr(e[2])
-            if e[1] == "!":
-                self.need("__not"); self.emit("        JSR __not")
+        elif k == "id":
+            kind = self.vinfo(e[1])
+            base, ptr, count = kind[2], kind[3], kind[4]
+            if count:                                    # array decays to its address
+                self.gen_address(e)
+            elif kind[0] == "l":
+                self.lea(kind[1])
+                if sizeof(base, ptr) == 2:
+                    self.emit("        LDA (P1)+", "        STA __ax",
+                              "        LDA (P1)", "        STA __ax+1")
+                else:
+                    self.emit("        LDA (P1)", "        STA __ax",
+                              "        LDA #0", "        STA __ax+1")
             else:
-                self.need("__sub")
+                lab = kind[1]
+                self.emit("        LDA %s" % lab, "        STA __ax")
+                self.emit(*(["        LDA %s+1" % lab, "        STA __ax+1"]
+                            if sizeof(base, ptr) == 2 else
+                            ["        LDA #0", "        STA __ax+1"]))
+        elif k == "unary":
+            if e[1] == "&": self.gen_address(e[2])
+            elif e[1] == "*":
+                self.gen_expr(e[2]); self.load_deref(*self.typeof_lval(e))
+            elif e[1] == "!":
+                self.gen_expr(e[2]); self.need("__not"); self.emit("        JSR __not")
+            else:  # -e
+                self.gen_expr(e[2]); self.need("__sub")
                 self.emit("        LDA #0", "        STA __t", "        STA __t+1",
                           "        JSR __sub")
+        elif k == "index":
+            self.gen_address(e); self.load_deref(*self.typeof_lval(e))
+        elif k == "assign": self.gen_assign(e[1], e[2])
         elif k == "bin": self.gen_bin(e[1], e[2], e[3])
         elif k == "call": self.gen_call(e[1], e[2])
         else: sys.exit("p8cc: cannot generate expr %r" % (k,))
 
+    def gen_assign(self, lhs, rhs):
+        self.gen_expr(rhs); self.push_ax()               # value on P3
+        self.gen_address(lhs)                            # AX = dest address
+        self.ax_to_p1()                                  # P1 = dest
+        self.pop_t()                                     # __t = value
+        if sizeof(*self.typeof_lval(lhs)) == 2:
+            self.emit("        LDA __t", "        STA (P1)+",
+                      "        LDA __t+1", "        STA (P1)")
+        else:
+            self.emit("        LDA __t", "        STA (P1)")
+        self.emit("        LDA __t", "        STA __ax",   # assignment yields the value
+                  "        LDA __t+1", "        STA __ax+1")
+
     def gen_bin(self, op, a, b):
         plan = {"+": ("__add", False, False), "-": ("__sub", False, False),
-                "*": ("__mul", False, False), "==": ("__eq", False, False),
+                "*": ("__mul", False, False), "/": ("__div", False, False),
+                "%": ("__mod", False, False), "==": ("__eq", False, False),
                 "!=": ("__eq", False, True), "<": ("__lt", False, False),
                 ">": ("__lt", True, False), "<=": ("__lt", True, True),
                 ">=": ("__lt", False, True)}[op]
         helper, swap, neg = plan
+        # pointer arithmetic: scale the integer operand by element size.
+        scale = 0
+        if op in ("+", "-"):
+            lt, rt = self.typeof(a), self.typeof(b)
+            if lt[1] > 0 and rt[1] == 0:
+                scale = sizeof(lt[0], lt[1] - 1)          # left is pointer, scale right
+            elif op == "+" and rt[1] > 0 and lt[1] == 0:
+                a, b = b, a                               # commute so pointer is left
+                scale = sizeof(rt[0], rt[1] - 1)
         lhs, rhs = (b, a) if swap else (a, b)
         self.gen_expr(lhs); self.push_ax()
-        self.gen_expr(rhs); self.pop_t()        # __t = left, __ax = right
+        self.gen_expr(rhs)
+        if scale == 2:                                    # scale the right (int) operand
+            self.emit("        LDA __ax", "        SHL", "        STA __ax",
+                      "        LDA __ax+1", "        ROL", "        STA __ax+1")
+        self.pop_t()
         self.need(helper); self.emit("        JSR %s" % helper)
         if neg:
             self.need("__not"); self.emit("        JSR __not")
@@ -347,14 +436,11 @@ class Gen:
             self.emit("        LDA __ax", "        TAP1L", "        LDA __ax+1",
                       "        TAP1H", "        JSR $0112",
                       "        LDA #10", "        JSR $0103"); return
-        # user function: push args right-to-left, call, caller cleans up.
         for a in reversed(args):
-            self.gen_expr(a)
-            self.need("__push"); self.emit("        JSR __push")
+            self.gen_expr(a); self.need("__push"); self.emit("        JSR __push")
         self.emit("        JSR _f_%s" % name)
         if args:
-            n = 2 * len(args)
-            skip = self.lbl("Lcl")
+            n = 2 * len(args); skip = self.lbl("Lcl")
             self.emit("        LDA __csp", "        LDB #%d" % n, "        ADD",
                       "        STA __csp", "        JNC %s" % skip,
                       "        LDA __csp+1", "        INC", "        STA __csp+1",
@@ -367,7 +453,7 @@ class Gen:
             for st in s[1]: self.gen_stmt(st)
         elif k == "decl":
             if s[3] is not None:
-                self.gen_expr(s[3]); self.store_var(s[2])
+                self.gen_assign(("id", s[2]), s[3])
         elif k == "expr": self.gen_expr(s[1])
         elif k == "empty": pass
         elif k == "return":
@@ -393,7 +479,16 @@ class Gen:
             self.emit("        JMP %s" % top, "%s:" % end)
         else: sys.exit("p8cc: cannot generate stmt %r" % (k,))
 
-    # ---- functions ----------------------------------------------------------
+    # ---- functions / top level ---------------------------------------------
+    def string(self, bs):
+        key = tuple(bs)
+        if key not in self.strings:
+            lab = self.lbl("__s"); self.strings[key] = lab
+            body = ",".join(str(b) for b in bs)
+            self.data.append("%s:    .byte %s,0" % (lab, body) if bs
+                             else "%s:    .byte 0" % lab)
+        return self.strings[key]
+
     def collect_decls(self, s):
         k = s[0]
         if k == "decl": yield s
@@ -405,47 +500,51 @@ class Gen:
         elif k == "while":
             yield from self.collect_decls(s[2])
 
-    def compile_func(self, ty, name, params, body):
-        self.func = name
-        self.locals = {}
-        for i, (pty, pnm) in enumerate(params):     # params: __fp+2, +4, ...
-            self.locals[pnm] = (2 + 2 * i, pty)
-        loff = -2                                   # locals: __fp-2, -4, ...
+    def compile_func(self, name, params, body):
+        self.func = name; self.locals = {}
+        for i, ((base, ptr, _), pnm) in enumerate(params):
+            self.locals[pnm] = (2 + 2 * i, base, ptr, 0)   # params: 2-byte slots
+        loff = 0
         for d in self.collect_decls(body):
-            if d[2] not in self.locals:
-                self.locals[d[2]] = (loff, d[1]); loff -= 2
-        localsize = -loff - 2
+            (base, ptr, count), nm = d[1], d[2]
+            if nm in self.locals: continue
+            size = (count * sizeof(base, ptr)) if count else 2
+            loff -= size
+            self.locals[nm] = (loff, base, ptr, count)
+        localsize = -loff
         self.emit("_f_%s:" % name)
         self.need("__enter"); self.emit("        JSR __enter")
         if localsize:
             skip = self.lbl("Lfr")
-            self.emit("        LDA __csp", "        LDB #%d" % localsize,
-                      "        SUB", "        STA __csp", "        JC %s" % skip,
-                      "        LDA __csp+1", "        LDB #1", "        SUB",
-                      "        STA __csp+1", "%s:" % skip)
+            self.emit("        LDA __csp", "        LDB #%d" % localsize, "        SUB",
+                      "        STA __csp", "        JC %s" % skip, "        LDA __csp+1",
+                      "        LDB #1", "        SUB", "        STA __csp+1", "%s:" % skip)
         self.gen_stmt(body)
         self.emit("_ret_%s:" % name)
         self.need("__leave"); self.emit("        JSR __leave", "        RTS")
 
-    # ---- top level ----------------------------------------------------------
+    def declare_global(self, base, ptr, count, name):
+        lab = "_g_" + name
+        self.globals[name] = (lab, base, ptr, count)
+        self.data.append("%s:    .fill %d" % (lab, (count * sizeof(base, ptr)) if count
+                                              else sizeof(base, ptr)))
+
     def gen_program(self, decls):
         for d in decls:
             if d[0] == "gvar":
                 if d[3] is not None:
-                    sys.exit("p8cc: global initializers not supported "
-                             "(assign inside a function instead)")
-                self.declare_global(d[2], d[1])
+                    sys.exit("p8cc: global initializers not supported")
+                self.declare_global(d[1][0], d[1][1], d[1][2], d[2])
         self.emit("        .org $B000",
                   "        LDA #%d" % (CSTACK_TOP & 0xFF), "        STA __csp",
                   "        LDA #%d" % (CSTACK_TOP >> 8), "        STA __csp+1",
                   "        JSR _f_main", "        RTS")
         for d in decls:
-            if d[0] == "func":
-                self.compile_func(d[1], d[2], d[3], d[4])
+            if d[0] == "func": self.compile_func(d[2], d[3], d[4])
         self.emit_runtime()
         self.emit("__ax:   .fill 2", "__t:    .fill 2", "__c:    .fill 1",
                   "__fp:   .fill 2", "__csp:  .fill 2", "__off:  .fill 2")
-        if "__mul" in self.used:
+        if {"__mul", "__div", "__mod"} & self.used:
             self.emit("__r:    .fill 2", "__n:    .fill 1")
         self.code.extend(self.data)
 
@@ -481,6 +580,36 @@ class Gen:
                       "        JNZ __mul_l",
                       "        LDA __r", "        STA __ax",
                       "        LDA __r+1", "        STA __ax+1", "        RTS"]
+        # __divmod: __t / __ax -> quotient __r, remainder __ax (unsigned 16-bit,
+        # restoring long division). __div and __mod both call it.
+        # __t / __ax: quotient -> __t (in place), remainder -> __dr. Restoring
+        # long division: shift the 32-bit [__dr:__t] left (low byte first!) so the
+        # dividend's top bit enters the remainder, then conditionally subtract.
+        R["__divmod"] = ["__divmod: LDA #0", "        STA __dr", "        STA __dr+1",
+                         "        LDA #16", "        STA __n",
+                         "__dm_l: LDA __t", "        SHL", "        STA __t",   # [__dr:__t] <<= 1
+                         "        LDA __t+1", "        ROL", "        STA __t+1",
+                         "        LDA __dr", "        ROL", "        STA __dr",
+                         "        LDA __dr+1", "        ROL", "        STA __dr+1",
+                         # if remainder >= divisor: subtract it, set quotient bit 0
+                         "        LDA __dr+1", "        LDB __ax+1", "        CMP",
+                         "        JZ __dm_lo", "        JC __dm_ge", "        JMP __dm_no",
+                         "__dm_lo: LDA __dr", "        LDB __ax", "        CMP",
+                         "        JNC __dm_no",
+                         "__dm_ge: LDA __dr", "        LDB __ax", "        SUB",
+                         "        STA __dr", "        LDA #0", "        JC __dm_b",
+                         "        LDA #1", "__dm_b: STA __c", "        LDA __dr+1",
+                         "        LDB __ax+1", "        SUB", "        LDB __c",
+                         "        SUB", "        STA __dr+1",
+                         "        LDA __t", "        LDB #1", "        OR",
+                         "        STA __t",            # set low quotient bit
+                         "__dm_no: LDA __n", "        DEC", "        STA __n",
+                         "        JNZ __dm_l",
+                         "        RTS"]
+        R["__div"] = ["__div:  JSR __divmod", "        LDA __t", "        STA __ax",
+                      "        LDA __t+1", "        STA __ax+1", "        RTS"]
+        R["__mod"] = ["__mod:  JSR __divmod", "        LDA __dr", "        STA __ax",
+                      "        LDA __dr+1", "        STA __ax+1", "        RTS"]
         R["__not"] = ["__not:  LDA __ax", "        LDB __ax+1", "        OR",
                       "        JZ __not1", "        LDA #0", "        JMP __nots",
                       "__not1: LDA #1", "__nots: STA __ax", "        LDA #0",
@@ -497,15 +626,12 @@ class Gen:
                      "__lt1:  LDA #1", "        JMP __lts",
                      "__lt0:  LDA #0", "__lts:  STA __ax", "        LDA #0",
                      "        STA __ax+1", "        RTS"]
-        # --- frame / C-stack helpers ---
-        # __push: push __ax onto the C-stack (csp -= 2; [csp] = __ax)
         R["__push"] = ["__push: LDA __csp", "        LDB #2", "        SUB",
                        "        STA __csp", "        JC __pu1", "        LDA __csp+1",
                        "        LDB #1", "        SUB", "        STA __csp+1",
                        "__pu1:  LDA __csp", "        TAP1L", "        LDA __csp+1",
                        "        TAP1H", "        LDA __ax", "        STA (P1)+",
                        "        LDA __ax+1", "        STA (P1)", "        RTS"]
-        # __enter: push the caller's FP, then FP = csp (start of this frame)
         R["__enter"] = ["__enter: LDA __csp", "        LDB #2", "        SUB",
                         "        STA __csp", "        JC __en1", "        LDA __csp+1",
                         "        LDB #1", "        SUB", "        STA __csp+1",
@@ -514,7 +640,6 @@ class Gen:
                         "        LDA __fp+1", "        STA (P1)",
                         "        LDA __csp", "        STA __fp",
                         "        LDA __csp+1", "        STA __fp+1", "        RTS"]
-        # __leave: csp = fp (drop locals); pop the saved FP; csp += 2
         R["__leave"] = ["__leave: LDA __fp", "        STA __csp", "        LDA __fp+1",
                         "        STA __csp+1", "        LDA __csp", "        TAP1L",
                         "        LDA __csp+1", "        TAP1H", "        LDA (P1)+",
@@ -522,7 +647,6 @@ class Gen:
                         "        LDA __csp", "        LDB #2", "        ADD",
                         "        STA __csp", "        JNC __lv1", "        LDA __csp+1",
                         "        INC", "        STA __csp+1", "__lv1:  RTS"]
-        # __lea: P1 = __fp + __off (signed)
         R["__lea"] = ["__lea:  LDA __fp", "        LDB __off", "        ADD",
                       "        STA __t", "        LDA #0", "        JNC __la1",
                       "        LDA #1", "__la1:  STA __c", "        LDA __fp+1",
@@ -530,8 +654,15 @@ class Gen:
                       "        ADD", "        STA __t+1", "        LDA __t",
                       "        TAP1L", "        LDA __t+1", "        TAP1H",
                       "        RTS"]
-        for h in sorted(self.used):
-            self.emit(*R[h])
+        order = ["__add", "__sub", "__mul", "__div", "__mod", "__divmod",
+                 "__not", "__eq", "__lt", "__push", "__enter", "__leave", "__lea"]
+        want = set(self.used)
+        if {"__div", "__mod"} & want: want.add("__divmod")
+        for h in order:
+            if h in want: self.emit(*R[h])
+        # __divmod uses __dr (remainder) and __t/__n; declare __dr in data
+        if "__divmod" in want:
+            self.data.append("__dr:   .fill 2")
 
 
 def compile_src(src):
