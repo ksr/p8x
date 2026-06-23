@@ -73,3 +73,5 @@ emulator/test/wd.img
 emulator/test/hwrdir.bin
 emulator/test/fn.img
 emulator/test/hnorm.bin
+emulator/test/fx.img
+emulator/test/hdir.bin

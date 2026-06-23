@@ -96,6 +96,8 @@ knowing the monitor's internal addresses. These entry points are **stable**:
 | `$0130` | FCLOSE | flush the partial sector + register file `FNAME` (length = bytes written); `C=1` if root full |
 | `$0133` | FRESOLVE | resolve path at `P1` (`/a/b`) → set the directory extent + leaf `FNAME`; a following `FFIND`/`FOPEN` runs in that dir; `C=1` on a bad path |
 | `$0136` | FNORM | format the string at `P1` into `FNAME` (≤12 chars, upper-cased, space-padded; stops at NUL/space) |
+| `$0139` | FOPENDIR | begin iterating the directory at path `P1` (`""`/`"/"` = root); `C=1` if not a directory |
+| `$013C` | FNEXT | next live entry → `FNAME`/`FFLAG`/`LBA`/`FLEN`; `C=1` at end (skips deleted entries) |
 
 Call them with `JSR $0103` etc. (P8X/OS is built entirely on this table.)
 

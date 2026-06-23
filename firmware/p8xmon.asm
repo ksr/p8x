@@ -89,6 +89,10 @@ DIRLBA  = $9D6E          ; current directory start LBA (1; <256 like the OS CWD)
 DIRN    = $9D6F          ; current directory sector count (1)
 FFLAG   = $9D70          ; flag of the entry FSCAN matched (file $01 / dir $02)
 RPATH   = $9D71          ; FRESOLVE path cursor (2)
+; --- directory iteration state (FOPENDIR/FNEXT) ---
+DILBA   = $9D73          ; iteration: current directory sector LBA (1)
+DICNT   = $9D74          ; iteration: sectors remaining (1)
+DIIDX   = $9D75          ; iteration: entry index within the sector (0..15)
 SBUF    = $9E00          ; sector buffer
 STKTOP  = $FEFF
 BASIC   = $2000          ; ROM BASIC cold-start (overlaid by the ROM build)
@@ -128,6 +132,8 @@ RESET:  JMP  COLD
         JMP  FCLOSE         ; $0130 FCLOSE  flush + register file FNAME (len=bytes written); C=1 full
         JMP  FRESOLVE       ; $0133 FRESOLVE resolve path (P1) -> dir extent + leaf FNAME; C=1 bad path
         JMP  FNORM          ; $0136 FNORM    copy string (P1) -> FNAME, upcased + space-padded to 12
+        JMP  FOPENDIR       ; $0139 FOPENDIR begin iterating directory at path (P1); C=1 bad path
+        JMP  FNEXT          ; $013C FNEXT    next live entry -> FNAME/FFLAG/LBA/FLEN; C=1 at end
 
 ;==============================================================================
 ; Monitor body (relocated above the BIOS table; reset vectors here).
@@ -818,6 +824,124 @@ FN_ST:  LDA  TMP2
         INP1
         JMP  FN_CP
 FN_DONE:RTS
+
+; FOPENDIR - begin iterating the directory named by the path at P1 (the whole
+;   path is a directory; "" or "/" is the root). Sets up the iteration state for
+;   FNEXT. C=1 if the path is not a directory. Reverts the current directory to
+;   root (iteration uses its own state).
+FOPENDIR:
+        JSR  FRESOLVE       ; -> DIRLBA = parent, FNAME = last component
+        JC   FOD_ERR
+        LDA  FNAME          ; empty last component ("/" ) -> iterate the resolved dir
+        LDB  #' '
+        CMP
+        JZ   FOD_USE
+        JSR  FSCAN          ; find the last component in its parent
+        JC   FOD_ERR
+        LDA  FFLAG
+        LDB  #$02
+        CMP
+        JNZ  FOD_ERR        ; not a directory
+        LDA  LBA            ; iterate the subdirectory extent (start, 4 sectors)
+        STA  DILBA
+        LDA  #4
+        STA  DICNT
+        JMP  FOD_GO
+FOD_USE:LDA  DIRLBA
+        STA  DILBA
+        LDA  DIRN
+        STA  DICNT
+FOD_GO: LDA  #0
+        STA  DIIDX
+        JSR  FRESET
+        CLC
+        RTS
+FOD_ERR:JSR  FRESET
+        SEC
+        RTS
+
+; FNEXT - return the next live directory entry: name -> FNAME, flag -> FFLAG,
+;   start LBA -> LBA, length -> FLEN. C=1 when the directory is exhausted. Skips
+;   deleted entries; stops at the end-of-directory marker. Re-reads the sector
+;   each call, so it is safe to interleave with other FS calls.
+FNEXT:  LDA  DICNT
+        JZ   FNX_END        ; no sectors left
+        LDA  DILBA          ; (re)load the current directory sector
+        STA  LBA
+        LDA  #0
+        STA  LBA1
+        STA  LBA2
+        LDP1 #SBUF
+        JSR  CFRDSEC
+        LDA  DIIDX          ; P2 = SBUF + DIIDX*32
+        LDB  #7
+        AND
+        SHL
+        SHL
+        SHL
+        SHL
+        SHL                 ; (DIIDX & 7) << 5  -> low byte
+        TAP2L
+        LDA  DIIDX
+        SHR
+        SHR
+        SHR                 ; DIIDX >> 3 (0 or 1)
+        LDB  #$9E
+        ADD
+        TAP2H
+        LDP1 #FNAME         ; copy the 12-byte name into FNAME
+        LDA  #12
+        STA  TMP
+FNX_NM: LDA  (P2)+
+        STA  (P1)+
+        LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  FNX_NM
+        LDA  (P2)+          ; 12..15 start LBA
+        STA  LBA
+        LDA  (P2)+
+        STA  LBA1
+        LDA  (P2)+
+        STA  LBA2
+        LDA  (P2)+
+        LDA  (P2)+          ; 16..19 length
+        STA  FLEN
+        LDA  (P2)+
+        STA  FLEN+1
+        LDA  (P2)+
+        LDA  (P2)+
+        LDA  (P2)+          ; 20..23 load + exec (ignored)
+        LDA  (P2)+
+        LDA  (P2)+
+        LDA  (P2)+
+        LDA  (P2)           ; 24 flag
+        STA  FFLAG
+        LDA  DIIDX          ; advance to the next entry / sector
+        INC
+        STA  DIIDX
+        LDB  #16
+        CMP
+        JNZ  FNX_DEC
+        LDA  #0
+        STA  DIIDX
+        LDA  DILBA
+        INC
+        STA  DILBA
+        LDA  DICNT
+        DEC
+        STA  DICNT
+FNX_DEC:LDA  FFLAG
+        JZ   FNX_END0       ; $00 end-of-directory marker
+        LDB  #$FF
+        CMP
+        JZ   FNEXT          ; deleted entry -> skip to the next
+        CLC                 ; live file/dir entry
+        RTS
+FNX_END0:LDA #0
+        STA  DICNT
+FNX_END:SEC
+        RTS
 
 ; FCREATE - create regular file FNAME in the root from FSRC (FLEN bytes).
 ;   C=1 if the name already exists or the root is full; else writes the data +

@@ -60,6 +60,7 @@ test-cf: p8xemu ucode
 	sh test/fresolve_test.sh
 	sh test/fwrdir_test.sh
 	sh test/fnorm_test.sh
+	sh test/fnext_test.sh
 
 # P8X/OS boot: build a P8XFS image with the OS + files, boot it, run DIR.
 test-os: p8xemu ucode
