@@ -305,15 +305,17 @@ Last updated: 2026-06-23
       in the resolved directory and revert to root after (so root-only callers
       like BASIC SAVE/LOAD are unaffected). Subdir LBAs assumed <256, like the OS CWD.
     - **`FNORM`** ($0136): string -> upper-cased, space-padded `FNAME`.
+    - **Directory iteration** `FOPENDIR` ($0139) + `FNEXT` ($013C): list a
+      directory's live entries (separate iteration state; skips deleted, stops at
+      the end marker). Enables offloading the OS DIR/TREE/PACK to loadable programs.
     The assembler was migrated onto the read+write streams (−520 B; self-host
     still byte-identical). Jump table grew, so the monitor body moved $0130->$0160.
-    Tests: fopen/fwrite/fresolve/fwrdir/fnorm (`make test-cf`); full suite green.
+    Tests: fopen/fwrite/fresolve/fwrdir/fnorm/fnext (`make test-cf`); full suite green.
     Caught two real bugs (FCLOSE/COLD jump-table collision; FFIND wrapper carry).
     This supersedes the old "make BIOS file routines hierarchy-aware" idea (done).
-    Remaining FS ideas: directory iteration (FOPENDIR/FNEXT) so programs can list
-    dirs and the OS can offload DIR/TREE/PACK; richer error status (an FERR byte
-    vs the carry flag) — deferred until a consumer needs it; cluster allocation to
-    retire PACK (P8XFS v3).
+    Remaining FS ideas: richer error status (an FERR byte vs the carry flag) —
+    deferred until a consumer needs it; cluster allocation to retire PACK (v3);
+    actually offloading the OS commands onto FOPENDIR/FNEXT.
 - **P8XFS v1 retired — v2 is the only format** (2026-06-22). Removed all v1 (flat)
   support now that v2 is mature and on-target FORMAT exists. Monitor `F` now writes
   a v2 boot block + root extent at LBA 33 (inline `.`/`..` builder; host fsck
