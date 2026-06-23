@@ -26,6 +26,17 @@ CR     = $0D
 LF     = $0A
 BS     = $08
 
+; BIOS filesystem calls (monitor ROM at $0100). Available in the ROM-in-monitor
+; and disk builds, where the monitor is resident; NOT in the standalone build.
+CFREAD  = $010C          ; read sector LBA -> (P1); P1 += 512
+FFIND   = $0118          ; find root file FNAME -> LBA + FLEN; C=1 if not found
+FCREATE = $011B          ; create root file FNAME from FSRC/FLEN; C=1 on error
+LBA     = $9D47          ; CFREAD target LBA (byte 0); LBA1 = byte 1
+LBA1    = $9D48
+FNAME   = $9D4A          ; 12-byte filename (space-padded)
+FSRC    = $9D56          ; FCREATE source address
+FLEN    = $9D58          ; file length in bytes
+
 LBUF   = BASRAM+$00          ; input line buffer
 NUM1   = BASRAM+$60          ; 16-bit math operands / results
 NUM2   = BASRAM+$62
@@ -106,6 +117,8 @@ TOK_POKE = $93
 TOK_STEP = $94
 TOK_BYE  = $95
 TOK_HELP = $96
+TOK_SAVE = $97
+TOK_LOAD = $98
 
 MONITOR = $0000          ; reset vector — BYE returns here
 
@@ -237,6 +250,14 @@ STMT:   JSR  SKIPSP
         LDB  #TOK_HELP
         CMP
         JZ   st_help
+        LDA  (P2)
+        LDB  #TOK_SAVE
+        CMP
+        JZ   st_save
+        LDA  (P2)
+        LDB  #TOK_LOAD
+        CMP
+        JZ   st_load
         LDA  (P2)            ; bare variable -> implicit LET
         LDB  #'A'
         SUB
@@ -263,6 +284,151 @@ st_help: INP2               ; consume the HELP token
 ; disk builds that re-enters the monitor (its ROM lives at $0000); standalone,
 ; it just restarts BASIC.
 DOBYE:  JMP  MONITOR
+
+; ---------------------------------------------------------------------------
+; SAVE "name" / LOAD "name" — persist the program to a P8XFS v2 root file via
+; the monitor's BIOS FS calls (works in the ROM-in-monitor and disk builds;
+; the standalone build has no resident monitor/BIOS).
+; ---------------------------------------------------------------------------
+st_save:INP2                        ; consume the SAVE token
+        JSR  GETFNM                 ; "name" -> FNAME ; C set = syntax error
+        JC   fs_serr
+        JSR  PROGLEN                 ; FLEN = program length (incl 00,00 marker)
+        LDA  #<PROG
+        STA  FSRC
+        LDA  #>PROG
+        STA  FSRC+1
+        JSR  FCREATE
+        JC   sv_ferr
+        LDP1 #MSAVED
+        JSR  PUTS
+        RTS
+sv_ferr:LDP1 #MFSERR                 ; ?SAVE FAILED (exists or disk full)
+        JSR  PUTS
+        RTS
+fs_serr:JMP  SYNERR
+
+st_load:INP2                        ; consume the LOAD token
+        JSR  GETFNM
+        JC   fs_serr
+        JSR  FFIND                   ; -> LBA + FLEN, or C set if missing
+        JC   ld_nf
+        LDA  #<PROG                  ; P1 = PROG (destination)
+        TAP1L
+        LDA  #>PROG
+        TAP1H
+        LDA  FLEN                    ; NUM1 = bytes remaining
+        STA  NUM1
+        LDA  FLEN+1
+        STA  NUM1+1
+ld_lp:  LDA  NUM1
+        LDB  NUM1+1
+        OR
+        JZ   ld_done                 ; all sectors read
+        JSR  CFREAD                  ; sector LBA -> (P1); P1 += 512
+        LDA  LBA                     ; LBA++ (carry into LBA1)
+        INC
+        STA  LBA
+        JNZ  ld_nc
+        LDA  LBA1
+        INC
+        STA  LBA1
+ld_nc:  LDA  NUM1+1                  ; remaining -= 512 (floor 0)
+        LDB  #2
+        SUB
+        JNC  ld_last
+        STA  NUM1+1
+        JMP  ld_lp
+ld_last:LDA  #0
+        STA  NUM1
+        STA  NUM1+1
+        JMP  ld_lp
+ld_done:LDP1 #MLOADED
+        JSR  PUTS
+        RTS
+ld_nf:  LDP1 #MNOFILE
+        JSR  PUTS
+        RTS
+
+; GETFNM — parse a quoted "name" at (P2) into FNAME: up to 12 chars, upcased,
+;   space-padded; P2 advances past the closing quote. C set on syntax error.
+GETFNM: LDP1 #FNAME                  ; pre-fill 12 spaces
+        LDA  #12
+        STA  RP
+gf_pad: LDA  #' '
+        STA  (P1)+
+        LDA  RP
+        DEC
+        STA  RP
+        JNZ  gf_pad
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #'"'
+        CMP
+        JNZ  gf_err
+        INP2                         ; past opening quote
+        LDP1 #FNAME
+        LDA  #12
+        STA  RP                      ; chars of room left
+gf_lp:  LDA  (P2)
+        JZ   gf_ok                   ; line ended before the quote -> accept
+        LDB  #'"'
+        CMP
+        JZ   gf_cl
+        LDA  RP
+        JZ   gf_adv                  ; no room: scan to the quote, don't store
+        LDA  (P2)                    ; upcase a..z
+        LDB  #'a'
+        SUB
+        JNC  gf_as                   ; < 'a'
+        LDB  #26
+        SUB
+        JC   gf_as                   ; > 'z'
+        LDA  (P2)
+        LDB  #$20
+        SUB
+        JMP  gf_st
+gf_as:  LDA  (P2)
+gf_st:  STA  (P1)+
+        LDA  RP
+        DEC
+        STA  RP
+gf_adv: INP2
+        JMP  gf_lp
+gf_cl:  INP2                         ; past closing quote
+gf_ok:  CLC
+        RTS
+gf_err: SEC
+        RTS
+
+; PROGLEN — FLEN = byte length of the program (PROG .. past the 00,00 marker).
+PROGLEN:LDA  #<PROG
+        TAP1L
+        LDA  #>PROG
+        TAP1H
+pl_l:   LDA  (P1)+                   ; line# lo
+        STA  TOKW
+        LDA  (P1)+                   ; line# hi
+        LDB  TOKW
+        OR
+        JZ   pl_end                  ; 00,00 marker -> end (P1 just past it)
+pl_sk:  LDA  (P1)+                   ; skip the text to its 00 terminator
+        JNZ  pl_sk
+        JMP  pl_l
+pl_end: TPA1L                        ; NUM1 = end pointer
+        STA  NUM1
+        TPA1H
+        STA  NUM1+1
+        LDA  #<PROG                  ; NUM2 = PROG
+        STA  NUM2
+        LDA  #>PROG
+        STA  NUM2+1
+        JSR  SUB16                   ; NUM1 = end - PROG = length
+        LDA  NUM1
+        STA  FLEN
+        LDA  NUM1+1
+        STA  FLEN+1
+        RTS
 st_err: LDP1 #MWHAT
         JSR  PUTS
 stmt_nop: RTS
@@ -2266,6 +2432,10 @@ KWTAB:  .ascii "PRINT"
         .byte $95
         .ascii "HELP"
         .byte $96
+        .ascii "SAVE"
+        .byte $97
+        .ascii "LOAD"
+        .byte $98
         .byte $00
 
 ;==============================================================================
@@ -2351,6 +2521,14 @@ MHELP:  .byte CR,LF
 MOK:    .ascii "Ok"
         .byte CR,LF,0
 MWHAT:  .byte $3F,CR,LF,0
+MSAVED: .ascii "Saved"
+        .byte CR,LF,0
+MLOADED:.ascii "Loaded"
+        .byte CR,LF,0
+MFSERR: .ascii "?Save failed"
+        .byte CR,LF,0
+MNOFILE:.ascii "?No file"
+        .byte CR,LF,0
 MSYN:   .ascii "?SYNTAX ERROR"
         .byte CR,LF,0
 MUNDEF: .ascii "?UNDEF'D LINE"

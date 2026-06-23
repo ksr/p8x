@@ -60,9 +60,18 @@ boots with **`B`**. Build commands for the disk and ROM images are in the
 | `30` (number alone) | **delete** line 30 |
 | `LIST` | print the program in line-number order |
 | `NEW` | erase the whole program |
+| `SAVE "NAME"` | write the program to a file on the CompactFlash card (`Saved`) |
+| `LOAD "NAME"` | replace the program with a saved file (`Loaded`) |
 
 Lines are always kept sorted by number regardless of entry order. Keywords are
 tokenized on entry (stored as single bytes) and expanded again by `LIST`.
+
+`SAVE`/`LOAD` store programs as files in the P8XFS **root** directory (via the
+monitor's BIOS filesystem calls), so they work in the **ROM** (`X`) and **disk**
+builds — the standalone whole-ROM build has no monitor and can't use them. Names
+are up to 12 characters, upper-cased; `SAVE` reports `?Save failed` if the name
+exists or the disk is full, `LOAD` reports `?No file` if it isn't found. Files
+created here are visible to P8X/OS (`DIR`) and the host `p8xfs.py` too.
 
 ## Numbers, variables, strings
 

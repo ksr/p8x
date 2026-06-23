@@ -1,7 +1,7 @@
 # P8X Project Backlog
 
 Add ideas as they come; move items between sections as they progress.
-Last updated: 2026-06-22
+Last updated: 2026-06-23
 
 ## How to use
 - **NEXT** — committed, in rough priority order
@@ -234,6 +234,16 @@ Last updated: 2026-06-22
   FSCK, the `MK_NOV2`/`MNOV2` reject, and the entire single-pass v1 PACK path
   (rename DOPACK2→DOPACK) — the OS shrank to 6967 B. Existing v1 cards no longer
   mount (acceptable — solo project, no v1 cards in use). Full suite green.
+- **BASIC SAVE/LOAD + BIOS filesystem API** (2026-06-23). Added file-level calls
+  to the monitor ROM — `$0118 FFIND` (find a root file -> start LBA + length) and
+  `$011B FCREATE` (create a root file from a buffer: allocate at the free pointer,
+  write data + a directory entry, bump free) — a shared P8XFS v2 root-file layer
+  for BASIC, the OS, and any program (ABI: FNAME/FSRC/FLEN at $9D4A/$9D56/$9D58;
+  CFWRSEC refactored to expose CFWRP1). BASIC gained `SAVE "NAME"` / `LOAD "NAME"`
+  (tokens $97/$98) that round-trip the program through the filesystem in the ROM
+  and disk builds. Tests: fs_bios_test.sh (FCREATE/FFIND round-trip + host fsck)
+  and basic_saveload_test.sh (SAVE -> NEW -> LOAD -> LIST/RUN). Caught: FFIND
+  clobbered FLEN during its scan, so FCREATE saves/restores the requested length.
 - **On-target FORMAT (P8XFS v2)** (2026-06-22). Added the OS `FORMAT` command:
   asks Y/N, then rewrites the boot block (`P8`, version 2, free pointer 37) and a
   clean root extent at LBA 33 (4 sectors, `.`/`..`) by reusing the `MKDIR` extent

@@ -37,6 +37,10 @@ README covers build internals and milestones.
 > minus, `REM`, and functions `ABS`, `RND`, `PEEK`, `POKE` (memory + I/O, so
 > `POKE 65282,n` drives the LED port). The full MS-style subset is in.
 >
+> Plus `SAVE "NAME"` / `LOAD "NAME"` — programs persist to the CompactFlash
+> filesystem (P8XFS v2 root) via the monitor's BIOS FS calls; ROM and disk
+> builds only.
+>
 > Limits: FOR nesting 2 deep, GOSUB 3 deep.
 
 ## Direction
