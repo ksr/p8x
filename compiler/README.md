@@ -18,37 +18,46 @@ first and stays the primary tool.
 
 The P8X has no 16-bit accumulator, so expression results live in a **16-bit
 pseudo-accumulator `AX`** (the memory word `__ax`). The hardware stack (`P3`)
-holds temporaries (`PHA`/`PLA`) and call return addresses (`JSR`/`RTS`). Binary
-operators compile to small **runtime helper calls** (`__add`, `__sub`, `__mul`,
-`__eq`, `__lt`, `__not`) so the generated code stays compact; only the helpers a
-program actually uses are emitted. A program returns to the OS shell with `RTS`
-(the startup stub is `JSR _f_main` / `RTS`).
+holds expression temporaries (`PHA`/`PLA`) and call return addresses
+(`JSR`/`RTS`). Binary operators compile to small **runtime helper calls**
+(`__add`, `__sub`, `__mul`, `__eq`, `__lt`, `__not`) so the generated code stays
+compact; only the helpers a program actually uses are emitted.
 
-## Supported subset (v0.1)
+**Calling convention / frames.** A separate **software C-stack** (`__csp`, grows
+down from `$F800`) holds call frames; `__fp` is the frame pointer. A caller
+pushes arguments right-to-left, `JSR`s, then pops them; the callee (`__enter`)
+saves the old `__fp`, sets `__fp = __csp`, and reserves space for locals, and
+(`__leave`) unwinds on `return`. So **parameters live at `__fp+2, __fp+4, …`**
+and **locals at `__fp-2, __fp-4, …`** — one frame per call, which makes functions
+reentrant, so **recursion works**. Globals keep static storage. A program returns
+to the OS shell with `RTS` (startup inits `__csp` then `JSR _f_main`).
+
+## Supported subset
 
 | area | supported |
 |------|-----------|
 | types | `int` (16-bit), `char` (8-bit) |
-| top level | function definitions (no parameters yet), global variable declarations |
+| top level | function definitions **with parameters**, global variable declarations |
 | statements | `{ }`, declarations, `if`/`else`, `while`, `return [e];`, `expr;`, `;` |
 | operators | `=`  `==` `!=` `<` `>` `<=` `>=`  `+` `-`  `*`  unary `-` `!` |
+| functions | parameters, **stack locals**, **recursion**, return value in `AX` |
 | primaries | int / char / string literals, identifiers, calls, `( )` |
 | builtins | `putchar(e)`, `puts(e)` (over the BIOS at `$0103` / `$0112`) |
 
-`int` is 16-bit signed-ish (comparisons are currently **unsigned** 16-bit);
-`char` is 8-bit. String literals are pooled and evaluate to their address.
+`int` is 16-bit (comparisons are currently **unsigned** 16-bit); `char` is 8-bit
+but on the stack each local/param occupies a 2-byte slot. String literals are
+pooled and evaluate to their address.
 
 ### Current limitations (next phases)
 
-- Every variable gets **static storage** — no stack frame, so **no recursion or
-  reentrancy**, and user functions take **no arguments** yet. (Calling
-  convention + stack locals is the next phase.)
 - No pointers/arrays/`&`/`*`, no `/` `%` or shifts, no `for`, no `&&`/`||`
-  short-circuit, no structs, no global initializers. See the project backlog.
+  short-circuit, no structs, no global initializers.
+- Locals are function-scoped (no per-block shadowing); the C-stack and the
+  hardware return stack are both in the TPA, so very deep recursion is bounded by
+  RAM. See the project backlog.
 
 ## Testing
 
 `emulator/test/c_compile_test.sh` (`make test-c`) compiles a C program, assembles
-it, RUNs it under P8X/OS in the emulator, and checks the console output
-(a `while` loop printing `12345`, then a user function + multiply printing
-`SQ-OK`).
+it, RUNs it under P8X/OS, and checks the output: a `while` loop printing `12345`,
+then **recursive `fact(5)`** → `FACT-OK` and a two-arg `add` → `ADD-OK`.
