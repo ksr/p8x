@@ -148,6 +148,8 @@ FOR I=1 TO 3 : PRINT I; : NEXT   ->  123
 ## Commands (immediate mode)
 
 `RUN` (execute the stored program from the lowest line), `LIST`, `NEW`,
+`SAVE "NAME"` / `LOAD "NAME"` (persist the program to the CompactFlash
+filesystem — ROM/disk builds; see *Editing a program* above),
 `HELP` (print the supported statements, commands, functions, and operators),
 and `BYE` (leave BASIC — returns to the monitor in the ROM/disk builds).
 

@@ -2512,7 +2512,7 @@ MHELP:  .byte CR,LF
         .byte CR,LF
         .ascii "  GOTO GOSUB RETURN INPUT POKE REM END"
         .byte CR,LF
-        .ascii "COMMANDS: RUN LIST NEW HELP BYE"
+        .ascii "COMMANDS: RUN LIST NEW SAVE LOAD HELP BYE"
         .byte CR,LF
         .ascii "FUNCTIONS: ABS(x) RND(n) PEEK(a)"
         .byte CR,LF
