@@ -38,6 +38,11 @@ if [ ! -f "$disk" ]; then
         --base 0xB000 -D BASORG=0xB000 -D BASRAM=0xC500 -D PBUF=0xE000 -D MONITOR=0x4000 >/dev/null
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/basicrun.bin" \
         --name /BIN/BASIC.BIN --load 0xB000 --exec 0xB000 >/dev/null
+    # EDIT: line-oriented text editor (TPA program) -> RUN /BIN/EDIT.BIN NAME
+    python3 "$root/assembler/p8xasm.py" "$root/apps/p8xedit.asm" -o "$build/edit.bin" \
+        --base 0xB000 >/dev/null
+    python3 "$root/tools/p8xfs.py" put "$disk" "$build/edit.bin" \
+        --name /BIN/EDIT.BIN --load 0xB000 --exec 0xB000 >/dev/null
     printf 'hello from P8X/OS\n' > "$build/readme.txt"
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/readme.txt" --name /README.TXT >/dev/null
     echo "created fresh disk: $disk"

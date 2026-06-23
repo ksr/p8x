@@ -42,3 +42,4 @@ emulator/test/v2bad.img
 Eagle/Libraries/*.orig.lbr
 emulator/test/fd.img
 emulator/test/argv.asm
+emulator/test/ed.img

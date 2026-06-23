@@ -51,6 +51,7 @@ test-os: p8xemu ucode
 	sh test/os_v2_test.sh
 	sh test/os_format_test.sh
 	sh test/os_argv_test.sh
+	sh test/os_edit_test.sh
 
 # BASIC: launch ROM BASIC from the monitor (X), and boot disk BASIC (B).
 test-basic: p8xemu ucode
