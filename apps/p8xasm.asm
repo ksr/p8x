@@ -2,9 +2,9 @@
 ; P8X ASM - native two-pass assembler (standalone TPA program)
 ; =============================================================================
 ;     RUN ASM.BIN SRC.ASM OUT.BIN
-; Reads SRC.ASM from disk and writes the binary OUT. Source is streamed a line
-; at a time and output is streamed a sector at a time (registered with FCOMMIT),
-; so neither is bounded by RAM — the assembler even assembles its own source.
+; Reads SRC.ASM from disk and writes the binary OUT, both through the BIOS
+; file streams (FOPEN/FGETB for input, FWOPEN/FPUTB/FCLOSE for output), so
+; neither is bounded by RAM — the assembler even assembles its own source.
 ; Output carries load/exec 0, which the OS treats as the TPA base $B000 — so a
 ; program written `.org $B000` is directly RUNnable after assembly.
 ;
@@ -24,20 +24,17 @@
 ; Limits: ~850 symbols, 12-char names, 127-char source lines, single .org.
 ; =============================================================================
 
-; ---- BIOS ----
+; ---- BIOS ---- (file I/O now goes entirely through the read/write streams)
 CONIN   = $0100
 CONOUT  = $0103
-CFREAD  = $010C
-CFWRITE = $010F   ; SBUF -> sector LBA
 PUTS    = $0112
 PHEX8   = $0115
-FFIND   = $0118
-FCREATE = $011B
-FDELETE = $011E
-FCOMMIT = $0121   ; register a streamed file: write dir entry + bump free
-FOPEN   = $0124   ; open FNAME for reading (P1 = 512-byte buffer)
+FFIND   = $0118   ; used once at startup to report a missing source
+FOPEN   = $0124   ; open source for reading (P1 = 512-byte buffer)
 FGETB   = $0127   ; next source byte -> A; C=1 at EOF
-SBUF    = $9E00   ; BIOS sector buffer — reused as the output sector buffer
+FWOPEN  = $012A   ; open the output write stream
+FPUTB   = $012D   ; append a byte to the output stream
+FCLOSE  = $0130   ; flush + register the output file FNAME; C=1 if full
 LBA     = $9D47
 LBA1    = $9D48
 LBA2    = $9D49
@@ -85,13 +82,9 @@ LEOF    = $C86A   ; 1 when NEXTLINE hits end of source
 SB      = $C86B   ; current source byte from FGETB
 LCNT    = $C86C   ; chars in the current line
 SB2     = $C872   ; EMIT: byte being emitted
-OUTLBA  = $C873   ; streamed-output write LBA (3)
-OSPOS   = $C876   ; byte offset within the output sector buffer (2)
-OUTSEC  = $C878   ; output sectors written (2)
-OUTPOS  = $C87A   ; total output bytes emitted so far (2)
+OUTPOS  = $C87A   ; total output bytes emitted (mirrors the write stream length)
 OFFL    = $C87C   ; PC-ORGBASE low
 OFFH    = $C87D   ; PC-ORGBASE high
-TMPB    = $C87E   ; OUTBYTE scratch
 SAVPE   = $C87F   ; EMIT P1 save (2)
 FVAL    = $C881   ; .fill byte value (EMIT clobbers TMP, so .fill can't use it)
 
@@ -983,10 +976,10 @@ EM_PCHK:LDA  OFFH               ; off < OUTPOS would loop forever -> backward .o
         JMP  EM_PADZ
 EM_PHI: JNC  EM_BACK            ; OFFH < OUTPOS+1 -> off < OUTPOS
 EM_PADZ:LDA  #0
-        JSR  OUTBYTE
+        JSR  EMITB
         JMP  EM_PAD
 EM_PUT: LDA  SB2
-        JSR  OUTBYTE
+        JSR  EMITB
 EM_ADV: LDA  PC                 ; PC++
         INC
         STA  PC
@@ -1015,141 +1008,32 @@ EM_RET: LDA  SAVPE              ; restore the line cursor
 EM_BACK:LDP1 #EBACK
         JMP  ASM_ERR
 
-; OUTBYTE - store byte A into the output sector buffer (SBUF); flush at 512.
-OUTBYTE:STA  TMPB
-        LDA  OSPOS              ; P1 = SBUF + OSPOS (SBUF low byte = 0)
-        TAP1L
-        LDA  #$9E
-        LDB  OSPOS+1
-        ADD
-        TAP1H
-        LDA  TMPB
-        STA  (P1)
-        LDA  OSPOS              ; OSPOS++
-        LDB  #1
-        ADD
-        STA  OSPOS
-        LDA  OSPOS+1
-        JNC  OB_1
-        INC
-        STA  OSPOS+1
-OB_1:   LDA  OUTPOS             ; OUTPOS++
+; EMITB - emit one output byte through the BIOS write stream (FPUTB) and track
+; OUTPOS so EMIT can zero-pad forward .org gaps. FPUTB handles the sector buffer,
+; flushing, and the running file length itself.
+EMITB:  JSR  FPUTB
+        LDA  OUTPOS
         LDB  #1
         ADD
         STA  OUTPOS
         LDA  OUTPOS+1
-        JNC  OB_2
+        JNC  EB_1
         INC
         STA  OUTPOS+1
-OB_2:   LDA  OSPOS+1            ; OSPOS == 512 -> flush
-        LDB  #2
-        CMP
-        JNZ  OB_RET
-        JSR  FLUSHOUT
-OB_RET: RTS
+EB_1:   RTS
 
-; FLUSHOUT - write SBUF to OUTLBA, advance the LBA, clear the buffer.
-FLUSHOUT:
-        LDA  OUTLBA
-        STA  LBA
-        LDA  OUTLBA+1
-        STA  LBA1
-        LDA  OUTLBA+2
-        STA  LBA2
-        JSR  CFWRITE
-        LDA  OUTLBA             ; OUTLBA++ (24-bit)
-        INC
-        STA  OUTLBA
-        JNZ  FL_1
-        LDA  OUTLBA+1
-        INC
-        STA  OUTLBA+1
-        JNZ  FL_1
-        LDA  OUTLBA+2
-        INC
-        STA  OUTLBA+2
-FL_1:   LDA  OUTSEC             ; OUTSEC++
-        LDB  #1
-        ADD
-        STA  OUTSEC
-        LDA  OUTSEC+1
-        JNC  FL_2
-        INC
-        STA  OUTSEC+1
-FL_2:   LDA  #0
-        STA  OSPOS
-        STA  OSPOS+1
-        JSR  ZSBUFO
-        RTS
-
-; ZSBUFO - zero the 512-byte output sector buffer (SBUF).
-ZSBUFO: LDA  #0
-        TAP1L
-        LDA  #$9E
-        TAP1H
-        LDA  #2
-        STA  TMP2
-ZB_PG:  LDA  #0
-        STA  DIG
-ZB_IN:  LDA  #0
-        STA  (P1)+
-        LDA  DIG
-        DEC
-        STA  DIG
-        JNZ  ZB_IN
-        LDA  TMP2
-        DEC
-        STA  TMP2
-        JNZ  ZB_PG
-        RTS
-
-; OUTINIT - begin streamed output: the file starts at the volume free pointer.
-OUTINIT:LDA  #0
-        STA  LBA
-        STA  LBA1
-        STA  LBA2
-        LDP1 #SBUF
-        JSR  CFREAD            ; boot block -> SBUF
-        LDA  SBUF+4            ; free pointer = first free data LBA
-        STA  OUTLBA
-        LDA  SBUF+5
-        STA  OUTLBA+1
+; OUTINIT - begin streamed output (BIOS write stream at the volume free pointer).
+OUTINIT:JSR  FWOPEN
         LDA  #0
-        STA  OUTLBA+2
-        STA  OSPOS
-        STA  OSPOS+1
-        STA  OUTSEC
-        STA  OUTSEC+1
         STA  OUTPOS
         STA  OUTPOS+1
-        JSR  ZSBUFO
         RTS
 
-; FINISHOUT - flush the partial sector, then register the file. C=1 if root full.
+; FINISHOUT - register the assembled file (FCLOSE flushes + writes the entry +
+; bumps the free pointer; its length comes from the bytes written). C=1 if full.
 FINISHOUT:
-        LDA  OSPOS
-        LDB  OSPOS+1
-        OR
-        JZ   FO_REG
-        JSR  FLUSHOUT
-FO_REG: LDA  HIWAT             ; FLEN = HIWAT - ORGBASE
-        LDB  ORGBASE
-        SUB
-        STA  FLEN
-        LDA  #0
-        JC   FO_NB
-        LDA  #1
-FO_NB:  STA  TMP
-        LDA  HIWAT+1
-        LDB  ORGBASE+1
-        SUB
-        LDB  TMP
-        SUB
-        STA  FLEN+1
         JSR  SETFNOUT          ; FNAME <- OUTNAME
-        JSR  FDELETE           ; drop any old version
-        JSR  FCOMMIT           ; dir entry + free bump (computes sectors from FLEN)
-        RTS
+        JMP  FCLOSE
 
 ; =============================================================================
 ; Source load + scanning helpers
