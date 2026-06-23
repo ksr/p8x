@@ -102,6 +102,7 @@ RESET:  JMP  COLD
         JMP  FFIND          ; $0118 FFIND   root file FNAME -> LBA+FLEN; C=0 found
         JMP  FCREATE        ; $011B FCREATE root file FNAME from FSRC/FLEN; C=1 err
         JMP  FDELETE        ; $011E FDELETE tombstone root file FNAME; C=1 not found
+        JMP  FCOMMIT        ; $0121 FCOMMIT register streamed file (entry+free); C=1 full
 
 ;==============================================================================
 ; Monitor body (relocated above the BIOS table; reset vectors here).
@@ -807,6 +808,47 @@ FC_WSP: LDA  #0
         RTS
 FC_ERR: SEC
         RTS
+
+; FCOMMIT - register a file whose data the caller already streamed to disk at
+;   the current free pointer. Writes its root directory entry (FNAME, start =
+;   free pointer, length FLEN, load/exec 0, flag = file) and bumps the free
+;   pointer by ceil(FLEN/512) sectors. Inputs are just the FS ABI vars FNAME +
+;   FLEN. C=1 if the root is full. Reuses FCREATE's tail (FC_WROK: bump free +
+;   write boot + find slot + write entry).
+FCOMMIT:LDA  #0             ; CNT = ceil(FLEN / 512)
+        STA  CNT
+        LDA  FLEN
+        STA  TMP
+        LDA  FLEN+1
+        STA  TMP2
+FCM_CL: LDA  TMP
+        LDB  TMP2
+        OR
+        JZ   FCM_DN
+        LDA  CNT
+        INC
+        STA  CNT
+        LDA  TMP2          ; remaining -= 512 (floor 0)
+        LDB  #2
+        SUB
+        JNC  FCM_LST
+        STA  TMP2
+        JMP  FCM_CL
+FCM_LST:LDA  #0
+        STA  TMP
+        STA  TMP2
+        JMP  FCM_CL
+FCM_DN: LDA  #0            ; read boot block -> SBUF
+        STA  LBA
+        STA  LBA1
+        STA  LBA2
+        LDP1 #SBUF
+        JSR  CFRDSEC
+        LDA  SBUF+4         ; start LBA = current free pointer
+        STA  ADDRL
+        LDA  SBUF+5
+        STA  ADDRH
+        JMP  FC_WROK
 
 ; FDELETE - tombstone regular file FNAME in the root (entry flag -> $FF).
 ;   C=0 if found and deleted; C=1 if not found. The file's data sectors are

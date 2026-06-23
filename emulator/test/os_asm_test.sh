@@ -81,6 +81,8 @@ fail() { echo "OS-ASM TEST: FAIL — $1"; echo "$out" | sed -n '/RUN ASM/,$p'; e
 # (1) full opcode-table coverage: on-target == host, byte for byte
 python3 $ROOT/tools/p8xfs.py get as.img COVER.BIN >/dev/null 2>&1 || fail "COVER.BIN not created"
 cmp -s covgold.bin COVER.BIN || fail "all-opcode coverage differs from host assembler"
+# streamed output must leave the volume structurally intact
+python3 $ROOT/tools/p8xfs.py fsck as.img >/dev/null 2>&1 || fail "volume invalid after streamed output"
 
 # (2) byte-for-byte on the feature program
 python3 $ROOT/tools/p8xfs.py get as.img PROG.BIN >/dev/null 2>&1 || fail "PROG.BIN not created"

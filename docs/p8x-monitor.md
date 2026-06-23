@@ -88,6 +88,7 @@ knowing the monitor's internal addresses. These entry points are **stable**:
 | `$0118` | FFIND | find root file `FNAME` → `LBA`+`FLEN`; `C=1` if not found |
 | `$011B` | FCREATE | create root file `FNAME` from `FSRC`/`FLEN`; `C=1` on error |
 | `$011E` | FDELETE | tombstone root file `FNAME` (flag → `$FF`); `C=1` if not found |
+| `$0121` | FCOMMIT | register a streamed file: write a root entry for data already at the free pointer (`FNAME`, length `FLEN`, sectors `=ceil(FLEN/512)`) and bump the free pointer; `C=1` if root full |
 
 Call them with `JSR $0103` etc. (P8X/OS is built entirely on this table.)
 

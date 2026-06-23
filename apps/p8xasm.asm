@@ -26,11 +26,14 @@
 CONIN   = $0100
 CONOUT  = $0103
 CFREAD  = $010C
+CFWRITE = $010F   ; SBUF -> sector LBA
 PUTS    = $0112
 PHEX8   = $0115
 FFIND   = $0118
 FCREATE = $011B
 FDELETE = $011E
+FCOMMIT = $0121   ; register a streamed file: write dir entry + bump free
+SBUF    = $9E00   ; BIOS sector buffer — reused as the output sector buffer
 LBA     = $9D47
 LBA1    = $9D48
 LBA2    = $9D49
@@ -84,16 +87,28 @@ SB      = $C86B   ; last byte from GETB
 LCNT    = $C86C   ; chars in the current line
 FSTART  = $C86D   ; source file start LBA, saved from FFIND (3)
 FLENS   = $C870   ; source file length, saved from FFIND (2)
+SB2     = $C872   ; EMIT: byte being emitted
+OUTLBA  = $C873   ; streamed-output write LBA (3)
+OSPOS   = $C876   ; byte offset within the output sector buffer (2)
+OUTSEC  = $C878   ; output sectors written (2)
+OUTPOS  = $C87A   ; total output bytes emitted so far (2)
+OFFL    = $C87C   ; PC-ORGBASE low
+OFFH    = $C87D   ; PC-ORGBASE high
+TMPB    = $C87E   ; OUTBYTE scratch
+SAVPE   = $C87F   ; EMIT P1 save (2)
+FVAL    = $C881   ; .fill byte value (EMIT clobbers TMP, so .fill can't use it)
 
 ; ---- buffers ----
 ; The source is streamed a line at a time from disk (no whole-file buffer), so
 ; source size is bounded by the disk, not RAM. That frees the old 6.5 KB source
 ; buffer for a much larger symbol table.
+; Output is streamed to disk a sector at a time (via the BIOS SBUF), so there is
+; no output RAM buffer — output size is bounded by the disk too. All of the TPA
+; above the line buffer is the symbol table (~850 symbols).
 SECBUF  = $C900   ; one streamed source sector (512)
 LINEBUF = $CB00   ; current source line (NUL-terminated, <=127 chars)
-SYMTAB  = $CC00   ; 14-byte entries: name[12] + value[2]  (~585 symbols)
-SYMEND  = $EC00   ; symbol-table limit (= OUTBUF)
-OUTBUF  = $EC00   ; assembled bytes, indexed by PC-ORGBASE
+SYMTAB  = $CC00   ; 14-byte entries: name[12] + value[2]  (~850 symbols)
+SYMEND  = $FB00   ; symbol-table limit (stack lives above)
 
         .org $B000
 ; =============================================================================
@@ -130,34 +145,13 @@ START:  TPA3L                   ; save SP so an error can long-jump back to OS
         STA  SYMP+1
         JSR  INITPC
         JSR  ASSEMBLE
-        ; ---- pass 2: emit ----
-        JSR  ZEROOUT
+        ; ---- pass 2: emit (streamed to disk) ----
+        JSR  OUTINIT            ; output LBA = free pointer; clear the sector buffer
         LDA  #1
         STA  PASS
         JSR  INITPC
         JSR  ASSEMBLE
-        ; ---- write output ----
-        JSR  SETFNOUT           ; FNAME <- OUTNAME
-        LDA  HIWAT              ; FLEN = HIWAT - ORGBASE
-        LDB  ORGBASE
-        SUB
-        STA  FLEN
-        LDA  #0
-        JC   ST_NB
-        LDA  #1
-ST_NB:  STA  TMP
-        LDA  HIWAT+1
-        LDB  ORGBASE+1
-        SUB
-        LDB  TMP
-        SUB
-        STA  FLEN+1
-        LDA  #<OUTBUF
-        STA  FSRC
-        LDA  #>OUTBUF
-        STA  FSRC+1
-        JSR  FDELETE            ; overwrite any old version
-        JSR  FCREATE
+        JSR  FINISHOUT          ; flush + register the file (dir entry + free bump)
         JC   ST_WERR
         LDP1 #MOK
         JSR  PUTS
@@ -397,7 +391,7 @@ DD_FILL:JSR  EVAL
         LDA  VAL+1
         STA  SAVP+1
         LDA  #0
-        STA  TMP                ; fill value default 0
+        STA  FVAL               ; fill value default 0 (TMP is clobbered by EMIT)
         JSR  SKIPSP
         LDA  (P1)
         LDB  #','
@@ -407,12 +401,12 @@ DD_FILL:JSR  EVAL
         JSR  SKIPSP
         JSR  EVAL
         LDA  VAL
-        STA  TMP
+        STA  FVAL
 DF_GO:  LDA  SAVP
         LDB  SAVP+1
         OR
         JZ   DD_RET
-        LDA  TMP
+        LDA  FVAL
         JSR  EMIT
         LDA  SAVP
         LDB  #1
@@ -958,44 +952,55 @@ M_NC:   STA  TMP
 ; =============================================================================
 ; EMIT - append A to output at PC-ORGBASE (pass2); advance PC; track HIWAT
 ; =============================================================================
-EMIT:   STA  TMP                ; byte
+; EMIT - append byte A to the output. Pass 1 only advances PC and tracks HIWAT;
+; pass 2 streams the byte to disk, zero-padding any gap left by a forward .org.
+; P1 (the line cursor) is saved for the whole routine, so OUTBYTE/FLUSHOUT may
+; use it freely.
+EMIT:   STA  SB2
+        TPA1L
+        STA  SAVPE
+        TPA1H
+        STA  SAVPE+1
         LDA  PASS
         JZ   EM_ADV
         LDA  PC                 ; off = PC - ORGBASE
         LDB  ORGBASE
         SUB
-        STA  TMP2
+        STA  OFFL
         LDA  #0
         JC   EM_NB
         LDA  #1
-EM_NB:  STA  CNTL
+EM_NB:  STA  TMP
         LDA  PC+1
         LDB  ORGBASE+1
         SUB
-        STA  CNTH
-        LDA  CNTL
-        JZ   EM_HOK
-        LDA  CNTH
-        LDB  #1
+        LDB  TMP
         SUB
-        STA  CNTH
-EM_HOK: LDA  CNTH               ; bounds: off < $1000 (4 KB)
-        LDB  #$10
+        STA  OFFH
+EM_PAD: LDA  OUTPOS             ; while OUTPOS != off, pad a zero
+        LDB  OFFL
         CMP
-        JC   EM_OVER
-        LDA  #<OUTBUF           ; P2 = OUTBUF + off
-        LDB  TMP2
-        ADD
-        TAP2L
-        LDA  #>OUTBUF
-        JNC  EM_PH
-        INC
-EM_PH:  LDB  CNTH
-        ADD
-        TAP2H
-        LDA  TMP
-        STA  (P2)
-EM_ADV: LDA  PC
+        JNZ  EM_PCHK
+        LDA  OUTPOS+1
+        LDB  OFFH
+        CMP
+        JZ   EM_PUT             ; OUTPOS == off -> emit the real byte
+EM_PCHK:LDA  OFFH               ; off < OUTPOS would loop forever -> backward .org
+        LDB  OUTPOS+1
+        CMP                     ; C = OFFH >= OUTPOS+1
+        JNZ  EM_PHI
+        LDA  OFFL
+        LDB  OUTPOS
+        CMP                     ; high equal -> compare low: C = OFFL >= OUTPOS
+        JNC  EM_BACK
+        JMP  EM_PADZ
+EM_PHI: JNC  EM_BACK            ; OFFH < OUTPOS+1 -> off < OUTPOS
+EM_PADZ:LDA  #0
+        JSR  OUTBYTE
+        JMP  EM_PAD
+EM_PUT: LDA  SB2
+        JSR  OUTBYTE
+EM_ADV: LDA  PC                 ; PC++
         INC
         STA  PC
         JNZ  EM_HW
@@ -1010,14 +1015,154 @@ EM_HW:  LDA  PC+1               ; HIWAT = max(HIWAT, PC)
         LDB  HIWAT
         CMP
 EM_HD:  JC   EM_SET
-        RTS
+        JMP  EM_RET
 EM_SET: LDA  PC
         STA  HIWAT
         LDA  PC+1
         STA  HIWAT+1
+EM_RET: LDA  SAVPE              ; restore the line cursor
+        TAP1L
+        LDA  SAVPE+1
+        TAP1H
         RTS
-EM_OVER:LDP1 #ETOOBIG
+EM_BACK:LDP1 #EBACK
         JMP  ASM_ERR
+
+; OUTBYTE - store byte A into the output sector buffer (SBUF); flush at 512.
+OUTBYTE:STA  TMPB
+        LDA  OSPOS              ; P1 = SBUF + OSPOS (SBUF low byte = 0)
+        TAP1L
+        LDA  #$9E
+        LDB  OSPOS+1
+        ADD
+        TAP1H
+        LDA  TMPB
+        STA  (P1)
+        LDA  OSPOS              ; OSPOS++
+        LDB  #1
+        ADD
+        STA  OSPOS
+        LDA  OSPOS+1
+        JNC  OB_1
+        INC
+        STA  OSPOS+1
+OB_1:   LDA  OUTPOS             ; OUTPOS++
+        LDB  #1
+        ADD
+        STA  OUTPOS
+        LDA  OUTPOS+1
+        JNC  OB_2
+        INC
+        STA  OUTPOS+1
+OB_2:   LDA  OSPOS+1            ; OSPOS == 512 -> flush
+        LDB  #2
+        CMP
+        JNZ  OB_RET
+        JSR  FLUSHOUT
+OB_RET: RTS
+
+; FLUSHOUT - write SBUF to OUTLBA, advance the LBA, clear the buffer.
+FLUSHOUT:
+        LDA  OUTLBA
+        STA  LBA
+        LDA  OUTLBA+1
+        STA  LBA1
+        LDA  OUTLBA+2
+        STA  LBA2
+        JSR  CFWRITE
+        LDA  OUTLBA             ; OUTLBA++ (24-bit)
+        INC
+        STA  OUTLBA
+        JNZ  FL_1
+        LDA  OUTLBA+1
+        INC
+        STA  OUTLBA+1
+        JNZ  FL_1
+        LDA  OUTLBA+2
+        INC
+        STA  OUTLBA+2
+FL_1:   LDA  OUTSEC             ; OUTSEC++
+        LDB  #1
+        ADD
+        STA  OUTSEC
+        LDA  OUTSEC+1
+        JNC  FL_2
+        INC
+        STA  OUTSEC+1
+FL_2:   LDA  #0
+        STA  OSPOS
+        STA  OSPOS+1
+        JSR  ZSBUFO
+        RTS
+
+; ZSBUFO - zero the 512-byte output sector buffer (SBUF).
+ZSBUFO: LDA  #0
+        TAP1L
+        LDA  #$9E
+        TAP1H
+        LDA  #2
+        STA  TMP2
+ZB_PG:  LDA  #0
+        STA  DIG
+ZB_IN:  LDA  #0
+        STA  (P1)+
+        LDA  DIG
+        DEC
+        STA  DIG
+        JNZ  ZB_IN
+        LDA  TMP2
+        DEC
+        STA  TMP2
+        JNZ  ZB_PG
+        RTS
+
+; OUTINIT - begin streamed output: the file starts at the volume free pointer.
+OUTINIT:LDA  #0
+        STA  LBA
+        STA  LBA1
+        STA  LBA2
+        LDP1 #SBUF
+        JSR  CFREAD            ; boot block -> SBUF
+        LDA  SBUF+4            ; free pointer = first free data LBA
+        STA  OUTLBA
+        LDA  SBUF+5
+        STA  OUTLBA+1
+        LDA  #0
+        STA  OUTLBA+2
+        STA  OSPOS
+        STA  OSPOS+1
+        STA  OUTSEC
+        STA  OUTSEC+1
+        STA  OUTPOS
+        STA  OUTPOS+1
+        JSR  ZSBUFO
+        RTS
+
+; FINISHOUT - flush the partial sector, then register the file. C=1 if root full.
+FINISHOUT:
+        LDA  OSPOS
+        LDB  OSPOS+1
+        OR
+        JZ   FO_REG
+        JSR  FLUSHOUT
+FO_REG: LDA  HIWAT             ; FLEN = HIWAT - ORGBASE
+        LDB  ORGBASE
+        SUB
+        STA  FLEN
+        LDA  #0
+        JC   FO_NB
+        LDA  #1
+FO_NB:  STA  TMP
+        LDA  HIWAT+1
+        LDB  ORGBASE+1
+        SUB
+        LDB  TMP
+        SUB
+        STA  FLEN+1
+        JSR  SETFNOUT          ; FNAME <- OUTNAME
+        JSR  FDELETE           ; drop any old version
+        JSR  FCOMMIT           ; dir entry + free bump (computes sectors from FLEN)
+        RTS
 
 ; =============================================================================
 ; Source load + scanning helpers
@@ -1159,23 +1304,6 @@ NL_DONE:LDA  #0
         RTS
 NL_END: LDA  #1
         STA  LEOF
-        RTS
-
-ZEROOUT:LDP1 #OUTBUF
-        LDA  #16
-        STA  TMP2
-ZO_PG:  LDA  #0
-        STA  DIG
-ZO_IN:  LDA  #0
-        STA  (P1)+
-        LDA  DIG
-        DEC
-        STA  DIG
-        JNZ  ZO_IN
-        LDA  TMP2
-        DEC
-        STA  TMP2
-        JNZ  ZO_PG
         RTS
 
 SKIPSP: LDA  (P1)
@@ -1435,5 +1563,5 @@ ENOSRC: .asciiz "?no source: "
 EWRITE: .asciiz "?write: "
 EBADOP: .asciiz "?syntax: "
 EUNDEF: .asciiz "?undefined: "
-ETOOBIG:.asciiz "?too big: "
+EBACK:  .asciiz "?backward .org: "
 ESYMS:  .asciiz "?too many symbols: "
