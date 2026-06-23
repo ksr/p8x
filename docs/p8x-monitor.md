@@ -99,6 +99,7 @@ knowing the monitor's internal addresses. These entry points are **stable**:
 | `$0139` | FOPENDIR | begin iterating the directory at path `P1` (`""`/`"/"` = root); `C=1` if not a directory |
 | `$013C` | FNEXT | next live entry → `FNAME`/`FFLAG`/`LBA`/`FLEN`; `C=1` at end (skips deleted entries) |
 | `$013F` | FLOADAT | bulk-read `FLEN` bytes from sector `LBA` into `(P1)`, a whole sector at a time (the fast "slurp a file" primitive; EDIT + the OS loader use it) |
+| `$0142` | FOPENDIRAT | begin iterating the directory whose 4-sector extent starts at the LBA in `A` (lets a caller iterate an extent it already resolved, e.g. the OS's CWD) |
 
 Call them with `JSR $0103` etc. (P8X/OS is built entirely on this table.)
 

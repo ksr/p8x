@@ -49,6 +49,10 @@ CFWRITE = $010F          ; SBUF -> sector LBA
 PUTS    = $0112          ; print (P1)+ until $00
 PHEX8   = $0115          ; print A as two hex digits
 FLOADAT = $013F          ; bulk-read FLEN bytes from LBA into (P1)
+FNEXT     = $013C        ; next directory entry -> BFNAME/BFFLAG/FLEN; C=1 at end
+FOPENDIRAT= $0142        ; begin iterating the 4-sector directory at LBA in A
+BFNAME  = $9D4A          ; FNEXT entry-name output (BIOS FNAME)
+BFFLAG  = $9D70          ; FNEXT entry-flag output (BIOS FFLAG)
 
 ; ---- Shared ABI state (set by/for the BIOS) --------------------------------
 LBA     = $9D47          ; CFREAD/CFWRITE target LBA, byte 0 (bits 7:0)
@@ -345,36 +349,33 @@ DD_CWD: LDA  CWDL
 DD_GO:  LDP1 #MDIRHDR
         JSR  OPUTS
         JSR  CRLF
-        LDA  SDIRL
-        STA  DLBA
-        LDA  SDIRN
-        STA  SCNT
-DSEC:   LDP1 #SBUF              ; read one directory sector -> SBUF
-        LDA  DLBA
-        STA  LBA
-        JSR  CFREAD
-        LDP2 #SBUF
-        LDA  #16                ; 16 entries per 512-byte sector
-        STA  ECNT
-DENT:   JSR  RDENT              ; name->NAMEBUF, length->LENLO/HI, flag->FLAGS
-        LDA  FLAGS
-        JZ   DDONE              ; $00 = end of directory
-        LDB  #F_DEL             ; skip deleted slots
-        CMP
-        JZ   DNEXT
+        LDA  SDIRL              ; iterate the resolved directory via the BIOS
+        JSR  FOPENDIRAT
+DD_LP:  JSR  FNEXT              ; next live entry -> BFNAME/BFFLAG/FLEN; C=1 at end
+        JC   DDONE
+        JSR  DENT2OS            ; copy BIOS entry vars into the OS print vars
         JSR  DPRENT             ; print this entry (file or <DIR>)
-DNEXT:  LDA  ECNT
-        DEC
-        STA  ECNT
-        JNZ  DENT
-        LDA  DLBA               ; next directory sector
-        INC
-        STA  DLBA
-        LDA  SCNT               ; sectors left in this directory extent
-        DEC
-        STA  SCNT
-        JNZ  DSEC
+        JMP  DD_LP
 DDONE:  JMP  SHELL
+; DENT2OS - copy the FNEXT outputs (BIOS FNAME/FFLAG/FLEN) into the OS print
+; variables (NAMEBUF/FLAGS/LENLO:LENHI) so DPRENT prints them unchanged.
+DENT2OS:LDP1 #BFNAME
+        LDP2 #NAMEBUF
+        LDA  #12
+        STA  TMP
+d2o_nm: LDA  (P1)+
+        STA  (P2)+
+        LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  d2o_nm
+        LDA  FLEN
+        STA  LENLO
+        LDA  FLEN+1
+        STA  LENHI
+        LDA  BFFLAG
+        STA  FLAGS
+        RTS
 
 ; DPRENT - print one directory entry: name, then size, then <DIR> for dirs.
 ; Skips the '.' and '..' self/parent entries. FLAGS/NAMEBUF/LEN already loaded.

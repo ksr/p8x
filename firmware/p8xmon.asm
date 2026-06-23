@@ -136,6 +136,7 @@ RESET:  JMP  COLD
         JMP  FOPENDIR       ; $0139 FOPENDIR begin iterating directory at path (P1); C=1 bad path
         JMP  FNEXT          ; $013C FNEXT    next live entry -> FNAME/FFLAG/LBA/FLEN; C=1 at end
         JMP  FLOADAT        ; $013F FLOADAT  read FLEN bytes from LBA into (P1) (whole sectors)
+        JMP  FOPENDIRAT     ; $0142 FOPENDIRAT begin iterating the 4-sector directory at LBA in A
 
 ;==============================================================================
 ; Monitor body (relocated above the BIOS table; reset vectors here).
@@ -834,7 +835,7 @@ FN_DONE:RTS
 FOPENDIR:
         JSR  FRESOLVE       ; -> DIRLBA = parent, FNAME = last component
         JC   FOD_ERR
-        LDA  FNAME          ; empty last component ("/" ) -> iterate the resolved dir
+        LDA  FNAME          ; empty last component ("/") -> iterate the resolved dir
         LDB  #' '
         CMP
         JZ   FOD_USE
@@ -844,22 +845,25 @@ FOPENDIR:
         LDB  #$02
         CMP
         JNZ  FOD_ERR        ; not a directory
-        LDA  LBA            ; iterate the subdirectory extent (start, 4 sectors)
-        STA  DILBA
-        LDA  #4
-        STA  DICNT
-        JMP  FOD_GO
+        LDA  LBA            ; iterate the subdirectory extent
+        JMP  FOD_SET
 FOD_USE:LDA  DIRLBA
-        STA  DILBA
-        LDA  DIRN
-        STA  DICNT
-FOD_GO: LDA  #0
-        STA  DIIDX
-        JSR  FRESET
+FOD_SET:JSR  FOPENDIRAT     ; A = start LBA -> set up iteration
+        JSR  FRESET         ; revert the current directory to root
         CLC
         RTS
 FOD_ERR:JSR  FRESET
         SEC
+        RTS
+; FOPENDIRAT - begin iterating the directory whose extent starts at the LBA in A
+;   (every P8XFS v2 directory is 4 sectors). Lets the OS iterate its own resolved
+;   directory extent (e.g. the CWD) without going through a path.
+FOPENDIRAT:
+        STA  DILBA
+        LDA  #4
+        STA  DICNT
+        LDA  #0
+        STA  DIIDX
         RTS
 
 ; FNEXT - return the next live directory entry: name -> FNAME, flag -> FFLAG,
