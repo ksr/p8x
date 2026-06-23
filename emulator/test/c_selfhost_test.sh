@@ -33,8 +33,14 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x4000 >/
 
 cat > diff.c <<'EOF'
 int main() {
-    putchar(48 + 5);          /* '5' */
-    putchar(48 + (9 - 2));    /* '7' */
+    putchar(48 + 3*4 - 11);                            /* 1: * - precedence    */
+    putchar(48 + (17%5));                              /* 2: %                 */
+    putchar(48 + (1<<3) - 5);                          /* 3: <<                */
+    putchar(48 + (20/5));                              /* 4: /                 */
+    putchar(48 + (6&3) + 3);                           /* 5: &                 */
+    putchar(48 + (3==3) + (5>2) + (1!=1) + 4);         /* 6: == > !=           */
+    putchar(48 + ((1&&0)||1) + ((2<1)||(3>=3)) + 5);   /* 7: && || < >=        */
+    putchar(48 + (~0 & 8));                            /* 8: ~ &               */
     putchar(10);
     return 0;
 }
@@ -57,8 +63,8 @@ py_out=$(python3 $ROOT/compiler/p8cc.py diff.c -o d.asm >/dev/null; \
     printf 'B\rRUN D.BIN\r' | ../p8xemu -l 80000000 -c d.img eeprom.bin 2>/dev/null \
         | LC_ALL=C tr -d '\0\r' | sed -n '/RUN D.BIN/,$p' | grep -v 'RUN D.BIN' | tr -dc '0-9')
 
-[ "$host_out" = "57" ]   || fail "host bootstrap output '$host_out' != '57'"
-[ "$py_out" = "57" ]     || fail "p8cc.py output '$py_out' != '57'"
-[ "$host_out" = "$py_out" ] || fail "host '$host_out' != p8cc.py '$py_out' (differential)"
+[ "$host_out" = "12345678" ] || fail "host bootstrap output '$host_out' != '12345678'"
+[ "$py_out" = "12345678" ]   || fail "p8cc.py output '$py_out' != '12345678'"
+[ "$host_out" = "$py_out" ]  || fail "host '$host_out' != p8cc.py '$py_out' (differential)"
 
 echo "C-SELFHOST TEST: PASS"
