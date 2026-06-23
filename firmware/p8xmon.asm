@@ -127,6 +127,7 @@ RESET:  JMP  COLD
         JMP  FPUTB          ; $012D FPUTB   append byte A to the write stream
         JMP  FCLOSE         ; $0130 FCLOSE  flush + register file FNAME (len=bytes written); C=1 full
         JMP  FRESOLVE       ; $0133 FRESOLVE resolve path (P1) -> dir extent + leaf FNAME; C=1 bad path
+        JMP  FNORM          ; $0136 FNORM    copy string (P1) -> FNAME, upcased + space-padded to 12
 
 ;==============================================================================
 ; Monitor body (relocated above the BIOS table; reset vectors here).
@@ -773,6 +774,50 @@ RS_SLASH:
         JMP  RS_COMP
 RS_NF:  SEC
         RTS
+
+; FNORM - format the string at P1 into FNAME: up to 12 chars, upper-cased,
+;   space-padded, stopping at NUL or space. Saves callers hand-padding a name
+;   before FFIND/FCREATE. Clobbers P1/P2/TMP/TMP2.
+FNORM:  LDP2 #FNAME         ; FNAME = 12 spaces
+        LDA  #12
+        STA  TMP
+FN_PAD: LDA  #' '
+        STA  (P2)+
+        LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  FN_PAD
+        LDP2 #FNAME
+        LDA  #12
+        STA  TMP            ; chars of room left
+FN_CP:  LDA  (P1)
+        JZ   FN_DONE        ; end of string
+        STA  TMP2
+        LDB  #' '
+        CMP
+        JZ   FN_DONE        ; space ends the name
+        LDA  TMP
+        JZ   FN_DONE        ; 12 chars stored -> stop
+        LDA  TMP2           ; upper-case a..z
+        LDB  #'a'
+        CMP
+        JNC  FN_ST          ; < 'a'
+        LDA  #'z'
+        LDB  TMP2
+        CMP
+        JNC  FN_ST          ; > 'z'
+        LDA  TMP2
+        LDB  #$20
+        SUB
+        STA  TMP2
+FN_ST:  LDA  TMP2
+        STA  (P2)+
+        LDA  TMP
+        DEC
+        STA  TMP
+        INP1
+        JMP  FN_CP
+FN_DONE:RTS
 
 ; FCREATE - create regular file FNAME in the root from FSRC (FLEN bytes).
 ;   C=1 if the name already exists or the root is full; else writes the data +

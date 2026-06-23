@@ -95,6 +95,7 @@ knowing the monitor's internal addresses. These entry points are **stable**:
 | `$012D` | FPUTB | append byte `A` to the write stream (flushes a full sector automatically) |
 | `$0130` | FCLOSE | flush the partial sector + register file `FNAME` (length = bytes written); `C=1` if root full |
 | `$0133` | FRESOLVE | resolve path at `P1` (`/a/b`) → set the directory extent + leaf `FNAME`; a following `FFIND`/`FOPEN` runs in that dir; `C=1` on a bad path |
+| `$0136` | FNORM | format the string at `P1` into `FNAME` (≤12 chars, upper-cased, space-padded; stops at NUL/space) |
 
 Call them with `JSR $0103` etc. (P8X/OS is built entirely on this table.)
 
