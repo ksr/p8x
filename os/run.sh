@@ -3,7 +3,8 @@
 #   ./os/run.sh
 # Assembles the ROM monitor and P8X/OS, builds the microcode, compiles the
 # emulator, and makes a ready-to-boot P8XFS v2 disk (OS installed, plus a small
-# sample tree). Then launches the emulator attached to your terminal: it starts
+# sample tree incl. /BIN/BASIC.BIN — RUN it, then BYE to return). Then launches
+# the emulator attached to your terminal: it starts
 # in the MONITOR; type B to boot P8X/OS. Quit with Ctrl-C (or Ctrl-D).
 #
 # The disk image persists at os/run-disk.img between runs (delete it to start
@@ -31,6 +32,12 @@ if [ ! -f "$disk" ]; then
     printf '        .org $B000\n        LDA #%cH%c\n        JSR $0103\n        LDA #%cI%c\n        JSR $0103\n        LDA #$0D\n        JSR $0103\n        LDA #$0A\n        JSR $0103\n        RTS\n' "'" "'" "'" "'" > "$build/hi.asm"
     python3 "$root/assembler/p8xasm.py" "$build/hi.asm" -o "$build/hi.bin" --base 0xB000 >/dev/null
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/hi.bin" --name /BIN/HI.BIN >/dev/null
+    # OS-runnable BASIC: TPA build (code+data+scratch in $B000.., clear of the OS)
+    # whose BYE returns to the OS cold start -> RUN /BIN/BASIC.BIN, then BYE.
+    python3 "$root/assembler/p8xasm.py" "$root/basic/p8xbasic.asm" -o "$build/basicrun.bin" \
+        --base 0xB000 -D BASORG=0xB000 -D BASRAM=0xC500 -D PBUF=0xE000 -D MONITOR=0x4000 >/dev/null
+    python3 "$root/tools/p8xfs.py" put "$disk" "$build/basicrun.bin" \
+        --name /BIN/BASIC.BIN --load 0xB000 --exec 0xB000 >/dev/null
     printf 'hello from P8X/OS\n' > "$build/readme.txt"
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/readme.txt" --name /README.TXT >/dev/null
     echo "created fresh disk: $disk"
