@@ -13,8 +13,9 @@ memory, I/O, CF-IDE.
   load) fields, decoded per card. DOE: 0 idle, 1 A, 2 B, 3 T, 4 T2,
   5 ALU, 6 FLAGS, 7 MEM, 8 PTRL, 9 PTRH. DLD: 1-5 A/B/T/T2/FLAGS-restore,
   6 IR, 7 MEMW, 8/9 PTRL/PTRH.
-- Memory map: $0000-7FFF EEPROM, $8000-FEFF RAM, $FF00-FFFF I/O
-  (switches $FF00, LEDs $FF02, ACIA $FF04/05, CF-IDE $FF10-17).
+- Memory map (rev D): $0000-3FFF ROM (16K), $4000-FEFF RAM (48K, 2x 62256),
+  $FF00-FFFF I/O (switches $FF00, LEDs $FF02, ACIA $FF04/05, CF-IDE $FF10-17).
+  The OS loads at $4000. P8XFS is v2-only (hierarchical).
 - Microcode: ROM address = IR | step<<8 | cond<<12. Step 0 of every opcode
   is the fetch cycle. The FCOND field of the executing word selects the
   flag driving A12 for the NEXT lookup (pipeline timing).

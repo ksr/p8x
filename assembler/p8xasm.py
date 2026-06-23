@@ -12,7 +12,7 @@ Syntax:  label:  MNEMONIC operand   ; comment
 Usage: p8xasm.py src.asm [-o out] [-l listing] [--base ADDR] [-D NAME=VAL ...]
   default    -> 32K ROM image from $0000 (cap $8000)
   --base A   -> RAM-resident blob: labels resolve to the run address A and only
-                the bytes A..high are written (e.g. an OS/program loaded to $8000)
+                the bytes A..high are written (e.g. an OS/program loaded to $4000)
   -D N=V     -> define+lock symbol N (decimal / 0x.. / $..); overrides a source
                 `N = default`, so one source builds at several orgs/data bases.
 Output: with --base, the A..high blob; otherwise the 32K ROM image (+listing)."""
@@ -168,7 +168,7 @@ def main():
             val=val.strip()
             defs[nm.strip()]=int(val[1:],16) if val.startswith("$") else int(val,0)
     lines=tokenize(open(src).read())
-    # --base: RAM-resident blob (e.g. an OS loaded to $8000); emit only the
+    # --base: RAM-resident blob (e.g. an OS loaded to $4000); emit only the
     # bytes from base..hi. No --base: 32K ROM image from $0000.
     if base is not None:
         A=Asm(base=base,cap=0x10000,defines=defs); A.run(lines,False); A.run(lines,True)
