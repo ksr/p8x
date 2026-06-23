@@ -294,6 +294,26 @@ Last updated: 2026-06-23
       proves the bytes are byte-identical to the host assembler, and RUNs the
       result. run.sh installs /BIN/EDIT.BIN + /BIN/ASM.BIN on the demo disk.
       Remaining polish in IDEAS ("Native toolchain follow-ups").
+- **BIOS file-operations upgrades — streams, paths, FNORM** (2026-06-23). Reworked
+  the monitor FS layer from flat-root, whole-file calls into a proper file API:
+    - **Read stream** `FOPEN` ($0124) + `FGETB` ($0127): sequential byte read over
+      a caller-supplied 512 B buffer; refills sectors internally.
+    - **Write stream** `FWOPEN` ($012A) + `FPUTB` ($012D) + `FCLOSE` ($0130):
+      streams output to disk a sector at a time, FCLOSE registers the file.
+    - **Path-aware** `FRESOLVE` ($0133): walks `/a/b` via the `.`/`..` tree to a
+      directory extent + leaf; `FFIND`/`FOPEN`/`FCREATE`/`FDELETE`/`FCLOSE` all run
+      in the resolved directory and revert to root after (so root-only callers
+      like BASIC SAVE/LOAD are unaffected). Subdir LBAs assumed <256, like the OS CWD.
+    - **`FNORM`** ($0136): string -> upper-cased, space-padded `FNAME`.
+    The assembler was migrated onto the read+write streams (−520 B; self-host
+    still byte-identical). Jump table grew, so the monitor body moved $0130->$0160.
+    Tests: fopen/fwrite/fresolve/fwrdir/fnorm (`make test-cf`); full suite green.
+    Caught two real bugs (FCLOSE/COLD jump-table collision; FFIND wrapper carry).
+    This supersedes the old "make BIOS file routines hierarchy-aware" idea (done).
+    Remaining FS ideas: directory iteration (FOPENDIR/FNEXT) so programs can list
+    dirs and the OS can offload DIR/TREE/PACK; richer error status (an FERR byte
+    vs the carry flag) — deferred until a consumer needs it; cluster allocation to
+    retire PACK (P8XFS v3).
 - **P8XFS v1 retired — v2 is the only format** (2026-06-22). Removed all v1 (flat)
   support now that v2 is mature and on-target FORMAT exists. Monitor `F` now writes
   a v2 boot block + root extent at LBA 33 (inline `.`/`..` builder; host fsck
