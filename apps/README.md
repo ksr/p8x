@@ -68,11 +68,11 @@ The opcode table is **generated** from `genucode.OPC` by
 `generators/gen_p8xopc.py` and concatenated after the assembler logic at build
 time, so the mnemonic/encoding map can never drift from the microcode.
 
-Source and output are both **streamed to/from disk** a sector at a time — the
-source is read a line at a time (no whole-file buffer) and the output is written
-sector by sector (via the BIOS `SBUF`, registered with `FCOMMIT`). So source and
-output size are bounded by the disk, not RAM, and the freed RAM gives a large
-(~850-entry) symbol table. As a result the assembler can **assemble its own
+Source and output are both **streamed to/from disk** through the BIOS file
+streams — input via `FOPEN`/`FGETB` (a line at a time), output via
+`FWOPEN`/`FPUTB`/`FCLOSE` (a sector at a time). So source and output size are
+bounded by the disk, not RAM, and the freed RAM gives a large (~850-entry)
+symbol table. As a result the assembler can **assemble its own
 source** on-target, producing a binary byte-identical to the host build
 (`emulator/test/asm_selfhost_test.sh`, `make test-asm-selfhost`).
 
