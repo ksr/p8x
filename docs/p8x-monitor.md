@@ -87,10 +87,15 @@ knowing the monitor's internal addresses. These entry points are **stable**:
 | `$0115` | PHEX8 | print `A` as two hex digits |
 | `$0118` | FFIND | find root file `FNAME` → `LBA`+`FLEN`; `C=1` if not found |
 | `$011B` | FCREATE | create root file `FNAME` from `FSRC`/`FLEN`; `C=1` on error |
+| `$011E` | FDELETE | tombstone root file `FNAME` (flag → `$FF`); `C=1` if not found |
 
 Call them with `JSR $0103` etc. (P8X/OS is built entirely on this table.)
 
-**Filesystem calls** (`FFIND`/`FCREATE`) operate on the P8XFS v2 **root**
+`FDELETE` marks the directory entry deleted but leaves its data sectors in
+place; they are reclaimed by the next `PACK`. To overwrite a file, `FDELETE`
+then `FCREATE`.
+
+**Filesystem calls** (`FFIND`/`FCREATE`/`FDELETE`) operate on the P8XFS v2 **root**
 directory (LBA 33) — flat file access shared by BASIC `SAVE`/`LOAD` and any RAM
 program; the hierarchical path layer lives in P8X/OS. Their parameters use fixed
 RAM: `FNAME` (`$9D4A`, 12-byte space-padded name), `FSRC` (`$9D56`, FCREATE

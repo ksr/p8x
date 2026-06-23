@@ -101,6 +101,7 @@ RESET:  JMP  COLD
         JMP  PRBYTE         ; $0115 PHEX8   print A as two hex digits
         JMP  FFIND          ; $0118 FFIND   root file FNAME -> LBA+FLEN; C=0 found
         JMP  FCREATE        ; $011B FCREATE root file FNAME from FSRC/FLEN; C=1 err
+        JMP  FDELETE        ; $011E FDELETE tombstone root file FNAME; C=1 not found
 
 ;==============================================================================
 ; Monitor body (relocated above the BIOS table; reset vectors here).
@@ -805,6 +806,90 @@ FC_WSP: LDA  #0
         CLC
         RTS
 FC_ERR: SEC
+        RTS
+
+; FDELETE - tombstone regular file FNAME in the root (entry flag -> $FF).
+;   C=0 if found and deleted; C=1 if not found. The file's data sectors are
+;   orphaned (reclaimed by the next PACK). Used to overwrite an existing file:
+;   FDELETE then FCREATE. Scan mirrors FFIND; flag-peek mirrors FCREATE.
+FDELETE:LDA  #4
+        STA  CNT
+        LDA  #33
+        STA  ADDRL          ; current root LBA
+FDD_SEC:LDA  ADDRL
+        STA  LBA
+        LDA  #0
+        STA  LBA1
+        STA  LBA2
+        LDP1 #SBUF
+        JSR  CFRDSEC        ; root sector -> SBUF
+        LDP2 #SBUF
+        LDA  #16
+        STA  TMP            ; 16 entries / sector
+FDD_ENT:TPA2L               ; save entry-start pointer (P2 into SBUF)
+        STA  FSRC
+        TPA2H
+        STA  FSRC+1
+        LDP1 #FNAME         ; compare 12-byte name: (P2)=entry vs (P1)=FNAME
+        LDA  #1
+        STA  HEXH           ; match flag (1 until a byte differs)
+        LDA  #12
+        STA  HEXL
+FDD_NM: LDA  (P2)+
+        STA  TMP2
+        LDA  (P1)+
+        LDB  TMP2
+        CMP
+        JZ   FDD_NE
+        LDA  #0
+        STA  HEXH
+FDD_NE: LDA  HEXL
+        DEC
+        STA  HEXL
+        JNZ  FDD_NM
+        LDA  #12            ; skip 12..23 (start+len+load+exec) to flag at +24
+        STA  HEXL
+FDD_SK: LDA  (P2)+
+        LDA  HEXL
+        DEC
+        STA  HEXL
+        JNZ  FDD_SK
+        LDA  (P2)           ; flag (no advance — may overwrite it below)
+        JZ   FDD_NO         ; $00 end-of-directory -> not found
+        LDB  #$01
+        CMP
+        JNZ  FDD_NXT        ; not a regular file -> skip
+        LDA  HEXH
+        JZ   FDD_NXT        ; name mismatch -> skip
+        LDA  #$FF           ; hit: tombstone the flag in SBUF
+        STA  (P2)
+        LDA  ADDRL          ; write the updated root sector back
+        STA  LBA
+        LDA  #0
+        STA  LBA1
+        STA  LBA2
+        JSR  CFWRSEC
+        CLC
+        RTS
+FDD_NXT:LDA  #8             ; P2 at +24 -> advance to next entry (+32)
+        STA  HEXL
+FDD_NXE:LDA  (P2)+
+        LDA  HEXL
+        DEC
+        STA  HEXL
+        JNZ  FDD_NXE
+        LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  FDD_ENT
+        LDA  ADDRL
+        INC
+        STA  ADDRL
+        LDA  CNT
+        DEC
+        STA  CNT
+        JNZ  FDD_SEC
+FDD_NO: SEC
         RTS
 
 ZSBUF:  LDP1 #SBUF          ; zero 512-byte buffer

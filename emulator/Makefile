@@ -43,6 +43,7 @@ test-cf: p8xemu ucode
 	sh test/cf_test.sh
 	sh test/cf_hilba_test.sh
 	sh test/fs_bios_test.sh
+	sh test/fdelete_test.sh
 
 # P8X/OS boot: build a P8XFS image with the OS + files, boot it, run DIR.
 test-os: p8xemu ucode
