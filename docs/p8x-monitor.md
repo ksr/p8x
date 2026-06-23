@@ -103,11 +103,12 @@ place; they are reclaimed by the next `PACK`. To overwrite a file, `FDELETE`
 then `FCREATE`.
 
 **Directory:** the file calls operate on a *current directory extent* that
-defaults to the root (LBA 33) and reverts there after each `FFIND`. Call
-`FRESOLVE` first with a path to point `FFIND`/`FOPEN` at a subdirectory (it walks
-the `.`/`..` tree and leaves the leaf name in `FNAME`); so `FRESOLVE("/BIN/X")`
-then `FOPEN` reads `/BIN/X`. `FCREATE`/`FDELETE` are still **root-only** for now
-(writing into subdirectories is a later upgrade). Parameters use fixed RAM:
+defaults to the root (LBA 33) and reverts there after each call. Call `FRESOLVE`
+first with a path to aim the next call at a subdirectory (it walks the `.`/`..`
+tree and leaves the leaf name in `FNAME`): `FRESOLVE("/BIN/X")` then `FOPEN`
+reads `/BIN/X`; `FRESOLVE("/SUB/W")` then `FWOPEN`/`FPUTB`/`FCLOSE` writes
+`/SUB/W`. `FFIND`/`FOPEN`/`FCREATE`/`FDELETE`/`FCLOSE` are all path-aware this
+way. Parameters use fixed RAM:
 `FNAME` (`$9D4A`, 12-byte space-padded name), `FSRC` (`$9D56`, FCREATE source
 address), `FLEN` (`$9D58`, length — FCREATE input, FFIND output); `FFIND` returns
 the start LBA in the shared `LBA` (`$9D47`). (Subdirectory LBAs are assumed

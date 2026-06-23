@@ -58,6 +58,7 @@ test-cf: p8xemu ucode
 	sh test/fopen_test.sh
 	sh test/fwrite_test.sh
 	sh test/fresolve_test.sh
+	sh test/fwrdir_test.sh
 
 # P8X/OS boot: build a P8XFS image with the OS + files, boot it, run DIR.
 test-os: p8xemu ucode

@@ -777,13 +777,16 @@ RS_NF:  SEC
 ; FCREATE - create regular file FNAME in the root from FSRC (FLEN bytes).
 ;   C=1 if the name already exists or the root is full; else writes the data +
 ;   directory entry, bumps the free pointer, C=0.
-FCREATE:JSR  FRESET         ; root-only (writes to subdirs is a later upgrade)
-        LDA  FLEN           ; FFIND clobbers FLEN while scanning — save the
+FCREATE:JSR  FCRE_CORE      ; create in the current directory (FRESOLVE-set or root)
+        JSR  FRESET         ; revert to root (LDA/STA preserve C)
+        RTS
+FCRE_CORE:
+        LDA  FLEN           ; FSCAN clobbers FLEN while scanning — save the
         STA  FSAV           ; caller's requested length and restore it after
         LDA  FLEN+1
         STA  FSAV+1
-        JSR  FFIND
-        JNC  FC_ERR         ; already exists
+        JSR  FSCAN          ; name already present (file or dir) in this dir?
+        JNC  FC_ERR         ; yes -> error
         LDA  FSAV
         STA  FLEN
         LDA  FSAV+1
@@ -850,10 +853,10 @@ FC_FNC: STA  SBUF+5
         STA  LBA1
         STA  LBA2
         JSR  CFWRSEC        ; write boot block back
-        LDA  #4             ; find a free slot in the root and write the entry
+        LDA  DIRN           ; find a free slot in the current directory + write entry
         STA  CNT
-        LDA  #33
-        STA  HEXL           ; current root LBA
+        LDA  DIRLBA
+        STA  HEXL           ; current directory LBA
 FC_DSEC:LDA  HEXL
         STA  LBA
         LDA  #0
@@ -959,7 +962,11 @@ FC_ERR: SEC
 ;   pointer by ceil(FLEN/512) sectors. Inputs are just the FS ABI vars FNAME +
 ;   FLEN. C=1 if the root is full. Reuses FCREATE's tail (FC_WROK: bump free +
 ;   write boot + find slot + write entry).
-FCOMMIT:LDA  #0             ; CNT = ceil(FLEN / 512)
+FCOMMIT:JSR  FCOM_CORE      ; register in the current directory (FRESOLVE-set or root)
+        JSR  FRESET
+        RTS
+FCOM_CORE:
+        LDA  #0             ; CNT = ceil(FLEN / 512)
         STA  CNT
         LDA  FLEN
         STA  TMP
@@ -1172,8 +1179,10 @@ FCL_R:  LDA  WOTOT
         STA  FLEN
         LDA  WOTOT+1
         STA  FLEN+1
-        JSR  FDELETE       ; drop any old version (ignore not-found)
-        JMP  FCOMMIT       ; write dir entry + bump free; returns C
+        JSR  FDEL_CORE     ; drop any old version in the current dir (no revert)
+        JSR  FCOM_CORE     ; write the entry + bump free in the same dir
+        JSR  FRESET        ; revert to root (preserves C from FCOM_CORE)
+        RTS
 ; FW_FLUSH - write SBUF to WOLBA, advance, clear the buffer.
 FW_FLUSH:
         LDA  WOLBA
@@ -1221,10 +1230,14 @@ FWZ_I:  LDA  #0
 ;   C=0 if found and deleted; C=1 if not found. The file's data sectors are
 ;   orphaned (reclaimed by the next PACK). Used to overwrite an existing file:
 ;   FDELETE then FCREATE. Scan mirrors FFIND; flag-peek mirrors FCREATE.
-FDELETE:LDA  #4
+FDELETE:JSR  FDEL_CORE      ; delete in the current directory (FRESOLVE-set or root)
+        JSR  FRESET
+        RTS
+FDEL_CORE:
+        LDA  DIRN
         STA  CNT
-        LDA  #33
-        STA  ADDRL          ; current root LBA
+        LDA  DIRLBA
+        STA  ADDRL          ; current directory LBA
 FDD_SEC:LDA  ADDRL
         STA  LBA
         LDA  #0
