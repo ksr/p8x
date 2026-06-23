@@ -416,12 +416,41 @@ DOLOAD: JSR  FINDARG            ; parse name, scan directory
 DORUN:  JSR  FINDARG
         JZ   NOFILE
         JSR  LOADF
+        ; program-arg ABI: enter with P2 -> the command tail after the program
+        ; name (null-terminated), so e.g. `RUN EDIT FOO.ASM` hands "FOO.ASM" to
+        ; the program. Programs that don't take args just ignore P2.
+        JSR  ARG2P2             ; P2 -> RUN args ("EDIT FOO.ASM")
+        JSR  SKIPWORD           ; skip the program name + spaces -> P2 at the tail
         LDA  EXECLO             ; P1 <- exec address
         TAP1L
         LDA  EXECHI
         TAP1H
-        JSR  (P1)               ; execute; program RTS returns here
+        JSR  (P1)               ; execute; program RTS returns here, P2 = arg tail
         JMP  SHELL
+; SKIPWORD - advance P2 past leading spaces, then one word, then trailing
+; spaces, leaving P2 at the next argument (ARGP has a leading space).
+SKIPWORD:LDA  (P2)              ; skip leading spaces
+        JZ   SW_DONE
+        LDB  #' '
+        CMP
+        JNZ  SW_W
+        INP2
+        JMP  SKIPWORD
+SW_W:   LDA  (P2)              ; skip the word (non-spaces)
+        JZ   SW_DONE
+        LDB  #' '
+        CMP
+        JZ   SW_SP
+        INP2
+        JMP  SW_W
+SW_SP:  LDA  (P2)              ; skip trailing spaces
+        JZ   SW_DONE
+        LDB  #' '
+        CMP
+        JNZ  SW_DONE
+        INP2
+        JMP  SW_SP
+SW_DONE:RTS
 
 ; ---------------- DEL name ---------------------------------------------------
 DODEL:  JSR  FINDARG

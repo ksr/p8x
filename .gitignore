@@ -18,6 +18,7 @@ emulator/test/fmt.img
 emulator/test/fs.img
 emulator/test/sl.img
 emulator/test/ob.img
+emulator/test/av.img
 emulator/test/bas.img
 emulator/test/tinyos.asm
 emulator/test/prog.asm
