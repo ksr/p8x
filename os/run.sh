@@ -53,6 +53,21 @@ if [ ! -f "$disk" ]; then
         --name /BIN/ASM.BIN --load 0xB000 --exec 0xB000 >/dev/null
     printf 'hello from P8X/OS\n' > "$build/readme.txt"
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/readme.txt" --name /README.TXT >/dev/null
+    # A sample assembly source so the EDIT -> ASM -> RUN loop is demoable out of
+    # the box: RUN /BIN/EDIT.BIN HELLO.ASM (look/edit), then
+    # RUN /BIN/ASM.BIN HELLO.ASM HELLO.BIN, then RUN HELLO.BIN -> prints HELLO.
+    cat > "$build/hello.asm" <<'ASMEOF'
+; sample program -- assemble with: RUN /BIN/ASM.BIN HELLO.ASM HELLO.BIN
+        .org $B000
+        LDP1 #msg
+lp:     LDA  (P1)+
+        JZ   done
+        JSR  $0103
+        JMP  lp
+done:   RTS
+msg:    .asciiz "HELLO FROM P8X ASM"
+ASMEOF
+    python3 "$root/tools/p8xfs.py" put "$disk" "$build/hello.asm" --name /HELLO.ASM >/dev/null
     echo "created fresh disk: $disk"
 else
     # Reinstall the freshly-built OS into the existing disk (keeps your files).
