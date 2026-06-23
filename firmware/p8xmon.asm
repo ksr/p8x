@@ -826,11 +826,7 @@ FDD_SEC:LDA  ADDRL
         LDP2 #SBUF
         LDA  #16
         STA  TMP            ; 16 entries / sector
-FDD_ENT:TPA2L               ; save entry-start pointer (P2 into SBUF)
-        STA  FSRC
-        TPA2H
-        STA  FSRC+1
-        LDP1 #FNAME         ; compare 12-byte name: (P2)=entry vs (P1)=FNAME
+FDD_ENT:LDP1 #FNAME         ; compare 12-byte name: (P2)=entry vs (P1)=FNAME
         LDA  #1
         STA  HEXH           ; match flag (1 until a byte differs)
         LDA  #12
