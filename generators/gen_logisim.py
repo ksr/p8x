@@ -21,8 +21,13 @@ sys.path.insert(0, _HERE)
 import gen_eagle as G
 
 GRID = 10                       # Logisim snaps to a 10px grid
-parts = G.mc_parts              # ref -> (dev, value, x, y)
-nets = G.mcn                    # netname -> [(ref, pin), ...]
+# rev D refactored the memory card onto the shared card() helper, so the old
+# module-level mc_parts/mcn globals are gone. card() now stashes each finished
+# board in gen_eagle.CARDS as (title, parts, nets) — parts is ref -> (dev, value)
+# (no x/y; this POC lays out its own grid anyway) and nets is the full net list,
+# including the J1 bus/power pins and per-IC decoupling caps that card() adds.
+_title, parts, nets = G.CARDS["memory-card"]
+# parts: ref -> (dev, value); nets: netname -> [(ref, pin), ...]
 
 pin2net = {}
 for nn, pins in nets.items():
