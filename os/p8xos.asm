@@ -55,6 +55,8 @@ FWOPEN  = $012A          ; open a write stream at the volume free pointer
 FPUTB   = $012D          ; append byte A to the write stream
 FCLOSE  = $0130          ; flush + register the streamed file as FNAME
 FNORM   = $0136          ; copy string (P1) -> FNAME, upcased + space-padded
+FOPEN   = $0124          ; open file FNAME for reading (P1 = 512-byte buffer)
+FGETB   = $0127          ; next byte -> A; C=1 at end of file
 BFNAME  = $9D4A          ; FNEXT entry-name output (BIOS FNAME)
 BFFLAG  = $9D70          ; FNEXT entry-flag output (BIOS FFLAG)
 
@@ -171,6 +173,11 @@ CANDSEC = $A0FC          ; candidate entry's location during the find walk
 CANDSLOT= $A0FD
 PARST   = $A0FE          ; PK2FIX: parent directory start LBA (for '..')
 CWDPATH = $A100          ; textual CWD path for the prompt (up to 48 bytes)
+; ---- stdin redirection ("< file") ----
+INMODE  = $A130          ; SYS_GETC source: 0 = console, 1 = the read stream
+INARM   = $A131          ; shell armed a "< file" for the next RUN
+INNAME  = $A132          ; "< file" name (null-terminated, <=48): $A132..$A161
+IBUF    = $A200          ; 512-byte buffer for the stdin read stream
 
 CR      = $0D
 LF      = $0A
@@ -198,8 +205,15 @@ SGC_LP: LDA  (P2)+
 SYS_CWDLBA:
         LDA  CWDL               ; current directory start LBA (8-bit) -> A
         RTS
-SYS_GETC:                       ; stdin: console for now (file binding is later)
-        JMP  CONIN
+SYS_GETC:                       ; next stdin byte -> A; C=1 at EOF (file mode)
+        LDA  INMODE
+        JNZ  SGC_FILE
+        JSR  CONIN              ; console: a key
+        CLC                     ; console never reports EOF
+        RTS
+SGC_FILE:
+        JSR  FGETB              ; read stream: next byte -> A, C=1 at end of file
+        RTS
 SYS_PUTS:                       ; write the (P1) string to stdout via OUTCH
 SPS_LP: LDA  (P1)+
         JZ   SPS_DN
@@ -210,6 +224,8 @@ SPS_DN: RTS
 COLD:   LDP3 #STKTOP
         LDA  #0                 ; output goes to the console until a "> file" redirect
         STA  REDIRF
+        STA  INMODE             ; input from the console until a "< file" redirect
+        STA  INARM
         LDP1 #MBANNER
         JSR  OPUTS
         ; P8XFS v2 layout (the only format): root LBA 33..36 (4 secs), data @ 37
@@ -231,6 +247,7 @@ SHELL:  JSR  FLUSHRED           ; if the previous command was redirected, write 
         LDP1 #MPROMPT
         JSR  OPUTS
         JSR  GETLN              ; line -> LINEBUF (null-terminated)
+        JSR  INSCAN            ; split off a "< name" stdin redirect (before REDSCAN)
         JSR  REDSCAN            ; split off a trailing "> name" and arm capture
         LDP2 #LINEBUF
         LDP1 #CMDBUF
@@ -458,7 +475,18 @@ DORUN:  JSR  FINDARG
         ; TPA, where the program lives. Instead stream the program's stdout to
         ; the file: open the write stream now (after LOADF's reads) and switch
         ; OUTCH to file mode (REDIRF=2); the program's putchar/SYS_PUTC -> OUTCH.
-        LDA  REDIRF
+        ; stdin redirect ("< name", armed by INSCAN): open the file as the read
+        ; stream into IBUF and switch SYS_GETC to file mode. Done before the
+        ; write stream; both use independent BIOS state + buffers (IBUF vs SBUF).
+        LDA  INARM
+        JZ   DR_NOIN
+        LDP1 #INNAME            ; FNAME = the input file
+        JSR  FNORM
+        LDP1 #IBUF              ; read-stream buffer
+        JSR  FOPEN
+        LDA  #1
+        STA  INMODE             ; SYS_GETC now reads the file
+DR_NOIN:LDA  REDIRF
         JZ   DR_NOR
         JSR  FWOPEN             ; open the write stream (FNAME is set at FCLOSE,
         LDA  #2                 ; below — the program's own FS calls clobber the
@@ -476,12 +504,15 @@ DR_NOR: JSR  ARG2P2             ; P2 -> RUN args ("EDIT FOO.ASM")
         LDA  REDIRF             ; if streaming to a file, name it + flush + register
         LDB  #2
         CMP
-        JNC  DR_DONE
+        JNC  DR_NOOUT
         LDP1 #REDNAME           ; FNAME = redirect target (set now: the program may
         JSR  FNORM              ; have clobbered the BIOS FNAME via its own FS calls)
         JSR  FCLOSE
         LDA  #0
         STA  REDIRF
+DR_NOOUT:LDA #0                 ; restore console stdin for the next command
+        STA  INMODE
+        STA  INARM
 DR_DONE:JMP  SHELL
 ; DEFADDR - a directory entry with load/exec == 0 (the value FCREATE writes for
 ; files built on-target) is taken to mean "load at the TPA base $B000". Programs
@@ -2711,6 +2742,45 @@ RDS_CL: LDA  (P1)+
         LDA  #>RBUF
         STA  RPTRH
 RDS_NO: RTS
+
+; INSCAN: split off a "< name" stdin redirect. Copies the name to INNAME and
+; blanks the '<' + name in LINEBUF (to spaces) so REDSCAN and the command parser
+; don't see it. Run BEFORE REDSCAN. No '<' -> INARM stays 0.
+INSCAN: LDA  #0
+        STA  INARM
+        LDP1 #LINEBUF
+INS_LP: LDA  (P1)
+        JZ   INS_NO
+        LDB  #'<'
+        CMP
+        JZ   INS_HIT
+        INP1
+        JMP  INS_LP
+INS_HIT:LDA  #' '              ; blank the '<'
+        STA  (P1)
+        INP1
+INS_SK: LDA  (P1)              ; skip spaces before the filename
+        LDB  #' '
+        CMP
+        JNZ  INS_CP
+        INP1
+        JMP  INS_SK
+INS_CP: LDP2 #INNAME
+INS_CL: LDA  (P1)              ; copy the filename, stopping at a space or NUL
+        JZ   INS_END
+        LDB  #' '
+        CMP
+        JZ   INS_END
+        STA  (P2)+             ; append to INNAME
+        LDA  #' '              ; blank the source byte
+        STA  (P1)
+        INP1
+        JMP  INS_CL
+INS_END:LDA  #0
+        STA  (P2)              ; NUL-terminate INNAME
+        LDA  #1
+        STA  INARM
+INS_NO: RTS
 
 ; FLUSHRED: called at the shell prompt. If a redirect was armed, write the
 ; captured bytes [RBUF, RPTR) to the file REDNAME (via SAVECORE), then disarm.

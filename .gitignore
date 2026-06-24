@@ -126,3 +126,8 @@ emulator/test/rp.asm
 emulator/test/out.txt
 emulator/test/f1
 emulator/test/f2
+emulator/test/in.txt
+emulator/test/cat.bin
+emulator/test/s.img
+emulator/test/sh.asm
+emulator/test/sp.asm

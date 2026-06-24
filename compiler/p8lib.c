@@ -42,7 +42,7 @@ int getline(char *buf, int max) {        /* read a line (until CR/LF); return le
     int c;
     n = 0;
     c = getchar();
-    while (c != 13 && c != 10 && c != 0 && n < max - 1) {
+    while (c != 13 && c != 10 && c != 0 && c != 65535 && n < max - 1) {  /* 65535 = EOF */
         buf[n] = c;
         n = n + 1;
         c = getchar();

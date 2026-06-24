@@ -837,10 +837,14 @@ int factor() {
         strcpy_(nm, tname); lex();
         if (is_punct("(")) {                     /* call / builtin -> int rvalue */
             lex();                               /* '(' */
-            if (streq(nm, "getchar")) {          /* OS SYS_GETC */
+            if (streq(nm, "getchar")) {          /* OS SYS_GETC -> char, -1 at EOF */
                 eat(")");
                 line("        JSR $400C"); line("        STA __ax");
                 line("        LDA #0"); line("        STA __ax+1");
+                k = nlabel; nlabel = nlabel + 1;
+                emitjmp("JNC", "Lge", k);        /* carry = end of (file) input */
+                line("        LDA #255"); line("        STA __ax"); line("        STA __ax+1");
+                emitlabel("Lge", k);             /* __ax = $FFFF (-1) */
             } else if (streq(nm, "putchar")) {   /* OS SYS_PUTC (redirectable) */
                 rvalue(expr()); eat(")");
                 line("        LDA __ax"); line("        JSR $4009");

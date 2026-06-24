@@ -598,9 +598,13 @@ class Gen:
                   "        STA __ax+1", "%s:" % end)
 
     def gen_call(self, name, args):
-        if name == "getchar":                            # OS SYS_GETC -> char
+        if name == "getchar":                            # OS SYS_GETC -> char, or -1 at EOF
+            skip = self.lbl("Lge")
             self.emit("        JSR $400C", "        STA __ax",
-                      "        LDA #0", "        STA __ax+1"); return
+                      "        LDA #0", "        STA __ax+1",
+                      "        JNC %s" % skip,             # carry = end of (file) input
+                      "        LDA #255", "        STA __ax", "        STA __ax+1",
+                      "%s:" % skip); return                # __ax = $FFFF (-1)
         if name == "putchar":                            # OS SYS_PUTC (redirectable)
             self.gen_expr(args[0])
             self.emit("        LDA __ax", "        JSR $4009"); return

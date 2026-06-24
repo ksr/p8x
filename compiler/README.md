@@ -92,9 +92,11 @@ to the OS shell with `RTS` (startup inits `__csp` then `JSR _f_main`).
 **Library functions are written in C.** The console builtins are thin wrappers
 over the **OS stream syscalls** (`$400C`/`$4009`/`$400F`), not the raw BIOS — so
 a program's output is **redirectable by the shell**: `RUN PROG >FILE` streams its
-`putchar`/`puts` to a file with no source change. (A program that iterates a
-directory while writing can't be redirected — the write stream and directory
-iteration share the BIOS `SBUF`.)
+`putchar`/`puts` to a file with no source change, and `RUN PROG <FILE` binds its
+`getchar` to a file (which returns `-1` at end of file). Both combine —
+`RUN CAT.BIN <IN >OUT` copies a file (see `compiler/examples/cat.c`). (A program
+that iterates a directory while writing can't be redirected — the write stream
+and directory iteration share the BIOS `SBUF`.)
 Everything else a program needs (`strlen`, `getline`, `strcmp`, …) is ordinary C
 compiled alongside it, now that pointers, arrays, and `char` work. See the
 `strlen` in the test below for the pattern.
