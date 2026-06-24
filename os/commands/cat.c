@@ -32,6 +32,11 @@ int main() {
     arg = argstr();                          /* the command tail */
     while (*arg == 32) { arg = arg + 1; }    /* skip leading spaces */
 
+    if (*arg == '-' && (*(arg + 1) == 'h' || *(arg + 1) == 'H')) {
+        puts("usage: CAT [file]   print file, or filter stdin if no file");
+        return 0;
+    }
+
     if (*arg == 0 || *arg == 13) {           /* no file -> filter stdin */
         c = getchar();
         while (c != 65535) { putchar(c); c = getchar(); }

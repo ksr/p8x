@@ -107,6 +107,10 @@ int main() {
     arg = argstr();                          /* the command tail after "DIR" */
     rec = 0;
     while (*arg == 32) { arg = arg + 1; }    /* skip leading spaces */
+    if (*arg == '-' && (*(arg + 1) == 'h' || *(arg + 1) == 'H')) {
+        puts("usage: DIR [-R] [path]   list a directory (-R: recurse subtree)");
+        return 0;
+    }
     if (*arg == '-' && (*(arg + 1) == 'R' || *(arg + 1) == 'r')) {
         rec = 1;                             /* -R / -r : recurse */
         arg = arg + 2;

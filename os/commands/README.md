@@ -8,22 +8,73 @@ through the `bios()`/`peek`/`poke`/`argstr()` builtins and the OS syscall table
 `getchar`/`putchar`/`puts` — so the shell can redirect (`<`/`>`) and pipe (`|`)
 them like any program.
 
-| Source | Command | Demonstrates |
-|--------|---------|--------------|
-| [`dir.c`](dir.c) | `DIR [-R] [path]` | `argstr()`, the `bios()` carry flag, `FOPENDIR`/`FNEXT`, `SYS_CWDLBA` (CWD); `-R` recurses the subtree (the FNEXT cursor is global BIOS state, so each level streams names while collecting child LBAs, then descends) |
-| [`pwd.c`](pwd.c) | `PWD` | `SYS_GETCWD` ($4003) — the CWD via the syscall ABI, not OS internals |
-| [`cat.c`](cat.c) | `cat [file]` | a named file (`FRESOLVE`+`FOPEN`/`FGETB`, resolved against the CWD via an absolute path) **or** the stdin→stdout filter when given no arg — so `cat file`, `cat <file` and `cat \| …` all work |
+## Running them
 
-Build one (or let [`../run.sh`](../run.sh) install all three into `/BIN`):
+Once installed in `/BIN`, a command runs by **bare name** — the shell's implicit
+RUN searches `PATH` (default `/BIN`) and appends `.BIN`:
+
+```
+DIR /BIN            CAT README.TXT          PWD
+```
+
+equivalently `RUN /BIN/DIR.BIN /BIN`, etc. Every command accepts **`-h`** to
+print a one-line usage summary and exit.
+
+> **Note — DIR and PWD are also shell built-ins**, which take priority over the
+> `/BIN` programs of the same name. So bare `DIR`/`PWD` run the built-in (which
+> ignores `-h`/`-R`); to reach the richer C versions use the explicit path, e.g.
+> `RUN /BIN/DIR.BIN -R /` or `RUN /BIN/DIR.BIN -h`. `CAT` is **not** a built-in
+> (it was removed once `cat.c` became a superset), so `CAT …` always runs
+> `/BIN/CAT.BIN`. Whether to drop the DIR/PWD built-ins too is tracked in the
+> [backlog](../../BACKLOG.md) (they're the only way to list a disk with no
+> `/BIN` installed, e.g. right after `FORMAT`).
+
+## Commands
+
+| Source | Usage | What it does |
+|--------|-------|--------------|
+| [`dir.c`](dir.c) | `DIR [-R] [path] [-h]` | List a directory (the path, or the CWD if omitted). `-R` recurses the whole subtree, indenting two spaces per level and flagging directories with a trailing `/`. Streams names one at a time, so it redirects/pipes with no size limit. |
+| [`pwd.c`](pwd.c) | `PWD [-h]` | Print the current working directory path. |
+| [`cat.c`](cat.c) | `CAT [file] [-h]` | Print a file, **or** copy stdin→stdout (the canonical filter) when given no file. So `cat file`, `cat <file`, and `cat \| …` all work. |
+
+### Implementation notes
+
+- **dir.c** — `argstr()`, the `bios()` carry flag to end the `FOPENDIR`/`FNEXT`
+  loop, `SYS_CWDLBA` ($4006) for the CWD, and `FSDIRBUF` ($0145) to move
+  iteration off the shared `SBUF` so output can stream. `-R`: the `FNEXT` cursor
+  is **global** BIOS state, so each level streams its entries while only
+  recording child-directory LBAs into a small per-level array, then descends —
+  bounded memory, no whole-tree buffer.
+- **pwd.c** — `SYS_GETCWD` ($4003): the CWD comes through the syscall ABI, not
+  by peeking OS RAM.
+- **cat.c** — a filename argument is opened with `FRESOLVE` ($0133) +
+  `FOPEN`/`FGETB`. The BIOS resolves names from its own current directory (root
+  for a fresh program), so cat builds an **absolute** path (CWD via
+  `SYS_GETCWD`, unless the arg is already absolute) — `FRESOLVE` always starts
+  at root, hence CWD-independent. With no argument it falls back to the stdin
+  filter, so redirection and pipes are unchanged.
+
+## Building
+
+Compile + assemble + install one (or let [`../run.sh`](../run.sh) install all
+three into `/BIN` on a fresh disk):
 
 ```sh
 python3 compiler/p8cc.py os/commands/dir.c -o dir.asm
 python3 assembler/p8xasm.py dir.asm -o dir.bin --base 0xB000
 python3 tools/p8xfs.py put disk.img dir.bin --name /BIN/DIR.BIN --load 0xB000 --exec 0xB000
-# on the P8X:   RUN /BIN/DIR.BIN /BIN
+# on the P8X:   DIR /BIN        (bare name via PATH)   or   RUN /BIN/DIR.BIN /BIN
 ```
 
-These double as the regression tests for the OS syscall + redirection + pipe
-machinery (`emulator/test/c_dir_test.sh`, `c_dir_recursive_test.sh`,
-`c_stdin_test.sh`, `c_pipe_test.sh`).
+Either compiler works: `p8cc.py` (the Python bootstrap) or the native
+`p8cc.c` build (`cc -O2 compiler/p8cc.c -o p8cc-host`) — they emit behaviorally
+equivalent P8X assembly.
+
+## Tests
+
+These double as regression tests for the OS syscall, redirection, and pipe
+machinery: `emulator/test/c_dir_test.sh`, `c_dir_recursive_test.sh`,
+`c_cat_test.sh`, `c_stdin_test.sh`, `c_redirect_test.sh`, `c_pipe_test.sh`, and
+the implicit-RUN/PATH path in `os_path_test.sh`.
+
 More commands to come (e.g. `MORE`/`WC`/`GREP`-style filters).

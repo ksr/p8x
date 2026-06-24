@@ -3045,8 +3045,6 @@ MHELP:   .byte CR,LF
          .byte CR,LF
          .ascii "PWD           print the working directory path"
          .byte CR,LF
-         .ascii "CAT path      print a file's contents"
-         .byte CR,LF
          .ascii "MKDIR path    create a subdirectory"
          .byte CR,LF
          .ascii "RMDIR path    remove an empty subdirectory"

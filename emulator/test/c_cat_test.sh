@@ -38,6 +38,7 @@ check() {   # $1 = label
     R 'CD /SUB\rRUN /BIN/CAT.BIN S.TXT' | grep -q 'DEEPOK'  || fail "$1: cat <relative> resolves against CWD"
     R 'RUN /BIN/CAT.BIN <R.TXT'         | grep -q 'ROOTOK'  || fail "$1: cat (no arg) still filters stdin"
     R 'RUN /BIN/CAT.BIN NOPE.TXT' | grep -qi 'not found'    || fail "$1: missing file not reported"
+    R 'RUN /BIN/CAT.BIN -h'       | grep -qi 'usage'        || fail "$1: -h did not print usage"
     # file-arg cat piped into a stdin-filter cat: both modes in one line
     R 'RUN /BIN/CAT.BIN R.TXT | RUN /BIN/CAT.BIN' | grep -q 'ROOTOK' || fail "$1: cat file | cat"
     # arg-mode cat redirected to a file
