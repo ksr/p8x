@@ -87,10 +87,14 @@ to the OS shell with `RTS` (startup inits `__csp` then `JSR _f_main`).
 | functions | parameters, **stack locals**, **recursion**, return value in `AX` |
 | pointers | `&lvalue`, `*ptr` (load/store), pointer +/- scaled by element size, `a[i]` |
 | primaries | int / char / string literals, identifiers, calls, `( )` |
-| builtins | console: `getchar()` `putchar(e)` `puts(e)` (BIOS `$0100`/`$0103`/`$0112`); memory: `peek(addr)` `poke(addr,v)`; general: `bios(constaddr, p1, a)` |
+| builtins | console: `getchar()` `putchar(e)` `puts(e)` (OS `SYS_GETC`/`SYS_PUTC`/`SYS_PUTS`); memory: `peek(addr)` `poke(addr,v)`; general: `bios(constaddr, p1, a)` |
 
-**Library functions are written in C.** The console builtins are thin BIOS
-wrappers — `getchar` (`CONIN`), `putchar` (`CONOUT`), `puts` (`PUTS` + newline).
+**Library functions are written in C.** The console builtins are thin wrappers
+over the **OS stream syscalls** (`$400C`/`$4009`/`$400F`), not the raw BIOS — so
+a program's output is **redirectable by the shell**: `RUN PROG >FILE` streams its
+`putchar`/`puts` to a file with no source change. (A program that iterates a
+directory while writing can't be redirected — the write stream and directory
+iteration share the BIOS `SBUF`.)
 Everything else a program needs (`strlen`, `getline`, `strcmp`, …) is ordinary C
 compiled alongside it, now that pointers, arrays, and `char` work. See the
 `strlen` in the test below for the pattern.

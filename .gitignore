@@ -118,3 +118,11 @@ emulator/test/x.dat
 emulator/test/d.bin
 emulator/test/p.asm
 emulator/test/p.bin
+emulator/test/rprog.c
+emulator/test/r.bin
+emulator/test/r.img
+emulator/test/rh.asm
+emulator/test/rp.asm
+emulator/test/out.txt
+emulator/test/f1
+emulator/test/f2

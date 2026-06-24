@@ -14,6 +14,9 @@
  *
  * BIOS: FOPENDIR=$0139 (P1=path), FOPENDIRAT=$0142 (A=dir LBA), FNEXT=$013C
  * (-> FNAME at $9D4A; C=1 at end).  OS: SYS_CWDLBA=$4006 (CWD dir LBA -> A).
+ *
+ * NB this command can't be redirected (`RUN DIR.BIN >FILE`): directory
+ * iteration (FNEXT) and the write stream both use the BIOS sector buffer SBUF.
  */
 int main() {
     char *arg;

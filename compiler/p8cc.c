@@ -19,9 +19,10 @@
  * so param i is at __fp+2*(pcount-i)); global int variables (optional constant
  * initializer); the FULL expression operator set (precedence ladder + - * / %
  * << >> < > <= >= == != & ^ | && || and unary - ! ~); assignment; putchar(e)
- * and user calls (plus the BIOS builtins getchar/putchar/puts, peek/poke for
- * byte memory, bios(constaddr,p1,a) to call any monitor routine returning
- * A|carry<<8, and argstr() for the RUN command tail in P2);
+ * and user calls (plus builtins: getchar/putchar/puts over the OS stream
+ * syscalls so program I/O is shell-redirectable, peek/poke for byte memory,
+ * bios(constaddr,p1,a) to call any monitor routine returning A|carry<<8, and
+ * argstr() for the RUN command tail in P2);
  * statements: block, decl, if/else, while, for, return, expr;
  * a char/int type system with pointers (& and *, correct 1/2-byte load/store,
  * pointer arithmetic scaled by element size) via an lvalue-address model;
@@ -836,18 +837,18 @@ int factor() {
         strcpy_(nm, tname); lex();
         if (is_punct("(")) {                     /* call / builtin -> int rvalue */
             lex();                               /* '(' */
-            if (streq(nm, "getchar")) {          /* BIOS CONIN */
+            if (streq(nm, "getchar")) {          /* OS SYS_GETC */
                 eat(")");
-                line("        JSR $0100"); line("        STA __ax");
+                line("        JSR $400C"); line("        STA __ax");
                 line("        LDA #0"); line("        STA __ax+1");
-            } else if (streq(nm, "putchar")) {   /* BIOS CONOUT */
+            } else if (streq(nm, "putchar")) {   /* OS SYS_PUTC (redirectable) */
                 rvalue(expr()); eat(")");
-                line("        LDA __ax"); line("        JSR $0103");
-            } else if (streq(nm, "puts")) {      /* BIOS PUTS + newline */
+                line("        LDA __ax"); line("        JSR $4009");
+            } else if (streq(nm, "puts")) {      /* OS SYS_PUTS + newline */
                 rvalue(expr()); eat(")");
                 line("        LDA __ax"); line("        TAP1L");
                 line("        LDA __ax+1"); line("        TAP1H");
-                line("        JSR $0112"); line("        LDA #10"); line("        JSR $0103");
+                line("        JSR $400F"); line("        LDA #10"); line("        JSR $4009");
             } else if (streq(nm, "peek")) {      /* peek(addr) -> byte */
                 rvalue(expr()); eat(")");
                 line("        LDA __ax"); line("        TAP1L");

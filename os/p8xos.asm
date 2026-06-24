@@ -51,6 +51,10 @@ PHEX8   = $0115          ; print A as two hex digits
 FLOADAT = $013F          ; bulk-read FLEN bytes from LBA into (P1)
 FNEXT     = $013C        ; next directory entry -> BFNAME/BFFLAG/FLEN; C=1 at end
 FOPENDIRAT= $0142        ; begin iterating the 4-sector directory at LBA in A
+FWOPEN  = $012A          ; open a write stream at the volume free pointer
+FPUTB   = $012D          ; append byte A to the write stream
+FCLOSE  = $0130          ; flush + register the streamed file as FNAME
+FNORM   = $0136          ; copy string (P1) -> FNAME, upcased + space-padded
 BFNAME  = $9D4A          ; FNEXT entry-name output (BIOS FNAME)
 BFFLAG  = $9D70          ; FNEXT entry-flag output (BIOS FFLAG)
 
@@ -181,8 +185,11 @@ STKTOP  = $FEFF
         JMP  COLD               ; $4000 boot entry (monitor's CMD_B jumps here)
         JMP  SYS_GETCWD         ; $4003 copy CWD path string -> (P1), incl. NUL
         JMP  SYS_CWDLBA         ; $4006 CWD directory start LBA -> A
-; Clobbers P2.  Reached only via the table above (COLD jumps past them).
-SYS_GETCWD:
+        JMP  OUTCH              ; $4009 SYS_PUTC: A -> current stdout (console/file)
+        JMP  SYS_GETC           ; $400C SYS_GETC: next stdin byte -> A
+        JMP  SYS_PUTS           ; $400F SYS_PUTS: write (P1) string to stdout
+; Reached only via the table above (COLD jumps past them).
+SYS_GETCWD:                     ; copy CWDPATH -> (P1); clobbers P2
         LDP2 #CWDPATH
 SGC_LP: LDA  (P2)+
         STA  (P1)+
@@ -191,6 +198,14 @@ SGC_LP: LDA  (P2)+
 SYS_CWDLBA:
         LDA  CWDL               ; current directory start LBA (8-bit) -> A
         RTS
+SYS_GETC:                       ; stdin: console for now (file binding is later)
+        JMP  CONIN
+SYS_PUTS:                       ; write the (P1) string to stdout via OUTCH
+SPS_LP: LDA  (P1)+
+        JZ   SPS_DN
+        JSR  OUTCH              ; OUTCH preserves P1 (see OUTFILE)
+        JMP  SPS_LP
+SPS_DN: RTS
 ; ---------------- Cold start -------------------------------------------------
 COLD:   LDP3 #STKTOP
         LDA  #0                 ; output goes to the console until a "> file" redirect
@@ -438,17 +453,36 @@ DORUN:  JSR  FINDARG
         JZ   NOFILE
         JSR  DEFADDR            ; load/exec 0 -> TPA base $B000 (on-target-built
         JSR  LOADF              ; programs, e.g. ASM output, carry 0 from FCREATE)
+        ; output redirection for programs: a "> name" (parsed by REDSCAN, which
+        ; set REDIRF=1 + REDNAME) can't use the RBUF capture buffer — RBUF is the
+        ; TPA, where the program lives. Instead stream the program's stdout to
+        ; the file: open the write stream now (after LOADF's reads) and switch
+        ; OUTCH to file mode (REDIRF=2); the program's putchar/SYS_PUTC -> OUTCH.
+        LDA  REDIRF
+        JZ   DR_NOR
+        JSR  FWOPEN             ; open the write stream (FNAME is set at FCLOSE,
+        LDA  #2                 ; below — the program's own FS calls clobber the
+        STA  REDIRF             ; BIOS FNAME, so we can't set it up front)
         ; program-arg ABI: enter with P2 -> the command tail after the program
         ; name (null-terminated), so e.g. `RUN EDIT FOO.ASM` hands "FOO.ASM" to
         ; the program. Programs that don't take args just ignore P2.
-        JSR  ARG2P2             ; P2 -> RUN args ("EDIT FOO.ASM")
+DR_NOR: JSR  ARG2P2             ; P2 -> RUN args ("EDIT FOO.ASM")
         JSR  SKIPWORD           ; skip the program name + spaces -> P2 at the tail
         LDA  EXECLO             ; P1 <- exec address
         TAP1L
         LDA  EXECHI
         TAP1H
         JSR  (P1)               ; execute; program RTS returns here, P2 = arg tail
-        JMP  SHELL
+        LDA  REDIRF             ; if streaming to a file, name it + flush + register
+        LDB  #2
+        CMP
+        JNC  DR_DONE
+        LDP1 #REDNAME           ; FNAME = redirect target (set now: the program may
+        JSR  FNORM              ; have clobbered the BIOS FNAME via its own FS calls)
+        JSR  FCLOSE
+        LDA  #0
+        STA  REDIRF
+DR_DONE:JMP  SHELL
 ; DEFADDR - a directory entry with load/exec == 0 (the value FCREATE writes for
 ; files built on-target) is taken to mean "load at the TPA base $B000". Programs
 ; installed from the host set explicit non-zero load/exec, so they are untouched.
@@ -2574,12 +2608,16 @@ CRLF:   LDA  #CR
 
 ; ---- output sink -----------------------------------------------------------
 ; OUTCH: emit A. REDIRF=0 -> console (BIOS CONOUT); REDIRF=1 -> append to the
-; capture buffer at RPTR (advancing it). Preserves the caller's P1 and P2
-; (P2 is saved/restored; P1 is untouched), clobbers A like CONOUT does.
+; capture buffer at RPTR (built-in commands); REDIRF=2 -> stream to the open
+; write stream via FPUTB (a redirected RUN program, whose putchar/SYS_PUTC come
+; here). Preserves the caller's P1 and P2, clobbers A like CONOUT does.
 OUTCH:  STA  RCH
         LDA  REDIRF
-        JZ   OUTTTY
-        TPA2L                   ; save caller P2
+        JZ   OUTTTY             ; 0 = console
+        LDB  #2
+        CMP                     ; C = REDIRF >= 2
+        JC   OUTFILE            ; 2 = stream to file
+        TPA2L                   ; 1 = capture buffer: save caller P2
         STA  RS2L
         TPA2H
         STA  RS2H
@@ -2597,6 +2635,18 @@ OUTCH:  STA  RCH
         TAP2L
         LDA  RS2H
         TAP2H
+        RTS
+OUTFILE:                        ; REDIRF=2: append RCH to the write stream (FPUTB),
+        TPA1L                   ; preserving P1 across the BIOS call (it uses P1)
+        PHA
+        TPA1H
+        PHA
+        LDA  RCH
+        JSR  FPUTB
+        PLA
+        TAP1H
+        PLA
+        TAP1L
         RTS
 OUTTTY: LDA  RCH
         JMP  CONOUT             ; tail call: CONOUT RTSs to OUTCH's caller

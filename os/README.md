@@ -176,10 +176,22 @@ from C, the `p8cc` `bios()` intrinsic). The table is **append-only**:
 | `$4000` | (boot)    | `JMP COLD` — the monitor's `CMD_B` enters here |
 | `$4003` | `SYS_GETCWD` | copy the CWD path string (incl. NUL) into `(P1)`; clobbers P2 |
 | `$4006` | `SYS_CWDLBA` | current directory's start LBA → `A` |
+| `$4009` | `SYS_PUTC` | write `A` to the current **stdout** (console, or the redirect file) |
+| `$400C` | `SYS_GETC` | next **stdin** byte → `A` (console for now) |
+| `$400F` | `SYS_PUTS` | write the `(P1)` NUL-terminated string to stdout |
 
-This is the supported way for a program to consult the CWD — no peeking into OS
-RAM. `compiler/examples/pwd.c` (PWD) and `compiler/examples/dir.c` (DIR, which
-with no argument lists the CWD via `SYS_CWDLBA` + `FOPENDIRAT`) are worked
-examples; `compiler/p8lib.c` wraps them as `getcwd(buf)` / `cwdlba()`. The
-stdin/stdout/stderr stream model (so the shell can redirect a *program's* I/O,
-not just a built-in's) is the natural next addition to this layer.
+`SYS_GETCWD`/`SYS_CWDLBA` are the supported way to consult the CWD — no peeking
+into OS RAM. `compiler/examples/pwd.c` (PWD) and `compiler/examples/dir.c` (DIR,
+no-arg lists the CWD via `SYS_CWDLBA` + `FOPENDIRAT`) are worked examples;
+`compiler/p8lib.c` wraps them as `getcwd(buf)` / `cwdlba()`.
+
+**Program I/O redirection.** `SYS_PUTC`/`SYS_PUTS`/`SYS_GETC` route through the
+OS output sink (`OUTCH`), so the shell can redirect a *program's* stdout the
+same way it redirects a built-in: `RUN PROG >FILE` makes `DORUN` open a write
+stream and switch `OUTCH` to file mode (`REDIRF=2`, streaming each byte via
+`FPUTB`) around the program. The p8cc compilers emit `putchar`/`puts`/`getchar`
+as these syscalls, so any compiled program is redirectable with no source
+change. Caveat: a program that iterates a directory (`DIR`/`TREE`) *and* streams
+output to a file can't be redirected — the write stream and directory iteration
+share the BIOS sector buffer `SBUF`. (stdin-from-file `<` is the remaining
+piece; `SYS_GETC` reads the console for now.)
