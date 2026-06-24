@@ -102,3 +102,9 @@ emulator/test/cbios.bin
 emulator/test/cbios.img
 emulator/test/ch.asm
 emulator/test/cp.asm
+emulator/test/prog.c
+emulator/test/lf.c
+emulator/test/lf.bin
+emulator/test/lf.img
+emulator/test/lh.asm
+emulator/test/lp.asm

@@ -104,6 +104,25 @@ the file API (`FOPEN`/`FGETB`/`FLOADAT`/…) can be driven by `poke`-ing its RAM
 ABI variables and `bios`-ing the call. (`bios`'s address must be a literal, since
 it becomes the `JSR` target.) Both `p8cc.py` and `p8cc.c` support all of these.
 
+### `p8lib.c` — a C-source standard library
+
+[`p8lib.c`](p8lib.c) is a small library written in the subset over those
+builtins: `strlen`/`strcpy`/`strcmp`, `getline`/`putdec`, and **file** helpers
+`loadfile(name, dest)` / `savefile(name, data, len)` (which drive
+`FNORM`/`FFIND`/`FLOADAT` and `FWOPEN`/`FPUTB`/`FCLOSE`). There is no `#include`
+or linker, so you use it by **prepending** it to your program:
+
+```sh
+cat compiler/p8lib.c prog.c > all.c
+python3 compiler/p8cc.py all.c -o all.asm      # or: compiler/p8cc-host all.c -o all.asm
+```
+
+Caveats it documents: `bios()` doesn't surface the carry flag, so
+`loadfile`/`savefile` don't detect a missing file or a full disk; and `loadfile`
+reads **whole sectors**, so its destination must be sector-sized (≥ 512 bytes
+for any file ≤ 512). Exercised end-to-end by `emulator/test/c_libfile_test.sh`
+(a `savefile`→`loadfile` round-trip, differential across both compilers).
+
 `int` is 16-bit (comparisons and `/` `%` are **unsigned** 16-bit); `char` is
 8-bit. The compiler tracks types so a dereference loads/stores the right width
 (int/pointer = 2 bytes, char = 1) and pointer arithmetic scales by element size.
