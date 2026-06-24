@@ -9,8 +9,8 @@
 #      p8cc.py produces byte-identical console output when run on the P8X.
 # p8cc.c is built incrementally; the sample covers the operator set, globals,
 # control flow, params/locals, recursion, multi-arg calls, pointers (int*/char*
-# with & and *, char vs int width, pointer arithmetic), arrays + indexing, and
-# string literals with puts.
+# with & and *, char vs int width, pointer arithmetic), arrays + indexing,
+# string literals with puts, and structs (. and -> member access).
 set -e
 cd "$(dirname "$0")"
 ROOT=../..
@@ -43,6 +43,7 @@ char gc;
 char *gpc;
 int ia[3];
 char ca[4];
+struct Pt { int x; int y; };                           /* struct definition     */
 int fact(int n) {                                      /* params + recursion    */
     if (n < 2) return 1;
     return n * fact(n - 1);
@@ -74,6 +75,11 @@ int main() {
     ca[0] = 81; ca[1] = 0; puts(ca);                   /* char[] + puts: Q      */
     puts("RS");                                        /* string literal: RS    */
     putchar("T"[0]);                                   /* indexed literal: T    */
+    struct Pt pt;
+    struct Pt *pq;
+    pt.x = 70; pt.y = 1;                               /* struct . member       */
+    pq = &pt;
+    putchar(pq->x + pq->y);                            /* -> : 70+1 = 71 'G'    */
     putchar(10);
     return 0;
 }
@@ -96,8 +102,8 @@ py_out=$(python3 $ROOT/compiler/p8cc.py diff.c -o d.asm >/dev/null; \
     printf 'B\rRUN D.BIN\r' | ../p8xemu -l 80000000 -c d.img eeprom.bin 2>/dev/null \
         | LC_ALL=C tr -d '\0\r' | sed -n '/RUN D.BIN/,$p' | grep -v 'RUN D.BIN' | tr -dc '0-9A-Z')
 
-[ "$host_out" = "12345678Y120AZ5QRST" ] || fail "host bootstrap output '$host_out' != '12345678Y120AZ5QRST'"
-[ "$py_out" = "12345678Y120AZ5QRST" ]   || fail "p8cc.py output '$py_out' != '12345678Y120AZ5QRST'"
+[ "$host_out" = "12345678Y120AZ5QRSTG" ] || fail "host bootstrap output '$host_out' != '12345678Y120AZ5QRSTG'"
+[ "$py_out" = "12345678Y120AZ5QRSTG" ]   || fail "p8cc.py output '$py_out' != '12345678Y120AZ5QRSTG'"
 [ "$host_out" = "$py_out" ]  || fail "host '$host_out' != p8cc.py '$py_out' (differential)"
 
 echo "C-SELFHOST TEST: PASS"

@@ -22,8 +22,10 @@
  * and user calls; statements: block, decl, if/else, while, for, return, expr;
  * a char/int type system with pointers (& and *, correct 1/2-byte load/store,
  * pointer arithmetic scaled by element size) via an lvalue-address model;
- * arrays (decl, decay, e[i] indexing), string literals (pooled) and the puts
- * builtin.  Structs/unions come in a later increment.
+ * arrays (decl, decay, e[i] indexing), string literals (pooled), the puts
+ * builtin, and struct/union types with . and -> member access.  This now spans
+ * the whole p8cc.py subset (it self-compiles); only larger inputs await
+ * Milestone B (running on the P8X needs streaming, not more language).
  */
 #include <stdio.h>
 
@@ -400,26 +402,71 @@ int lookup(char *nm) {               /* 1 if found; sets look_* (local first) */
     return 0;
 }
 
+/* ---- struct/union layouts ------------------------------------------------- */
+char stpool[512];    /* tag names */
+int stpooln = 0;
+int stnoff[16];      /* tag name offset */
+int stsz[16];        /* total size in bytes */
+int stfirst[16];     /* index of first member in the flat member arrays */
+int stnm[16];        /* number of members */
+int stcount = 0;
+char mpool[1024];    /* member names (flat across all structs) */
+int mpooln = 0;
+int mnoff[160];      /* member name offset */
+int moff[160];       /* member offset within its struct */
+int mbase[160];      /* member base type */
+int mptr[160];       /* member pointer depth */
+int mcnt[160];       /* member array count (0 = scalar) */
+int mtotal = 0;
+int mm_off = 0;      /* find_member result */
+int mm_base = 0;
+int mm_ptr = 0;
+int mm_cnt = 0;
+
+int struct_size(int idx) { return stsz[idx]; }
+
+int find_struct(char *tag) {         /* tag index, or -1 */
+    int i;
+    i = 0;
+    while (i < stcount) { if (streq(stpool + stnoff[i], tag)) return i; i = i + 1; }
+    return 0 - 1;
+}
+
+int find_member(int sidx, char *nm) {/* sets mm_*; 1 if found */
+    int i;
+    int e;
+    i = stfirst[sidx];
+    e = stfirst[sidx] + stnm[sidx];
+    while (i < e) {
+        if (streq(mpool + mnoff[i], nm)) {
+            mm_off = moff[i]; mm_base = mbase[i]; mm_ptr = mptr[i]; mm_cnt = mcnt[i];
+            return 1;
+        }
+        i = i + 1;
+    }
+    return 0;
+}
+
+/* base: 0=int, 1=char, 2+idx = struct/union tag #idx */
 int type_size(int base, int ptr) {   /* bytes of one object of this type */
     if (ptr > 0) return 2;
     if (base == 1) return 1;
+    if (base >= 2) return struct_size(base - 2);
     return 2;
 }
 
 /* ---- type encoding: (base, ptr, lval) packed in one int ------------------- */
-int mkty(int base, int ptr, int lv) { return base + lv * 2 + ptr * 256; }
-int ty_base(int ty) { return ty & 1; }
-int ty_lval(int ty) { return (ty >> 1) & 1; }
-int ty_ptr(int ty) { return ty >> 8; }
-int ty_size(int ty) {                /* bytes of the value: 2 unless plain char */
+int mkty(int base, int ptr, int lv) { return base + lv * 256 + ptr * 512; }
+int ty_base(int ty) { return ty & 255; }
+int ty_lval(int ty) { return (ty >> 8) & 1; }
+int ty_ptr(int ty) { return ty >> 9; }
+int ty_size(int ty) {                /* bytes of the value */
     if (ty_ptr(ty) > 0) return 2;
-    if (ty_base(ty) == 1) return 1;  /* char */
-    return 2;                         /* int  */
+    return type_size(ty_base(ty), 0);
 }
 int elem_size(int ty) {              /* size of *ty (one level less indirection) */
-    if (ty_ptr(ty) > 1) return 2;    /* pointer-to-pointer element is a pointer */
-    if (ty_base(ty) == 1) return 1;  /* char element */
-    return 2;                         /* int element */
+    if (ty_ptr(ty) > 1) return 2;
+    return type_size(ty_base(ty), 0);
 }
 
 int is_punct(char *p) { return tok == T_PUNCT && streq(tname, p); }
@@ -477,10 +524,14 @@ int load_local(int off) {            /* __ax = *(fp+off) */
     return 0;
 }
 
-int store_local(int off) {           /* *(fp+off) = __ax  (__ax preserved) */
+int store_local(int off, int sz) {   /* *(fp+off) = __ax by width (__ax preserved) */
     lea_off(off);
-    line("        LDA __ax"); line("        STA (P1)+");
-    line("        LDA __ax+1"); line("        STA (P1)");
+    if (sz == 2) {
+        line("        LDA __ax"); line("        STA (P1)+");
+        line("        LDA __ax+1"); line("        STA (P1)");
+    } else {
+        line("        LDA __ax"); line("        STA (P1)");
+    }
     return 0;
 }
 
@@ -498,6 +549,22 @@ int emitjmp(char *op, char *base, int n) {                 /* op base<n> */
 int test_jz(char *base, int n) {     /* if __ax == 0 jump to base<n> */
     line("        LDA __ax"); line("        LDB __ax+1"); line("        OR");
     emitjmp("JZ", base, n);
+    return 0;
+}
+
+int addconst_ax(int kk) {            /* __ax += kk (16-bit constant) */
+    int k;
+    if (kk == 0) return 0;
+    k = nlabel; nlabel = nlabel + 1;
+    line("        LDA __ax");
+    emitstr("        LDB #"); emitdec(kk & 255); putchar(10);
+    line("        ADD"); line("        STA __ax");
+    line("        LDA #0"); emitjmp("JNC", "Lac", k); line("        LDA #1");
+    emitlabel("Lac", k); line("        STA __c");
+    line("        LDA __ax+1");
+    emitstr("        LDB #"); emitdec((kk >> 8) & 255); putchar(10);
+    line("        ADD"); line("        LDB __c"); line("        ADD");
+    line("        STA __ax+1");
     return 0;
 }
 
@@ -704,7 +771,7 @@ int store_ind(int sz) {              /* __t = address, __ax = value -> store */
 }
 
 int rvalue(int ty) {                 /* if __ax holds an lvalue address, load it */
-    if (ty_lval(ty)) { deref_load(ty_size(ty)); return ty & 65533; }
+    if (ty_lval(ty)) { deref_load(ty_size(ty)); return mkty(ty_base(ty), ty_ptr(ty), 0); }
     return ty;
 }
 
@@ -721,9 +788,15 @@ int scale2_t() {                     /* __t <<= 1 */
 
 int parse_type() {                   /* tok at a type kw -> base; sets g_ptr */
     int base;
-    base = 0;
-    if (streq(tname, "char")) base = 1;
-    lex();
+    if (streq(tname, "struct") || streq(tname, "union")) {
+        lex();                       /* 'struct' / 'union' */
+        base = 2 + find_struct(tname);
+        lex();                       /* tag */
+    } else {
+        base = 0;
+        if (streq(tname, "char")) base = 1;
+        lex();
+    }
     g_ptr = 0;
     while (is_punct("*")) { g_ptr = g_ptr + 1; lex(); }
     return base;
@@ -809,17 +882,32 @@ int factor() {
         line("; ERROR: bad factor");
     }
 
-    while (is_punct("[")) {                       /* e[i] -> *(e + i) lvalue */
-        lex();
-        ty = rvalue(ty);                          /* pointer value in __ax */
-        push_ax();
-        rvalue(expr());                           /* index in __ax */
-        eat("]");
-        esz = elem_size(ty);
-        if (esz == 2) scale2_ax();
-        pop_t();                                  /* __t = base pointer */
-        line("        JSR __add"); use_add = 1;
-        ty = mkty(ty_base(ty), ty_ptr(ty) - 1, 1);
+    while (is_punct("[") || is_punct(".") || is_punct("->")) {
+        if (is_punct("[")) {                      /* e[i] -> *(e + i) lvalue */
+            lex();
+            ty = rvalue(ty);                      /* pointer value in __ax */
+            push_ax();
+            rvalue(expr());                       /* index in __ax */
+            eat("]");
+            esz = elem_size(ty);
+            if (esz == 2) scale2_ax();
+            pop_t();                              /* __t = base pointer */
+            line("        JSR __add"); use_add = 1;
+            ty = mkty(ty_base(ty), ty_ptr(ty) - 1, 1);
+        } else if (is_punct(".")) {               /* x.m : address of x + offset */
+            lex();
+            find_member(ty_base(ty) - 2, tname); lex();
+            addconst_ax(mm_off);
+            if (mm_cnt > 0) ty = mkty(mm_base, mm_ptr + 1, 0);
+            else ty = mkty(mm_base, mm_ptr, 1);
+        } else {                                  /* p->m : *p + offset */
+            lex();
+            ty = rvalue(ty);                      /* struct address in __ax */
+            find_member(ty_base(ty) - 2, tname); lex();
+            addconst_ax(mm_off);
+            if (mm_cnt > 0) ty = mkty(mm_base, mm_ptr + 1, 0);
+            else ty = mkty(mm_base, mm_ptr, 1);
+        }
     }
     return ty;
 }
@@ -1065,7 +1153,8 @@ int stmt() {
     int l3;
     int l4;
     if (is_punct("{")) { block(); return 0; }
-    if (tok == T_KW && (streq(tname, "int") || streq(tname, "char"))) {
+    if (tok == T_KW && (streq(tname, "int") || streq(tname, "char")
+                        || streq(tname, "struct") || streq(tname, "union"))) {
         char dn[64];
         int off;
         int base;
@@ -1076,11 +1165,13 @@ int stmt() {
         cnt = 0;
         if (is_punct("[")) { lex(); cnt = tval; lex(); eat("]"); }
         if (cnt > 0) sz = cnt * type_size(base, g_ptr);
-        else sz = 2;                              /* scalars get a 2-byte slot */
+        else sz = type_size(base, g_ptr);
         nlocoff = nlocoff - sz;
         off = nlocoff;
         addvar(dn, off, base, g_ptr, cnt);
-        if (cnt == 0 && is_punct("=")) { lex(); rvalue(expr()); store_local(off); }
+        if (cnt == 0 && is_punct("=")) {
+            lex(); rvalue(expr()); store_local(off, type_size(base, g_ptr));
+        }
         eat(";");
         return 0;
     }
@@ -1192,6 +1283,8 @@ int emit_globals() {
         if (gcnt[i] > 0) {
             emitstr(":   .fill ");
             emitdec(gcnt[i] * type_size(gbase[i], gptr[i])); putchar(10);
+        } else if (gbase[i] >= 2 && gptr[i] == 0) {   /* struct/union scalar */
+            emitstr(":   .fill "); emitdec(type_size(gbase[i], 0)); putchar(10);
         } else if (ghas[i]) {
             emitstr(":   .word "); emitdec(gini[i] & 65535); putchar(10);
         } else {
@@ -1226,10 +1319,15 @@ int count_locals() {                             /* total local bytes (arrays si
         lex();
         if (is_punct("{")) depth = depth + 1;
         else if (is_punct("}")) depth = depth - 1;
-        else if (tok == T_KW && (streq(tname, "int") || streq(tname, "char"))) {
-            base = 0;
-            if (streq(tname, "char")) base = 1;
-            lex();                               /* type keyword */
+        else if (tok == T_KW && (streq(tname, "int") || streq(tname, "char")
+                                 || streq(tname, "struct") || streq(tname, "union"))) {
+            if (streq(tname, "struct") || streq(tname, "union")) {
+                lex(); base = 2 + find_struct(tname); lex();   /* 'struct' tag */
+            } else {
+                base = 0;
+                if (streq(tname, "char")) base = 1;
+                lex();
+            }
             ptr = 0;
             while (is_punct("*")) { ptr = ptr + 1; lex(); }
             lex();                               /* name */
@@ -1237,13 +1335,60 @@ int count_locals() {                             /* total local bytes (arrays si
                 lex(); n = tval; lex();          /* '[' count -- ']' eaten by loop */
                 bytes = bytes + n * type_size(base, ptr);
             } else {
-                bytes = bytes + 2;
+                bytes = bytes + type_size(base, ptr);
             }
         }
     }
     spos = save;
     tok = T_PUNCT; tname[0] = 123; tname[1] = 0; /* restore current token '{' */
     return bytes;
+}
+
+int st_intern(char *s) {
+    int o;
+    o = stpooln;
+    while (*s != 0) { stpool[stpooln] = *s; stpooln = stpooln + 1; s = s + 1; }
+    stpool[stpooln] = 0; stpooln = stpooln + 1;
+    return o;
+}
+int m_intern(char *s) {
+    int o;
+    o = mpooln;
+    while (*s != 0) { mpool[mpooln] = *s; mpooln = mpooln + 1; s = s + 1; }
+    mpool[mpooln] = 0; mpooln = mpooln + 1;
+    return o;
+}
+
+/* register a `struct/union Tag { members };` definition (tok past the tag) */
+int register_struct(int isunion, char *tag) {
+    int off;
+    int sz;
+    int mbsz;
+    int base;
+    int cnt;
+    stnoff[stcount] = st_intern(tag);
+    stfirst[stcount] = mtotal;
+    eat("{");
+    off = 0; sz = 0;
+    while (is_punct("}") == 0 && tok != T_EOF) {
+        base = parse_type();                     /* member type; sets g_ptr */
+        mnoff[mtotal] = m_intern(tname); lex();  /* member name */
+        cnt = 0;
+        if (is_punct("[")) { lex(); cnt = tval; lex(); eat("]"); }
+        mbase[mtotal] = base; mptr[mtotal] = g_ptr; mcnt[mtotal] = cnt;
+        if (cnt > 0) mbsz = cnt * type_size(base, g_ptr);
+        else mbsz = type_size(base, g_ptr);
+        if (isunion) { moff[mtotal] = 0; if (mbsz > sz) sz = mbsz; }
+        else { moff[mtotal] = off; off = off + mbsz; }
+        mtotal = mtotal + 1;
+        eat(";");
+    }
+    eat("}"); eat(";");
+    if (isunion) stsz[stcount] = sz;
+    else stsz[stcount] = off;
+    stnm[stcount] = mtotal - stfirst[stcount];
+    stcount = stcount + 1;
+    return 0;
 }
 
 /* ---- top-level declarations: functions (with params) and global vars ------ */
@@ -1259,8 +1404,21 @@ int toplevel() {
     int rptr;
     int pbase;
     int gbas;
-    gbas = parse_type();                         /* return/var type; sets g_ptr */
-    rptr = g_ptr;
+    if (tok == T_KW && (streq(tname, "struct") || streq(tname, "union"))) {
+        char tag[64];
+        int isunion;
+        isunion = streq(tname, "union");
+        lex();                                   /* 'struct' / 'union' */
+        strcpy_(tag, tname); lex();              /* tag */
+        if (is_punct("{")) { register_struct(isunion, tag); return 0; }
+        gbas = 2 + find_struct(tag);             /* struct-typed declaration */
+        g_ptr = 0;
+        while (is_punct("*")) { g_ptr = g_ptr + 1; lex(); }
+        rptr = g_ptr;
+    } else {
+        gbas = parse_type();                     /* return/var type; sets g_ptr */
+        rptr = g_ptr;
+    }
     strcpy_(nm, tname); lex();                   /* declared name */
     if (is_punct("(")) {                         /* function definition */
         lex();                                   /* '(' */
