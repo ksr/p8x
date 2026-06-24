@@ -1,8 +1,9 @@
 # hardware/
 
-The physical machine: one passive backplane plus six plug-in cards, each in its
-own directory holding the Eagle `.sch`/`.brd`, a schematic PDF, a chip-by-chip
-README, and any board-specific design docs.
+The physical machine: one passive backplane plus six plug-in CPU cards and an
+optional front-panel LED display card, each in its own directory holding the
+Eagle `.sch`/`.brd`, a schematic PDF, a chip-by-chip README, and any
+board-specific design docs.
 
 | Board | Directory | Function |
 |-------|-----------|----------|
@@ -12,6 +13,7 @@ README, and any board-specific design docs.
 | Memory | [memory-card/](memory-card/README.md) | 28C256 EEPROM + 62256 SRAM, address decode |
 | I/O | [io-card/](io-card/README.md) | Switches, LEDs, 6850 ACIA (RS-232) |
 | CF-IDE | [cf-card/](cf-card/README.md) | CompactFlash in 8-bit True IDE mode at `$FF10–$FF17` |
+| LED display | [led-card/](led-card/README.md) | Optional front-panel bus monitor — passive address/data LED array |
 | Backplane | [backplane/](backplane/p8x-backplane-design.md) | 10-slot passive 96-pin DIN 41612 bus (rev C2) |
 
 `p8x-bom.csv` — the orderable bill of materials for the whole machine

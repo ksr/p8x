@@ -118,13 +118,13 @@ works chip by chip, and any board-specific design docs:
 
 ## Status
 
-- Emulator working: 83 opcodes, ACIA on stdin/stdout, CF-IDE disk model (`-c <img>`), interactive I/O card (switches `-s`, LED trace `-L`), verified against microcode images
+- Emulator working: 86 opcodes, ACIA on stdin/stdout, CF-IDE disk model (`-c <img>`), interactive I/O card (switches `-s`, LED trace `-L`), verified against microcode images
 - Assembler working: two-pass, full expression support, shares opcode table with microcode generator
-- Eagle schematics + boards generated for all 6 cards and backplane
+- Eagle schematics + boards generated for all 6 CPU cards, the front-panel LED card, and the backplane (8 boards)
 - ROM monitor boots in the emulator; its filesystem hooks (`I`/`F`/`B`) run end to end against a CF image (`make test-cf`)
 - P8X/OS v1.0 — full shell over flat **and hierarchical (P8XFS v2)** volumes: `DIR [path]`/`CD`/`PWD`/`CAT`/`MKDIR`/`RMDIR`/`TREE`/`LOAD`/`RUN`/`SAVE`/`DEL`/`DUMP`/`DEP`/`PACK`/`FSCK`/`EXIT`; path resolution + CWD-path prompt; output redirection (`cmd >FILE`); **`PACK` compacts the directory tree** (repointing parents + `.`/`..`) and **`FSCK`** checks integrity on-target; host-side `p8xfs.py` builds (`--v2`), navigates, and `fsck`s images (`make test-os`)
-- BASIC builds three ways from one source: standalone, disk-bootable (`B`), and ROM-in-monitor (launched by `X`) (`make test-basic`)
+- BASIC builds four ways from one source: standalone, disk-bootable (`B`), ROM-in-monitor (launched by `X`), and a run-from-OS TPA program (`make test-basic`)
 - On-target toolchain: **EDIT** (line editor) + **ASM** (native two-pass assembler) as `/BIN` programs — edit → assemble → run a program entirely on the machine; ASM output is byte-identical to the host assembler across the whole opcode table (`make test-os`, see [apps/](apps/README.md))
-- **C cross-compiler** (`compiler/p8cc.py`, v0.1) — a C subset (`int`/`char`, `if`/`while`, arithmetic, `putchar`/`puts`) compiles to P8X asm and runs as a `/BIN` program; 16-bit pseudo-accumulator + runtime helpers (`make test-c`, see [compiler/](compiler/README.md))
+- **C compiler** — `compiler/p8cc.py` (Python host tool) plus `compiler/p8cc.c`, the same compiler rewritten in its own subset that **self-compiles** ("small C in small C", Milestone A). Full subset: `int`/`char`, pointers, arrays, `struct`/`union`, functions with params/locals/recursion, `if`/`else`/`while`/`for`, the complete operator set (`+ - * / % << >>`, comparisons, `& ^ | && ||`, unary `- ! ~`), global initializers, and `getchar`/`putchar`/`puts`; compiles to P8X asm and runs as a `/BIN` program (`make test-c`, host-vs-self differential `c_selfhost_test`, see [compiler/](compiler/README.md))
 - BIOS **file API**: byte streams (`FOPEN`/`FGETB`, `FWOPEN`/`FPUTB`/`FCLOSE`), path resolution into subdirectories (`FRESOLVE`), name formatting (`FNORM`), and directory iteration (`FOPENDIR`/`FNEXT`) — the assembler rides on the streams and self-hosts (`make test-cf`)
-- **Next:** OS niceties (pipes `|`); offload OS `DIR`/`TREE`/`PACK` onto the new directory-iteration calls; C compiler params/locals → pointers; hardware bring-up checklist (Fusion DRC, footprint confirmation, order backplane first)
+- **Next:** C compiler **Milestone B** (run `p8cc.c` *on the P8X* — a streaming/RAM problem, not a language gap); OS pipes (`|`); the IRQ-controller hardware card; hardware bring-up checklist (Fusion DRC, footprint confirmation, order backplane first)

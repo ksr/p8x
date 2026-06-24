@@ -1,6 +1,6 @@
 # P8X: An 8-Bit TTL CPU — Bus/Backplane Card Architecture
 
-Reorganized around a passive backplane with six plug-in cards and the 4×16-bit pointer register bank as the architectural centerpiece. The PC, SP, and MAR of the original SAP-8X design are all subsumed by the pointer bank.
+Reorganized around a passive backplane with six plug-in CPU cards (plus an optional front-panel LED display card) and the 4×16-bit pointer register bank as the architectural centerpiece. The PC, SP, and MAR of the original SAP-8X design are all subsumed by the pointer bank.
 
 **Cards:**
 1. Control / Microcode card (clock, reset, sequencer, microcode EPROMs, IR, front-panel run controls)
@@ -9,6 +9,7 @@ Reorganized around a passive backplane with six plug-in cards and the 4×16-bit 
 4. Memory card (ROM, RAM, address decode)
 5. I/O card (toggle-switch input port, LED output port, RS-232 via 6850 ACIA)
 6. CF-IDE card (CompactFlash in 8-bit True IDE mode, memory-mapped at $FF10–$FF17)
+7. LED display card (optional front-panel bus monitor — a passive address/data LED array; not required for operation)
 
 Total: ~130 logic ICs across the cards. Each card is independently testable on the backplane.
 (The per-card "≈ N chips" notes below are original design estimates; the
@@ -53,7 +54,7 @@ Passive backplane, **DIN 41612 96-pin (rows A/B/C)** connectors on 100×160 mm E
 | Address bus | A0–A15 | 16 | Register Bank card (always) |
 | Data source select | DOE0–3 | 4 | Control card |
 | Data destination select | DLD0–3 | 4 | Control card |
-| Pointer select | PSEL0–1 | 2 | Control card |
+| Pointer select | PSEL0–2 | 3 | Control card |
 | Pointer count | PINC, PDEC | 2 | Control card |
 | ALU function | ALUS0–3, ALUM, CIN | 6 | Control card |
 | Shifter | SH0–SH1 | 2 | Control card |

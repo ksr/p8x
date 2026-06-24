@@ -79,9 +79,11 @@ without any extra sequencing logic — the condition literally selects a differe
 ROM page.
 
 ## Control word layout (32 bits)
-See [p8x-system-design.md §3.2](../../docs/p8x-system-design.md) for the full bit map. In
-brief: bits 0–3 DOE, 4–7 DLD, 8–9 PSEL, 10 PINC, 11 PDEC, 12–16 ALU S0–3+M,
-17 CIN, 18–19 SH, 20 LDF, 21–23 FCOND, 24 µRESET, 25 HALT, 26–31 spare.
+See [p8x-system-design.md §3.2](../../docs/p8x-system-design.md) for the full bit map, and
+`microcode/genucode.py` `w()` for the authoritative packing. In brief: bits 0–3
+DOE, 4–7 DLD, 8–10 PSEL (3-bit: P0–P3 + PT scratch), 11 PINC, 12 PDEC, 13–16 ALU
+S0–3, 17 ALU M, 18 CIN, 19–20 SH0/1, 21 LDF, 22–24 FCOND, 25 µRESET, 26 HALT,
+27 LDZN, 28 SHCIN, 29 SETC, 30 CLRC, 31 BSEL.
 
 ## LEDs
 PWR (green), RUN (green), HALT (red) — driven from the run/halt state.

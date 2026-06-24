@@ -164,8 +164,8 @@ OS. Code is ~5.2 KB, so in every layout it clears its data base with room to spa
    ✅ `RUN`, `GOTO`, `IF/THEN`, `END`, comparisons, `FOR/NEXT` (+`STEP`),
    `GOSUB/RETURN`, `INPUT`, multi-statement lines (`:`), multi-item `PRINT`.
 5. **Polish** — ✅ signed integers + unary minus, `REM`, functions `ABS`,
-   `RND` (LCG), `PEEK`/`POKE` (memory + memory-mapped I/O).
-5. **Polish** — error messages, `REM`, multi-statement lines, `RND`/`PEEK`/`POKE`.
+   `RND` (LCG), `PEEK`/`POKE` (memory + memory-mapped I/O), and `SAVE`/`LOAD`
+   over the filesystem.
 
 ## Open decisions
 
