@@ -75,6 +75,20 @@ that load into the transient program area (TPA, `$B000`) and are launched with
 Edit → assemble → run, all on the machine:
 `RUN /BIN/EDIT.BIN HELLO.ASM` → `RUN /BIN/ASM.BIN HELLO.ASM HELLO.BIN` → `RUN HELLO.BIN`.
 
+**Implicit RUN (a bare command name).** A command word that matches no built-in
+is looked up as a program, so you can type `DIR /BIN` instead of
+`RUN /BIN/DIR.BIN /BIN`. Resolution:
+- a word containing `/` is taken as a path (CWD-relative or absolute) and run as
+  typed, then with a `.BIN` suffix — so `/BIN/DIR.BIN` works as a bare command;
+- otherwise each directory on **`PATH`** (a `;`-separated list, default `/BIN`)
+  is tried as `<dir>/<name>` then `<dir>/<name>.BIN`, first hit wins;
+- no match → the unknown-command marker.
+
+`PATH` does not include the CWD (Unix-style: a file named `DIR` in your CWD won't
+shadow the command). The args, redirects (`<`/`>`) and pipes (`|`) all work on a
+bare-name invocation exactly as for explicit `RUN`. (`PATH` defaults to `/BIN` at
+boot; a command to change it is a later addition.)
+
 **Program ABI** (what `RUN` guarantees a program):
 - entered with a `JSR` to its exec address — **return to the shell with `RTS`**
   (the current directory is preserved);

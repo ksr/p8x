@@ -184,6 +184,12 @@ INNAME  = $A132          ; "< file" name (null-terminated, <=48): $A132..$A161
 PIPEF   = $A162          ; pipe stage: 0 none, 1 left ran, 2 right ran
 PIPEBUF = $A163          ; saved right-hand command of a "cmd | cmd" ($A163..$A1A2)
 IBUF    = $A200          ; 512-byte buffer for the stdin read stream
+; ---- program search path (implicit RUN of a bare command name) ----
+PATHBUF = $A400          ; search path, ';'-separated dirs; default "/BIN" ($A400..$A43F)
+RUNPATH = $A440          ; scratch: candidate program path built during a lookup ($A440..$A49F)
+RUNSKIP = $A4A0          ; DORUN: 1 = skip the program-name word for the arg pointer
+PSCANL  = $A4A1          ; PATH search cursor into PATHBUF (low)
+PSCANH  = $A4A2          ; PATH search cursor into PATHBUF (high)
 
 CR      = $0D
 LF      = $0A
@@ -251,6 +257,7 @@ COLD:   LDP3 #STKTOP
         LDA  #4
         STA  CWDN
         JSR  PATHROOT           ; CWDPATH = "/"
+        JSR  PATHINIT           ; PATH = "/BIN" (search dir for bare command names)
 
 ; ---------------- Shell main loop --------------------------------------------
 SHELL:  JSR  FLUSHRED           ; if the previous command was redirected, write its file
@@ -345,9 +352,7 @@ DISPATCH:
         LDP1 #KW_FORMAT
         JSR  CMPCMD
         JNZ  DOFORMAT
-        LDP1 #MUNK              ; unknown command
-        JSR  PUTS
-        JMP  SHELL
+        JMP  IMPRUN             ; not a built-in: try to run it as a program (PATH)
 
 ; CMPCMD - compare CMDBUF to the keyword at (P1); returns A!=0 (and Z clear)
 ; when they match. Leaves the keyword pointer consumed.
@@ -498,7 +503,9 @@ DOLOAD: JSR  FINDARG            ; parse name, scan directory
 ; ---------------- RUN name ---------------------------------------------------
 DORUN:  JSR  FINDARG
         JZ   NOFILE
-        JSR  DEFADDR            ; load/exec 0 -> TPA base $B000 (on-target-built
+        LDA  #1                 ; explicit RUN: program name is arg[0]; skip it so
+        STA  RUNSKIP            ;   the program sees the tail after its own name
+RUNGO:  JSR  DEFADDR            ; load/exec 0 -> TPA base $B000 (on-target-built
         JSR  LOADF              ; programs, e.g. ASM output, carry 0 from FCREATE)
         ; output redirection for programs: a "> name" (parsed by REDSCAN, which
         ; set REDIRF=1 + REDNAME) can't use the RBUF capture buffer — RBUF is the
@@ -526,8 +533,10 @@ DR_NOIN:LDA  REDIRF
         ; name (null-terminated), so e.g. `RUN EDIT FOO.ASM` hands "FOO.ASM" to
         ; the program. Programs that don't take args just ignore P2.
 DR_NOR: JSR  ARG2P2             ; P2 -> RUN args ("EDIT FOO.ASM")
+        LDA  RUNSKIP            ; explicit RUN: skip the program-name word; implicit
+        JZ   DR_ARGS            ;   run already points at the tail (after the cmd word)
         JSR  SKIPWORD           ; skip the program name + spaces -> P2 at the tail
-        LDA  EXECLO             ; P1 <- exec address
+DR_ARGS:LDA  EXECLO             ; P1 <- exec address
         TAP1L
         LDA  EXECHI
         TAP1H
@@ -591,6 +600,127 @@ SW_SP:  LDA  (P2)              ; skip trailing spaces
         JMP  SW_SP
 SW_DONE:RTS
 
+; ---------------- implicit RUN (bare command name -> a program) --------------
+; The command word in CMDBUF matched no built-in. Treat it as a program:
+;   * if CMDBUF contains '/', it's a path (CWD-relative or absolute) -> run it
+;     as typed, then with a ".BIN" suffix;
+;   * otherwise search PATHBUF (';'-separated directories, default "/BIN"),
+;     trying "<dir>/<cmd>" then "<dir>/<cmd>.BIN" in each.
+; On the first hit: RUNSKIP=0 (the args already follow the command word) and run
+; it via the shared RUNGO tail. No hit -> "unknown command". The whole-line
+; redirects/pipes ( < > | ) were stripped before DISPATCH, so they apply here too.
+IMPRUN: LDP1 #CMDBUF            ; does the command word contain a '/'?
+IM_SL:  LDA  (P1)+
+        JZ   IM_PATH            ; no '/': search PATHBUF
+        LDB  #'/'
+        CMP
+        JNZ  IM_SL
+        LDP1 #CMDBUF            ; literal path: RUNPATH = CMDBUF verbatim
+        LDP2 #RUNPATH
+IM_LCP: LDA  (P1)+
+        STA  (P2)+
+        JNZ  IM_LCP            ; copy through the terminating NUL
+        JSR  TRYCAND
+        LDA  MATCH
+        JNZ  IM_RUN
+        JSR  APPENDBIN         ; try "<path>.BIN"
+        JSR  TRYCAND
+        LDA  MATCH
+        JNZ  IM_RUN
+        JMP  IM_UNK
+IM_PATH:LDP1 #PATHBUF          ; PSCAN = start of the search path
+        TPA1L
+        STA  PSCANL
+        TPA1H
+        STA  PSCANH
+IM_LOOP:LDA  PSCANL            ; any path entries left?
+        TAP1L
+        LDA  PSCANH
+        TAP1H
+        LDA  (P1)
+        JZ   IM_UNK            ; end of PATH, nothing matched
+        JSR  BUILDCAND         ; RUNPATH = entry + "/" + CMDBUF; PSCAN -> next entry
+        JSR  TRYCAND
+        LDA  MATCH
+        JNZ  IM_RUN
+        JSR  APPENDBIN         ; entry + "/" + CMDBUF + ".BIN"
+        JSR  TRYCAND
+        LDA  MATCH
+        JNZ  IM_RUN
+        JMP  IM_LOOP
+IM_RUN: LDA  #0                ; args already follow the command word -> no skip
+        STA  RUNSKIP
+        JMP  RUNGO
+IM_UNK: LDP1 #MUNK
+        JSR  PUTS
+        JMP  SHELL
+
+; BUILDCAND - RUNPATH = (PATH entry at PSCAN) + "/" + CMDBUF; advance PSCAN past
+;   the entry (and its ';' separator). Entry ends at ';' or NUL.
+BUILDCAND:
+        LDA  PSCANL            ; P1 = PSCAN (source in PATHBUF)
+        TAP1L
+        LDA  PSCANH
+        TAP1H
+        LDP2 #RUNPATH          ; P2 = destination cursor
+BC_CP:  LDA  (P1)
+        JZ   BC_END            ; entry ends at NUL (last entry)
+        LDB  #$3B              ; ';' (char literal would start a comment) -> separator
+        CMP
+        JZ   BC_SEP            ; entry ends at ';'
+        STA  (P2)+
+        INP1
+        JMP  BC_CP
+BC_SEP: INP1                   ; consume the ';' -> PSCAN at the next entry
+BC_END: TPA1L                  ; save the advanced cursor back to PSCAN
+        STA  PSCANL
+        TPA1H
+        STA  PSCANH
+        LDA  #'/'              ; append "/"
+        STA  (P2)+
+        LDP1 #CMDBUF           ; append the command word
+BC_CMD: LDA  (P1)+
+        JZ   BC_TERM
+        STA  (P2)+
+        JMP  BC_CMD
+BC_TERM:LDA  #0                ; NUL-terminate (leave P2 on it for APPENDBIN)
+        STA  (P2)
+        RTS
+
+; APPENDBIN - append ".BIN" to the NUL-terminated string in RUNPATH.
+APPENDBIN:
+        LDP2 #RUNPATH
+AB_F:   LDA  (P2)
+        JZ   AB_AP
+        INP2
+        JMP  AB_F
+AB_AP:  LDA  #'.'
+        STA  (P2)+
+        LDA  #'B'
+        STA  (P2)+
+        LDA  #'I'
+        STA  (P2)+
+        LDA  #'N'
+        STA  (P2)+
+        LDA  #0
+        STA  (P2)
+        RTS
+
+; TRYCAND - resolve RUNPATH to a regular file (-> entry fields + MATCH).
+TRYCAND:LDP2 #RUNPATH
+        JSR  FINDP2
+        RTS
+
+; PATHINIT - seed the program search path with the default "/BIN".
+PATHINIT:
+        LDP1 #DEFPATH
+        LDP2 #PATHBUF
+PI_LP:  LDA  (P1)+
+        STA  (P2)+
+        JNZ  PI_LP
+        RTS
+DEFPATH:.asciiz "/BIN"
+
 ; ---------------- DEL name ---------------------------------------------------
 DODEL:  JSR  FINDARG
         JZ   NOFILE
@@ -615,7 +745,7 @@ NOFILE: LDP1 #MNOFILE
 ; failure (bad directory path, not found, or it's a directory), A=1 with the
 ; entry fields filled on success.
 FINDARG:JSR  ARG2P2             ; P2 -> argument text
-        JSR  RESOLVE            ; SDIR = parent dir, NAMEBUF = leaf
+FINDP2: JSR  RESOLVE            ; resolve the path at P2: SDIR = parent, NAMEBUF = leaf
         LDA  MATCH
         JZ   FA_NO
         JSR  FINDENT            ; scan SDIR for NAMEBUF
@@ -2945,6 +3075,8 @@ MHELP:   .byte CR,LF
          .ascii "LOAD path     read a file to its load address"
          .byte CR,LF
          .ascii "RUN path args load+run a program (args in P2, RTS to exit)"
+         .byte CR,LF
+         .ascii "NAME args     run a program by bare name, found on PATH (/BIN)"
          .byte CR,LF
          .ascii "SAVE path s e save memory [s,e) to a new file"
          .byte CR,LF
