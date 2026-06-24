@@ -191,7 +191,7 @@ from C, the `p8cc` `bios()` intrinsic). The table is **append-only**:
 | `$4003` | `SYS_GETCWD` | copy the CWD path string (incl. NUL) into `(P1)`; clobbers P2 |
 | `$4006` | `SYS_CWDLBA` | current directory's start LBA → `A` |
 | `$4009` | `SYS_PUTC` | write `A` to the current **stdout** (console, or the `>` file) |
-| `$400C` | `SYS_GETC` | next **stdin** byte → `A` (console, or the `<` file); `C=1` at EOF |
+| `$400C` | `SYS_GETC` | next **stdin** byte → `A` (console, or the `<` file); `C=1` at EOF (console: echoes the key, Ctrl-D = EOF) |
 | `$400F` | `SYS_PUTS` | write the `(P1)` NUL-terminated string to stdout |
 
 `SYS_GETCWD`/`SYS_CWDLBA` are the supported way to consult the CWD — no peeking
@@ -210,7 +210,10 @@ change. Redirect (and pipe) files resolve in the **current working directory**
 PROG >OUT` writes `/SUB/OUT`, not `/OUT`. Symmetrically, `RUN PROG <FILE` binds **stdin** to a file: `DORUN` opens
 it as the read stream into `IBUF` and `SYS_GETC`/`getchar` pull from it (`getchar`
 returns `-1` at EOF). Both combine — `RUN CAT.BIN <IN >OUT` copies a file. The
-canonical filter `os/commands/cat.c` (stdin→stdout) is the worked example.
+canonical filter `os/commands/cat.c` (stdin→stdout) is the worked example. When
+stdin is the **console** (no `<` file), `SYS_GETC` echoes each key and treats
+**Ctrl-D** (`$04`) as end of input (`getchar` → `-1`) — so `CAT >FILE` captures
+typed lines to a file and Ctrl-D finishes it.
 Note: directory iteration (`FNEXT`) and the write stream default to the same BIOS
 sector buffer `SBUF`, so a program that does both (`DIR`/`TREE`) must call
 `FSDIRBUF` ($0145) after opening the directory to move iteration onto its own

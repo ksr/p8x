@@ -35,7 +35,7 @@ print a one-line usage summary and exit.
 |--------|-------|--------------|
 | [`dir.c`](dir.c) | `DIR [-R] [path] [-h]` | List a directory (the path, or the CWD if omitted). `-R` recurses the whole subtree, indenting two spaces per level and flagging directories with a trailing `/`. Streams names one at a time, so it redirects/pipes with no size limit. |
 | [`pwd.c`](pwd.c) | `PWD [-h]` | Print the current working directory path. |
-| [`cat.c`](cat.c) | `CAT [file] [-h]` | Print a file, **or** copy stdin→stdout (the canonical filter) when given no file. So `cat file`, `cat <file`, and `cat \| …` all work. |
+| [`cat.c`](cat.c) | `CAT [file] [-h]` | Print a file, **or** copy stdin→stdout (the canonical filter) when given no file. So `cat file`, `cat <file`, and `cat \| …` all work. Reading the **console** (e.g. `CAT >FILE`), each key echoes and **Ctrl-D** ends the input. |
 
 ### Implementation notes
 

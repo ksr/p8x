@@ -50,6 +50,8 @@ python3 $ROOT/tools/p8xfs.py put    cl.img clibc.bin --name CL.BIN --load 0xB000
 out=$(printf 'B\rRUN CL.BIN\rabc\r' | ../p8xemu -l 150000000 -c cl.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r')
 fail() { echo "C-LIBC TEST: FAIL — $1"; echo "$out" | sed -n '/RUN CL/,$p'; exit 1; }
 
-echo "$out" | grep -qx 'ABC' || fail "getchar/upcase/puts did not produce 'ABC'"
-echo "$out" | grep -qx '3'   || fail "strlen('ABC') != 3"
+# console getchar now echoes each key, so the echoed "abc" precedes the puts
+# output on the line (CRs are stripped); match 'ABC' as a substring, not a line.
+echo "$out" | grep -q 'ABC' || fail "getchar/upcase/puts did not produce 'ABC'"
+echo "$out" | grep -qx '3'  || fail "strlen('ABC') != 3"
 echo "C-LIBC TEST: PASS"

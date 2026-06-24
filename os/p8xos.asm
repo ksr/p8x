@@ -217,11 +217,17 @@ SGC_LP: LDA  (P2)+
 SYS_CWDLBA:
         LDA  CWDL               ; current directory start LBA (8-bit) -> A
         RTS
-SYS_GETC:                       ; next stdin byte -> A; C=1 at EOF (file mode)
+SYS_GETC:                       ; next stdin byte -> A; C=1 at EOF
         LDA  INMODE
         JNZ  SGC_FILE
         JSR  CONIN              ; console: a key
-        CLC                     ; console never reports EOF
+        LDB  #$04               ; Ctrl-D ends console input (C=1, like file EOF)
+        CMP
+        JZ   SGC_EOF
+        JSR  CONOUT             ; echo to the screen via CONOUT, NOT OUTCH: stdout
+        CLC                     ; may be a redirect/pipe, but the echo is local
+        RTS
+SGC_EOF: SEC                    ; Ctrl-D -> end of input (not echoed)
         RTS
 SGC_FILE:
         JSR  FGETB              ; read stream: next byte -> A, C=1 at end of file

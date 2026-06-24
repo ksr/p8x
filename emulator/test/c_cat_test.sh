@@ -39,6 +39,12 @@ check() {   # $1 = label
     R 'RUN /BIN/CAT.BIN <R.TXT'         | grep -q 'ROOTOK'  || fail "$1: cat (no arg) still filters stdin"
     R 'RUN /BIN/CAT.BIN NOPE.TXT' | grep -qi 'not found'    || fail "$1: missing file not reported"
     R 'RUN /BIN/CAT.BIN -h'       | grep -qi 'usage'        || fail "$1: -h did not print usage"
+    # console stdin -> file, terminated by Ctrl-D ($04): type "ZAPPED" then ^D
+    printf 'B\rRUN /BIN/CAT.BIN >CAP.TXT\rZAPPED\004' \
+        | ../p8xemu -l 250000000 -c cat.img eeprom.bin 2>/dev/null >/dev/null
+    python3 $ROOT/tools/p8xfs.py get cat.img CAP.TXT --out cap.txt >/dev/null 2>&1 \
+        || fail "$1: console capture (Ctrl-D) did not create the file"
+    grep -q 'ZAPPED' cap.txt || fail "$1: console stdin not captured up to Ctrl-D"
     # file-arg cat piped into a stdin-filter cat: both modes in one line
     R 'RUN /BIN/CAT.BIN R.TXT | RUN /BIN/CAT.BIN' | grep -q 'ROOTOK' || fail "$1: cat file | cat"
     # arg-mode cat redirected to a file

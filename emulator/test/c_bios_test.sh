@@ -3,7 +3,8 @@
 # general bios(addr, p1, a) intrinsic that calls any monitor routine (here PUTS
 # $0112 and CONOUT $0103).  Differential: the program is compiled by BOTH the
 # native p8cc.c bootstrap and p8cc.py and must run to identical output, with a
-# char fed to getchar.  Expected: X (poke/peek) OK (PUTS) Z (CONOUT) Q (getchar).
+# char fed to getchar.  Expected: X (poke/peek) OK (PUTS) Z (CONOUT) QQ — the fed
+# 'Q' appears twice: console getchar echoes the key, then the program putchar's it.
 set -e
 cd "$(dirname "$0")"
 ROOT=../..
@@ -45,11 +46,11 @@ if command -v cc >/dev/null 2>&1; then
     cc -O2 -w $ROOT/compiler/p8cc.c -o p8cc_host 2>/dev/null || fail "cc could not build p8cc.c"
     ./p8cc_host < cbios.c > ch.asm
     host_out=$(run ch.asm)
-    [ "$host_out" = "XOKZQ" ] || fail "p8cc.c output '$host_out' != 'XOKZQ'"
+    [ "$host_out" = "XOKZQQ" ] || fail "p8cc.c output '$host_out' != 'XOKZQQ'"
 fi
 
 python3 $ROOT/compiler/p8cc.py cbios.c -o cp.asm >/dev/null
 py_out=$(run cp.asm)
-[ "$py_out" = "XOKZQ" ] || fail "p8cc.py output '$py_out' != 'XOKZQ'"
+[ "$py_out" = "XOKZQQ" ] || fail "p8cc.py output '$py_out' != 'XOKZQQ'"
 
 echo "C-BIOS TEST: PASS"
