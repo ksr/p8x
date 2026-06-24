@@ -8,7 +8,8 @@
 #   3. DIFFERENTIAL: a sample program compiled by BOTH the host bootstrap and
 #      p8cc.py produces byte-identical console output when run on the P8X.
 # p8cc.c is built incrementally; the sample covers the operator set, globals,
-# control flow, function params/locals, recursion, and multi-arg calls.
+# control flow, params/locals, recursion, multi-arg calls, and pointers
+# (int*/char* with & and *, char vs int width, pointer arithmetic).
 set -e
 cd "$(dirname "$0")"
 ROOT=../..
@@ -35,6 +36,10 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x4000 >/
 cat > diff.c <<'EOF'
 int s;
 int i;
+int gv;
+int *gp;
+char gc;
+char *gpc;
 int fact(int n) {                                      /* params + recursion    */
     if (n < 2) return 1;
     return n * fact(n - 1);
@@ -57,6 +62,10 @@ int main() {
     if (compute() == 10) putchar(89); else putchar(78);/* Y: for/if/call       */
     x = fact(5);                                       /* 120: recursion        */
     putchar(48 + x/100); putchar(48 + (x/10)%10); putchar(48 + x%10);
+    gv = 64; gp = &gv; *gp = *gp + 1;                  /* int* &/*: gv = 65 'A'  */
+    putchar(*gp);                                      /* A                     */
+    gc = 90; gpc = &gc;                                /* char* : 'Z'           */
+    putchar(*gpc);                                     /* Z                     */
     putchar(10);
     return 0;
 }
@@ -69,7 +78,7 @@ host_out=$(./p8cc_host < diff.c > d.asm; \
     python3 $ROOT/tools/p8xfs.py boot d.img osc.bin >/dev/null; \
     python3 $ROOT/tools/p8xfs.py put d.img d.bin --name D.BIN --load 0xB000 --exec 0xB000 >/dev/null; \
     printf 'B\rRUN D.BIN\r' | ../p8xemu -l 80000000 -c d.img eeprom.bin 2>/dev/null \
-        | LC_ALL=C tr -d '\0\r' | sed -n '/RUN D.BIN/,$p' | grep -v 'RUN D.BIN' | tr -dc '0-9Y')
+        | LC_ALL=C tr -d '\0\r' | sed -n '/RUN D.BIN/,$p' | grep -v 'RUN D.BIN' | tr -dc '0-9YAZ')
 
 py_out=$(python3 $ROOT/compiler/p8cc.py diff.c -o d.asm >/dev/null; \
     python3 $ROOT/assembler/p8xasm.py d.asm -o d.bin --base 0xB000 >/dev/null; \
@@ -77,10 +86,10 @@ py_out=$(python3 $ROOT/compiler/p8cc.py diff.c -o d.asm >/dev/null; \
     python3 $ROOT/tools/p8xfs.py boot d.img osc.bin >/dev/null; \
     python3 $ROOT/tools/p8xfs.py put d.img d.bin --name D.BIN --load 0xB000 --exec 0xB000 >/dev/null; \
     printf 'B\rRUN D.BIN\r' | ../p8xemu -l 80000000 -c d.img eeprom.bin 2>/dev/null \
-        | LC_ALL=C tr -d '\0\r' | sed -n '/RUN D.BIN/,$p' | grep -v 'RUN D.BIN' | tr -dc '0-9Y')
+        | LC_ALL=C tr -d '\0\r' | sed -n '/RUN D.BIN/,$p' | grep -v 'RUN D.BIN' | tr -dc '0-9YAZ')
 
-[ "$host_out" = "12345678Y120" ] || fail "host bootstrap output '$host_out' != '12345678Y120'"
-[ "$py_out" = "12345678Y120" ]   || fail "p8cc.py output '$py_out' != '12345678Y120'"
+[ "$host_out" = "12345678Y120AZ" ] || fail "host bootstrap output '$host_out' != '12345678Y120AZ'"
+[ "$py_out" = "12345678Y120AZ" ]   || fail "p8cc.py output '$py_out' != '12345678Y120AZ'"
 [ "$host_out" = "$py_out" ]  || fail "host '$host_out' != p8cc.py '$py_out' (differential)"
 
 echo "C-SELFHOST TEST: PASS"

@@ -19,8 +19,10 @@
  * so param i is at __fp+2*(pcount-i)); global int variables (optional constant
  * initializer); the FULL expression operator set (precedence ladder + - * / %
  * << >> < > <= >= == != & ^ | && || and unary - ! ~); assignment; putchar(e)
- * and user calls; statements: block, decl, if/else, while, for, return, expr.
- * Pointers, arrays and structs come in later increments.
+ * and user calls; statements: block, decl, if/else, while, for, return, expr;
+ * a char/int type system with pointers (& and *, correct 1/2-byte load/store,
+ * pointer arithmetic scaled by element size) via an lvalue-address model.
+ * Arrays, strings and structs come in later increments.
  */
 #include <stdio.h>
 
@@ -260,10 +262,17 @@ int use_leave = 0;
 int use_lea = 0;
 int use_push = 0;
 
+/* A type is (base, ptr) packed in one int: base in bit 0 (0=int, 1=char),
+   pointer depth in bits 8+.  Expression functions also carry an lvalue flag in
+   bit 1 (when set, __ax holds the object's ADDRESS, not its value). */
+int g_ptr = 0;       /* pointer depth from the most recent parse_type() */
+
 /* ---- global variable table (single-pass, declared before use) ------------- */
 char gpool[1024];    /* packed NUL-terminated names */
 int gpooln = 0;
 int goff[64];        /* name offset in gpool */
+int gbase[64];       /* base type (0 int / 1 char) */
+int gptr[64];        /* pointer depth */
 int ghas[64];        /* has a constant initializer? */
 int gini[64];        /* the initializer value */
 int gcount = 0;
@@ -273,9 +282,17 @@ char vpool[512];     /* packed names of the current function's params+locals */
 int vpooln = 0;
 int vnoff[64];       /* name offset in vpool */
 int vfoff[64];       /* frame offset relative to __fp */
+int vbase[64];       /* base type */
+int vptr[64];        /* pointer depth */
 int vcount = 0;
 int nlocal = 0;      /* locals allocated so far in the current function */
 char curfunc[64];    /* name of the function being compiled (for _ret_) */
+
+/* ---- variable lookup result ----------------------------------------------- */
+int look_off = 0;        /* frame offset (locals/params) */
+int look_base = 0;
+int look_ptr = 0;
+int look_isglobal = 0;
 
 int emitstr(char *s) {
     while (*s != 0) { putchar(*s); s = s + 1; }
@@ -308,8 +325,10 @@ int intern(char *s) {                /* copy a name into gpool, return its offse
     return off;
 }
 
-int addglobal(char *nm, int hasi, int v) {
+int addglobal(char *nm, int base, int ptr, int hasi, int v) {
     goff[gcount] = intern(nm);
+    gbase[gcount] = base;
+    gptr[gcount] = ptr;
     ghas[gcount] = hasi;
     gini[gcount] = v;
     gcount = gcount + 1;
@@ -324,21 +343,50 @@ int intern_v(char *s) {              /* like intern, but into the per-fn vpool *
     return off;
 }
 
-int addvar(char *nm, int foff) {     /* declare a param/local at frame offset */
+int addvar(char *nm, int foff, int base, int ptr) {
     vnoff[vcount] = intern_v(nm);
     vfoff[vcount] = foff;
+    vbase[vcount] = base;
+    vptr[vcount] = ptr;
     vcount = vcount + 1;
     return 0;
 }
 
-int findvar(char *nm) {              /* frame offset, or 30000 if not a local */
+int lookup(char *nm) {               /* 1 if found; sets look_* (local first) */
     int i;
     i = 0;
     while (i < vcount) {
-        if (streq(vpool + vnoff[i], nm)) return vfoff[i];
+        if (streq(vpool + vnoff[i], nm)) {
+            look_off = vfoff[i]; look_base = vbase[i]; look_ptr = vptr[i];
+            look_isglobal = 0; return 1;
+        }
         i = i + 1;
     }
-    return 30000;
+    i = 0;
+    while (i < gcount) {
+        if (streq(gpool + goff[i], nm)) {
+            look_base = gbase[i]; look_ptr = gptr[i];
+            look_isglobal = 1; return 1;
+        }
+        i = i + 1;
+    }
+    return 0;
+}
+
+/* ---- type encoding: (base, ptr, lval) packed in one int ------------------- */
+int mkty(int base, int ptr, int lv) { return base + lv * 2 + ptr * 256; }
+int ty_base(int ty) { return ty & 1; }
+int ty_lval(int ty) { return (ty >> 1) & 1; }
+int ty_ptr(int ty) { return ty >> 8; }
+int ty_size(int ty) {                /* bytes of the value: 2 unless plain char */
+    if (ty_ptr(ty) > 0) return 2;
+    if (ty_base(ty) == 1) return 1;  /* char */
+    return 2;                         /* int  */
+}
+int elem_size(int ty) {              /* size of *ty (one level less indirection) */
+    if (ty_ptr(ty) > 1) return 2;    /* pointer-to-pointer element is a pointer */
+    if (ty_base(ty) == 1) return 1;  /* char element */
+    return 2;                         /* int element */
 }
 
 int is_punct(char *p) { return tok == T_PUNCT && streq(tname, p); }
@@ -596,37 +644,93 @@ int emit_lea() {
     return 0;
 }
 
-/* ---- the precedence ladder (mutually recursive -> forward decls) ---------- */
+/* ---- lvalue / type-aware codegen primitives ------------------------------- */
+int deref_load(int sz) {             /* __ax holds an address -> load value */
+    line("        LDA __ax"); line("        TAP1L");
+    line("        LDA __ax+1"); line("        TAP1H");
+    if (sz == 2) {
+        line("        LDA (P1)+"); line("        STA __ax");
+        line("        LDA (P1)"); line("        STA __ax+1");
+    } else {
+        line("        LDA (P1)"); line("        STA __ax");
+        line("        LDA #0"); line("        STA __ax+1");
+    }
+    return 0;
+}
+
+int store_ind(int sz) {              /* __t = address, __ax = value -> store */
+    line("        LDA __t"); line("        TAP1L");
+    line("        LDA __t+1"); line("        TAP1H");
+    if (sz == 2) {
+        line("        LDA __ax"); line("        STA (P1)+");
+        line("        LDA __ax+1"); line("        STA (P1)");
+    } else {
+        line("        LDA __ax"); line("        STA (P1)");
+    }
+    return 0;
+}
+
+int rvalue(int ty) {                 /* if __ax holds an lvalue address, load it */
+    if (ty_lval(ty)) { deref_load(ty_size(ty)); return ty & 65533; }
+    return ty;
+}
+
+int scale2_ax() {                    /* __ax <<= 1 (pointer-arith element *2) */
+    line("        LDA __ax"); line("        SHL"); line("        STA __ax");
+    line("        LDA __ax+1"); line("        ROL"); line("        STA __ax+1");
+    return 0;
+}
+int scale2_t() {                     /* __t <<= 1 */
+    line("        LDA __t"); line("        SHL"); line("        STA __t");
+    line("        LDA __t+1"); line("        ROL"); line("        STA __t+1");
+    return 0;
+}
+
+int parse_type() {                   /* tok at a type kw -> base; sets g_ptr */
+    int base;
+    base = 0;
+    if (streq(tname, "char")) base = 1;
+    lex();
+    g_ptr = 0;
+    while (is_punct("*")) { g_ptr = g_ptr + 1; lex(); }
+    return base;
+}
+
+/* ---- the precedence ladder (mutually recursive -> forward decls) ----------
+   Each function returns the type of what it produced; a bare lvalue carries its
+   ADDRESS in __ax (lval bit set) and is dereferenced by rvalue() on demand. */
 int expr();
 int stmt();
 
-int primary() {
+int factor() {
     char nm[64];
-    int off;
     int nargs;
     int k;
-    if (tok == T_NUM) { set_ax(tval); lex(); return 0; }
-    if (is_punct("(")) { lex(); expr(); eat(")"); return 0; }
+    if (tok == T_NUM) { set_ax(tval); lex(); return mkty(0, 0, 0); }
+    if (is_punct("(")) {
+        int ty;
+        lex(); ty = expr(); eat(")"); return ty;
+    }
     if (tok == T_ID) {
         strcpy_(nm, tname); lex();
-        if (is_punct("(")) {                     /* function call */
-            lex();                               /* '(' */
+        if (is_punct("(")) {                     /* function call -> int rvalue */
+            lex();
             nargs = 0;
             if (is_punct(")") == 0) {
-                expr();                          /* first argument in __ax */
+                rvalue(expr());
                 if (streq(nm, "putchar") == 0) {
                     line("        JSR __push"); use_push = 1; nargs = 1;
                 }
                 while (is_punct(",")) {
-                    lex(); expr();
+                    lex(); rvalue(expr());
                     line("        JSR __push"); use_push = 1;
                     nargs = nargs + 1;
                 }
             }
             eat(")");
-            if (streq(nm, "putchar")) {          /* BIOS console out */
+            if (streq(nm, "putchar")) {
                 line("        LDA __ax"); line("        JSR $0103");
-                return 0;
+                return mkty(0, 0, 0);
             }
             emitstr("        JSR _f_"); emitstr(nm); putchar(10);
             if (nargs > 0) {                     /* caller pops args: __csp += 2n */
@@ -638,167 +742,197 @@ int primary() {
                 line("        LDA __csp+1"); line("        INC"); line("        STA __csp+1");
                 emitlabel("Lcl", k);
             }
-            return 0;
+            return mkty(0, 0, 0);
         }
-        if (is_punct("=")) {                     /* assignment */
-            lex(); expr();
-            off = findvar(nm);
-            if (off == 30000) {                  /* global */
-                line("        LDA __ax");
-                emitstr("        STA _g_"); emitstr(nm); putchar(10);
-                line("        LDA __ax+1");
-                emitstr("        STA _g_"); emitstr(nm); emitstr("+1"); putchar(10);
-            } else {
-                store_local(off);
-            }
-            return 0;
-        }
-        off = findvar(nm);                       /* variable load */
-        if (off == 30000) {                      /* global */
-            emitstr("        LDA _g_"); emitstr(nm); putchar(10);
-            line("        STA __ax");
-            emitstr("        LDA _g_"); emitstr(nm); emitstr("+1"); putchar(10);
-            line("        STA __ax+1");
+        /* a variable: leave its ADDRESS in __ax (lvalue) */
+        if (lookup(nm) == 0) { line("; ERROR: undeclared id"); return mkty(0, 0, 0); }
+        if (look_isglobal) {
+            emitstr("        LDA #<_g_"); emitstr(nm); putchar(10); line("        STA __ax");
+            emitstr("        LDA #>_g_"); emitstr(nm); putchar(10); line("        STA __ax+1");
         } else {
-            load_local(off);
+            lea_off(look_off);
+            line("        TPA1L"); line("        STA __ax");
+            line("        TPA1H"); line("        STA __ax+1");
         }
-        return 0;
+        return mkty(look_base, look_ptr, 1);
     }
-    line("; ERROR: bad primary");
-    return 0;
+    line("; ERROR: bad factor");
+    return mkty(0, 0, 0);
 }
 
 int unary() {
+    int ty;
+    if (is_punct("&")) {                          /* &lvalue: address already in __ax */
+        lex(); ty = unary();
+        return mkty(ty_base(ty), ty_ptr(ty) + 1, 0);
+    }
+    if (is_punct("*")) {                          /* *ptr: lvalue at the pointer value */
+        lex(); ty = rvalue(unary());
+        return mkty(ty_base(ty), ty_ptr(ty) - 1, 1);
+    }
     if (is_punct("-")) {
-        lex(); unary();
+        lex(); rvalue(unary());
         line("        LDA #0"); line("        STA __t"); line("        STA __t+1");
         line("        JSR __sub"); use_sub = 1;
-        return 0;
+        return mkty(0, 0, 0);
     }
     if (is_punct("!")) {
-        lex(); unary();
+        lex(); rvalue(unary());
         line("        JSR __not"); use_not = 1;
-        return 0;
+        return mkty(0, 0, 0);
     }
     if (is_punct("~")) {
-        lex(); unary();
+        lex(); rvalue(unary());
         line("        LDA #255"); line("        LDB __ax"); line("        SUB");
         line("        STA __ax"); line("        LDA #255"); line("        LDB __ax+1");
         line("        SUB"); line("        STA __ax+1");
-        return 0;
+        return mkty(0, 0, 0);
     }
-    primary();
-    return 0;
+    return factor();
 }
 
 int muldiv() {
     int op;
-    unary();
+    int ty;
+    ty = unary();
     while (is_punct("*") || is_punct("/") || is_punct("%")) {
         op = tname[0];
         lex();
-        push_ax(); unary(); pop_t();
+        rvalue(ty); push_ax();
+        rvalue(unary()); pop_t();
         if (op == 42) { line("        JSR __mul"); use_mul = 1; }
         else if (op == 47) { line("        JSR __div"); use_div = 1; }
         else { line("        JSR __mod"); use_mod = 1; }
+        ty = mkty(0, 0, 0);
     }
-    return 0;
+    return ty;
 }
 
 int addsub() {
     int op;
-    muldiv();
+    int lty;
+    int rty;
+    lty = muldiv();
     while (is_punct("+") || is_punct("-")) {
         op = tname[0];
         lex();
-        push_ax(); muldiv(); pop_t();
+        lty = rvalue(lty); push_ax();
+        rty = rvalue(muldiv()); pop_t();          /* __t = lhs, __ax = rhs */
+        if (ty_ptr(lty) > 0 && ty_ptr(rty) == 0) {        /* ptr +/- int */
+            if (elem_size(lty) == 2) scale2_ax();
+        } else if (op == 43 && ty_ptr(rty) > 0 && ty_ptr(lty) == 0) {  /* int + ptr */
+            if (elem_size(rty) == 2) scale2_t();
+            lty = rty;
+        } else {
+            lty = mkty(0, 0, 0);
+        }
         if (op == 43) { line("        JSR __add"); use_add = 1; }
         else { line("        JSR __sub"); use_sub = 1; }
     }
-    return 0;
+    return lty;
 }
 
 int shift() {
     char op[3];
-    addsub();
+    int ty;
+    ty = addsub();
     while (is_punct("<<") || is_punct(">>")) {
         strcpy_(op, tname);
         lex();
-        push_ax(); addsub(); pop_t();
+        rvalue(ty); push_ax();
+        rvalue(addsub()); pop_t();
         if (streq(op, "<<")) { line("        JSR __shl"); use_shl = 1; }
         else { line("        JSR __shr"); use_shr = 1; }
+        ty = mkty(0, 0, 0);
     }
-    return 0;
+    return ty;
 }
 
 int relational() {
     char op[3];
-    shift();
+    int ty;
+    ty = shift();
     while (is_punct("<") || is_punct(">") || is_punct("<=") || is_punct(">=")) {
         strcpy_(op, tname);
         lex();
-        push_ax(); shift(); pop_t();
+        rvalue(ty); push_ax();
+        rvalue(shift()); pop_t();
         if (streq(op, ">") || streq(op, "<=")) swap_tax();
         line("        JSR __lt"); use_lt = 1;
         if (streq(op, "<=") || streq(op, ">=")) { line("        JSR __not"); use_not = 1; }
+        ty = mkty(0, 0, 0);
     }
-    return 0;
+    return ty;
 }
 
 int equality() {
     char op[3];
-    relational();
+    int ty;
+    ty = relational();
     while (is_punct("==") || is_punct("!=")) {
         strcpy_(op, tname);
         lex();
-        push_ax(); relational(); pop_t();
+        rvalue(ty); push_ax();
+        rvalue(relational()); pop_t();
         line("        JSR __eq"); use_eq = 1;
         if (streq(op, "!=")) { line("        JSR __not"); use_not = 1; }
+        ty = mkty(0, 0, 0);
     }
-    return 0;
+    return ty;
 }
 
 int bitand_() {
-    equality();
+    int ty;
+    ty = equality();
     while (is_punct("&")) {
         lex();
-        push_ax(); equality(); pop_t();
+        rvalue(ty); push_ax();
+        rvalue(equality()); pop_t();
         line("        JSR __and"); use_and = 1;
+        ty = mkty(0, 0, 0);
     }
-    return 0;
+    return ty;
 }
 
 int bitxor_() {
-    bitand_();
+    int ty;
+    ty = bitand_();
     while (is_punct("^")) {
         lex();
-        push_ax(); bitand_(); pop_t();
+        rvalue(ty); push_ax();
+        rvalue(bitand_()); pop_t();
         line("        JSR __xor"); use_xor = 1;
+        ty = mkty(0, 0, 0);
     }
-    return 0;
+    return ty;
 }
 
 int bitor_() {
-    bitxor_();
+    int ty;
+    ty = bitxor_();
     while (is_punct("|")) {
         lex();
-        push_ax(); bitxor_(); pop_t();
+        rvalue(ty); push_ax();
+        rvalue(bitxor_()); pop_t();
         line("        JSR __or"); use_or = 1;
+        ty = mkty(0, 0, 0);
     }
-    return 0;
+    return ty;
 }
 
 int logand() {
     int f;
     int e;
-    bitor_();
+    int ty;
+    ty = bitor_();
     while (is_punct("&&")) {
         f = nlabel; nlabel = nlabel + 1;
         e = nlabel; nlabel = nlabel + 1;
         lex();
+        rvalue(ty);
         line("        LDA __ax"); line("        LDB __ax+1"); line("        OR");
         emitjmp("JZ", "Land", f);
-        bitor_();
+        rvalue(bitor_());
         line("        LDA __ax"); line("        LDB __ax+1"); line("        OR");
         emitjmp("JZ", "Land", f);
         line("        LDA #1"); line("        STA __ax"); line("        LDA #0");
@@ -807,21 +941,24 @@ int logand() {
         emitlabel("Land", f);
         line("        LDA #0"); line("        STA __ax"); line("        STA __ax+1");
         emitlabel("Lande", e);
+        ty = mkty(0, 0, 0);
     }
-    return 0;
+    return ty;
 }
 
 int logor() {
     int t;
     int e;
-    logand();
+    int ty;
+    ty = logand();
     while (is_punct("||")) {
         t = nlabel; nlabel = nlabel + 1;
         e = nlabel; nlabel = nlabel + 1;
         lex();
+        rvalue(ty);
         line("        LDA __ax"); line("        LDB __ax+1"); line("        OR");
         emitjmp("JNZ", "Lor", t);
-        logand();
+        rvalue(logand());
         line("        LDA __ax"); line("        LDB __ax+1"); line("        OR");
         emitjmp("JNZ", "Lor", t);
         line("        LDA #0"); line("        STA __ax"); line("        STA __ax+1");
@@ -830,11 +967,25 @@ int logor() {
         line("        LDA #1"); line("        STA __ax"); line("        LDA #0");
         line("        STA __ax+1");
         emitlabel("Lore", e);
+        ty = mkty(0, 0, 0);
     }
-    return 0;
+    return ty;
 }
 
-int expr() { logor(); return 0; }
+int expr() {                          /* assignment (right-associative) */
+    int lty;
+    int rty;
+    lty = logor();
+    if (is_punct("=")) {
+        push_ax();                    /* save the lvalue address */
+        lex();
+        rty = rvalue(expr());         /* value in __ax */
+        pop_t();                      /* __t = address */
+        store_ind(ty_size(lty));
+        return mkty(ty_base(lty), ty_ptr(lty), 0);
+    }
+    return lty;
+}
 
 /* ---- statements ----------------------------------------------------------- */
 int block() {
@@ -853,24 +1004,25 @@ int stmt() {
     if (tok == T_KW && (streq(tname, "int") || streq(tname, "char"))) {
         char dn[64];
         int off;
-        lex();                                    /* type */
+        int base;
+        base = parse_type();                      /* type + '*'s -> base, g_ptr */
         strcpy_(dn, tname); lex();                /* name */
         nlocal = nlocal + 1;
-        off = 0 - 2 * nlocal;                     /* locals at -2,-4,... */
-        addvar(dn, off);
-        if (is_punct("=")) { lex(); expr(); store_local(off); }
+        off = 0 - 2 * nlocal;                     /* one 2-byte slot per local */
+        addvar(dn, off, base, g_ptr);
+        if (is_punct("=")) { lex(); rvalue(expr()); store_local(off); }
         eat(";");
         return 0;
     }
     if (tok == T_KW && streq(tname, "return")) {
         lex();
-        if (is_punct(";") == 0) expr();
+        if (is_punct(";") == 0) rvalue(expr());
         eat(";");
         emitstr("        JMP _ret_"); emitstr(curfunc); putchar(10);
         return 0;
     }
     if (tok == T_KW && streq(tname, "if")) {
-        lex(); eat("("); expr(); eat(")");
+        lex(); eat("("); rvalue(expr()); eat(")");
         l1 = nlabel; nlabel = nlabel + 1;
         l2 = nlabel; nlabel = nlabel + 1;
         test_jz("Lif", l1);                       /* false -> else/end */
@@ -891,7 +1043,7 @@ int stmt() {
         l2 = nlabel; nlabel = nlabel + 1;         /* end */
         lex();
         emitlabel("Lw", l1);
-        eat("("); expr(); eat(")");
+        eat("("); rvalue(expr()); eat(")");
         test_jz("Lw", l2);
         stmt();
         emitjmp("JMP", "Lw", l1);
@@ -909,7 +1061,7 @@ int stmt() {
         l3 = nlabel; nlabel = nlabel + 1;         /* body */
         l4 = nlabel; nlabel = nlabel + 1;         /* end  */
         emitlabel("Lf", l1);
-        if (is_punct(";") == 0) { expr(); test_jz("Lf", l4); }
+        if (is_punct(";") == 0) { rvalue(expr()); test_jz("Lf", l4); }
         eat(";");
         emitjmp("JMP", "Lf", l3);
         emitlabel("Lf", l2);
@@ -1003,22 +1155,26 @@ int toplevel() {
     int i;
     int nl;
     int k;
-    if (tok == T_KW) lex();                      /* return type */
+    int rptr;
+    int pbase;
+    int gbas;
+    gbas = parse_type();                         /* return/var type; sets g_ptr */
+    rptr = g_ptr;
     strcpy_(nm, tname); lex();                   /* declared name */
     if (is_punct("(")) {                         /* function definition */
         lex();                                   /* '(' */
         vcount = 0; vpooln = 0; nlocal = 0;      /* fresh scope */
         pcount = 0;
         if (is_punct(")") == 0) {
-            if (tok == T_KW) lex();              /* param type */
+            pbase = parse_type();
             strcpy_(pn, tname); lex();
-            addvar(pn, 0);
+            addvar(pn, 0, pbase, g_ptr);
             pcount = 1;
             while (is_punct(",")) {
                 lex();
-                if (tok == T_KW) lex();
+                pbase = parse_type();
                 strcpy_(pn, tname); lex();
-                addvar(pn, 0);
+                addvar(pn, 0, pbase, g_ptr);
                 pcount = pcount + 1;
             }
         }
@@ -1055,7 +1211,7 @@ int toplevel() {
         hasi = 1;
     }
     eat(";");
-    addglobal(nm, hasi, v);
+    addglobal(nm, gbas, rptr, hasi, v);
     return 0;
 }
 
