@@ -21,8 +21,9 @@
  * << >> < > <= >= == != & ^ | && || and unary - ! ~); assignment; putchar(e)
  * and user calls; statements: block, decl, if/else, while, for, return, expr;
  * a char/int type system with pointers (& and *, correct 1/2-byte load/store,
- * pointer arithmetic scaled by element size) via an lvalue-address model.
- * Arrays, strings and structs come in later increments.
+ * pointer arithmetic scaled by element size) via an lvalue-address model;
+ * arrays (decl, decay, e[i] indexing), string literals (pooled) and the puts
+ * builtin.  Structs/unions come in a later increment.
  */
 #include <stdio.h>
 
@@ -41,6 +42,8 @@ int spos = 0;        /* scan cursor */
 int tok = 0;         /* current token kind */
 int tval = 0;        /* numeric value when tok == T_NUM */
 char tname[64];      /* identifier / keyword / punctuation text */
+char tstr[256];      /* decoded bytes of the last T_STR token */
+int tstrlen = 0;
 
 /* ---- small helpers (callee-before-caller, for gcc) ------------------------ */
 int streq(char *a, char *b) {
@@ -200,14 +203,26 @@ int lex() {
         return tok;
     }
 
-    /* string literal (content scanned past; pooling comes with the parser) */
+    /* string literal: decode escapes into tstr[] */
     if (c == 34) {                                          /* " */
         spos = spos + 1;
+        n = 0;
         while (src[spos] != 34 && src[spos] != 0) {
-            if (src[spos] == 92) spos = spos + 1;           /* skip escaped char */
-            spos = spos + 1;
+            if (src[spos] == 92) {                          /* backslash escape */
+                spos = spos + 1;
+                c = src[spos];
+                if (c == 110) tstr[n] = 10;
+                else if (c == 116) tstr[n] = 9;
+                else if (c == 114) tstr[n] = 13;
+                else if (c == 48) tstr[n] = 0;
+                else tstr[n] = c;
+                n = n + 1; spos = spos + 1;
+            } else {
+                tstr[n] = src[spos]; n = n + 1; spos = spos + 1;
+            }
         }
         if (src[spos] == 34) spos = spos + 1;
+        tstr[n] = 0; tstrlen = n;
         tok = T_STR;
         return tok;
     }
@@ -273,9 +288,17 @@ int gpooln = 0;
 int goff[64];        /* name offset in gpool */
 int gbase[64];       /* base type (0 int / 1 char) */
 int gptr[64];        /* pointer depth */
+int gcnt[64];        /* array element count (0 = scalar) */
 int ghas[64];        /* has a constant initializer? */
 int gini[64];        /* the initializer value */
 int gcount = 0;
+
+/* ---- string-literal pool (emitted as __sN: .byte ... at the end) ---------- */
+char spool[1024];
+int spooln = 0;
+int soff[64];        /* offset of string i in spool */
+int slen[64];        /* length of string i */
+int scount = 0;
 
 /* ---- per-function scope: params (frame offset +2,+4..) and locals (-2,-4..) */
 char vpool[512];     /* packed names of the current function's params+locals */
@@ -284,14 +307,16 @@ int vnoff[64];       /* name offset in vpool */
 int vfoff[64];       /* frame offset relative to __fp */
 int vbase[64];       /* base type */
 int vptr[64];        /* pointer depth */
+int vcnt[64];        /* array element count (0 = scalar) */
 int vcount = 0;
-int nlocal = 0;      /* locals allocated so far in the current function */
+int nlocoff = 0;     /* running frame offset for locals (grows negative) */
 char curfunc[64];    /* name of the function being compiled (for _ret_) */
 
 /* ---- variable lookup result ----------------------------------------------- */
 int look_off = 0;        /* frame offset (locals/params) */
 int look_base = 0;
 int look_ptr = 0;
+int look_cnt = 0;        /* array element count (0 = scalar) */
 int look_isglobal = 0;
 
 int emitstr(char *s) {
@@ -325,10 +350,11 @@ int intern(char *s) {                /* copy a name into gpool, return its offse
     return off;
 }
 
-int addglobal(char *nm, int base, int ptr, int hasi, int v) {
+int addglobal(char *nm, int base, int ptr, int cnt, int hasi, int v) {
     goff[gcount] = intern(nm);
     gbase[gcount] = base;
     gptr[gcount] = ptr;
+    gcnt[gcount] = cnt;
     ghas[gcount] = hasi;
     gini[gcount] = v;
     gcount = gcount + 1;
@@ -343,11 +369,12 @@ int intern_v(char *s) {              /* like intern, but into the per-fn vpool *
     return off;
 }
 
-int addvar(char *nm, int foff, int base, int ptr) {
+int addvar(char *nm, int foff, int base, int ptr, int cnt) {
     vnoff[vcount] = intern_v(nm);
     vfoff[vcount] = foff;
     vbase[vcount] = base;
     vptr[vcount] = ptr;
+    vcnt[vcount] = cnt;
     vcount = vcount + 1;
     return 0;
 }
@@ -358,19 +385,25 @@ int lookup(char *nm) {               /* 1 if found; sets look_* (local first) */
     while (i < vcount) {
         if (streq(vpool + vnoff[i], nm)) {
             look_off = vfoff[i]; look_base = vbase[i]; look_ptr = vptr[i];
-            look_isglobal = 0; return 1;
+            look_cnt = vcnt[i]; look_isglobal = 0; return 1;
         }
         i = i + 1;
     }
     i = 0;
     while (i < gcount) {
         if (streq(gpool + goff[i], nm)) {
-            look_base = gbase[i]; look_ptr = gptr[i];
+            look_base = gbase[i]; look_ptr = gptr[i]; look_cnt = gcnt[i];
             look_isglobal = 1; return 1;
         }
         i = i + 1;
     }
     return 0;
+}
+
+int type_size(int base, int ptr) {   /* bytes of one object of this type */
+    if (ptr > 0) return 2;
+    if (base == 1) return 1;
+    return 2;
 }
 
 /* ---- type encoding: (base, ptr, lval) packed in one int ------------------- */
@@ -706,19 +739,30 @@ int factor() {
     char nm[64];
     int nargs;
     int k;
-    if (tok == T_NUM) { set_ax(tval); lex(); return mkty(0, 0, 0); }
-    if (is_punct("(")) {
-        int ty;
-        lex(); ty = expr(); eat(")"); return ty;
+    int ty;
+    int j;
+    int esz;
+    ty = mkty(0, 0, 0);
+    if (tok == T_NUM) { set_ax(tval); lex(); ty = mkty(0, 0, 0); }
+    else if (tok == T_STR) {                     /* string literal -> char* */
+        k = scount; scount = scount + 1;
+        soff[k] = spooln; slen[k] = tstrlen;
+        j = 0;
+        while (j < tstrlen) { spool[spooln] = tstr[j]; spooln = spooln + 1; j = j + 1; }
+        emitstr("        LDA #<__s"); emitdec(k); putchar(10); line("        STA __ax");
+        emitstr("        LDA #>__s"); emitdec(k); putchar(10); line("        STA __ax+1");
+        lex();
+        ty = mkty(1, 1, 0);
     }
-    if (tok == T_ID) {
+    else if (is_punct("(")) { lex(); ty = expr(); eat(")"); }
+    else if (tok == T_ID) {
         strcpy_(nm, tname); lex();
         if (is_punct("(")) {                     /* function call -> int rvalue */
             lex();
             nargs = 0;
             if (is_punct(")") == 0) {
                 rvalue(expr());
-                if (streq(nm, "putchar") == 0) {
+                if (streq(nm, "putchar") == 0 && streq(nm, "puts") == 0) {
                     line("        JSR __push"); use_push = 1; nargs = 1;
                 }
                 while (is_punct(",")) {
@@ -730,34 +774,54 @@ int factor() {
             eat(")");
             if (streq(nm, "putchar")) {
                 line("        LDA __ax"); line("        JSR $0103");
-                return mkty(0, 0, 0);
+            } else if (streq(nm, "puts")) {
+                line("        LDA __ax"); line("        TAP1L");
+                line("        LDA __ax+1"); line("        TAP1H");
+                line("        JSR $0112"); line("        LDA #10"); line("        JSR $0103");
+            } else {
+                emitstr("        JSR _f_"); emitstr(nm); putchar(10);
+                if (nargs > 0) {                 /* caller pops args: __csp += 2n */
+                    k = nlabel; nlabel = nlabel + 1;
+                    line("        LDA __csp");
+                    emitstr("        LDB #"); emitdec(2 * nargs); putchar(10);
+                    line("        ADD"); line("        STA __csp");
+                    emitjmp("JNC", "Lcl", k);
+                    line("        LDA __csp+1"); line("        INC"); line("        STA __csp+1");
+                    emitlabel("Lcl", k);
+                }
             }
-            emitstr("        JSR _f_"); emitstr(nm); putchar(10);
-            if (nargs > 0) {                     /* caller pops args: __csp += 2n */
-                k = nlabel; nlabel = nlabel + 1;
-                line("        LDA __csp");
-                emitstr("        LDB #"); emitdec(2 * nargs); putchar(10);
-                line("        ADD"); line("        STA __csp");
-                emitjmp("JNC", "Lcl", k);
-                line("        LDA __csp+1"); line("        INC"); line("        STA __csp+1");
-                emitlabel("Lcl", k);
-            }
-            return mkty(0, 0, 0);
-        }
-        /* a variable: leave its ADDRESS in __ax (lvalue) */
-        if (lookup(nm) == 0) { line("; ERROR: undeclared id"); return mkty(0, 0, 0); }
-        if (look_isglobal) {
-            emitstr("        LDA #<_g_"); emitstr(nm); putchar(10); line("        STA __ax");
-            emitstr("        LDA #>_g_"); emitstr(nm); putchar(10); line("        STA __ax+1");
+            ty = mkty(0, 0, 0);
+        } else if (lookup(nm) == 0) {
+            line("; ERROR: undeclared id"); ty = mkty(0, 0, 0);
         } else {
-            lea_off(look_off);
-            line("        TPA1L"); line("        STA __ax");
-            line("        TPA1H"); line("        STA __ax+1");
+            if (look_isglobal) {                 /* address of the variable */
+                emitstr("        LDA #<_g_"); emitstr(nm); putchar(10); line("        STA __ax");
+                emitstr("        LDA #>_g_"); emitstr(nm); putchar(10); line("        STA __ax+1");
+            } else {
+                lea_off(look_off);
+                line("        TPA1L"); line("        STA __ax");
+                line("        TPA1H"); line("        STA __ax+1");
+            }
+            if (look_cnt > 0) ty = mkty(look_base, look_ptr + 1, 0);  /* array decays */
+            else ty = mkty(look_base, look_ptr, 1);                   /* scalar lvalue */
         }
-        return mkty(look_base, look_ptr, 1);
+    } else {
+        line("; ERROR: bad factor");
     }
-    line("; ERROR: bad factor");
-    return mkty(0, 0, 0);
+
+    while (is_punct("[")) {                       /* e[i] -> *(e + i) lvalue */
+        lex();
+        ty = rvalue(ty);                          /* pointer value in __ax */
+        push_ax();
+        rvalue(expr());                           /* index in __ax */
+        eat("]");
+        esz = elem_size(ty);
+        if (esz == 2) scale2_ax();
+        pop_t();                                  /* __t = base pointer */
+        line("        JSR __add"); use_add = 1;
+        ty = mkty(ty_base(ty), ty_ptr(ty) - 1, 1);
+    }
+    return ty;
 }
 
 int unary() {
@@ -1005,12 +1069,18 @@ int stmt() {
         char dn[64];
         int off;
         int base;
+        int cnt;
+        int sz;
         base = parse_type();                      /* type + '*'s -> base, g_ptr */
         strcpy_(dn, tname); lex();                /* name */
-        nlocal = nlocal + 1;
-        off = 0 - 2 * nlocal;                     /* one 2-byte slot per local */
-        addvar(dn, off, base, g_ptr);
-        if (is_punct("=")) { lex(); rvalue(expr()); store_local(off); }
+        cnt = 0;
+        if (is_punct("[")) { lex(); cnt = tval; lex(); eat("]"); }
+        if (cnt > 0) sz = cnt * type_size(base, g_ptr);
+        else sz = 2;                              /* scalars get a 2-byte slot */
+        nlocoff = nlocoff - sz;
+        off = nlocoff;
+        addvar(dn, off, base, g_ptr, cnt);
+        if (cnt == 0 && is_punct("=")) { lex(); rvalue(expr()); store_local(off); }
         eat(";");
         return 0;
     }
@@ -1114,11 +1184,27 @@ int emit_runtime() {
 
 int emit_globals() {
     int i;
+    int j;
+    int e;
     i = 0;
     while (i < gcount) {
         emitstr("_g_"); emitstr(gpool + goff[i]);
-        if (ghas[i]) { emitstr(":   .word "); emitdec(gini[i] & 65535); putchar(10); }
-        else { emitstr(":   .fill 2"); putchar(10); }
+        if (gcnt[i] > 0) {
+            emitstr(":   .fill ");
+            emitdec(gcnt[i] * type_size(gbase[i], gptr[i])); putchar(10);
+        } else if (ghas[i]) {
+            emitstr(":   .word "); emitdec(gini[i] & 65535); putchar(10);
+        } else {
+            emitstr(":   .fill 2"); putchar(10);
+        }
+        i = i + 1;
+    }
+    i = 0;                                        /* string-literal pool */
+    while (i < scount) {
+        emitstr("__s"); emitdec(i); emitstr(":    .byte ");
+        j = soff[i]; e = soff[i] + slen[i];
+        while (j < e) { emitdec(spool[j] & 255); putchar(44); j = j + 1; }
+        putchar(48); putchar(10);                 /* trailing NUL */
         i = i + 1;
     }
     return 0;
@@ -1126,23 +1212,38 @@ int emit_globals() {
 
 /* pre-scan the body (positioned at its '{') for the count of int/char locals,
    so the prologue can reserve the whole frame at once; then rewind. */
-int count_locals() {
+int count_locals() {                             /* total local bytes (arrays sized) */
     int save;
     int depth;
+    int bytes;
+    int base;
+    int ptr;
     int n;
     save = spos;                                 /* spos is just past '{' */
     depth = 1;
-    n = 0;
+    bytes = 0;
     while (depth > 0 && tok != T_EOF) {
         lex();
         if (is_punct("{")) depth = depth + 1;
         else if (is_punct("}")) depth = depth - 1;
-        else if (tok == T_KW && (streq(tname, "int") || streq(tname, "char")))
-            n = n + 1;
+        else if (tok == T_KW && (streq(tname, "int") || streq(tname, "char"))) {
+            base = 0;
+            if (streq(tname, "char")) base = 1;
+            lex();                               /* type keyword */
+            ptr = 0;
+            while (is_punct("*")) { ptr = ptr + 1; lex(); }
+            lex();                               /* name */
+            if (is_punct("[")) {
+                lex(); n = tval; lex();          /* '[' count -- ']' eaten by loop */
+                bytes = bytes + n * type_size(base, ptr);
+            } else {
+                bytes = bytes + 2;
+            }
+        }
     }
     spos = save;
     tok = T_PUNCT; tname[0] = 123; tname[1] = 0; /* restore current token '{' */
-    return n;
+    return bytes;
 }
 
 /* ---- top-level declarations: functions (with params) and global vars ------ */
@@ -1163,18 +1264,18 @@ int toplevel() {
     strcpy_(nm, tname); lex();                   /* declared name */
     if (is_punct("(")) {                         /* function definition */
         lex();                                   /* '(' */
-        vcount = 0; vpooln = 0; nlocal = 0;      /* fresh scope */
+        vcount = 0; vpooln = 0; nlocoff = 0;     /* fresh scope */
         pcount = 0;
         if (is_punct(")") == 0) {
             pbase = parse_type();
             strcpy_(pn, tname); lex();
-            addvar(pn, 0, pbase, g_ptr);
+            addvar(pn, 0, pbase, g_ptr, 0);
             pcount = 1;
             while (is_punct(",")) {
                 lex();
                 pbase = parse_type();
                 strcpy_(pn, tname); lex();
-                addvar(pn, 0, pbase, g_ptr);
+                addvar(pn, 0, pbase, g_ptr, 0);
                 pcount = pcount + 1;
             }
         }
@@ -1185,11 +1286,11 @@ int toplevel() {
         strcpy_(curfunc, nm);
         emitstr("_f_"); emitstr(nm); line(":");
         line("        JSR __enter"); use_enter = 1;
-        nl = count_locals();
-        if (nl > 0) {                             /* reserve locals: __csp -= 2*nl */
+        nl = count_locals();                      /* total local bytes */
+        if (nl > 0) {                             /* reserve locals: __csp -= nl */
             k = nlabel; nlabel = nlabel + 1;
             line("        LDA __csp");
-            emitstr("        LDB #"); emitdec(2 * nl); putchar(10);
+            emitstr("        LDB #"); emitdec(nl); putchar(10);
             line("        SUB"); line("        STA __csp");
             emitjmp("JC", "Lfr", k);
             line("        LDA __csp+1"); line("        LDB #1"); line("        SUB");
@@ -1203,7 +1304,9 @@ int toplevel() {
         return 0;
     }
     hasi = 0; v = 0;                             /* global variable */
-    if (is_punct("=")) {
+    pcount = 0;                                  /* reuse as array count */
+    if (is_punct("[")) { lex(); pcount = tval; lex(); eat("]"); }
+    if (pcount == 0 && is_punct("=")) {
         lex();
         if (is_punct("-")) { lex(); v = 0 - tval; }
         else v = tval;
@@ -1211,7 +1314,7 @@ int toplevel() {
         hasi = 1;
     }
     eat(";");
-    addglobal(nm, gbas, rptr, hasi, v);
+    addglobal(nm, gbas, rptr, pcount, hasi, v);
     return 0;
 }
 
