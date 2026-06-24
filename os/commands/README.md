@@ -10,7 +10,7 @@ them like any program.
 
 | Source | Command | Demonstrates |
 |--------|---------|--------------|
-| [`dir.c`](dir.c) | `DIR [path]` | `argstr()`, the `bios()` carry flag, `FOPENDIR`/`FNEXT`, `SYS_CWDLBA` (CWD) |
+| [`dir.c`](dir.c) | `DIR [-R] [path]` | `argstr()`, the `bios()` carry flag, `FOPENDIR`/`FNEXT`, `SYS_CWDLBA` (CWD); `-R` recurses the subtree (the FNEXT cursor is global BIOS state, so each level streams names while collecting child LBAs, then descends) |
 | [`pwd.c`](pwd.c) | `PWD` | `SYS_GETCWD` ($4003) — the CWD via the syscall ABI, not OS internals |
 | [`cat.c`](cat.c) | `cat` (stdin→stdout filter) | `getchar`/`putchar`, EOF (`-1`), input/output redirection, pipes |
 
@@ -24,5 +24,6 @@ python3 tools/p8xfs.py put disk.img dir.bin --name /BIN/DIR.BIN --load 0xB000 --
 ```
 
 These double as the regression tests for the OS syscall + redirection + pipe
-machinery (`emulator/test/c_dir_test.sh`, `c_stdin_test.sh`, `c_pipe_test.sh`).
+machinery (`emulator/test/c_dir_test.sh`, `c_dir_recursive_test.sh`,
+`c_stdin_test.sh`, `c_pipe_test.sh`).
 More commands to come (e.g. `MORE`/`WC`/`GREP`-style filters).
