@@ -162,3 +162,24 @@ via their own extents. Directory entry (32 bytes): name 12 · start LBA 4 ·
 length 4 · load 2 · exec 2 · flags 1 (`$00` end, `$01` file, `$02` dir, `$FF`
 deleted) · spare 7. See
 [../hardware/cf-card/p8xfs-v2-hierarchical.md](../hardware/cf-card/p8xfs-v2-hierarchical.md).
+
+## OS syscall ABI (for loadable programs)
+
+The OS publishes a small jump table at the front of its image — like the BIOS
+table at `$0100`, but for OS-level services the BIOS deliberately doesn't own
+(chiefly the current working directory). The OS stays resident at `$4000` while
+a `RUN` program executes, so a TPA program reaches these with a plain `JSR` (or,
+from C, the `p8cc` `bios()` intrinsic). The table is **append-only**:
+
+| Addr | Syscall | Convention |
+|------|---------|------------|
+| `$4000` | (boot)    | `JMP COLD` — the monitor's `CMD_B` enters here |
+| `$4003` | `SYS_GETCWD` | copy the CWD path string (incl. NUL) into `(P1)`; clobbers P2 |
+| `$4006` | `SYS_CWDLBA` | current directory's start LBA → `A` |
+
+This is the supported way for a program to consult the CWD — no peeking into OS
+RAM. `compiler/examples/pwd.c` (PWD) and `compiler/examples/dir.c` (DIR, which
+with no argument lists the CWD via `SYS_CWDLBA` + `FOPENDIRAT`) are worked
+examples; `compiler/p8lib.c` wraps them as `getcwd(buf)` / `cwdlba()`. The
+stdin/stdout/stderr stream model (so the shell can redirect a *program's* I/O,
+not just a built-in's) is the natural next addition to this layer.

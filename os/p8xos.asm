@@ -173,6 +173,24 @@ LF      = $0A
 STKTOP  = $FEFF
 
         .org $4000          ; rev D: OS loads at $4000 (match the monitor's CMD_B + --base)
+; ---------------- OS syscall table (stable ABI for TPA programs) -------------
+; A jump table at the front of the OS image, like the BIOS table at $0100 but
+; for OS-level services (CWD etc.) that the BIOS deliberately doesn't own. The
+; OS stays resident at $4000 while a RUN program executes, so a program reaches
+; these with a plain JSR (or the C compiler's bios()).  Append-only.
+        JMP  COLD               ; $4000 boot entry (monitor's CMD_B jumps here)
+        JMP  SYS_GETCWD         ; $4003 copy CWD path string -> (P1), incl. NUL
+        JMP  SYS_CWDLBA         ; $4006 CWD directory start LBA -> A
+; Clobbers P2.  Reached only via the table above (COLD jumps past them).
+SYS_GETCWD:
+        LDP2 #CWDPATH
+SGC_LP: LDA  (P2)+
+        STA  (P1)+
+        JNZ  SGC_LP             ; copy through the terminating NUL
+        RTS
+SYS_CWDLBA:
+        LDA  CWDL               ; current directory start LBA (8-bit) -> A
+        RTS
 ; ---------------- Cold start -------------------------------------------------
 COLD:   LDP3 #STKTOP
         LDA  #0                 ; output goes to the console until a "> file" redirect

@@ -47,6 +47,20 @@ Last updated: 2026-06-24
       T-operand ops won't run on bare metal until the 74157 mux (U32/U33) is
       actually populated, so until then it would only work in the emulator.
 
+- [ ] **OS syscall stdio model (stdin/stdout/stderr) — the next layer.** The OS
+      syscall table now exists (`$4000` jump table: `SYS_GETCWD`/`SYS_CWDLBA`,
+      see DONE) and the C compiler can reach it via `bios()`. The high-value
+      addition is OS-owned standard streams: route program I/O through the OS
+      (`SYS_PUTC`/`SYS_GETC`) instead of the BIOS console directly, so the shell
+      can **redirect a program's output** (`RUN DIR.BIN >LIST`) — today only
+      OS-builtin commands can be redirected; a TPA program's `putchar` goes
+      straight to `CONOUT`. Keep it to three fixed streams (stdout redirectable
+      to console/file; stderr always console — the OS already bypasses
+      redirection for errors; stdin console/file), not POSIX fds. Touches: the
+      OS (own the streams + syscalls), the shell (`REDSCAN` binds a program's
+      stdout), and the compiler (a flag/builtins to emit `SYS_PUTC` instead of
+      `$0103`, or libc wrappers). Pairs with `|` (pipes) below and is the clean
+      enabler for offloading filter commands (MORE/WC/GREP) to C programs.
 - [ ] **Unix-like pipes in the OS shell** (`|`): output-to-file `>` redirection
       is DONE (see DONE — OUTCH sink + shell `>name` capture). The remaining,
       harder piece is `|`: with no multitasking, run sequentially — capture

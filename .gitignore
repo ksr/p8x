@@ -114,3 +114,7 @@ emulator/test/dir.bin
 emulator/test/dir.img
 emulator/test/dh.asm
 emulator/test/dp.asm
+emulator/test/x.dat
+emulator/test/d.bin
+emulator/test/p.asm
+emulator/test/p.bin
