@@ -197,11 +197,12 @@ PROG >OUT` writes `/SUB/OUT`, not `/OUT`. Symmetrically, `RUN PROG <FILE` binds 
 it as the read stream into `IBUF` and `SYS_GETC`/`getchar` pull from it (`getchar`
 returns `-1` at EOF). Both combine — `RUN CAT.BIN <IN >OUT` copies a file. The
 canonical filter `os/commands/cat.c` (stdin→stdout) is the worked example.
-Note: directory iteration (`FNEXT`) and the write stream both buffer through the
-BIOS sector buffer `SBUF`, so a program that does both (`DIR`/`TREE`) must collect
-its whole listing into a local buffer *first* and emit it afterwards rather than
-streaming per entry (see `os/commands/dir.c`). Done that way it redirects and
-pipes like any other program.
+Note: directory iteration (`FNEXT`) and the write stream default to the same BIOS
+sector buffer `SBUF`, so a program that does both (`DIR`/`TREE`) must call
+`FSDIRBUF` ($0145) after opening the directory to move iteration onto its own
+page-aligned 512-byte buffer; the write stream then keeps `SBUF` to itself and
+the program can stream output per entry with no buffering or size limit (see
+`os/commands/dir.c`). It then redirects and pipes like any other program.
 
 **Pipes** build directly on this: `cmd1 | cmd2` runs `cmd1` with its stdout to a
 temp file `PIPE.TMP`, then re-dispatches `cmd2` with its stdin from that file,

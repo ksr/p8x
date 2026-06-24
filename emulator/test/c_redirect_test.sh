@@ -6,9 +6,10 @@
 # Compiled by BOTH p8cc.py and the native p8cc.c.  Two checks per compiler:
 #   RUN /R.BIN          -> console shows ALPHA/BETA (not redirected)
 #   RUN /R.BIN >OUT.TXT -> console silent; OUT.TXT on disk = "ALPHA\nBETA\n"
-# NB the write stream and directory iteration share the BIOS sector buffer SBUF,
-# so a program that does both (DIR) must collect its listing first, then emit it
-# (see os/commands/dir.c) — it can then be redirected like any other program.
+# NB the write stream and directory iteration default to the same BIOS sector
+# buffer SBUF; a program that does both (DIR) calls FSDIRBUF ($0145) to move
+# iteration onto its own buffer, so it can stream output while iterating (see
+# os/commands/dir.c) and be redirected like any other program.
 set -e
 cd "$(dirname "$0")"
 ROOT=../..

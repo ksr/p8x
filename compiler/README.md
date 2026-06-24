@@ -95,9 +95,9 @@ a program's output is **redirectable by the shell**: `RUN PROG >FILE` streams it
 `putchar`/`puts` to a file with no source change, and `RUN PROG <FILE` binds its
 `getchar` to a file (which returns `-1` at end of file). Both combine —
 `RUN CAT.BIN <IN >OUT` copies a file (see `os/commands/cat.c`). (Directory
-iteration and the write stream both buffer through the BIOS `SBUF`, so a program
-that does both — `DIR` — collects its listing first and emits it afterwards
-rather than streaming per entry; see `os/commands/dir.c`.)
+iteration and the write stream default to the same BIOS `SBUF`; a program that
+does both — `DIR` — calls `FSDIRBUF` to move iteration onto its own buffer so it
+can stream output while iterating; see `os/commands/dir.c`.)
 Everything else a program needs (`strlen`, `getline`, `strcmp`, …) is ordinary C
 compiled alongside it, now that pointers, arrays, and `char` work. See the
 `strlen` in the test below for the pattern.

@@ -94,6 +94,10 @@ DILBA   = $9D73          ; iteration: current directory sector LBA (1)
 DICNT   = $9D74          ; iteration: sectors remaining (1)
 DIIDX   = $9D75          ; iteration: entry index within the sector (0..15)
 FLAREM  = $9D76          ; FLOADAT remaining-bytes counter (CFRDSEC clobbers TMP) (2)
+DIBUFH  = $9D78          ; FNEXT directory-buffer page (high byte; low byte 0).
+                         ;   Defaults to $9E (=SBUF) so the write stream and dir
+                         ;   iteration don't have to share SBUF; FSDIRBUF repoints
+                         ;   it at a caller buffer. FOPENDIRAT resets it. (1)
 SBUF    = $9E00          ; sector buffer
 STKTOP  = $FEFF
 BASIC   = $2000          ; ROM BASIC cold-start (overlaid by the ROM build)
@@ -137,6 +141,7 @@ RESET:  JMP  COLD
         JMP  FNEXT          ; $013C FNEXT    next live entry -> FNAME/FFLAG/LBA/FLEN; C=1 at end
         JMP  FLOADAT        ; $013F FLOADAT  read FLEN bytes from LBA into (P1) (whole sectors)
         JMP  FOPENDIRAT     ; $0142 FOPENDIRAT begin iterating the 4-sector directory at LBA in A
+        JMP  FSDIRBUF       ; $0145 FSDIRBUF  point FNEXT's sector buffer at page A (high byte; call after FOPENDIR)
 
 ;==============================================================================
 ; Monitor body (relocated above the BIOS table; reset vectors here).
@@ -864,6 +869,18 @@ FOPENDIRAT:
         STA  DICNT
         LDA  #0
         STA  DIIDX
+        LDA  #$9E           ; default the iteration buffer to SBUF; a caller that
+        STA  DIBUFH         ;   redirects/pipes calls FSDIRBUF after this to move it
+        RTS
+
+; FSDIRBUF - point FNEXT's directory sector buffer at the page whose high byte is
+;   in A (a 512-byte, page-aligned buffer; low byte is taken as 0). Call AFTER
+;   FOPENDIR/FOPENDIRAT (which reset it to SBUF), BEFORE the first FNEXT. Lets a
+;   program iterate a directory while simultaneously running a write stream (which
+;   keeps SBUF) — e.g. DIR redirected to a file or a pipe — without the two
+;   clobbering one another.
+FSDIRBUF:
+        STA  DIBUFH
         RTS
 
 ; FNEXT - return the next live directory entry: name -> FNAME, flag -> FFLAG,
@@ -877,22 +894,25 @@ FNEXT:  LDA  DICNT
         LDA  #0
         STA  LBA1
         STA  LBA2
-        LDP1 #SBUF
+        LDA  #0             ; P1 = the directory buffer (DIBUFH:00), default SBUF
+        TAP1L
+        LDA  DIBUFH
+        TAP1H
         JSR  CFRDSEC
-        LDA  DIIDX          ; P2 = SBUF + DIIDX*32
+        LDA  DIIDX          ; P2 = DIBUF + DIIDX*32
         LDB  #7
         AND
         SHL
         SHL
         SHL
         SHL
-        SHL                 ; (DIIDX & 7) << 5  -> low byte
+        SHL                 ; (DIIDX & 7) << 5  -> low byte (buffer low byte is 0)
         TAP2L
         LDA  DIIDX
         SHR
         SHR
         SHR                 ; DIIDX >> 3 (0 or 1)
-        LDB  #$9E
+        LDB  DIBUFH         ; + buffer page
         ADD
         TAP2H
         LDP1 #FNAME         ; copy the 12-byte name into FNAME

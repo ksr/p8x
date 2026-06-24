@@ -100,6 +100,7 @@ knowing the monitor's internal addresses. These entry points are **stable**:
 | `$013C` | FNEXT | next live entry → `FNAME`/`FFLAG`/`LBA`/`FLEN`; `C=1` at end (skips deleted entries) |
 | `$013F` | FLOADAT | bulk-read `FLEN` bytes from sector `LBA` into `(P1)`, a whole sector at a time (the fast "slurp a file" primitive; EDIT + the OS loader use it) |
 | `$0142` | FOPENDIRAT | begin iterating the directory whose 4-sector extent starts at the LBA in `A` (lets a caller iterate an extent it already resolved, e.g. the OS's CWD) |
+| `$0145` | FSDIRBUF | point `FNEXT`'s sector buffer at the page in `A` (high byte; 512-byte page-aligned buffer). Call after `FOPENDIR`/`FOPENDIRAT` (which reset it to `SBUF`). Lets a program iterate a directory while a write stream keeps `SBUF` — so `DIR` can be redirected/piped while streaming per entry |
 
 Call them with `JSR $0103` etc. (P8X/OS is built entirely on this table.)
 
