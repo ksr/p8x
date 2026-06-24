@@ -41,6 +41,15 @@ check() {   # $1 = label, $2 = combined output
     echo "$2" | grep -qx 'PWD.BIN'  || fail "$1: root DIR did not list PWD.BIN"
     echo "$2" | grep -qx 'X.DAT'    || fail "$1: no-arg DIR did not list the CWD (/SUB) file X.DAT"
     echo "$2" | grep -qx '/SUB'     || fail "$1: PWD did not print /SUB"
+    # DIR buffers its listing, so it is redirectable: `RUN /DIR.BIN / >LIST.TXT`
+    # must capture the same listing to a file (FNEXT and the write stream share
+    # the BIOS sector buffer SBUF, hence collect-then-emit in dir.c).
+    printf 'B\rRUN /DIR.BIN / >LIST.TXT\r' \
+        | ../p8xemu -l 200000000 -c dir.img eeprom.bin 2>/dev/null >/dev/null
+    python3 $ROOT/tools/p8xfs.py get dir.img LIST.TXT --out list.txt >/dev/null 2>&1 \
+        || fail "$1: DIR redirect did not create LIST.TXT"
+    grep -qx 'DIR.BIN' list.txt || fail "$1: redirected DIR listing missing DIR.BIN"
+    grep -qx 'PWD.BIN' list.txt || fail "$1: redirected DIR listing missing PWD.BIN"
 }
 
 compile_one() {   # $1 = compiler tag: build both programs with it

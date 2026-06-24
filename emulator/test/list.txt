@@ -1,0 +1,5 @@
+.
+..
+SUB
+DIR.BIN
+PWD.BIN

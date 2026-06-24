@@ -6,8 +6,9 @@
 # Compiled by BOTH p8cc.py and the native p8cc.c.  Two checks per compiler:
 #   RUN /R.BIN          -> console shows ALPHA/BETA (not redirected)
 #   RUN /R.BIN >OUT.TXT -> console silent; OUT.TXT on disk = "ALPHA\nBETA\n"
-# NB programs that iterate a directory (DIR/TREE) can't also be redirected: the
-# write stream and directory iteration share the BIOS sector buffer SBUF.
+# NB the write stream and directory iteration share the BIOS sector buffer SBUF,
+# so a program that does both (DIR) must collect its listing first, then emit it
+# (see os/commands/dir.c) — it can then be redirected like any other program.
 set -e
 cd "$(dirname "$0")"
 ROOT=../..
