@@ -12,7 +12,7 @@ them like any program.
 |--------|---------|--------------|
 | [`dir.c`](dir.c) | `DIR [-R] [path]` | `argstr()`, the `bios()` carry flag, `FOPENDIR`/`FNEXT`, `SYS_CWDLBA` (CWD); `-R` recurses the subtree (the FNEXT cursor is global BIOS state, so each level streams names while collecting child LBAs, then descends) |
 | [`pwd.c`](pwd.c) | `PWD` | `SYS_GETCWD` ($4003) — the CWD via the syscall ABI, not OS internals |
-| [`cat.c`](cat.c) | `cat` (stdin→stdout filter) | `getchar`/`putchar`, EOF (`-1`), input/output redirection, pipes |
+| [`cat.c`](cat.c) | `cat [file]` | a named file (`FRESOLVE`+`FOPEN`/`FGETB`, resolved against the CWD via an absolute path) **or** the stdin→stdout filter when given no arg — so `cat file`, `cat <file` and `cat \| …` all work |
 
 Build one (or let [`../run.sh`](../run.sh) install all three into `/BIN`):
 
