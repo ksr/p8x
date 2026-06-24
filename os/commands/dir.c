@@ -18,9 +18,6 @@
  * (a dir holds <=64 entries, so it is bounded; output stays uncapped).  Only
  * after the loop closes do we re-open each child by LBA and recurse.  '.'/'..'
  * are skipped or it loops forever.
- *
- * NB: keep under 4 KB - the p8cc.c bootstrap reads source into a fixed
- * 4096-byte buffer, so longer comments would truncate the program.
  */
 
 /* Print FNAME ($9D4A, 12 bytes space-padded), trimming the trailing pad. */

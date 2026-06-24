@@ -42,7 +42,7 @@ int T_STR = 4;
 int T_PUNCT = 5;
 
 /* ---- scanner state -------------------------------------------------------- */
-char src[4096];      /* whole source, NUL-terminated (Milestone B: stream this) */
+char src[16384];     /* whole source, NUL-terminated (Milestone B: stream this) */
 int srclen = 0;
 int spos = 0;        /* scan cursor */
 int tok = 0;         /* current token kind */
@@ -100,12 +100,15 @@ int is_keyword(char *s) {
 }
 
 /* ---- read all of stdin into src[] ----------------------------------------- */
+/* Bounded by sizeof(src)-1 so an oversized file truncates safely instead of
+ * overflowing the buffer.  (src[16384] is a host-side limit; on-target — the
+ * open Milestone B — this slurp would become a stream.) */
 int slurp() {
     int c;
     int n;
     n = 0;
     c = getchar();
-    while (c != 0 && c != -1) {
+    while (c != 0 && c != -1 && n < 16383) {
         src[n] = c;
         n = n + 1;
         c = getchar();
