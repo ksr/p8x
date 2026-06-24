@@ -2743,9 +2743,31 @@ GL1:    JSR  CONIN
         LDB  #CR
         CMP
         JZ   GLEND
+        LDA  TMP               ; backspace ($08) or DEL ($7F) -> erase last char
+        LDB  #$08
+        CMP
+        JZ   GLBS
+        LDA  TMP
+        LDB  #$7F
+        CMP
+        JZ   GLBS
+        TPA2L                  ; full? LINEBUF is 64 bytes; cap at 63 (keep a NUL
+        LDB  #63               ; slot, and stay clear of CMDBUF at $A040). The line
+        CMP                    ; never spans a page, so the low byte is the length.
+        JC   GL1               ; C = (len >= 63) -> drop the char, keep reading
         LDA  TMP
         JSR  OUTCH             ; echo (CONOUT preserves A)
         STA  (P2)+
+        JMP  GL1
+GLBS:   TPA2L                  ; at the start of the line? nothing to erase
+        JZ   GL1
+        DEP2                   ; drop the last stored char
+        LDA  #$08              ; erase it on the terminal: BS, space, BS
+        JSR  OUTCH
+        LDA  #' '
+        JSR  OUTCH
+        LDA  #$08
+        JSR  OUTCH
         JMP  GL1
 GLEND:  JSR  CRLF
         LDA  #0
