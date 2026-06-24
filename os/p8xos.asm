@@ -190,6 +190,7 @@ RUNPATH = $A440          ; scratch: candidate program path built during a lookup
 RUNSKIP = $A4A0          ; DORUN: 1 = skip the program-name word for the arg pointer
 PSCANL  = $A4A1          ; PATH search cursor into PATHBUF (low)
 PSCANH  = $A4A2          ; PATH search cursor into PATHBUF (high)
+GPLF    = $A4A3          ; SYS_GETC console: 1 = a LF is pending after a CR keypress
 
 CR      = $0D
 LF      = $0A
@@ -220,12 +221,30 @@ SYS_CWDLBA:
 SYS_GETC:                       ; next stdin byte -> A; C=1 at EOF
         LDA  INMODE
         JNZ  SGC_FILE
-        JSR  CONIN              ; console: a key
+        LDA  GPLF               ; a LF queued from a prior CR keypress? deliver it
+        JZ   SGC_KEY            ;   (no echo: the CRLF was already echoed)
+        LDA  #0
+        STA  GPLF
+        LDA  #$0A
+        CLC
+        RTS
+SGC_KEY:JSR  CONIN              ; console: a key
         LDB  #$04               ; Ctrl-D ends console input (C=1, like file EOF)
         CMP
         JZ   SGC_EOF
-        JSR  CONOUT             ; echo to the screen via CONOUT, NOT OUTCH: stdout
-        CLC                     ; may be a redirect/pipe, but the echo is local
+        LDB  #CR                ; Enter -> echo CRLF, return CR now, queue the LF
+        CMP
+        JZ   SGC_CR             ;   so a typed line lands in the file as CR+LF
+        JSR  CONOUT             ; normal key: echo to the screen via CONOUT, NOT
+        CLC                     ;   OUTCH (stdout may be a redirect/pipe)
+        RTS
+SGC_CR: JSR  CONOUT             ; echo CR ...
+        LDA  #LF
+        JSR  CONOUT             ; ... and LF
+        LDA  #1
+        STA  GPLF               ; next SYS_GETC returns the LF
+        LDA  #CR                ; return the CR now
+        CLC
         RTS
 SGC_EOF: SEC                    ; Ctrl-D -> end of input (not echoed)
         RTS
@@ -470,7 +489,9 @@ DORUN:  JSR  FINDARG
         JZ   NOFILE
         LDA  #1                 ; explicit RUN: program name is arg[0]; skip it so
         STA  RUNSKIP            ;   the program sees the tail after its own name
-RUNGO:  JSR  DEFADDR            ; load/exec 0 -> TPA base $B000 (on-target-built
+RUNGO:  LDA  #0                 ; clear any pending console LF from a prior program
+        STA  GPLF
+        JSR  DEFADDR            ; load/exec 0 -> TPA base $B000 (on-target-built
         JSR  LOADF              ; programs, e.g. ASM output, carry 0 from FCREATE)
         ; output redirection for programs: a "> name" (parsed by REDSCAN, which
         ; set REDIRF=1 + REDNAME) can't use the RBUF capture buffer — RBUF is the

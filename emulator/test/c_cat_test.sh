@@ -45,6 +45,13 @@ check() {   # $1 = label
     python3 $ROOT/tools/p8xfs.py get cat.img CAP.TXT --out cap.txt >/dev/null 2>&1 \
         || fail "$1: console capture (Ctrl-D) did not create the file"
     grep -q 'ZAPPED' cap.txt || fail "$1: console stdin not captured up to Ctrl-D"
+    # an Enter keypress is captured as CR+LF: type "AB"<CR>"CD" then ^D -> AB\r\nCD
+    printf 'B\rRUN /BIN/CAT.BIN >CR.TXT\rAB\rCD\004' \
+        | ../p8xemu -l 250000000 -c cat.img eeprom.bin 2>/dev/null >/dev/null
+    python3 $ROOT/tools/p8xfs.py get cat.img CR.TXT --out cr.txt >/dev/null 2>&1 \
+        || fail "$1: CRLF capture did not create the file"
+    printf 'AB\r\nCD' > cr.exp
+    cmp -s cr.txt cr.exp || fail "$1: typed CR not captured as CR+LF"
     # file-arg cat piped into a stdin-filter cat: both modes in one line
     R 'RUN /BIN/CAT.BIN R.TXT | RUN /BIN/CAT.BIN' | grep -q 'ROOTOK' || fail "$1: cat file | cat"
     # arg-mode cat redirected to a file
