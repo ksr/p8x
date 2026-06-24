@@ -146,3 +146,5 @@ emulator/test/prh.asm
 emulator/test/prp.asm
 emulator/test/cah.asm
 emulator/test/cap.asm
+emulator/test/greet.c
+emulator/test/g.asm
