@@ -58,6 +58,9 @@ FNORM   = $0136          ; copy string (P1) -> FNAME, upcased + space-padded
 FOPEN   = $0124          ; open file FNAME for reading (P1 = 512-byte buffer)
 FGETB   = $0127          ; next byte -> A; C=1 at end of file
 FDELETE = $011E          ; tombstone file FNAME (for the pipe temp)
+BDIRLBA = $9D6E          ; BIOS "current directory" start LBA (default root); the
+BDIRN   = $9D6F          ; FS calls register/find in here. We point it at the CWD
+                         ; so a redirect / pipe file lands in the working dir.
 BFNAME  = $9D4A          ; FNEXT entry-name output (BIOS FNAME)
 BFFLAG  = $9D70          ; FNEXT entry-flag output (BIOS FFLAG)
 
@@ -223,6 +226,12 @@ SPS_LP: LDA  (P1)+
         JSR  OUTCH              ; OUTCH preserves P1 (see OUTFILE)
         JMP  SPS_LP
 SPS_DN: RTS
+SETCWDDIR:                      ; point the BIOS FS at the CWD (so redirect/pipe
+        LDA  CWDL               ; files land in the working dir, not root). The
+        STA  BDIRLBA            ; FS calls revert to root after, so set per-op.
+        LDA  CWDN
+        STA  BDIRN
+        RTS
 ; ---------------- Cold start -------------------------------------------------
 COLD:   LDP3 #STKTOP
         LDA  #0                 ; output goes to the console until a "> file" redirect
@@ -253,6 +262,7 @@ SHELL:  JSR  FLUSHRED           ; if the previous command was redirected, write 
         LDB  #1
         CMP
         JZ   PIPE_RHS
+        JSR  SETCWDDIR          ; PIPE.TMP lives in the CWD (where it was written)
         LDP1 #MPIPE             ; PIPEF=2: right command done -> remove the temp
         JSR  FNORM
         JSR  FDELETE
@@ -500,6 +510,7 @@ DORUN:  JSR  FINDARG
         ; write stream; both use independent BIOS state + buffers (IBUF vs SBUF).
         LDA  INARM
         JZ   DR_NOIN
+        JSR  SETCWDDIR          ; resolve the redirect file in the CWD, not root
         LDP1 #INNAME            ; FNAME = the input file
         JSR  FNORM
         LDP1 #IBUF              ; read-stream buffer
@@ -525,6 +536,7 @@ DR_NOR: JSR  ARG2P2             ; P2 -> RUN args ("EDIT FOO.ASM")
         LDB  #2
         CMP
         JNC  DR_NOOUT
+        JSR  SETCWDDIR          ; register the file in the CWD, not root
         LDP1 #REDNAME           ; FNAME = redirect target (set now: the program may
         JSR  FNORM              ; have clobbered the BIOS FNAME via its own FS calls)
         JSR  FCLOSE

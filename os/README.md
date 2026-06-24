@@ -191,7 +191,9 @@ same way it redirects a built-in: `RUN PROG >FILE` makes `DORUN` open a write
 stream and switch `OUTCH` to file mode (`REDIRF=2`, streaming each byte via
 `FPUTB`) around the program. The p8cc compilers emit `putchar`/`puts`/`getchar`
 as these syscalls, so any compiled program is redirectable with no source
-change. Symmetrically, `RUN PROG <FILE` binds **stdin** to a file: `DORUN` opens
+change. Redirect (and pipe) files resolve in the **current working directory**
+(the OS points the BIOS FS at `CWDL` before the open/close), so `CD /SUB; RUN
+PROG >OUT` writes `/SUB/OUT`, not `/OUT`. Symmetrically, `RUN PROG <FILE` binds **stdin** to a file: `DORUN` opens
 it as the read stream into `IBUF` and `SYS_GETC`/`getchar` pull from it (`getchar`
 returns `-1` at EOF). Both combine — `RUN CAT.BIN <IN >OUT` copies a file. The
 canonical filter `os/commands/cat.c` (stdin→stdout) is the worked example.

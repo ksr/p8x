@@ -33,6 +33,7 @@ check() {   # $1 = label, $2 = asm file
     python3 $ROOT/tools/p8xfs.py create r.img >/dev/null
     python3 $ROOT/tools/p8xfs.py boot   r.img osc.bin >/dev/null
     python3 $ROOT/tools/p8xfs.py put    r.img r.bin --name R.BIN --load 0xB000 --exec 0xB000 >/dev/null
+    python3 $ROOT/tools/p8xfs.py mkdir  r.img /SUB >/dev/null
     # console run (not redirected): output must appear on the console
     con=$(printf 'B\rRUN /R.BIN\r' | ../p8xemu -l 90000000 -c r.img eeprom.bin 2>/dev/null \
         | LC_ALL=C tr -d '\0\r' | sed -n '/RUN \/R.BIN/,$p' | grep -v 'RUN /R.BIN' | tr -dc 'A-Z')
@@ -42,6 +43,13 @@ check() {   # $1 = label, $2 = asm file
     python3 $ROOT/tools/p8xfs.py get r.img OUT.TXT --out out.txt >/dev/null 2>&1 || fail "$1: OUT.TXT not created"
     got=$(tr -dc 'A-Z' < out.txt)
     [ "$got" = "ALPHABETA" ] || fail "$1: redirected file '$got' != 'ALPHABETA'"
+    # redirect honours the CWD: from /SUB, the file must land in /SUB, not root
+    printf 'B\rCD /SUB\rRUN /R.BIN >S.TXT\r' | ../p8xemu -l 90000000 -c r.img eeprom.bin 2>/dev/null >/dev/null
+    python3 $ROOT/tools/p8xfs.py ls r.img /SUB 2>&1 | grep -qi 'S.TXT' \
+        || fail "$1: redirect from /SUB did not write into the CWD"
+    if python3 $ROOT/tools/p8xfs.py ls r.img / 2>&1 | grep -qi 'S.TXT'; then
+        fail "$1: redirect from /SUB leaked into root (CWD ignored)"
+    fi
 }
 
 if command -v cc >/dev/null 2>&1; then
