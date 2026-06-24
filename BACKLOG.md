@@ -47,28 +47,12 @@ Last updated: 2026-06-24
       T-operand ops won't run on bare metal until the 74157 mux (U32/U33) is
       actually populated, so until then it would only work in the emulator.
 
-- [ ] **OS syscall stdio model (stdin/stdout/stderr) — the next layer.** The OS
-      syscall table now exists (`$4000` jump table: `SYS_GETCWD`/`SYS_CWDLBA`,
-      see DONE) and the C compiler can reach it via `bios()`. The high-value
-      addition is OS-owned standard streams: route program I/O through the OS
-      (`SYS_PUTC`/`SYS_GETC`) instead of the BIOS console directly, so the shell
-      can **redirect a program's output** (`RUN DIR.BIN >LIST`) — today only
-      OS-builtin commands can be redirected; a TPA program's `putchar` goes
-      straight to `CONOUT`. Keep it to three fixed streams (stdout redirectable
-      to console/file; stderr always console — the OS already bypasses
-      redirection for errors; stdin console/file), not POSIX fds. Touches: the
-      OS (own the streams + syscalls), the shell (`REDSCAN` binds a program's
-      stdout), and the compiler (a flag/builtins to emit `SYS_PUTC` instead of
-      `$0103`, or libc wrappers). Pairs with `|` (pipes) below and is the clean
-      enabler for offloading filter commands (MORE/WC/GREP) to C programs.
-- [ ] **Unix-like pipes in the OS shell** (`|`): output-to-file `>` redirection
-      is DONE (see DONE — OUTCH sink + shell `>name` capture). The remaining,
-      harder piece is `|`: with no multitasking, run sequentially — capture
-      cmd1's output into the RBUF buffer (already built), then run cmd2 with its
-      *input* sourced from that buffer. Needs a matching input indirection (an
-      INCH the consumer reads) and, to be useful, filter commands that actually
-      read a stream (MORE/WC/GREP-style) — none exist yet. RBUF is RAM-bound
-      (~the TPA, $B000..). Scope: add INCH + one filter (e.g. MORE) -> `|`.
+- The **OS stdio stream model and pipes are DONE** (see DONE — OS stream
+      syscalls, program `<`/`>` redirection, and `|`). Remaining sugar, if
+      wanted: useful **filter commands** to pipe through (a `MORE`/`WC`/`GREP`
+      as C programs — now writable over `getchar`/`putchar` + the BIOS), and a
+      separate `stderr` stream (errors currently go to the console via the BIOS
+      directly, which is the desired behaviour, just not a distinct syscall).
 - [ ] **Make the BIOS file routines hierarchy-aware (paths, not just root).** The
       ROM FS calls (`$0118 FFIND` / `$011B FCREATE`) currently operate only on the
       P8XFS v2 **root** directory (LBA 33), so BASIC `SAVE`/`LOAD` and any BIOS-FS
@@ -267,6 +251,23 @@ Last updated: 2026-06-24
 > Convention: substantial features get a **bold-title** prose entry (what was
 > done + why + caveats). The original foundation milestones are a terse tick
 > list under *Early milestones* at the end of this section.
+
+- **OS stdio stream model + redirection + pipes** (2026-06-24). Gave the OS a
+  Unix-style I/O layer over the `$4000` syscall table. New syscalls `SYS_PUTC`
+  ($4009), `SYS_GETC` ($400C), `SYS_PUTS` ($400F) route through the OS output
+  sink `OUTCH`, which gained a file-stream mode (`REDIRF=2` -> `FPUTB`).
+  `DORUN` binds a program's stdout (`> file`, `FWOPEN`/`FCLOSE` around exec) and
+  stdin (`< file`, `FOPEN` into a dedicated `IBUF` at $A200, `SYS_GETC`->`FGETB`;
+  `getchar` returns -1 at EOF). Both compilers emit `putchar`/`puts`/`getchar`
+  as these syscalls, so every compiled program is redirectable with no source
+  change — `RUN CAT.BIN <IN >OUT` copies a file. **Pipes** (`cmd1 | cmd2`) are a
+  `SHELL` state machine (`PIPEF`): `INSCAN`/`PIPESCAN` split the line, the left
+  runs into `PIPE.TMP`, the right re-dispatches with stdin from it, then it's
+  deleted — no existing command changed. Examples `compiler/examples/cat.c`
+  (filter), `pwd.c`; tests `c_redirect_test`/`c_stdin_test`/`c_pipe_test`
+  (differential, both compilers). Limitation: a program that iterates a
+  directory and streams output can't be redirected (write stream + dir
+  iteration share `SBUF`).
 
 - **C compiler Milestone A — p8cc.c self-compiles ("small C in small C")**
   (2026-06-24, #57). Rewrote the compiler in its own small-C subset as

@@ -197,5 +197,11 @@ returns `-1` at EOF). Both combine — `RUN CAT.BIN <IN >OUT` copies a file. The
 canonical filter `compiler/examples/cat.c` (stdin→stdout) is the worked example.
 Caveat: a program that iterates a directory (`DIR`/`TREE`) *and* streams output
 to a file can't be redirected — directory iteration and the write stream share
-the BIOS sector buffer `SBUF`. (Pipes `|` — run two programs with the first's
-stdout feeding the second's stdin — are the natural next step on this layer.)
+the BIOS sector buffer `SBUF`.
+
+**Pipes** build directly on this: `cmd1 | cmd2` runs `cmd1` with its stdout to a
+temp file `PIPE.TMP`, then re-dispatches `cmd2` with its stdin from that file,
+then deletes it — a `SHELL` state machine (`PIPEF`) over the `<`/`>` redirection
+above, so existing commands are untouched. E.g. `RUN PROD.BIN | RUN CAT.BIN`.
+(Sequential, single-stage: with no multitasking the left command runs to
+completion into the temp before the right starts.)

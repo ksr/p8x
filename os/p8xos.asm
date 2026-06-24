@@ -57,6 +57,7 @@ FCLOSE  = $0130          ; flush + register the streamed file as FNAME
 FNORM   = $0136          ; copy string (P1) -> FNAME, upcased + space-padded
 FOPEN   = $0124          ; open file FNAME for reading (P1 = 512-byte buffer)
 FGETB   = $0127          ; next byte -> A; C=1 at end of file
+FDELETE = $011E          ; tombstone file FNAME (for the pipe temp)
 BFNAME  = $9D4A          ; FNEXT entry-name output (BIOS FNAME)
 BFFLAG  = $9D70          ; FNEXT entry-flag output (BIOS FFLAG)
 
@@ -177,6 +178,8 @@ CWDPATH = $A100          ; textual CWD path for the prompt (up to 48 bytes)
 INMODE  = $A130          ; SYS_GETC source: 0 = console, 1 = the read stream
 INARM   = $A131          ; shell armed a "< file" for the next RUN
 INNAME  = $A132          ; "< file" name (null-terminated, <=48): $A132..$A161
+PIPEF   = $A162          ; pipe stage: 0 none, 1 left ran, 2 right ran
+PIPEBUF = $A163          ; saved right-hand command of a "cmd | cmd" ($A163..$A1A2)
 IBUF    = $A200          ; 512-byte buffer for the stdin read stream
 
 CR      = $0D
@@ -226,6 +229,7 @@ COLD:   LDP3 #STKTOP
         STA  REDIRF
         STA  INMODE             ; input from the console until a "< file" redirect
         STA  INARM
+        STA  PIPEF              ; no pipe in progress
         LDP1 #MBANNER
         JSR  OPUTS
         ; P8XFS v2 layout (the only format): root LBA 33..36 (4 secs), data @ 37
@@ -241,14 +245,30 @@ COLD:   LDP3 #STKTOP
 
 ; ---------------- Shell main loop --------------------------------------------
 SHELL:  JSR  FLUSHRED           ; if the previous command was redirected, write its file
+        ; pipe state machine: 1 = the left command just ran (now run the right
+        ; from the temp file); 2 = the right just ran (delete the temp). A pipe
+        ; "cmd1 | cmd2" runs as cmd1 >PIPE.TMP then cmd2 <PIPE.TMP then del.
+        LDA  PIPEF
+        JZ   SH_PROMPT
+        LDB  #1
+        CMP
+        JZ   PIPE_RHS
+        LDP1 #MPIPE             ; PIPEF=2: right command done -> remove the temp
+        JSR  FNORM
+        JSR  FDELETE
+        LDA  #0
+        STA  PIPEF
+SH_PROMPT:
         JSR  CRLF
         LDP1 #CWDPATH           ; prompt = "<path>> "
         JSR  OPUTS
         LDP1 #MPROMPT
         JSR  OPUTS
         JSR  GETLN              ; line -> LINEBUF (null-terminated)
+        JSR  PIPESCAN          ; split "cmd | cmd": save the right, arm left's >PIPE
         JSR  INSCAN            ; split off a "< name" stdin redirect (before REDSCAN)
         JSR  REDSCAN            ; split off a trailing "> name" and arm capture
+DISPATCH:
         LDP2 #LINEBUF
         LDP1 #CMDBUF
         JSR  PARSEW             ; CMDBUF = upcased command word; P2 -> args
@@ -2781,6 +2801,69 @@ INS_END:LDA  #0
         LDA  #1
         STA  INARM
 INS_NO: RTS
+
+; CPYPIPE: copy the pipe temp-file name -> (P1) (incl. the NUL).
+CPYPIPE:LDP2 #MPIPE
+CPP_LP: LDA  (P2)+
+        STA  (P1)+
+        JNZ  CPP_LP
+        RTS
+
+; PIPESCAN: split "cmd1 | cmd2". Save cmd2 to PIPEBUF, truncate LINEBUF at '|',
+; and arm cmd1's stdout to PIPE.TMP (REDIRF=1 + REDNAME, like REDSCAN's '>').
+; No '|' -> PIPEF stays 0.
+PIPESCAN:LDA #0
+        STA  PIPEF
+        LDP1 #LINEBUF
+PPS_LP: LDA  (P1)
+        JZ   PPS_NO
+        LDB  #'|'
+        CMP
+        JZ   PPS_HIT
+        INP1
+        JMP  PPS_LP
+PPS_HIT:LDA  #0
+        STA  (P1)              ; left command ends at '|'
+        INP1
+PPS_SK: LDA  (P1)              ; skip spaces before the right command
+        LDB  #' '
+        CMP
+        JNZ  PPS_CP
+        INP1
+        JMP  PPS_SK
+PPS_CP: LDP2 #PIPEBUF          ; save the right command
+PPS_CL: LDA  (P1)+
+        STA  (P2)+
+        JNZ  PPS_CL
+        LDP1 #REDNAME          ; arm cmd1's stdout -> PIPE.TMP
+        JSR  CPYPIPE
+        LDA  #1
+        STA  REDIRF
+        LDA  #<RBUF
+        STA  RPTRL
+        LDA  #>RBUF
+        STA  RPTRH
+        LDA  #1
+        STA  PIPEF
+PPS_NO: RTS
+
+; PIPE_RHS: stage 2 — copy the saved right command into LINEBUF, parse a ">out"
+; on it, bind its stdin to PIPE.TMP, and re-enter the dispatcher.
+PIPE_RHS:LDP1 #PIPEBUF
+        LDP2 #LINEBUF
+PRH_CP: LDA  (P1)+
+        STA  (P2)+
+        JNZ  PRH_CP
+        JSR  REDSCAN           ; a ">out" on the right command still works
+        LDP1 #INNAME           ; stdin <- PIPE.TMP
+        JSR  CPYPIPE
+        LDA  #1
+        STA  INARM
+        LDA  #2
+        STA  PIPEF
+        JMP  DISPATCH
+
+MPIPE:   .asciiz "PIPE.TMP"
 
 ; FLUSHRED: called at the shell prompt. If a redirect was armed, write the
 ; captured bytes [RBUF, RPTR) to the file REDNAME (via SAVECORE), then disarm.

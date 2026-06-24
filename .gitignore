@@ -131,3 +131,15 @@ emulator/test/cat.bin
 emulator/test/s.img
 emulator/test/sh.asm
 emulator/test/sp.asm
+emulator/test/prod.c
+emulator/test/prod.bin
+emulator/test/cat.bin
+emulator/test/pp.img
+emulator/test/pr.asm
+emulator/test/pr.bin
+emulator/test/ca.asm
+emulator/test/ca.bin
+emulator/test/prh.asm
+emulator/test/prp.asm
+emulator/test/cah.asm
+emulator/test/cap.asm
