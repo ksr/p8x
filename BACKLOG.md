@@ -265,9 +265,10 @@ Last updated: 2026-06-24
   runs into `PIPE.TMP`, the right re-dispatches with stdin from it, then it's
   deleted — no existing command changed. Examples `os/commands/cat.c`
   (filter), `pwd.c`; tests `c_redirect_test`/`c_stdin_test`/`c_pipe_test`
-  (differential, both compilers). Limitation: a program that iterates a
-  directory and streams output can't be redirected (write stream + dir
-  iteration share `SBUF`).
+  (differential, both compilers). A program that iterates a directory *and*
+  streams output (`DIR`) calls `FSDIRBUF` ($0145) to move `FNEXT`'s sector
+  buffer off `SBUF` onto its own page, so it streams per entry and redirects/
+  pipes like any other program (no listing buffer, no size cap).
 
 - **C compiler Milestone A — p8cc.c self-compiles ("small C in small C")**
   (2026-06-24, #57). Rewrote the compiler in its own small-C subset as

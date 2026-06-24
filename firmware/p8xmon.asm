@@ -145,7 +145,7 @@ RESET:  JMP  COLD
 
 ;==============================================================================
 ; Monitor body (relocated above the BIOS table; reset vectors here).
-; The BIOS jump table now runs to $0132 (FCLOSE), so the body starts at $0160
+; The BIOS jump table now runs to $0145 (FSDIRBUF), so the body starts at $0160
 ; to leave headroom for further BIOS entries. RESET ($0000) jumps here by label.
 ;==============================================================================
         .org $0160
