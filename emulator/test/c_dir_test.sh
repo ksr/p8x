@@ -1,5 +1,5 @@
 #!/bin/sh
-# OS commands written in C (compiler/examples/dir.c, pwd.c), exercising:
+# OS commands written in C (os/commands/dir.c, pwd.c), exercising:
 #   - argstr()           the RUN command tail (P2)
 #   - bios() carry flag  to terminate the FOPENDIR/FNEXT directory loop
 #   - the OS syscall ABI SYS_CWDLBA ($4006) / SYS_GETCWD ($4003) for the current
@@ -45,11 +45,11 @@ check() {   # $1 = label, $2 = combined output
 
 compile_one() {   # $1 = compiler tag: build both programs with it
     if [ "$1" = "host" ]; then
-        ./p8cc_host < $ROOT/compiler/examples/dir.c > d.asm
-        ./p8cc_host < $ROOT/compiler/examples/pwd.c > p.asm
+        ./p8cc_host < $ROOT/os/commands/dir.c > d.asm
+        ./p8cc_host < $ROOT/os/commands/pwd.c > p.asm
     else
-        python3 $ROOT/compiler/p8cc.py $ROOT/compiler/examples/dir.c -o d.asm >/dev/null
-        python3 $ROOT/compiler/p8cc.py $ROOT/compiler/examples/pwd.c -o p.asm >/dev/null
+        python3 $ROOT/compiler/p8cc.py $ROOT/os/commands/dir.c -o d.asm >/dev/null
+        python3 $ROOT/compiler/p8cc.py $ROOT/os/commands/pwd.c -o p.asm >/dev/null
     fi
     python3 $ROOT/assembler/p8xasm.py d.asm -o d.bin --base 0xB000 >/dev/null
     python3 $ROOT/assembler/p8xasm.py p.asm -o p.bin --base 0xB000 >/dev/null

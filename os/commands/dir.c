@@ -7,7 +7,7 @@
  * no argument it lists the current directory, obtained through the OS syscall
  * SYS_CWDLBA ($4006) — no peeking into OS internals.
  *
- *     python3 compiler/p8cc.py compiler/examples/dir.c -o dir.asm
+ *     python3 compiler/p8cc.py os/commands/dir.c -o dir.asm
  *     python3 assembler/p8xasm.py dir.asm -o dir.bin --base 0xB000
  *     p8xfs put disk.img dir.bin --name DIR.BIN --load 0xB000 --exec 0xB000
  *     # on the P8X:   RUN DIR.BIN /BIN     (or just RUN DIR.BIN -> current dir)

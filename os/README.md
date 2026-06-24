@@ -181,7 +181,7 @@ from C, the `p8cc` `bios()` intrinsic). The table is **append-only**:
 | `$400F` | `SYS_PUTS` | write the `(P1)` NUL-terminated string to stdout |
 
 `SYS_GETCWD`/`SYS_CWDLBA` are the supported way to consult the CWD — no peeking
-into OS RAM. `compiler/examples/pwd.c` (PWD) and `compiler/examples/dir.c` (DIR,
+into OS RAM. `os/commands/pwd.c` (PWD) and `os/commands/dir.c` (DIR,
 no-arg lists the CWD via `SYS_CWDLBA` + `FOPENDIRAT`) are worked examples;
 `compiler/p8lib.c` wraps them as `getcwd(buf)` / `cwdlba()`.
 
@@ -194,7 +194,7 @@ as these syscalls, so any compiled program is redirectable with no source
 change. Symmetrically, `RUN PROG <FILE` binds **stdin** to a file: `DORUN` opens
 it as the read stream into `IBUF` and `SYS_GETC`/`getchar` pull from it (`getchar`
 returns `-1` at EOF). Both combine — `RUN CAT.BIN <IN >OUT` copies a file. The
-canonical filter `compiler/examples/cat.c` (stdin→stdout) is the worked example.
+canonical filter `os/commands/cat.c` (stdin→stdout) is the worked example.
 Caveat: a program that iterates a directory (`DIR`/`TREE`) *and* streams output
 to a file can't be redirected — directory iteration and the write stream share
 the BIOS sector buffer `SBUF`.

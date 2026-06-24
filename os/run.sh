@@ -55,7 +55,7 @@ if [ ! -f "$disk" ]; then
     # redirection and pipes out of the box. e.g.  RUN /BIN/DIR.BIN /BIN ,
     # RUN /BIN/CAT.BIN <README.TXT ,  RUN /BIN/PWD.BIN | RUN /BIN/CAT.BIN .
     for ex in dir pwd cat; do
-        python3 "$root/compiler/p8cc.py" "$root/compiler/examples/$ex.c" -o "$build/$ex.asm" >/dev/null
+        python3 "$root/compiler/p8cc.py" "$root/os/commands/$ex.c" -o "$build/$ex.asm" >/dev/null
         python3 "$root/assembler/p8xasm.py" "$build/$ex.asm" -o "$build/$ex.bin" --base 0xB000 >/dev/null
         up=$(echo "$ex" | tr a-z A-Z)
         python3 "$root/tools/p8xfs.py" put "$disk" "$build/$ex.bin" \

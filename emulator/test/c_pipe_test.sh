@@ -37,12 +37,12 @@ check() {   # $1 = label, $2 = prod.asm, $3 = cat.asm
 if command -v cc >/dev/null 2>&1; then
     cc -O2 -w $ROOT/compiler/p8cc.c -o p8cc_host 2>/dev/null || fail "cc could not build p8cc.c"
     ./p8cc_host < prod.c > prh.asm
-    ./p8cc_host < $ROOT/compiler/examples/cat.c > cah.asm
+    ./p8cc_host < $ROOT/os/commands/cat.c > cah.asm
     check "p8cc.c" prh.asm cah.asm
 fi
 
 python3 $ROOT/compiler/p8cc.py prod.c -o prp.asm >/dev/null
-python3 $ROOT/compiler/p8cc.py $ROOT/compiler/examples/cat.c -o cap.asm >/dev/null
+python3 $ROOT/compiler/p8cc.py $ROOT/os/commands/cat.c -o cap.asm >/dev/null
 check "p8cc.py" prp.asm cap.asm
 
 echo "C-PIPE TEST: PASS"

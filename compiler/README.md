@@ -94,7 +94,7 @@ over the **OS stream syscalls** (`$400C`/`$4009`/`$400F`), not the raw BIOS — 
 a program's output is **redirectable by the shell**: `RUN PROG >FILE` streams its
 `putchar`/`puts` to a file with no source change, and `RUN PROG <FILE` binds its
 `getchar` to a file (which returns `-1` at end of file). Both combine —
-`RUN CAT.BIN <IN >OUT` copies a file (see `compiler/examples/cat.c`). (A program
+`RUN CAT.BIN <IN >OUT` copies a file (see `os/commands/cat.c`). (A program
 that iterates a directory while writing can't be redirected — the write stream
 and directory iteration share the BIOS `SBUF`.)
 Everything else a program needs (`strlen`, `getline`, `strcmp`, …) is ordinary C
@@ -112,7 +112,7 @@ newline, and the file API (`FOPEN`/`FGETB`/`FLOADAT`/…) is driven by `poke`-in
 its RAM ABI variables and `bios`-ing the call. (`bios`'s address must be a
 literal — it becomes the `JSR` target.) `argstr()` returns the program's command
 tail (the `RUN` argument in `P2`) as a `char *`. Both compilers support all of
-these — see `compiler/examples/dir.c`, the OS `DIR` command written in C.
+these — see `os/commands/dir.c`, the OS `DIR` command written in C.
 
 ### `p8lib.c` — a C-source standard library
 

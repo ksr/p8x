@@ -263,7 +263,7 @@ Last updated: 2026-06-24
   change — `RUN CAT.BIN <IN >OUT` copies a file. **Pipes** (`cmd1 | cmd2`) are a
   `SHELL` state machine (`PIPEF`): `INSCAN`/`PIPESCAN` split the line, the left
   runs into `PIPE.TMP`, the right re-dispatches with stdin from it, then it's
-  deleted — no existing command changed. Examples `compiler/examples/cat.c`
+  deleted — no existing command changed. Examples `os/commands/cat.c`
   (filter), `pwd.c`; tests `c_redirect_test`/`c_stdin_test`/`c_pipe_test`
   (differential, both compilers). Limitation: a program that iterates a
   directory and streams output can't be redirected (write stream + dir

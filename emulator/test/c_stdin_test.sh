@@ -1,7 +1,7 @@
 #!/bin/sh
 # Shell INPUT redirection (`RUN PROG <FILE`): the OS binds stdin to a file (read
 # stream into IBUF), and SYS_GETC pulls from it; getchar() returns -1 at EOF.
-# compiler/examples/cat.c is a stdin->stdout filter.  Compiled by BOTH p8cc.py
+# os/commands/cat.c is a stdin->stdout filter.  Compiled by BOTH p8cc.py
 # and the native p8cc.c.  Two checks per compiler on a disk holding IN.TXT
 # ("STDINOK"):
 #   RUN /CAT.BIN <IN.TXT            -> console prints STDINOK
@@ -38,11 +38,11 @@ check() {   # $1 = label, $2 = cat.asm
 
 if command -v cc >/dev/null 2>&1; then
     cc -O2 -w $ROOT/compiler/p8cc.c -o p8cc_host 2>/dev/null || fail "cc could not build p8cc.c"
-    ./p8cc_host < $ROOT/compiler/examples/cat.c > sh.asm
+    ./p8cc_host < $ROOT/os/commands/cat.c > sh.asm
     check "p8cc.c" sh.asm
 fi
 
-python3 $ROOT/compiler/p8cc.py $ROOT/compiler/examples/cat.c -o sp.asm >/dev/null
+python3 $ROOT/compiler/p8cc.py $ROOT/os/commands/cat.c -o sp.asm >/dev/null
 check "p8cc.py" sp.asm
 
 echo "C-STDIN TEST: PASS"
