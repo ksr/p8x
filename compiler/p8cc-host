@@ -1,0 +1,24 @@
+#!/bin/sh
+# p8cc-host — file-argument front end for the native cross-compiler built from
+# p8cc.c.  Gives the same interface as p8cc.py:
+#
+#     p8cc-host prog.c [-o prog.asm]      (default output: a.asm)
+#
+# The native binary itself (p8cc-host.bin, built by `make` here) is a plain
+# stdin->stdout filter; this wrapper just builds it on demand and redirects.
+set -e
+here=$(dirname "$0")
+bin="$here/p8cc-host.bin"
+
+# build (or rebuild if p8cc.c is newer) the native compiler
+if [ ! -x "$bin" ] || [ "$here/p8cc.c" -nt "$bin" ]; then
+    ${CC:-cc} -O2 -w "$here/p8cc.c" -o "$bin"
+fi
+
+[ $# -ge 1 ] || { echo "usage: p8cc-host prog.c [-o out.asm]" >&2; exit 2; }
+src=$1; out=a.asm
+shift
+if [ "$1" = "-o" ]; then out=$2; fi
+
+"$bin" < "$src" > "$out"
+echo "p8cc-host: $src -> $out"

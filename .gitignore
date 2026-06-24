@@ -96,3 +96,4 @@ emulator/test/diff.c
 emulator/test/d.asm
 emulator/test/d.bin
 emulator/test/d.img
+compiler/p8cc-host.bin

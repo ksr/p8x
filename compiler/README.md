@@ -33,8 +33,21 @@ There are two implementations of the same compiler:
   console or `-1` from host `getchar`). `p8cc.py` compiling `p8cc.c` cleanly is
   the proof that the subset is self-sufficient — "small C written in small C".
   Correctness is checked by a **differential** test
-  (`emulator/test/c_selfhost_test.sh`): a sample compiled by *both* `p8cc_host`
-  and `p8cc.py` runs to byte-identical output on the P8X.
+  (`emulator/test/c_selfhost_test.sh`): a sample compiled by *both* `p8cc.c` and
+  `p8cc.py` runs to identical output on the P8X. (The two emit *behaviourally*
+  equivalent asm — same program output — not byte-identical text; they differ in
+  label names and argument-push order.)
+
+  **As a day-to-day tool.** A `compiler/Makefile` builds the native compiler, and
+  `compiler/p8cc-host` is a wrapper giving it `p8cc.py`'s file interface:
+
+  ```sh
+  make -C compiler                       # builds compiler/p8cc-host.bin (gitignored)
+  compiler/p8cc-host prog.c -o prog.asm   # same interface as p8cc.py (auto-builds if stale)
+  ```
+
+  The native binary is a fast (~no startup) alternative to the Python tool and
+  is literally the C codebase compiled for the host.
 
   **Milestone B** (run `p8cc.c` itself *on the P8X*) is a separate, open task: a
   full translation unit's working set exceeds the `$B000` TPA, so it needs the
