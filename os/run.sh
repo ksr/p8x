@@ -80,9 +80,25 @@ ASMEOF
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/hello.asm" --name /HELLO.ASM >/dev/null
     echo "created fresh disk: $disk"
 else
+    # Snapshot the disk's mtime BEFORE we touch it (the boot below rewrites it).
+    touch -r "$disk" "$build/diskref"
     # Reinstall the freshly-built OS into the existing disk (keeps your files).
     python3 "$root/tools/p8xfs.py" boot "$disk" "$build/p8xos.bin" >/dev/null
     echo "using existing disk: $disk"
+    # The OS boot is refreshed above, but the bundled /BIN programs (DIR, CAT,
+    # BASIC, EDIT, ASM ...) are NOT — p8xfs put won't overwrite, and we won't
+    # wipe a disk that may hold your files. So if any program/OS source is newer
+    # than the disk's pre-run mtime, its /BIN/*.BIN is stale here. Warn loudly.
+    newer=$(find "$root/os/commands" "$root/os/p8xos.asm" "$root/compiler/p8cc.py" \
+                 "$root/basic" "$root/apps" -type f -newer "$build/diskref" 2>/dev/null | head -5)
+    if [ -n "$newer" ]; then
+        echo "WARNING: these sources are newer than $disk, but the disk's /BIN" >&2
+        echo "         programs are NOT rebuilt on an existing disk:" >&2
+        echo "$newer" | sed 's,^,           ,' >&2
+        echo "         To pick up the changes, rebuild the disk:" >&2
+        echo "           rm \"$disk\" && $0 ${1:+\"$1\"}" >&2
+        echo "         (this recreates the sample tree; copy out any files you made first)." >&2
+    fi
 fi
 
 echo "--- starting emulator: you are in the MONITOR (* prompt). Type B to boot P8X/OS. ---"
