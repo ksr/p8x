@@ -19,7 +19,9 @@
  * so param i is at __fp+2*(pcount-i)); global int variables (optional constant
  * initializer); the FULL expression operator set (precedence ladder + - * / %
  * << >> < > <= >= == != & ^ | && || and unary - ! ~); assignment; putchar(e)
- * and user calls; statements: block, decl, if/else, while, for, return, expr;
+ * and user calls (plus the BIOS builtins getchar/putchar/puts, peek/poke for
+ * byte memory, and bios(constaddr,p1,a) to call any monitor routine);
+ * statements: block, decl, if/else, while, for, return, expr;
  * a char/int type system with pointers (& and *, correct 1/2-byte load/store,
  * pointer arithmetic scaled by element size) via an lvalue-address model;
  * arrays (decl, decay, e[i] indexing), string literals (pooled), the puts
@@ -815,6 +817,7 @@ int factor() {
     int ty;
     int j;
     int esz;
+    int addr;
     ty = mkty(0, 0, 0);
     if (tok == T_NUM) { set_ax(tval); lex(); ty = mkty(0, 0, 0); }
     else if (tok == T_STR) {                     /* string literal -> char* */
@@ -830,28 +833,56 @@ int factor() {
     else if (is_punct("(")) { lex(); ty = expr(); eat(")"); }
     else if (tok == T_ID) {
         strcpy_(nm, tname); lex();
-        if (is_punct("(")) {                     /* function call -> int rvalue */
-            lex();
-            nargs = 0;
-            if (is_punct(")") == 0) {
-                rvalue(expr());
-                if (streq(nm, "putchar") == 0 && streq(nm, "puts") == 0) {
-                    line("        JSR __push"); use_push = 1; nargs = 1;
-                }
-                while (is_punct(",")) {
-                    lex(); rvalue(expr());
-                    line("        JSR __push"); use_push = 1;
-                    nargs = nargs + 1;
-                }
-            }
-            eat(")");
-            if (streq(nm, "putchar")) {
+        if (is_punct("(")) {                     /* call / builtin -> int rvalue */
+            lex();                               /* '(' */
+            if (streq(nm, "getchar")) {          /* BIOS CONIN */
+                eat(")");
+                line("        JSR $0100"); line("        STA __ax");
+                line("        LDA #0"); line("        STA __ax+1");
+            } else if (streq(nm, "putchar")) {   /* BIOS CONOUT */
+                rvalue(expr()); eat(")");
                 line("        LDA __ax"); line("        JSR $0103");
-            } else if (streq(nm, "puts")) {
+            } else if (streq(nm, "puts")) {      /* BIOS PUTS + newline */
+                rvalue(expr()); eat(")");
                 line("        LDA __ax"); line("        TAP1L");
                 line("        LDA __ax+1"); line("        TAP1H");
                 line("        JSR $0112"); line("        LDA #10"); line("        JSR $0103");
-            } else {
+            } else if (streq(nm, "peek")) {      /* peek(addr) -> byte */
+                rvalue(expr()); eat(")");
+                line("        LDA __ax"); line("        TAP1L");
+                line("        LDA __ax+1"); line("        TAP1H");
+                line("        LDA (P1)"); line("        STA __ax");
+                line("        LDA #0"); line("        STA __ax+1");
+            } else if (streq(nm, "poke")) {      /* poke(addr, val) */
+                rvalue(expr()); push_ax();
+                eat(","); rvalue(expr()); eat(")");
+                pop_t();                          /* __t = addr, __ax = val */
+                line("        LDA __t"); line("        TAP1L");
+                line("        LDA __t+1"); line("        TAP1H");
+                line("        LDA __ax"); line("        STA (P1)");
+            } else if (streq(nm, "bios")) {      /* bios(constaddr, p1, a) -> A */
+                if (tok != T_NUM) line("; ERROR: bios addr not constant");
+                addr = tval; lex();
+                eat(","); rvalue(expr()); push_ax();   /* P1 operand */
+                eat(","); rvalue(expr()); eat(")");    /* A operand -> __ax */
+                pop_t();                               /* __t = P1 operand */
+                line("        LDA __t"); line("        TAP1L");
+                line("        LDA __t+1"); line("        TAP1H");
+                line("        LDA __ax");
+                emitstr("        JSR "); emitdec(addr); putchar(10);
+                line("        STA __ax"); line("        LDA #0"); line("        STA __ax+1");
+            } else {                             /* user function */
+                nargs = 0;
+                if (is_punct(")") == 0) {
+                    rvalue(expr());
+                    line("        JSR __push"); use_push = 1; nargs = 1;
+                    while (is_punct(",")) {
+                        lex(); rvalue(expr());
+                        line("        JSR __push"); use_push = 1;
+                        nargs = nargs + 1;
+                    }
+                }
+                eat(")");
                 emitstr("        JSR _f_"); emitstr(nm); putchar(10);
                 if (nargs > 0) {                 /* caller pops args: __csp += 2n */
                     k = nlabel; nlabel = nlabel + 1;

@@ -18,6 +18,9 @@ Supported now:
                returns, or whole-struct assignment (assign members instead).
                union members all sit at offset 0; no bitfields, no sizeof().
   builtins     getchar()  putchar(e)  puts(e)   (BIOS $0100 / $0103 / $0112)
+               peek(addr)  poke(addr,v)         (byte memory / memory-mapped I/O)
+               bios(constaddr, p1, a) -> A      (call any monitor routine: sets
+                 P1=p1 and A=a, JSRs the literal addr, returns A zero-extended)
   note         for-init is an expression, not a declaration (locals are
                function-scoped; declare the loop var before the loop)
 
@@ -604,6 +607,25 @@ class Gen:
             self.emit("        LDA __ax", "        TAP1L", "        LDA __ax+1",
                       "        TAP1H", "        JSR $0112",
                       "        LDA #10", "        JSR $0103"); return
+        if name == "peek":                               # peek(addr) -> byte at addr
+            self.gen_expr(args[0]); self.ax_to_p1()
+            self.emit("        LDA (P1)", "        STA __ax",
+                      "        LDA #0", "        STA __ax+1"); return
+        if name == "poke":                               # poke(addr, val)
+            self.gen_expr(args[1]); self.push_ax()
+            self.gen_expr(args[0]); self.ax_to_p1()
+            self.pop_t()
+            self.emit("        LDA __t", "        STA (P1)"); return
+        if name == "bios":                               # bios(addr, p1, a) -> A
+            if args[0][0] != "num":
+                sys.exit("p8cc: bios() address must be a constant")
+            self.gen_expr(args[1]); self.push_ax()       # P1 operand
+            self.gen_expr(args[2])                        # A operand -> __ax
+            self.pop_t()                                  # __t = P1 operand
+            self.emit("        LDA __t", "        TAP1L", "        LDA __t+1",
+                      "        TAP1H",                     # P1 = arg1
+                      "        LDA __ax", "        JSR $%04X" % (args[0][1] & 0xFFFF),
+                      "        STA __ax", "        LDA #0", "        STA __ax+1"); return
         for a in reversed(args):
             self.gen_expr(a); self.need("__push"); self.emit("        JSR __push")
         self.emit("        JSR _f_%s" % name)

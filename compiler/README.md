@@ -87,13 +87,22 @@ to the OS shell with `RTS` (startup inits `__csp` then `JSR _f_main`).
 | functions | parameters, **stack locals**, **recursion**, return value in `AX` |
 | pointers | `&lvalue`, `*ptr` (load/store), pointer +/- scaled by element size, `a[i]` |
 | primaries | int / char / string literals, identifiers, calls, `( )` |
-| builtins | `getchar()`, `putchar(e)`, `puts(e)` (over the BIOS at `$0100` / `$0103` / `$0112`) |
+| builtins | console: `getchar()` `putchar(e)` `puts(e)` (BIOS `$0100`/`$0103`/`$0112`); memory: `peek(addr)` `poke(addr,v)`; general: `bios(constaddr, p1, a)` |
 
-**Library functions are written in C.** The only I/O builtins are the three
-above — `getchar` (BIOS `CONIN`, returns the next console byte in `AX`),
-`putchar`, and `puts`. Everything else a program needs (`strlen`, `getline`,
-`strcmp`, …) is ordinary C compiled alongside it, now that pointers, arrays, and
-`char` work. See the `strlen` in the test below for the pattern.
+**Library functions are written in C.** The console builtins are thin BIOS
+wrappers — `getchar` (`CONIN`), `putchar` (`CONOUT`), `puts` (`PUTS` + newline).
+Everything else a program needs (`strlen`, `getline`, `strcmp`, …) is ordinary C
+compiled alongside it, now that pointers, arrays, and `char` work. See the
+`strlen` in the test below for the pattern.
+
+**Reaching the rest of the BIOS.** `peek(addr)`/`poke(addr, v)` do byte memory
+access (e.g. the switch/LED ports at `$FF00`/`$FF02`), and `bios(addr, p1, a)`
+calls *any* monitor routine: it sets `P1 = p1` and `A = a`, `JSR`s the (constant)
+address, and returns the routine's `A` zero-extended. So the whole jump table is
+reachable from C — e.g. `bios(0x0112, str, 0)` is `puts` without the newline, and
+the file API (`FOPEN`/`FGETB`/`FLOADAT`/…) can be driven by `poke`-ing its RAM
+ABI variables and `bios`-ing the call. (`bios`'s address must be a literal, since
+it becomes the `JSR` target.) Both `p8cc.py` and `p8cc.c` support all of these.
 
 `int` is 16-bit (comparisons and `/` `%` are **unsigned** 16-bit); `char` is
 8-bit. The compiler tracks types so a dereference loads/stores the right width

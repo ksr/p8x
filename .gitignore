@@ -97,3 +97,8 @@ emulator/test/d.asm
 emulator/test/d.bin
 emulator/test/d.img
 compiler/p8cc-host.bin
+emulator/test/cbios.c
+emulator/test/cbios.bin
+emulator/test/cbios.img
+emulator/test/ch.asm
+emulator/test/cp.asm
