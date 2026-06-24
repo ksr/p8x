@@ -1,7 +1,7 @@
 # P8X Project Backlog
 
 Add ideas as they come; move items between sections as they progress.
-Last updated: 2026-06-23
+Last updated: 2026-06-24
 
 ## How to use
 - **NEXT** — committed, in rough priority order
@@ -108,50 +108,25 @@ Last updated: 2026-06-23
     - Smoke tests test1-3.asm overlap test_isa.asm (per-opcode). They give
       higher-level scenario coverage (banner, JSR/RTS, countdown); keep as
       complementary unless trimming.
-- [ ] **C compiler — cross-compiler DONE; bootstrapping toward self-host is the
-      open work.** The host cross-compiler (`compiler/p8cc.py`) is solid through
-      v0.3 (#44–47, see DONE): int/char/pointers/arrays, functions with
-      params/locals/recursion, `if`/`while`, `+ - * / %`, comparisons, `& *`
-      indexing, and `getchar`/`putchar`/`puts` over the BIOS — with library
-      functions written in C. **It is written in Python and runs on the Mac.**
-      Two further milestones, in order, lead to "small C written in small C":
+- [ ] **C compiler — Milestone A DONE (self-compiling, host-run); Milestone B
+      (run on the P8X) is the open work.** Both compilers exist and are tested:
+      `compiler/p8cc.py` (Python, the everyday tool + reference oracle, never
+      removed) and `compiler/p8cc.c` (the same compiler in p8cc's own small-C
+      subset). p8cc.py compiles p8cc.c cleanly — "small C written in small C" —
+      and a differential test (`c_selfhost_test.sh`) proves the gcc-built
+      p8cc.c and p8cc.py agree on output. The language in p8cc.c is complete; see
+      DONE for details. **KEEP p8cc.py** — it bootstraps p8cc.c and is the diff
+      oracle.
 
-      **(A) Rewrite p8cc's source in its own C subset (still cross-compiled on
-      the host).** This is the "written in small C" milestone — the compiler
-      compiles itself, but you still run it on the Mac. Prerequisites are subset
-      features p8cc needs to express a compiler, none of which exist yet:
-        - **structs/unions** (the AST nodes, symbol-table entries, type records
-          are all structs today) — the single biggest gap;
-        - **function return-type tracking** (currently everything defaults to
-          `int`; a compiler passes pointers-to-structs around constantly);
-        - **`for`, `&&`/`||` short-circuit, shifts + bitwise `& | ^ ~`** (lexer
-          and codegen lean on these);
-        - **global initializers + arrays of pointers** (keyword/opcode tables);
-        - **`switch`** (nice-to-have for the lexer/parser dispatch).
-      Then port lex/parse/codegen from Python to that subset. Reference SubC
-      (Nils Holm) — it is explicitly a self-compiling small-C and a good map for
-      both the subset boundary and the codegen shape. **KEEP p8cc.py — the C
-      rewrite is added ALONGSIDE it (e.g. compiler/p8cc.c), never replacing it.**
-      The Python compiler is the host bootstrap that compiles the C-source
-      compiler in the first place (delete it and you need an already-working
-      p8cc to rebuild p8cc), and it stays the reference oracle for differential
-      testing the two against each other. Both stay built + tested in the suite.
-
-      **(B) Self-host: run the C-source compiler ON the P8X.** Strictly harder
-      than (A) and gated by RAM, exactly like the assembler was. The P8X has
-      ~48 KB RAM ($4000–$FEFF) and a compiler's working set (symbol table, AST,
-      type info) won't fit a whole translation unit in memory — so it needs the
-      same streaming/single-pass discipline we gave ASM (stream source in, emit
-      asm out, bounded tables), and it depends on the on-target assembler (DONE)
-      to turn that asm into a binary. Likely an even smaller subset than (A),
-      possibly multi-pass through temp files on disk.
-
-      Codegen is already shaped by the ISA (AX pseudo-acc; P3 hardware stack for
-      temps/returns; a software C-stack via `__csp`/`__fp` for frames) and a
-      runtime exists (`__add/__sub/__mul/__divmod/...`, emitted on demand).
-      Sequence: do (A)'s subset features incrementally (they're independently
-      useful for writing C on the P8X regardless of bootstrapping), then the
-      self-compile rewrite, then (B). Forth remains an orthogonal track.
+      **(B) Self-host: run `p8cc.c` ON the P8X.** Gated by RAM, exactly like the
+      assembler was. The P8X has ~48 KB RAM ($4000–$FEFF) and a compiler's
+      working set (source buffer, symbol/struct tables, string pool) plus its own
+      ~20 KB+ code won't fit a whole translation unit at the $B000 TPA — so it
+      needs the same streaming/single-pass discipline we gave ASM (stream source
+      in, emit asm out, bounded tables; today p8cc.c slurps stdin into a fixed
+      `src[]`). It depends on the on-target assembler (DONE) to turn the emitted
+      asm into a binary. Likely an even smaller working subset, possibly
+      multi-pass through temp files on disk. Forth remains an orthogonal track.
 - [ ] **Native toolchain follow-ups** (EDIT + ASM landed — see DONE). Remaining
       polish on the on-target assembler/editor, none blocking:
         - **Tools write to the flat root only.** EDIT `W` and ASM output go to
@@ -279,6 +254,25 @@ Last updated: 2026-06-23
 > done + why + caveats). The original foundation milestones are a terse tick
 > list under *Early milestones* at the end of this section.
 
+- **C compiler Milestone A — p8cc.c self-compiles ("small C in small C")**
+  (2026-06-24, #57). Rewrote the compiler in its own small-C subset as
+  `compiler/p8cc.c`, ALONGSIDE `p8cc.py` (kept as bootstrap + reference oracle).
+  p8cc.c is both valid standard C and valid p8cc-subset C, so it builds two
+  ways: `cc p8cc.c` → a native bootstrap that reads C on stdin and writes asm to
+  stdout, and `p8cc.py p8cc.c` → the self-compile proof (the subset accepts its
+  own source). Built in 8 increments, each behaviourally differential-tested
+  (host bootstrap vs p8cc.py, identical P8X output): lexer → first codegen slice
+  + harness → full operator ladder → globals/assignment/control-flow →
+  params/locals/recursion (a __csp/__fp frame; args pushed left-to-right so
+  param i is at __fp+2*(pcount-i)) → char/int types + pointers via an
+  lvalue-address model (a leaf leaves an lvalue's ADDRESS in __ax; rvalue()
+  derefs by width on demand, making &x free and *p/x= uniform) → arrays +
+  indexing + string-literal pool + puts → structs/unions with `.`/`->`.
+  Enabling subset additions to p8cc.py: `#`-line skipping (so `#include
+  <stdio.h>` works for gcc) and function prototypes (mutual recursion in a
+  recursive-descent parser needs forward decls). Single-pass, so declare-before-
+  use. Test: `emulator/test/c_selfhost_test.sh`. **Milestone B** (run p8cc.c ON
+  the P8X) stays open — a RAM/streaming problem, not a language gap.
 - **C cross-compiler v0.2/v0.3 — params, recursion, pointers, I/O** (2026-06-23,
   #45–47). Grew `p8cc.py` from the v0.1 skeleton into a usable small-C:
     - **#45 calling convention.** A software C-stack (`__csp`, grows down from

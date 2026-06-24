@@ -14,6 +14,37 @@ python3 tools/p8xfs.py put disk.img prog.bin --name /PROG.BIN --load 0xB000 --ex
 A native (on-target) compiler is a later goal; this host cross-compiler comes
 first and stays the primary tool.
 
+## Two compilers: `p8cc.py` and `p8cc.c`
+
+There are two implementations of the same compiler:
+
+- **`p8cc.py`** — the original, written in Python. The everyday tool and the
+  reference oracle. **It is the bootstrap and is never removed.**
+- **`p8cc.c`** — the compiler rewritten in p8cc's *own* small-C subset
+  (Milestone A, done). It is simultaneously valid standard C and valid
+  p8cc-subset C, so it builds two ways:
+
+  ```sh
+  cc compiler/p8cc.c -o p8cc_host        # native bootstrap: ./p8cc_host < prog.c > prog.asm
+  python3 compiler/p8cc.py compiler/p8cc.c -o p8cc.asm   # the self-compile proof
+  ```
+
+  It reads C from stdin and writes assembly to stdout (EOF is `0` from the P8X
+  console or `-1` from host `getchar`). `p8cc.py` compiling `p8cc.c` cleanly is
+  the proof that the subset is self-sufficient — "small C written in small C".
+  Correctness is checked by a **differential** test
+  (`emulator/test/c_selfhost_test.sh`): a sample compiled by *both* `p8cc_host`
+  and `p8cc.py` runs to byte-identical output on the P8X.
+
+  **Milestone B** (run `p8cc.c` itself *on the P8X*) is a separate, open task: a
+  full translation unit's working set exceeds the `$B000` TPA, so it needs the
+  streaming/single-pass discipline the on-target assembler already uses — a RAM
+  problem, not a language one. The language in `p8cc.c` is complete.
+
+  `p8cc.c` is single-pass and so requires **declare-before-use** (function
+  prototypes for mutual recursion, globals/structs before reference); `p8cc.py`
+  is two-pass and more lenient. Both accept the same subset otherwise.
+
 ## Execution model
 
 The P8X has no 16-bit accumulator, so expression results live in a **16-bit
@@ -97,3 +128,8 @@ union — checking the rendered output `796A`.
 `emulator/test/c_global_test.sh` covers global initializers: a scalar, a
 `char *` string, an `int[]` list, a `char *[]` string table, and an inferred
 `char[]` — output `7HI` / `6CY` / `YO`.
+
+`emulator/test/c_selfhost_test.sh` is the Milestone-A check for `p8cc.c`: it
+builds the host bootstrap with `cc`, confirms `p8cc.py` self-compiles `p8cc.c`,
+and runs a feature-spanning sample compiled by *both* compilers, asserting
+byte-identical P8X output (`12345678Y120AZ5QRSTG`).
