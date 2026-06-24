@@ -2964,7 +2964,11 @@ MHELP:   .byte CR,LF
          .byte CR,LF
          .ascii "EXIT / MON    return to the ROM monitor"
          .byte CR,LF
-         .ascii "any cmd >FILE send its output to FILE instead of the screen"
+         .ascii "cmd >FILE     send output to FILE instead of the screen"
+         .byte CR,LF
+         .ascii "cmd <FILE     take input from FILE instead of the keyboard"
+         .byte CR,LF
+         .ascii "a | b         pipe a's output into b's input"
          .byte CR,LF
          .ascii "programs:     RUN /BIN/BASIC.BIN | EDIT.BIN f | ASM.BIN s o"
          .byte CR,LF
