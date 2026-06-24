@@ -340,9 +340,6 @@ DISPATCH:
         LDP1 #KW_PWD
         JSR  CMPCMD
         JNZ  DOPWD
-        LDP1 #KW_CAT
-        JSR  CMPCMD
-        JNZ  DOCAT
         LDP1 #KW_EXIT
         JSR  CMPCMD
         JNZ  DOEXIT
@@ -376,47 +373,9 @@ DOPWD:  LDP1 #CWDPATH
 ; $0000), mirroring BASIC's BYE. The monitor re-inits the ACIA and prompts.
 DOEXIT: JMP  $0000
 
-; ---------------- CAT name : print a file's contents -------------------------
-; Resolve to a file, then stream its bytes (LEN bytes from STARTLO) to the
-; console, one sector at a time. A sector ends when P2 reaches SBUF+512=$A000.
-DOCAT:  JSR  FINDARG            ; STARTLO, LENLO:LENHI (used as remaining)
-        JZ   NOFILE
-        LDA  STARTLO
-        STA  CURLBA
-ct_sec: LDA  LENLO              ; remaining bytes == 0 -> done
-        JNZ  ct_rd
-        LDA  LENHI
-        JZ   ct_end
-ct_rd:  LDP1 #SBUF
-        LDA  CURLBA
-        STA  LBA
-        JSR  CFREAD
-        LDP2 #SBUF
-ct_b:   LDA  LENLO              ; remaining == 0 -> done mid-sector
-        JNZ  ct_pb
-        LDA  LENHI
-        JZ   ct_end
-ct_pb:  LDA  (P2)+
-        JSR  OUTCH
-        LDA  LENLO              ; remaining-- (16-bit borrow)
-        JNZ  ct_lo
-        LDA  LENHI
-        DEC
-        STA  LENHI
-ct_lo:  LDA  LENLO
-        DEC
-        STA  LENLO
-        TPA2H                   ; end of this sector? (P2 reached $A000)
-        LDB  #$A0
-        CMP
-        JZ   ct_nx
-        JMP  ct_b
-ct_nx:  LDA  CURLBA
-        INC
-        STA  CURLBA
-        JMP  ct_sec
-ct_end: JSR  CRLF
-        JMP  SHELL
+; CAT is no longer a built-in: a bare `CAT file` falls through DISPATCH to the
+; implicit-RUN of /BIN/CAT.BIN (os/commands/cat.c), which is a strict superset
+; (it also filters stdin and pipes). See the backlog for DIR/PWD.
 
 ; ---------------- DIR : list the P8XFS directory -----------------------------
 DODIR:  JSR  ARG2P2             ; optional path arg -> directory to list
@@ -3183,7 +3142,6 @@ KW_RMDIR:.asciiz "RMDIR"
 KW_TREE: .asciiz "TREE"
 KW_FSCK: .asciiz "FSCK"
 KW_PWD:  .asciiz "PWD"
-KW_CAT:  .asciiz "CAT"
 KW_EXIT: .asciiz "EXIT"
 KW_MON:  .asciiz "MON"
 KW_FORMAT:.asciiz "FORMAT"

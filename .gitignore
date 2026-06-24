@@ -148,3 +148,4 @@ emulator/test/cah.asm
 emulator/test/cap.asm
 emulator/test/greet.c
 emulator/test/g.asm
+emulator/test/v2cat.asm

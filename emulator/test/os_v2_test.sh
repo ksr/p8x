@@ -32,6 +32,11 @@ python3 $ROOT/tools/p8xfs.py create v2.img --v2 >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   v2.img p8xos.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  v2.img /BIN >/dev/null
 python3 $ROOT/tools/p8xfs.py put    v2.img v2prog.bin --name /BIN/HELLO.BIN >/dev/null
+# CAT is no longer a built-in; install the C cat (os/commands/cat.c) so a bare
+# `CAT /README` resolves via PATH (/BIN) — this doubles as an implicit-RUN check.
+python3 $ROOT/compiler/p8cc.py $ROOT/os/commands/cat.c -o v2cat.asm >/dev/null
+python3 $ROOT/assembler/p8xasm.py v2cat.asm -o v2cat.bin --base 0xB000 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    v2.img v2cat.bin --name /BIN/CAT.BIN --load 0xB000 --exec 0xB000 >/dev/null
 printf 'readme' > v2r.tmp
 python3 $ROOT/tools/p8xfs.py put    v2.img v2r.tmp --name /README >/dev/null
 rm -f v2r.tmp v2prog.asm

@@ -50,8 +50,9 @@ rm -f os_h.tmp prog.asm
 # ...then 'DIR >DLIST' captures the directory listing into a file (output
 # redirection), and EXIT returns to the monitor.
 # Also: SAVE over an existing name must be rejected (?EXISTS), and a redirected
-# command's error must still reach the console (CAT NOPE >X -> ?NO FILE on screen).
-out=$(printf 'B\rDIR\rRUN PROG.BIN\rDEL HELLO.TXT\rSAVE C.BIN 4000 4010\rDEP B000 41 42 43\rDUMP B000\r\r.PACK\rFSCK\rDIR\rDIR >DLIST\rSAVE PROG.BIN 4000 4001\rCAT NOPE >X\rEXIT\r' | \
+# command's error must still reach the console (DEL NOPE >X -> ?NO FILE on screen;
+# built-in errors use PUTS, not the redirectable OUTCH, so they bypass redirection).
+out=$(printf 'B\rDIR\rRUN PROG.BIN\rDEL HELLO.TXT\rSAVE C.BIN 4000 4010\rDEP B000 41 42 43\rDUMP B000\r\r.PACK\rFSCK\rDIR\rDIR >DLIST\rSAVE PROG.BIN 4000 4001\rDEL NOPE >X\rEXIT\r' | \
       ../p8xemu -l 80000000 -c os.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0')
 
 fail() { echo "OS TEST: FAIL — $1"; echo "$out" | sed -n '/P8X\/OS/,$p'; exit 1; }

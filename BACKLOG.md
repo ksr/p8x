@@ -24,6 +24,19 @@ Last updated: 2026-06-24
       ~3 B). LBA/SBUF/vars are unchanged ($9D47/$9E00/$A000).
 
 
+- [ ] **Remove the built-in DIR/PWD too? (possible — has a real trade-off).**
+      Built-in CAT is gone (2026-06-24): a bare `CAT file` now falls through
+      DISPATCH to the implicit-RUN of `/BIN/CAT.BIN` (the C cat is a strict
+      superset). DIR and PWD were *kept* deliberately: unlike CAT they are the
+      only way to inspect a disk that has **no `/BIN` installed** — e.g. right
+      after `FORMAT`, or a data-only volume — because the C `/BIN/DIR.BIN` can't
+      be found or listed when it isn't there. To drop them we'd need a story for
+      bootstrapping a bare disk (e.g. a minimal monitor-level lister, or FORMAT
+      seeding `/BIN/DIR.BIN`). `os_format_test` (DIRs a just-formatted volume)
+      and `os_test` (`DIR >DLIST`) depend on the built-in DIR today. Net code
+      saved if removed: ~70 lines (DODIR/DENT2OS/DPRENT + MDIRHDR/MDIRTAG) for
+      DIR, ~4 for PWD. Decide whether the dedup is worth the bare-disk capability.
+
 - [ ] Fusion import acceptance test: open backplane .sch/.brd pair, pour planes,
       run DRC, confirm zero airwires
 - [ ] Verify DIN 41612 footprints against physical connectors in stock
