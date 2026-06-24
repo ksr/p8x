@@ -13,6 +13,7 @@ emulator/test/*.out
 emulator/test/*.img
 emulator/test/*.dat
 emulator/test/*.txt
+emulator/test/*.exp
 emulator/test/cf.img
 emulator/test/os.img
 emulator/test/v2.img
