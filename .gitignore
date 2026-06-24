@@ -10,6 +10,8 @@ emulator/p8xemu
 emulator/*.o
 emulator/test/*.bin
 emulator/test/*.out
+emulator/test/*.img
+emulator/test/*.dat
 emulator/test/cf.img
 emulator/test/os.img
 emulator/test/v2.img
