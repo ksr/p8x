@@ -14,12 +14,13 @@
  * recursion, only getchar/putchar/puts for I/O.  EOF is c==0 (P8X CONIN at end
  * of stdin) or c==-1 (host getchar).
  *
- * Built incrementally.  Current language: multiple no-parameter functions and
- * global int variables (optional constant initializer); the FULL expression
- * operator set (precedence ladder + - * / % << >> < > <= >= == != & ^ | && ||
- * and unary - ! ~); assignment to globals; putchar(e) and no-arg user calls;
- * statements: block, if/else, while, for, return, expr.  Function parameters,
- * locals, pointers and structs come in later increments.
+ * Built incrementally.  Current language: functions with parameters, stack
+ * locals and recursion (a __csp/__fp software frame, args pushed left-to-right
+ * so param i is at __fp+2*(pcount-i)); global int variables (optional constant
+ * initializer); the FULL expression operator set (precedence ladder + - * / %
+ * << >> < > <= >= == != & ^ | && || and unary - ! ~); assignment; putchar(e)
+ * and user calls; statements: block, decl, if/else, while, for, return, expr.
+ * Pointers, arrays and structs come in later increments.
  */
 #include <stdio.h>
 
@@ -254,6 +255,11 @@ int use_not = 0;
 int use_eq = 0;
 int use_lt = 0;
 
+int use_enter = 0;
+int use_leave = 0;
+int use_lea = 0;
+int use_push = 0;
+
 /* ---- global variable table (single-pass, declared before use) ------------- */
 char gpool[1024];    /* packed NUL-terminated names */
 int gpooln = 0;
@@ -261,6 +267,15 @@ int goff[64];        /* name offset in gpool */
 int ghas[64];        /* has a constant initializer? */
 int gini[64];        /* the initializer value */
 int gcount = 0;
+
+/* ---- per-function scope: params (frame offset +2,+4..) and locals (-2,-4..) */
+char vpool[512];     /* packed names of the current function's params+locals */
+int vpooln = 0;
+int vnoff[64];       /* name offset in vpool */
+int vfoff[64];       /* frame offset relative to __fp */
+int vcount = 0;
+int nlocal = 0;      /* locals allocated so far in the current function */
+char curfunc[64];    /* name of the function being compiled (for _ret_) */
 
 int emitstr(char *s) {
     while (*s != 0) { putchar(*s); s = s + 1; }
@@ -301,6 +316,31 @@ int addglobal(char *nm, int hasi, int v) {
     return 0;
 }
 
+int intern_v(char *s) {              /* like intern, but into the per-fn vpool */
+    int off;
+    off = vpooln;
+    while (*s != 0) { vpool[vpooln] = *s; vpooln = vpooln + 1; s = s + 1; }
+    vpool[vpooln] = 0; vpooln = vpooln + 1;
+    return off;
+}
+
+int addvar(char *nm, int foff) {     /* declare a param/local at frame offset */
+    vnoff[vcount] = intern_v(nm);
+    vfoff[vcount] = foff;
+    vcount = vcount + 1;
+    return 0;
+}
+
+int findvar(char *nm) {              /* frame offset, or 30000 if not a local */
+    int i;
+    i = 0;
+    while (i < vcount) {
+        if (streq(vpool + vnoff[i], nm)) return vfoff[i];
+        i = i + 1;
+    }
+    return 30000;
+}
+
 int is_punct(char *p) { return tok == T_PUNCT && streq(tname, p); }
 
 int eat(char *p) {
@@ -337,6 +377,29 @@ int swap_tax() {                     /* exchange __t and __ax (for > and <=) */
     line("        LDA __ax+1"); line("        STA __t+1");
     line("        PLA"); line("        STA __ax+1");
     line("        PLA"); line("        STA __ax");
+    return 0;
+}
+
+int lea_off(int off) {               /* P1 = __fp + off (a frame slot address) */
+    emitstr("        LDA #"); emitdec(off & 255); putchar(10);
+    line("        STA __off");
+    emitstr("        LDA #"); emitdec((off >> 8) & 255); putchar(10);
+    line("        STA __off+1");
+    line("        JSR __lea"); use_lea = 1;
+    return 0;
+}
+
+int load_local(int off) {            /* __ax = *(fp+off) */
+    lea_off(off);
+    line("        LDA (P1)+"); line("        STA __ax");
+    line("        LDA (P1)"); line("        STA __ax+1");
+    return 0;
+}
+
+int store_local(int off) {           /* *(fp+off) = __ax  (__ax preserved) */
+    lea_off(off);
+    line("        LDA __ax"); line("        STA (P1)+");
+    line("        LDA __ax+1"); line("        STA (P1)");
     return 0;
 }
 
@@ -492,45 +555,113 @@ int emit_lt() {
     return 0;
 }
 
+int emit_push() {
+    line("__push: LDA __csp");  line("        LDB #2");    line("        SUB");
+    line("        STA __csp");  line("        JC __pu1");  line("        LDA __csp+1");
+    line("        LDB #1");     line("        SUB");       line("        STA __csp+1");
+    line("__pu1:  LDA __csp");  line("        TAP1L");     line("        LDA __csp+1");
+    line("        TAP1H");      line("        LDA __ax");  line("        STA (P1)+");
+    line("        LDA __ax+1"); line("        STA (P1)");  line("        RTS");
+    return 0;
+}
+int emit_enter() {
+    line("__enter: LDA __csp"); line("        LDB #2");    line("        SUB");
+    line("        STA __csp");  line("        JC __en1");  line("        LDA __csp+1");
+    line("        LDB #1");     line("        SUB");       line("        STA __csp+1");
+    line("__en1:  LDA __csp");  line("        TAP1L");     line("        LDA __csp+1");
+    line("        TAP1H");      line("        LDA __fp");  line("        STA (P1)+");
+    line("        LDA __fp+1"); line("        STA (P1)");  line("        LDA __csp");
+    line("        STA __fp");   line("        LDA __csp+1");line("        STA __fp+1");
+    line("        RTS");
+    return 0;
+}
+int emit_leave() {
+    line("__leave: LDA __fp");  line("        STA __csp"); line("        LDA __fp+1");
+    line("        STA __csp+1");line("        LDA __csp"); line("        TAP1L");
+    line("        LDA __csp+1");line("        TAP1H");     line("        LDA (P1)+");
+    line("        STA __fp");   line("        LDA (P1)");  line("        STA __fp+1");
+    line("        LDA __csp");  line("        LDB #2");    line("        ADD");
+    line("        STA __csp");  line("        JNC __lv1"); line("        LDA __csp+1");
+    line("        INC");        line("        STA __csp+1");line("__lv1:  RTS");
+    return 0;
+}
+int emit_lea() {
+    line("__lea:  LDA __fp");   line("        LDB __off"); line("        ADD");
+    line("        STA __t");    line("        LDA #0");    line("        JNC __la1");
+    line("        LDA #1");     line("__la1:  STA __c");   line("        LDA __fp+1");
+    line("        LDB __off+1");line("        ADD");       line("        LDB __c");
+    line("        ADD");        line("        STA __t+1"); line("        LDA __t");
+    line("        TAP1L");      line("        LDA __t+1"); line("        TAP1H");
+    line("        RTS");
+    return 0;
+}
+
 /* ---- the precedence ladder (mutually recursive -> forward decls) ---------- */
 int expr();
 int stmt();
 
 int primary() {
     char nm[64];
+    int off;
+    int nargs;
+    int k;
     if (tok == T_NUM) { set_ax(tval); lex(); return 0; }
     if (is_punct("(")) { lex(); expr(); eat(")"); return 0; }
     if (tok == T_ID) {
         strcpy_(nm, tname); lex();
         if (is_punct("(")) {                     /* function call */
-            lex();
-            if (is_punct(")")) {                 /* no-arg call */
-                lex();
-                emitstr("        JSR _f_"); emitstr(nm); putchar(10);
+            lex();                               /* '(' */
+            nargs = 0;
+            if (is_punct(")") == 0) {
+                expr();                          /* first argument in __ax */
+                if (streq(nm, "putchar") == 0) {
+                    line("        JSR __push"); use_push = 1; nargs = 1;
+                }
+                while (is_punct(",")) {
+                    lex(); expr();
+                    line("        JSR __push"); use_push = 1;
+                    nargs = nargs + 1;
+                }
+            }
+            eat(")");
+            if (streq(nm, "putchar")) {          /* BIOS console out */
+                line("        LDA __ax"); line("        JSR $0103");
                 return 0;
             }
-            expr();                              /* single argument */
-            eat(")");
-            if (streq(nm, "putchar")) {
-                line("        LDA __ax"); line("        JSR $0103");
-            } else {
-                emitstr("        JSR _f_"); emitstr(nm); putchar(10);
+            emitstr("        JSR _f_"); emitstr(nm); putchar(10);
+            if (nargs > 0) {                     /* caller pops args: __csp += 2n */
+                k = nlabel; nlabel = nlabel + 1;
+                line("        LDA __csp");
+                emitstr("        LDB #"); emitdec(2 * nargs); putchar(10);
+                line("        ADD"); line("        STA __csp");
+                emitjmp("JNC", "Lcl", k);
+                line("        LDA __csp+1"); line("        INC"); line("        STA __csp+1");
+                emitlabel("Lcl", k);
             }
             return 0;
         }
-        if (is_punct("=")) {                     /* assignment to a global */
+        if (is_punct("=")) {                     /* assignment */
             lex(); expr();
-            line("        LDA __ax");
-            emitstr("        STA _g_"); emitstr(nm); putchar(10);
-            line("        LDA __ax+1");
-            emitstr("        STA _g_"); emitstr(nm); emitstr("+1"); putchar(10);
+            off = findvar(nm);
+            if (off == 30000) {                  /* global */
+                line("        LDA __ax");
+                emitstr("        STA _g_"); emitstr(nm); putchar(10);
+                line("        LDA __ax+1");
+                emitstr("        STA _g_"); emitstr(nm); emitstr("+1"); putchar(10);
+            } else {
+                store_local(off);
+            }
             return 0;
         }
-        /* global variable load */
-        emitstr("        LDA _g_"); emitstr(nm); putchar(10);
-        line("        STA __ax");
-        emitstr("        LDA _g_"); emitstr(nm); emitstr("+1"); putchar(10);
-        line("        STA __ax+1");
+        off = findvar(nm);                       /* variable load */
+        if (off == 30000) {                      /* global */
+            emitstr("        LDA _g_"); emitstr(nm); putchar(10);
+            line("        STA __ax");
+            emitstr("        LDA _g_"); emitstr(nm); emitstr("+1"); putchar(10);
+            line("        STA __ax+1");
+        } else {
+            load_local(off);
+        }
         return 0;
     }
     line("; ERROR: bad primary");
@@ -719,11 +850,23 @@ int stmt() {
     int l3;
     int l4;
     if (is_punct("{")) { block(); return 0; }
+    if (tok == T_KW && (streq(tname, "int") || streq(tname, "char"))) {
+        char dn[64];
+        int off;
+        lex();                                    /* type */
+        strcpy_(dn, tname); lex();                /* name */
+        nlocal = nlocal + 1;
+        off = 0 - 2 * nlocal;                     /* locals at -2,-4,... */
+        addvar(dn, off);
+        if (is_punct("=")) { lex(); expr(); store_local(off); }
+        eat(";");
+        return 0;
+    }
     if (tok == T_KW && streq(tname, "return")) {
         lex();
         if (is_punct(";") == 0) expr();
         eat(";");
-        line("        RTS");
+        emitstr("        JMP _ret_"); emitstr(curfunc); putchar(10);
         return 0;
     }
     if (tok == T_KW && streq(tname, "if")) {
@@ -787,6 +930,10 @@ int stmt() {
 
 /* ---- emit all used runtime helpers + the data section --------------------- */
 int emit_runtime() {
+    if (use_enter) emit_enter();
+    if (use_leave) emit_leave();
+    if (use_push) emit_push();
+    if (use_lea) emit_lea();
     if (use_add) emit_add();
     if (use_sub) emit_sub();
     if (use_mul) emit_mul();
@@ -804,6 +951,9 @@ int emit_runtime() {
     line("__ax:   .fill 2");
     line("__t:    .fill 2");
     line("__c:    .fill 1");
+    line("__fp:   .fill 2");
+    line("__off:  .fill 2");
+    line("__csp:  .fill 2");
     if (use_mul) line("__r:    .fill 2");
     if (use_mul || use_div || use_mod || use_shl || use_shr) line("__n:    .fill 1");
     if (use_div || use_mod) line("__dr:   .fill 2");
@@ -822,19 +972,78 @@ int emit_globals() {
     return 0;
 }
 
-/* ---- top-level declarations: functions (no params yet) and global vars ---- */
+/* pre-scan the body (positioned at its '{') for the count of int/char locals,
+   so the prologue can reserve the whole frame at once; then rewind. */
+int count_locals() {
+    int save;
+    int depth;
+    int n;
+    save = spos;                                 /* spos is just past '{' */
+    depth = 1;
+    n = 0;
+    while (depth > 0 && tok != T_EOF) {
+        lex();
+        if (is_punct("{")) depth = depth + 1;
+        else if (is_punct("}")) depth = depth - 1;
+        else if (tok == T_KW && (streq(tname, "int") || streq(tname, "char")))
+            n = n + 1;
+    }
+    spos = save;
+    tok = T_PUNCT; tname[0] = 123; tname[1] = 0; /* restore current token '{' */
+    return n;
+}
+
+/* ---- top-level declarations: functions (with params) and global vars ------ */
 int toplevel() {
     char nm[64];
+    char pn[64];
     int hasi;
     int v;
-    if (tok == T_KW) lex();                      /* type: int/char/void */
+    int pcount;
+    int i;
+    int nl;
+    int k;
+    if (tok == T_KW) lex();                      /* return type */
     strcpy_(nm, tname); lex();                   /* declared name */
     if (is_punct("(")) {                         /* function definition */
         lex();                                   /* '(' */
-        eat(")");                                /* no parameters yet */
+        vcount = 0; vpooln = 0; nlocal = 0;      /* fresh scope */
+        pcount = 0;
+        if (is_punct(")") == 0) {
+            if (tok == T_KW) lex();              /* param type */
+            strcpy_(pn, tname); lex();
+            addvar(pn, 0);
+            pcount = 1;
+            while (is_punct(",")) {
+                lex();
+                if (tok == T_KW) lex();
+                strcpy_(pn, tname); lex();
+                addvar(pn, 0);
+                pcount = pcount + 1;
+            }
+        }
+        eat(")");
+        i = 0;                                    /* param i at __fp + 2*(pcount-i) */
+        while (i < pcount) { vfoff[i] = 2 * (pcount - i); i = i + 1; }
+
+        strcpy_(curfunc, nm);
         emitstr("_f_"); emitstr(nm); line(":");
+        line("        JSR __enter"); use_enter = 1;
+        nl = count_locals();
+        if (nl > 0) {                             /* reserve locals: __csp -= 2*nl */
+            k = nlabel; nlabel = nlabel + 1;
+            line("        LDA __csp");
+            emitstr("        LDB #"); emitdec(2 * nl); putchar(10);
+            line("        SUB"); line("        STA __csp");
+            emitjmp("JC", "Lfr", k);
+            line("        LDA __csp+1"); line("        LDB #1"); line("        SUB");
+            line("        STA __csp+1");
+            emitlabel("Lfr", k);
+        }
         block();
-        line("        RTS");                      /* fall-through return */
+        emitstr("_ret_"); emitstr(nm); line(":");
+        line("        JSR __leave"); use_leave = 1;
+        line("        RTS");
         return 0;
     }
     hasi = 0; v = 0;                             /* global variable */
@@ -856,6 +1065,8 @@ int main() {
     lex();                                       /* prime the first token */
 
     line("        .org $B000");
+    line("        LDA #0"); line("        STA __csp");      /* __csp = $F800 */
+    line("        LDA #248"); line("        STA __csp+1");
     line("        JSR _f_main");
     line("        RTS");
 

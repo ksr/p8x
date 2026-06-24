@@ -7,7 +7,8 @@
 #      compiler is larger than the $B000 TPA, which is Milestone B's concern.
 #   3. DIFFERENTIAL: a sample program compiled by BOTH the host bootstrap and
 #      p8cc.py produces byte-identical console output when run on the P8X.
-# p8cc.c is built incrementally; this stage covers int arithmetic + putchar.
+# p8cc.c is built incrementally; the sample covers the operator set, globals,
+# control flow, function params/locals, recursion, and multi-arg calls.
 set -e
 cd "$(dirname "$0")"
 ROOT=../..
@@ -34,12 +35,17 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x4000 >/
 cat > diff.c <<'EOF'
 int s;
 int i;
+int fact(int n) {                                      /* params + recursion    */
+    if (n < 2) return 1;
+    return n * fact(n - 1);
+}
 int compute() {                                        /* no-arg call + globals */
     s = 0;
     for (i = 0; i < 5; i = i + 1) s = s + i;           /* 0+1+2+3+4 = 10        */
     return s;
 }
 int main() {
+    int x;                                             /* a local               */
     putchar(48 + 3*4 - 11);                            /* 1: * - precedence    */
     putchar(48 + (17%5));                              /* 2: %                 */
     putchar(48 + (1<<3) - 5);                          /* 3: <<                */
@@ -49,6 +55,8 @@ int main() {
     putchar(48 + ((1&&0)||1) + ((2<1)||(3>=3)) + 5);   /* 7: && || < >=        */
     putchar(48 + (~0 & 8));                            /* 8: ~ &               */
     if (compute() == 10) putchar(89); else putchar(78);/* Y: for/if/call       */
+    x = fact(5);                                       /* 120: recursion        */
+    putchar(48 + x/100); putchar(48 + (x/10)%10); putchar(48 + x%10);
     putchar(10);
     return 0;
 }
@@ -71,8 +79,8 @@ py_out=$(python3 $ROOT/compiler/p8cc.py diff.c -o d.asm >/dev/null; \
     printf 'B\rRUN D.BIN\r' | ../p8xemu -l 80000000 -c d.img eeprom.bin 2>/dev/null \
         | LC_ALL=C tr -d '\0\r' | sed -n '/RUN D.BIN/,$p' | grep -v 'RUN D.BIN' | tr -dc '0-9Y')
 
-[ "$host_out" = "12345678Y" ] || fail "host bootstrap output '$host_out' != '12345678Y'"
-[ "$py_out" = "12345678Y" ]   || fail "p8cc.py output '$py_out' != '12345678Y'"
+[ "$host_out" = "12345678Y120" ] || fail "host bootstrap output '$host_out' != '12345678Y120'"
+[ "$py_out" = "12345678Y120" ]   || fail "p8cc.py output '$py_out' != '12345678Y120'"
 [ "$host_out" = "$py_out" ]  || fail "host '$host_out' != p8cc.py '$py_out' (differential)"
 
 echo "C-SELFHOST TEST: PASS"
