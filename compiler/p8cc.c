@@ -20,7 +20,8 @@
  * initializer); the FULL expression operator set (precedence ladder + - * / %
  * << >> < > <= >= == != & ^ | && || and unary - ! ~); assignment; putchar(e)
  * and user calls (plus the BIOS builtins getchar/putchar/puts, peek/poke for
- * byte memory, and bios(constaddr,p1,a) to call any monitor routine);
+ * byte memory, bios(constaddr,p1,a) to call any monitor routine returning
+ * A|carry<<8, and argstr() for the RUN command tail in P2);
  * statements: block, decl, if/else, while, for, return, expr;
  * a char/int type system with pointers (& and *, correct 1/2-byte load/store,
  * pointer arithmetic scaled by element size) via an lvalue-address model;
@@ -860,7 +861,11 @@ int factor() {
                 line("        LDA __t"); line("        TAP1L");
                 line("        LDA __t+1"); line("        TAP1H");
                 line("        LDA __ax"); line("        STA (P1)");
-            } else if (streq(nm, "bios")) {      /* bios(constaddr, p1, a) -> A */
+            } else if (streq(nm, "argstr")) {    /* P2 (program arg tail) -> char* */
+                eat(")");
+                line("        TPA2L"); line("        STA __ax");
+                line("        TPA2H"); line("        STA __ax+1");
+            } else if (streq(nm, "bios")) {      /* bios(constaddr, p1, a) -> A|carry<<8 */
                 if (tok != T_NUM) line("; ERROR: bios addr not constant");
                 addr = tval; lex();
                 eat(","); rvalue(expr()); push_ax();   /* P1 operand */
@@ -870,7 +875,10 @@ int factor() {
                 line("        LDA __t+1"); line("        TAP1H");
                 line("        LDA __ax");
                 emitstr("        JSR "); emitdec(addr); putchar(10);
-                line("        STA __ax"); line("        LDA #0"); line("        STA __ax+1");
+                line("        STA __ax"); line("        LDA #0");   /* returned A -> low */
+                k = nlabel; nlabel = nlabel + 1;
+                emitjmp("JNC", "Lbc", k); line("        LDA #1"); emitlabel("Lbc", k);
+                line("        STA __ax+1");             /* carry -> bit 8 */
             } else {                             /* user function */
                 nargs = 0;
                 if (is_punct(")") == 0) {

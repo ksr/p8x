@@ -108,3 +108,9 @@ emulator/test/lf.bin
 emulator/test/lf.img
 emulator/test/lh.asm
 emulator/test/lp.asm
+emulator/test/aaa.dat
+emulator/test/bbb.dat
+emulator/test/dir.bin
+emulator/test/dir.img
+emulator/test/dh.asm
+emulator/test/dp.asm

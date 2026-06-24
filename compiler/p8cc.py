@@ -19,8 +19,9 @@ Supported now:
                union members all sit at offset 0; no bitfields, no sizeof().
   builtins     getchar()  putchar(e)  puts(e)   (BIOS $0100 / $0103 / $0112)
                peek(addr)  poke(addr,v)         (byte memory / memory-mapped I/O)
-               bios(constaddr, p1, a) -> A      (call any monitor routine: sets
-                 P1=p1 and A=a, JSRs the literal addr, returns A zero-extended)
+               bios(constaddr, p1, a)           (call any monitor routine: sets
+                 P1=p1 and A=a, JSRs the literal addr; returns A | carry<<8)
+               argstr() -> char*                (the RUN command tail, from P2)
   note         for-init is an expression, not a declaration (locals are
                function-scoped; declare the loop var before the loop)
 
@@ -616,16 +617,22 @@ class Gen:
             self.gen_expr(args[0]); self.ax_to_p1()
             self.pop_t()
             self.emit("        LDA __t", "        STA (P1)"); return
-        if name == "bios":                               # bios(addr, p1, a) -> A
+        if name == "argstr":                             # P2 (program arg tail) -> char*
+            self.emit("        TPA2L", "        STA __ax",
+                      "        TPA2H", "        STA __ax+1"); return
+        if name == "bios":                               # bios(addr, p1, a) -> A | carry<<8
             if args[0][0] != "num":
                 sys.exit("p8cc: bios() address must be a constant")
             self.gen_expr(args[1]); self.push_ax()       # P1 operand
             self.gen_expr(args[2])                        # A operand -> __ax
             self.pop_t()                                  # __t = P1 operand
+            skip = self.lbl("Lbc")
             self.emit("        LDA __t", "        TAP1L", "        LDA __t+1",
                       "        TAP1H",                     # P1 = arg1
                       "        LDA __ax", "        JSR $%04X" % (args[0][1] & 0xFFFF),
-                      "        STA __ax", "        LDA #0", "        STA __ax+1"); return
+                      "        STA __ax",                  # returned A -> low byte
+                      "        LDA #0", "        JNC %s" % skip, "        LDA #1",
+                      "%s:    STA __ax+1" % skip); return  # carry -> bit 8
         for a in reversed(args):
             self.gen_expr(a); self.need("__push"); self.emit("        JSR __push")
         self.emit("        JSR _f_%s" % name)

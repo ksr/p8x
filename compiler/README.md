@@ -98,11 +98,15 @@ compiled alongside it, now that pointers, arrays, and `char` work. See the
 **Reaching the rest of the BIOS.** `peek(addr)`/`poke(addr, v)` do byte memory
 access (e.g. the switch/LED ports at `$FF00`/`$FF02`), and `bios(addr, p1, a)`
 calls *any* monitor routine: it sets `P1 = p1` and `A = a`, `JSR`s the (constant)
-address, and returns the routine's `A` zero-extended. So the whole jump table is
-reachable from C — e.g. `bios(0x0112, str, 0)` is `puts` without the newline, and
-the file API (`FOPEN`/`FGETB`/`FLOADAT`/…) can be driven by `poke`-ing its RAM
-ABI variables and `bios`-ing the call. (`bios`'s address must be a literal, since
-it becomes the `JSR` target.) Both `p8cc.py` and `p8cc.c` support all of these.
+address, and returns the routine's `A` in the low byte **with the carry flag in
+bit 8** (`result & 256`). So a status-returning call like `FNEXT` is usable from
+C — `while ((bios(0x013C, 0, 0) & 256) == 0)` loops until end-of-directory. The
+whole jump table is reachable: `bios(0x0112, str, 0)` is `puts` without the
+newline, and the file API (`FOPEN`/`FGETB`/`FLOADAT`/…) is driven by `poke`-ing
+its RAM ABI variables and `bios`-ing the call. (`bios`'s address must be a
+literal — it becomes the `JSR` target.) `argstr()` returns the program's command
+tail (the `RUN` argument in `P2`) as a `char *`. Both compilers support all of
+these — see `compiler/examples/dir.c`, the OS `DIR` command written in C.
 
 ### `p8lib.c` — a C-source standard library
 
