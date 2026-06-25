@@ -40,6 +40,9 @@ print a one-line usage summary and exit.
 | [`grep.c`](grep.c) | `GREP regex [file] [-h]` | Print lines matching a **basic regex** — `.` (any), `*` (zero-or-more), `^`/`$` (anchors); else literal. Reads the named `file` (like cat) or stdin if none: `GREP "^al" foo.txt`, `… \| GREP "x.*y"`. Lines capped at 127 chars. |
 | [`cp.c`](cp.c) | `CP src dst [-h]` | Copy a file (CWD-relative or absolute paths, across subdirectories). Read stream → write stream. |
 | [`mv.c`](mv.c) | `MV src dst [-h]` | Move/rename a file = copy + delete source (P8XFS has no rename primitive). `MV X X` is refused. |
+| [`head.c`](head.c) | `HEAD [-N] [file] [-h]` | First N lines (default 10) of a file or stdin. |
+| [`tail.c`](tail.c) | `TAIL [-N] [file] [-h]` | Last N lines (default 10, max 20) of a file or stdin, via a ring buffer. |
+| [`more.c`](more.c) | `MORE [file] [-h]` | Page a file or stdin a screenful (23 lines) at a time: space=next page, Enter=one line, q=quit. Forward pager (not full `less`). |
 
 ### Implementation notes
 
@@ -59,6 +62,11 @@ print a one-line usage summary and exit.
   inline loop, *not* a separate `matchstar`) — deliberately **no forward
   declaration / mutual recursion**, since the native `p8cc.c` bootstrap rejects a
   standalone prototype. See *Shared code* below.
+- **head.c / tail.c / more.c** — file-or-stdin via the shared `nextc()`/`openarg()`
+  idiom (copied from cat/grep). `head` stops after N lines; `tail` keeps the last
+  N in a flat ring buffer (`buf[slot*128+col]`, N≤20); `more` pages 23 lines then
+  reads the continue key from the **console** (`CONIN`, BIOS $0100) — separate
+  from the redirected stdin — so it pauses for both `MORE file` and `cmd | MORE`.
 - **cp.c / mv.c** — copy SRC (read stream, buffer at `$E000`) to DST (write
   stream). The read and write streams use **independent** buffers, so the
   byte loop interleaves them; but `FRESOLVE`/`FOPEN` and the write stream all
@@ -110,7 +118,7 @@ concatenates a shared `lib*.c` ahead of the command source before compiling
 These double as regression tests for the OS syscall, redirection, and pipe
 machinery: `emulator/test/c_dir_test.sh`, `c_dir_recursive_test.sh`,
 `c_cat_test.sh`, `c_filters_test.sh` (wc/grep), `c_fileops_test.sh` (cp/mv),
-`c_stdin_test.sh`, `c_redirect_test.sh`, `c_pipe_test.sh`, and the
-implicit-RUN/PATH path in `os_path_test.sh`.
+`c_pager_test.sh` (head/tail/more), `c_stdin_test.sh`, `c_redirect_test.sh`,
+`c_pipe_test.sh`, and the implicit-RUN/PATH path in `os_path_test.sh`.
 
-More commands to come (e.g. `MORE`/`HEAD`/`TAIL`-style filters).
+More commands to come (e.g. `SORT`/`UNIQ`/`DIFF`-style tools).

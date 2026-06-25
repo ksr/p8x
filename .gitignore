@@ -155,3 +155,6 @@ emulator/test/grep.asm
 emulator/test/cat.asm
 emulator/test/cp.asm
 emulator/test/mv.asm
+emulator/test/head.asm
+emulator/test/tail.asm
+emulator/test/more.asm
