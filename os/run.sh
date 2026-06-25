@@ -55,7 +55,7 @@ if [ ! -f "$disk" ]; then
     # redirection and pipes out of the box. Run by bare name via PATH (/BIN),
     # e.g.  DIR /BIN ,  CAT README.TXT ,  CAT README.TXT | GREP hello | WC ,
     # CP README.TXT COPY.TXT ,  MV COPY.TXT MOVED.TXT .
-    for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree dump; do
+    for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree; do
         python3 "$root/compiler/p8cc.py" "$root/os/commands/$ex.c" -o "$build/$ex.asm" >/dev/null
         python3 "$root/assembler/p8xasm.py" "$build/$ex.asm" -o "$build/$ex.bin" --base 0xB000 >/dev/null
         up=$(echo "$ex" | tr a-z A-Z)

@@ -144,7 +144,7 @@ PSL     = $A099          ; MKDIR: parent dir start LBA / sector count
 PSN     = $A09A
 EFLAG   = $A09B          ; flag byte WRENT stamps (F_FILE for SAVE, F_DIR for MKDIR)
 RMDL    = $A09C          ; RMDIR: parent directory sector holding the entry
-; ---- TREE working set ----
+; ---- directory-walk working set (FSCK/PACK; was TREE) ----
 CDST    = $A09D          ; current directory: start LBA / sectors / entry index
 CDSC    = $A09E
 CIDX    = $A09F
@@ -320,9 +320,6 @@ DISPATCH:
         STA  ARGPH
         LDA  CMDBUF
         JZ   SHELL              ; blank line
-        LDP1 #KW_DIR
-        JSR  CMPCMD
-        JNZ  DODIR
         LDP1 #KW_HELP
         JSR  CMPCMD
         JNZ  DOHELP
@@ -356,15 +353,9 @@ DISPATCH:
         LDP1 #KW_RMDIR
         JSR  CMPCMD
         JNZ  DORMDIR
-        LDP1 #KW_TREE
-        JSR  CMPCMD
-        JNZ  DOTREE
         LDP1 #KW_FSCK
         JSR  CMPCMD
         JNZ  DOFSCK
-        LDP1 #KW_PWD
-        JSR  CMPCMD
-        JNZ  DOPWD
         LDP1 #KW_PATH
         JSR  CMPCMD
         JNZ  DOPATH
@@ -391,11 +382,8 @@ DOHELP: LDP1 #MHELP
         JSR  OPUTS
         JMP  SHELL
 
-; ---------------- PWD : print the working directory --------------------------
-DOPWD:  LDP1 #CWDPATH
-        JSR  OPUTS
-        JSR  CRLF
-        JMP  SHELL
+; PWD is no longer a built-in — bare `PWD` falls through DISPATCH to /BIN/PWD.BIN
+; (os/commands/pwd.c). DIR and TREE likewise moved to /BIN. DUMP stays native.
 
 ; ---------------- PATH [dirs] : view or set the program search path ----------
 ; No argument prints the current PATH (PATHBUF, where implicit RUN looks up bare
@@ -421,79 +409,8 @@ DOEXIT: JMP  $0000
 ; implicit-RUN of /BIN/CAT.BIN (os/commands/cat.c), which is a strict superset
 ; (it also filters stdin and pipes). See the backlog for DIR/PWD.
 
-; ---------------- DIR : list the P8XFS directory -----------------------------
-DODIR:  JSR  ARG2P2             ; optional path arg -> directory to list
-        JSR  SKIPSPC
-        LDA  (P2)
-        JZ   DD_CWD             ; no arg: list the current directory
-        JSR  CDPATH             ; resolve the path as a directory
-        LDA  MATCH
-        JZ   NOFILE
-        JMP  DD_GO
-DD_CWD: LDA  CWDL
-        STA  SDIRL
-        LDA  CWDN
-        STA  SDIRN
-DD_GO:  LDP1 #MDIRHDR
-        JSR  OPUTS
-        JSR  CRLF
-        LDA  SDIRL              ; iterate the resolved directory via the BIOS
-        JSR  FOPENDIRAT
-DD_LP:  JSR  FNEXT              ; next live entry -> BFNAME/BFFLAG/FLEN; C=1 at end
-        JC   DDONE
-        JSR  DENT2OS            ; copy BIOS entry vars into the OS print vars
-        JSR  DPRENT             ; print this entry (file or <DIR>)
-        JMP  DD_LP
-DDONE:  JMP  SHELL
-; DENT2OS - copy the FNEXT outputs (BIOS FNAME/FFLAG/FLEN) into the OS print
-; variables (NAMEBUF/FLAGS/LENLO:LENHI) so DPRENT prints them unchanged.
-DENT2OS:LDP1 #BFNAME
-        LDP2 #NAMEBUF
-        LDA  #12
-        STA  TMP
-d2o_nm: LDA  (P1)+
-        STA  (P2)+
-        LDA  TMP
-        DEC
-        STA  TMP
-        JNZ  d2o_nm
-        LDA  FLEN
-        STA  LENLO
-        LDA  FLEN+1
-        STA  LENHI
-        LDA  BFFLAG
-        STA  FLAGS
-        RTS
-
-; DPRENT - print one directory entry: name, then size, then <DIR> for dirs.
-; Skips the '.' and '..' self/parent entries. FLAGS/NAMEBUF/LEN already loaded.
-DPRENT: LDA  NAMEBUF            ; hide '.' and '..'
-        LDB  #'.'
-        CMP
-        JZ   dp_ret
-        LDP1 #NAMEBUF
-        LDA  #12
-        STA  TMP
-dp_nm:  LDA  (P1)+
-        JSR  OUTCH
-        LDA  TMP
-        DEC
-        STA  TMP
-        JNZ  dp_nm
-        LDA  #' '
-        JSR  OUTCH
-        LDA  LENHI
-        JSR  OPHEX8
-        LDA  LENLO
-        JSR  OPHEX8
-        LDA  FLAGS
-        LDB  #F_DIR
-        CMP
-        JNZ  dp_crlf
-        LDP1 #MDIRTAG           ; " <DIR>"
-        JSR  OPUTS
-dp_crlf:JSR  CRLF
-dp_ret: RTS
+; DIR is no longer a built-in — `DIR [-R] [path]` falls through DISPATCH to
+; /BIN/DIR.BIN (os/commands/dir.c). DENT2OS/DPRENT/MDIRHDR/MDIRTAG went with it.
 
 ; ---------------- LOAD name --------------------------------------------------
 DOLOAD: JSR  FINDARG            ; parse name, scan directory
@@ -1390,99 +1307,7 @@ de_no:  LDA  #0
         STA  MATCH
         RTS
 
-; ---------------- TREE -------------------------------------------------------
-; Depth-first indented listing of the whole tree from root. Iterative, with an
-; explicit RAM stack of (dir start, dir sectors, next entry index) frames — one
-; shared sector buffer rules out recursion, so on return from a child we just
-; re-read the parent's sector and resume.
-DOTREE: LDA  #'/'               ; print the root
-        JSR  OUTCH
-        JSR  CRLF
-        LDA  #33                ; current = root
-        STA  CDST
-        LDA  ROOTN
-        STA  CDSC
-        LDA  #0
-        STA  CIDX
-        STA  TSP
-TR_ENT: LDA  CDSC               ; end of this directory? (CIDX >= CDSC*16)
-        SHL
-        SHL
-        SHL
-        SHL
-        STA  TMP                ; max entries = CDSC*16 (<=64 on v2)
-        LDA  CIDX
-        LDB  TMP
-        CMP
-        JC   TR_ASC             ; CIDX >= max -> ascend
-        JSR  READCUR            ; read entry CIDX -> NAMEBUF/STARTLO/LEN/FLAGS
-        LDA  FLAGS
-        JZ   TR_ASC             ; $00 end marker
-        LDA  CIDX               ; advance to the next entry for our return
-        INC
-        STA  CIDX
-        LDA  FLAGS
-        LDB  #F_DEL
-        CMP
-        JZ   TR_ENT             ; deleted slot
-        LDA  NAMEBUF            ; '.' / '..' both start with '.'
-        LDB  #'.'
-        CMP
-        JZ   TR_ENT
-        LDA  TSP                ; indent = (TSP+1)*2 spaces
-        INC
-        SHL
-        STA  TMP
-tr_ind: LDA  TMP
-        JZ   tr_pn
-        LDA  #' '
-        JSR  OUTCH
-        LDA  TMP
-        DEC
-        STA  TMP
-        JMP  tr_ind
-tr_pn:  LDP1 #NAMEBUF           ; print the name (trim trailing spaces)
-        LDA  #12
-        STA  TMP
-tr_nm:  LDA  (P1)
-        LDB  #' '
-        CMP
-        JZ   tr_nd
-        JSR  OUTCH
-        INP1
-        LDA  TMP
-        DEC
-        STA  TMP
-        JNZ  tr_nm
-tr_nd:  LDA  FLAGS              ; directories get a trailing '/'
-        LDB  #F_DIR
-        CMP
-        JNZ  tr_eol
-        LDA  #'/'
-        JSR  OUTCH
-tr_eol: JSR  CRLF
-        LDA  FLAGS              ; descend into subdirectories
-        LDB  #F_DIR
-        CMP
-        JNZ  TR_ENT
-        LDA  TSP                ; depth limit (8 frames) -> don't descend deeper
-        LDB  #7
-        CMP
-        JC   TR_ENT
-        JSR  TR_PUSH            ; save current frame, then make the child current
-        LDA  STARTLO
-        STA  CDST
-        JSR  SECCOUNT
-        LDA  SECCNT
-        STA  CDSC
-        LDA  #0
-        STA  CIDX
-        JMP  TR_ENT
-TR_ASC: LDA  TSP
-        JZ   TR_DONE            ; back at root -> finished
-        JSR  TR_POP
-        JMP  TR_ENT
-TR_DONE:JMP  SHELL
+; (TR_PUSH/TR_POP/READCUR below stay — shared with FSCK and PACK.)
 
 ; ---------------- FSCK (read-only consistency check) ------------------------
 ; Walks the directory tree WITHOUT modifying the
@@ -3085,19 +2910,13 @@ MPROMPT: .asciiz "> "
 MHELP:   .byte CR,LF
          .ascii "P8X/OS COMMANDS:"
          .byte CR,LF
-         .ascii "DIR [path]    list a directory (default: current)"
-         .byte CR,LF
          .ascii "CD path       change directory (/abs, rel, .., .)"
-         .byte CR,LF
-         .ascii "PWD           print the working directory path"
          .byte CR,LF
          .ascii "PATH [dirs]   show/set the program search path (default /BIN)"
          .byte CR,LF
          .ascii "MKDIR path    create a subdirectory"
          .byte CR,LF
          .ascii "RMDIR path    remove an empty subdirectory"
-         .byte CR,LF
-         .ascii "TREE          show the whole directory tree"
          .byte CR,LF
          .ascii "LOAD path     read a file to its load address"
          .byte CR,LF
@@ -3133,8 +2952,6 @@ MHELP:   .byte CR,LF
          .byte CR,LF
          .ascii "  path=file/dir, s e a=hex addr, b=hex byte"
          .byte CR,LF,0
-MDIRHDR: .byte CR,LF
-         .asciiz "NAME            SIZE"
 MUNK:    .byte CR,LF
          .asciiz "?"
 MNOFILE: .byte CR,LF
@@ -3159,7 +2976,6 @@ MPACKED: .byte CR,LF
          .asciiz "PACKED"
 MNODIR:  .byte CR,LF
          .asciiz "?NO DIR"
-MDIRTAG: .asciiz " <DIR>"
 MMKOK:   .byte CR,LF
          .asciiz "DIR CREATED"
 MRMOK:   .byte CR,LF
@@ -3195,7 +3011,6 @@ MFKBAD:  .byte CR,LF
 MFKOK:   .byte CR,LF
          .asciiz "FSCK OK"
 
-KW_DIR:  .asciiz "DIR"
 KW_HELP: .asciiz "HELP"
 KW_LOAD: .asciiz "LOAD"
 KW_RUN:  .asciiz "RUN"
@@ -3207,9 +3022,7 @@ KW_PACK: .asciiz "PACK"
 KW_CD:   .asciiz "CD"
 KW_MKDIR:.asciiz "MKDIR"
 KW_RMDIR:.asciiz "RMDIR"
-KW_TREE: .asciiz "TREE"
 KW_FSCK: .asciiz "FSCK"
-KW_PWD:  .asciiz "PWD"
 KW_PATH: .asciiz "PATH"
 KW_EXIT: .asciiz "EXIT"
 KW_MON:  .asciiz "MON"

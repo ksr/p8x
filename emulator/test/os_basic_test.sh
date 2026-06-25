@@ -21,7 +21,7 @@ python3 $ROOT/tools/p8xfs.py create ob.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   ob.img osb.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py put    ob.img basicrun.bin --name BASIC.BIN --load 0xB000 --exec 0xB000 >/dev/null
 
-out=$(printf 'B\rRUN BASIC.BIN\r10 PRINT "INBASIC"\rRUN\rBYE\rDIR\r' | \
+out=$(printf 'B\rRUN BASIC.BIN\r10 PRINT "INBASIC"\rRUN\rBYE\rMKDIR /Z\r' | \
       ../p8xemu -l 300000000 -c ob.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0')
 fail() { echo "OS-BASIC TEST: FAIL — $1"; echo "$out" | sed -n '/v1.0/,$p'; exit 1; }
 
@@ -29,5 +29,7 @@ echo "$out" | grep -q 'P8X BASIC'  || fail "RUN BASIC.BIN did not launch BASIC"
 echo "$out" | grep -q 'INBASIC'    || fail "program did not run inside BASIC"
 # BYE must return to the OS (its banner appears a 2nd time) and the shell works.
 [ "$(echo "$out" | grep -c 'P8X/OS v1.0')" -ge 2 ] || fail "BYE did not return to the OS"
-echo "$out" | sed -n '/INBASIC/,$p' | grep -q 'BASIC.BIN' || fail "OS shell not usable after BYE (DIR)"
+# DIR is no longer a built-in (and this disk has no /BIN), so prove the shell is
+# usable after BYE with a still-native command: MKDIR /Z -> "DIR CREATED".
+echo "$out" | sed -n '/INBASIC/,$p' | grep -q 'DIR CREATED' || fail "OS shell not usable after BYE (MKDIR)"
 echo "OS-BASIC TEST: PASS"

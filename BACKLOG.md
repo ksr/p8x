@@ -103,8 +103,22 @@ Last updated: 2026-06-24
       temp files), or the splitter could iterate left-to-right. Until then,
       `CAT f | GREP x | WC` silently drops the `| WC`.
 
-- [ ] **Minimal-kernel split: move the pure-viewer built-ins (DIR/PWD/TREE/DUMP)
-      to /BIN.** Built-in CAT is already gone (2026-06-24): bare `CAT file` falls
+- [x] **Minimal-kernel split: move the pure-viewer built-ins to /BIN.**
+      **DONE 2026-06-25** — removed the `DIR`/`PWD`/`TREE` built-ins from the OS
+      (`DODIR`/`DENT2OS`/`DPRENT`, `DOPWD`, `DOTREE`, their dispatch + keyword
+      strings + HELP lines + `MDIRHDR`/`MDIRTAG`); they now run from `/BIN` by
+      bare name (`dir.c`/`pwd.c`/`tree.c`, installed by `os/run.sh`). OS shrank
+      ~7977→7350 bytes. **`DUMP` kept native** — as a `/BIN` program it would load
+      into the `$B000` TPA and overwrite the very memory it's asked to dump (its
+      most common use). `TR_PUSH`/`TR_POP`/`READCUR` stayed (shared with
+      FSCK/PACK). Tests reworked: `os_test` installs `/BIN/DIR.BIN`; `os_v2_test`
+      installs `/BIN/{DIR,PWD,TREE}`; `os_format_test` verifies the post-FORMAT
+      tree host-side (no typed DIR); `os_basic`/`os_argv`/`os_lineedit` use native
+      sentinels (`MKDIR`/`HELP`) instead of the moved commands. Consequence
+      remains: a freshly-`FORMAT`ted card (no `/BIN`) can't `DIR` until `/BIN` is
+      repopulated (host, or the future second-CF master). Original analysis below.
+
+      Built-in CAT is already gone (2026-06-24): bare `CAT file` falls
       through DISPATCH to implicit-RUN of `/BIN/CAT.BIN`. The open question is how
       much further to push it. Reasoning (2026-06-24):
       - In normal provisioning the OS boot region and `/BIN` are written together

@@ -166,4 +166,7 @@ emulator/test/diff.asm
 emulator/test/greetp.c
 emulator/test/greetp.asm
 emulator/test/tree.asm
-emulator/test/dump.asm
+emulator/test/os_dir.asm
+emulator/test/v2dir.asm
+emulator/test/v2pwd.asm
+emulator/test/v2tree.asm

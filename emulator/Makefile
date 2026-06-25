@@ -50,7 +50,7 @@ test-c: p8xemu ucode
 	sh test/c_pager_test.sh
 	sh test/c_textutils_test.sh
 	sh test/c_findiff_test.sh
-	sh test/c_treedump_test.sh
+	sh test/c_tree_test.sh
 	sh test/c_pipe_test.sh
 
 # Native assembler self-host: assemble its own source on-target == host build.

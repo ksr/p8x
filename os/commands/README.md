@@ -20,14 +20,15 @@ DIR /BIN            CAT README.TXT          PWD
 equivalently `RUN /BIN/DIR.BIN /BIN`, etc. Every command accepts **`-h`** to
 print a one-line usage summary and exit.
 
-> **Note — DIR and PWD are also shell built-ins**, which take priority over the
-> `/BIN` programs of the same name. So bare `DIR`/`PWD` run the built-in (which
-> ignores `-h`/`-R`); to reach the richer C versions use the explicit path, e.g.
-> `RUN /BIN/DIR.BIN -R /` or `RUN /BIN/DIR.BIN -h`. `CAT` is **not** a built-in
-> (it was removed once `cat.c` became a superset), so `CAT …` always runs
-> `/BIN/CAT.BIN`. Whether to drop the DIR/PWD built-ins too is tracked in the
-> [backlog](../../BACKLOG.md) (they're the only way to list a disk with no
-> `/BIN` installed, e.g. right after `FORMAT`).
+> **Note — DIR, PWD, CAT, and TREE are no longer shell built-ins** (the
+> minimal-kernel split): they were removed from the OS and run from `/BIN` by
+> bare name, so `DIR -R`, `PWD`, `CAT file`, `TREE` all just work (and honour
+> `-h`). The kernel keeps only what can't be a `/BIN` program — `RUN`, the
+> authoring/FS primitives (`SAVE`/`DEP`/`LOAD`/`DEL`/`MKDIR`/`RMDIR`/`CD`), and
+> `HELP`/`EXIT`/`PACK`/`FSCK`/`FORMAT`. **`DUMP` stays native** — as a `/BIN`
+> program it would load into the `$B000` TPA and overwrite the very memory it
+> dumps. Consequence: a freshly-`FORMAT`ted card (no `/BIN`) can't `DIR`/`CAT`
+> until `/BIN` is repopulated (from the host, or a future master CF — backlog).
 
 ## Commands
 
@@ -49,7 +50,6 @@ print a one-line usage summary and exit.
 | [`find.c`](find.c) | `FIND pattern [-h]` | Recursively print CWD paths whose name contains `pattern` (substring). |
 | [`diff.c`](diff.c) | `DIFF f1 f2 [-h]` | Prefix/suffix-anchored line diff: `<` lines only in f1, `>` only in f2. ≤40 lines/file. |
 | [`tree.c`](tree.c) | `TREE [-h]` | Depth-first indented listing of the CWD tree (same recursion as `DIR -R`). |
-| [`dump.c`](dump.c) | `DUMP hexaddr [-h]` | 256-byte hex + ASCII dump of memory from a hex address (`peek`). |
 
 ### Implementation notes
 

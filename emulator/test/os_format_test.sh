@@ -18,21 +18,23 @@ python3 $ROOT/tools/p8xfs.py create fmt.img --v2 >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   fmt.img p8xos.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  fmt.img /OLD >/dev/null
 
-# Boot, list (OLD present), FORMAT (confirm Y), list (empty), MKDIR /NEW, list
-# (NEW present), FSCK, then EXIT to the monitor.
-out=$(printf 'B\rDIR\rFORMAT\rY\rDIR\rMKDIR /NEW\rDIR\rFSCK\rEXIT\r' | \
+# Boot, FORMAT (confirm Y), MKDIR /NEW, FSCK, then EXIT. DIR is no longer a
+# built-in and a just-FORMATted volume has no /BIN, so we don't type DIR here;
+# the post-format tree (/OLD gone, /NEW present) is checked host-side below with
+# p8xfs.py ls. MKDIR ("DIR CREATED") and FSCK are still native built-ins.
+out=$(printf 'B\rFORMAT\rY\rMKDIR /NEW\rFSCK\rEXIT\r' | \
       ../p8xemu -l 200000000 -c fmt.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r')
 fail() { echo "OS-FORMAT TEST: FAIL — $1"; echo "$out" | sed -n '/v1.0/,$p'; exit 1; }
 
 echo "$out" | grep -q 'P8X/OS v1.0'        || fail "OS did not boot"
-echo "$out" | grep -q 'OLD.*<DIR>'         || fail "pre-format DIR missing /OLD"
 echo "$out" | grep -q 'FORMATTED'          || fail "FORMAT did not report success"
-# Everything after FORMATTED is the post-format world: /OLD gone, /NEW present.
-post=$(echo "$out" | sed -n '/FORMATTED/,$p')
-echo "$post" | grep -q 'OLD.*<DIR>'        && fail "/OLD survived FORMAT" || true
-echo "$post" | grep -q 'DIR CREATED'       || fail "MKDIR failed on the fresh volume"
-echo "$post" | grep -q 'NEW.*<DIR>'        || fail "freshly created /NEW not listed"
-echo "$post" | grep -q 'FSCK OK'           || fail "on-target FSCK flagged the fresh volume"
+echo "$out" | grep -q 'DIR CREATED'        || fail "MKDIR failed on the fresh volume"
+echo "$out" | grep -q 'FSCK OK'            || fail "on-target FSCK flagged the fresh volume"
+# Host-side: the post-format root has /NEW and no longer has /OLD.
+python3 $ROOT/tools/p8xfs.py ls fmt.img / >fmt_ls.tmp 2>&1 || { cat fmt_ls.tmp; fail "host ls failed"; }
+grep -qi 'NEW' fmt_ls.tmp || { cat fmt_ls.tmp; fail "freshly created /NEW not in the volume"; }
+if grep -qi 'OLD' fmt_ls.tmp; then cat fmt_ls.tmp; fail "/OLD survived FORMAT"; fi
+rm -f fmt_ls.tmp
 
 # Host-side: the volume the OS wrote must be a clean v2, and the boot block must
 # carry version 2, a preserved (nonzero) OSCNT, and free = 41 (37 + one MKDIR).

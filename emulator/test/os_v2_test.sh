@@ -37,6 +37,14 @@ python3 $ROOT/tools/p8xfs.py put    v2.img v2prog.bin --name /BIN/HELLO.BIN >/de
 python3 $ROOT/compiler/p8cc.py $ROOT/os/commands/cat.c -o v2cat.asm >/dev/null
 python3 $ROOT/assembler/p8xasm.py v2cat.asm -o v2cat.bin --base 0xB000 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    v2.img v2cat.bin --name /BIN/CAT.BIN --load 0xB000 --exec 0xB000 >/dev/null
+# DIR/PWD/TREE are no longer built-ins either — install their C versions so the
+# bare names resolve via PATH (/BIN).
+for c in dir pwd tree; do
+    python3 $ROOT/compiler/p8cc.py $ROOT/os/commands/$c.c -o v2$c.asm >/dev/null
+    python3 $ROOT/assembler/p8xasm.py v2$c.asm -o v2$c.bin --base 0xB000 >/dev/null
+    up=$(echo $c | tr a-z A-Z)
+    python3 $ROOT/tools/p8xfs.py put v2.img v2$c.bin --name /BIN/$up.BIN --load 0xB000 --exec 0xB000 >/dev/null
+done
 printf 'readme' > v2r.tmp
 python3 $ROOT/tools/p8xfs.py put    v2.img v2r.tmp --name /README >/dev/null
 rm -f v2r.tmp v2prog.asm
@@ -52,10 +60,11 @@ fail() { echo "OS-V2 TEST: FAIL — $1"; echo "$out" | sed -n '/v1.0/,$p'; exit 
 echo "$out" | grep -q 'P8X/OS v1.0'   || fail "OS did not boot"
 echo "$out" | grep -q '^readme'       || fail "CAT did not print file contents"
 echo "$out" | grep -q '^/BIN$'        || fail "PWD did not print the working path"
-echo "$out" | grep -q 'BIN.*<DIR>'    || fail "root DIR missing BIN <DIR>"
-# TREE indents the hierarchy: BIN/ under root, HELLO.BIN deeper still.
-echo "$out" | grep -q '^  BIN/'       || fail "TREE missing indented BIN/"
-echo "$out" | grep -q '^    HELLO.BIN' || fail "TREE missing nested HELLO.BIN"
+# /BIN/DIR.BIN lists plain names (no "<DIR>" tag) — root shows the BIN entry.
+echo "$out" | grep -qx 'BIN'          || fail "root DIR missing BIN"
+# /BIN/TREE.BIN indents 2 spaces/level from depth 0: BIN/ at root, HELLO.BIN under it.
+echo "$out" | grep -qx 'BIN/'         || fail "TREE missing BIN/"
+echo "$out" | grep -qx '  HELLO.BIN'  || fail "TREE missing nested HELLO.BIN"
 echo "$out" | grep -q '/BIN> '        || fail "CD BIN: prompt path not updated"
 # RUN from CWD and via absolute path should each print V2 (two occurrences).
 [ "$(echo "$out" | grep -c '^V2')" -ge 2 ] || fail "RUN (cwd and absolute) did not both run"

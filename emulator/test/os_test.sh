@@ -41,6 +41,12 @@ rm -f os.img
 python3 $ROOT/tools/p8xfs.py create os.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot os.img p8xos.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py put os.img prog.bin --name PROG.BIN >/dev/null
+# DIR is no longer a built-in — install /BIN/DIR.BIN so bare `DIR` / `DIR >DLIST`
+# resolve via implicit RUN. (DUMP is still native; DEP/DUMP below are unchanged.)
+python3 $ROOT/compiler/p8cc.py $ROOT/os/commands/dir.c -o os_dir.asm >/dev/null
+python3 $ROOT/assembler/p8xasm.py os_dir.asm -o os_dir.bin --base 0xB000 >/dev/null
+python3 $ROOT/tools/p8xfs.py mkdir os.img /BIN >/dev/null
+python3 $ROOT/tools/p8xfs.py put os.img os_dir.bin --name /BIN/DIR.BIN --load 0xB000 --exec 0xB000 >/dev/null
 printf 'hi' > os_h.tmp
 python3 $ROOT/tools/p8xfs.py put os.img os_h.tmp --name HELLO.TXT >/dev/null
 rm -f os_h.tmp prog.asm

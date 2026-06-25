@@ -11,13 +11,10 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 >
 > | Command | Effect |
 > |---------|--------|
-> | `DIR [path]` | list the current directory, or a given one |
 > | `CD path` | change directory (absolute `/a/b`, relative, `.`/`..`) |
-> | `PWD` | print the working-directory path |
 > | `PATH [dirs]` | show/set the program search path (`;`-separated, default `/BIN`) |
 > | `MKDIR path` | create a subdirectory (v2) |
 > | `RMDIR path` | remove an empty subdirectory (v2) |
-> | `TREE` | depth-first indented listing of the whole tree (v2) |
 > | `LOAD name` | read a file into its stored load address |
 > | `RUN name [args]` | `LOAD` it, then `JSR` its exec address; `args` → `P2` (program `RTS` → shell) |
 > | `SAVE name start end` | write memory `[start,end)` to a new file (hex addrs) |
@@ -45,8 +42,8 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > the free pointer. Together `DEP`+`SAVE`+`RUN` let the machine author and run
 > its own programs. `MKDIR` allocates a 4-sector extent at the free pointer and
 > writes its `.`/`..`; `RMDIR` refuses a directory that still holds entries past
-> `.`/`..`. `TREE` walks the tree depth-first with an explicit RAM stack (the
-> single shared sector buffer rules out recursion). **`PACK`** reclaims every
+> `.`/`..`. (`TREE` is no longer a built-in — it, `DIR`, and `PWD` are now
+> userland C programs in `/BIN`; see *Programs* below.) **`PACK`** reclaims every
 > extent `DEL`/`RMDIR` left behind: a two-phase tree walk compacts all file and
 > directory extents down (updating each one's parent entry), then repairs every
 > directory's `.`/`..` from the final positions — so navigation and fsck stay
@@ -71,7 +68,9 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 
 The OS ships only a shell + built-ins; bigger tools are **standalone programs**
 that load into the transient program area (TPA, `$B000`) and are launched with
-`RUN`. A fresh `os/run.sh` disk carries three under `/BIN`:
+`RUN`. A fresh `os/run.sh` disk carries the three big interpreters/tools below
+under `/BIN`, **plus the userland C commands** (`DIR`, `PWD`, `TREE`, `CAT`,
+`WC`, `GREP`, … — see [commands/README.md](commands/README.md)):
 
 | Program | Run as | What |
 |---------|--------|------|
@@ -163,7 +162,8 @@ python3 assembler/p8xasm.py firmware/p8xmon.asm -o eeprom.bin
 ./emulator/p8xemu -c disk.img eeprom.bin
 ```
 
-At the monitor `*` prompt type `B` to boot the OS, then `DIR` / `HELP`.
+At the monitor `*` prompt type `B` to boot the OS, then `HELP` (a built-in) or
+`DIR` (a `/BIN` program — present on an `os/run.sh` disk).
 
 The full path is covered by a regression test: `make test-os` (in `emulator/`)
 builds an image with the OS + two files, boots it, and asserts `DIR` lists
