@@ -91,15 +91,6 @@ Last updated: 2026-06-24
       /BIN. Cost is only that a just-FORMATted card can't `DIR` until /BIN is
       repopulated. Decide + do as one migration.
 
-- [ ] **`PATH` command to view/set the program search path.** Implicit RUN
-      already searches `PATHBUF` (`;`-separated, RAM-backed at $A400, seeded to
-      `/BIN` at COLD), and the resolver honors whatever it holds — there's just
-      no command to change it, so it stays `/BIN`. Add a `PATH` shell command:
-      no arg → print `PATHBUF` (like `PWD` prints `CWDPATH`); with an arg → copy
-      it into `PATHBUF` (upcased, the `ARG2P2`+copy idiom, mirroring `CD`). ~15-20
-      lines. Resets to `/BIN` each boot; *persisting* it across reboots is a
-      separate, larger task (needs a config file or a reserved disk sector).
-
 - [ ] Fusion import acceptance test: open backplane .sch/.brd pair, pour planes,
       run DRC, confirm zero airwires
 - [ ] Verify DIN 41612 footprints against physical connectors in stock

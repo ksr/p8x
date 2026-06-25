@@ -365,6 +365,9 @@ DISPATCH:
         LDP1 #KW_PWD
         JSR  CMPCMD
         JNZ  DOPWD
+        LDP1 #KW_PATH
+        JSR  CMPCMD
+        JNZ  DOPATH
         LDP1 #KW_EXIT
         JSR  CMPCMD
         JNZ  DOEXIT
@@ -392,6 +395,22 @@ DOHELP: LDP1 #MHELP
 DOPWD:  LDP1 #CWDPATH
         JSR  OPUTS
         JSR  CRLF
+        JMP  SHELL
+
+; ---------------- PATH [dirs] : view or set the program search path ----------
+; No argument prints the current PATH (PATHBUF, where implicit RUN looks up bare
+; command names; ';'-separated, default "/BIN"). An argument replaces it (copied
+; upcased + NUL-terminated, like a path component). Resets to "/BIN" each boot.
+DOPATH: JSR  ARG2P2
+        JSR  SKIPSPC
+        LDA  (P2)
+        JNZ  DPA_SET            ; an argument -> set PATH
+        LDP1 #PATHBUF           ; no argument -> print the current PATH
+        JSR  OPUTS
+        JSR  CRLF
+        JMP  SHELL
+DPA_SET:LDP1 #PATHBUF           ; copy the argument word into PATHBUF (upcased)
+        JSR  PARSEW
         JMP  SHELL
 
 ; EXIT / MON - leave the OS and cold-restart into the ROM monitor (reset vector
@@ -3072,6 +3091,8 @@ MHELP:   .byte CR,LF
          .byte CR,LF
          .ascii "PWD           print the working directory path"
          .byte CR,LF
+         .ascii "PATH [dirs]   show/set the program search path (default /BIN)"
+         .byte CR,LF
          .ascii "MKDIR path    create a subdirectory"
          .byte CR,LF
          .ascii "RMDIR path    remove an empty subdirectory"
@@ -3189,6 +3210,7 @@ KW_RMDIR:.asciiz "RMDIR"
 KW_TREE: .asciiz "TREE"
 KW_FSCK: .asciiz "FSCK"
 KW_PWD:  .asciiz "PWD"
+KW_PATH: .asciiz "PATH"
 KW_EXIT: .asciiz "EXIT"
 KW_MON:  .asciiz "MON"
 KW_FORMAT:.asciiz "FORMAT"

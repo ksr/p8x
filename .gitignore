@@ -163,3 +163,5 @@ emulator/test/uniq.asm
 emulator/test/sed.asm
 emulator/test/find.asm
 emulator/test/diff.asm
+emulator/test/greetp.c
+emulator/test/greetp.asm

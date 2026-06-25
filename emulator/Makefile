@@ -86,6 +86,7 @@ test-os: p8xemu ucode
 	sh test/os_format_test.sh
 	sh test/os_argv_test.sh
 	sh test/os_path_test.sh
+	sh test/os_pathcmd_test.sh
 	sh test/os_lineedit_test.sh
 	sh test/os_edit_test.sh
 	sh test/os_asm_test.sh

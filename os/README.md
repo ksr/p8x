@@ -14,6 +14,7 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > | `DIR [path]` | list the current directory, or a given one |
 > | `CD path` | change directory (absolute `/a/b`, relative, `.`/`..`) |
 > | `PWD` | print the working-directory path |
+> | `PATH [dirs]` | show/set the program search path (`;`-separated, default `/BIN`) |
 > | `MKDIR path` | create a subdirectory (v2) |
 > | `RMDIR path` | remove an empty subdirectory (v2) |
 > | `TREE` | depth-first indented listing of the whole tree (v2) |
@@ -93,7 +94,8 @@ is looked up as a program, so you can type `DIR /BIN` instead of
 `PATH` does not include the CWD (Unix-style: a file named `DIR` in your CWD won't
 shadow the command). The args, redirects (`<`/`>`) and pipes (`|`) all work on a
 bare-name invocation exactly as for explicit `RUN`. (`PATH` defaults to `/BIN` at
-boot; a command to change it is a later addition.)
+boot; the **`PATH`** command shows it with no argument and sets it with one —
+e.g. `PATH /BIN;/UTIL` — but does not persist across reboots.)
 
 **Program ABI** (what `RUN` guarantees a program):
 - entered with a `JSR` to its exec address — **return to the shell with `RTS`**
