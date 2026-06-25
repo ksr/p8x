@@ -37,7 +37,7 @@ print a one-line usage summary and exit.
 | [`pwd.c`](pwd.c) | `PWD [-h]` | Print the current working directory path. |
 | [`cat.c`](cat.c) | `CAT [file] [-h]` | Print a file, **or** copy stdin→stdout (the canonical filter) when given no file. So `cat file`, `cat <file`, and `cat \| …` all work. Reading the **console** (e.g. `CAT >FILE`), each key echoes and **Ctrl-D** ends the input. |
 | [`wc.c`](wc.c) | `WC [-h]` | Count lines, words, and bytes on stdin → `L W B`. A pure filter: `WC <file` or `… \| WC`. Counts are 16-bit. |
-| [`grep.c`](grep.c) | `GREP regex [-h]` | Print stdin lines matching a **basic regex** — `.` (any), `*` (zero-or-more), `^`/`$` (anchors); else literal. `GREP "^al" <file`, `… \| GREP "x.*y"`. Lines capped at 127 chars. |
+| [`grep.c`](grep.c) | `GREP regex [file] [-h]` | Print lines matching a **basic regex** — `.` (any), `*` (zero-or-more), `^`/`$` (anchors); else literal. Reads the named `file` (like cat) or stdin if none: `GREP "^al" foo.txt`, `… \| GREP "x.*y"`. Lines capped at 127 chars. |
 | [`cp.c`](cp.c) | `CP src dst [-h]` | Copy a file (CWD-relative or absolute paths, across subdirectories). Read stream → write stream. |
 | [`mv.c`](mv.c) | `MV src dst [-h]` | Move/rename a file = copy + delete source (P8XFS has no rename primitive). `MV X X` is refused. |
 
@@ -51,9 +51,10 @@ print a one-line usage summary and exit.
   bounded memory, no whole-tree buffer.
 - **pwd.c** — `SYS_GETCWD` ($4003): the CWD comes through the syscall ABI, not
   by peeking OS RAM.
-- **wc.c / grep.c** — pure `getchar`→`putchar` filters; nothing OS-specific
-  beyond stdin EOF, so they compose with `<`/`|` unchanged. wc counts are
-  16-bit. grep matches a basic regex via the classic tiny matcher
+- **wc.c / grep.c** — stdin filters that compose with `<`/`|`. wc counts are
+  16-bit. grep also takes an optional **file argument** (opened like cat —
+  absolute path + `FRESOLVE`/`FOPEN`, read buffer at `$E000` — else stdin) and
+  matches a basic regex via the classic tiny matcher
   (`matchhere`/`match`): a single self-recursive `matchhere` (the `c*` case is an
   inline loop, *not* a separate `matchstar`) — deliberately **no forward
   declaration / mutual recursion**, since the native `p8cc.c` bootstrap rejects a

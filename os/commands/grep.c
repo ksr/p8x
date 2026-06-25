@@ -6,13 +6,16 @@
  *     $   anchor to the end of the line     (only special as the last char)
  * everything else is a literal. (No character classes, +, ?, or alternation.)
  *
- *     GREP "be.a" <FILE      -> lines matching be<any>a
- *     GREP "^al"  <FILE      -> lines starting with "al"
- *     GREP "a$"   <FILE      -> lines ending in 'a'
+ *     GREP "^al" FILE        -> lines of FILE starting with "al"
+ *     GREP "be.a" <FILE      -> from stdin (a redirect): be<any>a
  *     cmd | GREP "x.*y"      -> filter a pipe
  *
- * Reads stdin a line at a time (CR, LF, or CRLF all end a line). The pattern is
- * the first argument word (no spaces). Lines are capped at 127 characters.
+ * Like cat, grep reads a **named file** if a second argument is given, otherwise
+ * **stdin** (so `<`/`|` still work). The file is opened the same way cat does:
+ * an absolute path (CWD via SYS_GETCWD unless already absolute), FRESOLVE +
+ * FOPEN, with the read buffer at $E000. Reads a line at a time (CR, LF, or CRLF
+ * all end a line). The regex is the first argument word (no spaces); lines are
+ * capped at 127 characters.
  *
  * --- match(): the classic tiny regex matcher (Thompson/Pike style) -----------
  * Self-contained and dependency-free, so it can be copied verbatim into any
@@ -51,29 +54,67 @@ int match(char *re, char *t) {               /* 1 if re matches anywhere in t */
     }
 }
 
+char path[80];                               /* absolute path of the optional file arg */
+int fromfile;                                /* 1 = read the file stream, 0 = stdin */
+
+/* nextc(): next input byte, or 65535 at EOF — from the file (FGETB) or stdin. */
+int nextc() {
+    int c;
+    if (fromfile) {
+        c = bios(0x0127, 0, 0);              /* FGETB: A | carry<<8 */
+        if (c & 256) { return 65535; }       /* carry = end of file */
+        return c & 255;
+    }
+    return getchar();                        /* SYS_GETC; 65535 at EOF */
+}
+
 int main() {
-    char *pat;
+    char *a;
     char pbuf[64];
     int i;
+    int j;
     int n;
     int c;
 
-    pat = argstr();
-    while (*pat == 32) { pat = pat + 1; }
-    if (*pat == 0 || *pat == 13 ||
-        (*pat == '-' && (*(pat + 1) == 'h' || *(pat + 1) == 'H'))) {
-        puts("usage: GREP regex   print stdin lines matching regex (. * ^ $)");
+    a = argstr();
+    while (*a == 32) { a = a + 1; }
+    if (*a == 0 || *a == 13 ||
+        (*a == '-' && (*(a + 1) == 'h' || *(a + 1) == 'H'))) {
+        puts("usage: GREP regex [file]   match regex (. * ^ $) in file or stdin");
         return 0;
     }
-    i = 0;                                    /* copy the first arg word as the pattern */
-    while (pat[i] != 0 && pat[i] != 32 && pat[i] != 13 && i < 63) {
-        pbuf[i] = pat[i];
+    i = 0;                                    /* the regex = the first arg word */
+    while (a[i] != 0 && a[i] != 32 && a[i] != 13 && i < 63) {
+        pbuf[i] = a[i];
         i = i + 1;
     }
     pbuf[i] = 0;
+    a = a + i;                                /* skip to a possible second word: a file */
+    while (*a == 32) { a = a + 1; }
+
+    fromfile = 0;
+    if (*a != 0 && *a != 13) {                /* a file argument was given -> open it */
+        i = 0;                                /* build an absolute path (CWD-relative ok) */
+        if (*a != '/') {
+            bios(0x4003, path, 0);            /* SYS_GETCWD */
+            while (path[i] != 0) { i = i + 1; }
+            if (i > 0 && path[i - 1] != '/') { path[i] = '/'; i = i + 1; }
+        }
+        j = 0;
+        while (a[j] != 0 && a[j] != 13 && a[j] != 32) {
+            path[i] = a[j]; i = i + 1; j = j + 1;
+        }
+        path[i] = 0;
+        bios(0x0133, path, 0);                /* FRESOLVE */
+        if (bios(0x0124, 0xE000, 0) & 256) {  /* FOPEN; carry = not found */
+            puts("grep: not found");
+            return 1;
+        }
+        fromfile = 1;
+    }
 
     n = 0;
-    c = getchar();
+    c = nextc();
     while (c != 65535) {
         if (c == 10 || c == 13) {             /* end of line */
             line[n] = 0;
@@ -82,7 +123,7 @@ int main() {
         } else {
             if (n < 127) { line[n] = c; n = n + 1; }
         }
-        c = getchar();
+        c = nextc();
     }
     if (n > 0) {                              /* a final line with no trailing newline */
         line[n] = 0;

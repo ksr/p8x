@@ -56,6 +56,11 @@ check() {   # $1 = label
     out=$(R 'GREP g.*a <T.TXT')
     echo "$out" | grep -qx 'gamma alpha' || fail "$1: grep 'g.*a' missed 'gamma alpha'"
     echo "$out" | grep -qx 'beta'        && fail "$1: grep 'g.*a' wrongly matched 'beta'"
+    # grep with a FILE ARGUMENT (like cat) instead of stdin
+    out=$(R 'GREP ^beta T.TXT')
+    echo "$out" | grep -qx 'beta'        || fail "$1: grep <regex> <file> missed 'beta'"
+    echo "$out" | grep -qx 'alpha'       && fail "$1: grep file-arg wrongly matched 'alpha'"
+    R 'GREP x NOPE.TXT' | grep -qi 'not found' || fail "$1: grep missing-file not reported"
     # pipes: cat | grep, cat | wc
     R 'CAT T.TXT | GREP beta' | grep -qx 'beta'   || fail "$1: cat | grep pipe"
     R 'CAT T.TXT | RUN /BIN/WC.BIN' | grep -qx '3 4 26' || fail "$1: cat | wc pipe"
