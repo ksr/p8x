@@ -52,9 +52,10 @@ if [ ! -f "$disk" ]; then
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/asm.bin" \
         --name /BIN/ASM.BIN --load 0xB000 --exec 0xB000 >/dev/null
     # C-as-OS-commands (compiled with p8cc): demonstrate the OS syscalls, I/O
-    # redirection and pipes out of the box. e.g.  RUN /BIN/DIR.BIN /BIN ,
-    # RUN /BIN/CAT.BIN <README.TXT ,  RUN /BIN/PWD.BIN | RUN /BIN/CAT.BIN .
-    for ex in dir pwd cat; do
+    # redirection and pipes out of the box. Run by bare name via PATH (/BIN),
+    # e.g.  DIR /BIN ,  CAT README.TXT ,  CAT README.TXT | GREP hello | WC ,
+    # CP README.TXT COPY.TXT ,  MV COPY.TXT MOVED.TXT .
+    for ex in dir pwd cat wc grep cp mv; do
         python3 "$root/compiler/p8cc.py" "$root/os/commands/$ex.c" -o "$build/$ex.asm" >/dev/null
         python3 "$root/assembler/p8xasm.py" "$build/$ex.asm" -o "$build/$ex.bin" --base 0xB000 >/dev/null
         up=$(echo "$ex" | tr a-z A-Z)

@@ -24,6 +24,15 @@ Last updated: 2026-06-24
       ~3 B). LBA/SBUF/vars are unchanged ($9D47/$9E00/$A000).
 
 
+- [ ] **Multi-stage pipes (`a | b | c`).** The shell's pipe state machine
+      (`PIPEF`/`PIPESCAN`/`PIPE_RHS`) handles exactly **two** stages: it splits on
+      the first `|`, runs the left into `PIPE.TMP`, then re-dispatches the right.
+      The re-dispatch jumps to `DISPATCH` without re-scanning for `|`, so a third
+      stage is swallowed as args of the second command. To support N stages,
+      `PIPE_RHS` would need to re-run `PIPESCAN` on the remaining line (chaining
+      temp files), or the splitter could iterate left-to-right. Until then,
+      `CAT f | GREP x | WC` silently drops the `| WC`.
+
 - [ ] **Remove the built-in DIR/PWD too? (possible — has a real trade-off).**
       Built-in CAT is gone (2026-06-24): a bare `CAT file` now falls through
       DISPATCH to the implicit-RUN of `/BIN/CAT.BIN` (the C cat is a strict
