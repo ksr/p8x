@@ -142,4 +142,5 @@ machinery: `emulator/test/c_dir_test.sh`, `c_dir_recursive_test.sh`,
 `c_pager_test.sh` (head/tail/more), `c_stdin_test.sh`, `c_redirect_test.sh`,
 `c_pipe_test.sh`, and the implicit-RUN/PATH path in `os_path_test.sh`.
 
-More commands to come (e.g. `SORT`/`UNIQ`/`DIFF`-style tools).
+The core text/file utilities are all implemented (the table above). Future ideas:
+`TR`, `WC -l`-style flags, glob patterns for `FIND`, a real `LESS` (back-scroll).

@@ -29,7 +29,8 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > | `HELP` | list commands |
 >
 > The table above is the **built-in** command set. `CAT`, `WC`, `GREP`, `CP`,
-> `MV` (and richer `DIR -R` etc.) are **userland C programs** in `/BIN`, run by
+> `MV`, `HEAD`, `TAIL`, `MORE`, `SORT`, `UNIQ`, `SED`, `FIND`, `DIFF` (and richer
+> `DIR -R` etc.) are **userland C programs** in `/BIN`, run by
 > bare name (implicit RUN searches `PATH`, default `/BIN`) or explicit `RUN` —
 > see [commands/](commands/README.md). Line input echoes keys, supports
 > backspace/DEL editing (max 63 chars), and takes **Ctrl-D** as console EOF.
