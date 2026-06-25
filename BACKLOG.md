@@ -42,18 +42,31 @@ Last updated: 2026-06-24
       temp files), or the splitter could iterate left-to-right. Until then,
       `CAT f | GREP x | WC` silently drops the `| WC`.
 
-- [ ] **Remove the built-in DIR/PWD too? (possible — has a real trade-off).**
-      Built-in CAT is gone (2026-06-24): a bare `CAT file` now falls through
-      DISPATCH to the implicit-RUN of `/BIN/CAT.BIN` (the C cat is a strict
-      superset). DIR and PWD were *kept* deliberately: unlike CAT they are the
-      only way to inspect a disk that has **no `/BIN` installed** — e.g. right
-      after `FORMAT`, or a data-only volume — because the C `/BIN/DIR.BIN` can't
-      be found or listed when it isn't there. To drop them we'd need a story for
-      bootstrapping a bare disk (e.g. a minimal monitor-level lister, or FORMAT
-      seeding `/BIN/DIR.BIN`). `os_format_test` (DIRs a just-formatted volume)
-      and `os_test` (`DIR >DLIST`) depend on the built-in DIR today. Net code
-      saved if removed: ~70 lines (DODIR/DENT2OS/DPRENT + MDIRHDR/MDIRTAG) for
-      DIR, ~4 for PWD. Decide whether the dedup is worth the bare-disk capability.
+- [ ] **Minimal-kernel split: move the pure-viewer built-ins (DIR/PWD/TREE/DUMP)
+      to /BIN.** Built-in CAT is already gone (2026-06-24): bare `CAT file` falls
+      through DISPATCH to implicit-RUN of `/BIN/CAT.BIN`. The open question is how
+      much further to push it. Reasoning (2026-06-24):
+      - In normal provisioning the OS boot region and `/BIN` are written together
+        (run.sh / p8xfs), so an "OS but no /BIN" disk basically never happens in
+        day-to-day use — the old bare-disk argument is weak.
+      - The ONE real exception: `FORMAT` preserves the OS (it stashes OSCNT; "card
+        stays bootable") but empties the filesystem, so a freshly-FORMATted card
+        boots the OS with no `/BIN`. Decision hinges on: should that card be usable
+        standalone, or is "re-image from the host after FORMAT" acceptable?
+      - **Irreducible — must stay native** (can't be /BIN programs): `RUN` (it
+        launches /BIN programs; chicken-and-egg) + the implicit-run dispatch; the
+        on-target authoring/FS primitives `SAVE`/`DEP`/`LOAD`/`DEL`/`MKDIR`/`RMDIR`
+        /`CD` (these let you rebuild /BIN with no host — DEP bytes + SAVE → a .BIN;
+        if they were /BIN-only a FORMATted card with no host would be a brick);
+        plus `HELP`/`EXIT`/`MON`/`FORMAT`/`FSCK`/`PACK`.
+      - **Movable (pure viewers, no bootstrap role):** `DIR`, `PWD`, `TREE`,
+        `DUMP`. DIR is the big win (~70 lines: DODIR/DENT2OS/DPRENT + MDIRHDR/
+        MDIRTAG); PWD ~4; TREE/DUMP each a chunk. `os_format_test` (DIRs a fresh
+        volume) and `os_test` (`DIR >DLIST`) lean on built-in DIR and would need
+        reworking (install /BIN/DIR.BIN, or verify via p8xfs host-side).
+      Lean: minimal kernel (Unix-ish) — keep the kernel above, push the viewers to
+      /BIN. Cost is only that a just-FORMATted card can't `DIR` until /BIN is
+      repopulated. Decide + do as one migration.
 
 - [ ] **`PATH` command to view/set the program search path.** Implicit RUN
       already searches `PATHBUF` (`;`-separated, RAM-backed at $A400, seeded to
