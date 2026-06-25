@@ -1,7 +1,7 @@
 # P8X Project Backlog
 
 Add ideas as they come; move items between sections as they progress.
-Last updated: 2026-06-24
+Last updated: 2026-06-25
 
 ## How to use
 - **NEXT** — committed, in rough priority order
@@ -157,6 +157,29 @@ Last updated: 2026-06-24
 - [ ] Order backplane PCB first as the cheap validation article
 
 ## IDEAS
+
+- [ ] **Disassembler (reverse assembler): point it at an address block, get
+      assembler back.** A tool that walks a memory/file region and decodes each
+      byte stream back into P8X mnemonics + operands — the inverse of `p8xasm`.
+      Counterpart to the on-target ASM (#43); together they round-trip code on
+      the machine (DUMP shows hex, this shows instructions). Sketch:
+      - **Core:** a single opcode→(mnemonic, addressing-mode, length) table —
+        ideally *generated from the same source the assembler/emulator use* so it
+        can't drift (the ISA table is canon; don't hand-maintain a second copy).
+        Linear sweep from the start address: read opcode, look up length, format
+        the operand per its mode (`#imm`, `$abs`, `$zp`, relative-branch target
+        as `$abs` so output re-assembles), advance, repeat.
+      - **Output:** re-assemblable text — emit a leading `.org`, optional `addr:
+        bytes` columns (like a listing), and resolve branch displacements to
+        absolute targets. Round-trip test: `disasm` a known `.bin`, re-`p8xasm`
+        it, assert byte-identical (the strongest correctness check).
+      - **Where:** start as a **host tool** (`tools/p8xdis.py`, fast to iterate +
+        easy round-trip test in `make test`), then optionally an on-target `/BIN`
+        program (`disasm.c`) once the table can be shared — pairs with DUMP for
+        on-machine reverse-engineering. Caveat: pure linear sweep mis-decodes
+        data interleaved with code (no control-flow tracing) and can't recover
+        labels/comments — acceptable for a v1; a later pass could follow branches
+        to mark code vs. data.
 
 - [ ] **Optimize monitor/OS/BASIC hot paths with the rev-C T-operand ALU ops**
       (`LDT`/`ADDT`/`SUBT`/`CMPT`/etc.): these let you compute `A := A ⟨op⟩ T`
