@@ -13,6 +13,32 @@ Last updated: 2026-06-24
 
 ## NEXT
 
+- [ ] **Second CF as a removable master / transfer drive.** Goal (2026-06-25):
+      keep a "master" CF holding core files (e.g. `/BIN` binaries) and, in the
+      field with no host, provision a fresh card by copying from it — `FORMAT`,
+      insert master, `IMPORT 1:/BIN`, done. Scope is deliberately **read-from-
+      drive-1 only**, NOT full dual-volume: the working/boot volume stays drive 0
+      with the normal CWD; drive 1 is just a source you read/copy from. This
+      avoids the heavy FS refactor (no per-drive CWD, no mounting).
+      - **HW:** a second CF port at its own decode (e.g. `$FF18–$FF1F`) — one more
+        `'138` term + buffers + socket. (Master/slave on one channel is too
+        unreliable for True-IDE CF; the driver also hardwires `$E0`=drive 0 today.)
+      - **BIOS:** make sector I/O drive-aware — `CFRDSEC`/`CFWRSEC` select the
+        drive (port base / DEV bit) per transfer; the read stream carries its
+        source drive and the write stream its dest drive, so `FGETB`(drive 1) and
+        `FPUTB`(drive 0) interleave in one copy loop. Add a select call / per-init
+        IDENTIFY+SET FEATURES for card 1.
+      - **OS:** honor a leading `N:` drive prefix on **source** paths in the
+        resolve/`FOPEN` path (unprefixed = drive 0, with CWD). Then `CP 1:/BIN/X
+        /BIN/X` works as-is (cp reads src/writes dst). Add a bulk `IMPORT 1:/BIN`
+        (walk drive 1 with the find/dir-R recursion, copy each file to drive 0).
+      - **Emulator:** a 2nd image (`-c2 disk2.img`) modelling the 2nd device.
+        `p8xfs.py` is already per-image (build the master with it).
+      Bonus: this also solves the post-`FORMAT` bootstrap (repopulate `/BIN`
+      with no host), which **unblocks the minimal-kernel split** (DIR/PWD→/BIN)
+      below. Effort: HW small, BIOS moderate/low-risk (additive), OS `N:`+IMPORT
+      is the real work but far less than general dual-volume.
+
 - **P8XFS v2 — remaining loose ends** (the hierarchy itself is DONE; see DONE):
     - **on-target FORMAT — DONE** (2026-06-22, see DONE). Added the `FORMAT`
       command; it fit once the OS moved to $4000 (rev D).
@@ -101,7 +127,9 @@ Last updated: 2026-06-24
         reworking (install /BIN/DIR.BIN, or verify via p8xfs host-side).
       Lean: minimal kernel (Unix-ish) — keep the kernel above, push the viewers to
       /BIN. Cost is only that a just-FORMATted card can't `DIR` until /BIN is
-      repopulated. Decide + do as one migration.
+      repopulated. Decide + do as one migration. NOTE: the "second CF master /
+      transfer drive" item above removes that last objection — `IMPORT 1:/BIN`
+      repopulates a fresh card with no host — so doing that first makes this safe.
 
 - [ ] Fusion import acceptance test: open backplane .sch/.brd pair, pour planes,
       run DRC, confirm zero airwires
