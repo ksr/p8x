@@ -33,6 +33,16 @@ Last updated: 2026-06-24
       native `p8cc.c` subset: no forward decls / mutual recursion, no `++`/`--`,
       declarations at function top.
 
+- [ ] **`>>` append redirection.** Today the shell has `>` (REDSCAN -> FWOPEN,
+      create/overwrite). Add `>>` to append a command's stdout to an existing
+      file. Catch: P8XFS files are **contiguous extents** written at the boot-block
+      free pointer, so you can't grow a file in place. So `>>` means
+      copy-then-extend: stream the existing file's bytes into a fresh write stream
+      first, then the command's output, then close+register (replacing the old
+      entry); the old extent is reclaimed by PACK — same pattern as cp/mv. Parser:
+      REDSCAN must recognize `>>` before `>`. Mind the SBUF ordering (FRESOLVE the
+      target before FWOPEN) and that the source read uses ROBUF, not SBUF.
+
 - [ ] **Multi-stage pipes (`a | b | c`).** The shell's pipe state machine
       (`PIPEF`/`PIPESCAN`/`PIPE_RHS`) handles exactly **two** stages: it splits on
       the first `|`, runs the left into `PIPE.TMP`, then re-dispatches the right.
