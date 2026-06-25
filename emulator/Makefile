@@ -45,6 +45,8 @@ test-c: p8xemu ucode
 	sh test/c_redirect_test.sh
 	sh test/c_stdin_test.sh
 	sh test/c_cat_test.sh
+	sh test/c_filters_test.sh
+	sh test/c_fileops_test.sh
 	sh test/c_pipe_test.sh
 
 # Native assembler self-host: assemble its own source on-target == host build.

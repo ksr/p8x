@@ -150,3 +150,8 @@ emulator/test/cap.asm
 emulator/test/greet.c
 emulator/test/g.asm
 emulator/test/v2cat.asm
+emulator/test/wc.asm
+emulator/test/grep.asm
+emulator/test/cat.asm
+emulator/test/cp.asm
+emulator/test/mv.asm

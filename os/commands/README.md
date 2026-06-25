@@ -36,6 +36,10 @@ print a one-line usage summary and exit.
 | [`dir.c`](dir.c) | `DIR [-R] [path] [-h]` | List a directory (the path, or the CWD if omitted). `-R` recurses the whole subtree, indenting two spaces per level and flagging directories with a trailing `/`. Streams names one at a time, so it redirects/pipes with no size limit. |
 | [`pwd.c`](pwd.c) | `PWD [-h]` | Print the current working directory path. |
 | [`cat.c`](cat.c) | `CAT [file] [-h]` | Print a file, **or** copy stdin→stdout (the canonical filter) when given no file. So `cat file`, `cat <file`, and `cat \| …` all work. Reading the **console** (e.g. `CAT >FILE`), each key echoes and **Ctrl-D** ends the input. |
+| [`wc.c`](wc.c) | `WC [-h]` | Count lines, words, and bytes on stdin → `L W B`. A pure filter: `WC <file` or `… \| WC`. Counts are 16-bit. |
+| [`grep.c`](grep.c) | `GREP pattern [-h]` | Print stdin lines containing `pattern` (a literal substring, no regex). `GREP foo <file` or `… \| GREP foo`. Lines capped at 127 chars. |
+| [`cp.c`](cp.c) | `CP src dst [-h]` | Copy a file (CWD-relative or absolute paths, across subdirectories). Read stream → write stream. |
+| [`mv.c`](mv.c) | `MV src dst [-h]` | Move/rename a file = copy + delete source (P8XFS has no rename primitive). `MV X X` is refused. |
 
 ### Implementation notes
 
@@ -47,6 +51,14 @@ print a one-line usage summary and exit.
   bounded memory, no whole-tree buffer.
 - **pwd.c** — `SYS_GETCWD` ($4003): the CWD comes through the syscall ABI, not
   by peeking OS RAM.
+- **wc.c / grep.c** — pure `getchar`→`putchar` filters; nothing OS-specific
+  beyond stdin EOF, so they compose with `<`/`|` unchanged. grep matches a
+  literal substring; wc counts are 16-bit.
+- **cp.c / mv.c** — copy SRC (read stream, buffer at `$E000`) to DST (write
+  stream). The read and write streams use **independent** buffers, so the
+  byte loop interleaves them; but `FRESOLVE`/`FOPEN` and the write stream all
+  transit `SBUF`, so DST is resolved *before* `FWOPEN` (which zeroes `SBUF`
+  last). `mv` then `FDELETE`s the source; `MV X X` is guarded.
 - **cat.c** — a filename argument is opened with `FRESOLVE` ($0133) +
   `FOPEN`/`FGETB`. The BIOS resolves names from its own current directory (root
   for a fresh program), so cat builds an **absolute** path (CWD via
@@ -74,7 +86,8 @@ equivalent P8X assembly.
 
 These double as regression tests for the OS syscall, redirection, and pipe
 machinery: `emulator/test/c_dir_test.sh`, `c_dir_recursive_test.sh`,
-`c_cat_test.sh`, `c_stdin_test.sh`, `c_redirect_test.sh`, `c_pipe_test.sh`, and
-the implicit-RUN/PATH path in `os_path_test.sh`.
+`c_cat_test.sh`, `c_filters_test.sh` (wc/grep), `c_fileops_test.sh` (cp/mv),
+`c_stdin_test.sh`, `c_redirect_test.sh`, `c_pipe_test.sh`, and the
+implicit-RUN/PATH path in `os_path_test.sh`.
 
-More commands to come (e.g. `MORE`/`WC`/`GREP`-style filters).
+More commands to come (e.g. `MORE`/`HEAD`/`TAIL`-style filters).
