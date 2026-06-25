@@ -24,6 +24,15 @@ Last updated: 2026-06-24
       ~3 B). LBA/SBUF/vars are unchanged ($9D47/$9E00/$A000).
 
 
+- [ ] **Shared-source helper convention for /BIN commands.** There's no linker
+      and no `#include`, so reusable helpers (the basic-regex `match()` in
+      `grep.c` is the first; more commands will want it) are currently shared by
+      copy-paste. When a 3rd consumer appears, add a small build step that
+      concatenates a shared `os/commands/lib*.c` ahead of the command source
+      before `p8cc` (run.sh + the test harness). Helpers must stay within the
+      native `p8cc.c` subset: no forward decls / mutual recursion, no `++`/`--`,
+      declarations at function top.
+
 - [ ] **Multi-stage pipes (`a | b | c`).** The shell's pipe state machine
       (`PIPEF`/`PIPESCAN`/`PIPE_RHS`) handles exactly **two** stages: it splits on
       the first `|`, runs the left into `PIPE.TMP`, then re-dispatches the right.

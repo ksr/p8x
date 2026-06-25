@@ -1,31 +1,54 @@
-/* grep.c — print stdin lines that contain a (literal) pattern. Unix `grep`,
- * minus regular expressions: the pattern is a plain substring.
+/* grep.c — print stdin lines matching a basic regular expression. Unix `grep`
+ * with a small regex dialect:
+ *     .   any single character
+ *     *   zero or more of the preceding character (or '.')
+ *     ^   anchor to the start of the line   (only special as the first char)
+ *     $   anchor to the end of the line     (only special as the last char)
+ * everything else is a literal. (No character classes, +, ?, or alternation.)
  *
- *     RUN /BIN/GREP.BIN foo <FILE   -> lines of FILE containing "foo"
- *     cmd | RUN /BIN/GREP.BIN foo   -> filter a pipe
- *  (and, via implicit RUN + PATH, simply `GREP foo <FILE` or `… | GREP foo`).
+ *     GREP "be.a" <FILE      -> lines matching be<any>a
+ *     GREP "^al"  <FILE      -> lines starting with "al"
+ *     GREP "a$"   <FILE      -> lines ending in 'a'
+ *     cmd | GREP "x.*y"      -> filter a pipe
  *
- * Reads stdin a line at a time (CR, LF, or CRLF all end a line — so it handles
- * both P8X and host-style text), and prints each line that contains the pattern.
- * The pattern is the first argument word (no spaces). Lines are capped at 127
- * characters; longer lines are truncated for the match.
+ * Reads stdin a line at a time (CR, LF, or CRLF all end a line). The pattern is
+ * the first argument word (no spaces). Lines are capped at 127 characters.
  *
- * OS: getchar()/SYS_GETC, EOF = 65535. With no `<file`/pipe, stdin is the
- * console and Ctrl-D ends input.
+ * --- match(): the classic tiny regex matcher (Thompson/Pike style) -----------
+ * Self-contained and dependency-free, so it can be copied verbatim into any
+ * other command that wants basic patterns (there is no linker / #include here;
+ * see os/commands/README "shared code"). Written with a single self-recursive
+ * matchhere() — the `c*` case is an inline loop rather than a separate
+ * matchstar() — so it needs no forward declaration / mutual recursion (which the
+ * native p8cc.c bootstrap doesn't accept). Both p8cc.py and p8cc.c compile it.
  */
 char line[128];                              /* the current input line */
 
-int contains(char *hay, char *needle) {      /* 1 if needle is a substring of hay */
-    int i;
-    int j;
-    i = 0;
-    while (hay[i] != 0) {
-        j = 0;
-        while (needle[j] != 0 && hay[i + j] == needle[j]) { j = j + 1; }
-        if (needle[j] == 0) { return 1; }    /* reached needle end -> matched */
-        i = i + 1;
+int matchhere(char *re, char *t) {           /* match re at the start of t */
+    int c;
+    if (re[0] != 0 && re[1] == '*') {        /* re[0]* then re[2..] */
+        c = re[0];
+        while (1) {
+            if (matchhere(re + 2, t)) { return 1; }   /* zero or more c */
+            if (*t == 0) { return 0; }
+            if (*t != c && c != '.') { return 0; }
+            t = t + 1;
+        }
+    }
+    if (re[0] == 0) { return 1; }
+    if (re[0] == '$' && re[1] == 0) { return *t == 0; }
+    if (*t != 0 && (re[0] == '.' || re[0] == *t)) {
+        return matchhere(re + 1, t + 1);
     }
     return 0;
+}
+int match(char *re, char *t) {               /* 1 if re matches anywhere in t */
+    if (re[0] == '^') { return matchhere(re + 1, t); }
+    while (1) {                              /* try each starting position */
+        if (matchhere(re, t)) { return 1; }
+        if (*t == 0) { return 0; }
+        t = t + 1;
+    }
 }
 
 int main() {
@@ -37,8 +60,9 @@ int main() {
 
     pat = argstr();
     while (*pat == 32) { pat = pat + 1; }
-    if (*pat == '-' && (*(pat + 1) == 'h' || *(pat + 1) == 'H')) {
-        puts("usage: GREP pattern   print stdin lines containing pattern");
+    if (*pat == 0 || *pat == 13 ||
+        (*pat == '-' && (*(pat + 1) == 'h' || *(pat + 1) == 'H'))) {
+        puts("usage: GREP regex   print stdin lines matching regex (. * ^ $)");
         return 0;
     }
     i = 0;                                    /* copy the first arg word as the pattern */
@@ -53,7 +77,7 @@ int main() {
     while (c != 65535) {
         if (c == 10 || c == 13) {             /* end of line */
             line[n] = 0;
-            if (n > 0 && contains(line, pbuf)) { puts(line); }
+            if (n > 0 && match(pbuf, line)) { puts(line); }
             n = 0;
         } else {
             if (n < 127) { line[n] = c; n = n + 1; }
@@ -62,7 +86,7 @@ int main() {
     }
     if (n > 0) {                              /* a final line with no trailing newline */
         line[n] = 0;
-        if (contains(line, pbuf)) { puts(line); }
+        if (match(pbuf, line)) { puts(line); }
     }
     return 0;
 }

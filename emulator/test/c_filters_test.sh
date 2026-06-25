@@ -38,11 +38,24 @@ R() { printf "B\r$1\r" | ../p8xemu -l 300000000 -c flt.img eeprom.bin 2>/dev/nul
 
 check() {   # $1 = label
     R 'WC <T.TXT' | grep -qx '3 4 26' || fail "$1: wc count != '3 4 26'"
-    # grep prints both lines containing 'alpha' and not 'beta'
+    # literal substring: lines containing 'alpha', not 'beta'
     out=$(R 'GREP alpha <T.TXT')
     echo "$out" | grep -qx 'alpha'       || fail "$1: grep missed 'alpha'"
     echo "$out" | grep -qx 'gamma alpha' || fail "$1: grep missed 'gamma alpha'"
     echo "$out" | grep -qx 'beta'        && fail "$1: grep wrongly printed 'beta'"
+    # regex: ^ anchors start (only the line beginning with 'beta')
+    out=$(R 'GREP ^beta <T.TXT')
+    echo "$out" | grep -qx 'beta'        || fail "$1: grep ^beta missed 'beta'"
+    echo "$out" | grep -qx 'alpha'       && fail "$1: grep ^beta wrongly matched 'alpha'"
+    # regex: '.' any char — al.ha matches both alpha lines, not beta
+    out=$(R 'GREP al.ha <T.TXT')
+    echo "$out" | grep -qx 'alpha'       || fail "$1: grep 'al.ha' missed 'alpha'"
+    echo "$out" | grep -qx 'gamma alpha' || fail "$1: grep 'al.ha' missed 'gamma alpha'"
+    echo "$out" | grep -qx 'beta'        && fail "$1: grep 'al.ha' wrongly matched 'beta'"
+    # regex: '*' — 'g.*a' matches 'gamma alpha' (g … a), not the others
+    out=$(R 'GREP g.*a <T.TXT')
+    echo "$out" | grep -qx 'gamma alpha' || fail "$1: grep 'g.*a' missed 'gamma alpha'"
+    echo "$out" | grep -qx 'beta'        && fail "$1: grep 'g.*a' wrongly matched 'beta'"
     # pipes: cat | grep, cat | wc
     R 'CAT T.TXT | GREP beta' | grep -qx 'beta'   || fail "$1: cat | grep pipe"
     R 'CAT T.TXT | RUN /BIN/WC.BIN' | grep -qx '3 4 26' || fail "$1: cat | wc pipe"

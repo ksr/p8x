@@ -37,7 +37,7 @@ print a one-line usage summary and exit.
 | [`pwd.c`](pwd.c) | `PWD [-h]` | Print the current working directory path. |
 | [`cat.c`](cat.c) | `CAT [file] [-h]` | Print a file, **or** copy stdin→stdout (the canonical filter) when given no file. So `cat file`, `cat <file`, and `cat \| …` all work. Reading the **console** (e.g. `CAT >FILE`), each key echoes and **Ctrl-D** ends the input. |
 | [`wc.c`](wc.c) | `WC [-h]` | Count lines, words, and bytes on stdin → `L W B`. A pure filter: `WC <file` or `… \| WC`. Counts are 16-bit. |
-| [`grep.c`](grep.c) | `GREP pattern [-h]` | Print stdin lines containing `pattern` (a literal substring, no regex). `GREP foo <file` or `… \| GREP foo`. Lines capped at 127 chars. |
+| [`grep.c`](grep.c) | `GREP regex [-h]` | Print stdin lines matching a **basic regex** — `.` (any), `*` (zero-or-more), `^`/`$` (anchors); else literal. `GREP "^al" <file`, `… \| GREP "x.*y"`. Lines capped at 127 chars. |
 | [`cp.c`](cp.c) | `CP src dst [-h]` | Copy a file (CWD-relative or absolute paths, across subdirectories). Read stream → write stream. |
 | [`mv.c`](mv.c) | `MV src dst [-h]` | Move/rename a file = copy + delete source (P8XFS has no rename primitive). `MV X X` is refused. |
 
@@ -52,8 +52,12 @@ print a one-line usage summary and exit.
 - **pwd.c** — `SYS_GETCWD` ($4003): the CWD comes through the syscall ABI, not
   by peeking OS RAM.
 - **wc.c / grep.c** — pure `getchar`→`putchar` filters; nothing OS-specific
-  beyond stdin EOF, so they compose with `<`/`|` unchanged. grep matches a
-  literal substring; wc counts are 16-bit.
+  beyond stdin EOF, so they compose with `<`/`|` unchanged. wc counts are
+  16-bit. grep matches a basic regex via the classic tiny matcher
+  (`matchhere`/`match`): a single self-recursive `matchhere` (the `c*` case is an
+  inline loop, *not* a separate `matchstar`) — deliberately **no forward
+  declaration / mutual recursion**, since the native `p8cc.c` bootstrap rejects a
+  standalone prototype. See *Shared code* below.
 - **cp.c / mv.c** — copy SRC (read stream, buffer at `$E000`) to DST (write
   stream). The read and write streams use **independent** buffers, so the
   byte loop interleaves them; but `FRESOLVE`/`FOPEN` and the write stream all
@@ -81,6 +85,24 @@ python3 tools/p8xfs.py put disk.img dir.bin --name /BIN/DIR.BIN --load 0xB000 --
 Either compiler works: `p8cc.py` (the Python bootstrap) or the native
 `p8cc.c` build (`cc -O2 compiler/p8cc.c -o p8cc-host`) — they emit behaviorally
 equivalent P8X assembly.
+
+## Shared code
+
+There is **no linker and no `#include`** — each command is one self-contained
+translation unit. So a reusable helper (e.g. the basic-regex `match()` in
+`grep.c`, which other tools will want) is shared by **copying the function block
+verbatim** into each command, not by linking. Two practical rules for a helper
+meant to be lifted:
+
+- keep it dependency-free (only the builtins / its own locals), and
+- write it within the p8cc subset's intersection with the *native* `p8cc.c`
+  — in particular **no forward declarations / mutual recursion** (p8cc.c rejects
+  a standalone prototype), declarations at the top of each function, and no
+  `++`/`--`.
+
+If a third consumer appears it'll be worth a real fix: a tiny build step that
+concatenates a shared `lib*.c` ahead of the command source before compiling
+(tracked in the backlog).
 
 ## Tests
 
