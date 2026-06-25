@@ -46,6 +46,8 @@ print a one-line usage summary and exit.
 | [`sort.c`](sort.c) | `SORT [file] [-h]` | Sort lines ascending (file or stdin). In-memory: ≤96 lines of ≤63 chars. |
 | [`uniq.c`](uniq.c) | `UNIQ [file] [-h]` | Collapse **adjacent** duplicate lines (pair with `SORT`). |
 | [`sed.c`](sed.c) | `SED s/old/new/[g] [file] [-h]` | Literal `s///` substitution (first match, or all with `g`). No regex. |
+| [`find.c`](find.c) | `FIND pattern [-h]` | Recursively print CWD paths whose name contains `pattern` (substring). |
+| [`diff.c`](diff.c) | `DIFF f1 f2 [-h]` | Prefix/suffix-anchored line diff: `<` lines only in f1, `>` only in f2. ≤40 lines/file. |
 
 ### Implementation notes
 

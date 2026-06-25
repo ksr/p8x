@@ -161,3 +161,5 @@ emulator/test/more.asm
 emulator/test/sort.asm
 emulator/test/uniq.asm
 emulator/test/sed.asm
+emulator/test/find.asm
+emulator/test/diff.asm
