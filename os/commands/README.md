@@ -43,6 +43,9 @@ print a one-line usage summary and exit.
 | [`head.c`](head.c) | `HEAD [-N] [file] [-h]` | First N lines (default 10) of a file or stdin. |
 | [`tail.c`](tail.c) | `TAIL [-N] [file] [-h]` | Last N lines (default 10, max 20) of a file or stdin, via a ring buffer. |
 | [`more.c`](more.c) | `MORE [file] [-h]` | Page a file or stdin a screenful (23 lines) at a time: space=next page, Enter=one line, q=quit. Forward pager (not full `less`). |
+| [`sort.c`](sort.c) | `SORT [file] [-h]` | Sort lines ascending (file or stdin). In-memory: ≤96 lines of ≤63 chars. |
+| [`uniq.c`](uniq.c) | `UNIQ [file] [-h]` | Collapse **adjacent** duplicate lines (pair with `SORT`). |
+| [`sed.c`](sed.c) | `SED s/old/new/[g] [file] [-h]` | Literal `s///` substitution (first match, or all with `g`). No regex. |
 
 ### Implementation notes
 
@@ -104,10 +107,26 @@ verbatim** into each command, not by linking. Two practical rules for a helper
 meant to be lifted:
 
 - keep it dependency-free (only the builtins / its own locals), and
-- write it within the p8cc subset's intersection with the *native* `p8cc.c`
-  — in particular **no forward declarations / mutual recursion** (p8cc.c rejects
-  a standalone prototype), declarations at the top of each function, and no
-  `++`/`--`.
+- write it within the p8cc subset's intersection with the *native* `p8cc.c`.
+
+**p8cc subset gotchas** (learned the hard way building these — keep helpers and
+commands inside these limits, especially for `p8cc.c` parity):
+- **No `++`/`--`** — write `i = i + 1`.
+- **No `break`/`continue`** (rejected by `p8cc.py`) — fold the exit into the loop
+  condition, or use a flag.
+- **No forward declarations / mutual recursion** (`p8cc.c` drops the rest of the
+  file) — make functions self-recursive, define callees first.
+- **`<`/`>` are UNSIGNED** — never return a negative sentinel and test `< 0`
+  (it's always false); use a boolean comparator (e.g. `lless()` over masked
+  bytes) instead of a `-1/0/1` `lcmp()`.
+- **Avoid `int` arrays for indices** — they misbehaved as a sort permutation
+  array; sort swaps the `char` slots in place instead. Prefer flat `char`
+  buffers indexed by `slot*W+col`.
+- **Don't pass `array + expr` as a pointer to a function** (e.g.
+  `puts(buf + i*64)` printed the wrong slot) — index with `buf[i*64+j]` instead.
+- Declarations go at the **top of each function**.
+- Known open bug: `p8cc.c` miscompiles `sed.c`'s file-argument path (works under
+  `p8cc.py`, which is what `run.sh` ships); see the backlog.
 
 If a third consumer appears it'll be worth a real fix: a tiny build step that
 concatenates a shared `lib*.c` ahead of the command source before compiling

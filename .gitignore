@@ -158,3 +158,6 @@ emulator/test/mv.asm
 emulator/test/head.asm
 emulator/test/tail.asm
 emulator/test/more.asm
+emulator/test/sort.asm
+emulator/test/uniq.asm
+emulator/test/sed.asm

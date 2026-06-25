@@ -33,6 +33,17 @@ Last updated: 2026-06-24
       native `p8cc.c` subset: no forward decls / mutual recursion, no `++`/`--`,
       declarations at function top.
 
+- [ ] **`p8cc.c` miscompiles `sed.c`'s file-argument path.** Native-bootstrap bug:
+      host-compiled `SED s/a/b/ FILE` reads empty stdin instead of opening FILE
+      (the file word isn't parsed/opened), though `SED s/a/b/` via a pipe works
+      and `openarg()` is fine in other host-built commands (head/tail). `p8cc.py`
+      compiles sed correctly, so run.sh ships the working binary; `c_textutils_test`
+      builds sed with p8cc.py. Likely a p8cc.c codegen quirk in sed's local-heavy
+      `main`. Track down + fix in compiler/p8cc.c (it's the self-host oracle).
+      (Related p8cc subset gotchas now documented in os/commands/README "Shared
+      code": `<`/`>` are unsigned, `int` index arrays misbehave, no `break`/
+      forward-decls, don't pass `array+expr` to a function.)
+
 - [ ] **`>>` append redirection.** Today the shell has `>` (REDSCAN -> FWOPEN,
       create/overwrite). Add `>>` to append a command's stdout to an existing
       file. Catch: P8XFS files are **contiguous extents** written at the boot-block
