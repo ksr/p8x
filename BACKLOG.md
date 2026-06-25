@@ -55,6 +55,18 @@ Last updated: 2026-06-24
       entry); the old extent is reclaimed by PACK — same pattern as cp/mv. Parser:
       REDSCAN must recognize `>>` before `>`. Mind the SBUF ordering (FRESOLVE the
       target before FWOPEN) and that the source read uses ROBUF, not SBUF.
+      ATTEMPTED 2026-06-25, reverted: added REDAPP + `>>` parse + a DORUN prepend
+      (open old via SETCWDDIR/FNORM/FOPEN, FWOPEN, copy FGETB->FPUTB, then stdin
+      bind, exec, FCLOSE). The prepend's FGETB read a *directory* sector (ROLBA
+      ended up at a dir LBA, e.g. /BIN at 37) so the appended-onto bytes came out
+      garbage — even with the read buffer at $E000 (matching cp). cp does the
+      identical FOPEN(read)->FWOPEN->copy and works, so the bug is specific to
+      doing it inside DORUN after LOADF (shared read-stream/LBA state? FFIND
+      returning the wrong start LBA for the leaf name?). The attempt also
+      reordered DORUN to open output before stdin (so the prepend finishes before
+      `<file` reuses the single read stream) — re-verify that reorder doesn't
+      regress `<IN >OUT`/pipes when retrying. Next step: instrument FOPEN's ROLBA
+      in the DORUN context vs the cp context to find the divergence.
 
 - [ ] **Multi-stage pipes (`a | b | c`).** The shell's pipe state machine
       (`PIPEF`/`PIPESCAN`/`PIPE_RHS`) handles exactly **two** stages: it splits on
