@@ -48,6 +48,8 @@ print a one-line usage summary and exit.
 | [`sed.c`](sed.c) | `SED s/old/new/[g] [file] [-h]` | Literal `s///` substitution (first match, or all with `g`). No regex. |
 | [`find.c`](find.c) | `FIND pattern [-h]` | Recursively print CWD paths whose name contains `pattern` (substring). |
 | [`diff.c`](diff.c) | `DIFF f1 f2 [-h]` | Prefix/suffix-anchored line diff: `<` lines only in f1, `>` only in f2. ≤40 lines/file. |
+| [`tree.c`](tree.c) | `TREE [-h]` | Depth-first indented listing of the CWD tree (same recursion as `DIR -R`). |
+| [`dump.c`](dump.c) | `DUMP hexaddr [-h]` | 256-byte hex + ASCII dump of memory from a hex address (`peek`). |
 
 ### Implementation notes
 

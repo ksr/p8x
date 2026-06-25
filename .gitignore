@@ -165,3 +165,5 @@ emulator/test/find.asm
 emulator/test/diff.asm
 emulator/test/greetp.c
 emulator/test/greetp.asm
+emulator/test/tree.asm
+emulator/test/dump.asm
