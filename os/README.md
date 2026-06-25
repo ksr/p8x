@@ -14,7 +14,6 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > | `DIR [path]` | list the current directory, or a given one |
 > | `CD path` | change directory (absolute `/a/b`, relative, `.`/`..`) |
 > | `PWD` | print the working-directory path |
-> | `CAT path` | print a file's contents to the console |
 > | `MKDIR path` | create a subdirectory (v2) |
 > | `RMDIR path` | remove an empty subdirectory (v2) |
 > | `TREE` | depth-first indented listing of the whole tree (v2) |
@@ -28,6 +27,12 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > | `FSCK` | check filesystem integrity (read-only) |
 > | `FORMAT` | erase the card and lay a fresh P8XFS v2 volume (asks `Y/N`) |
 > | `HELP` | list commands |
+>
+> The table above is the **built-in** command set. `CAT`, `WC`, `GREP`, `CP`,
+> `MV` (and richer `DIR -R` etc.) are **userland C programs** in `/BIN`, run by
+> bare name (implicit RUN searches `PATH`, default `/BIN`) or explicit `RUN` —
+> see [commands/](commands/README.md). Line input echoes keys, supports
+> backspace/DEL editing (max 63 chars), and takes **Ctrl-D** as console EOF.
 >
 > A file/dir argument may be a **path**. Directory scanning works on any extent
 > — a `(start LBA, sector count)` pair — so the current directory and any
@@ -224,6 +229,8 @@ the program can stream output per entry with no buffering or size limit (see
 **Pipes** build directly on this: `cmd1 | cmd2` runs `cmd1` with its stdout to a
 temp file `PIPE.TMP`, then re-dispatches `cmd2` with its stdin from that file,
 then deletes it — a `SHELL` state machine (`PIPEF`) over the `<`/`>` redirection
-above, so existing commands are untouched. E.g. `RUN PROD.BIN | RUN CAT.BIN`.
-(Sequential, single-stage: with no multitasking the left command runs to
-completion into the temp before the right starts.)
+above, so existing commands are untouched. E.g. `CAT FILE | GREP foo`.
+(Sequential, **two-stage**: with no multitasking the left command runs to
+completion into the temp before the right starts. A third stage — `a | b | c`
+— is currently dropped, because the re-dispatch doesn't re-scan for `|`; see the
+backlog.)
