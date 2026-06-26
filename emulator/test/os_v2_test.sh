@@ -62,8 +62,9 @@ fail() { echo "OS-V2 TEST: FAIL — $1"; echo "$out" | sed -n '/v1.0/,$p'; exit 
 echo "$out" | grep -q 'P8X/OS v1.0'   || fail "OS did not boot"
 echo "$out" | grep -q '^readme'       || fail "CAT did not print file contents"
 echo "$out" | grep -q '^/BIN$'        || fail "PWD did not print the working path"
-# /BIN/DIR.BIN lists plain names (no "<DIR>" tag) — root shows the BIN entry.
-echo "$out" | grep -qx 'BIN'          || fail "root DIR missing BIN"
+# /BIN/DIR.BIN lists "<size>  NAME" with a '/' suffix on dirs — root shows BIN/
+# (the leading space distinguishes it from TREE's column-0 'BIN/' below).
+echo "$out" | grep -qE ' BIN/$'       || fail "root DIR missing BIN"
 # /BIN/TREE.BIN indents 2 spaces/level from depth 0: BIN/ at root, HELLO.BIN under it.
 echo "$out" | grep -qx 'BIN/'         || fail "TREE missing BIN/"
 echo "$out" | grep -qx '  HELLO.BIN'  || fail "TREE missing nested HELLO.BIN"

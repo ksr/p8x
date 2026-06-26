@@ -21,18 +21,56 @@
  *
  * It streams one name at a time straight to stdout, so it is fully redirectable
  * and pipeable. Directory iteration (FNEXT) is moved off the BIOS sector buffer
- * SBUF onto our own page (FSDIRBUF $0145, page $EA00) so a write stream/pipe keeps
- * SBUF to itself.
+ * SBUF onto our own page (FSDIRBUF $0145, page $FA00) so a write stream/pipe keeps
+ * SBUF to itself. ($FA is high in the TPA, clear of the code: the size column's
+ * putnum/ndigits/putsize pushed the native p8cc.c build past the old $EA00 page,
+ * which then scribbled the iteration buffer onto the program's own tail.)
+ *
+ * Each line is a right-justified byte size, two spaces, then the name (a '/'
+ * suffix marks a directory). Directories have no byte length, so their size
+ * column is left blank. The size comes from FNEXT's FLEN ($9D58 lo / $9D59 hi),
+ * a 16-bit count — fine for the small files this OS holds.
  *
  * BIOS: FOPENDIR=$0139 (P1=path), FOPENDIRAT=$0142 (A=low,LBA1=$9D48 high),
  * FNEXT=$013C (-> FNAME $9D4A 12 space-padded, FFLAG $9D70 file $01/dir $02,
- * start LBA byte0 $9D47/byte1 $9D48; C=1 at end), FSDIRBUF=$0145.
+ * start LBA byte0 $9D47/byte1 $9D48, FLEN $9D58 lo/$9D59 hi; C=1 at end),
+ * FSDIRBUF=$0145.
  * OS: SYS_OPENCWD=$4012 (begin iterating the CWD, full 16-bit LBA).
  */
 //#use glob   /* gmatch(pat, name): case-insensitive * ? matcher */
 
 char nbuf[16];                               /* current entry name, NUL-terminated */
 char gpat[16];                               /* glob pattern, or empty = no filter */
+
+/* putnum: print n as an unsigned decimal (recurses for the high digits). */
+int putnum(int n) {
+    if (n >= 10) { putnum(n / 10); }
+    putchar(48 + n % 10);
+    return 0;
+}
+
+/* ndigits: number of decimal digits in n (>=1, so 0 prints as one digit). */
+int ndigits(int n) {
+    int d;
+    d = 1;
+    while (n >= 10) { n = n / 10; d = d + 1; }
+    return d;
+}
+
+/* putsize: a 6-wide size column. Files: the byte count, right-justified.
+ * Directories (isdir): six blanks, since a directory has no byte length. */
+int putsize(int isdir, int sz) {
+    int k;
+    if (isdir) {
+        k = 0;
+        while (k < 6) { putchar(32); k = k + 1; }
+        return 0;
+    }
+    k = ndigits(sz);
+    while (k < 6) { putchar(32); k = k + 1; }     /* pad to width 6 */
+    putnum(sz);
+    return 0;
+}
 
 /* getname: nbuf <- FNAME ($9D4A, 12 space-padded), trailing pad trimmed. */
 int getname() {
@@ -49,12 +87,15 @@ int getname() {
     return i;
 }
 
-/* show: print nbuf (a '/' suffix if it's a directory), if it passes the filter. */
-int show(int depth, int isdir) {
+/* show: print "<size>  <indent><name>[/]" if nbuf passes the glob filter.
+ * The size column aligns first so it lines up regardless of -R indent depth. */
+int show(int depth, int isdir, int sz) {
     int i;
     if (gpat[0] != 0 && gmatch(gpat, nbuf) == 0) { return 0; }   /* filtered out */
+    putsize(isdir, sz);
+    putchar(32); putchar(32);                                    /* gap before name */
     i = 0;
-    while (i < depth) { putchar(32); putchar(32); i = i + 1; }    /* indent */
+    while (i < depth) { putchar(32); putchar(32); i = i + 1; }    /* -R indent */
     i = 0;
     while (nbuf[i] != 0) { putchar(nbuf[i]); i = i + 1; }
     if (isdir) { putchar('/'); }
@@ -75,7 +116,8 @@ int walk(int depth) {
     while ((r & 256) == 0) {                  /* bit 8 = carry = end of directory */
         if (peek(0x9D4A) != '.') {            /* skip '.' and '..' (both lead with '.') */
             getname();
-            show(depth, peek(0x9D70) == 2);   /* print (filtered) name */
+            show(depth, peek(0x9D70) == 2,    /* print (filtered) name + size */
+                 peek(0x9D58) + peek(0x9D59) * 256);
             if (peek(0x9D70) == 2) {          /* always record subdirs for the pass */
                 if (nsub < 64) {
                     sub[nsub] = peek(0x9D47) + peek(0x9D48) * 256;
@@ -91,7 +133,7 @@ int walk(int depth) {
         poke(0x9D48, sub[i] / 256);           /* FOPENDIRAT high byte (LBA1, $9D48) */
         poke(0x9D49, 0);
         bios(0x0142, 0, sub[i]);              /* FOPENDIRAT(child LBA): A=low, LBA1=high */
-        bios(0x0145, 0, 0xEA);                /* FSDIRBUF: our page $EA00 again */
+        bios(0x0145, 0, 0xFA);                /* FSDIRBUF: our page $FA00 again */
         walk(depth + 1);
         i = i + 1;
     }
@@ -151,7 +193,7 @@ int main() {
     } else {
         bios(0x0139, arg, 0);                /* FOPENDIR(path) */
     }
-    bios(0x0145, 0, 0xEA);                   /* FSDIRBUF: iterate in our own page $EA00 */
+    bios(0x0145, 0, 0xFA);                   /* FSDIRBUF: iterate in our own page $FA00 */
 
     if (rec) {
         walk(0);                             /* whole subtree, streamed (filtered) */
@@ -159,7 +201,8 @@ int main() {
         r = bios(0x013C, 0, 0);              /* FNEXT — single-level loop */
         while ((r & 256) == 0) {             /* bit 8 = carry = end of directory */
             getname();
-            show(0, 0);                      /* plain names (no '/'), like before */
+            show(0, peek(0x9D70) == 2,       /* name + size; '/' marks a directory */
+                 peek(0x9D58) + peek(0x9D59) * 256);
             r = bios(0x013C, 0, 0);
         }
     }

@@ -38,9 +38,13 @@ session() {   # echoes the combined console output of the three scenarios
 }
 
 check() {   # $1 = label, $2 = combined output
-    echo "$2" | grep -qx 'PWD.BIN'  || fail "$1: root DIR did not list PWD.BIN"
-    echo "$2" | grep -qx 'X.DAT'    || fail "$1: no-arg DIR did not list the CWD (/SUB) file X.DAT"
-    echo "$2" | grep -qx '/SUB'     || fail "$1: PWD did not print /SUB"
+    # DIR lines are now "<right-justified size>  NAME" (a '/' suffix marks a dir),
+    # so a file NAME sits at end-of-line after the size column — match ' NAME$'.
+    echo "$2" | grep -qE ' PWD\.BIN$' || fail "$1: root DIR did not list PWD.BIN"
+    echo "$2" | grep -qE ' X\.DAT$'   || fail "$1: no-arg DIR did not list the CWD (/SUB) file X.DAT"
+    # X.DAT holds 'inside-sub' (10 bytes) -> the size column must read 10.
+    echo "$2" | grep -qE '^ *10  X\.DAT$' || fail "$1: X.DAT size column wrong (expected 10)"
+    echo "$2" | grep -qx '/SUB'       || fail "$1: PWD did not print /SUB"
     # DIR buffers its listing, so it is redirectable: `RUN /DIR.BIN / >LIST.TXT`
     # must capture the same listing to a file (FNEXT and the write stream share
     # the BIOS sector buffer SBUF, hence collect-then-emit in dir.c).
@@ -48,8 +52,8 @@ check() {   # $1 = label, $2 = combined output
         | ../p8xemu -l 200000000 -c dir.img eeprom.bin 2>/dev/null >/dev/null
     python3 $ROOT/tools/p8xfs.py get dir.img LIST.TXT --out list.txt >/dev/null 2>&1 \
         || fail "$1: DIR redirect did not create LIST.TXT"
-    grep -qx 'DIR.BIN' list.txt || fail "$1: redirected DIR listing missing DIR.BIN"
-    grep -qx 'PWD.BIN' list.txt || fail "$1: redirected DIR listing missing PWD.BIN"
+    grep -qE ' DIR\.BIN$' list.txt || fail "$1: redirected DIR listing missing DIR.BIN"
+    grep -qE ' PWD\.BIN$' list.txt || fail "$1: redirected DIR listing missing PWD.BIN"
 }
 
 compile_one() {   # $1 = compiler tag: build both programs with it

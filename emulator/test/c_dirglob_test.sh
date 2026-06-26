@@ -38,25 +38,27 @@ R() { printf "B\r$1\r" | ../p8xemu -l 250000000 -c dg.img eeprom.bin 2>/dev/null
         | grep -vE '^/> ' | grep -v '^$'; }
 
 check() {   # $1 = compiler tag
+    # DIR lines are "<size>  NAME" (dirs get a '/' suffix), so match a file as
+    # ' NAME$' and the BIN directory as ' BIN/$'.
     out=$(R 'DIR *.ASM')
-    echo "$out" | grep -qx 'A.ASM' && echo "$out" | grep -qx 'B.ASM' || fail "$1: *.ASM missed A/B.ASM"
-    echo "$out" | grep -qx 'C.TXT' && fail "$1: *.ASM wrongly matched C.TXT"
-    echo "$out" | grep -qx 'BIN'   && fail "$1: *.ASM wrongly matched BIN"
+    echo "$out" | grep -qE ' A\.ASM$' && echo "$out" | grep -qE ' B\.ASM$' || fail "$1: *.ASM missed A/B.ASM"
+    echo "$out" | grep -qE ' C\.TXT$' && fail "$1: *.ASM wrongly matched C.TXT"
+    echo "$out" | grep -qE ' BIN/$'   && fail "$1: *.ASM wrongly matched BIN"
     # case-insensitive
-    R 'DIR *.asm' | grep -qx 'A.ASM' || fail "$1: lowercase *.asm did not match"
+    R 'DIR *.asm' | grep -qE ' A\.ASM$' || fail "$1: lowercase *.asm did not match"
     # glob within another directory
-    R 'DIR /BIN/*.BIN' | grep -qx 'DIR.BIN' || fail "$1: /BIN/*.BIN missed DIR.BIN"
+    R 'DIR /BIN/*.BIN' | grep -qE ' DIR\.BIN$' || fail "$1: /BIN/*.BIN missed DIR.BIN"
     # '?' = exactly one char: ?.ASM matches A.ASM, not READ.ME
     out=$(R 'DIR ?.ASM')
-    echo "$out" | grep -qx 'A.ASM' || fail "$1: ?.ASM missed A.ASM"
+    echo "$out" | grep -qE ' A\.ASM$' || fail "$1: ?.ASM missed A.ASM"
     # -R applies the filter at every level (D.ASM lives in /SUB, indented)
     out=$(R 'DIR -R *.ASM')
-    echo "$out" | grep -qx 'A.ASM'    || fail "$1: -R *.ASM missed A.ASM"
-    echo "$out" | grep -q  'D.ASM'    || fail "$1: -R *.ASM missed nested D.ASM"
-    echo "$out" | grep -qx 'C.TXT'    && fail "$1: -R *.ASM wrongly matched C.TXT"
-    # no glob: plain listing unchanged (lists everything, no '/' suffix)
+    echo "$out" | grep -qE ' A\.ASM$'  || fail "$1: -R *.ASM missed A.ASM"
+    echo "$out" | grep -q  'D.ASM'     || fail "$1: -R *.ASM missed nested D.ASM"
+    echo "$out" | grep -qE ' C\.TXT$'  && fail "$1: -R *.ASM wrongly matched C.TXT"
+    # no glob: plain listing unchanged (lists everything; dirs get a '/' suffix)
     out=$(R 'DIR')
-    echo "$out" | grep -qx 'A.ASM' && echo "$out" | grep -qx 'C.TXT' && echo "$out" | grep -qx 'BIN' \
+    echo "$out" | grep -qE ' A\.ASM$' && echo "$out" | grep -qE ' C\.TXT$' && echo "$out" | grep -qE ' BIN/$' \
         || fail "$1: plain DIR regressed"
     echo "C-DIRGLOB ($1): ok"
 }

@@ -49,8 +49,8 @@ echo "$out" | grep -q 'SAVED'        || fail "SAVE inside a LBA>=256 directory f
 # After the create, the final DIR must list both new entries (proves the listing
 # reads the right sectors — the original bug printed garbage from sector LBA&255).
 post=$(echo "$out" | sed -n 's/.*SAVED//; /SAVED/,$p')
-echo "$out" | grep -qx 'SUB'   || fail "DIR of the LBA>=256 dir missing the new subdir"
-echo "$out" | grep -qx 'F.BIN' || fail "DIR of the LBA>=256 dir missing the saved file"
+echo "$out" | grep -qE ' SUB/$'   || fail "DIR of the LBA>=256 dir missing the new subdir"
+echo "$out" | grep -qE ' F\.BIN$' || fail "DIR of the LBA>=256 dir missing the saved file"
 # No garbage: the listing must contain no non-printable bytes (the original bug
 # dumped raw sector data from LBA&255). LC_ALL=C makes the class byte-wise.
 if echo "$out" | LC_ALL=C grep -q '[^[:print:][:space:]]'; then fail "DIR produced garbage bytes"; fi

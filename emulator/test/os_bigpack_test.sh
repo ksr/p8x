@@ -43,8 +43,8 @@ echo "$out" | grep -q 'PACKED'       || fail "PACK did not complete"
 echo "$out" | grep -q 'FSCK OK'      || fail "on-target FSCK flagged the packed volume"
 # After PACK the relocated /BIG must still list its contents (proves its '.'/'..'
 # and the parent entry that points at it were rewritten to the new LBA).
-echo "$out" | sed -n '/CD \/BIG/,$p' | grep -qx 'SUB'   || fail "post-PACK DIR /BIG missing SUB"
-echo "$out" | sed -n '/CD \/BIG/,$p' | grep -qx 'F.BIN' || fail "post-PACK DIR /BIG missing F.BIN"
+echo "$out" | sed -n '/CD \/BIG/,$p' | grep -qE ' SUB/$'   || fail "post-PACK DIR /BIG missing SUB"
+echo "$out" | sed -n '/CD \/BIG/,$p' | grep -qE ' F\.BIN$' || fail "post-PACK DIR /BIG missing F.BIN"
 if echo "$out" | LC_ALL=C grep -q '[^[:print:][:space:]]'; then fail "DIR produced garbage bytes"; fi
 
 # Host cross-check: clean fsck, and F.BIN's bytes survived relocation byte-exact.
