@@ -80,7 +80,25 @@ Fixed **jump table at $0100** so user programs and the OS call stable entry poin
 | $010C | CFREAD | LBA in OS variables, sector → buffer at (P1) |
 | $010F | CFWRITE | inverse |
 | $0112 | PUTS | print string at (P1)+ until $00 |
-| $0115 | PHEX8/PHEX16 | debug output |
+| $0115 | PHEX8 | A → two hex digits |
+| $0118 | FFIND | find file FNAME in current dir → LBA+FLEN; C=0 found |
+| $011B | FCREATE | create file FNAME from FSRC/FLEN; C=1 err |
+| $011E | FDELETE | tombstone file FNAME; C=1 not found |
+| $0121 | FCOMMIT | register a streamed file (entry + free); C=1 full |
+| $0124 | FOPEN | open file FNAME for reading (P1=buf); C=1 missing |
+| $0127 | FGETB | next byte → A; C=1 at EOF |
+| $012A | FWOPEN | open a write stream at the free pointer (uses SBUF) |
+| $012D | FPUTB | append byte A to the write stream |
+| $0130 | FCLOSE | flush + register file FNAME; C=1 full |
+| $0133 | FRESOLVE | resolve path (P1) → dir extent + leaf FNAME; C=1 bad |
+| $0136 | FNORM | copy string (P1) → FNAME, upcased + space-padded to 12 |
+| $0139 | FOPENDIR | begin iterating directory at path (P1); C=1 bad path |
+| $013C | FNEXT | next live entry → FNAME/FFLAG/LBA/FLEN; C=1 at end |
+| $013F | FLOADAT | read FLEN bytes from LBA into (P1) (whole sectors) |
+| $0142 | FOPENDIRAT | iterate dir at 16-bit LBA = A (low) + LBA1 $9D48 (high) |
+| $0145 | FSDIRBUF | point FNEXT's sector buffer at page A (call after FOPENDIR) |
+
+The table is **append-only** — entries are never reordered or removed, so every OS image on every card keeps working across BIOS revisions. (The directory-iteration calls `FOPENDIRAT`/`FNEXT` carry a full 16-bit LBA, so directories may live anywhere on the volume, not just below sector 256.)
 
 The inner read loop shows the pointer bank earning its keep — B counts 256 twice (or use a RAM counter), P1 walks the buffer:
 
