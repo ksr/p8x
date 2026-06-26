@@ -85,7 +85,7 @@ WOPOS   = $9D6A          ; byte offset within SBUF; 512 -> flush (2)
 WOTOT   = $9D6C          ; total bytes written (-> FLEN at close) (2)
 ; --- current directory extent for the file calls (path resolution sets it;
 ;     defaults to the root and reverts there after each find) ---
-DIRLBA  = $9D6E          ; current directory start LBA (1; <256 like the OS CWD)
+DIRLBA  = $9D6E          ; current directory start LBA, low byte (16-bit: +DIRLBA1)
 DIRN    = $9D6F          ; current directory sector count (1)
 FFLAG   = $9D70          ; flag of the entry FSCAN matched (file $01 / dir $02)
 RPATH   = $9D71          ; FRESOLVE path cursor (2)
@@ -98,6 +98,11 @@ DIBUFH  = $9D78          ; FNEXT directory-buffer page (high byte; low byte 0).
                          ;   Defaults to $9E (=SBUF) so the write stream and dir
                          ;   iteration don't have to share SBUF; FSDIRBUF repoints
                          ;   it at a caller buffer. FOPENDIRAT resets it. (1)
+; --- 16-bit directory-LBA high bytes (directories may live at LBA >=256; the
+;     volume free pointer is 16-bit, so one extra byte per cursor suffices). ---
+DILBA1  = $9D79          ; FNEXT iteration sector LBA, high byte
+DIRLBA1 = $9D7A          ; current directory start LBA, high byte (pairs DIRLBA)
+FCDH    = $9D7B          ; FCREATE directory-sector scan cursor, high byte (HEXL)
 SBUF    = $9E00          ; sector buffer
 STKTOP  = $FEFF
 BASIC   = $2000          ; ROM BASIC cold-start (overlaid by the ROM build)
@@ -140,7 +145,7 @@ RESET:  JMP  COLD
         JMP  FOPENDIR       ; $0139 FOPENDIR begin iterating directory at path (P1); C=1 bad path
         JMP  FNEXT          ; $013C FNEXT    next live entry -> FNAME/FFLAG/LBA/FLEN; C=1 at end
         JMP  FLOADAT        ; $013F FLOADAT  read FLEN bytes from LBA into (P1) (whole sectors)
-        JMP  FOPENDIRAT     ; $0142 FOPENDIRAT begin iterating the 4-sector directory at LBA in A
+        JMP  FOPENDIRAT     ; $0142 FOPENDIRAT begin iterating the 4-sector directory at LBA = A (low) + LBA1 ($9D48) (high)
         JMP  FSDIRBUF       ; $0145 FSDIRBUF  point FNEXT's sector buffer at page A (high byte; call after FOPENDIR)
 
 ;==============================================================================
@@ -157,6 +162,8 @@ COLD:   LDP3 #STKTOP        ; stack
         STA  ACIAS
         LDA  #33            ; file calls default to the root directory
         STA  DIRLBA
+        LDA  #0
+        STA  DIRLBA1
         LDA  #4
         STA  DIRN
         LDP1 #MBANNER
@@ -613,6 +620,8 @@ FFI_R:  JSR  FRESET         ; revert to root (LDA/STA preserve C)
 ; FRESET - point the current directory at the root.
 FRESET: LDA  #33
         STA  DIRLBA
+        LDA  #0
+        STA  DIRLBA1
         LDA  #4
         STA  DIRN
         RTS
@@ -622,12 +631,15 @@ FRESET: LDA  #33
 ;   it to walk a path).
 FSCAN:  LDA  DIRN
         STA  CNT
-        LDA  DIRLBA
+        LDA  DIRLBA          ; 16-bit directory sector cursor in ADDRL/ADDRH
         STA  ADDRL
+        LDA  DIRLBA1
+        STA  ADDRH
 FF_SEC: LDA  ADDRL
         STA  LBA
-        LDA  #0
+        LDA  ADDRH
         STA  LBA1
+        LDA  #0
         STA  LBA2
         LDP1 #SBUF
         JSR  CFRDSEC        ; root sector -> SBUF
@@ -693,10 +705,14 @@ FF_NXT: LDA  TMP
         DEC
         STA  TMP
         JNZ  FF_ENT
-        LDA  ADDRL
+        LDA  ADDRL          ; advance the 16-bit sector cursor
         INC
         STA  ADDRL
-        LDA  CNT
+        JNZ  FF_SNC
+        LDA  ADDRH
+        INC
+        STA  ADDRH
+FF_SNC: LDA  CNT
         DEC
         STA  CNT
         JNZ  FF_SEC
@@ -710,7 +726,7 @@ FF_HIT: CLC
 ;   leaving DIRLBA/DIRN at the leaf's PARENT directory and FNAME = the leaf name;
 ;   the following FFIND/FOPEN then runs in that directory. C=1 if an intermediate
 ;   component is missing or is not a directory. A leading '/' is optional and the
-;   path is relative to the root. (Subdir LBAs assumed < 256, like the OS CWD.)
+;   path is relative to the root. (Subdir LBAs are 16-bit: DIRLBA/DIRLBA1.)
 FRESOLVE:
         TPA1L
         STA  RPATH
@@ -718,6 +734,8 @@ FRESOLVE:
         STA  RPATH+1
         LDA  #33            ; start at the root
         STA  DIRLBA
+        LDA  #0
+        STA  DIRLBA1
         LDA  #4
         STA  DIRN
         LDA  RPATH          ; skip a leading '/'
@@ -783,6 +801,8 @@ RS_SLASH:
         JNZ  RS_NF          ; component is not a directory
         LDA  LBA            ; descend: subdir extent = (start LBA, 4 sectors)
         STA  DIRLBA
+        LDA  LBA1
+        STA  DIRLBA1
         LDA  #4
         STA  DIRN
         JMP  RS_COMP
@@ -850,21 +870,26 @@ FOPENDIR:
         LDB  #$02
         CMP
         JNZ  FOD_ERR        ; not a directory
-        LDA  LBA            ; iterate the subdirectory extent
-        JMP  FOD_SET
-FOD_USE:LDA  DIRLBA
-FOD_SET:JSR  FOPENDIRAT     ; A = start LBA -> set up iteration
+        LDA  LBA            ; iterate the subdirectory extent (LBA1 = its high
+        JMP  FOD_SET        ;   byte, left in place by FSCAN above)
+FOD_USE:LDA  DIRLBA1        ; "/" case: resolved dir is in DIRLBA/DIRLBA1
+        STA  LBA1
+        LDA  DIRLBA
+FOD_SET:JSR  FOPENDIRAT     ; A = start LBA low, LBA1 = high -> set up iteration
         JSR  FRESET         ; revert the current directory to root
         CLC
         RTS
 FOD_ERR:JSR  FRESET
         SEC
         RTS
-; FOPENDIRAT - begin iterating the directory whose extent starts at the LBA in A
-;   (every P8XFS v2 directory is 4 sectors). Lets the OS iterate its own resolved
-;   directory extent (e.g. the CWD) without going through a path.
+; FOPENDIRAT - begin iterating the directory whose extent starts at the 16-bit
+;   LBA in A (low byte) + LBA1 ($9D48, high byte) — every P8XFS v2 directory is
+;   4 sectors. Lets the OS iterate its own resolved directory extent (e.g. the
+;   CWD) without going through a path. Callers must set LBA1 (0 for LBA <256).
 FOPENDIRAT:
-        STA  DILBA
+        STA  DILBA          ; A = start LBA low byte
+        LDA  LBA1           ; high byte taken from the LBA triple ($9D48)
+        STA  DILBA1
         LDA  #4
         STA  DICNT
         LDA  #0
@@ -889,10 +914,11 @@ FSDIRBUF:
 ;   each call, so it is safe to interleave with other FS calls.
 FNEXT:  LDA  DICNT
         JZ   FNX_END        ; no sectors left
-        LDA  DILBA          ; (re)load the current directory sector
+        LDA  DILBA          ; (re)load the current directory sector (16-bit)
         STA  LBA
-        LDA  #0
+        LDA  DILBA1
         STA  LBA1
+        LDA  #0
         STA  LBA2
         LDA  #0             ; P1 = the directory buffer (DIBUFH:00), default SBUF
         TAP1L
@@ -951,10 +977,14 @@ FNX_NM: LDA  (P2)+
         JNZ  FNX_DEC
         LDA  #0
         STA  DIIDX
-        LDA  DILBA
+        LDA  DILBA          ; advance the 16-bit iteration sector cursor
         INC
         STA  DILBA
-        LDA  DICNT
+        JNZ  FNX_SNC
+        LDA  DILBA1
+        INC
+        STA  DILBA1
+FNX_SNC:LDA  DICNT
         DEC
         STA  DICNT
 FNX_DEC:LDA  FFLAG
@@ -1051,11 +1081,14 @@ FC_FNC: STA  SBUF+5
         LDA  DIRN           ; find a free slot in the current directory + write entry
         STA  CNT
         LDA  DIRLBA
-        STA  HEXL           ; current directory LBA
+        STA  HEXL           ; current directory LBA (16-bit: HEXL/FCDH)
+        LDA  DIRLBA1
+        STA  FCDH
 FC_DSEC:LDA  HEXL
         STA  LBA
-        LDA  #0
+        LDA  FCDH
         STA  LBA1
+        LDA  #0
         STA  LBA2
         LDP1 #SBUF
         JSR  CFRDSEC
@@ -1089,10 +1122,14 @@ FC_NXE: LDA  (P2)+
         DEC
         STA  TMP
         JNZ  FC_DENT
-        LDA  HEXL
+        LDA  HEXL            ; advance the 16-bit directory-sector cursor
         INC
         STA  HEXL
-        LDA  CNT
+        JNZ  FC_DNC
+        LDA  FCDH
+        INC
+        STA  FCDH
+FC_DNC: LDA  CNT
         DEC
         STA  CNT
         JNZ  FC_DSEC
@@ -1140,10 +1177,11 @@ FC_WSP: LDA  #0
         DEC
         STA  HEXH
         JNZ  FC_WSP
-        LDA  HEXL           ; write the updated root sector back
+        LDA  HEXL           ; write the updated directory sector back (16-bit)
         STA  LBA
-        LDA  #0
+        LDA  FCDH
         STA  LBA1
+        LDA  #0
         STA  LBA2
         JSR  CFWRSEC
         CLC

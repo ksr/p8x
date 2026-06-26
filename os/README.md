@@ -197,14 +197,15 @@ from C, the `p8cc` `bios()` intrinsic). The table is **append-only**:
 |------|---------|------------|
 | `$4000` | (boot)    | `JMP COLD` — the monitor's `CMD_B` enters here |
 | `$4003` | `SYS_GETCWD` | copy the CWD path string (incl. NUL) into `(P1)`; clobbers P2 |
-| `$4006` | `SYS_CWDLBA` | current directory's start LBA → `A` |
+| `$4006` | `SYS_CWDLBA` | current directory's start LBA → `A` (low byte only; use `SYS_OPENCWD` for a CWD at LBA ≥ 256) |
 | `$4009` | `SYS_PUTC` | write `A` to the current **stdout** (console, or the `>` file) |
 | `$400C` | `SYS_GETC` | next **stdin** byte → `A` (console, or the `<` file); `C=1` at EOF (console: echoes the key, Ctrl-D = EOF) |
 | `$400F` | `SYS_PUTS` | write the `(P1)` NUL-terminated string to stdout |
+| `$4012` | `SYS_OPENCWD` | begin iterating the CWD with its full **16-bit** start LBA (then `FNEXT`); works when the CWD lives at LBA ≥ 256, where `SYS_CWDLBA` + `FOPENDIRAT(A)` would truncate |
 
-`SYS_GETCWD`/`SYS_CWDLBA` are the supported way to consult the CWD — no peeking
-into OS RAM. `os/commands/pwd.c` (PWD) and `os/commands/dir.c` (DIR,
-no-arg lists the CWD via `SYS_CWDLBA` + `FOPENDIRAT`) are worked examples;
+`SYS_GETCWD`/`SYS_CWDLBA`/`SYS_OPENCWD` are the supported way to consult the CWD
+— no peeking into OS RAM. `os/commands/pwd.c` (PWD) and `os/commands/dir.c` (DIR,
+no-arg lists the CWD via `SYS_OPENCWD`, the 16-bit CWD opener) are worked examples;
 `compiler/p8lib.c` wraps them as `getcwd(buf)` / `cwdlba()`.
 
 **Program I/O redirection.** `SYS_PUTC`/`SYS_PUTS`/`SYS_GETC` route through the

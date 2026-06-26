@@ -61,6 +61,7 @@ FDELETE = $011E          ; tombstone file FNAME (for the pipe temp)
 BDIRLBA = $9D6E          ; BIOS "current directory" start LBA (default root); the
 BDIRN   = $9D6F          ; FS calls register/find in here. We point it at the CWD
                          ; so a redirect / pipe file lands in the working dir.
+BDIRLBA1= $9D7A          ; BIOS current-directory start LBA high byte (16-bit dirs)
 BFNAME  = $9D4A          ; FNEXT entry-name output (BIOS FNAME)
 BFFLAG  = $9D70          ; FNEXT entry-flag output (BIOS FFLAG)
 
@@ -183,6 +184,18 @@ INARM   = $A131          ; shell armed a "< file" for the next RUN
 INNAME  = $A132          ; "< file" name (null-terminated, <=48): $A132..$A161
 PIPEF   = $A162          ; pipe stage: 0 none, 1 left ran, 2 right ran
 PIPEBUF = $A163          ; saved right-hand command of a "cmd | cmd" ($A163..$A1A2)
+; --- 16-bit directory-LBA high bytes (P8XFS directories may live at LBA >=256;
+;     the volume free pointer is 16-bit, so one extra byte per cursor suffices.
+;     Each pairs with an existing low-byte cursor of the same root name). ---
+CWDLH   = $A1A3          ; CWDL high byte (current working directory start LBA)
+SDIRLH  = $A1A4          ; SDIRL high byte (directory being scanned this op)
+STARTHI = $A1A5          ; STARTLO high byte (entry start LBA from FINDENT)
+DLBAH   = $A1A6          ; DLBA high byte (directory-sector scan cursor)
+NEWLBAH = $A1A7          ; NEWLBA high byte (MKDIR new extent)
+PSLH    = $A1A8          ; PSL high byte (MKDIR parent extent)
+PARSTH  = $A1A9          ; PARST high byte (PACK '..' parent fix)
+RMDLH   = $A1AA          ; RMDL high byte (RMDIR parent sector)
+CURLBAH = $A1AB          ; CURLBA high byte (SAVE data-write LBA, 16-bit)
 IBUF    = $A200          ; 512-byte buffer for the stdin read stream
 ; ---- program search path (implicit RUN of a bare command name) ----
 PATHBUF = $A400          ; search path, ';'-separated dirs; default "/BIN" ($A400..$A43F)
@@ -208,6 +221,7 @@ STKTOP  = $FEFF
         JMP  OUTCH              ; $4009 SYS_PUTC: A -> current stdout (console/file)
         JMP  SYS_GETC           ; $400C SYS_GETC: next stdin byte -> A
         JMP  SYS_PUTS           ; $400F SYS_PUTS: write (P1) string to stdout
+        JMP  SYS_OPENCWD        ; $4012 SYS_OPENCWD: begin iterating the CWD (16-bit LBA)
 ; Reached only via the table above (COLD jumps past them).
 SYS_GETCWD:                     ; copy CWDPATH -> (P1); clobbers P2
         LDP2 #CWDPATH
@@ -216,8 +230,15 @@ SGC_LP: LDA  (P2)+
         JNZ  SGC_LP             ; copy through the terminating NUL
         RTS
 SYS_CWDLBA:
-        LDA  CWDL               ; current directory start LBA (8-bit) -> A
-        RTS
+        LDA  CWDL               ; current directory start LBA (low byte) -> A
+        RTS                     ; (8-bit; use SYS_OPENCWD for dirs at LBA >=256)
+SYS_OPENCWD:                    ; begin iterating the CWD directory (full 16-bit
+        LDA  CWDLH              ; LBA), so a /BIN program can list the CWD even
+        STA  LBA1               ; when it lives at LBA >=256. Pairs with FNEXT.
+        LDA  #0
+        STA  LBA2
+        LDA  CWDL
+        JMP  FOPENDIRAT         ; A=low, LBA1=high -> set up iteration; RTS to caller
 SYS_GETC:                       ; next stdin byte -> A; C=1 at EOF
         LDA  INMODE
         JNZ  SGC_FILE
@@ -260,6 +281,8 @@ SPS_DN: RTS
 SETCWDDIR:                      ; point the BIOS FS at the CWD (so redirect/pipe
         LDA  CWDL               ; files land in the working dir, not root). The
         STA  BDIRLBA            ; FS calls revert to root after, so set per-op.
+        LDA  CWDLH              ; 16-bit: carry the high byte too
+        STA  BDIRLBA1
         LDA  CWDN
         STA  BDIRN
         RTS
@@ -279,6 +302,8 @@ COLD:   LDP3 #STKTOP
         STA  DATABASE
         LDA  #33                ; CWD = root
         STA  CWDL
+        LDA  #0
+        STA  CWDLH
         LDA  #4
         STA  CWDN
         JSR  PATHROOT           ; CWDPATH = "/"
@@ -652,9 +677,15 @@ DODEL:  JSR  FINDARG
         TAP1H
         LDA  #F_DEL
         STA  (P1)               ; mark deleted in the buffered sector
-        LDA  DLBA               ; persist that directory sector
+        LDA  DLBA               ; persist that directory sector (16-bit)
         STA  LBA
+        LDA  DLBAH
+        STA  LBA1
+        LDA  #0
+        STA  LBA2
         JSR  CFWRITE
+        LDA  #0                 ; restore LBA1=0 at rest
+        STA  LBA1
         LDP1 #MDELETED
         JSR  OPUTS
         JMP  SHELL
@@ -711,11 +742,15 @@ RV_START:JSR SKIPSPC
         INP2                    ; consume leading '/'
         LDA  #33
         STA  SDIRL
+        LDA  #0
+        STA  SDIRLH
         LDA  ROOTN
         STA  SDIRN
         RTS
 rvs_cwd:LDA  CWDL
         STA  SDIRL
+        LDA  CWDLH
+        STA  SDIRLH
         LDA  CWDN
         STA  SDIRN
         RTS
@@ -775,6 +810,8 @@ DESCEND:TPA2L
         JNZ  dsc_no
         LDA  STARTLO
         STA  SDIRL
+        LDA  STARTHI            ; 16-bit subdirectory start LBA
+        STA  SDIRLH
         JSR  SECCOUNT           ; sectors from the dir's length field
         LDA  SECCNT
         STA  SDIRN
@@ -837,6 +874,8 @@ DOCD:   JSR  ARG2P2
         JZ   NODIR
         LDA  SDIRL              ; commit it as the working directory
         STA  CWDL
+        LDA  SDIRLH
+        STA  CWDLH
         LDA  SDIRN
         STA  CWDN
         JSR  SETPATH            ; update the displayed path (cosmetic)
@@ -987,19 +1026,26 @@ DOMKDIR:JSR  ARG2P2
         JSR  RESOLVE            ; SDIR = parent, NAMEBUF = new dir name
         LDA  MATCH
         JZ   NODIR
-        LDA  SDIRL              ; remember the parent extent
+        LDA  SDIRL              ; remember the parent extent (16-bit)
         STA  PSL
+        LDA  SDIRLH
+        STA  PSLH
         LDA  SDIRN
         STA  PSN
         JSR  FINDENT            ; already present?
         LDA  MATCH
         JNZ  MK_EXIST
         LDP1 #SBUF              ; allocate: read free pointer, bump it by SUBSECS
-        LDA  #0
-        STA  LBA
+        LDA  #0                 ; boot block is LBA 0 (FINDENT left LBA1 nonzero
+        STA  LBA                ;   for a parent dir >=256, so zero it explicitly)
+        STA  LBA1
+        STA  LBA2
         JSR  CFREAD
-        LDA  SBUF+4
+        LDA  SBUF+4             ; new extent LBA = free pointer (16-bit)
         STA  NEWLBA
+        LDA  SBUF+5
+        STA  NEWLBAH
+        LDA  SBUF+4
         LDB  #SUBSECS
         ADD
         STA  SBUF+4
@@ -1009,10 +1055,14 @@ DOMKDIR:JSR  ARG2P2
 mk_nc:  STA  SBUF+5
         LDA  #0
         STA  LBA
+        STA  LBA1
+        STA  LBA2
         JSR  CFWRITE
         JSR  MKEXT              ; write the new extent's '.' and '..'
-        LDA  PSL                ; add the entry into the parent
+        LDA  PSL                ; add the entry into the parent (16-bit)
         STA  SDIRL
+        LDA  PSLH
+        STA  SDIRLH
         LDA  PSN
         STA  SDIRN
         JSR  FINDSLOT
@@ -1020,10 +1070,11 @@ mk_nc:  STA  SBUF+5
         JZ   SV_FULL
         LDA  #F_DIR
         STA  EFLAG
-        LDA  NEWLBA             ; entry: start=NEWLBA, len=SUBSECS*512, load/exec=0
+        LDA  NEWLBA             ; entry: start=NEWLBA (16-bit), len=SUBSECS*512
         STA  FREELO
-        LDA  #0
+        LDA  NEWLBAH
         STA  FREEHI
+        LDA  #0
         STA  SVSTLO
         STA  SVSTHI
         STA  LENLO
@@ -1031,9 +1082,15 @@ mk_nc:  STA  SBUF+5
         SHL                     ; SUBSECS*512 -> high byte = SUBSECS*2
         STA  LENHI
         JSR  WRENT
-        LDA  DLBA
+        LDA  DLBA               ; write the parent directory sector back (16-bit)
         STA  LBA
+        LDA  DLBAH
+        STA  LBA1
+        LDA  #0
+        STA  LBA2
         JSR  CFWRITE
+        LDA  #0                 ; restore LBA1=0 at rest
+        STA  LBA1
         LDP1 #MMKOK
         JSR  OPUTS
         JMP  SHELL
@@ -1055,10 +1112,11 @@ mx_d0:  LDA  #' '
         DEC
         STA  TMP
         JNZ  mx_d0
-        LDA  NEWLBA             ; start LBA (4)
+        LDA  NEWLBA             ; start LBA (4) = this dir (16-bit)
+        STA  (P1)+
+        LDA  NEWLBAH
         STA  (P1)+
         LDA  #0
-        STA  (P1)+
         STA  (P1)+
         STA  (P1)+
         LDA  #0                 ; length = SUBSECS*512 (4)
@@ -1096,10 +1154,11 @@ mx_d1:  LDA  #' '
         DEC
         STA  TMP
         JNZ  mx_d1
-        LDA  PSL                ; start LBA = parent (4)
+        LDA  PSL                ; start LBA = parent (4), 16-bit
+        STA  (P1)+
+        LDA  PSLH
         STA  (P1)+
         LDA  #0
-        STA  (P1)+
         STA  (P1)+
         STA  (P1)+
         LDA  #0                 ; length = PSN*512 (4)
@@ -1117,20 +1176,32 @@ mx_d1:  LDA  #' '
         STA  (P1)+
         LDA  #F_DIR             ; flag (spare left zero by ZSB)
         STA  (P1)+
-        LDA  NEWLBA             ; write the first sector
+        LDA  NEWLBA             ; write the first sector (16-bit LBA)
         STA  LBA
+        LDA  NEWLBAH
+        STA  LBA1
+        LDA  #0
+        STA  LBA2
         JSR  CFWRITE
-        LDA  NEWLBA             ; zero the remaining SUBSECS-1 sectors
+        LDA  LBA                ; advance to the second sector (16-bit)
         INC
         STA  LBA
-        LDA  #SUBSECS-1         ; CNT (not TMP) — ZSB clobbers TMP each pass
+        JNZ  mx_zi
+        LDA  LBA1
+        INC
+        STA  LBA1
+mx_zi:  LDA  #SUBSECS-1         ; CNT (not TMP) — ZSB clobbers TMP each pass
         STA  CNT
 mx_z:   JSR  ZSB
         JSR  CFWRITE
-        LDA  LBA
+        LDA  LBA                ; 16-bit advance
         INC
         STA  LBA
-        LDA  CNT
+        JNZ  mx_zc
+        LDA  LBA1
+        INC
+        STA  LBA1
+mx_zc:  LDA  CNT
         DEC
         STA  CNT
         JNZ  mx_z
@@ -1158,6 +1229,8 @@ DOFORMAT:LDP1 #MFMTQ            ; "FORMAT: erase card as v2? (Y/N) "
 FMT_GO: LDP1 #SBUF              ; read current boot block to keep OSCNT
         LDA  #0
         STA  LBA
+        STA  LBA1
+        STA  LBA2
         JSR  CFREAD
         LDA  SBUF+3             ; OSCNT (sectors of OS image at LBA 1..)
         STA  TMP2               ; stash across ZSB
@@ -1176,10 +1249,15 @@ FMT_GO: LDP1 #SBUF              ; read current boot block to keep OSCNT
         STA  SBUF+5
         LDA  #0
         STA  LBA
+        STA  LBA1
+        STA  LBA2
         JSR  CFWRITE            ; write boot block (LBA 0)
         LDA  #33                ; fresh root extent at LBA 33, parent = itself
         STA  NEWLBA
         STA  PSL
+        LDA  #0                 ; root LBA < 256, so high bytes are 0 (MKEXT reads
+        STA  NEWLBAH            ;   NEWLBAH/PSLH for the 16-bit start LBAs)
+        STA  PSLH
         LDA  #SUBSECS           ; 4 sectors (= root size)
         STA  PSN
         JSR  MKEXT              ; write root '.'/'..' + zero LBAs 34..36
@@ -1189,6 +1267,8 @@ FMT_GO: LDP1 #SBUF              ; read current boot block to keep OSCNT
         STA  DATABASE
         LDA  #33
         STA  CWDL
+        LDA  #0
+        STA  CWDLH
         LDA  #4
         STA  CWDN
         JSR  PATHROOT           ; CWDPATH = "/"
@@ -1235,17 +1315,25 @@ DORMDIR:JSR  ARG2P2
         JNZ  RM_NOTDIR
         LDA  DLBA               ; save parent sector + entry pointer (FINDENT set
         STA  RMDL               ;   ENTPL/H; DIREMPTY will reuse SBUF/DLBA)
+        LDA  DLBAH
+        STA  RMDLH
         LDA  STARTLO            ; scan the child extent for non-./.. entries
         STA  SDIRL
+        LDA  STARTHI
+        STA  SDIRLH
         JSR  SECCOUNT           ; child sector count from its length
         LDA  SECCNT
         STA  SDIRN
         JSR  DIREMPTY
         LDA  MATCH
         JZ   RM_NOTMT
-        LDP1 #SBUF              ; empty: tombstone the parent entry
+        LDP1 #SBUF              ; empty: tombstone the parent entry (16-bit LBA)
         LDA  RMDL
         STA  LBA
+        LDA  RMDLH
+        STA  LBA1
+        LDA  #0
+        STA  LBA2
         JSR  CFREAD
         LDA  ENTPL
         TAP1L
@@ -1255,7 +1343,13 @@ DORMDIR:JSR  ARG2P2
         STA  (P1)
         LDA  RMDL
         STA  LBA
+        LDA  RMDLH
+        STA  LBA1
+        LDA  #0
+        STA  LBA2
         JSR  CFWRITE
+        LDA  #0                 ; restore LBA1=0 at rest
+        STA  LBA1
         LDP1 #MRMOK
         JSR  OPUTS
         JMP  SHELL
@@ -1270,11 +1364,17 @@ RM_NOTMT:LDP1 #MNOTMT
 ; marker); MATCH=0 if any other live entry exists.
 DIREMPTY:LDA SDIRL
         STA  DLBA
+        LDA  SDIRLH             ; 16-bit child-directory scan cursor
+        STA  DLBAH
         LDA  SDIRN
         STA  SCNT
 de_sec: LDP1 #SBUF
         LDA  DLBA
         STA  LBA
+        LDA  DLBAH
+        STA  LBA1
+        LDA  #0
+        STA  LBA2
         JSR  CFREAD
         LDP2 #SBUF
         LDA  #16
@@ -1293,18 +1393,25 @@ de_nx:  LDA  ECNT
         DEC
         STA  ECNT
         JNZ  de_ent
-        LDA  DLBA
+        LDA  DLBA               ; advance the 16-bit scan cursor
         INC
         STA  DLBA
-        LDA  SCNT
+        JNZ  de_snc
+        LDA  DLBAH
+        INC
+        STA  DLBAH
+de_snc: LDA  SCNT
         DEC
         STA  SCNT
         JNZ  de_sec
 de_mt:  LDA  #1
         STA  MATCH
-        RTS
+        JMP  de_rst
 de_no:  LDA  #0
         STA  MATCH
+de_rst: LDA  #0                 ; restore LBA1=0 at rest
+        STA  LBA1
+        STA  LBA2
         RTS
 
 ; (TR_PUSH/TR_POP/READCUR below stay — shared with FSCK and PACK.)
@@ -1622,10 +1729,11 @@ to_r:   LDA  (P1)+
 
 ; LOADF - read the located file (STARTLO / LENLO:LENHI / LOADLO:LOADHI) into
 ; memory at its load address.
-LOADF:  LDA  STARTLO            ; set up the BIOS bulk read: LBA = start
+LOADF:  LDA  STARTLO            ; set up the BIOS bulk read: LBA = start (16-bit)
         STA  LBA
-        LDA  #0
+        LDA  STARTHI
         STA  LBA1
+        LDA  #0
         STA  LBA2
         LDA  LENLO              ; FLEN = length
         STA  FLEN
@@ -2106,6 +2214,8 @@ dd_a1:  INP1
 SAVECORE:LDP1 #SBUF             ; read boot block -> free pointer
         LDA  #0
         STA  LBA
+        STA  LBA1
+        STA  LBA2
         JSR  CFREAD
         LDA  SBUF+4
         STA  FREELO
@@ -2115,8 +2225,10 @@ SAVECORE:LDP1 #SBUF             ; read boot block -> free pointer
         STA  SRCLO
         LDA  SVSTHI
         STA  SRCHI
-        LDA  FREELO             ; data LBA starts at the free pointer
+        LDA  FREELO             ; data LBA starts at the free pointer (16-bit)
         STA  CURLBA
+        LDA  FREEHI
+        STA  CURLBAH
         LDA  SECCNT
         STA  REM
 SV_WL:  LDA  REM
@@ -2124,11 +2236,19 @@ SV_WL:  LDA  REM
         JSR  CPYSEC             ; copy 512 bytes SRC -> SBUF, advance SRC
         LDA  CURLBA
         STA  LBA
-        JSR  CFWRITE            ; SBUF -> data sector
-        LDA  CURLBA
+        LDA  CURLBAH
+        STA  LBA1
+        LDA  #0
+        STA  LBA2
+        JSR  CFWRITE            ; SBUF -> data sector (16-bit LBA)
+        LDA  CURLBA             ; 16-bit advance
         INC
         STA  CURLBA
-        LDA  REM
+        JNZ  SV_WNC
+        LDA  CURLBAH
+        INC
+        STA  CURLBAH
+SV_WNC: LDA  REM
         DEC
         STA  REM
         JMP  SV_WL
@@ -2138,12 +2258,18 @@ SV_WD:  JSR  FINDSLOT           ; locate a free directory slot (sector in SBUF)
         LDA  #F_FILE            ; SAVE writes a regular-file entry
         STA  EFLAG
         JSR  WRENT              ; build the 32-byte entry in SBUF
-        LDA  DLBA
+        LDA  DLBA               ; persist the directory sector (16-bit)
         STA  LBA
-        JSR  CFWRITE            ; persist the directory sector
+        LDA  DLBAH
+        STA  LBA1
+        LDA  #0
+        STA  LBA2
+        JSR  CFWRITE
         LDP1 #SBUF              ; reload boot block, bump free pointer
         LDA  #0
         STA  LBA
+        STA  LBA1
+        STA  LBA2
         JSR  CFREAD
         LDA  FREELO
         LDB  SECCNT
@@ -2155,6 +2281,8 @@ SV_WD:  JSR  FINDSLOT           ; locate a free directory slot (sector in SBUF)
 SVC_NC: STA  SBUF+5
         LDA  #0
         STA  LBA
+        STA  LBA1
+        STA  LBA2
         JSR  CFWRITE
         LDA  #1
         STA  MATCH
@@ -2194,11 +2322,17 @@ CS2:    LDA  (P1)+
 ; sector, sector left in SBUF. Directory full -> MATCH=0.
 FINDSLOT:LDA SDIRL
         STA  DLBA
+        LDA  SDIRLH             ; 16-bit directory-sector scan cursor
+        STA  DLBAH
         LDA  SDIRN
         STA  SCNT
 FS_SEC: LDP1 #SBUF
         LDA  DLBA
         STA  LBA
+        LDA  DLBAH
+        STA  LBA1
+        LDA  #0
+        STA  LBA2
         JSR  CFREAD
         LDP2 #SBUF
         LDA  #16
@@ -2232,18 +2366,25 @@ FS_SP:  LDA  (P2)+
         DEC
         STA  ECNT
         JNZ  FS_ENT
-        LDA  DLBA
+        LDA  DLBA               ; advance the 16-bit scan cursor
         INC
         STA  DLBA
-        LDA  SCNT
+        JNZ  FS_SNC
+        LDA  DLBAH
+        INC
+        STA  DLBAH
+FS_SNC: LDA  SCNT
         DEC
         STA  SCNT
         JNZ  FS_SEC
 FS_FULL:LDA  #0
         STA  MATCH
-        RTS
+        JMP  FS_RST
 FS_OK:  LDA  #1
         STA  MATCH
+FS_RST: LDA  #0                 ; restore LBA1=0 at rest (see FINDENT/FE_RST);
+        STA  LBA1               ; the write-back caller uses DLBAH for the sector
+        STA  LBA2
         RTS
 
 ; WRENT - write a 32-byte file entry at ENTPL/H (in SBUF): NAMEBUF, start LBA =
@@ -2390,11 +2531,17 @@ HV_BAD: LDA  #0
 ; On miss / end-of-directory: MATCH=0.
 FINDENT:LDA  SDIRL
         STA  DLBA
+        LDA  SDIRLH             ; 16-bit directory-sector scan cursor
+        STA  DLBAH
         LDA  SDIRN
         STA  SCNT
 FE_SEC: LDP1 #SBUF
         LDA  DLBA
         STA  LBA
+        LDA  DLBAH
+        STA  LBA1
+        LDA  #0
+        STA  LBA2
         JSR  CFREAD
         LDP2 #SBUF
         LDA  #16
@@ -2416,9 +2563,10 @@ FE_C1:  LDA  TMP
         DEC
         STA  TMP
         JNZ  FE_CMP
-        LDA  (P2)+              ; bytes 12..15  start LBA
+        LDA  (P2)+              ; bytes 12..15  start LBA (low 16 kept)
         STA  STARTLO
         LDA  (P2)+
+        STA  STARTHI
         LDA  (P2)+
         LDA  (P2)+
         LDA  (P2)+              ; bytes 16..19  length (low 16 kept)
@@ -2458,20 +2606,27 @@ FE_C1:  LDA  TMP
         JZ   FE_NEXT
         LDA  #1
         STA  MATCH              ; found (FLAGS = file or dir)
-        RTS
+        JMP  FE_RST
 FE_NEXT:LDA  ECNT
         DEC
         STA  ECNT
         JNZ  FE_ENT
-        LDA  DLBA
+        LDA  DLBA               ; advance the 16-bit scan cursor
         INC
         STA  DLBA
-        LDA  SCNT               ; sectors left in this directory extent
+        JNZ  FE_SNC
+        LDA  DLBAH
+        INC
+        STA  DLBAH
+FE_SNC: LDA  SCNT               ; sectors left in this directory extent
         DEC
         STA  SCNT
         JNZ  FE_SEC
 FE_NF:  LDA  #0
         STA  MATCH
+FE_RST: LDA  #0                 ; restore the "LBA1=0 at rest" invariant for the
+        STA  LBA1               ; OS's boot-block/absolute-LBA reads (the scan set
+        STA  LBA2               ; LBA1 high; write-back callers use DLBAH instead)
         RTS
 
 ; RDENT - read the 32-byte directory entry at (P2)+ for DIR: name -> NAMEBUF,

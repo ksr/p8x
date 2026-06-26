@@ -37,7 +37,7 @@ int walk(int depth) {
             putname();
             if (peek(0x9D70) == 2) {         /* directory */
                 putchar('/');
-                if (nsub < 24) { sub[nsub] = peek(0x9D47); nsub = nsub + 1; }
+                if (nsub < 24) { sub[nsub] = peek(0x9D47) + peek(0x9D48) * 256; nsub = nsub + 1; }
             }
             putchar(10);
         }
@@ -45,7 +45,9 @@ int walk(int depth) {
     }
     i = 0;                                    /* descend into recorded children */
     while (i < nsub) {
-        bios(0x0142, 0, sub[i]);             /* FOPENDIRAT(child) */
+        poke(0x9D48, sub[i] / 256);          /* FOPENDIRAT high byte (LBA1) */
+        poke(0x9D49, 0);
+        bios(0x0142, 0, sub[i]);             /* FOPENDIRAT(child): A=low, LBA1=high */
         bios(0x0145, 0, 0xE0);               /* FSDIRBUF: our page */
         walk(depth + 1);
         i = i + 1;
@@ -61,7 +63,7 @@ int main() {
         puts("usage: TREE   depth-first indented listing of the CWD tree");
         return 0;
     }
-    bios(0x0142, 0, bios(0x4006, 0, 0) & 255);   /* FOPENDIRAT(SYS_CWDLBA) */
+    bios(0x4012, 0, 0);                      /* SYS_OPENCWD: iterate CWD (16-bit LBA) */
     bios(0x0145, 0, 0xE0);
     walk(0);
     return 0;

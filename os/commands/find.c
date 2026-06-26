@@ -69,7 +69,7 @@ int walk(int plen) {                          /* plen = length of cur (no traili
                 putchar(10);
             }
             if (peek(0x9D70) == 2 && nsub < 24) {   /* a subdirectory -> record it */
-                clba[nsub] = peek(0x9D47);
+                clba[nsub] = peek(0x9D47) + peek(0x9D48) * 256;   /* 16-bit child LBA */
                 k = 0;
                 while (nm[k] != 0) { cn[nsub * 16 + k] = nm[k]; k = k + 1; }
                 cn[nsub * 16 + k] = 0;
@@ -81,7 +81,9 @@ int walk(int plen) {                          /* plen = length of cur (no traili
 
     i = 0;                                    /* descend into each recorded child */
     while (i < nsub) {
-        bios(0x0142, 0, clba[i]);            /* FOPENDIRAT(child) */
+        poke(0x9D48, clba[i] / 256);         /* FOPENDIRAT high byte (LBA1) */
+        poke(0x9D49, 0);
+        bios(0x0142, 0, clba[i]);            /* FOPENDIRAT(child): A=low, LBA1=high */
         bios(0x0145, 0, 0xE0);               /* FSDIRBUF: our page */
         oldp = plen;
         if (plen != 1 || cur[0] != '/') { cur[plen] = '/'; plen = plen + 1; }
@@ -115,7 +117,7 @@ int main() {
     bios(0x4003, cur, 0);                    /* cur = CWD path */
     plen = 0;
     while (cur[plen] != 0) { plen = plen + 1; }
-    bios(0x0142, 0, bios(0x4006, 0, 0) & 255);   /* FOPENDIRAT(SYS_CWDLBA) */
+    bios(0x4012, 0, 0);                      /* SYS_OPENCWD: iterate CWD (16-bit LBA) */
     bios(0x0145, 0, 0xE0);
     walk(plen);
     return 0;

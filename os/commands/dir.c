@@ -22,10 +22,11 @@
  *     p8xfs put disk.img dir.bin --name /BIN/DIR.BIN --load 0xB000 --exec 0xB000
  *     # on the P8X:   RUN /BIN/DIR.BIN /BIN     (or RUN /BIN/DIR.BIN -R / >LIST.TXT)
  *
- * BIOS: FOPENDIR=$0139 (P1=path), FOPENDIRAT=$0142 (A=dir LBA), FNEXT=$013C
- * (-> FNAME at $9D4A, 12 bytes space-padded; FFLAG at $9D70 = file $01 / dir
- * $02; start LBA in LBA byte0 at $9D47; C=1 at end), FSDIRBUF=$0145
- * (A=buffer page).  OS: SYS_CWDLBA=$4006.
+ * BIOS: FOPENDIR=$0139 (P1=path), FOPENDIRAT=$0142 (A=dir LBA low, LBA1/$9D48 =
+ * high), FNEXT=$013C (-> FNAME at $9D4A, 12 bytes space-padded; FFLAG at $9D70 =
+ * file $01 / dir $02; start LBA low/high at $9D47/$9D48; C=1 at end),
+ * FSDIRBUF=$0145 (A=buffer page).  OS: SYS_OPENCWD=$4012 (open the CWD with its
+ * full 16-bit LBA — handles a CWD at LBA >=256).
  *
  * The iteration buffer is a fixed 512-byte, page-aligned scratch buffer high in
  * the transient program area ($E000, page $E0): well above this program's
@@ -79,8 +80,8 @@ int walk(int depth) {
             putname();
             if (peek(0x9D70) == 2) {          /* FFLAG: directory */
                 putchar('/');
-                if (nsub < 64) {              /* record child LBA for the recursion pass */
-                    sub[nsub] = peek(0x9D47); /* start LBA, byte0 (subdir LBAs < 256) */
+                if (nsub < 64) {              /* record child LBA (16-bit) for the pass */
+                    sub[nsub] = peek(0x9D47) + peek(0x9D48) * 256;
                     nsub = nsub + 1;
                 }
             }
@@ -91,7 +92,9 @@ int walk(int depth) {
     /* This level's FNEXT loop is closed; now descend into each recorded child. */
     i = 0;
     while (i < nsub) {
-        bios(0x0142, 0, sub[i]);              /* FOPENDIRAT(child LBA) */
+        poke(0x9D48, sub[i] / 256);           /* FOPENDIRAT high byte (LBA1, $9D48) */
+        poke(0x9D49, 0);
+        bios(0x0142, 0, sub[i]);              /* FOPENDIRAT(child LBA): A=low, LBA1=high */
         bios(0x0145, 0, 0xE0);                /* FSDIRBUF: our page $E000 again */
         walk(depth + 1);
         i = i + 1;
@@ -118,7 +121,9 @@ int main() {
     }
 
     if (*arg == 0 || *arg == 13) {           /* no path -> current directory */
-        bios(0x0142, 0, bios(0x4006, 0, 0) & 255);   /* FOPENDIRAT(SYS_CWDLBA) */
+        bios(0x4012, 0, 0);                  /* SYS_OPENCWD: iterate the CWD with
+                                              * its full 16-bit LBA (works when the
+                                              * CWD lives at LBA >=256) */
     } else {
         bios(0x0139, arg, 0);                /* FOPENDIR(path) */
     }

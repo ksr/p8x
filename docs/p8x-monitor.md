@@ -99,7 +99,7 @@ knowing the monitor's internal addresses. These entry points are **stable**:
 | `$0139` | FOPENDIR | begin iterating the directory at path `P1` (`""`/`"/"` = root); `C=1` if not a directory |
 | `$013C` | FNEXT | next live entry → `FNAME`/`FFLAG`/`LBA`/`FLEN`; `C=1` at end (skips deleted entries) |
 | `$013F` | FLOADAT | bulk-read `FLEN` bytes from sector `LBA` into `(P1)`, a whole sector at a time (the fast "slurp a file" primitive; EDIT + the OS loader use it) |
-| `$0142` | FOPENDIRAT | begin iterating the directory whose 4-sector extent starts at the LBA in `A` (lets a caller iterate an extent it already resolved, e.g. the OS's CWD) |
+| `$0142` | FOPENDIRAT | begin iterating the directory whose 4-sector extent starts at the 16-bit LBA `A` (low) + `LBA1` (`$9D48`, high) — lets a caller iterate an extent it already resolved, e.g. the OS's CWD. Set `LBA1`=0 for LBA < 256 |
 | `$0145` | FSDIRBUF | point `FNEXT`'s sector buffer at the page in `A` (high byte; 512-byte page-aligned buffer). Call after `FOPENDIR`/`FOPENDIRAT` (which reset it to `SBUF`). Lets a program iterate a directory while a write stream keeps `SBUF` — so `DIR` can be redirected/piped while streaming per entry |
 
 Call them with `JSR $0103` etc. (P8X/OS is built entirely on this table.)
@@ -117,8 +117,10 @@ reads `/BIN/X`; `FRESOLVE("/SUB/W")` then `FWOPEN`/`FPUTB`/`FCLOSE` writes
 way. Parameters use fixed RAM:
 `FNAME` (`$9D4A`, 12-byte space-padded name), `FSRC` (`$9D56`, FCREATE source
 address), `FLEN` (`$9D58`, length — FCREATE input, FFIND output); `FFIND` returns
-the start LBA in the shared `LBA` (`$9D47`). (Subdirectory LBAs are assumed
-< 256, matching the OS's current-directory convention.)
+the start LBA in the shared `LBA` (`$9D47`). (Subdirectory LBAs are 16-bit: the
+directory-iteration/resolution path carries `DIRLBA`/`DILBA` plus their high
+bytes, so a directory whose extent starts at LBA ≥ 256 resolves and lists
+correctly.)
 
 ## Memory map
 

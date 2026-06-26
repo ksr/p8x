@@ -54,11 +54,13 @@ print a one-line usage summary and exit.
 ### Implementation notes
 
 - **dir.c** — `argstr()`, the `bios()` carry flag to end the `FOPENDIR`/`FNEXT`
-  loop, `SYS_CWDLBA` ($4006) for the CWD, and `FSDIRBUF` ($0145) to move
-  iteration off the shared `SBUF` so output can stream. `-R`: the `FNEXT` cursor
-  is **global** BIOS state, so each level streams its entries while only
-  recording child-directory LBAs into a small per-level array, then descends —
-  bounded memory, no whole-tree buffer.
+  loop, `SYS_OPENCWD` ($4012) to open the CWD with its full **16-bit** LBA (so a
+  CWD at LBA ≥ 256 lists correctly, not the truncated `SYS_CWDLBA` low byte), and
+  `FSDIRBUF` ($0145) to move iteration off the shared `SBUF` so output can stream.
+  `-R`: the `FNEXT` cursor is **global** BIOS state, so each level streams its
+  entries while only recording child-directory LBAs (16-bit) into a small
+  per-level array, then descends (poking the high byte into `LBA1`/`$9D48` before
+  `FOPENDIRAT`) — bounded memory, no whole-tree buffer.
 - **pwd.c** — `SYS_GETCWD` ($4003): the CWD comes through the syscall ABI, not
   by peeking OS RAM.
 - **wc.c / grep.c** — stdin filters that compose with `<`/`|`. wc counts are
