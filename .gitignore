@@ -171,3 +171,4 @@ emulator/test/os_dir.asm
 emulator/test/v2dir.asm
 emulator/test/v2pwd.asm
 emulator/test/v2tree.asm
+emulator/test/dg.asm
