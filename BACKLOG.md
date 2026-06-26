@@ -42,12 +42,15 @@ Last updated: 2026-06-25
 - **P8XFS v2 — remaining loose ends** (the hierarchy itself is DONE; see DONE):
     - **on-target FORMAT — DONE** (2026-06-22, see DONE). Added the `FORMAT`
       command; it fit once the OS moved to $4000 (rev D).
-    - **OS code size — ceiling lifted to 16 KB (rev D).** The boot loader (CMD_B)
-      loads the OS to $4000 upward, and the CF LBA pointer is BIOS-pinned at $9D47,
-      so the image must still end below $9D47 — but from $4000 that's ~23.8 KB (46
-      sectors). The tighter cap is the on-disk OS region (LBA 1–32), so **16 KB / 32
-      sectors max**. The OS is ~7165 B today, so there's now ~9 KB of headroom (was
-      ~3 B). LBA/SBUF/vars are unchanged ($9D47/$9E00/$A000).
+    - **OS code size — ~12 KB ceiling (after the 2026-06-26 memory remap).** The
+      boot loader (CMD_B) loads the OS to $4000 upward. The firmware/BIOS scratch
+      now sits low (monitor line buffer $7000, param/state block $7040, SBUF
+      $7100), so the OS image must end **below $7000** — i.e. **~12 KB** of RAM
+      ($4000–$6FFF). (Before the remap the scratch was at $9D40, giving ~23.8 KB
+      of RAM headroom; the remap traded that down to grow the TPA to ~31.6 KB.)
+      The on-disk OS region is still LBA 1–32 (16 KB), so RAM is now the tighter
+      cap. The OS is ~8.5 KB today → ~3.5 KB headroom. BIOS scratch/SBUF/OS vars
+      moved with the remap: LBA $7047, SBUF $7100, OS vars $7300.
 
 
 
@@ -125,51 +128,42 @@ Last updated: 2026-06-25
       the `$ROOT/tools/clib.py` refs in `os/run.sh` and the ~8 `c_*`/`os_*` test
       scripts, plus doc mentions, then re-run the suite. Deferred (2026-06-26).
 
-- [ ] **Wildcards — wc/grep/sort/sed/del/cp/mv (BLOCKED on per-command; needs a
-      different mechanism).** `DIR`/`FIND` glob in place (see DONE) and `CAT`
-      expands a glob into multiple files (`lib_globx`, see DONE — `CAT *.ASM
-      >OUT`). The plan to extend this to the filters by making `lib_stdin`
-      glob-aware (so `nextc()` reads a glob's files as one concatenated stream,
-      giving grep/sort/sed/wc globs for free) was **prototyped and abandoned on a
-      hard size wall** (2026-06-26): the glob machinery is ~12 KB of native
-      `p8cc.c` codegen (`glob_expand` alone ≈ 7 KB — the naive compiler explodes
-      its nested loops and `out[cnt*64]` indexing into ~3000 asm lines). Measured
-      end addresses with glob inlined: `wc` $BD0F→$FD04 (clips the $FC00 read
-      buffer), and `grep`/`sort`/`sed` **all overran 64 KB** (they sit at
-      $DB25/$F18B/$F134 already, only ~2.5 KB under the $FC00 ceiling). So
-      inlining glob per-command is infeasible for the large filters. Forward
-      options, roughly in order of payoff:
-        1. **Shell-level glob expansion (OS asm).** A compact `gmatch` + `FNEXT`
-           loop in the shell expands `*.X` once before dispatch — every command
-           (incl. `del`/`cp`/`mv`) gets globs uniformly with zero per-command
-           growth, and an asm matcher is a fraction of the C codegen size. Open
-           question: how a single-file filter consumes N matches — either the
-           shell loop-invokes the command per file, or it synthesizes the
-           existing `CAT match… | cmd` pipe (concatenated-stream model, which the
-           filters already accept). `lib_glob`'s `gmatch` is the algorithm to port
-           to asm. **Recommended primary.**
-        2. **Rewrite the size-critical filters (sort/sed/grep) in assembly.** A
-           hand-written asm `grep`/`sort`/`sed` is ~1–3 KB vs ~16 KB of p8cc.c
-           output, which reclaims enough room that *inlined* `glob_expand` would
-           fit — keeping the per-command model originally wanted, and they run
-           faster. Cost: loses the C readability and re-implements the regex
-           matcher in asm; large effort per command. See *ASM vs C commands*
-           below.
-        3. **Improve `p8cc.c` codegen** (peephole, temp reuse, cheaper array
-           indexing). Shrinks *every* command, so inlined glob might then fit
-           without an asm rewrite. Overlaps Milestone B compiler work; broad
-           benefit but the slowest route to this specific feature.
-      (Note `DEL *.TMP` is destructive and an OS built-in, so it lands in
-      `p8xos.asm` regardless — option 1 covers it naturally.)
+- [ ] **Wildcards — wc/grep/sort/sed (UNBLOCKED by the 2026-06-26 memory remap;
+      re-evaluate per-command inlining first).** `DIR`/`FIND` glob in place (see
+      DONE) and `CAT` expands a glob into multiple files (`lib_globx`, see DONE —
+      `CAT *.ASM >OUT`). The clean plan — make `lib_stdin` glob-aware so `nextc()`
+      reads a glob's files as one concatenated stream, giving grep/sort/sed/wc
+      globs for free — was prototyped and **abandoned on a size wall** when the TPA
+      base was `$B000` (~19 KB budget): the glob machinery is ~12 KB of native
+      `p8cc.c` codegen (`glob_expand` ≈ 7 KB), and `grep`/`sort`/`sed` (~16.7 KB)
+      overran 64 KB once it was inlined.
+      **That wall is now mostly gone.** The remap dropped the TPA base to `$7A00`
+      (~31.6 KB, code+globals up from `$7A00`, C-stack down from `$F800`). Back-of-
+      envelope: sed (~16.7 KB) + glob (~12 KB) ≈ 28.7 KB, which now fits with a few
+      KB to spare. So **step 1: re-do the `lib_stdin` glob-aware prototype and
+      re-measure** each filter's end address against the new ceiling. If it fits
+      (likely), this is the whole feature — the originally-preferred clean design.
+      Only if a command is still too tight fall back to:
+        - **Shell-level glob expansion (OS asm)** — a compact `gmatch`+`FNEXT` loop
+          in the shell expands `*.X` once before dispatch; every command gets globs
+          uniformly, zero per-command growth. (Open Q: how a single-file filter
+          consumes N matches — loop-invoke per file, or synthesize the existing
+          `CAT match… | cmd` pipe.) Also the natural home for **`DEL *.TMP`**, which
+          is a destructive OS built-in (`p8xos.asm`), not a `/BIN` command.
+        - **ASM rewrite** of the offending filter (see *ASM vs C commands*) or
+          **p8cc codegen improvements** (helps every command) — bigger efforts,
+          only if inlining still doesn't fit.
 
 - [ ] **`CP`/`MV` wildcards — `CP *.ASM /BAK`, `MV *.TMP TRASH/`.** Multi-source
       copy/move into a destination *directory* (the classic shell idiom). Depends
       on the wildcard mechanism chosen above: with shell-level expansion (option 1)
       the shell hands `cp`/`mv` each matched source in turn against the dest dir;
       `cp`/`mv` need to detect "dest is a directory" and derive `dest/leaf` per
-      source. `cp`/`mv` are `/BIN` C commands (`lib_stdin` read buffer + write
-      stream), so per-command inlined glob hits the same size wall as the filters
-      — do these via the shared mechanism, not bespoke.
+      source. With the bigger TPA (base `$7A00`) the old size wall is relieved, so
+      per-command inlined glob is likely viable here too — but `cp`/`mv` differ
+      from the filters (multi-source → dest-dir, not a concatenated stream), so
+      decide alongside the wildcards item: inline a small expander, or use the
+      shell-level mechanism if that lands first.
 
 - [ ] **ASM vs C commands — selectively hand-write the heavy `/BIN` utilities.**
       The C commands are large because `p8cc.c` is a naive code generator (~2.4
