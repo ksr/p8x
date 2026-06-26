@@ -125,18 +125,65 @@ Last updated: 2026-06-25
       the `$ROOT/tools/clib.py` refs in `os/run.sh` and the ~8 `c_*`/`os_*` test
       scripts, plus doc mentions, then re-run the suite. Deferred (2026-06-26).
 
-- [ ] **Wildcards — remaining commands via shell-level expansion.** `DIR` and
-      `FIND` glob in place (`*`/`?`, see DONE); `CAT` now expands a glob into
-      multiple files (`lib_globx`, see DONE — `CAT *.ASM >OUT`). The rest
-      (`grep`/`cp`/`del`/`sort`/…) take a single named file. cat's `lib_globx` +
-      the FSCAN-honors-FSDIRBUF firmware fix (see DONE) make per-command multi-file
-      globbing *possible* for any of them, but doing it one command at a time still
-      bolts an "expand, loop, open each" block onto each. The cleaner endgame is
-      **shell-level expansion** in the OS: the shell reads the CWD (FNEXT), expands
-      `*.X` into the matching names, and splices them into the line — which needs
-      multi-file arg support across the filters and a larger `LINEBUF`. `lib_glob`'s
-      `gmatch` / `lib_globx`'s `glob_expand` are the reusable pieces. (Note
-      `DEL *.TMP` is destructive and an OS built-in, not a `/BIN` command.)
+- [ ] **Wildcards — wc/grep/sort/sed/del/cp/mv (BLOCKED on per-command; needs a
+      different mechanism).** `DIR`/`FIND` glob in place (see DONE) and `CAT`
+      expands a glob into multiple files (`lib_globx`, see DONE — `CAT *.ASM
+      >OUT`). The plan to extend this to the filters by making `lib_stdin`
+      glob-aware (so `nextc()` reads a glob's files as one concatenated stream,
+      giving grep/sort/sed/wc globs for free) was **prototyped and abandoned on a
+      hard size wall** (2026-06-26): the glob machinery is ~12 KB of native
+      `p8cc.c` codegen (`glob_expand` alone ≈ 7 KB — the naive compiler explodes
+      its nested loops and `out[cnt*64]` indexing into ~3000 asm lines). Measured
+      end addresses with glob inlined: `wc` $BD0F→$FD04 (clips the $FC00 read
+      buffer), and `grep`/`sort`/`sed` **all overran 64 KB** (they sit at
+      $DB25/$F18B/$F134 already, only ~2.5 KB under the $FC00 ceiling). So
+      inlining glob per-command is infeasible for the large filters. Forward
+      options, roughly in order of payoff:
+        1. **Shell-level glob expansion (OS asm).** A compact `gmatch` + `FNEXT`
+           loop in the shell expands `*.X` once before dispatch — every command
+           (incl. `del`/`cp`/`mv`) gets globs uniformly with zero per-command
+           growth, and an asm matcher is a fraction of the C codegen size. Open
+           question: how a single-file filter consumes N matches — either the
+           shell loop-invokes the command per file, or it synthesizes the
+           existing `CAT match… | cmd` pipe (concatenated-stream model, which the
+           filters already accept). `lib_glob`'s `gmatch` is the algorithm to port
+           to asm. **Recommended primary.**
+        2. **Rewrite the size-critical filters (sort/sed/grep) in assembly.** A
+           hand-written asm `grep`/`sort`/`sed` is ~1–3 KB vs ~16 KB of p8cc.c
+           output, which reclaims enough room that *inlined* `glob_expand` would
+           fit — keeping the per-command model originally wanted, and they run
+           faster. Cost: loses the C readability and re-implements the regex
+           matcher in asm; large effort per command. See *ASM vs C commands*
+           below.
+        3. **Improve `p8cc.c` codegen** (peephole, temp reuse, cheaper array
+           indexing). Shrinks *every* command, so inlined glob might then fit
+           without an asm rewrite. Overlaps Milestone B compiler work; broad
+           benefit but the slowest route to this specific feature.
+      (Note `DEL *.TMP` is destructive and an OS built-in, so it lands in
+      `p8xos.asm` regardless — option 1 covers it naturally.)
+
+- [ ] **`CP`/`MV` wildcards — `CP *.ASM /BAK`, `MV *.TMP TRASH/`.** Multi-source
+      copy/move into a destination *directory* (the classic shell idiom). Depends
+      on the wildcard mechanism chosen above: with shell-level expansion (option 1)
+      the shell hands `cp`/`mv` each matched source in turn against the dest dir;
+      `cp`/`mv` need to detect "dest is a directory" and derive `dest/leaf` per
+      source. `cp`/`mv` are `/BIN` C commands (`lib_stdin` read buffer + write
+      stream), so per-command inlined glob hits the same size wall as the filters
+      — do these via the shared mechanism, not bespoke.
+
+- [ ] **ASM vs C commands — selectively hand-write the heavy `/BIN` utilities.**
+      The C commands are large because `p8cc.c` is a naive code generator (~2.4
+      bytes/asm-line, no register allocation, every value through `__ax`
+      temporaries, array indexing recomputed each access): `sort`/`sed` are ~16.7
+      KB, leaving almost no room under the $FC00 read buffer. Hand-written
+      assembly versions would be a fraction of that (freeing space for features
+      like inlined glob, and running faster), at the cost of readability and of
+      abandoning the "everything in our own C" story these commands also serve as
+      compiler test cases. Candidates to evaluate first: the size-critical filters
+      (`sort`, `sed`, `grep`) and anything that wants glob. Decision criteria:
+      keep C where it doubles as a `p8cc` regression and has size headroom; reach
+      for asm where a command is both size-pressured and stable. (Cross-ref the
+      wildcard item above — an asm rewrite is option 2 there.)
 
 - [ ] **Disassembler (reverse assembler): point it at an address block, get
       assembler back.** A tool that walks a memory/file region and decodes each
