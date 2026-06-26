@@ -17,12 +17,12 @@ build_disk() {   # $1 = py|host
     python3 $ROOT/tools/clib.py $ROOT/os/commands/dir.c -o dg.pp.c   # splice //#use glob
     if [ "$1" = host ]; then ./p8cc_host < dg.pp.c > dg.asm
     else python3 $ROOT/compiler/p8cc.py dg.pp.c -o dg.asm >/dev/null; fi
-    python3 $ROOT/assembler/p8xasm.py dg.asm -o dg.bin --base 0xB000 >/dev/null
+    python3 $ROOT/assembler/p8xasm.py dg.asm -o dg.bin --base 0xA700 >/dev/null
     rm -f dg.img
     python3 $ROOT/tools/p8xfs.py create dg.img --v2 >/dev/null
     python3 $ROOT/tools/p8xfs.py boot   dg.img dgos.bin >/dev/null
     python3 $ROOT/tools/p8xfs.py mkdir  dg.img /BIN >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    dg.img dg.bin --name /BIN/DIR.BIN --load 0xB000 --exec 0xB000 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    dg.img dg.bin --name /BIN/DIR.BIN --load 0xA700 --exec 0xA700 >/dev/null
     printf x > dgf
     for n in A.ASM B.ASM C.TXT READ.ME; do
         python3 $ROOT/tools/p8xfs.py put dg.img dgf --name /$n >/dev/null

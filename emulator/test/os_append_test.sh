@@ -21,13 +21,13 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o apos.bin --base 0x4000 >/dev/null
 python3 $ROOT/tools/clib.py $ROOT/os/commands/cat.c -o apcat.c
 python3 $ROOT/compiler/p8cc.py apcat.c -o apcat.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py apcat.asm -o apcat.bin --base 0xB000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py apcat.asm -o apcat.bin --base 0xA700 >/dev/null
 
 rm -f ap.img
 python3 $ROOT/tools/p8xfs.py create ap.img --v2 >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   ap.img apos.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  ap.img /BIN >/dev/null
-python3 $ROOT/tools/p8xfs.py put    ap.img apcat.bin --name /BIN/CAT.BIN --load 0xB000 --exec 0xB000 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    ap.img apcat.bin --name /BIN/CAT.BIN --load 0xA700 --exec 0xA700 >/dev/null
 printf 'oneline\n' > apin.dat
 python3 $ROOT/tools/p8xfs.py put    ap.img apin.dat --name /IN.TXT >/dev/null
 

@@ -27,8 +27,8 @@ build_disk() {   # $1 dir.bin  $2 pwd.bin -> dir.img with /SUB/X.DAT + both prog
     python3 $ROOT/tools/p8xfs.py boot   dir.img osc.bin >/dev/null
     python3 $ROOT/tools/p8xfs.py mkdir  dir.img /SUB >/dev/null
     python3 $ROOT/tools/p8xfs.py put    dir.img x.dat --name /SUB/X.DAT --load 0 --exec 0 >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    dir.img "$1" --name DIR.BIN --load 0xB000 --exec 0xB000 >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    dir.img "$2" --name PWD.BIN --load 0xB000 --exec 0xB000 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    dir.img "$1" --name DIR.BIN --load 0xA700 --exec 0xA700 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    dir.img "$2" --name PWD.BIN --load 0xA700 --exec 0xA700 >/dev/null
 }
 
 session() {   # echoes the combined console output of the three scenarios
@@ -65,8 +65,8 @@ compile_one() {   # $1 = compiler tag: build both programs with it
         python3 $ROOT/compiler/p8cc.py d.pp.c -o d.asm >/dev/null
         python3 $ROOT/compiler/p8cc.py $ROOT/os/commands/pwd.c -o p.asm >/dev/null
     fi
-    python3 $ROOT/assembler/p8xasm.py d.asm -o d.bin --base 0xB000 >/dev/null
-    python3 $ROOT/assembler/p8xasm.py p.asm -o p.bin --base 0xB000 >/dev/null
+    python3 $ROOT/assembler/p8xasm.py d.asm -o d.bin --base 0xA700 >/dev/null
+    python3 $ROOT/assembler/p8xasm.py p.asm -o p.bin --base 0xA700 >/dev/null
     build_disk d.bin p.bin
 }
 

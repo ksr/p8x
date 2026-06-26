@@ -37,7 +37,7 @@
 ; The prompt shows the current path. Verify a volume with p8xfs.py fsck.
 ; RAM layout: code $4000..(<=$9D46) | CF LBA $9D47, SBUF $9E00 (both fixed by the
 ; BIOS) | OS variables $A000.. | user programs / RUN / ">" capture (the TPA)
-; $B000.. | stack (P3) grows down from $FEFF.
+; $A700.. | TPA (programs); stack (P3) grows down from $FEFF.
 
 ; ---- BIOS jump table (stable ABI, in ROM) ----------------------------------
 CONIN   = $0100          ; wait for key, char -> A
@@ -168,7 +168,7 @@ FUSED   = $A0DB          ; data sectors occupied by live extents
 FERR    = $A0DC          ; problems found (0 = clean)
 FCHILD  = $A0DD          ; CHKDD: directory whose '..' is being checked
 FEXP    = $A0DE          ; CHKDD: expected parent LBA
-RBUF    = $B000          ; capture buffer = the TPA (free during a built-in cmd)
+RBUF    = $A700          ; capture buffer = the TPA (free during a built-in cmd)
 TSP     = $A0E0          ; tree stack depth (0 = at root level)
 TI      = $A0E1          ; scratch loop counter for the frame stack
 TFRAME  = $A1B7          ; 8 frames x 4 bytes (dst_lo,dst_hi,dsc,idx): $A1B7..$A1D6
@@ -472,7 +472,7 @@ DORUN:  JSR  FINDARG
         STA  RUNSKIP            ;   the program sees the tail after its own name
 RUNGO:  LDA  #0                 ; clear any pending console LF from a prior program
         STA  GPLF
-        JSR  DEFADDR            ; load/exec 0 -> TPA base $B000 (on-target-built
+        JSR  DEFADDR            ; load/exec 0 -> TPA base $A700 (on-target-built
         JSR  LOADF              ; programs, e.g. ASM output, carry 0 from FCREATE)
         ; Redirection for programs. KEY CONSTRAINT: FFIND scans through SBUF, but
         ; FWOPEN then keeps the write stream's partial (unflushed) sector in SBUF —
@@ -548,7 +548,7 @@ DR_NOOUT:LDA #0                 ; restore console stdin for the next command
         STA  INARM
 DR_DONE:JMP  SHELL
 ; DEFADDR - a directory entry with load/exec == 0 (the value FCREATE writes for
-; files built on-target) is taken to mean "load at the TPA base $B000". Programs
+; files built on-target) is taken to mean "load at the TPA base $A700". Programs
 ; installed from the host set explicit non-zero load/exec, so they are untouched.
 DEFADDR:LDA  LOADLO
         LDB  LOADHI
@@ -556,7 +556,7 @@ DEFADDR:LDA  LOADLO
         JNZ  DA_EX
         LDA  #$00
         STA  LOADLO
-        LDA  #$B0
+        LDA  #$A7
         STA  LOADHI
 DA_EX:  LDA  EXECLO
         LDB  EXECHI
@@ -564,7 +564,7 @@ DA_EX:  LDA  EXECLO
         JNZ  DA_RT
         LDA  #$00
         STA  EXECLO
-        LDA  #$B0
+        LDA  #$A7
         STA  EXECHI
 DA_RT:  RTS
 ; SKIPWORD - advance P2 past leading spaces, then one word, then trailing
@@ -3116,7 +3116,7 @@ RDS_CL: LDA  (P1)+
         JNZ  RDS_CL
         LDA  #1
         STA  REDIRF
-        LDA  #<RBUF            ; capture pointer = RBUF ($B000)
+        LDA  #<RBUF            ; capture pointer = RBUF ($A700)
         STA  RPTRL
         LDA  #>RBUF
         STA  RPTRH

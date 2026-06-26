@@ -65,7 +65,7 @@ KLEN    = $BF0D         ; bytes to insert (line length + 1 for LF)
 DIGIT   = $BF0E         ; DECOUT tens scratch
 CMDCH   = $BF0F         ; current command letter
 
-        .org $B000
+        .org $A700
 ; =============================================================================
 ; Entry
 ; =============================================================================

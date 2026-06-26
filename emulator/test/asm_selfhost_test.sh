@@ -15,12 +15,12 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o ossh.bin --base 0x4000 >
 python3 $ROOT/generators/gen_p8xopc.py shopc.asm
 cat $ROOT/apps/p8xasm.asm shopc.asm > shfull.asm
 # host build = the golden reference AND the ASM.BIN we run
-python3 $ROOT/assembler/p8xasm.py shfull.asm -o shgold.bin --base 0xB000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py shfull.asm -o shgold.bin --base 0xA700 >/dev/null
 
 rm -f sh.img
 python3 $ROOT/tools/p8xfs.py create sh.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   sh.img ossh.bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    sh.img shgold.bin --name ASM.BIN --load 0xB000 --exec 0xB000 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    sh.img shgold.bin --name ASM.BIN --load 0xA700 --exec 0xA700 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    sh.img shfull.asm --name SELF.ASM >/dev/null
 
 out=$(printf 'B\rRUN ASM.BIN SELF.ASM SELF.BIN\r' | \

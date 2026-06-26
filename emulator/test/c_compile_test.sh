@@ -50,12 +50,12 @@ int main() {
 }
 EOF
 python3 $ROOT/compiler/p8cc.py ctest.c -o ctest.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py ctest.asm -o ctest.bin --base 0xB000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py ctest.asm -o ctest.bin --base 0xA700 >/dev/null
 
 rm -f c.img
 python3 $ROOT/tools/p8xfs.py create c.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   c.img osc.bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    c.img ctest.bin --name CT.BIN --load 0xB000 --exec 0xB000 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    c.img ctest.bin --name CT.BIN --load 0xA700 --exec 0xA700 >/dev/null
 
 out=$(printf 'B\rRUN CT.BIN\r' | ../p8xemu -l 120000000 -c c.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r')
 fail() { echo "C-COMPILE TEST: FAIL — $1"; echo "$out" | sed -n '/RUN CT/,$p'; exit 1; }

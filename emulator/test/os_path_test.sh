@@ -29,14 +29,14 @@ int main() {
 }
 EOF
 python3 $ROOT/compiler/p8cc.py greet.c -o g.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py g.asm -o g.bin --base 0xB000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py g.asm -o g.bin --base 0xA700 >/dev/null
 
 rm -f path.img
 python3 $ROOT/tools/p8xfs.py create path.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   path.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  path.img /BIN >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  path.img /SUB >/dev/null
-python3 $ROOT/tools/p8xfs.py put    path.img g.bin --name /BIN/GREET.BIN --load 0xB000 --exec 0xB000 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    path.img g.bin --name /BIN/GREET.BIN --load 0xA700 --exec 0xA700 >/dev/null
 
 run() {  # $1 = command line typed at the OS prompt -> stripped console output
     printf "B\r$1\r" | ../p8xemu -l 250000000 -c path.img eeprom.bin 2>/dev/null \

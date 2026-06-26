@@ -37,12 +37,12 @@ int main() {
 }
 EOF
 python3 $ROOT/compiler/p8cc.py cstruct.c -o cstruct.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py cstruct.asm -o cstruct.bin --base 0xB000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py cstruct.asm -o cstruct.bin --base 0xA700 >/dev/null
 
 rm -f cs.img
 python3 $ROOT/tools/p8xfs.py create cs.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   cs.img osc.bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    cs.img cstruct.bin --name CS.BIN --load 0xB000 --exec 0xB000 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    cs.img cstruct.bin --name CS.BIN --load 0xA700 --exec 0xA700 >/dev/null
 
 out=$(printf 'B\rRUN CS.BIN\r' | ../p8xemu -l 120000000 -c cs.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r')
 fail() { echo "C-STRUCT TEST: FAIL — $1"; echo "$out" | sed -n '/RUN CS/,$p'; exit 1; }

@@ -87,18 +87,18 @@ EOF
 
 # host bootstrap reads from stdin
 host_out=$(./p8cc_host < diff.c > d.asm; \
-    python3 $ROOT/assembler/p8xasm.py d.asm -o d.bin --base 0xB000 >/dev/null; \
+    python3 $ROOT/assembler/p8xasm.py d.asm -o d.bin --base 0xA700 >/dev/null; \
     rm -f d.img; python3 $ROOT/tools/p8xfs.py create d.img >/dev/null; \
     python3 $ROOT/tools/p8xfs.py boot d.img osc.bin >/dev/null; \
-    python3 $ROOT/tools/p8xfs.py put d.img d.bin --name D.BIN --load 0xB000 --exec 0xB000 >/dev/null; \
+    python3 $ROOT/tools/p8xfs.py put d.img d.bin --name D.BIN --load 0xA700 --exec 0xA700 >/dev/null; \
     printf 'B\rRUN D.BIN\r' | ../p8xemu -l 80000000 -c d.img eeprom.bin 2>/dev/null \
         | LC_ALL=C tr -d '\0\r' | sed -n '/RUN D.BIN/,$p' | grep -v 'RUN D.BIN' | tr -dc '0-9A-Z')
 
 py_out=$(python3 $ROOT/compiler/p8cc.py diff.c -o d.asm >/dev/null; \
-    python3 $ROOT/assembler/p8xasm.py d.asm -o d.bin --base 0xB000 >/dev/null; \
+    python3 $ROOT/assembler/p8xasm.py d.asm -o d.bin --base 0xA700 >/dev/null; \
     rm -f d.img; python3 $ROOT/tools/p8xfs.py create d.img >/dev/null; \
     python3 $ROOT/tools/p8xfs.py boot d.img osc.bin >/dev/null; \
-    python3 $ROOT/tools/p8xfs.py put d.img d.bin --name D.BIN --load 0xB000 --exec 0xB000 >/dev/null; \
+    python3 $ROOT/tools/p8xfs.py put d.img d.bin --name D.BIN --load 0xA700 --exec 0xA700 >/dev/null; \
     printf 'B\rRUN D.BIN\r' | ../p8xemu -l 80000000 -c d.img eeprom.bin 2>/dev/null \
         | LC_ALL=C tr -d '\0\r' | sed -n '/RUN D.BIN/,$p' | grep -v 'RUN D.BIN' | tr -dc '0-9A-Z')
 

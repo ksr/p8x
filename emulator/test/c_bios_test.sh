@@ -32,11 +32,11 @@ int main() {
 EOF
 
 run() {   # $1 = asm file -> emulator output (letters only), feeding 'Q' to getchar
-    python3 $ROOT/assembler/p8xasm.py "$1" -o cbios.bin --base 0xB000 >/dev/null
+    python3 $ROOT/assembler/p8xasm.py "$1" -o cbios.bin --base 0xA700 >/dev/null
     rm -f cbios.img
     python3 $ROOT/tools/p8xfs.py create cbios.img >/dev/null
     python3 $ROOT/tools/p8xfs.py boot   cbios.img osc.bin >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    cbios.img cbios.bin --name CB.BIN --load 0xB000 --exec 0xB000 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    cbios.img cbios.bin --name CB.BIN --load 0xA700 --exec 0xA700 >/dev/null
     printf 'B\rRUN CB.BIN\rQ' | ../p8xemu -l 90000000 -c cbios.img eeprom.bin 2>/dev/null \
         | LC_ALL=C tr -d '\0\r' | sed -n '/RUN CB.BIN/,$p' | grep -v 'RUN CB.BIN' | tr -dc 'A-Z'
 }

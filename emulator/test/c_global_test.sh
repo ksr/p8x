@@ -27,12 +27,12 @@ int main() {
 }
 EOF
 python3 $ROOT/compiler/p8cc.py cglob.c -o cglob.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py cglob.asm -o cglob.bin --base 0xB000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py cglob.asm -o cglob.bin --base 0xA700 >/dev/null
 
 rm -f cg.img
 python3 $ROOT/tools/p8xfs.py create cg.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   cg.img osc.bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    cg.img cglob.bin --name CG.BIN --load 0xB000 --exec 0xB000 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    cg.img cglob.bin --name CG.BIN --load 0xA700 --exec 0xA700 >/dev/null
 
 out=$(printf 'B\rRUN CG.BIN\r' | ../p8xemu -l 120000000 -c cg.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r')
 fail() { echo "C-GLOBAL TEST: FAIL — $1"; echo "$out" | sed -n '/RUN CG/,$p'; exit 1; }

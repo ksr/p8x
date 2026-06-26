@@ -30,11 +30,11 @@ int main() {
 EOF
 
 check() {   # $1 = label, $2 = asm file
-    python3 $ROOT/assembler/p8xasm.py "$2" -o r.bin --base 0xB000 >/dev/null
+    python3 $ROOT/assembler/p8xasm.py "$2" -o r.bin --base 0xA700 >/dev/null
     rm -f r.img
     python3 $ROOT/tools/p8xfs.py create r.img >/dev/null
     python3 $ROOT/tools/p8xfs.py boot   r.img osc.bin >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    r.img r.bin --name R.BIN --load 0xB000 --exec 0xB000 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    r.img r.bin --name R.BIN --load 0xA700 --exec 0xA700 >/dev/null
     python3 $ROOT/tools/p8xfs.py mkdir  r.img /SUB >/dev/null
     # console run (not redirected): output must appear on the console
     con=$(printf 'B\rRUN /R.BIN\r' | ../p8xemu -l 90000000 -c r.img eeprom.bin 2>/dev/null \

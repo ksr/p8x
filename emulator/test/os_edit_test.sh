@@ -10,12 +10,12 @@ UC=../../microcode
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o ose.bin --base 0x4000 >/dev/null
-python3 $ROOT/assembler/p8xasm.py $ROOT/apps/p8xedit.asm -o edit.bin --base 0xB000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py $ROOT/apps/p8xedit.asm -o edit.bin --base 0xA700 >/dev/null
 
 rm -f ed.img
 python3 $ROOT/tools/p8xfs.py create ed.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   ed.img ose.bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    ed.img edit.bin --name EDIT.BIN --load 0xB000 --exec 0xB000 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    ed.img edit.bin --name EDIT.BIN --load 0xA700 --exec 0xA700 >/dev/null
 
 # Boot OS; build FOO.ASM, exercising append/insert/delete, save, quit; then
 # reopen and confirm the edited content round-trips from disk.

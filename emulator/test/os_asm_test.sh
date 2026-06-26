@@ -21,7 +21,7 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osa.bin --base 0x4000 >/
 # Build the native ASM program: assembler logic + generated opcode table.
 python3 $ROOT/generators/gen_p8xopc.py opctab.asm
 cat $ROOT/apps/p8xasm.asm opctab.asm > asmfull.asm
-python3 $ROOT/assembler/p8xasm.py asmfull.asm -o asm.bin --base 0xB000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py asmfull.asm -o asm.bin --base 0xA700 >/dev/null
 
 # COVER source: one line per (mnemonic,shape) from genucode.OPC, plus LDPn,
 # every directive, and every expression form. Deterministic (sorted) so the
@@ -32,7 +32,7 @@ from genucode import OPC
 ops={'':'', '#':' #1', 'a':' $1234',
      '(P1)':' (P1)','(P1)+':' (P1)+','(P2)':' (P2)','(P2)+':' (P2)+',
      '(P3)':' (P3)','(P3)+':' (P3)+'}
-L=["VAL = $1234", "CH  = 'Q'", "        .org $B000", "begin:"]
+L=["VAL = $1234", "CH  = 'Q'", "        .org $A700", "begin:"]
 for k in sorted(OPC):                       # every opcode/shape exactly as defined
     L.append("        %s%s"%(k[0],ops[k[1]]))
 for n in (1,2,3):
@@ -45,13 +45,13 @@ L += ["        LDA #<VAL","        LDB #>VAL","        LDA #CH",
       "        .fill 5,$AA","        .fill 3","fwd:    RTS","CR = $0D"]
 open(sys.argv[1],"w").write("\n".join(L)+"\n")
 PYEOF
-python3 $ROOT/assembler/p8xasm.py cover.asm -o covgold.bin --base 0xB000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py cover.asm -o covgold.bin --base 0xA700 >/dev/null
 
 # A small program that exercises forward refs / pointer modes / strings AND runs.
 cat > prog.asm <<'EOF'
 CR = $0D
 LF = $0A
-        .org $B000
+        .org $A700
         LDP1 #msg
 lp:     LDA (P1)+
         JZ   done
@@ -64,12 +64,12 @@ done:   LDA  #<msg
 msg:    .asciiz "HELLO-ASM"
         .byte CR,LF
 EOF
-python3 $ROOT/assembler/p8xasm.py prog.asm -o golden.bin --base 0xB000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py prog.asm -o golden.bin --base 0xA700 >/dev/null
 
 rm -f as.img
 python3 $ROOT/tools/p8xfs.py create as.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   as.img osa.bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    as.img asm.bin --name ASM.BIN --load 0xB000 --exec 0xB000 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    as.img asm.bin --name ASM.BIN --load 0xA700 --exec 0xA700 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    as.img cover.asm --name COVER.ASM >/dev/null
 python3 $ROOT/tools/p8xfs.py put    as.img prog.asm  --name PROG.ASM  >/dev/null
 

@@ -6,7 +6,7 @@
 ; file streams (FOPEN/FGETB for input, FWOPEN/FPUTB/FCLOSE for output), so
 ; neither is bounded by RAM — the assembler even assembles its own source.
 ; Output carries load/exec 0, which the OS treats as the TPA base $B000 — so a
-; program written `.org $B000` is directly RUNnable after assembly.
+; program written `.org $A700` is directly RUNnable after assembly.
 ;
 ; Supported syntax (a subset of the host assembler, same encodings):
 ;   label:                 define label = PC
@@ -100,7 +100,7 @@ LINEBUF = $CB00   ; current source line (NUL-terminated, <=127 chars)
 SYMTAB  = $CC00   ; 14-byte entries: name[12] + value[2]  (~850 symbols)
 SYMEND  = $FB00   ; symbol-table limit (stack lives above)
 
-        .org $B000
+        .org $A700
 ; =============================================================================
 START:  TPA3L                   ; save SP so an error can long-jump back to OS
         STA  SP0

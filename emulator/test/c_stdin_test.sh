@@ -19,12 +19,12 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x4000 >/
 printf 'STDINOK' > in.txt
 
 check() {   # $1 = label, $2 = cat.asm
-    python3 $ROOT/assembler/p8xasm.py "$2" -o cat.bin --base 0xB000 >/dev/null
+    python3 $ROOT/assembler/p8xasm.py "$2" -o cat.bin --base 0xA700 >/dev/null
     rm -f s.img
     python3 $ROOT/tools/p8xfs.py create s.img >/dev/null
     python3 $ROOT/tools/p8xfs.py boot   s.img osc.bin >/dev/null
     python3 $ROOT/tools/p8xfs.py put    s.img in.txt --name IN.TXT --load 0 --exec 0 >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    s.img cat.bin --name CAT.BIN --load 0xB000 --exec 0xB000 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    s.img cat.bin --name CAT.BIN --load 0xA700 --exec 0xA700 >/dev/null
     # console: cat the file to the screen
     con=$(printf 'B\rRUN /CAT.BIN <IN.TXT\r' | ../p8xemu -l 90000000 -c s.img eeprom.bin 2>/dev/null \
         | LC_ALL=C tr -d '\0\r' | sed -n '/RUN \/CAT.BIN/,$p' | grep -v 'RUN /CAT.BIN' | tr -dc 'A-Z')

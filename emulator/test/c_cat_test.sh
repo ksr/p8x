@@ -23,7 +23,7 @@ build_disk() {   # $1 = cat.bin
     python3 $ROOT/tools/p8xfs.py boot   cat.img osc.bin >/dev/null
     python3 $ROOT/tools/p8xfs.py mkdir  cat.img /BIN >/dev/null
     python3 $ROOT/tools/p8xfs.py mkdir  cat.img /SUB >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    cat.img "$1" --name /BIN/CAT.BIN --load 0xB000 --exec 0xB000 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    cat.img "$1" --name /BIN/CAT.BIN --load 0xA700 --exec 0xA700 >/dev/null
     printf 'ROOTOK\n' > rr.txt
     python3 $ROOT/tools/p8xfs.py put    cat.img rr.txt --name R.TXT --load 0 --exec 0 >/dev/null
     printf 'DEEPOK\n' > ss.txt
@@ -80,13 +80,13 @@ python3 $ROOT/tools/clib.py $ROOT/os/commands/cat.c -o cat.pp.c   # splice //#us
 if command -v cc >/dev/null 2>&1; then
     cc -O2 -w $ROOT/compiler/p8cc.c -o p8cc_host 2>/dev/null || fail "cc could not build p8cc.c"
     ./p8cc_host < cat.pp.c > ch.asm
-    python3 $ROOT/assembler/p8xasm.py ch.asm -o ch.bin --base 0xB000 >/dev/null
+    python3 $ROOT/assembler/p8xasm.py ch.asm -o ch.bin --base 0xA700 >/dev/null
     build_disk ch.bin
     check "p8cc.c"
 fi
 
 python3 $ROOT/compiler/p8cc.py cat.pp.c -o cp.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py cp.asm -o cp.bin --base 0xB000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py cp.asm -o cp.bin --base 0xA700 >/dev/null
 build_disk cp.bin
 check "p8cc.py"
 

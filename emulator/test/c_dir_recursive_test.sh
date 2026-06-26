@@ -33,7 +33,7 @@ build_disk() {   # $1 dir.bin -> rdir.img with a nested /SUB/DEEP tree + DIR.BIN
     python3 $ROOT/tools/p8xfs.py put    rdir.img a.dat --name /A.DAT        --load 0 --exec 0 >/dev/null
     python3 $ROOT/tools/p8xfs.py put    rdir.img b.dat --name /SUB/B.DAT    --load 0 --exec 0 >/dev/null
     python3 $ROOT/tools/p8xfs.py put    rdir.img c.dat --name /SUB/DEEP/C.DAT --load 0 --exec 0 >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    rdir.img "$1" --name DIR.BIN --load 0xB000 --exec 0xB000 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    rdir.img "$1" --name DIR.BIN --load 0xA700 --exec 0xA700 >/dev/null
 }
 
 session() {   # console output of a recursive listing from the root
@@ -66,7 +66,7 @@ compile_one() {   # $1 = compiler tag
     else
         python3 $ROOT/compiler/p8cc.py d.pp.c -o d.asm >/dev/null
     fi
-    python3 $ROOT/assembler/p8xasm.py d.asm -o d.bin --base 0xB000 >/dev/null
+    python3 $ROOT/assembler/p8xasm.py d.asm -o d.bin --base 0xA700 >/dev/null
     build_disk d.bin
 }
 
