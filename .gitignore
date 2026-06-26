@@ -12,6 +12,7 @@ emulator/test/*.bin
 emulator/test/*.out
 emulator/test/*.img
 emulator/test/*.dat
+emulator/test/*.log
 emulator/test/*.txt
 emulator/test/*.exp
 emulator/test/cf.img

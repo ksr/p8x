@@ -230,12 +230,14 @@ canonical filter `os/commands/cat.c` (stdin→stdout) is the worked example. Whe
 stdin is the **console** (no `<` file), `SYS_GETC` echoes each key and treats
 **Ctrl-D** (`$04`) as end of input (`getchar` → `-1`) — so `CAT >FILE` captures
 typed lines to a file and Ctrl-D finishes it.
-Note: directory iteration (`FNEXT`) and the write stream default to the same BIOS
-sector buffer `SBUF`, so a program that does both (`DIR`/`TREE`) must call
-`FSDIRBUF` ($0145) after opening the directory to move iteration onto its own
-page-aligned 512-byte buffer; the write stream then keeps `SBUF` to itself and
-the program can stream output per entry with no buffering or size limit (see
-`os/commands/dir.c`). It then redirects and pipes like any other program.
+Note: directory iteration (`FNEXT`) **and** path resolution (`FSCAN`, behind
+`FRESOLVE`/`FFIND`/`FOPEN`) default to the same BIOS sector buffer `SBUF` as the
+write stream, so a program that does both (`DIR`/`TREE` iterate; `CAT *.X >OUT`
+resolves+opens each match) must call `FSDIRBUF` ($0145) to move that directory
+traffic onto its own page-aligned 512-byte buffer; the write stream then keeps
+`SBUF` to itself and the program streams output with no buffering or size limit
+(see `os/commands/dir.c`, `os/commands/lib_globx.c`). It then redirects and pipes
+like any other program.
 
 **Pipes** build directly on this: `cmd1 | cmd2` runs `cmd1` with its stdout to a
 temp file `PIPE.TMP`, then re-dispatches `cmd2` with its stdin from that file,

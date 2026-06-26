@@ -126,14 +126,16 @@ Last updated: 2026-06-25
       scripts, plus doc mentions, then re-run the suite. Deferred (2026-06-26).
 
 - [ ] **Wildcards — remaining commands via shell-level expansion.** `DIR` and
-      `FIND` now glob (`*`/`?`, see DONE) — both already iterate the directory, so
-      a glob was a cheap filter. The rest (`cat`/`grep`/`cp`/`del`/…) take a
-      single named file and do NOT walk a directory, so per-command globbing would
-      bolt a separate "iterate CWD, match, open each" loop onto each — duplication.
-      The right approach for them is **shell-level expansion** in the OS: the shell
-      reads the CWD (FNEXT), expands `*.X` into the matching names, and splices
-      them into the line — which needs multi-file arg support across the filters
-      and a larger `LINEBUF`. `lib_glob`'s `gmatch` is the reusable matcher. (Note
+      `FIND` glob in place (`*`/`?`, see DONE); `CAT` now expands a glob into
+      multiple files (`lib_globx`, see DONE — `CAT *.ASM >OUT`). The rest
+      (`grep`/`cp`/`del`/`sort`/…) take a single named file. cat's `lib_globx` +
+      the FSCAN-honors-FSDIRBUF firmware fix (see DONE) make per-command multi-file
+      globbing *possible* for any of them, but doing it one command at a time still
+      bolts an "expand, loop, open each" block onto each. The cleaner endgame is
+      **shell-level expansion** in the OS: the shell reads the CWD (FNEXT), expands
+      `*.X` into the matching names, and splices them into the line — which needs
+      multi-file arg support across the filters and a larger `LINEBUF`. `lib_glob`'s
+      `gmatch` / `lib_globx`'s `glob_expand` are the reusable pieces. (Note
       `DEL *.TMP` is destructive and an OS built-in, not a `/BIN` command.)
 
 - [ ] **Disassembler (reverse assembler): point it at an address block, get
@@ -381,6 +383,28 @@ Last updated: 2026-06-25
 > Convention: substantial features get a **bold-title** prose entry (what was
 > done + why + caveats). The original foundation milestones are a terse tick
 > list under *Early milestones* at the end of this section.
+
+- **`CAT *.glob` multi-file concatenation + FSCAN/write-stream firmware fix**
+  (2026-06-26). `cat` now expands a glob argument into multiple files: a new
+  shared helper `os/commands/lib_globx.c` (`glob_expand(pat, out, maxn)`, pulled
+  in by `//#use globx`, which depends on `lib_glob`'s `gmatch`) iterates the
+  pattern's directory (or the CWD via `SYS_OPENCWD`) and returns the matching
+  *file* paths; `cat` streams each in turn. So `CAT *.ASM` and, crucially,
+  `CAT *.ASM >ALL.TXT` work. The hard part was the redirect case: a write stream
+  is already open, and every file's `FRESOLVE` walks the directory through
+  `SBUF` — the same buffer the write stream uses — so the first version
+  overwrote each file's buffered output with directory bytes (`.   BBB`). Root
+  fix in **firmware**: `FSCAN` (the engine behind `FRESOLVE`/`FFIND`/`FOPEN`)
+  now reads directory sectors into the repointable `DIBUFH` page (the one
+  `FSDIRBUF`/`FNEXT` already use) instead of a hardcoded `SBUF`; `DIBUFH`
+  defaults to `$9E`=`SBUF` at COLD boot, so every caller that doesn't repoint it
+  is byte-identical. `cat` points `FSDIRBUF` at `$FA` (a high-TPA scratch page,
+  clear of the `$FC00` read buffer and the code below it), so its per-file path
+  walks leave the open write stream's `SBUF` intact. This is the general
+  enabler for *any* glob-expanding command that redirects to a file (future
+  `wc`/`grep`/`sort`). Both compilers; `c_cat_test.sh` gained glob + glob-redirect
+  assertions; clib.py wired into the cat-compiling sites (`os_v2`, `c_pipe`,
+  `c_stdin`; `os_append` already had it). Full suite green.
 
 - **Regex factored to `lib_regex.c`; sed gained regex** (2026-06-26). grep's
   basic-regex matcher (`match`/`matchhere`, the `. * ^ $` dialect) — long flagged

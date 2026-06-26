@@ -36,7 +36,7 @@ print a one-line usage summary and exit.
 |--------|-------|--------------|
 | [`dir.c`](dir.c) | `DIR [-R] [path\|glob] [-h]` | List a directory (the path, or the CWD if omitted). `-R` recurses the whole subtree, indenting two spaces per level and flagging directories with a trailing `/`. A last component with `*`/`?` is a case-insensitive **glob** (via `lib_glob`): `DIR *.ASM`, `DIR /BIN/*.BIN`, `DIR -R *.C`. Streams names one at a time, so it redirects/pipes with no size limit. |
 | [`pwd.c`](pwd.c) | `PWD [-h]` | Print the current working directory path. |
-| [`cat.c`](cat.c) | `CAT [file] [-h]` | Print a file, **or** copy stdin→stdout (the canonical filter) when given no file. So `cat file`, `cat <file`, and `cat \| …` all work. Reading the **console** (e.g. `CAT >FILE`), each key echoes and **Ctrl-D** ends the input. |
+| [`cat.c`](cat.c) | `CAT [file\|glob] [-h]` | Print a file, **or** copy stdin→stdout (the canonical filter) when given no file. So `cat file`, `cat <file`, and `cat \| …` all work. A last component with `*`/`?` is a case-insensitive **glob** (via `lib_globx`): `CAT *.ASM` concatenates every matching file, and `CAT *.ASM >ALL.TXT` captures them — directory iteration now coexists with an open write stream (see FSDIRBUF below). Reading the **console** (e.g. `CAT >FILE`), each key echoes and **Ctrl-D** ends the input. |
 | [`wc.c`](wc.c) | `WC [-h]` | Count lines, words, and bytes on stdin → `L W B`. A pure filter: `WC <file` or `… \| WC`. Counts are 16-bit. |
 | [`grep.c`](grep.c) | `GREP regex [file] [-h]` | Print lines matching a **basic regex** — `.` (any), `*` (zero-or-more), `^`/`$` (anchors); else literal. Reads the named `file` (like cat) or stdin if none: `GREP "^al" foo.txt`, `… \| GREP "x.*y"`. Lines capped at 127 chars. |
 | [`cp.c`](cp.c) | `CP src dst [-h]` | Copy a file (CWD-relative or absolute paths, across subdirectories). Read stream → write stream. |
@@ -82,11 +82,23 @@ print a one-line usage summary and exit.
   transit `SBUF`, so DST is resolved *before* `FWOPEN` (which zeroes `SBUF`
   last). `mv` then `FDELETE`s the source; `MV X X` is guarded.
 - **cat.c** — a filename argument is opened with `FRESOLVE` ($0133) +
-  `FOPEN`/`FGETB`. The BIOS resolves names from its own current directory (root
-  for a fresh program), so cat builds an **absolute** path (CWD via
-  `SYS_GETCWD`, unless the arg is already absolute) — `FRESOLVE` always starts
-  at root, hence CWD-independent. With no argument it falls back to the stdin
-  filter, so redirection and pipes are unchanged.
+  `FOPEN`/`FGETB` (read buffer `$FC00`). The BIOS resolves names from its own
+  current directory (root for a fresh program), so cat builds an **absolute**
+  path (CWD via `SYS_GETCWD`, unless the arg is already absolute) — `FRESOLVE`
+  always starts at root, hence CWD-independent. With no argument it falls back
+  to the stdin filter, so redirection and pipes are unchanged. A glob argument
+  (`*`/`?`) is expanded by `lib_globx`'s `glob_expand` into a path list, then
+  each path is streamed in turn (`CAT *.ASM`). The hard part is `CAT *.ASM
+  >OUT`: a write stream is already open, and each file's `FRESOLVE` walks the
+  directory through `SBUF` — which is also the write stream's buffer, so the
+  naïve version overwrites each file's already-buffered output with directory
+  data (`.   BBB`). Fix: cat points `FSDIRBUF` ($0145) at page `$FA`, and
+  **FSCAN now honors that page too** (not just `FNEXT`; default `$9E`=`SBUF`
+  keeps every other caller byte-identical), so the per-file path walks read
+  into `$FA00` and leave the write stream's `SBUF` intact. This is the general
+  fix that lets any glob-expanding command redirect to a file — `cp`/`mv`'s
+  *resolve-DST-before-FWOPEN* dance (above) only worked because they resolve a
+  single target once.
 
 ## Building
 
@@ -133,7 +145,8 @@ consumer.
 | [`lib_abspath.c`](lib_abspath.c) | `abspath(out, a)` — build an absolute path (CWD-prefixed when relative) into a caller buffer; returns chars consumed | `cp`, `mv`, `diff` |
 | [`lib_readline.c`](lib_readline.c) | `readline(buf)` — read one line via `nextc()` (CR dropped, LF-terminated); 1 = line, 0 = EOF. **Needs `//#use stdin` above it.** | `uniq`, `sed` |
 | [`lib_streq.c`](lib_streq.c) | `streq(p, q)` — 1 if NUL-terminated strings are equal | `mv`, `uniq` |
-| [`lib_glob.c`](lib_glob.c) | `gmatch(pat, name)` — case-insensitive whole-string glob match (`*`, `?`) | `dir`, `find` |
+| [`lib_glob.c`](lib_glob.c) | `gmatch(pat, name)` — case-insensitive whole-string glob match (`*`, `?`) | `dir`, `find`, `lib_globx` |
+| [`lib_globx.c`](lib_globx.c) | `glob_expand(pat, out, maxn)` — expand a glob into a list of matching file paths (needs `lib_glob` above it) | `cat` |
 | [`lib_regex.c`](lib_regex.c) | `match(re, t)` / `matchhere(re, t)` — basic-regex matcher (`.` `*` `^` `$`); `matchhere` sets `rend` to the match end | `grep`, `sed` |
 
 When a helper depends on another (e.g. `readline` calls `lib_stdin`'s `nextc()`),
@@ -183,6 +196,8 @@ machinery: `emulator/test/c_dir_test.sh`, `c_dir_recursive_test.sh`,
 `c_pipe_test.sh`, and the implicit-RUN/PATH path in `os_path_test.sh`.
 
 The core text/file utilities are all implemented (the table above). `DIR` and
-`FIND` take globs (via `lib_glob`); extending wildcards to the rest is better done
-as shell-level expansion (see the backlog) than per-command. Future ideas: `TR`,
-`WC -l`-style flags, a real `LESS` (back-scroll).
+`FIND` match globs in place (via `lib_glob`); `CAT` expands a glob into multiple
+files (via `lib_globx`, e.g. `CAT *.ASM >OUT`). Extending wildcards to the
+remaining commands (`wc`/`grep`/`sort`/`cp`/`del`) is better done as a single
+shell-level expansion pass (see the backlog) than per-command. Future ideas:
+`TR`, `WC -l`-style flags, a real `LESS` (back-scroll).

@@ -166,6 +166,9 @@ COLD:   LDP3 #STKTOP        ; stack
         STA  DIRLBA1
         LDA  #4
         STA  DIRN
+        LDA  #$9E           ; FSCAN/FNEXT directory-buffer page defaults to SBUF;
+        STA  DIBUFH         ;   a program repoints it (FSDIRBUF) to run a dir walk
+                            ;   alongside an open write stream without clobbering it
         LDP1 #MBANNER
         JSR  PUTS
 
@@ -641,9 +644,15 @@ FF_SEC: LDA  ADDRL
         STA  LBA1
         LDA  #0
         STA  LBA2
-        LDP1 #SBUF
-        JSR  CFRDSEC        ; root sector -> SBUF
-        LDP2 #SBUF
+        LDA  #0             ; P1 = directory buffer (DIBUFH:00); defaults to SBUF,
+        TAP1L               ;   but follows FSDIRBUF so a path walk during an open
+        LDA  DIBUFH         ;   write stream reads into the program's scratch page
+        TAP1H               ;   instead of clobbering the write stream's SBUF
+        JSR  CFRDSEC        ; directory sector -> DIBUFH buffer
+        LDA  #0
+        TAP2L
+        LDA  DIBUFH
+        TAP2H
         LDA  #16
         STA  TMP            ; 16 entries / sector
 FF_ENT: LDP1 #FNAME         ; compare 12-byte name: (P2)=entry vs (P1)=FNAME

@@ -100,7 +100,7 @@ knowing the monitor's internal addresses. These entry points are **stable**:
 | `$013C` | FNEXT | next live entry → `FNAME`/`FFLAG`/`LBA`/`FLEN`; `C=1` at end (skips deleted entries) |
 | `$013F` | FLOADAT | bulk-read `FLEN` bytes from sector `LBA` into `(P1)`, a whole sector at a time (the fast "slurp a file" primitive; EDIT + the OS loader use it) |
 | `$0142` | FOPENDIRAT | begin iterating the directory whose 4-sector extent starts at the 16-bit LBA `A` (low) + `LBA1` (`$9D48`, high) — lets a caller iterate an extent it already resolved, e.g. the OS's CWD. Set `LBA1`=0 for LBA < 256 |
-| `$0145` | FSDIRBUF | point `FNEXT`'s sector buffer at the page in `A` (high byte; 512-byte page-aligned buffer). Call after `FOPENDIR`/`FOPENDIRAT` (which reset it to `SBUF`). Lets a program iterate a directory while a write stream keeps `SBUF` — so `DIR` can be redirected/piped while streaming per entry |
+| `$0145` | FSDIRBUF | point the directory sector buffer at the page in `A` (high byte; 512-byte page-aligned buffer; defaults to `SBUF`=`$9E` at boot and is reset to `SBUF` by `FOPENDIR`/`FOPENDIRAT`). Used by **both** `FNEXT` iteration **and** `FSCAN` (the engine behind `FRESOLVE`/`FFIND`/`FOPEN`), so repointing it lets a program iterate **and** resolve paths while a write stream keeps `SBUF` — e.g. `DIR` redirected/piped, or `CAT *.X >OUT` (resolve+open each match without clobbering the open write stream's `SBUF`) |
 
 Call them with `JSR $0103` etc. (P8X/OS is built entirely on this table.)
 
