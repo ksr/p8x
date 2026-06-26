@@ -214,7 +214,14 @@ same way it redirects a built-in: `RUN PROG >FILE` makes `DORUN` open a write
 stream and switch `OUTCH` to file mode (`REDIRF=2`, streaming each byte via
 `FPUTB`) around the program. The p8cc compilers emit `putchar`/`puts`/`getchar`
 as these syscalls, so any compiled program is redirectable with no source
-change. Redirect (and pipe) files resolve in the **current working directory**
+change. **`>>` appends** (`REDAPP`): since P8XFS extents are contiguous and can't
+grow in place, append is copy-then-extend — the OS streams the existing file's
+bytes into a fresh write stream (raw `CFREAD`s into `APBUF`), then the command's
+output, then `FCLOSE` registers it over the old entry (old extent reclaimed by
+`PACK`). All redirect targets are resolved with `FFIND` **before** `FWOPEN`,
+because an `FFIND` after it would scan through the write stream's unflushed
+`SBUF` and corrupt the output — this is why `< in >> out` resolves both files up
+front. Redirect (and pipe) files resolve in the **current working directory**
 (the OS points the BIOS FS at `CWDL` before the open/close), so `CD /SUB; RUN
 PROG >OUT` writes `/SUB/OUT`, not `/OUT`. Symmetrically, `RUN PROG <FILE` binds **stdin** to a file: `DORUN` opens
 it as the read stream into `IBUF` and `SYS_GETC`/`getchar` pull from it (`getchar`

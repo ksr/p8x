@@ -86,6 +86,7 @@ test-os: p8xemu ucode
 	sh test/os_v2_test.sh
 	sh test/os_bigdir_test.sh
 	sh test/os_bigpack_test.sh
+	sh test/os_append_test.sh
 	sh test/os_format_test.sh
 	sh test/os_argv_test.sh
 	sh test/os_path_test.sh

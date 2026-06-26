@@ -44,6 +44,7 @@ CONIN   = $0100          ; wait for key, char -> A
 CONOUT  = $0103          ; A -> serial
 CONST   = $0106          ; A = RDRF bit; Z=1 when no key waiting
 CFINIT  = $0109          ; reset + 8-bit mode; C=1 on error
+FFIND   = $0118          ; find file FNAME in current dir -> LBA+FLEN; C=1 absent
 CFREAD  = $010C          ; sector LBA -> (P1); P1 += 512
 CFWRITE = $010F          ; SBUF -> sector LBA
 PUTS    = $0112          ; print (P1)+ until $00
@@ -209,6 +210,12 @@ FCHILDH = $A1B3          ; FCHILD high byte (CHKDD child dir)
 FEXPH   = $A1B4          ; FEXP high byte (CHKDD expected parent)
 FMAXEH  = $A1B5          ; FMAXE high byte (FSCK highest extent end)
 FUSEDH  = $A1B6          ; FUSED high byte (FSCK live data sectors)
+REDAPP  = $A1D7          ; >> append redirect: 1 = prepend the existing file
+APHAVE  = $A1D8          ; >> : 1 = an existing file to prepend was found
+APLBA   = $A1D9          ; >> : old file's start LBA (2 bytes)
+APREM   = $A1DB          ; >> : old file bytes left to copy (2 bytes)
+APCHK   = $A1DD          ; >> : bytes to emit from the current sector (2 bytes)
+APBUF   = $A500          ; >> prepend sector buffer (512B, below the TPA)
 IBUF    = $A200          ; 512-byte buffer for the stdin read stream
 ; ---- program search path (implicit RUN of a bare command name) ----
 PATHBUF = $A400          ; search path, ';'-separated dirs; default "/BIN" ($A400..$A43F)
@@ -467,32 +474,57 @@ RUNGO:  LDA  #0                 ; clear any pending console LF from a prior prog
         STA  GPLF
         JSR  DEFADDR            ; load/exec 0 -> TPA base $B000 (on-target-built
         JSR  LOADF              ; programs, e.g. ASM output, carry 0 from FCREATE)
-        ; output redirection for programs: a "> name" (parsed by REDSCAN, which
-        ; set REDIRF=1 + REDNAME) can't use the RBUF capture buffer — RBUF is the
-        ; TPA, where the program lives. Instead stream the program's stdout to
-        ; the file: open the write stream now (after LOADF's reads) and switch
-        ; OUTCH to file mode (REDIRF=2); the program's putchar/SYS_PUTC -> OUTCH.
-        ; stdin redirect ("< name", armed by INSCAN): open the file as the read
-        ; stream into IBUF and switch SYS_GETC to file mode. Done before the
-        ; write stream; both use independent BIOS state + buffers (IBUF vs SBUF).
-        LDA  INARM
-        JZ   DR_NOIN
-        JSR  SETCWDDIR          ; resolve the redirect file in the CWD, not root
+        ; Redirection for programs. KEY CONSTRAINT: FFIND scans through SBUF, but
+        ; FWOPEN then keeps the write stream's partial (unflushed) sector in SBUF —
+        ; so any FFIND AFTER FWOPEN corrupts pending output. Therefore do every
+        ; FFIND first: (1) ">>" resolves the existing file's extent (FFIND, saved);
+        ; (2) "< name" stdin is bound (its FOPEN FFINDs); THEN (3) FWOPEN; THEN
+        ; (4) the ">>" prepend copies the old extent in with RAW sector reads
+        ; (CFREAD, not the read stream — stdin owns that), so the program's output
+        ; appends after it. RBUF capture isn't usable (RBUF is the TPA, where the
+        ; program lives); stdout streams to the file (REDIRF=2): putchar->OUTCH->
+        ; FPUTB. FNAME is (re)set at FCLOSE (the program clobbers the BIOS FNAME).
+        LDA  #0
+        STA  APHAVE
+        LDA  REDIRF             ; ">>" prepend resolve (needs output redirect)
+        JZ   DR_BIND
+        LDA  REDAPP
+        JZ   DR_BIND
+        JSR  SETCWDDIR          ; resolve REDNAME in the CWD, not root
+        LDP1 #REDNAME
+        JSR  FNORM              ; FNAME = the append target
+        JSR  FFIND              ; -> LBA(0..2)+FLEN; C=1 if the file is absent
+        JC   DR_BIND            ; new file -> nothing to prepend (acts like '>')
+        LDA  LBA                ; remember the old extent for the raw copy below
+        STA  APLBA
+        LDA  LBA1
+        STA  APLBA+1
+        LDA  FLEN
+        STA  APREM
+        LDA  FLEN+1
+        STA  APREM+1
+        LDA  #1
+        STA  APHAVE
+DR_BIND:LDA  INARM              ; stdin "< name": bind it (its FFIND runs BEFORE any
+        JZ   DR_OUT             ;   FWOPEN below, so it can't corrupt the output)
+        JSR  SETCWDDIR
         LDP1 #INNAME            ; FNAME = the input file
         JSR  FNORM
-        LDP1 #IBUF              ; read-stream buffer
+        LDP1 #IBUF              ; read-stream buffer (separate page from APBUF)
         JSR  FOPEN
         LDA  #1
         STA  INMODE             ; SYS_GETC now reads the file
-DR_NOIN:LDA  REDIRF
-        JZ   DR_NOR
-        JSR  FWOPEN             ; open the write stream (FNAME is set at FCLOSE,
-        LDA  #2                 ; below — the program's own FS calls clobber the
-        STA  REDIRF             ; BIOS FNAME, so we can't set it up front)
+DR_OUT: LDA  REDIRF             ; open the write stream if redirecting output
+        JZ   DR_NOIN
+        JSR  FWOPEN             ; claims SBUF — NO FFIND past this point
+        LDA  #2
+        STA  REDIRF
+        LDA  APHAVE             ; ">>": copy the old extent (APLBA/APREM) into the
+        JZ   DR_NOIN            ;   open write stream with raw sector reads
+        JSR  APCOPY
         ; program-arg ABI: enter with P2 -> the command tail after the program
-        ; name (null-terminated), so e.g. `RUN EDIT FOO.ASM` hands "FOO.ASM" to
-        ; the program. Programs that don't take args just ignore P2.
-DR_NOR: JSR  ARG2P2             ; P2 -> RUN args ("EDIT FOO.ASM")
+        ; name (null-terminated), so `RUN EDIT FOO.ASM` hands "FOO.ASM" to it.
+DR_NOIN:JSR  ARG2P2             ; P2 -> RUN args ("EDIT FOO.ASM")
         LDA  RUNSKIP            ; explicit RUN: skip the program-name word; implicit
         JZ   DR_ARGS            ;   run already points at the tail (after the cmd word)
         JSR  SKIPWORD           ; skip the program name + spaces -> P2 at the tail
@@ -3052,7 +3084,9 @@ ONHEX:  LDB  #$37             ; 'A' - 10
 ; ---- "> file" output redirection -------------------------------------------
 ; REDSCAN: if LINEBUF holds a '>', cut the command there, copy the target name
 ; to REDNAME, and arm capture (REDIRF=1, RPTR=RBUF). No '>' -> leaves REDIRF 0.
-REDSCAN:LDP1 #LINEBUF
+REDSCAN:LDA  #0
+        STA  REDAPP            ; default: '>' overwrite (not append)
+        LDP1 #LINEBUF
 RDS_LP: LDA  (P1)
         JZ   RDS_NO
         LDB  #'>'
@@ -3063,6 +3097,13 @@ RDS_LP: LDA  (P1)
 RDS_HIT:LDA  #0
         STA  (P1)              ; command text ends at the '>'
         INP1
+        LDA  (P1)              ; a second '>' -> append mode (>>)
+        LDB  #'>'
+        CMP
+        JNZ  RDS_SK
+        LDA  #1
+        STA  REDAPP
+        INP1                   ; consume the second '>'
 RDS_SK: LDA  (P1)              ; skip spaces before the filename
         LDB  #' '
         CMP
@@ -3157,6 +3198,8 @@ PPS_CL: LDA  (P1)+
         JSR  CPYPIPE
         LDA  #1
         STA  REDIRF
+        LDA  #0
+        STA  REDAPP            ; cmd1 -> PIPE.TMP is always a fresh overwrite
         LDA  #<RBUF
         STA  RPTRL
         LDA  #>RBUF
@@ -3183,6 +3226,70 @@ PRH_CP: LDA  (P1)+
 
 MPIPE:   .asciiz "PIPE.TMP"
 
+; APCOPY - ">>" helper: copy APREM bytes of an existing file (extent starting at
+; the 16-bit APLBA) into the currently-open write stream, using RAW sector reads
+; (CFREAD into APBUF, then FPUTB) — NOT the BIOS read stream, so a "< name" stdin
+; stream can stay open. No FFIND here (the caller resolved the extent before
+; FWOPEN; an FFIND now would corrupt the write stream's unflushed SBUF).
+APCOPY: LDA  APREM              ; bytes left to copy?
+        LDB  APREM+1
+        OR
+        JZ   APC_RET
+        LDA  APLBA              ; read one old sector into APBUF
+        STA  LBA
+        LDA  APLBA+1
+        STA  LBA1
+        LDA  #0
+        STA  LBA2
+        LDP1 #APBUF
+        JSR  CFREAD
+        LDA  APREM+1            ; chunk = min(512, APREM)
+        LDB  #2
+        CMP                     ; C=1 when APREM hi >= 2 (i.e. APREM >= 512)
+        JNC  APC_PART
+        LDA  #0
+        STA  APCHK
+        LDA  #2
+        STA  APCHK+1            ; chunk = 512
+        JMP  APC_BYT
+APC_PART:LDA APREM
+        STA  APCHK
+        LDA  APREM+1
+        STA  APCHK+1            ; chunk = APREM (< 512)
+APC_BYT:LDP2 #APBUF
+APC_B1: LDA  APCHK              ; sector chunk emitted?
+        LDB  APCHK+1
+        OR
+        JZ   APC_NXT
+        LDA  (P2)+
+        JSR  FPUTB
+        LDA  APCHK              ; APCHK-- (16-bit)
+        JNZ  APC_C1
+        LDA  APCHK+1
+        DEC
+        STA  APCHK+1
+APC_C1: LDA  APCHK
+        DEC
+        STA  APCHK
+        LDA  APREM              ; APREM-- (16-bit)
+        JNZ  APC_R1
+        LDA  APREM+1
+        DEC
+        STA  APREM+1
+APC_R1: LDA  APREM
+        DEC
+        STA  APREM
+        JMP  APC_B1
+APC_NXT:LDA  APLBA              ; APLBA++ (16-bit), next sector
+        INC
+        STA  APLBA
+        JNZ  APCOPY
+        LDA  APLBA+1
+        INC
+        STA  APLBA+1
+        JMP  APCOPY
+APC_RET:RTS
+
 ; FLUSHRED: called at the shell prompt. If a redirect was armed, write the
 ; captured bytes [RBUF, RPTR) to the file REDNAME (via SAVECORE), then disarm.
 FLUSHRED:LDA REDIRF
@@ -3199,8 +3306,10 @@ FR_GO:  LDP2 #REDNAME
         JSR  RESOLVE
         LDA  MATCH
         JZ   FR_ERR
-        JSR  FINDENT            ; refuse to clobber an existing file
-        LDA  MATCH
+        JSR  FINDENT            ; MATCH=1 if the target already exists
+        LDA  REDAPP
+        JNZ  FR_APP             ; ">>": append (prepend existing, then captured)
+        LDA  MATCH              ; ">": refuse to clobber an existing file
         JNZ  FR_EXIST
         LDA  #<RBUF
         STA  SVSTLO
@@ -3217,6 +3326,44 @@ FR_GO:  LDP2 #REDNAME
         LDA  MATCH
         JZ   FR_ERR
 FR_RET: RTS
+; ">>" capture-append: stream the existing file's bytes (if any) then the
+; captured [RBUF,RPTR) into a fresh file, registered over the old one by FCLOSE.
+FR_APP: LDA  #0
+        STA  APHAVE
+        LDA  MATCH              ; existing file -> remember its extent to prepend
+        JZ   FR_APOP
+        LDA  STARTLO
+        STA  APLBA
+        LDA  STARTHI
+        STA  APLBA+1
+        LDA  LENLO
+        STA  APREM
+        LDA  LENHI
+        STA  APREM+1
+        LDA  #1
+        STA  APHAVE
+FR_APOP:JSR  SETCWDDIR          ; FCLOSE registers in the CWD
+        LDP1 #REDNAME
+        JSR  FNORM              ; FNAME = the target (for FCLOSE)
+        JSR  FWOPEN
+        LDA  APHAVE
+        JZ   FR_APC
+        JSR  APCOPY             ; prepend the old bytes
+FR_APC: LDP2 #RBUF              ; append the captured bytes [RBUF, RPTR)
+FR_APL: TPA2H
+        LDB  RPTRH
+        CMP
+        JNZ  FR_APE
+        TPA2L
+        LDB  RPTRL
+        CMP
+        JZ   FR_APD             ; reached RPTR -> done
+FR_APE: LDA  (P2)+
+        JSR  FPUTB
+        JMP  FR_APL
+FR_APD: JSR  FCLOSE
+        JC   FR_ERR
+        RTS
 FR_ERR: LDP1 #MREDERR
         JSR  PUTS
         JSR  CRLF

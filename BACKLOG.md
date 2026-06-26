@@ -64,28 +64,6 @@ Last updated: 2026-06-25
       code": `<`/`>` are unsigned, `int` index arrays misbehave, no `break`/
       forward-decls, don't pass `array+expr` to a function.)
 
-- [ ] **`>>` append redirection.** Today the shell has `>` (REDSCAN -> FWOPEN,
-      create/overwrite). Add `>>` to append a command's stdout to an existing
-      file. Catch: P8XFS files are **contiguous extents** written at the boot-block
-      free pointer, so you can't grow a file in place. So `>>` means
-      copy-then-extend: stream the existing file's bytes into a fresh write stream
-      first, then the command's output, then close+register (replacing the old
-      entry); the old extent is reclaimed by PACK — same pattern as cp/mv. Parser:
-      REDSCAN must recognize `>>` before `>`. Mind the SBUF ordering (FRESOLVE the
-      target before FWOPEN) and that the source read uses ROBUF, not SBUF.
-      ATTEMPTED 2026-06-25, reverted: added REDAPP + `>>` parse + a DORUN prepend
-      (open old via SETCWDDIR/FNORM/FOPEN, FWOPEN, copy FGETB->FPUTB, then stdin
-      bind, exec, FCLOSE). The prepend's FGETB read a *directory* sector (ROLBA
-      ended up at a dir LBA, e.g. /BIN at 37) so the appended-onto bytes came out
-      garbage — even with the read buffer at $E000 (matching cp). cp does the
-      identical FOPEN(read)->FWOPEN->copy and works, so the bug is specific to
-      doing it inside DORUN after LOADF (shared read-stream/LBA state? FFIND
-      returning the wrong start LBA for the leaf name?). The attempt also
-      reordered DORUN to open output before stdin (so the prepend finishes before
-      `<file` reuses the single read stream) — re-verify that reorder doesn't
-      regress `<IN >OUT`/pipes when retrying. Next step: instrument FOPEN's ROLBA
-      in the DORUN context vs the cp context to find the divergence.
-
 - [ ] **Multi-stage pipes (`a | b | c`).** The shell's pipe state machine
       (`PIPEF`/`PIPESCAN`/`PIPE_RHS`) handles exactly **two** stages: it splits on
       the first `|`, runs the left into `PIPE.TMP`, then re-dispatches the right.
@@ -395,6 +373,20 @@ Last updated: 2026-06-25
 > Convention: substantial features get a **bold-title** prose entry (what was
 > done + why + caveats). The original foundation milestones are a terse tick
 > list under *Early milestones* at the end of this section.
+
+- **`>>` append redirection** (2026-06-26). The shell now appends a command's
+  stdout to a file with `>>` (programs and built-ins). P8XFS extents are
+  contiguous (no in-place growth), so it's copy-then-extend: stream the existing
+  file's bytes into a fresh write stream, then the command's output, then
+  `FCLOSE` registers it over the old entry (old extent → `PACK`). `REDSCAN`
+  parses `>>` (sets `REDAPP`); `DORUN` (programs) and `FLUSHRED` (built-in
+  capture) both prepend the old bytes via a shared `APCOPY` using **raw
+  `CFREAD`s** into `APBUF`, not the read stream. KEY fix vs. the 2026-06-25
+  attempt: every redirect target is resolved with `FFIND` *before* `FWOPEN` — an
+  `FFIND` after `FWOPEN` scans through the write stream's unflushed `SBUF` and
+  corrupted the output (the "< in >> out reads a directory sector" bug; the
+  original attempt also read into `$E000`, which overlaps the loaded program).
+  Test: `emulator/test/os_append_test.sh`.
 
 - **Shared-source helper convention for /BIN commands** (2026-06-26). Reusable
   helpers are now shared by concatenation instead of copy-paste. A command opts
