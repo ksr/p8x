@@ -19,8 +19,9 @@ asm() { python3 $ROOT/assembler/p8xasm.py "$1" -o "$2" --base 0xB000 >/dev/null;
 
 build_disk() {   # compile wc/grep/cat with $1 (py|host), build a disk
     for c in wc grep cat; do
-        if [ "$1" = host ]; then ./p8cc_host < $ROOT/os/commands/$c.c > $c.asm
-        else python3 $ROOT/compiler/p8cc.py $ROOT/os/commands/$c.c -o $c.asm >/dev/null; fi
+        python3 $ROOT/tools/clib.py $ROOT/os/commands/$c.c -o $c.pp.c   # splice //#use libs
+        if [ "$1" = host ]; then ./p8cc_host < $c.pp.c > $c.asm
+        else python3 $ROOT/compiler/p8cc.py $c.pp.c -o $c.asm >/dev/null; fi
         asm $c.asm $c.bin
     done
     rm -f flt.img

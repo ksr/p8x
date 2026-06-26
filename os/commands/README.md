@@ -104,13 +104,34 @@ Either compiler works: `p8cc.py` (the Python bootstrap) or the native
 `p8cc.c` build (`cc -O2 compiler/p8cc.c -o p8cc-host`) — they emit behaviorally
 equivalent P8X assembly.
 
-## Shared code
+## Shared code (`//#use` + `lib_*.c`)
 
-There is **no linker and no `#include`** — each command is one self-contained
-translation unit. So a reusable helper (e.g. the basic-regex `match()` in
-`grep.c`, which other tools will want) is shared by **copying the function block
-verbatim** into each command, not by linking. Two practical rules for a helper
-meant to be lifted:
+There is **no linker and no `#include`** in p8cc, so reusable helpers are shared
+by **concatenation**: a command opts in with a directive line
+
+```c
+//#use stdin        // splices in os/commands/lib_stdin.c, ahead of this source
+```
+
+and the build step ([`tools/clib.py`](../../tools/clib.py)) replaces that line
+with the contents of `os/commands/lib_<name>.c` *before* `p8cc` runs. A source
+with no `//#use` passes through unchanged, so the build can run `clib.py` over
+every command uniformly. The helper text is spliced **above** the command, so
+its functions are defined before any caller — keeping the combined source inside
+the native `p8cc.c` subset (no forward declarations). Both compilers see the same
+combined source: `p8cc.py combined.c` or `p8cc_host < combined.c`.
+
+`run.sh` and the `c_*_test.sh` harness both run `clib.py` first. To share a new
+helper, drop it in `os/commands/lib_NAME.c` and add `//#use NAME` to each
+consumer.
+
+**Current libraries:**
+
+| Library | Provides | Used by |
+|---------|----------|---------|
+| [`lib_stdin.c`](lib_stdin.c) | `path[80]`, `fromfile`, `nextc()` (next byte or 65535 at EOF), `openarg(a)` (open the optional file arg → 0 stdin / 1 opened / 2 not found) | `grep`, `head`, `tail`, `more`, `sort`, `uniq`, `sed` |
+
+Two rules for a helper meant to be lifted into a `lib_*.c`:
 
 - keep it dependency-free (only the builtins / its own locals), and
 - write it within the p8cc subset's intersection with the *native* `p8cc.c`.
@@ -130,13 +151,11 @@ commands inside these limits, especially for `p8cc.c` parity):
   buffers indexed by `slot*W+col`.
 - **Don't pass `array + expr` as a pointer to a function** (e.g.
   `puts(buf + i*64)` printed the wrong slot) — index with `buf[i*64+j]` instead.
-- Declarations go at the **top of each function**.
+- Declarations go at the **top of each function** (and a `lib_*.c`'s globals go
+  at its top, so they precede the command's own globals after splicing).
 - Known open bug: `p8cc.c` miscompiles `sed.c`'s file-argument path (works under
-  `p8cc.py`, which is what `run.sh` ships); see the backlog.
-
-If a third consumer appears it'll be worth a real fix: a tiny build step that
-concatenates a shared `lib*.c` ahead of the command source before compiling
-(tracked in the backlog).
+  `p8cc.py`, which is what `run.sh` ships); see the backlog. The `c_textutils`
+  harness builds `sed` with `p8cc.py` only for that reason.
 
 ## Tests
 

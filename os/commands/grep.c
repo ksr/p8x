@@ -54,19 +54,7 @@ int match(char *re, char *t) {               /* 1 if re matches anywhere in t */
     }
 }
 
-char path[80];                               /* absolute path of the optional file arg */
-int fromfile;                                /* 1 = read the file stream, 0 = stdin */
-
-/* nextc(): next input byte, or 65535 at EOF — from the file (FGETB) or stdin. */
-int nextc() {
-    int c;
-    if (fromfile) {
-        c = bios(0x0127, 0, 0);              /* FGETB: A | carry<<8 */
-        if (c & 256) { return 65535; }       /* carry = end of file */
-        return c & 255;
-    }
-    return getchar();                        /* SYS_GETC; 65535 at EOF */
-}
+//#use stdin   /* path[80], fromfile, nextc(), openarg() */
 
 int main() {
     char *a;
@@ -93,25 +81,9 @@ int main() {
     while (*a == 32) { a = a + 1; }
 
     fromfile = 0;
-    if (*a != 0 && *a != 13) {                /* a file argument was given -> open it */
-        i = 0;                                /* build an absolute path (CWD-relative ok) */
-        if (*a != '/') {
-            bios(0x4003, path, 0);            /* SYS_GETCWD */
-            while (path[i] != 0) { i = i + 1; }
-            if (i > 0 && path[i - 1] != '/') { path[i] = '/'; i = i + 1; }
-        }
-        j = 0;
-        while (a[j] != 0 && a[j] != 13 && a[j] != 32) {
-            path[i] = a[j]; i = i + 1; j = j + 1;
-        }
-        path[i] = 0;
-        bios(0x0133, path, 0);                /* FRESOLVE */
-        if (bios(0x0124, 0xE000, 0) & 256) {  /* FOPEN; carry = not found */
-            puts("grep: not found");
-            return 1;
-        }
-        fromfile = 1;
-    }
+    j = openarg(a);                           /* open the optional file arg, else stdin */
+    if (j == 2) { puts("grep: not found"); return 1; }
+    if (j == 1) { fromfile = 1; }
 
     n = 0;
     c = nextc();

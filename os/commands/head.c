@@ -9,40 +9,7 @@
  * FRESOLVE/FOPEN, buffer at $E000), else stdin. Line count defaults to 10, or
  * -N sets it. A line ends at LF; CR is passed through. EOF = 65535.
  */
-char path[80];
-int fromfile;
-
-int nextc() {                                /* next byte, or 65535 at EOF */
-    int c;
-    if (fromfile) {
-        c = bios(0x0127, 0, 0);              /* FGETB: A | carry<<8 */
-        if (c & 256) { return 65535; }
-        return c & 255;
-    }
-    return getchar();
-}
-
-/* openarg: open the file word at a (space-skipped). 0=none(stdin), 1=opened,
- * 2=not found. Builds an absolute path so it resolves against the CWD. */
-int openarg(char *a) {
-    int i;
-    int j;
-    if (*a == 0 || *a == 13) { return 0; }
-    i = 0;
-    if (*a != '/') {
-        bios(0x4003, path, 0);               /* SYS_GETCWD */
-        while (path[i] != 0) { i = i + 1; }
-        if (i > 0 && path[i - 1] != '/') { path[i] = '/'; i = i + 1; }
-    }
-    j = 0;
-    while (a[j] != 0 && a[j] != 13 && a[j] != 32) {
-        path[i] = a[j]; i = i + 1; j = j + 1;
-    }
-    path[i] = 0;
-    bios(0x0133, path, 0);                    /* FRESOLVE */
-    if (bios(0x0124, 0xE000, 0) & 256) { return 2; }   /* FOPEN; carry = not found */
-    return 1;
-}
+//#use stdin   /* path[80], fromfile, nextc(), openarg() */
 
 int main() {
     char *a;

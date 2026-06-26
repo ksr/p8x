@@ -8,39 +8,8 @@
  * lines in a ring buffer (N defaults to 10, clamped to 1..20), then prints them
  * in order at EOF. Lines are capped at 127 chars; CR is dropped, LF ends a line.
  */
-char path[80];
-int fromfile;
+//#use stdin   /* path[80], fromfile, nextc(), openarg() */
 char buf[2560];                              /* 20 slots x 128 bytes (ring) */
-
-int nextc() {
-    int c;
-    if (fromfile) {
-        c = bios(0x0127, 0, 0);
-        if (c & 256) { return 65535; }
-        return c & 255;
-    }
-    return getchar();
-}
-
-int openarg(char *a) {                        /* 0=stdin, 1=opened, 2=not found */
-    int i;
-    int j;
-    if (*a == 0 || *a == 13) { return 0; }
-    i = 0;
-    if (*a != '/') {
-        bios(0x4003, path, 0);
-        while (path[i] != 0) { i = i + 1; }
-        if (i > 0 && path[i - 1] != '/') { path[i] = '/'; i = i + 1; }
-    }
-    j = 0;
-    while (a[j] != 0 && a[j] != 13 && a[j] != 32) {
-        path[i] = a[j]; i = i + 1; j = j + 1;
-    }
-    path[i] = 0;
-    bios(0x0133, path, 0);
-    if (bios(0x0124, 0xE000, 0) & 256) { return 2; }
-    return 1;
-}
 
 int main() {
     char *a;

@@ -9,42 +9,11 @@
  * pattern with the replacement (first only, or all with the `g` flag) and prints
  * the result. Lines capped at 128 chars; the rewritten line is capped at 255.
  */
-char path[80];
-int fromfile;
+//#use stdin   /* path[80], fromfile, nextc(), openarg() */
 char pat[64];
 char rep[64];
 char line[130];
 char out[260];
-
-int nextc() {
-    int c;
-    if (fromfile) {
-        c = bios(0x0127, 0, 0);
-        if (c & 256) { return 65535; }
-        return c & 255;
-    }
-    return getchar();
-}
-
-int openarg(char *a) {
-    int i;
-    int j;
-    if (*a == 0 || *a == 13) { return 0; }
-    i = 0;
-    if (*a != '/') {
-        bios(0x4003, path, 0);
-        while (path[i] != 0) { i = i + 1; }
-        if (i > 0 && path[i - 1] != '/') { path[i] = '/'; i = i + 1; }
-    }
-    j = 0;
-    while (a[j] != 0 && a[j] != 13 && a[j] != 32) {
-        path[i] = a[j]; i = i + 1; j = j + 1;
-    }
-    path[i] = 0;
-    bios(0x0133, path, 0);
-    if (bios(0x0124, 0xE000, 0) & 256) { return 2; }
-    return 1;
-}
 
 int readline(char *buf) {
     int n;

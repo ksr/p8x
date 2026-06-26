@@ -50,14 +50,6 @@ Last updated: 2026-06-25
       ~3 B). LBA/SBUF/vars are unchanged ($9D47/$9E00/$A000).
 
 
-- [ ] **Shared-source helper convention for /BIN commands.** There's no linker
-      and no `#include`, so reusable helpers (the basic-regex `match()` in
-      `grep.c` is the first; more commands will want it) are currently shared by
-      copy-paste. When a 3rd consumer appears, add a small build step that
-      concatenates a shared `os/commands/lib*.c` ahead of the command source
-      before `p8cc` (run.sh + the test harness). Helpers must stay within the
-      native `p8cc.c` subset: no forward decls / mutual recursion, no `++`/`--`,
-      declarations at function top.
 
 - [ ] **`p8cc.c` miscompiles the file-argument parse in `sed.c` and `diff.c`.**
       Native-bootstrap bug: host-compiled `SED s/a/b/ FILE` / `DIFF A B` mis-parse
@@ -269,6 +261,14 @@ Last updated: 2026-06-25
       `src[]`). It depends on the on-target assembler (DONE) to turn the emitted
       asm into a binary. Likely an even smaller working subset, possibly
       multi-pass through temp files on disk. Forth remains an orthogonal track.
+      - **Multipass driver / separate pass binaries.** If the compiler won't fit
+        one TPA pass, split it into staged `/BIN` binaries driven through temp
+        files (like early Unix `cc` → `cpp`/`cc1`/`as`). The **source preprocessor
+        is naturally the first pass**: `tools/clib.py` (the host `//#use` splicer,
+        added 2026-06-26) is the prototype for that native pass — a C rewrite of
+        it (reading via BIOS `FOPEN`/`FGETB`, writing the combined source) becomes
+        the on-target `CPP.BIN`. So `clib.py` is a host-era convenience that this
+        milestone subsumes, not a throwaway.
 - [ ] **Native toolchain follow-ups** (EDIT + ASM landed — see DONE). Remaining
       polish on the on-target assembler/editor, none blocking:
         - **Tools write to the flat root only.** EDIT `W` and ASM output go to
@@ -395,6 +395,18 @@ Last updated: 2026-06-25
 > Convention: substantial features get a **bold-title** prose entry (what was
 > done + why + caveats). The original foundation milestones are a terse tick
 > list under *Early milestones* at the end of this section.
+
+- **Shared-source helper convention for /BIN commands** (2026-06-26). Reusable
+  helpers are now shared by concatenation instead of copy-paste. A command opts
+  in with a `//#use NAME` directive; the build step `tools/clib.py` splices in
+  `os/commands/lib_NAME.c` ahead of the source before `p8cc` (no `#include`/
+  linker needed, both compilers see the same combined source). First library:
+  `lib_stdin.c` (`path`/`fromfile`/`nextc()`/`openarg()` — the file-or-stdin
+  input pair), adopted by `grep`/`head`/`tail`/`more`/`sort`/`uniq`/`sed` (was
+  duplicated in all 7). Wired into `run.sh` and the `c_filters`/`c_pager`/
+  `c_textutils` harness; spliced text goes above `main()` so callees precede
+  callers (stays in the `p8cc.c` subset). See `os/commands/README.md` "Shared
+  code".
 
 - **16-bit directory LBAs — directories at LBA ≥ 256 usable** (2026-06-25).
   The whole directory-LBA path used 1-byte cursors, so a directory whose
