@@ -59,6 +59,6 @@ python3 $ROOT/tools/p8xfs.py fsck bd.img >bd_fsck.tmp 2>&1 || { cat bd_fsck.tmp;
 python3 $ROOT/tools/p8xfs.py ls bd.img /BIG >bd_ls.tmp 2>&1 || { cat bd_ls.tmp; fail "host ls /BIG failed"; }
 grep -qi 'SUB'   bd_ls.tmp || { cat bd_ls.tmp; fail "host: /BIG missing SUB"; }
 grep -qi 'F.BIN' bd_ls.tmp || { cat bd_ls.tmp; fail "host: /BIG missing F.BIN"; }
-rm -f bd_fsck.tmp bd_ls.tmp bdpad.bin
+rm -f bd_fsck.tmp bd_ls.tmp bdpad.bin bddir.asm
 
 echo "OS-BIGDIR TEST: PASS"
