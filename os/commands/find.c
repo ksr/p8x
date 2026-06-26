@@ -1,22 +1,29 @@
-/* find.c — recursively list files under the CWD whose name contains a pattern.
- * A small `find . -name '*PAT*'`.
+/* find.c — recursively list files under the CWD whose name matches a pattern.
+ * A small `find . -name PAT`.
  *
- *     FIND .TXT            every path under the CWD whose name contains ".TXT"
- *     FIND BIN             ... contains "BIN"
+ *     FIND .TXT            names that CONTAIN ".TXT" (substring, the default)
+ *     FIND BIN             ... contain "BIN"
+ *     FIND *.C             names matching the GLOB (case-insensitive * / ?)
+ *     FIND TEST?.ASM       glob with a single-char wildcard
  *
  * Walks the current directory tree depth-first and prints the full path of every
- * entry (file or directory) whose name contains the (literal substring) pattern.
- * Searches the CWD only — no path argument yet (backlog). The FNEXT cursor is
- * global BIOS state, so each level streams its entries while recording child
- * subdirectory LBAs *and names*, then descends (same shape as DIR -R). Per-level
- * children capped at 24; path depth bounded by the stack.
+ * entry (file or directory) whose name matches. The pattern is a glob when it
+ * contains '*' or '?' (via lib_glob's gmatch); otherwise it is a literal
+ * substring match (backward-compatible). Searches the CWD only — no path
+ * argument yet (backlog). The FNEXT cursor is global BIOS state, so each level
+ * streams its entries while recording child subdirectory LBAs *and names*, then
+ * descends (same shape as DIR -R). Per-level children capped at 24; path depth
+ * bounded by the stack.
  *
  * BIOS: FOPENDIRAT=$0142, FSDIRBUF=$0145, FNEXT=$013C (name->$9D4A, flag->$9D70,
  * start LBA->$9D47). OS: SYS_GETCWD=$4003, SYS_CWDLBA=$4006.
  */
+//#use glob   /* gmatch(pat, name): case-insensitive * ? matcher */
+
 char cur[256];                               /* path of the directory being walked */
 char nm[16];                                 /* current entry name (trimmed) */
-char pat[64];                                /* search substring */
+char pat[64];                                /* search pattern (substring or glob) */
+int  isglob;                                 /* 1 = pat has * or ? -> glob match */
 
 int contains(char *h, char *n) {             /* 1 if n is a substring of h */
     int i;
@@ -29,6 +36,13 @@ int contains(char *h, char *n) {             /* 1 if n is a substring of h */
         i = i + 1;
     }
     return 0;
+}
+
+/* nmatch: does the current name match pat? glob (gmatch) if pat has * or ?,
+ * else a literal substring (contains). */
+int nmatch(char *name) {
+    if (isglob) { return gmatch(pat, name); }
+    return contains(name, pat);
 }
 
 int rdname() {                               /* FNAME ($9D4A, 12, space-padded) -> nm */
@@ -60,7 +74,7 @@ int walk(int plen) {                          /* plen = length of cur (no traili
     while ((r & 256) == 0) {
         if (peek(0x9D4A) != '.') {           /* skip '.' / '..' */
             rdname();
-            if (contains(nm, pat)) {         /* print cur + '/' + nm */
+            if (nmatch(nm)) {                /* print cur + '/' + nm */
                 i = 0;
                 while (i < plen) { putchar(cur[i]); i = i + 1; }
                 if (plen != 1 || cur[0] != '/') { putchar('/'); }
@@ -84,7 +98,7 @@ int walk(int plen) {                          /* plen = length of cur (no traili
         poke(0x9D48, clba[i] / 256);         /* FOPENDIRAT high byte (LBA1) */
         poke(0x9D49, 0);
         bios(0x0142, 0, clba[i]);            /* FOPENDIRAT(child): A=low, LBA1=high */
-        bios(0x0145, 0, 0xE8);               /* FSDIRBUF: our page */
+        bios(0x0145, 0, 0xEA);               /* FSDIRBUF: our page */
         oldp = plen;
         if (plen != 1 || cur[0] != '/') { cur[plen] = '/'; plen = plen + 1; }
         k = 0;
@@ -107,18 +121,23 @@ int main() {
     while (*a == 32) { a = a + 1; }
     if (*a == 0 || *a == 13 ||
         (*a == '-' && (*(a + 1) == 'h' || *(a + 1) == 'H'))) {
-        puts("usage: FIND pattern   paths under the CWD whose name contains pattern");
+        puts("usage: FIND pattern   CWD paths matching pattern (glob if * or ?, else substring)");
         return 0;
     }
     i = 0;
-    while (a[i] != 0 && a[i] != 32 && a[i] != 13 && i < 63) { pat[i] = a[i]; i = i + 1; }
+    isglob = 0;
+    while (a[i] != 0 && a[i] != 32 && a[i] != 13 && i < 63) {
+        if (a[i] == '*' || a[i] == '?') { isglob = 1; }
+        pat[i] = a[i];
+        i = i + 1;
+    }
     pat[i] = 0;
 
     bios(0x4003, cur, 0);                    /* cur = CWD path */
     plen = 0;
     while (cur[plen] != 0) { plen = plen + 1; }
     bios(0x4012, 0, 0);                      /* SYS_OPENCWD: iterate CWD (16-bit LBA) */
-    bios(0x0145, 0, 0xE8);
+    bios(0x0145, 0, 0xEA);
     walk(plen);
     return 0;
 }

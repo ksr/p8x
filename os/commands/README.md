@@ -47,7 +47,7 @@ print a one-line usage summary and exit.
 | [`sort.c`](sort.c) | `SORT [file] [-h]` | Sort lines ascending (file or stdin). In-memory: ≤96 lines of ≤63 chars. |
 | [`uniq.c`](uniq.c) | `UNIQ [file] [-h]` | Collapse **adjacent** duplicate lines (pair with `SORT`). |
 | [`sed.c`](sed.c) | `SED s/old/new/[g] [file] [-h]` | Literal `s///` substitution (first match, or all with `g`). No regex. |
-| [`find.c`](find.c) | `FIND pattern [-h]` | Recursively print CWD paths whose name contains `pattern` (substring). |
+| [`find.c`](find.c) | `FIND pattern [-h]` | Recursively print CWD paths whose name matches `pattern`: a case-insensitive **glob** (`*`/`?`, via `lib_glob`) if it contains `*` or `?`, else a literal substring. So `FIND *.C`, `FIND TEST?.ASM`, and `FIND BIN` (substring) all work. |
 | [`diff.c`](diff.c) | `DIFF f1 f2 [-h]` | Prefix/suffix-anchored line diff: `<` lines only in f1, `>` only in f2. ≤40 lines/file. |
 | [`tree.c`](tree.c) | `TREE [-h]` | Depth-first indented listing of the CWD tree (same recursion as `DIR -R`). |
 
@@ -178,5 +178,7 @@ machinery: `emulator/test/c_dir_test.sh`, `c_dir_recursive_test.sh`,
 `c_pager_test.sh` (head/tail/more), `c_stdin_test.sh`, `c_redirect_test.sh`,
 `c_pipe_test.sh`, and the implicit-RUN/PATH path in `os_path_test.sh`.
 
-The core text/file utilities are all implemented (the table above). Future ideas:
-`TR`, `WC -l`-style flags, glob patterns for `FIND`, a real `LESS` (back-scroll).
+The core text/file utilities are all implemented (the table above). `DIR` and
+`FIND` take globs (via `lib_glob`); extending wildcards to the rest is better done
+as shell-level expansion (see the backlog) than per-command. Future ideas: `TR`,
+`WC -l`-style flags, a real `LESS` (back-scroll).

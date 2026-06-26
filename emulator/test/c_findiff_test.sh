@@ -51,6 +51,13 @@ check() {   # $1 = label
     echo "$out" | grep -qx '/SUB/B.TXT'      || fail "$1: find missed /SUB/B.TXT"
     echo "$out" | grep -qx '/SUB/DEEP/C.TXT' || fail "$1: find missed nested /SUB/DEEP/C.TXT"
     R 'FIND DEEP' | grep -qx '/SUB/DEEP'     || fail "$1: find missed the /SUB/DEEP directory"
+    # glob mode (pattern has * or ?): *.TXT matches the files, not the dirs
+    out=$(R 'FIND *.TXT')
+    echo "$out" | grep -qx '/A.TXT'          || fail "$1: find *.TXT missed /A.TXT"
+    echo "$out" | grep -qx '/SUB/DEEP/C.TXT' || fail "$1: find *.TXT missed nested C.TXT"
+    echo "$out" | grep -qx '/SUB/DEEP'       && fail "$1: find *.TXT wrongly matched the DEEP dir"
+    # 'B*' is a GLOB (name starts with B), not the literal substring "B*"
+    R 'FIND B*' | grep -qx '/SUB/B.TXT'      || fail "$1: find B* (glob) missed /SUB/B.TXT"
     # diff: changed middle line
     out=$(R 'DIFF A1.TXT B1.TXT')
     echo "$out" | grep -qx '< two' || fail "$1: diff missing '< two'"

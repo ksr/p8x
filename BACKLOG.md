@@ -125,14 +125,16 @@ Last updated: 2026-06-25
       the `$ROOT/tools/clib.py` refs in `os/run.sh` and the ~8 `c_*`/`os_*` test
       scripts, plus doc mentions, then re-run the suite. Deferred (2026-06-26).
 
-- [ ] **Wildcards — phase 2 (beyond DIR).** `DIR` now globs (`*`/`?`, see DONE)
-      via `lib_glob.c`. Extend it: (a) per-command — `//#use glob` in other
-      commands that take a name (e.g. a `FIND` glob mode, or `CAT`/`CP` matching);
-      and/or (b) the bigger one — **shell-level expansion** in the OS so any
-      command gets globs: the shell reads the CWD (FNEXT), expands `*.X` into the
-      matching names, and splices them into the line — which needs multi-file arg
-      support across `cat`/`head`/`grep`/… and a larger `LINEBUF`. `lib_glob`'s
-      `gmatch` is the reusable matcher for both.
+- [ ] **Wildcards — remaining commands via shell-level expansion.** `DIR` and
+      `FIND` now glob (`*`/`?`, see DONE) — both already iterate the directory, so
+      a glob was a cheap filter. The rest (`cat`/`grep`/`cp`/`del`/…) take a
+      single named file and do NOT walk a directory, so per-command globbing would
+      bolt a separate "iterate CWD, match, open each" loop onto each — duplication.
+      The right approach for them is **shell-level expansion** in the OS: the shell
+      reads the CWD (FNEXT), expands `*.X` into the matching names, and splices
+      them into the line — which needs multi-file arg support across the filters
+      and a larger `LINEBUF`. `lib_glob`'s `gmatch` is the reusable matcher. (Note
+      `DEL *.TMP` is destructive and an OS built-in, not a `/BIN` command.)
 
 - [ ] **Disassembler (reverse assembler): point it at an address block, get
       assembler back.** A tool that walks a memory/file region and decodes each
@@ -390,6 +392,11 @@ Last updated: 2026-06-25
   FSDIRBUF moved `$E0` → `$E8` (clears the bigger code, keeps ~5 KB for their
   recursive stack). Test `c_dirglob_test.sh` (both compilers). Phase 2 (other
   commands / shell-level expansion) is in IDEAS.
+  - **FIND glob mode** (2026-06-26): `FIND` now `//#use glob`s too — if its
+    pattern has `*`/`?` it `gmatch`es, else the original substring (so `FIND *.C`
+    works, `FIND BIN` still substring). find already walked+matched, so it was a
+    near-free fit. (find's `p8cc.c` build is ~14.2 KB ending `$E796`, so its
+    FSDIRBUF page moved `$E8` → `$EA` for margin.) Tested in `c_findiff_test.sh`.
 
 - **sed/diff on the native `p8cc.c` — was a buffer collision, not a miscompile**
   (2026-06-26). For months `sed`/`diff` built with `p8cc.c` (host) misbehaved on

@@ -48,7 +48,7 @@ int walk(int depth) {
         poke(0x9D48, sub[i] / 256);          /* FOPENDIRAT high byte (LBA1) */
         poke(0x9D49, 0);
         bios(0x0142, 0, sub[i]);             /* FOPENDIRAT(child): A=low, LBA1=high */
-        bios(0x0145, 0, 0xE8);               /* FSDIRBUF: our page */
+        bios(0x0145, 0, 0xEA);               /* FSDIRBUF: our page */
         walk(depth + 1);
         i = i + 1;
     }
@@ -64,7 +64,7 @@ int main() {
         return 0;
     }
     bios(0x4012, 0, 0);                      /* SYS_OPENCWD: iterate CWD (16-bit LBA) */
-    bios(0x0145, 0, 0xE8);
+    bios(0x0145, 0, 0xEA);
     walk(0);
     return 0;
 }

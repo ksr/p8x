@@ -21,7 +21,7 @@
  *
  * It streams one name at a time straight to stdout, so it is fully redirectable
  * and pipeable. Directory iteration (FNEXT) is moved off the BIOS sector buffer
- * SBUF onto our own page (FSDIRBUF $0145, page $E8) so a write stream/pipe keeps
+ * SBUF onto our own page (FSDIRBUF $0145, page $EA00) so a write stream/pipe keeps
  * SBUF to itself.
  *
  * BIOS: FOPENDIR=$0139 (P1=path), FOPENDIRAT=$0142 (A=low,LBA1=$9D48 high),
@@ -91,7 +91,7 @@ int walk(int depth) {
         poke(0x9D48, sub[i] / 256);           /* FOPENDIRAT high byte (LBA1, $9D48) */
         poke(0x9D49, 0);
         bios(0x0142, 0, sub[i]);              /* FOPENDIRAT(child LBA): A=low, LBA1=high */
-        bios(0x0145, 0, 0xE8);                /* FSDIRBUF: our page $E800 again */
+        bios(0x0145, 0, 0xEA);                /* FSDIRBUF: our page $EA00 again */
         walk(depth + 1);
         i = i + 1;
     }
@@ -151,7 +151,7 @@ int main() {
     } else {
         bios(0x0139, arg, 0);                /* FOPENDIR(path) */
     }
-    bios(0x0145, 0, 0xE8);                   /* FSDIRBUF: iterate in our own page $E800 */
+    bios(0x0145, 0, 0xEA);                   /* FSDIRBUF: iterate in our own page $EA00 */
 
     if (rec) {
         walk(0);                             /* whole subtree, streamed (filtered) */
