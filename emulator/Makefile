@@ -42,6 +42,7 @@ test-c: p8xemu ucode
 	sh test/c_libfile_test.sh
 	sh test/c_dir_test.sh
 	sh test/c_dir_recursive_test.sh
+	sh test/c_dirglob_test.sh
 	sh test/c_redirect_test.sh
 	sh test/c_stdin_test.sh
 	sh test/c_cat_test.sh

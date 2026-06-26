@@ -34,7 +34,7 @@ print a one-line usage summary and exit.
 
 | Source | Usage | What it does |
 |--------|-------|--------------|
-| [`dir.c`](dir.c) | `DIR [-R] [path] [-h]` | List a directory (the path, or the CWD if omitted). `-R` recurses the whole subtree, indenting two spaces per level and flagging directories with a trailing `/`. Streams names one at a time, so it redirects/pipes with no size limit. |
+| [`dir.c`](dir.c) | `DIR [-R] [path\|glob] [-h]` | List a directory (the path, or the CWD if omitted). `-R` recurses the whole subtree, indenting two spaces per level and flagging directories with a trailing `/`. A last component with `*`/`?` is a case-insensitive **glob** (via `lib_glob`): `DIR *.ASM`, `DIR /BIN/*.BIN`, `DIR -R *.C`. Streams names one at a time, so it redirects/pipes with no size limit. |
 | [`pwd.c`](pwd.c) | `PWD [-h]` | Print the current working directory path. |
 | [`cat.c`](cat.c) | `CAT [file] [-h]` | Print a file, **or** copy stdin→stdout (the canonical filter) when given no file. So `cat file`, `cat <file`, and `cat \| …` all work. Reading the **console** (e.g. `CAT >FILE`), each key echoes and **Ctrl-D** ends the input. |
 | [`wc.c`](wc.c) | `WC [-h]` | Count lines, words, and bytes on stdin → `L W B`. A pure filter: `WC <file` or `… \| WC`. Counts are 16-bit. |
@@ -133,6 +133,7 @@ consumer.
 | [`lib_abspath.c`](lib_abspath.c) | `abspath(out, a)` — build an absolute path (CWD-prefixed when relative) into a caller buffer; returns chars consumed | `cp`, `mv`, `diff` |
 | [`lib_readline.c`](lib_readline.c) | `readline(buf)` — read one line via `nextc()` (CR dropped, LF-terminated); 1 = line, 0 = EOF. **Needs `//#use stdin` above it.** | `uniq`, `sed` |
 | [`lib_streq.c`](lib_streq.c) | `streq(p, q)` — 1 if NUL-terminated strings are equal | `mv`, `uniq` |
+| [`lib_glob.c`](lib_glob.c) | `gmatch(pat, name)` — case-insensitive whole-string glob match (`*`, `?`) | `dir` |
 
 When a helper depends on another (e.g. `readline` calls `lib_stdin`'s `nextc()`),
 list its `//#use` **after** the dependency's so `clib.py` splices them in the

@@ -18,7 +18,8 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o bdos.bin --base 0x4000 >/dev/null
 # The C DIR is a /BIN program (no longer a built-in); install it so a bare `DIR`
 # resolves via PATH and lists the CWD through SYS_OPENCWD (the 16-bit CWD opener).
-python3 $ROOT/compiler/p8cc.py $ROOT/os/commands/dir.c -o bddir.asm >/dev/null
+python3 $ROOT/tools/clib.py $ROOT/os/commands/dir.c -o bddir.pp.c >/dev/null
+python3 $ROOT/compiler/p8cc.py bddir.pp.c -o bddir.asm >/dev/null
 python3 $ROOT/assembler/p8xasm.py bddir.asm -o bddir.bin --base 0xB000 >/dev/null
 
 rm -f bd.img

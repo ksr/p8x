@@ -115,6 +115,15 @@ Last updated: 2026-06-25
 
 ## IDEAS
 
+- [ ] **Wildcards — phase 2 (beyond DIR).** `DIR` now globs (`*`/`?`, see DONE)
+      via `lib_glob.c`. Extend it: (a) per-command — `//#use glob` in other
+      commands that take a name (e.g. a `FIND` glob mode, or `CAT`/`CP` matching);
+      and/or (b) the bigger one — **shell-level expansion** in the OS so any
+      command gets globs: the shell reads the CWD (FNEXT), expands `*.X` into the
+      matching names, and splices them into the line — which needs multi-file arg
+      support across `cat`/`head`/`grep`/… and a larger `LINEBUF`. `lib_glob`'s
+      `gmatch` is the reusable matcher for both.
+
 - [ ] **Disassembler (reverse assembler): point it at an address block, get
       assembler back.** A tool that walks a memory/file region and decodes each
       byte stream back into P8X mnemonics + operands — the inverse of `p8xasm`.
@@ -360,6 +369,17 @@ Last updated: 2026-06-25
 > Convention: substantial features get a **bold-title** prose entry (what was
 > done + why + caveats). The original foundation milestones are a terse tick
 > list under *Early milestones* at the end of this section.
+
+- **DIR wildcards (glob) + `lib_glob.c`** (2026-06-26). `DIR` filters by a glob
+  when the path's last component has `*`/`?`: `DIR *.ASM`, `DIR /BIN/*.BIN`,
+  `DIR -R *.C` (case-insensitive). New shared `lib_glob.c` (`gmatch`, a
+  self-recursive `*`/`?` matcher in grep's style) via `//#use glob`; dir.c splits
+  the path into dir + pattern and filters entries (recursing all subdirs under
+  -R). Because dir.c gained `gmatch` its `p8cc.c` build grew to `$E31D`, past the
+  `$E000` FSDIRBUF page — same collision class as sed/diff — so dir/tree/find's
+  FSDIRBUF moved `$E0` → `$E8` (clears the bigger code, keeps ~5 KB for their
+  recursive stack). Test `c_dirglob_test.sh` (both compilers). Phase 2 (other
+  commands / shell-level expansion) is in IDEAS.
 
 - **sed/diff on the native `p8cc.c` — was a buffer collision, not a miscompile**
   (2026-06-26). For months `sed`/`diff` built with `p8cc.c` (host) misbehaved on

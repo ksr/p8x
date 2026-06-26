@@ -40,7 +40,8 @@ python3 $ROOT/tools/p8xfs.py put    v2.img v2cat.bin --name /BIN/CAT.BIN --load 
 # DIR/PWD/TREE are no longer built-ins either — install their C versions so the
 # bare names resolve via PATH (/BIN).
 for c in dir pwd tree; do
-    python3 $ROOT/compiler/p8cc.py $ROOT/os/commands/$c.c -o v2$c.asm >/dev/null
+    python3 $ROOT/tools/clib.py $ROOT/os/commands/$c.c -o v2$c.pp.c   # splice //#use (dir: glob)
+    python3 $ROOT/compiler/p8cc.py v2$c.pp.c -o v2$c.asm >/dev/null
     python3 $ROOT/assembler/p8xasm.py v2$c.asm -o v2$c.bin --base 0xB000 >/dev/null
     up=$(echo $c | tr a-z A-Z)
     python3 $ROOT/tools/p8xfs.py put v2.img v2$c.bin --name /BIN/$up.BIN --load 0xB000 --exec 0xB000 >/dev/null

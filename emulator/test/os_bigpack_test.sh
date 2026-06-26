@@ -17,7 +17,8 @@ fail() { echo "OS-BIGPACK TEST: FAIL — $1"; [ -n "$out" ] && echo "$out" | sed
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o bpos.bin --base 0x4000 >/dev/null
-python3 $ROOT/compiler/p8cc.py $ROOT/os/commands/dir.c -o bpdir.asm >/dev/null
+python3 $ROOT/tools/clib.py $ROOT/os/commands/dir.c -o bpdir.pp.c >/dev/null
+python3 $ROOT/compiler/p8cc.py bpdir.pp.c -o bpdir.asm >/dev/null
 python3 $ROOT/assembler/p8xasm.py bpdir.asm -o bpdir.bin --base 0xB000 >/dev/null
 
 rm -f bp.img
