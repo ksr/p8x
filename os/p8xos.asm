@@ -170,7 +170,8 @@ FEXP    = $A0DE          ; CHKDD: expected parent LBA
 RBUF    = $B000          ; capture buffer = the TPA (free during a built-in cmd)
 TSP     = $A0E0          ; tree stack depth (0 = at root level)
 TI      = $A0E1          ; scratch loop counter for the frame stack
-TFRAME  = $A0E2          ; 8 frames x 3 bytes (dst,dsc,idx): $A0E2..$A0F9
+TFRAME  = $A1B7          ; 8 frames x 4 bytes (dst_lo,dst_hi,dsc,idx): $A1B7..$A1D6
+                         ;   (16-bit CDST; the old 3-byte $A0E2 region is now free)
 ; ---- v2 PACK working set ----
 PPSEC   = $A0FA          ; chosen extent's parent-entry: dir sector LBA / slot
 PPSLOT  = $A0FB
@@ -196,6 +197,18 @@ PSLH    = $A1A8          ; PSL high byte (MKDIR parent extent)
 PARSTH  = $A1A9          ; PARST high byte (PACK '..' parent fix)
 RMDLH   = $A1AA          ; RMDL high byte (RMDIR parent sector)
 CURLBAH = $A1AB          ; CURLBA high byte (SAVE data-write LBA, 16-bit)
+; --- PACK/FSCK 16-bit tree-walk high bytes (pair with the 8-bit cursors above) -
+NFH     = $A1AC          ; NF high byte (PACK next-free target)
+MINSTRTH= $A1AD          ; MINSTRT high byte (smallest start LBA this pass)
+CDSTH   = $A1AE          ; CDST high byte (current directory in the walk)
+CANDSECH= $A1AF          ; CANDSEC high byte (candidate entry's dir sector)
+PPSECH  = $A1B0          ; PPSEC high byte (chosen extent's parent-entry sector)
+SRCH    = $A1B1          ; SRCL high byte (PK2MOVE copy source)
+DSTH    = $A1B2          ; DSTL high byte (PK2MOVE copy dest)
+FCHILDH = $A1B3          ; FCHILD high byte (CHKDD child dir)
+FEXPH   = $A1B4          ; FEXP high byte (CHKDD expected parent)
+FMAXEH  = $A1B5          ; FMAXE high byte (FSCK highest extent end)
+FUSEDH  = $A1B6          ; FUSED high byte (FSCK live data sectors)
 IBUF    = $A200          ; 512-byte buffer for the stdin read stream
 ; ---- program search path (implicit RUN of a bare command name) ----
 PATHBUF = $A400          ; search path, ';'-separated dirs; default "/BIN" ($A400..$A43F)
@@ -1434,9 +1447,16 @@ DOFSCK: LDA  #0
         LDP1 #SBUF
         LDA  #0
         STA  LBA
+        STA  LBA1
+        STA  LBA2
         JSR  CFREAD
-        LDA  SBUF+4             ; free pointer (low byte; LBAs are 8-bit)
+        LDA  SBUF+4             ; free pointer (16-bit)
         STA  FREELO
+        LDA  SBUF+5
+        STA  FREEHI
+        LDA  #0                 ; FMAXE/FUSED are 16-bit accumulators
+        STA  FMAXEH
+        STA  FUSEDH
         LDA  SBUF
         LDB  #'P'
         CMP
@@ -1454,10 +1474,15 @@ FK_RDD: ; root's '..' must point at the root (LBA 33)
         STA  FCHILD
         LDA  #33
         STA  FEXP
+        LDA  #0
+        STA  FCHILDH
+        STA  FEXPH
         JSR  CHKDD
         ; --- walk from the root ---
         LDA  #33
         STA  CDST
+        LDA  #0
+        STA  CDSTH
         LDA  ROOTN
         STA  CDSC
         LDA  #0
@@ -1489,7 +1514,9 @@ FK_ENT: LDA  CDSC              ; max entries in this directory = CDSC * 16
         JZ   FK_ENT
         ; --- live file or directory: per-extent checks ---
         JSR  SECCOUNT          ; SECCNT = sectors for this extent
-        LDA  STARTLO           ; start must be in the data area
+        LDA  STARTHI           ; start must be in the data area (16-bit)
+        JNZ  FK_INB            ; high byte set -> start >=256 > DATABASE, in bounds
+        LDA  STARTLO
         LDB  DATABASE
         CMP                    ; C=1 when start >= DATABASE
         JC   FK_INB
@@ -1499,20 +1526,35 @@ FK_ENT: LDA  CDSC              ; max entries in this directory = CDSC * 16
         JSR  OPHEX8
         JSR  CRLF
         JSR  FK_BUMP
-FK_INB: LDA  STARTLO           ; end = start + sectors; track max + used
+FK_INB: LDA  STARTLO           ; end = start + sectors (16-bit); track max + used
         LDB  SECCNT
         ADD
-        STA  TMP
+        STA  TMP               ; end low
+        LDA  STARTHI
+        JNC  fk_enc
+        INC
+fk_enc: STA  TMP2              ; end high
+        LDA  TMP2              ; max(end, FMAXE), 16-bit
+        LDB  FMAXEH
+        CMP
+        JNZ  fk_mxc            ; high bytes differ -> their carry decides
+        LDA  TMP
         LDB  FMAXE
-        CMP                    ; C=1 when end >= FMAXE
-        JNC  FK_NMX
+        CMP
+fk_mxc: JNC  FK_NMX            ; end < FMAXE -> keep current max
         LDA  TMP
         STA  FMAXE
-FK_NMX: LDA  FUSED
+        LDA  TMP2
+        STA  FMAXEH
+FK_NMX: LDA  FUSED             ; FUSED += SECCNT (16-bit)
         LDB  SECCNT
         ADD
         STA  FUSED
-        LDA  FLAGS
+        JNC  fk_unc
+        LDA  FUSEDH
+        INC
+        STA  FUSEDH
+fk_unc: LDA  FLAGS
         LDB  #F_DIR
         CMP
         JNZ  FK_FIL
@@ -1522,8 +1564,12 @@ FK_NMX: LDA  FUSED
         STA  FNDIR
         LDA  STARTLO
         STA  FCHILD
-        LDA  CDST              ; this directory is the child's parent
+        LDA  STARTHI
+        STA  FCHILDH
+        LDA  CDST              ; this directory is the child's parent (16-bit)
         STA  FEXP
+        LDA  CDSTH
+        STA  FEXPH
         JSR  CHKDD
         LDA  TSP               ; depth limit (8 frames) -> don't descend deeper
         LDB  #7
@@ -1532,6 +1578,8 @@ FK_NMX: LDA  FUSED
         JSR  TR_PUSH
         LDA  STARTLO
         STA  CDST
+        LDA  STARTHI
+        STA  CDSTH
         JSR  SECCOUNT
         LDA  SECCNT
         STA  CDSC
@@ -1551,11 +1599,15 @@ FK_ASC: LDA  TSP
         JSR  TR_POP
         JMP  FK_ENT
 ; --- report ---
-FK_REP: LDA  FMAXE             ; free pointer must cover the highest extent
+FK_REP: LDA  FMAXEH            ; free pointer must cover the highest extent (16-bit)
+        LDB  FREEHI
+        CMP
+        JNZ  fk_frc            ; high bytes differ -> their carry/zero decide
+        LDA  FMAXE
         LDB  FREELO
-        CMP                    ; C=1 when FMAXE >= FREELO
-        JNC  FK_FOK            ; FMAXE < FREELO -> fine
-        JZ   FK_FOK            ; FMAXE == FREELO -> fine (free just past it)
+        CMP
+fk_frc: JNC  FK_FOK            ; FMAXE < FREE -> fine
+        JZ   FK_FOK            ; FMAXE == FREE -> fine (free just past it)
         LDP1 #MFKFRE
         JSR  OPUTS
         JSR  CRLF
@@ -1572,12 +1624,16 @@ FK_FOK: LDP1 #MFKD             ; "DIRS="
         JSR  OPUTS
         LDA  FNDEL
         JSR  OPHEX8
-        LDP1 #MFKR             ; " FREE="
+        LDP1 #MFKR             ; " FREE=" (16-bit: high then low)
         JSR  OPUTS
+        LDA  FREEHI
+        JSR  OPHEX8
         LDA  FREELO
         JSR  OPHEX8
-        LDP1 #MFKU             ; " USED="
+        LDP1 #MFKU             ; " USED=" (16-bit)
         JSR  OPUTS
+        LDA  FUSEDH
+        JSR  OPHEX8
         LDA  FUSED
         JSR  OPHEX8
         JSR  CRLF
@@ -1604,27 +1660,38 @@ FK_BUMP:LDA  FERR
         STA  FERR
 fkb_r:  RTS
 
-; CHKDD - verify the '..' entry (slot 1) of directory FCHILD points at FEXP.
-; Reads FCHILD's first sector; slot 1's start-LBA byte is at SBUF + 32 + 12 = 44.
+; CHKDD - verify the '..' entry (slot 1) of directory FCHILD/FCHILDH points at
+; FEXP/FEXPH (16-bit). Reads FCHILD's first sector; slot 1's start-LBA bytes are
+; at SBUF + 32 + 12 = 44 (low) and 45 (high).
 CHKDD:  LDA  FCHILD
         STA  LBA
+        LDA  FCHILDH
+        STA  LBA1
+        LDA  #0
+        STA  LBA2
         LDP1 #SBUF
         JSR  CFREAD
-        LDA  SBUF+44
+        LDA  SBUF+44           ; '..' start LBA low
         LDB  FEXP
         CMP
+        JNZ  ck_bad
+        LDA  SBUF+45           ; '..' start LBA high
+        LDB  FEXPH
+        CMP
         JZ   cd_ok
-        LDP1 #MFKPAR
+ck_bad: LDP1 #MFKPAR
         JSR  OPUTS
         LDA  FCHILD
         JSR  OPHEX8
         JSR  CRLF
         JSR  FK_BUMP
-cd_ok:  RTS
+cd_ok:  LDA  #0               ; restore LBA1=0 at rest (CHKDD read a dir sector)
+        STA  LBA1
+        RTS
 
 ; READCUR - read entry CIDX of the current directory (CDST) into NAMEBUF /
 ; STARTLO / LENLO:LENHI / FLAGS. Reads the containing sector into SBUF.
-READCUR:LDA  CIDX               ; sector = CDST + CIDX/16
+READCUR:LDA  CIDX               ; sector = CDST/CDSTH + CIDX/16 (16-bit)
         SHR
         SHR
         SHR
@@ -1632,6 +1699,12 @@ READCUR:LDA  CIDX               ; sector = CDST + CIDX/16
         LDB  CDST
         ADD
         STA  LBA
+        LDA  CDSTH              ; high byte + carry from the low-byte ADD
+        JNC  rc_nc
+        INC
+rc_nc:  STA  LBA1
+        LDA  #0
+        STA  LBA2
         LDP1 #SBUF
         JSR  CFREAD
         LDP2 #SBUF              ; advance P2 to slot (CIDX & 15) * 32 bytes
@@ -1661,9 +1734,10 @@ rf_nm:  LDA  (P2)+
         DEC
         STA  TMP
         JNZ  rf_nm
-        LDA  (P2)+              ; start LBA (low byte kept)
+        LDA  (P2)+              ; start LBA (low 16 kept)
         STA  STARTLO
         LDA  (P2)+
+        STA  STARTHI
         LDA  (P2)+
         LDA  (P2)+
         LDA  (P2)+              ; length low 16
@@ -1678,10 +1752,13 @@ rf_nm:  LDA  (P2)+
         LDA  (P2)+
         LDA  (P2)+              ; flag
         STA  FLAGS
+        LDA  #0                 ; restore LBA1=0 at rest (read a dir sector with a
+        STA  LBA1               ; 16-bit LBA; the next READCUR/CHKDD re-sets it, and
+        STA  LBA2               ; boot-block reads after the walk stay correct)
         RTS
 
-; TR_PUSH / TR_POP - save/restore the current (CDST,CDSC,CIDX) frame in the
-; depth stack at TFRAME + TSP*3.
+; TR_PUSH / TR_POP - save/restore the current (CDST/CDSTH,CDSC,CIDX) frame in the
+; depth stack at TFRAME + TSP*4 (4 bytes/frame: dst_lo, dst_hi, dsc, idx).
 TR_PUSH:LDP1 #TFRAME
         LDA  TSP
         STA  TI
@@ -1690,11 +1767,14 @@ tp_a:   LDA  TI
         INP1
         INP1
         INP1
+        INP1
         LDA  TI
         DEC
         STA  TI
         JMP  tp_a
 tp_w:   LDA  CDST
+        STA  (P1)+
+        LDA  CDSTH
         STA  (P1)+
         LDA  CDSC
         STA  (P1)+
@@ -1715,12 +1795,15 @@ to_a:   LDA  TI
         INP1
         INP1
         INP1
+        INP1
         LDA  TI
         DEC
         STA  TI
         JMP  to_a
 to_r:   LDA  (P1)+
         STA  CDST
+        LDA  (P1)+
+        STA  CDSTH
         LDA  (P1)+
         STA  CDSC
         LDA  (P1)
@@ -1919,32 +2002,46 @@ DP_ERR: LDP1 #MDPER
 ; not '.'/'..', so stale './..' don't matter here. PHASE 2 then re-walks the
 ; (now compacted) tree and rewrites every directory's '.' (=self) and '..'
 ; (=parent) from final positions. Root (LBA 33..36) never moves.
-DOPACK: LDA  DATABASE           ; first data LBA (37)
+DOPACK: LDA  DATABASE           ; first data LBA (37); NF is 16-bit
         STA  NF
+        LDA  #0
+        STA  NFH
 P2_PASS:JSR  PK2FIND            ; PFOUND + MINSTRT/MINSEC + PPSEC/PPSLOT
         LDA  PFOUND
         JZ   P2_FIX
-        LDA  MINSTRT            ; already at NF? just advance
+        LDA  MINSTRT            ; already at NF (16-bit)? just advance
         LDB  NF
         CMP
+        JNZ  P2_MOVE
+        LDA  MINSTRTH
+        LDB  NFH
+        CMP
         JZ   P2_ADV
-        JSR  PK2MOVE            ; copy extent down, repoint the parent entry
-P2_ADV: LDA  NF
+P2_MOVE:JSR  PK2MOVE            ; copy extent down, repoint the parent entry
+P2_ADV: LDA  NF                 ; NF += MINSEC (16-bit)
         LDB  MINSEC
         ADD
         STA  NF
-        JMP  P2_PASS
+        JNC  P2_PNC
+        LDA  NFH
+        INC
+        STA  NFH
+P2_PNC: JMP  P2_PASS
 P2_FIX: JSR  PK2FIX             ; phase 2: repair every dir's '.' and '..'
-        LDP1 #SBUF              ; write the new free pointer
+        LDP1 #SBUF              ; write the new free pointer (16-bit)
         LDA  #0
         STA  LBA
+        STA  LBA1
+        STA  LBA2
         JSR  CFREAD
         LDA  NF
         STA  SBUF+4
-        LDA  #0
+        LDA  NFH
         STA  SBUF+5
         LDA  #0
         STA  LBA
+        STA  LBA1
+        STA  LBA2
         JSR  CFWRITE
         LDP1 #MPACKED
         JSR  OPUTS
@@ -1957,6 +2054,8 @@ PK2FIND:LDA  #0
         STA  PFOUND
         LDA  #33
         STA  CDST
+        LDA  #0
+        STA  CDSTH
         LDA  ROOTN
         STA  CDSC
         LDA  #0
@@ -1980,6 +2079,10 @@ pf_ent: LDA  CDSC               ; end of this directory?
         LDB  CDST
         ADD
         STA  CANDSEC
+        LDA  CDSTH              ; 16-bit: high byte + carry from the low-byte ADD
+        JNC  pf_cnc
+        INC
+pf_cnc: STA  CANDSECH
         LDA  CIDX
         LDB  #15
         AND
@@ -1998,25 +2101,37 @@ pf_ent: LDA  CDSC               ; end of this directory?
         LDB  #'.'
         CMP
         JZ   pf_ent
-        LDA  STARTLO            ; candidate only if start >= NF
+        LDA  STARTHI            ; candidate only if start >= NF (16-bit)
+        LDB  NFH
+        CMP
+        JNZ  pf_gnf             ; high bytes differ -> their carry decides
+        LDA  STARTLO
         LDB  NF
         CMP
-        JNC  pf_dir             ; < NF (already packed) — but still descend dirs
+pf_gnf: JNC  pf_dir             ; start < NF (already packed) — still descend dirs
         LDA  PFOUND
         JZ   pf_take
+        LDA  STARTHI            ; smaller than the current min? (16-bit)
+        LDB  MINSTRTH
+        CMP
+        JNZ  pf_gmn             ; high bytes differ -> their carry decides
         LDA  STARTLO
         LDB  MINSTRT
         CMP
-        JC   pf_dir             ; not smaller than the current min
+pf_gmn: JC   pf_dir             ; start >= min -> not smaller, skip
 pf_take:LDA  #1
         STA  PFOUND
         LDA  STARTLO
         STA  MINSTRT
+        LDA  STARTHI
+        STA  MINSTRTH
         JSR  SECCOUNT
         LDA  SECCNT
         STA  MINSEC
         LDA  CANDSEC
         STA  PPSEC
+        LDA  CANDSECH
+        STA  PPSECH
         LDA  CANDSLOT
         STA  PPSLOT
 pf_dir: LDA  FLAGS              ; descend into subdirectories regardless
@@ -2030,6 +2145,8 @@ pf_dir: LDA  FLAGS              ; descend into subdirectories regardless
         JSR  TR_PUSH
         LDA  STARTLO
         STA  CDST
+        LDA  STARTHI
+        STA  CDSTH
         JSR  SECCOUNT
         LDA  SECCNT
         STA  CDSC
@@ -2044,32 +2161,56 @@ pf_done:RTS
 
 ; PK2MOVE - copy MINSEC sectors from MINSTRT down to NF, then set the parent
 ; entry (sector PPSEC, slot PPSLOT) start LBA = NF.
-PK2MOVE:LDA  MINSTRT
+PK2MOVE:LDA  MINSTRT            ; src/dst are 16-bit
         STA  SRCL
+        LDA  MINSTRTH
+        STA  SRCH
         LDA  NF
         STA  DSTL
+        LDA  NFH
+        STA  DSTH
         LDA  MINSEC
         STA  CPYN
 pm2_cp: LDP1 #SBUF
         LDA  SRCL
         STA  LBA
+        LDA  SRCH
+        STA  LBA1
+        LDA  #0
+        STA  LBA2
         JSR  CFREAD
         LDA  DSTL
         STA  LBA
+        LDA  DSTH
+        STA  LBA1
+        LDA  #0
+        STA  LBA2
         JSR  CFWRITE
-        LDA  SRCL
+        LDA  SRCL              ; 16-bit advance source
         INC
         STA  SRCL
-        LDA  DSTL
+        JNZ  pm2_snc
+        LDA  SRCH
+        INC
+        STA  SRCH
+pm2_snc:LDA  DSTL              ; 16-bit advance dest
         INC
         STA  DSTL
-        LDA  CPYN
+        JNZ  pm2_dnc
+        LDA  DSTH
+        INC
+        STA  DSTH
+pm2_dnc:LDA  CPYN
         DEC
         STA  CPYN
         JNZ  pm2_cp
-        LDP1 #SBUF              ; repoint the parent entry's start LBA to NF
+        LDP1 #SBUF              ; repoint the parent entry's start LBA to NF (16-bit)
         LDA  PPSEC
         STA  LBA
+        LDA  PPSECH
+        STA  LBA1
+        LDA  #0
+        STA  LBA2
         JSR  CFREAD
         LDA  PPSLOT             ; P1 -> entry start field (slot*32 + 12)
         STA  TMP
@@ -2096,13 +2237,20 @@ pm2_a2: INP1
         JNZ  pm2_a2
         LDA  NF
         STA  (P1)+
-        LDA  #0
+        LDA  NFH
         STA  (P1)+
+        LDA  #0
         STA  (P1)+
         STA  (P1)
         LDA  PPSEC
         STA  LBA
+        LDA  PPSECH
+        STA  LBA1
+        LDA  #0
+        STA  LBA2
         JSR  CFWRITE
+        LDA  #0                 ; restore LBA1=0 at rest
+        STA  LBA1
         RTS
 
 ; PK2FIX - phase 2: tree-walk; rewrite every directory's '.' (=its own start)
@@ -2111,9 +2259,14 @@ pm2_a2: INP1
 PK2FIX: LDA  #33                ; root: '.' and '..' both = 33
         STA  CDST
         STA  PARST
+        LDA  #0                 ; root LBA < 256
+        STA  CDSTH
+        STA  PARSTH
         JSR  PK2DD              ; write CDST's '.'=CDST, '..'=PARST
         LDA  #33
         STA  CDST
+        LDA  #0
+        STA  CDSTH
         LDA  ROOTN
         STA  CDSC
         LDA  #0
@@ -2153,10 +2306,14 @@ fx_ent: LDA  CDSC
         JC   fx_ent
         ; child dir at STARTLO, parent = CDST. Write its '.'=STARTLO, '..'=CDST.
         LDA  CDST
-        STA  PARST              ; parent start (for PK2DD '..')
+        STA  PARST              ; parent start (for PK2DD '..'), 16-bit
+        LDA  CDSTH
+        STA  PARSTH
         JSR  TR_PUSH
         LDA  STARTLO
         STA  CDST
+        LDA  STARTHI
+        STA  CDSTH
         JSR  SECCOUNT
         LDA  SECCNT
         STA  CDSC
@@ -2175,6 +2332,10 @@ fx_done:RTS
 PK2DD:  LDP1 #SBUF
         LDA  CDST
         STA  LBA
+        LDA  CDSTH
+        STA  LBA1
+        LDA  #0
+        STA  LBA2
         JSR  CFREAD
         LDP1 #SBUF              ; entry 0 start field at offset 12
         LDA  #12
@@ -2184,10 +2345,11 @@ dd_a0:  INP1
         DEC
         STA  TMP
         JNZ  dd_a0
-        LDA  CDST
+        LDA  CDST               ; '.' start = this dir (16-bit)
+        STA  (P1)+
+        LDA  CDSTH
         STA  (P1)+
         LDA  #0
-        STA  (P1)+
         STA  (P1)+
         STA  (P1)
         LDP1 #SBUF              ; entry 1 start field at offset 32+12 = 44
@@ -2198,15 +2360,22 @@ dd_a1:  INP1
         DEC
         STA  TMP
         JNZ  dd_a1
-        LDA  PARST
+        LDA  PARST              ; '..' start = parent (16-bit)
+        STA  (P1)+
+        LDA  PARSTH
         STA  (P1)+
         LDA  #0
-        STA  (P1)+
         STA  (P1)+
         STA  (P1)
         LDA  CDST
         STA  LBA
+        LDA  CDSTH
+        STA  LBA1
+        LDA  #0
+        STA  LBA2
         JSR  CFWRITE
+        LDA  #0                 ; restore LBA1=0 at rest
+        STA  LBA1
         RTS
 
 ; SAVECORE - allocate + write data + directory entry. Returns MATCH=0 if the

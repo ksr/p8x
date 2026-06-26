@@ -13,27 +13,6 @@ Last updated: 2026-06-25
 
 ## NEXT
 
-- [ ] **PACK / FSCK: widen the directory tree-walk to 16-bit LBAs.** The
-      create/navigate/list/save path is now 16-bit (directories at LBA ≥ 256 work
-      — see the directory-LBA fix, 2026-06-25), but `PACK` and `FSCK` still walk
-      the tree with **8-bit** cursors and so misbehave on any extent ≥ 256 (a
-      *pre-existing* limit — it predates the dir-LBA fix and affects files too).
-      `FSCK` is read-only (false flags / missed problems); `PACK` **relocates
-      extents on disk**, so it is the corruption risk — do it carefully with its
-      own test.
-      - Widen: `NF`/`MINSTRT` (PACK), the shared walk stack `CDST`+`TFRAME`
-        (frames 3 → 4 bytes: add a CDST high byte), `READCUR`, `CHKDD`
-        (`FCHILD`/`FEXP` + the `..` high byte at `SBUF+45`), `PK2FIND`/`PK2MOVE`/
-        `PK2FIX`/`PK2DD`, `PPSEC`/`PARST`, and `FMAXE`/`FUSED`/`FREELO` (read
-        `SBUF+5`; 16-bit compares). Boot-block reads must set `LBA1`=0 (the OS
-        "LBA1=0 at rest" invariant — `FINDENT`/`FINDSLOT` restore it on exit).
-      - **Test:** extend `emulator/test/os_bigdir_test.sh` (or a new one) to PACK
-        a volume holding extents ≥ 256 and assert byte-exact relocation + a clean
-        host `p8xfs.py fsck`, plus on-target `FSCK` reporting OK.
-      - Pattern to mirror: the 16-bit widening already done in `firmware/p8xmon.asm`
-        (FSCAN/FNEXT/FOPENDIRAT/FCREATE) and `os/p8xos.asm`
-        (FINDENT/FINDSLOT/DESCEND/MKDIR/MKEXT/SAVECORE/CWD + `SYS_OPENCWD` $4012).
-
 - [ ] **Second CF as a removable master / transfer drive.** Goal (2026-06-25):
       keep a "master" CF holding core files (e.g. `/BIN` binaries) and, in the
       field with no host, provision a fresh card by copying from it — `FORMAT`,
@@ -416,6 +395,31 @@ Last updated: 2026-06-25
 > Convention: substantial features get a **bold-title** prose entry (what was
 > done + why + caveats). The original foundation milestones are a terse tick
 > list under *Early milestones* at the end of this section.
+
+- **16-bit directory LBAs — directories at LBA ≥ 256 usable** (2026-06-25).
+  The whole directory-LBA path used 1-byte cursors, so a directory whose
+  4-sector extent started past sector 256 was truncated to its low byte:
+  `CD` into it + `DIR` iterated the wrong sector (garbage), and creating files
+  inside it corrupted the volume. The volume free pointer is 16-bit, so one
+  high byte per cursor suffices. Widened across two layers:
+  - **firmware/p8xmon.asm**: `DIRLBA`/`DILBA` gain high bytes; FSCAN, FNEXT,
+    FRESOLVE, FRESET, COLD, FCREATE carry + 16-bit-increment their sector
+    cursors; `FOPENDIRAT` takes a 16-bit LBA (A=low, `LBA1`/$9D48=high).
+  - **os/p8xos.asm**: `CWDL`/`SDIRL`/`STARTLO`/`DLBA`/`NEWLBA`/`PSL`/`RMDL`/
+    `CURLBA` gain high bytes through FINDENT/FINDSLOT/DESCEND/DIREMPTY/MKDIR/
+    MKEXT/SAVECORE/LOADF/CD/FORMAT; the scanners restore an "LBA1=0 at rest"
+    invariant so boot-block reads stay correct. New syscall `SYS_OPENCWD`
+    ($4012) opens the CWD with its full 16-bit LBA.
+  - **PACK + FSCK**: the shared tree-walk (`CDST`+`TFRAME` frames 3→4 bytes,
+    `READCUR`, `CHKDD`), `PK2FIND`/`PK2MOVE`/`PK2FIX`/`PK2DD`, and
+    `NF`/`MINSTRT`/`PPSEC`/`PARST`/`FMAXE`/`FUSED`/`FREE` are all 16-bit, so
+    PACK relocates high extents byte-exact and FSCK reports correctly. (This
+    was a pre-existing 8-bit limit affecting any extent ≥256, files included.)
+  - **os/commands/{dir,tree,find}.c**: use `SYS_OPENCWD` for the CWD and record
+    16-bit child LBAs (poking the high byte into `LBA1`) for `-R`/recursion.
+  - Tests: `os_bigdir_test.sh` (create/CD/DIR/SAVE at LBA≥256) and
+    `os_bigpack_test.sh` (DELETE→PACK relocates a high dir+file across sector
+    256; on-target FSCK OK + host fsck + byte-exact `get` of the moved file).
 
 - **OS stdio stream model + redirection + pipes** (2026-06-24). Gave the OS a
   Unix-style I/O layer over the `$4000` syscall table. New syscalls `SYS_PUTC`
