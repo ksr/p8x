@@ -431,6 +431,22 @@ Last updated: 2026-06-25
 > done + why + caveats). The original foundation milestones are a terse tick
 > list under *Early milestones* at the end of this section.
 
+- **Removed ROM-resident BASIC** (2026-06-26). BASIC was overlaid into the
+  monitor EEPROM at `$2000` and launched by the monitor `X` command (DONE #9).
+  Since it also ships as the disk program `/BIN/BASIC.BIN` (same source,
+  `basic/p8xbasic.asm`), the ROM copy was redundant; stripped it to reclaim ROM
+  space and simplify the program ROM to just the monitor + BIOS (~4.3 KB,
+  ends ~`$1100`; the chip is otherwise erased). Removed: the monitor `X`
+  command + `BASIC` equate + the `X` line from the in-ROM help (kept `?`/`H`);
+  `tools/build_basic_rom.py` (the monitor+BASIC overlay builder); the stale
+  `p8x-rom-basic.{bin,hex}`. `tools/build_rom.sh` and `os/run.sh` now assemble
+  the monitor directly; `emulator/test/basic_rom_test.sh` became
+  `mon_test.sh` (monitor D-paging + `?` help smoke test) and
+  `basic_saveload_test.sh` now boots **disk** BASIC (`B`) instead of ROM BASIC
+  (`X`). Docs swept (monitor ref, memory maps, basic/rom/tools/firmware READMEs,
+  the BASIC guide, system-design + hardware maps). Full suite green. This is a
+  first step toward the larger memory-map repack (see the TPA-expansion notes).
+
 - **`CAT *.glob` multi-file concatenation + FSCAN/write-stream firmware fix**
   (2026-06-26). `cat` now expands a glob argument into multiple files: a new
   shared helper `os/commands/lib_globx.c` (`glob_expand(pat, out, maxn)`, pulled

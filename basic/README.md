@@ -85,7 +85,7 @@ printf '20 PRINT "B"\r10 PRINT "A"\rLIST\r' | (cd /tmp && \
 Lines are terminated by CR (`\r`). In scripted mode use a cycle cap `-l N` to
 bound the spin after end-of-input.
 
-## Four ways to build & run (one source)
+## Three ways to build & run (one source)
 
 BASIC is self-contained (its own ACIA console + RAM), so the *same* source
 builds several ways. The differences are just `-D` symbols — `BASORG` (code
@@ -95,23 +95,19 @@ origin), `BASRAM` (data base), `PBUF` (rebuild scratch), and `MONITOR` (where
 | Build | Code (`BASORG`) | Data (`BASRAM`) | Invoked by |
 |-------|-----------------|-----------------|------------|
 | Standalone | `$0000` | `$8000` | burned as the whole ROM; `run.sh` / scripted tests |
-| ROM-in-monitor | `$2000` | `$A000` | monitor `X` command (BASIC's `BYE` returns to the monitor) |
 | Disk | `$4000` | `$A000` | installed on a P8XFS image, booted by the monitor `B` command (rev D: loads at `$4000`) |
 | Run-from-OS | `$B000` | `$C500` | a TPA program (`PBUF=$E000`, `MONITOR=$4000`) installed as `BASIC.BIN`; `RUN` it from the OS, `BYE` returns to the OS (see below) |
 
-`Code` is where the interpreter runs (low ROM, monitor ROM, or RAM); `Data` is
+`Code` is where the interpreter runs (low ROM or RAM); `Data` is
 the base of its variables + program text; `PBUF` (rebuild scratch) defaults to
 `$C000` and moves only for the TPA build. The standalone build takes no `-D` (the
 source defaults are `$0000`/`$8000`/`$C000`) and is byte-identical to before this
 split.
 
-**ROM-in-monitor** — build the combined monitor+BASIC EEPROM and launch with `X`:
-
-```sh
-python3 tools/build_basic_rom.py p8x-rom-basic.bin   # monitor + BASIC @ $2000
-# boot it; at the monitor '*' prompt press X to enter BASIC; type BYE to return
-./emulator/p8xemu p8x-rom-basic.bin                  # (needs u0-u3.bin alongside)
-```
+> **ROM-in-monitor is gone.** BASIC used to be overlaid into the monitor EEPROM
+> at `$2000` and launched with the monitor `X` command. Since it also ships as a
+> disk program, the ROM copy was redundant and was removed to reclaim ROM space;
+> use the **Disk** or **Run-from-OS** build below.
 
 **Disk** — assemble at `$4000` (rev D boot address), install as a bootable image, boot with `B`:
 
@@ -123,8 +119,8 @@ python3 tools/p8xfs.py boot   disk.img basicdisk.bin
 ./emulator/p8xemu -c disk.img eeprom.bin             # at '*' press B
 ```
 
-**Run from P8X/OS** — a fourth way: install BASIC as a regular OS program so you
-can `RUN BASIC.BIN` from the OS shell and `BYE` back to it. No source change —
+**Run from P8X/OS** — the primary way to use BASIC: install it as a regular OS
+program so you can `RUN BASIC.BIN` from the OS shell and `BYE` back to it. No source change —
 just relocate everything into the **TPA** (`$B000+`, clear of the OS at
 `$4000–$AFFF`) and point `MONITOR` at the OS cold-start so `BYE` re-enters the OS
 (which stays resident) instead of the ROM monitor:
@@ -139,9 +135,9 @@ python3 tools/p8xfs.py put disk.img basicrun.bin --name BASIC.BIN --load 0xB000 
 Layout: code `$B000`–`$C48x` (~5.2 KB), data `$C500` (`PROG` at `$C700`), rebuild
 buffer `$E000`; the stack stays at `$FEFF`. Covered by `os_basic_test.sh`.
 
-All four paths are covered by `make test-basic` (in `emulator/`): ROM BASIC via
-`X`, disk BASIC via `B`, `SAVE`/`LOAD` round-trip, and `RUN BASIC.BIN` from the
-OS. Code is ~5.2 KB, so in every layout it clears its data base with room to spare.
+These paths are covered by `make test-basic` (in `emulator/`): disk BASIC via
+`B`, `SAVE`/`LOAD` round-trip, and `RUN BASIC.BIN` from the OS. Code is ~5.2 KB,
+so in every layout it clears its data base with room to spare.
 
 ## Planned layout (proposed — see open decisions)
 

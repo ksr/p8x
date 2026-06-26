@@ -35,8 +35,11 @@ take an address read **4 hex digits** (`AAAA`) right after the letter.
 | **F** | `F` | **Format** the CF card as P8XFS (writes the boot block + root directory). Asks `Y/N`. |
 | **B** | `B` | **Boot** the OS image from the CF card into `$4000` and run it. |
 | **G** | `G AAAA` | **Go**: `JSR AAAA`. The called code returns to the monitor with `RTS`. |
-| **X** | `X` | **Run ROM BASIC** (in the combined ROM at `$2000`). BASIC's `BYE` returns here. |
 | **? / H** | `?` or `H` | Print the built-in command help. |
+
+> BASIC is no longer ROM-resident (the old `X` command is gone). It ships as the
+> disk program `/BIN/BASIC.BIN` (assembled from `basic/p8xbasic.asm`); run it
+> from the OS like any other program, and its `BYE` returns to the OS.
 
 ### E — examine / modify (interactive)
 
@@ -64,7 +67,6 @@ So you can walk forward through memory, setting only the bytes you want.
 Anything the monitor launches can come back to it:
 
 - **`G`** target — returns on `RTS`.
-- **ROM BASIC** (`X`) — type `BYE`.
 - **P8X/OS** (`B`) — type `EXIT` (or `MON`).
 
 Each of those re-enters the monitor (BASIC/OS do a cold restart via `JMP $0000`).
@@ -126,7 +128,7 @@ correctly.)
 
 | Range | Use |
 |-------|-----|
-| `$0000–$3FFF` | EEPROM (16 KB, rev D) — monitor at `$0000`, ROM BASIC at `$2000` (combined ROM) |
+| `$0000–$3FFF` | EEPROM (16 KB, rev D) — monitor + BIOS at `$0000` (~4.3 KB used). BASIC is no longer ROM-resident; it ships as `/BIN/BASIC.BIN` on disk. |
 | `$4000–$7FFF` | RAM (16 KB, rev D). **P8X/OS loads here** (`$4000`) and runs. |
 | `$8000–$FEFF` | RAM. OS variables at `$A000`; the BIOS parameter block + stream/iteration state occupy `$9D40–$9D75` (the CF `LBA` at `$9D47–$9D49`, `FNAME`/`FSRC`/`FLEN`, and the read/write/dir-iteration state) and the sector buffer `SBUF` at `$9E00` — all fixed by the BIOS; user programs / `RUN` (the TPA) at `$B000`; stack (P3) grows down from `$FEFF` |
 | `$FF00` | switch input port (read) |

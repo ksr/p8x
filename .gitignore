@@ -30,14 +30,11 @@ emulator/test/prog.asm
 emulator/test/v2prog.asm
 emulator/test/*.tmp
 emulator/test/*.pp.c
-# combined monitor+BASIC ROM (rebuild with tools/build_basic_rom.py)
-/p8x-rom-basic.bin
 # stray microcode images if a generator is run from the repo root
 /u?.bin
 /os/run-disk.img
 emulator/test/*.hex
 /u?.hex
-/p8x-rom-basic.hex
 microcode/u?.hex
 emulator/test/io.asm
 emulator/u?.bin

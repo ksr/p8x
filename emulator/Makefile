@@ -96,9 +96,10 @@ test-os: p8xemu ucode
 	sh test/os_edit_test.sh
 	sh test/os_asm_test.sh
 
-# BASIC: launch ROM BASIC from the monitor (X), and boot disk BASIC (B).
+# Monitor smoke test (D/?, no card), plus disk BASIC (boot via B) and SAVE/LOAD.
+# (ROM BASIC was removed — BASIC now ships as the disk program /BIN/BASIC.BIN.)
 test-basic: p8xemu ucode
-	sh test/basic_rom_test.sh
+	sh test/mon_test.sh
 	sh test/basic_disk_test.sh
 	sh test/basic_saveload_test.sh
 	sh test/os_basic_test.sh

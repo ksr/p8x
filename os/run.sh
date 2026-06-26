@@ -14,9 +14,9 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 disk=${1:-"$root/os/run-disk.img"}
 build=$(mktemp -d)
 
-# Combined monitor + ROM-BASIC EEPROM, so the monitor's X command can launch
-# BASIC (a bare-monitor build has nothing at $2000 and X would crash).
-python3 "$root/tools/build_basic_rom.py" "$build/eeprom.bin" >/dev/null
+# Monitor + BIOS EEPROM. BASIC is no longer ROM-resident — it ships as the disk
+# program /BIN/BASIC.BIN (installed below), so the EEPROM is just the monitor.
+python3 "$root/assembler/p8xasm.py" "$root/firmware/p8xmon.asm" -o "$build/eeprom.bin" >/dev/null
 python3 "$root/assembler/p8xasm.py" "$root/os/p8xos.asm" -o "$build/p8xos.bin" --base 0x4000 >/dev/null
 ( cd "$root/microcode" && python3 genucode.py >/dev/null )
 cp "$root"/microcode/u?.bin "$build/"

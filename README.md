@@ -33,11 +33,10 @@ All six cards plug into a passive 10-slot backplane over a 96-pin DIN 41612 bus 
 | `microcode/genucode.py` | `microcode/` | Microcode generator → `u0–u3.bin` EPROM images |
 | `assembler/p8xasm.py` | `assembler/` | Two-pass assembler, shares opcode table with genucode.py |
 | `emulator/p8xemu.c` | `emulator/` | Cycle-accurate emulator, interprets the same u0–u3.bin images |
-| `firmware/p8xmon.asm` | `firmware/` | ROM monitor (E/D/I/F/B/G/X commands) + BIOS jump table at `$0100` |
+| `firmware/p8xmon.asm` | `firmware/` | ROM monitor (E/D/I/F/B/G/? commands) + BIOS jump table at `$0100` |
 | `os/p8xos.asm` | `os/` | P8X/OS, RAM-resident disk OS booted from CF ([guide](os/README.md)) |
 | `tools/p8xfs.py` | `tools/` | Host-side P8XFS disk-image tool (create/boot/put/get/ls) |
-| `basic/p8xbasic.asm` | `basic/` | BASIC interpreter — standalone, disk, or ROM-in-monitor builds ([guide](basic/README.md)) |
-| `tools/build_basic_rom.py` | `tools/` | Build the combined monitor + ROM-BASIC EEPROM image |
+| `basic/p8xbasic.asm` | `basic/` | BASIC interpreter — standalone, disk, or run-from-OS builds ([guide](basic/README.md)) |
 | `apps/p8xedit.asm`, `apps/p8xasm.asm` | `apps/` | On-target toolchain: line editor + native two-pass assembler, as `/BIN` programs ([guide](apps/README.md)) |
 | `compiler/p8cc.py` | `compiler/` | C cross-compiler (subset) → P8X asm → RUNnable `.BIN` ([guide](compiler/README.md)) |
 | `generators/gen_p8xopc.py` | `generators/` | Opcode table for the native assembler, generated from `genucode.OPC` |
@@ -76,10 +75,10 @@ EEPROM programmer:
 - **Microcode** — `microcode/genucode.py` writes `u0–u3.bin` (what the emulator
   and tests load); the matching Intel HEX for the four 28C64 control-store EPROMs
   is produced into `rom/` by `make rom` (see below).
-- **Program ROM** — `tools/build_basic_rom.py out.bin` writes `out.bin` *and*
-  `out.hex` (monitor + ROM BASIC for the 28C256 at `$0000`).
+- **Program ROM** — the assembled monitor + BIOS for the 28C256 at `$0000`
+  (~4.3 KB; BASIC is no longer ROM-resident). `make rom` builds it into `rom/`.
 - **Any other binary** — `python3 tools/bin2hex.py in.bin out.hex [base]`
-  (e.g. a plain monitor built with `p8xasm.py`).
+  (e.g. a monitor built directly with `p8xasm.py`).
 
 For a ready-to-burn set at fixed paths, run `cd emulator && make rom` (or
 `sh tools/build_rom.sh`). It refreshes the four control-store EPROMs in
@@ -123,7 +122,7 @@ works chip by chip, and any board-specific design docs:
 - Eagle schematics + boards generated for all 6 CPU cards, the front-panel LED card, and the backplane (8 boards)
 - ROM monitor boots in the emulator; its filesystem hooks (`I`/`F`/`B`) run end to end against a CF image (`make test-cf`)
 - P8X/OS v1.0 — full shell over flat **and hierarchical (P8XFS v2)** volumes. Built-in commands: `CD`/`MKDIR`/`RMDIR`/`LOAD`/`RUN`/`SAVE`/`DEL`/`DUMP`/`DEP`/`PATH`/`PACK`/`FSCK`/`FORMAT`/`HELP`/`EXIT` (the minimal-kernel split moved the pure-viewer commands to `/BIN`; `DUMP` stays native — as a `/BIN` program it would load into the `$B000` TPA and overwrite the very memory it dumps). **Userland commands in `/BIN`** (written in C, run by bare name via implicit RUN + a `/BIN` search PATH, or explicit `RUN`): **`DIR`/`PWD`/`TREE`/`CAT`/`WC`/`GREP`/`CP`/`MV`/`HEAD`/`TAIL`/`MORE`/`SORT`/`UNIQ`/`SED`/`FIND`/`DIFF`** (`DIR -R`, etc.) — see [os/commands/](os/commands/README.md). Path resolution + CWD-path prompt; I/O redirection (`<`/`>`) and two-stage pipes (`a | b`); line editing (backspace/DEL, Ctrl-D EOF); **`PACK`** compacts the directory tree and **`FSCK`** checks integrity on-target; host-side `p8xfs.py` builds (`--v2`), navigates, and `fsck`s images (`make test-os`)
-- BASIC builds four ways from one source: standalone, disk-bootable (`B`), ROM-in-monitor (launched by `X`), and a run-from-OS TPA program (`make test-basic`)
+- BASIC builds three ways from one source: standalone, disk-bootable (`B`), and a run-from-OS TPA program (`RUN BASIC.BIN`) — `make test-basic` (ROM-resident BASIC was removed to reclaim ROM space)
 - On-target toolchain: **EDIT** (line editor) + **ASM** (native two-pass assembler) as `/BIN` programs — edit → assemble → run a program entirely on the machine; ASM output is byte-identical to the host assembler across the whole opcode table (`make test-os`, see [apps/](apps/README.md))
 - **C compiler** — `compiler/p8cc.py` (Python host tool) plus `compiler/p8cc.c`, the same compiler rewritten in its own subset that **self-compiles** ("small C in small C", Milestone A). Full subset: `int`/`char`, pointers, arrays, `struct`/`union`, functions with params/locals/recursion, `if`/`else`/`while`/`for`, the complete operator set (`+ - * / % << >>`, comparisons, `& ^ | && ||`, unary `- ! ~`), global initializers, and `getchar`/`putchar`/`puts`; compiles to P8X asm and runs as a `/BIN` program (`make test-c`, host-vs-self differential `c_selfhost_test`, see [compiler/](compiler/README.md))
 - BIOS **file API**: byte streams (`FOPEN`/`FGETB`, `FWOPEN`/`FPUTB`/`FCLOSE`), path resolution into subdirectories (`FRESOLVE`), name formatting (`FNORM`), and directory iteration (`FOPENDIR`/`FNEXT`) — the assembler rides on the streams and self-hosts (`make test-cf`)

@@ -22,8 +22,11 @@ for k in 0 1 2 3; do
     python3 tools/bin2hex.py "microcode/u$k.bin" "rom/p8x-ucode$k.hex" >/dev/null
 done
 
-# program ROM = monitor + ROM BASIC -> rom/ (emits .bin and .hex)
-python3 tools/build_basic_rom.py rom/p8x-prog-rom.bin >/dev/null
+# program ROM = monitor + BIOS -> rom/ (emits .bin and .hex). BASIC is no longer
+# ROM-resident; it ships as the disk program /BIN/BASIC.BIN (assembled from
+# basic/p8xbasic.asm), so the program ROM is now just the assembled monitor.
+python3 assembler/p8xasm.py firmware/p8xmon.asm -o rom/p8x-prog-rom.bin >/dev/null
+python3 tools/bin2hex.py rom/p8x-prog-rom.bin rom/p8x-prog-rom.hex >/dev/null
 
 echo "Burnable images (rom/):"
 ls -1 rom/*.bin rom/*.hex

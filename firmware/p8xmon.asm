@@ -13,8 +13,6 @@
 ;   B          Boot: load OS image from CF to $4000 and jump. Falls back
 ;              to the monitor prompt if no card / no signature / OSCNT=0.
 ;   G aaaa     Go: JSR to aaaa. Program returns to monitor via RTS.
-;   X          Run ROM BASIC (JMP $2000, overlaid by tools/build_basic_rom.py).
-;              BASIC's BYE command jumps to reset ($0000) to return here.
 ;   ?          Help.
 ;
 ; Also publishes a BIOS jump table at $0100 (CONIN/CONOUT/CONST/CFINIT/CFREAD/
@@ -105,7 +103,6 @@ DIRLBA1 = $9D7A          ; current directory start LBA, high byte (pairs DIRLBA)
 FCDH    = $9D7B          ; FCREATE directory-sector scan cursor, high byte (HEXL)
 SBUF    = $9E00          ; sector buffer
 STKTOP  = $FEFF
-BASIC   = $2000          ; ROM BASIC cold-start (overlaid by the ROM build)
 
 CR      = $0D
 LF      = $0A
@@ -204,10 +201,6 @@ PROMPT: LDP1 #MPROMPT
         LDB  #'G'
         CMP
         JZ   CMD_G
-        LDA  TMP2
-        LDB  #'X'
-        CMP
-        JZ   CMD_X
         LDA  TMP2
         LDB  #'?'
         CMP
@@ -486,12 +479,6 @@ CMD_G:  JSR  GETADDR
         JSR  (P1)           ; program RTS -> here
         JSR  CRLF
         JMP  PROMPT
-
-; ---------------- X : launch ROM BASIC ---------------------------------------
-; BASIC is assembled to $2000 (its cold start) and overlaid into this EEPROM
-; image by the ROM build (see basic/README.md). BASIC's BYE command jumps back
-; to the reset vector ($0000), returning here.
-CMD_X:  JMP  BASIC
 
 ; ---------------- ? : help ----------------------------------------------------
 CMD_H:  LDP1 #MHELP
@@ -1840,8 +1827,6 @@ MHELP:  .ascii "P8XMON COMMANDS  (AAAA = 4 HEX DIGITS):"
          .ascii "B       BOOT OS IMAGE FROM CF TO $4000"
          .byte CR,LF
          .ascii "G AAAA  CALL AAAA (JSR, RTS RETURNS HERE)"
-         .byte CR,LF
-         .ascii "X       RUN ROM BASIC (BASIC 'BYE' RETURNS HERE)"
          .byte CR,LF
          .ascii "? / H   THIS HELP"
          .byte CR,LF,0

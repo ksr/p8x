@@ -34,7 +34,7 @@ Every pointer supports synchronous **load, hold, increment, decrement** (full 16
 All I/O is memory-mapped in page **$FF00–$FFFF**.
 
 Memory map (rev D — see the memory card):
-- `$0000–$3FFF` EEPROM, 16 KB (monitor + ROM BASIC; 28C256 low half)
+- `$0000–$3FFF` EEPROM, 16 KB (monitor + BIOS, ~4.3 KB used; 28C256 low half)
 - `$4000–$FEFF` SRAM, 48 KB (2× 62256)
 - `$FF00–$FFFF` I/O page (RAM disabled here)
 
@@ -320,7 +320,7 @@ Opcode space is wide open (256 slots, ~50 used).
 4. **+ Memory card**: program ROM with $EA-style NOPs, microcode the fetch → IR should track ROM contents (probe IR or temporarily bus it)
 5. **+ ALU card**: registers first (bus loopback A→bus→B), then ALU functions against a truth-table program, then flags
 6. **+ I/O card**: LED port write from microcode, switch read, then ACIA loopback (TX→RX jumper) before wiring real RS-232
-7. **Monitor program** in ROM (`$0000`, serial console): examine/modify (`E`), dump (`D`), CF init/format/boot (`I`/`F`/`B`), go (`G`), run ROM BASIC (`X`), help (`?`/`H`), plus a BIOS jump table at `$0100` — from there everything else is software. See [p8x-monitor.md](p8x-monitor.md) for the full command reference.
+7. **Monitor program** in ROM (`$0000`, serial console): examine/modify (`E`), dump (`D`), CF init/format/boot (`I`/`F`/`B`), go (`G`), help (`?`/`H`), plus a BIOS jump table at `$0100` — from there everything else is software. See [p8x-monitor.md](p8x-monitor.md) for the full command reference.
 
 ## 11. Power & Practical Notes
 - ~130 LS-TTL chips ≈ 1.5–2 A at 5 V; size the PSU at 4–5 A with per-card 10 µF bulk + 0.1 µF per chip

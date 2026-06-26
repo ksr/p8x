@@ -1,7 +1,7 @@
 # Memory Card — Theory of Operation
 
 The memory card is the P8X's address space. **Rev D** map: a 16 KB EEPROM window
-(`$0000–$3FFF`, holding the monitor + ROM BASIC) and **48 KB of SRAM**
+(`$0000–$3FFF`, holding the monitor + BIOS) and **48 KB of SRAM**
 (`$4000–$FEFF`) across two 62256 chips. It decodes the address bus to decide which
 chip — if any — responds, steers a bidirectional data buffer the right way for
 reads vs writes, and includes a jumper to write-protect the ROM.

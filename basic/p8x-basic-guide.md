@@ -29,15 +29,15 @@ where the code and its data live and how you start it):
 | Build | Code | Data | Invoked by |
 |-------|------|------|------------|
 | Standalone | `$0000` | `$8000` | burned as the whole ROM; `run.sh` / tests |
-| ROM-in-monitor | `$2000` | `$A000` | the monitor's `X` command; type `BYE` to return to the monitor |
 | Disk | `$4000` | `$A000` | a bootable P8XFS image, started with the monitor's `B` command (rev D loads the OS region at `$4000`) |
 | Run-from-OS | `$B000` | `$C500` | a TPA program (`BASIC.BIN`); `RUN` it from the OS, `BYE` returns to the OS |
 
 `Code` is where the interpreter runs and `Data` is the base of its variables and
-program storage; everything else about the language is the same. From the
-monitor, **`X`** drops into ROM BASIC and **`BYE`** comes back; a BASIC disk
-boots with **`B`**. Build commands for the disk and ROM images are in the
-[README](README.md#three-build-targets-one-source).
+program storage; everything else about the language is the same. The usual way
+in is **`RUN BASIC.BIN`** from the OS (`BYE` returns to the OS); a standalone
+BASIC disk also boots with the monitor's **`B`**. (BASIC is no longer in the
+monitor ROM — the old `X` command was removed.) Build commands are in the
+[README](README.md).
 
 ## The two modes
 
@@ -68,8 +68,8 @@ Lines are always kept sorted by number regardless of entry order. Keywords are
 tokenized on entry (stored as single bytes) and expanded again by `LIST`.
 
 `SAVE`/`LOAD` store programs as files in the P8XFS **root** directory (via the
-monitor's BIOS filesystem calls), so they work in the **ROM** (`X`) and **disk**
-builds — the standalone whole-ROM build has no monitor and can't use them. Names
+BIOS filesystem calls), so they work in the **disk** and **run-from-OS** builds —
+the standalone whole-ROM build has no card access and can't use them. Names
 are up to 12 characters, upper-cased; `SAVE` reports `?Save failed` if the name
 exists or the disk is full, `LOAD` reports `?No file` if it isn't found. Files
 created here are visible to P8X/OS (`DIR`) and the host `p8xfs.py` too.

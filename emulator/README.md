@@ -13,7 +13,7 @@ make            # builds p8xemu and regenerates the microcode (u0-u3.bin)
 ```
 
 - `rom.bin` — the EEPROM image (origin `$0000`), e.g. the monitor or combined
-  ROM BASIC. The emulator expects `u0–u3.bin` in the current directory.
+  the monitor. The emulator expects `u0–u3.bin` in the current directory.
 - `-c disk.img` — attach a CompactFlash image; models the 8-bit True IDE task
   file at `$FF10–$FF17`.
 - `-s NN` — value the I/O card switches present at `$FF00` (hex or decimal, e.g.
@@ -34,7 +34,7 @@ make test        # everything below
 make test-isa    # per-instruction self-check (halts A=00 on success)
 make test-cf     # monitor format/boot against the CF model
 make test-os     # P8X/OS boot + shell on flat and v2 volumes
-make test-basic  # ROM BASIC (X) and disk BASIC (B)
+make test-basic  # monitor smoke test, disk BASIC (B), SAVE/LOAD
 make test-io     # switch input (-s) -> $FF00 and LED writes ($FF02, -L)
 ```
 

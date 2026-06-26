@@ -26,12 +26,13 @@ This refreshes `microcode/u0–u3.{bin,hex}` and all of `rom/`.
 | `p8x-ucode1.hex` | 28C64 | control U11 | microcode word bits 8–15 |
 | `p8x-ucode2.hex` | 28C64 | control U12 | microcode word bits 16–23 |
 | `p8x-ucode3.hex` | 28C64 | control U13 | microcode word bits 24–31 |
-| `p8x-prog-rom.hex` | 28C256 (32 KB) | memory U1 | monitor @ `$0000` + ROM BASIC @ `$2000` |
+| `p8x-prog-rom.hex` | 28C256 (32 KB) | memory U1 | monitor + BIOS @ `$0000` (~4.3 KB used; rest erased) |
 
 The four microcode EPROMs are addressed by `IR | step<<8 | cond<<12`; burn the
 same address range that the programmer reads from the `.hex`. The program ROM is
-mapped at `$0000` — the monitor lives below `$2000` and ROM BASIC at `$2000`
-(reached by the monitor's `X` command).
+mapped at `$0000` and holds just the monitor + BIOS (~4.3 KB). BASIC is no longer
+ROM-resident — it ships as the disk program `/BIN/BASIC.BIN`, so the rest of the
+chip is erased (`$FF`).
 
 Burn from the `.hex` files (standard Intel HEX, 16-byte records, 16-bit
 addresses). The `.bin` files are byte-identical raw images if your programmer

@@ -8,7 +8,7 @@ and generates a clean write strobe.
 
 | Region | Device | Size |
 |--------|--------|------|
-| `$0000–$3FFF` | 28C256 EEPROM (U1, low 16 KB) | 16 KB — monitor + ROM BASIC |
+| `$0000–$3FFF` | 28C256 EEPROM (U1, low 16 KB) | 16 KB — monitor + BIOS (~4.3 KB used; BASIC is a disk program) |
 | `$4000–$7FFF` | 62256 SRAM (U10, rev D) | 16 KB |
 | `$8000–$FEFF` | 62256 SRAM (U2) | 32 KB (minus the I/O page) |
 | `$FF00–$FFFF` | — (I/O page) | RAM inhibited; handled by I/O & CF cards |
