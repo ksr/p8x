@@ -5,8 +5,8 @@
 CONOUT  = $0103
 FCREATE = $011B
 FNORM   = $0136
-FSRC    = $9D56
-FLEN    = $9D58
+FSRC    = $7056
+FLEN    = $7058
         .org $4000
         LDA  #'X'           ; 1 byte of file data at $5000
         STA  $5000

@@ -19,13 +19,13 @@ int main() { puts("PIPEDATA"); return 0; }
 EOF
 
 check() {   # $1 = label, $2 = prod.asm, $3 = cat.asm
-    python3 $ROOT/assembler/p8xasm.py "$2" -o prod.bin --base 0xA700 >/dev/null
-    python3 $ROOT/assembler/p8xasm.py "$3" -o cat.bin  --base 0xA700 >/dev/null
+    python3 $ROOT/assembler/p8xasm.py "$2" -o prod.bin --base 0x7A00 >/dev/null
+    python3 $ROOT/assembler/p8xasm.py "$3" -o cat.bin  --base 0x7A00 >/dev/null
     rm -f pp.img
     python3 $ROOT/tools/p8xfs.py create pp.img >/dev/null
     python3 $ROOT/tools/p8xfs.py boot   pp.img osc.bin >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    pp.img prod.bin --name PROD.BIN --load 0xA700 --exec 0xA700 >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    pp.img cat.bin  --name CAT.BIN  --load 0xA700 --exec 0xA700 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    pp.img prod.bin --name PROD.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    pp.img cat.bin  --name CAT.BIN  --load 0x7A00 --exec 0x7A00 >/dev/null
     out=$(printf 'B\rRUN /PROD.BIN | RUN /CAT.BIN\r' | ../p8xemu -l 200000000 -c pp.img eeprom.bin 2>/dev/null \
         | LC_ALL=C tr -d '\0\r' | sed -n '/PROD.BIN/,$p' | grep -v 'PROD.BIN' | tr -dc 'A-Z')
     [ "$out" = "PIPEDATA" ] || fail "$1: pipe output '$out' != 'PIPEDATA'"

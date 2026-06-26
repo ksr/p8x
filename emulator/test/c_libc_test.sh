@@ -39,12 +39,12 @@ int main() {
 }
 EOF
 python3 $ROOT/compiler/p8cc.py clibc.c -o clibc.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py clibc.asm -o clibc.bin --base 0xA700 >/dev/null
+python3 $ROOT/assembler/p8xasm.py clibc.asm -o clibc.bin --base 0x7A00 >/dev/null
 
 rm -f cl.img
 python3 $ROOT/tools/p8xfs.py create cl.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   cl.img osc.bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    cl.img clibc.bin --name CL.BIN --load 0xA700 --exec 0xA700 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    cl.img clibc.bin --name CL.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
 
 # Boot, RUN, then feed "abc\r" to the program's getchar() loop.
 out=$(printf 'B\rRUN CL.BIN\rabc\r' | ../p8xemu -l 150000000 -c cl.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r')

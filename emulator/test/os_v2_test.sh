@@ -14,7 +14,7 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o p8xos.bin --base 0x4000 
 
 # A position-independent program at $B000: print "V2" then RTS.
 cat > v2prog.asm <<'EOF'
-        .org $A700
+        .org $7A00
         LDA  #'V'
         JSR  $0103
         LDA  #'2'
@@ -25,7 +25,7 @@ cat > v2prog.asm <<'EOF'
         JSR  $0103
         RTS
 EOF
-python3 $ROOT/assembler/p8xasm.py v2prog.asm -o v2prog.bin --base 0xA700 >/dev/null
+python3 $ROOT/assembler/p8xasm.py v2prog.asm -o v2prog.bin --base 0x7A00 >/dev/null
 
 rm -f v2.img
 python3 $ROOT/tools/p8xfs.py create v2.img --v2 >/dev/null
@@ -36,16 +36,16 @@ python3 $ROOT/tools/p8xfs.py put    v2.img v2prog.bin --name /BIN/HELLO.BIN >/de
 # `CAT /README` resolves via PATH (/BIN) — this doubles as an implicit-RUN check.
 python3 $ROOT/tools/clib.py $ROOT/os/commands/cat.c -o v2cat.pp.c   # splice //#use glob,globx
 python3 $ROOT/compiler/p8cc.py v2cat.pp.c -o v2cat.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py v2cat.asm -o v2cat.bin --base 0xA700 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    v2.img v2cat.bin --name /BIN/CAT.BIN --load 0xA700 --exec 0xA700 >/dev/null
+python3 $ROOT/assembler/p8xasm.py v2cat.asm -o v2cat.bin --base 0x7A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    v2.img v2cat.bin --name /BIN/CAT.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
 # DIR/PWD/TREE are no longer built-ins either — install their C versions so the
 # bare names resolve via PATH (/BIN).
 for c in dir pwd tree; do
     python3 $ROOT/tools/clib.py $ROOT/os/commands/$c.c -o v2$c.pp.c   # splice //#use (dir: glob)
     python3 $ROOT/compiler/p8cc.py v2$c.pp.c -o v2$c.asm >/dev/null
-    python3 $ROOT/assembler/p8xasm.py v2$c.asm -o v2$c.bin --base 0xA700 >/dev/null
+    python3 $ROOT/assembler/p8xasm.py v2$c.asm -o v2$c.bin --base 0x7A00 >/dev/null
     up=$(echo $c | tr a-z A-Z)
-    python3 $ROOT/tools/p8xfs.py put v2.img v2$c.bin --name /BIN/$up.BIN --load 0xA700 --exec 0xA700 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put v2.img v2$c.bin --name /BIN/$up.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
 done
 printf 'readme' > v2r.tmp
 python3 $ROOT/tools/p8xfs.py put    v2.img v2r.tmp --name /README >/dev/null

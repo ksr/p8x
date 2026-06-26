@@ -16,13 +16,13 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x4000 >/
 build_disk() {   # $1 = py|host
     if [ "$1" = host ]; then ./p8cc_host < $ROOT/os/commands/tree.c > tree.asm
     else python3 $ROOT/compiler/p8cc.py $ROOT/os/commands/tree.c -o tree.asm >/dev/null; fi
-    python3 $ROOT/assembler/p8xasm.py tree.asm -o tree.bin --base 0xA700 >/dev/null
+    python3 $ROOT/assembler/p8xasm.py tree.asm -o tree.bin --base 0x7A00 >/dev/null
     rm -f tr.img
     python3 $ROOT/tools/p8xfs.py create tr.img >/dev/null
     python3 $ROOT/tools/p8xfs.py boot   tr.img osc.bin >/dev/null
     python3 $ROOT/tools/p8xfs.py mkdir  tr.img /BIN >/dev/null
     python3 $ROOT/tools/p8xfs.py mkdir  tr.img /SUB >/dev/null
-    python3 $ROOT/tools/p8xfs.py put tr.img tree.bin --name /BIN/TREE.BIN --load 0xA700 --exec 0xA700 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put tr.img tree.bin --name /BIN/TREE.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
     printf 'z' > tr_z.dat
     python3 $ROOT/tools/p8xfs.py put tr.img tr_z.dat --name /SUB/F.TXT --load 0 --exec 0 >/dev/null
 }

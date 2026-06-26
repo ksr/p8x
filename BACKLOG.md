@@ -184,6 +184,58 @@ Last updated: 2026-06-25
       keep C where it doubles as a `p8cc` regression and has size headroom; reach
       for asm where a command is both size-pressured and stable. (Cross-ref the
       wildcard item above — an asm rewrite is option 2 there.)
+      **Explicitly wanted (2026-06-26): explore this** — prototype an asm version
+      of one heavy command (e.g. `sort` or `grep`) and measure the size/speed win
+      vs the C version to calibrate whether to convert more.
+
+- [ ] **Make OS/BIOS peek/poke a syscall ABI instead of fixed addresses**
+      (2026-06-26). Today the C `/BIN` commands reach BIOS scratch by hardcoded
+      `peek`/`poke` of fixed addresses — FNAME, FFLAG, FLEN, the CF LBA, etc. (now
+      `$704A`/`$7070`/`$7058`/`$7047` after the memory remap). That coupling is
+      exactly what made the `$B000→$7A00` remap expensive: 26 hardcoded sites
+      across `dir`/`tree`/`find`/`lib_globx`/`p8lib` had to move in lockstep with
+      the firmware/OS EQUs, and a single missed `#$9E` immediate silently broke
+      FNEXT. Wrapping these reads/writes behind syscalls (e.g. `SYS_FNAME`,
+      `SYS_FFLAG`, `SYS_FLEN` getters, or a "current dir-entry" struct accessor)
+      would let firmware relocate its scratch freely without touching a single
+      command, and document the ABI surface in one place. Cost: a few bytes + a
+      JSR per access (these are in tight loops — measure), and new jump-table
+      slots. Decide which accesses are hot enough to keep direct vs worth a call.
+
+- [ ] **ISA additions to shrink program size** (2026-06-26). `p8cc` codegen is
+      bulky partly because the ISA lacks ops the compiler emits constantly. Survey
+      the generated asm for the most frequent multi-instruction idioms and see
+      which would collapse to one opcode — candidates: increment/decrement a
+      memory byte/word in place (the `__csp`/`__fp` frame adjusts and loop
+      counters), 16-bit pointer-relative load/store (array and struct access
+      recompute the address each time), `LDA (P1)+ / STA (P2)+` block-copy
+      primitives, and a cheap "add immediate to pointer" for stack-frame math.
+      Each new opcode costs microcode space (control store) + emulator + assembler
+      + a `genucode.OPC` entry, so weigh per-op: only add where it shrinks *real*
+      programs meaningfully. Complements the codegen-improvement and asm-rewrite
+      items — a smaller ISA-level win that helps every compiled program at once.
+
+- [ ] **Emulator: optional real-clock-pace mode** (2026-06-26). `p8xemu` currently
+      runs as fast as the host (bounded only by `-l` cycle cap or TTY blocking).
+      Add a mode that throttles execution to the hardware's actual clock rate so
+      timing, I/O pacing, and the interactive feel match the real machine — useful
+      for sanity-checking that programs aren't relying on host speed, demoing at
+      realistic speed, and validating any future timing-sensitive I/O. Needs the
+      target clock frequency as a parameter and a host-time pacing loop (sleep to
+      align cycle count to wall-clock); keep it opt-in so the test suite stays
+      fast. Cross-check against the planned hardware clock once a board exists.
+
+- [ ] **Hardware changes enabling "deep" (multi-step) instructions to assist the
+      ISA** (2026-06-26). The current microcoded engine sequences each instruction
+      through control-store steps; richer instructions (block moves, deeper
+      addressing modes, the ISA additions above) may need more microcode steps or
+      wider control than the present sequencer/step-counter and control-word
+      budget allow. Explore the hardware mods that would unlock longer/deeper
+      microprograms: a wider step counter, more control-word bits (spare backplane
+      lines exist — see `SPARE12–SPARE23`), or a second-level sequencer. Since no
+      board is built yet, this is free to design now. Tie the scope to whichever
+      ISA additions (item above) prove worthwhile, so the hardware serves real
+      instructions rather than speculative ones.
 
 - [ ] **Disassembler (reverse assembler): point it at an address block, get
       assembler back.** A tool that walks a memory/file region and decodes each

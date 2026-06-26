@@ -59,11 +59,11 @@ A two-stage system: a permanent **BIOS in EEPROM**, and the **OS proper loaded f
 |---|---|
 | $0000–$1FFF | BIOS ROM: drivers, boot loader, syscall jump table |
 | $1100–$3FFF | ROM: erased ($FF) — monitor + BIOS end ~$1100 (BASIC is no longer ROM-resident) |
-| $4000–$9D46 | OS RAM: P8X/OS kernel + shell, **loaded from CF to $4000 (rev D)**. ~7 KB today; can grow to the boot ceiling at $9D47 (~23.8 KB) or the on-disk OS region (LBA 1–32 = 16 KB), whichever is smaller — so **16 KB max**, up from ~7 KB when it loaded at $8000 |
-| $9D47–$9D49 | CF LBA, 24-bit little-endian (LBA0/LBA1/LBA2; fixed by the BIOS). LBA1/LBA2 default 0 after CFINIT — set them for sectors >255 |
-| $9E00–$9FFF | Sector buffer SBUF (512 bytes, fixed by the BIOS) |
-| $A000–$AFFF | OS variables (relocated above SBUF; ~3.5 KB) |
-| $B000–$FDFF | **TPA** — transient program area (~20 KB; RUN load addr + `>` capture) |
+| $4000–$6FFF | OS RAM: P8X/OS kernel + shell, **loaded from CF to $4000 (rev D)**. ~8.3 KB today; can grow to the boot ceiling at $7047 or the on-disk OS region (LBA 1–32 = 16 KB), whichever is smaller — so **12 KB max**, up from ~7 KB when it loaded at $8000 |
+| $7047–$7049 | CF LBA, 24-bit little-endian (LBA0/LBA1/LBA2; fixed by the BIOS). LBA1/LBA2 default 0 after CFINIT — set them for sectors >255 |
+| $7100–$72FF | Sector buffer SBUF (512 bytes, fixed by the BIOS) |
+| $7300–$79FF | OS variables (~3.5 KB) |
+| $7A00–$FDFF | **TPA** — transient program area (~31.6 KB; RUN load addr + `>` capture) |
 | $FE00–$FEFF | Stack page (P3, grows down from $FEFF) |
 | $FF00–$FFFF | I/O |
 
@@ -95,7 +95,7 @@ Fixed **jump table at $0100** so user programs and the OS call stable entry poin
 | $0139 | FOPENDIR | begin iterating directory at path (P1); C=1 bad path |
 | $013C | FNEXT | next live entry → FNAME/FFLAG/LBA/FLEN; C=1 at end |
 | $013F | FLOADAT | read FLEN bytes from LBA into (P1) (whole sectors) |
-| $0142 | FOPENDIRAT | iterate dir at 16-bit LBA = A (low) + LBA1 $9D48 (high) |
+| $0142 | FOPENDIRAT | iterate dir at 16-bit LBA = A (low) + LBA1 $7048 (high) |
 | $0145 | FSDIRBUF | point FNEXT's sector buffer at page A (call after FOPENDIR) |
 
 The table is **append-only** — entries are never reordered or removed, so every OS image on every card keeps working across BIOS revisions. (The directory-iteration calls `FOPENDIRAT`/`FNEXT` carry a full 16-bit LBA, so directories may live anywhere on the volume, not just below sector 256.)
@@ -178,7 +178,7 @@ Programs return to the shell with RTS (shell calls via JSR) and may call any BIO
 | Shell | 2 KB RAM |
 | ROM monitor (fallback) | 1 KB ROM |
 
-Comfortably inside the maps above, with the whole 23.5 KB TPA left for programs — Tiny BASIC or a Forth loaded *from the CF card* as ordinary executables rather than burned into ROM.
+Comfortably inside the maps above, with the whole 31.6 KB TPA left for programs — Tiny BASIC or a Forth loaded *from the CF card* as ordinary executables rather than burned into ROM.
 
 ---
 

@@ -28,12 +28,12 @@
  *
  * Each line is a right-justified byte size, two spaces, then the name (a '/'
  * suffix marks a directory). Directories have no byte length, so their size
- * column is left blank. The size comes from FNEXT's FLEN ($9D58 lo / $9D59 hi),
+ * column is left blank. The size comes from FNEXT's FLEN ($7058 lo / $7059 hi),
  * a 16-bit count — fine for the small files this OS holds.
  *
- * BIOS: FOPENDIR=$0139 (P1=path), FOPENDIRAT=$0142 (A=low,LBA1=$9D48 high),
- * FNEXT=$013C (-> FNAME $9D4A 12 space-padded, FFLAG $9D70 file $01/dir $02,
- * start LBA byte0 $9D47/byte1 $9D48, FLEN $9D58 lo/$9D59 hi; C=1 at end),
+ * BIOS: FOPENDIR=$0139 (P1=path), FOPENDIRAT=$0142 (A=low,LBA1=$7048 high),
+ * FNEXT=$013C (-> FNAME $704A 12 space-padded, FFLAG $7070 file $01/dir $02,
+ * start LBA byte0 $7047/byte1 $7048, FLEN $7058 lo/$7059 hi; C=1 at end),
  * FSDIRBUF=$0145.
  * OS: SYS_OPENCWD=$4012 (begin iterating the CWD, full 16-bit LBA).
  */
@@ -72,16 +72,16 @@ int putsize(int isdir, int sz) {
     return 0;
 }
 
-/* getname: nbuf <- FNAME ($9D4A, 12 space-padded), trailing pad trimmed. */
+/* getname: nbuf <- FNAME ($704A, 12 space-padded), trailing pad trimmed. */
 int getname() {
     int i;
     int c;
     i = 0;
-    c = peek(0x9D4A + i);
+    c = peek(0x704A + i);
     while (i < 12 && c != 32) {
         nbuf[i] = c;
         i = i + 1;
-        c = peek(0x9D4A + i);
+        c = peek(0x704A + i);
     }
     nbuf[i] = 0;
     return i;
@@ -114,13 +114,13 @@ int walk(int depth) {
     nsub = 0;
     r = bios(0x013C, 0, 0);                  /* FNEXT */
     while ((r & 256) == 0) {                  /* bit 8 = carry = end of directory */
-        if (peek(0x9D4A) != '.') {            /* skip '.' and '..' (both lead with '.') */
+        if (peek(0x704A) != '.') {            /* skip '.' and '..' (both lead with '.') */
             getname();
-            show(depth, peek(0x9D70) == 2,    /* print (filtered) name + size */
-                 peek(0x9D58) + peek(0x9D59) * 256);
-            if (peek(0x9D70) == 2) {          /* always record subdirs for the pass */
+            show(depth, peek(0x7070) == 2,    /* print (filtered) name + size */
+                 peek(0x7058) + peek(0x7059) * 256);
+            if (peek(0x7070) == 2) {          /* always record subdirs for the pass */
                 if (nsub < 64) {
-                    sub[nsub] = peek(0x9D47) + peek(0x9D48) * 256;
+                    sub[nsub] = peek(0x7047) + peek(0x7048) * 256;
                     nsub = nsub + 1;
                 }
             }
@@ -130,8 +130,8 @@ int walk(int depth) {
     /* This level's FNEXT loop is closed; now descend into each recorded child. */
     i = 0;
     while (i < nsub) {
-        poke(0x9D48, sub[i] / 256);           /* FOPENDIRAT high byte (LBA1, $9D48) */
-        poke(0x9D49, 0);
+        poke(0x7048, sub[i] / 256);           /* FOPENDIRAT high byte (LBA1, $7048) */
+        poke(0x7049, 0);
         bios(0x0142, 0, sub[i]);              /* FOPENDIRAT(child LBA): A=low, LBA1=high */
         bios(0x0145, 0, 0xFA);                /* FSDIRBUF: our page $FA00 again */
         walk(depth + 1);
@@ -201,8 +201,8 @@ int main() {
         r = bios(0x013C, 0, 0);              /* FNEXT — single-level loop */
         while ((r & 256) == 0) {             /* bit 8 = carry = end of directory */
             getname();
-            show(0, peek(0x9D70) == 2,       /* name + size; '/' marks a directory */
-                 peek(0x9D58) + peek(0x9D59) * 256);
+            show(0, peek(0x7070) == 2,       /* name + size; '/' marks a directory */
+                 peek(0x7058) + peek(0x7059) * 256);
             r = bios(0x013C, 0, 0);
         }
     }

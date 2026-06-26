@@ -20,7 +20,7 @@
  * FCLOSE=$0130 (registers FNAME in DIRLBA).  OS: SYS_GETCWD=$4003.
  *
  * Read-stream buffer: the fixed page-aligned scratch at $FC00 (clear of our
- * code/globals at $B000 and the stack at $FEFF). p8cc has no preprocessor.
+ * code/globals at $7A00 and the stack at $FEFF). p8cc has no preprocessor.
  */
 char src[80];
 char dst[80];

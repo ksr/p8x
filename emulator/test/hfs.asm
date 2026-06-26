@@ -6,9 +6,9 @@ CONOUT  = $0103
 CFREAD  = $010C
 FFIND   = $0118
 FCREATE = $011B
-FNAME   = $9D4A
-FSRC    = $9D56
-FLEN    = $9D58
+FNAME   = $704A
+FSRC    = $7056
+FLEN    = $7058
         .org $4000          ; booted to $4000 (has internal labels -> not PIC)
         LDA  #'T'           ; FNAME = "TEST" + 8 spaces
         STA  FNAME

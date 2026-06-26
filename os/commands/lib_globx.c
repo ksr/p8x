@@ -65,10 +65,10 @@ int glob_expand(char *pat, char *out, int maxn) {
     cnt = 0;
     r = bios(0x013C, 0, 0);                  /* FNEXT */
     while ((r & 256) == 0) {
-        if (peek(0x9D4A) != '.' && peek(0x9D70) == 1) {   /* a FILE, not '.'/'..'/dir */
+        if (peek(0x704A) != '.' && peek(0x7070) == 1) {   /* a FILE, not '.'/'..'/dir */
             j = 0;                            /* trim FNAME -> nm */
-            c = peek(0x9D4A);
-            while (j < 12 && c != 32) { nm[j] = c; j = j + 1; c = peek(0x9D4A + j); }
+            c = peek(0x704A);
+            while (j < 12 && c != 32) { nm[j] = c; j = j + 1; c = peek(0x704A + j); }
             nm[j] = 0;
             if (gmatch(leaf, nm) && cnt < maxn) {
                 base = cnt * 64;              /* out[slot] = dir prefix + name */

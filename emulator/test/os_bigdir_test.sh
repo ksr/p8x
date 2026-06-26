@@ -20,13 +20,13 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o bdos.bin --base 0x4000 >
 # resolves via PATH and lists the CWD through SYS_OPENCWD (the 16-bit CWD opener).
 python3 $ROOT/tools/clib.py $ROOT/os/commands/dir.c -o bddir.pp.c >/dev/null
 python3 $ROOT/compiler/p8cc.py bddir.pp.c -o bddir.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py bddir.asm -o bddir.bin --base 0xA700 >/dev/null
+python3 $ROOT/assembler/p8xasm.py bddir.asm -o bddir.bin --base 0x7A00 >/dev/null
 
 rm -f bd.img
 python3 $ROOT/tools/p8xfs.py create bd.img --v2 >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   bd.img bdos.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  bd.img /BIN >/dev/null
-python3 $ROOT/tools/p8xfs.py put    bd.img bddir.bin --name /BIN/DIR.BIN --load 0xA700 --exec 0xA700 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    bd.img bddir.bin --name /BIN/DIR.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
 # Pad the volume so the next allocated extent is well past LBA 256.
 head -c 30000 /dev/zero > bdpad.bin
 for i in 1 2 3 4 5 6 7 8; do

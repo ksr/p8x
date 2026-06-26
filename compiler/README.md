@@ -2,12 +2,12 @@
 
 A tiny C compiler that runs on the host and emits P8X assembly for
 [`assembler/p8xasm.py`](../assembler/p8xasm.py). Output targets the OS transient
-program area (`$B000`), so a compiled program is a RUNnable `.BIN`.
+program area (`$7A00`), so a compiled program is a RUNnable `.BIN`.
 
 ```sh
 python3 compiler/p8cc.py prog.c -o prog.asm
-python3 assembler/p8xasm.py prog.asm -o prog.bin --base 0xB000
-python3 tools/p8xfs.py put disk.img prog.bin --name /PROG.BIN --load 0xB000 --exec 0xB000
+python3 assembler/p8xasm.py prog.asm -o prog.bin --base 0x7A00
+python3 tools/p8xfs.py put disk.img prog.bin --name /PROG.BIN --load 0x7A00 --exec 0x7A00
 # then on the P8X:  RUN /PROG.BIN
 ```
 
@@ -50,7 +50,7 @@ There are two implementations of the same compiler:
   is literally the C codebase compiled for the host.
 
   **Milestone B** (run `p8cc.c` itself *on the P8X*) is a separate, open task: a
-  full translation unit's working set exceeds the `$B000` TPA, so it needs the
+  full translation unit's working set exceeds the `$7A00` TPA, so it needs the
   streaming/single-pass discipline the on-target assembler already uses — a RAM
   problem, not a language one. The language in `p8cc.c` is complete.
 

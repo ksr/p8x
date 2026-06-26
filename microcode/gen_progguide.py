@@ -225,16 +225,16 @@ msg:    .asciiz "P8X lives!\\r\\n" """,MONO))
 E.append(Paragraph("Writing a program for P8X/OS",H2))
 E.append(Paragraph(
  "Programs launched by the OS <b>RUN</b> command load into the transient "
- "program area at <b>$B000</b> and run via a <b>JSR</b> to their exec address. "
+ "program area at <b>$7A00</b> and run via a <b>JSR</b> to their exec address. "
  "The program ABI: <b>return to the shell with RTS</b> (P3, the stack, is the "
  "OS's - leave it balanced); on entry <b>P2 points at the argument tail</b> - "
  "the command text after the program name, NUL-terminated (so "
  "<font face='Courier'>RUN EDIT FOO.ASM</font> enters with P2 -> "
  "<font face='Courier'>\"FOO.ASM\"</font>); programs that take no arguments "
- "ignore P2. Build with <font face='Courier'>.org $B000</font> and the host "
- "assembler's <font face='Courier'>--base 0xB000</font>, or assemble on-target "
+ "ignore P2. Build with <font face='Courier'>.org $7A00</font> and the host "
+ "assembler's <font face='Courier'>--base 0x7A00</font>, or assemble on-target "
  "with ASM. A file created on-target carries load/exec 0, which the OS maps to "
- "$B000, so it is directly RUNnable. The BIOS jump table at $0100 "
+ "$7A00, so it is directly RUNnable. The BIOS jump table at $0100 "
  "(console + CF, the FFIND/FCREATE/FDELETE/FCOMMIT file calls, the FOPEN/FGETB "
  "and FWOPEN/FPUTB/FCLOSE byte streams, and FRESOLVE/FNORM/FOPENDIR/FNEXT) "
  "is the only entry point a program needs - it must not call into OS internals.",B))

@@ -67,7 +67,7 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 ## Programs (the program ABI)
 
 The OS ships only a shell + built-ins; bigger tools are **standalone programs**
-that load into the transient program area (TPA, `$B000`) and are launched with
+that load into the transient program area (TPA, `$7A00`) and are launched with
 `RUN`. A fresh `os/run.sh` disk carries the three big interpreters/tools below
 under `/BIN`, **plus the userland C commands** (`DIR`, `PWD`, `TREE`, `CAT`,
 `WC`, `GREP`, … — see [commands/README.md](commands/README.md)):
@@ -103,7 +103,7 @@ e.g. `PATH /BIN;/UTIL` — but does not persist across reboots.)
   program name, NUL-terminated (e.g. `RUN EDIT FOO.ASM` enters with `P2` → `"FOO.ASM"`);
   programs that take no arguments just ignore `P2`;
 - a program built on-target (its entry's load/exec are `0`, as `FCREATE` writes)
-  is loaded at the TPA base `$B000`, so assemble with `.org $B000`. Host-installed
+  is loaded at the TPA base `$7A00`, so assemble with `.org $7A00`. Host-installed
   programs set explicit non-zero load/exec and load there instead.
 
 ## How it fits together
@@ -120,8 +120,8 @@ place. Those addresses are an ABI — see the full table in
 ROM (EEPROM $0000-$3FFF, rev D)     RAM ($4000-$FEFF, 48K)
   $0000 reset -> $0160 monitor        $4000 P8X/OS kernel + shell  (from CF, rev D)
   $0100 BIOS jump table  <------------ JSR CONOUT / CFREAD / ...
-  $0160 monitor body                   $9E00 sector buffer (shared ABI)
-                                       $A000 OS variables
+  $0160 monitor body                   $7100 sector buffer (shared ABI)
+                                       $7300 OS variables
 ```
 
 Boot path: monitor `B` reads the boot block (LBA 0), checks the `P8`

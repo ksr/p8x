@@ -18,14 +18,14 @@ build_disk() {   # $1 = py|host
         python3 $ROOT/tools/clib.py $ROOT/os/commands/$c.c -o $c.pp.c   # splice //#use libs
         if [ "$1" = host ]; then ./p8cc_host < $c.pp.c > $c.asm
         else python3 $ROOT/compiler/p8cc.py $c.pp.c -o $c.asm >/dev/null; fi
-        python3 $ROOT/assembler/p8xasm.py $c.asm -o $c.bin --base 0xA700 >/dev/null
+        python3 $ROOT/assembler/p8xasm.py $c.asm -o $c.bin --base 0x7A00 >/dev/null
     done
     rm -f pg.img
     python3 $ROOT/tools/p8xfs.py create pg.img >/dev/null
     python3 $ROOT/tools/p8xfs.py boot   pg.img osc.bin >/dev/null
     python3 $ROOT/tools/p8xfs.py mkdir  pg.img /BIN >/dev/null
     for c in head tail more cat; do up=$(echo $c | tr a-z A-Z)
-        python3 $ROOT/tools/p8xfs.py put pg.img $c.bin --name /BIN/$up.BIN --load 0xA700 --exec 0xA700 >/dev/null
+        python3 $ROOT/tools/p8xfs.py put pg.img $c.bin --name /BIN/$up.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
     done
     python3 -c "import sys; sys.stdout.write(''.join('L%02d\r\n'%i for i in range(1,31)))" > pg.dat
     python3 $ROOT/tools/p8xfs.py put pg.img pg.dat --name N.TXT --load 0 --exec 0 >/dev/null

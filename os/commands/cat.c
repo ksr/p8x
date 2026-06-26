@@ -17,7 +17,7 @@
  * shell's CWD. So we build an ABSOLUTE path (the CWD via SYS_GETCWD, unless the
  * argument is already absolute), FRESOLVE it (always starts at root, so it is
  * CWD-independent), then FOPEN. The 512-byte read buffer is a fixed page-aligned
- * scratch high in the TPA ($FC00), clear of our code/globals at $B000 and the
+ * scratch high in the TPA ($FC00), clear of our code/globals at $7A00 and the
  * stack at $FEFF (p8cc has no preprocessor, so it is written as a literal).
  *
  * BIOS: FRESOLVE=$0133 (P1=path), FOPEN=$0124 (P1=buffer; C=1 not found),

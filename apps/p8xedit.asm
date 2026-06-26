@@ -29,12 +29,12 @@ FCREATE = $011B         ; create root file FNAME from FSRC/FLEN; C=1 err
 FDELETE = $011E         ; tombstone root file FNAME; C=1 not found
 
 ; ---- BIOS shared FS parameter block -----------------------------------------
-LBA     = $9D47         ; 24-bit LBA (lo/mid/hi)
-LBA1    = $9D48
-LBA2    = $9D49
-FNAME   = $9D4A         ; 12-byte space-padded name
-FSRC    = $9D56         ; FCREATE source address
-FLEN    = $9D58         ; length (FCREATE in / FFIND out)
+LBA     = $7047         ; 24-bit LBA (lo/mid/hi)
+LBA1    = $7048
+LBA2    = $7049
+FNAME   = $704A         ; 12-byte space-padded name
+FSRC    = $7056         ; FCREATE source address
+FLEN    = $7058         ; length (FCREATE in / FFIND out)
 
 CR      = $0D
 LF      = $0A
@@ -65,7 +65,7 @@ KLEN    = $BF0D         ; bytes to insert (line length + 1 for LF)
 DIGIT   = $BF0E         ; DECOUT tens scratch
 CMDCH   = $BF0F         ; current command letter
 
-        .org $A700
+        .org $7A00
 ; =============================================================================
 ; Entry
 ; =============================================================================

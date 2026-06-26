@@ -18,7 +18,7 @@ across the P8X project. Authoritative sources where a term has one:
 | **ABI** | Application Binary Interface — the fixed binary contracts (entry addresses, layouts, conventions) that let separately-built code interoperate. See the BIOS jump table, the TPA, SBUF/LBA. |
 | **API** | Application Programming Interface — the *source*-level contract (vs ABI, the binary one). |
 | **BIOS** | The monitor's published service routines (jump table at `$0100`). |
-| **TPA** | Transient Program Area — RAM where `RUN`-loaded programs and the OS's `>`-redirect buffer live. `$B000` (rev C; was `$A000`). |
+| **TPA** | Transient Program Area — RAM where `RUN`-loaded programs and the OS's `>`-redirect buffer live. `$7A00`. |
 | **BOM** | Bill of Materials — the orderable parts list (`hardware/p8x-bom.csv`). |
 | **DNP** | Do Not Populate — a footprint laid down on the board but left unstuffed (provisioned for later). |
 | **DRC** | Design Rule Check — the EDA tool's electrical/clearance verification of a routed board. |
@@ -114,9 +114,9 @@ The word burned to the 4× 28C64 EPROMs and interpreted by the emulator. Bit map
 |------|---------|
 | **EEPROM** | `$0000–$3FFF` (16 KB, rev D) — monitor + BIOS at `$0000` (~4.3 KB used). BASIC is no longer ROM-resident; it runs as the disk program `/BIN/BASIC.BIN`. |
 | **SRAM / RAM** | `$4000–$FEFF` (48 KB, rev D — 2× 62256). |
-| **SBUF** | 512-byte sector buffer at `$9E00` (fixed by the BIOS — `CFWRITE` reads from it). |
-| **LBA** | Logical Block Address — the CF sector number; the BIOS reads the target LBA byte from a fixed `$9D47`. |
-| **RBUF** | The OS's `>`-redirect capture buffer (= the TPA, `$B000`). |
+| **SBUF** | 512-byte sector buffer at `$7100` (fixed by the BIOS — `CFWRITE` reads from it). |
+| **LBA** | Logical Block Address — the CF sector number; the BIOS reads the target LBA byte from a fixed `$7047`. |
+| **RBUF** | The OS's `>`-redirect capture buffer (= the TPA, `$7A00`). |
 | **CONIN / CONOUT / CONST** | BIOS console in / out / status (`$0100/$0103/$0106`). |
 | **CFINIT / CFREAD / CFWRITE** | BIOS CompactFlash init / read-sector / write-sector (`$0109/$010C/$010F`). |
 | **PUTS / PHEX8** | BIOS print-string / print-byte-as-hex (`$0112/$0115`). |

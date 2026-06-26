@@ -6,9 +6,9 @@ CONOUT  = $0103
 FFIND   = $0118
 FCREATE = $011B
 FDELETE = $011E
-FNAME   = $9D4A
-FSRC    = $9D56
-FLEN    = $9D58
+FNAME   = $704A
+FSRC    = $7056
+FLEN    = $7058
         .org $4000
         LDA  #'T'           ; FNAME = "TEST" + 8 spaces
         STA  FNAME

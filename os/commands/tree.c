@@ -7,15 +7,15 @@
  * subdirectory LBAs, then descends — because FNEXT's cursor is global BIOS
  * state. Searches the CWD; per-level children capped at 24.
  *
- * BIOS: FOPENDIRAT=$0142, FSDIRBUF=$0145, FNEXT=$013C (name->$9D4A, flag->$9D70,
- * start LBA->$9D47). OS: SYS_CWDLBA=$4006.
+ * BIOS: FOPENDIRAT=$0142, FSDIRBUF=$0145, FNEXT=$013C (name->$704A, flag->$7070,
+ * start LBA->$7047). OS: SYS_CWDLBA=$4006.
  */
-int putname() {                              /* FNAME ($9D4A, 12, space-padded) */
+int putname() {                              /* FNAME ($704A, 12, space-padded) */
     int i;
     int c;
     i = 0;
     while (i < 12) {
-        c = peek(0x9D4A + i);
+        c = peek(0x704A + i);
         if (c != 32) { putchar(c); }
         i = i + 1;
     }
@@ -31,13 +31,13 @@ int walk(int depth) {
     nsub = 0;
     r = bios(0x013C, 0, 0);                  /* FNEXT */
     while ((r & 256) == 0) {
-        if (peek(0x9D4A) != '.') {           /* skip '.' and '..' */
+        if (peek(0x704A) != '.') {           /* skip '.' and '..' */
             i = 0;
             while (i < depth) { putchar(32); putchar(32); i = i + 1; }
             putname();
-            if (peek(0x9D70) == 2) {         /* directory */
+            if (peek(0x7070) == 2) {         /* directory */
                 putchar('/');
-                if (nsub < 24) { sub[nsub] = peek(0x9D47) + peek(0x9D48) * 256; nsub = nsub + 1; }
+                if (nsub < 24) { sub[nsub] = peek(0x7047) + peek(0x7048) * 256; nsub = nsub + 1; }
             }
             putchar(10);
         }
@@ -45,8 +45,8 @@ int walk(int depth) {
     }
     i = 0;                                    /* descend into recorded children */
     while (i < nsub) {
-        poke(0x9D48, sub[i] / 256);          /* FOPENDIRAT high byte (LBA1) */
-        poke(0x9D49, 0);
+        poke(0x7048, sub[i] / 256);          /* FOPENDIRAT high byte (LBA1) */
+        poke(0x7049, 0);
         bios(0x0142, 0, sub[i]);             /* FOPENDIRAT(child): A=low, LBA1=high */
         bios(0x0145, 0, 0xEA);               /* FSDIRBUF: our page */
         walk(depth + 1);

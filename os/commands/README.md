@@ -2,7 +2,7 @@
 
 Userland commands for P8X/OS, written in C and compiled with
 [`p8cc`](../../compiler/README.md) to loadable `/BIN/*.BIN` programs. They run
-in the transient program area (`$B000`) under `RUN`, reach OS/BIOS services
+in the transient program area (`$7A00`) under `RUN`, reach OS/BIOS services
 through the `bios()`/`peek`/`poke`/`argstr()` builtins and the OS syscall table
 (see [../README.md](../README.md)), and read/write the standard streams via
 `getchar`/`putchar`/`puts` — so the shell can redirect (`<`/`>`) and pipe (`|`)
@@ -26,7 +26,7 @@ print a one-line usage summary and exit.
 > `-h`). The kernel keeps only what can't be a `/BIN` program — `RUN`, the
 > authoring/FS primitives (`SAVE`/`DEP`/`LOAD`/`DEL`/`MKDIR`/`RMDIR`/`CD`), and
 > `HELP`/`EXIT`/`PACK`/`FSCK`/`FORMAT`. **`DUMP` stays native** — as a `/BIN`
-> program it would load into the `$B000` TPA and overwrite the very memory it
+> program it would load into the `$7A00` TPA and overwrite the very memory it
 > dumps. Consequence: a freshly-`FORMAT`ted card (no `/BIN`) can't `DIR`/`CAT`
 > until `/BIN` is repopulated (from the host, or a future master CF — backlog).
 
@@ -59,13 +59,13 @@ print a one-line usage summary and exit.
   `FSDIRBUF` ($0145) to move iteration off the shared `SBUF` so output can stream.
   `-R`: the `FNEXT` cursor is **global** BIOS state, so each level streams its
   entries while only recording child-directory LBAs (16-bit) into a small
-  per-level array, then descends (poking the high byte into `LBA1`/`$9D48` before
+  per-level array, then descends (poking the high byte into `LBA1`/`$7048` before
   `FOPENDIRAT`) — bounded memory, no whole-tree buffer.
 - **pwd.c** — `SYS_GETCWD` ($4003): the CWD comes through the syscall ABI, not
   by peeking OS RAM.
 - **wc.c / grep.c** — stdin filters that compose with `<`/`|`. wc counts are
   16-bit. grep also takes an optional **file argument** (opened like cat —
-  absolute path + `FRESOLVE`/`FOPEN`, read buffer at `$E000` — else stdin) and
+  absolute path + `FRESOLVE`/`FOPEN`, read buffer at `$FC00` — else stdin) and
   matches a basic regex via the classic tiny matcher
   (`matchhere`/`match`): a single self-recursive `matchhere` (the `c*` case is an
   inline loop, *not* a separate `matchstar`) — deliberately **no forward
@@ -76,7 +76,7 @@ print a one-line usage summary and exit.
   N in a flat ring buffer (`buf[slot*128+col]`, N≤20); `more` pages 23 lines then
   reads the continue key from the **console** (`CONIN`, BIOS $0100) — separate
   from the redirected stdin — so it pauses for both `MORE file` and `cmd | MORE`.
-- **cp.c / mv.c** — copy SRC (read stream, buffer at `$E000`) to DST (write
+- **cp.c / mv.c** — copy SRC (read stream, buffer at `$FC00`) to DST (write
   stream). The read and write streams use **independent** buffers, so the
   byte loop interleaves them; but `FRESOLVE`/`FOPEN` and the write stream all
   transit `SBUF`, so DST is resolved *before* `FWOPEN` (which zeroes `SBUF`
@@ -93,7 +93,7 @@ print a one-line usage summary and exit.
   directory through `SBUF` — which is also the write stream's buffer, so the
   naïve version overwrites each file's already-buffered output with directory
   data (`.   BBB`). Fix: cat points `FSDIRBUF` ($0145) at page `$FA`, and
-  **FSCAN now honors that page too** (not just `FNEXT`; default `$9E`=`SBUF`
+  **FSCAN now honors that page too** (not just `FNEXT`; default `$71`=`SBUF`
   keeps every other caller byte-identical), so the per-file path walks read
   into `$FA00` and leave the write stream's `SBUF` intact. This is the general
   fix that lets any glob-expanding command redirect to a file — `cp`/`mv`'s
@@ -107,8 +107,8 @@ three into `/BIN` on a fresh disk):
 
 ```sh
 python3 compiler/p8cc.py os/commands/dir.c -o dir.asm
-python3 assembler/p8xasm.py dir.asm -o dir.bin --base 0xB000
-python3 tools/p8xfs.py put disk.img dir.bin --name /BIN/DIR.BIN --load 0xB000 --exec 0xB000
+python3 assembler/p8xasm.py dir.asm -o dir.bin --base 0x7A00
+python3 tools/p8xfs.py put disk.img dir.bin --name /BIN/DIR.BIN --load 0x7A00 --exec 0x7A00
 # on the P8X:   DIR /BIN        (bare name via PATH)   or   RUN /BIN/DIR.BIN /BIN
 ```
 
@@ -180,7 +180,7 @@ commands inside these limits, especially for `p8cc.c` parity):
   at its top, so they precede the command's own globals after splicing).
 - **TPA size limit (not a compiler bug):** the shared file read buffer lives at
   `$FC00` (just under the stack), so a command's code+globals must stay below
-  `$FC00` (~19 KB from the `$B000` base). This bit `sed`/`diff` built with the
+  `$FC00` (~33 KB from the `$7A00` base). This bit `sed`/`diff` built with the
   *native* `p8cc.c`, whose codegen is ~8% larger than `p8cc.py`'s: with the old
   `$E000` buffer they overran it and read file data into their own code. Moving
   the buffer to `$FC00` fixed it — both build on **both** compilers now. (Was

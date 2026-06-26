@@ -22,15 +22,15 @@ build_disk() {   # $1 = py|host
         python3 $ROOT/tools/clib.py $ROOT/os/commands/$c.c -o $c.pp.c   # splice //#use libs
         if [ "$1" = host ]; then ./p8cc_host < $c.pp.c > $c.asm
         else python3 $ROOT/compiler/p8cc.py $c.pp.c -o $c.asm >/dev/null; fi
-        python3 $ROOT/assembler/p8xasm.py $c.asm -o $c.bin --base 0xA700 >/dev/null
+        python3 $ROOT/assembler/p8xasm.py $c.asm -o $c.bin --base 0x7A00 >/dev/null
     done
     rm -f fo.img
     python3 $ROOT/tools/p8xfs.py create fo.img >/dev/null
     python3 $ROOT/tools/p8xfs.py boot   fo.img osc.bin >/dev/null
     python3 $ROOT/tools/p8xfs.py mkdir  fo.img /BIN >/dev/null
     python3 $ROOT/tools/p8xfs.py mkdir  fo.img /SUB >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    fo.img cp.bin --name /BIN/CP.BIN --load 0xA700 --exec 0xA700 >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    fo.img mv.bin --name /BIN/MV.BIN --load 0xA700 --exec 0xA700 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    fo.img cp.bin --name /BIN/CP.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    fo.img mv.bin --name /BIN/MV.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
     python3 $ROOT/tools/p8xfs.py put    fo.img fo_src.dat --name SRC.TXT --load 0 --exec 0 >/dev/null
     python3 $ROOT/tools/p8xfs.py put    fo.img fo_src.dat --name MS.TXT  --load 0 --exec 0 >/dev/null
 }

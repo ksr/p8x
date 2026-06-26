@@ -52,7 +52,7 @@ int openarg(char *a) {
     path[i] = 0;
     bios(0x0133, path, 0);                    /* FRESOLVE */
     /* Read buffer at $FC00 — just below the stack page ($FE00), so it clears even
-     * the largest command's code/globals (they grow up from $B000). $E000 was too
+     * the largest command's code/globals (they grow up from $7A00). $E000 was too
      * low: a big build (e.g. sed/diff on the native p8cc.c) overran it. */
     if (bios(0x0124, 0xFC00, 0) & 256) { return 2; }   /* FOPEN; carry = not found */
     return 1;

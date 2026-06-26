@@ -15,8 +15,8 @@
  * descends (same shape as DIR -R). Per-level children capped at 24; path depth
  * bounded by the stack.
  *
- * BIOS: FOPENDIRAT=$0142, FSDIRBUF=$0145, FNEXT=$013C (name->$9D4A, flag->$9D70,
- * start LBA->$9D47). OS: SYS_GETCWD=$4003, SYS_CWDLBA=$4006.
+ * BIOS: FOPENDIRAT=$0142, FSDIRBUF=$0145, FNEXT=$013C (name->$704A, flag->$7070,
+ * start LBA->$7047). OS: SYS_GETCWD=$4003, SYS_CWDLBA=$4006.
  */
 //#use glob   /* gmatch(pat, name): case-insensitive * ? matcher */
 
@@ -45,14 +45,14 @@ int nmatch(char *name) {
     return contains(name, pat);
 }
 
-int rdname() {                               /* FNAME ($9D4A, 12, space-padded) -> nm */
+int rdname() {                               /* FNAME ($704A, 12, space-padded) -> nm */
     int i;
     int k;
     int c;
     k = 0;
     i = 0;
     while (i < 12) {
-        c = peek(0x9D4A + i) & 255;
+        c = peek(0x704A + i) & 255;
         if (c != 32) { nm[k] = c; k = k + 1; }
         i = i + 1;
     }
@@ -72,7 +72,7 @@ int walk(int plen) {                          /* plen = length of cur (no traili
     nsub = 0;
     r = bios(0x013C, 0, 0);                  /* FNEXT */
     while ((r & 256) == 0) {
-        if (peek(0x9D4A) != '.') {           /* skip '.' / '..' */
+        if (peek(0x704A) != '.') {           /* skip '.' / '..' */
             rdname();
             if (nmatch(nm)) {                /* print cur + '/' + nm */
                 i = 0;
@@ -82,8 +82,8 @@ int walk(int plen) {                          /* plen = length of cur (no traili
                 while (nm[i] != 0) { putchar(nm[i]); i = i + 1; }
                 putchar(10);
             }
-            if (peek(0x9D70) == 2 && nsub < 24) {   /* a subdirectory -> record it */
-                clba[nsub] = peek(0x9D47) + peek(0x9D48) * 256;   /* 16-bit child LBA */
+            if (peek(0x7070) == 2 && nsub < 24) {   /* a subdirectory -> record it */
+                clba[nsub] = peek(0x7047) + peek(0x7048) * 256;   /* 16-bit child LBA */
                 k = 0;
                 while (nm[k] != 0) { cn[nsub * 16 + k] = nm[k]; k = k + 1; }
                 cn[nsub * 16 + k] = 0;
@@ -95,8 +95,8 @@ int walk(int plen) {                          /* plen = length of cur (no traili
 
     i = 0;                                    /* descend into each recorded child */
     while (i < nsub) {
-        poke(0x9D48, clba[i] / 256);         /* FOPENDIRAT high byte (LBA1) */
-        poke(0x9D49, 0);
+        poke(0x7048, clba[i] / 256);         /* FOPENDIRAT high byte (LBA1) */
+        poke(0x7049, 0);
         bios(0x0142, 0, clba[i]);            /* FOPENDIRAT(child): A=low, LBA1=high */
         bios(0x0145, 0, 0xEA);               /* FSDIRBUF: our page */
         oldp = plen;

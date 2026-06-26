@@ -33,11 +33,11 @@ EOF
 cat $ROOT/compiler/p8lib.c prog.c > lf.c        # prepend the library (no #include/linker)
 
 run() {   # $1 = asm file -> emulator output (letters+digits)
-    python3 $ROOT/assembler/p8xasm.py "$1" -o lf.bin --base 0xA700 >/dev/null
+    python3 $ROOT/assembler/p8xasm.py "$1" -o lf.bin --base 0x7A00 >/dev/null
     rm -f lf.img
     python3 $ROOT/tools/p8xfs.py create lf.img >/dev/null
     python3 $ROOT/tools/p8xfs.py boot   lf.img osc.bin >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    lf.img lf.bin --name LF.BIN --load 0xA700 --exec 0xA700 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    lf.img lf.bin --name LF.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
     printf 'B\rRUN LF.BIN\r' | ../p8xemu -l 120000000 -c lf.img eeprom.bin 2>/dev/null \
         | LC_ALL=C tr -d '\0\r' | sed -n '/RUN LF.BIN/,$p' | grep -v 'RUN LF.BIN' | tr -dc 'A-Z0-9'
 }

@@ -6,10 +6,10 @@ CONOUT  = $0103
 FCREATE = $011B
 FOPEN   = $0124
 FGETB   = $0127
-HEXL    = $9D42
-FNAME   = $9D4A
-FSRC    = $9D56
-FLEN    = $9D58
+HEXL    = $7042
+FNAME   = $704A
+FSRC    = $7056
+FLEN    = $7058
         .org $4000
         LDP1 #FNAME         ; FNAME = "T" + 11 spaces
         LDA  #'T'

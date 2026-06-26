@@ -30,7 +30,7 @@ where the code and its data live and how you start it):
 |-------|------|------|------------|
 | Standalone | `$0000` | `$8000` | burned as the whole ROM; `run.sh` / tests |
 | Disk | `$4000` | `$A000` | a bootable P8XFS image, started with the monitor's `B` command (rev D loads the OS region at `$4000`) |
-| Run-from-OS | `$B000` | `$C500` | a TPA program (`BASIC.BIN`); `RUN` it from the OS, `BYE` returns to the OS |
+| Run-from-OS | `$7A00` | `$C500` | a TPA program (`BASIC.BIN`); `RUN` it from the OS, `BYE` returns to the OS |
 
 `Code` is where the interpreter runs and `Data` is the base of its variables and
 program storage; everything else about the language is the same. The usual way

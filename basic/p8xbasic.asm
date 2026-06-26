@@ -31,11 +31,11 @@ BS     = $08
 FLOADAT = $013F          ; bulk-read FLEN bytes from LBA into (P1)
 FFIND   = $0118          ; find root file FNAME -> LBA + FLEN; C=1 if not found
 FCREATE = $011B          ; create root file FNAME from FSRC/FLEN; C=1 on error
-LBA     = $9D47          ; CFREAD target LBA (byte 0); LBA1 = byte 1
-LBA1    = $9D48
-FNAME   = $9D4A          ; 12-byte filename (space-padded)
-FSRC    = $9D56          ; FCREATE source address
-FLEN    = $9D58          ; file length in bytes
+LBA     = $7047          ; CFREAD target LBA (byte 0); LBA1 = byte 1
+LBA1    = $7048
+FNAME   = $704A          ; 12-byte filename (space-padded)
+FSRC    = $7056          ; FCREATE source address
+FLEN    = $7058          ; file length in bytes
 
 LBUF   = BASRAM+$00          ; input line buffer
 NUM1   = BASRAM+$60          ; 16-bit math operands / results
@@ -72,8 +72,8 @@ LFT    = BASRAM+$8D          ; comparison left operand (2)
 FNDF   = BASRAM+$8F          ; FINDLINE: 1 if line found
 GSTK   = BASRAM+$90          ; GOSUB return stack (3 x 4 bytes: line record + text ptr)
 GSP    = BASRAM+$9C          ; GOSUB stack depth
-JUMPF  = BASRAM+$9D          ; RUN: 1 -> set CURLINE = JUMPADDR directly
-JUMPADDR= BASRAM+$9E         ; direct jump target (line record pointer)
+JUMPF  = BASRAM+$70          ; RUN: 1 -> set CURLINE = JUMPADDR directly
+JUMPADDR= BASRAM+$71         ; direct jump target (line record pointer)
 GTMP   = BASRAM+$A0          ; scratch (2)
 FSP    = BASRAM+$A2          ; FOR stack depth
 FFP    = BASRAM+$A3          ; pointer to top FOR frame (2)

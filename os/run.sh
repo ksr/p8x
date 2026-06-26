@@ -29,28 +29,28 @@ if [ ! -f "$disk" ]; then
     python3 "$root/tools/p8xfs.py" boot   "$disk" "$build/p8xos.bin" >/dev/null
     python3 "$root/tools/p8xfs.py" mkdir  "$disk" /BIN >/dev/null
     # a tiny program (prints "HI") so RUN /BIN/HI.BIN works
-    printf '        .org $A700\n        LDA #%cH%c\n        JSR $0103\n        LDA #%cI%c\n        JSR $0103\n        LDA #$0D\n        JSR $0103\n        LDA #$0A\n        JSR $0103\n        RTS\n' "'" "'" "'" "'" > "$build/hi.asm"
-    python3 "$root/assembler/p8xasm.py" "$build/hi.asm" -o "$build/hi.bin" --base 0xA700 >/dev/null
+    printf '        .org $7A00\n        LDA #%cH%c\n        JSR $0103\n        LDA #%cI%c\n        JSR $0103\n        LDA #$0D\n        JSR $0103\n        LDA #$0A\n        JSR $0103\n        RTS\n' "'" "'" "'" "'" > "$build/hi.asm"
+    python3 "$root/assembler/p8xasm.py" "$build/hi.asm" -o "$build/hi.bin" --base 0x7A00 >/dev/null
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/hi.bin" --name /BIN/HI.BIN >/dev/null
     # OS-runnable BASIC: TPA build (code+data+scratch in $B000.., clear of the OS)
     # whose BYE returns to the OS cold start -> RUN /BIN/BASIC.BIN, then BYE.
     python3 "$root/assembler/p8xasm.py" "$root/basic/p8xbasic.asm" -o "$build/basicrun.bin" \
-        --base 0xA700 -D BASORG=0xA700 -D BASRAM=0xC500 -D PBUF=0xE000 -D MONITOR=0x4000 >/dev/null
+        --base 0x7A00 -D BASORG=0x7A00 -D BASRAM=0xC500 -D PBUF=0xE000 -D MONITOR=0x4000 >/dev/null
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/basicrun.bin" \
-        --name /BIN/BASIC.BIN --load 0xA700 --exec 0xA700 >/dev/null
+        --name /BIN/BASIC.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
     # EDIT: line-oriented text editor (TPA program) -> RUN /BIN/EDIT.BIN NAME
     python3 "$root/assembler/p8xasm.py" "$root/apps/p8xedit.asm" -o "$build/edit.bin" \
-        --base 0xA700 >/dev/null
+        --base 0x7A00 >/dev/null
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/edit.bin" \
-        --name /BIN/EDIT.BIN --load 0xA700 --exec 0xA700 >/dev/null
+        --name /BIN/EDIT.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
     # ASM: native two-pass assembler (logic + generated opcode table) -> RUN
     # /BIN/ASM.BIN SRC.ASM OUT.BIN.  Pair with EDIT for an on-target toolchain.
     python3 "$root/generators/gen_p8xopc.py" "$build/opctab.asm"
     cat "$root/apps/p8xasm.asm" "$build/opctab.asm" > "$build/asmfull.asm"
     python3 "$root/assembler/p8xasm.py" "$build/asmfull.asm" -o "$build/asm.bin" \
-        --base 0xA700 >/dev/null
+        --base 0x7A00 >/dev/null
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/asm.bin" \
-        --name /BIN/ASM.BIN --load 0xA700 --exec 0xA700 >/dev/null
+        --name /BIN/ASM.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
     # C-as-OS-commands (compiled with p8cc): demonstrate the OS syscalls, I/O
     # redirection and pipes out of the box. Run by bare name via PATH (/BIN),
     # e.g.  DIR /BIN ,  CAT README.TXT ,  CAT README.TXT | GREP hello | WC ,
@@ -60,10 +60,10 @@ if [ ! -f "$disk" ]; then
         # a no-op passthrough for commands with no //#use directive.
         python3 "$root/tools/clib.py" "$root/os/commands/$ex.c" -o "$build/$ex.c"
         python3 "$root/compiler/p8cc.py" "$build/$ex.c" -o "$build/$ex.asm" >/dev/null
-        python3 "$root/assembler/p8xasm.py" "$build/$ex.asm" -o "$build/$ex.bin" --base 0xA700 >/dev/null
+        python3 "$root/assembler/p8xasm.py" "$build/$ex.asm" -o "$build/$ex.bin" --base 0x7A00 >/dev/null
         up=$(echo "$ex" | tr a-z A-Z)
         python3 "$root/tools/p8xfs.py" put "$disk" "$build/$ex.bin" \
-            --name "/BIN/$up.BIN" --load 0xA700 --exec 0xA700 >/dev/null
+            --name "/BIN/$up.BIN" --load 0x7A00 --exec 0x7A00 >/dev/null
     done
     printf 'hello from P8X/OS\n' > "$build/readme.txt"
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/readme.txt" --name /README.TXT >/dev/null
@@ -72,7 +72,7 @@ if [ ! -f "$disk" ]; then
     # RUN /BIN/ASM.BIN HELLO.ASM HELLO.BIN, then RUN HELLO.BIN -> prints HELLO.
     cat > "$build/hello.asm" <<'ASMEOF'
 ; sample program -- assemble with: RUN /BIN/ASM.BIN HELLO.ASM HELLO.BIN
-        .org $A700
+        .org $7A00
         LDP1 #msg
 lp:     LDA  (P1)+
         JZ   done

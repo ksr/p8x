@@ -2,7 +2,7 @@
 """p8cc - a tiny C cross-compiler for the P8X.
 
 Emits P8X assembly (for assembler/p8xasm.py) targeting the OS transient program
-area ($B000), so the output is a RUNnable program. Grown in phases.
+area ($7A00), so the output is a RUNnable program. Grown in phases.
 
 Supported now:
   types        int (16-bit), char (8-bit), pointers (T *), arrays (T a[N]),
@@ -37,7 +37,7 @@ Execution model
   Types are tracked so pointer arithmetic scales by element size and a
   dereference loads/stores the right width (int/pointer = 2 bytes, char = 1).
 
-Usage:  p8cc.py prog.c [-o prog.asm]   then  p8xasm.py prog.asm -o prog.bin --base 0xB000
+Usage:  p8cc.py prog.c [-o prog.asm]   then  p8xasm.py prog.asm -o prog.bin --base 0x7A00
 """
 import sys
 
@@ -816,7 +816,7 @@ class Gen:
             if d[0] == "gvar":
                 _, base, ptr, arr, count, name, init = d
                 self.declare_global(base, ptr, arr, count, name, init)
-        self.emit("        .org $B000",
+        self.emit("        .org $7A00",
                   "        LDA #%d" % (CSTACK_TOP & 0xFF), "        STA __csp",
                   "        LDA #%d" % (CSTACK_TOP >> 8), "        STA __csp+1",
                   "        JSR _f_main", "        RTS")
