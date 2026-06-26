@@ -115,6 +115,16 @@ Last updated: 2026-06-25
 
 ## IDEAS
 
+- [ ] **Move `tools/clib.py` -> `compiler/clib.py`.** clib.py is a C-toolchain
+      preprocessing pass (the `//#use lib_*.c` splicer) — conceptually a sibling
+      of `p8cc.py`/`p8cc.c` and the prototype of the future native CPP pass, not a
+      disk/ROM utility like the rest of `tools/`. Grouping it under `compiler/`
+      makes the toolchain legible. The `lib_*.c` files STAY in `os/commands/`:
+      they're command-specific helpers and clib resolves `//#use NAME` to
+      `lib_NAME.c` relative to the *source* dir. Low-risk but mechanical — update
+      the `$ROOT/tools/clib.py` refs in `os/run.sh` and the ~8 `c_*`/`os_*` test
+      scripts, plus doc mentions, then re-run the suite. Deferred (2026-06-26).
+
 - [ ] **Wildcards — phase 2 (beyond DIR).** `DIR` now globs (`*`/`?`, see DONE)
       via `lib_glob.c`. Extend it: (a) per-command — `//#use glob` in other
       commands that take a name (e.g. a `FIND` glob mode, or `CAT`/`CP` matching);
