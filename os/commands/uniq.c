@@ -10,26 +10,9 @@
 char cur[130];
 char prev[130];
 
-int readline(char *buf) {                     /* 1 if a line read, 0 at EOF */
-    int n;
-    int c;
-    n = 0;
-    c = nextc();
-    if (c == 65535) { return 0; }
-    while (c != 65535 && c != 10) {
-        if (c != 13 && n < 128) { buf[n] = c; n = n + 1; }
-        c = nextc();
-    }
-    buf[n] = 0;
-    return 1;
-}
+//#use readline
+//#use streq
 
-int streq(char *p, char *q) {
-    int i;
-    i = 0;
-    while (p[i] != 0 && p[i] == q[i]) { i = i + 1; }
-    return p[i] == q[i];
-}
 
 int main() {
     char *a;

@@ -16,29 +16,9 @@
 char src[80];
 char dst[80];
 
-int abspath(char *out, char *a) {             /* arg word -> absolute path; returns chars used */
-    int i;
-    int j;
-    i = 0;
-    if (*a != '/') {
-        bios(0x4003, out, 0);                 /* SYS_GETCWD */
-        while (out[i] != 0) { i = i + 1; }
-        if (i > 0 && out[i - 1] != '/') { out[i] = '/'; i = i + 1; }
-    }
-    j = 0;
-    while (a[j] != 0 && a[j] != 13 && a[j] != 32) {
-        out[i] = a[j]; i = i + 1; j = j + 1;
-    }
-    out[i] = 0;
-    return j;
-}
+//#use abspath
+//#use streq
 
-int streq(char *p, char *q) {
-    int i;
-    i = 0;
-    while (p[i] != 0 && p[i] == q[i]) { i = i + 1; }
-    return p[i] == q[i];                       /* both reached NUL together */
-}
 
 int main() {
     char *a;

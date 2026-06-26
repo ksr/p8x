@@ -15,19 +15,7 @@ char rep[64];
 char line[130];
 char out[260];
 
-int readline(char *buf) {
-    int n;
-    int c;
-    n = 0;
-    c = nextc();
-    if (c == 65535) { return 0; }
-    while (c != 65535 && c != 10) {
-        if (c != 13 && n < 128) { buf[n] = c; n = n + 1; }
-        c = nextc();
-    }
-    buf[n] = 0;
-    return 1;
-}
+//#use readline
 
 int matchat(char *s, int i, char *p) {        /* literal: does p occur at s[i]? */
     int k;

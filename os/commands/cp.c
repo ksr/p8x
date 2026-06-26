@@ -28,22 +28,7 @@ char dst[80];
 /* abspath(out, arg): copy the next whitespace-delimited word of *argp into out
  * as an absolute path (prefixing the CWD when it isn't already absolute), and
  * advance *argp past it. Returns 1 if a word was present, 0 if none. */
-int abspath(char *out, char *a) {
-    int i;
-    int j;
-    i = 0;
-    if (*a != '/') {                          /* relative -> prefix the CWD */
-        bios(0x4003, out, 0);                 /* SYS_GETCWD -> out */
-        while (out[i] != 0) { i = i + 1; }
-        if (i > 0 && out[i - 1] != '/') { out[i] = '/'; i = i + 1; }
-    }
-    j = 0;
-    while (a[j] != 0 && a[j] != 13 && a[j] != 32) {
-        out[i] = a[j]; i = i + 1; j = j + 1;
-    }
-    out[i] = 0;
-    return j;                                 /* number of chars consumed */
-}
+//#use abspath
 
 int main() {
     char *a;

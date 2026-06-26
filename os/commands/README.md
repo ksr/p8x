@@ -130,6 +130,13 @@ consumer.
 | Library | Provides | Used by |
 |---------|----------|---------|
 | [`lib_stdin.c`](lib_stdin.c) | `path[80]`, `fromfile`, `nextc()` (next byte or 65535 at EOF), `openarg(a)` (open the optional file arg → 0 stdin / 1 opened / 2 not found) | `grep`, `head`, `tail`, `more`, `sort`, `uniq`, `sed` |
+| [`lib_abspath.c`](lib_abspath.c) | `abspath(out, a)` — build an absolute path (CWD-prefixed when relative) into a caller buffer; returns chars consumed | `cp`, `mv`, `diff` |
+| [`lib_readline.c`](lib_readline.c) | `readline(buf)` — read one line via `nextc()` (CR dropped, LF-terminated); 1 = line, 0 = EOF. **Needs `//#use stdin` above it.** | `uniq`, `sed` |
+| [`lib_streq.c`](lib_streq.c) | `streq(p, q)` — 1 if NUL-terminated strings are equal | `mv`, `uniq` |
+
+When a helper depends on another (e.g. `readline` calls `lib_stdin`'s `nextc()`),
+list its `//#use` **after** the dependency's so `clib.py` splices them in the
+right order (callee before caller).
 
 Two rules for a helper meant to be lifted into a `lib_*.c`:
 

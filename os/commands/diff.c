@@ -17,22 +17,7 @@ char blines[2560];
 int na;
 int nb;
 
-int abspath(char *out, char *a) {            /* arg word -> absolute path; chars used */
-    int i;
-    int j;
-    i = 0;
-    if (*a != '/') {
-        bios(0x4003, out, 0);
-        while (out[i] != 0) { i = i + 1; }
-        if (i > 0 && out[i - 1] != '/') { out[i] = '/'; i = i + 1; }
-    }
-    j = 0;
-    while (a[j] != 0 && a[j] != 13 && a[j] != 32) {
-        out[i] = a[j]; i = i + 1; j = j + 1;
-    }
-    out[i] = 0;
-    return j;
-}
+//#use abspath
 
 int openf(char *a) {                          /* FRESOLVE+FOPEN; 1 ok, 0 not found */
     bios(0x0133, path, 0);
