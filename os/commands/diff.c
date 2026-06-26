@@ -9,7 +9,7 @@
  * (it isolates one changed/inserted block) — not a minimal-edit LCS diff.
  *
  * BIOS: FRESOLVE=$0133, FOPEN=$0124, FGETB=$0127.  OS: SYS_GETCWD=$4003.
- * Read buffer at $E000 (the two files are read one after the other).
+ * Read buffer at $FC00 (the two files are read one after the other).
  */
 char path[80];
 char alines[2560];                           /* 40 x 64 */
@@ -21,7 +21,7 @@ int nb;
 
 int openf(char *a) {                          /* FRESOLVE+FOPEN; 1 ok, 0 not found */
     bios(0x0133, path, 0);
-    if (bios(0x0124, 0xE000, 0) & 256) { return 0; }
+    if (bios(0x0124, 0xFC00, 0) & 256) { return 0; }
     return 1;
 }
 

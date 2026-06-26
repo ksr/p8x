@@ -6,7 +6,7 @@
  *     HEAD <file           first 10 lines from a stdin redirect
  *
  * Reads a named file if given (opened like cat: absolute path via SYS_GETCWD +
- * FRESOLVE/FOPEN, buffer at $E000), else stdin. Line count defaults to 10, or
+ * FRESOLVE/FOPEN, buffer at $FC00), else stdin. Line count defaults to 10, or
  * -N sets it. A line ends at LF; CR is passed through. EOF = 65535.
  */
 //#use stdin   /* path[80], fromfile, nextc(), openarg() */

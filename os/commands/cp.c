@@ -19,7 +19,7 @@
  * not found), FGETB=$0127 (->A, C=1 EOF), FWOPEN=$012A, FPUTB=$012D (A=byte),
  * FCLOSE=$0130 (registers FNAME in DIRLBA).  OS: SYS_GETCWD=$4003.
  *
- * Read-stream buffer: the fixed page-aligned scratch at $E000 (clear of our
+ * Read-stream buffer: the fixed page-aligned scratch at $FC00 (clear of our
  * code/globals at $B000 and the stack at $FEFF). p8cc has no preprocessor.
  */
 char src[80];
@@ -50,7 +50,7 @@ int main() {
     abspath(dst, a);
 
     bios(0x0133, src, 0);                      /* FRESOLVE SRC */
-    if (bios(0x0124, 0xE000, 0) & 256) {       /* FOPEN SRC; C=1 -> not found */
+    if (bios(0x0124, 0xFC00, 0) & 256) {       /* FOPEN SRC; C=1 -> not found */
         puts("cp: source not found");
         return 1;
     }

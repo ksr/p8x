@@ -11,7 +11,7 @@
  *
  * BIOS: FRESOLVE=$0133, FOPEN=$0124, FGETB=$0127, FWOPEN=$012A, FPUTB=$012D,
  * FCLOSE=$0130, FDELETE=$011E.  OS: SYS_GETCWD=$4003.  See cp.c for the SBUF
- * ordering rationale (FRESOLVE DST before FWOPEN). Read buffer at $E000.
+ * ordering rationale (FRESOLVE DST before FWOPEN). Read buffer at $FC00.
  */
 char src[80];
 char dst[80];
@@ -42,7 +42,7 @@ int main() {
     if (streq(src, dst)) { puts("mv: source and dest are the same"); return 1; }
 
     bios(0x0133, src, 0);                      /* FRESOLVE SRC */
-    if (bios(0x0124, 0xE000, 0) & 256) {       /* FOPEN SRC */
+    if (bios(0x0124, 0xFC00, 0) & 256) {       /* FOPEN SRC */
         puts("mv: source not found");
         return 1;
     }

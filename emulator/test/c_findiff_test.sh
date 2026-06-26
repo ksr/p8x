@@ -16,10 +16,8 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x4000 >/
 
 build_disk() {   # $1 = py|host
     for c in find diff; do
-        # diff (like sed) hits the p8cc.c file-arg miscompile (backlog); it is
-        # correct under p8cc.py, which run.sh ships. find compiles on both.
         python3 $ROOT/tools/clib.py $ROOT/os/commands/$c.c -o $c.pp.c   # splice //#use libs
-        if [ "$1" = host ] && [ "$c" != diff ]; then ./p8cc_host < $c.pp.c > $c.asm
+        if [ "$1" = host ]; then ./p8cc_host < $c.pp.c > $c.asm
         else python3 $ROOT/compiler/p8cc.py $c.pp.c -o $c.asm >/dev/null; fi
         python3 $ROOT/assembler/p8xasm.py $c.asm -o $c.bin --base 0xB000 >/dev/null
     done

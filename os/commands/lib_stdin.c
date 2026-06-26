@@ -11,7 +11,7 @@
  *   nextc()              next input byte, or 65535 at EOF (file stream or stdin)
  *   openarg(a)           open the file word `a` (CWD-relative or absolute):
  *                          0 = none given (use stdin)
- *                          1 = opened (read stream at $E000; sets nothing else)
+ *                          1 = opened (read stream at $FC00; sets nothing else)
  *                          2 = not found
  *
  * Stays inside the native p8cc.c subset (so commands still build on BOTH
@@ -51,6 +51,9 @@ int openarg(char *a) {
     }
     path[i] = 0;
     bios(0x0133, path, 0);                    /* FRESOLVE */
-    if (bios(0x0124, 0xE000, 0) & 256) { return 2; }   /* FOPEN; carry = not found */
+    /* Read buffer at $FC00 — just below the stack page ($FE00), so it clears even
+     * the largest command's code/globals (they grow up from $B000). $E000 was too
+     * low: a big build (e.g. sed/diff on the native p8cc.c) overran it. */
+    if (bios(0x0124, 0xFC00, 0) & 256) { return 2; }   /* FOPEN; carry = not found */
     return 1;
 }

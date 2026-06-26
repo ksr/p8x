@@ -51,19 +51,6 @@ Last updated: 2026-06-25
 
 
 
-- [ ] **`p8cc.c` miscompiles the file-argument parse in `sed.c` and `diff.c`.**
-      Native-bootstrap bug: host-compiled `SED s/a/b/ FILE` / `DIFF A B` mis-parse
-      their file argument(s) — sed reads empty stdin, diff diffs the wrong files —
-      though the same commands work via pipe/under `p8cc.py`, and `openarg()` is
-      fine in head/tail/find on the host. Common factor: advancing the arg pointer
-      past one token then opening a *second* word (the `abspath()`-returns-count /
-      `a = a + n` idiom). `p8cc.py` compiles both correctly, so run.sh ships the
-      working binaries; `c_textutils_test`/`c_findiff_test` build sed/diff with
-      p8cc.py. Track down + fix in compiler/p8cc.c (it's the self-host oracle).
-      (Related p8cc subset gotchas now documented in os/commands/README "Shared
-      code": `<`/`>` are unsigned, `int` index arrays misbehave, no `break`/
-      forward-decls, don't pass `array+expr` to a function.)
-
 - [ ] **Multi-stage pipes (`a | b | c`).** The shell's pipe state machine
       (`PIPEF`/`PIPESCAN`/`PIPE_RHS`) handles exactly **two** stages: it splits on
       the first `|`, runs the left into `PIPE.TMP`, then re-dispatches the right.
@@ -373,6 +360,19 @@ Last updated: 2026-06-25
 > Convention: substantial features get a **bold-title** prose entry (what was
 > done + why + caveats). The original foundation milestones are a terse tick
 > list under *Early milestones* at the end of this section.
+
+- **sed/diff on the native `p8cc.c` — was a buffer collision, not a miscompile**
+  (2026-06-26). For months `sed`/`diff` built with `p8cc.c` (host) misbehaved on
+  a file argument, filed as a "file-arg parse miscompile". The real cause: the
+  shared file read buffer was hardcoded at `$E000` (only ~12 KB above the `$B000`
+  TPA base), and `p8cc.c`'s codegen is ~8% larger than `p8cc.py`'s — so the two
+  biggest commands overran it (host `sed` ends `$E333`, `diff` `$F4C9`) and
+  `FGETB` read file data into their own code. Fix: moved the read buffer to
+  `$FC00` (just under the stack page) in `lib_stdin.c`/`cat`/`cp`/`mv`/`diff`.
+  Both now build+pass on **both** compilers; dropped the `p8cc.py`-only guards in
+  `c_textutils`/`c_findiff`. This also closes the last gap for Milestone B (every
+  `/BIN` command compiles correctly on the native compiler). Watch `diff`'s
+  headroom (~17.6 KB on `p8cc.c`).
 
 - **`>>` append redirection** (2026-06-26). The shell now appends a command's
   stdout to a file with `>>` (programs and built-ins). P8XFS extents are

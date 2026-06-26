@@ -17,11 +17,8 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x4000 >/
 
 build_disk() {   # $1 = py|host
     for c in sort uniq sed cat; do
-        # sed: the native p8cc.c miscompiles its file-arg path (backlog); it is
-        # correct under p8cc.py, which is what run.sh ships — so always build sed
-        # with p8cc.py. sort/uniq/cat are built with the requested compiler.
         python3 $ROOT/tools/clib.py $ROOT/os/commands/$c.c -o $c.pp.c   # splice //#use libs
-        if [ "$1" = host ] && [ "$c" != sed ]; then ./p8cc_host < $c.pp.c > $c.asm
+        if [ "$1" = host ]; then ./p8cc_host < $c.pp.c > $c.asm
         else python3 $ROOT/compiler/p8cc.py $c.pp.c -o $c.asm >/dev/null; fi
         python3 $ROOT/assembler/p8xasm.py $c.asm -o $c.bin --base 0xB000 >/dev/null
     done

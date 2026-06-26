@@ -13,7 +13,7 @@
  * Like cat, grep reads a **named file** if a second argument is given, otherwise
  * **stdin** (so `<`/`|` still work). The file is opened the same way cat does:
  * an absolute path (CWD via SYS_GETCWD unless already absolute), FRESOLVE +
- * FOPEN, with the read buffer at $E000. Reads a line at a time (CR, LF, or CRLF
+ * FOPEN, with the read buffer at $FC00. Reads a line at a time (CR, LF, or CRLF
  * all end a line). The regex is the first argument word (no spaces); lines are
  * capped at 127 characters.
  *

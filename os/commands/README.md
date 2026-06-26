@@ -160,9 +160,14 @@ commands inside these limits, especially for `p8cc.c` parity):
   `puts(buf + i*64)` printed the wrong slot) — index with `buf[i*64+j]` instead.
 - Declarations go at the **top of each function** (and a `lib_*.c`'s globals go
   at its top, so they precede the command's own globals after splicing).
-- Known open bug: `p8cc.c` miscompiles `sed.c`'s file-argument path (works under
-  `p8cc.py`, which is what `run.sh` ships); see the backlog. The `c_textutils`
-  harness builds `sed` with `p8cc.py` only for that reason.
+- **TPA size limit (not a compiler bug):** the shared file read buffer lives at
+  `$FC00` (just under the stack), so a command's code+globals must stay below
+  `$FC00` (~19 KB from the `$B000` base). This bit `sed`/`diff` built with the
+  *native* `p8cc.c`, whose codegen is ~8% larger than `p8cc.py`'s: with the old
+  `$E000` buffer they overran it and read file data into their own code. Moving
+  the buffer to `$FC00` fixed it — both build on **both** compilers now. (Was
+  long misfiled as a "`p8cc.c` file-arg miscompile".) `diff` is the largest at
+  ~17.6 KB on `p8cc.c`, so keep an eye on headroom there.
 
 ## Tests
 
