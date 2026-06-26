@@ -4,34 +4,45 @@
  *     SED s/foo/bar/g file     replace every "foo"
  *     cmd | SED s/x/y/         substitute on a pipe
  *
- * Only the `s///` command, with **literal** (non-regex) patterns. Reads a named
- * file (opened like cat) or stdin; on each line, replaces occurrences of the
- * pattern with the replacement (first only, or all with the `g` flag) and prints
- * the result. Lines capped at 128 chars; the rewritten line is capped at 255.
+ * Only the `s///` command. The left-hand side is a **basic regex** (`.` `*` `^`
+ * `$`, via the shared lib_regex — same matcher as grep); the replacement is
+ * literal. Reads a named file (opened like cat) or stdin; on each line, replaces
+ * the first match (or all with `g`) and prints the result. The matched span (not
+ * a fixed length) is what gets replaced. `*` is non-greedy (shortest match);
+ * a zero-length match is skipped. Lines capped at 128 chars, output at 255.
  */
 //#use stdin   /* path[80], fromfile, nextc(), openarg() */
 char pat[64];
 char rep[64];
 char line[130];
 char out[260];
+int  anchored;                                /* 1 = pattern began with '^' */
+char *rpat;                                   /* pattern to match (past any '^') */
 
 //#use readline
+//#use regex   /* match/matchhere (. * ^ $) + rend, shared with grep */
 
-int matchat(char *s, int i, char *p) {        /* literal: does p occur at s[i]? */
-    int k;
-    k = 0;
-    while (p[k] != 0) {
-        if (s[i + k] != p[k]) { return 0; }
-        k = k + 1;
-    }
-    return 1;
+/* re_at: length of the regex match starting at line[i], or 0 if none here.
+ * matchhere() sets rend past the match; a zero-length match counts as "no
+ * match" so a star pattern can't loop forever. A leading '^' anchors to i==0. */
+int re_at(int i) {
+    char *lp;
+    char *q;
+    int len;
+    if (anchored && i != 0) { return 0; }
+    lp = line + i;
+    if (matchhere(rpat, lp) == 0) { return 0; }
+    len = 0;
+    q = lp;
+    while (q != rend) { q = q + 1; len = len + 1; }
+    return len;
 }
 
 int main() {
     char *a;
     int r;
     int global;
-    int plen;
+    int mlen;
     int i;
     int j;
     int n;
@@ -41,15 +52,17 @@ int main() {
     while (*a == 32) { a = a + 1; }
     if (*a == 0 || *a == 13 ||
         (*a == '-' && (*(a + 1) == 'h' || *(a + 1) == 'H'))) {
-        puts("usage: SED s/old/new/[g] [file]   literal substitution");
+        puts("usage: SED s/re/new/[g] [file]   substitute (regex: . * ^ $)");
         return 0;
     }
-    if (a[0] != 's' || a[1] != '/') { puts("sed: only s/old/new/[g]"); return 1; }
+    if (a[0] != 's' || a[1] != '/') { puts("sed: only s/re/new/[g]"); return 1; }
     a = a + 2;
     i = 0;                                     /* pattern up to '/' */
     while (*a != 0 && *a != '/' && i < 63) { pat[i] = *a; i = i + 1; a = a + 1; }
     pat[i] = 0;
-    plen = i;
+    anchored = 0;
+    rpat = pat;
+    if (pat[0] == '^') { anchored = 1; rpat = pat + 1; }   /* ^ anchors to start */
     if (*a != '/') { puts("sed: bad s/// (no second /)"); return 1; }
     a = a + 1;
     j = 0;                                     /* replacement up to '/' */
@@ -71,10 +84,12 @@ int main() {
         i = 0;
         done = 0;
         while (line[i] != 0) {
-            if (plen > 0 && (global || done == 0) && matchat(line, i, pat)) {
+            mlen = 0;
+            if (global || done == 0) { mlen = re_at(i); }   /* regex match here? */
+            if (mlen > 0) {
                 j = 0;
                 while (rep[j] != 0 && n < 255) { out[n] = rep[j]; n = n + 1; j = j + 1; }
-                i = i + plen;
+                i = i + mlen;                  /* skip the whole matched span */
                 if (global == 0) { done = 1; }
             } else {
                 if (n < 255) { out[n] = line[i]; n = n + 1; }

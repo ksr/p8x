@@ -17,43 +17,13 @@
  * all end a line). The regex is the first argument word (no spaces); lines are
  * capped at 127 characters.
  *
- * --- match(): the classic tiny regex matcher (Thompson/Pike style) -----------
- * Self-contained and dependency-free, so it can be copied verbatim into any
- * other command that wants basic patterns (there is no linker / #include here;
- * see os/commands/README "shared code"). Written with a single self-recursive
- * matchhere() — the `c*` case is an inline loop rather than a separate
- * matchstar() — so it needs no forward declaration / mutual recursion (which the
- * native p8cc.c bootstrap doesn't accept). Both p8cc.py and p8cc.c compile it.
+ * The basic-regex matcher (`match`/`matchhere`, the `. * ^ $` dialect) lives in
+ * the shared os/commands/lib_regex.c and is spliced in by `//#use regex` below;
+ * sed uses the same library. grep filters lines with match() (matches anywhere).
  */
 char line[128];                              /* the current input line */
 
-int matchhere(char *re, char *t) {           /* match re at the start of t */
-    int c;
-    if (re[0] != 0 && re[1] == '*') {        /* re[0]* then re[2..] */
-        c = re[0];
-        while (1) {
-            if (matchhere(re + 2, t)) { return 1; }   /* zero or more c */
-            if (*t == 0) { return 0; }
-            if (*t != c && c != '.') { return 0; }
-            t = t + 1;
-        }
-    }
-    if (re[0] == 0) { return 1; }
-    if (re[0] == '$' && re[1] == 0) { return *t == 0; }
-    if (*t != 0 && (re[0] == '.' || re[0] == *t)) {
-        return matchhere(re + 1, t + 1);
-    }
-    return 0;
-}
-int match(char *re, char *t) {               /* 1 if re matches anywhere in t */
-    if (re[0] == '^') { return matchhere(re + 1, t); }
-    while (1) {                              /* try each starting position */
-        if (matchhere(re, t)) { return 1; }
-        if (*t == 0) { return 0; }
-        t = t + 1;
-    }
-}
-
+//#use regex   /* match(re,t)/matchhere(re,t): the basic-regex matcher . * ^ $ */
 //#use stdin   /* path[80], fromfile, nextc(), openarg() */
 
 int main() {

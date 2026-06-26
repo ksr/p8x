@@ -46,7 +46,7 @@ print a one-line usage summary and exit.
 | [`more.c`](more.c) | `MORE [file] [-h]` | Page a file or stdin a screenful (23 lines) at a time: space=next page, Enter=one line, q=quit. Forward pager (not full `less`). |
 | [`sort.c`](sort.c) | `SORT [file] [-h]` | Sort lines ascending (file or stdin). In-memory: ≤96 lines of ≤63 chars. |
 | [`uniq.c`](uniq.c) | `UNIQ [file] [-h]` | Collapse **adjacent** duplicate lines (pair with `SORT`). |
-| [`sed.c`](sed.c) | `SED s/old/new/[g] [file] [-h]` | Literal `s///` substitution (first match, or all with `g`). No regex. |
+| [`sed.c`](sed.c) | `SED s/re/new/[g] [file] [-h]` | `s///` substitution; the left side is a **basic regex** (`.` `*` `^` `$`, via `lib_regex` — same matcher as grep), replacement is literal. First match or all with `g`; the whole matched span is replaced. `*` is non-greedy. |
 | [`find.c`](find.c) | `FIND pattern [-h]` | Recursively print CWD paths whose name matches `pattern`: a case-insensitive **glob** (`*`/`?`, via `lib_glob`) if it contains `*` or `?`, else a literal substring. So `FIND *.C`, `FIND TEST?.ASM`, and `FIND BIN` (substring) all work. |
 | [`diff.c`](diff.c) | `DIFF f1 f2 [-h]` | Prefix/suffix-anchored line diff: `<` lines only in f1, `>` only in f2. ≤40 lines/file. |
 | [`tree.c`](tree.c) | `TREE [-h]` | Depth-first indented listing of the CWD tree (same recursion as `DIR -R`). |
@@ -133,7 +133,8 @@ consumer.
 | [`lib_abspath.c`](lib_abspath.c) | `abspath(out, a)` — build an absolute path (CWD-prefixed when relative) into a caller buffer; returns chars consumed | `cp`, `mv`, `diff` |
 | [`lib_readline.c`](lib_readline.c) | `readline(buf)` — read one line via `nextc()` (CR dropped, LF-terminated); 1 = line, 0 = EOF. **Needs `//#use stdin` above it.** | `uniq`, `sed` |
 | [`lib_streq.c`](lib_streq.c) | `streq(p, q)` — 1 if NUL-terminated strings are equal | `mv`, `uniq` |
-| [`lib_glob.c`](lib_glob.c) | `gmatch(pat, name)` — case-insensitive whole-string glob match (`*`, `?`) | `dir` |
+| [`lib_glob.c`](lib_glob.c) | `gmatch(pat, name)` — case-insensitive whole-string glob match (`*`, `?`) | `dir`, `find` |
+| [`lib_regex.c`](lib_regex.c) | `match(re, t)` / `matchhere(re, t)` — basic-regex matcher (`.` `*` `^` `$`); `matchhere` sets `rend` to the match end | `grep`, `sed` |
 
 When a helper depends on another (e.g. `readline` calls `lib_stdin`'s `nextc()`),
 list its `//#use` **after** the dependency's so `clib.py` splices them in the
@@ -147,6 +148,9 @@ Two rules for a helper meant to be lifted into a `lib_*.c`:
 **p8cc subset gotchas** (learned the hard way building these — keep helpers and
 commands inside these limits, especially for `p8cc.c` parity):
 - **No `++`/`--`** — write `i = i + 1`.
+- **Watch for `*/` inside a block comment** — e.g. writing a regex example like
+  `s/a*/x/` in a `/* ... */` comment ends the comment early (at the `a*/`) and
+  spills the rest as code. Reword (no literal `*/`) or use `//` line comments.
 - **No `break`/`continue`** (rejected by `p8cc.py`) — fold the exit into the loop
   condition, or use a flag.
 - **No forward declarations / mutual recursion** (`p8cc.c` drops the rest of the

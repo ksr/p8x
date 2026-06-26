@@ -3,7 +3,7 @@
 # line transforms. Compiled by BOTH p8cc.py and the native p8cc.c.
 #   sort  - ascending line sort (in-place selection sort of slots)
 #   uniq  - collapse adjacent duplicate lines
-#   sed   - literal s/old/new/[g] substitution
+#   sed   - s/RE/new/[g] substitution (RE is a basic regex: . * ^ $)
 set -e
 cd "$(dirname "$0")"
 ROOT=../..
@@ -54,6 +54,9 @@ check() {   # $1 = label
     # sed first-only and global
     R 'SED s/hello/HI/ H.TXT'   | grep -qx 'HI world'   || fail "$1: sed s/hello/HI/"
     R 'SED s/l/L/g H.TXT'       | grep -qx 'heLLo worLd' || fail "$1: sed global s/l/L/g"
+    # regex: '.' '*' and the '^' anchor (replaces the whole matched span)
+    R 'SED s/l.*o/X/ H.TXT'     | grep -qx 'heX world'   || fail "$1: sed regex .*"
+    R 'SED s/^h/Q/ H.TXT'       | grep -qx 'Qello world' || fail "$1: sed regex ^ anchor"
     R 'SORT -h' | grep -qi usage || fail "$1: sort -h"
 }
 

@@ -382,6 +382,17 @@ Last updated: 2026-06-25
 > done + why + caveats). The original foundation milestones are a terse tick
 > list under *Early milestones* at the end of this section.
 
+- **Regex factored to `lib_regex.c`; sed gained regex** (2026-06-26). grep's
+  basic-regex matcher (`match`/`matchhere`, the `. * ^ $` dialect) — long flagged
+  as a future shared helper — is now `os/commands/lib_regex.c`, pulled in by
+  `//#use regex`. grep de-inlines it (no behavior change). **sed's `s///` is now
+  a regex** on the left side (was literal `matchat`): `matchhere` gained a global
+  `rend` (match end) so sed replaces the whole matched span; sed handles a leading
+  `^` (anchor to col 0), `$` is in the matcher, `*` is non-greedy, zero-length
+  matches are skipped. Tests: `c_filters` (grep, unchanged) + `c_textutils` (sed
+  `.`/`*`/`^`), both compilers. Gotcha hit & documented: a `*/` inside a C comment
+  (a regex example like `s/a*` + `/`...) closes the comment early — reword.
+
 - **DIR wildcards (glob) + `lib_glob.c`** (2026-06-26). `DIR` filters by a glob
   when the path's last component has `*`/`?`: `DIR *.ASM`, `DIR /BIN/*.BIN`,
   `DIR -R *.C` (case-insensitive). New shared `lib_glob.c` (`gmatch`, a
