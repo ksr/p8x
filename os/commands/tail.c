@@ -5,11 +5,11 @@
  *     cmd | TAIL           last 10 lines of a pipe
  *
  * Reads a named file if given (opened like cat), else stdin. Keeps the last N
- * lines in a ring buffer (N defaults to 10, clamped to 1..20), then prints them
- * in order at EOF. Lines are capped at 127 chars; CR is dropped, LF ends a line.
+ * lines in a ring buffer (N defaults to 10, clamped to 1..40), then prints them
+ * in order at EOF. Lines are capped at 255 chars; CR is dropped, LF ends a line.
  */
 //#use stdin   /* path[80], fromfile, nextc(), openarg() */
-char buf[2560];                              /* 20 slots x 128 bytes (ring) */
+char buf[10240];                            /* 40 slots x 256 bytes (ring) */
 
 int main() {
     char *a;
@@ -36,7 +36,7 @@ int main() {
         while (*a == 32) { a = a + 1; }
     }
     if (n < 1) { n = 1; }
-    if (n > 20) { n = 20; }
+    if (n > 40) { n = 40; }
 
     fromfile = 0;
     r = openarg(a);
@@ -49,17 +49,17 @@ int main() {
     c = nextc();
     while (c != 65535) {
         if (c == 10) {                        /* end of line -> close the slot */
-            buf[slot * 128 + col] = 0;
+            buf[slot * 256 + col] = 0;
             slot = slot + 1; if (slot >= n) { slot = 0; }
             total = total + 1;
             col = 0;
         } else {
-            if (c != 13 && col < 127) { buf[slot * 128 + col] = c; col = col + 1; }
+            if (c != 13 && col < 255) { buf[slot * 256 + col] = c; col = col + 1; }
         }
         c = nextc();
     }
     if (col > 0) {                            /* a final line with no trailing LF */
-        buf[slot * 128 + col] = 0;
+        buf[slot * 256 + col] = 0;
         slot = slot + 1; if (slot >= n) { slot = 0; }
         total = total + 1;
     }
@@ -68,7 +68,7 @@ int main() {
     base = 0; if (total > n) { base = slot; }      /* oldest still held */
     while (count > 0) {
         col = 0;
-        while (buf[base * 128 + col] != 0) { putchar(buf[base * 128 + col]); col = col + 1; }
+        while (buf[base * 256 + col] != 0) { putchar(buf[base * 256 + col]); col = col + 1; }
         putchar(10);
         base = base + 1; if (base >= n) { base = 0; }
         count = count - 1;

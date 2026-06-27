@@ -4,12 +4,12 @@
  *     cmd | SORT           sort a pipe
  *
  * Reads a named file (opened like cat) or stdin into memory, sorts the lines
- * ascending by byte value, and prints them. Holds up to 96 lines of up to 63
- * chars (longer lines truncated, extra lines dropped with a note on stderr-ish
- * console). Insertion sort over an index array.
+ * ascending by byte value, and prints them. Holds up to 128 lines of up to 79
+ * chars (longer lines truncated, extra lines dropped). Selection sort over the
+ * slots. (Buffer sized to the larger rev-D TPA — was 96 x 63.)
  */
 //#use stdin   /* path[80], fromfile, nextc(), openarg() */
-char lines[6144];                            /* 96 slots x 64 bytes */
+char lines[10240];                           /* 128 slots x 80 bytes */
 int nline;
 
 /* lless: 1 if line x sorts before line y (ascending, unsigned bytes). Returns a
@@ -22,8 +22,8 @@ int lless(int x, int y) {
     int b;
     i = 0;
     while (1) {
-        a = lines[x * 64 + i] & 255;
-        b = lines[y * 64 + i] & 255;
+        a = lines[x * 80 + i] & 255;
+        b = lines[y * 80 + i] & 255;
         if (a != b) { if (a < b) { return 1; } return 0; }
         if (a == 0) { return 0; }             /* equal -> not "less" */
         i = i + 1;
@@ -55,18 +55,18 @@ int main() {
     nline = 0;                                /* read lines into the flat buffer */
     col = 0;
     c = nextc();
-    while (c != 65535 && nline < 96) {        /* stop at buffer full (96 lines) */
+    while (c != 65535 && nline < 128) {        /* stop at buffer full (192 lines) */
         if (c == 10) {
-            lines[nline * 64 + col] = 0;
+            lines[nline * 80 + col] = 0;
             nline = nline + 1;
             col = 0;
         } else {
-            if (c != 13 && col < 63) { lines[nline * 64 + col] = c; col = col + 1; }
+            if (c != 13 && col < 79) { lines[nline * 80 + col] = c; col = col + 1; }
         }
         c = nextc();
     }
-    if (col > 0 && nline < 96) {              /* a final line with no trailing LF */
-        lines[nline * 64 + col] = 0;
+    if (col > 0 && nline < 128) {              /* a final line with no trailing LF */
+        lines[nline * 80 + col] = 0;
         nline = nline + 1;
     }
 
@@ -78,12 +78,12 @@ int main() {
             if (lless(j, min)) { min = j; }
             j = j + 1;
         }
-        if (min != i) {                        /* swap the two 64-byte slots */
+        if (min != i) {                        /* swap the two 80-byte slots */
             k = 0;
-            while (k < 64) {
-                t = lines[i * 64 + k];
-                lines[i * 64 + k] = lines[min * 64 + k];
-                lines[min * 64 + k] = t;
+            while (k < 80) {
+                t = lines[i * 80 + k];
+                lines[i * 80 + k] = lines[min * 80 + k];
+                lines[min * 80 + k] = t;
                 k = k + 1;
             }
         }
@@ -92,7 +92,7 @@ int main() {
 
     i = 0;                                      /* print slots in order */
     while (i < nline) {
-        col = i * 64;
+        col = i * 80;
         j = 0;
         while (lines[col + j] != 0) { putchar(lines[col + j]); j = j + 1; }
         putchar(10);

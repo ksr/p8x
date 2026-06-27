@@ -15,13 +15,13 @@
  * an absolute path (CWD via SYS_GETCWD unless already absolute), FRESOLVE +
  * FOPEN, with the read buffer at $FC00. Reads a line at a time (CR, LF, or CRLF
  * all end a line). The regex is the first argument word (no spaces); lines are
- * capped at 127 characters.
+ * capped at 255 characters.
  *
  * The basic-regex matcher (`match`/`matchhere`, the `. * ^ $` dialect) lives in
  * the shared os/commands/lib_regex.c and is spliced in by `//#use regex` below;
  * sed uses the same library. grep filters lines with match() (matches anywhere).
  */
-char line[128];                              /* the current input line */
+char line[256];                              /* the current input line */
 
 //#use regex   /* match(re,t)/matchhere(re,t): the basic-regex matcher . * ^ $ */
 //#use stdin   /* path[80], fromfile, nextc(), openarg() */
@@ -63,7 +63,7 @@ int main() {
             if (n > 0 && match(pbuf, line)) { puts(line); }
             n = 0;
         } else {
-            if (n < 127) { line[n] = c; n = n + 1; }
+            if (n < 255) { line[n] = c; n = n + 1; }
         }
         c = nextc();
     }

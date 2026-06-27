@@ -2,7 +2,7 @@
  *
  *     DIFF OLD.TXT NEW.TXT
  *
- * Reads both files into memory (<=40 lines of <=63 chars each), skips the common
+ * Reads both files into memory (<=96 lines of <=79 chars each (rev-D TPA; was 40 x 63)), skips the common
  * leading and trailing lines, and reports the differing middle: lines only in
  * the first file prefixed "< ", lines only in the second prefixed "> ". Prints
  * nothing if the files are identical. This is a *prefix/suffix-anchored* diff
@@ -12,8 +12,8 @@
  * Read buffer at $FC00 (the two files are read one after the other).
  */
 char path[80];
-char alines[2560];                           /* 40 x 64 */
-char blines[2560];
+char alines[7680];                           /* 96 x 80 */
+char blines[7680];
 int na;
 int nb;
 
@@ -32,13 +32,13 @@ int loadlines(char *buf) {                    /* read the open stream into buf; 
     n = 0;
     col = 0;
     c = bios(0x0127, 0, 0);
-    while ((c & 256) == 0 && n < 40) {
+    while ((c & 256) == 0 && n < 96) {
         c = c & 255;
-        if (c == 10) { buf[n * 64 + col] = 0; n = n + 1; col = 0; }
-        else { if (c != 13 && col < 63) { buf[n * 64 + col] = c; col = col + 1; } }
+        if (c == 10) { buf[n * 80 + col] = 0; n = n + 1; col = 0; }
+        else { if (c != 13 && col < 79) { buf[n * 80 + col] = c; col = col + 1; } }
         c = bios(0x0127, 0, 0);
     }
-    if (col > 0 && n < 40) { buf[n * 64 + col] = 0; n = n + 1; }
+    if (col > 0 && n < 96) { buf[n * 80 + col] = 0; n = n + 1; }
     return n;
 }
 
@@ -48,8 +48,8 @@ int leq(char *x, int xi, char *y, int yi) {   /* are line xi of x and yi of y eq
     int b;
     i = 0;
     while (1) {
-        a = x[xi * 64 + i] & 255;
-        b = y[yi * 64 + i] & 255;
+        a = x[xi * 80 + i] & 255;
+        b = y[yi * 80 + i] & 255;
         if (a != b) { return 0; }
         if (a == 0) { return 1; }
         i = i + 1;
@@ -61,7 +61,7 @@ int emit(char *tag, char *buf, int li) {      /* print "<tag> line\n" */
     i = 0;
     while (tag[i] != 0) { putchar(tag[i]); i = i + 1; }
     i = 0;
-    while (buf[li * 64 + i] != 0) { putchar(buf[li * 64 + i]); i = i + 1; }
+    while (buf[li * 80 + i] != 0) { putchar(buf[li * 80 + i]); i = i + 1; }
     putchar(10);
     return 0;
 }

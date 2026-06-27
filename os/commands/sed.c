@@ -14,7 +14,7 @@
 //#use stdin   /* path[80], fromfile, nextc(), openarg() */
 char pat[64];
 char rep[64];
-char line[130];
+char line[260];
 char out[260];
 int  anchored;                                /* 1 = pattern began with '^' */
 char *rpat;                                   /* pattern to match (past any '^') */

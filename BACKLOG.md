@@ -280,6 +280,20 @@ Last updated: 2026-06-25
       ISA additions (item above) prove worthwhile, so the hardware serves real
       instructions rather than speculative ones.
 
+- [ ] **Recursive content search — `GREP -r pat` (or `RGREP`): match file
+      CONTENTS by regex across a directory tree.** The right home for regex, as
+      distinct from name-matching: glob (`*`/`?`) is for file *names* (what `dir`
+      and `find` already do); a **regex** is for the *search string* you look for
+      inside files. This tool combines `find`'s tree walk (FNEXT recursion +
+      `lib_globx`/`FSDIRBUF`) with `grep`'s regex matcher (`lib_regex`) — for each
+      file under the CWD, open it and print matching lines prefixed with the path
+      (`path:line`). Effectively `grep -r`. The pieces already exist as shared
+      libs (`lib_regex` + the find/dir recursion), and there's TPA room now, so it
+      mostly composes. (Decide: extend `grep` with a `-r` flag that walks, or a
+      separate `RGREP`/`FIND … -e pat` — leaning `GREP -r` for Unix familiarity.)
+      Note: this is why `find` itself stays name-glob only — regex lives where the
+      content is.
+
 - [ ] **`TOUCH name` command — create an empty file (and later, bump its
       timestamp).** Unix `touch`: if the file doesn't exist, create it empty
       (zero-length extent); if it does, no-op for now. Useful for scripting and as

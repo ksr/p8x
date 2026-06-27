@@ -7,8 +7,8 @@
  * differs from the previous printed line. Lines capped at 128 chars.
  */
 //#use stdin   /* path[80], fromfile, nextc(), openarg() */
-char cur[130];
-char prev[130];
+char cur[260];
+char prev[260];
 
 //#use readline
 //#use streq
