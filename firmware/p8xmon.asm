@@ -33,7 +33,7 @@
 ;     4: PSEL=P0, DOE=T,   DLD=PTRL, uRESET
 ;   (JSR (P1) prepends the 4-cycle return-address push from JSR abs.)
 ;
-; RAM USE (below the OS area; TPA $B000+ is never touched):
+; RAM USE (monitor scratch only; reclaimed once the OS/TPA take over):
 ;   $9D00-$9D3F  line buffer
 ;   $9D40-       variables (see equates)
 ;   $9E00-$9FFF  512-byte sector buffer (shared with OS when it loads)

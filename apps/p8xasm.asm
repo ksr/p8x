@@ -5,7 +5,7 @@
 ; Reads SRC.ASM from disk and writes the binary OUT, both through the BIOS
 ; file streams (FOPEN/FGETB for input, FWOPEN/FPUTB/FCLOSE for output), so
 ; neither is bounded by RAM — the assembler even assembles its own source.
-; Output carries load/exec 0, which the OS treats as the TPA base $B000 — so a
+; Output carries load/exec 0, which the OS treats as the TPA base $7A00 — so a
 ; program written `.org $7A00` is directly RUNnable after assembly.
 ;
 ; Supported syntax (a subset of the host assembler, same encodings):

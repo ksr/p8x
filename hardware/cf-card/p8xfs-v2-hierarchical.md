@@ -99,7 +99,7 @@ TREE              optional treat: depth-first listing with indentation —
 ```
 
 Changed behavior: **every command that takes a filename now accepts a
-path** — `RUN /BIN/FORTH.BIN`, `SAVE /SRC/TEST.BIN B000 B400`, `DEL
+path** — `RUN /BIN/FORTH.BIN`, `SAVE /SRC/TEST.BIN 7A00 7E00`, `DEL
 OLD/JUNK.BIN`. The parser change is in exactly one place (resolve), which
 is the payoff of doing it this way.
 
