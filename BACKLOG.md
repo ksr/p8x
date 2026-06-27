@@ -294,6 +294,16 @@ Last updated: 2026-06-25
       ISA additions (item above) prove worthwhile, so the hardware serves real
       instructions rather than speculative ones.
 
+- [ ] **`TOUCH name` command — create an empty file (and later, bump its
+      timestamp).** Unix `touch`: if the file doesn't exist, create it empty
+      (zero-length extent); if it does, no-op for now. Useful for scripting and as
+      the trivial "make a file" primitive (today you SAVE bytes or redirect output
+      to create one). A `/BIN` C command (`os/commands/touch.c`) using the BIOS
+      `FCREATE` (or FWOPEN+FCLOSE with zero bytes) on a CWD-resolved absolute path,
+      like the other file commands. Once the **DS1302 RTC** lands (see IDEAS) and
+      P8XFS entries carry an mtime, extend it to update the timestamp of an
+      existing file — the classic `touch` behaviour.
+
 - [ ] **Disassembler (reverse assembler): point it at an address block, get
       assembler back.** A tool that walks a memory/file region and decodes each
       byte stream back into P8X mnemonics + operands — the inverse of `p8xasm`.
