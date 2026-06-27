@@ -117,7 +117,7 @@ works chip by chip, and any board-specific design docs:
 
 ## Status
 
-- Emulator working: 86 opcodes, ACIA on stdin/stdout, CF-IDE disk model (`-c <img>`), interactive I/O card (switches `-s`, LED trace `-L`), verified against microcode images
+- Emulator working: 87 opcodes, ACIA on stdin/stdout, CF-IDE disk model (`-c <img>`), interactive I/O card (switches `-s`, LED trace `-L`), verified against microcode images
 - Assembler working: two-pass, full expression support, shares opcode table with microcode generator
 - Eagle schematics + boards generated for all 6 CPU cards, the front-panel LED card, and the backplane (8 boards)
 - ROM monitor boots in the emulator; its filesystem hooks (`I`/`F`/`B`) run end to end against a CF image (`make test-cf`)

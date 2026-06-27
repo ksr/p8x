@@ -308,7 +308,17 @@ Beyond the Rev 1 set (loads/stores, ALU ops, jumps, stack, JSR/RTS):
 | PHP / PLP | push/pop flags |
 | PSH n / POP n | push/pop a full pointer (microcoded via T/T2) |
 
-Opcode space is wide open (256 slots, ~50 used).
+**Implemented in rev D** (pure microcode, opcodes `$74`–`$77`) — added to shrink
+compiler-generated code, where 16-bit word moves to/from the stack and pointer
+loads dominate:
+
+| Mnemonic | Operation |
+|---|---|
+| PHW a | push the 16-bit word at memory address `a` (replaces LDA/PHA ×2) |
+| PLW a | pop a 16-bit word into memory address `a` (replaces PLA/STA ×2) |
+| LPW1 a / LPW2 a | load pointer P1 / P2 from the 16-bit word at `a` (replaces LDA/TAPnL/LDA/TAPnH) |
+
+Opcode space is still wide open (256 slots, 87 used).
 
 ---
 

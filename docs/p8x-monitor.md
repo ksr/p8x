@@ -3,8 +3,7 @@
 The ROM monitor is the firmware that runs at power-on. It lives at `$0000` in
 EEPROM (`firmware/p8xmon.asm`), talks to you over the 6850 ACIA serial console
 (**9600 8N1**), and is the entry point to everything else — from here you can
-inspect/modify memory, drive the CompactFlash card, boot P8X/OS, or launch ROM
-BASIC.
+inspect/modify memory, drive the CompactFlash card, and boot P8X/OS.
 
 > Source of truth: `firmware/p8xmon.asm` (and its in-ROM `H`/`?` help, which this
 > document mirrors). The companion [programmer's guide](p8x-programmers-guide.pdf)
@@ -17,7 +16,7 @@ it resets the ACIA and prints the `P8X MONITOR` banner and a `*` prompt. In the
 emulator:
 
 ```sh
-./os/run.sh        # builds the combined monitor+BASIC ROM and launches it
+./os/run.sh        # builds the monitor ROM (BASIC is no longer ROM-resident) and launches it
 # or directly, against an EEPROM image you've assembled and a CF disk image:
 emulator/p8xemu -c disk.img eeprom.bin
 ```

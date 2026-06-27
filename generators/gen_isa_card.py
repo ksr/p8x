@@ -82,6 +82,10 @@ DESC = {
     ("STA", "a"): ("-", "byte at addr:=A (absolute)."),
     ("PHA", ""): ("-", "Push A onto P3 stack."),
     ("PLA", ""): ("ZN", "Pop A from P3 stack."),
+    ("PHW", "a"): ("-", "Push 16-bit word at addr (lo then hi)."),
+    ("PLW", "a"): ("-", "Pop 16-bit word into addr."),
+    ("LPW1", "a"): ("-", "P1 := 16-bit word at addr."),
+    ("LPW2", "a"): ("-", "P2 := 16-bit word at addr."),
     ("JMP", "a"): ("-", "P0(PC):=addr."),
     ("JSR", "(P1)"): ("-", "Push return addr, P0:=P1."),
     ("JSR", "a"): ("-", "Push return addr, P0:=addr."),
@@ -119,6 +123,7 @@ GROUPS = [
     ("ALU with T (rev C; 2nd operand=T, B preserved)",
      ["LDT", "ADDT", "SUBT", "ANDT", "ORT", "XORT", "CMPT"]),
     ("Stack", ["PHA", "PLA"]),
+    ("16-bit memory (rev D)", ["PHW", "PLW", "LPW1", "LPW2"]),
     ("Control flow", ["JMP", "JSR", "RTS", "BZ", "BNZ", "BCP", "JNC"]),
     ("Signed branches (rev C; after CMP)", ["BLT", "BGE", "BLE", "BGT"]),
     ("Pointer registers", ["LPL1", "LPH1", "LPL2", "LPH2", "LPL3", "LPH3",
@@ -198,7 +203,7 @@ two_col = Table([[tL, tR]], colWidths=[93 * mm, 93 * mm])
 two_col.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
                              ("LEFTPADDING", (1, 0), (1, 0), 5)]))
 
-story = [Paragraph("P8X Instruction Set -- Quick Reference (rev C)", H1),
+story = [Paragraph("P8X Instruction Set -- Quick Reference (rev D)", H1),
          Paragraph("Opcodes, mnemonics and cycle counts generated live from "
                    "genucode.py (the microcode source of truth) -- cannot drift "
                    "from the hardware.", SUB),
