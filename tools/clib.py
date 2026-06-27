@@ -36,9 +36,11 @@ import sys
 USE_RE = re.compile(r'^\s*//#use\s+([A-Za-z_][A-Za-z0-9_]*)\b')
 
 
-def expand(src_path):
-    src_dir = os.path.dirname(os.path.abspath(src_path))
-    out = []
+def _emit(src_path, src_dir, out, included, stack):
+    """Append src_path, splicing each //#use library (depth-first, deduped via
+    `included`) ahead of the line that asks for it, so a lib can declare its own
+    dependencies (e.g. lib_stdin uses lib_globx uses lib_glob). `stack` catches
+    //#use cycles."""
     with open(src_path, 'r') as f:
         for lineno, line in enumerate(f, 1):
             m = USE_RE.match(line)
@@ -46,14 +48,25 @@ def expand(src_path):
                 out.append(line)
                 continue
             name = m.group(1)
+            if name in included:
+                continue                       # already spliced via another route
             lib_path = os.path.join(src_dir, 'lib_%s.c' % name)
             if not os.path.exists(lib_path):
                 sys.exit("clib.py: %s:%d: no such library 'lib_%s.c' in %s"
                          % (src_path, lineno, name, src_dir))
-            with open(lib_path, 'r') as lf:
-                out.append('/* --- clib.py: spliced lib_%s.c --- */\n' % name)
-                out.append(lf.read())
-                out.append('/* --- clib.py: end lib_%s.c --- */\n' % name)
+            if name in stack:
+                sys.exit("clib.py: %s:%d: //#use cycle: %s -> %s"
+                         % (src_path, lineno, ' -> '.join(stack), name))
+            included.add(name)
+            out.append('/* --- clib.py: spliced lib_%s.c --- */\n' % name)
+            _emit(lib_path, src_dir, out, included, stack + [name])   # its deps first
+            out.append('/* --- clib.py: end lib_%s.c --- */\n' % name)
+
+
+def expand(src_path):
+    src_dir = os.path.dirname(os.path.abspath(src_path))
+    out = []
+    _emit(src_path, src_dir, out, set(), [])
     return ''.join(out)
 
 

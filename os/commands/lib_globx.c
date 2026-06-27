@@ -27,6 +27,7 @@
  *
  * BIOS: FOPENDIR=$0139, FNEXT=$013C, FSDIRBUF=$0145; OS: SYS_OPENCWD=$4012.
  */
+//#use glob   /* gmatch(pat,name) — clib.py splices it above (recursive //#use) */
 int glob_expand(char *pat, char *out, int maxn) {
     char leaf[16];                           /* the pattern's last component */
     char dir[64];                            /* its directory prefix (incl trailing /) */

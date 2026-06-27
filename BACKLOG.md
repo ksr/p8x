@@ -128,31 +128,17 @@ Last updated: 2026-06-25
       the `$ROOT/tools/clib.py` refs in `os/run.sh` and the ~8 `c_*`/`os_*` test
       scripts, plus doc mentions, then re-run the suite. Deferred (2026-06-26).
 
-- [ ] **Wildcards — wc/grep/sort/sed (UNBLOCKED by the 2026-06-26 memory remap;
-      re-evaluate per-command inlining first).** `DIR`/`FIND` glob in place (see
-      DONE) and `CAT` expands a glob into multiple files (`lib_globx`, see DONE —
-      `CAT *.ASM >OUT`). The clean plan — make `lib_stdin` glob-aware so `nextc()`
-      reads a glob's files as one concatenated stream, giving grep/sort/sed/wc
-      globs for free — was prototyped and **abandoned on a size wall** when the TPA
-      base was `$B000` (~19 KB budget): the glob machinery is ~12 KB of native
-      `p8cc.c` codegen (`glob_expand` ≈ 7 KB), and `grep`/`sort`/`sed` (~16.7 KB)
-      overran 64 KB once it was inlined.
-      **That wall is now mostly gone.** The remap dropped the TPA base to `$7A00`
-      (~31.6 KB, code+globals up from `$7A00`, C-stack down from `$F800`). Back-of-
-      envelope: sed (~16.7 KB) + glob (~12 KB) ≈ 28.7 KB, which now fits with a few
-      KB to spare. So **step 1: re-do the `lib_stdin` glob-aware prototype and
-      re-measure** each filter's end address against the new ceiling. If it fits
-      (likely), this is the whole feature — the originally-preferred clean design.
-      Only if a command is still too tight fall back to:
-        - **Shell-level glob expansion (OS asm)** — a compact `gmatch`+`FNEXT` loop
-          in the shell expands `*.X` once before dispatch; every command gets globs
-          uniformly, zero per-command growth. (Open Q: how a single-file filter
-          consumes N matches — loop-invoke per file, or synthesize the existing
-          `CAT match… | cmd` pipe.) Also the natural home for **`DEL *.TMP`**, which
-          is a destructive OS built-in (`p8xos.asm`), not a `/BIN` command.
-        - **ASM rewrite** of the offending filter (see *ASM vs C commands*) or
-          **p8cc codegen improvements** (helps every command) — bigger efforts,
-          only if inlining still doesn't fit.
+- [x] **Wildcards on the filters — wc/grep/sort/sed/head/tail/more/uniq — DONE
+      (2026-06-27, see DONE).** Made `lib_stdin` glob-aware: `openarg` expands a
+      `*`/`?` arg via `lib_globx` and `nextc()` reads all matches as one
+      concatenated stream, so every `//#use stdin` command got globs for free
+      (`GREP x *.C`, `SORT *.TXT`, `WC *.LOG`). Unblocked by the TPA remap (~31.6
+      KB) + the ISA-shrink (~−24%); needed a `clib.py` recursive-`//#use` change
+      and a bump of `p8cc.c`'s 16 KB source buffer to 32 KB (sed's spliced source
+      is ~17 KB). Full suite green.
+      **Still open:** `DEL *.TMP` (destructive OS built-in in `p8xos.asm`, not a
+      `/BIN` command — needs the shell-level/asm `gmatch`+`FNEXT` path) and the
+      `CP`/`MV` multi-source-into-a-directory idiom (separate item below).
 
 - [ ] **`CP`/`MV` wildcards — `CP *.ASM /BAK`, `MV *.TMP TRASH/`.** Multi-source
       copy/move into a destination *directory* (the classic shell idiom). Depends
@@ -549,6 +535,22 @@ Last updated: 2026-06-25
 > Convention: substantial features get a **bold-title** prose entry (what was
 > done + why + caveats). The original foundation milestones are a terse tick
 > list under *Early milestones* at the end of this section.
+
+- **Wildcards on the stdin filters** (2026-06-27). Made `lib_stdin` glob-aware so
+  `wc`/`grep`/`sort`/`sed`/`head`/`tail`/`more`/`uniq` all accept a `*`/`?` arg:
+  `openarg` expands it via `lib_globx`'s `glob_expand`, and `nextc()` reads the
+  matched files back-to-back as ONE concatenated stream — identical to
+  `CAT *.X | cmd`, no per-command logic (`GREP foo *.C`, `SORT *.TXT >OUT`,
+  `WC *.LOG`). `wc` also gained file-arg support in the process. Enabled by the
+  recent headroom (TPA → ~31.6 KB after the remap, programs ~−24% after the
+  ISA-shrink ops) — the glob machinery (~12 KB) now fits in every filter. Two
+  supporting changes: `tools/clib.py` made recursive (`lib_stdin` declares
+  `//#use globx`, which declares `//#use glob`, deduped) so a lib can pull its own
+  deps; and `compiler/p8cc.c`'s source buffer bumped 16 KB → 32 KB (`slurp` cap
+  too) because sed's clib-spliced source is ~17 KB and silently truncated under
+  the host bootstrap. New `c_filters` glob assertions (`WC *.LOG`, `GREP key
+  *.LOG`); full suite green (53 PASS) on both compilers. (`DEL`/`CP`/`MV`
+  wildcards remain — they're OS-builtin / multi-source, see IDEAS.)
 
 - **Removed ROM-resident BASIC** (2026-06-26). BASIC was overlaid into the
   monitor EEPROM at `$2000` and launched by the monitor `X` command (DONE #9).

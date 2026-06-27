@@ -1,16 +1,23 @@
-/* wc.c — count lines, words, and bytes on stdin (the Unix `wc` filter).
+/* wc.c — count lines, words, and bytes of a file, a glob, or stdin (Unix `wc`).
  *
- *     RUN /BIN/WC.BIN <FILE         -> "L W B"  (lines words bytes)
+ *     RUN /BIN/WC.BIN FILE          -> "L W B"  (lines words bytes)
+ *     RUN /BIN/WC.BIN *.LOG         -> combined count over every matching file
+ *     RUN /BIN/WC.BIN <FILE         -> from a stdin redirect
  *     cmd | RUN /BIN/WC.BIN         -> counts the pipe
- *  (and, via implicit RUN + PATH, simply `WC <FILE` or `… | WC`).
+ *  (and, via implicit RUN + PATH, simply `WC FILE`, `WC *.LOG`, or `… | WC`).
  *
- * A pure stdin->stdout filter: reads getchar() to EOF (-1), counting newlines
- * (LF) as lines and whitespace-delimited runs as words. Counts are 16-bit (the
- * p8cc int), so they wrap above 65535 — fine for the small files this OS holds.
+ * A stdin->stdout filter built on the shared open-input helper (lib_stdin): a
+ * file or glob argument is read via that (a glob is read as ONE concatenated
+ * stream — combined totals, like `CAT *.LOG | WC`), else it reads stdin. Counts
+ * newlines (LF) as lines and whitespace-delimited runs as words. Counts are
+ * 16-bit (the p8cc int), so they wrap above 65535 — fine for the small files
+ * this OS holds.
  *
- * OS: getchar() is SYS_GETC; EOF is 65535. With no `<file`/pipe, stdin is the
- * console and Ctrl-D ends input.
+ * OS: getchar() is SYS_GETC; EOF is 65535. With no arg/`<file`/pipe, stdin is
+ * the console and Ctrl-D ends input.
  */
+//#use stdin   /* path[80], fromfile, nextc(), openarg() — file/glob/stdin input */
+
 int putnum(int n) {                          /* print an unsigned decimal */
     if (n >= 10) { putnum(n / 10); }
     putchar(48 + n % 10);
@@ -20,6 +27,7 @@ int putnum(int n) {                          /* print an unsigned decimal */
 int main() {
     char *arg;
     int c;
+    int r;
     int lines;
     int words;
     int bytes;
@@ -28,15 +36,20 @@ int main() {
     arg = argstr();
     while (*arg == 32) { arg = arg + 1; }
     if (*arg == '-' && (*(arg + 1) == 'h' || *(arg + 1) == 'H')) {
-        puts("usage: WC   count lines words bytes on stdin");
+        puts("usage: WC [file|glob]   count lines words bytes (file/glob or stdin)");
         return 0;
     }
+
+    fromfile = 0;
+    r = openarg(arg);                         /* file/glob, else stdin */
+    if (r == 2) { puts("wc: not found"); return 1; }
+    if (r == 1) { fromfile = 1; }
 
     lines = 0;
     words = 0;
     bytes = 0;
     inword = 0;
-    c = getchar();
+    c = nextc();
     while (c != 65535) {
         bytes = bytes + 1;
         if (c == 10) { lines = lines + 1; }
@@ -45,7 +58,7 @@ int main() {
         } else {
             if (inword == 0) { words = words + 1; inword = 1; }
         }
-        c = getchar();
+        c = nextc();
     }
     putnum(lines); putchar(32);
     putnum(words); putchar(32);

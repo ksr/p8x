@@ -33,6 +33,12 @@ build_disk() {   # compile wc/grep/cat with $1 (py|host), build a disk
     python3 $ROOT/tools/p8xfs.py put    flt.img cat.bin  --name /BIN/CAT.BIN  --load 0x7A00 --exec 0x7A00 >/dev/null
     printf 'alpha\r\nbeta\r\ngamma alpha\r\n' > tf.dat
     python3 $ROOT/tools/p8xfs.py put    flt.img tf.dat --name T.TXT --load 0 --exec 0 >/dev/null
+    # two .LOG files for the glob tests (read as one concatenated stream):
+    # G1 = 2 lines/2 words/11 bytes, G2 = 1 line/2 words/11 bytes -> *.LOG = 3 4 22
+    printf 'red\r\nblue\r\n' > g1.dat
+    python3 $ROOT/tools/p8xfs.py put    flt.img g1.dat --name G1.LOG --load 0 --exec 0 >/dev/null
+    printf 'green key\r\n' > g2.dat
+    python3 $ROOT/tools/p8xfs.py put    flt.img g2.dat --name G2.LOG --load 0 --exec 0 >/dev/null
 }
 
 R() { printf "B\r$1\r" | ../p8xemu -l 300000000 -c flt.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r'; }
@@ -65,6 +71,9 @@ check() {   # $1 = label
     # pipes: cat | grep, cat | wc
     R 'CAT T.TXT | GREP beta' | grep -qx 'beta'   || fail "$1: cat | grep pipe"
     R 'CAT T.TXT | RUN /BIN/WC.BIN' | grep -qx '3 4 26' || fail "$1: cat | wc pipe"
+    # glob: a `*`/`?` arg is read as ONE concatenated stream over all matches
+    R 'WC *.LOG' | grep -qx '3 4 22' || fail "$1: WC *.LOG combined count (concatenated)"
+    R 'GREP key *.LOG' | grep -qx 'green key' || fail "$1: GREP over *.LOG glob"
     R 'WC -h'   | grep -qi usage || fail "$1: wc -h"
     R 'GREP -h' | grep -qi usage || fail "$1: grep -h"
 }
