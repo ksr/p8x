@@ -172,6 +172,36 @@ for p in (1,2,3):
     op(0x67+p*2,"TPA%dH"%p,"", w(doe="PTRH",dld="A",psel=p,ldzn=1,urst=1))  # Pn high -> A
 op(0x70,"PHA","", w(doe="A",dld="MEMW",psel=3,pdec=1,urst=1))          # push A, SP--
 op(0x71,"PLA","", w(psel=3,pinc=1), w(doe="MEM",dld="A",psel=3,ldzn=1,urst=1))  # SP++, A=[SP]
+# 16-bit push/pop of a memory word (collapses the compiler's LDA/PHA/LDA/PHA and
+# PLA/STA/PLA/STA 16-bit-operand idioms into one instruction). PHW a: push mem[a]
+# (lo) then mem[a+1] (hi) so the high byte ends on top; PLW a: pop hi->mem[a+1]
+# then lo->mem[a] — matching p8cc's push_ax / pop_t byte order. Scratch: PT holds
+# the operand address (incremented for the high byte), T/T2 carry the two bytes.
+op(0x74,"PHW","a", *_ld_pt(),
+   w(doe="MEM",dld="T", psel=PT),                 # T  = mem[a]   (lo)
+   w(psel=PT,pinc=1),                             # PT = a+1
+   w(doe="MEM",dld="T2",psel=PT),                 # T2 = mem[a+1] (hi)
+   w(doe="T", dld="MEMW",psel=3,pdec=1),          # push lo, SP--
+   w(doe="T2",dld="MEMW",psel=3,pdec=1,urst=1))   # push hi, SP--
+op(0x75,"PLW","a", *_ld_pt(),
+   w(psel=3,pinc=1),                              # SP++
+   w(doe="MEM",dld="T2",psel=3),                  # T2 = [SP] (hi, last pushed)
+   w(psel=3,pinc=1),                              # SP++
+   w(doe="MEM",dld="T", psel=3),                  # T  = [SP] (lo)
+   w(doe="T", dld="MEMW",psel=PT),                # mem[a]   = lo   (PT = a)
+   w(psel=PT,pinc=1),                             # PT = a+1
+   w(doe="T2",dld="MEMW",psel=PT,urst=1))         # mem[a+1] = hi
+# Load a 16-bit pointer (P1/P2) from a memory word — collapses the compiler's
+# LDA a / TAP1L / LDA a+1 / TAP1H idiom (set a pointer from a C pointer variable
+# or __ax). PT holds the source address (read), Pn is the destination; the read
+# and the pointer-byte write use different PSELs in sequence, so no 2nd scratch
+# pointer is needed (pure microcode, unlike MOVW).
+for p in (1,2):
+    op(0x75+p,"LPW%d"%p,"a", *_ld_pt(),
+       w(doe="MEM",dld="T",psel=PT,pinc=1),       # T = mem[a]   (lo), PT = a+1
+       w(doe="T",dld="PTRL",psel=p),              # P%d.lo = T
+       w(doe="MEM",dld="T",psel=PT),              # T = mem[a+1] (hi)
+       w(doe="T",dld="PTRH",psel=p,urst=1))       # P%d.hi = T
 op(0x72,"CLC","", w(clrc=1,urst=1))    # C := 0
 op(0x73,"SEC","", w(setc=1,urst=1))    # C := 1
 

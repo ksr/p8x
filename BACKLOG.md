@@ -197,17 +197,80 @@ Last updated: 2026-06-25
       slots. Decide which accesses are hot enough to keep direct vs worth a call.
 
 - [ ] **ISA additions to shrink program size** (2026-06-26). `p8cc` codegen is
-      bulky partly because the ISA lacks ops the compiler emits constantly. Survey
-      the generated asm for the most frequent multi-instruction idioms and see
-      which would collapse to one opcode — candidates: increment/decrement a
-      memory byte/word in place (the `__csp`/`__fp` frame adjusts and loop
-      counters), 16-bit pointer-relative load/store (array and struct access
-      recompute the address each time), `LDA (P1)+ / STA (P2)+` block-copy
-      primitives, and a cheap "add immediate to pointer" for stack-frame math.
-      Each new opcode costs microcode space (control store) + emulator + assembler
-      + a `genucode.OPC` entry, so weigh per-op: only add where it shrinks *real*
-      programs meaningfully. Complements the codegen-improvement and asm-rewrite
-      items — a smaller ISA-level win that helps every compiled program at once.
+      bulky partly because the ISA lacks ops the compiler emits constantly. The
+      approach: histogram the generated asm, find the most frequent
+      multi-instruction idioms, collapse each to one opcode — but **only where it
+      shrinks *real* programs** (each opcode costs microcode/emulator/assembler +
+      a `genucode.OPC` entry). Complements the codegen-improvement and asm-rewrite
+      items — an ISA-level win that helps every compiled program at once.
+
+      **Data-driven priority (measured on 5 compiled commands, 19,897 instrs):**
+        - **Done — the move idioms (the big win, all pure microcode):** `PHW`/`PLW`
+          + `LPW1`/`LPW2`, see the PROTOTYPED note below — 67% of instructions were
+          `LDA`/`STA` (16-bit data shuffled byte-by-byte through A). −15.3% so far.
+        - **DROPPED — generic memory inc/dec & 16-bit ALU (`INCM`/`DECM`/`ADDW`).**
+          Originally floated, but arithmetic (`ADD`/`SUB`/`INC`/`DEC`) is only
+          **1.1%** of instructions — new opcodes here would shrink real programs by
+          a fraction of a percent. Not worth it for size; would only help speed in
+          arithmetic-heavy code, which the text-tool workload isn't.
+        - **PROMOTED — frame-relative addressing for local access (best remaining
+          microcode-only lever).** `LDA __csp` appears **192×** — every local-var
+          access has the compiler compute `local_addr = __csp + offset` inline
+          (`LDA __csp … LDA __csp+1`, then load a pointer) right after each
+          `JSR __enter`. Far more frequent than arithmetic. A targeted op —
+          `LPW1 __csp,#off` (load P1 = the word at `__csp`+immediate offset), or a
+          general `(Pn+disp)` load/store mode — would collapse these. Likely
+          **pure microcode** (compute base+offset through the ALU into `PT`, then
+          access — the ALU is free mid-instruction; no 2nd scratch pointer). Worth
+          measuring/prototyping next, ahead of the hardware `MOVW`.
+        - **Hardware:** `MOVW`+`PT2` (separate item below) — the biggest single
+          idiom but the only one needing a chip.
+
+      **PROTOTYPED & MEASURED (2026-06-26):** an empirical histogram of 5 compiled
+      commands showed 67% of all instructions are `LDA`/`STA` — 16-bit data moved
+      one byte at a time through A. Three pure-microcode 16-bit ops were added and
+      validated (full suite green, both compilers):
+        - `PHW a` / `PLW a` (0x74/0x75) — 16-bit push/pop of a memory word, replace
+          the compiler's `LDA/PHA/LDA/PHA` & `PLA/STA/PLA/STA` (push_ax/pop_t).
+        - `LPW1 a` / `LPW2 a` (0x76/0x77) — load a 16-bit pointer from a memory
+          word, replace `LDA a/TAP1L/LDA a+1/TAP1H` (ax_to_p1). Read-via-PT /
+          write-to-Pn is sequential, so **no 2nd scratch pointer needed**.
+        Measured on sed/sort/grep/dir/cat/wc: `PHW`/`PLW` alone **−12.1%**, plus
+        `LPW1` (wired only into the central `ax_to_p1` site) **−15.3% total**
+        (sed −16.9%, dir −17.2%). All pure microcode: opcodes + emulator runs the
+        regenerated `u*.bin` directly + assembler gets them via `genucode.OPC`;
+        only `genucode.py` + `p8cc.py` + `p8cc.c` changed. **Remaining to finish
+        this op set:** convert p8cc.c's `LPW1` sites (only p8cc.py's central one is
+        done) + the remaining inline/once-per-program `LPW1` sites in both, then
+        update the ISA docs (opcode table in `docs/p8x-monitor.md`, the
+        programmer's-guide PDF via `gen_progguide.py`).
+
+- [ ] **`MOVW dst,src` — 16-bit memory→memory move (needs a 2nd scratch pointer
+      = HARDWARE)** (2026-06-26). The single largest idiom from the histogram:
+      `LDA src/STA dst/LDA src+1/STA dst+1` (~3,335 sites across the 5 commands),
+      12 bytes that `MOVW dst,src` would collapse to 5. Deferred from the
+      PHW/PLW/LPW prototype because, unlike those, it can't be done in pure
+      microcode: a mem→mem move needs **two** addresses live at once (read src /
+      write dst), but there's only one hidden scratch pointer (`PT`); `P1`/`P2`
+      belong to the running program. And the pure-microcode shortcut (`LDAX`/`STAX`
+      on a fixed pseudo-accumulator) is impossible because `__ax` is a per-program
+      label, not a fixed address microcode could name. So `MOVW` requires:
+        - **Hardware:** a second hidden scratch pointer `PT2` (PSEL=5) — one more
+          74169 counter pair + extend the register-bank PSEL decode (74138 U33,
+          currently decodes 0–4) to output 5. ~2 chips; PSEL is already 3 bits so
+          the control word needs no change. `PT2` would also enable future
+          two-address ops. Nothing's fab'd, so this is free to design now.
+        - **Emulator:** widen `P[]` to 6 entries (P[5]=PT2); psel is already 3-bit.
+        - **Assembler:** a two-operand absolute shape `MOVW dst,src` (the parser
+          currently handles a single `a` operand).
+        - **Compiler:** a `movw(dst,src)` helper replacing the scattered inline
+          `LDA/STA/LDA/STA` mem→mem moves, mirrored in p8cc.py + p8cc.c.
+      Microcode sketch (12 steps, fits the 16-step budget): load dst→PT2, src→PT
+      (4 steps each via the `_ld_pt` pattern), then 2× (read mem[PT]→T, PT++; write
+      T→mem[PT2], PT2++). Projected to stack on top of the −15.3% already measured,
+      plausibly reaching the 25–40% total from the original analysis. The one item
+      in the ISA-shrink program that needs hardware — do it as a deliberate
+      hardware decision, after the pure-microcode ops above are banked.
 
 - [ ] **Emulator: optional real-clock-pace mode** (2026-06-26). `p8xemu` currently
       runs as fast as the host (bounded only by `-l` cycle cap or TTY blocking).

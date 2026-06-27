@@ -101,6 +101,12 @@ DESC[("ANDT","")]=("C Z N","A := A AND T. (B preserved.)")
 DESC[("ORT","")] =("C Z N","A := A OR T. (B preserved.)")
 DESC[("XORT","")]=("C Z N","A := A XOR T. (B preserved.)")
 DESC[("CMPT","")]=("C Z N","Flags from A - T; A and B unchanged.")
+# rev D: 16-bit memory ops — collapse the compiler's byte-by-byte 16-bit moves
+# into one instruction (pure microcode; PT + T/T2 scratch).
+DESC[("PHW","a")]=("-","Push the 16-bit word at addr onto the P3 stack (low byte first, high on top).")
+DESC[("PLW","a")]=("-","Pop a 16-bit word from the P3 stack into addr (high then low).")
+DESC[("LPW1","a")]=("-","P1 (16-bit) := the word at addr.")
+DESC[("LPW2","a")]=("-","P2 (16-bit) := the word at addr.")
 
 DESC[("EI","")]=("-","Enable maskable interrupts (IE := 1).")
 DESC[("DI","")]=("-","Disable maskable interrupts (IE := 0).")
@@ -119,6 +125,7 @@ GROUPS=[("System",["NOP","HLT","CLC","SEC"]),
   "TAP1L","TAP1H","TAP2L","TAP2H","TAP3L","TAP3H",
   "TPA1L","TPA1H","TPA2L","TPA2H","TPA3L","TPA3H"]),
  ("Stack",["PHA","PLA"]),
+ ("16-bit memory ops (rev D; pure-microcode space savers)",["PHW","PLW","LPW1","LPW2"]),
  ("Control flow",["JMP","JSR","RTS","BZ","BNZ","BCP","JNC"]),
  ("Signed branches (rev C; after CMP — N^V/Z)",["BLT","BGE","BLE","BGT"])]
 

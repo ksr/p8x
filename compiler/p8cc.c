@@ -494,14 +494,12 @@ int set_ax(int v) {                  /* __ax = constant v */
 }
 
 int push_ax() {                      /* push __ax onto the P3 hardware stack */
-    line("        LDA __ax"); line("        PHA");
-    line("        LDA __ax+1"); line("        PHA");
+    line("        PHW __ax");         /* 16-bit push (was LDA/PHA/LDA/PHA) */
     return 0;
 }
 
 int pop_t() {                        /* pop into __t */
-    line("        PLA"); line("        STA __t+1");
-    line("        PLA"); line("        STA __t");
+    line("        PLW __t");          /* 16-bit pop (was PLA/STA/PLA/STA) */
     return 0;
 }
 
@@ -515,12 +513,9 @@ int swap_tax() {                     /* exchange __t and __ax (for > and <=) */
     return 0;
 }
 
-int lea_off(int off) {               /* P1 = __fp + off (a frame slot address) */
-    emitstr("        LDA #"); emitdec(off & 255); putchar(10);
-    line("        STA __off");
-    emitstr("        LDA #"); emitdec((off >> 8) & 255); putchar(10);
-    line("        STA __off+1");
+int lea_off(int off) {               /* P1 = __fp + off (offset inline after JSR) */
     line("        JSR __lea"); use_lea = 1;
+    emitstr("        .word "); emitdec(off & 0xFFFF); putchar(10);
     return 0;
 }
 
@@ -740,13 +735,21 @@ int emit_leave() {
     line("        INC");        line("        STA __csp+1");line("__lv1:  RTS");
     return 0;
 }
-int emit_lea() {
-    line("__lea:  LDA __fp");   line("        LDB __off"); line("        ADD");
-    line("        STA __t");    line("        LDA #0");    line("        JNC __la1");
-    line("        LDA #1");     line("__la1:  STA __c");   line("        LDA __fp+1");
-    line("        LDB __off+1");line("        ADD");       line("        LDB __c");
-    line("        ADD");        line("        STA __t+1"); line("        LDA __t");
-    line("        TAP1L");      line("        LDA __t+1"); line("        TAP1H");
+int emit_lea() {                     /* P1 = __fp + (inline .word offset after the JSR) */
+    line("__lea:  PLA");        line("        TAP1L");      line("        PLA");
+    line("        TAP1H");                                  /* P1 = return PC -> the .word */
+    line("        LDA (P1)+");   line("        STA __off");
+    line("        LDA (P1)+");   line("        STA __off+1");/* P1 = retPC+2 */
+    line("        TPA1L");       line("        STA __ra");
+    line("        TPA1H");       line("        STA __ra+1"); /* save retPC+2 (P1 gets reused) */
+    line("        LDA __fp");    line("        LDB __off");  line("        ADD");
+    line("        STA __t");     line("        LDA #0");     line("        JNC __la1");
+    line("        LDA #1");      line("__la1:  STA __c");    line("        LDA __fp+1");
+    line("        LDB __off+1"); line("        ADD");        line("        LDB __c");
+    line("        ADD");         line("        STA __t+1");  line("        LDA __t");
+    line("        TAP1L");       line("        LDA __t+1");  line("        TAP1H");
+    line("        LDA __ra+1");  line("        PHA");        /* push retPC+2 back */
+    line("        LDA __ra");    line("        PHA");
     line("        RTS");
     return 0;
 }
@@ -1313,6 +1316,7 @@ int emit_runtime() {
     line("__c:    .fill 1");
     line("__fp:   .fill 2");
     line("__off:  .fill 2");
+    line("__ra:   .fill 2");
     line("__csp:  .fill 2");
     if (use_mul) line("__r:    .fill 2");
     if (use_mul || use_div || use_mod || use_shl || use_shr) line("__n:    .fill 1");

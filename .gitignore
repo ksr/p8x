@@ -28,6 +28,7 @@ emulator/test/bas.img
 emulator/test/tinyos.asm
 emulator/test/prog.asm
 emulator/test/v2prog.asm
+emulator/test/wordops.asm
 emulator/test/*.tmp
 emulator/test/*.pp.c
 # stray microcode images if a generator is run from the repo root

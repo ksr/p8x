@@ -394,25 +394,19 @@ class Gen:
         sys.exit("p8cc: not an lvalue")
 
     # ---- helpers ------------------------------------------------------------
-    def lea(self, off):                       # P1 = __fp + off
-        o = off & 0xFFFF
+    def lea(self, off):                       # P1 = __fp + off (offset inline after JSR)
         self.need("__lea")
-        self.emit("        LDA #%d" % (o & 0xFF), "        STA __off",
-                  "        LDA #%d" % (o >> 8), "        STA __off+1",
-                  "        JSR __lea")
+        self.emit("        JSR __lea", "        .word %d" % (off & 0xFFFF))
 
     def set_ax_const(self, v):
         v &= 0xFFFF
         self.emit("        LDA #%d" % (v & 0xFF), "        STA __ax",
                   "        LDA #%d" % (v >> 8), "        STA __ax+1")
 
-    def push_ax(self): self.emit("        LDA __ax", "        PHA",
-                                 "        LDA __ax+1", "        PHA")
-    def pop_t(self): self.emit("        PLA", "        STA __t+1",
-                              "        PLA", "        STA __t")
+    def push_ax(self): self.emit("        PHW __ax")   # 16-bit push (was LDA/PHA/LDA/PHA)
+    def pop_t(self): self.emit("        PLW __t")       # 16-bit pop  (was PLA/STA/PLA/STA)
 
-    def ax_to_p1(self): self.emit("        LDA __ax", "        TAP1L",
-                                  "        LDA __ax+1", "        TAP1H")
+    def ax_to_p1(self): self.emit("        LPW1 __ax")   # P1 = word @ __ax (was LDA/TAP1L/LDA/TAP1H)
 
     def add_const_ax(self, off):              # AX += off (16-bit constant)
         off &= 0xFFFF
@@ -824,7 +818,8 @@ class Gen:
             if d[0] == "func": self.compile_func(d[2], d[3], d[4])
         self.emit_runtime()
         self.emit("__ax:   .fill 2", "__t:    .fill 2", "__c:    .fill 1",
-                  "__fp:   .fill 2", "__csp:  .fill 2", "__off:  .fill 2")
+                  "__fp:   .fill 2", "__csp:  .fill 2", "__off:  .fill 2",
+                  "__ra:   .fill 2")
         if "__mul" in self.used:
             self.emit("__r:    .fill 2")
         if {"__mul", "__div", "__mod", "__shl", "__shr"} & self.used:
@@ -930,12 +925,21 @@ class Gen:
                         "        LDA __csp", "        LDB #2", "        ADD",
                         "        STA __csp", "        JNC __lv1", "        LDA __csp+1",
                         "        INC", "        STA __csp+1", "__lv1:  RTS"]
-        R["__lea"] = ["__lea:  LDA __fp", "        LDB __off", "        ADD",
+        # P1 = __fp + (inline .word offset after the JSR). Pop the return PC into
+        # P1, read the 2-byte offset there into __off, save retPC+2 in __ra, do the
+        # 16-bit add into P1, then push retPC+2 back so RTS skips the inline word.
+        R["__lea"] = ["__lea:  PLA", "        TAP1L", "        PLA", "        TAP1H",
+                      "        LDA (P1)+", "        STA __off",
+                      "        LDA (P1)+", "        STA __off+1",
+                      "        TPA1L", "        STA __ra",
+                      "        TPA1H", "        STA __ra+1",
+                      "        LDA __fp", "        LDB __off", "        ADD",
                       "        STA __t", "        LDA #0", "        JNC __la1",
                       "        LDA #1", "__la1:  STA __c", "        LDA __fp+1",
                       "        LDB __off+1", "        ADD", "        LDB __c",
                       "        ADD", "        STA __t+1", "        LDA __t",
                       "        TAP1L", "        LDA __t+1", "        TAP1H",
+                      "        LDA __ra+1", "        PHA", "        LDA __ra", "        PHA",
                       "        RTS"]
         R["__and"] = ["__and:  LDA __t", "        LDB __ax", "        AND",
                       "        STA __ax", "        LDA __t+1", "        LDB __ax+1",

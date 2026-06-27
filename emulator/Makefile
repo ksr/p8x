@@ -67,6 +67,7 @@ test-isa: p8xemu ucode
 	../p8xemu tisa.bin 2>tisa.out; \
 	grep -q ' A=00 ' tisa.out && echo "ISA TEST: PASS" || \
 	  { echo "ISA TEST: FAIL —"; tail -1 tisa.out; exit 1; }
+	sh test/isa_wordops_test.sh
 
 # Filesystem round-trip: monitor F (format) + B (boot) against the CF model.
 test-cf: p8xemu ucode
