@@ -280,8 +280,18 @@ Last updated: 2026-06-25
       ISA additions (item above) prove worthwhile, so the hardware serves real
       instructions rather than speculative ones.
 
-- [ ] **Recursive content search — `GREP -r pat` (or `RGREP`): match file
-      CONTENTS by regex across a directory tree.** The right home for regex, as
+- [x] **Recursive content search — `GREP -r pat`: match file CONTENTS by regex
+      across a directory tree — DONE (2026-06-27).** Implemented as a `-r` flag on
+      `grep` (Unix-familiar, reuses `lib_regex`'s `match()`). Two-phase to respect
+      the global FNEXT cursor: phase 1 walks the CWD tree depth-first (same
+      recursion shape as `FIND`/`DIR -R`, FSDIRBUF page `$EA`) collecting every
+      file's absolute path; phase 2 opens each (`open_path` from `lib_stdin`) and
+      greps it, printing hits as `path:line`. Capped at 48 files (frees C-stack —
+      grep -r ends `$E877`, ~9 dir-nesting levels of recursion headroom under the
+      `$F800` stack). Tested in `c_filters_test.sh` (root file + `/DOCS/D.TXT`
+      subdir, both compilers). Original analysis kept below.
+
+      The right home for regex, as
       distinct from name-matching: glob (`*`/`?`) is for file *names* (what `dir`
       and `find` already do); a **regex** is for the *search string* you look for
       inside files. This tool combines `find`'s tree walk (FNEXT recursion +

@@ -38,7 +38,7 @@ print a one-line usage summary and exit.
 | [`pwd.c`](pwd.c) | `PWD [-h]` | Print the current working directory path. |
 | [`cat.c`](cat.c) | `CAT [file\|glob] [-h]` | Print a file, **or** copy stdin→stdout (the canonical filter) when given no file. So `cat file`, `cat <file`, and `cat \| …` all work. A last component with `*`/`?` is a case-insensitive **glob** (via `lib_globx`): `CAT *.ASM` concatenates every matching file, and `CAT *.ASM >ALL.TXT` captures them — directory iteration now coexists with an open write stream (see FSDIRBUF below). Reading the **console** (e.g. `CAT >FILE`), each key echoes and **Ctrl-D** ends the input. |
 | [`wc.c`](wc.c) | `WC [file\|glob] [-h]` | Count lines, words, and bytes → `L W B`. A file, a glob (`WC *.LOG` = combined count over all matches), `<file`, or a pipe. Counts are 16-bit. |
-| [`grep.c`](grep.c) | `GREP regex [file] [-h]` | Print lines matching a **basic regex** — `.` (any), `*` (zero-or-more), `^`/`$` (anchors); else literal. Reads the named `file` (like cat) or stdin if none: `GREP "^al" foo.txt`, `… \| GREP "x.*y"`. Lines capped at 255 chars. |
+| [`grep.c`](grep.c) | `GREP [-r] regex [file\|glob] [-h]` | Print lines matching a **basic regex** — `.` (any), `*` (zero-or-more), `^`/`$` (anchors); else literal. Reads the named `file`/glob (like cat) or stdin if none: `GREP "^al" foo.txt`, `… \| GREP "x.*y"`. **`-r`** recurses the CWD tree (depth-first, like `DIR -R`/`FIND`) and searches file **contents**, printing each hit as `path:line` — `GREP -r "x.*y"`. Lines capped at 255 chars; `-r` is capped at 48 files. |
 | [`cp.c`](cp.c) | `CP src dst [-h]` | Copy a file (CWD-relative or absolute paths, across subdirectories). Read stream → write stream. |
 | [`mv.c`](mv.c) | `MV src dst [-h]` | Move/rename a file = copy + delete source (P8XFS has no rename primitive). `MV X X` is refused. |
 | [`head.c`](head.c) | `HEAD [-N] [file] [-h]` | First N lines (default 10) of a file or stdin. |
@@ -70,7 +70,14 @@ print a one-line usage summary and exit.
   (`matchhere`/`match`): a single self-recursive `matchhere` (the `c*` case is an
   inline loop, *not* a separate `matchstar`) — deliberately **no forward
   declaration / mutual recursion**, since the native `p8cc.c` bootstrap rejects a
-  standalone prototype. See *Shared code* below.
+  standalone prototype. See *Shared code* below. **`grep -r`** adds a recursive
+  content search: it can't grep files *during* the directory walk because the
+  `FNEXT` cursor is global BIOS state (the same reason `dir -R`/`find` record-then-
+  descend), so it runs in two phases — phase 1 walks the CWD tree depth-first
+  (FSDIRBUF page `$EA`) collecting every file's absolute path into `rfiles[]`
+  (48 × 96), phase 2 `open_path`s each and greps it, prefixing hits with `path:`.
+  The 48-file cap keeps grep's image low enough (`$E877`) to leave ~9 levels of
+  `collect()` recursion headroom under the `$F800` C-stack.
 - **head.c / tail.c / more.c** — file-or-stdin via the shared `nextc()`/`openarg()`
   idiom (copied from cat/grep). `head` stops after N lines; `tail` keeps the last
   N in a flat ring buffer (`buf[slot*256+col]`, N≤40); `more` pages 23 lines then

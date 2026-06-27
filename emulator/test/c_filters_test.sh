@@ -39,6 +39,10 @@ build_disk() {   # compile wc/grep/cat with $1 (py|host), build a disk
     python3 $ROOT/tools/p8xfs.py put    flt.img g1.dat --name G1.LOG --load 0 --exec 0 >/dev/null
     printf 'green key\r\n' > g2.dat
     python3 $ROOT/tools/p8xfs.py put    flt.img g2.dat --name G2.LOG --load 0 --exec 0 >/dev/null
+    # a subdirectory with a file, for the recursive content search (GREP -r)
+    python3 $ROOT/tools/p8xfs.py mkdir  flt.img /DOCS >/dev/null
+    printf 'alpha doc\r\nplain line\r\n' > d.dat
+    python3 $ROOT/tools/p8xfs.py put    flt.img d.dat --name /DOCS/D.TXT --load 0 --exec 0 >/dev/null
 }
 
 R() { printf "B\r$1\r" | ../p8xemu -l 300000000 -c flt.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r'; }
@@ -74,6 +78,12 @@ check() {   # $1 = label
     # glob: a `*`/`?` arg is read as ONE concatenated stream over all matches
     R 'WC *.LOG' | grep -qx '3 4 22' || fail "$1: WC *.LOG combined count (concatenated)"
     R 'GREP key *.LOG' | grep -qx 'green key' || fail "$1: GREP over *.LOG glob"
+    # recursive content search: -r walks the CWD tree and prints "path:line"
+    out=$(R 'GREP -r alpha')
+    echo "$out" | grep -qx '/T.TXT:alpha'        || fail "$1: GREP -r missed /T.TXT:alpha"
+    echo "$out" | grep -qx '/T.TXT:gamma alpha'  || fail "$1: GREP -r missed /T.TXT:gamma alpha"
+    echo "$out" | grep -qx '/DOCS/D.TXT:alpha doc' || fail "$1: GREP -r missed subdir /DOCS/D.TXT"
+    echo "$out" | grep -q  'plain line'          && fail "$1: GREP -r wrongly matched a non-matching line"
     R 'WC -h'   | grep -qi usage || fail "$1: wc -h"
     R 'GREP -h' | grep -qi usage || fail "$1: grep -h"
 }

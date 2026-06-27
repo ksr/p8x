@@ -171,3 +171,7 @@ emulator/test/v2dir.asm
 emulator/test/v2pwd.asm
 emulator/test/v2tree.asm
 emulator/test/dg.asm
+
+# test-generated per-command compiler output (the .bin/.pp.c are already ignored)
+emulator/test/*.py.asm
+emulator/test/*.host.asm
