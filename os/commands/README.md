@@ -20,6 +20,14 @@ DIR /BIN            CAT README.TXT          PWD
 equivalently `RUN /BIN/DIR.BIN /BIN`, etc. Every command accepts **`-h`** to
 print a one-line usage summary and exit.
 
+> **Drives.** These `/BIN` commands operate on the **current drive** (dual-CF:
+> drive 0 = boot/default, drive 1). A path argument is resolved on whichever
+> drive is active, so to run one against the other card, switch first with a bare
+> `1:` / `0:` at the prompt, then run it (`1:` → `DIR`, `GREP x *.C`, `CAT F`).
+> An inline `0:`/`1:` **drive prefix** on a `/BIN` argument (`CAT 1:/F`) is **not
+> wired yet** — that lives in the OS **built-ins** (`CD`/`MKDIR`/`SAVE`/…) and
+> the `IMPORT` bulk copy. See [../README.md](../README.md) "Two drives".
+
 > **Note — DIR, PWD, CAT, and TREE are no longer shell built-ins** (the
 > minimal-kernel split): they were removed from the OS and run from `/BIN` by
 > bare name, so `DIR -R`, `PWD`, `CAT file`, `TREE` all just work (and honour

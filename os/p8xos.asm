@@ -3866,6 +3866,8 @@ MHELP:   .byte CR,LF
          .byte CR,LF
          .ascii "PACK          reclaim deleted space"
          .byte CR,LF
+         .ascii "N:            switch to drive N (0/1), N:path targets it"
+         .byte CR,LF
          .ascii "IMPORT N:/dir copy files from another drive's dir into the CWD"
          .byte CR,LF
          .ascii "FSCK          check filesystem integrity (read-only)"
@@ -3884,7 +3886,7 @@ MHELP:   .byte CR,LF
          .byte CR,LF
          .ascii "programs:     RUN /BIN/BASIC.BIN | EDIT.BIN f | ASM.BIN s o"
          .byte CR,LF
-         .ascii "  path=file/dir, s e a=hex addr, b=hex byte"
+         .ascii "  path=file/dir, N:path=on drive N, s e a=hex, b=byte"
          .byte CR,LF,0
 MUNK:    .byte CR,LF
          .asciiz "?"

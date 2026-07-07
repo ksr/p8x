@@ -27,11 +27,17 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > | `IMPORT N:/dir` | copy every file from another drive's directory into the CWD (bulk cross-drive copy; card provisioning) |
 > | `HELP` | list commands |
 >
+> Any `path` argument to a **built-in** above may carry a `0:`/`1:` **drive
+> prefix** (`CD 1:/SRC`, `MKDIR 1:/LIB`, `SAVE 1:/PROG 7A00 7B00`, `DEL 0:/OLD`);
+> `CD N:/dir` also makes N the current drive. See **Two drives** below.
+>
 > The table above is the **built-in** command set. `CAT`, `WC`, `GREP`, `CP`,
 > `MV`, `HEAD`, `TAIL`, `MORE`, `SORT`, `UNIQ`, `SED`, `FIND`, `DIFF` (and richer
 > `DIR -R` etc.) are **userland C programs** in `/BIN`, run by
 > bare name (implicit RUN searches `PATH`, default `/BIN`) or explicit `RUN` —
-> see [commands/](commands/README.md). Line input echoes keys, supports
+> see [commands/](commands/README.md). They run on the **current drive**; to use
+> them on the other card, switch first with a bare `1:`/`0:` (an inline `N:`
+> prefix on a `/BIN` command argument is not wired yet — see BACKLOG). Line input echoes keys, supports
 > backspace/DEL editing (max 63 chars), and takes **Ctrl-D** as console EOF.
 >
 > A file/dir argument may be a **path**. Directory scanning works on any extent
