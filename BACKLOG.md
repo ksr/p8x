@@ -231,8 +231,50 @@ Last updated: 2026-06-25
         update the ISA docs (opcode table in `docs/p8x-monitor.md`, the
         programmer's-guide PDF via `gen_progguide.py`).
 
-- [ ] **`MOVW dst,src` — 16-bit memory→memory move (needs a 2nd scratch pointer
-      = HARDWARE)** (2026-06-26). The single largest idiom from the histogram:
+- [~] **`MOVW dst,src` — 16-bit memory→memory move — SOFTWARE DONE (2026-06-27);
+      register-bank hardware regen PENDING.** Opcode `$78`, shape `a,a` (5 bytes:
+      opcode + dst16 + src16), 12 microcode steps. Landed: microcode (`genucode.py`
+      `MOVW` + `PT2=5`), emulator (`P[6]`, PT2 init), assembler (`MOVW dst,src`
+      two-operand encoder), and **`p8cc.py`** (a `mov16` helper at the two hot
+      absolute→absolute sites — assignment-yields-value and int var-load). Measured
+      on the /BIN commands: sort −833 B, grep −1106 B, sed −931 B (~3–5% each, on
+      top of the −15.3% from PHW/PLW/LPW). Tested: `isa_wordops_test.sh` gained a
+      MOVW round-trip (mem→mem via both scratch pointers); full suite green.
+      Docs synced (ISA card + programmer's guide PDFs regen'd → 88 opcodes,
+      system-design §9, bus-definition, regbank theory).
+      **Two findings while doing it:**
+        1. **No backplane change** — `PSEL` is already 3 bits (`PSEL0–2` on
+           C20/C21/C27) and `U33` already decodes select 5. Confirmed against the
+           regbank generator's exported bus set.
+        2. **The register-bank hardware needs more than "+2 chips", and there's a
+           latent gap:** `MOVW` increments BOTH scratch pointers, and the
+           already-shipped `PHW`/`PLW`/`LPW` also `PINC` `PT` — but the current
+           `PT` is load-only 74377 latches ("PT does not count"). So `PT` must
+           become four 74169 counters, `PT2` is another four 74169s + a 74244
+           buffer pair, and the count/load decoders (`U39`/`U40`) must produce
+           `-CNT4/-CNT5` + `-LDL5/-LDH5`. ~10 chips, all on the regbank card, no
+           backplane/control-card change. Documented in the regbank theory as
+           rev-D PENDING. **The remaining work is the `gen_eagle.py` schematic
+           regen + BOM + placement PDFs + DRC** — deliberately its own pass (canon
+           generator, no DRC backstop; the project warns against rushing bus-facing
+           schematic edits).
+        3. **`p8cc.c` does NOT yet emit MOVW** — its codegen is P1-indirect
+           (address-through-`__ax`), so it lacks the absolute→absolute idioms MOVW
+           targets; benefiting would need a codegen refactor. p8cc.py (which builds
+           every /BIN command) gets the win; p8cc.c adoption is a follow-up.
+      Original analysis below.
+
+- [ ] **`MOVW` register-bank hardware regen (rev D).** See the MOVW item above and
+      the regbank theory rev-D note: turn `PT` into 74169 counters, add `PT2`
+      (PSEL=5) counters + `-SEL5` buffers, extend `U39`/`U40` count/load decode.
+      Regenerate `gen_eagle.py` → regbank `.sch/.brd`, `gen_bom.py`, the placement
+      PDFs; DRC for one-hot pointer-bus drive. No backplane/control-card change.
+      Also teach the on-target assembler (`apps/p8xasm.asm` + `gen_p8xopc.py`) the
+      two-operand shape if MOVW is ever to be assembled on the target (host-only
+      today; the opcode table and cover-test currently skip two-operand shapes).
+
+- [ ] **(orig)** `MOVW dst,src` — 16-bit memory→memory move (needs a 2nd scratch pointer
+      = HARDWARE) (2026-06-26). The single largest idiom from the histogram:
       `LDA src/STA dst/LDA src+1/STA dst+1` (~3,335 sites across the 5 commands),
       12 bytes that `MOVW dst,src` would collapse to 5. Deferred from the
       PHW/PLW/LPW prototype because, unlike those, it can't be done in pure

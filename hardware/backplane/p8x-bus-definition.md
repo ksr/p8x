@@ -212,7 +212,7 @@ microcode-word additions, all driven by the control card's pipeline latches:
 
 | Signal | Pin | Consumer | Function |
 |--------|-----|----------|----------|
-| PSEL2 | C27 | Reg-bank | 3rd pointer-select bit (P0–P3 + PT scratch=4) |
+| PSEL2 | C27 | Reg-bank | 3rd pointer-select bit (P0–P3, PT scratch=4, PT2 scratch=5 in rev D — MOVW). No new bus line: PSEL is already 3 bits and U33 decodes 5. |
 | LDZN | C28 | ALU | Latch Z,N from the data bus on loads (without touching C/V) |
 | SHCIN | C29 | ALU | Shifter shift-in = current C flag (rotate through carry) |
 | SETC | C30 | ALU | Force C = 1 (SEC) |

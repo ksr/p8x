@@ -27,6 +27,9 @@ FC=dict(never=0,always=1,C=2,Z=3,N=4,V=5,LT=6,LE=7)
 #   LT = N^V (signed A<B), LE = (N^V)|Z (signed A<=B) — rev C signed compares.
 #   The condition mux gets N^V on input 6 and (N^V)|Z on input 7 (control card).
 PT=4   # hidden microcode-only scratch pointer (PSEL=4), for absolute addressing
+PT2=5  # 2nd hidden scratch pointer (PSEL=5) — the write cursor for MOVW. Both PT
+       # and PT2 are up-counters in hardware (74169s): PHW/PLW/LPW1/LPW2 and MOVW
+       # all PINC them, so PT is NOT a load-only latch (regbank card rev D).
 
 def w(doe=0,dld=0,psel=0,pinc=0,pdec=0,alus=0,m=0,cin=1,sh0=0,sh1=0,
       ldf=0,fcond=0,urst=0,halt=0,ldzn=0,shcin=0,setc=0,clrc=0,bsel=0):
@@ -202,6 +205,25 @@ for p in (1,2):
        w(doe="T",dld="PTRL",psel=p),              # P%d.lo = T
        w(doe="MEM",dld="T",psel=PT),              # T = mem[a+1] (hi)
        w(doe="T",dld="PTRH",psel=p,urst=1))       # P%d.hi = T
+# MOVW dst,src — 16-bit memory->memory move, collapses the compiler's most common
+# idiom (LDA src / STA dst / LDA src+1 / STA dst+1, 12 bytes) into 5. Needs TWO
+# live addresses (read src, write dst) so it uses BOTH scratch pointers: PT2 = the
+# dst (write) cursor, PT = the src (read) cursor. Operand order in the stream is
+# dst word then src word (matching `MOVW dst,src`). 12 steps, inside the 16 budget.
+op(0x78,"MOVW","a,a",
+   w(doe="MEM",dld="T", psel=0,pinc=1),           # T  = dst.lo, P0++
+   w(doe="MEM",dld="T2",psel=0,pinc=1),           # T2 = dst.hi, P0++
+   w(doe="T", dld="PTRL",psel=PT2),               # PT2.lo = dst.lo
+   w(doe="T2",dld="PTRH",psel=PT2),               # PT2.hi = dst.hi
+   w(doe="MEM",dld="T", psel=0,pinc=1),           # T  = src.lo, P0++
+   w(doe="MEM",dld="T2",psel=0,pinc=1),           # T2 = src.hi, P0++
+   w(doe="T", dld="PTRL",psel=PT),                # PT.lo = src.lo
+   w(doe="T2",dld="PTRH",psel=PT),                # PT.hi = src.hi
+   w(doe="MEM",dld="T",psel=PT,pinc=1),           # T = mem[src],   PT++
+   w(doe="T",dld="MEMW",psel=PT2,pinc=1),         # mem[dst] = T,   PT2++
+   w(doe="MEM",dld="T",psel=PT),                  # T = mem[src+1]
+   w(doe="T",dld="MEMW",psel=PT2,urst=1))         # mem[dst+1] = T
+
 op(0x72,"CLC","", w(clrc=1,urst=1))    # C := 0
 op(0x73,"SEC","", w(setc=1,urst=1))    # C := 1
 

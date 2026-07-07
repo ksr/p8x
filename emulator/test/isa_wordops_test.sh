@@ -1,8 +1,9 @@
 #!/bin/sh
-# rev-D 16-bit memory ops: PHW/PLW (push/pop a memory word) and LPW1 (load a
-# pointer from a memory word). Booted as a tiny "OS" at $4000; prints AB CD 5A
-# iff all three work. (These collapse the compiler's byte-by-byte 16-bit moves;
-# the C suite exercises them heavily — this is the isolated microcode check.)
+# rev-D 16-bit memory ops: PHW/PLW (push/pop a memory word), LPW1 (load a pointer
+# from a memory word), and MOVW (16-bit mem->mem move via PT2). Booted as a tiny
+# "OS" at $4000; prints AB CD 5A EF BE iff all four work. (These collapse the
+# compiler's byte-by-byte 16-bit moves; the C suite exercises them heavily — this
+# is the isolated microcode check, incl. the 2nd scratch pointer PT2.)
 set -e
 cd "$(dirname "$0")"
 ROOT=../..
@@ -34,6 +35,16 @@ cat > wordops.asm <<'EOF'
         STA (P1)         ; mem[$5020] := $5A
         LDA $5020
         JSR $0103        ; -> 5A  (P1 loaded from the word correctly)
+        ; MOVW: copy the word $BEEF from $5030 to $5040 (mem->mem, both scratch ptrs)
+        LDA #$EF
+        STA $5030
+        LDA #$BE
+        STA $5031
+        MOVW $5040,$5030
+        LDA $5040
+        JSR $0103        ; -> EF  (low byte moved)
+        LDA $5041
+        JSR $0103        ; -> BE  (high byte moved, order preserved)
         HLT
 EOF
 python3 $ROOT/assembler/p8xasm.py wordops.asm -o wordops.bin --base 0x4000 >/dev/null
@@ -43,6 +54,6 @@ python3 $ROOT/tools/p8xfs.py boot   wordops.img wordops.bin >/dev/null
 
 out=$(printf 'B\r' | ../p8xemu -l 5000000 -c wordops.img eeprom.bin 2>/dev/null | LC_ALL=C od -An -tx1 | tr -s ' \n' ' ')
 case "$out" in
-  *"ab cd 5a"*) echo "ISA-WORDOPS TEST: PASS" ;;
-  *) echo "ISA-WORDOPS TEST: FAIL — expected 'ab cd 5a', got [$out]"; exit 1 ;;
+  *"ab cd 5a ef be"*) echo "ISA-WORDOPS TEST: PASS" ;;
+  *) echo "ISA-WORDOPS TEST: FAIL — expected 'ab cd 5a ef be', got [$out]"; exit 1 ;;
 esac

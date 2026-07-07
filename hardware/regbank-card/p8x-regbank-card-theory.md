@@ -90,6 +90,24 @@ PT (PSEL = 4) is different hardware — two 74377 octal latches (`U41/U42`) inst
 of counters, because the scratch pointer only ever needs to be *loaded*, never
 counted.
 
+> **Rev D — PT must become a counter, and a second scratch pointer PT2 is added
+> (PENDING; not yet in the generated schematic).** The rev-D 16-bit ops change
+> this picture. `PHW`/`PLW`/`LPW1`/`LPW2` (and the new `MOVW`) *increment* PT
+> (`PINC` at PSEL = 4) to walk from a word's low byte to its high byte — so the
+> load-only 74377 latches above are **no longer sufficient**: PT must be four
+> 74169 up-counters like P0–P3. (Those ops currently run only in the emulator,
+> which counts any pointer; on real 74377 latches they would re-read the low byte.
+> This is a latent gap the "pure-microcode" ops introduced.) `MOVW dst,src` also
+> needs a **second** scratch pointer **PT2 (PSEL = 5)** as its write cursor, since
+> a memory→memory move holds two addresses live at once — another four 74169s
+> plus a 74244 buffer pair (like `U43/U44`) gated by `-SEL5`. Decode work: the
+> count decoder must produce `-CNT4`/`-CNT5` (extend `U39`), and the load decoder
+> `-LDL5`/`-LDH5` for PT2. **No backplane change** — `PSEL` is already 3 bits and
+> `U33` already decodes select 5 (this also defines the previously-floating
+> PSEL = 5 case flagged in the backplane VERIFY notes). ~10 chips, all on this
+> card. Tracked in BACKLOG (MOVW/PT2); the microcode, emulator, assembler, and
+> `p8cc.py` already emit and model it.
+
 ### 3.2 Pointer selection → the internal pointer bus (PB0–15)
 `PSEL0–2` drive `U33` (74138), producing the one-hot select `-SEL0..-SEL4`. The
 selected pointer's counter outputs (`PQ`) are gated onto the internal **pointer

@@ -42,7 +42,7 @@ static struct termios g_orig;
 static int g_raw=0;
 
 static uint8_t rom[4][8192], eeprom[0x8000], ram[0xBF00];  /* RAM = $4000..$FEFF (48K) */
-static uint16_t P[5];                 /* P0=PC P1 P2 P3=SP P4=PT (hidden scratch) */
+static uint16_t P[6];                 /* P0=PC P1 P2 P3=SP P4=PT P5=PT2 (2 hidden scratch) */
 static uint8_t A,B,T,T2,IR;
 static int stp, fC,fZ,fN,fV;          /* fC = conventional carry (1 = carry / A>=B) */
 static int prev_fcond=0, halted=0, trace=0;
@@ -245,7 +245,7 @@ int main(int argc,char**argv){
         signal(SIGINT,on_sig); signal(SIGTERM,on_sig);
         lim=~0ULL;                                  /* no cycle cap while typing */
     }
-    P[0]=0; P[1]=P[2]=0; P[3]=0xFEFF; P[4]=0; stp=0; IR=0;   /* reset: P0 forced 0 */
+    P[0]=0; P[1]=P[2]=0; P[3]=0xFEFF; P[4]=P[5]=0; stp=0; IR=0;   /* reset: P0 forced 0 */
     while(!halted && cycles<lim){
         /* condition mux: FCOND of the word currently in the pipeline */
         int cond;

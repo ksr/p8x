@@ -34,7 +34,8 @@ ops={'':'', '#':' #1', 'a':' $1234',
      '(P3)':' (P3)','(P3)+':' (P3)+'}
 L=["VAL = $1234", "CH  = 'Q'", "        .org $7A00", "begin:"]
 for k in sorted(OPC):                       # every opcode/shape exactly as defined
-    L.append("        %s%s"%(k[0],ops[k[1]]))
+    if ',' in k[1]: continue                # two-operand ops (MOVW) are host-only:
+    L.append("        %s%s"%(k[0],ops[k[1]]))  # not in the on-target OPCTAB (gen_p8xopc)
 for n in (1,2,3):
     L.append("        LDP%d #fwd"%n)         # LDPn pseudo, all pointers
 L += ["        LDA #<VAL","        LDB #>VAL","        LDA #CH",

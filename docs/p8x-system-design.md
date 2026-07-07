@@ -317,8 +317,19 @@ loads dominate:
 | PHW a | push the 16-bit word at memory address `a` (replaces LDA/PHA ×2) |
 | PLW a | pop a 16-bit word into memory address `a` (replaces PLA/STA ×2) |
 | LPW1 a / LPW2 a | load pointer P1 / P2 from the 16-bit word at `a` (replaces LDA/TAPnL/LDA/TAPnH) |
+| MOVW dst,src (`$78`) | 16-bit memory→memory move (replaces LDA/STA/LDA/STA) |
 
-Opcode space is still wide open (256 slots, 87 used).
+`PHW`/`PLW`/`LPW1`/`LPW2` are pure microcode. **`MOVW` needs one hardware
+addition**: a second hidden scratch pointer `PT2` (PSEL = 5) as the write cursor,
+since a mem→mem move holds two addresses live at once. `PT2` is another 74169
+counter set on the register-bank card — **no backplane change** (PSEL is already
+3 bits: `PSEL0–2` on C20/C21/C27, and U33 already decodes select 5). Making it
+work on real hardware also requires upgrading `PT` from load-only 74377 latches to
+74169 counters, because `PHW`/`PLW`/`LPW` (and `MOVW`) increment `PT` — a
+requirement the earlier "pure-microcode" ops introduced but the regbank card has
+not yet been revised for. See the register-bank card theory (rev D).
+
+Opcode space is still wide open (256 slots, 88 used).
 
 ---
 

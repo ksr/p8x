@@ -35,9 +35,9 @@ MONO=ParagraphStyle("m",parent=B,fontName="Courier",fontSize=8)
 NOTE=ParagraphStyle("n",parent=B,backColor=colors.Color(1,0.97,0.88),
                     borderPadding=4,leftIndent=2)
 
-SHN={"":"","#":" #imm","a":" addr","(P1)":" (P1)","(P2)":" (P2)","(P3)":" (P3)",
+SHN={"":"","#":" #imm","a":" addr","a,a":" dst,src","(P1)":" (P1)","(P2)":" (P2)","(P3)":" (P3)",
      "(P1)+":" (P1)+","(P2)+":" (P2)+","(P3)+":" (P3)+"}
-BYTES={"":1,"#":2,"a":3,"(P1)":1,"(P2)":1,"(P3)":1,"(P1)+":1,"(P2)+":1,"(P3)+":1}
+BYTES={"":1,"#":2,"a":3,"a,a":5,"(P1)":1,"(P2)":1,"(P3)":1,"(P1)+":1,"(P2)+":1,"(P3)+":1}
 DESC={
  ("NOP",""):("-","No operation."),
  ("HLT",""):("-","Halt the clock. Resume only by reset (or emulator exit)."),
@@ -107,6 +107,7 @@ DESC[("PHW","a")]=("-","Push the 16-bit word at addr onto the P3 stack (low byte
 DESC[("PLW","a")]=("-","Pop a 16-bit word from the P3 stack into addr (high then low).")
 DESC[("LPW1","a")]=("-","P1 (16-bit) := the word at addr.")
 DESC[("LPW2","a")]=("-","P2 (16-bit) := the word at addr.")
+DESC[("MOVW","a,a")]=("-","16-bit memory->memory move: the word at src -> dst (via the PT/PT2 scratch pointers).")
 
 DESC[("EI","")]=("-","Enable maskable interrupts (IE := 1).")
 DESC[("DI","")]=("-","Disable maskable interrupts (IE := 0).")
@@ -125,7 +126,7 @@ GROUPS=[("System",["NOP","HLT","CLC","SEC"]),
   "TAP1L","TAP1H","TAP2L","TAP2H","TAP3L","TAP3H",
   "TPA1L","TPA1H","TPA2L","TPA2H","TPA3L","TPA3H"]),
  ("Stack",["PHA","PLA"]),
- ("16-bit memory ops (rev D; pure-microcode space savers)",["PHW","PLW","LPW1","LPW2"]),
+ ("16-bit memory ops (rev D; compiler space savers). PHW/PLW/LPW pure-microcode; MOVW adds the PT2 scratch pointer",["PHW","PLW","LPW1","LPW2","MOVW"]),
  ("Control flow",["JMP","JSR","RTS","BZ","BNZ","BCP","JNC"]),
  ("Signed branches (rev C; after CMP — N^V/Z)",["BLT","BGE","BLE","BGT"])]
 

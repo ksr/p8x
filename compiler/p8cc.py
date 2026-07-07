@@ -403,6 +403,8 @@ class Gen:
         self.emit("        LDA #%d" % (v & 0xFF), "        STA __ax",
                   "        LDA #%d" % (v >> 8), "        STA __ax+1")
 
+    def mov16(self, dst, src):                          # 16-bit mem->mem (was LDA/STA x2)
+        self.emit("        MOVW %s,%s" % (dst, src))
     def push_ax(self): self.emit("        PHW __ax")   # 16-bit push (was LDA/PHA/LDA/PHA)
     def pop_t(self): self.emit("        PLW __t")       # 16-bit pop  (was PLA/STA/PLA/STA)
 
@@ -485,10 +487,11 @@ class Gen:
                               "        LDA #0", "        STA __ax+1")
             else:
                 lab = kind[1]
-                self.emit("        LDA %s" % lab, "        STA __ax")
-                self.emit(*(["        LDA %s+1" % lab, "        STA __ax+1"]
-                            if sizeof(base, ptr) == 2 else
-                            ["        LDA #0", "        STA __ax+1"]))
+                if sizeof(base, ptr) == 2:
+                    self.mov16("__ax", lab)              # 16-bit var load -> AX
+                else:
+                    self.emit("        LDA %s" % lab, "        STA __ax",
+                              "        LDA #0", "        STA __ax+1")
         elif k == "unary":
             if e[1] == "&": self.gen_address(e[2])
             elif e[1] == "*":
@@ -531,8 +534,7 @@ class Gen:
                       "        LDA __t+1", "        STA (P1)")
         else:
             self.emit("        LDA __t", "        STA (P1)")
-        self.emit("        LDA __t", "        STA __ax",   # assignment yields the value
-                  "        LDA __t+1", "        STA __ax+1")
+        self.mov16("__ax", "__t")                        # assignment yields the value
 
     def gen_bin(self, op, a, b):
         plan = {"+": ("__add", False, False), "-": ("__sub", False, False),

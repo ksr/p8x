@@ -40,9 +40,10 @@ from reportlab.platypus.flowables import KeepInFrame  # noqa: E402
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle  # noqa: E402
 
 # ---- operand-shape rendering + byte counts (same as gen_progguide.py) -------
-SHN = {"": "", "#": " #imm", "a": " addr", "(P1)": " (P1)", "(P2)": " (P2)",
+SHN = {"": "", "#": " #imm", "a": " addr", "a,a": " dst,src",
+       "(P1)": " (P1)", "(P2)": " (P2)",
        "(P3)": " (P3)", "(P1)+": " (P1)+", "(P2)+": " (P2)+", "(P3)+": " (P3)+"}
-BYTES = {"": 1, "#": 2, "a": 3, "(P1)": 1, "(P2)": 1, "(P3)": 1,
+BYTES = {"": 1, "#": 2, "a": 3, "a,a": 5, "(P1)": 1, "(P2)": 1, "(P3)": 1,
          "(P1)+": 1, "(P2)+": 1, "(P3)+": 1}
 
 # (mnemonic, shape) -> (flags, one-line description). Authored prose only.
@@ -86,6 +87,7 @@ DESC = {
     ("PLW", "a"): ("-", "Pop 16-bit word into addr."),
     ("LPW1", "a"): ("-", "P1 := 16-bit word at addr."),
     ("LPW2", "a"): ("-", "P2 := 16-bit word at addr."),
+    ("MOVW", "a,a"): ("-", "16-bit mem->mem: word at src -> dst."),
     ("JMP", "a"): ("-", "P0(PC):=addr."),
     ("JSR", "(P1)"): ("-", "Push return addr, P0:=P1."),
     ("JSR", "a"): ("-", "Push return addr, P0:=addr."),
@@ -123,7 +125,7 @@ GROUPS = [
     ("ALU with T (rev C; 2nd operand=T, B preserved)",
      ["LDT", "ADDT", "SUBT", "ANDT", "ORT", "XORT", "CMPT"]),
     ("Stack", ["PHA", "PLA"]),
-    ("16-bit memory (rev D)", ["PHW", "PLW", "LPW1", "LPW2"]),
+    ("16-bit memory (rev D)", ["PHW", "PLW", "LPW1", "LPW2", "MOVW"]),
     ("Control flow", ["JMP", "JSR", "RTS", "BZ", "BNZ", "BCP", "JNC"]),
     ("Signed branches (rev C; after CMP)", ["BLT", "BGE", "BLE", "BGT"]),
     ("Pointer registers", ["LPL1", "LPH1", "LPL2", "LPH2", "LPL3", "LPH3",

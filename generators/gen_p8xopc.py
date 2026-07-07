@@ -38,6 +38,12 @@ def main():
     w("OPCTAB:\n")
     # stable order: by mnemonic then shape, for readable diffs
     for (mn, sh), op in sorted(OPC.items()):
+        if "," in sh:
+            # Two-operand ops (e.g. MOVW dst,src) — the on-target assembler's
+            # parse_operand handles only single-operand shapes, so they're
+            # emitted by the HOST toolchain only. Skip until the native parser
+            # grows a two-absolute form (backlog: ASM two-operand support).
+            continue
         if sh not in SHAPE:
             sys.exit("gen_p8xopc: unknown shape %r for %s" % (sh, mn))
         w("        .byte %d,$%02X\n" % (SHAPE[sh], op))

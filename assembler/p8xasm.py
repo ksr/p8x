@@ -138,6 +138,11 @@ class Asm:
                 es=opnd.split(","); n=self.expr(es[0],ln,line,pass2)
                 v=self.expr(es[1],ln,line,pass2) if len(es)>1 else 0
                 emit(*([v]*n))
+            elif mn=="MOVW":                              # MOVW dst,src (two abs16)
+                if "," not in opnd: err(ln,line,"MOVW needs dst,src")
+                d,s=opnd.split(",",1)
+                dv=self.expr(d,ln,line,pass2); sv=self.expr(s,ln,line,pass2)
+                emit(OPC[("MOVW","a,a")], dv&0xFF,dv>>8, sv&0xFF,sv>>8)
             elif re.fullmatch(r"LDP[123]",mn):           # pseudo: 16-bit ptr load
                 shape,etext=parse_operand(opnd)
                 if shape!="#": err(ln,line,"LDPn needs #imm16")
