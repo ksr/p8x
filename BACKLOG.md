@@ -514,6 +514,24 @@ Last updated: 2026-06-27
       compaction is the general but heavier route) and type tracking in the
       expression evaluator. Orthogonal to (and larger than) multi-character
       variable names — best layered on after those land.
+- [ ] **BASIC: check syntax on line entry, not just at RUN.** Today entering a
+      program line runs `CRUNCH` (tokenizes keywords in place) and stores it
+      (`DOLINE`, ~p8xbasic.asm:1821) with no grammar validation — a malformed
+      statement (`10 PRINT )`, a bad expression, a missing operand) is only
+      caught later when RUN reaches that line, so you can type a whole program
+      and not learn line 10 is broken until it executes. Add an entry-time
+      syntax pass so an error is reported immediately, against the line just
+      typed, with the line still on screen to fix. Options: (a) a lightweight
+      validator that walks the crunched line confirming each statement's shape
+      (keyword + well-formed operands/expression) and rejects on the spot; or
+      (b) reuse the real statement/expression parser in a "check, don't execute"
+      mode (no side effects — no variable writes, no I/O) so entry-time and
+      run-time grammar can't diverge — (b) is more code but keeps one source of
+      truth. Print the usual `SYNTAX ERROR` (SNERR) with the column/offset if
+      cheap. Keep it entry-only: don't try to resolve `GOTO`/`GOSUB` targets or
+      undefined variables at entry (those are legitimately runtime). Interactive
+      immediate-mode lines already execute (and error) at once; this is about
+      the *numbered* lines that are stored deferred.
 - [ ] Tiny BASIC port (after Forth? Forth kernel is smaller and self-hosting)
 - [ ] Forth kernel — pointer bank makes NEXT 4 cycles; arguably the native
       language of this machine
