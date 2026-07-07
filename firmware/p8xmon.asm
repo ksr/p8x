@@ -101,6 +101,9 @@ DIBUFH  = $7078          ; FNEXT directory-buffer page (high byte; low byte 0).
 DILBA1  = $7079          ; FNEXT iteration sector LBA, high byte
 DIRLBA1 = $707A          ; current directory start LBA, high byte (pairs DIRLBA)
 FCDH    = $707B          ; FCREATE directory-sector scan cursor, high byte (HEXL)
+DRVSEL  = $707C          ; current CF drive for sector I/O (0/1); ORed into CFHEAD
+CFTOL   = $707D          ; CF bounded-wait timeout counter, low byte
+CFTOH   = $707E          ; CF bounded-wait timeout counter, high byte
 SBUF    = $7100          ; sector buffer
 STKTOP  = $FEFF
 
@@ -144,11 +147,14 @@ RESET:  JMP  COLD
         JMP  FLOADAT        ; $013F FLOADAT  read FLEN bytes from LBA into (P1) (whole sectors)
         JMP  FOPENDIRAT     ; $0142 FOPENDIRAT begin iterating the 4-sector directory at LBA = A (low) + LBA1 ($9D48) (high)
         JMP  FSDIRBUF       ; $0145 FSDIRBUF  point FNEXT's sector buffer at page A (high byte; call after FOPENDIR)
+        JMP  CFSEL          ; $0148 CFSEL     A = drive (0/1) -> route sector/FS I/O to that CF card
+        JMP  CFCURDRV       ; $014B CFCURDRV  -> A = current CF drive
 
 ;==============================================================================
 ; Monitor body (relocated above the BIOS table; reset vectors here).
 ; The BIOS jump table now runs to $0145 (FSDIRBUF), so the body starts at $0160
-; to leave headroom for further BIOS entries. RESET ($0000) jumps here by label.
+; to leave headroom for further BIOS entries (now runs to $014B). RESET ($0000)
+; jumps here by label.
 ;==============================================================================
         .org $0160
 ; ---------------- Cold start -------------------------------------------------
@@ -163,6 +169,8 @@ COLD:   LDP3 #STKTOP        ; stack
         STA  DIRLBA1
         LDA  #4
         STA  DIRN
+        LDA  #0             ; CF sector I/O defaults to drive 0
+        STA  DRVSEL
         LDA  #$71           ; FSCAN/FNEXT directory-buffer page defaults to SBUF;
         STA  DIBUFH         ;   a program repoints it (FSDIRBUF) to run a dir walk
                             ;   alongside an open write stream without clobbering it
@@ -488,23 +496,62 @@ CMD_H:  LDP1 #MHELP
 ;==============================================================================
 ; CF DRIVER
 ;==============================================================================
-CFWAIT: LDA  CFSTAT         ; spin while BSY
+; CFWAIT/CFDRQ are BOUNDED (up to 65536 status polls) so an ABSENT drive — whose
+; task-file floats to $FF (BSY-looking) — times out instead of hanging. A present
+; device is ready on the first poll, so this costs nothing in the common case.
+CFWAIT: LDA  #0             ; spin while BSY, bounded (~4096 polls)
+        STA  CFTOL
+        LDA  #$F0           ; count 0xF000..0xFFFF then wrap -> 4096 iterations:
+        STA  CFTOH          ;   instant for a present device, quick on an absent one
+cfw_lp: LDA  CFSTAT
         LDB  #$80
         AND
-        JNZ  CFWAIT
-        RTS
+        JZ   cfw_rt         ; BSY clear -> done
+        LDA  CFTOL
+        INC
+        STA  CFTOL
+        JNZ  cfw_lp
+        LDA  CFTOH
+        INC
+        STA  CFTOH
+        JNZ  cfw_lp         ; 65536 polls elapsed -> give up (timeout)
+cfw_rt: RTS
 
-CFDRQ:  LDA  CFSTAT         ; spin until DRQ
+CFDRQ:  LDA  #0             ; spin until DRQ, bounded (~4096 polls)
+        STA  CFTOL
+        LDA  #$F0
+        STA  CFTOH
+cfd_lp: LDA  CFSTAT
         LDB  #$08
         AND
-        JZ   CFDRQ
+        JNZ  cfd_rt         ; DRQ set -> done
+        LDA  CFTOL
+        INC
+        STA  CFTOL
+        JNZ  cfd_lp
+        LDA  CFTOH
+        INC
+        STA  CFTOH
+        JNZ  cfd_lp         ; timeout
+cfd_rt: RTS
+
+; CFSEL - select the active CF drive for subsequent sector/FS I/O. A = drive (0/1).
+;   Just records DRVSEL (ORed into CFHEAD by CFSETL/CFINIT). The OS handles first-
+;   use CFINIT + presence (an absent drive makes the next CFINIT return C=1).
+CFSEL:  LDB  #1
+        AND                 ; A = drive & 1
+        STA  DRVSEL
+        RTS
+CFCURDRV:LDA  DRVSEL        ; -> A = current drive
         RTS
 
 CFINIT: LDA  #0             ; default the high LBA bytes to 0 (legacy 1-byte
         STA  LBA1           ; callers set only LBA0; CFSETL now reads LBA1/LBA2,
         STA  LBA2           ; so init them here — set them only for sectors >255)
         JSR  CFWAIT
-        LDA  #$E0           ; LBA mode, drive 0
+        LDA  #$E0           ; LBA mode | DRVSEL (ATA device-select bit)
+        LDB  DRVSEL
+        OR
         STA  CFHEAD
         LDA  #$01           ; feature: enable 8-bit transfers
         STA  CFFEAT
@@ -526,7 +573,9 @@ CFSETL: LDA  LBA            ; 24-bit LBA -> task file (LBA0/LBA1/LBA2)
         STA  CFLBA1
         LDA  LBA2
         STA  CFLBA2
-        LDA  #$E0           ; LBA mode, drive 0, LBA[27:24]=0
+        LDA  #$E0           ; LBA mode | DRVSEL (device-select bit), LBA[27:24]=0
+        LDB  DRVSEL
+        OR
         STA  CFHEAD
         LDA  #1
         STA  CFSCNT
