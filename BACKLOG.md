@@ -13,10 +13,46 @@ Last updated: 2026-06-27
 
 ## NEXT
 
-- [ ] **Second CF as a removable master / transfer drive.** Goal (2026-06-25):
+- [~] **Second CF drive — FULL DUAL-VOLUME core DONE (2026-06-27); cross-drive
+      single-command copy deferred.** Landed (emulator + firmware + OS, hardware
+      card deferred): two CF cards as equal read/write P8XFS volumes, each with
+      its own current directory, `0:`/`1:` prefixes, a switchable current drive,
+      drive 0 = boot/default.
+      - **Emulator** (`a886a47`): `struct cf_state cf[2]`, `-c2 <img>`, ATA
+        DEV-bit routing (`CFHEAD` bit 0), absent-device safe.
+      - **Firmware** (`30f388b`): `DRVSEL` ORed into `CFHEAD` by `CFSETL`/`CFINIT`;
+        `CFSEL` ($0148) / `CFCURDRV` ($014B) jump-table entries; bounded
+        `CFWAIT`/`CFDRQ` (~4096 polls) so an absent drive times out, not hangs.
+        `cf2_test.sh`.
+      - **OS** (`dd7beb4`): `CURDRIVE` + a drive-1 CWD backing block; `SWITCHDRV`
+        (swap working↔backing CWD, lazy `CFINIT` via a `DRVINIT` bitmask);
+        `PARSEDRIVE` in `RV_START` (one-shot `N:` prefix → resolve from that
+        drive's root); bare `0:`/`1:` switch (`CKDRIVESW`), `CD N:/dir`, prompt
+        shows the drive; `SYS_SETDRIVE`/`SYS_GETDRIVE`. `os_dualvol_test.sh` (prefix
+        + switch + isolation). Single-drive behavior byte-identical; full suite
+        green.
+      **Deferred — single-command cross-drive `CP`/`MV` (`CP 1:/X 0:/Y`).**
+      Prototyped (abspath `N:` parse + per-byte `CFSEL` toggle) but reverted: a
+      `/BIN` program hitting a *non-current* drive via the raw firmware `CFSEL`
+      surfaced two firmware-ABI issues needing deliberate design, not a patch:
+      (1) an un-`CFINIT`'d drive has stale `LBA1`/`LBA2` scratch, so `FFIND`
+      scans the wrong sector — a program needs a *select-with-lazy-init* primitive
+      (expose `BSELDRV` as a syscall, or have `CFSEL` lazy-init); (2) the read
+      stream's `FGETB` refill must re-assert the source drive across an intervening
+      `FWOPEN` on the dest drive — the RO*/WO* stream state is single-global, so
+      cross-drive interleave needs each stream to carry (and re-select) its drive.
+      Until then, cross-drive copy works via the shell: `1:` `CP /X 0:/X`? no —
+      `CP` runs from the current drive's `/BIN`; simplest path is a dedicated
+      `IMPORT` built-in (OS-level, uses `BSELDRV`) rather than teaching every
+      `/BIN` command. Also not yet done: `N:` prefix on other `/BIN` commands
+      (`DIR 1:/BIN`, `CAT 1:/X`) — today "switch then run" covers these; and
+      drive-scoped `PACK`/`FORMAT`/`FSCK` need a test (they *should* act on the
+      current drive via `DRVSEL`, unverified).
+
+      Original scope note (superseded — we went full dual-volume, not read-only):
       keep a "master" CF holding core files (e.g. `/BIN` binaries) and, in the
       field with no host, provision a fresh card by copying from it — `FORMAT`,
-      insert master, `IMPORT 1:/BIN`, done. Scope is deliberately **read-from-
+      insert master, `IMPORT 1:/BIN`, done. Scope was to be **read-from-
       drive-1 only**, NOT full dual-volume: the working/boot volume stays drive 0
       with the normal CWD; drive 1 is just a source you read/copy from. This
       avoids the heavy FS refactor (no per-drive CWD, no mounting).
