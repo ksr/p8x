@@ -858,8 +858,7 @@ class Gen:
                       "        LDA __ax", "        ROR", "        STA __ax",
                       "        LDA __n", "        DEC", "        STA __n",
                       "        JNZ __mul_l",
-                      "        LDA __r", "        STA __ax",
-                      "        LDA __r+1", "        STA __ax+1", "        RTS"]
+                      "        MOVW __ax,__r", "        RTS"]
         # __divmod: __t / __ax -> quotient __r, remainder __ax (unsigned 16-bit,
         # restoring long division). __div and __mod both call it.
         # __t / __ax: quotient -> __t (in place), remainder -> __dr. Restoring
@@ -886,10 +885,8 @@ class Gen:
                          "__dm_no: LDA __n", "        DEC", "        STA __n",
                          "        JNZ __dm_l",
                          "        RTS"]
-        R["__div"] = ["__div:  JSR __divmod", "        LDA __t", "        STA __ax",
-                      "        LDA __t+1", "        STA __ax+1", "        RTS"]
-        R["__mod"] = ["__mod:  JSR __divmod", "        LDA __dr", "        STA __ax",
-                      "        LDA __dr+1", "        STA __ax+1", "        RTS"]
+        R["__div"] = ["__div:  JSR __divmod", "        MOVW __ax,__t", "        RTS"]
+        R["__mod"] = ["__mod:  JSR __divmod", "        MOVW __ax,__dr", "        RTS"]
         R["__not"] = ["__not:  LDA __ax", "        LDB __ax+1", "        OR",
                       "        JZ __not1", "        LDA #0", "        JMP __nots",
                       "__not1: LDA #1", "__nots: STA __ax", "        LDA #0",
@@ -918,10 +915,9 @@ class Gen:
                         "__en1:  LDA __csp", "        TAP1L", "        LDA __csp+1",
                         "        TAP1H", "        LDA __fp", "        STA (P1)+",
                         "        LDA __fp+1", "        STA (P1)",
-                        "        LDA __csp", "        STA __fp",
-                        "        LDA __csp+1", "        STA __fp+1", "        RTS"]
-        R["__leave"] = ["__leave: LDA __fp", "        STA __csp", "        LDA __fp+1",
-                        "        STA __csp+1", "        LDA __csp", "        TAP1L",
+                        "        MOVW __fp,__csp", "        RTS"]
+        R["__leave"] = ["__leave: MOVW __csp,__fp",
+                        "        LDA __csp", "        TAP1L",
                         "        LDA __csp+1", "        TAP1H", "        LDA (P1)+",
                         "        STA __fp", "        LDA (P1)", "        STA __fp+1",
                         "        LDA __csp", "        LDB #2", "        ADD",
