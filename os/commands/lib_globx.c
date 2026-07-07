@@ -27,7 +27,8 @@
  *
  * BIOS: FOPENDIR=$0139, FNEXT=$013C, FSDIRBUF=$0145; OS: SYS_OPENCWD=$4012.
  */
-//#use glob   /* gmatch(pat,name) — clib.py splices it above (recursive //#use) */
+//#use glob     /* gmatch(pat,name) — clib.py splices it above (recursive //#use) */
+//#use dirent   /* de_read/de_isfile/de_isdot: current entry via SYS_DIRENTRY */
 int glob_expand(char *pat, char *out, int maxn) {
     char leaf[16];                           /* the pattern's last component */
     char dir[64];                            /* its directory prefix (incl trailing /) */
@@ -66,10 +67,11 @@ int glob_expand(char *pat, char *out, int maxn) {
     cnt = 0;
     r = bios(0x013C, 0, 0);                  /* FNEXT */
     while ((r & 256) == 0) {
-        if (peek(0x704A) != '.' && peek(0x7070) == 1) {   /* a FILE, not '.'/'..'/dir */
-            j = 0;                            /* trim FNAME -> nm */
-            c = peek(0x704A);
-            while (j < 12 && c != 32) { nm[j] = c; j = j + 1; c = peek(0x704A + j); }
+        de_read();                            /* snapshot the entry (SYS_DIRENTRY) */
+        if (de_isdot() == 0 && de_isfile()) {   /* a FILE, not '.'/'..'/dir */
+            j = 0;                            /* trim de[] name -> nm */
+            c = de[0] & 255;
+            while (j < 12 && c != 32) { nm[j] = c; j = j + 1; c = de[j] & 255; }
             nm[j] = 0;
             if (gmatch(leaf, nm) && cnt < maxn) {
                 base = cnt * 64;              /* out[slot] = dir prefix + name */

@@ -231,6 +231,8 @@ from C, the `p8cc` `bios()` intrinsic). The table is **append-only**:
 | `$4012` | `SYS_OPENCWD` | begin iterating the CWD with its full **16-bit** start LBA (then `FNEXT`); works when the CWD lives at LBA ≥ 256, where `SYS_CWDLBA` + `FOPENDIRAT(A)` would truncate |
 | `$4015` | `SYS_SETDRIVE` | switch the current CF drive to `A` (0/1); `C=1` if that drive is absent (dual-volume) |
 | `$4018` | `SYS_GETDRIVE` | current CF drive → `A` (0/1) |
+| `$401B` | `SYS_DIRENTRY` | snapshot the entry `FNEXT`/`FFIND` just matched into `(P1)` — 17 bytes: name[12], flag, len(lo/hi), start-LBA(lo/hi). Lets commands read directory metadata without hardcoding BIOS scratch addresses |
+| `$401E` | `SYS_OPENDIR` | begin iterating the directory whose 16-bit start LBA is in `P1` (then `FNEXT`); the drive-agnostic way to descend into a subdirectory found via `SYS_DIRENTRY` |
 
 `SYS_GETCWD`/`SYS_CWDLBA`/`SYS_OPENCWD` all follow the **current drive** (each
 drive keeps its own CWD), so a program operates on whichever card is active with

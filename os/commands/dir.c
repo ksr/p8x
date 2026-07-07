@@ -37,7 +37,8 @@
  * FSDIRBUF=$0145.
  * OS: SYS_OPENCWD=$4012 (begin iterating the CWD, full 16-bit LBA).
  */
-//#use glob   /* gmatch(pat, name): case-insensitive * ? matcher */
+//#use glob     /* gmatch(pat, name): case-insensitive * ? matcher */
+//#use dirent   /* de_read/de_isdir/de_len/de_lba/de_opendir: entry via syscall */
 
 char nbuf[16];                               /* current entry name, NUL-terminated */
 char gpat[16];                               /* glob pattern, or empty = no filter */
@@ -72,16 +73,17 @@ int putsize(int isdir, int sz) {
     return 0;
 }
 
-/* getname: nbuf <- FNAME ($704A, 12 space-padded), trailing pad trimmed. */
+/* getname: nbuf <- entry name (de[0..11], space-padded), trailing pad trimmed.
+ * Assumes de_read() has snapshotted the current entry. */
 int getname() {
     int i;
     int c;
     i = 0;
-    c = peek(0x704A + i);
+    c = de[i] & 255;
     while (i < 12 && c != 32) {
         nbuf[i] = c;
         i = i + 1;
-        c = peek(0x704A + i);
+        c = de[i] & 255;
     }
     nbuf[i] = 0;
     return i;
@@ -114,13 +116,13 @@ int walk(int depth) {
     nsub = 0;
     r = bios(0x013C, 0, 0);                  /* FNEXT */
     while ((r & 256) == 0) {                  /* bit 8 = carry = end of directory */
-        if (peek(0x704A) != '.') {            /* skip '.' and '..' (both lead with '.') */
+        de_read();                            /* snapshot the entry (SYS_DIRENTRY) */
+        if (de_isdot() == 0) {                /* skip '.' and '..' (both lead with '.') */
             getname();
-            show(depth, peek(0x7070) == 2,    /* print (filtered) name + size */
-                 peek(0x7058) + peek(0x7059) * 256);
-            if (peek(0x7070) == 2) {          /* always record subdirs for the pass */
+            show(depth, de_isdir(), de_len()); /* print (filtered) name + size */
+            if (de_isdir()) {                 /* always record subdirs for the pass */
                 if (nsub < 64) {
-                    sub[nsub] = peek(0x7047) + peek(0x7048) * 256;
+                    sub[nsub] = de_lba();
                     nsub = nsub + 1;
                 }
             }
@@ -130,9 +132,7 @@ int walk(int depth) {
     /* This level's FNEXT loop is closed; now descend into each recorded child. */
     i = 0;
     while (i < nsub) {
-        poke(0x7048, sub[i] / 256);           /* FOPENDIRAT high byte (LBA1, $7048) */
-        poke(0x7049, 0);
-        bios(0x0142, 0, sub[i]);              /* FOPENDIRAT(child LBA): A=low, LBA1=high */
+        de_opendir(sub[i]);                   /* SYS_OPENDIR(child LBA, 16-bit) */
         bios(0x0145, 0, 0xFA);                /* FSDIRBUF: our page $FA00 again */
         walk(depth + 1);
         i = i + 1;
@@ -200,9 +200,9 @@ int main() {
     } else {
         r = bios(0x013C, 0, 0);              /* FNEXT — single-level loop */
         while ((r & 256) == 0) {             /* bit 8 = carry = end of directory */
+            de_read();                       /* snapshot the entry (SYS_DIRENTRY) */
             getname();
-            show(0, peek(0x7070) == 2,       /* name + size; '/' marks a directory */
-                 peek(0x7058) + peek(0x7059) * 256);
+            show(0, de_isdir(), de_len());   /* name + size; '/' marks a directory */
             r = bios(0x013C, 0, 0);
         }
     }

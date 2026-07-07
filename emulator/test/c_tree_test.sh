@@ -14,8 +14,9 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x4000 >/dev/null
 
 build_disk() {   # $1 = py|host
-    if [ "$1" = host ]; then ./p8cc_host < $ROOT/os/commands/tree.c > tree.asm
-    else python3 $ROOT/compiler/p8cc.py $ROOT/os/commands/tree.c -o tree.asm >/dev/null; fi
+    python3 $ROOT/tools/clib.py $ROOT/os/commands/tree.c -o tree.pp.c  # splice //#use dirent
+    if [ "$1" = host ]; then ./p8cc_host < tree.pp.c > tree.asm
+    else python3 $ROOT/compiler/p8cc.py tree.pp.c -o tree.asm >/dev/null; fi
     python3 $ROOT/assembler/p8xasm.py tree.asm -o tree.bin --base 0x7A00 >/dev/null
     rm -f tr.img
     python3 $ROOT/tools/p8xfs.py create tr.img >/dev/null

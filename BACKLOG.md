@@ -214,19 +214,29 @@ Last updated: 2026-06-27
       of one heavy command (e.g. `sort` or `grep`) and measure the size/speed win
       vs the C version to calibrate whether to convert more.
 
-- [ ] **Make OS/BIOS peek/poke a syscall ABI instead of fixed addresses**
-      (2026-06-26). Today the C `/BIN` commands reach BIOS scratch by hardcoded
-      `peek`/`poke` of fixed addresses — FNAME, FFLAG, FLEN, the CF LBA, etc. (now
-      `$704A`/`$7070`/`$7058`/`$7047` after the memory remap). That coupling is
-      exactly what made the `$B000→$7A00` remap expensive: 26 hardcoded sites
-      across `dir`/`tree`/`find`/`lib_globx`/`p8lib` had to move in lockstep with
-      the firmware/OS EQUs, and a single missed `#$9E` immediate silently broke
-      FNEXT. Wrapping these reads/writes behind syscalls (e.g. `SYS_FNAME`,
-      `SYS_FFLAG`, `SYS_FLEN` getters, or a "current dir-entry" struct accessor)
-      would let firmware relocate its scratch freely without touching a single
-      command, and document the ABI surface in one place. Cost: a few bytes + a
-      JSR per access (these are in tight loops — measure), and new jump-table
-      slots. Decide which accesses are hot enough to keep direct vs worth a call.
+- [x] **Make OS/BIOS peek/poke a syscall ABI instead of fixed addresses**
+      (2026-06-26; DONE 2026-07-07). The C `/BIN` commands used to reach BIOS
+      scratch by hardcoded `peek`/`poke` of fixed addresses — FNAME `$704A`,
+      FFLAG `$7070`, FLEN `$7058`, entry LBA `$7047/$7048` — which is what made
+      the `$B000→$7A00` remap expensive (~30 sites across `dir`/`tree`/`find`/
+      `grep`/`lib_globx`/`p8lib` moving in lockstep with the firmware EQUs).
+      Resolved with the "current dir-entry accessor" option rather than one getter
+      per field: two OS syscalls —
+      - **`SYS_DIRENTRY` ($401B)**: copy the entry FNEXT (or FFIND) just matched
+        into a caller buffer as a 17-byte snapshot — name[12], flag, len(2),
+        LBA(2). One JSR + 17-byte copy per entry replaces ~5 scattered peeks.
+      - **`SYS_OPENDIR` ($401E)**: begin iterating a subdirectory whose 16-bit
+        start LBA is passed in P1 — replaces the `poke($7048)/poke($7049) +
+        FOPENDIRAT(A=low)` idiom used to descend.
+
+      New shared lib `os/commands/lib_dirent.c` (`//#use dirent`) wraps them as
+      `de_read()/de_isfile()/de_isdir()/de_isdot()/de_len()/de_lba()/de_opendir()`
+      with a `de[17]` buffer. `dir`/`find`/`grep`/`tree`/`lib_globx` converted;
+      `p8lib.c`'s `loadfile()` reads its length via `SYS_DIRENTRY` too. Zero
+      hardcoded scratch addresses remain in the commands — the firmware can now
+      relocate FNAME/FFLAG/FLEN/LBA without touching a single command. Verified by
+      the existing dir/tree/find/grep command tests (which now exercise both
+      syscalls, including recursion via `SYS_OPENDIR`) + full suite.
 
 - [ ] **ISA additions to shrink program size** (2026-06-26). `p8cc` codegen is
       bulky partly because the ISA lacks ops the compiler emits constantly. The

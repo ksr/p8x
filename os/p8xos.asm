@@ -267,10 +267,50 @@ STKTOP  = $FEFF
         JMP  SYS_OPENCWD        ; $4012 SYS_OPENCWD: begin iterating the CWD (16-bit LBA)
         JMP  SWITCHDRV          ; $4015 SYS_SETDRIVE: A = drive (0/1) -> switch current drive; C=1 if absent
         JMP  SYS_GETDRIVE       ; $4018 SYS_GETDRIVE: -> A = current drive (0/1)
+        JMP  SYS_DIRENTRY       ; $401B SYS_DIRENTRY: snapshot the current dir entry -> (P1) 17 bytes
+        JMP  SYS_OPENDIR        ; $401E SYS_OPENDIR: P1 = 16-bit dir start LBA -> open for FNEXT
 ; Reached only via the table above (COLD jumps past them).
 SYS_GETDRIVE:
         LDA  CURDRIVE
         RTS
+; SYS_DIRENTRY — copy the entry FNEXT just matched into a caller buffer, so
+; /BIN commands read directory metadata without hardcoding BIOS scratch
+; addresses (FNAME/FFLAG/FLEN/entry-LBA). Layout of the 17-byte snapshot:
+;   [0..11] name (space-padded)  [12] flag (file $01/dir $02)
+;   [13..14] length lo/hi        [15..16] start-LBA lo/hi
+; Call it right after a BIOS FNEXT (before any other FS call reuses the scratch).
+SYS_DIRENTRY:                   ; P1 = dest (17 bytes); clobbers A, P2, TMP
+        LDP2 #BFNAME
+        LDA  #12
+        STA  TMP
+SDE_NM: LDA  (P2)+              ; [0..11] name
+        STA  (P1)+
+        LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  SDE_NM
+        LDA  BFFLAG             ; [12] flag
+        STA  (P1)+
+        LDA  FLEN               ; [13] length lo
+        STA  (P1)+
+        LDA  FLEN+1             ; [14] length hi
+        STA  (P1)+
+        LDA  LBA                ; [15] start-LBA lo
+        STA  (P1)+
+        LDA  LBA1               ; [16] start-LBA hi
+        STA  (P1)
+        RTS
+; SYS_OPENDIR — begin iterating an arbitrary directory whose 16-bit start LBA is
+; passed in P1 (so a command can descend into a subdirectory it found via
+; SYS_DIRENTRY without poking the LBA scratch). Pairs with FNEXT; a caller that
+; redirects iteration to its own page calls FSDIRBUF afterwards.
+SYS_OPENDIR:                    ; P1 = dir start LBA (16-bit)
+        TPA1H                   ; P1 high -> LBA1
+        STA  LBA1
+        LDA  #0
+        STA  LBA2
+        TPA1L                   ; P1 low -> A
+        JMP  FOPENDIRAT         ; A=low, LBA1=high, DICNT=4 -> ready; RTS to caller
 SYS_GETCWD:                     ; copy CWDPATH -> (P1); clobbers P2
         LDP2 #CWDPATH
 SGC_LP: LDA  (P2)+

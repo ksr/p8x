@@ -156,6 +156,7 @@ consumer.
 | [`lib_glob.c`](lib_glob.c) | `gmatch(pat, name)` — case-insensitive whole-string glob match (`*`, `?`) | `dir`, `find`, `lib_globx` |
 | [`lib_globx.c`](lib_globx.c) | `glob_expand(pat, out, maxn)` — expand a glob into a list of matching file paths (pulls in `lib_glob`) | `cat`, `lib_stdin` |
 | [`lib_regex.c`](lib_regex.c) | `match(re, t)` / `matchhere(re, t)` — basic-regex matcher (`.` `*` `^` `$`); `matchhere` sets `rend` to the match end | `grep`, `sed` |
+| [`lib_dirent.c`](lib_dirent.c) | `de_read()` snapshots the entry `FNEXT` just matched into `de[17]`; `de_isfile()`/`de_isdir()`/`de_isdot()`/`de_len()`/`de_lba()` query it, `de_opendir(lba)` descends — all via the `SYS_DIRENTRY`/`SYS_OPENDIR` syscalls, so commands never hardcode BIOS scratch addresses | `dir`, `find`, `grep`, `tree`, `lib_globx` |
 
 When a helper depends on another (e.g. `readline` calls `lib_stdin`'s `nextc()`),
 list its `//#use` **after** the dependency's so `clib.py` splices them in the

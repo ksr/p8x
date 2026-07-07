@@ -8,14 +8,16 @@
  * state. Searches the CWD; per-level children capped at 24.
  *
  * BIOS: FOPENDIRAT=$0142, FSDIRBUF=$0145, FNEXT=$013C (name->$704A, flag->$7070,
- * start LBA->$7047). OS: SYS_CWDLBA=$4006.
+ * start LBA->$7047). OS: SYS_CWDLBA=$4006. Entry fields read via SYS_DIRENTRY.
  */
-int putname() {                              /* FNAME ($704A, 12, space-padded) */
+//#use dirent   /* de_read/de_isdir/de_isdot/de_lba/de_opendir: entry via syscall */
+
+int putname() {                              /* de[0..11] (space-padded) */
     int i;
     int c;
     i = 0;
     while (i < 12) {
-        c = peek(0x704A + i);
+        c = de[i] & 255;
         if (c != 32) { putchar(c); }
         i = i + 1;
     }
@@ -31,13 +33,14 @@ int walk(int depth) {
     nsub = 0;
     r = bios(0x013C, 0, 0);                  /* FNEXT */
     while ((r & 256) == 0) {
-        if (peek(0x704A) != '.') {           /* skip '.' and '..' */
+        de_read();                           /* snapshot the entry (SYS_DIRENTRY) */
+        if (de_isdot() == 0) {               /* skip '.' and '..' */
             i = 0;
             while (i < depth) { putchar(32); putchar(32); i = i + 1; }
             putname();
-            if (peek(0x7070) == 2) {         /* directory */
+            if (de_isdir()) {                /* directory */
                 putchar('/');
-                if (nsub < 24) { sub[nsub] = peek(0x7047) + peek(0x7048) * 256; nsub = nsub + 1; }
+                if (nsub < 24) { sub[nsub] = de_lba(); nsub = nsub + 1; }
             }
             putchar(10);
         }
@@ -45,9 +48,7 @@ int walk(int depth) {
     }
     i = 0;                                    /* descend into recorded children */
     while (i < nsub) {
-        poke(0x7048, sub[i] / 256);          /* FOPENDIRAT high byte (LBA1) */
-        poke(0x7049, 0);
-        bios(0x0142, 0, sub[i]);             /* FOPENDIRAT(child): A=low, LBA1=high */
+        de_opendir(sub[i]);                  /* SYS_OPENDIR(child LBA, 16-bit) */
         bios(0x0145, 0, 0xEA);               /* FSDIRBUF: our page */
         walk(depth + 1);
         i = i + 1;

@@ -32,6 +32,7 @@ char re[64];                                 /* the compiled regex (first arg wo
 
 //#use regex   /* match(re,t)/matchhere(re,t): the basic-regex matcher . * ^ $ */
 //#use stdin   /* path[80], fromfile, nextc(), openarg(), open_path() */
+//#use dirent  /* de_read/de_isfile/de_isdir/de_isdot/de_lba/de_opendir */
 
 /* grep_stream: read the currently-open input (file stream or stdin) line by
  * line and print each match. If pfx != 0, print "pfx:" before the line (for -r).
@@ -80,7 +81,7 @@ int rdname() {                               /* FNAME ($704A, 12 space-padded) -
     k = 0;
     i = 0;
     while (i < 12) {
-        c = peek(0x704A + i) & 255;
+        c = de[i] & 255;
         if (c != 32) { nm[k] = c; k = k + 1; }
         i = i + 1;
     }
@@ -104,9 +105,10 @@ int collect(int plen) {
     nsub = 0;
     r = bios(0x013C, 0, 0);                  /* FNEXT */
     while ((r & 256) == 0) {
-        if (peek(0x704A) != '.') {           /* skip '.' / '..' */
+        de_read();                           /* snapshot the entry (SYS_DIRENTRY) */
+        if (de_isdot() == 0) {               /* skip '.' / '..' */
             rdname();
-            if (peek(0x7070) == 1 && nrf < 48) {   /* a FILE -> record its path */
+            if (de_isfile() && nrf < 48) {   /* a FILE -> record its path */
                 base = nrf * 96;
                 i = 0;
                 while (i < plen) { rfiles[base] = cur[i]; base = base + 1; i = i + 1; }
@@ -116,8 +118,8 @@ int collect(int plen) {
                 rfiles[base] = 0;
                 nrf = nrf + 1;
             }
-            if (peek(0x7070) == 2 && nsub < 24) {  /* a subdirectory -> descend later */
-                clba[nsub] = peek(0x7047) + peek(0x7048) * 256;
+            if (de_isdir() && nsub < 24) {   /* a subdirectory -> descend later */
+                clba[nsub] = de_lba();
                 k = 0;
                 while (nm[k] != 0) { cn[nsub * 16 + k] = nm[k]; k = k + 1; }
                 cn[nsub * 16 + k] = 0;
@@ -129,9 +131,7 @@ int collect(int plen) {
 
     i = 0;                                    /* descend into each recorded child */
     while (i < nsub) {
-        poke(0x7048, clba[i] / 256);         /* FOPENDIRAT high byte (LBA1) */
-        poke(0x7049, 0);
-        bios(0x0142, 0, clba[i]);            /* FOPENDIRAT(child): A=low, LBA1=high */
+        de_opendir(clba[i]);                 /* SYS_OPENDIR(child LBA, 16-bit) */
         bios(0x0145, 0, 0xEA);               /* FSDIRBUF: our page */
         oldp = plen;
         if (plen != 1 || cur[0] != '/') { cur[plen] = '/'; plen = plen + 1; }
