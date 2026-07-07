@@ -20,7 +20,10 @@ make            # builds p8xemu and regenerates the microcode (u0-u3.bin)
   share the `$FF10` task-file port and are selected by the ATA device-select bit
   (`CFHEAD`/`$FF16` bit 0), which the firmware drives from its `DRVSEL`. An absent
   drive 1 (no `-c2`) reads back `$FF`, so the firmware's bounded CF waits detect
-  it instead of hanging.
+  it instead of hanging. The task-file (feature + LBA) is a **shared bus**: both
+  drives latch those register writes and the device bit only picks who executes
+  the command — so loading the LBA *before* selecting the drive (as `CFSETL` does)
+  still targets the right card.
 - `-s NN` — value the I/O card switches present at `$FF00` (hex or decimal, e.g.
   `-s 0xA5`); defaults to 0. So `PEEK(65280)` / monitor reads see it.
 - `-L` — trace LED writes: each change to `$FF02` prints to stderr as
