@@ -43,7 +43,9 @@
 CONIN   = $0100          ; wait for key, char -> A
 CONOUT  = $0103          ; A -> serial
 CONST   = $0106          ; A = RDRF bit; Z=1 when no key waiting
-CFINIT  = $0109          ; reset + 8-bit mode; C=1 on error
+CFINIT  = $0109          ; reset + 8-bit mode (current drive); C=1 on error
+CFSEL   = $0148          ; A = drive (0/1) -> route CF/FS sector I/O to that card
+CFCURDRV= $014B          ; -> A = current CF drive
 FFIND   = $0118          ; find file FNAME in current dir -> LBA+FLEN; C=1 absent
 CFREAD  = $010C          ; sector LBA -> (P1); P1 += 512
 CFWRITE = $010F          ; SBUF -> sector LBA
@@ -224,6 +226,14 @@ RUNSKIP = $77A0          ; DORUN: 1 = skip the program-name word for the arg poi
 PSCANL  = $77A1          ; PATH search cursor into PATHBUF (low)
 PSCANH  = $77A2          ; PATH search cursor into PATHBUF (high)
 GPLF    = $77A3          ; SYS_GETC console: 1 = a LF is pending after a CR keypress
+; ---- dual-volume (two CF drives) state ----
+CURDRIVE= $77A4          ; active drive (0/1); the CWD working set below is its CWD
+DRVINIT = $77A5          ; bitmask: bit N set = drive N has been CFINIT'd this session
+SWTGT   = $77A6          ; SWITCHDRV target-drive scratch
+SAVEL   = $77A7          ; the INACTIVE drive's saved CWD: start LBA low
+SAVELH  = $77A8          ;   start LBA high
+SAVEN   = $77A9          ;   sector count
+SAVEPATH= $77AA          ;   textual path ($77AA..$77D9, 48 bytes)
 
 CR      = $0D
 LF      = $0A
@@ -242,7 +252,12 @@ STKTOP  = $FEFF
         JMP  SYS_GETC           ; $400C SYS_GETC: next stdin byte -> A
         JMP  SYS_PUTS           ; $400F SYS_PUTS: write (P1) string to stdout
         JMP  SYS_OPENCWD        ; $4012 SYS_OPENCWD: begin iterating the CWD (16-bit LBA)
+        JMP  SWITCHDRV          ; $4015 SYS_SETDRIVE: A = drive (0/1) -> switch current drive; C=1 if absent
+        JMP  SYS_GETDRIVE       ; $4018 SYS_GETDRIVE: -> A = current drive (0/1)
 ; Reached only via the table above (COLD jumps past them).
+SYS_GETDRIVE:
+        LDA  CURDRIVE
+        RTS
 SYS_GETCWD:                     ; copy CWDPATH -> (P1); clobbers P2
         LDP2 #CWDPATH
 SGC_LP: LDA  (P2)+
@@ -327,6 +342,22 @@ COLD:   LDP3 #STKTOP
         LDA  #4
         STA  CWDN
         JSR  PATHROOT           ; CWDPATH = "/"
+        ; dual-volume: current drive 0 (already CFINIT'd by the boot loader), and
+        ; the inactive drive's saved CWD = its root "/"
+        LDA  #0
+        STA  CURDRIVE
+        LDA  #1                 ; drive 0 inited by CMD_B; mark it
+        STA  DRVINIT
+        LDA  #33
+        STA  SAVEL
+        LDA  #0
+        STA  SAVELH
+        LDA  #4
+        STA  SAVEN
+        LDA  #'/'
+        STA  SAVEPATH
+        LDA  #0
+        STA  SAVEPATH+1
         JSR  PATHINIT           ; PATH = "/BIN" (search dir for bare command names)
 
 ; ---------------- Shell main loop --------------------------------------------
@@ -347,7 +378,13 @@ SHELL:  JSR  FLUSHRED           ; if the previous command was redirected, write 
         STA  PIPEF
 SH_PROMPT:
         JSR  CRLF
-        LDP1 #CWDPATH           ; prompt = "<path>> "
+        LDA  CURDRIVE           ; prompt = "N:<path>> "
+        LDB  #'0'
+        ADD
+        JSR  OUTCH
+        LDA  #':'
+        JSR  OUTCH
+        LDP1 #CWDPATH
         JSR  OPUTS
         LDP1 #MPROMPT
         JSR  OPUTS
@@ -365,6 +402,10 @@ DISPATCH:
         STA  ARGPH
         LDA  CMDBUF
         JZ   SHELL              ; blank line
+        JSR  SYNCDRV            ; baseline CF routing = the current drive
+        JSR  CKDRIVESW          ; bare "N:" -> switch the current drive
+        LDA  MATCH
+        JNZ  SHELL
         LDP1 #KW_HELP
         JSR  CMPCMD
         JNZ  DOHELP
@@ -780,12 +821,20 @@ sks_d:  RTS
 ; RV_START - begin a walk: skip spaces, then set SDIR to the root directory and
 ; consume a leading '/' (absolute path) or to the current directory (relative).
 RV_START:JSR SKIPSPC
+        JSR  PARSEDRIVE         ; consume an optional "N:" prefix -> route to drive N
+        JC   rvs_pfx            ; prefixed: resolve from that drive's root
         LDA  (P2)
         LDB  #'/'
         CMP
         JNZ  rvs_cwd
         INP2                    ; consume leading '/'
-        LDA  #33
+        JMP  rvs_root
+rvs_pfx:LDA  (P2)               ; skip an optional '/' right after "N:"
+        LDB  #'/'
+        CMP
+        JNZ  rvs_root
+        INP2
+rvs_root:LDA #33
         STA  SDIRL
         LDA  #0
         STA  SDIRLH
@@ -799,6 +848,184 @@ rvs_cwd:LDA  CWDL
         LDA  CWDN
         STA  SDIRN
         RTS
+
+; ---------------- dual-volume drive support ----------------------------------
+; PARSEDRIVE - consume an optional "N:" drive prefix (N=0/1) at (P2). If present,
+; route CF/FS sector I/O to drive N (CFSEL + lazy CFINIT) and return C=1.
+; Otherwise leave (P2) untouched and return C=0.
+PARSEDRIVE:
+        LDA  (P2)
+        LDB  #'0'
+        CMP
+        JZ   pd_y
+        LDB  #'1'
+        CMP
+        JZ   pd_y
+        CLC
+        RTS
+pd_y:   STA  TMP2               ; digit char
+        INP2
+        LDA  (P2)
+        LDB  #':'
+        CMP
+        JZ   pd_ok
+        DEP2                    ; not "N:" -> restore and report no prefix
+        CLC
+        RTS
+pd_ok:  INP2                    ; consume ':'
+        LDA  TMP2
+        LDB  #'0'
+        SUB                     ; A = drive number (0/1)
+        JSR  BSELDRV
+        SEC
+        RTS
+
+; BSELDRV - route sector I/O to drive A (0/1): CFSEL it, and CFINIT it the first
+; time it's used this session (DRVINIT bitmask). Returns C=1 if absent/unready.
+BSELDRV:STA  TMP                ; drive
+        JSR  CFSEL              ; route CF I/O to this drive
+        LDA  TMP
+        JNZ  bs_d1
+        LDA  #1                 ; drive 0 -> mask bit 0
+        JMP  bs_mk
+bs_d1:  LDA  #2                 ; drive 1 -> mask bit 1
+bs_mk:  STA  TMP2               ; init mask
+        LDB  DRVINIT
+        AND
+        JNZ  bs_ok              ; already inited
+        JSR  CFINIT             ; init this drive; C=1 if absent
+        JC   bs_er
+        LDA  DRVINIT            ; mark inited
+        LDB  TMP2
+        OR
+        STA  DRVINIT
+bs_ok:  CLC
+        RTS
+bs_er:  RTS
+
+; SYNCDRV - baseline routing = the current drive (call at each command).
+SYNCDRV:LDA  CURDRIVE
+        JSR  CFSEL
+        RTS
+
+; SWAPCWD - swap the active CWD working set (CWDL/CWDLH/CWDN + CWDPATH) with the
+; inactive drive's saved copy (SAVEL/SAVELH/SAVEN + SAVEPATH).
+SWAPCWD:LDA  CWDL
+        STA  TMP
+        LDA  SAVEL
+        STA  CWDL
+        LDA  TMP
+        STA  SAVEL
+        LDA  CWDLH
+        STA  TMP
+        LDA  SAVELH
+        STA  CWDLH
+        LDA  TMP
+        STA  SAVELH
+        LDA  CWDN
+        STA  TMP
+        LDA  SAVEN
+        STA  CWDN
+        LDA  TMP
+        STA  SAVEN
+        LDP1 #CWDPATH
+        LDP2 #SAVEPATH
+        LDA  #48
+        STA  CNT
+scw_lp: LDA  (P1)
+        STA  TMP
+        LDA  (P2)
+        STA  (P1)+
+        LDA  TMP
+        STA  (P2)+
+        LDA  CNT
+        DEC
+        STA  CNT
+        JNZ  scw_lp
+        RTS
+
+; SWITCHDRV - make drive A (0/1) the current drive: select+init it (report if
+; absent), then swap in its CWD. C=1 if the drive is absent (no switch).
+SWITCHDRV:
+        STA  SWTGT
+        LDA  CURDRIVE
+        LDB  SWTGT
+        CMP
+        JZ   sw_same
+        LDA  SWTGT
+        JSR  BSELDRV            ; select + lazy init the target; C=1 if absent
+        JC   sw_abs
+        JSR  SWAPCWD            ; present: swap its CWD in, commit CURDRIVE
+        LDA  SWTGT
+        STA  CURDRIVE
+        CLC
+        RTS
+sw_abs: LDA  CURDRIVE           ; absent: restore routing to the current drive
+        JSR  CFSEL
+        LDP1 #MNODRV
+        JSR  OPUTS
+        SEC
+        RTS
+sw_same:LDA  SWTGT
+        JSR  CFSEL
+        CLC
+        RTS
+
+; CKDRIVESW - if CMDBUF is exactly "N:" (bare drive switch), do it. MATCH=1 if
+; handled (caller loops back to the shell), else MATCH=0.
+CKDRIVESW:
+        LDP1 #CMDBUF
+        LDA  (P1)
+        LDB  #'0'
+        CMP
+        JZ   ck_y
+        LDB  #'1'
+        CMP
+        JZ   ck_y
+        JMP  ck_no
+ck_y:   LDB  #'0'
+        SUB                     ; A = drive (0/1)
+        STA  TMP                ; stash across the ":" / end checks
+        LDP1 #CMDBUF
+        INP1
+        LDA  (P1)               ; CMDBUF[1] must be ':'
+        LDB  #':'
+        CMP
+        JNZ  ck_no
+        INP1
+        LDA  (P1)               ; CMDBUF[2] must be end of word
+        JNZ  ck_no
+        LDA  TMP
+        JSR  SWITCHDRV
+        LDA  #1
+        STA  MATCH
+        RTS
+ck_no:  LDA  #0
+        STA  MATCH
+        RTS
+
+; CDPFX - CD helper: if the CD argument begins with "N:", switch to drive N
+; (permanent), so `CD 1:/DIR` lands you on drive 1. Leaves the arg for CDPATH.
+CDPFX:  JSR  SKIPSPC
+        LDA  (P2)
+        LDB  #'0'
+        CMP
+        JZ   cdp_y
+        LDB  #'1'
+        CMP
+        JZ   cdp_y
+        RTS
+cdp_y:  LDB  #'0'
+        SUB
+        STA  TMP
+        INP2
+        LDA  (P2)
+        LDB  #':'
+        CMP
+        JNZ  cdp_no
+        LDA  TMP
+        JSR  SWITCHDRV
+cdp_no: RTS
 
 ; PARSECOMP - copy one path component from (P2) into NAMEBUF (upcased, 12,
 ; space-padded), stopping at '/', space, or null WITHOUT consuming it.
@@ -914,6 +1141,8 @@ cd_bad: LDA  #0
 
 ; ---------------- CD path ----------------------------------------------------
 DOCD:   JSR  ARG2P2
+        JSR  CDPFX              ; "CD N:/dir" -> switch to drive N first (permanent)
+        JSR  ARG2P2             ; CDPFX advanced P2; reset it for CDPATH
         JSR  CDPATH             ; resolve to a directory -> SDIR
         LDA  MATCH
         JZ   NODIR
@@ -3378,6 +3607,8 @@ MREDERR:.asciiz "?REDIRECT"
 MBANNER: .byte CR,LF
          .asciiz "P8X/OS v1.0"
 MPROMPT: .asciiz "> "
+MNODRV:  .byte CR,LF
+         .asciiz "?NO DRIVE"
 MHELP:   .byte CR,LF
          .ascii "P8X/OS COMMANDS:"
          .byte CR,LF

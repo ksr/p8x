@@ -39,7 +39,7 @@ run() {   # $1 = asm file -> emulator output (letters+digits)
     python3 $ROOT/tools/p8xfs.py boot   lf.img osc.bin >/dev/null
     python3 $ROOT/tools/p8xfs.py put    lf.img lf.bin --name LF.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
     printf 'B\rRUN LF.BIN\r' | ../p8xemu -l 120000000 -c lf.img eeprom.bin 2>/dev/null \
-        | LC_ALL=C tr -d '\0\r' | sed -n '/RUN LF.BIN/,$p' | grep -v 'RUN LF.BIN' | tr -dc 'A-Z0-9'
+        | LC_ALL=C tr -d '\0\r' | sed -n '/RUN LF.BIN/,$p' | grep -v 'RUN LF.BIN' | grep -vE '^[0-9]:' | tr -dc 'A-Z0-9'
 }
 
 if command -v cc >/dev/null 2>&1; then

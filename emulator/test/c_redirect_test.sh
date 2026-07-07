@@ -38,7 +38,7 @@ check() {   # $1 = label, $2 = asm file
     python3 $ROOT/tools/p8xfs.py mkdir  r.img /SUB >/dev/null
     # console run (not redirected): output must appear on the console
     con=$(printf 'B\rRUN /R.BIN\r' | ../p8xemu -l 90000000 -c r.img eeprom.bin 2>/dev/null \
-        | LC_ALL=C tr -d '\0\r' | sed -n '/RUN \/R.BIN/,$p' | grep -v 'RUN /R.BIN' | tr -dc 'A-Z')
+        | LC_ALL=C tr -d '\0\r' | sed -n '/RUN \/R.BIN/,$p' | grep -v 'RUN /R.BIN' | grep -vE '^[0-9]:' | tr -dc 'A-Z')
     [ "$con" = "ALPHABETA" ] || fail "$1: console output '$con' != 'ALPHABETA'"
     # redirected run: capture to OUT.TXT, then read it back from the image
     printf 'B\rRUN /R.BIN >OUT.TXT\r' | ../p8xemu -l 90000000 -c r.img eeprom.bin 2>/dev/null >/dev/null

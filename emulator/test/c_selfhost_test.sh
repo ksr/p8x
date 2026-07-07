@@ -92,7 +92,7 @@ host_out=$(./p8cc_host < diff.c > d.asm; \
     python3 $ROOT/tools/p8xfs.py boot d.img osc.bin >/dev/null; \
     python3 $ROOT/tools/p8xfs.py put d.img d.bin --name D.BIN --load 0x7A00 --exec 0x7A00 >/dev/null; \
     printf 'B\rRUN D.BIN\r' | ../p8xemu -l 80000000 -c d.img eeprom.bin 2>/dev/null \
-        | LC_ALL=C tr -d '\0\r' | sed -n '/RUN D.BIN/,$p' | grep -v 'RUN D.BIN' | tr -dc '0-9A-Z')
+        | LC_ALL=C tr -d '\0\r' | sed -n '/RUN D.BIN/,$p' | grep -v 'RUN D.BIN' | grep -vE '^[0-9]:' | tr -dc '0-9A-Z')
 
 py_out=$(python3 $ROOT/compiler/p8cc.py diff.c -o d.asm >/dev/null; \
     python3 $ROOT/assembler/p8xasm.py d.asm -o d.bin --base 0x7A00 >/dev/null; \
@@ -100,7 +100,7 @@ py_out=$(python3 $ROOT/compiler/p8cc.py diff.c -o d.asm >/dev/null; \
     python3 $ROOT/tools/p8xfs.py boot d.img osc.bin >/dev/null; \
     python3 $ROOT/tools/p8xfs.py put d.img d.bin --name D.BIN --load 0x7A00 --exec 0x7A00 >/dev/null; \
     printf 'B\rRUN D.BIN\r' | ../p8xemu -l 80000000 -c d.img eeprom.bin 2>/dev/null \
-        | LC_ALL=C tr -d '\0\r' | sed -n '/RUN D.BIN/,$p' | grep -v 'RUN D.BIN' | tr -dc '0-9A-Z')
+        | LC_ALL=C tr -d '\0\r' | sed -n '/RUN D.BIN/,$p' | grep -v 'RUN D.BIN' | grep -vE '^[0-9]:' | tr -dc '0-9A-Z')
 
 [ "$host_out" = "12345678Y120AZ5QRSTG" ] || fail "host bootstrap output '$host_out' != '12345678Y120AZ5QRSTG'"
 [ "$py_out" = "12345678Y120AZ5QRSTG" ]   || fail "p8cc.py output '$py_out' != '12345678Y120AZ5QRSTG'"

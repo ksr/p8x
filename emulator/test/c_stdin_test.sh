@@ -27,7 +27,7 @@ check() {   # $1 = label, $2 = cat.asm
     python3 $ROOT/tools/p8xfs.py put    s.img cat.bin --name CAT.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
     # console: cat the file to the screen
     con=$(printf 'B\rRUN /CAT.BIN <IN.TXT\r' | ../p8xemu -l 90000000 -c s.img eeprom.bin 2>/dev/null \
-        | LC_ALL=C tr -d '\0\r' | sed -n '/RUN \/CAT.BIN/,$p' | grep -v 'RUN /CAT.BIN' | tr -dc 'A-Z')
+        | LC_ALL=C tr -d '\0\r' | sed -n '/RUN \/CAT.BIN/,$p' | grep -v 'RUN /CAT.BIN' | grep -vE '^[0-9]:' | tr -dc 'A-Z')
     [ "$con" = "STDINOK" ] || fail "$1: console '$con' != 'STDINOK' (stdin redirect)"
     # < and > together: copy IN.TXT -> OUT.TXT
     printf 'B\rRUN /CAT.BIN <IN.TXT >OUT.TXT\r' | ../p8xemu -l 90000000 -c s.img eeprom.bin 2>/dev/null >/dev/null
