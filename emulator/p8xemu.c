@@ -59,44 +59,53 @@ static int led_trace=0;                /* -L: print $FF02 writes as they change 
    data port FF10. We model exactly that handshake. BSY is never asserted (the
    transfer is instantaneous here); DRQ is raised while a 512-byte buffer is
    being streamed and dropped when it drains. */
-static FILE *cf_img=NULL;
-static uint8_t cf_buf[512];
-static int cf_idx=0, cf_drq=0, cf_err=0, cf_write=0;
-static uint8_t cf_feat=0, cf_lba0=0, cf_lba1=0, cf_lba2=0;
-static long cf_lba(void){ return ((long)cf_lba2<<16)|((long)cf_lba1<<8)|cf_lba0; }
-static void cf_seek(void){ if(cf_img) fseek(cf_img, cf_lba()*512L, SEEK_SET); }
+/* Two CF devices on the shared $FF10 task-file port, selected by the ATA device
+   bit (CFHEAD/$FF16 bit 0): device 0 = drive 0 (boot), device 1 = drive 1.
+   `-c <img>` attaches drive 0, `-c2 <img>` drive 1. An absent device reads back
+   $FF (a floating bus) — the firmware's bounded CF waits time out on it, so a
+   missing drive 1 is detected, not a hang. */
+struct cf_state {
+    FILE   *img;
+    uint8_t buf[512];
+    int     idx, drq, err, write;
+    uint8_t feat, lba0, lba1, lba2;
+};
+static struct cf_state cf[2];
+static int cf_active=0;                 /* device selected by CFHEAD bit 0 */
+static long cf_lbaof(struct cf_state*c){ return ((long)c->lba2<<16)|((long)c->lba1<<8)|c->lba0; }
+static void cf_seek(struct cf_state*c){ if(c->img) fseek(c->img, cf_lbaof(c)*512L, SEEK_SET); }
 /* ATA IDENTIFY: words 27-46 (bytes 54..) hold a byte-swapped model string,
    which is what the monitor's I command prints. */
-static void cf_identify(void){
+static void cf_identify(struct cf_state*c){
     const char *m="P8X-CF EMULATOR                         "; /* 40 chars */
-    memset(cf_buf,0,512);
-    for(int i=0;i<40;i+=2){ cf_buf[54+i]=m[i+1]; cf_buf[54+i+1]=m[i]; }
-    cf_idx=0; cf_drq=1; cf_err=0; cf_write=0;
+    memset(c->buf,0,512);
+    for(int i=0;i<40;i+=2){ c->buf[54+i]=m[i+1]; c->buf[54+i+1]=m[i]; }
+    c->idx=0; c->drq=1; c->err=0; c->write=0;
 }
-static void cf_readsec(void){
-    memset(cf_buf,0,512);
-    cf_seek(); if(cf_img) fread(cf_buf,1,512,cf_img);
-    cf_idx=0; cf_drq=1; cf_err=0; cf_write=0;
+static void cf_readsec(struct cf_state*c){
+    memset(c->buf,0,512);
+    cf_seek(c); if(c->img) fread(c->buf,1,512,c->img);
+    c->idx=0; c->drq=1; c->err=0; c->write=0;
 }
-static void cf_cmd(uint8_t c){
-    switch(c){
-    case 0xEF: cf_err=0; cf_drq=0; break;                    /* SET FEATURES   */
-    case 0xEC: cf_identify(); break;                         /* IDENTIFY       */
-    case 0x20: cf_readsec(); break;                          /* READ SECTORS   */
-    case 0x30: cf_idx=0; cf_drq=1; cf_err=0; cf_write=1; break; /* WRITE SECTORS */
-    default:   cf_err=1; cf_drq=0; break;
+static void cf_cmd(struct cf_state*c, uint8_t v){
+    switch(v){
+    case 0xEF: c->err=0; c->drq=0; break;                    /* SET FEATURES   */
+    case 0xEC: cf_identify(c); break;                        /* IDENTIFY       */
+    case 0x20: cf_readsec(c); break;                         /* READ SECTORS   */
+    case 0x30: c->idx=0; c->drq=1; c->err=0; c->write=1; break; /* WRITE SECTORS */
+    default:   c->err=1; c->drq=0; break;
     }
 }
-static uint8_t cf_data_rd(void){
-    uint8_t v=cf_buf[cf_idx++];
-    if(cf_idx>=512){ cf_idx=0; cf_drq=0; }
+static uint8_t cf_data_rd(struct cf_state*c){
+    uint8_t v=c->buf[c->idx++];
+    if(c->idx>=512){ c->idx=0; c->drq=0; }
     return v;
 }
-static void cf_data_wr(uint8_t v){
-    cf_buf[cf_idx++]=v;
-    if(cf_idx>=512){
-        if(cf_write && cf_img){ cf_seek(); fwrite(cf_buf,1,512,cf_img); fflush(cf_img); }
-        cf_idx=0; cf_drq=0; cf_write=0;
+static void cf_data_wr(struct cf_state*c, uint8_t v){
+    c->buf[c->idx++]=v;
+    if(c->idx>=512){
+        if(c->write && c->img){ cf_seek(c); fwrite(c->buf,1,512,c->img); fflush(c->img); }
+        c->idx=0; c->drq=0; c->write=0;
     }
 }
 
@@ -171,8 +180,9 @@ static uint8_t memrd(uint16_t ad){
     case 0xFF00: return switches;                             /* switches (-s) */
     case 0xFF04: return 0x02 | (rx_ready()?0x01:0x00);        /* TDRE|RDRF */
     case 0xFF05: return rx_char();
-    case 0xFF10: return cf_img? cf_data_rd() : 0xFF;          /* CF data    */
-    case 0xFF17: return cf_img? (0x40|(cf_drq?0x08:0)|(cf_err?0x01:0)) : 0xFF; /* CF status: RDY, !BSY */
+    case 0xFF10: return cf[cf_active].img? cf_data_rd(&cf[cf_active]) : 0xFF;  /* CF data */
+    case 0xFF17: return cf[cf_active].img?                                     /* CF status */
+                        (0x40|(cf[cf_active].drq?0x08:0)|(cf[cf_active].err?0x01:0)) : 0xFF;
     default: return 0xFF;
     }
 }
@@ -188,35 +198,48 @@ static void memwr(uint16_t ad,uint8_t v){
     }
     if(ad==0xFF06){ irq_pending=1; return; }   /* rev C: raise a maskable IRQ (models a device) */
     if(ad==0xFF05){ putchar(v); fflush(stdout); rx_misses=0; return; }
-    if(cf_img) switch(ad){                                   /* CF task file */
-    case 0xFF10: cf_data_wr(v); return;
-    case 0xFF11: cf_feat=v; return;
-    case 0xFF13: cf_lba0=v; return;
-    case 0xFF14: cf_lba1=v; return;
-    case 0xFF15: cf_lba2=v; return;
-    case 0xFF17: cf_cmd(v); return;
-    /* FF12 sector-count, FF16 head/dev: accepted, single-sector model */
-    }
+    if(ad==0xFF16){ cf_active=v&1; return; }  /* CFHEAD: ATA device select (bit 0) */
+    { struct cf_state *c=&cf[cf_active];
+      if(c->img) switch(ad){                                 /* CF task file */
+      case 0xFF10: cf_data_wr(c,v); return;
+      case 0xFF11: c->feat=v; return;
+      case 0xFF13: c->lba0=v; return;
+      case 0xFF14: c->lba1=v; return;
+      case 0xFF15: c->lba2=v; return;
+      case 0xFF17: cf_cmd(c,v); return;
+      /* FF12 sector-count: accepted, single-sector model */
+      } }
 }
 static void load(const char*fn,uint8_t*buf,size_t n){
     FILE*f=fopen(fn,"rb");
     if(!f){perror(fn);exit(1);}
     fread(buf,1,n,f); fclose(f);
 }
+static void cf_attach(struct cf_state*c,const char*fn){   /* open/create a CF image */
+    c->img=fopen(fn,"r+b");
+    if(!c->img){                                /* create + zero-fill 256 sectors */
+        c->img=fopen(fn,"w+b");
+        if(!c->img){ perror(fn); exit(1); }
+        static uint8_t z[512]={0};
+        for(int s=0;s<256;s++) fwrite(z,1,512,c->img);
+        fflush(c->img);
+    }
+}
 int main(int argc,char**argv){
-    const char*ee="eeprom.bin"; const char*cfn=0; unsigned long long lim=200000000ULL;
+    const char*ee="eeprom.bin"; const char*cfn=0,*cfn2=0; unsigned long long lim=200000000ULL;
     for(int i=1;i<argc;i++){
         if(!strcmp(argv[i],"-t")) trace=1;
         else if(!strcmp(argv[i],"-l")) lim=strtoull(argv[++i],0,0);
         else if(!strcmp(argv[i],"-c")) cfn=argv[++i];
+        else if(!strcmp(argv[i],"-c2")) cfn2=argv[++i];   /* 2nd CF (drive 1) */
         else if(!strcmp(argv[i],"-s")) switches=(uint8_t)strtoul(argv[++i],0,0);  /* $FF00 input byte */
         else if(!strcmp(argv[i],"-L")) led_trace=1;                               /* trace $FF02 writes */
         else if(!strcmp(argv[i],"-h")||!strcmp(argv[i],"--help")){
-            fprintf(stderr,"usage: p8xemu [-t] [-l cycles] [-c disk.img] "
+            fprintf(stderr,"usage: p8xemu [-t] [-l cycles] [-c disk.img] [-c2 disk2.img] "
                 "[-s switches] [-L] [rom.bin]\n"
                 "  -s NN  value read at $FF00 (e.g. -s 0xA5); default 0\n"
                 "  -L     print $FF02 LED writes to stderr as they change\n"
-                "  -t trace  -l limit cycles  -c attach CF image\n");
+                "  -t trace  -l limit cycles  -c attach CF drive 0  -c2 attach CF drive 1\n");
             return 0;
         }
         else ee=argv[i];
@@ -224,16 +247,8 @@ int main(int argc,char**argv){
     char fn[64];
     for(int k=0;k<4;k++){ sprintf(fn,"u%d.bin",k); load(fn,rom[k],8192); }
     load(ee,eeprom,0x8000);
-    if(cfn){                                        /* attach CF disk image */
-        cf_img=fopen(cfn,"r+b");
-        if(!cf_img){                                /* create + zero-fill 256 sectors */
-            cf_img=fopen(cfn,"w+b");
-            if(!cf_img){ perror(cfn); exit(1); }
-            static uint8_t z[512]={0};
-            for(int s=0;s<256;s++) fwrite(z,1,512,cf_img);
-            fflush(cf_img);
-        }
-    }
+    if(cfn)  cf_attach(&cf[0],cfn);                 /* attach CF disk images */
+    if(cfn2) cf_attach(&cf[1],cfn2);
     if(isatty(0) && tcgetattr(0,&g_orig)==0){       /* interactive console */
         interactive=1;
         struct termios t=g_orig;
