@@ -880,28 +880,10 @@ pd_ok:  INP2                    ; consume ':'
         SEC
         RTS
 
-; BSELDRV - route sector I/O to drive A (0/1): CFSEL it, and CFINIT it the first
-; time it's used this session (DRVINIT bitmask). Returns C=1 if absent/unready.
-BSELDRV:STA  TMP                ; drive
-        JSR  CFSEL              ; route CF I/O to this drive
-        LDA  TMP
-        JNZ  bs_d1
-        LDA  #1                 ; drive 0 -> mask bit 0
-        JMP  bs_mk
-bs_d1:  LDA  #2                 ; drive 1 -> mask bit 1
-bs_mk:  STA  TMP2               ; init mask
-        LDB  DRVINIT
-        AND
-        JNZ  bs_ok              ; already inited
-        JSR  CFINIT             ; init this drive; C=1 if absent
-        JC   bs_er
-        LDA  DRVINIT            ; mark inited
-        LDB  TMP2
-        OR
-        STA  DRVINIT
-bs_ok:  CLC
-        RTS
-bs_er:  RTS
+; BSELDRV - route sector I/O to drive A (0/1). The firmware CFSEL now selects the
+; drive AND lazily CFINITs it the first time it's used (see p8xmon.asm), returning
+; C=1 if the drive is absent — so this is a thin wrapper.
+BSELDRV:JMP  CFSEL
 
 ; SYNCDRV - baseline routing = the current drive (call at each command).
 SYNCDRV:LDA  CURDRIVE

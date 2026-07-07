@@ -104,6 +104,9 @@ FCDH    = $707B          ; FCREATE directory-sector scan cursor, high byte (HEXL
 DRVSEL  = $707C          ; current CF drive for sector I/O (0/1); ORed into CFHEAD
 CFTOL   = $707D          ; CF bounded-wait timeout counter, low byte
 CFTOH   = $707E          ; CF bounded-wait timeout counter, high byte
+ROSDRV  = $707F          ; read-stream drive (captured by FOPEN, re-asserted by FG_FILL)
+WOSDRV  = $7080          ; write-stream drive (captured by FWOPEN, re-asserted by FW_FLUSH)
+CFIMASK = $7081          ; bit N set = drive N has been CFINIT'd this session
 SBUF    = $7100          ; sector buffer
 STKTOP  = $FEFF
 
@@ -171,6 +174,7 @@ COLD:   LDP3 #STKTOP        ; stack
         STA  DIRN
         LDA  #0             ; CF sector I/O defaults to drive 0
         STA  DRVSEL
+        STA  CFIMASK        ; no drive CFINIT'd yet
         LDA  #$71           ; FSCAN/FNEXT directory-buffer page defaults to SBUF;
         STA  DIBUFH         ;   a program repoints it (FSDIRBUF) to run a dir walk
                             ;   alongside an open write stream without clobbering it
@@ -541,6 +545,13 @@ cfd_rt: RTS
 CFSEL:  LDB  #1
         AND                 ; A = drive & 1
         STA  DRVSEL
+        LDB  #1             ; mask = 1<<drive (drive 0->1, drive 1->2; = drive+1)
+        ADD
+        LDB  CFIMASK
+        AND
+        JNZ  cfs_ok         ; this drive already CFINIT'd this session
+        JMP  CFINIT         ; else init it now (sets CFIMASK, returns carry)
+cfs_ok: CLC
         RTS
 CFCURDRV:LDA  DRVSEL        ; -> A = current drive
         RTS
@@ -564,7 +575,13 @@ CFINIT: LDA  #0             ; default the high LBA bytes to 0 (legacy 1-byte
         JZ   CFI_OK
         SEC                 ; (SEC/CLC = set/clear carry; 1-byte micro-ops)
         RTS
-CFI_OK: CLC
+CFI_OK: LDA  DRVSEL         ; mark this drive inited: CFIMASK |= 1<<DRVSEL
+        LDB  #1
+        ADD                 ; A = mask (DRVSEL+1)
+        LDB  CFIMASK
+        OR
+        STA  CFIMASK
+        CLC
         RTS
 
 CFSETL: LDA  LBA            ; 24-bit LBA -> task file (LBA0/LBA1/LBA2)
@@ -1282,7 +1299,9 @@ FCM_DN: LDA  #0            ; read boot block -> SBUF
 ; FOPEN - open root file FNAME for sequential byte reading. P1 = a caller-owned
 ;   512-byte sector buffer the stream will use. C=1 if the file is not found.
 ;   Pairs with FGETB. (One read stream at a time.)
-FOPEN:  TPA1L
+FOPEN:  LDA  DRVSEL         ; the read stream remembers its drive (dual-volume)
+        STA  ROSDRV
+        TPA1L
         STA  ROBUF
         TPA1H
         STA  ROBUF+1
@@ -1351,7 +1370,9 @@ FG_R2:  LDA  TMP
         CLC
         RTS
 ; FG_FILL - read the next sector into ROBUF; reset ROPTR; ROCNT = min(512,ROREM).
-FG_FILL:LDA  ROLBA
+FG_FILL:LDA  ROSDRV        ; re-assert the read stream's drive before the disk read
+        STA  DRVSEL
+        LDA  ROLBA
         STA  LBA
         LDA  ROLBA+1
         STA  LBA1
@@ -1431,12 +1452,14 @@ FLA_DONE:RTS
 ; FWOPEN - open a sequential write stream. Data streams to disk starting at the
 ;   volume free pointer; SBUF is the sector buffer. Pair with FPUTB + FCLOSE.
 ;   (One write stream at a time.)
-FWOPEN: LDA  #0
+FWOPEN: LDA  DRVSEL        ; the write stream remembers its drive (dual-volume)
+        STA  WOSDRV
+        LDA  #0
         STA  LBA
         STA  LBA1
         STA  LBA2
         LDP1 #SBUF
-        JSR  CFRDSEC       ; boot block -> SBUF
+        JSR  CFRDSEC       ; boot block -> SBUF (on this drive)
         LDA  SBUF+4        ; output starts at the free pointer
         STA  WOLBA
         LDA  SBUF+5
@@ -1489,7 +1512,9 @@ FCLOSE: LDA  WOPOS
         OR
         JZ   FCL_R
         JSR  FW_FLUSH
-FCL_R:  LDA  WOTOT
+FCL_R:  LDA  WOSDRV        ; commit (dir write + free pointer) on the write drive
+        STA  DRVSEL
+        LDA  WOTOT
         STA  FLEN
         LDA  WOTOT+1
         STA  FLEN+1
@@ -1499,6 +1524,8 @@ FCL_R:  LDA  WOTOT
         RTS
 ; FW_FLUSH - write SBUF to WOLBA, advance, clear the buffer.
 FW_FLUSH:
+        LDA  WOSDRV        ; re-assert the write stream's drive before the disk write
+        STA  DRVSEL
         LDA  WOLBA
         STA  LBA
         LDA  WOLBA+1
