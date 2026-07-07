@@ -31,20 +31,23 @@ Last updated: 2026-06-27
         shows the drive; `SYS_SETDRIVE`/`SYS_GETDRIVE`. `os_dualvol_test.sh` (prefix
         + switch + isolation). Single-drive behavior byte-identical; full suite
         green.
-      **Deferred — single-command cross-drive `CP`/`MV` (`CP 1:/X 0:/Y`).**
-      Prototyped (abspath `N:` parse + per-byte `CFSEL` toggle) but reverted: a
-      `/BIN` program hitting a *non-current* drive via the raw firmware `CFSEL`
-      surfaced two firmware-ABI issues needing deliberate design, not a patch:
-      (1) an un-`CFINIT`'d drive has stale `LBA1`/`LBA2` scratch, so `FFIND`
-      scans the wrong sector — a program needs a *select-with-lazy-init* primitive
-      (expose `BSELDRV` as a syscall, or have `CFSEL` lazy-init); (2) the read
-      stream's `FGETB` refill must re-assert the source drive across an intervening
-      `FWOPEN` on the dest drive — the RO*/WO* stream state is single-global, so
-      cross-drive interleave needs each stream to carry (and re-select) its drive.
-      Until then, cross-drive copy works via the shell: `1:` `CP /X 0:/X`? no —
-      `CP` runs from the current drive's `/BIN`; simplest path is a dedicated
-      `IMPORT` built-in (OS-level, uses `BSELDRV`) rather than teaching every
-      `/BIN` command. Also not yet done: `N:` prefix on other `/BIN` commands
+      **In progress — single-command cross-drive `CP`/`MV` (`CP 1:/X 0:/Y`).**
+      **Firmware foundation DONE (`152a51a`):** (1) `CFSEL` now lazy-`CFINIT`s a
+      drive on first select (`CFIMASK`), so a program can ready drive 1 — fixes
+      the stale-`LBA1`/`LBA2` → wrong-`FFIND`-sector issue; (2) the BIOS read/write
+      streams carry their own drive (`ROSDRV`/`WOSDRV`, captured by `FOPEN`/
+      `FWOPEN`, re-asserted by `FG_FILL`/`FW_FLUSH`/`FCLOSE`) so a stream keeps
+      hitting the right card across an intervening op on the other drive. Full
+      suite green; single-drive byte-identical.
+      **Still broken:** with those in place, `FFIND` on the program-selected drive
+      finds the file (correct length) but the data refill still lands on the wrong
+      LBA/drive — traced to `dev=1 lba=0` instead of the file's data LBA, so
+      `ROLBA` or the refill path is off when the read stream's drive differs from
+      the write stream's. Reverted the `cp`/`mv`/`abspath` `N:` command changes to
+      keep same-drive `cp`/`mv` clean; the firmware foundation is committed and
+      ready for the next attempt. Simplest overall path may still be a dedicated
+      `IMPORT` built-in (OS-level, one drive context at a time) rather than
+      teaching every `/BIN` command cross-drive streaming. Also not yet done: `N:` prefix on other `/BIN` commands
       (`DIR 1:/BIN`, `CAT 1:/X`) — today "switch then run" covers these; and
       drive-scoped `PACK`/`FORMAT`/`FSCK` need a test (they *should* act on the
       current drive via `DRVSEL`, unverified).
