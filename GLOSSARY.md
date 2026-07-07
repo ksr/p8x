@@ -39,6 +39,7 @@ across the P8X project. Authoritative sources where a term has one:
 | **T, T2** | Microcode scratch byte registers. `T` is also selectable as the ALU B operand via **BSEL** (rev C); `LDT` loads it. |
 | **P0–P3** | The 4×16-bit pointer bank. **P0** = PC (program counter), **P3** = SP (stack pointer, empty-descending from `$FEFF`); P1/P2 are general pointers. |
 | **PT** | Hidden microcode-only scratch pointer (PSEL=4), used for absolute addressing; not programmer-visible. |
+| **PT2** | Second hidden scratch pointer (PSEL=5, rev D), the write cursor for `MOVW` (16-bit mem→mem move); not programmer-visible. Adds no bus line (PSEL is already 3 bits). |
 | **IR** | Instruction Register — holds the current opcode. |
 | **FLAGS** | The 4-bit status register (C, Z, N, V). |
 
@@ -65,7 +66,7 @@ The word burned to the 4× 28C64 EPROMs and interpreted by the emulator. Bit map
 |------|--------|---------|
 | 0–3 | **DOE** | Data-Output Enable — which source drives the data bus (idle/A/B/T/T2/ALU/FLAGS/MEM/PTRL/PTRH). |
 | 4–7 | **DLD** | Data-LoaD — which destination latches the bus at the clock edge. |
-| 8–10 | **PSEL** | Pointer SELect (P0–P3 + PT=4; 3-bit since rev B). |
+| 8–10 | **PSEL** | Pointer SELect (P0–P3 + PT=4 + PT2=5; 3-bit since rev B). |
 | 11 | **PINC** | Increment the selected pointer. |
 | 12 | **PDEC** | Decrement the selected pointer. |
 | 13–16 | **ALUS** | 74181 ALU function select S0–S3. |

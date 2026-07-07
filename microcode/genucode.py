@@ -9,7 +9,8 @@ Control word layout (matches control card pipeline mapping exactly):
   29 SETC (force C=1) | 30 CLRC (force C=0) |
   31 BSEL (ALU B-input mux: 0=B register, 1=T register)
 PSEL is 3 bits (rev: was 2). PT (=4) is a hidden microcode-only scratch pointer
-used for absolute addressing; not programmer-visible.
+used for absolute addressing; PT2 (=5, rev D) is a second scratch pointer, the
+write cursor for MOVW (16-bit mem→mem). Neither is programmer-visible.
 LDZN gives loads conventional set-Z/N-from-loaded-value behaviour without
 touching C/V (LDF latches all four flags from the ALU; LDZN only Z and N).
 CARRY (rev B): the C flag is CONVENTIONAL active-high — C=1 means carry-out

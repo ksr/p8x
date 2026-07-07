@@ -2,7 +2,9 @@
 
 The register bank holds the machine's four **16-bit pointer registers** —
 P0 (the program counter), P1/P2 (general purpose), P3 (the stack pointer) — plus
-a hidden scratch pointer **PT** (PSEL = 4). It is also the **address-bus driver**:
+a hidden scratch pointer **PT** (PSEL = 4) — and, in rev D, a second scratch
+pointer **PT2** (PSEL = 5) for `MOVW` (see the rev-D note in §3.1). It is also the
+**address-bus driver**:
 the 16-bit address bus is *always* driven by exactly one of these pointers, so the
 P8X has no separate memory-address register. The card increments/decrements the
 active pointer, loads pointer bytes from the data bus, and can read a pointer byte
@@ -86,9 +88,9 @@ the same clock edge with no ripple delay in the *outputs*.
 count up, PDEC → count down. Loading a pointer half drives `D0–7` into the slice
 `A/B/C/D` inputs and pulses `!LOAD`.
 
-PT (PSEL = 4) is different hardware — two 74377 octal latches (`U41/U42`) instead
-of counters, because the scratch pointer only ever needs to be *loaded*, never
-counted.
+PT (PSEL = 4) is different hardware **in rev B/C** — two 74377 octal latches
+(`U41/U42`) instead of counters, because there the scratch pointer only ever
+needs to be *loaded*, never counted. (Rev D changes this — see the note below.)
 
 > **Rev D — PT must become a counter, and a second scratch pointer PT2 is added
 > (PENDING; not yet in the generated schematic).** The rev-D 16-bit ops change
@@ -135,9 +137,10 @@ So "load P2 high byte" = DLD decodes to load-high, PSEL=2 routes it to P2's `H0/
 ### 3.5 Increment / decrement
 `PINC`/`PDEC` go to `U34` (NOR) to produce the global count-enable `CNTN`, and
 `U35` derives the direction `UDB`. `U39` (74139, enabled by `CNTN`) decodes
-`PSEL0/1` to `-CNT0..3` so only the selected P0–P3 pointer's slices count. (PT does
-not count.) This is how the PC self-increments during fetch and how the SP
-adjusts on push/pop.
+`PSEL0/1` to `-CNT0..3` so only the selected P0–P3 pointer's slices count. (In
+rev B/C, PT does not count; **rev D extends this so PT and PT2 count too** — see
+the rev-D note in §3.1 — because the 16-bit ops `PINC` them.) This is how the PC
+self-increments during fetch and how the SP adjusts on push/pop.
 
 ### 3.6 Reading a pointer back onto the data bus
 To push the PC (or otherwise spill a pointer to memory) the card can put a pointer
@@ -175,11 +178,12 @@ one of those actions is just a combination of `PSEL`, `PINC/PDEC`, `DLD`, and
 - **IC power pins:** *fixed* — `card()` now nets every IC's VCC/GND supply pin to
   the power pours (the review found it previously omitted them). This card has 44
   ICs and was the most affected; verified all 44 now have both rails.
-- **Address bus floats for PSEL = 5, 6, 7:** `U33` is always enabled and only
-  decodes 0–4; for codes 5–7 no pointer drives PB, yet the always-on address
-  drivers (`U25/U26`) still push an undefined PB value onto `A0–15`. Safe **only
-  if** the microcode never emits PSEL > 4 (PT = 4 is the max). Worth a constraint
-  note / bring-up check.
+- **Address bus floats for PSEL = 6, 7** (rev B/C: 5, 6, 7): `U33` is always
+  enabled; in rev B/C only 0–4 are populated, so codes 5–7 drive an undefined PB
+  onto `A0–15`. **Rev D defines PSEL = 5 (PT2)** with real hardware + `-SEL5`
+  decode (see the rev-D note in §3.1), leaving only 6, 7 unused. Safe **only if**
+  the microcode never emits PSEL > 5 (PT2 = 5 is the max in rev D). Worth a
+  constraint note / bring-up check.
 - Confirmed OK: the 16-bit carry chain, the load data path (low/high nibble
   mapping), direction control, and that exactly one pointer drives PB for valid
   PSEL.

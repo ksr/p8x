@@ -122,7 +122,7 @@ comment in `microcode/genucode.py`; this table mirrors it.
 |---|---|
 | 0–3 | DOE |
 | 4–7 | DLD |
-| 8–10 | PSEL (P0–P3 + PT hidden scratch = 4; 3-bit since rev B) |
+| 8–10 | PSEL (P0–P3 + PT=4 + PT2=5 hidden scratch; 3-bit since rev B) |
 | 11 | PINC |
 | 12 | PDEC |
 | 13–16 | ALU S0–S3 |

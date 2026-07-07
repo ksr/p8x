@@ -114,7 +114,7 @@ the C decodes, which match `genucode.py`'s packing — the single source of trut
 |------|-------|----------|
 | 0–3   | `DOE`   | **bus source** / output-enable — who drives the internal bus this cycle |
 | 4–7   | `DLD`   | **load destination** — who latches the bus on the clock edge |
-| 8–10  | `PSEL`  | pointer select: `P0`=PC, `P1`, `P2`, `P3`=SP, `P4`=PT (hidden scratch) |
+| 8–10  | `PSEL`  | pointer select: `P0`=PC, `P1`, `P2`, `P3`=SP, `P4`=PT, `P5`=PT2 (hidden scratch) |
 | 11    | `PINC`  | post-increment the selected pointer |
 | 12    | `PDEC`  | post-decrement the selected pointer |
 | 13–16 | `ALUS`  | 74181 function select S3–S0 |
@@ -135,9 +135,10 @@ the C decodes, which match `genucode.py`'s packing — the single source of trut
 ## 5. The datapath and the internal bus
 
 Registers modeled: accumulator `A`, operand `B`, temporaries `T`/`T2`, the
-instruction register `IR`, and the five 16-bit pointers `P[0..4]`
+instruction register `IR`, and the six 16-bit pointers `P[0..5]`
 (`P0`=program counter, `P1`/`P2` general, `P3`=stack pointer, `P4`=`PT` hidden
-scratch used by call/return microcode).
+scratch for absolute addressing in call/return/16-bit-move microcode,
+`P5`=`PT2` hidden scratch — the write cursor for `MOVW`).
 
 Exactly one source drives the bus per cycle (`DOE`); exactly one destination
 latches it (`DLD`). `addr = P[PSEL]` is the address presented to memory.
@@ -224,7 +225,7 @@ so the hardware never "stalls" to decide.
 ## 8. Reset
 
 ```c
-P[0]=0; P[1]=P[2]=0; P[3]=0xFEFF; P[4]=0; stp=0; IR=0;
+P[0]=0; P[1]=P[2]=0; P[3]=0xFEFF; P[4]=P[5]=0; stp=0; IR=0;
 ```
 
 PC is forced to `$0000` (the reset vector — a `JMP` to the monitor cold start),

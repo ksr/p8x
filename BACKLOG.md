@@ -1,7 +1,7 @@
 # P8X Project Backlog
 
 Add ideas as they come; move items between sections as they progress.
-Last updated: 2026-06-25
+Last updated: 2026-06-27
 
 ## How to use
 - **NEXT** — committed, in rough priority order
@@ -191,9 +191,12 @@ Last updated: 2026-06-25
       items — an ISA-level win that helps every compiled program at once.
 
       **Data-driven priority (measured on 5 compiled commands, 19,897 instrs):**
-        - **Done — the move idioms (the big win, all pure microcode):** `PHW`/`PLW`
-          + `LPW1`/`LPW2`, see the PROTOTYPED note below — 67% of instructions were
-          `LDA`/`STA` (16-bit data shuffled byte-by-byte through A). −15.3% so far.
+        - **Done — the move idioms (the big win):** `PHW`/`PLW` + `LPW1`/`LPW2`
+          (pure microcode, −15.3%) and now **`MOVW`** (the mem→mem move, adds the
+          PT2 scratch pointer — software done 2026-06-27, −3.6% more; hardware
+          regen pending). See the PROTOTYPED note below and the MOVW item. 67% of
+          instructions were `LDA`/`STA` (16-bit data shuffled byte-by-byte through
+          A); the rev-D ops together are now ~−18–19% off compiled command size.
         - **DROPPED — generic memory inc/dec & 16-bit ALU (`INCM`/`DECM`/`ADDW`).**
           Originally floated, but arithmetic (`ADD`/`SUB`/`INC`/`DEC`) is only
           **1.1%** of instructions — new opcodes here would shrink real programs by
@@ -207,10 +210,13 @@ Last updated: 2026-06-25
           `LPW1 __csp,#off` (load P1 = the word at `__csp`+immediate offset), or a
           general `(Pn+disp)` load/store mode — would collapse these. Likely
           **pure microcode** (compute base+offset through the ALU into `PT`, then
-          access — the ALU is free mid-instruction; no 2nd scratch pointer). Worth
-          measuring/prototyping next, ahead of the hardware `MOVW`.
+          access — the ALU is free mid-instruction; no 2nd scratch pointer). This
+          is now the **best remaining microcode-only lever** — `MOVW` (below) is
+          done, so frame-relative addressing is the next size win to prototype.
         - **Hardware:** `MOVW`+`PT2` (separate item below) — the biggest single
-          idiom but the only one needing a chip.
+          idiom, the only one needing a chip. **Software done 2026-06-27**
+          (microcode/emulator/assembler/p8cc.py); register-bank schematic regen
+          pending.
 
       **PROTOTYPED & MEASURED (2026-06-26):** an empirical histogram of 5 compiled
       commands showed 67% of all instructions are `LDA`/`STA` — 16-bit data moved
@@ -550,12 +556,13 @@ Last updated: 2026-06-25
 
 ## VERIFY
 
-- **Register bank: address bus floats for PSEL = 5, 6, 7** (2026-06 review). U33
-  (74138) is always enabled and decodes only PSEL 0-4 (P0-P3 + PT); the address
-  drivers U25/U26 are always on. For PSEL 5-7 no pointer drives the internal
-  pointer bus, so an undefined value reaches A0-15. Safe ONLY if microcode never
-  emits PSEL > 4 (PT = 4 is the max). Confirm the microcode constraint, or add a
-  default-select / pull so the bus can't float.
+- **Register bank: address bus floats for PSEL = 6, 7** (2026-06 review; updated
+  rev D). U33 (74138) is always enabled; in rev B/C only PSEL 0-4 are populated
+  (P0-P3 + PT), and the address drivers U25/U26 are always on, so unpopulated
+  codes drive an undefined value onto A0-15. **Rev D adds PT2 at PSEL = 5** (MOVW),
+  so 5 is now a real driver — only 6, 7 remain undriven. Safe ONLY if microcode
+  never emits PSEL > 5 (PT2 = 5 is the max in rev D). Confirm the constraint, or
+  add a default-select / pull so the bus can't float.
 - **System-wide data-bus arbitration is one-hot** (2026-06 review). Bus drivers
   are distributed: ALU U20 decodes DOE 1-6 (reg/ALU/flags); at DOE = 7 exactly one
   of memory/IO/CF should drive based on address decode. No check enforces "no

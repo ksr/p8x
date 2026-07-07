@@ -76,8 +76,9 @@ print a one-line usage summary and exit.
   descend), so it runs in two phases — phase 1 walks the CWD tree depth-first
   (FSDIRBUF page `$EA`) collecting every file's absolute path into `rfiles[]`
   (48 × 96), phase 2 `open_path`s each and greps it, prefixing hits with `path:`.
-  The 48-file cap keeps grep's image low enough (`$E877`) to leave ~9 levels of
-  `collect()` recursion headroom under the `$F800` C-stack.
+  The 48-file cap keeps grep's image low enough (ends ~`$E400` after the MOVW
+  shrink) to leave ~11 levels of `collect()` recursion headroom under the `$F800`
+  C-stack.
 - **head.c / tail.c / more.c** — file-or-stdin via the shared `nextc()`/`openarg()`
   idiom (copied from cat/grep). `head` stops after N lines; `tail` keeps the last
   N in a flat ring buffer (`buf[slot*256+col]`, N≤40); `more` pages 23 lines then
