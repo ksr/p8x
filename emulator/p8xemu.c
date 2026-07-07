@@ -199,15 +199,22 @@ static void memwr(uint16_t ad,uint8_t v){
     if(ad==0xFF06){ irq_pending=1; return; }   /* rev C: raise a maskable IRQ (models a device) */
     if(ad==0xFF05){ putchar(v); fflush(stdout); rx_misses=0; return; }
     if(ad==0xFF16){ cf_active=v&1; return; }  /* CFHEAD: ATA device select (bit 0) */
-    { struct cf_state *c=&cf[cf_active];
-      if(c->img) switch(ad){                                 /* CF task file */
-      case 0xFF10: cf_data_wr(c,v); return;
-      case 0xFF11: c->feat=v; return;
-      case 0xFF13: c->lba0=v; return;
-      case 0xFF14: c->lba1=v; return;
-      case 0xFF15: c->lba2=v; return;
-      case 0xFF17: cf_cmd(c,v); return;
+    /* The ATA task-file (feature + LBA) is a SHARED bus: both drives latch these
+       writes; the CFHEAD DEV bit picks who executes the command. Mirror them to
+       both devices so a drive switch after loading the LBA still sees it (the
+       firmware writes CFLBAx before CFHEAD in CFSETL). Data/command route to the
+       device selected at command time. */
+    switch(ad){
+      case 0xFF11: cf[0].feat=cf[1].feat=v; return;
+      case 0xFF13: cf[0].lba0=cf[1].lba0=v; return;
+      case 0xFF14: cf[0].lba1=cf[1].lba1=v; return;
+      case 0xFF15: cf[0].lba2=cf[1].lba2=v; return;
       /* FF12 sector-count: accepted, single-sector model */
+    }
+    { struct cf_state *c=&cf[cf_active];
+      if(c->img) switch(ad){
+      case 0xFF10: cf_data_wr(c,v); return;
+      case 0xFF17: cf_cmd(c,v); return;
       } }
 }
 static void load(const char*fn,uint8_t*buf,size_t n){

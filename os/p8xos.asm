@@ -54,6 +54,7 @@ PHEX8   = $0115          ; print A as two hex digits
 FLOADAT = $013F          ; bulk-read FLEN bytes from LBA into (P1)
 FNEXT     = $013C        ; next directory entry -> BFNAME/BFFLAG/FLEN; C=1 at end
 FOPENDIRAT= $0142        ; begin iterating the 4-sector directory at LBA in A
+FSDIRBUF= $0145          ; point the FNEXT/FSCAN sector buffer at page A (high byte)
 FWOPEN  = $012A          ; open a write stream at the volume free pointer
 FPUTB   = $012D          ; append byte A to the write stream
 FCLOSE  = $0130          ; flush + register the streamed file as FNAME
@@ -234,6 +235,18 @@ SAVEL   = $77A7          ; the INACTIVE drive's saved CWD: start LBA low
 SAVELH  = $77A8          ;   start LBA high
 SAVEN   = $77A9          ;   sector count
 SAVEPATH= $77AA          ;   textual path ($77AA..$77D9, 48 bytes)
+; ---- IMPORT (cross-drive bulk copy) state ----
+IMPSD   = $77DA          ; source drive
+IMPDD   = $77DB          ; destination drive (the current drive)
+IMPDL   = $77DC          ; destination directory: start LBA lo / hi / sec count
+IMPDLH  = $77DD
+IMPDN   = $77DE
+IMPN    = $77DF          ; # of files collected in pass 1
+IMPI    = $77E0          ; pass-2 index
+IMPLEN  = $77E1          ; current file length (2)
+IMPPL   = $77E3          ; IMPARR cursor (2)
+IMPARR  = $7800          ; collected entries: 32 x 16 (name12 + LBA2 + len2) [APBUF page]
+IMPBUF  = $7A00          ; per-file data buffer (TPA is free during a built-in)
 
 CR      = $0D
 LF      = $0A
@@ -430,6 +443,9 @@ DISPATCH:
         LDP1 #KW_PACK
         JSR  CMPCMD
         JNZ  DOPACK
+        LDP1 #KW_IMPORT
+        JSR  CMPCMD
+        JNZ  DOIMPORT
         LDP1 #KW_CD
         JSR  CMPCMD
         JNZ  DOCD
@@ -2071,6 +2087,198 @@ LOADF:  LDA  STARTLO            ; set up the BIOS bulk read: LBA = start (16-bit
         TAP1H
         JMP  FLOADAT            ; reads the whole file into (P1); RTSes to caller
 
+; ---------------- IMPORT srcdir ----------------------------------------------
+; Copy every file in srcdir (an "N:" path, on any drive) into the CURRENT
+; directory on the current drive — the card-provisioning primitive, e.g.
+; `MKDIR /BIN` `CD /BIN` `IMPORT 1:/BIN`. Two passes so the FNEXT iteration and
+; the write stream never share a sector buffer, and each file is read (FLOADAT,
+; source drive) then written (FWOPEN/FPUTB/FCLOSE, dest drive) as SEPARATE phases
+; — no cross-drive stream interleave. Files only (skips . / .. / subdirs); up to
+; 32 files, each <= 32 KB (fits IMPBUF under the stack).
+DOIMPORT:
+        LDA  CURDRIVE           ; destination = the current drive + CWD (capture now,
+        STA  IMPDD              ;   before resolving src flips DRVSEL)
+        LDA  CWDL
+        STA  IMPDL
+        LDA  CWDLH
+        STA  IMPDLH
+        LDA  CWDN
+        STA  IMPDN
+        JSR  ARG2P2             ; resolve the source directory (CDPATH honours "N:")
+        JSR  CDPATH
+        LDA  MATCH
+        JZ   imp_nod
+        JSR  CFCURDRV           ; the drive PARSEDRIVE selected for src
+        STA  IMPSD
+        ; ---- pass 1: collect the files of SDIR into IMPARR ----
+        LDA  #0
+        STA  IMPN
+        LDA  #<IMPARR
+        STA  IMPPL
+        LDA  #>IMPARR
+        STA  IMPPL+1
+        LDA  IMPSD
+        JSR  CFSEL
+        LDA  SDIRLH             ; FOPENDIRAT: A = LBA lo, LBA1 = LBA hi
+        STA  LBA1
+        LDA  SDIRL
+        JSR  FOPENDIRAT
+        LDA  #$7A               ; iterate through $7A00 (transient; pass 1 only)
+        JSR  FSDIRBUF
+imp_p1: LDA  IMPSD              ; re-assert src before each FNEXT (it self-heals)
+        JSR  CFSEL
+        JSR  FNEXT
+        JC   imp_p1d
+        LDA  BFNAME             ; skip "." and ".."
+        LDB  #'.'
+        CMP
+        JZ   imp_p1
+        LDA  BFFLAG             ; files only
+        LDB  #F_FILE
+        CMP
+        JNZ  imp_p1
+        LDA  IMPN               ; array full (32)? stop collecting
+        LDB  #32
+        CMP
+        JC   imp_p1d
+        LDA  IMPPL              ; P1 = IMPARR[IMPN]
+        TAP1L
+        LDA  IMPPL+1
+        TAP1H
+        LDP2 #BFNAME            ; name (12)
+        LDA  #12
+        STA  TMP
+imp_cn: LDA  (P2)+
+        STA  (P1)+
+        LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  imp_cn
+        LDA  LBA                ; +12/+13: start LBA
+        STA  (P1)+
+        LDA  LBA1
+        STA  (P1)+
+        LDA  FLEN               ; +14/+15: length
+        STA  (P1)+
+        LDA  FLEN+1
+        STA  (P1)
+        LDA  IMPPL              ; IMPPL += 16
+        LDB  #16
+        ADD
+        STA  IMPPL
+        JNC  imp_p1b
+        LDA  IMPPL+1
+        INC
+        STA  IMPPL+1
+imp_p1b:LDA  IMPN
+        INC
+        STA  IMPN
+        JMP  imp_p1
+imp_p1d:
+        ; ---- pass 2: copy each collected file ----
+        LDA  #0
+        STA  IMPI
+        LDA  #<IMPARR
+        STA  IMPPL
+        LDA  #>IMPARR
+        STA  IMPPL+1
+imp_p2: LDA  IMPI
+        LDB  IMPN
+        CMP
+        JC   imp_done           ; IMPI >= IMPN -> finished
+        LDA  IMPPL              ; P1 = IMPARR[IMPI]
+        TAP1L
+        LDA  IMPPL+1
+        TAP1H
+        LDP2 #BFNAME            ; name(12) -> BFNAME (for FCLOSE to register)
+        LDA  #12
+        STA  TMP
+imp_rn: LDA  (P1)+
+        STA  (P2)+
+        LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  imp_rn
+        LDA  IMPSD              ; read the file from src into IMPBUF
+        JSR  CFSEL
+        LDA  (P1)+              ; +12: LBA lo
+        STA  LBA
+        LDA  (P1)+              ; +13: LBA hi
+        STA  LBA1
+        LDA  #0
+        STA  LBA2
+        LDA  (P1)+              ; +14: len lo
+        STA  FLEN
+        STA  IMPLEN
+        LDA  (P1)              ; +15: len hi
+        STA  FLEN+1
+        STA  IMPLEN+1
+        LDP1 #IMPBUF
+        JSR  FLOADAT            ; whole file (src) -> IMPBUF
+        LDA  IMPDD              ; write it to the dest drive + dir
+        JSR  CFSEL
+        LDA  IMPDL
+        STA  BDIRLBA
+        LDA  IMPDLH
+        STA  BDIRLBA1
+        LDA  IMPDN
+        STA  BDIRN
+        JSR  FWOPEN
+        LDP2 #IMPBUF            ; P2 = source cursor (FPUTB clobbers P1, not P2)
+imp_wb: LDA  IMPLEN             ; IMPLEN bytes: FPUTB each
+        LDB  IMPLEN+1
+        OR
+        JZ   imp_wd
+        LDA  (P2)+
+        JSR  FPUTB
+        LDA  IMPLEN
+        JNZ  imp_wl
+        LDA  IMPLEN+1
+        DEC
+        STA  IMPLEN+1
+imp_wl: LDA  IMPLEN
+        DEC
+        STA  IMPLEN
+        JMP  imp_wb
+imp_wd: LDA  IMPDL              ; register in the dest dir
+        STA  BDIRLBA
+        LDA  IMPDLH
+        STA  BDIRLBA1
+        LDA  IMPDN
+        STA  BDIRN
+        JSR  FCLOSE
+        LDP2 #BFNAME            ; echo the copied name
+        LDA  #12
+        STA  TMP
+imp_pn: LDA  (P2)+
+        LDB  #' '
+        CMP
+        JZ   imp_pnd
+        JSR  OUTCH
+        LDA  TMP
+        DEC
+        STA  TMP
+        JNZ  imp_pn
+imp_pnd:JSR  CRLF
+        LDA  IMPPL              ; IMPPL += 16 ; IMPI++
+        LDB  #16
+        ADD
+        STA  IMPPL
+        JNC  imp_p2b
+        LDA  IMPPL+1
+        INC
+        STA  IMPPL+1
+imp_p2b:LDA  IMPI
+        INC
+        STA  IMPI
+        JMP  imp_p2
+imp_done:
+        JSR  SYNCDRV            ; restore routing to the current drive
+        JMP  SHELL
+imp_nod:LDP1 #MNODIR
+        JSR  OPUTS
+        JMP  SHELL
+
 ; ---------------- SAVE name start end ----------------------------------------
 ; Write the memory range [start,end) to a new file: length = end - start,
 ; allocate at the boot-block free pointer, copy memory into successive sectors,
@@ -3618,6 +3826,8 @@ MHELP:   .byte CR,LF
          .byte CR,LF
          .ascii "PACK          reclaim deleted space"
          .byte CR,LF
+         .ascii "IMPORT N:/dir copy files from another drive's dir into the CWD"
+         .byte CR,LF
          .ascii "FSCK          check filesystem integrity (read-only)"
          .byte CR,LF
          .ascii "FORMAT        erase card, make a fresh v2 volume (asks Y/N)"
@@ -3703,6 +3913,7 @@ KW_SAVE: .asciiz "SAVE"
 KW_DUMP: .asciiz "DUMP"
 KW_DEP:  .asciiz "DEP"
 KW_PACK: .asciiz "PACK"
+KW_IMPORT: .asciiz "IMPORT"
 KW_CD:   .asciiz "CD"
 KW_MKDIR:.asciiz "MKDIR"
 KW_RMDIR:.asciiz "RMDIR"

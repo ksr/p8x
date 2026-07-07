@@ -31,26 +31,33 @@ Last updated: 2026-06-27
         shows the drive; `SYS_SETDRIVE`/`SYS_GETDRIVE`. `os_dualvol_test.sh` (prefix
         + switch + isolation). Single-drive behavior byte-identical; full suite
         green.
-      **In progress — single-command cross-drive `CP`/`MV` (`CP 1:/X 0:/Y`).**
-      **Firmware foundation DONE (`152a51a`):** (1) `CFSEL` now lazy-`CFINIT`s a
-      drive on first select (`CFIMASK`), so a program can ready drive 1 — fixes
-      the stale-`LBA1`/`LBA2` → wrong-`FFIND`-sector issue; (2) the BIOS read/write
-      streams carry their own drive (`ROSDRV`/`WOSDRV`, captured by `FOPEN`/
-      `FWOPEN`, re-asserted by `FG_FILL`/`FW_FLUSH`/`FCLOSE`) so a stream keeps
-      hitting the right card across an intervening op on the other drive. Full
-      suite green; single-drive byte-identical.
-      **Still broken:** with those in place, `FFIND` on the program-selected drive
-      finds the file (correct length) but the data refill still lands on the wrong
-      LBA/drive — traced to `dev=1 lba=0` instead of the file's data LBA, so
-      `ROLBA` or the refill path is off when the read stream's drive differs from
-      the write stream's. Reverted the `cp`/`mv`/`abspath` `N:` command changes to
-      keep same-drive `cp`/`mv` clean; the firmware foundation is committed and
-      ready for the next attempt. Simplest overall path may still be a dedicated
-      `IMPORT` built-in (OS-level, one drive context at a time) rather than
-      teaching every `/BIN` command cross-drive streaming. Also not yet done: `N:` prefix on other `/BIN` commands
-      (`DIR 1:/BIN`, `CAT 1:/X`) — today "switch then run" covers these; and
-      drive-scoped `PACK`/`FORMAT`/`FSCK` need a test (they *should* act on the
-      current drive via `DRVSEL`, unverified).
+      **Bulk cross-drive copy DONE — `IMPORT N:/dir` built-in.** Provisions a
+      fresh card from a "master": walks the source directory (drive N) collecting
+      its files, then for each one reads the whole file into a RAM buffer on the
+      source drive and writes it into the CWD on the destination drive — flipping
+      the ATA device bit between the read and the write of every file.
+      `os_import_test.sh` (build a boot volume + a master with `/BIN/{ALPHA,BETA}`,
+      `IMPORT 1:/BIN`, host-verify both land on drive 0 with exact content).
+      **Root-cause fix that unblocked cross-drive I/O (emulator):** the CF model
+      stored the LBA/feature task-file registers *per device* and routed writes to
+      the currently-selected device. But `CFSETL` writes `CFLBAx` **before** it
+      writes `CFHEAD` (the device-select), so on a drive switch the LBA landed on
+      the *old* device and the newly-selected one executed with a stale LBA — the
+      `dev=1 lba=0` / wrong-refill-LBA symptom that had blocked cross-drive copy.
+      Real ATA has a **shared task-file bus** (both drives latch LBA writes; the
+      DEV bit picks who runs the command), so the emulator now mirrors feature/LBA
+      writes to both devices and routes only data/command to the active one. This
+      is the same defect that stalled single-command `CP 1:/X 0:/Y`.
+      **Firmware foundation (`152a51a`):** `CFSEL` lazy-`CFINIT`s a drive on first
+      select (`CFIMASK`); BIOS read/write streams carry their own drive
+      (`ROSDRV`/`WOSDRV`, captured by `FOPEN`/`FWOPEN`, re-asserted by
+      `FG_FILL`/`FW_FLUSH`/`FCLOSE`). Full suite green; single-drive byte-identical.
+      **Still deferred:** single-command cross-drive `CP`/`MV` (`CP 1:/X 0:/Y`) and
+      `N:` prefixes on other `/BIN` commands (`DIR 1:/BIN`, `CAT 1:/X`) — the
+      emulator fix should now let the reverted `cp`/`mv` `N:` changes work; not
+      re-attempted yet. Today "switch then run" + `IMPORT` for bulk cover the need.
+      Drive-scoped `PACK`/`FORMAT`/`FSCK` still act on the current drive via
+      `DRVSEL` (unverified by a dedicated test).
 
       Original scope note (superseded — we went full dual-volume, not read-only):
       keep a "master" CF holding core files (e.g. `/BIN` binaries) and, in the

@@ -24,6 +24,7 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > | `PACK` | compact the data area, reclaiming `DEL`/`RMDIR`'d extents |
 > | `FSCK` | check filesystem integrity (read-only) |
 > | `FORMAT` | erase the card and lay a fresh P8XFS v2 volume (asks `Y/N`) |
+> | `IMPORT N:/dir` | copy every file from another drive's directory into the CWD (bulk cross-drive copy; card provisioning) |
 > | `HELP` | list commands |
 >
 > The table above is the **built-in** command set. `CAT`, `WC`, `GREP`, `CP`,
@@ -203,9 +204,13 @@ directory**. In the emulator, attach them with `-c disk0.img -c2 disk1.img`.
 
 Under the hood the OS keeps a `CURDRIVE` selector and routes BIOS sector I/O via
 the firmware `CFSEL` ($0148) / `DRVSEL`; both cards share one task-file port
-selected by the ATA device bit. *Single-command cross-drive `CP`/`MV`
-(`CP 1:/X 0:/Y`) and `N:` prefixes on other `/BIN` commands are not yet wired —
-switch drives and copy, or see BACKLOG.*
+selected by the ATA device bit. For bulk cross-drive copying — provisioning a
+fresh card from a "master" — the built-in **`IMPORT N:/dir`** reads every file
+from another drive's directory and writes it into the current directory (a
+two-pass read-source / write-dest copy that switches the ATA device bit between
+each file's read and write). *Single-command cross-drive `CP`/`MV` (`CP 1:/X
+0:/Y`) and `N:` prefixes on other `/BIN` commands are not yet wired — switch
+drives and copy, use `IMPORT` for bulk, or see BACKLOG.*
 
 ## OS syscall ABI (for loadable programs)
 
