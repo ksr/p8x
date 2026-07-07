@@ -6,6 +6,16 @@ Extends the P8X five-card design with mass storage and a small ROM-resident oper
 
 ## 1. Card 6: CF/IDE Hardware
 
+> **Dual-volume (rev D, 2026-06-27).** P8X/OS now supports **two** CF cards as
+> equal read/write P8XFS volumes (drive 0 = boot, drive 1), selected by the ATA
+> device-select bit (`CFHEAD` bit 0, driven from the firmware `DRVSEL`). This is
+> implemented and tested in the emulator (`-c2`) + firmware + OS; the **physical
+> second socket is a deferred hardware follow-up**. Realization choice for the
+> card build: either populate the ATA device bit on the shared `$FF10` port with a
+> reliable master/slave arrangement, **or** add a second CF port at its own decode
+> (`$FF18–$FF1F`) — only the firmware's `CFSETL`/`CFINIT` drive-select changes, the
+> OS/FS layer is unaffected. See BACKLOG (second-CF item).
+
 ### 1.1 How CF maps onto the P8X bus
 
 CF in True IDE mode exposes the standard ATA task-file registers: 3 address lines, two chip selects, read/write strobes, 8/16-bit data. We map it into the I/O page:

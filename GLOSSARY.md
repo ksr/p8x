@@ -120,6 +120,7 @@ The word burned to the 4× 28C64 EPROMs and interpreted by the emulator. Bit map
 | **RBUF** | The OS's `>`-redirect capture buffer (= the TPA, `$7A00`). |
 | **CONIN / CONOUT / CONST** | BIOS console in / out / status (`$0100/$0103/$0106`). |
 | **CFINIT / CFREAD / CFWRITE** | BIOS CompactFlash init / read-sector / write-sector (`$0109/$010C/$010F`). |
+| **CFSEL / CFCURDRV / DRVSEL** | Dual-volume drive select: `CFSEL` (`$0148`, `A`=0/1) routes sector/FS I/O to that CF card via the `DRVSEL` byte (ORed into `CFHEAD` as the ATA device-select bit); `CFCURDRV` (`$014B`) reads the current drive. Two cards share the `$FF10` task-file port. |
 | **PUTS / PHEX8** | BIOS print-string / print-byte-as-hex (`$0112/$0115`). |
 
 ---

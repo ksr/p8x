@@ -185,6 +185,28 @@ length 4 · load 2 · exec 2 · flags 1 (`$00` end, `$01` file, `$02` dir, `$FF`
 deleted) · spare 7. See
 [../hardware/cf-card/p8xfs-v2-hierarchical.md](../hardware/cf-card/p8xfs-v2-hierarchical.md).
 
+## Two drives (dual-volume)
+
+The OS drives up to **two** CF cards — **drive 0** (the boot/default volume) and
+**drive 1** — each a full read/write P8XFS v2 volume with its **own current
+directory**. In the emulator, attach them with `-c disk0.img -c2 disk1.img`.
+
+- **Switch the current drive** by typing `0:` or `1:` on its own; the prompt shows
+  the active drive, e.g. `1:/SUB> `. Each drive remembers its own CWD across
+  switches.
+- **A `0:`/`1:` prefix** on any path targets that drive for one command, resolving
+  from its root: `MKDIR 1:/SRC`, `SAVE 1:/PROG 7A00 7B00`, `CD 1:/BIN`. `CD N:/dir`
+  also switches the current drive to N.
+- Bare commands and `/BIN` programs run on the **current drive** (`PATH` is
+  searched there), so `1:` then work normally.
+- An absent drive 1 reports `?NO DRIVE` and does not switch.
+
+Under the hood the OS keeps a `CURDRIVE` selector and routes BIOS sector I/O via
+the firmware `CFSEL` ($0148) / `DRVSEL`; both cards share one task-file port
+selected by the ATA device bit. *Single-command cross-drive `CP`/`MV`
+(`CP 1:/X 0:/Y`) and `N:` prefixes on other `/BIN` commands are not yet wired —
+switch drives and copy, or see BACKLOG.*
+
 ## OS syscall ABI (for loadable programs)
 
 The OS publishes a small jump table at the front of its image — like the BIOS
@@ -202,8 +224,12 @@ from C, the `p8cc` `bios()` intrinsic). The table is **append-only**:
 | `$400C` | `SYS_GETC` | next **stdin** byte → `A` (console, or the `<` file); `C=1` at EOF (console: echoes the key, Ctrl-D = EOF) |
 | `$400F` | `SYS_PUTS` | write the `(P1)` NUL-terminated string to stdout |
 | `$4012` | `SYS_OPENCWD` | begin iterating the CWD with its full **16-bit** start LBA (then `FNEXT`); works when the CWD lives at LBA ≥ 256, where `SYS_CWDLBA` + `FOPENDIRAT(A)` would truncate |
+| `$4015` | `SYS_SETDRIVE` | switch the current CF drive to `A` (0/1); `C=1` if that drive is absent (dual-volume) |
+| `$4018` | `SYS_GETDRIVE` | current CF drive → `A` (0/1) |
 
-`SYS_GETCWD`/`SYS_CWDLBA`/`SYS_OPENCWD` are the supported way to consult the CWD
+`SYS_GETCWD`/`SYS_CWDLBA`/`SYS_OPENCWD` all follow the **current drive** (each
+drive keeps its own CWD), so a program operates on whichever card is active with
+no extra work. `SYS_GETCWD`/`SYS_CWDLBA`/`SYS_OPENCWD` are the supported way to consult the CWD
 — no peeking into OS RAM. `os/commands/pwd.c` (PWD) and `os/commands/dir.c` (DIR,
 no-arg lists the CWD via `SYS_OPENCWD`, the 16-bit CWD opener) are worked examples;
 `compiler/p8lib.c` wraps them as `getcwd(buf)` / `cwdlba()`.

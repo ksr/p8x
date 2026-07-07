@@ -9,13 +9,18 @@ approximation.
 
 ```sh
 make            # builds p8xemu and regenerates the microcode (u0-u3.bin)
-./p8xemu [-t] [-l N] [-c disk.img] [-s NN] [-L] rom.bin
+./p8xemu [-t] [-l N] [-c disk.img] [-c2 disk2.img] [-s NN] [-L] rom.bin
 ```
 
 - `rom.bin` — the EEPROM image (origin `$0000`), e.g. the monitor or combined
   the monitor. The emulator expects `u0–u3.bin` in the current directory.
-- `-c disk.img` — attach a CompactFlash image; models the 8-bit True IDE task
-  file at `$FF10–$FF17`.
+- `-c disk.img` — attach a CompactFlash image as **drive 0** (boot); models the
+  8-bit True IDE task file at `$FF10–$FF17`.
+- `-c2 disk2.img` — attach a second CompactFlash image as **drive 1**. Both cards
+  share the `$FF10` task-file port and are selected by the ATA device-select bit
+  (`CFHEAD`/`$FF16` bit 0), which the firmware drives from its `DRVSEL`. An absent
+  drive 1 (no `-c2`) reads back `$FF`, so the firmware's bounded CF waits detect
+  it instead of hanging.
 - `-s NN` — value the I/O card switches present at `$FF00` (hex or decimal, e.g.
   `-s 0xA5`); defaults to 0. So `PEEK(65280)` / monitor reads see it.
 - `-L` — trace LED writes: each change to `$FF02` prints to stderr as

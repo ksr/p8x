@@ -103,6 +103,9 @@ knowing the monitor's internal addresses. These entry points are **stable**:
 | `$0142` | FOPENDIRAT | begin iterating the directory whose 4-sector extent starts at the 16-bit LBA `A` (low) + `LBA1` (`$7048`, high) — lets a caller iterate an extent it already resolved, e.g. the OS's CWD. Set `LBA1`=0 for LBA < 256 |
 | `$0145` | FSDIRBUF | point the directory sector buffer at the page in `A` (high byte; 512-byte page-aligned buffer; defaults to `SBUF`=`$71` at boot and is reset to `SBUF` by `FOPENDIR`/`FOPENDIRAT`). Used by **both** `FNEXT` iteration **and** `FSCAN` (the engine behind `FRESOLVE`/`FFIND`/`FOPEN`), so repointing it lets a program iterate **and** resolve paths while a write stream keeps `SBUF` — e.g. `DIR` redirected/piped, or `CAT *.X >OUT` (resolve+open each match without clobbering the open write stream's `SBUF`) |
 
+| `$0148` | CFSEL | select the active CF drive for subsequent sector/FS I/O: `A` = drive (0/1) → `DRVSEL` (dual-volume; the OS resolves a `0:`/`1:` path prefix to this). Both cards share the `$FF10` task-file port; `DRVSEL` is ORed into `CFHEAD` as the ATA device bit |
+| `$014B` | CFCURDRV | current CF drive → `A` (0/1) |
+
 Call them with `JSR $0103` etc. (P8X/OS is built entirely on this table.)
 
 `FDELETE` marks the directory entry deleted but leaves its data sectors in
