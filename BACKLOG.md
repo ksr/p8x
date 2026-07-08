@@ -52,6 +52,16 @@ Last updated: 2026-06-27
       select (`CFIMASK`); BIOS read/write streams carry their own drive
       (`ROSDRV`/`WOSDRV`, captured by `FOPEN`/`FWOPEN`, re-asserted by
       `FG_FILL`/`FW_FLUSH`/`FCLOSE`). Full suite green; single-drive byte-identical.
+      **SUPERSEDED (2026-07-08) by the Unix-style mount migration** (branch
+      `mount-drives`, see `docs/mount-drives-design.md`). The `0:`/`1:` prefix
+      model below was replaced by mounting drive 1 at `/D1` in one namespace: the
+      drive decision moved into a single `FRESOLVE`/`RV_START` mount redirect, so
+      `lib_drive.c` and all per-command prefix code were deleted and commands are
+      drive-unaware (`CAT /D1/X`, cross-mount `CP /D1/A /B`). **This retires the
+      filter-tool limitation** — `grep`/`wc`/`sed`/… reach `/D1` for free (they
+      build absolute paths → `FRESOLVE`) with zero code growth, because no command
+      parses a drive. The historical record of the `N:`-prefix work is kept below.
+
       **Inline `N:` prefix on `/BIN` commands — DONE for cat/dir/cp/mv/diff
       (2026-07-07).** New shared `lib_drive.c` (`hasdrive`/`pdrive`/`seldrive`
       over BIOS `CFSEL`) wired into the self-contained openers `catpath` (cat) and

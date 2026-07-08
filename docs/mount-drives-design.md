@@ -1,5 +1,10 @@
 # Unix-style mount for the second CF (branch: `mount-drives`)
 
+**Status: COMPLETE.** All five phases landed on this branch and the full suite is
+green (57 PASS). Drive 1 is mounted at `/D1`; commands are drive-unaware; the
+DOS-model `0:`/`1:` machinery is removed. Ready to merge.
+
+
 ## Goal
 
 Replace the DOS-style `0:`/`1:` drive-prefix model with a **single unified
