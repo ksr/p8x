@@ -7,11 +7,18 @@
 # the emulator attached to your terminal: it starts
 # in the MONITOR; type B to boot P8X/OS. Quit with Ctrl-C (or Ctrl-D).
 #
-# The disk image persists at os/run-disk.img between runs (delete it to start
-# fresh). Pass a path to use/keep a different image:  ./os/run.sh mydisk.img
+# Dual CompactFlash: a second data volume is attached as drive 1 (a small sample
+# tree under /DATA), so you can exercise the dual-drive features out of the box —
+# a bare `1:` switches to it, and paths take a `0:`/`1:` prefix (`DIR 1:/DATA`,
+# `CAT 1:/DATA/NOTES.TXT`, `CP 1:/DATA/NOTES.TXT 0:/`). Drive 0 is the boot/default.
+#
+# Both images persist between runs: os/run-disk.img (drive 0) and
+# os/run-disk1.img (drive 1); delete either to start it fresh. Pass paths to
+# use/keep different images:  ./os/run.sh mydisk0.img mydisk1.img
 set -e
 root=$(cd "$(dirname "$0")/.." && pwd)
 disk=${1:-"$root/os/run-disk.img"}
+disk1=${2:-"$root/os/run-disk1.img"}
 build=$(mktemp -d)
 
 # Monitor + BIOS EEPROM. BASIC is no longer ROM-resident — it ships as the disk
@@ -105,6 +112,22 @@ else
     fi
 fi
 
+# Drive 1: a second CF, a plain data volume (not bootable — OSCNT stays 0). Lay
+# down a small /DATA tree so `1:` then `DIR`, and `0:`/`1:` prefixes, have
+# something to show. Persists at os/run-disk1.img; delete it to recreate.
+if [ ! -f "$disk1" ]; then
+    python3 "$root/tools/p8xfs.py" create "$disk1" --v2 >/dev/null
+    python3 "$root/tools/p8xfs.py" mkdir  "$disk1" /DATA >/dev/null
+    printf 'this file lives on drive 1\n' > "$build/notes.txt"
+    python3 "$root/tools/p8xfs.py" put "$disk1" "$build/notes.txt" --name /DATA/NOTES.TXT >/dev/null
+    printf 'drive one root file\n' > "$build/d1root.txt"
+    python3 "$root/tools/p8xfs.py" put "$disk1" "$build/d1root.txt" --name /HELLO1.TXT >/dev/null
+    echo "created fresh drive-1 disk: $disk1"
+else
+    echo "using existing drive-1 disk: $disk1"
+fi
+
 echo "--- starting emulator: you are in the MONITOR (* prompt). Type B to boot P8X/OS. ---"
+echo "--- drive 0 = $disk  |  drive 1 = $disk1  (bare '1:' switches; '0:' back) ---"
 cd "$build"
-exec ./p8xemu -L -c "$disk" eeprom.bin   # writes persist to the disk image
+exec ./p8xemu -L -c "$disk" -c2 "$disk1" eeprom.bin   # writes persist to both images
