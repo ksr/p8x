@@ -52,7 +52,7 @@ int main() {
     while (*a == 32) { a = a + 1; }
     if (*a == 0 || *a == 13 ||
         (*a == '-' && (*(a + 1) == 'h' || *(a + 1) == 'H'))) {
-        puts("usage: SED s/re/new/[g] [file]   substitute (regex: . * ^ $)");
+        puts("usage: SED s/re/new/[g] [file]   substitute (regex: . * + ? ^ $)");
         return 0;
     }
     if (a[0] != 's' || a[1] != '/') { puts("sed: only s/re/new/[g]"); return 1; }

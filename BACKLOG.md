@@ -372,6 +372,20 @@ Last updated: 2026-06-27
         name/glob/substring over the CWD tree). Enhancements if wanted: `-type f|d`,
         `-name`, `-exec`, or an `N:` path arg (it's one of the two — with `tree` —
         that still has no drive-prefix support). Small, in-budget.
+      - **Regex `+` and `?` — DONE (2026-07-08); classes `[..]` blocked.**
+        `lib_regex` gained `+` (one-or-more) and `?` (zero-or-one) single-char
+        quantifiers, so `grep`/`sed` handle `colou?r`, `ab+c`, etc. (`c_filters`
+        covers both). Adding them pushed grep's **host (p8cc.c) build** over —
+        grep was already at the razor's edge where its globals overlap the
+        `$EA00` (-r) / `$FA00` (glob) FNEXT iteration pages — so grep's `-r`
+        buffer was trimmed 48→**36 files** and `line`/`cur` 256→176 to land the
+        host build back below `$FA00`. **Character classes `[a-z]`/`[^..]` and
+        `\` escapes did NOT fit** — even minimal buffers overflowed once the class
+        code (variable-length atoms: atomlen/atomone) was added. They're the
+        highest-value regex feature but are **blocked on grep's host-build size**,
+        i.e. on the p8cc codegen-size work (ISA-shrink item above) or restructuring
+        grep (e.g. splitting `-r` content-search into its own command to free
+        grep's globals). vi search is still literal (would also need this).
       - **Fits-now alternative — a "field tool," not awk.** Drop the expression
         evaluator entirely: a `CUT`/`SELECT`-style filter — `/re/` or `$n OP num`
         pattern + a fixed field list to print (`{print $2 $4}`), no arithmetic /

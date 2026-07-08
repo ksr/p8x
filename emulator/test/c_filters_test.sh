@@ -67,6 +67,14 @@ check() {   # $1 = label
     out=$(R 'GREP g.*a <T.TXT')
     echo "$out" | grep -qx 'gamma alpha' || fail "$1: grep 'g.*a' missed 'gamma alpha'"
     echo "$out" | grep -qx 'beta'        && fail "$1: grep 'g.*a' wrongly matched 'beta'"
+    # + (one or more): 'mm+' needs a double-m -> only 'gamma alpha'
+    out=$(R 'GREP mm+ <T.TXT')
+    echo "$out" | grep -qx 'gamma alpha' || fail "$1: grep 'mm+' missed 'gamma alpha'"
+    echo "$out" | grep -qx 'alpha'       && fail "$1: grep 'mm+' wrongly matched 'alpha'"
+    # ? (zero or one): 'be?ta' matches 'beta', not 'alpha'
+    out=$(R 'GREP be?ta <T.TXT')
+    echo "$out" | grep -qx 'beta'        || fail "$1: grep 'be?ta' missed 'beta'"
+    echo "$out" | grep -qx 'alpha'       && fail "$1: grep 'be?ta' wrongly matched 'alpha'"
     # grep with a FILE ARGUMENT (like cat) instead of stdin
     out=$(R 'GREP ^beta T.TXT')
     echo "$out" | grep -qx 'beta'        || fail "$1: grep <regex> <file> missed 'beta'"

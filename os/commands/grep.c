@@ -1,10 +1,11 @@
 /* grep.c — print lines matching a basic regular expression. Unix `grep`
  * with a small regex dialect:
- *     .   any single character
- *     *   zero or more of the preceding character (or '.')
- *     ^   anchor to the start of the line   (only special as the first char)
- *     $   anchor to the end of the line     (only special as the last char)
- * everything else is a literal. (No character classes, +, ?, or alternation.)
+ *     .     any single character
+ *     * + ? zero-or-more / one-or-more / zero-or-one of the preceding char
+ *     ^     anchor to the start of the line (only special as the first char)
+ *     $     anchor to the end of the line   (only special as the last char)
+ * everything else is a literal. (No character classes [..] or alternation yet —
+ * blocked on grep's host-build size; see BACKLOG.)
  *
  *     GREP "^al" FILE        -> lines of FILE starting with "al"
  *     GREP "be.a" <FILE      -> from stdin (a redirect): be<any>a
@@ -18,15 +19,15 @@
  * (FNEXT, same shape as DIR -R / FIND), collects every file's path, then greps
  * each — the walk and the per-file reads are kept in separate phases because the
  * FNEXT cursor is global BIOS state (opening a file mid-walk would clobber it).
- * Lines are capped at 255 chars; the recursive search is capped at 48 files.
+ * Lines are capped at 255 chars; the recursive search is capped at 36 files.
  *
  * The basic-regex matcher (`match`/`matchhere`) lives in the shared lib_regex.c
  * (`//#use regex`); sed uses the same library.
  */
-char line[256];                              /* the current input line */
-char cur[256];                               /* -r: path of the directory being walked */
+char line[176];                              /* the current input line */
+char cur[176];                               /* -r: path of the directory being walked */
 char nm[16];                                 /* -r: current entry name (trimmed) */
-char rfiles[4608];                           /* -r: collected file paths, 48 x 96 */
+char rfiles[2880];                           /* -r: collected file paths, 36 x 80 */
 int  nrf;                                    /* -r: number of paths collected */
 char re[64];                                 /* the compiled regex (first arg word) */
 
@@ -108,8 +109,8 @@ int collect(int plen) {
         de_read();                           /* snapshot the entry (SYS_DIRENTRY) */
         if (de_isdot() == 0) {               /* skip '.' / '..' */
             rdname();
-            if (de_isfile() && nrf < 48) {   /* a FILE -> record its path */
-                base = nrf * 96;
+            if (de_isfile() && nrf < 36) {   /* a FILE -> record its path */
+                base = nrf * 80;
                 i = 0;
                 while (i < plen) { rfiles[base] = cur[i]; base = base + 1; i = i + 1; }
                 if (plen != 1 || cur[0] != '/') { rfiles[base] = '/'; base = base + 1; }
@@ -158,7 +159,7 @@ int main() {
     while (*a == 32) { a = a + 1; }
     if (*a == 0 || *a == 13 ||
         (*a == '-' && (*(a + 1) == 'h' || *(a + 1) == 'H'))) {
-        puts("usage: GREP [-r] regex [file|glob]   match regex (. * ^ $); -r walks the CWD tree");
+        puts("usage: GREP [-r] regex [file|glob]   match regex (. * + ? ^ $); -r walks the CWD tree");
         return 0;
     }
     recurse = 0;
@@ -186,7 +187,7 @@ int main() {
         collect(plen);                        /* phase 1: gather file paths */
         i = 0;                                /* phase 2: grep each (paths are absolute) */
         while (i < nrf) {
-            p = rfiles + i * 96;              /* pointer var, not array+expr as a call arg */
+            p = rfiles + i * 80;              /* pointer var, not array+expr as a call arg */
             fromfile = 0;
             if (open_path(p) == 1) { fromfile = 1; grep_stream(p); }
             i = i + 1;

@@ -47,7 +47,7 @@ print a one-line usage summary and exit.
 | [`pwd.c`](pwd.c) | `PWD [-h]` | Print the current working directory path. |
 | [`cat.c`](cat.c) | `CAT [file\|glob] [-h]` | Print a file, **or** copy stdin→stdout (the canonical filter) when given no file. So `cat file`, `cat <file`, and `cat \| …` all work. A last component with `*`/`?` is a case-insensitive **glob** (via `lib_globx`): `CAT *.ASM` concatenates every matching file, and `CAT *.ASM >ALL.TXT` captures them — directory iteration now coexists with an open write stream (see FSDIRBUF below). Reading the **console** (e.g. `CAT >FILE`), each key echoes and **Ctrl-D** ends the input. |
 | [`wc.c`](wc.c) | `WC [file\|glob] [-h]` | Count lines, words, and bytes → `L W B`. A file, a glob (`WC *.LOG` = combined count over all matches), `<file`, or a pipe. Counts are 16-bit. |
-| [`grep.c`](grep.c) | `GREP [-r] regex [file\|glob] [-h]` | Print lines matching a **basic regex** — `.` (any), `*` (zero-or-more), `^`/`$` (anchors); else literal. Reads the named `file`/glob (like cat) or stdin if none: `GREP "^al" foo.txt`, `… \| GREP "x.*y"`. **`-r`** recurses the CWD tree (depth-first, like `DIR -R`/`FIND`) and searches file **contents**, printing each hit as `path:line` — `GREP -r "x.*y"`. Lines capped at 255 chars; `-r` is capped at 48 files. |
+| [`grep.c`](grep.c) | `GREP [-r] regex [file\|glob] [-h]` | Print lines matching a **basic regex** — `.` (any), `*`/`+`/`?` (zero-or-more / one-or-more / zero-or-one), `^`/`$` (anchors); else literal. Reads the named `file`/glob (like cat) or stdin if none: `GREP "^al" foo.txt`, `… \| GREP "x.*y"`. **`-r`** recurses the CWD tree (depth-first, like `DIR -R`/`FIND`) and searches file **contents**, printing each hit as `path:line` — `GREP -r "x.*y"`. Lines capped at 255 chars; `-r` is capped at 36 files. |
 | [`cp.c`](cp.c) | `CP [-r] src dst [-h]` | Copy a file (read stream → write stream), or with **`-r`** a whole directory tree — recursively, and across the `/D1` mount (`CP -r /D1/SRC /SRC`). `-r` collects each level's entries before descending (the FNEXT cursor is global) and makes destination dirs via the `SYS_MKDIR` syscall. Supersedes the old `IMPORT` built-in. |
 | [`mv.c`](mv.c) | `MV src dst [-h]` | Move/rename a file = copy + delete source (P8XFS has no rename primitive). `MV X X` is refused. |
 | [`head.c`](head.c) | `HEAD [-N] [file] [-h]` | First N lines (default 10) of a file or stdin. |
@@ -55,7 +55,7 @@ print a one-line usage summary and exit.
 | [`more.c`](more.c) | `MORE [file] [-h]` | Page a file or stdin a screenful (23 lines) at a time: space=next page, Enter=one line, q=quit. Forward pager (not full `less`). |
 | [`sort.c`](sort.c) | `SORT [file] [-h]` | Sort lines ascending (file or stdin). In-memory: ≤128 lines of ≤79 chars. |
 | [`uniq.c`](uniq.c) | `UNIQ [file] [-h]` | Collapse **adjacent** duplicate lines (pair with `SORT`). |
-| [`sed.c`](sed.c) | `SED s/re/new/[g] [file] [-h]` | `s///` substitution; the left side is a **basic regex** (`.` `*` `^` `$`, via `lib_regex` — same matcher as grep), replacement is literal. First match or all with `g`; the whole matched span is replaced. `*` is non-greedy. |
+| [`sed.c`](sed.c) | `SED s/re/new/[g] [file] [-h]` | `s///` substitution; the left side is a **basic regex** (`.` `*` `+` `?` `^` `$`, via `lib_regex` — same matcher as grep), replacement is literal. First match or all with `g`; the whole matched span is replaced. `*` is non-greedy. |
 | [`find.c`](find.c) | `FIND pattern [-h]` | Recursively print CWD paths whose name matches `pattern`: a case-insensitive **glob** (`*`/`?`, via `lib_glob`) if it contains `*` or `?`, else a literal substring. So `FIND *.C`, `FIND TEST?.ASM`, and `FIND BIN` (substring) all work. |
 | [`diff.c`](diff.c) | `DIFF f1 f2 [-h]` | Prefix/suffix-anchored line diff: `<` lines only in f1, `>` only in f2. ≤96 lines/file (≤79 chars). |
 | [`tree.c`](tree.c) | `TREE [-h]` | Depth-first indented listing of the CWD tree (same recursion as `DIR -R`). |
@@ -165,7 +165,7 @@ consumer.
 | [`lib_streq.c`](lib_streq.c) | `streq(p, q)` — 1 if NUL-terminated strings are equal | `mv`, `uniq` |
 | [`lib_glob.c`](lib_glob.c) | `gmatch(pat, name)` — case-insensitive whole-string glob match (`*`, `?`) | `dir`, `find`, `lib_globx` |
 | [`lib_globx.c`](lib_globx.c) | `glob_expand(pat, out, maxn)` — expand a glob into a list of matching file paths (pulls in `lib_glob`) | `cat`, `lib_stdin` |
-| [`lib_regex.c`](lib_regex.c) | `match(re, t)` / `matchhere(re, t)` — basic-regex matcher (`.` `*` `^` `$`); `matchhere` sets `rend` to the match end | `grep`, `sed` |
+| [`lib_regex.c`](lib_regex.c) | `match(re, t)` / `matchhere(re, t)` — basic-regex matcher (`.` `*` `+` `?` `^` `$`); `matchhere` sets `rend` to the match end. (Character classes `[..]` / escapes don't fit in grep's host build yet — see BACKLOG.) | `grep`, `sed` |
 | [`lib_dirent.c`](lib_dirent.c) | `de_read()` snapshots the entry `FNEXT` just matched into `de[17]`; `de_isfile()`/`de_isdir()`/`de_isdot()`/`de_len()`/`de_lba()` query it, `de_opendir(lba)` descends — all via the `SYS_DIRENTRY`/`SYS_OPENDIR` syscalls, so commands never hardcode BIOS scratch addresses | `dir`, `find`, `grep`, `tree`, `lib_globx` |
 
 When a helper depends on another (e.g. `readline` calls `lib_stdin`'s `nextc()`),
