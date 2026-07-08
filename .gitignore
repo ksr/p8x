@@ -176,3 +176,4 @@ emulator/test/dg.asm
 # test-generated per-command compiler output (the .bin/.pp.c are already ignored)
 emulator/test/*.py.asm
 emulator/test/*.host.asm
+emulator/test/cf2.asm
