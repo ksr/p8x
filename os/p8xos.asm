@@ -231,16 +231,8 @@ GPLF    = $77A3          ; SYS_GETC console: 1 = a LF is pending after a CR keyp
 CURDRIVE= $77A4          ; derived: 1 if the CWD is under /D1 (drive 1), else 0
 DRVINIT = $77A5          ; bitmask: bit N set = drive N has been CFINIT'd this session
 MPSAV   = $77A6          ; MNTPFX: saved P2 (2 bytes) while sniffing a "D1" prefix
-; The DOS-model drive machinery below (SWITCHDRV/SWAPCWD/CKDRIVESW/CDPFX/
-; PARSEDRIVE) is now dead — the mount redirect in RV_START/FRESOLVE replaces it.
-; Kept temporarily so it still assembles; removed in the mount cleanup pass. Its
-; scratch is aliased over the now-unused $77A6.. span (MPSAV shares it; both are
-; only ever written, never concurrently, since the dead routines never run).
-SWTGT   = $77A6          ; (dead) SWITCHDRV target-drive scratch
-SAVEL   = $77A7          ; (dead) saved CWD start LBA low
-SAVELH  = $77A8          ; (dead) start LBA high
-SAVEN   = $77A9          ; (dead) sector count
-SAVEPATH= $77AA          ; (dead) textual path ($77AA..$77D9, 48 bytes)
+; $77A8..$77D9 free (was the DOS-model drive-1 CWD backing, removed with the
+; mount migration).
 ; ---- IMPORT (cross-drive bulk copy) state ----
 IMPSD   = $77DA          ; source drive
 IMPDD   = $77DB          ; destination drive (the current drive)
@@ -271,13 +263,16 @@ STKTOP  = $FEFF
         JMP  SYS_GETC           ; $400C SYS_GETC: next stdin byte -> A
         JMP  SYS_PUTS           ; $400F SYS_PUTS: write (P1) string to stdout
         JMP  SYS_OPENCWD        ; $4012 SYS_OPENCWD: begin iterating the CWD (16-bit LBA)
-        JMP  SWITCHDRV          ; $4015 SYS_SETDRIVE: A = drive (0/1) -> switch current drive; C=1 if absent
-        JMP  SYS_GETDRIVE       ; $4018 SYS_GETDRIVE: -> A = current drive (0/1)
+        JMP  SYS_SETDRV         ; $4015 SYS_SETDRIVE: deprecated (mount model) — no-op stub, ABI slot kept
+        JMP  SYS_GETDRIVE       ; $4018 SYS_GETDRIVE: -> A = 1 if CWD is under /D1 (drive 1), else 0
         JMP  SYS_DIRENTRY       ; $401B SYS_DIRENTRY: snapshot the current dir entry -> (P1) 17 bytes
         JMP  SYS_OPENDIR        ; $401E SYS_OPENDIR: P1 = 16-bit dir start LBA -> open for FNEXT
 ; Reached only via the table above (COLD jumps past them).
-SYS_GETDRIVE:
+SYS_GETDRIVE:                   ; derived: 1 if the CWD is under the /D1 mount
         LDA  CURDRIVE
+        RTS
+SYS_SETDRV:                     ; deprecated: the drive follows the CWD path now
+        CLC
         RTS
 ; SYS_DIRENTRY — copy the entry FNEXT just matched into a caller buffer, so
 ; /BIN commands read directory metadata without hardcoding BIOS scratch
@@ -404,22 +399,12 @@ COLD:   LDP3 #STKTOP
         LDA  #4
         STA  CWDN
         JSR  PATHROOT           ; CWDPATH = "/"
-        ; dual-volume: current drive 0 (already CFINIT'd by the boot loader), and
-        ; the inactive drive's saved CWD = its root "/"
+        ; mount model: boot at the root on drive 0 (already CFINIT'd by the boot
+        ; loader). CURDRIVE is derived from the CWD path (0 = not under /D1).
         LDA  #0
         STA  CURDRIVE
         LDA  #1                 ; drive 0 inited by CMD_B; mark it
         STA  DRVINIT
-        LDA  #33
-        STA  SAVEL
-        LDA  #0
-        STA  SAVELH
-        LDA  #4
-        STA  SAVEN
-        LDA  #'/'
-        STA  SAVEPATH
-        LDA  #0
-        STA  SAVEPATH+1
         JSR  PATHINIT           ; PATH = "/BIN" (search dir for bare command names)
 
 ; ---------------- Shell main loop --------------------------------------------
@@ -967,165 +952,11 @@ dd_0:   LDA  #0
         STA  CURDRIVE
         RTS
 
-; ---------------- dual-volume drive support ----------------------------------
-; PARSEDRIVE - consume an optional "N:" drive prefix (N=0/1) at (P2). If present,
-; route CF/FS sector I/O to drive N (CFSEL + lazy CFINIT) and return C=1.
-; Otherwise leave (P2) untouched and return C=0.
-PARSEDRIVE:
-        LDA  (P2)
-        LDB  #'0'
-        CMP
-        JZ   pd_y
-        LDB  #'1'
-        CMP
-        JZ   pd_y
-        CLC
-        RTS
-pd_y:   STA  TMP2               ; digit char
-        INP2
-        LDA  (P2)
-        LDB  #':'
-        CMP
-        JZ   pd_ok
-        DEP2                    ; not "N:" -> restore and report no prefix
-        CLC
-        RTS
-pd_ok:  INP2                    ; consume ':'
-        LDA  TMP2
-        LDB  #'0'
-        SUB                     ; A = drive number (0/1)
-        JSR  BSELDRV
-        SEC
-        RTS
-
-; BSELDRV - route sector I/O to drive A (0/1). The firmware CFSEL now selects the
-; drive AND lazily CFINITs it the first time it's used (see p8xmon.asm), returning
-; C=1 if the drive is absent — so this is a thin wrapper.
-BSELDRV:JMP  CFSEL
-
 ; SYNCDRV - baseline routing = the current drive (call at each command).
 SYNCDRV:LDA  CURDRIVE
         JSR  CFSEL
         RTS
 
-; SWAPCWD - swap the active CWD working set (CWDL/CWDLH/CWDN + CWDPATH) with the
-; inactive drive's saved copy (SAVEL/SAVELH/SAVEN + SAVEPATH).
-SWAPCWD:LDA  CWDL
-        STA  TMP
-        LDA  SAVEL
-        STA  CWDL
-        LDA  TMP
-        STA  SAVEL
-        LDA  CWDLH
-        STA  TMP
-        LDA  SAVELH
-        STA  CWDLH
-        LDA  TMP
-        STA  SAVELH
-        LDA  CWDN
-        STA  TMP
-        LDA  SAVEN
-        STA  CWDN
-        LDA  TMP
-        STA  SAVEN
-        LDP1 #CWDPATH
-        LDP2 #SAVEPATH
-        LDA  #48
-        STA  CNT
-scw_lp: LDA  (P1)
-        STA  TMP
-        LDA  (P2)
-        STA  (P1)+
-        LDA  TMP
-        STA  (P2)+
-        LDA  CNT
-        DEC
-        STA  CNT
-        JNZ  scw_lp
-        RTS
-
-; SWITCHDRV - make drive A (0/1) the current drive: select+init it (report if
-; absent), then swap in its CWD. C=1 if the drive is absent (no switch).
-SWITCHDRV:
-        STA  SWTGT
-        LDA  CURDRIVE
-        LDB  SWTGT
-        CMP
-        JZ   sw_same
-        LDA  SWTGT
-        JSR  BSELDRV            ; select + lazy init the target; C=1 if absent
-        JC   sw_abs
-        JSR  SWAPCWD            ; present: swap its CWD in, commit CURDRIVE
-        LDA  SWTGT
-        STA  CURDRIVE
-        CLC
-        RTS
-sw_abs: LDA  CURDRIVE           ; absent: restore routing to the current drive
-        JSR  CFSEL
-        LDP1 #MNODRV
-        JSR  OPUTS
-        SEC
-        RTS
-sw_same:LDA  SWTGT
-        JSR  CFSEL
-        CLC
-        RTS
-
-; CKDRIVESW - if CMDBUF is exactly "N:" (bare drive switch), do it. MATCH=1 if
-; handled (caller loops back to the shell), else MATCH=0.
-CKDRIVESW:
-        LDP1 #CMDBUF
-        LDA  (P1)
-        LDB  #'0'
-        CMP
-        JZ   ck_y
-        LDB  #'1'
-        CMP
-        JZ   ck_y
-        JMP  ck_no
-ck_y:   LDB  #'0'
-        SUB                     ; A = drive (0/1)
-        STA  TMP                ; stash across the ":" / end checks
-        LDP1 #CMDBUF
-        INP1
-        LDA  (P1)               ; CMDBUF[1] must be ':'
-        LDB  #':'
-        CMP
-        JNZ  ck_no
-        INP1
-        LDA  (P1)               ; CMDBUF[2] must be end of word
-        JNZ  ck_no
-        LDA  TMP
-        JSR  SWITCHDRV
-        LDA  #1
-        STA  MATCH
-        RTS
-ck_no:  LDA  #0
-        STA  MATCH
-        RTS
-
-; CDPFX - CD helper: if the CD argument begins with "N:", switch to drive N
-; (permanent), so `CD 1:/DIR` lands you on drive 1. Leaves the arg for CDPATH.
-CDPFX:  JSR  SKIPSPC
-        LDA  (P2)
-        LDB  #'0'
-        CMP
-        JZ   cdp_y
-        LDB  #'1'
-        CMP
-        JZ   cdp_y
-        RTS
-cdp_y:  LDB  #'0'
-        SUB
-        STA  TMP
-        INP2
-        LDA  (P2)
-        LDB  #':'
-        CMP
-        JNZ  cdp_no
-        LDA  TMP
-        JSR  SWITCHDRV
-cdp_no: RTS
 
 ; PARSECOMP - copy one path component from (P2) into NAMEBUF (upcased, 12,
 ; space-padded), stopping at '/', space, or null WITHOUT consuming it.
