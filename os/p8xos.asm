@@ -49,6 +49,7 @@ CFCURDRV= $014B          ; -> A = current CF drive
 FFIND   = $0118          ; find file FNAME in current dir -> LBA+FLEN; C=1 absent
 CFREAD  = $010C          ; sector LBA -> (P1); P1 += 512
 CFWRITE = $010F          ; SBUF -> sector LBA
+CFIMASK = $7081          ; firmware "drive N CFINIT'd this session" bitmask (UMOUNT clears bit 1)
 PUTS    = $0112          ; print (P1)+ until $00
 PHEX8   = $0115          ; print A as two hex digits
 FLOADAT = $013F          ; bulk-read FLEN bytes from LBA into (P1)
@@ -497,6 +498,12 @@ DISPATCH:
         LDP1 #KW_FORMAT
         JSR  CMPCMD
         JNZ  DOFORMAT
+        LDP1 #KW_UMOUNT
+        JSR  CMPCMD
+        JNZ  DOUMOUNT
+        LDP1 #KW_MOUNT
+        JSR  CMPCMD
+        JNZ  DOMOUNT
         JMP  IMPRUN             ; not a built-in: try to run it as a program (PATH)
 
 ; CMPCMD - compare CMDBUF to the keyword at (P1); returns A!=0 (and Z clear)
@@ -528,6 +535,73 @@ DOPATH: JSR  ARG2P2
         JMP  SHELL
 DPA_SET:LDP1 #PATHBUF           ; copy the argument word into PATHBUF (upcased)
         JSR  PARSEW
+        JMP  SHELL
+
+; ---------------- MOUNT / UMOUNT : hot-swap the /D1 card ---------------------
+; The filesystem caches no state for drive 1 (free pointer, root LBA, and the
+; CWD are all re-derived on demand), so a CF in the /D1 slot can be swapped at
+; the prompt. Two things must be reset across a swap: the firmware's
+; "already initialized" cache (CFIMASK) so the new card gets its 8-bit-mode +
+; IDENTIFY handshake, and the CWD if it currently sits under /D1 (its LBAs
+; belong to the OLD card). Swap sequence:  UMOUNT -> pull card -> insert card
+; -> MOUNT.  (Swap only at the prompt with no I/O in flight — the True-IDE bus
+; has no card-detect.)
+DOUMOUNT:
+        LDA  CURDRIVE           ; if the CWD is under /D1, drop back to the root
+        JZ   um_forget          ;   (its start LBA belongs to the old card)
+        LDA  #33
+        STA  CWDL
+        LDA  #0
+        STA  CWDLH
+        LDA  ROOTN
+        STA  CWDN
+        LDA  #0
+        STA  CURDRIVE
+        JSR  PATHROOT           ; CWDPATH = "/"
+um_forget:
+        LDA  CFIMASK            ; forget drive 1's init: the next /D1 access will
+        LDB  #$FD               ;   re-run CFINIT on whatever card is now inserted
+        AND
+        STA  CFIMASK
+        LDP1 #MUMOK
+        JSR  OPUTS
+        JMP  SHELL
+
+DOMOUNT:
+        LDA  CFIMASK            ; force a fresh init: clear drive 1's cached flag so
+        LDB  #$FD               ;   CFSEL re-runs the CFINIT handshake on the card
+        AND
+        STA  CFIMASK
+        LDA  #1                 ; route to drive 1 (CFSEL does the CFINIT handshake)
+        JSR  CFSEL
+        LDP1 #SBUF              ; read the boot block (LBA 0) and judge by its data:
+        LDA  #0                 ;   "P8" = mounted, $FF = floating bus (no card),
+        STA  LBA                ;   else = unformatted. (Bounded CF waits -> no hang.)
+        STA  LBA1
+        STA  LBA2
+        JSR  CFREAD
+        LDA  SBUF+0
+        LDB  #'P'
+        CMP
+        JNZ  mnt_notp
+        LDA  SBUF+1
+        LDB  #'8'
+        CMP
+        JNZ  mnt_notp
+        LDP1 #MMNTOK           ; "P8" signature -> mounted
+        JSR  OPUTS
+        JMP  mnt_done
+mnt_notp:LDA SBUF+0
+        LDB  #$FF
+        CMP
+        JZ   mnt_no            ; all-ones -> nothing driving the bus -> no card
+        LDP1 #MMNTBAD         ; else -> a card, but not P8XFS
+        JSR  OPUTS
+        JMP  mnt_done
+mnt_no: LDP1 #MMNTNO
+        JSR  OPUTS
+mnt_done:
+        JSR  SYNCDRV            ; restore routing to the current drive
         JMP  SHELL
 
 ; EXIT / MON - leave the OS and cold-restart into the ROM monitor (reset vector
@@ -3614,6 +3688,8 @@ MHELP:   .byte CR,LF
          .byte CR,LF
          .ascii "/D1           drive 1 is mounted here (CD /D1, CAT /D1/FILE)"
          .byte CR,LF
+         .ascii "UMOUNT/MOUNT  swap the /D1 card: UMOUNT, swap, MOUNT"
+         .byte CR,LF
          .ascii "FSCK          check filesystem integrity (read-only)"
          .byte CR,LF
          .ascii "FORMAT        erase card, make a fresh v2 volume (asks Y/N)"
@@ -3666,6 +3742,14 @@ MFMTOK:  .byte CR,LF
          .asciiz "FORMATTED"
 MFMTAB:  .byte CR,LF
          .asciiz "ABORTED"
+MUMOK:   .byte CR,LF
+         .asciiz "DRIVE 1 UNMOUNTED - SWAP THE CARD, THEN MOUNT"
+MMNTOK:  .byte CR,LF
+         .asciiz "DRIVE 1 MOUNTED AT /D1"
+MMNTNO:  .byte CR,LF
+         .asciiz "?NO CARD IN DRIVE 1"
+MMNTBAD: .byte CR,LF
+         .asciiz "?DRIVE 1 NOT P8XFS - FORMAT IT"
 MEXIST:  .byte CR,LF
          .asciiz "?EXISTS"
 MNOTDIR: .byte CR,LF
@@ -3707,3 +3791,5 @@ KW_PATH: .asciiz "PATH"
 KW_EXIT: .asciiz "EXIT"
 KW_MON:  .asciiz "MON"
 KW_FORMAT:.asciiz "FORMAT"
+KW_MOUNT: .asciiz "MOUNT"
+KW_UMOUNT:.asciiz "UMOUNT"

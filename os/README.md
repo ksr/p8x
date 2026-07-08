@@ -24,6 +24,7 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > | `PACK` | compact the data area, reclaiming `DEL`/`RMDIR`'d extents |
 > | `FSCK` | check filesystem integrity (read-only) |
 > | `FORMAT` | erase the card and lay a fresh P8XFS v2 volume (asks `Y/N`) |
+> | `UMOUNT` / `MOUNT` | swap the CF in the `/D1` slot without rebooting (see **Two drives**) |
 > | `HELP` | list commands |
 >
 > A second CF is **mounted at `/D1`** in one unified namespace — any `path` on a
@@ -211,6 +212,15 @@ path reaches drive 1 through `/D1`:
 - `DIR /` shows a `D1/` entry (an empty placeholder directory on drive 0 marks
   the mount; traversal into it is redirected to drive 1 before the placeholder is
   read). An absent drive 1 makes `/D1` paths fail cleanly rather than hang.
+- **Swapping the card.** Because no drive-1 state is cached (the free pointer,
+  root LBA, and CWD are all re-derived), a card can be swapped at the prompt:
+  **`UMOUNT`** (forgets drive 1's CFINIT-once flag so the new card gets its
+  8-bit-mode + IDENTIFY handshake, and drops the CWD back to `/` if it was under
+  `/D1`) → pull the card → insert the new card → **`MOUNT`** (re-initializes it
+  and reports by reading the boot block: *mounted* / *no card* / *not P8XFS*).
+  Swap only at the prompt with no I/O in flight — the True-IDE bus has no
+  card-detect line. (A power-cycle also works: `COLD` clears the flag and resets
+  the CWD.)
 
 The mechanism is a single **mount redirect** in path resolution — firmware
 `FRESOLVE` (used by every `/BIN` command) and the OS's own walker `RV_START`
