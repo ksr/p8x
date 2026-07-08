@@ -64,4 +64,11 @@ grep -q 'hello from drive one' mn_got.out \
 python3 $ROOT/tools/p8xfs.py get mn1.img /GOT.TXT --out /dev/null >/dev/null 2>&1 \
     && { echo "OS-MOUNT TEST: FAIL — GOT.TXT leaked onto drive 1"; exit 1; } || true
 
+# 4) a bare relative "CD D1" from the root must reach the mount (drive 1), the
+#    same as "CD /D1" — not descend into the drive-0 placeholder. Then a relative
+#    DIR must list drive 1's root.
+printf 'B\rCD D1\rDIR\r' | ../p8xemu -l 120000000 -c mn0.img -c2 mn1.img eeprom.bin 2>/dev/null \
+    | LC_ALL=C tr -d '\0' | tr '\r' '\n' | grep -q 'HELLO.TXT' \
+    || { echo "OS-MOUNT TEST: FAIL — relative 'CD D1' from / did not reach drive 1"; exit 1; }
+
 echo "OS-MOUNT TEST: PASS"

@@ -865,9 +865,26 @@ RV_START:JSR SKIPSPC
         LDA  (P2)
         LDB  #'/'
         CMP
-        JNZ  rvs_cwd            ; relative -> from CWD, on the current drive
-        INP2                    ; consume leading '/'
-        JSR  MNTPFX             ; absolute: "/D1[/]" -> drive 1 + strip; else drive 0
+        JZ   rvs_abs            ; absolute path
+        ; relative: a bare "D1" is the mount only when the CWD is the drive-0
+        ; root (so `CD D1` from / == `CD /D1`, but a real D1 subdir elsewhere,
+        ; or D1 while already under /D1, stays an ordinary component).
+        LDA  CURDRIVE
+        JNZ  rvs_cwd            ; already under /D1 -> normal relative
+        LDA  CWDLH
+        JNZ  rvs_cwd            ; CWD not at the root (LBA 33) -> normal relative
+        LDA  CWDL
+        LDB  #33
+        CMP
+        JNZ  rvs_cwd
+        JSR  MNTPFX             ; at root: bare "D1" -> mount (C=1), else C=0
+        JC   rvs_root
+        JMP  rvs_cwd            ; other name -> normal relative from root
+rvs_abs:INP2                    ; consume leading '/'
+        JSR  MNTPFX             ; "/D1[/]" -> drive 1 + strip (C=1); else C=0
+        JC   rvs_root
+        LDA  #0                 ; absolute, not the mount -> drive 0 root
+        JSR  CFSEL
         JMP  rvs_root
 rvs_cwd:LDA  CURDRIVE           ; relative path resolves on the CWD's drive
         JSR  CFSEL
@@ -910,11 +927,12 @@ MNTPFX: TPA2L                   ; save P2 to restore on a non-match
         CMP
         JNZ  mp_no
         INP2                    ; consume the '/'
-mp_yes: LDA  #1
+mp_yes: LDA  #1                 ; it is the mount: route to drive 1, C=1
         JSR  CFSEL
+        SEC
         RTS
-mp_no:  LDA  MPSAV              ; restore P2 (first component wasn't "D1")
-        TAP2L
+mp_no:  LDA  MPSAV              ; restore P2 (first component wasn't "D1"); C=0,
+        TAP2L                   ;   leave the drive to the caller
         LDA  MPSAV+1
         TAP2H
         LDA  #0
