@@ -349,13 +349,16 @@ Last updated: 2026-06-27
         (frame-relative addressing, finishing the `LPW1`/`MOVW` adoption) and/or a
         p8cc peephole/temp-reuse pass; or by a larger TPA (code overlays / bank
         switching). Revisit awk once compiled command size drops materially.
-      - **`vi` — same wall, worse.** Strictly larger than awk (modal parser +
-        screen-redraw loop + in-TPA text buffer) AND needs a terminal decision:
-        the console is a raw serial ACIA, so a screen editor means committing to
-        **ANSI/VT100 escape sequences over serial** (fine in the emulator's host
-        terminal + a real VT100-class terminal). `EDIT` (line-oriented) already
-        exists. Treat vi as a separate, larger project gated on the same size fix +
-        the terminal commitment.
+      - **`vi` — DONE (2026-07-08).** A minimal modal VT100 screen editor shipped
+        as `os/commands/vi.c` (`RUN /BIN/VI.BIN NAME`). Unlike awk it has no
+        expression evaluator, so it fits: ~18 KB code + a flat 150×80 line buffer
+        = 30 KB total, ending `$EF6B`, below the `$FC00` read buffer. Reads keys
+        raw via BIOS CONIN (`$0100`, no echo), drives the cursor with ANSI escapes
+        (VT100 committed), and uses selective redraw (one line per char edit, full
+        only on scroll) so it is usable at real serial baud, not just in the
+        emulator. Commands: `hjkl 0 $ G i a A o x dd :w :q :wq :q!`. `os_vi_test`
+        drives it headlessly (feed keystrokes, check the saved file). Future: word
+        motions, search `/`, undo, arrow-key escape parsing, longer lines.
       - **`find` already exists** (`os/commands/find.c`: `FIND pattern`, recursive
         name/glob/substring over the CWD tree). Enhancements if wanted: `-type f|d`,
         `-name`, `-exec`, or an `N:` path arg (it's one of the two — with `tree` —
