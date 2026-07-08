@@ -24,7 +24,6 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > | `PACK` | compact the data area, reclaiming `DEL`/`RMDIR`'d extents |
 > | `FSCK` | check filesystem integrity (read-only) |
 > | `FORMAT` | erase the card and lay a fresh P8XFS v2 volume (asks `Y/N`) |
-> | `IMPORT /D1/dir` | copy every file from a directory (e.g. on the mounted drive 1) into the CWD (bulk copy; card provisioning) |
 > | `HELP` | list commands |
 >
 > A second CF is **mounted at `/D1`** in one unified namespace — any `path` on a
@@ -219,8 +218,10 @@ both treat a leading `/D1` component as "route sector I/O to drive 1 and resolve
 the rest from its root." So **no command parses a drive prefix** — the two cards
 share one ATA task-file port selected by the device bit (`CFSEL`/`DRVSEL`), and
 the redirect flips that bit based on the path. For bulk copying — provisioning a
-fresh card from a "master" — the built-in **`IMPORT /D1/dir`** reads every file
-from that directory and writes it into the current directory.
+fresh card from a "master" — use **`CP -r /D1/dir /dir`**: the userland `cp`
+recurses a whole subtree and works across the mount (each file's read and write
+stream keeps its own drive). It creates destination directories via the
+`SYS_MKDIR` syscall. (`cp -r` replaced the old flat `IMPORT` built-in.)
 
 ## OS syscall ABI (for loadable programs)
 
@@ -243,6 +244,7 @@ from C, the `p8cc` `bios()` intrinsic). The table is **append-only**:
 | `$4018` | `SYS_GETDRIVE` | → `A` = 1 if the CWD is under the `/D1` mount (drive 1), else 0 |
 | `$401B` | `SYS_DIRENTRY` | snapshot the entry `FNEXT`/`FFIND` just matched into `(P1)` — 17 bytes: name[12], flag, len(lo/hi), start-LBA(lo/hi). Lets commands read directory metadata without hardcoding BIOS scratch addresses |
 | `$401E` | `SYS_OPENDIR` | begin iterating the directory whose 16-bit start LBA is in `P1` (then `FNEXT`); the drive-agnostic way to descend into a subdirectory found via `SYS_DIRENTRY` |
+| `$4021` | `SYS_MKDIR` | create the directory named by the path in `P1` (applies the `/D1` mount); `C=1` on real failure, idempotent if it already exists. Lets a `/BIN` program (`cp -r`) make directories |
 
 `SYS_GETCWD`/`SYS_CWDLBA`/`SYS_OPENCWD` operate on the single CWD in the unified
 namespace (the path shows `/D1/...` when it is on the mounted drive); `SYS_OPENCWD`
