@@ -27,7 +27,7 @@ printf 'the beta file here\r\n'  > b.dat
 python3 $ROOT/tools/p8xfs.py put im1.img a.dat --name /BIN/ALPHA.TXT --load 0 --exec 0 >/dev/null
 python3 $ROOT/tools/p8xfs.py put im1.img b.dat --name /BIN/BETA.TXT  --load 0 --exec 0 >/dev/null
 
-printf 'B\rMKDIR /BIN\rCD /BIN\rIMPORT 1:/BIN\r' \
+printf 'B\rMKDIR /BIN\rCD /BIN\rIMPORT /D1/BIN\r' \
     | ../p8xemu -l 80000000 -c im0.img -c2 im1.img eeprom.bin 2>/dev/null >/dev/null
 
 # host-verify: drive 0 /BIN now has both files with the master's content

@@ -24,37 +24,28 @@ int main() {
     char *a;
     int n;
     int c;
-    int sdrv;
-    int ddrv;
 
     a = argstr();
     while (*a == 32) { a = a + 1; }
     if (*a == 0 || *a == 13 ||
         (*a == '-' && (*(a + 1) == 'h' || *(a + 1) == 'H'))) {
-        puts("usage: MV src dst   move/rename a file (src/dst may be N:/path)");
+        puts("usage: MV src dst   move/rename a file");
         return 0;
     }
     n = abspath(src, a);
-    sdrv = apdrive;
     if (n == 0) { puts("usage: MV src dst"); return 1; }
     a = a + n;
     while (*a == 32) { a = a + 1; }
     if (*a == 0 || *a == 13) { puts("usage: MV src dst"); return 1; }
     abspath(dst, a);
-    ddrv = apdrive;
 
-    /* src==dst only clashes on the SAME drive; across drives it's a real move */
-    if (sdrv == ddrv && streq(src, dst)) {
-        puts("mv: source and dest are the same"); return 1;
-    }
+    if (streq(src, dst)) { puts("mv: source and dest are the same"); return 1; }
 
-    seldrive(sdrv);                            /* open SRC on its drive */
     bios(0x0133, src, 0);                      /* FRESOLVE SRC */
     if (bios(0x0124, 0xFC00, 0) & 256) {       /* FOPEN SRC */
         puts("mv: source not found");
         return 1;
     }
-    seldrive(ddrv);                            /* open DST on its drive */
     bios(0x0133, dst, 0);                      /* FRESOLVE DST (DIRLBA+FNAME) */
     bios(0x012A, 0, 0);                        /* FWOPEN */
     c = bios(0x0127, 0, 0);                    /* FGETB */
@@ -64,7 +55,6 @@ int main() {
     }
     bios(0x0130, 0, 0);                        /* FCLOSE -> commit DST */
 
-    seldrive(sdrv);                            /* delete SRC on its drive */
     bios(0x0133, src, 0);                      /* FRESOLVE SRC again, then delete it */
     bios(0x011E, 0, 0);                        /* FDELETE SRC */
     return 0;

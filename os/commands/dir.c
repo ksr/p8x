@@ -39,7 +39,6 @@
  */
 //#use glob     /* gmatch(pat, name): case-insensitive * ? matcher */
 //#use dirent   /* de_read/de_isdir/de_len/de_lba/de_opendir: entry via syscall */
-//#use drive    /* hasdrive()/seldrive(): list a "N:"-prefixed drive */
 
 char nbuf[16];                               /* current entry name, NUL-terminated */
 char gpat[16];                               /* glob pattern, or empty = no filter */
@@ -158,17 +157,13 @@ int main() {
     gpat[0] = 0;
     while (*arg == 32) { arg = arg + 1; }    /* skip leading spaces */
     if (*arg == '-' && (*(arg + 1) == 'h' || *(arg + 1) == 'H')) {
-        puts("usage: DIR [-R] [path|glob]   list a dir (N:/path ok); glob: * ?");
+        puts("usage: DIR [-R] [path|glob]   list a dir; glob: * ? in the last name");
         return 0;
     }
     if (*arg == '-' && (*(arg + 1) == 'R' || *(arg + 1) == 'r')) {
         rec = 1;                             /* -R / -r : recurse */
         arg = arg + 2;
         while (*arg == 32) { arg = arg + 1; }  /* then the optional path/glob */
-    }
-    if (hasdrive(arg)) {                      /* "N:" prefix -> list that drive */
-        seldrive(arg[0] - '0');
-        arg = arg + 2;
     }
 
     /* scan the path token: remember the last '/', note any glob char */

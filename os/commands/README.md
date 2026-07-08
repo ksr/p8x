@@ -20,21 +20,14 @@ DIR /BIN            CAT README.TXT          PWD
 equivalently `RUN /BIN/DIR.BIN /BIN`, etc. Every command accepts **`-h`** to
 print a one-line usage summary and exit.
 
-> **Drives.** These `/BIN` commands default to the **current drive** (dual-CF:
-> drive 0 = boot/default, drive 1). `cat`, `dir`, `cp`, `mv`, `diff` also accept
-> a `0:`/`1:` **drive prefix** on a path to target the other card without
-> switching: `CAT 1:/NOTES`, `DIR 1:/BIN`, `DIR 1:/*.C`. `cp`/`mv`/`diff` take a
-> prefix on **either** path, so `CP 1:/A 0:/B` copies across cards (the read and
-> write streams each carry their own drive via `ROSDRV`/`WOSDRV`). The prefix
-> routes that command's filesystem I/O only — the shell re-asserts the current
-> drive next command, so it never changes where you are.
->
-> The stdin-filter tools (`grep`, `wc`, `head`, `tail`, `more`, `sort`, `uniq`,
-> `sed`) do **not** take a path prefix — they share `lib_stdin`/`lib_globx`, and
-> the largest of them (`grep`, which also carries the `-r` tree walk) is right at
-> the TPA size ceiling, so the extra code would push it into its own I/O buffers.
-> Use a bare `1:` / `0:` to switch, then run them. See [../README.md](../README.md)
-> "Two drives".
+> **Drives.** A second CF is **mounted at `/D1`** in one unified namespace, so
+> these commands are **drive-unaware**: an ordinary `/D1/...` path reaches drive 1
+> with no special syntax — `CAT /D1/NOTES`, `DIR /D1/BIN`, `DIR /D1/*.C`,
+> `GREP x /D1/SRC/*.C`, and cross-mount `CP /D1/A /B` (the read and write streams
+> each carry their own drive via `ROSDRV`/`WOSDRV`). The drive selection lives in
+> one place — the `FRESOLVE`/`RV_START` mount redirect — not in any command, so
+> even the stdin-filter tools (`grep`, `wc`, `head`, …) get the mount for free
+> without growing. See [../README.md](../README.md) "Two drives".
 
 > **Note — DIR, PWD, CAT, and TREE are no longer shell built-ins** (the
 > minimal-kernel split): they were removed from the OS and run from `/BIN` by
@@ -173,7 +166,6 @@ consumer.
 | [`lib_globx.c`](lib_globx.c) | `glob_expand(pat, out, maxn)` — expand a glob into a list of matching file paths (pulls in `lib_glob`) | `cat`, `lib_stdin` |
 | [`lib_regex.c`](lib_regex.c) | `match(re, t)` / `matchhere(re, t)` — basic-regex matcher (`.` `*` `^` `$`); `matchhere` sets `rend` to the match end | `grep`, `sed` |
 | [`lib_dirent.c`](lib_dirent.c) | `de_read()` snapshots the entry `FNEXT` just matched into `de[17]`; `de_isfile()`/`de_isdir()`/`de_isdot()`/`de_len()`/`de_lba()` query it, `de_opendir(lba)` descends — all via the `SYS_DIRENTRY`/`SYS_OPENDIR` syscalls, so commands never hardcode BIOS scratch addresses | `dir`, `find`, `grep`, `tree`, `lib_globx` |
-| [`lib_drive.c`](lib_drive.c) | `hasdrive(a)` (does `a` begin with a `0:`/`1:` prefix), `pdrive(a)` (the prefix's drive, else the current drive), `seldrive(d)` (route FS I/O to drive `d` via BIOS `CFSEL`) — the machinery behind the inline `N:` path prefix | `cat`, `dir`, `cp`, `mv`, `diff`, `lib_abspath` |
 
 When a helper depends on another (e.g. `readline` calls `lib_stdin`'s `nextc()`),
 list its `//#use` **after** the dependency's so `clib.py` splices them in the
