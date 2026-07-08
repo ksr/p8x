@@ -813,6 +813,42 @@ RS_SAVE:TPA2L
         STA  RPATH
         TPA2H
         STA  RPATH+1
+; --- mount redirect ---------------------------------------------------------
+; A leading component "D1" (delimited by '/' or end-of-string) is the mount
+; point for the second CF: route sector I/O to drive 1 and strip the component,
+; so the remainder resolves from drive 1's root. Any other first component (incl.
+; a longer name like "D1FOO") resolves on drive 0. This is the ONE place drive
+; selection happens — every FRESOLVE (files via FOPEN/FFIND, dirs via FOPENDIR)
+; is mount-aware for free, so no caller ever parses a drive prefix.
+        LDA  RPATH
+        TAP2L
+        LDA  RPATH+1
+        TAP2H
+        LDA  (P2)           ; [0] == 'D' ?
+        LDB  #'D'
+        CMP
+        JNZ  RS_MNT0
+        INP2
+        LDA  (P2)           ; [1] == '1' ?
+        LDB  #'1'
+        CMP
+        JNZ  RS_MNT0
+        INP2
+        LDA  (P2)           ; [2] == NUL -> bare "/D1" (the mount root)
+        JZ   RS_MNT1
+        LDB  #'/'           ; [2] == '/' -> "/D1/..." (into drive 1)
+        CMP
+        JNZ  RS_MNT0
+        INP2                ; consume the '/' after "D1"
+RS_MNT1:TPA2L               ; commit: RPATH advanced past "D1[/]"
+        STA  RPATH
+        TPA2H
+        STA  RPATH+1
+        LDA  #1             ; route I/O to drive 1 (CFSEL lazily CFINITs it)
+        JSR  CFSEL
+        JMP  RS_COMP
+RS_MNT0:LDA  #0             ; not the mount -> drive 0 (RPATH untouched)
+        JSR  CFSEL
 RS_COMP:LDP1 #FNAME         ; FNAME = 12 spaces
         LDA  #12
         STA  HEXL
