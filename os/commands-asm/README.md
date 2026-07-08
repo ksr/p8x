@@ -45,6 +45,7 @@ size table with the ratio. Ported commands only in the TOTAL.
 | mv      | 4585 |      789 | 5.8×  |
 | tree    | 3440 |     1358 | 2.5×  |
 | dir     |10195 |     4021 | 2.5×  |
+| wc      |13739 |     3655 | 3.8×  |
 
 (Regenerate with `compare.sh`; the C sizes include the `//#use` shared libs
 spliced by `clib.py`.)

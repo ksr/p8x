@@ -76,7 +76,8 @@ for cmd in $ALL; do
     $CLIB "$CDIR/$cmd.c" -o "$W/$cmd.pp.c" 2>/dev/null
     $CC "$W/$cmd.pp.c" -o "$W/${cmd}_c.asm" >/dev/null 2>&1
     $ASM "$W/${cmd}_c.asm" -o "$W/${cmd}_c.bin" --base 0x7A00 >/dev/null 2>&1
-    $ASM "$ADIR/$cmd.asm" -o "$W/${cmd}_a.bin" --base 0x7A00 >/dev/null 2>&1
+    sh "$ADIR/mkasm.sh" "$cmd" > "$W/${cmd}_full.asm"
+    $ASM "$W/${cmd}_full.asm" -o "$W/${cmd}_a.bin" --base 0x7A00 >/dev/null 2>&1
     scr=$(cmd_script "$up")
     fixtures "$W/dc.img"; $FS put "$W/dc.img" "$W/${cmd}_c.bin" --name "/BIN/$up.BIN" --load 0x7A00 --exec 0x7A00 >/dev/null
     fixtures "$W/da.img"; $FS put "$W/da.img" "$W/${cmd}_a.bin" --name "/BIN/$up.BIN" --load 0x7A00 --exec 0x7A00 >/dev/null

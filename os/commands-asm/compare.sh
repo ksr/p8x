@@ -44,7 +44,8 @@ for cmd in $ALL; do
         csz=$(wc -c < "$WORK/${cmd}_c.bin" | tr -d ' ')
     fi
     if [ -f "$ADIR/$cmd.asm" ]; then
-        $ASM "$ADIR/$cmd.asm" -o "$WORK/${cmd}_a.bin" --base 0x7A00 >/dev/null 2>&1
+        sh "$ADIR/mkasm.sh" "$cmd" > "$WORK/${cmd}_full.asm"
+        $ASM "$WORK/${cmd}_full.asm" -o "$WORK/${cmd}_a.bin" --base 0x7A00 >/dev/null 2>&1
         asz=$(wc -c < "$WORK/${cmd}_a.bin" | tr -d ' ')
     fi
     ratio="-"
