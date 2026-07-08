@@ -227,14 +227,20 @@ RUNSKIP = $77A0          ; DORUN: 1 = skip the program-name word for the arg poi
 PSCANL  = $77A1          ; PATH search cursor into PATHBUF (low)
 PSCANH  = $77A2          ; PATH search cursor into PATHBUF (high)
 GPLF    = $77A3          ; SYS_GETC console: 1 = a LF is pending after a CR keypress
-; ---- dual-volume (two CF drives) state ----
-CURDRIVE= $77A4          ; active drive (0/1); the CWD working set below is its CWD
+; ---- mount model (drive 1 mounted at /D1) state ----
+CURDRIVE= $77A4          ; derived: 1 if the CWD is under /D1 (drive 1), else 0
 DRVINIT = $77A5          ; bitmask: bit N set = drive N has been CFINIT'd this session
-SWTGT   = $77A6          ; SWITCHDRV target-drive scratch
-SAVEL   = $77A7          ; the INACTIVE drive's saved CWD: start LBA low
-SAVELH  = $77A8          ;   start LBA high
-SAVEN   = $77A9          ;   sector count
-SAVEPATH= $77AA          ;   textual path ($77AA..$77D9, 48 bytes)
+MPSAV   = $77A6          ; MNTPFX: saved P2 (2 bytes) while sniffing a "D1" prefix
+; The DOS-model drive machinery below (SWITCHDRV/SWAPCWD/CKDRIVESW/CDPFX/
+; PARSEDRIVE) is now dead — the mount redirect in RV_START/FRESOLVE replaces it.
+; Kept temporarily so it still assembles; removed in the mount cleanup pass. Its
+; scratch is aliased over the now-unused $77A6.. span (MPSAV shares it; both are
+; only ever written, never concurrently, since the dead routines never run).
+SWTGT   = $77A6          ; (dead) SWITCHDRV target-drive scratch
+SAVEL   = $77A7          ; (dead) saved CWD start LBA low
+SAVELH  = $77A8          ; (dead) start LBA high
+SAVEN   = $77A9          ; (dead) sector count
+SAVEPATH= $77AA          ; (dead) textual path ($77AA..$77D9, 48 bytes)
 ; ---- IMPORT (cross-drive bulk copy) state ----
 IMPSD   = $77DA          ; source drive
 IMPDD   = $77DB          ; destination drive (the current drive)
@@ -321,6 +327,9 @@ SYS_CWDLBA:
         LDA  CWDL               ; current directory start LBA (low byte) -> A
         RTS                     ; (8-bit; use SYS_OPENCWD for dirs at LBA >=256)
 SYS_OPENCWD:                    ; begin iterating the CWD directory (full 16-bit
+        JSR  SYNCDRV           ; route to the CWD's drive first: a /BIN program was
+                              ;   just loaded from drive 0, leaving DRVSEL=0, but the
+                              ;   CWD may be under the /D1 mount (drive 1).
         LDA  CWDLH              ; LBA), so a /BIN program can list the CWD even
         STA  LBA1               ; when it lives at LBA >=256. Pairs with FNEXT.
         LDA  #0
@@ -431,13 +440,7 @@ SHELL:  JSR  FLUSHRED           ; if the previous command was redirected, write 
         STA  PIPEF
 SH_PROMPT:
         JSR  CRLF
-        LDA  CURDRIVE           ; prompt = "N:<path>> "
-        LDB  #'0'
-        ADD
-        JSR  OUTCH
-        LDA  #':'
-        JSR  OUTCH
-        LDP1 #CWDPATH
+        LDP1 #CWDPATH           ; prompt = "<path>> " (drive 1 shows as /D1/...)
         JSR  OPUTS
         LDP1 #MPROMPT
         JSR  OPUTS
@@ -455,10 +458,7 @@ DISPATCH:
         STA  ARGPH
         LDA  CMDBUF
         JZ   SHELL              ; blank line
-        JSR  SYNCDRV            ; baseline CF routing = the current drive
-        JSR  CKDRIVESW          ; bare "N:" -> switch the current drive
-        LDA  MATCH
-        JNZ  SHELL
+        JSR  SYNCDRV            ; baseline CF routing = the current drive (CWD's card)
         LDP1 #KW_HELP
         JSR  CMPCMD
         JNZ  DOHELP
@@ -877,19 +877,22 @@ sks_d:  RTS
 ; RV_START - begin a walk: skip spaces, then set SDIR to the root directory and
 ; consume a leading '/' (absolute path) or to the current directory (relative).
 RV_START:JSR SKIPSPC
-        JSR  PARSEDRIVE         ; consume an optional "N:" prefix -> route to drive N
-        JC   rvs_pfx            ; prefixed: resolve from that drive's root
         LDA  (P2)
         LDB  #'/'
         CMP
-        JNZ  rvs_cwd
+        JNZ  rvs_cwd            ; relative -> from CWD, on the current drive
         INP2                    ; consume leading '/'
+        JSR  MNTPFX             ; absolute: "/D1[/]" -> drive 1 + strip; else drive 0
         JMP  rvs_root
-rvs_pfx:LDA  (P2)               ; skip an optional '/' right after "N:"
-        LDB  #'/'
-        CMP
-        JNZ  rvs_root
-        INP2
+rvs_cwd:LDA  CURDRIVE           ; relative path resolves on the CWD's drive
+        JSR  CFSEL
+        LDA  CWDL
+        STA  SDIRL
+        LDA  CWDLH
+        STA  SDIRLH
+        LDA  CWDN
+        STA  SDIRN
+        RTS
 rvs_root:LDA #33
         STA  SDIRL
         LDA  #0
@@ -897,12 +900,71 @@ rvs_root:LDA #33
         LDA  ROOTN
         STA  SDIRN
         RTS
-rvs_cwd:LDA  CWDL
-        STA  SDIRL
-        LDA  CWDLH
-        STA  SDIRLH
-        LDA  CWDN
-        STA  SDIRN
+
+; MNTPFX - at (P2), just past a leading '/', apply the mount redirect: if the
+; component is "D1" (delimited by '/' or NUL) route I/O to drive 1 and advance
+; P2 past it; otherwise route to drive 0 and leave P2 unchanged. Mirrors the
+; firmware FRESOLVE redirect for the OS's own directory walker.
+MNTPFX: TPA2L                   ; save P2 to restore on a non-match
+        STA  MPSAV
+        TPA2H
+        STA  MPSAV+1
+        LDA  (P2)
+        LDB  #'D'
+        CMP
+        JNZ  mp_no
+        INP2
+        LDA  (P2)
+        LDB  #'1'
+        CMP
+        JNZ  mp_no
+        INP2
+        LDA  (P2)               ; after "D1": NUL or '/' => the mount point
+        JZ   mp_yes
+        LDB  #'/'
+        CMP
+        JNZ  mp_no
+        INP2                    ; consume the '/'
+mp_yes: LDA  #1
+        JSR  CFSEL
+        RTS
+mp_no:  LDA  MPSAV              ; restore P2 (first component wasn't "D1")
+        TAP2L
+        LDA  MPSAV+1
+        TAP2H
+        LDA  #0
+        JSR  CFSEL
+        RTS
+
+; DERIVEDRV - CURDRIVE = 1 if CWDPATH begins "/D1" (the mount), else 0. Called
+; after CD commits a new CWD so SYNCDRV routes current-drive ops to the right card.
+DERIVEDRV:
+        LDP2 #CWDPATH
+        LDA  (P2)
+        LDB  #'/'
+        CMP
+        JNZ  dd_0
+        INP2
+        LDA  (P2)
+        LDB  #'D'
+        CMP
+        JNZ  dd_0
+        INP2
+        LDA  (P2)
+        LDB  #'1'
+        CMP
+        JNZ  dd_0
+        INP2
+        LDA  (P2)               ; "/D1" then NUL or '/' => under the mount
+        JZ   dd_1
+        LDB  #'/'
+        CMP
+        JNZ  dd_0
+dd_1:   LDA  #1
+        STA  CURDRIVE
+        RTS
+dd_0:   LDA  #0
+        STA  CURDRIVE
         RTS
 
 ; ---------------- dual-volume drive support ----------------------------------
@@ -1179,9 +1241,7 @@ cd_bad: LDA  #0
 
 ; ---------------- CD path ----------------------------------------------------
 DOCD:   JSR  ARG2P2
-        JSR  CDPFX              ; "CD N:/dir" -> switch to drive N first (permanent)
-        JSR  ARG2P2             ; CDPFX advanced P2; reset it for CDPATH
-        JSR  CDPATH             ; resolve to a directory -> SDIR
+        JSR  CDPATH             ; resolve to a directory -> SDIR (RV_START does /D1)
         LDA  MATCH
         JZ   NODIR
         LDA  SDIRL              ; commit it as the working directory
@@ -1190,7 +1250,8 @@ DOCD:   JSR  ARG2P2
         STA  CWDLH
         LDA  SDIRN
         STA  CWDN
-        JSR  SETPATH            ; update the displayed path (cosmetic)
+        JSR  SETPATH            ; update the displayed CWD path
+        JSR  DERIVEDRV          ; CURDRIVE = is the new CWD under /D1?
         JMP  SHELL
 NODIR:  LDP1 #MNODIR
         JSR  PUTS
