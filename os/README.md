@@ -24,23 +24,21 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > | `PACK` | compact the data area, reclaiming `DEL`/`RMDIR`'d extents |
 > | `FSCK` | check filesystem integrity (read-only) |
 > | `FORMAT` | erase the card and lay a fresh P8XFS v2 volume (asks `Y/N`) |
-> | `IMPORT N:/dir` | copy every file from another drive's directory into the CWD (bulk cross-drive copy; card provisioning) |
+> | `IMPORT /D1/dir` | copy every file from a directory (e.g. on the mounted drive 1) into the CWD (bulk copy; card provisioning) |
 > | `HELP` | list commands |
 >
-> Any `path` argument to a **built-in** above may carry a `0:`/`1:` **drive
-> prefix** (`CD 1:/SRC`, `MKDIR 1:/LIB`, `SAVE 1:/PROG 7A00 7B00`, `DEL 0:/OLD`);
-> `CD N:/dir` also makes N the current drive. See **Two drives** below.
+> A second CF is **mounted at `/D1`** in one unified namespace — any `path` on a
+> built-in (or `/BIN` command) reaches it with ordinary path syntax
+> (`CD /D1/SRC`, `MKDIR /D1/LIB`, `CAT /D1/NOTES`). See **Two drives** below.
 >
 > The table above is the **built-in** command set. `CAT`, `WC`, `GREP`, `CP`,
 > `MV`, `HEAD`, `TAIL`, `MORE`, `SORT`, `UNIQ`, `SED`, `FIND`, `DIFF` (and richer
 > `DIR -R` etc.) are **userland C programs** in `/BIN`, run by
 > bare name (implicit RUN searches `PATH`, default `/BIN`) or explicit `RUN` —
-> see [commands/](commands/README.md). They default to the **current drive**, and
-> `CAT`, `DIR`, `CP`, `MV`, `DIFF` also take a `0:`/`1:` **drive prefix** on a
-> path — `CAT 1:/NOTES`, `DIR 1:/BIN`, and cross-drive `CP 1:/A 0:/B` / `MV` /
-> `DIFF` (each read/write stream carries its own drive). The stdin-filter tools
-> (`GREP`/`WC`/`HEAD`/`TAIL`/`MORE`/`SORT`/`UNIQ`/`SED`) follow the current drive
-> only — a bare `1:`/`0:` switches it for a run of commands. Line input echoes keys, supports
+> see [commands/](commands/README.md). They are **drive-unaware**: a `/D1/...`
+> path reaches drive 1 through the same mount redirect, so `CAT /D1/NOTES`,
+> `GREP x /D1/SRC/*.C`, and cross-mount `CP /D1/A /B` all just work with no
+> per-command drive logic. Line input echoes keys, supports
 > backspace/DEL editing (max 63 chars), and takes **Ctrl-D** as console EOF.
 >
 > A file/dir argument may be a **path**. Directory scanning works on any extent
@@ -195,31 +193,34 @@ length 4 · load 2 · exec 2 · flags 1 (`$00` end, `$01` file, `$02` dir, `$FF`
 deleted) · spare 7. See
 [../hardware/cf-card/p8xfs-v2-hierarchical.md](../hardware/cf-card/p8xfs-v2-hierarchical.md).
 
-## Two drives (dual-volume)
+## Two drives (drive 1 mounted at /D1)
 
-The OS drives up to **two** CF cards — **drive 0** (the boot/default volume) and
-**drive 1** — each a full read/write P8XFS v2 volume with its **own current
-directory**. In the emulator, attach them with `-c disk0.img -c2 disk1.img`.
+The OS drives up to **two** CF cards in a **single unified namespace**: drive 0
+is the root `/`, and drive 1 is **mounted at `/D1`**. In the emulator, attach
+them with `-c disk0.img -c2 disk1.img`.
 
-- **Switch the current drive** by typing `0:` or `1:` on its own; the prompt shows
-  the active drive, e.g. `1:/SUB> `. Each drive remembers its own CWD across
-  switches.
-- **A `0:`/`1:` prefix** on any path targets that drive for one command, resolving
-  from its root: `MKDIR 1:/SRC`, `SAVE 1:/PROG 7A00 7B00`, `CD 1:/BIN`. `CD N:/dir`
-  also switches the current drive to N.
-- Bare commands and `/BIN` programs run on the **current drive** (`PATH` is
-  searched there), so `1:` then work normally.
-- An absent drive 1 reports `?NO DRIVE` and does not switch.
+A path is just a path — there is no drive-letter syntax. Everything that takes a
+path reaches drive 1 through `/D1`:
 
-Under the hood the OS keeps a `CURDRIVE` selector and routes BIOS sector I/O via
-the firmware `CFSEL` ($0148) / `DRVSEL`; both cards share one task-file port
-selected by the ATA device bit. For bulk cross-drive copying — provisioning a
-fresh card from a "master" — the built-in **`IMPORT N:/dir`** reads every file
-from another drive's directory and writes it into the current directory (a
-two-pass read-source / write-dest copy that switches the ATA device bit between
-each file's read and write). *Single-command cross-drive `CP`/`MV` (`CP 1:/X
-0:/Y`) and `N:` prefixes on other `/BIN` commands are not yet wired — switch
-drives and copy, use `IMPORT` for bulk, or see BACKLOG.*
+- `CD /D1` — the prompt becomes `/D1> `; `CD /D1/SRC`, `CD ..` back out.
+- `CAT /D1/NOTES`, `DIR /D1`, `MKDIR /D1/LIB`, `SAVE /D1/PROG 7A00 7B00`.
+- Relative paths resolve on whichever drive the CWD is on (the OS tracks that as
+  a derived `CURDRIVE`), so once you `CD /D1`, bare `DIR` / `CAT F` / a `/BIN`
+  program all operate on drive 1.
+- **Cross-mount** works with no special syntax: `CP /D1/A /B` reads drive 1 and
+  writes drive 0 (each file stream carries its own drive); `MV`, `DIFF` likewise.
+- `DIR /` shows a `D1/` entry (an empty placeholder directory on drive 0 marks
+  the mount; traversal into it is redirected to drive 1 before the placeholder is
+  read). An absent drive 1 makes `/D1` paths fail cleanly rather than hang.
+
+The mechanism is a single **mount redirect** in path resolution — firmware
+`FRESOLVE` (used by every `/BIN` command) and the OS's own walker `RV_START`
+both treat a leading `/D1` component as "route sector I/O to drive 1 and resolve
+the rest from its root." So **no command parses a drive prefix** — the two cards
+share one ATA task-file port selected by the device bit (`CFSEL`/`DRVSEL`), and
+the redirect flips that bit based on the path. For bulk copying — provisioning a
+fresh card from a "master" — the built-in **`IMPORT /D1/dir`** reads every file
+from that directory and writes it into the current directory.
 
 ## OS syscall ABI (for loadable programs)
 
@@ -238,14 +239,15 @@ from C, the `p8cc` `bios()` intrinsic). The table is **append-only**:
 | `$400C` | `SYS_GETC` | next **stdin** byte → `A` (console, or the `<` file); `C=1` at EOF (console: echoes the key, Ctrl-D = EOF) |
 | `$400F` | `SYS_PUTS` | write the `(P1)` NUL-terminated string to stdout |
 | `$4012` | `SYS_OPENCWD` | begin iterating the CWD with its full **16-bit** start LBA (then `FNEXT`); works when the CWD lives at LBA ≥ 256, where `SYS_CWDLBA` + `FOPENDIRAT(A)` would truncate |
-| `$4015` | `SYS_SETDRIVE` | switch the current CF drive to `A` (0/1); `C=1` if that drive is absent (dual-volume) |
-| `$4018` | `SYS_GETDRIVE` | current CF drive → `A` (0/1) |
+| `$4015` | `SYS_SETDRIVE` | *(deprecated in the mount model — the drive follows the CWD's path; kept only as an ABI-stable slot)* |
+| `$4018` | `SYS_GETDRIVE` | → `A` = 1 if the CWD is under the `/D1` mount (drive 1), else 0 |
 | `$401B` | `SYS_DIRENTRY` | snapshot the entry `FNEXT`/`FFIND` just matched into `(P1)` — 17 bytes: name[12], flag, len(lo/hi), start-LBA(lo/hi). Lets commands read directory metadata without hardcoding BIOS scratch addresses |
 | `$401E` | `SYS_OPENDIR` | begin iterating the directory whose 16-bit start LBA is in `P1` (then `FNEXT`); the drive-agnostic way to descend into a subdirectory found via `SYS_DIRENTRY` |
 
-`SYS_GETCWD`/`SYS_CWDLBA`/`SYS_OPENCWD` all follow the **current drive** (each
-drive keeps its own CWD), so a program operates on whichever card is active with
-no extra work. `SYS_GETCWD`/`SYS_CWDLBA`/`SYS_OPENCWD` are the supported way to consult the CWD
+`SYS_GETCWD`/`SYS_CWDLBA`/`SYS_OPENCWD` operate on the single CWD in the unified
+namespace (the path shows `/D1/...` when it is on the mounted drive); `SYS_OPENCWD`
+routes sector I/O to the CWD's drive first, so a `/BIN` program loaded from drive 0
+still lists a CWD under `/D1` correctly. They are the supported way to consult the CWD
 — no peeking into OS RAM. `os/commands/pwd.c` (PWD) and `os/commands/dir.c` (DIR,
 no-arg lists the CWD via `SYS_OPENCWD`, the 16-bit CWD opener) are worked examples;
 `compiler/p8lib.c` wraps them as `getcwd(buf)` / `cwdlba()`.

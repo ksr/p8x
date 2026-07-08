@@ -99,7 +99,7 @@ test-os: p8xemu ucode
 	sh test/os_asm_test.sh
 	sh test/os_dualvol_test.sh
 	sh test/os_import_test.sh
-	sh test/os_binprefix_test.sh
+	sh test/os_mount_test.sh
 
 # Monitor smoke test (D/?, no card), plus disk BASIC (boot via B) and SAVE/LOAD.
 # (ROM BASIC was removed — BASIC now ships as the disk program /BIN/BASIC.BIN.)
