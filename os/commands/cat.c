@@ -25,6 +25,7 @@
  */
 //#use glob    /* gmatch() — required by glob_expand below */
 //#use globx   /* glob_expand(pat, out, maxn): expand a glob into a path list */
+//#use drive   /* hasdrive()/seldrive(): a "N:"-prefixed file lives on drive N */
 
 char path[80];                               /* absolute path we build per file */
 char gbuf[1536];                             /* glob_expand output: 24 slots x 64 */
@@ -35,6 +36,10 @@ int catpath(char *arg) {
     int i;
     int j;
     int c;
+    if (hasdrive(arg)) {                      /* "N:" prefix -> read from drive N */
+        seldrive(arg[0] - '0');
+        arg = arg + 2;
+    }
     i = 0;                                    /* build an absolute path in path[] */
     if (*arg != '/') {                        /* relative -> prepend the CWD */
         bios(0x4003, path, 0);                /* SYS_GETCWD -> path */
@@ -68,7 +73,7 @@ int main() {
     while (*arg == 32) { arg = arg + 1; }    /* skip leading spaces */
 
     if (*arg == '-' && (*(arg + 1) == 'h' || *(arg + 1) == 'H')) {
-        puts("usage: CAT [file|glob]   print file(s), or filter stdin if none");
+        puts("usage: CAT [file|glob]   print file(s) (N:/path ok), or filter stdin");
         return 0;
     }
 

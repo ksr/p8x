@@ -52,12 +52,28 @@ Last updated: 2026-06-27
       select (`CFIMASK`); BIOS read/write streams carry their own drive
       (`ROSDRV`/`WOSDRV`, captured by `FOPEN`/`FWOPEN`, re-asserted by
       `FG_FILL`/`FW_FLUSH`/`FCLOSE`). Full suite green; single-drive byte-identical.
-      **Still deferred:** single-command cross-drive `CP`/`MV` (`CP 1:/X 0:/Y`) and
-      `N:` prefixes on other `/BIN` commands (`DIR 1:/BIN`, `CAT 1:/X`) — the
-      emulator fix should now let the reverted `cp`/`mv` `N:` changes work; not
-      re-attempted yet. Today "switch then run" + `IMPORT` for bulk cover the need.
-      Drive-scoped `PACK`/`FORMAT`/`FSCK` still act on the current drive via
-      `DRVSEL` (unverified by a dedicated test).
+      **Inline `N:` prefix on `/BIN` commands — DONE for cat/dir/cp/mv/diff
+      (2026-07-07).** New shared `lib_drive.c` (`hasdrive`/`pdrive`/`seldrive`
+      over BIOS `CFSEL`) wired into the self-contained openers `catpath` (cat) and
+      `dir`, and into `abspath` (cp/mv/diff). A path may carry a `0:`/`1:` prefix
+      (`CAT 1:/X`, `DIR 1:/BIN`, `DIR 1:/*.C`), and `cp`/`mv`/`diff` take a prefix
+      on **either** path — so single-command cross-drive `CP 1:/A 0:/B` works:
+      each stream keeps its own drive (`ROSDRV`/`WOSDRV`) and the shell's
+      per-command `SYNCDRV` means routing to the other card never leaks. The
+      earlier revert failed only because of the emulator's per-device task-file
+      bug (fixed with the shared-bus model); with that gone the per-stream
+      approach is correct. `os_binprefix_test.sh` verifies `CAT`/`DIR`/`CP` across
+      drives (and that `CP` doesn't leak onto the wrong card).
+      **Deliberately excluded:** the stdin-filter tools (`grep`/`wc`/`head`/`tail`/
+      `more`/`sort`/`uniq`/`sed`) share `lib_stdin`/`lib_globx`; the largest,
+      `grep` (which also carries the `-r` tree walk), sits right at the TPA ceiling
+      — its globals already overlap the `$EA00` FSDIRBUF page and it works only at
+      its exact current size, so the ~1.2 KB of prefix code pushed it into its own
+      `$FA00`/`$FC00` I/O buffers and corrupted `-r`/glob. Those tools follow the
+      current drive (switch-then-run). Would need a size cut (or a per-command
+      lib) to include them. **Also open:** drive-scoped `PACK`/`FORMAT`/`FSCK` act
+      on the current drive via `DRVSEL` (no dedicated test); `find`/`tree` walk the
+      current drive's CWD only (no path arg to prefix).
 
       Original scope note (superseded — we went full dual-volume, not read-only):
       keep a "master" CF holding core files (e.g. `/BIN` binaries) and, in the

@@ -35,9 +35,12 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > `MV`, `HEAD`, `TAIL`, `MORE`, `SORT`, `UNIQ`, `SED`, `FIND`, `DIFF` (and richer
 > `DIR -R` etc.) are **userland C programs** in `/BIN`, run by
 > bare name (implicit RUN searches `PATH`, default `/BIN`) or explicit `RUN` —
-> see [commands/](commands/README.md). They run on the **current drive**; to use
-> them on the other card, switch first with a bare `1:`/`0:` (an inline `N:`
-> prefix on a `/BIN` command argument is not wired yet — see BACKLOG). Line input echoes keys, supports
+> see [commands/](commands/README.md). They default to the **current drive**, and
+> `CAT`, `DIR`, `CP`, `MV`, `DIFF` also take a `0:`/`1:` **drive prefix** on a
+> path — `CAT 1:/NOTES`, `DIR 1:/BIN`, and cross-drive `CP 1:/A 0:/B` / `MV` /
+> `DIFF` (each read/write stream carries its own drive). The stdin-filter tools
+> (`GREP`/`WC`/`HEAD`/`TAIL`/`MORE`/`SORT`/`UNIQ`/`SED`) follow the current drive
+> only — a bare `1:`/`0:` switches it for a run of commands. Line input echoes keys, supports
 > backspace/DEL editing (max 63 chars), and takes **Ctrl-D** as console EOF.
 >
 > A file/dir argument may be a **path**. Directory scanning works on any extent

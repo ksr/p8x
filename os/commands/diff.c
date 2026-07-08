@@ -78,17 +78,20 @@ int main() {
     while (*a == 32) { a = a + 1; }
     if (*a == 0 || *a == 13 ||
         (*a == '-' && (*(a + 1) == 'h' || *(a + 1) == 'H'))) {
-        puts("usage: DIFF file1 file2   show differing lines (< file1, > file2)");
+        puts("usage: DIFF file1 file2   diff two files (either may be N:/path)");
         return 0;
     }
     n = abspath(path, a);                     /* file 1 */
+    p = apdrive;                               /* its drive (reuse p as scratch here) */
     a = a + n;
     while (*a == 32) { a = a + 1; }
+    seldrive(p);
     if (openf(path) == 0) { puts("diff: file1 not found"); return 1; }
     na = loadlines(alines);
 
     if (*a == 0 || *a == 13) { puts("usage: DIFF file1 file2"); return 1; }
     abspath(path, a);                         /* file 2 */
+    seldrive(apdrive);
     if (openf(path) == 0) { puts("diff: file2 not found"); return 1; }
     nb = loadlines(blines);
 

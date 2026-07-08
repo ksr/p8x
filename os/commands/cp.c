@@ -34,26 +34,32 @@ int main() {
     char *a;
     int n;
     int c;
+    int sdrv;
+    int ddrv;
 
     a = argstr();
     while (*a == 32) { a = a + 1; }
     if (*a == 0 || *a == 13 ||
         (*a == '-' && (*(a + 1) == 'h' || *(a + 1) == 'H'))) {
-        puts("usage: CP src dst   copy a file");
+        puts("usage: CP src dst   copy a file (src/dst may be N:/path)");
         return 0;
     }
     n = abspath(src, a);                      /* SRC word */
+    sdrv = apdrive;                            /* its drive (prefix or current) */
     if (n == 0) { puts("usage: CP src dst"); return 1; }
     a = a + n;
     while (*a == 32) { a = a + 1; }            /* DST word */
     if (*a == 0 || *a == 13) { puts("usage: CP src dst"); return 1; }
     abspath(dst, a);
+    ddrv = apdrive;
 
+    seldrive(sdrv);                            /* open SRC on its drive */
     bios(0x0133, src, 0);                      /* FRESOLVE SRC */
     if (bios(0x0124, 0xFC00, 0) & 256) {       /* FOPEN SRC; C=1 -> not found */
         puts("cp: source not found");
         return 1;
     }
+    seldrive(ddrv);                            /* open DST on its drive */
     bios(0x0133, dst, 0);                      /* FRESOLVE DST (sets DIRLBA+FNAME) */
     bios(0x012A, 0, 0);                        /* FWOPEN (zeroes SBUF last) */
     c = bios(0x0127, 0, 0);                    /* FGETB */
