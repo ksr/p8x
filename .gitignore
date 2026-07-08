@@ -34,6 +34,7 @@ emulator/test/*.pp.c
 # stray microcode images if a generator is run from the repo root
 /u?.bin
 /os/run-disk.img
+/os/run-disk1.img
 emulator/test/*.hex
 /u?.hex
 microcode/u?.hex
