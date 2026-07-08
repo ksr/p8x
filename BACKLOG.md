@@ -356,9 +356,18 @@ Last updated: 2026-06-27
         raw via BIOS CONIN (`$0100`, no echo), drives the cursor with ANSI escapes
         (VT100 committed), and uses selective redraw (one line per char edit, full
         only on scroll) so it is usable at real serial baud, not just in the
-        emulator. Commands: `hjkl 0 $ G i a A o x dd :w :q :wq :q!`. `os_vi_test`
-        drives it headlessly (feed keystrokes, check the saved file). Future: word
-        motions, search `/`, undo, arrow-key escape parsing, longer lines.
+        emulator. Commands: `hjkl 0 $ G i a A o x dd :w :q :wq :q!`, plus **`u`
+        undo** (single-level, op-based — reverts the last x/dd/o/single-line
+        insert, so it costs one saved line, not a whole 2nd buffer) and **`/`pat +
+        `n` search** (literal substring, forward, wraps once) added 2026-07-08.
+        The search+undo code grew the binary, so the line buffer was trimmed from
+        150 to **110 lines** to stay below the `$FC00` read buffer; `os_vi_test`
+        drives all of it headlessly. **Still future:** word motions (`w`/`b`),
+        multi-level undo + redo, regex search, arrow-key escape parsing, and
+        longer lines / bigger files. The capacity and multi-level-undo limits both
+        point at replacing the flat fixed-width line array with a **gap buffer**
+        (compact storage → more lines + cheap snapshots) — the natural next vi
+        refactor.
       - **`find` already exists** (`os/commands/find.c`: `FIND pattern`, recursive
         name/glob/substring over the CWD tree). Enhancements if wanted: `-type f|d`,
         `-name`, `-exec`, or an `N:` path arg (it's one of the two — with `tree` —

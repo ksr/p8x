@@ -58,4 +58,25 @@ getf /T.TXT
 python3 -c "import sys;d=open('vg.out','rb').read();sys.exit(0 if d==b'hello\r\nworld\r\n' else 1)" \
     || { echo "OS-VI TEST: FAIL — :q left the file changed"; exit 1; }
 
+# 5) undo of x: x deletes 'h', u restores it -> file unchanged
+mkdisk
+edit "xu:wq\r" T.TXT
+getf /T.TXT
+python3 -c "import sys;d=open('vg.out','rb').read();sys.exit(0 if d==b'hello\r\nworld\r\n' else 1)" \
+    || { echo "OS-VI TEST: FAIL — undo of x"; python3 -c "print(repr(open('vg.out','rb').read()))"; exit 1; }
+
+# 6) undo of dd: dd deletes line 1, u reinserts it -> file unchanged
+mkdisk
+edit "ddu:wq\r" T.TXT
+getf /T.TXT
+python3 -c "import sys;d=open('vg.out','rb').read();sys.exit(0 if d==b'hello\r\nworld\r\n' else 1)" \
+    || { echo "OS-VI TEST: FAIL — undo of dd"; python3 -c "print(repr(open('vg.out','rb').read()))"; exit 1; }
+
+# 7) search: /world<CR> jumps to line 2, A! appends there -> "hello\r\nworld!\r\n"
+mkdisk
+edit "/world\rA!$ESC:wq\r" T.TXT
+getf /T.TXT
+python3 -c "import sys;d=open('vg.out','rb').read();sys.exit(0 if d==b'hello\r\nworld!\r\n' else 1)" \
+    || { echo "OS-VI TEST: FAIL — search then edit at match"; python3 -c "print(repr(open('vg.out','rb').read()))"; exit 1; }
+
 echo "OS-VI TEST: PASS"
