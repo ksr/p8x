@@ -309,6 +309,45 @@ Last updated: 2026-06-27
         update the ISA docs (opcode table in `docs/p8x-monitor.md`, the
         programmer's-guide PDF via `gen_progguide.py`).
 
+- [ ] **Userland text tools — `awk`, `vi`, richer `find` (2026-07-08).** Wanted:
+      more `/BIN` utilities. Findings from a build attempt:
+
+      - **`awk` does NOT fit — blocked on codegen size.** Built a genuine minimal
+        integer-only awk (rules/`BEGIN`/`END`, `/re/` + expression patterns,
+        fields `$0..$NF`/`NR`/`NF`, `a`–`z` vars, `+ - * / %`, comparisons, `~`,
+        `&& || !`, `print`/assignment/`if`). It compiles logically but the binary
+        is **> 64 KB** — over the whole address space and **~2.3× the ~28 KB TPA**
+        (`$7A00..$EA00`). 15,584 lines of asm from ~400 lines of C. Root cause is
+        p8cc's non-optimizing codegen exploding the recursive `eval()` (16-bit ops
+        expanded byte-by-byte); `grep` (much simpler) is already 32.5 KB at the
+        ceiling, so any expression language is over budget. **Not a design flaw —
+        blocked on program size.** Unblocked by the codegen/ISA-shrink work above
+        (frame-relative addressing, finishing the `LPW1`/`MOVW` adoption) and/or a
+        p8cc peephole/temp-reuse pass; or by a larger TPA (code overlays / bank
+        switching). Revisit awk once compiled command size drops materially.
+      - **`vi` — same wall, worse.** Strictly larger than awk (modal parser +
+        screen-redraw loop + in-TPA text buffer) AND needs a terminal decision:
+        the console is a raw serial ACIA, so a screen editor means committing to
+        **ANSI/VT100 escape sequences over serial** (fine in the emulator's host
+        terminal + a real VT100-class terminal). `EDIT` (line-oriented) already
+        exists. Treat vi as a separate, larger project gated on the same size fix +
+        the terminal commitment.
+      - **`find` already exists** (`os/commands/find.c`: `FIND pattern`, recursive
+        name/glob/substring over the CWD tree). Enhancements if wanted: `-type f|d`,
+        `-name`, `-exec`, or an `N:` path arg (it's one of the two — with `tree` —
+        that still has no drive-prefix support). Small, in-budget.
+      - **Fits-now alternative — a "field tool," not awk.** Drop the expression
+        evaluator entirely: a `CUT`/`SELECT`-style filter — `/re/` or `$n OP num`
+        pattern + a fixed field list to print (`{print $2 $4}`), no arithmetic /
+        vars / `if`. No `eval()` ⇒ small enough to ship; covers the common awk use
+        (field extraction + simple filtering). Reuses `lib_stdin` + `lib_regex`.
+
+      **p8cc subset gaps confirmed while writing awk** (bite any ambitious command;
+      note in the compiler docs): **no `break`/`continue`** (restructure loops with
+      a flag / condition), and **no forward declarations or mutual recursion**
+      (self-recursion is fine — write one self-recursive function, e.g. a
+      precedence-climbing `eval(minbp)`, instead of `expr`↔`primary`).
+
 - [~] **`MOVW dst,src` — 16-bit memory→memory move — SOFTWARE DONE (2026-06-27);
       register-bank hardware regen PENDING.** Opcode `$78`, shape `a,a` (5 bytes:
       opcode + dst16 + src16), 12 microcode steps. Landed: microcode (`genucode.py`
