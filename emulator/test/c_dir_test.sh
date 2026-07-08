@@ -54,6 +54,10 @@ check() {   # $1 = label, $2 = combined output
         || fail "$1: DIR redirect did not create LIST.TXT"
     grep -qE ' DIR\.BIN$' list.txt || fail "$1: redirected DIR listing missing DIR.BIN"
     grep -qE ' PWD\.BIN$' list.txt || fail "$1: redirected DIR listing missing PWD.BIN"
+    # a missing directory is reported, not silently empty
+    printf 'B\rRUN /DIR.BIN /NOPE\r' \
+        | ../p8xemu -l 200000000 -c dir.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0' \
+        | grep -qi 'not found' || fail "$1: DIR of a missing path did not report 'not found'"
 }
 
 compile_one() {   # $1 = compiler tag: build both programs with it
