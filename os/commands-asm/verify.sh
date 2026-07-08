@@ -45,7 +45,10 @@ fixtures() {
 cmd_script() {
     case "$1" in
         PWD)  printf 'CD /SUB\rPWD\r' ;;
-        DIR)  printf 'DIR\rDIR /SUB\rDIR *.LOG\rDIR -R\rDIR /NOPE\r' ;;
+        # -R targets /SUB (no .BIN files): a recursive listing of /BIN would
+        # show DIR.BIN's own byte size, which legitimately differs between the
+        # p8cc and asm builds — a size artifact, not a behavior difference.
+        DIR)  printf 'DIR\rDIR /SUB\rDIR *.LOG\rDIR -R /SUB\rDIR /NOPE\r' ;;
         TREE) printf 'TREE\r' ;;
         MV)   printf 'MV T.TXT R.TXT\rDIR\rCAT R.TXT\rMV R.TXT R.TXT\r' ;;
         WC)   printf 'WC T.TXT\rWC *.LOG\rCAT T.TXT | WC\rWC -h\r' ;;
