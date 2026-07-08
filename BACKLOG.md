@@ -212,6 +212,20 @@ Last updated: 2026-06-27
       `/BIN` command — needs the shell-level/asm `gmatch`+`FNEXT` path) and the
       `CP`/`MV` multi-source-into-a-directory idiom (separate item below).
 
+- [x] **`cp -r` (recursive copy) — DONE (2026-07-08); retired `IMPORT`.** `cp`
+      gained `-r`: it recurses a directory tree (collecting each level's entries
+      before descending, since the FNEXT cursor is global) and works across the
+      `/D1` mount (`CP -r /D1/SRC /SRC`) — each file's read/write stream keeps its
+      own drive. Needed a new **`SYS_MKDIR` syscall** ($4021, factored from
+      `DOMKDIR` as `MKDIRCORE`) so a `/BIN` program can create directories. This
+      **superseded the `IMPORT` built-in** (flat, one-level, drive-1→CWD), which
+      was removed — the kernel shrank ~534 bytes. `os_cprecursive_test` covers
+      single-file, same-drive `-r`, and cross-mount `-r` with nesting.
+      Still open: cp/mv **wildcards** (below). The `-r` iteration page sits at
+      `$A000` (just above cp's code), giving ~40 levels of recursion headroom
+      before the descending stack could reach it — deep enough for any real tree,
+      but there is no explicit depth cap.
+
 - [ ] **`CP`/`MV` wildcards — `CP *.ASM /BAK`, `MV *.TMP TRASH/`.** Multi-source
       copy/move into a destination *directory* (the classic shell idiom). Depends
       on the wildcard mechanism chosen above: with shell-level expansion (option 1)

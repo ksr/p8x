@@ -233,18 +233,8 @@ DRVINIT = $77A5          ; bitmask: bit N set = drive N has been CFINIT'd this s
 MPSAV   = $77A6          ; MNTPFX: saved P2 (2 bytes) while sniffing a "D1" prefix
 ; $77A8..$77D9 free (was the DOS-model drive-1 CWD backing, removed with the
 ; mount migration).
-; ---- IMPORT (cross-drive bulk copy) state ----
-IMPSD   = $77DA          ; source drive
-IMPDD   = $77DB          ; destination drive (the current drive)
-IMPDL   = $77DC          ; destination directory: start LBA lo / hi / sec count
-IMPDLH  = $77DD
-IMPDN   = $77DE
-IMPN    = $77DF          ; # of files collected in pass 1
-IMPI    = $77E0          ; pass-2 index
-IMPLEN  = $77E1          ; current file length (2)
-IMPPL   = $77E3          ; IMPARR cursor (2)
-IMPARR  = $7800          ; collected entries: 32 x 16 (name12 + LBA2 + len2) [APBUF page]
-IMPBUF  = $7A00          ; per-file data buffer (TPA is free during a built-in)
+; ($77DA..$77E4 free — was IMPORT bulk-copy state; IMPORT removed, superseded by
+;  the userland `cp -r`, which recurses and works across the /D1 mount.)
 
 CR      = $0D
 LF      = $0A
@@ -267,6 +257,7 @@ STKTOP  = $FEFF
         JMP  SYS_GETDRIVE       ; $4018 SYS_GETDRIVE: -> A = 1 if CWD is under /D1 (drive 1), else 0
         JMP  SYS_DIRENTRY       ; $401B SYS_DIRENTRY: snapshot the current dir entry -> (P1) 17 bytes
         JMP  SYS_OPENDIR        ; $401E SYS_OPENDIR: P1 = 16-bit dir start LBA -> open for FNEXT
+        JMP  SYS_MKDIR          ; $4021 SYS_MKDIR: P1 = path -> create a directory; C=1 on real failure
 ; Reached only via the table above (COLD jumps past them).
 SYS_GETDRIVE:                   ; derived: 1 if the CWD is under the /D1 mount
         LDA  CURDRIVE
@@ -312,6 +303,20 @@ SYS_OPENDIR:                    ; P1 = dir start LBA (16-bit)
         STA  LBA2
         TPA1L                   ; P1 low -> A
         JMP  FOPENDIRAT         ; A=low, LBA1=high, DICNT=4 -> ready; RTS to caller
+SYS_MKDIR:                      ; P1 = path -> create a directory (via MKDIRCORE).
+        TPA1L                   ; P2 = P1 (MKDIRCORE resolves the path at P2)
+        TAP2L
+        TPA1H
+        TAP2H
+        JSR  MKDIRCORE          ; A = status, C=1 on error
+        JNC  smk_ok             ; 0 created -> ok
+        LDB  #2                 ; 2 already-exists -> also ok (idempotent for cp -r)
+        CMP
+        JZ   smk_ok
+        SEC                     ; 1 bad path / 3 full -> real failure
+        RTS
+smk_ok: CLC
+        RTS
 SYS_GETCWD:                     ; copy CWDPATH -> (P1); clobbers P2
         LDP2 #CWDPATH
 SGC_LP: LDA  (P2)+
@@ -468,9 +473,6 @@ DISPATCH:
         LDP1 #KW_PACK
         JSR  CMPCMD
         JNZ  DOPACK
-        LDP1 #KW_IMPORT
-        JSR  CMPCMD
-        JNZ  DOIMPORT
         LDP1 #KW_CD
         JSR  CMPCMD
         JNZ  DOCD
@@ -1244,11 +1246,35 @@ SC_GO:  RTS
 ; ---------------- MKDIR path -------------------------------------------------
 ; Create a subdirectory: allocate a SUBSECS-sector extent at the free pointer,
 ; lay down its '.' / '..', and add an entry to the parent directory.
-DOMKDIR:JSR  ARG2P2
+DOMKDIR:JSR  ARG2P2             ; P2 -> the path argument
+        JSR  MKDIRCORE          ; create it; A = status, C=1 on error
+        JNC  mk_ok
+        LDB  #1
+        CMP
+        JZ   NODIR              ; A=1: bad parent path
+        LDB  #2
+        CMP
+        JZ   MK_EXIST           ; A=2: already exists
+        JMP  SV_FULL            ; A=3: parent directory full
+mk_ok:  LDP1 #MMKOK
+        JSR  OPUTS
+        JMP  SHELL
+MK_EXIST:LDP1 #MEXIST
+        JSR  PUTS
+        JMP  SHELL
+
+; MKDIRCORE - create the directory named by the NUL-terminated path at (P2).
+; Returns A = status (0 created / 1 bad parent path / 2 already exists / 3 parent
+; directory full) and C=1 on any error (A != 0). Shared by DOMKDIR and the
+; SYS_MKDIR syscall (so a /BIN program like `cp -r` can make directories).
+MKDIRCORE:
         JSR  RESOLVE            ; SDIR = parent, NAMEBUF = new dir name
         LDA  MATCH
-        JZ   NODIR
-        LDA  SDIRL              ; remember the parent extent (16-bit)
+        JNZ  mkc_p
+        LDA  #1                 ; bad parent path
+        SEC
+        RTS
+mkc_p:  LDA  SDIRL              ; remember the parent extent (16-bit)
         STA  PSL
         LDA  SDIRLH
         STA  PSLH
@@ -1256,8 +1282,11 @@ DOMKDIR:JSR  ARG2P2
         STA  PSN
         JSR  FINDENT            ; already present?
         LDA  MATCH
-        JNZ  MK_EXIST
-        LDP1 #SBUF              ; allocate: read free pointer, bump it by SUBSECS
+        JZ   mkc_new
+        LDA  #2                 ; already exists
+        SEC
+        RTS
+mkc_new:LDP1 #SBUF              ; allocate: read free pointer, bump it by SUBSECS
         LDA  #0                 ; boot block is LBA 0 (FINDENT left LBA1 nonzero
         STA  LBA                ;   for a parent dir >=256, so zero it explicitly)
         STA  LBA1
@@ -1272,9 +1301,9 @@ DOMKDIR:JSR  ARG2P2
         ADD
         STA  SBUF+4
         LDA  SBUF+5
-        JNC  mk_nc
+        JNC  mkc_nc
         INC
-mk_nc:  STA  SBUF+5
+mkc_nc: STA  SBUF+5
         LDA  #0
         STA  LBA
         STA  LBA1
@@ -1289,8 +1318,11 @@ mk_nc:  STA  SBUF+5
         STA  SDIRN
         JSR  FINDSLOT
         LDA  MATCH
-        JZ   SV_FULL
-        LDA  #F_DIR
+        JNZ  mkc_slot
+        LDA  #3                 ; parent directory full
+        SEC
+        RTS
+mkc_slot:LDA #F_DIR
         STA  EFLAG
         LDA  NEWLBA             ; entry: start=NEWLBA (16-bit), len=SUBSECS*512
         STA  FREELO
@@ -1311,14 +1343,10 @@ mk_nc:  STA  SBUF+5
         LDA  #0
         STA  LBA2
         JSR  CFWRITE
-        LDA  #0                 ; restore LBA1=0 at rest
+        LDA  #0                 ; success (A=0), restore LBA1=0 at rest
         STA  LBA1
-        LDP1 #MMKOK
-        JSR  OPUTS
-        JMP  SHELL
-MK_EXIST:LDP1 #MEXIST
-        JSR  PUTS
-        JMP  SHELL
+        CLC
+        RTS
 
 ; MKEXT - initialize the directory extent at NEWLBA: entry 0 = '.', entry 1 =
 ; '..' (parent = PSL/PSN); remaining sectors zeroed.
@@ -2036,198 +2064,6 @@ LOADF:  LDA  STARTLO            ; set up the BIOS bulk read: LBA = start (16-bit
         LDA  LOADHI
         TAP1H
         JMP  FLOADAT            ; reads the whole file into (P1); RTSes to caller
-
-; ---------------- IMPORT srcdir ----------------------------------------------
-; Copy every file in srcdir (an "N:" path, on any drive) into the CURRENT
-; directory on the current drive — the card-provisioning primitive, e.g.
-; `MKDIR /BIN` `CD /BIN` `IMPORT 1:/BIN`. Two passes so the FNEXT iteration and
-; the write stream never share a sector buffer, and each file is read (FLOADAT,
-; source drive) then written (FWOPEN/FPUTB/FCLOSE, dest drive) as SEPARATE phases
-; — no cross-drive stream interleave. Files only (skips . / .. / subdirs); up to
-; 32 files, each <= 32 KB (fits IMPBUF under the stack).
-DOIMPORT:
-        LDA  CURDRIVE           ; destination = the current drive + CWD (capture now,
-        STA  IMPDD              ;   before resolving src flips DRVSEL)
-        LDA  CWDL
-        STA  IMPDL
-        LDA  CWDLH
-        STA  IMPDLH
-        LDA  CWDN
-        STA  IMPDN
-        JSR  ARG2P2             ; resolve the source directory (CDPATH honours "N:")
-        JSR  CDPATH
-        LDA  MATCH
-        JZ   imp_nod
-        JSR  CFCURDRV           ; the drive PARSEDRIVE selected for src
-        STA  IMPSD
-        ; ---- pass 1: collect the files of SDIR into IMPARR ----
-        LDA  #0
-        STA  IMPN
-        LDA  #<IMPARR
-        STA  IMPPL
-        LDA  #>IMPARR
-        STA  IMPPL+1
-        LDA  IMPSD
-        JSR  CFSEL
-        LDA  SDIRLH             ; FOPENDIRAT: A = LBA lo, LBA1 = LBA hi
-        STA  LBA1
-        LDA  SDIRL
-        JSR  FOPENDIRAT
-        LDA  #$7A               ; iterate through $7A00 (transient; pass 1 only)
-        JSR  FSDIRBUF
-imp_p1: LDA  IMPSD              ; re-assert src before each FNEXT (it self-heals)
-        JSR  CFSEL
-        JSR  FNEXT
-        JC   imp_p1d
-        LDA  BFNAME             ; skip "." and ".."
-        LDB  #'.'
-        CMP
-        JZ   imp_p1
-        LDA  BFFLAG             ; files only
-        LDB  #F_FILE
-        CMP
-        JNZ  imp_p1
-        LDA  IMPN               ; array full (32)? stop collecting
-        LDB  #32
-        CMP
-        JC   imp_p1d
-        LDA  IMPPL              ; P1 = IMPARR[IMPN]
-        TAP1L
-        LDA  IMPPL+1
-        TAP1H
-        LDP2 #BFNAME            ; name (12)
-        LDA  #12
-        STA  TMP
-imp_cn: LDA  (P2)+
-        STA  (P1)+
-        LDA  TMP
-        DEC
-        STA  TMP
-        JNZ  imp_cn
-        LDA  LBA                ; +12/+13: start LBA
-        STA  (P1)+
-        LDA  LBA1
-        STA  (P1)+
-        LDA  FLEN               ; +14/+15: length
-        STA  (P1)+
-        LDA  FLEN+1
-        STA  (P1)
-        LDA  IMPPL              ; IMPPL += 16
-        LDB  #16
-        ADD
-        STA  IMPPL
-        JNC  imp_p1b
-        LDA  IMPPL+1
-        INC
-        STA  IMPPL+1
-imp_p1b:LDA  IMPN
-        INC
-        STA  IMPN
-        JMP  imp_p1
-imp_p1d:
-        ; ---- pass 2: copy each collected file ----
-        LDA  #0
-        STA  IMPI
-        LDA  #<IMPARR
-        STA  IMPPL
-        LDA  #>IMPARR
-        STA  IMPPL+1
-imp_p2: LDA  IMPI
-        LDB  IMPN
-        CMP
-        JC   imp_done           ; IMPI >= IMPN -> finished
-        LDA  IMPPL              ; P1 = IMPARR[IMPI]
-        TAP1L
-        LDA  IMPPL+1
-        TAP1H
-        LDP2 #BFNAME            ; name(12) -> BFNAME (for FCLOSE to register)
-        LDA  #12
-        STA  TMP
-imp_rn: LDA  (P1)+
-        STA  (P2)+
-        LDA  TMP
-        DEC
-        STA  TMP
-        JNZ  imp_rn
-        LDA  IMPSD              ; read the file from src into IMPBUF
-        JSR  CFSEL
-        LDA  (P1)+              ; +12: LBA lo
-        STA  LBA
-        LDA  (P1)+              ; +13: LBA hi
-        STA  LBA1
-        LDA  #0
-        STA  LBA2
-        LDA  (P1)+              ; +14: len lo
-        STA  FLEN
-        STA  IMPLEN
-        LDA  (P1)              ; +15: len hi
-        STA  FLEN+1
-        STA  IMPLEN+1
-        LDP1 #IMPBUF
-        JSR  FLOADAT            ; whole file (src) -> IMPBUF
-        LDA  IMPDD              ; write it to the dest drive + dir
-        JSR  CFSEL
-        LDA  IMPDL
-        STA  BDIRLBA
-        LDA  IMPDLH
-        STA  BDIRLBA1
-        LDA  IMPDN
-        STA  BDIRN
-        JSR  FWOPEN
-        LDP2 #IMPBUF            ; P2 = source cursor (FPUTB clobbers P1, not P2)
-imp_wb: LDA  IMPLEN             ; IMPLEN bytes: FPUTB each
-        LDB  IMPLEN+1
-        OR
-        JZ   imp_wd
-        LDA  (P2)+
-        JSR  FPUTB
-        LDA  IMPLEN
-        JNZ  imp_wl
-        LDA  IMPLEN+1
-        DEC
-        STA  IMPLEN+1
-imp_wl: LDA  IMPLEN
-        DEC
-        STA  IMPLEN
-        JMP  imp_wb
-imp_wd: LDA  IMPDL              ; register in the dest dir
-        STA  BDIRLBA
-        LDA  IMPDLH
-        STA  BDIRLBA1
-        LDA  IMPDN
-        STA  BDIRN
-        JSR  FCLOSE
-        LDP2 #BFNAME            ; echo the copied name
-        LDA  #12
-        STA  TMP
-imp_pn: LDA  (P2)+
-        LDB  #' '
-        CMP
-        JZ   imp_pnd
-        JSR  OUTCH
-        LDA  TMP
-        DEC
-        STA  TMP
-        JNZ  imp_pn
-imp_pnd:JSR  CRLF
-        LDA  IMPPL              ; IMPPL += 16 ; IMPI++
-        LDB  #16
-        ADD
-        STA  IMPPL
-        JNC  imp_p2b
-        LDA  IMPPL+1
-        INC
-        STA  IMPPL+1
-imp_p2b:LDA  IMPI
-        INC
-        STA  IMPI
-        JMP  imp_p2
-imp_done:
-        JSR  SYNCDRV            ; restore routing to the current drive
-        JMP  SHELL
-imp_nod:LDP1 #MNODIR
-        JSR  OPUTS
-        JMP  SHELL
 
 ; ---------------- SAVE name start end ----------------------------------------
 ; Write the memory range [start,end) to a new file: length = end - start,
@@ -3778,8 +3614,6 @@ MHELP:   .byte CR,LF
          .byte CR,LF
          .ascii "/D1           drive 1 is mounted here (CD /D1, CAT /D1/FILE)"
          .byte CR,LF
-         .ascii "IMPORT /D1/dir copy a dir's files (e.g. from /D1) into the CWD"
-         .byte CR,LF
          .ascii "FSCK          check filesystem integrity (read-only)"
          .byte CR,LF
          .ascii "FORMAT        erase card, make a fresh v2 volume (asks Y/N)"
@@ -3865,7 +3699,6 @@ KW_SAVE: .asciiz "SAVE"
 KW_DUMP: .asciiz "DUMP"
 KW_DEP:  .asciiz "DEP"
 KW_PACK: .asciiz "PACK"
-KW_IMPORT: .asciiz "IMPORT"
 KW_CD:   .asciiz "CD"
 KW_MKDIR:.asciiz "MKDIR"
 KW_RMDIR:.asciiz "RMDIR"
