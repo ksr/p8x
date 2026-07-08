@@ -100,6 +100,7 @@ test-os: p8xemu ucode
 	sh test/os_dualvol_test.sh
 	sh test/os_cprecursive_test.sh
 	sh test/os_mountcmd_test.sh
+	sh test/os_vi_test.sh
 	sh test/os_mount_test.sh
 
 # Monitor smoke test (D/?, no card), plus disk BASIC (boot via B) and SAVE/LOAD.

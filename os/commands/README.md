@@ -59,6 +59,7 @@ print a one-line usage summary and exit.
 | [`find.c`](find.c) | `FIND pattern [-h]` | Recursively print CWD paths whose name matches `pattern`: a case-insensitive **glob** (`*`/`?`, via `lib_glob`) if it contains `*` or `?`, else a literal substring. So `FIND *.C`, `FIND TEST?.ASM`, and `FIND BIN` (substring) all work. |
 | [`diff.c`](diff.c) | `DIFF f1 f2 [-h]` | Prefix/suffix-anchored line diff: `<` lines only in f1, `>` only in f2. ≤96 lines/file (≤79 chars). |
 | [`tree.c`](tree.c) | `TREE [-h]` | Depth-first indented listing of the CWD tree (same recursion as `DIR -R`). |
+| [`vi.c`](vi.c) | `VI name [-h]` | Minimal modal **VT100 screen editor**. Reads keys raw (CONIN, no echo) and drives the cursor with ANSI escapes, so it needs a VT100-compatible terminal. `h j k l` move, `i`/`a`/`A`/`o` insert, `x` delete char, `dd` delete line, `0`/`$`/`G`, `:w`/`:q`/`:wq`/`:q!`. Selective redraw (one line per edit, full only on scroll) keeps it usable at serial baud. Flat 150×80 line buffer. Complements the line-oriented [`EDIT`](../../apps/README.md) app. |
 
 ### Implementation notes
 
