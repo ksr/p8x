@@ -46,6 +46,31 @@ size table with the ratio. Ported commands only in the TOTAL.
 | tree    | 3440 |     1358 | 2.5×  |
 | dir     |10195 |     4021 | 2.5×  |
 | wc      |13739 |     3655 | 3.8×  |
+| head    |13358 |     3536 | 3.8×  |
+| tail    |25624 |    14125 | 1.8×  |
+| uniq    |14589 |     4026 | 3.6×  |
+| cat     |11906 |     3428 | 3.5×  |
+| **TOTAL** |**98375** | **35112** | **2.8×** |
 
 (Regenerate with `compare.sh`; the C sizes include the `//#use` shared libs
-spliced by `clib.py`.)
+spliced by `clib.py`, and each hand-asm binary that declares `;#use stdin`
+likewise counts `lib_stdin.inc`, so the comparison is apples-to-apples.)
+
+## Takeaways
+
+- Hand asm is **2–6× smaller**, but the win depends on the command's shape:
+  - **Code-dominated** (pwd, mv, wc, head, uniq, cat): **3.5–5.8×**. p8cc's
+    stack-machine codegen — every expression pushed/popped through `__csp` —
+    is where the bloat lives; straight-line register asm collapses it.
+  - **Buffer/data-dominated** (tail): **1.8×**. tail's 10 KB line ring is
+    identical fixed data in both, so it dilutes the code-size win.
+  - **Small + pointer-arithmetic-heavy** (tree, dir): **2.5×**. These are
+    already small in C, and hand asm pays for manual 16-bit index math
+    (depth-indexed arrays, `divmod10`) that the compiler emits compactly.
+- The heavy commands (`grep`, `sed`, `vi`, `sort`, `diff`, `find`, `more`,
+  `cp`) were out of scope for this pass — `grep`/`sed` need the regex matcher
+  hand-assembled and `vi` is a screen editor. The representative set above is
+  enough to characterize the ratio.
+- Every ported command is verified **byte-identical** to its p8cc twin by
+  `verify.sh` (diff of emulator transcripts), so the sizes compare equivalent
+  behavior, not a cut-down reimplementation.
