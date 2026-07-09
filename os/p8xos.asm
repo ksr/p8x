@@ -59,7 +59,7 @@ FSDIRBUF= $0145          ; point the FNEXT/FSCAN sector buffer at page A (high b
 FWOPEN  = $012A          ; open a write stream at the volume free pointer
 FPUTB   = $012D          ; append byte A to the write stream
 FCLOSE  = $0130          ; flush + register the streamed file as FNAME
-FNORM   = $0136          ; copy string (P1) -> FNAME, upcased + space-padded
+FNORM   = $0136          ; copy string (P1) -> FNAME, case-preserved + space-padded
 FOPEN   = $0124          ; open file FNAME for reading (P1 = 512-byte buffer)
 FGETB   = $0127          ; next byte -> A; C=1 at end of file
 FDELETE = $011E          ; tombstone file FNAME (for the pipe temp)
@@ -1076,9 +1076,8 @@ pc_lp:  LDA  (P2)
         JZ   pc_end
         LDA  CNT
         JZ   pc_end
-        LDA  (P2)
-        JSR  UPCASE
-        STA  (P1)
+        LDA  (P2)               ; case preserved (filenames are case-sensitive;
+        STA  (P1)               ; the command word is still upcased in PARSEW)
         INP1
         INP2
         LDA  CNT
@@ -1225,8 +1224,7 @@ sa_lp:  LDA  (P2)
         LDB  #' '
         CMP
         JZ   sa_end
-        JSR  UPCASE
-        STA  (P1)
+        STA  (P1)               ; case preserved (case-sensitive CWD path)
         INP1
         INP2
         JMP  sa_lp
@@ -1253,8 +1251,7 @@ sap_copy:LDA (P2)
         LDB  #' '
         CMP
         JZ   sap_end
-        JSR  UPCASE
-        STA  (P1)
+        STA  (P1)               ; case preserved (case-sensitive CWD path)
         INP1
         INP2
         JMP  sap_copy

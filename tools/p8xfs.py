@@ -93,8 +93,8 @@ def unpack_at(img, off):
 
 
 def pack_at(img, off, name, start, length, load, exec_, flags):
-    nm = (name.upper().encode("ascii", "replace") if isinstance(name, str)
-          else name)[:12].ljust(12, b" ")
+    nm = (name.encode("ascii", "replace") if isinstance(name, str)
+          else name)[:12].ljust(12, b" ")   # case preserved (FS is case-sensitive)
     img[off:off + 12] = nm
     struct.pack_into("<IIHHB", img, off + 12, start, length, load, exec_, flags)
     # spare 25..31 left as-is (zeroed on format)
@@ -121,7 +121,7 @@ def iter_dir(img, dlba, dsecs):
 
 
 def name12(name):
-    return name.upper().encode("ascii", "replace")[:12].ljust(12, b" ")
+    return name.encode("ascii", "replace")[:12].ljust(12, b" ")  # case preserved
 
 
 def find_in_dir(img, dlba, dsecs, name):
@@ -148,10 +148,10 @@ def resolve_dir(img, path):
 
 
 def split_path(path):
-    """'/a/b/name' -> ('/a/b', 'NAME').  'name' -> ('', 'NAME')."""
+    """'/a/b/name' -> ('/a/b', 'name').  Case preserved (FS is case-sensitive)."""
     p = path.strip("/")
     parent, _, leaf = p.rpartition("/")
-    return parent, leaf.upper()
+    return parent, leaf
 
 
 def alloc(img, nsec):

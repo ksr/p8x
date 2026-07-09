@@ -144,7 +144,7 @@ RESET:  JMP  COLD
         JMP  FPUTB          ; $012D FPUTB   append byte A to the write stream
         JMP  FCLOSE         ; $0130 FCLOSE  flush + register file FNAME (len=bytes written); C=1 full
         JMP  FRESOLVE       ; $0133 FRESOLVE resolve path (P1) -> dir extent + leaf FNAME; C=1 bad path
-        JMP  FNORM          ; $0136 FNORM    copy string (P1) -> FNAME, upcased + space-padded to 12
+        JMP  FNORM          ; $0136 FNORM    copy string (P1) -> FNAME, case-preserved + space-padded to 12
         JMP  FOPENDIR       ; $0139 FOPENDIR begin iterating directory at path (P1); C=1 bad path
         JMP  FNEXT          ; $013C FNEXT    next live entry -> FNAME/FFLAG/LBA/FLEN; C=1 at end
         JMP  FLOADAT        ; $013F FLOADAT  read FLEN bytes from LBA into (P1) (whole sectors)
@@ -907,9 +907,13 @@ RS_SLASH:
 RS_NF:  SEC
         RTS
 
-; FNORM - format the string at P1 into FNAME: up to 12 chars, upper-cased,
+; FNORM - format the string at P1 into FNAME: up to 12 chars, CASE PRESERVED,
 ;   space-padded, stopping at NUL or space. Saves callers hand-padding a name
-;   before FFIND/FCREATE. Clobbers P1/P2/TMP/TMP2.
+;   before FFIND/FCREATE. Names are case-sensitive: FSCAN compares exact bytes,
+;   so "ff" and "FF" are distinct and a lookup must match the stored case. (The
+;   shell still upper-cases the COMMAND word for dispatch/PATH — see PARSEW — so
+;   `touch`/`TOUCH` both run TOUCH.BIN; only file-name args are case-exact.)
+;   Clobbers P1/P2/TMP/TMP2.
 FNORM:  LDP2 #FNAME         ; FNAME = 12 spaces
         LDA  #12
         STA  TMP
@@ -930,19 +934,7 @@ FN_CP:  LDA  (P1)
         JZ   FN_DONE        ; space ends the name
         LDA  TMP
         JZ   FN_DONE        ; 12 chars stored -> stop
-        LDA  TMP2           ; upper-case a..z
-        LDB  #'a'
-        CMP
-        JNC  FN_ST          ; < 'a'
-        LDA  #'z'
-        LDB  TMP2
-        CMP
-        JNC  FN_ST          ; > 'z'
-        LDA  TMP2
-        LDB  #$20
-        SUB
-        STA  TMP2
-FN_ST:  LDA  TMP2
+        LDA  TMP2           ; store the char as typed (case preserved)
         STA  (P2)+
         LDA  TMP
         DEC

@@ -1,7 +1,7 @@
 #!/bin/sh
-# BIOS FNORM: a planted program formats the lowercase string "hi.c" into FNAME
-# with FNORM and creates a file by that name. Confirms the name was upper-cased
-# and space-padded (the directory holds "HI.C").
+# BIOS FNORM: a planted program formats the string "hi.c" into FNAME with FNORM
+# and creates a file by that name. Confirms the name is CASE-PRESERVED and
+# space-padded (the directory holds "hi.c") — filenames are case-sensitive.
 set -e
 cd "$(dirname "$0")"
 ROOT=../..
@@ -20,6 +20,6 @@ case "$out" in
   *Y*) ;;
   *) echo "FNORM TEST: FAIL — FCREATE after FNORM did not succeed (got [$out])"; exit 1 ;;
 esac
-python3 $ROOT/tools/p8xfs.py ls fn.img 2>/dev/null | grep -q 'HI.C' \
-  || { echo "FNORM TEST: FAIL — directory does not hold upper-cased 'HI.C'"; exit 1; }
+python3 $ROOT/tools/p8xfs.py ls fn.img 2>/dev/null | grep -q 'hi.c' \
+  || { echo "FNORM TEST: FAIL — directory does not hold case-preserved 'hi.c'"; exit 1; }
 echo "FNORM TEST: PASS"
