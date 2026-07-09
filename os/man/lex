@@ -26,7 +26,7 @@ DESCRIPTION
     the lexer inside the host compiler (p8cc.py --tokens). The passes chain:
         cpp foo.c >foo.i        splice //#use libraries
         lex foo.i >foo.tok      tokenize
-        (then cc1 / cg on foo.tok)
+        cc1 foo.tok >foo.ast     parse  (codegen then runs on the host)
 
     Streams the source through the BIOS read stream with a one-character
     pushback, so it needs no whole-file buffer and can tokenize sources far

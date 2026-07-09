@@ -11,8 +11,10 @@ python3 tools/p8xfs.py put disk.img prog.bin --name /PROG.BIN --load 0x7A00 --ex
 # then on the P8X:  RUN /PROG.BIN
 ```
 
-A native (on-target) compiler is a later goal; this host cross-compiler comes
-first and stays the primary tool.
+This host cross-compiler is the primary tool. The C **front end** now also runs
+*on the P8X* — `cpp | lex | cc1` preprocess, tokenize, and parse C to an AST
+natively (see "On-target front end" below) — but code generation stays on the
+host: the codegen is too big to run on the machine.
 
 ## Two compilers: `p8cc.py` and `p8cc.c`
 
@@ -49,14 +51,48 @@ There are two implementations of the same compiler:
   The native binary is a fast (~no startup) alternative to the Python tool and
   is literally the C codebase compiled for the host.
 
-  **Milestone B** (run `p8cc.c` itself *on the P8X*) is a separate, open task: a
-  full translation unit's working set exceeds the `$7A00` TPA, so it needs the
-  streaming/single-pass discipline the on-target assembler already uses — a RAM
-  problem, not a language one. The language in `p8cc.c` is complete.
+  **Milestone B** (run the compiler *on the P8X*) is **partially achieved**: the
+  C **front end** is self-hosted (see below), but the **back end stays on the
+  host**. This is not a language gap — it is a hard size wall: `p8cc.c` compiles
+  to ~82 KB, which is *larger than the machine's entire 64 KB address space* (it
+  won't even assemble to one image), and ~2.6× the ~31.5 KB program area. The
+  codegen's ~55 KB of symbol-table/type-analysis/emit machinery is shared across
+  every part, so it can't be sharded into TPA-sized passes. A true on-target back
+  end would need a *new*, deliberately-small code generator (a filed stretch
+  goal), not a port of this one. See `BACKLOG.md` for the measurements.
 
   `p8cc.c` is single-pass and so requires **declare-before-use** (function
   prototypes for mutual recursion, globals/structs before reference); `p8cc.py`
   is two-pass and more lenient. Both accept the same subset otherwise.
+
+## On-target front end (`cpp | lex | cc1`)
+
+The compiler's front half runs natively on the P8X as three `/bin` programs, each
+small enough for the TPA. They chain through temp files, mirroring an early Unix
+`cpp`/`cc1`/`as` pipeline:
+
+```
+cpp foo.c   >foo.i      # splice //#use libraries          (os/commands/cpp.c)
+lex foo.i   >foo.tok    # tokenize                          (os/commands/lex.c)
+cc1 foo.tok >foo.ast    # parse -> serialized AST           (os/commands/cc1.c)
+# then, on the HOST, code generation turns the AST into asm:
+python3 compiler/p8cc.py --from-ast foo.ast -o foo.asm
+```
+
+Each native pass has an exact host reference in `p8cc.py`, and its output is
+verified **byte-identical** to that reference (`make test-os`:
+`os_cpp_test`/`os_lex_test`/`os_cc1_test`):
+
+- `p8cc.py --tokens FILE` — the LEX token stream (`<line> <T> <payload>`).
+- `p8cc.py --ast FILE` — the serialized AST (a pre-order atom stream; the wire
+  format is documented at `ast_ser` in `p8cc.py`).
+- `p8cc.py --from-ast FILE` — the inverse: read a serialized AST and run codegen,
+  producing the same asm as compiling the source directly.
+
+So today the P8X can preprocess, tokenize, and parse C by itself; the `.ast` then
+returns to the host for codegen. A native code generator is the missing piece for
+end-to-end on-target compilation (`cpp | lex | cc1 | cg | asm`) — see the stretch
+goal in `BACKLOG.md`.
 
 ## Execution model
 

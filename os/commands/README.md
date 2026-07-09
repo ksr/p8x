@@ -72,7 +72,7 @@ print a one-line usage summary and exit.
 | [`dep.c`](dep.c) | `dep addr b b ... [-h]` | Deposit hex byte values into memory starting at hex `addr` (`poke`); quiet on success. The counterpart to `dump`. Formerly an OS built-in. Note both live in the TPA at `$7A00`, so don't `dep` over that region. |
 | [`cpp.c`](cpp.c) | `cpp src.c [-h]` | The `//#use` source preprocessor — **pass 1 of the on-target C toolchain**, the native counterpart of host [`clib.py`](../../tools/clib.py). Splices `lib_NAME.c` (recursively, deduped) for each `//#use NAME` and writes the combined source to stdout. Reads stay non-nested (single BIOS read stream) by emitting all libs ahead of the source — compiles identically (p8cc orders by symbol table). Uses `FSDIRBUF` so file-opens don't clobber a redirected write stream. C-only (a compiler pass, no asm twin). |
 | [`lex.c`](lex.c) | `lex src.c [-h]` | The tokenizer — **pass 2 of the on-target C toolchain**, the native counterpart of the host compiler's lexer (`p8cc.py --tokens`). Reads a (preprocessed) C source and writes its token stream to stdout, one token per line `<line> <T> <payload>` (T = K keyword / I identifier / N number / S string / O operator / E eof). Streams the source through the BIOS read stream with a one-char pushback — no whole-file buffer, so it tokenizes sources far larger than the TPA. Line counting matches `p8cc.py` exactly (only a top-level newline counts; block-comment newlines don't). C-only (a compiler pass, no asm twin). Verified byte-identical to `p8cc.py --tokens` by `os_lex_test`. |
-| [`cc1.c`](cc1.c) | `cc1 src.tok [-h]` | The parser — **pass 3 of the on-target C toolchain**, the parser half of the host compiler (`p8cc.py --ast`). Reads a LEX token stream and writes the serialized AST (a pre-order atom stream; see `ast_ser` in `p8cc.py`) that the code generator consumes. Recursive descent, emitting the AST as it parses — only the current statement is buffered (to splice infix operators into pre-order), so it handles functions far larger than the TPA. Purely syntactic; all type/symbol/struct analysis is deferred to `cg`. C-only (a compiler pass, no asm twin). Verified byte-identical to `p8cc.py --ast` by `os_cc1_test`. |
+| [`cc1.c`](cc1.c) | `cc1 src.tok [-h]` | The parser — **pass 3 of the on-target C toolchain**, the parser half of the host compiler (`p8cc.py --ast`). Reads a LEX token stream and writes the serialized AST (a pre-order atom stream; see `ast_ser` in `p8cc.py`) that the code generator consumes. Recursive descent, emitting the AST as it parses — only the current statement is buffered (to splice infix operators into pre-order), so it handles functions far larger than the TPA. Purely syntactic; all type/symbol/struct analysis is deferred to the code generator, which stays **host-side** (`p8cc.py --from-ast`) — the on-target back end doesn't fit the TPA. C-only (a compiler pass, no asm twin). Verified byte-identical to `p8cc.py --ast` by `os_cc1_test`. |
 
 ### Implementation notes
 
@@ -213,11 +213,14 @@ commands inside these limits, especially for `p8cc.c` parity):
 - **TPA size limit (not a compiler bug):** the shared file read buffer lives at
   `$FC00` (just under the stack), so a command's code+globals must stay below
   `$FC00` (~33 KB from the `$7A00` base). This bit `sed`/`diff` built with the
-  *native* `p8cc.c`, whose codegen is ~8% larger than `p8cc.py`'s: with the old
+  *native* `p8cc.c`, whose codegen is larger than `p8cc.py`'s: with the old
   `$E000` buffer they overran it and read file data into their own code. Moving
   the buffer to `$FC00` fixed it — both build on **both** compilers now. (Was
   long misfiled as a "`p8cc.c` file-arg miscompile".) `diff` is the largest at
-  ~17.6 KB on `p8cc.c`, so keep an eye on headroom there.
+  ~17.6 KB on `p8cc.c`, so keep an eye on headroom there. NB the gap widened when
+  `p8cc.py` gained a codegen-shrink (~17% tighter output) that has **not** been
+  mirrored to `p8cc.c` (a deferred item) — so `p8cc.c`-built commands are now
+  noticeably larger than the same source through `p8cc.py`.
 
 ## Tests
 
