@@ -221,8 +221,8 @@ Last updated: 2026-07-08
       **superseded the `IMPORT` built-in** (flat, one-level, drive-1→CWD), which
       was removed — the kernel shrank ~534 bytes. `os_cprecursive_test` covers
       single-file, same-drive `-r`, and cross-mount `-r` with nesting.
-      Still open: cp/mv **wildcards** (below). The `-r` iteration page sits at
-      `$A000` (just above cp's code), giving ~40 levels of recursion headroom
+      cp/mv **wildcards** are now done too (see below). The `-r` iteration page
+      sits at `$A000` (just above cp's code), giving ~40 levels of recursion headroom
       before the descending stack could reach it — deep enough for any real tree,
       but there is no explicit depth cap.
 
@@ -503,15 +503,14 @@ Last updated: 2026-07-08
       Note: this is why `find` itself stays name-glob only — regex lives where the
       content is.
 
-- [ ] **`TOUCH name` command — create an empty file (and later, bump its
-      timestamp).** Unix `touch`: if the file doesn't exist, create it empty
-      (zero-length extent); if it does, no-op for now. Useful for scripting and as
-      the trivial "make a file" primitive (today you SAVE bytes or redirect output
-      to create one). A `/BIN` C command (`os/commands/touch.c`) using the BIOS
-      `FCREATE` (or FWOPEN+FCLOSE with zero bytes) on a CWD-resolved absolute path,
-      like the other file commands. Once the **DS1302 RTC** lands (see IDEAS) and
-      P8XFS entries carry an mtime, extend it to update the timestamp of an
-      existing file — the classic `touch` behaviour.
+- [x] **`TOUCH name` command — DONE (2026-07-09).** Unix `touch`: creates each
+      named file empty if missing (FWOPEN+FCLOSE, zero bytes), leaves an existing
+      file untouched (NOT truncated). Shipped as `os/commands/touch.c` and the
+      hand-asm `os/commands-asm/touch.asm`, verified byte-identical, on a
+      CWD-resolved absolute path like the other file commands. **Still future:**
+      once the **DS1302 RTC** lands (see IDEAS) and P8XFS entries carry an mtime,
+      extend it to bump the timestamp of an existing file (the classic behaviour;
+      P8XFS has no timestamps yet).
 
 - [ ] **Disassembler (reverse assembler): point it at an address block, get
       assembler back.** A tool that walks a memory/file region and decodes each
