@@ -13,12 +13,13 @@ DESCRIPTION
     string is "<len>" then decimal bytes. This is exactly the format the host
     reference `p8cc.py --ast` emits, reproduced byte-for-byte.
 
-    cc1 is pass 3 of the on-target C toolchain, the parser half of the host
-    compiler. The passes chain through temp files:
+    cc1 is the last on-target pass: it completes the self-hosted C FRONT END
+    (cpp | lex | cc1) that preprocesses, tokenizes and parses C natively. Code
+    generation stays on the host (p8cc): the on-target back end does not fit the
+    ~31.5 KB TPA. The passes chain through temp files:
         cpp foo.c  >foo.i        splice //#use libraries
         lex foo.i  >foo.tok      tokenize
-        cc1 foo.tok >foo.ast     parse
-        (then cg on foo.ast)
+        cc1 foo.tok >foo.ast     parse  (host p8cc turns the AST into asm)
 
     Parsing is recursive descent. The AST is emitted as it is parsed, with no
     in-memory tree of the whole program; only the current statement is buffered

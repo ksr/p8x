@@ -615,8 +615,10 @@ Last updated: 2026-07-08
     - Smoke tests test1-3.asm overlap test_isa.asm (per-opcode). They give
       higher-level scenario coverage (banner, JSR/RTS, countdown); keep as
       complementary unless trimming.
-- [ ] **C compiler — Milestone A DONE (self-compiling, host-run); Milestone B
-      (run on the P8X) is the open work.** Both compilers exist and are tested:
+- [~] **C compiler — Milestone A DONE (self-compiling, host-run); Milestone B
+      FRONT END self-hosted on the P8X (cpp|lex|cc1); back end stays host-side
+      (codegen won't fit the TPA — see the measured finding below).** Both
+      compilers exist and are tested:
       `compiler/p8cc.py` (Python, the everyday tool + reference oracle, never
       removed) and `compiler/p8cc.c` (the same compiler in p8cc's own small-C
       subset). p8cc.py compiles p8cc.c cleanly — "small C written in small C" —
@@ -742,15 +744,28 @@ Last updated: 2026-07-08
             into sub-passes doesn't help: each shard still needs most of that 55 KB.
           vs a 31.5 KB TPA, codegen is ~2.5-3x too big and cannot be cleanly cut.
         CONCLUSION: porting the existing optimizing p8cc codegen to run within the
-        TPA is not viable. Viable directions (STRATEGIC, undecided):
-          (2) write a NEW, deliberately-small on-target codegen (host p8cc stays
-              the "good" compiler; the on-target one just has to work);
-          (3) a different memory model for compiler passes (load below $7A00 /
-              overlays / banking) — real firmware+OS work;
-          (4) STOP at cc1: ship on-target cpp|lex|cc1 (preprocess, tokenize,
-              parse-to-AST) as a self-hosted FRONT END, keep codegen host-side.
-        Front end (cpp|lex|cc1) is done and each fits the TPA; the back end is the
-        wall. Milestone B is blocked on this strategic choice.
+        TPA is not viable.
+      - **DECISION (2026-07-09): ship the self-hosted FRONT END; stop at cc1.**
+        `cpp | lex | cc1` all run on-target and each fits the TPA, so the P8X can
+        natively preprocess, tokenize, and parse C to an AST. Code generation
+        stays host-side (p8cc.py / p8cc.c). This is the coherent, finished shape
+        of Milestone B given the codegen wall. A true on-target back end would be
+        a SEPARATE future milestone — a NEW, deliberately-small codegen written to
+        fit 31.5 KB (NOT a port of the optimizing p8cc; the ~55 KB shared infra
+        makes a port impossible). Filed below as a stretch goal, not blocking.
+        Other rejected paths: sharding the existing codegen (the shared infra
+        defeats it); a bigger flat memory region (tops out ~46 KB, still < 82 KB —
+        would need banking, i.e. major firmware/OS/hardware work).
+      - [ ] **STRETCH (future milestone): a NEW minimal on-target codegen (cg).**
+        Not a port of p8cc's optimizing back end — a from-scratch, size-first
+        code generator that reads the cc1 AST stream and emits correct (not
+        optimal) asm within the 31.5 KB TPA. It reuses the proven front end
+        (cpp|lex|cc1) and the on-target assembler; the host p8cc.py/p8cc.c stay
+        the reference. Verification would be BEHAVIORAL (compile a program
+        on-target, run it, diff output) since its asm won't match p8cc byte-for-
+        byte. Chief risk: the symbol-table + type-analysis + emit machinery must
+        be written FAR more compactly than p8cc's ~55 KB. Only worth starting if
+        true end-to-end on-target compilation becomes a priority.
 - [ ] **Native toolchain follow-ups** (EDIT + ASM landed — see DONE). Remaining
       polish on the on-target assembler/editor, none blocking:
         - **Tools write to the flat root only.** EDIT `W` and ASM output go to
