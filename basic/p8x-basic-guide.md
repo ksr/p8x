@@ -67,12 +67,20 @@ monitor ROM — the old `X` command was removed.) Build commands are in the
 Lines are always kept sorted by number regardless of entry order. Keywords are
 tokenized on entry (stored as single bytes) and expanded again by `LIST`.
 
-`SAVE`/`LOAD` store programs as files in the P8XFS **root** directory (via the
+`SAVE`/`LOAD` store programs as files in the P8XFS filesystem (via the
 BIOS filesystem calls), so they work in the **disk** and **run-from-OS** builds —
-the standalone whole-ROM build has no card access and can't use them. Names
-are up to 12 characters, upper-cased; `SAVE` reports `?Save failed` if the name
-exists or the disk is full, `LOAD` reports `?No file` if it isn't found. Files
-created here are visible to P8X/OS (`DIR`) and the host `p8xfs.py` too.
+the standalone whole-ROM build has no card access and can't use them.
+
+The name may be a **path**: a bare name (`SAVE "GAME"`) writes to the root
+directory, and a slashed path (`SAVE "/SRC/GAME"`, `LOAD "/SRC/GAME"`) reaches a
+subdirectory — BASIC resolves the path through the filesystem, the same resolver
+the OS uses, so it can save into any existing directory. (BASIC has no notion of
+a "current directory": a bare name is always the root; make a subdirectory with
+`MKDIR` in the OS first.) Each leaf name is up to 12 characters and
+**case-sensitive** (`GAME` and `game` are different files). `SAVE` reports
+`?Save failed` if the name exists or the disk is full, `LOAD` reports `?No file`
+if it isn't found. Files created here are visible to P8X/OS (`DIR`) and the host
+`p8xfs.py` too.
 
 ## Numbers, variables, strings
 
@@ -196,9 +204,10 @@ disk and run-from-OS builds (the standalone whole-ROM build has no card access).
 100 CLOSE
 ```
 
-- The filename is any string expression (`OPEN F$ FOR INPUT`), up to 12
-  characters; files live in the P8XFS **root**, so they are visible to `DIR`,
-  `SAVE`/`LOAD`, and the host `p8xfs.py`. The `FOR` is optional.
+- The filename is any string expression (`OPEN F$ FOR INPUT`) and may be a
+  **path** — a bare name is a root file, `OPEN "/LOGS/A" FOR OUTPUT` writes into
+  a subdirectory (like `SAVE`/`LOAD` above; the leaf is up to 12 characters). The
+  files are visible to `DIR` and the host `p8xfs.py`. The `FOR` is optional.
 - `PRINT#` writes exactly **one value per record** (its text form followed by a
   newline). `INPUT#` reads exactly **one record**: into a numeric variable it
   parses the decimal number, into a string variable (`INPUT# A$`) it takes the

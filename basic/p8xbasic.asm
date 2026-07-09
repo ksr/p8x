@@ -29,10 +29,13 @@ BS     = $08
 ; BIOS filesystem calls (monitor ROM at $0100). Available in the ROM-in-monitor
 ; and disk builds, where the monitor is resident; NOT in the standalone build.
 FLOADAT = $013F          ; bulk-read FLEN bytes from LBA into (P1)
-FFIND   = $0118          ; find root file FNAME -> LBA + FLEN; C=1 if not found
-FCREATE = $011B          ; create root file FNAME from FSRC/FLEN; C=1 on error
-; sequential byte streams (for BASIC data files) — root files, no OS needed:
-FOPEN   = $0124          ; open root file FNAME for reading (P1=512-byte buf); C=1 missing
+; Files are found/created in the FRESOLVE-set directory (root if no FRESOLVE),
+; so SAVE/LOAD and data files reach subdirectories by FRESOLVE-ing a path first.
+FFIND   = $0118          ; find file FNAME in the resolved dir -> LBA + FLEN; C=1 if not found
+FCREATE = $011B          ; create file FNAME (FSRC/FLEN) in the resolved dir; C=1 on error
+FRESOLVE= $0133          ; resolve NUL-terminated path (P1) -> dir extent + leaf FNAME; C=1 bad path
+; sequential byte streams (for BASIC data files):
+FOPEN   = $0124          ; open file FNAME for reading (P1=512-byte buf); C=1 missing
 FGETB   = $0127          ; next byte -> A; C=1 at end of file
 FWOPEN  = $012A          ; open a write stream at the free pointer (uses SBUF)
 FPUTB   = $012D          ; append byte A to the write stream
@@ -107,7 +110,6 @@ FMODE  = BASRAM+$CD          ; data file: 0 closed, 1 open for input, 2 for outp
 OUTFILE= BASRAM+$CE          ; 1 while PRINT emits to the data file (via PUTCH)
 SPA    = BASRAM+$D0          ; string source pointer (2)
 SPD    = BASRAM+$D2          ; string dest pointer (2)
-FNMBUF = BASRAM+$D6          ; NUL-terminated filename for FNORM (13 bytes)
 SEED   = BASRAM+$F4          ; RND state (2)
 POKEA  = BASRAM+$F6          ; POKE address (2)
 NAMLEN = 6                   ; significant variable-name length
@@ -346,8 +348,11 @@ DOBYE:  JMP  MONITOR
 ; the standalone build has no resident monitor/BIOS).
 ; ---------------------------------------------------------------------------
 st_save:INP2                        ; consume the SAVE token
-        JSR  GETFNM                 ; "name" -> FNAME ; C set = syntax error
+        JSR  GETPATH                ; "path" -> PBUF ; C set = syntax error
         JC   fs_serr
+        LDP1 #PBUF                   ; resolve it: subdir path or bare name (=root)
+        JSR  FRESOLVE                ; -> DIRLBA + leaf FNAME ; C=1 bad path
+        JC   sv_ferr
         JSR  PROGLEN                 ; FLEN = program length (incl 00,00 marker)
         LDA  #<PROG
         STA  FSRC
@@ -364,8 +369,11 @@ sv_ferr:LDP1 #MFSERR                 ; ?SAVE FAILED (exists or disk full)
 fs_serr:JMP  SYNERR
 
 st_load:INP2                        ; consume the LOAD token
-        JSR  GETFNM
+        JSR  GETPATH
         JC   fs_serr
+        LDP1 #PBUF
+        JSR  FRESOLVE                ; -> DIRLBA + leaf FNAME ; C=1 bad path
+        JC   ld_nf
         JSR  FFIND                   ; -> LBA + FLEN, or C set if missing
         JC   ld_nf
         LDP1 #PROG                   ; bulk-read the whole file into PROG
@@ -377,25 +385,23 @@ ld_nf:  LDP1 #MNOFILE
         JSR  PUTS
         RTS
 
-; GETFNM — parse a quoted "name" at (P2) into FNAME: up to 12 chars, upcased,
-;   space-padded; P2 advances past the closing quote. C set on syntax error.
-GETFNM: LDP1 #FNAME                  ; pre-fill 12 spaces
-        LDA  #12
-        STA  RP
-gf_pad: LDA  #' '
-        STA  (P1)+
-        LDA  RP
-        DEC
-        STA  RP
-        JNZ  gf_pad
-        JSR  SKIPSP
+; GETPATH — parse a quoted "path" at (P2) into PBUF as a NUL-terminated string,
+;   CASE-PRESERVED (slashes kept), P2 past the closing quote. C set on syntax
+;   error (no opening quote). The caller FRESOLVEs it, so a bare "NAME" resolves
+;   in the root and "/SUB/NAME" descends — SAVE/LOAD reach subdirectories.
+;   PBUF (the edit scratch) is free during immediate SAVE/LOAD; a path >47 chars
+;   is truncated. Case-preserving matches the case-sensitive filesystem.
+GETPATH: JSR  SKIPSP
         LDA  (P2)
         LDB  #'"'
         CMP
         JNZ  gf_err
         INP2                         ; past opening quote
-        LDP1 #FNAME
-        LDA  #12
+        LDA  #<PBUF
+        TAP1L
+        LDA  #>PBUF
+        TAP1H
+        LDA  #47
         STA  RP                      ; chars of room left
 gf_lp:  LDA  (P2)
         JZ   gf_ok                   ; line ended before the quote -> accept
@@ -403,27 +409,18 @@ gf_lp:  LDA  (P2)
         CMP
         JZ   gf_cl
         LDA  RP
-        JZ   gf_adv                  ; no room: scan to the quote, don't store
-        LDA  (P2)                    ; upcase a..z
-        LDB  #'a'
-        SUB
-        JNC  gf_as                   ; < 'a'
-        LDB  #26
-        SUB
-        JC   gf_as                   ; > 'z'
-        LDA  (P2)
-        LDB  #$20
-        SUB
-        JMP  gf_st
-gf_as:  LDA  (P2)
-gf_st:  STA  (P1)+
+        JZ   gf_adv                  ; full: consume but don't store
+        LDA  (P2)                    ; store the char as typed (case preserved)
+        STA  (P1)+
         LDA  RP
         DEC
         STA  RP
 gf_adv: INP2
         JMP  gf_lp
 gf_cl:  INP2                         ; past closing quote
-gf_ok:  CLC
+gf_ok:  LDA  #0
+        STA  (P1)                    ; NUL-terminate the path
+        CLC
         RTS
 gf_err: SEC
         RTS
@@ -3236,31 +3233,32 @@ fa_asc0: LDA #0
 ; (the standalone whole-ROM build has no resident BIOS), like SAVE/LOAD.
 ;==============================================================================
 
-; SETFNAME — evaluate the filename string expression at (P2) and install it in
-; FNAME (via the BIOS FNORM). Preserves the parse cursor.
-SETFNAME: JSR SEVAL                   ; STRACC = filename
-        TPA2L                          ; the FNMBUF copy + FNORM clobber P2
+; SETFNAME — evaluate the filename string expression at (P2) and resolve it into
+; a target directory + leaf FNAME (via the BIOS FRESOLVE), so a data file can
+; name a subdirectory ("/LOGS/A") as well as a bare root name. NUL-terminates
+; STRACC's data in place and resolves that, avoiding a second buffer. Preserves
+; the parse cursor (FRESOLVE clobbers P2).
+SETFNAME: JSR SEVAL                   ; STRACC = filename ([len][data])
+        TPA2L
         PHA
         TPA2H
         PHA
-        LDP1 #STRACC                   ; STRACC -> FNMBUF, NUL-terminated
+        LDP1 #STRACC                   ; NUL-terminate the data in place
         LDA  (P1)
-        STA  TMPC
-        INP1
-        LDP2 #FNMBUF
-        LDA  TMPC
+        STA  TMPC                      ; len
+        INP1                           ; -> data[0]
+sfn_a:  LDA  TMPC
         JZ   sfn_z
-sfn_l:  LDA  (P1)+
-        STA  (P2)
-        INP2
+        INP1
         LDA  TMPC
         DEC
         STA  TMPC
-        JNZ  sfn_l
+        JMP  sfn_a
 sfn_z:  LDA  #0
-        STA  (P2)
-        LDP1 #FNMBUF
-        JSR  FNORM                     ; -> FNAME (12, space-padded, case-preserved)
+        STA  (P1)                      ; NUL after the data
+        LDP1 #STRACC                   ; FRESOLVE the path string (STRACC+1)
+        INP1
+        JSR  FRESOLVE                  ; -> DIRLBA + leaf FNAME
         PLA
         TAP2H
         PLA

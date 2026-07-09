@@ -551,19 +551,20 @@ Last updated: 2026-07-08
       as C programs — now writable over `getchar`/`putchar` + the BIOS), and a
       separate `stderr` stream (errors currently go to the console via the BIOS
       directly, which is the desired behaviour, just not a distinct syscall).
-- [ ] **Make the BIOS file routines hierarchy-aware (paths, not just root).** The
-      ROM FS calls (`$0118 FFIND` / `$011B FCREATE`) currently operate only on the
-      P8XFS v2 **root** directory (LBA 33), so BASIC `SAVE`/`LOAD` and any BIOS-FS
-      client are flat — they can't reach `/BIN/FOO`. Teach them to **resolve a
-      path** through the `.`/`..` entries (walk components, DESCEND into each
-      subdir extent) so a name like `/BIN/PROG` or a relative path works, matching
-      what P8X/OS already does internally. Open questions: (a) carry a notion of
-      "current directory" across calls (a CWD extent in the BIOS ABI) vs requiring
-      absolute paths; (b) ROM size — path resolution is ~the OS's RESOLVE/DESCEND
-      (a few hundred bytes), and ROM has room. This is the natural precursor to the
-      "offload OS commands" item below (those need dir iteration + paths too), and
-      it would let BASIC save into subdirectories. Keep the root-only fast path or
-      replace it. Update the BIOS ABI doc + a hierarchy round-trip test.
+- [x] **Hierarchy-aware BIOS file routines — DONE (2026-07-09).** Resolved in two
+      parts. The *resolver* already exists: **`$0133 FRESOLVE`** (FS upgrade 3)
+      walks a path through the `.`/`..` entries and sets the target directory +
+      leaf `FNAME`, so `FFIND`/`FCREATE`/`FOPEN` run in that directory. What was
+      left was the flat *clients*: BASIC `SAVE`/`LOAD` and the data-file `OPEN`
+      called `FFIND`/`FCREATE`/`FNORM` with no `FRESOLVE`, so they were root-only.
+      **Retrofitted them to FRESOLVE the name** (`GETPATH` reads a case-preserved
+      path, `SETFNAME` resolves the string), so `SAVE "/SRC/GAME"` and
+      `OPEN "/LOGS/A"` reach subdirectories while a bare name still means root.
+      Design decision (open question (a)): the **BIOS stays stateless — no CWD in
+      the ABI**. A current directory is shell/OS state (it would add shared mutable
+      state to a re-entrant ROM and has no meaning at boot), so clients resolve
+      absolute/root-relative paths; the OS owns the CWD. `basic_savepath_test`
+      covers root + subdir round-trips (program and data file).
 - [ ] **Offload OS commands to loadable programs via the ROM FS routines.** Now
       that the monitor publishes a shared filesystem API (`$0118 FFIND` /
       `$011B FCREATE`, see DONE — BASIC SAVE/LOAD), the heavy/self-contained OS
