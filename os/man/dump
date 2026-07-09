@@ -6,11 +6,18 @@ SYNOPSIS
 
 DESCRIPTION
     Displays 256 bytes of memory starting at the hexadecimal address
-    addr. At the prompt, Enter shows the next block and "." exits. dump
-    is an OS built-in command.
+    addr, as 16 rows of "AAAA: bb bb ... cccc" (hex bytes then their
+    ASCII, non-printable shown as "."). After each block it waits for a
+    console key: "." returns to the shell, any other key shows the next
+    block. dump is a /bin program (formerly an OS built-in).
+
+NOTES
+    dump loads into the TPA at $7A00, so dumping that region shows dump's
+    own bytes. It reads memory only -- see dep to change it.
 
 EXAMPLES
     dump 7A00
+    dump 4000        peek at the resident OS
 
 SEE ALSO
     dep, load, save

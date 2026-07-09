@@ -465,12 +465,6 @@ DISPATCH:
         LDP1 #KW_SAVE
         JSR  CMPCMD
         JNZ  DOSAVE
-        LDP1 #KW_DUMP
-        JSR  CMPCMD
-        JNZ  DODUMP
-        LDP1 #KW_DEP
-        JSR  CMPCMD
-        JNZ  DODEP
         LDP1 #KW_PACK
         JSR  CMPCMD
         JNZ  DOPACK
@@ -2201,102 +2195,6 @@ SV_FULL:LDP1 #MDIRFUL
         JSR  PUTS
         JMP  SHELL
 
-; ---------------- DUMP addr --------------------------------------------------
-; Show 256 bytes from addr: 16 lines of "AAAA: bb bb ... |ascii|".
-DODUMP: JSR  ARG2P2
-        JSR  GETHEX
-        LDA  MATCH
-        JZ   DU_ERR
-        LDA  HXLO
-        TAP1L
-        LDA  HXHI
-        TAP1H
-DU_PAGE:LDA  #16                ; 16 lines = one 256-byte block
-        STA  CNT
-DU_LINE:TPA1H                   ; "AAAA: "
-        JSR  OPHEX8
-        TPA1L
-        JSR  OPHEX8
-        LDA  #':'
-        JSR  OUTCH
-        LDA  #' '
-        JSR  OUTCH
-        TPA1L                   ; remember line start for the ASCII pass
-        STA  SRCLO
-        TPA1H
-        STA  SRCHI
-        LDA  #16                ; 16 hex bytes
-        STA  TMP
-DU_HEX: LDA  (P1)+
-        JSR  OPHEX8
-        LDA  #' '
-        JSR  OUTCH
-        LDA  TMP
-        DEC
-        STA  TMP
-        JNZ  DU_HEX
-        LDA  #' '
-        JSR  OUTCH
-        LDA  SRCLO              ; rewind to line start for the ASCII column
-        TAP1L
-        LDA  SRCHI
-        TAP1H
-        LDA  #16
-        STA  TMP
-DU_ASC: LDA  (P1)+
-        STA  TMP2
-        LDB  #' '
-        CMP                     ; printable range $20..$7E
-        JNC  DU_DOT
-        LDA  TMP2
-        LDB  #$7F
-        CMP
-        JC   DU_DOT
-        LDA  TMP2
-        JMP  DU_PUT
-DU_DOT: LDA  #'.'
-DU_PUT: JSR  OUTCH
-        LDA  TMP
-        DEC
-        STA  TMP
-        JNZ  DU_ASC
-        JSR  CRLF
-        LDA  CNT
-        DEC
-        STA  CNT
-        JNZ  DU_LINE
-        JSR  CONIN              ; page: '.' = exit to shell, CR/any = next block
-        LDB  #'.'
-        CMP
-        JZ   SHELL
-        JMP  DU_PAGE            ; P1 already points at the next 256 bytes
-DU_ERR: LDP1 #MDUER
-        JSR  PUTS
-        JMP  SHELL
-
-; ---------------- DEP addr b b b... ------------------------------------------
-; Deposit a series of hex byte values starting at addr (low byte of each
-; parsed value is stored). No values = no-op.
-DODEP:  JSR  ARG2P2
-        JSR  GETHEX             ; address
-        LDA  MATCH
-        JZ   DP_ERR
-        LDA  HXLO
-        TAP1L
-        LDA  HXHI
-        TAP1H
-DP_LP:  JSR  GETHEX             ; next byte value
-        LDA  MATCH
-        JZ   DP_END             ; no more values
-        LDA  HXLO
-        STA  (P1)+
-        JMP  DP_LP
-DP_END: LDP1 #MDEPOK
-        JSR  OPUTS
-        JMP  SHELL
-DP_ERR: LDP1 #MDPER
-        JSR  PUTS
-        JMP  SHELL
 
 ; ---------------- PACK : compact the data area -------------------------------
 ; SAVE allocates at the free pointer and DEL/RMDIR only tombstone, so deleted
@@ -3676,10 +3574,6 @@ MHELP:   .byte CR,LF
          .byte CR,LF
          .ascii "del path      delete a file"
          .byte CR,LF
-         .ascii "dump a        dump 256 bytes at a (CR=next block, .=exit)"
-         .byte CR,LF
-         .ascii "dep a b b...  store hex bytes b... at hex addr a"
-         .byte CR,LF
          .ascii "pack          reclaim deleted space"
          .byte CR,LF
          .ascii "/d1           drive 1 is mounted here (cd /d1, cat /d1/FILE)"
@@ -3720,12 +3614,6 @@ MSVERR:  .byte CR,LF
          .asciiz "?SAVE f start end"
 MDIRFUL: .byte CR,LF
          .asciiz "?DIR FULL"
-MDEPOK:  .byte CR,LF
-         .asciiz "OK"
-MDUER:   .byte CR,LF
-         .asciiz "?DUMP addr"
-MDPER:   .byte CR,LF
-         .asciiz "?DEP addr byte..."
 MPACKED: .byte CR,LF
          .asciiz "PACKED"
 MNODIR:  .byte CR,LF
@@ -3778,8 +3666,6 @@ KW_LOAD: .asciiz "load"
 KW_RUN:  .asciiz "run"
 KW_DEL:  .asciiz "del"
 KW_SAVE: .asciiz "save"
-KW_DUMP: .asciiz "dump"
-KW_DEP:  .asciiz "dep"
 KW_PACK: .asciiz "pack"
 KW_CD:   .asciiz "cd"
 KW_MKDIR:.asciiz "mkdir"

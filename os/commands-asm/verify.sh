@@ -74,6 +74,11 @@ cmd_script() {
         # NOT truncated (cat still shows its content). find/cat are helpers.
         TOUCH) printf 'touch NEW.TXT\rfind NEW\rtouch T.TXT\rcat T.TXT\rtouch -h\r' ;;
         MAN)  printf 'man dir\rman nope\rman -h\r' ;;
+        # dep is quiet on success (both builds); usage/bad-addr paths print.
+        DEP)  printf 'dep -h\rdep\rdep zz\rdep 9000 41 42 43\r' ;;
+        # dump a zeroed RAM page clear of the program at $7A00 (identical in
+        # both builds); '.' exits the pager; then the usage/bad-addr paths.
+        DUMP) printf 'dump 9000\r.\rdump -h\rdump zz\r' ;;
     esac
 }
 

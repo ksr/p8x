@@ -32,6 +32,11 @@ python3 $ROOT/tools/p8xfs.py create v2.img --v2 >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   v2.img p8xos.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  v2.img /bin >/dev/null
 python3 $ROOT/tools/p8xfs.py put    v2.img v2prog.bin --name /bin/hello.bin >/dev/null
+# dep is now a /bin program (used below with save to seed T.bin) — install it.
+python3 $ROOT/tools/clib.py $ROOT/os/commands/dep.c -o v2dep.pp.c >/dev/null
+python3 $ROOT/compiler/p8cc.py v2dep.pp.c -o v2dep.asm >/dev/null
+python3 $ROOT/assembler/p8xasm.py v2dep.asm -o v2dep.bin --base 0x7A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    v2.img v2dep.bin --name /bin/dep.bin --load 0x7A00 --exec 0x7A00 >/dev/null
 # CAT is no longer a built-in; install the C cat (os/commands/cat.c) so a bare
 # `CAT /README` resolves via PATH (/bin) — this doubles as an implicit-RUN check.
 python3 $ROOT/tools/clib.py $ROOT/os/commands/cat.c -o v2cat.pp.c   # splice //#use glob,globx

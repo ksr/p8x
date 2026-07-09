@@ -68,6 +68,8 @@ print a one-line usage summary and exit.
 | [`tree.c`](tree.c) | `tree [-h]` | Depth-first indented listing of the CWD tree (same recursion as `dir -R`). |
 | [`vi.c`](vi.c) | `vi name [-h]` | Minimal modal **VT100 screen editor**. Reads keys raw (CONIN, no echo) and drives the cursor with ANSI escapes, so it needs a VT100-compatible terminal. `h j k l` move, `i`/`a`/`A`/`o` insert, `x` delete char, `dd` delete line, `0`/`$`/`G`, **`u` undo** (single-level), **`/`pat + `n`** search (literal, forward, wraps), `:w`/`:q`/`:wq`/`:q!`. Selective redraw (one line per edit, full only on scroll) keeps it usable at serial baud. Flat 110×80 line buffer. Complements the line-oriented [`EDIT`](../../apps/README.md) app. |
 | [`man.c`](man.c) | `man name [-h]` | Print the manual page for a command: streams `/man/<name>` to stdout (a `cat` with a fixed `/man/` prefix, so it is CWD-independent). Works for both `/bin` commands and OS built-ins; an unknown name prints `no manual entry for NAME`. Pages are plain text authored in [`os/man/`](../man/) and installed to `/man` by `run.sh`. |
+| [`dump.c`](dump.c) | `dump addr [-h]` | Hex-dump 256 bytes from hex `addr` (16 rows of hex + ASCII); a console key pages, `.` exits. Memory-only (`peek` + CONIN). Formerly an OS built-in — moved out of the kernel (it needs no shell/FS state). |
+| [`dep.c`](dep.c) | `dep addr b b ... [-h]` | Deposit hex byte values into memory starting at hex `addr` (`poke`); quiet on success. The counterpart to `dump`. Formerly an OS built-in. Note both live in the TPA at `$7A00`, so don't `dep` over that region. |
 
 ### Implementation notes
 

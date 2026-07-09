@@ -42,7 +42,8 @@ python3 $ROOT/tools/p8xfs.py create os.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot os.img p8xos.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py put os.img prog.bin --name PROG.bin >/dev/null
 # DIR is no longer a built-in — install /bin/dir.bin so bare `DIR` / `DIR >DLIST`
-# resolve via implicit RUN. (DUMP is still native; DEP/DUMP below are unchanged.)
+# resolve via implicit RUN. (DUMP/DEP are now /bin programs too — covered by
+# os_depdump_test.sh, so this smoke test no longer exercises them.)
 python3 $ROOT/tools/clib.py $ROOT/os/commands/dir.c -o os_dir.pp.c >/dev/null
 python3 $ROOT/compiler/p8cc.py os_dir.pp.c -o os_dir.asm >/dev/null
 python3 $ROOT/assembler/p8xasm.py os_dir.asm -o os_dir.bin --base 0x7A00 >/dev/null
@@ -52,14 +53,12 @@ printf 'hi' > os_h.tmp
 python3 $ROOT/tools/p8xfs.py put os.img os_h.tmp --name HELLO.TXT >/dev/null
 rm -f os_h.tmp prog.asm
 
-# DUMP B000 now pages: CR advances to the next block (B100), '.' exits — so feed
-# '\r.' after the address (else PACK's letters would be eaten as paging keys).
-# ...then 'DIR >DLIST' captures the directory listing into a file (output
-# redirection), and EXIT returns to the monitor.
+# 'DIR >DLIST' captures the directory listing into a file (output redirection),
+# and EXIT returns to the monitor.
 # Also: SAVE over an existing name must be rejected (?EXISTS), and a redirected
 # command's error must still reach the console (DEL NOPE >X -> ?NO FILE on screen;
 # built-in errors use PUTS, not the redirectable OUTCH, so they bypass redirection).
-out=$(printf 'B\rdir\rrun PROG.bin\rdel HELLO.TXT\rsave C.bin 4000 4010\rdep B000 41 42 43\rdump B000\r\r.pack\rfsck\rdir\rdir >DLIST\rsave PROG.bin 4000 4001\rdel NOPE >X\rexit\r' | \
+out=$(printf 'B\rdir\rrun PROG.bin\rdel HELLO.TXT\rsave C.bin 4000 4010\rpack\rfsck\rdir\rdir >DLIST\rsave PROG.bin 4000 4001\rdel NOPE >X\rexit\r' | \
       ../p8xemu -l 80000000 -c os.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0')
 
 fail() { echo "OS TEST: FAIL — $1"; echo "$out" | sed -n '/P8X\/OS/,$p'; exit 1; }
@@ -69,11 +68,6 @@ echo "$out" | grep -q 'HELLO.TXT'   || fail "DIR missing HELLO.TXT"
 echo "$out" | grep -q 'RAN'         || fail "RUN did not execute the program"
 echo "$out" | grep -q 'DELETED'     || fail "DEL did not report success"
 echo "$out" | grep -q 'SAVED'       || fail "SAVE did not report success"
-# DEP B000 41 42 43, then DUMP B000 -> the row shows the bytes and ASCII "ABC".
-echo "$out" | grep -q 'B000: 41 42 43' || fail "DEP/DUMP did not show deposited bytes"
-echo "$out" | grep -q 'ABC'            || fail "DUMP ASCII column wrong"
-# DUMP paging: CR after the first block advanced to the next one (rows at B100).
-echo "$out" | grep -q 'B100'           || fail "DUMP paging (CR=next block) did not advance"
 echo "$out" | grep -q 'PACKED'       || fail "PACK did not report success"
 echo "$out" | grep -q 'FSCK OK'      || fail "FSCK reported problems on a clean v2 volume"
 # After DEL+SAVE+PACK, the final DIR (re-read from disk): HELLO.TXT gone, C.bin

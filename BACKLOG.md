@@ -579,6 +579,16 @@ Last updated: 2026-07-08
       built-ins; everything else lives on disk and shares one ROM FS layer with
       BASIC and any user program. Sequence after the FS API grows those few calls;
       pairs with the on-target assembler/editor ideas below.
+      **Progress (2026-07-09):** TREE was already a `/bin` command. **DUMP and DEP
+      offloaded** — they need only `peek`/`poke` + a console key (no FS state), so
+      they became `os/commands/{dump,dep}.c` + byte-identical hand-asm twins, run
+      by bare name via PATH; the kernel shrank ~400 bytes. **FSCK** (~392 asm
+      lines, read-only via `$010C CFREAD`) and **PACK** (~832 asm lines,
+      filesystem-*mutating* via `$010F CFWRITE`) remain resident: both are
+      feasible on the current BIOS (raw sector I/O is exposed) but each would be a
+      large C + hand-asm reimplementation, and PACK is delicate enough (a bug
+      corrupts a card) that kernel residence is defensible. Revisit FSCK next
+      (safe, read-only); treat PACK as opt-in.
 - [x] **Man-page-style OS command reference — DONE (2026-07-09), on-target.**
       Went further than the doc-only plan: authored a per-command manual page
       (NAME / SYNOPSIS / DESCRIPTION / OPTIONS / EXAMPLES / SEE ALSO) for every

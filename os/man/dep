@@ -6,11 +6,18 @@ SYNOPSIS
 
 DESCRIPTION
     Stores one or more hexadecimal byte values into memory starting at
-    the hexadecimal address addr. The counterpart to dump. dep is an OS
-    built-in command.
+    the hexadecimal address addr. The counterpart to dump. Quiet on
+    success. dep is a /bin program (formerly an OS built-in).
+
+NOTES
+    dep writes anywhere in the 64K space, including over the resident OS.
+    Because it loads into the TPA at $7A00, depositing into its own
+    footprint (roughly $7A00..$8A00) corrupts the running program -- so
+    dep into other regions (OS variables, high RAM, the I/O ports).
 
 EXAMPLES
-    dep 7A00 A9 01 60
+    dep 9000 41 42 43     store "ABC" at $9000
+    dep FF02 AA           drive the LED port
 
 SEE ALSO
     dump, save, load

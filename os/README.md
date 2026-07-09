@@ -19,8 +19,6 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > | `run name [args]` | `load` it, then `JSR` its exec address; `args` → `P2` (program `RTS` → shell) |
 > | `save name start end` | write memory `[start,end)` to a new file (hex addrs) |
 > | `del name` | mark the directory entry deleted (`$FF`) and write it back |
-> | `dump addr` | show 256 bytes from `addr` (hex + ASCII) |
-> | `dep addr b b ...` | deposit hex byte values starting at `addr` |
 > | `pack` | compact the data area, reclaiming `del`/`rmdir`'d extents |
 > | `fsck` | check filesystem integrity (read-only) |
 > | `format` | erase the card and lay a fresh P8XFS v2 volume (asks `Y/N`) |
@@ -34,7 +32,8 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 >
 > The table above is the **built-in** command set. `cat`, `wc`, `grep`, `cp`,
 > `mv`, `head`, `tail`, `more`, `sort`, `uniq`, `sed`, `find`, `diff`, `touch`,
-> `vi`, `man` (and richer `dir -R`, the `vi` screen editor, etc.) are **userland C
+> `vi`, `man`, `dump`, `dep` (and richer `dir -R`, the `vi` screen editor, etc.)
+> are **userland C
 > programs** in
 > `/bin`, run by
 > bare name (implicit RUN searches `path`, default `/bin`) or explicit `run` —
