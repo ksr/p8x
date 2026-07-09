@@ -86,8 +86,12 @@ created here are visible to P8X/OS (`DIR`) and the host `p8xfs.py` too.
   and starts at 0 on first use. A name may begin with a keyword (`TOTAL`,
   `FORK`) as long as it's followed by more letters/digits — `TO X` is the `TO`
   keyword, `TOTAL` is a variable. (No arrays.)
-- **Strings** exist only as **literals inside `PRINT`** (`PRINT "HI"`). There are
-  no string variables.
+- **Strings** are sequences of characters, up to **32** long. They appear as
+  **literals** (`"HI"`) and as **string variables**, whose names end in `$`
+  (`A$`, `NAME$`). A string variable is a *separate* variable from the numeric
+  one of the same base name (`A` and `A$` are unrelated) and starts out empty
+  (`""`). Up to **16** string variables. Strings are joined with `+`
+  (`A$ + "!"`), and a value longer than 32 characters is truncated to 32.
 
 ## Expressions
 
@@ -103,6 +107,12 @@ Operators, highest precedence first:
 Parentheses override precedence: `(2+3)*4` → 20. Comparisons are signed and can
 be used anywhere a number can: `PRINT 5>3` prints `1`; `LET F = A<0`.
 
+**String expressions** use `+` to concatenate (`A$ + "!"`), and the same six
+comparison operators compare two strings, character by character (a shorter
+string sorts before a longer one with the same prefix) — yielding `1`/`0` just
+like numeric comparisons, so they slot straight into `IF`:
+`IF A$ = "Y" THEN ...`, `IF N$ < "M" THEN ...`.
+
 ### Functions
 
 | Call | Returns |
@@ -110,8 +120,16 @@ be used anywhere a number can: `PRINT 5>3` prints `1`; `LET F = A<0`.
 | `ABS(x)` | absolute value of `x` |
 | `RND(n)` | a pseudo-random integer **1..n** (LCG; `RND(6)` is a die) |
 | `PEEK(addr)` | the byte (0–255) at memory address `addr` |
+| `LEN(s$)` | number of characters in the string `s$` |
+| `ASC(s$)` | code (0–255) of the first character (0 if empty) |
+| `CHR$(n)` | a one-character string with character code `n` |
+| `LEFT$(s$,n)` | the first `n` characters of `s$` |
+| `RIGHT$(s$,n)` | the last `n` characters of `s$` |
+| `MID$(s$,i[,n])` | `n` characters of `s$` starting at position `i` (1-based); to the end if `n` is omitted |
 
-`POKE addr,val` is a *statement* (below), not a function.
+`LEN`/`ASC` return numbers; `CHR$`/`LEFT$`/`RIGHT$`/`MID$` return strings (their
+names end in `$`). Counts are clamped to what the source actually holds, so
+`LEFT$("HI",9)` is just `"HI"`. `POKE addr,val` is a *statement* (below).
 
 ## Statements
 
@@ -121,14 +139,14 @@ A line may hold several statements separated by `:` —
 | Statement | Meaning |
 |-----------|---------|
 | `PRINT items` | print numbers/strings (see below); empty `PRINT` = blank line |
-| `LET v = expr` | assign; the `LET` is optional, so `A=5` works too |
+| `LET v = expr` | assign; the `LET` is optional, so `A=5` works too. Works for string variables too: `A$ = "HI"`, `N$ = F$ + L$` |
 | `IF expr THEN ...` | if `expr` is non-zero, run the rest of the line; the `THEN` part may be a statement (`THEN PRINT X`) **or** a line number (`THEN 100`, an implicit `GOTO`) |
 | `FOR v = a TO b [STEP s]` | begin a counting loop (`STEP` defaults to 1; negative start/limit OK) |
 | `NEXT [v]` | end of loop body: add the step, loop back if still ≤ limit |
 | `GOTO line` | jump to `line` |
 | `GOSUB line` | call a subroutine; execution resumes after the `GOSUB` on `RETURN` |
 | `RETURN` | return from the most recent `GOSUB` |
-| `INPUT v` | print `? ` and read a number from the console into `v` |
+| `INPUT v` | print `? ` and read a value from the console into `v`; for a string variable (`INPUT A$`) the whole reply line becomes the string |
 | `REM text` | comment; the rest of the line is ignored |
 | `END` | stop the running program |
 
@@ -243,12 +261,13 @@ so `10 REM (unbalanced "quotes` is accepted.
 
 ## Limits (current implementation)
 
-- Integers only (16-bit signed); no floating point.
-- Variables: integer only, names ≤ 6 significant chars, up to 32; no arrays,
-  no string variables.
+- Numbers are integers only (16-bit signed); no floating point.
+- Numeric variables: names ≤ 6 significant chars, up to 32; no arrays.
+- String variables (`A$`): up to 16, each holding up to 32 characters; longer
+  values are truncated. Not arrays, and there is no `STR$`/`VAL` yet (no
+  number↔string conversion beyond `CHR$`/`ASC`).
 - `FOR` loops nest **2 deep**; `GOSUB` nests **3 deep**.
-- No `DATA`/`READ`, `DIM`, `DEF FN`, `ON…GOTO`, `WHILE`, string functions, or
-  file/disk I/O.
+- No `DATA`/`READ`, `DIM`, `DEF FN`, `ON…GOTO`, `WHILE`, or data-file I/O.
 - Numbers are decimal only on input; `PRINT` shows signed decimal.
 
 These reflect what `p8xbasic.asm` implements today; see [README](README.md) and

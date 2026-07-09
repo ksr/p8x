@@ -89,11 +89,29 @@ FTP    = BASRAM+$BE          ; FOR/NEXT scratch: loop-back text pointer (2)
 VARCNT = BASRAM+$C0          ; number of variables defined (0..NVARS)
 VARIDX = BASRAM+$C1          ; VARGET result: the variable's table index
 NMBUF  = BASRAM+$C2          ; parsed variable name, NAMLEN chars, space-padded
+; string-variable scratch (all one-byte unless noted):
+SVARCNT= BASRAM+$C8          ; number of string variables defined (0..NSVARS)
+SVIDX  = BASRAM+$C9          ; SVARFIND result index
+SLENV  = BASRAM+$CA          ; string length scratch
+SI     = BASRAM+$CB          ; string byte-index / count scratch
+SJ     = BASRAM+$CC          ; string byte-count scratch
+SPA    = BASRAM+$D0          ; string source pointer (2)
+SPD    = BASRAM+$D2          ; string dest pointer (2)
 SEED   = BASRAM+$F4          ; RND state (2)
 POKEA  = BASRAM+$F6          ; POKE address (2)
 NAMLEN = 6                   ; significant variable-name length
 NVARS  = 32                  ; symbol-table capacity (entry = NAMLEN+2 = 8 bytes)
 VARTAB = BASRAM+$100         ; NVARS x 8 = 256 bytes ($x100..$x1FF)
+; string values are [len byte][data...]; length is capped at SLEN. Four fixed
+; work buffers live below the string-variable table, which lives below PROG.
+SLEN   = 32                  ; maximum stored string length
+SVENT  = 40                  ; string-var entry: NAMLEN name + 1 len + 32 data + pad
+NSVARS = 16                  ; string-variable table capacity
+STRACC = BASRAM+$200         ; SEVAL result accumulator (64 bytes)
+STRTMP = BASRAM+$240         ; current term being produced (64)
+STRARG = BASRAM+$280         ; a string function's string argument (64)
+STRCMP = BASRAM+$2C0         ; saved left operand during a string comparison (64)
+SVARTAB= BASRAM+$300         ; NSVARS x SVENT = 640 bytes ($x300..$x57F)
 
 ; keyword tokens (>= $80 so they never collide with text or the 00 terminator)
 TOK_PRINT = $80
@@ -121,10 +139,17 @@ TOK_BYE  = $95
 TOK_HELP = $96
 TOK_SAVE = $97
 TOK_LOAD = $98
+; string tokens
+TOK_CHRS  = $99          ; CHR$
+TOK_LEFTS = $9A          ; LEFT$
+TOK_RIGHTS= $9B          ; RIGHT$
+TOK_MIDS  = $9C          ; MID$
+TOK_LEN   = $9D          ; LEN   (numeric result)
+TOK_ASC   = $9E          ; ASC   (numeric result)
 
 MONITOR = $0000          ; reset vector — BYE returns here
 
-PROG   = BASRAM+$200          ; program storage (VARTAB occupies $100..$1FF)
+PROG   = BASRAM+$580          ; program storage (string table occupies $300..$57F)
 PBUF   = $C000          ; rebuild scratch buffer
 STKTOP = $FEFF
 
@@ -426,9 +451,9 @@ dp_item: JSR  SKIPSP
         LDB  #':'
         CMP
         JZ   dp_nl
-        LDB  #'"'
-        CMP
-        JZ   dp_str
+        JSR  SPEEK                  ; string item (literal / var / concat / function)?
+        LDA  MATCHF
+        JNZ  dp_pstr
         JSR  EVAL                   ; numeric item
         LDA  RESULT
         STA  LNUM
@@ -436,17 +461,8 @@ dp_item: JSR  SKIPSP
         STA  LNUM+1
         JSR  PRDEC
         JMP  dp_sep
-dp_str: INP2                        ; string literal
-ds_l:   LDA  (P2)
-        JZ   dp_nl
-        LDB  #'"'
-        CMP
-        JZ   ds_e
-        LDA  (P2)
-        JSR  PUTC
-        INP2
-        JMP  ds_l
-ds_e:   INP2
+dp_pstr: JSR  SEVAL                  ; string item -> STRACC
+        JSR  SPUT
 dp_sep: JSR  SKIPSP
         LDA  (P2)
         LDB  #$3B                   ; ';' (byte value: ';' can't be a char literal here)
@@ -475,9 +491,12 @@ dp_done: RTS
 DOLET:  LDA  (P2)
         LDB  #TOK_LET
         CMP
-        JNZ  dl_var
+        JNZ  dl_chk
         INP2                        ; skip LET token
         JSR  SKIPSP
+dl_chk: JSR  SPEEK                   ; string target (NAME$)?  -> string assignment
+        LDA  MATCHF
+        JNZ  dl_str
 dl_var: JSR  VARGET                  ; parse name, look up/create -> P1 = &value
         LDA  MATCHF
         JZ   dl_err
@@ -501,6 +520,35 @@ dl_var: JSR  VARGET                  ; parse name, look up/create -> P1 = &value
         INP1
         LDA  RESULT+1
         STA  (P1)
+        RTS
+; string assignment: NAME$ = <string expr>
+dl_str: JSR  SVARGET                 ; parse NAME$, look up/create -> P1 = &entry
+        LDA  MATCHF
+        JZ   dl_err
+        TPA1L                        ; save entry address across SEVAL
+        STA  SAVE1
+        TPA1H
+        STA  SAVE1+1
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #'='
+        CMP
+        JNZ  dl_err
+        INP2
+        JSR  SEVAL                   ; STRACC = string value
+        LDA  #<STRACC                ; store STRACC into the variable's data field
+        STA  SPA
+        LDA  #>STRACC
+        STA  SPA+1
+        LDA  SAVE1                   ; SPD = entry + NAMLEN (the len byte)
+        LDB  #NAMLEN
+        ADD
+        STA  SPD
+        LDA  SAVE1+1
+        JNC  dls1
+        INC
+dls1:   STA  SPD+1
+        JSR  SMOVE
         RTS
 dl_err: JMP  SYNERR
 
@@ -668,6 +716,9 @@ DOEND:  INP2
 ; INPUT <var> — prompt "? ", read a number from the console into <var>
 DOINPUT: INP2
         JSR  SKIPSP
+        JSR  SPEEK                   ; string variable (NAME$)?  -> read a string
+        LDA  MATCHF
+        JNZ  in_str
         JSR  VARGET                 ; parse name, look up/create -> P1 = &value
         LDA  MATCHF
         JZ   in_err
@@ -697,6 +748,61 @@ DOINPUT: INP2
         LDA  LNUM+1
         STA  (P1)
         LDA  GTMP                   ; restore program text pointer
+        TAP2L
+        LDA  GTMP+1
+        TAP2H
+        RTS
+; INPUT into a string variable: read a whole line into NAME$ (capped at SLEN)
+in_str: JSR  SVARGET                 ; P1 = &entry
+        TPA1L
+        STA  SAVE1
+        TPA1H
+        STA  SAVE1+1
+        TPA2L                        ; save program text pointer
+        STA  GTMP
+        TPA2H
+        STA  GTMP+1
+        LDA  #'?'
+        JSR  PUTC
+        LDA  #' '
+        JSR  PUTC
+        JSR  GETLINE                 ; reply -> LBUF
+        LDP2 #LBUF                    ; copy LBUF -> STRACC (len+data, capped)
+        LDP1 #STRACC
+        INP1
+        LDA  #0
+        STA  SI
+ins_cl: LDA  (P2)
+        JZ   ins_ce
+        LDA  SI
+        LDB  #SLEN
+        CMP
+        JC   ins_ce
+        LDA  (P2)
+        STA  (P1)
+        INP1
+        INP2
+        LDA  SI
+        INC
+        STA  SI
+        JMP  ins_cl
+ins_ce: LDP1 #STRACC
+        LDA  SI
+        STA  (P1)
+        LDA  #<STRACC                ; store STRACC -> variable data
+        STA  SPA
+        LDA  #>STRACC
+        STA  SPA+1
+        LDA  SAVE1
+        LDB  #NAMLEN
+        ADD
+        STA  SPD
+        LDA  SAVE1+1
+        JNC  ins_s1
+        INC
+ins_s1: STA  SPD+1
+        JSR  SMOVE
+        LDA  GTMP                    ; restore program text pointer
         TAP2L
         LDA  GTMP+1
         TAP2H
@@ -1061,8 +1167,13 @@ nx_err: JMP  SYNERR
 ;   FACTOR = number | variable | '(' EXPR ')'
 ; The running left value is pushed (lo,hi) across the recursive call.
 ;==============================================================================
-; EVAL — an arithmetic EXPR, then an optional comparison -> RESULT (1=true/0=false)
-EVAL:   JSR  EXPR
+; EVAL — an arithmetic EXPR, then an optional comparison -> RESULT (1=true/0=false).
+; A string-valued operand (detected by SPEEK) routes to EVALSTR, which requires a
+; relational operator and yields 1/0 just like the numeric comparison below.
+EVAL:   JSR  SPEEK
+        LDA  MATCHF
+        JNZ  EVALSTR
+        JSR  EXPR
         JSR  SKIPSP
         LDA  (P2)
         LDB  #'='
@@ -1344,6 +1455,14 @@ FACTOR: JSR  SKIPSP
         CMP
         JZ   fa_peek
         LDA  (P2)
+        LDB  #TOK_LEN
+        CMP
+        JZ   fa_len
+        LDA  (P2)
+        LDB  #TOK_ASC
+        CMP
+        JZ   fa_asc
+        LDA  (P2)
         LDB  #'('
         CMP
         JZ   fa_par
@@ -1568,33 +1687,47 @@ ia_no:  LDA  #0
 ; VARGET — parse a variable name at (P2) (consuming it), look it up (creating a
 ; new zeroed entry on first use), and set P1 = &value and VARIDX = its index.
 ; MATCHF=1 if (P2) started a valid name (letter), else 0 (P2 unchanged).
-VARGET: LDA  (P2)               ; first char must be a letter
+VARGET: JSR  PARSENAME          ; NMBUF = name; MATCHF=1 if it started with a letter
+        LDA  MATCHF
+        JZ   vg_bad
+        JSR  VARFIND           ; P1 = &value, VARIDX = index
+        LDA  #1
+        STA  MATCHF
+        RTS
+vg_bad: LDA  #0
+        STA  MATCHF
+        RTS
+
+; PARSENAME — parse an identifier at (P2) into NMBUF (NAMLEN chars, upcased,
+; space-padded), consuming it. MATCHF=1 if (P2) began with a letter (a name was
+; read), else 0 with P2 unchanged. Shared by VARGET (numeric) and SVARGET (string).
+PARSENAME: LDA (P2)             ; first char must be a letter
         JSR  UPCHAR
         LDB  #'A'
         SUB
-        JNC  vg_bad
+        JNC  pn_bad
         LDB  #26
         CMP
-        JC   vg_bad
+        JC   pn_bad
         LDP1 #NMBUF             ; blank the name field
         LDA  #NAMLEN
         STA  TMPC
-vg_fz:  LDA  #' '
+pn_fz:  LDA  #' '
         STA  (P1)
         INP1
         LDA  TMPC
         DEC
         STA  TMPC
-        JNZ  vg_fz
+        JNZ  pn_fz
         LDP1 #NMBUF            ; copy identifier chars (letters/digits), upcased
         LDA  #NAMLEN
         STA  TMPC
-vg_cp:  LDA  (P2)
+pn_cp:  LDA  (P2)
         JSR  ISALNUM
         LDA  MATCHF
-        JZ   vg_end            ; non-alnum -> end of name
+        JZ   pn_end            ; non-alnum -> end of name
         LDA  TMPC
-        JZ   vg_skip           ; name field full -> consume but don't store
+        JZ   pn_skip           ; name field full -> consume but don't store
         LDA  (P2)
         JSR  UPCHAR
         STA  (P1)
@@ -1602,13 +1735,12 @@ vg_cp:  LDA  (P2)
         LDA  TMPC
         DEC
         STA  TMPC
-vg_skip: INP2                  ; consume the char
-        JMP  vg_cp
-vg_end: JSR  VARFIND           ; P1 = &value, VARIDX = index
-        LDA  #1
+pn_skip: INP2                  ; consume the char
+        JMP  pn_cp
+pn_end: LDA  #1
         STA  MATCHF
         RTS
-vg_bad: LDA  #0
+pn_bad: LDA  #0
         STA  MATCHF
         RTS
 
@@ -1941,6 +2073,7 @@ NEWPROG: LDA #0              ; empty program = bare 00,00 marker at PROG
         STA  PROG
         STA  PROG+1
         STA  VARCNT          ; and no variables defined
+        STA  SVARCNT         ; and no string variables defined
         RTS
 
 ;==============================================================================
@@ -2272,6 +2405,791 @@ CR_PUTW: STA TMPC                   ; write A to (WP), WP++
         STA  WP+1
         RTS
 
+;==============================================================================
+; STRING SUPPORT
+;
+; A string value is [len byte][data...], length capped at SLEN. String variables
+; (NAME$) live in SVARTAB (SVENT-byte entries: NAMLEN name + len + data). Four
+; fixed buffers carry values around: STRACC (SEVAL result), STRTMP (one term),
+; STRARG (a function's string arg), STRCMP (saved LHS of a comparison).
+;==============================================================================
+
+; SPEEK — does (P2) begin a STRING-valued expression? MATCHF=1/0; P2 unchanged.
+; Yes for a "literal", a string function (CHR$/LEFT$/RIGHT$/MID$), or an
+; identifier immediately followed by '$'.
+SPEEK:  JSR  SKIPSP                   ; leading spaces are insignificant
+        LDA  #0
+        STA  MATCHF
+        LDA  (P2)
+        LDB  #'"'
+        CMP
+        JZ   sp_yes
+        LDA  (P2)
+        LDB  #TOK_CHRS
+        CMP
+        JZ   sp_yes
+        LDA  (P2)
+        LDB  #TOK_LEFTS
+        CMP
+        JZ   sp_yes
+        LDA  (P2)
+        LDB  #TOK_RIGHTS
+        CMP
+        JZ   sp_yes
+        LDA  (P2)
+        LDB  #TOK_MIDS
+        CMP
+        JZ   sp_yes
+        LDA  (P2)                    ; a letter? then look for a trailing '$'
+        JSR  UPCHAR
+        LDB  #'A'
+        CMP                          ; C=1 if >= 'A'
+        JNC  sp_no
+        LDB  #$5B                    ; 'Z' + 1
+        CMP                          ; C=1 if > 'Z'
+        JC   sp_no
+        TPA2L                         ; walk a copy of P2 over the identifier
+        TAP1L
+        TPA2H
+        TAP1H
+sp_w:   LDA  (P1)
+        JSR  ISALNUM
+        LDA  MATCHF
+        JZ   sp_chk
+        INP1
+        JMP  sp_w
+sp_chk: LDA  (P1)
+        LDB  #'$'
+        CMP
+        JZ   sp_yes
+        LDA  #0
+        STA  MATCHF
+        RTS
+sp_yes: LDA  #1
+        STA  MATCHF
+        RTS
+sp_no:  LDA  #0
+        STA  MATCHF
+        RTS
+
+; SVARGET — parse NAME$ at (P2) (consuming it, including the '$'), find/create the
+; string variable, and set P1 = &entry (start of name) with MATCHF=1. If the name
+; is not followed by '$', MATCHF=0.
+SVARGET: JSR PARSENAME
+        LDA  MATCHF
+        JZ   svg_bad
+        LDA  (P2)
+        LDB  #'$'
+        CMP
+        JNZ  svg_bad
+        INP2                         ; consume '$'
+        JSR  SVARFIND                ; P1 = &entry
+        LDA  #1
+        STA  MATCHF
+        RTS
+svg_bad: LDA #0
+        STA  MATCHF
+        RTS
+
+; SVENTADDR — P1 = SVARTAB + SI*SVENT  (SI = string-var index)
+SVENTADDR: LDA SI
+        STA  NUM1
+        LDA  #0
+        STA  NUM1+1
+        LDA  #SVENT
+        STA  NUM2
+        LDA  #0
+        STA  NUM2+1
+        JSR  MUL16                   ; NUM1 = SI*SVENT
+        LDA  #<SVARTAB
+        STA  NUM2
+        LDA  #>SVARTAB
+        STA  NUM2+1
+        JSR  ADD16                   ; NUM1 += SVARTAB
+        LDA  NUM1
+        TAP1L
+        LDA  NUM1+1
+        TAP1H
+        RTS
+
+; SVARFIND — look up NMBUF in SVARTAB. On a hit or after creating a new (empty)
+; entry, P1 = &entry, SVIDX = index. Saves the input cursor (P2) on the stack.
+SVARFIND: TPA2L
+        PHA
+        TPA2H
+        PHA
+        LDA  #0
+        STA  SI                       ; i = 0
+svf2lp: LDA  SI
+        LDB  SVARCNT
+        CMP
+        JZ   svf2new                  ; i == SVARCNT -> not found
+        JSR  SVENTADDR                ; P1 = &entry i
+        LDP2 #NMBUF
+        LDA  #NAMLEN
+        STA  TMPC
+        LDA  #1
+        STA  MATCHF
+svf2cm: LDA  (P1)
+        STA  CYTMP
+        LDA  (P2)
+        LDB  CYTMP
+        CMP
+        JZ   svf2c1
+        LDA  #0
+        STA  MATCHF
+svf2c1: INP1
+        INP2
+        LDA  TMPC
+        DEC
+        STA  TMPC
+        JNZ  svf2cm
+        LDA  MATCHF
+        JNZ  svf2hit
+        LDA  SI
+        INC
+        STA  SI
+        JMP  svf2lp
+svf2hit: LDA SI
+        STA  SVIDX
+        JSR  SVENTADDR                ; P1 = &entry
+        JMP  svf2done
+svf2new: LDA SVARCNT                  ; append a new entry
+        STA  SVIDX
+        STA  SI
+        JSR  SVENTADDR                ; P1 = &entry
+        LDP2 #NMBUF                    ; copy the name in
+        LDA  #NAMLEN
+        STA  TMPC
+svf2cp: LDA  (P2)
+        STA  (P1)
+        INP1
+        INP2
+        LDA  TMPC
+        DEC
+        STA  TMPC
+        JNZ  svf2cp
+        LDA  #0                        ; empty value (P1 now at the len byte)
+        STA  (P1)
+        LDA  SVARCNT
+        INC
+        STA  SVARCNT
+        JSR  SVENTADDR                ; reset P1 = &entry for the caller
+svf2done: PLA
+        TAP2H
+        PLA
+        TAP2L
+        RTS
+
+; SMOVE — copy the string at (SPA) to (SPD) (len byte + data). Uses P2 internally
+; as the destination walker, so it saves and restores the parse cursor.
+SMOVE:  TPA2L
+        PHA
+        TPA2H
+        PHA
+        LDA  SPA
+        TAP1L
+        LDA  SPA+1
+        TAP1H
+        LDA  SPD
+        TAP2L
+        LDA  SPD+1
+        TAP2H
+        LDA  (P1)
+        STA  SLENV
+        STA  (P2)
+        INP1
+        INP2
+        LDA  SLENV
+        JZ   smv_d
+        STA  TMPC
+smv_l:  LDA  (P1)+
+        STA  (P2)
+        INP2
+        LDA  TMPC
+        DEC
+        STA  TMPC
+        JNZ  smv_l
+smv_d:  PLA
+        TAP2H
+        PLA
+        TAP2L
+        RTS
+
+; SCPYLIT — copy the "..." literal at (P2) (P2 at the opening quote) into (SPD),
+; capping at SLEN and consuming through the closing quote.
+SCPYLIT: INP2
+        LDA  SPD
+        TAP1L
+        LDA  SPD+1
+        TAP1H
+        INP1                          ; skip the len byte -> data
+        LDA  #0
+        STA  SI
+scl_l:  LDA  (P2)
+        JZ   scl_end
+        LDB  #'"'
+        CMP
+        JZ   scl_cl
+        LDA  SI
+        LDB  #SLEN
+        CMP
+        JC   scl_sk                   ; full -> consume but don't store
+        LDA  (P2)
+        STA  (P1)
+        INP1
+        LDA  SI
+        INC
+        STA  SI
+scl_sk: INP2
+        JMP  scl_l
+scl_cl: INP2
+scl_end: LDA SPD
+        TAP1L
+        LDA  SPD+1
+        TAP1H
+        LDA  SI
+        STA  (P1)
+        RTS
+
+; SAPP — append the string at (SPA) onto (SPD), capping the result at SLEN.
+; Uses P2 as the destination walker, so it preserves the parse cursor.
+SAPP:   TPA2L
+        PHA
+        TPA2H
+        PHA
+        LDA  SPA
+        TAP1L
+        LDA  SPA+1
+        TAP1H
+        LDA  (P1)
+        STA  SJ                        ; src length
+        INP1
+        LDA  SPD
+        TAP2L
+        LDA  SPD+1
+        TAP2H
+        LDA  (P2)
+        STA  SI                        ; dst length
+        INP2
+        LDA  SI                        ; advance P2 past existing data
+        STA  TMPC
+sap_ad: LDA  TMPC
+        JZ   sap_go
+        INP2
+        LDA  TMPC
+        DEC
+        STA  TMPC
+        JMP  sap_ad
+sap_go: LDA  SJ
+        JZ   sap_fin
+        LDA  SI
+        LDB  #SLEN
+        CMP
+        JC   sap_fin                   ; dst full
+        LDA  (P1)+
+        STA  (P2)
+        INP2
+        LDA  SI
+        INC
+        STA  SI
+        LDA  SJ
+        DEC
+        STA  SJ
+        JMP  sap_go
+sap_fin: LDA SPD
+        TAP1L
+        LDA  SPD+1
+        TAP1H
+        LDA  SI
+        STA  (P1)
+        PLA
+        TAP2H
+        PLA
+        TAP2L
+        RTS
+
+; SPUT — print the string in STRACC.
+SPUT:   LDP1 #STRACC
+        LDA  (P1)
+        STA  TMPC
+        INP1
+spt_l:  LDA  TMPC
+        JZ   spt_d
+        LDA  (P1)+
+        JSR  PUTC
+        LDA  TMPC
+        DEC
+        STA  TMPC
+        JMP  spt_l
+spt_d:  RTS
+
+; SUBSTR — STRTMP = substring of STRARG starting at 0-based SI, length SJ, both
+; clamped to the source. Used by LEFT$/RIGHT$/MID$.
+SUBSTR: TPA2L
+        PHA
+        TPA2H
+        PHA
+        LDP1 #STRARG
+        LDA  (P1)
+        STA  SLENV                     ; L
+        LDA  SI
+        LDB  SLENV
+        CMP                            ; SI >= L ?
+        JC   sub_empty
+        LDA  SLENV                     ; avail = L - SI
+        LDB  SI
+        SUB
+        STA  SLENV
+        LDA  SJ                        ; count = min(SJ, avail)
+        LDB  SLENV
+        CMP                            ; C=1 if SJ >= avail
+        JNC  sub_pos
+        LDA  SLENV
+        STA  SJ
+sub_pos: LDP1 #STRARG                  ; P1 = STRARG + 1 + SI
+        INP1
+        LDA  SI
+        STA  TMPC
+sub_ad: LDA  TMPC
+        JZ   sub_go
+        INP1
+        LDA  TMPC
+        DEC
+        STA  TMPC
+        JMP  sub_ad
+sub_go: LDP2 #STRTMP                   ; P2 = STRTMP data
+        INP2
+        LDA  SJ
+        STA  TMPC
+sub_cp: LDA  TMPC
+        JZ   sub_fin
+        LDA  (P1)+
+        STA  (P2)
+        INP2
+        LDA  TMPC
+        DEC
+        STA  TMPC
+        JMP  sub_cp
+sub_fin: LDP2 #STRTMP
+        LDA  SJ
+        STA  (P2)
+        JMP  sub_done
+sub_empty: LDP2 #STRTMP
+        LDA  #0
+        STA  (P2)
+sub_done: PLA
+        TAP2H
+        PLA
+        TAP2L
+        RTS
+
+; CLAMPN — SJ = RESULT clamped to 0..SLEN (negative -> 0, >255 -> SLEN).
+CLAMPN: LDA  RESULT+1
+        JZ   cn_lo
+        LDB  #$80
+        AND
+        JZ   cn_big
+        LDA  #0                        ; negative
+        STA  SJ
+        RTS
+cn_big: LDA  #SLEN
+        STA  SJ
+        RTS
+cn_lo:  LDA  RESULT
+        STA  SJ
+        RTS
+
+; SARG — read a string variable or literal at (P2) into (SPD).
+SARG:   JSR  SKIPSP
+        LDA  (P2)
+        LDB  #'"'
+        CMP
+        JZ   SCPYLIT                   ; literal -> (SPD); returns
+        JSR  SVARGET
+        LDA  MATCHF
+        JZ   sarg_err
+        TPA1L                          ; SPA = &entry + NAMLEN
+        LDB  #NAMLEN
+        ADD
+        STA  SPA
+        TPA1H
+        JNC  sarg_v1
+        INC
+sarg_v1: STA SPA+1
+        JSR  SMOVE
+        RTS
+sarg_err: JMP SYNERR
+
+; STERM — produce one string term at (P2) into STRTMP.
+STERM:  JSR  SKIPSP
+        LDA  (P2)
+        LDB  #'"'
+        CMP
+        JZ   stm_lit
+        LDA  (P2)
+        LDB  #TOK_CHRS
+        CMP
+        JZ   stm_chr
+        LDA  (P2)
+        LDB  #TOK_LEFTS
+        CMP
+        JZ   stm_left
+        LDA  (P2)
+        LDB  #TOK_RIGHTS
+        CMP
+        JZ   stm_right
+        LDA  (P2)
+        LDB  #TOK_MIDS
+        CMP
+        JZ   stm_mid
+        JSR  SVARGET                   ; else: a string variable -> copy its data
+        LDA  MATCHF
+        JZ   stm_err
+        TPA1L                          ; SPA = &entry + NAMLEN
+        LDB  #NAMLEN
+        ADD
+        STA  SPA
+        TPA1H
+        JNC  stm_v1
+        INC
+stm_v1: STA  SPA+1
+        LDA  #<STRTMP
+        STA  SPD
+        LDA  #>STRTMP
+        STA  SPD+1
+        JSR  SMOVE
+        RTS
+stm_lit: LDA #<STRTMP
+        STA  SPD
+        LDA  #>STRTMP
+        STA  SPD+1
+        JSR  SCPYLIT
+        RTS
+stm_chr: INP2
+        JSR  PARGET                    ; RESULT = code
+        LDP1 #STRTMP
+        LDA  #1
+        STA  (P1)
+        INP1
+        LDA  RESULT
+        STA  (P1)
+        RTS
+stm_err: JMP  SYNERR
+
+; STM_OPEN — for LEFT$/RIGHT$/MID$: consume '(' , read the string arg into STRARG,
+; consume ',' , evaluate the first numeric arg -> RESULT.
+STM_OPEN: JSR SKIPSP
+        LDA  (P2)
+        LDB  #'('
+        CMP
+        JNZ  stm_err
+        INP2
+        LDA  #<STRARG
+        STA  SPD
+        LDA  #>STRARG
+        STA  SPD+1
+        JSR  SARG
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #','
+        CMP
+        JNZ  stm_err
+        INP2
+        JSR  EXPR
+        RTS
+; STM_CLOSE — build the substring (STRARG[SI..], SJ chars) into STRTMP, consume ')'.
+STM_CLOSE: JSR SUBSTR
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #')'
+        CMP
+        JNZ  stm_err
+        INP2
+        RTS
+stm_left: INP2
+        JSR  STM_OPEN                  ; STRARG set, RESULT = n
+        JSR  CLAMPN                    ; SJ = n
+        LDA  #0
+        STA  SI
+        JSR  STM_CLOSE
+        RTS
+stm_right: INP2
+        JSR  STM_OPEN
+        JSR  CLAMPN                    ; SJ = n
+        LDP1 #STRARG
+        LDA  (P1)
+        STA  SLENV                     ; L
+        LDA  SJ
+        LDB  SLENV
+        CMP                            ; n >= L ?
+        JC   str_all
+        LDA  SLENV                     ; SI = L - n
+        LDB  SJ
+        SUB
+        STA  SI
+        JMP  str_sub
+str_all: LDA #0
+        STA  SI
+str_sub: JSR STM_CLOSE
+        RTS
+stm_mid: INP2
+        JSR  STM_OPEN                  ; STRARG set, RESULT = i (1-based)
+        LDA  RESULT+1
+        JNZ  mid_hi
+        LDA  RESULT
+        JZ   mid_zero                  ; i = 0 -> treat as 1
+        LDB  #1
+        SUB                            ; SI = i - 1
+        STA  SI
+        JMP  mid_len
+mid_zero: LDA #0
+        STA  SI
+        JMP  mid_len
+mid_hi: LDB  #$80
+        AND
+        JZ   mid_big                   ; large positive start -> past end
+        LDA  #0                        ; negative -> start 0
+        STA  SI
+        JMP  mid_len
+mid_big: LDA  #SLEN
+        STA  SI
+mid_len: JSR SKIPSP                    ; optional length argument
+        LDA  (P2)
+        LDB  #','
+        CMP
+        JZ   mid_hasl
+        LDA  #SLEN                      ; no length -> to end
+        STA  SJ
+        JMP  mid_cl
+mid_hasl: INP2
+        JSR  EXPR
+        JSR  CLAMPN                     ; SJ = n
+mid_cl: JSR  STM_CLOSE
+        RTS
+
+; SEVAL — evaluate a string expression at (P2): STERM { '+' STERM } -> STRACC.
+SEVAL:  LDP1 #STRACC                   ; start empty
+        LDA  #0
+        STA  (P1)
+        JSR  STERM                     ; first term -> STRTMP
+        JSR  sev_app
+sev_l:  JSR  SKIPSP
+        LDA  (P2)
+        LDB  #'+'
+        CMP
+        JNZ  sev_d
+        INP2
+        JSR  STERM
+        JSR  sev_app
+        JMP  sev_l
+sev_d:  RTS
+sev_app: LDA #<STRTMP                   ; STRACC += STRTMP
+        STA  SPA
+        LDA  #>STRTMP
+        STA  SPA+1
+        LDA  #<STRACC
+        STA  SPD
+        LDA  #>STRACC
+        STA  SPD+1
+        JSR  SAPP
+        RTS
+
+; EVALSTR — string comparison in a numeric context: SEVAL relop SEVAL -> RESULT
+; (1/0). Reached from EVAL when SPEEK sees a string operand.
+EVALSTR: JSR SEVAL                      ; LHS -> STRACC
+        LDA  #<STRACC                   ; save LHS in STRCMP
+        STA  SPA
+        LDA  #>STRACC
+        STA  SPA+1
+        LDA  #<STRCMP
+        STA  SPD
+        LDA  #>STRCMP
+        STA  SPD+1
+        JSR  SMOVE
+        JSR  SRELOP                     ; RELOP set; C=1 if no operator
+        JC   es_err
+        JSR  SEVAL                      ; RHS -> STRACC
+        TPA2L                            ; SCMP walks P2; preserve the cursor
+        PHA
+        TPA2H
+        PHA
+        JSR  SCMP                        ; GEF,EQF from STRCMP vs STRACC
+        PLA
+        TAP2H
+        PLA
+        TAP2L
+        JMP  ev_disp                     ; reuse numeric relop dispatch
+es_err: JMP  SYNERR
+
+; SRELOP — parse a relational operator at (P2) into RELOP (0..5); C=1 if none.
+SRELOP: JSR  SKIPSP
+        LDA  (P2)
+        LDB  #'='
+        CMP
+        JZ   srl_eq
+        LDA  (P2)
+        LDB  #'<'
+        CMP
+        JZ   srl_lt
+        LDA  (P2)
+        LDB  #'>'
+        CMP
+        JZ   srl_gt
+        SEC
+        RTS
+srl_eq: INP2
+        LDA  #0
+        STA  RELOP
+        CLC
+        RTS
+srl_lt: INP2
+        LDA  (P2)
+        LDB  #'='
+        CMP
+        JZ   srl_le
+        LDA  (P2)
+        LDB  #'>'
+        CMP
+        JZ   srl_ne
+        LDA  #1
+        STA  RELOP
+        CLC
+        RTS
+srl_le: INP2
+        LDA  #3
+        STA  RELOP
+        CLC
+        RTS
+srl_ne: INP2
+        LDA  #5
+        STA  RELOP
+        CLC
+        RTS
+srl_gt: INP2
+        LDA  (P2)
+        LDB  #'='
+        CMP
+        JZ   srl_ge
+        LDA  #2
+        STA  RELOP
+        CLC
+        RTS
+srl_ge: INP2
+        LDA  #4
+        STA  RELOP
+        CLC
+        RTS
+
+; SCMP — lexicographic compare STRCMP vs STRACC; sets GEF (>=), EQF (==).
+SCMP:   LDP1 #STRCMP
+        LDA  (P1)
+        STA  SLENV                      ; La
+        LDP2 #STRACC
+        LDA  (P2)
+        STA  SI                         ; Lb
+        INP1
+        INP2
+        LDA  SLENV                       ; min(La,Lb) -> SJ
+        LDB  SI
+        CMP
+        JC   sc_minb
+        LDA  SLENV
+        STA  SJ
+        JMP  sc_lp
+sc_minb: LDA SI
+        STA  SJ
+sc_lp:  LDA  SJ
+        JZ   sc_leneq
+        LDA  (P1)
+        STA  CYTMP                        ; a
+        LDA  (P2)
+        STA  TMPC                         ; b
+        LDA  CYTMP
+        LDB  TMPC
+        CMP                              ; Z if a==b, C if a>=b
+        JZ   sc_next
+        JC   sc_gt
+        LDA  #0                           ; a < b
+        STA  GEF
+        STA  EQF
+        RTS
+sc_gt:  LDA  #1
+        STA  GEF
+        LDA  #0
+        STA  EQF
+        RTS
+sc_next: INP1
+        INP2
+        LDA  SJ
+        DEC
+        STA  SJ
+        JMP  sc_lp
+sc_leneq: LDA SLENV                       ; equal prefix -> shorter is less
+        LDB  SI
+        CMP
+        JZ   sc_eq
+        JC   sc_gt2
+        LDA  #0
+        STA  GEF
+        STA  EQF
+        RTS
+sc_gt2: LDA  #1
+        STA  GEF
+        LDA  #0
+        STA  EQF
+        RTS
+sc_eq:  LDA  #1
+        STA  GEF
+        STA  EQF
+        RTS
+
+; FN_SARG — for LEN/ASC: consume '(' , read the string arg into STRARG, consume ')'.
+FN_SARG: JSR SKIPSP
+        LDA  (P2)
+        LDB  #'('
+        CMP
+        JNZ  fn_err
+        INP2
+        LDA  #<STRARG
+        STA  SPD
+        LDA  #>STRARG
+        STA  SPD+1
+        JSR  SARG
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #')'
+        CMP
+        JNZ  fn_err
+        INP2
+        RTS
+fn_err: JMP  SYNERR
+
+; fa_len / fa_asc — numeric string functions, called from FACTOR.
+fa_len: INP2
+        JSR  FN_SARG
+        LDP1 #STRARG
+        LDA  (P1)
+        STA  RESULT
+        LDA  #0
+        STA  RESULT+1
+        RTS
+fa_asc: INP2
+        JSR  FN_SARG
+        LDP1 #STRARG
+        LDA  (P1)
+        JZ   fa_asc0
+        INP1
+        LDA  (P1)
+        STA  RESULT
+        LDA  #0
+        STA  RESULT+1
+        RTS
+fa_asc0: LDA #0
+        STA  RESULT
+        STA  RESULT+1
+        RTS
+
 ; ---------------------------------------------------------------------------
 ; CHECKLINE — structural syntax check of the just-crunched line in LBUF, run at
 ; entry so a malformed line is rejected immediately (with the program unchanged)
@@ -2385,6 +3303,24 @@ ckd_1:  LDB  #TOK_REM
         CMP
         JZ   ckd_bad
         LDB  #TOK_PEEK
+        CMP
+        JZ   ckd_bad
+        LDB  #TOK_CHRS
+        CMP
+        JZ   ckd_bad
+        LDB  #TOK_LEFTS
+        CMP
+        JZ   ckd_bad
+        LDB  #TOK_RIGHTS
+        CMP
+        JZ   ckd_bad
+        LDB  #TOK_MIDS
+        CMP
+        JZ   ckd_bad
+        LDB  #TOK_LEN
+        CMP
+        JZ   ckd_bad
+        LDB  #TOK_ASC
         CMP
         JZ   ckd_bad
         CLC                         ; a statement keyword -> ok
@@ -2546,6 +3482,18 @@ KWTAB:  .ascii "PRINT"
         .byte $97
         .ascii "LOAD"
         .byte $98
+        .ascii "CHR"
+        .byte $24,$99               ; '$' then token: CHR$
+        .ascii "LEFT"
+        .byte $24,$9A               ; LEFT$
+        .ascii "RIGHT"
+        .byte $24,$9B               ; RIGHT$
+        .ascii "MID"
+        .byte $24,$9C               ; MID$
+        .ascii "LEN"
+        .byte $9D
+        .ascii "ASC"
+        .byte $9E
         .byte $00
 
 ;==============================================================================
