@@ -658,14 +658,18 @@ Last updated: 2026-07-08
       table and may require nudging `VARTAB`/`PROG` placement). Also: names
       longer than 6 chars silently alias on their first 6 — could warn/error
       instead.
-- [ ] **BASIC string-valued variables** (e.g. `A$ = "HELLO"`): add a string
-      type alongside integers — string literals, `$`-suffixed variables,
-      `PRINT`/`INPUT` of strings, and concatenation. Needs string storage
-      (fixed per-variable buffers are simplest on this machine; a heap +
-      compaction is the general but heavier route) and type tracking in the
-      expression evaluator. Orthogonal to (and larger than) multi-character
-      variable names — best layered on after those land.
-- [ ] **BASIC: check syntax on line entry, not just at RUN.** Today entering a
+- [x] **BASIC string-valued variables** — DONE (2026-07-09). `A$`-style
+      variables (16 fixed 32-byte slots), assignment, `+` concatenation,
+      `=`/`<>`/`<`/`>`/`<=`/`>=` comparison in `IF`, `PRINT`/`INPUT` of strings,
+      and `LEN`/`ASC`/`CHR$`/`LEFT$`/`RIGHT$`/`MID$`. `STR$`/`VAL` deferred.
+- [x] **BASIC data files** — DONE (2026-07-09). One sequential channel over the
+      BIOS byte streams: `OPEN name$ [FOR] OUTPUT|INPUT`, `PRINT#`, `INPUT#`,
+      `CLOSE` (root files; one value per CR record). No `EOF()` test yet.
+- [x] **BASIC: check syntax on line entry, not just at RUN** — DONE (2026-07-09)
+      via `CHECKLINE` (option (a): a lightweight structural validator — legal
+      statement leader, balanced parens, terminated strings; forward line
+      references stay runtime). Original notes below.
+      Today entering a
       program line runs `CRUNCH` (tokenizes keywords in place) and stores it
       (`DOLINE`, ~p8xbasic.asm:1821) with no grammar validation — a malformed
       statement (`10 PRINT )`, a bad expression, a missing operand) is only
