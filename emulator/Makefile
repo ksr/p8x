@@ -108,6 +108,7 @@ test-os: p8xemu ucode
 test-basic: p8xemu ucode
 	sh test/mon_test.sh
 	sh test/basic_disk_test.sh
+	sh test/basic_syntax_test.sh
 	sh test/basic_saveload_test.sh
 	sh test/os_basic_test.sh
 

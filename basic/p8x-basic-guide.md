@@ -224,6 +224,23 @@ Guess-a-number (uses RND and INPUT):
 
 On any error the running program stops and returns to the prompt.
 
+### Syntax checking at entry
+
+Every line is checked for structural problems **the moment you enter it**, before
+it is stored or run — so a typo is caught immediately, with the program left
+unchanged, instead of only surfacing later at `RUN`. A line is rejected with
+`?SYNTAX ERROR` (and *not* stored) if it has:
+
+- **unbalanced parentheses** — `10 PRINT (1+2` or a stray `)`;
+- an **unterminated string** — `20 PRINT "HI`;
+- an **illegal statement start** — a line that begins with `THEN`, `TO`, `STEP`,
+  or a function name (`ABS`/`RND`/`PEEK`), an operator, or a digit.
+
+The check is deliberately *structural* only. It does **not** validate forward
+references — `GOTO 100` before line 100 exists is legal and is still checked at
+`RUN` (`?UNDEF'D LINE`) — and the tail of a `REM` is treated as free-form text,
+so `10 REM (unbalanced "quotes` is accepted.
+
 ## Limits (current implementation)
 
 - Integers only (16-bit signed); no floating point.

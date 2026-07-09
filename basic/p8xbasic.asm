@@ -72,6 +72,8 @@ LFT    = BASRAM+$8D          ; comparison left operand (2)
 FNDF   = BASRAM+$8F          ; FINDLINE: 1 if line found
 GSTK   = BASRAM+$90          ; GOSUB return stack (3 x 4 bytes: line record + text ptr)
 GSP    = BASRAM+$9C          ; GOSUB stack depth
+CKDEP  = BASRAM+$9E          ; CHECKLINE: running parenthesis-nesting depth
+CKREM  = BASRAM+$9F          ; CHECKLINE: 1 once a REM is seen (rest is a comment)
 JUMPF  = BASRAM+$70          ; RUN: 1 -> set CURLINE = JUMPADDR directly
 JUMPADDR= BASRAM+$71         ; direct jump target (line record pointer)
 GTMP   = BASRAM+$A0          ; scratch (2)
@@ -144,6 +146,8 @@ STKTOP = $FEFF
 ; ---------------- REPL -------------------------------------------------------
 REPL:   JSR  GETLINE         ; line -> LBUF
         JSR  CRUNCH          ; tokenize keywords in place
+        JSR  CHECKLINE       ; reject malformed lines at entry (C=1 -> reported)
+        JC   REPL
         LDP2 #LBUF
         JSR  SKIPSP
         LDA  (P2)
@@ -2266,6 +2270,140 @@ CR_PUTW: STA TMPC                   ; write A to (WP), WP++
         STA  WP
         TPA2H
         STA  WP+1
+        RTS
+
+; ---------------------------------------------------------------------------
+; CHECKLINE — structural syntax check of the just-crunched line in LBUF, run at
+; entry so a malformed line is rejected immediately (with the program unchanged)
+; instead of only blowing up later at RUN. Skips a leading line number, then for
+; each ':'-separated statement validates: a legal statement leader, balanced
+; parentheses, and a terminated string literal. A REM ends checking (its tail is
+; a free-form comment). Forward references (GOTO/GOSUB to a not-yet-entered line)
+; are deliberately NOT checked here — those stay legal and are caught at RUN.
+; Prints ?SYNTAX ERROR and returns C=1 on failure; C=0 (silent) on success.
+CHECKLINE:
+        LDP2 #LBUF
+        JSR  SKIPSP
+ckl_dg: LDA  (P2)                   ; skip a leading decimal line number, if any
+        LDB  #'0'
+        CMP                         ; C=1 if A >= '0'
+        JNC  ckl_st
+        LDB  #$3A                   ; '9' + 1
+        CMP                         ; C=1 if A >= ':' (i.e. past '9')
+        JC   ckl_st
+        INP2                        ; it's a digit -> consume
+        JMP  ckl_dg
+ckl_st: LDA  #0                     ; start of a statement: parens balance here
+        STA  CKDEP
+        JSR  SKIPSP
+        JSR  CKLEAD                 ; legal statement leader?
+        JC   ckl_bad
+        LDA  CKREM                  ; REM -> rest of line is a comment, accept
+        JNZ  ckl_ok
+ckl_lp: LDA  (P2)
+        JZ   ckl_eol
+        LDB  #'"'
+        CMP
+        JZ   ckl_str
+        LDB  #'('
+        CMP
+        JZ   ckl_op
+        LDB  #')'
+        CMP
+        JZ   ckl_cp
+        LDB  #':'
+        CMP
+        JZ   ckl_col
+        INP2
+        JMP  ckl_lp
+ckl_op: LDA  CKDEP                  ; '(' -> deeper
+        INC
+        STA  CKDEP
+        INP2
+        JMP  ckl_lp
+ckl_cp: LDA  CKDEP                  ; ')' with no matching '(' -> error
+        JZ   ckl_bad
+        DEC
+        STA  CKDEP
+        INP2
+        JMP  ckl_lp
+ckl_col: LDA CKDEP                  ; ':' with a paren still open -> error
+        JNZ  ckl_bad
+        INP2
+        JMP  ckl_st                 ; next statement: re-check its leader
+ckl_str: INP2                       ; opening quote
+cks_l:  LDA  (P2)
+        JZ   ckl_bad                ; ran off the end -> unterminated string
+        LDB  #'"'
+        CMP
+        JZ   cks_e
+        INP2
+        JMP  cks_l
+cks_e:  INP2
+        JMP  ckl_lp
+ckl_eol: LDA CKDEP                  ; end of line: any '(' left open -> error
+        JNZ  ckl_bad
+ckl_ok: CLC
+        RTS
+ckl_bad: LDP1 #MSYN
+        JSR  PUTS
+        SEC
+        RTS
+
+; CKLEAD — is the token/char at (P2) a legal way to START a statement? A letter
+; begins an implicit LET; the statement keywords are all legal; the "operator"
+; keywords THEN/TO/STEP and the function keywords ABS/RND/PEEK are not. Anything
+; else (a digit, an operator, a ')') is illegal. Sets CKREM=1 for REM so the
+; caller stops scanning. C=1 if the leader is illegal; P2 is left unchanged.
+CKLEAD: LDA  #0
+        STA  CKREM
+        LDA  (P2)
+        JNZ  ckd_1
+        CLC                         ; empty statement (end of line / after ':')
+        RTS
+ckd_1:  LDB  #TOK_REM
+        CMP
+        JZ   ckd_rem
+        LDA  (P2)                   ; is it a keyword token (bit 7 set)?
+        LDB  #$80
+        AND
+        JZ   ckd_alpha
+        LDA  (P2)                   ; a token: reject the non-statement ones
+        LDB  #TOK_THEN
+        CMP
+        JZ   ckd_bad
+        LDB  #TOK_TO
+        CMP
+        JZ   ckd_bad
+        LDB  #TOK_STEP
+        CMP
+        JZ   ckd_bad
+        LDB  #TOK_ABS
+        CMP
+        JZ   ckd_bad
+        LDB  #TOK_RND
+        CMP
+        JZ   ckd_bad
+        LDB  #TOK_PEEK
+        CMP
+        JZ   ckd_bad
+        CLC                         ; a statement keyword -> ok
+        RTS
+ckd_rem: LDA  #1
+        STA  CKREM
+        CLC
+        RTS
+ckd_alpha: LDA (P2)                 ; not a token: must be a letter (implicit LET)
+        JSR  UPCHAR
+        LDB  #'A'
+        CMP                         ; C=1 if A >= 'A'
+        JNC  ckd_bad
+        LDB  #$5B                   ; 'Z' + 1
+        CMP                         ; C=1 if A > 'Z'
+        JC   ckd_bad
+        CLC
+        RTS
+ckd_bad: SEC
         RTS
 
 ; MATCHKW — keyword at (P1)? sets MATCHF=1 + TOKEN and advances P1 past it,
