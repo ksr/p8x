@@ -43,34 +43,54 @@ size table with the ratio. Ported commands only in the TOTAL.
 |---------|-----:|---------:|------:|
 | pwd     |  939 |      174 | 5.4×  |
 | mv      | 4585 |      789 | 5.8×  |
-| tree    | 3440 |     1358 | 2.5×  |
-| dir     |10195 |     4021 | 2.5×  |
-| wc      |13739 |     3655 | 3.8×  |
+| more    |13542 |     3418 | 4.0×  |
+| sed     |21491 |     5430 | 4.0×  |
 | head    |13358 |     3536 | 3.8×  |
-| tail    |25624 |    14125 | 1.8×  |
+| wc      |13739 |     3655 | 3.8×  |
 | uniq    |14589 |     4026 | 3.6×  |
 | cat     |11906 |     3428 | 3.5×  |
-| **TOTAL** |**98375** | **35112** | **2.8×** |
+| dir     |10195 |     4021 | 2.5×  |
+| tree    | 3440 |     1358 | 2.5×  |
+| vi      |32871 |    13460 | 2.4×  |
+| grep    |26959 |    12507 | 2.2×  |
+| tail    |25624 |    14125 | 1.8×  |
+| sort    |25844 |    14117 | 1.8×  |
+| cp      | 9071 |     5955 | 1.5×  |
+| find    | 9415 |     6413 | 1.5×  |
+| diff    |23080 |    16858 | 1.4×  |
+| **TOTAL** |**260648** | **113270** | **2.3×** |
 
 (Regenerate with `compare.sh`; the C sizes include the `//#use` shared libs
-spliced by `clib.py`, and each hand-asm binary that declares `;#use stdin`
-likewise counts `lib_stdin.inc`, so the comparison is apples-to-apples.)
+spliced by `clib.py`, and each hand-asm binary that declares `;#use` likewise
+counts its include, so the comparison is apples-to-apples.)
 
 ## Takeaways
 
-- Hand asm is **2–6× smaller**, but the win depends on the command's shape:
-  - **Code-dominated** (pwd, mv, wc, head, uniq, cat): **3.5–5.8×**. p8cc's
-    stack-machine codegen — every expression pushed/popped through `__csp` —
-    is where the bloat lives; straight-line register asm collapses it.
-  - **Buffer/data-dominated** (tail): **1.8×**. tail's 10 KB line ring is
-    identical fixed data in both, so it dilutes the code-size win.
-  - **Small + pointer-arithmetic-heavy** (tree, dir): **2.5×**. These are
-    already small in C, and hand asm pays for manual 16-bit index math
-    (depth-indexed arrays, `divmod10`) that the compiler emits compactly.
-- The heavy commands (`grep`, `sed`, `vi`, `sort`, `diff`, `find`, `more`,
-  `cp`) were out of scope for this pass — `grep`/`sed` need the regex matcher
-  hand-assembled and `vi` is a screen editor. The representative set above is
-  enough to characterize the ratio.
-- Every ported command is verified **byte-identical** to its p8cc twin by
-  `verify.sh` (diff of emulator transcripts), so the sizes compare equivalent
-  behavior, not a cut-down reimplementation.
+All 17 `/BIN` commands are ported and verified **byte-identical** to their p8cc
+twin by `verify.sh` (diff of emulator transcripts) — so the sizes compare
+equivalent behavior, not a cut-down reimplementation. The overall win is **2.3×**
+(260 KB → 113 KB), but it splits cleanly by what a command's binary is *made of*:
+
+- **Code-dominated → 3.5–5.8×** (pwd, mv, more, sed, head, wc, uniq, cat). This
+  is the real result: p8cc's stack-machine codegen — every subexpression pushed
+  and popped through the `__csp` software stack — is pure overhead that
+  straight-line register asm erases. `sed` (a full regex substitutor) at 4.0×
+  and `more`/`head`/`wc` near 4× are the headline numbers.
+- **Big-fixed-data → 1.4–1.8×** (diff, tail, sort, cp, find). These carry large
+  buffers that are *identical bytes in both builds* — diff's two 7.7 KB line
+  arrays, tail's 10 KB ring, sort's 10 KB, cp/find's per-level recursion arrays.
+  The data dominates the binary, so the code shrink barely moves the total. The
+  code portion still shrank ~3–5×; the ratio just measures data too.
+- **Middle (2.2–2.5×)**: dir/tree (small C already, hand asm pays for manual
+  16-bit index math), and grep/vi (large programs with a mix of code and buffers).
+
+Shared hand-asm includes mirror the C `//#use` model (spliced by `mkasm.sh`):
+`lib_stdin.inc` (open/read/glob engine), `lib_glob.inc` (gmatch + de[]),
+`lib_regex.inc` (the recursive `. * + ? ^ $` matcher for grep/sed).
+
+Two structural techniques recur, forced by the ISA (P3 is the hardware stack
+pointer, so only P1/P2 are general-purpose and there are no cheap software-stack
+frames): recursion is done with **depth-indexed arrays + a global `w_depth`**
+(tree, dir, find, cp, grep), and the genuinely recursive regex/glob matchers save
+their pointer args on the **hardware stack** across non-tail calls. The CPU has
+no divide, so decimal output uses a `divmod10` subtraction routine.

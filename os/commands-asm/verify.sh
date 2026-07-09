@@ -66,6 +66,7 @@ cmd_script() {
         GREP) printf 'GREP alpha T.TXT\rGREP ^beta T.TXT\rGREP al.ha T.TXT\rGREP mm+ T.TXT\rGREP -r alpha\rGREP x NOPE\rGREP -h\r' ;;
         SED)  printf 'SED s/alpha/X/ T.TXT\rSED s/l/L/g T.TXT\rSED -h\r' ;;
         DIFF) printf 'DIFF T.TXT U.TXT\rDIFF T.TXT T.TXT\rDIFF -h\r' ;;
+        VI)   printf 'VI N.TXT\rxjA!\033:wq\rCAT N.TXT\rVI -h\r' ;;
     esac
 }
 
