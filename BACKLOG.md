@@ -728,10 +728,29 @@ Last updated: 2026-07-08
         the append-only write stream needs no seek-back. Purely syntactic; all
         type/symbol/struct analysis is deferred to cg. C-only (no asm twin).
         Sizing: cc1.bin ~29.5 KB fits the TPA ($7A00+29.5K < $F800) with ~2.7 KB
-        headroom. NEXT and LAST: **CG** (AST → asm, matching `--from-ast`) — the
-        whole `Gen` back end (symbol tables, struct layout, type analysis, codegen,
-        runtime). It is the big one and the real fit-under-TPA question; if it
-        overflows, cg itself splits (e.g. codegen vs runtime-emit).
+        headroom.
+      - **CG DOES NOT FIT — measured (2026-07-09).** The codegen cannot run
+        on-target as one pass, and a simple cg+runtime split doesn't rescue it:
+          * full p8cc.c compiles to ~82-96 KB (won't even ASSEMBLE — the assembler
+            has a hard 64 KB address ceiling and p8cc.c overflows it). Earlier
+            "~59 KB" was wrong.
+          * moving the runtime-helper emitters (emit_add..emit_lea, string-literal
+            heavy) OUT of the compiler saves only ~14 KB (→ ~82 KB).
+          * the NON-walk infrastructure alone — symbol tables + type analysis +
+            emit primitives + globals/struct/toplevel — is ~55 KB. It is SHARED by
+            every part of codegen, so sharding the expr/stmt walk (only ~18 KB)
+            into sub-passes doesn't help: each shard still needs most of that 55 KB.
+          vs a 31.5 KB TPA, codegen is ~2.5-3x too big and cannot be cleanly cut.
+        CONCLUSION: porting the existing optimizing p8cc codegen to run within the
+        TPA is not viable. Viable directions (STRATEGIC, undecided):
+          (2) write a NEW, deliberately-small on-target codegen (host p8cc stays
+              the "good" compiler; the on-target one just has to work);
+          (3) a different memory model for compiler passes (load below $7A00 /
+              overlays / banking) — real firmware+OS work;
+          (4) STOP at cc1: ship on-target cpp|lex|cc1 (preprocess, tokenize,
+              parse-to-AST) as a self-hosted FRONT END, keep codegen host-side.
+        Front end (cpp|lex|cc1) is done and each fits the TPA; the back end is the
+        wall. Milestone B is blocked on this strategic choice.
 - [ ] **Native toolchain follow-ups** (EDIT + ASM landed — see DONE). Remaining
       polish on the on-target assembler/editor, none blocking:
         - **Tools write to the flat root only.** EDIT `W` and ASM output go to
