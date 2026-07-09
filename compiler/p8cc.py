@@ -478,13 +478,12 @@ class Gen:
             if count:                                    # array decays to its address
                 self.gen_address(e)
             elif kind[0] == "l":
-                self.lea(kind[1])
-                if sizeof(base, ptr) == 2:
-                    self.emit("        LDA (P1)+", "        STA __ax",
-                              "        LDA (P1)", "        STA __ax+1")
-                else:
-                    self.emit("        LDA (P1)", "        STA __ax",
-                              "        LDA #0", "        STA __ax+1")
+                if sizeof(base, ptr) == 2:               # load local word into AX
+                    self.need("__ldw")
+                    self.emit("        JSR __ldw", "        .word %d" % (kind[1] & 0xFFFF))
+                else:                                    # load local byte (zero-extend)
+                    self.need("__ldb")
+                    self.emit("        JSR __ldb", "        .word %d" % (kind[1] & 0xFFFF))
             else:
                 lab = kind[1]
                 if sizeof(base, ptr) == 2:
@@ -525,6 +524,22 @@ class Gen:
         if sz not in (1, 2):
             sys.exit("p8cc: whole struct/array assignment not supported "
                      "(assign members, or use pointers)")
+        # fast path: `var = expr` for a plain scalar variable (not an array,
+        # deref, member or index). Compute the value into AX, then store it with
+        # one instruction/helper — AX is left holding the value (assignment result).
+        if lhs[0] == "id":
+            kind = self.vinfo(lhs[1])
+            if not kind[4]:                              # count==0: not an array
+                self.gen_expr(rhs)                       # AX = value
+                if kind[0] == "l":                       # local -> __fp+off
+                    h = "__stw" if sz == 2 else "__stb"
+                    self.need(h)
+                    self.emit("        JSR %s" % h, "        .word %d" % (kind[1] & 0xFFFF))
+                elif sz == 2:                            # global word -> fixed label
+                    self.mov16(kind[1], "__ax")          # MOVW lab,__ax
+                else:                                    # global byte
+                    self.emit("        LDA __ax", "        STA %s" % kind[1])
+                return
         self.gen_expr(rhs); self.push_ax()               # value on P3
         self.gen_address(lhs)                            # AX = dest address
         self.ax_to_p1()                                  # P1 = dest
@@ -939,6 +954,71 @@ class Gen:
                       "        TAP1L", "        LDA __t+1", "        TAP1H",
                       "        LDA __ra+1", "        PHA", "        LDA __ra", "        PHA",
                       "        RTS"]
+        # __ldw/__ldb: like __lea (P1 = __fp + inline offset), but then load the
+        # word/byte at P1 into __ax — folding the 4-instruction load into the call
+        # so a local read is one `JSR __ldw ; .word off` instead of lea + 4 loads.
+        R["__ldw"] = ["__ldw:  PLA", "        TAP1L", "        PLA", "        TAP1H",
+                      "        LDA (P1)+", "        STA __off",
+                      "        LDA (P1)+", "        STA __off+1",
+                      "        TPA1L", "        STA __ra",
+                      "        TPA1H", "        STA __ra+1",
+                      "        LDA __fp", "        LDB __off", "        ADD",
+                      "        STA __t", "        LDA #0", "        JNC __ldw1",
+                      "        LDA #1", "__ldw1: STA __c", "        LDA __fp+1",
+                      "        LDB __off+1", "        ADD", "        LDB __c",
+                      "        ADD", "        STA __t+1", "        LDA __t",
+                      "        TAP1L", "        LDA __t+1", "        TAP1H",
+                      "        LDA (P1)+", "        STA __ax",
+                      "        LDA (P1)", "        STA __ax+1",
+                      "        LDA __ra+1", "        PHA", "        LDA __ra", "        PHA",
+                      "        RTS"]
+        R["__ldb"] = ["__ldb:  PLA", "        TAP1L", "        PLA", "        TAP1H",
+                      "        LDA (P1)+", "        STA __off",
+                      "        LDA (P1)+", "        STA __off+1",
+                      "        TPA1L", "        STA __ra",
+                      "        TPA1H", "        STA __ra+1",
+                      "        LDA __fp", "        LDB __off", "        ADD",
+                      "        STA __t", "        LDA #0", "        JNC __ldb1",
+                      "        LDA #1", "__ldb1: STA __c", "        LDA __fp+1",
+                      "        LDB __off+1", "        ADD", "        LDB __c",
+                      "        ADD", "        STA __t+1", "        LDA __t",
+                      "        TAP1L", "        LDA __t+1", "        TAP1H",
+                      "        LDA (P1)", "        STA __ax",
+                      "        LDA #0", "        STA __ax+1",
+                      "        LDA __ra+1", "        PHA", "        LDA __ra", "        PHA",
+                      "        RTS"]
+        # __stw/__stb: like __lea, then store __ax (the value) at __fp+off. __ax is
+        # left intact so `a = b` yields the value. Turns a local store from
+        # gen_address+ax_to_p1+pop into one `JSR __stw ; .word off`.
+        R["__stw"] = ["__stw:  PLA", "        TAP1L", "        PLA", "        TAP1H",
+                      "        LDA (P1)+", "        STA __off",
+                      "        LDA (P1)+", "        STA __off+1",
+                      "        TPA1L", "        STA __ra",
+                      "        TPA1H", "        STA __ra+1",
+                      "        LDA __fp", "        LDB __off", "        ADD",
+                      "        STA __t", "        LDA #0", "        JNC __stw1",
+                      "        LDA #1", "__stw1: STA __c", "        LDA __fp+1",
+                      "        LDB __off+1", "        ADD", "        LDB __c",
+                      "        ADD", "        STA __t+1", "        LDA __t",
+                      "        TAP1L", "        LDA __t+1", "        TAP1H",
+                      "        LDA __ax", "        STA (P1)+",
+                      "        LDA __ax+1", "        STA (P1)",
+                      "        LDA __ra+1", "        PHA", "        LDA __ra", "        PHA",
+                      "        RTS"]
+        R["__stb"] = ["__stb:  PLA", "        TAP1L", "        PLA", "        TAP1H",
+                      "        LDA (P1)+", "        STA __off",
+                      "        LDA (P1)+", "        STA __off+1",
+                      "        TPA1L", "        STA __ra",
+                      "        TPA1H", "        STA __ra+1",
+                      "        LDA __fp", "        LDB __off", "        ADD",
+                      "        STA __t", "        LDA #0", "        JNC __stb1",
+                      "        LDA #1", "__stb1: STA __c", "        LDA __fp+1",
+                      "        LDB __off+1", "        ADD", "        LDB __c",
+                      "        ADD", "        STA __t+1", "        LDA __t",
+                      "        TAP1L", "        LDA __t+1", "        TAP1H",
+                      "        LDA __ax", "        STA (P1)",
+                      "        LDA __ra+1", "        PHA", "        LDA __ra", "        PHA",
+                      "        RTS"]
         R["__and"] = ["__and:  LDA __t", "        LDB __ax", "        AND",
                       "        STA __ax", "        LDA __t+1", "        LDB __ax+1",
                       "        AND", "        STA __ax+1", "        RTS"]
@@ -965,7 +1045,8 @@ class Gen:
                       "        JMP __shr_l", "__shr_e: RTS"]
         order = ["__add", "__sub", "__mul", "__div", "__mod", "__divmod",
                  "__and", "__or", "__xor", "__shl", "__shr",
-                 "__not", "__eq", "__lt", "__push", "__enter", "__leave", "__lea"]
+                 "__not", "__eq", "__lt", "__push", "__enter", "__leave", "__lea",
+                 "__ldw", "__ldb", "__stw", "__stb"]
         want = set(self.used)
         if {"__div", "__mod"} & want: want.add("__divmod")
         for h in order:

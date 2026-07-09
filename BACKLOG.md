@@ -654,6 +654,20 @@ Last updated: 2026-07-08
         parser alone overflows today. Next: shrink, then the CC1/CG split. KNOWN
         LIMIT: P8XFS's 12-char names block storing `lib_abspath.c`/`lib_readline.c`
         on-card for on-target preprocessing (rename or widen FS names).
+      - **Codegen-shrink step 1 — DONE (2026-07-09).** Added `__ldw`/`__ldb`
+        (load local word/byte) and `__stw`/`__stb` (store local) runtime helpers
+        + a `var = expr` fast path (scalar local via `__stw`, global via `MOVW`),
+        so a local read is `JSR __ldw ; .word off` instead of `__lea` + 4 loads,
+        and a scalar store skips the old address→AX→P1 round-trip. **p8cc.c's own
+        compiled asm: 30372 → 25383 lines (−16.4%)** (~72 KB → ~60 KB). Applied to
+        **`p8cc.py` only** — the compiler binary is host-built by p8cc.py, so this
+        shrinks it without touching `p8cc.c`; the self-host differential test is
+        behavioural (same program output), so it still passes. Mirroring to
+        `p8cc.c` (so the ON-target compiler emits the same tight code) is a
+        deferred refinement, not needed to fit the binary. Next: reduce the
+        binary-op `PHW/PLW` (779×) and revisit `__push` (1157×), then the split.
+        NOTE: this makes the `os/commands-asm` size scoreboard stale (p8cc builds
+        are now smaller) — regenerate it.
 - [ ] **Native toolchain follow-ups** (EDIT + ASM landed — see DONE). Remaining
       polish on the on-target assembler/editor, none blocking:
         - **Tools write to the flat root only.** EDIT `W` and ASM output go to
