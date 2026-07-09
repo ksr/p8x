@@ -35,6 +35,9 @@ fixtures() {
     printf 'one\r\none\r\ntwo\r\ntwo\r\ntwo\r\none\r\n' > "$W/u.dat"; $FS put "$1" "$W/u.dat" --name U.TXT >/dev/null
     printf 'l1\r\nl2\r\nl3\r\nl4\r\nl5\r\nl6\r\nl7\r\nl8\r\nl9\r\nl10\r\nl11\r\nl12\r\n' > "$W/n.dat"
     $FS put "$1" "$W/n.dat" --name N.TXT >/dev/null
+    i=1; : > "$W/big.dat"; while [ $i -le 30 ]; do printf 'line%d\r\n' $i >> "$W/big.dat"; i=$((i+1)); done
+    $FS put "$1" "$W/big.dat" --name BIG.TXT >/dev/null
+    printf 'pear\r\napple\r\ncherry\r\napple\r\nbanana\r\n' > "$W/s.dat"; $FS put "$1" "$W/s.dat" --name S.TXT >/dev/null
     printf 'red\r\nblue\r\n' > "$W/g1.dat"; $FS put "$1" "$W/g1.dat" --name G1.LOG >/dev/null
     printf 'green\r\n'       > "$W/g2.dat"; $FS put "$1" "$W/g2.dat" --name G2.LOG >/dev/null
     $FS mkdir "$1" /SUB/DEEP >/dev/null
@@ -56,6 +59,13 @@ cmd_script() {
         TAIL) printf 'TAIL N.TXT\rTAIL -3 N.TXT\r' ;;
         UNIQ) printf 'UNIQ U.TXT\r' ;;
         CAT)  printf 'CAT T.TXT\rCAT *.LOG\rCAT NOPE.TXT\r' ;;
+        MORE) printf 'MORE N.TXT\rMORE BIG.TXT\rq\rMORE -h\r' ;;
+        FIND) printf 'FIND .TXT\rFIND *.LOG\rFIND SUB\rFIND -h\r' ;;
+        SORT) printf 'SORT S.TXT\rSORT *.LOG\rSORT -h\r' ;;
+        CP)   printf 'CP T.TXT C.TXT\rCAT C.TXT\rCP -r SUB S2\rFIND S2\rCP X X\r' ;;
+        GREP) printf 'GREP alpha T.TXT\rGREP ^beta T.TXT\rGREP al.ha T.TXT\rGREP mm+ T.TXT\rGREP -r alpha\rGREP x NOPE\rGREP -h\r' ;;
+        SED)  printf 'SED s/alpha/X/ T.TXT\rSED s/l/L/g T.TXT\rSED -h\r' ;;
+        DIFF) printf 'DIFF T.TXT U.TXT\rDIFF T.TXT T.TXT\rDIFF -h\r' ;;
     esac
 }
 
@@ -63,6 +73,23 @@ run() { # $1=img $2=script -> transcript
     # The emulator loads microcode u?.bin from the CWD, so run from $W (which has
     # them copied in above). $1 is absolute, eeprom.bin is in $W.
     ( cd "$W" && printf 'B\r%s' "$2" | "$ROOT/emulator/p8xemu" -l 400000000 -c "$1" eeprom.bin 2>/dev/null ) | LC_ALL=C tr -d '\0\r'
+}
+
+# Build C helper commands (cat, find) once — installed on every disk so tests of
+# mutating commands (cp, mv) can inspect results by content. Same build on both
+# disks, so they don't affect the c-vs-a comparison.
+build_c() { # $1=name -> $W/<name>_h.bin
+    $CLIB "$CDIR/$1.c" -o "$W/$1.hpp.c" 2>/dev/null
+    $CC "$W/$1.hpp.c" -o "$W/$1.hlp.asm" >/dev/null 2>&1
+    $ASM "$W/$1.hlp.asm" -o "$W/$1_h.bin" --base 0x7A00 >/dev/null 2>&1
+}
+build_c cat; build_c find
+install_helpers() { # $1=img  $2=name-under-test(upper, skip that one)
+    for h in CAT FIND; do
+        [ "$h" = "$2" ] && continue
+        l=$(echo "$h" | tr A-Z a-z)
+        $FS put "$1" "$W/${l}_h.bin" --name "/BIN/$h.BIN" --load 0x7A00 --exec 0x7A00 >/dev/null
+    done
 }
 
 ALL="${*:-}"
@@ -79,8 +106,8 @@ for cmd in $ALL; do
     sh "$ADIR/mkasm.sh" "$cmd" > "$W/${cmd}_full.asm"
     $ASM "$W/${cmd}_full.asm" -o "$W/${cmd}_a.bin" --base 0x7A00 >/dev/null 2>&1
     scr=$(cmd_script "$up")
-    fixtures "$W/dc.img"; $FS put "$W/dc.img" "$W/${cmd}_c.bin" --name "/BIN/$up.BIN" --load 0x7A00 --exec 0x7A00 >/dev/null
-    fixtures "$W/da.img"; $FS put "$W/da.img" "$W/${cmd}_a.bin" --name "/BIN/$up.BIN" --load 0x7A00 --exec 0x7A00 >/dev/null
+    fixtures "$W/dc.img"; install_helpers "$W/dc.img" "$up"; $FS put "$W/dc.img" "$W/${cmd}_c.bin" --name "/BIN/$up.BIN" --load 0x7A00 --exec 0x7A00 >/dev/null
+    fixtures "$W/da.img"; install_helpers "$W/da.img" "$up"; $FS put "$W/da.img" "$W/${cmd}_a.bin" --name "/BIN/$up.BIN" --load 0x7A00 --exec 0x7A00 >/dev/null
     run "$W/dc.img" "$scr" > "$W/$cmd.c.out"
     run "$W/da.img" "$scr" > "$W/$cmd.a.out"
     ran=$((ran + 1))
