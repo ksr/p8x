@@ -7,6 +7,11 @@
 # the emulator attached to your terminal: it starts
 # in the MONITOR; type B to boot P8X/OS. Quit with Ctrl-C (or Ctrl-D).
 #
+# Commands ship twice: /BIN holds the p8cc-compiled builds (run by bare name via
+# PATH, e.g. `GREP`), and /BINA holds the hand-assembled counterparts from
+# os/commands-asm (run explicitly, e.g. `RUN /BINA/GREP.BIN`) so the two can be
+# compared on-target.
+#
 # Dual CompactFlash: a second data volume is attached as drive 1, mounted at
 # /D1 in the unified namespace (a small sample tree under /D1/DATA). So you can
 # exercise it out of the box with ordinary paths — `CD /D1`, `DIR /D1/DATA`,
@@ -35,6 +40,10 @@ if [ ! -f "$disk" ]; then
     python3 "$root/tools/p8xfs.py" create "$disk" --v2 >/dev/null
     python3 "$root/tools/p8xfs.py" boot   "$disk" "$build/p8xos.bin" >/dev/null
     python3 "$root/tools/p8xfs.py" mkdir  "$disk" /BIN >/dev/null
+    # /BINA: the hand-assembled counterparts of the /BIN commands (the
+    # os/commands-asm experiment), so both can be run and compared on-target,
+    # e.g.  RUN /BINA/GREP.BIN ...  vs  RUN /BIN/GREP.BIN ...
+    python3 "$root/tools/p8xfs.py" mkdir  "$disk" /BINA >/dev/null
     # /D1 mount point: a placeholder dir so `DIR /` shows the mount. Traversal
     # into /D1 is intercepted by the resolver (redirected to drive 1) before this
     # empty placeholder is ever read — it is just a signpost.
@@ -76,6 +85,15 @@ if [ ! -f "$disk" ]; then
         python3 "$root/tools/p8xfs.py" put "$disk" "$build/$ex.bin" \
             --name "/BIN/$up.BIN" --load 0x7A00 --exec 0x7A00 >/dev/null
     done
+    # Hand-assembled versions -> /BINA (os/commands-asm). mkasm.sh splices any
+    # ;#use includes (lib_stdin/glob/regex) just like clib.py does for the C ones.
+    for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi; do
+        sh "$root/os/commands-asm/mkasm.sh" "$ex" > "$build/$ex.a.asm"
+        python3 "$root/assembler/p8xasm.py" "$build/$ex.a.asm" -o "$build/$ex.a.bin" --base 0x7A00 >/dev/null
+        up=$(echo "$ex" | tr a-z A-Z)
+        python3 "$root/tools/p8xfs.py" put "$disk" "$build/$ex.a.bin" \
+            --name "/BINA/$up.BIN" --load 0x7A00 --exec 0x7A00 >/dev/null
+    done
     printf 'hello from P8X/OS\n' > "$build/readme.txt"
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/readme.txt" --name /README.TXT >/dev/null
     # A sample assembly source so the EDIT -> ASM -> RUN loop is demoable out of
@@ -104,8 +122,9 @@ else
     # BASIC, EDIT, ASM ...) are NOT — p8xfs put won't overwrite, and we won't
     # wipe a disk that may hold your files. So if any program/OS source is newer
     # than the disk's pre-run mtime, its /BIN/*.BIN is stale here. Warn loudly.
-    newer=$(find "$root/os/commands" "$root/os/p8xos.asm" "$root/compiler/p8cc.py" \
-                 "$root/basic" "$root/apps" -type f -newer "$build/diskref" 2>/dev/null | head -5)
+    newer=$(find "$root/os/commands" "$root/os/commands-asm" "$root/os/p8xos.asm" \
+                 "$root/compiler/p8cc.py" "$root/basic" "$root/apps" -type f \
+                 -newer "$build/diskref" 2>/dev/null | head -5)
     if [ -n "$newer" ]; then
         echo "WARNING: these sources are newer than $disk, but the disk's /BIN" >&2
         echo "         programs are NOT rebuilt on an existing disk:" >&2
