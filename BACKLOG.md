@@ -226,16 +226,16 @@ Last updated: 2026-07-08
       before the descending stack could reach it — deep enough for any real tree,
       but there is no explicit depth cap.
 
-- [ ] **`CP`/`MV` wildcards — `CP *.ASM /BAK`, `MV *.TMP TRASH/`.** Multi-source
-      copy/move into a destination *directory* (the classic shell idiom). Depends
-      on the wildcard mechanism chosen above: with shell-level expansion (option 1)
-      the shell hands `cp`/`mv` each matched source in turn against the dest dir;
-      `cp`/`mv` need to detect "dest is a directory" and derive `dest/leaf` per
-      source. With the bigger TPA (base `$7A00`) the old size wall is relieved, so
-      per-command inlined glob is likely viable here too — but `cp`/`mv` differ
-      from the filters (multi-source → dest-dir, not a concatenated stream), so
-      decide alongside the wildcards item: inline a small expander, or use the
-      shell-level mechanism if that lands first.
+- [x] **`CP`/`MV` wildcards — `CP *.ASM /BAK`, `MV *.TMP TRASH/` — DONE
+      (2026-07-09).** Went with per-command inlined glob (option 2): a `*`/`?`
+      source is expanded via `lib_globx`'s `glob_expand`, and each match is copied/
+      moved INTO the destination, which must be an existing directory (each lands
+      at `<dst>/<basename>`; `cp -r` copies a matched subtree). Both the C builds
+      (`cp.c`/`mv.c`, `//#use globx`) and the hand-asm builds (`cp.asm`/`mv.asm`
+      via new `lib_globx.inc`) implemented and verified byte-identical. Adding
+      globx doubled cp's C binary, so `cp`'s `copy_tree` FSDIRBUF page moved
+      $A0 → $E0 (clear of the enlarged image). Also added **`TOUCH`** the same
+      day (C + hand-asm). No shell-level expansion was needed.
 
 - [x] **ASM vs C commands — hand-wrote ALL heavy `/BIN` utilities — DONE
       (2026-07-08, see DONE).** The prototype-one-command experiment turned into a

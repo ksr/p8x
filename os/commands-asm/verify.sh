@@ -53,7 +53,7 @@ cmd_script() {
         # p8cc and asm builds — a size artifact, not a behavior difference.
         DIR)  printf 'DIR\rDIR /SUB\rDIR *.LOG\rDIR -R /SUB\rDIR /NOPE\r' ;;
         TREE) printf 'TREE\r' ;;
-        MV)   printf 'MV T.TXT R.TXT\rDIR\rCAT R.TXT\rMV R.TXT R.TXT\r' ;;
+        MV)   printf 'MV T.TXT R.TXT\rCAT R.TXT\rMV *.LOG SUB\rFIND LOG\rMV *.LOG NOPE\rMV R.TXT R.TXT\r' ;;
         WC)   printf 'WC T.TXT\rWC *.LOG\rCAT T.TXT | WC\rWC -h\r' ;;
         HEAD) printf 'HEAD N.TXT\rHEAD -3 N.TXT\rHEAD -h\r' ;;
         TAIL) printf 'TAIL N.TXT\rTAIL -3 N.TXT\r' ;;
@@ -62,7 +62,7 @@ cmd_script() {
         MORE) printf 'MORE N.TXT\rMORE BIG.TXT\rq\rMORE -h\r' ;;
         FIND) printf 'FIND .TXT\rFIND *.LOG\rFIND SUB\rFIND -h\r' ;;
         SORT) printf 'SORT S.TXT\rSORT *.LOG\rSORT -h\r' ;;
-        CP)   printf 'CP T.TXT C.TXT\rCAT C.TXT\rCP -r SUB S2\rFIND S2\rCP X X\r' ;;
+        CP)   printf 'CP T.TXT C.TXT\rCAT C.TXT\rCP -r SUB S2\rFIND S2\rCP *.LOG SUB\rFIND LOG\rCP *.LOG T.TXT\rCP X X\r' ;;
         GREP) printf 'GREP alpha T.TXT\rGREP ^beta T.TXT\rGREP al.ha T.TXT\rGREP mm+ T.TXT\rGREP -r alpha\rGREP x NOPE\rGREP -h\r' ;;
         SED)  printf 'SED s/alpha/X/ T.TXT\rSED s/l/L/g T.TXT\rSED -h\r' ;;
         DIFF) printf 'DIFF T.TXT U.TXT\rDIFF T.TXT T.TXT\rDIFF -h\r' ;;

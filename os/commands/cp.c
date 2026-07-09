@@ -3,6 +3,11 @@
  *     CP OLD.TXT NEW.TXT            copy one file
  *     CP -r SRC DST                 copy a directory tree recursively
  *     CP -r /D1/SRC /SRC            ... across the mount (drive 1 -> drive 0)
+ *     CP *.ASM /BAK                 glob source -> copy each match into a dir
+ *
+ * A `*`/`?` in the source is a glob: it is expanded (lib_globx) and every match
+ * is copied INTO the destination, which must be an existing directory (each copy
+ * lands at <dst>/<basename>). With -r a matched subdirectory is copied as a tree.
  *
  * A single file is read through the BIOS read stream (FOPEN/FGETB, buffer $FC00)
  * and written through the write stream (FWOPEN/FPUTB/FCLOSE); the two use
@@ -26,9 +31,12 @@ char src[80];
 char dst[80];
 char jsrc[80];                       /* child-path scratch: <dir>/<name> */
 char jdst[80];
+char patw[80];                       /* the source arg word (may be a glob) */
+char gfiles[1536];                   /* glob_expand output: 24 slots x 64 */
 
 //#use abspath   /* abspath(out, arg): next path word -> absolute in out */
 //#use dirent    /* de_read/de_isdir/de_isdot + de[] : current entry via syscall */
+//#use globx     /* glob_expand(pat, out, maxn): expand a glob into a path list */
 
 /* scopy: copy NUL-terminated s into d; return the length. */
 int scopy(char *d, char *s) {
@@ -91,11 +99,13 @@ int copy_tree(char *sp0, char *dp0) {
 
     n = 0;                                     /* collect this level's entries */
     bios(0x0139, sp, 0);                       /* FOPENDIR src */
-    bios(0x0145, 0, 0xA0);                     /* FSDIRBUF: iterate on page $A000,
-                                                * just above cp's code/globals and
-                                                * well below the descending stack —
-                                                * ~40 levels of headroom before the
-                                                * recursion stack could reach it. */
+    bios(0x0145, 0, 0xE0);                     /* FSDIRBUF: iterate on page $E000.
+                                                * Above cp's code/globals (adding
+                                                * //#use globx grew the binary past
+                                                * the old $A000 page) and clear of
+                                                * the $FC00 read buffer / $FE00
+                                                * stack. glob_expand's $FA00 page
+                                                * runs earlier, so no overlap. */
     r = bios(0x013C, 0, 0);                    /* FNEXT */
     while ((r & 256) == 0) {
         de_read();
@@ -125,13 +135,18 @@ int copy_tree(char *sp0, char *dp0) {
 
 int main() {
     char *a;
-    int n;
+    char *m;
+    int i;
+    int j;
+    int b;
+    int g;
+    int nm;
     int rec;
 
     a = argstr();
     while (*a == 32) { a = a + 1; }
     if (*a == '-' && (*(a + 1) == 'h' || *(a + 1) == 'H')) {
-        puts("usage: CP [-r] src dst   copy a file, or -r a directory tree");
+        puts("usage: CP [-r] src dst   copy a file/glob, or -r a directory tree");
         return 0;
     }
     rec = 0;
@@ -141,16 +156,43 @@ int main() {
         while (*a == 32) { a = a + 1; }
     }
     if (*a == 0 || *a == 13) { puts("usage: CP [-r] src dst"); return 1; }
-    n = abspath(src, a);                       /* SRC word */
-    a = a + n;
+
+    g = 0;                                      /* copy the SRC word; note glob */
+    i = 0;
+    while (a[i] != 0 && a[i] != 13 && a[i] != 32) {
+        if (a[i] == '*' || a[i] == '?') { g = 1; }
+        patw[i] = a[i]; i = i + 1;
+    }
+    patw[i] = 0;
+    a = a + i;
     while (*a == 32) { a = a + 1; }
     if (*a == 0 || *a == 13) { puts("usage: CP [-r] src dst"); return 1; }
     abspath(dst, a);                           /* DST word */
 
-    if (rec && isdir(src)) {                    /* -r on a directory: recurse */
-        copy_tree(src, dst);
+    if (g == 0) {                               /* single named source */
+        abspath(src, patw);
+        if (rec && isdir(src)) { copy_tree(src, dst); return 0; }
+        if (copy_file(src, dst)) { puts("cp: source not found"); return 1; }
         return 0;
     }
-    if (copy_file(src, dst)) { puts("cp: source not found"); return 1; }
+
+    if (isdir(dst) == 0) {                       /* glob -> dst must be a dir */
+        puts("cp: target is not a directory");
+        return 1;
+    }
+    nm = glob_expand(patw, gfiles, 24);
+    if (nm == 0) { puts("cp: no match"); return 1; }
+    i = 0;
+    while (i < nm) {
+        m = gfiles + i * 64;                    /* one match (dir prefix + name) */
+        abspath(src, m);
+        b = 0;                                  /* basename = after the last '/' */
+        j = 0;
+        while (m[j] != 0) { if (m[j] == '/') { b = j + 1; } j = j + 1; }
+        joinp(jdst, dst, m + b);                /* <dst>/<basename> */
+        if (rec && isdir(src)) { copy_tree(src, jdst); }
+        else { copy_file(src, jdst); }
+        i = i + 1;
+    }
     return 0;
 }

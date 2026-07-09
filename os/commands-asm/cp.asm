@@ -5,7 +5,11 @@
 ; Iterates on FSDIRBUF page $A0. BIOS: FRESOLVE $0133, FOPEN $0124, FGETB $0127,
 ; FWOPEN $012A, FPUTB $012D, FCLOSE $0130, FOPENDIR $0139, FNEXT $013C, FSDIRBUF
 ; $0145, SYS_DIRENTRY $401B. OS: SYS_GETCWD $4003, SYS_MKDIR $4021, SYS_PUTS/PUTC.
+; A `*`/`?` source is a glob (lib_globx): every match is copied into the dst
+; directory. copy_tree iterates on FSDIRBUF page $E0 (above the enlarged binary).
 ; Entry: P2 = arg tail.
+;#use glob
+;#use globx
 
         .org $7A00
         TPA2L
@@ -88,17 +92,48 @@ c_args: LDA c_arg
         LDB #13
         CMP
         JZ c_usage2
-        LDA #<src
-        STA ap_out
-        LDA #>src
-        STA ap_out+1
+        LDA #0                       ; copy src WORD into patw, note glob (cg)
+        STA cg
+        LDA #<patw
+        TAP1L
+        LDA #>patw
+        TAP1H
         LDA c_arg
-        STA ap_a
+        TAP2L
         LDA c_arg+1
-        STA ap_a+1
-        JSR abspath
-        LDA c_arg                    ; c_arg += ap_n
-        LDB ap_n
+        TAP2H
+        LDA #0
+        STA cpw
+cpw_l:  LDA (P2)
+        LDB #0
+        CMP
+        JZ cpw_d
+        LDB #13
+        CMP
+        JZ cpw_d
+        LDB #32
+        CMP
+        JZ cpw_d
+        LDB #'*'
+        CMP
+        JZ cpw_g
+        LDB #'?'
+        CMP
+        JZ cpw_g
+        JMP cpw_s
+cpw_g:  LDA #1
+        STA cg
+        LDA (P2)
+cpw_s:  STA (P1)+
+        INP2
+        LDA cpw
+        INC
+        STA cpw
+        JMP cpw_l
+cpw_d:  LDA #0
+        STA (P1)
+        LDA c_arg                    ; c_arg += cpw
+        LDB cpw
         ADD
         STA c_arg
         JNC ca_sk
@@ -136,6 +171,19 @@ ca_d:   LDA (P2)
         LDA c_arg
         STA ap_a
         LDA c_arg+1
+        STA ap_a+1
+        JSR abspath                  ; abspath(dst, arg)
+        LDA cg                       ; glob source? -> c_glob
+        LDB #0
+        CMP
+        JNZ c_glob
+        LDA #<src                    ; single: abspath(src, patw)
+        STA ap_out
+        LDA #>src
+        STA ap_out+1
+        LDA #<patw
+        STA ap_a
+        LDA #>patw
         STA ap_a+1
         JSR abspath
         LDA rec
@@ -176,6 +224,184 @@ c_dofile:
         CMP
         JZ c_srcnf
         RTS
+; --- glob: dst must be a dir; copy each match into it -----------------------
+c_glob: LDA #<dst
+        STA id_p
+        LDA #>dst
+        STA id_p+1
+        JSR isdir
+        LDB #0
+        CMP
+        JZ c_notdir
+        LDA #<patw
+        STA ge_pat
+        LDA #>patw
+        STA ge_pat+1
+        LDA #<gfiles
+        STA ge_out
+        LDA #>gfiles
+        STA ge_out+1
+        LDA #24
+        STA ge_max
+        JSR glob_expand
+        LDA ge_cnt
+        LDB #0
+        CMP
+        JZ c_nomatch
+        LDA #0
+        STA cgi
+cg_l:   LDA cgi
+        LDB ge_cnt
+        CMP
+        JC cg_done                   ; i >= cnt
+        JSR cg_ptr                   ; cgp = gfiles + cgi*64
+        LDA #<src                    ; abspath(src, cgp)
+        STA ap_out
+        LDA #>src
+        STA ap_out+1
+        LDA cgp
+        STA ap_a
+        LDA cgp+1
+        STA ap_a+1
+        JSR abspath
+        JSR cg_base                  ; cgbp = basename of the match
+        LDA #<jdst                   ; joinp(jdst, dst, basename)
+        STA jp_out
+        LDA #>jdst
+        STA jp_out+1
+        LDA #<dst
+        STA jp_dir
+        LDA #>dst
+        STA jp_dir+1
+        LDA cgbp
+        STA jp_name
+        LDA cgbp+1
+        STA jp_name+1
+        JSR joinp
+        LDA rec                      ; -r && dir -> copy_tree, else copy_file
+        LDB #0
+        CMP
+        JZ cg_file
+        LDA #<src
+        STA id_p
+        LDA #>src
+        STA id_p+1
+        JSR isdir
+        LDB #0
+        CMP
+        JZ cg_file
+        LDA #<src
+        STA ct_s
+        LDA #>src
+        STA ct_s+1
+        LDA #<jdst
+        STA ct_d
+        LDA #>jdst
+        STA ct_d+1
+        LDA #0
+        STA w_depth
+        JSR copy_tree
+        JMP cg_next
+cg_file:LDA #<src
+        STA cf_s
+        LDA #>src
+        STA cf_s+1
+        LDA #<jdst
+        STA cf_d
+        LDA #>jdst
+        STA cf_d+1
+        JSR copy_file
+cg_next:LDA cgi
+        INC
+        STA cgi
+        JMP cg_l
+cg_done:RTS
+c_notdir:
+        LDA #<u_notdir
+        TAP1L
+        LDA #>u_notdir
+        TAP1H
+        JMP c_put
+c_nomatch:
+        LDA #<u_nomat
+        TAP1L
+        LDA #>u_nomat
+        TAP1H
+        JMP c_put
+; cg_ptr: cgp = gfiles + cgi*64
+cg_ptr: LDA #0
+        STA cgp
+        STA cgp+1
+        LDA cgi
+        STA cgt
+cgp_l:  LDA cgt
+        LDB #0
+        CMP
+        JZ cgp_d
+        LDA cgp
+        LDB #64
+        ADD
+        STA cgp
+        JNC cgp_1
+        LDA cgp+1
+        INC
+        STA cgp+1
+cgp_1:  LDA cgt
+        DEC
+        STA cgt
+        JMP cgp_l
+cgp_d:  LDA cgp
+        LDB #<gfiles
+        ADD
+        STA cgp
+        LDA #0
+        JNC cgp_2
+        LDA #1
+cgp_2:  STA cgcar
+        LDA cgp+1
+        LDB #>gfiles
+        ADD
+        LDB cgcar
+        ADD
+        STA cgp+1
+        RTS
+; cg_base: cgbp = cgp advanced past the last '/', else cgp
+cg_base:LDA cgp
+        STA cgbp
+        LDA cgp+1
+        STA cgbp+1
+        LDA cgp
+        TAP1L
+        LDA cgp+1
+        TAP1H
+        LDA #0
+        STA cgk
+cgb_l:  LDA (P1)
+        LDB #0
+        CMP
+        JZ cgb_d
+        LDB #'/'
+        CMP
+        JNZ cgb_adv
+        LDA cgk                      ; cgbp = cgp + cgk + 1
+        INC
+        STA cgt
+        LDA cgp
+        LDB cgt
+        ADD
+        STA cgbp
+        LDA #0
+        JNC cgb_hi
+        LDA #1
+cgb_hi: LDB cgp+1
+        ADD
+        STA cgbp+1
+cgb_adv:INP1
+        LDA cgk
+        INC
+        STA cgk
+        JMP cgb_l
+cgb_d:  RTS
 c_usage:LDA #<u_use
         TAP1L
         LDA #>u_use
@@ -279,7 +505,7 @@ copy_tree:
         LDA #0
         TAP1L
         TAP1H
-        LDA #$A0
+        LDA #$E0
         JSR $0145
         JSR nn_a
         LDA #0
@@ -793,12 +1019,24 @@ na_b:   STA hcar
         TAP1H
         RTS
 
-u_use:  .asciiz "usage: CP [-r] src dst   copy a file, or -r a directory tree"
+u_use:  .asciiz "usage: CP [-r] src dst   copy a file/glob, or -r a directory tree"
 u_use2: .asciiz "usage: CP [-r] src dst"
 u_nf:   .asciiz "cp: source not found"
+u_notdir:.asciiz "cp: target is not a directory"
+u_nomat:.asciiz "cp: no match"
 
 c_arg:  .fill 2
 rec:    .fill 1
+cg:     .fill 1
+cpw:    .fill 1
+cgi:    .fill 1
+cgp:    .fill 2
+cgbp:   .fill 2
+cgk:    .fill 1
+cgt:    .fill 1
+cgcar:  .fill 1
+patw:   .fill 80
+gfiles: .fill 1536
 w_depth:.fill 1
 cti:    .fill 1
 ctk:    .fill 1
@@ -824,7 +1062,6 @@ ht:     .fill 2
 hn:     .fill 1
 hk:     .fill 1
 hcar:   .fill 1
-de:     .fill 17
 src:    .fill 80
 dst:    .fill 80
 jsrc:   .fill 80
