@@ -31,6 +31,13 @@ BS     = $08
 FLOADAT = $013F          ; bulk-read FLEN bytes from LBA into (P1)
 FFIND   = $0118          ; find root file FNAME -> LBA + FLEN; C=1 if not found
 FCREATE = $011B          ; create root file FNAME from FSRC/FLEN; C=1 on error
+; sequential byte streams (for BASIC data files) — root files, no OS needed:
+FOPEN   = $0124          ; open root file FNAME for reading (P1=512-byte buf); C=1 missing
+FGETB   = $0127          ; next byte -> A; C=1 at end of file
+FWOPEN  = $012A          ; open a write stream at the free pointer (uses SBUF)
+FPUTB   = $012D          ; append byte A to the write stream
+FCLOSE  = $0130          ; flush + register file FNAME (len = bytes written); C=1 if full
+FNORM   = $0136          ; copy string (P1) -> FNAME, case-preserved, space-padded to 12
 LBA     = $7047          ; CFREAD target LBA (byte 0); LBA1 = byte 1
 LBA1    = $7048
 FNAME   = $704A          ; 12-byte filename (space-padded)
@@ -74,8 +81,9 @@ GSTK   = BASRAM+$90          ; GOSUB return stack (3 x 4 bytes: line record + te
 GSP    = BASRAM+$9C          ; GOSUB stack depth
 CKDEP  = BASRAM+$9E          ; CHECKLINE: running parenthesis-nesting depth
 CKREM  = BASRAM+$9F          ; CHECKLINE: 1 once a REM is seen (rest is a comment)
-JUMPF  = BASRAM+$70          ; RUN: 1 -> set CURLINE = JUMPADDR directly
-JUMPADDR= BASRAM+$71         ; direct jump target (line record pointer)
+JUMPF  = BASRAM+$E3          ; RUN: 1 -> set CURLINE = JUMPADDR directly (was $70,
+JUMPADDR= BASRAM+$E4         ;   which ALIASED PCNT — VARFIND's counter clobbered it,
+                             ;   so any var past the first broke RUN's jump handling)
 GTMP   = BASRAM+$A0          ; scratch (2)
 FSP    = BASRAM+$A2          ; FOR stack depth
 FFP    = BASRAM+$A3          ; pointer to top FOR frame (2)
@@ -95,8 +103,11 @@ SVIDX  = BASRAM+$C9          ; SVARFIND result index
 SLENV  = BASRAM+$CA          ; string length scratch
 SI     = BASRAM+$CB          ; string byte-index / count scratch
 SJ     = BASRAM+$CC          ; string byte-count scratch
+FMODE  = BASRAM+$CD          ; data file: 0 closed, 1 open for input, 2 for output
+OUTFILE= BASRAM+$CE          ; 1 while PRINT emits to the data file (via PUTCH)
 SPA    = BASRAM+$D0          ; string source pointer (2)
 SPD    = BASRAM+$D2          ; string dest pointer (2)
+FNMBUF = BASRAM+$D6          ; NUL-terminated filename for FNORM (13 bytes)
 SEED   = BASRAM+$F4          ; RND state (2)
 POKEA  = BASRAM+$F6          ; POKE address (2)
 NAMLEN = 6                   ; significant variable-name length
@@ -146,6 +157,10 @@ TOK_RIGHTS= $9B          ; RIGHT$
 TOK_MIDS  = $9C          ; MID$
 TOK_LEN   = $9D          ; LEN   (numeric result)
 TOK_ASC   = $9E          ; ASC   (numeric result)
+; data-file tokens
+TOK_OPEN  = $9F          ; OPEN
+TOK_CLOSE = $A0          ; CLOSE
+TOK_OUTPUT= $A1          ; OUTPUT (OPEN ... FOR OUTPUT)
 
 MONITOR = $0000          ; reset vector — BYE returns here
 
@@ -161,6 +176,9 @@ STKTOP = $FEFF
         LDA  #$15            ; /16 clock, 8N1
         STA  ACIAS
         JSR  NEWPROG         ; empty program
+        LDA  #0              ; no data file open
+        STA  FMODE
+        STA  OUTFILE
         LDA  #$E1            ; seed the RNG
         STA  SEED
         LDA  #$AC
@@ -287,6 +305,14 @@ STMT:   JSR  SKIPSP
         LDB  #TOK_LOAD
         CMP
         JZ   st_load
+        LDA  (P2)
+        LDB  #TOK_OPEN
+        CMP
+        JZ   DOOPEN
+        LDA  (P2)
+        LDB  #TOK_CLOSE
+        CMP
+        JZ   DOCLOSE
         LDA  (P2)            ; bare variable -> implicit LET
         LDB  #'A'
         SUB
@@ -436,6 +462,8 @@ stmt_nop: RTS
 
 ; SYNERR — abort current statement to the prompt (resets the stack)
 SYNERR: LDP3 #STKTOP
+        LDA  #0                      ; a PRINT# aborted mid-record must not leave
+        STA  OUTFILE                 ; console output redirected to the file
         LDP1 #MSYN
         JSR  PUTS
         JMP  REPL
@@ -445,6 +473,11 @@ SYNERR: LDP3 #STKTOP
 ;==============================================================================
 ; PRINT <expr> | PRINT "string" | PRINT
 DOPRINT: INP2                       ; skip PRINT token
+        JSR  SKIPSP
+        LDA  (P2)                    ; PRINT# writes one value + CR to the data file
+        LDB  #'#'
+        CMP
+        JZ   DOPRINTF
 dp_item: JSR  SKIPSP
         LDA  (P2)
         JZ   dp_nl                  ; end of statement -> newline
@@ -560,6 +593,8 @@ DORUN:  LDA  #0
         STA  ENDF
         STA  GSP                    ; reset GOSUB and FOR stacks
         STA  FSP
+        STA  FMODE                  ; abandon any data file left open by a prior run
+        STA  OUTFILE
         LDA  #<PROG
         STA  CURLINE
         LDA  #>PROG
@@ -716,6 +751,10 @@ DOEND:  INP2
 ; INPUT <var> — prompt "? ", read a number from the console into <var>
 DOINPUT: INP2
         JSR  SKIPSP
+        LDA  (P2)                    ; INPUT# reads one record from the data file
+        LDB  #'#'
+        CMP
+        JZ   DOINPUTF
         JSR  SPEEK                   ; string variable (NAME$)?  -> read a string
         LDA  MATCHF
         JNZ  in_str
@@ -2288,7 +2327,7 @@ PRDEC:  LDA  LNUM+1
         AND
         JZ   PRDECU                 ; positive -> just print
         LDA  #'-'
-        JSR  PUTC
+        JSR  PUTCH
         LDA  LNUM                   ; LNUM = -LNUM (two's complement)
         LDB  #$FF
         XOR
@@ -2341,7 +2380,7 @@ prsh:   LDA  #0
 prf:    LDA  DIG
         LDB  #'0'
         ADD
-        JSR  PUTC
+        JSR  PUTCH
 prsk:   LDA  PCNT
         DEC
         STA  PCNT
@@ -2717,7 +2756,7 @@ SPUT:   LDP1 #STRACC
 spt_l:  LDA  TMPC
         JZ   spt_d
         LDA  (P1)+
-        JSR  PUTC
+        JSR  PUTCH
         LDA  TMPC
         DEC
         STA  TMPC
@@ -3190,6 +3229,227 @@ fa_asc0: LDA #0
         STA  RESULT+1
         RTS
 
+;==============================================================================
+; DATA FILES — one sequential channel over the BIOS byte streams (FOPEN/FGETB and
+; FWOPEN/FPUTB/FCLOSE). Root files only; PRINT# writes one value + CR per record,
+; INPUT# reads one CR-delimited record. Available in the disk / run-from-OS builds
+; (the standalone whole-ROM build has no resident BIOS), like SAVE/LOAD.
+;==============================================================================
+
+; SETFNAME — evaluate the filename string expression at (P2) and install it in
+; FNAME (via the BIOS FNORM). Preserves the parse cursor.
+SETFNAME: JSR SEVAL                   ; STRACC = filename
+        TPA2L                          ; the FNMBUF copy + FNORM clobber P2
+        PHA
+        TPA2H
+        PHA
+        LDP1 #STRACC                   ; STRACC -> FNMBUF, NUL-terminated
+        LDA  (P1)
+        STA  TMPC
+        INP1
+        LDP2 #FNMBUF
+        LDA  TMPC
+        JZ   sfn_z
+sfn_l:  LDA  (P1)+
+        STA  (P2)
+        INP2
+        LDA  TMPC
+        DEC
+        STA  TMPC
+        JNZ  sfn_l
+sfn_z:  LDA  #0
+        STA  (P2)
+        LDP1 #FNMBUF
+        JSR  FNORM                     ; -> FNAME (12, space-padded, case-preserved)
+        PLA
+        TAP2H
+        PLA
+        TAP2L
+        RTS
+
+; OPEN <name$> [FOR] OUTPUT|INPUT — open the one data channel.
+DOOPEN: INP2                           ; skip OPEN token
+        JSR  SETFNAME                  ; FNAME = the name
+        JSR  SKIPSP
+        LDA  (P2)                      ; an optional FOR is accepted
+        LDB  #TOK_FOR
+        CMP
+        JNZ  dop_mode
+        INP2
+        JSR  SKIPSP
+dop_mode: LDA (P2)
+        LDB  #TOK_OUTPUT
+        CMP
+        JZ   dop_out
+        LDA  (P2)
+        LDB  #TOK_INPUT
+        CMP
+        JZ   dop_in
+        JMP  SYNERR
+dop_out: INP2
+        JSR  FWOPEN                     ; write stream at the free pointer
+        LDA  #2
+        STA  FMODE
+        RTS
+dop_in: INP2
+        LDP1 #PBUF                      ; read stream needs a 512-byte buffer
+        JSR  FOPEN
+        JC   dop_nf
+        LDA  #1
+        STA  FMODE
+        RTS
+dop_nf: LDA  #0
+        STA  FMODE
+        LDP1 #MNOFILE
+        JSR  PUTS
+        RTS
+
+; CLOSE — commit a write channel (FCLOSE) / drop a read channel.
+DOCLOSE: INP2
+        LDA  FMODE
+        LDB  #2
+        CMP
+        JNZ  dcl_ni                     ; only a write channel needs committing
+        JSR  FCLOSE
+dcl_ni: LDA  #0
+        STA  FMODE
+        RTS
+
+; PRINT# <expr> — write one value (its text form) plus a CR record terminator.
+; Entered from DOPRINT with P2 at the '#'.
+DOPRINTF: LDA FMODE
+        LDB  #2
+        CMP
+        JNZ  dpf_err                    ; not open for output
+        INP2                            ; consume '#'
+        LDA  #1
+        STA  OUTFILE
+        JSR  SKIPSP
+        LDA  (P2)
+        JZ   dpf_cr                     ; bare PRINT# -> a blank record
+        JSR  SPEEK
+        LDA  MATCHF
+        JNZ  dpf_str
+        JSR  EVAL                       ; numeric value -> decimal text (via PUTCH)
+        LDA  RESULT
+        STA  LNUM
+        LDA  RESULT+1
+        STA  LNUM+1
+        JSR  PRDEC
+        JMP  dpf_cr
+dpf_str: JSR SEVAL                       ; string value (via PUTCH)
+        JSR  SPUT
+dpf_cr: LDA  #$0D                        ; record terminator
+        JSR  FPUTB
+        LDA  #0
+        STA  OUTFILE
+        RTS
+dpf_err: JMP  SYNERR
+
+; INPUT# <var> — read one CR-delimited record into a numeric or string variable.
+; Entered from DOINPUT with P2 at the '#'.
+DOINPUTF: LDA FMODE
+        LDB  #1
+        CMP
+        JNZ  dif_err                    ; not open for input
+        INP2                            ; consume '#'
+        JSR  SKIPSP
+        JSR  SPEEK
+        LDA  MATCHF
+        JNZ  dif_str
+        JSR  VARGET                     ; numeric variable -> P1 = &value
+        LDA  MATCHF
+        JZ   dif_err
+        TPA1L
+        STA  SAVE1
+        TPA1H
+        STA  SAVE1+1
+        TPA2L                           ; save cursor (FREADREC clobbers P2)
+        STA  GTMP
+        TPA2H
+        STA  GTMP+1
+        JSR  FREADREC                   ; STRACC = record text (NUL-terminated)
+        LDP2 #STRACC                    ; parse it as a decimal number
+        INP2
+        JSR  SKIPSP
+        JSR  PARSEDEC                   ; LNUM = value
+        LDA  GTMP
+        TAP2L
+        LDA  GTMP+1
+        TAP2H
+        LDA  SAVE1
+        TAP1L
+        LDA  SAVE1+1
+        TAP1H
+        LDA  LNUM
+        STA  (P1)
+        INP1
+        LDA  LNUM+1
+        STA  (P1)
+        RTS
+dif_str: JSR SVARGET                     ; string variable -> P1 = &entry
+        LDA  MATCHF
+        JZ   dif_err
+        TPA1L
+        STA  SAVE1
+        TPA1H
+        STA  SAVE1+1
+        TPA2L                            ; save cursor (FREADREC clobbers P2)
+        STA  GTMP
+        TPA2H
+        STA  GTMP+1
+        JSR  FREADREC                    ; STRACC = record
+        LDA  #<STRACC
+        STA  SPA
+        LDA  #>STRACC
+        STA  SPA+1
+        LDA  SAVE1
+        LDB  #NAMLEN
+        ADD
+        STA  SPD
+        LDA  SAVE1+1
+        JNC  dif_s1
+        INC
+dif_s1: STA  SPD+1
+        JSR  SMOVE
+        LDA  GTMP                        ; restore the parse cursor
+        TAP2L
+        LDA  GTMP+1
+        TAP2H
+        RTS
+dif_err: JMP  SYNERR
+
+; FREADREC — read the next CR-delimited record from the open read stream into
+; STRACC (len + data, capped at SLEN, and NUL-terminated after the data so the
+; numeric path can PARSEDEC it). Uses P2 as the walker (FGETB clobbers P1, not P2).
+FREADREC: LDP2 #STRACC
+        INP2                            ; data pointer
+        LDA  #0
+        STA  SI
+frr_l:  JSR  FGETB                       ; A = byte, C=1 at EOF
+        JC   frr_end
+        STA  TMPC
+        LDB  #$0D
+        CMP
+        JZ   frr_end                     ; end of this record
+        LDA  SI
+        LDB  #SLEN
+        CMP
+        JC   frr_l                       ; record too long -> discard the overflow
+        LDA  TMPC
+        STA  (P2)
+        INP2
+        LDA  SI
+        INC
+        STA  SI
+        JMP  frr_l
+frr_end: LDA #0                          ; NUL-terminate after the data
+        STA  (P2)
+        LDP2 #STRACC
+        LDA  SI
+        STA  (P2)
+        RTS
+
 ; ---------------------------------------------------------------------------
 ; CHECKLINE — structural syntax check of the just-crunched line in LBUF, run at
 ; entry so a malformed line is rejected immediately (with the program unchanged)
@@ -3321,6 +3581,9 @@ ckd_1:  LDB  #TOK_REM
         CMP
         JZ   ckd_bad
         LDB  #TOK_ASC
+        CMP
+        JZ   ckd_bad
+        LDB  #TOK_OUTPUT
         CMP
         JZ   ckd_bad
         CLC                         ; a statement keyword -> ok
@@ -3494,6 +3757,12 @@ KWTAB:  .ascii "PRINT"
         .byte $9D
         .ascii "ASC"
         .byte $9E
+        .ascii "OPEN"
+        .byte $9F
+        .ascii "CLOSE"
+        .byte $A0
+        .ascii "OUTPUT"
+        .byte $A1
         .byte $00
 
 ;==============================================================================
@@ -3513,6 +3782,26 @@ putc1:  LDA  ACIAS
         JZ   putc1
         PLA
         STA  ACIAD
+        RTS
+
+; PUTCH — emit A to the current sink: the open data file when OUTFILE is set
+; (PRINT#), otherwise the console. Lets PRDEC/SPUT serve both PRINT and PRINT#.
+PUTCH:  PHA                          ; preserve the char (and TMPC, used by SPUT)
+        LDA  OUTFILE
+        JZ   pch_con
+        TPA1L                        ; FPUTB clobbers P1; PRDECU/SPUT walk it
+        STA  SAVE2
+        TPA1H
+        STA  SAVE2+1
+        PLA
+        JSR  FPUTB
+        LDA  SAVE2
+        TAP1L
+        LDA  SAVE2+1
+        TAP1H
+        RTS
+pch_con: PLA
+        JSR  PUTC
         RTS
 GETC:   LDA  ACIAS
         LDB  #$01
@@ -3569,6 +3858,8 @@ MHELP:  .byte CR,LF
         .ascii "STATEMENTS: PRINT LET IF/THEN FOR/TO/STEP NEXT"
         .byte CR,LF
         .ascii "  GOTO GOSUB RETURN INPUT POKE REM END"
+        .byte CR,LF
+        .ascii "FILES: OPEN name OUTPUT|INPUT : PRINT# : INPUT# : CLOSE"
         .byte CR,LF
         .ascii "COMMANDS: RUN LIST NEW SAVE LOAD HELP BYE"
         .byte CR,LF

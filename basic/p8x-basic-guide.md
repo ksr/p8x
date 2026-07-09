@@ -149,6 +149,10 @@ A line may hold several statements separated by `:` —
 | `INPUT v` | print `? ` and read a value from the console into `v`; for a string variable (`INPUT A$`) the whole reply line becomes the string |
 | `REM text` | comment; the rest of the line is ignored |
 | `END` | stop the running program |
+| `OPEN s$ [FOR] OUTPUT` / `OPEN s$ [FOR] INPUT` | open the data-file channel for writing / reading (see *Data files*) |
+| `PRINT# expr` | write one value + newline as a record to the open output file |
+| `INPUT# v` | read one record from the open input file into `v` (numeric or string) |
+| `CLOSE` | close the data-file channel (commits an output file) |
 
 ### PRINT details
 
@@ -171,6 +175,37 @@ FOR I=1 TO 3 : PRINT I; : NEXT   ->  123
 filesystem — ROM/disk builds; see *Editing a program* above),
 `HELP` (print the supported statements, commands, functions, and operators),
 and `BYE` (leave BASIC — returns to the monitor in the ROM/disk builds).
+
+## Data files
+
+Beyond `SAVE`/`LOAD` (which store the *program*), BASIC can read and write its own
+**data files** on the CompactFlash card — one sequential channel at a time, in the
+disk and run-from-OS builds (the standalone whole-ROM build has no card access).
+
+```
+10 OPEN "SCORES" FOR OUTPUT      write mode: creates/overwrites the file
+20 FOR I=1 TO 3
+30   PRINT# I*I                  each PRINT# writes ONE value as a record
+40 NEXT
+50 PRINT# "DONE"                 numbers and strings both work
+60 CLOSE                         CLOSE commits the file
+
+70 OPEN "SCORES" FOR INPUT       read mode
+80 FOR I=1 TO 3 : INPUT# N : PRINT N : NEXT
+90 INPUT# T$ : PRINT T$
+100 CLOSE
+```
+
+- The filename is any string expression (`OPEN F$ FOR INPUT`), up to 12
+  characters; files live in the P8XFS **root**, so they are visible to `DIR`,
+  `SAVE`/`LOAD`, and the host `p8xfs.py`. The `FOR` is optional.
+- `PRINT#` writes exactly **one value per record** (its text form followed by a
+  newline). `INPUT#` reads exactly **one record**: into a numeric variable it
+  parses the decimal number, into a string variable (`INPUT# A$`) it takes the
+  whole record text.
+- One channel is open at a time. Opening a missing file `FOR INPUT` prints
+  `?No file`. There is no end-of-file test yet, so store a known count first (as
+  above) or a sentinel value and stop when you read it.
 
 ## Memory & hardware access
 
@@ -267,7 +302,9 @@ so `10 REM (unbalanced "quotes` is accepted.
   values are truncated. Not arrays, and there is no `STR$`/`VAL` yet (no
   number↔string conversion beyond `CHR$`/`ASC`).
 - `FOR` loops nest **2 deep**; `GOSUB` nests **3 deep**.
-- No `DATA`/`READ`, `DIM`, `DEF FN`, `ON…GOTO`, `WHILE`, or data-file I/O.
+- Data files: one channel open at a time, one value per record, no end-of-file
+  test (`EOF`) yet — see *Data files*.
+- No `DATA`/`READ`, `DIM`, `DEF FN`, `ON…GOTO`, or `WHILE`.
 - Numbers are decimal only on input; `PRINT` shows signed decimal.
 
 These reflect what `p8xbasic.asm` implements today; see [README](README.md) and
