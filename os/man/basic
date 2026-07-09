@@ -5,16 +5,120 @@ SYNOPSIS
     basic
 
 DESCRIPTION
-    Launches P8X BASIC, a small integer BASIC with string variables,
-    functions, and data-file I/O. Type BYE to return to the OS. basic is
-    a /bin program; SAVE/LOAD and data files use the shared filesystem,
-    so programs and data are visible to dir and the other tools.
+    P8X BASIC is a small integer BASIC with string variables, functions,
+    and data-file I/O. Run it with `basic` (or `run /bin/basic.bin`); type
+    BYE to return to the OS. SAVE/LOAD and data files use the shared
+    filesystem, so programs and data are visible to dir and the other
+    tools. This page is a quick reference; the full guide lives in the
+    repo (basic/p8x-basic-guide.md).
 
-    See the P8X BASIC guide for the language reference.
+MODES
+    Immediate  a line with no leading number runs at once:
+                   PRINT 2+3*4          -> 14
+    Program    a line that starts with a number is stored:
+                   10 PRINT "HELLO"
+               Type RUN to execute the stored program. Entering "30 ..."
+               inserts or replaces line 30; a bare "30" deletes it. Lines
+               are kept sorted by number. Every line is syntax-checked as
+               you type it (balanced parens, closed strings, a legal
+               statement), so typos are caught at entry, not at RUN.
+
+NUMBERS AND VARIABLES
+    Numbers are signed 16-bit integers, -32768..32767, in decimal or hex
+    with a 0x prefix (0x1F). Arithmetic wraps modulo 65536.
+
+    Numeric variables start with a letter, continue with letters/digits,
+    are case-insensitive and significant to 6 characters, up to 32 of
+    them; each starts at 0. No arrays.
+
+    String variables end in `$` (A$, NAME$), up to 16, each holding up to
+    32 characters (longer values truncate); they are a separate namespace
+    from numeric variables and start empty. Join strings with `+`.
+
+OPERATORS
+    Highest precedence first:
+        unary   - +
+        1       * / %        (integer; / truncates toward zero)
+        2       + -
+        3       = <> < > <= >=   comparisons yield 1 (true) or 0 (false)
+    Parentheses override precedence. Comparisons are signed and usable
+    anywhere a number is. Strings compare too (lexicographic), so
+    IF A$ = "Y" and IF N$ < "M" work.
+
+FUNCTIONS
+    ABS(x)          absolute value
+    RND(n)          pseudo-random integer 1..n
+    PEEK(addr)      byte (0-255) at a memory address
+    LEN(s$)         number of characters in s$
+    ASC(s$)         code of the first character (0 if empty)
+    CHR$(n)         one-character string with code n
+    LEFT$(s$,n)     first n characters
+    RIGHT$(s$,n)    last n characters
+    MID$(s$,i[,n])  n chars from position i (1-based); to end if n omitted
+    Counts clamp to the source, so LEFT$("HI",9) is just "HI".
+
+STATEMENTS
+    Several may share a line, separated by `:`.
+    PRINT items     print numbers/strings; `;` = no gap, `,` = one space;
+                    a trailing `;`/`,` suppresses the newline
+    LET v = expr    assign (LET optional); works for A$ too
+    IF expr THEN .. run the rest of the line if expr is non-zero; the THEN
+                    part is a statement or a line number (implicit GOTO)
+    FOR v = a TO b [STEP s] / NEXT [v]     counting loop
+    GOTO line / GOSUB line / RETURN
+    INPUT v         prompt "? " and read a number, or a whole line into A$
+    POKE addr,val   store the low byte of val at addr
+    REM text        comment
+    END             stop the program
+
+DATA FILES
+    One sequential channel over the filesystem:
+        OPEN name$ [FOR] OUTPUT|INPUT     open (name may be a path)
+        PRINT# expr                       write one value + newline
+        INPUT# var                        read one record (number or A$)
+        CLOSE                             commit/close
+    One value per record; there is no end-of-file test yet, so write a
+    known count first or use a sentinel. Opening a missing file for INPUT
+    prints ?No file.
+
+COMMANDS
+    RUN             execute the stored program
+    LIST            print the program
+    NEW             erase the program (and variables)
+    SAVE "path"     write the program to a file
+    LOAD "path"     replace the program with a saved file
+    HELP            summary of statements/commands/functions
+    BYE             leave BASIC (returns to the OS)
+
+    SAVE/LOAD and OPEN take a PATH: a bare name is a root file, and a
+    slashed path (SAVE "/SRC/GAME") reaches a subdirectory. Leaf names are
+    up to 12 characters and case-sensitive. BASIC has no current
+    directory, so make subdirectories with MKDIR in the OS first.
+
+MEMORY
+    PEEK/POKE reach the whole map (decimal addresses): 0-16383 EEPROM
+    (read-only), 16384-65279 RAM, 65280 switch input, 65282 LED output,
+    65284/65285 the serial port. So POKE 65282,170 lights an LED pattern.
+
+ERRORS
+    ?                       unrecognized statement/command
+    ?SYNTAX ERROR           malformed line (also reported at entry)
+    ?UNDEF'D LINE           GOTO/GOSUB to a missing line
+    ?RETURN WITHOUT GOSUB   RETURN with no matching GOSUB
+    A running program stops and returns to the prompt on any error.
+
+LIMITS
+    Integers only (no floating point). FOR loops nest 2 deep, GOSUB 3
+    deep. Data files: one channel, one value per record, no EOF() yet. No
+    STR$/VAL (number<->string beyond CHR$/ASC), DATA/READ, DIM, DEF FN,
+    ON..GOTO, or WHILE.
 
 EXAMPLES
     basic
-    run /bin/basic.bin
+    10 FOR I=1 TO 5 : PRINT I*I : NEXT
+    RUN
+    SAVE "/SRC/SQUARES"
+    BYE
 
 SEE ALSO
-    edit, run, save, load
+    edit, run, save, load, mkdir
