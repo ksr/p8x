@@ -37,11 +37,20 @@ README covers build internals and milestones.
 > minus, `REM`, and functions `ABS`, `RND`, `PEEK`, `POKE` (memory + I/O, so
 > `POKE 65282,n` drives the LED port). The full MS-style subset is in.
 >
+> Plus **string variables** (`A$`, 16 slots × 32 chars): assignment, `+`
+> concatenation, `=`/`<>`/`<`/`>`/`<=`/`>=` comparison, `PRINT`/`INPUT`, and
+> `LEN`/`ASC`/`CHR$`/`LEFT$`/`RIGHT$`/`MID$`.
+>
 > Plus `SAVE "NAME"` / `LOAD "NAME"` — programs persist to the CompactFlash
 > filesystem (P8XFS v2 root) via the monitor's BIOS FS calls; ROM and disk
-> builds only.
+> builds only — and **data files**: `OPEN name$ [FOR] OUTPUT|INPUT`, `PRINT#`,
+> `INPUT#`, `CLOSE` (one sequential channel, one value per record).
 >
-> Limits: FOR nesting 2 deep, GOSUB 3 deep.
+> Lines are **syntax-checked on entry** (balanced parens, terminated strings,
+> legal statement leader), so typos are caught as you type, not at RUN.
+>
+> Limits: FOR nesting 2 deep, GOSUB 3 deep; one data file open at a time; no
+> `STR$`/`VAL` or `EOF()` yet.
 
 ## Direction
 
@@ -53,11 +62,14 @@ keep it tractable on this ISA (floats are a large lift, deferred).
 
 Target language:
 - **Statements:** `PRINT`, `LET` (and implicit let), `IF/THEN`, `FOR/NEXT`,
-  `GOTO`, `GOSUB/RETURN`, `INPUT`, `REM`, `END`, `RUN`, `LIST`, `NEW`
+  `GOTO`, `GOSUB/RETURN`, `INPUT`, `REM`, `END`, `RUN`, `LIST`, `NEW`,
+  `SAVE`/`LOAD`, and data files (`OPEN`/`CLOSE`/`PRINT#`/`INPUT#`)
 - **Lines:** multiple statements per line separated by `:`
 - **Expressions:** integer `+ - * /`, parens, comparisons (`= <> < > <= >=`),
-  numeric variables A–Z (and A0–Z9), plus string variables (`A$`) for PRINT/INPUT
-- **Functions:** `ABS`, `RND`, `PEEK`/`POKE` (memory + I/O access — the P8X hook)
+  named numeric variables (≤6 significant chars, up to 32), and string
+  variables (`A$`: assign, `+` concat, compare) with `+` concatenation
+- **Functions:** `ABS`, `RND`, `PEEK`/`POKE` (memory + I/O access — the P8X
+  hook), and the string functions `LEN`, `ASC`, `CHR$`, `LEFT$`, `RIGHT$`, `MID$`
 
 ## Build & run
 
@@ -136,8 +148,9 @@ Layout: code `$7A00`–`$8E8x` (~5.2 KB), data `$C500` (`PROG` at `$C700`), rebu
 buffer `$E000`; the stack stays at `$FEFF`. Covered by `os_basic_test.sh`.
 
 These paths are covered by `make test-basic` (in `emulator/`): disk BASIC via
-`B`, `SAVE`/`LOAD` round-trip, and `RUN BASIC.BIN` from the OS. Code is ~5.2 KB,
-so in every layout it clears its data base with room to spare.
+`B`, `SAVE`/`LOAD` round-trip, string variables/functions, data-file I/O, and
+`RUN BASIC.BIN` from the OS. Code is ~7.9 KB, so in every layout it clears its
+data base with room to spare.
 
 ## Planned layout (proposed — see open decisions)
 
@@ -146,7 +159,7 @@ so in every layout it clears its data base with room to spare.
 | `$0000-$3FFF` | interpreter code (EEPROM, 16 KB rev D) |
 | `$4000-$7FFF` | RAM (rev D) — unused by the standalone build |
 | `$8000-…`     | tokenized program text (standalone `BASRAM=$8000`) |
-| `…-$FDFF`     | variables (26 ints A–Z to start), string/eval scratch |
+| `…-$FDFF`     | named numeric vars (32) + string-var table + string/eval scratch |
 | `$FE00-$FEFF` | stack (P3), incl. GOSUB return stack |
 
 ## Milestones
@@ -162,6 +175,10 @@ so in every layout it clears its data base with room to spare.
 5. **Polish** — ✅ signed integers + unary minus, `REM`, functions `ABS`,
    `RND` (LCG), `PEEK`/`POKE` (memory + memory-mapped I/O), and `SAVE`/`LOAD`
    over the filesystem.
+6. **Strings, files, entry-time checking** — ✅ string variables (`A$`) with
+   assignment/concat/comparison and `LEN`/`ASC`/`CHR$`/`LEFT$`/`RIGHT$`/`MID$`;
+   sequential data files (`OPEN`/`CLOSE`/`PRINT#`/`INPUT#`); and a `CHECKLINE`
+   structural syntax check applied as each line is entered.
 
 ## Open decisions
 
