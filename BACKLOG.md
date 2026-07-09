@@ -712,6 +712,26 @@ Last updated: 2026-07-08
         — the AST layer is introduced fresh, following p8cc.py's two-phase shape.
         NEXT: cc1.c (emit AST, byte-identical to `--ast`), then cg.c (AST → asm,
         matching `--from-ast`).
+      - **Pass 3 — CC1.BIN DONE (2026-07-09).** `os/commands/cc1.c` (→
+        `/bin/cc1.bin`, ~29.5 KB) parses a LEX token stream into the serialized
+        AST. Recursive descent mirroring p8cc.py's `P`, emitting the AST as it
+        parses (no whole-program tree). Two tricks make streaming work: (1) infix
+        operators (`a+b`, `a=b`, `a[i]`, `a.b`) parse the left operand before the
+        tag is known, so cc1 splices the tag in front of it with an in-buffer
+        `einsert()`; (2) since an einsert only reaches back within one expression,
+        eb[] is flushed at every statement boundary — the buffer holds at most one
+        statement, so cc1 handles functions far larger than the TPA. Output is
+        **byte-identical** to `p8cc.py --ast` — verified on-target by `os_cc1_test`
+        (the real `lex | cc1` chain) and, during development, via a gcc build of
+        cc1.c against `--ast` across all 24 command sources AND p8cc.c itself.
+        Wire format switched from count-prefixed lists to `;`-terminated lists so
+        the append-only write stream needs no seek-back. Purely syntactic; all
+        type/symbol/struct analysis is deferred to cg. C-only (no asm twin).
+        Sizing: cc1.bin ~29.5 KB fits the TPA ($7A00+29.5K < $F800) with ~2.7 KB
+        headroom. NEXT and LAST: **CG** (AST → asm, matching `--from-ast`) — the
+        whole `Gen` back end (symbol tables, struct layout, type analysis, codegen,
+        runtime). It is the big one and the real fit-under-TPA question; if it
+        overflows, cg itself splits (e.g. codegen vs runtime-emit).
 - [ ] **Native toolchain follow-ups** (EDIT + ASM landed — see DONE). Remaining
       polish on the on-target assembler/editor, none blocking:
         - **Tools write to the flat root only.** EDIT `W` and ASM output go to

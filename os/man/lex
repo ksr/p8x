@@ -37,4 +37,4 @@ EXAMPLES
     cpp cat.c >cat.i         then: lex cat.i >cat.tok
 
 SEE ALSO
-    cpp, asm, run
+    cpp, cc1, asm, run

@@ -1099,12 +1099,15 @@ def dump_tokens(src):
 
 def ast_ser(decls):
     # Serialize the AST (pass 2 -> pass 3 of the split compiler): a whitespace-
-    # separated pre-order atom stream. Node = <tag> then its fields; lists are
-    # <count> then that many nodes; optional children are <0> or <1> <node>;
-    # a type triple is <base> <ptr> <count> (count -1 = infer/None); a byte
-    # string is <len> then that many decimal bytes. cc1 must reproduce this
-    # exactly; cg (and --from-ast) consume it. Barewords (ids, struct tags,
-    # keywords, operators) never contain spaces, so plain atoms suffice.
+    # separated pre-order atom stream. Node = <tag> then its fields; a variadic
+    # list is its nodes followed by a ";" terminator (NOT a leading count, so the
+    # native parser cc1 can stream it out as it parses, with no seek-back on the
+    # append-only write stream); optional children are <0> or <1> <node>; a type
+    # triple is <base> <ptr> <count> (count -1 = infer/None); a byte string is
+    # <len> then that many decimal bytes (len is always known when emitting).
+    # cc1 must reproduce this exactly; cg (and --from-ast) consume it. Barewords
+    # (ids, struct tags, keywords, operators) never contain spaces or equal ";",
+    # so plain atoms suffice.
     out = []
     def wr(*xs):
         for x in xs: out.append(str(x))
@@ -1114,9 +1117,12 @@ def ast_ser(decls):
     def wtype(t):
         base, ptr, count = t
         wr(base, ptr, -1 if count is None else count)
+    def wlist(ns):
+        for x in ns: wnode(x)
+        wr(";")
     def wparams(ps):
-        wr(len(ps))
         for (t, nm) in ps: wtype(t); wr(nm)
+        wr(";")
     def wopt(n):
         if n is None: wr(0)
         else: wr(1); wnode(n)
@@ -1130,14 +1136,14 @@ def ast_ser(decls):
         elif k == "logand":  wnode(n[1]); wnode(n[2])
         elif k == "bin":     wr(n[1]); wnode(n[2]); wnode(n[3])
         elif k == "unary":   wr(n[1]); wnode(n[2])
-        elif k == "call":    wr(n[1]); wr(len(n[2])); [wnode(a) for a in n[2]]
+        elif k == "call":    wr(n[1]); wlist(n[2])
         elif k == "index":   wnode(n[1]); wnode(n[2])
         elif k == "member":  wnode(n[1]); wr(n[2])
         elif k == "arrow":   wnode(n[1]); wr(n[2])
-        elif k == "initlist":wr(len(n[1])); [wnode(x) for x in n[1]]
+        elif k == "initlist":wlist(n[1])
         elif k == "initstr": wbytes(n[1])
         elif k == "initnum": wr(n[1])
-        elif k == "block":   wr(len(n[1])); [wnode(s) for s in n[1]]
+        elif k == "block":   wlist(n[1])
         elif k == "decl":    wtype(n[1]); wr(n[2]); wopt(n[3])
         elif k == "if":      wnode(n[1]); wnode(n[2]); wopt(n[3])
         elif k == "while":   wnode(n[1]); wnode(n[2])
@@ -1146,30 +1152,38 @@ def ast_ser(decls):
         elif k == "empty":   pass
         elif k == "expr":    wnode(n[1])
         elif k == "structdef":
-            wr(n[1], n[2], len(n[3]))
+            wr(n[1], n[2])
             for (t, nm) in n[3]: wtype(t); wr(nm)
+            wr(";")
         elif k == "proto":   wtype(n[1]); wr(n[2]); wparams(n[3])
         elif k == "func":    wtype(n[1]); wr(n[2]); wparams(n[3]); wnode(n[4])
         elif k == "gvar":
             wr(n[1], n[2], 1 if n[3] else 0, -1 if n[4] is None else n[4], n[5])
             wopt(n[6])
         else: sys.exit("p8cc: cannot serialize node %r" % (k,))
-    wr(len(decls))
     for d in decls: wnode(d)
+    out.append(";")
     return " ".join(out) + "\n"
 
 
 def ast_de(text):
     toks = text.split(); pos = [0]
-    def rd():    v = toks[pos[0]]; pos[0] += 1; return v
-    def rint():  return int(rd())
+    def peek(): return toks[pos[0]]
+    def rd():   v = toks[pos[0]]; pos[0] += 1; return v
+    def rint(): return int(rd())
     def rbytes():
         n = rint(); return [rint() for _ in range(n)]
     def rtype():
         base = rd(); ptr = rint(); c = rint()
         return (base, ptr, None if c == -1 else c)
+    def rlist():
+        r = []
+        while peek() != ";": r.append(rnode())
+        rd(); return r
     def rparams():
-        n = rint(); return [(rtype(), rd()) for _ in range(n)]
+        r = []
+        while peek() != ";": t = rtype(); r.append((t, rd()))
+        rd(); return r
     def ropt():
         return rnode() if rint() else None
     def rnode():
@@ -1182,14 +1196,14 @@ def ast_de(text):
         elif k == "logand":  return ("logand", rnode(), rnode())
         elif k == "bin":     op = rd(); return ("bin", op, rnode(), rnode())
         elif k == "unary":   op = rd(); return ("unary", op, rnode())
-        elif k == "call":    nm = rd(); n = rint(); return ("call", nm, [rnode() for _ in range(n)])
+        elif k == "call":    nm = rd(); return ("call", nm, rlist())
         elif k == "index":   return ("index", rnode(), rnode())
         elif k == "member":  return ("member", rnode(), rd())
         elif k == "arrow":   return ("arrow", rnode(), rd())
-        elif k == "initlist":n = rint(); return ("initlist", [rnode() for _ in range(n)])
+        elif k == "initlist":return ("initlist", rlist())
         elif k == "initstr": return ("initstr", rbytes())
         elif k == "initnum": return ("initnum", rint())
-        elif k == "block":   n = rint(); return ("block", [rnode() for _ in range(n)])
+        elif k == "block":   return ("block", rlist())
         elif k == "decl":    t = rtype(); nm = rd(); return ("decl", t, nm, ropt())
         elif k == "if":      return ("if", rnode(), rnode(), ropt())
         elif k == "while":   return ("while", rnode(), rnode())
@@ -1198,17 +1212,16 @@ def ast_de(text):
         elif k == "empty":   return ("empty",)
         elif k == "expr":    return ("expr", rnode())
         elif k == "structdef":
-            kind = rd(); tag = rd(); n = rint()
-            members = [(rtype(), rd()) for _ in range(n)]
-            return ("structdef", kind, tag, members)
+            kind = rd(); tag = rd(); return ("structdef", kind, tag, rparams())
         elif k == "proto":   t = rtype(); nm = rd(); return ("proto", t, nm, rparams())
         elif k == "func":    t = rtype(); nm = rd(); ps = rparams(); return ("func", t, nm, ps, rnode())
         elif k == "gvar":
             base = rd(); ptr = rint(); arr = rint(); c = rint(); nm = rd()
             return ("gvar", base, ptr, arr != 0, None if c == -1 else c, nm, ropt())
         else: sys.exit("p8cc: cannot deserialize node %r" % (k,))
-    n = rint()
-    return [rnode() for _ in range(n)]
+    decls = []
+    while peek() != ";": decls.append(rnode())
+    return decls
 
 
 def main():
