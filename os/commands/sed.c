@@ -4,8 +4,8 @@
  *     SED s/foo/bar/g file     replace every "foo"
  *     cmd | SED s/x/y/         substitute on a pipe
  *
- * Only the `s///` command. The left-hand side is a **basic regex** (`.` `*` `^`
- * `$`, via the shared lib_regex — same matcher as grep); the replacement is
+ * Only the `s///` command. The left-hand side is a **basic regex** (`.` `*` `+`
+ * `?` `^` `$`, via the shared lib_regex — same matcher as grep); the replacement is
  * literal. Reads a named file (opened like cat) or stdin; on each line, replaces
  * the first match (or all with `g`) and prints the result. The matched span (not
  * a fixed length) is what gets replaced. `*` is non-greedy (shortest match);
@@ -20,7 +20,7 @@ int  anchored;                                /* 1 = pattern began with '^' */
 char *rpat;                                   /* pattern to match (past any '^') */
 
 //#use readline
-//#use regex   /* match/matchhere (. * ^ $) + rend, shared with grep */
+//#use regex   /* match/matchhere (. * + ? ^ $) + rend, shared with grep */
 
 /* re_at: length of the regex match starting at line[i], or 0 if none here.
  * matchhere() sets rend past the match; a zero-length match counts as "no

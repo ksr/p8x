@@ -20,6 +20,12 @@ DIR /BIN            CAT README.TXT          PWD
 equivalently `RUN /BIN/DIR.BIN /BIN`, etc. Every command accepts **`-h`** to
 print a one-line usage summary and exit.
 
+> **Hand-assembled counterparts.** Each of these commands also has a hand-written
+> P8X assembler version in [`../commands-asm/`](../commands-asm/README.md),
+> verified byte-identical in behavior and ~2.3× smaller overall (up to 5.8×).
+> `run.sh` installs them to a parallel `/BINA`, so you can compare on-target:
+> `RUN /BINA/GREP.BIN …` vs `GREP …`.
+
 > **Drives.** A second CF is **mounted at `/D1`** in one unified namespace, so
 > these commands are **drive-unaware**: an ordinary `/D1/...` path reaches drive 1
 > with no special syntax — `CAT /D1/NOTES`, `DIR /D1/BIN`, `DIR /D1/*.C`,

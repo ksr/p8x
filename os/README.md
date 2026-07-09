@@ -32,8 +32,9 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > (`CD /D1/SRC`, `MKDIR /D1/LIB`, `CAT /D1/NOTES`). See **Two drives** below.
 >
 > The table above is the **built-in** command set. `CAT`, `WC`, `GREP`, `CP`,
-> `MV`, `HEAD`, `TAIL`, `MORE`, `SORT`, `UNIQ`, `SED`, `FIND`, `DIFF` (and richer
-> `DIR -R` etc.) are **userland C programs** in `/BIN`, run by
+> `MV`, `HEAD`, `TAIL`, `MORE`, `SORT`, `UNIQ`, `SED`, `FIND`, `DIFF`, `VI` (and
+> richer `DIR -R`, the `VI` screen editor, etc.) are **userland C programs** in
+> `/BIN`, run by
 > bare name (implicit RUN searches `PATH`, default `/BIN`) or explicit `RUN` —
 > see [commands/](commands/README.md). They are **drive-unaware**: a `/D1/...`
 > path reaches drive 1 through the same mount redirect, so `CAT /D1/NOTES`,

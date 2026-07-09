@@ -31,7 +31,7 @@ char rfiles[2880];                           /* -r: collected file paths, 36 x 8
 int  nrf;                                    /* -r: number of paths collected */
 char re[64];                                 /* the compiled regex (first arg word) */
 
-//#use regex   /* match(re,t)/matchhere(re,t): the basic-regex matcher . * ^ $ */
+//#use regex   /* match(re,t)/matchhere(re,t): the basic-regex matcher . * + ? ^ $ */
 //#use stdin   /* path[80], fromfile, nextc(), openarg(), open_path() */
 //#use dirent  /* de_read/de_isfile/de_isdir/de_isdot/de_lba/de_opendir */
 
