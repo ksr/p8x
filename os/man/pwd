@@ -1,0 +1,16 @@
+NAME
+    pwd - print the working directory
+
+SYNOPSIS
+    pwd
+
+DESCRIPTION
+    Prints the absolute path of the current working directory. The path
+    is obtained through the SYS_GETCWD syscall, not by reading OS memory.
+    pwd is a /bin program.
+
+EXAMPLES
+    pwd              e.g.  /sub
+
+SEE ALSO
+    cd, dir

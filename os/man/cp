@@ -1,0 +1,26 @@
+NAME
+    cp - copy files and directory trees
+
+SYNOPSIS
+    cp src dst
+    cp -r src dst
+    cp glob dir
+
+DESCRIPTION
+    Copies a file, a directory tree, or every glob match. A file is
+    copied byte for byte to dst. If the source is a glob (* or ?), each
+    match is copied INTO dst, which must be an existing directory (each
+    lands at dst/basename). Copies work across the /d1 mount. cp is a
+    /bin program.
+
+OPTIONS
+    -r    copy a directory and its contents recursively
+
+EXAMPLES
+    cp OLD.TXT NEW.TXT       copy one file
+    cp -r SRC DST            copy a subtree
+    cp -r /d1/SRC /SRC       copy across the drive-1 mount
+    cp *.asm /bak            copy each match into a directory
+
+SEE ALSO
+    mv, cat, touch, del

@@ -1,0 +1,18 @@
+NAME
+    tree - print the directory tree
+
+SYNOPSIS
+    tree
+
+DESCRIPTION
+    Prints an indented, depth-first listing of the directory tree under
+    the current working directory: two spaces of indent per level, a
+    trailing slash on directories. Per-level children are capped at 24.
+    tree is a /bin program.
+
+EXAMPLES
+    tree
+    cd /bin ; tree
+
+SEE ALSO
+    dir, find, cd

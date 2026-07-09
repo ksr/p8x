@@ -75,7 +75,7 @@ if [ ! -f "$disk" ]; then
     # redirection and pipes out of the box. Run by bare name via PATH (/bin),
     # e.g.  dir /bin ,  cat README.TXT ,  cat README.TXT | grep hello | wc ,
     # cp README.TXT COPY.TXT ,  mv COPY.TXT MOVED.TXT .
-    for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch; do
+    for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch man; do
         # clib.py splices any //#use lib_*.c (shared helpers) into the source first;
         # a no-op passthrough for commands with no //#use directive.
         python3 "$root/tools/clib.py" "$root/os/commands/$ex.c" -o "$build/$ex.c"
@@ -86,11 +86,20 @@ if [ ! -f "$disk" ]; then
     done
     # Hand-assembled versions -> /bina (os/commands-asm). mkasm.sh splices any
     # ;#use includes (lib_stdin/glob/regex) just like clib.py does for the C ones.
-    for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch; do
+    for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch man; do
         sh "$root/os/commands-asm/mkasm.sh" "$ex" > "$build/$ex.a.asm"
         python3 "$root/assembler/p8xasm.py" "$build/$ex.a.asm" -o "$build/$ex.a.bin" --base 0x7A00 >/dev/null
         python3 "$root/tools/p8xfs.py" put "$disk" "$build/$ex.a.bin" \
             --name "/bina/$ex.bin" --load 0x7A00 --exec 0x7A00 >/dev/null
+    done
+    # /man: a Unix-style manual page per command (plain text in os/man/). The
+    # `man` command (installed above) reads /man/<name>, so `man dir` works.
+    python3 "$root/tools/p8xfs.py" mkdir "$disk" /man >/dev/null
+    for page in "$root"/os/man/*; do
+        base=$(basename "$page")
+        [ "$base" = "README.md" ] && continue      # repo doc, not a man page
+        python3 "$root/tools/p8xfs.py" put "$disk" "$page" \
+            --name "/man/$base" >/dev/null
     done
     printf 'hello from P8X/OS\n' > "$build/readme.txt"
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/readme.txt" --name /README.TXT >/dev/null

@@ -1,0 +1,17 @@
+NAME
+    pack - reclaim deleted space
+
+SYNOPSIS
+    pack
+
+DESCRIPTION
+    Compacts the filesystem, reclaiming the space left by deleted or
+    moved files (P8XFS frees extents lazily). Run it to recover room on a
+    full card. pack is an OS built-in command that operates on the
+    current drive.
+
+EXAMPLES
+    pack
+
+SEE ALSO
+    del, mv, fsck, format

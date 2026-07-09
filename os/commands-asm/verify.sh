@@ -42,6 +42,9 @@ fixtures() {
     printf 'green\r\n'       > "$W/g2.dat"; $FS put "$1" "$W/g2.dat" --name G2.LOG >/dev/null
     $FS mkdir "$1" /SUB/DEEP >/dev/null
     printf 'x\r\n' > "$W/m.dat"; $FS put "$1" "$W/m.dat" --name /SUB/M.TXT >/dev/null
+    $FS mkdir "$1" /man >/dev/null
+    printf 'DIR(1)\r\nNAME\r\n  dir - list directory contents\r\n' > "$W/mdir.dat"
+    $FS put "$1" "$W/mdir.dat" --name /man/dir >/dev/null
 }
 
 # cmd_script $1=CMD(upper) : echo the \r-separated shell lines for that command
@@ -70,6 +73,7 @@ cmd_script() {
         # create a missing file, then touch an existing one and confirm it is
         # NOT truncated (cat still shows its content). find/cat are helpers.
         TOUCH) printf 'touch NEW.TXT\rfind NEW\rtouch T.TXT\rcat T.TXT\rtouch -h\r' ;;
+        MAN)  printf 'man dir\rman nope\rman -h\r' ;;
     esac
 }
 

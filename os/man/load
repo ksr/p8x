@@ -1,0 +1,16 @@
+NAME
+    load - read a file into memory at its load address
+
+SYNOPSIS
+    load path
+
+DESCRIPTION
+    Reads a file into memory at the load address recorded with it, but
+    does not run it. Useful for inspecting or patching a program before
+    execution. load is an OS built-in command.
+
+EXAMPLES
+    load hello.bin
+
+SEE ALSO
+    run, save, dump

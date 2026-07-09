@@ -1,0 +1,16 @@
+NAME
+    dump - display memory as hex
+
+SYNOPSIS
+    dump addr
+
+DESCRIPTION
+    Displays 256 bytes of memory starting at the hexadecimal address
+    addr. At the prompt, Enter shows the next block and "." exits. dump
+    is an OS built-in command.
+
+EXAMPLES
+    dump 7A00
+
+SEE ALSO
+    dep, load, save

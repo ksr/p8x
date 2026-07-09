@@ -26,6 +26,7 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > | `format` | erase the card and lay a fresh P8XFS v2 volume (asks `Y/N`) |
 > | `umount` / `mount` | swap the CF in the `/d1` slot without rebooting (see **Two drives**) |
 > | `help` | list commands |
+> | `man name` | show a command's manual page (reads `/man/<name>`) |
 >
 > A second CF is **mounted at `/d1`** in one unified namespace — any `path` on a
 > built-in (or `/bin` command) reaches it with ordinary path syntax
@@ -33,7 +34,7 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 >
 > The table above is the **built-in** command set. `cat`, `wc`, `grep`, `cp`,
 > `mv`, `head`, `tail`, `more`, `sort`, `uniq`, `sed`, `find`, `diff`, `touch`,
-> `vi` (and richer `dir -R`, the `vi` screen editor, etc.) are **userland C
+> `vi`, `man` (and richer `dir -R`, the `vi` screen editor, etc.) are **userland C
 > programs** in
 > `/bin`, run by
 > bare name (implicit RUN searches `path`, default `/bin`) or explicit `run` —
@@ -42,6 +43,10 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > `grep x /d1/SRC/*.C`, and cross-mount `cp /d1/A /B` all just work with no
 > per-command drive logic. Line input echoes keys, supports
 > backspace/DEL editing (max 63 chars), and takes **Ctrl-D** as console EOF.
+>
+> Every command — built-in or `/bin` — has a **manual page** in `/man` (plain
+> text authored in [`man/`](man/), installed by `run.sh`). `man name` prints it,
+> e.g. `man cp`; an unknown name reports `no manual entry`.
 >
 > A file/dir argument may be a **path**. Directory scanning works on any extent
 > — a `(start LBA, sector count)` pair — so the current directory and any

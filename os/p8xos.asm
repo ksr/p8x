@@ -3692,6 +3692,8 @@ MHELP:   .byte CR,LF
          .byte CR,LF
          .ascii "help          this help"
          .byte CR,LF
+         .ascii "man name      show a command's manual page (/man)"
+         .byte CR,LF
          .ascii "exit / mon    return to the ROM monitor"
          .byte CR,LF
          .ascii "cmd >FILE     send output to FILE instead of the screen"

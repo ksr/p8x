@@ -1,0 +1,18 @@
+NAME
+    cd - change the working directory
+
+SYNOPSIS
+    cd path
+
+DESCRIPTION
+    Changes the current working directory. The path may be absolute
+    (/bin), relative, or use . and .. -- and may cross the drive-1 mount
+    (cd /d1). cd is an OS built-in command.
+
+EXAMPLES
+    cd /bin
+    cd ..
+    cd /d1
+
+SEE ALSO
+    pwd, dir, mkdir

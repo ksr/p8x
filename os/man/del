@@ -1,0 +1,16 @@
+NAME
+    del - delete a file
+
+SYNOPSIS
+    del path
+
+DESCRIPTION
+    Deletes a file. The space it used is reclaimed later by pack, not
+    immediately. del is an OS built-in command.
+
+EXAMPLES
+    del OLD.TXT
+    del /d1/JUNK.DAT
+
+SEE ALSO
+    mv, pack, rmdir

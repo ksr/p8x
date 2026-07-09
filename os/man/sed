@@ -1,0 +1,21 @@
+NAME
+    sed - stream editor (substitution)
+
+SYNOPSIS
+    sed s/regex/replacement/[g] [file]
+
+DESCRIPTION
+    Applies a single substitution command to each line of a file (or of
+    standard input) and prints the result. Only the s/// command is
+    supported. The left-hand side is a basic regex (the same dialect as
+    grep: . * + ? ^ $); the replacement is literal text. Without the
+    trailing g only the first match on a line is replaced. sed is a /bin
+    program.
+
+EXAMPLES
+    sed s/foo/bar/ file      replace the first foo on each line
+    sed s/foo/bar/g file     replace every foo
+    cmd | sed s/x/y/         substitute on a pipe
+
+SEE ALSO
+    grep, cat

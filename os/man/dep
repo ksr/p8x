@@ -1,0 +1,16 @@
+NAME
+    dep - deposit bytes into memory
+
+SYNOPSIS
+    dep addr byte [byte ...]
+
+DESCRIPTION
+    Stores one or more hexadecimal byte values into memory starting at
+    the hexadecimal address addr. The counterpart to dump. dep is an OS
+    built-in command.
+
+EXAMPLES
+    dep 7A00 A9 01 60
+
+SEE ALSO
+    dump, save, load

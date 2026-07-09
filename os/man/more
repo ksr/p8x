@@ -1,0 +1,24 @@
+NAME
+    more - page through text a screenful at a time
+
+SYNOPSIS
+    more [file]
+
+DESCRIPTION
+    Displays a file (or standard input) one page at a time. After each
+    page it prints "--More--" and waits for a console key. The paging key
+    is always read from the console, so more still works at the end of a
+    pipe. more is a /bin program.
+
+    Keys at the --More-- prompt:
+        space   next full page
+        Enter   one more line
+        q, Q    quit
+        other   next full page
+
+EXAMPLES
+    more BIG.TXT
+    dir -R | more
+
+SEE ALSO
+    cat, head, tail

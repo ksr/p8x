@@ -1,0 +1,20 @@
+NAME
+    mv - move or rename files
+
+SYNOPSIS
+    mv src dst
+    mv glob dir
+
+DESCRIPTION
+    Moves or renames a file. P8XFS has no rename primitive, so mv copies
+    src to dst and then deletes src (the data is rewritten and the old
+    extent is reclaimed later by pack). A glob source moves each match
+    into the destination directory. `mv X X` is refused. mv is a /bin
+    program.
+
+EXAMPLES
+    mv OLD.TXT NEW.TXT       rename in place
+    mv *.tmp trash           move each match into a directory
+
+SEE ALSO
+    cp, del, pack

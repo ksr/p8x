@@ -1,0 +1,31 @@
+NAME
+    grep - print lines matching a regular expression
+
+SYNOPSIS
+    grep pattern [file]
+    grep -r pattern
+
+DESCRIPTION
+    Prints the lines of a file (or of standard input) that match a basic
+    regular expression. grep is a /bin program.
+
+    The regex dialect:
+        .        any single character
+        *  +  ?  zero-or-more / one-or-more / zero-or-one of the
+                 preceding character
+        ^        anchor to the start of the line (special only first)
+        $        anchor to the end of the line   (special only last)
+    Everything else is a literal. There are no character classes or
+    alternation yet.
+
+OPTIONS
+    -r    recurse the CWD tree, grepping every file
+
+EXAMPLES
+    grep "^al" FILE          lines starting with "al"
+    grep "be.a" <FILE        be, any char, a  (from a redirect)
+    cmd | grep "x.*y"        filter a pipe
+    grep -r alpha            search every file under the CWD
+
+SEE ALSO
+    sed, find, cat

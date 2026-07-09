@@ -1,0 +1,15 @@
+NAME
+    mon - return to the ROM monitor
+
+SYNOPSIS
+    mon
+
+DESCRIPTION
+    Leaves the OS and returns to the ROM monitor -- a synonym for exit.
+    mon is an OS built-in command.
+
+EXAMPLES
+    mon
+
+SEE ALSO
+    exit

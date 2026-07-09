@@ -1,0 +1,17 @@
+NAME
+    mount - mount the drive-1 card
+
+SYNOPSIS
+    mount
+
+DESCRIPTION
+    Mounts the second CompactFlash card at /d1 after it has been
+    inserted. Used together with umount to hot-swap the drive-1 card:
+    umount, swap the card, then mount. mount is an OS built-in command.
+
+EXAMPLES
+    mount
+    cd /d1
+
+SEE ALSO
+    umount, cd, format

@@ -1,0 +1,19 @@
+NAME
+    sort - sort lines of text
+
+SYNOPSIS
+    sort [file]
+
+DESCRIPTION
+    Reads a file (or standard input) into memory, sorts its lines in
+    ascending ASCII byte order, and prints them. Holds up to 128 lines of
+    up to 79 characters (longer lines are truncated). sort is a /bin
+    program.
+
+EXAMPLES
+    sort S.TXT               file's lines ascending
+    cmd | sort               sort a pipe
+    sort f | uniq            sort, then collapse duplicates
+
+SEE ALSO
+    uniq, wc, cat

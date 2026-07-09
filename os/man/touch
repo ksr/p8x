@@ -1,0 +1,20 @@
+NAME
+    touch - create empty files
+
+SYNOPSIS
+    touch name [name ...]
+
+DESCRIPTION
+    Creates each named file empty if it does not exist. An existing file
+    is left completely untouched (it is NOT truncated). P8XFS has no
+    timestamps yet, so touch does not bump an mtime. Names may be
+    relative (resolved against the CWD) or absolute, including across the
+    /d1 mount. touch is a /bin program.
+
+EXAMPLES
+    touch NEW.TXT            create one empty file
+    touch A.TXT B.TXT C      several at once
+    touch /d1/NEW.TXT        an absolute / cross-mount path
+
+SEE ALSO
+    cp, del, save

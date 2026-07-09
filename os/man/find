@@ -1,0 +1,20 @@
+NAME
+    find - search for files by name under the CWD
+
+SYNOPSIS
+    find pattern
+
+DESCRIPTION
+    Walks the current directory tree depth-first and prints the full path
+    of every entry (file or directory) whose name matches. If the pattern
+    contains * or ? it is a case-insensitive glob; otherwise it is a
+    literal substring match. Searches the CWD subtree only. find is a
+    /bin program.
+
+EXAMPLES
+    find .TXT            names containing ".TXT"
+    find *.c             names matching a glob
+    find TEST?.ASM       glob with a single-char wildcard
+
+SEE ALSO
+    dir, tree, grep

@@ -1,0 +1,18 @@
+NAME
+    path - show or set the program search path
+
+SYNOPSIS
+    path [dir ...]
+
+DESCRIPTION
+    With no argument, prints the current search path used to find
+    programs run by bare name. With directory arguments, sets the path.
+    The default is /bin. When you type a bare command name, the OS looks
+    for name.bin in the path directories. path is an OS built-in.
+
+EXAMPLES
+    path                 show the current path
+    path /bin /bina      search /bin then /bina
+
+SEE ALSO
+    run, help

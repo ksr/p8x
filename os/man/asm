@@ -1,0 +1,18 @@
+NAME
+    asm - the on-target two-pass assembler
+
+SYNOPSIS
+    asm src.asm out.bin
+
+DESCRIPTION
+    Assembles a P8X assembly source file into a binary, entirely on the
+    machine -- the on-target counterpart of the host assembler. Pair it
+    with edit (or vi) for a self-hosted edit/assemble/run loop. asm is a
+    /bin program.
+
+EXAMPLES
+    asm hello.asm hello.bin
+    run hello.bin
+
+SEE ALSO
+    edit, vi, run

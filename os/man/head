@@ -1,0 +1,20 @@
+NAME
+    head - print the first lines of a file
+
+SYNOPSIS
+    head [-N] [file]
+
+DESCRIPTION
+    Prints the first N lines of a file, or of standard input if no file
+    is given. N defaults to 10. head is a /bin program.
+
+OPTIONS
+    -N    print the first N lines (e.g. -5)
+
+EXAMPLES
+    head N.TXT           first 10 lines
+    head -5 N.TXT        first 5 lines
+    cmd | head           first 10 lines of a pipe
+
+SEE ALSO
+    tail, more, cat

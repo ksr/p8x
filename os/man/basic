@@ -1,0 +1,20 @@
+NAME
+    basic - the P8X BASIC interpreter
+
+SYNOPSIS
+    basic
+
+DESCRIPTION
+    Launches P8X BASIC, a small integer BASIC with string variables,
+    functions, and data-file I/O. Type BYE to return to the OS. basic is
+    a /bin program; SAVE/LOAD and data files use the shared filesystem,
+    so programs and data are visible to dir and the other tools.
+
+    See the P8X BASIC guide for the language reference.
+
+EXAMPLES
+    basic
+    run /bin/basic.bin
+
+SEE ALSO
+    edit, run, save, load

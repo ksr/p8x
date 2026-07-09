@@ -1,0 +1,16 @@
+NAME
+    fsck - check filesystem integrity
+
+SYNOPSIS
+    fsck
+
+DESCRIPTION
+    Checks the filesystem for consistency and reports problems. It is
+    read-only -- it does not modify the card. fsck is an OS built-in
+    command that operates on the current drive.
+
+EXAMPLES
+    fsck
+
+SEE ALSO
+    pack, format

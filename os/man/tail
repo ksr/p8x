@@ -1,0 +1,22 @@
+NAME
+    tail - print the last lines of a file
+
+SYNOPSIS
+    tail [-N] [file]
+
+DESCRIPTION
+    Prints the last N lines of a file, or of standard input if no file is
+    given. N defaults to 10 and is clamped to 1..40. Lines are held in a
+    ring buffer and printed in order at end of input. tail is a /bin
+    program.
+
+OPTIONS
+    -N    print the last N lines (e.g. -5)
+
+EXAMPLES
+    tail N.TXT           last 10 lines
+    tail -5 N.TXT        last 5 lines
+    cmd | tail           last 10 lines of a pipe
+
+SEE ALSO
+    head, more, cat

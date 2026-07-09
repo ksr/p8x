@@ -1,0 +1,20 @@
+NAME
+    diff - compare two files line by line
+
+SYNOPSIS
+    diff old new
+
+DESCRIPTION
+    Compares two files. It skips the common leading and trailing lines
+    and reports the differing middle: lines only in the first file are
+    prefixed "< ", lines only in the second "> ". Identical files produce
+    no output. This is a prefix/suffix-anchored diff that isolates one
+    changed block, not a minimal-edit diff. Holds up to 96 lines of 79
+    chars per file. diff is a /bin program.
+
+EXAMPLES
+    diff OLD.TXT NEW.TXT
+    diff a.asm b.asm
+
+SEE ALSO
+    cat, grep

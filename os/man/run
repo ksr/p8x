@@ -1,0 +1,20 @@
+NAME
+    run - load and run a program
+
+SYNOPSIS
+    run path [args]
+
+DESCRIPTION
+    Loads a program to its load address and jumps to its entry point,
+    passing the argument tail. The program returns to the OS with RTS.
+    Any command typed by bare name is run this way after being found on
+    the search path (see path), so `dir` is short for `run /bin/dir.bin`.
+    run is an OS built-in command.
+
+EXAMPLES
+    run /bin/basic.bin
+    run hello.bin
+    run /bin/asm.bin src.asm out.bin
+
+SEE ALSO
+    load, path, save

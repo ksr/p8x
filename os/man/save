@@ -1,0 +1,16 @@
+NAME
+    save - write a range of memory to a file
+
+SYNOPSIS
+    save path start end
+
+DESCRIPTION
+    Writes the bytes of memory in the half-open range [start, end) to a
+    new file. start and end are hexadecimal addresses. save is an OS
+    built-in command.
+
+EXAMPLES
+    save prog.bin 7A00 7C00
+
+SEE ALSO
+    load, dump, dep

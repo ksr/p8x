@@ -1,0 +1,23 @@
+NAME
+    man - display a manual page
+
+SYNOPSIS
+    man name
+
+DESCRIPTION
+    Prints the manual page for a command. Pages are plain-text files in
+    the /man directory, one per command, named after the command in
+    lower case. `man dir` prints /man/dir. Works for both /bin programs
+    and OS built-in commands. An unknown name prints
+    "no manual entry for NAME".
+
+    man is a /bin program (a `cat` with a fixed /man/ prefix), so it can
+    also be run explicitly: run /bin/man.bin cat
+
+EXAMPLES
+    man dir          the manual page for dir
+    man man          this page
+    man grep         the regex dialect grep accepts
+
+SEE ALSO
+    help, cat, dir

@@ -1,0 +1,24 @@
+NAME
+    dir - list directory contents
+
+SYNOPSIS
+    dir [-R] [path | glob]
+
+DESCRIPTION
+    Lists a directory. With no argument it lists the current working
+    directory; a path lists that directory; a glob (containing * or ?)
+    lists the matching entries. Directories are shown with a trailing
+    slash. dir is a /bin program.
+
+OPTIONS
+    -R    list subdirectories recursively (like tree)
+
+EXAMPLES
+    dir              list the current directory
+    dir /bin         list a directory by path
+    dir *.asm        entries in the CWD matching a glob
+    dir /bin/*.bin   glob within another directory
+    dir -R /sub      recursive listing of /sub
+
+SEE ALSO
+    tree, find, cd, pwd, ls

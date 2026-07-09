@@ -1,0 +1,16 @@
+NAME
+    umount - unmount the drive-1 card
+
+SYNOPSIS
+    umount
+
+DESCRIPTION
+    Unmounts the /d1 card so it can be removed safely. Pair it with mount
+    to hot-swap the drive-1 card: umount, swap, mount. umount is an OS
+    built-in command.
+
+EXAMPLES
+    umount               then remove/swap the card
+
+SEE ALSO
+    mount, cd

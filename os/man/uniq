@@ -1,0 +1,18 @@
+NAME
+    uniq - collapse adjacent duplicate lines
+
+SYNOPSIS
+    uniq [file]
+
+DESCRIPTION
+    Prints a file (or standard input) with adjacent duplicate lines
+    collapsed to one -- a line is printed only when it differs from the
+    line before it. Only *adjacent* duplicates are removed, so uniq is
+    usually paired with sort. uniq is a /bin program.
+
+EXAMPLES
+    uniq U.TXT
+    sort f | uniq            the usual pairing
+
+SEE ALSO
+    sort, wc

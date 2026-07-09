@@ -579,14 +579,14 @@ Last updated: 2026-07-08
       built-ins; everything else lives on disk and shares one ROM FS layer with
       BASIC and any user program. Sequence after the FS API grows those few calls;
       pairs with the on-target assembler/editor ideas below.
-- [ ] **Man-page-style OS command reference in os/README.md.** The OS README
-      currently has a one-line-per-command table. Expand it into per-command
-      "man" entries — NAME / SYNOPSIS / DESCRIPTION / EXAMPLES, plus notes on
-      paths, hex args, redirection, and error messages (`?EXISTS`, `?NO FILE`,
-      `?NO DIR`, `FSCK: PROBLEMS=n`, etc.). Keep the quick table at the top as a
-      summary and put the detailed entries below. Source of truth stays the
-      on-target `HELP` text + the assembly; the README is the long-form companion.
-      (Doc-only — no code change.)
+- [x] **Man-page-style OS command reference — DONE (2026-07-09), on-target.**
+      Went further than the doc-only plan: authored a per-command manual page
+      (NAME / SYNOPSIS / DESCRIPTION / OPTIONS / EXAMPLES / SEE ALSO) for every
+      `/bin` command AND every OS built-in in `os/man/`, installed to `/man` by
+      `run.sh`, and added a **`man` command** (`os/commands/man.c` + byte-identical
+      `os/commands-asm/man.asm`) so `man dir` prints `/man/dir` on the machine.
+      HELP lists `man`; `os_man_test` covers it. **Still future:** a `man -k`
+      apropos/keyword search, and a `SEE ALSO`-driven index page.
 - [ ] **Housekeeping (from 2026-06 consistency audit; not yet decided):**
     - Tracked generated binaries: `microcode/u0-u3.bin` are committed but
       regenerate byte-identically from genucode.py. Consider gitignoring them

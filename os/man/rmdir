@@ -1,0 +1,15 @@
+NAME
+    rmdir - remove an empty directory
+
+SYNOPSIS
+    rmdir path
+
+DESCRIPTION
+    Removes a directory, which must be empty. rmdir is an OS built-in
+    command.
+
+EXAMPLES
+    rmdir /old
+
+SEE ALSO
+    mkdir, del, pack

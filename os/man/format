@@ -1,0 +1,16 @@
+NAME
+    format - make a fresh filesystem
+
+SYNOPSIS
+    format
+
+DESCRIPTION
+    Erases the card and creates a fresh, empty P8XFS v2 volume. This
+    destroys all files, so it asks for Y/N confirmation first. format is
+    an OS built-in command that operates on the current drive.
+
+EXAMPLES
+    format               (then answer Y to confirm)
+
+SEE ALSO
+    fsck, pack, mount

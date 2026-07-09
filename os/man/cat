@@ -1,0 +1,22 @@
+NAME
+    cat - concatenate and print files
+
+SYNOPSIS
+    cat [file | glob]
+
+DESCRIPTION
+    With a file argument, prints that file. With a glob (* or ? in the
+    last component), concatenates every matching file in that directory.
+    With no argument, copies standard input to standard output, so it
+    works as a filter with redirection (<) and pipes (|). cat is a /bin
+    program.
+
+EXAMPLES
+    cat README.TXT           print a file
+    cat *.log                concatenate matching files
+    cat *.log >all.txt       ... into a file (redirect)
+    cat <file                print from a stdin redirect
+    cat file | grep hello    as a pipe stage
+
+SEE ALSO
+    more, head, tail, grep, man

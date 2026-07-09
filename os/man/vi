@@ -1,0 +1,31 @@
+NAME
+    vi - a minimal screen editor
+
+SYNOPSIS
+    vi name
+
+DESCRIPTION
+    A modal, vi-flavoured VT100 screen editor. It needs a VT100-capable
+    terminal (it drives the cursor with ANSI escapes) and reads keys raw
+    and unbuffered, bypassing the OS line editor. The file is a flat
+    buffer of fixed-width lines (about 110 lines of 80 columns). vi is a
+    /bin program.
+
+    Commands:
+        h j k l    move left / down / up / right
+        0  $       start / end of line
+        G          last line
+        i a A      insert before / after cursor / at end of line
+        o          open a new line below
+        x  dd      delete a character / a line
+        u          undo the last change (single level)
+        /pat  n    search forward for pat, repeat
+        :w :q      write / quit
+        :wq  :q!   write and quit / quit without saving
+
+EXAMPLES
+    vi notes.txt
+    run /bin/vi.bin hello.asm
+
+SEE ALSO
+    edit, cat

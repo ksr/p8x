@@ -1,0 +1,16 @@
+NAME
+    mkdir - create a directory
+
+SYNOPSIS
+    mkdir path
+
+DESCRIPTION
+    Creates a new, empty subdirectory at the given path. mkdir is an OS
+    built-in command. Prints "DIR CREATED" on success.
+
+EXAMPLES
+    mkdir /src
+    mkdir sub
+
+SEE ALSO
+    rmdir, cd, dir
