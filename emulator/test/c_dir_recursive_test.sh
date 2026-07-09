@@ -4,7 +4,7 @@
 #   - per-level FNEXT loops that RECORD child-subdir LBAs and recurse AFTER the
 #     loop closes — so the global FNEXT cursor (DILBA/DICNT/DIIDX) is never
 #     re-entered mid-loop and no level loses its place
-#   - the no-cap streaming property under recursion: RUN /DIR.BIN -R / >X must
+#   - the no-cap streaming property under recursion: RUN /DIR.bin -R / >X must
 #     capture the FULL multi-level listing to a file
 # Compiled by BOTH p8cc.py and the native p8cc.c bootstrap.  Disk layout:
 #   /                A.DAT, SUB/
@@ -24,7 +24,7 @@ printf 'in-root' > a.dat
 printf 'in-sub'  > b.dat
 printf 'in-deep' > c.dat
 
-build_disk() {   # $1 dir.bin -> rdir.img with a nested /SUB/DEEP tree + DIR.BIN
+build_disk() {   # $1 dir.bin -> rdir.img with a nested /SUB/DEEP tree + DIR.bin
     rm -f rdir.img
     python3 $ROOT/tools/p8xfs.py create rdir.img >/dev/null
     python3 $ROOT/tools/p8xfs.py boot   rdir.img osc.bin >/dev/null
@@ -33,11 +33,11 @@ build_disk() {   # $1 dir.bin -> rdir.img with a nested /SUB/DEEP tree + DIR.BIN
     python3 $ROOT/tools/p8xfs.py put    rdir.img a.dat --name /A.DAT        --load 0 --exec 0 >/dev/null
     python3 $ROOT/tools/p8xfs.py put    rdir.img b.dat --name /SUB/B.DAT    --load 0 --exec 0 >/dev/null
     python3 $ROOT/tools/p8xfs.py put    rdir.img c.dat --name /SUB/DEEP/C.DAT --load 0 --exec 0 >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    rdir.img "$1" --name DIR.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    rdir.img "$1" --name DIR.bin --load 0x7A00 --exec 0x7A00 >/dev/null
 }
 
 session() {   # console output of a recursive listing from the root
-    printf 'B\rRUN /DIR.BIN -R /\r' \
+    printf 'B\rrun /DIR.bin -R /\r' \
         | ../p8xemu -l 200000000 -c rdir.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r'
 }
 
@@ -50,7 +50,7 @@ check() {   # $1 = label, $2 = console output of the recursive run
     echo "$2" | grep -q 'C.DAT'  || fail "$1: -R did not descend into /SUB/DEEP (C.DAT missing)"
 
     # redirection: the full recursive listing must stream to a file uncapped
-    printf 'B\rRUN /DIR.BIN -R / >LIST.TXT\r' \
+    printf 'B\rrun /DIR.bin -R / >LIST.TXT\r' \
         | ../p8xemu -l 200000000 -c rdir.img eeprom.bin 2>/dev/null >/dev/null
     python3 $ROOT/tools/p8xfs.py get rdir.img LIST.TXT --out rlist.txt >/dev/null 2>&1 \
         || fail "$1: -R redirect did not create LIST.TXT"

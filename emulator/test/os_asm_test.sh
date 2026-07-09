@@ -6,7 +6,7 @@
 #      and host encodings together so neither can drift (the opcode table is
 #      generated from genucode.OPC for both).
 #  (2) byte-for-byte match on a small feature program, and
-#  (3) RUN the freshly-assembled program and confirm it executes.
+#  (3) run the freshly-assembled program and confirm it executes.
 # (A true self-host — ASM assembling its own ~26 KB source — is impossible: the
 # source text is larger than the whole TPA. This coverage check is the strongest
 # feasible consistency guarantee.)
@@ -70,24 +70,24 @@ python3 $ROOT/assembler/p8xasm.py prog.asm -o golden.bin --base 0x7A00 >/dev/nul
 rm -f as.img
 python3 $ROOT/tools/p8xfs.py create as.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   as.img osa.bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    as.img asm.bin --name ASM.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    as.img asm.bin --name ASM.bin --load 0x7A00 --exec 0x7A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    as.img cover.asm --name COVER.ASM >/dev/null
 python3 $ROOT/tools/p8xfs.py put    as.img prog.asm  --name PROG.ASM  >/dev/null
 
 # Assemble both on-target, then run the small program.
-out=$(printf 'B\rRUN ASM.BIN COVER.ASM COVER.BIN\rRUN ASM.BIN PROG.ASM PROG.BIN\rRUN PROG.BIN\r' | \
+out=$(printf 'B\rrun ASM.bin COVER.ASM COVER.bin\rrun ASM.bin PROG.ASM PROG.bin\rrun PROG.bin\r' | \
       ../p8xemu -l 350000000 -c as.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r')
-fail() { echo "OS-ASM TEST: FAIL — $1"; echo "$out" | sed -n '/RUN ASM/,$p'; exit 1; }
+fail() { echo "OS-ASM TEST: FAIL — $1"; echo "$out" | sed -n '/run ASM/,$p'; exit 1; }
 
 # (1) full opcode-table coverage: on-target == host, byte for byte
-python3 $ROOT/tools/p8xfs.py get as.img COVER.BIN >/dev/null 2>&1 || fail "COVER.BIN not created"
-cmp -s covgold.bin COVER.BIN || fail "all-opcode coverage differs from host assembler"
+python3 $ROOT/tools/p8xfs.py get as.img COVER.bin >/dev/null 2>&1 || fail "COVER.bin not created"
+cmp -s covgold.bin COVER.bin || fail "all-opcode coverage differs from host assembler"
 # streamed output must leave the volume structurally intact
 python3 $ROOT/tools/p8xfs.py fsck as.img >/dev/null 2>&1 || fail "volume invalid after streamed output"
 
 # (2) byte-for-byte on the feature program
-python3 $ROOT/tools/p8xfs.py get as.img PROG.BIN >/dev/null 2>&1 || fail "PROG.BIN not created"
-cmp -s golden.bin PROG.BIN || fail "on-target output differs from host assembler"
+python3 $ROOT/tools/p8xfs.py get as.img PROG.bin >/dev/null 2>&1 || fail "PROG.bin not created"
+cmp -s golden.bin PROG.bin || fail "on-target output differs from host assembler"
 
 # (3) the freshly-assembled program runs and prints its string
 echo "$out" | grep -q 'HELLO-ASM' || fail "assembled program did not run/print"

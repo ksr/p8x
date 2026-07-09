@@ -44,10 +44,10 @@ python3 $ROOT/assembler/p8xasm.py clibc.asm -o clibc.bin --base 0x7A00 >/dev/nul
 rm -f cl.img
 python3 $ROOT/tools/p8xfs.py create cl.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   cl.img osc.bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    cl.img clibc.bin --name CL.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    cl.img clibc.bin --name CL.bin --load 0x7A00 --exec 0x7A00 >/dev/null
 
 # Boot, RUN, then feed "abc\r" to the program's getchar() loop.
-out=$(printf 'B\rRUN CL.BIN\rabc\r' | ../p8xemu -l 150000000 -c cl.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r')
+out=$(printf 'B\rrun CL.bin\rabc\r' | ../p8xemu -l 150000000 -c cl.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r')
 fail() { echo "C-LIBC TEST: FAIL — $1"; echo "$out" | sed -n '/RUN CL/,$p'; exit 1; }
 
 # console getchar now echoes each key, so the echoed "abc" precedes the puts

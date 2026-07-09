@@ -25,9 +25,9 @@ build_disk() {   # $1 = py|host
     rm -f tu.img
     python3 $ROOT/tools/p8xfs.py create tu.img >/dev/null
     python3 $ROOT/tools/p8xfs.py boot   tu.img osc.bin >/dev/null
-    python3 $ROOT/tools/p8xfs.py mkdir  tu.img /BIN >/dev/null
+    python3 $ROOT/tools/p8xfs.py mkdir  tu.img /bin >/dev/null
     for c in sort uniq sed cat; do up=$(echo $c | tr a-z A-Z)
-        python3 $ROOT/tools/p8xfs.py put tu.img $c.bin --name /BIN/$up.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
+        python3 $ROOT/tools/p8xfs.py put tu.img $c.bin --name /bin/$c.bin --load 0x7A00 --exec 0x7A00 >/dev/null
     done
     printf 'banana\r\napple\r\ncherry\r\napple\r\n' > tu_u.dat
     python3 $ROOT/tools/p8xfs.py put tu.img tu_u.dat --name U.TXT --load 0 --exec 0 >/dev/null
@@ -41,23 +41,23 @@ R() { printf "B\r$1\r" | ../p8xemu -l 400000000 -c tu.img eeprom.bin 2>/dev/null
 
 check() {   # $1 = label
     # sort: ascending; first data line is 'apple', and 'cherry' is last
-    out=$(R 'SORT U.TXT' | grep -E '^(apple|banana|cherry)$')
+    out=$(R 'sort U.TXT' | grep -E '^(apple|banana|cherry)$')
     [ "$(echo "$out" | head -1)" = apple ]  || fail "$1: sort first line != apple"
     [ "$(echo "$out" | tail -1)" = cherry ] || fail "$1: sort last line != cherry"
     [ "$(echo "$out" | grep -c apple)" = 2 ] || fail "$1: sort lost an 'apple'"
     # uniq: aa,bb,aa (adjacent dups collapsed, non-adjacent kept)
-    [ "$(R 'UNIQ D.TXT' | grep -cx aa)" = 2 ] || fail "$1: uniq aa count != 2"
-    R 'UNIQ D.TXT' | grep -qx bb || fail "$1: uniq dropped bb"
+    [ "$(R 'uniq D.TXT' | grep -cx aa)" = 2 ] || fail "$1: uniq aa count != 2"
+    R 'uniq D.TXT' | grep -qx bb || fail "$1: uniq dropped bb"
     # sort | uniq pipeline -> 3 distinct lines
-    [ "$(R 'SORT U.TXT | RUN /BIN/UNIQ.BIN' | grep -cE '^(apple|banana|cherry)$')" = 3 ] \
+    [ "$(R 'sort U.TXT | run /bin/uniq.bin' | grep -cE '^(apple|banana|cherry)$')" = 3 ] \
         || fail "$1: sort|uniq distinct count != 3"
     # sed first-only and global
-    R 'SED s/hello/HI/ H.TXT'   | grep -qx 'HI world'   || fail "$1: sed s/hello/HI/"
-    R 'SED s/l/L/g H.TXT'       | grep -qx 'heLLo worLd' || fail "$1: sed global s/l/L/g"
+    R 'sed s/hello/HI/ H.TXT'   | grep -qx 'HI world'   || fail "$1: sed s/hello/HI/"
+    R 'sed s/l/L/g H.TXT'       | grep -qx 'heLLo worLd' || fail "$1: sed global s/l/L/g"
     # regex: '.' '*' and the '^' anchor (replaces the whole matched span)
-    R 'SED s/l.*o/X/ H.TXT'     | grep -qx 'heX world'   || fail "$1: sed regex .*"
-    R 'SED s/^h/Q/ H.TXT'       | grep -qx 'Qello world' || fail "$1: sed regex ^ anchor"
-    R 'SORT -h' | grep -qi usage || fail "$1: sort -h"
+    R 'sed s/l.*o/X/ H.TXT'     | grep -qx 'heX world'   || fail "$1: sed regex .*"
+    R 'sed s/^h/Q/ H.TXT'       | grep -qx 'Qello world' || fail "$1: sed regex ^ anchor"
+    R 'sort -h' | grep -qi usage || fail "$1: sort -h"
 }
 
 if command -v cc >/dev/null 2>&1; then

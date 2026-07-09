@@ -55,9 +55,9 @@ python3 $ROOT/assembler/p8xasm.py ctest.asm -o ctest.bin --base 0x7A00 >/dev/nul
 rm -f c.img
 python3 $ROOT/tools/p8xfs.py create c.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   c.img osc.bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    c.img ctest.bin --name CT.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    c.img ctest.bin --name CT.bin --load 0x7A00 --exec 0x7A00 >/dev/null
 
-out=$(printf 'B\rRUN CT.BIN\r' | ../p8xemu -l 120000000 -c c.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r')
+out=$(printf 'B\rrun CT.bin\r' | ../p8xemu -l 120000000 -c c.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r')
 fail() { echo "C-COMPILE TEST: FAIL — $1"; echo "$out" | sed -n '/RUN CT/,$p'; exit 1; }
 
 echo "$out" | grep -qx '12345'   || fail "loop/arith output not '12345'"

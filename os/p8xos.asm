@@ -228,14 +228,14 @@ RUNSKIP = $77A0          ; DORUN: 1 = skip the program-name word for the arg poi
 PSCANL  = $77A1          ; PATH search cursor into PATHBUF (low)
 PSCANH  = $77A2          ; PATH search cursor into PATHBUF (high)
 GPLF    = $77A3          ; SYS_GETC console: 1 = a LF is pending after a CR keypress
-; ---- mount model (drive 1 mounted at /D1) state ----
-CURDRIVE= $77A4          ; derived: 1 if the CWD is under /D1 (drive 1), else 0
+; ---- mount model (drive 1 mounted at /d1) state ----
+CURDRIVE= $77A4          ; derived: 1 if the CWD is under /d1 (drive 1), else 0
 DRVINIT = $77A5          ; bitmask: bit N set = drive N has been CFINIT'd this session
-MPSAV   = $77A6          ; MNTPFX: saved P2 (2 bytes) while sniffing a "D1" prefix
+MPSAV   = $77A6          ; MNTPFX: saved P2 (2 bytes) while sniffing a "d1" prefix
 ; $77A8..$77D9 free (was the DOS-model drive-1 CWD backing, removed with the
 ; mount migration).
 ; ($77DA..$77E4 free — was IMPORT bulk-copy state; IMPORT removed, superseded by
-;  the userland `cp -r`, which recurses and works across the /D1 mount.)
+;  the userland `cp -r`, which recurses and works across the /d1 mount.)
 
 CR      = $0D
 LF      = $0A
@@ -255,12 +255,12 @@ STKTOP  = $FEFF
         JMP  SYS_PUTS           ; $400F SYS_PUTS: write (P1) string to stdout
         JMP  SYS_OPENCWD        ; $4012 SYS_OPENCWD: begin iterating the CWD (16-bit LBA)
         JMP  SYS_SETDRV         ; $4015 SYS_SETDRIVE: deprecated (mount model) — no-op stub, ABI slot kept
-        JMP  SYS_GETDRIVE       ; $4018 SYS_GETDRIVE: -> A = 1 if CWD is under /D1 (drive 1), else 0
+        JMP  SYS_GETDRIVE       ; $4018 SYS_GETDRIVE: -> A = 1 if CWD is under /d1 (drive 1), else 0
         JMP  SYS_DIRENTRY       ; $401B SYS_DIRENTRY: snapshot the current dir entry -> (P1) 17 bytes
         JMP  SYS_OPENDIR        ; $401E SYS_OPENDIR: P1 = 16-bit dir start LBA -> open for FNEXT
         JMP  SYS_MKDIR          ; $4021 SYS_MKDIR: P1 = path -> create a directory; C=1 on real failure
 ; Reached only via the table above (COLD jumps past them).
-SYS_GETDRIVE:                   ; derived: 1 if the CWD is under the /D1 mount
+SYS_GETDRIVE:                   ; derived: 1 if the CWD is under the /d1 mount
         LDA  CURDRIVE
         RTS
 SYS_SETDRV:                     ; deprecated: the drive follows the CWD path now
@@ -330,7 +330,7 @@ SYS_CWDLBA:
 SYS_OPENCWD:                    ; begin iterating the CWD directory (full 16-bit
         JSR  SYNCDRV           ; route to the CWD's drive first: a /BIN program was
                               ;   just loaded from drive 0, leaving DRVSEL=0, but the
-                              ;   CWD may be under the /D1 mount (drive 1).
+                              ;   CWD may be under the /d1 mount (drive 1).
         LDA  CWDLH              ; LBA), so a /BIN program can list the CWD even
         STA  LBA1               ; when it lives at LBA >=256. Pairs with FNEXT.
         LDA  #0
@@ -406,7 +406,7 @@ COLD:   LDP3 #STKTOP
         STA  CWDN
         JSR  PATHROOT           ; CWDPATH = "/"
         ; mount model: boot at the root on drive 0 (already CFINIT'd by the boot
-        ; loader). CURDRIVE is derived from the CWD path (0 = not under /D1).
+        ; loader). CURDRIVE is derived from the CWD path (0 = not under /d1).
         LDA  #0
         STA  CURDRIVE
         LDA  #1                 ; drive 0 inited by CMD_B; mark it
@@ -431,7 +431,7 @@ SHELL:  JSR  FLUSHRED           ; if the previous command was redirected, write 
         STA  PIPEF
 SH_PROMPT:
         JSR  CRLF
-        LDP1 #CWDPATH           ; prompt = "<path>> " (drive 1 shows as /D1/...)
+        LDP1 #CWDPATH           ; prompt = "<path>> " (drive 1 shows as /d1/...)
         JSR  OPUTS
         LDP1 #MPROMPT
         JSR  OPUTS
@@ -537,17 +537,17 @@ DPA_SET:LDP1 #PATHBUF           ; copy the argument word into PATHBUF (upcased)
         JSR  PARSEW
         JMP  SHELL
 
-; ---------------- MOUNT / UMOUNT : hot-swap the /D1 card ---------------------
+; ---------------- MOUNT / UMOUNT : hot-swap the /d1 card ---------------------
 ; The filesystem caches no state for drive 1 (free pointer, root LBA, and the
-; CWD are all re-derived on demand), so a CF in the /D1 slot can be swapped at
+; CWD are all re-derived on demand), so a CF in the /d1 slot can be swapped at
 ; the prompt. Two things must be reset across a swap: the firmware's
 ; "already initialized" cache (CFIMASK) so the new card gets its 8-bit-mode +
-; IDENTIFY handshake, and the CWD if it currently sits under /D1 (its LBAs
+; IDENTIFY handshake, and the CWD if it currently sits under /d1 (its LBAs
 ; belong to the OLD card). Swap sequence:  UMOUNT -> pull card -> insert card
 ; -> MOUNT.  (Swap only at the prompt with no I/O in flight — the True-IDE bus
 ; has no card-detect.)
 DOUMOUNT:
-        LDA  CURDRIVE           ; if the CWD is under /D1, drop back to the root
+        LDA  CURDRIVE           ; if the CWD is under /d1, drop back to the root
         JZ   um_forget          ;   (its start LBA belongs to the old card)
         LDA  #33
         STA  CWDL
@@ -559,7 +559,7 @@ DOUMOUNT:
         STA  CURDRIVE
         JSR  PATHROOT           ; CWDPATH = "/"
 um_forget:
-        LDA  CFIMASK            ; forget drive 1's init: the next /D1 access will
+        LDA  CFIMASK            ; forget drive 1's init: the next /d1 access will
         LDB  #$FD               ;   re-run CFINIT on whatever card is now inserted
         AND
         STA  CFIMASK
@@ -837,7 +837,7 @@ BC_TERM:LDA  #0                ; NUL-terminate (leave P2 on it for APPENDBIN)
         STA  (P2)
         RTS
 
-; APPENDBIN - append ".BIN" to the NUL-terminated string in RUNPATH.
+; APPENDBIN - append ".bin" to the NUL-terminated string in RUNPATH.
 APPENDBIN:
         LDP2 #RUNPATH
 AB_F:   LDA  (P2)
@@ -846,11 +846,11 @@ AB_F:   LDA  (P2)
         JMP  AB_F
 AB_AP:  LDA  #'.'
         STA  (P2)+
-        LDA  #'B'
+        LDA  #'b'
         STA  (P2)+
-        LDA  #'I'
+        LDA  #'i'
         STA  (P2)+
-        LDA  #'N'
+        LDA  #'n'
         STA  (P2)+
         LDA  #0
         STA  (P2)
@@ -861,7 +861,7 @@ TRYCAND:LDP2 #RUNPATH
         JSR  FINDP2
         RTS
 
-; PATHINIT - seed the program search path with the default "/BIN".
+; PATHINIT - seed the program search path with the default "/bin".
 PATHINIT:
         LDP1 #DEFPATH
         LDP2 #PATHBUF
@@ -869,7 +869,7 @@ PI_LP:  LDA  (P1)+
         STA  (P2)+
         JNZ  PI_LP
         RTS
-DEFPATH:.asciiz "/BIN"
+DEFPATH:.asciiz "/bin"
 
 ; ---------------- DEL name ---------------------------------------------------
 DODEL:  JSR  FINDARG
@@ -942,22 +942,22 @@ RV_START:JSR SKIPSPC
         LDB  #'/'
         CMP
         JZ   rvs_abs            ; absolute path
-        ; relative: a bare "D1" is the mount only when the CWD is the drive-0
-        ; root (so `CD D1` from / == `CD /D1`, but a real D1 subdir elsewhere,
-        ; or D1 while already under /D1, stays an ordinary component).
+        ; relative: a bare "d1" is the mount only when the CWD is the drive-0
+        ; root (so `CD D1` from / == `CD /d1`, but a real D1 subdir elsewhere,
+        ; or D1 while already under /d1, stays an ordinary component).
         LDA  CURDRIVE
-        JNZ  rvs_cwd            ; already under /D1 -> normal relative
+        JNZ  rvs_cwd            ; already under /d1 -> normal relative
         LDA  CWDLH
         JNZ  rvs_cwd            ; CWD not at the root (LBA 33) -> normal relative
         LDA  CWDL
         LDB  #33
         CMP
         JNZ  rvs_cwd
-        JSR  MNTPFX             ; at root: bare "D1" -> mount (C=1), else C=0
+        JSR  MNTPFX             ; at root: bare "d1" -> mount (C=1), else C=0
         JC   rvs_root
         JMP  rvs_cwd            ; other name -> normal relative from root
 rvs_abs:INP2                    ; consume leading '/'
-        JSR  MNTPFX             ; "/D1[/]" -> drive 1 + strip (C=1); else C=0
+        JSR  MNTPFX             ; "/d1[/]" -> drive 1 + strip (C=1); else C=0
         JC   rvs_root
         LDA  #0                 ; absolute, not the mount -> drive 0 root
         JSR  CFSEL
@@ -980,7 +980,7 @@ rvs_root:LDA #33
         RTS
 
 ; MNTPFX - at (P2), just past a leading '/', apply the mount redirect: if the
-; component is "D1" (delimited by '/' or NUL) route I/O to drive 1 and advance
+; component is "d1" (delimited by '/' or NUL) route I/O to drive 1 and advance
 ; P2 past it; otherwise route to drive 0 and leave P2 unchanged. Mirrors the
 ; firmware FRESOLVE redirect for the OS's own directory walker.
 MNTPFX: TPA2L                   ; save P2 to restore on a non-match
@@ -988,7 +988,7 @@ MNTPFX: TPA2L                   ; save P2 to restore on a non-match
         TPA2H
         STA  MPSAV+1
         LDA  (P2)
-        LDB  #'D'
+        LDB  #'d'
         CMP
         JNZ  mp_no
         INP2
@@ -997,7 +997,7 @@ MNTPFX: TPA2L                   ; save P2 to restore on a non-match
         CMP
         JNZ  mp_no
         INP2
-        LDA  (P2)               ; after "D1": NUL or '/' => the mount point
+        LDA  (P2)               ; after "d1": NUL or '/' => the mount point
         JZ   mp_yes
         LDB  #'/'
         CMP
@@ -1007,7 +1007,7 @@ mp_yes: LDA  #1                 ; it is the mount: route to drive 1, C=1
         JSR  CFSEL
         SEC
         RTS
-mp_no:  LDA  MPSAV              ; restore P2 (first component wasn't "D1"); C=0,
+mp_no:  LDA  MPSAV              ; restore P2 (first component wasn't "d1"); C=0,
         TAP2L                   ;   leave the drive to the caller
         LDA  MPSAV+1
         TAP2H
@@ -1015,7 +1015,7 @@ mp_no:  LDA  MPSAV              ; restore P2 (first component wasn't "D1"); C=0,
         JSR  CFSEL
         RTS
 
-; DERIVEDRV - CURDRIVE = 1 if CWDPATH begins "/D1" (the mount), else 0. Called
+; DERIVEDRV - CURDRIVE = 1 if CWDPATH begins "/d1" (the mount), else 0. Called
 ; after CD commits a new CWD so SYNCDRV routes current-drive ops to the right card.
 DERIVEDRV:
         LDP2 #CWDPATH
@@ -1025,7 +1025,7 @@ DERIVEDRV:
         JNZ  dd_0
         INP2
         LDA  (P2)
-        LDB  #'D'
+        LDB  #'d'
         CMP
         JNZ  dd_0
         INP2
@@ -1034,7 +1034,7 @@ DERIVEDRV:
         CMP
         JNZ  dd_0
         INP2
-        LDA  (P2)               ; "/D1" then NUL or '/' => under the mount
+        LDA  (P2)               ; "/d1" then NUL or '/' => under the mount
         JZ   dd_1
         LDB  #'/'
         CMP
@@ -1052,7 +1052,7 @@ SYNCDRV:LDA  CURDRIVE
         RTS
 
 
-; PARSECOMP - copy one path component from (P2) into NAMEBUF (upcased, 12,
+; PARSECOMP - copy one path component from (P2) into NAMEBUF (case-preserved, 12,
 ; space-padded), stopping at '/', space, or null WITHOUT consuming it.
 PARSECOMP:LDP1 #NAMEBUF
         LDA  #12
@@ -1165,7 +1165,7 @@ cd_bad: LDA  #0
 
 ; ---------------- CD path ----------------------------------------------------
 DOCD:   JSR  ARG2P2
-        JSR  CDPATH             ; resolve to a directory -> SDIR (RV_START does /D1)
+        JSR  CDPATH             ; resolve to a directory -> SDIR (RV_START does /d1)
         LDA  MATCH
         JZ   NODIR
         LDA  SDIRL              ; commit it as the working directory
@@ -1175,7 +1175,7 @@ DOCD:   JSR  ARG2P2
         LDA  SDIRN
         STA  CWDN
         JSR  SETPATH            ; update the displayed CWD path
-        JSR  DERIVEDRV          ; CURDRIVE = is the new CWD under /D1?
+        JSR  DERIVEDRV          ; CURDRIVE = is the new CWD under /d1?
         JMP  SHELL
 NODIR:  LDP1 #MNODIR
         JSR  PUTS
@@ -3157,9 +3157,8 @@ PW_LP:  LDA  (P2)
         LDB  #' '
         CMP
         JZ   PW_END             ; space ends the word
-        JSR  UPCASE             ; A holds the char (CMP preserves A)
-        STA  (P1)
-        INP1
+        STA  (P1)               ; case preserved: commands are lowercase and
+        INP1                    ; matched case-sensitively (type them lowercase)
         INP2
         JMP  PW_LP
 PW_END: LDA  #0
@@ -3659,41 +3658,41 @@ MNODRV:  .byte CR,LF
 MHELP:   .byte CR,LF
          .ascii "P8X/OS COMMANDS:"
          .byte CR,LF
-         .ascii "CD path       change directory (/abs, rel, .., .)"
+         .ascii "cd path       change directory (/abs, rel, .., .)"
          .byte CR,LF
-         .ascii "PATH [dirs]   show/set the program search path (default /BIN)"
+         .ascii "path [dirs]   show/set the program search path (default /bin)"
          .byte CR,LF
-         .ascii "MKDIR path    create a subdirectory"
+         .ascii "mkdir path    create a subdirectory"
          .byte CR,LF
-         .ascii "RMDIR path    remove an empty subdirectory"
+         .ascii "rmdir path    remove an empty subdirectory"
          .byte CR,LF
-         .ascii "LOAD path     read a file to its load address"
+         .ascii "load path     read a file to its load address"
          .byte CR,LF
-         .ascii "RUN path args load+run a program (args in P2, RTS to exit)"
+         .ascii "run path args load+run a program (args in P2, RTS to exit)"
          .byte CR,LF
-         .ascii "NAME args     run a program by bare name, found on PATH (/BIN)"
+         .ascii "name args     run a program by bare name, found on PATH (/bin)"
          .byte CR,LF
-         .ascii "SAVE path s e save memory [s,e) to a new file"
+         .ascii "save path s e save memory [s,e) to a new file"
          .byte CR,LF
-         .ascii "DEL path      delete a file"
+         .ascii "del path      delete a file"
          .byte CR,LF
-         .ascii "DUMP a        dump 256 bytes at a (CR=next block, .=exit)"
+         .ascii "dump a        dump 256 bytes at a (CR=next block, .=exit)"
          .byte CR,LF
-         .ascii "DEP a b b...  store hex bytes b... at hex addr a"
+         .ascii "dep a b b...  store hex bytes b... at hex addr a"
          .byte CR,LF
-         .ascii "PACK          reclaim deleted space"
+         .ascii "pack          reclaim deleted space"
          .byte CR,LF
-         .ascii "/D1           drive 1 is mounted here (CD /D1, CAT /D1/FILE)"
+         .ascii "/d1           drive 1 is mounted here (cd /d1, cat /d1/FILE)"
          .byte CR,LF
-         .ascii "UMOUNT/MOUNT  swap the /D1 card: UMOUNT, swap, MOUNT"
+         .ascii "umount/mount  swap the /d1 card: umount, swap, mount"
          .byte CR,LF
-         .ascii "FSCK          check filesystem integrity (read-only)"
+         .ascii "fsck          check filesystem integrity (read-only)"
          .byte CR,LF
-         .ascii "FORMAT        erase card, make a fresh v2 volume (asks Y/N)"
+         .ascii "format        erase card, make a fresh v2 volume (asks Y/N)"
          .byte CR,LF
-         .ascii "HELP          this help"
+         .ascii "help          this help"
          .byte CR,LF
-         .ascii "EXIT / MON    return to the ROM monitor"
+         .ascii "exit / mon    return to the ROM monitor"
          .byte CR,LF
          .ascii "cmd >FILE     send output to FILE instead of the screen"
          .byte CR,LF
@@ -3701,9 +3700,9 @@ MHELP:   .byte CR,LF
          .byte CR,LF
          .ascii "a | b         pipe a's output into b's input"
          .byte CR,LF
-         .ascii "programs:     RUN /BIN/BASIC.BIN | EDIT.BIN f | ASM.BIN s o"
+         .ascii "programs:     run /bin/basic.bin | edit.bin f | asm.bin s o"
          .byte CR,LF
-         .ascii "  path=file/dir (drive 1 at /D1), s e a=hex, b=byte"
+         .ascii "  path=file/dir (drive 1 at /d1), s e a=hex, b=byte"
          .byte CR,LF,0
 MUNK:    .byte CR,LF
          .asciiz "?"
@@ -3742,7 +3741,7 @@ MFMTAB:  .byte CR,LF
 MUMOK:   .byte CR,LF
          .asciiz "DRIVE 1 UNMOUNTED - SWAP THE CARD, THEN MOUNT"
 MMNTOK:  .byte CR,LF
-         .asciiz "DRIVE 1 MOUNTED AT /D1"
+         .asciiz "DRIVE 1 MOUNTED AT /d1"
 MMNTNO:  .byte CR,LF
          .asciiz "?NO CARD IN DRIVE 1"
 MMNTBAD: .byte CR,LF
@@ -3772,21 +3771,21 @@ MFKBAD:  .byte CR,LF
 MFKOK:   .byte CR,LF
          .asciiz "FSCK OK"
 
-KW_HELP: .asciiz "HELP"
-KW_LOAD: .asciiz "LOAD"
-KW_RUN:  .asciiz "RUN"
-KW_DEL:  .asciiz "DEL"
-KW_SAVE: .asciiz "SAVE"
-KW_DUMP: .asciiz "DUMP"
-KW_DEP:  .asciiz "DEP"
-KW_PACK: .asciiz "PACK"
-KW_CD:   .asciiz "CD"
-KW_MKDIR:.asciiz "MKDIR"
-KW_RMDIR:.asciiz "RMDIR"
-KW_FSCK: .asciiz "FSCK"
-KW_PATH: .asciiz "PATH"
-KW_EXIT: .asciiz "EXIT"
-KW_MON:  .asciiz "MON"
-KW_FORMAT:.asciiz "FORMAT"
-KW_MOUNT: .asciiz "MOUNT"
-KW_UMOUNT:.asciiz "UMOUNT"
+KW_HELP: .asciiz "help"
+KW_LOAD: .asciiz "load"
+KW_RUN:  .asciiz "run"
+KW_DEL:  .asciiz "del"
+KW_SAVE: .asciiz "save"
+KW_DUMP: .asciiz "dump"
+KW_DEP:  .asciiz "dep"
+KW_PACK: .asciiz "pack"
+KW_CD:   .asciiz "cd"
+KW_MKDIR:.asciiz "mkdir"
+KW_RMDIR:.asciiz "rmdir"
+KW_FSCK: .asciiz "fsck"
+KW_PATH: .asciiz "path"
+KW_EXIT: .asciiz "exit"
+KW_MON:  .asciiz "mon"
+KW_FORMAT:.asciiz "format"
+KW_MOUNT: .asciiz "mount"
+KW_UMOUNT:.asciiz "umount"

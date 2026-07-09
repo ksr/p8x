@@ -2,7 +2,7 @@
  *
  *     CP OLD.TXT NEW.TXT            copy one file
  *     CP -r SRC DST                 copy a directory tree recursively
- *     CP -r /D1/SRC /SRC            ... across the mount (drive 1 -> drive 0)
+ *     CP -r /d1/SRC /SRC            ... across the mount (drive 1 -> drive 0)
  *     CP *.ASM /BAK                 glob source -> copy each match into a dir
  *
  * A `*`/`?` in the source is a glob: it is expanded (lib_globx) and every match
@@ -12,7 +12,7 @@
  * A single file is read through the BIOS read stream (FOPEN/FGETB, buffer $FC00)
  * and written through the write stream (FWOPEN/FPUTB/FCLOSE); the two use
  * independent buffers so the byte loop interleaves them. Both paths are made
- * absolute (via abspath) and resolved with FRESOLVE, which applies the /D1 mount
+ * absolute (via abspath) and resolved with FRESOLVE, which applies the /d1 mount
  * redirect — so a cross-mount copy needs no special handling: each stream keeps
  * its own drive (ROSDRV/WOSDRV).
  *
@@ -63,7 +63,7 @@ int joinp(char *out, char *dir, char *name) {
  * Returns 1 if the source was not found, else 0. */
 int copy_file(char *s, char *d) {
     int c;
-    bios(0x0133, s, 0);                       /* FRESOLVE SRC (applies /D1) */
+    bios(0x0133, s, 0);                       /* FRESOLVE SRC (applies /d1) */
     if (bios(0x0124, 0xFC00, 0) & 256) { return 1; }   /* FOPEN; C=1 -> not found */
     bios(0x0133, d, 0);                       /* FRESOLVE DST (DIRLBA + FNAME) */
     bios(0x012A, 0, 0);                       /* FWOPEN (zeroes SBUF last) */

@@ -27,10 +27,10 @@ build_disk() {   # $1 = py|host
     rm -f fo.img
     python3 $ROOT/tools/p8xfs.py create fo.img >/dev/null
     python3 $ROOT/tools/p8xfs.py boot   fo.img osc.bin >/dev/null
-    python3 $ROOT/tools/p8xfs.py mkdir  fo.img /BIN >/dev/null
+    python3 $ROOT/tools/p8xfs.py mkdir  fo.img /bin >/dev/null
     python3 $ROOT/tools/p8xfs.py mkdir  fo.img /SUB >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    fo.img cp.bin --name /BIN/CP.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    fo.img mv.bin --name /BIN/MV.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    fo.img cp.bin --name /bin/cp.bin --load 0x7A00 --exec 0x7A00 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    fo.img mv.bin --name /bin/mv.bin --load 0x7A00 --exec 0x7A00 >/dev/null
     python3 $ROOT/tools/p8xfs.py put    fo.img fo_src.dat --name SRC.TXT --load 0 --exec 0 >/dev/null
     python3 $ROOT/tools/p8xfs.py put    fo.img fo_src.dat --name MS.TXT  --load 0 --exec 0 >/dev/null
 }
@@ -40,21 +40,21 @@ got() { python3 $ROOT/tools/p8xfs.py get fo.img "$1" --out "$2" >/dev/null 2>&1;
 
 check() {   # $1 = label
     # cp into the CWD: DST identical to SRC, SRC still present
-    run 'CP SRC.TXT DST.TXT'
+    run 'cp SRC.TXT DST.TXT'
     got DST.TXT fo_dst.out || fail "$1: cp did not create DST"
     cmp -s fo_dst.out fo_src.dat || fail "$1: cp DST != SRC (byte mismatch)"
     got SRC.TXT fo_s.out || fail "$1: cp removed the source"
     # cp into a subdirectory (absolute dest path)
-    run 'CP SRC.TXT /SUB/C.TXT'
+    run 'cp SRC.TXT /SUB/C.TXT'
     got /SUB/C.TXT fo_sub.out || fail "$1: cp to /SUB did not create the file"
     cmp -s fo_sub.out fo_src.dat || fail "$1: cp to /SUB byte mismatch"
     # mv: MD.TXT identical, MS.TXT gone
-    run 'MV MS.TXT MD.TXT'
+    run 'mv MS.TXT MD.TXT'
     got MD.TXT fo_md.out || fail "$1: mv did not create the dest"
     cmp -s fo_md.out fo_src.dat || fail "$1: mv dest != source"
     if got MS.TXT fo_ms.out; then fail "$1: mv left the source behind"; fi
     # mv X X is refused and leaves the file intact
-    run 'MV MD.TXT MD.TXT'
+    run 'mv MD.TXT MD.TXT'
     got MD.TXT fo_md2.out || fail "$1: same-path mv lost the file"
     cmp -s fo_md2.out fo_src.dat || fail "$1: same-path mv corrupted the file"
 }

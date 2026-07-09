@@ -1,11 +1,11 @@
 #!/bin/sh
-# Shell INPUT redirection (`RUN PROG <FILE`): the OS binds stdin to a file (read
+# Shell INPUT redirection (`run PROG <FILE`): the OS binds stdin to a file (read
 # stream into IBUF), and SYS_GETC pulls from it; getchar() returns -1 at EOF.
 # os/commands/cat.c is a stdin->stdout filter.  Compiled by BOTH p8cc.py
 # and the native p8cc.c.  Two checks per compiler on a disk holding IN.TXT
 # ("STDINOK"):
-#   RUN /CAT.BIN <IN.TXT            -> console prints STDINOK
-#   RUN /CAT.BIN <IN.TXT >OUT.TXT   -> OUT.TXT on disk = STDINOK  (< and > together)
+#   run /CAT.bin <IN.TXT            -> console prints STDINOK
+#   run /CAT.bin <IN.TXT >OUT.TXT   -> OUT.TXT on disk = STDINOK  (< and > together)
 set -e
 cd "$(dirname "$0")"
 ROOT=../..
@@ -24,13 +24,13 @@ check() {   # $1 = label, $2 = cat.asm
     python3 $ROOT/tools/p8xfs.py create s.img >/dev/null
     python3 $ROOT/tools/p8xfs.py boot   s.img osc.bin >/dev/null
     python3 $ROOT/tools/p8xfs.py put    s.img in.txt --name IN.TXT --load 0 --exec 0 >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    s.img cat.bin --name CAT.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    s.img cat.bin --name CAT.bin --load 0x7A00 --exec 0x7A00 >/dev/null
     # console: cat the file to the screen
-    con=$(printf 'B\rRUN /CAT.BIN <IN.TXT\r' | ../p8xemu -l 90000000 -c s.img eeprom.bin 2>/dev/null \
-        | LC_ALL=C tr -d '\0\r' | sed -n '/RUN \/CAT.BIN/,$p' | grep -v 'RUN /CAT.BIN' | grep -vE '^[0-9]:' | tr -dc 'A-Z')
+    con=$(printf 'B\rrun /CAT.bin <IN.TXT\r' | ../p8xemu -l 90000000 -c s.img eeprom.bin 2>/dev/null \
+        | LC_ALL=C tr -d '\0\r' | sed -n '/run \/CAT.bin/,$p' | grep -v 'run /CAT.bin' | grep -vE '^[0-9]:' | tr -dc 'A-Z')
     [ "$con" = "STDINOK" ] || fail "$1: console '$con' != 'STDINOK' (stdin redirect)"
     # < and > together: copy IN.TXT -> OUT.TXT
-    printf 'B\rRUN /CAT.BIN <IN.TXT >OUT.TXT\r' | ../p8xemu -l 90000000 -c s.img eeprom.bin 2>/dev/null >/dev/null
+    printf 'B\rrun /CAT.bin <IN.TXT >OUT.TXT\r' | ../p8xemu -l 90000000 -c s.img eeprom.bin 2>/dev/null >/dev/null
     python3 $ROOT/tools/p8xfs.py get s.img OUT.TXT --out out.txt >/dev/null 2>&1 || fail "$1: OUT.TXT not created"
     got=$(tr -dc 'A-Z' < out.txt)
     [ "$got" = "STDINOK" ] || fail "$1: copied file '$got' != 'STDINOK' (< and >)"

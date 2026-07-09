@@ -16,7 +16,7 @@ fail() { echo "OS-BIGDIR TEST: FAIL — $1"; [ -n "$out" ] && echo "$out" | sed 
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o bdos.bin --base 0x4000 >/dev/null
-# The C DIR is a /BIN program (no longer a built-in); install it so a bare `DIR`
+# The C DIR is a /bin program (no longer a built-in); install it so a bare `DIR`
 # resolves via PATH and lists the CWD through SYS_OPENCWD (the 16-bit CWD opener).
 python3 $ROOT/tools/clib.py $ROOT/os/commands/dir.c -o bddir.pp.c >/dev/null
 python3 $ROOT/compiler/p8cc.py bddir.pp.c -o bddir.asm >/dev/null
@@ -25,8 +25,8 @@ python3 $ROOT/assembler/p8xasm.py bddir.asm -o bddir.bin --base 0x7A00 >/dev/nul
 rm -f bd.img
 python3 $ROOT/tools/p8xfs.py create bd.img --v2 >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   bd.img bdos.bin >/dev/null
-python3 $ROOT/tools/p8xfs.py mkdir  bd.img /BIN >/dev/null
-python3 $ROOT/tools/p8xfs.py put    bd.img bddir.bin --name /BIN/DIR.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py mkdir  bd.img /bin >/dev/null
+python3 $ROOT/tools/p8xfs.py put    bd.img bddir.bin --name /bin/dir.bin --load 0x7A00 --exec 0x7A00 >/dev/null
 # Pad the volume so the next allocated extent is well past LBA 256.
 head -c 30000 /dev/zero > bdpad.bin
 for i in 1 2 3 4 5 6 7 8; do
@@ -38,8 +38,8 @@ biglba=$(python3 $ROOT/tools/p8xfs.py ls bd.img / 2>/dev/null | awk '$1=="BIG"{p
 [ -n "$biglba" ] && [ "$biglba" -ge 256 ] || { echo "premise broken: /BIG at LBA $biglba (<256)"; exit 1; }
 
 # On-target: CD into the high-LBA dir, list it (must show only . / ..), then make
-# a subdir and SAVE a file inside it, and list again (must show SUB and F.BIN).
-out=$(printf 'B\rCD /BIG\rDIR\rMKDIR SUB\rDEP B000 41 42 43\rSAVE F.BIN B000 B003\rDIR\r' | \
+# a subdir and SAVE a file inside it, and list again (must show SUB and F.bin).
+out=$(printf 'B\rcd /BIG\rdir\rmkdir SUB\rdep B000 41 42 43\rsave F.bin B000 B003\rdir\r' | \
       ../p8xemu -l 400000000 -c bd.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r')
 
 echo "$out" | grep -q 'P8X/OS v1.0' || fail "OS did not boot"
@@ -50,16 +50,16 @@ echo "$out" | grep -q 'SAVED'        || fail "SAVE inside a LBA>=256 directory f
 # reads the right sectors — the original bug printed garbage from sector LBA&255).
 post=$(echo "$out" | sed -n 's/.*SAVED//; /SAVED/,$p')
 echo "$out" | grep -qE ' SUB/$'   || fail "DIR of the LBA>=256 dir missing the new subdir"
-echo "$out" | grep -qE ' F\.BIN$' || fail "DIR of the LBA>=256 dir missing the saved file"
+echo "$out" | grep -qE ' F\.bin$' || fail "DIR of the LBA>=256 dir missing the saved file"
 # No garbage: the listing must contain no non-printable bytes (the original bug
 # dumped raw sector data from LBA&255). LC_ALL=C makes the class byte-wise.
 if echo "$out" | LC_ALL=C grep -q '[^[:print:][:space:]]'; then fail "DIR produced garbage bytes"; fi
 
-# Host cross-check: the volume the OS wrote is consistent, and /BIG holds SUB+F.BIN.
+# Host cross-check: the volume the OS wrote is consistent, and /BIG holds SUB+F.bin.
 python3 $ROOT/tools/p8xfs.py fsck bd.img >bd_fsck.tmp 2>&1 || { cat bd_fsck.tmp; fail "host fsck failed after on-target writes"; }
 python3 $ROOT/tools/p8xfs.py ls bd.img /BIG >bd_ls.tmp 2>&1 || { cat bd_ls.tmp; fail "host ls /BIG failed"; }
 grep -qi 'SUB'   bd_ls.tmp || { cat bd_ls.tmp; fail "host: /BIG missing SUB"; }
-grep -qi 'F.BIN' bd_ls.tmp || { cat bd_ls.tmp; fail "host: /BIG missing F.BIN"; }
+grep -qi 'F.bin' bd_ls.tmp || { cat bd_ls.tmp; fail "host: /BIG missing F.bin"; }
 rm -f bd_fsck.tmp bd_ls.tmp bdpad.bin bddir.asm
 
 echo "OS-BIGDIR TEST: PASS"

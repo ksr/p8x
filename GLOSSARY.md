@@ -18,7 +18,7 @@ across the P8X project. Authoritative sources where a term has one:
 | **ABI** | Application Binary Interface — the fixed binary contracts (entry addresses, layouts, conventions) that let separately-built code interoperate. See the BIOS jump table, the TPA, SBUF/LBA. |
 | **API** | Application Programming Interface — the *source*-level contract (vs ABI, the binary one). |
 | **BIOS** | The monitor's published service routines (jump table at `$0100`). |
-| **TPA** | Transient Program Area — RAM where `RUN`-loaded programs and the OS's `>`-redirect buffer live. `$7A00`. |
+| **TPA** | Transient Program Area — RAM where `run`-loaded programs and the OS's `>`-redirect buffer live. `$7A00`. |
 | **BOM** | Bill of Materials — the orderable parts list (`hardware/p8x-bom.csv`). |
 | **DNP** | Do Not Populate — a footprint laid down on the board but left unstuffed (provisioned for later). |
 | **DRC** | Design Rule Check — the EDA tool's electrical/clearance verification of a routed board. |
@@ -113,7 +113,7 @@ The word burned to the 4× 28C64 EPROMs and interpreted by the emulator. Bit map
 
 | Term | Meaning |
 |------|---------|
-| **EEPROM** | `$0000–$3FFF` (16 KB, rev D) — monitor + BIOS at `$0000` (~4.3 KB used). BASIC is no longer ROM-resident; it runs as the disk program `/BIN/BASIC.BIN`. |
+| **EEPROM** | `$0000–$3FFF` (16 KB, rev D) — monitor + BIOS at `$0000` (~4.3 KB used). BASIC is no longer ROM-resident; it runs as the disk program `/bin/basic.bin`. |
 | **SRAM / RAM** | `$4000–$FEFF` (48 KB, rev D — 2× 62256). |
 | **SBUF** | 512-byte sector buffer at `$7100` (fixed by the BIOS — `CFWRITE` reads from it). |
 | **LBA** | Logical Block Address — the CF sector number; the BIOS reads the target LBA byte from a fixed `$7047`. |
@@ -133,7 +133,7 @@ The word burned to the 4× 28C64 EPROMs and interpreted by the emulator. Bit map
 | **boot block** | LBA 0 — signature, version byte, OS sector count, free pointer. |
 | **extent** | A file/directory's contiguous run of data sectors. |
 | **PACK** | Compaction — reclaim the gaps left by deleted files by sliding extents down. |
-| **fsck** | Filesystem consistency check — host tool `p8xfs.py fsck` (exhaustive) and the on-target OS `FSCK` command (read-only quick check). |
+| **fsck** | Filesystem consistency check — host tool `p8xfs.py fsck` (exhaustive) and the on-target OS `fsck` command (read-only quick check). |
 | **F_FILE / F_DIR** | Directory-entry flag bytes: regular file ($01) / subdirectory ($02). ($FF = deleted.) |
 | **OS / monitor / BASIC** | P8X/OS (disk shell), the ROM monitor (`$0000`), and the integer BASIC interpreter. |
 

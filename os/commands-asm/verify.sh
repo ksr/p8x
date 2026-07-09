@@ -29,7 +29,7 @@ $ASM "$ROOT/os/p8xos.asm" -o "$W/osc.bin" --base 0x4000 >/dev/null
 fixtures() {
     $FS create "$1" >/dev/null
     $FS boot   "$1" "$W/osc.bin" >/dev/null
-    $FS mkdir  "$1" /BIN >/dev/null
+    $FS mkdir  "$1" /bin >/dev/null
     $FS mkdir  "$1" /SUB >/dev/null
     printf 'alpha\r\nbeta\r\ngamma alpha\r\n'      > "$W/t.dat"; $FS put "$1" "$W/t.dat" --name T.TXT >/dev/null
     printf 'one\r\none\r\ntwo\r\ntwo\r\ntwo\r\none\r\n' > "$W/u.dat"; $FS put "$1" "$W/u.dat" --name U.TXT >/dev/null
@@ -47,29 +47,29 @@ fixtures() {
 # cmd_script $1=CMD(upper) : echo the \r-separated shell lines for that command
 cmd_script() {
     case "$1" in
-        PWD)  printf 'CD /SUB\rPWD\r' ;;
-        # -R targets /SUB (no .BIN files): a recursive listing of /BIN would
-        # show DIR.BIN's own byte size, which legitimately differs between the
+        PWD)  printf 'cd /SUB\rpwd\r' ;;
+        # -R targets /SUB (no .bin files): a recursive listing of /bin would
+        # show dir.bin's own byte size, which legitimately differs between the
         # p8cc and asm builds — a size artifact, not a behavior difference.
-        DIR)  printf 'DIR\rDIR /SUB\rDIR *.LOG\rDIR -R /SUB\rDIR /NOPE\r' ;;
-        TREE) printf 'TREE\r' ;;
-        MV)   printf 'MV T.TXT R.TXT\rCAT R.TXT\rMV *.LOG SUB\rFIND LOG\rMV *.LOG NOPE\rMV R.TXT R.TXT\r' ;;
-        WC)   printf 'WC T.TXT\rWC *.LOG\rCAT T.TXT | WC\rWC -h\r' ;;
-        HEAD) printf 'HEAD N.TXT\rHEAD -3 N.TXT\rHEAD -h\r' ;;
-        TAIL) printf 'TAIL N.TXT\rTAIL -3 N.TXT\r' ;;
-        UNIQ) printf 'UNIQ U.TXT\r' ;;
-        CAT)  printf 'CAT T.TXT\rCAT *.LOG\rCAT NOPE.TXT\r' ;;
-        MORE) printf 'MORE N.TXT\rMORE BIG.TXT\rq\rMORE -h\r' ;;
-        FIND) printf 'FIND .TXT\rFIND *.LOG\rFIND SUB\rFIND -h\r' ;;
-        SORT) printf 'SORT S.TXT\rSORT *.LOG\rSORT -h\r' ;;
-        CP)   printf 'CP T.TXT C.TXT\rCAT C.TXT\rCP -r SUB S2\rFIND S2\rCP *.LOG SUB\rFIND LOG\rCP *.LOG T.TXT\rCP X X\r' ;;
-        GREP) printf 'GREP alpha T.TXT\rGREP ^beta T.TXT\rGREP al.ha T.TXT\rGREP mm+ T.TXT\rGREP -r alpha\rGREP x NOPE\rGREP -h\r' ;;
-        SED)  printf 'SED s/alpha/X/ T.TXT\rSED s/l/L/g T.TXT\rSED -h\r' ;;
-        DIFF) printf 'DIFF T.TXT U.TXT\rDIFF T.TXT T.TXT\rDIFF -h\r' ;;
-        VI)   printf 'VI N.TXT\rxjA!\033:wq\rCAT N.TXT\rVI -h\r' ;;
-        # create a missing file, then TOUCH an existing one and confirm it is
-        # NOT truncated (CAT still shows its content). FIND/CAT are helpers.
-        TOUCH) printf 'TOUCH NEW.TXT\rFIND NEW\rTOUCH T.TXT\rCAT T.TXT\rTOUCH -h\r' ;;
+        DIR)  printf 'dir\rdir /SUB\rdir *.LOG\rdir -R /SUB\rdir /NOPE\r' ;;
+        TREE) printf 'tree\r' ;;
+        MV)   printf 'mv T.TXT R.TXT\rcat R.TXT\rmv *.LOG SUB\rfind LOG\rmv *.LOG NOPE\rmv R.TXT R.TXT\r' ;;
+        WC)   printf 'wc T.TXT\rwc *.LOG\rcat T.TXT | wc\rwc -h\r' ;;
+        HEAD) printf 'head N.TXT\rhead -3 N.TXT\rhead -h\r' ;;
+        TAIL) printf 'tail N.TXT\rtail -3 N.TXT\r' ;;
+        UNIQ) printf 'uniq U.TXT\r' ;;
+        CAT)  printf 'cat T.TXT\rcat *.LOG\rcat NOPE.TXT\r' ;;
+        MORE) printf 'more N.TXT\rmore BIG.TXT\rq\rmore -h\r' ;;
+        FIND) printf 'find .TXT\rfind *.LOG\rfind SUB\rfind -h\r' ;;
+        SORT) printf 'sort S.TXT\rsort *.LOG\rsort -h\r' ;;
+        CP)   printf 'cp T.TXT C.TXT\rcat C.TXT\rcp -r SUB S2\rfind S2\rcp *.LOG SUB\rfind LOG\rcp *.LOG T.TXT\rcp X X\r' ;;
+        GREP) printf 'grep alpha T.TXT\rgrep ^beta T.TXT\rgrep al.ha T.TXT\rgrep mm+ T.TXT\rgrep -r alpha\rgrep x NOPE\rgrep -h\r' ;;
+        SED)  printf 'sed s/alpha/X/ T.TXT\rsed s/l/L/g T.TXT\rsed -h\r' ;;
+        DIFF) printf 'diff T.TXT U.TXT\rdiff T.TXT T.TXT\rdiff -h\r' ;;
+        VI)   printf 'vi N.TXT\rxjA!\033:wq\rcat N.TXT\rvi -h\r' ;;
+        # create a missing file, then touch an existing one and confirm it is
+        # NOT truncated (cat still shows its content). find/cat are helpers.
+        TOUCH) printf 'touch NEW.TXT\rfind NEW\rtouch T.TXT\rcat T.TXT\rtouch -h\r' ;;
     esac
 }
 
@@ -88,11 +88,10 @@ build_c() { # $1=name -> $W/<name>_h.bin
     $ASM "$W/$1.hlp.asm" -o "$W/$1_h.bin" --base 0x7A00 >/dev/null 2>&1
 }
 build_c cat; build_c find
-install_helpers() { # $1=img  $2=name-under-test(upper, skip that one)
-    for h in CAT FIND; do
+install_helpers() { # $1=img  $2=name-under-test (lowercase, skip that one)
+    for h in cat find; do
         [ "$h" = "$2" ] && continue
-        l=$(echo "$h" | tr A-Z a-z)
-        $FS put "$1" "$W/${l}_h.bin" --name "/BIN/$h.BIN" --load 0x7A00 --exec 0x7A00 >/dev/null
+        $FS put "$1" "$W/${h}_h.bin" --name "/bin/$h.bin" --load 0x7A00 --exec 0x7A00 >/dev/null
     done
 }
 
@@ -110,8 +109,8 @@ for cmd in $ALL; do
     sh "$ADIR/mkasm.sh" "$cmd" > "$W/${cmd}_full.asm"
     $ASM "$W/${cmd}_full.asm" -o "$W/${cmd}_a.bin" --base 0x7A00 >/dev/null 2>&1
     scr=$(cmd_script "$up")
-    fixtures "$W/dc.img"; install_helpers "$W/dc.img" "$up"; $FS put "$W/dc.img" "$W/${cmd}_c.bin" --name "/BIN/$up.BIN" --load 0x7A00 --exec 0x7A00 >/dev/null
-    fixtures "$W/da.img"; install_helpers "$W/da.img" "$up"; $FS put "$W/da.img" "$W/${cmd}_a.bin" --name "/BIN/$up.BIN" --load 0x7A00 --exec 0x7A00 >/dev/null
+    fixtures "$W/dc.img"; install_helpers "$W/dc.img" "$cmd"; $FS put "$W/dc.img" "$W/${cmd}_c.bin" --name "/bin/$cmd.bin" --load 0x7A00 --exec 0x7A00 >/dev/null
+    fixtures "$W/da.img"; install_helpers "$W/da.img" "$cmd"; $FS put "$W/da.img" "$W/${cmd}_a.bin" --name "/bin/$cmd.bin" --load 0x7A00 --exec 0x7A00 >/dev/null
     run "$W/dc.img" "$scr" > "$W/$cmd.c.out"
     run "$W/da.img" "$scr" > "$W/$cmd.a.out"
     ran=$((ran + 1))

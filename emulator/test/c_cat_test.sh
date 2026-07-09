@@ -21,9 +21,9 @@ build_disk() {   # $1 = cat.bin
     rm -f cat.img
     python3 $ROOT/tools/p8xfs.py create cat.img >/dev/null
     python3 $ROOT/tools/p8xfs.py boot   cat.img osc.bin >/dev/null
-    python3 $ROOT/tools/p8xfs.py mkdir  cat.img /BIN >/dev/null
+    python3 $ROOT/tools/p8xfs.py mkdir  cat.img /bin >/dev/null
     python3 $ROOT/tools/p8xfs.py mkdir  cat.img /SUB >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    cat.img "$1" --name /BIN/CAT.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    cat.img "$1" --name /bin/cat.bin --load 0x7A00 --exec 0x7A00 >/dev/null
     printf 'ROOTOK\n' > rr.txt
     python3 $ROOT/tools/p8xfs.py put    cat.img rr.txt --name R.TXT --load 0 --exec 0 >/dev/null
     printf 'DEEPOK\n' > ss.txt
@@ -40,37 +40,37 @@ build_disk() {   # $1 = cat.bin
 R() { printf "B\r$1\r" | ../p8xemu -l 250000000 -c cat.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r'; }
 
 check() {   # $1 = label
-    R 'RUN /BIN/CAT.BIN R.TXT'          | grep -q 'ROOTOK'  || fail "$1: cat <file-arg> (CWD root)"
-    R 'RUN /BIN/CAT.BIN /SUB/S.TXT'     | grep -q 'DEEPOK'  || fail "$1: cat <absolute path>"
-    R 'CD /SUB\rRUN /BIN/CAT.BIN S.TXT' | grep -q 'DEEPOK'  || fail "$1: cat <relative> resolves against CWD"
-    R 'RUN /BIN/CAT.BIN <R.TXT'         | grep -q 'ROOTOK'  || fail "$1: cat (no arg) still filters stdin"
-    R 'RUN /BIN/CAT.BIN NOPE.TXT' | grep -qi 'not found'    || fail "$1: missing file not reported"
-    R 'RUN /BIN/CAT.BIN -h'       | grep -qi 'usage'        || fail "$1: -h did not print usage"
+    R 'run /bin/cat.bin R.TXT'          | grep -q 'ROOTOK'  || fail "$1: cat <file-arg> (CWD root)"
+    R 'run /bin/cat.bin /SUB/S.TXT'     | grep -q 'DEEPOK'  || fail "$1: cat <absolute path>"
+    R 'cd /SUB\rrun /bin/cat.bin S.TXT' | grep -q 'DEEPOK'  || fail "$1: cat <relative> resolves against CWD"
+    R 'run /bin/cat.bin <R.TXT'         | grep -q 'ROOTOK'  || fail "$1: cat (no arg) still filters stdin"
+    R 'run /bin/cat.bin NOPE.TXT' | grep -qi 'not found'    || fail "$1: missing file not reported"
+    R 'run /bin/cat.bin -h'       | grep -qi 'usage'        || fail "$1: -h did not print usage"
     # console stdin -> file, terminated by Ctrl-D ($04): type "ZAPPED" then ^D
-    printf 'B\rRUN /BIN/CAT.BIN >CAP.TXT\rZAPPED\004' \
+    printf 'B\rrun /bin/cat.bin >CAP.TXT\rZAPPED\004' \
         | ../p8xemu -l 250000000 -c cat.img eeprom.bin 2>/dev/null >/dev/null
     python3 $ROOT/tools/p8xfs.py get cat.img CAP.TXT --out cap.txt >/dev/null 2>&1 \
         || fail "$1: console capture (Ctrl-D) did not create the file"
     grep -q 'ZAPPED' cap.txt || fail "$1: console stdin not captured up to Ctrl-D"
     # an Enter keypress is captured as CR+LF: type "AB"<CR>"CD" then ^D -> AB\r\nCD
-    printf 'B\rRUN /BIN/CAT.BIN >CR.TXT\rAB\rCD\004' \
+    printf 'B\rrun /bin/cat.bin >CR.TXT\rAB\rCD\004' \
         | ../p8xemu -l 250000000 -c cat.img eeprom.bin 2>/dev/null >/dev/null
     python3 $ROOT/tools/p8xfs.py get cat.img CR.TXT --out cr.txt >/dev/null 2>&1 \
         || fail "$1: CRLF capture did not create the file"
     printf 'AB\r\nCD' > cr.exp
     cmp -s cr.txt cr.exp || fail "$1: typed CR not captured as CR+LF"
     # file-arg cat piped into a stdin-filter cat: both modes in one line
-    R 'RUN /BIN/CAT.BIN R.TXT | RUN /BIN/CAT.BIN' | grep -q 'ROOTOK' || fail "$1: cat file | cat"
+    R 'run /bin/cat.bin R.TXT | run /bin/cat.bin' | grep -q 'ROOTOK' || fail "$1: cat file | cat"
     # arg-mode cat redirected to a file
-    R 'RUN /BIN/CAT.BIN R.TXT >O.TXT' >/dev/null
+    R 'run /bin/cat.bin R.TXT >O.TXT' >/dev/null
     python3 $ROOT/tools/p8xfs.py get cat.img O.TXT --out co.txt >/dev/null 2>&1 || fail "$1: cat file >OUT did not write"
     grep -q 'ROOTOK' co.txt || fail "$1: redirected cat-file output wrong"
     # glob: `cat *.LOG` concatenates A.LOG + B.LOG but not X.DAT
-    R 'RUN /BIN/CAT.BIN *.LOG' | grep -q 'AAA' || fail "$1: cat *.LOG missed A.LOG"
-    R 'RUN /BIN/CAT.BIN *.LOG' | grep -q 'BBB' || fail "$1: cat *.LOG missed B.LOG"
-    R 'RUN /BIN/CAT.BIN *.LOG' | grep -q 'ZZZ' && fail "$1: cat *.LOG wrongly included X.DAT"
+    R 'run /bin/cat.bin *.LOG' | grep -q 'AAA' || fail "$1: cat *.LOG missed A.LOG"
+    R 'run /bin/cat.bin *.LOG' | grep -q 'BBB' || fail "$1: cat *.LOG missed B.LOG"
+    R 'run /bin/cat.bin *.LOG' | grep -q 'ZZZ' && fail "$1: cat *.LOG wrongly included X.DAT"
     # glob to a file: `cat *.LOG >GLB.TXT` captures both matches
-    R 'RUN /BIN/CAT.BIN *.LOG >GLB.TXT' >/dev/null
+    R 'run /bin/cat.bin *.LOG >GLB.TXT' >/dev/null
     python3 $ROOT/tools/p8xfs.py get cat.img GLB.TXT --out glb.txt >/dev/null 2>&1 || fail "$1: cat glob >OUT did not write"
     grep -q 'AAA' glb.txt && grep -q 'BBB' glb.txt || fail "$1: cat glob >OUT missing a match"
 }

@@ -25,19 +25,19 @@ run() {  # $1 = bytes to type (printf escapes ok) -> stripped console output
         | LC_ALL=C tr -d '\0\r'
 }
 
-# Sentinel command is HELP — a still-native built-in (DIR/PWD moved to /BIN, which
+# Sentinel command is HELP — a still-native built-in (DIR/PWD moved to /bin, which
 # this minimal disk doesn't carry). A valid command produces no lone "?" line; an
 # unknown one does (the banner's "? FOR HELP" isn't a lone line, so -x distinguishes).
 # control: an uncorrected bad command must produce a lone "?".
 run 'XYZHELP' | grep -qx '?' || fail "control: unknown command did not print '?'"
 
 # backspace: "XYZ" + 3x BS clears the word, leaving "HELP" -> valid, no lone "?"
-if run 'XYZ\b\b\bHELP' | grep -qx '?'; then fail "backspace did not erase (got '?')"; fi
+if run 'XYZ\b\b\bhelp' | grep -qx '?'; then fail "backspace did not erase (got '?')"; fi
 
 # DEL key ($7F=\177): "HELPX" + DEL -> "HELP" -> valid, no lone "?"
-if run 'HELPX\177' | grep -qx '?'; then fail "DEL did not erase (got '?')"; fi
+if run 'helpx\177' | grep -qx '?'; then fail "DEL did not erase (got '?')"; fi
 
 # backspace at the start of an empty line must be harmless, then a real command runs
-if run '\b\b\bHELP' | grep -qx '?'; then fail "backspace past start of line corrupted input"; fi
+if run '\b\b\bhelp' | grep -qx '?'; then fail "backspace past start of line corrupted input"; fi
 
 echo "OS-LINEEDIT TEST: PASS"

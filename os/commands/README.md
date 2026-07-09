@@ -1,8 +1,8 @@
 # os/commands/ — P8X/OS commands written in C
 
 Userland commands for P8X/OS, written in C and compiled with
-[`p8cc`](../../compiler/README.md) to loadable `/BIN/*.BIN` programs. They run
-in the transient program area (`$7A00`) under `RUN`, reach OS/BIOS services
+[`p8cc`](../../compiler/README.md) to loadable `/bin/*.bin` programs. They run
+in the transient program area (`$7A00`) under `run`, reach OS/BIOS services
 through the `bios()`/`peek`/`poke`/`argstr()` builtins and the OS syscall table
 (see [../README.md](../README.md)), and read/write the standard streams via
 `getchar`/`putchar`/`puts` — so the shell can redirect (`<`/`>`) and pipe (`|`)
@@ -10,63 +10,63 @@ them like any program.
 
 ## Running them
 
-Once installed in `/BIN`, a command runs by **bare name** — the shell's implicit
-RUN searches `PATH` (default `/BIN`) and appends `.BIN`:
+Once installed in `/bin`, a command runs by **bare name** — the shell's implicit
+RUN searches `path` (default `/bin`) and appends `.bin`:
 
 ```
-DIR /BIN            CAT README.TXT          PWD
+dir /bin            cat README.TXT          pwd
 ```
 
-equivalently `RUN /BIN/DIR.BIN /BIN`, etc. Every command accepts **`-h`** to
+equivalently `run /bin/dir.bin /bin`, etc. Every command accepts **`-h`** to
 print a one-line usage summary and exit.
 
 > **Hand-assembled counterparts.** Each of these commands also has a hand-written
 > P8X assembler version in [`../commands-asm/`](../commands-asm/README.md),
 > verified byte-identical in behavior and ~2.3× smaller overall (up to 5.8×).
-> `run.sh` installs them to a parallel `/BINA`, so you can compare on-target:
-> `RUN /BINA/GREP.BIN …` vs `GREP …`.
+> `run.sh` installs them to a parallel `/bina`, so you can compare on-target:
+> `run /bina/grep.bin …` vs `grep …`.
 
-> **Drives.** A second CF is **mounted at `/D1`** in one unified namespace, so
-> these commands are **drive-unaware**: an ordinary `/D1/...` path reaches drive 1
-> with no special syntax — `CAT /D1/NOTES`, `DIR /D1/BIN`, `DIR /D1/*.C`,
-> `GREP x /D1/SRC/*.C`, and cross-mount `CP /D1/A /B` (the read and write streams
+> **Drives.** A second CF is **mounted at `/d1`** in one unified namespace, so
+> these commands are **drive-unaware**: an ordinary `/d1/...` path reaches drive 1
+> with no special syntax — `cat /d1/NOTES`, `dir /d1/bin`, `dir /d1/*.C`,
+> `grep x /d1/SRC/*.C`, and cross-mount `cp /d1/A /B` (the read and write streams
 > each carry their own drive via `ROSDRV`/`WOSDRV`). The drive selection lives in
 > one place — the `FRESOLVE`/`RV_START` mount redirect — not in any command, so
 > even the stdin-filter tools (`grep`, `wc`, `head`, …) get the mount for free
 > without growing. See [../README.md](../README.md) "Two drives".
 
 > **Note — DIR, PWD, CAT, and TREE are no longer shell built-ins** (the
-> minimal-kernel split): they were removed from the OS and run from `/BIN` by
-> bare name, so `DIR -R`, `PWD`, `CAT file`, `TREE` all just work (and honour
-> `-h`). The kernel keeps only what can't be a `/BIN` program — `RUN`, the
-> authoring/FS primitives (`SAVE`/`DEP`/`LOAD`/`DEL`/`MKDIR`/`RMDIR`/`CD`), and
-> `HELP`/`EXIT`/`PACK`/`FSCK`/`FORMAT`. **`DUMP` stays native** — as a `/BIN`
+> minimal-kernel split): they were removed from the OS and run from `/bin` by
+> bare name, so `dir -R`, `pwd`, `cat file`, `tree` all just work (and honour
+> `-h`). The kernel keeps only what can't be a `/bin` program — `run`, the
+> authoring/FS primitives (`save`/`dep`/`load`/`del`/`mkdir`/`rmdir`/`cd`), and
+> `help`/`exit`/`pack`/`fsck`/`format`. **`dump` stays native** — as a `/bin`
 > program it would load into the `$7A00` TPA and overwrite the very memory it
-> dumps. Consequence: a freshly-`FORMAT`ted card (no `/BIN`) can't `DIR`/`CAT`
-> until `/BIN` is repopulated (from the host, or a future master CF — backlog).
+> dumps. Consequence: a freshly-`format`ted card (no `/bin`) can't `dir`/`cat`
+> until `/bin` is repopulated (from the host, or a future master CF — backlog).
 
 ## Commands
 
 | Source | Usage | What it does |
 |--------|-------|--------------|
-| [`dir.c`](dir.c) | `DIR [-R] [path\|glob] [-h]` | List a directory (the path, or the CWD if omitted). Each line is a right-justified byte size, two spaces, then the name; directories show a blank size and a trailing `/`. `-R` recurses the whole subtree, indenting two spaces per level (the size column stays aligned). A last component with `*`/`?` is a case-insensitive **glob** (via `lib_glob`): `DIR *.ASM`, `DIR /BIN/*.BIN`, `DIR -R *.C`. Streams one line at a time, so it redirects/pipes with no size limit. |
-| [`pwd.c`](pwd.c) | `PWD [-h]` | Print the current working directory path. |
-| [`cat.c`](cat.c) | `CAT [file\|glob] [-h]` | Print a file, **or** copy stdin→stdout (the canonical filter) when given no file. So `cat file`, `cat <file`, and `cat \| …` all work. A last component with `*`/`?` is a case-insensitive **glob** (via `lib_globx`): `CAT *.ASM` concatenates every matching file, and `CAT *.ASM >ALL.TXT` captures them — directory iteration now coexists with an open write stream (see FSDIRBUF below). Reading the **console** (e.g. `CAT >FILE`), each key echoes and **Ctrl-D** ends the input. |
-| [`wc.c`](wc.c) | `WC [file\|glob] [-h]` | Count lines, words, and bytes → `L W B`. A file, a glob (`WC *.LOG` = combined count over all matches), `<file`, or a pipe. Counts are 16-bit. |
-| [`grep.c`](grep.c) | `GREP [-r] regex [file\|glob] [-h]` | Print lines matching a **basic regex** — `.` (any), `*`/`+`/`?` (zero-or-more / one-or-more / zero-or-one), `^`/`$` (anchors); else literal. Reads the named `file`/glob (like cat) or stdin if none: `GREP "^al" foo.txt`, `… \| GREP "x.*y"`. **`-r`** recurses the CWD tree (depth-first, like `DIR -R`/`FIND`) and searches file **contents**, printing each hit as `path:line` — `GREP -r "x.*y"`. Lines capped at 255 chars; `-r` is capped at 36 files. |
-| [`cp.c`](cp.c) | `CP [-r] src dst [-h]` | Copy a file (read stream → write stream), or with **`-r`** a whole directory tree — recursively, and across the `/D1` mount (`CP -r /D1/SRC /SRC`). A `*`/`?` **glob** source copies every match into the destination directory (`CP *.ASM /BAK`). `-r` collects each level's entries before descending (the FNEXT cursor is global) and makes destination dirs via the `SYS_MKDIR` syscall. Supersedes the old `IMPORT` built-in. |
-| [`mv.c`](mv.c) | `MV src dst [-h]` | Move/rename a file = copy + delete source (P8XFS has no rename primitive). A `*`/`?` **glob** source moves every match into the destination directory (`MV *.TMP TRASH`). `MV X X` is refused. |
-| [`head.c`](head.c) | `HEAD [-N] [file] [-h]` | First N lines (default 10) of a file or stdin. |
-| [`tail.c`](tail.c) | `TAIL [-N] [file] [-h]` | Last N lines (default 10, max 40) of a file or stdin, via a ring buffer. |
-| [`more.c`](more.c) | `MORE [file] [-h]` | Page a file or stdin a screenful (23 lines) at a time: space=next page, Enter=one line, q=quit. Forward pager (not full `less`). |
-| [`sort.c`](sort.c) | `SORT [file] [-h]` | Sort lines ascending (file or stdin). In-memory: ≤128 lines of ≤79 chars. |
-| [`uniq.c`](uniq.c) | `UNIQ [file] [-h]` | Collapse **adjacent** duplicate lines (pair with `SORT`). |
-| [`sed.c`](sed.c) | `SED s/re/new/[g] [file] [-h]` | `s///` substitution; the left side is a **basic regex** (`.` `*` `+` `?` `^` `$`, via `lib_regex` — same matcher as grep), replacement is literal. First match or all with `g`; the whole matched span is replaced. `*` is non-greedy. |
-| [`find.c`](find.c) | `FIND pattern [-h]` | Recursively print CWD paths whose name matches `pattern`: a case-insensitive **glob** (`*`/`?`, via `lib_glob`) if it contains `*` or `?`, else a literal substring. So `FIND *.C`, `FIND TEST?.ASM`, and `FIND BIN` (substring) all work. |
-| [`diff.c`](diff.c) | `DIFF f1 f2 [-h]` | Prefix/suffix-anchored line diff: `<` lines only in f1, `>` only in f2. ≤96 lines/file (≤79 chars). |
-| [`touch.c`](touch.c) | `TOUCH name [name...] [-h]` | Create each named file empty if missing; an existing file is left **untouched** (not truncated). No mtime yet (no RTC); no globbing (a pattern only ever matches existing files). |
-| [`tree.c`](tree.c) | `TREE [-h]` | Depth-first indented listing of the CWD tree (same recursion as `DIR -R`). |
-| [`vi.c`](vi.c) | `VI name [-h]` | Minimal modal **VT100 screen editor**. Reads keys raw (CONIN, no echo) and drives the cursor with ANSI escapes, so it needs a VT100-compatible terminal. `h j k l` move, `i`/`a`/`A`/`o` insert, `x` delete char, `dd` delete line, `0`/`$`/`G`, **`u` undo** (single-level), **`/`pat + `n`** search (literal, forward, wraps), `:w`/`:q`/`:wq`/`:q!`. Selective redraw (one line per edit, full only on scroll) keeps it usable at serial baud. Flat 110×80 line buffer. Complements the line-oriented [`EDIT`](../../apps/README.md) app. |
+| [`dir.c`](dir.c) | `dir [-R] [path\|glob] [-h]` | List a directory (the path, or the CWD if omitted). Each line is a right-justified byte size, two spaces, then the name; directories show a blank size and a trailing `/`. `-R` recurses the whole subtree, indenting two spaces per level (the size column stays aligned). A last component with `*`/`?` is a case-insensitive **glob** (via `lib_glob`): `dir *.ASM`, `dir /bin/*.bin`, `dir -R *.C`. Streams one line at a time, so it redirects/pipes with no size limit. |
+| [`pwd.c`](pwd.c) | `pwd [-h]` | Print the current working directory path. |
+| [`cat.c`](cat.c) | `cat [file\|glob] [-h]` | Print a file, **or** copy stdin→stdout (the canonical filter) when given no file. So `cat file`, `cat <file`, and `cat \| …` all work. A last component with `*`/`?` is a case-insensitive **glob** (via `lib_globx`): `cat *.ASM` concatenates every matching file, and `cat *.ASM >ALL.TXT` captures them — directory iteration now coexists with an open write stream (see FSDIRBUF below). Reading the **console** (e.g. `cat >FILE`), each key echoes and **Ctrl-D** ends the input. |
+| [`wc.c`](wc.c) | `wc [file\|glob] [-h]` | Count lines, words, and bytes → `L W B`. A file, a glob (`wc *.LOG` = combined count over all matches), `<file`, or a pipe. Counts are 16-bit. |
+| [`grep.c`](grep.c) | `grep [-r] regex [file\|glob] [-h]` | Print lines matching a **basic regex** — `.` (any), `*`/`+`/`?` (zero-or-more / one-or-more / zero-or-one), `^`/`$` (anchors); else literal. Reads the named `file`/glob (like cat) or stdin if none: `grep "^al" foo.txt`, `… \| GREP "x.*y"`. **`-r`** recurses the CWD tree (depth-first, like `dir -R`/`find`) and searches file **contents**, printing each hit as `path:line` — `grep -r "x.*y"`. Lines capped at 255 chars; `-r` is capped at 36 files. |
+| [`cp.c`](cp.c) | `cp [-r] src dst [-h]` | Copy a file (read stream → write stream), or with **`-r`** a whole directory tree — recursively, and across the `/d1` mount (`cp -r /d1/SRC /SRC`). A `*`/`?` **glob** source copies every match into the destination directory (`cp *.ASM /BAK`). `-r` collects each level's entries before descending (the FNEXT cursor is global) and makes destination dirs via the `SYS_MKDIR` syscall. Supersedes the old `IMPORT` built-in. |
+| [`mv.c`](mv.c) | `mv src dst [-h]` | Move/rename a file = copy + delete source (P8XFS has no rename primitive). A `*`/`?` **glob** source moves every match into the destination directory (`mv *.TMP TRASH`). `mv X X` is refused. |
+| [`head.c`](head.c) | `head [-N] [file] [-h]` | First N lines (default 10) of a file or stdin. |
+| [`tail.c`](tail.c) | `tail [-N] [file] [-h]` | Last N lines (default 10, max 40) of a file or stdin, via a ring buffer. |
+| [`more.c`](more.c) | `more [file] [-h]` | Page a file or stdin a screenful (23 lines) at a time: space=next page, Enter=one line, q=quit. Forward pager (not full `less`). |
+| [`sort.c`](sort.c) | `sort [file] [-h]` | Sort lines ascending (file or stdin). In-memory: ≤128 lines of ≤79 chars. |
+| [`uniq.c`](uniq.c) | `uniq [file] [-h]` | Collapse **adjacent** duplicate lines (pair with `sort`). |
+| [`sed.c`](sed.c) | `sed s/re/new/[g] [file] [-h]` | `s///` substitution; the left side is a **basic regex** (`.` `*` `+` `?` `^` `$`, via `lib_regex` — same matcher as grep), replacement is literal. First match or all with `g`; the whole matched span is replaced. `*` is non-greedy. |
+| [`find.c`](find.c) | `find pattern [-h]` | Recursively print CWD paths whose name matches `pattern`: a case-insensitive **glob** (`*`/`?`, via `lib_glob`) if it contains `*` or `?`, else a literal substring. So `find *.C`, `find TEST?.ASM`, and `find BIN` (substring) all work. |
+| [`diff.c`](diff.c) | `diff f1 f2 [-h]` | Prefix/suffix-anchored line diff: `<` lines only in f1, `>` only in f2. ≤96 lines/file (≤79 chars). |
+| [`touch.c`](touch.c) | `touch name [name...] [-h]` | Create each named file empty if missing; an existing file is left **untouched** (not truncated). No mtime yet (no RTC); no globbing (a pattern only ever matches existing files). |
+| [`tree.c`](tree.c) | `tree [-h]` | Depth-first indented listing of the CWD tree (same recursion as `dir -R`). |
+| [`vi.c`](vi.c) | `vi name [-h]` | Minimal modal **VT100 screen editor**. Reads keys raw (CONIN, no echo) and drives the cursor with ANSI escapes, so it needs a VT100-compatible terminal. `h j k l` move, `i`/`a`/`A`/`o` insert, `x` delete char, `dd` delete line, `0`/`$`/`G`, **`u` undo** (single-level), **`/`pat + `n`** search (literal, forward, wraps), `:w`/`:q`/`:wq`/`:q!`. Selective redraw (one line per edit, full only on scroll) keeps it usable at serial baud. Flat 110×80 line buffer. Complements the line-oriented [`EDIT`](../../apps/README.md) app. |
 
 ### Implementation notes
 
@@ -100,12 +100,12 @@ print a one-line usage summary and exit.
   idiom (copied from cat/grep). `head` stops after N lines; `tail` keeps the last
   N in a flat ring buffer (`buf[slot*256+col]`, N≤40); `more` pages 23 lines then
   reads the continue key from the **console** (`CONIN`, BIOS $0100) — separate
-  from the redirected stdin — so it pauses for both `MORE file` and `cmd | MORE`.
+  from the redirected stdin — so it pauses for both `more file` and `cmd | MORE`.
 - **cp.c / mv.c** — copy SRC (read stream, buffer at `$FC00`) to DST (write
   stream). The read and write streams use **independent** buffers, so the
   byte loop interleaves them; but `FRESOLVE`/`FOPEN` and the write stream all
   transit `SBUF`, so DST is resolved *before* `FWOPEN` (which zeroes `SBUF`
-  last). `mv` then `FDELETE`s the source; `MV X X` is guarded.
+  last). `mv` then `FDELETE`s the source; `mv X X` is guarded.
 - **cat.c** — a filename argument is opened with `FRESOLVE` ($0133) +
   `FOPEN`/`FGETB` (read buffer `$FC00`). The BIOS resolves names from its own
   current directory (root for a fresh program), so cat builds an **absolute**
@@ -113,7 +113,7 @@ print a one-line usage summary and exit.
   always starts at root, hence CWD-independent. With no argument it falls back
   to the stdin filter, so redirection and pipes are unchanged. A glob argument
   (`*`/`?`) is expanded by `lib_globx`'s `glob_expand` into a path list, then
-  each path is streamed in turn (`CAT *.ASM`). The hard part is `CAT *.ASM
+  each path is streamed in turn (`cat *.ASM`). The hard part is `cat *.ASM
   >OUT`: a write stream is already open, and each file's `FRESOLVE` walks the
   directory through `SBUF` — which is also the write stream's buffer, so the
   naïve version overwrites each file's already-buffered output with directory
@@ -128,13 +128,13 @@ print a one-line usage summary and exit.
 ## Building
 
 Compile + assemble + install one (or let [`../run.sh`](../run.sh) install all
-three into `/BIN` on a fresh disk):
+three into `/bin` on a fresh disk):
 
 ```sh
 python3 compiler/p8cc.py os/commands/dir.c -o dir.asm
 python3 assembler/p8xasm.py dir.asm -o dir.bin --base 0x7A00
-python3 tools/p8xfs.py put disk.img dir.bin --name /BIN/DIR.BIN --load 0x7A00 --exec 0x7A00
-# on the P8X:   DIR /BIN        (bare name via PATH)   or   RUN /BIN/DIR.BIN /BIN
+python3 tools/p8xfs.py put disk.img dir.bin --name /bin/dir.bin --load 0x7A00 --exec 0x7A00
+# on the P8X:   DIR /bin        (bare name via PATH)   or   RUN /bin/dir.bin /bin
 ```
 
 Either compiler works: `p8cc.py` (the Python bootstrap) or the native
@@ -166,7 +166,7 @@ consumer.
 
 | Library | Provides | Used by |
 |---------|----------|---------|
-| [`lib_stdin.c`](lib_stdin.c) | `path[80]`, `fromfile`, `nextc()` (next byte or 65535 at EOF), `openarg(a)` (open the optional file arg → 0 stdin / 1 opened / 2 not found). A `*`/`?` arg is expanded (via `lib_globx`) and `nextc()` reads all matches as **one concatenated stream**, so every command below gets globs for free (`GREP x *.C`, `SORT *.TXT`, `WC *.LOG`). | `grep`, `head`, `tail`, `more`, `sort`, `uniq`, `sed`, `wc` |
+| [`lib_stdin.c`](lib_stdin.c) | `path[80]`, `fromfile`, `nextc()` (next byte or 65535 at EOF), `openarg(a)` (open the optional file arg → 0 stdin / 1 opened / 2 not found). A `*`/`?` arg is expanded (via `lib_globx`) and `nextc()` reads all matches as **one concatenated stream**, so every command below gets globs for free (`grep x *.C`, `sort *.TXT`, `wc *.LOG`). | `grep`, `head`, `tail`, `more`, `sort`, `uniq`, `sed`, `wc` |
 | [`lib_abspath.c`](lib_abspath.c) | `abspath(out, a)` — build an absolute path (CWD-prefixed when relative) into a caller buffer; returns chars consumed | `cp`, `mv`, `diff`, `touch` |
 | [`lib_readline.c`](lib_readline.c) | `readline(buf)` — read one line via `nextc()` (CR dropped, LF-terminated); 1 = line, 0 = EOF. **Needs `//#use stdin` above it.** | `uniq`, `sed` |
 | [`lib_streq.c`](lib_streq.c) | `streq(p, q)` — 1 if NUL-terminated strings are equal | `mv`, `uniq` |
@@ -221,9 +221,9 @@ machinery: `emulator/test/c_dir_test.sh`, `c_dir_recursive_test.sh`,
 `c_pager_test.sh` (head/tail/more), `c_stdin_test.sh`, `c_redirect_test.sh`,
 `c_pipe_test.sh`, and the implicit-RUN/PATH path in `os_path_test.sh`.
 
-The core text/file utilities are all implemented (the table above). `DIR` and
-`FIND` match globs in place (via `lib_glob`); `CAT` expands a glob into multiple
-files (via `lib_globx`, e.g. `CAT *.ASM >OUT`). Extending wildcards to the
+The core text/file utilities are all implemented (the table above). `dir` and
+`find` match globs in place (via `lib_glob`); `cat` expands a glob into multiple
+files (via `lib_globx`, e.g. `cat *.ASM >OUT`). Extending wildcards to the
 remaining commands (`wc`/`grep`/`sort`/`cp`/`del`) is better done as a single
 shell-level expansion pass (see the backlog) than per-command. Future ideas:
-`TR`, `WC -l`-style flags, a real `LESS` (back-scroll).
+`TR`, `wc -l`-style flags, a real `LESS` (back-scroll).

@@ -1,13 +1,13 @@
 #!/bin/sh
 # P8X/OS boot + shell test. Builds a P8XFS image with the OS, a runnable
-# program (PROG.BIN, prints "RAN" then RTS to the shell), and a data file
+# program (PROG.bin, prints "RAN" then RTS to the shell), and a data file
 # (HELLO.TXT), boots it through the ROM monitor (B), then exercises the shell:
 #   DIR              -> lists both files
-#   RUN PROG.BIN     -> prints RAN (program loaded to $B000 and JSR'd)
+#   RUN PROG.bin     -> prints RAN (program loaded to $B000 and JSR'd)
 #   DEL HELLO.TXT    -> marks the entry deleted and writes the sector back
-#   SAVE C.BIN 4000 4010 -> create a file from memory ($4000 = the OS image)
-#   DIR              -> re-read from disk: HELLO.TXT gone, PROG.BIN + C.BIN kept
-# Then on the host: get C.BIN back and confirm its bytes equal p8xos.bin[0:16].
+#   SAVE C.bin 4000 4010 -> create a file from memory ($4000 = the OS image)
+#   DIR              -> re-read from disk: HELLO.TXT gone, PROG.bin + C.bin kept
+# Then on the host: get C.bin back and confirm its bytes equal p8xos.bin[0:16].
 # Exercises the whole stack: assembler --base, p8xfs.py, the BIOS jump table,
 # the CF model, and the OS shell / filesystem code.
 set -e
@@ -40,14 +40,14 @@ python3 $ROOT/assembler/p8xasm.py prog.asm -o prog.bin --base 0x7A00 >/dev/null
 rm -f os.img
 python3 $ROOT/tools/p8xfs.py create os.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot os.img p8xos.bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put os.img prog.bin --name PROG.BIN >/dev/null
-# DIR is no longer a built-in — install /BIN/DIR.BIN so bare `DIR` / `DIR >DLIST`
+python3 $ROOT/tools/p8xfs.py put os.img prog.bin --name PROG.bin >/dev/null
+# DIR is no longer a built-in — install /bin/dir.bin so bare `DIR` / `DIR >DLIST`
 # resolve via implicit RUN. (DUMP is still native; DEP/DUMP below are unchanged.)
 python3 $ROOT/tools/clib.py $ROOT/os/commands/dir.c -o os_dir.pp.c >/dev/null
 python3 $ROOT/compiler/p8cc.py os_dir.pp.c -o os_dir.asm >/dev/null
 python3 $ROOT/assembler/p8xasm.py os_dir.asm -o os_dir.bin --base 0x7A00 >/dev/null
-python3 $ROOT/tools/p8xfs.py mkdir os.img /BIN >/dev/null
-python3 $ROOT/tools/p8xfs.py put os.img os_dir.bin --name /BIN/DIR.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py mkdir os.img /bin >/dev/null
+python3 $ROOT/tools/p8xfs.py put os.img os_dir.bin --name /bin/dir.bin --load 0x7A00 --exec 0x7A00 >/dev/null
 printf 'hi' > os_h.tmp
 python3 $ROOT/tools/p8xfs.py put os.img os_h.tmp --name HELLO.TXT >/dev/null
 rm -f os_h.tmp prog.asm
@@ -59,12 +59,12 @@ rm -f os_h.tmp prog.asm
 # Also: SAVE over an existing name must be rejected (?EXISTS), and a redirected
 # command's error must still reach the console (DEL NOPE >X -> ?NO FILE on screen;
 # built-in errors use PUTS, not the redirectable OUTCH, so they bypass redirection).
-out=$(printf 'B\rDIR\rRUN PROG.BIN\rDEL HELLO.TXT\rSAVE C.BIN 4000 4010\rDEP B000 41 42 43\rDUMP B000\r\r.PACK\rFSCK\rDIR\rDIR >DLIST\rSAVE PROG.BIN 4000 4001\rDEL NOPE >X\rEXIT\r' | \
+out=$(printf 'B\rdir\rrun PROG.bin\rdel HELLO.TXT\rsave C.bin 4000 4010\rdep B000 41 42 43\rdump B000\r\r.pack\rfsck\rdir\rdir >DLIST\rsave PROG.bin 4000 4001\rdel NOPE >X\rexit\r' | \
       ../p8xemu -l 80000000 -c os.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0')
 
 fail() { echo "OS TEST: FAIL — $1"; echo "$out" | sed -n '/P8X\/OS/,$p'; exit 1; }
 echo "$out" | grep -q 'P8X/OS v1.0' || fail "OS did not boot"
-echo "$out" | grep -q 'PROG.BIN'    || fail "DIR missing PROG.BIN"
+echo "$out" | grep -q 'PROG.bin'    || fail "DIR missing PROG.bin"
 echo "$out" | grep -q 'HELLO.TXT'   || fail "DIR missing HELLO.TXT"
 echo "$out" | grep -q 'RAN'         || fail "RUN did not execute the program"
 echo "$out" | grep -q 'DELETED'     || fail "DEL did not report success"
@@ -76,29 +76,29 @@ echo "$out" | grep -q 'ABC'            || fail "DUMP ASCII column wrong"
 echo "$out" | grep -q 'B100'           || fail "DUMP paging (CR=next block) did not advance"
 echo "$out" | grep -q 'PACKED'       || fail "PACK did not report success"
 echo "$out" | grep -q 'FSCK OK'      || fail "FSCK reported problems on a clean v2 volume"
-# After DEL+SAVE+PACK, the final DIR (re-read from disk): HELLO.TXT gone, C.BIN
-# kept. (DEL HELLO left a gap that PACK reclaims by moving C.BIN down.)
+# After DEL+SAVE+PACK, the final DIR (re-read from disk): HELLO.TXT gone, C.bin
+# kept. (DEL HELLO left a gap that PACK reclaims by moving C.bin down.)
 tail=$(echo "$out" | sed -n '/PACKED/,$p')
 echo "$tail" | grep -q 'HELLO.TXT' && fail "HELLO.TXT still listed after DEL" || true
-echo "$tail" | grep -q 'PROG.BIN'  || fail "PROG.BIN lost"
-echo "$tail" | grep -q 'C.BIN'     || fail "C.BIN lost after PACK"
+echo "$tail" | grep -q 'PROG.bin'  || fail "PROG.bin lost"
+echo "$tail" | grep -q 'C.bin'     || fail "C.bin lost after PACK"
 # EXIT leaves the OS and cold-restarts the monitor: its banner shows a 2nd time
 # (once for the initial B-boot, once after EXIT).
 [ "$(echo "$out" | grep -c 'P8X MONITOR')" -ge 2 ] || fail "EXIT did not return to the monitor"
 
-# Host round-trip: SAVE'd C.BIN must equal the first 16 bytes of the OS image
+# Host round-trip: SAVE'd C.bin must equal the first 16 bytes of the OS image
 # (it was saved straight from $4000, where the OS image is loaded verbatim) —
 # and must still match AFTER PACK relocated its extent.
-python3 $ROOT/tools/p8xfs.py get os.img C.BIN --out os_c.tmp >/dev/null
+python3 $ROOT/tools/p8xfs.py get os.img C.bin --out os_c.tmp >/dev/null
 head -c 16 p8xos.bin > os_exp.tmp
-cmp -s os_c.tmp os_exp.tmp || fail "C.BIN bytes wrong after PACK"
+cmp -s os_c.tmp os_exp.tmp || fail "C.bin bytes wrong after PACK"
 rm -f os_c.tmp os_exp.tmp
 # Output redirection: 'DIR >DLIST' must have created DLIST holding the captured
-# directory listing (so it contains a known entry name, PROG.BIN).
+# directory listing (so it contains a known entry name, PROG.bin).
 python3 $ROOT/tools/p8xfs.py get os.img DLIST --out os_dl.tmp >/dev/null || fail "redirect: DLIST not created"
-LC_ALL=C tr -d '\0\r' < os_dl.tmp | grep -q 'PROG.BIN' || { echo "--- DLIST ---"; cat os_dl.tmp; fail "redirect: DLIST missing captured listing"; }
+LC_ALL=C tr -d '\0\r' < os_dl.tmp | grep -q 'PROG.bin' || { echo "--- DLIST ---"; cat os_dl.tmp; fail "redirect: DLIST missing captured listing"; }
 rm -f os_dl.tmp
-# Duplicate name rejected: SAVE PROG.BIN (already exists) -> ?EXISTS.
+# Duplicate name rejected: SAVE PROG.bin (already exists) -> ?EXISTS.
 echo "$out" | grep -q 'EXISTS'  || fail "duplicate SAVE not rejected (?EXISTS missing)"
 # stderr: a redirected command's error still prints on the console.
 echo "$out" | grep -q 'NO FILE' || fail "redirected command's error did not reach the console"

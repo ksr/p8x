@@ -1,7 +1,7 @@
 #!/bin/sh
 # Run BASIC as a P8X/OS program: build a TPA-resident BASIC (code+data+scratch all
 # in $B000.., clear of the OS at $4000-$AFFF) whose BYE returns to the OS cold
-# start ($4000) instead of the ROM monitor. Install it on the disk as BASIC.BIN
+# start ($4000) instead of the ROM monitor. Install it on the disk as BASIC.bin
 # (load/exec $B000), boot the OS, RUN it, run a tiny program, and BYE back to the
 # OS shell — proving it round-trips without disturbing the resident OS.
 set -e
@@ -19,17 +19,17 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/basic/p8xbasic.asm -o basicrun.bin \
 rm -f ob.img
 python3 $ROOT/tools/p8xfs.py create ob.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   ob.img osb.bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    ob.img basicrun.bin --name BASIC.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    ob.img basicrun.bin --name BASIC.bin --load 0x7A00 --exec 0x7A00 >/dev/null
 
-out=$(printf 'B\rRUN BASIC.BIN\r10 PRINT "INBASIC"\rRUN\rBYE\rMKDIR /Z\r' | \
+out=$(printf 'B\rrun BASIC.bin\r10 PRINT "INBASIC"\rRUN\rBYE\rmkdir /Z\r' | \
       ../p8xemu -l 300000000 -c ob.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0')
 fail() { echo "OS-BASIC TEST: FAIL — $1"; echo "$out" | sed -n '/v1.0/,$p'; exit 1; }
 
-echo "$out" | grep -q 'P8X BASIC'  || fail "RUN BASIC.BIN did not launch BASIC"
+echo "$out" | grep -q 'P8X BASIC'  || fail "RUN BASIC.bin did not launch BASIC"
 echo "$out" | grep -q 'INBASIC'    || fail "program did not run inside BASIC"
 # BYE must return to the OS (its banner appears a 2nd time) and the shell works.
 [ "$(echo "$out" | grep -c 'P8X/OS v1.0')" -ge 2 ] || fail "BYE did not return to the OS"
-# DIR is no longer a built-in (and this disk has no /BIN), so prove the shell is
+# DIR is no longer a built-in (and this disk has no /bin), so prove the shell is
 # usable after BYE with a still-native command: MKDIR /Z -> "DIR CREATED".
 echo "$out" | sed -n '/INBASIC/,$p' | grep -q 'DIR CREATED' || fail "OS shell not usable after BYE (MKDIR)"
 echo "OS-BASIC TEST: PASS"

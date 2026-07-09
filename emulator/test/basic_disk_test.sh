@@ -16,7 +16,7 @@ rm -f bas.img
 python3 $ROOT/tools/p8xfs.py create bas.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot bas.img basicdisk.bin >/dev/null
 
-out=$(printf 'B\r10 FOR I=1 TO 3\r20 PRINT I\r30 NEXT\rRUN\r' | \
+out=$(printf 'B\r10 FOR I=1 TO 3\r20 PRINT I\r30 NEXT\rrun\r' | \
       ../p8xemu -l 90000000 -c bas.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0')
 fail() { echo "BASIC-DISK TEST: FAIL — $1"; echo "$out"; exit 1; }
 echo "$out" | grep -q 'P8X BASIC' || fail "BASIC did not boot from disk"

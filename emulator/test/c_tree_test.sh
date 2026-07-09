@@ -21,9 +21,9 @@ build_disk() {   # $1 = py|host
     rm -f tr.img
     python3 $ROOT/tools/p8xfs.py create tr.img >/dev/null
     python3 $ROOT/tools/p8xfs.py boot   tr.img osc.bin >/dev/null
-    python3 $ROOT/tools/p8xfs.py mkdir  tr.img /BIN >/dev/null
+    python3 $ROOT/tools/p8xfs.py mkdir  tr.img /bin >/dev/null
     python3 $ROOT/tools/p8xfs.py mkdir  tr.img /SUB >/dev/null
-    python3 $ROOT/tools/p8xfs.py put tr.img tree.bin --name /BIN/TREE.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put tr.img tree.bin --name /bin/tree.bin --load 0x7A00 --exec 0x7A00 >/dev/null
     printf 'z' > tr_z.dat
     python3 $ROOT/tools/p8xfs.py put tr.img tr_z.dat --name /SUB/F.TXT --load 0 --exec 0 >/dev/null
 }
@@ -31,10 +31,10 @@ build_disk() {   # $1 = py|host
 R() { printf "B\r$1\r" | ../p8xemu -l 400000000 -c tr.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r'; }
 
 check() {   # $1 = label
-    out=$(R 'RUN /BIN/TREE.BIN')
+    out=$(R 'run /bin/tree.bin')
     echo "$out" | grep -qx 'SUB/'    || fail "$1: tree missing SUB/"
     echo "$out" | grep -qx '  F.TXT' || fail "$1: tree missing indented F.TXT"
-    R 'RUN /BIN/TREE.BIN -h' | grep -qi usage || fail "$1: tree -h"
+    R 'run /bin/tree.bin -h' | grep -qi usage || fail "$1: tree -h"
 }
 
 if command -v cc >/dev/null 2>&1; then

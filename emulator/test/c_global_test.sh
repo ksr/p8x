@@ -32,9 +32,9 @@ python3 $ROOT/assembler/p8xasm.py cglob.asm -o cglob.bin --base 0x7A00 >/dev/nul
 rm -f cg.img
 python3 $ROOT/tools/p8xfs.py create cg.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   cg.img osc.bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    cg.img cglob.bin --name CG.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    cg.img cglob.bin --name CG.bin --load 0x7A00 --exec 0x7A00 >/dev/null
 
-out=$(printf 'B\rRUN CG.BIN\r' | ../p8xemu -l 120000000 -c cg.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r')
+out=$(printf 'B\rrun CG.bin\r' | ../p8xemu -l 120000000 -c cg.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r')
 fail() { echo "C-GLOBAL TEST: FAIL — $1"; echo "$out" | sed -n '/RUN CG/,$p'; exit 1; }
 
 echo "$out" | grep -qx '7HI'  || fail "scalar int / char* string init failed"

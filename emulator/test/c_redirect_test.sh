@@ -1,11 +1,11 @@
 #!/bin/sh
-# Shell output redirection for RUN programs: `RUN PROG >FILE` streams a program's
+# Shell output redirection for run programs: `run PROG >FILE` streams a program's
 # stdout to a file instead of the console.  putchar/puts now go through the OS
-# (SYS_PUTC -> OUTCH); OUTCH gains a file-stream mode (REDIRF=2) and DORUN binds
+# (SYS_PUTC -> OUTCH); OUTCH gains a file-stream mode (REDIRF=2) and DOrun binds
 # the program's stdout to the redirect target (FWOPEN before exec, FCLOSE after).
 # Compiled by BOTH p8cc.py and the native p8cc.c.  Two checks per compiler:
-#   RUN /R.BIN          -> console shows ALPHA/BETA (not redirected)
-#   RUN /R.BIN >OUT.TXT -> console silent; OUT.TXT on disk = "ALPHA\nBETA\n"
+#   run /R.bin          -> console shows ALPHA/BETA (not redirected)
+#   run /R.bin >OUT.TXT -> console silent; OUT.TXT on disk = "ALPHA\nBETA\n"
 # NB the write stream and directory iteration default to the same BIOS sector
 # buffer SBUF; a program that does both (DIR) calls FSDIRBUF ($0145) to move
 # iteration onto its own buffer, so it can stream output while iterating (see
@@ -34,19 +34,19 @@ check() {   # $1 = label, $2 = asm file
     rm -f r.img
     python3 $ROOT/tools/p8xfs.py create r.img >/dev/null
     python3 $ROOT/tools/p8xfs.py boot   r.img osc.bin >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    r.img r.bin --name R.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    r.img r.bin --name R.bin --load 0x7A00 --exec 0x7A00 >/dev/null
     python3 $ROOT/tools/p8xfs.py mkdir  r.img /SUB >/dev/null
     # console run (not redirected): output must appear on the console
-    con=$(printf 'B\rRUN /R.BIN\r' | ../p8xemu -l 90000000 -c r.img eeprom.bin 2>/dev/null \
-        | LC_ALL=C tr -d '\0\r' | sed -n '/RUN \/R.BIN/,$p' | grep -v 'RUN /R.BIN' | grep -vE '^[0-9]:' | tr -dc 'A-Z')
+    con=$(printf 'B\rrun /R.bin\r' | ../p8xemu -l 90000000 -c r.img eeprom.bin 2>/dev/null \
+        | LC_ALL=C tr -d '\0\r' | sed -n '/run \/R.bin/,$p' | grep -v 'run /R.bin' | grep -vE '^[0-9]:' | tr -dc 'A-Z')
     [ "$con" = "ALPHABETA" ] || fail "$1: console output '$con' != 'ALPHABETA'"
     # redirected run: capture to OUT.TXT, then read it back from the image
-    printf 'B\rRUN /R.BIN >OUT.TXT\r' | ../p8xemu -l 90000000 -c r.img eeprom.bin 2>/dev/null >/dev/null
+    printf 'B\rrun /R.bin >OUT.TXT\r' | ../p8xemu -l 90000000 -c r.img eeprom.bin 2>/dev/null >/dev/null
     python3 $ROOT/tools/p8xfs.py get r.img OUT.TXT --out out.txt >/dev/null 2>&1 || fail "$1: OUT.TXT not created"
     got=$(tr -dc 'A-Z' < out.txt)
     [ "$got" = "ALPHABETA" ] || fail "$1: redirected file '$got' != 'ALPHABETA'"
     # redirect honours the CWD: from /SUB, the file must land in /SUB, not root
-    printf 'B\rCD /SUB\rRUN /R.BIN >S.TXT\r' | ../p8xemu -l 90000000 -c r.img eeprom.bin 2>/dev/null >/dev/null
+    printf 'B\rcd /SUB\rrun /R.bin >S.TXT\r' | ../p8xemu -l 90000000 -c r.img eeprom.bin 2>/dev/null >/dev/null
     python3 $ROOT/tools/p8xfs.py ls r.img /SUB 2>&1 | grep -qi 'S.TXT' \
         || fail "$1: redirect from /SUB did not write into the CWD"
     if python3 $ROOT/tools/p8xfs.py ls r.img / 2>&1 | grep -qi 'S.TXT'; then

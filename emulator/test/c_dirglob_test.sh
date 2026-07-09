@@ -21,8 +21,8 @@ build_disk() {   # $1 = py|host
     rm -f dg.img
     python3 $ROOT/tools/p8xfs.py create dg.img --v2 >/dev/null
     python3 $ROOT/tools/p8xfs.py boot   dg.img dgos.bin >/dev/null
-    python3 $ROOT/tools/p8xfs.py mkdir  dg.img /BIN >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    dg.img dg.bin --name /BIN/DIR.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
+    python3 $ROOT/tools/p8xfs.py mkdir  dg.img /bin >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    dg.img dg.bin --name /bin/dir.bin --load 0x7A00 --exec 0x7A00 >/dev/null
     printf x > dgf
     for n in A.ASM B.ASM C.TXT READ.ME; do
         python3 $ROOT/tools/p8xfs.py put dg.img dgf --name /$n >/dev/null
@@ -40,25 +40,25 @@ R() { printf "B\r$1\r" | ../p8xemu -l 250000000 -c dg.img eeprom.bin 2>/dev/null
 check() {   # $1 = compiler tag
     # DIR lines are "<size>  NAME" (dirs get a '/' suffix), so match a file as
     # ' NAME$' and the BIN directory as ' BIN/$'.
-    out=$(R 'DIR *.ASM')
+    out=$(R 'dir *.ASM')
     echo "$out" | grep -qE ' A\.ASM$' && echo "$out" | grep -qE ' B\.ASM$' || fail "$1: *.ASM missed A/B.ASM"
     echo "$out" | grep -qE ' C\.TXT$' && fail "$1: *.ASM wrongly matched C.TXT"
-    echo "$out" | grep -qE ' BIN/$'   && fail "$1: *.ASM wrongly matched BIN"
+    echo "$out" | grep -qE ' bin/$'   && fail "$1: *.ASM wrongly matched BIN"
     # case-insensitive
-    R 'DIR *.asm' | grep -qE ' A\.ASM$' || fail "$1: lowercase *.asm did not match"
+    R 'dir *.asm' | grep -qE ' A\.ASM$' || fail "$1: lowercase *.asm did not match"
     # glob within another directory
-    R 'DIR /BIN/*.BIN' | grep -qE ' DIR\.BIN$' || fail "$1: /BIN/*.BIN missed DIR.BIN"
+    R 'dir /bin/*.bin' | grep -qE ' dir\.bin$' || fail "$1: /bin/*.bin missed dir.bin"
     # '?' = exactly one char: ?.ASM matches A.ASM, not READ.ME
-    out=$(R 'DIR ?.ASM')
+    out=$(R 'dir ?.ASM')
     echo "$out" | grep -qE ' A\.ASM$' || fail "$1: ?.ASM missed A.ASM"
     # -R applies the filter at every level (D.ASM lives in /SUB, indented)
-    out=$(R 'DIR -R *.ASM')
+    out=$(R 'dir -R *.ASM')
     echo "$out" | grep -qE ' A\.ASM$'  || fail "$1: -R *.ASM missed A.ASM"
     echo "$out" | grep -q  'D.ASM'     || fail "$1: -R *.ASM missed nested D.ASM"
     echo "$out" | grep -qE ' C\.TXT$'  && fail "$1: -R *.ASM wrongly matched C.TXT"
     # no glob: plain listing unchanged (lists everything; dirs get a '/' suffix)
-    out=$(R 'DIR')
-    echo "$out" | grep -qE ' A\.ASM$' && echo "$out" | grep -qE ' C\.TXT$' && echo "$out" | grep -qE ' BIN/$' \
+    out=$(R 'dir')
+    echo "$out" | grep -qE ' A\.ASM$' && echo "$out" | grep -qE ' C\.TXT$' && echo "$out" | grep -qE ' bin/$' \
         || fail "$1: plain DIR regressed"
     echo "C-DIRGLOB ($1): ok"
 }

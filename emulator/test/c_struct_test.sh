@@ -42,9 +42,9 @@ python3 $ROOT/assembler/p8xasm.py cstruct.asm -o cstruct.bin --base 0x7A00 >/dev
 rm -f cs.img
 python3 $ROOT/tools/p8xfs.py create cs.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   cs.img osc.bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    cs.img cstruct.bin --name CS.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    cs.img cstruct.bin --name CS.bin --load 0x7A00 --exec 0x7A00 >/dev/null
 
-out=$(printf 'B\rRUN CS.BIN\r' | ../p8xemu -l 120000000 -c cs.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r')
+out=$(printf 'B\rrun CS.bin\r' | ../p8xemu -l 120000000 -c cs.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r')
 fail() { echo "C-STRUCT TEST: FAIL — $1"; echo "$out" | sed -n '/RUN CS/,$p'; exit 1; }
 
 echo "$out" | grep -qx '796A' || fail "struct/union member access output not '796A'"

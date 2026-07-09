@@ -373,8 +373,7 @@ SN_CP:  LDA  (P2)
         LDB  #' '
         CMP
         JZ   SN_SET
-        LDA  (P2)
-        JSR  UPCASE
+        LDA  (P2)               ; filename copied as typed (case-sensitive FS)
         STA  (P1)+
         INP2
         LDA  TMP

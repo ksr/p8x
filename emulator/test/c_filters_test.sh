@@ -27,10 +27,10 @@ build_disk() {   # compile wc/grep/cat with $1 (py|host), build a disk
     rm -f flt.img
     python3 $ROOT/tools/p8xfs.py create flt.img >/dev/null
     python3 $ROOT/tools/p8xfs.py boot   flt.img osc.bin >/dev/null
-    python3 $ROOT/tools/p8xfs.py mkdir  flt.img /BIN >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    flt.img wc.bin   --name /BIN/WC.BIN   --load 0x7A00 --exec 0x7A00 >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    flt.img grep.bin --name /BIN/GREP.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    flt.img cat.bin  --name /BIN/CAT.BIN  --load 0x7A00 --exec 0x7A00 >/dev/null
+    python3 $ROOT/tools/p8xfs.py mkdir  flt.img /bin >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    flt.img wc.bin   --name /bin/wc.bin   --load 0x7A00 --exec 0x7A00 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    flt.img grep.bin --name /bin/grep.bin --load 0x7A00 --exec 0x7A00 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    flt.img cat.bin  --name /bin/cat.bin  --load 0x7A00 --exec 0x7A00 >/dev/null
     printf 'alpha\r\nbeta\r\ngamma alpha\r\n' > tf.dat
     python3 $ROOT/tools/p8xfs.py put    flt.img tf.dat --name T.TXT --load 0 --exec 0 >/dev/null
     # two .LOG files for the glob tests (read as one concatenated stream):
@@ -48,52 +48,52 @@ build_disk() {   # compile wc/grep/cat with $1 (py|host), build a disk
 R() { printf "B\r$1\r" | ../p8xemu -l 300000000 -c flt.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r'; }
 
 check() {   # $1 = label
-    R 'WC <T.TXT' | grep -qx '3 4 26' || fail "$1: wc count != '3 4 26'"
+    R 'wc <T.TXT' | grep -qx '3 4 26' || fail "$1: wc count != '3 4 26'"
     # literal substring: lines containing 'alpha', not 'beta'
-    out=$(R 'GREP alpha <T.TXT')
+    out=$(R 'grep alpha <T.TXT')
     echo "$out" | grep -qx 'alpha'       || fail "$1: grep missed 'alpha'"
     echo "$out" | grep -qx 'gamma alpha' || fail "$1: grep missed 'gamma alpha'"
     echo "$out" | grep -qx 'beta'        && fail "$1: grep wrongly printed 'beta'"
     # regex: ^ anchors start (only the line beginning with 'beta')
-    out=$(R 'GREP ^beta <T.TXT')
+    out=$(R 'grep ^beta <T.TXT')
     echo "$out" | grep -qx 'beta'        || fail "$1: grep ^beta missed 'beta'"
     echo "$out" | grep -qx 'alpha'       && fail "$1: grep ^beta wrongly matched 'alpha'"
     # regex: '.' any char — al.ha matches both alpha lines, not beta
-    out=$(R 'GREP al.ha <T.TXT')
+    out=$(R 'grep al.ha <T.TXT')
     echo "$out" | grep -qx 'alpha'       || fail "$1: grep 'al.ha' missed 'alpha'"
     echo "$out" | grep -qx 'gamma alpha' || fail "$1: grep 'al.ha' missed 'gamma alpha'"
     echo "$out" | grep -qx 'beta'        && fail "$1: grep 'al.ha' wrongly matched 'beta'"
     # regex: '*' — 'g.*a' matches 'gamma alpha' (g … a), not the others
-    out=$(R 'GREP g.*a <T.TXT')
+    out=$(R 'grep g.*a <T.TXT')
     echo "$out" | grep -qx 'gamma alpha' || fail "$1: grep 'g.*a' missed 'gamma alpha'"
     echo "$out" | grep -qx 'beta'        && fail "$1: grep 'g.*a' wrongly matched 'beta'"
     # + (one or more): 'mm+' needs a double-m -> only 'gamma alpha'
-    out=$(R 'GREP mm+ <T.TXT')
+    out=$(R 'grep mm+ <T.TXT')
     echo "$out" | grep -qx 'gamma alpha' || fail "$1: grep 'mm+' missed 'gamma alpha'"
     echo "$out" | grep -qx 'alpha'       && fail "$1: grep 'mm+' wrongly matched 'alpha'"
     # ? (zero or one): 'be?ta' matches 'beta', not 'alpha'
-    out=$(R 'GREP be?ta <T.TXT')
+    out=$(R 'grep be?ta <T.TXT')
     echo "$out" | grep -qx 'beta'        || fail "$1: grep 'be?ta' missed 'beta'"
     echo "$out" | grep -qx 'alpha'       && fail "$1: grep 'be?ta' wrongly matched 'alpha'"
     # grep with a FILE ARGUMENT (like cat) instead of stdin
-    out=$(R 'GREP ^beta T.TXT')
+    out=$(R 'grep ^beta T.TXT')
     echo "$out" | grep -qx 'beta'        || fail "$1: grep <regex> <file> missed 'beta'"
     echo "$out" | grep -qx 'alpha'       && fail "$1: grep file-arg wrongly matched 'alpha'"
-    R 'GREP x NOPE.TXT' | grep -qi 'not found' || fail "$1: grep missing-file not reported"
+    R 'grep x NOPE.TXT' | grep -qi 'not found' || fail "$1: grep missing-file not reported"
     # pipes: cat | grep, cat | wc
-    R 'CAT T.TXT | GREP beta' | grep -qx 'beta'   || fail "$1: cat | grep pipe"
-    R 'CAT T.TXT | RUN /BIN/WC.BIN' | grep -qx '3 4 26' || fail "$1: cat | wc pipe"
+    R 'cat T.TXT | grep beta' | grep -qx 'beta'   || fail "$1: cat | grep pipe"
+    R 'cat T.TXT | run /bin/wc.bin' | grep -qx '3 4 26' || fail "$1: cat | wc pipe"
     # glob: a `*`/`?` arg is read as ONE concatenated stream over all matches
-    R 'WC *.LOG' | grep -qx '3 4 22' || fail "$1: WC *.LOG combined count (concatenated)"
-    R 'GREP key *.LOG' | grep -qx 'green key' || fail "$1: GREP over *.LOG glob"
+    R 'wc *.LOG' | grep -qx '3 4 22' || fail "$1: WC *.LOG combined count (concatenated)"
+    R 'grep key *.LOG' | grep -qx 'green key' || fail "$1: GREP over *.LOG glob"
     # recursive content search: -r walks the CWD tree and prints "path:line"
-    out=$(R 'GREP -r alpha')
+    out=$(R 'grep -r alpha')
     echo "$out" | grep -qx '/T.TXT:alpha'        || fail "$1: GREP -r missed /T.TXT:alpha"
     echo "$out" | grep -qx '/T.TXT:gamma alpha'  || fail "$1: GREP -r missed /T.TXT:gamma alpha"
     echo "$out" | grep -qx '/DOCS/D.TXT:alpha doc' || fail "$1: GREP -r missed subdir /DOCS/D.TXT"
     echo "$out" | grep -q  'plain line'          && fail "$1: GREP -r wrongly matched a non-matching line"
-    R 'WC -h'   | grep -qi usage || fail "$1: wc -h"
-    R 'GREP -h' | grep -qi usage || fail "$1: grep -h"
+    R 'wc -h'   | grep -qi usage || fail "$1: wc -h"
+    R 'grep -h' | grep -qi usage || fail "$1: grep -h"
 }
 
 if command -v cc >/dev/null 2>&1; then

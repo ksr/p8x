@@ -16,17 +16,17 @@ python3 $ROOT/tools/clib.py $ROOT/os/commands/vi.c -o vi.pp.c
 python3 $ROOT/compiler/p8cc.py vi.pp.c -o vi.asm >/dev/null
 python3 $ROOT/assembler/p8xasm.py vi.asm -o vi.bin --base 0x7A00 >/dev/null
 
-mkdisk() {   # fresh disk with /BIN/VI.BIN and a two-line T.TXT
+mkdisk() {   # fresh disk with /bin/vi.bin and a two-line T.TXT
     rm -f vi.img
     python3 $ROOT/tools/p8xfs.py create vi.img >/dev/null
     python3 $ROOT/tools/p8xfs.py boot   vi.img osc.bin >/dev/null
-    python3 $ROOT/tools/p8xfs.py mkdir  vi.img /BIN >/dev/null
-    python3 $ROOT/tools/p8xfs.py put vi.img vi.bin --name /BIN/VI.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
+    python3 $ROOT/tools/p8xfs.py mkdir  vi.img /bin >/dev/null
+    python3 $ROOT/tools/p8xfs.py put vi.img vi.bin --name /bin/vi.bin --load 0x7A00 --exec 0x7A00 >/dev/null
     printf 'hello\r\nworld\r\n' > vt.dat
     python3 $ROOT/tools/p8xfs.py put vi.img vt.dat --name /T.TXT --load 0 --exec 0 >/dev/null
 }
 edit() {   # $1 = keystrokes after opening $2 ; runs vi headlessly
-    printf "B\rRUN /BIN/VI.BIN $2\r$1" | ../p8xemu -l 200000000 -c vi.img eeprom.bin >/dev/null 2>&1
+    printf "B\rrun /bin/vi.bin $2\r$1" | ../p8xemu -l 200000000 -c vi.img eeprom.bin >/dev/null 2>&1
 }
 getf() { python3 $ROOT/tools/p8xfs.py get vi.img "$1" --out vg.out >/dev/null 2>&1; }
 

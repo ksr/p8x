@@ -1281,8 +1281,7 @@ WC_CP:  LDA  (P2)
         JZ   WC_DONE
         LDA  DIG
         JZ   WC_DONE
-        LDA  (P2)
-        JSR  UPCASE
+        LDA  (P2)               ; filename copied as typed (case-sensitive FS)
         STA  (P1)+
         INP2
         LDA  DIG

@@ -26,20 +26,20 @@ python3 $ROOT/assembler/p8xasm.py apcat.asm -o apcat.bin --base 0x7A00 >/dev/nul
 rm -f ap.img
 python3 $ROOT/tools/p8xfs.py create ap.img --v2 >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   ap.img apos.bin >/dev/null
-python3 $ROOT/tools/p8xfs.py mkdir  ap.img /BIN >/dev/null
-python3 $ROOT/tools/p8xfs.py put    ap.img apcat.bin --name /BIN/CAT.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py mkdir  ap.img /bin >/dev/null
+python3 $ROOT/tools/p8xfs.py put    ap.img apcat.bin --name /bin/cat.bin --load 0x7A00 --exec 0x7A00 >/dev/null
 printf 'oneline\n' > apin.dat
 python3 $ROOT/tools/p8xfs.py put    ap.img apin.dat --name /IN.TXT >/dev/null
 
 # On-target: cat > then >> (program path); < + >> combo twice; >> to a new file;
 # >> inside a subdir; HELP >> (built-in capture path).
-printf 'B\rCAT >F.TXT\rAAAA\r\004CAT >>F.TXT\rBBBB\r\004CAT <IN.TXT >>LOG.TXT\rCAT <IN.TXT >>LOG.TXT\rCAT >>NEW.TXT\rzz\r\004MKDIR /S\rCD /S\rCAT >>A\rp\r\004CAT >>A\rq\r\004CD /\rFSCK\r' \
+printf 'B\rcat >F.TXT\rAAAA\r\004cat >>F.TXT\rBBBB\r\004cat <IN.TXT >>LOG.TXT\rcat <IN.TXT >>LOG.TXT\rcat >>NEW.TXT\rzz\r\004mkdir /S\rcd /S\rcat >>A\rp\r\004cat >>A\rq\r\004cd /\rfsck\r' \
   | ../p8xemu -l 700000000 -c ap.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r' | grep -q 'FSCK OK' \
   || fail "on-target FSCK flagged the volume after the appends"
 
 # Built-in capture path: HELP > then HELP >> doubles the file.
-printf 'B\rHELP >H.TXT\rHELP >>H.TXT\r' | ../p8xemu -l 300000000 -c ap.img eeprom.bin 2>/dev/null >/dev/null
-printf 'B\rHELP >H1.TXT\r'             | ../p8xemu -l 300000000 -c ap.img eeprom.bin 2>/dev/null >/dev/null
+printf 'B\rhelp >H.TXT\rhelp >>H.TXT\r' | ../p8xemu -l 300000000 -c ap.img eeprom.bin 2>/dev/null >/dev/null
+printf 'B\rhelp >H1.TXT\r'             | ../p8xemu -l 300000000 -c ap.img eeprom.bin 2>/dev/null >/dev/null
 
 # --- host-side content checks ---
 chk() { python3 $ROOT/tools/p8xfs.py get ap.img "$1" --out ap.tmp >/dev/null 2>&1 || fail "get $1 failed"; tr -d '\r' < ap.tmp; }

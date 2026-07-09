@@ -1,9 +1,9 @@
 #!/bin/sh
 # PATH command: view/set the program search path used by implicit RUN.
-#   PATH            -> prints the current PATH (default "/BIN")
+#   PATH            -> prints the current PATH (default "/bin")
 #   PATH /UTIL      -> sets it; a bare command name is then found in /UTIL
-#   PATH /BIN;/UTIL -> multiple ';'-separated dirs are all searched
-# A program GREET.BIN is placed in /UTIL (NOT /BIN), so it is only runnable by
+#   PATH /bin;/UTIL -> multiple ';'-separated dirs are all searched
+# A program GREET.bin is placed in /UTIL (NOT /bin), so it is only runnable by
 # bare name once PATH includes /UTIL.
 set -e
 cd "$(dirname "$0")"
@@ -26,19 +26,19 @@ rm -f pc.img
 python3 $ROOT/tools/p8xfs.py create pc.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   pc.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  pc.img /UTIL >/dev/null
-python3 $ROOT/tools/p8xfs.py put    pc.img greetp.bin --name /UTIL/GREET.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    pc.img greetp.bin --name /UTIL/greet.bin --load 0x7A00 --exec 0x7A00 >/dev/null
 
 run() { printf "B\r$1\r" | ../p8xemu -l 200000000 -c pc.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r'; }
 
-# default PATH prints /BIN
-run 'PATH' | grep -qx '/BIN' || fail "PATH (no arg) did not print /BIN"
-# GREET is in /UTIL, not /BIN -> bare GREET is unknown under the default PATH
-if run 'GREET' | grep -q 'HIYA'; then fail "GREET ran under default PATH (should not)"; fi
+# default PATH prints /bin
+run 'path' | grep -qx '/bin' || fail "PATH (no arg) did not print /bin"
+# GREET is in /UTIL, not /bin -> bare GREET is unknown under the default PATH
+if run 'greet' | grep -q 'HIYA'; then fail "GREET ran under default PATH (should not)"; fi
 # set PATH to /UTIL, then bare GREET resolves and prints HIYA
-run 'PATH /UTIL\rGREET'        | grep -q 'HIYA' || fail "GREET not found after PATH /UTIL"
+run 'path /UTIL\rgreet'        | grep -q 'HIYA' || fail "GREET not found after PATH /UTIL"
 # and PATH now prints the new value
-run 'PATH /UTIL\rPATH'         | grep -qx '/UTIL' || fail "PATH did not update to /UTIL"
+run 'path /UTIL\rpath'         | grep -qx '/UTIL' || fail "PATH did not update to /UTIL"
 # multiple ';'-separated entries are searched
-run 'PATH /BIN;/UTIL\rGREET'   | grep -q 'HIYA' || fail "multi-entry PATH search failed"
+run 'path /bin;/UTIL\rgreet'   | grep -q 'HIYA' || fail "multi-entry PATH search failed"
 
 echo "OS-PATHCMD TEST: PASS"

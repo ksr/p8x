@@ -814,7 +814,7 @@ RS_SAVE:TPA2L
         TPA2H
         STA  RPATH+1
 ; --- mount redirect ---------------------------------------------------------
-; A leading component "D1" (delimited by '/' or end-of-string) is the mount
+; A leading component "d1" (delimited by '/' or end-of-string) is the mount
 ; point for the second CF: route sector I/O to drive 1 and strip the component,
 ; so the remainder resolves from drive 1's root. Any other first component (incl.
 ; a longer name like "D1FOO") resolves on drive 0. This is the ONE place drive
@@ -824,8 +824,8 @@ RS_SAVE:TPA2L
         TAP2L
         LDA  RPATH+1
         TAP2H
-        LDA  (P2)           ; [0] == 'D' ?
-        LDB  #'D'
+        LDA  (P2)           ; [0] == 'd' ?
+        LDB  #'d'
         CMP
         JNZ  RS_MNT0
         INP2
@@ -834,12 +834,12 @@ RS_SAVE:TPA2L
         CMP
         JNZ  RS_MNT0
         INP2
-        LDA  (P2)           ; [2] == NUL -> bare "/D1" (the mount root)
+        LDA  (P2)           ; [2] == NUL -> bare "/d1" (the mount root)
         JZ   RS_MNT1
-        LDB  #'/'           ; [2] == '/' -> "/D1/..." (into drive 1)
+        LDB  #'/'           ; [2] == '/' -> "/d1/..." (into drive 1)
         CMP
         JNZ  RS_MNT0
-        INP2                ; consume the '/' after "D1"
+        INP2                ; consume the '/' after "d1"
 RS_MNT1:TPA2L               ; commit: RPATH advanced past "D1[/]"
         STA  RPATH
         TPA2H

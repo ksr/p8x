@@ -1,13 +1,13 @@
-# commands-asm — hand-coded assembler versions of the /BIN commands
+# commands-asm — hand-coded assembler versions of the /bin commands
 
-An experiment (branch `commands-asm`): rewrite the C `/BIN` commands
+An experiment (branch `commands-asm`): rewrite the C `/bin` commands
 (`os/commands/*.c`, compiled by `p8cc`) as **hand-written P8X assembler**, to
 measure how much smaller carefully hand-coded asm is than the current `p8cc`
 codegen. This is the concrete data behind the backlog's "ASM vs C commands"
 question and the p8cc codegen-size concern (grep/sed/vi live at the 64 K TPA
 ceiling because of code size).
 
-Each `NAME.asm` here is a drop-in replacement for `/BIN/NAME.BIN`: same entry
+Each `NAME.asm` here is a drop-in replacement for `/bin/name.bin`: same entry
 (`$7A00`), same argument ABI (`P2` = arg-tail pointer), same OS/BIOS calls, so it
 must produce **byte-identical behavior** to the C version — verified in the
 emulator, not just assumed.
@@ -67,7 +67,7 @@ counts its include, so the comparison is apples-to-apples.)
 
 ## Takeaways
 
-All 18 `/BIN` commands are ported and verified **byte-identical** to their p8cc
+All 18 `/bin` commands are ported and verified **byte-identical** to their p8cc
 twin by `verify.sh` (diff of emulator transcripts) — so the sizes compare
 equivalent behavior, not a cut-down reimplementation. The overall win is **2.4×**
 (284 KB → 120 KB), but it splits cleanly by what a command's binary is *made of*:

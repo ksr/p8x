@@ -24,9 +24,9 @@ build_disk() {   # $1 = py|host
     rm -f fd.img
     python3 $ROOT/tools/p8xfs.py create fd.img >/dev/null
     python3 $ROOT/tools/p8xfs.py boot   fd.img osc.bin >/dev/null
-    python3 $ROOT/tools/p8xfs.py mkdir  fd.img /BIN >/dev/null
-    python3 $ROOT/tools/p8xfs.py put fd.img find.bin --name /BIN/FIND.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
-    python3 $ROOT/tools/p8xfs.py put fd.img diff.bin --name /BIN/DIFF.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
+    python3 $ROOT/tools/p8xfs.py mkdir  fd.img /bin >/dev/null
+    python3 $ROOT/tools/p8xfs.py put fd.img find.bin --name /bin/find.bin --load 0x7A00 --exec 0x7A00 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put fd.img diff.bin --name /bin/diff.bin --load 0x7A00 --exec 0x7A00 >/dev/null
     # a small tree for find: /A.TXT, /SUB/B.TXT, /SUB/DEEP/C.TXT
     python3 $ROOT/tools/p8xfs.py mkdir fd.img /SUB >/dev/null
     python3 $ROOT/tools/p8xfs.py mkdir fd.img /SUB/DEEP >/dev/null
@@ -46,26 +46,26 @@ build_disk() {   # $1 = py|host
 R() { printf "B\r$1\r" | ../p8xemu -l 500000000 -c fd.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r'; }
 
 check() {   # $1 = label
-    out=$(R 'FIND .TXT')
+    out=$(R 'find .TXT')
     echo "$out" | grep -qx '/A.TXT'          || fail "$1: find missed /A.TXT"
     echo "$out" | grep -qx '/SUB/B.TXT'      || fail "$1: find missed /SUB/B.TXT"
     echo "$out" | grep -qx '/SUB/DEEP/C.TXT' || fail "$1: find missed nested /SUB/DEEP/C.TXT"
-    R 'FIND DEEP' | grep -qx '/SUB/DEEP'     || fail "$1: find missed the /SUB/DEEP directory"
+    R 'find DEEP' | grep -qx '/SUB/DEEP'     || fail "$1: find missed the /SUB/DEEP directory"
     # glob mode (pattern has * or ?): *.TXT matches the files, not the dirs
-    out=$(R 'FIND *.TXT')
+    out=$(R 'find *.TXT')
     echo "$out" | grep -qx '/A.TXT'          || fail "$1: find *.TXT missed /A.TXT"
     echo "$out" | grep -qx '/SUB/DEEP/C.TXT' || fail "$1: find *.TXT missed nested C.TXT"
     echo "$out" | grep -qx '/SUB/DEEP'       && fail "$1: find *.TXT wrongly matched the DEEP dir"
     # 'B*' is a GLOB (name starts with B), not the literal substring "B*"
-    R 'FIND B*' | grep -qx '/SUB/B.TXT'      || fail "$1: find B* (glob) missed /SUB/B.TXT"
+    R 'find B*' | grep -qx '/SUB/B.TXT'      || fail "$1: find B* (glob) missed /SUB/B.TXT"
     # diff: changed middle line
-    out=$(R 'DIFF A1.TXT B1.TXT')
+    out=$(R 'diff A1.TXT B1.TXT')
     echo "$out" | grep -qx '< two' || fail "$1: diff missing '< two'"
     echo "$out" | grep -qx '> TWO' || fail "$1: diff missing '> TWO'"
     # diff identical -> no < / > lines
-    if R 'DIFF A1.TXT C1.TXT' | grep -qE '^[<>] '; then fail "$1: diff of identical files printed a diff"; fi
-    R 'FIND -h' | grep -qi usage || fail "$1: find -h"
-    R 'DIFF -h' | grep -qi usage || fail "$1: diff -h"
+    if R 'diff A1.TXT C1.TXT' | grep -qE '^[<>] '; then fail "$1: diff of identical files printed a diff"; fi
+    R 'find -h' | grep -qi usage || fail "$1: find -h"
+    R 'diff -h' | grep -qi usage || fail "$1: diff -h"
 }
 
 if command -v cc >/dev/null 2>&1; then

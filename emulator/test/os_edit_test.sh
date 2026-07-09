@@ -15,7 +15,7 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/apps/p8xedit.asm -o edit.bin --base 0x7A
 rm -f ed.img
 python3 $ROOT/tools/p8xfs.py create ed.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   ed.img ose.bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    ed.img edit.bin --name EDIT.BIN --load 0x7A00 --exec 0x7A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    ed.img edit.bin --name edit.bin --load 0x7A00 --exec 0x7A00 >/dev/null
 
 # Boot OS; build FOO.ASM, exercising append/insert/delete, save, quit; then
 # reopen and confirm the edited content round-trips from disk.
@@ -23,14 +23,14 @@ python3 $ROOT/tools/p8xfs.py put    ed.img edit.bin --name EDIT.BIN --load 0x7A0
 #   I 1: "; HEADER"   ->  1 ; HEADER 2 LDA #1 3 HLT
 #   D 2 (LDA #1)      ->  1 ; HEADER 2 HLT
 script='B\r'
-script="${script}RUN EDIT.BIN FOO.ASM\r"   # open new file
+script="${script}run edit.bin FOO.ASM\r"   # open new file
 script="${script}A\r; HDR placeholder\r.\r" # (dummy first append, replaced below)
 script="${script}D 1\r"                      # remove placeholder -> empty
 script="${script}A\rLDA #1\rHLT\r.\r"        # append two lines
 script="${script}I 1\r; HEADER\r.\r"         # insert a header before line 1
 script="${script}D 2\r"                      # delete the LDA #1 line
 script="${script}L\rW\rQ\r"                  # list, write, quit
-script="${script}RUN EDIT.BIN FOO.ASM\r"     # reopen from disk
+script="${script}run edit.bin FOO.ASM\r"     # reopen from disk
 script="${script}L\rQ\r"                     # list, quit
 script="${script}DIR\r"
 

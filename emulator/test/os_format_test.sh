@@ -19,10 +19,10 @@ python3 $ROOT/tools/p8xfs.py boot   fmt.img p8xos.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  fmt.img /OLD >/dev/null
 
 # Boot, FORMAT (confirm Y), MKDIR /NEW, FSCK, then EXIT. DIR is no longer a
-# built-in and a just-FORMATted volume has no /BIN, so we don't type DIR here;
+# built-in and a just-FORMATted volume has no /bin, so we don't type DIR here;
 # the post-format tree (/OLD gone, /NEW present) is checked host-side below with
 # p8xfs.py ls. MKDIR ("DIR CREATED") and FSCK are still native built-ins.
-out=$(printf 'B\rFORMAT\rY\rMKDIR /NEW\rFSCK\rEXIT\r' | \
+out=$(printf 'B\rformat\rY\rmkdir /NEW\rfsck\rexit\r' | \
       ../p8xemu -l 200000000 -c fmt.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r')
 fail() { echo "OS-FORMAT TEST: FAIL — $1"; echo "$out" | sed -n '/v1.0/,$p'; exit 1; }
 

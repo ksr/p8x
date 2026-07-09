@@ -3,7 +3,7 @@
  *
  *     TOUCH NAME              create NAME as an empty file if it is missing
  *     TOUCH A.TXT B.TXT C     several at once
- *     TOUCH /D1/NEW.TXT       absolute / cross-mount paths work
+ *     TOUCH /d1/NEW.TXT       absolute / cross-mount paths work
  *
  * Each name is made absolute (CWD-relative via abspath) and resolved; if the
  * file already exists it is left completely untouched (NOT truncated — that is
