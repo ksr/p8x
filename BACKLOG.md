@@ -668,6 +668,17 @@ Last updated: 2026-07-08
         binary-op `PHW/PLW` (779×) and revisit `__push` (1157×), then the split.
         NOTE: this makes the `os/commands-asm` size scoreboard stale (p8cc builds
         are now smaller) — regenerate it.
+      - **Codegen-shrink step 2 — `__entf` (2026-07-09).** Fold each function's
+        inline frame-alloc into `JSR __entf ; .word localsize`. Only +0.9% (most
+        functions have no locals — params need no frame), total now **−17.2%**
+        (30372 → 25157 lines, ~59 KB). PLATEAU: the remaining bulk is structural —
+        `__push` (1157×, call args) and `PHW/PLW` (779×, binary-op operand stack)
+        resist peephole shrinking, and the front end (lex+parser+symtab, ~70% of
+        the source) would still be ~40 KB after a 2-way split — over the ~32 KB
+        TPA. So fitting needs EITHER a bigger structural rewrite (an accumulator/
+        temp scheme to kill the per-op stack traffic) OR a **3-way split**
+        (lex | parse | codegen, each ~⅓ ≈ 20 KB) through two temp files. Decide
+        the direction before more peephole work — it's low ROI from here.
 - [ ] **Native toolchain follow-ups** (EDIT + ASM landed — see DONE). Remaining
       polish on the on-target assembler/editor, none blocking:
         - **Tools write to the flat root only.** EDIT `W` and ASM output go to

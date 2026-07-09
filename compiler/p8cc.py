@@ -747,12 +747,11 @@ class Gen:
             self.locals[nm] = (loff, base, ptr, count)
         localsize = -loff
         self.emit("_f_%s:" % name)
-        self.need("__enter"); self.emit("        JSR __enter")
-        if localsize:
-            skip = self.lbl("Lfr")
-            self.emit("        LDA __csp", "        LDB #%d" % localsize, "        SUB",
-                      "        STA __csp", "        JC %s" % skip, "        LDA __csp+1",
-                      "        LDB #1", "        SUB", "        STA __csp+1", "%s:" % skip)
+        if localsize:                                    # enter + reserve frame
+            self.need("__entf")
+            self.emit("        JSR __entf", "        .word %d" % (localsize & 0xFFFF))
+        else:                                            # no locals -> plain enter
+            self.need("__enter"); self.emit("        JSR __enter")
         self.gen_stmt(body)
         self.emit("_ret_%s:" % name)
         self.need("__leave"); self.emit("        JSR __leave", "        RTS")
@@ -931,6 +930,26 @@ class Gen:
                         "        TAP1H", "        LDA __fp", "        STA (P1)+",
                         "        LDA __fp+1", "        STA (P1)",
                         "        MOVW __fp,__csp", "        RTS"]
+        # __entf: __enter, then reserve an inline-.word frame of locals (csp -=
+        # size). Folds a function prologue's ~10-instruction inline frame alloc
+        # into `JSR __entf ; .word localsize`. (localsize < 256, as before.)
+        R["__entf"] = ["__entf: PLA", "        TAP1L", "        PLA", "        TAP1H",
+                       "        LDA (P1)+", "        STA __off",
+                       "        LDA (P1)+", "        STA __off+1",
+                       "        TPA1L", "        STA __ra",
+                       "        TPA1H", "        STA __ra+1",
+                       "        LDA __csp", "        LDB #2", "        SUB",
+                       "        STA __csp", "        JC __ef1", "        LDA __csp+1",
+                       "        LDB #1", "        SUB", "        STA __csp+1",
+                       "__ef1:  LDA __csp", "        TAP1L", "        LDA __csp+1",
+                       "        TAP1H", "        LDA __fp", "        STA (P1)+",
+                       "        LDA __fp+1", "        STA (P1)",
+                       "        MOVW __fp,__csp",
+                       "        LDA __csp", "        LDB __off", "        SUB",
+                       "        STA __csp", "        JC __ef2", "        LDA __csp+1",
+                       "        LDB #1", "        SUB", "        STA __csp+1",
+                       "__ef2:  LDA __ra+1", "        PHA", "        LDA __ra", "        PHA",
+                       "        RTS"]
         R["__leave"] = ["__leave: MOVW __csp,__fp",
                         "        LDA __csp", "        TAP1L",
                         "        LDA __csp+1", "        TAP1H", "        LDA (P1)+",
@@ -1045,8 +1064,8 @@ class Gen:
                       "        JMP __shr_l", "__shr_e: RTS"]
         order = ["__add", "__sub", "__mul", "__div", "__mod", "__divmod",
                  "__and", "__or", "__xor", "__shl", "__shr",
-                 "__not", "__eq", "__lt", "__push", "__enter", "__leave", "__lea",
-                 "__ldw", "__ldb", "__stw", "__stb"]
+                 "__not", "__eq", "__lt", "__push", "__enter", "__entf", "__leave",
+                 "__lea", "__ldw", "__ldb", "__stw", "__stb"]
         want = set(self.used)
         if {"__div", "__mod"} & want: want.add("__divmod")
         for h in order:
