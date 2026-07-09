@@ -697,6 +697,21 @@ Last updated: 2026-07-08
         IR) needs an IR text format + a `p8cc.py --ir` reference, then **CG**
         (IR → asm). The parser+symtab is the ~70%-of-source risk; getting it under
         the TPA on its own is the crux of the whole split.
+      - **IR format designed + host-validated (2026-07-09).** The pass-2→pass-3
+        boundary is the **AST** (not a lower three-address IR): cc1 = parse token
+        stream → serialize AST; cg = deserialize AST → the existing codegen (Gen).
+        This keeps the whole type/symbol/struct analysis in ONE pass (cg, mirroring
+        p8cc.py's `Gen`) instead of splitting it. Format: a whitespace-separated
+        pre-order atom stream (`<tag>` + fields; lists = `<count>` + nodes; options
+        = `0` | `1 <node>`; type triple = `<base> <ptr> <count>`, count -1 = infer;
+        byte string = `<len>` + decimal bytes). Added `p8cc.py --ast` (serialize)
+        and `--from-ast` (deserialize → Gen) as the references. PROVEN lossless:
+        `--ast | --from-ast` is **byte-identical** to direct compilation across all
+        23 command sources AND `p8cc.c` itself (85 KB AST). NB p8cc.c is single-pass
+        (emits asm while parsing, no AST), so cc1/cg aren't a mechanical split of it
+        — the AST layer is introduced fresh, following p8cc.py's two-phase shape.
+        NEXT: cc1.c (emit AST, byte-identical to `--ast`), then cg.c (AST → asm,
+        matching `--from-ast`).
 - [ ] **Native toolchain follow-ups** (EDIT + ASM landed — see DONE). Remaining
       polish on the on-target assembler/editor, none blocking:
         - **Tools write to the flat root only.** EDIT `W` and ASM output go to
