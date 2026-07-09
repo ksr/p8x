@@ -3574,6 +3574,10 @@ MHELP:  .byte CR,LF
         .byte CR,LF
         .ascii "FUNCTIONS: ABS(x) RND(n) PEEK(a)"
         .byte CR,LF
+        .ascii "  LEN ASC CHR$ LEFT$ RIGHT$ MID$"
+        .byte CR,LF
+        .ascii "STRINGS: A$ B$ (assign, + concat, compare)"
+        .byte CR,LF
         .ascii "OPERATORS: + - * / %  = <> < > <= >="
         .byte CR,LF,0
 MOK:    .ascii "Ok"
