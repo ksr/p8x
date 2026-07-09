@@ -70,6 +70,7 @@ print a one-line usage summary and exit.
 | [`man.c`](man.c) | `man name [-h]` | Print the manual page for a command: streams `/man/<name>` to stdout (a `cat` with a fixed `/man/` prefix, so it is CWD-independent). Works for both `/bin` commands and OS built-ins; an unknown name prints `no manual entry for NAME`. Pages are plain text authored in [`os/man/`](../man/) and installed to `/man` by `run.sh`. |
 | [`dump.c`](dump.c) | `dump addr [-h]` | Hex-dump 256 bytes from hex `addr` (16 rows of hex + ASCII); a console key pages, `.` exits. Memory-only (`peek` + CONIN). Formerly an OS built-in — moved out of the kernel (it needs no shell/FS state). |
 | [`dep.c`](dep.c) | `dep addr b b ... [-h]` | Deposit hex byte values into memory starting at hex `addr` (`poke`); quiet on success. The counterpart to `dump`. Formerly an OS built-in. Note both live in the TPA at `$7A00`, so don't `dep` over that region. |
+| [`cpp.c`](cpp.c) | `cpp src.c [-h]` | The `//#use` source preprocessor — **pass 1 of the on-target C toolchain**, the native counterpart of host [`clib.py`](../../tools/clib.py). Splices `lib_NAME.c` (recursively, deduped) for each `//#use NAME` and writes the combined source to stdout. Reads stay non-nested (single BIOS read stream) by emitting all libs ahead of the source — compiles identically (p8cc orders by symbol table). Uses `FSDIRBUF` so file-opens don't clobber a redirected write stream. C-only (a compiler pass, no asm twin). |
 
 ### Implementation notes
 

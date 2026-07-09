@@ -642,6 +642,18 @@ Last updated: 2026-07-08
         it (reading via BIOS `FOPEN`/`FGETB`, writing the combined source) becomes
         the on-target `CPP.BIN`. So `clib.py` is a host-era convenience that this
         milestone subsumes, not a throwaway.
+      - **Pass 1 — CPP.BIN DONE (2026-07-09).** `os/commands/cpp.c` (→ `/bin/cpp.bin`)
+        splices `//#use` on-target; its output compiles **byte-identical** to the
+        `clib.py` path (`os_cpp_test`). Single read stream → cpp emits libs ahead
+        of the source (compiles the same; p8cc orders by symbol table) and calls
+        `FSDIRBUF` so file-opens don't clobber a redirected write stream (the SBUF
+        read-scan vs write-partial conflict `cp -r` also hit). C-only (a compiler
+        pass, no asm twin). Sizing reality that shapes the rest: `p8cc.c` compiles
+        to **~72 KB** vs a ~32 KB TPA (~46 B/line), so the front/back split needs
+        the **codegen-shrink first** (frame-relative locals / MOVW) — even the
+        parser alone overflows today. Next: shrink, then the CC1/CG split. KNOWN
+        LIMIT: P8XFS's 12-char names block storing `lib_abspath.c`/`lib_readline.c`
+        on-card for on-target preprocessing (rename or widen FS names).
 - [ ] **Native toolchain follow-ups** (EDIT + ASM landed — see DONE). Remaining
       polish on the on-target assembler/editor, none blocking:
         - **Tools write to the flat root only.** EDIT `W` and ASM output go to

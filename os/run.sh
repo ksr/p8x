@@ -71,6 +71,14 @@ if [ ! -f "$disk" ]; then
         --base 0x7A00 >/dev/null
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/asm.bin" \
         --name /bin/asm.bin --load 0x7A00 --exec 0x7A00 >/dev/null
+    # CPP: the //#use source preprocessor, pass 1 of the on-target C toolchain
+    # (native counterpart of tools/clib.py). C-only — a compiler pass, not a dual
+    # C+asm command, so no /bina twin (like edit/asm are asm-only).
+    python3 "$root/tools/clib.py"    "$root/os/commands/cpp.c" -o "$build/cpp.c"
+    python3 "$root/compiler/p8cc.py" "$build/cpp.c" -o "$build/cpp.asm" >/dev/null
+    python3 "$root/assembler/p8xasm.py" "$build/cpp.asm" -o "$build/cpp.bin" --base 0x7A00 >/dev/null
+    python3 "$root/tools/p8xfs.py" put "$disk" "$build/cpp.bin" \
+        --name /bin/cpp.bin --load 0x7A00 --exec 0x7A00 >/dev/null
     # C-as-OS-commands (compiled with p8cc): demonstrate the OS syscalls, I/O
     # redirection and pipes out of the box. Run by bare name via PATH (/bin),
     # e.g.  dir /bin ,  cat README.TXT ,  cat README.TXT | grep hello | wc ,

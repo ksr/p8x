@@ -1,0 +1,37 @@
+NAME
+    cpp - C source preprocessor (//#use splicer)
+
+SYNOPSIS
+    cpp src.c >out.c
+    cpp src.c | ...
+
+DESCRIPTION
+    Expands the `//#use NAME` directives in a C source and writes the
+    combined source to stdout. Each directive is replaced with the
+    contents of lib_NAME.c from the same directory, recursively (a library
+    may //#use others) and deduplicated, so shared helpers are pulled in
+    by concatenation (p8cc has no #include or linker). A source with no
+    //#use passes through unchanged.
+
+    cpp is pass 1 of the on-target C toolchain — the native counterpart of
+    the host tools/clib.py. Its output feeds the compiler:
+        cpp foo.c >foo.i
+        (then the compiler on foo.i)
+
+    Because the BIOS has a single read stream, cpp emits every library
+    ahead of the source rather than at each directive's exact position;
+    the result compiles identically (p8cc lays functions out by symbol
+    table, and definitions still precede uses).
+
+NOTES
+    Libraries are looked up as lib_NAME.c in the source's directory.
+    P8XFS filenames are at most 12 characters, so libraries whose file
+    name exceeds that (lib_abspath.c, lib_readline.c) cannot yet be stored
+    on the card for on-target preprocessing.
+
+EXAMPLES
+    cpp cat.c >cat.i        splice glob/globx/dirent into cat.c
+    cpp pwd.c >pwd.i        a source with no //#use: passes through
+
+SEE ALSO
+    edit, asm, run
