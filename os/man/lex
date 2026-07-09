@@ -1,0 +1,40 @@
+NAME
+    lex - C tokenizer (source -> token stream)
+
+SYNOPSIS
+    lex src.c >out.tok
+    cpp src.c | ...            (feed a preprocessed source)
+
+DESCRIPTION
+    Reads a C source and writes its token stream to stdout, one token per
+    line. Each line is "<line> <T> <payload>", where T names the token class:
+
+        <n> K int          keyword     (int char void struct union
+                                         if else while for return)
+        <n> I main         identifier
+        <n> N 31           number      (decimal or 0x hex, as a decimal word)
+        <n> S 3 72 105 10  string      (byte count, then each byte)
+        <n> O (            operator    (one- or two-char)
+        <n> E              end of file
+
+    <n> is the 1-based source line. Character literals ('A', '\n') are
+    emitted as N tokens (their byte value). Comments and whitespace are
+    consumed and produce no tokens; only a top-level newline advances the
+    line count (the newlines inside a slash-star block comment do not).
+
+    lex is pass 2 of the on-target C toolchain, the native counterpart of
+    the lexer inside the host compiler (p8cc.py --tokens). The passes chain:
+        cpp foo.c >foo.i        splice //#use libraries
+        lex foo.i >foo.tok      tokenize
+        (then cc1 / cg on foo.tok)
+
+    Streams the source through the BIOS read stream with a one-character
+    pushback, so it needs no whole-file buffer and can tokenize sources far
+    larger than the TPA.
+
+EXAMPLES
+    lex pwd.c >pwd.tok       tokenize a command source
+    cpp cat.c >cat.i         then: lex cat.i >cat.tok
+
+SEE ALSO
+    cpp, asm, run

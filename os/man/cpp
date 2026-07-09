@@ -34,4 +34,4 @@ EXAMPLES
     cpp pwd.c >pwd.i        a source with no //#use: passes through
 
 SEE ALSO
-    edit, asm, run
+    lex, edit, asm, run

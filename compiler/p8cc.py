@@ -1080,9 +1080,32 @@ def compile_src(src):
     return "\n".join(g.code) + "\n"
 
 
+def dump_tokens(src):
+    # The token-stream intermediate (pass 1 -> pass 2 of the split compiler): one
+    # token per line, "<line> <T> <payload>". T is K keyword, I identifier,
+    # N number(decimal), S string(count then decimal bytes), O operator, E eof.
+    # This is the reference format the native LEX pass must reproduce.
+    out = []
+    for (k, v, ln) in lex(src):
+        if k == "kw":    out.append("%d K %s" % (ln, v))
+        elif k == "id":  out.append("%d I %s" % (ln, v))
+        elif k == "num": out.append("%d N %d" % (ln, v & 0xFFFF))
+        elif k == "str": out.append("%d S %d%s" % (ln, len(v),
+                                    "".join(" %d" % b for b in v)))
+        elif k == "op":  out.append("%d O %s" % (ln, v))
+        elif k == "eof": out.append("%d E" % ln)
+    return "\n".join(out) + "\n"
+
+
 def main():
     a = sys.argv[1:]
-    if not a: sys.exit("usage: p8cc.py prog.c [-o out.asm]")
+    if not a: sys.exit("usage: p8cc.py [--tokens] prog.c [-o out]")
+    if "--tokens" in a:                        # emit the token stream, not asm
+        a = [x for x in a if x != "--tokens"]
+        src_path = a[0]; out = a[a.index("-o") + 1] if "-o" in a else None
+        text = dump_tokens(open(src_path).read())
+        (open(out, "w").write(text) if out else sys.stdout.write(text))
+        return
     src_path = a[0]; out = "a.asm"
     if "-o" in a: out = a[a.index("-o") + 1]
     open(out, "w").write(compile_src(open(src_path).read()))

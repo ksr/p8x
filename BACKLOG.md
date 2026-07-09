@@ -679,6 +679,24 @@ Last updated: 2026-07-08
         temp scheme to kill the per-op stack traffic) OR a **3-way split**
         (lex | parse | codegen, each ~⅓ ≈ 20 KB) through two temp files. Decide
         the direction before more peephole work — it's low ROI from here.
+      - **Split direction chosen: 3-way (lex | parse/cc1 | codegen/cg).** The
+        toolchain becomes `cpp | lex | cc1 | cg`, each a `/bin` binary chained
+        through temp files (like early Unix `cpp`/`cc1`/`as`). Temp files carry
+        text formats between passes so each is independently testable against a
+        host reference (`p8cc.py --tokens`, later `--ir`).
+      - **Pass 2 — LEX.BIN DONE (2026-07-09).** `os/commands/lex.c` (→
+        `/bin/lex.bin`, ~10.9 KB) tokenizes a (preprocessed) C source on-target
+        and emits the token stream `<line> <T> <payload>` (T = K/I/N/S/O/E). Its
+        output is **byte-identical** to the new host reference `p8cc.py --tokens`
+        (`dump_tokens`) — verified by `os_lex_test` on a mixed-token source AND a
+        ~1900-token real source. Streams via the BIOS read stream with a one-char
+        pushback (no whole-file buffer). Line counting matches p8cc.py to the
+        letter (only top-level newlines count; block-comment newlines don't). Char
+        literals emit as `N` (byte value); keyword set matches p8cc's lexer.
+        C-only (a compiler pass, no asm twin). NEXT: **CC1** (parse token stream →
+        IR) needs an IR text format + a `p8cc.py --ir` reference, then **CG**
+        (IR → asm). The parser+symtab is the ~70%-of-source risk; getting it under
+        the TPA on its own is the crux of the whole split.
 - [ ] **Native toolchain follow-ups** (EDIT + ASM landed — see DONE). Remaining
       polish on the on-target assembler/editor, none blocking:
         - **Tools write to the flat root only.** EDIT `W` and ASM output go to
