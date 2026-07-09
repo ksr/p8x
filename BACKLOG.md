@@ -1,7 +1,7 @@
 # P8X Project Backlog
 
 Add ideas as they come; move items between sections as they progress.
-Last updated: 2026-06-27
+Last updated: 2026-07-08
 
 ## How to use
 - **NEXT** — committed, in rough priority order
@@ -237,22 +237,12 @@ Last updated: 2026-06-27
       decide alongside the wildcards item: inline a small expander, or use the
       shell-level mechanism if that lands first.
 
-- [ ] **ASM vs C commands — selectively hand-write the heavy `/BIN` utilities.**
-      The C commands are large because `p8cc.c` is a naive code generator (~2.4
-      bytes/asm-line, no register allocation, every value through `__ax`
-      temporaries, array indexing recomputed each access): `sort`/`sed` are ~16.7
-      KB, leaving almost no room under the $FC00 read buffer. Hand-written
-      assembly versions would be a fraction of that (freeing space for features
-      like inlined glob, and running faster), at the cost of readability and of
-      abandoning the "everything in our own C" story these commands also serve as
-      compiler test cases. Candidates to evaluate first: the size-critical filters
-      (`sort`, `sed`, `grep`) and anything that wants glob. Decision criteria:
-      keep C where it doubles as a `p8cc` regression and has size headroom; reach
-      for asm where a command is both size-pressured and stable. (Cross-ref the
-      wildcard item above — an asm rewrite is option 2 there.)
-      **Explicitly wanted (2026-06-26): explore this** — prototype an asm version
-      of one heavy command (e.g. `sort` or `grep`) and measure the size/speed win
-      vs the C version to calibrate whether to convert more.
+- [x] **ASM vs C commands — hand-wrote ALL heavy `/BIN` utilities — DONE
+      (2026-07-08, see DONE).** The prototype-one-command experiment turned into a
+      full sweep: all 17 `/BIN` commands now have hand-written P8X assembler
+      counterparts in `os/commands-asm/`, each verified byte-identical in behavior
+      to its `p8cc` build and installed to a parallel `/BINA` on the demo disk.
+      Overall ~2.3× smaller, up to 5.8× (mv/pwd). See DONE.
 
 - [x] **Make OS/BIOS peek/poke a syscall ABI instead of fixed addresses**
       (2026-06-26; DONE 2026-07-07). The C `/BIN` commands used to reach BIOS
@@ -787,6 +777,22 @@ Last updated: 2026-06-27
 > Convention: substantial features get a **bold-title** prose entry (what was
 > done + why + caveats). The original foundation milestones are a terse tick
 > list under *Early milestones* at the end of this section.
+
+- **ASM vs C commands — hand-coded assembler versions of all 17 `/BIN` commands**
+  (2026-07-08). What started as "prototype one heavy command to calibrate" became
+  a full sweep: every `/BIN` command was rewritten by hand in P8X assembler under
+  `os/commands-asm/` (`pwd mv more sed head wc uniq cat dir tree vi grep tail sort
+  cp find diff`), each a drop-in replacement (same `$7A00` entry, same `P2`
+  arg-tail ABI, same OS/BIOS calls) and verified **byte-identical in behavior** to
+  its `p8cc` build in the emulator (`compare.sh`/the behavioral harness), not just
+  assumed. Result: **~2.3× smaller overall**, ranging from 1.4× (diff) up to 5.8×
+  (mv) / 5.4× (pwd) — see the scoreboard in `os/commands-asm/README.md`. `run.sh`
+  installs the hand builds to a parallel **`/BINA`** (via `mkasm.sh` + `p8xasm.py
+  --base 0x7A00`) alongside the C `/BIN`, so the two can be run and compared
+  on-target (`RUN /BINA/GREP.BIN` vs `RUN /BIN/GREP.BIN`). This is the concrete
+  data behind the "reach for asm where a command is size-pressured and stable"
+  question (grep/sed/vi sit at the TPA ceiling on the C codegen). The C sources
+  stay as the primary builds + `p8cc` regression corpus.
 
 - **Wildcards on the stdin filters** (2026-06-27). Made `lib_stdin` glob-aware so
   `wc`/`grep`/`sort`/`sed`/`head`/`tail`/`more`/`uniq` all accept a `*`/`?` arg:
