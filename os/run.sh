@@ -75,7 +75,7 @@ if [ ! -f "$disk" ]; then
     # redirection and pipes out of the box. Run by bare name via PATH (/BIN),
     # e.g.  DIR /BIN ,  CAT README.TXT ,  CAT README.TXT | GREP hello | WC ,
     # CP README.TXT COPY.TXT ,  MV COPY.TXT MOVED.TXT .
-    for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi; do
+    for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch; do
         # clib.py splices any //#use lib_*.c (shared helpers) into the source first;
         # a no-op passthrough for commands with no //#use directive.
         python3 "$root/tools/clib.py" "$root/os/commands/$ex.c" -o "$build/$ex.c"
@@ -87,7 +87,7 @@ if [ ! -f "$disk" ]; then
     done
     # Hand-assembled versions -> /BINA (os/commands-asm). mkasm.sh splices any
     # ;#use includes (lib_stdin/glob/regex) just like clib.py does for the C ones.
-    for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi; do
+    for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch; do
         sh "$root/os/commands-asm/mkasm.sh" "$ex" > "$build/$ex.a.asm"
         python3 "$root/assembler/p8xasm.py" "$build/$ex.a.asm" -o "$build/$ex.a.bin" --base 0x7A00 >/dev/null
         up=$(echo "$ex" | tr a-z A-Z)

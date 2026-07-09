@@ -25,7 +25,7 @@ ASM="python3 $ROOT/assembler/p8xasm.py"
 CC="python3 $ROOT/compiler/p8cc.py"
 CLIB="python3 $ROOT/tools/clib.py"
 
-ALL="cat cp diff dir find grep head more mv pwd sed sort tail tree uniq vi wc"
+ALL="cat cp diff dir find grep head more mv pwd sed sort tail touch tree uniq vi wc"
 
 ratio() {   # $1=p8cc bytes $2=asm bytes -> "N.Nx" (integer math, no awk)
     r=$(( ($1 * 10 + $2 / 2) / $2 ))

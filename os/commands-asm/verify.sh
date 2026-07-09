@@ -67,6 +67,9 @@ cmd_script() {
         SED)  printf 'SED s/alpha/X/ T.TXT\rSED s/l/L/g T.TXT\rSED -h\r' ;;
         DIFF) printf 'DIFF T.TXT U.TXT\rDIFF T.TXT T.TXT\rDIFF -h\r' ;;
         VI)   printf 'VI N.TXT\rxjA!\033:wq\rCAT N.TXT\rVI -h\r' ;;
+        # create a missing file, then TOUCH an existing one and confirm it is
+        # NOT truncated (CAT still shows its content). FIND/CAT are helpers.
+        TOUCH) printf 'TOUCH NEW.TXT\rFIND NEW\rTOUCH T.TXT\rCAT T.TXT\rTOUCH -h\r' ;;
     esac
 }
 
