@@ -21,7 +21,7 @@ DESCRIPTION
     BACK-END-and-all compiler aimed at fitting the ~31.5 KB TPA, where a port
     of the optimizing p8cc could not.
 
-    THIS IS EARLY (v0.23). Supported so far:  (`int` is 16-bit; `char` is a
+    THIS IS EARLY (v0.24). Supported so far:  (`int` is 16-bit; `char` is a
     1-byte element type — see below.)
 
         program : (func | global)*
@@ -61,7 +61,11 @@ DESCRIPTION
     this gives pass-by-reference — set(&x), swap(&a,&b). ARRAYS: `int a[N]`
     reserves N ints; `a[i]` reads/writes an element; an array name doesn't decay
     on its own, but `&a[0]` gives a pointer you can index (`p[i]`) and pass to a
-    function. STRINGS: a char literal 'A' is a number; a string literal "abc"
+    function. A bare array name now DECAYS to &a[0] (so `puts(buf)` and
+    passing an array work). BUILTINS (like p8cc): putchar(c), puts(s) [+newline],
+    getchar() [->char or 0xFFFF at EOF], peek(addr), poke(addr,val), argstr()
+    [->the program's argument string], and bios(ADDR,p1,a) [a raw BIOS/OS syscall,
+    ADDR constant, -> A|carry<<8]. STRINGS: a char literal 'A' is a number; a string literal "abc"
     is emitted inline (jumped over) as NUL-terminated data padded with an extra
     zero, and evaluates to its address. So a classic
         char *s; s = "hi"; while (*s) { putchar(*s); s = s + 1; }

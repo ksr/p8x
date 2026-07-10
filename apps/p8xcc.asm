@@ -9,7 +9,7 @@
 ; emits assembly text to stdout via SYS_PUTC, so `>OUT.ASM` captures it and the
 ; program's own I/O stays shell-redirectable.
 ;
-; EARLY (v0.23). Supported so far:  (type = int (16-bit) | char (1-byte elem))
+; EARLY (v0.24). Supported so far:  (type = int (16-bit) | char (1-byte elem))
 ;     program : (func | global)*   global : type [*]NAME [ [N] ] ;
 ;     func : type NAME([type [*]P,...]) { <stmt>* }
 ;     stmt : type [*]NAME [= expr]; | type NAME[N]; | NAME = expr; |
@@ -20,8 +20,9 @@
 ;     bor : bxor ('|' bxor)*   bxor : band ('^' band)*   band : rel ('&' rel)*
 ;     rel  : add [relop add]   add : term (('+'|'-') term)*
 ;     term : unary (('*'|'/'|'%') unary)*   unary : ('-'|'!'|'*'|'&') unary | factor
-;     factor : NUM(dec/0xhex) | 'c' | "str" | NAME | NAME[i] |
-;              bios(ADDR,p1,a) | NAME(args) | '(' e ')'
+;     factor : NUM(dec/0xhex) | 'c' | "str" | NAME | NAME[i] | NAME(args) |
+;              builtins: putchar/puts/getchar/peek/poke/argstr/bios | '(' e ')'
+;     (a bare array NAME decays to &NAME[0])
 ; Values are 16-bit int. Codegen uses a MEMORY accumulator __ax (every
 ; expression's value) + a temp __t0; binary ops route through runtime helpers
 ; (__add/__sub/__mul/__cmp/__div) emitted at the end of the program. putchar
@@ -2546,7 +2547,13 @@ gfi_var: LDA IDVAROK
         STA  SYMIDX
         LDA  IDVARCH
         STA  EXPRCHAR
+        LDA  IDVARAR                 ; a bare array name decays to &name[0]
+        JNZ  gfv_arr
         JSR  EM_LDVAR
+        RTS
+gfv_arr: LDA #1
+        STA  SAWADDRG                 ; array decay passes an address (pass-by-ref)
+        JSR  EM_ADDROF
         RTS
 gfi_index: LDA IDVARIDX               ; NAME[index] rvalue
         STA  SYMIDX
@@ -2561,6 +2568,71 @@ gfi_index: LDA IDVARIDX               ; NAME[index] rvalue
         RTS
 gfx_b:  JSR  EM_LOADB
         RTS
+; puts(s): print the string + a newline
+gc_puts: JSR ADVANCE
+        JSR  GEXPR
+        LDA  #')'
+        JSR  EXPECTP
+        LDP1 #MLDAX
+        JSR  EMIT
+        LDP1 #MTAP1L
+        JSR  EMIT
+        LDP1 #MLDAXH
+        JSR  EMIT
+        LDP1 #MTAP1H
+        JSR  EMIT
+        LDP1 #MPUTS
+        JSR  EMIT
+        LDP1 #MPUTNL
+        JSR  EMIT
+        RTS
+
+; getchar(): next stdin byte -> __ax, or 0xFFFF at EOF
+gc_getc: JSR ADVANCE
+        LDA  #')'
+        JSR  EXPECTP
+        LDP1 #MGETC
+        JSR  EMIT
+        JSR  NEWLBL
+        STA  JLBL
+        LDP1 #MJNC
+        LDA  JLBL
+        JSR  EMITJ
+        LDP1 #MGETCEOF
+        JSR  EMIT
+        LDA  JLBL
+        JSR  EMITLBL
+        RTS
+
+; peek(addr): byte at addr -> __ax
+gc_peek: JSR ADVANCE
+        JSR  GEXPR
+        LDA  #')'
+        JSR  EXPECTP
+        JSR  EM_LOADB
+        RTS
+
+; poke(addr, val): store val's low byte at addr
+gc_poke: JSR ADVANCE
+        JSR  GEXPR
+        JSR  EM_PUSH
+        LDA  #','
+        JSR  EXPECTP
+        JSR  GEXPR
+        JSR  EM_POP
+        JSR  EM_STOREB
+        LDA  #')'
+        JSR  EXPECTP
+        RTS
+
+; argstr(): the program's argument tail (P2) -> __ax  (a char*)
+gc_argstr: JSR ADVANCE
+        LDA  #')'
+        JSR  EXPECTP
+        LDP1 #MARGSTR
+        JSR  EMIT
+        RTS
+
 ; gc_bios: bios(ADDR, p1, a) -> A | carry<<8 in __ax.  ADDR is a constant.
 gc_bios: JSR ADVANCE                 ; past '('
         LDA  CURV                    ; arg0 = the constant BIOS/OS address
@@ -2663,13 +2735,85 @@ EMHEX:  STA TMPC
         RTS
 
 M_BIOS:  .asciiz "bios"
+M_PUTS:  .asciiz "puts"
+M_GETC:  .asciiz "getchar"
+M_PEEK:  .asciiz "peek"
+M_POKE:  .asciiz "poke"
+M_ARGSTR: .asciiz "argstr"
+MPUTS:
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "JSR $400F"
+        .byte LF,0
+MPUTNL:
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "LDA #10"
+        .byte LF
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "JSR $4009"
+        .byte LF,0
+MGETC:
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "JSR $400C"
+        .byte LF
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "STA __ax"
+        .byte LF
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "LDA #0"
+        .byte LF
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "STA __ax+1"
+        .byte LF,0
+MGETCEOF:
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "LDA #255"
+        .byte LF
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "STA __ax"
+        .byte LF
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "STA __ax+1"
+        .byte LF,0
+MARGSTR:
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "TPA2L"
+        .byte LF
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "STA __ax"
+        .byte LF
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "TPA2H"
+        .byte LF
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "STA __ax+1"
+        .byte LF,0
 MJSRHEX: .byte $20,$20,$20,$20,$20,$20,$20,$20
          .asciiz "JSR $"
 
-gfi_call: LDP1 #M_BIOS             ; the bios(addr,p1,a) intrinsic?
-        JSR  IDNAMEEQ
+gfi_call: LDP1 #M_BIOS             ; builtins: bios / puts / getchar / peek /
+        JSR  IDNAMEEQ                ;   poke / argstr
         LDA  TMPB
         JNZ  gc_bios
+        LDP1 #M_PUTS
+        JSR  IDNAMEEQ
+        LDA  TMPB
+        JNZ  gc_puts
+        LDP1 #M_GETC
+        JSR  IDNAMEEQ
+        LDA  TMPB
+        JNZ  gc_getc
+        LDP1 #M_PEEK
+        JSR  IDNAMEEQ
+        LDA  TMPB
+        JNZ  gc_peek
+        LDP1 #M_POKE
+        JSR  IDNAMEEQ
+        LDA  TMPB
+        JNZ  gc_poke
+        LDP1 #M_ARGSTR
+        JSR  IDNAMEEQ
+        LDA  TMPB
+        JNZ  gc_argstr
         JSR  FFIND_ID              ; FI = callee index (name for the JSR)
         LDA  FI                      ; save across arg parsing (FI/IDNAME get reused)
         PHA

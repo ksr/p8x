@@ -27,10 +27,10 @@ python3 $ROOT/tools/p8xfs.py boot   cc.img oscc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  cc.img /bin >/dev/null
 python3 $ROOT/tools/p8xfs.py put    cc.img cc.bin  --name /bin/cc.bin  --load 0x7A00 --exec 0x7A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    cc.img asm.bin --name /bin/asm.bin --load 0x7A00 --exec 0x7A00 >/dev/null
-# exercises a STRING literal + char* loop (puts) and MUTUAL RECURSION via a
-# forward prototype (even/odd). puts prints "P8"; even(10) is true -> 'A'.
-# Expected output: P8A.
-printf 'int odd(int n); int even(int n) { if (n == 0) return 1; return odd(n - 1); } int odd(int n) { if (n == 0) return 0; return even(n - 1); } int puts(char *s) { while (*s) { putchar(*s); s = s + 1; } return 0; } int main() { puts("P8"); if (even(10)) putchar(65); else putchar(66); }\n' > t.c
+# exercises MUTUAL RECURSION via a forward prototype (even/odd) plus a string
+# printed with the puts() builtin. puts("P8") -> "P8\n"; even(10) is true -> 'A'.
+# Expected: a line "P8" then a line "A".
+printf 'int odd(int n); int even(int n) { if (n == 0) return 1; return odd(n - 1); } int odd(int n) { if (n == 0) return 0; return even(n - 1); } int main() { puts("P8"); if (even(10)) putchar(65); else putchar(66); }\n' > t.c
 python3 $ROOT/tools/p8xfs.py put cc.img t.c --name /t.c >/dev/null
 
 # all on-target: cc t.c >t.asm ; asm t.asm PROG.BIN ; PROG
@@ -38,5 +38,5 @@ printf 'B\rcc t.c >t.asm\rasm t.asm PROG.BIN\rrun PROG.BIN\r' | \
     ../p8xemu -l 900000000 -c cc.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r' > cc_out.txt
 
 grep -q 'P8X' cc_out.txt || fail "did not boot"
-grep -q '^P8A$' cc_out.txt || { echo "--- transcript ---"; sed -n '/PROG/,$p' cc_out.txt | head; fail "compiled program did not print P8A"; }
+{ grep -q '^P8$' cc_out.txt && grep -q '^A$' cc_out.txt; } || { echo "--- transcript ---"; sed -n '/PROG/,$p' cc_out.txt | head; fail "compiled program did not print P8 then A"; }
 echo "OS-CC TEST: PASS"
