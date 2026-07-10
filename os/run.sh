@@ -35,6 +35,43 @@ python3 "$root/assembler/p8xasm.py" "$root/os/p8xos.asm" -o "$build/p8xos.bin" -
 cp "$root"/microcode/u?.bin "$build/"
 cc -O2 -o "$build/p8xemu" "$root/emulator/p8xemu.c"
 
+# ensure_src: lay down /src/commands/{c,asm} — the browsable command + toolchain
+# SOURCES, mirroring the repo so you can read (and, for C, on-target `cc`-compile)
+# any command right on the machine:
+#   /src/commands/c    — the C sources, incl. the shared lib_*.c helpers
+#   /src/commands/asm  — the hand-assembled sources + shared includes (renamed
+#                        glob/globx/regex/stdin.inc to fit the 12-char field),
+#                        plus the toolchain app sources p8xcc/p8xasm/p8xedit.asm
+# Idempotent and safe on a FRESH or EXISTING disk: mkdir/put are best-effort
+# (p8xfs put never overwrites, so your files are kept and only MISSING sources are
+# added — e.g. an older disk that predates a source gets it on the next run).
+# The DEPRECATED front-end sources (cpp/lex/cc1.c) are not shipped, matching the
+# rest of that deprecation.
+ensure_src() {
+    for d in /src /src/commands /src/commands/c /src/commands/asm; do
+        python3 "$root/tools/p8xfs.py" mkdir "$disk" "$d" >/dev/null 2>&1 || true
+    done
+    for cf in "$root"/os/commands/*.c; do
+        base=$(basename "$cf")
+        case "$base" in cpp.c|lex.c|cc1.c) continue;; esac
+        python3 "$root/tools/p8xfs.py" put "$disk" "$cf" \
+            --name "/src/commands/c/$base" >/dev/null 2>&1 || true
+    done
+    for af in "$root"/os/commands-asm/*.asm; do
+        python3 "$root/tools/p8xfs.py" put "$disk" "$af" \
+            --name "/src/commands/asm/$(basename "$af")" >/dev/null 2>&1 || true
+    done
+    for inc in "$root"/os/commands-asm/lib_*.inc; do
+        base=$(basename "$inc"); base=${base#lib_}
+        python3 "$root/tools/p8xfs.py" put "$disk" "$inc" \
+            --name "/src/commands/asm/$base" >/dev/null 2>&1 || true
+    done
+    for app in "$root"/apps/p8xcc.asm "$root"/apps/p8xasm.asm "$root"/apps/p8xedit.asm; do
+        python3 "$root/tools/p8xfs.py" put "$disk" "$app" \
+            --name "/src/commands/asm/$(basename "$app")" >/dev/null 2>&1 || true
+    done
+}
+
 if [ ! -f "$disk" ]; then
     # Fresh v2 disk: install the OS and lay down a small sample tree so DIR/
     # tree/cd/run have something to show.
@@ -126,42 +163,7 @@ if [ ! -f "$disk" ]; then
         python3 "$root/tools/p8xfs.py" put "$disk" "$libc" \
             --name "/lib/$(basename "$libc")" >/dev/null
     done
-    # /src: browsable command SOURCES, mirroring the repo layout so you can read
-    # (and, for C, on-target `cc`-compile) any command right on the machine:
-    #   /src/commands/c    — the C sources, incl. the shared lib_*.c helpers
-    #   /src/commands/asm  — the hand-assembled sources + shared includes, plus
-    #                        the toolchain app sources (p8xcc/p8xasm/p8xedit.asm)
-    # The DEPRECATED front-end sources (cpp/lex/cc1.c) are NOT shipped, matching
-    # the rest of that deprecation (no binary, no man page, and no source on-card).
-    python3 "$root/tools/p8xfs.py" mkdir "$disk" /src >/dev/null
-    python3 "$root/tools/p8xfs.py" mkdir "$disk" /src/commands >/dev/null
-    python3 "$root/tools/p8xfs.py" mkdir "$disk" /src/commands/c >/dev/null
-    python3 "$root/tools/p8xfs.py" mkdir "$disk" /src/commands/asm >/dev/null
-    for cf in "$root"/os/commands/*.c; do
-        base=$(basename "$cf")
-        case "$base" in cpp.c|lex.c|cc1.c) continue;; esac   # DEPRECATED front end
-        python3 "$root/tools/p8xfs.py" put "$disk" "$cf" \
-            --name "/src/commands/c/$base" >/dev/null
-    done
-    for af in "$root"/os/commands-asm/*.asm; do
-        python3 "$root/tools/p8xfs.py" put "$disk" "$af" \
-            --name "/src/commands/asm/$(basename "$af")" >/dev/null
-    done
-    # Shared asm includes: drop the `lib_` prefix so the name fits P8XFS's 12-char
-    # field (browse-only — on-target asm has no ;#use; mkasm.sh splices host-side).
-    for inc in "$root"/os/commands-asm/lib_*.inc; do
-        base=$(basename "$inc"); base=${base#lib_}
-        python3 "$root/tools/p8xfs.py" put "$disk" "$inc" \
-            --name "/src/commands/asm/$base" >/dev/null
-    done
-    # The on-target toolchain apps (cc, asm, edit) ship their binaries to /bin;
-    # their assembly SOURCES ride along here too — notably p8xcc.asm, the native
-    # C compiler written in assembly, next to p8xasm.asm (the assembler that turns
-    # its output into a binary) and p8xedit.asm.
-    for app in "$root"/apps/p8xcc.asm "$root"/apps/p8xasm.asm "$root"/apps/p8xedit.asm; do
-        python3 "$root/tools/p8xfs.py" put "$disk" "$app" \
-            --name "/src/commands/asm/$(basename "$app")" >/dev/null
-    done
+    ensure_src            # /src/commands/{c,asm}: browsable sources (see the function)
     printf 'hello from P8X/OS\n' > "$build/readme.txt"
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/readme.txt" --name /README.TXT >/dev/null
     # A sample assembly source so the EDIT -> ASM -> RUN loop is demoable out of
@@ -185,7 +187,8 @@ else
     touch -r "$disk" "$build/diskref"
     # Reinstall the freshly-built OS into the existing disk (keeps your files).
     python3 "$root/tools/p8xfs.py" boot "$disk" "$build/p8xos.bin" >/dev/null
-    echo "using existing disk: $disk"
+    ensure_src   # add /src (and any sources missing on an older disk) without touching your files
+    echo "using existing disk: $disk (refreshed OS + /src sources)"
     # The OS boot is refreshed above, but the bundled /bin programs (dir, cat,
     # BASIC, EDIT, ASM ...) are NOT — p8xfs put won't overwrite, and we won't
     # wipe a disk that may hold your files. So if any program/OS source is newer
