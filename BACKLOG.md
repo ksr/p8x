@@ -763,17 +763,22 @@ Last updated: 2026-07-08
         source in (FOPEN/FGETB, one-char pushback) and emits asm to stdout
         (SYS_PUTC, shell-redirectable), which the native `asm` turns into a
         RUNnable binary — so C is compiled, assembled, and run entirely on-target.
-        v0.1 WALKING SKELETON works end to end (`os_cc_test`, behavioural: compile
-        -> asm -> run -> diff output): `int main() { putchar(<expr>); | return
-        [<expr>]; }` with `+`/`-` on 8-bit ints; codegen is a hardware-stack
-        machine + one memory temp (`__t0`), since the ISA has no A<->B move.
+        Works end to end (`os_cc_test`, behavioural: compile -> asm -> run ->
+        diff output). Codegen is a hardware-stack machine + one memory temp
+        (`__t0`), since the ISA has no A<->B move.
+          * v0.1 — `int main() { putchar(<expr>); | return [<expr>]; }`, `+`/`-`,
+            8-bit ints.
+          * v0.2 — **variables**: `int NAME [= expr];` declarations, `NAME = expr;`
+            assignment, and NAME as an expression term. Symbol table
+            (SYMFIND/SYMADD, packed name pool); each variable is emitted as a
+            byte `V<idx>: .fill 1`.
         Debug notes for future selves: FGETB clobbers P1 (build identifiers via
         P2); variables must live in the program's own BSS, not a fixed high page
         (OS/SYS_PUTC scratch collides); FRESOLVE's scan needs FSDIRBUF off SBUF
         when a write stream is redirected; the shell's `>` target must be RELATIVE
         (absolute `>/X` silently drops the file — pre-existing OS limitation,
         filed separately below). NEXT, one tested step at a time toward the p8cc
-        subset: variables/assignment, `*`, `if`/`while`, functions+params, then
+        subset: `*` and 16-bit ints, `if`/`while`, functions+params, then
         pointers/char/arrays. Chief risk stays the symbol-table + type-analysis
         machinery — must be far more compact than p8cc's ~55 KB.
       - [ ] **Shell `>`/`<` redirect rejects an ABSOLUTE target path.** `cmd

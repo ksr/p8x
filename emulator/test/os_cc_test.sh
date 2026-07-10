@@ -27,8 +27,9 @@ python3 $ROOT/tools/p8xfs.py boot   cc.img oscc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  cc.img /bin >/dev/null
 python3 $ROOT/tools/p8xfs.py put    cc.img cc.bin  --name /bin/cc.bin  --load 0x7A00 --exec 0x7A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    cc.img asm.bin --name /bin/asm.bin --load 0x7A00 --exec 0x7A00 >/dev/null
-# putchar(64+1) -> 'A' (65)
-printf 'int main() { putchar(64+1); }\n' > t.c
+# exercises arithmetic, a declaration with initialiser, a plain declaration +
+# assignment, and a variable used in an expression — all must yield 'A' (65).
+printf 'int main() { int x; int y; x = 60; y = x + 5; putchar(y); putchar(64+1); }\n' > t.c
 python3 $ROOT/tools/p8xfs.py put cc.img t.c --name /t.c >/dev/null
 
 # all on-target: cc t.c >t.asm ; asm t.asm PROG.BIN ; PROG
@@ -36,6 +37,6 @@ printf 'B\rcc t.c >t.asm\rasm t.asm PROG.BIN\rrun PROG.BIN\r' | \
     ../p8xemu -l 900000000 -c cc.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r' > cc_out.txt
 
 grep -q 'P8X' cc_out.txt || fail "did not boot"
-# the compiled+assembled+run program must print 'A'
-grep -q '^A$' cc_out.txt || { echo "--- transcript ---"; sed -n '/PROG/,$p' cc_out.txt | head; fail "compiled program did not print A"; }
+# the compiled+assembled+run program must print 'AA' (variable result, then literal)
+grep -q '^AA$' cc_out.txt || { echo "--- transcript ---"; sed -n '/PROG/,$p' cc_out.txt | head; fail "compiled program did not print AA"; }
 echo "OS-CC TEST: PASS"

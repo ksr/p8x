@@ -21,16 +21,21 @@ DESCRIPTION
     BACK-END-and-all compiler aimed at fitting the ~31.5 KB TPA, where a port
     of the optimizing p8cc could not.
 
-    THIS IS v0.1 — a walking skeleton. Supported so far:
+    THIS IS EARLY (v0.2). Supported so far:
 
         int main() { <stmt>* }
-        stmt  : putchar( <expr> ) ;  |  return [<expr>] ;
-        expr  : term (('+' | '-') term)*      term : NUMBER | '(' <expr> ')'
+        stmt  : int NAME [ = <expr> ] ;   (declare a variable)
+              | NAME = <expr> ;           (assign)
+              | putchar( <expr> ) ;
+              | return [<expr>] ;
+        expr  : term (('+' | '-') term)*
+        term  : NUMBER | NAME | '(' <expr> ')'
 
     Values are 8-bit for now (putchar takes a byte). It grows one tested
-    feature at a time (variables, '*', if/while, functions, ...) toward the
-    p8cc subset. Redirect the output to a RELATIVE filename (cc src.c >out.asm)
-    — an absolute redirect target is not yet supported by the shell.
+    feature at a time ('*', if/while, functions, char/pointers, ...) toward
+    the p8cc subset. Redirect the output to a RELATIVE filename
+    (cc src.c >out.asm) — an absolute redirect target is not yet supported by
+    the shell.
 
 EXAMPLES
     cc t.c >t.asm            compile; then  asm t.asm T.BIN ;  run T.BIN

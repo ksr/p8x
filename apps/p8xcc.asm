@@ -63,8 +63,9 @@ START:  TPA3L
         LDA  #0
         JSR  FOPEN
         JC   OPENERR
-        LDA  #0                      ; reset the lexer
+        LDA  #0                      ; reset the lexer + symbol table
         STA  PBF
+        STA  SYMCNT
         JSR  COMPILE
         RTS
 USAGE:  LDP1 #MUSAGE
@@ -354,13 +355,33 @@ co_end: LDP1 #MRTS                   ; fall-through return
         JSR  EMIT
         LDP1 #MTEMP                  ; the codegen temp
         JSR  EMIT
-        RTS
+        LDA  #0                      ; storage for each declared variable:
+        STA  VITER                   ;   V0:  .fill 1  /  V1:  .fill 1  / ...
+ce_vl:  LDA  VITER
+        LDB  SYMCNT
+        CMP
+        JC   ce_vd                   ; VITER >= SYMCNT -> done
+        LDP1 #MVL                    ; "V"
+        JSR  EMIT
+        LDA  VITER
+        JSR  EMITNUM
+        LDP1 #MVF                    ; ":   .fill 1" + LF
+        JSR  EMIT
+        LDA  VITER
+        INC
+        STA  VITER
+        JMP  ce_vl
+ce_vd:  RTS
 
 ; one statement
 STMT:   LDA  CURK
         LDB  #2
         CMP
         JNZ  st_err
+        LDP1 #KW_INT
+        JSR  IDEQ
+        LDA  TMPB
+        JNZ  st_decl
         LDP1 #KW_PUTC
         JSR  IDEQ
         LDA  TMPB
@@ -369,7 +390,52 @@ STMT:   LDA  CURK
         JSR  IDEQ
         LDA  TMPB
         JNZ  st_ret
-st_err: RTS                          ; (v0.1: unknown statement -> stop quietly)
+        JMP  st_assign               ; an identifier LHS -> assignment
+st_err: RTS                          ; (unknown statement -> stop quietly)
+
+; int NAME [ = expr ] ;   -> reserve a variable, optionally initialise it
+st_decl: JSR ADVANCE                 ; past "int"
+        JSR  SYMADD                  ; add NAME (current id) -> SYMIDX
+        LDA  SYMIDX
+        STA  LHSIDX
+        JSR  ADVANCE                 ; past NAME
+        LDA  CURK                    ; optional  = expr
+        LDB  #3
+        CMP
+        JNZ  sd_semi
+        LDA  CURV
+        LDB  #'='
+        CMP
+        JNZ  sd_semi
+        JSR  ADVANCE                 ; past '='
+        JSR  GEXPR
+        JSR  EMITSTV                 ; STA V<LHSIDX>
+sd_semi: LDA #$3B
+        JSR  EXPECTP
+        RTS
+
+; NAME = expr ;   -> assignment to an existing variable
+st_assign: JSR SYMFIND              ; look up NAME (current id) -> SYMIDX/SYMOK
+        LDA  SYMOK
+        JZ   st_err                  ; undeclared -> stop
+        LDA  SYMIDX
+        STA  LHSIDX
+        JSR  ADVANCE                 ; past NAME
+        LDA  #'='
+        JSR  EXPECTP
+        JSR  GEXPR
+        JSR  EMITSTV                 ; STA V<LHSIDX>
+        LDA  #$3B
+        JSR  EXPECTP
+        RTS
+; EMITSTV: emit  "        STA V<LHSIDX>" + newline
+EMITSTV: LDP1 #MSTAV
+        JSR  EMIT
+        LDA  LHSIDX
+        JSR  EMITNUM
+        LDP1 #MNL
+        JSR  EMIT
+        RTS
 st_putc: JSR ADVANCE
         LDA  #'('
         JSR  EXPECTP
@@ -444,11 +510,14 @@ ge_d:   RTS
 GTERM:  JSR  GFACT
         RTS
 
-; factor: NUMBER | '(' expr ')'
+; factor: NUMBER | IDENT | '(' expr ')'
 GFACT:  LDA  CURK
         LDB  #1
         CMP
         JZ   gf_num
+        LDB  #2
+        CMP
+        JZ   gf_id
         LDB  #3
         CMP
         JNZ  gf_err
@@ -469,7 +538,103 @@ gf_num: LDP1 #MLDAI                  ; LDA #<n>
         JSR  EMIT
         JSR  ADVANCE
         RTS
+gf_id:  JSR  SYMFIND                 ; a variable read -> LDA V<idx>
+        LDA  SYMOK
+        JZ   gf_err
+        LDP1 #MLDAV
+        JSR  EMIT
+        LDA  SYMIDX
+        JSR  EMITNUM
+        LDP1 #MNL
+        JSR  EMIT
+        JSR  ADVANCE
+        RTS
 gf_err: RTS
+
+; =============================================================================
+; Symbol table - each declared variable maps to an index (emitted as V<index>).
+; Names are packed NUL-terminated in SYMPOOL; SYMCNT counts them.
+; =============================================================================
+; SYMFIND: search SYMPOOL for the current id (TID). SYMOK=1 & SYMIDX=index if
+;          found, else SYMOK=0.
+SYMFIND: LDA #0
+        STA  SYMIDX
+        STA  SYMOK
+        LDA  #<SYMPOOL
+        TAP1L
+        LDA  #>SYMPOOL
+        TAP1H
+sf_e:   LDA  SYMIDX
+        LDB  SYMCNT
+        CMP
+        JC   sf_no                   ; SYMIDX >= SYMCNT -> not found
+        LDA  #<TID
+        TAP2L
+        LDA  #>TID
+        TAP2H
+sf_c:   LDA  (P1)                    ; pool char vs TID char
+        STA  TMPC
+        LDA  (P2)
+        LDB  TMPC
+        CMP
+        JNZ  sf_nx
+        LDA  (P1)
+        JZ   sf_yes                  ; equal and both at NUL -> match
+        INP1
+        INP2
+        JMP  sf_c
+sf_nx:  LDA  (P1)                    ; skip the rest of this pool name + its NUL
+        JZ   sf_np
+        INP1
+        JMP  sf_nx
+sf_np:  INP1
+        LDA  SYMIDX
+        INC
+        STA  SYMIDX
+        JMP  sf_e
+sf_yes: LDA  #1
+        STA  SYMOK
+        RTS
+sf_no:  LDA  #0
+        STA  SYMOK
+        RTS
+
+; SYMADD: append the current id (TID) to SYMPOOL; SYMIDX = its (new) index.
+SYMADD: LDA #<SYMPOOL
+        TAP1L
+        LDA  #>SYMPOOL
+        TAP1H
+        LDA  #0
+        STA  TMPB                    ; names skipped
+sa_e:   LDA  TMPB
+        LDB  SYMCNT
+        CMP
+        JC   sa_ap                   ; skipped SYMCNT names -> at the append point
+sa_sk:  LDA  (P1)
+        JZ   sa_np
+        INP1
+        JMP  sa_sk
+sa_np:  INP1
+        LDA  TMPB
+        INC
+        STA  TMPB
+        JMP  sa_e
+sa_ap:  LDA  #<TID                   ; copy TID (+ its NUL) into the pool
+        TAP2L
+        LDA  #>TID
+        TAP2H
+sa_cp:  LDA  (P2)
+        STA  (P1)
+        JZ   sa_dn
+        INP1
+        INP2
+        JMP  sa_cp
+sa_dn:  LDA  SYMCNT                  ; index = old count; bump the count
+        STA  SYMIDX
+        LDA  SYMCNT
+        INC
+        STA  SYMCNT
+        RTS
 
 ; EXPECTP: current token must be punct char A, else quietly stop; then ADVANCE.
 EXPECTP: STA TMPB
@@ -536,6 +701,13 @@ MORG:   .byte $20,$20,$20,$20,$20,$20,$20,$20
         .byte LF,0
 MLDAI:  .byte $20,$20,$20,$20,$20,$20,$20,$20   ; prefix: a number + MNL follow
         .asciiz "LDA #"
+MLDAV:  .byte $20,$20,$20,$20,$20,$20,$20,$20   ; prefix: "LDA V" + index + MNL
+        .asciiz "LDA V"
+MSTAV:  .byte $20,$20,$20,$20,$20,$20,$20,$20   ; prefix: "STA V" + index + MNL
+        .asciiz "STA V"
+MVL:    .asciiz "V"                             ; a variable's storage label prefix
+MVF:    .ascii ":   .fill 1"
+        .byte LF,0
 MNL:    .byte LF,0
 MPHA:   .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "PHA"
@@ -583,3 +755,9 @@ NACC:   .fill 2    ; lexer number accumulator
 STK0:   .fill 2    ; saved SP for a clean bail on error
 TMPB:   .fill 1    ; byte scratch (also IDEQ / EXPECT* result flag)
 TMPC:   .fill 1    ; byte scratch (IDEQ char compare)
+SYMCNT: .fill 1    ; number of declared variables
+SYMIDX: .fill 1    ; SYMFIND/SYMADD result index
+SYMOK:  .fill 1    ; SYMFIND: 1 if found
+LHSIDX: .fill 1    ; index of an assignment/decl target variable
+VITER:  .fill 1    ; loop counter emitting variable storage
+SYMPOOL: .fill 256 ; packed NUL-terminated variable names
