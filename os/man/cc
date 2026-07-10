@@ -21,7 +21,7 @@ DESCRIPTION
     BACK-END-and-all compiler aimed at fitting the ~31.5 KB TPA, where a port
     of the optimizing p8cc could not.
 
-    THIS IS EARLY (v0.18). Supported so far:  (`int` is 16-bit; `char` is a
+    THIS IS EARLY (v0.19). Supported so far:  (`int` is 16-bit; `char` is a
     1-byte element type — see below.)
 
         program : func*
@@ -66,10 +66,11 @@ DESCRIPTION
     index (`*p`, `p[i]`, `a[i]`) read/write ONE byte and pointer arithmetic on
     them steps by 1 — so a char buffer strcpy(&d[0], s) works. (A scalar `char c`
     is still stored in a word; the byte width matters for arrays and pointers.)
-    Escape sequences \n \t \r \0 \\ \' \" work in char and string literals, and // line and /* block */ comments are skipped.
-    NOTE: mutual
-    recursion / forward calls are not supported (single pass: a callee must be
-    defined before it is called); within one call's argument list a later
+    Escape sequences \n \t \r \0 \\ \' \" work in char and string literals, and
+    // line and /* block */ comments are skipped. Arguments pass on a runtime arg
+    stack (the callee pops them into its own slots), so FORWARD CALLS and MUTUAL
+    RECURSION work when the callee has a forward prototype `int f(int);` before
+    its use. NOTE: within one call's argument list a later
     argument must not read a parameter an earlier one overwrote; and taking the
     address of a local across a DIRECT recursive call is undefined (that local is
     saved/restored). Comparisons yield 0/1. 16-bit

@@ -903,6 +903,18 @@ Last updated: 2026-07-08
             still a word (width only matters for arrays/pointers). Verified: char
             b[4] build+print, char* byte deref, strcpy(&d[0],s) into a buffer,
             char scalar; all int/pointer/recursion/string regressions green.
+          * v0.19 — **mutual recursion / forward calls** via a runtime ARG
+            STACK, WITHOUT a frame-pointer rewrite (static V<slot> storage is
+            unchanged). The caller pushes args onto __sp (EM_PUSHARG); the
+            callee's prologue pops them into its own slots (EM_POPPARAMS). Because
+            the caller never references the callee's storage, a forward call just
+            needs the name -- so a prototype `int f(int);` now registers the name
+            (FADD) and forward calls resolve (two-pass JSR label). Re-entrancy:
+            EM_SAVESLOTS/RESTSLOTS still wrap a call, now SKIPPED when an argument
+            took an address (SAWADDRG) so pass-by-reference composes. This
+            supersedes the frame-pointer design above (kept for reference).
+            Verified: even/odd mutual recursion, plus fact/fib/pass-by-ref/arrays/
+            char/strings all still green; os_cc_test uses mutual recursion.
           * v0.18 — **comments**: the lexer skips `//` line comments and
             `/* ... */` block comments in its whitespace phase (a leading `/`
             peeks ahead; a lone `/` is still the divide operator). Verified line,
@@ -1782,3 +1794,39 @@ record. Newer work is logged as bold-title entries above.
 - [x] P8XFS v2 spec: hierarchical, directories-as-files, PACK algorithm
 - [x] CF-IDE interface design: 8-bit mode, 5 chips, memory-mapped $FF10
 - [x] Card design standards document (p8x-card-standards.md)
+
+    ### cc: frame-pointer calling convention (mutual recursion) — DESIGN
+
+    Goal: replace static per-function slots with a runtime stack frame so that
+    mutual recursion / forward calls work AND pass-by-reference still composes
+    (the two are incompatible under caller-saved static slots). This is an
+    ATOMIC re-architecture — the compiler is either all-static-slot or
+    all-frame-relative, so it lands as one change, not an incremental version.
+
+    Runtime model (compiled program):
+      * __sp  16-bit C-stack pointer, grows down; init in MBOOT (e.g. $F600).
+      * __fp  16-bit frame pointer.  (Return address stays on the P3 hw stack.)
+      * Prologue (_f_NAME): push __fp on the C stack; __fp = __sp; __sp -= FRAME
+        (FRAME = a fixed reservation, e.g. 64 bytes, to avoid a forward-referenced
+        frame size — documents a per-function local-size cap).
+      * Epilogue (_e_NAME): __sp = __fp; pop __fp; RTS.
+      * Args: caller pushes right-to-left, JSRs, then pops (cdecl). Param i is at
+        __fp + 2 + 2*i; local j at __fp - 2 - 2*j.  Forward calls resolve because
+        the caller never needs the callee's storage — only its name (JSR label,
+        two-pass) — so a prototype `int f(int);` just registers the name.
+
+    Addressing (the crux): a var carries a signed frame offset (stored as a
+    two's-complement byte). One emitted-once helper does the arithmetic:
+        __lea:  __ea = __fp + sign_extend(__off)   (offset preset in __off)
+    so each access is `LDA #<off>; STA __off; JSR __lea` then load/store via __ea
+    (word for int, byte for char — reuse EM_LOADB/EM_STOREB).  &x is just __ea.
+
+    Changes required (~15 routines): MBOOT (init __sp/__fp), FUNCDEF
+    (prologue/epilogue + FRAME reserve), SYMADD/SYMFIND (name -> frame offset,
+    params +/locals -), EM_LDVAR/EM_STVAR/EM_ADDROF (-> __lea-relative),
+    gfi_call (push args + pop, drop EM_STSLOT), DELETE EM_SAVESLOTS/RESTSLOTS +
+    SELFREC (no longer needed — each activation has its own frame), the V<slot>
+    storage trailer (gone), arrays/char (frame-relative offsets), and prototype
+    registration for forward calls.  Then re-verify the ENTIRE suite (scalars,
+    params, recursion, mutual recursion, pointers, pass-by-ref, arrays, char,
+    strings) — nothing is independently committable until it is all green.
