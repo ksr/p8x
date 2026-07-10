@@ -9,7 +9,7 @@
 ; emits assembly text to stdout via SYS_PUTC, so `>OUT.ASM` captures it and the
 ; program's own I/O stays shell-redirectable.
 ;
-; EARLY (v0.25). Supported so far:  (type = int (16-bit) | char (1-byte elem))
+; EARLY (v0.26). Supported so far:  (type = int (16-bit) | char (1-byte elem))
 ;     program : (func | global)*   global : type [*]NAME [ [N] ] ;
 ;     func : type NAME([type [*]P,...]) { <stmt>* }
 ;     stmt : type [*]NAME [= expr]; | type NAME[N]; | NAME = expr; |
@@ -2151,7 +2151,51 @@ GREL:   JSR  GSHIFT
 grx:    RTS
 
 ; expr: logical-or  ->  land ('||' land)*   (short-circuit, yields 0/1)
-GEXPR:  JSR  GLAND
+; expr : cond  ->  a ? b : c   (ternary; wraps the || level GLOR)
+GEXPR:  JSR  GLOR
+        LDA  CURK
+        LDB  #3
+        CMP
+        JNZ  ge_condd
+        LDA  CURV
+        LDB  #'?'
+        CMP
+        JNZ  ge_condd
+        JSR  ADVANCE                 ; past '?'
+        JSR  EM_TESTAX
+        JSR  NEWLBL
+        STA  TERNF
+        JSR  NEWLBL
+        STA  TERNE
+        LDP1 #MJZ
+        LDA  TERNF
+        JSR  EMITJ                   ; JZ Lfalse
+        LDA  TERNF                   ; save labels across the true branch (may nest)
+        PHA
+        LDA  TERNE
+        PHA
+        JSR  GEXPR                   ; b (true branch)
+        PLA
+        STA  TERNE
+        PLA
+        STA  TERNF
+        LDA  #':'
+        JSR  EXPECTP
+        LDP1 #MJMP
+        LDA  TERNE
+        JSR  EMITJ                   ; JMP Lend
+        LDA  TERNF
+        JSR  EMITLBL                 ; Lfalse:
+        LDA  TERNE
+        PHA
+        JSR  GEXPR                   ; c (false branch)
+        PLA
+        STA  TERNE
+        LDA  TERNE
+        JSR  EMITLBL                 ; Lend:
+ge_condd: RTS
+
+GLOR:   JSR  GLAND
 ge_orl: LDA  CURK
         LDB  #3
         CMP
@@ -4421,6 +4465,8 @@ USEOR:  .fill 1    ; 1 if binary | used
 USEXOR: .fill 1    ; 1 if binary ^ used
 USESHL: .fill 1    ; 1 if << used
 USESHR: .fill 1    ; 1 if >> used
+TERNF:  .fill 1    ; ternary ?: false label
+TERNE:  .fill 1    ; ternary ?: end label
 NLSLOT: .fill 1    ; current function's slot count (>= name count, arrays add N)
 SYMSLOT: .fill 48  ; per-name -> first slot (relative to SLOTBASE)
 SYMARR: .fill 256  ; per-slot: 1 if this slot is an array base

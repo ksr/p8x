@@ -21,7 +21,7 @@ DESCRIPTION
     BACK-END-and-all compiler aimed at fitting the ~31.5 KB TPA, where a port
     of the optimizing p8cc could not.
 
-    THIS IS EARLY (v0.25). Supported so far:  (`int` is 16-bit; `char` is a
+    THIS IS EARLY (v0.26). Supported so far:  (`int` is 16-bit; `char` is a
     1-byte element type — see below.)
 
         program : (func | global)*
@@ -41,7 +41,7 @@ DESCRIPTION
               | { <stmt>* }               (block)
               | putchar( <expr> ) ;
               | return [<expr>] ;
-        expr  : land ('||' land)*         (short-circuit, yields 0/1)
+        expr  : cond ? expr : expr        (ternary) | land ('||' land)*
         land  : bor ('&&' bor)*           (short-circuit, yields 0/1)
         bor   : bxor ('|' bxor)*          (bitwise or)
         bxor  : band ('^' band)*          (bitwise xor)
