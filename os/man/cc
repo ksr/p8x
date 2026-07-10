@@ -21,7 +21,7 @@ DESCRIPTION
     BACK-END-and-all compiler aimed at fitting the ~31.5 KB TPA, where a port
     of the optimizing p8cc could not.
 
-    THIS IS EARLY (v0.20). Supported so far:  (`int` is 16-bit; `char` is a
+    THIS IS EARLY (v0.21). Supported so far:  (`int` is 16-bit; `char` is a
     1-byte element type — see below.)
 
         program : (func | global)*
@@ -68,7 +68,9 @@ DESCRIPTION
     them steps by 1 — so a char buffer strcpy(&d[0], s) works. (A scalar `char c`
     is still stored in a word; the byte width matters for arrays and pointers.)
     Escape sequences \n \t \r \0 \\ \' \" work in char and string literals, and
-    // line and /* block */ comments are skipped. Arguments pass on a runtime arg
+    // line and /* block */ comments are skipped, and a `//#use NAME`
+    directive splices in /lib/lib_NAME.c on-target (recursive, deduped -- the
+    native counterpart of the host clib.py). Arguments pass on a runtime arg
     stack (the callee pops them into its own slots), so FORWARD CALLS and MUTUAL
     RECURSION work when the callee has a forward prototype `int f(int);` before
     its use. NOTE: within one call's argument list a later

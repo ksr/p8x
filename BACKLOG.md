@@ -928,6 +928,19 @@ Last updated: 2026-07-08
             and globals deliver them uniformly. Verified: scalar globals shared
             across functions, multiple globals, global int/char arrays, &global
             pass-by-ref, and a global char* to a string literal. Regression green.
+          * v0.21 — **`//#use` splicer** (the on-target preprocessor, native
+            counterpart of tools/clib.py). On `//#use NAME` in the lexer's `//`
+            path, cc saves the BIOS read-stream state (ROLBA..ROCNT + ROSDRV),
+            opens /lib/lib_NAME.c into a per-level buffer, and lexes from it; GC
+            pops back to the parent at the lib's EOF. Nesting is a stack
+            (USESTATE + USEBUF, 5 levels); each library is spliced at most once
+            (USED dedup, so a diamond dependency doesn't double-define). run.sh
+            now ships os/commands/lib_*.c into /lib. Verified on-target: basic
+            splice, dedup (program + a lib both `//#use a`), a lib-declared global
+            used by main with main's own globals after the directive, and 3-level
+            nesting (c->b->a). No #define/#include (the command sources use
+            neither). This completes "step 1" (globals + //#use) toward compiling
+            the C command sources; next is the bios() intrinsic + hex literals.
           * v0.18 — **comments**: the lexer skips `//` line comments and
             `/* ... */` block comments in its whitespace phase (a leading `/`
             peeks ahead; a lone `/` is still the divide operator). Verified line,

@@ -9,7 +9,7 @@
 ; emits assembly text to stdout via SYS_PUTC, so `>OUT.ASM` captures it and the
 ; program's own I/O stays shell-redirectable.
 ;
-; EARLY (v0.20). Supported so far:  (type = int (16-bit) | char (1-byte elem))
+; EARLY (v0.21). Supported so far:  (type = int (16-bit) | char (1-byte elem))
 ;     program : (func | global)*   global : type [*]NAME [ [N] ] ;
 ;     func : type NAME([type [*]P,...]) { <stmt>* }
 ;     stmt : type [*]NAME [= expr]; | type NAME[N]; | NAME = expr; |
@@ -48,6 +48,8 @@ FOPEN    = $0124   ; open the resolved file for reading (P1 = 512-byte buffer)
 FGETB    = $0127   ; next source byte -> A; C=1 at EOF
 SYS_PUTC = $4009   ; emit A to stdout (redirectable by the shell)
 RDBUF    = $FC00   ; FOPEN read buffer
+ROSTATE  = $705C   ; BIOS read-stream state (ROLBA..ROCNT, 11 contiguous bytes)
+ROSDRV   = $707F   ; BIOS read-stream drive (1 byte)
 
 CR       = $0D
 LF       = $0A
@@ -93,6 +95,8 @@ START:  TPA3L
         STA  CURBRK
         STA  CURCONT
         STA  GSYMCNT
+        STA  USESP
+        STA  USEDN
         JSR  COMPILE
         RTS
 USAGE:  LDP1 #MUSAGE
@@ -527,7 +531,315 @@ GC:     LDA  PBF
         CLC
         RTS
 gc_rd:  JSR  FGETB                   ; C=1 at EOF
+        JNC  gc_ok                   ; got a byte
+        LDA  USESP                   ; EOF: inside a spliced lib? pop and continue
+        JZ   gc_reof
+        JSR  USEPOP
+        JMP  gc_rd
+gc_reof: SEC
         RTS
+gc_ok:  CLC
+        RTS
+
+; =============================================================================
+; //#use NAME  -- recursive source splicer (native counterpart of clib.py).
+;   On "//#use NAME" the current read stream is saved, /lib/lib_NAME.c is opened
+;   into a fresh buffer, and lexing continues from it; at its EOF (GC) the parent
+;   stream is restored. Nesting is a stack (USESTATE + USEBUF per level); each
+;   library is spliced at most once (USED dedup).
+; =============================================================================
+; TRYUSE: we have consumed "//#". Expect "use NAME" -> splice; else skip the line.
+TRYUSE: JSR GC
+        JC   tu_ret
+        LDB  #'u'
+        CMP
+        JNZ  tu_skipl
+        JSR  GC
+        JC   tu_ret
+        LDB  #'s'
+        CMP
+        JNZ  tu_skipl
+        JSR  GC
+        JC   tu_ret
+        LDB  #'e'
+        CMP
+        JNZ  tu_skipl
+tu_sp:  JSR  GC                       ; skip spaces before the name
+        JC   tu_ret
+        STA  TMPB
+        LDB  #' '
+        CMP
+        JZ   tu_sp
+        LDA  #<NAMEBUF                ; read the library name into NAMEBUF (via P2)
+        TAP2L
+        LDA  #>NAMEBUF
+        TAP2H
+tu_nm:  LDA  TMPB
+        JSR  ISALP
+        JC   tu_put
+        LDA  TMPB
+        JSR  ISDIG
+        JC   tu_put
+        JMP  tu_nend
+tu_put: LDA  TMPB
+        STA  (P2)
+        INP2
+        JSR  GC
+        JC   tu_nend0
+        STA  TMPB
+        JMP  tu_nm
+tu_nend0: LDA #LF
+        STA  TMPB
+tu_nend: LDA #0
+        STA  (P2)                     ; NUL-terminate the name
+        LDA  TMPB                     ; skip to end of line
+        LDB  #LF
+        CMP
+        JZ   tu_do
+tu_es:  JSR  GC
+        JC   tu_do
+        LDB  #LF
+        CMP
+        JNZ  tu_es
+tu_do:  JSR  DOUSE
+        RTS
+tu_skipl: LDB #LF                     ; not "use": skip the rest of the line
+        CMP
+        JZ   tu_ret
+tu_sl:  JSR  GC
+        JC   tu_ret
+        LDB  #LF
+        CMP
+        JNZ  tu_sl
+tu_ret: RTS
+
+; DOUSE: dedup NAMEBUF, then save state + open /lib/lib_NAME.c into a new buffer.
+DOUSE:  JSR USED_HAS
+        LDA  USEDF
+        JNZ  du_done                  ; already spliced -> skip
+        JSR  USED_ADD
+        JSR  BUILDLIBPATH
+        JSR  SAVESTATE
+        LDA  #<LIBPATH
+        TAP1L
+        LDA  #>LIBPATH
+        TAP1H
+        LDA  #0
+        JSR  FRESOLVE
+        JSR  LIBBUFPTR                ; P1 = USEBUF + USESP*512
+        LDA  #0
+        JSR  FOPEN
+        JC   du_fail
+        LDA  USESP                    ; success: descend one level
+        INC
+        STA  USESP
+        RTS
+du_fail: JSR RESTORESTATE             ; not found -> restore parent, continue
+du_done: RTS
+
+; USED_HAS: USEDF = 1 if NAMEBUF is already in the USED pool.
+USED_HAS: LDA #<USED
+        TAP1L
+        LDA  #>USED
+        TAP1H
+        LDA  #0
+        STA  TMPB
+        STA  USEDF
+uh_e:   LDA  TMPB
+        LDB  USEDN
+        CMP
+        JC   uh_ret
+        LDA  #<NAMEBUF
+        TAP2L
+        LDA  #>NAMEBUF
+        TAP2H
+uh_c:   LDA  (P1)
+        STA  TMPC
+        LDA  (P2)
+        LDB  TMPC
+        CMP
+        JNZ  uh_nx
+        LDA  (P1)
+        JZ   uh_yes
+        INP1
+        INP2
+        JMP  uh_c
+uh_nx:  LDA  (P1)
+        JZ   uh_np
+        INP1
+        JMP  uh_nx
+uh_np:  INP1
+        LDA  TMPB
+        INC
+        STA  TMPB
+        JMP  uh_e
+uh_yes: LDA #1
+        STA  USEDF
+uh_ret: RTS
+
+; USED_ADD: append NAMEBUF to the USED pool.
+USED_ADD: LDA #<USED
+        TAP1L
+        LDA  #>USED
+        TAP1H
+        LDA  #0
+        STA  TMPB
+ua_e:   LDA  TMPB
+        LDB  USEDN
+        CMP
+        JC   ua_ap
+ua_sk:  LDA  (P1)
+        JZ   ua_np
+        INP1
+        JMP  ua_sk
+ua_np:  INP1
+        LDA  TMPB
+        INC
+        STA  TMPB
+        JMP  ua_e
+ua_ap:  LDA #<NAMEBUF
+        TAP2L
+        LDA  #>NAMEBUF
+        TAP2H
+ua_cp:  LDA  (P2)
+        STA  (P1)
+        JZ   ua_dn
+        INP1
+        INP2
+        JMP  ua_cp
+ua_dn:  LDA USEDN
+        INC
+        STA  USEDN
+        RTS
+
+; BUILDLIBPATH: LIBPATH = "/lib/lib_" + NAMEBUF + ".c"
+BUILDLIBPATH: LDA #<LIBPATH
+        TAP2L
+        LDA  #>LIBPATH
+        TAP2H
+        LDA  #<M_LIBPFX
+        TAP1L
+        LDA  #>M_LIBPFX
+        TAP1H
+blp_p:  LDA  (P1)
+        JZ   blp_nm
+        STA  (P2)
+        INP1
+        INP2
+        JMP  blp_p
+blp_nm: LDA  #<NAMEBUF
+        TAP1L
+        LDA  #>NAMEBUF
+        TAP1H
+blp_n:  LDA  (P1)
+        JZ   blp_x
+        STA  (P2)
+        INP1
+        INP2
+        JMP  blp_n
+blp_x:  LDA  #<M_DOTC
+        TAP1L
+        LDA  #>M_DOTC
+        TAP1H
+blp_e:  LDA  (P1)
+        STA  (P2)
+        JZ   blp_d
+        INP1
+        INP2
+        JMP  blp_e
+blp_d:  RTS
+
+; LIBBUFPTR: P1 = USEBUF + USESP*512
+LIBBUFPTR: LDA #<USEBUF
+        TAP1L
+        LDA  USESP
+        SHL
+        STA  TMPC
+        LDA  #>USEBUF
+        LDB  TMPC
+        ADD
+        TAP1H
+        RTS
+
+; USEOFF -> A = USESP*12  (index into USESTATE)
+USEOFF: LDA USESP
+        SHL
+        SHL
+        STA  TMPC
+        SHL
+        LDB  TMPC
+        ADD
+        RTS
+
+; SAVESTATE: USESTATE[USESP] = the 11-byte read state + ROSDRV
+SAVESTATE: JSR USEOFF
+        STA  TMPC
+        LDA  #<USESTATE
+        LDB  TMPC
+        ADD
+        TAP2L
+        LDA  #>USESTATE
+        JNC  ss0
+        INC
+ss0:    TAP2H
+        LDA  #<ROSTATE
+        TAP1L
+        LDA  #>ROSTATE
+        TAP1H
+        LDA  #11
+        STA  USECNT
+ss_l:   LDA  (P1)
+        STA  (P2)
+        INP1
+        INP2
+        LDA  USECNT
+        DEC
+        STA  USECNT
+        JNZ  ss_l
+        LDA  ROSDRV
+        STA  (P2)
+        RTS
+
+; RESTORESTATE: BIOS read state <- USESTATE[USESP]
+RESTORESTATE: JSR USEOFF
+        STA  TMPC
+        LDA  #<USESTATE
+        LDB  TMPC
+        ADD
+        TAP1L
+        LDA  #>USESTATE
+        JNC  rs0
+        INC
+rs0:    TAP1H
+        LDA  #<ROSTATE
+        TAP2L
+        LDA  #>ROSTATE
+        TAP2H
+        LDA  #11
+        STA  USECNT
+rs_l:   LDA  (P1)
+        STA  (P2)
+        INP1
+        INP2
+        LDA  USECNT
+        DEC
+        STA  USECNT
+        JNZ  rs_l
+        LDA  (P1)
+        STA  ROSDRV
+        RTS
+
+; USEPOP: a spliced library reached EOF -> restore the parent stream
+USEPOP: LDA USESP
+        DEC
+        STA  USESP
+        JSR  RESTORESTATE
+        RTS
+
+M_LIBPFX: .asciiz "/lib/lib_"
+M_DOTC:   .asciiz ".c"
+
+
 UNGC:   STA  PBC                     ; push A back
         LDA  #1
         STA  PBF
@@ -741,12 +1053,22 @@ adv_slash: JSR GC
 adv_slp: LDA #'/'
         STA  TMPB
         JMP  adv_cls                  ; classify as the '/' punct
-adv_linec: JSR GC                     ; skip to end of line
+adv_linec: JSR GC                     ; first char after '//'
         JC   adv_eof
         LDB  #LF
         CMP
-        JNZ  adv_linec
+        JZ   alc_end
+        LDB  #'#'
+        CMP
+        JNZ  alc_skip                 ; ordinary comment
+        JSR  TRYUSE                   ; "#use NAME" ? -> splice the library
         JMP  adv_ws
+alc_skip: JSR GC                       ; skip the rest of an ordinary comment line
+        JC   adv_eof
+        LDB  #LF
+        CMP
+        JNZ  alc_skip
+alc_end: JMP  adv_ws
 adv_blockc: JSR GC                    ; skip to '*/'
         JC   adv_eof
         LDB  #'*'
@@ -3423,6 +3745,15 @@ IDVARAR: .fill 1    ; gf_id: the variable's array flag
 ELARR: .fill 1      ; ELEMADDR: 1 if the indexed base is an array (else pointer)
 LHSCH: .fill 1      ; assignment target char flag
 LHSAR: .fill 1      ; assignment target array flag
+USESP:  .fill 1     ; //#use nesting depth (0 = main source)
+USEDF:  .fill 1     ; USED_HAS result
+USEDN:  .fill 1     ; number of spliced library names (dedup)
+USECNT: .fill 1     ; save/restore byte counter
+NAMEBUF: .fill 24   ; the current //#use library name
+LIBPATH: .fill 40   ; "/lib/lib_<name>.c"
+USED:   .fill 128   ; packed names of already-spliced libraries
+USESTATE: .fill 60  ; saved read-stream state, 12 bytes x 5 levels
+USEBUF: .fill 2560  ; per-level 512-byte read buffers (5 levels)
 NLSLOT: .fill 1    ; current function's slot count (>= name count, arrays add N)
 SYMSLOT: .fill 48  ; per-name -> first slot (relative to SLOTBASE)
 SYMARR: .fill 256  ; per-slot: 1 if this slot is an array base

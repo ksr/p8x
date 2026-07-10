@@ -117,6 +117,14 @@ if [ ! -f "$disk" ]; then
         python3 "$root/tools/p8xfs.py" put "$disk" "$page" \
             --name "/man/$base" >/dev/null
     done
+    # /lib: the shared C library sources (lib_*.c). The native `cc`'s //#use
+    # splicer opens /lib/lib_<name>.c on-target (its counterpart of clib.py), so
+    # e.g. `cc wc.c` can pull in `//#use stdin`. Plain source, not compiled here.
+    python3 "$root/tools/p8xfs.py" mkdir "$disk" /lib >/dev/null
+    for libc in "$root"/os/commands/lib_*.c; do
+        python3 "$root/tools/p8xfs.py" put "$disk" "$libc" \
+            --name "/lib/$(basename "$libc")" >/dev/null
+    done
     printf 'hello from P8X/OS\n' > "$build/readme.txt"
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/readme.txt" --name /README.TXT >/dev/null
     # A sample assembly source so the EDIT -> ASM -> RUN loop is demoable out of
