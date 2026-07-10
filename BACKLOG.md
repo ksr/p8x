@@ -962,6 +962,17 @@ Last updated: 2026-07-08
             NOTE: a survey found wc's tree uses NO ++/--/?: (lib_stdin was written
             in the restricted subset on purpose) -- so those operators are not
             needed for the simple filter commands, only the complex ones.
+          * v0.24 — **builtins + array decay: cc compiles & RUNS a real OS
+            command.** Added the p8cc builtins puts/getchar/peek/poke/argstr as
+            gfi_call intrinsics (puts=SYS_PUTS+\n, getchar=SYS_GETC->char/0xFFFF,
+            peek/poke=byte load/store, argstr=P2). A bare array name now DECAYS to
+            &name[0] in gfi_var (and sets SAWADDRG so a LOCAL array passed to a
+            callee isn't caller-saved over the callee's pointer writes). MILESTONE:
+            pwd.c -- an actual OS command -- compiled by cc on-target, assembled
+            (3054 bytes), installed, and ran CORRECTLY: `pwd` -> "/", `cd /foo;
+            pwd` -> "/foo". The full self-hosted pipeline (cc -> asm -> run) works
+            on real command source. A program must not redefine a builtin name
+            (same rule as p8cc). os_cc_test updated to use the puts() builtin.
           * v0.18 — **comments**: the lexer skips `//` line comments and
             `/* ... */` block comments in its whitespace phase (a leading `/`
             peeks ahead; a lone `/` is still the divide operator). Verified line,
