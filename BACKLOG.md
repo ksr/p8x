@@ -862,6 +862,19 @@ Last updated: 2026-07-08
             fact/fib still green. LIMITATION: no `char`/byte width yet (a char*
             still moves a word), no arrays/`[]` yet, and &local across a *direct*
             recursive call is undefined.
+          * v0.14 — **int arrays + indexing**. Required decoupling the name count
+            from the slot count: SYMCNT still counts names, new NLSLOT counts
+            slots (an array takes N), SYMSLOT[name]→slot, SYMARR[slot]=1 for array
+            bases. SYMFIND/SYMADD now key on the slot; EM_LDVAR/STVAR/ADDROF and
+            caller-saves loop over NLSLOT — all behaviour-preserving for scalars.
+            `int a[N]` reserves N contiguous word slots; `a[i]` / `p[i]` read and
+            write via ELEMADDR (base = &V<slot> for an array, the value for a
+            pointer; `+ index*2`; EM_LOADW/EM_STOREW). `&a[i]` yields an element
+            address, so `p = &a[0]` then `p[i]` and passing arrays to functions
+            (fill(&a[0],n)) work. Verified: a[i] read/write, for-loop fill/sum,
+            var index, &a[i], p[i] read/write, array passed to a function.
+            LIMITATION: word elements only (no char/byte), a bare array name does
+            not decay (use &a[0]), and slot count per function must stay < 256.
         Debug notes for future selves: FGETB clobbers P1 (build identifiers via
         P2); variables must live in the program's own BSS, not a fixed high page
         (OS/SYS_PUTC scratch collides); FRESOLVE's scan needs FSDIRBUF off SBUF

@@ -9,15 +9,16 @@
 ; emits assembly text to stdout via SYS_PUTC, so `>OUT.ASM` captures it and the
 ; program's own I/O stays shell-redirectable.
 ;
-; EARLY (v0.13). Supported so far:
+; EARLY (v0.14). Supported so far:
 ;     program : func*    func : int NAME([int [*]P,...]) { <stmt>* }
-;     stmt : int [*]NAME [= expr]; | NAME = expr; | *expr = expr; | expr; |
-;            if(e) s [else s] | while(e) s | for([asg];[e];[asg]) s |
-;            break; | continue; | { s* } | putchar(e); | return [e];
+;     stmt : int [*]NAME [= expr]; | int NAME[N]; | NAME = expr; |
+;            NAME[i] = expr; | *expr = expr; | expr; | if(e) s [else s] |
+;            while(e) s | for([asg];[e];[asg]) s | break; | continue; |
+;            { s* } | putchar(e); | return [e];
 ;     expr : land ('||' land)*   land : rel ('&&' rel)*   (short-circuit -> 0/1)
 ;     rel  : add [relop add]   add : term (('+'|'-') term)*
 ;     term : unary (('*'|'/'|'%') unary)*   unary : ('-'|'!'|'*'|'&') unary | factor
-;     factor : NUMBER | NAME | NAME(args) | '(' e ')'   relop: < <= > >= == !=
+;     factor : NUMBER | NAME | NAME[i] | NAME(args) | '(' e ')'   relop: < <= > >= == !=
 ; Values are 16-bit int. Codegen uses a MEMORY accumulator __ax (every
 ; expression's value) + a temp __t0; binary ops route through runtime helpers
 ; (__add/__sub/__mul/__cmp/__div) emitted at the end of the program. putchar
@@ -248,6 +249,40 @@ EM_LDVAR: LDP1 #MLDAV                ; __ax = V<SYMIDX>
         LDP1 #MSTAXH
         JSR  EMIT
         RTS
+; EM_SCALE2: __ax <<= 1  (scale an int index to a byte offset)
+EM_SCALE2: LDP1 #MLDAX
+        JSR  EMIT
+        LDP1 #MSHL
+        JSR  EMIT
+        LDP1 #MSTAX
+        JSR  EMIT
+        LDP1 #MLDAXH
+        JSR  EMIT
+        LDP1 #MROL
+        JSR  EMIT
+        LDP1 #MSTAXH
+        JSR  EMIT
+        RTS
+
+; ELEMADDR: SYMIDX = an array/pointer variable's slot; current token '['.
+;   Emits code leaving the element ADDRESS in __ax.  Consumes  [ index ] .
+ELEMADDR: LDA SYMIDX
+        JSR  GSYMARR
+        JZ   ela_ptr
+        JSR  EM_ADDROF               ; array: base = &V<slot>
+        JMP  ela_base
+ela_ptr: JSR EM_LDVAR                ; pointer: base = its value
+ela_base: JSR EM_PUSH                ; push base
+        JSR  ADVANCE                 ; past '['
+        JSR  GEXPR                   ; index -> __ax
+        LDA  #']'
+        JSR  EXPECTP
+        JSR  EM_SCALE2               ; index *= 2  (int elements)
+        JSR  EM_POP                  ; base -> __t0
+        LDP1 #MADD                   ; JSR __add -> __ax = index*2 + base
+        JSR  EMIT
+        RTS
+
 ; --- pointer helpers (v0.13) ---
 ; EM_ADDROF: __ax = &V<SLOTBASE+SYMIDX>   (address-of a scalar variable)
 EM_ADDROF: LDP1 #MLDALV
@@ -653,6 +688,7 @@ FUNCDEF: LDP1 #KW_INT
         STA  SLOTBASE
         LDA  #0
         STA  SYMCNT
+        STA  NLSLOT
         JSR  ADVANCE                 ; past NAME
         LDA  #'('
         JSR  EXPECTP
@@ -735,7 +771,7 @@ fd_end: LDA  #'}'
         LDP1 #MRTS
         JSR  EMIT
         LDA  SLOTBASE                ; advance the global slot counter
-        LDB  SYMCNT
+        LDB  NLSLOT
         ADD
         STA  SLOTCNT
         RTS
@@ -1180,7 +1216,15 @@ sd_nostar: JSR SYMADD                ; add NAME (current id) -> SYMIDX
         LDA  SYMIDX
         STA  LHSIDX
         JSR  ADVANCE                 ; past NAME
-        LDA  CURK                    ; optional  = expr
+        LDA  CURK                    ; array?  int NAME [ N ]
+        LDB  #3
+        CMP
+        JNZ  sd_chkeq
+        LDA  CURV
+        LDB  #'['
+        CMP
+        JZ   sd_arr
+sd_chkeq: LDA CURK                   ; optional  = expr
         LDB  #3
         CMP
         JNZ  sd_semi
@@ -1191,6 +1235,28 @@ sd_nostar: JSR SYMADD                ; add NAME (current id) -> SYMIDX
         JSR  ADVANCE                 ; past '='
         JSR  GEXPR
         JSR  EMITSTV                 ; STA V<LHSIDX>
+sd_arr: JSR ADVANCE                  ; past '['
+        LDA  NLSLOT                   ; reserve (size - 1) extra slots
+        LDB  CURV
+        ADD
+        STA  NLSLOT
+        LDA  NLSLOT
+        LDB  #1
+        SUB
+        STA  NLSLOT
+        LDA  #<SYMARR                 ; SYMARR[base slot] = 1
+        LDB  LHSIDX
+        ADD
+        TAP1L
+        LDA  #>SYMARR
+        JNC  sd_a1
+        INC
+sd_a1:  TAP1H
+        LDA  #1
+        STA  (P1)
+        JSR  ADVANCE                  ; past size
+        LDA  #']'
+        JSR  EXPECTP
 sd_semi: LDA #$3B
         JSR  EXPECTP
         RTS
@@ -1209,10 +1275,30 @@ st_asg2:
         LDA  SYMIDX
         STA  LHSIDX
         JSR  ADVANCE                 ; past NAME
-        LDA  #'='
+        LDA  CURK                    ; NAME[index] = e ?
+        LDB  #3
+        CMP
+        JNZ  sa_scalar
+        LDA  CURV
+        LDB  #'['
+        CMP
+        JZ   sa_arrstore
+sa_scalar: LDA #'='
         JSR  EXPECTP
         JSR  GEXPR
         JSR  EMITSTV                 ; STA V<LHSIDX>
+        LDA  #$3B
+        JSR  EXPECTP
+        RTS
+sa_arrstore: LDA LHSIDX
+        STA  SYMIDX
+        JSR  ELEMADDR                ; __ax = element address (consumes [i])
+        JSR  EM_PUSH                 ; save address
+        LDA  #'='
+        JSR  EXPECTP
+        JSR  GEXPR                   ; RHS -> __ax
+        JSR  EM_POP                  ; address -> __t0
+        JSR  EM_STOREW               ; *(__t0) = __ax
         LDA  #$3B
         JSR  EXPECTP
         RTS
@@ -1473,11 +1559,27 @@ GUNARY: LDA  CURK
         JZ   gu_deref
 gu_fact: JMP  GFACT
 gu_addr: JSR  ADVANCE                 ; past '&'
-        JSR  SYMFIND                  ; the NAME (TID) -> SYMIDX
+        JSR  SYMFIND                  ; the NAME (TID) -> SYMIDX (slot)
         LDA  SYMOK
         JZ   gu_ad_e
-        JSR  EM_ADDROF                ; __ax = &V<slot>
+        LDA  SYMIDX
+        STA  IDVARIDX                 ; save the slot across ADVANCE
         JSR  ADVANCE                  ; past NAME
+        LDA  CURK                     ; &NAME[i] ?
+        LDB  #3
+        CMP
+        JNZ  gu_ad_pl
+        LDA  CURV
+        LDB  #'['
+        CMP
+        JZ   gu_ad_ix
+gu_ad_pl: LDA IDVARIDX                ; &NAME  -> address of the variable
+        STA  SYMIDX
+        JSR  EM_ADDROF
+        RTS
+gu_ad_ix: LDA IDVARIDX                ; &NAME[i] -> address of the element
+        STA  SYMIDX
+        JSR  ELEMADDR
         RTS
 gu_ad_e: RTS
 gu_deref: JSR ADVANCE                 ; past '*'
@@ -1537,11 +1639,20 @@ gf_id:  JSR  CPIDNAME                ; save the id; it may be a call or a variab
         LDB  #'('
         CMP
         JZ   gfi_call
+        LDA  CURV
+        LDB  #'['
+        CMP
+        JZ   gfi_index
 gfi_var: LDA IDVAROK
         JZ   gf_err
         LDA  IDVARIDX
         STA  SYMIDX
         JSR  EM_LDVAR
+        RTS
+gfi_index: LDA IDVARIDX               ; NAME[index] rvalue
+        STA  SYMIDX
+        JSR  ELEMADDR                 ; __ax = element address
+        JSR  EM_LOADW                 ; __ax = *(element)
         RTS
 gfi_call: JSR FFIND_ID              ; FI = callee index, FFB = param base slot
         JSR  CHKSELFREC              ; SELFREC = (callee == current function)?
@@ -1659,7 +1770,7 @@ efn_go: JSR  EMIT                    ; P1 -> the FI-th name; emit it
 EM_SAVESLOTS: LDA #0
         STA  VITER3
 ess_l:  LDA  VITER3
-        LDB  SYMCNT
+        LDB  NLSLOT
         CMP
         JC   ess_d                   ; VITER3 >= SYMCNT -> done
         LDA  SLOTBASE
@@ -1673,7 +1784,7 @@ ess_l:  LDA  VITER3
 ess_d:  RTS
 
 ; EM_RESTSLOTS: emit runtime pops in reverse (slot SYMCNT-1 .. 0).
-EM_RESTSLOTS: LDA SYMCNT
+EM_RESTSLOTS: LDA NLSLOT
         JZ   ers_d
         STA  VITER3
 ers_l:  LDA  VITER3
@@ -1771,6 +1882,9 @@ sf_np:  INP1
         JMP  sf_e
 sf_yes: LDA  #1
         STA  SYMOK
+        LDA  SYMIDX                   ; SYMIDX walked as the name index; map -> slot
+        JSR  GSYMSLOT
+        STA  SYMIDX
         RTS
 sf_no:  LDA  #0
         STA  SYMOK
@@ -1806,11 +1920,59 @@ sa_cp:  LDA  (P2)
         INP1
         INP2
         JMP  sa_cp
-sa_dn:  LDA  SYMCNT                  ; index = old count; bump the count
+sa_dn:  LDA  #<SYMSLOT                ; SYMSLOT[SYMCNT] = NLSLOT (name -> slot)
+        LDB  SYMCNT
+        ADD
+        TAP1L
+        LDA  #>SYMSLOT
+        JNC  sad1
+        INC
+sad1:   TAP1H
+        LDA  NLSLOT
+        STA  (P1)
+        LDA  #<SYMARR                 ; SYMARR[NLSLOT] = 0 (scalar by default)
+        LDB  NLSLOT
+        ADD
+        TAP1L
+        LDA  #>SYMARR
+        JNC  sad2
+        INC
+sad2:   TAP1H
+        LDA  #0
+        STA  (P1)
+        LDA  NLSLOT                   ; SYMIDX = the slot; bump slot + name counts
         STA  SYMIDX
+        INC
+        STA  NLSLOT
         LDA  SYMCNT
         INC
         STA  SYMCNT
+        RTS
+
+; GSYMSLOT (A = name index) -> A = that name's slot (SYMSLOT[A])
+GSYMSLOT: STA TMPC
+        LDA  #<SYMSLOT
+        LDB  TMPC
+        ADD
+        TAP1L
+        LDA  #>SYMSLOT
+        JNC  gss1
+        INC
+gss1:   TAP1H
+        LDA  (P1)
+        RTS
+
+; GSYMARR (A = slot) -> A = 1 if that slot is an array base, else 0
+GSYMARR: STA TMPC
+        LDA  #<SYMARR
+        LDB  TMPC
+        ADD
+        TAP1L
+        LDA  #>SYMARR
+        JNC  gsa1
+        INC
+gsa1:   TAP1H
+        LDA  (P1)
         RTS
 
 ; =============================================================================
@@ -2442,6 +2604,12 @@ MCMP_DEF:
         .byte LF
         .ascii "__cm0:  RTS"
         .byte LF,0
+MSHL:   .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "SHL"
+        .byte LF,0
+MROL:   .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "ROL"
+        .byte LF,0
 MNEG:   .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "JSR __neg"
         .byte LF,0
@@ -2570,6 +2738,9 @@ VITER:  .fill 1    ; loop counter emitting variable storage
 VITER2: .fill 1    ; EM_PUSHSLOT/EM_POPSLOT: slot number being emitted
 VITER3: .fill 1    ; EM_SAVESLOTS/EM_RESTSLOTS: slot loop counter
 SELFREC: .fill 1   ; 1 if the current call is a direct self-recursion
+NLSLOT: .fill 1    ; current function's slot count (>= name count, arrays add N)
+SYMSLOT: .fill 48  ; per-name -> first slot (relative to SLOTBASE)
+SYMARR: .fill 256  ; per-slot: 1 if this slot is an array base
 CUR2:   .fill 1    ; second char of a two-char punct (== != <= >=), else 0
 RELOP:  .fill 1    ; relational op code: 0 LT 1 LE 2 GT 3 GE 4 EQ 5 NE
 RELF:   .fill 1    ; RELDET: 1 if the current token is a relational op
