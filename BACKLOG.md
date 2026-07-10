@@ -888,6 +888,11 @@ Last updated: 2026-07-08
             Verified: puts(), strlen(), multiple string literals, char params.
             LIMITATION: still no true 1-byte type/width, and no escape sequences
             in literals.
+          * v0.16 — **escape sequences** in char/string literals: \n \t \r \0
+            \\ \' \". Char literals decode at lex time (ESCMAP); string literals
+            keep the backslash text verbatim in STRBUF and rely on the assembler
+            (.asciiz uses Python unicode_escape). adv_stl now treats `\"` as a
+            literal quote, not the terminator. Verified '\n', "A\nB\n", '\t'.
         Debug notes for future selves: FGETB clobbers P1 (build identifiers via
         P2); variables must live in the program's own BSS, not a fixed high page
         (OS/SYS_PUTC scratch collides); FRESOLVE's scan needs FSDIRBUF off SBUF

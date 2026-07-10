@@ -21,7 +21,7 @@ DESCRIPTION
     BACK-END-and-all compiler aimed at fitting the ~31.5 KB TPA, where a port
     of the optimizing p8cc could not.
 
-    THIS IS EARLY (v0.15). Supported so far:  (`int` and `char` name a type;
+    THIS IS EARLY (v0.16). Supported so far:  (`int` and `char` name a type;
     `char` is currently a synonym for `int`.)
 
         program : func*
@@ -64,7 +64,7 @@ DESCRIPTION
     loop and helpers like puts()/strlen() work. All values are word-sized: a
     char* deref reads a WORD, but putchar takes the low byte and the pad zero
     makes the word at the terminator read 0, so string loops behave. There is no
-    real 1-byte type yet (no escape sequences in literals either). NOTE: mutual
+    real 1-byte type yet, but escape sequences \n \t \r \0 \\ \' \" work in char and string literals. NOTE: mutual
     recursion / forward calls are not supported (single pass: a callee must be
     defined before it is called); within one call's argument list a later
     argument must not read a parameter an earlier one overwrote; and taking the

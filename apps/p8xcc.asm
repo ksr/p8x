@@ -9,7 +9,7 @@
 ; emits assembly text to stdout via SYS_PUTC, so `>OUT.ASM` captures it and the
 ; program's own I/O stays shell-redirectable.
 ;
-; EARLY (v0.15). Supported so far:  (type = int | char; char == int for now)
+; EARLY (v0.16). Supported so far:  (type = int | char; char == int for now)
 ;     program : func*    func : type NAME([type [*]P,...]) { <stmt>* }
 ;     stmt : type [*]NAME [= expr]; | type NAME[N]; | NAME = expr; |
 ;            NAME[i] = expr; | *expr = expr; | expr; | if(e) s [else s] |
@@ -544,13 +544,49 @@ adv_pd: RTS
 adv_eof: LDA #0
         STA  CURK
         RTS
-adv_chl: JSR GC                       ; 'x' -> NUMBER token (ASCII value)
-        STA  CURV
+adv_chl: JSR GC                       ; 'x' or '\x' -> NUMBER token
+        STA  TMPB
+        LDB  #$5C
+        CMP
+        JNZ  ach_v
+        JSR  GC                       ; the escaped char
+        JSR  ESCMAP                   ; -> byte value
+        JMP  ach_set
+ach_v:  LDA  TMPB
+ach_set: STA CURV
         LDA  #0
         STA  CURV+1
         LDA  #1
         STA  CURK
-        JSR  GC                       ; closing quote (discarded; no escapes)
+        JSR  GC                       ; closing quote
+        RTS
+
+; ESCMAP: A = char after a backslash -> A = the byte it denotes.
+ESCMAP: STA TMPB
+        LDB  #'n'
+        CMP
+        JNZ  esc1
+        LDA  #10
+        RTS
+esc1:   LDA TMPB
+        LDB  #'t'
+        CMP
+        JNZ  esc2
+        LDA  #9
+        RTS
+esc2:   LDA TMPB
+        LDB  #'r'
+        CMP
+        JNZ  esc3
+        LDA  #13
+        RTS
+esc3:   LDA TMPB
+        LDB  #'0'
+        CMP
+        JNZ  esc_d
+        LDA  #0
+        RTS
+esc_d:  LDA TMPB                       ; default (\\ \' \") : the char itself
         RTS
 adv_stl: LDA #<STRBUF                  ; "..." -> STRING (kind 4); built via P2
         TAP2L                         ;   (GC/FGETB clobbers P1, preserves P2)
@@ -563,6 +599,18 @@ asl_l:  JSR  GC
         CMP
         JZ   asl_e                    ; closing quote
         LDA  TMPB
+        LDB  #$5C                     ; backslash: keep it + the next char raw
+        CMP
+        JNZ  asl_st                   ; (the assembler decodes the escape)
+        LDA  #$5C
+        STA  (P2)
+        INP2
+        JSR  GC
+        JC   asl_e
+        STA  (P2)
+        INP2
+        JMP  asl_l
+asl_st: LDA  TMPB
         STA  (P2)
         INP2
         JMP  asl_l
