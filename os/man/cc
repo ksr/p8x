@@ -21,8 +21,8 @@ DESCRIPTION
     BACK-END-and-all compiler aimed at fitting the ~31.5 KB TPA, where a port
     of the optimizing p8cc could not.
 
-    THIS IS EARLY (v0.16). Supported so far:  (`int` and `char` name a type;
-    `char` is currently a synonym for `int`.)
+    THIS IS EARLY (v0.17). Supported so far:  (`int` is 16-bit; `char` is a
+    1-byte element type — see below.)
 
         program : func*
         func  : type NAME ( [type [*]P (, type [*]P)*] ) { <stmt>* }
@@ -61,10 +61,13 @@ DESCRIPTION
     is emitted inline (jumped over) as NUL-terminated data padded with an extra
     zero, and evaluates to its address. So a classic
         char *s; s = "hi"; while (*s) { putchar(*s); s = s + 1; }
-    loop and helpers like puts()/strlen() work. All values are word-sized: a
-    char* deref reads a WORD, but putchar takes the low byte and the pad zero
-    makes the word at the terminator read 0, so string loops behave. There is no
-    real 1-byte type yet, but escape sequences \n \t \r \0 \\ \' \" work in char and string literals. NOTE: mutual
+    loop and helpers like puts()/strlen() work. CHAR is a real 1-byte element:
+    `char a[N]` packs N bytes (2 per word slot), `char *p`/`char a[]` deref and
+    index (`*p`, `p[i]`, `a[i]`) read/write ONE byte and pointer arithmetic on
+    them steps by 1 — so a char buffer strcpy(&d[0], s) works. (A scalar `char c`
+    is still stored in a word; the byte width matters for arrays and pointers.)
+    Escape sequences \n \t \r \0 \\ \' \" work in char and string literals.
+    NOTE: mutual
     recursion / forward calls are not supported (single pass: a callee must be
     defined before it is called); within one call's argument list a later
     argument must not read a parameter an earlier one overwrote; and taking the

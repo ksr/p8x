@@ -9,7 +9,7 @@
 ; emits assembly text to stdout via SYS_PUTC, so `>OUT.ASM` captures it and the
 ; program's own I/O stays shell-redirectable.
 ;
-; EARLY (v0.16). Supported so far:  (type = int | char; char == int for now)
+; EARLY (v0.17). Supported so far:  (type = int (16-bit) | char (1-byte elem))
 ;     program : func*    func : type NAME([type [*]P,...]) { <stmt>* }
 ;     stmt : type [*]NAME [= expr]; | type NAME[N]; | NAME = expr; |
 ;            NAME[i] = expr; | *expr = expr; | expr; | if(e) s [else s] |
@@ -249,6 +249,66 @@ EM_LDVAR: LDP1 #MLDAV                ; __ax = V<SYMIDX>
         LDP1 #MSTAXH
         JSR  EMIT
         RTS
+; GSYMCHAR (A = slot) -> A = 1 if that slot is char-typed
+GSYMCHAR: STA TMPC
+        LDA  #<SYMCHAR
+        LDB  TMPC
+        ADD
+        TAP1L
+        LDA  #>SYMCHAR
+        JNC  gsc1
+        INC
+gsc1:   TAP1H
+        LDA  (P1)
+        RTS
+
+; SETSYMCHAR: SYMCHAR[SYMIDX] = DCLCHAR
+SETSYMCHAR: LDA #<SYMCHAR
+        LDB  SYMIDX
+        ADD
+        TAP1L
+        LDA  #>SYMCHAR
+        JNC  ssc1
+        INC
+ssc1:   TAP1H
+        LDA  DCLCHAR
+        STA  (P1)
+        RTS
+
+; EM_LOADB: __ax = (byte)*(__ax)   (byte deref; high byte 0)
+EM_LOADB: LDP1 #MLDAX
+        JSR  EMIT
+        LDP1 #MTAP1L
+        JSR  EMIT
+        LDP1 #MLDAXH
+        JSR  EMIT
+        LDP1 #MTAP1H
+        JSR  EMIT
+        LDP1 #MLDP1
+        JSR  EMIT
+        LDP1 #MSTAX
+        JSR  EMIT
+        LDP1 #MLDA0
+        JSR  EMIT
+        LDP1 #MSTAXH
+        JSR  EMIT
+        RTS
+
+; EM_STOREB: *(__t0) = (byte)__ax   (store the low byte)
+EM_STOREB: LDP1 #MLDT0
+        JSR  EMIT
+        LDP1 #MTAP1L
+        JSR  EMIT
+        LDP1 #MLDT0H
+        JSR  EMIT
+        LDP1 #MTAP1H
+        JSR  EMIT
+        LDP1 #MLDAX
+        JSR  EMIT
+        LDP1 #MSTP1
+        JSR  EMIT
+        RTS
+
 ; EM_SCALE2: __ax <<= 1  (scale an int index to a byte offset)
 EM_SCALE2: LDP1 #MLDAX
         JSR  EMIT
@@ -267,6 +327,9 @@ EM_SCALE2: LDP1 #MLDAX
 ; ELEMADDR: SYMIDX = an array/pointer variable's slot; current token '['.
 ;   Emits code leaving the element ADDRESS in __ax.  Consumes  [ index ] .
 ELEMADDR: LDA SYMIDX
+        JSR  GSYMCHAR                ; ELCHAR = char-typed? (byte elements)
+        STA  ELCHAR
+        LDA  SYMIDX
         JSR  GSYMARR
         JZ   ela_ptr
         JSR  EM_ADDROF               ; array: base = &V<slot>
@@ -277,9 +340,11 @@ ela_base: JSR EM_PUSH                ; push base
         JSR  GEXPR                   ; index -> __ax
         LDA  #']'
         JSR  EXPECTP
-        JSR  EM_SCALE2               ; index *= 2  (int elements)
-        JSR  EM_POP                  ; base -> __t0
-        LDP1 #MADD                   ; JSR __add -> __ax = index*2 + base
+        LDA  ELCHAR                  ; char: scale 1 (no shift); int: scale 2
+        JNZ  ela_nos
+        JSR  EM_SCALE2
+ela_nos: JSR EM_POP                  ; base -> __t0
+        LDP1 #MADD                   ; JSR __add -> __ax = index*(1|2) + base
         JSR  EMIT
         RTS
 
@@ -785,6 +850,8 @@ FUNCDEF: JSR EXPECTTYPE
         CMP
         JZ   fp_done
 fp_loop: JSR EXPECTTYPE
+        LDA  ISCHARTYPE
+        STA  DCLCHAR
 fp_star: LDA CURK                    ; skip pointer stars on the param
         LDB  #3
         CMP
@@ -796,6 +863,7 @@ fp_star: LDA CURK                    ; skip pointer stars on the param
         JSR  ADVANCE
         JMP  fp_star
 fp_nostar: JSR SYMADD                ; the param is a local variable (slots 0..n-1)
+        JSR  SETSYMCHAR              ; record a char-typed parameter
         JSR  ADVANCE                 ; past the param name
         LDA  NPARAMS
         INC
@@ -1286,7 +1354,11 @@ st_while: JSR ADVANCE                ; past "while"
         RTS
 
 ; int NAME [ = expr ] ;   -> reserve a variable, optionally initialise it
-st_decl: JSR ADVANCE                 ; past "int"
+st_decl: LDP1 #KW_CHAR              ; int or char ?
+        JSR  IDEQ
+        LDA  TMPB
+        STA  DCLCHAR
+        JSR  ADVANCE                 ; past the type keyword
 sd_star: LDA CURK                    ; skip pointer stars: int *p, int **p
         LDB  #3
         CMP
@@ -1300,6 +1372,7 @@ sd_star: LDA CURK                    ; skip pointer stars: int *p, int **p
 sd_nostar: JSR SYMADD                ; add NAME (current id) -> SYMIDX
         LDA  SYMIDX
         STA  LHSIDX
+        JSR  SETSYMCHAR              ; SYMCHAR[slot] = DCLCHAR
         JSR  ADVANCE                 ; past NAME
         LDA  CURK                    ; array?  int NAME [ N ]
         LDB  #3
@@ -1321,11 +1394,20 @@ sd_chkeq: LDA CURK                   ; optional  = expr
         JSR  GEXPR
         JSR  EMITSTV                 ; STA V<LHSIDX>
 sd_arr: JSR ADVANCE                  ; past '['
-        LDA  NLSLOT                   ; reserve (size - 1) extra slots
+        LDA  DCLCHAR                  ; char array: ceil(N/2) words; int array: N
+        JNZ  sd_arrc
+        LDA  NLSLOT
         LDB  CURV
         ADD
         STA  NLSLOT
-        LDA  NLSLOT
+        JMP  sd_arrm
+sd_arrc: LDA CURV                     ; (N + 1) / 2
+        INC
+        SHR
+        LDB  NLSLOT
+        ADD
+        STA  NLSLOT
+sd_arrm: LDA NLSLOT                   ; the base slot was already counted -> -1
         LDB  #1
         SUB
         STA  NLSLOT
@@ -1378,13 +1460,21 @@ sa_scalar: LDA #'='
 sa_arrstore: LDA LHSIDX
         STA  SYMIDX
         JSR  ELEMADDR                ; __ax = element address (consumes [i])
+        LDA  ELCHAR                  ; save char-ness across the RHS parse
+        PHA
         JSR  EM_PUSH                 ; save address
         LDA  #'='
         JSR  EXPECTP
         JSR  GEXPR                   ; RHS -> __ax
         JSR  EM_POP                  ; address -> __t0
-        JSR  EM_STOREW               ; *(__t0) = __ax
-        LDA  #$3B
+        PLA
+        STA  ELCHAR
+        LDA  ELCHAR
+        JNZ  sas_b
+        JSR  EM_STOREW
+        JMP  sas_semi
+sas_b:  JSR  EM_STOREB
+sas_semi: LDA #$3B
         JSR  EXPECTP
         RTS
 ; EMITSTV: emit  "        STA V<LHSIDX>" + newline
@@ -1669,7 +1759,11 @@ gu_ad_ix: LDA IDVARIDX                ; &NAME[i] -> address of the element
 gu_ad_e: RTS
 gu_deref: JSR ADVANCE                 ; past '*'
         JSR  GUNARY                   ; the address expression -> __ax
-        JSR  EM_LOADW                 ; __ax = *(__ax)
+        LDA  EXPRCHAR                 ; char* -> byte load, else word
+        JNZ  gud_b
+        JSR  EM_LOADW
+        RTS
+gud_b:  JSR  EM_LOADB
         RTS
 gu_neg: JSR  ADVANCE
         JSR  GUNARY
@@ -1710,11 +1804,15 @@ GFACT:  LDA  CURK
         JSR  EXPECTP
         RTS
 gf_num: JSR  EM_LDIMM                ; __ax = the 16-bit literal
+        LDA  #0
+        STA  EXPRCHAR
         JSR  ADVANCE
         RTS
 ; a string literal: emit its bytes inline (jumped over), __ax = its address.
 ; Padded with an extra 0 so a WORD load at the terminating NUL reads 0.
-gf_str: JSR  NEWLBL
+gf_str: LDA #1                       ; a string literal is a char*
+        STA  EXPRCHAR
+        JSR  NEWLBL
         STA  STRDL                    ; data label
         JSR  NEWLBL
         STA  STRSL                    ; skip label
@@ -1774,12 +1872,18 @@ gfi_var: LDA IDVAROK
         JZ   gf_err
         LDA  IDVARIDX
         STA  SYMIDX
+        JSR  GSYMCHAR                ; remember if this value is char-typed
+        STA  EXPRCHAR
         JSR  EM_LDVAR
         RTS
 gfi_index: LDA IDVARIDX               ; NAME[index] rvalue
         STA  SYMIDX
-        JSR  ELEMADDR                 ; __ax = element address
-        JSR  EM_LOADW                 ; __ax = *(element)
+        JSR  ELEMADDR                 ; __ax = element address; ELCHAR set
+        LDA  ELCHAR
+        JNZ  gfx_b
+        JSR  EM_LOADW
+        RTS
+gfx_b:  JSR  EM_LOADB
         RTS
 gfi_call: JSR FFIND_ID              ; FI = callee index, FFB = param base slot
         JSR  CHKSELFREC              ; SELFREC = (callee == current function)?
@@ -2286,11 +2390,16 @@ ep_ret: RTS
 EXPECTTYPE: LDP1 #KW_INT
         JSR  IDEQ
         LDA  TMPB
-        JNZ  ett_ok
-        LDP1 #KW_CHAR
+        JZ   ett_c
+        LDA  #0
+        STA  ISCHARTYPE
+        JMP  ett_ok
+ett_c:  LDP1 #KW_CHAR
         JSR  IDEQ
         LDA  TMPB
         JZ   ett_no
+        LDA  #1
+        STA  ISCHARTYPE
 ett_ok: JSR  ADVANCE
         LDA  #1
         STA  TMPB
@@ -2900,6 +3009,11 @@ SYMARR: .fill 256  ; per-slot: 1 if this slot is an array base
 STRBUF: .fill 128  ; current string-literal text
 STRDL:  .fill 1    ; string literal: data label
 STRSL:  .fill 1    ; string literal: skip label
+SYMCHAR: .fill 256 ; per-slot: 1 if the variable is char-typed (byte elements)
+DCLCHAR: .fill 1   ; current declaration is char-typed
+ISCHARTYPE: .fill 1 ; EXPECTTYPE: 1 if the type just parsed was 'char'
+EXPRCHAR: .fill 1  ; last factor loaded a char-typed value (for *p byte deref)
+ELCHAR: .fill 1    ; ELEMADDR: 1 if the indexed base is char-typed
 CUR2:   .fill 1    ; second char of a two-char punct (== != <= >=), else 0
 RELOP:  .fill 1    ; relational op code: 0 LT 1 LE 2 GT 3 GE 4 EQ 5 NE
 RELF:   .fill 1    ; RELDET: 1 if the current token is a relational op
