@@ -19,7 +19,7 @@
  *
  * BIOS: FRESOLVE=$0133, FOPEN=$0124 (buf $FC00), FGETB=$0127.
  */
-//#use abspath   /* abspath(out, a): a CWD-relative path word -> absolute */
+//#use apath   /* abspath(out, a): a CWD-relative path word -> absolute */
 
 int pb;                            /* one-char pushback (-1 = empty) */
 int lno;                           /* current source line (1-based) */

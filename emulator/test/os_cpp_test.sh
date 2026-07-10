@@ -13,7 +13,7 @@ cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o oscpp.bin --base 0x4000 >/dev/null
 
-# cpp itself is built on the host (it //#use abspath); it becomes /bin/cpp.bin.
+# cpp itself is built on the host (it //#use apath); it becomes /bin/cpp.bin.
 python3 $ROOT/tools/clib.py $ROOT/os/commands/cpp.c -o cpp.pp.c
 python3 $ROOT/compiler/p8cc.py cpp.pp.c -o cpp.cc.asm >/dev/null
 python3 $ROOT/assembler/p8xasm.py cpp.cc.asm -o cpp.cc.bin --base 0x7A00 >/dev/null

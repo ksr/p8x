@@ -10,7 +10,7 @@
 char cur[260];
 char prev[260];
 
-//#use readline
+//#use rdline
 //#use streq
 
 

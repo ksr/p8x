@@ -656,8 +656,11 @@ Last updated: 2026-07-08
         to **~72 KB** vs a ~32 KB TPA (~46 B/line), so the front/back split needs
         the **codegen-shrink first** (frame-relative locals / MOVW) — even the
         parser alone overflows today. Next: shrink, then the CC1/CG split. KNOWN
-        LIMIT: P8XFS's 12-char names block storing `lib_abspath.c`/`lib_readline.c`
-        on-card for on-target preprocessing (rename or widen FS names).
+        LIMIT (RESOLVED 2026-07-10): P8XFS's 12-char names truncated
+        `lib_abspath.c`/`lib_readline.c` on-card; renamed to `lib_apath.c`/
+        `lib_rdline.c` (tokens `//#use apath`/`//#use rdline`) so the full name
+        incl. `.c` fits the 12-byte field. Convention is now `lib_<token>.c`
+        with `token` ≤ 6 chars.
       - **Codegen-shrink step 1 — DONE (2026-07-09).** Added `__ldw`/`__ldb`
         (load local word/byte) and `__stw`/`__stb` (store local) runtime helpers
         + a `var = expr` fast path (scalar local via `__stw`, global via `MOVW`),

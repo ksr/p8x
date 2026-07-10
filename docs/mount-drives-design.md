@@ -67,7 +67,7 @@ refused (reserved mount point).
 
 Revert to their pre-prefix form and **delete `lib_drive.c`**:
 `cat`, `dir`, `cp`, `mv`, `diff`, plus the `open_path`/`glob_expand`/`abspath`
-prefix hooks in `lib_stdin`/`lib_globx`/`lib_abspath`. They resolve unified
+prefix hooks in `lib_stdin`/`lib_globx`/`lib_apath`. They resolve unified
 paths; the mount is transparent. `cp`/`mv`/`diff` keep working across the mount
 because `FRESOLVE` sets `DRVSEL` per path and the streams carry their own drive.
 

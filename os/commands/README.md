@@ -180,8 +180,8 @@ consumer.
 | Library | Provides | Used by |
 |---------|----------|---------|
 | [`lib_stdin.c`](lib_stdin.c) | `path[80]`, `fromfile`, `nextc()` (next byte or 65535 at EOF), `openarg(a)` (open the optional file arg → 0 stdin / 1 opened / 2 not found). A `*`/`?` arg is expanded (via `lib_globx`) and `nextc()` reads all matches as **one concatenated stream**, so every command below gets globs for free (`grep x *.C`, `sort *.TXT`, `wc *.LOG`). | `grep`, `head`, `tail`, `more`, `sort`, `uniq`, `sed`, `wc` |
-| [`lib_abspath.c`](lib_abspath.c) | `abspath(out, a)` — build an absolute path (CWD-prefixed when relative) into a caller buffer; returns chars consumed | `cp`, `mv`, `diff`, `touch` |
-| [`lib_readline.c`](lib_readline.c) | `readline(buf)` — read one line via `nextc()` (CR dropped, LF-terminated); 1 = line, 0 = EOF. **Needs `//#use stdin` above it.** | `uniq`, `sed` |
+| [`lib_apath.c`](lib_apath.c) | `abspath(out, a)` — build an absolute path (CWD-prefixed when relative) into a caller buffer; returns chars consumed. Spliced with `//#use apath`. | `cp`, `mv`, `diff`, `touch` |
+| [`lib_rdline.c`](lib_rdline.c) | `readline(buf)` — read one line via `nextc()` (CR dropped, LF-terminated); 1 = line, 0 = EOF. Spliced with `//#use rdline`; **needs `//#use stdin` above it.** | `uniq`, `sed` |
 | [`lib_streq.c`](lib_streq.c) | `streq(p, q)` — 1 if NUL-terminated strings are equal | `mv`, `uniq` |
 | [`lib_glob.c`](lib_glob.c) | `gmatch(pat, name)` — case-insensitive whole-string glob match (`*`, `?`) | `dir`, `find`, `lib_globx` |
 | [`lib_globx.c`](lib_globx.c) | `glob_expand(pat, out, maxn)` — expand a glob into a list of matching file paths (pulls in `lib_glob`) | `cat`, `cp`, `mv`, `lib_stdin` |

@@ -23,7 +23,7 @@ char jdst[80];                       /* <dst>/<basename> for a glob move */
 char patw[80];                       /* the source arg word (may be a glob) */
 char gfiles[1536];                   /* glob_expand output: 24 slots x 64 */
 
-//#use abspath
+//#use apath
 //#use streq
 //#use globx     /* glob_expand(pat, out, maxn): expand a glob into a path list */
 

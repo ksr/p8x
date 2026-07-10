@@ -19,7 +19,7 @@ char out[260];
 int  anchored;                                /* 1 = pattern began with '^' */
 char *rpat;                                   /* pattern to match (past any '^') */
 
-//#use readline
+//#use rdline
 //#use regex   /* match/matchhere (. * + ? ^ $) + rend, shared with grep */
 
 /* re_at: length of the regex match starting at line[i], or 0 if none here.

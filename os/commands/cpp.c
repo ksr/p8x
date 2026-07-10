@@ -23,7 +23,7 @@
  * FGETB=$0127 (->A, C=1 at EOF). Read buffer at $FC00.  Within the p8cc subset
  * (no ++/--, no break/continue, decls at top, flat arrays, self-recursion).
  */
-//#use abspath   /* abspath(out, a): a CWD-relative path word -> absolute */
+//#use apath   /* abspath(out, a): a CWD-relative path word -> absolute */
 
 char dir[64];                     /* directory of the source (lib_*.c live here) */
 char line[256];                   /* the current line of the file being scanned */

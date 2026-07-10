@@ -1,6 +1,8 @@
-/* lib_abspath.c — shared "build an absolute path" helper for /BIN commands.
+/* lib_apath.c — shared "build an absolute path" helper for /BIN commands.
+ * (Named lib_apath.c so it fits P8XFS's 12-char filename field; it defines the
+ *  abspath() helper — the `//#use apath` token names the FILE, not the function.)
  *
- * Spliced in by `//#use abspath` (see README "Shared code"). Turns a command-line
+ * Spliced in by `//#use apath` (see README "Shared code"). Turns a command-line
  * path word into an absolute path the BIOS FRESOLVE can use, prefixing the CWD
  * (SYS_GETCWD $4003) when the word is relative. Unlike lib_stdin's openarg(),
  * this only *builds the string* into a caller-supplied buffer (it does not open

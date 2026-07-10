@@ -34,7 +34,7 @@ char jdst[80];
 char patw[80];                       /* the source arg word (may be a glob) */
 char gfiles[1536];                   /* glob_expand output: 24 slots x 64 */
 
-//#use abspath   /* abspath(out, arg): next path word -> absolute in out */
+//#use apath   /* abspath(out, arg): next path word -> absolute in out */
 //#use dirent    /* de_read/de_isdir/de_isdot + de[] : current entry via syscall */
 //#use globx     /* glob_expand(pat, out, maxn): expand a glob into a path list */
 

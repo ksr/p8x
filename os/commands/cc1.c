@@ -28,7 +28,7 @@
  * BIOS: FRESOLVE=$0133, FOPEN=$0124 (buf $FC00), FGETB=$0127. p8cc subset:
  * no ++/--, no break, flat arrays, unsigned 16-bit compares.
  */
-//#use abspath   /* abspath(out, a): a CWD-relative path word -> absolute */
+//#use apath   /* abspath(out, a): a CWD-relative path word -> absolute */
 
 /* token kinds */
 int K_EOF;

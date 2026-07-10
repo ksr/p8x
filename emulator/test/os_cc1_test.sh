@@ -13,7 +13,7 @@ cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o oscc1.bin --base 0x4000 >/dev/null
 
-# lex.bin + cc1.bin are host-built (both //#use abspath); they become /bin/*.bin.
+# lex.bin + cc1.bin are host-built (both //#use apath); they become /bin/*.bin.
 python3 $ROOT/tools/clib.py $ROOT/os/commands/lex.c -o lex.pp.c
 python3 $ROOT/compiler/p8cc.py lex.pp.c -o lex.cc.asm >/dev/null
 python3 $ROOT/assembler/p8xasm.py lex.cc.asm -o lex.cc.bin --base 0x7A00 >/dev/null

@@ -19,7 +19,7 @@
  */
 char path[80];
 
-//#use abspath   /* abspath(out, arg): next path word -> absolute in out */
+//#use apath   /* abspath(out, arg): next path word -> absolute in out */
 
 /* exists: 1 if the file at absolute path p is present, else 0. */
 int exists(char *p) {

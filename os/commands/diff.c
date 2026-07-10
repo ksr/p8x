@@ -17,7 +17,7 @@ char blines[7680];
 int na;
 int nb;
 
-//#use abspath
+//#use apath
 
 int openf(char *a) {                          /* FRESOLVE+FOPEN; 1 ok, 0 not found */
     bios(0x0133, path, 0);
