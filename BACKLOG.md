@@ -826,6 +826,13 @@ Last updated: 2026-07-08
             body; JMP Lpost; Lend:`. The 4 labels are stack-saved across the body
             so `for` nests. No `break`/`continue` yet. Verified incl. nested
             loops, a block body, and a `for`-based factorial `fac(5)`.
+          * v0.11 — **`break` and `continue`**. A single innermost-loop context
+            (`CURBRK`/`CURCONT` label numbers) is saved/restored on the hardware
+            stack around every loop body, so the right target is used through
+            nesting; `break` -> loop end, `continue` -> while-top / for-post.
+            `st_while` was reworked to BSS labels (like `st_for`) to carry the
+            context. Verified: break/continue in both loop kinds and nested
+            `break` hitting only the inner loop. (No labelled break.)
         Debug notes for future selves: FGETB clobbers P1 (build identifiers via
         P2); variables must live in the program's own BSS, not a fixed high page
         (OS/SYS_PUTC scratch collides); FRESOLVE's scan needs FSDIRBUF off SBUF

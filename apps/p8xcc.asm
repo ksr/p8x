@@ -9,10 +9,11 @@
 ; emits assembly text to stdout via SYS_PUTC, so `>OUT.ASM` captures it and the
 ; program's own I/O stays shell-redirectable.
 ;
-; EARLY (v0.10). Supported so far:
+; EARLY (v0.11). Supported so far:
 ;     program : func*    func : int NAME([int P,...]) { <stmt>* }
 ;     stmt : int NAME [= expr]; | NAME = expr; | if(e) s [else s] |
-;            while(e) s | for([asg];[e];[asg]) s | { s* } | putchar(e); | return [e];
+;            while(e) s | for([asg];[e];[asg]) s | break; | continue; |
+;            { s* } | putchar(e); | return [e];
 ;     expr : land ('||' land)*   land : rel ('&&' rel)*   (short-circuit -> 0/1)
 ;     rel  : add [relop add]   add : term (('+'|'-') term)*
 ;     term : unary (('*'|'/'|'%') unary)*   unary : ('-'|'!') unary | factor
@@ -81,6 +82,8 @@ START:  TPA3L
         STA  FCNT
         STA  USENEG
         STA  USENOT
+        STA  CURBRK
+        STA  CURCONT
         JSR  COMPILE
         RTS
 USAGE:  LDP1 #MUSAGE
@@ -824,6 +827,14 @@ STMT:   LDA  CURK
         JSR  IDEQ
         LDA  TMPB
         JNZ  st_for
+        LDP1 #KW_BRK
+        JSR  IDEQ
+        LDA  TMPB
+        JNZ  st_break
+        LDP1 #KW_CONT
+        JSR  IDEQ
+        LDA  TMPB
+        JNZ  st_continue
         JMP  st_assign               ; an identifier LHS -> assignment
 st_punct: LDA CURV
         LDB  #'{'
@@ -891,6 +902,24 @@ if_ne:  PLA                          ; la
         RTS
 
 ; while ( <expr> ) <stmt>
+; break ;   -> jump to the innermost loop's end label
+st_break: JSR ADVANCE
+        LDP1 #MJMP
+        LDA  CURBRK
+        JSR  EMITJ
+        LDA  #$3B
+        JSR  EXPECTP
+        RTS
+
+; continue ;   -> jump to the innermost loop's continue label
+st_continue: JSR ADVANCE
+        LDP1 #MJMP
+        LDA  CURCONT
+        JSR  EMITJ
+        LDA  #$3B
+        JSR  EXPECTP
+        RTS
+
 ; for ( [init] ; [cond] ; [post] ) <stmt>
 ; single-pass jump threading:  init ; Ltop: cond?JZ Lend ; JMP Lbody ;
 ;   Lpost: post ; JMP Ltop ; Lbody: <body> ; JMP Lpost ; Lend:
@@ -938,15 +967,27 @@ sf_nocond: LDA #$3B
         JSR  EMITJ
         LDA  LFB                       ; Lbody:
         JSR  EMITLBL
+        LDA  CURBRK                    ; save enclosing break/continue
+        PHA
+        LDA  CURCONT
+        PHA
         LDA  LFP                       ; save Lpost/Lend across the body (may nest)
         PHA
         LDA  LFE
         PHA
+        LDA  LFE
+        STA  CURBRK                    ; break -> Lend
+        LDA  LFP
+        STA  CURCONT                   ; continue -> Lpost (run post, re-test)
         JSR  STMT                      ; body
         PLA
         STA  LFE
         PLA
         STA  LFP
+        PLA
+        STA  CURCONT
+        PLA
+        STA  CURBRK
         LDP1 #MJMP                     ; JMP Lpost
         LDA  LFP
         JSR  EMITJ
@@ -973,7 +1014,10 @@ fc_ret: RTS
 
 st_while: JSR ADVANCE                ; past "while"
         JSR  NEWLBL                  ; ltop
-        PHA
+        STA  WHT
+        JSR  NEWLBL                  ; lend
+        STA  WHE
+        LDA  WHT
         JSR  EMITLBL                 ; L<ltop>:
         LDA  #'('
         JSR  EXPECTP
@@ -981,21 +1025,34 @@ st_while: JSR ADVANCE                ; past "while"
         LDA  #')'
         JSR  EXPECTP
         JSR  EM_TESTAX               ; set Z from __ax for the branch
-        JSR  NEWLBL                  ; lend
-        PHA
         LDP1 #MJZ
-        PLA
-        PHA
+        LDA  WHE
         JSR  EMITJ                   ; JZ L<lend>
-        JSR  STMT                    ; body
-        PLA                          ; lend
-        STA  IFTMP
-        PLA                          ; ltop
+        LDA  CURBRK                  ; enter loop: save enclosing break/continue
         PHA
-        LDP1 #MJMP
+        LDA  CURCONT
+        PHA
+        LDA  WHT                     ; and this loop's labels (nesting)
+        PHA
+        LDA  WHE
+        PHA
+        LDA  WHE
+        STA  CURBRK                  ; break -> lend
+        LDA  WHT
+        STA  CURCONT                 ; continue -> ltop (re-test)
+        JSR  STMT                    ; body
         PLA
+        STA  WHE
+        PLA
+        STA  WHT
+        PLA
+        STA  CURCONT
+        PLA
+        STA  CURBRK
+        LDP1 #MJMP
+        LDA  WHT
         JSR  EMITJ                   ; JMP L<ltop>
-        LDA  IFTMP
+        LDA  WHE
         JSR  EMITLBL                 ; L<lend>:
         RTS
 
@@ -1704,6 +1761,8 @@ KW_IF:   .asciiz "if"
 KW_WHILE: .asciiz "while"
 KW_ELSE: .asciiz "else"
 KW_FOR:  .asciiz "for"
+KW_BRK:  .asciiz "break"
+KW_CONT: .asciiz "continue"
 
 ; whole-line mnemonics end with LF (8-space indent + text + newline)
 MORG:   .byte $20,$20,$20,$20,$20,$20,$20,$20
@@ -2234,4 +2293,8 @@ LFT:    .fill 1    ; for-loop: cond (top) label
 LFB:    .fill 1    ; for-loop: body label
 LFP:    .fill 1    ; for-loop: post label
 LFE:    .fill 1    ; for-loop: end label
+WHT:    .fill 1    ; while-loop: top (cond) label
+WHE:    .fill 1    ; while-loop: end label
+CURBRK: .fill 1    ; innermost loop's break target (0 outside any loop)
+CURCONT: .fill 1   ; innermost loop's continue target
 SYMPOOL: .fill 256 ; packed NUL-terminated variable names
