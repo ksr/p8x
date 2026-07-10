@@ -9,7 +9,7 @@
 ; emits assembly text to stdout via SYS_PUTC, so `>OUT.ASM` captures it and the
 ; program's own I/O stays shell-redirectable.
 ;
-; EARLY (v0.18). Supported so far:  (type = int (16-bit) | char (1-byte elem))
+; EARLY (v0.19). Supported so far:  (type = int (16-bit) | char (1-byte elem))
 ;     program : func*    func : type NAME([type [*]P,...]) { <stmt>* }
 ;     stmt : type [*]NAME [= expr]; | type NAME[N]; | NAME = expr; |
 ;            NAME[i] = expr; | *expr = expr; | expr; | if(e) s [else s] |
@@ -24,14 +24,14 @@
 ; (__add/__sub/__mul/__cmp/__div) emitted at the end of the program. putchar
 ; takes __ax's low byte. FUNCTIONS: each is _f_NAME (call = JSR, return value in
 ; __ax); params/locals use STATIC per-function slots (a global slot counter);
-; the caller stores args into the callee's param slots before the JSR. To make
-; that re-entrant, a function pushes its own live slots (EM_SAVESLOTS) before a
-; DIRECT recursive call and restores them after (EM_RESTSLOTS) -- so RECURSION
-; works without a frame pointer. Caller-saves is limited to self-recursive calls
-; (SELFREC) so that a pointer to a caller local passed to another function still
-; works (pass-by-reference). POINTERS: & (EM_ADDROF), * deref (EM_LOADW), and
-; *p = e (EM_STOREW) via P1; all word-sized. (Mutual recursion / forward calls
-; are not supported: single pass, a callee must be defined before called.) Ver.
+; args are passed on a runtime ARG STACK (__sp): the caller pushes them
+; (EM_PUSHARG), the callee's prologue pops them into its own static slots
+; (EM_POPPARAMS) -- so a callee's storage is never needed at the call site and
+; FORWARD calls / MUTUAL RECURSION work (a prototype just registers the name).
+; Re-entrancy: before a call a function pushes its own live slots (EM_SAVESLOTS)
+; and restores them after -- SKIPPED when an argument took an address (SAWADDRG)
+; so pass-by-reference still works. POINTERS: & (EM_ADDROF), * deref (EM_LOADW),
+; *p = e (EM_STOREW) via P1. Ver.
 ; behavioural (compile on-target, run, diff output vs p8cc.py). Grows one tested
 ; feature at a time (char/pointers, ...) toward the p8cc subset.
 ;
@@ -453,6 +453,46 @@ EM_POP: LDP1 #MPLA                   ; pop -> __t0 (16-bit)
         LDP1 #MSTAT
         JSR  EMIT
         RTS
+; EM_PUSHARG: emit "JSR __pusharg" (push __ax onto the runtime arg stack)
+EM_PUSHARG: LDP1 #MPUSHARG
+        JSR  EMIT
+        RTS
+
+; EM_POPPARAMS: prologue - pop NPARAMS args (pushed left-to-right by the caller)
+;   into this function's param slots V<SLOTBASE+i>, i = NPARAMS-1 .. 0.
+EM_POPPARAMS: LDA NPARAMS
+        JZ   epp_d
+        STA  VITER
+epp_l:  LDA  VITER
+        DEC
+        STA  VITER
+        LDP1 #MPOP                    ; JSR __pop  (-> __ax)
+        JSR  EMIT
+        LDP1 #MLDAX
+        JSR  EMIT
+        LDP1 #MSTAV
+        JSR  EMIT
+        LDA  SLOTBASE
+        LDB  VITER
+        ADD
+        JSR  EMITNUM
+        LDP1 #MNL
+        JSR  EMIT
+        LDP1 #MLDAXH
+        JSR  EMIT
+        LDP1 #MSTAV
+        JSR  EMIT
+        LDA  SLOTBASE
+        LDB  VITER
+        ADD
+        JSR  EMITNUM
+        LDP1 #MP1
+        JSR  EMIT
+        LDA  VITER
+        JZ   epp_d
+        JMP  epp_l
+epp_d:  RTS
+
 EM_AX0: LDP1 #MLDA0                  ; __ax = 0
         JSR  EMIT
         LDP1 #MSTAX
@@ -850,6 +890,8 @@ ce_noneg: LDA USENOT                 ; logical-not helper, if '!' used
         JSR  EMIT
 ce_nonot: LDP1 #MTEMP                ; the codegen temp
         JSR  EMIT
+        LDP1 #MFRAMEDEF              ; arg-stack runtime: __pusharg/__pop/__sp/__cstack
+        JSR  EMIT
         LDA  #0                      ; storage for each declared variable:
         STA  VITER                   ;   V0:  .fill 1  /  V1:  .fill 1  / ...
 ce_vl:  LDA  VITER
@@ -928,7 +970,8 @@ fp_done: LDA #')'
         LDB  #$3B
         CMP
         JNZ  fd_def
-        JSR  ADVANCE                 ; consume ';' -> skip (no code, not registered)
+        JSR  FADD                    ; a prototype still registers the name
+        JSR  ADVANCE                 ; consume ';' (forward calls can now resolve it)
         RTS
 fd_def: JSR  FADD                    ; record CURFN -> NPARAMS, SLOTBASE
         LDP1 #MFPFX                  ; "_f_" NAME ":"
@@ -937,6 +980,7 @@ fd_def: JSR  FADD                    ; record CURFN -> NPARAMS, SLOTBASE
         JSR  EMIT
         LDP1 #MCOLON
         JSR  EMIT
+        JSR  EM_POPPARAMS            ; prologue: pop args into param slots
         LDA  #'{'
         JSR  EXPECTP
 fd_s:   LDA  CURK
@@ -1773,7 +1817,9 @@ GUNARY: LDA  CURK
         CMP
         JZ   gu_deref
 gu_fact: JMP  GFACT
-gu_addr: JSR  ADVANCE                 ; past '&'
+gu_addr: LDA #1
+        STA  SAWADDRG                 ; an argument took an address (pass-by-ref)
+        JSR  ADVANCE                 ; past '&'
         JSR  SYMFIND                  ; the NAME (TID) -> SYMIDX (slot)
         LDA  SYMOK
         JZ   gu_ad_e
@@ -1925,16 +1971,11 @@ gfi_index: LDA IDVARIDX               ; NAME[index] rvalue
         RTS
 gfx_b:  JSR  EM_LOADB
         RTS
-gfi_call: JSR FFIND_ID              ; FI = callee index, FFB = param base slot
-        JSR  CHKSELFREC              ; SELFREC = (callee == current function)?
-        LDA  FI                      ; save callee index (arg parsing reuses FI/IDNAME)
+gfi_call: JSR FFIND_ID              ; FI = callee index (name for the JSR)
+        LDA  FI                      ; save across arg parsing (FI/IDNAME get reused)
         PHA
-        LDA  SELFREC
-        PHA
-        LDA  SELFREC                 ; only a DIRECT recursive call needs caller-saves
-        JZ   gc_nosave               ; (else the callee may write our locals via a ptr)
-        JSR  EM_SAVESLOTS
-gc_nosave:
+        LDA  #0
+        STA  SAWADDRG                ; did any argument take an address? (pass-by-ref)
         JSR  ADVANCE                 ; past '('
         LDA  #0
         STA  ARGI
@@ -1946,20 +1987,12 @@ gc_nosave:
         LDB  #')'
         CMP
         JZ   ga_done
-ga_loop: LDA FFB                     ; save FFB/ARGI across GEXPR (may nest calls)
-        PHA
-        LDA  ARGI
+ga_loop: LDA ARGI                    ; save ARGI across GEXPR (nested calls reuse it)
         PHA
         JSR  GEXPR                   ; arg value -> __ax
         PLA
         STA  ARGI
-        PLA
-        STA  FFB
-        LDA  FFB                     ; store __ax into param slot FFB+ARGI
-        LDB  ARGI
-        ADD
-        STA  ARGSLOT
-        JSR  EM_STSLOT
+        JSR  EM_PUSHARG              ; push __ax onto the runtime arg stack
         LDA  ARGI
         INC
         STA  ARGI
@@ -1975,17 +2008,18 @@ ga_loop: LDA FFB                     ; save FFB/ARGI across GEXPR (may nest call
         JMP  ga_loop
 ga_done: LDA #')'
         JSR  EXPECTP
-        LDP1 #MJSRF                  ; JSR _f_NAME   (result -> __ax)
+        LDA  SAWADDRG                ; caller-save the live slots (re-entrancy) unless
+        JNZ  gc_nosave               ; a &local was passed (then the callee writes it)
+        JSR  EM_SAVESLOTS
+gc_nosave: LDP1 #MJSRF               ; JSR _f_NAME   (result -> __ax)
         JSR  EMIT
-        PLA                          ; restore SELFREC
-        STA  SELFREC
         PLA                          ; restore callee index
         STA  FI
         JSR  EMITFNAME               ; emit the callee's name from FPOOL[FI]
         LDP1 #MNL
         JSR  EMIT
-        LDA  SELFREC
-        JZ   gc_norest
+        LDA  SAWADDRG
+        JNZ  gc_norest
         JSR  EM_RESTSLOTS            ; restore caller's slots (result stays in __ax)
 gc_norest: RTS
 gf_err: RTS
@@ -2511,10 +2545,28 @@ MLDAV:  .byte $20,$20,$20,$20,$20,$20,$20,$20   ; prefix: "LDA V" + index + MNL
 MSTAV:  .byte $20,$20,$20,$20,$20,$20,$20,$20   ; prefix: "STA V" + index + MNL
         .asciiz "STA V"
 MBOOT:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "LDA #<__cstktop"
+        .byte LF
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "STA __sp"
+        .byte LF
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "LDA #>__cstktop"
+        .byte LF
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "STA __sp+1"
+        .byte LF
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "JSR _f_main"
         .byte LF
         .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "RTS"
+        .byte LF,0
+MPUSHARG: .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "JSR __pusharg"
+        .byte LF,0
+MPOP:   .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "JSR __pop"
         .byte LF,0
 MFPFX:  .asciiz "_f_"
 MEPFX:  .asciiz "_e_"
@@ -3015,6 +3067,85 @@ MLDALV: .byte $20,$20,$20,$20,$20,$20,$20,$20
         .asciiz "LDA #<V"
 MLDAHV: .byte $20,$20,$20,$20,$20,$20,$20,$20
         .asciiz "LDA #>V"
+MFRAMEDEF:
+        .ascii "__pusharg: LDA __sp"
+        .byte LF
+        .ascii "        LDB #2"
+        .byte LF
+        .ascii "        SUB"
+        .byte LF
+        .ascii "        STA __sp"
+        .byte LF
+        .ascii "        JC __pa1"
+        .byte LF
+        .ascii "        LDA __sp+1"
+        .byte LF
+        .ascii "        DEC"
+        .byte LF
+        .ascii "        STA __sp+1"
+        .byte LF
+        .ascii "__pa1:  LDA __sp"
+        .byte LF
+        .ascii "        TAP1L"
+        .byte LF
+        .ascii "        LDA __sp+1"
+        .byte LF
+        .ascii "        TAP1H"
+        .byte LF
+        .ascii "        LDA __ax"
+        .byte LF
+        .ascii "        STA (P1)"
+        .byte LF
+        .ascii "        INP1"
+        .byte LF
+        .ascii "        LDA __ax+1"
+        .byte LF
+        .ascii "        STA (P1)"
+        .byte LF
+        .ascii "        RTS"
+        .byte LF
+        .ascii "__pop:  LDA __sp"
+        .byte LF
+        .ascii "        TAP1L"
+        .byte LF
+        .ascii "        LDA __sp+1"
+        .byte LF
+        .ascii "        TAP1H"
+        .byte LF
+        .ascii "        LDA (P1)"
+        .byte LF
+        .ascii "        STA __ax"
+        .byte LF
+        .ascii "        INP1"
+        .byte LF
+        .ascii "        LDA (P1)"
+        .byte LF
+        .ascii "        STA __ax+1"
+        .byte LF
+        .ascii "        LDA __sp"
+        .byte LF
+        .ascii "        LDB #2"
+        .byte LF
+        .ascii "        ADD"
+        .byte LF
+        .ascii "        STA __sp"
+        .byte LF
+        .ascii "        JNC __pp1"
+        .byte LF
+        .ascii "        LDA __sp+1"
+        .byte LF
+        .ascii "        INC"
+        .byte LF
+        .ascii "        STA __sp+1"
+        .byte LF
+        .ascii "__pp1:  RTS"
+        .byte LF
+        .ascii "__sp:   .word 0"
+        .byte LF
+        .ascii "__cstack: .fill 2048"
+        .byte LF
+        .ascii "__cstktop:"
+        .byte LF,0
 MUSAGE: .asciiz "usage: cc src.c >out.asm"
 MNOSRC: .asciiz "cc: cannot open source"
 
@@ -3042,7 +3173,8 @@ LHSIDX: .fill 1    ; index of an assignment/decl target variable
 VITER:  .fill 1    ; loop counter emitting variable storage
 VITER2: .fill 1    ; EM_PUSHSLOT/EM_POPSLOT: slot number being emitted
 VITER3: .fill 1    ; EM_SAVESLOTS/EM_RESTSLOTS: slot loop counter
-SELFREC: .fill 1   ; 1 if the current call is a direct self-recursion
+SELFREC: .fill 1   ; (unused since frames) was: direct self-recursion flag
+SAWADDRG: .fill 1   ; 1 if an argument in the current call took an address
 NLSLOT: .fill 1    ; current function's slot count (>= name count, arrays add N)
 SYMSLOT: .fill 48  ; per-name -> first slot (relative to SLOTBASE)
 SYMARR: .fill 256  ; per-slot: 1 if this slot is an array base

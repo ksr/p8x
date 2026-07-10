@@ -903,6 +903,18 @@ Last updated: 2026-07-08
             still a word (width only matters for arrays/pointers). Verified: char
             b[4] build+print, char* byte deref, strcpy(&d[0],s) into a buffer,
             char scalar; all int/pointer/recursion/string regressions green.
+          * v0.19 — **mutual recursion / forward calls** via a runtime ARG
+            STACK, WITHOUT a frame-pointer rewrite (static V<slot> storage is
+            unchanged). The caller pushes args onto __sp (EM_PUSHARG); the
+            callee's prologue pops them into its own slots (EM_POPPARAMS). Because
+            the caller never references the callee's storage, a forward call just
+            needs the name -- so a prototype `int f(int);` now registers the name
+            (FADD) and forward calls resolve (two-pass JSR label). Re-entrancy:
+            EM_SAVESLOTS/RESTSLOTS still wrap a call, now SKIPPED when an argument
+            took an address (SAWADDRG) so pass-by-reference composes. This
+            supersedes the frame-pointer design above (kept for reference).
+            Verified: even/odd mutual recursion, plus fact/fib/pass-by-ref/arrays/
+            char/strings all still green; os_cc_test uses mutual recursion.
           * v0.18 — **comments**: the lexer skips `//` line comments and
             `/* ... */` block comments in its whitespace phase (a leading `/`
             peeks ahead; a lone `/` is still the divide operator). Verified line,
