@@ -590,6 +590,22 @@ Last updated: 2026-07-08
       large C + hand-asm reimplementation, and PACK is delicate enough (a bug
       corrupts a card) that kernel residence is defensible. Revisit FSCK next
       (safe, read-only); treat PACK as opt-in.
+- [x] **On-target assembler `;#use` includes — DONE (2026-07-10).** `apps/p8xasm.asm`
+      now recognizes a `;#use NAME` line and APPENDS `/lib/NAME.inc` after the
+      program body (up to 4, in declared order) — the on-target mirror of the host
+      `mkasm.sh` (`cat SRC ; cat lib_*.inc`). So a command with shared helpers
+      (`cat`→`stdin`, `grep`→`stdin`+`regex`, …) can be rebuilt from source ON the
+      machine: `asm /src/commands/asm/cat.asm cat.bin`. Verified byte-identical to
+      the host build (`os_asm_use_test`, in `make test`); self-hosting unaffected.
+      Landmines handled: (1) `FSDIRBUF` repoints directory scans off `SBUF` so the
+      include's `FFIND` in pass 2 can't clobber the write stream's partial sector;
+      (2) the include reads on its own buffer (not the source's); (3) `SRCGET`
+      preserves the caller's `P2` (line cursor) across the stream switch; (4) the
+      source's `FNAME`/dir context is saved at startup and restored each pass so
+      `PASSINIT` re-opens the source after a `;#use` re-resolved `FNAME`. This is
+      the enabling half of on-target command rebuild-from-asm; the C half already
+      works (`cc` + `asm`). Next: a shell script runner + a `mk` build script (no
+      P8XFS mtimes, so always-rebuild, not a true make).
 - [x] **Man-page-style OS command reference — DONE (2026-07-09), on-target.**
       Went further than the doc-only plan: authored a per-command manual page
       (NAME / SYNOPSIS / DESCRIPTION / OPTIONS / EXAMPLES / SEE ALSO) for every

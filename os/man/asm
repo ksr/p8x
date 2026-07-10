@@ -10,9 +10,14 @@ DESCRIPTION
     with edit (or vi) for a self-hosted edit/assemble/run loop. asm is a
     /bin program.
 
+    A `;#use NAME` line (at the start of a line) appends the shared include
+    /lib/NAME.inc after the program, so a command can share helpers the way
+    the C compiler's //#use shares /lib/lib_NAME.c. Up to 4 per file.
+
 EXAMPLES
     asm hello.asm hello.bin
     run hello.bin
+    asm /src/commands/asm/cat.asm cat.bin   (cat.asm does `;#use stdin`)
 
 SEE ALSO
-    edit, vi, run
+    edit, vi, run, cc

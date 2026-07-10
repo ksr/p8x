@@ -14,6 +14,10 @@
 ;   MNEMONIC [operand]     operand: #expr | (Pn) | (Pn)+ | expr | none
 ;   LDPn #expr16           pseudo -> LPLn #<expr ; LPHn #>expr
 ;   .org .byte .word .ascii .asciiz .fill
+;   ;#use NAME             at line start: append /lib/NAME.inc after the source,
+;                          so a command shares helpers (stdin/glob/regex) just as
+;                          the host mkasm.sh splices lib_NAME.inc. Up to 4 per file,
+;                          read in the order declared (each command lists each once).
 ;   expr: $hex | decimal | 'c' | symbol, joined with + / -, optional </> prefix
 ;
 ; The opcode table (OPCTAB) is generated from genucode.OPC by
@@ -35,12 +39,19 @@ FGETB   = $0127   ; next source byte -> A; C=1 at EOF
 FWOPEN  = $012A   ; open the output write stream
 FPUTB   = $012D   ; append a byte to the output stream
 FCLOSE  = $0130   ; flush + register the output file FNAME; C=1 if full
+FRESOLVE= $0133   ; resolve a path (P1) -> dir extent + leaf FNAME (for ;#use)
+FSDIRBUF= $0145   ; repoint directory scans (FSCAN/FFIND/FNEXT) at page A
 LBA     = $7047
 LBA1    = $7048
 LBA2    = $7049
 FNAME   = $704A
 FSRC    = $7056
 FLEN    = $7058
+; Directory context — saved at startup, restored each pass so PASSINIT re-opens
+; the source even after a ;#use has re-resolved FNAME/DIRLBA to an include.
+DIRLBA  = $706E   ; current directory start LBA low
+DIRN    = $706F   ; current directory sector count
+DIRLBA1 = $707A   ; current directory start LBA high
 
 CR      = $0D
 LF      = $0A
@@ -99,6 +110,21 @@ SECBUF  = $C900   ; one streamed source sector (512)
 LINEBUF = $CB00   ; current source line (NUL-terminated, <=127 chars)
 SYMTAB  = $CC00   ; 14-byte entries: name[12] + value[2]  (~850 symbols)
 SYMEND  = $FB00   ; symbol-table limit (stack lives above)
+; ---- ;#use include support (sequential append, mirroring mkasm.sh) ----
+; A ;#use line records a name; at the source's EOF the recorded includes are read
+; in turn (over the same SECBUF — the source is done), so their code lands AFTER
+; the program body, exactly like the host `cat SRC ; cat lib_*.inc`.
+USECOUNT= $CB80   ; number of ;#use names recorded this pass
+USEDONE = $CB81   ; how many recorded includes have been opened so far
+UCNT    = $CB82   ; byte-copy counter for the helpers (1)
+P2SAV   = $CB83   ; SRCGET saves NEXTLINE's P2 (line cursor) across NEXTUSE (2)
+INCBUF  = $C400   ; include read buffer — a fresh 512-byte page, NOT the source's
+                  ; SECBUF (reusing it leaves stale stream state), and clear of
+                  ; the $C600 dir-scan page and SECBUF ($C900)
+SRCFN   = $CB90   ; the source's own FNAME (12), so PASSINIT re-opens it each pass
+SRCDIR  = $CB9C   ; the source's dir context: DIRLBA, DIRLBA1, DIRN (3)
+UPATH   = $CBA0   ; built include path "/lib/NAME.inc" (24)
+USELIST = $CBC0   ; up to 4 include names, 12 bytes each (NUL-terminated)
 
         .org $7A00
 ; =============================================================================
@@ -106,6 +132,9 @@ START:  TPA3L                   ; save SP so an error can long-jump back to OS
         STA  SP0
         TPA3H
         STA  SP0+1
+        LDA  #$C6               ; repoint directory scans (FFIND) off SBUF, so a
+        JSR  FSDIRBUF           ; ;#use FOPEN in pass 2 can't clobber the write
+                                ; stream's partial output sector (shared SBUF)
         JSR  PARSEARGS          ; FNAME <- SRC, OUTNAME <- OUT
         LDA  OUTNAME            ; no output name given -> show usage
         LDB  #' '
@@ -113,6 +142,9 @@ START:  TPA3L                   ; save SP so an error can long-jump back to OS
         JZ   ST_USAGE
         JSR  FFIND              ; just to report a missing source cleanly
         JC   ST_NOSRC
+        JSR  SAVESRC            ; remember the source's FNAME + dir so PASSINIT
+                                ; re-opens it each pass even if a ;#use resolves
+                                ; an include (FRESOLVE clobbers FNAME/DIRLBA)
         ; ---- pass 1: build symbol table ----
         LDA  #0
         STA  PASS
@@ -1045,6 +1077,10 @@ FINISHOUT:
 ; PASSINIT - (re)open the source for a pass. FNAME is still the source name
 ;            (SETFNOUT only runs at FINISHOUT, after both passes).
 PASSINIT:
+        JSR  RESTSRC           ; FNAME + dir context <- source (undo any ;#use)
+        LDA  #0
+        STA  USECOUNT          ; re-scan ;#use directives fresh each pass
+        STA  USEDONE
         LDP1 #SECBUF
         JSR  FOPEN             ; source existence already checked at startup
         LDA  #0
@@ -1056,7 +1092,7 @@ NEXTLINE:
         LDP2 #LINEBUF
         LDA  #0
         STA  LCNT
-NL_LP:  JSR  FGETB
+NL_LP:  JSR  SRCGET
         JC   NL_EOF           ; C=1 -> end of file
         STA  SB
         LDB  #LF
@@ -1081,9 +1117,243 @@ NL_DONE:LDA  #0
         STA  (P2)
         LDA  #0
         STA  LEOF
+        JSR  CHKUSE           ; ";#use NAME"? -> splice the include, read next line
+        JC   NEXTLINE
         RTS
 NL_END: LDA  #1
         STA  LEOF
+        RTS
+
+; ---- ;#use include machinery (sequential append) ----------------------------
+; SRCGET - like FGETB, but at a file's EOF opens the next recorded ;#use include
+;   (over SECBUF — the source is done) and keeps reading. C=1 only when the
+;   source AND all its includes are exhausted.
+SRCGET: JSR  FGETB
+        JNC  SG_RET           ; got a byte (FGETB preserves P2)
+        TPA2L                 ; EOF: NEXTUSE clobbers P2, but the caller (NEXTLINE)
+        STA  P2SAV            ; uses P2 as its LINEBUF write cursor — save/restore it
+        TPA2H
+        STA  P2SAV+1
+        JSR  NEXTUSE          ; open the next include?
+        JC   SG_EOF           ; test carry BEFORE the P2 restore can disturb it
+        JSR  RESTP2           ; opened one: restore P2 and read from it
+        JMP  SRCGET
+SG_EOF: JSR  RESTP2           ; none left: restore P2, re-assert EOF
+        SEC
+SG_RET: RTS
+RESTP2: LDA  P2SAV
+        TAP2L
+        LDA  P2SAV+1
+        TAP2H
+        RTS
+
+; NEXTUSE - if a recorded include is still unread, open /lib/<name>.inc on SECBUF
+;   and return C=0 (advancing USEDONE); else C=1.
+NEXTUSE:LDA  USEDONE
+        LDB  USECOUNT
+        CMP                   ; C=1 if USEDONE >= USECOUNT
+        JC   NU_END
+        LDA  USEDONE          ; P1 = USELIST + USEDONE*12  (page-local)
+        JSR  SLOTLO
+        TAP1L
+        LDA  #>USELIST
+        TAP1H
+        JSR  BUILDINC         ; UPATH = "/lib/<name>.inc"
+        LDA  USEDONE
+        INC
+        STA  USEDONE
+        LDP1 #UPATH
+        JSR  FRESOLVE
+        JC   NU_ERR
+        LDP1 #INCBUF          ; include streams on its own buffer
+        JSR  FOPEN
+        JC   NU_ERR
+        CLC
+        RTS
+NU_END: SEC
+        RTS
+NU_ERR: LDP1 #EUSE
+        JMP  ASM_ERR
+
+; SLOTLO - A = index -> A = low byte of USELIST + index*12 (all within one page).
+SLOTLO: STA  UCNT
+        LDA  #0
+        STA  TMP
+SL_LP:  LDA  UCNT
+        JZ   SL_D
+        LDA  TMP
+        LDB  #12
+        ADD
+        STA  TMP
+        LDA  UCNT
+        DEC
+        STA  UCNT
+        JMP  SL_LP
+SL_D:   LDA  #<USELIST
+        LDB  TMP
+        ADD
+        RTS
+
+; BUILDINC - P1 = NUL-terminated name -> UPATH = "/lib/NAME.inc".
+BUILDINC:LDP2 #UPATH
+        LDA  #'/'
+        STA  (P2)+
+        LDA  #'l'
+        STA  (P2)+
+        LDA  #'i'
+        STA  (P2)+
+        LDA  #'b'
+        STA  (P2)+
+        LDA  #'/'
+        STA  (P2)+
+BI_CP:  LDA  (P1)
+        JZ   BI_EXT
+        STA  (P2)+
+        INP1
+        JMP  BI_CP
+BI_EXT: LDA  #'.'
+        STA  (P2)+
+        LDA  #'i'
+        STA  (P2)+
+        LDA  #'n'
+        STA  (P2)+
+        LDA  #'c'
+        STA  (P2)+
+        LDA  #0
+        STA  (P2)
+        RTS
+
+; CHKUSE - if LINEBUF is ";#use NAME", record the include and return C=1 (so the
+;   line is skipped); else C=0. Includes are read at the source's EOF (NEXTUSE).
+CHKUSE: LDP1 #LINEBUF
+CU_SK:  LDA  (P1)            ; skip leading spaces / tabs
+        LDB  #' '
+        CMP
+        JZ   CU_SKA
+        LDB  #$09
+        CMP
+        JNZ  CU_S1
+CU_SKA: INP1
+        JMP  CU_SK
+CU_S1:  LDB  #59             ; ';'  (literal, not written '  ;  ' — that starts a comment)
+        CMP
+        JNZ  CU_NO
+        INP1
+        LDA  (P1)
+        LDB  #'#'
+        CMP
+        JNZ  CU_NO
+        INP1
+        LDA  (P1)
+        LDB  #'u'
+        CMP
+        JNZ  CU_NO
+        INP1
+        LDA  (P1)
+        LDB  #'s'
+        CMP
+        JNZ  CU_NO
+        INP1
+        LDA  (P1)
+        LDB  #'e'
+        CMP
+        JNZ  CU_NO
+        INP1
+        LDA  (P1)            ; require whitespace after "use"
+        LDB  #' '
+        CMP
+        JZ   CU_SP
+        LDB  #$09
+        CMP
+        JNZ  CU_NO
+CU_SP:  LDA  (P1)            ; skip spaces to the NAME
+        LDB  #' '
+        CMP
+        JZ   CU_SPA
+        LDB  #$09
+        CMP
+        JNZ  CU_GO
+CU_SPA: INP1
+        JMP  CU_SP
+CU_GO:  LDA  (P1)            ; P1 at NAME; empty -> ignore
+        JZ   CU_NO
+        LDB  #CR
+        CMP
+        JZ   CU_NO
+        JSR  ADDUSE          ; record the name (P1 = NAME cursor)
+        SEC
+        RTS
+CU_NO:  CLC
+        RTS
+
+; ADDUSE - P1 = NAME cursor in LINEBUF. Append the name (NUL-terminated) to
+;   USELIST[USECOUNT] and bump USECOUNT (capped at 4). Duplicates are not
+;   dedup'd — each command declares each ;#use once (matches the shipped set).
+ADDUSE: LDA  USECOUNT
+        LDB  #4
+        CMP
+        JC   AU_RET          ; USECOUNT >= 4 -> ignore extra (won't happen)
+        LDA  USECOUNT        ; P2 = USELIST + USECOUNT*12
+        JSR  SLOTLO
+        TAP2L
+        LDA  #>USELIST
+        TAP2H
+AU_CP:  LDA  (P1)            ; copy name up to a delimiter
+        JZ   AU_END
+        LDB  #' '
+        CMP
+        JZ   AU_END
+        LDB  #CR
+        CMP
+        JZ   AU_END
+        LDB  #$09
+        CMP
+        JZ   AU_END
+        STA  (P2)+
+        INP1
+        JMP  AU_CP
+AU_END: LDA  #0
+        STA  (P2)            ; NUL-terminate the slot
+        LDA  USECOUNT
+        INC
+        STA  USECOUNT
+AU_RET: RTS
+
+; SAVESRC / RESTSRC - the source's FNAME + dir context, so PASSINIT re-opens the
+;   source each pass regardless of a ;#use having re-resolved FNAME/DIRLBA.
+SAVESRC:LDP1 #FNAME
+        LDP2 #SRCFN
+        LDA  #12
+        STA  UCNT
+SR_LP:  LDA  (P1)+
+        STA  (P2)+
+        LDA  UCNT
+        DEC
+        STA  UCNT
+        JNZ  SR_LP
+        LDA  DIRLBA
+        STA  SRCDIR
+        LDA  DIRLBA1
+        STA  SRCDIR+1
+        LDA  DIRN
+        STA  SRCDIR+2
+        RTS
+RESTSRC:LDP1 #SRCFN
+        LDP2 #FNAME
+        LDA  #12
+        STA  UCNT
+RT_LP:  LDA  (P1)+
+        STA  (P2)+
+        LDA  UCNT
+        DEC
+        STA  UCNT
+        JNZ  RT_LP
+        LDA  SRCDIR
+        STA  DIRLBA
+        LDA  SRCDIR+1
+        STA  DIRLBA1
+        LDA  SRCDIR+2
+        STA  DIRN
         RTS
 
 SKIPSP: LDA  (P1)
@@ -1344,3 +1614,4 @@ EBADOP: .asciiz "?syntax: "
 EUNDEF: .asciiz "?undefined: "
 EBACK:  .asciiz "?backward .org: "
 ESYMS:  .asciiz "?too many symbols: "
+EUSE:   .asciiz "?missing #use include: "

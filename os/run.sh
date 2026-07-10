@@ -163,6 +163,14 @@ if [ ! -f "$disk" ]; then
         python3 "$root/tools/p8xfs.py" put "$disk" "$libc" \
             --name "/lib/$(basename "$libc")" >/dev/null
     done
+    # ...and the shared ASM includes, so the on-target assembler's `;#use NAME`
+    # can splice /lib/NAME.inc (its counterpart of mkasm.sh) — e.g. `asm cat.asm`
+    # pulls in `;#use stdin`. Named NAME.inc (lib_ dropped) to fit the 12-char field.
+    for inc in "$root"/os/commands-asm/lib_*.inc; do
+        base=$(basename "$inc"); base=${base#lib_}
+        python3 "$root/tools/p8xfs.py" put "$disk" "$inc" \
+            --name "/lib/$base" >/dev/null
+    done
     ensure_src            # /src/commands/{c,asm}: browsable sources (see the function)
     printf 'hello from P8X/OS\n' > "$build/readme.txt"
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/readme.txt" --name /README.TXT >/dev/null
