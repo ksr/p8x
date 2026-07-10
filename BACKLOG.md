@@ -809,6 +809,10 @@ Last updated: 2026-07-08
             software stack frame (the p8cc `__csp`/`__fp` model) is the next step.
             Verified: `add(a,b)`, `m(a,b)=a*b`, nested `inc(inc(63))`, and
             `max(a,b)` with if/return, plus a `sum(n)` loop over its parameter.
+          * v0.8 — **unary `-` and `!`** (a `GUNARY` level below `term`): `-e`
+            emits `JSR __neg` (16-bit two's complement), `!e` emits `JSR __lnot`
+            (-> 0/1); both helpers gated by USENEG/USENOT. Verified incl.
+            `70 - -5 - 10` and `-x` on a variable.
         Debug notes for future selves: FGETB clobbers P1 (build identifiers via
         P2); variables must live in the program's own BSS, not a fixed high page
         (OS/SYS_PUTC scratch collides); FRESOLVE's scan needs FSDIRBUF off SBUF

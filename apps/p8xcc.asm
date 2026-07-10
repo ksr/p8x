@@ -9,12 +9,12 @@
 ; emits assembly text to stdout via SYS_PUTC, so `>OUT.ASM` captures it and the
 ; program's own I/O stays shell-redirectable.
 ;
-; EARLY (v0.7). Supported so far:
+; EARLY (v0.8). Supported so far:
 ;     program : func*    func : int NAME([int P,...]) { <stmt>* }
 ;     stmt : int NAME [= expr]; | NAME = expr; | if(e) s [else s] |
 ;            while(e) s | { s* } | putchar(e); | return [e];
 ;     expr : add [relop add]   add : term (('+'|'-') term)*
-;     term : factor (('*'|'/'|'%') factor)*
+;     term : unary (('*'|'/'|'%') unary)*   unary : ('-'|'!') unary | factor
 ;     factor : NUMBER | NAME | NAME(args) | '(' e ')'   relop: < <= > >= == !=
 ; Values are 16-bit int. Codegen uses a MEMORY accumulator __ax (every
 ; expression's value) + a temp __t0; binary ops route through runtime helpers
@@ -78,6 +78,8 @@ START:  TPA3L
         STA  USEDIV
         STA  SLOTCNT
         STA  FCNT
+        STA  USENEG
+        STA  USENOT
         JSR  COMPILE
         RTS
 USAGE:  LDP1 #MUSAGE
@@ -521,7 +523,15 @@ ce_nomul: LDA USEDIV                 ; the divide/modulo helper, if '/' or '%' u
         JZ   ce_nodiv
         LDP1 #MDMDEF
         JSR  EMIT
-ce_nodiv: LDP1 #MTEMP                ; the codegen temp
+ce_nodiv: LDA USENEG                 ; unary-minus helper, if '-' used as a prefix
+        JZ   ce_noneg
+        LDP1 #MNEG_DEF
+        JSR  EMIT
+ce_noneg: LDA USENOT                 ; logical-not helper, if '!' used
+        JZ   ce_nonot
+        LDP1 #MLNOT_DEF
+        JSR  EMIT
+ce_nonot: LDP1 #MTEMP                ; the codegen temp
         JSR  EMIT
         LDA  #0                      ; storage for each declared variable:
         STA  VITER                   ;   V0:  .fill 1  /  V1:  .fill 1  / ...
@@ -980,7 +990,7 @@ GEXPR:  JSR  GADD
 grx:    RTS
 
 ; term: factor (('*'|'/'|'%') factor)*   (8-bit, via __mul8/__divmod8 helpers)
-GTERM:  JSR  GFACT
+GTERM:  JSR  GUNARY
 gt_l:   LDA  CURK
         LDB  #3
         CMP
@@ -1022,7 +1032,7 @@ gt_mod: JSR  ADVANCE
 gt_d:   RTS
 ; GT_COMB: emit  push-left ; <right factor> ; STA __t0 ; PLA  (left in A, right in __t0)
 GT_COMB: JSR EM_PUSH                  ; left
-        JSR  GFACT                    ; right -> __ax
+        JSR  GUNARY                   ; right -> __ax
         JSR  EM_POP                   ; left -> __t0
         RTS
 
@@ -1056,6 +1066,37 @@ ge_sub: JSR  ADVANCE
         JSR  EMIT
         JMP  ge_l
 ge_d:   RTS
+
+; unary: ('-' | '!') unary | factor
+GUNARY: LDA  CURK
+        LDB  #3
+        CMP
+        JNZ  gu_fact
+        LDA  CUR2                    ; a single-char op only
+        JNZ  gu_fact
+        LDA  CURV
+        LDB  #'-'
+        CMP
+        JZ   gu_neg
+        LDA  CURV
+        LDB  #'!'
+        CMP
+        JZ   gu_not
+gu_fact: JMP  GFACT
+gu_neg: JSR  ADVANCE
+        JSR  GUNARY
+        LDA  #1
+        STA  USENEG
+        LDP1 #MNEG                   ; JSR __neg  (__ax = -__ax)
+        JSR  EMIT
+        RTS
+gu_not: JSR  ADVANCE
+        JSR  GUNARY
+        LDA  #1
+        STA  USENOT
+        LDP1 #MLNOT                  ; JSR __lnot (__ax = !__ax -> 0/1)
+        JSR  EMIT
+        RTS
 
 ; factor: NUMBER | IDENT | '(' expr ')'
 GFACT:  LDA  CURK
@@ -1862,6 +1903,74 @@ MCMP_DEF:
         .byte LF
         .ascii "__cm0:  RTS"
         .byte LF,0
+MNEG:   .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "JSR __neg"
+        .byte LF,0
+MLNOT:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "JSR __lnot"
+        .byte LF,0
+MNEG_DEF:
+        .ascii "__neg:  LDA __ax"
+        .byte LF
+        .ascii "        LDB #$FF"
+        .byte LF
+        .ascii "        XOR"
+        .byte LF
+        .ascii "        STA __ax"
+        .byte LF
+        .ascii "        LDA __ax+1"
+        .byte LF
+        .ascii "        LDB #$FF"
+        .byte LF
+        .ascii "        XOR"
+        .byte LF
+        .ascii "        STA __ax+1"
+        .byte LF
+        .ascii "        LDA __ax"
+        .byte LF
+        .ascii "        LDB #1"
+        .byte LF
+        .ascii "        ADD"
+        .byte LF
+        .ascii "        STA __ax"
+        .byte LF
+        .ascii "        JNC __ng0"
+        .byte LF
+        .ascii "        LDA __ax+1"
+        .byte LF
+        .ascii "        INC"
+        .byte LF
+        .ascii "        STA __ax+1"
+        .byte LF
+        .ascii "__ng0:  RTS"
+        .byte LF,0
+MLNOT_DEF:
+        .ascii "__lnot: LDA __ax"
+        .byte LF
+        .ascii "        LDB __ax+1"
+        .byte LF
+        .ascii "        OR"
+        .byte LF
+        .ascii "        JZ __ln1"
+        .byte LF
+        .ascii "        LDA #0"
+        .byte LF
+        .ascii "        STA __ax"
+        .byte LF
+        .ascii "        STA __ax+1"
+        .byte LF
+        .ascii "        RTS"
+        .byte LF
+        .ascii "__ln1:  LDA #1"
+        .byte LF
+        .ascii "        STA __ax"
+        .byte LF
+        .ascii "        LDA #0"
+        .byte LF
+        .ascii "        STA __ax+1"
+        .byte LF
+        .ascii "        RTS"
+        .byte LF,0
 MUSAGE: .asciiz "usage: cc src.c >out.asm"
 MNOSRC: .asciiz "cc: cannot open source"
 
@@ -1915,4 +2024,6 @@ ARGSLOT: .fill 1   ; call: absolute slot for the current argument
 FNPAR:  .fill 16   ; per-function parameter count
 FSLOT:  .fill 16   ; per-function param base slot
 FPOOL:  .fill 128  ; packed function names
+USENEG: .fill 1    ; 1 if unary '-' is used (emit __neg)
+USENOT: .fill 1    ; 1 if '!' is used (emit __lnot)
 SYMPOOL: .fill 256 ; packed NUL-terminated variable names
