@@ -833,6 +833,20 @@ Last updated: 2026-07-08
             `st_while` was reworked to BSS labels (like `st_for`) to carry the
             context. Verified: break/continue in both loop kinds and nested
             `break` hitting only the inner loop. (No labelled break.)
+          * v0.12 — **recursion** (direct/self), via *caller-saved slots* rather
+            than a frame pointer: before every call a function pushes its own live
+            slots V<SLOTBASE..+SYMCNT-1> (EM_SAVESLOTS) and pops them after
+            (EM_RESTSLOTS), making the static per-function storage re-entrant.
+            Also fixed a latent bug this exposed: the callee name lived in IDNAME,
+            which argument parsing overwrites (any *variable* argument, e.g.
+            `fact(n-1)`, or `add(x,y)`, mis-emitted `JSR _f_<argname>`) — now the
+            callee's FPOOL index (FI) is saved across the arg parse and the name
+            emitted from the table (EMITFNAME). Function *prototypes*
+            `int f(int);` are parsed and skipped. Verified: fact(5), fib(10),
+            sum(10), a recursion-with-local, and var-arg calls. LIMITATION: mutual
+            recursion / forward calls unsupported (single pass, static slots — the
+            callee's param base isn't known before its definition); a full
+            __csp/__fp frame is the eventual fix.
         Debug notes for future selves: FGETB clobbers P1 (build identifiers via
         P2); variables must live in the program's own BSS, not a fixed high page
         (OS/SYS_PUTC scratch collides); FRESOLVE's scan needs FSDIRBUF off SBUF

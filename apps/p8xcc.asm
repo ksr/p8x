@@ -9,7 +9,7 @@
 ; emits assembly text to stdout via SYS_PUTC, so `>OUT.ASM` captures it and the
 ; program's own I/O stays shell-redirectable.
 ;
-; EARLY (v0.11). Supported so far:
+; EARLY (v0.12). Supported so far:
 ;     program : func*    func : int NAME([int P,...]) { <stmt>* }
 ;     stmt : int NAME [= expr]; | NAME = expr; | if(e) s [else s] |
 ;            while(e) s | for([asg];[e];[asg]) s | break; | continue; |
@@ -22,11 +22,14 @@
 ; expression's value) + a temp __t0; binary ops route through runtime helpers
 ; (__add/__sub/__mul/__cmp/__div) emitted at the end of the program. putchar
 ; takes __ax's low byte. FUNCTIONS: each is _f_NAME (call = JSR, return value in
-; __ax); params/locals use STATIC per-function slots (a global slot counter, so
-; NO recursion yet); the caller stores args into the callee's param slots before
-; the JSR. Verification is behavioural (compile on-target, run, diff output vs
-; p8cc.py). Grows one tested feature at a time (recursion/stack frame,
-; char/pointers, ...) toward the p8cc subset.
+; __ax); params/locals use STATIC per-function slots (a global slot counter);
+; the caller stores args into the callee's param slots before the JSR. To make
+; that re-entrant, a function pushes its own live slots (EM_SAVESLOTS) before
+; every call and restores them after (EM_RESTSLOTS) -- so direct RECURSION works
+; without a frame pointer. (Mutual recursion / forward calls are not supported:
+; single pass, a callee must be defined before it is called.) Verification is
+; behavioural (compile on-target, run, diff output vs p8cc.py). Grows one tested
+; feature at a time (char/pointers, ...) toward the p8cc subset.
 ;
 ; Conventions: source is the BIOS read stream (no cursor pointer); output is
 ; SYS_PUTC. P3 is the system stack. Emit walks strings via EMP (survives any
@@ -613,7 +616,17 @@ fp_loop: LDP1 #KW_INT
         JMP  fp_loop
 fp_done: LDA #')'
         JSR  EXPECTP
-        JSR  FADD                    ; record CURFN -> NPARAMS, SLOTBASE
+        LDA  CURK                    ; prototype?  int NAME(params) ;
+        LDB  #3
+        CMP
+        JNZ  fd_def
+        LDA  CURV
+        LDB  #$3B
+        CMP
+        JNZ  fd_def
+        JSR  ADVANCE                 ; consume ';' -> skip (no code, not registered)
+        RTS
+fd_def: JSR  FADD                    ; record CURFN -> NPARAMS, SLOTBASE
         LDP1 #MFPFX                  ; "_f_" NAME ":"
         JSR  EMIT
         LDP1 #CURFN
@@ -1398,7 +1411,10 @@ gfi_var: LDA IDVAROK
         STA  SYMIDX
         JSR  EM_LDVAR
         RTS
-gfi_call: JSR FFIND_ID              ; FFB = the callee's param base slot
+gfi_call: JSR FFIND_ID              ; FI = callee index, FFB = param base slot
+        LDA  FI                      ; save callee index (arg parsing reuses FI/IDNAME)
+        PHA
+        JSR  EM_SAVESLOTS            ; push caller's live slots (re-entrancy)
         JSR  ADVANCE                 ; past '('
         LDA  #0
         STA  ARGI
@@ -1441,12 +1457,108 @@ ga_done: LDA #')'
         JSR  EXPECTP
         LDP1 #MJSRF                  ; JSR _f_NAME   (result -> __ax)
         JSR  EMIT
-        LDP1 #IDNAME
+        PLA                          ; restore callee index
+        STA  FI
+        JSR  EMITFNAME               ; emit the callee's name from FPOOL[FI]
+        LDP1 #MNL
         JSR  EMIT
+        JSR  EM_RESTSLOTS            ; restore caller's slots (result stays in __ax)
+        RTS
+gf_err: RTS
+
+; EMITFNAME: emit the FI-th NUL-terminated name from the packed FPOOL.
+EMITFNAME: LDA #<FPOOL
+        TAP1L
+        LDA  #>FPOOL
+        TAP1H
+        LDA  FI
+        STA  VITER2                  ; names to skip
+efn_sk: LDA  VITER2
+        JZ   efn_go
+efn_s1: LDA  (P1)                    ; walk past one name + its NUL
+        INP1
+        JNZ  efn_s1
+        LDA  VITER2
+        DEC
+        STA  VITER2
+        JMP  efn_sk
+efn_go: JSR  EMIT                    ; P1 -> the FI-th name; emit it
+        RTS
+
+; --- caller-saved slots: make static local storage re-entrant (recursion) ---
+; EM_SAVESLOTS: emit runtime pushes of the current function's live slots
+;   V<SLOTBASE .. SLOTBASE+SYMCNT-1>, low then high, in ascending order.
+EM_SAVESLOTS: LDA #0
+        STA  VITER3
+ess_l:  LDA  VITER3
+        LDB  SYMCNT
+        CMP
+        JC   ess_d                   ; VITER3 >= SYMCNT -> done
+        LDA  SLOTBASE
+        LDB  VITER3
+        ADD
+        JSR  EM_PUSHSLOT
+        LDA  VITER3
+        INC
+        STA  VITER3
+        JMP  ess_l
+ess_d:  RTS
+
+; EM_RESTSLOTS: emit runtime pops in reverse (slot SYMCNT-1 .. 0).
+EM_RESTSLOTS: LDA SYMCNT
+        JZ   ers_d
+        STA  VITER3
+ers_l:  LDA  VITER3
+        DEC
+        STA  VITER3
+        LDA  SLOTBASE
+        LDB  VITER3
+        ADD
+        JSR  EM_POPSLOT
+        LDA  VITER3
+        JZ   ers_d                   ; just handled slot 0
+        JMP  ers_l
+ers_d:  RTS
+
+; EM_PUSHSLOT (A = slot number): emit  LDA V<n> / PHA / LDA V<n>+1 / PHA
+EM_PUSHSLOT: STA VITER2
+        LDP1 #MLDAV
+        JSR  EMIT
+        LDA  VITER2
+        JSR  EMITNUM
+        LDP1 #MNL
+        JSR  EMIT
+        LDP1 #MPHA
+        JSR  EMIT
+        LDP1 #MLDAV
+        JSR  EMIT
+        LDA  VITER2
+        JSR  EMITNUM
+        LDP1 #MP1
+        JSR  EMIT
+        LDP1 #MPHA
+        JSR  EMIT
+        RTS
+
+; EM_POPSLOT (A = slot number): emit  PLA / STA V<n>+1 / PLA / STA V<n>
+EM_POPSLOT: STA VITER2
+        LDP1 #MPLA
+        JSR  EMIT
+        LDP1 #MSTAV
+        JSR  EMIT
+        LDA  VITER2
+        JSR  EMITNUM
+        LDP1 #MP1
+        JSR  EMIT
+        LDP1 #MPLA
+        JSR  EMIT
+        LDP1 #MSTAV
+        JSR  EMIT
+        LDA  VITER2
+        JSR  EMITNUM
         LDP1 #MNL
         JSR  EMIT
         RTS
-gf_err: RTS
 
 ; =============================================================================
 ; Symbol table - each declared variable maps to an index (emitted as V<index>).
@@ -2255,6 +2367,8 @@ SYMIDX: .fill 1    ; SYMFIND/SYMADD result index
 SYMOK:  .fill 1    ; SYMFIND: 1 if found
 LHSIDX: .fill 1    ; index of an assignment/decl target variable
 VITER:  .fill 1    ; loop counter emitting variable storage
+VITER2: .fill 1    ; EM_PUSHSLOT/EM_POPSLOT: slot number being emitted
+VITER3: .fill 1    ; EM_SAVESLOTS/EM_RESTSLOTS: slot loop counter
 CUR2:   .fill 1    ; second char of a two-char punct (== != <= >=), else 0
 RELOP:  .fill 1    ; relational op code: 0 LT 1 LE 2 GT 3 GE 4 EQ 5 NE
 RELF:   .fill 1    ; RELDET: 1 if the current token is a relational op

@@ -27,10 +27,10 @@ python3 $ROOT/tools/p8xfs.py boot   cc.img oscc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  cc.img /bin >/dev/null
 python3 $ROOT/tools/p8xfs.py put    cc.img cc.bin  --name /bin/cc.bin  --load 0x7A00 --exec 0x7A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    cc.img asm.bin --name /bin/asm.bin --load 0x7A00 --exec 0x7A00 >/dev/null
-# exercises FUNCTIONS with a parameter (sum(n) loops n times, a 16-bit sum since
-# 10*(1+..+10)=550 > 255), a second function with an if/return, and calls used in
-# expressions. sum(10)*10 - 485 = 65 = 'A'; cmp(5) = 'Y'. Expected output: AY.
-printf 'int sum(int n) { int s; int i; s = 0; i = 1; while (i <= n) { s = s + i; i = i + 1; } return s; } int cmp(int x) { if (x > 3) return 89; return 90; } int main() { putchar(sum(10) * 10 - 485); putchar(cmp(5)); }\n' > t.c
+# exercises RECURSION (sum(n) = n + sum(n-1), a 16-bit result since 10*55=550 >
+# 255), a second function with an if/return, and calls used in expressions.
+# sum(10)*10 - 485 = 65 = 'A'; cmp(5) = 'Y'. Expected output: AY.
+printf 'int sum(int n) { if (n == 0) return 0; return n + sum(n - 1); } int cmp(int x) { if (x > 3) return 89; return 90; } int main() { putchar(sum(10) * 10 - 485); putchar(cmp(5)); }\n' > t.c
 python3 $ROOT/tools/p8xfs.py put cc.img t.c --name /t.c >/dev/null
 
 # all on-target: cc t.c >t.asm ; asm t.asm PROG.BIN ; PROG

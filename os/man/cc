@@ -21,7 +21,7 @@ DESCRIPTION
     BACK-END-and-all compiler aimed at fitting the ~31.5 KB TPA, where a port
     of the optimizing p8cc could not.
 
-    THIS IS EARLY (v0.11). Supported so far:
+    THIS IS EARLY (v0.12). Supported so far:
 
         program : func*
         func  : int NAME ( [int P (, int P)*] ) { <stmt>* }
@@ -43,9 +43,12 @@ DESCRIPTION
         factor: NUMBER | NAME | NAME( args ) | '(' <expr> ')'
 
     Multiple functions with parameters; execution starts at main(). Functions
-    return a value via `return`. NOTE: parameters and locals use STATIC storage
-    (not a stack), so recursion is not supported yet, and a function must not
-    appear in its own argument list. Comparisons yield 0/1. Values are 16-bit
+    return a value via `return`. Parameters and locals use STATIC per-function
+    storage, but a function saves its own live slots around every call, so
+    (direct) RECURSION works — fact(), fib(), etc. NOTE: mutual recursion /
+    forward calls are not supported (single pass: a callee must be defined before
+    it is called), and within one call's argument list a later argument must not
+    read a parameter an earlier argument overwrote. Comparisons yield 0/1. 16-bit
     `int` — arithmetic runs through a memory accumulator (__ax) and runtime
     helpers (__add/__sub/__mul/__cmp/__div); integer division, and '/' or '%' by
     0 gives 0. putchar takes the low byte.
