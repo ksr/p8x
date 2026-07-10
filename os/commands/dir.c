@@ -39,6 +39,7 @@
  */
 //#use glob     /* gmatch(pat, name): case-insensitive * ? matcher */
 //#use dirent   /* de_read/de_isdir/de_len/de_lba/de_opendir: entry via syscall */
+//#use apath    /* abspath(out, a): CWD-prefix a relative path (FRESOLVE starts at root) */
 
 char nbuf[16];                               /* current entry name, NUL-terminated */
 char gpat[16];                               /* glob pattern, or empty = no filter */
@@ -143,6 +144,7 @@ int walk(int depth) {
 int main() {
     char *arg;
     char dbuf[64];                           /* the directory part of a glob path */
+    char abuf[80];                           /* dbuf/arg made absolute (CWD-prefixed) */
     int rec;
     int r;
     int i;
@@ -186,14 +188,16 @@ int main() {
             j = 0;
             while (j <= slashpos) { dbuf[j] = arg[j]; j = j + 1; }
             dbuf[j] = 0;
-            if (bios(0x0139, dbuf, 0) & 256) { nf = 1; }   /* FOPENDIR(dir) */
+            abspath(abuf, dbuf);                           /* relative -> CWD-prefixed */
+            if (bios(0x0139, abuf, 0) & 256) { nf = 1; }   /* FOPENDIR(dir) */
         } else {
             bios(0x4012, 0, 0);              /* SYS_OPENCWD */
         }
     } else if (*arg == 0 || *arg == 13) {    /* no path -> current directory */
         bios(0x4012, 0, 0);                  /* SYS_OPENCWD (full 16-bit CWD LBA) */
-    } else {                                 /* FOPENDIR(path); carry = missing/not a dir */
-        if (bios(0x0139, arg, 0) & 256) { nf = 1; }
+    } else {                                 /* FOPENDIR(abs path); carry = missing/not a dir */
+        abspath(abuf, arg);                  /* relative -> CWD-prefixed (FRESOLVE starts at root) */
+        if (bios(0x0139, abuf, 0) & 256) { nf = 1; }
     }
     if (nf) { puts("dir: not found"); return 1; }
     bios(0x0145, 0, 0xFA);                   /* FSDIRBUF: iterate in our own page $FA00 */

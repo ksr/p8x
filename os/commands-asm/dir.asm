@@ -126,9 +126,18 @@ d_scd:  LDA #0
         LDB #13
         CMP
         JZ d_cwd
-        LDA m_arg                    ; FOPENDIR(arg)
-        TAP1L
+        LDA m_arg                    ; abspath(apath, m_arg) — CWD-prefix if relative
+        STA ap_a
         LDA m_arg+1
+        STA ap_a+1
+        LDA #<apath
+        STA ap_out
+        LDA #>apath
+        STA ap_out+1
+        JSR abspath
+        LDA #<apath                  ; FOPENDIR(apath)
+        TAP1L
+        LDA #>apath
         TAP1H
         LDA #0
         JSR $0139
@@ -209,12 +218,21 @@ d_gdl:  LDA (P2)
         JMP d_gdl
 d_gde:  LDA #0
         STA (P1)
-        LDA #<dbuf
-        TAP1L
+        LDA #<dbuf                    ; abspath(apath, dbuf) — CWD-prefix if relative
+        STA ap_a
         LDA #>dbuf
+        STA ap_a+1
+        LDA #<apath
+        STA ap_out
+        LDA #>apath
+        STA ap_out+1
+        JSR abspath
+        LDA #<apath                  ; FOPENDIR(apath)
+        TAP1L
+        LDA #>apath
         TAP1H
         LDA #0
-        JSR $0139                    ; FOPENDIR(dbuf)
+        JSR $0139                    ; FOPENDIR(dbuf via apath)
         JNC d_ok
         LDA #1
         STA notf
@@ -839,6 +857,73 @@ ca_b1:  STA caddr+1
         TAP1H
         RTS
 
+; abspath (mirrors os/commands/lib_apath.c): ap_out <- absolute path of the word
+; at ap_a; ap_n = chars consumed. A relative word is prefixed with the CWD
+; (SYS_GETCWD $4003), since FOPENDIR/FRESOLVE start at root. P3 is the stack, so
+; P2 is the source cursor and P1 the dest. (Ported from touch.asm/mv.asm.)
+abspath:LDA #0
+        STA ap_n
+        LDA ap_a
+        TAP2L
+        LDA ap_a+1
+        TAP2H
+        LDA (P2)
+        LDB #'/'
+        CMP
+        JZ ab_abs
+        LDA ap_out
+        TAP1L
+        LDA ap_out+1
+        TAP1H
+        LDA #0
+        JSR $4003                    ; SYS_GETCWD -> out
+        LDA ap_out
+        TAP1L
+        LDA ap_out+1
+        TAP1H
+ab_sl:  LDA (P1)
+        LDB #0
+        CMP
+        JZ ab_sld
+        INP1
+        JMP ab_sl
+ab_sld: DEP1
+        LDA (P1)
+        INP1
+        LDB #'/'
+        CMP
+        JZ ab_setp
+        LDA #'/'
+        STA (P1)+
+        JMP ab_setp
+ab_abs: LDA ap_out
+        TAP1L
+        LDA ap_out+1
+        TAP1H
+ab_setp:LDA ap_a
+        TAP2L
+        LDA ap_a+1
+        TAP2H
+ab_cp:  LDA (P2)
+        LDB #0
+        CMP
+        JZ ab_dn
+        LDB #13
+        CMP
+        JZ ab_dn
+        LDB #32
+        CMP
+        JZ ab_dn
+        STA (P1)+
+        INP2
+        LDA ap_n
+        INC
+        STA ap_n
+        JMP ab_cp
+ab_dn:  LDA #0
+        STA (P1)
+        RTS
+
 ; ======================= messages / scratch ===============================
 ; (assembler strips ';' as a comment even in strings, so the usage line is
 ;  emitted in two .ascii pieces around a literal ';' byte = 59)
@@ -847,6 +932,11 @@ u_use:  .ascii "usage: DIR [-R] [path|glob]   list a dir"
         .ascii " glob: * ? in the last name"
         .byte 0
 u_nf:   .asciiz "dir: not found"
+
+ap_out: .fill 2
+ap_a:   .fill 2
+ap_n:   .fill 1
+apath:  .fill 80
 
 m_arg:  .fill 2
 rec:    .fill 1

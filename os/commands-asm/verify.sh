@@ -42,6 +42,7 @@ fixtures() {
     printf 'green\r\n'       > "$W/g2.dat"; $FS put "$1" "$W/g2.dat" --name G2.LOG >/dev/null
     $FS mkdir "$1" /SUB/DEEP >/dev/null
     printf 'x\r\n' > "$W/m.dat"; $FS put "$1" "$W/m.dat" --name /SUB/M.TXT >/dev/null
+    printf 'deep\r\n' > "$W/z.dat"; $FS put "$1" "$W/z.dat" --name /SUB/DEEP/ZREL.TXT >/dev/null
     $FS mkdir "$1" /man >/dev/null
     printf 'DIR(1)\r\nNAME\r\n  dir - list directory contents\r\n' > "$W/mdir.dat"
     $FS put "$1" "$W/mdir.dat" --name /man/dir >/dev/null
@@ -54,7 +55,9 @@ cmd_script() {
         # -R targets /SUB (no .bin files): a recursive listing of /bin would
         # show dir.bin's own byte size, which legitimately differs between the
         # p8cc and asm builds — a size artifact, not a behavior difference.
-        DIR)  printf 'dir\rdir /SUB\rdir *.LOG\rdir -R /SUB\rdir /NOPE\r' ;;
+        # `cd /SUB; dir DEEP` exercises a RELATIVE path arg (must resolve vs the
+        # CWD -> /SUB/DEEP, not /DEEP): the two builds must agree on it too.
+        DIR)  printf 'dir\rdir /SUB\rcd /SUB\rdir DEEP\rcd /\rdir *.LOG\rdir -R /SUB\rdir /NOPE\r' ;;
         TREE) printf 'tree\r' ;;
         MV)   printf 'mv T.TXT R.TXT\rcat R.TXT\rmv *.LOG SUB\rfind LOG\rmv *.LOG NOPE\rmv R.TXT R.TXT\r' ;;
         WC)   printf 'wc T.TXT\rwc *.LOG\rcat T.TXT | wc\rwc -h\r' ;;

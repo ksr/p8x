@@ -20,6 +20,7 @@ cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x4000 >/dev/null
 printf 'inside-sub' > x.dat
+printf 'deep-rel'   > zrel.dat
 
 build_disk() {   # $1 dir.bin  $2 pwd.bin -> dir.img with /SUB/X.DAT + both programs
     rm -f dir.img
@@ -27,13 +28,19 @@ build_disk() {   # $1 dir.bin  $2 pwd.bin -> dir.img with /SUB/X.DAT + both prog
     python3 $ROOT/tools/p8xfs.py boot   dir.img osc.bin >/dev/null
     python3 $ROOT/tools/p8xfs.py mkdir  dir.img /SUB >/dev/null
     python3 $ROOT/tools/p8xfs.py put    dir.img x.dat --name /SUB/X.DAT --load 0 --exec 0 >/dev/null
+    # a nested dir so we can test a RELATIVE path arg from within /SUB
+    python3 $ROOT/tools/p8xfs.py mkdir  dir.img /SUB/DEEP >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    dir.img zrel.dat --name /SUB/DEEP/ZREL.DAT --load 0 --exec 0 >/dev/null
     python3 $ROOT/tools/p8xfs.py put    dir.img "$1" --name DIR.bin --load 0x7A00 --exec 0x7A00 >/dev/null
     python3 $ROOT/tools/p8xfs.py put    dir.img "$2" --name PWD.bin --load 0x7A00 --exec 0x7A00 >/dev/null
 }
 
 session() {   # echoes the combined console output of the three scenarios
-    # programs are invoked by ABSOLUTE path so RUN finds them whatever the CWD
-    printf 'B\rrun /DIR.bin /\rcd /SUB\rrun /DIR.bin\rrun /PWD.bin\r' \
+    # programs are invoked by ABSOLUTE path so RUN finds them whatever the CWD.
+    # `run /DIR.bin DEEP` from within /SUB exercises a RELATIVE path arg: dir must
+    # resolve it against the CWD (/SUB/DEEP), not the root (a bare FOPENDIR starts
+    # at root, so dir prepends the CWD via abspath — the regression this guards).
+    printf 'B\rrun /DIR.bin /\rcd /SUB\rrun /DIR.bin\rrun /DIR.bin DEEP\rrun /PWD.bin\r' \
         | ../p8xemu -l 200000000 -c dir.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r'
 }
 
@@ -45,6 +52,9 @@ check() {   # $1 = label, $2 = combined output
     # X.DAT holds 'inside-sub' (10 bytes) -> the size column must read 10.
     echo "$2" | grep -qE '^ *10  X\.DAT$' || fail "$1: X.DAT size column wrong (expected 10)"
     echo "$2" | grep -qx '/SUB'       || fail "$1: PWD did not print /SUB"
+    # the regression: a RELATIVE path arg ('DIR DEEP' from /SUB) must resolve
+    # against the CWD -> list /SUB/DEEP's ZREL.DAT, not fail as /DEEP not-found.
+    echo "$2" | grep -qE ' ZREL\.DAT$' || fail "$1: relative 'DIR DEEP' from /SUB did not resolve against the CWD (no ZREL.DAT)"
     # DIR buffers its listing, so it is redirectable: `RUN /DIR.bin / >LIST.TXT`
     # must capture the same listing to a file (FNEXT and the write stream share
     # the BIOS sector buffer SBUF, hence collect-then-emit in dir.c).
