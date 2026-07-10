@@ -27,10 +27,10 @@ python3 $ROOT/tools/p8xfs.py boot   cc.img oscc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  cc.img /bin >/dev/null
 python3 $ROOT/tools/p8xfs.py put    cc.img cc.bin  --name /bin/cc.bin  --load 0x7A00 --exec 0x7A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    cc.img asm.bin --name /bin/asm.bin --load 0x7A00 --exec 0x7A00 >/dev/null
-# exercises RECURSION (sum(n) = n + sum(n-1), a 16-bit result since 10*55=550 >
-# 255), a second function with an if/return, and calls used in expressions.
-# sum(10)*10 - 485 = 65 = 'A'; cmp(5) = 'Y'. Expected output: AY.
-printf 'int sum(int n) { if (n == 0) return 0; return n + sum(n - 1); } int cmp(int x) { if (x > 3) return 89; return 90; } int main() { putchar(sum(10) * 10 - 485); putchar(cmp(5)); }\n' > t.c
+# exercises a STRING literal + char* loop (puts), RECURSION (sum(n)=n+sum(n-1),
+# a 16-bit result since 10*55=550 > 255), and calls used in expressions.
+# puts prints "P8"; sum(10)*10 - 485 = 65 = 'A'. Expected output: P8A.
+printf 'int puts(char *s) { while (*s) { putchar(*s); s = s + 1; } return 0; } int sum(int n) { if (n == 0) return 0; return n + sum(n - 1); } int main() { puts("P8"); putchar(sum(10) * 10 - 485); }\n' > t.c
 python3 $ROOT/tools/p8xfs.py put cc.img t.c --name /t.c >/dev/null
 
 # all on-target: cc t.c >t.asm ; asm t.asm PROG.BIN ; PROG
@@ -38,5 +38,5 @@ printf 'B\rcc t.c >t.asm\rasm t.asm PROG.BIN\rrun PROG.BIN\r' | \
     ../p8xemu -l 900000000 -c cc.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r' > cc_out.txt
 
 grep -q 'P8X' cc_out.txt || fail "did not boot"
-grep -q '^AY$' cc_out.txt || { echo "--- transcript ---"; sed -n '/PROG/,$p' cc_out.txt | head; fail "compiled program did not print AY"; }
+grep -q '^P8A$' cc_out.txt || { echo "--- transcript ---"; sed -n '/PROG/,$p' cc_out.txt | head; fail "compiled program did not print P8A"; }
 echo "OS-CC TEST: PASS"

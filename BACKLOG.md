@@ -875,6 +875,19 @@ Last updated: 2026-07-08
             var index, &a[i], p[i] read/write, array passed to a function.
             LIMITATION: word elements only (no char/byte), a bare array name does
             not decay (use &a[0]), and slot count per function must stay < 256.
+          * v0.15 — **char literals + string literals + the `char` keyword**.
+            `'A'` lexes to a NUMBER (its ASCII value); `"..."` lexes to a new
+            token kind 4 (text built in STRBUF via **P2** — GC/FGETB clobbers P1,
+            same gotcha as identifiers). A string factor (`gf_str`) emits the
+            bytes inline, jumped over: `JMP Lskip; Ldata: .asciiz "..."; .byte 0;
+            Lskip:` then `__ax = &Ldata`. The extra pad zero means a WORD load at
+            the terminating NUL reads 0, and putchar already takes the low byte —
+            so `char *s; s="hi"; while(*s){putchar(*s); s=s+1;}` prints correctly
+            without a real 1-byte type. `char` is accepted as a type keyword
+            (EXPECTTYPE, synonym for int) in decls, params, and return types.
+            Verified: puts(), strlen(), multiple string literals, char params.
+            LIMITATION: still no true 1-byte type/width, and no escape sequences
+            in literals.
         Debug notes for future selves: FGETB clobbers P1 (build identifiers via
         P2); variables must live in the program's own BSS, not a fixed high page
         (OS/SYS_PUTC scratch collides); FRESOLVE's scan needs FSDIRBUF off SBUF

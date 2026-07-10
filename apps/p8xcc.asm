@@ -9,16 +9,16 @@
 ; emits assembly text to stdout via SYS_PUTC, so `>OUT.ASM` captures it and the
 ; program's own I/O stays shell-redirectable.
 ;
-; EARLY (v0.14). Supported so far:
-;     program : func*    func : int NAME([int [*]P,...]) { <stmt>* }
-;     stmt : int [*]NAME [= expr]; | int NAME[N]; | NAME = expr; |
+; EARLY (v0.15). Supported so far:  (type = int | char; char == int for now)
+;     program : func*    func : type NAME([type [*]P,...]) { <stmt>* }
+;     stmt : type [*]NAME [= expr]; | type NAME[N]; | NAME = expr; |
 ;            NAME[i] = expr; | *expr = expr; | expr; | if(e) s [else s] |
 ;            while(e) s | for([asg];[e];[asg]) s | break; | continue; |
 ;            { s* } | putchar(e); | return [e];
 ;     expr : land ('||' land)*   land : rel ('&&' rel)*   (short-circuit -> 0/1)
 ;     rel  : add [relop add]   add : term (('+'|'-') term)*
 ;     term : unary (('*'|'/'|'%') unary)*   unary : ('-'|'!'|'*'|'&') unary | factor
-;     factor : NUMBER | NAME | NAME[i] | NAME(args) | '(' e ')'   relop: < <= > >= == !=
+;     factor : NUMBER | 'c' | "str" | NAME | NAME[i] | NAME(args) | '(' e ')'
 ; Values are 16-bit int. Codegen uses a MEMORY accumulator __ax (every
 ; expression's value) + a temp __t0; binary ops route through runtime helpers
 ; (__add/__sub/__mul/__cmp/__div) emitted at the end of the program. putchar
@@ -482,6 +482,14 @@ adv_ws: JSR  GC                      ; skip whitespace
         LDA  TMPB
         JSR  ISALP
         JC   adv_id
+        LDA  TMPB                     ; char literal  'x'
+        LDB  #$27
+        CMP
+        JZ   adv_chl
+        LDA  TMPB                     ; string literal  "..."
+        LDB  #$22
+        CMP
+        JZ   adv_stl
         LDA  #3                      ; punctuation
         STA  CURK
         LDA  TMPB
@@ -534,6 +542,33 @@ adv_2set: LDA #'='
         RTS
 adv_pd: RTS
 adv_eof: LDA #0
+        STA  CURK
+        RTS
+adv_chl: JSR GC                       ; 'x' -> NUMBER token (ASCII value)
+        STA  CURV
+        LDA  #0
+        STA  CURV+1
+        LDA  #1
+        STA  CURK
+        JSR  GC                       ; closing quote (discarded; no escapes)
+        RTS
+adv_stl: LDA #<STRBUF                  ; "..." -> STRING (kind 4); built via P2
+        TAP2L                         ;   (GC/FGETB clobbers P1, preserves P2)
+        LDA  #>STRBUF
+        TAP2H
+asl_l:  JSR  GC
+        JC   asl_e                    ; EOF ends it
+        STA  TMPB
+        LDB  #$22
+        CMP
+        JZ   asl_e                    ; closing quote
+        LDA  TMPB
+        STA  (P2)
+        INP2
+        JMP  asl_l
+asl_e:  LDA  #0
+        STA  (P2)                     ; NUL-terminate
+        LDA  #4
         STA  CURK
         RTS
 adv_num: LDA #0                      ; decimal number -> CURV
@@ -681,8 +716,7 @@ ce_vl:  LDA  VITER
 ce_vd:  RTS
 
 ; FUNCDEF: int NAME ( ) { <stmt>* }   (Stage A: no parameters yet)
-FUNCDEF: LDP1 #KW_INT
-        JSR  EXPECTID
+FUNCDEF: JSR EXPECTTYPE
         JSR  CPCURFN                 ; CURFN <- function name (current id)
         LDA  SLOTCNT                 ; this function's variables start here
         STA  SLOTBASE
@@ -702,8 +736,7 @@ FUNCDEF: LDP1 #KW_INT
         LDB  #')'
         CMP
         JZ   fp_done
-fp_loop: LDP1 #KW_INT
-        JSR  EXPECTID
+fp_loop: JSR EXPECTTYPE
 fp_star: LDA CURK                    ; skip pointer stars on the param
         LDB  #3
         CMP
@@ -932,6 +965,10 @@ STMT:   LDA  CURK
         CMP
         JNZ  st_err
         LDP1 #KW_INT
+        JSR  IDEQ
+        LDA  TMPB
+        JNZ  st_decl
+        LDP1 #KW_CHAR
         JSR  IDEQ
         LDA  TMPB
         JNZ  st_decl
@@ -1609,6 +1646,9 @@ GFACT:  LDA  CURK
         LDB  #2
         CMP
         JZ   gf_id
+        LDB  #4
+        CMP
+        JZ   gf_str
         LDB  #3
         CMP
         JNZ  gf_err
@@ -1622,6 +1662,45 @@ GFACT:  LDA  CURK
         JSR  EXPECTP
         RTS
 gf_num: JSR  EM_LDIMM                ; __ax = the 16-bit literal
+        JSR  ADVANCE
+        RTS
+; a string literal: emit its bytes inline (jumped over), __ax = its address.
+; Padded with an extra 0 so a WORD load at the terminating NUL reads 0.
+gf_str: JSR  NEWLBL
+        STA  STRDL                    ; data label
+        JSR  NEWLBL
+        STA  STRSL                    ; skip label
+        LDP1 #MJMP                    ; JMP L<skip>
+        LDA  STRSL
+        JSR  EMITJ
+        LDA  STRDL                    ; L<data>:
+        JSR  EMITLBL
+        LDP1 #MDQASC                  ; "        .asciiz \""
+        JSR  EMIT
+        LDP1 #STRBUF                  ; the text
+        JSR  EMIT
+        LDP1 #MDQCL                   ; closing quote + LF
+        JSR  EMIT
+        LDP1 #MBYTE0                  ; extra pad 0
+        JSR  EMIT
+        LDA  STRSL                    ; L<skip>:
+        JSR  EMITLBL
+        LDP1 #MLDALL                  ; __ax = &L<data>
+        JSR  EMIT
+        LDA  STRDL
+        JSR  EMITNUM
+        LDP1 #MNL
+        JSR  EMIT
+        LDP1 #MSTAX
+        JSR  EMIT
+        LDP1 #MLDAHL
+        JSR  EMIT
+        LDA  STRDL
+        JSR  EMITNUM
+        LDP1 #MNL
+        JSR  EMIT
+        LDP1 #MSTAXH
+        JSR  EMIT
         JSR  ADVANCE
         RTS
 gf_id:  JSR  CPIDNAME                ; save the id; it may be a call or a variable
@@ -2155,6 +2234,23 @@ EXPECTP: STA TMPB
 ep_ret: RTS
 
 ; EXPECTID: current token must be the identifier at P1, then ADVANCE.
+; EXPECTTYPE: accept the type keyword 'int' or 'char' (advance past it).
+EXPECTTYPE: LDP1 #KW_INT
+        JSR  IDEQ
+        LDA  TMPB
+        JNZ  ett_ok
+        LDP1 #KW_CHAR
+        JSR  IDEQ
+        LDA  TMPB
+        JZ   ett_no
+ett_ok: JSR  ADVANCE
+        LDA  #1
+        STA  TMPB
+        RTS
+ett_no: LDA  #0
+        STA  TMPB
+        RTS
+
 EXPECTID: JSR IDEQ
         LDA  TMPB
         JZ   ei_ret
@@ -2196,6 +2292,7 @@ id_no:  LDA  #0
 ; Strings
 ; =============================================================================
 KW_INT:  .asciiz "int"
+KW_CHAR: .asciiz "char"
 KW_MAIN: .asciiz "main"
 KW_PUTC: .asciiz "putchar"
 KW_RET:  .asciiz "return"
@@ -2604,6 +2701,17 @@ MCMP_DEF:
         .byte LF
         .ascii "__cm0:  RTS"
         .byte LF,0
+MDQASC: .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .byte $2E,$61,$73,$63,$69,$69,$7A,$20,$22   ; .asciiz (space) "
+        .byte 0
+MDQCL:  .byte $22,LF,0                              ; closing quote + newline
+MBYTE0: .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii ".byte 0"
+        .byte LF,0
+MLDALL: .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .asciiz "LDA #<L"
+MLDAHL: .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .asciiz "LDA #>L"
 MSHL:   .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "SHL"
         .byte LF,0
@@ -2741,6 +2849,9 @@ SELFREC: .fill 1   ; 1 if the current call is a direct self-recursion
 NLSLOT: .fill 1    ; current function's slot count (>= name count, arrays add N)
 SYMSLOT: .fill 48  ; per-name -> first slot (relative to SLOTBASE)
 SYMARR: .fill 256  ; per-slot: 1 if this slot is an array base
+STRBUF: .fill 128  ; current string-literal text
+STRDL:  .fill 1    ; string literal: data label
+STRSL:  .fill 1    ; string literal: skip label
 CUR2:   .fill 1    ; second char of a two-char punct (== != <= >=), else 0
 RELOP:  .fill 1    ; relational op code: 0 LT 1 LE 2 GT 3 GE 4 EQ 5 NE
 RELF:   .fill 1    ; RELDET: 1 if the current token is a relational op

@@ -21,13 +21,14 @@ DESCRIPTION
     BACK-END-and-all compiler aimed at fitting the ~31.5 KB TPA, where a port
     of the optimizing p8cc could not.
 
-    THIS IS EARLY (v0.14). Supported so far:
+    THIS IS EARLY (v0.15). Supported so far:  (`int` and `char` name a type;
+    `char` is currently a synonym for `int`.)
 
         program : func*
-        func  : int NAME ( [int [*]P (, int [*]P)*] ) { <stmt>* }
-        stmt  : int NAME [ = <expr> ] ;   (declare a variable)
-              | int * NAME ;              (pointer variable)
-              | int NAME [ N ] ;          (array of N ints)
+        func  : type NAME ( [type [*]P (, type [*]P)*] ) { <stmt>* }
+        stmt  : type NAME [ = <expr> ] ;  (declare a variable)
+              | type * NAME ;             (pointer variable)
+              | type NAME [ N ] ;         (array of N ints)
               | NAME = <expr> ;           (assign)
               | NAME [ <expr> ] = <expr> ; (array/pointer element store)
               | * <expr> = <expr> ;       (store through a pointer)
@@ -45,7 +46,8 @@ DESCRIPTION
         add   : term (('+' | '-') term)*
         term  : unary (('*' | '/' | '%') unary)*
         unary : ('-' | '!' | '*' | '&') unary | factor   (* deref, & address-of)
-        factor: NUMBER | NAME | NAME[ <expr> ] | NAME( args ) | '(' <expr> ')'
+        factor: NUMBER | 'c' | "string" | NAME | NAME[ <expr> ]
+              | NAME( args ) | '(' <expr> ')'
 
     Multiple functions with parameters; execution starts at main(). Functions
     return a value via `return`. Parameters and locals use STATIC per-function
@@ -55,8 +57,14 @@ DESCRIPTION
     this gives pass-by-reference — set(&x), swap(&a,&b). ARRAYS: `int a[N]`
     reserves N ints; `a[i]` reads/writes an element; an array name doesn't decay
     on its own, but `&a[0]` gives a pointer you can index (`p[i]`) and pass to a
-    function. All values are word-sized (a `char`-typed byte pointer is not
-    distinguished yet — every element is 2 bytes). NOTE: mutual
+    function. STRINGS: a char literal 'A' is a number; a string literal "abc"
+    is emitted inline (jumped over) as NUL-terminated data padded with an extra
+    zero, and evaluates to its address. So a classic
+        char *s; s = "hi"; while (*s) { putchar(*s); s = s + 1; }
+    loop and helpers like puts()/strlen() work. All values are word-sized: a
+    char* deref reads a WORD, but putchar takes the low byte and the pad zero
+    makes the word at the terminator read 0, so string loops behave. There is no
+    real 1-byte type yet (no escape sequences in literals either). NOTE: mutual
     recursion / forward calls are not supported (single pass: a callee must be
     defined before it is called); within one call's argument list a later
     argument must not read a parameter an earlier one overwrote; and taking the
