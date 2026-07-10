@@ -9,7 +9,7 @@
 ; emits assembly text to stdout via SYS_PUTC, so `>OUT.ASM` captures it and the
 ; program's own I/O stays shell-redirectable.
 ;
-; EARLY (v0.17). Supported so far:  (type = int (16-bit) | char (1-byte elem))
+; EARLY (v0.18). Supported so far:  (type = int (16-bit) | char (1-byte elem))
 ;     program : func*    func : type NAME([type [*]P,...]) { <stmt>* }
 ;     stmt : type [*]NAME [= expr]; | type NAME[N]; | NAME = expr; |
 ;            NAME[i] = expr; | *expr = expr; | expr; | if(e) s [else s] |
@@ -541,8 +541,11 @@ adv_ws: JSR  GC                      ; skip whitespace
         LDB  #$09
         CMP
         JZ   adv_ws
+        LDB  #'/'                     ; '/' may start a comment
+        CMP
+        JZ   adv_slash
         STA  TMPB
-        JSR  ISDIG
+adv_cls: JSR ISDIG                    ; classify the first non-ws char
         JC   adv_num
         LDA  TMPB
         JSR  ISALP
@@ -684,6 +687,43 @@ asl_e:  LDA  #0
         LDA  #4
         STA  CURK
         RTS
+; '/' seen: peek next -> // line comment, /* block comment, or lone '/' (divide)
+adv_slash: JSR GC
+        JC   adv_slp                  ; EOF after '/' -> lone '/'
+        STA  TMPC
+        LDB  #'/'
+        CMP
+        JZ   adv_linec
+        LDA  TMPC
+        LDB  #'*'
+        CMP
+        JZ   adv_blockc
+        LDA  TMPC                     ; lone '/' : push back the peeked char
+        JSR  UNGC
+adv_slp: LDA #'/'
+        STA  TMPB
+        JMP  adv_cls                  ; classify as the '/' punct
+adv_linec: JSR GC                     ; skip to end of line
+        JC   adv_eof
+        LDB  #LF
+        CMP
+        JNZ  adv_linec
+        JMP  adv_ws
+adv_blockc: JSR GC                    ; skip to '*/'
+        JC   adv_eof
+        LDB  #'*'
+        CMP
+        JNZ  adv_blockc
+abc_st: JSR  GC
+        JC   adv_eof
+        LDB  #'/'
+        CMP
+        JZ   adv_ws                   ; '*/' -> comment ends
+        LDB  #'*'
+        CMP
+        JZ   abc_st                   ; another '*' -> re-check
+        JMP  adv_blockc
+
 adv_num: LDA #0                      ; decimal number -> CURV
         STA  NACC
         STA  NACC+1

@@ -903,6 +903,10 @@ Last updated: 2026-07-08
             still a word (width only matters for arrays/pointers). Verified: char
             b[4] build+print, char* byte deref, strcpy(&d[0],s) into a buffer,
             char scalar; all int/pointer/recursion/string regressions green.
+          * v0.18 — **comments**: the lexer skips `//` line comments and
+            `/* ... */` block comments in its whitespace phase (a leading `/`
+            peeks ahead; a lone `/` is still the divide operator). Verified line,
+            block, a block containing `**` and `/`, and that 130/2 still divides.
         Debug notes for future selves: FGETB clobbers P1 (build identifiers via
         P2); variables must live in the program's own BSS, not a fixed high page
         (OS/SYS_PUTC scratch collides); FRESOLVE's scan needs FSDIRBUF off SBUF
