@@ -9,15 +9,19 @@
 ; emits assembly text to stdout via SYS_PUTC, so `>OUT.ASM` captures it and the
 ; program's own I/O stays shell-redirectable.
 ;
-; THIS IS THE WALKING SKELETON (v0.1). Supported so far:
+; EARLY (v0.6). Supported so far:
 ;     int main() { <stmt>* }
-;     stmt : putchar( <expr> ) ;  |  return [<expr>] ;
-;     expr : term (('+'|'-') term)*        term : NUMBER | '(' expr ')'
-; Values are 8-bit for now (putchar takes a byte). Codegen is a stack machine on
-; the hardware stack + one memory temp (__t0), since the ISA has no A<->B move.
-; Grows one tested feature at a time (params/locals, *, if/while, ... ) toward
-; the p8cc subset; verification is behavioural (compile on-target, run, diff
-; output against the p8cc.py reference).
+;     stmt : int NAME [= expr]; | NAME = expr; | if(e) s [else s] |
+;            while(e) s | { s* } | putchar(e); | return [e];
+;     expr : add [relop add]   add : term (('+'|'-') term)*
+;     term : factor (('*'|'/'|'%') factor)*  factor : NUMBER | NAME | '(' e ')'
+;     relop: < <= > >= == !=
+; Values are 16-bit int. Codegen uses a MEMORY accumulator __ax (every
+; expression's value) + a temp __t0; binary ops route through runtime helpers
+; (__add/__sub/__mul/__cmp/__div) emitted at the end of the program. putchar
+; takes __ax's low byte. Verification is behavioural (compile on-target, run,
+; diff output against p8cc.py). Grows one tested feature at a time
+; (functions/params, char/pointers, ...) toward the p8cc subset.
 ;
 ; Conventions: source is the BIOS read stream (no cursor pointer); output is
 ; SYS_PUTC. P3 is the system stack. Emit walks strings via EMP (survives any
@@ -188,6 +192,100 @@ en_o:   LDA  VN                      ; ones (always)
         JSR  SYS_PUTC
         RTS
 
+; ---- 16-bit accumulator emit helpers ----
+EM_LDIMM: LDP1 #MLDAI                ; __ax = CURV (16-bit literal)
+        JSR  EMIT
+        LDA  CURV
+        JSR  EMITNUM
+        LDP1 #MNL
+        JSR  EMIT
+        LDP1 #MSTAX
+        JSR  EMIT
+        LDP1 #MLDAI
+        JSR  EMIT
+        LDA  CURV+1
+        JSR  EMITNUM
+        LDP1 #MNL
+        JSR  EMIT
+        LDP1 #MSTAXH
+        JSR  EMIT
+        RTS
+EM_LDVAR: LDP1 #MLDAV                ; __ax = V<SYMIDX>
+        JSR  EMIT
+        LDA  SYMIDX
+        JSR  EMITNUM
+        LDP1 #MNL
+        JSR  EMIT
+        LDP1 #MSTAX
+        JSR  EMIT
+        LDP1 #MLDAV
+        JSR  EMIT
+        LDA  SYMIDX
+        JSR  EMITNUM
+        LDP1 #MP1
+        JSR  EMIT
+        LDP1 #MSTAXH
+        JSR  EMIT
+        RTS
+EM_STVAR: LDP1 #MLDAX                ; V<LHSIDX> = __ax
+        JSR  EMIT
+        LDP1 #MSTAV
+        JSR  EMIT
+        LDA  LHSIDX
+        JSR  EMITNUM
+        LDP1 #MNL
+        JSR  EMIT
+        LDP1 #MLDAXH
+        JSR  EMIT
+        LDP1 #MSTAV
+        JSR  EMIT
+        LDA  LHSIDX
+        JSR  EMITNUM
+        LDP1 #MP1
+        JSR  EMIT
+        RTS
+EM_PUSH: LDP1 #MLDAX                 ; push __ax (16-bit)
+        JSR  EMIT
+        LDP1 #MPHA
+        JSR  EMIT
+        LDP1 #MLDAXH
+        JSR  EMIT
+        LDP1 #MPHA
+        JSR  EMIT
+        RTS
+EM_POP: LDP1 #MPLA                   ; pop -> __t0 (16-bit)
+        JSR  EMIT
+        LDP1 #MSTT0H
+        JSR  EMIT
+        LDP1 #MPLA
+        JSR  EMIT
+        LDP1 #MSTAT
+        JSR  EMIT
+        RTS
+EM_AX0: LDP1 #MLDA0                  ; __ax = 0
+        JSR  EMIT
+        LDP1 #MSTAX
+        JSR  EMIT
+        LDP1 #MSTAXH
+        JSR  EMIT
+        RTS
+EM_AX1: LDP1 #MLDA1                  ; __ax = 1
+        JSR  EMIT
+        LDP1 #MSTAX
+        JSR  EMIT
+        LDP1 #MLDA0
+        JSR  EMIT
+        LDP1 #MSTAXH
+        JSR  EMIT
+        RTS
+EM_TESTAX: LDP1 #MLDAX                ; set Z=1 iff __ax==0  (LDA __ax; LDB __ax+1; OR)
+        JSR  EMIT
+        LDP1 #MLDBXH
+        JSR  EMIT
+        LDP1 #MOR
+        JSR  EMIT
+        RTS
+
 ; =============================================================================
 ; Lexer  (source via the BIOS read stream; one-char pushback)
 ; =============================================================================
@@ -297,21 +395,51 @@ adv_eof: LDA #0
 adv_num: LDA #0                      ; decimal number -> CURV
         STA  NACC
         STA  NACC+1
-an_l:   LDA  TMPB                    ; NACC = NACC*10 + digit  (low byte only kept 8-bit-ish)
+an_l:   LDA  TMPB                    ; digit -> DQ; NACC = NACC*10 + digit (16-bit)
         LDB  #'0'
         SUB
-        STA  DQ                      ; digit
-        LDA  NACC                    ; *10 = *8 + *2  (8-bit is enough for v0.1)
+        STA  DQ
+        LDA  NACC                    ; MULT2 = NACC << 1
         SHL
-        STA  TMPB                    ; *2
+        STA  MULT2
+        LDA  NACC+1
+        ROL
+        STA  MULT2+1
+        LDA  MULT2                   ; NACC = MULT2 << 2  (= NACC*8)
         SHL
-        SHL                          ; *8
-        LDB  TMPB
-        ADD                          ; *10
+        STA  NACC
+        LDA  MULT2+1
+        ROL
+        STA  NACC+1
+        LDA  NACC
+        SHL
+        STA  NACC
+        LDA  NACC+1
+        ROL
+        STA  NACC+1
+        LDA  NACC                    ; NACC = NACC + MULT2  (= NACC*10)
+        LDB  MULT2
+        ADD
+        STA  NACC
+        LDA  #0
+        JNC  an_c0
+        LDA  #1
+an_c0:  STA  CARRY
+        LDA  NACC+1
+        LDB  MULT2+1
+        ADD
+        LDB  CARRY
+        ADD
+        STA  NACC+1
+        LDA  NACC                    ; NACC += digit
         LDB  DQ
         ADD
         STA  NACC
-        JSR  GC
+        JNC  an_c1
+        LDA  NACC+1
+        INC
+        STA  NACC+1
+an_c1:  JSR  GC
         JC   an_done
         STA  TMPB
         JSR  ISDIG
@@ -322,7 +450,7 @@ an_done: LDA #1
         STA  CURK
         LDA  NACC
         STA  CURV
-        LDA  #0
+        LDA  NACC+1
         STA  CURV+1
         RTS
 adv_id: LDA #<TID                    ; identifier -> TID  (built via P2, which
@@ -381,6 +509,12 @@ co_s:   LDA  CURK                    ; statements until '}'
 co_stmt: JSR STMT
         JMP  co_s
 co_end: LDP1 #MRTS                   ; fall-through return
+        JSR  EMIT
+        LDP1 #MADD_DEF                ; 16-bit runtime helpers (always emitted)
+        JSR  EMIT
+        LDP1 #MSUB_DEF
+        JSR  EMIT
+        LDP1 #MCMP_DEF
         JSR  EMIT
         LDA  USEMUL                  ; the multiply helper, if the program used '*'
         JZ   ce_nomul
@@ -466,9 +600,10 @@ sb_end: LDA  #'}'
 st_if:  JSR  ADVANCE                 ; past "if"
         LDA  #'('
         JSR  EXPECTP
-        JSR  GEXPR                   ; condition -> A
+        JSR  GEXPR                   ; condition -> __ax
         LDA  #')'
         JSR  EXPECTP
+        JSR  EM_TESTAX               ; set Z from __ax for the branch
         JSR  NEWLBL                  ; la = false-branch target
         PHA
         LDP1 #MJZ
@@ -510,9 +645,10 @@ st_while: JSR ADVANCE                ; past "while"
         JSR  EMITLBL                 ; L<ltop>:
         LDA  #'('
         JSR  EXPECTP
-        JSR  GEXPR                   ; condition -> A
+        JSR  GEXPR                   ; condition -> __ax
         LDA  #')'
         JSR  EXPECTP
+        JSR  EM_TESTAX               ; set Z from __ax for the branch
         JSR  NEWLBL                  ; lend
         PHA
         LDP1 #MJZ
@@ -567,12 +703,7 @@ st_assign: JSR SYMFIND              ; look up NAME (current id) -> SYMIDX/SYMOK
         JSR  EXPECTP
         RTS
 ; EMITSTV: emit  "        STA V<LHSIDX>" + newline
-EMITSTV: LDP1 #MSTAV
-        JSR  EMIT
-        LDA  LHSIDX
-        JSR  EMITNUM
-        LDP1 #MNL
-        JSR  EMIT
+EMITSTV: JSR EM_STVAR                 ; V<LHSIDX> = __ax
         RTS
 st_putc: JSR ADVANCE
         LDA  #'('
@@ -612,21 +743,15 @@ GEXPR:  JSR  GADD
         JSR  RELDET                  ; is the current punct a relop? -> RELOP/RELF
         LDA  RELF
         JZ   grx
-        LDP1 #MPHA                   ; push the left operand
-        JSR  EMIT
+        JSR  EM_PUSH                 ; push the left operand
         LDA  RELOP                   ; save RELOP across GADD (parens may recurse)
         PHA
         JSR  ADVANCE                 ; past the operator
-        JSR  GADD                    ; right operand -> A
+        JSR  GADD                    ; right operand -> __ax
         PLA
         STA  RELOP
-        LDP1 #MSTAT                  ; STA __t0   (right)
-        JSR  EMIT
-        LDP1 #MPLA                   ; PLA        (left)
-        JSR  EMIT
-        LDP1 #MLDBT                  ; LDB __t0   (right)
-        JSR  EMIT
-        LDP1 #MCMP                   ; CMP        (left - right; C=left>=right, Z=eq)
+        JSR  EM_POP                  ; pop left -> __t0
+        LDP1 #MCMP                   ; JSR __cmp  (C=left>=right, Z=eq)
         JSR  EMIT
         JSR  EMITCMP                 ; emit the 0/1 sequence for RELOP
 grx:    RTS
@@ -673,13 +798,9 @@ gt_mod: JSR  ADVANCE
         JMP  gt_l
 gt_d:   RTS
 ; GT_COMB: emit  push-left ; <right factor> ; STA __t0 ; PLA  (left in A, right in __t0)
-GT_COMB: LDP1 #MPHA
-        JSR  EMIT
-        JSR  GFACT
-        LDP1 #MSTAT
-        JSR  EMIT
-        LDP1 #MPLA
-        JSR  EMIT
+GT_COMB: JSR EM_PUSH                  ; left
+        JSR  GFACT                    ; right -> __ax
+        JSR  EM_POP                   ; left -> __t0
         RTS
 
 ; additive: term (('+'|'-') term)*
@@ -698,29 +819,17 @@ ge_l:   LDA  CURK
         JZ   ge_sub
         JMP  ge_d
 ge_add: JSR  ADVANCE
-        LDP1 #MPHA
-        JSR  EMIT
-        JSR  GTERM
-        LDP1 #MSTAT
-        JSR  EMIT
-        LDP1 #MPLA
-        JSR  EMIT
-        LDP1 #MLDBT
-        JSR  EMIT
-        LDP1 #MADD
+        JSR  EM_PUSH                  ; left
+        JSR  GTERM                    ; right -> __ax
+        JSR  EM_POP                   ; left -> __t0
+        LDP1 #MADD                    ; JSR __add  (__ax = __t0 + __ax)
         JSR  EMIT
         JMP  ge_l
 ge_sub: JSR  ADVANCE
-        LDP1 #MPHA
-        JSR  EMIT
-        JSR  GTERM
-        LDP1 #MSTAT
-        JSR  EMIT
-        LDP1 #MPLA
-        JSR  EMIT
-        LDP1 #MLDBT
-        JSR  EMIT
-        LDP1 #MSUB
+        JSR  EM_PUSH                  ; left
+        JSR  GTERM                    ; right -> __ax
+        JSR  EM_POP                   ; left -> __t0
+        LDP1 #MSUB                    ; JSR __sub  (__ax = __t0 - __ax)
         JSR  EMIT
         JMP  ge_l
 ge_d:   RTS
@@ -745,23 +854,13 @@ GFACT:  LDA  CURK
         LDA  #')'
         JSR  EXPECTP
         RTS
-gf_num: LDP1 #MLDAI                  ; LDA #<n>
-        JSR  EMIT
-        LDA  CURV
-        JSR  EMITNUM
-        LDP1 #MNL
-        JSR  EMIT
+gf_num: JSR  EM_LDIMM                ; __ax = the 16-bit literal
         JSR  ADVANCE
         RTS
-gf_id:  JSR  SYMFIND                 ; a variable read -> LDA V<idx>
+gf_id:  JSR  SYMFIND                 ; a variable read -> __ax = V<idx>
         LDA  SYMOK
         JZ   gf_err
-        LDP1 #MLDAV
-        JSR  EMIT
-        LDA  SYMIDX
-        JSR  EMITNUM
-        LDP1 #MNL
-        JSR  EMIT
+        JSR  EM_LDVAR
         JSR  ADVANCE
         RTS
 gf_err: RTS
@@ -951,15 +1050,13 @@ ec_ne:  LDP1 #MJNZ                   ; a!=b : true when Z=0
         LDA  LBLA
         JSR  EMITJ
         JMP  ec_t
-ec_t:   LDP1 #MLDA0                  ; false path, then jump over the true value
-        JSR  EMIT
+ec_t:   JSR  EM_AX0                  ; false path, then jump over the true value
         LDP1 #MJMP
         LDA  LBLB
         JSR  EMITJ
         LDA  LBLA                    ; la: (true)
         JSR  EMITLBL
-        LDP1 #MLDA1
-        JSR  EMIT
+        JSR  EM_AX1
         JMP  ec_end
 ec_gt:  LDP1 #MJZ                    ; a>b : false when Z=1 (eq) or C=0 (a<b)
         LDA  LBLA
@@ -967,15 +1064,13 @@ ec_gt:  LDP1 #MJZ                    ; a>b : false when Z=1 (eq) or C=0 (a<b)
         LDP1 #MJNC
         LDA  LBLA
         JSR  EMITJ
-        LDP1 #MLDA1                  ; a>b -> true
-        JSR  EMIT
+        JSR  EM_AX1                  ; a>b -> true
         LDP1 #MJMP
         LDA  LBLB
         JSR  EMITJ
         LDA  LBLA                    ; la: (false)
         JSR  EMITLBL
-        LDP1 #MLDA0
-        JSR  EMIT
+        JSR  EM_AX0
         JMP  ec_end
 ec_le:  LDP1 #MJZ                    ; a<=b : true when Z=1 (eq) or C=0 (a<b)
         LDA  LBLA
@@ -983,15 +1078,13 @@ ec_le:  LDP1 #MJZ                    ; a<=b : true when Z=1 (eq) or C=0 (a<b)
         LDP1 #MJNC
         LDA  LBLA
         JSR  EMITJ
-        LDP1 #MLDA0                  ; a>b -> false
-        JSR  EMIT
+        JSR  EM_AX0                  ; a>b -> false
         LDP1 #MJMP
         LDA  LBLB
         JSR  EMITJ
         LDA  LBLA                    ; la: (true)
         JSR  EMITLBL
-        LDP1 #MLDA1
-        JSR  EMIT
+        JSR  EM_AX1
 ec_end: LDA  LBLB                    ; lb: (end)
         JSR  EMITLBL
         RTS
@@ -1096,9 +1189,34 @@ MLDAV:  .byte $20,$20,$20,$20,$20,$20,$20,$20   ; prefix: "LDA V" + index + MNL
 MSTAV:  .byte $20,$20,$20,$20,$20,$20,$20,$20   ; prefix: "STA V" + index + MNL
         .asciiz "STA V"
 MVL:    .asciiz "V"                             ; a variable's storage label prefix
-MVF:    .ascii ":   .fill 1"
+MVF:    .ascii ":   .word 0"
         .byte LF,0
 MNL:    .byte LF,0
+MSTAX:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "STA __ax"
+        .byte LF,0
+MSTAXH: .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "STA __ax+1"
+        .byte LF,0
+MLDAX:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "LDA __ax"
+        .byte LF,0
+MLDAXH: .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "LDA __ax+1"
+        .byte LF,0
+MLDBXH: .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "LDB __ax+1"
+        .byte LF,0
+MOR:    .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "OR"
+        .byte LF,0
+MSTT0H: .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "STA __t0+1"
+        .byte LF,0
+MP1:    .ascii "+1"
+        .byte LF,0
+MVWORD: .ascii ":   .word 0"
+        .byte LF,0
 MPHA:   .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "PHA"
         .byte LF,0
@@ -1112,112 +1230,227 @@ MLDBT:  .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "LDB __t0"
         .byte LF,0
 MADD:   .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "ADD"
+        .ascii "JSR __add"
         .byte LF,0
 MSUB:   .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "SUB"
+        .ascii "JSR __sub"
         .byte LF,0
 MPUTC:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "LDA __ax"
+        .byte LF
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "JSR $4009"
         .byte LF,0
 MRTS:   .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "RTS"
         .byte LF,0
 MCMP:   .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "CMP"
+        .ascii "JSR __cmp"
         .byte LF,0
 MMUL:   .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "JSR __mul8"
+        .ascii "JSR __mul"
         .byte LF,0
 ; the 8-bit multiply runtime helper (A * __t0 -> A), emitted once if '*' is used
-MMULDEF: .ascii "__mul8: STA __m0"
+MMULDEF:
+        .ascii "__mul:  LDA #0"
         .byte LF
-        .ascii "        LDA #0"
+        .ascii "        STA __mr"
         .byte LF
-        .ascii "        STA __m1"
+        .ascii "        STA __mr+1"
         .byte LF
-        .ascii "__mml:  LDA __t0"
+        .ascii "__mu0:  LDA __ax"
         .byte LF
-        .ascii "        JZ __mmd"
+        .ascii "        LDB __ax+1"
         .byte LF
-        .ascii "        LDA __m1"
+        .ascii "        OR"
         .byte LF
-        .ascii "        LDB __m0"
+        .ascii "        JZ __mu2"
+        .byte LF
+        .ascii "        LDA __mr"
+        .byte LF
+        .ascii "        LDB __t0"
         .byte LF
         .ascii "        ADD"
         .byte LF
-        .ascii "        STA __m1"
+        .ascii "        STA __mr"
         .byte LF
-        .ascii "        LDA __t0"
+        .ascii "        LDA #0"
+        .byte LF
+        .ascii "        JNC __mu1"
+        .byte LF
+        .ascii "        LDA #1"
+        .byte LF
+        .ascii "__mu1:  STA __c"
+        .byte LF
+        .ascii "        LDA __mr+1"
+        .byte LF
+        .ascii "        LDB __t0+1"
+        .byte LF
+        .ascii "        ADD"
+        .byte LF
+        .ascii "        LDB __c"
+        .byte LF
+        .ascii "        ADD"
+        .byte LF
+        .ascii "        STA __mr+1"
+        .byte LF
+        .ascii "        LDA __ax"
         .byte LF
         .ascii "        LDB #1"
         .byte LF
         .ascii "        SUB"
         .byte LF
-        .ascii "        STA __t0"
+        .ascii "        STA __ax"
         .byte LF
-        .ascii "        JMP __mml"
+        .ascii "        JC __mu0"
         .byte LF
-        .ascii "__mmd:  LDA __m1"
+        .ascii "        LDA __ax+1"
+        .byte LF
+        .ascii "        DEC"
+        .byte LF
+        .ascii "        STA __ax+1"
+        .byte LF
+        .ascii "        JMP __mu0"
+        .byte LF
+        .ascii "__mu2:  LDA __mr"
+        .byte LF
+        .ascii "        STA __ax"
+        .byte LF
+        .ascii "        LDA __mr+1"
+        .byte LF
+        .ascii "        STA __ax+1"
         .byte LF
         .ascii "        RTS"
         .byte LF
-        .ascii "__m0:   .fill 1"
-        .byte LF
-        .ascii "__m1:   .fill 1"
+        .ascii "__mr:   .fill 2"
         .byte LF,0
 MDIV:   .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "JSR __divmod8"
-        .byte LF
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "LDA __d1"
+        .ascii "JSR __div"
         .byte LF,0
 MMOD:   .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "JSR __divmod8"
-        .byte LF
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "LDA __d0"
+        .ascii "JSR __mod"
         .byte LF,0
 ; the 8-bit divide/modulo helper (A / __t0 -> __d1 quotient, __d0 remainder)
-MDMDEF: .ascii "__divmod8: STA __d0"
+MDMDEF:
+        .ascii "__div:  JSR __divmod"
+        .byte LF
+        .ascii "        LDA __dq"
+        .byte LF
+        .ascii "        STA __ax"
+        .byte LF
+        .ascii "        LDA __dq+1"
+        .byte LF
+        .ascii "        STA __ax+1"
+        .byte LF
+        .ascii "        RTS"
+        .byte LF
+        .ascii "__mod:  JSR __divmod"
+        .byte LF
+        .ascii "        LDA __dr"
+        .byte LF
+        .ascii "        STA __ax"
+        .byte LF
+        .ascii "        LDA __dr+1"
+        .byte LF
+        .ascii "        STA __ax+1"
+        .byte LF
+        .ascii "        RTS"
+        .byte LF
+        .ascii "__divmod: LDA __t0"
+        .byte LF
+        .ascii "        STA __dr"
+        .byte LF
+        .ascii "        LDA __t0+1"
+        .byte LF
+        .ascii "        STA __dr+1"
         .byte LF
         .ascii "        LDA #0"
         .byte LF
-        .ascii "        STA __d1"
+        .ascii "        STA __dq"
         .byte LF
-        .ascii "        LDA __t0"
+        .ascii "        STA __dq+1"
         .byte LF
-        .ascii "        JZ __dmd"
+        .ascii "        LDA __ax"
         .byte LF
-        .ascii "__dml:  LDA __d0"
+        .ascii "        LDB __ax+1"
         .byte LF
-        .ascii "        LDB __t0"
+        .ascii "        OR"
+        .byte LF
+        .ascii "        JZ __dm2"
+        .byte LF
+        .ascii "__dm0:  LDA __dr+1"
+        .byte LF
+        .ascii "        LDB __ax+1"
         .byte LF
         .ascii "        CMP"
         .byte LF
-        .ascii "        JNC __dmd"
+        .ascii "        JNZ __dm3"
         .byte LF
-        .ascii "        LDA __d0"
+        .ascii "        LDA __dr"
         .byte LF
-        .ascii "        LDB __t0"
+        .ascii "        LDB __ax"
+        .byte LF
+        .ascii "        CMP"
+        .byte LF
+        .ascii "__dm3:  JNC __dm2"
+        .byte LF
+        .ascii "        LDA __dr"
+        .byte LF
+        .ascii "        LDB __ax"
         .byte LF
         .ascii "        SUB"
         .byte LF
-        .ascii "        STA __d0"
+        .ascii "        STA __dr"
         .byte LF
-        .ascii "        LDA __d1"
+        .ascii "        LDA #0"
+        .byte LF
+        .ascii "        JC __dm1"
+        .byte LF
+        .ascii "        LDA #1"
+        .byte LF
+        .ascii "__dm1:  STA __c"
+        .byte LF
+        .ascii "        LDA __dr+1"
+        .byte LF
+        .ascii "        LDB __ax+1"
+        .byte LF
+        .ascii "        SUB"
+        .byte LF
+        .ascii "        STA __dr+1"
+        .byte LF
+        .ascii "        LDA __c"
+        .byte LF
+        .ascii "        JZ __dm4"
+        .byte LF
+        .ascii "        LDA __dr+1"
+        .byte LF
+        .ascii "        DEC"
+        .byte LF
+        .ascii "        STA __dr+1"
+        .byte LF
+        .ascii "__dm4:  LDA __dq"
+        .byte LF
+        .ascii "        LDB #1"
+        .byte LF
+        .ascii "        ADD"
+        .byte LF
+        .ascii "        STA __dq"
+        .byte LF
+        .ascii "        JNC __dm0"
+        .byte LF
+        .ascii "        LDA __dq+1"
         .byte LF
         .ascii "        INC"
         .byte LF
-        .ascii "        STA __d1"
+        .ascii "        STA __dq+1"
         .byte LF
-        .ascii "        JMP __dml"
+        .ascii "        JMP __dm0"
         .byte LF
-        .ascii "__dmd:  RTS"
+        .ascii "__dm2:  RTS"
         .byte LF
-        .ascii "__d0:   .fill 1"
+        .ascii "__dq:   .fill 2"
         .byte LF
-        .ascii "__d1:   .fill 1"
+        .ascii "__dr:   .fill 2"
         .byte LF,0
 MLDA0:  .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "LDA #0"
@@ -1238,7 +1471,96 @@ MJMP:   .byte $20,$20,$20,$20,$20,$20,$20,$20
 MLBP:   .asciiz "L"                              ; a label def: "L" + num + MLBC
 MLBC:   .ascii ":"
         .byte LF,0
-MTEMP:  .ascii "__t0:   .fill 1"
+MTEMP:  .ascii "__t0:   .fill 2"
+        .byte LF
+        .ascii "__ax:   .fill 2"
+        .byte LF
+        .ascii "__c:    .fill 1"
+        .byte LF,0
+MADD_DEF:
+        .ascii "__add:  LDA __ax"
+        .byte LF
+        .ascii "        LDB __t0"
+        .byte LF
+        .ascii "        ADD"
+        .byte LF
+        .ascii "        STA __ax"
+        .byte LF
+        .ascii "        LDA #0"
+        .byte LF
+        .ascii "        JNC __ad0"
+        .byte LF
+        .ascii "        LDA #1"
+        .byte LF
+        .ascii "__ad0:  STA __c"
+        .byte LF
+        .ascii "        LDA __ax+1"
+        .byte LF
+        .ascii "        LDB __t0+1"
+        .byte LF
+        .ascii "        ADD"
+        .byte LF
+        .ascii "        LDB __c"
+        .byte LF
+        .ascii "        ADD"
+        .byte LF
+        .ascii "        STA __ax+1"
+        .byte LF
+        .ascii "        RTS"
+        .byte LF,0
+MSUB_DEF:
+        .ascii "__sub:  LDA __t0"
+        .byte LF
+        .ascii "        LDB __ax"
+        .byte LF
+        .ascii "        SUB"
+        .byte LF
+        .ascii "        STA __ax"
+        .byte LF
+        .ascii "        LDA #0"
+        .byte LF
+        .ascii "        JC __sb0"
+        .byte LF
+        .ascii "        LDA #1"
+        .byte LF
+        .ascii "__sb0:  STA __c"
+        .byte LF
+        .ascii "        LDA __t0+1"
+        .byte LF
+        .ascii "        LDB __ax+1"
+        .byte LF
+        .ascii "        SUB"
+        .byte LF
+        .ascii "        STA __ax+1"
+        .byte LF
+        .ascii "        LDA __c"
+        .byte LF
+        .ascii "        JZ __sb1"
+        .byte LF
+        .ascii "        LDA __ax+1"
+        .byte LF
+        .ascii "        DEC"
+        .byte LF
+        .ascii "        STA __ax+1"
+        .byte LF
+        .ascii "__sb1:  RTS"
+        .byte LF,0
+MCMP_DEF:
+        .ascii "__cmp:  LDA __t0+1"
+        .byte LF
+        .ascii "        LDB __ax+1"
+        .byte LF
+        .ascii "        CMP"
+        .byte LF
+        .ascii "        JNZ __cm0"
+        .byte LF
+        .ascii "        LDA __t0"
+        .byte LF
+        .ascii "        LDB __ax"
+        .byte LF
+        .ascii "        CMP"
+        .byte LF
+        .ascii "__cm0:  RTS"
         .byte LF,0
 MUSAGE: .asciiz "usage: cc src.c >out.asm"
 MNOSRC: .asciiz "cc: cannot open source"
@@ -1274,5 +1596,7 @@ LBLB:   .fill 1    ; comparison end label (EMITCMP)
 JLBL:   .fill 1    ; label number scratch for EMITJ/EMITLBL
 IFTMP:  .fill 1    ; a label held briefly (non-recursively) in if/while
 USEMUL: .fill 1    ; 1 if the program uses '*' (emit the __mul8 helper)
-USEDIV: .fill 1    ; 1 if the program uses '/' or '%' (emit __divmod8)
+USEDIV: .fill 1    ; 1 if the program uses '/' or '%'
+MULT2:  .fill 2    ; lexer: NACC<<1 scratch for *10
+CARRY:  .fill 1    ; lexer: 16-bit add carry
 SYMPOOL: .fill 256 ; packed NUL-terminated variable names

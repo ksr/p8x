@@ -787,6 +787,17 @@ Last updated: 2026-07-08
             A shared `__divmod8` helper (repeated subtraction; guards divide-by-
             zero) leaves quotient in `__d1` and remainder in `__d0`; `USEDIV`
             gates it. All of `* / %` are at the `GTERM` precedence level.
+          * v0.6 — **16-bit ints** (the big rewrite). Codegen switched from the
+            8-bit hardware `A` register to a 16-bit MEMORY accumulator `__ax`
+            (+ temp `__t0`); every op routes through runtime helpers emitted at
+            the program end — `__add`/`__sub`/`__cmp` (always), `__mul` (repeated
+            add) and `__div`/`__mod` (repeated subtract), all 16-bit. The lexer
+            now accumulates 16-bit literals (`*10` via shifts). GOTCHAS fixed: a
+            condition value now lives in `__ax`, so `if`/`while` must emit
+            `LDA __ax; LDB __ax+1; OR` before the `JZ` (the branch can't read the
+            stale hardware Z); and a comparison's false path must actually STORE 0
+            to `__ax` (the earlier `LDA #0` left `__ax` holding the right operand).
+            Verified with values >255 (`sum(1..10)*10 = 550`) end to end.
         Debug notes for future selves: FGETB clobbers P1 (build identifiers via
         P2); variables must live in the program's own BSS, not a fixed high page
         (OS/SYS_PUTC scratch collides); FRESOLVE's scan needs FSDIRBUF off SBUF

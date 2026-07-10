@@ -21,7 +21,7 @@ DESCRIPTION
     BACK-END-and-all compiler aimed at fitting the ~31.5 KB TPA, where a port
     of the optimizing p8cc could not.
 
-    THIS IS EARLY (v0.5). Supported so far:
+    THIS IS EARLY (v0.6). Supported so far:
 
         int main() { <stmt>* }
         stmt  : int NAME [ = <expr> ] ;   (declare a variable)
@@ -36,9 +36,11 @@ DESCRIPTION
         term  : factor (('*' | '/' | '%') factor)*
         factor: NUMBER | NAME | '(' <expr> ')'
 
-    Comparisons yield 0/1. Values are 8-bit for now (putchar takes a byte), so
-    '*' '/' '%' are 8-bit (integer division; '/' or '%' by 0 gives 0). It grows one tested feature at a time (16-bit ints,
-    functions, char/pointers, ...) toward the p8cc subset. Redirect the output to a RELATIVE filename
+    Comparisons yield 0/1. Values are 16-bit `int` — arithmetic runs through a
+    memory accumulator (__ax) and runtime helpers (__add/__sub/__mul/__cmp/__div);
+    integer division, and '/' or '%' by 0 gives 0. putchar takes the low byte.
+    It grows one tested feature at a time (functions, char/pointers, ...) toward
+    the p8cc subset. Redirect the output to a RELATIVE filename
     (cc src.c >out.asm) — an absolute redirect target is not yet supported by
     the shell.
 

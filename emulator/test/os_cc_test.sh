@@ -27,10 +27,10 @@ python3 $ROOT/tools/p8xfs.py boot   cc.img oscc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  cc.img /bin >/dev/null
 python3 $ROOT/tools/p8xfs.py put    cc.img cc.bin  --name /bin/cc.bin  --load 0x7A00 --exec 0x7A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    cc.img asm.bin --name /bin/asm.bin --load 0x7A00 --exec 0x7A00 >/dev/null
-# exercises: declaration + assignment, a variable in an expression, a while loop
-# with a '<=' comparison, and an if/else — a `while (c<='E') putchar(c)` prints
-# ABCDE, then the if picks 'Y'. Expected output: ABCDEY.
-printf 'int main() { int c; int x; c = 65; while (c <= 69) { putchar(c); c = c + 1; } x = 5; if (x > 3) putchar(89); else putchar(90); }\n' > t.c
+# exercises: a while loop with '<=', a '*' inside the loop that accumulates a
+# 16-BIT sum (10*(1+..+10) = 550, > 255, so this only works with 16-bit ints),
+# then an if/else. sum-485 = 65 = 'A'; the if picks 'Y'. Expected output: AY.
+printf 'int main() { int s; int i; int x; s = 0; i = 1; while (i <= 10) { s = s + i * 10; i = i + 1; } putchar(s - 485); x = 5; if (x > 3) putchar(89); else putchar(90); }\n' > t.c
 python3 $ROOT/tools/p8xfs.py put cc.img t.c --name /t.c >/dev/null
 
 # all on-target: cc t.c >t.asm ; asm t.asm PROG.BIN ; PROG
@@ -38,5 +38,5 @@ printf 'B\rcc t.c >t.asm\rasm t.asm PROG.BIN\rrun PROG.BIN\r' | \
     ../p8xemu -l 900000000 -c cc.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r' > cc_out.txt
 
 grep -q 'P8X' cc_out.txt || fail "did not boot"
-grep -q '^ABCDEY$' cc_out.txt || { echo "--- transcript ---"; sed -n '/PROG/,$p' cc_out.txt | head; fail "compiled program did not print ABCDEY"; }
+grep -q '^AY$' cc_out.txt || { echo "--- transcript ---"; sed -n '/PROG/,$p' cc_out.txt | head; fail "compiled program did not print AY"; }
 echo "OS-CC TEST: PASS"
