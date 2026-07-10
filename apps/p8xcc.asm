@@ -68,6 +68,7 @@ START:  TPA3L
         STA  SYMCNT
         STA  LBLCNT
         STA  USEMUL
+        STA  USEDIV
         JSR  COMPILE
         RTS
 USAGE:  LDP1 #MUSAGE
@@ -385,7 +386,11 @@ co_end: LDP1 #MRTS                   ; fall-through return
         JZ   ce_nomul
         LDP1 #MMULDEF
         JSR  EMIT
-ce_nomul: LDP1 #MTEMP                ; the codegen temp
+ce_nomul: LDA USEDIV                 ; the divide/modulo helper, if '/' or '%' used
+        JZ   ce_nodiv
+        LDP1 #MDMDEF
+        JSR  EMIT
+ce_nodiv: LDP1 #MTEMP                ; the codegen temp
         JSR  EMIT
         LDA  #0                      ; storage for each declared variable:
         STA  VITER                   ;   V0:  .fill 1  /  V1:  .fill 1  / ...
@@ -626,7 +631,7 @@ GEXPR:  JSR  GADD
         JSR  EMITCMP                 ; emit the 0/1 sequence for RELOP
 grx:    RTS
 
-; term: factor (('*') factor)*   (8-bit multiply via the __mul8 runtime helper)
+; term: factor (('*'|'/'|'%') factor)*   (8-bit, via __mul8/__divmod8 helpers)
 GTERM:  JSR  GFACT
 gt_l:   LDA  CURK
         LDB  #3
@@ -635,21 +640,47 @@ gt_l:   LDA  CURK
         LDA  CURV
         LDB  #'*'
         CMP
-        JNZ  gt_d
-        JSR  ADVANCE
+        JZ   gt_mul
+        LDA  CURV
+        LDB  #'/'
+        CMP
+        JZ   gt_div
+        LDA  CURV
+        LDB  #'%'
+        CMP
+        JZ   gt_mod
+        JMP  gt_d
+gt_mul: JSR  ADVANCE
         LDA  #1
         STA  USEMUL
-        LDP1 #MPHA                   ; push the left factor
-        JSR  EMIT
-        JSR  GFACT                   ; right factor -> A
-        LDP1 #MSTAT                  ; STA __t0   (right)
-        JSR  EMIT
-        LDP1 #MPLA                   ; PLA        (left)
-        JSR  EMIT
+        JSR  GT_COMB
         LDP1 #MMUL                   ; JSR __mul8 -> A = left * right
         JSR  EMIT
         JMP  gt_l
+gt_div: JSR  ADVANCE
+        LDA  #1
+        STA  USEDIV
+        JSR  GT_COMB
+        LDP1 #MDIV                   ; JSR __divmod8 ; LDA __d1  (quotient)
+        JSR  EMIT
+        JMP  gt_l
+gt_mod: JSR  ADVANCE
+        LDA  #1
+        STA  USEDIV
+        JSR  GT_COMB
+        LDP1 #MMOD                   ; JSR __divmod8 ; LDA __d0  (remainder)
+        JSR  EMIT
+        JMP  gt_l
 gt_d:   RTS
+; GT_COMB: emit  push-left ; <right factor> ; STA __t0 ; PLA  (left in A, right in __t0)
+GT_COMB: LDP1 #MPHA
+        JSR  EMIT
+        JSR  GFACT
+        LDP1 #MSTAT
+        JSR  EMIT
+        LDP1 #MPLA
+        JSR  EMIT
+        RTS
 
 ; additive: term (('+'|'-') term)*
 GADD:   JSR  GTERM
@@ -1135,6 +1166,59 @@ MMULDEF: .ascii "__mul8: STA __m0"
         .byte LF
         .ascii "__m1:   .fill 1"
         .byte LF,0
+MDIV:   .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "JSR __divmod8"
+        .byte LF
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "LDA __d1"
+        .byte LF,0
+MMOD:   .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "JSR __divmod8"
+        .byte LF
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "LDA __d0"
+        .byte LF,0
+; the 8-bit divide/modulo helper (A / __t0 -> __d1 quotient, __d0 remainder)
+MDMDEF: .ascii "__divmod8: STA __d0"
+        .byte LF
+        .ascii "        LDA #0"
+        .byte LF
+        .ascii "        STA __d1"
+        .byte LF
+        .ascii "        LDA __t0"
+        .byte LF
+        .ascii "        JZ __dmd"
+        .byte LF
+        .ascii "__dml:  LDA __d0"
+        .byte LF
+        .ascii "        LDB __t0"
+        .byte LF
+        .ascii "        CMP"
+        .byte LF
+        .ascii "        JNC __dmd"
+        .byte LF
+        .ascii "        LDA __d0"
+        .byte LF
+        .ascii "        LDB __t0"
+        .byte LF
+        .ascii "        SUB"
+        .byte LF
+        .ascii "        STA __d0"
+        .byte LF
+        .ascii "        LDA __d1"
+        .byte LF
+        .ascii "        INC"
+        .byte LF
+        .ascii "        STA __d1"
+        .byte LF
+        .ascii "        JMP __dml"
+        .byte LF
+        .ascii "__dmd:  RTS"
+        .byte LF
+        .ascii "__d0:   .fill 1"
+        .byte LF
+        .ascii "__d1:   .fill 1"
+        .byte LF,0
 MLDA0:  .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "LDA #0"
         .byte LF,0
@@ -1190,4 +1274,5 @@ LBLB:   .fill 1    ; comparison end label (EMITCMP)
 JLBL:   .fill 1    ; label number scratch for EMITJ/EMITLBL
 IFTMP:  .fill 1    ; a label held briefly (non-recursively) in if/while
 USEMUL: .fill 1    ; 1 if the program uses '*' (emit the __mul8 helper)
+USEDIV: .fill 1    ; 1 if the program uses '/' or '%' (emit __divmod8)
 SYMPOOL: .fill 256 ; packed NUL-terminated variable names
