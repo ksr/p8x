@@ -660,7 +660,11 @@ Last updated: 2026-07-08
         `lib_abspath.c`/`lib_readline.c` on-card; renamed to `lib_apath.c`/
         `lib_rdline.c` (tokens `//#use apath`/`//#use rdline`) so the full name
         incl. `.c` fits the 12-byte field. Convention is now `lib_<token>.c`
-        with `token` ≤ 6 chars.
+        with `token` ≤ 6 chars. Guarded going forward: `p8xfs.py put`/`mkdir`
+        WARN (or fail under `--strict`) on any name > 12 chars, and `fsck` flags
+        two live entries that alias to the same 12-byte name. Verified host and
+        target (firmware `FNORM`) truncate identically (first 12 bytes,
+        space-padded), so the two agree on every name.
       - **Codegen-shrink step 1 — DONE (2026-07-09).** Added `__ldw`/`__ldb`
         (load local word/byte) and `__stw`/`__stb` (store local) runtime helpers
         + a `var = expr` fast path (scalar local via `__stw`, global via `MOVW`),

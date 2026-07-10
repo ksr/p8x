@@ -120,8 +120,34 @@ def iter_dir(img, dlba, dsecs):
         yield e
 
 
+NAMELEN = 12               # P8XFS filename field: 12 bytes, space-padded
+
+# When True, an over-length name is a hard error instead of a warning (set by
+# the CLI's --strict). Default off so existing builds keep working.
+STRICT = False
+
 def name12(name):
-    return name.encode("ascii", "replace")[:12].ljust(12, b" ")  # case preserved
+    return name.encode("ascii", "replace")[:NAMELEN].ljust(NAMELEN, b" ")  # case preserved
+
+def check_leaf(name):
+    """Guard the 12-byte filename limit. A name longer than NAMELEN is stored (and
+    later looked up) as just its first 12 bytes — the SAME first-12-bytes rule the
+    on-target firmware FNORM applies (p8xmon.asm), so host and target agree. The
+    catch: an over-length name does not fail, it silently ALIASES any other name
+    that shares those first 12 bytes. Warn (or, under --strict, fail) so that never
+    ships unnoticed. `.`/`..` and every current file are <=12, so this is quiet in
+    normal builds."""
+    raw = name.encode("ascii", "replace")
+    if len(raw) <= NAMELEN:
+        return
+    trunc = raw[:NAMELEN].decode("ascii", "replace")
+    msg = ("name %r is %d bytes > %d — will be stored and matched as %r "
+           "(the trailing %d char(s) are dropped, so it ALIASES any name sharing "
+           "those first %d chars)"
+           % (name, len(raw), NAMELEN, trunc, len(raw) - NAMELEN, NAMELEN))
+    if STRICT:
+        raise SystemExit("p8xfs: ERROR: " + msg + "  [--strict]")
+    sys.stderr.write("p8xfs: WARNING: " + msg + "\n")
 
 
 def find_in_dir(img, dlba, dsecs, name):
@@ -165,6 +191,7 @@ def alloc(img, nsec):
 
 def add_entry(img, dlba, dsecs, name, start, length, load, exec_, flags):
     """Write a new entry into the first free/$FF slot of a directory extent."""
+    check_leaf(name)   # warn/fail on names the 12-byte field would truncate
     for i in range(dsecs * ENT_PER_SEC):
         f = img[ent_abs(dlba, i) + 24]
         if f in (F_END, F_DEL):
@@ -323,6 +350,7 @@ def fsck_v2(img, imgname):
         if up and up["start"] != parent_lba:
             errs.append("%s/..: points at LBA %d, parent is %d" %
                         (path, up["start"], parent_lba))
+        seen = {}   # 12-byte stored name -> path, to catch aliasing duplicates
         for e in iter_dir(img, dlba, dsecs):
             nm = e["name"].decode("latin1").rstrip()
             if e["flags"] == F_DEL:
@@ -330,6 +358,13 @@ def fsck_v2(img, imgname):
                 continue
             if nm in (".", ".."):
                 continue
+            key = bytes(e["name"])   # the exact 12-byte field
+            if key in seen:
+                errs.append("%s/%s: duplicate name — aliases %s (two live entries "
+                            "share the same 12-byte name; the on-target lookup "
+                            "cannot tell them apart)" % (path, nm, seen[key]))
+            else:
+                seen[key] = path + "/" + nm
             secs = max(1, (e["length"] + SEC - 1) // SEC)
             if e["flags"] == F_DIR:
                 ndirs += 1
@@ -389,6 +424,8 @@ def main():
     c = sub.add_parser("put"); c.add_argument("img"); c.add_argument("file")
     c.add_argument("--name"); c.add_argument("--load", type=lambda x: int(x, 0), default=0xB000)
     c.add_argument("--exec", type=lambda x: int(x, 0), default=0xB000)
+    c.add_argument("--strict", action="store_true",
+                   help="fail (don't just warn) if a name exceeds the 12-char field")
     c.set_defaults(fn=cmd_put)
 
     c = sub.add_parser("get"); c.add_argument("img"); c.add_argument("name")
@@ -399,6 +436,8 @@ def main():
     c.set_defaults(fn=cmd_ls)
 
     c = sub.add_parser("mkdir"); c.add_argument("img"); c.add_argument("path")
+    c.add_argument("--strict", action="store_true",
+                   help="fail (don't just warn) if a name exceeds the 12-char field")
     c.set_defaults(fn=cmd_mkdir)
 
     c = sub.add_parser("tree"); c.add_argument("img"); c.set_defaults(fn=cmd_tree)
@@ -406,6 +445,8 @@ def main():
     c = sub.add_parser("fsck"); c.add_argument("img"); c.set_defaults(fn=cmd_fsck)
 
     a = p.parse_args()
+    global STRICT
+    STRICT = getattr(a, "strict", False)
     a.fn(a)
 
 
