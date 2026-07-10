@@ -772,6 +772,12 @@ Last updated: 2026-07-08
             assignment, and NAME as an expression term. Symbol table
             (SYMFIND/SYMADD, packed name pool); each variable is emitted as a
             byte `V<idx>: .fill 1`.
+          * v0.3 — **control flow**: `if/else`, `while`, `{ }` blocks, and the six
+            comparisons `< <= > >= == !=` (two-char op lexing via CUR2; results
+            0/1). Codegen emits unique labels (NEWLBL); if/while save labels on
+            the hardware stack across the recursive body. GOTCHA fixed: a compare
+            must branch on the CMP flags BEFORE any LDA — LDA clobbers Z (not C),
+            which silently broke the Z-based ops (`== != > <=`).
         Debug notes for future selves: FGETB clobbers P1 (build identifiers via
         P2); variables must live in the program's own BSS, not a fixed high page
         (OS/SYS_PUTC scratch collides); FRESOLVE's scan needs FSDIRBUF off SBUF

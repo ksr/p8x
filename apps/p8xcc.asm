@@ -63,9 +63,10 @@ START:  TPA3L
         LDA  #0
         JSR  FOPEN
         JC   OPENERR
-        LDA  #0                      ; reset the lexer + symbol table
+        LDA  #0                      ; reset the lexer + symbol table + labels
         STA  PBF
         STA  SYMCNT
+        STA  LBLCNT
         JSR  COMPILE
         RTS
 USAGE:  LDP1 #MUSAGE
@@ -255,13 +256,39 @@ adv_ws: JSR  GC                      ; skip whitespace
         LDA  TMPB
         JSR  ISALP
         JC   adv_id
-        LDA  #3                      ; punctuation: single char
+        LDA  #3                      ; punctuation
         STA  CURK
         LDA  TMPB
         STA  CURV
         LDA  #0
-        STA  CURV+1
+        STA  CUR2                    ; default: single-char op
+        LDA  TMPB                    ; a two-char op?  == != <= >=  (c2 is '=')
+        LDB  #'='
+        CMP
+        JZ   adv_2ck
+        LDB  #'!'
+        CMP
+        JZ   adv_2ck
+        LDB  #'<'
+        CMP
+        JZ   adv_2ck
+        LDB  #'>'
+        CMP
+        JZ   adv_2ck
         RTS
+adv_2ck: JSR GC                      ; peek the next char
+        JC   adv_pd                  ; EOF -> single
+        STA  TMPC
+        LDB  #'='
+        CMP
+        JZ   adv_2set
+        LDA  TMPC                    ; not '=' -> push back, stay single
+        JSR  UNGC
+        RTS
+adv_2set: LDA #'='
+        STA  CUR2
+        RTS
+adv_pd: RTS
 adv_eof: LDA #0
         STA  CURK
         RTS
@@ -375,6 +402,9 @@ ce_vd:  RTS
 
 ; one statement
 STMT:   LDA  CURK
+        LDB  #3
+        CMP
+        JZ   st_punct                ; '{' -> block
         LDB  #2
         CMP
         JNZ  st_err
@@ -382,6 +412,14 @@ STMT:   LDA  CURK
         JSR  IDEQ
         LDA  TMPB
         JNZ  st_decl
+        LDP1 #KW_IF
+        JSR  IDEQ
+        LDA  TMPB
+        JNZ  st_if
+        LDP1 #KW_WHILE
+        JSR  IDEQ
+        LDA  TMPB
+        JNZ  st_while
         LDP1 #KW_PUTC
         JSR  IDEQ
         LDA  TMPB
@@ -391,7 +429,97 @@ STMT:   LDA  CURK
         LDA  TMPB
         JNZ  st_ret
         JMP  st_assign               ; an identifier LHS -> assignment
+st_punct: LDA CURV
+        LDB  #'{'
+        CMP
+        JZ   st_block
 st_err: RTS                          ; (unknown statement -> stop quietly)
+
+; { <stmt>* }
+st_block: LDA #'{'
+        JSR  EXPECTP
+sb_l:   LDA  CURK
+        LDB  #3
+        CMP
+        JNZ  sb_st
+        LDA  CURV
+        LDB  #'}'
+        CMP
+        JZ   sb_end
+sb_st:  JSR  STMT
+        JMP  sb_l
+sb_end: LDA  #'}'
+        JSR  EXPECTP
+        RTS
+
+; if ( <expr> ) <stmt> [ else <stmt> ]
+st_if:  JSR  ADVANCE                 ; past "if"
+        LDA  #'('
+        JSR  EXPECTP
+        JSR  GEXPR                   ; condition -> A
+        LDA  #')'
+        JSR  EXPECTP
+        JSR  NEWLBL                  ; la = false-branch target
+        PHA
+        LDP1 #MJZ
+        PLA
+        PHA
+        JSR  EMITJ                   ; JZ L<la>
+        JSR  STMT                    ; then-branch
+        LDA  CURK                    ; an "else"?
+        LDB  #2
+        CMP
+        JNZ  if_ne
+        LDP1 #KW_ELSE
+        JSR  IDEQ
+        LDA  TMPB
+        JZ   if_ne
+        JSR  ADVANCE                 ; past "else"
+        PLA                          ; la
+        STA  IFTMP
+        JSR  NEWLBL                  ; lb = end target
+        PHA
+        LDP1 #MJMP
+        PLA
+        PHA
+        JSR  EMITJ                   ; JMP L<lb>
+        LDA  IFTMP
+        JSR  EMITLBL                 ; L<la>:
+        JSR  STMT                    ; else-branch
+        PLA
+        JSR  EMITLBL                 ; L<lb>:
+        RTS
+if_ne:  PLA                          ; la
+        JSR  EMITLBL                 ; L<la>:
+        RTS
+
+; while ( <expr> ) <stmt>
+st_while: JSR ADVANCE                ; past "while"
+        JSR  NEWLBL                  ; ltop
+        PHA
+        JSR  EMITLBL                 ; L<ltop>:
+        LDA  #'('
+        JSR  EXPECTP
+        JSR  GEXPR                   ; condition -> A
+        LDA  #')'
+        JSR  EXPECTP
+        JSR  NEWLBL                  ; lend
+        PHA
+        LDP1 #MJZ
+        PLA
+        PHA
+        JSR  EMITJ                   ; JZ L<lend>
+        JSR  STMT                    ; body
+        PLA                          ; lend
+        STA  IFTMP
+        PLA                          ; ltop
+        PHA
+        LDP1 #MJMP
+        PLA
+        JSR  EMITJ                   ; JMP L<ltop>
+        LDA  IFTMP
+        JSR  EMITLBL                 ; L<lend>:
+        RTS
 
 ; int NAME [ = expr ] ;   -> reserve a variable, optionally initialise it
 st_decl: JSR ADVANCE                 ; past "int"
@@ -463,8 +591,38 @@ sr_semi: LDA #$3B
         JSR  EMIT
         RTS
 
-; expression: term (('+'|'-') term)*   -> result in the runtime A register
-GEXPR:  JSR  GTERM
+; expression: GADD [ relop GADD ]  -> result in the runtime A register.
+; A relational compares two additive expressions, yielding 0/1 (single, non-
+; associative). Assignment/putchar/return/conditions all call GEXPR.
+GEXPR:  JSR  GADD
+        LDA  CURK
+        LDB  #3
+        CMP
+        JNZ  grx
+        JSR  RELDET                  ; is the current punct a relop? -> RELOP/RELF
+        LDA  RELF
+        JZ   grx
+        LDP1 #MPHA                   ; push the left operand
+        JSR  EMIT
+        LDA  RELOP                   ; save RELOP across GADD (parens may recurse)
+        PHA
+        JSR  ADVANCE                 ; past the operator
+        JSR  GADD                    ; right operand -> A
+        PLA
+        STA  RELOP
+        LDP1 #MSTAT                  ; STA __t0   (right)
+        JSR  EMIT
+        LDP1 #MPLA                   ; PLA        (left)
+        JSR  EMIT
+        LDP1 #MLDBT                  ; LDB __t0   (right)
+        JSR  EMIT
+        LDP1 #MCMP                   ; CMP        (left - right; C=left>=right, Z=eq)
+        JSR  EMIT
+        JSR  EMITCMP                 ; emit the 0/1 sequence for RELOP
+grx:    RTS
+
+; additive: term (('+'|'-') term)*
+GADD:   JSR  GTERM
 ge_l:   LDA  CURK
         LDB  #3
         CMP
@@ -636,11 +794,183 @@ sa_dn:  LDA  SYMCNT                  ; index = old count; bump the count
         STA  SYMCNT
         RTS
 
+; =============================================================================
+; Comparisons + labels (for relational operators and if/while)
+; =============================================================================
+; RELDET: is the current punct token a relational operator? RELF=1 and RELOP set
+;         (0 LT, 1 LE, 2 GT, 3 GE, 4 EQ, 5 NE), else RELF=0. Does not advance.
+RELDET: LDA #0
+        STA  RELF
+        LDA  CURV
+        LDB  #'<'
+        CMP
+        JZ   rd_l
+        LDB  #'>'
+        CMP
+        JZ   rd_g
+        LDB  #'='
+        CMP
+        JZ   rd_e
+        LDB  #'!'
+        CMP
+        JZ   rd_x
+        RTS
+rd_l:   LDA  CUR2                    ; '<' or '<='
+        LDB  #'='
+        CMP
+        JZ   rd_le
+        LDA  #0
+        STA  RELOP
+        JMP  rd_ok
+rd_le:  LDA  #1
+        STA  RELOP
+        JMP  rd_ok
+rd_g:   LDA  CUR2                    ; '>' or '>='
+        LDB  #'='
+        CMP
+        JZ   rd_ge
+        LDA  #2
+        STA  RELOP
+        JMP  rd_ok
+rd_ge:  LDA  #3
+        STA  RELOP
+        JMP  rd_ok
+rd_e:   LDA  CUR2                    ; only '==' is relational ('=' is assignment)
+        LDB  #'='
+        CMP
+        JNZ  rd_no
+        LDA  #4
+        STA  RELOP
+        JMP  rd_ok
+rd_x:   LDA  CUR2                    ; '!='
+        LDB  #'='
+        CMP
+        JNZ  rd_no
+        LDA  #5
+        STA  RELOP
+rd_ok:  LDA  #1
+        STA  RELF
+rd_no:  RTS
+
+; EMITCMP: given a preceding CMP (left-right, setting C=left>=right and Z=equal),
+;          emit code leaving 0/1 in A per RELOP.  The conditional branch must come
+;          BEFORE any LDA — an LDA clobbers Z (though not C), which would destroy
+;          the comparison result.  Two fresh labels: la (branch target), lb (end).
+EMITCMP: JSR NEWLBL
+        STA  LBLA
+        JSR  NEWLBL
+        STA  LBLB
+        LDA  RELOP
+        LDB  #0
+        CMP
+        JZ   ec_lt
+        LDB  #1
+        CMP
+        JZ   ec_le
+        LDB  #2
+        CMP
+        JZ   ec_gt
+        LDB  #3
+        CMP
+        JZ   ec_ge
+        LDB  #4
+        CMP
+        JZ   ec_eq
+        JMP  ec_ne
+; simple ops: one conditional jump (on the CMP flags) to la=TRUE, else fall to 0.
+ec_lt:  LDP1 #MJNC                   ; a<b : true when C=0
+        LDA  LBLA
+        JSR  EMITJ
+        JMP  ec_t
+ec_ge:  LDP1 #MJC                    ; a>=b : true when C=1
+        LDA  LBLA
+        JSR  EMITJ
+        JMP  ec_t
+ec_eq:  LDP1 #MJZ                    ; a==b : true when Z=1
+        LDA  LBLA
+        JSR  EMITJ
+        JMP  ec_t
+ec_ne:  LDP1 #MJNZ                   ; a!=b : true when Z=0
+        LDA  LBLA
+        JSR  EMITJ
+        JMP  ec_t
+ec_t:   LDP1 #MLDA0                  ; false path, then jump over the true value
+        JSR  EMIT
+        LDP1 #MJMP
+        LDA  LBLB
+        JSR  EMITJ
+        LDA  LBLA                    ; la: (true)
+        JSR  EMITLBL
+        LDP1 #MLDA1
+        JSR  EMIT
+        JMP  ec_end
+ec_gt:  LDP1 #MJZ                    ; a>b : false when Z=1 (eq) or C=0 (a<b)
+        LDA  LBLA
+        JSR  EMITJ
+        LDP1 #MJNC
+        LDA  LBLA
+        JSR  EMITJ
+        LDP1 #MLDA1                  ; a>b -> true
+        JSR  EMIT
+        LDP1 #MJMP
+        LDA  LBLB
+        JSR  EMITJ
+        LDA  LBLA                    ; la: (false)
+        JSR  EMITLBL
+        LDP1 #MLDA0
+        JSR  EMIT
+        JMP  ec_end
+ec_le:  LDP1 #MJZ                    ; a<=b : true when Z=1 (eq) or C=0 (a<b)
+        LDA  LBLA
+        JSR  EMITJ
+        LDP1 #MJNC
+        LDA  LBLA
+        JSR  EMITJ
+        LDP1 #MLDA0                  ; a>b -> false
+        JSR  EMIT
+        LDP1 #MJMP
+        LDA  LBLB
+        JSR  EMITJ
+        LDA  LBLA                    ; la: (true)
+        JSR  EMITLBL
+        LDP1 #MLDA1
+        JSR  EMIT
+ec_end: LDA  LBLB                    ; lb: (end)
+        JSR  EMITLBL
+        RTS
+
+; NEWLBL: A = a fresh label number; bump the counter.
+NEWLBL: LDA LBLCNT
+        STA  TMPC
+        INC
+        STA  LBLCNT
+        LDA  TMPC
+        RTS
+; EMITJ: emit a jump (P1 = "... L" prefix) to the label number in A + newline.
+EMITJ:  STA JLBL
+        JSR  EMIT
+        LDA  JLBL
+        JSR  EMITNUM
+        LDP1 #MNL
+        JSR  EMIT
+        RTS
+; EMITLBL: emit  "L<A>:"  + newline (a label definition at column 0).
+EMITLBL: STA JLBL
+        LDP1 #MLBP
+        JSR  EMIT
+        LDA  JLBL
+        JSR  EMITNUM
+        LDP1 #MLBC
+        JSR  EMIT
+        RTS
+
 ; EXPECTP: current token must be punct char A, else quietly stop; then ADVANCE.
 EXPECTP: STA TMPB
         LDA  CURK
         LDB  #3
         CMP
+        JNZ  ep_ret
+        LDA  CUR2                    ; a single-char punct only (not ==, <=, ...)
         JNZ  ep_ret
         LDA  CURV
         LDB  TMPB
@@ -694,6 +1024,9 @@ KW_INT:  .asciiz "int"
 KW_MAIN: .asciiz "main"
 KW_PUTC: .asciiz "putchar"
 KW_RET:  .asciiz "return"
+KW_IF:   .asciiz "if"
+KW_WHILE: .asciiz "while"
+KW_ELSE: .asciiz "else"
 
 ; whole-line mnemonics end with LF (8-space indent + text + newline)
 MORG:   .byte $20,$20,$20,$20,$20,$20,$20,$20
@@ -733,6 +1066,28 @@ MPUTC:  .byte $20,$20,$20,$20,$20,$20,$20,$20
 MRTS:   .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "RTS"
         .byte LF,0
+MCMP:   .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "CMP"
+        .byte LF,0
+MLDA0:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "LDA #0"
+        .byte LF,0
+MLDA1:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "LDA #1"
+        .byte LF,0
+MJC:    .byte $20,$20,$20,$20,$20,$20,$20,$20     ; jump prefixes: "JXX L" + num
+        .asciiz "JC L"
+MJNC:   .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .asciiz "JNC L"
+MJZ:    .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .asciiz "JZ L"
+MJNZ:   .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .asciiz "JNZ L"
+MJMP:   .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .asciiz "JMP L"
+MLBP:   .asciiz "L"                              ; a label def: "L" + num + MLBC
+MLBC:   .ascii ":"
+        .byte LF,0
 MTEMP:  .ascii "__t0:   .fill 1"
         .byte LF,0
 MUSAGE: .asciiz "usage: cc src.c >out.asm"
@@ -760,4 +1115,12 @@ SYMIDX: .fill 1    ; SYMFIND/SYMADD result index
 SYMOK:  .fill 1    ; SYMFIND: 1 if found
 LHSIDX: .fill 1    ; index of an assignment/decl target variable
 VITER:  .fill 1    ; loop counter emitting variable storage
+CUR2:   .fill 1    ; second char of a two-char punct (== != <= >=), else 0
+RELOP:  .fill 1    ; relational op code: 0 LT 1 LE 2 GT 3 GE 4 EQ 5 NE
+RELF:   .fill 1    ; RELDET: 1 if the current token is a relational op
+LBLCNT: .fill 1    ; next codegen label number
+LBLA:   .fill 1    ; comparison branch-target label (EMITCMP)
+LBLB:   .fill 1    ; comparison end label (EMITCMP)
+JLBL:   .fill 1    ; label number scratch for EMITJ/EMITLBL
+IFTMP:  .fill 1    ; a label held briefly (non-recursively) in if/while
 SYMPOOL: .fill 256 ; packed NUL-terminated variable names
