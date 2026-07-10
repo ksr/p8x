@@ -973,6 +973,17 @@ Last updated: 2026-07-08
             pwd` -> "/foo". The full self-hosted pipeline (cc -> asm -> run) works
             on real command source. A program must not redefine a builtin name
             (same rule as p8cc). os_cc_test updated to use the puts() builtin.
+          * v0.25 — **shift operators `<< >>`** (the last feature any SHIPPED
+            command needed). Lexer routes `<`/`>` to adv_ltgt, which combines with
+            `=` (<=/>=) OR a doubled char (<</>>). New GSHIFT level between
+            relational and additive; runtime helpers __shl/__shr (variable count,
+            loop; __sc counter added to the MTEMP block). A robust survey (block/
+            line comments + string/char literals stripped) confirmed that across
+            ALL os/commands, the ONLY remaining unsupported features are `struct`
+            (only cc1.c, which is DEPRECATED/not shipped) and `<<`/`>>` (only
+            dump.c). So with shifts, the native cc covers every shipped command's
+            language needs. Verified: 1<<6, 260>>2, (1<<6)|1, byte/word combine,
+            and </<=/>/>= still correct; os_cc_test green.
           * v0.18 — **comments**: the lexer skips `//` line comments and
             `/* ... */` block comments in its whitespace phase (a leading `/`
             peeks ahead; a lone `/` is still the divide operator). Verified line,

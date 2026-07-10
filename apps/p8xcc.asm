@@ -9,7 +9,7 @@
 ; emits assembly text to stdout via SYS_PUTC, so `>OUT.ASM` captures it and the
 ; program's own I/O stays shell-redirectable.
 ;
-; EARLY (v0.24). Supported so far:  (type = int (16-bit) | char (1-byte elem))
+; EARLY (v0.25). Supported so far:  (type = int (16-bit) | char (1-byte elem))
 ;     program : (func | global)*   global : type [*]NAME [ [N] ] ;
 ;     func : type NAME([type [*]P,...]) { <stmt>* }
 ;     stmt : type [*]NAME [= expr]; | type NAME[N]; | NAME = expr; |
@@ -18,7 +18,7 @@
 ;            { s* } | putchar(e); | return [e];
 ;     expr : land ('||' land)*   land : bor ('&&' bor)*   (short-circuit)
 ;     bor : bxor ('|' bxor)*   bxor : band ('^' band)*   band : rel ('&' rel)*
-;     rel  : add [relop add]   add : term (('+'|'-') term)*
+;     rel  : sh [relop sh]   sh : add (('<<'|'>>') add)*   add : term(...)
 ;     term : unary (('*'|'/'|'%') unary)*   unary : ('-'|'!'|'*'|'&') unary | factor
 ;     factor : NUM(dec/0xhex) | 'c' | "str" | NAME | NAME[i] | NAME(args) |
 ;              builtins: putchar/puts/getchar/peek/poke/argstr/bios | '(' e ')'
@@ -103,6 +103,8 @@ START:  TPA3L
         STA  USEAND
         STA  USEOR
         STA  USEXOR
+        STA  USESHL
+        STA  USESHR
         JSR  COMPILE
         RTS
 USAGE:  LDP1 #MUSAGE
@@ -929,16 +931,29 @@ adv_cls: JSR ISDIG                    ; classify the first non-ws char
         JZ   adv_2ck
         LDB  #'<'
         CMP
-        JZ   adv_2ck
+        JZ   adv_ltgt
         LDB  #'>'
         CMP
-        JZ   adv_2ck
+        JZ   adv_ltgt
         LDB  #'&'                    ; '&&' and '||' : combine only if doubled
         CMP
         JZ   adv_2same
         LDB  #'|'
         CMP
         JZ   adv_2same
+        RTS
+adv_ltgt: JSR GC                     ; '<'/'>' : peek for '=' (<=,>=) or doubling (<<,>>)
+        JC   adv_pd
+        STA  TMPC
+        LDB  #'='
+        CMP
+        JZ   adv_2set
+        LDA  TMPC
+        LDB  CURV
+        CMP
+        JZ   adv_2sset
+        LDA  TMPC
+        JSR  UNGC
         RTS
 adv_2same: JSR GC                    ; peek c2
         JC   adv_pd
@@ -1332,7 +1347,15 @@ ce_noor: LDA USEXOR
         JZ   ce_noxor
         LDP1 #MXORDEF
         JSR  EMIT
-ce_noxor: LDP1 #MTEMP                ; the codegen temp
+ce_noxor: LDA USESHL
+        JZ   ce_noshl
+        LDP1 #MSHLDEF
+        JSR  EMIT
+ce_noshl: LDA USESHR
+        JZ   ce_noshr
+        LDP1 #MSHRDEF
+        JSR  EMIT
+ce_noshr: LDP1 #MTEMP                ; the codegen temp
         JSR  EMIT
         LDP1 #MFRAMEDEF              ; arg-stack runtime: __pusharg/__pop/__sp/__cstack
         JSR  EMIT
@@ -2106,7 +2129,7 @@ sr_semi: LDA #$3B
 ; expression: GADD [ relop GADD ]  -> result in the runtime A register.
 ; A relational compares two additive expressions, yielding 0/1 (single, non-
 ; associative). Assignment/putchar/return/conditions all call GEXPR.
-GREL:   JSR  GADD
+GREL:   JSR  GSHIFT
         LDA  CURK
         LDB  #3
         CMP
@@ -2118,7 +2141,7 @@ GREL:   JSR  GADD
         LDA  RELOP                   ; save RELOP across GADD (parens may recurse)
         PHA
         JSR  ADVANCE                 ; past the operator
-        JSR  GADD                    ; right operand -> __ax
+        JSR  GSHIFT                  ; right operand -> __ax
         PLA
         STA  RELOP
         JSR  EM_POP                  ; pop left -> __t0
@@ -2337,6 +2360,49 @@ gba_l:  LDA  CURK
         JSR  EMIT
         JMP  gba_l
 gba_d:  RTS
+
+; shift: GSHIFT (<< >>) between relational and additive
+GSHIFT: JSR  GADD
+gsh_l:  LDA  CURK
+        LDB  #3
+        CMP
+        JNZ  gsh_d
+        LDA  CURV
+        LDB  #'<'
+        CMP
+        JZ   gsh_ml
+        LDA  CURV
+        LDB  #'>'
+        CMP
+        JZ   gsh_mr
+        JMP  gsh_d
+gsh_ml: LDA CUR2
+        LDB  #'<'
+        CMP
+        JNZ  gsh_d
+        JSR  ADVANCE
+        JSR  EM_PUSH
+        JSR  GADD
+        JSR  EM_POP
+        LDA  #1
+        STA  USESHL
+        LDP1 #MJSHL
+        JSR  EMIT
+        JMP  gsh_l
+gsh_mr: LDA CUR2
+        LDB  #'>'
+        CMP
+        JNZ  gsh_d
+        JSR  ADVANCE
+        JSR  EM_PUSH
+        JSR  GADD
+        JSR  EM_POP
+        LDA  #1
+        STA  USESHR
+        LDP1 #MJSHR
+        JSR  EMIT
+        JMP  gsh_l
+gsh_d:  RTS
 
 GADD:   JSR  GTERM
 ge_l:   LDA  CURK
@@ -3618,6 +3684,12 @@ MSTAT:  .byte $20,$20,$20,$20,$20,$20,$20,$20
 MLDBT:  .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "LDB __t0"
         .byte LF,0
+MJSHL:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "JSR __shl"
+        .byte LF,0
+MJSHR:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "JSR __shr"
+        .byte LF,0
 MJAND:  .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "JSR __and"
         .byte LF,0
@@ -3874,6 +3946,8 @@ MTEMP:  .ascii "__t0:   .fill 2"
         .ascii "__ax:   .fill 2"
         .byte LF
         .ascii "__c:    .fill 1"
+        .byte LF
+        .ascii "__sc:   .fill 1"
         .byte LF,0
 MANDDEF:
         .ascii "__and:  LDA __ax"
@@ -3927,6 +4001,84 @@ MXORDEF:
         .ascii "        LDB __t0+1"
         .byte LF
         .ascii "        XOR"
+        .byte LF
+        .ascii "        STA __ax+1"
+        .byte LF
+        .ascii "        RTS"
+        .byte LF,0
+MSHLDEF:
+        .ascii "__shl:  LDA __ax"
+        .byte LF
+        .ascii "        STA __sc"
+        .byte LF
+        .ascii "__shl0:  LDA __sc"
+        .byte LF
+        .ascii "        JZ __shld"
+        .byte LF
+        .ascii "        LDA __t0"
+        .byte LF
+        .ascii "        SHL"
+        .byte LF
+        .ascii "        STA __t0"
+        .byte LF
+        .ascii "        LDA __t0+1"
+        .byte LF
+        .ascii "        ROL"
+        .byte LF
+        .ascii "        STA __t0+1"
+        .byte LF
+        .ascii "        LDA __sc"
+        .byte LF
+        .ascii "        DEC"
+        .byte LF
+        .ascii "        STA __sc"
+        .byte LF
+        .ascii "        JMP __shl0"
+        .byte LF
+        .ascii "__shld:  LDA __t0"
+        .byte LF
+        .ascii "        STA __ax"
+        .byte LF
+        .ascii "        LDA __t0+1"
+        .byte LF
+        .ascii "        STA __ax+1"
+        .byte LF
+        .ascii "        RTS"
+        .byte LF,0
+MSHRDEF:
+        .ascii "__shr:  LDA __ax"
+        .byte LF
+        .ascii "        STA __sc"
+        .byte LF
+        .ascii "__shr0:  LDA __sc"
+        .byte LF
+        .ascii "        JZ __shrd"
+        .byte LF
+        .ascii "        LDA __t0+1"
+        .byte LF
+        .ascii "        SHR"
+        .byte LF
+        .ascii "        STA __t0+1"
+        .byte LF
+        .ascii "        LDA __t0"
+        .byte LF
+        .ascii "        ROR"
+        .byte LF
+        .ascii "        STA __t0"
+        .byte LF
+        .ascii "        LDA __sc"
+        .byte LF
+        .ascii "        DEC"
+        .byte LF
+        .ascii "        STA __sc"
+        .byte LF
+        .ascii "        JMP __shr0"
+        .byte LF
+        .ascii "__shrd:  LDA __t0"
+        .byte LF
+        .ascii "        STA __ax"
+        .byte LF
+        .ascii "        LDA __t0+1"
         .byte LF
         .ascii "        STA __ax+1"
         .byte LF
@@ -4267,6 +4419,8 @@ BIOSAD: .fill 2    ; bios() intrinsic: the constant call address
 USEAND: .fill 1    ; 1 if binary & used
 USEOR:  .fill 1    ; 1 if binary | used
 USEXOR: .fill 1    ; 1 if binary ^ used
+USESHL: .fill 1    ; 1 if << used
+USESHR: .fill 1    ; 1 if >> used
 NLSLOT: .fill 1    ; current function's slot count (>= name count, arrays add N)
 SYMSLOT: .fill 48  ; per-name -> first slot (relative to SLOTBASE)
 SYMARR: .fill 256  ; per-slot: 1 if this slot is an array base
