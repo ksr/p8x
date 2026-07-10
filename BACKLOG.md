@@ -893,6 +893,16 @@ Last updated: 2026-07-08
             keep the backslash text verbatim in STRBUF and rely on the assembler
             (.asciiz uses Python unicode_escape). adv_stl now treats `\"` as a
             literal quote, not the terminator. Verified '\n', "A\nB\n", '\t'.
+          * v0.17 — **true 1-byte `char`**. Per-variable type tracking via
+            SYMCHAR[slot] (EXPECTTYPE reports int vs char; the declaration and
+            each parameter record it). A `char` array packs its bytes (ceil(N/2)
+            word slots); indexing a char array/pointer scales by 1 and uses byte
+            load/store (EM_LOADB/EM_STOREB) instead of *2/word; `*p` on a char*
+            byte-derefs via an EXPRCHAR flag set by the variable/string factors.
+            int arrays/pointers unchanged (scale 2, word); a scalar `char c` is
+            still a word (width only matters for arrays/pointers). Verified: char
+            b[4] build+print, char* byte deref, strcpy(&d[0],s) into a buffer,
+            char scalar; all int/pointer/recursion/string regressions green.
         Debug notes for future selves: FGETB clobbers P1 (build identifiers via
         P2); variables must live in the program's own BSS, not a fixed high page
         (OS/SYS_PUTC scratch collides); FRESOLVE's scan needs FSDIRBUF off SBUF
