@@ -984,6 +984,21 @@ Last updated: 2026-07-08
             dump.c). So with shifts, the native cc covers every shipped command's
             language needs. Verified: 1<<6, 260>>2, (1<<6)|1, byte/word combine,
             and </<=/>/>= still correct; os_cc_test green.
+          * v0.26 — **ternary `?:`** (GEXPR wraps the || level GLOR; JZ/JMP with
+            two stack-saved labels; nests).
+          * v0.27 — **++ / -- / += / -= (scalar)**: lexer routes +/- to adv_pm;
+            statement compound-assign, prefix, and postfix (postfix keeps __ax via
+            in-place EM_INCVAR/EM_DECVAR of V<slot>).
+          * v0.28 — **structs** (minimal). A tag->size table (STAG*) and a GLOBAL
+            member->offset table (STM*, member names assumed unique across
+            structs). `struct TAG { type [*]m; ... };` defines it; `struct TAG v;`
+            / `struct TAG *p;` declare storage (ceil(size/2) word slots for a
+            value, 1 for a pointer). Member access: `.` uses &var, `->` uses
+            value(var); both add the member's byte offset (EM_ADDOFF) and
+            load/store a word (int/ptr member) or byte (char member). `->` is
+            lexed in adv_pm. Verified: int/char members, local + global structs,
+            `->` via a pointer, read + write. LIMITATION: member names must be
+            unique program-wide, no struct params/returns/assignment or nesting.
           * v0.18 — **comments**: the lexer skips `//` line comments and
             `/* ... */` block comments in its whitespace phase (a leading `/`
             peeks ahead; a lone `/` is still the divide operator). Verified line,

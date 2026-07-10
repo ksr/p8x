@@ -21,10 +21,11 @@ DESCRIPTION
     BACK-END-and-all compiler aimed at fitting the ~31.5 KB TPA, where a port
     of the optimizing p8cc could not.
 
-    THIS IS EARLY (v0.27). Supported so far:  (`int` is 16-bit; `char` is a
+    THIS IS EARLY (v0.28). Supported so far:  (`int` is 16-bit; `char` is a
     1-byte element type — see below.)
 
-        program : (func | global)*
+        program : (func | global | struct)*
+        struct: struct TAG { (type [*]member ;)* } ;   member access: v.m , p->m
         global: type [*] NAME [ [ N ] ] ;   (file-scope variable, zero-init)
         func  : type NAME ( [type [*]P (, type [*]P)*] ) { <stmt>* }
         stmt  : type NAME [ = <expr> ] ;  (declare a variable)

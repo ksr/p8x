@@ -9,8 +9,9 @@
 ; emits assembly text to stdout via SYS_PUTC, so `>OUT.ASM` captures it and the
 ; program's own I/O stays shell-redirectable.
 ;
-; EARLY (v0.27). Supported so far:  (type = int (16-bit) | char (1-byte elem))
-;     program : (func | global)*   global : type [*]NAME [ [N] ] ;
+; EARLY (v0.28). Supported so far:  (type = int (16-bit) | char (1-byte elem))
+;     program : (func | global | struct-def)*   global : type [*]NAME [[N]] ;
+;     struct-def : struct TAG { (type [*]member;)* } ;   access: v.m  p->m
 ;     func : type NAME([type [*]P,...]) { <stmt>* }
 ;     stmt : type [*]NAME [= expr]; | type NAME[N]; | NAME = expr; |
 ;            NAME++; | NAME--; | NAME+=e; | NAME-=e; |
@@ -106,6 +107,8 @@ START:  TPA3L
         STA  USEXOR
         STA  USESHL
         STA  USESHR
+        STA  STAGCNT
+        STA  STMCNT
         JSR  COMPILE
         RTS
 USAGE:  LDP1 #MUSAGE
@@ -1045,7 +1048,7 @@ adv_cls: JSR ISDIG                    ; classify the first non-ws char
         CMP
         JZ   adv_pm
         RTS
-adv_pm: JSR GC                       ; '+'/'-' : '+='/'-=' or '++'/'--' or single
+adv_pm: JSR GC                       ; '+'/'-' : += -= ++ -- or -> or single
         JC   adv_pd
         STA  TMPC
         LDB  #'='
@@ -1056,7 +1059,14 @@ adv_pm: JSR GC                       ; '+'/'-' : '+='/'-=' or '++'/'--' or singl
         CMP
         JZ   adv_2sset
         LDA  TMPC
+        LDB  #'>'
+        CMP
+        JZ   adv_arrow
+        LDA  TMPC
         JSR  UNGC
+        RTS
+adv_arrow: LDA #'>'                   ; '->' : CURV='-', CUR2='>'
+        STA  CUR2
         RTS
 adv_ltgt: JSR GC                     ; '<'/'>' : peek for '=' (<=,>=) or doubling (<<,>>)
         JC   adv_pd
@@ -1494,6 +1504,391 @@ ce_vl:  LDA  VITER
 ce_vd:  RTS
 
 ; FUNCDEF: int NAME ( ) { <stmt>* }   (Stage A: no parameters yet)
+
+; =============================================================================
+; structs (minimal): a tag -> size table, and a GLOBAL member -> offset table
+;   (member names are assumed unique across structs). `.`/`->` add the member
+;   offset to the base (&var for '.', value(var) for '->') and load/store a
+;   word (int/ptr member) or byte (char member).
+; =============================================================================
+; STRUCTDEF: current = tag name; parse  { type [*]m ; ... } ;  and record it.
+STRUCTDEF: JSR CPCURFN                ; CURFN = tag name
+        JSR  ADVANCE                  ; past tag
+        LDA  #'{'
+        JSR  EXPECTP
+        LDA  #0
+        STA  STOFF
+sdf_l:  LDA  CURK                     ; '}' ends the member list
+        LDB  #3
+        CMP
+        JNZ  sdf_m
+        LDA  CURV
+        LDB  #'}'
+        CMP
+        JZ   sdf_end
+sdf_m:  JSR  EXPECTTYPE               ; member type (int/char)
+        LDA  ISCHARTYPE
+        STA  DCLCHAR
+sdf_st: LDA  CURK                     ; pointer member -> word (DCLCHAR=0)
+        LDB  #3
+        CMP
+        JNZ  sdf_ns
+        LDA  CURV
+        LDB  #'*'
+        CMP
+        JNZ  sdf_ns
+        LDA  #0
+        STA  DCLCHAR
+        JSR  ADVANCE
+        JMP  sdf_st
+sdf_ns: JSR  STMADD_M                 ; member name (TID) @ STOFF, char DCLCHAR
+        JSR  ADVANCE                  ; past member name
+        LDA  DCLCHAR                  ; STOFF += (char ? 1 : 2)
+        JNZ  sdf_c1
+        LDA  STOFF
+        LDB  #2
+        ADD
+        STA  STOFF
+        JMP  sdf_semi
+sdf_c1: LDA STOFF
+        INC
+        STA  STOFF
+sdf_semi: LDA #$3B
+        JSR  EXPECTP
+        JMP  sdf_l
+sdf_end: LDA #'}'
+        JSR  EXPECTP
+        JSR  STAGADD                  ; record tag CURFN with size STOFF
+        LDA  #$3B
+        JSR  EXPECTP
+        RTS
+
+; fd_struct: top-level 'struct' -> a definition (Tag {...}) or a global var.
+fd_struct: JSR ADVANCE                ; past 'struct'
+        JSR  CPCURFN                  ; CURFN = tag name (for a possible def)
+        JSR  ADVANCE                  ; past tag; peek
+        LDA  CURK
+        LDB  #3
+        CMP
+        JNZ  fds_var
+        LDA  CURV
+        LDB  #'{'
+        CMP
+        JNZ  fds_var
+        ; a definition: CURFN=tag, current='{'.  Re-enter STRUCTDEF's body.
+        LDA  #'{'
+        JSR  EXPECTP
+        LDA  #0
+        STA  STOFF
+        JMP  sdf_l                    ; (CURFN already = tag)
+fds_var: ; global 'struct Tag [*]NAME ;'  -> reserve storage
+        JSR  STAGFIND_CURFN           ; TAGSIZE from the tag (still in CURFN)
+        LDA  #0
+        STA  DCLCHAR
+        LDA  #0
+        STA  MEMTMP2                  ; is-pointer flag
+        LDA  CURK
+        LDB  #3
+        CMP
+        JNZ  fdsv_nm
+        LDA  CURV
+        LDB  #'*'
+        CMP
+        JNZ  fdsv_nm
+        JSR  ADVANCE                  ; past '*'
+        LDA  #1
+        STA  MEMTMP2
+fdsv_nm: JSR CPCURFN                  ; CURFN = the VARIABLE name (not the tag)
+        JSR  GSYMADD
+        LDA  MEMTMP2
+        JNZ  fdsv_ptr
+        LDA  TAGSIZE                  ; struct value: ceil(size/2) slots
+        INC
+        SHR
+        LDB  SLOTCNT
+        ADD
+        STA  SLOTCNT
+        JMP  fdsv_end
+fdsv_ptr: LDA SLOTCNT                 ; pointer: 1 slot
+        INC
+        STA  SLOTCNT
+fdsv_end: JSR ADVANCE                 ; past NAME
+        LDA  #$3B
+        JSR  EXPECTP
+        RTS
+
+; st_lstruct: local 'struct Tag [*]NAME ;'
+st_lstruct: JSR ADVANCE               ; past 'struct'
+        JSR  STAGFIND_CURTID          ; TAGSIZE = size (tag = current TID)
+        JSR  ADVANCE                  ; past tag
+        LDA  #0
+        STA  DCLCHAR
+        LDA  CURK                     ; pointer?
+        LDB  #3
+        CMP
+        JNZ  sls_val
+        LDA  CURV
+        LDB  #'*'
+        CMP
+        JNZ  sls_val
+        JSR  ADVANCE                  ; '*' -> pointer (1 slot)
+        JSR  SYMADD
+        JSR  SETSYMCHAR
+        JMP  sls_end
+sls_val: JSR SYMADD                   ; struct value: ceil(size/2) slots
+        JSR  SETSYMCHAR
+        LDA  TAGSIZE                  ; NLSLOT += ceil(size/2) - 1  (base already 1)
+        INC
+        SHR
+        STA  TMPC
+        LDA  NLSLOT
+        LDB  TMPC
+        ADD
+        STA  NLSLOT
+        LDA  NLSLOT
+        LDB  #1
+        SUB
+        STA  NLSLOT
+sls_end: JSR ADVANCE                  ; past NAME
+        LDA  #$3B
+        JSR  EXPECTP
+        RTS
+
+; STAGADD: record tag CURFN with size STOFF
+STAGADD: LDA #<STAGPOOL
+        TAP1L
+        LDA  #>STAGPOOL
+        TAP1H
+        LDA  #0
+        STA  TMPB
+sga_e:  LDA  TMPB
+        LDB  STAGCNT
+        CMP
+        JC   sga_ap
+sga_sk: LDA  (P1)
+        JZ   sga_np
+        INP1
+        JMP  sga_sk
+sga_np: INP1
+        LDA  TMPB
+        INC
+        STA  TMPB
+        JMP  sga_e
+sga_ap: LDA #<CURFN
+        TAP2L
+        LDA  #>CURFN
+        TAP2H
+sga_cp: LDA  (P2)
+        STA  (P1)
+        JZ   sga_dn
+        INP1
+        INP2
+        JMP  sga_cp
+sga_dn: LDA #<STAGSIZE
+        LDB  STAGCNT
+        ADD
+        TAP1L
+        LDA  #>STAGSIZE
+        JNC  sga1
+        INC
+sga1:   TAP1H
+        LDA  STOFF
+        STA  (P1)
+        LDA  STAGCNT
+        INC
+        STA  STAGCNT
+        RTS
+
+; STAGFIND_CURFN / STAGFIND_CURTID: tag name -> TAGSIZE (by name in CURFN or TID)
+STAGFIND_CURFN: LDA #<CURFN
+        STA  STFNP
+        LDA  #>CURFN
+        STA  STFNP+1
+        JMP  stf_go
+STAGFIND_CURTID: LDA #<TID
+        STA  STFNP
+        LDA  #>TID
+        STA  STFNP+1
+stf_go: LDA #<STAGPOOL
+        TAP1L
+        LDA  #>STAGPOOL
+        TAP1H
+        LDA  #0
+        STA  TMPB
+        STA  TAGSIZE
+stf_e:  LDA  TMPB
+        LDB  STAGCNT
+        CMP
+        JC   stf_no
+        LDA  STFNP
+        TAP2L
+        LDA  STFNP+1
+        TAP2H
+stf_c:  LDA  (P1)
+        STA  TMPC
+        LDA  (P2)
+        LDB  TMPC
+        CMP
+        JNZ  stf_nx
+        LDA  (P1)
+        JZ   stf_yes
+        INP1
+        INP2
+        JMP  stf_c
+stf_nx: LDA  (P1)
+        JZ   stf_np
+        INP1
+        JMP  stf_nx
+stf_np: INP1
+        LDA  TMPB
+        INC
+        STA  TMPB
+        JMP  stf_e
+stf_yes: LDA #<STAGSIZE
+        LDB  TMPB
+        ADD
+        TAP1L
+        LDA  #>STAGSIZE
+        JNC  sty1
+        INC
+sty1:   TAP1H
+        LDA  (P1)
+        STA  TAGSIZE
+stf_no: RTS
+
+; STMADD_M: add member TID @ STOFF (char DCLCHAR) to the global member table
+STMADD_M: LDA #<STMPOOL
+        TAP1L
+        LDA  #>STMPOOL
+        TAP1H
+        LDA  #0
+        STA  TMPB
+smm_e:  LDA  TMPB
+        LDB  STMCNT
+        CMP
+        JC   smm_ap
+smm_sk: LDA  (P1)
+        JZ   smm_np
+        INP1
+        JMP  smm_sk
+smm_np: INP1
+        LDA  TMPB
+        INC
+        STA  TMPB
+        JMP  smm_e
+smm_ap: LDA #<TID
+        TAP2L
+        LDA  #>TID
+        TAP2H
+smm_cp: LDA  (P2)
+        STA  (P1)
+        JZ   smm_dn
+        INP1
+        INP2
+        JMP  smm_cp
+smm_dn: LDA #<STMOFF
+        LDB  STMCNT
+        ADD
+        TAP1L
+        LDA  #>STMOFF
+        JNC  smm1
+        INC
+smm1:   TAP1H
+        LDA  STOFF
+        STA  (P1)
+        LDA  #<STMCH
+        LDB  STMCNT
+        ADD
+        TAP1L
+        LDA  #>STMCH
+        JNC  smm2
+        INC
+smm2:   TAP1H
+        LDA  DCLCHAR
+        STA  (P1)
+        LDA  STMCNT
+        INC
+        STA  STMCNT
+        RTS
+
+; STMFIND: member name TID -> STMEMOFF, STMEMCH (STMEMOK=1 if found)
+STMFIND: LDA #<STMPOOL
+        TAP1L
+        LDA  #>STMPOOL
+        TAP1H
+        LDA  #0
+        STA  TMPB
+        STA  STMEMOK
+smf_e:  LDA  TMPB
+        LDB  STMCNT
+        CMP
+        JC   smf_no
+        LDA  #<TID
+        TAP2L
+        LDA  #>TID
+        TAP2H
+smf_c:  LDA  (P1)
+        STA  TMPC
+        LDA  (P2)
+        LDB  TMPC
+        CMP
+        JNZ  smf_nx
+        LDA  (P1)
+        JZ   smf_yes
+        INP1
+        INP2
+        JMP  smf_c
+smf_nx: LDA  (P1)
+        JZ   smf_np
+        INP1
+        JMP  smf_nx
+smf_np: INP1
+        LDA  TMPB
+        INC
+        STA  TMPB
+        JMP  smf_e
+smf_yes: LDA #1
+        STA  STMEMOK
+        LDA  #<STMOFF
+        LDB  TMPB
+        ADD
+        TAP1L
+        LDA  #>STMOFF
+        JNC  smy1
+        INC
+smy1:   TAP1H
+        LDA  (P1)
+        STA  STMEMOFF
+        LDA  #<STMCH
+        LDB  TMPB
+        ADD
+        TAP1L
+        LDA  #>STMCH
+        JNC  smy2
+        INC
+smy2:   TAP1H
+        LDA  (P1)
+        STA  STMEMCH
+smf_no: RTS
+
+; EM_ADDOFF (A = offset): emit __ax += offset  (via __t0 + __add)
+EM_ADDOFF: STA MEMTMP
+        LDP1 #MLDAI
+        JSR  EMIT
+        LDA  MEMTMP
+        JSR  EMITNUM
+        LDP1 #MNL
+        JSR  EMIT
+        LDP1 #MSTAT
+        JSR  EMIT
+        LDP1 #MLDA0
+        JSR  EMIT
+        LDP1 #MSTT0H
+        JSR  EMIT
+        LDP1 #MADD
+        JSR  EMIT
+        RTS
+
 ; fd_glob: a top-level global declaration  type [*]NAME [ [N] ] ;
 fd_glob: JSR GSYMADD                 ; record CURFN @ slot SLOTCNT (char = DCLCHAR)
         LDA  CURK
@@ -1530,7 +1925,11 @@ fdg_end: LDA #$3B
         JSR  EXPECTP
         RTS
 
-FUNCDEF: JSR EXPECTTYPE
+FUNCDEF: LDP1 #KW_STRUCT
+        JSR  IDEQ
+        LDA  TMPB
+        JNZ  fd_struct
+        JSR  EXPECTTYPE
         LDA  ISCHARTYPE              ; remember char-ness for a possible global
         STA  DCLCHAR
 fdt_star: LDA CURK                   ; skip pointer stars (ret-type / global ptr)
@@ -1811,6 +2210,10 @@ STMT:   LDA  CURK
         JSR  IDEQ
         LDA  TMPB
         JNZ  st_decl
+        LDP1 #KW_STRUCT
+        JSR  IDEQ
+        LDA  TMPB
+        JNZ  st_lstruct
         LDP1 #KW_IF
         JSR  IDEQ
         LDA  TMPB
@@ -2177,6 +2580,49 @@ st_asg2:
         LDB  #'['
         CMP
         JZ   sa_arrstore
+        LDA  CUR2                 ; NAME.m = e  or  NAME->m = e ?
+        JNZ  sa_ck_arrow
+        LDA  CURV
+        LDB  #'.'
+        CMP
+        JZ   sa_memdot
+        JMP  sa_scalar
+sa_ck_arrow: LDA CURV
+        LDB  #'-'
+        CMP
+        JNZ  sa_scalar
+        LDA  CUR2
+        LDB  #'>'
+        CMP
+        JZ   sa_memarrow
+        JMP  sa_scalar
+sa_memdot: LDA LHSIDX             ; &NAME + offset
+        STA  SYMIDX
+        JSR  EM_ADDROF
+        JMP  sa_memcommon
+sa_memarrow: LDA LHSIDX           ; value(NAME) + offset
+        STA  SYMIDX
+        JSR  EM_LDVAR
+sa_memcommon: JSR ADVANCE         ; past '.' or '->'
+        JSR  STMFIND
+        LDA  STMEMOFF
+        JSR  EM_ADDOFF
+        JSR  ADVANCE              ; past member name
+        LDA  STMEMCH
+        STA  MEMTMP2              ; remember member width across the RHS
+        JSR  EM_PUSH              ; save address
+        LDA  #'='
+        JSR  EXPECTP
+        JSR  GEXPR                ; RHS -> __ax
+        JSR  EM_POP               ; address -> __t0
+        LDA  MEMTMP2
+        JNZ  sa_memb
+        JSR  EM_STOREW
+        JMP  sa_memsemi
+sa_memb: JSR EM_STOREB
+sa_memsemi: LDA #$3B
+        JSR  EXPECTP
+        RTS
 sa_scalar: LDA CUR2               ; ++ / -- / += / -= ?
         JZ   sa_asg
         LDA  CURV
@@ -2837,7 +3283,22 @@ gf_id:  JSR  CPIDNAME                ; save the id; it may be a call or a variab
         LDB  #'['
         CMP
         JZ   gfi_index
-        LDA  CUR2                    ; NAME++ / NAME-- (postfix, simple var)
+        LDA  CUR2                    ; NAME.m ?
+        JNZ  gfi_ck_arrow
+        LDA  CURV
+        LDB  #'.'
+        CMP
+        JZ   gfi_dot
+        JMP  gfi_ckpp
+gfi_ck_arrow: LDA CURV               ; NAME->m ?  (CURV='-', CUR2='>')
+        LDB  #'-'
+        CMP
+        JNZ  gfi_ckpp
+        LDA  CUR2
+        LDB  #'>'
+        CMP
+        JZ   gfi_arrow
+gfi_ckpp: LDA CUR2                   ; NAME++ / NAME-- (postfix, simple var)
         JZ   gfi_var
         LDA  CURV
         LDB  #'+'
@@ -2860,6 +3321,24 @@ gfi_var: LDA IDVAROK
 gfv_arr: LDA #1
         STA  SAWADDRG                 ; array decay passes an address (pass-by-ref)
         JSR  EM_ADDROF
+        RTS
+gfi_dot: LDA IDVARIDX               ; NAME.member : &NAME + offset
+        STA  SYMIDX
+        JSR  EM_ADDROF
+        JMP  gfi_memld
+gfi_arrow: LDA IDVARIDX              ; NAME->member : value(NAME) + offset
+        STA  SYMIDX
+        JSR  EM_LDVAR
+gfi_memld: JSR ADVANCE               ; past '.' or '->'
+        JSR  STMFIND
+        LDA  STMEMOFF
+        JSR  EM_ADDOFF
+        JSR  ADVANCE                 ; past member name
+        LDA  STMEMCH
+        JNZ  gfi_memb
+        JSR  EM_LOADW
+        RTS
+gfi_memb: JSR EM_LOADB
         RTS
 gfi_pinc: LDA IDVAROK               ; NAME++ : value = old NAME, then NAME += 1
         JZ   gf_err
@@ -3854,6 +4333,7 @@ KW_IF:   .asciiz "if"
 KW_WHILE: .asciiz "while"
 KW_ELSE: .asciiz "else"
 KW_FOR:  .asciiz "for"
+KW_STRUCT: .asciiz "struct"
 KW_BRK:  .asciiz "break"
 KW_CONT: .asciiz "continue"
 
@@ -4695,6 +5175,21 @@ USESHR: .fill 1    ; 1 if >> used
 TERNF:  .fill 1    ; ternary ?: false label
 TERNE:  .fill 1    ; ternary ?: end label
 INCLBL: .fill 1    ; ++/-- carry-skip label
+STAGPOOL: .fill 128 ; struct tag names
+STAGSIZE: .fill 16  ; per-tag size in bytes
+STAGCNT: .fill 1
+STMPOOL: .fill 256  ; struct member names (global, unique)
+STMOFF: .fill 64    ; per-member byte offset
+STMCH:  .fill 64    ; per-member char flag
+STMCNT: .fill 1
+STOFF:  .fill 1     ; running offset while defining a struct
+TAGSIZE: .fill 1    ; STAGFIND result: tag size
+STFNP:  .fill 2     ; STAGFIND name pointer
+STMEMOK: .fill 1    ; STMFIND: found
+STMEMOFF: .fill 1   ; STMFIND: member offset
+STMEMCH: .fill 1    ; STMFIND: member char flag
+MEMTMP: .fill 1     ; EM_ADDOFF scratch
+MEMTMP2: .fill 1    ; member-store width across RHS
 NLSLOT: .fill 1    ; current function's slot count (>= name count, arrays add N)
 SYMSLOT: .fill 48  ; per-name -> first slot (relative to SLOTBASE)
 SYMARR: .fill 256  ; per-slot: 1 if this slot is an array base
