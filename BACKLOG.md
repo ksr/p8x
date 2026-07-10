@@ -950,6 +950,18 @@ Last updated: 2026-07-08
             arithmetic, mixed hex/decimal, and bios(0x4009,0,ch) (SYS_PUTC) ->
             "AB". This is the OS-syscall primitive the commands use (21 files).
             Remaining before a real command compiles: ++/--/+= and ?: (step 3).
+          * v0.23 — **binary bitwise `& | ^`** (three precedence levels
+            GBOR->GBXOR->GBAND between `&&` and the relational parser; `&`/`|`
+            require CUR2==0 so `&&`/`||` and unary `&` are unaffected). Runtime
+            helpers __and/__or/__xor (16-bit, gated by USEAND/USEOR/USEXOR).
+            MILESTONE: with this, the native cc compiled a REAL command library,
+            lib_dirent.c (via //#use, using globals + bios() + hex + `& 255`
+            byte masks), and the emitted asm assembled to a valid 3427-byte
+            binary. The full wc tree (wc -> stdin -> globx -> glob -> dirent) also
+            compiles; it's just slow to run the whole thing through the emulator.
+            NOTE: a survey found wc's tree uses NO ++/--/?: (lib_stdin was written
+            in the restricted subset on purpose) -- so those operators are not
+            needed for the simple filter commands, only the complex ones.
           * v0.18 — **comments**: the lexer skips `//` line comments and
             `/* ... */` block comments in its whitespace phase (a leading `/`
             peeks ahead; a lone `/` is still the divide operator). Verified line,
