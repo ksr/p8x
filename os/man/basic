@@ -106,6 +106,7 @@ MEMORY
 ERRORS
     ?                       unrecognized statement/command
     ?SYNTAX ERROR           malformed line (also reported at entry)
+    ?SYNTAX ERROR IN n      the same, during RUN — names the failing line n
     ?UNDEF'D LINE           GOTO/GOSUB to a missing line
     ?RETURN WITHOUT GOSUB   RETURN with no matching GOSUB
     A running program stops and returns to the prompt on any error.

@@ -287,10 +287,13 @@ Guess-a-number (uses RND and INPUT):
 |---------|-------|
 | `?` | unrecognized statement/command |
 | `?SYNTAX ERROR` | malformed expression or statement (e.g. unbalanced `)`) |
+| `?SYNTAX ERROR IN 100` | the same, hit during `RUN` — names the failing line |
 | `?UNDEF'D LINE` | `GOTO`/`GOSUB` to a line that doesn't exist |
 | `?RETURN WITHOUT GOSUB` | `RETURN` with no matching `GOSUB` |
 
-On any error the running program stops and returns to the prompt.
+On any error the running program stops and returns to the prompt. A syntax error
+raised while a program is running reports the line it happened on
+(`?SYNTAX ERROR IN 100`); the bare form is used for mistakes typed at the prompt.
 
 ### Syntax checking at entry
 

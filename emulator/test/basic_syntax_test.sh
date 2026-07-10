@@ -36,4 +36,12 @@ echo "$out" | grep -q '^9'   || fail "valid parenthesized expression did not run
 echo "$out" | grep -q 'OK)'  || fail "string containing ')' was mishandled"
 # a valid immediate statement still works
 echo "$out" | grep -q '^5'   || fail "valid immediate PRINT 2+3 did not print 5"
+
+# a runtime (not entry-time) error names its line: a lowercase keyword slips past
+# the structural entry check as an identifier, then fails at RUN on line 20. The
+# same statement typed immediately errors with no line number.
+out2=$(printf 'B\r10 PRINT "A"\r20 print 100\r30 PRINT "C"\rRUN\rprint 9\r' | \
+       ../p8xemu -l 120000000 -c bsyn.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r')
+echo "$out2" | grep -q 'SYNTAX ERROR IN 20' || fail "runtime error did not name its line (expected 'IN 20')"
+echo "$out2" | grep -q '^?SYNTAX ERROR$'    || fail "immediate error wrongly showed a line number"
 echo "BASIC-SYNTAX TEST: PASS"

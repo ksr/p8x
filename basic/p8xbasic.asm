@@ -115,6 +115,7 @@ STRSP  = BASRAM+$D5          ; string-sink append pointer (2)
 STRSN  = BASRAM+$D7          ; string-sink char count
 FLOOK  = BASRAM+$D8          ; input-file 1-byte lookahead (for EOF)
 FLOOKC = BASRAM+$D9          ; 1 if the lookahead position is end-of-file
+RUNNING= BASRAM+$DA          ; 1 while a program is RUNning (else immediate mode)
 SEED   = BASRAM+$F4          ; RND state (2)
 POKEA  = BASRAM+$F6          ; POKE address (2)
 NAMLEN = 6                   ; significant variable-name length
@@ -199,7 +200,9 @@ STKTOP = $FEFF
         JSR  PUTS
 
 ; ---------------- REPL -------------------------------------------------------
-REPL:   JSR  GETLINE         ; line -> LBUF
+REPL:   LDA  #0              ; back at the prompt: not running a program
+        STA  RUNNING
+        JSR  GETLINE         ; line -> LBUF
         JSR  CRUNCH          ; tokenize keywords in place
         JSR  CHECKLINE       ; reject malformed lines at entry (C=1 -> reported)
         JC   REPL
@@ -467,11 +470,29 @@ st_err: LDP1 #MWHAT
         JSR  PUTS
 stmt_nop: RTS
 
-; SYNERR — abort current statement to the prompt (resets the stack)
+; SYNERR — abort current statement to the prompt (resets the stack). When a
+; program is RUNning, report the offending line ("?SYNTAX ERROR IN 100"); in
+; immediate mode there is no line, so just "?SYNTAX ERROR".
 SYNERR: LDP3 #STKTOP
         LDA  #0                      ; a PRINT# aborted mid-record must not leave
         STA  OUTFILE                 ; console output redirected to the file
-        LDP1 #MSYN
+        STA  STRSINK                 ; nor an interrupted STR$ capture
+        LDA  RUNNING
+        JZ   syn_imm
+        LDP1 #MSYNIN                 ; "?SYNTAX ERROR IN "
+        JSR  PUTS
+        LDA  CURLINE                 ; line number = the word at CURLINE
+        TAP1L
+        LDA  CURLINE+1
+        TAP1H
+        LDA  (P1)+
+        STA  LNUM
+        LDA  (P1)
+        STA  LNUM+1
+        JSR  PRDECU                  ; unsigned decimal line number
+        JSR  CRLF
+        JMP  REPL
+syn_imm: LDP1 #MSYN
         JSR  PUTS
         JMP  REPL
 
@@ -602,6 +623,8 @@ DORUN:  LDA  #0
         STA  FSP
         STA  FMODE                  ; abandon any data file left open by a prior run
         STA  OUTFILE
+        LDA  #1                      ; a runtime error now reports its line number
+        STA  RUNNING
         LDA  #<PROG
         STA  CURLINE
         LDA  #>PROG
@@ -4106,6 +4129,8 @@ MNOFILE:.ascii "?No file"
         .byte CR,LF,0
 MSYN:   .ascii "?SYNTAX ERROR"
         .byte CR,LF,0
+MSYNIN: .ascii "?SYNTAX ERROR IN "
+        .byte 0
 MUNDEF: .ascii "?UNDEF'D LINE"
         .byte CR,LF,0
 MRG:    .ascii "?RETURN WITHOUT GOSUB"
