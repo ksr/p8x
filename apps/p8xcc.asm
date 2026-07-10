@@ -9,14 +9,14 @@
 ; emits assembly text to stdout via SYS_PUTC, so `>OUT.ASM` captures it and the
 ; program's own I/O stays shell-redirectable.
 ;
-; EARLY (v0.12). Supported so far:
-;     program : func*    func : int NAME([int P,...]) { <stmt>* }
-;     stmt : int NAME [= expr]; | NAME = expr; | if(e) s [else s] |
-;            while(e) s | for([asg];[e];[asg]) s | break; | continue; |
-;            { s* } | putchar(e); | return [e];
+; EARLY (v0.13). Supported so far:
+;     program : func*    func : int NAME([int [*]P,...]) { <stmt>* }
+;     stmt : int [*]NAME [= expr]; | NAME = expr; | *expr = expr; | expr; |
+;            if(e) s [else s] | while(e) s | for([asg];[e];[asg]) s |
+;            break; | continue; | { s* } | putchar(e); | return [e];
 ;     expr : land ('||' land)*   land : rel ('&&' rel)*   (short-circuit -> 0/1)
 ;     rel  : add [relop add]   add : term (('+'|'-') term)*
-;     term : unary (('*'|'/'|'%') unary)*   unary : ('-'|'!') unary | factor
+;     term : unary (('*'|'/'|'%') unary)*   unary : ('-'|'!'|'*'|'&') unary | factor
 ;     factor : NUMBER | NAME | NAME(args) | '(' e ')'   relop: < <= > >= == !=
 ; Values are 16-bit int. Codegen uses a MEMORY accumulator __ax (every
 ; expression's value) + a temp __t0; binary ops route through runtime helpers
@@ -24,10 +24,13 @@
 ; takes __ax's low byte. FUNCTIONS: each is _f_NAME (call = JSR, return value in
 ; __ax); params/locals use STATIC per-function slots (a global slot counter);
 ; the caller stores args into the callee's param slots before the JSR. To make
-; that re-entrant, a function pushes its own live slots (EM_SAVESLOTS) before
-; every call and restores them after (EM_RESTSLOTS) -- so direct RECURSION works
-; without a frame pointer. (Mutual recursion / forward calls are not supported:
-; single pass, a callee must be defined before it is called.) Verification is
+; that re-entrant, a function pushes its own live slots (EM_SAVESLOTS) before a
+; DIRECT recursive call and restores them after (EM_RESTSLOTS) -- so RECURSION
+; works without a frame pointer. Caller-saves is limited to self-recursive calls
+; (SELFREC) so that a pointer to a caller local passed to another function still
+; works (pass-by-reference). POINTERS: & (EM_ADDROF), * deref (EM_LOADW), and
+; *p = e (EM_STOREW) via P1; all word-sized. (Mutual recursion / forward calls
+; are not supported: single pass, a callee must be defined before called.) Ver.
 ; behavioural (compile on-target, run, diff output vs p8cc.py). Grows one tested
 ; feature at a time (char/pointers, ...) toward the p8cc subset.
 ;
@@ -245,6 +248,72 @@ EM_LDVAR: LDP1 #MLDAV                ; __ax = V<SYMIDX>
         LDP1 #MSTAXH
         JSR  EMIT
         RTS
+; --- pointer helpers (v0.13) ---
+; EM_ADDROF: __ax = &V<SLOTBASE+SYMIDX>   (address-of a scalar variable)
+EM_ADDROF: LDP1 #MLDALV
+        JSR  EMIT
+        LDA  SYMIDX
+        LDB  SLOTBASE
+        ADD
+        JSR  EMITNUM
+        LDP1 #MNL
+        JSR  EMIT
+        LDP1 #MSTAX
+        JSR  EMIT
+        LDP1 #MLDAHV
+        JSR  EMIT
+        LDA  SYMIDX
+        LDB  SLOTBASE
+        ADD
+        JSR  EMITNUM
+        LDP1 #MNL
+        JSR  EMIT
+        LDP1 #MSTAXH
+        JSR  EMIT
+        RTS
+
+; EM_LOADW: __ax = *(__ax)   (deref: load a word from the address in __ax)
+EM_LOADW: LDP1 #MLDAX
+        JSR  EMIT
+        LDP1 #MTAP1L
+        JSR  EMIT
+        LDP1 #MLDAXH
+        JSR  EMIT
+        LDP1 #MTAP1H
+        JSR  EMIT
+        LDP1 #MLDP1
+        JSR  EMIT
+        LDP1 #MSTAX
+        JSR  EMIT
+        LDP1 #MINP1
+        JSR  EMIT
+        LDP1 #MLDP1
+        JSR  EMIT
+        LDP1 #MSTAXH
+        JSR  EMIT
+        RTS
+
+; EM_STOREW: *(__t0) = __ax   (store the word in __ax to the address in __t0)
+EM_STOREW: LDP1 #MLDT0
+        JSR  EMIT
+        LDP1 #MTAP1L
+        JSR  EMIT
+        LDP1 #MLDT0H
+        JSR  EMIT
+        LDP1 #MTAP1H
+        JSR  EMIT
+        LDP1 #MLDAX
+        JSR  EMIT
+        LDP1 #MSTP1
+        JSR  EMIT
+        LDP1 #MINP1
+        JSR  EMIT
+        LDP1 #MLDAXH
+        JSR  EMIT
+        LDP1 #MSTP1
+        JSR  EMIT
+        RTS
+
 EM_STVAR: LDP1 #MLDAX                ; V<LHSIDX> = __ax
         JSR  EMIT
         LDP1 #MSTAV
@@ -599,7 +668,17 @@ FUNCDEF: LDP1 #KW_INT
         JZ   fp_done
 fp_loop: LDP1 #KW_INT
         JSR  EXPECTID
-        JSR  SYMADD                  ; the param is a local variable (slots 0..n-1)
+fp_star: LDA CURK                    ; skip pointer stars on the param
+        LDB  #3
+        CMP
+        JNZ  fp_nostar
+        LDA  CURV
+        LDB  #'*'
+        CMP
+        JNZ  fp_nostar
+        JSR  ADVANCE
+        JMP  fp_star
+fp_nostar: JSR SYMADD                ; the param is a local variable (slots 0..n-1)
         JSR  ADVANCE                 ; past the param name
         LDA  NPARAMS
         INC
@@ -853,7 +932,23 @@ st_punct: LDA CURV
         LDB  #'{'
         CMP
         JZ   st_block
+        LDA  CURV
+        LDB  #'*'
+        CMP
+        JZ   st_derefasg
 st_err: RTS                          ; (unknown statement -> stop quietly)
+; *ptr = expr ;   -> store a word through a pointer
+st_derefasg: JSR ADVANCE             ; past '*'
+        JSR  GUNARY                  ; address -> __ax
+        JSR  EM_PUSH                 ; save address
+        LDA  #'='
+        JSR  EXPECTP
+        JSR  GEXPR                   ; RHS -> __ax
+        JSR  EM_POP                  ; address -> __t0
+        JSR  EM_STOREW               ; *(__t0) = __ax
+        LDA  #$3B
+        JSR  EXPECTP
+        RTS
 
 ; { <stmt>* }
 st_block: LDA #'{'
@@ -1071,7 +1166,17 @@ st_while: JSR ADVANCE                ; past "while"
 
 ; int NAME [ = expr ] ;   -> reserve a variable, optionally initialise it
 st_decl: JSR ADVANCE                 ; past "int"
-        JSR  SYMADD                  ; add NAME (current id) -> SYMIDX
+sd_star: LDA CURK                    ; skip pointer stars: int *p, int **p
+        LDB  #3
+        CMP
+        JNZ  sd_nostar
+        LDA  CURV
+        LDB  #'*'
+        CMP
+        JNZ  sd_nostar
+        JSR  ADVANCE
+        JMP  sd_star
+sd_nostar: JSR SYMADD                ; add NAME (current id) -> SYMIDX
         LDA  SYMIDX
         STA  LHSIDX
         JSR  ADVANCE                 ; past NAME
@@ -1093,7 +1198,14 @@ sd_semi: LDA #$3B
 ; NAME = expr ;   -> assignment to an existing variable
 st_assign: JSR SYMFIND              ; look up NAME (current id) -> SYMIDX/SYMOK
         LDA  SYMOK
-        JZ   st_err                  ; undeclared -> stop
+        JZ   st_exprstmt             ; not a variable (a function call etc.)
+        JMP  st_asg2
+; expression statement:  foo(args) ;   (evaluate for side effects, discard result)
+st_exprstmt: JSR GEXPR
+        LDA  #$3B
+        JSR  EXPECTP
+        RTS
+st_asg2:
         LDA  SYMIDX
         STA  LHSIDX
         JSR  ADVANCE                 ; past NAME
@@ -1351,7 +1463,27 @@ GUNARY: LDA  CURK
         LDB  #'!'
         CMP
         JZ   gu_not
+        LDA  CURV
+        LDB  #'&'
+        CMP
+        JZ   gu_addr
+        LDA  CURV
+        LDB  #'*'
+        CMP
+        JZ   gu_deref
 gu_fact: JMP  GFACT
+gu_addr: JSR  ADVANCE                 ; past '&'
+        JSR  SYMFIND                  ; the NAME (TID) -> SYMIDX
+        LDA  SYMOK
+        JZ   gu_ad_e
+        JSR  EM_ADDROF                ; __ax = &V<slot>
+        JSR  ADVANCE                  ; past NAME
+        RTS
+gu_ad_e: RTS
+gu_deref: JSR ADVANCE                 ; past '*'
+        JSR  GUNARY                   ; the address expression -> __ax
+        JSR  EM_LOADW                 ; __ax = *(__ax)
+        RTS
 gu_neg: JSR  ADVANCE
         JSR  GUNARY
         LDA  #1
@@ -1412,9 +1544,15 @@ gfi_var: LDA IDVAROK
         JSR  EM_LDVAR
         RTS
 gfi_call: JSR FFIND_ID              ; FI = callee index, FFB = param base slot
+        JSR  CHKSELFREC              ; SELFREC = (callee == current function)?
         LDA  FI                      ; save callee index (arg parsing reuses FI/IDNAME)
         PHA
-        JSR  EM_SAVESLOTS            ; push caller's live slots (re-entrancy)
+        LDA  SELFREC
+        PHA
+        LDA  SELFREC                 ; only a DIRECT recursive call needs caller-saves
+        JZ   gc_nosave               ; (else the callee may write our locals via a ptr)
+        JSR  EM_SAVESLOTS
+gc_nosave:
         JSR  ADVANCE                 ; past '('
         LDA  #0
         STA  ARGI
@@ -1457,14 +1595,44 @@ ga_done: LDA #')'
         JSR  EXPECTP
         LDP1 #MJSRF                  ; JSR _f_NAME   (result -> __ax)
         JSR  EMIT
+        PLA                          ; restore SELFREC
+        STA  SELFREC
         PLA                          ; restore callee index
         STA  FI
         JSR  EMITFNAME               ; emit the callee's name from FPOOL[FI]
         LDP1 #MNL
         JSR  EMIT
+        LDA  SELFREC
+        JZ   gc_norest
         JSR  EM_RESTSLOTS            ; restore caller's slots (result stays in __ax)
-        RTS
+gc_norest: RTS
 gf_err: RTS
+
+; CHKSELFREC: SELFREC = 1 if IDNAME (callee) equals CURFN (current function).
+CHKSELFREC: LDA #<IDNAME
+        TAP1L
+        LDA  #>IDNAME
+        TAP1H
+        LDA  #<CURFN
+        TAP2L
+        LDA  #>CURFN
+        TAP2H
+        LDA  #1
+        STA  SELFREC
+csr_l:  LDA  (P1)
+        STA  TMPC
+        LDA  (P2)
+        LDB  TMPC
+        CMP
+        JNZ  csr_no
+        LDA  (P1)
+        JZ   csr_d
+        INP1
+        INP2
+        JMP  csr_l
+csr_no: LDA  #0
+        STA  SELFREC
+csr_d:  RTS
 
 ; EMITFNAME: emit the FI-th NUL-terminated name from the packed FPOOL.
 EMITFNAME: LDA #<FPOOL
@@ -2342,6 +2510,38 @@ MLNOT_DEF:
         .byte LF
         .ascii "        RTS"
         .byte LF,0
+MTAP1L:
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "TAP1L"
+        .byte LF,0
+MTAP1H:
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "TAP1H"
+        .byte LF,0
+MINP1:
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "INP1"
+        .byte LF,0
+MLDP1:
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "LDA (P1)"
+        .byte LF,0
+MSTP1:
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "STA (P1)"
+        .byte LF,0
+MLDT0:
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "LDA __t0"
+        .byte LF,0
+MLDT0H:
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "LDA __t0+1"
+        .byte LF,0
+MLDALV: .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .asciiz "LDA #<V"
+MLDAHV: .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .asciiz "LDA #>V"
 MUSAGE: .asciiz "usage: cc src.c >out.asm"
 MNOSRC: .asciiz "cc: cannot open source"
 
@@ -2369,6 +2569,7 @@ LHSIDX: .fill 1    ; index of an assignment/decl target variable
 VITER:  .fill 1    ; loop counter emitting variable storage
 VITER2: .fill 1    ; EM_PUSHSLOT/EM_POPSLOT: slot number being emitted
 VITER3: .fill 1    ; EM_SAVESLOTS/EM_RESTSLOTS: slot loop counter
+SELFREC: .fill 1   ; 1 if the current call is a direct self-recursion
 CUR2:   .fill 1    ; second char of a two-char punct (== != <= >=), else 0
 RELOP:  .fill 1    ; relational op code: 0 LT 1 LE 2 GT 3 GE 4 EQ 5 NE
 RELF:   .fill 1    ; RELDET: 1 if the current token is a relational op

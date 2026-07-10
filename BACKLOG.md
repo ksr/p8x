@@ -847,6 +847,21 @@ Last updated: 2026-07-08
             recursion / forward calls unsupported (single pass, static slots — the
             callee's param base isn't known before its definition); a full
             __csp/__fp frame is the eventual fix.
+          * v0.13 — **pointers** (16-bit, word-sized): `&x` (EM_ADDROF -> the
+            address of V<slot>), `*p` deref read (EM_LOADW), `*p = e` store
+            (EM_STOREW, a new `st_derefasg` under st_punct), `int *p` /
+            `int f(int *p)` (the `*` is parsed and ignored — a pointer is just a
+            word). Added **expression statements** so a bare call `foo(args);`
+            works (st_exprstmt). This gives **pass-by-reference**: set(&x),
+            inc(&x), swap(&a,&b) all verified. Key interaction: caller-saved slots
+            (v0.12) would undo a callee's write through a pointer to a caller
+            local, so caller-saves is now emitted ONLY for direct self-recursive
+            calls (SELFREC = callee name == CURFN); calls to *other* functions
+            skip it, so pass-by-ref composes with recursion. Verified: deref
+            read/write, double deref, repoint, pass-by-ref, swap, call-stmt, plus
+            fact/fib still green. LIMITATION: no `char`/byte width yet (a char*
+            still moves a word), no arrays/`[]` yet, and &local across a *direct*
+            recursive call is undefined.
         Debug notes for future selves: FGETB clobbers P1 (build identifiers via
         P2); variables must live in the program's own BSS, not a fixed high page
         (OS/SYS_PUTC scratch collides); FRESOLVE's scan needs FSDIRBUF off SBUF

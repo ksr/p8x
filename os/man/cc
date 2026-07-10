@@ -21,12 +21,15 @@ DESCRIPTION
     BACK-END-and-all compiler aimed at fitting the ~31.5 KB TPA, where a port
     of the optimizing p8cc could not.
 
-    THIS IS EARLY (v0.12). Supported so far:
+    THIS IS EARLY (v0.13). Supported so far:
 
         program : func*
         func  : int NAME ( [int P (, int P)*] ) { <stmt>* }
         stmt  : int NAME [ = <expr> ] ;   (declare a variable)
+              | int * NAME ;              (pointer variable)
               | NAME = <expr> ;           (assign)
+              | * <expr> = <expr> ;       (store through a pointer)
+              | <expr> ;                  (expression stmt, e.g. a call)
               | if ( <expr> ) <stmt> [ else <stmt> ]
               | while ( <expr> ) <stmt>
               | for ( [asg] ; [<expr>] ; [asg] ) <stmt>
@@ -39,16 +42,21 @@ DESCRIPTION
         rel   : add [ relop add ]         relop: <  <=  >  >=  ==  !=
         add   : term (('+' | '-') term)*
         term  : unary (('*' | '/' | '%') unary)*
-        unary : ('-' | '!') unary | factor
+        unary : ('-' | '!' | '*' | '&') unary | factor   (* deref, & address-of)
         factor: NUMBER | NAME | NAME( args ) | '(' <expr> ')'
 
     Multiple functions with parameters; execution starts at main(). Functions
     return a value via `return`. Parameters and locals use STATIC per-function
-    storage, but a function saves its own live slots around every call, so
-    (direct) RECURSION works — fact(), fib(), etc. NOTE: mutual recursion /
-    forward calls are not supported (single pass: a callee must be defined before
-    it is called), and within one call's argument list a later argument must not
-    read a parameter an earlier argument overwrote. Comparisons yield 0/1. 16-bit
+    storage, but a function saves its own live slots around a direct recursive
+    call, so (direct) RECURSION works — fact(), fib(), etc. POINTERS are 16-bit:
+    `&x` takes a variable's address, `*p` dereferences (read), `*p = e` stores;
+    this gives pass-by-reference — set(&x), swap(&a,&b). All values are word-
+    sized (a `char`-typed byte pointer is not distinguished yet). NOTE: mutual
+    recursion / forward calls are not supported (single pass: a callee must be
+    defined before it is called); within one call's argument list a later
+    argument must not read a parameter an earlier one overwrote; and taking the
+    address of a local across a DIRECT recursive call is undefined (that local is
+    saved/restored). Comparisons yield 0/1. 16-bit
     `int` — arithmetic runs through a memory accumulator (__ax) and runtime
     helpers (__add/__sub/__mul/__cmp/__div); integer division, and '/' or '%' by
     0 gives 0. putchar takes the low byte.
