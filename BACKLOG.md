@@ -941,6 +941,15 @@ Last updated: 2026-07-08
             nesting (c->b->a). No #define/#include (the command sources use
             neither). This completes "step 1" (globals + //#use) toward compiling
             the C command sources; next is the bios() intrinsic + hex literals.
+          * v0.22 — **hex literals + the `bios()` intrinsic** (step 2). The
+            number lexer takes `0x..` (HEXVAL, upper/lower). `bios(ADDR, p1, a)`
+            (ADDR a constant) lowers exactly like p8cc: P1 = p1, A = a low byte,
+            `JSR $ADDR` (emitted via EMHEX), returned A -> __ax low, carry ->
+            __ax high -- so it returns `A | carry<<8`. gfi_call special-cases the
+            name "bios" (IDNAMEEQ) before FFIND. Verified: 0x41/0xFF hex, hex
+            arithmetic, mixed hex/decimal, and bios(0x4009,0,ch) (SYS_PUTC) ->
+            "AB". This is the OS-syscall primitive the commands use (21 files).
+            Remaining before a real command compiles: ++/--/+= and ?: (step 3).
           * v0.18 — **comments**: the lexer skips `//` line comments and
             `/* ... */` block comments in its whitespace phase (a leading `/`
             peeks ahead; a lone `/` is still the divide operator). Verified line,

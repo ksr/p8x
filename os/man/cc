@@ -21,7 +21,7 @@ DESCRIPTION
     BACK-END-and-all compiler aimed at fitting the ~31.5 KB TPA, where a port
     of the optimizing p8cc could not.
 
-    THIS IS EARLY (v0.21). Supported so far:  (`int` is 16-bit; `char` is a
+    THIS IS EARLY (v0.22). Supported so far:  (`int` is 16-bit; `char` is a
     1-byte element type — see below.)
 
         program : (func | global)*
@@ -47,8 +47,8 @@ DESCRIPTION
         add   : term (('+' | '-') term)*
         term  : unary (('*' | '/' | '%') unary)*
         unary : ('-' | '!' | '*' | '&') unary | factor   (* deref, & address-of)
-        factor: NUMBER | 'c' | "string" | NAME | NAME[ <expr> ]
-              | NAME( args ) | '(' <expr> ')'
+        factor: NUMBER | 0xHEX | 'c' | "string" | NAME | NAME[ <expr> ]
+              | bios( ADDR, p1, a ) | NAME( args ) | '(' <expr> ')'
 
     Multiple functions with parameters; execution starts at main(). Functions
     return a value via `return`. Parameters and locals use STATIC per-function

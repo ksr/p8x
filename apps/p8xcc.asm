@@ -9,7 +9,7 @@
 ; emits assembly text to stdout via SYS_PUTC, so `>OUT.ASM` captures it and the
 ; program's own I/O stays shell-redirectable.
 ;
-; EARLY (v0.21). Supported so far:  (type = int (16-bit) | char (1-byte elem))
+; EARLY (v0.22). Supported so far:  (type = int (16-bit) | char (1-byte elem))
 ;     program : (func | global)*   global : type [*]NAME [ [N] ] ;
 ;     func : type NAME([type [*]P,...]) { <stmt>* }
 ;     stmt : type [*]NAME [= expr]; | type NAME[N]; | NAME = expr; |
@@ -19,7 +19,8 @@
 ;     expr : land ('||' land)*   land : rel ('&&' rel)*   (short-circuit -> 0/1)
 ;     rel  : add [relop add]   add : term (('+'|'-') term)*
 ;     term : unary (('*'|'/'|'%') unary)*   unary : ('-'|'!'|'*'|'&') unary | factor
-;     factor : NUMBER | 'c' | "str" | NAME | NAME[i] | NAME(args) | '(' e ')'
+;     factor : NUM(dec/0xhex) | 'c' | "str" | NAME | NAME[i] |
+;              bios(ADDR,p1,a) | NAME(args) | '(' e ')'
 ; Values are 16-bit int. Codegen uses a MEMORY accumulator __ax (every
 ; expression's value) + a temp __t0; binary ops route through runtime helpers
 ; (__add/__sub/__mul/__cmp/__div) emitted at the end of the program. putchar
@@ -1084,9 +1085,115 @@ abc_st: JSR  GC
         JZ   abc_st                   ; another '*' -> re-check
         JMP  adv_blockc
 
-adv_num: LDA #0                      ; decimal number -> CURV
+; HEXVAL: A = char -> A = 0..15, C=1 if a hex digit, else C=0
+HEXVAL: STA TMPC
+        LDB  #'0'
+        CMP
+        JNC  hv_no
+        LDA  TMPC
+        LDB  #':'
+        CMP
+        JC   hv_hi
+        LDA  TMPC
+        LDB  #'0'
+        SUB
+        SEC
+        RTS
+hv_hi:  LDA TMPC
+        LDB  #'A'
+        CMP
+        JNC  hv_no
+        LDA  TMPC
+        LDB  #'G'
+        CMP
+        JC   hv_lo
+        LDA  TMPC
+        LDB  #'A'
+        SUB
+        LDB  #10
+        ADD
+        SEC
+        RTS
+hv_lo:  LDA TMPC
+        LDB  #'a'
+        CMP
+        JNC  hv_no
+        LDA  TMPC
+        LDB  #'g'
+        CMP
+        JC   hv_no
+        LDA  TMPC
+        LDB  #'a'
+        SUB
+        LDB  #10
+        ADD
+        SEC
+        RTS
+hv_no:  CLC
+        RTS
+
+adv_num: LDA #0                      ; number -> CURV (decimal, or 0x.. hex)
         STA  NACC
         STA  NACC+1
+        LDA  TMPB
+        LDB  #'0'
+        CMP
+        JNZ  an_l                    ; not '0' -> decimal
+        JSR  GC                      ; peek after '0'
+        JC   an_done
+        STA  TMPC
+        LDB  #'x'
+        CMP
+        JZ   an_hex
+        LDA  TMPC
+        LDB  #'X'
+        CMP
+        JZ   an_hex
+        LDA  TMPC                    ; "0" not followed by x -> decimal
+        JSR  UNGC
+        JMP  an_l
+an_hex: JSR GC                       ; hex digits after 0x
+        JC   an_done
+        STA  TMPB
+        JSR  HEXVAL
+        JC   ah_put
+        LDA  TMPB
+        JSR  UNGC
+        JMP  an_done
+ah_put: STA DQ                       ; NACC = NACC*16 + digit
+        LDA  NACC
+        SHL
+        STA  NACC
+        LDA  NACC+1
+        ROL
+        STA  NACC+1
+        LDA  NACC
+        SHL
+        STA  NACC
+        LDA  NACC+1
+        ROL
+        STA  NACC+1
+        LDA  NACC
+        SHL
+        STA  NACC
+        LDA  NACC+1
+        ROL
+        STA  NACC+1
+        LDA  NACC
+        SHL
+        STA  NACC
+        LDA  NACC+1
+        ROL
+        STA  NACC+1
+        LDA  NACC
+        LDB  DQ
+        ADD
+        STA  NACC
+        JNC  ah_nc
+        LDA  NACC+1
+        INC
+        STA  NACC+1
+ah_nc:  JMP an_hex
 an_l:   LDA  TMPB                    ; digit -> DQ; NACC = NACC*10 + digit (16-bit)
         LDB  #'0'
         SUB
@@ -2371,7 +2478,116 @@ gfi_index: LDA IDVARIDX               ; NAME[index] rvalue
         RTS
 gfx_b:  JSR  EM_LOADB
         RTS
-gfi_call: JSR FFIND_ID              ; FI = callee index (name for the JSR)
+; gc_bios: bios(ADDR, p1, a) -> A | carry<<8 in __ax.  ADDR is a constant.
+gc_bios: JSR ADVANCE                 ; past '('
+        LDA  CURV                    ; arg0 = the constant BIOS/OS address
+        STA  BIOSAD
+        LDA  CURV+1
+        STA  BIOSAD+1
+        JSR  ADVANCE                 ; past the address number
+        LDA  #','
+        JSR  EXPECTP
+        JSR  GEXPR                   ; arg1 (P1 operand) -> __ax
+        JSR  EM_PUSH
+        LDA  #','
+        JSR  EXPECTP
+        JSR  GEXPR                   ; arg2 (A operand) -> __ax
+        LDA  #')'
+        JSR  EXPECTP
+        JSR  EM_POP                  ; __t0 = the P1 operand
+        LDP1 #MLDT0
+        JSR  EMIT
+        LDP1 #MTAP1L
+        JSR  EMIT
+        LDP1 #MLDT0H
+        JSR  EMIT
+        LDP1 #MTAP1H
+        JSR  EMIT
+        LDP1 #MLDAX
+        JSR  EMIT
+        LDP1 #MJSRHEX                ; "        JSR $"
+        JSR  EMIT
+        LDA  BIOSAD+1
+        JSR  EMHEX
+        LDA  BIOSAD
+        JSR  EMHEX
+        LDP1 #MNL
+        JSR  EMIT
+        LDP1 #MSTAX                  ; returned A -> __ax low
+        JSR  EMIT
+        JSR  NEWLBL
+        STA  JLBL
+        LDP1 #MLDA0                  ; carry -> __ax high  (LDA keeps C)
+        JSR  EMIT
+        LDP1 #MJNC
+        LDA  JLBL
+        JSR  EMITJ
+        LDP1 #MLDA1
+        JSR  EMIT
+        LDA  JLBL
+        JSR  EMITLBL
+        LDP1 #MSTAXH
+        JSR  EMIT
+        RTS
+
+; IDNAMEEQ: P1 = a NUL-terminated string -> TMPB = 1 if it equals IDNAME.
+IDNAMEEQ: LDA #<IDNAME
+        TAP2L
+        LDA  #>IDNAME
+        TAP2H
+ine_l:  LDA  (P1)
+        STA  TMPC
+        LDA  (P2)
+        LDB  TMPC
+        CMP
+        JNZ  ine_no
+        LDA  (P1)
+        JZ   ine_yes
+        INP1
+        INP2
+        JMP  ine_l
+ine_no: LDA #0
+        STA  TMPB
+        RTS
+ine_yes: LDA #1
+        STA  TMPB
+        RTS
+
+; EMNIB / EMHEX: emit a nibble / byte as hex digit(s)
+EMNIB:  LDB #10
+        CMP
+        JC   en_af
+        LDB  #'0'
+        ADD
+        JSR  SYS_PUTC
+        RTS
+en_af:  LDB #10
+        SUB
+        LDB  #'A'
+        ADD
+        JSR  SYS_PUTC
+        RTS
+EMHEX:  STA TMPC
+        SHR
+        SHR
+        SHR
+        SHR
+        JSR  EMNIB
+        LDA  TMPC
+        LDB  #$0F
+        AND
+        JSR  EMNIB
+        RTS
+
+M_BIOS:  .asciiz "bios"
+MJSRHEX: .byte $20,$20,$20,$20,$20,$20,$20,$20
+         .asciiz "JSR $"
+
+gfi_call: LDP1 #M_BIOS             ; the bios(addr,p1,a) intrinsic?
+        JSR  IDNAMEEQ
+        LDA  TMPB
+        JNZ  gc_bios
+        JSR  FFIND_ID              ; FI = callee index (name for the JSR)
         LDA  FI                      ; save across arg parsing (FI/IDNAME get reused)
         PHA
         LDA  #0
@@ -3754,6 +3970,7 @@ LIBPATH: .fill 40   ; "/lib/lib_<name>.c"
 USED:   .fill 128   ; packed names of already-spliced libraries
 USESTATE: .fill 60  ; saved read-stream state, 12 bytes x 5 levels
 USEBUF: .fill 2560  ; per-level 512-byte read buffers (5 levels)
+BIOSAD: .fill 2    ; bios() intrinsic: the constant call address
 NLSLOT: .fill 1    ; current function's slot count (>= name count, arrays add N)
 SYMSLOT: .fill 48  ; per-name -> first slot (relative to SLOTBASE)
 SYMARR: .fill 256  ; per-slot: 1 if this slot is an array base
