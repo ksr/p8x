@@ -71,6 +71,12 @@ if [ ! -f "$disk" ]; then
         --base 0x7A00 >/dev/null
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/asm.bin" \
         --name /bin/asm.bin --load 0x7A00 --exec 0x7A00 >/dev/null
+    # CC: the native C compiler, hand-written in asm (Milestone B, path B) -> RUN
+    # /bin/cc.bin SRC.C >OUT.ASM.  Chains with asm to compile C entirely on-target.
+    python3 "$root/assembler/p8xasm.py" "$root/apps/p8xcc.asm" -o "$build/cc.bin" \
+        --base 0x7A00 >/dev/null
+    python3 "$root/tools/p8xfs.py" put "$disk" "$build/cc.bin" \
+        --name /bin/cc.bin --load 0x7A00 --exec 0x7A00 >/dev/null
     # CPP: the //#use source preprocessor, pass 1 of the on-target C toolchain
     # (native counterpart of tools/clib.py). C-only — a compiler pass, not a dual
     # C+asm command, so no /bina twin (like edit/asm are asm-only).

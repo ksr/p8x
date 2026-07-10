@@ -1,0 +1,39 @@
+NAME
+    cc - native C compiler (runs on the P8X)
+
+SYNOPSIS
+    cc src.c >out.asm
+    asm out.asm PROG.BIN      (then: run PROG.BIN)
+
+DESCRIPTION
+    A small C compiler written directly in assembly, compact enough to run
+    ON the machine. It reads a C source (streamed through the BIOS read
+    stream) and writes P8X assembly to stdout, which the native assembler
+    (asm) turns into a RUNnable binary. So a C program can be compiled,
+    assembled, and run entirely on the P8X:
+
+        cc hello.c >hello.asm
+        asm hello.asm HELLO.BIN
+        run HELLO.BIN
+
+    This is distinct from the host cross-compiler (compiler/p8cc.py) and the
+    self-hosted FRONT END (cpp | lex | cc1): cc is a from-scratch native
+    BACK-END-and-all compiler aimed at fitting the ~31.5 KB TPA, where a port
+    of the optimizing p8cc could not.
+
+    THIS IS v0.1 — a walking skeleton. Supported so far:
+
+        int main() { <stmt>* }
+        stmt  : putchar( <expr> ) ;  |  return [<expr>] ;
+        expr  : term (('+' | '-') term)*      term : NUMBER | '(' <expr> ')'
+
+    Values are 8-bit for now (putchar takes a byte). It grows one tested
+    feature at a time (variables, '*', if/while, functions, ...) toward the
+    p8cc subset. Redirect the output to a RELATIVE filename (cc src.c >out.asm)
+    — an absolute redirect target is not yet supported by the shell.
+
+EXAMPLES
+    cc t.c >t.asm            compile; then  asm t.asm T.BIN ;  run T.BIN
+
+SEE ALSO
+    asm, edit, run, cpp

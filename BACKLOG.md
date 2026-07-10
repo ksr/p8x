@@ -756,16 +756,30 @@ Last updated: 2026-07-08
         Other rejected paths: sharding the existing codegen (the shared infra
         defeats it); a bigger flat memory region (tops out ~46 KB, still < 82 KB —
         would need banking, i.e. major firmware/OS/hardware work).
-      - [ ] **STRETCH (future milestone): a NEW minimal on-target codegen (cg).**
-        Not a port of p8cc's optimizing back end — a from-scratch, size-first
-        code generator that reads the cc1 AST stream and emits correct (not
-        optimal) asm within the 31.5 KB TPA. It reuses the proven front end
-        (cpp|lex|cc1) and the on-target assembler; the host p8cc.py/p8cc.c stay
-        the reference. Verification would be BEHAVIORAL (compile a program
-        on-target, run it, diff output) since its asm won't match p8cc byte-for-
-        byte. Chief risk: the symbol-table + type-analysis + emit machinery must
-        be written FAR more compactly than p8cc's ~55 KB. Only worth starting if
-        true end-to-end on-target compilation becomes a priority.
+      - [~] **NATIVE C COMPILER in asm (Milestone B, path B) — STARTED
+        (2026-07-09).** A from-scratch, single-pass C compiler written directly
+        in assembly (`apps/p8xcc.asm` -> `/bin/cc.bin`), dense enough to run on
+        the machine where the p8cc.c codegen (~82 KB) cannot. It streams the
+        source in (FOPEN/FGETB, one-char pushback) and emits asm to stdout
+        (SYS_PUTC, shell-redirectable), which the native `asm` turns into a
+        RUNnable binary — so C is compiled, assembled, and run entirely on-target.
+        v0.1 WALKING SKELETON works end to end (`os_cc_test`, behavioural: compile
+        -> asm -> run -> diff output): `int main() { putchar(<expr>); | return
+        [<expr>]; }` with `+`/`-` on 8-bit ints; codegen is a hardware-stack
+        machine + one memory temp (`__t0`), since the ISA has no A<->B move.
+        Debug notes for future selves: FGETB clobbers P1 (build identifiers via
+        P2); variables must live in the program's own BSS, not a fixed high page
+        (OS/SYS_PUTC scratch collides); FRESOLVE's scan needs FSDIRBUF off SBUF
+        when a write stream is redirected; the shell's `>` target must be RELATIVE
+        (absolute `>/X` silently drops the file — pre-existing OS limitation,
+        filed separately below). NEXT, one tested step at a time toward the p8cc
+        subset: variables/assignment, `*`, `if`/`while`, functions+params, then
+        pointers/char/arrays. Chief risk stays the symbol-table + type-analysis
+        machinery — must be far more compact than p8cc's ~55 KB.
+      - [ ] **Shell `>`/`<` redirect rejects an ABSOLUTE target path.** `cmd
+        >REL.TXT` works but `cmd >/DIR/X` silently produces no file (the redirect
+        code treats the name as a CWD leaf). Found while testing `cc`. Make the
+        redirect target go through FRESOLVE like other paths.
 - [ ] **Native toolchain follow-ups** (EDIT + ASM landed — see DONE). Remaining
       polish on the on-target assembler/editor, none blocking:
         - **Tools write to the flat root only.** EDIT `W` and ASM output go to
