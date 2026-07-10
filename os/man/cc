@@ -21,9 +21,10 @@ DESCRIPTION
     BACK-END-and-all compiler aimed at fitting the ~31.5 KB TPA, where a port
     of the optimizing p8cc could not.
 
-    THIS IS EARLY (v0.6). Supported so far:
+    THIS IS EARLY (v0.7). Supported so far:
 
-        int main() { <stmt>* }
+        program : func*
+        func  : int NAME ( [int P (, int P)*] ) { <stmt>* }
         stmt  : int NAME [ = <expr> ] ;   (declare a variable)
               | NAME = <expr> ;           (assign)
               | if ( <expr> ) <stmt> [ else <stmt> ]
@@ -34,11 +35,15 @@ DESCRIPTION
         expr  : add [ relop add ]         relop: <  <=  >  >=  ==  !=
         add   : term (('+' | '-') term)*
         term  : factor (('*' | '/' | '%') factor)*
-        factor: NUMBER | NAME | '(' <expr> ')'
+        factor: NUMBER | NAME | NAME( args ) | '(' <expr> ')'
 
-    Comparisons yield 0/1. Values are 16-bit `int` — arithmetic runs through a
-    memory accumulator (__ax) and runtime helpers (__add/__sub/__mul/__cmp/__div);
-    integer division, and '/' or '%' by 0 gives 0. putchar takes the low byte.
+    Multiple functions with parameters; execution starts at main(). Functions
+    return a value via `return`. NOTE: parameters and locals use STATIC storage
+    (not a stack), so recursion is not supported yet, and a function must not
+    appear in its own argument list. Comparisons yield 0/1. Values are 16-bit
+    `int` — arithmetic runs through a memory accumulator (__ax) and runtime
+    helpers (__add/__sub/__mul/__cmp/__div); integer division, and '/' or '%' by
+    0 gives 0. putchar takes the low byte.
     It grows one tested feature at a time (functions, char/pointers, ...) toward
     the p8cc subset. Redirect the output to a RELATIVE filename
     (cc src.c >out.asm) — an absolute redirect target is not yet supported by

@@ -9,19 +9,22 @@
 ; emits assembly text to stdout via SYS_PUTC, so `>OUT.ASM` captures it and the
 ; program's own I/O stays shell-redirectable.
 ;
-; EARLY (v0.6). Supported so far:
-;     int main() { <stmt>* }
+; EARLY (v0.7). Supported so far:
+;     program : func*    func : int NAME([int P,...]) { <stmt>* }
 ;     stmt : int NAME [= expr]; | NAME = expr; | if(e) s [else s] |
 ;            while(e) s | { s* } | putchar(e); | return [e];
 ;     expr : add [relop add]   add : term (('+'|'-') term)*
-;     term : factor (('*'|'/'|'%') factor)*  factor : NUMBER | NAME | '(' e ')'
-;     relop: < <= > >= == !=
+;     term : factor (('*'|'/'|'%') factor)*
+;     factor : NUMBER | NAME | NAME(args) | '(' e ')'   relop: < <= > >= == !=
 ; Values are 16-bit int. Codegen uses a MEMORY accumulator __ax (every
 ; expression's value) + a temp __t0; binary ops route through runtime helpers
 ; (__add/__sub/__mul/__cmp/__div) emitted at the end of the program. putchar
-; takes __ax's low byte. Verification is behavioural (compile on-target, run,
-; diff output against p8cc.py). Grows one tested feature at a time
-; (functions/params, char/pointers, ...) toward the p8cc subset.
+; takes __ax's low byte. FUNCTIONS: each is _f_NAME (call = JSR, return value in
+; __ax); params/locals use STATIC per-function slots (a global slot counter, so
+; NO recursion yet); the caller stores args into the callee's param slots before
+; the JSR. Verification is behavioural (compile on-target, run, diff output vs
+; p8cc.py). Grows one tested feature at a time (recursion/stack frame,
+; char/pointers, ...) toward the p8cc subset.
 ;
 ; Conventions: source is the BIOS read stream (no cursor pointer); output is
 ; SYS_PUTC. P3 is the system stack. Emit walks strings via EMP (survives any
@@ -73,6 +76,8 @@ START:  TPA3L
         STA  LBLCNT
         STA  USEMUL
         STA  USEDIV
+        STA  SLOTCNT
+        STA  FCNT
         JSR  COMPILE
         RTS
 USAGE:  LDP1 #MUSAGE
@@ -213,6 +218,8 @@ EM_LDIMM: LDP1 #MLDAI                ; __ax = CURV (16-bit literal)
 EM_LDVAR: LDP1 #MLDAV                ; __ax = V<SYMIDX>
         JSR  EMIT
         LDA  SYMIDX
+        LDB  SLOTBASE
+        ADD
         JSR  EMITNUM
         LDP1 #MNL
         JSR  EMIT
@@ -221,6 +228,8 @@ EM_LDVAR: LDP1 #MLDAV                ; __ax = V<SYMIDX>
         LDP1 #MLDAV
         JSR  EMIT
         LDA  SYMIDX
+        LDB  SLOTBASE
+        ADD
         JSR  EMITNUM
         LDP1 #MP1
         JSR  EMIT
@@ -232,6 +241,8 @@ EM_STVAR: LDP1 #MLDAX                ; V<LHSIDX> = __ax
         LDP1 #MSTAV
         JSR  EMIT
         LDA  LHSIDX
+        LDB  SLOTBASE
+        ADD
         JSR  EMITNUM
         LDP1 #MNL
         JSR  EMIT
@@ -240,6 +251,8 @@ EM_STVAR: LDP1 #MLDAX                ; V<LHSIDX> = __ax
         LDP1 #MSTAV
         JSR  EMIT
         LDA  LHSIDX
+        LDB  SLOTBASE
+        ADD
         JSR  EMITNUM
         LDP1 #MP1
         JSR  EMIT
@@ -487,30 +500,14 @@ ai_done: LDA #0
 COMPILE:
         LDP1 #MORG                   ; .org $7A00
         JSR  EMIT
-        JSR  ADVANCE
-        LDP1 #KW_INT                 ; int main ( ) {
-        JSR  EXPECTID
-        LDP1 #KW_MAIN
-        JSR  EXPECTID
-        LDA  #'('
-        JSR  EXPECTP
-        LDA  #')'
-        JSR  EXPECTP
-        LDA  #'{'
-        JSR  EXPECTP
-co_s:   LDA  CURK                    ; statements until '}'
-        LDB  #3
-        CMP
-        JNZ  co_stmt
-        LDA  CURV
-        LDB  #'}'
-        CMP
-        JZ   co_end
-co_stmt: JSR STMT
-        JMP  co_s
-co_end: LDP1 #MRTS                   ; fall-through return
+        LDP1 #MBOOT                  ; JSR _f_main ; RTS
         JSR  EMIT
-        LDP1 #MADD_DEF                ; 16-bit runtime helpers (always emitted)
+        JSR  ADVANCE
+co_s:   LDA  CURK                    ; a sequence of function definitions
+        JZ   co_end
+        JSR  FUNCDEF
+        JMP  co_s
+co_end: LDP1 #MADD_DEF                ; 16-bit runtime helpers (always emitted)
         JSR  EMIT
         LDP1 #MSUB_DEF
         JSR  EMIT
@@ -529,9 +526,9 @@ ce_nodiv: LDP1 #MTEMP                ; the codegen temp
         LDA  #0                      ; storage for each declared variable:
         STA  VITER                   ;   V0:  .fill 1  /  V1:  .fill 1  / ...
 ce_vl:  LDA  VITER
-        LDB  SYMCNT
+        LDB  SLOTCNT
         CMP
-        JC   ce_vd                   ; VITER >= SYMCNT -> done
+        JC   ce_vd                   ; VITER >= SLOTCNT -> done
         LDP1 #MVL                    ; "V"
         JSR  EMIT
         LDA  VITER
@@ -543,6 +540,228 @@ ce_vl:  LDA  VITER
         STA  VITER
         JMP  ce_vl
 ce_vd:  RTS
+
+; FUNCDEF: int NAME ( ) { <stmt>* }   (Stage A: no parameters yet)
+FUNCDEF: LDP1 #KW_INT
+        JSR  EXPECTID
+        JSR  CPCURFN                 ; CURFN <- function name (current id)
+        LDA  SLOTCNT                 ; this function's variables start here
+        STA  SLOTBASE
+        LDA  #0
+        STA  SYMCNT
+        JSR  ADVANCE                 ; past NAME
+        LDA  #'('
+        JSR  EXPECTP
+        LDA  #0
+        STA  NPARAMS                 ; parameters: int P, int P, ...
+        LDA  CURK
+        LDB  #3
+        CMP
+        JNZ  fp_loop
+        LDA  CURV
+        LDB  #')'
+        CMP
+        JZ   fp_done
+fp_loop: LDP1 #KW_INT
+        JSR  EXPECTID
+        JSR  SYMADD                  ; the param is a local variable (slots 0..n-1)
+        JSR  ADVANCE                 ; past the param name
+        LDA  NPARAMS
+        INC
+        STA  NPARAMS
+        LDA  CURK
+        LDB  #3
+        CMP
+        JNZ  fp_done
+        LDA  CURV
+        LDB  #','
+        CMP
+        JNZ  fp_done
+        JSR  ADVANCE                 ; past ','
+        JMP  fp_loop
+fp_done: LDA #')'
+        JSR  EXPECTP
+        JSR  FADD                    ; record CURFN -> NPARAMS, SLOTBASE
+        LDP1 #MFPFX                  ; "_f_" NAME ":"
+        JSR  EMIT
+        LDP1 #CURFN
+        JSR  EMIT
+        LDP1 #MCOLON
+        JSR  EMIT
+        LDA  #'{'
+        JSR  EXPECTP
+fd_s:   LDA  CURK
+        LDB  #3
+        CMP
+        JNZ  fd_st
+        LDA  CURV
+        LDB  #'}'
+        CMP
+        JZ   fd_end
+fd_st:  JSR  STMT
+        JMP  fd_s
+fd_end: LDA  #'}'
+        JSR  EXPECTP
+        LDP1 #MEPFX                  ; "_e_" NAME ":"  (return target)
+        JSR  EMIT
+        LDP1 #CURFN
+        JSR  EMIT
+        LDP1 #MCOLON
+        JSR  EMIT
+        LDP1 #MRTS
+        JSR  EMIT
+        LDA  SLOTBASE                ; advance the global slot counter
+        LDB  SYMCNT
+        ADD
+        STA  SLOTCNT
+        RTS
+; CPCURFN / CPIDNAME: copy the current id (TID) into CURFN / IDNAME.
+CPCURFN: LDA #<CURFN
+        TAP2L
+        LDA  #>CURFN
+        TAP2H
+        JMP  cpn_go
+CPIDNAME: LDA #<IDNAME
+        TAP2L
+        LDA  #>IDNAME
+        TAP2H
+cpn_go: LDA #<TID
+        TAP1L
+        LDA  #>TID
+        TAP1H
+cpn_l:  LDA  (P1)
+        STA  (P2)
+        JZ   cpn_d
+        INP1
+        INP2
+        JMP  cpn_l
+cpn_d:  RTS
+
+; FADD: record the current function -> FPOOL name, FNPAR[], FSLOT[].
+FADD:   LDA #<FPOOL
+        TAP1L
+        LDA  #>FPOOL
+        TAP1H
+        LDA  #0
+        STA  TMPC
+fa_e:   LDA  TMPC
+        LDB  FCNT
+        CMP
+        JC   fa_ap
+fa_sk:  LDA  (P1)
+        JZ   fa_np
+        INP1
+        JMP  fa_sk
+fa_np:  INP1
+        LDA  TMPC
+        INC
+        STA  TMPC
+        JMP  fa_e
+fa_ap:  LDA #<CURFN
+        TAP2L
+        LDA  #>CURFN
+        TAP2H
+fa_cp:  LDA  (P2)
+        STA  (P1)
+        JZ   fa_dn
+        INP1
+        INP2
+        JMP  fa_cp
+fa_dn:  LDA #<FNPAR
+        LDB  FCNT
+        ADD
+        TAP1L
+        LDA  #>FNPAR
+        JNC  fad1
+        INC
+fad1:   TAP1H
+        LDA  NPARAMS
+        STA  (P1)
+        LDA  #<FSLOT
+        LDB  FCNT
+        ADD
+        TAP1L
+        LDA  #>FSLOT
+        JNC  fad2
+        INC
+fad2:   TAP1H
+        LDA  SLOTBASE
+        STA  (P1)
+        LDA  FCNT
+        INC
+        STA  FCNT
+        RTS
+; FFIND_ID: look up IDNAME in the function table -> FFB (base slot), FOK.
+FFIND_ID: LDA #0
+        STA  FOK
+        LDA  #<FPOOL
+        TAP1L
+        LDA  #>FPOOL
+        TAP1H
+        LDA  #0
+        STA  FI
+ff_e:   LDA  FI
+        LDB  FCNT
+        CMP
+        JC   ff_no
+        LDA  #<IDNAME
+        TAP2L
+        LDA  #>IDNAME
+        TAP2H
+ff_c:   LDA  (P1)
+        STA  TMPC
+        LDA  (P2)
+        LDB  TMPC
+        CMP
+        JNZ  ff_nx
+        LDA  (P1)
+        JZ   ff_yes
+        INP1
+        INP2
+        JMP  ff_c
+ff_nx:  LDA  (P1)
+        JZ   ff_np
+        INP1
+        JMP  ff_nx
+ff_np:  INP1
+        LDA  FI
+        INC
+        STA  FI
+        JMP  ff_e
+ff_yes: LDA #<FSLOT
+        LDB  FI
+        ADD
+        TAP1L
+        LDA  #>FSLOT
+        JNC  ffy1
+        INC
+ffy1:   TAP1H
+        LDA  (P1)
+        STA  FFB
+        LDA  #1
+        STA  FOK
+        RTS
+ff_no:  LDA #0
+        STA  FOK
+        RTS
+; EM_STSLOT: store __ax into the absolute variable slot in ARGSLOT.
+EM_STSLOT: LDP1 #MLDAX
+        JSR  EMIT
+        LDP1 #MSTAV
+        JSR  EMIT
+        LDA  ARGSLOT
+        JSR  EMITNUM
+        LDP1 #MNL
+        JSR  EMIT
+        LDP1 #MLDAXH
+        JSR  EMIT
+        LDP1 #MSTAV
+        JSR  EMIT
+        LDA  ARGSLOT
+        JSR  EMITNUM
+        LDP1 #MP1
+        JSR  EMIT
+        RTS
 
 ; one statement
 STMT:   LDA  CURK
@@ -728,7 +947,11 @@ st_ret: JSR  ADVANCE
 sr_e:   JSR  GEXPR
 sr_semi: LDA #$3B
         JSR  EXPECTP
-        LDP1 #MRTS
+        LDP1 #MJMPE                  ; JMP _e_<CURFN>  (function epilogue)
+        JSR  EMIT
+        LDP1 #CURFN
+        JSR  EMIT
+        LDP1 #MNL
         JSR  EMIT
         RTS
 
@@ -857,11 +1080,74 @@ GFACT:  LDA  CURK
 gf_num: JSR  EM_LDIMM                ; __ax = the 16-bit literal
         JSR  ADVANCE
         RTS
-gf_id:  JSR  SYMFIND                 ; a variable read -> __ax = V<idx>
+gf_id:  JSR  CPIDNAME                ; save the id; it may be a call or a variable
+        JSR  SYMFIND                 ; variable candidate (from TID)
         LDA  SYMOK
+        STA  IDVAROK
+        LDA  SYMIDX
+        STA  IDVARIDX
+        JSR  ADVANCE                 ; past the id
+        LDA  CURK
+        LDB  #3
+        CMP
+        JNZ  gfi_var
+        LDA  CURV
+        LDB  #'('
+        CMP
+        JZ   gfi_call
+gfi_var: LDA IDVAROK
         JZ   gf_err
+        LDA  IDVARIDX
+        STA  SYMIDX
         JSR  EM_LDVAR
-        JSR  ADVANCE
+        RTS
+gfi_call: JSR FFIND_ID              ; FFB = the callee's param base slot
+        JSR  ADVANCE                 ; past '('
+        LDA  #0
+        STA  ARGI
+        LDA  CURK
+        LDB  #3
+        CMP
+        JNZ  ga_loop
+        LDA  CURV
+        LDB  #')'
+        CMP
+        JZ   ga_done
+ga_loop: LDA FFB                     ; save FFB/ARGI across GEXPR (may nest calls)
+        PHA
+        LDA  ARGI
+        PHA
+        JSR  GEXPR                   ; arg value -> __ax
+        PLA
+        STA  ARGI
+        PLA
+        STA  FFB
+        LDA  FFB                     ; store __ax into param slot FFB+ARGI
+        LDB  ARGI
+        ADD
+        STA  ARGSLOT
+        JSR  EM_STSLOT
+        LDA  ARGI
+        INC
+        STA  ARGI
+        LDA  CURK
+        LDB  #3
+        CMP
+        JNZ  ga_done
+        LDA  CURV
+        LDB  #','
+        CMP
+        JNZ  ga_done
+        JSR  ADVANCE                 ; past ','
+        JMP  ga_loop
+ga_done: LDA #')'
+        JSR  EXPECTP
+        LDP1 #MJSRF                  ; JSR _f_NAME   (result -> __ax)
+        JSR  EMIT
+        LDP1 #IDNAME
+        JSR  EMIT
+        LDP1 #MNL
+        JSR  EMIT
         RTS
 gf_err: RTS
 
@@ -1188,6 +1474,20 @@ MLDAV:  .byte $20,$20,$20,$20,$20,$20,$20,$20   ; prefix: "LDA V" + index + MNL
         .asciiz "LDA V"
 MSTAV:  .byte $20,$20,$20,$20,$20,$20,$20,$20   ; prefix: "STA V" + index + MNL
         .asciiz "STA V"
+MBOOT:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "JSR _f_main"
+        .byte LF
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "RTS"
+        .byte LF,0
+MFPFX:  .asciiz "_f_"
+MEPFX:  .asciiz "_e_"
+MJSRF:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .asciiz "JSR _f_"
+MJMPE:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .asciiz "JMP _e_"
+MCOLON: .ascii ":"
+        .byte LF,0
 MVL:    .asciiz "V"                             ; a variable's storage label prefix
 MVF:    .ascii ":   .word 0"
         .byte LF,0
@@ -1599,4 +1899,20 @@ USEMUL: .fill 1    ; 1 if the program uses '*' (emit the __mul8 helper)
 USEDIV: .fill 1    ; 1 if the program uses '/' or '%'
 MULT2:  .fill 2    ; lexer: NACC<<1 scratch for *10
 CARRY:  .fill 1    ; lexer: 16-bit add carry
+SLOTCNT: .fill 1   ; total variable slots across all functions (global)
+SLOTBASE: .fill 1  ; the current function's first slot
+CURFN:  .fill 16   ; current function name
+IDNAME: .fill 16   ; a factor's identifier (call name / var name)
+IDVAROK: .fill 1   ; gf_id: the id is a known variable
+IDVARIDX: .fill 1  ; gf_id: that variable's local index
+FCNT:   .fill 1    ; number of defined functions
+FI:     .fill 1    ; FFIND function index
+FFB:    .fill 1    ; FFIND result: the function's param base slot
+FOK:    .fill 1    ; FFIND: 1 if found
+NPARAMS: .fill 1   ; FUNCDEF: parameter count being parsed
+ARGI:   .fill 1    ; call: current argument index
+ARGSLOT: .fill 1   ; call: absolute slot for the current argument
+FNPAR:  .fill 16   ; per-function parameter count
+FSLOT:  .fill 16   ; per-function param base slot
+FPOOL:  .fill 128  ; packed function names
 SYMPOOL: .fill 256 ; packed NUL-terminated variable names

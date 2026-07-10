@@ -798,6 +798,17 @@ Last updated: 2026-07-08
             stale hardware Z); and a comparison's false path must actually STORE 0
             to `__ax` (the earlier `LDA #0` left `__ax` holding the right operand).
             Verified with values >255 (`sum(1..10)*10 = 550`) end to end.
+          * v0.7 — **functions with parameters**. Multiple `int NAME(int p,...)
+            { }` definitions; calls `NAME(args)` in expressions; `return e`
+            (value in `__ax`, jumps to the function's `_e_NAME` epilogue). Each
+            function is `_f_NAME`. Params/locals use STATIC per-function storage:
+            a global slot counter, each function's vars at `SLOTBASE..`; the
+            caller stores each arg into the callee's param slots (FFB+i, found via
+            a small function table) before the JSR. LIMITATION: static slots mean
+            no recursion, and a function must not appear in its own arg list — a
+            software stack frame (the p8cc `__csp`/`__fp` model) is the next step.
+            Verified: `add(a,b)`, `m(a,b)=a*b`, nested `inc(inc(63))`, and
+            `max(a,b)` with if/return, plus a `sum(n)` loop over its parameter.
         Debug notes for future selves: FGETB clobbers P1 (build identifiers via
         P2); variables must live in the program's own BSS, not a fixed high page
         (OS/SYS_PUTC scratch collides); FRESOLVE's scan needs FSDIRBUF off SBUF

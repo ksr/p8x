@@ -27,10 +27,10 @@ python3 $ROOT/tools/p8xfs.py boot   cc.img oscc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  cc.img /bin >/dev/null
 python3 $ROOT/tools/p8xfs.py put    cc.img cc.bin  --name /bin/cc.bin  --load 0x7A00 --exec 0x7A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    cc.img asm.bin --name /bin/asm.bin --load 0x7A00 --exec 0x7A00 >/dev/null
-# exercises: a while loop with '<=', a '*' inside the loop that accumulates a
-# 16-BIT sum (10*(1+..+10) = 550, > 255, so this only works with 16-bit ints),
-# then an if/else. sum-485 = 65 = 'A'; the if picks 'Y'. Expected output: AY.
-printf 'int main() { int s; int i; int x; s = 0; i = 1; while (i <= 10) { s = s + i * 10; i = i + 1; } putchar(s - 485); x = 5; if (x > 3) putchar(89); else putchar(90); }\n' > t.c
+# exercises FUNCTIONS with a parameter (sum(n) loops n times, a 16-bit sum since
+# 10*(1+..+10)=550 > 255), a second function with an if/return, and calls used in
+# expressions. sum(10)*10 - 485 = 65 = 'A'; cmp(5) = 'Y'. Expected output: AY.
+printf 'int sum(int n) { int s; int i; s = 0; i = 1; while (i <= n) { s = s + i; i = i + 1; } return s; } int cmp(int x) { if (x > 3) return 89; return 90; } int main() { putchar(sum(10) * 10 - 485); putchar(cmp(5)); }\n' > t.c
 python3 $ROOT/tools/p8xfs.py put cc.img t.c --name /t.c >/dev/null
 
 # all on-target: cc t.c >t.asm ; asm t.asm PROG.BIN ; PROG
