@@ -9,10 +9,10 @@
 ; emits assembly text to stdout via SYS_PUTC, so `>OUT.ASM` captures it and the
 ; program's own I/O stays shell-redirectable.
 ;
-; EARLY (v0.9). Supported so far:
+; EARLY (v0.10). Supported so far:
 ;     program : func*    func : int NAME([int P,...]) { <stmt>* }
 ;     stmt : int NAME [= expr]; | NAME = expr; | if(e) s [else s] |
-;            while(e) s | { s* } | putchar(e); | return [e];
+;            while(e) s | for([asg];[e];[asg]) s | { s* } | putchar(e); | return [e];
 ;     expr : land ('||' land)*   land : rel ('&&' rel)*   (short-circuit -> 0/1)
 ;     rel  : add [relop add]   add : term (('+'|'-') term)*
 ;     term : unary (('*'|'/'|'%') unary)*   unary : ('-'|'!') unary | factor
@@ -820,6 +820,10 @@ STMT:   LDA  CURK
         JSR  IDEQ
         LDA  TMPB
         JNZ  st_ret
+        LDP1 #KW_FOR
+        JSR  IDEQ
+        LDA  TMPB
+        JNZ  st_for
         JMP  st_assign               ; an identifier LHS -> assignment
 st_punct: LDA CURV
         LDB  #'{'
@@ -887,6 +891,86 @@ if_ne:  PLA                          ; la
         RTS
 
 ; while ( <expr> ) <stmt>
+; for ( [init] ; [cond] ; [post] ) <stmt>
+; single-pass jump threading:  init ; Ltop: cond?JZ Lend ; JMP Lbody ;
+;   Lpost: post ; JMP Ltop ; Lbody: <body> ; JMP Lpost ; Lend:
+st_for: JSR  ADVANCE                  ; past "for"
+        LDA  #'('
+        JSR  EXPECTP
+        JSR  NEWLBL                   ; Ltop (cond)
+        STA  LFT
+        JSR  NEWLBL                   ; Lbody
+        STA  LFB
+        JSR  NEWLBL                   ; Lpost
+        STA  LFP
+        JSR  NEWLBL                   ; Lend
+        STA  LFE
+        JSR  FORCLAUSE                 ; init (optional assignment)
+        LDA  #$3B                      ; ';'
+        JSR  EXPECTP
+        LDA  LFT                       ; Ltop:
+        JSR  EMITLBL
+        LDA  CURK                      ; empty condition?  (next token is ';')
+        LDB  #3
+        CMP
+        JNZ  sf_cond
+        LDA  CURV
+        LDB  #$3B
+        CMP
+        JZ   sf_nocond
+sf_cond: JSR  GEXPR                    ; cond -> __ax
+        JSR  EM_TESTAX
+        LDP1 #MJZ
+        LDA  LFE
+        JSR  EMITJ                     ; JZ Lend
+sf_nocond: LDA #$3B
+        JSR  EXPECTP
+        LDP1 #MJMP                     ; JMP Lbody
+        LDA  LFB
+        JSR  EMITJ
+        LDA  LFP                       ; Lpost:
+        JSR  EMITLBL
+        JSR  FORCLAUSE                  ; post (optional assignment)
+        LDA  #')'
+        JSR  EXPECTP
+        LDP1 #MJMP                     ; JMP Ltop
+        LDA  LFT
+        JSR  EMITJ
+        LDA  LFB                       ; Lbody:
+        JSR  EMITLBL
+        LDA  LFP                       ; save Lpost/Lend across the body (may nest)
+        PHA
+        LDA  LFE
+        PHA
+        JSR  STMT                      ; body
+        PLA
+        STA  LFE
+        PLA
+        STA  LFP
+        LDP1 #MJMP                     ; JMP Lpost
+        LDA  LFP
+        JSR  EMITJ
+        LDA  LFE                       ; Lend:
+        JSR  EMITLBL
+        RTS
+
+; FORCLAUSE: optional  NAME = expr  (for-loop init/post; consumes no terminator)
+FORCLAUSE: LDA CURK
+        LDB  #2                        ; an identifier LHS?
+        CMP
+        JNZ  fc_ret                    ; else empty clause
+        JSR  SYMFIND
+        LDA  SYMOK
+        JZ   fc_ret                    ; undeclared -> stop quietly
+        LDA  SYMIDX
+        STA  LHSIDX
+        JSR  ADVANCE                   ; past NAME
+        LDA  #'='
+        JSR  EXPECTP
+        JSR  GEXPR
+        JSR  EMITSTV                   ; STA V<LHSIDX>
+fc_ret: RTS
+
 st_while: JSR ADVANCE                ; past "while"
         JSR  NEWLBL                  ; ltop
         PHA
@@ -1619,6 +1703,7 @@ KW_RET:  .asciiz "return"
 KW_IF:   .asciiz "if"
 KW_WHILE: .asciiz "while"
 KW_ELSE: .asciiz "else"
+KW_FOR:  .asciiz "for"
 
 ; whole-line mnemonics end with LF (8-space indent + text + newline)
 MORG:   .byte $20,$20,$20,$20,$20,$20,$20,$20
@@ -2145,4 +2230,8 @@ LORT:   .fill 1    ; '||' short-circuit: Ltrue label
 LORE:   .fill 1    ; '||' end label
 LANDF:  .fill 1    ; '&&' short-circuit: Lfalse label
 LANDE:  .fill 1    ; '&&' end label
+LFT:    .fill 1    ; for-loop: cond (top) label
+LFB:    .fill 1    ; for-loop: body label
+LFP:    .fill 1    ; for-loop: post label
+LFE:    .fill 1    ; for-loop: end label
 SYMPOOL: .fill 256 ; packed NUL-terminated variable names

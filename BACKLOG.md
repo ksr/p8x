@@ -819,6 +819,13 @@ Last updated: 2026-07-08
             right operand is skipped when the result is already decided; the
             result is normalised to 0/1 via EM_AX0/EM_AX1. Verified incl. chained
             `2 && 3 && 1`, `if (x>0 && x<10)`, and short-circuit `0 && 9`.
+          * v0.10 — **`for (init; cond; post) body`** (`st_for`). init/post are
+            optional assignments (`FORCLAUSE`); cond is an optional expression
+            (empty = always true). Emitted single-pass with jump threading:
+            `init; Ltop: cond?JZ Lend; JMP Lbody; Lpost: post; JMP Ltop; Lbody:
+            body; JMP Lpost; Lend:`. The 4 labels are stack-saved across the body
+            so `for` nests. No `break`/`continue` yet. Verified incl. nested
+            loops, a block body, and a `for`-based factorial `fac(5)`.
         Debug notes for future selves: FGETB clobbers P1 (build identifiers via
         P2); variables must live in the program's own BSS, not a fixed high page
         (OS/SYS_PUTC scratch collides); FRESOLVE's scan needs FSDIRBUF off SBUF
