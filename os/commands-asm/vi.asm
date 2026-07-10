@@ -50,25 +50,15 @@ v_chk:  LDA (P2)
         TAP2L
         LDA v_arg+1
         TAP2H
-v_path: LDA #<path
-        TAP1L
+v_path: LDA v_arg                     ; abspath(path, v_arg) — CWD-prefix if relative
+        STA ap_a
+        LDA v_arg+1
+        STA ap_a+1
+        LDA #<path
+        STA ap_out
         LDA #>path
-        TAP1H
-vp_l:   LDA (P2)
-        LDB #0
-        CMP
-        JZ vp_d
-        LDB #13
-        CMP
-        JZ vp_d
-        LDB #32
-        CMP
-        JZ vp_d
-        STA (P1)+
-        INP2
-        JMP vp_l
-vp_d:   LDA #0
-        STA (P1)
+        STA ap_out+1
+        JSR abspath
         LDA #<path
         STA ld_p
         LDA #>path
@@ -1801,6 +1791,72 @@ dc_unk: LDA #<s_unknown
         JSR msg24
         RTS
 
+; abspath (mirrors os/commands/lib_apath.c): ap_out <- absolute path of the word
+; at ap_a; a relative word is prefixed with the CWD (SYS_GETCWD $4003), since
+; FRESOLVE starts at root. P2 = source cursor, P1 = dest. (Ported from dir.asm.)
+abspath:LDA #0
+        STA ap_n
+        LDA ap_a
+        TAP2L
+        LDA ap_a+1
+        TAP2H
+        LDA (P2)
+        LDB #'/'
+        CMP
+        JZ ab_abs
+        LDA ap_out
+        TAP1L
+        LDA ap_out+1
+        TAP1H
+        LDA #0
+        JSR $4003                    ; SYS_GETCWD -> out
+        LDA ap_out
+        TAP1L
+        LDA ap_out+1
+        TAP1H
+ab_sl:  LDA (P1)
+        LDB #0
+        CMP
+        JZ ab_sld
+        INP1
+        JMP ab_sl
+ab_sld: DEP1
+        LDA (P1)
+        INP1
+        LDB #'/'
+        CMP
+        JZ ab_setp
+        LDA #'/'
+        STA (P1)+
+        JMP ab_setp
+ab_abs: LDA ap_out
+        TAP1L
+        LDA ap_out+1
+        TAP1H
+ab_setp:LDA ap_a
+        TAP2L
+        LDA ap_a+1
+        TAP2H
+ab_cp:  LDA (P2)
+        LDB #0
+        CMP
+        JZ ab_dn
+        LDB #13
+        CMP
+        JZ ab_dn
+        LDB #32
+        CMP
+        JZ ab_dn
+        STA (P1)+
+        INP2
+        LDA ap_n
+        INC
+        STA ap_n
+        JMP ab_cp
+ab_dn:  LDA #0
+        STA (P1)
+        RTS
+
 ; ======================= strings / data ====================================
 u_use:  .asciiz "usage: VI name   modal VT100 screen editor (:wq to save+quit)"
 s_ins:  .asciiz "-- INSERT --  "
@@ -1813,6 +1869,9 @@ s_unknown:.asciiz "?unknown command"
 s_nowrite:.asciiz "no write since change (:q! to force)"
 
 v_arg:  .fill 2
+ap_out: .fill 2
+ap_a:   .fill 2
+ap_n:   .fill 1
 key:    .fill 1
 mode:   .fill 1
 dirty:  .fill 1

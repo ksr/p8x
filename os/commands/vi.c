@@ -31,6 +31,8 @@
  * BIOS: CONIN=$0100, CONOUT=$0103, FRESOLVE=$0133, FOPEN=$0124, FGETB=$0127,
  * FWOPEN=$012A, FPUTB=$012D, FCLOSE=$0130.  Read buffer at $FC00.
  */
+//#use apath   /* abspath(out, a): CWD-prefix a relative path (FRESOLVE starts at root) */
+
 char path[80];
 char line[8800];         /* 110 lines x 80 cols, flat; line i at line[i*80..] */
 int  nlines;             /* number of lines in the buffer (>=1) */
@@ -374,9 +376,7 @@ int main() {
         puts("usage: VI name   modal VT100 screen editor (:wq to save+quit)");
         return 0;
     }
-    i = 0;
-    while (a[i] != 0 && a[i] != 13 && a[i] != 32) { path[i] = a[i]; i = i + 1; }
-    path[i] = 0;
+    abspath(path, a);                            /* relative name -> CWD-prefixed */
 
     load(path);
     mode = 0; dirty = 0; done = 0; pend = 0; uop = 0; havepat = 0;

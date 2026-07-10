@@ -29,7 +29,8 @@ print a one-line usage summary and exit.
 > **Sources on-card.** `run.sh` also ships the command *sources* under
 > `/src/commands/c` (the `.c` files, incl. the shared `lib_*.c` helpers) and
 > `/src/commands/asm` (the hand-assembled `.asm` + shared includes, the latter
-> renamed `glob/globx/regex/stdin.inc` to fit P8XFS's 12-char names). So you can
+> renamed `glob/globx/regex/stdin.inc` to fit P8XFS's 12-char names; plus the
+> toolchain app sources `p8xcc.asm`/`p8xasm.asm`/`p8xedit.asm`). So you can
 > read — and, for C, `cc /src/commands/c/pwd.c >pwd.asm` — any command right on
 > the machine. The deprecated `cpp/lex/cc1` front end is **not** shipped (no
 > binary, no man page, no source), matching its deprecation everywhere else.

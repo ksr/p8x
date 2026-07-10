@@ -129,7 +129,8 @@ if [ ! -f "$disk" ]; then
     # /src: browsable command SOURCES, mirroring the repo layout so you can read
     # (and, for C, on-target `cc`-compile) any command right on the machine:
     #   /src/commands/c    — the C sources, incl. the shared lib_*.c helpers
-    #   /src/commands/asm  — the hand-assembled sources, incl. shared includes
+    #   /src/commands/asm  — the hand-assembled sources + shared includes, plus
+    #                        the toolchain app sources (p8xcc/p8xasm/p8xedit.asm)
     # The DEPRECATED front-end sources (cpp/lex/cc1.c) are NOT shipped, matching
     # the rest of that deprecation (no binary, no man page, and no source on-card).
     python3 "$root/tools/p8xfs.py" mkdir "$disk" /src >/dev/null
@@ -152,6 +153,14 @@ if [ ! -f "$disk" ]; then
         base=$(basename "$inc"); base=${base#lib_}
         python3 "$root/tools/p8xfs.py" put "$disk" "$inc" \
             --name "/src/commands/asm/$base" >/dev/null
+    done
+    # The on-target toolchain apps (cc, asm, edit) ship their binaries to /bin;
+    # their assembly SOURCES ride along here too — notably p8xcc.asm, the native
+    # C compiler written in assembly, next to p8xasm.asm (the assembler that turns
+    # its output into a binary) and p8xedit.asm.
+    for app in "$root"/apps/p8xcc.asm "$root"/apps/p8xasm.asm "$root"/apps/p8xedit.asm; do
+        python3 "$root/tools/p8xfs.py" put "$disk" "$app" \
+            --name "/src/commands/asm/$(basename "$app")" >/dev/null
     done
     printf 'hello from P8X/OS\n' > "$build/readme.txt"
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/readme.txt" --name /README.TXT >/dev/null
