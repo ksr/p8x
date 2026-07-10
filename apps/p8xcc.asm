@@ -9,10 +9,11 @@
 ; emits assembly text to stdout via SYS_PUTC, so `>OUT.ASM` captures it and the
 ; program's own I/O stays shell-redirectable.
 ;
-; EARLY (v0.26). Supported so far:  (type = int (16-bit) | char (1-byte elem))
+; EARLY (v0.27). Supported so far:  (type = int (16-bit) | char (1-byte elem))
 ;     program : (func | global)*   global : type [*]NAME [ [N] ] ;
 ;     func : type NAME([type [*]P,...]) { <stmt>* }
 ;     stmt : type [*]NAME [= expr]; | type NAME[N]; | NAME = expr; |
+;            NAME++; | NAME--; | NAME+=e; | NAME-=e; |
 ;            NAME[i] = expr; | *expr = expr; | expr; | if(e) s [else s] |
 ;            while(e) s | for([asg];[e];[asg]) s | break; | continue; |
 ;            { s* } | putchar(e); | return [e];
@@ -463,6 +464,102 @@ EM_POP: LDP1 #MPLA                   ; pop -> __t0 (16-bit)
         LDP1 #MSTAT
         JSR  EMIT
         RTS
+; EM_INCVAR / EM_DECVAR: V<SLOTBASE+SYMIDX> += / -= 1 (16-bit, in place; __ax kept)
+EM_VADDR: LDP1 #MSTAV                 ; helper: emit "STA V<slot>" (slot in A? no) -- unused
+        RTS
+EM_INCVAR: JSR NEWLBL
+        STA  INCLBL
+        LDP1 #MLDAV
+        JSR  EMIT
+        LDA  SYMIDX
+        LDB  SLOTBASE
+        ADD
+        JSR  EMITNUM
+        LDP1 #MNL
+        JSR  EMIT
+        LDP1 #MLDB1
+        JSR  EMIT
+        LDP1 #MADDOP
+        JSR  EMIT
+        LDP1 #MSTAV
+        JSR  EMIT
+        LDA  SYMIDX
+        LDB  SLOTBASE
+        ADD
+        JSR  EMITNUM
+        LDP1 #MNL
+        JSR  EMIT
+        LDP1 #MJNC
+        LDA  INCLBL
+        JSR  EMITJ
+        LDP1 #MLDAV
+        JSR  EMIT
+        LDA  SYMIDX
+        LDB  SLOTBASE
+        ADD
+        JSR  EMITNUM
+        LDP1 #MP1
+        JSR  EMIT
+        LDP1 #MINCOP
+        JSR  EMIT
+        LDP1 #MSTAV
+        JSR  EMIT
+        LDA  SYMIDX
+        LDB  SLOTBASE
+        ADD
+        JSR  EMITNUM
+        LDP1 #MP1
+        JSR  EMIT
+        LDA  INCLBL
+        JSR  EMITLBL
+        RTS
+EM_DECVAR: JSR NEWLBL
+        STA  INCLBL
+        LDP1 #MLDAV
+        JSR  EMIT
+        LDA  SYMIDX
+        LDB  SLOTBASE
+        ADD
+        JSR  EMITNUM
+        LDP1 #MNL
+        JSR  EMIT
+        LDP1 #MLDB1
+        JSR  EMIT
+        LDP1 #MSUBOP
+        JSR  EMIT
+        LDP1 #MSTAV
+        JSR  EMIT
+        LDA  SYMIDX
+        LDB  SLOTBASE
+        ADD
+        JSR  EMITNUM
+        LDP1 #MNL
+        JSR  EMIT
+        LDP1 #MJC
+        LDA  INCLBL
+        JSR  EMITJ
+        LDP1 #MLDAV
+        JSR  EMIT
+        LDA  SYMIDX
+        LDB  SLOTBASE
+        ADD
+        JSR  EMITNUM
+        LDP1 #MP1
+        JSR  EMIT
+        LDP1 #MDECOP
+        JSR  EMIT
+        LDP1 #MSTAV
+        JSR  EMIT
+        LDA  SYMIDX
+        LDB  SLOTBASE
+        ADD
+        JSR  EMITNUM
+        LDP1 #MP1
+        JSR  EMIT
+        LDA  INCLBL
+        JSR  EMITLBL
+        RTS
+
 ; EM_PUSHARG: emit "JSR __pusharg" (push __ax onto the runtime arg stack)
 EM_PUSHARG: LDP1 #MPUSHARG
         JSR  EMIT
@@ -941,6 +1038,25 @@ adv_cls: JSR ISDIG                    ; classify the first non-ws char
         LDB  #'|'
         CMP
         JZ   adv_2same
+        LDB  #'+'
+        CMP
+        JZ   adv_pm
+        LDB  #'-'
+        CMP
+        JZ   adv_pm
+        RTS
+adv_pm: JSR GC                       ; '+'/'-' : '+='/'-=' or '++'/'--' or single
+        JC   adv_pd
+        STA  TMPC
+        LDB  #'='
+        CMP
+        JZ   adv_2set
+        LDA  TMPC
+        LDB  CURV
+        CMP
+        JZ   adv_2sset
+        LDA  TMPC
+        JSR  UNGC
         RTS
 adv_ltgt: JSR GC                     ; '<'/'>' : peek for '=' (<=,>=) or doubling (<<,>>)
         JC   adv_pd
@@ -2061,12 +2177,50 @@ st_asg2:
         LDB  #'['
         CMP
         JZ   sa_arrstore
-sa_scalar: LDA #'='
+sa_scalar: LDA CUR2               ; ++ / -- / += / -= ?
+        JZ   sa_asg
+        LDA  CURV
+        LDB  #'+'
+        CMP
+        JZ   sa_cadd
+        LDA  CURV
+        LDB  #'-'
+        CMP
+        JZ   sa_csub
+sa_asg: LDA #'='
         JSR  EXPECTP
         JSR  GEXPR
         JSR  EMITSTV                 ; STA V<LHSIDX>
         LDA  #$3B
         JSR  EXPECTP
+        RTS
+sa_cadd: JSR SA_CLOAD               ; NAME += rhs
+        LDP1 #MADD
+        JSR  EMIT
+        JMP  sa_cst
+sa_csub: JSR SA_CLOAD               ; NAME -= rhs
+        LDP1 #MSUB
+        JSR  EMIT
+sa_cst: JSR EMITSTV
+        LDA  #$3B
+        JSR  EXPECTP
+        RTS
+; SA_CLOAD: __ax = old NAME (pushed), then RHS -> __ax, then __t0 = old NAME.
+;   rhs = 1 for ++/-- (CUR2 == CURV), or an expression for += / -= (CUR2 == '=').
+SA_CLOAD: LDA LHSIDX
+        STA  SYMIDX
+        JSR  EM_LDVAR
+        JSR  EM_PUSH
+        LDA  CUR2
+        LDB  #'='
+        CMP
+        JZ   scl_e
+        JSR  ADVANCE                 ; past ++ / --
+        JSR  EM_AX1                  ; rhs = 1
+        JMP  scl_p
+scl_e:  JSR ADVANCE                  ; past += / -=
+        JSR  GEXPR
+scl_p:  JSR EM_POP                   ; __t0 = old NAME
         RTS
 sa_arrstore: LDA LHSIDX
         STA  SYMIDX
@@ -2483,7 +2637,23 @@ GUNARY: LDA  CURK
         LDB  #3
         CMP
         JNZ  gu_fact
-        LDA  CUR2                    ; a single-char op only
+        LDA  CUR2                    ; prefix ++ / -- (CUR2 == CURV)
+        LDB  #'+'
+        CMP
+        JNZ  gu_np1
+        LDA  CURV
+        LDB  #'+'
+        CMP
+        JZ   gu_pinc
+gu_np1: LDA  CUR2
+        LDB  #'-'
+        CMP
+        JNZ  gu_np2
+        LDA  CURV
+        LDB  #'-'
+        CMP
+        JZ   gu_pdec
+gu_np2: LDA  CUR2                    ; other two-char op -> factor
         JNZ  gu_fact
         LDA  CURV
         LDB  #'-'
@@ -2502,6 +2672,22 @@ GUNARY: LDA  CURK
         CMP
         JZ   gu_deref
 gu_fact: JMP  GFACT
+gu_pinc: JSR ADVANCE
+        JSR  SYMFIND
+        LDA  SYMOK
+        JZ   gu_fact
+        JSR  EM_INCVAR
+        JSR  EM_LDVAR
+        JSR  ADVANCE
+        RTS
+gu_pdec: JSR ADVANCE
+        JSR  SYMFIND
+        LDA  SYMOK
+        JZ   gu_fact
+        JSR  EM_DECVAR
+        JSR  EM_LDVAR
+        JSR  ADVANCE
+        RTS
 gu_addr: LDA #1
         STA  SAWADDRG                 ; an argument took an address (pass-by-ref)
         JSR  ADVANCE                 ; past '&'
@@ -2651,6 +2837,16 @@ gf_id:  JSR  CPIDNAME                ; save the id; it may be a call or a variab
         LDB  #'['
         CMP
         JZ   gfi_index
+        LDA  CUR2                    ; NAME++ / NAME-- (postfix, simple var)
+        JZ   gfi_var
+        LDA  CURV
+        LDB  #'+'
+        CMP
+        JZ   gfi_pinc
+        LDA  CURV
+        LDB  #'-'
+        CMP
+        JZ   gfi_pdec
 gfi_var: LDA IDVAROK
         JZ   gf_err
         LDA  IDVARIDX
@@ -2664,6 +2860,22 @@ gfi_var: LDA IDVAROK
 gfv_arr: LDA #1
         STA  SAWADDRG                 ; array decay passes an address (pass-by-ref)
         JSR  EM_ADDROF
+        RTS
+gfi_pinc: LDA IDVAROK               ; NAME++ : value = old NAME, then NAME += 1
+        JZ   gf_err
+        LDA  IDVARIDX
+        STA  SYMIDX
+        JSR  EM_LDVAR                 ; __ax = old NAME
+        JSR  EM_INCVAR                ; NAME += 1 (in place, __ax kept)
+        JSR  ADVANCE
+        RTS
+gfi_pdec: LDA IDVAROK
+        JZ   gf_err
+        LDA  IDVARIDX
+        STA  SYMIDX
+        JSR  EM_LDVAR
+        JSR  EM_DECVAR
+        JSR  ADVANCE
         RTS
 gfi_index: LDA IDVARIDX               ; NAME[index] rvalue
         STA  SYMIDX
@@ -3728,6 +3940,21 @@ MSTAT:  .byte $20,$20,$20,$20,$20,$20,$20,$20
 MLDBT:  .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "LDB __t0"
         .byte LF,0
+MLDB1:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "LDB #1"
+        .byte LF,0
+MADDOP:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "ADD"
+        .byte LF,0
+MSUBOP:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "SUB"
+        .byte LF,0
+MINCOP:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "INC"
+        .byte LF,0
+MDECOP:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "DEC"
+        .byte LF,0
 MJSHL:  .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "JSR __shl"
         .byte LF,0
@@ -4467,6 +4694,7 @@ USESHL: .fill 1    ; 1 if << used
 USESHR: .fill 1    ; 1 if >> used
 TERNF:  .fill 1    ; ternary ?: false label
 TERNE:  .fill 1    ; ternary ?: end label
+INCLBL: .fill 1    ; ++/-- carry-skip label
 NLSLOT: .fill 1    ; current function's slot count (>= name count, arrays add N)
 SYMSLOT: .fill 48  ; per-name -> first slot (relative to SLOTBASE)
 SYMARR: .fill 256  ; per-slot: 1 if this slot is an array base

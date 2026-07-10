@@ -21,7 +21,7 @@ DESCRIPTION
     BACK-END-and-all compiler aimed at fitting the ~31.5 KB TPA, where a port
     of the optimizing p8cc could not.
 
-    THIS IS EARLY (v0.26). Supported so far:  (`int` is 16-bit; `char` is a
+    THIS IS EARLY (v0.27). Supported so far:  (`int` is 16-bit; `char` is a
     1-byte element type — see below.)
 
         program : (func | global)*
@@ -31,6 +31,7 @@ DESCRIPTION
               | type * NAME ;             (pointer variable)
               | type NAME [ N ] ;         (array of N ints)
               | NAME = <expr> ;           (assign)
+              | NAME++ ; | NAME-- ; | NAME += e ; | NAME -= e ; (scalar)
               | NAME [ <expr> ] = <expr> ; (array/pointer element store)
               | * <expr> = <expr> ;       (store through a pointer)
               | <expr> ;                  (expression stmt, e.g. a call)
@@ -50,7 +51,7 @@ DESCRIPTION
         sh    : add (('<<' | '>>') add)*  (shifts, variable count)
         add   : term (('+' | '-') term)*
         term  : unary (('*' | '/' | '%') unary)*
-        unary : ('-' | '!' | '*' | '&') unary | factor   (* deref, & address-of)
+        unary : ('-'|'!'|'*'|'&'|'++'|'--') unary | factor | NAME++ | NAME--
         factor: NUMBER | 0xHEX | 'c' | "string" | NAME | NAME[ <expr> ]
               | bios( ADDR, p1, a ) | NAME( args ) | '(' <expr> ')'
 
