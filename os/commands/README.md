@@ -26,6 +26,14 @@ print a one-line usage summary and exit.
 > `run.sh` installs them to a parallel `/bina`, so you can compare on-target:
 > `run /bina/grep.bin …` vs `grep …`.
 
+> **Sources on-card.** `run.sh` also ships the command *sources* under
+> `/src/commands/c` (the `.c` files, incl. the shared `lib_*.c` helpers) and
+> `/src/commands/asm` (the hand-assembled `.asm` + shared includes, the latter
+> renamed `glob/globx/regex/stdin.inc` to fit P8XFS's 12-char names). So you can
+> read — and, for C, `cc /src/commands/c/pwd.c >pwd.asm` — any command right on
+> the machine. The deprecated `cpp/lex/cc1` front end is **not** shipped (no
+> binary, no man page, no source), matching its deprecation everywhere else.
+
 > **Drives.** A second CF is **mounted at `/d1`** in one unified namespace, so
 > these commands are **drive-unaware**: an ordinary `/d1/...` path reaches drive 1
 > with no special syntax — `cat /d1/NOTES`, `dir /d1/bin`, `dir /d1/*.C`,

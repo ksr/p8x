@@ -10,7 +10,8 @@
 # Commands ship twice: /bin holds the p8cc-compiled builds (run by bare name via
 # PATH, e.g. `grep`), and /bina holds the hand-assembled counterparts from
 # os/commands-asm (run explicitly, e.g. `run /bina/grep.bin`) so the two can be
-# compared on-target.
+# compared on-target. Their SOURCES ride along under /src/commands/{c,asm} so you
+# can read (and, for C, `cc`-compile) any command right on the machine.
 #
 # Dual CompactFlash: a second data volume is attached as drive 1, mounted at
 # /d1 in the unified namespace (a small sample tree under /d1/DATA). So you can
@@ -124,6 +125,33 @@ if [ ! -f "$disk" ]; then
     for libc in "$root"/os/commands/lib_*.c; do
         python3 "$root/tools/p8xfs.py" put "$disk" "$libc" \
             --name "/lib/$(basename "$libc")" >/dev/null
+    done
+    # /src: browsable command SOURCES, mirroring the repo layout so you can read
+    # (and, for C, on-target `cc`-compile) any command right on the machine:
+    #   /src/commands/c    — the C sources, incl. the shared lib_*.c helpers
+    #   /src/commands/asm  — the hand-assembled sources, incl. shared includes
+    # The DEPRECATED front-end sources (cpp/lex/cc1.c) are NOT shipped, matching
+    # the rest of that deprecation (no binary, no man page, and no source on-card).
+    python3 "$root/tools/p8xfs.py" mkdir "$disk" /src >/dev/null
+    python3 "$root/tools/p8xfs.py" mkdir "$disk" /src/commands >/dev/null
+    python3 "$root/tools/p8xfs.py" mkdir "$disk" /src/commands/c >/dev/null
+    python3 "$root/tools/p8xfs.py" mkdir "$disk" /src/commands/asm >/dev/null
+    for cf in "$root"/os/commands/*.c; do
+        base=$(basename "$cf")
+        case "$base" in cpp.c|lex.c|cc1.c) continue;; esac   # DEPRECATED front end
+        python3 "$root/tools/p8xfs.py" put "$disk" "$cf" \
+            --name "/src/commands/c/$base" >/dev/null
+    done
+    for af in "$root"/os/commands-asm/*.asm; do
+        python3 "$root/tools/p8xfs.py" put "$disk" "$af" \
+            --name "/src/commands/asm/$(basename "$af")" >/dev/null
+    done
+    # Shared asm includes: drop the `lib_` prefix so the name fits P8XFS's 12-char
+    # field (browse-only — on-target asm has no ;#use; mkasm.sh splices host-side).
+    for inc in "$root"/os/commands-asm/lib_*.inc; do
+        base=$(basename "$inc"); base=${base#lib_}
+        python3 "$root/tools/p8xfs.py" put "$disk" "$inc" \
+            --name "/src/commands/asm/$base" >/dev/null
     done
     printf 'hello from P8X/OS\n' > "$build/readme.txt"
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/readme.txt" --name /README.TXT >/dev/null
