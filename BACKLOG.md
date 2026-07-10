@@ -792,13 +792,24 @@ Last updated: 2026-07-08
       table and may require nudging `VARTAB`/`PROG` placement). Also: names
       longer than 6 chars silently alias on their first 6 — could warn/error
       instead.
+- [ ] **BASIC: name the line on the other runtime errors too.** A runtime
+      `?SYNTAX ERROR` now reports its line (`?SYNTAX ERROR IN 100`) via the
+      `RUNNING` flag + `CURLINE`. Extend the same to `?UNDEF'D LINE` (`run_undef`)
+      and `?RETURN WITHOUT GOSUB` — both have their own handlers that print a
+      bare message and would benefit from `IN <line>`. Small, mechanical: reuse
+      the SYNERR pattern (check `RUNNING`, read the line number from `CURLINE`,
+      `PRDECU`).
 - [x] **BASIC string-valued variables** — DONE (2026-07-09). `A$`-style
       variables (16 fixed 32-byte slots), assignment, `+` concatenation,
       `=`/`<>`/`<`/`>`/`<=`/`>=` comparison in `IF`, `PRINT`/`INPUT` of strings,
-      and `LEN`/`ASC`/`CHR$`/`LEFT$`/`RIGHT$`/`MID$`. `STR$`/`VAL` deferred.
+      and `LEN`/`ASC`/`CHR$`/`LEFT$`/`RIGHT$`/`MID$`. `STR$`/`VAL` added later
+      (2026-07-09) — number↔string conversion, signed `VAL` stopping at the first
+      non-digit.
 - [x] **BASIC data files** — DONE (2026-07-09). One sequential channel over the
       BIOS byte streams: `OPEN name$ [FOR] OUTPUT|INPUT`, `PRINT#`, `INPUT#`,
-      `CLOSE` (root files; one value per CR record). No `EOF()` test yet.
+      `CLOSE` (root files; one value per CR record). `EOF(n)` added later
+      (2026-07-09) via a 1-byte read-ahead, so `IF EOF(1) THEN ...` ends a read
+      loop cleanly.
 - [x] **BASIC: check syntax on line entry, not just at RUN** — DONE (2026-07-09)
       via `CHECKLINE` (option (a): a lightweight structural validator — legal
       statement leader, balanced parens, terminated strings; forward line
