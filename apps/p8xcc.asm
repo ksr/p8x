@@ -9,8 +9,9 @@
 ; emits assembly text to stdout via SYS_PUTC, so `>OUT.ASM` captures it and the
 ; program's own I/O stays shell-redirectable.
 ;
-; EARLY (v0.19). Supported so far:  (type = int (16-bit) | char (1-byte elem))
-;     program : func*    func : type NAME([type [*]P,...]) { <stmt>* }
+; EARLY (v0.20). Supported so far:  (type = int (16-bit) | char (1-byte elem))
+;     program : (func | global)*   global : type [*]NAME [ [N] ] ;
+;     func : type NAME([type [*]P,...]) { <stmt>* }
 ;     stmt : type [*]NAME [= expr]; | type NAME[N]; | NAME = expr; |
 ;            NAME[i] = expr; | *expr = expr; | expr; | if(e) s [else s] |
 ;            while(e) s | for([asg];[e];[asg]) s | break; | continue; |
@@ -91,6 +92,7 @@ START:  TPA3L
         STA  USENOT
         STA  CURBRK
         STA  CURCONT
+        STA  GSYMCNT
         JSR  COMPILE
         RTS
 USAGE:  LDP1 #MUSAGE
@@ -326,11 +328,7 @@ EM_SCALE2: LDP1 #MLDAX
 
 ; ELEMADDR: SYMIDX = an array/pointer variable's slot; current token '['.
 ;   Emits code leaving the element ADDRESS in __ax.  Consumes  [ index ] .
-ELEMADDR: LDA SYMIDX
-        JSR  GSYMCHAR                ; ELCHAR = char-typed? (byte elements)
-        STA  ELCHAR
-        LDA  SYMIDX
-        JSR  GSYMARR
+ELEMADDR: LDA ELARR                 ; caller pre-set ELCHAR + ELARR
         JZ   ela_ptr
         JSR  EM_ADDROF               ; array: base = &V<slot>
         JMP  ela_base
@@ -911,16 +909,72 @@ ce_vl:  LDA  VITER
 ce_vd:  RTS
 
 ; FUNCDEF: int NAME ( ) { <stmt>* }   (Stage A: no parameters yet)
+; fd_glob: a top-level global declaration  type [*]NAME [ [N] ] ;
+fd_glob: JSR GSYMADD                 ; record CURFN @ slot SLOTCNT (char = DCLCHAR)
+        LDA  CURK
+        LDB  #3
+        CMP
+        JNZ  fdg_scal
+        LDA  CURV
+        LDB  #'['
+        CMP
+        JZ   fdg_arr
+fdg_scal: LDA SLOTCNT                ; scalar global: one word slot
+        INC
+        STA  SLOTCNT
+        JMP  fdg_end
+fdg_arr: JSR GSYMMARKARR             ; mark it an array
+        JSR  ADVANCE                 ; past '['
+        LDA  DCLCHAR
+        JZ   fdg_aint
+        LDA  CURV                    ; char array: ceil(N/2) word slots
+        INC
+        SHR
+        LDB  SLOTCNT
+        ADD
+        STA  SLOTCNT
+        JMP  fdg_asz
+fdg_aint: LDA SLOTCNT                ; int array: N word slots
+        LDB  CURV
+        ADD
+        STA  SLOTCNT
+fdg_asz: JSR ADVANCE                 ; past size
+        LDA  #']'
+        JSR  EXPECTP
+fdg_end: LDA #$3B
+        JSR  EXPECTP
+        RTS
+
 FUNCDEF: JSR EXPECTTYPE
-        JSR  CPCURFN                 ; CURFN <- function name (current id)
-        LDA  SLOTCNT                 ; this function's variables start here
+        LDA  ISCHARTYPE              ; remember char-ness for a possible global
+        STA  DCLCHAR
+fdt_star: LDA CURK                   ; skip pointer stars (ret-type / global ptr)
+        LDB  #3
+        CMP
+        JNZ  fdt_ns
+        LDA  CURV
+        LDB  #'*'
+        CMP
+        JNZ  fdt_ns
+        JSR  ADVANCE
+        JMP  fdt_star
+fdt_ns: JSR  CPCURFN                 ; CURFN <- NAME (function or global)
+        JSR  ADVANCE                 ; past NAME; peek what follows
+        LDA  CURK
+        LDB  #3
+        CMP
+        JNZ  fd_glob                 ; not '(' -> a global declaration
+        LDA  CURV
+        LDB  #'('
+        CMP
+        JNZ  fd_glob
+        LDA  SLOTCNT                 ; ---- function definition ----
         STA  SLOTBASE
         LDA  #0
         STA  SYMCNT
         STA  NLSLOT
-        JSR  ADVANCE                 ; past NAME
         LDA  #'('
-        JSR  EXPECTP
+        JSR  EXPECTP                 ; consume '(' (current)
         LDA  #0
         STA  NPARAMS                 ; parameters: int P, int P, ...
         LDA  CURK
@@ -1525,6 +1579,10 @@ st_exprstmt: JSR GEXPR
 st_asg2:
         LDA  SYMIDX
         STA  LHSIDX
+        LDA  SYMRCH
+        STA  LHSCH
+        LDA  SYMRAR
+        STA  LHSAR
         JSR  ADVANCE                 ; past NAME
         LDA  CURK                    ; NAME[index] = e ?
         LDB  #3
@@ -1543,6 +1601,10 @@ sa_scalar: LDA #'='
         RTS
 sa_arrstore: LDA LHSIDX
         STA  SYMIDX
+        LDA  LHSCH
+        STA  ELCHAR
+        LDA  LHSAR
+        STA  ELARR
         JSR  ELEMADDR                ; __ax = element address (consumes [i])
         LDA  ELCHAR                  ; save char-ness across the RHS parse
         PHA
@@ -1825,6 +1887,10 @@ gu_addr: LDA #1
         JZ   gu_ad_e
         LDA  SYMIDX
         STA  IDVARIDX                 ; save the slot across ADVANCE
+        LDA  SYMRCH
+        STA  IDVARCH
+        LDA  SYMRAR
+        STA  IDVARAR
         JSR  ADVANCE                  ; past NAME
         LDA  CURK                     ; &NAME[i] ?
         LDB  #3
@@ -1840,6 +1906,10 @@ gu_ad_pl: LDA IDVARIDX                ; &NAME  -> address of the variable
         RTS
 gu_ad_ix: LDA IDVARIDX                ; &NAME[i] -> address of the element
         STA  SYMIDX
+        LDA  IDVARCH
+        STA  ELCHAR
+        LDA  IDVARAR
+        STA  ELARR
         JSR  ELEMADDR
         RTS
 gu_ad_e: RTS
@@ -1941,6 +2011,10 @@ gf_id:  JSR  CPIDNAME                ; save the id; it may be a call or a variab
         STA  IDVAROK
         LDA  SYMIDX
         STA  IDVARIDX
+        LDA  SYMRCH
+        STA  IDVARCH
+        LDA  SYMRAR
+        STA  IDVARAR
         JSR  ADVANCE                 ; past the id
         LDA  CURK
         LDB  #3
@@ -1958,13 +2032,17 @@ gfi_var: LDA IDVAROK
         JZ   gf_err
         LDA  IDVARIDX
         STA  SYMIDX
-        JSR  GSYMCHAR                ; remember if this value is char-typed
+        LDA  IDVARCH
         STA  EXPRCHAR
         JSR  EM_LDVAR
         RTS
 gfi_index: LDA IDVARIDX               ; NAME[index] rvalue
         STA  SYMIDX
-        JSR  ELEMADDR                 ; __ax = element address; ELCHAR set
+        LDA  IDVARCH
+        STA  ELCHAR
+        LDA  IDVARAR
+        STA  ELARR
+        JSR  ELEMADDR                 ; __ax = element address
         LDA  ELCHAR
         JNZ  gfx_b
         JSR  EM_LOADW
@@ -2190,10 +2268,13 @@ sf_yes: LDA  #1
         LDA  SYMIDX                   ; SYMIDX walked as the name index; map -> slot
         JSR  GSYMSLOT
         STA  SYMIDX
+        JSR  GSYMCHAR                 ; resolve the char/array flags for the caller
+        STA  SYMRCH
+        LDA  SYMIDX
+        JSR  GSYMARR
+        STA  SYMRAR
         RTS
-sf_no:  LDA  #0
-        STA  SYMOK
-        RTS
+sf_no:  JMP  GSYMFIND                 ; not a local -> try the globals
 
 ; SYMADD: append the current id (TID) to SYMPOOL; SYMIDX = its (new) index.
 SYMADD: LDA #<SYMPOOL
@@ -2252,6 +2333,161 @@ sad2:   TAP1H
         LDA  SYMCNT
         INC
         STA  SYMCNT
+        RTS
+
+; GSYMFIND: search the GLOBAL table for TID. Sets SYMOK; on a hit, SYMIDX =
+;   (global slot - SLOTBASE) so V<SLOTBASE+SYMIDX> lands on the fixed slot, and
+;   SYMRCH/SYMRAR carry its char/array flags.
+GSYMFIND: LDA #<GSYMPOOL
+        TAP1L
+        LDA  #>GSYMPOOL
+        TAP1H
+        LDA  #0
+        STA  TMPB
+gsf_e:  LDA  TMPB
+        LDB  GSYMCNT
+        CMP
+        JC   gsf_no
+        LDA  #<TID
+        TAP2L
+        LDA  #>TID
+        TAP2H
+gsf_c:  LDA  (P1)
+        STA  TMPC
+        LDA  (P2)
+        LDB  TMPC
+        CMP
+        JNZ  gsf_nx
+        LDA  (P1)
+        JZ   gsf_yes
+        INP1
+        INP2
+        JMP  gsf_c
+gsf_nx: LDA  (P1)
+        JZ   gsf_np
+        INP1
+        JMP  gsf_nx
+gsf_np: INP1
+        LDA  TMPB
+        INC
+        STA  TMPB
+        JMP  gsf_e
+gsf_yes: LDA #1
+        STA  SYMOK
+        LDA  #<GVSLOT
+        LDB  TMPB
+        ADD
+        TAP1L
+        LDA  #>GVSLOT
+        JNC  gsy1
+        INC
+gsy1:   TAP1H
+        LDA  (P1)
+        LDB  SLOTBASE
+        SUB
+        STA  SYMIDX
+        LDA  #<GSYMCH
+        LDB  TMPB
+        ADD
+        TAP1L
+        LDA  #>GSYMCH
+        JNC  gsy2
+        INC
+gsy2:   TAP1H
+        LDA  (P1)
+        STA  SYMRCH
+        LDA  #<GSYMAR
+        LDB  TMPB
+        ADD
+        TAP1L
+        LDA  #>GSYMAR
+        JNC  gsy3
+        INC
+gsy3:   TAP1H
+        LDA  (P1)
+        STA  SYMRAR
+        RTS
+gsf_no: LDA #0
+        STA  SYMOK
+        RTS
+
+; GSYMADD: append CURFN to the global table at slot SLOTCNT (char = DCLCHAR).
+GSYMADD: LDA #<GSYMPOOL
+        TAP1L
+        LDA  #>GSYMPOOL
+        TAP1H
+        LDA  #0
+        STA  TMPB
+gA_e:   LDA  TMPB
+        LDB  GSYMCNT
+        CMP
+        JC   gA_ap
+gA_sk:  LDA  (P1)
+        JZ   gA_np
+        INP1
+        JMP  gA_sk
+gA_np:  INP1
+        LDA  TMPB
+        INC
+        STA  TMPB
+        JMP  gA_e
+gA_ap:  LDA #<CURFN
+        TAP2L
+        LDA  #>CURFN
+        TAP2H
+gA_cp:  LDA  (P2)
+        STA  (P1)
+        JZ   gA_dn
+        INP1
+        INP2
+        JMP  gA_cp
+gA_dn:  LDA #<GVSLOT
+        LDB  GSYMCNT
+        ADD
+        TAP1L
+        LDA  #>GVSLOT
+        JNC  gAd1
+        INC
+gAd1:   TAP1H
+        LDA  SLOTCNT
+        STA  (P1)
+        LDA  #<GSYMCH
+        LDB  GSYMCNT
+        ADD
+        TAP1L
+        LDA  #>GSYMCH
+        JNC  gAd2
+        INC
+gAd2:   TAP1H
+        LDA  DCLCHAR
+        STA  (P1)
+        LDA  #<GSYMAR
+        LDB  GSYMCNT
+        ADD
+        TAP1L
+        LDA  #>GSYMAR
+        JNC  gAd3
+        INC
+gAd3:   TAP1H
+        LDA  #0
+        STA  (P1)
+        LDA  GSYMCNT
+        INC
+        STA  GSYMCNT
+        RTS
+
+; GSYMMARKARR: mark the most-recently-added global (GSYMCNT-1) as an array.
+GSYMMARKARR: LDA #<GSYMAR
+        LDB  GSYMCNT
+        ADD
+        TAP1L
+        LDA  #>GSYMAR
+        JNC  gma1
+        INC
+gma1:   TAP1H
+        DEP1
+        LDA  #1
+        STA  (P1)
         RTS
 
 ; GSYMSLOT (A = name index) -> A = that name's slot (SYMSLOT[A])
@@ -3175,6 +3411,18 @@ VITER2: .fill 1    ; EM_PUSHSLOT/EM_POPSLOT: slot number being emitted
 VITER3: .fill 1    ; EM_SAVESLOTS/EM_RESTSLOTS: slot loop counter
 SELFREC: .fill 1   ; (unused since frames) was: direct self-recursion flag
 SAWADDRG: .fill 1   ; 1 if an argument in the current call took an address
+GSYMPOOL: .fill 256 ; packed global variable names
+GVSLOT: .fill 48   ; per-global: its (absolute) storage slot
+GSYMCH: .fill 48    ; per-global: char-typed flag
+GSYMAR: .fill 48    ; per-global: array flag
+GSYMCNT: .fill 1    ; number of globals
+SYMRCH: .fill 1     ; SYMFIND/GSYMFIND result: char flag
+SYMRAR: .fill 1     ; SYMFIND/GSYMFIND result: array flag
+IDVARCH: .fill 1    ; gf_id: the variable's char flag
+IDVARAR: .fill 1    ; gf_id: the variable's array flag
+ELARR: .fill 1      ; ELEMADDR: 1 if the indexed base is an array (else pointer)
+LHSCH: .fill 1      ; assignment target char flag
+LHSAR: .fill 1      ; assignment target array flag
 NLSLOT: .fill 1    ; current function's slot count (>= name count, arrays add N)
 SYMSLOT: .fill 48  ; per-name -> first slot (relative to SLOTBASE)
 SYMARR: .fill 256  ; per-slot: 1 if this slot is an array base

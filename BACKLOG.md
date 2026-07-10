@@ -915,6 +915,19 @@ Last updated: 2026-07-08
             supersedes the frame-pointer design above (kept for reference).
             Verified: even/odd mutual recursion, plus fact/fib/pass-by-ref/arrays/
             char/strings all still green; os_cc_test uses mutual recursion.
+          * v0.20 — **file-scope globals** (toward compiling the C command
+            sources). A top-level `type [*]NAME [ [N] ];` is a global: the
+            FUNCDEF entry now peeks after the name ('(' = function, else global)
+            and records it in a separate global table (GSYMPOOL/GVSLOT/GSYMCH/
+            GSYMAR). Globals reuse the static V<slot> storage (zero-init via
+            `.word 0`, which is exactly C's rule and what every command global
+            relies on -- none use initializers). SYMFIND now falls through to
+            GSYMFIND on a local miss and returns SYMIDX = gslot-SLOTBASE (so
+            V<SLOTBASE+SYMIDX> hits the fixed slot); char/array flags are resolved
+            into SYMRCH/SYMRAR and threaded (IDVARCH/IDVARAR/ELARR) so both locals
+            and globals deliver them uniformly. Verified: scalar globals shared
+            across functions, multiple globals, global int/char arrays, &global
+            pass-by-ref, and a global char* to a string literal. Regression green.
           * v0.18 — **comments**: the lexer skips `//` line comments and
             `/* ... */` block comments in its whitespace phase (a leading `/`
             peeks ahead; a lone `/` is still the divide operator). Verified line,
