@@ -1,3 +1,8 @@
+DEPRECATED
+    The self-hosted front end (cpp | lex | cc1) is superseded by cc(1), which
+    compiles C entirely on-target. This program is kept in the repo but is no
+    longer built or shipped on the disk image.
+
 NAME
     cc1 - C parser (token stream -> AST)
 

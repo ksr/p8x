@@ -1,3 +1,6 @@
+/* DEPRECATED (kept for reference, NOT built/shipped): the self-hosted C front
+   end (cpp | lex | cc1) is superseded by `cc` (apps/p8xcc.asm), which compiles
+   entirely on-target. See os/run.sh and BACKLOG.md. */
 /* cc1.c - the parser: pass 3 of the on-target C toolchain (cpp | lex | cc1 | cg).
  *
  *     cc1 src.tok >src.ast

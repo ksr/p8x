@@ -1,3 +1,6 @@
+/* DEPRECATED (kept for reference, NOT built/shipped): the self-hosted C front
+   end (cpp | lex | cc1) is superseded by `cc` (apps/p8xcc.asm), which compiles
+   entirely on-target. See os/run.sh and BACKLOG.md. */
 /* cpp.c — the //#use source preprocessor: pass 1 of the on-target C toolchain.
  *
  *     CPP src.c >out.c          splice //#use libs, combined source to stdout

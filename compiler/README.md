@@ -65,7 +65,16 @@ There are two implementations of the same compiler:
   prototypes for mutual recursion, globals/structs before reference); `p8cc.py`
   is two-pass and more lenient. Both accept the same subset otherwise.
 
-## On-target front end (`cpp | lex | cc1`)
+## On-target front end (`cpp | lex | cc1`) — DEPRECATED
+
+> **Superseded by `cc` (`apps/p8xcc.asm`).** This split front end (path A) ran
+> the front half on-target while code generation stayed on the host. The
+> from-scratch native compiler `cc` now does the **whole** compile on the P8X, so
+> `cpp | lex | cc1` are **no longer built or shipped** onto the disk image. Their
+> sources (`os/commands/{cpp,lex,cc1}.c`) and man pages are kept in the repo for
+> reference; the `os_cpp`/`os_lex`/`os_cc1` tests are out of the default suite
+> but still runnable. (The `//#use` splicing `cpp` did also lives host-side as
+> `tools/clib.py`.) The rest of this section is retained for historical context.
 
 The compiler's front half runs natively on the P8X as three `/bin` programs, each
 small enough for the TPA. They chain through temp files, mirroring an early Unix
