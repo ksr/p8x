@@ -766,6 +766,59 @@ Last updated: 2026-07-08
         Works end to end (`os_cc_test`, behavioural: compile -> asm -> run ->
         diff output). Codegen is a hardware-stack machine + one memory temp
         (`__t0`), since the ISA has no A<->B move.
+
+        **cc — KNOWN LIMITATIONS / SHORTCOMINGS (as of v0.28).** The native cc
+        covers the language needs of every shipped OS command and hand-written C
+        in the same subset, but it is deliberately minimal. Gaps a future version
+        could close (roughly by cost):
+
+        Types & values
+          * `int` is 16-bit; there is NO `unsigned`, `long`, `short`, or float —
+            all arithmetic and comparison is 16-bit signed-ish (comparisons via
+            `__cmp` use C/Z; no true signed `<` for negatives).
+          * A scalar `char` is stored in a WORD; the 1-byte width only applies to
+            char arrays and `char*` deref/index.
+          * No `typedef`, `enum`, `union`, `const`, `static`, `sizeof`.
+
+        Structs
+          * Member names must be UNIQUE program-wide (single global member table,
+            no per-variable tag). No struct parameters, struct returns, struct
+            assignment (`a = b`), nested structs, or arrays of structs.
+
+        Pointers & arrays
+          * Pointer arithmetic does NOT scale by element size in general (`p + 1`
+            adds 1, not `sizeof *p`); only `[]` scales (by 1 for char, 2 for int).
+            So a `char*` walks byte-wise (correct) but `int* + 1` is off unless
+            you write `&p[1]`.
+          * No multi-dimensional arrays (`a[i][j]`); no arrays of structs.
+          * `++`/`--` work on scalar variables only — not `arr[i]++` or `*p++`.
+
+        Functions & calls
+          * Recursion uses caller-saved STATIC slots, not a real stack frame
+            (the __csp/__fp frame design is captured below but superseded). So:
+            mutual recursion needs a forward prototype; taking `&local` across a
+            DIRECT recursive call is undefined; and within one call's argument
+            list a later argument must not read a parameter an earlier one
+            overwrote.
+          * A program must not redefine a builtin name (putchar/puts/getchar/
+            peek/poke/argstr/bios) — those are intercepted unconditionally.
+          * No function pointers; no variadic functions; no struct-by-value.
+          * `bios(ADDR, ...)`'s ADDR must be a compile-time constant.
+
+        Preprocessor & misc
+          * The only preprocessor directive is `//#use NAME` (splices
+            /lib/lib_NAME.c). No `#define`, `#include`, `#if`, or macros. No
+            escape decoding beyond \n \t \r \0 \\ \' \" in literals.
+          * No `switch`, `do`/`while`, `goto`, comma operator, or compound
+            literals; no aggregate/initializer lists; globals are zero-init only
+            (no `int x = 5;` at file scope).
+          * Single pass: a global used before its declaration won't resolve.
+          * A function's total slot count (locals+params, incl. arrays/structs)
+            must stay < 256; the //#use nesting depth is bounded (5) and the
+            per-program arg-stack buffer is 2 KB (recursion depth).
+          * Output redirect target must be a RELATIVE filename (an OS shell bug,
+            not the compiler).
+
           * v0.1 — `int main() { putchar(<expr>); | return [<expr>]; }`, `+`/`-`,
             8-bit ints.
           * v0.2 — **variables**: `int NAME [= expr];` declarations, `NAME = expr;`
