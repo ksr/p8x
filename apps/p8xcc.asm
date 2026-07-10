@@ -67,6 +67,7 @@ START:  TPA3L
         STA  PBF
         STA  SYMCNT
         STA  LBLCNT
+        STA  USEMUL
         JSR  COMPILE
         RTS
 USAGE:  LDP1 #MUSAGE
@@ -380,7 +381,11 @@ co_stmt: JSR STMT
         JMP  co_s
 co_end: LDP1 #MRTS                   ; fall-through return
         JSR  EMIT
-        LDP1 #MTEMP                  ; the codegen temp
+        LDA  USEMUL                  ; the multiply helper, if the program used '*'
+        JZ   ce_nomul
+        LDP1 #MMULDEF
+        JSR  EMIT
+ce_nomul: LDP1 #MTEMP                ; the codegen temp
         JSR  EMIT
         LDA  #0                      ; storage for each declared variable:
         STA  VITER                   ;   V0:  .fill 1  /  V1:  .fill 1  / ...
@@ -621,6 +626,31 @@ GEXPR:  JSR  GADD
         JSR  EMITCMP                 ; emit the 0/1 sequence for RELOP
 grx:    RTS
 
+; term: factor (('*') factor)*   (8-bit multiply via the __mul8 runtime helper)
+GTERM:  JSR  GFACT
+gt_l:   LDA  CURK
+        LDB  #3
+        CMP
+        JNZ  gt_d
+        LDA  CURV
+        LDB  #'*'
+        CMP
+        JNZ  gt_d
+        JSR  ADVANCE
+        LDA  #1
+        STA  USEMUL
+        LDP1 #MPHA                   ; push the left factor
+        JSR  EMIT
+        JSR  GFACT                   ; right factor -> A
+        LDP1 #MSTAT                  ; STA __t0   (right)
+        JSR  EMIT
+        LDP1 #MPLA                   ; PLA        (left)
+        JSR  EMIT
+        LDP1 #MMUL                   ; JSR __mul8 -> A = left * right
+        JSR  EMIT
+        JMP  gt_l
+gt_d:   RTS
+
 ; additive: term (('+'|'-') term)*
 GADD:   JSR  GTERM
 ge_l:   LDA  CURK
@@ -663,10 +693,6 @@ ge_sub: JSR  ADVANCE
         JSR  EMIT
         JMP  ge_l
 ge_d:   RTS
-
-; term: (v0.1) just a factor
-GTERM:  JSR  GFACT
-        RTS
 
 ; factor: NUMBER | IDENT | '(' expr ')'
 GFACT:  LDA  CURK
@@ -1069,6 +1095,46 @@ MRTS:   .byte $20,$20,$20,$20,$20,$20,$20,$20
 MCMP:   .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "CMP"
         .byte LF,0
+MMUL:   .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "JSR __mul8"
+        .byte LF,0
+; the 8-bit multiply runtime helper (A * __t0 -> A), emitted once if '*' is used
+MMULDEF: .ascii "__mul8: STA __m0"
+        .byte LF
+        .ascii "        LDA #0"
+        .byte LF
+        .ascii "        STA __m1"
+        .byte LF
+        .ascii "__mml:  LDA __t0"
+        .byte LF
+        .ascii "        JZ __mmd"
+        .byte LF
+        .ascii "        LDA __m1"
+        .byte LF
+        .ascii "        LDB __m0"
+        .byte LF
+        .ascii "        ADD"
+        .byte LF
+        .ascii "        STA __m1"
+        .byte LF
+        .ascii "        LDA __t0"
+        .byte LF
+        .ascii "        LDB #1"
+        .byte LF
+        .ascii "        SUB"
+        .byte LF
+        .ascii "        STA __t0"
+        .byte LF
+        .ascii "        JMP __mml"
+        .byte LF
+        .ascii "__mmd:  LDA __m1"
+        .byte LF
+        .ascii "        RTS"
+        .byte LF
+        .ascii "__m0:   .fill 1"
+        .byte LF
+        .ascii "__m1:   .fill 1"
+        .byte LF,0
 MLDA0:  .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "LDA #0"
         .byte LF,0
@@ -1123,4 +1189,5 @@ LBLA:   .fill 1    ; comparison branch-target label (EMITCMP)
 LBLB:   .fill 1    ; comparison end label (EMITCMP)
 JLBL:   .fill 1    ; label number scratch for EMITJ/EMITLBL
 IFTMP:  .fill 1    ; a label held briefly (non-recursively) in if/while
+USEMUL: .fill 1    ; 1 if the program uses '*' (emit the __mul8 helper)
 SYMPOOL: .fill 256 ; packed NUL-terminated variable names

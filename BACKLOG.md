@@ -778,6 +778,11 @@ Last updated: 2026-07-08
             the hardware stack across the recursive body. GOTCHA fixed: a compare
             must branch on the CMP flags BEFORE any LDA — LDA clobbers Z (not C),
             which silently broke the Z-based ops (`== != > <=`).
+          * v0.4 — **`*` multiply** (8-bit), completing the multiplicative
+            precedence level. Introduces emitting a runtime helper on demand:
+            when the program uses `*`, cc appends an `__mul8` routine (repeated
+            addition) after the code; a `USEMUL` flag gates it. This "emit a
+            helper if used" pattern is the groundwork for 16-bit arithmetic.
         Debug notes for future selves: FGETB clobbers P1 (build identifiers via
         P2); variables must live in the program's own BSS, not a fixed high page
         (OS/SYS_PUTC scratch collides); FRESOLVE's scan needs FSDIRBUF off SBUF
