@@ -55,6 +55,9 @@ FUNCTIONS
     LEFT$(s$,n)     first n characters
     RIGHT$(s$,n)    last n characters
     MID$(s$,i[,n])  n chars from position i (1-based); to end if n omitted
+    STR$(x)         the decimal text of x (STR$(-7) is "-7")
+    VAL(s$)         number parsed from s$ (signed; stops at first non-digit)
+    EOF(n)          1 if the input file is at end (or not open), else 0
     Counts clamp to the source, so LEFT$("HI",9) is just "HI".
 
 STATEMENTS
@@ -77,9 +80,9 @@ DATA FILES
         PRINT# expr                       write one value + newline
         INPUT# var                        read one record (number or A$)
         CLOSE                             commit/close
-    One value per record; there is no end-of-file test yet, so write a
-    known count first or use a sentinel. Opening a missing file for INPUT
-    prints ?No file.
+        EOF(n)                            1 at end of the input file, else 0
+    One value per record; EOF(n) ends a read loop (IF EOF(1) THEN ...).
+    Opening a missing file for INPUT prints ?No file.
 
 COMMANDS
     RUN             execute the stored program
@@ -109,9 +112,8 @@ ERRORS
 
 LIMITS
     Integers only (no floating point). FOR loops nest 2 deep, GOSUB 3
-    deep. Data files: one channel, one value per record, no EOF() yet. No
-    STR$/VAL (number<->string beyond CHR$/ASC), DATA/READ, DIM, DEF FN,
-    ON..GOTO, or WHILE.
+    deep. Data files: one channel, one value per record (EOF(n) tests for
+    end). No DATA/READ, DIM, DEF FN, ON..GOTO, or WHILE.
 
 EXAMPLES
     basic

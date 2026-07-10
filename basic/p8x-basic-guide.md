@@ -134,9 +134,13 @@ like numeric comparisons, so they slot straight into `IF`:
 | `LEFT$(s$,n)` | the first `n` characters of `s$` |
 | `RIGHT$(s$,n)` | the last `n` characters of `s$` |
 | `MID$(s$,i[,n])` | `n` characters of `s$` starting at position `i` (1-based); to the end if `n` is omitted |
+| `STR$(x)` | the decimal text of number `x` (e.g. `STR$(-7)` is `"-7"`) |
+| `VAL(s$)` | the number parsed from the start of `s$` (signed; stops at the first non-digit; `0` if none) |
+| `EOF(n)` | `1` if the input data file is at end (or not open), else `0` (see *Data files*) |
 
-`LEN`/`ASC` return numbers; `CHR$`/`LEFT$`/`RIGHT$`/`MID$` return strings (their
-names end in `$`). Counts are clamped to what the source actually holds, so
+`LEN`/`ASC`/`VAL`/`EOF` return numbers; `CHR$`/`LEFT$`/`RIGHT$`/`MID$`/`STR$`
+return strings (their names end in `$`). `STR$` and `VAL` are inverses — the
+number↔string conversion pair. Counts are clamped to what the source actually holds, so
 `LEFT$("HI",9)` is just `"HI"`. `POKE addr,val` is a *statement* (below).
 
 ## Statements
@@ -199,9 +203,10 @@ disk and run-from-OS builds (the standalone whole-ROM build has no card access).
 60 CLOSE                         CLOSE commits the file
 
 70 OPEN "SCORES" FOR INPUT       read mode
-80 FOR I=1 TO 3 : INPUT# N : PRINT N : NEXT
-90 INPUT# T$ : PRINT T$
-100 CLOSE
+80 IF EOF(1) THEN 120            EOF(n) is 1 once the file is exhausted
+90 INPUT# N : PRINT N            read until end — no count needed
+100 GOTO 80
+120 CLOSE
 ```
 
 - The filename is any string expression (`OPEN F$ FOR INPUT`) and may be a
@@ -213,8 +218,9 @@ disk and run-from-OS builds (the standalone whole-ROM build has no card access).
   parses the decimal number, into a string variable (`INPUT# A$`) it takes the
   whole record text.
 - One channel is open at a time. Opening a missing file `FOR INPUT` prints
-  `?No file`. There is no end-of-file test yet, so store a known count first (as
-  above) or a sentinel value and stop when you read it.
+  `?No file`. `EOF(n)` returns `1` once the input file is exhausted (and `1` if
+  no file is open), so `IF EOF(1) THEN ...` cleanly ends a read loop; the channel
+  number `n` is accepted but there is only one channel.
 
 ## Memory & hardware access
 
@@ -308,11 +314,10 @@ so `10 REM (unbalanced "quotes` is accepted.
 - Numbers are integers only (16-bit signed); no floating point.
 - Numeric variables: names ≤ 6 significant chars, up to 32; no arrays.
 - String variables (`A$`): up to 16, each holding up to 32 characters; longer
-  values are truncated. Not arrays, and there is no `STR$`/`VAL` yet (no
-  number↔string conversion beyond `CHR$`/`ASC`).
+  values are truncated. Not arrays. (`STR$`/`VAL` convert number↔string.)
 - `FOR` loops nest **2 deep**; `GOSUB` nests **3 deep**.
-- Data files: one channel open at a time, one value per record, no end-of-file
-  test (`EOF`) yet — see *Data files*.
+- Data files: one channel open at a time, one value per record; `EOF(n)` tests
+  for end of file — see *Data files*.
 - No `DATA`/`READ`, `DIM`, `DEF FN`, `ON…GOTO`, or `WHILE`.
 - Numbers are decimal only on input; `PRINT` shows signed decimal.
 

@@ -110,6 +110,11 @@ FMODE  = BASRAM+$CD          ; data file: 0 closed, 1 open for input, 2 for outp
 OUTFILE= BASRAM+$CE          ; 1 while PRINT emits to the data file (via PUTCH)
 SPA    = BASRAM+$D0          ; string source pointer (2)
 SPD    = BASRAM+$D2          ; string dest pointer (2)
+STRSINK= BASRAM+$D4          ; 1 while PUTCH captures into a string buffer (STR$)
+STRSP  = BASRAM+$D5          ; string-sink append pointer (2)
+STRSN  = BASRAM+$D7          ; string-sink char count
+FLOOK  = BASRAM+$D8          ; input-file 1-byte lookahead (for EOF)
+FLOOKC = BASRAM+$D9          ; 1 if the lookahead position is end-of-file
 SEED   = BASRAM+$F4          ; RND state (2)
 POKEA  = BASRAM+$F6          ; POKE address (2)
 NAMLEN = 6                   ; significant variable-name length
@@ -122,6 +127,7 @@ SVENT  = 40                  ; string-var entry: NAMLEN name + 1 len + 32 data +
 NSVARS = 16                  ; string-variable table capacity
 STRACC = BASRAM+$200         ; SEVAL result accumulator (64 bytes)
 STRTMP = BASRAM+$240         ; current term being produced (64)
+STRTMPD= BASRAM+$241         ; STRTMP data area (past the length byte)
 STRARG = BASRAM+$280         ; a string function's string argument (64)
 STRCMP = BASRAM+$2C0         ; saved left operand during a string comparison (64)
 SVARTAB= BASRAM+$300         ; NSVARS x SVENT = 640 bytes ($x300..$x57F)
@@ -163,6 +169,9 @@ TOK_ASC   = $9E          ; ASC   (numeric result)
 TOK_OPEN  = $9F          ; OPEN
 TOK_CLOSE = $A0          ; CLOSE
 TOK_OUTPUT= $A1          ; OUTPUT (OPEN ... FOR OUTPUT)
+TOK_STRS  = $A2          ; STR$  (number -> string)
+TOK_VAL   = $A3          ; VAL   (string -> number)
+TOK_EOF   = $A4          ; EOF   (input channel at end -> 1/0)
 
 MONITOR = $0000          ; reset vector — BYE returns here
 
@@ -181,6 +190,7 @@ STKTOP = $FEFF
         LDA  #0              ; no data file open
         STA  FMODE
         STA  OUTFILE
+        STA  STRSINK         ; PUTCH not capturing into a string
         LDA  #$E1            ; seed the RNG
         STA  SEED
         LDA  #$AC
@@ -736,7 +746,11 @@ DOIF:   INP2
         JC   if_stmt
         JMP  DOGOTON
 if_stmt: JMP  STMTLINE        ; THEN clause = rest of the line
-if_false: RTS
+if_false: LDA (P2)            ; false: skip the whole THEN clause (to end of line)
+        JZ   iff_d
+        INP2
+        JMP  if_false
+iff_d:  RTS
 if_err: JMP  SYNERR
 
 ; END — stop the running program
@@ -1498,6 +1512,14 @@ FACTOR: JSR  SKIPSP
         LDB  #TOK_ASC
         CMP
         JZ   fa_asc
+        LDA  (P2)
+        LDB  #TOK_VAL
+        CMP
+        JZ   fa_val
+        LDA  (P2)
+        LDB  #TOK_EOF
+        CMP
+        JZ   fa_eof
         LDA  (P2)
         LDB  #'('
         CMP
@@ -2476,6 +2498,10 @@ SPEEK:  JSR  SKIPSP                   ; leading spaces are insignificant
         LDB  #TOK_MIDS
         CMP
         JZ   sp_yes
+        LDA  (P2)
+        LDB  #TOK_STRS
+        CMP
+        JZ   sp_yes
         LDA  (P2)                    ; a letter? then look for a trailing '$'
         JSR  UPCHAR
         LDB  #'A'
@@ -2879,6 +2905,10 @@ STERM:  JSR  SKIPSP
         LDB  #TOK_MIDS
         CMP
         JZ   stm_mid
+        LDA  (P2)
+        LDB  #TOK_STRS
+        CMP
+        JZ   stm_strs
         JSR  SVARGET                   ; else: a string variable -> copy its data
         LDA  MATCHF
         JZ   stm_err
@@ -2910,6 +2940,29 @@ stm_chr: INP2
         INP1
         LDA  RESULT
         STA  (P1)
+        RTS
+; STR$(n) — render the number as decimal text into STRTMP. Reuses PRDEC by
+; routing its PUTCH output into a string sink (STRSINK) aimed at STRTMP's data.
+stm_strs: INP2
+        JSR  PARGET                    ; RESULT = number
+        LDA  RESULT
+        STA  LNUM
+        LDA  RESULT+1
+        STA  LNUM+1
+        LDA  #<STRTMPD                  ; capture digits after the length byte
+        STA  STRSP
+        LDA  #>STRTMPD
+        STA  STRSP+1
+        LDA  #0
+        STA  STRSN
+        LDA  #1
+        STA  STRSINK
+        JSR  PRDEC                      ; number text -> string sink
+        LDA  #0
+        STA  STRSINK
+        LDP1 #STRTMP
+        LDA  STRSN
+        STA  (P1)                       ; length byte
         RTS
 stm_err: JMP  SYNERR
 
@@ -3226,6 +3279,100 @@ fa_asc0: LDA #0
         STA  RESULT+1
         RTS
 
+; fa_val — VAL(string$): parse a signed decimal from the string arg -> RESULT.
+; Stops at the first non-digit; a non-numeric string yields 0.
+fa_val: INP2
+        JSR  FN_SARG                    ; STRARG = [len][data]
+        LDP1 #STRARG
+        LDA  (P1)                       ; len -> counter, walk P1 past the data
+        STA  SI
+        INP1                            ; P1 -> data[0]
+fv_nt:  LDA  SI
+        JZ   fv_nt0
+        INP1
+        LDA  SI
+        DEC
+        STA  SI
+        JMP  fv_nt
+fv_nt0: LDA  #0
+        STA  (P1)                       ; NUL-terminate the data so PARSEDEC stops
+        TPA2L                           ; save the program cursor (repoint P2)
+        STA  GTMP
+        TPA2H
+        STA  GTMP+1
+        LDA  #<STRARG                    ; repoint P2 at STRARG's data (STRARG+1)
+        LDB  #1
+        ADD
+        TAP2L
+        LDA  #>STRARG
+        JNC  fv_p2
+        INC
+fv_p2:  TAP2H
+        JSR  SKIPSP
+        LDA  #0
+        STA  TMPC                        ; sign flag
+        LDA  (P2)
+        LDB  #'-'
+        CMP
+        JNZ  fv_ns
+        LDA  #1
+        STA  TMPC
+        INP2
+        JMP  fv_pd
+fv_ns:  LDA  (P2)
+        LDB  #'+'
+        CMP
+        JNZ  fv_pd
+        INP2
+fv_pd:  JSR  PARSEDEC                    ; LNUM = value
+        LDA  TMPC
+        JZ   fv_pos
+        LDA  LNUM                         ; negate LNUM
+        LDB  #$FF
+        XOR
+        STA  LNUM
+        LDA  LNUM+1
+        LDB  #$FF
+        XOR
+        STA  LNUM+1
+        LDA  LNUM
+        LDB  #1
+        ADD
+        STA  LNUM
+        JNC  fv_pos
+        LDA  LNUM+1
+        INC
+        STA  LNUM+1
+fv_pos: LDA  GTMP                         ; restore the program cursor
+        TAP2L
+        LDA  GTMP+1
+        TAP2H
+        LDA  LNUM
+        STA  RESULT
+        LDA  LNUM+1
+        STA  RESULT+1
+        RTS
+
+; fa_eof — EOF(n): 1 if the input channel is at end (or not open for input),
+; else 0. The channel number is parsed and ignored (one channel).
+fa_eof: INP2
+        JSR  PARGET                       ; consume '(n)'
+        LDA  FMODE
+        LDB  #1
+        CMP
+        JNZ  fe_true                      ; not open for input -> EOF
+        LDA  FLOOKC
+        JZ   fe_false
+fe_true: LDA #1
+        STA  RESULT
+        LDA  #0
+        STA  RESULT+1
+        RTS
+fe_false: LDA #0
+        STA  RESULT
+        STA  RESULT+1
+        RTS
+
 ;==============================================================================
 ; DATA FILES — one sequential channel over the BIOS byte streams (FOPEN/FGETB and
 ; FWOPEN/FPUTB/FCLOSE). Root files only; PRINT# writes one value + CR per record,
@@ -3295,6 +3442,7 @@ dop_in: INP2
         JC   dop_nf
         LDA  #1
         STA  FMODE
+        JSR  FPRIME                     ; prime the EOF lookahead
         RTS
 dop_nf: LDA  #0
         STA  FMODE
@@ -3417,6 +3565,39 @@ dif_s1: STA  SPD+1
         RTS
 dif_err: JMP  SYNERR
 
+; FPRIME — prime the 1-byte read-ahead when a channel is opened for input, so
+; EOF() can report end-of-file BEFORE the read that would hit it.
+FPRIME: LDA  #0
+        STA  FLOOKC
+        JSR  FGETB
+        JC   fpr_eof
+        STA  FLOOK
+        RTS
+fpr_eof: LDA #1
+        STA  FLOOKC
+        RTS
+
+; GNB — get next byte from the input stream via the lookahead: return FLOOK and
+; refill it from FGETB. A = byte, C=1 at EOF. FLOOKC records whether the byte now
+; sitting in FLOOK is really end-of-file, which is exactly what EOF() reports.
+GNB:    LDA  FLOOKC
+        JNZ  gnb_eof
+        LDA  FLOOK                       ; byte to deliver
+        STA  TMPC
+        JSR  FGETB                       ; refill lookahead
+        JC   gnb_reof
+        STA  FLOOK
+        LDA  TMPC
+        CLC
+        RTS
+gnb_reof: LDA #1
+        STA  FLOOKC
+        LDA  TMPC
+        CLC
+        RTS
+gnb_eof: SEC
+        RTS
+
 ; FREADREC — read the next CR-delimited record from the open read stream into
 ; STRACC (len + data, capped at SLEN, and NUL-terminated after the data so the
 ; numeric path can PARSEDEC it). Uses P2 as the walker (FGETB clobbers P1, not P2).
@@ -3424,7 +3605,7 @@ FREADREC: LDP2 #STRACC
         INP2                            ; data pointer
         LDA  #0
         STA  SI
-frr_l:  JSR  FGETB                       ; A = byte, C=1 at EOF
+frr_l:  JSR  GNB                         ; A = byte, C=1 at EOF (via lookahead)
         JC   frr_end
         STA  TMPC
         LDB  #$0D
@@ -3579,6 +3760,15 @@ ckd_1:  LDB  #TOK_REM
         CMP
         JZ   ckd_bad
         LDB  #TOK_ASC
+        CMP
+        JZ   ckd_bad
+        LDB  #TOK_STRS
+        CMP
+        JZ   ckd_bad
+        LDB  #TOK_VAL
+        CMP
+        JZ   ckd_bad
+        LDB  #TOK_EOF
         CMP
         JZ   ckd_bad
         LDB  #TOK_OUTPUT
@@ -3761,6 +3951,12 @@ KWTAB:  .ascii "PRINT"
         .byte $A0
         .ascii "OUTPUT"
         .byte $A1
+        .ascii "STR"
+        .byte $24,$A2               ; '$' then token: STR$
+        .ascii "VAL"
+        .byte $A3
+        .ascii "EOF"
+        .byte $A4
         .byte $00
 
 ;==============================================================================
@@ -3785,6 +3981,8 @@ putc1:  LDA  ACIAS
 ; PUTCH — emit A to the current sink: the open data file when OUTFILE is set
 ; (PRINT#), otherwise the console. Lets PRDEC/SPUT serve both PRINT and PRINT#.
 PUTCH:  PHA                          ; preserve the char (and TMPC, used by SPUT)
+        LDA  STRSINK                 ; STR$ capture takes priority over the file
+        JNZ  pch_str
         LDA  OUTFILE
         JZ   pch_con
         TPA1L                        ; FPUTB clobbers P1; PRDECU/SPUT walk it
@@ -3800,6 +3998,32 @@ PUTCH:  PHA                          ; preserve the char (and TMPC, used by SPUT
         RTS
 pch_con: PLA
         JSR  PUTC
+        RTS
+pch_str: TPA1L                        ; string sink: append A to (STRSP), inc STRSN
+        STA  SAVE2
+        TPA1H
+        STA  SAVE2+1
+        LDA  STRSP
+        TAP1L
+        LDA  STRSP+1
+        TAP1H
+        PLA
+        STA  (P1)
+        LDA  STRSP
+        LDB  #1
+        ADD
+        STA  STRSP
+        JNC  pst_1
+        LDA  STRSP+1
+        INC
+        STA  STRSP+1
+pst_1:  LDA  STRSN
+        INC
+        STA  STRSN
+        LDA  SAVE2
+        TAP1L
+        LDA  SAVE2+1
+        TAP1H
         RTS
 GETC:   LDA  ACIAS
         LDB  #$01
@@ -3857,13 +4081,13 @@ MHELP:  .byte CR,LF
         .byte CR,LF
         .ascii "  GOTO GOSUB RETURN INPUT POKE REM END"
         .byte CR,LF
-        .ascii "FILES: OPEN name OUTPUT|INPUT : PRINT# : INPUT# : CLOSE"
+        .ascii "FILES: OPEN name OUTPUT|INPUT : PRINT# : INPUT# : CLOSE : EOF(n)"
         .byte CR,LF
         .ascii "COMMANDS: RUN LIST NEW SAVE LOAD HELP BYE"
         .byte CR,LF
         .ascii "FUNCTIONS: ABS(x) RND(n) PEEK(a)"
         .byte CR,LF
-        .ascii "  LEN ASC CHR$ LEFT$ RIGHT$ MID$"
+        .ascii "  LEN ASC CHR$ LEFT$ RIGHT$ MID$ STR$ VAL"
         .byte CR,LF
         .ascii "STRINGS: A$ B$ (assign, + concat, compare)"
         .byte CR,LF
