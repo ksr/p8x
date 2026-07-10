@@ -813,6 +813,12 @@ Last updated: 2026-07-08
             emits `JSR __neg` (16-bit two's complement), `!e` emits `JSR __lnot`
             (-> 0/1); both helpers gated by USENEG/USENOT. Verified incl.
             `70 - -5 - 10` and `-x` on a variable.
+          * v0.9 — **`&&` and `||`** (short-circuit). Lexer combines the doubled
+            punctuation; two parser levels above the relational parser (`GEXPR`=||
+            -> `GLAND`=&& -> `GREL`). Each emits a test + conditional jump so the
+            right operand is skipped when the result is already decided; the
+            result is normalised to 0/1 via EM_AX0/EM_AX1. Verified incl. chained
+            `2 && 3 && 1`, `if (x>0 && x<10)`, and short-circuit `0 && 9`.
         Debug notes for future selves: FGETB clobbers P1 (build identifiers via
         P2); variables must live in the program's own BSS, not a fixed high page
         (OS/SYS_PUTC scratch collides); FRESOLVE's scan needs FSDIRBUF off SBUF

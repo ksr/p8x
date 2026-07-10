@@ -9,11 +9,12 @@
 ; emits assembly text to stdout via SYS_PUTC, so `>OUT.ASM` captures it and the
 ; program's own I/O stays shell-redirectable.
 ;
-; EARLY (v0.8). Supported so far:
+; EARLY (v0.9). Supported so far:
 ;     program : func*    func : int NAME([int P,...]) { <stmt>* }
 ;     stmt : int NAME [= expr]; | NAME = expr; | if(e) s [else s] |
 ;            while(e) s | { s* } | putchar(e); | return [e];
-;     expr : add [relop add]   add : term (('+'|'-') term)*
+;     expr : land ('||' land)*   land : rel ('&&' rel)*   (short-circuit -> 0/1)
+;     rel  : add [relop add]   add : term (('+'|'-') term)*
 ;     term : unary (('*'|'/'|'%') unary)*   unary : ('-'|'!') unary | factor
 ;     factor : NUMBER | NAME | NAME(args) | '(' e ')'   relop: < <= > >= == !=
 ; Values are 16-bit int. Codegen uses a MEMORY accumulator __ax (every
@@ -390,6 +391,24 @@ adv_ws: JSR  GC                      ; skip whitespace
         LDB  #'>'
         CMP
         JZ   adv_2ck
+        LDB  #'&'                    ; '&&' and '||' : combine only if doubled
+        CMP
+        JZ   adv_2same
+        LDB  #'|'
+        CMP
+        JZ   adv_2same
+        RTS
+adv_2same: JSR GC                    ; peek c2
+        JC   adv_pd
+        STA  TMPC
+        LDB  CURV                    ; c1
+        CMP                          ; c2 == c1 ?
+        JZ   adv_2sset
+        LDA  TMPC                    ; not doubled -> push back, stay single
+        JSR  UNGC
+        RTS
+adv_2sset: LDA CURV                  ; CUR2 = the doubled char ('&' or '|')
+        STA  CUR2
         RTS
 adv_2ck: JSR GC                      ; peek the next char
         JC   adv_pd                  ; EOF -> single
@@ -968,7 +987,7 @@ sr_semi: LDA #$3B
 ; expression: GADD [ relop GADD ]  -> result in the runtime A register.
 ; A relational compares two additive expressions, yielding 0/1 (single, non-
 ; associative). Assignment/putchar/return/conditions all call GEXPR.
-GEXPR:  JSR  GADD
+GREL:   JSR  GADD
         LDA  CURK
         LDB  #3
         CMP
@@ -988,6 +1007,102 @@ GEXPR:  JSR  GADD
         JSR  EMIT
         JSR  EMITCMP                 ; emit the 0/1 sequence for RELOP
 grx:    RTS
+
+; expr: logical-or  ->  land ('||' land)*   (short-circuit, yields 0/1)
+GEXPR:  JSR  GLAND
+ge_orl: LDA  CURK
+        LDB  #3
+        CMP
+        JNZ  ge_ord
+        LDA  CURV
+        LDB  #'|'
+        CMP
+        JNZ  ge_ord
+        LDA  CUR2
+        LDB  #'|'
+        CMP
+        JNZ  ge_ord
+        JSR  NEWLBL                  ; Ltrue
+        STA  LORT
+        JSR  NEWLBL                  ; Lend
+        STA  LORE
+        JSR  EM_TESTAX               ; left in __ax
+        LDP1 #MJNZ
+        LDA  LORT
+        JSR  EMITJ                   ; JNZ Ltrue  (left true -> whole true)
+        JSR  ADVANCE                 ; past '||'
+        LDA  LORT
+        PHA
+        LDA  LORE
+        PHA
+        JSR  GLAND                   ; right -> __ax  (labels saved on stack)
+        PLA
+        STA  LORE
+        PLA
+        STA  LORT
+        JSR  EM_TESTAX
+        LDP1 #MJNZ
+        LDA  LORT
+        JSR  EMITJ                   ; JNZ Ltrue
+        JSR  EM_AX0                  ; both false -> 0
+        LDP1 #MJMP
+        LDA  LORE
+        JSR  EMITJ                   ; JMP Lend
+        LDA  LORT
+        JSR  EMITLBL                 ; Ltrue:
+        JSR  EM_AX1                  ; -> 1
+        LDA  LORE
+        JSR  EMITLBL                 ; Lend:
+        JMP  ge_orl                  ; chained '||'
+ge_ord: RTS
+
+; logical-and  ->  rel ('&&' rel)*   (short-circuit, yields 0/1)
+GLAND:  JSR  GREL
+ga_andl: LDA CURK
+        LDB  #3
+        CMP
+        JNZ  ga_andd
+        LDA  CURV
+        LDB  #'&'
+        CMP
+        JNZ  ga_andd
+        LDA  CUR2
+        LDB  #'&'
+        CMP
+        JNZ  ga_andd
+        JSR  NEWLBL                  ; Lfalse
+        STA  LANDF
+        JSR  NEWLBL                  ; Lend
+        STA  LANDE
+        JSR  EM_TESTAX
+        LDP1 #MJZ
+        LDA  LANDF
+        JSR  EMITJ                   ; JZ Lfalse  (left false -> whole false)
+        JSR  ADVANCE                 ; past '&&'
+        LDA  LANDF
+        PHA
+        LDA  LANDE
+        PHA
+        JSR  GREL                    ; right -> __ax
+        PLA
+        STA  LANDE
+        PLA
+        STA  LANDF
+        JSR  EM_TESTAX
+        LDP1 #MJZ
+        LDA  LANDF
+        JSR  EMITJ                   ; JZ Lfalse
+        JSR  EM_AX1                  ; both true -> 1
+        LDP1 #MJMP
+        LDA  LANDE
+        JSR  EMITJ                   ; JMP Lend
+        LDA  LANDF
+        JSR  EMITLBL                 ; Lfalse:
+        JSR  EM_AX0                  ; -> 0
+        LDA  LANDE
+        JSR  EMITLBL                 ; Lend:
+        JMP  ga_andl                 ; chained '&&'
+ga_andd: RTS
 
 ; term: factor (('*'|'/'|'%') factor)*   (8-bit, via __mul8/__divmod8 helpers)
 GTERM:  JSR  GUNARY
@@ -2026,4 +2141,8 @@ FSLOT:  .fill 16   ; per-function param base slot
 FPOOL:  .fill 128  ; packed function names
 USENEG: .fill 1    ; 1 if unary '-' is used (emit __neg)
 USENOT: .fill 1    ; 1 if '!' is used (emit __lnot)
+LORT:   .fill 1    ; '||' short-circuit: Ltrue label
+LORE:   .fill 1    ; '||' end label
+LANDF:  .fill 1    ; '&&' short-circuit: Lfalse label
+LANDE:  .fill 1    ; '&&' end label
 SYMPOOL: .fill 256 ; packed NUL-terminated variable names

@@ -21,7 +21,7 @@ DESCRIPTION
     BACK-END-and-all compiler aimed at fitting the ~31.5 KB TPA, where a port
     of the optimizing p8cc could not.
 
-    THIS IS EARLY (v0.8). Supported so far:
+    THIS IS EARLY (v0.9). Supported so far:
 
         program : func*
         func  : int NAME ( [int P (, int P)*] ) { <stmt>* }
@@ -32,7 +32,9 @@ DESCRIPTION
               | { <stmt>* }               (block)
               | putchar( <expr> ) ;
               | return [<expr>] ;
-        expr  : add [ relop add ]         relop: <  <=  >  >=  ==  !=
+        expr  : land ('||' land)*         (short-circuit, yields 0/1)
+        land  : rel ('&&' rel)*           (short-circuit, yields 0/1)
+        rel   : add [ relop add ]         relop: <  <=  >  >=  ==  !=
         add   : term (('+' | '-') term)*
         term  : unary (('*' | '/' | '%') unary)*
         unary : ('-' | '!') unary | factor
