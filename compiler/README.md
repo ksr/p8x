@@ -11,10 +11,14 @@ python3 tools/p8xfs.py put disk.img prog.bin --name /PROG.BIN --load 0x7A00 --ex
 # then on the P8X:  RUN /PROG.BIN
 ```
 
-This host cross-compiler is the primary tool. The C **front end** now also runs
-*on the P8X* — `cpp | lex | cc1` preprocess, tokenize, and parse C to an AST
-natively (see "On-target front end" below) — but code generation stays on the
-host: the codegen is too big to run on the machine.
+This host cross-compiler is the **primary build tool** — every `/bin` OS command
+is compiled with it. For compiling C **on the machine**, see the from-scratch
+native compiler [`apps/p8xcc.asm`](../apps/p8xcc.asm) (`/bin/cc`), which does the
+whole compile on-target (Milestone B, achieved through v0.28 — functions,
+recursion, pointers, arrays, structs, a `//#use` splicer, and the standard
+builtins). The older path-A **front end** (`cpp | lex | cc1`, front half on the
+P8X with host-side codegen) is **DEPRECATED and superseded by `cc`** — kept for
+reference but no longer built or shipped (see "On-target front end" below).
 
 ## Two compilers: `p8cc.py` and `p8cc.c`
 

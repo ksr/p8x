@@ -615,9 +615,11 @@ Last updated: 2026-07-08
     - Smoke tests test1-3.asm overlap test_isa.asm (per-opcode). They give
       higher-level scenario coverage (banner, JSR/RTS, countdown); keep as
       complementary unless trimming.
-- [~] **C compiler — Milestone A DONE (self-compiling, host-run); Milestone B
-      FRONT END self-hosted on the P8X (cpp|lex|cc1); back end stays host-side
-      (codegen won't fit the TPA — see the measured finding below).** Both
+- [x] **C compiler — Milestone A DONE (self-compiling, host-run); Milestone B
+      ACHIEVED via the from-scratch native `cc` (`apps/p8xcc.asm`), which compiles
+      C ENTIRELY on-target through v0.28 (see "NATIVE C COMPILER" below). The
+      earlier path-A front end (cpp|lex|cc1, host-side codegen) is DEPRECATED /
+      superseded and no longer shipped.** Both
       compilers exist and are tested:
       `compiler/p8cc.py` (Python, the everyday tool + reference oracle, never
       removed) and `compiler/p8cc.c` (the same compiler in p8cc's own small-C
@@ -745,19 +747,18 @@ Last updated: 2026-07-08
           vs a 31.5 KB TPA, codegen is ~2.5-3x too big and cannot be cleanly cut.
         CONCLUSION: porting the existing optimizing p8cc codegen to run within the
         TPA is not viable.
-      - **DECISION (2026-07-09): ship the self-hosted FRONT END; stop at cc1.**
-        `cpp | lex | cc1` all run on-target and each fits the TPA, so the P8X can
-        natively preprocess, tokenize, and parse C to an AST. Code generation
-        stays host-side (p8cc.py / p8cc.c). This is the coherent, finished shape
-        of Milestone B given the codegen wall. A true on-target back end would be
-        a SEPARATE future milestone — a NEW, deliberately-small codegen written to
-        fit 31.5 KB (NOT a port of the optimizing p8cc; the ~55 KB shared infra
-        makes a port impossible). Filed below as a stretch goal, not blocking.
+      - **DECISION (2026-07-09), later SUPERSEDED: ship the self-hosted FRONT END
+        (cpp|lex|cc1); stop at cc1.** At the time this was the coherent shape of
+        Milestone B given the codegen wall (a port of the optimizing p8cc codegen
+        can't fit). It was correct that a native back end had to be a NEW,
+        deliberately-small codegen — and that is exactly what the **native `cc`**
+        (path B, below) became: it compiles C ENTIRELY on-target. So the
+        front-end-only decision is superseded, and cpp|lex|cc1 are deprecated.
         Other rejected paths: sharding the existing codegen (the shared infra
         defeats it); a bigger flat memory region (tops out ~46 KB, still < 82 KB —
         would need banking, i.e. major firmware/OS/hardware work).
-      - [~] **NATIVE C COMPILER in asm (Milestone B, path B) — STARTED
-        (2026-07-09).** A from-scratch, single-pass C compiler written directly
+      - [x] **NATIVE C COMPILER in asm (Milestone B, path B) — ACHIEVED
+        (through v0.28).** A from-scratch, single-pass C compiler written directly
         in assembly (`apps/p8xcc.asm` -> `/bin/cc.bin`), dense enough to run on
         the machine where the p8cc.c codegen (~82 KB) cannot. It streams the
         source in (FOPEN/FGETB, one-char pushback) and emits asm to stdout

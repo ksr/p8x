@@ -80,3 +80,37 @@ Correctness is checked by assembling a feature source both on-target and with
 the host assembler and comparing the bytes (`emulator/test/os_asm_test.sh`).
 Limits: ~850 symbols, 12-char names, 127-char source lines, single `.org`
 (use `.org $7A00`; a backward `.org` is rejected).
+
+## CC — native C compiler (`p8xcc.asm`)
+
+A from-scratch, single-pass C compiler written directly in assembly — small
+enough (~21 KB) to compile C **entirely on the machine**, front and back end.
+It streams the source in (BIOS `FOPEN`/`FGETB`, one-char pushback) and emits P8X
+assembly to stdout (`SYS_PUTC`, shell-redirectable), which the native `asm`
+turns into a RUNnable binary — so C is compiled, assembled, and run on-target:
+
+```
+cc hello.c >hello.asm      # native compiler
+asm hello.asm HELLO.BIN    # native assembler
+run HELLO.BIN
+```
+
+This is **Milestone B** (the native route) — the optimizing host `p8cc.c`
+codegen is ~82 KB, larger than the whole 64 KB address space, so it can't run on
+the machine; `cc` uses a deliberately small hardware-stack codegen instead.
+
+**Language (through v0.28):** functions, direct **and mutual** recursion (via a
+forward prototype), pointers + pass-by-reference, `int`/`char`, arrays with `[]`
+and name decay, **structs** (`.`/`->`), file-scope globals, the full operator set
+(`+ - * / % << >> & ^ | && || ?:`, `++ -- += -=`, comparisons, unary `- ! * &`),
+hex/char/string literals with escapes, `//` and `/* */` comments, a recursive
+**`//#use`** preprocessor (splices `/lib/lib_*.c`), and the `putchar`/`puts`/
+`getchar`/`peek`/`poke`/`argstr`/`bios` builtins. It compiles real OS command
+source (e.g. `pwd.c`). Codegen is verified **behaviourally** (compile → asm →
+run → diff output; `emulator/test/os_cc_test.sh`).
+
+Known gaps are listed under "cc — KNOWN LIMITATIONS" in [`BACKLOG.md`](../BACKLOG.md)
+(highlights: 16-bit `int` only; no `unsigned`/`typedef`/`enum`/`union`/`sizeof`;
+struct member names must be unique program-wide, no struct params/returns; `+`
+doesn't scale pointers by element size; `//#use` is the only preprocessor
+directive — no `#define`/`#include`).

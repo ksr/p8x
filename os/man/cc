@@ -99,4 +99,4 @@ EXAMPLES
     cc t.c >t.asm            compile; then  asm t.asm T.BIN ;  run T.BIN
 
 SEE ALSO
-    asm, edit, run, cpp
+    asm, edit, run
