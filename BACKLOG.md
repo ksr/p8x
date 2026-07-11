@@ -636,6 +636,21 @@ Last updated: 2026-07-08
       (root scratch, since redirect targets aren't path-resolved) then
       `asm T.ASM .../bin/NAME.bin`; asm is a single path-aware `asm`. Round-trip
       exercised headlessly by `os_sysbuild_test` (build-only `run.sh` + boot).
+- [~] **`/src/os-bios/asm` — OS + monitor sources on-card (partial, 2026-07-11).**
+      The OS + BIOS-monitor asm sources now ship under `/src/os-bios/asm` with a
+      `bin` output dir, and `make os-bios` (script `/src/mk/os-bios`) assembles
+      both. Browsing works; the on-target BUILD is BLOCKED on two things:
+        1. **>64 KB reads.** `os/p8xos.asm` is ~121 KB but the BIOS read stream's
+           length (`ROREM`/`FLEN`) is 16-bit, so it truncates past ~56 KB and the
+           OS assembly fails with a spurious `?undefined` at a late label. Need a
+           24-bit read length across `FFIND`/`FOPEN`/`FGETB` (like `ROLBA`). The
+           monitor (58 KB) is under the limit and assembles correctly on its own.
+        2. **63-char shell line edge.** The `os-bios` build-script command lines
+           are ~63 chars — right at `LINEBUF`'s 64-byte cap. A lone 63-char script
+           line runs fine, but with a following line the first command corrupts
+           (`make os-bios`'s monitor line fails). Either widen `LINEBUF`, make the
+           on-target `asm` CWD-relative (so scripts can `cd` + use short names), or
+           shorten the output paths. A pre-existing shell limit the script exposed.
 - [x] **Man-page-style OS command reference — DONE (2026-07-09), on-target.**
       Went further than the doc-only plan: authored a per-command manual page
       (NAME / SYNOPSIS / DESCRIPTION / OPTIONS / EXAMPLES / SEE ALSO) for every

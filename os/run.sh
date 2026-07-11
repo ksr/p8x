@@ -70,6 +70,17 @@ ensure_src() {
         python3 "$root/tools/p8xfs.py" put "$disk" "$app" \
             --name "/src/commands/asm/$(basename "$app")" >/dev/null 2>&1 || true
     done
+    # The OS + BIOS monitor are asm too — their sources ride under /src/os-bios/asm
+    # with a build-output dir, and `make os-bios` assembles them (see /src/mk below).
+    # The monitor (58 KB) builds on-target; the OS source is 121 KB and the BIOS read
+    # stream's length is 16-bit, so it truncates past ~56 KB — the OS on-target build
+    # is blocked until the BIOS supports >64 KB reads (BACKLOG). The script assembles
+    # both anyway, so it "just works" once that lands.
+    for d in /src/os-bios /src/os-bios/asm /src/os-bios/asm/bin; do
+        python3 "$root/tools/p8xfs.py" mkdir "$disk" "$d" >/dev/null 2>&1 || true
+    done
+    python3 "$root/tools/p8xfs.py" put "$disk" "$root/firmware/p8xmon.asm" --name /src/os-bios/asm/p8xmon.asm >/dev/null 2>&1 || true
+    python3 "$root/tools/p8xfs.py" put "$disk" "$root/os/p8xos.asm"        --name /src/os-bios/asm/p8xos.asm  >/dev/null 2>&1 || true
     # On-target rebuild: output dirs + build scripts under /src/mk, driven by the
     # `make` built-in (make <target> == run /src/mk/<target> through the `sh` engine,
     # always rebuild — there are no timestamps yet). Per command a script rebuilds
@@ -99,6 +110,9 @@ ensure_src() {
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_c.scr"   --name /src/mk/c   >/dev/null 2>&1 || true
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_asm.scr" --name /src/mk/asm >/dev/null 2>&1 || true
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_all.scr" --name /src/mk/all >/dev/null 2>&1 || true
+    # `make os-bios` — assemble the monitor + OS from /src/os-bios/asm into its bin dir.
+    printf 'asm /src/os-bios/asm/p8xmon.asm /src/os-bios/asm/bin/p8xmon.bin\rasm /src/os-bios/asm/p8xos.asm /src/os-bios/asm/bin/p8xos.bin\r' > "$build/mk_osbios.scr"
+    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_osbios.scr" --name /src/mk/os-bios >/dev/null 2>&1 || true
 }
 
 if [ ! -f "$disk" ]; then
