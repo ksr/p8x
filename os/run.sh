@@ -34,6 +34,10 @@ python3 "$root/assembler/p8xasm.py" "$root/os/p8xos.asm" -o "$build/p8xos.bin" -
 ( cd "$root/microcode" && python3 genucode.py >/dev/null )
 cp "$root"/microcode/u?.bin "$build/"
 cc -O2 -o "$build/p8xemu" "$root/emulator/p8xemu.c"
+# Keep generated tables in sync with the ISA: the assembler opcode table (done
+# per-build below) and the disassembler's opcode table (os/commands/lib_distab.c,
+# spliced into disasm.c via //#use distab).
+python3 "$root/generators/gen_p8xdis.py" >/dev/null 2>&1 || true
 
 # ensure_src: lay down /src/commands/{c,asm} — the browsable command + toolchain
 # SOURCES, mirroring the repo so you can read (and, for C, on-target `cc`-compile)
@@ -106,6 +110,11 @@ ensure_src() {
         _cline "$c" >> "$build/mk_c.scr"
         _aline "$c" >> "$build/mk_asm.scr"
     done
+    # disasm is C-only (no hand-asm twin yet) — its /src/mk script + the C/all
+    # groups rebuild it from C alone.
+    _cline disasm > "$build/mk_one.scr"
+    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_one.scr" --name /src/mk/disasm >/dev/null 2>&1 || true
+    _cline disasm >> "$build/mk_c.scr"
     cat "$build/mk_c.scr" "$build/mk_asm.scr" > "$build/mk_all.scr"
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_c.scr"   --name /src/mk/c   >/dev/null 2>&1 || true
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_asm.scr" --name /src/mk/asm >/dev/null 2>&1 || true
@@ -171,9 +180,10 @@ if [ ! -f "$disk" ]; then
     # redirection and pipes out of the box. Run by bare name via PATH (/bin),
     # e.g.  dir /bin ,  cat README.TXT ,  cat README.TXT | grep hello | wc ,
     # cp README.TXT COPY.TXT ,  mv COPY.TXT MOVED.TXT .
-    for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch man dep dump; do
+    for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch man dep dump disasm; do
         # clib.py splices any //#use lib_*.c (shared helpers) into the source first;
-        # a no-op passthrough for commands with no //#use directive.
+        # a no-op passthrough for commands with no //#use directive.  (disasm is
+        # C-only for now — no hand-asm twin, so it's absent from the /bina loop.)
         python3 "$root/tools/clib.py" "$root/os/commands/$ex.c" -o "$build/$ex.c"
         python3 "$root/compiler/p8cc.py" "$build/$ex.c" -o "$build/$ex.asm" >/dev/null
         python3 "$root/assembler/p8xasm.py" "$build/$ex.asm" -o "$build/$ex.bin" --base 0x7A00 >/dev/null

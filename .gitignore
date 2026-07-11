@@ -204,3 +204,4 @@ emulator/test/vi.asm
 emulator/test/*.scr
 emulator/test/*.bak
 emulator/test/make.img
+emulator/test/disasm.img

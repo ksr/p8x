@@ -636,6 +636,16 @@ Last updated: 2026-07-08
       (root scratch, since redirect targets aren't path-resolved) then
       `asm T.ASM .../bin/NAME.bin`; asm is a single path-aware `asm`. Round-trip
       exercised headlessly by `os_sysbuild_test` (build-only `run.sh` + boot).
+- [~] **`disasm` — memory-range disassembler (C DONE 2026-07-11; asm twin TODO).**
+      `disasm start end` decodes `[start,end)` to `AAAA: bytes MNEMONIC operand`,
+      one instruction per line (imm8 `#$NN`, addr16 `$NNNN`, `(Pn)`/`(Pn)+`, or
+      `a,a` for MOVW; unknown -> `???`). The opcode table `os/commands/lib_distab.c`
+      is generated from `genucode.OPC` by `generators/gen_p8xdis.py` (spliced via
+      `//#use distab`), so it can't drift from the ISA. `/bin/disasm.bin`, man page
+      `os/man/disasm`, `make disasm`, `c_disasm_test`. TODO: the hand-asm twin
+      (`os/commands-asm/disasm.asm`) to restore the byte-identical C+asm invariant
+      — a sizable port (table scan + hex formatting), hence deferred; it's the one
+      `/bin` command currently C-only.
 - [~] **`/src/os-bios/asm` — OS + monitor sources on-card (partial, 2026-07-11).**
       The OS + BIOS-monitor asm sources now ship under `/src/os-bios/asm` with a
       `bin` output dir, and `make os-bios` (script `/src/mk/os-bios`) assembles
