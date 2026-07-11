@@ -3245,6 +3245,10 @@ GS_LP:  JSR  FGETB
         LDB  #CR
         CMP
         JZ   GS_DONE
+        TPA2L                  ; cap at 63 like the console reader (LINEBUF is page-
+        LDB  #63               ;   aligned, so P2 low = length); full -> drop the char
+        CMP                    ;   but keep scanning to end of line
+        JC   GS_LP
         LDA  TMP                ; store + echo
         STA  (P2)+
         JSR  OUTCH

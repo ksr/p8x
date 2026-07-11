@@ -70,6 +70,29 @@ ensure_src() {
         python3 "$root/tools/p8xfs.py" put "$disk" "$app" \
             --name "/src/commands/asm/$(basename "$app")" >/dev/null 2>&1 || true
     done
+    # Output dirs for an on-target rebuild, and the build scripts that drive it
+    # with `sh` (the script runner). CR-separated lines, as the on-target editor
+    # writes. `>/T.ASM` is a scratch file reused per command (`>` overwrites).
+    #   sh /src/mkc    rebuild every C command   -> /src/commands/c/bin/*.bin
+    #   sh /src/mka    rebuild every asm command -> /src/commands/asm/bin/*.bin
+    #   sh /src/mkall  both (a flat script, since `sh` doesn't nest)
+    for d in /src/commands/c/bin /src/commands/asm/bin; do
+        python3 "$root/tools/p8xfs.py" mkdir "$disk" "$d" >/dev/null 2>&1 || true
+    done
+    _mkcmds="dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch man dep dump"
+    # `cc` writes its .asm to a scratch T.ASM in the root (redirect targets are NOT
+    # path-resolved), so mkc `cd /` first, then `asm` reads that T.ASM (asm resolves
+    # a bare name from root). mka uses absolute paths throughout. Lines stay < the
+    # 64-byte shell line buffer.
+    printf 'cd /\r' > "$build/mkc.scr"; : > "$build/mka.scr"
+    for c in $_mkcmds; do
+        printf 'cc /src/commands/c/%s.c >T.ASM\rasm T.ASM /src/commands/c/bin/%s.bin\r' "$c" "$c" >> "$build/mkc.scr"
+        printf 'asm /src/commands/asm/%s.asm /src/commands/asm/bin/%s.bin\r' "$c" "$c" >> "$build/mka.scr"
+    done
+    cat "$build/mkc.scr" "$build/mka.scr" > "$build/mkall.scr"
+    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mkc.scr"   --name /src/mkc   >/dev/null 2>&1 || true
+    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mka.scr"   --name /src/mka   >/dev/null 2>&1 || true
+    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mkall.scr" --name /src/mkall >/dev/null 2>&1 || true
 }
 
 if [ ! -f "$disk" ]; then

@@ -88,7 +88,11 @@ SP0     = $C822   ; saved system SP for error abort
 LDPN    = $C824   ; LDPn pointer digit (survives EVAL, which trashes TMP/MNBUF)
 MNBUF   = $C830   ; upcased mnemonic/directive (8)
 NAMBUF  = $C840   ; identifier as written (16, 12 used)
-OUTNAME = $C850   ; output file name (12)
+OUTNAME = $C850   ; output file name (12, legacy — unused since paths went in)
+SRCPATH = $C000   ; full SRC path arg (NUL-terminated, path-aware via FRESOLVE)
+OUTPATH = $C030   ; full OUT path arg (NUL-terminated, path-aware via FRESOLVE)
+OUTDIR  = $C060   ; output parent dir stashed at OUTINIT: DIRLBA, DIRLBA1, DIRN (3)
+OUTFN   = $C063   ; output leaf name stashed at OUTINIT (12)
 LEOF    = $C86A   ; 1 when NEXTLINE hits end of source
 SB      = $C86B   ; current source byte from FGETB
 LCNT    = $C86C   ; chars in the current line
@@ -135,12 +139,13 @@ START:  TPA3L                   ; save SP so an error can long-jump back to OS
         LDA  #$C6               ; repoint directory scans (FFIND) off SBUF, so a
         JSR  FSDIRBUF           ; ;#use FOPEN in pass 2 can't clobber the write
                                 ; stream's partial output sector (shared SBUF)
-        JSR  PARSEARGS          ; FNAME <- SRC, OUTNAME <- OUT
-        LDA  OUTNAME            ; no output name given -> show usage
-        LDB  #' '
-        CMP
+        JSR  PARSEARGS          ; SRCPATH <- SRC, OUTPATH <- OUT (full paths)
+        LDA  OUTPATH            ; no output path given -> show usage
         JZ   ST_USAGE
-        JSR  FFIND              ; just to report a missing source cleanly
+        LDP1 #SRCPATH           ; resolve the source path -> DIRLBA + FNAME(leaf)
+        JSR  FRESOLVE
+        JC   ST_NOSRC
+        JSR  FFIND              ; confirm the leaf exists in the resolved dir
         JC   ST_NOSRC
         JSR  SAVESRC            ; remember the source's FNAME + dir so PASSINIT
                                 ; re-opens it each pass even if a ;#use resolves
@@ -1055,7 +1060,28 @@ EMITB:  JSR  FPUTB
 EB_1:   RTS
 
 ; OUTINIT - begin streamed output (BIOS write stream at the volume free pointer).
-OUTINIT:JSR  FWOPEN
+; OUTINIT - resolve the output path's parent dir + leaf NOW, BEFORE opening the
+;   write stream (a FRESOLVE while the stream is live corrupts its pending SBUF /
+;   length). Stash them; FINISHOUT restores them for FCLOSE.
+OUTINIT:LDP1 #OUTPATH
+        JSR  FRESOLVE          ; DIRLBA = parent (exists), FNAME = leaf (may be new)
+        LDA  DIRLBA
+        STA  OUTDIR
+        LDA  DIRLBA1
+        STA  OUTDIR+1
+        LDA  DIRN
+        STA  OUTDIR+2
+        LDP1 #FNAME            ; OUTFN <- FNAME (12)
+        LDP2 #OUTFN
+        LDA  #12
+        STA  DIG
+OI_FN:  LDA  (P1)+
+        STA  (P2)+
+        LDA  DIG
+        DEC
+        STA  DIG
+        JNZ  OI_FN
+        JSR  FWOPEN
         LDA  #0
         STA  OUTPOS
         STA  OUTPOS+1
@@ -1064,7 +1090,22 @@ OUTINIT:JSR  FWOPEN
 ; FINISHOUT - register the assembled file (FCLOSE flushes + writes the entry +
 ; bumps the free pointer; its length comes from the bytes written). C=1 if full.
 FINISHOUT:
-        JSR  SETFNOUT          ; FNAME <- OUTNAME
+        LDA  OUTDIR            ; restore the stashed output dir + leaf (pass 2 / a
+        STA  DIRLBA            ;   ;#use moved DIRLBA/FNAME); no FRESOLVE here, so the
+        LDA  OUTDIR+1          ;   live write stream is untouched. FCLOSE flushes and
+        STA  DIRLBA1           ;   registers FNAME in DIRLBA, then reverts to root.
+        LDA  OUTDIR+2
+        STA  DIRN
+        LDP1 #OUTFN
+        LDP2 #FNAME
+        LDA  #12
+        STA  DIG
+FO_FN:  LDA  (P1)+
+        STA  (P2)+
+        LDA  DIG
+        DEC
+        STA  DIG
+        JNZ  FO_FN
         JMP  FCLOSE
 
 ; =============================================================================
@@ -1510,11 +1551,30 @@ UC_NO:  LDA  TMP2
 ; =============================================================================
 PARSEARGS:
         JSR  ASKIPSP2
-        LDP1 #FNAME
-        JSR  WORDCOPY
+        LDP1 #SRCPATH          ; full paths (case-preserved), resolved via FRESOLVE
+        JSR  PATHCOPY
         JSR  ASKIPSP2
-        LDP1 #OUTNAME
-        JSR  WORDCOPY
+        LDP1 #OUTPATH
+        JSR  PATHCOPY
+        RTS
+; PATHCOPY - copy the path word at P2 into (P1), NUL-terminated, case preserved,
+;   stopping at a space / CR / NUL. Advances P2. (Unlike WORDCOPY: no 12-char cap,
+;   no upcasing — so SRC/OUT can be sub-directory paths like /src/commands/c/x.c.)
+PATHCOPY:
+PC_CP:  LDA  (P2)
+        JZ   PC_END
+        LDB  #' '
+        CMP
+        JZ   PC_END
+        LDB  #CR
+        CMP
+        JZ   PC_END
+        LDA  (P2)
+        STA  (P1)+
+        INP2
+        JMP  PC_CP
+PC_END: LDA  #0
+        STA  (P1)
         RTS
 ASKIPSP2:
         LDA  (P2)

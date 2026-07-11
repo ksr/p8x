@@ -201,3 +201,5 @@ emulator/test/mn_cp.asm
 emulator/test/mn_dir.asm
 emulator/test/v2dep.asm
 emulator/test/vi.asm
+emulator/test/*.scr
+emulator/test/*.bak
