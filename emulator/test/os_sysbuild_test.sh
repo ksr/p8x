@@ -31,14 +31,21 @@ $ROOT/tools/p8xfs.py ls "$D0" /src/commands/c 2>/dev/null | grep -qE '^pwd\.c ' 
 
 # Boot headless and drive a smoke session.
 cd "$work"
+# Rebuild a command ON THE EMULATOR with `make` (both the C and asm twins) and RUN
+# the freshly built C binary — proving the whole native toolchain (make -> cc ->
+# asm, plus the asm ;#use) works end to end on the built system. A COMPLETE
+# on-emulator rebuild of all 42 commands is `make` (or `sh /src/mk/all`) on-target;
+# the automated test rebuilds one here because each cc+asm is millions of emulated
+# cycles — a full sweep is minutes of wall time, so it's driven manually, not in CI.
 printf 'B\rdir /bin\rcat README.TXT | grep hello\rmake pwd\rrun /src/commands/c/bin/pwd.bin\rcat /d1/DATA/NOTES.TXT\r' \
-    | ./p8xemu -l 2000000000 -c "$D0" -c2 "$D1" eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r' > sys_out.txt
+    | ./p8xemu -l 3000000000 -c "$D0" -c2 "$D1" eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r' > sys_out.txt
 
 grep -q 'P8X/OS' sys_out.txt                 || fail "did not boot P8X/OS"
 grep -qE 'cat\.bin'  sys_out.txt             || fail "dir /bin did not list the compiled commands"
 grep -qi 'hello from P8X' sys_out.txt        || fail "cat | grep pipe did not pass 'hello' through"
-$ROOT/tools/p8xfs.py ls "$D0" /src/commands/c/bin   2>/dev/null | grep -qE '^pwd\.bin ' || fail "make pwd did not rebuild the C binary"
-$ROOT/tools/p8xfs.py ls "$D0" /src/commands/asm/bin 2>/dev/null | grep -qE '^pwd\.bin ' || fail "make pwd did not rebuild the asm binary"
+$ROOT/tools/p8xfs.py ls "$D0" /src/commands/c/bin   2>/dev/null | grep -qE '^pwd\.bin ' || fail "make pwd: no C binary"
+$ROOT/tools/p8xfs.py ls "$D0" /src/commands/asm/bin 2>/dev/null | grep -qE '^pwd\.bin ' || fail "make pwd: no asm binary"
+grep -qE '^/$' sys_out.txt                   || fail "rebuilt pwd.bin did not run / print the CWD"
 grep -q 'drive 1' sys_out.txt                || fail "/d1/DATA/NOTES.TXT (dual-CF mount) not readable"
 
 echo "SYSBUILD TEST: PASS"

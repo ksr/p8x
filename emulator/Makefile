@@ -67,6 +67,16 @@ test-asm-selfhost: p8xemu ucode
 test-sysbuild: p8xemu ucode
 	sh test/os_sysbuild_test.sh
 
+# The FULL system test: (1) `make test` assembles/compiles every source + runs the
+# whole emulator suite; (2) the native-assembler self-host; (3) the full system
+# build + headless boot + an on-emulator `make` rebuild. A COMPLETE on-emulator
+# rebuild of all 42 commands is `sh /src/mk/all` / `make` on the target itself
+# (minutes of emulated time); os_sysbuild rebuilds one command as CI-tractable proof.
+test-full: p8xemu ucode
+	$(MAKE) test
+	$(MAKE) test-asm-selfhost
+	$(MAKE) test-sysbuild test-full
+
 # Per-instruction self-checking regression: halts with A=00 on success,
 # or A=<test id> at the first failing check.
 test-isa: p8xemu ucode
@@ -145,4 +155,4 @@ test-mem: p8xemu ucode
 	../p8xemu -l 200000 tmem.bin 2>/dev/null | tr -d '\0' | grep -q Y && \
 	  echo "MEM48 TEST: PASS" || { echo "MEM48 TEST: FAIL"; exit 1; }
 
-.PHONY: all ucode rom test test-isa test-cf test-os test-basic test-io test-mem test-c test-asm-selfhost test-sysbuild
+.PHONY: all ucode rom test test-isa test-cf test-os test-basic test-io test-mem test-c test-asm-selfhost test-sysbuild test-full
