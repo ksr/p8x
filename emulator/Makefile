@@ -101,6 +101,7 @@ test-os: p8xemu ucode
 	sh test/os_asm_use_test.sh
 	sh test/os_sh_test.sh
 	sh test/os_mk_test.sh
+	sh test/os_make_test.sh
 	sh test/os_dualvol_test.sh
 	sh test/os_cprecursive_test.sh
 	sh test/os_mountcmd_test.sh

@@ -70,29 +70,35 @@ ensure_src() {
         python3 "$root/tools/p8xfs.py" put "$disk" "$app" \
             --name "/src/commands/asm/$(basename "$app")" >/dev/null 2>&1 || true
     done
-    # Output dirs for an on-target rebuild, and the build scripts that drive it
-    # with `sh` (the script runner). CR-separated lines, as the on-target editor
-    # writes. `>/T.ASM` is a scratch file reused per command (`>` overwrites).
-    #   sh /src/mkc    rebuild every C command   -> /src/commands/c/bin/*.bin
-    #   sh /src/mka    rebuild every asm command -> /src/commands/asm/bin/*.bin
-    #   sh /src/mkall  both (a flat script, since `sh` doesn't nest)
-    for d in /src/commands/c/bin /src/commands/asm/bin; do
+    # On-target rebuild: output dirs + build scripts under /src/mk, driven by the
+    # `make` built-in (make <target> == run /src/mk/<target> through the `sh` engine,
+    # always rebuild — there are no timestamps yet). Per command a script rebuilds
+    # BOTH twins (C -> c/bin, asm -> asm/bin); c/asm/all rebuild whole groups:
+    #   make pwd    /src/mk/pwd    one command (both twins)
+    #   make c      /src/mk/c      every C command   -> /src/commands/c/bin/*.bin
+    #   make asm    /src/mk/asm    every asm command -> /src/commands/asm/bin/*.bin
+    #   make        /src/mk/all    everything
+    # `cc` writes its .asm to a scratch T.ASM in the root (redirect targets aren't
+    # path-resolved), so C builds `cd /` first, then `asm` reads that root T.ASM.
+    # CR-separated lines (as the on-target editor writes), each < the 64-byte line buffer.
+    for d in /src/commands/c/bin /src/commands/asm/bin /src/mk; do
         python3 "$root/tools/p8xfs.py" mkdir "$disk" "$d" >/dev/null 2>&1 || true
     done
     _mkcmds="dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch man dep dump"
-    # `cc` writes its .asm to a scratch T.ASM in the root (redirect targets are NOT
-    # path-resolved), so mkc `cd /` first, then `asm` reads that T.ASM (asm resolves
-    # a bare name from root). mka uses absolute paths throughout. Lines stay < the
-    # 64-byte shell line buffer.
-    printf 'cd /\r' > "$build/mkc.scr"; : > "$build/mka.scr"
+    _cline() { printf 'cd /\rcc /src/commands/c/%s.c >T.ASM\rasm T.ASM /src/commands/c/bin/%s.bin\r' "$1" "$1"; }
+    _aline() { printf 'asm /src/commands/asm/%s.asm /src/commands/asm/bin/%s.bin\r' "$1" "$1"; }
+    : > "$build/mk_c.scr"; : > "$build/mk_asm.scr"
     for c in $_mkcmds; do
-        printf 'cc /src/commands/c/%s.c >T.ASM\rasm T.ASM /src/commands/c/bin/%s.bin\r' "$c" "$c" >> "$build/mkc.scr"
-        printf 'asm /src/commands/asm/%s.asm /src/commands/asm/bin/%s.bin\r' "$c" "$c" >> "$build/mka.scr"
+        # per-command script: rebuild both twins
+        { _cline "$c"; _aline "$c"; } > "$build/mk_one.scr"
+        python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_one.scr" --name "/src/mk/$c" >/dev/null 2>&1 || true
+        _cline "$c" >> "$build/mk_c.scr"
+        _aline "$c" >> "$build/mk_asm.scr"
     done
-    cat "$build/mkc.scr" "$build/mka.scr" > "$build/mkall.scr"
-    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mkc.scr"   --name /src/mkc   >/dev/null 2>&1 || true
-    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mka.scr"   --name /src/mka   >/dev/null 2>&1 || true
-    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mkall.scr" --name /src/mkall >/dev/null 2>&1 || true
+    cat "$build/mk_c.scr" "$build/mk_asm.scr" > "$build/mk_all.scr"
+    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_c.scr"   --name /src/mk/c   >/dev/null 2>&1 || true
+    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_asm.scr" --name /src/mk/asm >/dev/null 2>&1 || true
+    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_all.scr" --name /src/mk/all >/dev/null 2>&1 || true
 }
 
 if [ ! -f "$disk" ]; then
