@@ -3758,7 +3758,9 @@ MHELP:   .byte CR,LF
          .byte CR,LF
          .ascii "man name      show a command's manual page (/man)"
          .byte CR,LF
-         .ascii "sh file       run shell commands from a script file (<=512B)"
+         .ascii "sh file       run shell commands from a script file (streamed)"
+         .byte CR,LF
+         .ascii "make [target] rebuild commands from /src (always rebuild)"
          .byte CR,LF
          .ascii "exit / mon    return to the ROM monitor"
          .byte CR,LF

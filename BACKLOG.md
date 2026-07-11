@@ -606,6 +606,36 @@ Last updated: 2026-07-08
       the enabling half of on-target command rebuild-from-asm; the C half already
       works (`cc` + `asm`). Next: a shell script runner + a `mk` build script (no
       P8XFS mtimes, so always-rebuild, not a true make).
+- [x] **On-target assembler path-aware SRC/OUT — DONE (2026-07-10).** `asm`'s
+      SRC and OUT arguments were truncated to 12-char root-only names; they are
+      now full paths resolved via `FRESOLVE` (`SRCPATH`/`OUTPATH`; the output
+      parent dir + leaf are stashed at `OUTINIT` and restored for `FCLOSE` at
+      `FINISHOUT`). So a source under `/src` assembles straight into a build dir:
+      `asm /src/commands/asm/pwd.asm /src/commands/asm/bin/pwd.bin`. This is the
+      last piece that let command rebuild-from-asm live entirely on the machine.
+- [x] **`sh FILE` — shell script runner — DONE (2026-07-10).** New OS built-in
+      (`DOSH`/`GL_SCRIPT`): runs each line of FILE through the normal shell
+      dispatch (`>`/`<`/`|`/PATH all work). The script stream is kept open over
+      IBUF and saved/restored (`SAVESCR`) around every dispatched command — so
+      each command uses the BIOS file streams itself and the script **streams a
+      line at a time, no size cap** (the earlier 512-byte slurp is gone). Caveat:
+      a script line can't use `< redirect` (it shares IBUF). Man page `os/man/sh`
+      updated; `os_sh_test` covers it.
+- [x] **`make <target>` — scaled-down make — DONE (2026-07-10).** New OS built-in
+      (`DOMAKE`): builds `/src/mk/<target>` and runs it through the `sh` engine.
+      **Always rebuilds** — the FS has no mtimes yet, so there's no up-to-date
+      check (dependency tracking is a future enhancement). `run.sh` pre-generates
+      the scripts: `/src/mk/<cmd>` rebuilds one command (both C and asm twins),
+      `/src/mk/{c,asm}` a whole group, `/src/mk/all` everything; bare `make` ==
+      `make all`. `os_mk_test`/`os_make_test`/`os_sysbuild_test` cover it. New man
+      page `os/man/make`; HELP lists `sh` and `make`.
+- [x] **`/src` build-output dirs + `/src/mk` scripts — DONE (2026-07-10).**
+      `run.sh`'s `ensure_src` now also lays down `/src/commands/{c,asm}/bin`
+      (where rebuilt binaries land) and the `/src/mk/` build scripts, idempotently
+      on both fresh and existing disks. The full recipe: C is `cc SRC >T.ASM`
+      (root scratch, since redirect targets aren't path-resolved) then
+      `asm T.ASM .../bin/NAME.bin`; asm is a single path-aware `asm`. Round-trip
+      exercised headlessly by `os_sysbuild_test` (build-only `run.sh` + boot).
 - [x] **Man-page-style OS command reference — DONE (2026-07-09), on-target.**
       Went further than the doc-only plan: authored a per-command manual page
       (NAME / SYNOPSIS / DESCRIPTION / OPTIONS / EXAMPLES / SEE ALSO) for every

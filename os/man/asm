@@ -14,10 +14,15 @@ DESCRIPTION
     /lib/NAME.inc after the program, so a command can share helpers the way
     the C compiler's //#use shares /lib/lib_NAME.c. Up to 4 per file.
 
+    Both the SRC and OUT arguments are path-aware -- a full path, not just a
+    12-char root-only name -- so you can assemble a source out of a /src tree
+    straight into a build-output directory. This is what `make` relies on.
+
 EXAMPLES
     asm hello.asm hello.bin
     run hello.bin
     asm /src/commands/asm/cat.asm cat.bin   (cat.asm does `;#use stdin`)
+    asm /src/commands/asm/pwd.asm /src/commands/asm/bin/pwd.bin
 
 SEE ALSO
-    edit, vi, run, cc
+    edit, vi, run, cc, make, sh

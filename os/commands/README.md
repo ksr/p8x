@@ -34,6 +34,14 @@ print a one-line usage summary and exit.
 > read — and, for C, `cc /src/commands/c/pwd.c >pwd.asm` — any command right on
 > the machine. The deprecated `cpp/lex/cc1` front end is **not** shipped (no
 > binary, no man page, no source), matching its deprecation everywhere else.
+>
+> **Rebuild on-card.** Alongside the sources, `run.sh` lays down build-output
+> dirs `/src/commands/c/bin` and `/src/commands/asm/bin`, plus a `/src/mk/`
+> tree of build scripts. The OS **`sh`** built-in runs a script of shell
+> commands a line at a time (`sh /src/mk/all`), and the **`make <target>`**
+> built-in runs the matching `/src/mk/<target>` script for you — a scaled-down,
+> **always-rebuild** make (P8XFS has no mtimes yet, so there's no up-to-date
+> check — dependency tracking is a future item). See *Building on-target* below.
 
 > **Drives.** A second CF is **mounted at `/d1`** in one unified namespace, so
 > these commands are **drive-unaware**: an ordinary `/d1/...` path reaches drive 1
@@ -140,7 +148,36 @@ print a one-line usage summary and exit.
   *resolve-DST-before-FWOPEN* dance (above) only worked because they resolve a
   single target once.
 
-## Building
+## Building on-target
+
+You can rebuild any command **on the P8X itself**, from the sources shipped
+under `/src`. The `make <target>` built-in is the easy path — it runs the
+pre-generated `/src/mk/<target>` script through the `sh` engine (always
+rebuilds; no timestamps yet):
+
+```
+make pwd            rebuild one command — BOTH twins (C and asm)
+make c              rebuild every C command   -> /src/commands/c/bin/*.bin
+make asm            rebuild every asm command -> /src/commands/asm/bin/*.bin
+make                rebuild everything (== make all)
+sh /src/mk/all      the same, driven directly through sh
+```
+
+Each script just chains the on-target toolchain. A C command compiles then
+assembles; a hand-asm command assembles directly (with `;#use` includes pulled
+from `/lib`):
+
+```
+cc /src/commands/c/pwd.c >T.ASM              # cc writes to a root scratch file
+asm T.ASM /src/commands/c/bin/pwd.bin        # (redirect targets aren't path-resolved)
+asm /src/commands/asm/pwd.asm /src/commands/asm/bin/pwd.bin
+```
+
+So the loop is: edit a source under `/src/commands/{c,asm}` (with `edit`/`vi`),
+`make <name>`, and the fresh binary lands in that group's `bin/` dir. To put it
+on `PATH`, `cp` it to `/bin`.
+
+## Building (host)
 
 Compile + assemble + install one (or let [`../run.sh`](../run.sh) install all
 three into `/bin` on a fresh disk):

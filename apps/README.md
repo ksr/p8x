@@ -64,6 +64,18 @@ Accepted syntax is a subset of the host assembler, with identical encodings:
 | directives | `.org .byte .word .ascii .asciiz .fill` |
 | expressions | `$hex` · decimal · `'c'` · symbol, joined with `+`/`-`, optional `<`/`>` prefix |
 
+A `;#use NAME` line (at column 0) appends the shared include `/lib/NAME.inc`
+after the program body (up to 4 per file, in declared order) — the on-target
+mirror of the host `mkasm.sh`, letting a hand-asm command share the same helper
+includes (`stdin`/`glob`/`globx`/`regex`) that the C `//#use` shares. Both the
+`SRC` and `OUT` arguments are **path-aware** (a full path, not a 12-char
+root-only name), so a source under `/src` can be assembled straight into a
+build-output dir: `asm /src/commands/asm/pwd.asm /src/commands/asm/bin/pwd.bin`.
+Together these let ASM rebuild the hand-asm `/bin` commands from source on the
+machine — the `asm` half of the on-target rebuild loop (`cc` handles the C
+half); the `make`/`sh` built-ins drive it (see
+[os/commands/](../os/commands/README.md)).
+
 The opcode table is **generated** from `genucode.OPC` by
 `generators/gen_p8xopc.py` and concatenated after the assembler logic at build
 time, so the mnemonic/encoding map can never drift from the microcode.

@@ -1,0 +1,32 @@
+NAME
+    make - rebuild commands from source, on-target
+
+SYNOPSIS
+    make [target]
+
+DESCRIPTION
+    A scaled-down make: it runs the pre-generated build script
+    /src/mk/<target> through the same engine as `sh`. make is an OS
+    built-in.
+
+    There are no file timestamps yet (P8XFS has no mtimes), so make
+    ALWAYS rebuilds -- there is no up-to-date check. Dependency
+    checking can be added later.
+
+    Targets (the scripts under /src/mk, laid down by run.sh):
+      make NAME   rebuild one command (both its C and asm twins)
+      make c      rebuild every C command   -> /src/commands/c/bin
+      make asm    rebuild every asm command -> /src/commands/asm/bin
+      make        rebuild everything (same as `make all`)
+
+    A C command is built cc -> asm from /src/commands/c/NAME.c; a
+    hand-asm command is assembled from /src/commands/asm/NAME.asm.
+    The binaries land under /src/commands/{c,asm}/bin.
+
+EXAMPLES
+    make pwd
+    make c
+    make
+
+SEE ALSO
+    sh, cc, asm, run
