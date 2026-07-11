@@ -1,9 +1,10 @@
 #!/bin/sh
-# `sh FILE` — the shell script runner (os/p8xos.asm). The shell slurps the whole
-# script into APBUF and runs each line through the normal DISPATCH (built-ins,
-# /bin programs, >, <, | all work), then returns to the console at end-of-script.
-# Fast mechanism check: a two-line script of built-ins (mkdir) must create BOTH
-# directories and then hand control back to the interactive prompt.
+# `sh FILE` — the shell script runner (os/p8xos.asm). The shell streams the script
+# a line at a time (its read-stream state is saved/restored around each command, so
+# a script of ANY length works), running each line through the normal DISPATCH
+# (built-ins, /bin programs, >, <, | all work), then returns to the console at EOF.
+# Checks: (1) a two-line script creates both dirs + hands back to the prompt;
+# (2) a >512-byte script (50 mkdirs) runs fully, proving there is no size cap.
 #   (the cc+asm build-a-command use case is exercised manually / in os_mk_test)
 set -e
 cd "$(dirname "$0")"
@@ -35,5 +36,16 @@ done
 # and they must be clean names (a botched line-split makes e.g. 'FOOmkdir')
 python3 $ROOT/tools/p8xfs.py ls sh.img / 2>/dev/null | grep -qE '[A-Z]mkdir' \
     && fail "concatenated command — script line-splitting is broken" || true
+
+# ---- big script: 50 mkdirs (~550 bytes) must ALL run (past the old 512 cap) ----
+rm -f big.img big.scr
+python3 $ROOT/tools/p8xfs.py create big.img >/dev/null
+python3 $ROOT/tools/p8xfs.py boot   big.img ossh.bin >/dev/null
+i=0; : > big.scr
+while [ $i -lt 50 ]; do printf 'mkdir /D%02d\r' "$i" >> big.scr; i=$((i+1)); done
+python3 $ROOT/tools/p8xfs.py put big.img big.scr --name /b >/dev/null
+printf 'B\rsh b\r' | ../p8xemu -l 900000000 -c big.img eeprom.bin >/dev/null 2>&1
+n=$(python3 $ROOT/tools/p8xfs.py ls big.img / 2>/dev/null | grep -cE '^D[0-9][0-9] ')
+[ "$n" -eq 50 ] || fail "big script: only $n/50 dirs created (streaming past 512B broken)"
 
 echo "OS-SH TEST: PASS"

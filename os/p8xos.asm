@@ -75,6 +75,15 @@ LBA     = $7047          ; CFREAD/CFWRITE target LBA, byte 0 (bits 7:0)
 LBA1    = $7048          ; LBA byte 1 (bits 15:8)  — 0 after CFINIT unless set
 LBA2    = $7049          ; LBA byte 2 (bits 23:16) — 0 after CFINIT unless set
 FLEN    = $7058          ; BIOS file length param (used to drive FLOADAT)
+; BIOS read-stream state — `sh` points a stream at the script's extent (over IBUF)
+; and saves/restores this block around each dispatched command.
+ROSTAT  = $705C          ; read-stream state base (ROLBA..ROCNT, 11 bytes)
+ROLBA   = $705C          ; next sector LBA (3)
+ROREM   = $705F          ; bytes remaining in the file (2)
+ROBUF   = $7061          ; caller's 512-byte sector buffer address (2)
+ROCNT   = $7065          ; bytes left in ROBUF; 0 -> refill (2)
+DRVSEL  = $707C          ; current CF drive
+ROSDRV  = $707F          ; read-stream drive
 SBUF    = $7100          ; 512-byte sector buffer
 
 ; ---- P8XFS v2 on-disk layout (root @ LBA 33, 4 secs; data @ 37) -------------
@@ -220,9 +229,9 @@ APLBA   = $74D9          ; >> : old file's start LBA (2 bytes)
 APREM   = $74DB          ; >> : old file bytes left to copy (2 bytes)
 APCHK   = $74DD          ; >> : bytes to emit from the current sector (2 bytes)
 ; ---- sh: run shell commands from a script file (slurped into APBUF) ----
-SCRIPTM = $74E0          ; 1 = the shell is reading its lines from the script buffer
-SCRPTR  = $74E1          ; read cursor into the script buffer (APBUF) (2)
-SCRREM  = $74E3          ; script bytes still unread (2)
+SCRIPTM = $74E0          ; 1 = the shell is running lines from a `sh` script
+SCRSAVE = $74E1          ; saved script read-stream state (ROSTATE 11 + ROSDRV = 12)
+SCRCNT  = $74ED          ; byte counter for SAVESCR/RESTSCR (1)
 APBUF   = $7800          ; >> prepend sector buffer (512B, below the TPA); also the
                          ;   `sh` script buffer (a script line can't use >>, which is
                          ;   fine — build scripts use >)
@@ -903,42 +912,36 @@ NOFILE: LDP1 #MNOFILE
         JMP  SHELL
 
 ; ---------------- sh name : run shell commands from a script file ------------
-; Slurp the whole script (<=512 bytes) into APBUF, then set SCRIPTM so the shell
-; loop reads its lines from there. Each line runs through the normal DISPATCH
-; (so >, <, | and PATH all work); the script lives in RAM, so a command's own FS
-; use can't disturb it. Build a command from source with, e.g.:
-;   cc /src/commands/c/pwd.c >T.ASM   then   asm T.ASM /bin/pwd.bin
-DOSH:   JSR  FINDARG            ; resolve + locate the script file
+; `sh FILE` — run shell commands from FILE. The script's read stream is kept open
+; over IBUF and its state is saved/restored (SCRSAVE) around every dispatched
+; command — each command (cc/asm/...) uses the BIOS read stream itself — so a
+; script of any length streams a line at a time. GL_SCRIPT does the reading.
+; Caveat: a script line can't use `< redirect` (it shares IBUF). Build a command
+; from source, e.g.:  cc /src/commands/c/pwd.c >T.ASM   then   asm T.ASM /bin/pwd.bin
+DOSH:   JSR  FINDARG            ; locate the script -> STARTLO/STARTHI + LENLO/LENHI
         JZ   NOFILE
-        LDA  LENHI              ; must fit APBUF (512B): reject >= 512 (LENHI >= 2)
-        LDB  #2
-        CMP
-        JC   SH_BIG
-        LDA  STARTLO            ; bulk-read the whole script into APBUF
-        STA  LBA
+        LDA  STARTLO            ; point a read stream at the script's extent (IBUF)
+        STA  ROLBA
         LDA  STARTHI
-        STA  LBA1
+        STA  ROLBA+1
         LDA  #0
-        STA  LBA2
+        STA  ROLBA+2
         LDA  LENLO
-        STA  FLEN
+        STA  ROREM
         LDA  LENHI
-        STA  FLEN+1
-        LDP1 #APBUF
-        JSR  FLOADAT
-        LDA  #<APBUF            ; arm script mode: cursor + remaining
-        STA  SCRPTR
-        LDA  #>APBUF
-        STA  SCRPTR+1
-        LDA  LENLO
-        STA  SCRREM
-        LDA  LENHI
-        STA  SCRREM+1
+        STA  ROREM+1
+        LDA  #<IBUF
+        STA  ROBUF
+        LDA  #>IBUF
+        STA  ROBUF+1
+        LDA  #0                 ; ROCNT=0 -> the first FGETB refills IBUF
+        STA  ROCNT
+        STA  ROCNT+1
+        LDA  DRVSEL
+        STA  ROSDRV
+        JSR  SAVESCR            ; SCRSAVE <- this fresh stream state
         LDA  #1
         STA  SCRIPTM
-        JMP  SHELL
-SH_BIG: LDP1 #MSHBIG
-        JSR  PUTS
         JMP  SHELL
 
 ; FINDARG - resolve a path argument to a regular file. Returns A=0 (Z set) on
@@ -3226,43 +3229,22 @@ GLEND:  JSR  CRLF
         STA  (P2)
         RTS
 
-; GL_SCRIPT - GETLN in `sh` mode: copy the next line from the script buffer
-;   (SCRPTR/SCRREM over APBUF) into LINEBUF (P2), echoing it. LF ends the line;
-;   CR is dropped. At the buffer's end, clear SCRIPTM so the next GETLN reads the
-;   console. Commands run normally (the script lives in RAM, so it survives their
-;   FS use); P1 is reloaded from SCRPTR each char (OUTCH may not preserve it).
+; GL_SCRIPT - GETLN in `sh` mode: read the next line from the OPEN script stream
+;   (RESTSCR brings its ROSTATE back, since the previous command clobbered it) into
+;   LINEBUF (P2), echoing it; LF ends the line, CR is dropped. Save the stream
+;   position for the next line. At EOF, clear SCRIPTM so GETLN reads the console.
 GL_SCRIPT:
-GS_LP:  LDA  SCRREM             ; end of script?
-        LDB  SCRREM+1
-        OR
-        JZ   GS_EOF
-        LDA  SCRPTR             ; ch = *SCRPTR ; then SCRPTR++ , SCRREM--
-        TAP1L
-        LDA  SCRPTR+1
-        TAP1H
-        LDA  (P1)
+        JSR  RESTSCR            ; ROSTATE <- script stream (a command clobbered it)
+        LDP2 #LINEBUF           ; RESTSCR used P2 — restore the LINEBUF write cursor
+GS_LP:  JSR  FGETB
+        JC   GS_EOF             ; end of script
         STA  TMP
-        INP1
-        TPA1L
-        STA  SCRPTR
-        TPA1H
-        STA  SCRPTR+1
-        LDA  SCRREM
-        LDB  #1
-        SUB
-        STA  SCRREM
-        JC   GS_C1
-        LDA  SCRREM+1
-        LDB  #1
-        SUB
-        STA  SCRREM+1
-GS_C1:  LDA  TMP
-        LDB  #LF                ; LF ends the line...
+        LDB  #LF                ; CR or LF ends the line (an editor writes CR; a
+        CMP                     ;   CRLF's trailing LF just makes a blank line that
+        JZ   GS_DONE            ;   DISPATCH ignores)
+        LDB  #CR
         CMP
         JZ   GS_DONE
-        LDB  #CR                ; ...and so does CR (handles CR, LF, and CRLF —
-        CMP                     ;   the leftover LF of a CRLF just yields a blank
-        JZ   GS_DONE            ;   line, which DISPATCH ignores)
         LDA  TMP                ; store + echo
         STA  (P2)+
         JSR  OUTCH
@@ -3270,11 +3252,41 @@ GS_C1:  LDA  TMP
 GS_DONE:LDA  #0
         STA  (P2)               ; NUL-terminate the line
         JSR  CRLF               ; echo the newline after the command
+        JSR  SAVESCR            ; remember the position for the next line
         RTS
 GS_EOF: LDA  #0                 ; script exhausted -> console next time
         STA  SCRIPTM
         STA  (P2)
         JSR  CRLF
+        RTS
+
+; SAVESCR / RESTSCR - copy the BIOS read-stream state (ROSTATE 11 + ROSDRV) to /
+;   from SCRSAVE, so a `sh` script survives each command's own read-stream use.
+SAVESCR:LDP1 #ROSTAT
+        LDP2 #SCRSAVE
+        LDA  #11
+        STA  SCRCNT
+SVS_LP: LDA  (P1)+
+        STA  (P2)+
+        LDA  SCRCNT
+        DEC
+        STA  SCRCNT
+        JNZ  SVS_LP
+        LDA  ROSDRV
+        STA  (P2)
+        RTS
+RESTSCR:LDP1 #SCRSAVE
+        LDP2 #ROSTAT
+        LDA  #11
+        STA  SCRCNT
+RSS_LP: LDA  (P1)+
+        STA  (P2)+
+        LDA  SCRCNT
+        DEC
+        STA  SCRCNT
+        JNZ  RSS_LP
+        LDA  (P1)
+        STA  ROSDRV
         RTS
 
 CRLF:   LDA  #CR
@@ -3709,8 +3721,6 @@ MUNK:    .byte CR,LF
          .asciiz "?"
 MNOFILE: .byte CR,LF
          .asciiz "?NO FILE"
-MSHBIG:  .byte CR,LF
-         .asciiz "?SCRIPT TOO BIG (MAX 512)"
 MLOADED: .byte CR,LF
          .asciiz "LOADED"
 MDELETED: .byte CR,LF
