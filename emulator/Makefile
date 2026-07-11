@@ -75,7 +75,7 @@ test-sysbuild: p8xemu ucode
 test-full: p8xemu ucode
 	$(MAKE) test
 	$(MAKE) test-asm-selfhost
-	$(MAKE) test-sysbuild test-full
+	$(MAKE) test-sysbuild
 
 # Per-instruction self-checking regression: halts with A=00 on success,
 # or A=<test id> at the first failing check.
