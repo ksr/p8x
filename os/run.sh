@@ -258,6 +258,18 @@ else
     echo "using existing drive-1 disk: $disk1"
 fi
 
+# Headless build-only mode (P8X_BUILD_ONLY=1): the full disk images are built
+# above; skip the interactive emulator. Used by the system-build test to get a
+# complete, ready-to-boot volume without launching a terminal session. The built
+# eeprom + emulator are copied next to the images so a caller can boot them.
+if [ -n "$P8X_BUILD_ONLY" ]; then
+    # copy the boot bits next to the images: eeprom, the emulator, AND the
+    # microcode u?.bin (the emulator loads microcode from its CWD).
+    cp "$build/eeprom.bin" "$build/p8xemu" "$build"/u?.bin "$(dirname "$disk")/" 2>/dev/null || true
+    echo "built (headless): $disk  +  $disk1"
+    exit 0
+fi
+
 echo "--- starting emulator: you are in the MONITOR (* prompt). Type B to boot P8X/OS. ---"
 echo "--- drive 0 = $disk  |  drive 1 = $disk1 (mounted at /d1) ---"
 cd "$build"

@@ -60,6 +60,12 @@ test-c: p8xemu ucode
 test-asm-selfhost: p8xemu ucode
 	sh test/asm_selfhost_test.sh
 
+# Full system build: build the whole ready-to-boot system the way run.sh does
+# (OS + every /bin + /bina + /src + /man + /lib + dual-CF), boot it headless, and
+# smoke-test boot / PATH / pipes / `make` rebuild / the /d1 mount. Slow; on demand.
+test-sysbuild: p8xemu ucode
+	sh test/os_sysbuild_test.sh
+
 # Per-instruction self-checking regression: halts with A=00 on success,
 # or A=<test id> at the first failing check.
 test-isa: p8xemu ucode
@@ -138,4 +144,4 @@ test-mem: p8xemu ucode
 	../p8xemu -l 200000 tmem.bin 2>/dev/null | tr -d '\0' | grep -q Y && \
 	  echo "MEM48 TEST: PASS" || { echo "MEM48 TEST: FAIL"; exit 1; }
 
-.PHONY: all ucode rom test test-isa test-cf test-os test-basic test-io test-mem test-c test-asm-selfhost
+.PHONY: all ucode rom test test-isa test-cf test-os test-basic test-io test-mem test-c test-asm-selfhost test-sysbuild
