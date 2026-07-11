@@ -219,7 +219,13 @@ APHAVE  = $74D8          ; >> : 1 = an existing file to prepend was found
 APLBA   = $74D9          ; >> : old file's start LBA (2 bytes)
 APREM   = $74DB          ; >> : old file bytes left to copy (2 bytes)
 APCHK   = $74DD          ; >> : bytes to emit from the current sector (2 bytes)
-APBUF   = $7800          ; >> prepend sector buffer (512B, below the TPA)
+; ---- sh: run shell commands from a script file (slurped into APBUF) ----
+SCRIPTM = $74E0          ; 1 = the shell is reading its lines from the script buffer
+SCRPTR  = $74E1          ; read cursor into the script buffer (APBUF) (2)
+SCRREM  = $74E3          ; script bytes still unread (2)
+APBUF   = $7800          ; >> prepend sector buffer (512B, below the TPA); also the
+                         ;   `sh` script buffer (a script line can't use >>, which is
+                         ;   fine — build scripts use >)
 IBUF    = $7500          ; 512-byte buffer for the stdin read stream
 ; ---- program search path (implicit RUN of a bare command name) ----
 PATHBUF = $7700          ; search path, ';'-separated dirs; default "/BIN" ($7700..$773F)
@@ -430,12 +436,14 @@ SHELL:  JSR  FLUSHRED           ; if the previous command was redirected, write 
         LDA  #0
         STA  PIPEF
 SH_PROMPT:
+        LDA  SCRIPTM            ; running a script: no prompt (GETLN pulls + echoes)
+        JNZ  SH_GL
         JSR  CRLF
         LDP1 #CWDPATH           ; prompt = "<path>> " (drive 1 shows as /d1/...)
         JSR  OPUTS
         LDP1 #MPROMPT
         JSR  OPUTS
-        JSR  GETLN              ; line -> LINEBUF (null-terminated)
+SH_GL:  JSR  GETLN              ; line -> LINEBUF (null-terminated)
         JSR  PIPESCAN          ; split "cmd | cmd": save the right, arm left's >PIPE
         JSR  INSCAN            ; split off a "< name" stdin redirect (before REDSCAN)
         JSR  REDSCAN            ; split off a trailing "> name" and arm capture
@@ -498,6 +506,9 @@ DISPATCH:
         LDP1 #KW_MOUNT
         JSR  CMPCMD
         JNZ  DOMOUNT
+        LDP1 #KW_SH
+        JSR  CMPCMD
+        JNZ  DOSH
         JMP  IMPRUN             ; not a built-in: try to run it as a program (PATH)
 
 ; CMPCMD - compare CMDBUF to the keyword at (P1); returns A!=0 (and Z clear)
@@ -888,6 +899,45 @@ DODEL:  JSR  FINDARG
         JMP  SHELL
 
 NOFILE: LDP1 #MNOFILE
+        JSR  PUTS
+        JMP  SHELL
+
+; ---------------- sh name : run shell commands from a script file ------------
+; Slurp the whole script (<=512 bytes) into APBUF, then set SCRIPTM so the shell
+; loop reads its lines from there. Each line runs through the normal DISPATCH
+; (so >, <, | and PATH all work); the script lives in RAM, so a command's own FS
+; use can't disturb it. Build a command from source with, e.g.:
+;   cc /src/commands/c/pwd.c >T.ASM   then   asm T.ASM /bin/pwd.bin
+DOSH:   JSR  FINDARG            ; resolve + locate the script file
+        JZ   NOFILE
+        LDA  LENHI              ; must fit APBUF (512B): reject >= 512 (LENHI >= 2)
+        LDB  #2
+        CMP
+        JC   SH_BIG
+        LDA  STARTLO            ; bulk-read the whole script into APBUF
+        STA  LBA
+        LDA  STARTHI
+        STA  LBA1
+        LDA  #0
+        STA  LBA2
+        LDA  LENLO
+        STA  FLEN
+        LDA  LENHI
+        STA  FLEN+1
+        LDP1 #APBUF
+        JSR  FLOADAT
+        LDA  #<APBUF            ; arm script mode: cursor + remaining
+        STA  SCRPTR
+        LDA  #>APBUF
+        STA  SCRPTR+1
+        LDA  LENLO
+        STA  SCRREM
+        LDA  LENHI
+        STA  SCRREM+1
+        LDA  #1
+        STA  SCRIPTM
+        JMP  SHELL
+SH_BIG: LDP1 #MSHBIG
         JSR  PUTS
         JMP  SHELL
 
@@ -3138,6 +3188,8 @@ SR_NE:  LDA  #0
 ; ---------------- console helpers (built on the BIOS) ------------------------
 ; GETLN - read a line into LINEBUF until CR, echoing; null-terminate.
 GETLN:  LDP2 #LINEBUF
+        LDA  SCRIPTM            ; sh: read the next line from the script buffer
+        JNZ  GL_SCRIPT
 GL1:    JSR  CONIN
         STA  TMP
         LDB  #CR
@@ -3172,6 +3224,57 @@ GLBS:   TPA2L                  ; at the start of the line? nothing to erase
 GLEND:  JSR  CRLF
         LDA  #0
         STA  (P2)
+        RTS
+
+; GL_SCRIPT - GETLN in `sh` mode: copy the next line from the script buffer
+;   (SCRPTR/SCRREM over APBUF) into LINEBUF (P2), echoing it. LF ends the line;
+;   CR is dropped. At the buffer's end, clear SCRIPTM so the next GETLN reads the
+;   console. Commands run normally (the script lives in RAM, so it survives their
+;   FS use); P1 is reloaded from SCRPTR each char (OUTCH may not preserve it).
+GL_SCRIPT:
+GS_LP:  LDA  SCRREM             ; end of script?
+        LDB  SCRREM+1
+        OR
+        JZ   GS_EOF
+        LDA  SCRPTR             ; ch = *SCRPTR ; then SCRPTR++ , SCRREM--
+        TAP1L
+        LDA  SCRPTR+1
+        TAP1H
+        LDA  (P1)
+        STA  TMP
+        INP1
+        TPA1L
+        STA  SCRPTR
+        TPA1H
+        STA  SCRPTR+1
+        LDA  SCRREM
+        LDB  #1
+        SUB
+        STA  SCRREM
+        JC   GS_C1
+        LDA  SCRREM+1
+        LDB  #1
+        SUB
+        STA  SCRREM+1
+GS_C1:  LDA  TMP
+        LDB  #LF                ; LF ends the line...
+        CMP
+        JZ   GS_DONE
+        LDB  #CR                ; ...and so does CR (handles CR, LF, and CRLF —
+        CMP                     ;   the leftover LF of a CRLF just yields a blank
+        JZ   GS_DONE            ;   line, which DISPATCH ignores)
+        LDA  TMP                ; store + echo
+        STA  (P2)+
+        JSR  OUTCH
+        JMP  GS_LP
+GS_DONE:LDA  #0
+        STA  (P2)               ; NUL-terminate the line
+        JSR  CRLF               ; echo the newline after the command
+        RTS
+GS_EOF: LDA  #0                 ; script exhausted -> console next time
+        STA  SCRIPTM
+        STA  (P2)
+        JSR  CRLF
         RTS
 
 CRLF:   LDA  #CR
@@ -3588,6 +3691,8 @@ MHELP:   .byte CR,LF
          .byte CR,LF
          .ascii "man name      show a command's manual page (/man)"
          .byte CR,LF
+         .ascii "sh file       run shell commands from a script file (<=512B)"
+         .byte CR,LF
          .ascii "exit / mon    return to the ROM monitor"
          .byte CR,LF
          .ascii "cmd >FILE     send output to FILE instead of the screen"
@@ -3604,6 +3709,8 @@ MUNK:    .byte CR,LF
          .asciiz "?"
 MNOFILE: .byte CR,LF
          .asciiz "?NO FILE"
+MSHBIG:  .byte CR,LF
+         .asciiz "?SCRIPT TOO BIG (MAX 512)"
 MLOADED: .byte CR,LF
          .asciiz "LOADED"
 MDELETED: .byte CR,LF
@@ -3677,3 +3784,4 @@ KW_MON:  .asciiz "mon"
 KW_FORMAT:.asciiz "format"
 KW_MOUNT: .asciiz "mount"
 KW_UMOUNT:.asciiz "umount"
+KW_SH:   .asciiz "sh"

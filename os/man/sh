@@ -1,0 +1,33 @@
+NAME
+    sh - run shell commands from a script file
+
+SYNOPSIS
+    sh file
+
+DESCRIPTION
+    Reads `file` (a text file of shell command lines, up to 512 bytes) and
+    runs each line exactly as if you had typed it at the prompt: built-ins,
+    /bin programs, and redirection/pipes (>, <, |) all work. Lines are echoed
+    as they run. At end of file, control returns to the interactive prompt.
+
+    sh is a shell built-in, not a /bin program. The whole script is read into
+    memory first, so a command's own file I/O can't disturb it -- with one
+    exception: a script line may not use the `>>` append redirect (it shares
+    the script's buffer). Lines end with CR, LF, or CRLF.
+
+    The main use is rebuilding a command from source on the machine. A build
+    script for a C command:
+
+        cc /src/commands/c/pwd.c >T.ASM
+        asm T.ASM /bin/pwd.bin
+
+    and for a hand-assembled command (asm resolves ;#use from /lib):
+
+        asm /src/commands/asm/cat.asm /bin/cat.bin
+
+EXAMPLES
+    sh build            run the commands in the file `build`
+    sh /mkpwd           rebuild pwd from /src and reinstall it
+
+SEE ALSO
+    cc, asm, run, edit
