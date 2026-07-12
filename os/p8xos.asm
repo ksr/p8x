@@ -49,7 +49,7 @@ CFCURDRV= $014B          ; -> A = current CF drive
 FFIND   = $0118          ; find file FNAME in current dir -> LBA+FLEN; C=1 absent
 CFREAD  = $010C          ; sector LBA -> (P1); P1 += 512
 CFWRITE = $010F          ; SBUF -> sector LBA
-CFIMASK = $7081          ; firmware "drive N CFINIT'd this session" bitmask (UMOUNT clears bit 1)
+CFIMASK = $7087          ; firmware "drive N CFINIT'd this session" bitmask (UMOUNT clears bit 1)
 PUTS    = $0112          ; print (P1)+ until $00
 PHEX8   = $0115          ; print A as two hex digits
 FLOADAT = $013F          ; bulk-read FLEN bytes from LBA into (P1)
@@ -63,12 +63,12 @@ FNORM   = $0136          ; copy string (P1) -> FNAME, case-preserved + space-pad
 FOPEN   = $0124          ; open file FNAME for reading (P1 = 512-byte buffer)
 FGETB   = $0127          ; next byte -> A; C=1 at end of file
 FDELETE = $011E          ; tombstone file FNAME (for the pipe temp)
-BDIRLBA = $706E          ; BIOS "current directory" start LBA (default root); the
-BDIRN   = $706F          ; FS calls register/find in here. We point it at the CWD
+BDIRLBA = $7073          ; BIOS "current directory" start LBA (default root); the
+BDIRN   = $7074          ; FS calls register/find in here. We point it at the CWD
                          ; so a redirect / pipe file lands in the working dir.
-BDIRLBA1= $707A          ; BIOS current-directory start LBA high byte (16-bit dirs)
+BDIRLBA1= $7080          ; BIOS current-directory start LBA high byte (16-bit dirs)
 BFNAME  = $704A          ; FNEXT entry-name output (BIOS FNAME)
-BFFLAG  = $7070          ; FNEXT entry-flag output (BIOS FFLAG)
+BFFLAG  = $7075          ; FNEXT entry-flag output (BIOS FFLAG)
 
 ; ---- Shared ABI state (set by/for the BIOS) --------------------------------
 LBA     = $7047          ; CFREAD/CFWRITE target LBA, byte 0 (bits 7:0)
@@ -77,13 +77,13 @@ LBA2    = $7049          ; LBA byte 2 (bits 23:16) — 0 after CFINIT unless set
 FLEN    = $7058          ; BIOS file length param (used to drive FLOADAT)
 ; BIOS read-stream state — `sh` points a stream at the script's extent (over IBUF)
 ; and saves/restores this block around each dispatched command.
-ROSTAT  = $705C          ; read-stream state base (ROLBA..ROCNT, 11 bytes)
-ROLBA   = $705C          ; next sector LBA (3)
-ROREM   = $705F          ; bytes remaining in the file (2)
-ROBUF   = $7061          ; caller's 512-byte sector buffer address (2)
-ROCNT   = $7065          ; bytes left in ROBUF; 0 -> refill (2)
-DRVSEL  = $707C          ; current CF drive
-ROSDRV  = $707F          ; read-stream drive
+ROSTAT  = $705E          ; read-stream state base (ROLBA..ROCNT, 11 bytes)
+ROLBA   = $705E          ; next sector LBA (3)
+ROREM   = $7061          ; bytes remaining in the file (2)
+ROBUF   = $7064          ; caller's 512-byte sector buffer address (2)
+ROCNT   = $7068          ; bytes left in ROBUF; 0 -> refill (2)
+DRVSEL  = $7082          ; current CF drive
+ROSDRV  = $7085          ; read-stream drive
 SBUF    = $7100          ; 512-byte sector buffer
 
 ; ---- P8XFS v2 on-disk layout (root @ LBA 33, 4 secs; data @ 37) -------------
@@ -230,8 +230,8 @@ APREM   = $74DB          ; >> : old file bytes left to copy (2 bytes)
 APCHK   = $74DD          ; >> : bytes to emit from the current sector (2 bytes)
 ; ---- sh: run shell commands from a script file (slurped into APBUF) ----
 SCRIPTM = $74E0          ; 1 = the shell is running lines from a `sh` script
-SCRSAVE = $74E1          ; saved script read-stream state (ROSTATE 11 + ROSDRV = 12)
-SCRCNT  = $74ED          ; byte counter for SAVESCR/RESTSCR (1)
+SCRSAVE = $74E1          ; saved script read-stream state (ROSTATE 13 + ROSDRV = 14: $74E1..$74EE)
+SCRCNT  = $74EF          ; byte counter for SAVESCR/RESTSCR (1)
 APBUF   = $7800          ; >> prepend sector buffer (512B, below the TPA); also the
                          ;   `sh` script buffer (a script line can't use >>, which is
                          ;   fine — build scripts use >)
@@ -3323,11 +3323,11 @@ GS_EOF: LDA  #0                 ; script exhausted -> console next time
         JSR  CRLF
         RTS
 
-; SAVESCR / RESTSCR - copy the BIOS read-stream state (ROSTATE 11 + ROSDRV) to /
+; SAVESCR / RESTSCR - copy the BIOS read-stream state (ROSTATE 13 + ROSDRV) to /
 ;   from SCRSAVE, so a `sh` script survives each command's own read-stream use.
 SAVESCR:LDP1 #ROSTAT
         LDP2 #SCRSAVE
-        LDA  #11
+        LDA  #13
         STA  SCRCNT
 SVS_LP: LDA  (P1)+
         STA  (P2)+
@@ -3340,7 +3340,7 @@ SVS_LP: LDA  (P1)+
         RTS
 RESTSCR:LDP1 #SCRSAVE
         LDP2 #ROSTAT
-        LDA  #11
+        LDA  #13
         STA  SCRCNT
 RSS_LP: LDA  (P1)+
         STA  (P2)+
