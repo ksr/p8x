@@ -100,13 +100,14 @@ ensure_src() {
     #   make installasm  /src/mk/installasm  copy asm/bin/*.bin -> /bin (publish asm twins)
     # `cc` writes its .asm to a scratch T.ASM in the root (redirect targets aren't
     # path-resolved), so C builds `cd /` first, then `asm` reads that root T.ASM.
-    # CR-separated lines (as the on-target editor writes), each < the 64-byte line buffer.
+    # LF-separated lines (the Unix convention; EDIT writes LF too, and sh/make's
+    # GL_SCRIPT ends a line on CR or LF), each < the 64-byte line buffer.
     for d in /src/commands/c/bin /src/commands/asm/bin /src/mk; do
         python3 "$root/tools/p8xfs.py" mkdir "$disk" "$d" >/dev/null 2>&1 || true
     done
     _mkcmds="dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch man dep dump"
-    _cline() { printf 'cd /\rcc /src/commands/c/%s.c >T.ASM\rasm T.ASM /src/commands/c/bin/%s.bin\r' "$1" "$1"; }
-    _aline() { printf 'asm /src/commands/asm/%s.asm /src/commands/asm/bin/%s.bin\r' "$1" "$1"; }
+    _cline() { printf 'cd /\ncc /src/commands/c/%s.c >T.ASM\nasm T.ASM /src/commands/c/bin/%s.bin\n' "$1" "$1"; }
+    _aline() { printf 'asm /src/commands/asm/%s.asm /src/commands/asm/bin/%s.bin\n' "$1" "$1"; }
     : > "$build/mk_c.scr"; : > "$build/mk_asm.scr"
     for c in $_mkcmds; do
         # per-command script: rebuild both twins
@@ -132,12 +133,12 @@ ensure_src() {
     # twin goes live: `make installc` copies the C builds over /bin, `make installasm`
     # the asm builds. cp's wildcard-into-directory does the whole set in one line
     # (well under the 63-byte shell LINEBUF).
-    printf 'cp /src/commands/c/bin/*.bin /bin\r'   > "$build/mk_instc.scr"
-    printf 'cp /src/commands/asm/bin/*.bin /bin\r' > "$build/mk_insta.scr"
+    printf 'cp /src/commands/c/bin/*.bin /bin\n'   > "$build/mk_instc.scr"
+    printf 'cp /src/commands/asm/bin/*.bin /bin\n' > "$build/mk_insta.scr"
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_instc.scr" --name /src/mk/installc   >/dev/null 2>&1 || true
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_insta.scr" --name /src/mk/installasm >/dev/null 2>&1 || true
     # `make os-bios` — assemble the monitor + OS from /src/os-bios/asm into its bin dir.
-    printf 'asm /src/os-bios/asm/p8xmon.asm /src/os-bios/asm/bin/p8xmon.bin\rasm /src/os-bios/asm/p8xos.asm /src/os-bios/asm/bin/p8xos.bin\r' > "$build/mk_osbios.scr"
+    printf 'asm /src/os-bios/asm/p8xmon.asm /src/os-bios/asm/bin/p8xmon.bin\nasm /src/os-bios/asm/p8xos.asm /src/os-bios/asm/bin/p8xos.bin\n' > "$build/mk_osbios.scr"
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_osbios.scr" --name /src/mk/os-bios >/dev/null 2>&1 || true
 }
 

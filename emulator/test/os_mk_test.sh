@@ -36,10 +36,10 @@ done
 python3 $ROOT/tools/p8xfs.py put mk.img $ROOT/os/commands/pwd.c      --name /src/commands/c/pwd.c     >/dev/null
 python3 $ROOT/tools/p8xfs.py put mk.img $ROOT/os/commands-asm/pwd.asm --name /src/commands/asm/pwd.asm >/dev/null
 # the build script: rebuild pwd from C (cc -> asm) and from asm
-printf 'cd /\rcc /src/commands/c/pwd.c >T.ASM\rasm T.ASM /src/commands/c/bin/pwd.bin\rasm /src/commands/asm/pwd.asm /src/commands/asm/bin/pwd.bin\r' > mk.scr
+printf 'cd /\ncc /src/commands/c/pwd.c >T.ASM\nasm T.ASM /src/commands/c/bin/pwd.bin\nasm /src/commands/asm/pwd.asm /src/commands/asm/bin/pwd.bin\n' > mk.scr
 python3 $ROOT/tools/p8xfs.py put mk.img mk.scr --name /mk >/dev/null
 # the install target (as run.sh generates it): publish the C builds to /bin
-printf 'cp /src/commands/c/bin/*.bin /bin\r' > mk_instc.scr
+printf 'cp /src/commands/c/bin/*.bin /bin\n' > mk_instc.scr
 python3 $ROOT/tools/p8xfs.py put mk.img mk_instc.scr --name /src/mk/installc >/dev/null
 
 # rebuild pwd (both twins), then `make installc` to publish the C build to /bin, then
