@@ -278,7 +278,7 @@ kk:     .fill 1
 nch:    .fill 1
 lba:    .fill 2
 caddr:  .fill 2
-de:     .fill 17
+de:     .fill 18   ; +[17] = length bits 16..23 (24-bit file size)
 nsub:   .fill 16                      ; nsub[MAXD], MAXD=16
 idx:    .fill 16
 csub:   .fill 768                     ; csub[16][24] 16-bit

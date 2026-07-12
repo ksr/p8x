@@ -140,4 +140,4 @@ gpc:    .fill 1
 gsc:    .fill 1
 gmr:    .fill 1
 guch:   .fill 1
-de:     .fill 17
+de:     .fill 18   ; +[17] = length bits 16..23 (24-bit file size)

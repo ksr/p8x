@@ -277,7 +277,7 @@ STKTOP  = $FEFF
         JMP  SYS_OPENCWD        ; $4012 SYS_OPENCWD: begin iterating the CWD (16-bit LBA)
         JMP  SYS_SETDRV         ; $4015 SYS_SETDRIVE: deprecated (mount model) — no-op stub, ABI slot kept
         JMP  SYS_GETDRIVE       ; $4018 SYS_GETDRIVE: -> A = 1 if CWD is under /d1 (drive 1), else 0
-        JMP  SYS_DIRENTRY       ; $401B SYS_DIRENTRY: snapshot the current dir entry -> (P1) 17 bytes
+        JMP  SYS_DIRENTRY       ; $401B SYS_DIRENTRY: snapshot the current dir entry -> (P1) 18 bytes
         JMP  SYS_OPENDIR        ; $401E SYS_OPENDIR: P1 = 16-bit dir start LBA -> open for FNEXT
         JMP  SYS_MKDIR          ; $4021 SYS_MKDIR: P1 = path -> create a directory; C=1 on real failure
 ; Reached only via the table above (COLD jumps past them).
@@ -291,9 +291,9 @@ SYS_SETDRV:                     ; deprecated: the drive follows the CWD path now
 ; /BIN commands read directory metadata without hardcoding BIOS scratch
 ; addresses (FNAME/FFLAG/FLEN/entry-LBA). Layout of the 17-byte snapshot:
 ;   [0..11] name (space-padded)  [12] flag (file $01/dir $02)
-;   [13..14] length lo/hi        [15..16] start-LBA lo/hi
+;   [13..14] length lo/mid       [15..16] start-LBA lo/hi   [17] length hi
 ; Call it right after a BIOS FNEXT (before any other FS call reuses the scratch).
-SYS_DIRENTRY:                   ; P1 = dest (17 bytes); clobbers A, P2, TMP
+SYS_DIRENTRY:                   ; P1 = dest (18 bytes); clobbers A, P2, TMP
         LDP2 #BFNAME
         LDA  #12
         STA  TMP
@@ -312,6 +312,8 @@ SDE_NM: LDA  (P2)+              ; [0..11] name
         LDA  LBA                ; [15] start-LBA lo
         STA  (P1)+
         LDA  LBA1               ; [16] start-LBA hi
+        STA  (P1)+
+        LDA  FLEN+2             ; [17] length bits 16..23 (24-bit file size)
         STA  (P1)
         RTS
 ; SYS_OPENDIR — begin iterating an arbitrary directory whose 16-bit start LBA is

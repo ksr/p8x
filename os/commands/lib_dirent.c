@@ -19,10 +19,10 @@
  * usual FSDIRBUF if the command iterates in its own page.
  *
  * de[] layout (17 bytes): [0..11] name (space-padded), [12] flag (1=file 2=dir),
- * [13..14] length lo/hi, [15..16] start-LBA lo/hi.  Within the p8cc subset
+ * [13..14] length lo/hi, [15..16] start-LBA lo/hi, [17] length hi.  Within the p8cc subset
  * (no ++/--, decls at top); only the bios() builtin is used.
  */
-char de[17];
+char de[18];
 
 int de_read() {                       /* snapshot the current entry into de[] */
     bios(0x401B, de, 0);              /* SYS_DIRENTRY -> (P1)=de */

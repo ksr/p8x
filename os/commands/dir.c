@@ -37,9 +37,9 @@
  *
  * Each line is a right-justified byte size, two spaces, then the name (a '/'
  * suffix marks a directory). Directories have no byte length, so their size
- * column is left blank. The size comes from FNEXT's FLEN ($7058 lo / $7059 hi),
- * a 16-bit count — fine for the small files this OS holds. p8cc's < / > are
- * unsigned 16-bit, so size sorting is correct up to 65535 bytes.
+ * column is left blank. The size is 24-bit (de[13/14] + de[17] via SYS_DIRENTRY):
+ * p8cc's int is 16-bit, so the column is printed with a byte-wise divmod10
+ * (dm10/putsize24) and sorted with an explicit 24-bit compare (before()).
  *
  * BIOS: FOPENDIR=$0139 (P1=path), FOPENDIRAT=$0142 (A=low,LBA1=$7048 high),
  * FNEXT=$013C (-> FNAME $704A 12 space-padded, FFLAG $7070 file $01/dir $02,
@@ -58,7 +58,10 @@ char gpat[16];                               /* glob pattern, or empty = no filt
  * level (a level is printed before its children overwrite them). Cap 64 = a
  * fresh directory extent (4 sectors * 16 entries). */
 char enam[768];                              /* 64 names, 12 space-padded bytes each */
-int  elen[64];                               /* byte length (0 for dirs); 16-bit */
+int  elen[64];                               /* byte length low 16 (0 for dirs) */
+char elen2[64];                              /* byte length bits 16..23 (24-bit size) */
+char num24[3];                               /* scratch little-endian 24-bit for printing */
+char dg[8];                                   /* digit buffer for putsize24 */
 char eisd[64];                               /* 1 = directory (char: house rule — */
 int  elba[64];                               /* start LBA (for -R descent); 16-bit */
 char eidx[64];                               /* sorted print order (indices 0..63; a */
@@ -68,33 +71,58 @@ char eidx[64];                               /* sorted print order (indices 0..6
 int  ecnt;                                   /* entries collected this level */
 int  szmode;                                 /* 1 = -S size sort, 0 = name sort */
 
-/* putnum: print n as an unsigned decimal (recurses for the high digits). */
-int putnum(int n) {
-    if (n >= 10) { putnum(n / 10); }
-    putchar(48 + n % 10);
+/* dm10: divide the 24-bit little-endian num24[] by 10 in place, return the
+ * remainder (0..9). p8cc's int is 16-bit, so a >64 KB size can't live in one int
+ * — long-divide it a byte at a time. cur = rem*256 + byte fits (rem<10). */
+int dm10() {
+    int rem;
+    int i;
+    int cur;
+    int n;
+    rem = 0;
+    i = 2;
+    n = 3;                                         /* count down (p8cc >= 0 is
+                                                     unsigned-broken for i<0) */
+    while (n != 0) {
+        cur = rem * 256 + (num24[i] & 255);
+        num24[i] = cur / 10;
+        rem = cur - (cur / 10) * 10;
+        i = i - 1;
+        n = n - 1;
+    }
+    return rem;
+}
+
+/* putsize24: a 6-wide size column, right-justified, from a 24-bit size (lo = low
+ * 16 bits, hi = bits 16..23). Directories (isdir) get six blanks (no byte length). */
+int nz24() {                                      /* num24 != 0 ? (avoid || in a loop) */
+    if (num24[0] != 0) { return 1; }
+    if (num24[1] != 0) { return 1; }
+    if (num24[2] != 0) { return 1; }
     return 0;
 }
 
-/* ndigits: number of decimal digits in n (>=1, so 0 prints as one digit). */
-int ndigits(int n) {
-    int d;
-    d = 1;
-    while (n >= 10) { n = n / 10; d = d + 1; }
-    return d;
-}
-
-/* putsize: a 6-wide size column. Files: the byte count, right-justified.
- * Directories (isdir): six blanks, since a directory has no byte length. */
-int putsize(int isdir, int sz) {
-    int k;
+int putsize24(int isdir, int lo, int hi) {
+    int nd;
+    int i;
     if (isdir) {
-        k = 0;
-        while (k < 6) { putchar(32); k = k + 1; }
+        i = 0;
+        while (i < 6) { putchar(32); i = i + 1; }
         return 0;
     }
-    k = ndigits(sz);
-    while (k < 6) { putchar(32); k = k + 1; }     /* pad to width 6 */
-    putnum(sz);
+    num24[0] = lo & 255;
+    num24[1] = (lo / 256) & 255;                  /* p8cc / is unsigned */
+    num24[2] = hi & 255;
+    nd = 0;
+    dg[nd] = 48 + dm10();                          /* at least one digit (handles 0) */
+    nd = nd + 1;
+    while (nz24()) {
+        dg[nd] = 48 + dm10();
+        nd = nd + 1;
+    }
+    i = nd;
+    while (i < 6) { putchar(32); i = i + 1; }      /* pad to width 6 */
+    while (nd != 0) { nd = nd - 1; putchar(dg[nd]); }  /* LS-first -> print reversed */
     return 0;
 }
 
@@ -113,13 +141,6 @@ int nameat(int m) {
     }
     nbuf[i] = 0;
     return i;
-}
-
-/* skey: the sort size-key for entry m — a directory has no size, so it counts
- * as 0 (sorts after every file under largest-first). */
-int skey(int m) {
-    if (eisd[m]) { return 0; }
-    return elen[m];
 }
 
 /* namecmp: compare the 12-byte padded names of entries a and b, raw ASCII.
@@ -147,14 +168,20 @@ int namecmp(int a, int b) {
 /* before: does entry a sort strictly before entry b? Size mode: larger key
  * first, name ascending on a tie. Name mode: name ascending. */
 int before(int a, int b) {
-    int ka;
-    int kb;
+    int ha;
+    int hb;
+    int la;
+    int lb;
     if (szmode) {
-        ka = skey(a);
-        kb = skey(b);
-        if (ka > kb) { return 1; }
-        if (ka < kb) { return 0; }
-        return namecmp(a, b) == 1;
+        ha = 0; if (eisd[a] == 0) { ha = elen2[a] & 255; }   /* 24-bit key: dir -> 0 */
+        hb = 0; if (eisd[b] == 0) { hb = elen2[b] & 255; }
+        if (ha > hb) { return 1; }                /* larger first */
+        if (ha < hb) { return 0; }
+        la = 0; if (eisd[a] == 0) { la = elen[a]; }          /* high tied -> low 16 */
+        lb = 0; if (eisd[b] == 0) { lb = elen[b]; }
+        if (la > lb) { return 1; }
+        if (la < lb) { return 0; }
+        return namecmp(a, b) == 1;                /* size tied -> name ascending */
     }
     return namecmp(a, b) == 1;
 }
@@ -180,8 +207,8 @@ int collect() {
                 base = k * 12;
                 i = 0;
                 while (i < 12) { enam[base + i] = de[i]; i = i + 1; }
-                if (de_isdir()) { eisd[k] = 1; elen[k] = 0; }
-                else            { eisd[k] = 0; elen[k] = de_len(); }
+                if (de_isdir()) { eisd[k] = 1; elen[k] = 0; elen2[k] = 0; }
+                else { eisd[k] = 0; elen[k] = de_len(); elen2[k] = de[17] & 255; }
                 elba[k] = de_lba();
                 k = k + 1;
             }
@@ -208,10 +235,10 @@ int collect() {
 
 /* show: print "<size>  <indent><name>[/]" if nbuf passes the glob filter.
  * The size column aligns first so it lines up regardless of -R indent depth. */
-int show(int depth, int isdir, int sz) {
+int show(int depth, int isdir, int lo, int hi) {
     int i;
     if (gpat[0] != 0 && gmatch(gpat, nbuf) == 0) { return 0; }   /* filtered out */
-    putsize(isdir, sz);
+    putsize24(isdir, lo, hi);
     putchar(32); putchar(32);                                    /* gap before name */
     i = 0;
     while (i < depth) { putchar(32); putchar(32); i = i + 1; }    /* -R indent */
@@ -238,7 +265,7 @@ int walk(int depth) {
     while (i < ecnt) {
         m = eidx[i];
         nameat(m);
-        show(depth, eisd[m], elen[m]);        /* print (filtered) name + size */
+        show(depth, eisd[m], elen[m], elen2[m]);        /* print (filtered) name + size */
         if (eisd[m]) {                        /* always record subdirs for the pass */
             if (nsub < 64) {
                 sub[nsub] = elba[m];
@@ -331,7 +358,7 @@ int main() {
         while (i < ecnt) {
             m = eidx[i];
             nameat(m);
-            show(0, eisd[m], elen[m]);       /* name + size; '/' marks a directory */
+            show(0, eisd[m], elen[m], elen2[m]);       /* name + size; '/' marks a directory */
             i = i + 1;
         }
     }

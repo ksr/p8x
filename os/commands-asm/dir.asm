@@ -9,9 +9,9 @@
 ; global arrays reused at every recursion level), then a selection sort orders an
 ; index array `eidx`, and the level is printed in that order. Default key is name,
 ; raw ASCII; -S sorts by byte size LARGEST first with a name tiebreak, and a
-; directory (blank size) counts as size 0 so it sorts after all files. The CPU's
-; CMP is unsigned, so both name-byte and 16-bit size compares are unsigned — matching
-; p8cc's unsigned < / >. A level is fully collected+printed (recording child LBAs
+; directory (blank size) counts as size 0 so it sorts after all files. Sizes are
+; 24-bit (elen2 = de[17]); the column prints via a byte-wise divmod10 (dm10) and
+; sorts with a 24-bit compare. CMP is unsigned, matching p8cc's unsigned < / >. A level is fully collected+printed (recording child LBAs
 ; into the per-depth csub[] array) BEFORE descending, so a child's collect() may
 ; reuse the global buffers freely.
 ;
@@ -20,7 +20,7 @@
 ;
 ; BIOS: FOPENDIR $0139, FNEXT $013C, FSDIRBUF $0145, SYS_DIRENTRY $401B,
 ; SYS_OPENDIR $401E. OS: SYS_OPENCWD $4012, SYS_PUTC $4009, SYS_PUTS $400F.
-; The CPU has no divide, so putnum/ndigits use a divmod10 subtraction routine.
+; The CPU has no divide, so the size printer uses a divmod10 subtraction routine.
 ; Entry: P2 = arg tail.
 
         .org $7A00
@@ -541,7 +541,24 @@ col_lfile:
         LDA de+14
         STA (P2)
 col_lba:
-        LDA ecnt                     ; elba[ecnt] = de[15..16]
+        LDA ecnt                     ; elen2[ecnt] = (dir ? 0 : de[17])  24-bit size hi
+        LDB #<elen2
+        ADD
+        TAP1L
+        LDA #>elen2
+        JNC col_e2p
+        INC
+col_e2p:TAP1H
+        LDA cflg2
+        LDB #0
+        CMP
+        JZ col_e2f
+        LDA #0
+        STA (P1)
+        JMP col_e2d
+col_e2f:LDA de+17
+        STA (P1)
+col_e2d:LDA ecnt                     ; elba[ecnt] = de[15..16]
         STA mi
         JSR elba_ptr
         LDA de+15
@@ -651,6 +668,8 @@ before: LDA szmode
         STA keyA
         LDA keyw+1
         STA keyA+1
+        LDA keyw+2
+        STA keyA+2
         LDA bB                       ; keyB = skey(bB)
         STA em2
         JSR skey
@@ -658,18 +677,27 @@ before: LDA szmode
         STA keyB
         LDA keyw+1
         STA keyB+1
-        LDA keyA+1                   ; compare hi bytes (unsigned)
-        LDB keyB+1
+        LDA keyw+2
+        STA keyB+2
+        LDA keyA+2                   ; 24-bit compare, byte 2 (hi) first (unsigned)
+        LDB keyB+2
         CMP
-        JZ bf_lo                     ; hi equal -> compare lo
-        JC bf_yes                    ; keyA_hi > keyB_hi
+        JZ bf_c1
+        JC bf_yes
         LDA #0
         RTS
-bf_lo:  LDA keyA
+bf_c1:  LDA keyA+1                   ; byte 1
+        LDB keyB+1
+        CMP
+        JZ bf_lo
+        JC bf_yes
+        LDA #0
+        RTS
+bf_lo:  LDA keyA                     ; byte 0
         LDB keyB
         CMP
         JZ bf_name                   ; equal keys -> name tiebreak
-        JC bf_yes                    ; keyA_lo > keyB_lo
+        JC bf_yes
         LDA #0
         RTS
 bf_yes: LDA #1
@@ -745,6 +773,7 @@ skey:   LDA em2
         LDA #0
         STA keyw
         STA keyw+1
+        STA keyw+2
         RTS
 sk_file:LDA em2
         STA mi
@@ -754,6 +783,9 @@ sk_file:LDA em2
         INP2
         LDA (P2)
         STA keyw+1
+        LDA em2
+        JSR elen2_get
+        STA keyw+2
         RTS
 
 ; nameat: nbuf <- enam[em] (12 space-padded bytes), trailing pad trimmed.
@@ -800,6 +832,9 @@ setbuf: LDA em
         INP2
         LDA (P2)
         STA sh_sz+1
+        LDA em
+        JSR elen2_get
+        STA sh_sz2
         RTS
 
 ; eidx_get: A(index) -> A = eidx[index]
@@ -823,6 +858,18 @@ eisd_get:
         JNC eis_1
         INC
 eis_1:  TAP1H
+        LDA (P1)
+        RTS
+
+; elen2_get: A(index) -> A = elen2[index]  (size bits 16..23)
+elen2_get:
+        LDB #<elen2
+        ADD
+        TAP1L
+        LDA #>elen2
+        JNC el2_1
+        INC
+el2_1:  TAP1H
         LDA (P1)
         RTS
 
@@ -972,27 +1019,130 @@ ps_dl:  LDA cnt
         STA cnt
         JMP ps_dl
 ps_ret: RTS
+; 24-bit size print (mirrors dir.c putsize24): num24 = sh_sz2:sh_sz+1:sh_sz,
+; extract decimal digits LS-first into dg[], pad to 6, print reversed.
 ps_file:LDA sh_sz
-        STA ndv
+        STA num24
         LDA sh_sz+1
-        STA ndv+1
-        JSR ndigits
+        STA num24+1
+        LDA sh_sz2
+        STA num24+2
+        LDA #0
+        STA psnd
+        JSR dm10                     ; first digit (handles 0)
+        LDB #48
+        ADD
+        JSR ps_push
+ps_wl:  JSR nz24
+        LDB #0
+        CMP
+        JZ ps_pad2
+        JSR dm10
+        LDB #48
+        ADD
+        JSR ps_push
+        JMP ps_wl
+ps_pad2:LDA psnd                     ; pad: while nd < 6 -> space
         STA cnt2
 ps_pl:  LDA cnt2
         LDB #6
         CMP
-        JC ps_num                    ; cnt2>=6 -> done padding
+        JC ps_rev                    ; nd>=6 -> done padding
         LDA #32
         JSR $4009
         LDA cnt2
         INC
         STA cnt2
         JMP ps_pl
-ps_num: LDA sh_sz
-        STA pn
-        LDA sh_sz+1
-        STA pn+1
-        JSR putnum
+ps_rev: LDA psnd                     ; while nd != 0 -> nd--, print dg[nd]
+        LDB #0
+        CMP
+        JZ ps_rdn
+        LDA psnd
+        LDB #1
+        SUB
+        STA psnd
+        LDA #<dg
+        LDB psnd
+        ADD
+        TAP1L
+        LDA #>dg
+        JNC ps_rp
+        INC
+ps_rp:  TAP1H
+        LDA (P1)
+        JSR $4009
+        JMP ps_rev
+ps_rdn: RTS
+
+; ps_push: dg[psnd] = A ; psnd++
+ps_push:STA pstmp
+        LDA #<dg
+        LDB psnd
+        ADD
+        TAP1L
+        LDA #>dg
+        JNC pp_1
+        INC
+pp_1:   TAP1H
+        LDA pstmp
+        STA (P1)
+        LDA psnd
+        INC
+        STA psnd
+        RTS
+
+; dm10: num24[0..2] /= 10 (24-bit LE); remainder -> A. divmod10 does each byte's
+; 16-bit divide (cur = dmrem*256 + num24[i], < 2560).
+dm10:   LDA #0
+        STA dmrem
+        LDA #2
+        STA dmi
+dm_lp:  LDA #<num24                  ; P1 = num24 + dmi
+        LDB dmi
+        ADD
+        TAP1L
+        LDA #>num24
+        JNC dm_p1
+        INC
+dm_p1:  TAP1H
+        LDA (P1)
+        STA dv                       ; dv = dmrem*256 + num24[dmi]
+        LDA dmrem
+        STA dv+1
+        JSR divmod10                 ; dvq = dv/10, dvr = dv%10 (P1 preserved)
+        LDA dvq
+        STA (P1)                     ; num24[dmi] = dvq (dv<2560 -> dvq<256)
+        LDA dvr
+        STA dmrem
+        LDA dmi
+        LDB #0
+        CMP
+        JZ dm_dn                     ; processed dmi==0 -> stop
+        LDA dmi
+        LDB #1
+        SUB
+        STA dmi
+        JMP dm_lp
+dm_dn:  LDA dmrem
+        RTS
+
+; nz24: A = 1 if num24 != 0 else 0
+nz24:   LDA num24
+        LDB #0
+        CMP
+        JNZ nz_y
+        LDA num24+1
+        LDB #0
+        CMP
+        JNZ nz_y
+        LDA num24+2
+        LDB #0
+        CMP
+        JNZ nz_y
+        LDA #0
+        RTS
+nz_y:   LDA #1
         RTS
 
 putnum: LDA #0
@@ -1409,6 +1559,13 @@ w_depth:.fill 1
 sh_depth:.fill 1
 sh_dir: .fill 1
 sh_sz:  .fill 2
+sh_sz2: .fill 1   ; size bits 16..23 (24-bit)
+num24:  .fill 3   ; scratch 24-bit LE for the decimal printer
+dg:     .fill 8   ; digit buffer
+dmrem:  .fill 1
+dmi:    .fill 1
+psnd:   .fill 1
+pstmp:  .fill 1
 pn:     .fill 2
 pncnt:  .fill 1
 ndv:    .fill 2
@@ -1439,9 +1596,9 @@ cflg2:  .fill 1
 ecnt:   .fill 1
 macc:   .fill 2
 dptr:   .fill 2
-keyA:   .fill 2
-keyB:   .fill 2
-keyw:   .fill 2
+keyA:   .fill 3
+keyB:   .fill 3
+keyw:   .fill 3
 naddrA: .fill 2
 naddrB: .fill 2
 nca:    .fill 1
@@ -1449,10 +1606,11 @@ ncb:    .fill 1
 nbuf:   .fill 16
 gpat:   .fill 16
 dbuf:   .fill 64
-de:     .fill 17
+de:     .fill 18   ; +[17] = length bits 16..23 (24-bit file size)
 ; --- per-directory entry buffers (reused at every recursion level) ---
 enam:   .fill 768
 elen:   .fill 128
+elen2:  .fill 64    ; size bits 16..23 per entry (24-bit)
 eisd:   .fill 64
 elba:   .fill 128
 eidx:   .fill 64

@@ -670,5 +670,5 @@ spath:  .fill 80
 ge_dir: .fill 64
 ge_leaf:.fill 16
 ge_nm:  .fill 16
-de:     .fill 17
+de:     .fill 18   ; +[17] = length bits 16..23 (24-bit file size)
 gfiles: .fill 1536
