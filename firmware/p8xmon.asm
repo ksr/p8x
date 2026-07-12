@@ -741,8 +741,9 @@ FF_NE:  LDA  HEXL
         STA  FLEN
         LDA  (P2)+
         STA  FLEN+1
-        LDA  (P2)+
-        LDA  (P2)+
+        LDA  (P2)+          ; 18: 3rd length byte -> 24-bit FLEN
+        STA  FLEN+2
+        LDA  (P2)+          ; 19: 4th length byte discarded
         LDA  (P2)+          ; 20..23 load + exec
         LDA  (P2)+
         LDA  (P2)+
@@ -1056,8 +1057,9 @@ FNX_NM: LDA  (P2)+
         STA  FLEN
         LDA  (P2)+
         STA  FLEN+1
-        LDA  (P2)+
-        LDA  (P2)+
+        LDA  (P2)+          ; 18: 3rd length byte -> 24-bit FLEN
+        STA  FLEN+2
+        LDA  (P2)+          ; 19: 4th length byte discarded
         LDA  (P2)+          ; 20..23 load + exec (ignored)
         LDA  (P2)+
         LDA  (P2)+
@@ -1350,9 +1352,12 @@ FOPEN:  LDA  DRVSEL         ; the read stream remembers its drive (dual-volume)
         STA  ROREM
         LDA  FLEN+1
         STA  ROREM+1
+        LDA  FLEN+2
+        STA  ROREM+2
         LDA  #0            ; force a refill on the first FGETB
         STA  ROCNT
         STA  ROCNT+1
+        STA  ROCNT+2
         CLC
         RTS
 FOP_NF: SEC
@@ -1362,6 +1367,8 @@ FOP_NF: SEC
 ;   Refills the sector buffer from disk as needed. Clobbers P1 + TMP.
 FGETB:  LDA  ROREM
         LDB  ROREM+1
+        OR
+        LDB  ROREM+2       ; 24-bit: fold in the high byte
         OR
         JNZ  FG_GO
         SEC                ; no bytes left -> EOF
@@ -1390,7 +1397,7 @@ FG_RD:  LDA  ROPTR
         LDB  #1
         SUB
         STA  ROCNT+1
-FG_R1:  LDA  ROREM         ; ROREM--
+FG_R1:  LDA  ROREM         ; ROREM-- (24-bit)
         LDB  #1
         SUB
         STA  ROREM
@@ -1399,6 +1406,11 @@ FG_R1:  LDA  ROREM         ; ROREM--
         LDB  #1
         SUB
         STA  ROREM+1
+        JC   FG_R2
+        LDA  ROREM+2
+        LDB  #1
+        SUB
+        STA  ROREM+2
 FG_R2:  LDA  TMP
         CLC
         RTS
@@ -1431,10 +1443,14 @@ FF_1:   LDA  ROBUF
         STA  ROPTR
         LDA  ROBUF+1
         STA  ROPTR+1
-        LDA  ROREM+1       ; ROCNT = min(512, ROREM)
+        LDA  ROREM+2       ; ROCNT = min(512, ROREM); any high byte -> >= 64K >> 512
+        LDB  #0
+        CMP
+        JNZ  FF_FULL
+        LDA  ROREM+1
         LDB  #2
         CMP
-        JC   FF_FULL       ; ROREM hi >= 2 -> >= 512
+        JC   FF_FULL       ; ROREM mid >= 2 -> >= 512
         LDA  ROREM
         STA  ROCNT
         LDA  ROREM+1
@@ -1450,12 +1466,16 @@ FF_FULL:LDA  #0
 ;   a whole sector at a time (P1 advances by 512 each). The fast "slurp a file"
 ;   primitive shared by EDIT's load and the OS loader; the byte-at-a-time reader
 ;   is FOPEN/FGETB. LBA is advanced; FLEN is preserved (counts down in TMP/TMP2).
-FLOADAT:LDA  FLEN           ; FLAREM = remaining bytes (TMP would be clobbered by
-        STA  FLAREM         ; CFRDSEC, so use a dedicated counter)
+FLOADAT:LDA  FLEN           ; FLAREM = remaining bytes (24-bit; TMP would be
+        STA  FLAREM         ; clobbered by CFRDSEC, so use a dedicated counter)
         LDA  FLEN+1
         STA  FLAREM+1
+        LDA  FLEN+2
+        STA  FLAREM+2
 FLA_LP: LDA  FLAREM
         LDB  FLAREM+1
+        OR
+        LDB  FLAREM+2
         OR
         JZ   FLA_DONE
         JSR  CFRDSEC        ; sector LBA -> (P1); P1 += 512
@@ -1470,15 +1490,24 @@ FLA_LP: LDA  FLAREM
         LDA  LBA2
         INC
         STA  LBA2
-FLA_NC: LDA  FLAREM+1       ; remaining -= 512 (floor 0)
+FLA_NC: LDA  FLAREM+1       ; remaining -= 512 (24-bit, floor 0)
         LDB  #2
         SUB
-        JNC  FLA_LAST
-        STA  FLAREM+1
+        STA  FLAREM+1       ; wrapped mid (borrow handled next)
+        JC   FLA_LP         ; no borrow -> keep going
+        LDA  FLAREM+2       ; borrow out of mid: any high byte to borrow from?
+        LDB  #0
+        CMP
+        JZ   FLA_LAST       ; hi==0 -> remaining was < 512 -> last partial sector
+        LDA  FLAREM+2       ; hi>0: propagate the borrow into hi
+        LDB  #1
+        SUB
+        STA  FLAREM+2
         JMP  FLA_LP
 FLA_LAST:LDA #0
         STA  FLAREM
         STA  FLAREM+1
+        STA  FLAREM+2
         JMP  FLA_LP
 FLA_DONE:RTS
 
