@@ -44,7 +44,9 @@ python3 "$root/generators/gen_p8xdis.py" --asm >/dev/null 2>&1 || true
 # ensure_src: lay down /src/commands/{c,asm} — the browsable command + toolchain
 # SOURCES, mirroring the repo so you can read (and, for C, on-target `cc`-compile)
 # any command right on the machine:
-#   /src/commands/c    — the C sources, incl. the shared lib_*.c helpers
+#   /src/commands/c    — the C command sources (the shared lib_*.c helpers are NOT
+#                        duplicated here — they live only in /lib, where the native
+#                        cc's //#use opens them: /lib/lib_<name>.c)
 #   /src/commands/asm  — the hand-assembled sources + shared includes (renamed
 #                        glob/globx/regex/stdin.inc to fit the 12-char field),
 #                        plus the toolchain app sources p8xcc/p8xasm/p8xedit.asm
@@ -59,7 +61,8 @@ ensure_src() {
     done
     for cf in "$root"/os/commands/*.c; do
         base=$(basename "$cf")
-        case "$base" in cpp.c|lex.c|cc1.c) continue;; esac
+        case "$base" in cpp.c|lex.c|cc1.c) continue;; esac   # DEPRECATED front end
+        case "$base" in lib_*.c) continue;; esac             # shared libs live in /lib only
         python3 "$root/tools/p8xfs.py" put "$disk" "$cf" \
             --name "/src/commands/c/$base" >/dev/null 2>&1 || true
     done

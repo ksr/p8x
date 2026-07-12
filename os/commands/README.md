@@ -27,7 +27,9 @@ print a one-line usage summary and exit.
 > `run /bina/grep.bin …` vs `grep …`.
 
 > **Sources on-card.** `run.sh` also ships the command *sources* under
-> `/src/commands/c` (the `.c` files, incl. the shared `lib_*.c` helpers) and
+> `/src/commands/c` (the command `.c` files — the shared `lib_*.c` helpers are
+> **not** duplicated here; they live only in `/lib`, where the native `cc`'s
+> `//#use` opens them as `/lib/lib_<name>.c`) and
 > `/src/commands/asm` (the hand-assembled `.asm` + shared includes, the latter
 > renamed `glob/globx/regex/stdin.inc` to fit P8XFS's 12-char names; plus the
 > toolchain app sources `p8xcc.asm`/`p8xasm.asm`/`p8xedit.asm`). So you can
