@@ -1,8 +1,9 @@
 ; wc.asm — hand-coded WC command (asm counterpart of os/commands/wc.c).
 ;   WC [file|glob]   count lines, words, bytes (file/glob or stdin).
 ; Shares the file/glob/stdin input engine via `;#use stdin` (lib_stdin.inc).
-; Counts are 16-bit (wrap past 65535), matching wc.c. putnum/divmod10 are inline
-; (the CPU has no divide). Entry: P2 = arg tail.
+; Counts are 24-bit (a file may be up to 16 MB): each counter is 3 bytes, bumped
+; by a 24-bit increment, and printed by put24 — a byte-wise divmod10 (the CPU has
+; no divide), matching wc.c's dm10/put24. Entry: P2 = arg tail.
 ;#use stdin
 
         .org $7A00
@@ -47,19 +48,22 @@ w_open: LDA w_arg                     ; openarg(arg)
         LDB #2
         CMP
         JZ w_nf
-; init counters
+; init 24-bit counters
         LDA #0
         STA lines
         STA lines+1
+        STA lines+2
         STA words
         STA words+1
+        STA words+2
         STA bytes
         STA bytes+1
+        STA bytes+2
         STA inword
 w_loop: JSR nextc
         JC w_done
         STA wch
-        LDA bytes                     ; bytes++
+        LDA bytes                     ; bytes++ (24-bit)
         LDB #1
         ADD
         STA bytes
@@ -67,7 +71,11 @@ w_loop: JSR nextc
         LDA bytes+1
         INC
         STA bytes+1
-w_b1:   LDA wch                       ; if c==10 lines++
+        JNZ w_b1
+        LDA bytes+2
+        INC
+        STA bytes+2
+w_b1:   LDA wch                       ; if c==10 lines++ (24-bit)
         LDB #10
         CMP
         JNZ w_wsq
@@ -79,6 +87,10 @@ w_b1:   LDA wch                       ; if c==10 lines++
         LDA lines+1
         INC
         STA lines+1
+        JNZ w_wsq
+        LDA lines+2
+        INC
+        STA lines+2
 w_wsq:  LDA wch                       ; whitespace?
         LDB #32
         CMP
@@ -99,7 +111,7 @@ w_wsq:  LDA wch                       ; whitespace?
         LDB #0
         CMP
         JNZ w_loop
-        LDA words
+        LDA words                     ; words++ (24-bit)
         LDB #1
         ADD
         STA words
@@ -107,31 +119,41 @@ w_wsq:  LDA wch                       ; whitespace?
         LDA words+1
         INC
         STA words+1
+        JNZ w_wi
+        LDA words+2
+        INC
+        STA words+2
 w_wi:   LDA #1
         STA inword
         JMP w_loop
 w_ws:   LDA #0
         STA inword
         JMP w_loop
-w_done: LDA lines
+w_done: LDA lines                     ; print lines words bytes
         STA pn
         LDA lines+1
         STA pn+1
-        JSR putnum
+        LDA lines+2
+        STA pn+2
+        JSR put24
         LDA #32
         JSR $4009
         LDA words
         STA pn
         LDA words+1
         STA pn+1
-        JSR putnum
+        LDA words+2
+        STA pn+2
+        JSR put24
         LDA #32
         JSR $4009
         LDA bytes
         STA pn
         LDA bytes+1
         STA pn+1
-        JSR putnum
+        LDA bytes+2
+        STA pn+2
+        JSR put24
         LDA #10
         JSR $4009
         RTS
@@ -154,103 +176,168 @@ w_usage:LDA #<u_use
         JSR $4009
         RTS
 
-; putnum: print pn (word) as unsigned decimal
-putnum: LDA #0
-        STA pncnt
-        LDA pn
-        LDB #0
-        CMP
-        JNZ pn_loop
+; put24: print pn (3-byte LE) as an unsigned decimal (no padding).
+put24:  LDA pn
+        STA num24
         LDA pn+1
-        LDB #0
-        CMP
-        JNZ pn_loop
-        LDA #'0'
-        JSR $4009
-        RTS
-pn_loop:LDA pn
-        LDB #0
-        CMP
-        JNZ pn_go
-        LDA pn+1
-        LDB #0
-        CMP
-        JZ pn_print
-pn_go:  LDA pn
-        STA dv
-        LDA pn+1
-        STA dv+1
-        JSR divmod10
-        LDA dvr
+        STA num24+1
+        LDA pn+2
+        STA num24+2
+        LDA #0
+        STA psnd
+        JSR dm10                      ; first digit (handles 0)
         LDB #48
         ADD
-        PHA
-        LDA pncnt
-        INC
-        STA pncnt
-        LDA dvq
-        STA pn
-        LDA dvq+1
-        STA pn+1
-        JMP pn_loop
-pn_print:
-        LDA pncnt
+        JSR pu_push
+pu_wl:  JSR nz24
         LDB #0
         CMP
-        JZ pn_done
-        PLA
+        JZ pu_rev
+        JSR dm10
+        LDB #48
+        ADD
+        JSR pu_push
+        JMP pu_wl
+pu_rev: LDA psnd                      ; while nd != 0 -> nd--, print dg[nd]
+        LDB #0
+        CMP
+        JZ pu_dn
+        LDA psnd
+        LDB #1
+        SUB
+        STA psnd
+        LDA #<dg
+        LDB psnd
+        ADD
+        TAP1L
+        LDA #>dg
+        JNC pu_rp
+        INC
+pu_rp:  TAP1H
+        LDA (P1)
         JSR $4009
-        LDA pncnt
-        DEC
-        STA pncnt
-        JMP pn_print
-pn_done:RTS
+        JMP pu_rev
+pu_dn:  RTS
 
-; divmod10: dv (word) -> dvq=dv/10, dvr=dv%10
+; pu_push: dg[psnd] = A ; psnd++
+pu_push:STA pstmp
+        LDA #<dg
+        LDB psnd
+        ADD
+        TAP1L
+        LDA #>dg
+        JNC pp_1
+        INC
+pp_1:   TAP1H
+        LDA pstmp
+        STA (P1)
+        LDA psnd
+        INC
+        STA psnd
+        RTS
+
+; dm10: num24[0..2] /= 10 (24-bit LE); remainder -> A (divmod10 per byte).
+dm10:   LDA #0
+        STA dmrem
+        LDA #2
+        STA dmi
+dm_lp:  LDA #<num24
+        LDB dmi
+        ADD
+        TAP1L
+        LDA #>num24
+        JNC dm_p1
+        INC
+dm_p1:  TAP1H
+        LDA (P1)
+        STA dv
+        LDA dmrem
+        STA dv+1
+        JSR divmod10
+        LDA dvq
+        STA (P1)
+        LDA dvr
+        STA dmrem
+        LDA dmi
+        LDB #0
+        CMP
+        JZ dm_dn
+        LDA dmi
+        LDB #1
+        SUB
+        STA dmi
+        JMP dm_lp
+dm_dn:  LDA dmrem
+        RTS
+
+; nz24: A = 1 if num24 != 0 else 0
+nz24:   LDA num24
+        LDB #0
+        CMP
+        JNZ nz_y
+        LDA num24+1
+        LDB #0
+        CMP
+        JNZ nz_y
+        LDA num24+2
+        LDB #0
+        CMP
+        JNZ nz_y
+        LDA #0
+        RTS
+nz_y:   LDA #1
+        RTS
+
+; divmod10: dv (word) -> dvq=dv/10, dvr=dv%10  (P1 preserved)
 divmod10:
         LDA #0
         STA dvq
         STA dvq+1
-dm_l:   LDA dv+1
+dv_l:   LDA dv+1
         LDB #0
         CMP
-        JNZ dm_sub
+        JNZ dv_sub
         LDA dv
         LDB #10
         CMP
-        JC dm_sub
+        JC dv_sub
         LDA dv
         STA dvr
         RTS
-dm_sub: LDA dv
+dv_sub: LDA dv
         LDB #10
         SUB
         STA dv
-        JC dm_nc
+        JC dv_nc
         LDA dv+1
         DEC
         STA dv+1
-dm_nc:  LDA dvq
+dv_nc:  LDA dvq
         LDB #1
         ADD
         STA dvq
-        JNC dm_l
+        JNC dv_l
         LDA dvq+1
         INC
         STA dvq+1
-        JMP dm_l
+        JMP dv_l
 
 u_nf:   .asciiz "wc: not found"
 u_use:  .asciiz "usage: WC [file|glob]   count lines words bytes (file/glob or stdin)"
 
 w_arg:  .fill 2
 wch:    .fill 1
-lines:  .fill 2
-words:  .fill 2
-bytes:  .fill 2
+lines:  .fill 3
+words:  .fill 3
+bytes:  .fill 3
 inword: .fill 1
-pn:     .fill 2
-pncnt:  .fill 1
+pn:     .fill 3
+num24:  .fill 3
+dg:     .fill 10
+dmrem:  .fill 1
+dmi:    .fill 1
+psnd:   .fill 1
+pstmp:  .fill 1
 dv:     .fill 2
 dvq:    .fill 2
 dvr:    .fill 1
