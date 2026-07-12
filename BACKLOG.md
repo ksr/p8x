@@ -1196,6 +1196,25 @@ Last updated: 2026-07-08
         >REL.TXT` works but `cmd >/DIR/X` silently produces no file (the redirect
         code treats the name as a CWD leaf). Found while testing `cc`. Make the
         redirect target go through FRESOLVE like other paths.
+- [ ] **On-target `cc >file` truncates for large `//#use` sources (2026-07-12).**
+      `cc /src/commands/c/dir.c >T.ASM` on-target prints `?` and writes a truncated
+      ~5 KB `T.ASM` (missing the `__cstktop:` tail), so the following `asm` fails
+      `?undefined: __cstktop`. NOT a compile error and NOT the 64 KB file cap:
+      diagnosed via emulator (2026-07-12). The compiler alone is fine — `cc dir.c`
+      with no redirect streams the *complete* asm to the console (incl. `__cstktop`);
+      the redirect alone is fine — `cat 13KB >out` writes all 13 KB. It only breaks
+      when **`cc` reads another file mid-compile (a `//#use` include, or a later-pass
+      source reopen) while the `>` write stream is open**: the read and the write
+      share the BIOS sector buffer SBUF, so the reopen clobbers the write and it
+      truncates at the first such point (~5 KB in). Confirmed pre-existing and
+      size/`//#use`-general, NOT specific to the `dir` sort rewrite: `sort.c` (69 KB)
+      and `grep.c` (110 KB) fail identically, while `pwd.c` (tiny, no `//#use`)
+      builds — and `pwd` is the only thing the on-target build tests exercise, which
+      is why it was never caught. FIX: give `cc`'s source reads their own buffer,
+      off the write stream's SBUF (the same move `FSDIRBUF` made for `dir -R`/`find`
+      directory scans during a write). WORKAROUND today: the C twins are built on the
+      host by run.sh; on-target, publish big commands via the **asm twin**
+      (`make installa`), which assembles directly with no cc/redirect step.
 - [ ] **Native toolchain follow-ups** (EDIT + ASM landed — see DONE). Remaining
       polish on the on-target assembler/editor, none blocking:
         - **Tools write to the flat root only.** EDIT `W` and ASM output go to
