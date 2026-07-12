@@ -95,9 +95,13 @@ it). `FSCK` (extent-end + `FUSED`) and `PACK` (`MINSEC:MINSECH`, `PK2MOVE`'s
 `CPYN:CPYNH` 16-bit copy loop, `NF += MINSEC`) all carry the high byte. Verified by
 `os_bigfile_test`: `del` + `pack` relocates a 66 KB file byte-intact, fsck clean.
 
-### Deferred follow-up (cosmetic only)
+### Display commands — DONE (2026-07-12)
 
-- **`dir` size column** stays 16-bit — p8cc's `int` is 16-bit, so `dir` shows a
-  >64 KB file's size mod 65536. A true 24-bit column needs `SYS_DIRENTRY`/`de[]`
-  to carry the 3rd length byte plus a 24-bit print helper in both `dir` twins. All
-  *behavioral* paths (create/read/write/PACK/FSCK) are 24-bit.
+`dir`'s size column and `wc`'s line/word/byte counts are 24-bit too. `SYS_DIRENTRY`
+now carries FLEN's 3rd byte as `de[17]` (18-byte snapshot; every command's `de[]`
+widened). p8cc's `int` is 16-bit, so both commands print via a byte-wise `divmod10`
+(`dm10`/`put24`/`putsize24`) and `dir -S` sorts with a 24-bit compare — in **both**
+twins (verify.sh green; C and asm diffed on 66–100 KB files). A p8cc gotcha found
+here: comparisons are unsigned, so `while (i >= 0)` never terminates once `i<0` —
+the digit loops count down to zero instead. Nothing about 24-bit file lengths
+remains; every path (create/read/write/PACK/FSCK/dir/wc) is 24-bit.
