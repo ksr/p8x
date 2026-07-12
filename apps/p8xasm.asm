@@ -145,11 +145,14 @@ START:  TPA3L                   ; save SP so an error can long-jump back to OS
         LDP1 #SRCPATH           ; resolve the source path -> DIRLBA + FNAME(leaf)
         JSR  FRESOLVE
         JC   ST_NOSRC
+        JSR  SAVESRC            ; remember the source's FNAME + dir BEFORE FFIND,
+                                ; because FFIND ends in FRESET (reverts DIRLBA to
+                                ; root). PASSINIT re-opens each pass from SRCDIR, so
+                                ; a subdir source (e.g. /src/os-bios/asm/x.asm) must
+                                ; save its true parent dir, not root. (FRESOLVE also
+                                ; sets FNAME=leaf, which a later ;#use would clobber.)
         JSR  FFIND              ; confirm the leaf exists in the resolved dir
         JC   ST_NOSRC
-        JSR  SAVESRC            ; remember the source's FNAME + dir so PASSINIT
-                                ; re-opens it each pass even if a ;#use resolves
-                                ; an include (FRESOLVE clobbers FNAME/DIRLBA)
         ; ---- pass 1: build symbol table ----
         LDA  #0
         STA  PASS

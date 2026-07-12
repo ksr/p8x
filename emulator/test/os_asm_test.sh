@@ -92,4 +92,18 @@ cmp -s golden.bin PROG.bin || fail "on-target output differs from host assembler
 # (3) the freshly-assembled program runs and prints its string
 echo "$out" | grep -q 'HELLO-ASM' || fail "assembled program did not run/print"
 
+# (4) SUBDIRECTORY source: a source that lives several directories deep must
+# assemble identically to the same source at the root. Regression guard for the
+# per-pass re-open bug where PASSINIT restored the source's directory as root
+# (FFIND at startup ends in FRESET) instead of the resolved parent, so any subdir
+# source re-opened in root, found nothing, and streamed a 0-byte output.
+python3 $ROOT/tools/p8xfs.py mkdir as.img /src >/dev/null
+python3 $ROOT/tools/p8xfs.py mkdir as.img /src/os-bios >/dev/null
+python3 $ROOT/tools/p8xfs.py mkdir as.img /src/os-bios/asm >/dev/null
+python3 $ROOT/tools/p8xfs.py put   as.img prog.asm --name /src/os-bios/asm/PROG.ASM >/dev/null
+out2=$(printf 'B\rrun ASM.bin /src/os-bios/asm/PROG.ASM /SUBP.bin\r' | \
+       ../p8xemu -l 200000000 -c as.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r')
+python3 $ROOT/tools/p8xfs.py get as.img SUBP.bin >/dev/null 2>&1 || fail "subdir-source output not created"
+cmp -s golden.bin SUBP.bin || fail "subdir-source output differs from root-source output"
+
 echo "OS-ASM TEST: PASS"
