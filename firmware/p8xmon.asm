@@ -112,6 +112,8 @@ CFTOH   = $7084          ; CF bounded-wait timeout counter, high byte
 ROSDRV  = $7085          ; read-stream drive (captured by FOPEN, re-asserted by FG_FILL)
 WOSDRV  = $7086          ; write-stream drive (captured by FWOPEN, re-asserted by FW_FLUSH)
 CFIMASK = $7087          ; bit N set = drive N has been CFINIT'd this session
+REMW    = $7088          ; FCOM_CORE ceil(FLEN/512): 24-bit remaining counter (3)
+CNTW    = $708B          ; FCOM_CORE sector count, 16-bit (files may span >255 sectors)
 SBUF    = $7100          ; sector buffer
 STKTOP  = $FEFF
 
@@ -1107,12 +1109,16 @@ FCRE_CORE:
         STA  FSAV           ; caller's requested length and restore it after
         LDA  FLEN+1
         STA  FSAV+1
+        LDA  FLEN+2
+        STA  FSAV+2
         JSR  FSCAN          ; name already present (file or dir) in this dir?
         JNC  FC_ERR         ; yes -> error
         LDA  FSAV
         STA  FLEN
         LDA  FSAV+1
         STA  FLEN+1
+        LDA  FSAV+2
+        STA  FLEN+2
         LDA  #0             ; read boot block -> SBUF (free pointer at +4/+5)
         STA  LBA
         STA  LBA1
@@ -1175,7 +1181,7 @@ FC_FNC: STA  SBUF+5
         STA  LBA1
         STA  LBA2
         JSR  CFWRSEC        ; write boot block back
-        LDA  DIRN           ; find a free slot in the current directory + write entry
+FC_WENT:LDA  DIRN           ; find a free slot in the current directory + write entry
         STA  CNT
         LDA  DIRLBA
         STA  HEXL           ; current directory LBA (16-bit: HEXL/FCDH)
@@ -1252,12 +1258,13 @@ FC_WNM: LDA  (P1)+
         LDA  #0
         STA  (P2)+
         STA  (P2)+
-        LDA  FLEN           ; length (lo, hi, 0, 0)
+        LDA  FLEN           ; length (lo, mid, hi, 0) — 24-bit
         STA  (P2)+
         LDA  FLEN+1
         STA  (P2)+
-        LDA  #0
+        LDA  FLEN+2
         STA  (P2)+
+        LDA  #0
         STA  (P2)+
         LDA  #0             ; load (2) + exec (2) = 0
         STA  (P2)+
@@ -1296,28 +1303,47 @@ FCOMMIT:JSR  FCOM_CORE      ; register in the current directory (FRESOLVE-set or
         JSR  FRESET
         RTS
 FCOM_CORE:
-        LDA  #0             ; CNT = ceil(FLEN / 512)
-        STA  CNT
+        LDA  #0            ; CNTW = ceil(FLEN/512), 16-bit; REMW = 24-bit remaining
+        STA  CNTW
+        STA  CNTW+1
         LDA  FLEN
-        STA  TMP
+        STA  REMW
         LDA  FLEN+1
-        STA  TMP2
-FCM_CL: LDA  TMP
-        LDB  TMP2
+        STA  REMW+1
+        LDA  FLEN+2
+        STA  REMW+2
+FCM_CL: LDA  REMW
+        LDB  REMW+1
+        OR
+        LDB  REMW+2
         OR
         JZ   FCM_DN
-        LDA  CNT
+        LDA  CNTW          ; CNTW++
+        LDB  #1
+        ADD
+        STA  CNTW
+        JNC  FCM_C1
+        LDA  CNTW+1
         INC
-        STA  CNT
-        LDA  TMP2          ; remaining -= 512 (floor 0)
+        STA  CNTW+1
+FCM_C1: LDA  REMW+1        ; REMW -= 512 (24-bit, floor 0)
         LDB  #2
         SUB
-        JNC  FCM_LST
-        STA  TMP2
+        STA  REMW+1
+        JC   FCM_CL
+        LDA  REMW+2
+        LDB  #0
+        CMP
+        JZ   FCM_LST
+        LDA  REMW+2
+        LDB  #1
+        SUB
+        STA  REMW+2
         JMP  FCM_CL
 FCM_LST:LDA  #0
-        STA  TMP
-        STA  TMP2
+        STA  REMW
+        STA  REMW+1
+        STA  REMW+2
         JMP  FCM_CL
 FCM_DN: LDA  #0            ; read boot block -> SBUF
         STA  LBA
@@ -1329,7 +1355,26 @@ FCM_DN: LDA  #0            ; read boot block -> SBUF
         STA  ADDRL
         LDA  SBUF+5
         STA  ADDRH
-        JMP  FC_WROK
+        LDA  SBUF+4         ; bump free pointer by CNTW (16-bit)
+        LDB  CNTW
+        ADD
+        STA  SBUF+4
+        LDA  #0
+        JNC  FCM_B1
+        LDA  #1
+FCM_B1: STA  TMP           ; carry out of the low byte
+        LDA  SBUF+5
+        LDB  CNTW+1
+        ADD
+        LDB  TMP
+        ADD
+        STA  SBUF+5
+        LDA  #0            ; write boot block back
+        STA  LBA
+        STA  LBA1
+        STA  LBA2
+        JSR  CFWRSEC
+        JMP  FC_WENT       ; shared: find slot + write the dir entry
 
 ; FOPEN - open root file FNAME for sequential byte reading. P1 = a caller-owned
 ;   512-byte sector buffer the stream will use. C=1 if the file is not found.
@@ -1532,6 +1577,7 @@ FWOPEN: LDA  DRVSEL        ; the write stream remembers its drive (dual-volume)
         STA  WOPOS+1
         STA  WOTOT
         STA  WOTOT+1
+        STA  WOTOT+2
         JSR  FW_ZBUF       ; clear the first sector
         RTS
 ; FPUTB - append byte A to the write stream; flush a full sector at 512.
@@ -1553,14 +1599,18 @@ FPUTB:  STA  TMP
         JNC  FP_1
         INC
         STA  WOPOS+1
-FP_1:   LDA  WOTOT         ; WOTOT++
+FP_1:   LDA  WOTOT         ; WOTOT++ (24-bit)
         LDB  #1
         ADD
         STA  WOTOT
-        LDA  WOTOT+1
         JNC  FP_2
+        LDA  WOTOT+1
         INC
         STA  WOTOT+1
+        JNZ  FP_2
+        LDA  WOTOT+2
+        INC
+        STA  WOTOT+2
 FP_2:   LDA  WOPOS+1       ; WOPOS == 512 -> flush
         LDB  #2
         CMP
@@ -1580,6 +1630,8 @@ FCL_R:  LDA  WOSDRV        ; commit (dir write + free pointer) on the write driv
         STA  FLEN
         LDA  WOTOT+1
         STA  FLEN+1
+        LDA  WOTOT+2
+        STA  FLEN+2
         JSR  FDEL_CORE     ; drop any old version in the current dir (no revert)
         JSR  FCOM_CORE     ; write the entry + bump free in the same dir
         JSR  FRESET        ; revert to root (preserves C from FCOM_CORE)

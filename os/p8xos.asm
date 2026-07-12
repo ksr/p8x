@@ -2232,10 +2232,12 @@ LOADF:  LDA  STARTLO            ; set up the BIOS bulk read: LBA = start (16-bit
         STA  LBA1
         LDA  #0
         STA  LBA2
-        LDA  LENLO              ; FLEN = length
+        LDA  LENLO              ; FLEN = length (24-bit; this SAVE is 16-bit-bounded)
         STA  FLEN
         LDA  LENHI
         STA  FLEN+1
+        LDA  #0
+        STA  FLEN+2
         LDA  LOADLO             ; P1 = load address
         TAP1L
         LDA  LOADHI
