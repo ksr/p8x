@@ -190,6 +190,38 @@ Last updated: 2026-07-08
 
 ## IDEAS
 
+- [ ] **`ln` command — symbolic links (2026-07-12).** Wanted: `ln /bin/dir /bin/ls`
+      so `ls` runs `dir` (command aliasing, and general path aliasing). Design
+      decided after analysis: implement as a **symlink**, NOT a hard link. The
+      P8XFS v2 entry (`name12|startLBA4|len4|load2|exec2|flag1|spare7`, flags
+      `$00`/`$01`/`$02`/`$FF`) has **no reference counting**, and `PACK` relocates
+      extents by rewriting the single owning directory entry — so a hard link (a
+      2nd entry sharing an extent) dangles the moment either name is deleted or the
+      volume is packed. Making hard links safe = adding per-extent refcounts to the
+      on-disk format + delete/PACK changes (a format change; rejected).
+      Symlink plan: a new flag `$03` whose file content is the target path string.
+      Work: (1) firmware `FRESOLVE` detects a `$03` leaf, reads its stored path, and
+      re-resolves it (absolute, or relative to the link's directory) behind a depth
+      counter (≤8) to break cycles — decide whether `FFIND`/`FOPEN` follow; this is
+      the boot-critical, highest-risk piece. (2) `tools/p8xfs.py`: recognize `$03`,
+      `ls` prints `ls -> dir`, optional host `ln` subcommand. (3) OS `DIR` shows
+      `-> target`; `RUN` follows for free (loads via `FOPEN`). (4) new `ln` command
+      C **and** asm twins (reuse `FWOPEN`/`FPUTB`/`FCLOSE`, set flag `$03`), man
+      page, `os_ln_test`, `/src` tree + a `/src/mk/ln` target. NB: `cp /bin/dir
+      /bin/ls` already aliases a command today, safely, at the cost of a duplicate
+      binary — so `ln` is convenience, not a capability gap.
+
+- [ ] **OS `make`: real Makefile parsing (2026-07-12).** Today `make <target>` just
+      runs the script `/src/mk/<target>` through the `sh` streaming engine (one
+      file per target, always-rebuild, no deps). That already covers per-command
+      builds (`make dir` = both twins), group builds (`c`/`asm`/`all`), and now
+      `installc`/`installasm`. A "real" make — parse a single `Makefile` with
+      `target:` blocks, prerequisites, and a default `all` — would be a genuine new
+      feature (a mini-make parser in the OS `make` built-in or a `/bin/make`
+      program) and buys little over the target-per-file model. Deferred; revisit
+      only if Makefile syntax itself is wanted. See the `installc`/`installasm`
+      targets (DONE 2026-07-12) for the current publish workflow.
+
 - [ ] **Move `tools/clib.py` -> `compiler/clib.py`.** clib.py is a C-toolchain
       preprocessing pass (the `//#use lib_*.c` splicer) — conceptually a sibling
       of `p8cc.py`/`p8cc.c` and the prototype of the future native CPP pass, not a
@@ -652,26 +684,31 @@ Last updated: 2026-07-08
 - [~] **`/src/os-bios/asm` — OS + monitor sources on-card (partial, 2026-07-11).**
       The OS + BIOS-monitor asm sources now ship under `/src/os-bios/asm` with a
       `bin` output dir, and `make os-bios` (script `/src/mk/os-bios`) assembles
-      both. Browsing works; the on-target BUILD is BLOCKED on two things:
+      both. Browsing works; blocker #2 (subdir-source read) is now FIXED, so a
+      subdir source of any size streams correctly (the 58 KB monitor assembles
+      on-target, standalone or under `sh`/`make`). The remaining blocker is only
+      the OS's sheer size:
         1. **>64 KB reads.** `os/p8xos.asm` is ~121 KB but the BIOS read stream's
            length (`ROREM`/`FLEN`) is 16-bit, so it truncates past ~56 KB and the
            OS assembly fails with a spurious `?undefined` at a late label. Need a
            24-bit read length across `FFIND`/`FOPEN`/`FGETB` (like `ROLBA`).
-        2. **Large source assembled UNDER a script over-reads (2026-07-11 —
-           diagnosed; NOT a line-length bug).** Ruled out the earlier 63-char
-           `LINEBUF` theory: a *short* 40-char monitor build line under `sh`
-           still fails, and a lone build line (single-line script) works. Real
-           trigger is SOURCE SIZE while running under `sh`/`make`: a ~48 KB+ source
-           (40 KB assembles fine, the 58 KB monitor fails) reads ONE sector past
-           its true EOF into the following file, but ONLY when assembled under the
-           script runner — standalone (`run /bin/asm.bin …`) reads the 58 KB
-           monitor correctly. It surfaces as `?syntax: <next line>` because the
-           monitor happens to sit one sector before the very script file (`sA` at
-           LBA 179 = the `pwd` line). So `ROREM`/`ROLBA` end up wrong under the
-           `sh` save/restore (`SAVESCR`/`RESTSCR`) path for big sources — needs
-           emulator-level instrumentation of the read counters to root-cause.
-           WORKAROUND today: assemble large sources standalone, not under `sh`/
-           `make`. (So `LINEBUF`→128 would NOT fix this.)
+        2. **Subdirectory source read empty / over-read — FIXED (2026-07-12).**
+           ROOT CAUSE (found via emulator memory-watch on `FLEN`/`ROREM` + an LBA
+           trace, `apps/p8xasm.asm`): the size/`sh`/`LINEBUF` theories were all
+           wrong. The startup sequence resolved the source path
+           (`FRESOLVE` → `DIRLBA`=parent, `FNAME`=leaf), then called `FFIND` to
+           confirm it exists — but `FFIND` ends in `FRESET`, reverting `DIRLBA` to
+           the root. `SAVESRC` ran *after* `FFIND`, so it recorded the source's
+           directory as **root**, not the real parent. Each pass, `PASSINIT` →
+           `RESTSRC` restored `DIRLBA`=root and `FOPEN`→`FFIND` scanned root for the
+           leaf, found nothing, left `ROREM`=0, and streamed a **0-byte** output.
+           A root-level source worked only because its parent *is* root. Under
+           `sh` the empty read then over-read one sector into the adjacent script
+           file, surfacing as `?syntax: pwd` — which mislabeled the bug as
+           size/`sh`-dependent. FIX: call `SAVESRC` *before* `FFIND` so it captures
+           the resolved parent dir. Guard: `os_asm_test.sh` check (4) assembles a
+           source in `/src/os-bios/asm/` and requires byte-identical output to the
+           same source at root.
 - [x] **Man-page-style OS command reference — DONE (2026-07-09), on-target.**
       Went further than the doc-only plan: authored a per-command manual page
       (NAME / SYNOPSIS / DESCRIPTION / OPTIONS / EXAMPLES / SEE ALSO) for every
