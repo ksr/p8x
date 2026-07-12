@@ -13,7 +13,10 @@ DESCRIPTION
     sh is a shell built-in, not a /bin program. The script is streamed a line
     at a time (no size cap), so it may be any length -- each dispatched
     command uses the file streams itself while sh's read position is saved and
-    restored around it. Lines end with CR, LF, or CRLF.
+    restored around it. Lines end with CR, LF, or CRLF; by convention P8X
+    scripts use LF (the Unix line ending, as EDIT writes) and are named with
+    a .sh suffix (e.g. `sh build.sh`). The `make` built-in relies on this: it
+    runs /src/mk/<target>.sh.
 
     Caveat: a script line may not use the `< redirect` -- input redirection
     and the script stream share the same buffer (IBUF).

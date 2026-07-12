@@ -6,21 +6,24 @@ SYNOPSIS
 
 DESCRIPTION
     A scaled-down make: it runs the pre-generated build script
-    /src/mk/<target> through the same engine as `sh`. make is an OS
-    built-in.
+    /src/mk/<target>.sh through the same engine as `sh`. make is an OS
+    built-in. The .sh suffix is appended automatically (P8X shell
+    scripts end in .sh), so `make dir` runs /src/mk/dir.sh.
 
     There are no file timestamps yet (P8XFS has no mtimes), so make
     ALWAYS rebuilds -- there is no up-to-date check. Dependency
     checking can be added later.
 
     Targets (the scripts under /src/mk, laid down by run.sh):
-      make NAME        rebuild one command (both its C and asm twins)
-      make c           rebuild every C command   -> /src/commands/c/bin
-      make asm         rebuild every asm command -> /src/commands/asm/bin
-      make             rebuild everything (same as `make all`)
-      make installc    publish the C builds:   cp /src/commands/c/bin/*.bin   /bin
-      make installasm  publish the asm builds: cp /src/commands/asm/bin/*.bin /bin
-      make os-bios     assemble the monitor + OS from /src/os-bios/asm
+      make NAME       rebuild one command (both its C and asm twins)
+      make c          rebuild every C command   -> /src/commands/c/bin
+      make asm        rebuild every asm command -> /src/commands/asm/bin
+      make            rebuild everything (same as `make all`)
+      make installc   publish the C builds:   cp /src/commands/c/bin/*.bin   /bin
+      make installa   publish the asm builds: cp /src/commands/asm/bin/*.bin /bin
+      make os-bios    assemble the monitor + OS from /src/os-bios/asm
+
+    Each target NAME maps to the script /src/mk/NAME.sh.
 
     A C command is built cc -> asm from /src/commands/c/NAME.c; a
     hand-asm command is assembled from /src/commands/asm/NAME.asm.

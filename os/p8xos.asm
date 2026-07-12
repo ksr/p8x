@@ -948,9 +948,11 @@ SH_RUN: LDA  STARTLO            ; point a read stream at the script's extent (IB
         JMP  SHELL
 
 ; `make <target>` — a scaled-down make: run the pre-generated build script
-; /src/mk/<target> via the same streaming runner as `sh` (always rebuilds — there
-; are no file timestamps yet). run.sh writes /src/mk/<cmd> (rebuild one command,
-; both C and asm twins), plus /src/mk/{c,asm,all}. Bare `make` builds everything.
+; /src/mk/<target>.sh via the same streaming runner as `sh` (always rebuilds —
+; there are no file timestamps yet). ".sh" is appended here (P8X shell scripts end
+; in .sh), so `make dir` streams /src/mk/dir.sh. run.sh writes /src/mk/<cmd>.sh
+; (rebuild one command, both twins), plus /src/mk/{c,asm,all}.sh. Bare `make`
+; builds everything (all.sh).
 DOMAKE: LDP1 #RUNPATH          ; build "/src/mk/<target>" (RUNPATH is free scratch
         LDP2 #MMKPFX           ;   until a program is actually run)
 DM_PFX: LDA  (P2)              ; copy the "/src/mk/" prefix
@@ -987,7 +989,13 @@ DM_AL:  LDA  (P2)
         STA  (P1)+
         INP2
         JMP  DM_AL
-DM_END: LDA  #0
+DM_END: LDP2 #MMKSFX          ; append ".sh" (P8X shell scripts end in .sh)
+DM_SFX: LDA  (P2)
+        JZ   DM_FIN
+        STA  (P1)+
+        INP2
+        JMP  DM_SFX
+DM_FIN: LDA  #0
         STA  (P1)             ; NUL-terminate the path
         LDP2 #RUNPATH         ; resolve + stream it (same engine as `sh`)
         JSR  FINDP2
@@ -3855,3 +3863,4 @@ KW_SH:   .asciiz "sh"
 KW_MAKE: .asciiz "make"
 MMKPFX:  .asciiz "/src/mk/"
 MMKALL:  .asciiz "all"
+MMKSFX:  .asciiz ".sh"

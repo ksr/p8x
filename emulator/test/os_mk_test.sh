@@ -37,15 +37,15 @@ python3 $ROOT/tools/p8xfs.py put mk.img $ROOT/os/commands/pwd.c      --name /src
 python3 $ROOT/tools/p8xfs.py put mk.img $ROOT/os/commands-asm/pwd.asm --name /src/commands/asm/pwd.asm >/dev/null
 # the build script: rebuild pwd from C (cc -> asm) and from asm
 printf 'cd /\ncc /src/commands/c/pwd.c >T.ASM\nasm T.ASM /src/commands/c/bin/pwd.bin\nasm /src/commands/asm/pwd.asm /src/commands/asm/bin/pwd.bin\n' > mk.scr
-python3 $ROOT/tools/p8xfs.py put mk.img mk.scr --name /mk >/dev/null
+python3 $ROOT/tools/p8xfs.py put mk.img mk.scr --name /mk.sh >/dev/null
 # the install target (as run.sh generates it): publish the C builds to /bin
 printf 'cp /src/commands/c/bin/*.bin /bin\n' > mk_instc.scr
-python3 $ROOT/tools/p8xfs.py put mk.img mk_instc.scr --name /src/mk/installc >/dev/null
+python3 $ROOT/tools/p8xfs.py put mk.img mk_instc.scr --name /src/mk/installc.sh >/dev/null
 
 # rebuild pwd (both twins), then `make installc` to publish the C build to /bin, then
 # RUN the PUBLISHED /bin/pwd.bin — it must print the CWD "/" (exercises DEFADDR: the
 # copied entry has load/exec 0, mapped to the TPA base $7A00).
-printf 'B\rsh /mk\rmake installc\rrun /bin/pwd.bin\r' \
+printf 'B\rsh /mk.sh\rmake installc\rrun /bin/pwd.bin\r' \
     | ../p8xemu -l 3000000000 -c mk.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r' > mk_out.txt
 
 # both binaries must now exist on the image

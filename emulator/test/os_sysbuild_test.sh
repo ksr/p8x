@@ -26,7 +26,7 @@ P8X_BUILD_ONLY=1 sh "$ROOT/os/run.sh" "$D0" "$D1" >"$work/build.log" 2>&1 \
 
 # sanity: the image really carries the expected trees
 $ROOT/tools/p8xfs.py ls "$D0" /bin 2>/dev/null | grep -qE '^cat\.bin '  || fail "/bin/cat.bin missing from the built disk"
-$ROOT/tools/p8xfs.py ls "$D0" /src/mk 2>/dev/null | grep -qE '^pwd '     || fail "/src/mk/pwd (make script) missing"
+$ROOT/tools/p8xfs.py ls "$D0" /src/mk 2>/dev/null | grep -qE '^pwd\.sh ' || fail "/src/mk/pwd.sh (make script) missing"
 $ROOT/tools/p8xfs.py ls "$D0" /src/commands/c 2>/dev/null | grep -qE '^pwd\.c ' || fail "/src sources missing"
 
 # Boot headless and drive a smoke session.
@@ -34,7 +34,7 @@ cd "$work"
 # Rebuild a command ON THE EMULATOR with `make` (both the C and asm twins) and RUN
 # the freshly built C binary — proving the whole native toolchain (make -> cc ->
 # asm, plus the asm ;#use) works end to end on the built system. A COMPLETE
-# on-emulator rebuild of all 42 commands is `make` (or `sh /src/mk/all`) on-target;
+# on-emulator rebuild of all 42 commands is `make` (or `sh /src/mk/all.sh`) on-target;
 # the automated test rebuilds one here because each cc+asm is millions of emulated
 # cycles — a full sweep is minutes of wall time, so it's driven manually, not in CI.
 printf 'B\rdir /bin\rcat README.TXT | grep hello\rmake pwd\rrun /src/commands/c/bin/pwd.bin\rcat /d1/DATA/NOTES.TXT\r' \

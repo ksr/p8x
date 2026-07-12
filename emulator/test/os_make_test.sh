@@ -32,7 +32,7 @@ python3 $ROOT/tools/p8xfs.py put make.img $ROOT/os/commands/pwd.c        --name 
 python3 $ROOT/tools/p8xfs.py put make.img $ROOT/os/commands-asm/pwd.asm  --name /src/commands/asm/pwd.asm >/dev/null
 # the per-command build script `make pwd` resolves + runs
 printf 'cd /\rcc /src/commands/c/pwd.c >T.ASM\rasm T.ASM /src/commands/c/bin/pwd.bin\rasm /src/commands/asm/pwd.asm /src/commands/asm/bin/pwd.bin\r' > mkpwd.scr
-python3 $ROOT/tools/p8xfs.py put make.img mkpwd.scr --name /src/mk/pwd >/dev/null
+python3 $ROOT/tools/p8xfs.py put make.img mkpwd.scr --name /src/mk/pwd.sh >/dev/null
 
 printf 'B\rmake pwd\rrun /src/commands/c/bin/pwd.bin\r' \
     | ../p8xemu -l 3000000000 -c make.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r' > make_out.txt

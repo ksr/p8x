@@ -92,12 +92,13 @@ ensure_src() {
     # `make` built-in (make <target> == run /src/mk/<target> through the `sh` engine,
     # always rebuild — there are no timestamps yet). Per command a script rebuilds
     # BOTH twins (C -> c/bin, asm -> asm/bin); c/asm/all rebuild whole groups:
-    #   make pwd    /src/mk/pwd    one command (both twins)
-    #   make c      /src/mk/c      every C command   -> /src/commands/c/bin/*.bin
-    #   make asm    /src/mk/asm    every asm command -> /src/commands/asm/bin/*.bin
-    #   make        /src/mk/all    everything
-    #   make installc    /src/mk/installc    copy c/bin/*.bin   -> /bin (publish C twins)
-    #   make installasm  /src/mk/installasm  copy asm/bin/*.bin -> /bin (publish asm twins)
+    # (make appends .sh: `make dir` runs /src/mk/dir.sh — P8X shell scripts end in .sh)
+    #   make pwd    /src/mk/pwd.sh    one command (both twins)
+    #   make c      /src/mk/c.sh      every C command   -> /src/commands/c/bin/*.bin
+    #   make asm    /src/mk/asm.sh    every asm command -> /src/commands/asm/bin/*.bin
+    #   make        /src/mk/all.sh    everything
+    #   make installc    /src/mk/installc.sh    copy c/bin/*.bin   -> /bin (publish C twins)
+    #   make installa    /src/mk/installa.sh    copy asm/bin/*.bin -> /bin (publish asm twins)
     # `cc` writes its .asm to a scratch T.ASM in the root (redirect targets aren't
     # path-resolved), so C builds `cd /` first, then `asm` reads that root T.ASM.
     # LF-separated lines (the Unix convention; EDIT writes LF too, and sh/make's
@@ -112,7 +113,7 @@ ensure_src() {
     for c in $_mkcmds; do
         # per-command script: rebuild both twins
         { _cline "$c"; _aline "$c"; } > "$build/mk_one.scr"
-        python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_one.scr" --name "/src/mk/$c" >/dev/null 2>&1 || true
+        python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_one.scr" --name "/src/mk/$c.sh" >/dev/null 2>&1 || true
         _cline "$c" >> "$build/mk_c.scr"
         _aline "$c" >> "$build/mk_asm.scr"
     done
@@ -122,24 +123,24 @@ ensure_src() {
     # on-target for now (the asm twin ships to /bina host-built + verify-checked).
     # Widening LINEBUF / CWD-relative asm (BACKLOG) would let the asm line fit too.
     _cline disasm > "$build/mk_one.scr"
-    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_one.scr" --name /src/mk/disasm >/dev/null 2>&1 || true
+    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_one.scr" --name /src/mk/disasm.sh >/dev/null 2>&1 || true
     _cline disasm >> "$build/mk_c.scr"
     cat "$build/mk_c.scr" "$build/mk_asm.scr" > "$build/mk_all.scr"
-    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_c.scr"   --name /src/mk/c   >/dev/null 2>&1 || true
-    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_asm.scr" --name /src/mk/asm >/dev/null 2>&1 || true
-    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_all.scr" --name /src/mk/all >/dev/null 2>&1 || true
-    # `make installc` / `make installasm` — publish freshly-built binaries to /bin.
+    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_c.scr"   --name /src/mk/c.sh   >/dev/null 2>&1 || true
+    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_asm.scr" --name /src/mk/asm.sh >/dev/null 2>&1 || true
+    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_all.scr" --name /src/mk/all.sh >/dev/null 2>&1 || true
+    # `make installc` / `make installa` — publish freshly-built binaries to /bin.
     # After `make dir` (which rebuilds BOTH twins into c/bin + asm/bin), pick which
-    # twin goes live: `make installc` copies the C builds over /bin, `make installasm`
+    # twin goes live: `make installc` copies the C builds over /bin, `make installa`
     # the asm builds. cp's wildcard-into-directory does the whole set in one line
     # (well under the 63-byte shell LINEBUF).
     printf 'cp /src/commands/c/bin/*.bin /bin\n'   > "$build/mk_instc.scr"
     printf 'cp /src/commands/asm/bin/*.bin /bin\n' > "$build/mk_insta.scr"
-    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_instc.scr" --name /src/mk/installc   >/dev/null 2>&1 || true
-    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_insta.scr" --name /src/mk/installasm >/dev/null 2>&1 || true
+    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_instc.scr" --name /src/mk/installc.sh   >/dev/null 2>&1 || true
+    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_insta.scr" --name /src/mk/installa.sh >/dev/null 2>&1 || true
     # `make os-bios` — assemble the monitor + OS from /src/os-bios/asm into its bin dir.
     printf 'asm /src/os-bios/asm/p8xmon.asm /src/os-bios/asm/bin/p8xmon.bin\nasm /src/os-bios/asm/p8xos.asm /src/os-bios/asm/bin/p8xos.bin\n' > "$build/mk_osbios.scr"
-    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_osbios.scr" --name /src/mk/os-bios >/dev/null 2>&1 || true
+    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_osbios.scr" --name /src/mk/os-bios.sh >/dev/null 2>&1 || true
 }
 
 if [ ! -f "$disk" ]; then
