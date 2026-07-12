@@ -47,9 +47,10 @@ python3 "$root/generators/gen_p8xdis.py" --asm >/dev/null 2>&1 || true
 #   /src/commands/c    — the C command sources (the shared lib_*.c helpers are NOT
 #                        duplicated here — they live only in /lib, where the native
 #                        cc's //#use opens them: /lib/lib_<name>.c)
-#   /src/commands/asm  — the hand-assembled sources + shared includes (renamed
-#                        glob/globx/regex/stdin.inc to fit the 12-char field),
-#                        plus the toolchain app sources p8xcc/p8xasm/p8xedit.asm
+#   /src/commands/asm  — the hand-assembled command sources + the toolchain app
+#                        sources p8xcc/p8xasm/p8xedit.asm. (The shared includes are
+#                        NOT here; they live only in /lib as glob/globx/regex/
+#                        stdin/distab.inc, where the on-target asm's ;#use reads them.)
 # Idempotent and safe on a FRESH or EXISTING disk: mkdir/put are best-effort
 # (p8xfs put never overwrites, so your files are kept and only MISSING sources are
 # added — e.g. an older disk that predates a source gets it on the next run).
@@ -70,11 +71,8 @@ ensure_src() {
         python3 "$root/tools/p8xfs.py" put "$disk" "$af" \
             --name "/src/commands/asm/$(basename "$af")" >/dev/null 2>&1 || true
     done
-    for inc in "$root"/os/commands-asm/lib_*.inc; do
-        base=$(basename "$inc"); base=${base#lib_}
-        python3 "$root/tools/p8xfs.py" put "$disk" "$inc" \
-            --name "/src/commands/asm/$base" >/dev/null 2>&1 || true
-    done
+    # (the shared asm includes lib_*.inc are NOT copied here — like the C libs,
+    #  they live only in /lib, where the on-target asm's ;#use opens /lib/<name>.inc)
     for app in "$root"/apps/p8xcc.asm "$root"/apps/p8xasm.asm "$root"/apps/p8xedit.asm; do
         python3 "$root/tools/p8xfs.py" put "$disk" "$app" \
             --name "/src/commands/asm/$(basename "$app")" >/dev/null 2>&1 || true

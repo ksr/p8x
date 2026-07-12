@@ -30,9 +30,10 @@ print a one-line usage summary and exit.
 > `/src/commands/c` (the command `.c` files — the shared `lib_*.c` helpers are
 > **not** duplicated here; they live only in `/lib`, where the native `cc`'s
 > `//#use` opens them as `/lib/lib_<name>.c`) and
-> `/src/commands/asm` (the hand-assembled `.asm` + shared includes, the latter
-> renamed `glob/globx/regex/stdin.inc` to fit P8XFS's 12-char names; plus the
-> toolchain app sources `p8xcc.asm`/`p8xasm.asm`/`p8xedit.asm`). So you can
+> `/src/commands/asm` (the hand-assembled command `.asm` + the toolchain app
+> sources `p8xcc.asm`/`p8xasm.asm`/`p8xedit.asm`; the shared includes are **not**
+> here — like the C libs they live only in `/lib`, as `glob/globx/regex/stdin/
+> distab.inc`, where the on-target `asm`'s `;#use` opens them). So you can
 > read — and, for C, `cc /src/commands/c/pwd.c >pwd.asm` — any command right on
 > the machine. The deprecated `cpp/lex/cc1` front end is **not** shipped (no
 > binary, no man page, no source), matching its deprecation everywhere else.
