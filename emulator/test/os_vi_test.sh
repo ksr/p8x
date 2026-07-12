@@ -30,28 +30,30 @@ edit() {   # $1 = keystrokes after opening $2 ; runs vi headlessly
 }
 getf() { python3 $ROOT/tools/p8xfs.py get vi.img "$1" --out vg.out >/dev/null 2>&1; }
 
-# 1) append to line 1:  A " X" Esc :wq  -> "hello X\r\nworld\r\n"
+# 1) append to line 1:  A " X" Esc :wq  -> "hello X\nworld\n" (vi saves LF)
 mkdisk
 edit "A X$ESC:wq\r" T.TXT
 getf /T.TXT
-python3 -c "import sys;d=open('vg.out','rb').read();sys.exit(0 if d==b'hello X\r\nworld\r\n' else 1)" \
+python3 -c "import sys;d=open('vg.out','rb').read();sys.exit(0 if d==b'hello X\nworld\n' else 1)" \
     || { echo "OS-VI TEST: FAIL — append (A)"; python3 -c "print(repr(open('vg.out','rb').read()))"; exit 1; }
 
-# 2) x (del 'h'), j, dd (del 'world'), o "new" Esc, :wq  -> "ello\r\nnew\r\n"
+# 2) x (del 'h'), j, dd (del 'world'), o "new" Esc, :wq  -> "ello\nnew\n"
 mkdisk
 edit "xjddonew$ESC:wq\r" T.TXT
 getf /T.TXT
-python3 -c "import sys;d=open('vg.out','rb').read();sys.exit(0 if d==b'ello\r\nnew\r\n' else 1)" \
+python3 -c "import sys;d=open('vg.out','rb').read();sys.exit(0 if d==b'ello\nnew\n' else 1)" \
     || { echo "OS-VI TEST: FAIL — x/dd/o edits"; python3 -c "print(repr(open('vg.out','rb').read()))"; exit 1; }
 
 # 3) new file:  VI NEW.TXT ; i "first line" Esc :wq
 mkdisk
 edit "ifirst line$ESC:wq\r" NEW.TXT
 getf /NEW.TXT || { echo "OS-VI TEST: FAIL — new file not created"; exit 1; }
-python3 -c "import sys;d=open('vg.out','rb').read();sys.exit(0 if d==b'first line\r\n' else 1)" \
+python3 -c "import sys;d=open('vg.out','rb').read();sys.exit(0 if d==b'first line\n' else 1)" \
     || { echo "OS-VI TEST: FAIL — new-file content"; python3 -c "print(repr(open('vg.out','rb').read()))"; exit 1; }
 
-# 4) :q on an unmodified file quits without writing (T.TXT unchanged)
+# 4) :q on an unmodified file quits without writing — T.TXT keeps its ORIGINAL
+#    bytes (the CRLF input fixture untouched; contrast the :wq cases which rewrite
+#    with LF). Proves :q doesn't normalize line endings.
 mkdisk
 edit ":q\r" T.TXT
 getf /T.TXT
@@ -62,21 +64,21 @@ python3 -c "import sys;d=open('vg.out','rb').read();sys.exit(0 if d==b'hello\r\n
 mkdisk
 edit "xu:wq\r" T.TXT
 getf /T.TXT
-python3 -c "import sys;d=open('vg.out','rb').read();sys.exit(0 if d==b'hello\r\nworld\r\n' else 1)" \
+python3 -c "import sys;d=open('vg.out','rb').read();sys.exit(0 if d==b'hello\nworld\n' else 1)" \
     || { echo "OS-VI TEST: FAIL — undo of x"; python3 -c "print(repr(open('vg.out','rb').read()))"; exit 1; }
 
 # 6) undo of dd: dd deletes line 1, u reinserts it -> file unchanged
 mkdisk
 edit "ddu:wq\r" T.TXT
 getf /T.TXT
-python3 -c "import sys;d=open('vg.out','rb').read();sys.exit(0 if d==b'hello\r\nworld\r\n' else 1)" \
+python3 -c "import sys;d=open('vg.out','rb').read();sys.exit(0 if d==b'hello\nworld\n' else 1)" \
     || { echo "OS-VI TEST: FAIL — undo of dd"; python3 -c "print(repr(open('vg.out','rb').read()))"; exit 1; }
 
 # 7) search: /world<CR> jumps to line 2, A! appends there -> "hello\r\nworld!\r\n"
 mkdisk
 edit "/world\rA!$ESC:wq\r" T.TXT
 getf /T.TXT
-python3 -c "import sys;d=open('vg.out','rb').read();sys.exit(0 if d==b'hello\r\nworld!\r\n' else 1)" \
+python3 -c "import sys;d=open('vg.out','rb').read();sys.exit(0 if d==b'hello\nworld!\n' else 1)" \
     || { echo "OS-VI TEST: FAIL — search then edit at match"; python3 -c "print(repr(open('vg.out','rb').read()))"; exit 1; }
 
 echo "OS-VI TEST: PASS"

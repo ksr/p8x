@@ -809,12 +809,7 @@ sv_c1:  JMP sv_cl
 sv_eol: LDA #0
         TAP1L
         TAP1H
-        LDA #13
-        JSR $012D
-        LDA #0
-        TAP1L
-        TAP1H
-        LDA #10
+        LDA #10                 ; LF (was CRLF; conform to Unix)
         JSR $012D
         LDA sv_i
         INC

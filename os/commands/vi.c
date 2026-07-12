@@ -108,7 +108,7 @@ int load(char *p) {
     return 0;
 }
 
-/* save: write each line + CRLF to `p`. */
+/* save: write each line + LF to `p` (the Unix line ending — P8X convention). */
 int save(char *p) {
     int i;
     int b;
@@ -120,8 +120,7 @@ int save(char *p) {
         b = i * 80;
         j = 0;
         while (line[b + j] != 0) { bios(0x012D, 0, line[b + j]); j = j + 1; }
-        bios(0x012D, 0, 13);
-        bios(0x012D, 0, 10);
+        bios(0x012D, 0, 10);                     /* LF (was CRLF; conform to Unix) */
         i = i + 1;
     }
     bios(0x0130, 0, 0);                          /* FCLOSE */
