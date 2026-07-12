@@ -75,7 +75,28 @@ bytes** (was 11): bump `SAVESCR`/`RESTSCR` count 11→13 and the `SCRSAVE` buffe
 
 ## Steps (each green before the next)
 
-- **A** reflow map + all caller equates, NO arithmetic change → full FS suite green.
-- **B** widen read path → new >64 KB read test.
-- **C** widen write path + FCREATE + zero FLEN+2 in EDIT/BASIC → >64 KB write→read round-trip.
-- **D** `dir` 24-bit size column; on-target assemble of a >64 KB source; docs + backlog.
+- **A** ✅ reflow map + all caller equates, NO arithmetic change → full FS suite green.
+- **B** ✅ widen read path (FSCAN/FNEXT/FOPEN/FGETB/FG_FILL/FLOADAT) → 70 KB cat read byte-exact.
+- **C** ✅ widen write path (FWOPEN/FPUTB/FCLOSE/FCOM_CORE) + dir-entry 3rd byte + zero FLEN+2 in EDIT/BASIC/OS SAVE → 70 KB write round-trip byte-exact, fsck clean.
+- **D** ✅ `os_bigfile_test` (66 KB read+write round-trip); on-target assemble resolves a label past 64 KB; docs + backlog.
+
+## Done (2026-07-12)
+
+All four steps landed on `feature/24bit-filesize`. Files up to 16 MB read + write
+correctly on-target. The 121 KB `os/p8xos.asm` assembles on-target (slow in the
+emulator).
+
+### Deferred follow-ups (16-bit-length assumptions outside the core R/W path)
+
+These don't affect creating/reading/writing a >64 KB file; they're maintenance /
+display paths that still assume ≤64 KB:
+
+1. **`dir` size column (cosmetic).** p8cc's `int` is 16-bit, so `dir` shows a
+   >64 KB file's size mod 65536. A true 24-bit column needs `SYS_DIRENTRY`/`de[]`
+   to carry the 3rd length byte plus a 24-bit print helper in both `dir` twins.
+2. **`SECCOUNT` (os/p8xos.asm) is 16-bit** — `SECCNT = ceil(LENHI:LENLO/512)`,
+   used by `LOAD`/`SAVE` (RAM-bounded, fine) but also **`FSCK`** and **`PACK`**.
+   So `FSCK` mis-validates and `PACK` mis-relocates a >64 KB file's extent. To fix:
+   widen `SECCOUNT` to a 24-bit length + 16-bit `SECCNT`, and the extent arithmetic
+   in `FK_*`/`PACK` callers. Until then, avoid `PACK` on a volume holding a
+   >64 KB file.

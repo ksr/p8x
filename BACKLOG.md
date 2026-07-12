@@ -686,12 +686,23 @@ Last updated: 2026-07-08
       `bin` output dir, and `make os-bios` (script `/src/mk/os-bios`) assembles
       both. Browsing works; blocker #2 (subdir-source read) is now FIXED, so a
       subdir source of any size streams correctly (the 58 KB monitor assembles
-      on-target, standalone or under `sh`/`make`). The remaining blocker is only
-      the OS's sheer size:
-        1. **>64 KB reads.** `os/p8xos.asm` is ~121 KB but the BIOS read stream's
-           length (`ROREM`/`FLEN`) is 16-bit, so it truncates past ~56 KB and the
-           OS assembly fails with a spurious `?undefined` at a late label. Need a
-           24-bit read length across `FFIND`/`FOPEN`/`FGETB` (like `ROLBA`).
+      on-target, standalone or under `sh`/`make`). Both original blockers are now
+      fixed:
+        1. **>64 KB files — FIXED (2026-07-12, branch `feature/24bit-filesize`).**
+           The BIOS file length is now **24-bit** (`FLEN`/`FSAV`/`ROREM`/`ROCNT`/
+           `WOTOT`/`FLAREM`), matching `ROLBA` — max file 16 MB. The FS scratch
+           block was reflowed for 3-byte length fields (all callers + `sh` read-
+           stream save/restore updated), and the read AND write math widened
+           (`FSCAN`/`FNEXT`/`FOPEN`/`FGETB`/`FG_FILL`/`FLOADAT`; `FWOPEN`/`FPUTB`/
+           `FCLOSE`/`FCOM_CORE`, 16-bit sector count for >255-sector files). No
+           on-disk format change (the entry already stored 4 length bytes).
+           Verified: 66–70 KB files read + write round-trip byte-identical
+           on-target (`os_bigfile_test`), and an on-target assemble resolves a
+           label living past the 64 KB source mark (was `?undefined`). So the 121 KB
+           `os/p8xos.asm` now assembles on-target — though it's slow in the emulator
+           (~wall-time bound, minutes). See `firmware/WIDE_FILELEN.md`. Follow-up:
+           the `dir` size column is still 16-bit (p8cc `int`), so a file >64 KB
+           shows its size mod 65536 until a 24-bit size column lands (cosmetic).
         2. **Subdirectory source read empty / over-read — FIXED (2026-07-12).**
            ROOT CAUSE (found via emulator memory-watch on `FLEN`/`ROREM` + an LBA
            trace, `apps/p8xasm.asm`): the size/`sh`/`LINEBUF` theories were all

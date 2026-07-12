@@ -1,0 +1,46 @@
+#!/bin/sh
+# >64 KB files — the BIOS file length is 24-bit (FLEN/ROREM/WOTOT/FLAREM), so a
+# file may be up to 16 MB. This regresses the read AND write streams past the old
+# 16-bit (64 KB) wall in one shot: put a >64 KB file host-side, then on-target
+# `cat BIG.TXT > COPY.TXT` (read stream -> write stream -> FCOM_CORE), and verify
+# COPY.TXT is byte-identical host-side and the volume stays FSCK-clean. Before the
+# 24-bit widening the length wrapped mod 65536 and the copy truncated/corrupted.
+set -e
+cd "$(dirname "$0")"
+ROOT=../..
+UC=../../microcode
+
+fail() { echo "OS-BIGFILE TEST: FAIL — $1"; exit 1; }
+
+cp $UC/u?.bin .
+python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
+python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o bfos.bin --base 0x4000 >/dev/null
+python3 $ROOT/tools/clib.py $ROOT/os/commands/cat.c -o bfcat.c
+python3 $ROOT/compiler/p8cc.py bfcat.c -o bfcat.asm >/dev/null
+python3 $ROOT/assembler/p8xasm.py bfcat.asm -o bfcat.bin --base 0x7A00 >/dev/null
+
+# 66000 bytes (>64 KB): 6000 distinct 11-char lines, so any wrap/truncation shows.
+python3 -c "
+f=open('bf_big.txt','w')
+for i in range(6000): f.write('L%09d\n'%i)   # 11 chars/line * 6000 = 66000
+f.close()
+import os; assert os.path.getsize('bf_big.txt')==66000"
+
+rm -f bf.img
+python3 $ROOT/tools/p8xfs.py create bf.img >/dev/null
+python3 $ROOT/tools/p8xfs.py boot   bf.img bfos.bin >/dev/null
+python3 $ROOT/tools/p8xfs.py mkdir  bf.img /bin >/dev/null
+python3 $ROOT/tools/p8xfs.py put    bf.img bfcat.bin --name /bin/cat.bin --load 0x7A00 --exec 0x7A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    bf.img bf_big.txt --name /BIG.TXT >/dev/null
+
+# read the 66 KB file and stream it back out to a new file (read + write past 64 KB)
+printf 'B\rcat /BIG.TXT > COPY.TXT\r' | ../p8xemu -l 12000000000 -c bf.img eeprom.bin >/dev/null 2>&1
+
+python3 $ROOT/tools/p8xfs.py get bf.img /COPY.TXT --out bf_copy.txt >/dev/null 2>&1 \
+    || fail "COPY.TXT not created (>64 KB write failed)"
+sz=$(wc -c < bf_copy.txt | tr -d ' ')
+[ "$sz" -eq 66000 ] || fail "COPY.TXT is $sz bytes, expected 66000 (length wrapped?)"
+cmp -s bf_big.txt bf_copy.txt || fail "COPY.TXT differs from the 66 KB source"
+python3 $ROOT/tools/p8xfs.py fsck bf.img >/dev/null 2>&1 || fail "volume invalid after >64 KB write"
+
+echo "OS-BIGFILE TEST: PASS"
