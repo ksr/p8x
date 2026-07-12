@@ -2,7 +2,7 @@ NAME
     dir - list directory contents
 
 SYNOPSIS
-    dir [-R] [path | glob]
+    dir [-R] [-S] [path | glob]
 
 DESCRIPTION
     Lists a directory. With no argument it lists the current working
@@ -10,15 +10,24 @@ DESCRIPTION
     lists the matching entries. Directories are shown with a trailing
     slash. dir is a /bin program.
 
+    Entries are sorted within each directory (and, with -R, at every
+    level). The default order is by name, raw ASCII -- so uppercase
+    A-Z sort before lowercase a-z. -S sorts by byte size, largest
+    first, with ties broken by name; a directory has no shown size and
+    so counts as size 0, sorting after all files.
+
 OPTIONS
     -R    list subdirectories recursively (like tree)
+    -S    sort by file size, largest first (default is by name)
 
 EXAMPLES
-    dir              list the current directory
+    dir              list the current directory, sorted by name
     dir /bin         list a directory by path
+    dir -S           list the CWD, largest files first
     dir *.asm        entries in the CWD matching a glob
     dir /bin/*.bin   glob within another directory
     dir -R /sub      recursive listing of /sub
+    dir -R -S /sub   recursive listing, each level size-sorted
 
 SEE ALSO
     tree, find, cd, pwd, ls

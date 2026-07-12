@@ -60,7 +60,7 @@ cmd_script() {
         # p8cc and asm builds — a size artifact, not a behavior difference.
         # `cd /SUB; dir DEEP` exercises a RELATIVE path arg (must resolve vs the
         # CWD -> /SUB/DEEP, not /DEEP): the two builds must agree on it too.
-        DIR)  printf 'dir\rdir /SUB\rcd /SUB\rdir DEEP\rcd /\rdir *.LOG\rdir -R /SUB\rdir /NOPE\r' ;;
+        DIR)  printf 'dir\rdir -S\rdir /SUB\rcd /SUB\rdir DEEP\rcd /\rdir *.LOG\rdir -R /SUB\rdir -R -S /SUB\rdir /NOPE\r' ;;
         TREE) printf 'tree\r' ;;
         MV)   printf 'mv T.TXT R.TXT\rcat R.TXT\rmv *.LOG SUB\rfind LOG\rmv *.LOG NOPE\rmv R.TXT R.TXT\r' ;;
         WC)   printf 'wc T.TXT\rwc *.LOG\rcat T.TXT | wc\rwc -h\r' ;;

@@ -1,9 +1,20 @@
 ; dir.asm — hand-coded DIR command (asm counterpart of os/commands/dir.c).
-;   DIR [-R] [path|glob]   list a directory (size column + name; '/' = dir).
+;   DIR [-R] [-S] [path|glob]   list a directory (size column + name; '/' = dir).
 ;
-; Mirrors dir.c: optional -R recursion, a `*`/`?` glob in the last path
-; component (dir split + case-insensitive gmatch filter), a 6-wide right-
-; justified size column (blank for dirs), streamed one entry at a time.
+; Mirrors dir.c: optional -R recursion, -S size sort, a `*`/`?` glob in the last
+; path component (dir split + case-insensitive gmatch filter), a 6-wide right-
+; justified size column (blank for dirs).
+;
+; SORT: entries are buffered per directory (name/len/dir-flag/LBA into single
+; global arrays reused at every recursion level), then a selection sort orders an
+; index array `eidx`, and the level is printed in that order. Default key is name,
+; raw ASCII; -S sorts by byte size LARGEST first with a name tiebreak, and a
+; directory (blank size) counts as size 0 so it sorts after all files. The CPU's
+; CMP is unsigned, so both name-byte and 16-bit size compares are unsigned — matching
+; p8cc's unsigned < / >. A level is fully collected+printed (recording child LBAs
+; into the per-depth csub[] array) BEFORE descending, so a child's collect() may
+; reuse the global buffers freely.
+;
 ; Recursion uses depth-indexed arrays + a global w_depth (see tree.asm; P3 is the
 ; stack pointer so only P1/P2 are usable). Iterates on FSDIRBUF page $FA.
 ;
@@ -20,6 +31,7 @@
         STA m_arg+1
         LDA #0
         STA rec
+        STA szmode
         STA gpat                     ; gpat[0]=0 (no filter)
 ; skip spaces (advance m_arg)
 d_sk:   LDA m_arg
@@ -29,14 +41,15 @@ d_sk:   LDA m_arg
         LDA (P2)
         LDB #32
         CMP
-        JNZ d_opt
+        JNZ d_hchk
         JSR arg_inc
         JMP d_sk
-; -h / -R
-d_opt:  LDA (P2)
+; -h is only recognized as the FIRST token (mirror dir.c: the -h check precedes
+; the flag loop, so `dir -R -h` treats -h as a path, not a usage request).
+d_hchk: LDA (P2)
         LDB #'-'
         CMP
-        JNZ d_scan
+        JNZ d_opt
         INP2
         LDA (P2)
         LDB #'h'
@@ -45,27 +58,47 @@ d_opt:  LDA (P2)
         LDB #'H'
         CMP
         JZ d_usage
+; flag loop: -R/-r recurse, -S/-s size sort (each its own '-x' token, any order)
+d_opt:  LDA m_arg
+        TAP2L
+        LDA m_arg+1
+        TAP2H
+        LDA (P2)
+        LDB #'-'
+        CMP
+        JNZ d_scan
+        INP2
+        LDA (P2)
         LDB #'R'
         CMP
-        JZ d_rec
+        JZ d_setr
         LDB #'r'
         CMP
-        JZ d_rec
+        JZ d_setr
+        LDB #'S'
+        CMP
+        JZ d_sets
+        LDB #'s'
+        CMP
+        JZ d_sets
         JMP d_scan                   ; some other '-x': fall through (m_arg at '-')
-d_rec:  LDA #1
+d_setr: LDA #1
         STA rec
-        JSR arg_inc                  ; skip '-'
-        JSR arg_inc                  ; skip 'R'
-d_rsk:  LDA m_arg
+        JMP d_oadv
+d_sets: LDA #1
+        STA szmode
+d_oadv: JSR arg_inc                  ; skip '-'
+        JSR arg_inc                  ; skip flag char
+d_osk:  LDA m_arg
         TAP2L
         LDA m_arg+1
         TAP2H
         LDA (P2)
         LDB #32
         CMP
-        JNZ d_scan
+        JNZ d_opt                    ; next flag or the path
         JSR arg_inc
-        JMP d_rsk
+        JMP d_osk
 ; scan path token: hasslash/slashpos, g(glob), i(length)
 d_scan: LDA #0
         STA hasslash
@@ -269,25 +302,26 @@ d_go:   LDA #0                        ; FSDIRBUF page $FA
         STA w_depth
         JSR walk
         RTS
-; single-level listing
-d_flat: LDA #0
-        TAP1L
-        TAP1H
+; single-level listing: collect + sort, then print in sorted order
+d_flat: JSR collect
         LDA #0
-        JSR $013C                    ; FNEXT
-        JC d_fdone
-        LDA #<de
-        TAP1L
-        LDA #>de
-        TAP1H
-        LDA #0
-        JSR $401B                    ; de_read
-        JSR getname
+        STA pri
+df_l:   LDA pri
+        LDB ecnt
+        CMP
+        JZ d_fdone
+        LDA pri
+        JSR eidx_get                 ; A = eidx[pri]
+        STA em
+        JSR nameat                   ; nbuf <- enam[em]
         LDA #0
         STA sh_depth
-        JSR set_dirsz                ; sh_dir, sh_sz from de[]
+        JSR setbuf                   ; sh_dir/sh_sz from eisd[em]/elen[em]
         JSR show
-        JMP d_flat
+        LDA pri
+        INC
+        STA pri
+        JMP df_l
 d_fdone:RTS
 d_usage:LDA #<u_use
         TAP1L
@@ -311,70 +345,69 @@ arg_inc:
         STA m_arg+1
 ai1:    RTS
 
-; set_dirsz: sh_dir = (de[12]==2), sh_sz = de[13]+de[14]*256
-set_dirsz:
-        LDA de+12
-        LDB #2
-        CMP
-        JNZ sd_file
-        LDA #1
-        STA sh_dir
-        JMP sd_sz
-sd_file:LDA #0
-        STA sh_dir
-sd_sz:  LDA de+13
-        STA sh_sz
-        LDA de+14
-        STA sh_sz+1
-        RTS
-
 ; ======================= walk (recursive, like tree) =======================
-walk:   JSR nsub_addr
+; collect+sort this level, print it (recording child LBAs into csub[depth] in
+; sorted order), then descend into each recorded child.
+walk:   JSR collect
+        JSR nsub_addr
         LDA #0
-        STA (P1)
-w_next: LDA #0
-        TAP1L
-        TAP1H
+        STA (P1)                     ; nsub[depth]=0
         LDA #0
-        JSR $013C                    ; FNEXT
-        JC w_desc
-        LDA #<de
-        TAP1L
-        LDA #>de
-        TAP1H
-        LDA #0
-        JSR $401B                    ; de_read
-        LDA de                       ; skip '.'/'..'
-        LDB #'.'
+        STA pri
+w_pl:   LDA pri
+        LDB ecnt
         CMP
-        JZ w_next
-        JSR getname
+        JZ w_desc
+        LDA pri
+        JSR eidx_get
+        STA em
+        JSR nameat
         LDA w_depth
         STA sh_depth
-        JSR set_dirsz
+        JSR setbuf
         JSR show
-        LDA de+12                    ; if dir, record LBA
-        LDB #2
+        LDA em                       ; if dir, record LBA
+        JSR eisd_get
+        LDB #0
         CMP
-        JNZ w_next
+        JZ w_pnext
         JSR nsub_addr
         LDA (P1)
         LDB #64
         CMP
-        JC w_next                    ; nsub>=64 -> skip
+        JC w_pnext                   ; nsub>=64 -> skip
         JSR nsub_addr
         LDA (P1)
         STA kk
-        JSR csub_addr
-        LDA de+15
+        JSR csub_addr                ; P1 = csub[depth][kk]
+        TPA1L
+        STA cdst
+        TPA1H
+        STA cdst+1
+        LDA em                       ; P2 = elba + em*2
+        STA mi
+        JSR elba_ptr
+        LDA (P2)
+        STA lba
+        INP2
+        LDA (P2)
+        STA lba+1
+        LDA cdst                     ; store lba into csub slot
+        TAP1L
+        LDA cdst+1
+        TAP1H
+        LDA lba
         STA (P1)+
-        LDA de+16
+        LDA lba+1
         STA (P1)
         JSR nsub_addr
         LDA (P1)
         INC
         STA (P1)
-        JMP w_next
+w_pnext:LDA pri
+        INC
+        STA pri
+        JMP w_pl
 w_desc: JSR idx_addr
         LDA #0
         STA (P1)
@@ -416,10 +449,38 @@ w_dl:   JSR idx_addr
         JMP w_dl
 w_ret:  RTS
 
-; ======================= getname ===========================================
-getname:LDA #<nbuf
+; ======================= collect (buffer + selection sort) =================
+; Iterate the ALREADY-open directory, snapshot every non-dot entry into the
+; global buffers (enam/elen/eisd/elba) up to 64, then sort eidx[] via before().
+collect:LDA #0
+        STA ecnt
+col_nx: LDA #0
         TAP1L
-        LDA #>nbuf
+        TAP1H
+        LDA #0
+        JSR $013C                    ; FNEXT
+        JC col_srt
+        LDA #<de
+        TAP1L
+        LDA #>de
+        TAP1H
+        LDA #0
+        JSR $401B                    ; de_read
+        LDA de                       ; skip '.'/'..'
+        LDB #'.'
+        CMP
+        JZ col_nx
+        LDA ecnt
+        LDB #64
+        CMP
+        JC col_nx                    ; ecnt>=64 -> don't store
+        ; enam + ecnt*12 <- de[0..11]
+        LDA ecnt
+        STA mi
+        JSR enam_ptr                 ; dptr = enam + ecnt*12
+        LDA dptr
+        TAP1L
+        LDA dptr+1
         TAP1H
         LDA #<de
         TAP2L
@@ -427,23 +488,412 @@ getname:LDA #<nbuf
         TAP2H
         LDA #0
         STA cnt
-gn_l:   LDA cnt
+col_cp: LDA cnt
         LDB #12
         CMP
-        JZ gn_done
+        JZ col_meta
         LDA (P2)
-        LDB #32
-        CMP
-        JZ gn_done
         STA (P1)+
         INP2
         LDA cnt
         INC
         STA cnt
-        JMP gn_l
-gn_done:LDA #0
+        JMP col_cp
+col_meta:
+        LDA de+12                    ; eisd = (de[12]==2)
+        LDB #2
+        CMP
+        JNZ col_file
+        LDA #1
+        STA cflg2
+        JMP col_sisd
+col_file:
+        LDA #0
+        STA cflg2
+col_sisd:
+        LDA ecnt                     ; eisd[ecnt] = cflg2
+        LDB #<eisd
+        ADD
+        TAP1L
+        LDA #>eisd
+        JNC col_i1
+        INC
+col_i1: TAP1H
+        LDA cflg2
+        STA (P1)
+        LDA ecnt                     ; elen[ecnt] (0 for dir, else de[13..14])
+        STA mi
+        JSR elen_ptr
+        LDA cflg2
+        LDB #0
+        CMP
+        JZ col_lfile
+        LDA #0
+        STA (P2)
+        INP2
+        LDA #0
+        STA (P2)
+        JMP col_lba
+col_lfile:
+        LDA de+13
+        STA (P2)
+        INP2
+        LDA de+14
+        STA (P2)
+col_lba:
+        LDA ecnt                     ; elba[ecnt] = de[15..16]
+        STA mi
+        JSR elba_ptr
+        LDA de+15
+        STA (P2)
+        INP2
+        LDA de+16
+        STA (P2)
+        LDA ecnt
+        INC
+        STA ecnt
+        JMP col_nx
+col_srt:
+        LDA #0                       ; eidx[i] = i
+        STA si
+csi_l:  LDA si
+        LDB ecnt
+        CMP
+        JZ csrt
+        LDA si
+        LDB #<eidx
+        ADD
+        TAP1L
+        LDA #>eidx
+        JNC csi_1
+        INC
+csi_1:  TAP1H
+        LDA si
+        STA (P1)
+        LDA si
+        INC
+        STA si
+        JMP csi_l
+csrt:   LDA #0                       ; selection sort
+        STA si
+srt_i:  LDA si
+        LDB ecnt
+        CMP
+        JZ srt_dn
+        LDA si
+        STA sm                       ; m = i
+        LDA si
+        LDB #1
+        ADD
+        STA sj                       ; j = i+1
+srt_j:  LDA sj
+        LDB ecnt
+        CMP
+        JZ srt_sw
+        LDA sj                       ; before(eidx[sj], eidx[sm]) ?
+        JSR eidx_get
+        STA bA
+        LDA sm
+        JSR eidx_get
+        STA bB
+        JSR before
+        LDB #0
+        CMP
+        JZ srt_jn
+        LDA sj                       ; new minimum
+        STA sm
+srt_jn: LDA sj
+        INC
+        STA sj
+        JMP srt_j
+srt_sw: LDA si                       ; swap eidx[si], eidx[sm]
+        JSR eidx_get
+        STA tA
+        LDA sm
+        JSR eidx_get
+        STA tB
+        LDA si
+        LDB #<eidx
+        ADD
+        TAP1L
+        LDA #>eidx
+        JNC sw_1
+        INC
+sw_1:   TAP1H
+        LDA tB
+        STA (P1)
+        LDA sm
+        LDB #<eidx
+        ADD
+        TAP1L
+        LDA #>eidx
+        JNC sw_2
+        INC
+sw_2:   TAP1H
+        LDA tA
+        STA (P1)
+        LDA si
+        INC
+        STA si
+        JMP srt_i
+srt_dn: RTS
+
+; before: A=1 if entry bA sorts strictly before entry bB, else 0.
+;   size mode: larger key first, name ascending on a tie; name mode: name asc.
+before: LDA szmode
+        LDB #0
+        CMP
+        JZ bf_name
+        LDA bA                       ; keyA = skey(bA)
+        STA em2
+        JSR skey
+        LDA keyw
+        STA keyA
+        LDA keyw+1
+        STA keyA+1
+        LDA bB                       ; keyB = skey(bB)
+        STA em2
+        JSR skey
+        LDA keyw
+        STA keyB
+        LDA keyw+1
+        STA keyB+1
+        LDA keyA+1                   ; compare hi bytes (unsigned)
+        LDB keyB+1
+        CMP
+        JZ bf_lo                     ; hi equal -> compare lo
+        JC bf_yes                    ; keyA_hi > keyB_hi
+        LDA #0
+        RTS
+bf_lo:  LDA keyA
+        LDB keyB
+        CMP
+        JZ bf_name                   ; equal keys -> name tiebreak
+        JC bf_yes                    ; keyA_lo > keyB_lo
+        LDA #0
+        RTS
+bf_yes: LDA #1
+        RTS
+bf_name:
+        JSR name_before              ; A = (name(bA) < name(bB))
+        RTS
+
+; name_before: A=1 if the 12-byte padded name of bA < that of bB (raw ASCII).
+name_before:
+        LDA bA
+        STA mi
+        JSR enam_ptr
+        LDA dptr
+        STA naddrA
+        LDA dptr+1
+        STA naddrA+1
+        LDA bB
+        STA mi
+        JSR enam_ptr
+        LDA dptr
+        STA naddrB
+        LDA dptr+1
+        STA naddrB+1
+        LDA #0
+        STA cnt
+nb_l:   LDA cnt
+        LDB #12
+        CMP
+        JZ nb_eq
+        LDA naddrA                   ; ca = [naddrA + cnt]
+        LDB cnt
+        ADD
+        TAP1L
+        LDA naddrA+1
+        JNC nb_a1
+        INC
+nb_a1:  TAP1H
+        LDA (P1)
+        STA nca
+        LDA naddrB                   ; cb = [naddrB + cnt]
+        LDB cnt
+        ADD
+        TAP2L
+        LDA naddrB+1
+        JNC nb_b1
+        INC
+nb_b1:  TAP2H
+        LDA (P2)
+        STA ncb
+        LDA nca
+        LDB ncb
+        CMP
+        JZ nb_nx                     ; equal byte -> keep comparing
+        JC nb_no                     ; nca > ncb -> a > b -> not before
+        LDA #1
+        RTS
+nb_no:  LDA #0
+        RTS
+nb_nx:  LDA cnt
+        INC
+        STA cnt
+        JMP nb_l
+nb_eq:  LDA #0
+        RTS
+
+; skey: keyw = size sort key of entry em2 (0 for a directory, else elen[em2]).
+skey:   LDA em2
+        JSR eisd_get
+        LDB #0
+        CMP
+        JZ sk_file
+        LDA #0
+        STA keyw
+        STA keyw+1
+        RTS
+sk_file:LDA em2
+        STA mi
+        JSR elen_ptr
+        LDA (P2)
+        STA keyw
+        INP2
+        LDA (P2)
+        STA keyw+1
+        RTS
+
+; nameat: nbuf <- enam[em] (12 space-padded bytes), trailing pad trimmed.
+nameat: LDA em
+        STA mi
+        JSR enam_ptr
+        LDA dptr
+        TAP2L
+        LDA dptr+1
+        TAP2H
+        LDA #<nbuf
+        TAP1L
+        LDA #>nbuf
+        TAP1H
+        LDA #0
+        STA cnt
+na_l:   LDA cnt
+        LDB #12
+        CMP
+        JZ na_d
+        LDA (P2)
+        LDB #32
+        CMP
+        JZ na_d
+        STA (P1)+
+        INP2
+        LDA cnt
+        INC
+        STA cnt
+        JMP na_l
+na_d:   LDA #0
         STA (P1)
         RTS
+
+; setbuf: sh_dir = eisd[em], sh_sz = elen[em] (for show/putsize).
+setbuf: LDA em
+        JSR eisd_get
+        STA sh_dir
+        LDA em
+        STA mi
+        JSR elen_ptr
+        LDA (P2)
+        STA sh_sz
+        INP2
+        LDA (P2)
+        STA sh_sz+1
+        RTS
+
+; eidx_get: A(index) -> A = eidx[index]
+eidx_get:
+        LDB #<eidx
+        ADD
+        TAP1L
+        LDA #>eidx
+        JNC eg_1
+        INC
+eg_1:   TAP1H
+        LDA (P1)
+        RTS
+
+; eisd_get: A(index) -> A = eisd[index]
+eisd_get:
+        LDB #<eisd
+        ADD
+        TAP1L
+        LDA #>eisd
+        JNC eis_1
+        INC
+eis_1:  TAP1H
+        LDA (P1)
+        RTS
+
+; enam_ptr: dptr = enam + mi*12  (16-bit offset up to 756)
+enam_ptr:
+        JSR amul12
+        LDA #<enam
+        LDB macc
+        ADD
+        STA dptr
+        LDA #0
+        JNC ep_0
+        LDA #1
+ep_0:   STA cflg
+        LDA #>enam
+        LDB macc+1
+        ADD
+        LDB cflg
+        ADD
+        STA dptr+1
+        RTS
+
+; elen_ptr: P2 = elen + mi*2  (mi<64 so offset<128, single byte)
+elen_ptr:
+        LDA mi
+        SHL
+        LDB #<elen
+        ADD
+        TAP2L
+        LDA #>elen
+        JNC el_1
+        INC
+el_1:   TAP2H
+        RTS
+
+; elba_ptr: P2 = elba + mi*2
+elba_ptr:
+        LDA mi
+        SHL
+        LDB #<elba
+        ADD
+        TAP2L
+        LDA #>elba
+        JNC eb_1
+        INC
+eb_1:   TAP2H
+        RTS
+
+; amul12: macc (word) = mi * 12  (repeated add; no 16-bit multiply on the CPU)
+amul12: LDA #0
+        STA macc
+        STA macc+1
+        LDA mi
+        STA cnt
+am_l:   LDA cnt
+        LDB #0
+        CMP
+        JZ am_d
+        LDA macc
+        LDB #12
+        ADD
+        STA macc
+        JNC am_n
+        LDA macc+1
+        INC
+        STA macc+1
+am_n:   LDA cnt
+        DEC
+        STA cnt
+        JMP am_l
+am_d:   RTS
 
 ; ======================= show ==============================================
 ; sh_depth, sh_dir, sh_sz ; nbuf holds the name; gpat is the optional filter.
@@ -926,10 +1376,12 @@ ab_dn:  LDA #0
 
 ; ======================= messages / scratch ===============================
 ; (assembler strips ';' as a comment even in strings, so the usage line is
-;  emitted in two .ascii pieces around a literal ';' byte = 59)
-u_use:  .ascii "usage: DIR [-R] [path|glob]   list a dir"
+;  emitted in .ascii pieces around literal ';' bytes = 59)
+u_use:  .ascii "usage: DIR [-R] [-S] [path|glob]   list a dir"
         .byte 59
-        .ascii " glob: * ? in the last name"
+        .ascii " -S: size sort"
+        .byte 59
+        .ascii " glob: * ?"
         .byte 0
 u_nf:   .asciiz "dir: not found"
 
@@ -940,6 +1392,7 @@ apath:  .fill 80
 
 m_arg:  .fill 2
 rec:    .fill 1
+szmode: .fill 1
 hasslash:.fill 1
 slashpos:.fill 1
 gflag:  .fill 1
@@ -951,6 +1404,7 @@ cnt2:   .fill 1
 kk:     .fill 1
 lba:    .fill 2
 caddr:  .fill 2
+cdst:   .fill 2
 w_depth:.fill 1
 sh_depth:.fill 1
 sh_dir: .fill 1
@@ -968,10 +1422,41 @@ gpc:    .fill 1
 gsc:    .fill 1
 gmr:    .fill 1
 uch:    .fill 1
+; --- sort state ---
+pri:    .fill 1
+em:     .fill 1
+em2:    .fill 1
+mi:     .fill 1
+si:     .fill 1
+sj:     .fill 1
+sm:     .fill 1
+bA:     .fill 1
+bB:     .fill 1
+tA:     .fill 1
+tB:     .fill 1
+cflg:   .fill 1
+cflg2:  .fill 1
+ecnt:   .fill 1
+macc:   .fill 2
+dptr:   .fill 2
+keyA:   .fill 2
+keyB:   .fill 2
+keyw:   .fill 2
+naddrA: .fill 2
+naddrB: .fill 2
+nca:    .fill 1
+ncb:    .fill 1
 nbuf:   .fill 16
 gpat:   .fill 16
 dbuf:   .fill 64
 de:     .fill 17
+; --- per-directory entry buffers (reused at every recursion level) ---
+enam:   .fill 768
+elen:   .fill 128
+eisd:   .fill 64
+elba:   .fill 128
+eidx:   .fill 64
+; --- per-depth recursion arrays ---
 nsub:   .fill 16
 idx:    .fill 16
 csub:   .fill 2048
