@@ -313,6 +313,8 @@ CMD_W:  LDA  HASNAME
         LDB  #>TBUF
         SUB
         STA  FLEN+1
+        LDA  #0                 ; FLEN is 24-bit now; the editor buffer is <64 KB
+        STA  FLEN+2
         JSR  FDELETE            ; remove old version (ignore "not found")
         JSR  FCREATE
         JC   CW_ERR

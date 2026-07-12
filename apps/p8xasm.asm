@@ -49,9 +49,9 @@ FSRC    = $7056
 FLEN    = $7058
 ; Directory context — saved at startup, restored each pass so PASSINIT re-opens
 ; the source even after a ;#use has re-resolved FNAME/DIRLBA to an include.
-DIRLBA  = $706E   ; current directory start LBA low
-DIRN    = $706F   ; current directory sector count
-DIRLBA1 = $707A   ; current directory start LBA high
+DIRLBA  = $7073   ; current directory start LBA low
+DIRN    = $7074   ; current directory sector count
+DIRLBA1 = $7080   ; current directory start LBA high
 
 CR      = $0D
 LF      = $0A

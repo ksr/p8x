@@ -120,7 +120,8 @@ reads `/BIN/X`; `FRESOLVE("/SUB/W")` then `FWOPEN`/`FPUTB`/`FCLOSE` writes
 `/SUB/W`. `FFIND`/`FOPEN`/`FCREATE`/`FDELETE`/`FCLOSE` are all path-aware this
 way. Parameters use fixed RAM:
 `FNAME` (`$704A`, 12-byte space-padded name), `FSRC` (`$7056`, FCREATE source
-address), `FLEN` (`$7058`, length — FCREATE input, FFIND output); `FFIND` returns
+address), `FLEN` (`$7058`, **24-bit** length, 3 bytes — FCREATE input, FFIND
+output; max file 16 MB, matching the 24-bit `ROLBA`); `FFIND` returns
 the start LBA in the shared `LBA` (`$7047`). (Subdirectory LBAs are 16-bit: the
 directory-iteration/resolution path carries `DIRLBA`/`DILBA` plus their high
 bytes, so a directory whose extent starts at LBA ≥ 256 resolves and lists

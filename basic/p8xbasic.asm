@@ -465,6 +465,8 @@ pl_end: TPA1L                        ; NUM1 = end pointer
         STA  FLEN
         LDA  NUM1+1
         STA  FLEN+1
+        LDA  #0                      ; FLEN is 24-bit now; a BASIC program is <64 KB
+        STA  FLEN+2
         RTS
 st_err: LDP1 #MWHAT
         JSR  PUTS

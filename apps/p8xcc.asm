@@ -53,8 +53,8 @@ FOPEN    = $0124   ; open the resolved file for reading (P1 = 512-byte buffer)
 FGETB    = $0127   ; next source byte -> A; C=1 at EOF
 SYS_PUTC = $4009   ; emit A to stdout (redirectable by the shell)
 RDBUF    = $FC00   ; FOPEN read buffer
-ROSTATE  = $705C   ; BIOS read-stream state (ROLBA..ROCNT, 11 contiguous bytes)
-ROSDRV   = $707F   ; BIOS read-stream drive (1 byte)
+ROSTATE  = $705E   ; BIOS read-stream state (ROLBA..ROCNT, 13 contiguous bytes)
+ROSDRV   = $7085   ; BIOS read-stream drive (1 byte)
 
 CR       = $0D
 LF       = $0A
@@ -869,17 +869,23 @@ LIBBUFPTR: LDA #<USEBUF
         TAP1H
         RTS
 
-; USEOFF -> A = USESP*12  (index into USESTATE)
+; USEOFF -> A = USESP*14  (index into USESTATE)
 USEOFF: LDA USESP
-        SHL
-        SHL
-        STA  TMPC
-        SHL
+        SHL             ; x*2
+        STA  TMPC       ; TMPC = x*2
+        SHL             ; x*4
         LDB  TMPC
-        ADD
+        ADD             ; x*6
+        STA  TMPC       ; TMPC = x*6
+        LDA  USESP
+        SHL
+        SHL
+        SHL             ; x*8
+        LDB  TMPC
+        ADD             ; x*8 + x*6 = x*14
         RTS
 
-; SAVESTATE: USESTATE[USESP] = the 11-byte read state + ROSDRV
+; SAVESTATE: USESTATE[USESP] = the 13-byte read state + ROSDRV
 SAVESTATE: JSR USEOFF
         STA  TMPC
         LDA  #<USESTATE
@@ -894,7 +900,7 @@ ss0:    TAP2H
         TAP1L
         LDA  #>ROSTATE
         TAP1H
-        LDA  #11
+        LDA  #13
         STA  USECNT
 ss_l:   LDA  (P1)
         STA  (P2)
@@ -923,7 +929,7 @@ rs0:    TAP1H
         TAP2L
         LDA  #>ROSTATE
         TAP2H
-        LDA  #11
+        LDA  #13
         STA  USECNT
 rs_l:   LDA  (P1)
         STA  (P2)
@@ -5164,7 +5170,7 @@ USECNT: .fill 1     ; save/restore byte counter
 NAMEBUF: .fill 24   ; the current //#use library name
 LIBPATH: .fill 40   ; "/lib/lib_<name>.c"
 USED:   .fill 128   ; packed names of already-spliced libraries
-USESTATE: .fill 60  ; saved read-stream state, 12 bytes x 5 levels
+USESTATE: .fill 70  ; saved read-stream state, 14 bytes x 5 levels
 USEBUF: .fill 2560  ; per-level 512-byte read buffers (5 levels)
 BIOSAD: .fill 2    ; bios() intrinsic: the constant call address
 USEAND: .fill 1    ; 1 if binary & used
