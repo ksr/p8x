@@ -656,14 +656,22 @@ Last updated: 2026-07-08
         1. **>64 KB reads.** `os/p8xos.asm` is ~121 KB but the BIOS read stream's
            length (`ROREM`/`FLEN`) is 16-bit, so it truncates past ~56 KB and the
            OS assembly fails with a spurious `?undefined` at a late label. Need a
-           24-bit read length across `FFIND`/`FOPEN`/`FGETB` (like `ROLBA`). The
-           monitor (58 KB) is under the limit and assembles correctly on its own.
-        2. **63-char shell line edge.** The `os-bios` build-script command lines
-           are ~63 chars — right at `LINEBUF`'s 64-byte cap. A lone 63-char script
-           line runs fine, but with a following line the first command corrupts
-           (`make os-bios`'s monitor line fails). Either widen `LINEBUF`, make the
-           on-target `asm` CWD-relative (so scripts can `cd` + use short names), or
-           shorten the output paths. A pre-existing shell limit the script exposed.
+           24-bit read length across `FFIND`/`FOPEN`/`FGETB` (like `ROLBA`).
+        2. **Large source assembled UNDER a script over-reads (2026-07-11 —
+           diagnosed; NOT a line-length bug).** Ruled out the earlier 63-char
+           `LINEBUF` theory: a *short* 40-char monitor build line under `sh`
+           still fails, and a lone build line (single-line script) works. Real
+           trigger is SOURCE SIZE while running under `sh`/`make`: a ~48 KB+ source
+           (40 KB assembles fine, the 58 KB monitor fails) reads ONE sector past
+           its true EOF into the following file, but ONLY when assembled under the
+           script runner — standalone (`run /bin/asm.bin …`) reads the 58 KB
+           monitor correctly. It surfaces as `?syntax: <next line>` because the
+           monitor happens to sit one sector before the very script file (`sA` at
+           LBA 179 = the `pwd` line). So `ROREM`/`ROLBA` end up wrong under the
+           `sh` save/restore (`SAVESCR`/`RESTSCR`) path for big sources — needs
+           emulator-level instrumentation of the read counters to root-cause.
+           WORKAROUND today: assemble large sources standalone, not under `sh`/
+           `make`. (So `LINEBUF`→128 would NOT fix this.)
 - [x] **Man-page-style OS command reference — DONE (2026-07-09), on-target.**
       Went further than the doc-only plan: authored a per-command manual page
       (NAME / SYNOPSIS / DESCRIPTION / OPTIONS / EXAMPLES / SEE ALSO) for every
