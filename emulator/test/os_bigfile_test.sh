@@ -43,4 +43,16 @@ sz=$(wc -c < bf_copy.txt | tr -d ' ')
 cmp -s bf_big.txt bf_copy.txt || fail "COPY.TXT differs from the 66 KB source"
 python3 $ROOT/tools/p8xfs.py fsck bf.img >/dev/null 2>&1 || fail "volume invalid after >64 KB write"
 
+# PACK must relocate a >64 KB extent correctly (its sector count is 24-bit-derived,
+# 16-bit SECCNT:SECCH). Free BIG.TXT to open a gap before COPY.TXT, compact, and
+# confirm the 66 KB COPY.TXT survived byte-for-byte. Before the widening PACK copied
+# only ceil((len mod 65536)/512) sectors and shredded the file.
+printf 'B\rdel /BIG.TXT\rpack\r' | ../p8xemu -l 8000000000 -c bf.img eeprom.bin >/dev/null 2>&1
+python3 $ROOT/tools/p8xfs.py get bf.img /COPY.TXT --out bf_packed.txt >/dev/null 2>&1 \
+    || fail "COPY.TXT gone after PACK"
+psz=$(wc -c < bf_packed.txt | tr -d ' ')
+[ "$psz" -eq 66000 ] || fail "COPY.TXT is $psz bytes after PACK, expected 66000 (mis-packed)"
+cmp -s bf_big.txt bf_packed.txt || fail "COPY.TXT corrupted by PACK (>64 KB extent mis-copied)"
+python3 $ROOT/tools/p8xfs.py fsck bf.img >/dev/null 2>&1 || fail "volume invalid after PACK"
+
 echo "OS-BIGFILE TEST: PASS"

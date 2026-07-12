@@ -86,17 +86,18 @@ All four steps landed on `feature/24bit-filesize`. Files up to 16 MB read + writ
 correctly on-target. The 121 KB `os/p8xos.asm` assembles on-target (slow in the
 emulator).
 
-### Deferred follow-ups (16-bit-length assumptions outside the core R/W path)
+### OS maintenance paths — DONE (2026-07-12)
 
-These don't affect creating/reading/writing a >64 KB file; they're maintenance /
-display paths that still assume ≤64 KB:
+`SECCOUNT` (os/p8xos.asm) is now 24-bit-length → 16-bit `SECCNT:SECCH`. A 3rd
+length byte `LENHI2` is threaded through all 8 `LENLO:LENHI` setters (the 3 dir-
+entry readers capture byte 18; the 3 computed setters — MKDIR/SAVE/SAVECORE — zero
+it). `FSCK` (extent-end + `FUSED`) and `PACK` (`MINSEC:MINSECH`, `PK2MOVE`'s
+`CPYN:CPYNH` 16-bit copy loop, `NF += MINSEC`) all carry the high byte. Verified by
+`os_bigfile_test`: `del` + `pack` relocates a 66 KB file byte-intact, fsck clean.
 
-1. **`dir` size column (cosmetic).** p8cc's `int` is 16-bit, so `dir` shows a
-   >64 KB file's size mod 65536. A true 24-bit column needs `SYS_DIRENTRY`/`de[]`
-   to carry the 3rd length byte plus a 24-bit print helper in both `dir` twins.
-2. **`SECCOUNT` (os/p8xos.asm) is 16-bit** — `SECCNT = ceil(LENHI:LENLO/512)`,
-   used by `LOAD`/`SAVE` (RAM-bounded, fine) but also **`FSCK`** and **`PACK`**.
-   So `FSCK` mis-validates and `PACK` mis-relocates a >64 KB file's extent. To fix:
-   widen `SECCOUNT` to a 24-bit length + 16-bit `SECCNT`, and the extent arithmetic
-   in `FK_*`/`PACK` callers. Until then, avoid `PACK` on a volume holding a
-   >64 KB file.
+### Deferred follow-up (cosmetic only)
+
+- **`dir` size column** stays 16-bit — p8cc's `int` is 16-bit, so `dir` shows a
+  >64 KB file's size mod 65536. A true 24-bit column needs `SYS_DIRENTRY`/`de[]`
+  to carry the 3rd length byte plus a 24-bit print helper in both `dir` twins. All
+  *behavioral* paths (create/read/write/PACK/FSCK) are 24-bit.

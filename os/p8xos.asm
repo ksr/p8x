@@ -184,6 +184,12 @@ FEXP    = $73DE          ; CHKDD: expected parent LBA
 RBUF    = $7A00          ; capture buffer = the TPA (free during a built-in cmd)
 TSP     = $73E0          ; tree stack depth (0 = at root level)
 TI      = $73E1          ; scratch loop counter for the frame stack
+; ---- 24-bit file length high bytes (LENLO:LENHI are 16-bit; a file may be up to
+;      16 MB, so its sector count needs a high byte too). $73E2..$73E5 free gap. ---
+LENHI2  = $73E2          ; entry length, bits 16..23 (the BIOS FLEN 3rd byte)
+SECCH   = $73E3          ; SECCOUNT sector-count high byte (files >255 sectors)
+MINSECH = $73E4          ; PACK: chosen extent's sector count, high byte
+CPYNH   = $73E5          ; PK2MOVE: sectors-to-copy counter, high byte
 TFRAME  = $74B7          ; 8 frames x 4 bytes (dst_lo,dst_hi,dsc,idx): $74B7..$74D6
                          ;   (16-bit CDST; the old 3-byte $A0E2 region is now free)
 ; ---- v2 PACK working set ----
@@ -1406,18 +1412,34 @@ pp_cut: LDA  LSL
 
 ; SECCOUNT - SECCNT = ceil(LENLO:LENHI / 512) = (LENHI>>1) rounded up when any
 ; low bits remain. Used by LOAD and SAVE.
-SECCOUNT:LDA LENHI
+SECCOUNT:LDA LENHI2            ; SECCH:SECCNT = (LENHI2:LENHI) >> 1  (= len / 512 floor)
         SHR
-        STA  SECCNT
+        STA  SECCH
         LDA  LENHI
+        SHR
+        STA  SECCNT             ; bit7 comes from LENHI2 bit0 next
+        LDA  LENHI2
         LDB  #1
-        AND                     ; high byte odd -> 256-byte tail -> round up
+        AND
+        JZ   SC_NOB
+        LDA  SECCNT             ; carry LENHI2 bit0 into SECCNT bit7
+        LDB  #$80
+        OR
+        STA  SECCNT
+SC_NOB: LDA  LENHI              ; round up if the low 9 bits (LENLO | LENHI bit0) remain
+        LDB  #1
+        AND
         JNZ  SC_RND
         LDA  LENLO
         JZ   SC_GO              ; exact multiple of 512
-SC_RND: LDA  SECCNT
-        INC
+SC_RND: LDA  SECCNT             ; SECCNT:SECCH += 1 (16-bit)
+        LDB  #1
+        ADD
         STA  SECCNT
+        JNC  SC_GO
+        LDA  SECCH
+        INC
+        STA  SECCH
 SC_GO:  RTS
 
 ; ---------------- MKDIR path -------------------------------------------------
@@ -1512,6 +1534,8 @@ mkc_slot:LDA #F_DIR
         LDA  #SUBSECS
         SHL                     ; SUBSECS*512 -> high byte = SUBSECS*2
         STA  LENHI
+        LDA  #0                 ; a directory extent is small (24-bit high byte 0)
+        STA  LENHI2
         JSR  WRENT
         LDA  DLBA               ; write the parent directory sector back (16-bit)
         STA  LBA
@@ -1940,14 +1964,16 @@ FK_ENT: LDA  CDSC              ; max entries in this directory = CDSC * 16
         JSR  OPHEX8
         JSR  CRLF
         JSR  FK_BUMP
-FK_INB: LDA  STARTLO           ; end = start + sectors (16-bit); track max + used
+FK_INB: LDA  STARTLO           ; end = start + sectors (16-bit count SECCNT:SECCH)
         LDB  SECCNT
         ADD
         STA  TMP               ; end low
         LDA  STARTHI
         JNC  fk_enc
         INC
-fk_enc: STA  TMP2              ; end high
+fk_enc: LDB  SECCH             ; end high = STARTHI + carry + SECCH
+        ADD
+        STA  TMP2
         LDA  TMP2              ; max(end, FMAXE), 16-bit
         LDB  FMAXEH
         CMP
@@ -1960,13 +1986,15 @@ fk_mxc: JNC  FK_NMX            ; end < FMAXE -> keep current max
         STA  FMAXE
         LDA  TMP2
         STA  FMAXEH
-FK_NMX: LDA  FUSED             ; FUSED += SECCNT (16-bit)
+FK_NMX: LDA  FUSED             ; FUSED += SECCNT:SECCH (16-bit count)
         LDB  SECCNT
         ADD
         STA  FUSED
-        JNC  fk_unc
         LDA  FUSEDH
+        JNC  fk_fu1
         INC
+fk_fu1: LDB  SECCH
+        ADD
         STA  FUSEDH
 fk_unc: LDA  FLAGS
         LDB  #F_DIR
@@ -2158,8 +2186,9 @@ rf_nm:  LDA  (P2)+
         STA  LENLO
         LDA  (P2)+
         STA  LENHI
-        LDA  (P2)+
-        LDA  (P2)+
+        LDA  (P2)+              ; byte 18: length bits 16..23 (24-bit)
+        STA  LENHI2
+        LDA  (P2)+              ; byte 19 discarded
         LDA  (P2)+              ; load + exec
         LDA  (P2)+
         LDA  (P2)+
@@ -2292,7 +2321,9 @@ SV_HI:  LDA  HXHI
         LDB  SVSTHI
         SUB
         STA  LENHI
-SV_LEN: JSR  SECCOUNT           ; SECCNT = sectors needed
+SV_LEN: LDA  #0                 ; SAVE length is 16-bit-bounded (24-bit high byte 0)
+        STA  LENHI2
+        JSR  SECCOUNT           ; SECCNT:SECCH = sectors needed
         JSR  SAVECORE
         LDA  MATCH
         JZ   SV_FULL
@@ -2338,13 +2369,15 @@ P2_PASS:JSR  PK2FIND            ; PFOUND + MINSTRT/MINSEC + PPSEC/PPSLOT
         CMP
         JZ   P2_ADV
 P2_MOVE:JSR  PK2MOVE            ; copy extent down, repoint the parent entry
-P2_ADV: LDA  NF                 ; NF += MINSEC (16-bit)
+P2_ADV: LDA  NF                 ; NF += MINSEC:MINSECH (16-bit count)
         LDB  MINSEC
         ADD
         STA  NF
-        JNC  P2_PNC
         LDA  NFH
+        JNC  p2_pn1
         INC
+p2_pn1: LDB  MINSECH
+        ADD
         STA  NFH
 P2_PNC: JMP  P2_PASS
 P2_FIX: JSR  PK2FIX             ; phase 2: repair every dir's '.' and '..'
@@ -2448,6 +2481,8 @@ pf_take:LDA  #1
         JSR  SECCOUNT
         LDA  SECCNT
         STA  MINSEC
+        LDA  SECCH
+        STA  MINSECH
         LDA  CANDSEC
         STA  PPSEC
         LDA  CANDSECH
@@ -2489,8 +2524,10 @@ PK2MOVE:LDA  MINSTRT            ; src/dst are 16-bit
         STA  DSTL
         LDA  NFH
         STA  DSTH
-        LDA  MINSEC
+        LDA  MINSEC             ; CPYN:CPYNH = sectors to copy (16-bit)
         STA  CPYN
+        LDA  MINSECH
+        STA  CPYNH
 pm2_cp: LDP1 #SBUF
         LDA  SRCL
         STA  LBA
@@ -2520,9 +2557,18 @@ pm2_snc:LDA  DSTL              ; 16-bit advance dest
         LDA  DSTH
         INC
         STA  DSTH
-pm2_dnc:LDA  CPYN
-        DEC
+pm2_dnc:LDA  CPYN              ; CPYN:CPYNH-- (16-bit)
+        LDB  #1
+        SUB
         STA  CPYN
+        JC   pm2_ckz
+        LDA  CPYNH
+        LDB  #1
+        SUB
+        STA  CPYNH
+pm2_ckz:LDA  CPYN              ; loop while sectors remain
+        LDB  CPYNH
+        OR
         JNZ  pm2_cp
         LDP1 #SBUF              ; repoint the parent entry's start LBA to NF (16-bit)
         LDA  PPSEC
@@ -3058,12 +3104,13 @@ FE_C1:  LDA  TMP
         STA  STARTHI
         LDA  (P2)+
         LDA  (P2)+
-        LDA  (P2)+              ; bytes 16..19  length (low 16 kept)
+        LDA  (P2)+              ; bytes 16..19  length (low 24 kept)
         STA  LENLO
         LDA  (P2)+
         STA  LENHI
-        LDA  (P2)+
-        LDA  (P2)+
+        LDA  (P2)+              ; byte 18: length bits 16..23 (24-bit)
+        STA  LENHI2
+        LDA  (P2)+              ; byte 19 discarded
         LDA  (P2)+              ; bytes 20..23  load + exec
         STA  LOADLO
         LDA  (P2)+
@@ -3137,8 +3184,9 @@ RE_NM:  LDA  (P2)+
         STA  LENLO
         LDA  (P2)+
         STA  LENHI
-        LDA  (P2)+              ; length high 16 (discard)
-        LDA  (P2)+
+        LDA  (P2)+              ; byte 18: length bits 16..23 (24-bit)
+        STA  LENHI2
+        LDA  (P2)+              ; byte 19 discarded
         LDA  (P2)+              ; load + exec (discard 4)
         LDA  (P2)+
         LDA  (P2)+
@@ -3674,6 +3722,8 @@ FR_GO:  LDP2 #REDNAME
         LDB  #>RBUF
         SUB
         STA  LENHI
+        LDA  #0                ; RAM buffer length is <64 KB (24-bit high byte 0)
+        STA  LENHI2
         JSR  SECCOUNT
         JSR  SAVECORE
         LDA  MATCH

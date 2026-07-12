@@ -700,9 +700,11 @@ Last updated: 2026-07-08
            on-target (`os_bigfile_test`), and an on-target assemble resolves a
            label living past the 64 KB source mark (was `?undefined`). So the 121 KB
            `os/p8xos.asm` now assembles on-target — though it's slow in the emulator
-           (~wall-time bound, minutes). See `firmware/WIDE_FILELEN.md`. Follow-up:
-           the `dir` size column is still 16-bit (p8cc `int`), so a file >64 KB
-           shows its size mod 65536 until a 24-bit size column lands (cosmetic).
+           (~wall-time bound, minutes). `PACK`/`FSCK` are 24-bit too (OS `SECCOUNT`
+           → 16-bit `SECCNT:SECCH`; `del`+`pack` relocates a 66 KB file byte-intact
+           in `os_bigfile_test`). See `firmware/WIDE_FILELEN.md`. Only cosmetic
+           follow-up: the `dir` size column is still 16-bit (p8cc `int`), so a file
+           >64 KB shows its size mod 65536 until a 24-bit column lands.
         2. **Subdirectory source read empty / over-read — FIXED (2026-07-12).**
            ROOT CAUSE (found via emulator memory-watch on `FLEN`/`ROREM` + an LBA
            trace, `apps/p8xasm.asm`): the size/`sh`/`LINEBUF` theories were all
