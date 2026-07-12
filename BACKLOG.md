@@ -636,16 +636,19 @@ Last updated: 2026-07-08
       (root scratch, since redirect targets aren't path-resolved) then
       `asm T.ASM .../bin/NAME.bin`; asm is a single path-aware `asm`. Round-trip
       exercised headlessly by `os_sysbuild_test` (build-only `run.sh` + boot).
-- [~] **`disasm` — memory-range disassembler (C DONE 2026-07-11; asm twin TODO).**
+- [x] **`disasm` — memory-range disassembler, C + asm twin — DONE (2026-07-11).**
       `disasm start end` decodes `[start,end)` to `AAAA: bytes MNEMONIC operand`,
       one instruction per line (imm8 `#$NN`, addr16 `$NNNN`, `(Pn)`/`(Pn)+`, or
-      `a,a` for MOVW; unknown -> `???`). The opcode table `os/commands/lib_distab.c`
-      is generated from `genucode.OPC` by `generators/gen_p8xdis.py` (spliced via
-      `//#use distab`), so it can't drift from the ISA. `/bin/disasm.bin`, man page
-      `os/man/disasm`, `make disasm`, `c_disasm_test`. TODO: the hand-asm twin
-      (`os/commands-asm/disasm.asm`) to restore the byte-identical C+asm invariant
-      — a sizable port (table scan + hex formatting), hence deferred; it's the one
-      `/bin` command currently C-only.
+      `a,a` for MOVW; unknown -> `???`). The opcode table is generated from
+      `genucode.OPC` by `generators/gen_p8xdis.py` in BOTH forms — C
+      `os/commands/lib_distab.c` (`//#use distab`) and asm
+      `os/commands-asm/lib_distab.inc` (`;#use distab`, added `--asm`) — so neither
+      twin can drift from the ISA. The hand-asm twin `os/commands-asm/disasm.asm`
+      (`DIS_FIND` table scan + hex formatting) is verified byte-identical to the C
+      twin across every operand shape incl. MOVW and `???` (`verify.sh disasm`;
+      /bina host-built). Restores the C+asm invariant for all `/bin` commands.
+      `/bin/disasm.bin`, `os/man/disasm`, `make disasm` (C twin on-target; the asm
+      rebuild line is >63 chars, see the LINEBUF backlog), `c_disasm_test`.
 - [~] **`/src/os-bios/asm` — OS + monitor sources on-card (partial, 2026-07-11).**
       The OS + BIOS-monitor asm sources now ship under `/src/os-bios/asm` with a
       `bin` output dir, and `make os-bios` (script `/src/mk/os-bios`) assembles

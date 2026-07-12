@@ -52,6 +52,9 @@ fixtures() {
 cmd_script() {
     case "$1" in
         PWD)  printf 'cd /SUB\rpwd\r' ;;
+        # a FIXED memory range (the ROM BIOS jump table) so both builds decode the
+        # same bytes — the program itself loads at $7A00 and would differ.
+        DISASM) printf 'disasm 0100 0140\r' ;;
         # -R targets /SUB (no .bin files): a recursive listing of /bin would
         # show dir.bin's own byte size, which legitimately differs between the
         # p8cc and asm builds — a size artifact, not a behavior difference.

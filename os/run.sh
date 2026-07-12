@@ -35,9 +35,11 @@ python3 "$root/assembler/p8xasm.py" "$root/os/p8xos.asm" -o "$build/p8xos.bin" -
 cp "$root"/microcode/u?.bin "$build/"
 cc -O2 -o "$build/p8xemu" "$root/emulator/p8xemu.c"
 # Keep generated tables in sync with the ISA: the assembler opcode table (done
-# per-build below) and the disassembler's opcode table (os/commands/lib_distab.c,
-# spliced into disasm.c via //#use distab).
+# per-build below) and the disassembler's opcode table — both the C form
+# (os/commands/lib_distab.c, `//#use distab` in disasm.c) and the asm form
+# (os/commands-asm/lib_distab.inc, `;#use distab` in disasm.asm).
 python3 "$root/generators/gen_p8xdis.py" >/dev/null 2>&1 || true
+python3 "$root/generators/gen_p8xdis.py" --asm >/dev/null 2>&1 || true
 
 # ensure_src: lay down /src/commands/{c,asm} — the browsable command + toolchain
 # SOURCES, mirroring the repo so you can read (and, for C, on-target `cc`-compile)
@@ -110,8 +112,11 @@ ensure_src() {
         _cline "$c" >> "$build/mk_c.scr"
         _aline "$c" >> "$build/mk_asm.scr"
     done
-    # disasm is C-only (no hand-asm twin yet) — its /src/mk script + the C/all
-    # groups rebuild it from C alone.
+    # disasm has both twins, but its long name makes the asm rebuild line
+    # (`asm /src/commands/asm/disasm.asm /src/commands/asm/bin/disasm.bin`) 65 chars
+    # — over the 64-byte shell LINEBUF — so `make disasm` rebuilds only the C twin
+    # on-target for now (the asm twin ships to /bina host-built + verify-checked).
+    # Widening LINEBUF / CWD-relative asm (BACKLOG) would let the asm line fit too.
     _cline disasm > "$build/mk_one.scr"
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_one.scr" --name /src/mk/disasm >/dev/null 2>&1 || true
     _cline disasm >> "$build/mk_c.scr"
@@ -191,8 +196,8 @@ if [ ! -f "$disk" ]; then
             --name "/bin/$ex.bin" --load 0x7A00 --exec 0x7A00 >/dev/null
     done
     # Hand-assembled versions -> /bina (os/commands-asm). mkasm.sh splices any
-    # ;#use includes (lib_stdin/glob/regex) just like clib.py does for the C ones.
-    for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch man dep dump; do
+    # ;#use includes (lib_stdin/glob/regex/distab) just like clib.py does for C.
+    for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch man dep dump disasm; do
         sh "$root/os/commands-asm/mkasm.sh" "$ex" > "$build/$ex.a.asm"
         python3 "$root/assembler/p8xasm.py" "$build/$ex.a.asm" -o "$build/$ex.a.bin" --base 0x7A00 >/dev/null
         python3 "$root/tools/p8xfs.py" put "$disk" "$build/$ex.a.bin" \
