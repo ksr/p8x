@@ -96,6 +96,8 @@ ensure_src() {
     #   make c      /src/mk/c      every C command   -> /src/commands/c/bin/*.bin
     #   make asm    /src/mk/asm    every asm command -> /src/commands/asm/bin/*.bin
     #   make        /src/mk/all    everything
+    #   make installc    /src/mk/installc    copy c/bin/*.bin   -> /bin (publish C twins)
+    #   make installasm  /src/mk/installasm  copy asm/bin/*.bin -> /bin (publish asm twins)
     # `cc` writes its .asm to a scratch T.ASM in the root (redirect targets aren't
     # path-resolved), so C builds `cd /` first, then `asm` reads that root T.ASM.
     # CR-separated lines (as the on-target editor writes), each < the 64-byte line buffer.
@@ -125,6 +127,15 @@ ensure_src() {
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_c.scr"   --name /src/mk/c   >/dev/null 2>&1 || true
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_asm.scr" --name /src/mk/asm >/dev/null 2>&1 || true
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_all.scr" --name /src/mk/all >/dev/null 2>&1 || true
+    # `make installc` / `make installasm` — publish freshly-built binaries to /bin.
+    # After `make dir` (which rebuilds BOTH twins into c/bin + asm/bin), pick which
+    # twin goes live: `make installc` copies the C builds over /bin, `make installasm`
+    # the asm builds. cp's wildcard-into-directory does the whole set in one line
+    # (well under the 63-byte shell LINEBUF).
+    printf 'cp /src/commands/c/bin/*.bin /bin\r'   > "$build/mk_instc.scr"
+    printf 'cp /src/commands/asm/bin/*.bin /bin\r' > "$build/mk_insta.scr"
+    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_instc.scr" --name /src/mk/installc   >/dev/null 2>&1 || true
+    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_insta.scr" --name /src/mk/installasm >/dev/null 2>&1 || true
     # `make os-bios` — assemble the monitor + OS from /src/os-bios/asm into its bin dir.
     printf 'asm /src/os-bios/asm/p8xmon.asm /src/os-bios/asm/bin/p8xmon.bin\rasm /src/os-bios/asm/p8xos.asm /src/os-bios/asm/bin/p8xos.bin\r' > "$build/mk_osbios.scr"
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_osbios.scr" --name /src/mk/os-bios >/dev/null 2>&1 || true
