@@ -49,6 +49,7 @@
 ; ---- BIOS / OS ----
 FSDIRBUF = $0145   ; repoint the directory-scan buffer (A = page) off SBUF
 FRESOLVE = $0133   ; resolve a path -> dir extent + leaf FNAME (P1 = path)
+SYS_GETCWD = $4003 ; OS: write the CWD path (NUL-terminated) to (P1)
 FOPEN    = $0124   ; open the resolved file for reading (P1 = 512-byte buffer)
 FGETB    = $0127   ; next source byte -> A; C=1 at EOF
 SYS_PUTC = $4009   ; emit A to stdout (redirectable by the shell)
@@ -58,6 +59,7 @@ ROSDRV   = $7085   ; BIOS read-stream drive (1 byte)
 
 CR       = $0D
 LF       = $0A
+MAXFUNC  = 64        ; capacity of FNPAR/FSLOT/FPOOL (see the BSS at end)
 
 ; Variables live in this program's OWN space (the BSS labelled at the end), NOT
 ; a fixed high page — a high page collides with the OS/shell scratch used by the
@@ -71,12 +73,14 @@ START:  TPA3L
         JSR  GETARG                  ; PATH <- first arg word (the source path)
         LDA  PATH
         JZ   USAGE                   ; no arg -> usage
+        JSR  ABSPFX                  ; APATHB <- PATH made absolute (CWD-prefix if
+                                     ;   relative — FRESOLVE starts at root)
         LDA  #$E0                    ; FSDIRBUF: move the directory-scan buffer to
         JSR  FSDIRBUF                ;   $E000 so FRESOLVE's scan doesn't clobber a
                                      ;   redirected write stream's SBUF partial
-        LDA  #<PATH                  ; FRESOLVE(PATH)
+        LDA  #<APATHB                ; FRESOLVE(APATHB)
         TAP1L
-        LDA  #>PATH
+        LDA  #>APATHB
         TAP1H
         LDA  #0
         JSR  FRESOLVE
@@ -147,6 +151,63 @@ ga_l:   LDA  (P2)
 ga_end: LDA  #0
         STA  (P1)
         RTS
+
+; ABSPFX: APATHB <- PATH made absolute. An absolute PATH (leading '/') is copied
+; as-is; a relative one is CWD-prefixed (SYS_GETCWD + '/'), because FRESOLVE starts
+; at root, not the CWD. Lets `cc x.c` read a source from any working directory
+; (matches asm). PATH itself is left as the raw arg.
+ABSPFX: LDA  PATH
+        LDB  #'/'
+        CMP
+        JZ   ap_abs
+        LDA  #<APATHB                ; relative: APATHB = CWD
+        TAP1L
+        LDA  #>APATHB
+        TAP1H
+        LDA  #0
+        JSR  SYS_GETCWD
+        LDA  #<APATHB                ; walk to the end of the CWD string
+        TAP1L
+        LDA  #>APATHB
+        TAP1H
+ap_en:  LDA  (P1)
+        JZ   ap_sl
+        INP1
+        JMP  ap_en
+ap_sl:  DEP1                        ; last char == '/'? (root "/" already ends in one)
+        LDA  (P1)
+        INP1
+        LDB  #'/'
+        CMP
+        JZ   ap_cat
+        LDA  #'/'                    ; else append a separator
+        STA  (P1)
+        INP1
+ap_cat: LDA  #<PATH                  ; append PATH (the relative arg)
+        TAP2L
+        LDA  #>PATH
+        TAP2H
+ap_cl:  LDA  (P2)
+        STA  (P1)
+        JZ   ap_ret
+        INP1
+        INP2
+        JMP  ap_cl
+ap_abs: LDA  #<PATH                  ; absolute: APATHB = PATH
+        TAP2L
+        LDA  #>PATH
+        TAP2H
+        LDA  #<APATHB
+        TAP1L
+        LDA  #>APATHB
+        TAP1H
+ap_al:  LDA  (P2)
+        STA  (P1)
+        JZ   ap_ret
+        INP1
+        INP2
+        JMP  ap_al
+ap_ret: RTS
 
 ; =============================================================================
 ; Output (emit assembly text via SYS_PUTC)
@@ -2075,7 +2136,21 @@ cpn_l:  LDA  (P1)
 cpn_d:  RTS
 
 ; FADD: record the current function -> FPOOL name, FNPAR[], FSLOT[].
-FADD:   LDA #<FPOOL
+; Guard: FNPAR/FSLOT hold MAXFUNC entries and FPOOL is sized for their names;
+; a 17th-plus function used to overrun them (silent corruption -> a blank
+; `JSR _f_`). Bail cleanly if a source exceeds MAXFUNC functions.
+FADD:   LDA  FCNT
+        LDB  #MAXFUNC
+        CMP                          ; C=1 (JC) when FCNT >= MAXFUNC: no room
+        JNC  fa_ok                   ; FCNT < MAXFUNC -> room, proceed
+        LDP1 #MTOOFUN                ; else: print error and bail to OS
+        JSR  EMIT
+        LDA  STK0                    ; restore the entry SP (P3) saved by START
+        TAP3L
+        LDA  STK0+1
+        TAP3H
+        RTS                          ; returns straight to the OS, not the parser
+fa_ok:  LDA #<FPOOL
         TAP1L
         LDA  #>FPOOL
         TAP1H
@@ -5124,6 +5199,7 @@ MFRAMEDEF:
         .byte LF,0
 MUSAGE: .asciiz "usage: cc src.c >out.asm"
 MNOSRC: .asciiz "cc: cannot open source"
+MTOOFUN: .asciiz "cc: too many functions"
 
 ; =============================================================================
 ; BSS - in this program's own space (safe from OS scratch)
@@ -5133,7 +5209,8 @@ PBC:    .fill 1    ; pushback char
 CURK:   .fill 1    ; current token kind: 0 EOF, 1 NUM, 2 ID, 3 PUNCT
 CURV:   .fill 2    ; current token value (NUM value / PUNCT char)
 TID:    .fill 24   ; identifier text, NUL-terminated
-PATH:   .fill 64   ; source path buffer
+PATH:   .fill 64   ; source path buffer (raw arg)
+APATHB: .fill 80   ; PATH made absolute (CWD-prefixed) for FRESOLVE
 EMP:    .fill 2    ; emit walk pointer
 VN:     .fill 1    ; emitnum working value
 DQ:     .fill 1    ; emitnum digit counter
@@ -5232,9 +5309,9 @@ FOK:    .fill 1    ; FFIND: 1 if found
 NPARAMS: .fill 1   ; FUNCDEF: parameter count being parsed
 ARGI:   .fill 1    ; call: current argument index
 ARGSLOT: .fill 1   ; call: absolute slot for the current argument
-FNPAR:  .fill 16   ; per-function parameter count
-FSLOT:  .fill 16   ; per-function param base slot
-FPOOL:  .fill 128  ; packed function names
+FNPAR:  .fill 64   ; per-function parameter count (cap: MAXFUNC functions)
+FSLOT:  .fill 64   ; per-function param base slot (cap: MAXFUNC functions)
+FPOOL:  .fill 384  ; packed function names (NUL-separated; cap: MAXFUNC funcs)
 USENEG: .fill 1    ; 1 if unary '-' is used (emit __neg)
 USENOT: .fill 1    ; 1 if '!' is used (emit __lnot)
 LORT:   .fill 1    ; '||' short-circuit: Ltrue label

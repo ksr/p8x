@@ -1209,32 +1209,27 @@ Last updated: 2026-07-08
         >REL.TXT` works but `cmd >/DIR/X` silently produces no file (the redirect
         code treats the name as a CWD leaf). Found while testing `cc`. Make the
         redirect target go through FRESOLVE like other paths.
-- [ ] **On-target `cc >file` truncates for large `//#use` sources (2026-07-12).**
-      `cc /src/commands/c/dir.c >T.ASM` on-target prints `?` and writes a truncated
-      ~5 KB `T.ASM` (missing the `__cstktop:` tail), so the following `asm` fails
-      `?undefined: __cstktop`. NOT a compile error and NOT the 64 KB file cap:
-      diagnosed via emulator (2026-07-12). The compiler alone is fine — `cc dir.c`
-      with no redirect streams the *complete* asm to the console (incl. `__cstktop`);
-      the redirect alone is fine — `cat 13KB >out` writes all 13 KB. It only breaks
-      when **`cc` reads another file mid-compile (a `//#use` include, or a later-pass
-      source reopen) while the `>` write stream is open**: the read and the write
-      share the BIOS sector buffer SBUF, so the reopen clobbers the write and it
-      truncates at the first such point (~5 KB in). Confirmed pre-existing and
-      size/`//#use`-general, NOT specific to the `dir` sort rewrite: `sort.c` (69 KB)
-      and `grep.c` (110 KB) fail identically, while `pwd.c` (tiny, no `//#use`)
-      builds — and `pwd` is the only thing the on-target build tests exercise, which
-      is why it was never caught. FIX: give `cc`'s source reads their own buffer,
-      off the write stream's SBUF (the same move `FSDIRBUF` made for `dir -R`/`find`
-      directory scans during a write). WORKAROUND today: the C twins are built on the
-      host by run.sh; on-target, publish big commands via the **asm twin**
-      (`make installa`), which assembles directly with no cc/redirect step.
-- [ ] **`cc` should CWD-prefix a relative path arg (like `asm` now does).** `asm`
-      abspath()s a relative SRC/OUT against the CWD (2026-07-12), so build scripts
-      need no `cd /`. `cc`'s input path still resolves from root (FRESOLVE), so
-      `cd /sub; cc x.c` fails — fine for `make` (its `cc` args are absolute) but a
-      latent gap for interactive use. Port the same abspath step into `apps/p8xcc.asm`.
-      (Related finding: a shell `>` redirect registers its file in the CWD, not root —
-      so `cd /sub; cat x > y` puts `y` in /sub, as expected.)
+- [x] **On-target `cc >file` builds large `//#use` commands (2026-07-12).** Two
+      independent bugs made `cc /src/commands/c/{dir,wc,grep,sed,...}.c >T.ASM` fail;
+      both are now fixed and covered by `os_cc_bigcmd_test`:
+      1. **SBUF read/write collision → truncation.** `cc` reading a `//#use` include
+         (or reopening the source for a later pass) while the `>` write stream was
+         open shared the BIOS sector buffer SBUF, clobbering the write so `T.ASM`
+         truncated ~5 KB in (missing the `__cstktop:` tail → `asm` `?undefined`).
+         Fixed by giving `cc`'s reads their own buffer at `RDBUF=$FC00`, off SBUF.
+      2. **Function-table overflow → blank `JSR _f_`.** `FNPAR`/`FSLOT`/`FPOOL` were
+         sized for only 16 functions; a source with 17+ functions (every command
+         once `//#use` splices in `lib_stdin`/`lib_globx`/… — wc has 17, dir 19,
+         grep 18, vi 34) overran them in `FADD`, silently corrupting a function name
+         into a blank `JSR _f_` that `asm` then rejected. Raised the tables to
+         `MAXFUNC=64` (64/64/384 B) with a clean "too many functions" bail past the
+         cap. cc1 (40 funcs) and vi (34) now fit; the deeper `SLOTCNT`-byte slot cap
+         (255 total variable slots) is the next ceiling, untouched here.
+- [x] **Toolchain path args are CWD-relative (2026-07-12).** Both `asm` and `cc`
+      now `abspath()` a relative SRC/OUT/source arg against the CWD (SYS_GETCWD),
+      mirroring `lib_apath`, so build scripts need no `cd /` and `cd /sub; cc x.c`
+      works. (A shell `>` redirect already registers its file in the CWD, not root —
+      `cd /sub; cat x > y` puts `y` in /sub, as expected.)
 - [ ] **Native toolchain follow-ups** (EDIT + ASM landed — see DONE). Remaining
       polish on the on-target assembler/editor, none blocking:
         - **Tools write to the flat root only.** EDIT `W` and ASM output go to

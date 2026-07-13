@@ -130,6 +130,7 @@ test-os: p8xemu ucode
 	# the disk image, so dropped from the default suite. The scripts remain in
 	# test/ (os_cpp_test.sh/os_lex_test.sh/os_cc1_test.sh) and can be run by hand.
 	sh test/os_cc_test.sh
+	sh test/os_cc_bigcmd_test.sh
 	sh test/os_mount_test.sh
 
 # Monitor smoke test (D/?, no card), plus disk BASIC (boot via B) and SAVE/LOAD.
