@@ -42,15 +42,28 @@ python3 $ROOT/tools/p8xfs.py put    bc.img ccbc.bin  --name /bin/cc.bin  --load 
 python3 $ROOT/tools/p8xfs.py put    bc.img asmbc.bin --name /bin/asm.bin --load 0x7A00 --exec 0x7A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    bc.img bigf.c    --name /bigf.c >/dev/null
 
-# all on-target: cc /bigf.c >T.ASM ; asm T.ASM /BIGF.BIN ; run /BIGF.BIN
-printf 'B\rcc /bigf.c >T.ASM\rasm /T.ASM /BIGF.BIN\rrun /BIGF.BIN\r' | \
-    ../p8xemu -l 3000000000 -c bc.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r' > bc_out.txt
+# Second guard: a program needing MORE than 255 variable slots. A 600-byte global
+# array is 300 word-slots, so `after` lands at slot ~300 (>255). This exercises the
+# 16-bit slot machinery (SLOTCNT/SLOTBASE/EMITNUM16, signed global-relative index)
+# and the single __V storage array (slot n -> __V+2n; one asm symbol, not N — so
+# the assembler's symbol table doesn't overflow on slot-heavy programs). Before the
+# 16-bit rework this either wrapped the 8-bit slot counter (undefined `V232`) or
+# blew the assembler's ~850-symbol table. main prints "AB".
+printf 'char big[600];\nint after;\nint main() { big[0] = 66; after = 65; putchar(after); putchar(big[0]); }\n' > slots.c
+python3 $ROOT/tools/p8xfs.py put bc.img slots.c --name /slots.c >/dev/null
 
-# the assemble step must not have failed with an undefined symbol
-grep -q '?undefined' bc_out.txt && { echo "--- transcript ---"; cat bc_out.txt; \
-    fail "asm rejected cc's output (function-table overflow -> blank JSR _f_)"; }
-# and the program must print exactly the two chars proving f17 and f20 are callable
+# all on-target: cc /bigf.c >T.ASM ; asm T.ASM /BIGF.BIN ; run /BIGF.BIN ; then slots
+printf 'B\rcc /bigf.c >T.ASM\rasm /T.ASM /BIGF.BIN\rrun /BIGF.BIN\rcc /slots.c >U.ASM\rasm /U.ASM /SLOTS.BIN\rrun /SLOTS.BIN\r' | \
+    ../p8xemu -l 6000000000 -c bc.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r' > bc_out.txt
+
+# the assemble steps must not have failed with an undefined symbol or a full symtab
+grep -qE '\?undefined|too many symbols' bc_out.txt && { echo "--- transcript ---"; cat bc_out.txt; \
+    fail "asm rejected cc's output (function-table overflow, or slot/symbol overflow)"; }
+# bigf: f17 and f20 callable -> "AZ"
 grep -q 'AZ' bc_out.txt || { echo "--- transcript ---"; cat bc_out.txt; \
     fail "on-target run did not print AZ (a high-index function call was corrupt)"; }
+# slots: the >255-slot global resolves correctly -> "AB"
+grep -q 'AB' bc_out.txt || { echo "--- transcript ---"; cat bc_out.txt; \
+    fail "on-target run did not print AB (a >255 variable slot was miscompiled)"; }
 
 echo "OS-CC-BIGCMD TEST: PASS"

@@ -1223,8 +1223,20 @@ Last updated: 2026-07-08
          grep 18, vi 34) overran them in `FADD`, silently corrupting a function name
          into a blank `JSR _f_` that `asm` then rejected. Raised the tables to
          `MAXFUNC=64` (64/64/384 B) with a clean "too many functions" bail past the
-         cap. cc1 (40 funcs) and vi (34) now fit; the deeper `SLOTCNT`-byte slot cap
-         (255 total variable slots) is the next ceiling, untouched here.
+         cap. cc1 (40 funcs) and vi (34) now fit.
+      3. **8-bit variable slots → `?undefined: V232` (2026-07-13).** `cc`'s variable
+         slots (`SLOTCNT`/`SLOTBASE`/indices/`EMITNUM`) were 8-bit and array sizes
+         were read low-byte-only, so `dir.c` (`char enam[768]` = 384 slots; ~838
+         slots total) overflowed → stray undefined `V232`. Reworked the whole slot
+         path to 16-bit (signed global-relative index) AND changed codegen to put all
+         variable storage in ONE array `__V` (slot n → `__V+2n`) instead of a
+         `V<n>:` label per slot — so slot-heavy programs no longer blow `asm`'s
+         ~850-symbol table either. dir now compiles AND assembles clean.
+      NEXT CEILING — **code SIZE, not slots/symbols.** `dir.c` compiles to a ~36 KB
+      binary (verbose codegen + `__cstack` 2 KB + `__V` 1.7 KB) which overflows the
+      TPA (`$7A00`–`$FE00`, ~33 KB), so the *binary won't run* even though the build
+      (`cc`+`asm`) now succeeds. Big C commands still ship via their **asm twin**
+      (`make installa`); shrinking codegen or relocating the TPA would let them run.
 - [x] **Toolchain path args are CWD-relative (2026-07-12).** Both `asm` and `cc`
       now `abspath()` a relative SRC/OUT/source arg against the CWD (SYS_GETCWD),
       mirroring `lib_apath`, so build scripts need no `cd /` and `cd /sub; cc x.c`

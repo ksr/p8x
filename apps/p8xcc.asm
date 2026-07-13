@@ -98,6 +98,7 @@ START:  TPA3L
         STA  USEMUL
         STA  USEDIV
         STA  SLOTCNT
+        STA  SLOTCNT+1               ; 16-bit slot counter
         STA  FCNT
         STA  USENEG
         STA  USENOT
@@ -237,56 +238,141 @@ em_l:   LDA  EMP
 em_d:   RTS
 
 ; EMITNUM: emit A (0..255) as decimal, no leading zeros.
+; EMITNUM16: emit the 16-bit value in VN:VN+1 (0..65535) as decimal. Slot numbers
+;   can now exceed 255 (a program may use >255 variable slots), so the number
+;   emitter is 16-bit: strip ten-thousands..tens by 16-bit subtract, then ones.
 EMITNUM: STA VN
         LDA  #0
+        STA  VN+1
+EMITNUM16: LDA #0
         STA  HADH
-        LDA  #0                      ; hundreds
+        LDA  #$10                    ; 10000 = $2710
+        STA  DVLO
+        LDA  #$27
+        STA  DVHI
+        JSR  EN_DIG
+        LDA  #$E8                    ; 1000 = $03E8
+        STA  DVLO
+        LDA  #$03
+        STA  DVHI
+        JSR  EN_DIG
+        LDA  #100                    ; 100
+        STA  DVLO
+        LDA  #0
+        STA  DVHI
+        JSR  EN_DIG
+        LDA  #10                     ; 10
+        STA  DVLO
+        LDA  #0
+        STA  DVHI
+        JSR  EN_DIG
+        LDA  VN                      ; ones (always printed)
+        LDB  #'0'
+        ADD
+        JSR  SYS_PUTC
+        RTS
+; EN_DIG: DQ = count of times DVLO:DVHI fits in VN:VN+1; VN -= DQ*DV; emit the
+;   digit unless it's a leading zero (HADH tracks "a digit was already printed").
+EN_DIG: LDA  #0
         STA  DQ
-en_h:   LDA  VN
-        LDB  #100
-        CMP
-        JNC  en_hd
-        LDA  VN
-        LDB  #100
+end_lp: JSR  EN_GE                   ; C=1 iff VN >= DV
+        JNC  end_em
+        LDA  VN                      ; VN -= DV (16-bit)
+        LDB  DVLO
         SUB
         STA  VN
+        JC   end_nb                  ; C=1 -> no borrow out of the low byte
+        LDA  VN+1
+        LDB  #1
+        SUB
+        STA  VN+1
+end_nb: LDA  VN+1
+        LDB  DVHI
+        SUB
+        STA  VN+1
         LDA  DQ
         INC
         STA  DQ
-        JMP  en_h
-en_hd:  LDA  DQ
-        JZ   en_t
+        JMP  end_lp
+end_em: LDA  DQ
+        JNZ  end_pr
+        LDA  HADH
+        JZ   end_ret                 ; suppressed leading zero
+end_pr: LDA  DQ
         LDB  #'0'
         ADD
         JSR  SYS_PUTC
         LDA  #1
         STA  HADH
-en_t:   LDA  #0                      ; tens
-        STA  DQ
-en_tl:  LDA  VN
-        LDB  #10
+end_ret: RTS
+; EN_GE: C=1 iff VN:VN+1 >= DVLO:DVHI, else C=0.
+EN_GE:  LDA  VN+1
+        LDB  DVHI
         CMP
-        JNC  en_td
-        LDA  VN
-        LDB  #10
-        SUB
+        JNC  eng_lt                  ; VN_hi < DV_hi
+        LDA  DVHI
+        LDB  VN+1
+        CMP
+        JNC  eng_ge                  ; VN_hi > DV_hi
+        LDA  VN                      ; hi equal -> compare lo
+        LDB  DVLO
+        CMP
+        RTS
+eng_ge: LDA  #1
+        LDB  #0
+        CMP
+        RTS
+eng_lt: LDA  #0
+        LDB  #1
+        CMP
+        RTS
+
+; EMSLOT: emit the decimal of the ABSOLUTE slot = SLOTBASE + SREL:SREL+1, where
+;   SREL is a 16-bit SLOTBASE-relative index (signed: globals resolve to
+;   G-SLOTBASE, which may be negative). 16-bit two's-complement add.
+EMSLOT: LDA  SLOTBASE
+        LDB  SREL
+        ADD
         STA  VN
-        LDA  DQ
+        LDA  SLOTBASE+1
+        JNC  emsl_nb
+        INC                          ; carry from the low byte
+emsl_nb: LDB SREL+1
+        ADD
+        STA  VN+1
+        LDA  VN                      ; byte offset into __V = 2 * slot (word cells)
+        SHL
+        STA  VN
+        LDA  VN+1
+        ROL
+        STA  VN+1
+        JMP  EMITNUM16
+; EMSY: emit V<SLOTBASE + SYMIDX>   EMLH: ... + LHSIDX   EMSB: ... + A (0..255).
+EMSY:   LDA  SYMIDX
+        STA  SREL
+        LDA  SYMIDX+1
+        STA  SREL+1
+        JMP  EMSLOT
+EMLH:   LDA  LHSIDX
+        STA  SREL
+        LDA  LHSIDX+1
+        STA  SREL+1
+        JMP  EMSLOT
+EMSB:   STA  SREL
+        LDA  #0
+        STA  SREL+1
+        JMP  EMSLOT
+; SLOTADD_VN: SLOTCNT += VN:VN+1 (16-bit) — used by array declarations.
+SLOTADD_VN: LDA SLOTCNT
+        LDB  VN
+        ADD
+        STA  SLOTCNT
+        LDA  SLOTCNT+1
+        JNC  sav1
         INC
-        STA  DQ
-        JMP  en_tl
-en_td:  LDA  DQ
-        JNZ  en_tp
-        LDA  HADH
-        JZ   en_o
-en_tp:  LDA  DQ
-        LDB  #'0'
+sav1:   LDB  VN+1
         ADD
-        JSR  SYS_PUTC
-en_o:   LDA  VN                      ; ones (always)
-        LDB  #'0'
-        ADD
-        JSR  SYS_PUTC
+        STA  SLOTCNT+1
         RTS
 
 ; ---- 16-bit accumulator emit helpers ----
@@ -309,20 +395,14 @@ EM_LDIMM: LDP1 #MLDAI                ; __ax = CURV (16-bit literal)
         RTS
 EM_LDVAR: LDP1 #MLDAV                ; __ax = V<SYMIDX>
         JSR  EMIT
-        LDA  SYMIDX
-        LDB  SLOTBASE
-        ADD
-        JSR  EMITNUM
+        JSR  EMSY
         LDP1 #MNL
         JSR  EMIT
         LDP1 #MSTAX
         JSR  EMIT
         LDP1 #MLDAV
         JSR  EMIT
-        LDA  SYMIDX
-        LDB  SLOTBASE
-        ADD
-        JSR  EMITNUM
+        JSR  EMSY
         LDP1 #MP1
         JSR  EMIT
         LDP1 #MSTAXH
@@ -427,20 +507,14 @@ ela_nos: JSR EM_POP                  ; base -> __t0
 ; EM_ADDROF: __ax = &V<SLOTBASE+SYMIDX>   (address-of a scalar variable)
 EM_ADDROF: LDP1 #MLDALV
         JSR  EMIT
-        LDA  SYMIDX
-        LDB  SLOTBASE
-        ADD
-        JSR  EMITNUM
+        JSR  EMSY
         LDP1 #MNL
         JSR  EMIT
         LDP1 #MSTAX
         JSR  EMIT
         LDP1 #MLDAHV
         JSR  EMIT
-        LDA  SYMIDX
-        LDB  SLOTBASE
-        ADD
-        JSR  EMITNUM
+        JSR  EMSY
         LDP1 #MNL
         JSR  EMIT
         LDP1 #MSTAXH
@@ -493,20 +567,14 @@ EM_STVAR: LDP1 #MLDAX                ; V<LHSIDX> = __ax
         JSR  EMIT
         LDP1 #MSTAV
         JSR  EMIT
-        LDA  LHSIDX
-        LDB  SLOTBASE
-        ADD
-        JSR  EMITNUM
+        JSR  EMLH
         LDP1 #MNL
         JSR  EMIT
         LDP1 #MLDAXH
         JSR  EMIT
         LDP1 #MSTAV
         JSR  EMIT
-        LDA  LHSIDX
-        LDB  SLOTBASE
-        ADD
-        JSR  EMITNUM
+        JSR  EMLH
         LDP1 #MP1
         JSR  EMIT
         RTS
@@ -535,10 +603,7 @@ EM_INCVAR: JSR NEWLBL
         STA  INCLBL
         LDP1 #MLDAV
         JSR  EMIT
-        LDA  SYMIDX
-        LDB  SLOTBASE
-        ADD
-        JSR  EMITNUM
+        JSR  EMSY
         LDP1 #MNL
         JSR  EMIT
         LDP1 #MLDB1
@@ -547,10 +612,7 @@ EM_INCVAR: JSR NEWLBL
         JSR  EMIT
         LDP1 #MSTAV
         JSR  EMIT
-        LDA  SYMIDX
-        LDB  SLOTBASE
-        ADD
-        JSR  EMITNUM
+        JSR  EMSY
         LDP1 #MNL
         JSR  EMIT
         LDP1 #MJNC
@@ -558,20 +620,14 @@ EM_INCVAR: JSR NEWLBL
         JSR  EMITJ
         LDP1 #MLDAV
         JSR  EMIT
-        LDA  SYMIDX
-        LDB  SLOTBASE
-        ADD
-        JSR  EMITNUM
+        JSR  EMSY
         LDP1 #MP1
         JSR  EMIT
         LDP1 #MINCOP
         JSR  EMIT
         LDP1 #MSTAV
         JSR  EMIT
-        LDA  SYMIDX
-        LDB  SLOTBASE
-        ADD
-        JSR  EMITNUM
+        JSR  EMSY
         LDP1 #MP1
         JSR  EMIT
         LDA  INCLBL
@@ -581,10 +637,7 @@ EM_DECVAR: JSR NEWLBL
         STA  INCLBL
         LDP1 #MLDAV
         JSR  EMIT
-        LDA  SYMIDX
-        LDB  SLOTBASE
-        ADD
-        JSR  EMITNUM
+        JSR  EMSY
         LDP1 #MNL
         JSR  EMIT
         LDP1 #MLDB1
@@ -593,10 +646,7 @@ EM_DECVAR: JSR NEWLBL
         JSR  EMIT
         LDP1 #MSTAV
         JSR  EMIT
-        LDA  SYMIDX
-        LDB  SLOTBASE
-        ADD
-        JSR  EMITNUM
+        JSR  EMSY
         LDP1 #MNL
         JSR  EMIT
         LDP1 #MJC
@@ -604,20 +654,14 @@ EM_DECVAR: JSR NEWLBL
         JSR  EMITJ
         LDP1 #MLDAV
         JSR  EMIT
-        LDA  SYMIDX
-        LDB  SLOTBASE
-        ADD
-        JSR  EMITNUM
+        JSR  EMSY
         LDP1 #MP1
         JSR  EMIT
         LDP1 #MDECOP
         JSR  EMIT
         LDP1 #MSTAV
         JSR  EMIT
-        LDA  SYMIDX
-        LDB  SLOTBASE
-        ADD
-        JSR  EMITNUM
+        JSR  EMSY
         LDP1 #MP1
         JSR  EMIT
         LDA  INCLBL
@@ -643,20 +687,16 @@ epp_l:  LDA  VITER
         JSR  EMIT
         LDP1 #MSTAV
         JSR  EMIT
-        LDA  SLOTBASE
-        LDB  VITER
-        ADD
-        JSR  EMITNUM
+        LDA  VITER
+        JSR  EMSB
         LDP1 #MNL
         JSR  EMIT
         LDP1 #MLDAXH
         JSR  EMIT
         LDP1 #MSTAV
         JSR  EMIT
-        LDA  SLOTBASE
-        LDB  VITER
-        ADD
-        JSR  EMITNUM
+        LDA  VITER
+        JSR  EMSB
         LDP1 #MP1
         JSR  EMIT
         LDA  VITER
@@ -1552,23 +1592,18 @@ ce_noshr: LDP1 #MTEMP                ; the codegen temp
         JSR  EMIT
         LDP1 #MFRAMEDEF              ; arg-stack runtime: __pusharg/__pop/__sp/__cstack
         JSR  EMIT
-        LDA  #0                      ; storage for each declared variable:
-        STA  VITER                   ;   V0:  .fill 1  /  V1:  .fill 1  / ...
-ce_vl:  LDA  VITER
-        LDB  SLOTCNT
-        CMP
-        JC   ce_vd                   ; VITER >= SLOTCNT -> done
-        LDP1 #MVL                    ; "V"
+        LDP1 #MVBASE                 ; all variable storage in ONE array __V; a
+        JSR  EMIT                    ;   slot n is __V+2*n (see EMSLOT / MLDAV). One
+        LDA  SLOTCNT                 ;   assembler symbol instead of SLOTCNT of them,
+        SHL                          ;   so large programs don't blow asm's symtab.
+        STA  VN                      ;   __V:   .fill <2*SLOTCNT>   (zero-filled)
+        LDA  SLOTCNT+1
+        ROL
+        STA  VN+1
+        JSR  EMITNUM16
+        LDP1 #MNL
         JSR  EMIT
-        LDA  VITER
-        JSR  EMITNUM
-        LDP1 #MVF                    ; ":   .fill 1" + LF
-        JSR  EMIT
-        LDA  VITER
-        INC
-        STA  VITER
-        JMP  ce_vl
-ce_vd:  RTS
+        RTS
 
 ; FUNCDEF: int NAME ( ) { <stmt>* }   (Stage A: no parameters yet)
 
@@ -1669,16 +1704,21 @@ fdsv_nm: JSR CPCURFN                  ; CURFN = the VARIABLE name (not the tag)
         JSR  GSYMADD
         LDA  MEMTMP2
         JNZ  fdsv_ptr
-        LDA  TAGSIZE                  ; struct value: ceil(size/2) slots
-        INC
+        LDA  TAGSIZE                  ; struct value: ceil(size/2) slots (SLOTCNT
+        INC                           ;   += (TAGSIZE+1)/2, 16-bit; TAGSIZE < 256)
         SHR
-        LDB  SLOTCNT
-        ADD
-        STA  SLOTCNT
+        STA  VN
+        LDA  #0
+        STA  VN+1
+        JSR  SLOTADD_VN
         JMP  fdsv_end
-fdsv_ptr: LDA SLOTCNT                 ; pointer: 1 slot
+fdsv_ptr: LDA SLOTCNT                 ; pointer: 1 slot (SLOTCNT += 1, 16-bit)
         INC
         STA  SLOTCNT
+        JNZ  fdsv_end
+        LDA  SLOTCNT+1
+        INC
+        STA  SLOTCNT+1
 fdsv_end: JSR ADVANCE                 ; past NAME
         LDA  #$3B
         JSR  EXPECTP
@@ -1966,25 +2006,39 @@ fd_glob: JSR GSYMADD                 ; record CURFN @ slot SLOTCNT (char = DCLCH
         LDB  #'['
         CMP
         JZ   fdg_arr
-fdg_scal: LDA SLOTCNT                ; scalar global: one word slot
+fdg_scal: LDA SLOTCNT                ; scalar global: one word slot (SLOTCNT += 1)
         INC
         STA  SLOTCNT
+        JNZ  fdg_end
+        LDA  SLOTCNT+1
+        INC
+        STA  SLOTCNT+1
         JMP  fdg_end
 fdg_arr: JSR GSYMMARKARR             ; mark it an array
         JSR  ADVANCE                 ; past '['
         LDA  DCLCHAR
         JZ   fdg_aint
-        LDA  CURV                    ; char array: ceil(N/2) word slots
+        LDA  CURV                    ; char array: ceil(N/2) word slots, N 16-bit
+        LDB  #1                      ;   VN = CURV + 1 (16-bit)
+        ADD
+        STA  VN
+        LDA  CURV+1
+        JNC  fca1
         INC
+fca1:   STA  VN+1
+        LDA  VN+1                    ;   VN >>= 1 (16-bit logical)
         SHR
-        LDB  SLOTCNT
-        ADD
-        STA  SLOTCNT
+        STA  VN+1
+        LDA  VN
+        ROR
+        STA  VN
+        JSR  SLOTADD_VN              ;   SLOTCNT += VN
         JMP  fdg_asz
-fdg_aint: LDA SLOTCNT                ; int array: N word slots
-        LDB  CURV
-        ADD
-        STA  SLOTCNT
+fdg_aint: LDA CURV                   ; int array: N word slots (SLOTCNT += CURV)
+        STA  VN
+        LDA  CURV+1
+        STA  VN+1
+        JSR  SLOTADD_VN
 fdg_asz: JSR ADVANCE                 ; past size
         LDA  #']'
         JSR  EXPECTP
@@ -2020,7 +2074,9 @@ fdt_ns: JSR  CPCURFN                 ; CURFN <- NAME (function or global)
         CMP
         JNZ  fd_glob
         LDA  SLOTCNT                 ; ---- function definition ----
-        STA  SLOTBASE
+        STA  SLOTBASE                ; SLOTBASE = SLOTCNT (16-bit)
+        LDA  SLOTCNT+1
+        STA  SLOTBASE+1
         LDA  #0
         STA  SYMCNT
         STA  NLSLOT
@@ -2108,10 +2164,14 @@ fd_end: LDA  #'}'
         JSR  EMIT
         LDP1 #MRTS
         JSR  EMIT
-        LDA  SLOTBASE                ; advance the global slot counter
-        LDB  NLSLOT
+        LDA  SLOTBASE                ; advance the global slot counter (16-bit):
+        LDB  NLSLOT                  ;   SLOTCNT = SLOTBASE + NLSLOT
         ADD
         STA  SLOTCNT
+        LDA  SLOTBASE+1
+        JNC  fde_nc
+        INC
+fde_nc: STA  SLOTCNT+1
         RTS
 ; CPCURFN / CPIDNAME: copy the current id (TID) into CURFN / IDNAME.
 CPCURFN: LDA #<CURFN
@@ -2189,8 +2249,9 @@ fa_dn:  LDA #<FNPAR
 fad1:   TAP1H
         LDA  NPARAMS
         STA  (P1)
-        LDA  #<FSLOT
-        LDB  FCNT
+        LDA  FCNT                    ; FSLOT[FCNT] = SLOTBASE (16-bit cell)
+        SHL
+        LDB  #<FSLOT
         ADD
         TAP1L
         LDA  #>FSLOT
@@ -2198,6 +2259,9 @@ fad1:   TAP1H
         INC
 fad2:   TAP1H
         LDA  SLOTBASE
+        STA  (P1)
+        INP1
+        LDA  SLOTBASE+1
         STA  (P1)
         LDA  FCNT
         INC
@@ -2240,8 +2304,9 @@ ff_np:  INP1
         INC
         STA  FI
         JMP  ff_e
-ff_yes: LDA #<FSLOT
-        LDB  FI
+ff_yes: LDA FI                       ; FFB = FSLOT[FI] (16-bit cell)
+        SHL
+        LDB  #<FSLOT
         ADD
         TAP1L
         LDA  #>FSLOT
@@ -2250,6 +2315,9 @@ ff_yes: LDA #<FSLOT
 ffy1:   TAP1H
         LDA  (P1)
         STA  FFB
+        INP1
+        LDA  (P1)
+        STA  FFB+1
         LDA  #1
         STA  FOK
         RTS
@@ -2262,7 +2330,10 @@ EM_STSLOT: LDP1 #MLDAX
         LDP1 #MSTAV
         JSR  EMIT
         LDA  ARGSLOT
-        JSR  EMITNUM
+        STA  VN
+        LDA  ARGSLOT+1
+        STA  VN+1
+        JSR  EMITNUM16
         LDP1 #MNL
         JSR  EMIT
         LDP1 #MLDAXH
@@ -2270,7 +2341,10 @@ EM_STSLOT: LDP1 #MLDAX
         LDP1 #MSTAV
         JSR  EMIT
         LDA  ARGSLOT
-        JSR  EMITNUM
+        STA  VN
+        LDA  ARGSLOT+1
+        STA  VN+1
+        JSR  EMITNUM16
         LDP1 #MP1
         JSR  EMIT
         RTS
@@ -2509,6 +2583,8 @@ FORCLAUSE: LDA CURK
         JZ   fc_ret                    ; undeclared -> stop quietly
         LDA  SYMIDX
         STA  LHSIDX
+        LDA  SYMIDX+1
+        STA  LHSIDX+1
         JSR  ADVANCE                   ; past NAME
         LDA  #'='
         JSR  EXPECTP
@@ -2579,6 +2655,8 @@ sd_star: LDA CURK                    ; skip pointer stars: int *p, int **p
 sd_nostar: JSR SYMADD                ; add NAME (current id) -> SYMIDX
         LDA  SYMIDX
         STA  LHSIDX
+        LDA  SYMIDX+1
+        STA  LHSIDX+1
         JSR  SETSYMCHAR              ; SYMCHAR[slot] = DCLCHAR
         JSR  ADVANCE                 ; past NAME
         LDA  CURK                    ; array?  int NAME [ N ]
@@ -2648,6 +2726,8 @@ st_exprstmt: JSR GEXPR
 st_asg2:
         LDA  SYMIDX
         STA  LHSIDX
+        LDA  SYMIDX+1
+        STA  LHSIDX+1
         LDA  SYMRCH
         STA  LHSCH
         LDA  SYMRAR
@@ -2679,10 +2759,14 @@ sa_ck_arrow: LDA CURV
         JMP  sa_scalar
 sa_memdot: LDA LHSIDX             ; &NAME + offset
         STA  SYMIDX
+        LDA  LHSIDX+1
+        STA  SYMIDX+1
         JSR  EM_ADDROF
         JMP  sa_memcommon
 sa_memarrow: LDA LHSIDX           ; value(NAME) + offset
         STA  SYMIDX
+        LDA  LHSIDX+1
+        STA  SYMIDX+1
         JSR  EM_LDVAR
 sa_memcommon: JSR ADVANCE         ; past '.' or '->'
         JSR  STMFIND
@@ -2736,6 +2820,8 @@ sa_cst: JSR EMITSTV
 ;   rhs = 1 for ++/-- (CUR2 == CURV), or an expression for += / -= (CUR2 == '=').
 SA_CLOAD: LDA LHSIDX
         STA  SYMIDX
+        LDA  LHSIDX+1
+        STA  SYMIDX+1
         JSR  EM_LDVAR
         JSR  EM_PUSH
         LDA  CUR2
@@ -2751,6 +2837,8 @@ scl_p:  JSR EM_POP                   ; __t0 = old NAME
         RTS
 sa_arrstore: LDA LHSIDX
         STA  SYMIDX
+        LDA  LHSIDX+1
+        STA  SYMIDX+1
         LDA  LHSCH
         STA  ELCHAR
         LDA  LHSAR
@@ -3222,7 +3310,9 @@ gu_addr: LDA #1
         LDA  SYMOK
         JZ   gu_ad_e
         LDA  SYMIDX
-        STA  IDVARIDX                 ; save the slot across ADVANCE
+        STA  IDVARIDX
+        LDA  SYMIDX+1
+        STA  IDVARIDX+1                 ; save the slot across ADVANCE
         LDA  SYMRCH
         STA  IDVARCH
         LDA  SYMRAR
@@ -3238,10 +3328,14 @@ gu_addr: LDA #1
         JZ   gu_ad_ix
 gu_ad_pl: LDA IDVARIDX                ; &NAME  -> address of the variable
         STA  SYMIDX
+        LDA  IDVARIDX+1
+        STA  SYMIDX+1
         JSR  EM_ADDROF
         RTS
 gu_ad_ix: LDA IDVARIDX                ; &NAME[i] -> address of the element
         STA  SYMIDX
+        LDA  IDVARIDX+1
+        STA  SYMIDX+1
         LDA  IDVARCH
         STA  ELCHAR
         LDA  IDVARAR
@@ -3347,6 +3441,8 @@ gf_id:  JSR  CPIDNAME                ; save the id; it may be a call or a variab
         STA  IDVAROK
         LDA  SYMIDX
         STA  IDVARIDX
+        LDA  SYMIDX+1
+        STA  IDVARIDX+1
         LDA  SYMRCH
         STA  IDVARCH
         LDA  SYMRAR
@@ -3393,6 +3489,8 @@ gfi_var: LDA IDVAROK
         JZ   gf_err
         LDA  IDVARIDX
         STA  SYMIDX
+        LDA  IDVARIDX+1
+        STA  SYMIDX+1
         LDA  IDVARCH
         STA  EXPRCHAR
         LDA  IDVARAR                 ; a bare array name decays to &name[0]
@@ -3405,10 +3503,14 @@ gfv_arr: LDA #1
         RTS
 gfi_dot: LDA IDVARIDX               ; NAME.member : &NAME + offset
         STA  SYMIDX
+        LDA  IDVARIDX+1
+        STA  SYMIDX+1
         JSR  EM_ADDROF
         JMP  gfi_memld
 gfi_arrow: LDA IDVARIDX              ; NAME->member : value(NAME) + offset
         STA  SYMIDX
+        LDA  IDVARIDX+1
+        STA  SYMIDX+1
         JSR  EM_LDVAR
 gfi_memld: JSR ADVANCE               ; past '.' or '->'
         JSR  STMFIND
@@ -3425,6 +3527,8 @@ gfi_pinc: LDA IDVAROK               ; NAME++ : value = old NAME, then NAME += 1
         JZ   gf_err
         LDA  IDVARIDX
         STA  SYMIDX
+        LDA  IDVARIDX+1
+        STA  SYMIDX+1
         JSR  EM_LDVAR                 ; __ax = old NAME
         JSR  EM_INCVAR                ; NAME += 1 (in place, __ax kept)
         JSR  ADVANCE
@@ -3433,12 +3537,16 @@ gfi_pdec: LDA IDVAROK
         JZ   gf_err
         LDA  IDVARIDX
         STA  SYMIDX
+        LDA  IDVARIDX+1
+        STA  SYMIDX+1
         JSR  EM_LDVAR
         JSR  EM_DECVAR
         JSR  ADVANCE
         RTS
 gfi_index: LDA IDVARIDX               ; NAME[index] rvalue
         STA  SYMIDX
+        LDA  IDVARIDX+1
+        STA  SYMIDX+1
         LDA  IDVARCH
         STA  ELCHAR
         LDA  IDVARAR
@@ -3803,9 +3911,7 @@ ess_l:  LDA  VITER3
         LDB  NLSLOT
         CMP
         JC   ess_d                   ; VITER3 >= SYMCNT -> done
-        LDA  SLOTBASE
-        LDB  VITER3
-        ADD
+        LDA  VITER3
         JSR  EM_PUSHSLOT
         LDA  VITER3
         INC
@@ -3820,9 +3926,7 @@ EM_RESTSLOTS: LDA NLSLOT
 ers_l:  LDA  VITER3
         DEC
         STA  VITER3
-        LDA  SLOTBASE
-        LDB  VITER3
-        ADD
+        LDA  VITER3
         JSR  EM_POPSLOT
         LDA  VITER3
         JZ   ers_d                   ; just handled slot 0
@@ -3834,7 +3938,7 @@ EM_PUSHSLOT: STA VITER2
         LDP1 #MLDAV
         JSR  EMIT
         LDA  VITER2
-        JSR  EMITNUM
+        JSR  EMSB
         LDP1 #MNL
         JSR  EMIT
         LDP1 #MPHA
@@ -3842,7 +3946,7 @@ EM_PUSHSLOT: STA VITER2
         LDP1 #MLDAV
         JSR  EMIT
         LDA  VITER2
-        JSR  EMITNUM
+        JSR  EMSB
         LDP1 #MP1
         JSR  EMIT
         LDP1 #MPHA
@@ -3856,7 +3960,7 @@ EM_POPSLOT: STA VITER2
         LDP1 #MSTAV
         JSR  EMIT
         LDA  VITER2
-        JSR  EMITNUM
+        JSR  EMSB
         LDP1 #MP1
         JSR  EMIT
         LDP1 #MPLA
@@ -3864,7 +3968,7 @@ EM_POPSLOT: STA VITER2
         LDP1 #MSTAV
         JSR  EMIT
         LDA  VITER2
-        JSR  EMITNUM
+        JSR  EMSB
         LDP1 #MNL
         JSR  EMIT
         RTS
@@ -3914,7 +4018,9 @@ sf_yes: LDA  #1
         STA  SYMOK
         LDA  SYMIDX                   ; SYMIDX walked as the name index; map -> slot
         JSR  GSYMSLOT
-        STA  SYMIDX
+        STA  SYMIDX                    ; a local's slot is relative (<255) -> hi=0
+        LDA  #0
+        STA  SYMIDX+1
         JSR  GSYMCHAR                 ; resolve the char/array flags for the caller
         STA  SYMRCH
         LDA  SYMIDX
@@ -3973,8 +4079,11 @@ sad1:   TAP1H
 sad2:   TAP1H
         LDA  #0
         STA  (P1)
-        LDA  NLSLOT                   ; SYMIDX = the slot; bump slot + name counts
-        STA  SYMIDX
+        LDA  NLSLOT                   ; SYMIDX = the slot (local: relative, hi=0);
+        STA  SYMIDX                    ;   bump slot + name counts
+        LDA  #0
+        STA  SYMIDX+1
+        LDA  NLSLOT
         INC
         STA  NLSLOT
         LDA  SYMCNT
@@ -4021,8 +4130,9 @@ gsf_np: INP1
         JMP  gsf_e
 gsf_yes: LDA #1
         STA  SYMOK
-        LDA  #<GVSLOT
-        LDB  TMPB
+        LDA  TMPB                     ; read GVSLOT[TMPB] (16-bit) -> VN
+        SHL
+        LDB  #<GVSLOT
         ADD
         TAP1L
         LDA  #>GVSLOT
@@ -4030,9 +4140,21 @@ gsf_yes: LDA #1
         INC
 gsy1:   TAP1H
         LDA  (P1)
-        LDB  SLOTBASE
+        STA  VN
+        INP1
+        LDA  (P1)
+        STA  VN+1
+        LDA  VN                       ; SYMIDX = global slot - SLOTBASE (16-bit,
+        LDB  SLOTBASE                 ;   signed: emit re-adds SLOTBASE -> abs slot)
         SUB
         STA  SYMIDX
+        LDA  VN+1
+        JC   gsy_nb
+        LDB  #1
+        SUB
+gsy_nb: LDB  SLOTBASE+1
+        SUB
+        STA  SYMIDX+1
         LDA  #<GSYMCH
         LDB  TMPB
         ADD
@@ -4088,8 +4210,9 @@ gA_cp:  LDA  (P2)
         INP1
         INP2
         JMP  gA_cp
-gA_dn:  LDA #<GVSLOT
-        LDB  GSYMCNT
+gA_dn:  LDA GSYMCNT                  ; GVSLOT[GSYMCNT] = SLOTCNT (16-bit cell)
+        SHL
+        LDB  #<GVSLOT
         ADD
         TAP1L
         LDA  #>GVSLOT
@@ -4097,6 +4220,9 @@ gA_dn:  LDA #<GVSLOT
         INC
 gAd1:   TAP1H
         LDA  SLOTCNT
+        STA  (P1)
+        INP1
+        LDA  SLOTCNT+1
         STA  (P1)
         LDA  #<GSYMCH
         LDB  GSYMCNT
@@ -4424,10 +4550,10 @@ MORG:   .byte $20,$20,$20,$20,$20,$20,$20,$20
         .byte LF,0
 MLDAI:  .byte $20,$20,$20,$20,$20,$20,$20,$20   ; prefix: a number + MNL follow
         .asciiz "LDA #"
-MLDAV:  .byte $20,$20,$20,$20,$20,$20,$20,$20   ; prefix: "LDA V" + index + MNL
-        .asciiz "LDA V"
-MSTAV:  .byte $20,$20,$20,$20,$20,$20,$20,$20   ; prefix: "STA V" + index + MNL
-        .asciiz "STA V"
+MLDAV:  .byte $20,$20,$20,$20,$20,$20,$20,$20   ; prefix: "LDA __V+" + 2*slot + MNL
+        .asciiz "LDA __V+"
+MSTAV:  .byte $20,$20,$20,$20,$20,$20,$20,$20   ; prefix: "STA __V+" + 2*slot + MNL
+        .asciiz "STA __V+"
 MBOOT:  .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "LDA #<__cstktop"
         .byte LF
@@ -4460,7 +4586,8 @@ MJMPE:  .byte $20,$20,$20,$20,$20,$20,$20,$20
         .asciiz "JMP _e_"
 MCOLON: .ascii ":"
         .byte LF,0
-MVL:    .asciiz "V"                             ; a variable's storage label prefix
+MVBASE: .asciiz "__V:   .fill "                  ; single variable-storage array
+MVL:    .asciiz "V"                             ; (unused now) legacy per-slot prefix
 MVF:    .ascii ":   .word 0"
         .byte LF,0
 MNL:    .byte LF,0
@@ -5115,9 +5242,9 @@ MLDT0H:
         .ascii "LDA __t0+1"
         .byte LF,0
 MLDALV: .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .asciiz "LDA #<V"
+        .asciiz "LDA #<__V+"
 MLDAHV: .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .asciiz "LDA #>V"
+        .asciiz "LDA #>__V+"
 MFRAMEDEF:
         .ascii "__pusharg: LDA __sp"
         .byte LF
@@ -5212,24 +5339,27 @@ TID:    .fill 24   ; identifier text, NUL-terminated
 PATH:   .fill 64   ; source path buffer (raw arg)
 APATHB: .fill 80   ; PATH made absolute (CWD-prefixed) for FRESOLVE
 EMP:    .fill 2    ; emit walk pointer
-VN:     .fill 1    ; emitnum working value
+VN:     .fill 2    ; emitnum working value (16-bit: slot numbers can exceed 255)
+DVLO:   .fill 1    ; emitnum: current power-of-ten divisor, low byte
+DVHI:   .fill 1    ; emitnum: current power-of-ten divisor, high byte
 DQ:     .fill 1    ; emitnum digit counter
 HADH:   .fill 1    ; emitnum: a higher digit was already printed
+SREL:   .fill 2    ; EMSLOT: 16-bit relative slot index (SLOTBASE-relative)
 NACC:   .fill 2    ; lexer number accumulator
 STK0:   .fill 2    ; saved SP for a clean bail on error
 TMPB:   .fill 1    ; byte scratch (also IDEQ / EXPECT* result flag)
 TMPC:   .fill 1    ; byte scratch (IDEQ char compare)
 SYMCNT: .fill 1    ; number of declared variables
-SYMIDX: .fill 1    ; SYMFIND/SYMADD result index
+SYMIDX: .fill 2    ; SYMFIND/SYMADD result index (16-bit: >255 slots; signed for globals)
 SYMOK:  .fill 1    ; SYMFIND: 1 if found
-LHSIDX: .fill 1    ; index of an assignment/decl target variable
-VITER:  .fill 1    ; loop counter emitting variable storage
+LHSIDX: .fill 2    ; index of an assignment/decl target variable (16-bit)
+VITER:  .fill 2    ; loop counter emitting variable storage (16-bit)
 VITER2: .fill 1    ; EM_PUSHSLOT/EM_POPSLOT: slot number being emitted
 VITER3: .fill 1    ; EM_SAVESLOTS/EM_RESTSLOTS: slot loop counter
 SELFREC: .fill 1   ; (unused since frames) was: direct self-recursion flag
 SAWADDRG: .fill 1   ; 1 if an argument in the current call took an address
 GSYMPOOL: .fill 256 ; packed global variable names
-GVSLOT: .fill 48   ; per-global: its (absolute) storage slot
+GVSLOT: .fill 96   ; per-global: its (absolute) storage slot (16-bit cells)
 GSYMCH: .fill 48    ; per-global: char-typed flag
 GSYMAR: .fill 48    ; per-global: array flag
 GSYMCNT: .fill 1    ; number of globals
@@ -5296,21 +5426,21 @@ USEMUL: .fill 1    ; 1 if the program uses '*' (emit the __mul8 helper)
 USEDIV: .fill 1    ; 1 if the program uses '/' or '%'
 MULT2:  .fill 2    ; lexer: NACC<<1 scratch for *10
 CARRY:  .fill 1    ; lexer: 16-bit add carry
-SLOTCNT: .fill 1   ; total variable slots across all functions (global)
-SLOTBASE: .fill 1  ; the current function's first slot
+SLOTCNT: .fill 2   ; total variable slots across all functions (global, 16-bit)
+SLOTBASE: .fill 2  ; the current function's first slot (16-bit)
 CURFN:  .fill 16   ; current function name
 IDNAME: .fill 16   ; a factor's identifier (call name / var name)
 IDVAROK: .fill 1   ; gf_id: the id is a known variable
-IDVARIDX: .fill 1  ; gf_id: that variable's local index
+IDVARIDX: .fill 2  ; gf_id: that variable's local index (16-bit)
 FCNT:   .fill 1    ; number of defined functions
 FI:     .fill 1    ; FFIND function index
-FFB:    .fill 1    ; FFIND result: the function's param base slot
+FFB:    .fill 2    ; FFIND result: the function's param base slot (16-bit)
 FOK:    .fill 1    ; FFIND: 1 if found
 NPARAMS: .fill 1   ; FUNCDEF: parameter count being parsed
 ARGI:   .fill 1    ; call: current argument index
-ARGSLOT: .fill 1   ; call: absolute slot for the current argument
+ARGSLOT: .fill 2   ; call: absolute slot for the current argument (16-bit)
 FNPAR:  .fill 64   ; per-function parameter count (cap: MAXFUNC functions)
-FSLOT:  .fill 64   ; per-function param base slot (cap: MAXFUNC functions)
+FSLOT:  .fill 128  ; per-function param base slot (16-bit cells; cap: MAXFUNC functions)
 FPOOL:  .fill 384  ; packed function names (NUL-separated; cap: MAXFUNC funcs)
 USENEG: .fill 1    ; 1 if unary '-' is used (emit __neg)
 USENOT: .fill 1    ; 1 if '!' is used (emit __lnot)
