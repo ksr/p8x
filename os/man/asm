@@ -16,7 +16,9 @@ DESCRIPTION
 
     Both the SRC and OUT arguments are path-aware -- a full path, not just a
     12-char root-only name -- so you can assemble a source out of a /src tree
-    straight into a build-output directory. This is what `make` relies on.
+    straight into a build-output directory. This is what `make` relies on. A
+    relative name (no leading /) resolves against the current directory, like the
+    shell -- so `asm T.ASM out.bin` reads a `cc ... >T.ASM` redirect from any CWD.
 
 EXAMPLES
     asm hello.asm hello.bin

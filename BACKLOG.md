@@ -1228,6 +1228,13 @@ Last updated: 2026-07-08
       directory scans during a write). WORKAROUND today: the C twins are built on the
       host by run.sh; on-target, publish big commands via the **asm twin**
       (`make installa`), which assembles directly with no cc/redirect step.
+- [ ] **`cc` should CWD-prefix a relative path arg (like `asm` now does).** `asm`
+      abspath()s a relative SRC/OUT against the CWD (2026-07-12), so build scripts
+      need no `cd /`. `cc`'s input path still resolves from root (FRESOLVE), so
+      `cd /sub; cc x.c` fails — fine for `make` (its `cc` args are absolute) but a
+      latent gap for interactive use. Port the same abspath step into `apps/p8xcc.asm`.
+      (Related finding: a shell `>` redirect registers its file in the CWD, not root —
+      so `cd /sub; cat x > y` puts `y` in /sub, as expected.)
 - [ ] **Native toolchain follow-ups** (EDIT + ASM landed — see DONE). Remaining
       polish on the on-target assembler/editor, none blocking:
         - **Tools write to the flat root only.** EDIT `W` and ASM output go to
