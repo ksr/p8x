@@ -2,7 +2,7 @@
 
 Userland commands for P8X/OS, written in C and compiled with
 [`p8cc`](../../compiler/README.md) to loadable `/bin/*.bin` programs. They run
-in the transient program area (`$7A00`) under `run`, reach OS/BIOS services
+in the transient program area (`$6A00`) under `run`, reach OS/BIOS services
 through the `bios()`/`peek`/`poke`/`argstr()` builtins and the OS syscall table
 (see [../README.md](../README.md)), and read/write the standard streams via
 `getchar`/`putchar`/`puts` — so the shell can redirect (`<`/`>`) and pipe (`|`)
@@ -61,7 +61,7 @@ print a one-line usage summary and exit.
 > `-h`). The kernel keeps only what can't be a `/bin` program — `run`, the
 > authoring/FS primitives (`save`/`dep`/`load`/`del`/`mkdir`/`rmdir`/`cd`), and
 > `help`/`exit`/`pack`/`fsck`/`format`. **`dump` stays native** — as a `/bin`
-> program it would load into the `$7A00` TPA and overwrite the very memory it
+> program it would load into the `$6A00` TPA and overwrite the very memory it
 > dumps. Consequence: a freshly-`format`ted card (no `/bin`) can't `dir`/`cat`
 > until `/bin` is repopulated (from the host, or a future master CF — backlog).
 
@@ -89,8 +89,8 @@ print a one-line usage summary and exit.
 | [`vi.c`](vi.c) | `vi name [-h]` | Minimal modal **VT100 screen editor**. Reads keys raw (CONIN, no echo) and drives the cursor with ANSI escapes, so it needs a VT100-compatible terminal. `h j k l` move, `i`/`a`/`A`/`o` insert, `x` delete char, `dd` delete line, `0`/`$`/`G`, **`u` undo** (single-level), **`/`pat + `n`** search (literal, forward, wraps), `:w`/`:q`/`:wq`/`:q!`. Selective redraw (one line per edit, full only on scroll) keeps it usable at serial baud. Flat 110×80 line buffer. Complements the line-oriented [`EDIT`](../../apps/README.md) app. |
 | [`man.c`](man.c) | `man name [-h]` | Print the manual page for a command: streams `/man/<name>` to stdout (a `cat` with a fixed `/man/` prefix, so it is CWD-independent). Works for both `/bin` commands and OS built-ins; an unknown name prints `no manual entry for NAME`. Pages are plain text authored in [`os/man/`](../man/) and installed to `/man` by `run.sh`. |
 | [`dump.c`](dump.c) | `dump addr [-h]` | Hex-dump 256 bytes from hex `addr` (16 rows of hex + ASCII); a console key pages, `.` exits. Memory-only (`peek` + CONIN). Formerly an OS built-in — moved out of the kernel (it needs no shell/FS state). |
-| [`dep.c`](dep.c) | `dep addr b b ... [-h]` | Deposit hex byte values into memory starting at hex `addr` (`poke`); quiet on success. The counterpart to `dump`. Formerly an OS built-in. Note both live in the TPA at `$7A00`, so don't `dep` over that region. |
-| [`disasm.c`](disasm.c) | `disasm start end [-h]` | Disassemble the hex range `[start,end)` — one instruction per line (`AAAA: bb bb.. MNEMONIC operand`), unknown bytes print `???`. Memory-only (`peek`). The opcode table [`lib_distab.c`](lib_distab.c) is **generated** from `genucode.OPC` by [`generators/gen_p8xdis.py`](../../generators/gen_p8xdis.py) (spliced via `//#use distab`), so it never drifts from the ISA. Runs in the `$7A00` TPA, so don't disassemble that range. C-only (no hand-asm twin yet). |
+| [`dep.c`](dep.c) | `dep addr b b ... [-h]` | Deposit hex byte values into memory starting at hex `addr` (`poke`); quiet on success. The counterpart to `dump`. Formerly an OS built-in. Note both live in the TPA at `$6A00`, so don't `dep` over that region. |
+| [`disasm.c`](disasm.c) | `disasm start end [-h]` | Disassemble the hex range `[start,end)` — one instruction per line (`AAAA: bb bb.. MNEMONIC operand`), unknown bytes print `???`. Memory-only (`peek`). The opcode table [`lib_distab.c`](lib_distab.c) is **generated** from `genucode.OPC` by [`generators/gen_p8xdis.py`](../../generators/gen_p8xdis.py) (spliced via `//#use distab`), so it never drifts from the ISA. Runs in the `$6A00` TPA, so don't disassemble that range. C-only (no hand-asm twin yet). |
 | **[DEPRECATED]** [`cpp.c`](cpp.c) | `cpp src.c [-h]` | The `//#use` source preprocessor — **pass 1 of the on-target C toolchain**, the native counterpart of host [`clib.py`](../../tools/clib.py). Splices `lib_NAME.c` (recursively, deduped) for each `//#use NAME` and writes the combined source to stdout. Reads stay non-nested (single BIOS read stream) by emitting all libs ahead of the source — compiles identically (p8cc orders by symbol table). Uses `FSDIRBUF` so file-opens don't clobber a redirected write stream. C-only (a compiler pass, no asm twin). |
 | **[DEPRECATED]** [`lex.c`](lex.c) | `lex src.c [-h]` | The tokenizer — **pass 2 of the on-target C toolchain**, the native counterpart of the host compiler's lexer (`p8cc.py --tokens`). Reads a (preprocessed) C source and writes its token stream to stdout, one token per line `<line> <T> <payload>` (T = K keyword / I identifier / N number / S string / O operator / E eof). Streams the source through the BIOS read stream with a one-char pushback — no whole-file buffer, so it tokenizes sources far larger than the TPA. Line counting matches `p8cc.py` exactly (only a top-level newline counts; block-comment newlines don't). C-only (a compiler pass, no asm twin). Verified byte-identical to `p8cc.py --tokens` by `os_lex_test`. |
 | **[DEPRECATED]** [`cc1.c`](cc1.c) | `cc1 src.tok [-h]` | The parser — **pass 3 of the on-target C toolchain**, the parser half of the host compiler (`p8cc.py --ast`). Reads a LEX token stream and writes the serialized AST (a pre-order atom stream; see `ast_ser` in `p8cc.py`) that the code generator consumes. Recursive descent, emitting the AST as it parses — only the current statement is buffered (to splice infix operators into pre-order), so it handles functions far larger than the TPA. Purely syntactic; all type/symbol/struct analysis is deferred to the code generator, which stays **host-side** (`p8cc.py --from-ast`) — the on-target back end doesn't fit the TPA. C-only (a compiler pass, no asm twin). Verified byte-identical to `p8cc.py --ast` by `os_cc1_test`. |
@@ -188,8 +188,8 @@ three into `/bin` on a fresh disk):
 
 ```sh
 python3 compiler/p8cc.py os/commands/dir.c -o dir.asm
-python3 assembler/p8xasm.py dir.asm -o dir.bin --base 0x7A00
-python3 tools/p8xfs.py put disk.img dir.bin --name /bin/dir.bin --load 0x7A00 --exec 0x7A00
+python3 assembler/p8xasm.py dir.asm -o dir.bin --base 0x6A00
+python3 tools/p8xfs.py put disk.img dir.bin --name /bin/dir.bin --load 0x6A00 --exec 0x6A00
 # on the P8X:   DIR /bin        (bare name via PATH)   or   RUN /bin/dir.bin /bin
 ```
 
@@ -269,7 +269,7 @@ commands inside these limits, especially for `p8cc.c` parity):
   at its top, so they precede the command's own globals after splicing).
 - **TPA size limit (not a compiler bug):** the shared file read buffer lives at
   `$FC00` (just under the stack), so a command's code+globals must stay below
-  `$FC00` (~33 KB from the `$7A00` base). This bit `sed`/`diff` built with the
+  `$FC00` (~37.9 KB from the `$6A00` base). This bit `sed`/`diff` built with the
   *native* `p8cc.c`, whose codegen is larger than `p8cc.py`'s: with the old
   `$E000` buffer they overran it and read file data into their own code. Moving
   the buffer to `$FC00` fixed it — both build on **both** compilers now. (Was

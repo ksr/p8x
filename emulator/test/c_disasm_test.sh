@@ -16,7 +16,7 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osdis.bin --base 0x2000 
 build() {   # $1 = command name -> $1.bin
     python3 $ROOT/tools/clib.py "$ROOT/os/commands/$1.c" -o "$1.pp.c" >/dev/null
     python3 $ROOT/compiler/p8cc.py "$1.pp.c" -o "$1.d.asm" >/dev/null
-    python3 $ROOT/assembler/p8xasm.py "$1.d.asm" -o "$1.d.bin" --base 0x7A00 >/dev/null
+    python3 $ROOT/assembler/p8xasm.py "$1.d.asm" -o "$1.d.bin" --base 0x6A00 >/dev/null
 }
 build disasm
 build dep
@@ -25,8 +25,8 @@ rm -f disasm.img
 python3 $ROOT/tools/p8xfs.py create disasm.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   disasm.img osdis.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  disasm.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put disasm.img disasm.d.bin --name /bin/disasm.bin --load 0x7A00 --exec 0x7A00 >/dev/null
-python3 $ROOT/tools/p8xfs.py put disasm.img dep.d.bin    --name /bin/dep.bin    --load 0x7A00 --exec 0x7A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put disasm.img disasm.d.bin --name /bin/disasm.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put disasm.img dep.d.bin    --name /bin/dep.bin    --load 0x6A00 --exec 0x6A00 >/dev/null
 
 # Deposit at $C000 (clear of disasm's own TPA image): LDA #$48 (10 48), JSR $0103
 # (43 03 01), RTS (42), ADD (20), LDA (P1)+ (15) — one of each operand shape.

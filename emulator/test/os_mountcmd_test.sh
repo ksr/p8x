@@ -15,7 +15,7 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/
 for c in dir cat; do
     python3 $ROOT/tools/clib.py $ROOT/os/commands/$c.c -o mc_$c.pp.c
     python3 $ROOT/compiler/p8cc.py mc_$c.pp.c -o mc_$c.asm >/dev/null
-    python3 $ROOT/assembler/p8xasm.py mc_$c.asm -o mc_$c.bin --base 0x7A00 >/dev/null
+    python3 $ROOT/assembler/p8xasm.py mc_$c.asm -o mc_$c.bin --base 0x6A00 >/dev/null
 done
 
 mk0() {   # fresh boot disk with /bin/{DIR,CAT} + /d1 placeholder
@@ -24,8 +24,8 @@ mk0() {   # fresh boot disk with /bin/{DIR,CAT} + /d1 placeholder
     python3 $ROOT/tools/p8xfs.py boot   mc0.img osc.bin >/dev/null
     python3 $ROOT/tools/p8xfs.py mkdir  mc0.img /bin >/dev/null
     python3 $ROOT/tools/p8xfs.py mkdir  mc0.img /d1  >/dev/null
-    python3 $ROOT/tools/p8xfs.py put mc0.img mc_dir.bin --name /bin/dir.bin --load 0x7A00 --exec 0x7A00 >/dev/null
-    python3 $ROOT/tools/p8xfs.py put mc0.img mc_cat.bin --name /bin/cat.bin --load 0x7A00 --exec 0x7A00 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put mc0.img mc_dir.bin --name /bin/dir.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put mc0.img mc_cat.bin --name /bin/cat.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 }
 # a formatted drive-1 card with a file, and an unformatted (zeroed) one
 rm -f mc1.img mcbad.img

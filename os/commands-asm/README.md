@@ -8,7 +8,7 @@ question and the p8cc codegen-size concern (grep/sed/vi live at the 64 K TPA
 ceiling because of code size).
 
 Each `NAME.asm` here is a drop-in replacement for `/bin/name.bin`: same entry
-(`$7A00`), same argument ABI (`P2` = arg-tail pointer), same OS/BIOS calls, so it
+(`$6A00`), same argument ABI (`P2` = arg-tail pointer), same OS/BIOS calls, so it
 must produce **byte-identical behavior** to the C version — verified in the
 emulator, not just assumed.
 
@@ -16,7 +16,7 @@ emulator, not just assumed.
 
 | call | addr | in | out |
 |------|------|----|-----|
-| entry | `$7A00` | `P2` = ptr to NUL-terminated arg tail | `RTS` to OS |
+| entry | `$6A00` | `P2` = ptr to NUL-terminated arg tail | `RTS` to OS |
 | SYS_GETCWD | `$4003` | `P1` = dest buf | CWD path (incl. NUL) copied |
 | SYS_PUTC | `$4009` | `A` = char | — |
 | SYS_PUTS | `$400F` | `P1` = string | prints string, no newline |
@@ -34,7 +34,7 @@ sh os/commands-asm/compare.sh
 ```
 
 builds every `os/commands/NAME.c` with `p8cc` and every `os/commands-asm/NAME.asm`
-by hand — both through the same `p8xasm.py --base 0x7A00` — and prints a
+by hand — both through the same `p8xasm.py --base 0x6A00` — and prints a
 size table with the ratio. Ported commands only in the TOTAL.
 
 ## Scoreboard (fill-binary bytes)

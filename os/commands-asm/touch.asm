@@ -6,7 +6,7 @@
 ; BIOS: FRESOLVE $0133, FOPEN $0124, FWOPEN $012A, FCLOSE $0130. OS: SYS_GETCWD
 ; $2003 (via abspath). Entry: P2 = arg tail.
 
-        .org $7A00
+        .org $6A00
         TPA2L
         STA t_arg
         TPA2H

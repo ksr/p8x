@@ -1,7 +1,7 @@
 ; =============================================================================
 ; P8X EDIT - line-oriented text editor (standalone TPA program)
 ; =============================================================================
-; Built for the transient program area ($7A00), launched from P8X/OS:
+; Built for the transient program area ($6A00), launched from P8X/OS:
 ;     RUN EDIT NAME.EXT
 ; On entry P2 -> the argument tail (the OS program-arg ABI); EDIT copies it to
 ; FNAME and, if that file exists, loads it. Commands operate on a flat text
@@ -29,12 +29,12 @@ FCREATE = $011B         ; create root file FNAME from FSRC/FLEN; C=1 err
 FDELETE = $011E         ; tombstone root file FNAME; C=1 not found
 
 ; ---- BIOS shared FS parameter block -----------------------------------------
-LBA     = $7047         ; 24-bit LBA (lo/mid/hi)
-LBA1    = $7048
-LBA2    = $7049
-FNAME   = $704A         ; 12-byte space-padded name
-FSRC    = $7056         ; FCREATE source address
-FLEN    = $7058         ; length (FCREATE in / FFIND out)
+LBA     = $6047         ; 24-bit LBA (lo/mid/hi)
+LBA1    = $6048
+LBA2    = $6049
+FNAME   = $604A         ; 12-byte space-padded name
+FSRC    = $6056         ; FCREATE source address
+FLEN    = $6058         ; length (FCREATE in / FFIND out)
 
 CR      = $0D
 LF      = $0A
@@ -65,7 +65,7 @@ KLEN    = $BF0D         ; bytes to insert (line length + 1 for LF)
 DIGIT   = $BF0E         ; DECOUT tens scratch
 CMDCH   = $BF0F         ; current command letter
 
-        .org $7A00
+        .org $6A00
 ; =============================================================================
 ; Entry
 ; =============================================================================

@@ -20,18 +20,18 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o bdos.bin --base 0x2000 >
 # resolves via PATH and lists the CWD through SYS_OPENCWD (the 16-bit CWD opener).
 python3 $ROOT/tools/clib.py $ROOT/os/commands/dir.c -o bddir.pp.c >/dev/null
 python3 $ROOT/compiler/p8cc.py bddir.pp.c -o bddir.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py bddir.asm -o bddir.bin --base 0x7A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py bddir.asm -o bddir.bin --base 0x6A00 >/dev/null
 
 rm -f bd.img
 python3 $ROOT/tools/p8xfs.py create bd.img --v2 >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   bd.img bdos.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  bd.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    bd.img bddir.bin --name /bin/dir.bin --load 0x7A00 --exec 0x7A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    bd.img bddir.bin --name /bin/dir.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 # dep is now a /bin program (used below with save to seed F.bin) — install it.
 python3 $ROOT/tools/clib.py $ROOT/os/commands/dep.c -o bddep.pp.c >/dev/null
 python3 $ROOT/compiler/p8cc.py bddep.pp.c -o bddep.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py bddep.asm -o bddep.bin --base 0x7A00 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    bd.img bddep.bin --name /bin/dep.bin --load 0x7A00 --exec 0x7A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py bddep.asm -o bddep.bin --base 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    bd.img bddep.bin --name /bin/dep.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 # Pad the volume so the next allocated extent is well past LBA 256.
 head -c 30000 /dev/zero > bdpad.bin
 for i in 1 2 3 4 5 6 7 8; do

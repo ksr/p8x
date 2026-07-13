@@ -5,7 +5,7 @@
 CONOUT  = $0103
 FOPENDIR= $0139
 FNEXT   = $013C
-FNAME   = $704A
+FNAME   = $604A
         .org $2000
         LDP1 #ROOTSTR
         JSR  FOPENDIR       ; iterate the root

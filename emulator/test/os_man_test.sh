@@ -15,13 +15,13 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osm.bin --base 0x2000 >/
 # man.bin (no //#use, so clib is a passthrough)
 python3 $ROOT/tools/clib.py $ROOT/os/commands/man.c -o man.pp.c
 python3 $ROOT/compiler/p8cc.py man.pp.c -o man.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py man.asm -o man.bin --base 0x7A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py man.asm -o man.bin --base 0x6A00 >/dev/null
 
 rm -f man.img
 python3 $ROOT/tools/p8xfs.py create man.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   man.img osm.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  man.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    man.img man.bin --name /bin/man.bin --load 0x7A00 --exec 0x7A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    man.img man.bin --name /bin/man.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  man.img /man >/dev/null
 for page in $ROOT/os/man/*; do
     base=$(basename "$page")

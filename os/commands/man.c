@@ -12,7 +12,7 @@
  *
  * BIOS: FRESOLVE=$0133 (P1=path), FOPEN=$0124 (P1=buffer; C=1 not found),
  * FGETB=$0127 (->A, C=1 at EOF).  512-byte read buffer at $FC00 (page-aligned,
- * clear of code/globals at $7A00 and the stack at $FEFF).
+ * clear of code/globals at $6A00 and the stack at $FEFF).
  */
 char path[80];                               /* "/man/" + the requested name */
 

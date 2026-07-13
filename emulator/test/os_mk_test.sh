@@ -13,22 +13,22 @@ fail() { echo "OS-MK TEST: FAIL — $1"; exit 1; }
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osmk.bin --base 0x2000 >/dev/null
-python3 $ROOT/assembler/p8xasm.py $ROOT/apps/p8xcc.asm -o cc.bin --base 0x7A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py $ROOT/apps/p8xcc.asm -o cc.bin --base 0x6A00 >/dev/null
 python3 $ROOT/generators/gen_p8xopc.py > opctab.asm
 cat $ROOT/apps/p8xasm.asm opctab.asm > asmfull.asm
-python3 $ROOT/assembler/p8xasm.py asmfull.asm -o asm.bin --base 0x7A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py asmfull.asm -o asm.bin --base 0x6A00 >/dev/null
 
 rm -f mk.img
 python3 $ROOT/tools/p8xfs.py create mk.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   mk.img osmk.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  mk.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    mk.img cc.bin  --name /bin/cc.bin  --load 0x7A00 --exec 0x7A00 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    mk.img asm.bin --name /bin/asm.bin --load 0x7A00 --exec 0x7A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    mk.img cc.bin  --name /bin/cc.bin  --load 0x6A00 --exec 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    mk.img asm.bin --name /bin/asm.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 # cp is needed on-target to exercise `make installc` (publish c/bin -> /bin).
 python3 $ROOT/tools/clib.py $ROOT/os/commands/cp.c -o cp.pp.c 2>/dev/null
 python3 $ROOT/compiler/p8cc.py cp.pp.c -o cp.asm >/dev/null 2>&1
-python3 $ROOT/assembler/p8xasm.py cp.asm -o cp.bin --base 0x7A00 >/dev/null 2>&1
-python3 $ROOT/tools/p8xfs.py put    mk.img cp.bin  --name /bin/cp.bin  --load 0x7A00 --exec 0x7A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py cp.asm -o cp.bin --base 0x6A00 >/dev/null 2>&1
+python3 $ROOT/tools/p8xfs.py put    mk.img cp.bin  --name /bin/cp.bin  --load 0x6A00 --exec 0x6A00 >/dev/null
 # source tree + output dirs (mirror run.sh's layout)
 for d in /src /src/commands /src/commands/c /src/commands/c/bin /src/commands/asm /src/commands/asm/bin /src/mk; do
     python3 $ROOT/tools/p8xfs.py mkdir mk.img "$d" >/dev/null
@@ -44,7 +44,7 @@ python3 $ROOT/tools/p8xfs.py put mk.img mk_instc.scr --name /src/mk/installc.sh 
 
 # rebuild pwd (both twins), then `make installc` to publish the C build to /bin, then
 # RUN the PUBLISHED /bin/pwd.bin — it must print the CWD "/" (exercises DEFADDR: the
-# copied entry has load/exec 0, mapped to the TPA base $7A00).
+# copied entry has load/exec 0, mapped to the TPA base $6A00).
 printf 'B\rsh /mk.sh\rmake installc\rrun /bin/pwd.bin\r' \
     | ../p8xemu -l 3000000000 -c mk.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r' > mk_out.txt
 

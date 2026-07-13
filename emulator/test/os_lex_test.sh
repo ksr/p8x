@@ -16,7 +16,7 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o oslex.bin --base 0x2000 
 # lex itself is built on the host (it //#use apath); it becomes /bin/lex.bin.
 python3 $ROOT/tools/clib.py $ROOT/os/commands/lex.c -o lex.pp.c
 python3 $ROOT/compiler/p8cc.py lex.pp.c -o lex.cc.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py lex.cc.asm -o lex.cc.bin --base 0x7A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py lex.cc.asm -o lex.cc.bin --base 0x6A00 >/dev/null
 
 # a small source that exercises every token class: keywords, identifiers, decimal
 # and hex numbers, char literals with escapes, string literals with escapes,
@@ -39,7 +39,7 @@ rm -f lex.img
 python3 $ROOT/tools/p8xfs.py create lex.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   lex.img oslex.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  lex.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    lex.img lex.cc.bin --name /bin/lex.bin --load 0x7A00 --exec 0x7A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    lex.img lex.cc.bin --name /bin/lex.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    lex.img lex_src.c --name /lex_src.c >/dev/null
 
 fail() { echo "OS-LEX TEST: FAIL — $1"; exit 1; }

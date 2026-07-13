@@ -21,10 +21,10 @@ fail() { echo "OS-CC-BIGCMD TEST: FAIL — $1"; exit 1; }
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osbc.bin --base 0x2000 >/dev/null
-python3 $ROOT/assembler/p8xasm.py $ROOT/apps/p8xcc.asm -o ccbc.bin --base 0x7A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py $ROOT/apps/p8xcc.asm -o ccbc.bin --base 0x6A00 >/dev/null
 python3 $ROOT/generators/gen_p8xopc.py > opctab.asm
 cat $ROOT/apps/p8xasm.asm opctab.asm > asmfull.asm
-python3 $ROOT/assembler/p8xasm.py asmfull.asm -o asmbc.bin --base 0x7A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py asmfull.asm -o asmbc.bin --base 0x6A00 >/dev/null
 
 # 20 functions f1..f20 (+ main = 21), well past the old 16-function cap.
 {
@@ -38,8 +38,8 @@ rm -f bc.img
 python3 $ROOT/tools/p8xfs.py create bc.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   bc.img osbc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  bc.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    bc.img ccbc.bin  --name /bin/cc.bin  --load 0x7A00 --exec 0x7A00 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    bc.img asmbc.bin --name /bin/asm.bin --load 0x7A00 --exec 0x7A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    bc.img ccbc.bin  --name /bin/cc.bin  --load 0x6A00 --exec 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    bc.img asmbc.bin --name /bin/asm.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    bc.img bigf.c    --name /bigf.c >/dev/null
 
 # Second guard: a program needing MORE than 255 variable slots. A 600-byte global

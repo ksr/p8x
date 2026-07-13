@@ -16,10 +16,10 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o oscc1.bin --base 0x2000 
 # lex.bin + cc1.bin are host-built (both //#use apath); they become /bin/*.bin.
 python3 $ROOT/tools/clib.py $ROOT/os/commands/lex.c -o lex.pp.c
 python3 $ROOT/compiler/p8cc.py lex.pp.c -o lex.cc.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py lex.cc.asm -o lex.cc.bin --base 0x7A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py lex.cc.asm -o lex.cc.bin --base 0x6A00 >/dev/null
 python3 $ROOT/tools/clib.py $ROOT/os/commands/cc1.c -o cc1.pp.c
 python3 $ROOT/compiler/p8cc.py cc1.pp.c -o cc1.cc.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py cc1.cc.asm -o cc1.cc.bin --base 0x7A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py cc1.cc.asm -o cc1.cc.bin --base 0x6A00 >/dev/null
 
 # a source exercising every construct: struct, globals+initializers, functions
 # with params/locals, all statement forms, and the full expression grammar.
@@ -50,8 +50,8 @@ rm -f cc1.img
 python3 $ROOT/tools/p8xfs.py create cc1.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   cc1.img oscc1.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  cc1.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    cc1.img lex.cc.bin --name /bin/lex.bin --load 0x7A00 --exec 0x7A00 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    cc1.img cc1.cc.bin --name /bin/cc1.bin --load 0x7A00 --exec 0x7A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    cc1.img lex.cc.bin --name /bin/lex.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    cc1.img cc1.cc.bin --name /bin/cc1.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    cc1.img cc1_src.c --name /cc1_src.c >/dev/null
 
 fail() { echo "OS-CC1 TEST: FAIL — $1"; exit 1; }

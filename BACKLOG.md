@@ -119,7 +119,7 @@ Last updated: 2026-07-08
       now sits low (monitor line buffer $7000, param/state block $7040, SBUF
       $7100), so the OS image must end **below $7000** — i.e. **~12 KB** of RAM
       ($4000–$6FFF). (Before the remap the scratch was at $9D40, giving ~23.8 KB
-      of RAM headroom; the remap traded that down to grow the TPA to ~31.6 KB.)
+      of RAM headroom; the remap traded that down to grow the TPA to ~37.9 KB.)
       The on-disk OS region is still LBA 1–32 (16 KB), so RAM is now the tighter
       cap. The OS is ~8.5 KB today → ~3.5 KB headroom. BIOS scratch/SBUF/OS vars
       moved with the remap: LBA $7047, SBUF $7100, OS vars $7300.
@@ -870,7 +870,7 @@ Last updated: 2026-07-08
         Wire format switched from count-prefixed lists to `;`-terminated lists so
         the append-only write stream needs no seek-back. Purely syntactic; all
         type/symbol/struct analysis is deferred to cg. C-only (no asm twin).
-        Sizing: cc1.bin ~29.5 KB fits the TPA ($7A00+29.5K < $F800) with ~2.7 KB
+        Sizing: cc1.bin ~29.5 KB fits the TPA ($6A00+29.5K < $F800) with ~2.7 KB
         headroom.
       - **CG DOES NOT FIT — measured (2026-07-09).** The codegen cannot run
         on-target as one pass, and a simple cg+runtime split doesn't rescue it:
@@ -1234,7 +1234,7 @@ Last updated: 2026-07-08
          ~850-symbol table either. dir now compiles AND assembles clean.
       NEXT CEILING — **code SIZE, not slots/symbols.** `dir.c` compiles to a ~36 KB
       binary (verbose codegen + `__cstack` 2 KB + `__V` 1.7 KB) which overflows the
-      TPA (`$7A00`–`$FE00`, ~33 KB), so the *binary won't run* even though the build
+      TPA (`$6A00`–`$FE00`, ~37.9 KB), so the *binary won't run* even though the build
       (`cc`+`asm`) now succeeds. Big C commands still ship via their **asm twin**
       (`make installa`); shrinking codegen or relocating the TPA would let them run.
 - [x] **Toolchain path args are CWD-relative (2026-07-12).** Both `asm` and `cc`
@@ -1407,7 +1407,7 @@ Last updated: 2026-07-08
   (2026-07-08). What started as "prototype one heavy command to calibrate" became
   a full sweep: every `/BIN` command was rewritten by hand in P8X assembler under
   `os/commands-asm/` (`pwd mv more sed head wc uniq cat dir tree vi grep tail sort
-  cp find diff`), each a drop-in replacement (same `$7A00` entry, same `P2`
+  cp find diff`), each a drop-in replacement (same `$6A00` entry, same `P2`
   arg-tail ABI, same OS/BIOS calls) and verified **byte-identical in behavior** to
   its `p8cc` build in the emulator (`compare.sh`/the behavioral harness), not just
   assumed. Result: **~2.3× smaller overall**, ranging from 1.4× (diff) up to 5.8×
@@ -1425,7 +1425,7 @@ Last updated: 2026-07-08
   matched files back-to-back as ONE concatenated stream — identical to
   `CAT *.X | cmd`, no per-command logic (`GREP foo *.C`, `SORT *.TXT >OUT`,
   `WC *.LOG`). `wc` also gained file-arg support in the process. Enabled by the
-  recent headroom (TPA → ~31.6 KB after the remap, programs ~−24% after the
+  recent headroom (TPA → ~37.9 KB after the remap, programs ~−24% after the
   ISA-shrink ops) — the glob machinery (~12 KB) now fits in every filter. Two
   supporting changes: `tools/clib.py` made recursive (`lib_stdin` declares
   `//#use globx`, which declares `//#use glob`, deduped) so a lib can pull its own

@@ -3,7 +3,7 @@
 ; Shares the input engine via `;#use stdin`. Entry: P2 = arg tail.
 ;#use stdin
 
-        .org $7A00
+        .org $6A00
         LDA #10                      ; n = 10
         STA n
         LDA #0

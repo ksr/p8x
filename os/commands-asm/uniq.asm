@@ -4,7 +4,7 @@
 ; Entry: P2 = arg tail.
 ;#use stdin
 
-        .org $7A00
+        .org $6A00
         TPA2L
         STA u_arg
         TPA2H

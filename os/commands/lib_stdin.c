@@ -54,7 +54,7 @@ int open_path(char *a) {
     path[i] = 0;
     bios(0x0133, path, 0);                    /* FRESOLVE */
     /* Read buffer at $FC00 — just below the stack page ($FE00), clear of even the
-     * largest command's code/globals (they grow up from $7A00). */
+     * largest command's code/globals (they grow up from $6A00). */
     if (bios(0x0124, 0xFC00, 0) & 256) { return 2; }   /* FOPEN; carry = not found */
     return 1;
 }

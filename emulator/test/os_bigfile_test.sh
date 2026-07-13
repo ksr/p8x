@@ -17,14 +17,14 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o bfos.bin --base 0x2000 >/dev/null
 python3 $ROOT/tools/clib.py $ROOT/os/commands/cat.c -o bfcat.c
 python3 $ROOT/compiler/p8cc.py bfcat.c -o bfcat.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py bfcat.asm -o bfcat.bin --base 0x7A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py bfcat.asm -o bfcat.bin --base 0x6A00 >/dev/null
 # dir + wc: their size column / byte count must show a >64 KB value, not mod 65536
 python3 $ROOT/tools/clib.py $ROOT/os/commands/dir.c -o bfdir.c
 python3 $ROOT/compiler/p8cc.py bfdir.c -o bfdir.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py bfdir.asm -o bfdir.bin --base 0x7A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py bfdir.asm -o bfdir.bin --base 0x6A00 >/dev/null
 python3 $ROOT/tools/clib.py $ROOT/os/commands/wc.c -o bfwc.c
 python3 $ROOT/compiler/p8cc.py bfwc.c -o bfwc.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py bfwc.asm -o bfwc.bin --base 0x7A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py bfwc.asm -o bfwc.bin --base 0x6A00 >/dev/null
 
 # 66000 bytes (>64 KB): 6000 distinct 11-char lines, so any wrap/truncation shows.
 python3 -c "
@@ -37,9 +37,9 @@ rm -f bf.img
 python3 $ROOT/tools/p8xfs.py create bf.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   bf.img bfos.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  bf.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    bf.img bfcat.bin --name /bin/cat.bin --load 0x7A00 --exec 0x7A00 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    bf.img bfdir.bin --name /bin/dir.bin --load 0x7A00 --exec 0x7A00 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    bf.img bfwc.bin  --name /bin/wc.bin  --load 0x7A00 --exec 0x7A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    bf.img bfcat.bin --name /bin/cat.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    bf.img bfdir.bin --name /bin/dir.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    bf.img bfwc.bin  --name /bin/wc.bin  --load 0x6A00 --exec 0x6A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    bf.img bf_big.txt --name /BIG.TXT >/dev/null
 
 # read the 66 KB file and stream it back out to a new file (read + write past 64 KB)

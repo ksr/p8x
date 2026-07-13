@@ -31,8 +31,8 @@ build_disk() {   # $1 dir.bin  $2 pwd.bin -> dir.img with /SUB/X.DAT + both prog
     # a nested dir so we can test a RELATIVE path arg from within /SUB
     python3 $ROOT/tools/p8xfs.py mkdir  dir.img /SUB/DEEP >/dev/null
     python3 $ROOT/tools/p8xfs.py put    dir.img zrel.dat --name /SUB/DEEP/ZREL.DAT --load 0 --exec 0 >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    dir.img "$1" --name DIR.bin --load 0x7A00 --exec 0x7A00 >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    dir.img "$2" --name PWD.bin --load 0x7A00 --exec 0x7A00 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    dir.img "$1" --name DIR.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    dir.img "$2" --name PWD.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 }
 
 session() {   # echoes the combined console output of the three scenarios
@@ -79,8 +79,8 @@ compile_one() {   # $1 = compiler tag: build both programs with it
         python3 $ROOT/compiler/p8cc.py d.pp.c -o d.asm >/dev/null
         python3 $ROOT/compiler/p8cc.py $ROOT/os/commands/pwd.c -o p.asm >/dev/null
     fi
-    python3 $ROOT/assembler/p8xasm.py d.asm -o d.bin --base 0x7A00 >/dev/null
-    python3 $ROOT/assembler/p8xasm.py p.asm -o p.bin --base 0x7A00 >/dev/null
+    python3 $ROOT/assembler/p8xasm.py d.asm -o d.bin --base 0x6A00 >/dev/null
+    python3 $ROOT/assembler/p8xasm.py p.asm -o p.bin --base 0x6A00 >/dev/null
     build_disk d.bin p.bin
 }
 

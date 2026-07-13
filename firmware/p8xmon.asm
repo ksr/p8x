@@ -53,68 +53,68 @@ CFHEAD  = $FF16          ; $E0 = LBA mode, drive 0
 CFCMD   = $FF17          ; command (wr) / status (rd)
 CFSTAT  = $FF17
 
-LBUF    = $7000          ; input line buffer
-ADDRL   = $7040          ; parsed address
-ADDRH   = $7041
-HEXL    = $7042          ; hex accumulator
-HEXH    = $7043
-TMP     = $7044
-TMP2    = $7045
-CNT     = $7046          ; loop counter
-LBA     = $7047          ; current LBA, byte 0 (bits 7:0)
-LBA1    = $7048          ; LBA byte 1 (bits 15:8)  — 0 after CFINIT unless set
-LBA2    = $7049          ; LBA byte 2 (bits 23:16) — 0 after CFINIT unless set
+LBUF    = $6000          ; input line buffer
+ADDRL   = $6040          ; parsed address
+ADDRH   = $6041
+HEXL    = $6042          ; hex accumulator
+HEXH    = $6043
+TMP     = $6044
+TMP2    = $6045
+CNT     = $6046          ; loop counter
+LBA     = $6047          ; current LBA, byte 0 (bits 7:0)
+LBA1    = $6048          ; LBA byte 1 (bits 15:8)  — 0 after CFINIT unless set
+LBA2    = $6049          ; LBA byte 2 (bits 23:16) — 0 after CFINIT unless set
 ; ---- filesystem-call ABI (FFIND/FCREATE operate on the P8XFS v2 root, LBA 33) -
 ; File LENGTHS are 24-bit (3 bytes): FLEN/FSAV/ROREM/ROCNT/WOTOT/FLAREM. That
 ; matches the 24-bit ROLBA (16 MB max file). FNAME/FSRC/FLEN stay anchored so
 ; callers that only touch those (EDIT, BASIC) need no address change; the rest of
 ; the block reflows to give each length field 3 contiguous bytes. See
 ; firmware/WIDE_FILELEN.md for the full map.
-FNAME   = $704A          ; 12-byte filename (space-padded) — in for both calls
-FSRC    = $7056          ; FCREATE: source address of the file data (2 bytes)
-FLEN    = $7058          ; file length in bytes (3 bytes): FCREATE in, FFIND out
-FSAV    = $705B          ; FCREATE scratch: requested length saved across FFIND (3)
+FNAME   = $604A          ; 12-byte filename (space-padded) — in for both calls
+FSRC    = $6056          ; FCREATE: source address of the file data (2 bytes)
+FLEN    = $6058          ; file length in bytes (3 bytes): FCREATE in, FFIND out
+FSAV    = $605B          ; FCREATE scratch: requested length saved across FFIND (3)
 ; --- read-stream state (FOPEN/FGETB): a sequential byte reader over a file,
 ;     using a caller-supplied 512-byte sector buffer (ROBUF) ---
-ROLBA   = $705E          ; next sector LBA to read (3)
-ROREM   = $7061          ; bytes remaining in the file (3)
-ROBUF   = $7064          ; caller's 512-byte sector buffer address (2)
-ROPTR   = $7066          ; read cursor within ROBUF (2)
-ROCNT   = $7068          ; bytes left in ROBUF; 0 -> refill (3)
+ROLBA   = $605E          ; next sector LBA to read (3)
+ROREM   = $6061          ; bytes remaining in the file (3)
+ROBUF   = $6064          ; caller's 512-byte sector buffer address (2)
+ROPTR   = $6066          ; read cursor within ROBUF (2)
+ROCNT   = $6068          ; bytes left in ROBUF; 0 -> refill (3)
 ; --- write-stream state (FWOPEN/FPUTB/FCLOSE): a sequential byte writer that
 ;     streams to disk at the volume free pointer, using SBUF as its buffer ---
-WOLBA   = $706B          ; current output sector LBA (3)
-WOPOS   = $706E          ; byte offset within SBUF; 512 -> flush (2)
-WOTOT   = $7070          ; total bytes written (-> FLEN at close) (3)
+WOLBA   = $606B          ; current output sector LBA (3)
+WOPOS   = $606E          ; byte offset within SBUF; 512 -> flush (2)
+WOTOT   = $6070          ; total bytes written (-> FLEN at close) (3)
 ; --- current directory extent for the file calls (path resolution sets it;
 ;     defaults to the root and reverts there after each find) ---
-DIRLBA  = $7073          ; current directory start LBA, low byte (16-bit: +DIRLBA1)
-DIRN    = $7074          ; current directory sector count (1)
-FFLAG   = $7075          ; flag of the entry FSCAN matched (file $01 / dir $02)
-RPATH   = $7076          ; FRESOLVE path cursor (2)
+DIRLBA  = $6073          ; current directory start LBA, low byte (16-bit: +DIRLBA1)
+DIRN    = $6074          ; current directory sector count (1)
+FFLAG   = $6075          ; flag of the entry FSCAN matched (file $01 / dir $02)
+RPATH   = $6076          ; FRESOLVE path cursor (2)
 ; --- directory iteration state (FOPENDIR/FNEXT) ---
-DILBA   = $7078          ; iteration: current directory sector LBA (1)
-DICNT   = $7079          ; iteration: sectors remaining (1)
-DIIDX   = $707A          ; iteration: entry index within the sector (0..15)
-FLAREM  = $707B          ; FLOADAT remaining-bytes counter (CFRDSEC clobbers TMP) (3)
-DIBUFH  = $707E          ; FNEXT directory-buffer page (high byte; low byte 0).
+DILBA   = $6078          ; iteration: current directory sector LBA (1)
+DICNT   = $6079          ; iteration: sectors remaining (1)
+DIIDX   = $607A          ; iteration: entry index within the sector (0..15)
+FLAREM  = $607B          ; FLOADAT remaining-bytes counter (CFRDSEC clobbers TMP) (3)
+DIBUFH  = $607E          ; FNEXT directory-buffer page (high byte; low byte 0).
                          ;   Defaults to $9E (=SBUF) so the write stream and dir
                          ;   iteration don't have to share SBUF; FSDIRBUF repoints
                          ;   it at a caller buffer. FOPENDIRAT resets it. (1)
 ; --- 16-bit directory-LBA high bytes (directories may live at LBA >=256; the
 ;     volume free pointer is 16-bit, so one extra byte per cursor suffices). ---
-DILBA1  = $707F          ; FNEXT iteration sector LBA, high byte
-DIRLBA1 = $7080          ; current directory start LBA, high byte (pairs DIRLBA)
-FCDH    = $7081          ; FCREATE directory-sector scan cursor, high byte (HEXL)
-DRVSEL  = $7082          ; current CF drive for sector I/O (0/1); ORed into CFHEAD
-CFTOL   = $7083          ; CF bounded-wait timeout counter, low byte
-CFTOH   = $7084          ; CF bounded-wait timeout counter, high byte
-ROSDRV  = $7085          ; read-stream drive (captured by FOPEN, re-asserted by FG_FILL)
-WOSDRV  = $7086          ; write-stream drive (captured by FWOPEN, re-asserted by FW_FLUSH)
-CFIMASK = $7087          ; bit N set = drive N has been CFINIT'd this session
-REMW    = $7088          ; FCOM_CORE ceil(FLEN/512): 24-bit remaining counter (3)
-CNTW    = $708B          ; FCOM_CORE sector count, 16-bit (files may span >255 sectors)
-SBUF    = $7100          ; sector buffer
+DILBA1  = $607F          ; FNEXT iteration sector LBA, high byte
+DIRLBA1 = $6080          ; current directory start LBA, high byte (pairs DIRLBA)
+FCDH    = $6081          ; FCREATE directory-sector scan cursor, high byte (HEXL)
+DRVSEL  = $6082          ; current CF drive for sector I/O (0/1); ORed into CFHEAD
+CFTOL   = $6083          ; CF bounded-wait timeout counter, low byte
+CFTOH   = $6084          ; CF bounded-wait timeout counter, high byte
+ROSDRV  = $6085          ; read-stream drive (captured by FOPEN, re-asserted by FG_FILL)
+WOSDRV  = $6086          ; write-stream drive (captured by FWOPEN, re-asserted by FW_FLUSH)
+CFIMASK = $6087          ; bit N set = drive N has been CFINIT'd this session
+REMW    = $6088          ; FCOM_CORE ceil(FLEN/512): 24-bit remaining counter (3)
+CNTW    = $608B          ; FCOM_CORE sector count, 16-bit (files may span >255 sectors)
+SBUF    = $6100          ; sector buffer
 STKTOP  = $FEFF
 
 CR      = $0D
@@ -182,7 +182,7 @@ COLD:   LDP3 #STKTOP        ; stack
         LDA  #0             ; CF sector I/O defaults to drive 0
         STA  DRVSEL
         STA  CFIMASK        ; no drive CFINIT'd yet
-        LDA  #$71           ; FSCAN/FNEXT directory-buffer page defaults to SBUF;
+        LDA  #$61           ; FSCAN/FNEXT directory-buffer page defaults to SBUF;
         STA  DIBUFH         ;   a program repoints it (FSDIRBUF) to run a dir walk
                             ;   alongside an open write stream without clobbering it
         LDP1 #MBANNER
@@ -992,7 +992,7 @@ FOPENDIRAT:
         STA  DICNT
         LDA  #0
         STA  DIIDX
-        LDA  #$71           ; default the iteration buffer to SBUF; a caller that
+        LDA  #$61           ; default the iteration buffer to SBUF; a caller that
         STA  DIBUFH         ;   redirects/pipes calls FSDIRBUF after this to move it
         RTS
 
@@ -1585,7 +1585,7 @@ FWOPEN: LDA  DRVSEL        ; the write stream remembers its drive (dual-volume)
 FPUTB:  STA  TMP
         LDA  WOPOS         ; P1 = SBUF + WOPOS (SBUF low byte = 0)
         TAP1L
-        LDA  #$71
+        LDA  #$61
         LDB  WOPOS+1
         ADD
         TAP1H

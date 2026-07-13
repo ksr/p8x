@@ -5,7 +5,7 @@
 ; Entry: P2 = arg tail.  BIOS FRESOLVE=$0133, FOPEN=$0124, FGETB=$0127; the
 ; 512-byte read buffer is $FC00.  SYS_PUTS=$200F, SYS_PUTC=$2009.
 
-        .org $7A00
+        .org $6A00
 m_sk:   LDA (P2)                     ; skip leading spaces
         LDB #32
         CMP

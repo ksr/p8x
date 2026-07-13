@@ -7,7 +7,7 @@
 ; Entry: P2 = arg tail.  SYS_PUTS=$200F, SYS_PUTC=$2009.
 ;#use distab
 
-        .org $7A00
+        .org $6A00
         ; ---- parse "start end" ------------------------------------------------
 d_sk:   LDA (P2)                     ; skip leading spaces
         LDB #32

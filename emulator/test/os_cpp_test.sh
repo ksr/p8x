@@ -16,13 +16,13 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o oscpp.bin --base 0x2000 
 # cpp itself is built on the host (it //#use apath); it becomes /bin/cpp.bin.
 python3 $ROOT/tools/clib.py $ROOT/os/commands/cpp.c -o cpp.pp.c
 python3 $ROOT/compiler/p8cc.py cpp.pp.c -o cpp.cc.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py cpp.cc.asm -o cpp.cc.bin --base 0x7A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py cpp.cc.asm -o cpp.cc.bin --base 0x6A00 >/dev/null
 
 rm -f cpp.img
 python3 $ROOT/tools/p8xfs.py create cpp.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   cpp.img oscpp.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  cpp.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    cpp.img cpp.cc.bin --name /bin/cpp.bin --load 0x7A00 --exec 0x7A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    cpp.img cpp.cc.bin --name /bin/cpp.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 # cat.c uses //#use glob + globx; globx uses glob + dirent — put them all at root
 for f in cat.c lib_glob.c lib_globx.c lib_dirent.c; do
     python3 $ROOT/tools/p8xfs.py put cpp.img $ROOT/os/commands/$f --name /$f >/dev/null
@@ -38,7 +38,7 @@ fail() { echo "OS-CPP TEST: FAIL — $1"; exit 1; }
 python3 $ROOT/tools/clib.py $ROOT/os/commands/cat.c -o clib_out.c
 python3 $ROOT/compiler/p8cc.py cpp_out.c  -o a.asm >/dev/null 2>&1 || fail "cpp output did not compile"
 python3 $ROOT/compiler/p8cc.py clib_out.c -o b.asm >/dev/null 2>&1
-python3 $ROOT/assembler/p8xasm.py a.asm -o a.bin --base 0x7A00 >/dev/null
-python3 $ROOT/assembler/p8xasm.py b.asm -o b.bin --base 0x7A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py a.asm -o a.bin --base 0x6A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py b.asm -o b.bin --base 0x6A00 >/dev/null
 cmp -s a.bin b.bin || fail "cpp-preprocessed binary differs from clib.py-preprocessed binary"
 echo "OS-CPP TEST: PASS"

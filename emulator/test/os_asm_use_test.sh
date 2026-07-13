@@ -16,18 +16,18 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osu.bin --base 0x2000 >/
 # the on-target assembler itself (logic + generated opcode table)
 python3 $ROOT/generators/gen_p8xopc.py > opctab.asm
 cat $ROOT/apps/p8xasm.asm opctab.asm > asmfull.asm
-python3 $ROOT/assembler/p8xasm.py asmfull.asm -o asm.bin --base 0x7A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py asmfull.asm -o asm.bin --base 0x6A00 >/dev/null
 
 # host reference: what mkasm.sh + the host assembler produce for cat (= /bina/cat.bin)
 sh $ROOT/os/commands-asm/mkasm.sh cat > cat.full.asm
-python3 $ROOT/assembler/p8xasm.py cat.full.asm -o cat.ref.bin --base 0x7A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py cat.full.asm -o cat.ref.bin --base 0x6A00 >/dev/null
 
 # on-target disk: asm.bin in /bin, the include at /lib/stdin.inc, raw cat.asm at /
 rm -f use.img
 python3 $ROOT/tools/p8xfs.py create use.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   use.img osu.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  use.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    use.img asm.bin --name /bin/asm.bin --load 0x7A00 --exec 0x7A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    use.img asm.bin --name /bin/asm.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  use.img /lib >/dev/null
 python3 $ROOT/tools/p8xfs.py put    use.img $ROOT/os/commands-asm/lib_stdin.inc --name /lib/stdin.inc >/dev/null
 python3 $ROOT/tools/p8xfs.py put    use.img $ROOT/os/commands-asm/cat.asm --name /cat.asm >/dev/null

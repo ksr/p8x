@@ -14,7 +14,7 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o p8xos.bin --base 0x2000 
 
 # A position-independent program at $B000: print "V2" then RTS.
 cat > v2prog.asm <<'EOF'
-        .org $7A00
+        .org $6A00
         LDA  #'V'
         JSR  $0103
         LDA  #'2'
@@ -25,7 +25,7 @@ cat > v2prog.asm <<'EOF'
         JSR  $0103
         RTS
 EOF
-python3 $ROOT/assembler/p8xasm.py v2prog.asm -o v2prog.bin --base 0x7A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py v2prog.asm -o v2prog.bin --base 0x6A00 >/dev/null
 
 rm -f v2.img
 python3 $ROOT/tools/p8xfs.py create v2.img --v2 >/dev/null
@@ -35,22 +35,22 @@ python3 $ROOT/tools/p8xfs.py put    v2.img v2prog.bin --name /bin/hello.bin >/de
 # dep is now a /bin program (used below with save to seed T.bin) — install it.
 python3 $ROOT/tools/clib.py $ROOT/os/commands/dep.c -o v2dep.pp.c >/dev/null
 python3 $ROOT/compiler/p8cc.py v2dep.pp.c -o v2dep.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py v2dep.asm -o v2dep.bin --base 0x7A00 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    v2.img v2dep.bin --name /bin/dep.bin --load 0x7A00 --exec 0x7A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py v2dep.asm -o v2dep.bin --base 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    v2.img v2dep.bin --name /bin/dep.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 # CAT is no longer a built-in; install the C cat (os/commands/cat.c) so a bare
 # `CAT /README` resolves via PATH (/bin) — this doubles as an implicit-RUN check.
 python3 $ROOT/tools/clib.py $ROOT/os/commands/cat.c -o v2cat.pp.c   # splice //#use glob,globx
 python3 $ROOT/compiler/p8cc.py v2cat.pp.c -o v2cat.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py v2cat.asm -o v2cat.bin --base 0x7A00 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    v2.img v2cat.bin --name /bin/cat.bin --load 0x7A00 --exec 0x7A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py v2cat.asm -o v2cat.bin --base 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    v2.img v2cat.bin --name /bin/cat.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 # DIR/PWD/TREE are no longer built-ins either — install their C versions so the
 # bare names resolve via PATH (/bin).
 for c in dir pwd tree; do
     python3 $ROOT/tools/clib.py $ROOT/os/commands/$c.c -o v2$c.pp.c   # splice //#use (dir: glob)
     python3 $ROOT/compiler/p8cc.py v2$c.pp.c -o v2$c.asm >/dev/null
-    python3 $ROOT/assembler/p8xasm.py v2$c.asm -o v2$c.bin --base 0x7A00 >/dev/null
+    python3 $ROOT/assembler/p8xasm.py v2$c.asm -o v2$c.bin --base 0x6A00 >/dev/null
     up=$(echo $c | tr a-z A-Z)
-    python3 $ROOT/tools/p8xfs.py put v2.img v2$c.bin --name /bin/$c.bin --load 0x7A00 --exec 0x7A00 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put v2.img v2$c.bin --name /bin/$c.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 done
 printf 'readme' > v2r.tmp
 python3 $ROOT/tools/p8xfs.py put    v2.img v2r.tmp --name /README >/dev/null

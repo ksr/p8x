@@ -13,7 +13,7 @@
 ; BIOS: FNEXT $013C, FSDIRBUF $0145, SYS_DIRENTRY $201B, SYS_OPENDIR $201E.
 ; OS: SYS_OPENCWD $2012, SYS_PUTC $2009, SYS_PUTS $200F. Entry: P2 = arg tail.
 
-        .org $7A00
+        .org $6A00
 ; --- -h check (P2 = arg) ---------------------------------------------------
 tr_sk:  LDA (P2)
         LDB #32

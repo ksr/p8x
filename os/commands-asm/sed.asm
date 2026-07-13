@@ -6,7 +6,7 @@
 ;#use stdin
 ;#use regex
 
-        .org $7A00
+        .org $6A00
         TPA2L
         STA s_sav
         TPA2H

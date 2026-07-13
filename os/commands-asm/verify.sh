@@ -53,7 +53,7 @@ cmd_script() {
     case "$1" in
         PWD)  printf 'cd /SUB\rpwd\r' ;;
         # a FIXED memory range (the ROM BIOS jump table) so both builds decode the
-        # same bytes — the program itself loads at $7A00 and would differ.
+        # same bytes — the program itself loads at $6A00 and would differ.
         DISASM) printf 'disasm 0100 0140\r' ;;
         # -R targets /SUB (no .bin files): a recursive listing of /bin would
         # show dir.bin's own byte size, which legitimately differs between the
@@ -82,7 +82,7 @@ cmd_script() {
         MAN)  printf 'man dir\rman nope\rman -h\r' ;;
         # dep is quiet on success (both builds); usage/bad-addr paths print.
         DEP)  printf 'dep -h\rdep\rdep zz\rdep 9000 41 42 43\r' ;;
-        # dump a zeroed RAM page clear of the program at $7A00 (identical in
+        # dump a zeroed RAM page clear of the program at $6A00 (identical in
         # both builds); '.' exits the pager; then the usage/bad-addr paths.
         DUMP) printf 'dump 9000\r.\rdump -h\rdump zz\r' ;;
     esac
@@ -100,13 +100,13 @@ run() { # $1=img $2=script -> transcript
 build_c() { # $1=name -> $W/<name>_h.bin
     $CLIB "$CDIR/$1.c" -o "$W/$1.hpp.c" 2>/dev/null
     $CC "$W/$1.hpp.c" -o "$W/$1.hlp.asm" >/dev/null 2>&1
-    $ASM "$W/$1.hlp.asm" -o "$W/$1_h.bin" --base 0x7A00 >/dev/null 2>&1
+    $ASM "$W/$1.hlp.asm" -o "$W/$1_h.bin" --base 0x6A00 >/dev/null 2>&1
 }
 build_c cat; build_c find
 install_helpers() { # $1=img  $2=name-under-test (lowercase, skip that one)
     for h in cat find; do
         [ "$h" = "$2" ] && continue
-        $FS put "$1" "$W/${h}_h.bin" --name "/bin/$h.bin" --load 0x7A00 --exec 0x7A00 >/dev/null
+        $FS put "$1" "$W/${h}_h.bin" --name "/bin/$h.bin" --load 0x6A00 --exec 0x6A00 >/dev/null
     done
 }
 
@@ -120,12 +120,12 @@ for cmd in $ALL; do
     up=$(echo "$cmd" | tr a-z A-Z)
     $CLIB "$CDIR/$cmd.c" -o "$W/$cmd.pp.c" 2>/dev/null
     $CC "$W/$cmd.pp.c" -o "$W/${cmd}_c.asm" >/dev/null 2>&1
-    $ASM "$W/${cmd}_c.asm" -o "$W/${cmd}_c.bin" --base 0x7A00 >/dev/null 2>&1
+    $ASM "$W/${cmd}_c.asm" -o "$W/${cmd}_c.bin" --base 0x6A00 >/dev/null 2>&1
     sh "$ADIR/mkasm.sh" "$cmd" > "$W/${cmd}_full.asm"
-    $ASM "$W/${cmd}_full.asm" -o "$W/${cmd}_a.bin" --base 0x7A00 >/dev/null 2>&1
+    $ASM "$W/${cmd}_full.asm" -o "$W/${cmd}_a.bin" --base 0x6A00 >/dev/null 2>&1
     scr=$(cmd_script "$up")
-    fixtures "$W/dc.img"; install_helpers "$W/dc.img" "$cmd"; $FS put "$W/dc.img" "$W/${cmd}_c.bin" --name "/bin/$cmd.bin" --load 0x7A00 --exec 0x7A00 >/dev/null
-    fixtures "$W/da.img"; install_helpers "$W/da.img" "$cmd"; $FS put "$W/da.img" "$W/${cmd}_a.bin" --name "/bin/$cmd.bin" --load 0x7A00 --exec 0x7A00 >/dev/null
+    fixtures "$W/dc.img"; install_helpers "$W/dc.img" "$cmd"; $FS put "$W/dc.img" "$W/${cmd}_c.bin" --name "/bin/$cmd.bin" --load 0x6A00 --exec 0x6A00 >/dev/null
+    fixtures "$W/da.img"; install_helpers "$W/da.img" "$cmd"; $FS put "$W/da.img" "$W/${cmd}_a.bin" --name "/bin/$cmd.bin" --load 0x6A00 --exec 0x6A00 >/dev/null
     run "$W/dc.img" "$scr" > "$W/$cmd.c.out"
     run "$W/da.img" "$scr" > "$W/$cmd.a.out"
     ran=$((ran + 1))

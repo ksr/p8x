@@ -18,7 +18,7 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/
 build_cmd() {   # $1 = command name -> $1.bin in /bin of mn0
     python3 $ROOT/tools/clib.py $ROOT/os/commands/$1.c -o mn_$1.pp.c
     python3 $ROOT/compiler/p8cc.py mn_$1.pp.c -o mn_$1.asm >/dev/null
-    python3 $ROOT/assembler/p8xasm.py mn_$1.asm -o mn_$1.bin --base 0x7A00 >/dev/null
+    python3 $ROOT/assembler/p8xasm.py mn_$1.asm -o mn_$1.bin --base 0x6A00 >/dev/null
 }
 
 # drive 0: bootable, /bin with the three commands + the /d1 mount placeholder
@@ -30,7 +30,7 @@ python3 $ROOT/tools/p8xfs.py mkdir  mn0.img /d1 >/dev/null
 for c in cat dir cp; do
     build_cmd $c
     U=$(echo $c | tr a-z A-Z)
-    python3 $ROOT/tools/p8xfs.py put mn0.img mn_$c.bin --name /bin/$c.bin --load 0x7A00 --exec 0x7A00 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put mn0.img mn_$c.bin --name /bin/$c.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 done
 
 # drive 1: a data card with a file at root and a file in /SUB (appear under /d1)

@@ -157,34 +157,34 @@ if [ ! -f "$disk" ]; then
     # empty placeholder is ever read — it is just a signpost.
     python3 "$root/tools/p8xfs.py" mkdir  "$disk" /d1 >/dev/null
     # a tiny program (prints "HI") so RUN /bin/hi.bin works
-    printf '        .org $7A00\n        LDA #%cH%c\n        JSR $0103\n        LDA #%cI%c\n        JSR $0103\n        LDA #$0D\n        JSR $0103\n        LDA #$0A\n        JSR $0103\n        RTS\n' "'" "'" "'" "'" > "$build/hi.asm"
-    python3 "$root/assembler/p8xasm.py" "$build/hi.asm" -o "$build/hi.bin" --base 0x7A00 >/dev/null
+    printf '        .org $6A00\n        LDA #%cH%c\n        JSR $0103\n        LDA #%cI%c\n        JSR $0103\n        LDA #$0D\n        JSR $0103\n        LDA #$0A\n        JSR $0103\n        RTS\n' "'" "'" "'" "'" > "$build/hi.asm"
+    python3 "$root/assembler/p8xasm.py" "$build/hi.asm" -o "$build/hi.bin" --base 0x6A00 >/dev/null
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/hi.bin" --name /bin/hi.bin >/dev/null
     # OS-runnable BASIC: TPA build (code+data+scratch in $B000.., clear of the OS)
     # whose BYE returns to the OS cold start -> RUN /bin/basic.bin, then BYE.
     python3 "$root/assembler/p8xasm.py" "$root/basic/p8xbasic.asm" -o "$build/basicrun.bin" \
-        --base 0x7A00 -D BASORG=0x7A00 -D BASRAM=0xC500 -D PBUF=0xE000 -D MONITOR=0x2000 >/dev/null
+        --base 0x6A00 -D BASORG=0x6A00 -D BASRAM=0xC500 -D PBUF=0xE000 -D MONITOR=0x2000 >/dev/null
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/basicrun.bin" \
-        --name /bin/basic.bin --load 0x7A00 --exec 0x7A00 >/dev/null
+        --name /bin/basic.bin --load 0x6A00 --exec 0x6A00 >/dev/null
     # EDIT: line-oriented text editor (TPA program) -> RUN /bin/edit.bin NAME
     python3 "$root/assembler/p8xasm.py" "$root/apps/p8xedit.asm" -o "$build/edit.bin" \
-        --base 0x7A00 >/dev/null
+        --base 0x6A00 >/dev/null
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/edit.bin" \
-        --name /bin/edit.bin --load 0x7A00 --exec 0x7A00 >/dev/null
+        --name /bin/edit.bin --load 0x6A00 --exec 0x6A00 >/dev/null
     # ASM: native two-pass assembler (logic + generated opcode table) -> RUN
     # /bin/asm.bin SRC.ASM OUT.BIN.  Pair with EDIT for an on-target toolchain.
     python3 "$root/generators/gen_p8xopc.py" "$build/opctab.asm"
     cat "$root/apps/p8xasm.asm" "$build/opctab.asm" > "$build/asmfull.asm"
     python3 "$root/assembler/p8xasm.py" "$build/asmfull.asm" -o "$build/asm.bin" \
-        --base 0x7A00 >/dev/null
+        --base 0x6A00 >/dev/null
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/asm.bin" \
-        --name /bin/asm.bin --load 0x7A00 --exec 0x7A00 >/dev/null
+        --name /bin/asm.bin --load 0x6A00 --exec 0x6A00 >/dev/null
     # CC: the native C compiler, hand-written in asm (Milestone B, path B) -> RUN
     # /bin/cc.bin SRC.C >OUT.ASM.  Chains with asm to compile C entirely on-target.
     python3 "$root/assembler/p8xasm.py" "$root/apps/p8xcc.asm" -o "$build/cc.bin" \
-        --base 0x7A00 >/dev/null
+        --base 0x6A00 >/dev/null
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/cc.bin" \
-        --name /bin/cc.bin --load 0x7A00 --exec 0x7A00 >/dev/null
+        --name /bin/cc.bin --load 0x6A00 --exec 0x6A00 >/dev/null
     # DEPRECATED — the self-hosted C FRONT END (cpp | lex | cc1, path A) is
     # superseded by the from-scratch native compiler `cc` (apps/p8xcc.asm), which
     # does the WHOLE compile on-target. Their sources are kept in the repo
@@ -204,17 +204,17 @@ if [ ! -f "$disk" ]; then
         # C-only for now — no hand-asm twin, so it's absent from the /bina loop.)
         python3 "$root/tools/clib.py" "$root/os/commands/$ex.c" -o "$build/$ex.c"
         python3 "$root/compiler/p8cc.py" "$build/$ex.c" -o "$build/$ex.asm" >/dev/null
-        python3 "$root/assembler/p8xasm.py" "$build/$ex.asm" -o "$build/$ex.bin" --base 0x7A00 >/dev/null
+        python3 "$root/assembler/p8xasm.py" "$build/$ex.asm" -o "$build/$ex.bin" --base 0x6A00 >/dev/null
         python3 "$root/tools/p8xfs.py" put "$disk" "$build/$ex.bin" \
-            --name "/bin/$ex.bin" --load 0x7A00 --exec 0x7A00 >/dev/null
+            --name "/bin/$ex.bin" --load 0x6A00 --exec 0x6A00 >/dev/null
     done
     # Hand-assembled versions -> /bina (os/commands-asm). mkasm.sh splices any
     # ;#use includes (lib_stdin/glob/regex/distab) just like clib.py does for C.
     for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch man dep dump disasm; do
         sh "$root/os/commands-asm/mkasm.sh" "$ex" > "$build/$ex.a.asm"
-        python3 "$root/assembler/p8xasm.py" "$build/$ex.a.asm" -o "$build/$ex.a.bin" --base 0x7A00 >/dev/null
+        python3 "$root/assembler/p8xasm.py" "$build/$ex.a.asm" -o "$build/$ex.a.bin" --base 0x6A00 >/dev/null
         python3 "$root/tools/p8xfs.py" put "$disk" "$build/$ex.a.bin" \
-            --name "/bina/$ex.bin" --load 0x7A00 --exec 0x7A00 >/dev/null
+            --name "/bina/$ex.bin" --load 0x6A00 --exec 0x6A00 >/dev/null
     done
     # /man: a Unix-style manual page per command (plain text in os/man/). The
     # `man` command (installed above) reads /man/<name>, so `man dir` works.
@@ -250,7 +250,7 @@ if [ ! -f "$disk" ]; then
     # run /bin/asm.bin hello.asm hello.bin, then run hello.bin -> prints HELLO.
     cat > "$build/hello.asm" <<'ASMEOF'
 ; sample program -- assemble with: run /bin/asm.bin hello.asm hello.bin
-        .org $7A00
+        .org $6A00
         LDP1 #msg
 lp:     LDA  (P1)+
         JZ   done

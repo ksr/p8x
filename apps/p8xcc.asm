@@ -54,8 +54,8 @@ FOPEN    = $0124   ; open the resolved file for reading (P1 = 512-byte buffer)
 FGETB    = $0127   ; next source byte -> A; C=1 at EOF
 SYS_PUTC = $2009   ; emit A to stdout (redirectable by the shell)
 RDBUF    = $FC00   ; FOPEN read buffer
-ROSTATE  = $705E   ; BIOS read-stream state (ROLBA..ROCNT, 13 contiguous bytes)
-ROSDRV   = $7085   ; BIOS read-stream drive (1 byte)
+ROSTATE  = $605E   ; BIOS read-stream state (ROLBA..ROCNT, 13 contiguous bytes)
+ROSDRV   = $6085   ; BIOS read-stream drive (1 byte)
 
 CR       = $0D
 LF       = $0A
@@ -65,7 +65,7 @@ MAXFUNC  = 64        ; capacity of FNPAR/FSLOT/FPOOL (see the BSS at end)
 ; a fixed high page — a high page collides with the OS/shell scratch used by the
 ; SYS_PUTC output-redirect path, corrupting state between calls.
 
-        .org $7A00
+        .org $6A00
 START:  TPA3L
         STA  STK0
         TPA3H
@@ -1537,7 +1537,7 @@ ai_done: LDA #0
 ; Parser + codegen (single pass; emits as it parses)
 ; =============================================================================
 COMPILE:
-        LDP1 #MORG                   ; .org $7A00
+        LDP1 #MORG                   ; .org $6A00
         JSR  EMIT
         LDP1 #MBOOT                  ; JSR _f_main ; RTS
         JSR  EMIT
@@ -4546,7 +4546,7 @@ KW_CONT: .asciiz "continue"
 
 ; whole-line mnemonics end with LF (8-space indent + text + newline)
 MORG:   .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii ".org $7A00"
+        .ascii ".org $6A00"
         .byte LF,0
 MLDAI:  .byte $20,$20,$20,$20,$20,$20,$20,$20   ; prefix: a number + MNL follow
         .asciiz "LDA #"

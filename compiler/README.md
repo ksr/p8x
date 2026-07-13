@@ -2,12 +2,12 @@
 
 A tiny C compiler that runs on the host and emits P8X assembly for
 [`assembler/p8xasm.py`](../assembler/p8xasm.py). Output targets the OS transient
-program area (`$7A00`), so a compiled program is a RUNnable `.BIN`.
+program area (`$6A00`), so a compiled program is a RUNnable `.BIN`.
 
 ```sh
 python3 compiler/p8cc.py prog.c -o prog.asm
-python3 assembler/p8xasm.py prog.asm -o prog.bin --base 0x7A00
-python3 tools/p8xfs.py put disk.img prog.bin --name /PROG.BIN --load 0x7A00 --exec 0x7A00
+python3 assembler/p8xasm.py prog.asm -o prog.bin --base 0x6A00
+python3 tools/p8xfs.py put disk.img prog.bin --name /PROG.BIN --load 0x6A00 --exec 0x6A00
 # then on the P8X:  RUN /PROG.BIN
 ```
 

@@ -4,7 +4,7 @@
 ; 40 x 256-byte slots, then prints them in order at EOF. Entry: P2 = arg tail.
 ;#use stdin
 
-        .org $7A00
+        .org $6A00
         LDA #10
         STA n
         LDA #0

@@ -23,7 +23,7 @@ build_disk() {   # $1 = vi binary -> vi.img with /SUB/READ.TXT + /VI.bin
     python3 $ROOT/tools/p8xfs.py mkdir  vi.img /SUB >/dev/null
     printf 'HELLOSUB\n' > read.dat
     python3 $ROOT/tools/p8xfs.py put vi.img read.dat --name /SUB/READ.TXT --load 0 --exec 0 >/dev/null
-    python3 $ROOT/tools/p8xfs.py put vi.img "$1" --name /VI.bin --load 0x7A00 --exec 0x7A00 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put vi.img "$1" --name /VI.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 }
 
 run_vi() {   # echoes vi's console output for: cd /SUB; vi READ.TXT; :q
@@ -41,13 +41,13 @@ check() {   # $1 = label
 # C twin (p8cc.py)
 python3 $ROOT/tools/clib.py $ROOT/os/commands/vi.c -o vi.pp.c   # splice //#use apath
 python3 $ROOT/compiler/p8cc.py vi.pp.c -o vi.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py vi.asm -o vi.bin --base 0x7A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py vi.asm -o vi.bin --base 0x6A00 >/dev/null
 build_disk vi.bin
 check "vi.c (p8cc)"
 
 # asm twin
 sh $ROOT/os/commands-asm/mkasm.sh vi > via.asm
-python3 $ROOT/assembler/p8xasm.py via.asm -o via.bin --base 0x7A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py via.asm -o via.bin --base 0x6A00 >/dev/null
 build_disk via.bin
 check "vi.asm (hand)"
 

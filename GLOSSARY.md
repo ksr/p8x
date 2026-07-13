@@ -18,7 +18,7 @@ across the P8X project. Authoritative sources where a term has one:
 | **ABI** | Application Binary Interface — the fixed binary contracts (entry addresses, layouts, conventions) that let separately-built code interoperate. See the BIOS jump table, the TPA, SBUF/LBA. |
 | **API** | Application Programming Interface — the *source*-level contract (vs ABI, the binary one). |
 | **BIOS** | The monitor's published service routines (jump table at `$0100`). |
-| **TPA** | Transient Program Area — RAM where `run`-loaded programs and the OS's `>`-redirect buffer live. `$7A00`. |
+| **TPA** | Transient Program Area — RAM where `run`-loaded programs and the OS's `>`-redirect buffer live. `$6A00`. |
 | **BOM** | Bill of Materials — the orderable parts list (`hardware/p8x-bom.csv`). |
 | **DNP** | Do Not Populate — a footprint laid down on the board but left unstuffed (provisioned for later). |
 | **DRC** | Design Rule Check — the EDA tool's electrical/clearance verification of a routed board. |
@@ -117,7 +117,7 @@ The word burned to the 4× 28C64 EPROMs and interpreted by the emulator. Bit map
 | **SRAM / RAM** | `$2000–$FEFF` (56 KB, rev E — 2× 62256). |
 | **SBUF** | 512-byte sector buffer at `$7100` (fixed by the BIOS — `CFWRITE` reads from it). |
 | **LBA** | Logical Block Address — the CF sector number; the BIOS reads the target LBA byte from a fixed `$7047`. |
-| **RBUF** | The OS's `>`-redirect capture buffer (= the TPA, `$7A00`). |
+| **RBUF** | The OS's `>`-redirect capture buffer (= the TPA, `$6A00`). |
 | **CONIN / CONOUT / CONST** | BIOS console in / out / status (`$0100/$0103/$0106`). |
 | **CFINIT / CFREAD / CFWRITE** | BIOS CompactFlash init / read-sector / write-sector (`$0109/$010C/$010F`). |
 | **CFSEL / CFCURDRV / DRVSEL** | Dual-volume drive select: `CFSEL` (`$0148`, `A`=0/1) routes sector/FS I/O to that CF card via the `DRVSEL` byte (ORed into `CFHEAD` as the ATA device-select bit); `CFCURDRV` (`$014B`) reads the current drive. Two cards share the `$FF10` task-file port. |

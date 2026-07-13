@@ -7,7 +7,7 @@
 # the whole point of the experiment: how much smaller is hand asm than the
 # current p8cc codegen?
 #
-# Both are assembled with the SAME assembler (assembler/p8xasm.py, --base 0x7A00)
+# Both are assembled with the SAME assembler (assembler/p8xasm.py, --base 0x6A00)
 # so the comparison is code size only. p8cc first splices //#use libs (clib.py).
 #
 #     sh os/commands-asm/compare.sh
@@ -40,12 +40,12 @@ for cmd in $ALL; do
     if [ -f "$CDIR/$cmd.c" ]; then
         $CLIB "$CDIR/$cmd.c" -o "$WORK/$cmd.pp.c" 2>/dev/null
         $CC "$WORK/$cmd.pp.c" -o "$WORK/${cmd}_c.asm" >/dev/null 2>&1
-        $ASM "$WORK/${cmd}_c.asm" -o "$WORK/${cmd}_c.bin" --base 0x7A00 >/dev/null 2>&1
+        $ASM "$WORK/${cmd}_c.asm" -o "$WORK/${cmd}_c.bin" --base 0x6A00 >/dev/null 2>&1
         csz=$(wc -c < "$WORK/${cmd}_c.bin" | tr -d ' ')
     fi
     if [ -f "$ADIR/$cmd.asm" ]; then
         sh "$ADIR/mkasm.sh" "$cmd" > "$WORK/${cmd}_full.asm"
-        $ASM "$WORK/${cmd}_full.asm" -o "$WORK/${cmd}_a.bin" --base 0x7A00 >/dev/null 2>&1
+        $ASM "$WORK/${cmd}_full.asm" -o "$WORK/${cmd}_a.bin" --base 0x6A00 >/dev/null 2>&1
         asz=$(wc -c < "$WORK/${cmd}_a.bin" | tr -d ' ')
     fi
     ratio="-"

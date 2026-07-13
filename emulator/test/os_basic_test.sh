@@ -14,12 +14,12 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osb.bin --base 0x2000 >/dev/null
 # TPA build: code @ $B000, data @ $C500, rebuild scratch @ $E000, BYE -> OS ($2000).
 python3 $ROOT/assembler/p8xasm.py $ROOT/basic/p8xbasic.asm -o basicrun.bin \
-        --base 0x7A00 -D BASORG=0x7A00 -D BASRAM=0xC500 -D PBUF=0xE000 -D MONITOR=0x2000 >/dev/null
+        --base 0x6A00 -D BASORG=0x6A00 -D BASRAM=0xC500 -D PBUF=0xE000 -D MONITOR=0x2000 >/dev/null
 
 rm -f ob.img
 python3 $ROOT/tools/p8xfs.py create ob.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   ob.img osb.bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    ob.img basicrun.bin --name BASIC.bin --load 0x7A00 --exec 0x7A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    ob.img basicrun.bin --name BASIC.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 
 out=$(printf 'B\rrun BASIC.bin\r10 PRINT "INBASIC"\rRUN\rBYE\rmkdir /Z\r' | \
       ../p8xemu -l 300000000 -c ob.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0')

@@ -15,7 +15,7 @@ cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/dev/null
 
-asm() { python3 $ROOT/assembler/p8xasm.py "$1" -o "$2" --base 0x7A00 >/dev/null; }
+asm() { python3 $ROOT/assembler/p8xasm.py "$1" -o "$2" --base 0x6A00 >/dev/null; }
 
 build_disk() {   # compile wc/grep/cat with $1 (py|host), build a disk
     for c in wc grep cat; do
@@ -28,9 +28,9 @@ build_disk() {   # compile wc/grep/cat with $1 (py|host), build a disk
     python3 $ROOT/tools/p8xfs.py create flt.img >/dev/null
     python3 $ROOT/tools/p8xfs.py boot   flt.img osc.bin >/dev/null
     python3 $ROOT/tools/p8xfs.py mkdir  flt.img /bin >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    flt.img wc.bin   --name /bin/wc.bin   --load 0x7A00 --exec 0x7A00 >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    flt.img grep.bin --name /bin/grep.bin --load 0x7A00 --exec 0x7A00 >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    flt.img cat.bin  --name /bin/cat.bin  --load 0x7A00 --exec 0x7A00 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    flt.img wc.bin   --name /bin/wc.bin   --load 0x6A00 --exec 0x6A00 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    flt.img grep.bin --name /bin/grep.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    flt.img cat.bin  --name /bin/cat.bin  --load 0x6A00 --exec 0x6A00 >/dev/null
     printf 'alpha\r\nbeta\r\ngamma alpha\r\n' > tf.dat
     python3 $ROOT/tools/p8xfs.py put    flt.img tf.dat --name T.TXT --load 0 --exec 0 >/dev/null
     # two .LOG files for the glob tests (read as one concatenated stream):

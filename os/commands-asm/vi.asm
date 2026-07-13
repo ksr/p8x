@@ -6,7 +6,7 @@
 ; include. BIOS: CONIN $0100, CONOUT $0103, FRESOLVE $0133, FOPEN $0124, FGETB
 ; $0127, FWOPEN $012A, FPUTB $012D, FCLOSE $0130. Entry: P2 = arg tail.
 
-        .org $7A00
+        .org $6A00
         TPA2L
         STA v_arg
         TPA2H

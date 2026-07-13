@@ -6,7 +6,7 @@
 ; no divide), matching wc.c's dm10/put24. Entry: P2 = arg tail.
 ;#use stdin
 
-        .org $7A00
+        .org $6A00
         TPA2L
         STA w_arg
         TPA2H

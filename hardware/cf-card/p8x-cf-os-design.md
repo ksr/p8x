@@ -73,7 +73,7 @@ A two-stage system: a permanent **BIOS in EEPROM**, and the **OS proper loaded f
 | $7047–$7049 | CF LBA, 24-bit little-endian (LBA0/LBA1/LBA2; fixed by the BIOS). LBA1/LBA2 default 0 after CFINIT — set them for sectors >255 |
 | $7100–$72FF | Sector buffer SBUF (512 bytes, fixed by the BIOS) |
 | $7300–$79FF | OS variables (~3.5 KB) |
-| $7A00–$FDFF | **TPA** — transient program area (~31.6 KB; RUN load addr + `>` capture) |
+| $6A00–$FDFF | **TPA** — transient program area (~37.9 KB; RUN load addr + `>` capture) |
 | $FE00–$FEFF | Stack page (P3, grows down from $FEFF) |
 | $FF00–$FFFF | I/O |
 

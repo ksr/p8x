@@ -81,7 +81,7 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 ## Programs (the program ABI)
 
 The OS ships only a shell + built-ins; bigger tools are **standalone programs**
-that load into the transient program area (TPA, `$7A00`) and are launched with
+that load into the transient program area (TPA, `$6A00`) and are launched with
 `run`. A fresh `os/run.sh` disk carries the three big interpreters/tools below
 under `/bin`, **plus the userland C commands** (`dir`, `pwd`, `tree`, `cat`,
 `wc`, `grep`, … — see [commands/README.md](commands/README.md)):
@@ -117,7 +117,7 @@ e.g. `path /bin;/UTIL` — but does not persist across reboots.)
   program name, NUL-terminated (e.g. `run EDIT FOO.ASM` enters with `P2` → `"FOO.ASM"`);
   programs that take no arguments just ignore `P2`;
 - a program built on-target (its entry's load/exec are `0`, as `FCREATE` writes)
-  is loaded at the TPA base `$7A00`, so assemble with `.org $7A00`. Host-installed
+  is loaded at the TPA base `$6A00`, so assemble with `.org $6A00`. Host-installed
   programs set explicit non-zero load/exec and load there instead.
 
 ## How it fits together

@@ -4,7 +4,7 @@
 ; success; usage on -h / empty; "dep: bad address" on a non-hex address.
 ; Entry: P2 = arg tail.  SYS_PUTS=$200F, SYS_PUTC=$2009.
 
-        .org $7A00
+        .org $6A00
 d_sk:   LDA (P2)                     ; skip leading spaces
         LDB #32
         CMP

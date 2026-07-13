@@ -23,7 +23,7 @@
 ; The CPU has no divide, so the size printer uses a divmod10 subtraction routine.
 ; Entry: P2 = arg tail.
 
-        .org $7A00
+        .org $6A00
 ; ======================= main ==============================================
         TPA2L
         STA m_arg

@@ -5,7 +5,7 @@
 ; include. BIOS: FRESOLVE $0133, FOPEN $0124, FGETB $0127. OS: SYS_GETCWD $2003.
 ; Entry: P2 = arg tail.
 
-        .org $7A00
+        .org $6A00
         TPA2L
         STA d_arg
         TPA2H

@@ -19,18 +19,18 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o bpos.bin --base 0x2000 >/dev/null
 python3 $ROOT/tools/clib.py $ROOT/os/commands/dir.c -o bpdir.pp.c >/dev/null
 python3 $ROOT/compiler/p8cc.py bpdir.pp.c -o bpdir.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py bpdir.asm -o bpdir.bin --base 0x7A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py bpdir.asm -o bpdir.bin --base 0x6A00 >/dev/null
 
 rm -f bp.img
 python3 $ROOT/tools/p8xfs.py create bp.img --v2 >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   bp.img bpos.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  bp.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    bp.img bpdir.bin --name /bin/dir.bin --load 0x7A00 --exec 0x7A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    bp.img bpdir.bin --name /bin/dir.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 # dep/save seed F.bin's content below; dep is now a /bin program, so install it.
 python3 $ROOT/tools/clib.py $ROOT/os/commands/dep.c -o bpdep.pp.c >/dev/null
 python3 $ROOT/compiler/p8cc.py bpdep.pp.c -o bpdep.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py bpdep.asm -o bpdep.bin --base 0x7A00 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    bp.img bpdep.bin --name /bin/dep.bin --load 0x7A00 --exec 0x7A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py bpdep.asm -o bpdep.bin --base 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    bp.img bpdep.bin --name /bin/dep.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 head -c 30000 /dev/zero > bppad.bin
 for i in 1 2 3 4 5 6 7 8; do python3 $ROOT/tools/p8xfs.py put bp.img bppad.bin --name /PAD$i >/dev/null; done
 python3 $ROOT/tools/p8xfs.py mkdir bp.img /BIG >/dev/null

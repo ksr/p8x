@@ -7,8 +7,8 @@ FGETB   = $0127
 FWOPEN  = $012A
 FPUTB   = $012D
 FCLOSE  = $0130
-HEXL    = $7042
-FNAME   = $704A
+HEXL    = $6042
+FNAME   = $604A
         .org $2000
         JSR  FWOPEN
         LDA  #'H'

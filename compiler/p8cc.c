@@ -1535,7 +1535,7 @@ int main() {
     slurp();
     lex();                                       /* prime the first token */
 
-    line("        .org $7A00");
+    line("        .org $6A00");
     line("        LDA #0"); line("        STA __csp");      /* __csp = $F800 */
     line("        LDA #248"); line("        STA __csp+1");
     line("        JSR _f_main");

@@ -11,7 +11,7 @@
 ;#use glob
 ;#use globx
 
-        .org $7A00
+        .org $6A00
         TPA2L
         STA m_arg
         TPA2H

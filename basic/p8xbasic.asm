@@ -41,11 +41,11 @@ FWOPEN  = $012A          ; open a write stream at the free pointer (uses SBUF)
 FPUTB   = $012D          ; append byte A to the write stream
 FCLOSE  = $0130          ; flush + register file FNAME (len = bytes written); C=1 if full
 FNORM   = $0136          ; copy string (P1) -> FNAME, case-preserved, space-padded to 12
-LBA     = $7047          ; CFREAD target LBA (byte 0); LBA1 = byte 1
-LBA1    = $7048
-FNAME   = $704A          ; 12-byte filename (space-padded)
-FSRC    = $7056          ; FCREATE source address
-FLEN    = $7058          ; file length in bytes
+LBA     = $6047          ; CFREAD target LBA (byte 0); LBA1 = byte 1
+LBA1    = $6048
+FNAME   = $604A          ; 12-byte filename (space-padded)
+FSRC    = $6056          ; FCREATE source address
+FLEN    = $6058          ; file length in bytes
 
 LBUF   = BASRAM+$00          ; input line buffer
 NUM1   = BASRAM+$60          ; 16-bit math operands / results

@@ -4,7 +4,7 @@
 ; Memory-only (no filesystem). Entry: P2 = arg tail.
 ; BIOS CONIN=$0100.  SYS_PUTS=$200F, SYS_PUTC=$2009.
 
-        .org $7A00
+        .org $6A00
 u_sk:   LDA (P2)                     ; skip leading spaces
         LDB #32
         CMP
