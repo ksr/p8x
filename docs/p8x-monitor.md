@@ -133,7 +133,7 @@ correctly.)
 |-------|-----|
 | `$0000–$3FFF` | EEPROM (16 KB, rev D) — monitor + BIOS at `$0000` (~4.3 KB used). BASIC is no longer ROM-resident; it ships as `/BIN/BASIC.BIN` on disk. |
 | `$4000–$6FFF` | RAM — **P8X/OS code** loads here (`$4000`, ~8.3 KB). |
-| `$7000–$72FF` | RAM — **firmware/BIOS scratch** (fixed by the BIOS): monitor line buffer `$7000`, the parameter block + read/write/dir-iteration state `$7040` (CF `LBA` `$7047–$7049`, `FNAME` `$704A`, `FSRC`/`FLEN`, `FFLAG` `$7070`, `DIBUFH` `$7078`), and the sector buffer `SBUF` at `$7100`. |
+| `$7000–$72FF` | RAM — **firmware/BIOS scratch** (fixed by the BIOS): monitor line buffer `$7000`, the parameter block + read/write/dir-iteration state `$7040` (CF `LBA` `$7047–$7049`, `FNAME` `$704A`, `FSRC`/`FLEN`, `FFLAG` `$7075`, `DIBUFH` `$707E`), and the sector buffer `SBUF` at `$7100`. |
 | `$7300–$79FF` | RAM — **OS data**: variables `$7300`, the stdin read buffer `IBUF` `$7500`, search `PATH` `$7700`, the `>>` prepend buffer `APBUF` `$7800`. |
 | `$7A00–$FDFF` | RAM — **TPA**: user programs + data (`RUN` loads at `$7A00`, ~31.6 KB). Commands keep their 512-byte scratch buffers near the top — the file-read buffer at `$FC00` and the glob/dir-iteration buffer at `$FA00`. |
 | `$FE00–$FEFF` | RAM — stack (P3 grows down from `$FEFF`). |

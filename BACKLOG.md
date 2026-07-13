@@ -215,11 +215,11 @@ Last updated: 2026-07-08
       runs the script `/src/mk/<target>` through the `sh` streaming engine (one
       file per target, always-rebuild, no deps). That already covers per-command
       builds (`make dir` = both twins), group builds (`c`/`asm`/`all`), and now
-      `installc`/`installasm`. A "real" make — parse a single `Makefile` with
+      `installc`/`installa`. A "real" make — parse a single `Makefile` with
       `target:` blocks, prerequisites, and a default `all` — would be a genuine new
       feature (a mini-make parser in the OS `make` built-in or a `/bin/make`
       program) and buys little over the target-per-file model. Deferred; revisit
-      only if Makefile syntax itself is wanted. See the `installc`/`installasm`
+      only if Makefile syntax itself is wanted. See the `installc`/`installa`
       targets (DONE 2026-07-12) for the current publish workflow.
 
 - [ ] **Move `tools/clib.py` -> `compiler/clib.py`.** clib.py is a C-toolchain

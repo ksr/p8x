@@ -7,8 +7,8 @@ SYNOPSIS
 DESCRIPTION
     Prints three counts -- lines, words, bytes -- for a file, for the
     combined content of a glob, or for standard input. Lines are counted
-    by newline (LF); words are whitespace-delimited runs. wc is a /bin
-    program.
+    by newline (LF); words are whitespace-delimited runs. Counts are 24-bit
+    (files may be up to 16 MB). wc is a /bin program.
 
 EXAMPLES
     wc T.TXT             "L W B" for one file

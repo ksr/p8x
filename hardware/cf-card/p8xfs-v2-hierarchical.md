@@ -26,7 +26,7 @@ flag byte says "directory."
 |---|---|---|
 | 0–11 | 12 | Name, ASCII, space-padded. '/' forbidden in names |
 | 12–15 | 4 | Start LBA |
-| 16–19 | 4 | Length in bytes (for a directory: allocated size) |
+| 16–19 | 4 | Length in bytes (for a directory: allocated size). The BIOS uses the low 24 bits → max file 16 MB |
 | 20–21 | 2 | Load address (files only) |
 | 22–23 | 2 | Exec address (files only) |
 | 24 | 1 | **Flags**: $00 = end-of-directory marker, $01 = file, $02 = directory, $FF = deleted |

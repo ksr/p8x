@@ -258,7 +258,7 @@ from C, the `p8cc` `bios()` intrinsic). The table is **append-only**:
 | `$4012` | `SYS_OPENCWD` | begin iterating the CWD with its full **16-bit** start LBA (then `FNEXT`); works when the CWD lives at LBA ≥ 256, where `SYS_CWDLBA` + `FOPENDIRAT(A)` would truncate |
 | `$4015` | `SYS_SETDRIVE` | *(deprecated in the mount model — the drive follows the CWD's path; kept only as an ABI-stable slot)* |
 | `$4018` | `SYS_GETDRIVE` | → `A` = 1 if the CWD is under the `/d1` mount (drive 1), else 0 |
-| `$401B` | `SYS_DIRENTRY` | snapshot the entry `FNEXT`/`FFIND` just matched into `(P1)` — 17 bytes: name[12], flag, len(lo/hi), start-LBA(lo/hi). Lets commands read directory metadata without hardcoding BIOS scratch addresses |
+| `$401B` | `SYS_DIRENTRY` | snapshot the entry `FNEXT`/`FFIND` just matched into `(P1)` — 18 bytes: name[12], flag, len(lo/mid), start-LBA(lo/hi), len(hi) — a 24-bit length. Lets commands read directory metadata without hardcoding BIOS scratch addresses |
 | `$401E` | `SYS_OPENDIR` | begin iterating the directory whose 16-bit start LBA is in `P1` (then `FNEXT`); the drive-agnostic way to descend into a subdirectory found via `SYS_DIRENTRY` |
 | `$4021` | `SYS_MKDIR` | create the directory named by the path in `P1` (applies the `/d1` mount); `C=1` on real failure, idempotent if it already exists. Lets a `/bin` program (`cp -r`) make directories |
 

@@ -29,7 +29,7 @@ DESCRIPTION
     hand-asm command is assembled from /src/commands/asm/NAME.asm.
     The binaries land under /src/commands/{c,asm}/bin. Nothing is live
     until you install it: `make dir` then `make installc` (or
-    `make installasm`) copies the chosen twin over /bin.
+    `make installa`) copies the chosen twin over /bin.
 
 EXAMPLES
     make pwd
