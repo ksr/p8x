@@ -49,10 +49,10 @@
 ; ---- BIOS / OS ----
 FSDIRBUF = $0145   ; repoint the directory-scan buffer (A = page) off SBUF
 FRESOLVE = $0133   ; resolve a path -> dir extent + leaf FNAME (P1 = path)
-SYS_GETCWD = $4003 ; OS: write the CWD path (NUL-terminated) to (P1)
+SYS_GETCWD = $2003 ; OS: write the CWD path (NUL-terminated) to (P1)
 FOPEN    = $0124   ; open the resolved file for reading (P1 = 512-byte buffer)
 FGETB    = $0127   ; next source byte -> A; C=1 at EOF
-SYS_PUTC = $4009   ; emit A to stdout (redirectable by the shell)
+SYS_PUTC = $2009   ; emit A to stdout (redirectable by the shell)
 RDBUF    = $FC00   ; FOPEN read buffer
 ROSTATE  = $705E   ; BIOS read-stream state (ROLBA..ROCNT, 13 contiguous bytes)
 ROSDRV   = $7085   ; BIOS read-stream drive (1 byte)
@@ -3732,18 +3732,18 @@ M_POKE:  .asciiz "poke"
 M_ARGSTR: .asciiz "argstr"
 MPUTS:
         .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "JSR $400F"
+        .ascii "JSR $200F"
         .byte LF,0
 MPUTNL:
         .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "LDA #10"
         .byte LF
         .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "JSR $4009"
+        .ascii "JSR $2009"
         .byte LF,0
 MGETC:
         .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "JSR $400C"
+        .ascii "JSR $200C"
         .byte LF
         .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "STA __ax"
@@ -4668,7 +4668,7 @@ MPUTC:  .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "LDA __ax"
         .byte LF
         .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "JSR $4009"
+        .ascii "JSR $2009"
         .byte LF,0
 MRTS:   .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "RTS"

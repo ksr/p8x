@@ -237,11 +237,11 @@ t_pl:   LDA (P1)
         LDB #0
         CMP
         JZ t_peol
-        JSR $4009
+        JSR $2009
         INP1
         JMP t_pl
 t_peol: LDA #10
-        JSR $4009
+        JSR $2009
         LDA base
         INC
         STA base
@@ -261,18 +261,18 @@ t_nf:   LDA #<u_nf
         LDA #>u_nf
         TAP1H
         LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 t_usage:LDA #<u_use
         TAP1L
         LDA #>u_use
         TAP1H
         LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 
 t_ainc: LDA t_arg

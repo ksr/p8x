@@ -1,7 +1,7 @@
 #!/bin/sh
 # Run BASIC as a P8X/OS program: build a TPA-resident BASIC (code+data+scratch all
-# in $B000.., clear of the OS at $4000-$AFFF) whose BYE returns to the OS cold
-# start ($4000) instead of the ROM monitor. Install it on the disk as BASIC.bin
+# in $B000.., clear of the OS at $2000-$AFFF) whose BYE returns to the OS cold
+# start ($2000) instead of the ROM monitor. Install it on the disk as BASIC.bin
 # (load/exec $B000), boot the OS, RUN it, run a tiny program, and BYE back to the
 # OS shell — proving it round-trips without disturbing the resident OS.
 set -e
@@ -11,10 +11,10 @@ UC=../../microcode
 
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
-python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osb.bin --base 0x4000 >/dev/null
-# TPA build: code @ $B000, data @ $C500, rebuild scratch @ $E000, BYE -> OS ($4000).
+python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osb.bin --base 0x2000 >/dev/null
+# TPA build: code @ $B000, data @ $C500, rebuild scratch @ $E000, BYE -> OS ($2000).
 python3 $ROOT/assembler/p8xasm.py $ROOT/basic/p8xbasic.asm -o basicrun.bin \
-        --base 0x7A00 -D BASORG=0x7A00 -D BASRAM=0xC500 -D PBUF=0xE000 -D MONITOR=0x4000 >/dev/null
+        --base 0x7A00 -D BASORG=0x7A00 -D BASRAM=0xC500 -D PBUF=0xE000 -D MONITOR=0x2000 >/dev/null
 
 rm -f ob.img
 python3 $ROOT/tools/p8xfs.py create ob.img >/dev/null

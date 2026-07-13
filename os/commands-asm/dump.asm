@@ -2,7 +2,7 @@
 ;   DUMP addr   show 256 bytes from hex address addr (16 rows, hex + ASCII).
 ; After each block waits for a console key: '.' returns, else next block.
 ; Memory-only (no filesystem). Entry: P2 = arg tail.
-; BIOS CONIN=$0100.  SYS_PUTS=$400F, SYS_PUTC=$4009.
+; BIOS CONIN=$0100.  SYS_PUTS=$200F, SYS_PUTC=$2009.
 
         .org $7A00
 u_sk:   LDA (P2)                     ; skip leading spaces
@@ -45,9 +45,9 @@ u_row:  LDA ADHI                     ; "AAAA: "
         LDA ADLO
         JSR OPH8
         LDA #':'
-        JSR $4009
+        JSR $2009
         LDA #32
-        JSR $4009
+        JSR $2009
         LDA ADLO                     ; P1 = addr, 16 hex bytes
         TAP1L
         LDA ADHI
@@ -57,13 +57,13 @@ u_row:  LDA ADHI                     ; "AAAA: "
 u_hex:  LDA (P1)+
         JSR OPH8
         LDA #32
-        JSR $4009
+        JSR $2009
         LDA CNT
         DEC
         STA CNT
         JNZ u_hex
         LDA #32
-        JSR $4009
+        JSR $2009
         LDA ADLO                     ; P1 = addr again, 16 ASCII bytes
         TAP1L
         LDA ADHI
@@ -82,15 +82,15 @@ u_asc:  LDA (P1)+
         LDA ATMP
         JMP u_put
 u_dot:  LDA #'.'
-u_put:  JSR $4009
+u_put:  JSR $2009
         LDA CNT
         DEC
         STA CNT
         JNZ u_asc
         LDA #13
-        JSR $4009
+        JSR $2009
         LDA #10
-        JSR $4009
+        JSR $2009
         LDA ADLO                     ; addr += 16
         LDB #16
         ADD
@@ -114,18 +114,18 @@ u_bad:  LDA #<m_bad
         LDA #>m_bad
         TAP1H
         LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 u_use:  LDA #<m_use
         TAP1L
         LDA #>m_use
         TAP1H
         LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 
 ; OPH8: print A as two hex digits (to SYS_PUTC).
@@ -144,11 +144,11 @@ ONIB:   LDB #10
         JC on_hex
         LDB #'0'
         ADD
-        JSR $4009
+        JSR $2009
         RTS
 on_hex: LDB #$37
         ADD
-        JSR $4009
+        JSR $2009
         RTS
 
 ; GETHEX: skip spaces at (P2), parse hex digits -> HXLO/HXHI, advance P2.

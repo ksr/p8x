@@ -15,7 +15,7 @@ fail() { echo "OS-BIGDIR TEST: FAIL — $1"; [ -n "$out" ] && echo "$out" | sed 
 
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
-python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o bdos.bin --base 0x4000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o bdos.bin --base 0x2000 >/dev/null
 # The C DIR is a /bin program (no longer a built-in); install it so a bare `DIR`
 # resolves via PATH and lists the CWD through SYS_OPENCWD (the 16-bit CWD opener).
 python3 $ROOT/tools/clib.py $ROOT/os/commands/dir.c -o bddir.pp.c >/dev/null

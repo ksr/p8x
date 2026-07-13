@@ -1144,13 +1144,13 @@ ic={"U1":("MEM28K8","28C256"),"U2":("MEM28K8","62256"),
  "U3":("74245","74HCT245"),"U4":("7430","74HCT30"),
  "U5":("74138","DOE DEC"),"U6":("74138","DLD DEC"),
  "U7":("GATES14","74HCT00"),"U8":("GATES14","74HCT32"),"U9":("GATES14","74HCT08"),
- "U10":("MEM28K8","62256")}   # rev D: 2nd SRAM, RAM grows to 48K ($4000-$FEFF)
+ "U10":("MEM28K8","62256")}   # rev E: 2nd SRAM, RAM $2000-$FEFF (56K); U10 low 24K used
 sm={"RP1":("RES","1K"),"LED3":("LED","PWR-GRN"),
  "RS1":("RES","1K"),"LED2":("LED","ROM-YEL"),
  "RS2":("RES","1K"),"LED4":("LED","RAM-YEL"),
  "RS3":("RES","1K"),"LED5":("LED","RD-GRN"),
  "RS4":("RES","1K"),"LED6":("LED","WR-RED"),
- "RS5":("RES","1K"),"LED7":("LED","RAM2-YEL"),   # rev D: U10 ($4000-$7FFF) bank LED
+ "RS5":("RES","1K"),"LED7":("LED","RAM2-YEL"),   # rev E: U10 ($2000-$7FFF) bank LED
  # ROM write-protect jumper (3-pin select on the 28C256 !WE: 1-2 = -WE writable
  # [default], 2-3 = VCC write-protected; RAM stays on -WE).
  "JWP":("HDR3","ROM-WP")}
@@ -1168,15 +1168,20 @@ for i in range(16):
     mnet("A%d"%i,*pins)
 mnet("-IOPG",("U4","Y"),("U7","1B"))
 mnet("-RAMCE",("U7","1Y"),("U2","!CE"))
-# rev D memory map: 16K ROM ($0000-$3FFF) + 48K RAM ($4000-$FEFF) across two 62256.
-#   U1  28C256 ROM   !CE = OR(A15,A14)   -> $0000-$3FFF   (low 16K of the EEPROM)
-#   U10 62256  RAM   !CE = NAND(!A15,A14) -> $4000-$7FFF  (the added 16K)
-#   U2  62256  RAM   !CE = -RAMCE          -> $8000-$FEFF (unchanged; I/O page carved out)
+# rev E memory map: 8K ROM ($0000-$1FFF) + 56K RAM ($2000-$FEFF) across two 62256.
+#   U1  ROM(8K)  !CE = OR3(A13,A14,A15)      -> $0000-$1FFF  (8K window; A13 added)
+#   U10 62256    !CE = OR(A15, NOR(A13,A14)) -> $2000-$7FFF  (low 24K used; deselected
+#                                                             in the $0000-$1FFF ROM page)
+#   U2  62256    !CE = -RAMCE                 -> $8000-$FEFF (unchanged; I/O page carved out)
+# rev E vs rev D: the ROM window halved (A13 now in the ROM decode) and the RAM floor
+# dropped to $2000, so the OS loads at $2000. NOTE: rev E needs A13 routed to the
+# decode plus one extra 2-input gate over rev D (rev D's spares are used up) — add a
+# 74HCT32/74HCT02 gate for OR3(A13..A15)+NOR(A13,A14); finalize at board layout.
 mnet("ROMCE",("U8","4Y"),("U1","!CE"),("U8","3A"))   # U8.4 = OR(A15,A14); also ROM-LED select
 mnet("A15N",("U7","2Y"),("U7","3A"))                  # U7.2 = NAND(A15,A15) = !A15
 mnet("-RAM2CE",("U7","3Y"),("U10","!CE"),("U7","4A"),("U7","4B"))   # U7.3 = NAND(!A15,A14); also feed the bank LED inverter
 # U10 bank-select LED: U7's last spare NAND inverts -RAM2CE to active-high
-# (HIGH when $4000-$7FFF is addressed) and sources the LED through RS5. (It's a
+# (HIGH when $2000-$7FFF is addressed) and sources the LED through RS5. (It's a
 # select indicator, not -BOE-gated like ROM/RAM/RD/WR — only one spare gate left.)
 mnet("RAM2ON",("U7","4Y"),("RS5","1"))
 mnet("LEDRA2",("RS5","2"),("LED7","A"))

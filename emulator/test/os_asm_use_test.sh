@@ -12,7 +12,7 @@ fail() { echo "OS-ASM-USE TEST: FAIL — $1"; exit 1; }
 
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
-python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osu.bin --base 0x4000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osu.bin --base 0x2000 >/dev/null
 # the on-target assembler itself (logic + generated opcode table)
 python3 $ROOT/generators/gen_p8xopc.py > opctab.asm
 cat $ROOT/apps/p8xasm.asm opctab.asm > asmfull.asm

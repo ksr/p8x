@@ -6,8 +6,8 @@
 ; A `*`/`?` source is expanded (lib_globx) and each match moved into the dst dir
 ; (which must exist). BIOS: FRESOLVE $0133, FOPEN $0124, FGETB $0127, FWOPEN
 ; $012A, FPUTB $012D, FCLOSE $0130, FDELETE $011E, FOPENDIR $0139, FNEXT $013C,
-; FSDIRBUF $0145, SYS_DIRENTRY $401B. OS: SYS_GETCWD $4003, SYS_OPENCWD $4012,
-; SYS_PUTS $400F, SYS_PUTC $4009. Read buf $FC00. Entry: P2 = arg tail.
+; FSDIRBUF $0145, SYS_DIRENTRY $201B. OS: SYS_GETCWD $2003, SYS_OPENCWD $2012,
+; SYS_PUTS $200F, SYS_PUTC $2009. Read buf $FC00. Entry: P2 = arg tail.
 ;#use glob
 ;#use globx
 
@@ -279,9 +279,9 @@ mv_nomatch:
         LDA #>u_nomat
         TAP1H
 mv_put: LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 
 ; move_one: copy mo_s -> mo_d then delete mo_s. A = 1 not found / 0 ok.
@@ -475,7 +475,7 @@ abspath:LDA #0
         LDA ap_out+1
         TAP1H
         LDA #0
-        JSR $4003
+        JSR $2003
         LDA ap_out
         TAP1L
         LDA ap_out+1

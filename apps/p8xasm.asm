@@ -41,7 +41,7 @@ FPUTB   = $012D   ; append a byte to the output stream
 FCLOSE  = $0130   ; flush + register the output file FNAME; C=1 if full
 FRESOLVE= $0133   ; resolve a path (P1) -> dir extent + leaf FNAME (for ;#use)
 FSDIRBUF= $0145   ; repoint directory scans (FSCAN/FFIND/FNEXT) at page A
-SYS_GETCWD = $4003 ; OS: write the CWD path (NUL-terminated) to (P1)
+SYS_GETCWD = $2003 ; OS: write the CWD path (NUL-terminated) to (P1)
 LBA     = $7047
 LBA1    = $7048
 LBA2    = $7049

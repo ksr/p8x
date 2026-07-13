@@ -16,7 +16,7 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/
 
 cat > cf2.asm <<'EOF'
         ; Position-independent (fixed BIOS/ABI addresses only): assembles at org 0,
-        ; planted at LBA 1, booted to $4000. drive 0 was CFINIT'd by the boot.
+        ; planted at LBA 1, booted to $2000. drive 0 was CFINIT'd by the boot.
         ; Marker $B0 -> drive0 LBA 40.
         LDA  #40
         STA  $7047

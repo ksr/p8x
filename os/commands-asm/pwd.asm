@@ -6,9 +6,9 @@
 ;
 ; ABI (same as a p8cc-compiled command):
 ;   entry at $7A00; P2 = pointer to the command-argument tail (NUL-terminated).
-;   SYS_GETCWD = $4003 (P1 = dest buffer, copies CWD incl. NUL).
-;   SYS_PUTS   = $400F (P1 = string) prints the string (no newline).
-;   SYS_PUTC   = $4009 (A = char).  puts() = SYS_PUTS then SYS_PUTC(10).
+;   SYS_GETCWD = $2003 (P1 = dest buffer, copies CWD incl. NUL).
+;   SYS_PUTS   = $200F (P1 = string) prints the string (no newline).
+;   SYS_PUTC   = $2009 (A = char).  puts() = SYS_PUTS then SYS_PUTC(10).
 ;   return to the OS with RTS.
 ;
 ;   python3 assembler/p8xasm.py os/commands-asm/pwd.asm -o pwd.bin --base 0x7A00
@@ -43,23 +43,23 @@ _pwd:   LDA #<_buf
         TAP1L
         LDA #>_buf
         TAP1H
-        JSR $4003                            ; SYS_GETCWD -> _buf
+        JSR $2003                            ; SYS_GETCWD -> _buf
         LDA #<_buf
         TAP1L
         LDA #>_buf
         TAP1H
-        JSR $400F                            ; SYS_PUTS
+        JSR $200F                            ; SYS_PUTS
         LDA #10
-        JSR $4009                            ; newline
+        JSR $2009                            ; newline
         RTS
 ; ---- -h usage --------------------------------------------------------------
 _usage: LDA #<_msg
         TAP1L
         LDA #>_msg
         TAP1H
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 
 _msg:   .asciiz "usage: PWD   print the working directory path"

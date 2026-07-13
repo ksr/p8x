@@ -25,7 +25,7 @@
  * p8cc.c subset. NOT pulled into dir/find (they only //#use glob), so it doesn't
  * bloat those size-tight recursive commands.
  *
- * BIOS: FOPENDIR=$0139, FNEXT=$013C, FSDIRBUF=$0145; OS: SYS_OPENCWD=$4012.
+ * BIOS: FOPENDIR=$0139, FNEXT=$013C, FSDIRBUF=$0145; OS: SYS_OPENCWD=$2012.
  */
 //#use glob     /* gmatch(pat,name) — clib.py splices it above (recursive //#use) */
 //#use dirent   /* de_read/de_isfile/de_isdot: current entry via SYS_DIRENTRY */
@@ -61,7 +61,7 @@ int glob_expand(char *pat, char *out, int maxn) {
     leaf[j] = 0;
 
     if (hasslash) { bios(0x0139, dir, 0); }  /* FOPENDIR(dir) */
-    else { bios(0x4012, 0, 0); }             /* SYS_OPENCWD */
+    else { bios(0x2012, 0, 0); }             /* SYS_OPENCWD */
     bios(0x0145, 0, 0xFA);                   /* FSDIRBUF: iterate on page $FA (high TPA) */
 
     cnt = 0;

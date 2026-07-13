@@ -1,4 +1,4 @@
-; BIOS read-stream exerciser — planted as the "OS" at LBA 1, booted to $4000.
+; BIOS read-stream exerciser — planted as the "OS" at LBA 1, booted to $2000.
 ; Creates root file "T" holding "FSOK" (FCREATE), then opens it with FOPEN and
 ; reads it back a byte at a time with FGETB, echoing each byte. Clean output is
 ; "FSOK"; 'E' on any error.
@@ -10,7 +10,7 @@ HEXL    = $7042
 FNAME   = $704A
 FSRC    = $7056
 FLEN    = $7058
-        .org $4000
+        .org $2000
         LDP1 #FNAME         ; FNAME = "T" + 11 spaces
         LDA  #'T'
         STA  (P1)+

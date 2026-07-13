@@ -11,7 +11,7 @@ UC=../../microcode
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
 python3 $ROOT/assembler/p8xasm.py $ROOT/basic/p8xbasic.asm -o basicdisk.bin \
-        --base 0x4000 -D BASORG=0x4000 -D BASRAM=0xA000 >/dev/null
+        --base 0x2000 -D BASORG=0x2000 -D BASRAM=0xA000 >/dev/null
 rm -f sl.img
 python3 $ROOT/tools/p8xfs.py create sl.img >/dev/null            # empty v2 volume
 python3 $ROOT/tools/p8xfs.py boot   sl.img basicdisk.bin >/dev/null   # bootable BASIC

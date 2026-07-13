@@ -1,23 +1,26 @@
 # Memory Card — Theory of Operation
 
-The memory card is the P8X's address space. **Rev D** map: a 16 KB EEPROM window
-(`$0000–$3FFF`, holding the monitor + BIOS) and **48 KB of SRAM**
-(`$4000–$FEFF`) across two 62256 chips. It decodes the address bus to decide which
+The memory card is the P8X's address space. **Rev E** map: an 8 KB ROM window
+(`$0000–$1FFF`, holding the monitor + BIOS) and **56 KB of SRAM**
+(`$2000–$FEFF`) across two 62256 chips. It decodes the address bus to decide which
 chip — if any — responds, steers a bidirectional data buffer the right way for
 reads vs writes, and includes a jumper to write-protect the ROM.
 
 | Region | Range | Size | Chip | `!CE` decode |
 |--------|-------|------|------|--------------|
-| ROM | `$0000–$3FFF` | 16 KB | U1 28C256 (low half) | `A15 OR A14` |
-| RAM | `$4000–$7FFF` | 16 KB | U10 62256 (rev D, new) | `NAND(!A15, A14)` |
+| ROM | `$0000–$1FFF` | 8 KB | U1 28C64 (or low 8 K of a 28C256) | `A13 OR A14 OR A15` |
+| RAM | `$2000–$7FFF` | 24 KB | U10 62256 (low 24 K used) | `A15 OR NOR(A13, A14)` |
 | RAM | `$8000–$FEFF` | 32 KB | U2 62256 | `NAND(A15, -IOPG)` |
 | I/O | `$FF00–$FFFF` | — | (other cards) | — |
 
-> Rev D shrank the ROM window to 16 KB and added the second SRAM (U10) to grow RAM
-> to 48 KB — the EEPROM still holds the same image (only its low 16 KB is now
-> addressable), and the new decode reuses spare gates in U7/U8 (no added logic IC).
+> Rev E shrank the ROM window to 8 KB (`$0000–$1FFF`) and moved the RAM floor down
+> to `$2000`, growing usable RAM to 56 KB and freeing `$2000–$3FFF` (formerly the
+> upper ROM window) for the OS — which now loads at `$2000`. U10 covers the low
+> 32 K address space; ROM overlays its bottom 8 K, so only `$2000–$7FFF` (24 K) of
+> U10 is reachable. The ROM decode gains A13 (an 8 K, not 16 K, window); the RAM-low
+> decode deselects U10 in the ROM region (`NOR(A13,A14)` = the `$0000–$1FFF` page).
 
-> Source of truth: the `# MEMORY CARD rev D` section of
+> Source of truth: the `# MEMORY CARD rev E` section of
 > [`../../generators/gen_eagle.py`](../../generators/gen_eagle.py). Like every
 > other logic card it is now built through the shared `card()` helper; its
 > functional netlist is assembled with a local `mnet` helper and handed to
@@ -50,8 +53,8 @@ reads vs writes, and includes a jumper to write-protect the ROM.
 ## 2. Block diagram
 
 ```
-  A15,A14 ─► U8 OR  ──────────────────────────► U1 28C256 !CE  (ROM=$0000-3FFF: A15=A14=0)
-  A15,A14 ─► U7 NAND(!A15,A14) ───────────────► U10 62256 !CE (RAM=$4000-7FFF)
+  A15,A14 ─► U8 OR  ──────────────────────────► U1 ROM !CE  (ROM=$0000-1FFF: A13=A14=A15=0)
+  A15,A14 ─► U7 (A15 OR NOR(A13,A14)) ───────────────► U10 62256 !CE (RAM=$2000-7FFF)
                      │
   A8..A15 ─► ┌───────▼────┐ -IOPG    ┌─────────┐ -RAMCE
              │U4 7430 NAND├─────────►│U7 74HC00├─────────► U2 62256 !CE (RAM=$8000-FEFF)
@@ -77,22 +80,23 @@ reads vs writes, and includes a jumper to write-protect the ROM.
 
 ## 3. How it works
 
-### 3.1 Address decode — who responds (rev D)
-The top two address bits, **A15** and **A14**, pick the region:
+### 3.1 Address decode — who responds (rev E)
+The top three address bits, **A15/A14/A13**, pick the region:
 
-- **ROM** (`U1` 28C256): `!CE = A15 OR A14` (`U8` spare OR gate). Active-low only
-  when both are 0, so the EEPROM responds for `$0000–$3FFF`. Its A14 pin is then
-  always 0 when selected, so only the low 16 KB of the 32 KB part is used.
-- **New SRAM** (`U10` 62256): `!CE = NAND(!A15, A14)` (`U7` spare NAND gates — one
-  inverts A15, one ANDs it with A14). Responds for `$4000–$7FFF`.
+- **ROM** (`U1`, 8 KB): `!CE = A13 OR A14 OR A15`. Active-low only when all three
+  are 0, so the ROM responds for `$0000–$1FFF` (8 KB). A 28C64 fits exactly; a
+  28C256 works too with only its low 8 KB reachable.
+- **Low SRAM** (`U10` 62256): `!CE = A15 OR NOR(A13, A14)` — active-low when A15=0
+  **and** (A13 or A14)=1, i.e. `$2000–$7FFF`. The `NOR(A13,A14)` term deselects U10
+  across the `$0000–$1FFF` ROM page so ROM and RAM never both drive the bus.
 - **Main SRAM** (`U2` 62256): `!CE = -RAMCE = NAND(A15, -IOPG)`, unchanged. `U4`
   (a 7430 8-input NAND) asserts `-IOPG` low for an `$FFxx` address (A8–A15 all
   high); the RAM responds when A15 = 1 **and** it is not the I/O page. That
   carve-out keeps the RAM from fighting the I/O and CF cards at `$FF00–$FFFF`.
 
 So the decode yields four regions:
-- `$0000–$3FFF` → EEPROM (16 KB)
-- `$4000–$7FFF` → SRAM U10 (16 KB, rev D)
+- `$0000–$1FFF` → ROM (8 KB)
+- `$2000–$7FFF` → SRAM U10 ($2000–$7FFF, 24 KB, rev E)
 - `$8000–$FEFF` → SRAM U2 (32 KB)
 - `$FF00–$FFFF` → neither responds here (the I/O and CF cards do)
 
@@ -128,21 +132,21 @@ ROM `!WE`.)
 
 ### 3.5 Status LEDs
 `U8` and `U9` spare gates also drive activity LEDs: ROM-select, RAM-select, RD, and
-WR, which is invaluable during bring-up to *see* the bus cycles. **Rev D** adds a
-**RAM2** LED for the new `$4000–$7FFF` bank: `U7`'s last spare gate (a NAND wired
+WR, which is invaluable during bring-up to *see* the bus cycles. **Rev E** keeps the
+**RAM2** LED for the new `$2000–$7FFF` bank: `U7`'s last spare gate (a NAND wired
 as an inverter) flips `-RAM2CE` to active-high and sources the LED through `RS5`.
 Unlike the others it isn't `-BOE`-gated (no spare gate left for that), so it's a
-bank-*select* indicator — it lights whenever an address in `$4000–$7FFF` is driven.
+bank-*select* indicator — it lights whenever an address in `$2000–$7FFF` is driven.
 
 ---
 
-## 4. Worked example — fetching an opcode at `$2000`
+## 4. Worked example — fetching an opcode at `$0100`
 
-1. The register bank drives `A0–15 = $2000` (the PC). A15 = 0 → `U1` (ROM) `!CE`
-   active; `-IOPG` is high (not `$FFxx`) so RAM stays disabled.
+1. The register bank drives `A0–15 = $0100` (the PC). A13=A14=A15 = 0 → `U1` (ROM)
+   `!CE` active; U10's `NOR(A13,A14)` term also holds it deselected in this page.
 2. Microcode sets `DOE = 7`; `U5.Y7` = `-RD` goes low → ROM `!OE` active, `U3`
    `DIR` = read, `-BOE` enables the buffer.
-3. The ROM puts the byte at `$2000` on `MD0–7`; `U3` drives it onto `D0–7`; the
+3. The ROM puts the byte at `$0100` on `MD0–7`; `U3` drives it onto `D0–7`; the
    control card latches it into the instruction register.
 
 A write to RAM at, say, `$9000` is the mirror: A15 = 1 and not `$FFxx` → `-RAMCE`
@@ -157,7 +161,7 @@ active; `DLD = 7` → `-MEMW`; `AND(CLK)` → `-WE` pulses; `U3` drives bus → 
   `card()`-built boards missed those) didn't affect it; that hand wiring was the
   reference for the `card()` fix. The card is now `card()`-built too, so all
   boards get their IC power pins the same way.
-- **Spare lines stay off GND (rev D).** When it was hand-built this card wired
+- **Spare lines stay off GND (rev E).** When it was hand-built this card wired
   *every* row-B pin straight to GND — which would have shorted the new even-pin
   spares (SPARE12–23). Routing J1 through `card()`/`busnet()` fixed that: only the
   odd-pin guards are grounded.

@@ -2,7 +2,7 @@
 ;   DIFF file1 file2   show differing lines (< file1, > file2).
 ; Loads both files (<=96 lines x 79 chars) into memory, skips the common leading
 ; and trailing lines, prints the differing middle. abspath inline; no shared
-; include. BIOS: FRESOLVE $0133, FOPEN $0124, FGETB $0127. OS: SYS_GETCWD $4003.
+; include. BIOS: FRESOLVE $0133, FOPEN $0124, FGETB $0127. OS: SYS_GETCWD $2003.
 ; Entry: P2 = arg tail.
 
         .org $7A00
@@ -262,9 +262,9 @@ d_nf2:  LDA #<u_nf2
         LDA #>u_nf2
         TAP1H
 d_pm:   LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 
 ; openf: FRESOLVE(path)+FOPEN($FC00) -> A = 1 ok / 0 not found
@@ -419,7 +419,7 @@ et_l:   LDA (P1)
         LDB #0
         CMP
         JZ et_ln
-        JSR $4009
+        JSR $2009
         INP1
         JMP et_l
 et_ln:  LDA em_buf
@@ -435,11 +435,11 @@ el_l:   LDA (P1)
         LDB #0
         CMP
         JZ el_d
-        JSR $4009
+        JSR $2009
         INP1
         JMP el_l
 el_d:   LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 
 ; laddr: P1 = la_base + la_s*80 + la_c
@@ -508,7 +508,7 @@ abspath:LDA #0
         LDA ap_out+1
         TAP1H
         LDA #0
-        JSR $4003
+        JSR $2003
         LDA ap_out
         TAP1L
         LDA ap_out+1

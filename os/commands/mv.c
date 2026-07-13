@@ -14,7 +14,7 @@
  * which must be an existing directory (each lands at <dst>/<basename>).
  *
  * BIOS: FRESOLVE=$0133, FOPEN=$0124, FGETB=$0127, FWOPEN=$012A, FPUTB=$012D,
- * FCLOSE=$0130, FDELETE=$011E, FOPENDIR=$0139.  OS: SYS_GETCWD=$4003.  See cp.c
+ * FCLOSE=$0130, FDELETE=$011E, FOPENDIR=$0139.  OS: SYS_GETCWD=$2003.  See cp.c
  * for the SBUF ordering rationale (FRESOLVE DST before FWOPEN). Read buf $FC00.
  */
 char src[80];

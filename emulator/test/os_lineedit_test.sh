@@ -14,7 +14,7 @@ fail() { echo "OS-LINEEDIT TEST: FAIL — $1"; exit 1; }
 
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
-python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x4000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/dev/null
 
 rm -f le.img
 python3 $ROOT/tools/p8xfs.py create le.img >/dev/null

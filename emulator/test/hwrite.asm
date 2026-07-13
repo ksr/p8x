@@ -1,4 +1,4 @@
-; BIOS write-stream exerciser — planted as the "OS" at LBA 1, booted to $4000.
+; BIOS write-stream exerciser — planted as the "OS" at LBA 1, booted to $2000.
 ; Writes "HELLO" to a new file "W" with FWOPEN/FPUTB/FCLOSE, then reads it back
 ; with FOPEN/FGETB and echoes it. Clean output is "HELLO"; 'E' on any error.
 CONOUT  = $0103
@@ -9,7 +9,7 @@ FPUTB   = $012D
 FCLOSE  = $0130
 HEXL    = $7042
 FNAME   = $704A
-        .org $4000
+        .org $2000
         JSR  FWOPEN
         LDA  #'H'
         JSR  FPUTB

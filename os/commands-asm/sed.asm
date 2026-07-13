@@ -309,9 +309,9 @@ sle1:   TAP1H
         LDA #>out
         TAP1H
         LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         JMP sed_loop
 sed_end:RTS
 
@@ -338,9 +338,9 @@ sed_nf: LDA #<u_nf
         LDA #>u_nf
         TAP1H
 sed_pm: LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 
 ; re_at: ra_i = start index in line -> A = length of a regex match here (0=none).

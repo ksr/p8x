@@ -1726,9 +1726,9 @@ Last updated: 2026-07-08
   moved $8000→$4000. Full suite (OS/OS-v2/BASIC-disk/CF/...) green. Docs swept:
   cf-os design, monitor + system-design, os/basic READMEs, programmer's guide.
 - **Memory card rev D: 16 KB ROM + 48 KB RAM** (2026-06-22). Shrank the ROM
-  window to `$0000–$3FFF` (16 KB; the 28C256 stays, only its low half is now
+  window to `$0000–$1FFF` (16 KB; the 28C256 stays, only its low half is now
   addressed — monitor+BASIC end at $3307, well under 16 KB) and grew RAM to 48 KB
-  (`$4000–$FEFF`) by adding a second 62256 (U10) at `$4000–$7FFF`. New decode from
+  (`$2000–$FEFF`) by adding a second 62256 (U10) at `$4000–$7FFF`. New decode from
   A15+A14: ROM `!CE=A15|A14`, U10 `!CE=NAND(!A15,A14)`, main RAM (U2) unchanged
   (`NAND(A15,-IOPG)`, $8000–$FEFF). It reuses spare gates in U7/U8 — **no added
   logic IC**; the only new parts are U10 + its 100 nF. Memory card is the *only*

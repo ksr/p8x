@@ -848,7 +848,7 @@ int factor() {
             lex();                               /* '(' */
             if (streq(nm, "getchar")) {          /* OS SYS_GETC -> char, -1 at EOF */
                 eat(")");
-                line("        JSR $400C"); line("        STA __ax");
+                line("        JSR $200C"); line("        STA __ax");
                 line("        LDA #0"); line("        STA __ax+1");
                 k = nlabel; nlabel = nlabel + 1;
                 emitjmp("JNC", "Lge", k);        /* carry = end of (file) input */
@@ -856,12 +856,12 @@ int factor() {
                 emitlabel("Lge", k);             /* __ax = $FFFF (-1) */
             } else if (streq(nm, "putchar")) {   /* OS SYS_PUTC (redirectable) */
                 rvalue(expr()); eat(")");
-                line("        LDA __ax"); line("        JSR $4009");
+                line("        LDA __ax"); line("        JSR $2009");
             } else if (streq(nm, "puts")) {      /* OS SYS_PUTS + newline */
                 rvalue(expr()); eat(")");
                 line("        LDA __ax"); line("        TAP1L");
                 line("        LDA __ax+1"); line("        TAP1H");
-                line("        JSR $400F"); line("        LDA #10"); line("        JSR $4009");
+                line("        JSR $200F"); line("        LDA #10"); line("        JSR $2009");
             } else if (streq(nm, "peek")) {      /* peek(addr) -> byte */
                 rvalue(expr()); eat(")");
                 line("        LDA __ax"); line("        TAP1L");

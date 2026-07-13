@@ -1,4 +1,4 @@
-; BIOS filesystem-API exerciser — planted as the "OS" at LBA 1, booted to $4000.
+; BIOS filesystem-API exerciser — planted as the "OS" at LBA 1, booted to $2000.
 ; Creates a root file "TEST" holding "FSOK" via FCREATE, finds it via FFIND,
 ; reads its sector back, and prints 'Y' on a clean round-trip ('E' = FCREATE
 ; error, 'N' = not found / data mismatch).
@@ -9,7 +9,7 @@ FCREATE = $011B
 FNAME   = $704A
 FSRC    = $7056
 FLEN    = $7058
-        .org $4000          ; booted to $4000 (has internal labels -> not PIC)
+        .org $2000          ; booted to $2000 (has internal labels -> not PIC)
         LDA  #'T'           ; FNAME = "TEST" + 8 spaces
         STA  FNAME
         LDA  #'E'

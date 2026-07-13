@@ -12,7 +12,7 @@ fail() { echo "C-DISASM TEST: FAIL — $1"; exit 1; }
 cp $UC/u?.bin .
 python3 $ROOT/generators/gen_p8xdis.py >/dev/null    # refresh the opcode table
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
-python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osdis.bin --base 0x4000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osdis.bin --base 0x2000 >/dev/null
 build() {   # $1 = command name -> $1.bin
     python3 $ROOT/tools/clib.py "$ROOT/os/commands/$1.c" -o "$1.pp.c" >/dev/null
     python3 $ROOT/compiler/p8cc.py "$1.pp.c" -o "$1.d.asm" >/dev/null

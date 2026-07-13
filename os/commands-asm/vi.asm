@@ -96,9 +96,9 @@ v_usage:LDA #<u_use
         LDA #>u_use
         TAP1H
         LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 
 ; ---- INSERT mode ----------------------------------------------------------
@@ -1787,7 +1787,7 @@ dc_unk: LDA #<s_unknown
         RTS
 
 ; abspath (mirrors os/commands/lib_apath.c): ap_out <- absolute path of the word
-; at ap_a; a relative word is prefixed with the CWD (SYS_GETCWD $4003), since
+; at ap_a; a relative word is prefixed with the CWD (SYS_GETCWD $2003), since
 ; FRESOLVE starts at root. P2 = source cursor, P1 = dest. (Ported from dir.asm.)
 abspath:LDA #0
         STA ap_n
@@ -1804,7 +1804,7 @@ abspath:LDA #0
         LDA ap_out+1
         TAP1H
         LDA #0
-        JSR $4003                    ; SYS_GETCWD -> out
+        JSR $2003                    ; SYS_GETCWD -> out
         LDA ap_out
         TAP1L
         LDA ap_out+1

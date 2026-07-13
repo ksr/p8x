@@ -9,7 +9,7 @@ UC=../../microcode
 
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
-python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osdd.bin --base 0x4000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osdd.bin --base 0x2000 >/dev/null
 
 for c in dep dump; do
     python3 $ROOT/tools/clib.py $ROOT/os/commands/$c.c -o $c.pp.c

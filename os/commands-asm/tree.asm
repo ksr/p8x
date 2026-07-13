@@ -10,8 +10,8 @@
 ; single global w_depth that the descent loop inc/decs around each recursive
 ; call. MAXD levels deep, 24 child dirs per level (as tree.c).
 ;
-; BIOS: FNEXT $013C, FSDIRBUF $0145, SYS_DIRENTRY $401B, SYS_OPENDIR $401E.
-; OS: SYS_OPENCWD $4012, SYS_PUTC $4009, SYS_PUTS $400F. Entry: P2 = arg tail.
+; BIOS: FNEXT $013C, FSDIRBUF $0145, SYS_DIRENTRY $201B, SYS_OPENDIR $201E.
+; OS: SYS_OPENCWD $2012, SYS_PUTC $2009, SYS_PUTS $200F. Entry: P2 = arg tail.
 
         .org $7A00
 ; --- -h check (P2 = arg) ---------------------------------------------------
@@ -37,7 +37,7 @@ tr_run: LDA #0                        ; SYS_OPENCWD
         TAP1L
         TAP1H
         LDA #0
-        JSR $4012
+        JSR $2012
         LDA #0                        ; FSDIRBUF page $EA
         TAP1L
         TAP1H
@@ -53,9 +53,9 @@ tr_usage:
         LDA #>u_use
         TAP1H
         LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 
 ; ===========================================================================
@@ -81,7 +81,7 @@ tw_next:
         LDA #>de
         TAP1H
         LDA #0
-        JSR $401B
+        JSR $201B
         LDA de                        ; skip '.' / '..'
         LDB #'.'
         CMP
@@ -94,9 +94,9 @@ tw_ind: LDA cnt
         CMP
         JZ tw_name
         LDA #32
-        JSR $4009
+        JSR $2009
         LDA #32
-        JSR $4009
+        JSR $2009
         LDA cnt
         DEC
         STA cnt
@@ -119,7 +119,7 @@ tw_nl:  LDA cnt
         CMP
         JZ tw_ncont                   ; skip spaces
         LDA nch
-        JSR $4009
+        JSR $2009
 tw_ncont:
         LDA cnt
         INC
@@ -132,7 +132,7 @@ tw_isdir:
         CMP
         JNZ tw_eol
         LDA #'/'
-        JSR $4009
+        JSR $2009
         JSR nsub_addr                 ; nsub[w_depth] in *P1
         LDA (P1)
         LDB #24
@@ -152,7 +152,7 @@ tw_isdir:
         INC
         STA (P1)
 tw_eol: LDA #10
-        JSR $4009
+        JSR $2009
         JMP tw_next
 ; --- descend into recorded children ---------------------------------------
 tw_desc:
@@ -178,7 +178,7 @@ tw_dl:  JSR idx_addr
         LDA lba+1
         TAP1H
         LDA #0
-        JSR $401E                     ; SYS_OPENDIR
+        JSR $201E                     ; SYS_OPENDIR
         LDA #0                        ; FSDIRBUF page $EA
         TAP1L
         TAP1H

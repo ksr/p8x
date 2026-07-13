@@ -1,4 +1,4 @@
-; BIOS path-resolution exerciser — planted as the "OS" at LBA 1, booted to $4000.
+; BIOS path-resolution exerciser — planted as the "OS" at LBA 1, booted to $2000.
 ; Resolves "/SUB/T" with FRESOLVE (descending into the subdirectory), opens it
 ; with FOPEN, and echoes its bytes via FGETB. Clean output is the file contents
 ; ("DEEP"); 'E' on any error.
@@ -6,7 +6,7 @@ CONOUT  = $0103
 FOPEN   = $0124
 FGETB   = $0127
 FRESOLVE= $0133
-        .org $4000
+        .org $2000
         LDP1 #PATHSTR
         JSR  FRESOLVE       ; DIRLBA/DIRN -> /SUB, FNAME -> "T"
         JC   ERR

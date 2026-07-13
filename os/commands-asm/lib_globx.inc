@@ -4,7 +4,7 @@
 ; so a command using globx must ALSO ';#use glob'. glob_expand(ge_pat, ge_out,
 ; ge_max) -> ge_cnt files written to ge_out[i*64] (dir prefix + name). Iterates
 ; on FSDIRBUF page $FA. BIOS: FOPENDIR $0139, FNEXT $013C, FSDIRBUF $0145,
-; SYS_DIRENTRY $401B; OS: SYS_OPENCWD $4012.
+; SYS_DIRENTRY $201B; OS: SYS_OPENCWD $2012.
 
 glob_expand:
         LDA #0
@@ -113,7 +113,7 @@ ge_ocwd:LDA #0
         TAP1L
         TAP1H
         LDA #0
-        JSR $4012                     ; SYS_OPENCWD
+        JSR $2012                     ; SYS_OPENCWD
 ge_fsd: LDA #0
         TAP1L
         TAP1H
@@ -132,7 +132,7 @@ ge_nl:  LDA #0
         LDA #>de
         TAP1H
         LDA #0
-        JSR $401B                     ; de_read
+        JSR $201B                     ; de_read
         LDA de
         LDB #'.'
         CMP

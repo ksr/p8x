@@ -13,7 +13,7 @@ ROOT=../..
 
 cp $ROOT/microcode/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
-python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x4000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/dev/null
 
 build_cmd() {   # $1 = command name -> $1.bin in /bin of mn0
     python3 $ROOT/tools/clib.py $ROOT/os/commands/$1.c -o mn_$1.pp.c

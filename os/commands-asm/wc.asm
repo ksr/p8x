@@ -137,7 +137,7 @@ w_done: LDA lines                     ; print lines words bytes
         STA pn+2
         JSR put24
         LDA #32
-        JSR $4009
+        JSR $2009
         LDA words
         STA pn
         LDA words+1
@@ -146,7 +146,7 @@ w_done: LDA lines                     ; print lines words bytes
         STA pn+2
         JSR put24
         LDA #32
-        JSR $4009
+        JSR $2009
         LDA bytes
         STA pn
         LDA bytes+1
@@ -155,25 +155,25 @@ w_done: LDA lines                     ; print lines words bytes
         STA pn+2
         JSR put24
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 w_nf:   LDA #<u_nf
         TAP1L
         LDA #>u_nf
         TAP1H
         LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 w_usage:LDA #<u_use
         TAP1L
         LDA #>u_use
         TAP1H
         LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 
 ; put24: print pn (3-byte LE) as an unsigned decimal (no padding).
@@ -215,7 +215,7 @@ pu_rev: LDA psnd                      ; while nd != 0 -> nd--, print dg[nd]
         INC
 pu_rp:  TAP1H
         LDA (P1)
-        JSR $4009
+        JSR $2009
         JMP pu_rev
 pu_dn:  RTS
 

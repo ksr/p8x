@@ -77,9 +77,9 @@ u_put:  LDA #<cur
         LDA #>cur
         TAP1H
         LDA #0
-        JSR $400F                    ; SYS_PUTS
+        JSR $200F                    ; SYS_PUTS
         LDA #10
-        JSR $4009
+        JSR $2009
 u_copy: LDA #<cur                    ; prev = cur
         TAP2L
         LDA #>cur
@@ -106,18 +106,18 @@ u_nf:   LDA #<m_nf
         LDA #>m_nf
         TAP1H
         LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 u_usage:LDA #<m_use
         TAP1L
         LDA #>m_use
         TAP1H
         LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 
 ; readline: rl_buf (word) = dest. Returns A=1 line read / 0 EOF. Because nextc

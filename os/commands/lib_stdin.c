@@ -25,7 +25,7 @@
  * compilers): no ++/--, declarations at the top of each function, and the
  * callees are defined before any caller (this file is spliced ABOVE main()).
  *
- * BIOS/OS calls: FGETB $0127, FRESOLVE $0133, FOPEN $0124, SYS_GETCWD $4003.
+ * BIOS/OS calls: FGETB $0127, FRESOLVE $0133, FOPEN $0124, SYS_GETCWD $2003.
  */
 //#use globx   /* glob_expand(pat,out,maxn); clib.py recursively splices glob too */
 
@@ -43,7 +43,7 @@ int open_path(char *a) {
     int j;
     i = 0;
     if (*a != '/') {
-        bios(0x4003, path, 0);               /* SYS_GETCWD */
+        bios(0x2003, path, 0);               /* SYS_GETCWD */
         while (path[i] != 0) { i = i + 1; }
         if (i > 0 && path[i - 1] != '/') { path[i] = '/'; i = i + 1; }
     }

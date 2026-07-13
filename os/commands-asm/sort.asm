@@ -220,11 +220,11 @@ sp_cl:  LDA (P1)
         LDB #0
         CMP
         JZ sp_eol
-        JSR $4009
+        JSR $2009
         INP1
         JMP sp_cl
 sp_eol: LDA #10
-        JSR $4009
+        JSR $2009
         LDA si
         INC
         STA si
@@ -235,18 +235,18 @@ s_nf:   LDA #<u_nf
         LDA #>u_nf
         TAP1H
         LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 s_usage:LDA #<u_use
         TAP1L
         LDA #>u_use
         TAP1H
         LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 
 ; laddr: P1 = lines + la_s*80 + la_c

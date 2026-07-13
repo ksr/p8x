@@ -156,7 +156,7 @@ g_go:   LDA recurse
         LDA #>cur
         TAP1H
         LDA #0
-        JSR $4003                     ; SYS_GETCWD -> cur
+        JSR $2003                     ; SYS_GETCWD -> cur
         LDA #<cur
         TAP1L
         LDA #>cur
@@ -181,7 +181,7 @@ gcl0:   LDA #0
         TAP1L
         TAP1H
         LDA #0
-        JSR $4012                     ; SYS_OPENCWD
+        JSR $2012                     ; SYS_OPENCWD
         LDA #0
         TAP1L
         TAP1H
@@ -238,18 +238,18 @@ g_nf:   LDA #<u_nf
         LDA #>u_nf
         TAP1H
         LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 g_usage:LDA #<u_use
         TAP1L
         LDA #>u_use
         TAP1H
         LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 
 ; ======================= grep_stream =======================================
@@ -350,19 +350,19 @@ dmp_l:  LDA (P1)
         LDB #0
         CMP
         JZ dmp_d
-        JSR $4009
+        JSR $2009
         INP1
         JMP dmp_l
 dmp_d:  LDA #':'
-        JSR $4009
+        JSR $2009
 dm_line:LDA #<line
         TAP1L
         LDA #>line
         TAP1H
         LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
 dm_ret: RTS
 
 ; ======================= collect (-r walk) =================================
@@ -383,7 +383,7 @@ c_next: LDA #0
         LDA #>de
         TAP1H
         LDA #0
-        JSR $401B
+        JSR $201B
         LDA de
         LDB #'.'
         CMP
@@ -462,7 +462,7 @@ c_dl:   JSR idx_a
         LDA flba+1
         TAP1H
         LDA #0
-        JSR $401E
+        JSR $201E
         LDA #0
         TAP1L
         TAP1H

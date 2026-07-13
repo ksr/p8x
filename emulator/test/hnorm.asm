@@ -1,4 +1,4 @@
-; BIOS FNORM exerciser — planted as the "OS" at LBA 1, booted to $4000.
+; BIOS FNORM exerciser — planted as the "OS" at LBA 1, booted to $2000.
 ; Formats the lowercase string "hi.c" into FNAME with FNORM, then FCREATEs a
 ; 1-byte file by that name. Prints 'Y' on success ('E' on error). The host then
 ; checks the directory holds the upper-cased, padded name "HI.C".
@@ -7,7 +7,7 @@ FCREATE = $011B
 FNORM   = $0136
 FSRC    = $7056
 FLEN    = $7058
-        .org $4000
+        .org $2000
         LDA  #'X'           ; 1 byte of file data at $5000
         STA  $5000
         LDA  #$00

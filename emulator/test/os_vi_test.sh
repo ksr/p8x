@@ -11,7 +11,7 @@ ESC=$(printf '\033')
 
 cp $ROOT/microcode/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
-python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x4000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/dev/null
 python3 $ROOT/tools/clib.py $ROOT/os/commands/vi.c -o vi.pp.c
 python3 $ROOT/compiler/p8cc.py vi.pp.c -o vi.asm >/dev/null
 python3 $ROOT/assembler/p8xasm.py vi.asm -o vi.bin --base 0x7A00 >/dev/null

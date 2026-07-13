@@ -10,12 +10,12 @@ Syntax:  label:  MNEMONIC operand   ; comment
   pseudo:    LDPn #expr16  ->  LPLn #<expr, LPHn #>expr
 
 Usage: p8xasm.py src.asm [-o out] [-l listing] [--base ADDR] [-D NAME=VAL ...]
-  default    -> 32K ROM image from $0000 (cap $8000)
+  default    -> 8K ROM image from $0000 (cap $2000)
   --base A   -> RAM-resident blob: labels resolve to the run address A and only
-                the bytes A..high are written (e.g. an OS/program loaded to $4000)
+                the bytes A..high are written (e.g. an OS/program loaded to $2000)
   -D N=V     -> define+lock symbol N (decimal / 0x.. / $..); overrides a source
                 `N = default`, so one source builds at several orgs/data bases.
-Output: with --base, the A..high blob; otherwise the 32K ROM image (+listing)."""
+Output: with --base, the A..high blob; otherwise the 8K ROM image (+listing)."""
 import sys, re, os
 import sys, os
 def _find_genucode():
@@ -58,9 +58,9 @@ def parse_operand(opnd):
     return "a",opnd
 
 class Asm:
-    def __init__(self,base=0,cap=0x8000,defines=None):
+    def __init__(self,base=0,cap=0x2000,defines=None):
         # img spans the full 64K; `base` is where the output blob starts and
-        # `cap` is the highest legal address+1 (0x8000 for a ROM, 0x10000 for a
+        # `cap` is the highest legal address+1 (0x2000 for the 8K ROM, 0x10000 for a
         # RAM-resident image assembled with --base). hi tracks the high-water
         # mark so a RAM image emits only its own bytes.
         self.sym={}; self.img=bytearray(0x10000); self.lst=[]
@@ -114,7 +114,7 @@ class Asm:
                     if pass2:
                         if pc>=self.cap:
                             err(ln,line,"address past %s"%
-                                ("EEPROM" if self.cap==0x8000 else "64K"))
+                                ("8K ROM" if self.cap==0x2000 else "64K"))
                         if pc<self.base: err(ln,line,"address below --base")
                         self.img[pc]=b&0xFF; emitted.append(b&0xFF)
                         if pc+1>self.hi: self.hi=pc+1
@@ -173,16 +173,16 @@ def main():
             val=val.strip()
             defs[nm.strip()]=int(val[1:],16) if val.startswith("$") else int(val,0)
     lines=tokenize(open(src).read())
-    # --base: RAM-resident blob (e.g. an OS loaded to $4000); emit only the
-    # bytes from base..hi. No --base: 32K ROM image from $0000.
+    # --base: RAM-resident blob (e.g. an OS loaded to $2000); emit only the
+    # bytes from base..hi. No --base: 8K ROM image from $0000.
     if base is not None:
         A=Asm(base=base,cap=0x10000,defines=defs); A.run(lines,False); A.run(lines,True)
         open(out,"wb").write(A.img[base:A.hi])
         size="%d bytes @ $%04X"%(A.hi-base,base)
     else:
         A=Asm(defines=defs); A.run(lines,False); A.run(lines,True)
-        open(out,"wb").write(A.img[:0x8000])
-        size="32K"
+        open(out,"wb").write(A.img[:0x2000])
+        size="8K"
     if lstf:
         with open(lstf,"w") as f:
             for pc,bs,raw in A.lst:

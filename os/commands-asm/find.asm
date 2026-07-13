@@ -3,8 +3,8 @@
 ; Shares gmatch + de[] via `;#use glob`. Recursive CWD walk building each path in
 ; cur[], with per-level child LBA+name arrays indexed by a global w_depth (P3 is
 ; the stack pointer, so no software-stack frames). MAXD=10 deep, 24 children/lvl.
-; BIOS: FNEXT $013C, FSDIRBUF $0145, SYS_DIRENTRY $401B, SYS_OPENDIR $401E.
-; OS: SYS_GETCWD $4003, SYS_OPENCWD $4012, SYS_PUTC $4009, SYS_PUTS $400F.
+; BIOS: FNEXT $013C, FSDIRBUF $0145, SYS_DIRENTRY $201B, SYS_OPENDIR $201E.
+; OS: SYS_GETCWD $2003, SYS_OPENCWD $2012, SYS_PUTC $2009, SYS_PUTS $200F.
 ; Entry: P2 = arg tail.
 ;#use glob
 
@@ -99,7 +99,7 @@ f_pd:   LDA #0
         LDA #>cur
         TAP1H
         LDA #0
-        JSR $4003                    ; SYS_GETCWD -> cur
+        JSR $2003                    ; SYS_GETCWD -> cur
         LDA #<cur
         TAP1L
         LDA #>cur
@@ -124,7 +124,7 @@ f_len0: LDA #0                        ; w_depth=0; parr[0]=plen
         TAP1L
         TAP1H
         LDA #0
-        JSR $4012                    ; SYS_OPENCWD
+        JSR $2012                    ; SYS_OPENCWD
         LDA #0
         TAP1L
         TAP1H
@@ -137,9 +137,9 @@ f_usage:LDA #<u_use
         LDA #>u_use
         TAP1H
         LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 
 ; ======================= walk ==============================================
@@ -160,7 +160,7 @@ w_next: LDA #0
         LDA #>de
         TAP1H
         LDA #0
-        JSR $401B                    ; de_read
+        JSR $201B                    ; de_read
         LDA de
         LDB #'.'
         CMP
@@ -239,7 +239,7 @@ w_dl:   JSR idx_a
         LDA flba+1
         TAP1H
         LDA #0
-        JSR $401E                    ; SYS_OPENDIR
+        JSR $201E                    ; SYS_OPENDIR
         LDA #0
         TAP1L
         TAP1H
@@ -350,7 +350,7 @@ pm_l:   LDA pcnt
         CMP
         JZ pm_sep
         LDA (P1)
-        JSR $4009
+        JSR $2009
         INP1
         LDA pcnt
         INC
@@ -366,7 +366,7 @@ pm_sep: LDA fpl
         JZ pm_name
 pm_slash:
         LDA #'/'
-        JSR $4009
+        JSR $2009
 pm_name:LDA #<nm
         TAP1L
         LDA #>nm
@@ -375,11 +375,11 @@ pm_nl:  LDA (P1)
         LDB #0
         CMP
         JZ pm_eol
-        JSR $4009
+        JSR $2009
         INP1
         JMP pm_nl
 pm_eol: LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 
 ; ======================= rdname / nmatch / contains ========================

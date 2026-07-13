@@ -10,7 +10,7 @@
 ;   D aaaa     Dump 256 bytes from aaaa, hex + ASCII, 16 per line.
 ;   I          Init CF: SET FEATURES 8-bit mode, IDENTIFY, print model.
 ;   F          Format CF as P8XFS v2 (boot block + root extent '.'/'..'). Asks Y/N.
-;   B          Boot: load OS image from CF to $4000 and jump. Falls back
+;   B          Boot: load OS image from CF to $2000 and jump. Falls back
 ;              to the monitor prompt if no card / no signature / OSCNT=0.
 ;   G aaaa     Go: JSR to aaaa. Program returns to monitor via RTS.
 ;   ?          Help.
@@ -476,7 +476,7 @@ CMD_B:  JSR  CFINIT
         STA  CNT
         LDA  #1
         STA  LBA
-        LDP1 #$4000         ; OS load address (rev D: RAM starts at $4000)
+        LDP1 #$2000         ; OS load address (rev E: 8K ROM, RAM starts at $2000)
 BLOOP:  JSR  CFRDSEC        ; reads 512 bytes, advances P1
         LDA  LBA
         INC
@@ -485,7 +485,7 @@ BLOOP:  JSR  CFRDSEC        ; reads 512 bytes, advances P1
         DEC
         STA  CNT
         JNZ  BLOOP
-        JMP  $4000          ; hand off to the OS
+        JMP  $2000          ; hand off to the OS
 NOBOOT: LDP1 #MNOOS
         JSR  PUTS
         JMP  PROMPT
@@ -2014,7 +2014,7 @@ MHELP:  .ascii "P8XMON COMMANDS  (AAAA = 4 HEX DIGITS):"
          .byte CR,LF
          .ascii "F       FORMAT CF AS P8XFS (ASKS Y/N)"
          .byte CR,LF
-         .ascii "B       BOOT OS IMAGE FROM CF TO $4000"
+         .ascii "B       BOOT OS IMAGE FROM CF TO $2000"
          .byte CR,LF
          .ascii "G AAAA  CALL AAAA (JSR, RTS RETURNS HERE)"
          .byte CR,LF

@@ -8,12 +8,12 @@ and generates a clean write strobe.
 
 | Region | Device | Size |
 |--------|--------|------|
-| `$0000–$3FFF` | 28C256 EEPROM (U1, low 16 KB) | 16 KB — monitor + BIOS (~4.3 KB used; BASIC is a disk program) |
-| `$4000–$7FFF` | 62256 SRAM (U10, rev D) | 16 KB |
+| `$0000–$1FFF` | 28C64 ROM (U1, 8 KB) | 8 KB — monitor + BIOS (~4.3 KB used; BASIC is a disk program) |
+| `$2000–$7FFF` | 62256 SRAM (U10, rev E) | 24 KB ($2000–$7FFF) |
 | `$8000–$FEFF` | 62256 SRAM (U2) | 32 KB (minus the I/O page) |
 | `$FF00–$FFFF` | — (I/O page) | RAM inhibited; handled by I/O & CF cards |
 
-(Rev D: ROM shrank to a 16 KB window and a second 62256 grew RAM to 48 KB total.)
+(Rev E: 8 KB ROM at $0000–$1FFF; two 62256 cover $2000–$FEFF = 56 KB; OS loads at $2000.)
 
 > This README describes the circuit as actually built in
 > [`generators/gen_eagle.py`](../../generators/gen_eagle.py). See
@@ -24,9 +24,9 @@ and generates a clean write strobe.
 
 | Ref | Device | Role |
 |-----|--------|------|
-| U1 | 28C256 | EEPROM (low 16 KB addressed) |
+| U1 | 28C256 | ROM (8 KB, $0000–$1FFF) |
 | U2 | 62256 | SRAM, 32 KB (`$8000–$FEFF`) |
-| U10 | 62256 | SRAM, 16 KB (`$4000–$7FFF`, rev D) |
+| U10 | 62256 | SRAM, 24 KB (`$2000–$7FFF`, rev E) |
 | U3 | 74245 | Bidirectional data-bus transceiver |
 | U4 | 7430 | 8-input NAND — I/O page ($FFxx) detector |
 | U5 | 74138 | DOE decoder (read enable) |
@@ -37,11 +37,11 @@ and generates a clean write strobe.
 
 ## How it works
 
-### Address decode (ROM vs RAM vs I/O) — rev D, decoded from A15 + A14
+### Address decode (ROM vs RAM vs I/O) — rev E, decoded from A13 + A14 + A15
 - **ROM** (28C256, U1) is selected when **A15 = 0 and A14 = 0** — `!CE = A15 OR A14`
-  (a spare U8 OR gate), so the EEPROM responds for `$0000–$3FFF` (its low 16 KB).
+  (a spare U8 OR gate), so the EEPROM responds for `$0000–$1FFF` (8 KB).
 - **New RAM** (62256, U10) is selected when **A15 = 0 and A14 = 1** —
-  `!CE = NAND(!A15, A14)` (spare U7 NAND gates), covering `$4000–$7FFF`.
+  `!CE = NAND(!A15, A14)` (spare U7 NAND gates), covering `$2000–$7FFF`.
 - The **I/O page detector** (U4, a 7430 8-input NAND on A8–A15) asserts `-IOPG` low
   whenever the address is `$FFxx`.
 - **Main RAM** (62256, U2) is selected only when **A15 = 1 *and* not the I/O page**.
@@ -75,7 +75,7 @@ EEPROM programming is out of scope for normal operation).
 
 ## LEDs
 PWR (green), ROM (yellow), RAM (yellow), RD (green), WR (red) — show which region
-and direction is active each cycle. **RAM2 (yellow, rev D)** lights when the new
-`$4000–$7FFF` bank (U10) is addressed — a bank-select indicator (driven by U7's
+and direction is active each cycle. **RAM2 (yellow, rev E)** lights when the new
+`$2000–$7FFF` bank (U10) is addressed — a bank-select indicator (driven by U7's
 spare gate inverting `-RAM2CE`; not `-BOE`-gated like the others, as only one
 spare gate remained).

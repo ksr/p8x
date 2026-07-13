@@ -1,7 +1,7 @@
 #!/bin/sh
 # rev-D 16-bit memory ops: PHW/PLW (push/pop a memory word), LPW1 (load a pointer
 # from a memory word), and MOVW (16-bit mem->mem move via PT2). Booted as a tiny
-# "OS" at $4000; prints AB CD 5A EF BE iff all four work. (These collapse the
+# "OS" at $2000; prints AB CD 5A EF BE iff all four work. (These collapse the
 # compiler's byte-by-byte 16-bit moves; the C suite exercises them heavily — this
 # is the isolated microcode check, incl. the 2nd scratch pointer PT2.)
 set -e
@@ -13,7 +13,7 @@ cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
 
 cat > wordops.asm <<'EOF'
-        .org $4000
+        .org $2000
         ; PHW/PLW: push the word $CDAB at $5000, pop it to $5010
         LDA #$AB
         STA $5000
@@ -47,7 +47,7 @@ cat > wordops.asm <<'EOF'
         JSR $0103        ; -> BE  (high byte moved, order preserved)
         HLT
 EOF
-python3 $ROOT/assembler/p8xasm.py wordops.asm -o wordops.bin --base 0x4000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py wordops.asm -o wordops.bin --base 0x2000 >/dev/null
 python3 -c "open('wordops.img','wb').write(bytes(512*64))"
 python3 $ROOT/tools/p8xfs.py create wordops.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   wordops.img wordops.bin >/dev/null

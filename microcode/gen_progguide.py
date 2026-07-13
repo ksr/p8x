@@ -147,7 +147,7 @@ E.append(Paragraph(
  "P1 and P2 are general pointers used by the (Pn) addressing modes. "
  "<b>FLAGS</b> - C, Z, N, V, latched only by instructions marked in the Flags column.",B))
 E.append(Paragraph(
- "<b>Memory map (rev D):</b> $0000-$3FFF ROM (16K) &nbsp;|&nbsp; $4000-$FEFF RAM (48K) &nbsp;|&nbsp; "
+ "<b>Memory map (rev E):</b> $0000-$1FFF ROM (8K) &nbsp;|&nbsp; $2000-$FEFF RAM (56K) &nbsp;|&nbsp; "
  "$FF00-$FFFF I/O: $FF00 switches (r), $FF02 LEDs (w), $FF04 ACIA status "
  "(bit0 RX ready, bit1 TX ready), $FF05 ACIA data.",B))
 E.append(Paragraph(

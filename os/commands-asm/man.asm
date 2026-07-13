@@ -3,7 +3,7 @@
 ; man is `cat` with a fixed "/man/" prefix: it builds the path, FRESOLVEs it
 ; (always from root, so CWD-independent) and streams the file with FGETB.
 ; Entry: P2 = arg tail.  BIOS FRESOLVE=$0133, FOPEN=$0124, FGETB=$0127; the
-; 512-byte read buffer is $FC00.  SYS_PUTS=$400F, SYS_PUTC=$4009.
+; 512-byte read buffer is $FC00.  SYS_PUTS=$200F, SYS_PUTC=$2009.
 
         .org $7A00
 m_sk:   LDA (P2)                     ; skip leading spaces
@@ -78,7 +78,7 @@ mb_e:   LDA #0
 mo_l:   LDA #0
         JSR $0127                    ; FGETB -> A, C=1 at EOF
         JC mo_d
-        JSR $4009                    ; putchar
+        JSR $2009                    ; putchar
         JMP mo_l
 mo_d:   RTS
 m_nf:   LDA #<m_msg                  ; "no manual entry for " (no newline)
@@ -86,7 +86,7 @@ m_nf:   LDA #<m_msg                  ; "no manual entry for " (no newline)
         LDA #>m_msg
         TAP1H
         LDA #0
-        JSR $400F
+        JSR $200F
         LDP1 #path                   ; then the name (path + 5), then newline
         INP1
         INP1
@@ -97,20 +97,20 @@ mn_l:   LDA (P1)
         LDB #0
         CMP
         JZ mn_d
-        JSR $4009
+        JSR $2009
         INP1
         JMP mn_l
 mn_d:   LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 m_usage: LDA #<m_use
         TAP1L
         LDA #>m_use
         TAP1H
         LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 
 m_use:  .asciiz "usage: MAN name   show the manual page for a command"

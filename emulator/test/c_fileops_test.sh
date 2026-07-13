@@ -14,7 +14,7 @@ fail() { echo "C-FILEOPS TEST: FAIL — $1"; exit 1; }
 
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
-python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x4000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/dev/null
 python3 -c "import sys; sys.stdout.write(''.join('line%03d\r\n'%i for i in range(80)))" > fo_src.dat
 
 build_disk() {   # $1 = py|host

@@ -14,7 +14,7 @@ fail() { echo "OS-BIGFILE TEST: FAIL — $1"; exit 1; }
 
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
-python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o bfos.bin --base 0x4000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o bfos.bin --base 0x2000 >/dev/null
 python3 $ROOT/tools/clib.py $ROOT/os/commands/cat.c -o bfcat.c
 python3 $ROOT/compiler/p8cc.py bfcat.c -o bfcat.asm >/dev/null
 python3 $ROOT/assembler/p8xasm.py bfcat.asm -o bfcat.bin --base 0x7A00 >/dev/null

@@ -17,8 +17,8 @@ Supported now:
   struct note  structs/unions are used by pointer: NO by-value struct params,
                returns, or whole-struct assignment (assign members instead).
                union members all sit at offset 0; no bitfields, no sizeof().
-  builtins     getchar()  putchar(e)  puts(e)   (OS stream syscalls $400C /
-                 $4009 / $400F, so program I/O is shell-redirectable)
+  builtins     getchar()  putchar(e)  puts(e)   (OS stream syscalls $200C /
+                 $2009 / $200F, so program I/O is shell-redirectable)
                peek(addr)  poke(addr,v)         (byte memory / memory-mapped I/O)
                bios(constaddr, p1, a)           (call any monitor routine: sets
                  P1=p1 and A=a, JSRs the literal addr; returns A | carry<<8)
@@ -611,19 +611,19 @@ class Gen:
     def gen_call(self, name, args):
         if name == "getchar":                            # OS SYS_GETC -> char, or -1 at EOF
             skip = self.lbl("Lge")
-            self.emit("        JSR $400C", "        STA __ax",
+            self.emit("        JSR $200C", "        STA __ax",
                       "        LDA #0", "        STA __ax+1",
                       "        JNC %s" % skip,             # carry = end of (file) input
                       "        LDA #255", "        STA __ax", "        STA __ax+1",
                       "%s:" % skip); return                # __ax = $FFFF (-1)
         if name == "putchar":                            # OS SYS_PUTC (redirectable)
             self.gen_expr(args[0])
-            self.emit("        LDA __ax", "        JSR $4009"); return
+            self.emit("        LDA __ax", "        JSR $2009"); return
         if name == "puts":                               # OS SYS_PUTS + newline
             self.gen_expr(args[0])
             self.emit("        LDA __ax", "        TAP1L", "        LDA __ax+1",
-                      "        TAP1H", "        JSR $400F",
-                      "        LDA #10", "        JSR $4009"); return
+                      "        TAP1H", "        JSR $200F",
+                      "        LDA #10", "        JSR $2009"); return
         if name == "peek":                               # peek(addr) -> byte at addr
             self.gen_expr(args[0]); self.ax_to_p1()
             self.emit("        LDA (P1)", "        STA __ax",

@@ -24,7 +24,7 @@
  * paths; the child-path scratch (JSRC/JDST) is global and rebuilt per entry.
  *
  * BIOS: FRESOLVE=$0133, FOPEN=$0124, FGETB=$0127, FWOPEN=$012A, FPUTB=$012D,
- * FCLOSE=$0130, FOPENDIR=$0139, FNEXT=$013C, FSDIRBUF=$0145.  OS: SYS_MKDIR=$4021.
+ * FCLOSE=$0130, FOPENDIR=$0139, FNEXT=$013C, FSDIRBUF=$0145.  OS: SYS_MKDIR=$2021.
  * Within the p8cc subset (no ++/--, decls at top, self-recursion only).
  */
 char src[80];
@@ -95,7 +95,7 @@ int copy_tree(char *sp0, char *dp0) {
     int  r;
     scopy(sp, sp0);
     scopy(dp, dp0);
-    bios(0x4021, dp, 0);                      /* SYS_MKDIR dst (idempotent) */
+    bios(0x2021, dp, 0);                      /* SYS_MKDIR dst (idempotent) */
 
     n = 0;                                     /* collect this level's entries */
     bios(0x0139, sp, 0);                       /* FOPENDIR src */

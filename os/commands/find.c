@@ -16,7 +16,7 @@
  * bounded by the stack.
  *
  * BIOS: FOPENDIRAT=$0142, FSDIRBUF=$0145, FNEXT=$013C (name->$704A, flag->$7070,
- * start LBA->$7047). OS: SYS_GETCWD=$4003, SYS_CWDLBA=$4006.
+ * start LBA->$7047). OS: SYS_GETCWD=$2003, SYS_CWDLBA=$2006.
  */
 //#use glob     /* gmatch(pat, name): case-insensitive * ? matcher */
 //#use dirent   /* de_read/de_isdir/de_isdot/de_lba/de_opendir: entry via syscall */
@@ -133,10 +133,10 @@ int main() {
     }
     pat[i] = 0;
 
-    bios(0x4003, cur, 0);                    /* cur = CWD path */
+    bios(0x2003, cur, 0);                    /* cur = CWD path */
     plen = 0;
     while (cur[plen] != 0) { plen = plen + 1; }
-    bios(0x4012, 0, 0);                      /* SYS_OPENCWD: iterate CWD (16-bit LBA) */
+    bios(0x2012, 0, 0);                      /* SYS_OPENCWD: iterate CWD (16-bit LBA) */
     bios(0x0145, 0, 0xEA);
     walk(plen);
     return 0;

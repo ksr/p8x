@@ -32,7 +32,7 @@ python3 $ROOT/compiler/p8cc.py $ROOT/compiler/p8cc.c -o selfacc.asm >/dev/null \
 # 3. differential behaviour on a sample program
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
-python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x4000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/dev/null
 
 cat > diff.c <<'EOF'
 int s;

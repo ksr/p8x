@@ -18,8 +18,8 @@
 ; Recursion uses depth-indexed arrays + a global w_depth (see tree.asm; P3 is the
 ; stack pointer so only P1/P2 are usable). Iterates on FSDIRBUF page $FA.
 ;
-; BIOS: FOPENDIR $0139, FNEXT $013C, FSDIRBUF $0145, SYS_DIRENTRY $401B,
-; SYS_OPENDIR $401E. OS: SYS_OPENCWD $4012, SYS_PUTC $4009, SYS_PUTS $400F.
+; BIOS: FOPENDIR $0139, FNEXT $013C, FSDIRBUF $0145, SYS_DIRENTRY $201B,
+; SYS_OPENDIR $201E. OS: SYS_OPENCWD $2012, SYS_PUTC $2009, SYS_PUTS $200F.
 ; The CPU has no divide, so the size printer uses a divmod10 subtraction routine.
 ; Entry: P2 = arg tail.
 
@@ -182,7 +182,7 @@ d_cwd:  LDA #0
         TAP1L
         TAP1H
         LDA #0
-        JSR $4012                    ; SYS_OPENCWD
+        JSR $2012                    ; SYS_OPENCWD
         JMP d_ok
 ; ---- glob: split dir + pattern --------------------------------------------
 d_glob: ; ls = hasslash ? slashpos+1 : 0 ; gpat = arg[ls..plen)
@@ -274,7 +274,7 @@ d_gcwd: LDA #0
         TAP1L
         TAP1H
         LDA #0
-        JSR $4012
+        JSR $2012
 ; ---- opened (or not) ------------------------------------------------------
 d_ok:   LDA notf
         LDB #0
@@ -285,9 +285,9 @@ d_ok:   LDA notf
         LDA #>u_nf
         TAP1H
         LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 d_go:   LDA #0                        ; FSDIRBUF page $FA
         TAP1L
@@ -328,9 +328,9 @@ d_usage:LDA #<u_use
         LDA #>u_use
         TAP1H
         LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 
 ; arg_inc: m_arg += 1
@@ -429,7 +429,7 @@ w_dl:   JSR idx_addr
         LDA lba+1
         TAP1H
         LDA #0
-        JSR $401E                    ; SYS_OPENDIR
+        JSR $201E                    ; SYS_OPENDIR
         LDA #0
         TAP1L
         TAP1H
@@ -465,7 +465,7 @@ col_nx: LDA #0
         LDA #>de
         TAP1H
         LDA #0
-        JSR $401B                    ; de_read
+        JSR $201B                    ; de_read
         LDA de                       ; skip '.'/'..'
         LDB #'.'
         CMP
@@ -962,9 +962,9 @@ show:   LDA gpat
         JZ sh_ret                    ; no match -> filtered out
 sh_show:JSR putsize
         LDA #32
-        JSR $4009
+        JSR $2009
         LDA #32
-        JSR $4009
+        JSR $2009
         LDA sh_depth
         STA cnt
 sh_il:  LDA cnt
@@ -972,9 +972,9 @@ sh_il:  LDA cnt
         CMP
         JZ sh_pn
         LDA #32
-        JSR $4009
+        JSR $2009
         LDA #32
-        JSR $4009
+        JSR $2009
         LDA cnt
         DEC
         STA cnt
@@ -987,7 +987,7 @@ sh_nl:  LDA (P1)
         LDB #0
         CMP
         JZ sh_slash
-        JSR $4009
+        JSR $2009
         INP1
         JMP sh_nl
 sh_slash:
@@ -996,9 +996,9 @@ sh_slash:
         CMP
         JZ sh_eol
         LDA #'/'
-        JSR $4009
+        JSR $2009
 sh_eol: LDA #10
-        JSR $4009
+        JSR $2009
 sh_ret: RTS
 
 ; ======================= putsize / putnum / ndigits / divmod10 =============
@@ -1013,7 +1013,7 @@ ps_dl:  LDA cnt
         CMP
         JZ ps_ret
         LDA #32
-        JSR $4009
+        JSR $2009
         LDA cnt
         DEC
         STA cnt
@@ -1049,7 +1049,7 @@ ps_pl:  LDA cnt2
         CMP
         JC ps_rev                    ; nd>=6 -> done padding
         LDA #32
-        JSR $4009
+        JSR $2009
         LDA cnt2
         INC
         STA cnt2
@@ -1071,7 +1071,7 @@ ps_rev: LDA psnd                     ; while nd != 0 -> nd--, print dg[nd]
         INC
 ps_rp:  TAP1H
         LDA (P1)
-        JSR $4009
+        JSR $2009
         JMP ps_rev
 ps_rdn: RTS
 
@@ -1156,7 +1156,7 @@ putnum: LDA #0
         CMP
         JNZ pn_loop
         LDA #'0'
-        JSR $4009
+        JSR $2009
         RTS
 pn_loop:LDA pn
         LDB #0
@@ -1189,7 +1189,7 @@ pn_print:
         CMP
         JZ pn_done
         PLA
-        JSR $4009
+        JSR $2009
         LDA pncnt
         DEC
         STA pncnt
@@ -1459,7 +1459,7 @@ ca_b1:  STA caddr+1
 
 ; abspath (mirrors os/commands/lib_apath.c): ap_out <- absolute path of the word
 ; at ap_a; ap_n = chars consumed. A relative word is prefixed with the CWD
-; (SYS_GETCWD $4003), since FOPENDIR/FRESOLVE start at root. P3 is the stack, so
+; (SYS_GETCWD $2003), since FOPENDIR/FRESOLVE start at root. P3 is the stack, so
 ; P2 is the source cursor and P1 the dest. (Ported from touch.asm/mv.asm.)
 abspath:LDA #0
         STA ap_n
@@ -1476,7 +1476,7 @@ abspath:LDA #0
         LDA ap_out+1
         TAP1H
         LDA #0
-        JSR $4003                    ; SYS_GETCWD -> out
+        JSR $2003                    ; SYS_GETCWD -> out
         LDA ap_out
         TAP1L
         LDA ap_out+1

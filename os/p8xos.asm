@@ -1,17 +1,17 @@
 ; p8xos.asm - P8X/OS v1.0, a RAM-resident disk operating system.
 ;
-; Loaded from CompactFlash to $4000 and entered by the ROM monitor's B command
-; (which reads OSCNT sectors from LBA 1 and JMPs to $4000). The OS does NOT
+; Loaded from CompactFlash to $2000 and entered by the ROM monitor's B command
+; (which reads OSCNT sectors from LBA 1 and JMPs to $2000). The OS does NOT
 ; carry its own drivers: it calls the BIOS jump table the monitor publishes at
 ; $0100 (see firmware/p8xmon.asm), so console + CF access stay in one place.
 ;
-; rev D memory map (16K ROM / 48K RAM) put RAM at $4000, so the OS loads there
-; instead of $8000 — the code can now span $4000..$9D46 (~23.8K) before the BIOS
-; LBA pointer at $9D47, vs ~7K at $8000. The on-disk OS region (LBA 1..32) caps
-; it at 32 sectors / 16K. Data ($A000 vars, $9E00 SBUF, $9D47 LBA) is unchanged.
+; rev E memory map (8K ROM / 56K RAM) puts RAM at $2000, so the OS loads there.
+; The code can span $2000..$6FFF (~20K) before the firmware/BIOS scratch at $7000,
+; giving the OS ~20K of growth room. The on-disk OS region (LBA 1..32) caps it at
+; 32 sectors / 16K. Firmware scratch $7000-$70xx + SBUF $7100 are fixed by the BIOS.
 ;
-; Build (RAM image, assembled to run at $4000):
-;   python3 assembler/p8xasm.py os/p8xos.asm -o p8xos.bin --base 0x4000
+; Build (RAM image, assembled to run at $2000):
+;   python3 assembler/p8xasm.py os/p8xos.asm -o p8xos.bin --base 0x2000
 ; then install on a P8XFS image with:  tools/p8xfs.py boot disk.img p8xos.bin
 ;
 ; shell over a P8XFS v2 (hierarchical) volume:
@@ -35,9 +35,9 @@
 ; A file/dir argument may be a path; directory scanning works on any extent
 ; (start LBA + sector count), so CWD and resolved paths share one code path.
 ; The prompt shows the current path. Verify a volume with p8xfs.py fsck.
-; RAM layout: code $4000..(<=$9D46) | CF LBA $9D47, SBUF $9E00 (both fixed by the
-; BIOS) | OS variables $A000.. | user programs / RUN / ">" capture (the TPA)
-; $7A00.. | TPA (programs); stack (P3) grows down from $FEFF.
+; RAM layout: OS code $2000..$6FFF | firmware/BIOS scratch $7000-$70xx + SBUF $7100
+; (fixed by the BIOS) | OS shell scratch $7300 | APBUF $7800 | TPA (programs / RUN /
+; ">" capture) $7A00..; stack (P3) grows down from $FEFF.
 
 ; ---- BIOS jump table (stable ABI, in ROM) ----------------------------------
 CONIN   = $0100          ; wait for key, char -> A
@@ -262,24 +262,24 @@ CR      = $0D
 LF      = $0A
 STKTOP  = $FEFF
 
-        .org $4000          ; rev D: OS loads at $4000 (match the monitor's CMD_B + --base)
+        .org $2000          ; rev E: OS loads at $2000 (match the monitor's CMD_B + --base)
 ; ---------------- OS syscall table (stable ABI for TPA programs) -------------
 ; A jump table at the front of the OS image, like the BIOS table at $0100 but
 ; for OS-level services (CWD etc.) that the BIOS deliberately doesn't own. The
-; OS stays resident at $4000 while a RUN program executes, so a program reaches
+; OS stays resident at $2000 while a RUN program executes, so a program reaches
 ; these with a plain JSR (or the C compiler's bios()).  Append-only.
-        JMP  COLD               ; $4000 boot entry (monitor's CMD_B jumps here)
-        JMP  SYS_GETCWD         ; $4003 copy CWD path string -> (P1), incl. NUL
-        JMP  SYS_CWDLBA         ; $4006 CWD directory start LBA -> A
-        JMP  OUTCH              ; $4009 SYS_PUTC: A -> current stdout (console/file)
-        JMP  SYS_GETC           ; $400C SYS_GETC: next stdin byte -> A
-        JMP  SYS_PUTS           ; $400F SYS_PUTS: write (P1) string to stdout
-        JMP  SYS_OPENCWD        ; $4012 SYS_OPENCWD: begin iterating the CWD (16-bit LBA)
-        JMP  SYS_SETDRV         ; $4015 SYS_SETDRIVE: deprecated (mount model) — no-op stub, ABI slot kept
-        JMP  SYS_GETDRIVE       ; $4018 SYS_GETDRIVE: -> A = 1 if CWD is under /d1 (drive 1), else 0
-        JMP  SYS_DIRENTRY       ; $401B SYS_DIRENTRY: snapshot the current dir entry -> (P1) 18 bytes
-        JMP  SYS_OPENDIR        ; $401E SYS_OPENDIR: P1 = 16-bit dir start LBA -> open for FNEXT
-        JMP  SYS_MKDIR          ; $4021 SYS_MKDIR: P1 = path -> create a directory; C=1 on real failure
+        JMP  COLD               ; $2000 boot entry (monitor's CMD_B jumps here)
+        JMP  SYS_GETCWD         ; $2003 copy CWD path string -> (P1), incl. NUL
+        JMP  SYS_CWDLBA         ; $2006 CWD directory start LBA -> A
+        JMP  OUTCH              ; $2009 SYS_PUTC: A -> current stdout (console/file)
+        JMP  SYS_GETC           ; $200C SYS_GETC: next stdin byte -> A
+        JMP  SYS_PUTS           ; $200F SYS_PUTS: write (P1) string to stdout
+        JMP  SYS_OPENCWD        ; $2012 SYS_OPENCWD: begin iterating the CWD (16-bit LBA)
+        JMP  SYS_SETDRV         ; $2015 SYS_SETDRIVE: deprecated (mount model) — no-op stub, ABI slot kept
+        JMP  SYS_GETDRIVE       ; $2018 SYS_GETDRIVE: -> A = 1 if CWD is under /d1 (drive 1), else 0
+        JMP  SYS_DIRENTRY       ; $201B SYS_DIRENTRY: snapshot the current dir entry -> (P1) 18 bytes
+        JMP  SYS_OPENDIR        ; $201E SYS_OPENDIR: P1 = 16-bit dir start LBA -> open for FNEXT
+        JMP  SYS_MKDIR          ; $2021 SYS_MKDIR: P1 = path -> create a directory; C=1 on real failure
 ; Reached only via the table above (COLD jumps past them).
 SYS_GETDRIVE:                   ; derived: 1 if the CWD is under the /d1 mount
         LDA  CURDRIVE

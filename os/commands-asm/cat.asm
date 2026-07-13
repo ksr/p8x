@@ -122,9 +122,9 @@ c_single:
         JZ c_nf                      ; not found
         RTS
 c_stdin:LDA #0                       ; stdin -> stdout filter
-        JSR $400C
+        JSR $200C
         JC cs_d
-        JSR $4009
+        JSR $2009
         JMP c_stdin
 cs_d:   RTS
 c_nf:   LDA #<m_nf
@@ -132,18 +132,18 @@ c_nf:   LDA #<m_nf
         LDA #>m_nf
         TAP1H
         LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 c_usage:LDA #<m_use
         TAP1L
         LDA #>m_use
         TAP1H
         LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 
 ; catpath: op_a = path word -> stream it. A = 0 ok / 1 not found.
@@ -154,7 +154,7 @@ catpath:JSR open_path                ; 1 opened / 2 not found
 cp_l:   LDA #0
         JSR $0127                    ; FGETB -> A, C=EOF
         JC cp_ok
-        JSR $4009                    ; putchar
+        JSR $2009                    ; putchar
         JMP cp_l
 cp_ok:  LDA #0
         RTS

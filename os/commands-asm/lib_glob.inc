@@ -4,7 +4,7 @@
 ; expansion — those live in lib_stdin.inc). Do not use both includes in one
 ; command (they would both define gmatch/de).
 ;   gmatch : gp/gs -> A = 1 if pattern gp matches string gs (case-insensitive)
-;   de[17] : directory-entry snapshot buffer for SYS_DIRENTRY ($401B)
+;   de[17] : directory-entry snapshot buffer for SYS_DIRENTRY ($201B)
 
 gmatch: LDA gp
         TAP1L

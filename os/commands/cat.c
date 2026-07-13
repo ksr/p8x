@@ -21,7 +21,7 @@
  * stack at $FEFF (p8cc has no preprocessor, so it is written as a literal).
  *
  * BIOS: FRESOLVE=$0133 (P1=path), FOPEN=$0124 (P1=buffer; C=1 not found),
- * FGETB=$0127 (->A, C=1 at EOF).  OS: SYS_GETCWD=$4003.
+ * FGETB=$0127 (->A, C=1 at EOF).  OS: SYS_GETCWD=$2003.
  */
 //#use glob    /* gmatch() — required by glob_expand below */
 //#use globx   /* glob_expand(pat, out, maxn): expand a glob into a path list */
@@ -37,7 +37,7 @@ int catpath(char *arg) {
     int c;
     i = 0;                                    /* build an absolute path in path[] */
     if (*arg != '/') {                        /* relative -> prepend the CWD */
-        bios(0x4003, path, 0);                /* SYS_GETCWD -> path */
+        bios(0x2003, path, 0);                /* SYS_GETCWD -> path */
         while (path[i] != 0) { i = i + 1; }
         if (i > 0 && path[i - 1] != '/') { path[i] = '/'; i = i + 1; }
     }

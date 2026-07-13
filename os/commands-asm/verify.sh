@@ -23,7 +23,7 @@ FS="python3 $ROOT/tools/p8xfs.py"
 
 cp "$UC"/u?.bin "$W"/ 2>/dev/null
 $ASM "$ROOT/firmware/p8xmon.asm" -o "$W/eeprom.bin" >/dev/null
-$ASM "$ROOT/os/p8xos.asm" -o "$W/osc.bin" --base 0x4000 >/dev/null
+$ASM "$ROOT/os/p8xos.asm" -o "$W/osc.bin" --base 0x2000 >/dev/null
 
 # fixtures $1=img : a small tree both builds see (command binary added by caller)
 fixtures() {

@@ -4,7 +4,7 @@
 ; (sp/dp/names/isd/n/idx) keyed by a global w_depth (P3 is the stack pointer).
 ; Iterates on FSDIRBUF page $A0. BIOS: FRESOLVE $0133, FOPEN $0124, FGETB $0127,
 ; FWOPEN $012A, FPUTB $012D, FCLOSE $0130, FOPENDIR $0139, FNEXT $013C, FSDIRBUF
-; $0145, SYS_DIRENTRY $401B. OS: SYS_GETCWD $4003, SYS_MKDIR $4021, SYS_PUTS/PUTC.
+; $0145, SYS_DIRENTRY $201B. OS: SYS_GETCWD $2003, SYS_MKDIR $2021, SYS_PUTS/PUTC.
 ; A `*`/`?` source is a glob (lib_globx): every match is copied into the dst
 ; directory. copy_tree iterates on FSDIRBUF page $E0 (above the enlarged binary).
 ; Entry: P2 = arg tail.
@@ -418,9 +418,9 @@ c_srcnf:LDA #<u_nf
         LDA #>u_nf
         TAP1H
 c_put:  LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 
 ; ======================= copy_file / isdir =================================
@@ -498,7 +498,7 @@ copy_tree:
         JSR scopy
         JSR dpd_a                    ; SYS_MKDIR(dp[d])
         LDA #0
-        JSR $4021
+        JSR $2021
         JSR spd_a                    ; FOPENDIR(sp[d])
         LDA #0
         JSR $0139
@@ -521,7 +521,7 @@ ct_nl:  LDA #0
         LDA #>de
         TAP1H
         LDA #0
-        JSR $401B
+        JSR $201B
         LDA de
         LDB #'.'
         CMP
@@ -777,7 +777,7 @@ abspath:LDA #0
         LDA ap_out+1
         TAP1H
         LDA #0
-        JSR $4003
+        JSR $2003
         LDA ap_out
         TAP1L
         LDA ap_out+1

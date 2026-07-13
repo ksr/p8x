@@ -1,12 +1,12 @@
 ; BIOS directory-iteration exerciser — planted as the "OS" at LBA 1, booted to
-; $4000. Iterates the root directory with FOPENDIR/FNEXT and prints the first
+; $2000. Iterates the root directory with FOPENDIR/FNEXT and prints the first
 ; character of each live entry's name. With files A and B present the output is
 ; "AB"; 'E' on a FOPENDIR error.
 CONOUT  = $0103
 FOPENDIR= $0139
 FNEXT   = $013C
 FNAME   = $704A
-        .org $4000
+        .org $2000
         LDP1 #ROOTSTR
         JSR  FOPENDIR       ; iterate the root
         JC   ERR

@@ -6,7 +6,7 @@ layout, has been retired — v2 is the only format.)
 A P8XFS v2 volume is a sequence of 512-byte sectors (LBAs):
 
     LBA 0        boot block: 'P8', version=2, OSCNT, free-pointer
-    LBA 1..32    OS image (loaded to $4000 by the monitor's B command)
+    LBA 1..32    OS image (loaded to $2000 by the monitor's B command)
     LBA 33..36   root directory (4-sector extent; entry 0='.', 1='..')
     LBA 37..     files + subdirectory extents, contiguous (at the free pointer)
 

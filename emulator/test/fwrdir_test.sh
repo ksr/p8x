@@ -10,7 +10,7 @@ UC=../../microcode
 
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
-python3 $ROOT/assembler/p8xasm.py hwrdir.asm -o hwrdir.bin --base 0x4000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py hwrdir.asm -o hwrdir.bin --base 0x2000 >/dev/null
 
 rm -f wd.img
 python3 $ROOT/tools/p8xfs.py create wd.img >/dev/null

@@ -15,7 +15,7 @@
  * create behavior.
  *
  * BIOS: FRESOLVE=$0133, FOPEN=$0124 (C=1 not found), FWOPEN=$012A, FCLOSE=$0130.
- * OS: SYS_GETCWD=$4003 (via abspath). Read buffer at $FC00.
+ * OS: SYS_GETCWD=$2003 (via abspath). Read buffer at $FC00.
  */
 char path[80];
 

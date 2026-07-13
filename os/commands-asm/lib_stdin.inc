@@ -15,8 +15,8 @@
 ;   gmatch       : gp/gs -> A = 1 if pattern gp matches string gs (case-insens.)
 ;
 ; BIOS: FGETB $0127, FRESOLVE $0133, FOPEN $0124, FOPENDIR $0139, FNEXT $013C,
-; FSDIRBUF $0145, SYS_DIRENTRY $401B. OS: SYS_GETCWD $4003, SYS_GETC $400C,
-; SYS_OPENCWD $4012.
+; FSDIRBUF $0145, SYS_DIRENTRY $201B. OS: SYS_GETCWD $2003, SYS_GETC $200C,
+; SYS_OPENCWD $2012.
 
 ; ---- openarg --------------------------------------------------------------
 openarg:
@@ -112,7 +112,7 @@ nextc:  LDA fromfile
         CMP
         JNZ nc_file
         LDA #0
-        JSR $400C                     ; stdin: A=byte, C=EOF (passthrough)
+        JSR $200C                     ; stdin: A=byte, C=EOF (passthrough)
         RTS
 nc_file:LDA #0
         JSR $0127                     ; FGETB
@@ -195,7 +195,7 @@ open_path:
         LDA #>spath
         TAP1H
         LDA #0
-        JSR $4003
+        JSR $2003
         LDA #<spath
         TAP1L
         LDA #>spath
@@ -364,7 +364,7 @@ ge_ocwd:LDA #0
         TAP1L
         TAP1H
         LDA #0
-        JSR $4012                     ; SYS_OPENCWD
+        JSR $2012                     ; SYS_OPENCWD
 ge_fsd: LDA #0
         TAP1L
         TAP1H
@@ -383,7 +383,7 @@ ge_nl:  LDA #0
         LDA #>de
         TAP1H
         LDA #0
-        JSR $401B                     ; de_read
+        JSR $201B                     ; de_read
         LDA de
         LDB #'.'
         CMP

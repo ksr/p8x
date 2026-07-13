@@ -45,7 +45,7 @@
  * FNEXT=$013C (-> FNAME $704A 12 space-padded, FFLAG $7070 file $01/dir $02,
  * start LBA byte0 $7047/byte1 $7048, FLEN $7058 lo/$7059 hi; C=1 at end),
  * FSDIRBUF=$0145.
- * OS: SYS_OPENCWD=$4012 (begin iterating the CWD, full 16-bit LBA).
+ * OS: SYS_OPENCWD=$2012 (begin iterating the CWD, full 16-bit LBA).
  */
 //#use glob     /* gmatch(pat, name): case-insensitive * ? matcher */
 //#use dirent   /* de_read/de_isdir/de_len/de_lba/de_opendir: entry via syscall */
@@ -339,10 +339,10 @@ int main() {
             abspath(abuf, dbuf);                           /* relative -> CWD-prefixed */
             if (bios(0x0139, abuf, 0) & 256) { nf = 1; }   /* FOPENDIR(dir) */
         } else {
-            bios(0x4012, 0, 0);              /* SYS_OPENCWD */
+            bios(0x2012, 0, 0);              /* SYS_OPENCWD */
         }
     } else if (*arg == 0 || *arg == 13) {    /* no path -> current directory */
-        bios(0x4012, 0, 0);                  /* SYS_OPENCWD (full 16-bit CWD LBA) */
+        bios(0x2012, 0, 0);                  /* SYS_OPENCWD (full 16-bit CWD LBA) */
     } else {                                 /* FOPENDIR(abs path); carry = missing/not a dir */
         abspath(abuf, arg);                  /* relative -> CWD-prefixed (FRESOLVE starts at root) */
         if (bios(0x0139, abuf, 0) & 256) { nf = 1; }

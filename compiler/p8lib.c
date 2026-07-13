@@ -61,14 +61,14 @@ int putdec(int v) {                      /* print an unsigned decimal number */
     return 0;
 }
 
-/* ---- OS syscalls (the OS jump table at $4000; the OS owns CWD) ---------- */
-int getcwd(char *buf) { bios(0x4003, buf, 0); return 0; }   /* SYS_GETCWD -> buf */
-int cwdlba() { return bios(0x4006, 0, 0) & 255; }           /* SYS_CWDLBA -> LBA */
+/* ---- OS syscalls (the OS jump table at $2000; the OS owns CWD) ---------- */
+int getcwd(char *buf) { bios(0x2003, buf, 0); return 0; }   /* SYS_GETCWD -> buf */
+int cwdlba() { return bios(0x2006, 0, 0) & 255; }           /* SYS_CWDLBA -> LBA */
 
 /* ---- files (over the monitor BIOS jump table) -------------------------- */
 /* FNORM=$0136, FFIND=$0118, FLOADAT=$013F, FWOPEN=$012A, FPUTB=$012D,
    FCLOSE=$0130.  The file length comes back via the OS SYS_DIRENTRY syscall
-   ($401B, a 17-byte snapshot: [13..14] = length lo/hi) rather than a hardcoded
+   ($201B, a 17-byte snapshot: [13..14] = length lo/hi) rather than a hardcoded
    peek of the BIOS FLEN scratch, so the firmware can relocate its scratch. */
 
 int loadfile(char *name, char *dest) {   /* read a file into dest; return its byte length */
@@ -76,7 +76,7 @@ int loadfile(char *name, char *dest) {   /* read a file into dest; return its by
     char de[17];
     bios(0x0136, name, 0);               /* FNORM:   name -> FNAME            */
     bios(0x0118, 0, 0);                  /* FFIND:   FNAME -> LBA + FLEN      */
-    bios(0x401B, de, 0);                 /* SYS_DIRENTRY: snapshot LBA/FLEN etc */
+    bios(0x201B, de, 0);                 /* SYS_DIRENTRY: snapshot LBA/FLEN etc */
     len = (de[13] & 255) + (de[14] & 255) * 256;      /* FLEN (little-endian) */
     bios(0x013F, dest, 0);               /* FLOADAT: FLEN bytes (whole sectors) -> dest */
     return len;

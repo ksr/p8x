@@ -179,10 +179,10 @@ int main() {
 
     if (recurse) {                            /* walk the CWD tree, grep each file */
         nrf = 0;
-        bios(0x4003, cur, 0);                 /* cur = CWD path */
+        bios(0x2003, cur, 0);                 /* cur = CWD path */
         plen = 0;
         while (cur[plen] != 0) { plen = plen + 1; }
-        bios(0x4012, 0, 0);                   /* SYS_OPENCWD: iterate the CWD */
+        bios(0x2012, 0, 0);                   /* SYS_OPENCWD: iterate the CWD */
         bios(0x0145, 0, 0xEA);
         collect(plen);                        /* phase 1: gather file paths */
         i = 0;                                /* phase 2: grep each (paths are absolute) */

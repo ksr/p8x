@@ -4,7 +4,7 @@
  *
  * Spliced in by `//#use apath` (see README "Shared code"). Turns a command-line
  * path word into an absolute path the BIOS FRESOLVE can use, prefixing the CWD
- * (SYS_GETCWD $4003) when the word is relative. Unlike lib_stdin's openarg(),
+ * (SYS_GETCWD $2003) when the word is relative. Unlike lib_stdin's openarg(),
  * this only *builds the string* into a caller-supplied buffer (it does not open
  * anything) — so a command can build two paths (src + dst) into separate buffers.
  *
@@ -19,7 +19,7 @@ int abspath(char *out, char *a) {
     int j;
     i = 0;
     if (*a != '/') {                          /* relative -> prefix the CWD */
-        bios(0x4003, out, 0);                 /* SYS_GETCWD -> out */
+        bios(0x2003, out, 0);                 /* SYS_GETCWD -> out */
         while (out[i] != 0) { i = i + 1; }
         if (i > 0 && out[i - 1] != '/') { out[i] = '/'; i = i + 1; }
     }

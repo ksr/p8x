@@ -11,7 +11,7 @@ UC=../../microcode
 
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
-python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o ossh.bin --base 0x4000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o ossh.bin --base 0x2000 >/dev/null
 python3 $ROOT/generators/gen_p8xopc.py shopc.asm
 cat $ROOT/apps/p8xasm.asm shopc.asm > shfull.asm
 # host build = the golden reference AND the ASM.bin we run

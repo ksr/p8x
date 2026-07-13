@@ -30,7 +30,7 @@ build=$(mktemp -d)
 # Monitor + BIOS EEPROM. BASIC is no longer ROM-resident — it ships as the disk
 # program /bin/basic.bin (installed below), so the EEPROM is just the monitor.
 python3 "$root/assembler/p8xasm.py" "$root/firmware/p8xmon.asm" -o "$build/eeprom.bin" >/dev/null
-python3 "$root/assembler/p8xasm.py" "$root/os/p8xos.asm" -o "$build/p8xos.bin" --base 0x4000 >/dev/null
+python3 "$root/assembler/p8xasm.py" "$root/os/p8xos.asm" -o "$build/p8xos.bin" --base 0x2000 >/dev/null
 ( cd "$root/microcode" && python3 genucode.py >/dev/null )
 cp "$root"/microcode/u?.bin "$build/"
 cc -O2 -o "$build/p8xemu" "$root/emulator/p8xemu.c"
@@ -163,7 +163,7 @@ if [ ! -f "$disk" ]; then
     # OS-runnable BASIC: TPA build (code+data+scratch in $B000.., clear of the OS)
     # whose BYE returns to the OS cold start -> RUN /bin/basic.bin, then BYE.
     python3 "$root/assembler/p8xasm.py" "$root/basic/p8xbasic.asm" -o "$build/basicrun.bin" \
-        --base 0x7A00 -D BASORG=0x7A00 -D BASRAM=0xC500 -D PBUF=0xE000 -D MONITOR=0x4000 >/dev/null
+        --base 0x7A00 -D BASORG=0x7A00 -D BASRAM=0xC500 -D PBUF=0xE000 -D MONITOR=0x2000 >/dev/null
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/basicrun.bin" \
         --name /bin/basic.bin --load 0x7A00 --exec 0x7A00 >/dev/null
     # EDIT: line-oriented text editor (TPA program) -> RUN /bin/edit.bin NAME

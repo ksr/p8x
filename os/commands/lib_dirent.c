@@ -7,8 +7,8 @@
  * to the firmware's scratch layout — a memory remap had to move ~30 hardcoded
  * sites in lockstep. These helpers go through two OS syscalls instead:
  *
- *   SYS_DIRENTRY ($401B): copy the current entry into a caller buffer.
- *   SYS_OPENDIR  ($401E): begin iterating a subdirectory by its 16-bit LBA.
+ *   SYS_DIRENTRY ($201B): copy the current entry into a caller buffer.
+ *   SYS_OPENDIR  ($201E): begin iterating a subdirectory by its 16-bit LBA.
  *
  * so the firmware can relocate its scratch freely without touching a command.
  *
@@ -25,7 +25,7 @@
 char de[18];
 
 int de_read() {                       /* snapshot the current entry into de[] */
-    bios(0x401B, de, 0);              /* SYS_DIRENTRY -> (P1)=de */
+    bios(0x201B, de, 0);              /* SYS_DIRENTRY -> (P1)=de */
     return 0;
 }
 int de_isfile() { return (de[12] & 255) == 1; }
@@ -35,6 +35,6 @@ int de_len()    { return (de[13] & 255) + (de[14] & 255) * 256; }
 int de_lba()    { return (de[15] & 255) + (de[16] & 255) * 256; }
 
 int de_opendir(int lba) {             /* open subdirectory `lba` for FNEXT */
-    bios(0x401E, lba, 0);            /* SYS_OPENDIR: P1 = 16-bit start LBA */
+    bios(0x201E, lba, 0);            /* SYS_OPENDIR: P1 = 16-bit start LBA */
     return 0;
 }

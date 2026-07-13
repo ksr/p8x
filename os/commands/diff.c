@@ -8,7 +8,7 @@
  * nothing if the files are identical. This is a *prefix/suffix-anchored* diff
  * (it isolates one changed/inserted block) — not a minimal-edit LCS diff.
  *
- * BIOS: FRESOLVE=$0133, FOPEN=$0124, FGETB=$0127.  OS: SYS_GETCWD=$4003.
+ * BIOS: FRESOLVE=$0133, FOPEN=$0124, FGETB=$0127.  OS: SYS_GETCWD=$2003.
  * Read buffer at $FC00 (the two files are read one after the other).
  */
 char path[80];

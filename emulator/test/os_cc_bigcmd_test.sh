@@ -20,7 +20,7 @@ fail() { echo "OS-CC-BIGCMD TEST: FAIL — $1"; exit 1; }
 
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
-python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osbc.bin --base 0x4000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osbc.bin --base 0x2000 >/dev/null
 python3 $ROOT/assembler/p8xasm.py $ROOT/apps/p8xcc.asm -o ccbc.bin --base 0x7A00 >/dev/null
 python3 $ROOT/generators/gen_p8xopc.py > opctab.asm
 cat $ROOT/apps/p8xasm.asm opctab.asm > asmfull.asm

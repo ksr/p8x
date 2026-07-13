@@ -14,7 +14,7 @@ ROOT=../..
 
 cp $ROOT/microcode/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
-python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x4000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/dev/null
 
 python3 $ROOT/tools/clib.py $ROOT/os/commands/cp.c -o cr_cp.pp.c
 python3 $ROOT/compiler/p8cc.py cr_cp.pp.c -o cr_cp.asm >/dev/null

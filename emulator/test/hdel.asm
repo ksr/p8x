@@ -1,4 +1,4 @@
-; BIOS FDELETE exerciser — planted as the "OS" at LBA 1, booted to $4000.
+; BIOS FDELETE exerciser — planted as the "OS" at LBA 1, booted to $2000.
 ; Creates root file "TEST", deletes it via FDELETE (expects C=0), then FFIND
 ; must report not-found (C=1). Prints 'Y' on success; 'E' create error,
 ; 'D' delete-not-found, 'N' file still found after delete.
@@ -9,7 +9,7 @@ FDELETE = $011E
 FNAME   = $704A
 FSRC    = $7056
 FLEN    = $7058
-        .org $4000
+        .org $2000
         LDA  #'T'           ; FNAME = "TEST" + 8 spaces
         STA  FNAME
         LDA  #'E'

@@ -53,7 +53,7 @@ m_open: LDA m_arg
 m_loop: JSR nextc
         JC m_done
         STA mch
-        JSR $4009                    ; putchar
+        JSR $2009                    ; putchar
         LDA mch
         LDB #10
         CMP
@@ -101,18 +101,18 @@ m_nf:   LDA #<u_nf
         LDA #>u_nf
         TAP1H
         LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 m_usage:LDA #<u_use
         TAP1L
         LDA #>u_use
         TAP1H
         LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 
 ; prompt: print "--More--", read a CONIN key -> mkey (and A), erase the prompt.
@@ -121,7 +121,7 @@ prompt: LDA #<s_more
         LDA #>s_more
         TAP1H
         LDA #0
-        JSR $400F                    ; SYS_PUTS "--More--"
+        JSR $200F                    ; SYS_PUTS "--More--"
         LDA #0
         TAP1L
         TAP1H
@@ -133,7 +133,7 @@ prompt: LDA #<s_more
         LDA #>s_erase
         TAP1H
         LDA #0
-        JSR $400F                    ; erase: "\r        \r"
+        JSR $200F                    ; erase: "\r        \r"
         LDA mkey
         RTS
 

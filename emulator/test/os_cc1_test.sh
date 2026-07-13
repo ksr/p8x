@@ -11,7 +11,7 @@ UC=../../microcode
 
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
-python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o oscc1.bin --base 0x4000 >/dev/null
+python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o oscc1.bin --base 0x2000 >/dev/null
 
 # lex.bin + cc1.bin are host-built (both //#use apath); they become /bin/*.bin.
 python3 $ROOT/tools/clib.py $ROOT/os/commands/lex.c -o lex.pp.c

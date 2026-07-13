@@ -2,7 +2,7 @@
 ;   DEP addr b b ...   store hex byte values at hex address addr.
 ; Memory-only (no filesystem): parse hex, poke each byte, addr++. Quiet on
 ; success; usage on -h / empty; "dep: bad address" on a non-hex address.
-; Entry: P2 = arg tail.  SYS_PUTS=$400F, SYS_PUTC=$4009.
+; Entry: P2 = arg tail.  SYS_PUTS=$200F, SYS_PUTC=$2009.
 
         .org $7A00
 d_sk:   LDA (P2)                     ; skip leading spaces
@@ -61,18 +61,18 @@ d_bad:  LDA #<m_bad
         LDA #>m_bad
         TAP1H
         LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 d_use:  LDA #<m_use
         TAP1L
         LDA #>m_use
         TAP1H
         LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 
 ; GETHEX: skip spaces at (P2), parse hex digits -> HXLO/HXHI, advance P2.

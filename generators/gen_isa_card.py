@@ -197,7 +197,7 @@ legend = Paragraph(
     "<b>By</b>=bytes, <b>Cy</b>=cycles (incl. fetch). &nbsp; "
     "<b>Flags (Fl):</b> C carry (active-high: ADD carry-out / SUB,CMP no-borrow A>=B), "
     "Z zero, N negative (bit7), V overflow. '-' = none. Signed branches test N^V / Z. &nbsp; "
-    "<b>Memory (rev D):</b> $0000-3FFF ROM | $4000-FEFF RAM | $FF00-FFFF I/O. "
+    "<b>Memory (rev E):</b> $0000-1FFF ROM | $2000-FEFF RAM | $FF00-FFFF I/O. "
     "P0=PC, P3=stack (empty-descending). JZ/JNZ/JC are aliases of BZ/BNZ/BCP.",
     SUB)
 

@@ -8,7 +8,7 @@
  * state. Searches the CWD; per-level children capped at 24.
  *
  * BIOS: FOPENDIRAT=$0142, FSDIRBUF=$0145, FNEXT=$013C (name->$704A, flag->$7070,
- * start LBA->$7047). OS: SYS_CWDLBA=$4006. Entry fields read via SYS_DIRENTRY.
+ * start LBA->$7047). OS: SYS_CWDLBA=$2006. Entry fields read via SYS_DIRENTRY.
  */
 //#use dirent   /* de_read/de_isdir/de_isdot/de_lba/de_opendir: entry via syscall */
 
@@ -64,7 +64,7 @@ int main() {
         puts("usage: TREE   depth-first indented listing of the CWD tree");
         return 0;
     }
-    bios(0x4012, 0, 0);                      /* SYS_OPENCWD: iterate CWD (16-bit LBA) */
+    bios(0x2012, 0, 0);                      /* SYS_OPENCWD: iterate CWD (16-bit LBA) */
     bios(0x0145, 0, 0xEA);
     walk(0);
     return 0;

@@ -228,8 +228,8 @@ disk and run-from-OS builds (the standalone whole-ROM build has no card access).
 
 | Address (dec / hex) | What |
 |---------------------|------|
-| 0–16383 / `$0000–$3FFF` | EEPROM (the interpreter ROM — read-only; 16 KB on rev-D hardware) |
-| 16384–65279 / `$4000–$FEFF` | RAM, 48 KB (BASIC's program + variables live around `$8000`/`$A000`) |
+| 0–16383 / `$0000–$1FFF` | EEPROM (the interpreter ROM — read-only; 16 KB on rev-D hardware) |
+| 16384–65279 / `$2000–$FEFF` | RAM, 56 KB (BASIC's program + variables live around `$8000`/`$A000`) |
 | 65280 / `$FF00` | switch input port (`PEEK`) |
 | 65282 / `$FF02` | LED output port (`POKE`) |
 | 65284–65285 / `$FF04–05` | 6850 ACIA status / data |

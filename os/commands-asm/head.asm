@@ -102,7 +102,7 @@ h_loop: JSR less                     ; lines < n ?
         JSR nextc
         JC h_done
         STA hch
-        JSR $4009                    ; putchar
+        JSR $2009                    ; putchar
         LDA hch
         LDB #10
         CMP
@@ -122,18 +122,18 @@ h_nf:   LDA #<u_nf
         LDA #>u_nf
         TAP1H
         LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 h_usage:LDA #<u_use
         TAP1L
         LDA #>u_use
         TAP1H
         LDA #0
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         RTS
 
 h_ainc: LDA h_arg                    ; h_arg++

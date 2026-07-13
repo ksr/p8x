@@ -139,7 +139,7 @@ to the OS shell with `RTS` (startup inits `__csp` then `JSR _f_main`).
 | builtins | console: `getchar()` `putchar(e)` `puts(e)` (OS `SYS_GETC`/`SYS_PUTC`/`SYS_PUTS`); memory: `peek(addr)` `poke(addr,v)`; general: `bios(constaddr, p1, a)` |
 
 **Library functions are written in C.** The console builtins are thin wrappers
-over the **OS stream syscalls** (`$400C`/`$4009`/`$400F`), not the raw BIOS — so
+over the **OS stream syscalls** (`$200C`/`$2009`/`$200F`), not the raw BIOS — so
 a program's output is **redirectable by the shell**: `RUN PROG >FILE` streams its
 `putchar`/`puts` to a file with no source change, and `RUN PROG <FILE` binds its
 `getchar` to a file (which returns `-1` at end of file). Both combine —
