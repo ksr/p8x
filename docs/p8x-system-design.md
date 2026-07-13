@@ -33,8 +33,8 @@ Every pointer supports synchronous **load, hold, increment, decrement** (full 16
 
 All I/O is memory-mapped in page **$FF00–$FFFF**.
 
-Memory map (rev D — see the memory card):
-- `$0000–$1FFF` EEPROM, 16 KB (monitor + BIOS, ~4.3 KB used; 28C256 low half)
+Memory map (rev E — see the memory card):
+- `$0000–$1FFF` EEPROM, 8 KB (monitor + BIOS, ~4.7 KB used; 28C64, or low 8 KB of a 28C256)
 - `$2000–$FEFF` SRAM, 56 KB (2× 62256)
 - `$FF00–$FFFF` I/O page (RAM disabled here)
 

@@ -8,7 +8,7 @@
 ; rev E memory map (8K ROM / 56K RAM) puts RAM at $2000, so the OS loads there.
 ; The code can span $2000..$6FFF (~20K) before the firmware/BIOS scratch at $7000,
 ; giving the OS ~20K of growth room. The on-disk OS region (LBA 1..32) caps it at
-; 32 sectors / 16K. Firmware scratch $7000-$70xx + SBUF $7100 are fixed by the BIOS.
+; 32 sectors / 16K. Firmware scratch $6000-$60xx + SBUF $6100 are fixed by the BIOS.
 ;
 ; Build (RAM image, assembled to run at $2000):
 ;   python3 assembler/p8xasm.py os/p8xos.asm -o p8xos.bin --base 0x2000

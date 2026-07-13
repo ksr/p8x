@@ -11,8 +11,8 @@ DESCRIPTION
 
 NOTES
     dep writes anywhere in the 64K space, including over the resident OS.
-    Because it loads into the TPA at $7A00, depositing into its own
-    footprint (roughly $7A00..$8A00) corrupts the running program -- so
+    Because it loads into the TPA at $6A00, depositing into its own
+    footprint (roughly $6A00..$7A00) corrupts the running program -- so
     dep into other regions (OS variables, high RAM, the I/O ports).
 
 EXAMPLES

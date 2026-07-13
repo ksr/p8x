@@ -1,7 +1,7 @@
 # P8X/OS
 
 A small RAM-resident disk operating system for the P8X, loaded from
-CompactFlash to `$4000` by the ROM monitor's `B` command. Written in P8X
+CompactFlash to `$2000` by the ROM monitor's `B` command. Written in P8X
 assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 [`p8xasm.py`](../assembler/p8xasm.py).
 
@@ -72,7 +72,7 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 > the `mkdir` extent builder), then adopts the new layout in RAM. It **preserves
 > OSCNT**, so the OS image at LBA 1–32 is untouched and the card stays bootable
 > (`exit` then `B` re-boots the same OS onto the clean volume). This became
-> possible once the OS load address moved to `$4000` (rev D) — it didn't fit
+> possible once the OS load address moved to `$2000` (rev E) — it didn't fit
 > under the old `$8000` 14-sector ceiling.
 > See the design in
 > [hardware/cf-card/p8x-cf-os-design.md](../hardware/cf-card/p8x-cf-os-design.md)
@@ -131,15 +131,15 @@ place. Those addresses are an ABI — see the full table in
 [docs/p8x-monitor.md](../docs/p8x-monitor.md).
 
 ```
-ROM (EEPROM $0000-$3FFF, rev D)     RAM ($4000-$FEFF, 48K)
-  $0000 reset -> $0160 monitor        $4000 P8X/OS kernel + shell  (from CF, rev D)
+ROM (EEPROM 28C64 $0000-$1FFF, 8K, rev E)     RAM ($2000-$FEFF, 56K)
+  $0000 reset -> $0160 monitor        $2000 P8X/OS kernel + shell  (from CF, rev E)
   $0100 BIOS jump table  <------------ JSR CONOUT / CFREAD / ...
-  $0160 monitor body                   $7100 sector buffer (shared ABI)
-                                       $7300 OS variables
+  $0160 monitor body                   $6100 sector buffer (shared ABI)
+                                       $6300 OS variables
 ```
 
 Boot path: monitor `B` reads the boot block (LBA 0), checks the `P8`
-signature + `OSCNT`, loads `OSCNT` sectors from LBA 1 to `$4000`, and `JMP`s
+signature + `OSCNT`, loads `OSCNT` sectors from LBA 1 to `$2000`, and `JMP`s
 there. No card / bad signature falls back to the monitor prompt.
 
 ## Build & run
@@ -157,13 +157,13 @@ prompt) — type `?` for monitor help, then **`B`** to boot P8X/OS (`help` lists
 its commands). The disk persists at `os/run-disk.img`, so files you `save`
 survive across runs (delete it to start fresh; quit with Ctrl-C).
 
-**Manual build** — the OS is a RAM image, so it's assembled with `--base 0x4000`
-(the assembler emits only the bytes from `$4000` up, with labels resolved to
+**Manual build** — the OS is a RAM image, so it's assembled with `--base 0x2000`
+(the assembler emits only the bytes from `$2000` up, with labels resolved to
 their run address):
 
 ```sh
 # assemble the OS
-python3 assembler/p8xasm.py os/p8xos.asm -o p8xos.bin --base 0x4000
+python3 assembler/p8xasm.py os/p8xos.asm -o p8xos.bin --base 0x2000
 
 # build a P8XFS disk image, install the OS, add some files
 python3 tools/p8xfs.py create disk.img
@@ -189,7 +189,7 @@ tool (`create`/`boot`/`put`/`get`/`ls`).
 | LBA | Contents |
 |-----|----------|
 | 0 | Boot block: `P8`, version (2), OSCNT, free pointer |
-| 1–32 | OS image (loaded to `$4000`) |
+| 1–32 | OS image (loaded to `$2000`) |
 | 33–36 | Root directory: 4-sector extent (entry 0 `.`, entry 1 `..`) |
 | 37+ | Files + subdirectory extents, contiguous (from the free pointer) |
 
@@ -209,7 +209,7 @@ A path is just a path — there is no drive-letter syntax. Everything that takes
 path reaches drive 1 through `/d1`:
 
 - `cd /d1` — the prompt becomes `/d1> `; `cd /d1/SRC`, `cd ..` back out.
-- `cat /d1/NOTES`, `dir /d1`, `mkdir /d1/LIB`, `save /d1/PROG 7A00 7B00`.
+- `cat /d1/NOTES`, `dir /d1`, `mkdir /d1/LIB`, `save /d1/PROG 6A00 6B00`.
 - Relative paths resolve on whichever drive the CWD is on (the OS tracks that as
   a derived `CURDRIVE`), so once you `cd /d1`, bare `dir` / `cat F` / a `/bin`
   program all operate on drive 1.
@@ -243,24 +243,24 @@ stream keeps its own drive). It creates destination directories via the
 
 The OS publishes a small jump table at the front of its image — like the BIOS
 table at `$0100`, but for OS-level services the BIOS deliberately doesn't own
-(chiefly the current working directory). The OS stays resident at `$4000` while
+(chiefly the current working directory). The OS stays resident at `$2000` while
 a `run` program executes, so a TPA program reaches these with a plain `JSR` (or,
 from C, the `p8cc` `bios()` intrinsic). The table is **append-only**:
 
 | Addr | Syscall | Convention |
 |------|---------|------------|
-| `$4000` | (boot)    | `JMP COLD` — the monitor's `CMD_B` enters here |
-| `$4003` | `SYS_GETCWD` | copy the CWD path string (incl. NUL) into `(P1)`; clobbers P2 |
-| `$4006` | `SYS_CWDLBA` | current directory's start LBA → `A` (low byte only; use `SYS_OPENCWD` for a CWD at LBA ≥ 256) |
-| `$4009` | `SYS_PUTC` | write `A` to the current **stdout** (console, or the `>` file) |
-| `$400C` | `SYS_GETC` | next **stdin** byte → `A` (console, or the `<` file); `C=1` at EOF (console: echoes the key, Ctrl-D = EOF) |
-| `$400F` | `SYS_PUTS` | write the `(P1)` NUL-terminated string to stdout |
-| `$4012` | `SYS_OPENCWD` | begin iterating the CWD with its full **16-bit** start LBA (then `FNEXT`); works when the CWD lives at LBA ≥ 256, where `SYS_CWDLBA` + `FOPENDIRAT(A)` would truncate |
-| `$4015` | `SYS_SETDRIVE` | *(deprecated in the mount model — the drive follows the CWD's path; kept only as an ABI-stable slot)* |
-| `$4018` | `SYS_GETDRIVE` | → `A` = 1 if the CWD is under the `/d1` mount (drive 1), else 0 |
-| `$401B` | `SYS_DIRENTRY` | snapshot the entry `FNEXT`/`FFIND` just matched into `(P1)` — 18 bytes: name[12], flag, len(lo/mid), start-LBA(lo/hi), len(hi) — a 24-bit length. Lets commands read directory metadata without hardcoding BIOS scratch addresses |
-| `$401E` | `SYS_OPENDIR` | begin iterating the directory whose 16-bit start LBA is in `P1` (then `FNEXT`); the drive-agnostic way to descend into a subdirectory found via `SYS_DIRENTRY` |
-| `$4021` | `SYS_MKDIR` | create the directory named by the path in `P1` (applies the `/d1` mount); `C=1` on real failure, idempotent if it already exists. Lets a `/bin` program (`cp -r`) make directories |
+| `$2000` | (boot)    | `JMP COLD` — the monitor's `CMD_B` enters here |
+| `$2003` | `SYS_GETCWD` | copy the CWD path string (incl. NUL) into `(P1)`; clobbers P2 |
+| `$2006` | `SYS_CWDLBA` | current directory's start LBA → `A` (low byte only; use `SYS_OPENCWD` for a CWD at LBA ≥ 256) |
+| `$2009` | `SYS_PUTC` | write `A` to the current **stdout** (console, or the `>` file) |
+| `$200C` | `SYS_GETC` | next **stdin** byte → `A` (console, or the `<` file); `C=1` at EOF (console: echoes the key, Ctrl-D = EOF) |
+| `$200F` | `SYS_PUTS` | write the `(P1)` NUL-terminated string to stdout |
+| `$2012` | `SYS_OPENCWD` | begin iterating the CWD with its full **16-bit** start LBA (then `FNEXT`); works when the CWD lives at LBA ≥ 256, where `SYS_CWDLBA` + `FOPENDIRAT(A)` would truncate |
+| `$2015` | `SYS_SETDRIVE` | *(deprecated in the mount model — the drive follows the CWD's path; kept only as an ABI-stable slot)* |
+| `$2018` | `SYS_GETDRIVE` | → `A` = 1 if the CWD is under the `/d1` mount (drive 1), else 0 |
+| `$201B` | `SYS_DIRENTRY` | snapshot the entry `FNEXT`/`FFIND` just matched into `(P1)` — 18 bytes: name[12], flag, len(lo/mid), start-LBA(lo/hi), len(hi) — a 24-bit length. Lets commands read directory metadata without hardcoding BIOS scratch addresses |
+| `$201E` | `SYS_OPENDIR` | begin iterating the directory whose 16-bit start LBA is in `P1` (then `FNEXT`); the drive-agnostic way to descend into a subdirectory found via `SYS_DIRENTRY` |
+| `$2021` | `SYS_MKDIR` | create the directory named by the path in `P1` (applies the `/d1` mount); `C=1` on real failure, idempotent if it already exists. Lets a `/bin` program (`cp -r`) make directories |
 
 `SYS_GETCWD`/`SYS_CWDLBA`/`SYS_OPENCWD` operate on the single CWD in the unified
 namespace (the path shows `/d1/...` when it is on the mounted drive); `SYS_OPENCWD`

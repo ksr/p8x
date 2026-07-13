@@ -34,9 +34,9 @@
 ;   (JSR (P1) prepends the 4-cycle return-address push from JSR abs.)
 ;
 ; RAM USE (monitor scratch only; reclaimed once the OS/TPA take over):
-;   $9D00-$9D3F  line buffer
-;   $9D40-       variables (see equates)
-;   $9E00-$9FFF  512-byte sector buffer (shared with OS when it loads)
+;   $6000-$603F  line buffer
+;   $6040-       variables (see equates)
+;   $6100-$62FF  512-byte sector buffer (shared with OS when it loads)
 ;   $FE00-$FEFF  stack (P3), grows down from $FEFF
 ;==============================================================================
 
@@ -98,7 +98,7 @@ DICNT   = $6079          ; iteration: sectors remaining (1)
 DIIDX   = $607A          ; iteration: entry index within the sector (0..15)
 FLAREM  = $607B          ; FLOADAT remaining-bytes counter (CFRDSEC clobbers TMP) (3)
 DIBUFH  = $607E          ; FNEXT directory-buffer page (high byte; low byte 0).
-                         ;   Defaults to $9E (=SBUF) so the write stream and dir
+                         ;   Defaults to $61 (=SBUF) so the write stream and dir
                          ;   iteration don't have to share SBUF; FSDIRBUF repoints
                          ;   it at a caller buffer. FOPENDIRAT resets it. (1)
 ; --- 16-bit directory-LBA high bytes (directories may live at LBA >=256; the
@@ -128,9 +128,9 @@ RESET:  JMP  COLD
 ; BIOS JUMP TABLE  — stable entry points for RAM-resident programs (P8X/OS).
 ; These addresses are an ABI: never reorder or insert, or every OS image on
 ; every card breaks. See hardware/cf-card/p8x-cf-os-design.md sec 2.2.
-; Shared ABI state: 24-bit LBA at $9D47..$9D49 (LBA0/LBA1/LBA2, little-endian;
+; Shared ABI state: 24-bit LBA at $6047..$6049 (LBA0/LBA1/LBA2, little-endian;
 ; LBA1/LBA2 default 0 after CFINIT — set them for sectors >255), and the
-; 512-byte sector buffer SBUF at $9E00.
+; 512-byte sector buffer SBUF at $6100.
 ;==============================================================================
         .org $0100
         JMP  GETC           ; $0100 CONIN   wait for key, char -> A
@@ -155,7 +155,7 @@ RESET:  JMP  COLD
         JMP  FOPENDIR       ; $0139 FOPENDIR begin iterating directory at path (P1); C=1 bad path
         JMP  FNEXT          ; $013C FNEXT    next live entry -> FNAME/FFLAG/LBA/FLEN; C=1 at end
         JMP  FLOADAT        ; $013F FLOADAT  read FLEN bytes from LBA into (P1) (whole sectors)
-        JMP  FOPENDIRAT     ; $0142 FOPENDIRAT begin iterating the 4-sector directory at LBA = A (low) + LBA1 ($9D48) (high)
+        JMP  FOPENDIRAT     ; $0142 FOPENDIRAT begin iterating the 4-sector directory at LBA = A (low) + LBA1 ($6048) (high)
         JMP  FSDIRBUF       ; $0145 FSDIRBUF  point FNEXT's sector buffer at page A (high byte; call after FOPENDIR)
         JMP  CFSEL          ; $0148 CFSEL     A = drive (0/1) -> route sector/FS I/O to that CF card
         JMP  CFCURDRV       ; $014B CFCURDRV  -> A = current CF drive
@@ -981,12 +981,12 @@ FOD_ERR:JSR  FRESET
         SEC
         RTS
 ; FOPENDIRAT - begin iterating the directory whose extent starts at the 16-bit
-;   LBA in A (low byte) + LBA1 ($9D48, high byte) — every P8XFS v2 directory is
+;   LBA in A (low byte) + LBA1 ($6048, high byte) — every P8XFS v2 directory is
 ;   4 sectors. Lets the OS iterate its own resolved directory extent (e.g. the
 ;   CWD) without going through a path. Callers must set LBA1 (0 for LBA <256).
 FOPENDIRAT:
         STA  DILBA          ; A = start LBA low byte
-        LDA  LBA1           ; high byte taken from the LBA triple ($9D48)
+        LDA  LBA1           ; high byte taken from the LBA triple ($6048)
         STA  DILBA1
         LDA  #4
         STA  DICNT

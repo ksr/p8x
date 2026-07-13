@@ -10,7 +10,7 @@ board-specific design docs.
 | Control / Microcode | [control-card/](control-card/README.md) | Clock, reset, sequencer, microcode EPROMs, IR, condition mux, front panel |
 | Register Bank | [regbank-card/](regbank-card/README.md) | P0–P3 16-bit pointer registers, address-bus drivers |
 | ALU | [alu-card/](alu-card/README.md) | A/B/T/T2 registers, 74181 ALU, shifter, FLAGS |
-| Memory | [memory-card/](memory-card/README.md) | 28C256 EEPROM + 62256 SRAM, address decode |
+| Memory | [memory-card/](memory-card/README.md) | 28C64 ROM (or low 8K of 28C256) + 62256 SRAM, address decode |
 | I/O | [io-card/](io-card/README.md) | Switches, LEDs, 6850 ACIA (RS-232) |
 | CF-IDE | [cf-card/](cf-card/README.md) | CompactFlash in 8-bit True IDE mode at `$FF10–$FF17` |
 | LED display | [led-card/](led-card/README.md) | Optional front-panel bus monitor — passive address/data LED array |

@@ -24,7 +24,7 @@ and generates a clean write strobe.
 
 | Ref | Device | Role |
 |-----|--------|------|
-| U1 | 28C256 | ROM (8 KB, $0000–$1FFF) |
+| U1 | 28C64 (or low 8 KB of a 28C256) | ROM (8 KB, $0000–$1FFF) |
 | U2 | 62256 | SRAM, 32 KB (`$8000–$FEFF`) |
 | U10 | 62256 | SRAM, 24 KB (`$2000–$7FFF`, rev E) |
 | U3 | 74245 | Bidirectional data-bus transceiver |
@@ -38,17 +38,19 @@ and generates a clean write strobe.
 ## How it works
 
 ### Address decode (ROM vs RAM vs I/O) — rev E, decoded from A13 + A14 + A15
-- **ROM** (28C256, U1) is selected when **A15 = 0 and A14 = 0** — `!CE = A15 OR A14`
-  (a spare U8 OR gate), so the EEPROM responds for `$0000–$1FFF` (8 KB).
-- **New RAM** (62256, U10) is selected when **A15 = 0 and A14 = 1** —
-  `!CE = NAND(!A15, A14)` (spare U7 NAND gates), covering `$2000–$7FFF`.
+- **ROM** (U1) is selected when **A13 = A14 = A15 = 0** — `!CE = A13 OR A14 OR A15`,
+  so the ROM responds for `$0000–$1FFF` (8 KB).
+- **Low RAM** (62256, U10) is selected when **A15 = 0 and (A13 or A14) = 1** —
+  `!CE = A15 OR NOR(A13, A14)`, covering `$2000–$7FFF` (deselected in the
+  `$0000–$1FFF` ROM page).
 - The **I/O page detector** (U4, a 7430 8-input NAND on A8–A15) asserts `-IOPG` low
   whenever the address is `$FFxx`.
 - **Main RAM** (62256, U2) is selected only when **A15 = 1 *and* not the I/O page**.
   U7 NANDs A15 with `-IOPG` to produce `-RAMCE`: RAM enables for `$8000–$FEFF` but
   stays off for `$FFxx`, leaving that page to the I/O and CF cards.
 
-The rev-D decode added **no logic chips** — it reuses spare gates in U7 and U8.
+The rev-E decode adds the A13 term to the ROM/RAM-low select; rev D's spare gates
+are used up, so rev E likely needs one added 2-input gate (a 74HCT32/74HCT02).
 
 ### Data-bus transceiver
 The 74245 (U3) connects on-card memory to the backplane data bus. Its **direction**

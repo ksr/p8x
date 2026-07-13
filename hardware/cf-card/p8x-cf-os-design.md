@@ -68,11 +68,11 @@ A two-stage system: a permanent **BIOS in EEPROM**, and the **OS proper loaded f
 | Range | Contents |
 |---|---|
 | $0000–$1FFF | BIOS ROM: drivers, boot loader, syscall jump table |
-| $1100–$3FFF | ROM: erased ($FF) — monitor + BIOS end ~$1100 (BASIC is no longer ROM-resident) |
-| $4000–$6FFF | OS RAM: P8X/OS kernel + shell, **loaded from CF to $2000 (rev E)**. ~8.3 KB today; can grow to the boot ceiling at $7047 or the on-disk OS region (LBA 1–32 = 16 KB), whichever is smaller — so **12 KB max**, up from ~7 KB when it loaded at $8000 |
-| $7047–$7049 | CF LBA, 24-bit little-endian (LBA0/LBA1/LBA2; fixed by the BIOS). LBA1/LBA2 default 0 after CFINIT — set them for sectors >255 |
-| $7100–$72FF | Sector buffer SBUF (512 bytes, fixed by the BIOS) |
-| $7300–$79FF | OS variables (~3.5 KB) |
+| $1100–$1FFF | ROM: erased ($FF) — monitor + BIOS end ~$1100 (BASIC is no longer ROM-resident) |
+| $2000–$5FFF | OS RAM: P8X/OS kernel + shell, **loaded from CF to $2000 (rev E)**. ~9.5 KB today; the 16 KB reserve ($2000–$5FFF) matches the on-disk OS region (LBA 1–32 = 16 KB), so both impose the same **16 KB max** |
+| $6047–$6049 | CF LBA, 24-bit little-endian (LBA0/LBA1/LBA2; fixed by the BIOS). LBA1/LBA2 default 0 after CFINIT — set them for sectors >255 |
+| $6100–$62FF | Sector buffer SBUF (512 bytes, fixed by the BIOS) |
+| $6300–$69FF | OS variables + stdin/PATH/APBUF buffers |
 | $6A00–$FDFF | **TPA** — transient program area (~37.9 KB; RUN load addr + `>` capture) |
 | $FE00–$FEFF | Stack page (P3, grows down from $FEFF) |
 | $FF00–$FFFF | I/O |
@@ -188,7 +188,7 @@ Programs return to the shell with RTS (shell calls via JSR) and may call any BIO
 | Shell | 2 KB RAM |
 | ROM monitor (fallback) | 1 KB ROM |
 
-Comfortably inside the maps above, with the whole 31.6 KB TPA left for programs — Tiny BASIC or a Forth loaded *from the CF card* as ordinary executables rather than burned into ROM.
+Comfortably inside the maps above, with the whole 37.9 KB TPA left for programs — Tiny BASIC or a Forth loaded *from the CF card* as ordinary executables rather than burned into ROM.
 
 ---
 

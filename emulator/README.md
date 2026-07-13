@@ -243,12 +243,12 @@ the stack pointer starts at `$FEFF` (top of RAM, growing down), and step 0 with
 ## 9. Memory map and I/O
 
 ```
-0000–3FFF  ROM   (16K, decoded from the EEPROM image)
-4000–FEFF  RAM   (48K: 2×62256, $4000–7FFF and $8000–FEFF)
+0000–1FFF  ROM   (8K, decoded from the EEPROM image)
+2000–FEFF  RAM   (56K: 2×62256, $2000–7FFF and $8000–FEFF)
 FF00–FFFF  I/O
 ```
 
-`memrd`/`memwr` implement the decode. Writes below `$4000` are refused with a
+`memrd`/`memwr` implement the decode. Writes below `$2000` are refused with a
 warning (you can't write ROM). The I/O page:
 
 | Addr | R/W | Device |

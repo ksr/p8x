@@ -12,12 +12,12 @@ DESCRIPTION
     block. dump is a /bin program (formerly an OS built-in).
 
 NOTES
-    dump loads into the TPA at $7A00, so dumping that region shows dump's
+    dump loads into the TPA at $6A00, so dumping that region shows dump's
     own bytes. It reads memory only -- see dep to change it.
 
 EXAMPLES
-    dump 7A00
-    dump 4000        peek at the resident OS
+    dump 6A00
+    dump 2000        peek at the resident OS
 
 SEE ALSO
     dep, load, save

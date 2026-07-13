@@ -76,7 +76,7 @@ EEPROM programmer:
   and tests load); the matching Intel HEX for the four 28C64 control-store EPROMs
   is produced into `rom/` by `make rom` (see below).
 - **Program ROM** — the assembled monitor + BIOS for the 28C256 at `$0000`
-  (~4.3 KB; BASIC is no longer ROM-resident). `make rom` builds it into `rom/`.
+  (~4.7 KB; BASIC is no longer ROM-resident). `make rom` builds it into `rom/`.
 - **Any other binary** — `python3 tools/bin2hex.py in.bin out.hex [base]`
   (e.g. a monitor built directly with `p8xasm.py`).
 

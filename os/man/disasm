@@ -17,17 +17,17 @@ DESCRIPTION
 
     Both addresses are hexadecimal. disasm reads memory with peek() only,
     so it can disassemble the OS, the BIOS, or a program you LOADed --
-    but note disasm itself runs in the TPA at $7A00, so don't disassemble
+    but note disasm itself runs in the TPA at $6A00, so don't disassemble
     the range it occupies. Output is a plain stream, so it redirects and
-    pipes (disasm 4000 4100 >OS.LST).
+    pipes (disasm 2000 2100 >OS.LST).
 
     The opcode table is generated from the same source as the assembler
     and microcode (genucode.OPC), so disasm never drifts from the ISA.
 
 EXAMPLES
-    disasm 7A00 7A40      the first instructions of a loaded program
+    disasm 6A00 6A40      the first instructions of a loaded program
     disasm 0100 0130      the BIOS jump table
-    disasm 4000 4100 >L   capture a disassembly to a file
+    disasm 2000 2100 >L   capture a disassembly to a file
 
 SEE ALSO
     dump, dep, asm, run

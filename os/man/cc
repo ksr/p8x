@@ -18,7 +18,7 @@ DESCRIPTION
 
     This is distinct from the host cross-compiler (compiler/p8cc.py) and the
     self-hosted FRONT END (cpp | lex | cc1): cc is a from-scratch native
-    BACK-END-and-all compiler aimed at fitting the ~31.5 KB TPA, where a port
+    BACK-END-and-all compiler aimed at fitting the ~37.9 KB TPA, where a port
     of the optimizing p8cc could not.
 
     THIS IS EARLY (v0.28). Supported so far:  (`int` is 16-bit; `char` is a

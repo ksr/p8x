@@ -4,6 +4,10 @@ Widen the BIOS file-length fields from 16-bit to **24-bit** (16 MB max/file),
 matching the existing 24-bit `ROLBA`. The P8XFS v2 directory entry already stores
 length in 4 bytes, so **no on-disk format change** — only the BIOS's use of it.
 
+> **Note (rev E):** the RAM addresses in this note predate the rev-E scratch
+> relocation — the firmware/BIOS scratch + SBUF moved −$1000 (e.g. SBUF `$7100`→`$6100`,
+> `FLEN` `$7058`→`$6058`). The layout/logic described is unchanged; only the base moved.
+
 ## New FS scratch layout (firmware/p8xmon.asm)
 
 `FNAME`/`FSRC`/`FLEN` stay anchored ($704A/$7056/$7058) so `EDIT` and `BASIC`

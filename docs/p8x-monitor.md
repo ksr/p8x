@@ -32,7 +32,7 @@ take an address read **4 hex digits** (`AAAA`) right after the letter.
 | **D** | `D AAAA` | **Dump** 256 bytes from `AAAA` as hex + ASCII. Pages (see below). |
 | **I** | `I` | **Init CF**: reset the card, set 8-bit mode, IDENTIFY, print the model string. |
 | **F** | `F` | **Format** the CF card as P8XFS (writes the boot block + root directory). Asks `Y/N`. |
-| **B** | `B` | **Boot** the OS image from the CF card into `$4000` and run it. |
+| **B** | `B` | **Boot** the OS image from the CF card into `$2000` and run it. |
 | **G** | `G AAAA` | **Go**: `JSR AAAA`. The called code returns to the monitor with `RTS`. |
 | **? / H** | `?` or `H` | Print the built-in command help. |
 
@@ -100,8 +100,8 @@ knowing the monitor's internal addresses. These entry points are **stable**:
 | `$0139` | FOPENDIR | begin iterating the directory at path `P1` (`""`/`"/"` = root); `C=1` if not a directory |
 | `$013C` | FNEXT | next live entry → `FNAME`/`FFLAG`/`LBA`/`FLEN`; `C=1` at end (skips deleted entries) |
 | `$013F` | FLOADAT | bulk-read `FLEN` bytes from sector `LBA` into `(P1)`, a whole sector at a time (the fast "slurp a file" primitive; EDIT + the OS loader use it) |
-| `$0142` | FOPENDIRAT | begin iterating the directory whose 4-sector extent starts at the 16-bit LBA `A` (low) + `LBA1` (`$7048`, high) — lets a caller iterate an extent it already resolved, e.g. the OS's CWD. Set `LBA1`=0 for LBA < 256 |
-| `$0145` | FSDIRBUF | point the directory sector buffer at the page in `A` (high byte; 512-byte page-aligned buffer; defaults to `SBUF`=`$71` at boot and is reset to `SBUF` by `FOPENDIR`/`FOPENDIRAT`). Used by **both** `FNEXT` iteration **and** `FSCAN` (the engine behind `FRESOLVE`/`FFIND`/`FOPEN`), so repointing it lets a program iterate **and** resolve paths while a write stream keeps `SBUF` — e.g. `DIR` redirected/piped, or `CAT *.X >OUT` (resolve+open each match without clobbering the open write stream's `SBUF`) |
+| `$0142` | FOPENDIRAT | begin iterating the directory whose 4-sector extent starts at the 16-bit LBA `A` (low) + `LBA1` (`$6048`, high) — lets a caller iterate an extent it already resolved, e.g. the OS's CWD. Set `LBA1`=0 for LBA < 256 |
+| `$0145` | FSDIRBUF | point the directory sector buffer at the page in `A` (high byte; 512-byte page-aligned buffer; defaults to `SBUF`=`$61` at boot and is reset to `SBUF` by `FOPENDIR`/`FOPENDIRAT`). Used by **both** `FNEXT` iteration **and** `FSCAN` (the engine behind `FRESOLVE`/`FFIND`/`FOPEN`), so repointing it lets a program iterate **and** resolve paths while a write stream keeps `SBUF` — e.g. `DIR` redirected/piped, or `CAT *.X >OUT` (resolve+open each match without clobbering the open write stream's `SBUF`) |
 
 | `$0148` | CFSEL | select the active CF drive for subsequent sector/FS I/O: `A` = drive (0/1) → `DRVSEL`. The OS's mount redirect (in `FRESOLVE`/`RV_START`) calls this to route a `/D1` path to drive 1 — there is no drive-letter prefix. Both cards share the `$FF10` task-file port; `DRVSEL` is ORed into `CFHEAD` as the ATA device bit |
 | `$014B` | CFCURDRV | current CF drive → `A` (0/1) |
@@ -119,10 +119,10 @@ tree and leaves the leaf name in `FNAME`): `FRESOLVE("/BIN/X")` then `FOPEN`
 reads `/BIN/X`; `FRESOLVE("/SUB/W")` then `FWOPEN`/`FPUTB`/`FCLOSE` writes
 `/SUB/W`. `FFIND`/`FOPEN`/`FCREATE`/`FDELETE`/`FCLOSE` are all path-aware this
 way. Parameters use fixed RAM:
-`FNAME` (`$704A`, 12-byte space-padded name), `FSRC` (`$7056`, FCREATE source
-address), `FLEN` (`$7058`, **24-bit** length, 3 bytes — FCREATE input, FFIND
+`FNAME` (`$604A`, 12-byte space-padded name), `FSRC` (`$6056`, FCREATE source
+address), `FLEN` (`$6058`, **24-bit** length, 3 bytes — FCREATE input, FFIND
 output; max file 16 MB, matching the 24-bit `ROLBA`); `FFIND` returns
-the start LBA in the shared `LBA` (`$7047`). (Subdirectory LBAs are 16-bit: the
+the start LBA in the shared `LBA` (`$6047`). (Subdirectory LBAs are 16-bit: the
 directory-iteration/resolution path carries `DIRLBA`/`DILBA` plus their high
 bytes, so a directory whose extent starts at LBA ≥ 256 resolves and lists
 correctly.)
@@ -131,10 +131,10 @@ correctly.)
 
 | Range | Use |
 |-------|-----|
-| `$0000–$1FFF` | EEPROM (16 KB, rev D) — monitor + BIOS at `$0000` (~4.3 KB used). BASIC is no longer ROM-resident; it ships as `/BIN/BASIC.BIN` on disk. |
-| `$4000–$6FFF` | RAM — **P8X/OS code** loads here (`$4000`, ~8.3 KB). |
-| `$7000–$72FF` | RAM — **firmware/BIOS scratch** (fixed by the BIOS): monitor line buffer `$7000`, the parameter block + read/write/dir-iteration state `$7040` (CF `LBA` `$7047–$7049`, `FNAME` `$704A`, `FSRC`/`FLEN`, `FFLAG` `$7075`, `DIBUFH` `$707E`), and the sector buffer `SBUF` at `$7100`. |
-| `$7300–$79FF` | RAM — **OS data**: variables `$7300`, the stdin read buffer `IBUF` `$7500`, search `PATH` `$7700`, the `>>` prepend buffer `APBUF` `$7800`. |
+| `$0000–$1FFF` | EEPROM (8 KB, rev E; 28C64 or low 8 KB of a 28C256) — monitor + BIOS at `$0000` (~4.7 KB used). BASIC is no longer ROM-resident; it ships as `/BIN/BASIC.BIN` on disk. |
+| `$2000–$5FFF` | RAM — **P8X/OS code** loads here (`$2000`, ~9.5 KB; 16 KB reserve = the on-disk LBA 1–32 cap). |
+| `$6000–$62FF` | RAM — **firmware/BIOS scratch** (fixed by the BIOS): monitor line buffer `$6000`, the parameter block + read/write/dir-iteration state `$6040` (CF `LBA` `$6047–$6049`, `FNAME` `$604A`, `FSRC`/`FLEN`, `FFLAG` `$6075`, `DIBUFH` `$607E`), and the sector buffer `SBUF` at `$6100`. |
+| `$6300–$69FF` | RAM — **OS data**: variables `$6300`, the stdin read buffer `IBUF` `$6500`, search `PATH` `$6700`, the `>>` prepend buffer `APBUF` `$6800`. |
 | `$6A00–$FDFF` | RAM — **TPA**: user programs + data (`RUN` loads at `$6A00`, ~37.9 KB). Commands keep their 512-byte scratch buffers near the top — the file-read buffer at `$FC00` and the glob/dir-iteration buffer at `$FA00`. |
 | `$FE00–$FEFF` | RAM — stack (P3 grows down from `$FEFF`). |
 | `$FF00` | switch input port (read) |

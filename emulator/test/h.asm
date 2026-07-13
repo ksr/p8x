@@ -15,9 +15,9 @@ _f_main:
         TAP1L
         LDA __ax+1
         TAP1H
-        JSR $400F
+        JSR $200F
         LDA #10
-        JSR $4009
+        JSR $2009
         LDA #0
         STA __ax
         LDA #0

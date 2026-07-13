@@ -2,7 +2,7 @@
 # OS commands written in C (os/commands/dir.c, pwd.c), exercising:
 #   - argstr()           the RUN command tail (P2)
 #   - bios() carry flag  to terminate the FOPENDIR/FNEXT directory loop
-#   - the OS syscall ABI SYS_CWDLBA ($4006) / SYS_GETCWD ($4003) for the current
+#   - the OS syscall ABI SYS_CWDLBA ($2006) / SYS_GETCWD ($2003) for the current
 #     working directory — via the published jump table, NOT by peeking OS RAM
 # Compiled by BOTH p8cc.py and the native p8cc.c bootstrap.  One emulator session
 # per compiler runs three scenarios on a disk with a /SUB subdirectory:

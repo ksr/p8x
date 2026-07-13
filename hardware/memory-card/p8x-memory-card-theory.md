@@ -71,7 +71,7 @@ reads vs writes, and includes a jumper to write-protect the ROM.
                         │                        VCC ─── JWP 3 ──│ WP  │     (jumper: writable
                         ▼                                        └─────┘      or VCC=protected)
               D0-7 ◄──► ┌──────────────┐ MD0-7
-                        │U3 74245 DATA │◄────────► U1 28C256 IO0-7
+                        │U3 74245 DATA │◄────────► U1 28C64  IO0-7
                         │  BUFFER      │◄────────► U2 62256  IO0-7
                         └──────────────┘
 ```
@@ -100,8 +100,9 @@ So the decode yields four regions:
 - `$8000–$FEFF` → SRAM U2 (32 KB)
 - `$FF00–$FFFF` → neither responds here (the I/O and CF cards do)
 
-The new decode added **no logic chips** — it reuses spare gates already on the
-card (U7 had three unused NANDs, U8 a spare OR). The only added part is U10 (the
+The rev-E decode adds the A13 term to the ROM/RAM-low select; rev D's spare gates
+are exhausted, so rev E likely needs one added 2-input gate (74HCT32/74HCT02). The
+other added part is U10 (the
 second 62256) and its 100 nF decoupling cap.
 
 ### 3.2 Read vs write strobes
@@ -122,7 +123,7 @@ through a 74245 transceiver:
   never contends with other cards' bus drivers.
 
 ### 3.4 ROM write-protect jumper (JWP)
-The 28C256 is electrically writable (it's an EEPROM), which is convenient for
+The ROM (a 28C64, or a 28C256 used as 8K) is electrically writable (an EEPROM), which is convenient for
 in-system programming but risky if runaway code scribbles on it. `JWP` is a 3-pin
 select on the ROM's `!WE` only: position **1-2** routes the live `-WE` net (ROM
 writable, the default for flashing), position **2-3** ties `!WE` to VCC (ROM

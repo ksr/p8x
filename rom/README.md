@@ -26,7 +26,7 @@ This refreshes `microcode/u0–u3.{bin,hex}` and all of `rom/`.
 | `p8x-ucode1.hex` | 28C64 | control U11 | microcode word bits 8–15 |
 | `p8x-ucode2.hex` | 28C64 | control U12 | microcode word bits 16–23 |
 | `p8x-ucode3.hex` | 28C64 | control U13 | microcode word bits 24–31 |
-| `p8x-prog-rom.hex` | 28C256 (32 KB) | memory U1 | monitor + BIOS @ `$0000` (~4.3 KB used; rest erased) |
+| `p8x-prog-rom.hex` | 28C64 8 KB (`$0000–$1FFF`; or low 8 KB of a 28C256) | memory U1 | monitor + BIOS @ `$0000` (~4.7 KB used; rest erased) |
 
 The four microcode EPROMs are addressed by `IR | step<<8 | cond<<12`; burn the
 same address range that the programmer reads from the `.hex`. The program ROM is

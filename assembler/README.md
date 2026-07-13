@@ -13,7 +13,7 @@ disagree about what an opcode means. (Edit the instruction set in
 python3 p8xasm.py src.asm [-o out.bin] [-l listing.txt] [--base ADDR] [-D NAME=VAL ...]
 ```
 
-- **No `--base`** → a full 32 KB ROM image (origin `$0000`), ready for the
+- **No `--base`** → an 8 KB ROM image (origin `$0000`, `$0000–$1FFF`), ready for the
   memory-card EEPROM. This is how the monitor (program ROM) is built.
 - **`--base A`** → a RAM-resident blob: labels resolve to run address `A`, and
   only the `A..high` bytes are emitted. This is how P8X/OS and disk BASIC are

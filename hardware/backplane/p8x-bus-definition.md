@@ -273,8 +273,8 @@ FCOND encoding: 0=C, 1=Z, 2=N, 3=V (selects which flag pin drives A12).
 
 | Range | Device | Notes |
 |-------|--------|-------|
-| $0000–$3FFF | EEPROM (28C256, low 16 KB) | ROM monitor + BIOS (rev D; BASIC is a disk program) |
-| $4000–$FEFF | SRAM (2× 62256) | General RAM, 56 KB (rev D) |
+| $0000–$1FFF | EEPROM (28C64, or low 8 KB of a 28C256) | ROM monitor + BIOS (rev E; BASIC is a disk program) |
+| $2000–$FEFF | SRAM (2× 62256) | General RAM, 56 KB (rev E) |
 | $FF00 | I/O: switches | Read |
 | $FF02 | I/O: LEDs | Write |
 | $FF04–$FF05 | I/O: ACIA (6850) | $FF04=control/status, $FF05=data |

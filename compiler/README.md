@@ -59,7 +59,7 @@ There are two implementations of the same compiler:
   C **front end** is self-hosted (see below), but the **back end stays on the
   host**. This is not a language gap — it is a hard size wall: `p8cc.c` compiles
   to ~82 KB, which is *larger than the machine's entire 64 KB address space* (it
-  won't even assemble to one image), and ~2.6× the ~31.5 KB program area. The
+  won't even assemble to one image), and ~2.2× the ~37.9 KB program area. The
   codegen's ~55 KB of symbol-table/type-analysis/emit machinery is shared across
   every part, so it can't be sharded into TPA-sized passes. A true on-target back
   end would need a *new*, deliberately-small code generator (a filed stretch

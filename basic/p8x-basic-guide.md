@@ -29,7 +29,7 @@ where the code and its data live and how you start it):
 | Build | Code | Data | Invoked by |
 |-------|------|------|------------|
 | Standalone | `$0000` | `$8000` | burned as the whole ROM; `run.sh` / tests |
-| Disk | `$4000` | `$A000` | a bootable P8XFS image, started with the monitor's `B` command (rev D loads the OS region at `$4000`) |
+| Disk | `$2000` | `$A000` | a bootable P8XFS image, started with the monitor's `B` command (rev E loads the OS region at `$2000`) |
 | Run-from-OS | `$6A00` | `$C500` | a TPA program (`BASIC.BIN`); `RUN` it from the OS, `BYE` returns to the OS |
 
 `Code` is where the interpreter runs and `Data` is the base of its variables and
@@ -228,8 +228,8 @@ disk and run-from-OS builds (the standalone whole-ROM build has no card access).
 
 | Address (dec / hex) | What |
 |---------------------|------|
-| 0–16383 / `$0000–$1FFF` | EEPROM (the interpreter ROM — read-only; 16 KB on rev-D hardware) |
-| 16384–65279 / `$2000–$FEFF` | RAM, 56 KB (BASIC's program + variables live around `$8000`/`$A000`) |
+| 0–8191 / `$0000–$1FFF` | EEPROM (the interpreter ROM — read-only; 8 KB on rev-E hardware) |
+| 8192–65279 / `$2000–$FEFF` | RAM, 56 KB (BASIC's program + variables live around `$8000`/`$A000`) |
 | 65280 / `$FF00` | switch input port (`PEEK`) |
 | 65282 / `$FF02` | LED output port (`POKE`) |
 | 65284–65285 / `$FF04–05` | 6850 ACIA status / data |

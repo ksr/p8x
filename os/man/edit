@@ -9,7 +9,7 @@ DESCRIPTION
     serial console, without needing a full-screen terminal (unlike vi).
     Lines are numbered; you list, insert, replace, and delete by number,
     then write the file out. edit is a /bin program (a TPA program run at
-    $7A00).
+    $6A00).
 
 EXAMPLES
     edit hello.asm

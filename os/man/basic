@@ -99,8 +99,8 @@ COMMANDS
     directory, so make subdirectories with MKDIR in the OS first.
 
 MEMORY
-    PEEK/POKE reach the whole map (decimal addresses): 0-16383 EEPROM
-    (read-only), 16384-65279 RAM, 65280 switch input, 65282 LED output,
+    PEEK/POKE reach the whole map (decimal addresses): 0-8191 EEPROM
+    (read-only), 8192-65279 RAM, 65280 switch input, 65282 LED output,
     65284/65285 the serial port. So POKE 65282,170 lights an LED pattern.
 
 ERRORS

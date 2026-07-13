@@ -17,10 +17,10 @@ emulator, not just assumed.
 | call | addr | in | out |
 |------|------|----|-----|
 | entry | `$6A00` | `P2` = ptr to NUL-terminated arg tail | `RTS` to OS |
-| SYS_GETCWD | `$4003` | `P1` = dest buf | CWD path (incl. NUL) copied |
-| SYS_PUTC | `$4009` | `A` = char | — |
-| SYS_PUTS | `$400F` | `P1` = string | prints string, no newline |
-| SYS_GETC | `$400C` | — | `A` = char, or EOF |
+| SYS_GETCWD | `$2003` | `P1` = dest buf | CWD path (incl. NUL) copied |
+| SYS_PUTC | `$2009` | `A` = char | — |
+| SYS_PUTS | `$200F` | `P1` = string | prints string, no newline |
+| SYS_GETC | `$200C` | — | `A` = char, or EOF |
 | FRESOLVE | `$0133` | `P1` = path | sets DIRLBA/FNAME |
 | FOPEN | `$0124` | `P1` = 512-byte buf | `C`=1 if not found |
 | FGETB | `$0127` | — | `A` = byte, `C`=1 at EOF |

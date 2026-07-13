@@ -1134,7 +1134,7 @@ card("cf-card","P8X CF-IDE CARD REV A - 8-BIT TRUE IDE AT 0xFF10",ic,sm,n,
  {"D%d"%i for i in range(8)}|{"A0","A1","A2","A3","A4"}|{"A%d"%i for i in range(8,16)}|
  {"DOE%d"%i for i in range(4)}|{"DLD%d"%i for i in range(4)}|{"CLKB","-RES"})
 
-# ===================== MEMORY CARD rev D ======================================
+# ===================== MEMORY CARD rev E ======================================
 # Built through the shared card() helper like every other logic card (placement
 # is auto — final layout is done in Fusion/Eagle). card() supplies J1, the per-IC
 # decoupling caps, the IC power pins, and the J1 bus/power wiring derived from
@@ -1213,7 +1213,7 @@ mnet("LEDRA",("RS2","2"),("LED4","A")); mnet("RAMK",("U8","2Y"),("LED4","K"))
 mnet("LEDRD",("RS3","2"),("LED5","A")); mnet("RDK",("U9","2Y"),("LED5","K"))
 mnet("LEDWR",("RS4","2"),("LED6","A")); mnet("WRK",("U9","3Y"),("LED6","K"))
 mnet("VCC",("RP1","1"),("RS1","1"),("RS2","1"),("RS3","1"),("RS4","1"))
-card("memory-card","P8X MEMORY CARD REV D",ic,sm,mcn,
+card("memory-card","P8X MEMORY CARD REV E",ic,sm,mcn,
  {"D%d"%i for i in range(8)}|{"A%d"%i for i in range(16)}|
  {"DOE%d"%i for i in range(4)}|{"DLD%d"%i for i in range(4)}|{"CLK"})
 

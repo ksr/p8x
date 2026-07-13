@@ -10,7 +10,7 @@ DESCRIPTION
     built-in command.
 
 EXAMPLES
-    save prog.bin 7A00 7C00
+    save prog.bin 6A00 6C00
 
 SEE ALSO
     load, dump, dep

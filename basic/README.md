@@ -107,7 +107,7 @@ origin), `BASRAM` (data base), `PBUF` (rebuild scratch), and `MONITOR` (where
 | Build | Code (`BASORG`) | Data (`BASRAM`) | Invoked by |
 |-------|-----------------|-----------------|------------|
 | Standalone | `$0000` | `$8000` | burned as the whole ROM; `run.sh` / scripted tests |
-| Disk | `$4000` | `$A000` | installed on a P8XFS image, booted by the monitor `B` command (rev D: loads at `$4000`) |
+| Disk | `$2000` | `$A000` | installed on a P8XFS image, booted by the monitor `B` command (rev E: loads at `$2000`) |
 | Run-from-OS | `$6A00` | `$C500` | a TPA program (`PBUF=$E000`, `MONITOR=$2000`) installed as `BASIC.BIN`; `RUN` it from the OS, `BYE` returns to the OS (see below) |
 
 `Code` is where the interpreter runs (low ROM or RAM); `Data` is
@@ -121,11 +121,11 @@ split.
 > disk program, the ROM copy was redundant and was removed to reclaim ROM space;
 > use the **Disk** or **Run-from-OS** build below.
 
-**Disk** — assemble at `$4000` (rev D boot address), install as a bootable image, boot with `B`:
+**Disk** — assemble at `$2000` (rev E boot address), install as a bootable image, boot with `B`:
 
 ```sh
 python3 assembler/p8xasm.py basic/p8xbasic.asm -o basicdisk.bin \
-        --base 0x4000 -D BASORG=0x4000 -D BASRAM=0xA000
+        --base 0x2000 -D BASORG=0x2000 -D BASRAM=0xA000
 python3 tools/p8xfs.py create disk.img
 python3 tools/p8xfs.py boot   disk.img basicdisk.bin
 ./emulator/p8xemu -c disk.img eeprom.bin             # at '*' press B
@@ -134,12 +134,12 @@ python3 tools/p8xfs.py boot   disk.img basicdisk.bin
 **Run from P8X/OS** — the primary way to use BASIC: install it as a regular OS
 program so you can `RUN BASIC.BIN` from the OS shell and `BYE` back to it. No source change —
 just relocate everything into the **TPA** (`$6A00+`, clear of the OS at
-`$4000–$AFFF`) and point `MONITOR` at the OS cold-start so `BYE` re-enters the OS
+`$2000–$AFFF`) and point `MONITOR` at the OS cold-start so `BYE` re-enters the OS
 (which stays resident) instead of the ROM monitor:
 
 ```sh
 python3 assembler/p8xasm.py basic/p8xbasic.asm -o basicrun.bin \
-        --base 0x6A00 -D BASORG=0x6A00 -D BASRAM=0xC500 -D PBUF=0xE000 -D MONITOR=0x4000
+        --base 0x6A00 -D BASORG=0x6A00 -D BASRAM=0xC500 -D PBUF=0xE000 -D MONITOR=0x2000
 python3 tools/p8xfs.py put disk.img basicrun.bin --name BASIC.BIN --load 0x6A00 --exec 0x6A00
 # boot the OS (B), then:  RUN BASIC.BIN   ... use BASIC ...   BYE   (-> back at /> )
 ```
@@ -156,8 +156,8 @@ data base with room to spare.
 
 | Region | Use |
 |--------|-----|
-| `$0000-$3FFF` | interpreter code (EEPROM, 16 KB rev D) |
-| `$4000-$7FFF` | RAM (rev D) — unused by the standalone build |
+| `$0000-$1FFF` | interpreter code (EEPROM, 8 KB rev E) |
+| `$2000-$7FFF` | RAM (rev E) — unused by the standalone build |
 | `$8000-…`     | tokenized program text (standalone `BASRAM=$8000`) |
 | `…-$FDFF`     | named numeric vars (32) + string-var table + string/eval scratch |
 | `$FE00-$FEFF` | stack (P3), incl. GOSUB return stack |

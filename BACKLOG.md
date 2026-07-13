@@ -114,15 +114,14 @@ Last updated: 2026-07-08
 - **P8XFS v2 — remaining loose ends** (the hierarchy itself is DONE; see DONE):
     - **on-target FORMAT — DONE** (2026-06-22, see DONE). Added the `FORMAT`
       command; it fit once the OS moved to $4000 (rev D).
-    - **OS code size — ~12 KB ceiling (after the 2026-06-26 memory remap).** The
-      boot loader (CMD_B) loads the OS to $4000 upward. The firmware/BIOS scratch
-      now sits low (monitor line buffer $7000, param/state block $7040, SBUF
-      $7100), so the OS image must end **below $7000** — i.e. **~12 KB** of RAM
-      ($4000–$6FFF). (Before the remap the scratch was at $9D40, giving ~23.8 KB
-      of RAM headroom; the remap traded that down to grow the TPA to ~37.9 KB.)
-      The on-disk OS region is still LBA 1–32 (16 KB), so RAM is now the tighter
-      cap. The OS is ~8.5 KB today → ~3.5 KB headroom. BIOS scratch/SBUF/OS vars
-      moved with the remap: LBA $7047, SBUF $7100, OS vars $7300.
+    - **OS code size — 16 KB ceiling (rev E).** The boot loader (CMD_B) loads the
+      OS to $2000 upward. The firmware/BIOS scratch sits at $6000 (monitor line
+      buffer $6000, param/state block $6040, SBUF $6100), so the OS image must end
+      **below $6000** — i.e. **16 KB** of RAM ($2000–$5FFF). This now matches the
+      on-disk OS region (LBA 1–32 = 16 KB) exactly, so RAM and disk impose the same
+      cap. The OS is ~9.5 KB today → ~6.5 KB headroom. (rev E dropped the OS to
+      $2000 and the scratch/TPA −$1000, growing the TPA to ~37.9 KB.) BIOS
+      scratch/SBUF/OS vars: LBA $6047, SBUF $6100, OS vars $6300.
 
 
 
@@ -362,8 +361,8 @@ Last updated: 2026-07-08
         integer-only awk (rules/`BEGIN`/`END`, `/re/` + expression patterns,
         fields `$0..$NF`/`NR`/`NF`, `a`–`z` vars, `+ - * / %`, comparisons, `~`,
         `&& || !`, `print`/assignment/`if`). It compiles logically but the binary
-        is **> 64 KB** — over the whole address space and **~2.3× the ~28 KB TPA**
-        (`$7A00..$EA00`). 15,584 lines of asm from ~400 lines of C. Root cause is
+        is **> 64 KB** — over the whole address space and **~2.3× the ~37.9 KB TPA**
+        (`$6A00..$FE00`). 15,584 lines of asm from ~400 lines of C. Root cause is
         p8cc's non-optimizing codegen exploding the recursive `eval()` (16-bit ops
         expanded byte-by-byte); `grep` (much simpler) is already 32.5 KB at the
         ceiling, so any expression language is over budget. **Not a design flaw —
@@ -762,9 +761,9 @@ Last updated: 2026-07-08
       oracle.
 
       **(B) Self-host: run `p8cc.c` ON the P8X.** Gated by RAM, exactly like the
-      assembler was. The P8X has ~48 KB RAM ($4000–$FEFF) and a compiler's
+      assembler was. The P8X has 56 KB RAM ($2000–$FEFF) and a compiler's
       working set (source buffer, symbol/struct tables, string pool) plus its own
-      ~20 KB+ code won't fit a whole translation unit at the $B000 TPA — so it
+      ~20 KB+ code won't fit a whole translation unit at the $6A00 TPA — so it
       needs the same streaming/single-pass discipline we gave ASM (stream source
       in, emit asm out, bounded tables; today p8cc.c slurps stdin into a fixed
       `src[]`). It depends on the on-target assembler (DONE) to turn the emitted
