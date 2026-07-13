@@ -41,6 +41,7 @@ FPUTB   = $012D   ; append a byte to the output stream
 FCLOSE  = $0130   ; flush + register the output file FNAME; C=1 if full
 FRESOLVE= $0133   ; resolve a path (P1) -> dir extent + leaf FNAME (for ;#use)
 FSDIRBUF= $0145   ; repoint directory scans (FSCAN/FFIND/FNEXT) at page A
+SYS_GETCWD = $4003 ; OS: write the CWD path (NUL-terminated) to (P1)
 LBA     = $7047
 LBA1    = $7048
 LBA2    = $7049
@@ -93,6 +94,9 @@ SRCPATH = $C000   ; full SRC path arg (NUL-terminated, path-aware via FRESOLVE)
 OUTPATH = $C030   ; full OUT path arg (NUL-terminated, path-aware via FRESOLVE)
 OUTDIR  = $C060   ; output parent dir stashed at OUTINIT: DIRLBA, DIRLBA1, DIRN (3)
 OUTFN   = $C063   ; output leaf name stashed at OUTINIT (12)
+ARGTMP  = $C070   ; raw path arg before abspath (48)
+ABDST   = $C0A0   ; abspath destination pointer (2)
+ACSAV   = $C0A2   ; PARSEARGS: saved arg cursor across ABSPATH (2)
 LEOF    = $C86A   ; 1 when NEXTLINE hits end of source
 SB      = $C86B   ; current source byte from FGETB
 LCNT    = $C86C   ; chars in the current line
@@ -1554,12 +1558,96 @@ UC_NO:  LDA  TMP2
 ; =============================================================================
 PARSEARGS:
         JSR  ASKIPSP2
-        LDP1 #SRCPATH          ; full paths (case-preserved), resolved via FRESOLVE
+        LDP1 #ARGTMP           ; raw SRC token -> ARGTMP
         JSR  PATHCOPY
-        JSR  ASKIPSP2
-        LDP1 #OUTPATH
+        JSR  ASKIPSP2          ; advance the arg cursor to the OUT token first...
+        TPA2L                  ; ...then save it: ABSPATH clobbers P2
+        STA  ACSAV
+        TPA2H
+        STA  ACSAV+1
+        LDA  #<SRCPATH         ; SRCPATH = abspath(ARGTMP)  [SRC]
+        STA  ABDST
+        LDA  #>SRCPATH
+        STA  ABDST+1
+        JSR  ABSPATH
+        LDA  ACSAV             ; restore the arg cursor -> OUT token
+        TAP2L
+        LDA  ACSAV+1
+        TAP2H
+        LDP1 #ARGTMP           ; raw OUT token -> ARGTMP
         JSR  PATHCOPY
+        LDA  #<OUTPATH         ; OUTPATH = abspath(ARGTMP)  [OUT]
+        STA  ABDST
+        LDA  #>OUTPATH
+        STA  ABDST+1
+        JSR  ABSPATH
         RTS
+
+; ABSPATH: (ABDST) <- ARGTMP made absolute. An absolute arg (leading '/') is copied
+; as-is; a relative one is CWD-prefixed (SYS_GETCWD + '/') — because FRESOLVE starts
+; at root, not the CWD. This makes `asm T.ASM` read a redirect's T.ASM from ANY
+; directory (the redirect registers it in the CWD), so a build script needs no
+; `cd /`. An empty arg stays empty (preserves the "no arg -> usage" check).
+ABSPATH:LDA  ARGTMP
+        LDB  #0
+        CMP
+        JNZ  AB_NE
+        LDA  ABDST             ; empty arg -> empty dest
+        TAP1L
+        LDA  ABDST+1
+        TAP1H
+        LDA  #0
+        STA  (P1)
+        RTS
+AB_NE:  LDA  ARGTMP
+        LDB  #'/'
+        CMP
+        JZ   AB_ABS
+        LDA  ABDST             ; relative: CWD -> (ABDST)
+        TAP1L
+        LDA  ABDST+1
+        TAP1H
+        LDA  #0
+        JSR  SYS_GETCWD
+        LDA  ABDST             ; walk to the end of the CWD string
+        TAP1L
+        LDA  ABDST+1
+        TAP1H
+AB_EN:  LDA  (P1)
+        JZ   AB_TSL
+        INP1
+        JMP  AB_EN
+AB_TSL: DEP1                   ; last char == '/'? (root CWD "/" already ends in one)
+        LDA  (P1)
+        INP1
+        LDB  #'/'
+        CMP
+        JZ   AB_CAT
+        LDA  #'/'              ; else append a separator
+        STA  (P1)+
+AB_CAT: LDA  #<ARGTMP          ; append the relative arg (P2) at P1
+        TAP2L
+        LDA  #>ARGTMP
+        TAP2H
+AB_CL:  LDA  (P2)
+        STA  (P1)+
+        JZ   AB_RT
+        INP2
+        JMP  AB_CL
+AB_RT:  RTS
+AB_ABS: LDA  ABDST             ; absolute: copy ARGTMP -> (ABDST)
+        TAP1L
+        LDA  ABDST+1
+        TAP1H
+        LDA  #<ARGTMP
+        TAP2L
+        LDA  #>ARGTMP
+        TAP2H
+AB_AL:  LDA  (P2)
+        STA  (P1)+
+        JZ   AB_RT
+        INP2
+        JMP  AB_AL
 ; PATHCOPY - copy the path word at P2 into (P1), NUL-terminated, case preserved,
 ;   stopping at a space / CR / NUL. Advances P2. (Unlike WORDCOPY: no 12-char cap,
 ;   no upcasing — so SRC/OUT can be sub-directory paths like /src/commands/c/x.c.)

@@ -36,7 +36,7 @@ done
 python3 $ROOT/tools/p8xfs.py put mk.img $ROOT/os/commands/pwd.c      --name /src/commands/c/pwd.c     >/dev/null
 python3 $ROOT/tools/p8xfs.py put mk.img $ROOT/os/commands-asm/pwd.asm --name /src/commands/asm/pwd.asm >/dev/null
 # the build script: rebuild pwd from C (cc -> asm) and from asm
-printf 'cd /\ncc /src/commands/c/pwd.c >T.ASM\nasm T.ASM /src/commands/c/bin/pwd.bin\nasm /src/commands/asm/pwd.asm /src/commands/asm/bin/pwd.bin\n' > mk.scr
+printf 'cc /src/commands/c/pwd.c >T.ASM\nasm T.ASM /src/commands/c/bin/pwd.bin\nasm /src/commands/asm/pwd.asm /src/commands/asm/bin/pwd.bin\n' > mk.scr
 python3 $ROOT/tools/p8xfs.py put mk.img mk.scr --name /mk.sh >/dev/null
 # the install target (as run.sh generates it): publish the C builds to /bin
 printf 'cp /src/commands/c/bin/*.bin /bin\n' > mk_instc.scr

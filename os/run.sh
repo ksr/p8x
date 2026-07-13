@@ -79,10 +79,8 @@ ensure_src() {
     done
     # The OS + BIOS monitor are asm too — their sources ride under /src/os-bios/asm
     # with a build-output dir, and `make os-bios` assembles them (see /src/mk below).
-    # The monitor (58 KB) builds on-target; the OS source is 121 KB and the BIOS read
-    # stream's length is 16-bit, so it truncates past ~56 KB — the OS on-target build
-    # is blocked until the BIOS supports >64 KB reads (BACKLOG). The script assembles
-    # both anyway, so it "just works" once that lands.
+    # The monitor (58 KB) and the 121 KB OS both assemble on-target now — the BIOS
+    # read/write streams are 24-bit (files up to 16 MB), so `make os-bios` builds both.
     for d in /src/os-bios /src/os-bios/asm /src/os-bios/asm/bin; do
         python3 "$root/tools/p8xfs.py" mkdir "$disk" "$d" >/dev/null 2>&1 || true
     done
@@ -99,15 +97,16 @@ ensure_src() {
     #   make        /src/mk/all.sh    everything
     #   make installc    /src/mk/installc.sh    copy c/bin/*.bin   -> /bin (publish C twins)
     #   make installa    /src/mk/installa.sh    copy asm/bin/*.bin -> /bin (publish asm twins)
-    # `cc` writes its .asm to a scratch T.ASM in the root (redirect targets aren't
-    # path-resolved), so C builds `cd /` first, then `asm` reads that root T.ASM.
+    # `cc` writes its .asm to a scratch T.ASM in the CWD (the shell registers a `>`
+    # redirect in the working dir); `asm` CWD-prefixes a relative path arg, so it reads
+    # that same T.ASM from any directory — no `cd /` needed.
     # LF-separated lines (the Unix convention; EDIT writes LF too, and sh/make's
     # GL_SCRIPT ends a line on CR or LF), each < the 64-byte line buffer.
     for d in /src/commands/c/bin /src/commands/asm/bin /src/mk; do
         python3 "$root/tools/p8xfs.py" mkdir "$disk" "$d" >/dev/null 2>&1 || true
     done
     _mkcmds="dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch man dep dump"
-    _cline() { printf 'cd /\ncc /src/commands/c/%s.c >T.ASM\nasm T.ASM /src/commands/c/bin/%s.bin\n' "$1" "$1"; }
+    _cline() { printf 'cc /src/commands/c/%s.c >T.ASM\nasm T.ASM /src/commands/c/bin/%s.bin\n' "$1" "$1"; }
     _aline() { printf 'asm /src/commands/asm/%s.asm /src/commands/asm/bin/%s.bin\n' "$1" "$1"; }
     : > "$build/mk_c.scr"; : > "$build/mk_asm.scr"
     for c in $_mkcmds; do
