@@ -54,15 +54,12 @@ python3 "$root/generators/gen_p8xdis.py" --asm >/dev/null 2>&1 || true
 # Idempotent and safe on a FRESH or EXISTING disk: mkdir/put are best-effort
 # (p8xfs put never overwrites, so your files are kept and only MISSING sources are
 # added — e.g. an older disk that predates a source gets it on the next run).
-# The DEPRECATED front-end sources (cpp/lex/cc1.c) are not shipped, matching the
-# rest of that deprecation.
 ensure_src() {
     for d in /src /src/commands /src/commands/c /src/commands/asm; do
         python3 "$root/tools/p8xfs.py" mkdir "$disk" "$d" >/dev/null 2>&1 || true
     done
     for cf in "$root"/os/commands/*.c; do
         base=$(basename "$cf")
-        case "$base" in cpp.c|lex.c|cc1.c) continue;; esac   # DEPRECATED front end
         case "$base" in lib_*.c) continue;; esac             # shared libs live in /lib only
         python3 "$root/tools/p8xfs.py" put "$disk" "$cf" \
             --name "/src/commands/c/$base" >/dev/null 2>&1 || true
@@ -185,15 +182,10 @@ if [ ! -f "$disk" ]; then
         --base 0x6A00 >/dev/null
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/cc.bin" \
         --name /bin/cc.bin --load 0x6A00 --exec 0x6A00 >/dev/null
-    # DEPRECATED — the self-hosted C FRONT END (cpp | lex | cc1, path A) is
-    # superseded by the from-scratch native compiler `cc` (apps/p8xcc.asm), which
-    # does the WHOLE compile on-target. Their sources are kept in the repo
-    # (os/commands/{cpp,lex,cc1}.c) for reference, but they are NO LONGER built or
-    # shipped onto the disk image (nor are their man pages installed below). To
-    # resurrect them, restore the build+install steps here and re-enable
-    # os_cpp/os_lex/os_cc1 in emulator/Makefile.
-    #   NB: the //#use splicing that cpp performed still exists host-side as
-    #   tools/clib.py (used just below to build every /bin command).
+    # The native `cc` (apps/p8xcc.asm) does the WHOLE compile on-target, so the
+    # older split front end (cpp | lex | cc1) was retired (2026-07-14). The
+    # //#use splicing that cpp performed lives host-side as tools/clib.py (used
+    # just below to build every /bin command).
     # C-as-OS-commands (compiled with p8cc): demonstrate the OS syscalls, I/O
     # redirection and pipes out of the box. Run by bare name via PATH (/bin),
     # e.g.  dir /bin ,  cat README.TXT ,  cat README.TXT | grep hello | wc ,

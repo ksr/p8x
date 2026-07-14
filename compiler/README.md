@@ -16,9 +16,8 @@ is compiled with it. For compiling C **on the machine**, see the from-scratch
 native compiler [`apps/p8xcc.asm`](../apps/p8xcc.asm) (`/bin/cc`), which does the
 whole compile on-target (Milestone B, achieved through v0.28 — functions,
 recursion, pointers, arrays, structs, a `//#use` splicer, and the standard
-builtins). The older path-A **front end** (`cpp | lex | cc1`, front half on the
-P8X with host-side codegen) is **DEPRECATED and superseded by `cc`** — kept for
-reference but no longer built or shipped (see "On-target front end" below).
+builtins). (An earlier path-A **front end** — `cpp | lex | cc1`, front half on the P8X with
+host-side codegen — was **retired in favor of `cc`** on 2026-07-14; see git history.)
 
 ## Two compilers: `p8cc.py` and `p8cc.c`
 
@@ -69,44 +68,6 @@ There are two implementations of the same compiler:
   `p8cc.c` is single-pass and so requires **declare-before-use** (function
   prototypes for mutual recursion, globals/structs before reference); `p8cc.py`
   is two-pass and more lenient. Both accept the same subset otherwise.
-
-## On-target front end (`cpp | lex | cc1`) — DEPRECATED
-
-> **Superseded by `cc` (`apps/p8xcc.asm`).** This split front end (path A) ran
-> the front half on-target while code generation stayed on the host. The
-> from-scratch native compiler `cc` now does the **whole** compile on the P8X, so
-> `cpp | lex | cc1` are **no longer built or shipped** onto the disk image. Their
-> sources (`os/commands/{cpp,lex,cc1}.c`) and man pages are kept in the repo for
-> reference; the `os_cpp`/`os_lex`/`os_cc1` tests are out of the default suite
-> but still runnable. (The `//#use` splicing `cpp` did also lives host-side as
-> `tools/clib.py`.) The rest of this section is retained for historical context.
-
-The compiler's front half runs natively on the P8X as three `/bin` programs, each
-small enough for the TPA. They chain through temp files, mirroring an early Unix
-`cpp`/`cc1`/`as` pipeline:
-
-```
-cpp foo.c   >foo.i      # splice //#use libraries          (os/commands/cpp.c)
-lex foo.i   >foo.tok    # tokenize                          (os/commands/lex.c)
-cc1 foo.tok >foo.ast    # parse -> serialized AST           (os/commands/cc1.c)
-# then, on the HOST, code generation turns the AST into asm:
-python3 compiler/p8cc.py --from-ast foo.ast -o foo.asm
-```
-
-Each native pass has an exact host reference in `p8cc.py`, and its output is
-verified **byte-identical** to that reference (`make test-os`:
-`os_cpp_test`/`os_lex_test`/`os_cc1_test`):
-
-- `p8cc.py --tokens FILE` — the LEX token stream (`<line> <T> <payload>`).
-- `p8cc.py --ast FILE` — the serialized AST (a pre-order atom stream; the wire
-  format is documented at `ast_ser` in `p8cc.py`).
-- `p8cc.py --from-ast FILE` — the inverse: read a serialized AST and run codegen,
-  producing the same asm as compiling the source directly.
-
-So today the P8X can preprocess, tokenize, and parse C by itself; the `.ast` then
-returns to the host for codegen. A native code generator is the missing piece for
-end-to-end on-target compilation (`cpp | lex | cc1 | cg | asm`) — see the stretch
-goal in `BACKLOG.md`.
 
 ## Execution model
 

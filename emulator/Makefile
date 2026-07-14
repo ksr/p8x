@@ -126,9 +126,6 @@ test-os: p8xemu ucode
 	sh test/os_vi_test.sh
 	sh test/os_man_test.sh
 	sh test/os_depdump_test.sh
-	# DEPRECATED front end (cpp|lex|cc1, superseded by cc) — no longer shipped on
-	# the disk image, so dropped from the default suite. The scripts remain in
-	# test/ (os_cpp_test.sh/os_lex_test.sh/os_cc1_test.sh) and can be run by hand.
 	sh test/os_cc_test.sh
 	sh test/os_cc_bigcmd_test.sh
 	sh test/os_mount_test.sh
@@ -150,7 +147,7 @@ test-basic: p8xemu ucode
 test-io: p8xemu ucode
 	sh test/io_test.sh
 
-# rev D memory map: $4000-$7FFF is now RAM (was ROM). Write+readback -> 'Y'.
+# rev E memory map: $2000-$FEFF is RAM (OS at $2000). Write+readback -> 'Y'.
 test-mem: p8xemu ucode
 	cd test && cp ../$(UC)/u?.bin . && \
 	python3 ../../assembler/p8xasm.py test_ram48.asm -o tmem.bin && \

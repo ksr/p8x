@@ -2107,9 +2107,10 @@ record. Newer work is logged as bold-title entries above.
     ### DEPRECATED: self-hosted front end (cpp | lex | cc1)
 
     Superseded by the native `cc` (apps/p8xcc.asm), which compiles C entirely
-    on-target (front + back end). The cpp|lex|cc1 sources (os/commands/*.c) and
-    man pages are KEPT in the repo but are no longer built or shipped on the disk
-    image (os/run.sh) or installed as man pages, and os_cpp/os_lex/os_cc1 are out
+    on-target (front + back end). The cpp|lex|cc1 sources (os/commands/*.c),
+    man pages, the os_cpp/os_lex/os_cc1 tests, and p8cc.py's --tokens/--ast/
+    --from-ast modes were REMOVED (2026-07-14); git history retains them. Formerly
+    they were kept in the repo but no longer built or shipped on the disk
     of the default `make test` suite (scripts remain, runnable by hand). The
     //#use splicing cpp did still exists host-side as tools/clib.py. To resurrect:
     restore the run.sh build/install + man steps and the Makefile test lines.
