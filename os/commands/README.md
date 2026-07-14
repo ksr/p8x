@@ -41,10 +41,10 @@ print a one-line usage summary and exit.
 > **Rebuild on-card.** Alongside the sources, `run.sh` lays down build-output
 > dirs `/src/commands/c/bin` and `/src/commands/asm/bin`, plus a `/src/mk/`
 > tree of build scripts. The OS **`sh`** built-in runs a script of shell
-> commands a line at a time (`sh /src/mk/all`), and the **`make <target>`**
-> built-in runs the matching `/src/mk/<target>` script for you — a scaled-down,
-> **always-rebuild** make (P8XFS has no mtimes yet, so there's no up-to-date
-> check — dependency tracking is a future item). See *Building on-target* below.
+> commands a line at a time, so `sh /src/mk/all.sh` rebuilds everything and
+> `sh /src/mk/pwd.sh` one command — always-rebuild (P8XFS has no mtimes yet).
+> See *Building on-target* below. (A `make`/Makefile front end is a future
+> item — see `BACKLOG.md`.)
 
 > **Drives.** A second CF is **mounted at `/d1`** in one unified namespace, so
 > these commands are **drive-unaware**: an ordinary `/d1/...` path reaches drive 1
@@ -152,17 +152,20 @@ print a one-line usage summary and exit.
 ## Building on-target
 
 You can rebuild any command **on the P8X itself**, from the sources shipped
-under `/src`. The `make <target>` built-in is the easy path — it runs the
-pre-generated `/src/mk/<target>` script through the `sh` engine (always
-rebuilds; no timestamps yet):
+under `/src`. `run.sh` pre-generates a build script per target under `/src/mk`;
+run the one you want through the `sh` engine (always rebuilds; no timestamps
+yet):
 
 ```
-make pwd            rebuild one command — BOTH twins (C and asm)
-make c              rebuild every C command   -> /src/commands/c/bin/*.bin
-make asm            rebuild every asm command -> /src/commands/asm/bin/*.bin
-make                rebuild everything (== make all)
-sh /src/mk/all      the same, driven directly through sh
+sh /src/mk/pwd.sh        rebuild one command — BOTH twins (C and asm)
+sh /src/mk/c.sh          rebuild every C command   -> /src/commands/c/bin/*.bin
+sh /src/mk/asm.sh        rebuild every asm command -> /src/commands/asm/bin/*.bin
+sh /src/mk/all.sh        rebuild everything
+sh /src/mk/installc.sh   publish the C builds over /bin  (installa.sh: the asm twins)
 ```
+
+(A `make`/Makefile front end over these scripts is a future item — see
+`BACKLOG.md`.)
 
 Each script just chains the on-target toolchain. A C command compiles then
 assembles; a hand-asm command assembles directly (with `;#use` includes pulled

@@ -373,9 +373,6 @@ DISPATCH:
         LDP1 #KW_SH
         JSR  CMPCMD
         JNZ  DOSH
-        LDP1 #KW_MAKE
-        JSR  CMPCMD
-        JNZ  DOMAKE
         JMP  IMPRUN             ; not a built-in: try to run it as a program (PATH)
 
 ; CMPCMD - compare CMDBUF to the keyword at (P1); returns A!=0 (and Z clear)
@@ -802,61 +799,6 @@ SH_RUN: LDA  STARTLO            ; point a read stream at the script's extent (IB
         STA  SCRIPTM
         JMP  SHELL
 
-; `make <target>` — a scaled-down make: run the pre-generated build script
-; /src/mk/<target>.sh via the same streaming runner as `sh` (always rebuilds —
-; there are no file timestamps yet). ".sh" is appended here (P8X shell scripts end
-; in .sh), so `make dir` streams /src/mk/dir.sh. run.sh writes /src/mk/<cmd>.sh
-; (rebuild one command, both twins), plus /src/mk/{c,asm,all}.sh. Bare `make`
-; builds everything (all.sh).
-DOMAKE: LDP1 #RUNPATH          ; build "/src/mk/<target>" (RUNPATH is free scratch
-        LDP2 #MMKPFX           ;   until a program is actually run)
-DM_PFX: LDA  (P2)              ; copy the "/src/mk/" prefix
-        JZ   DM_ARG
-        STA  (P1)+
-        INP2
-        JMP  DM_PFX
-DM_ARG: JSR  ARG2P2            ; P2 -> the command tail (target word)
-DM_SK:  LDA  (P2)             ; skip leading spaces
-        LDB  #' '
-        CMP
-        JNZ  DM_T0
-        INP2
-        JMP  DM_SK
-DM_T0:  LDA  (P2)             ; no target -> default to "all"
-        JZ   DM_ALL
-        LDB  #CR
-        CMP
-        JZ   DM_ALL
-DM_CP:  LDA  (P2)             ; append the target word
-        JZ   DM_END
-        LDB  #' '
-        CMP
-        JZ   DM_END
-        LDB  #CR
-        CMP
-        JZ   DM_END
-        STA  (P1)+
-        INP2
-        JMP  DM_CP
-DM_ALL: LDP2 #MMKALL          ; "all"
-DM_AL:  LDA  (P2)
-        JZ   DM_END
-        STA  (P1)+
-        INP2
-        JMP  DM_AL
-DM_END: LDP2 #MMKSFX          ; append ".sh" (P8X shell scripts end in .sh)
-DM_SFX: LDA  (P2)
-        JZ   DM_FIN
-        STA  (P1)+
-        INP2
-        JMP  DM_SFX
-DM_FIN: LDA  #0
-        STA  (P1)             ; NUL-terminate the path
-        LDP2 #RUNPATH         ; resolve + stream it (same engine as `sh`)
-        JSR  FINDP2
-        LDA  MATCH
-        JZ   NOFILE
-        JMP  SH_RUN
 
 ; FINDARG - resolve a path argument to a regular file. Returns A=0 (Z set) on
 ; failure (bad directory path, not found, or it's a directory), A=1 with the
@@ -3669,7 +3611,6 @@ MHELP:   .byte CR,LF
          .byte CR,LF
          .ascii "sh file       run shell commands from a script file (streamed)"
          .byte CR,LF
-         .ascii "make [target] rebuild commands from /src (always rebuild)"
          .byte CR,LF
          .ascii "exit / mon    return to the ROM monitor"
          .byte CR,LF
@@ -3761,7 +3702,3 @@ KW_FORMAT:.asciiz "format"
 KW_MOUNT: .asciiz "mount"
 KW_UMOUNT:.asciiz "umount"
 KW_SH:   .asciiz "sh"
-KW_MAKE: .asciiz "make"
-MMKPFX:  .asciiz "/src/mk/"
-MMKALL:  .asciiz "all"
-MMKSFX:  .asciiz ".sh"

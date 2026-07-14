@@ -75,29 +75,28 @@ ensure_src() {
             --name "/src/commands/asm/$(basename "$app")" >/dev/null 2>&1 || true
     done
     # The OS + BIOS monitor are asm too — their sources ride under /src/os-bios/asm
-    # with a build-output dir, and `make os-bios` assembles them (see /src/mk below).
+    # with a build-output dir, and they assemble on-target with `asm`.
     # The monitor (58 KB) and the 121 KB OS both assemble on-target now — the BIOS
-    # read/write streams are 24-bit (files up to 16 MB), so `make os-bios` builds both.
+    # read/write streams are 24-bit (files up to 16 MB), so `asm` rebuilds both on-target.
     for d in /src/os-bios /src/os-bios/asm /src/os-bios/asm/bin; do
         python3 "$root/tools/p8xfs.py" mkdir "$disk" "$d" >/dev/null 2>&1 || true
     done
     python3 "$root/tools/p8xfs.py" put "$disk" "$root/firmware/p8xmon.asm" --name /src/os-bios/asm/p8xmon.asm >/dev/null 2>&1 || true
     python3 "$root/tools/p8xfs.py" put "$disk" "$root/os/p8xos.asm"        --name /src/os-bios/asm/p8xos.asm  >/dev/null 2>&1 || true
-    # On-target rebuild: output dirs + build scripts under /src/mk, driven by the
-    # `make` built-in (make <target> == run /src/mk/<target> through the `sh` engine,
-    # always rebuild — there are no timestamps yet). Per command a script rebuilds
-    # BOTH twins (C -> c/bin, asm -> asm/bin); c/asm/all rebuild whole groups:
-    # (make appends .sh: `make dir` runs /src/mk/dir.sh — P8X shell scripts end in .sh)
-    #   make pwd    /src/mk/pwd.sh    one command (both twins)
-    #   make c      /src/mk/c.sh      every C command   -> /src/commands/c/bin/*.bin
-    #   make asm    /src/mk/asm.sh    every asm command -> /src/commands/asm/bin/*.bin
-    #   make        /src/mk/all.sh    everything
-    #   make installc    /src/mk/installc.sh    copy c/bin/*.bin   -> /bin (publish C twins)
-    #   make installa    /src/mk/installa.sh    copy asm/bin/*.bin -> /bin (publish asm twins)
+    # On-target rebuild: output dirs + build scripts under /src/mk, run with the
+    # `sh` built-in (always rebuild — there are no timestamps yet). Per command a
+    # script rebuilds BOTH twins (C -> c/bin, asm -> asm/bin); c/asm/all rebuild
+    # whole groups. P8X shell scripts end in .sh:
+    #   sh /src/mk/pwd.sh    one command (both twins)
+    #   sh /src/mk/c.sh      every C command   -> /src/commands/c/bin/*.bin
+    #   sh /src/mk/asm.sh    every asm command -> /src/commands/asm/bin/*.bin
+    #   sh /src/mk/all.sh    everything
+    #   sh /src/mk/installc.sh   copy c/bin/*.bin   -> /bin (publish C twins)
+    #   sh /src/mk/installa.sh   copy asm/bin/*.bin -> /bin (publish asm twins)
     # `cc` writes its .asm to a scratch T.ASM in the CWD (the shell registers a `>`
     # redirect in the working dir); `asm` CWD-prefixes a relative path arg, so it reads
     # that same T.ASM from any directory — no `cd /` needed.
-    # LF-separated lines (the Unix convention; EDIT writes LF too, and sh/make's
+    # LF-separated lines (the Unix convention; EDIT writes LF too, and sh's
     # GL_SCRIPT ends a line on CR or LF), each < the 64-byte line buffer.
     for d in /src/commands/c/bin /src/commands/asm/bin /src/mk; do
         python3 "$root/tools/p8xfs.py" mkdir "$disk" "$d" >/dev/null 2>&1 || true
@@ -115,7 +114,7 @@ ensure_src() {
     done
     # disasm has both twins, but its long name makes the asm rebuild line
     # (`asm /src/commands/asm/disasm.asm /src/commands/asm/bin/disasm.bin`) 65 chars
-    # — over the 64-byte shell LINEBUF — so `make disasm` rebuilds only the C twin
+    # — over the 64-byte shell LINEBUF — so `sh /src/mk/disasm.sh` rebuilds only the C twin
     # on-target for now (the asm twin ships to /bina host-built + verify-checked).
     # Widening LINEBUF / CWD-relative asm (BACKLOG) would let the asm line fit too.
     _cline disasm > "$build/mk_one.scr"
@@ -125,16 +124,16 @@ ensure_src() {
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_c.scr"   --name /src/mk/c.sh   >/dev/null 2>&1 || true
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_asm.scr" --name /src/mk/asm.sh >/dev/null 2>&1 || true
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_all.scr" --name /src/mk/all.sh >/dev/null 2>&1 || true
-    # `make installc` / `make installa` — publish freshly-built binaries to /bin.
-    # After `make dir` (which rebuilds BOTH twins into c/bin + asm/bin), pick which
-    # twin goes live: `make installc` copies the C builds over /bin, `make installa`
-    # the asm builds. cp's wildcard-into-directory does the whole set in one line
+    # installc / installa — publish freshly-built binaries to /bin. After
+    # `sh /src/mk/dir.sh` (which rebuilds BOTH twins into c/bin + asm/bin), pick
+    # which twin goes live: `sh /src/mk/installc.sh` copies the C builds over /bin,
+    # `sh /src/mk/installa.sh` the asm builds. cp's wildcard-into-directory does the whole set in one line
     # (well under the 63-byte shell LINEBUF).
     printf 'cp /src/commands/c/bin/*.bin /bin\n'   > "$build/mk_instc.scr"
     printf 'cp /src/commands/asm/bin/*.bin /bin\n' > "$build/mk_insta.scr"
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_instc.scr" --name /src/mk/installc.sh   >/dev/null 2>&1 || true
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_insta.scr" --name /src/mk/installa.sh >/dev/null 2>&1 || true
-    # `make os-bios` — assemble the monitor + OS from /src/os-bios/asm into its bin dir.
+    # os-bios — assemble the monitor + OS from /src/os-bios/asm into its bin dir.
     printf 'asm /src/os-bios/asm/p8xmon.asm /src/os-bios/asm/bin/p8xmon.bin\nasm /src/os-bios/asm/p8xos.asm /src/os-bios/asm/bin/p8xos.bin\n' > "$build/mk_osbios.scr"
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_osbios.scr" --name /src/mk/os-bios.sh >/dev/null 2>&1 || true
 }

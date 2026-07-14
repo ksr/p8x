@@ -15,8 +15,8 @@ DESCRIPTION
     command uses the file streams itself while sh's read position is saved and
     restored around it. Lines end with CR, LF, or CRLF; by convention P8X
     scripts use LF (the Unix line ending, as EDIT writes) and are named with
-    a .sh suffix (e.g. `sh build.sh`). The `make` built-in relies on this: it
-    runs /src/mk/<target>.sh.
+    a .sh suffix (e.g. `sh build.sh`). run.sh ships build scripts under /src/mk,
+    so `sh /src/mk/all.sh` rebuilds everything from source on the machine.
 
     Caveat: a script line may not use the `< redirect` -- input redirection
     and the script stream share the same buffer (IBUF).
@@ -31,12 +31,13 @@ DESCRIPTION
 
         asm /src/commands/asm/cat.asm /src/commands/asm/bin/cat.bin
 
-    The `make` built-in runs these pre-generated scripts for you (see make).
+    run.sh pre-generates these under /src/mk (one per command, plus c/asm/all/
+    installc/installa), so you just `sh` the one you want.
 
 EXAMPLES
     sh build            run the commands in the file `build`
-    sh /src/mk/pwd      rebuild pwd from /src (both twins)
-    sh /src/mk/all      rebuild every command
+    sh /src/mk/pwd.sh   rebuild pwd from /src (both twins)
+    sh /src/mk/all.sh   rebuild every command
 
 SEE ALSO
-    make, cc, asm, run, edit
+    cc, asm, run, edit

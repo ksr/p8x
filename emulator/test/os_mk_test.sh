@@ -24,7 +24,7 @@ python3 $ROOT/tools/p8xfs.py boot   mk.img osmk.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  mk.img /bin >/dev/null
 python3 $ROOT/tools/p8xfs.py put    mk.img cc.bin  --name /bin/cc.bin  --load 0x6A00 --exec 0x6A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    mk.img asm.bin --name /bin/asm.bin --load 0x6A00 --exec 0x6A00 >/dev/null
-# cp is needed on-target to exercise `make installc` (publish c/bin -> /bin).
+# cp is needed on-target to exercise `sh /src/mk/installc.sh` (publish c/bin -> /bin).
 python3 $ROOT/tools/clib.py $ROOT/os/commands/cp.c -o cp.pp.c 2>/dev/null
 python3 $ROOT/compiler/p8cc.py cp.pp.c -o cp.asm >/dev/null 2>&1
 python3 $ROOT/assembler/p8xasm.py cp.asm -o cp.bin --base 0x6A00 >/dev/null 2>&1
@@ -47,10 +47,10 @@ python3 $ROOT/tools/p8xfs.py put mk.img mk.scr --name /mk.sh >/dev/null
 printf 'cp /src/commands/c/bin/*.bin /bin\n' > mk_instc.scr
 python3 $ROOT/tools/p8xfs.py put mk.img mk_instc.scr --name /src/mk/installc.sh >/dev/null
 
-# rebuild pwd (both twins), then `make installc` to publish the C build to /bin, then
+# rebuild pwd (both twins), then `sh /src/mk/installc.sh` to publish the C build to /bin, then
 # RUN the PUBLISHED /bin/pwd.bin — it must print the CWD "/" (exercises DEFADDR: the
 # copied entry has load/exec 0, mapped to the TPA base $6A00).
-printf 'B\rsh /mk.sh\rmake installc\rrun /bin/pwd.bin\r' \
+printf 'B\rsh /mk.sh\rsh /src/mk/installc.sh\rrun /bin/pwd.bin\r' \
     | ../p8xemu -l 3000000000 -c mk.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r' > mk_out.txt
 
 # both binaries must now exist on the image
@@ -58,9 +58,9 @@ python3 $ROOT/tools/p8xfs.py ls mk.img /src/commands/c/bin   2>/dev/null | grep 
     || fail "C rebuild produced no /src/commands/c/bin/pwd.bin (cc or asm step failed)"
 python3 $ROOT/tools/p8xfs.py ls mk.img /src/commands/asm/bin 2>/dev/null | grep -qE '^pwd\.bin ' \
     || fail "asm rebuild produced no /src/commands/asm/bin/pwd.bin"
-# `make installc` must have published the freshly-built C pwd to /bin
+# `sh /src/mk/installc.sh` must have published the freshly-built C pwd to /bin
 python3 $ROOT/tools/p8xfs.py ls mk.img /bin 2>/dev/null | grep -qE '^pwd\.bin ' \
-    || fail "make installc did not publish /bin/pwd.bin"
+    || fail "sh /src/mk/installc.sh did not publish /bin/pwd.bin"
 # and the PUBLISHED /bin binary must run and print the CWD
 grep -qE '^/$' mk_out.txt || { echo "--- transcript ---"; sed -n '/sh .mk/,$p' mk_out.txt | head; \
     fail "published /bin/pwd.bin did not run / print the CWD"; }

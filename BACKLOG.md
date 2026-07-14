@@ -125,6 +125,18 @@ Last updated: 2026-07-08
 
 
 
+- [ ] **On-target `make` — a real single-Makefile front end.** The old `make`
+      built-in (a `/src/mk/<target>.sh` wrapper) was removed from the kernel on
+      2026-07-14; on-target builds now run the scripts directly (`sh
+      /src/mk/all.sh`). A proper `make` would read ONE CWD `Makefile` (`target:
+      deps` + TAB recipe), resolve prerequisites (DFS, dedup, cycle-detect), and
+      run deps-first — always-rebuild (no mtimes). Validated design (turnkey):
+      flatten the ordered recipe into the free TPA during planning (it's free
+      until a recipe program runs), write it to a temp file in one FWOPEN session
+      (FOPEN's FFIND clobbers FWOPEN's SBUF, so all Makefile reads finish first),
+      then `SH_RUN` it. Could live in the kernel again or as a `/bin/make`. See
+      the (now superseded) mini-make note below.
+
 - [ ] **memmap: build-time regeneration.** `generators/gen_memmap.py` emits the
       committed `memmap.{inc,h,py}`. They must be re-run by hand after editing the
       canonical MAP. Follow-up: have `run.sh` / the Makefiles invoke `gen_memmap.py`
@@ -682,7 +694,12 @@ Last updated: 2026-07-08
       line at a time, no size cap** (the earlier 512-byte slurp is gone). Caveat:
       a script line can't use `< redirect` (it shares IBUF). Man page `os/man/sh`
       updated; `os_sh_test` covers it.
-- [x] **`make <target>` — scaled-down make — DONE (2026-07-10).** New OS built-in
+- [x] **`make <target>` — scaled-down make — DONE (2026-07-10); REMOVED
+      (2026-07-14).** The `DOMAKE` built-in was pulled back out of the kernel (it
+      was a thin `/src/mk/<target>.sh` wrapper — a hack, not a real make). The
+      `/src/mk/*.sh` scripts remain and are run directly with `sh` (e.g. `sh
+      /src/mk/all.sh`); a proper single-`Makefile` front end is a future item (see
+      the open "on-target make" entry). Original note follows:** New OS built-in
       (`DOMAKE`): builds `/src/mk/<target>` and runs it through the `sh` engine.
       **Always rebuilds** — the FS has no mtimes yet, so there's no up-to-date
       check (dependency tracking is a future enhancement). `run.sh` pre-generates

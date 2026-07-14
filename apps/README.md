@@ -73,7 +73,7 @@ root-only name), so a source under `/src` can be assembled straight into a
 build-output dir: `asm /src/commands/asm/pwd.asm /src/commands/asm/bin/pwd.bin`.
 Together these let ASM rebuild the hand-asm `/bin` commands from source on the
 machine — the `asm` half of the on-target rebuild loop (`cc` handles the C
-half); the `make`/`sh` built-ins drive it (see
+half); the `sh` built-in drives it (see
 [os/commands/](../os/commands/README.md)).
 
 The opcode table is **generated** from `genucode.OPC` by
