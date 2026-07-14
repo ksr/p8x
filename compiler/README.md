@@ -44,16 +44,17 @@ There are two implementations of the same compiler:
   equivalent asm — same program output — not byte-identical text; they differ in
   label names and argument-push order.)
 
-  **As a day-to-day tool.** A `compiler/Makefile` builds the native compiler, and
-  `compiler/p8cc-host` is a wrapper giving it `p8cc.py`'s file interface:
+  **As a fast native tool.** Build `p8cc.c` with the host `cc` for a fast
+  (~no startup) alternative to the Python tool — it is literally the C codebase
+  compiled for the host:
 
   ```sh
-  make -C compiler                       # builds compiler/p8cc-host.bin (gitignored)
-  compiler/p8cc-host prog.c -o prog.asm   # same interface as p8cc.py (auto-builds if stale)
+  cc -O2 -w compiler/p8cc.c -o p8cc-host   # a stdin->stdout filter (the in-subset
+  p8cc-host < prog.c > prog.asm            #   source can only use getchar/putchar)
   ```
 
-  The native binary is a fast (~no startup) alternative to the Python tool and
-  is literally the C codebase compiled for the host.
+  The test suite builds it exactly this way to differentially cross-check every
+  command against `p8cc.py` (see `emulator/test/c_*` and `c_selfhost_test`).
 
   **Milestone B** (run the compiler *on the P8X*) is **partially achieved**: the
   C **front end** is self-hosted (see below), but the **back end stays on the
@@ -174,7 +175,7 @@ or linker, so you use it by **prepending** it to your program:
 
 ```sh
 cat compiler/p8lib.c prog.c > all.c
-python3 compiler/p8cc.py all.c -o all.asm      # or: compiler/p8cc-host all.c -o all.asm
+python3 compiler/p8cc.py all.c -o all.asm      # (or build p8cc.c with cc and run: p8cc-host < all.c > all.asm)
 ```
 
 Caveats it documents: `bios()` doesn't surface the carry flag, so
