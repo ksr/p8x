@@ -6,9 +6,8 @@ SYNOPSIS
 
 DESCRIPTION
     Assembles a P8X assembly source file into a binary, entirely on the
-    machine -- the on-target counterpart of the host assembler. Pair it
-    with edit (or vi) for a self-hosted edit/assemble/run loop. asm is a
-    /bin program.
+    machine. Pair it with edit (or vi) for a self-hosted edit/assemble/run
+    loop. asm is a /bin program.
 
     A `;#use NAME` line (at the start of a line) appends the shared include
     /lib/NAME.inc after the program, so a command can share helpers the way

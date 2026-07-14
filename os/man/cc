@@ -16,14 +16,12 @@ DESCRIPTION
         asm hello.asm HELLO.BIN
         run HELLO.BIN
 
-    cc is the P8X's native C compiler: a single from-scratch program written
-    directly in assembly (apps/p8xcc.asm) that does the whole job on-target --
-    preprocess (//#use splicing), parse, and code-generate -- with no host help.
-    A host cross-compiler (compiler/p8cc.py) produces byte-identical output for
-    the build tooling, but cc itself needs nothing off-machine. Variable storage
-    is 16-bit-addressed (a program may use thousands of slots), so cc compiles
-    the large shared-code commands -- dir, grep, sed, vi and the like, each
-    pulling in several //#use libraries -- entirely on the machine.
+    cc does the whole job on-target -- preprocess (splicing /lib/lib_NAME.c for
+    each //#use), parse, and code-generate -- so nothing off the machine is
+    needed. Variable storage is 16-bit-addressed (a program may use thousands of
+    slots), so cc compiles the large shared-code commands -- dir, grep, sed, vi
+    and the like, each pulling in several //#use libraries -- entirely on the
+    machine.
 
     Supported C subset  (`int` is 16-bit; `char` is a 1-byte element type — see
     below.)
