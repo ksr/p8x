@@ -54,6 +54,13 @@ char tname[64];      /* identifier / keyword / punctuation text */
 char tstr[256];      /* decoded bytes of the last T_STR token */
 int tstrlen = 0;
 
+/* ---- object-like //#define macros (name -> 16-bit value) ------------------ */
+char mac_names[1024]; /* packed NUL-terminated macro names */
+int  mac_vals[64];    /* parallel values (k-th name -> mac_vals[k]) */
+int  mac_cnt = 0;
+int  mac_end = 0;     /* next free offset in mac_names */
+int  mac_hit = 0;     /* set by mac_lookup: 1 if the name is a macro */
+
 /* ---- small helpers (callee-before-caller, for gcc) ------------------------ */
 int streq(char *a, char *b) {
     while (*a != 0) {
@@ -102,6 +109,58 @@ int is_keyword(char *s) {
     return 0;
 }
 
+/* ---- object-like //#define: parse one directive, and look a name up -------- */
+/* mac_define: spos points just past "//#define"; read NAME then a dec/0xhex value. */
+int mac_define() {
+    int v;
+    while (src[spos] == 32 || src[spos] == 9) spos = spos + 1;
+    while (is_alnum(src[spos])) {                 /* NAME -> packed pool */
+        mac_names[mac_end] = src[spos];
+        mac_end = mac_end + 1;
+        spos = spos + 1;
+    }
+    mac_names[mac_end] = 0;
+    mac_end = mac_end + 1;
+    while (src[spos] == 32 || src[spos] == 9) spos = spos + 1;
+    v = 0;                                        /* value: 0x hex or decimal */
+    if (src[spos] == 48 && (src[spos + 1] == 120 || src[spos + 1] == 88)) {
+        spos = spos + 2;
+        while (is_hex(src[spos])) { v = v * 16 + hexval(src[spos]); spos = spos + 1; }
+    } else {
+        while (is_digit(src[spos])) { v = v * 10 + (src[spos] - 48); spos = spos + 1; }
+    }
+    mac_vals[mac_cnt] = v;
+    mac_cnt = mac_cnt + 1;
+    return v;
+}
+
+/* mac_lookup: return the value of macro `name` (mac_hit=1), else 0 (mac_hit=0). */
+int mac_lookup(char *name) {
+    int p;
+    int k;
+    int j;
+    int ok;
+    p = 0;
+    k = 0;
+    mac_hit = 0;
+    while (k < mac_cnt) {
+        j = 0;
+        ok = 1;
+        while (mac_names[p + j] != 0 && ok) {
+            if (mac_names[p + j] != name[j]) ok = 0;
+            j = j + 1;
+        }
+        if (ok && name[j] == 0) {                 /* both terminated together */
+            mac_hit = 1;
+            return mac_vals[k];
+        }
+        while (mac_names[p] != 0) p = p + 1;       /* skip to next packed name */
+        p = p + 1;
+        k = k + 1;
+    }
+    return 0;
+}
+
 /* ---- read all of stdin into src[] ----------------------------------------- */
 /* Bounded by sizeof(src)-1 so an oversized file truncates safely instead of
  * overflowing the buffer.  (src is a host-side 32 KB buffer; on-target — the
@@ -136,6 +195,13 @@ int lex() {
         if (c == 32 || c == 9 || c == 13 || c == 10) {
             spos = spos + 1;
         } else if (c == 47 && src[spos + 1] == 47) {       /* //  */
+            spos = spos + 2;
+            if (src[spos] == 35 && src[spos + 1] == 100 && src[spos + 2] == 101
+                && src[spos + 3] == 102 && src[spos + 4] == 105
+                && src[spos + 5] == 110 && src[spos + 6] == 101) {  /* //#define */
+                spos = spos + 7;
+                mac_define();
+            }
             while (src[spos] != 10 && src[spos] != 0) spos = spos + 1;
         } else if (c == 47 && src[spos + 1] == 42) {       /* slash-star */
             spos = spos + 2;
@@ -170,8 +236,10 @@ int lex() {
             spos = spos + 1;
         }
         tname[n] = 0;
-        if (is_keyword(tname)) tok = T_KW;
-        else tok = T_ID;
+        if (is_keyword(tname)) { tok = T_KW; return tok; }
+        tval = mac_lookup(tname);                          /* //#define macro -> NUMBER */
+        if (mac_hit) { tok = T_NUM; return tok; }
+        tok = T_ID;
         return tok;
     }
 

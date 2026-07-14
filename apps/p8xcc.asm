@@ -921,6 +921,201 @@ ua_dn:  LDA USEDN
         STA  USEDN
         RTS
 
+; =============================================================================
+; //#define NAME value  -- object-like macros (native counterpart of the host
+;   preprocessor's #define). NAME is added to a packed pool (MACNAMES) with its
+;   16-bit value in MACVALS; every identifier the lexer then reads is looked up
+;   (MACLOOKUP) and, if defined, replaced by a NUMBER token. Values may be decimal
+;   or 0x hex (parsed by reusing the number lexer, adv_num).
+; =============================================================================
+; TRYDEF: we have consumed "//#d". Expect "efine NAME value".
+TRYDEF: JSR GC
+        JC  td_ret
+        LDB #'e'
+        CMP
+        JNZ td_skipl
+        JSR GC
+        JC  td_ret
+        LDB #'f'
+        CMP
+        JNZ td_skipl
+        JSR GC
+        JC  td_ret
+        LDB #'i'
+        CMP
+        JNZ td_skipl
+        JSR GC
+        JC  td_ret
+        LDB #'n'
+        CMP
+        JNZ td_skipl
+        JSR GC
+        JC  td_ret
+        LDB #'e'
+        CMP
+        JNZ td_skipl
+td_sp:  JSR GC                        ; skip spaces before NAME
+        JC  td_ret
+        STA TMPB
+        LDB #' '
+        CMP
+        JZ  td_sp
+        LDA #<NAMEBUF                  ; read NAME into NAMEBUF (via P2)
+        TAP2L
+        LDA #>NAMEBUF
+        TAP2H
+td_nm:  LDA TMPB
+        JSR ISALP
+        JC  td_nput
+        LDA TMPB
+        JSR ISDIG
+        JC  td_nput
+        JMP td_nend
+td_nput: LDA TMPB
+        STA (P2)
+        INP2
+        JSR GC
+        JC  td_nend0
+        STA TMPB
+        JMP td_nm
+td_nend0: LDA #' '                     ; EOF right after the name
+        STA TMPB
+td_nend: LDA #0
+        STA (P2)                       ; NUL-terminate NAME
+td_vs:  LDA TMPB                       ; skip spaces between NAME and value
+        LDB #' '
+        CMP
+        JNZ td_val
+        JSR GC
+        JC  td_ret
+        STA TMPB
+        JMP td_vs
+td_val: JSR adv_num                    ; first value char in TMPB -> CURV (dec/hex)
+        JSR MAC_ADD                    ; store NAMEBUF -> value
+td_eol: JSR GC                         ; skip to end of line
+        JC  td_ret
+        LDB #LF
+        CMP
+        JNZ td_eol
+td_ret: RTS
+td_skipl: LDB #LF                       ; malformed //#d... -> skip the line
+        CMP
+        JZ  td_ret
+td_sl:  JSR GC
+        JC  td_ret
+        LDB #LF
+        CMP
+        JNZ td_sl
+        RTS
+
+; MAC_ADD: append NAMEBUF to MACNAMES, store CURV in MACVALS[MACCNT], MACCNT++.
+MAC_ADD: LDA #<MACNAMES               ; walk past the MACCNT names already packed
+        TAP1L
+        LDA #>MACNAMES
+        TAP1H
+        LDA #0
+        STA TMPB
+ma_e:   LDA TMPB
+        LDB MACCNT
+        CMP
+        JC  ma_ap                     ; TMPB >= MACCNT -> append point
+ma_sk:  LDA (P1)
+        JZ  ma_np
+        INP1
+        JMP ma_sk
+ma_np:  INP1
+        LDA TMPB
+        INC
+        STA TMPB
+        JMP ma_e
+ma_ap:  LDA #<NAMEBUF                  ; copy NAMEBUF (incl NUL) into the pool
+        TAP2L
+        LDA #>NAMEBUF
+        TAP2H
+ma_cp:  LDA (P2)
+        STA (P1)
+        JZ  ma_val
+        INP1
+        INP2
+        JMP ma_cp
+ma_val: LDA MACCNT                     ; P1 = MACVALS + MACCNT*2
+        SHL
+        STA TMPC
+        LDA #<MACVALS
+        LDB TMPC
+        ADD
+        TAP1L
+        LDA #>MACVALS
+        JNC ma_nc
+        INC
+ma_nc:  TAP1H
+        LDA CURV
+        STA (P1)
+        INP1
+        LDA CURV+1
+        STA (P1)
+        LDA MACCNT
+        INC
+        STA MACCNT
+        RTS
+
+; MACLOOKUP: TID a defined macro? -> MACF=1, MACVAL=value ; else MACF=0.
+MACLOOKUP: LDA #0
+        STA MACF
+        LDA #<MACNAMES
+        TAP1L
+        LDA #>MACNAMES
+        TAP1H
+        LDA #0
+        STA TMPB                       ; index k
+ml_e:   LDA TMPB
+        LDB MACCNT
+        CMP
+        JC  ml_ret                     ; k >= MACCNT -> not found
+        LDA #<TID
+        TAP2L
+        LDA #>TID
+        TAP2H
+ml_c:   LDA (P1)
+        STA TMPC
+        LDA (P2)
+        LDB TMPC
+        CMP
+        JNZ ml_nx
+        LDA (P1)
+        JZ  ml_yes                     ; both NUL -> match
+        INP1
+        INP2
+        JMP ml_c
+ml_nx:  LDA (P1)                        ; advance P1 past this name
+        JZ  ml_np
+        INP1
+        JMP ml_nx
+ml_np:  INP1
+        LDA TMPB
+        INC
+        STA TMPB
+        JMP ml_e
+ml_yes: LDA TMPB                        ; value = MACVALS[k*2]
+        SHL
+        STA TMPC
+        LDA #<MACVALS
+        LDB TMPC
+        ADD
+        TAP1L
+        LDA #>MACVALS
+        JNC ml_nc
+        INC
+ml_nc:  TAP1H
+        LDA (P1)
+        STA MACVAL
+        INP1
+        LDA (P1)
+        STA MACVAL+1
+        LDA #1
+        STA MACF
+ml_ret: RTS
+
 ; BUILDLIBPATH: LIBPATH = "/lib/lib_" + NAMEBUF + ".c"
 BUILDLIBPATH: LDA #<LIBPATH
         TAP2L
@@ -1315,7 +1510,17 @@ adv_linec: JSR GC                     ; first char after '//'
         LDB  #'#'
         CMP
         JNZ  alc_skip                 ; ordinary comment
-        JSR  TRYUSE                   ; "#use NAME" ? -> splice the library
+        JSR  GC                        ; char after '//#': 'd'efine or 'u'se ?
+        JC   adv_ws
+        STA  TMPC
+        LDB  #'d'
+        CMP
+        JZ   adv_def
+        LDA  TMPC                      ; not 'd' -> push back; TRYUSE reads "use"
+        JSR  UNGC
+        JSR  TRYUSE                   ; "//#use NAME" -> splice the library
+        JMP  adv_ws
+adv_def: JSR TRYDEF                    ; "//#define NAME value" -> macro table
         JMP  adv_ws
 alc_skip: JSR GC                       ; skip the rest of an ordinary comment line
         JC   adv_eof
@@ -1529,8 +1734,18 @@ ai_put: LDA  TMPB
         JMP  ai_l
 ai_done: LDA #0
         STA  (P2)                    ; NUL-terminate
-        LDA  #2
+        JSR  MACLOOKUP               ; a //#define object-like macro? -> NUMBER
+        LDA  MACF
+        JNZ  ai_mac
+        LDA  #2                      ; ordinary identifier
         STA  CURK
+        RTS
+ai_mac: LDA #1                        ; substitute the macro's value (NUMBER token)
+        STA  CURK
+        LDA  MACVAL
+        STA  CURV
+        LDA  MACVAL+1
+        STA  CURV+1
         RTS
 
 ; =============================================================================
@@ -5377,6 +5592,11 @@ USECNT: .fill 1     ; save/restore byte counter
 NAMEBUF: .fill 24   ; the current //#use library name
 LIBPATH: .fill 40   ; "/lib/lib_<name>.c"
 USED:   .fill 128   ; packed names of already-spliced libraries
+MACCNT:  .fill 1    ; number of object-like //#define macros
+MACF:    .fill 1    ; MACLOOKUP result: 1 if TID is a macro
+MACVAL:  .fill 2    ; MACLOOKUP result: the macro's 16-bit value
+MACNAMES: .fill 384 ; packed NUL-terminated macro names
+MACVALS:  .fill 64  ; parallel 16-bit values (32 macros max)
 USESTATE: .fill 70  ; saved read-stream state, 14 bytes x 5 levels
 USEBUF: .fill 2560  ; per-level 512-byte read buffers (5 levels)
 BIOSAD: .fill 2    ; bios() intrinsic: the constant call address

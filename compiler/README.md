@@ -134,6 +134,15 @@ builtins: `strlen`/`strcpy`/`strcmp`, `getline`/`putdec`, and **file** helpers
 `FNORM`/`FFIND`/`FLOADAT` and `FWOPEN`/`FPUTB`/`FCLOSE`). There is no `#include`
 or linker, so you use it by **prepending** it to your program:
 
+> **Object-like `#define`.** Both compilers (`p8cc.py` and the native `cc`) support
+> `#define NAME value` where `value` is a decimal or `0x` hex integer — a
+> compile-time textual substitution (no function-like macros). This is how a
+> command names raw BIOS/OS addresses without any code cost: `//#use abi` splices
+> `os/commands/lib_abi.c` (`#define FOPEN 0x0124`, …) so the source reads
+> `bios(FOPEN, RDBUF, 0)` and compiles byte-for-byte identically to the old
+> `bios(0x0124, 0xFC00, 0)`. (On-target, `cc` writes it `//#define`, matching its
+> `//#use` directive style.)
+
 ```sh
 cat compiler/p8lib.c prog.c > all.c
 python3 compiler/p8cc.py all.c -o all.asm      # (or build p8cc.c with cc and run: p8cc-host < all.c > all.asm)

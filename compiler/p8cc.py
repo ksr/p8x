@@ -55,20 +55,42 @@ PUNCT = ["==", "!=", "<=", ">=", "<<", ">>", "&&", "||", "->",
 
 def lex(src):
     toks, i, n, line = [], 0, len(src), 1
+    macros = {}                            # object-like #define NAME value (value = int)
     while i < n:
         c = src[i]
         if c == "\n": line += 1; i += 1; continue
         if c in " \t\r": i += 1; continue
-        if c == "#":                       # ignore cpp lines (#include) - no preprocessor
-            i = src.find("\n", i); i = n if i < 0 else i; continue
+        if c == "#":                       # cpp directive line: only #define is honored
+            eol = src.find("\n", i); eol = n if eol < 0 else eol
+            parts = src[i:eol].split(None, 2)          # ['#define', NAME, 'value ...']
+            if len(parts) >= 3 and parts[0] == "#define":
+                vtok = parts[2].split()[0]             # first token after the name
+                try:
+                    macros[parts[1]] = int(vtok, 0)    # 0x.. hex or decimal
+                except ValueError:
+                    sys.exit("p8cc: line %d: #define %s: value %r is not an integer"
+                             % (line, parts[1], vtok))
+            i = eol; continue                          # (other # lines are ignored)
         if src.startswith("//", i):
-            i = src.find("\n", i); i = n if i < 0 else i; continue
+            eol = src.find("\n", i); eol = n if eol < 0 else eol
+            body = src[i + 2:eol].lstrip()             # "//#define NAME value" (matches //#use style)
+            if body.startswith("#define"):
+                parts = body.split(None, 2)
+                if len(parts) >= 3:
+                    try:
+                        macros[parts[1]] = int(parts[2].split()[0], 0)
+                    except ValueError:
+                        sys.exit("p8cc: line %d: //#define %s: value %r is not an integer"
+                                 % (line, parts[1], parts[2].split()[0]))
+            i = eol; continue
         if src.startswith("/*", i):
             j = src.find("*/", i + 2); i = n if j < 0 else j + 2; continue
         if c.isalpha() or c == "_":
             j = i + 1
             while j < n and (src[j].isalnum() or src[j] == "_"): j += 1
             w = src[i:j]
+            if w in macros:                            # object-like macro -> its number
+                toks.append(("num", macros[w], line)); i = j; continue
             toks.append(("kw" if w in KEYWORDS else "id", w, line)); i = j; continue
         if c.isdigit():
             j = i + 1

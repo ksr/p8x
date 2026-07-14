@@ -80,7 +80,10 @@ DESCRIPTION
     them steps by 1 — so a char buffer strcpy(&d[0], s) works. (A scalar `char c`
     is still stored in a word; the byte width matters for arrays and pointers.)
     Escape sequences \n \t \r \0 \\ \' \" work in char and string literals, and
-    // line and /* block */ comments are skipped, and a `//#use NAME`
+    // line and /* block */ comments are skipped; a `//#define NAME value`
+    directive defines an object-like macro (value = a decimal or 0x-hex number)
+    that is substituted wherever NAME appears -- e.g. `//#use abi` brings in the
+    BIOS/OS address names so a program writes bios(FOPEN, RDBUF, 0). And a `//#use NAME`
     directive splices in /lib/lib_NAME.c on-target (recursive, deduped -- the
     native counterpart of the host clib.py). Arguments pass on a runtime arg
     stack (the callee pops them into its own slots), so FORWARD CALLS and MUTUAL
