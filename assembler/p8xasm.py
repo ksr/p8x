@@ -48,6 +48,30 @@ def tokenize(text):
         out.append((ln,raw.rstrip(),line))
     return out
 
+def expand_includes(path,_stack=None):
+    """Return the text of `path` with every `.include "file"` line replaced by the
+    (recursively expanded) contents of that file, resolved relative to the
+    including file's directory. Lets sources share a committed equates file
+    (e.g. a generated memmap.inc). Cycles are an error."""
+    _stack=_stack or []
+    ap=os.path.abspath(path)
+    if ap in _stack:
+        sys.exit("p8xasm: .include cycle: %s"%" -> ".join(_stack+[ap]))
+    try:
+        text=open(path).read()
+    except OSError as e:
+        sys.exit("p8xasm: cannot open %r: %s"%(path,e))
+    out=[]
+    for raw in text.splitlines():
+        code=raw.split(";")[0].strip()
+        m=re.match(r'\.include\s+"([^"]+)"\s*$',code) or re.match(r"\.include\s+'([^']+)'\s*$",code)
+        if m:
+            inc=os.path.join(os.path.dirname(ap),m.group(1))
+            out.append(expand_includes(inc,_stack+[ap]))
+        else:
+            out.append(raw)
+    return "\n".join(out)
+
 def parse_operand(opnd):
     """-> (shape, exprtext or None)"""
     opnd=opnd.strip()
@@ -172,7 +196,7 @@ def main():
             nm,_,val=a[i+1].partition("=")
             val=val.strip()
             defs[nm.strip()]=int(val[1:],16) if val.startswith("$") else int(val,0)
-    lines=tokenize(open(src).read())
+    lines=tokenize(expand_includes(src))
     # --base: RAM-resident blob (e.g. an OS loaded to $2000); emit only the
     # bytes from base..hi. No --base: 8K ROM image from $0000.
     if base is not None:

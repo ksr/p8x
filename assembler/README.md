@@ -22,6 +22,15 @@ python3 p8xasm.py src.asm [-o out.bin] [-l listing.txt] [--base ADDR] [-D NAME=V
   via `BASORG`/`BASRAM`, for example).
 - **`-l`** → write a listing file (address + bytes + source per line).
 
+## Directives
+
+- `.org`, `.byte`, `.word`, `.fill`, `.ascii`, `.asciiz`, `.equ`
+- **`.include "file"`** → splice another source file at this point (recursively;
+  path resolved relative to the *including* file; cycles are an error). Lets
+  sources share a committed equates file — e.g. the generated `memmap.inc` — so a
+  memory-map constant lives in one place instead of being copied into firmware,
+  the OS, and `p8xcc`.
+
 ## Notes
 
 - Two passes: pass 1 builds the symbol table, pass 2 emits bytes.
