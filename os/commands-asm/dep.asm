@@ -3,6 +3,7 @@
 ; Memory-only (no filesystem): parse hex, poke each byte, addr++. Quiet on
 ; success; usage on -h / empty; "dep: bad address" on a non-hex address.
 ; Entry: P2 = arg tail.  SYS_PUTS=$200F, SYS_PUTC=$2009.
+;#use abi
 
         .org $6A00
 d_sk:   LDA (P2)                     ; skip leading spaces
@@ -61,18 +62,18 @@ d_bad:  LDA #<m_bad
         LDA #>m_bad
         TAP1H
         LDA #0
-        JSR $200F
+        JSR SYS_PUTS
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 d_use:  LDA #<m_use
         TAP1L
         LDA #>m_use
         TAP1H
         LDA #0
-        JSR $200F
+        JSR SYS_PUTS
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 
 ; GETHEX: skip spaces at (P2), parse hex digits -> HXLO/HXHI, advance P2.

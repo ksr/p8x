@@ -25,6 +25,7 @@
  */
 //#use glob    /* gmatch() — required by glob_expand below */
 //#use globx   /* glob_expand(pat, out, maxn): expand a glob into a path list */
+//#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
 
 char path[80];                               /* absolute path we build per file */
 char gbuf[1536];                             /* glob_expand output: 24 slots x 64 */
@@ -37,7 +38,7 @@ int catpath(char *arg) {
     int c;
     i = 0;                                    /* build an absolute path in path[] */
     if (*arg != '/') {                        /* relative -> prepend the CWD */
-        bios(0x2003, path, 0);                /* SYS_GETCWD -> path */
+        bios(SYS_GETCWD, path, 0);                /* SYS_GETCWD -> path */
         while (path[i] != 0) { i = i + 1; }
         if (i > 0 && path[i - 1] != '/') { path[i] = '/'; i = i + 1; }
     }
@@ -46,12 +47,12 @@ int catpath(char *arg) {
         path[i] = arg[j]; i = i + 1; j = j + 1;
     }
     path[i] = 0;
-    bios(0x0133, path, 0);                    /* FRESOLVE: DIRLBA=parent, FNAME=leaf */
-    if (bios(0x0124, 0xFC00, 0) & 256) { return 1; }   /* FOPEN; carry=1 -> not found */
-    c = bios(0x0127, 0, 0);                    /* FGETB */
+    bios(FRESOLVE, path, 0);                    /* FRESOLVE: DIRLBA=parent, FNAME=leaf */
+    if (bios(FOPEN, RDBUF, 0) & 256) { return 1; }   /* FOPEN; carry=1 -> not found */
+    c = bios(FGETB, 0, 0);                    /* FGETB */
     while ((c & 256) == 0) {                   /* carry=1 -> end of file */
         putchar(c & 255);
-        c = bios(0x0127, 0, 0);
+        c = bios(FGETB, 0, 0);
     }
     return 0;
 }

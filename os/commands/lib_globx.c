@@ -29,6 +29,7 @@
  */
 //#use glob     /* gmatch(pat,name) — clib.py splices it above (recursive //#use) */
 //#use dirent   /* de_read/de_isfile/de_isdot: current entry via SYS_DIRENTRY */
+//#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
 int glob_expand(char *pat, char *out, int maxn) {
     char leaf[16];                           /* the pattern's last component */
     char dir[64];                            /* its directory prefix (incl trailing /) */
@@ -60,12 +61,12 @@ int glob_expand(char *pat, char *out, int maxn) {
     while (ls < i) { leaf[j] = pat[ls]; j = j + 1; ls = ls + 1; }
     leaf[j] = 0;
 
-    if (hasslash) { bios(0x0139, dir, 0); }  /* FOPENDIR(dir) */
-    else { bios(0x2012, 0, 0); }             /* SYS_OPENCWD */
-    bios(0x0145, 0, 0xFA);                   /* FSDIRBUF: iterate on page $FA (high TPA) */
+    if (hasslash) { bios(FOPENDIR, dir, 0); }  /* FOPENDIR(dir) */
+    else { bios(SYS_OPENCWD, 0, 0); }             /* SYS_OPENCWD */
+    bios(FSDIRBUF, 0, 0xFA);                   /* FSDIRBUF: iterate on page $FA (high TPA) */
 
     cnt = 0;
-    r = bios(0x013C, 0, 0);                  /* FNEXT */
+    r = bios(FNEXT, 0, 0);                  /* FNEXT */
     while ((r & 256) == 0) {
         de_read();                            /* snapshot the entry (SYS_DIRENTRY) */
         if (de_isdot() == 0 && de_isfile()) {   /* a FILE, not '.'/'..'/dir */
@@ -83,7 +84,7 @@ int glob_expand(char *pat, char *out, int maxn) {
                 cnt = cnt + 1;
             }
         }
-        r = bios(0x013C, 0, 0);
+        r = bios(FNEXT, 0, 0);
     }
     return cnt;
 }

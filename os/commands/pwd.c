@@ -9,6 +9,8 @@
  *
  * OS: SYS_GETCWD = $2003 (copies the CWD path, incl. NUL, into P1).
  */
+//#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
+
 char buf[52];                                /* CWDPATH is up to 48 bytes + NUL */
 int main() {
     char *arg;
@@ -18,7 +20,7 @@ int main() {
         puts("usage: PWD   print the working directory path");
         return 0;
     }
-    bios(0x2003, buf, 0);                    /* SYS_GETCWD -> buf */
+    bios(SYS_GETCWD, buf, 0);                    /* SYS_GETCWD -> buf */
     puts(buf);
     return 0;
 }

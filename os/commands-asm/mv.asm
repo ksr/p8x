@@ -10,6 +10,7 @@
 ; SYS_PUTS $200F, SYS_PUTC $2009. Read buf $FC00. Entry: P2 = arg tail.
 ;#use glob
 ;#use globx
+;#use abi
 
         .org $6A00
         TPA2L
@@ -182,7 +183,7 @@ mv_glob:LDA #<m_dst
         LDA #>m_dst
         TAP1H
         LDA #0
-        JSR $0139                    ; FOPENDIR(dst)
+        JSR FOPENDIR                 ; FOPENDIR(dst)
         JC mv_notdir
         LDA #<patw
         STA ge_pat
@@ -279,9 +280,9 @@ mv_nomatch:
         LDA #>u_nomat
         TAP1H
 mv_put: LDA #0
-        JSR $200F
+        JSR SYS_PUTS
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 
 ; move_one: copy mo_s -> mo_d then delete mo_s. A = 1 not found / 0 ok.
@@ -291,42 +292,42 @@ move_one:
         LDA mo_s+1
         TAP1H
         LDA #0
-        JSR $0133                    ; FRESOLVE src
+        JSR FRESOLVE                 ; FRESOLVE src
         LDA #$00
         TAP1L
         LDA #$FC
         TAP1H
         LDA #0
-        JSR $0124                    ; FOPEN $FC00
+        JSR FOPEN                    ; FOPEN $FC00
         JC mo_nf
         LDA mo_d
         TAP1L
         LDA mo_d+1
         TAP1H
         LDA #0
-        JSR $0133                    ; FRESOLVE dst
+        JSR FRESOLVE                 ; FRESOLVE dst
         LDA #0
-        JSR $012A                    ; FWOPEN
+        JSR FWOPEN                   ; FWOPEN
 mo_cp:  LDA #0
-        JSR $0127                    ; FGETB
+        JSR FGETB                    ; FGETB
         JC mo_end
         STA m_ch
         LDA #0
         TAP1L
         TAP1H
         LDA m_ch
-        JSR $012D                    ; FPUTB
+        JSR FPUTB                    ; FPUTB
         JMP mo_cp
 mo_end: LDA #0
-        JSR $0130                    ; FCLOSE
+        JSR FCLOSE                   ; FCLOSE
         LDA mo_s
         TAP1L
         LDA mo_s+1
         TAP1H
         LDA #0
-        JSR $0133                    ; FRESOLVE src
+        JSR FRESOLVE                 ; FRESOLVE src
         LDA #0
-        JSR $011E                    ; FDELETE
+        JSR FDELETE                  ; FDELETE
         LDA #0
         RTS
 mo_nf:  LDA #1
@@ -475,7 +476,7 @@ abspath:LDA #0
         LDA ap_out+1
         TAP1H
         LDA #0
-        JSR $2003
+        JSR SYS_GETCWD
         LDA ap_out
         TAP1L
         LDA ap_out+1

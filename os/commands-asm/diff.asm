@@ -4,6 +4,7 @@
 ; and trailing lines, prints the differing middle. abspath inline; no shared
 ; include. BIOS: FRESOLVE $0133, FOPEN $0124, FGETB $0127. OS: SYS_GETCWD $2003.
 ; Entry: P2 = arg tail.
+;#use abi
 
         .org $6A00
         TPA2L
@@ -262,9 +263,9 @@ d_nf2:  LDA #<u_nf2
         LDA #>u_nf2
         TAP1H
 d_pm:   LDA #0
-        JSR $200F
+        JSR SYS_PUTS
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 
 ; openf: FRESOLVE(path)+FOPEN($FC00) -> A = 1 ok / 0 not found
@@ -273,13 +274,13 @@ openf:  LDA #<path
         LDA #>path
         TAP1H
         LDA #0
-        JSR $0133
+        JSR FRESOLVE
         LDA #$00
         TAP1L
         LDA #$FC
         TAP1H
         LDA #0
-        JSR $0124
+        JSR FOPEN
         JC of_no
         LDA #1
         RTS
@@ -292,7 +293,7 @@ loadlines:
         STA lln
         STA llcol
 ll_rd:  LDA #0
-        JSR $0127
+        JSR FGETB
         JC ll_fin
         STA llc
         LDA lln
@@ -419,7 +420,7 @@ et_l:   LDA (P1)
         LDB #0
         CMP
         JZ et_ln
-        JSR $2009
+        JSR SYS_PUTC
         INP1
         JMP et_l
 et_ln:  LDA em_buf
@@ -435,11 +436,11 @@ el_l:   LDA (P1)
         LDB #0
         CMP
         JZ el_d
-        JSR $2009
+        JSR SYS_PUTC
         INP1
         JMP el_l
 el_d:   LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 
 ; laddr: P1 = la_base + la_s*80 + la_c
@@ -508,7 +509,7 @@ abspath:LDA #0
         LDA ap_out+1
         TAP1H
         LDA #0
-        JSR $2003
+        JSR SYS_GETCWD
         LDA ap_out
         TAP1L
         LDA ap_out+1

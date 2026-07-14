@@ -7,6 +7,7 @@
 ; OS: SYS_GETCWD $2003, SYS_OPENCWD $2012, SYS_PUTC $2009, SYS_PUTS $200F.
 ; Entry: P2 = arg tail.
 ;#use glob
+;#use abi
 
         .org $6A00
         TPA2L
@@ -99,7 +100,7 @@ f_pd:   LDA #0
         LDA #>cur
         TAP1H
         LDA #0
-        JSR $2003                    ; SYS_GETCWD -> cur
+        JSR SYS_GETCWD               ; SYS_GETCWD -> cur
         LDA #<cur
         TAP1L
         LDA #>cur
@@ -124,12 +125,12 @@ f_len0: LDA #0                        ; w_depth=0; parr[0]=plen
         TAP1L
         TAP1H
         LDA #0
-        JSR $2012                    ; SYS_OPENCWD
+        JSR SYS_OPENCWD              ; SYS_OPENCWD
         LDA #0
         TAP1L
         TAP1H
         LDA #$EA
-        JSR $0145                    ; FSDIRBUF $EA
+        JSR FSDIRBUF                 ; FSDIRBUF $EA
         JSR walk
         RTS
 f_usage:LDA #<u_use
@@ -137,9 +138,9 @@ f_usage:LDA #<u_use
         LDA #>u_use
         TAP1H
         LDA #0
-        JSR $200F
+        JSR SYS_PUTS
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 
 ; ======================= walk ==============================================
@@ -153,14 +154,14 @@ w_next: LDA #0
         TAP1L
         TAP1H
         LDA #0
-        JSR $013C                    ; FNEXT
+        JSR FNEXT                    ; FNEXT
         JC w_desc
         LDA #<de
         TAP1L
         LDA #>de
         TAP1H
         LDA #0
-        JSR $201B                    ; de_read
+        JSR SYS_DIRENTRY             ; de_read
         LDA de
         LDB #'.'
         CMP
@@ -239,12 +240,12 @@ w_dl:   JSR idx_a
         LDA flba+1
         TAP1H
         LDA #0
-        JSR $201E                    ; SYS_OPENDIR
+        JSR SYS_OPENDIR              ; SYS_OPENDIR
         LDA #0
         TAP1L
         TAP1H
         LDA #$EA
-        JSR $0145
+        JSR FSDIRBUF
         JSR parr_a
         LDA (P1)
         STA fpl                      ; oldp
@@ -350,7 +351,7 @@ pm_l:   LDA pcnt
         CMP
         JZ pm_sep
         LDA (P1)
-        JSR $2009
+        JSR SYS_PUTC
         INP1
         LDA pcnt
         INC
@@ -366,7 +367,7 @@ pm_sep: LDA fpl
         JZ pm_name
 pm_slash:
         LDA #'/'
-        JSR $2009
+        JSR SYS_PUTC
 pm_name:LDA #<nm
         TAP1L
         LDA #>nm
@@ -375,11 +376,11 @@ pm_nl:  LDA (P1)
         LDB #0
         CMP
         JZ pm_eol
-        JSR $2009
+        JSR SYS_PUTC
         INP1
         JMP pm_nl
 pm_eol: LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 
 ; ======================= rdname / nmatch / contains ========================

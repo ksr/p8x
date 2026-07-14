@@ -2,6 +2,7 @@
 ;   HEAD [-N] [file]   first N lines (default 10), file or stdin.
 ; Shares the input engine via `;#use stdin`. Entry: P2 = arg tail.
 ;#use stdin
+;#use abi
 
         .org $6A00
         LDA #10                      ; n = 10
@@ -102,7 +103,7 @@ h_loop: JSR less                     ; lines < n ?
         JSR nextc
         JC h_done
         STA hch
-        JSR $2009                    ; putchar
+        JSR SYS_PUTC                 ; putchar
         LDA hch
         LDB #10
         CMP
@@ -122,18 +123,18 @@ h_nf:   LDA #<u_nf
         LDA #>u_nf
         TAP1H
         LDA #0
-        JSR $200F
+        JSR SYS_PUTS
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 h_usage:LDA #<u_use
         TAP1L
         LDA #>u_use
         TAP1H
         LDA #0
-        JSR $200F
+        JSR SYS_PUTS
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 
 h_ainc: LDA h_arg                    ; h_arg++

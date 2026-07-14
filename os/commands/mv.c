@@ -26,6 +26,7 @@ char gfiles[1536];                   /* glob_expand output: 24 slots x 64 */
 //#use apath
 //#use streq
 //#use globx     /* glob_expand(pat, out, maxn): expand a glob into a path list */
+//#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
 
 /* joinp: out = dir + "/" + name (name NUL-terminated). */
 int joinp(char *out, char *dir, char *name) {
@@ -44,18 +45,18 @@ int joinp(char *out, char *dir, char *name) {
  * Returns 1 if the source was not found, else 0. */
 int move_one(char *s, char *d) {
     int c;
-    bios(0x0133, s, 0);                        /* FRESOLVE SRC */
-    if (bios(0x0124, 0xFC00, 0) & 256) { return 1; }   /* FOPEN; C=1 -> not found */
-    bios(0x0133, d, 0);                        /* FRESOLVE DST (DIRLBA + FNAME) */
-    bios(0x012A, 0, 0);                        /* FWOPEN */
-    c = bios(0x0127, 0, 0);                    /* FGETB */
+    bios(FRESOLVE, s, 0);                        /* FRESOLVE SRC */
+    if (bios(FOPEN, RDBUF, 0) & 256) { return 1; }   /* FOPEN; C=1 -> not found */
+    bios(FRESOLVE, d, 0);                        /* FRESOLVE DST (DIRLBA + FNAME) */
+    bios(FWOPEN, 0, 0);                        /* FWOPEN */
+    c = bios(FGETB, 0, 0);                    /* FGETB */
     while ((c & 256) == 0) {
-        bios(0x012D, 0, c & 255);              /* FPUTB */
-        c = bios(0x0127, 0, 0);
+        bios(FPUTB, 0, c & 255);              /* FPUTB */
+        c = bios(FGETB, 0, 0);
     }
-    bios(0x0130, 0, 0);                        /* FCLOSE -> commit DST */
-    bios(0x0133, s, 0);                        /* FRESOLVE SRC again, delete it */
-    bios(0x011E, 0, 0);                        /* FDELETE SRC */
+    bios(FCLOSE, 0, 0);                        /* FCLOSE -> commit DST */
+    bios(FRESOLVE, s, 0);                        /* FRESOLVE SRC again, delete it */
+    bios(FDELETE, 0, 0);                        /* FDELETE SRC */
     return 0;
 }
 
@@ -96,7 +97,7 @@ int main() {
         return 0;
     }
 
-    if (bios(0x0139, dst, 0) & 256) {          /* glob -> dst must be a dir */
+    if (bios(FOPENDIR, dst, 0) & 256) {          /* glob -> dst must be a dir */
         puts("mv: target is not a directory");
         return 1;
     }

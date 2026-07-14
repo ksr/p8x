@@ -20,11 +20,12 @@
 char path[80];
 
 //#use apath   /* abspath(out, arg): next path word -> absolute in out */
+//#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
 
 /* exists: 1 if the file at absolute path p is present, else 0. */
 int exists(char *p) {
-    bios(0x0133, p, 0);                        /* FRESOLVE */
-    if (bios(0x0124, 0xFC00, 0) & 256) { return 0; }   /* FOPEN; C=1 -> not found */
+    bios(FRESOLVE, p, 0);                        /* FRESOLVE */
+    if (bios(FOPEN, RDBUF, 0) & 256) { return 0; }   /* FOPEN; C=1 -> not found */
     return 1;
 }
 
@@ -46,9 +47,9 @@ int main() {
         a = a + n;
         while (*a == 32) { a = a + 1; }
         if (exists(path) == 0) {               /* missing -> create empty */
-            bios(0x0133, path, 0);             /* FRESOLVE (DIRLBA + FNAME) */
-            bios(0x012A, 0, 0);                /* FWOPEN */
-            bios(0x0130, 0, 0);                /* FCLOSE -> zero-byte file */
+            bios(FRESOLVE, path, 0);             /* FRESOLVE (DIRLBA + FNAME) */
+            bios(FWOPEN, 0, 0);                /* FWOPEN */
+            bios(FCLOSE, 0, 0);                /* FCLOSE -> zero-byte file */
         }
     }
     return 0;

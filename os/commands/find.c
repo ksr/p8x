@@ -20,6 +20,7 @@
  */
 //#use glob     /* gmatch(pat, name): case-insensitive * ? matcher */
 //#use dirent   /* de_read/de_isdir/de_isdot/de_lba/de_opendir: entry via syscall */
+//#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
 
 char cur[256];                               /* path of the directory being walked */
 char nm[16];                                 /* current entry name (trimmed) */
@@ -71,7 +72,7 @@ int walk(int plen) {                          /* plen = length of cur (no traili
     int oldp;
 
     nsub = 0;
-    r = bios(0x013C, 0, 0);                  /* FNEXT */
+    r = bios(FNEXT, 0, 0);                  /* FNEXT */
     while ((r & 256) == 0) {
         de_read();                           /* snapshot the entry (SYS_DIRENTRY) */
         if (de_isdot() == 0) {               /* skip '.' / '..' */
@@ -92,13 +93,13 @@ int walk(int plen) {                          /* plen = length of cur (no traili
                 nsub = nsub + 1;
             }
         }
-        r = bios(0x013C, 0, 0);
+        r = bios(FNEXT, 0, 0);
     }
 
     i = 0;                                    /* descend into each recorded child */
     while (i < nsub) {
         de_opendir(clba[i]);                 /* SYS_OPENDIR(child LBA, 16-bit) */
-        bios(0x0145, 0, 0xEA);               /* FSDIRBUF: our page */
+        bios(FSDIRBUF, 0, 0xEA);               /* FSDIRBUF: our page */
         oldp = plen;
         if (plen != 1 || cur[0] != '/') { cur[plen] = '/'; plen = plen + 1; }
         k = 0;
@@ -133,11 +134,11 @@ int main() {
     }
     pat[i] = 0;
 
-    bios(0x2003, cur, 0);                    /* cur = CWD path */
+    bios(SYS_GETCWD, cur, 0);                    /* cur = CWD path */
     plen = 0;
     while (cur[plen] != 0) { plen = plen + 1; }
-    bios(0x2012, 0, 0);                      /* SYS_OPENCWD: iterate CWD (16-bit LBA) */
-    bios(0x0145, 0, 0xEA);
+    bios(SYS_OPENCWD, 0, 0);                      /* SYS_OPENCWD: iterate CWD (16-bit LBA) */
+    bios(FSDIRBUF, 0, 0xEA);
     walk(plen);
     return 0;
 }

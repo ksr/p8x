@@ -10,6 +10,7 @@
 ; Entry: P2 = arg tail.
 ;#use glob
 ;#use globx
+;#use abi
 
         .org $6A00
         TPA2L
@@ -418,9 +419,9 @@ c_srcnf:LDA #<u_nf
         LDA #>u_nf
         TAP1H
 c_put:  LDA #0
-        JSR $200F
+        JSR SYS_PUTS
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 
 ; ======================= copy_file / isdir =================================
@@ -430,34 +431,34 @@ copy_file:
         LDA cf_s+1
         TAP1H
         LDA #0
-        JSR $0133
+        JSR FRESOLVE
         LDA #$00
         TAP1L
         LDA #$FC
         TAP1H
         LDA #0
-        JSR $0124
+        JSR FOPEN
         JC cf_nf
         LDA cf_d
         TAP1L
         LDA cf_d+1
         TAP1H
         LDA #0
-        JSR $0133
+        JSR FRESOLVE
         LDA #0
-        JSR $012A
+        JSR FWOPEN
 cf_cp:  LDA #0
-        JSR $0127
+        JSR FGETB
         JC cf_done
         STA cfch
         LDA #0
         TAP1L
         TAP1H
         LDA cfch
-        JSR $012D
+        JSR FPUTB
         JMP cf_cp
 cf_done:LDA #0
-        JSR $0130
+        JSR FCLOSE
         LDA #0
         RTS
 cf_nf:  LDA #1
@@ -467,7 +468,7 @@ isdir:  LDA id_p
         LDA id_p+1
         TAP1H
         LDA #0
-        JSR $0139
+        JSR FOPENDIR
         JC id_no
         LDA #1
         RTS
@@ -498,15 +499,15 @@ copy_tree:
         JSR scopy
         JSR dpd_a                    ; SYS_MKDIR(dp[d])
         LDA #0
-        JSR $2021
+        JSR SYS_MKDIR
         JSR spd_a                    ; FOPENDIR(sp[d])
         LDA #0
-        JSR $0139
+        JSR FOPENDIR
         LDA #0
         TAP1L
         TAP1H
         LDA #$E0
-        JSR $0145
+        JSR FSDIRBUF
         JSR nn_a
         LDA #0
         STA (P1)
@@ -514,14 +515,14 @@ ct_nl:  LDA #0
         TAP1L
         TAP1H
         LDA #0
-        JSR $013C
+        JSR FNEXT
         JC ct_proc
         LDA #<de
         TAP1L
         LDA #>de
         TAP1H
         LDA #0
-        JSR $201B
+        JSR SYS_DIRENTRY
         LDA de
         LDB #'.'
         CMP
@@ -777,7 +778,7 @@ abspath:LDA #0
         LDA ap_out+1
         TAP1H
         LDA #0
-        JSR $2003
+        JSR SYS_GETCWD
         LDA ap_out
         TAP1L
         LDA ap_out+1

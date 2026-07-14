@@ -3,6 +3,7 @@
 ; Shares the input engine via `;#use stdin`. Keeps the last N lines in a ring of
 ; 40 x 256-byte slots, then prints them in order at EOF. Entry: P2 = arg tail.
 ;#use stdin
+;#use abi
 
         .org $6A00
         LDA #10
@@ -237,11 +238,11 @@ t_pl:   LDA (P1)
         LDB #0
         CMP
         JZ t_peol
-        JSR $2009
+        JSR SYS_PUTC
         INP1
         JMP t_pl
 t_peol: LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         LDA base
         INC
         STA base
@@ -261,18 +262,18 @@ t_nf:   LDA #<u_nf
         LDA #>u_nf
         TAP1H
         LDA #0
-        JSR $200F
+        JSR SYS_PUTS
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 t_usage:LDA #<u_use
         TAP1L
         LDA #>u_use
         TAP1H
         LDA #0
-        JSR $200F
+        JSR SYS_PUTS
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 
 t_ainc: LDA t_arg

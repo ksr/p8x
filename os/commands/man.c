@@ -14,6 +14,8 @@
  * FGETB=$0127 (->A, C=1 at EOF).  512-byte read buffer at $FC00 (page-aligned,
  * clear of code/globals at $6A00 and the stack at $FEFF).
  */
+//#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
+
 char path[80];                               /* "/man/" + the requested name */
 
 int main() {
@@ -44,8 +46,8 @@ int main() {
     }
     path[i] = 0;
 
-    bios(0x0133, path, 0);                    /* FRESOLVE: DIRLBA=parent, FNAME=leaf */
-    if (bios(0x0124, 0xFC00, 0) & 256) {      /* FOPEN; carry=1 -> not found */
+    bios(FRESOLVE, path, 0);                    /* FRESOLVE: DIRLBA=parent, FNAME=leaf */
+    if (bios(FOPEN, RDBUF, 0) & 256) {      /* FOPEN; carry=1 -> not found */
         p = "no manual entry for ";
         i = 0;
         while (p[i] != 0) { putchar(p[i]); i = i + 1; }
@@ -54,10 +56,10 @@ int main() {
         putchar(10);
         return 1;
     }
-    c = bios(0x0127, 0, 0);                    /* FGETB */
+    c = bios(FGETB, 0, 0);                    /* FGETB */
     while ((c & 256) == 0) {                   /* carry=1 -> end of file */
         putchar(c & 255);
-        c = bios(0x0127, 0, 0);
+        c = bios(FGETB, 0, 0);
     }
     return 0;
 }

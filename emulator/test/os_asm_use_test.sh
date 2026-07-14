@@ -22,7 +22,8 @@ python3 $ROOT/assembler/p8xasm.py asmfull.asm -o asm.bin --base 0x6A00 >/dev/nul
 sh $ROOT/os/commands-asm/mkasm.sh cat > cat.full.asm
 python3 $ROOT/assembler/p8xasm.py cat.full.asm -o cat.ref.bin --base 0x6A00 >/dev/null
 
-# on-target disk: asm.bin in /bin, the include at /lib/stdin.inc, raw cat.asm at /
+# on-target disk: asm.bin in /bin, includes at /lib/stdin.inc + /lib/abi.inc
+# (cat.asm now `;#use abi` for its named BIOS/OS addresses), raw cat.asm at /
 rm -f use.img
 python3 $ROOT/tools/p8xfs.py create use.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   use.img osu.bin >/dev/null
@@ -30,6 +31,7 @@ python3 $ROOT/tools/p8xfs.py mkdir  use.img /bin >/dev/null
 python3 $ROOT/tools/p8xfs.py put    use.img asm.bin --name /bin/asm.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  use.img /lib >/dev/null
 python3 $ROOT/tools/p8xfs.py put    use.img $ROOT/os/commands-asm/lib_stdin.inc --name /lib/stdin.inc >/dev/null
+python3 $ROOT/tools/p8xfs.py put    use.img $ROOT/os/commands-asm/lib_abi.inc   --name /lib/abi.inc >/dev/null
 python3 $ROOT/tools/p8xfs.py put    use.img $ROOT/os/commands-asm/cat.asm --name /cat.asm >/dev/null
 
 # assemble on-target, extract, diff against the host reference

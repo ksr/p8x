@@ -34,6 +34,7 @@ char re[64];                                 /* the compiled regex (first arg wo
 //#use regex   /* match(re,t)/matchhere(re,t): the basic-regex matcher . * + ? ^ $ */
 //#use stdin   /* path[80], fromfile, nextc(), openarg(), open_path() */
 //#use dirent  /* de_read/de_isfile/de_isdir/de_isdot/de_lba/de_opendir */
+//#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
 
 /* grep_stream: read the currently-open input (file stream or stdin) line by
  * line and print each match. If pfx != 0, print "pfx:" before the line (for -r).
@@ -104,7 +105,7 @@ int collect(int plen) {
     int base;
 
     nsub = 0;
-    r = bios(0x013C, 0, 0);                  /* FNEXT */
+    r = bios(FNEXT, 0, 0);                  /* FNEXT */
     while ((r & 256) == 0) {
         de_read();                           /* snapshot the entry (SYS_DIRENTRY) */
         if (de_isdot() == 0) {               /* skip '.' / '..' */
@@ -127,13 +128,13 @@ int collect(int plen) {
                 nsub = nsub + 1;
             }
         }
-        r = bios(0x013C, 0, 0);
+        r = bios(FNEXT, 0, 0);
     }
 
     i = 0;                                    /* descend into each recorded child */
     while (i < nsub) {
         de_opendir(clba[i]);                 /* SYS_OPENDIR(child LBA, 16-bit) */
-        bios(0x0145, 0, 0xEA);               /* FSDIRBUF: our page */
+        bios(FSDIRBUF, 0, 0xEA);               /* FSDIRBUF: our page */
         oldp = plen;
         if (plen != 1 || cur[0] != '/') { cur[plen] = '/'; plen = plen + 1; }
         k = 0;
@@ -179,11 +180,11 @@ int main() {
 
     if (recurse) {                            /* walk the CWD tree, grep each file */
         nrf = 0;
-        bios(0x2003, cur, 0);                 /* cur = CWD path */
+        bios(SYS_GETCWD, cur, 0);                 /* cur = CWD path */
         plen = 0;
         while (cur[plen] != 0) { plen = plen + 1; }
-        bios(0x2012, 0, 0);                   /* SYS_OPENCWD: iterate the CWD */
-        bios(0x0145, 0, 0xEA);
+        bios(SYS_OPENCWD, 0, 0);                   /* SYS_OPENCWD: iterate the CWD */
+        bios(FSDIRBUF, 0, 0xEA);
         collect(plen);                        /* phase 1: gather file paths */
         i = 0;                                /* phase 2: grep each (paths are absolute) */
         while (i < nrf) {

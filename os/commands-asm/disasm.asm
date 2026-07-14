@@ -6,6 +6,7 @@
 ; Output is byte-identical to disasm.c:  AAAA: bb bb ..   MNEMONIC operand.
 ; Entry: P2 = arg tail.  SYS_PUTS=$200F, SYS_PUTC=$2009.
 ;#use distab
+;#use abi
 
         .org $6A00
         ; ---- parse "start end" ------------------------------------------------
@@ -75,9 +76,9 @@ d_body: LDA ADDR                     ; op = peek(addr)
         LDA ADDR
         JSR OPH8
         LDA #':'
-        JSR $2009
+        JSR SYS_PUTC
         LDA #32
-        JSR $2009
+        JSR SYS_PUTC
         LDA FOUNDF
         JZ d_unk
         ; known opcode -----------------------------------------------------
@@ -92,7 +93,7 @@ d_rb:   LDA KCNT
         JSR PEEKAT                   ; peek(addr+k)
         JSR OPH8
         LDA #32
-        JSR $2009
+        JSR SYS_PUTC
         LDA KCNT
         INC
         STA KCNT
@@ -102,17 +103,17 @@ d_rbd:  LDA KCNT                     ; pad byte column: k=LN..4, 3 spaces each
         CMP
         JC d_rpd
         LDA #32
-        JSR $2009
+        JSR SYS_PUTC
         LDA #32
-        JSR $2009
+        JSR SYS_PUTC
         LDA #32
-        JSR $2009
+        JSR SYS_PUTC
         LDA KCNT
         INC
         STA KCNT
         JMP d_rbd
 d_rpd:  LDA #32                      ; the extra space before the mnemonic
-        JSR $2009
+        JSR SYS_PUTC
         LDA MNL                      ; prs(mnemonic)
         TAP1L
         LDA MNH
@@ -120,9 +121,9 @@ d_rpd:  LDA #32                      ; the extra space before the mnemonic
         JSR PRS
         JSR DS_OPER                  ; operand for SHAPE
         LDA #13
-        JSR $2009
+        JSR SYS_PUTC
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         LDA ADDR                     ; addr += LN
         LDB LN
         ADD
@@ -140,9 +141,9 @@ d_unk:  LDA OP                       ; unknown byte: op + pad + "???"
         TAP1H
         JSR PRS
         LDA #13
-        JSR $2009
+        JSR SYS_PUTC
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         LDA ADDR                     ; addr += 1
         LDB #1
         ADD
@@ -170,9 +171,9 @@ d_nend: LDA #<M_NEND
         LDA #>M_NEND
         TAP1H
 d_puts: LDA #0                       ; P1 = the string -> SYS_PUTS + LF
-        JSR $200F
+        JSR SYS_PUTS
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 
 ; CALC_LN: LN = ilen(SHAPE): sh1->2, sh2->3, sh9->5, else 1.
@@ -225,19 +226,19 @@ DS_OPER:LDA SHAPE
         JMP do_preg
 do_non: RTS
 do_imm: LDA #32                       ; " #$" + ph2(peek(addr+1))
-        JSR $2009
+        JSR SYS_PUTC
         LDA #'#'
-        JSR $2009
+        JSR SYS_PUTC
         LDA #'$'
-        JSR $2009
+        JSR SYS_PUTC
         LDA #1
         JSR PEEKAT
         JSR OPH8
         RTS
 do_adr: LDA #32                       ; " $" + ph4(w16(addr+1))
-        JSR $2009
+        JSR SYS_PUTC
         LDA #'$'
-        JSR $2009
+        JSR SYS_PUTC
         LDA #1
         JSR W16OFF
         LDA WH
@@ -246,9 +247,9 @@ do_adr: LDA #32                       ; " $" + ph4(w16(addr+1))
         JSR OPH8
         RTS
 do_mvw: LDA #32                       ; " $" ph4 ",$" ph4
-        JSR $2009
+        JSR SYS_PUTC
         LDA #'$'
-        JSR $2009
+        JSR SYS_PUTC
         LDA #1
         JSR W16OFF
         LDA WH
@@ -256,9 +257,9 @@ do_mvw: LDA #32                       ; " $" ph4 ",$" ph4
         LDA WL
         JSR OPH8
         LDA #','
-        JSR $2009
+        JSR SYS_PUTC
         LDA #'$'
-        JSR $2009
+        JSR SYS_PUTC
         LDA #3
         JSR W16OFF
         LDA WH
@@ -267,11 +268,11 @@ do_mvw: LDA #32                       ; " $" ph4 ",$" ph4
         JSR OPH8
         RTS
 do_preg:LDA #32                       ; " (P" digit ")" optional "+"
-        JSR $2009
+        JSR SYS_PUTC
         LDA #'('
-        JSR $2009
+        JSR SYS_PUTC
         LDA #'P'
-        JSR $2009
+        JSR SYS_PUTC
         LDA SHAPE                      ; 3,4->1  5,6->2  7,8->3
         LDB #5
         CMP
@@ -287,13 +288,13 @@ dp_1:   LDA #'1'
 dp_2:   LDA #'2'
 dp_d:   JSR $2009
         LDA #')'
-        JSR $2009
+        JSR SYS_PUTC
         LDA SHAPE                      ; '+' when shape is even (4,6,8)
         LDB #1
         AND
         JNZ dp_e
         LDA #'+'
-        JSR $2009
+        JSR SYS_PUTC
 dp_e:   RTS
 
 ; PEEKAT: A = offset (0..4) -> A = peek(ADDR + offset). Clobbers P1, TMPA.
@@ -368,7 +369,7 @@ ps_lp:  LDA PSL
         TAP1H
         LDA (P1)
         JZ ps_d
-        JSR $2009
+        JSR SYS_PUTC
         LDA PSL
         LDB #1
         ADD
@@ -396,11 +397,11 @@ ONIB:   LDB #10
         JC on_hex
         LDB #'0'
         ADD
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 on_hex: LDB #$37
         ADD
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 
 ; GETHEX: skip spaces at (P2), parse hex -> HXLO/HXHI, advance P2. MATCH=1 if

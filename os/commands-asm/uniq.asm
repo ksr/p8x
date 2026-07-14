@@ -3,6 +3,7 @@
 ; Shares the input engine via `;#use stdin`. readline() + streq() are inline.
 ; Entry: P2 = arg tail.
 ;#use stdin
+;#use abi
 
         .org $6A00
         TPA2L
@@ -77,9 +78,9 @@ u_put:  LDA #<cur
         LDA #>cur
         TAP1H
         LDA #0
-        JSR $200F                    ; SYS_PUTS
+        JSR SYS_PUTS                 ; SYS_PUTS
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
 u_copy: LDA #<cur                    ; prev = cur
         TAP2L
         LDA #>cur
@@ -106,18 +107,18 @@ u_nf:   LDA #<m_nf
         LDA #>m_nf
         TAP1H
         LDA #0
-        JSR $200F
+        JSR SYS_PUTS
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 u_usage:LDA #<m_use
         TAP1L
         LDA #>m_use
         TAP1H
         LDA #0
-        JSR $200F
+        JSR SYS_PUTS
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 
 ; readline: rl_buf (word) = dest. Returns A=1 line read / 0 EOF. Because nextc

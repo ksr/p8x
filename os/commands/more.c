@@ -15,13 +15,14 @@
  * back the way full `less` does.
  */
 //#use stdin   /* path[80], fromfile, nextc(), openarg() */
+//#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
 
 int prompt() {                                /* show --More--, erase, return key */
     char *m;
     int k;
     m = "--More--";
     while (*m != 0) { putchar(*m); m = m + 1; }
-    k = bios(0x0100, 0, 0) & 255;             /* CONIN: a console key */
+    k = bios(CONIN, 0, 0) & 255;             /* CONIN: a console key */
     m = "\r        \r";                       /* erase the prompt (8 spaces) */
     while (*m != 0) { putchar(*m); m = m + 1; }
     return k;

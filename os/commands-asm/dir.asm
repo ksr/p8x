@@ -22,6 +22,7 @@
 ; SYS_OPENDIR $201E. OS: SYS_OPENCWD $2012, SYS_PUTC $2009, SYS_PUTS $200F.
 ; The CPU has no divide, so the size printer uses a divmod10 subtraction routine.
 ; Entry: P2 = arg tail.
+;#use abi
 
         .org $6A00
 ; ======================= main ==============================================
@@ -173,7 +174,7 @@ d_scd:  LDA #0
         LDA #>apath
         TAP1H
         LDA #0
-        JSR $0139
+        JSR FOPENDIR
         JNC d_ok
         LDA #1
         STA notf
@@ -182,7 +183,7 @@ d_cwd:  LDA #0
         TAP1L
         TAP1H
         LDA #0
-        JSR $2012                    ; SYS_OPENCWD
+        JSR SYS_OPENCWD              ; SYS_OPENCWD
         JMP d_ok
 ; ---- glob: split dir + pattern --------------------------------------------
 d_glob: ; ls = hasslash ? slashpos+1 : 0 ; gpat = arg[ls..plen)
@@ -265,7 +266,7 @@ d_gde:  LDA #0
         LDA #>apath
         TAP1H
         LDA #0
-        JSR $0139                    ; FOPENDIR(dbuf via apath)
+        JSR FOPENDIR                 ; FOPENDIR(dbuf via apath)
         JNC d_ok
         LDA #1
         STA notf
@@ -274,7 +275,7 @@ d_gcwd: LDA #0
         TAP1L
         TAP1H
         LDA #0
-        JSR $2012
+        JSR SYS_OPENCWD
 ; ---- opened (or not) ------------------------------------------------------
 d_ok:   LDA notf
         LDB #0
@@ -285,15 +286,15 @@ d_ok:   LDA notf
         LDA #>u_nf
         TAP1H
         LDA #0
-        JSR $200F
+        JSR SYS_PUTS
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 d_go:   LDA #0                        ; FSDIRBUF page $FA
         TAP1L
         TAP1H
         LDA #$FA
-        JSR $0145
+        JSR FSDIRBUF
         LDA rec
         LDB #0
         CMP
@@ -328,9 +329,9 @@ d_usage:LDA #<u_use
         LDA #>u_use
         TAP1H
         LDA #0
-        JSR $200F
+        JSR SYS_PUTS
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 
 ; arg_inc: m_arg += 1
@@ -429,12 +430,12 @@ w_dl:   JSR idx_addr
         LDA lba+1
         TAP1H
         LDA #0
-        JSR $201E                    ; SYS_OPENDIR
+        JSR SYS_OPENDIR              ; SYS_OPENDIR
         LDA #0
         TAP1L
         TAP1H
         LDA #$FA
-        JSR $0145                    ; FSDIRBUF $FA
+        JSR FSDIRBUF                 ; FSDIRBUF $FA
         LDA w_depth
         INC
         STA w_depth
@@ -458,14 +459,14 @@ col_nx: LDA #0
         TAP1L
         TAP1H
         LDA #0
-        JSR $013C                    ; FNEXT
+        JSR FNEXT                    ; FNEXT
         JC col_srt
         LDA #<de
         TAP1L
         LDA #>de
         TAP1H
         LDA #0
-        JSR $201B                    ; de_read
+        JSR SYS_DIRENTRY             ; de_read
         LDA de                       ; skip '.'/'..'
         LDB #'.'
         CMP
@@ -962,9 +963,9 @@ show:   LDA gpat
         JZ sh_ret                    ; no match -> filtered out
 sh_show:JSR putsize
         LDA #32
-        JSR $2009
+        JSR SYS_PUTC
         LDA #32
-        JSR $2009
+        JSR SYS_PUTC
         LDA sh_depth
         STA cnt
 sh_il:  LDA cnt
@@ -972,9 +973,9 @@ sh_il:  LDA cnt
         CMP
         JZ sh_pn
         LDA #32
-        JSR $2009
+        JSR SYS_PUTC
         LDA #32
-        JSR $2009
+        JSR SYS_PUTC
         LDA cnt
         DEC
         STA cnt
@@ -987,7 +988,7 @@ sh_nl:  LDA (P1)
         LDB #0
         CMP
         JZ sh_slash
-        JSR $2009
+        JSR SYS_PUTC
         INP1
         JMP sh_nl
 sh_slash:
@@ -996,9 +997,9 @@ sh_slash:
         CMP
         JZ sh_eol
         LDA #'/'
-        JSR $2009
+        JSR SYS_PUTC
 sh_eol: LDA #10
-        JSR $2009
+        JSR SYS_PUTC
 sh_ret: RTS
 
 ; ======================= putsize / putnum / ndigits / divmod10 =============
@@ -1013,7 +1014,7 @@ ps_dl:  LDA cnt
         CMP
         JZ ps_ret
         LDA #32
-        JSR $2009
+        JSR SYS_PUTC
         LDA cnt
         DEC
         STA cnt
@@ -1049,7 +1050,7 @@ ps_pl:  LDA cnt2
         CMP
         JC ps_rev                    ; nd>=6 -> done padding
         LDA #32
-        JSR $2009
+        JSR SYS_PUTC
         LDA cnt2
         INC
         STA cnt2
@@ -1071,7 +1072,7 @@ ps_rev: LDA psnd                     ; while nd != 0 -> nd--, print dg[nd]
         INC
 ps_rp:  TAP1H
         LDA (P1)
-        JSR $2009
+        JSR SYS_PUTC
         JMP ps_rev
 ps_rdn: RTS
 
@@ -1156,7 +1157,7 @@ putnum: LDA #0
         CMP
         JNZ pn_loop
         LDA #'0'
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 pn_loop:LDA pn
         LDB #0
@@ -1189,7 +1190,7 @@ pn_print:
         CMP
         JZ pn_done
         PLA
-        JSR $2009
+        JSR SYS_PUTC
         LDA pncnt
         DEC
         STA pncnt
@@ -1476,7 +1477,7 @@ abspath:LDA #0
         LDA ap_out+1
         TAP1H
         LDA #0
-        JSR $2003                    ; SYS_GETCWD -> out
+        JSR SYS_GETCWD               ; SYS_GETCWD -> out
         LDA ap_out
         TAP1L
         LDA ap_out+1

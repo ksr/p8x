@@ -37,6 +37,7 @@ char gfiles[1536];                   /* glob_expand output: 24 slots x 64 */
 //#use apath   /* abspath(out, arg): next path word -> absolute in out */
 //#use dirent    /* de_read/de_isdir/de_isdot + de[] : current entry via syscall */
 //#use globx     /* glob_expand(pat, out, maxn): expand a glob into a path list */
+//#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
 
 /* scopy: copy NUL-terminated s into d; return the length. */
 int scopy(char *d, char *s) {
@@ -63,22 +64,22 @@ int joinp(char *out, char *dir, char *name) {
  * Returns 1 if the source was not found, else 0. */
 int copy_file(char *s, char *d) {
     int c;
-    bios(0x0133, s, 0);                       /* FRESOLVE SRC (applies /d1) */
-    if (bios(0x0124, 0xFC00, 0) & 256) { return 1; }   /* FOPEN; C=1 -> not found */
-    bios(0x0133, d, 0);                       /* FRESOLVE DST (DIRLBA + FNAME) */
-    bios(0x012A, 0, 0);                       /* FWOPEN (zeroes SBUF last) */
-    c = bios(0x0127, 0, 0);                   /* FGETB */
+    bios(FRESOLVE, s, 0);                       /* FRESOLVE SRC (applies /d1) */
+    if (bios(FOPEN, RDBUF, 0) & 256) { return 1; }   /* FOPEN; C=1 -> not found */
+    bios(FRESOLVE, d, 0);                       /* FRESOLVE DST (DIRLBA + FNAME) */
+    bios(FWOPEN, 0, 0);                       /* FWOPEN (zeroes SBUF last) */
+    c = bios(FGETB, 0, 0);                   /* FGETB */
     while ((c & 256) == 0) {
-        bios(0x012D, 0, c & 255);             /* FPUTB */
-        c = bios(0x0127, 0, 0);
+        bios(FPUTB, 0, c & 255);             /* FPUTB */
+        c = bios(FGETB, 0, 0);
     }
-    bios(0x0130, 0, 0);                       /* FCLOSE -> commit DST */
+    bios(FCLOSE, 0, 0);                       /* FCLOSE -> commit DST */
     return 0;
 }
 
 /* isdir: 1 if the absolute path p names a directory (FOPENDIR succeeds). */
 int isdir(char *p) {
-    if (bios(0x0139, p, 0) & 256) { return 0; }   /* FOPENDIR; C=1 -> not a dir */
+    if (bios(FOPENDIR, p, 0) & 256) { return 0; }   /* FOPENDIR; C=1 -> not a dir */
     return 1;
 }
 
@@ -95,18 +96,18 @@ int copy_tree(char *sp0, char *dp0) {
     int  r;
     scopy(sp, sp0);
     scopy(dp, dp0);
-    bios(0x2021, dp, 0);                      /* SYS_MKDIR dst (idempotent) */
+    bios(SYS_MKDIR, dp, 0);                      /* SYS_MKDIR dst (idempotent) */
 
     n = 0;                                     /* collect this level's entries */
-    bios(0x0139, sp, 0);                       /* FOPENDIR src */
-    bios(0x0145, 0, 0xE0);                     /* FSDIRBUF: iterate on page $E000.
+    bios(FOPENDIR, sp, 0);                       /* FOPENDIR src */
+    bios(FSDIRBUF, 0, 0xE0);                     /* FSDIRBUF: iterate on page $E000.
                                                 * Above cp's code/globals (adding
                                                 * //#use globx grew the binary past
                                                 * the old $A000 page) and clear of
                                                 * the $FC00 read buffer / $FE00
                                                 * stack. glob_expand's $FA00 page
                                                 * runs earlier, so no overlap. */
-    r = bios(0x013C, 0, 0);                    /* FNEXT */
+    r = bios(FNEXT, 0, 0);                    /* FNEXT */
     while ((r & 256) == 0) {
         de_read();
         if (de_isdot() == 0 && n < 24) {
@@ -119,7 +120,7 @@ int copy_tree(char *sp0, char *dp0) {
             isd[n] = de_isdir();
             n = n + 1;
         }
-        r = bios(0x013C, 0, 0);
+        r = bios(FNEXT, 0, 0);
     }
 
     i = 0;                                     /* now process (safe to recurse) */

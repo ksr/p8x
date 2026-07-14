@@ -5,6 +5,7 @@
 ; (an existing file is left untouched, NOT truncated). No shared include.
 ; BIOS: FRESOLVE $0133, FOPEN $0124, FWOPEN $012A, FCLOSE $0130. OS: SYS_GETCWD
 ; $2003 (via abspath). Entry: P2 = arg tail.
+;#use abi
 
         .org $6A00
         TPA2L
@@ -102,13 +103,13 @@ t_ex:   LDA #<path
         LDA #>path
         TAP1H
         LDA #0
-        JSR $0133                    ; FRESOLVE
+        JSR FRESOLVE                 ; FRESOLVE
         LDA #$00
         TAP1L
         LDA #$FC
         TAP1H
         LDA #0
-        JSR $0124                    ; FOPEN $FC00
+        JSR FOPEN                    ; FOPEN $FC00
         JNC t_loop                   ; carry clear -> exists -> leave it, next name
 ; --- create empty (FRESOLVE + FWOPEN + FCLOSE) -----------------------------
         LDA #<path
@@ -116,11 +117,11 @@ t_ex:   LDA #<path
         LDA #>path
         TAP1H
         LDA #0
-        JSR $0133                    ; FRESOLVE
+        JSR FRESOLVE                 ; FRESOLVE
         LDA #0
-        JSR $012A                    ; FWOPEN
+        JSR FWOPEN                   ; FWOPEN
         LDA #0
-        JSR $0130                    ; FCLOSE -> zero-byte file
+        JSR FCLOSE                   ; FCLOSE -> zero-byte file
         JMP t_loop
 t_done: RTS
 t_usage:LDA #<u_use
@@ -128,9 +129,9 @@ t_usage:LDA #<u_use
         LDA #>u_use
         TAP1H
         LDA #0
-        JSR $200F
+        JSR SYS_PUTS
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 
 ; abspath (P2 source, P1 dest): ap_out <- absolute path of the word at ap_a;
@@ -150,7 +151,7 @@ abspath:LDA #0
         LDA ap_out+1
         TAP1H
         LDA #0
-        JSR $2003                    ; SYS_GETCWD -> out
+        JSR SYS_GETCWD               ; SYS_GETCWD -> out
         LDA ap_out
         TAP1L
         LDA ap_out+1

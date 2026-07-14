@@ -12,6 +12,7 @@
 ;
 ; BIOS: FNEXT $013C, FSDIRBUF $0145, SYS_DIRENTRY $201B, SYS_OPENDIR $201E.
 ; OS: SYS_OPENCWD $2012, SYS_PUTC $2009, SYS_PUTS $200F. Entry: P2 = arg tail.
+;#use abi
 
         .org $6A00
 ; --- -h check (P2 = arg) ---------------------------------------------------
@@ -37,12 +38,12 @@ tr_run: LDA #0                        ; SYS_OPENCWD
         TAP1L
         TAP1H
         LDA #0
-        JSR $2012
+        JSR SYS_OPENCWD
         LDA #0                        ; FSDIRBUF page $EA
         TAP1L
         TAP1H
         LDA #$EA
-        JSR $0145
+        JSR FSDIRBUF
         LDA #0                        ; w_depth = 0
         STA w_depth
         JSR walk
@@ -53,9 +54,9 @@ tr_usage:
         LDA #>u_use
         TAP1H
         LDA #0
-        JSR $200F
+        JSR SYS_PUTS
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 
 ; ===========================================================================
@@ -74,14 +75,14 @@ tw_next:
         TAP1L
         TAP1H
         LDA #0
-        JSR $013C                     ; FNEXT
+        JSR FNEXT                    ; FNEXT
         JC tw_desc                    ; carry = end of directory
         LDA #<de                      ; de_read: SYS_DIRENTRY -> de
         TAP1L
         LDA #>de
         TAP1H
         LDA #0
-        JSR $201B
+        JSR SYS_DIRENTRY
         LDA de                        ; skip '.' / '..'
         LDB #'.'
         CMP
@@ -94,9 +95,9 @@ tw_ind: LDA cnt
         CMP
         JZ tw_name
         LDA #32
-        JSR $2009
+        JSR SYS_PUTC
         LDA #32
-        JSR $2009
+        JSR SYS_PUTC
         LDA cnt
         DEC
         STA cnt
@@ -119,7 +120,7 @@ tw_nl:  LDA cnt
         CMP
         JZ tw_ncont                   ; skip spaces
         LDA nch
-        JSR $2009
+        JSR SYS_PUTC
 tw_ncont:
         LDA cnt
         INC
@@ -132,7 +133,7 @@ tw_isdir:
         CMP
         JNZ tw_eol
         LDA #'/'
-        JSR $2009
+        JSR SYS_PUTC
         JSR nsub_addr                 ; nsub[w_depth] in *P1
         LDA (P1)
         LDB #24
@@ -152,7 +153,7 @@ tw_isdir:
         INC
         STA (P1)
 tw_eol: LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         JMP tw_next
 ; --- descend into recorded children ---------------------------------------
 tw_desc:
@@ -178,12 +179,12 @@ tw_dl:  JSR idx_addr
         LDA lba+1
         TAP1H
         LDA #0
-        JSR $201E                     ; SYS_OPENDIR
+        JSR SYS_OPENDIR              ; SYS_OPENDIR
         LDA #0                        ; FSDIRBUF page $EA
         TAP1L
         TAP1H
         LDA #$EA
-        JSR $0145
+        JSR FSDIRBUF
         LDA w_depth                   ; recurse at depth+1
         INC
         STA w_depth

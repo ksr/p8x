@@ -50,6 +50,7 @@
 //#use glob     /* gmatch(pat, name): case-insensitive * ? matcher */
 //#use dirent   /* de_read/de_isdir/de_len/de_lba/de_opendir: entry via syscall */
 //#use apath    /* abspath(out, a): CWD-prefix a relative path (FRESOLVE starts at root) */
+//#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
 
 char nbuf[16];                               /* current entry name, NUL-terminated */
 char gpat[16];                               /* glob pattern, or empty = no filter */
@@ -199,7 +200,7 @@ int collect() {
     int t;
 
     k = 0;
-    r = bios(0x013C, 0, 0);                  /* FNEXT */
+    r = bios(FNEXT, 0, 0);                  /* FNEXT */
     while ((r & 256) == 0) {                  /* bit 8 = carry = end of directory */
         de_read();                            /* snapshot the entry (SYS_DIRENTRY) */
         if (de_isdot() == 0) {                /* skip '.' and '..' */
@@ -213,7 +214,7 @@ int collect() {
                 k = k + 1;
             }
         }
-        r = bios(0x013C, 0, 0);
+        r = bios(FNEXT, 0, 0);
     }
     ecnt = k;
 
@@ -278,7 +279,7 @@ int walk(int depth) {
     i = 0;
     while (i < nsub) {
         de_opendir(sub[i]);                   /* SYS_OPENDIR(child LBA, 16-bit) */
-        bios(0x0145, 0, 0xFA);                /* FSDIRBUF: our page $FA00 again */
+        bios(FSDIRBUF, 0, 0xFA);                /* FSDIRBUF: our page $FA00 again */
         walk(depth + 1);
         i = i + 1;
     }
@@ -337,18 +338,18 @@ int main() {
             while (j <= slashpos) { dbuf[j] = arg[j]; j = j + 1; }
             dbuf[j] = 0;
             abspath(abuf, dbuf);                           /* relative -> CWD-prefixed */
-            if (bios(0x0139, abuf, 0) & 256) { nf = 1; }   /* FOPENDIR(dir) */
+            if (bios(FOPENDIR, abuf, 0) & 256) { nf = 1; }   /* FOPENDIR(dir) */
         } else {
-            bios(0x2012, 0, 0);              /* SYS_OPENCWD */
+            bios(SYS_OPENCWD, 0, 0);              /* SYS_OPENCWD */
         }
     } else if (*arg == 0 || *arg == 13) {    /* no path -> current directory */
-        bios(0x2012, 0, 0);                  /* SYS_OPENCWD (full 16-bit CWD LBA) */
+        bios(SYS_OPENCWD, 0, 0);                  /* SYS_OPENCWD (full 16-bit CWD LBA) */
     } else {                                 /* FOPENDIR(abs path); carry = missing/not a dir */
         abspath(abuf, arg);                  /* relative -> CWD-prefixed (FRESOLVE starts at root) */
-        if (bios(0x0139, abuf, 0) & 256) { nf = 1; }
+        if (bios(FOPENDIR, abuf, 0) & 256) { nf = 1; }
     }
     if (nf) { puts("dir: not found"); return 1; }
-    bios(0x0145, 0, 0xFA);                   /* FSDIRBUF: iterate in our own page $FA00 */
+    bios(FSDIRBUF, 0, 0xFA);                   /* FSDIRBUF: iterate in our own page $FA00 */
 
     if (rec) {
         walk(0);                             /* whole subtree, streamed (filtered) */

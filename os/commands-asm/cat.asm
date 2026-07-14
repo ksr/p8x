@@ -4,6 +4,7 @@
 ; glob match) is streamed with FGETB; with no arg it filters stdin (SYS_GETC).
 ; Entry: P2 = arg tail.
 ;#use stdin
+;#use abi
 
         .org $6A00
         TPA2L
@@ -122,9 +123,9 @@ c_single:
         JZ c_nf                      ; not found
         RTS
 c_stdin:LDA #0                       ; stdin -> stdout filter
-        JSR $200C
+        JSR SYS_GETC
         JC cs_d
-        JSR $2009
+        JSR SYS_PUTC
         JMP c_stdin
 cs_d:   RTS
 c_nf:   LDA #<m_nf
@@ -132,18 +133,18 @@ c_nf:   LDA #<m_nf
         LDA #>m_nf
         TAP1H
         LDA #0
-        JSR $200F
+        JSR SYS_PUTS
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 c_usage:LDA #<m_use
         TAP1L
         LDA #>m_use
         TAP1H
         LDA #0
-        JSR $200F
+        JSR SYS_PUTS
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 
 ; catpath: op_a = path word -> stream it. A = 0 ok / 1 not found.
@@ -152,9 +153,9 @@ catpath:JSR open_path                ; 1 opened / 2 not found
         CMP
         JZ cp_nf
 cp_l:   LDA #0
-        JSR $0127                    ; FGETB -> A, C=EOF
+        JSR FGETB                    ; FGETB -> A, C=EOF
         JC cp_ok
-        JSR $2009                    ; putchar
+        JSR SYS_PUTC                 ; putchar
         JMP cp_l
 cp_ok:  LDA #0
         RTS

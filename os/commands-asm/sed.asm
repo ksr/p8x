@@ -5,6 +5,7 @@
 ; span with the literal replacement, print. Entry: P2 = arg tail.
 ;#use stdin
 ;#use regex
+;#use abi
 
         .org $6A00
         TPA2L
@@ -309,9 +310,9 @@ sle1:   TAP1H
         LDA #>out
         TAP1H
         LDA #0
-        JSR $200F
+        JSR SYS_PUTS
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         JMP sed_loop
 sed_end:RTS
 
@@ -338,9 +339,9 @@ sed_nf: LDA #<u_nf
         LDA #>u_nf
         TAP1H
 sed_pm: LDA #0
-        JSR $200F
+        JSR SYS_PUTS
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 
 ; re_at: ra_i = start index in line -> A = length of a regex match here (0=none).

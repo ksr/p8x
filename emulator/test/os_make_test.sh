@@ -30,6 +30,11 @@ for d in /src /src/commands /src/commands/c /src/commands/c/bin /src/commands/as
 done
 python3 $ROOT/tools/p8xfs.py put make.img $ROOT/os/commands/pwd.c        --name /src/commands/c/pwd.c     >/dev/null
 python3 $ROOT/tools/p8xfs.py put make.img $ROOT/os/commands-asm/pwd.asm  --name /src/commands/asm/pwd.asm >/dev/null
+# pwd names its BIOS/OS addresses: cc's //#use abi splices the #define header
+# /lib/lib_abi.c, and asm's ;#use abi splices /lib/abi.inc — so both must be present.
+python3 $ROOT/tools/p8xfs.py mkdir make.img /lib >/dev/null
+python3 $ROOT/tools/p8xfs.py put make.img $ROOT/os/commands/lib_abi.c       --name /lib/lib_abi.c >/dev/null
+python3 $ROOT/tools/p8xfs.py put make.img $ROOT/os/commands-asm/lib_abi.inc --name /lib/abi.inc    >/dev/null
 # the per-command build script `make pwd` resolves + runs
 printf 'cd /\rcc /src/commands/c/pwd.c >T.ASM\rasm T.ASM /src/commands/c/bin/pwd.bin\rasm /src/commands/asm/pwd.asm /src/commands/asm/bin/pwd.bin\r' > mkpwd.scr
 python3 $ROOT/tools/p8xfs.py put make.img mkpwd.scr --name /src/mk/pwd.sh >/dev/null

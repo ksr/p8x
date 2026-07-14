@@ -32,6 +32,7 @@
  * FWOPEN=$012A, FPUTB=$012D, FCLOSE=$0130.  Read buffer at $FC00.
  */
 //#use apath   /* abspath(out, a): CWD-prefix a relative path (FRESOLVE starts at root) */
+//#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
 
 char path[80];
 char line[8800];         /* 110 lines x 80 cols, flat; line i at line[i*80..] */
@@ -54,8 +55,8 @@ int  uy;
 int  ux;
 
 /* ---- terminal primitives (raw, unbuffered, straight to the console) -------- */
-int rawkey() { return bios(0x0100, 0, 0) & 255; }        /* CONIN: one key, no echo */
-int outc(int c) { bios(0x0103, 0, c & 255); return 0; }  /* CONOUT: one char */
+int rawkey() { return bios(CONIN, 0, 0) & 255; }        /* CONIN: one key, no echo */
+int outc(int c) { bios(CONOUT, 0, c & 255); return 0; }  /* CONOUT: one char */
 int outs(char *s) { int i; i = 0; while (s[i] != 0) { outc(s[i]); i = i + 1; } return 0; }
 int outn(int n) {                                        /* decimal, for ANSI args */
     if (n >= 10) { outn(n / 10); }
@@ -82,14 +83,14 @@ int llen(int i) {                                /* length of line i */
 int load(char *p) {
     int c;
     int col;
-    bios(0x0133, p, 0);                          /* FRESOLVE */
+    bios(FRESOLVE, p, 0);                          /* FRESOLVE */
     nlines = 0; cx = 0; cy = 0; top = 0;
-    if (bios(0x0124, 0xFC00, 0) & 256) {         /* FOPEN; C=1 -> new file */
+    if (bios(FOPEN, RDBUF, 0) & 256) {         /* FOPEN; C=1 -> new file */
         nlines = 1; line[0] = 0;
         return 1;
     }
     col = 0;
-    c = bios(0x0127, 0, 0);                       /* FGETB */
+    c = bios(FGETB, 0, 0);                       /* FGETB */
     while ((c & 256) == 0) {
         c = c & 255;
         if (c == 10) {                            /* LF -> end of line */
@@ -100,7 +101,7 @@ int load(char *p) {
         } else if (c != 13) {
             if (col < 79) { line[nlines * 80 + col] = c; col = col + 1; }
         }
-        c = bios(0x0127, 0, 0);
+        c = bios(FGETB, 0, 0);
     }
     line[nlines * 80 + col] = 0;                  /* final (unterminated) line */
     if (col > 0 || nlines == 0) { nlines = nlines + 1; }
@@ -113,17 +114,17 @@ int save(char *p) {
     int i;
     int b;
     int j;
-    bios(0x0133, p, 0);                          /* FRESOLVE (dir + leaf) */
-    bios(0x012A, 0, 0);                          /* FWOPEN */
+    bios(FRESOLVE, p, 0);                          /* FRESOLVE (dir + leaf) */
+    bios(FWOPEN, 0, 0);                          /* FWOPEN */
     i = 0;
     while (i < nlines) {
         b = i * 80;
         j = 0;
-        while (line[b + j] != 0) { bios(0x012D, 0, line[b + j]); j = j + 1; }
-        bios(0x012D, 0, 10);                     /* LF (was CRLF; conform to Unix) */
+        while (line[b + j] != 0) { bios(FPUTB, 0, line[b + j]); j = j + 1; }
+        bios(FPUTB, 0, 10);                     /* LF (was CRLF; conform to Unix) */
         i = i + 1;
     }
-    bios(0x0130, 0, 0);                          /* FCLOSE */
+    bios(FCLOSE, 0, 0);                          /* FCLOSE */
     dirty = 0;
     return 0;
 }

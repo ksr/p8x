@@ -28,6 +28,7 @@
  * BIOS/OS calls: FGETB $0127, FRESOLVE $0133, FOPEN $0124, SYS_GETCWD $2003.
  */
 //#use globx   /* glob_expand(pat,out,maxn); clib.py recursively splices glob too */
+//#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
 
 char path[80];                               /* absolute path of the current file */
 int fromfile;                                /* 1 = read the file stream, 0 = stdin */
@@ -43,7 +44,7 @@ int open_path(char *a) {
     int j;
     i = 0;
     if (*a != '/') {
-        bios(0x2003, path, 0);               /* SYS_GETCWD */
+        bios(SYS_GETCWD, path, 0);               /* SYS_GETCWD */
         while (path[i] != 0) { i = i + 1; }
         if (i > 0 && path[i - 1] != '/') { path[i] = '/'; i = i + 1; }
     }
@@ -52,10 +53,10 @@ int open_path(char *a) {
         path[i] = a[j]; i = i + 1; j = j + 1;
     }
     path[i] = 0;
-    bios(0x0133, path, 0);                    /* FRESOLVE */
+    bios(FRESOLVE, path, 0);                    /* FRESOLVE */
     /* Read buffer at $FC00 — just below the stack page ($FE00), clear of even the
      * largest command's code/globals (they grow up from $6A00). */
-    if (bios(0x0124, 0xFC00, 0) & 256) { return 2; }   /* FOPEN; carry = not found */
+    if (bios(FOPEN, RDBUF, 0) & 256) { return 2; }   /* FOPEN; carry = not found */
     return 1;
 }
 
@@ -63,14 +64,14 @@ int nextc() {                                /* next byte, or 65535 at EOF */
     int c;
     char *p;
     if (fromfile == 0) { return getchar(); } /* SYS_GETC; 65535 at EOF */
-    c = bios(0x0127, 0, 0);                  /* FGETB: A | carry<<8 */
+    c = bios(FGETB, 0, 0);                  /* FGETB: A | carry<<8 */
     while (c & 256) {                        /* carry = end of THIS file */
         if (gnf == 0) { return 65535; }      /* single file -> done */
         if (gidx + 1 >= gnf) { return 65535; }   /* last glob match -> done */
         gidx = gidx + 1;                     /* advance to the next matched file */
         p = gfiles + gidx * 64;              /* pointer var, NOT array+expr as a call arg */
         open_path(p);                        /* a match always exists -> opens */
-        c = bios(0x0127, 0, 0);              /* read its first byte (may be EOF too) */
+        c = bios(FGETB, 0, 0);              /* read its first byte (may be EOF too) */
     }
     return c & 255;
 }

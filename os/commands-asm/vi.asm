@@ -5,6 +5,7 @@
 ; matches p8cc's 16-bit-unsigned comparisons on these small values. No shared
 ; include. BIOS: CONIN $0100, CONOUT $0103, FRESOLVE $0133, FOPEN $0124, FGETB
 ; $0127, FWOPEN $012A, FPUTB $012D, FCLOSE $0130. Entry: P2 = arg tail.
+;#use abi
 
         .org $6A00
         TPA2L
@@ -96,9 +97,9 @@ v_usage:LDA #<u_use
         LDA #>u_use
         TAP1H
         LDA #0
-        JSR $200F
+        JSR SYS_PUTS
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 
 ; ---- INSERT mode ----------------------------------------------------------
@@ -468,14 +469,14 @@ rawkey: LDA #0
         TAP1L
         TAP1H
         LDA #0
-        JSR $0100
+        JSR CONIN
         RTS
 outc:   STA oc
         LDA #0
         TAP1L
         TAP1H
         LDA oc
-        JSR $0103
+        JSR CONOUT
         RTS
 outs:   LDA #0
         STA osk
@@ -659,7 +660,7 @@ load:   LDA ld_p
         LDA ld_p+1
         TAP1H
         LDA #0
-        JSR $0133
+        JSR FRESOLVE
         LDA #0
         STA nlines
         STA cx
@@ -670,7 +671,7 @@ load:   LDA ld_p
         LDA #$FC
         TAP1H
         LDA #0
-        JSR $0124
+        JSR FOPEN
         JNC ld_read
         LDA #1
         STA nlines
@@ -685,7 +686,7 @@ load:   LDA ld_p
 ld_read:LDA #0
         STA ld_col
 ld_l:   LDA #0
-        JSR $0127
+        JSR FGETB
         JC ld_fin
         STA ld_c
         LDB #10
@@ -765,9 +766,9 @@ save:   LDA sv_p
         LDA sv_p+1
         TAP1H
         LDA #0
-        JSR $0133
+        JSR FRESOLVE
         LDA #0
-        JSR $012A
+        JSR FWOPEN
         LDA #0
         STA sv_i
 sv_il:  LDA sv_i
@@ -796,7 +797,7 @@ sv_cl:  LDA sv_p2
         TAP1L
         TAP1H
         LDA sv_c
-        JSR $012D
+        JSR FPUTB
         LDA sv_p2
         LDB #1
         ADD
@@ -810,13 +811,13 @@ sv_eol: LDA #0
         TAP1L
         TAP1H
         LDA #10                 ; LF (was CRLF; conform to Unix)
-        JSR $012D
+        JSR FPUTB
         LDA sv_i
         INC
         STA sv_i
         JMP sv_il
 sv_done:LDA #0
-        JSR $0130
+        JSR FCLOSE
         LDA #0
         STA dirty
         RTS
@@ -1804,7 +1805,7 @@ abspath:LDA #0
         LDA ap_out+1
         TAP1H
         LDA #0
-        JSR $2003                    ; SYS_GETCWD -> out
+        JSR SYS_GETCWD               ; SYS_GETCWD -> out
         LDA ap_out
         TAP1L
         LDA ap_out+1

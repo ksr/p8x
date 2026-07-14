@@ -14,12 +14,14 @@
  * Within the native p8cc.c subset (no ++/--, decls at top). No dependencies
  * beyond the bios() builtin.
  */
+//#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
+
 int abspath(char *out, char *a) {
     int i;
     int j;
     i = 0;
     if (*a != '/') {                          /* relative -> prefix the CWD */
-        bios(0x2003, out, 0);                 /* SYS_GETCWD -> out */
+        bios(SYS_GETCWD, out, 0);                 /* SYS_GETCWD -> out */
         while (out[i] != 0) { i = i + 1; }
         if (i > 0 && out[i - 1] != '/') { out[i] = '/'; i = i + 1; }
     }

@@ -18,10 +18,11 @@ int na;
 int nb;
 
 //#use apath
+//#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
 
 int openf(char *a) {                          /* FRESOLVE+FOPEN; 1 ok, 0 not found */
-    bios(0x0133, path, 0);
-    if (bios(0x0124, 0xFC00, 0) & 256) { return 0; }
+    bios(FRESOLVE, path, 0);
+    if (bios(FOPEN, RDBUF, 0) & 256) { return 0; }
     return 1;
 }
 
@@ -31,12 +32,12 @@ int loadlines(char *buf) {                    /* read the open stream into buf; 
     int c;
     n = 0;
     col = 0;
-    c = bios(0x0127, 0, 0);
+    c = bios(FGETB, 0, 0);
     while ((c & 256) == 0 && n < 96) {
         c = c & 255;
         if (c == 10) { buf[n * 80 + col] = 0; n = n + 1; col = 0; }
         else { if (c != 13 && col < 79) { buf[n * 80 + col] = c; col = col + 1; } }
-        c = bios(0x0127, 0, 0);
+        c = bios(FGETB, 0, 0);
     }
     if (col > 0 && n < 96) { buf[n * 80 + col] = 0; n = n + 1; }
     return n;

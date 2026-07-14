@@ -4,6 +4,7 @@
 ; into a flat buffer, selection-sorts the slots by unsigned byte value, prints.
 ; Entry: P2 = arg tail.
 ;#use stdin
+;#use abi
 
         .org $6A00
         TPA2L
@@ -220,11 +221,11 @@ sp_cl:  LDA (P1)
         LDB #0
         CMP
         JZ sp_eol
-        JSR $2009
+        JSR SYS_PUTC
         INP1
         JMP sp_cl
 sp_eol: LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         LDA si
         INC
         STA si
@@ -235,18 +236,18 @@ s_nf:   LDA #<u_nf
         LDA #>u_nf
         TAP1H
         LDA #0
-        JSR $200F
+        JSR SYS_PUTS
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 s_usage:LDA #<u_use
         TAP1L
         LDA #>u_use
         TAP1H
         LDA #0
-        JSR $200F
+        JSR SYS_PUTS
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 
 ; laddr: P1 = lines + la_s*80 + la_c

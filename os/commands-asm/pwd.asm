@@ -12,6 +12,7 @@
 ;   return to the OS with RTS.
 ;
 ;   python3 assembler/p8xasm.py os/commands-asm/pwd.asm -o pwd.bin --base 0x6A00
+;#use abi
 
         .org $6A00
 ; ---- skip leading spaces in the arg tail, then look for -h / -H ------------
@@ -43,23 +44,23 @@ _pwd:   LDA #<_buf
         TAP1L
         LDA #>_buf
         TAP1H
-        JSR $2003                            ; SYS_GETCWD -> _buf
+        JSR SYS_GETCWD               ; SYS_GETCWD -> _buf
         LDA #<_buf
         TAP1L
         LDA #>_buf
         TAP1H
-        JSR $200F                            ; SYS_PUTS
+        JSR SYS_PUTS                 ; SYS_PUTS
         LDA #10
-        JSR $2009                            ; newline
+        JSR SYS_PUTC                 ; newline
         RTS
 ; ---- -h usage --------------------------------------------------------------
 _usage: LDA #<_msg
         TAP1L
         LDA #>_msg
         TAP1H
-        JSR $200F
+        JSR SYS_PUTS
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 
 _msg:   .asciiz "usage: PWD   print the working directory path"

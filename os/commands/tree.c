@@ -11,6 +11,7 @@
  * start LBA->$7047). OS: SYS_CWDLBA=$2006. Entry fields read via SYS_DIRENTRY.
  */
 //#use dirent   /* de_read/de_isdir/de_isdot/de_lba/de_opendir: entry via syscall */
+//#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
 
 int putname() {                              /* de[0..11] (space-padded) */
     int i;
@@ -31,7 +32,7 @@ int walk(int depth) {
     int i;
 
     nsub = 0;
-    r = bios(0x013C, 0, 0);                  /* FNEXT */
+    r = bios(FNEXT, 0, 0);                  /* FNEXT */
     while ((r & 256) == 0) {
         de_read();                           /* snapshot the entry (SYS_DIRENTRY) */
         if (de_isdot() == 0) {               /* skip '.' and '..' */
@@ -44,12 +45,12 @@ int walk(int depth) {
             }
             putchar(10);
         }
-        r = bios(0x013C, 0, 0);
+        r = bios(FNEXT, 0, 0);
     }
     i = 0;                                    /* descend into recorded children */
     while (i < nsub) {
         de_opendir(sub[i]);                  /* SYS_OPENDIR(child LBA, 16-bit) */
-        bios(0x0145, 0, 0xEA);               /* FSDIRBUF: our page */
+        bios(FSDIRBUF, 0, 0xEA);               /* FSDIRBUF: our page */
         walk(depth + 1);
         i = i + 1;
     }
@@ -64,8 +65,8 @@ int main() {
         puts("usage: TREE   depth-first indented listing of the CWD tree");
         return 0;
     }
-    bios(0x2012, 0, 0);                      /* SYS_OPENCWD: iterate CWD (16-bit LBA) */
-    bios(0x0145, 0, 0xEA);
+    bios(SYS_OPENCWD, 0, 0);                      /* SYS_OPENCWD: iterate CWD (16-bit LBA) */
+    bios(FSDIRBUF, 0, 0xEA);
     walk(0);
     return 0;
 }

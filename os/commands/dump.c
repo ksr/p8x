@@ -11,6 +11,8 @@
  * Each row is:  AAAA: bb bb ... bb  cccccccccccccccc
  * where non-printable bytes ($20..$7E outside) show as '.'.
  */
+//#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
+
 char *HD = "0123456789ABCDEF";
 
 /* ph2/ph4: print a byte / a 16-bit word as hex digits. */
@@ -80,7 +82,7 @@ int main() {
             addr = addr + 16;
             row = row + 1;
         }
-        k = bios(0x0100, 0, 0) & 255;        /* CONIN: '.' quits, else next page */
+        k = bios(CONIN, 0, 0) & 255;        /* CONIN: '.' quits, else next page */
         if (k == '.') { return 0; }
     }
     return 0;

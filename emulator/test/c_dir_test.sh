@@ -72,12 +72,13 @@ check() {   # $1 = label, $2 = combined output
 
 compile_one() {   # $1 = compiler tag: build both programs with it
     python3 $ROOT/tools/clib.py $ROOT/os/commands/dir.c -o d.pp.c   # splice //#use glob
+    python3 $ROOT/tools/clib.py $ROOT/os/commands/pwd.c -o p.pp.c   # splice //#use fsread
     if [ "$1" = "host" ]; then
         ./p8cc_host < d.pp.c > d.asm
-        ./p8cc_host < $ROOT/os/commands/pwd.c > p.asm
+        ./p8cc_host < p.pp.c > p.asm
     else
         python3 $ROOT/compiler/p8cc.py d.pp.c -o d.asm >/dev/null
-        python3 $ROOT/compiler/p8cc.py $ROOT/os/commands/pwd.c -o p.asm >/dev/null
+        python3 $ROOT/compiler/p8cc.py p.pp.c -o p.asm >/dev/null
     fi
     python3 $ROOT/assembler/p8xasm.py d.asm -o d.bin --base 0x6A00 >/dev/null
     python3 $ROOT/assembler/p8xasm.py p.asm -o p.bin --base 0x6A00 >/dev/null

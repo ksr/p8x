@@ -7,6 +7,7 @@
 ; Entry: P2 = arg tail.
 ;#use stdin
 ;#use regex
+;#use abi
 
         .org $6A00
         TPA2L
@@ -156,7 +157,7 @@ g_go:   LDA recurse
         LDA #>cur
         TAP1H
         LDA #0
-        JSR $2003                     ; SYS_GETCWD -> cur
+        JSR SYS_GETCWD               ; SYS_GETCWD -> cur
         LDA #<cur
         TAP1L
         LDA #>cur
@@ -181,12 +182,12 @@ gcl0:   LDA #0
         TAP1L
         TAP1H
         LDA #0
-        JSR $2012                     ; SYS_OPENCWD
+        JSR SYS_OPENCWD              ; SYS_OPENCWD
         LDA #0
         TAP1L
         TAP1H
         LDA #$EA
-        JSR $0145
+        JSR FSDIRBUF
         JSR collect
         LDA #0
         STA gi
@@ -238,18 +239,18 @@ g_nf:   LDA #<u_nf
         LDA #>u_nf
         TAP1H
         LDA #0
-        JSR $200F
+        JSR SYS_PUTS
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 g_usage:LDA #<u_use
         TAP1L
         LDA #>u_use
         TAP1H
         LDA #0
-        JSR $200F
+        JSR SYS_PUTS
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
         RTS
 
 ; ======================= grep_stream =======================================
@@ -350,19 +351,19 @@ dmp_l:  LDA (P1)
         LDB #0
         CMP
         JZ dmp_d
-        JSR $2009
+        JSR SYS_PUTC
         INP1
         JMP dmp_l
 dmp_d:  LDA #':'
-        JSR $2009
+        JSR SYS_PUTC
 dm_line:LDA #<line
         TAP1L
         LDA #>line
         TAP1H
         LDA #0
-        JSR $200F
+        JSR SYS_PUTS
         LDA #10
-        JSR $2009
+        JSR SYS_PUTC
 dm_ret: RTS
 
 ; ======================= collect (-r walk) =================================
@@ -376,14 +377,14 @@ c_next: LDA #0
         TAP1L
         TAP1H
         LDA #0
-        JSR $013C
+        JSR FNEXT
         JC c_desc
         LDA #<de
         TAP1L
         LDA #>de
         TAP1H
         LDA #0
-        JSR $201B
+        JSR SYS_DIRENTRY
         LDA de
         LDB #'.'
         CMP
@@ -462,12 +463,12 @@ c_dl:   JSR idx_a
         LDA flba+1
         TAP1H
         LDA #0
-        JSR $201E
+        JSR SYS_OPENDIR
         LDA #0
         TAP1L
         TAP1H
         LDA #$EA
-        JSR $0145
+        JSR FSDIRBUF
         JSR parr_a
         LDA (P1)
         STA fpl
