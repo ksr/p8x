@@ -88,7 +88,10 @@ equivalent behavior, not a cut-down reimplementation. The overall win is **2.4×
 Shared hand-asm includes mirror the C `//#use` model (spliced by `mkasm.sh`):
 `lib_stdin.inc` (open/read/glob engine), `lib_glob.inc` (gmatch + de[]),
 `lib_regex.inc` (the recursive `. * + ? ^ $` matcher for grep/sed),
-`lib_globx.inc` (glob expansion for cp/mv wildcards, on top of `lib_glob.inc`).
+`lib_globx.inc` (glob expansion for cp/mv wildcards, on top of `lib_glob.inc`),
+and `lib_abi.inc` (equates naming the BIOS jump table + OS syscalls — `FOPEN =
+$0124`, `SYS_GETCWD = $2003`, … — so a twin `;#use abi` and does `JSR FOPEN`, the
+asm counterpart of the C side's `//#use abi` / `os/commands/lib_abi.c` #defines).
 
 Two structural techniques recur, forced by the ISA (P3 is the hardware stack
 pointer, so only P1/P2 are general-purpose and there are no cheap software-stack

@@ -1142,8 +1142,8 @@ Last updated: 2026-07-08
             now ships os/commands/lib_*.c into /lib. Verified on-target: basic
             splice, dedup (program + a lib both `//#use a`), a lib-declared global
             used by main with main's own globals after the directive, and 3-level
-            nesting (c->b->a). No #define/#include (the command sources use
-            neither). This completes "step 1" (globals + //#use) toward compiling
+            nesting (c->b->a). No #define/#include at the time (`//#define` was
+            added 2026-07-14; still no #include). This completes "step 1" (globals + //#use) toward compiling
             the C command sources; next is the bios() intrinsic + hex literals.
           * v0.22 — **hex literals + the `bios()` intrinsic** (step 2). The
             number lexer takes `0x..` (HEXVAL, upper/lower). `bios(ADDR, p1, a)`
