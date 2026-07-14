@@ -955,9 +955,11 @@ Last updated: 2026-07-08
           * `bios(ADDR, ...)`'s ADDR must be a compile-time constant.
 
         Preprocessor & misc
-          * The only preprocessor directive is `//#use NAME` (splices
-            /lib/lib_NAME.c). No `#define`, `#include`, `#if`, or macros. No
-            escape decoding beyond \n \t \r \0 \\ \' \" in literals.
+          * Preprocessor directives: `//#use NAME` (splices /lib/lib_NAME.c) and
+            object-like `//#define NAME value` (value = decimal or 0x hex; added
+            2026-07-14 — e.g. `//#use abi` names the BIOS/OS addresses). No
+            `#include`, `#if`, or function-like macros. No escape decoding beyond
+            \n \t \r \0 \\ \' \" in literals.
           * No `switch`, `do`/`while`, `goto`, comma operator, or compound
             literals; no aggregate/initializer lists; globals are zero-init only
             (no `int x = 5;` at file scope).

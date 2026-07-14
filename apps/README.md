@@ -116,13 +116,14 @@ forward prototype), pointers + pass-by-reference, `int`/`char`, arrays with `[]`
 and name decay, **structs** (`.`/`->`), file-scope globals, the full operator set
 (`+ - * / % << >> & ^ | && || ?:`, `++ -- += -=`, comparisons, unary `- ! * &`),
 hex/char/string literals with escapes, `//` and `/* */` comments, a recursive
-**`//#use`** preprocessor (splices `/lib/lib_*.c`), and the `putchar`/`puts`/
-`getchar`/`peek`/`poke`/`argstr`/`bios` builtins. It compiles real OS command
+**`//#use`** preprocessor (splices `/lib/lib_*.c`) plus object-like **`//#define`**
+macros, and the `putchar`/`puts`/`getchar`/`peek`/`poke`/`argstr`/`bios` builtins.
+It compiles real OS command
 source (e.g. `pwd.c`). Codegen is verified **behaviourally** (compile → asm →
 run → diff output; `emulator/test/os_cc_test.sh`).
 
 Known gaps are listed under "cc — KNOWN LIMITATIONS" in [`BACKLOG.md`](../BACKLOG.md)
 (highlights: 16-bit `int` only; no `unsigned`/`typedef`/`enum`/`union`/`sizeof`;
 struct member names must be unique program-wide, no struct params/returns; `+`
-doesn't scale pointers by element size; `//#use` is the only preprocessor
-directive — no `#define`/`#include`).
+doesn't scale pointers by element size; preprocessor is `//#use` + object-like
+`//#define` only — no `#include`/`#if`/function-like macros).
