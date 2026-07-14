@@ -125,6 +125,26 @@ Last updated: 2026-07-08
 
 
 
+- [ ] **memmap: build-time regeneration.** `generators/gen_memmap.py` emits the
+      committed `memmap.{inc,h,py}`. They must be re-run by hand after editing the
+      canonical MAP. Follow-up: have `run.sh` / the Makefiles invoke `gen_memmap.py`
+      before assembling/compiling so the generated files can never be stale (the
+      "option 2" deferred when this landed). Low urgency — the table changes rarely.
+
+- [ ] **memmap: fold the file-local temps in (full flat map).** `TMP`/`TMP2`/`CNT`
+      are kept out of `memmap.inc` because firmware and the OS each define them at
+      different addresses (a name collision). Forcing them in means renaming the OS
+      side (`TMP` alone = 97 refs, 131 total) to unique names. Deferred as
+      high-churn / low-value (they're working temps, not layout).
+
+- [ ] **memmap: auto-single-source the compiler-emitted `.org`.** `apps/p8xcc.asm`
+      and `compiler/p8cc.c` emit `.org $6A00` (= `TPABASE`) as literal text — they
+      can't `.include memmap.inc` (their TPA buffers reuse OS-scratch names like
+      `NAMEBUF`) nor interpolate a symbol into emitted text. `p8cc.py` already reads
+      `memmap.TPABASE`. Options: rename the internal buffers to avoid the clash then
+      `.include`, or teach the emit path to substitute the value. Pointer comments
+      mark the coupling meanwhile.
+
 - [ ] **Multi-stage pipes (`a | b | c`).** The shell's pipe state machine
       (`PIPEF`/`PIPESCAN`/`PIPE_RHS`) handles exactly **two** stages: it splits on
       the first `|`, runs the left into `PIPE.TMP`, then re-dispatches the right.
