@@ -16,13 +16,17 @@ DESCRIPTION
         asm hello.asm HELLO.BIN
         run HELLO.BIN
 
-    This is distinct from the host cross-compiler (compiler/p8cc.py) and the
-    self-hosted FRONT END (cpp | lex | cc1): cc is a from-scratch native
-    BACK-END-and-all compiler aimed at fitting the ~37.9 KB TPA, where a port
-    of the optimizing p8cc could not.
+    cc is the P8X's native C compiler: a single from-scratch program written
+    directly in assembly (apps/p8xcc.asm) that does the whole job on-target --
+    preprocess (//#use splicing), parse, and code-generate -- with no host help.
+    A host cross-compiler (compiler/p8cc.py) produces byte-identical output for
+    the build tooling, but cc itself needs nothing off-machine. Variable storage
+    is 16-bit-addressed (a program may use thousands of slots), so cc compiles
+    the large shared-code commands -- dir, grep, sed, vi and the like, each
+    pulling in several //#use libraries -- entirely on the machine.
 
-    THIS IS EARLY (v0.28). Supported so far:  (`int` is 16-bit; `char` is a
-    1-byte element type — see below.)
+    Supported C subset  (`int` is 16-bit; `char` is a 1-byte element type — see
+    below.)
 
         program : (func | global | struct)*
         struct: struct TAG { (type [*]member ;)* } ;   member access: v.m , p->m

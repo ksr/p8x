@@ -222,7 +222,6 @@ if [ ! -f "$disk" ]; then
     for page in "$root"/os/man/*; do
         base=$(basename "$page")
         [ "$base" = "README.md" ] && continue      # repo doc, not a man page
-        case "$base" in cpp|lex|cc1) continue;; esac  # DEPRECATED front end — not shipped
         python3 "$root/tools/p8xfs.py" put "$disk" "$page" \
             --name "/man/$base" >/dev/null
     done
