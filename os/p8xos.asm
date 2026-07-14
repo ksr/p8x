@@ -51,11 +51,11 @@ CFCURDRV= $014B          ; -> A = current CF drive
 FFIND   = $0118          ; find file FNAME in current dir -> LBA+FLEN; C=1 absent
 CFREAD  = $010C          ; sector LBA -> (P1); P1 += 512
 CFWRITE = $010F          ; SBUF -> sector LBA
-CFIMASK = $6087          ; firmware "drive N CFINIT'd this session" bitmask (UMOUNT clears bit 1)
+        .include "../generators/memmap.inc"   ; single-source data memory map (gen_memmap.py)
 PUTS    = $0112          ; print (P1)+ until $00
 PHEX8   = $0115          ; print A as two hex digits
 FLOADAT = $013F          ; bulk-read FLEN bytes from LBA into (P1)
-FNEXT     = $013C        ; next directory entry -> BFNAME/BFFLAG/FLEN; C=1 at end
+FNEXT     = $013C        ; next directory entry -> FNAME/FFLAG/FLEN; C=1 at end
 FOPENDIRAT= $0142        ; begin iterating the 4-sector directory at LBA in A
 FSDIRBUF= $0145          ; point the FNEXT/FSCAN sector buffer at page A (high byte)
 FWOPEN  = $012A          ; open a write stream at the volume free pointer
@@ -65,28 +65,11 @@ FNORM   = $0136          ; copy string (P1) -> FNAME, case-preserved + space-pad
 FOPEN   = $0124          ; open file FNAME for reading (P1 = 512-byte buffer)
 FGETB   = $0127          ; next byte -> A; C=1 at end of file
 FDELETE = $011E          ; tombstone file FNAME (for the pipe temp)
-BDIRLBA = $6073          ; BIOS "current directory" start LBA (default root); the
-BDIRN   = $6074          ; FS calls register/find in here. We point it at the CWD
                          ; so a redirect / pipe file lands in the working dir.
-BDIRLBA1= $6080          ; BIOS current-directory start LBA high byte (16-bit dirs)
-BFNAME  = $604A          ; FNEXT entry-name output (BIOS FNAME)
-BFFLAG  = $6075          ; FNEXT entry-flag output (BIOS FFLAG)
 
 ; ---- Shared ABI state (set by/for the BIOS) --------------------------------
-LBA     = $6047          ; CFREAD/CFWRITE target LBA, byte 0 (bits 7:0)
-LBA1    = $6048          ; LBA byte 1 (bits 15:8)  — 0 after CFINIT unless set
-LBA2    = $6049          ; LBA byte 2 (bits 23:16) — 0 after CFINIT unless set
-FLEN    = $6058          ; BIOS file length param (used to drive FLOADAT)
 ; BIOS read-stream state — `sh` points a stream at the script's extent (over IBUF)
 ; and saves/restores this block around each dispatched command.
-ROSTAT  = $605E          ; read-stream state base (ROLBA..ROCNT, 11 bytes)
-ROLBA   = $605E          ; next sector LBA (3)
-ROREM   = $6061          ; bytes remaining in the file (2)
-ROBUF   = $6064          ; caller's 512-byte sector buffer address (2)
-ROCNT   = $6068          ; bytes left in ROBUF; 0 -> refill (2)
-DRVSEL  = $6082          ; current CF drive
-ROSDRV  = $6085          ; read-stream drive
-SBUF    = $6100          ; 512-byte sector buffer
 
 ; ---- P8XFS v2 on-disk layout (root @ LBA 33, 4 secs; data @ 37) -------------
 F_FILE  = $01            ; entry flag: regular file ($00 end marker)
@@ -95,166 +78,29 @@ F_DEL   = $FF            ; deleted
 SUBSECS = 4              ; sectors allocated for a new subdirectory (64 entries)
 
 ; ---- OS RAM variables (below the kernel, clear of BIOS $9D44+ and SBUF) -----
-LINEBUF = $6300          ; shell input line (64 bytes)
-CMDBUF  = $6340          ; parsed command word (16 bytes)
-NAMEBUF = $6350          ; 12-byte filename (search key / DIR scratch)
 TMP     = $6360
 TMP2    = $6361
 CNT     = $6362
-ECNT    = $6363          ; entries-left-in-sector counter
-FLAGS   = $6364          ; current entry flag byte
-MATCH   = $6365          ; 1 = name matched / strings equal
-LENLO   = $6366          ; entry length, low 16 bits
-LENHI   = $6367
-STARTLO = $6368          ; entry start LBA (low byte)
-LOADLO  = $6369          ; entry load address
-LOADHI  = $636A
-EXECLO  = $636B          ; entry exec address
-EXECHI  = $636C
-DLBA    = $636D          ; directory sector being scanned
-SECCNT  = $636E          ; sectors left to transfer
-CURLBA  = $636F          ; current data LBA
-ENTPL   = $6370          ; pointer to a directory entry (in SBUF):
-ENTPH   = $6371          ;   flag byte for DEL, entry start for SAVE
-ARGPL   = $6372          ; saved arg position in LINEBUF
-ARGPH   = $6373
 ; ---- SAVE working set ----
-HXLO    = $6374          ; GETHEX result
-HXHI    = $6375
-DIGIT   = $6376          ; HEXVAL digit value
-SHCNT   = $6377          ; shift counter
-SVSTLO  = $6378          ; SAVE source start address
-SVSTHI  = $6379
-FREELO  = $637A          ; boot-block free pointer (next data LBA)
-FREEHI  = $637B
-SRCLO   = $637C          ; running source pointer during the copy
-SRCHI   = $637D
-REM     = $637E          ; sectors remaining in the SAVE write loop
 ; ---- PACK working set ----
-NF      = $6380          ; running next-free LBA
-PFOUND  = $6381          ; 1 if this pass found an unpacked extent
-MINSTRT = $6382          ; smallest start LBA >= NF this pass
-MINSEC  = $6383          ; that extent's sector count
-MINPL   = $6384          ; pointer to that entry's start-LBA field (in SBUF)
-MINPH   = $6385
-MINDL   = $6386          ; that entry's directory sector LBA
-ESTART  = $6387          ; current entry start LBA (low byte)
-SRCL    = $6388          ; copy source LBA
-DSTL    = $6389          ; copy dest LBA
-CPYN    = $638A          ; sectors left to copy
-CANDL   = $638B          ; current entry's start-field pointer
-CANDH   = $638C
 ; ---- directory / path working set ----
-ROOTN   = $638D          ; root directory sector count (4)
-DATABASE= $638E          ; first data LBA (37)
-CWDL    = $638F          ; current directory: start LBA
-CWDN    = $6390          ;                    sector count
-SDIRL   = $6391          ; directory being scanned this op (start LBA)
-SDIRN   = $6392          ;                                 sector count
-SCNT    = $6393          ; sectors-left counter while scanning a directory
-LSL     = $6394          ; SETPATH: pointer to the last '/' in CWDPATH
-LSH     = $6395
-PATHL   = $6396          ; saved path cursor across DESCEND (FINDENT clobbers P2)
-PATHH   = $6397
-NEWLBA  = $6398          ; MKDIR: LBA of the new directory extent
-PSL     = $6399          ; MKDIR: parent dir start LBA / sector count
-PSN     = $639A
-EFLAG   = $639B          ; flag byte WRENT stamps (F_FILE for SAVE, F_DIR for MKDIR)
-RMDL    = $639C          ; RMDIR: parent directory sector holding the entry
 ; ---- directory-walk working set (FSCK/PACK; was TREE) ----
-CDST    = $639D          ; current directory: start LBA / sectors / entry index
-CDSC    = $639E
-CIDX    = $639F
 ; ---- output redirection ("> file") ----
-REDIRF  = $63A0          ; 0 = console, 1 = capturing to RBUF
-RCH     = $63A1          ; OUTCH: byte being emitted
-RS2L    = $63A2          ; OUTCH: saved caller P2
-RS2H    = $63A3
-RPTRL   = $63A4          ; OUTCH: next free byte in the capture buffer
-RPTRH   = $63A5
-RHX     = $63A6          ; OPHEX8 scratch
-REDNAME = $63A7          ; redirect target filename (null-terminated, <=48): $73A7..$73D6
 ; FSCK counters/scratch ($A0D7..$A0DE) - safely above REDNAME, below the tree stack
-FNDIR   = $63D7          ; directories counted
-FNFIL   = $63D8          ; files counted
-FNDEL   = $63D9          ; deleted slots counted
-FMAXE   = $63DA          ; highest extent end LBA seen (data area only)
-FUSED   = $63DB          ; data sectors occupied by live extents
-FERR    = $63DC          ; problems found (0 = clean)
-FCHILD  = $63DD          ; CHKDD: directory whose '..' is being checked
-FEXP    = $63DE          ; CHKDD: expected parent LBA
-RBUF    = $6A00          ; capture buffer = the TPA (free during a built-in cmd)
-TSP     = $63E0          ; tree stack depth (0 = at root level)
-TI      = $63E1          ; scratch loop counter for the frame stack
 ; ---- 24-bit file length high bytes (LENLO:LENHI are 16-bit; a file may be up to
 ;      16 MB, so its sector count needs a high byte too). $73E2..$73E5 free gap. ---
-LENHI2  = $63E2          ; entry length, bits 16..23 (the BIOS FLEN 3rd byte)
-SECCH   = $63E3          ; SECCOUNT sector-count high byte (files >255 sectors)
-MINSECH = $63E4          ; PACK: chosen extent's sector count, high byte
-CPYNH   = $63E5          ; PK2MOVE: sectors-to-copy counter, high byte
-TFRAME  = $64B7          ; 8 frames x 4 bytes (dst_lo,dst_hi,dsc,idx): $74B7..$74D6
                          ;   (16-bit CDST; the old 3-byte $A0E2 region is now free)
 ; ---- v2 PACK working set ----
-PPSEC   = $63FA          ; chosen extent's parent-entry: dir sector LBA / slot
-PPSLOT  = $63FB
-CANDSEC = $63FC          ; candidate entry's location during the find walk
-CANDSLOT= $63FD
-PARST   = $63FE          ; PK2FIX: parent directory start LBA (for '..')
-CWDPATH = $6400          ; textual CWD path for the prompt (up to 48 bytes)
 ; ---- stdin redirection ("< file") ----
-INMODE  = $6430          ; SYS_GETC source: 0 = console, 1 = the read stream
-INARM   = $6431          ; shell armed a "< file" for the next RUN
-INNAME  = $6432          ; "< file" name (null-terminated, <=48): $7432..$7461
-PIPEF   = $6462          ; pipe stage: 0 none, 1 left ran, 2 right ran
-PIPEBUF = $6463          ; saved right-hand command of a "cmd | cmd" ($7463..$74A2)
 ; --- 16-bit directory-LBA high bytes (P8XFS directories may live at LBA >=256;
 ;     the volume free pointer is 16-bit, so one extra byte per cursor suffices.
 ;     Each pairs with an existing low-byte cursor of the same root name). ---
-CWDLH   = $64A3          ; CWDL high byte (current working directory start LBA)
-SDIRLH  = $64A4          ; SDIRL high byte (directory being scanned this op)
-STARTHI = $64A5          ; STARTLO high byte (entry start LBA from FINDENT)
-DLBAH   = $64A6          ; DLBA high byte (directory-sector scan cursor)
-NEWLBAH = $64A7          ; NEWLBA high byte (MKDIR new extent)
-PSLH    = $64A8          ; PSL high byte (MKDIR parent extent)
-PARSTH  = $64A9          ; PARST high byte (PACK '..' parent fix)
-RMDLH   = $64AA          ; RMDL high byte (RMDIR parent sector)
-CURLBAH = $64AB          ; CURLBA high byte (SAVE data-write LBA, 16-bit)
 ; --- PACK/FSCK 16-bit tree-walk high bytes (pair with the 8-bit cursors above) -
-NFH     = $64AC          ; NF high byte (PACK next-free target)
-MINSTRTH= $64AD          ; MINSTRT high byte (smallest start LBA this pass)
-CDSTH   = $64AE          ; CDST high byte (current directory in the walk)
-CANDSECH= $64AF          ; CANDSEC high byte (candidate entry's dir sector)
-PPSECH  = $64B0          ; PPSEC high byte (chosen extent's parent-entry sector)
-SRCH    = $64B1          ; SRCL high byte (PK2MOVE copy source)
-DSTH    = $64B2          ; DSTL high byte (PK2MOVE copy dest)
-FCHILDH = $64B3          ; FCHILD high byte (CHKDD child dir)
-FEXPH   = $64B4          ; FEXP high byte (CHKDD expected parent)
-FMAXEH  = $64B5          ; FMAXE high byte (FSCK highest extent end)
-FUSEDH  = $64B6          ; FUSED high byte (FSCK live data sectors)
-REDAPP  = $64D7          ; >> append redirect: 1 = prepend the existing file
-APHAVE  = $64D8          ; >> : 1 = an existing file to prepend was found
-APLBA   = $64D9          ; >> : old file's start LBA (2 bytes)
-APREM   = $64DB          ; >> : old file bytes left to copy (2 bytes)
-APCHK   = $64DD          ; >> : bytes to emit from the current sector (2 bytes)
 ; ---- sh: run shell commands from a script file (slurped into APBUF) ----
-SCRIPTM = $64E0          ; 1 = the shell is running lines from a `sh` script
-SCRSAVE = $64E1          ; saved script read-stream state (ROSTATE 13 + ROSDRV = 14: $74E1..$74EE)
-SCRCNT  = $64EF          ; byte counter for SAVESCR/RESTSCR (1)
-APBUF   = $6800          ; >> prepend sector buffer (512B, below the TPA); also the
                          ;   `sh` script buffer (a script line can't use >>, which is
                          ;   fine — build scripts use >)
-IBUF    = $6500          ; 512-byte buffer for the stdin read stream
 ; ---- program search path (implicit RUN of a bare command name) ----
-PATHBUF = $6700          ; search path, ';'-separated dirs; default "/BIN" ($7700..$773F)
-RUNPATH = $6740          ; scratch: candidate program path built during a lookup ($7740..$779F)
-RUNSKIP = $67A0          ; DORUN: 1 = skip the program-name word for the arg pointer
-PSCANL  = $67A1          ; PATH search cursor into PATHBUF (low)
-PSCANH  = $67A2          ; PATH search cursor into PATHBUF (high)
-GPLF    = $67A3          ; SYS_GETC console: 1 = a LF is pending after a CR keypress
 ; ---- mount model (drive 1 mounted at /d1) state ----
-CURDRIVE= $67A4          ; derived: 1 if the CWD is under /d1 (drive 1), else 0
-DRVINIT = $67A5          ; bitmask: bit N set = drive N has been CFINIT'd this session
-MPSAV   = $67A6          ; MNTPFX: saved P2 (2 bytes) while sniffing a "d1" prefix
 ; $77A8..$77D9 free (was the DOS-model drive-1 CWD backing, removed with the
 ; mount migration).
 ; ($77DA..$77E4 free — was IMPORT bulk-copy state; IMPORT removed, superseded by
@@ -262,7 +108,6 @@ MPSAV   = $67A6          ; MNTPFX: saved P2 (2 bytes) while sniffing a "d1" pref
 
 CR      = $0D
 LF      = $0A
-STKTOP  = $FEFF
 
         .org $2000          ; rev E: OS loads at $2000 (match the monitor's CMD_B + --base)
 ; ---------------- OS syscall table (stable ABI for TPA programs) -------------
@@ -296,7 +141,7 @@ SYS_SETDRV:                     ; deprecated: the drive follows the CWD path now
 ;   [13..14] length lo/mid       [15..16] start-LBA lo/hi   [17] length hi
 ; Call it right after a BIOS FNEXT (before any other FS call reuses the scratch).
 SYS_DIRENTRY:                   ; P1 = dest (18 bytes); clobbers A, P2, TMP
-        LDP2 #BFNAME
+        LDP2 #FNAME
         LDA  #12
         STA  TMP
 SDE_NM: LDA  (P2)+              ; [0..11] name
@@ -305,7 +150,7 @@ SDE_NM: LDA  (P2)+              ; [0..11] name
         DEC
         STA  TMP
         JNZ  SDE_NM
-        LDA  BFFLAG             ; [12] flag
+        LDA  FFLAG             ; [12] flag
         STA  (P1)+
         LDA  FLEN               ; [13] length lo
         STA  (P1)+
@@ -403,11 +248,11 @@ SPS_LP: LDA  (P1)+
 SPS_DN: RTS
 SETCWDDIR:                      ; point the BIOS FS at the CWD (so redirect/pipe
         LDA  CWDL               ; files land in the working dir, not root). The
-        STA  BDIRLBA            ; FS calls revert to root after, so set per-op.
+        STA  DIRLBA            ; FS calls revert to root after, so set per-op.
         LDA  CWDLH              ; 16-bit: carry the high byte too
-        STA  BDIRLBA1
+        STA  DIRLBA1
         LDA  CWDN
-        STA  BDIRN
+        STA  DIRN
         RTS
 ; ---------------- Cold start -------------------------------------------------
 COLD:   LDP3 #STKTOP

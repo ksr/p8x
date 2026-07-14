@@ -41,81 +41,29 @@
 ;==============================================================================
 
 ; ---------------- Equates ----------------------------------------------------
-ACIAS   = $FF04          ; ACIA status (rd) / control (wr)
-ACIAD   = $FF05          ; ACIA data
-CFDATA  = $FF10          ; CF task file
-CFFEAT  = $FF11
-CFSCNT  = $FF12
-CFLBA0  = $FF13
-CFLBA1  = $FF14
-CFLBA2  = $FF15
-CFHEAD  = $FF16          ; $E0 = LBA mode, drive 0
-CFCMD   = $FF17          ; command (wr) / status (rd)
-CFSTAT  = $FF17
+        .include "../generators/memmap.inc"   ; single-source data memory map (gen_memmap.py)
 
-LBUF    = $6000          ; input line buffer
-ADDRL   = $6040          ; parsed address
-ADDRH   = $6041
-HEXL    = $6042          ; hex accumulator
-HEXH    = $6043
 TMP     = $6044
 TMP2    = $6045
 CNT     = $6046          ; loop counter
-LBA     = $6047          ; current LBA, byte 0 (bits 7:0)
-LBA1    = $6048          ; LBA byte 1 (bits 15:8)  — 0 after CFINIT unless set
-LBA2    = $6049          ; LBA byte 2 (bits 23:16) — 0 after CFINIT unless set
 ; ---- filesystem-call ABI (FFIND/FCREATE operate on the P8XFS v2 root, LBA 33) -
 ; File LENGTHS are 24-bit (3 bytes): FLEN/FSAV/ROREM/ROCNT/WOTOT/FLAREM. That
 ; matches the 24-bit ROLBA (16 MB max file). FNAME/FSRC/FLEN stay anchored so
 ; callers that only touch those (EDIT, BASIC) need no address change; the rest of
 ; the block reflows to give each length field 3 contiguous bytes. See
 ; firmware/WIDE_FILELEN.md for the full map.
-FNAME   = $604A          ; 12-byte filename (space-padded) — in for both calls
-FSRC    = $6056          ; FCREATE: source address of the file data (2 bytes)
-FLEN    = $6058          ; file length in bytes (3 bytes): FCREATE in, FFIND out
-FSAV    = $605B          ; FCREATE scratch: requested length saved across FFIND (3)
 ; --- read-stream state (FOPEN/FGETB): a sequential byte reader over a file,
 ;     using a caller-supplied 512-byte sector buffer (ROBUF) ---
-ROLBA   = $605E          ; next sector LBA to read (3)
-ROREM   = $6061          ; bytes remaining in the file (3)
-ROBUF   = $6064          ; caller's 512-byte sector buffer address (2)
-ROPTR   = $6066          ; read cursor within ROBUF (2)
-ROCNT   = $6068          ; bytes left in ROBUF; 0 -> refill (3)
 ; --- write-stream state (FWOPEN/FPUTB/FCLOSE): a sequential byte writer that
 ;     streams to disk at the volume free pointer, using SBUF as its buffer ---
-WOLBA   = $606B          ; current output sector LBA (3)
-WOPOS   = $606E          ; byte offset within SBUF; 512 -> flush (2)
-WOTOT   = $6070          ; total bytes written (-> FLEN at close) (3)
 ; --- current directory extent for the file calls (path resolution sets it;
 ;     defaults to the root and reverts there after each find) ---
-DIRLBA  = $6073          ; current directory start LBA, low byte (16-bit: +DIRLBA1)
-DIRN    = $6074          ; current directory sector count (1)
-FFLAG   = $6075          ; flag of the entry FSCAN matched (file $01 / dir $02)
-RPATH   = $6076          ; FRESOLVE path cursor (2)
 ; --- directory iteration state (FOPENDIR/FNEXT) ---
-DILBA   = $6078          ; iteration: current directory sector LBA (1)
-DICNT   = $6079          ; iteration: sectors remaining (1)
-DIIDX   = $607A          ; iteration: entry index within the sector (0..15)
-FLAREM  = $607B          ; FLOADAT remaining-bytes counter (CFRDSEC clobbers TMP) (3)
-DIBUFH  = $607E          ; FNEXT directory-buffer page (high byte; low byte 0).
                          ;   Defaults to $61 (=SBUF) so the write stream and dir
                          ;   iteration don't have to share SBUF; FSDIRBUF repoints
                          ;   it at a caller buffer. FOPENDIRAT resets it. (1)
 ; --- 16-bit directory-LBA high bytes (directories may live at LBA >=256; the
 ;     volume free pointer is 16-bit, so one extra byte per cursor suffices). ---
-DILBA1  = $607F          ; FNEXT iteration sector LBA, high byte
-DIRLBA1 = $6080          ; current directory start LBA, high byte (pairs DIRLBA)
-FCDH    = $6081          ; FCREATE directory-sector scan cursor, high byte (HEXL)
-DRVSEL  = $6082          ; current CF drive for sector I/O (0/1); ORed into CFHEAD
-CFTOL   = $6083          ; CF bounded-wait timeout counter, low byte
-CFTOH   = $6084          ; CF bounded-wait timeout counter, high byte
-ROSDRV  = $6085          ; read-stream drive (captured by FOPEN, re-asserted by FG_FILL)
-WOSDRV  = $6086          ; write-stream drive (captured by FWOPEN, re-asserted by FW_FLUSH)
-CFIMASK = $6087          ; bit N set = drive N has been CFINIT'd this session
-REMW    = $6088          ; FCOM_CORE ceil(FLEN/512): 24-bit remaining counter (3)
-CNTW    = $608B          ; FCOM_CORE sector count, 16-bit (files may span >255 sectors)
-SBUF    = $6100          ; sector buffer
-STKTOP  = $FEFF
 
 CR      = $0D
 LF      = $0A
