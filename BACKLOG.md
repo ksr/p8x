@@ -186,19 +186,16 @@ Last updated: 2026-07-08
       connector datasheet (mechanical retention against card insertion force)
 - [ ] Route memory card signals in Fusion (planes already done)
 - [ ] Order backplane PCB first as the cheap validation article
-- [ ] **Memory-card rev-E decode netlist (gen_eagle.py).** The rev-E memory map
-      (8K ROM $0000-$1FFF, RAM from $2000) is done in the emulator + software +
-      docs, but the memory-card **schematic netlist still implements the rev-D
-      decode**: `ROMCE = OR(A15,A14)` (→ 16K ROM window) and `-RAM2CE =
-      NAND(!A15,A14)`, with A13 not routed to any decode gate. gen_eagle.py's
-      title/comments say "REV E" but the gates lag, so the schematic/placement
-      PDFs are NOT regenerated (they'd read REV E over rev-D logic). Implement:
-      route A13 to the decode; ROM `!CE = OR3(A13,A14,A15)` (add the 2nd-stage OR
-      — U8.2 is spare); RAM-low U10 `!CE = A15 OR NOR(A13,A14)` (needs a NOR +
-      OR — no spare gates left, so add one 2-input gate IC, e.g. 74HCT02/32, with
-      its 100nF cap + placement). Then re-run gen_eagle + the render scripts and
-      commit the memory-card .sch/.brd + 3 PDFs. (Emulator decode is already
-      rev-E: ad<$2000 = ROM.)
+- [x] **Memory-card rev-E decode netlist (gen_eagle.py).** DONE 2026-07-14. The
+      rev-E decode is now in the schematic netlist, matching the emulator/software/
+      docs. A13 is routed into the decode; realized with ONE added 2-input gate
+      (U11.1, a 74HCT32) by reusing the rev-D gates in place: `U8.4 = OR(A13,A14) =
+      Q`; `U11.1 = OR(Q,A15)` = ROM `!CE` (`A13|A14|A15` → 8K $0000-$1FFF); `U7.3 =
+      NAND(!A15,Q)` = RAM-low U10 `!CE` (= `A15 OR NOR(A13,A14)` → $2000-$7FFF). U11
+      gets its CD11 100nF cap automatically via card(). gen_eagle validates
+      errors=0 across all 8 boards; the memory-card .sch/.brd + 3 PDFs are
+      regenerated. (Note: the earlier plan's "U8.2 is spare / add a NOR" was wrong —
+      U8 was fully used; the AND/NAND refactor above needed only one new OR.)
 
 ## IDEAS
 

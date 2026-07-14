@@ -1144,7 +1144,8 @@ ic={"U1":("MEM28K8","28C256"),"U2":("MEM28K8","62256"),
  "U3":("74245","74HCT245"),"U4":("7430","74HCT30"),
  "U5":("74138","DOE DEC"),"U6":("74138","DLD DEC"),
  "U7":("GATES14","74HCT00"),"U8":("GATES14","74HCT32"),"U9":("GATES14","74HCT08"),
- "U10":("MEM28K8","62256")}   # rev E: 2nd SRAM, RAM $2000-$FEFF (56K); U10 low 24K used
+ "U10":("MEM28K8","62256"),   # rev E: 2nd SRAM, RAM $2000-$FEFF (56K); U10 low 24K used
+ "U11":("GATES14","74HCT32")} # rev E: ROM 8K decode — one added OR, ROM !CE = OR(A13|A14, A15)
 sm={"RP1":("RES","1K"),"LED3":("LED","PWR-GRN"),
  "RS1":("RES","1K"),"LED2":("LED","ROM-YEL"),
  "RS2":("RES","1K"),"LED4":("LED","RAM-YEL"),
@@ -1163,23 +1164,29 @@ for i in range(16):
     pins=[]
     if i<15: pins+=[("U1","A%d"%i),("U2","A%d"%i),("U10","A%d"%i)]
     if 8<=i<=14: pins.append(("U4","ABCDEFG"[i-8]))
-    if i==14: pins+=[("U8","4B"),("U7","3B")]                       # A14 -> ROM/RAM2 decode
-    if i==15: pins+=[("U4","H"),("U7","1A"),("U8","4A"),("U7","2A"),("U7","2B")]
+    if i==13: pins.append(("U8","4A"))                             # rev E: A13 -> Q=OR(A13,A14) (ROM 8K decode)
+    if i==14: pins.append(("U8","4B"))                             # A14 -> Q=OR(A13,A14)
+    if i==15: pins+=[("U4","H"),("U7","1A"),("U11","1B"),("U7","2A"),("U7","2B")]  # A15 -> ROM8CE OR + -RAMCE/A15N
     mnet("A%d"%i,*pins)
 mnet("-IOPG",("U4","Y"),("U7","1B"))
 mnet("-RAMCE",("U7","1Y"),("U2","!CE"))
 # rev E memory map: 8K ROM ($0000-$1FFF) + 56K RAM ($2000-$FEFF) across two 62256.
-#   U1  ROM(8K)  !CE = OR3(A13,A14,A15)      -> $0000-$1FFF  (8K window; A13 added)
-#   U10 62256    !CE = OR(A15, NOR(A13,A14)) -> $2000-$7FFF  (low 24K used; deselected
-#                                                             in the $0000-$1FFF ROM page)
-#   U2  62256    !CE = -RAMCE                 -> $8000-$FEFF (unchanged; I/O page carved out)
-# rev E vs rev D: the ROM window halved (A13 now in the ROM decode) and the RAM floor
-# dropped to $2000, so the OS loads at $2000. NOTE: rev E needs A13 routed to the
-# decode plus one extra 2-input gate over rev D (rev D's spares are used up) — add a
-# 74HCT32/74HCT02 gate for OR3(A13..A15)+NOR(A13,A14); finalize at board layout.
-mnet("ROMCE",("U8","4Y"),("U1","!CE"),("U8","3A"))   # U8.4 = OR(A15,A14); also ROM-LED select
+#   U1  ROM(8K)  !CE = OR(A13|A14, A15)        -> $0000-$1FFF  (8K window; A13 added)
+#   U10 62256    !CE = NAND(!A15, A13|A14)     -> $2000-$7FFF  (low 24K used; deselected
+#                                                              in the $0000-$1FFF ROM page)
+#   U2  62256    !CE = -RAMCE = NAND(A15,-IOPG)-> $8000-$FEFF (unchanged; I/O page carved out)
+# rev E vs rev D: the ROM window halved to 8K and the RAM floor dropped to $2000 (OS loads
+# at $2000). Realized by folding A13 into the decode with ONE added 2-input gate (U11.1),
+# reusing the rev-D gates in place:
+#   Q      = OR(A13,A14)      -> U8.4  (was rev-D ROMCE=OR(A14,A15); A15 input moves to U11)
+#   ROM8CE = OR(Q, A15)       -> U11.1 (the one new gate) = A13|A14|A15 = ROM !CE
+#   -RAM2CE= NAND(A15N, Q)    -> U7.3  (was rev-D NAND(A15N,A14); A14 input becomes Q)
+# U11 is a 74HCT32; only gate 1 is used (gates 2-4 tied off). Its 100nF decoupling cap is
+# CD11, added automatically by card() like every other IC.
+mnet("Q",("U8","4Y"),("U7","3B"),("U11","1A"))        # U8.4 = OR(A13,A14); feeds ROM OR + RAM2 NAND
+mnet("ROM8CE",("U11","1Y"),("U1","!CE"),("U8","3A"))  # U11.1 = OR(Q,A15) = ROM !CE; also ROM-LED select
 mnet("A15N",("U7","2Y"),("U7","3A"))                  # U7.2 = NAND(A15,A15) = !A15
-mnet("-RAM2CE",("U7","3Y"),("U10","!CE"),("U7","4A"),("U7","4B"))   # U7.3 = NAND(!A15,A14); also feed the bank LED inverter
+mnet("-RAM2CE",("U7","3Y"),("U10","!CE"),("U7","4A"),("U7","4B"))   # U7.3 = NAND(A15N, Q); also feed the bank LED inverter
 # U10 bank-select LED: U7's last spare NAND inverts -RAM2CE to active-high
 # (HIGH when $2000-$7FFF is addressed) and sources the LED through RS5. (It's a
 # select indicator, not -BOE-gated like ROM/RAM/RD/WR — only one spare gate left.)
@@ -1201,8 +1208,9 @@ mnet("-BOE",("U9","1Y"),("U3","!OE"))
 # even-pin spares stay OFF GND) plus every IC's own VCC/GND supply pin.
 mnet("VCC",("U5","G1"),("U6","G1"))
 mnet("GND",("U5","!G2B"),("U6","!G2B"),
-  ("U9","4A"),("U9","4B"),         # U7 gates 2,3,4 now decode ROM/RAM2 + drive the bank LED
-  ("LED3","K"),("LED7","K"))       # U8 gate 4 ORs A15,A14 for ROMCE; U9 gate 4 still spare
+  ("U9","4A"),("U9","4B"),         # U7 gates 2,3,4 decode RAM2 (A15N/Q NAND) + drive the bank LED
+  ("U11","2A"),("U11","2B"),("U11","3A"),("U11","3B"),("U11","4A"),("U11","4B"),  # U11 spare OR gates tied off
+  ("LED3","K"),("LED7","K"))       # U8.4 ORs A13,A14 (Q); U11.1 ORs Q,A15 (ROM !CE); U9.4 still spare
 mnet("-BOE",("U8","2B"),("U8","3B"))
 mnet("-RAMCE",("U8","2A"))
 mnet("-RD",("U9","2A"),("U9","2B"))

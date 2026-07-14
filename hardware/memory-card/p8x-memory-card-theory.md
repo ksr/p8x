@@ -53,8 +53,8 @@ reads vs writes, and includes a jumper to write-protect the ROM.
 ## 2. Block diagram
 
 ```
-  A15,A14 ─► U8 OR  ──────────────────────────► U1 ROM !CE  (ROM=$0000-1FFF: A13=A14=A15=0)
-  A15,A14 ─► U7 (A15 OR NOR(A13,A14)) ───────────────► U10 62256 !CE (RAM=$2000-7FFF)
+  A13,A14 ─► U8.4 OR (Q) ─► U11.1 OR (Q,A15) ─► U1 ROM !CE  (ROM=$0000-1FFF: A13=A14=A15=0)
+  A15,Q ──► U7.3 NAND (= A15 OR NOR(A13,A14)) ─────────► U10 62256 !CE (RAM=$2000-7FFF)
                      │
   A8..A15 ─► ┌───────▼────┐ -IOPG    ┌─────────┐ -RAMCE
              │U4 7430 NAND├─────────►│U7 74HC00├─────────► U2 62256 !CE (RAM=$8000-FEFF)
@@ -100,10 +100,12 @@ So the decode yields four regions:
 - `$8000–$FEFF` → SRAM U2 (32 KB)
 - `$FF00–$FFFF` → neither responds here (the I/O and CF cards do)
 
-The rev-E decode adds the A13 term to the ROM/RAM-low select; rev D's spare gates
-are exhausted, so rev E likely needs one added 2-input gate (74HCT32/74HCT02). The
-other added part is U10 (the
-second 62256) and its 100 nF decoupling cap.
+The rev-E decode adds the A13 term to the ROM/RAM-low select. rev D's spare gates
+were exhausted, so rev E adds exactly one 2-input gate — **U11.1** (a 74HCT32 OR) —
+reusing the rev-D gates in place: `U8.4 = OR(A13,A14) = Q`, `U11.1 = OR(Q,A15)` =
+the ROM `!CE` (`A13|A14|A15`), and `U7.3 = NAND(!A15,Q)` = the RAM-low `!CE`
+(= `A15 OR NOR(A13,A14)`). The other added parts are U10 (the second 62256) and the
+two decoupling caps CD10/CD11.
 
 ### 3.2 Read vs write strobes
 The control word's `DOE` and `DLD` fields are decoded locally:
