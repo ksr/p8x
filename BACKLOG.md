@@ -186,6 +186,19 @@ Last updated: 2026-07-08
       connector datasheet (mechanical retention against card insertion force)
 - [ ] Route memory card signals in Fusion (planes already done)
 - [ ] Order backplane PCB first as the cheap validation article
+- [ ] **Memory-card rev-E decode netlist (gen_eagle.py).** The rev-E memory map
+      (8K ROM $0000-$1FFF, RAM from $2000) is done in the emulator + software +
+      docs, but the memory-card **schematic netlist still implements the rev-D
+      decode**: `ROMCE = OR(A15,A14)` (→ 16K ROM window) and `-RAM2CE =
+      NAND(!A15,A14)`, with A13 not routed to any decode gate. gen_eagle.py's
+      title/comments say "REV E" but the gates lag, so the schematic/placement
+      PDFs are NOT regenerated (they'd read REV E over rev-D logic). Implement:
+      route A13 to the decode; ROM `!CE = OR3(A13,A14,A15)` (add the 2nd-stage OR
+      — U8.2 is spare); RAM-low U10 `!CE = A15 OR NOR(A13,A14)` (needs a NOR +
+      OR — no spare gates left, so add one 2-input gate IC, e.g. 74HCT02/32, with
+      its 100nF cap + placement). Then re-run gen_eagle + the render scripts and
+      commit the memory-card .sch/.brd + 3 PDFs. (Emulator decode is already
+      rev-E: ad<$2000 = ROM.)
 
 ## IDEAS
 
