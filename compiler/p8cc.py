@@ -39,9 +39,14 @@ Execution model
 
 Usage:  p8cc.py prog.c [-o prog.asm]   then  p8xasm.py prog.asm -o prog.bin --base 0x6A00
 """
-import sys
+import sys, os
+# Single-source memory map: pull the TPA base + C-stack top from the generated
+# generators/memmap.py instead of hardcoding them (see gen_memmap.py).
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "generators"))
+import memmap
 
-CSTACK_TOP = 0xF800
+CSTACK_TOP = memmap.CSTACKTOP
+TPA_BASE   = memmap.TPABASE
 
 # --------------------------------------------------------------------------- #
 # Lexer
@@ -848,7 +853,7 @@ class Gen:
             if d[0] == "gvar":
                 _, base, ptr, arr, count, name, init = d
                 self.declare_global(base, ptr, arr, count, name, init)
-        self.emit("        .org $6A00",
+        self.emit("        .org $%04X" % TPA_BASE,
                   "        LDA #%d" % (CSTACK_TOP & 0xFF), "        STA __csp",
                   "        LDA #%d" % (CSTACK_TOP >> 8), "        STA __csp+1",
                   "        JSR _f_main", "        RTS")

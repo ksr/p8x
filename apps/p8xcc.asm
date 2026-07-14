@@ -65,7 +65,9 @@ MAXFUNC  = 64        ; capacity of FNPAR/FSLOT/FPOOL (see the BSS at end)
 ; a fixed high page — a high page collides with the OS/shell scratch used by the
 ; SYS_PUTC output-redirect path, corrupting state between calls.
 
-        .org $6A00
+        .org $6A00               ; = TPABASE (generators/gen_memmap.py). NOT .include'd:
+                                 ; memmap.inc's OS-scratch names (NAMEBUF, ...) collide
+                                 ; with this program's own TPA buffers. Keep in sync by hand.
 START:  TPA3L
         STA  STK0
         TPA3H
@@ -4761,7 +4763,7 @@ KW_CONT: .asciiz "continue"
 
 ; whole-line mnemonics end with LF (8-space indent + text + newline)
 MORG:   .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii ".org $6A00"
+        .ascii ".org $6A00"      ; emitted for every compiled program = TPABASE (gen_memmap.py)
         .byte LF,0
 MLDAI:  .byte $20,$20,$20,$20,$20,$20,$20,$20   ; prefix: a number + MNL follow
         .asciiz "LDA #"
