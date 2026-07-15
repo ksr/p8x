@@ -437,13 +437,7 @@ ssc1:   TAP1H
         RTS
 
 ; EM_LOADB: __ax = (byte)*(__ax)   (byte deref; high byte 0)
-EM_LOADB: LDP1 #MLDAX
-        JSR  EMIT
-        LDP1 #MTAP1L
-        JSR  EMIT
-        LDP1 #MLDAXH
-        JSR  EMIT
-        LDP1 #MTAP1H
+EM_LOADB: LDP1 #MLPWAX               ; P1 = word @ __ax (was LDA/TAP1L/LDA/TAP1H)
         JSR  EMIT
         LDP1 #MLDP1
         JSR  EMIT
@@ -456,13 +450,7 @@ EM_LOADB: LDP1 #MLDAX
         RTS
 
 ; EM_STOREB: *(__t0) = (byte)__ax   (store the low byte)
-EM_STOREB: LDP1 #MLDT0
-        JSR  EMIT
-        LDP1 #MTAP1L
-        JSR  EMIT
-        LDP1 #MLDT0H
-        JSR  EMIT
-        LDP1 #MTAP1H
+EM_STOREB: LDP1 #MLPWT0              ; P1 = word @ __t0 (was LDA/TAP1L/LDA/TAP1H)
         JSR  EMIT
         LDP1 #MLDAX
         JSR  EMIT
@@ -524,13 +512,7 @@ EM_ADDROF: LDP1 #MLDALV
         RTS
 
 ; EM_LOADW: __ax = *(__ax)   (deref: load a word from the address in __ax)
-EM_LOADW: LDP1 #MLDAX
-        JSR  EMIT
-        LDP1 #MTAP1L
-        JSR  EMIT
-        LDP1 #MLDAXH
-        JSR  EMIT
-        LDP1 #MTAP1H
+EM_LOADW: LDP1 #MLPWAX               ; P1 = word @ __ax (was LDA/TAP1L/LDA/TAP1H)
         JSR  EMIT
         LDP1 #MLDP1
         JSR  EMIT
@@ -545,13 +527,7 @@ EM_LOADW: LDP1 #MLDAX
         RTS
 
 ; EM_STOREW: *(__t0) = __ax   (store the word in __ax to the address in __t0)
-EM_STOREW: LDP1 #MLDT0
-        JSR  EMIT
-        LDP1 #MTAP1L
-        JSR  EMIT
-        LDP1 #MLDT0H
-        JSR  EMIT
-        LDP1 #MTAP1H
+EM_STOREW: LDP1 #MLPWT0              ; P1 = word @ __t0 (was LDA/TAP1L/LDA/TAP1H)
         JSR  EMIT
         LDP1 #MLDAX
         JSR  EMIT
@@ -580,23 +556,11 @@ EM_STVAR: LDP1 #MLDAX                ; V<LHSIDX> = __ax
         LDP1 #MP1
         JSR  EMIT
         RTS
-EM_PUSH: LDP1 #MLDAX                 ; push __ax (16-bit)
-        JSR  EMIT
-        LDP1 #MPHA
-        JSR  EMIT
-        LDP1 #MLDAXH
-        JSR  EMIT
-        LDP1 #MPHA
-        JSR  EMIT
+EM_PUSH: LDP1 #MPHW                  ; push __ax (16-bit) -> one PHW instruction
+        JSR  EMIT                    ;   (was LDA/PHA/LDA/PHA)
         RTS
-EM_POP: LDP1 #MPLA                   ; pop -> __t0 (16-bit)
-        JSR  EMIT
-        LDP1 #MSTT0H
-        JSR  EMIT
-        LDP1 #MPLA
-        JSR  EMIT
-        LDP1 #MSTAT
-        JSR  EMIT
+EM_POP: LDP1 #MPLW                   ; pop -> __t0 (16-bit) -> one PLW instruction
+        JSR  EMIT                    ;   (was PLA/STA/PLA/STA)
         RTS
 ; EM_INCVAR / EM_DECVAR: V<SLOTBASE+SYMIDX> += / -= 1 (16-bit, in place; __ax kept)
 EM_VADDR: LDP1 #MSTAV                 ; helper: emit "STA V<slot>" (slot in A? no) -- unused
@@ -3790,13 +3754,7 @@ gc_puts: JSR ADVANCE
         JSR  GEXPR
         LDA  #')'
         JSR  EXPECTP
-        LDP1 #MLDAX
-        JSR  EMIT
-        LDP1 #MTAP1L
-        JSR  EMIT
-        LDP1 #MLDAXH
-        JSR  EMIT
-        LDP1 #MTAP1H
+        LDP1 #MLPWAX                 ; P1 = word @ __ax (was LDA/TAP1L/LDA/TAP1H)
         JSR  EMIT
         LDP1 #MPUTS
         JSR  EMIT
@@ -3867,13 +3825,7 @@ gc_bios: JSR ADVANCE                 ; past '('
         LDA  #')'
         JSR  EXPECTP
         JSR  EM_POP                  ; __t0 = the P1 operand
-        LDP1 #MLDT0
-        JSR  EMIT
-        LDP1 #MTAP1L
-        JSR  EMIT
-        LDP1 #MLDT0H
-        JSR  EMIT
-        LDP1 #MTAP1H
+        LDP1 #MLPWT0                 ; P1 = word @ __t0 (was LDA/TAP1L/LDA/TAP1H)
         JSR  EMIT
         LDP1 #MLDAX
         JSR  EMIT
@@ -4851,6 +4803,18 @@ MPLA:   .byte $20,$20,$20,$20,$20,$20,$20,$20
         .byte LF,0
 MSTAT:  .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "STA __t0"
+        .byte LF,0
+MPHW:   .byte $20,$20,$20,$20,$20,$20,$20,$20     ; wide 16-bit ops: 1 instr each
+        .ascii "PHW __ax"
+        .byte LF,0
+MPLW:   .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "PLW __t0"
+        .byte LF,0
+MLPWAX: .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "LPW1 __ax"
+        .byte LF,0
+MLPWT0: .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "LPW1 __t0"
         .byte LF,0
 MLDBT:  .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "LDB __t0"
