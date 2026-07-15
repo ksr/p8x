@@ -76,9 +76,15 @@ ensure_src() {
     done
     # p8xasm needs the generated opcode table concatenated onto its source; ship the
     # table so the asm Makefile can build p8xasm on-target (cat opctab.asm then asm).
-    python3 "$root/generators/gen_p8xopc.py" "$build/opctab.asm" >/dev/null 2>&1 || true
+    # Fail loudly if generation breaks: a silently-empty/absent opctab.asm makes the
+    # on-target `make p8xasm` die with `?undefined: OPCTAB`, which is baffling to debug.
+    python3 "$root/generators/gen_p8xopc.py" "$build/opctab.asm" >/dev/null \
+        || { echo "run.sh: gen_p8xopc.py failed" >&2; exit 1; }
+    [ -s "$build/opctab.asm" ] && grep -q '^OPCTAB:' "$build/opctab.asm" \
+        || { echo "run.sh: generated opctab.asm is empty or missing OPCTAB:" >&2; exit 1; }
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/opctab.asm" \
-        --name /src/commands/asm/opctab.asm >/dev/null 2>&1 || true
+        --name /src/commands/asm/opctab.asm >/dev/null \
+        || { echo "run.sh: failed to ship opctab.asm to /src/commands/asm" >&2; exit 1; }
     # The OS + BIOS monitor are asm too — their sources ride under /src/os-bios/asm
     # with a build-output dir, and they assemble on-target with `asm`.
     # The monitor (58 KB) and the 121 KB OS both assemble on-target now — the BIOS

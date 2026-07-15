@@ -61,6 +61,18 @@ test-c: p8xemu ucode
 test-asm-selfhost: p8xemu ucode
 	sh test/asm_selfhost_test.sh
 
+# Native assembler assembles the FULL OS (p8xos.asm, ~872 symbols) on-target ==
+# host build. Guards the symbol-table capacity (the `make os` self-host path).
+# Slow (assembles the OS under emulation); run on demand, not in `test`.
+test-asm-os: p8xemu ucode
+	sh test/os_asmos_test.sh
+
+# Build the heaviest /bin command (vi) through BOTH native toolchains on-target ==
+# host: the asm twin via `asm`, the C command via `cc`+`asm`. Command-Makefile
+# analog of test-asm-os. Slow (two native builds under emulation); on demand.
+test-cmdbuild: p8xemu ucode
+	sh test/os_cmdbuild_test.sh
+
 # Full system build: build the whole ready-to-boot system the way run.sh does
 # (OS + every /bin + /bina + /src + /man + /lib + dual-CF), boot it headless, and
 # smoke-test boot / PATH / pipes / `make` rebuild / the /d1 mount. Slow; on demand.
@@ -76,6 +88,8 @@ test-sysbuild: p8xemu ucode
 test-full: p8xemu ucode
 	$(MAKE) test
 	$(MAKE) test-asm-selfhost
+	$(MAKE) test-asm-os
+	$(MAKE) test-cmdbuild
 	$(MAKE) test-sysbuild
 
 # Per-instruction self-checking regression: halts with A=00 on success,
@@ -162,4 +176,4 @@ test-mem: p8xemu ucode
 	../p8xemu -l 200000 tmem.bin 2>/dev/null | tr -d '\0' | grep -q Y && \
 	  echo "MEM48 TEST: PASS" || { echo "MEM48 TEST: FAIL"; exit 1; }
 
-.PHONY: all ucode rom test test-isa test-cf test-os test-basic test-io test-mem test-c test-asm-selfhost test-sysbuild test-full
+.PHONY: all ucode rom test test-isa test-cf test-os test-basic test-io test-mem test-c test-asm-selfhost test-asm-os test-cmdbuild test-sysbuild test-full
