@@ -1755,6 +1755,8 @@ DOCD:   JSR  ARG2P2
         LDA  SDIRN
         STA  CWDN
         JSR  SETPATH            ; update the displayed CWD path
+        JSR  PATHNORM           ; collapse // and strip a trailing / (keep CWDPATH
+                                ; in sync with CWDL: `cd foo/` then `cd ..` etc.)
         JSR  DERIVEDRV          ; CURDRIVE = is the new CWD under /d1?
         JMP  SHELL
 NODIR:  LDP1 #MNODIR
@@ -1838,6 +1840,46 @@ sap_copy:LDA (P2)
 sap_end:LDA  #0
         STA  (P1)
         RTS
+
+; PATHNORM - normalize CWDPATH in place: collapse runs of '/' into one and strip
+; a trailing '/' (unless the path is exactly "/"). Runs after every SETPATH so
+; `cd foo/`, `cd a//b`, and a following `cd ..` keep the prompt (and SYS_GETCWD,
+; which programs use to resolve relative paths) in step with the real CWD.
+PATHNORM:LDP1 #CWDPATH           ; P1 = read cursor
+        LDP2 #CWDPATH           ; P2 = write cursor (write <= read: only removes)
+pnm_lp: LDA  (P1)
+        JZ   pnm_end
+        STA  (P2)               ; copy this char
+        INP2
+        LDB  #'/'
+        CMP
+        JNZ  pnm_adv
+pnm_sk: INP1                    ; just copied a '/': skip any run of following '/'
+        LDA  (P1)
+        LDB  #'/'
+        CMP
+        JZ   pnm_sk
+        JMP  pnm_lp
+pnm_adv:INP1
+        JMP  pnm_lp
+pnm_end:LDA  #0
+        STA  (P2)               ; NUL-terminate the compacted path
+        DEP2                    ; P2 -> last char written
+        LDA  (P2)
+        LDB  #'/'
+        CMP
+        JNZ  pnm_ret            ; last char isn't '/', done
+        TPA2L                   ; trailing '/': strip it unless it's the root slash
+        LDB  #<CWDPATH
+        CMP
+        JNZ  pnm_str
+        TPA2H
+        LDB  #>CWDPATH
+        CMP
+        JZ   pnm_ret            ; P2 == CWDPATH -> path is just "/", keep it
+pnm_str:LDA  #0
+        STA  (P2)               ; drop the trailing '/'
+pnm_ret:RTS
 
 ; PATHPOP - drop the last component of CWDPATH (truncate at the last '/',
 ; leaving at least "/").

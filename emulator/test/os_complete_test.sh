@@ -28,13 +28,15 @@ run() { printf "$1" | ../p8xemu -l 200000000 -c cmp.img eeprom.bin 2>/dev/null |
 run "B\rma${TAB}\r" > c1.txt
 grep -q 'make: no Makefile' c1.txt || fail "'ma'+Tab did not complete to the 'make' built-in" c1.txt
 
-# 2) argument dir, no slash: 'cd b' -> 'cd bin/' (adds '/'); the prompt becomes /bin/.
+# 2) argument dir, no slash: 'cd b' -> 'cd bin/' (Tab adds the '/'). (The CWD then
+#    normalizes to /bin — no trailing slash — so assert the completed COMMAND, not
+#    the prompt.)
 run "B\rcd b${TAB}\r" > c2.txt
-grep -q '/bin/' c2.txt || fail "'cd b'+Tab did not complete the CWD directory 'bin/'" c2.txt
+grep -q 'cd bin/' c2.txt || fail "'cd b'+Tab did not complete the CWD directory 'bin/'" c2.txt
 
 # 3) path with a slash: 'cd /b' -> 'cd /bin/'.
 run "B\rcd /b${TAB}\r" > c3.txt
-grep -q '/bin/' c3.txt || fail "'cd /b'+Tab did not complete the path '/bin/'" c3.txt
+grep -q 'cd /bin/' c3.txt || fail "'cd /b'+Tab did not complete the path '/bin/'" c3.txt
 
 # 4) ambiguous file: 'cat /HE' fills the common prefix '/HEL', a second Tab lists
 #    both matches (HELLO.TXT and HELP.TXT).
