@@ -160,6 +160,7 @@ test-basic: p8xemu ucode
 	sh test/mon_test.sh
 	sh test/basic_disk_test.sh
 	sh test/basic_syntax_test.sh
+	sh test/basic_step_test.sh
 	sh test/basic_string_test.sh
 	sh test/basic_fileio_test.sh
 	sh test/basic_strval_test.sh

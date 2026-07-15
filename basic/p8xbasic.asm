@@ -1206,9 +1206,22 @@ nx_go:  LDA  FSP
         XOR
         STA  NUM2+1
         JSR  CMP16                  ; Z=equal, C=var>=limit
-        JZ   nx_loop                ; var == limit -> loop once more
-        JC   nx_done                ; var > limit -> finished
-        JMP  nx_loop                ; var < limit -> loop
+        JZ   nx_loop                ; var == limit -> loop once more (limit inclusive)
+; Which side of the limit ends the loop depends on the SIGN of STEP: an up-loop
+; ends once var > limit, a down-loop once var < limit. Consume C from CMP16 FIRST
+; and branch — the sign test below is an AND, which loads flags and would destroy
+; the carry we still need.
+        JC   nx_gt                  ; var > limit
+        LDA  FSTEP+1                ; var < limit: only a DOWN loop finishes here
+        LDB  #$80
+        AND
+        JNZ  nx_done                ; STEP < 0 -> counted past the limit -> finished
+        JMP  nx_loop                ; STEP >= 0 -> still climbing toward it -> loop
+nx_gt:  LDA  FSTEP+1                ; var > limit: only an UP loop finishes here
+        LDB  #$80
+        AND
+        JNZ  nx_loop                ; STEP < 0 -> still above the limit -> loop
+        JMP  nx_done                ; STEP >= 0 -> passed the limit -> finished
 nx_loop: LDA FLR                    ; resume at loop-back (CURLINE=LR, P2=TP)
         STA  CURLINE
         LDA  FLR+1
