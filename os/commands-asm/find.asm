@@ -331,8 +331,17 @@ wn2:    TAP1H
         LDA #0
         STA (P1)
 ; Descend: w_depth++, record new level's path length (cp) in parr[d], recurse.
+; Depth cap: the per-level arrays hold MAXD=10 (nsub/idx/parr .fill 10, clba
+; 10*24*2), so descending at w_depth==10 would index past all of them. Skip the
+; subtree instead — the header's "guarding recursion depth is the caller's" note
+; was wishful thinking; nothing bounded it. Landing on the parr_a restore with
+; w_depth UNCHANGED reads parr[depth] and truncates cur back to the parent
+; length, which is what the next sibling needs.
         LDA w_depth
         INC
+        LDB #10                       ; MAXD (nsub/idx/parr .fill 10)
+        CMP
+        JC  w_deep                    ; depth+1 >= MAXD -> too deep, don't descend
         STA w_depth
         JSR parr_a
         LDA cp
@@ -342,7 +351,7 @@ wn2:    TAP1H
         LDA w_depth
         DEC
         STA w_depth
-        JSR parr_a
+w_deep: JSR parr_a
         LDA (P1)
         STA fpl
         LDA #<cur

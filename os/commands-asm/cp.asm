@@ -663,8 +663,14 @@ ct_pl:  JSR idx_a
         STA ct_d
         LDA #>jdst
         STA ct_d+1
+; Depth cap: the per-level arrays hold exactly 8 levels (sp/dp 8*80, names 8*288,
+; isd 8*24), so descending at w_depth==8 would make spd_a run off sp into dp and
+; names_a/isd_a into their neighbours. Skip the subtree instead of corrupting it.
         LDA w_depth
         INC
+        LDB #8                        ; MAXD (sp/dp .fill 640 = 8*80)
+        CMP
+        JC  ct_pinc                   ; depth+1 >= 8 -> too deep, skip this subtree
         STA w_depth
         JSR copy_tree
         LDA w_depth

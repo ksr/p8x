@@ -577,8 +577,17 @@ cn2:    TAP1H
         LDA #0
         STA (P1)
         ; recurse one level deeper: save this level's cur length in parr[depth+1]
+        ; Depth cap: the per-level tables hold exactly 8 levels (nsub/gidxr/parr
+        ; .fill 8, clba 8*48, cn 8*384), so descending at w_depth==8 would index
+        ; past every one of them. Skip the subtree instead of corrupting RAM.
+        ; Landing on the parr_a restore with w_depth UNCHANGED reads parr[depth],
+        ; which truncates cur back to the parent length — exactly what the next
+        ; sibling needs.
         LDA w_depth
         INC
+        LDB #8                         ; MAXD (nsub/gidxr/parr .fill 8)
+        CMP
+        JC  gr_deep                    ; depth+1 >= 8 -> too deep, don't descend
         STA w_depth
         JSR parr_a
         LDA cp
@@ -587,7 +596,7 @@ cn2:    TAP1H
         LDA w_depth
         DEC
         STA w_depth                    ; back up; restore cur to the parent length below
-        JSR parr_a
+gr_deep: JSR parr_a
         LDA (P1)
         STA fpl
         LDA #<cur

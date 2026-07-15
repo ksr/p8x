@@ -460,14 +460,20 @@ w_dl:   JSR idx_addr
         TAP1H
         LDA #$FA
         JSR FSDIRBUF                 ; FSDIRBUF $FA
+; Depth cap: nsub/idx hold 16 and csub is 16*128, so descending at w_depth==16
+; would index one past every per-level array. Stop descending instead — the same
+; silent-cap behaviour this command already has for >24 children per level.
         LDA w_depth
         INC
+        LDB #16                      ; MAXD (nsub/idx .fill 16, csub 16*128)
+        CMP
+        JC  w_deep                   ; depth+1 >= 16 -> too deep, don't descend
         STA w_depth
         JSR walk
         LDA w_depth
         DEC
         STA w_depth
-        JSR idx_addr
+w_deep: JSR idx_addr
         LDA (P1)
         INC
         STA (P1)
