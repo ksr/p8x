@@ -351,7 +351,6 @@ int use_shr = 0;
 int use_not = 0;
 int use_eq = 0;
 int use_lt = 0;
-int use_ltu = 0;
 
 int use_enter = 0;
 int use_leave = 0;
@@ -766,29 +765,13 @@ int emit_eq() {
     line("        LDA #0");     line("        STA __ax+1");line("        RTS");
     return 0;
 }
-/* __lt: SIGNED (int/char). The high byte is compared with BLT (LT = N^V, valid
-   after CMP); when the high bytes are equal the low byte is compared UNSIGNED —
-   the standard signed-16-bit compare. */
 int emit_lt() {
     line("__lt:   LDA __t+1");  line("        LDB __ax+1");line("        CMP");
-    line("        JZ __lt_lo"); line("        BLT __lt1"); line("        JMP __lt0");
+    line("        JZ __lt_lo"); line("        JC __lt0");  line("        JMP __lt1");
     line("__lt_lo: LDA __t");   line("        LDB __ax");  line("        CMP");
     line("        JC __lt0");
     line("__lt1:  LDA #1");     line("        JMP __lts");
     line("__lt0:  LDA #0");     line("__lts:  STA __ax");  line("        LDA #0");
-    line("        STA __ax+1"); line("        RTS");
-    return 0;
-}
-/* __ltu: UNSIGNED, for POINTER comparison. The TPA spans $6A00-$F800, so
-   pointers routinely exceed $7FFF; comparing them signed would order a buffer
-   straddling $8000 backwards. */
-int emit_ltu() {
-    line("__ltu:  LDA __t+1");  line("        LDB __ax+1");line("        CMP");
-    line("        JZ __ltu_lo");line("        JC __ltu0"); line("        JMP __ltu1");
-    line("__ltu_lo: LDA __t");  line("        LDB __ax");  line("        CMP");
-    line("        JC __ltu0");
-    line("__ltu1: LDA #1");     line("        JMP __ltus");
-    line("__ltu0: LDA #0");     line("__ltus: STA __ax");  line("        LDA #0");
     line("        STA __ax+1"); line("        RTS");
     return 0;
 }
@@ -1141,24 +1124,14 @@ int shift() {
 int relational() {
     char op[3];
     int ty;
-    int rty;
     ty = shift();
     while (is_punct("<") || is_punct(">") || is_punct("<=") || is_punct(">=")) {
         strcpy_(op, tname);
         lex();
         rvalue(ty); push_ax();
-        rty = shift();
-        rvalue(rty); pop_t();
+        rvalue(shift()); pop_t();
         if (streq(op, ">") || streq(op, "<=")) swap_tax();
-        /* Signed for int/char, but POINTERS must compare unsigned: the TPA runs
-           past $7FFF, so a signed compare would order a buffer straddling $8000
-           backwards. Either side being a pointer decides it (the swap above does
-           not affect the choice). */
-        if (ty_ptr(ty) > 0 || ty_ptr(rty) > 0) {
-            line("        JSR __ltu"); use_ltu = 1;
-        } else {
-            line("        JSR __lt"); use_lt = 1;
-        }
+        line("        JSR __lt"); use_lt = 1;
         if (streq(op, "<=") || streq(op, ">=")) { line("        JSR __not"); use_not = 1; }
         ty = mkty(0, 0, 0);
     }
@@ -1409,7 +1382,6 @@ int emit_runtime() {
     if (use_not) emit_not();
     if (use_eq) emit_eq();
     if (use_lt) emit_lt();
-    if (use_ltu) emit_ltu();
     line("__ax:   .fill 2");
     line("__t:    .fill 2");
     line("__c:    .fill 1");
