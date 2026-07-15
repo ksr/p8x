@@ -6,7 +6,7 @@
 ; Mirrors the ROM monitor's `E`. Memory-only. Entry: P2 = arg tail.
 ; SYS_GETC ($200C) echoes the key (and CRLF + a queued LF on Enter), so we echo
 ; nothing and swallow the queued LF after an Enter. SYS_PUTC=$2009, SYS_PUTS=$200F.
-;#use abi
+; (spliced below by mkasm.sh) use abi
 
         .org $6A00
 e_sk:   LDA (P2)                     ; skip leading spaces

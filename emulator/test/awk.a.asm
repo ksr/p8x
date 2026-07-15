@@ -4,9 +4,9 @@
 ; Records split on whitespace (or -F c). Input = file arg or stdin (pipes).
 ; The program is one quoted arg (awk strips the quotes; the shell doesn't).
 ; Shares nextc/openarg via `;#use stdin` and match() via `;#use regex`.
-;#use stdin
-;#use regex
-;#use abi
+; (spliced below by mkasm.sh) use stdin
+; (spliced below by mkasm.sh) use regex
+; (spliced below by mkasm.sh) use abi
 
 ; Entry: P2 = command-tail pointer (TPA2L/H). We keep our own running cursor
 ; in `aarg` (16-bit) and advance it byte-by-byte through the tail, parsing in

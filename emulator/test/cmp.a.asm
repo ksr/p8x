@@ -4,7 +4,7 @@
 ; tracking a 16-bit offset + line. abspath + openf inline (from diff.asm); the
 ; 16-bit decimal printer + compares mirror awk.asm. BIOS: FRESOLVE $0133,
 ; FOPEN $0124, FGETB $0127. OS: SYS_GETCWD $2003, SYS_PUTC $2009, SYS_PUTS $200F.
-;#use abi
+; (spliced below by mkasm.sh) use abi
 
         .org $6A00
         TPA2L
