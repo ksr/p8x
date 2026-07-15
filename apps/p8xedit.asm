@@ -78,7 +78,27 @@ START:  JSR  SETNAME            ; arg (P2) -> FNAME; HASNAME set
         JZ   BANNER             ; no name -> empty new buffer
         JSR  FFIND              ; existing file? loads LBA + FLEN
         JC   BANNER             ; not found -> new file
-        JSR  LOADFILE
+; The text buffer is TBUF..$F000 = 12 KB, and LOADFILE reads FLEN bytes into it
+; with no ceiling of its own — a longer file overruns past $F000 and leaves TEND
+; beyond the ceiling, so ROOMQ/CHKINS then do their arithmetic on an invalid
+; buffer. Refuse the file outright rather than loading part of it: a truncated
+; load looks like a short file, and the first SAVE would write that back over the
+; user's real one. FLEN is 24-bit, so test the top byte too — LOADFILE itself only
+; consumes FLEN/FLEN+1, so a >=64 KB file would otherwise wrap and look small.
+        LDA  FLEN+2
+        JNZ  TOOBIG             ; >= 64 KB
+        LDA  FLEN+1             ; ceiling is $3000 (12 KB); too big if FLEN > $3000
+        LDB  #$30
+        CMP
+        JNC  LD_OK              ; hi < $30 -> fits
+        JNZ  TOOBIG             ; hi > $30 -> too big
+        LDA  FLEN               ; hi == $30 -> only exactly $3000 fits (buffer full)
+        JNZ  TOOBIG
+LD_OK:  JSR  LOADFILE
+        JMP  BANNER
+TOOBIG: LDP1 #MTOOBIG
+        JSR  PUTS
+        RTS                     ; back to the OS without a buffer or a filename
 BANNER: LDP1 #MBANNER
         JSR  PUTS
 
@@ -404,6 +424,16 @@ GL_LP:  JSR  CONIN
         LDB  #DEL
         CMP
         JZ   GL_BS
+; LBUF is exactly one page ($BE00..$BEFF) and TENDL — the end-of-text pointer —
+; begins at $BF00, so an unbounded line walks P2 out of the page and GL_END's
+; terminating STA (P2) lands on the editor's own state. Ignore input at 255 chars,
+; leaving that NUL a home at $BEFF. The test must trip AT 255, not after: LBUF is a
+; full page, so a 256th store wraps P2's low byte to $00 and the offset becomes
+; indistinguishable from an empty buffer.
+        TPA2L
+        LDB  #<LBUF+255
+        CMP
+        JC   GL_LP              ; 255 buffered -> drop the char (no echo, no store)
         LDA  TMP                ; ordinary char: echo + store
         JSR  CONOUT
         STA  (P2)+
@@ -741,6 +771,8 @@ MPROMPT:.ascii ": "
 MHELP:  .ascii "L list  A append  I n insert  D n delete  W write  Q quit"
         .byte CR,LF,0
 MERR:   .ascii "?"
+        .byte CR,LF,0
+MTOOBIG:.ascii "FILE TOO LARGE (MAX 12K)"
         .byte CR,LF,0
 MFULL:  .ascii "BUFFER FULL"
         .byte CR,LF,0

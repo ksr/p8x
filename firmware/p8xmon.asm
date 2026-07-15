@@ -1801,6 +1801,15 @@ GL1:    JSR  GETC
         LDB  #$7F
         CMP
         JZ   GLBS
+; LBUF is 64 bytes ($6000..$603F) and ADDRL sits immediately after it at $6040, so
+; an unbounded line would overwrite the monitor's own address/hex scratch. Ignore
+; input once 63 characters are buffered, leaving GLDONE's NUL a home at $603F. The
+; low byte alone is the offset because LBUF is page-aligned and one page long — the
+; same invariant GLBS already relies on.
+        TPA2L
+        LDB  #<LBUF+63
+        CMP
+        JC   GL1            ; 63 buffered -> drop the char (no echo, no store)
         LDA  TMP
         JSR  PUTC           ; echo
         STA  (P2)+
