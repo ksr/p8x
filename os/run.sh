@@ -82,9 +82,13 @@ ensure_src() {
         || { echo "run.sh: gen_p8xopc.py failed" >&2; exit 1; }
     [ -s "$build/opctab.asm" ] && grep -q '^OPCTAB:' "$build/opctab.asm" \
         || { echo "run.sh: generated opctab.asm is empty or missing OPCTAB:" >&2; exit 1; }
+    # Idempotent: on a reused disk opctab.asm is already present (p8xfs put has no
+    # overwrite) — that's fine; only fail if it ends up neither shipped nor present.
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/opctab.asm" \
-        --name /src/commands/asm/opctab.asm >/dev/null \
-        || { echo "run.sh: failed to ship opctab.asm to /src/commands/asm" >&2; exit 1; }
+        --name /src/commands/asm/opctab.asm >/dev/null 2>&1 \
+        || python3 "$root/tools/p8xfs.py" ls "$disk" /src/commands/asm 2>/dev/null \
+             | grep -q '^opctab.asm ' \
+        || { echo "run.sh: opctab.asm neither shipped nor already present" >&2; exit 1; }
     # The OS + BIOS monitor are asm too — their sources ride under /src/os-bios/asm
     # with a build-output dir, and they assemble on-target with `asm`.
     # The monitor (58 KB) and the 121 KB OS both assemble on-target now — the BIOS
