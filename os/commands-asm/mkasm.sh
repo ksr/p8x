@@ -7,7 +7,11 @@
 # the shared code, keeping the size comparison apples-to-apples.
 here=$(cd "$(dirname "$0")" && pwd)
 f="$here/$1.asm"
-cat "$f"
+# Neutralise the directive as we splice: the include content is appended below,
+# so a `;#use` left in the output would make the NATIVE assembler (which
+# implements `;#use`) go looking for /lib/NAME.inc on disk and fail. The host
+# assembler ignores it either way, which is why this only bit on-target.
+sed 's/^;#use \([a-z_]*\)/; (spliced below by mkasm.sh) use \1/' "$f"
 # only a directive at the very start of a line counts (not a mention in prose),
 # and each lib is included at most once
 grep -oE '^;#use [a-z_]+' "$f" 2>/dev/null | awk '{print $2}' | sort -u | while read -r lib; do
