@@ -246,6 +246,18 @@ mg_l:   LDA mgi
         LDA cgbp+1
         STA jp_name+1
         JSR joinp
+        LDA #<m_src                  ; skip a same-path match (src == jdst): moving
+        STA se_p                     ;   a file onto itself would truncate+delete it
+        LDA #>m_src
+        STA se_p+1
+        LDA #<m_jdst
+        STA se_q
+        LDA #>m_jdst
+        STA se_q+1
+        JSR streq
+        LDB #0
+        CMP
+        JNZ mg_skip                  ; streq != 0 -> equal -> don't move
         LDA #<m_src
         STA mo_s
         LDA #>m_src
@@ -255,7 +267,7 @@ mg_l:   LDA mgi
         LDA #>m_jdst
         STA mo_d+1
         JSR move_one
-        LDA mgi
+mg_skip:LDA mgi
         INC
         STA mgi
         JMP mg_l

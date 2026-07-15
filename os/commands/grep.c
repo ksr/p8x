@@ -19,7 +19,7 @@
  * (FNEXT, same shape as DIR -R / FIND), collects every file's path, then greps
  * each — the walk and the per-file reads are kept in separate phases because the
  * FNEXT cursor is global BIOS state (opening a file mid-walk would clobber it).
- * Lines are capped at 255 chars; the recursive search is capped at 36 files.
+ * Lines are capped at 175 chars (line[176]); the recursive search is capped at 36 files.
  *
  * The basic-regex matcher (`match`/`matchhere`) lives in the shared lib_regex.c
  * (`//#use regex`); sed uses the same library.
@@ -58,7 +58,7 @@ int grep_stream(char *pfx) {
             }
             n = 0;
         } else {
-            if (n < 255) { line[n] = c; n = n + 1; }
+            if (n < 175) { line[n] = c; n = n + 1; }  /* line[176]: 175 data + NUL */
         }
         c = nextc();
     }

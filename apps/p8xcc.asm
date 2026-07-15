@@ -2903,6 +2903,8 @@ sd_chkeq: LDA CURK                   ; optional  = expr
         JSR  ADVANCE                 ; past '='
         JSR  GEXPR
         JSR  EMITSTV                 ; STA V<LHSIDX>
+        JMP  sd_semi                 ; initialized scalar is done; do NOT fall into
+                                     ; the array path (which would eat the ';')
 sd_arr: JSR ADVANCE                  ; past '['
         LDA  DCLCHAR                  ; char array: ceil(N/2) words; int array: N
         JNZ  sd_arrc

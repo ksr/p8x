@@ -292,8 +292,8 @@ gst_l:  JSR nextc                     ; A = next char, C set at end of stream
         LDB #13
         CMP
         JZ gst_eol
-        LDA gn                        ; at 255 chars: drop overflow, keep scanning
-        LDB #255
+        LDA gn                        ; at 175 chars: drop overflow, keep scanning
+        LDB #175                      ;   (line[] is 176 bytes: 175 data + NUL)
         CMP
         JC gst_l
         LDA #<line
@@ -879,9 +879,9 @@ cna_m:  LDA fn
         INC
         STA ft+1
         LDA ft
-        LDB #32
-        ADD
-        STA ft
+        LDB #128             ; cn per-depth stride = 24*16 = 384 (256 hi + 128 lo);
+        ADD                  ;   was 32 (=288), which overlapped the parent depth's
+        STA ft               ;   name table for subdir indices >= 19
         JNC cna_1
         LDA ft+1
         INC
@@ -972,7 +972,7 @@ ft:     .fill 2
 fn:     .fill 1
 fcar:   .fill 1
 re:     .fill 64                      ; compiled/copied regex pattern (63 chars + NUL)
-line:   .fill 176                     ; current input line (used up to 255, NUL-term)
+line:   .fill 176                     ; current input line (up to 175 data + NUL)
 nm:     .fill 16                      ; one dir entry name, space-trimmed + NUL
 cur:    .fill 176                     ; running absolute path during the -r walk
 nsub:   .fill 8                       ; nsub[depth]  = subdir count (max depth 8)

@@ -699,11 +699,16 @@ SYMDEFVAL:
         JSR  SYMFIND
         LDA  FOUND
         JNZ  SD_UPD
-        LDA  SYMP+1            ; table full?
-        LDB  #>SYMEND
-        CMP
-        JC   SD_FULL          ; SYMP hi >= SYMEND hi
-        LDA  SYMP
+        LDA  SYMP+1            ; table full?  A 14-byte entry must fit below SYMEND
+        LDB  #$BF             ; ($C000), so it is full when SYMP > SYMEND-14 = $BFF2.
+        CMP                   ; full 16-bit test (the old hi-byte-only check let an
+        JNC  SD_RM            ;   entry at $BFxx write up to 12 bytes past SYMEND).
+        JNZ  SD_FULL          ; SYMP hi > $BF -> full
+        LDA  #$F2            ; SYMP hi == $BF -> full iff SYMP lo > $F2
+        LDB  SYMP
+        CMP                   ; C=1 when $F2 >= SYMP lo (room)
+        JNC  SD_FULL          ; $F2 < SYMP lo -> full
+SD_RM:  LDA  SYMP
         TAP2L
         LDA  SYMP+1
         TAP2H

@@ -118,7 +118,9 @@ int main() {
         j = 0;                                  /* scan to end, tracking last-slash+1 */
         while (m[j] != 0) { if (m[j] == '/') { b = j + 1; } j = j + 1; }
         joinp(jdst, dst, m + b);                /* <dst>/<basename> */
-        move_one(src, jdst);
+        if (streq(src, jdst) == 0) {            /* skip same-dir matches: moving a */
+            move_one(src, jdst);                /*   file onto itself would delete it */
+        }
         i = i + 1;
     }
     return 0;

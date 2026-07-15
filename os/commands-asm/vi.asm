@@ -430,6 +430,7 @@ nm_sl:  LDA key
         LDB #0
         CMP
         JZ nm_sl_nf
+        JSR scroll                   ; recenter viewport on the match before repaint
         JSR redraw
         JMP nm_end
 nm_sl_nf:
@@ -456,6 +457,7 @@ nm_n:   LDA key
         LDB #0
         CMP
         JZ nm_n_nf
+        JSR scroll                   ; recenter viewport on the match before repaint
         JSR redraw
         JMP nm_end
 nm_n_nf:LDA #<s_nf

@@ -422,13 +422,13 @@ int main() {
             else if (k == 'u') { undo(); }
             else if (k == '/') {
                 if (getpat() && havepat) {
-                    if (search()) { redraw(); }
+                    if (search()) { scroll(); redraw(); }
                     else { redraw(); gotoxy(24, 1); outs("pattern not found"); clreol(); placecur(); }
                 } else { redraw(); }
             }
             else if (k == 'n') {
                 if (havepat) {
-                    if (search()) { redraw(); }
+                    if (search()) { scroll(); redraw(); }
                     else { gotoxy(24, 1); outs("pattern not found"); clreol(); placecur(); }
                 }
             }
