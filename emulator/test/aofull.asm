@@ -32,7 +32,7 @@
 ;
 ; Conventions: P1 is the source cursor (preserved across helper calls); P3 is
 ; the system stack (never touched); helpers needing a 2nd pointer save P1 first.
-; Limits: ~850 symbols, 12-char names, 127-char source lines, single .org.
+; Limits: ~1097 symbols, 12-char names, 127-char source lines, single .org.
 ; =============================================================================
 
 ; ---- BIOS ---- (file I/O now goes entirely through the read/write streams)

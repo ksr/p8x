@@ -110,6 +110,7 @@ test-cf: p8xemu ucode
 	sh test/cf2_test.sh
 	sh test/fs_bios_test.sh
 	sh test/fdelete_test.sh
+	sh test/fdelete_hilba_test.sh
 	sh test/fopen_test.sh
 	sh test/fwrite_test.sh
 	sh test/fresolve_test.sh

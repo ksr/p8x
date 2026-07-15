@@ -1640,14 +1640,17 @@ FDEL_CORE:
         LDA  DIRN
         STA  CNT
         LDA  DIRLBA
-        STA  ADDRL          ; current directory LBA
+        STA  ADDRL          ; current directory LBA (16-bit: ADDRL + ADDRH)
+        LDA  DIRLBA1        ; high byte too, so subdirs past LBA 255 work
+        STA  ADDRH
 FDD_SEC:LDA  ADDRL
         STA  LBA
-        LDA  #0
+        LDA  ADDRH
         STA  LBA1
+        LDA  #0
         STA  LBA2
         LDP1 #SBUF
-        JSR  CFRDSEC        ; root sector -> SBUF
+        JSR  CFRDSEC        ; directory sector -> SBUF
         LDP2 #SBUF
         LDA  #16
         STA  TMP            ; 16 entries / sector
@@ -1684,10 +1687,11 @@ FDD_SK: LDA  (P2)+
         JZ   FDD_NXT        ; name mismatch -> skip
         LDA  #$FF           ; hit: tombstone the flag in SBUF
         STA  (P2)
-        LDA  ADDRL          ; write the updated root sector back
+        LDA  ADDRL          ; write the updated directory sector back
         STA  LBA
-        LDA  #0
+        LDA  ADDRH
         STA  LBA1
+        LDA  #0
         STA  LBA2
         JSR  CFWRSEC
         CLC
@@ -1706,7 +1710,11 @@ FDD_NXE:LDA  (P2)+
         LDA  ADDRL
         INC
         STA  ADDRL
-        LDA  CNT
+        JNZ  FDD_NC         ; 16-bit LBA advance: carry into ADDRH on wrap
+        LDA  ADDRH
+        INC
+        STA  ADDRH
+FDD_NC: LDA  CNT
         DEC
         STA  CNT
         JNZ  FDD_SEC
