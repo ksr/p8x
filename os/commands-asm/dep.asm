@@ -6,6 +6,10 @@
 ;#use abi
 
         .org $6A00
+; Main entry (loaded/run at $6A00, the TPA). Walks the arg tail at (P2):
+;   parse the address, then loop parsing byte values and poking them into
+;   ascending memory. Clobbers A/B, P1 (poke target), P2 (advanced past args)
+;   and the scratch cells at file end (HXLO..ADHI). Falls through to RTS.
 d_sk:   LDA (P2)                     ; skip leading spaces
         LDB #32
         CMP
@@ -41,7 +45,7 @@ d_addr: JSR GETHEX                   ; address -> HXLO/HXHI, MATCH
 d_lp:   JSR GETHEX                   ; each following byte value
         LDA MATCH
         JZ d_done
-        LDA ADLO                     ; poke(addr, value low)
+        LDA ADLO                     ; poke(addr, value low); P1 = 16-bit addr
         TAP1L
         LDA ADHI
         TAP1H
@@ -51,7 +55,7 @@ d_lp:   JSR GETHEX                   ; each following byte value
         LDB #1
         ADD
         STA ADLO
-        LDA ADHI
+        LDA ADHI                     ; 16-bit carry: only bump ADHI on low wrap
         JNC d_lp
         INC
         STA ADHI
@@ -127,6 +131,8 @@ gh_no:  LDA #0
         RTS
 
 ; HEXVAL: A = char -> DIGIT (0..15), MATCH=1 if a hex digit, else MATCH=0.
+; Range checks use CMP (C=1 when A>=B). Boundary constants are one-past the
+; range end: $3A = ':' (just after '9'), $47 = 'G' (just after 'F').
 HEXVAL: STA HVT
         LDB #'a'                     ; lower-case a..f -> upper
         CMP

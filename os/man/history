@@ -1,0 +1,43 @@
+NAME
+    history - command-line recall in the shell line editor
+
+DESCRIPTION
+    The interactive shell remembers the commands you type and lets you recall
+    them with the arrow keys, like a Unix shell:
+
+        Up arrow      recall the previous (older) command
+        Down arrow    move back toward the most recent command
+        Tab           autocomplete the word at the cursor (see below)
+        Backspace/DEL erase the last character
+        Ctrl-D        end of input (EOF) on an empty line
+
+    A recalled line replaces what you were typing and is redrawn at the prompt;
+    you can then edit its end and press Enter to run it. Pressing Down past the
+    newest entry returns you to an empty line.
+
+    History is a ring of the last 32 command lines, kept in RAM. Blank lines are
+    not recorded, and a command identical to the one just before it is stored
+    only once (no consecutive duplicates). The ring is cleared at power-on / cold
+    start; it is not (yet) saved to disk between sessions.
+
+    History applies only to interactive typing. Lines read from a script by the
+    `sh` built-in are not added to the history.
+
+AUTOCOMPLETE
+    Tab completes the word at the cursor. The first word (the command) completes
+    against the built-in command names and the programs in /bin; any later word
+    completes a filename against the directory it names -- the current directory,
+    or the path before its last '/'. So `ma<Tab>` -> `make `, `cd /b<Tab>` ->
+    `cd /bin/`, `cat RE<Tab>` -> the matching file.
+
+    With a single match the whole name is filled in, followed by a space (a file
+    or command) or a '/' (a directory). With several matches the longest common
+    prefix is filled; press Tab again to list the candidates and redraw the line.
+
+NOTES
+    Arrow keys are received as ANSI escape sequences (ESC [ A / ESC [ B), so a
+    VT100-style terminal (or the emulator's raw console) is required; left/right
+    arrows are ignored (the editor edits at the end of the line only).
+
+SEE ALSO
+    sh, make, edit, vi

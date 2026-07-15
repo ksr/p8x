@@ -49,6 +49,9 @@ int open_path(char *a) {
         if (i > 0 && path[i - 1] != '/') { path[i] = '/'; i = i + 1; }
     }
     j = 0;
+    /* Copy the file word, stopping at NUL, CR (13), or space (32) so a trailing
+     * word or shell line-ending doesn't bleed into the path. No bounds check:
+     * path[80] assumes CWD + name stays under 80 bytes. */
     while (a[j] != 0 && a[j] != 13 && a[j] != 32) {
         path[i] = a[j]; i = i + 1; j = j + 1;
     }
@@ -60,10 +63,16 @@ int open_path(char *a) {
     return 1;
 }
 
+/* nextc: return the next input byte (0..255), or 65535 at end of all input.
+ * Reads stdin when fromfile==0, else the open file stream. For a glob set it
+ * transparently rolls from one matched file to the next so callers see a single
+ * concatenated stream. Clobbers P1/P2 via FGETB. */
 int nextc() {                                /* next byte, or 65535 at EOF */
     int c;
     char *p;
     if (fromfile == 0) { return getchar(); } /* SYS_GETC; 65535 at EOF */
+    /* FGETB returns the byte in A and the EOF flag in carry; p8cc packs that as
+     * A | carry<<8, so bit 8 (& 256) set means EOF of the current file. */
     c = bios(FGETB, 0, 0);                  /* FGETB: A | carry<<8 */
     while (c & 256) {                        /* carry = end of THIS file */
         if (gnf == 0) { return 65535; }      /* single file -> done */

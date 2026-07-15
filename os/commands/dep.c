@@ -22,6 +22,13 @@ int hx(int c) {
                                              * out-of-range sentinel, not -1 */
 }
 
+/* main: parse "addr b b ..." from the command tail and poke each byte.
+ * Returns 0 on success (or usage/no-op), 1 on a bad address.
+ * a  -> walking cursor over the argument string
+ * addr -> current write address (16-bit, wraps in the 64K space)
+ * v  -> accumulated value of the byte token being parsed
+ * d  -> value of the current hex digit (>=16 means "not a hex digit")
+ * any -> flag: did we consume at least one hex digit for this token? */
 int main() {
     char *a;
     int addr;
@@ -29,8 +36,9 @@ int main() {
     int d;
     int any;
 
-    a = argstr();
-    while (*a == 32) { a = a + 1; }
+    a = argstr();                            /* raw command tail after "DEP" */
+    while (*a == 32) { a = a + 1; }          /* skip leading spaces (32 = ' ') */
+    /* Empty tail, bare CR (13), or a -h/-H flag -> print usage and exit. */
     if (*a == 0 || *a == 13 ||
         (*a == '-' && (*(a + 1) == 'h' || *(a + 1) == 'H'))) {
         puts("usage: DEP addr b b ...   store hex bytes at hex address addr");
@@ -40,7 +48,7 @@ int main() {
     addr = 0;                                /* parse the hex address */
     any = 0;
     d = hx(*a);
-    while (d < 16) {
+    while (d < 16) {                         /* accumulate hex digits: n*16 + d */
         addr = addr * 16 + d;
         a = a + 1;
         any = 1;
@@ -61,7 +69,7 @@ int main() {
             d = hx(*a);
         }
         if (any == 0) { return 0; }          /* non-hex tail -> stop */
-        poke(addr, v & 255);
+        poke(addr, v & 255);                 /* store low byte only; discard >8 bits */
         addr = addr + 1;
     }
     return 0;

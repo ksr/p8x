@@ -1,0 +1,28 @@
+NAME
+    cmp - compare two files byte for byte
+
+SYNOPSIS
+    cmp file1 file2
+
+DESCRIPTION
+    Compares the two files. If they are identical, cmp prints nothing and
+    succeeds. Otherwise it reports where they first differ:
+
+        cmp: files differ: byte N, line M
+
+    (N and M are 1-based). If one file is a prefix of the other -- equal up to
+    the shorter one's end -- cmp names the file that ended first:
+
+        cmp: EOF on file1        (file2 is longer)
+        cmp: EOF on file2        (file1 is longer)
+
+    The first file is read into memory (up to 8 KB) and the second is streamed
+    and compared against it. A byte-level companion to diff (which compares by
+    line). cmp is a /bin program.
+
+EXAMPLES
+    cmp a.bin b.bin        silent if identical; else the first differing byte
+    cmp old.txt new.txt    "byte N, line M" of the first difference
+
+SEE ALSO
+    diff, dump, cat

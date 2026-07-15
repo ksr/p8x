@@ -14,13 +14,16 @@
 char buf[52];                                /* CWDPATH is up to 48 bytes + NUL */
 int main() {
     char *arg;
-    arg = argstr();                          /* -h -> usage, then exit */
-    while (*arg == 32) { arg = arg + 1; }
+    arg = argstr();                          /* raw arg tail; only -h is honored */
+    while (*arg == 32) { arg = arg + 1; }    /* skip leading spaces (32 = ' ') */
+    /* Accept -h or -H as the help flag; any other arg is ignored below. */
     if (*arg == '-' && (*(arg + 1) == 'h' || *(arg + 1) == 'H')) {
         puts("usage: PWD   print the working directory path");
         return 0;
     }
+    /* Ask the OS for the CWD via the ABI. Clobbers P1/P2 like all syscalls;
+     * third arg unused. On return buf holds the NUL-terminated path. */
     bios(SYS_GETCWD, buf, 0);                    /* SYS_GETCWD -> buf */
-    puts(buf);
+    puts(buf);                                   /* puts() appends a newline */
     return 0;
 }

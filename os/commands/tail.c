@@ -10,7 +10,17 @@
  */
 //#use stdin   /* path[80], fromfile, nextc(), openarg() */
 char buf[10240];                            /* 40 slots x 256 bytes (ring) */
+                                            /* Each slot holds one NUL-terminated line; slot i lives at
+                                             * buf[i*256 .. i*256+255]. Only the first N slots are used
+                                             * (N clamped to 1..40), but the 256-byte stride is fixed so
+                                             * indexing stays buf[slot*256 + col] regardless of N. */
 
+/* main — TAIL entry point.
+ * Parses an optional -N count and optional filename from the command line,
+ * streams the input through a size-N ring of line slots keeping only the most
+ * recent N lines, then prints them oldest-first at EOF.
+ * No args (params come from argstr()); returns 0 on success, 1 if the named
+ * file is missing. nextc()/openarg() come from the stdin lib (//#use stdin). */
 int main() {
     char *a;
     int n;
@@ -29,10 +39,10 @@ int main() {
         puts("usage: TAIL [-N] [file]   last N lines (default 10), file or stdin");
         return 0;
     }
-    if (*a == '-') {
+    if (*a == '-') {                          /* -N: parse the digits after the dash as the line count */
         a = a + 1;
         n = 0;
-        while (*a >= 48 && *a <= 57) { n = n * 10 + (*a - 48); a = a + 1; }
+        while (*a >= 48 && *a <= 57) { n = n * 10 + (*a - 48); a = a + 1; }  /* 48='0', 57='9' */
         while (*a == 32) { a = a + 1; }
     }
     if (n < 1) { n = 1; }
@@ -47,13 +57,14 @@ int main() {
     slot = 0;
     total = 0;
     c = nextc();
-    while (c != 65535) {
-        if (c == 10) {                        /* end of line -> close the slot */
+    while (c != 65535) {                      /* 65535 = nextc()'s 16-bit EOF sentinel */
+        if (c == 10) {                        /* LF: end of line -> NUL-terminate and advance the ring */
             buf[slot * 256 + col] = 0;
-            slot = slot + 1; if (slot >= n) { slot = 0; }
-            total = total + 1;
+            slot = slot + 1; if (slot >= n) { slot = 0; }  /* wrap; overwrites the oldest held line */
+            total = total + 1;                /* total counts every line seen, not just the N kept */
             col = 0;
         } else {
+            /* Drop CR (13); store any other byte until the 255-char cap (leaving room for the NUL). */
             if (c != 13 && col < 255) { buf[slot * 256 + col] = c; col = col + 1; }
         }
         c = nextc();
@@ -64,6 +75,10 @@ int main() {
         total = total + 1;
     }
 
+    /* Print phase. If fewer than N lines arrived, print them all starting at
+     * slot 0. Once the ring has wrapped (total > n), `slot` points at the slot
+     * about to be reused next — i.e. the oldest surviving line — so start there
+     * and walk forward N slots with wraparound. */
     count = total; if (count > n) { count = n; }   /* how many to print */
     base = 0; if (total > n) { base = slot; }      /* oldest still held */
     while (count > 0) {

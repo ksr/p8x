@@ -74,68 +74,86 @@ ensure_src() {
         python3 "$root/tools/p8xfs.py" put "$disk" "$app" \
             --name "/src/commands/asm/$(basename "$app")" >/dev/null 2>&1 || true
     done
+    # p8xasm needs the generated opcode table concatenated onto its source; ship the
+    # table so the asm Makefile can build p8xasm on-target (cat opctab.asm then asm).
+    python3 "$root/generators/gen_p8xopc.py" "$build/opctab.asm" >/dev/null 2>&1 || true
+    python3 "$root/tools/p8xfs.py" put "$disk" "$build/opctab.asm" \
+        --name /src/commands/asm/opctab.asm >/dev/null 2>&1 || true
     # The OS + BIOS monitor are asm too — their sources ride under /src/os-bios/asm
     # with a build-output dir, and they assemble on-target with `asm`.
     # The monitor (58 KB) and the 121 KB OS both assemble on-target now — the BIOS
     # read/write streams are 24-bit (files up to 16 MB), so `asm` rebuilds both on-target.
-    for d in /src/os-bios /src/os-bios/asm /src/os-bios/asm/bin; do
+    for d in /src/os-bios /src/os-bios/asm /src/os-bios/asm/bin /src/os-bios/generators; do
         python3 "$root/tools/p8xfs.py" mkdir "$disk" "$d" >/dev/null 2>&1 || true
     done
     python3 "$root/tools/p8xfs.py" put "$disk" "$root/firmware/p8xmon.asm" --name /src/os-bios/asm/p8xmon.asm >/dev/null 2>&1 || true
     python3 "$root/tools/p8xfs.py" put "$disk" "$root/os/p8xos.asm"        --name /src/os-bios/asm/p8xos.asm  >/dev/null 2>&1 || true
-    # On-target rebuild: output dirs + build scripts under /src/mk, run with the
-    # `sh` built-in (always rebuild — there are no timestamps yet). Per command a
-    # script rebuilds BOTH twins (C -> c/bin, asm -> asm/bin); c/asm/all rebuild
-    # whole groups. P8X shell scripts end in .sh:
-    #   sh /src/mk/pwd.sh    one command (both twins)
-    #   sh /src/mk/c.sh      every C command   -> /src/commands/c/bin/*.bin
-    #   sh /src/mk/asm.sh    every asm command -> /src/commands/asm/bin/*.bin
-    #   sh /src/mk/all.sh    everything
-    #   sh /src/mk/installc.sh   copy c/bin/*.bin   -> /bin (publish C twins)
-    #   sh /src/mk/installa.sh   copy asm/bin/*.bin -> /bin (publish asm twins)
-    # `cc` writes its .asm to a scratch T.ASM in the CWD (the shell registers a `>`
-    # redirect in the working dir); `asm` CWD-prefixes a relative path arg, so it reads
-    # that same T.ASM from any directory — no `cd /` needed.
-    # LF-separated lines (the Unix convention; EDIT writes LF too, and sh's
-    # GL_SCRIPT ends a line on CR or LF), each < the 64-byte line buffer.
-    for d in /src/commands/c/bin /src/commands/asm/bin /src/mk; do
+    # Bundle the memory map the OS/monitor sources `.include` — the LATEST generated
+    # one at disk-creation time — at the path their `.include "../generators/
+    # memmap.inc"` names (relative to /src/os-bios/asm). So the on-target OS build
+    # has its single-source memory map alongside it.
+    python3 "$root/tools/p8xfs.py" put "$disk" "$root/generators/memmap.inc" \
+        --name /src/os-bios/generators/memmap.inc >/dev/null 2>&1 || true
+    # On-target rebuild via the `make` built-in: each source dir carries a proper
+    # Makefile (target: deps + TAB recipe; `all`/`clean`/`install` targets). `make`
+    # reads the CWD Makefile and always rebuilds (no timestamps yet), so you `cd`
+    # into a dir and build:
+    #   cd /src/commands/c   && make pwd      one C command      -> bin/pwd.bin
+    #   cd /src/commands/asm && make all      every asm command  -> bin/*.bin
+    #   cd /src/os-bios      && make          the monitor + OS   -> asm/bin/*.bin
+    #   ... && make clean                     delete that dir's build outputs
+    #   ... && make install                   cp the built bin/*.bin -> /bin
+    # Recipes run in the invoking CWD, so every path is dir-relative and short —
+    # well under the 64-byte shell line buffer (disasm no longer needs an absolute
+    # path, so its asm twin now rebuilds on-target too). `cc` writes its .asm to a
+    # scratch T.ASM in the CWD (the shell registers the `>` redirect there); `asm`
+    # reads that same relative T.ASM. Makefiles use LF line endings (the Unix
+    # convention; EDIT writes LF too and make's line reader ends on CR or LF).
+    for d in /src/commands/c/bin /src/commands/asm/bin; do
         python3 "$root/tools/p8xfs.py" mkdir "$disk" "$d" >/dev/null 2>&1 || true
     done
-    _mkcmds="dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch man dep dump"
-    _cline() { printf 'cc /src/commands/c/%s.c >T.ASM\nasm T.ASM /src/commands/c/bin/%s.bin\n' "$1" "$1"; }
-    _aline() { printf 'asm /src/commands/asm/%s.asm /src/commands/asm/bin/%s.bin\n' "$1" "$1"; }
-    : > "$build/mk_c.scr"; : > "$build/mk_asm.scr"
-    for c in $_mkcmds; do
-        # per-command script: rebuild both twins
-        { _cline "$c"; _aline "$c"; } > "$build/mk_one.scr"
-        python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_one.scr" --name "/src/mk/$c.sh" >/dev/null 2>&1 || true
-        _cline "$c" >> "$build/mk_c.scr"
-        _aline "$c" >> "$build/mk_asm.scr"
+    # 22 dual-twin commands (each has a C source in commands/ and a hand-asm twin
+    # in commands-asm/); disasm included — its relative recipe line now fits.
+    _mkcmds="awk cat cmp cp dep diff dir disasm dump examine find grep head man more mv pwd sed sort tail touch tree uniq vi wc"
+    # C-only commands (no hand-asm twin yet) — they appear in the C Makefile only.
+    _ccmds=""
+    # --- /src/commands/c/Makefile : cc <cmd>.c >T.ASM ; asm T.ASM bin/<cmd>.bin
+    mf="$build/Makefile.c"
+    printf 'all:' > "$mf"; for c in $_mkcmds $_ccmds; do printf ' %s' "$c" >> "$mf"; done; printf '\n' >> "$mf"
+    for c in $_mkcmds $_ccmds; do
+        printf '%s:\n\tcc %s.c >T.ASM\n\tasm T.ASM bin/%s.bin\n' "$c" "$c" "$c" >> "$mf"
     done
-    # disasm has both twins, but its long name makes the asm rebuild line
-    # (`asm /src/commands/asm/disasm.asm /src/commands/asm/bin/disasm.bin`) 65 chars
-    # — over the 64-byte shell LINEBUF — so `sh /src/mk/disasm.sh` rebuilds only the C twin
-    # on-target for now (the asm twin ships to /bina host-built + verify-checked).
-    # Widening LINEBUF / CWD-relative asm (BACKLOG) would let the asm line fit too.
-    _cline disasm > "$build/mk_one.scr"
-    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_one.scr" --name /src/mk/disasm.sh >/dev/null 2>&1 || true
-    _cline disasm >> "$build/mk_c.scr"
-    cat "$build/mk_c.scr" "$build/mk_asm.scr" > "$build/mk_all.scr"
-    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_c.scr"   --name /src/mk/c.sh   >/dev/null 2>&1 || true
-    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_asm.scr" --name /src/mk/asm.sh >/dev/null 2>&1 || true
-    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_all.scr" --name /src/mk/all.sh >/dev/null 2>&1 || true
-    # installc / installa — publish freshly-built binaries to /bin. After
-    # `sh /src/mk/dir.sh` (which rebuilds BOTH twins into c/bin + asm/bin), pick
-    # which twin goes live: `sh /src/mk/installc.sh` copies the C builds over /bin,
-    # `sh /src/mk/installa.sh` the asm builds. cp's wildcard-into-directory does the whole set in one line
-    # (well under the 63-byte shell LINEBUF).
-    printf 'cp /src/commands/c/bin/*.bin /bin\n'   > "$build/mk_instc.scr"
-    printf 'cp /src/commands/asm/bin/*.bin /bin\n' > "$build/mk_insta.scr"
-    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_instc.scr" --name /src/mk/installc.sh   >/dev/null 2>&1 || true
-    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_insta.scr" --name /src/mk/installa.sh >/dev/null 2>&1 || true
-    # os-bios — assemble the monitor + OS from /src/os-bios/asm into its bin dir.
-    printf 'asm /src/os-bios/asm/p8xmon.asm /src/os-bios/asm/bin/p8xmon.bin\nasm /src/os-bios/asm/p8xos.asm /src/os-bios/asm/bin/p8xos.bin\n' > "$build/mk_osbios.scr"
-    python3 "$root/tools/p8xfs.py" put "$disk" "$build/mk_osbios.scr" --name /src/mk/os-bios.sh >/dev/null 2>&1 || true
+    printf 'clean:\n' >> "$mf"; for c in $_mkcmds $_ccmds; do printf '\tdel bin/%s.bin\n' "$c" >> "$mf"; done
+    # install: cp's glob needs an absolute dir (it doesn't CWD-prefix a relative
+    # `bin/`), so name the source dir in full — this Makefile is dir-specific.
+    printf 'install:\n\tcp /src/commands/c/bin/*.bin /bin\n' >> "$mf"
+    python3 "$root/tools/p8xfs.py" put "$disk" "$mf" --name /src/commands/c/Makefile >/dev/null 2>&1 || true
+    # --- /src/commands/asm/Makefile : asm <cmd>.asm bin/<cmd>.bin
+    # Every .asm source in the dir gets a target: the 22 command twins (built
+    # standalone) plus the toolchain apps p8xedit/p8xcc (standalone) and p8xasm
+    # (its source is cat'd with the shipped opctab.asm first, since the opcode
+    # table is generated, not part of the .asm).
+    _asmapps="p8xedit p8xcc"
+    mf="$build/Makefile.asm"
+    printf 'all:' > "$mf"; for c in $_mkcmds $_asmapps p8xasm; do printf ' %s' "$c" >> "$mf"; done; printf '\n' >> "$mf"
+    for c in $_mkcmds $_asmapps; do
+        printf '%s:\n\tasm %s.asm bin/%s.bin\n' "$c" "$c" "$c" >> "$mf"
+    done
+    printf 'p8xasm:\n\tcat p8xasm.asm opctab.asm >T.ASM\n\tasm T.ASM bin/p8xasm.bin\n' >> "$mf"
+    printf 'clean:\n' >> "$mf"
+    for c in $_mkcmds $_asmapps p8xasm; do printf '\tdel bin/%s.bin\n' "$c" >> "$mf"; done
+    printf 'install:\n\tcp /src/commands/asm/bin/*.bin /bin\n' >> "$mf"
+    python3 "$root/tools/p8xfs.py" put "$disk" "$mf" --name /src/commands/asm/Makefile >/dev/null 2>&1 || true
+    # --- /src/os-bios/Makefile : monitor + OS (sources under asm/, outputs asm/bin/)
+    # NB: p8xmon.asm/p8xos.asm `.include "../generators/memmap.inc"` (bundled under
+    # generators/ above); the native `asm` now supports `.include`, so these build
+    # on-target too (slow — the OS is ~11 KB assembled).
+    mf="$build/Makefile.osbios"
+    printf 'all: mon os\n' > "$mf"
+    printf 'mon:\n\tasm asm/p8xmon.asm asm/bin/p8xmon.bin\n' >> "$mf"
+    printf 'os:\n\tasm asm/p8xos.asm asm/bin/p8xos.bin\n' >> "$mf"
+    printf 'clean:\n\tdel asm/bin/p8xmon.bin\n\tdel asm/bin/p8xos.bin\n' >> "$mf"
+    python3 "$root/tools/p8xfs.py" put "$disk" "$mf" --name /src/os-bios/Makefile >/dev/null 2>&1 || true
 }
 
 if [ ! -f "$disk" ]; then
@@ -189,10 +207,9 @@ if [ ! -f "$disk" ]; then
     # redirection and pipes out of the box. Run by bare name via PATH (/bin),
     # e.g.  dir /bin ,  cat README.TXT ,  cat README.TXT | grep hello | wc ,
     # cp README.TXT COPY.TXT ,  mv COPY.TXT MOVED.TXT .
-    for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch man dep dump disasm; do
+    for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch man dep dump examine disasm awk cmp; do
         # clib.py splices any //#use lib_*.c (shared helpers) into the source first;
-        # a no-op passthrough for commands with no //#use directive.  (disasm is
-        # C-only for now — no hand-asm twin, so it's absent from the /bina loop.)
+        # a no-op passthrough for commands with no //#use directive.
         python3 "$root/tools/clib.py" "$root/os/commands/$ex.c" -o "$build/$ex.c"
         python3 "$root/compiler/p8cc.py" "$build/$ex.c" -o "$build/$ex.asm" >/dev/null
         python3 "$root/assembler/p8xasm.py" "$build/$ex.asm" -o "$build/$ex.bin" --base 0x6A00 >/dev/null
@@ -201,7 +218,7 @@ if [ ! -f "$disk" ]; then
     done
     # Hand-assembled versions -> /bina (os/commands-asm). mkasm.sh splices any
     # ;#use includes (lib_stdin/glob/regex/distab) just like clib.py does for C.
-    for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch man dep dump disasm; do
+    for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch man dep dump examine disasm awk cmp; do
         sh "$root/os/commands-asm/mkasm.sh" "$ex" > "$build/$ex.a.asm"
         python3 "$root/assembler/p8xasm.py" "$build/$ex.a.asm" -o "$build/$ex.a.bin" --base 0x6A00 >/dev/null
         python3 "$root/tools/p8xfs.py" put "$disk" "$build/$ex.a.bin" \

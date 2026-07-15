@@ -217,3 +217,28 @@ GPLF        = $67A3              ; SYS_GETC console: 1 = a LF is pending after a
 CURDRIVE    = $67A4              ; derived: 1 if the CWD is under /d1 (drive 1), else 0
 DRVINIT     = $67A5              ; bitmask: bit N set = drive N has been CFINIT'd this session
 MPSAV       = $67A6              ; MNTPFX: saved P2 (2 bytes) while sniffing a 'd1' prefix
+
+; shell history
+HISTST      = $608E              ; history ring: index where the next entry is written (0..HISTN-1)
+HISTCT      = $608F              ; history ring: number of stored entries (0..HISTN)
+HISTNV      = $6090              ; history ring: recall cursor (0 = not navigating; N = N lines back)
+HISTRING    = $5800              ; history ring buffer base: HISTN x HISTLEN bytes ($5800..$5FFF)
+
+; shell completion
+CMPPFX      = $5700              ; tab-complete: leaf prefix being completed (NUL-term)
+CMPLCP      = $5740              ; tab-complete: longest common prefix of the matches (NUL-term)
+CMPDIR      = $5760              ; tab-complete: directory-part path string, for CDPATH (NUL-term)
+CMPPL       = $6091              ; tab-complete: length of the typed leaf prefix
+CMPCNT      = $6092              ; tab-complete: number of matches (saturates at 255)
+CMPFW       = $6093              ; tab-complete: 1 = completing the command word (first word)
+CMPTABF     = $6094              ; tab-complete: 1 = the previous key was a no-progress Tab
+CMPISD      = $6095              ; tab-complete: 1 = the sole match is a directory
+CMPLM       = $6096              ; tab-complete: 1 = scan in list mode (print matches)
+CMPDL       = $6097              ; tab-complete: target directory start LBA, low byte
+CMPDLH      = $6098              ; tab-complete: target directory start LBA, high byte
+CMPDN       = $6099              ; tab-complete: target directory sector count
+CMPCUR      = $609A              ; tab-complete: saved line length (cursor) across the scan
+CMPSAV      = $609B              ; tab-complete: saved SBUF entry cursor across a candidate (2)
+CMPWLB      = $609D              ; tab-complete: directory-walk running sector LBA (2)
+CMPWSC      = $609F              ; tab-complete: directory-walk sectors remaining
+CMPIX       = $60A0              ; tab-complete: KWTAB index during the built-in scan

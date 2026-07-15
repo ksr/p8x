@@ -13,10 +13,15 @@
 ;#use abi
 
         .org $6A00
+; Entry: the shell passes the argument tail (everything after "MV ") in P2.
+; Stash that pointer in the m_arg word so we can walk it byte-by-byte and
+; advance it by adding to the low/high halves (P8X has no 16-bit add).
         TPA2L
         STA m_arg
         TPA2H
         STA m_arg+1
+; mv_sk: skip leading spaces (32) at m_arg. Falls through once a non-space
+; is seen. m_arg is bumped a byte at a time; JNC/INC handles the low->high carry.
 mv_sk:  LDA m_arg
         TAP2L
         LDA m_arg+1
@@ -34,6 +39,8 @@ mv_sk:  LDA m_arg
         INC
         STA m_arg+1
         JMP mv_sk
+; mv_chk: no args (NUL / CR) -> usage. A leading '-' means a flag; only
+; -h / -H are recognized and both just print usage/help.
 mv_chk: LDA (P2)
         LDB #0
         CMP
@@ -53,6 +60,10 @@ mv_chk: LDA (P2)
         CMP
         JZ mv_usage
 ; --- copy src WORD into patw, note glob (mg) --------------------------------
+; Copy the source token (up to the next space/CR/NUL) into the patw buffer,
+; setting mg=1 if any '*'/'?' is seen. Keeping the raw, un-abspath'd word lets
+; the globber match against it later. mpw counts chars so we can advance m_arg
+; past the token afterward.
 mv_word:LDA #0
         STA mg
         LDA #<patw
@@ -82,16 +93,16 @@ mpw_l:  LDA (P2)
         CMP
         JZ mpw_g
         JMP mpw_s
-mpw_g:  LDA #1
+mpw_g:  LDA #1                        ; wildcard seen: mark this a glob
         STA mg
-        LDA (P2)
+        LDA (P2)                      ; reload the wildcard char to store it
 mpw_s:  STA (P1)+
         INP2
         LDA mpw
         INC
         STA mpw
         JMP mpw_l
-mpw_d:  LDA #0
+mpw_d:  LDA #0                        ; NUL-terminate patw
         STA (P1)
         LDA mpw
         LDB #0
@@ -122,6 +133,8 @@ mv_dsk: LDA m_arg                    ; skip spaces before dst
         INC
         STA m_arg+1
         JMP mv_dsk
+; mv_dchk: a missing dst (NUL/CR after the source) is a usage error. Otherwise
+; resolve dst to an absolute path in m_dst, then branch on mg: glob vs single.
 mv_dchk:LDA (P2)
         LDB #0
         CMP
@@ -143,6 +156,8 @@ mv_dchk:LDA (P2)
         CMP
         JNZ mv_glob
 ; --- single source ---------------------------------------------------------
+; Resolve the source word to absolute m_src, refuse a no-op (src == dst via
+; streq), otherwise move_one. move_one returns A=1 when src wasn't found.
         LDA #<m_src
         STA ap_out
         LDA #>m_src
@@ -193,15 +208,16 @@ mv_glob:LDA #<m_dst
         STA ge_out
         LDA #>gfiles
         STA ge_out+1
-        LDA #24
+        LDA #24                      ; gfiles holds 24 * 64-byte name slots
         STA ge_max
         JSR glob_expand
         LDA ge_cnt
         LDB #0
         CMP
-        JZ mv_nomatch
+        JZ mv_nomatch                ; nothing matched the pattern
         LDA #0
         STA mgi
+; mg_l: loop mgi = 0 .. ge_cnt-1. CMP sets C when mgi >= ge_cnt, so JC exits.
 mg_l:   LDA mgi
         LDB ge_cnt
         CMP
@@ -285,7 +301,12 @@ mv_put: LDA #0
         JSR SYS_PUTC
         RTS
 
-; move_one: copy mo_s -> mo_d then delete mo_s. A = 1 not found / 0 ok.
+; move_one: copy file mo_s -> mo_d then delete mo_s (P8XFS has no rename).
+;   in:  mo_s = src path, mo_d = dst path (both NUL-terminated, absolute)
+;   out: A = 1 if src not found (nothing done), A = 0 on success
+;   clobbers: P1/P2 (BIOS file calls), m_ch. Streams a byte at a time.
+; FOPEN is pointed at the read buffer $FC00 (P1); the copy loop then FGETBs from
+; the open read file and FPUTBs to the open write file until FGETB sets C (EOF).
 move_one:
         LDA mo_s
         TAP1L
@@ -298,7 +319,7 @@ move_one:
         LDA #$FC
         TAP1H
         LDA #0
-        JSR FOPEN                    ; FOPEN $FC00
+        JSR FOPEN                    ; FOPEN $FC00 (C set => not found)
         JC mo_nf
         LDA mo_d
         TAP1L
@@ -309,7 +330,7 @@ move_one:
         LDA #0
         JSR FWOPEN                   ; FWOPEN
 mo_cp:  LDA #0
-        JSR FGETB                    ; FGETB
+        JSR FGETB                    ; FGETB: byte in A, C set at EOF
         JC mo_end
         STA m_ch
         LDA #0
@@ -384,7 +405,9 @@ jp_nd:  LDA #0
         STA (P1)
         RTS
 
-; cg_ptr: cgp = gfiles + mgi*64
+; cg_ptr: cgp = gfiles + mgi*64  (pointer to the mgi-th 64-byte name slot).
+; No multiply instruction: add 64 mgi times (cgt is the down-counter), then add
+; the 16-bit gfiles base. cgcar carries the low-byte add into the high byte.
 cg_ptr: LDA #0
         STA cgp
         STA cgp+1
@@ -558,11 +581,12 @@ u_nosrc:.asciiz "mv: source not found"
 u_notdir:.asciiz "mv: target is not a directory"
 u_nomat:.asciiz "mv: no match"
 
-m_arg:  .fill 2
-m_ch:   .fill 1
-mg:     .fill 1
-mpw:    .fill 1
-mgi:    .fill 1
+; --- variables / scratch buffers -------------------------------------------
+m_arg:  .fill 2                      ; walking pointer into the argument tail
+m_ch:   .fill 1                      ; one byte in flight during the copy loop
+mg:     .fill 1                      ; 1 if source contains a wildcard (glob)
+mpw:    .fill 1                      ; length of the source word copied to patw
+mgi:    .fill 1                      ; current glob match index
 cgp:    .fill 2
 cgbp:   .fill 2
 cgk:    .fill 1
@@ -580,8 +604,8 @@ jp_out: .fill 2
 jp_dir: .fill 2
 jp_name:.fill 2
 jp_i:   .fill 1
-patw:   .fill 80
-m_src:  .fill 80
-m_dst:  .fill 80
-m_jdst: .fill 80
-gfiles: .fill 1536
+patw:   .fill 80                     ; raw source word (kept for glob matching)
+m_src:  .fill 80                     ; absolute source path
+m_dst:  .fill 80                     ; absolute dest path (a dir when globbing)
+m_jdst: .fill 80                     ; m_dst + "/" + basename for each match
+gfiles: .fill 1536                   ; 24 glob-match slots * 64 bytes each

@@ -1,0 +1,33 @@
+NAME
+    bootload - install an OS image into the boot sectors
+
+SYNOPSIS
+    bootload file
+
+DESCRIPTION
+    Copies `file` (an assembled OS image, e.g. one just built under /src/os-bios)
+    into the disk's OS region -- sector LBA 1 onward, where the ROM monitor's B
+    command loads the OS -- and records its sector count in the boot block
+    (OSCNT). The next time you `exit` to the monitor and press B, that image
+    boots. bootload is a shell built-in.
+
+    The running OS lives in RAM, so overwriting the on-disk OS region under it is
+    safe. bootload writes the current drive (drive 0 is the boot disk). The image
+    may be up to 32 sectors (16 KB).
+
+    Typical self-hosting loop, rebuilding the OS on the machine:
+
+        cd /src/os-bios
+        make os                       assemble asm/p8xos.asm -> asm/bin/p8xos.bin
+        bootload asm/bin/p8xos.bin    install it as the boot OS
+        exit                          back to the monitor
+        B                             boot the freshly built OS
+
+THE MONITOR
+    Only the OS is on disk. The MONITOR is EEPROM/ROM firmware -- it is what runs
+    at reset and loads the OS -- so it cannot be installed from disk. To change
+    the monitor you must reprogram the EEPROM (host-side: rebuild eeprom.bin and
+    reflash the chip). bootload does not touch it.
+
+SEE ALSO
+    make, asm, save, exit

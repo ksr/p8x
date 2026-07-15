@@ -1822,7 +1822,9 @@ ce_noshr: LDP1 #MTEMP                ; the codegen temp
         JSR  EMIT
         RTS
 
-; FUNCDEF: int NAME ( ) { <stmt>* }   (Stage A: no parameters yet)
+; (The FUNCDEF routine itself is below, past the struct helpers, at label
+;  FUNCDEF. It now handles parameters, prototypes, and globals — not just the
+;  parameterless Stage-A form this note originally described.)
 
 ; =============================================================================
 ; structs (minimal): a tag -> size table, and a GLOBAL member -> offset table
@@ -2263,6 +2265,12 @@ fdg_end: LDA #$3B
         JSR  EXPECTP
         RTS
 
+; FUNCDEF: parse one top-level item and dispatch. First a 'struct' keyword ->
+;   fd_struct (a struct def or a global struct var). Otherwise a type, optional
+;   '*'s, and a NAME: if '(' follows it is a function (params, then either a
+;   ';' prototype via FADD or a '{...}' body); if not, it is a global -> fd_glob.
+;   For a function, SLOTBASE is pinned to SLOTCNT so this function's slots occupy
+;   a fresh range, and SYMCNT/NLSLOT reset for its local symbol table.
 FUNCDEF: LDP1 #KW_STRUCT
         JSR  IDEQ
         LDA  TMPB

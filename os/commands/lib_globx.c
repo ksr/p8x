@@ -30,6 +30,16 @@
 //#use glob     /* gmatch(pat,name) — clib.py splices it above (recursive //#use) */
 //#use dirent   /* de_read/de_isfile/de_isdot: current entry via SYS_DIRENTRY */
 //#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
+
+/* glob_expand — split `pat` into <dir prefix>/<leaf>, open that directory
+ * (named dir via FOPENDIR, else the CWD), walk every entry with FNEXT, and for
+ * each real FILE whose name matches the leaf glob append "<dir><name>" to `out`.
+ *   in:  pat  = pattern; the arg string is terminated by NUL, CR (13) or SP (32)
+ *        out  = maxn 64-byte path slots; maxn = slot capacity
+ *   out: return = match count (0..maxn); slots filled in directory-scan order
+ *   note: BIOS dir iteration (FNEXT) and SYS_DIRENTRY clobber P1/P2 per the ABI,
+ *         so no pointer state is held live across the loop's bios() calls.
+ */
 int glob_expand(char *pat, char *out, int maxn) {
     char leaf[16];                           /* the pattern's last component */
     char dir[64];                            /* its directory prefix (incl trailing /) */
@@ -66,13 +76,13 @@ int glob_expand(char *pat, char *out, int maxn) {
     bios(FSDIRBUF, 0, 0xFA);                   /* FSDIRBUF: iterate on page $FA (high TPA) */
 
     cnt = 0;
-    r = bios(FNEXT, 0, 0);                  /* FNEXT */
-    while ((r & 256) == 0) {
+    r = bios(FNEXT, 0, 0);                  /* FNEXT: advance to first entry */
+    while ((r & 256) == 0) {                   /* bit 8 (256) set => end of directory */
         de_read();                            /* snapshot the entry (SYS_DIRENTRY) */
         if (de_isdot() == 0 && de_isfile()) {   /* a FILE, not '.'/'..'/dir */
             j = 0;                            /* trim de[] name -> nm */
-            c = de[0] & 255;
-            while (j < 12 && c != 32) { nm[j] = c; j = j + 1; c = de[j] & 255; }
+            c = de[0] & 255;                  /* name is a space-padded 12-byte field; */
+            while (j < 12 && c != 32) { nm[j] = c; j = j + 1; c = de[j] & 255; } /* stop at first pad space */
             nm[j] = 0;
             if (gmatch(leaf, nm) && cnt < maxn) {
                 base = cnt * 64;              /* out[slot] = dir prefix + name */

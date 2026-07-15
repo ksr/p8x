@@ -18,9 +18,15 @@
  * To descend into a subdirectory found this way: de_opendir(de_lba()), then the
  * usual FSDIRBUF if the command iterates in its own page.
  *
- * de[] layout (17 bytes): [0..11] name (space-padded), [12] flag (1=file 2=dir),
- * [13..14] length lo/hi, [15..16] start-LBA lo/hi, [17] length hi.  Within the p8cc subset
- * (no ++/--, decls at top); only the bios() builtin is used.
+ * de[] layout (18-byte buffer, indices 0..17): [0..11] name (space-padded),
+ * [12] flag (1=file 2=dir), [13..14] length lo/hi, [15..16] start-LBA lo/hi;
+ * [17] is spare/reserved. All multi-byte fields are little-endian, and the
+ * accessors below mask with &255 because A/B are 8-bit and this is a C subset
+ * with no unsigned char. Within the p8cc subset (no ++/--, decls at top);
+ * only the bios() builtin is used.
+ *
+ * NOTE: any SYS_* / bios() call clobbers P1/P2 per the P8X syscall ABI, so
+ * treat those pointer regs as dead across de_read()/de_opendir().
  */
 //#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
 
@@ -30,11 +36,13 @@ int de_read() {                       /* snapshot the current entry into de[] */
     bios(SYS_DIRENTRY, de, 0);              /* SYS_DIRENTRY -> (P1)=de */
     return 0;
 }
+/* Predicates/accessors below just read the de[] snapshot; no BIOS call, so
+ * they clobber nothing beyond A/B and are safe to call repeatedly. */
 int de_isfile() { return (de[12] & 255) == 1; }
 int de_isdir()  { return (de[12] & 255) == 2; }
-int de_isdot()  { return (de[0]  & 255) == '.'; }   /* '.' or '..' */
-int de_len()    { return (de[13] & 255) + (de[14] & 255) * 256; }
-int de_lba()    { return (de[15] & 255) + (de[16] & 255) * 256; }
+int de_isdot()  { return (de[0]  & 255) == '.'; }   /* matches both '.' and '..' (only first char tested) */
+int de_len()    { return (de[13] & 255) + (de[14] & 255) * 256; }  /* file length in bytes, LE */
+int de_lba()    { return (de[15] & 255) + (de[16] & 255) * 256; }  /* start LBA (dir's first block) */
 
 int de_opendir(int lba) {             /* open subdirectory `lba` for FNEXT */
     bios(SYS_OPENDIR, lba, 0);            /* SYS_OPENDIR: P1 = 16-bit start LBA */

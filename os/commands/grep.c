@@ -76,6 +76,8 @@ int grep_stream(char *pfx) {
     return 0;
 }
 
+/* rdname: copy the 12-byte space-padded 8.3 name from the snapshotted dirent
+ * (de[], via de_read) into nm[], dropping the padding spaces. Returns length. */
 int rdname() {                               /* FNAME ($704A, 12 space-padded) -> nm */
     int i;
     int k;
@@ -104,6 +106,10 @@ int collect(int plen) {
     int oldp;
     int base;
 
+    /* Phase A: enumerate this directory. FNEXT returns the next entry; bit 8
+     * (r & 256) is the end-of-directory flag, so loop until it is set. Files are
+     * recorded now; subdirs are stashed (clba/cn) and recursed into afterward,
+     * because de_opendir would move the same global FNEXT cursor we're iterating. */
     nsub = 0;
     r = bios(FNEXT, 0, 0);                  /* FNEXT */
     while ((r & 256) == 0) {
@@ -111,9 +117,10 @@ int collect(int plen) {
         if (de_isdot() == 0) {               /* skip '.' / '..' */
             rdname();
             if (de_isfile() && nrf < 36) {   /* a FILE -> record its path */
-                base = nrf * 80;
+                base = nrf * 80;             /* slot for this path (80-byte stride) */
                 i = 0;
                 while (i < plen) { rfiles[base] = cur[i]; base = base + 1; i = i + 1; }
+                /* insert a separator unless cur is exactly "/" (avoid "//name") */
                 if (plen != 1 || cur[0] != '/') { rfiles[base] = '/'; base = base + 1; }
                 k = 0;
                 while (nm[k] != 0) { rfiles[base] = nm[k]; base = base + 1; k = k + 1; }
@@ -131,6 +138,9 @@ int collect(int plen) {
         r = bios(FNEXT, 0, 0);
     }
 
+    /* Phase B: now that this level's cursor is exhausted, recurse. de_opendir
+     * repoints the global FNEXT cursor at the child; FSDIRBUF resets the FS's
+     * dirent buffer to our page ($EA) since the child open moved BIOS state. */
     i = 0;                                    /* descend into each recorded child */
     while (i < nsub) {
         de_opendir(clba[i]);                 /* SYS_OPENDIR(child LBA, 16-bit) */
@@ -156,8 +166,8 @@ int main() {
     int recurse;
     int plen;
 
-    a = argstr();
-    while (*a == 32) { a = a + 1; }
+    a = argstr();                             /* raw argument string after "GREP" */
+    while (*a == 32) { a = a + 1; }           /* skip leading spaces */
     if (*a == 0 || *a == 13 ||
         (*a == '-' && (*(a + 1) == 'h' || *(a + 1) == 'H'))) {
         puts("usage: GREP [-r] regex [file|glob]   match regex (. * + ? ^ $); -r walks the CWD tree");

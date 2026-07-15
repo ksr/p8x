@@ -15,14 +15,15 @@ DESCRIPTION
     command uses the file streams itself while sh's read position is saved and
     restored around it. Lines end with CR, LF, or CRLF; by convention P8X
     scripts use LF (the Unix line ending, as EDIT writes) and are named with
-    a .sh suffix (e.g. `sh build.sh`). run.sh ships build scripts under /src/mk,
-    so `sh /src/mk/all.sh` rebuilds everything from source on the machine.
+    a .sh suffix (e.g. `sh build.sh`).
 
     Caveat: a script line may not use the `< redirect` -- input redirection
     and the script stream share the same buffer (IBUF).
 
-    The main use is rebuilding a command from source on the machine. A build
-    script for a C command:
+    To rebuild a command from source on the machine, prefer the `make` built-in
+    over a hand-written sh script: each /src source dir ships a real Makefile
+    (`cd /src/commands/c && make pwd`). sh is for ad-hoc command sequences. A
+    build sequence for a C command is just:
 
         cc /src/commands/c/pwd.c >T.ASM
         asm T.ASM /src/commands/c/bin/pwd.bin
@@ -31,13 +32,8 @@ DESCRIPTION
 
         asm /src/commands/asm/cat.asm /src/commands/asm/bin/cat.bin
 
-    run.sh pre-generates these under /src/mk (one per command, plus c/asm/all/
-    installc/installa), so you just `sh` the one you want.
-
 EXAMPLES
     sh build            run the commands in the file `build`
-    sh /src/mk/pwd.sh   rebuild pwd from /src (both twins)
-    sh /src/mk/all.sh   rebuild every command
 
 SEE ALSO
-    cc, asm, run, edit
+    make, cc, asm, run, edit

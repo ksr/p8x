@@ -25,6 +25,12 @@
  */
 char *rend;                                  /* end of the last successful match */
 
+/* matchhere: does regex `re` match a PREFIX of text `t`?
+ *   re, t : NUL-terminated pattern and remaining input, both scanned in place.
+ *   returns 1 on match (and sets global `rend` to t past the matched prefix),
+ *           0 otherwise (`rend` left unchanged).
+ * Quantifier cases are tested before the plain literal case because a '*'/'+'/'?'
+ * in re[1] rebinds the meaning of the char in re[0]. Recurses on the tail. */
 int matchhere(char *re, char *t) {
     int c;
     c = re[0] & 255;
@@ -53,6 +59,9 @@ int matchhere(char *re, char *t) {
         return matchhere(re + 2, t);
     }
     if (re[0] == 0) { rend = t; return 1; }              /* whole pattern consumed */
+    /* '$' is an end-of-line anchor only as the final pattern char; matches the
+     * NUL terminator without consuming any input. A '$' elsewhere falls through
+     * to the literal case below and matches a real '$' byte. */
     if (re[0] == '$' && re[1] == 0) {
         if (*t == 0) { rend = t; return 1; }
         return 0;
@@ -63,6 +72,10 @@ int matchhere(char *re, char *t) {
     return 0;
 }
 
+/* match: does `re` match anywhere in `t`? Returns 1/0; on success `rend` (set by
+ * matchhere) points just past the match, so sed can measure the matched span.
+ * A leading '^' anchors to start, so it only tries position 0; otherwise it
+ * walks each starting offset until a match or the end of the string. */
 int match(char *re, char *t) {               /* 1 if re matches anywhere in t */
     if (re[0] == '^') { return matchhere(re + 1, t); }
     while (1) {                              /* try each starting position */

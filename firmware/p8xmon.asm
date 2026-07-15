@@ -1735,6 +1735,9 @@ ZS2:    LDA  #0
 ;==============================================================================
 ; CONSOLE & PARSING SUPPORT
 ;==============================================================================
+; PUTC - send the char in A out the ACIA. Spins until TDRE (transmit data
+;   register empty) before writing. A is preserved via PHA/PLA; no other regs
+;   touched. (CONOUT BIOS entry at $0103.)
 PUTC:   PHA
 PUTC1:  LDA  ACIAS
         LDB  #$02           ; TDRE
@@ -1744,6 +1747,9 @@ PUTC1:  LDA  ACIAS
         STA  ACIAD
         RTS
 
+; GETC - block until a key arrives, return it in A (and a convenience copy in
+;   TMP, since callers often clobber A before re-testing the char). Spins on
+;   RDRF (receive data register full). (CONIN BIOS entry at $0100.)
 GETC:   LDA  ACIAS
         LDB  #$01           ; RDRF
         AND
@@ -1892,6 +1898,7 @@ GHEND:  LDA  TMP2
 GHERR:  SEC
         RTS
 
+; A2P1 - load the parsed 16-bit ADDR (ADDRL/ADDRH) into pointer P1.
 A2P1:   LDA  ADDRL          ; ADDR -> P1
         TAP1L
         LDA  ADDRH
@@ -1910,6 +1917,8 @@ PRADDR: TPA1H               ; print P1 as 4 hex digits
         JSR  PRBYTE
         RTS
 
+; PRBYTE - print A as two uppercase hex digits (high nibble first). PRNIB prints
+;   the low nibble of A. A is destroyed. (PHEX8 BIOS entry at $0115.)
 PRBYTE: PHA
         SHR
         SHR

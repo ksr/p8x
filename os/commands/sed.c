@@ -38,6 +38,12 @@ int re_at(int i) {
     return len;
 }
 
+/* main: parse the s/re/new/[g] argument, then stream-substitute.
+ * Input: argstr() command line + a named file or stdin (via openarg).
+ * Output: each transformed line via puts(). Returns 0 on success, 1 on a
+ * usage/parse/open error. Uses globals pat/rep (the parsed sides), line/out
+ * (per-line buffers), and anchored/rpat (set up for re_at). Note: readline and
+ * the file syscalls behind openarg clobber P1/P2, but that is invisible here. */
 int main() {
     char *a;
     int r;
@@ -79,6 +85,11 @@ int main() {
     if (r == 2) { puts("sed: not found"); return 1; }
     if (r == 1) { fromfile = 1; }
 
+    /* Rebuild each line into out[]: walk src index i, copying literally until a
+     * regex match at i, where we emit rep[] instead and skip the matched span.
+     * n = dst index; done = "first (non-global) substitution already made", so
+     * once set we stop matching and copy the rest verbatim. Output caps at 255
+     * chars (out[260]); overflow is silently dropped. */
     while (readline(line)) {
         n = 0;
         i = 0;

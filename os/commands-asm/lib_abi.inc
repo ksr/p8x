@@ -20,6 +20,8 @@ SYS_PUTC     = $2009    ; A -> current stdout (console or redirected file)
 SYS_GETC     = $200C    ; next stdin byte -> A (carry/EOF per ABI)
 SYS_PUTS     = $200F    ; write (P1) string to stdout
 SYS_OPENCWD  = $2012    ; begin iterating the CWD (16-bit LBA)
+; Note the gap: $2015/$2018 are reserved/unused vectors, so the numbering
+; jumps from $2012 straight to $201B — keep new syscalls at the +3 stride.
 SYS_DIRENTRY = $201B    ; snapshot the current dir entry -> (P1) 18 bytes
 SYS_OPENDIR  = $201E    ; P1 = 16-bit dir start LBA -> open for FNEXT
 SYS_MKDIR    = $2021    ; P1 = path -> create a directory; C=1 on real failure
@@ -34,6 +36,8 @@ FCREATE    = $011B      ; create root file FNAME from FSRC/FLEN; C=1 err
 FDELETE    = $011E      ; tombstone root file FNAME; C=1 not found
 FCOMMIT    = $0121      ; register streamed file (entry+free); C=1 full
 FOPEN      = $0124      ; open file FNAME for reading (P1=buffer); C=1 missing
+; FGETB/FPUTB stream one byte at a time and clobber P1/P2 (they walk the
+; sector buffer), so save any live pointer regs around the call.
 FGETB      = $0127      ; next byte -> A; C=1 at end of file
 FWOPEN     = $012A      ; open a write stream at the free pointer (uses SBUF)
 FPUTB      = $012D      ; append byte A to the write stream

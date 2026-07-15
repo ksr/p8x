@@ -516,6 +516,9 @@ DO_TL:  LDA  TMP
         INC
         STA  DIGIT
         JMP  DO_TL
+; After this point TMP holds the ones digit; TMP2 = hundreds, DIGIT = tens.
+; Leading zeros are suppressed, but once a higher digit prints, all lower
+; digits must print too (TMP2 is repurposed as a "already printed" flag).
 DO_P:   LDA  TMP2               ; print hundreds if nonzero
         JZ   DO_NOH
         LDB  #'0'
@@ -649,7 +652,7 @@ CHKINS: STA  KLEN
         LDA  TENDH
         JNC  CI_1
         INC
-CI_1:   STA  CNTH               ; CNT = TEND + K
+CI_1:   STA  CNTH               ; CNT = TEND + K (proposed new end-of-text)
         LDA  #TMAXH
         LDB  CNTH
         CMP
@@ -674,7 +677,7 @@ GAPOPEN:LDA  TENDL              ; CNT = TEND - S
         LDA  #0
         JC   GO_NB
         LDA  #1
-GO_NB:  STA  TMP2               ; borrow
+GO_NB:  STA  TMP2               ; borrow flag: 1 if the lo-byte SUB borrowed
         LDA  TENDH
         LDB  SRCH
         SUB
@@ -685,6 +688,8 @@ GO_NB:  STA  TMP2               ; borrow
         LDB  #1
         SUB
         STA  CNTH
+; Copy top-down (both pointers pre-decremented) so the source and destination
+; ranges may overlap without clobbering bytes not yet moved.
 GO_HOK: LDA  TENDL              ; P1 = TEND (src top, DEP before read)
         TAP1L
         LDA  TENDH
@@ -697,7 +702,7 @@ GO_HOK: LDA  TENDL              ; P1 = TEND (src top, DEP before read)
         JNC  GO_DH
         INC
 GO_DH:  TAP2H
-GO_LP:  LDA  CNTL
+GO_LP:  LDA  CNTL               ; loop while CNT (16-bit byte count) != 0
         LDB  CNTH
         OR
         JZ   GO_END

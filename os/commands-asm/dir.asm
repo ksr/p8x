@@ -33,6 +33,7 @@
         LDA #0
         STA rec
         STA szmode
+        STA filemode                 ; not listing a single file (yet)
         STA gpat                     ; gpat[0]=0 (no filter)
 ; skip spaces (advance m_arg)
 d_sk:   LDA m_arg
@@ -176,9 +177,14 @@ d_scd:  LDA #0
         LDA #0
         JSR FOPENDIR
         JNC d_ok
+        ; not a directory -> list it as a single file: reuse the glob split
+        ; (gpat = the leaf, open its parent) and note filemode for the not-found
+        ; check. A file has no subtree, so force rec off.
         LDA #1
-        STA notf
-        JMP d_ok
+        STA filemode
+        LDA #0
+        STA rec
+        JMP d_glob
 d_cwd:  LDA #0
         TAP1L
         TAP1H
@@ -306,6 +312,8 @@ d_go:   LDA #0                        ; FSDIRBUF page $FA
 ; single-level listing: collect + sort, then print in sorted order
 d_flat: JSR collect
         LDA #0
+        STA shown
+        LDA #0
         STA pri
 df_l:   LDA pri
         LDB ecnt
@@ -323,7 +331,23 @@ df_l:   LDA pri
         INC
         STA pri
         JMP df_l
-d_fdone:RTS
+d_fdone:LDA filemode                 ; a single-file arg that matched nothing?
+        LDB #0
+        CMP
+        JZ df_ok
+        LDA shown
+        LDB #0
+        CMP
+        JNZ df_ok
+        LDA #<u_nf                    ; "dir: not found"
+        TAP1L
+        LDA #>u_nf
+        TAP1H
+        LDA #0
+        JSR SYS_PUTS
+        LDA #10
+        JSR SYS_PUTC
+df_ok:  RTS
 d_usage:LDA #<u_use
         TAP1L
         LDA #>u_use
@@ -961,7 +985,10 @@ show:   LDA gpat
         LDB #0
         CMP
         JZ sh_ret                    ; no match -> filtered out
-sh_show:JSR putsize
+sh_show:LDA shown                    ; count entries that actually print
+        INC
+        STA shown
+        JSR putsize
         LDA #32
         JSR SYS_PUTC
         LDA #32
@@ -1146,6 +1173,11 @@ nz24:   LDA num24
 nz_y:   LDA #1
         RTS
 
+; putnum: print the 16-bit unsigned value in pn as decimal, no padding.
+;   Extracts digits LS-first via divmod10, pushing each ASCII digit on the
+;   hardware stack (PHA), then pops (PLA) them to emit MS-first. pn==0 prints
+;   a single '0'. Clobbers dv/dvq/dvr/pncnt and pn (consumed). (Helper; the
+;   size column uses the 24-bit putsize path instead.)
 putnum: LDA #0
         STA pncnt
         LDA pn
@@ -1197,6 +1229,9 @@ pn_print:
         JMP pn_print
 pn_done:RTS
 
+; ndigits: A = number of decimal digits in the 16-bit value ndv (min 1).
+;   Repeatedly divides by 10 (divmod10) counting iterations; ndv unchanged,
+;   but dv/dvq are clobbered. (Helper.)
 ndigits:LDA #1
         STA ndc
         LDA ndv
@@ -1550,6 +1585,8 @@ gflag:  .fill 1
 plen:   .fill 1
 ls:     .fill 1
 notf:   .fill 1
+filemode:.fill 1
+shown:  .fill 1
 cnt:    .fill 1
 cnt2:   .fill 1
 kk:     .fill 1

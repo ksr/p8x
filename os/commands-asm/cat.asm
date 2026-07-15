@@ -6,33 +6,38 @@
 ;#use stdin
 ;#use abi
 
-        .org $6A00
+        .org $6A00                   ; loads at TPA base (see memory-map: $6A00)
+; Save the incoming arg-tail pointer (P2) into the c_arg 16-bit variable so we
+; can freely reload/advance it while scanning. TPA2L/TPA2H read P2's low/high.
         TPA2L
         STA c_arg
         TPA2H
         STA c_arg+1
+; c_sk: skip leading spaces (ASCII 32) in the arg tail, advancing c_arg past them.
 c_sk:   LDA c_arg
         TAP2L
         LDA c_arg+1
         TAP2H
-        LDA (P2)
+        LDA (P2)                     ; A = current char
         LDB #32
         CMP
-        JNZ c_chk
+        JNZ c_chk                    ; not a space -> done skipping
+; advance c_arg by 1 (16-bit); carry out of the low byte bumps the high byte
         LDA c_arg
         LDB #1
         ADD
         STA c_arg
-        JNC c_sk
+        JNC c_sk                     ; no carry -> low byte only
         LDA c_arg+1
         INC
         STA c_arg+1
         JMP c_sk
+; c_chk: first non-space char reached. Handle the "-h"/"-H" help flag.
 c_chk:  LDA (P2)
         LDB #'-'
         CMP
-        JNZ c_noarg
-        INP2
+        JNZ c_noarg                  ; not '-' -> ordinary filename
+        INP2                         ; peek char after '-'
         LDA (P2)
         LDB #'h'
         CMP
@@ -41,6 +46,8 @@ c_chk:  LDA (P2)
         CMP
         JZ c_usage
         ; '-' but not -h: fall through and treat as a filename (from c_arg)
+; c_noarg: reload c_arg into P2 and test the first char. NUL or CR (13) means
+; there was no filename, so fall through to the stdin filter.
 c_noarg:LDA c_arg                    ; empty arg -> filter stdin
         TAP2L
         LDA c_arg+1
@@ -52,13 +59,14 @@ c_noarg:LDA c_arg                    ; empty arg -> filter stdin
         LDB #13
         CMP
         JZ c_stdin
-; scan for a glob char in the word
+; scan the word for a glob metachar ('*' or '?'); c_g = 1 if found, else 0
         LDA #0
         STA c_g
         LDA c_arg
         TAP2L
         LDA c_arg+1
         TAP2H
+; c_scl: scan loop. Word terminates at NUL, CR (13), or space (32).
 c_scl:  LDA (P2)
         LDB #0
         CMP
@@ -77,15 +85,18 @@ c_scl:  LDA (P2)
         JZ c_setg
         INP2
         JMP c_scl
+; c_setg: glob char found -> set flag and keep scanning to word end
 c_setg: LDA #1
         STA c_g
         INP2
         JMP c_scl
+; c_scd: end of word. c_g==0 -> plain single file; else glob-expand.
 c_scd:  LDA c_g
         LDB #0
         CMP
         JZ c_single
-; glob: expand and cat each match
+; glob path: fill glob_expand's ABI vars (pattern, output buf, max count),
+; then cat each returned match. gfiles is a 24 x 64-byte name buffer.
         LDA c_arg
         STA ge_pat
         LDA c_arg+1
@@ -96,9 +107,10 @@ c_scd:  LDA c_g
         STA ge_out+1
         LDA #24
         STA ge_max
-        JSR glob_expand
+        JSR glob_expand              ; ge_cnt = number of matches
         LDA #0
-        STA c_i
+        STA c_i                      ; i = 0
+; cg_l: loop i over the matches. CMP sets C when A>=B, i.e. i>=ge_cnt.
 cg_l:   LDA c_i
         LDB ge_cnt
         CMP
@@ -112,6 +124,8 @@ cg_l:   LDA c_i
         STA c_i
         JMP cg_l
 cg_d:   RTS
+; c_single: no glob chars -> cat the one named file. catpath returns A=1 if
+; the file was not found, in which case we print the not-found message.
 c_single:
         LDA c_arg
         STA op_a
@@ -120,14 +134,18 @@ c_single:
         JSR catpath
         LDB #1
         CMP
-        JZ c_nf                      ; not found
+        JZ c_nf                      ; A==1 -> not found
         RTS
+; c_stdin: no filename given -> copy stdin to stdout byte by byte.
+; SYS_GETC returns C=1 at EOF; each byte is echoed with SYS_PUTC.
 c_stdin:LDA #0                       ; stdin -> stdout filter
         JSR SYS_GETC
         JC cs_d
         JSR SYS_PUTC
         JMP c_stdin
 cs_d:   RTS
+; c_nf / c_usage: print a message via SYS_PUTS (P1 = string ptr, A=0 flags),
+; then emit a trailing newline (LF, 10). Both return to the shell.
 c_nf:   LDA #<m_nf
         TAP1L
         LDA #>m_nf
@@ -147,11 +165,15 @@ c_usage:LDA #<m_use
         JSR SYS_PUTC
         RTS
 
-; catpath: op_a = path word -> stream it. A = 0 ok / 1 not found.
-catpath:JSR open_path                ; 1 opened / 2 not found
+; catpath: op_a = path word -> open and stream its bytes to stdout.
+;   In:  op_a = pointer to the path/name word (NUL/CR/space terminated)
+;   Out: A = 0 on success, A = 1 if the file was not found
+;   Clobbers: A, B, P1/P2 (FGETB clobbers the pointer regs)
+catpath:JSR open_path                ; returns 1 = opened, 2 = not found
         LDB #2
         CMP
         JZ cp_nf
+; cp_l: read/echo loop. FGETB returns the byte in A and sets C=1 at EOF.
 cp_l:   LDA #0
         JSR FGETB                    ; FGETB -> A, C=EOF
         JC cp_ok
@@ -165,6 +187,7 @@ cp_nf:  LDA #1
 m_nf:   .asciiz "cat: not found"
 m_use:  .asciiz "usage: CAT [file|glob]   print file(s), or filter stdin if none"
 
-c_arg:  .fill 2
-c_g:    .fill 1
-c_i:    .fill 1
+; command-local scratch variables
+c_arg:  .fill 2                      ; 16-bit pointer to the current arg word
+c_g:    .fill 1                      ; glob flag: 1 if word contains '*' or '?'
+c_i:    .fill 1                      ; glob match loop index

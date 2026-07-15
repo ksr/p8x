@@ -19,6 +19,12 @@
 ; SYS_OPENCWD $2012.
 
 ; ---- openarg --------------------------------------------------------------
+; Decide how to source input for one argv word.
+;   in : oa_a  = pointer to the arg string (word)
+;   out: A = 0 read from stdin (empty/CR arg), 1 opened a file, 2 not found
+;        fromfile set; on a *|? arg, gfiles[]/gnf hold the expanded match list
+;        and the first match is opened (nextc walks the rest).
+; Clobbers A/B/P2; leaves the open file positioned at byte 0.
 openarg:
         LDA #0
         STA fromfile
@@ -41,7 +47,7 @@ openarg:
         TAP2L
         LDA oa_a+1
         TAP2H
-oa_scl: LDA (P2)
+oa_scl: LDA (P2)                       ; scan arg for a '*' or '?' -> oa_g (is-glob)
         LDB #0
         CMP
         JZ oa_scd
@@ -107,6 +113,10 @@ oa_nf:  LDA #2
         RTS
 
 ; ---- nextc ----------------------------------------------------------------
+; Return the next input byte, transparently spanning glob matches.
+;   out: A = byte, carry CLEAR on success / SET at end-of-input
+; On file EOF it advances gidx to the next glob match and reopens; when no
+; more matches remain it reports EOF. Clobbers A/B/P1/P2 (FGETB clobbers P1/P2).
 nextc:  LDA fromfile
         LDB #0
         CMP
@@ -126,7 +136,7 @@ nc_adv: LDA gnf                       ; end of current file
         STA gtmp
         LDA gtmp
         LDB gnf
-        CMP
+        CMP                           ; CMP sets C when gtmp(=gidx+1) >= gnf
         JC nc_eof                     ; gidx+1 >= gnf -> done
         LDA gtmp
         STA gidx
@@ -141,7 +151,9 @@ nc_ok:  CLC
 nc_eof: SEC
         RTS
 
-; gfile_ptr: op_a = gfiles + gidx*64
+; gfile_ptr: op_a = &gfiles[gidx]  (64-byte fixed-stride path slots)
+; Computes gidx*64 by repeated add (no MUL), then adds the gfiles base as a
+; 16-bit sum via gcarry. In: gidx. Out: op_a word. Clobbers A/B, gtmp2, gcarry.
 gfile_ptr:
         LDA #0
         STA op_a
@@ -181,6 +193,12 @@ gfp_2:  STA gcarry
         RTS
 
 ; ---- open_path (abspath + FRESOLVE + FOPEN) -------------------------------
+; Open the file named by op_a into the read buffer at $FC00.
+;   in : op_a = path word (relative or absolute)
+;   out: A = 1 opened / 2 not found
+; A relative path (no leading '/') is prefixed with SYS_GETCWD into spath so
+; FRESOLVE/FOPENDIR, which start at root rather than CWD, resolve it correctly.
+; Clobbers A/B/P1/P2 and spath.
 open_path:
         LDA op_a
         TAP2L
@@ -257,6 +275,14 @@ opa_nf: LDA #2
         RTS
 
 ; ---- glob_expand ----------------------------------------------------------
+; Expand a single *|? pattern into a list of matching regular-file paths.
+;   in : ge_pat = pattern word, ge_out = dest array word, ge_max = slot cap
+;   out: ge_cnt files written, ge_out[i*64] = full path (dir prefix + name)
+; The pattern is split at its last '/': ge_dir holds the directory prefix
+; (or none -> current dir via SYS_OPENCWD) and ge_leaf the wildcard leaf.
+; Directory is read with FSDIRBUF at page $FA; entries are matched with gmatch,
+; '.'-prefixed and non-regular (de+12 != 1) entries skipped, and the list is
+; truncated at ge_max. Clobbers A/B/P1/P2 and most ge_* scratch.
 glob_expand:
         LDA #0
         STA ge_hs
@@ -266,7 +292,7 @@ glob_expand:
         TAP2L
         LDA ge_pat+1
         TAP2H
-ge_scl: LDA (P2)
+ge_scl: LDA (P2)                       ; scan pattern; ge_sp=last '/' index, ge_hs=has-slash
         LDB #0
         CMP
         JZ ge_scd
@@ -466,7 +492,8 @@ ge_ot:  LDA #0
 ge_gdone:
         RTS
 
-; ge_slot: P1 = ge_out + ge_cnt*64
+; ge_slot: P1 = &ge_out[ge_cnt]  (ge_out + ge_cnt*64, same stride as gfile_ptr)
+; In: ge_cnt, ge_out. Out: P1. Clobbers A/B, getmp, ge_j2, gecar.
 ge_slot:
         LDA #0
         STA getmp
@@ -510,6 +537,13 @@ ges_2:  STA gecar
         RTS
 
 ; ---- gmatch / upper (case-insensitive * ? whole-string matcher) -----------
+; gmatch: does glob pattern gp match the whole string gs? (case-insensitive)
+;   in : gp = pattern word, gs = string word
+;   out: A = 1 match / 0 no match
+; '?' matches any one char; '*' matches zero-or-more via recursion: it saves
+; gp/gs on the stack, tries matching the tail here, and on failure advances gs
+; and retries (classic backtracking). Recurses through JSR gmatch, so it leans
+; on the return stack. Clobbers A/B/P1/P2 and gpc/gsc/gmr.
 gmatch: LDA gp
         TAP1L
         LDA gp+1
@@ -623,16 +657,18 @@ gm_s0:  LDA gp
         INC
         STA gs+1
         JMP gm_s0
+; upper: fold A to upper-case (ASCII), leave other bytes unchanged.
+; In: A = char. Out: A = folded char. Clobbers B, uch.
 upper:  STA uch
-        LDB #'a'
+        LDB #'a'                       ; below 'a' (97)? CMP clears C when A<B
         CMP
         JNC up_no
         LDA uch
-        LDB #123
+        LDB #123                       ; at/above 'z'+1 (123)? CMP sets C when A>=B
         CMP
         JC up_no
         LDA uch
-        LDB #32
+        LDB #32                        ; in a..z: clear bit 5 by subtracting 32
         SUB
         RTS
 up_no:  LDA uch

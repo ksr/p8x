@@ -108,6 +108,9 @@ CNT     = $6362
 
 CR      = $0D
 LF      = $0A
+ESC     = $1B          ; arrow keys arrive as ESC '[' 'A'/'B' (up/down)
+HISTN   = 32           ; command-history ring capacity (lines); HISTRING = HISTN*HISTLEN
+HISTLEN = 64           ; bytes per history slot (matches LINEBUF width)
 
         .org $2000          ; rev E: OS loads at $2000 (match the monitor's CMD_B + --base)
 ; ---------------- OS syscall table (stable ABI for TPA programs) -------------
@@ -136,7 +139,7 @@ SYS_SETDRV:                     ; deprecated: the drive follows the CWD path now
         RTS
 ; SYS_DIRENTRY — copy the entry FNEXT just matched into a caller buffer, so
 ; /BIN commands read directory metadata without hardcoding BIOS scratch
-; addresses (FNAME/FFLAG/FLEN/entry-LBA). Layout of the 17-byte snapshot:
+; addresses (FNAME/FFLAG/FLEN/entry-LBA). Layout of the 18-byte snapshot:
 ;   [0..11] name (space-padded)  [12] flag (file $01/dir $02)
 ;   [13..14] length lo/mid       [15..16] start-LBA lo/hi   [17] length hi
 ; Call it right after a BIOS FNEXT (before any other FS call reuses the scratch).
@@ -282,6 +285,10 @@ COLD:   LDP3 #STKTOP
         LDA  #1                 ; drive 0 inited by CMD_B; mark it
         STA  DRVINIT
         JSR  PATHINIT           ; PATH = "/BIN" (search dir for bare command names)
+        LDA  #0                 ; empty command history
+        STA  HISTST
+        STA  HISTCT
+        STA  CMPTABF            ; no Tab-completion streak
 
 ; ---------------- Shell main loop --------------------------------------------
 SHELL:  JSR  FLUSHRED           ; if the previous command was redirected, write its file
@@ -373,6 +380,12 @@ DISPATCH:
         LDP1 #KW_SH
         JSR  CMPCMD
         JNZ  DOSH
+        LDP1 #KW_MAKE
+        JSR  CMPCMD
+        JNZ  DOMAKE
+        LDP1 #KW_BOOTLOAD
+        JSR  CMPCMD
+        JNZ  DOBOOTLOAD
         JMP  IMPRUN             ; not a built-in: try to run it as a program (PATH)
 
 ; CMPCMD - compare CMDBUF to the keyword at (P1); returns A!=0 (and Z clear)
@@ -543,6 +556,11 @@ DR_BIND:LDA  INARM              ; stdin "< name": bind it (its FFIND runs BEFORE
         STA  INMODE             ; SYS_GETC now reads the file
 DR_OUT: LDA  REDIRF             ; open the write stream if redirecting output
         JZ   DR_NOIN
+        JSR  SETCWDDIR          ; overwrite: tombstone any existing target BEFORE
+        LDP1 #REDNAME           ;   FWOPEN (FDELETE scans the dir via SBUF, which the
+        JSR  FNORM              ;   open stream then claims — so it must run first).
+        JSR  FDELETE            ;   C=1 (absent) is fine; ">>" still has the old data
+                               ;   via APLBA/APCOPY (raw sectors survive a tombstone).
         JSR  FWOPEN             ; claims SBUF — NO FFIND past this point
         LDA  #2
         STA  REDIRF
@@ -766,6 +784,97 @@ NOFILE: LDP1 #MNOFILE
         JSR  PUTS
         JMP  SHELL
 
+; ---------------- bootload file : install an OS image into the boot sectors ---
+; `bootload FILE` copies FILE's data extent to LBA 1.. (where the monitor's B
+; command loads the OS) and stores its sector count in boot-block byte 3 (OSCNT),
+; so the next `exit` -> `B` boots it. The running OS is in RAM, so overwriting the
+; on-disk OS region is safe. Writes the current drive (the boot disk = drive 0).
+; NB: the MONITOR is EEPROM firmware, not on disk — it can't be installed this way
+; (reflash the chip / rebuild eeprom.bin host-side).
+DOBOOTLOAD:
+        JSR  FINDARG            ; resolve FILE -> STARTLO/STARTHI + LEN*, MATCH
+        JZ   NOFILE
+        JSR  SYNCDRV            ; target the CWD's drive
+        JSR  SECCOUNT           ; SECCNT:SECCH = ceil(len / 512)
+        LDA  SECCH              ; > 255 sectors -> absurd, reject
+        JNZ  BL_BIG
+        LDA  SECCNT
+        JZ   BL_EMPTY           ; empty file
+        LDB  #33               ; the OS region is LBA 1..32
+        CMP                    ; C=1 when SECCNT >= 33
+        JC   BL_BIG
+        LDA  STARTLO            ; src = the file's data extent
+        STA  BLSRC
+        LDA  STARTHI
+        STA  BLSRC+1
+        LDA  #1                ; dst = LBA 1
+        STA  BLDST
+        LDA  #0
+        STA  BLDST+1
+        LDA  SECCNT
+        STA  BLCNT
+BL_LP:  LDA  BLCNT
+        JZ   BL_BB
+        LDP1 #SBUF             ; read the source sector into SBUF
+        LDA  BLSRC
+        STA  LBA
+        LDA  BLSRC+1
+        STA  LBA1
+        LDA  #0
+        STA  LBA2
+        JSR  CFREAD
+        LDA  BLDST             ; write SBUF to the destination sector
+        STA  LBA
+        LDA  BLDST+1
+        STA  LBA1
+        LDA  #0
+        STA  LBA2
+        JSR  CFWRITE
+        LDA  BLSRC             ; src++ (16-bit)
+        LDB  #1
+        ADD
+        STA  BLSRC
+        JNC  BL_S2
+        LDA  BLSRC+1
+        INC
+        STA  BLSRC+1
+BL_S2:  LDA  BLDST             ; dst++ (16-bit)
+        LDB  #1
+        ADD
+        STA  BLDST
+        JNC  BL_D2
+        LDA  BLDST+1
+        INC
+        STA  BLDST+1
+BL_D2:  LDA  BLCNT
+        DEC
+        STA  BLCNT
+        JMP  BL_LP
+BL_BB:  LDP1 #SBUF             ; boot block: OSCNT (byte 3) = sector count
+        LDA  #0
+        STA  LBA
+        STA  LBA1
+        STA  LBA2
+        JSR  CFREAD
+        LDA  SECCNT
+        STA  SBUF+3
+        LDA  #0
+        STA  LBA
+        STA  LBA1
+        STA  LBA2
+        JSR  CFWRITE
+        LDA  #0
+        STA  LBA1              ; restore LBA1=0 at rest
+        LDP1 #MBLOK
+        JSR  OPUTS
+        JMP  SHELL
+BL_BIG: LDP1 #MBLBIG
+        JSR  PUTS
+        JMP  SHELL
+BL_EMPTY: LDP1 #MBLEMP
+        JSR  PUTS
+        JMP  SHELL
+
 ; ---------------- sh name : run shell commands from a script file ------------
 ; `sh FILE` — run shell commands from FILE. The script's read stream is kept open
 ; over IBUF and its state is saved/restored (SCRSAVE) around every dispatched
@@ -798,6 +907,574 @@ SH_RUN: LDA  STARTLO            ; point a read stream at the script's extent (IB
         LDA  #1
         STA  SCRIPTM
         JMP  SHELL
+
+
+; =============================================================================
+; `make [target]` — read a Makefile in the CWD and build a target.
+;
+;   target: prereq1 prereq2       (a rule)
+;   <TAB>recipe command           (recipe lines, run through the `sh` engine)
+;
+; Prerequisites build first, each once (deduped); bare `make` builds the first
+; target, `clean`/`all` are ordinary targets. No timestamps -> always rebuilds.
+; The Makefile is slurped into a TPA buffer (free until a recipe program runs)
+; and parsed in RAM; the resolved recipe is flattened to MK.RUN and streamed by
+; the same engine as `sh`.  Deep nesting (> MKMAXD) is reported as a cycle.
+MKSRC   = $C000    ; slurped Makefile text (NUL-terminated); cap MKSRCE
+MKSRCE  = $EF00    ; slurp stops here (a larger Makefile truncates)
+MKFLATB = $6A00    ; flattened recipe out (grows up); becomes MK.RUN
+MKPLAN  = $F000    ; packed built-target names (NUL-term each; lone NUL = end)
+MKFRAME = $F400    ; DFS frames, 4B each: [0..1] dep-scan ptr, [2..3] rule-start ptr
+MKMAXD  = 15       ; max prerequisite nesting (cycle guard)
+MKNAME  = $F480    ; current target/dep name (NUL-term, < 64)
+MKPP    = $F4C0    ; MKPLAN append cursor (2)
+MKFP    = $F4C2    ; MKFLATB write cursor (2)
+MKDEP   = $F4C4    ; DFS depth (1)
+MKRULE  = $F4C6    ; rule-line start from MKR_FIND (2)
+MKT0    = $F4C8    ; MKR_ISRULE P1 save (2)
+MKTE    = $F4CA    ; MKR_TGTEQ P1 save (2)
+MKT1    = $F4CC    ; MKF_FLAT plan-cursor save (2)
+MKWORD  = $F4CE    ; byte temp
+MKSP    = $F4D0    ; byte-stream cursor across FGETB/FPUTB (which clobber P1/P2) (2)
+BLSRC   = $F4E0    ; bootload: source sector cursor (file extent) (2)
+BLDST   = $F4E2    ; bootload: destination sector cursor (LBA 1..) (2)
+BLCNT   = $F4E4    ; bootload: sectors left to copy (1)
+
+DOMAKE: JSR  MKL_LOAD           ; slurp CWD Makefile -> MKSRC
+        JC   MKE_NOM
+        JSR  ARG2P2
+        JSR  MKD_ARGW           ; MKNAME = first arg word (empty if none)
+        LDA  MKNAME
+        JNZ  dm_go
+        JSR  MKD_FIRST          ; no arg -> first target in the file
+        JC   MKE_NOM
+dm_go:  LDA  #<MKPLAN           ; plan = empty
+        STA  MKPP
+        LDA  #>MKPLAN
+        STA  MKPP+1
+        LDP1 #MKPLAN
+        LDA  #0
+        STA  (P1)
+        JSR  MKD_PLAN           ; DFS -> MKPLAN (build order); C=1 error (reported)
+        JC   dm_abort
+        JSR  MKF_FLAT           ; planned recipes -> MKFLATB
+        JSR  MKF_WRITE          ; MKFLATB -> MK.RUN
+        LDP2 #MK_TMP
+        JSR  FINDP2
+        LDA  MATCH
+        JZ   dm_abort
+        JMP  SH_RUN
+dm_abort: JMP SHELL
+MKE_NOM: LDP1 #MK_ENOM
+        JSR  OPUTS
+        JMP  SHELL
+
+; ---- MKL_LOAD: FOPEN "Makefile" in the CWD, slurp -> MKSRC (NUL-term). C=1 none
+MKL_LOAD: JSR SETCWDDIR
+        LDP1 #MK_MFN
+        JSR  FNORM
+        LDP1 #IBUF
+        JSR  FOPEN
+        JC   mkl_no
+        LDA  #<MKSRC            ; cursor in MKSP (FGETB clobbers P1/P2)
+        STA  MKSP
+        LDA  #>MKSRC
+        STA  MKSP+1
+mkl_lp: JSR  FGETB              ; -> A, C=1 at EOF; clobbers P1/P2
+        JC   mkl_end
+        STA  MKWORD
+        LDA  MKSP
+        TAP1L
+        LDA  MKSP+1
+        TAP1H
+        LDA  MKWORD
+        STA  (P1)
+        INP1
+        TPA1L
+        STA  MKSP
+        TPA1H
+        STA  MKSP+1
+        LDB  #>MKSRCE
+        CMP
+        JNC  mkl_lp
+mkl_end: LDA MKSP
+        TAP1L
+        LDA  MKSP+1
+        TAP1H
+        LDA  #0
+        STA  (P1)
+        CLC
+        RTS
+mkl_no: SEC
+        RTS
+
+; ---- MKD_ARGW: first whitespace-delimited word at P2 -> MKNAME ---------------
+MKD_ARGW: LDP1 #MKNAME
+mkaw_sk: LDA (P2)
+        LDB  #' '
+        CMP
+        JNZ  mkaw_cp
+        INP2
+        JMP  mkaw_sk
+mkaw_cp: LDA (P2)
+        JZ   mkaw_end
+        LDB  #' '
+        CMP
+        JZ   mkaw_end
+        LDB  #CR
+        CMP
+        JZ   mkaw_end
+        LDB  #LF
+        CMP
+        JZ   mkaw_end
+        STA  (P1)
+        INP1
+        INP2
+        JMP  mkaw_cp
+mkaw_end: LDA #0
+        STA  (P1)
+        RTS
+
+; ---- MKD_FIRST: MKNAME = first rule's target (C=1 if the file has no rule) ---
+MKD_FIRST: LDP1 #MKSRC
+mkfi_ln: LDA (P1)
+        JZ   mkfi_no
+        JSR  MKR_ISRULE
+        JC   mkfi_got
+        JSR  MKR_NEXTLN
+        JMP  mkfi_ln
+mkfi_got: LDP2 #MKNAME
+        JSR  MKR_CPTGT          ; copy target token at P1 -> (P2)
+        CLC
+        RTS
+mkfi_no: SEC
+        RTS
+
+; ---- MKR_ISRULE: is P1 at a rule line? (col0, not blank/#/TAB, has ':')  -----
+;   C=1 yes (P1 unchanged), C=0 no.
+MKR_ISRULE: LDA (P1)
+        LDB  #' '
+        CMP
+        JZ   mkir_no
+        LDA  (P1)
+        LDB  #9
+        CMP
+        JZ   mkir_no
+        LDA  (P1)
+        LDB  #'#'
+        CMP
+        JZ   mkir_no
+        LDA  (P1)
+        LDB  #LF
+        CMP
+        JZ   mkir_no
+        LDA  (P1)
+        LDB  #CR
+        CMP
+        JZ   mkir_no
+        TPA1L
+        STA  MKT0
+        TPA1H
+        STA  MKT0+1
+mkir_s: LDA (P1)
+        JZ   mkir_rno
+        LDB  #LF
+        CMP
+        JZ   mkir_rno
+        LDB  #':'
+        CMP
+        JZ   mkir_yes
+        INP1
+        JMP  mkir_s
+mkir_yes: LDA MKT0
+        TAP1L
+        LDA  MKT0+1
+        TAP1H
+        SEC
+        RTS
+mkir_rno: LDA MKT0
+        TAP1L
+        LDA  MKT0+1
+        TAP1H
+mkir_no: CLC
+        RTS
+
+; ---- MKR_NEXTLN: advance P1 past the next LF (or to end) --------------------
+MKR_NEXTLN: LDA (P1)
+        JZ   mknl_r
+        INP1
+        LDB  #LF
+        CMP
+        JNZ  MKR_NEXTLN
+mknl_r: RTS
+
+; ---- MKR_CPTGT: copy target token at P1 (until ':'/space) -> (P2) -----------
+MKR_CPTGT: LDA (P1)
+        LDB  #':'
+        CMP
+        JZ   mkct_end
+        LDB  #' '
+        CMP
+        JZ   mkct_end
+        STA  (P2)
+        INP1
+        INP2
+        JMP  MKR_CPTGT
+mkct_end: LDA #0
+        STA  (P2)
+        RTS
+
+; ---- MKR_FIND: find the rule whose target == MKNAME.  On success C=0, ---------
+;   P1 -> deps (after ':'), MKRULE = rule-line start.  C=1 if not found.
+MKR_FIND: LDP1 #MKSRC
+mkrf_ln: LDA (P1)
+        JZ   mkrf_no
+        JSR  MKR_ISRULE
+        JNC  mkrf_skip
+        JSR  MKR_TGTEQ          ; C=1 match (P1 past ':', MKTE = rule start)
+        JC   mkrf_yes
+mkrf_skip: JSR MKR_NEXTLN
+        JMP  mkrf_ln
+mkrf_yes: LDA MKTE
+        STA  MKRULE
+        LDA  MKTE+1
+        STA  MKRULE+1
+        CLC
+        RTS
+mkrf_no: SEC
+        RTS
+
+; ---- MKR_TGTEQ: rule target at P1 == MKNAME then ':'?  C=1 + P1 past ':', -----
+;   MKTE = original P1; else C=0 + P1 restored.
+MKR_TGTEQ: TPA1L
+        STA  MKTE
+        TPA1H
+        STA  MKTE+1
+        LDP2 #MKNAME
+mkte_lp: LDA (P2)
+        JZ   mkte_ne
+        STA  MKWORD
+        LDA  (P1)
+        LDB  MKWORD
+        CMP
+        JNZ  mkte_no
+        INP1
+        INP2
+        JMP  mkte_lp
+mkte_ne: LDA (P1)
+        LDB  #' '
+        CMP
+        JNZ  mkte_col
+        INP1
+        JMP  mkte_ne
+mkte_col: LDA (P1)
+        LDB  #':'
+        CMP
+        JNZ  mkte_no
+        INP1
+        SEC
+        RTS
+mkte_no: LDA MKTE
+        TAP1L
+        LDA  MKTE+1
+        TAP1H
+        CLC
+        RTS
+
+; ---- MKD_FRP: P1 = MKFRAME + MKDEP*4  (page-aligned; MKDEP<64) --------------
+MKD_FRP: LDA MKDEP
+        SHL
+        SHL
+        TAP1L
+        LDA  #>MKFRAME
+        TAP1H
+        RTS
+
+; ---- MKD_PUSH: frame[MKDEP] = (deps=P1, rule=MKRULE) ------------------------
+MKD_PUSH: TPA1L
+        STA  MKT0
+        TPA1H
+        STA  MKT0+1
+        JSR  MKD_FRP
+        LDA  MKT0
+        STA  (P1)
+        INP1
+        LDA  MKT0+1
+        STA  (P1)
+        INP1
+        LDA  MKRULE
+        STA  (P1)
+        INP1
+        LDA  MKRULE+1
+        STA  (P1)
+        RTS
+
+; ---- MKD_NEXTDEP: next dep word of top frame -> MKNAME. A=1 got / A=0 none ---
+MKD_NEXTDEP: JSR MKD_FRP
+        LDA  (P1)
+        TAP2L
+        INP1
+        LDA  (P1)
+        TAP2H
+mknd_sk: LDA (P2)
+        LDB  #' '
+        CMP
+        JNZ  mknd_ck
+        INP2
+        JMP  mknd_sk
+mknd_ck: LDA (P2)
+        JZ   mknd_none
+        LDB  #LF
+        CMP
+        JZ   mknd_none
+        LDB  #CR
+        CMP
+        JZ   mknd_none
+        LDP1 #MKNAME
+mknd_w: LDA (P2)
+        JZ   mknd_we
+        LDB  #' '
+        CMP
+        JZ   mknd_we
+        LDB  #LF
+        CMP
+        JZ   mknd_we
+        LDB  #CR
+        CMP
+        JZ   mknd_we
+        STA  (P1)
+        INP1
+        INP2
+        JMP  mknd_w
+mknd_we: LDA #0
+        STA  (P1)
+        JSR  MKD_SAVEDEP
+        LDA  #1
+        RTS
+mknd_none: JSR MKD_SAVEDEP
+        LDA  #0
+        RTS
+MKD_SAVEDEP: TPA2L
+        STA  MKT0
+        TPA2H
+        STA  MKT0+1
+        JSR  MKD_FRP
+        LDA  MKT0
+        STA  (P1)
+        INP1
+        LDA  MKT0+1
+        STA  (P1)
+        RTS
+
+; ---- MKD_EMIT: append top frame's target name to MKPLAN --------------------
+MKD_EMIT: JSR MKD_FRP
+        INP1
+        INP1
+        LDA  (P1)               ; rule-start ptr -> P2
+        TAP2L
+        INP1
+        LDA  (P1)
+        TAP2H
+        LDA  MKPP               ; P1 = MKPP
+        TAP1L
+        LDA  MKPP+1
+        TAP1H
+mke_cp: LDA (P2)                ; copy target token until ':'/space, then a NUL
+        LDB  #':'
+        CMP
+        JZ   mke_end
+        LDA  (P2)
+        LDB  #' '
+        CMP
+        JZ   mke_end
+        LDA  (P2)
+        STA  (P1)
+        INP1
+        INP2
+        JMP  mke_cp
+mke_end: LDA #0
+        STA  (P1)               ; NUL-terminate the name
+        INP1
+        TPA1L
+        STA  MKPP
+        TPA1H
+        STA  MKPP+1
+        LDA  #0
+        STA  (P1)               ; lone NUL = new list end
+        RTS
+
+; ---- MKD_INPLAN: is MKNAME in MKPLAN?  C=1 yes ------------------------------
+MKD_INPLAN: LDP1 #MKPLAN
+mkip_e: LDA (P1)
+        JZ   mkip_no
+        LDP2 #MKNAME
+mkip_c: LDA (P1)
+        STA  MKWORD
+        LDA  (P2)
+        LDB  MKWORD
+        CMP
+        JNZ  mkip_nx
+        LDA  (P1)
+        JZ   mkip_yes
+        INP1
+        INP2
+        JMP  mkip_c
+mkip_nx: LDA (P1)
+        JZ   mkip_np
+        INP1
+        JMP  mkip_nx
+mkip_np: INP1
+        JMP  mkip_e
+mkip_yes: SEC
+        RTS
+mkip_no: CLC
+        RTS
+
+; ---- MKD_PLAN: DFS from MKNAME -> MKPLAN in build order.  C=1 error ---------
+MKD_PLAN: JSR MKR_FIND
+        JC   mkp_nor
+        LDA  #0
+        STA  MKDEP
+        JSR  MKD_PUSH
+mkp_lp: JSR  MKD_NEXTDEP
+        JZ   mkp_em
+        JSR  MKD_INPLAN
+        JC   mkp_lp
+        LDA  MKDEP
+        LDB  #MKMAXD
+        CMP
+        JC   mkp_cyc            ; depth >= MKMAXD -> treat as a cycle
+        JSR  MKR_FIND
+        JC   mkp_nor
+        LDA  MKDEP
+        INC
+        STA  MKDEP
+        JSR  MKD_PUSH
+        JMP  mkp_lp
+mkp_em: JSR MKD_EMIT
+        LDA  MKDEP
+        JZ   mkp_ok
+        DEC
+        STA  MKDEP
+        JMP  mkp_lp
+mkp_ok: CLC
+        RTS
+mkp_nor: LDP1 #MK_ERUL
+        JSR  OPUTS
+        LDP1 #MKNAME
+        JSR  OPUTS
+        JSR  CRLF
+        SEC
+        RTS
+mkp_cyc: LDP1 #MK_ECYC
+        JSR  OPUTS
+        SEC
+        RTS
+
+; ---- MKF_FLAT: for each planned target, copy its TAB recipe lines -> MKFLATB -
+MKF_FLAT: LDA #<MKFLATB
+        STA  MKFP
+        LDA  #>MKFLATB
+        STA  MKFP+1
+        LDP2 #MKPLAN
+mkfl_e: LDA (P2)
+        JZ   mkfl_dn
+        LDP1 #MKNAME            ; MKNAME = this plan entry
+mkfl_cp: LDA (P2)
+        STA  (P1)
+        JZ   mkfl_cpd
+        INP1
+        INP2
+        JMP  mkfl_cp
+mkfl_cpd: INP2
+        TPA2L
+        STA  MKT1
+        TPA2H
+        STA  MKT1+1
+        JSR  MKR_FIND
+        JC   mkfl_nx
+mkfl_eol: LDA (P1)             ; skip to end of the rule line
+        JZ   mkfl_nx
+        INP1
+        LDB  #LF
+        CMP
+        JNZ  mkfl_eol
+mkfl_rl: LDA (P1)             ; recipe line? (starts with TAB)
+        LDB  #9
+        CMP
+        JNZ  mkfl_nx
+        INP1                   ; strip the TAB
+mkfl_ch: LDA (P1)
+        JZ   mkfl_wlf
+        STA  MKWORD
+        INP1
+        JSR  MKF_PUT
+        LDA  MKWORD
+        LDB  #LF
+        CMP
+        JNZ  mkfl_ch
+        JMP  mkfl_rl
+mkfl_wlf: LDA #LF
+        STA  MKWORD
+        JSR  MKF_PUT
+mkfl_nx: LDA MKT1
+        TAP2L
+        LDA  MKT1+1
+        TAP2H
+        JMP  mkfl_e
+mkfl_dn: RTS
+MKF_PUT: LDA MKFP               ; append MKWORD to MKFLATB via P2 (P1 = caller's cursor)
+        TAP2L
+        LDA  MKFP+1
+        TAP2H
+        LDA  MKWORD
+        STA  (P2)
+        INP2
+        TPA2L
+        STA  MKFP
+        TPA2H
+        STA  MKFP+1
+        RTS
+
+; ---- MKF_WRITE: MKFLATB[.. MKFP) -> MK.RUN (delete old, stream, register) ----
+MKF_WRITE: JSR SETCWDDIR
+        LDP1 #MK_TMP
+        JSR  FNORM
+        JSR  FDELETE            ; remove a previous MK.RUN (ignore if absent)
+        JSR  FWOPEN
+        LDA  #<MKFLATB          ; cursor in MKSP (FPUTB clobbers P1/P2)
+        STA  MKSP
+        LDA  #>MKFLATB
+        STA  MKSP+1
+mkw_lp: LDA MKSP                ; cursor == MKFP (end)?
+        LDB  MKFP
+        CMP
+        JNZ  mkw_go
+        LDA  MKSP+1
+        LDB  MKFP+1
+        CMP
+        JZ   mkw_dn
+mkw_go: LDA MKSP                ; P1 = cursor; fetch + write the byte
+        TAP1L
+        LDA  MKSP+1
+        TAP1H
+        LDA  (P1)
+        JSR  FPUTB
+        LDA  MKSP               ; advance cursor
+        TAP1L
+        LDA  MKSP+1
+        TAP1H
+        INP1
+        TPA1L
+        STA  MKSP
+        TPA1H
+        STA  MKSP+1
+        JMP  mkw_lp
+mkw_dn: JSR SETCWDDIR
+        LDP1 #MK_TMP
+        JSR  FNORM
+        JSR  FCLOSE
+        RTS
 
 
 ; FINDARG - resolve a path argument to a regular file. Returns A=0 (Z set) on
@@ -3093,11 +3770,24 @@ SR_NE:  LDA  #0
 GETLN:  LDP2 #LINEBUF
         LDA  SCRIPTM            ; sh: read the next line from the script buffer
         JNZ  GL_SCRIPT
+        LDA  #0                 ; fresh line: not navigating history yet
+        STA  HISTNV
+        STA  CMPTABF            ; ...and no Tab-completion streak in progress
 GL1:    JSR  CONIN
         STA  TMP
+        LDB  #$09              ; Tab -> autocomplete (preserves the double-Tab streak)
+        CMP
+        JZ   GLTAB
+        LDA  #0               ; any other key ends the double-Tab streak
+        STA  CMPTABF
+        LDA  TMP
         LDB  #CR
         CMP
         JZ   GLEND
+        LDA  TMP               ; ESC '[' 'A'/'B' -> history recall (up/down)
+        LDB  #ESC
+        CMP
+        JZ   GLESC
         LDA  TMP               ; backspace ($08) or DEL ($7F) -> erase last char
         LDB  #$08
         CMP
@@ -3114,6 +3804,8 @@ GL1:    JSR  CONIN
         JSR  OUTCH             ; echo (CONOUT preserves A)
         STA  (P2)+
         JMP  GL1
+GLTAB:  JSR  DOTAB             ; complete the word at the cursor
+        JMP  GL1
 GLBS:   TPA2L                  ; at the start of the line? nothing to erase
         JZ   GL1
         DEP2                   ; drop the last stored char
@@ -3127,7 +3819,656 @@ GLBS:   TPA2L                  ; at the start of the line? nothing to erase
 GLEND:  JSR  CRLF
         LDA  #0
         STA  (P2)
+        JSR  HISTADD           ; record the finished line in the command history
         RTS
+
+; ---------------- Command-line history (interactive line editor) --------------
+; A ring of HISTN lines at HISTRING (HISTLEN bytes each). HISTST = index of the
+; next write slot, HISTCT = stored count, HISTNV = recall cursor (0 = the live
+; line being typed, k = k lines back). Up/Down redraw LINEBUF in place.
+
+; GLESC - an ESC was read; parse a CSI arrow. ESC '[' 'A' = up, 'B' = down; any
+;   other sequence is swallowed. Returns to GL1 with P2 = the line cursor.
+GLESC:  JSR  CONIN
+        LDB  #'['
+        CMP
+        JNZ  GL1               ; bare ESC / non-CSI -> ignore
+        JSR  CONIN
+        STA  TMP
+        LDB  #'A'
+        CMP
+        JZ   glesc_u
+        LDA  TMP
+        LDB  #'B'
+        CMP
+        JZ   glesc_d
+        JMP  GL1               ; other CSI (left/right/etc) -> ignore
+glesc_u: JSR HISTUP
+        JMP  GL1
+glesc_d: JSR HISTDOWN
+        JMP  GL1
+
+; HISTUP - recall the next older line (HISTNV++ up to HISTCT), redraw.
+HISTUP: LDA  HISTCT
+        JZ   hist_ret          ; empty history
+        LDA  HISTNV
+        LDB  HISTCT
+        CMP                    ; C=1 -> HISTNV >= HISTCT (already at oldest)
+        JC   hist_ret
+        LDA  HISTNV
+        INC
+        STA  HISTNV
+        JMP  HLOAD
+hist_ret: RTS
+
+; HISTDOWN - recall the next newer line; from 1 down to 0 restores an empty line.
+HISTDOWN: LDA HISTNV
+        JZ   hist_ret          ; already at the live line
+        DEC
+        STA  HISTNV
+        JZ   HCLR              ; back to the (blank) live line
+        JMP  HLOAD
+
+; HLOAD - load the slot for HISTNV steps back into LINEBUF and redraw it.
+;   slot = (HISTST - HISTNV) mod HISTN.
+HLOAD:  LDA  HISTST
+        LDB  HISTNV
+        SUB
+        LDB  #HISTN-1
+        AND                    ; mask to 0..HISTN-1 (HISTN is a power of two)
+        JSR  HSLOT             ; P1 = &slot
+        ; fall into HREDRAW
+
+; HREDRAW - erase the shown line, then copy (P1) NUL-terminated into LINEBUF,
+;   echoing it; leaves P2 at the new end of line.
+HREDRAW: JSR HCLR0             ; erase to the prompt; P2 = LINEBUF
+hr_lp:  LDA  (P1)
+        JZ   hr_done
+        JSR  OUTCH
+        STA  (P2)+
+        INP1
+        JMP  hr_lp
+hr_done: RTS
+
+; HCLR - erase the shown line back to the prompt and return (empty live line).
+HCLR:   JSR  HCLR0
+        RTS
+HCLR0:  TPA2L                  ; low byte = chars shown (LINEBUF is page-aligned)
+        JZ   hclr_d
+        DEP2
+        LDA  #$08
+        JSR  OUTCH
+        LDA  #' '
+        JSR  OUTCH
+        LDA  #$08
+        JSR  OUTCH
+        JMP  HCLR0
+hclr_d: RTS
+
+; HSLOT - A = slot (0..HISTN-1) -> P1 = HISTRING + slot*HISTLEN. HISTLEN=64, so
+;   lo = (slot<<6)&$FF (SHL drops the high bits), hi = >HISTRING + (slot>>2).
+HSLOT:  STA  TMP2
+        SHL
+        SHL
+        SHL
+        SHL
+        SHL
+        SHL
+        TAP1L
+        LDA  TMP2
+        SHR
+        SHR
+        LDB  #>HISTRING
+        ADD
+        TAP1H
+        RTS
+
+; HISTADD - store the NUL-terminated LINEBUF as a new history entry, unless it is
+;   empty or identical to the most-recent entry (dedup consecutive duplicates).
+HISTADD: LDA LINEBUF
+        JZ   ha_ret            ; empty line -> don't record
+        LDA  HISTCT
+        JZ   ha_store          ; nothing to dedup against
+        LDA  HISTST            ; most-recent slot = (HISTST-1) mod HISTN
+        LDB  #1
+        SUB
+        LDB  #HISTN-1
+        AND
+        JSR  HSLOT             ; P1 = most-recent slot
+        LDP2 #LINEBUF
+        JSR  HSTREQ            ; A=0 if equal
+        JZ   ha_ret            ; duplicate of the previous command -> skip
+ha_store: LDA HISTST
+        JSR  HSLOT             ; P1 = target slot
+        LDP2 #LINEBUF
+ha_cp:  LDA  (P2)
+        STA  (P1)
+        JZ   ha_adv            ; copied the NUL -> done
+        INP2
+        INP1
+        JMP  ha_cp
+ha_adv: LDA  HISTST            ; HISTST = (HISTST+1) mod HISTN
+        INC
+        LDB  #HISTN-1
+        AND
+        STA  HISTST
+        LDA  HISTCT            ; HISTCT = min(HISTCT+1, HISTN)
+        LDB  #HISTN
+        CMP                    ; C=1 -> already full
+        JC   ha_ret
+        LDA  HISTCT
+        INC
+        STA  HISTCT
+ha_ret: RTS
+
+; HSTREQ - compare NUL-terminated (P1) and (P2); A=0 (Z=1) if equal, else A=1.
+HSTREQ: LDA (P1)
+        STA  TMP
+        LDA  (P2)
+        LDB  TMP
+        CMP
+        JNZ  he_ne
+        LDA  (P1)              ; chars equal; at the shared NUL -> strings equal
+        JZ   he_eq
+        INP1
+        INP2
+        JMP  HSTREQ
+he_eq:  LDA  #0
+        RTS
+he_ne:  LDA  #1
+        RTS
+
+; ---------------- Tab autocomplete -------------------------------------------
+; DOTAB - complete the word at the cursor. The command word (first word, no '/')
+;   completes against the built-in names + /bin; any other word completes a
+;   filename against the directory the word implies (the CWD, or the path before
+;   its last '/'). Fills the longest common prefix of the matches; a second
+;   consecutive Tab that adds nothing lists them. P2 is the LINEBUF cursor on
+;   entry and exit (rebuilt from CMPCUR — the scan clobbers P1/P2 freely).
+DOTAB:  JSR  DT_WORD            ; parse the word; resolve its directory
+        JC   dt_setret          ; couldn't resolve the dir -> do nothing
+        LDP1 #CMPPFX            ; CMPPL = length of the typed leaf prefix
+        LDA  #0
+        STA  CMPPL
+dt_pl:  LDA  (P1)
+        JZ   dt_pld
+        LDA  CMPPL
+        INC
+        STA  CMPPL
+        INP1
+        JMP  dt_pl
+dt_pld: LDA  #0                 ; scan the candidates for the common prefix
+        STA  CMPLM
+        JSR  DT_SCAN
+        LDA  CMPCNT
+        JZ   dt_bell            ; no matches
+        LDA  CMPPL             ; P1 = CMPLCP + prefixlen = the part still to type
+        LDB  #<CMPLCP
+        ADD
+        TAP1L
+        LDA  #>CMPLCP
+        JNC  dt_ea
+        INC
+dt_ea:  TAP1H
+        LDA  (P1)
+        JNZ  dt_ext            ; there is an extension to append
+        LDA  CMPCNT            ; nothing to add
+        LDB  #1
+        CMP
+        JZ   dt_termonly       ; single exact match -> just add the terminator
+        LDA  CMPTABF          ; ambiguous: list on the second consecutive Tab
+        JNZ  dt_list
+        LDA  #1
+        STA  CMPTABF
+        JMP  dt_setret
+dt_ext: JSR  DT_SETCUR         ; append CMPLCP[prefixlen..] to the line
+de_lp:  LDA  (P1)
+        JZ   de_done
+        LDB  CMPCUR
+        LDA  #62               ; guard the 63-byte LINEBUF
+        CMP                    ; A(62) >= B(CMPCUR)? C=1 while there is room
+        JNC  de_done
+        LDA  (P1)
+        JSR  OUTCH
+        STA  (P2)+
+        INP1
+        LDA  CMPCUR
+        INC
+        STA  CMPCUR
+        JMP  de_lp
+de_done: LDA CMPCNT
+        LDB  #1
+        CMP
+        JNZ  de_multi          ; multiple matches -> partial fill
+        JSR  DT_TERM           ; sole match -> add the terminator, end the streak
+        LDA  #0
+        STA  CMPTABF
+        RTS
+de_multi: LDA #1               ; extended but still ambiguous -> arm the next Tab to list
+        STA  CMPTABF
+        RTS
+dt_termonly: JSR DT_SETCUR
+        JSR  DT_TERM
+        LDA  #0
+        STA  CMPTABF
+        RTS
+dt_list: JSR CRLF              ; print the matches, then redraw the prompt + line
+        LDA  #1
+        STA  CMPLM
+        JSR  DT_SCAN
+        JSR  CRLF
+        LDP1 #CWDPATH
+        JSR  OPUTS
+        LDP1 #MPROMPT
+        JSR  OPUTS
+        JSR  DT_REDRAW
+        LDA  #0
+        STA  CMPTABF
+        RTS
+dt_bell: LDA #$07              ; BEL
+        JSR  OUTCH
+dt_setret: JSR DT_SETCUR
+        RTS
+
+; DT_SETCUR - P2 = LINEBUF + CMPCUR (the live cursor).
+DT_SETCUR: LDA CMPCUR
+        TAP2L
+        LDA  #>LINEBUF
+        TAP2H
+        RTS
+
+; DT_TERM - append a word terminator at the cursor: '/' after a sole directory
+;   match, else a space. Echoes it and bumps CMPCUR.
+DT_TERM: LDA CMPCUR
+        LDB  #62
+        CMP                    ; B(62) >= A(CMPCUR)? no room -> skip
+        JC   dtt_ret
+        LDA  CMPISD
+        JZ   dtt_sp
+        LDA  #'/'
+        JMP  dtt_put
+dtt_sp: LDA  #' '
+dtt_put: JSR OUTCH
+        STA  (P2)+
+        LDA  CMPCUR
+        INC
+        STA  CMPCUR
+dtt_ret: RTS
+
+; DT_REDRAW - reprint LINEBUF[0..CMPCUR); leaves P2 = cursor.
+DT_REDRAW: LDA #<LINEBUF
+        TAP1L
+        LDA  #>LINEBUF
+        TAP1H
+        LDA  #0
+        STA  TMP
+drl_lp: LDA  TMP
+        LDB  CMPCUR
+        CMP                    ; A(i) >= B(curlen)? done
+        JC   drl_done
+        LDA  (P1)
+        JSR  OUTCH
+        INP1
+        LDA  TMP
+        INC
+        STA  TMP
+        JMP  drl_lp
+drl_done: JSR DT_SETCUR
+        RTS
+
+; DT_WORD - isolate the word at the cursor. Sets CMPPFX = its leaf (after the last
+;   '/'), CMPFW = 1 when it is the command word, and CMPDL/CMPDLH/CMPDN = the
+;   directory to enumerate for filenames. C=1 if that directory can't be resolved.
+DT_WORD: TPA2L
+        STA  CMPCUR            ; curlen
+        STA  CMPPL            ; i = curlen (running index for the back-scan)
+dw_bk:  LDA  CMPPL
+        JZ   dw_ws
+        LDA  CMPPL
+        LDB  #1
+        SUB
+        TAP1L
+        LDA  #>LINEBUF
+        TAP1H
+        LDA  (P1)
+        LDB  #' '
+        CMP
+        JZ   dw_ws            ; space at i-1 -> wordstart = i
+        LDA  CMPPL
+        DEC
+        STA  CMPPL
+        JMP  dw_bk
+dw_ws:  LDA  #1               ; CMPPL = wordstart; is anything non-space before it?
+        STA  CMPFW
+        LDA  CMPPL
+        JZ   dw_word
+        LDA  #0
+        STA  TMP2             ; j = 0
+dw_fw:  LDA  TMP2
+        LDB  CMPPL
+        CMP
+        JC   dw_word          ; j >= wordstart -> only spaces -> first word
+        LDA  TMP2
+        TAP1L
+        LDA  #>LINEBUF
+        TAP1H
+        LDA  (P1)
+        LDB  #' '
+        CMP
+        JNZ  dw_notfw
+        LDA  TMP2
+        INC
+        STA  TMP2
+        JMP  dw_fw
+dw_notfw: LDA #0
+        STA  CMPFW
+dw_word: LDA CMPPL            ; copy LINEBUF[wordstart..curlen) -> CMPDIR
+        TAP1L
+        LDA  #>LINEBUF
+        TAP1H
+        LDP2 #CMPDIR
+        LDA  CMPCUR
+        LDB  CMPPL
+        SUB
+        STA  TMP              ; n = word length
+dw_cpw: LDA  TMP
+        JZ   dw_cpwe
+        LDA  (P1)
+        STA  (P2)
+        INP1
+        INP2
+        LDA  TMP
+        DEC
+        STA  TMP
+        JMP  dw_cpw
+dw_cpwe: LDA #0
+        STA  (P2)             ; CMPDIR = the whole word (NUL-term)
+        LDA  #$FF             ; find the last '/'; TMP2 = its index or $FF
+        STA  TMP2
+        LDA  #0
+        STA  TMP              ; i = 0
+dw_sl:  LDA  TMP
+        LDB  #<CMPDIR          ; P1 = CMPDIR + i (CMPDIR is not page-aligned)
+        ADD
+        TAP1L
+        LDA  #>CMPDIR
+        TAP1H
+        LDA  (P1)
+        JZ   dw_sld
+        LDB  #'/'
+        CMP
+        JNZ  dw_slnx
+        LDA  TMP
+        STA  TMP2
+dw_slnx: LDA TMP
+        INC
+        STA  TMP
+        JMP  dw_sl
+dw_sld: LDA  TMP2
+        LDB  #$FF
+        CMP
+        JZ   dw_noslash
+        LDA  TMP2            ; slash present: leaf starts after it
+        INC
+        STA  TMP2
+        LDB  #<CMPDIR          ; P1 = CMPDIR + leafstart
+        ADD
+        TAP1L
+        LDA  #>CMPDIR
+        TAP1H
+        LDP2 #CMPPFX
+dw_lcp: LDA  (P1)            ; copy leaf -> CMPPFX (incl NUL)
+        STA  (P2)
+        JZ   dw_lcpe
+        INP1
+        INP2
+        JMP  dw_lcp
+dw_lcpe: LDA TMP2            ; cut CMPDIR after the slash -> the dir part
+        LDB  #<CMPDIR          ; P1 = CMPDIR + leafstart
+        ADD
+        TAP1L
+        LDA  #>CMPDIR
+        TAP1H
+        LDA  #0
+        STA  (P1)
+        STA  CMPFW           ; a slashed word is a path -> file completion
+        LDP2 #CMPDIR
+        JMP  DT_RESDIR
+dw_noslash: LDP1 #CMPDIR    ; no slash: leaf = the whole word
+        LDP2 #CMPPFX
+dw_ncp: LDA  (P1)
+        STA  (P2)
+        JZ   dw_ncpe
+        INP1
+        INP2
+        JMP  dw_ncp
+dw_ncpe: LDA CMPFW
+        JZ   dw_cwd           ; argument word -> the CWD
+        LDP1 #BINDIR          ; command word -> /bin (plus KWTAB in DT_SCAN)
+        LDP2 #CMPDIR
+db_cp:  LDA  (P1)
+        STA  (P2)
+        JZ   db_cpe
+        INP1
+        INP2
+        JMP  db_cp
+db_cpe: LDP2 #CMPDIR
+        JMP  DT_RESDIR
+dw_cwd: JSR  SYNCDRV           ; enumerate on the CWD's drive
+        LDA  CWDL
+        STA  CMPDL
+        LDA  CWDLH
+        STA  CMPDLH
+        LDA  CWDN
+        STA  CMPDN
+        CLC
+        RTS
+
+; DT_RESDIR - resolve the directory path at P2 -> CMPDL/CMPDLH/CMPDN. C=1 on fail.
+DT_RESDIR: JSR CDPATH
+        LDA  MATCH
+        JZ   dr_bad
+        LDA  SDIRL
+        STA  CMPDL
+        LDA  SDIRLH
+        STA  CMPDLH
+        LDA  SDIRN
+        STA  CMPDN
+        CLC
+        RTS
+dr_bad: SEC
+        RTS
+
+; DT_SCAN - enumerate candidates. CMPLM=0 folds the common prefix into CMPLCP
+;   (and counts); CMPLM=1 prints each match. Command word also scans KWTAB.
+DT_SCAN: LDA #0
+        STA  CMPCNT
+        LDA  CMPFW
+        JZ   ds_dir
+        JSR  DT_SCANKW
+ds_dir: JSR  DT_SCANDIR
+        RTS
+
+; DT_SCANKW - fold/print the built-in command names matching CMPPFX.
+DT_SCANKW: LDA #0
+        STA  CMPIX
+dk_lp:  LDA  CMPIX            ; P1 = KWTAB + CMPIX*2
+        SHL
+        LDB  #<KWTAB
+        ADD
+        TAP1L
+        LDA  #>KWTAB
+        JNC  dk_nc
+        INC
+dk_nc:  TAP1H
+        LDA  (P1)             ; name pointer (little-endian)
+        STA  TMP
+        INP1
+        LDA  (P1)
+        STA  TMP2
+        LDA  TMP              ; 0 pointer terminates the table
+        JNZ  dk_go
+        LDA  TMP2
+        JZ   dk_end
+dk_go:  LDA  TMP              ; copy the keyword -> NAMEBUF (NUL-term)
+        TAP1L
+        LDA  TMP2
+        TAP1H
+        LDP2 #NAMEBUF
+dk_cp:  LDA  (P1)
+        STA  (P2)
+        JZ   dk_cpd
+        INP1
+        INP2
+        JMP  dk_cp
+dk_cpd: LDA  #0               ; built-ins are not directories
+        JSR  DT_CAND2
+        LDA  CMPIX
+        INC
+        STA  CMPIX
+        JMP  dk_lp
+dk_end: RTS
+
+; DT_SCANDIR - fold/print the entries of the target directory matching CMPPFX.
+DT_SCANDIR: LDA CMPDL
+        STA  CMPWLB
+        LDA  CMPDLH
+        STA  CMPWLB+1
+        LDA  CMPDN
+        STA  CMPWSC
+ds_sec: LDA  CMPWSC
+        JZ   ds_end
+        LDP1 #SBUF
+        LDA  CMPWLB
+        STA  LBA
+        LDA  CMPWLB+1
+        STA  LBA1
+        LDA  #0
+        STA  LBA2
+        JSR  CFREAD
+        LDP2 #SBUF
+        LDA  #16
+        STA  ECNT
+ds_ent: JSR  RDENT            ; NAMEBUF + FLAGS; P2 advances by 32
+        LDA  FLAGS
+        JZ   ds_end            ; 0 flag = end-of-directory marker
+        LDB  #F_DEL
+        CMP
+        JZ   ds_nx
+        LDA  NAMEBUF           ; skip '.' and '..'
+        LDB  #'.'
+        CMP
+        JZ   ds_nx
+        TPA2L                 ; save the SBUF cursor across DT_CAND2
+        STA  CMPSAV
+        TPA2H
+        STA  CMPSAV+1
+        LDA  FLAGS
+        LDB  #F_DIR
+        CMP
+        JZ   ds_isd
+        LDA  #0
+        JMP  ds_cand
+ds_isd: LDA  #1
+ds_cand: JSR DT_CAND2
+        LDA  CMPSAV
+        TAP2L
+        LDA  CMPSAV+1
+        TAP2H
+ds_nx:  LDA  ECNT
+        DEC
+        STA  ECNT
+        JNZ  ds_ent
+        LDA  CMPWLB           ; next sector (16-bit)
+        INC
+        STA  CMPWLB
+        JNZ  ds_snc
+        LDA  CMPWLB+1
+        INC
+        STA  CMPWLB+1
+ds_snc: LDA  CMPWSC
+        DEC
+        STA  CMPWSC
+        JMP  ds_sec
+ds_end: RTS
+
+; DT_CAND2 - consider NAMEBUF (enter A = 1 if it is a directory). If it starts
+;   with CMPPFX: bump CMPCNT and, per CMPLM, fold it into CMPLCP or print it.
+DT_CAND2: STA TMP2            ; isdir
+        LDP1 #CMPPFX
+        LDP2 #NAMEBUF
+dc_pm:  LDA  (P1)             ; prefix match
+        JZ   dc_ok
+        STA  TMP
+        LDA  (P2)
+        LDB  TMP
+        CMP
+        JNZ  dc_ret
+        INP1
+        INP2
+        JMP  dc_pm
+dc_ok:  LDA  CMPCNT           ; matched -> count (saturating)
+        LDB  #255
+        CMP
+        JC   dc_cnt
+        LDA  CMPCNT
+        INC
+        STA  CMPCNT
+dc_cnt: LDA  CMPLM
+        JNZ  dc_print
+        LDA  CMPCNT
+        LDB  #1
+        CMP
+        JNZ  dc_fold
+        LDP1 #NAMEBUF         ; first match -> CMPLCP = name, record isdir
+        LDP2 #CMPLCP
+dc_cp:  LDA  (P1)
+        JZ   dc_cpe
+        LDB  #' '
+        CMP
+        JZ   dc_cpe
+        STA  (P2)
+        INP1
+        INP2
+        JMP  dc_cp
+dc_cpe: LDA  #0
+        STA  (P2)
+        LDA  TMP2
+        STA  CMPISD
+        RTS
+dc_fold: LDP1 #CMPLCP         ; later match -> shrink CMPLCP to the common prefix
+        LDP2 #NAMEBUF
+df_lp:  LDA  (P1)
+        JZ   dc_ret
+        STA  TMP
+        LDA  (P2)
+        LDB  #' '
+        CMP
+        JZ   df_cut
+        LDA  (P2)
+        LDB  TMP
+        CMP
+        JNZ  df_cut
+        INP1
+        INP2
+        JMP  df_lp
+df_cut: LDA  #0
+        STA  (P1)
+        RTS
+dc_print: LDP1 #NAMEBUF       ; list mode -> print the name + two spaces
+dp_lp:  LDA  (P1)
+        JZ   dp_end
+        LDB  #' '
+        CMP
+        JZ   dp_end
+        JSR  OUTCH
+        INP1
+        JMP  dp_lp
+dp_end: LDA  #' '
+        JSR  OUTCH
+        LDA  #' '
+        JSR  OUTCH
+dc_ret: RTS
 
 ; GL_SCRIPT - GETLN in `sh` mode: read the next line from the OPEN script stream
 ;   (RESTSCR brings its ROSTATE back, since the previous command clobbered it) into
@@ -3577,42 +4918,46 @@ MNODRV:  .byte CR,LF
 MHELP:   .byte CR,LF
          .ascii "P8X/OS COMMANDS:"
          .byte CR,LF
+         .ascii "/d1           drive 1 is mounted here (cd /d1, cat /d1/FILE)"
+         .byte CR,LF
+         .ascii "bootload file install file as the boot OS, then exit + B to run"
+         .byte CR,LF
          .ascii "cd path       change directory (/abs, rel, .., .)"
-         .byte CR,LF
-         .ascii "path [dirs]   show/set the program search path (default /bin)"
-         .byte CR,LF
-         .ascii "mkdir path    create a subdirectory"
-         .byte CR,LF
-         .ascii "rmdir path    remove an empty subdirectory"
-         .byte CR,LF
-         .ascii "load path     read a file to its load address"
-         .byte CR,LF
-         .ascii "run path args load+run a program (args in P2, RTS to exit)"
-         .byte CR,LF
-         .ascii "name args     run a program by bare name, found on PATH (/bin)"
-         .byte CR,LF
-         .ascii "save path s e save memory [s,e) to a new file"
          .byte CR,LF
          .ascii "del path      delete a file"
          .byte CR,LF
-         .ascii "pack          reclaim deleted space"
-         .byte CR,LF
-         .ascii "/d1           drive 1 is mounted here (cd /d1, cat /d1/FILE)"
-         .byte CR,LF
-         .ascii "umount/mount  swap the /d1 card: umount, swap, mount"
-         .byte CR,LF
-         .ascii "fsck          check filesystem integrity (read-only)"
+         .ascii "exit / mon    return to the ROM monitor"
          .byte CR,LF
          .ascii "format        erase card, make a fresh v2 volume (asks Y/N)"
          .byte CR,LF
+         .ascii "fsck          check filesystem integrity (read-only)"
+         .byte CR,LF
          .ascii "help          this help"
+         .byte CR,LF
+         .ascii "load path     read a file to its load address"
+         .byte CR,LF
+         .ascii "make [target] build a target from the Makefile in the CWD"
          .byte CR,LF
          .ascii "man name      show a command's manual page (/man)"
          .byte CR,LF
+         .ascii "mkdir path    create a subdirectory"
+         .byte CR,LF
+         .ascii "name args     run a program by bare name, found on PATH (/bin)"
+         .byte CR,LF
+         .ascii "pack          reclaim deleted space"
+         .byte CR,LF
+         .ascii "path [dirs]   show/set the program search path (default /bin)"
+         .byte CR,LF
+         .ascii "rmdir path    remove an empty subdirectory"
+         .byte CR,LF
+         .ascii "run path args load+run a program (args in P2, RTS to exit)"
+         .byte CR,LF
+         .ascii "save path s e save memory [s,e) to a new file"
+         .byte CR,LF
          .ascii "sh file       run shell commands from a script file (streamed)"
          .byte CR,LF
+         .ascii "umount/mount  swap the /d1 card: umount, swap, mount"
          .byte CR,LF
-         .ascii "exit / mon    return to the ROM monitor"
          .byte CR,LF
          .ascii "cmd >FILE     send output to FILE instead of the screen"
          .byte CR,LF
@@ -3628,6 +4973,12 @@ MUNK:    .byte CR,LF
          .asciiz "?"
 MNOFILE: .byte CR,LF
          .asciiz "?NO FILE"
+MBLOK:   .byte CR,LF
+         .asciiz "installed as boot OS -- exit then B to run"
+MBLBIG:  .byte CR,LF
+         .asciiz "bootload: image too big (max 32 sectors)"
+MBLEMP:  .byte CR,LF
+         .asciiz "bootload: empty file"
 MLOADED: .byte CR,LF
          .asciiz "LOADED"
 MDELETED: .byte CR,LF
@@ -3702,3 +5053,19 @@ KW_FORMAT:.asciiz "format"
 KW_MOUNT: .asciiz "mount"
 KW_UMOUNT:.asciiz "umount"
 KW_SH:   .asciiz "sh"
+KW_MAKE: .asciiz "make"
+KW_BOOTLOAD: .asciiz "bootload"
+; KWTAB - pointers to every built-in command name, for Tab completion of the
+; command word. NUL-terminated list. (`mon` is the `exit` alias.)
+KWTAB:   .word KW_HELP,KW_LOAD,KW_RUN,KW_DEL,KW_SAVE,KW_PACK,KW_CD,KW_MKDIR
+         .word KW_RMDIR,KW_FSCK,KW_PATH,KW_EXIT,KW_MON,KW_FORMAT,KW_MOUNT
+         .word KW_UMOUNT,KW_SH,KW_MAKE,KW_BOOTLOAD,0
+BINDIR:  .asciiz "/bin"
+MK_MFN:  .asciiz "Makefile"
+MK_TMP:  .asciiz "MK.RUN"
+MK_ENOM: .byte CR,LF
+         .asciiz "make: no Makefile"
+MK_ERUL: .byte CR,LF
+         .asciiz "make: no rule to make target "
+MK_ECYC: .byte CR,LF
+         .asciiz "make: prerequisite cycle (or too deep)"

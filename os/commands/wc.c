@@ -46,6 +46,8 @@ int dm10() {
     return rem;
 }
 
+/* nz24: is num24 nonzero? Returns 1 if any of its 3 bytes is set, else 0.
+ * put24 uses it as the "more digits remain" test after the first digit. */
 int nz24() {
     if (num24[0] != 0) { return 1; }
     if (num24[1] != 0) { return 1; }
@@ -83,6 +85,12 @@ int put24(char *p) {
     return 0;
 }
 
+/* main: parse the optional arg, open the input, then scan it byte by byte,
+ * tallying bytes/lines/words into the three 24-bit counters, and print
+ * "lines words bytes". A word is a maximal run of non-whitespace: inword
+ * tracks whether we're mid-word so each run is counted once, on its first
+ * non-space char. Whitespace = space/tab/LF/CR; only LF bumps the line count.
+ * Returns 0 on success, 1 if the file/glob was not found. */
 int main() {
     char *arg;
     int c;

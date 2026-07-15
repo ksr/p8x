@@ -204,11 +204,13 @@ int collect() {
     while ((r & 256) == 0) {                  /* bit 8 = carry = end of directory */
         de_read();                            /* snapshot the entry (SYS_DIRENTRY) */
         if (de_isdot() == 0) {                /* skip '.' and '..' */
-            if (k < 64) {
+            if (k < 64) {                     /* cap 64: extra entries silently dropped */
                 base = k * 12;
                 i = 0;
                 while (i < 12) { enam[base + i] = de[i]; i = i + 1; }
                 if (de_isdir()) { eisd[k] = 1; elen[k] = 0; elen2[k] = 0; }
+                /* file: low 16 bits from de_len(), bits 16..23 from dir-entry
+                 * byte 17 (the third size byte) -> full 24-bit length */
                 else { eisd[k] = 0; elen[k] = de_len(); elen2[k] = de[17] & 255; }
                 elba[k] = de_lba();
                 k = k + 1;
@@ -299,10 +301,13 @@ int main() {
     int slashpos;
     int g;
     int nf;                                  /* 1 = the requested directory is missing */
+    int filemode;                            /* 1 = arg named a file, not a directory */
+    int shown;                               /* entries that passed the glob filter */
 
     arg = argstr();                          /* the command tail after "DIR" */
     rec = 0;
     szmode = 0;
+    filemode = 0;
     gpat[0] = 0;
     while (*arg == 32) { arg = arg + 1; }    /* skip leading spaces */
     if (*arg == '-' && (*(arg + 1) == 'h' || *(arg + 1) == 'H')) {
@@ -344,9 +349,28 @@ int main() {
         }
     } else if (*arg == 0 || *arg == 13) {    /* no path -> current directory */
         bios(SYS_OPENCWD, 0, 0);                  /* SYS_OPENCWD (full 16-bit CWD LBA) */
-    } else {                                 /* FOPENDIR(abs path); carry = missing/not a dir */
+    } else {                                 /* a path: try it as a directory... */
         abspath(abuf, arg);                  /* relative -> CWD-prefixed (FRESOLVE starts at root) */
-        if (bios(FOPENDIR, abuf, 0) & 256) { nf = 1; }
+        if (bios(FOPENDIR, abuf, 0) & 256) { /* ...not a dir -> list it as a single file: */
+            filemode = 1;                    /*   filter the parent dir by the exact leaf */
+            rec = 0;                         /*   (a file has no subtree to recurse) */
+            ls = 0;
+            if (hasslash) { ls = slashpos + 1; }
+            j = 0;
+            while (arg[ls] != 0 && arg[ls] != 13 && arg[ls] != 32) {
+                gpat[j] = arg[ls]; j = j + 1; ls = ls + 1;
+            }
+            gpat[j] = 0;
+            if (hasslash) {                  /* open the file's parent directory */
+                j = 0;
+                while (j <= slashpos) { dbuf[j] = arg[j]; j = j + 1; }
+                dbuf[j] = 0;
+                abspath(abuf, dbuf);
+                if (bios(FOPENDIR, abuf, 0) & 256) { nf = 1; }
+            } else {
+                bios(SYS_OPENCWD, 0, 0);
+            }
+        }
     }
     if (nf) { puts("dir: not found"); return 1; }
     bios(FSDIRBUF, 0, 0xFA);                   /* FSDIRBUF: iterate in our own page $FA00 */
@@ -356,12 +380,17 @@ int main() {
     } else {
         collect();                           /* single level: buffer + sort */
         i = 0;
+        shown = 0;
         while (i < ecnt) {
             m = eidx[i];
             nameat(m);
+            if (gpat[0] == 0 || gmatch(gpat, nbuf)) { shown = shown + 1; }
             show(0, eisd[m], elen[m], elen2[m]);       /* name + size; '/' marks a directory */
             i = i + 1;
         }
+        /* a named file that survived FOPENDIR-fails but matched nothing in its
+         * parent means the leaf doesn't actually exist -> report not found */
+        if (filemode && shown == 0) { puts("dir: not found"); return 1; }
     }
     return 0;
 }

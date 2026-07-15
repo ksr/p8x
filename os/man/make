@@ -1,0 +1,55 @@
+NAME
+    make - build targets from a Makefile in the current directory
+
+SYNOPSIS
+    make [target]
+
+DESCRIPTION
+    Reads a file named `Makefile` in the current directory, builds `target`
+    (or the first target in the file if none is given), and runs its recipe.
+    make is a shell built-in, not a /bin program.
+
+    A Makefile is a sequence of rules:
+
+        target: prereq1 prereq2
+        <TAB>recipe line 1
+        <TAB>recipe line 2
+
+    A rule starts in column 0 with the target name, a colon, then zero or more
+    space-separated prerequisites. The lines below it that begin with a TAB are
+    the recipe -- ordinary shell command lines (built-ins, /bin programs,
+    redirection, pipes). Blank lines and lines starting with `#` are ignored.
+
+    make resolves prerequisites depth-first: every prerequisite is built before
+    the target that needs it, and a prerequisite shared by several targets is
+    built only once. A prerequisite that has no rule of its own is assumed to
+    exist already (e.g. a source file). A prerequisite cycle, or nesting deeper
+    than 15, is reported as an error.
+
+    There are no timestamps (P8XFS has no mtimes), so make ALWAYS rebuilds --
+    there is no up-to-date check. Recipes run in the current directory, so their
+    paths are directory-relative.
+
+    Conventionally each source directory under /src carries a Makefile with an
+    `all` target (build everything), a `clean` target (delete the build
+    outputs), and an `install` target (publish the built binaries to /bin).
+
+EXAMPLES
+    make                 build the first target (usually `all`)
+    make pwd             build just the `pwd` target
+    make clean           run the `clean` target
+
+    Rebuild a command on the machine and put it on PATH:
+
+        cd /src/commands/c
+        make pwd             cc pwd.c >T.ASM ; asm T.ASM bin/pwd.bin
+        make install         cp the built bin/*.bin to /bin
+
+DIAGNOSTICS
+    make: no Makefile                        no Makefile in the current directory
+    make: no rule to make target NAME        NAME is not a target and has no file
+    make: prerequisite cycle (or too deep)   a rule depends on itself (directly
+                                             or through a chain), or nesting > 15
+
+SEE ALSO
+    sh, cc, asm, cd, run

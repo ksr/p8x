@@ -9,6 +9,10 @@
 ;#use regex
 ;#use abi
 
+; ---- entry: parse args (skip leading spaces, detect -r/-h) -----------------
+; g_arg (word) = a moving cursor into the arg tail (P2 on entry). We keep the
+; pointer in the g_arg RAM word and reload P2 from it whenever we dereference,
+; since match()/syscalls clobber P1/P2.
         .org $6A00
         TPA2L
         STA g_arg
@@ -16,6 +20,7 @@
         STA g_arg+1
         LDA #0
         STA recurse
+; g_sk: skip spaces (ASCII 32) at the front of the arg tail.
 g_sk:   LDA g_arg
         TAP2L
         LDA g_arg+1
@@ -33,6 +38,9 @@ g_sk:   LDA g_arg
         INC
         STA g_arg+1
         JMP g_sk
+; g_chk: first non-space char. Empty (NUL) or CR => print usage. A leading '-'
+; means an option: -h/-H show usage, -r enables recursion; any other '-...' is
+; treated as the regex itself (falls through to g_re using the original g_arg).
 g_chk:  LDA (P2)
         LDB #0
         CMP
@@ -56,6 +64,7 @@ g_chk:  LDA (P2)
         JNZ g_re                      ; '-' not -r/-h: treat rest as regex (from g_arg)
         LDA #1
         STA recurse
+        ; skip the "-r" token (2 chars), then its trailing spaces (grs loop)
         LDA g_arg
         LDB #2
         ADD
@@ -81,7 +90,8 @@ grs:    LDA g_arg
         INC
         STA g_arg+1
         JMP grs
-; extract regex word into re[]
+; g_re: copy the regex word (up to first space/CR/NUL, max 63 chars) into re[],
+; NUL-terminated. fi counts chars copied so g_arg can be advanced past it.
 g_re:   LDA g_arg
         TAP2L
         LDA g_arg+1
@@ -92,7 +102,7 @@ g_re:   LDA g_arg
         TAP1H
         LDA #0
         STA fi
-gre_l:  LDA fi
+gre_l:  LDA fi                        ; stop at 63 chars (leave room for NUL in 64-byte re[])
         LDB #63
         CMP
         JC gre_d
@@ -124,6 +134,7 @@ gre_d:  LDA #0
         LDA g_arg+1
         INC
         STA g_arg+1
+; gad_s: skip spaces after the regex, leaving g_arg at the optional file/glob arg.
 gad:    LDA g_arg
         TAP2L
         LDA g_arg+1
@@ -145,19 +156,22 @@ gad_s2: LDA g_arg
         LDA g_arg+1
         TAP2H
         JMP gad_s
+; g_go: dispatch. recurse==0 -> non-recursive path; else the -r tree walk.
 g_go:   LDA recurse
         LDB #0
         CMP
         JZ g_plain
 ; ---- -r : collect CWD tree, grep each --------------------------------------
+        ; Phase 1: collect() fills rfiles[] with up to 36 file paths under CWD.
+        ; Phase 2: grep each collected path, prefixing output with "path:".
         LDA #0
-        STA nrf
+        STA nrf                       ; nrf = count of collected files
         LDA #<cur
         TAP1L
         LDA #>cur
         TAP1H
         LDA #0
-        JSR SYS_GETCWD               ; SYS_GETCWD -> cur
+        JSR SYS_GETCWD               ; cur[] = absolute CWD string (path prefix base)
         LDA #<cur
         TAP1L
         LDA #>cur
@@ -173,6 +187,8 @@ gcl:    LDA (P1)
         INC
         STA fi
         JMP gcl
+; fi now = strlen(cur). parr[0] records the path length at depth 0 so nested
+; collect() calls know where to append/truncate the "cur" path as they recurse.
 gcl0:   LDA #0
         STA w_depth
         JSR parr_a
@@ -187,8 +203,9 @@ gcl0:   LDA #0
         TAP1L
         TAP1H
         LDA #$EA
-        JSR FSDIRBUF
-        JSR collect
+        JSR FSDIRBUF                  ; point the dir-scan buffer at RAM page $EA
+        JSR collect                   ; fill rfiles[]/nrf with the tree's file paths
+; Phase 2: for gi in 0..nrf, grep rfiles[gi] with "path:" line prefix.
         LDA #0
         STA gi
 gp2_l:  LDA gi
@@ -197,17 +214,17 @@ gp2_l:  LDA gi
         JC gp2_d
         LDA gi
         STA rfi
-        JSR rf_addr
+        JSR rf_addr                   ; rfp -> rfiles[gi] (the path string)
         LDA #0
         STA fromfile
         LDA rfp
         STA op_a
         LDA rfp+1
         STA op_a+1
-        JSR open_path
+        JSR open_path                 ; returns A: 1 = opened OK
         LDB #1
         CMP
-        JNZ gp2_n
+        JNZ gp2_n                      ; open failed -> skip this path
         LDA #1
         STA fromfile
         LDA rfp
@@ -221,6 +238,8 @@ gp2_n:  LDA gi
         JMP gp2_l
 gp2_d:  RTS
 ; ---- non-recursive: file/glob/stdin ----------------------------------------
+; openarg opens the file/glob at g_arg, or falls back to stdin if no arg.
+; Return A: 2 = "not found" -> print error; otherwise the stream is ready.
 g_plain:LDA g_arg
         STA oa_a
         LDA g_arg+1
@@ -254,21 +273,26 @@ g_usage:LDA #<u_use
         RTS
 
 ; ======================= grep_stream =======================================
-; gs_pfx (word): 0 = no prefix, else print "pfx:" before each matching line.
+; Read the currently-open stream one char at a time via nextc, accumulate a
+; line in line[] (LF/CR terminated), and run do_match on each complete line.
+; In:  gs_pfx (word) = 0 for no prefix, else pointer to a "pfx" printed as
+;      "pfx:" before each matching line (used to show the file path under -r).
+; gn = current line length. Lines longer than 255 chars are truncated (the
+; overflow chars are consumed but dropped once gn reaches 255).
 grep_stream:
         LDA #0
         STA gn
-gst_l:  JSR nextc
+gst_l:  JSR nextc                     ; A = next char, C set at end of stream
         JC gst_end
         STA g_sc
-        LDB #10
+        LDB #10                        ; LF ends a line
         CMP
         JZ gst_eol
         LDA g_sc
         LDB #13
         CMP
         JZ gst_eol
-        LDA gn
+        LDA gn                        ; at 255 chars: drop overflow, keep scanning
         LDB #255
         CMP
         JC gst_l
@@ -286,6 +310,7 @@ gsl1:   TAP1H
         INC
         STA gn
         JMP gst_l
+; gst_eol: NUL-terminate line[] at gn, and match it (skip empty lines).
 gst_eol:LDA #<line
         LDB gn
         ADD
@@ -299,12 +324,13 @@ gse1:   TAP1H
         LDA gn
         LDB #0
         CMP
-        JZ gst_reset
+        JZ gst_reset                  ; empty line: nothing to match
         JSR do_match
 gst_reset:
         LDA #0
         STA gn
         JMP gst_l
+; gst_end: stream ended. Flush any partial last line (no trailing newline).
 gst_end:LDA gn
         LDB #0
         CMP
@@ -322,6 +348,9 @@ gsf1:   TAP1H
         JSR do_match
 gst_ret:RTS
 
+; do_match: run the shared regex match() on line[] against re[]. If it matches,
+; print the line (preceded by "gs_pfx:" when gs_pfx is non-zero) plus a newline.
+; match() returns A: nonzero = match. match/SYS_PUTC clobber P1/P2.
 do_match:
         LDA #<re
         STA rx_re
@@ -334,7 +363,8 @@ do_match:
         JSR match
         LDB #0
         CMP
-        JZ dm_ret
+        JZ dm_ret                      ; no match: nothing to print
+        ; print prefix only if gs_pfx (either byte) is non-zero
         LDA gs_pfx
         LDB #0
         CMP
@@ -367,12 +397,20 @@ dm_line:LDA #<line
 dm_ret: RTS
 
 ; ======================= collect (-r walk) =================================
+; Recursively walk the currently-open directory, appending each regular file's
+; full path to rfiles[] (capped at 36 entries). Subdirectories are remembered
+; in the per-depth clba[]/cn[] tables and then re-opened one level deeper.
+; State is indexed by w_depth (recursion depth) via the *_a helpers below; the
+; "cur" string is extended with "/name" on the way down and truncated on return.
+; This is the find-style, explicit-index recursion (no CPU call stack for dirs).
+; Reentrant through w_depth; uses FSDIRBUF page $EA for the active dir scan.
 collect:JSR nsub_a
         LDA #0
         STA (P1)
         JSR parr_a
         LDA (P1)
         STA fpl
+; c_next: advance to the next dir entry; C set = no more -> descend into subdirs.
 c_next: LDA #0
         TAP1L
         TAP1H
@@ -385,20 +423,22 @@ c_next: LDA #0
         TAP1H
         LDA #0
         JSR SYS_DIRENTRY
-        LDA de
+        LDA de                        ; skip entries beginning with '.' (., .., hidden)
         LDB #'.'
         CMP
         JZ c_next
-        JSR rdname
-        LDA de+12
+        JSR rdname                    ; de[0..11] -> nm (space-trimmed name)
+        LDA de+12                      ; de+12 = entry type: 1 = regular file
         LDB #1
         CMP
         JNZ c_chkdir
-        LDA nrf
+        LDA nrf                        ; only record a file while below the 36-file cap
         LDB #36
         CMP
         JC c_chkdir
         JSR append_file
+; c_chkdir: type 2 = subdirectory. Record its LBA + name for later descent,
+; up to 24 subdirs per level (nsub[w_depth] is the running count).
 c_chkdir:
         LDA de+12
         LDB #2
@@ -412,11 +452,12 @@ c_chkdir:
         JSR nsub_a
         LDA (P1)
         STA fi
-        JSR clba_a
-        LDA de+15
+        JSR clba_a                     ; P1 -> clba slot for this (depth, subdir index)
+        LDA de+15                      ; de+15/16 = subdir start LBA (little-endian word)
         STA (P1)+
         LDA de+16
         STA (P1)
+        ; copy nm (NUL-terminated) into the cn[] name slot for this subdir
         LDA #0
         STA fk
 crn_l:  JSR cn_a
@@ -442,6 +483,9 @@ crn_d:  JSR nsub_a
         INC
         STA (P1)
         JMP c_next
+; c_desc: all entries of this dir seen. Now descend into each recorded subdir.
+; gidxr[w_depth] iterates 0..nsub[w_depth]; for each, reopen the subdir by LBA,
+; extend "cur" with "/name", recurse via collect(), then restore "cur".
 c_desc: JSR idx_a
         LDA #0
         STA (P1)
@@ -473,7 +517,8 @@ c_dl:   JSR idx_a
         LDA (P1)
         STA fpl
         LDA fpl
-        STA cp
+        STA cp                        ; cp = write cursor into cur[] (starts at parent len)
+        ; if cur is exactly "/" (len 1) don't append a second '/'
         LDA fpl
         LDB #1
         CMP
@@ -531,6 +576,7 @@ cnm_d:  LDA #<cur
 cn2:    TAP1H
         LDA #0
         STA (P1)
+        ; recurse one level deeper: save this level's cur length in parr[depth+1]
         LDA w_depth
         INC
         STA w_depth
@@ -540,7 +586,7 @@ cn2:    TAP1H
         JSR collect
         LDA w_depth
         DEC
-        STA w_depth
+        STA w_depth                    ; back up; restore cur to the parent length below
         JSR parr_a
         LDA (P1)
         STA fpl
@@ -667,7 +713,9 @@ af_nd:  LDA rfp
         STA nrf
         RTS
 
-; rf_addr: rfp = rfiles + rfi*80
+; rf_addr: rfp (word) = rfiles + rfi*80. rfiles[] holds up to 36 collected
+; paths, each in an 80-byte fixed slot. Multiply is done by repeated add of 80
+; (rfn counts down), then the rfiles base is added with an explicit carry.
 rf_addr:LDA #0
         STA rfp
         STA rfp+1
@@ -735,6 +783,13 @@ rd_d:   LDA #0
         RTS
 
 ; ======================= index helpers (find-style) ========================
+; Address calculators for the per-depth walk state, all indexed by w_depth:
+;   nsub_a  -> &nsub[depth]   (subdir count at this level)
+;   idx_a   -> &gidxr[depth]  (which subdir we're currently descending)
+;   parr_a  -> &parr[depth]   (length of "cur" path at this level, for truncation)
+;   clba_a  -> &clba[depth][fi]  (2-byte LBA of subdir fi; stride 48 per depth, 2 per fi)
+;   cn_a    -> &cn[depth][fi][fk] (name char fk of subdir fi; stride 32 per depth,
+;              16 per subdir). All compute a 16-bit address via add-with-carry.
 nsub_a: LDA #<nsub
         LDB w_depth
         ADD
@@ -881,7 +936,12 @@ cna_b:  STA fcar
         TAP1H
         RTS
 
+; ======================= strings & RAM scratch =============================
 u_nf:   .asciiz "grep: not found"
+; Usage line. The message contains a literal semicolon, which cannot appear in a
+; quoted string (the assembler strips from ';' to end-of-line as a comment), so
+; it is emitted as .byte 59 (ASCII ';') between the two .ascii fragments. The
+; trailing .byte 0 NUL-terminates the whole concatenated string.
 u_use:  .ascii "usage: GREP [-r] regex [file|glob]   match regex (. * + ? ^ $)"
         .byte 59
         .ascii " -r walks the CWD tree"
@@ -911,13 +971,13 @@ afc:    .fill 1
 ft:     .fill 2
 fn:     .fill 1
 fcar:   .fill 1
-re:     .fill 64
-line:   .fill 176
-nm:     .fill 16
-cur:    .fill 176
-nsub:   .fill 8
-gidxr:  .fill 8
-parr:   .fill 8
-clba:   .fill 384
-cn:     .fill 3072
-rfiles: .fill 2880
+re:     .fill 64                      ; compiled/copied regex pattern (63 chars + NUL)
+line:   .fill 176                     ; current input line (used up to 255, NUL-term)
+nm:     .fill 16                      ; one dir entry name, space-trimmed + NUL
+cur:    .fill 176                     ; running absolute path during the -r walk
+nsub:   .fill 8                       ; nsub[depth]  = subdir count (max depth 8)
+gidxr:  .fill 8                       ; gidxr[depth] = subdir currently descending
+parr:   .fill 8                       ; parr[depth]  = cur[] length at this depth
+clba:   .fill 384                     ; clba[8][24] LBAs: 8 depths * 24 subdirs * 2 bytes
+cn:     .fill 3072                    ; cn[8][24][16] subdir names: 8*24*16 bytes
+rfiles: .fill 2880                    ; 36 collected paths * 80-byte slots

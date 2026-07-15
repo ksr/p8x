@@ -7,6 +7,8 @@
 ;#use abi
 
         .org $6A00
+; --- Parse the argument: skip spaces, reject empty/usage, find the name word.
+;     P2 walks the arg tail; m_arg saves the name's start for the '-' rewind.
 m_sk:   LDA (P2)                     ; skip leading spaces
         LDB #32
         CMP
@@ -35,11 +37,12 @@ m_save: TPA2L                        ; m_arg = start of the name word
         LDB #'H'
         CMP
         JZ m_usage
-        LDA m_arg                    ; '-' but not -h: treat the word as the name
-        TAP2L
+        LDA m_arg                    ; '-' but not -h: rewind P2 to m_arg and
+        TAP2L                        ;   treat the whole word (dash included) as name
         LDA m_arg+1
         TAP2H
-m_build: LDP1 #path                  ; path = "/man/" + name
+; --- Build "/man/" + name into the path buffer via P1, then open and stream it.
+m_build: LDP1 #path                  ; path = "/man/" + name (prefix written inline)
         LDA #'/'
         STA (P1)
         INP1
@@ -72,24 +75,26 @@ mb_l:   LDA (P2)                     ; copy the name (stop at NUL/CR/space)
 mb_e:   LDA #0
         STA (P1)                     ; NUL-terminate
         LDP1 #path
-        JSR FRESOLVE                 ; FRESOLVE
-        LDP1 #$FC00
-        JSR FOPEN                    ; FOPEN; C=1 -> not found
+        JSR FRESOLVE                 ; resolve absolute path from root (CWD-independent)
+        LDP1 #$FC00                  ; P1 = 512-byte read buffer for the open file
+        JSR FOPEN                    ; FOPEN; C=1 -> not found (clobbers P1/P2)
         JC m_nf
+; --- Copy loop: stream the whole file byte-by-byte to the console.
 mo_l:   LDA #0
-        JSR FGETB                    ; FGETB -> A, C=1 at EOF
+        JSR FGETB                    ; FGETB -> A, C=1 at EOF (clobbers P1/P2)
         JC mo_d
         JSR SYS_PUTC                 ; putchar
         JMP mo_l
 mo_d:   RTS
+; --- Not-found path: print "no manual entry for " then the requested name + LF.
 m_nf:   LDA #<m_msg                  ; "no manual entry for " (no newline)
         TAP1L
         LDA #>m_msg
         TAP1H
         LDA #0
         JSR SYS_PUTS
-        LDP1 #path                   ; then the name (path + 5), then newline
-        INP1
+        LDP1 #path                   ; then the name: skip the 5-char "/man/"
+        INP1                         ;   prefix (path+5 = start of copied name)
         INP1
         INP1
         INP1
@@ -104,6 +109,7 @@ mn_l:   LDA (P1)
 mn_d:   LDA #10
         JSR SYS_PUTC
         RTS
+; --- Usage: emit the one-line help string plus a trailing newline.
 m_usage: LDA #<m_use
         TAP1L
         LDA #>m_use

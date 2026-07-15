@@ -286,7 +286,7 @@ do_preg:LDA #32                       ; " (P" digit ")" optional "+"
 dp_1:   LDA #'1'
         JMP dp_d
 dp_2:   LDA #'2'
-dp_d:   JSR $2009
+dp_d:   JSR $2009                      ; SYS_PUTC (hard address; same as the label)
         LDA #')'
         JSR SYS_PUTC
         LDA SHAPE                      ; '+' when shape is even (4,6,8)
@@ -399,7 +399,7 @@ ONIB:   LDB #10
         ADD
         JSR SYS_PUTC
         RTS
-on_hex: LDB #$37
+on_hex: LDB #$37                       ; 'A'-10 = $41-$0A: maps 10..15 -> 'A'..'F'
         ADD
         JSR SYS_PUTC
         RTS
@@ -456,17 +456,17 @@ gh_no:  LDA #0
 
 ; HEXVAL: A = char -> DIGIT (0..15), MATCH=1 if a hex digit else 0.
 HEXVAL: STA HVT
-        LDB #'a'
+        LDB #'a'                      ; if 'a'..'f' (>= 'a' and < 'g'), fold to
         CMP
         JNC hv_u
         LDB #'g'
         CMP
         JC hv_u
-        LDA HVT
+        LDA HVT                       ; upper case by subtracting $20
         LDB #$20
         SUB
         STA HVT
-hv_u:   LDA HVT
+hv_u:   LDA HVT                       ; digit range: >= '0' and < ':' ($3A, one past '9')
         LDB #'0'
         CMP
         JNC hv_no
@@ -480,7 +480,7 @@ hv_u:   LDA HVT
         LDA #1
         STA MATCH
         RTS
-hv_af:  LDA HVT
+hv_af:  LDA HVT                       ; letter range: >= 'A' and < 'G' ($47, one past 'F')
         LDB #'A'
         CMP
         JNC hv_no

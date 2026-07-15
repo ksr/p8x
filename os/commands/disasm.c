@@ -19,7 +19,8 @@
 
 char *HD = "0123456789ABCDEF";
 
-/* ph2/ph4: print a byte / a 16-bit word as hex digits. */
+/* ph2/ph4: print a byte / a 16-bit word as hex digits (MSB first).
+ * ph4 prints high byte then low byte, so a little-endian word reads normally. */
 int ph2(int v) { putchar(HD[(v >> 4) & 15]); putchar(HD[v & 15]); return 0; }
 int ph4(int v) { ph2((v >> 8) & 255); ph2(v & 255); return 0; }
 
@@ -46,7 +47,10 @@ int ilen(int sh) {
 /* w16: read a little-endian 16-bit word at addr. */
 int w16(int addr) { return (peek(addr) & 255) | ((peek(addr + 1) & 255) << 8); }
 
-/* preg: print the register-indirect operand for shapes 3..8, e.g. " (P2)+". */
+/* preg: print the register-indirect operand for shapes 3..8, e.g. " (P2)+".
+ * Shapes pair up: 3/4 -> P1, 5/6 -> P2, 7/8 -> P3, and the even member of each
+ * pair (4,6,8) is the post-increment form (Pn)+. putchar(32) leads with a space
+ * to match the leading space of the #imm/addr operand forms. */
 int preg(int sh) {
     putchar(32); putchar('(');
     putchar('P');
@@ -82,7 +86,10 @@ int main() {
     addr = start;
     while (addr < end) {
         op = peek(addr) & 255;
-        found = 99; i = 0;               /* linear scan of the opcode table */
+        /* Linear scan of the opcode table for this byte. found==99 is the
+         * "not found" sentinel (99 is out of the valid 0..dt_n-1 index range);
+         * setting i=dt_n breaks the loop early (the subset has no break). */
+        found = 99; i = 0;
         while (i < dt_n) {
             if (dt_op[i] == op) { found = i; i = dt_n; }
             else { i = i + 1; }
@@ -96,7 +103,10 @@ int main() {
             ln = ilen(sh);
             k = 0;                        /* raw bytes */
             while (k < ln) { ph2(peek(addr + k) & 255); putchar(32); k = k + 1; }
-            k = ln;                       /* pad the byte column (max 5 bytes) */
+            /* Pad the raw-byte column to a fixed width so mnemonics align:
+             * each byte above printed 3 chars ("bb "), so emit 3 spaces per
+             * missing byte up to the max shape length of 5 (the a,a form). */
+            k = ln;
             while (k < 5) { putchar(32); putchar(32); putchar(32); k = k + 1; }
             putchar(32);
             prs(dt_mn[found]);

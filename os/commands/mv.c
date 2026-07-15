@@ -21,7 +21,8 @@ char src[80];
 char dst[80];
 char jdst[80];                       /* <dst>/<basename> for a glob move */
 char patw[80];                       /* the source arg word (may be a glob) */
-char gfiles[1536];                   /* glob_expand output: 24 slots x 64 */
+char gfiles[1536];                   /* glob_expand output: 24 slots x 64 bytes each
+                                        (must match the maxn=24 / stride-64 used below) */
 
 //#use apath
 //#use streq
@@ -45,13 +46,17 @@ int joinp(char *out, char *dir, char *name) {
  * Returns 1 if the source was not found, else 0. */
 int move_one(char *s, char *d) {
     int c;
+    /* bios() returns the P8X flags in the high byte, so bit 8 (&256) is the carry
+     * flag. FRESOLVE loads DIRLBA+FNAME from a path; it must be redone before each
+     * FOPEN/FWOPEN/FDELETE because those consume that resolved location. */
     bios(FRESOLVE, s, 0);                        /* FRESOLVE SRC */
-    if (bios(FOPEN, RDBUF, 0) & 256) { return 1; }   /* FOPEN; C=1 -> not found */
+    if (bios(FOPEN, RDBUF, 0) & 256) { return 1; }   /* FOPEN into RDBUF; C=1 -> not found */
     bios(FRESOLVE, d, 0);                        /* FRESOLVE DST (DIRLBA + FNAME) */
-    bios(FWOPEN, 0, 0);                        /* FWOPEN */
+    bios(FWOPEN, 0, 0);                        /* FWOPEN: create/truncate DST for writing */
+    /* Byte-copy loop: FGETB returns C=1 (bit 8 set) at EOF; low byte is the data. */
     c = bios(FGETB, 0, 0);                    /* FGETB */
     while ((c & 256) == 0) {
-        bios(FPUTB, 0, c & 255);              /* FPUTB */
+        bios(FPUTB, 0, c & 255);              /* FPUTB low byte to DST */
         c = bios(FGETB, 0, 0);
     }
     bios(FCLOSE, 0, 0);                        /* FCLOSE -> commit DST */
@@ -77,6 +82,8 @@ int main() {
         return 0;
     }
 
+    /* Parse SRC: copy the first whitespace/CR-terminated word into patw[], and
+     * set g=1 if it contains a glob metachar so we branch to the multi-move path. */
     g = 0;                                     /* copy the SRC word; note glob */
     i = 0;
     while (a[i] != 0 && a[i] != 13 && a[i] != 32) {
@@ -108,7 +115,7 @@ int main() {
         m = gfiles + i * 64;                    /* one match (dir prefix + name) */
         abspath(src, m);
         b = 0;                                  /* basename = after the last '/' */
-        j = 0;
+        j = 0;                                  /* scan to end, tracking last-slash+1 */
         while (m[j] != 0) { if (m[j] == '/') { b = j + 1; } j = j + 1; }
         joinp(jdst, dst, m + b);                /* <dst>/<basename> */
         move_one(src, jdst);

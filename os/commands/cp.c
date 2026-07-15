@@ -107,11 +107,13 @@ int copy_tree(char *sp0, char *dp0) {
                                                 * the $FC00 read buffer / $FE00
                                                 * stack. glob_expand's $FA00 page
                                                 * runs earlier, so no overlap. */
-    r = bios(FNEXT, 0, 0);                    /* FNEXT */
+    r = bios(FNEXT, 0, 0);                    /* FNEXT; bit 8 (&256) = C=1 = end */
     while ((r & 256) == 0) {
-        de_read();
+        de_read();                             /* pull the entry into de[] */
+        /* skip "." / ".." and stop collecting once the 24-slot arrays are full */
         if (de_isdot() == 0 && n < 24) {
             k = 0;                             /* trim de[] name into names[n*12] */
+            /* dir names are space-padded to 12 (0x20); copy up to the first pad */
             while (k < 12 && (de[k] & 255) != 32) {
                 names[n * 12 + k] = de[k];
                 k = k + 1;

@@ -6,11 +6,18 @@
 ; Entry: P2 = arg tail.
 ;#use abi
 
+; Memory model: each file's lines live in a fixed 80-byte-per-line grid
+; (alines/blines, 7680 = 96 lines x 80). A line holds up to 79 chars + a NUL
+; terminator; laddr computes base + line*80 + col. na/nb hold each file's line
+; count. dp = length of common prefix; dsa/dsb = end index of each file's
+; differing region (everything from dsa..na / dsb..nb is the common suffix).
+
         .org $6A00
-        TPA2L
+        TPA2L                        ; stash arg-tail pointer (P2) into d_arg
         STA d_arg
         TPA2H
         STA d_arg+1
+; d_sk: advance d_arg past leading spaces (ASCII 32) in the arg tail.
 d_sk:   LDA d_arg
         TAP2L
         LDA d_arg+1
@@ -28,6 +35,8 @@ d_sk:   LDA d_arg
         INC
         STA d_arg+1
         JMP d_sk
+; d_chk: first non-space char. NUL or CR (13) = empty tail -> usage. A leading
+; '-' means an option; the only options accepted are -h / -H, both print usage.
 d_chk:  LDA (P2)
         LDB #0
         CMP
@@ -55,14 +64,15 @@ d_f1:   LDA #<path                   ; abspath(path, arg) - file 1
         LDA d_arg+1
         STA ap_a+1
         JSR abspath
-        LDA d_arg
-        LDB ap_n
+        LDA d_arg                    ; advance d_arg past the token just consumed
+        LDB ap_n                     ; ap_n = char count abspath copied from arg
         ADD
         STA d_arg
         JNC d_f1s
         LDA d_arg+1
         INC
         STA d_arg+1
+; d_f1s: skip spaces between file1 and file2 tokens in the arg tail.
 d_f1s:  LDA d_arg
         TAP2L
         LDA d_arg+1
@@ -80,6 +90,8 @@ d_f1sk: LDA (P2)
         INC
         STA d_arg+1
         JMP d_f1s
+; d_open1: open file1; openf returns A=0 on not-found. Load its lines into
+; alines and record the count in na.
 d_open1:JSR openf
         LDB #0
         CMP
@@ -121,16 +133,18 @@ d_open1:JSR openf
         JSR loadlines
         STA nb
 ; ---- common prefix --------------------------------------------------------
+; Walk dp forward while alines[dp] == blines[dp]. Stop when dp reaches either
+; line count (CMP sets C=1 when A>=B, i.e. dp >= na or dp >= nb) or a line differs.
         LDA #0
         STA dp
 pfx_l:  LDA dp
         LDB na
         CMP
-        JC pfx_d
+        JC pfx_d                      ; dp >= na -> ran off file1
         LDA dp
         LDB nb
         CMP
-        JC pfx_d
+        JC pfx_d                      ; dp >= nb -> ran off file2
         LDA #<alines
         STA le_x
         LDA #>alines
@@ -143,26 +157,30 @@ pfx_l:  LDA dp
         STA le_y+1
         LDA dp
         STA le_yi
-        JSR leq
+        JSR leq                       ; leq -> A=1 if the two lines are equal
         LDB #0
         CMP
-        JZ pfx_d
+        JZ pfx_d                      ; unequal -> prefix ends here
         LDA dp
         INC
         STA dp
         JMP pfx_l
-pfx_d:  LDA na                       ; common suffix
+; ---- common suffix --------------------------------------------------------
+; From the ends, walk dsa/dsb backward while alines[dsa-1]==blines[dsb-1], but
+; never past dp (stop when either end index equals dp). After this, the
+; differing region is alines[dp..dsa) vs blines[dp..dsb).
+pfx_d:  LDA na                       ; dsa/dsb start one past the last line
         STA dsa
         LDA nb
         STA dsb
 sfx_l:  LDA dsa
         LDB dp
         CMP
-        JZ sfx_d
+        JZ sfx_d                      ; dsa reached prefix end -> done
         LDA dsb
         LDB dp
         CMP
-        JZ sfx_d
+        JZ sfx_d                      ; dsb reached prefix end -> done
         LDA dsa
         LDB #1
         SUB
@@ -190,6 +208,8 @@ sfx_l:  LDA dsa
         DEC
         STA dsb
         JMP sfx_l
+; sfx_d: if both differing regions are empty (dp==dsa and dp==dsb) the files
+; are identical -> print nothing and return.
 sfx_d:  LDA dp                       ; identical?
         LDB dsa
         CMP
@@ -199,12 +219,13 @@ sfx_d:  LDA dp                       ; identical?
         CMP
         JNZ d_emit
         RTS
+; d_emit: print file1's differing lines tagged "< ", then file2's tagged "> ".
 d_emit: LDA dp
         STA di
 de_a:   LDA di
         LDB dsa
         CMP
-        JC de_ad
+        JC de_ad                      ; di >= dsa -> file1 region done
         LDA #<tag_lt
         STA em_tag
         LDA #>tag_lt
@@ -225,7 +246,7 @@ de_ad:  LDA dp
 de_b:   LDA di
         LDB dsb
         CMP
-        JC de_bd
+        JC de_bd                      ; di >= dsb -> file2 region done
         LDA #<tag_gt
         STA em_tag
         LDA #>tag_gt
@@ -242,6 +263,8 @@ de_b:   LDA di
         STA di
         JMP de_b
 de_bd:  RTS
+; Error/usage exits: point P1 at a message string, fall through to d_pm which
+; prints it (SYS_PUTS) followed by a newline, then returns.
 d_usage:LDA #<u_use
         TAP1L
         LDA #>u_use
@@ -268,50 +291,57 @@ d_pm:   LDA #0
         JSR SYS_PUTC
         RTS
 
-; openf: FRESOLVE(path)+FOPEN($FC00) -> A = 1 ok / 0 not found
+; openf: resolve the absolute path in 'path', then open it. FOPEN needs a
+; caller-supplied file-handle/descriptor buffer; $FC00 is the fixed scratch
+; page this command uses for it. FOPEN sets carry on failure.
+; Out: A = 1 opened / 0 not found. Clobbers P1 (and P1/P2 via FRESOLVE/FOPEN).
 openf:  LDA #<path
         TAP1L
         LDA #>path
         TAP1H
         LDA #0
         JSR FRESOLVE
-        LDA #$00
+        LDA #$00                     ; P1 = $FC00 = FOPEN handle buffer
         TAP1L
         LDA #$FC
         TAP1H
         LDA #0
         JSR FOPEN
-        JC of_no
+        JC of_no                     ; carry set -> open failed
         LDA #1
         RTS
 of_no:  LDA #0
         RTS
 
-; loadlines: read the open stream into ll_buf; return line count in A.
+; loadlines: read the currently-open stream into the 80-byte-per-line grid at
+; ll_buf, splitting on LF and NUL-terminating each line. lln = current line
+; index, llcol = current column. Return the line count in A.
+; Caps: at most 96 lines; at most 79 chars/line (excess chars are dropped,
+; CR is ignored). Clobbers P1/P2 (FGETB) and the ll*/la* scratch vars.
 loadlines:
         LDA #0
         STA lln
         STA llcol
 ll_rd:  LDA #0
         JSR FGETB
-        JC ll_fin
+        JC ll_fin                     ; carry = EOF
         STA llc
         LDA lln
         LDB #96
         CMP
-        JC ll_fin
+        JC ll_fin                     ; lln >= 96 -> line grid full, stop
         LDA llc
         LDB #10
         CMP
-        JZ ll_nl
+        JZ ll_nl                      ; LF -> terminate current line
         LDA llc
         LDB #13
         CMP
-        JZ ll_rd
+        JZ ll_rd                      ; CR -> ignore (handles CRLF)
         LDA llcol
         LDB #79
         CMP
-        JC ll_rd
+        JC ll_rd                      ; col >= 79 -> line full, drop char
         LDA ll_buf
         STA la_base
         LDA ll_buf+1
@@ -320,13 +350,14 @@ ll_rd:  LDA #0
         STA la_s
         LDA llcol
         STA la_c
-        JSR laddr
+        JSR laddr                     ; P1 = &ll_buf[lln][llcol]
         LDA llc
         STA (P1)
         LDA llcol
         INC
         STA llcol
         JMP ll_rd
+; ll_nl: end of line - write the NUL terminator, bump line index, reset column.
 ll_nl:  LDA ll_buf
         STA la_base
         LDA ll_buf+1
@@ -344,14 +375,16 @@ ll_nl:  LDA ll_buf
         LDA #0
         STA llcol
         JMP ll_rd
+; ll_fin: EOF (or grid full). If the last line had no trailing LF (llcol != 0)
+; and there is still room, flush it as a final NUL-terminated line.
 ll_fin: LDA llcol
         LDB #0
         CMP
-        JZ ll_ret
+        JZ ll_ret                     ; clean line boundary -> nothing pending
         LDA lln
         LDB #96
         CMP
-        JC ll_ret
+        JC ll_ret                     ; no room for the partial line -> drop it
         LDA ll_buf
         STA la_base
         LDA ll_buf+1
@@ -369,7 +402,9 @@ ll_fin: LDA llcol
 ll_ret: LDA lln
         RTS
 
-; leq: A = 1 if line le_xi of le_x equals line le_yi of le_y
+; leq: compare two NUL-terminated lines byte-by-byte.
+; In: le_x/le_xi = base+index of line X, le_y/le_yi = base+index of line Y.
+; Out: A = 1 if equal (both reach NUL together), else 0. Clobbers P1, le_i/a/b.
 leq:    LDA #0
         STA le_i
 le_l:   LDA le_x
@@ -398,7 +433,7 @@ le_l:   LDA le_x
         LDB le_b
         CMP
         JNZ le_no
-        LDA le_a
+        LDA le_a                      ; bytes match; if both are NUL, lines equal
         LDB #0
         CMP
         JZ le_yes
@@ -411,7 +446,8 @@ le_no:  LDA #0
 le_yes: LDA #1
         RTS
 
-; emit: print em_tag then line em_li of em_buf then newline
+; emit: print the NUL-terminated tag at em_tag, then line em_li of grid em_buf,
+; then a newline (LF, 10). Clobbers P1 and the la* scratch vars.
 emit:   LDA em_tag
         TAP1L
         LDA em_tag+1
@@ -443,7 +479,11 @@ el_d:   LDA #10
         JSR SYS_PUTC
         RTS
 
-; laddr: P1 = la_base + la_s*80 + la_c
+; laddr: compute the address of a cell in an 80-byte-per-line grid.
+; In: la_base (16-bit grid base), la_s (line/slot index), la_c (column).
+; Out: P1 = la_base + la_s*80 + la_c. la_s*80 done by repeated 16-bit add of 80
+; (lat is the running 16-bit accumulator; lacar carries into the high byte on
+; the final base add). Clobbers A/B, P1, lat/lan/lacar.
 laddr:  LDA #0
         STA lat
         STA lat+1
@@ -493,7 +533,12 @@ lad_3:  STA lacar
         TAP1H
         RTS
 
-; abspath (P2 source, P1 dest)
+; abspath: build an absolute path in the buffer at ap_out from the arg token
+; at ap_a. If the token starts with '/', copy it verbatim. Otherwise prefix
+; the current working directory (SYS_GETCWD), ensure exactly one '/' separator,
+; then append the token. Copying stops at NUL, CR (13) or space (32).
+; In: ap_a = source ptr, ap_out = dest buffer. Out: ap_n = #chars copied from
+; the token; dest is NUL-terminated. Clobbers A/B, P1, P2.
 abspath:LDA #0
         STA ap_n
         LDA ap_a
@@ -503,7 +548,7 @@ abspath:LDA #0
         LDA (P2)
         LDB #'/'
         CMP
-        JZ ab_abs
+        JZ ab_abs                     ; leading '/' -> already absolute
         LDA ap_out
         TAP1L
         LDA ap_out+1
@@ -514,12 +559,15 @@ abspath:LDA #0
         TAP1L
         LDA ap_out+1
         TAP1H
+; ab_sl: advance P1 to the NUL at the end of the copied CWD string.
 ab_sl:  LDA (P1)
         LDB #0
         CMP
         JZ ab_sld
         INP1
         JMP ab_sl
+; ab_sld: back up to the CWD's last char; if it is not already '/', append one
+; so exactly one separator sits between the directory and the token.
 ab_sld: DEP1
         LDA (P1)
         INP1
@@ -533,6 +581,8 @@ ab_abs: LDA ap_out
         TAP1L
         LDA ap_out+1
         TAP1H
+; ab_setp: point P2 back at the token and append it to dest (P1), counting
+; chars in ap_n and stopping at NUL / CR / space.
 ab_setp:LDA ap_a
         TAP2L
         LDA ap_a+1

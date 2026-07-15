@@ -7,11 +7,15 @@
 ;#use stdin
 ;#use abi
 
+; Entry: P2 points at the raw argument tail. Stash it in w_arg (a 16-bit
+; pointer we can advance byte-by-byte, since P2 gets clobbered by nextc/syscalls).
         .org $6A00
         TPA2L
         STA w_arg
         TPA2H
         STA w_arg+1
+; w_sk: skip leading spaces in the arg tail. Reload P2 from w_arg each pass
+; because the byte fetch below is via (P2), then advance the 16-bit w_arg.
 w_sk:   LDA w_arg
         TAP2L
         LDA w_arg+1
@@ -29,6 +33,8 @@ w_sk:   LDA w_arg
         INC
         STA w_arg+1
         JMP w_sk
+; w_chk: first non-space char. If it is '-', peek the next char for a -h/-H
+; help flag; anything else (including a bare '-') falls through to open.
 w_chk:  LDA (P2)
         LDB #'-'
         CMP
@@ -45,8 +51,8 @@ w_open: LDA w_arg                     ; openarg(arg)
         STA oa_a
         LDA w_arg+1
         STA oa_a+1
-        JSR openarg
-        LDB #2
+        JSR openarg                   ; open file/glob (or stdin if empty)
+        LDB #2                        ; openarg returns 2 = not found
         CMP
         JZ w_nf
 ; init 24-bit counters
@@ -61,6 +67,9 @@ w_open: LDA w_arg                     ; openarg(arg)
         STA bytes+1
         STA bytes+2
         STA inword
+; w_loop: main scan. nextc returns next byte in A, or C=1 at EOF (across all
+; files of a glob). Carry-out on the low-byte ADDs ripples into the higher
+; counter bytes; INC sets Z, so JNZ skips the next byte when there was no carry.
 w_loop: JSR nextc
         JC w_done
         STA wch
@@ -108,6 +117,8 @@ w_wsq:  LDA wch                       ; whitespace?
         LDB #13
         CMP
         JZ w_ws
+        ; non-ws char: count a word only on the ws->word transition
+        ; (inword==0). w_ws below resets inword=0 on any whitespace.
         LDA inword                    ; non-ws: enter a word?
         LDB #0
         CMP
@@ -178,6 +189,11 @@ w_usage:LDA #<u_use
         RTS
 
 ; put24: print pn (3-byte LE) as an unsigned decimal (no padding).
+;   Copies pn -> num24, then repeatedly extracts the low decimal digit via
+;   dm10 (which divides num24 by 10 in place, returning the remainder). Digits
+;   come out least-significant first, so they are pushed onto dg[] (count in
+;   psnd) and replayed in reverse. The first dm10 runs unconditionally so a
+;   zero value still prints "0". Uses P1; clobbers A/B, num24, dg, psnd.
 put24:  LDA pn
         STA num24
         LDA pn+1
@@ -190,6 +206,7 @@ put24:  LDA pn
         LDB #48
         ADD
         JSR pu_push
+; keep extracting digits while num24 is still non-zero
 pu_wl:  JSR nz24
         LDB #0
         CMP
@@ -238,6 +255,10 @@ pp_1:   TAP1H
         RTS
 
 ; dm10: num24[0..2] /= 10 (24-bit LE); remainder -> A (divmod10 per byte).
+;   Walks bytes MSB-first (dmi 2->0). For each byte, dv = {byte, carry-in
+;   remainder}, so divmod10 folds the running remainder into the high half;
+;   quotient stored back in place, remainder carried down. Final remainder in A.
+;   Uses P1; clobbers dmrem, dmi, dv/dvq/dvr.
 dm10:   LDA #0
         STA dmrem
         LDA #2

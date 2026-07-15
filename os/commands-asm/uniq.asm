@@ -5,11 +5,17 @@
 ;#use stdin
 ;#use abi
 
+; Main entry (TPA load address $6A00). On entry P2 points at the raw argument
+; tail. Stash it as a 16-bit pointer word (u_arg) so we can walk it with plain
+; 8-bit adds even though (P2) dereferences clobber-prone pointer registers.
         .org $6A00
         TPA2L
         STA u_arg
         TPA2H
         STA u_arg+1
+; u_sk: skip leading spaces (ASCII 32) in the arg tail, advancing u_arg. The
+; ADD/JNC/INC dance is a 16-bit pointer increment: bump the low byte, and only
+; ripple into the high byte when the low-byte add carried (JNC skips the INC).
 u_sk:   LDA u_arg
         TAP2L
         LDA u_arg+1
@@ -27,6 +33,8 @@ u_sk:   LDA u_arg
         INC
         STA u_arg+1
         JMP u_sk
+; u_chk: first non-space char. If it is '-', peek the next char for the -h/-H
+; help flag and jump to the usage message; otherwise fall through to open.
 u_chk:  LDA (P2)
         LDB #'-'
         CMP
@@ -39,6 +47,9 @@ u_chk:  LDA (P2)
         LDB #'H'
         CMP
         JZ u_usage
+; u_open: hand u_arg to the shared stdin engine's openarg (via ;#use stdin).
+; openarg returns A=2 when the named file was not found -> u_nf error path.
+; With no filename it selects stdin. Then first=1 marks the initial line.
 u_open: LDA u_arg
         STA oa_a
         LDA u_arg+1
@@ -49,6 +60,7 @@ u_open: LDA u_arg
         JZ u_nf
         LDA #1
         STA first
+; u_loop: read next line into cur[]. readline returns A=0 at EOF -> done.
 u_loop: LDA #<cur
         STA rl_buf
         LDA #>cur
@@ -60,7 +72,7 @@ u_loop: LDA #<cur
         LDA first
         LDB #0
         CMP
-        JNZ u_put                    ; first line -> print
+        JNZ u_put                    ; first line -> always print (no prev yet)
         LDA #<cur
         STA se_p
         LDA #>cur
@@ -72,15 +84,18 @@ u_loop: LDA #<cur
         JSR streq
         LDB #0
         CMP
-        JNZ u_copy                   ; equal to prev -> skip
+        JNZ u_copy                   ; equal to prev -> skip print, just refresh prev
+; u_put: emit cur[] followed by a newline (LF=10). SYS_PUTS' A=0 arg selects
+; stdout. Falls through into u_copy to update prev.
 u_put:  LDA #<cur
         TAP1L
         LDA #>cur
         TAP1H
         LDA #0
-        JSR SYS_PUTS                 ; SYS_PUTS
+        JSR SYS_PUTS
         LDA #10
         JSR SYS_PUTC
+; u_copy: prev = cur (byte copy P2=cur -> P1=prev until NUL), clear first, loop.
 u_copy: LDA #<cur                    ; prev = cur
         TAP2L
         LDA #>cur
@@ -101,7 +116,8 @@ uc_d:   LDA #0
         LDA #0
         STA first
         JMP u_loop
-u_end:  RTS
+u_end:  RTS                          ; EOF reached, normal exit
+; u_nf: "not found" error, u_usage: help text. Both print msg + newline, return.
 u_nf:   LDA #<m_nf
         TAP1L
         LDA #>m_nf
@@ -132,25 +148,25 @@ readline:
         STA rln
         JSR nextc
         JC rl_eof0
-rl_l:   STA rlc
+rl_l:   STA rlc                      ; rlc = current char from nextc
         LDB #10
         CMP
-        JZ rl_done
+        JZ rl_done                   ; LF ends the line
         LDA rlc
         LDB #13
         CMP
-        JZ rl_skip
+        JZ rl_skip                   ; drop CR (CRLF -> LF), don't store
         LDA rln
         LDB #255
         CMP
-        JC rl_skip
+        JC rl_skip                   ; buffer full (len>=255): swallow rest of line
         LDA rlp
         TAP1L
         LDA rlp+1
         TAP1H
         LDA rlc
-        STA (P1)
-        LDA rlp
+        STA (P1)                     ; store char at rlp
+        LDA rlp                      ; 16-bit rlp++ (ripple carry into high byte)
         LDB #1
         ADD
         STA rlp
@@ -160,10 +176,11 @@ rl_l:   STA rlc
         STA rlp+1
 rl_s1:  LDA rln
         INC
-        STA rln
-rl_skip:JSR nextc
+        STA rln                      ; rln++ (bytes stored this line)
+rl_skip:JSR nextc                    ; fetch next char; C set = EOF
         JC rl_done
         JMP rl_l
+; rl_done: NUL-terminate at rlp and return A=1 (a line, possibly empty, was read)
 rl_done:LDA rlp
         TAP1L
         LDA rlp+1
@@ -172,7 +189,7 @@ rl_done:LDA rlp
         STA (P1)
         LDA #1
         RTS
-rl_eof0:LDA #0
+rl_eof0:LDA #0                        ; EOF hit before any char -> A=0, no line
         RTS
 
 ; streq: A = 1 if strings at se_p and se_q are equal, else 0.
@@ -184,16 +201,17 @@ streq:  LDA se_p
         TAP2L
         LDA se_q+1
         TAP2H
+; Compare byte-by-byte until a mismatch or a shared terminating NUL.
 se_l:   LDA (P1)
-        STA se_c
+        STA se_c                      ; se_c = *P1 (needed: (P2) load clobbers regs)
         LDA (P2)
         LDB se_c
         CMP
-        JNZ se_ne
+        JNZ se_ne                     ; bytes differ -> not equal
         LDA se_c
         LDB #0
         CMP
-        JZ se_eq
+        JZ se_eq                      ; both NUL at same spot -> equal
         INP1
         INP2
         JMP se_l
@@ -205,8 +223,9 @@ se_eq:  LDA #1
 m_nf:   .asciiz "uniq: not found"
 m_use:  .asciiz "usage: UNIQ [file]   collapse adjacent duplicate lines"
 
-u_arg:  .fill 2
-first:  .fill 1
+; --- variables / buffers ---
+u_arg:  .fill 2                       ; 16-bit pointer into the arg tail
+first:  .fill 1                       ; 1 until first line printed (no prev yet)
 rl_buf: .fill 2
 rlp:    .fill 2
 rln:    .fill 1
@@ -214,5 +233,5 @@ rlc:    .fill 1
 se_p:   .fill 2
 se_q:   .fill 2
 se_c:   .fill 1
-cur:    .fill 260
-prev:   .fill 260
+cur:    .fill 260                     ; current line (255 max chars + NUL + slack)
+prev:   .fill 260                     ; previous line, for adjacent-dup compare

@@ -7,11 +7,14 @@
 ; $2003 (via abspath). Entry: P2 = arg tail.
 ;#use abi
 
+; Entry: TPA points P2 at the raw argument tail. Stash it in t_arg (a 16-bit
+; RAM cursor) since P2 gets reused for every dereference below.
         .org $6A00
         TPA2L
         STA t_arg
         TPA2H
         STA t_arg+1
+; t_sk: skip leading spaces so t_chk sees the first real char of the tail.
 t_sk:   LDA t_arg
         TAP2L
         LDA t_arg+1
@@ -29,6 +32,8 @@ t_sk:   LDA t_arg
         INC
         STA t_arg+1
         JMP t_sk
+; t_chk: no operand (NUL or CR) prints usage; a leading '-' is inspected for the
+; -h / -H help flag, which also prints usage. Anything else falls to t_loop.
 t_chk:  LDA (P2)
         LDB #0
         CMP
@@ -39,7 +44,7 @@ t_chk:  LDA (P2)
         LDB #'-'
         CMP
         JNZ t_loop
-        INP2
+        INP2                            ; step past '-' to the flag letter
         LDA (P2)
         LDB #'h'
         CMP
@@ -104,12 +109,12 @@ t_ex:   LDA #<path
         TAP1H
         LDA #0
         JSR FRESOLVE                 ; FRESOLVE
-        LDA #$00
+        LDA #$00                     ; P1 = $FC00 read-buffer for FOPEN's use
         TAP1L
         LDA #$FC
         TAP1H
         LDA #0
-        JSR FOPEN                    ; FOPEN $FC00
+        JSR FOPEN                    ; FOPEN $FC00 (C=0 -> file exists)
         JNC t_loop                   ; carry clear -> exists -> leave it, next name
 ; --- create empty (FRESOLVE + FWOPEN + FCLOSE) -----------------------------
         LDA #<path
@@ -136,6 +141,8 @@ t_usage:LDA #<u_use
 
 ; abspath (P2 source, P1 dest): ap_out <- absolute path of the word at ap_a;
 ; ap_n = chars consumed. (P3 is the stack pointer, so P2 is the source cursor.)
+; A relative word is prefixed with SYS_GETCWD + '/'; an absolute word ('/...')
+; is copied verbatim. Copy stops at NUL, CR, or space. Clobbers A, B, P1, P2.
 abspath:LDA #0
         STA ap_n
         LDA ap_a
@@ -162,6 +169,9 @@ ab_sl:  LDA (P1)
         JZ ab_sld
         INP1
         JMP ab_sl
+; ab_sld: P1 sits on the NUL; back up to inspect the CWD's last char. If it is
+; not already '/', append one so the joined path has exactly one separator.
+; (Overwriting the NUL is fine; ab_cp/ab_dn re-terminate the string.)
 ab_sld: DEP1
         LDA (P1)
         INP1

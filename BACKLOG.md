@@ -125,17 +125,129 @@ Last updated: 2026-07-08
 
 
 
-- [ ] **On-target `make` — a real single-Makefile front end.** The old `make`
-      built-in (a `/src/mk/<target>.sh` wrapper) was removed from the kernel on
-      2026-07-14; on-target builds now run the scripts directly (`sh
-      /src/mk/all.sh`). A proper `make` would read ONE CWD `Makefile` (`target:
-      deps` + TAB recipe), resolve prerequisites (DFS, dedup, cycle-detect), and
-      run deps-first — always-rebuild (no mtimes). Validated design (turnkey):
-      flatten the ordered recipe into the free TPA during planning (it's free
-      until a recipe program runs), write it to a temp file in one FWOPEN session
-      (FOPEN's FFIND clobbers FWOPEN's SBUF, so all Makefile reads finish first),
-      then `SH_RUN` it. Could live in the kernel again or as a `/bin/make`. See
-      the (now superseded) mini-make note below.
+- [x] **Overwrite semantics for streamed output — FIXED (2026-07-14).** Writing a
+      file that already existed left a DUPLICATE directory entry (P8XFS registers a
+      new entry at FCLOSE; there is no in-place replace), so `make wc` twice — or any
+      `asm src out` / `cmd >out` rerun — accreted stale twins of the output. Fix: the
+      writer now FDELETEs the existing target BEFORE FWOPEN (it must precede the open
+      stream — FDELETE scans the directory via SBUF, which the write stream then
+      claims). Applied in the `asm` app's `OUTINIT` (apps/p8xasm.asm) and the shell's
+      `>`/`>>` redirect `DR_OUT` (os/p8xos.asm); `>>` keeps the old data via the raw
+      APLBA/APCOPY path (a tombstone doesn't erase sectors). The orphaned old extent
+      is reclaimed by the next `pack`, same as EDIT's rewrite. This is the documented
+      "FDELETE then FCREATE" overwrite convention, now applied on the rebuild paths.
+
+- [x] **`awk` command (basic) — DONE (2026-07-14).** A small awk (os/commands/awk.c):
+      records split into `$1..$NF` on whitespace or `-F c`; one rule `[/regex/]
+      { print items }` (`/regex/` via the shared `lib_regex`; empty pattern = every
+      line; bare pattern = print the line); `print` items are `$0`/`$N`/`$NF`/`NF`/
+      `NR`/`"str"`, comma = a space between. File arg or stdin (pipes). The program
+      is one quoted arg (awk strips the quotes; the shell doesn't). Man page
+      `os/man/awk`; test `emulator/test/os_awk_test.sh`. **Hand-asm twin done
+      (2026-07-14):** os/commands-asm/awk.asm, verified byte-behaviour-identical to
+      the C twin (the test diffs both); awk is now a full dual-twin command in
+      `_mkcmds` + /bin + /bina. Follow-ups: `printf`, `BEGIN`/`END`, expr patterns,
+      multiple rules.
+
+- [x] **`bootload file` — install an OS image on-target — DONE (2026-07-14).** New
+      kernel built-in (`DOBOOTLOAD`): copies FILE's data extent to LBA 1.. (the OS
+      region the monitor's `B` loads) via raw `CFREAD`/`CFWRITE`, and writes
+      `ceil(len/512)` into boot-block byte 3 (OSCNT) — so `exit` -> `B` boots it.
+      Closes the self-hosting loop: `cd /src/os-bios && make os && bootload
+      asm/bin/p8xos.bin && exit && B`. The running OS is in RAM, so overwriting the
+      on-disk region is safe; max 32 sectors. Man `os/man/bootload`; test
+      `emulator/test/os_bootload_test.sh` (installs a variant OS, reboots, checks
+      the new banner + the OSCNT byte). NB: the MONITOR is EEPROM firmware, not on
+      disk — it can't be installed this way (reflash host-side); documented.
+
+- [x] **On-target `.include` for the native assembler — DONE (2026-07-14).** The
+      native `apps/p8xasm.asm` now supports `.include "path"` (one per file):
+      `CHKINC` (parallel to `CHKUSE`) records the path resolved relative to the
+      INCLUDING source's directory — it prefixes the source dir (SRCPATH minus its
+      leaf) and lets `FRESOLVE` walk the `..` entries (each dir has a real `..`), so
+      `../generators/memmap.inc` finds `/src/os-bios/generators/memmap.inc`. The file
+      is opened + spliced at the source's EOF like `;#use` (`NU_INC`); equates are
+      order-independent (two-pass). So `/src/os-bios` builds the OS/monitor on-target
+      (the memmap is bundled at `/src/os-bios/generators/memmap.inc`). Test
+      `emulator/test/os_asm_inc_test.sh` (relative include + the full-memmap os-bios
+      layout); `os/man/asm` + the p8xasm header updated.
+
+- [x] **`cmp` command (basic) — DONE (2026-07-14), incl. hand-asm twin.**
+      os/commands/cmp.c: byte-for-byte file compare — silent if identical, else
+      `cmp: files differ: byte N, line M`, or `cmp: EOF on fileX` when one is a
+      prefix of the other. Reads file1 into an 8 KB buffer, streams file2 (both via
+      the single BIOS read stream, like diff). **Hand-asm twin** os/commands-asm/
+      cmp.asm (16-bit offset/line + decimal print), verified byte-identical to the C
+      twin (the test diffs both). Full dual-twin in `_mkcmds` + /bin + /bina. Man
+      `os/man/cmp`; test `emulator/test/os_cmp_test.sh`.
+      NB while building it: the shared 16-bit decimal printer `pnum` had an inverted
+      borrow branch (`JNC`→`JC` on the low-byte SUB) that broke any value ≥ 10 — it
+      was latent in awk.asm too (its tests only printed single digits). Fixed in
+      both; both tests now exercise a 2-digit value.
+
+- [x] **Makefiles build every source in each dir — DONE (2026-07-14).** The C
+      Makefile already covered all command `.c` (via `_mkcmds`+`_ccmds`); the asm
+      Makefile now also builds the toolchain apps: `p8xedit`/`p8xcc` (standalone
+      `asm`) and `p8xasm` (its recipe `cat p8xasm.asm opctab.asm >T.ASM` then `asm`,
+      since the opcode table is generated). run.sh ships the generated `opctab.asm`
+      into `/src/commands/asm`. `all`/`clean` include the apps.
+
+- [x] **`examine` command (C + asm) — DONE (2026-07-14).** Interactive memory
+      examine/modify — the monitor's `E` as a /bin command: shows `aaaa: vv`, Enter
+      advances, two hex digits write + advance, `.` quits. C twin
+      (os/commands/examine.c, `getchar`/`peek`/`poke`) + byte-behaviour-identical
+      hand-asm twin (os/commands-asm/examine.asm, `SYS_GETC`/`SYS_PUTC` + the shared
+      GETHEX/HEXVAL/OPH8 helpers). Both echo via SYS_GETC (so nothing is echoed by
+      hand) and swallow the queued LF after Enter. Added to the c/asm Makefiles
+      (`_mkcmds`) + the /bin and /bina build lists in run.sh; man page
+      `os/man/examine`; test `emulator/test/os_examine_test.sh` (write→dump readback
+      + C-vs-asm output parity). `dump` (monitor-D block view) and `dep` (blind
+      write) already existed; `examine` completes the trio.
+
+- [x] **Shell autocomplete (Tab) — DONE (2026-07-14).** `DOTAB` in the line editor
+      completes the word at the cursor: the command word against built-in names
+      (`KWTAB`) + `/bin`, other words against the directory the word implies (the
+      CWD, or the path before its last `/`, resolved with `CDPATH`). Directories are
+      walked with `CFREAD`+`RDENT`. Fills the longest common prefix; a sole match
+      adds a trailing space (file/command) or `/` (directory); a second consecutive
+      Tab with nothing to add lists the matches and redraws the prompt. Scratch in
+      the free gap below the history ring (`CMPPFX`/`CMPLCP`/`CMPDIR` at $5700) +
+      state bytes in the $60xx tail. Test `emulator/test/os_complete_test.sh`; man
+      topic `os/man/history` (AUTOCOMPLETE section). Gotcha fixed: `CMPDIR` ($5760)
+      is not page-aligned, so offset indexing must add `<CMPDIR`, not just set the
+      high byte.
+
+- [ ] **History persistence (optional).** The history ring is RAM-only (cleared at
+      cold start). If cross-session history is wanted, add explicit `history -w
+      [file]` / `history -r [file]` (dump/load the whole ring in one FCREATE/FOPEN)
+      rather than a per-command append — P8XFS is contiguous one-extent-per-file, so
+      appending each command would rewrite+reallocate the file and churn the disk.
+
+- [x] **Shell command history (arrow-key recall) — DONE (2026-07-14).** The
+      interactive line editor (`GETLN`) now records finished lines in a 32-line RAM
+      ring (`HISTRING` $5800..$5FFF, state `HISTST`/`HISTCT`/`HISTNV` in the $60xx
+      scratch tail). Up/Down arrows (ESC `[` `A`/`B`) recall older/newer lines and
+      redraw `LINEBUF` in place; blank lines and consecutive duplicates are not
+      stored. `sh`-script lines are excluded. Man topic `os/man/history`; test
+      `emulator/test/os_hist_test.sh` (up recall, down-nav, dedup via piped ESC
+      sequences). Autocomplete (Tab) is the planned follow-on above.
+
+- [x] **On-target `make` — a real single-Makefile front end — DONE (2026-07-14).**
+      The old `/src/mk/<target>.sh` wrapper hack was removed; `make` is now a
+      proper kernel built-in that reads ONE CWD `Makefile` (`target: deps` + TAB
+      recipe), resolves prerequisites depth-first (dedup so shared deps build
+      once, cycle/too-deep guard), and runs deps-first — always-rebuild (no
+      mtimes). Implementation matches the validated design: slurp the Makefile
+      into free RAM, DFS the prerequisites into an ordered plan, flatten the
+      plan's recipes into the free TPA, write them to a temp file `MK.RUN` in one
+      FWOPEN session (all Makefile reads finish first — FOPEN's FFIND clobbers
+      FWOPEN's SBUF), then `SH_RUN` it. Targets `all`/`clean`/`install`. `run.sh`
+      ships a `Makefile` in `/src/commands/{c,asm}` and `/src/os-bios`. Tests:
+      `emulator/test/os_mk_test.sh` (semantics + cc/asm integration),
+      `os_sysbuild_test.sh` (full-system on-emulator rebuild). Gotchas fixed
+      along the way: FGETB/FPUTB and the MKF_PUT helper clobber P1/P2, so the
+      byte-stream loops keep their cursor in RAM (MKSP) and reload P1 each pass;
+      `cp`'s glob needs an absolute dir, so `install` names the source dir in full.
 
 - [ ] **memmap: build-time regeneration.** `generators/gen_memmap.py` emits the
       committed `memmap.{inc,h,py}`. They must be re-run by hand after editing the
@@ -248,20 +360,16 @@ Last updated: 2026-07-08
       `ls` prints `ls -> dir`, optional host `ln` subcommand. (3) OS `DIR` shows
       `-> target`; `RUN` follows for free (loads via `FOPEN`). (4) new `ln` command
       C **and** asm twins (reuse `FWOPEN`/`FPUTB`/`FCLOSE`, set flag `$03`), man
-      page, `os_ln_test`, `/src` tree + a `/src/mk/ln` target. NB: `cp /bin/dir
+      page, `os_ln_test`, `/src` tree + an `ln` target in the `/src/commands/*`
+      Makefiles. NB: `cp /bin/dir
       /bin/ls` already aliases a command today, safely, at the cost of a duplicate
       binary — so `ln` is convenience, not a capability gap.
 
-- [ ] **OS `make`: real Makefile parsing (2026-07-12).** Today `make <target>` just
-      runs the script `/src/mk/<target>` through the `sh` streaming engine (one
-      file per target, always-rebuild, no deps). That already covers per-command
-      builds (`make dir` = both twins), group builds (`c`/`asm`/`all`), and now
-      `installc`/`installa`. A "real" make — parse a single `Makefile` with
-      `target:` blocks, prerequisites, and a default `all` — would be a genuine new
-      feature (a mini-make parser in the OS `make` built-in or a `/bin/make`
-      program) and buys little over the target-per-file model. Deferred; revisit
-      only if Makefile syntax itself is wanted. See the `installc`/`installa`
-      targets (DONE 2026-07-12) for the current publish workflow.
+- [x] **OS `make`: real Makefile parsing — DONE (2026-07-14).** Superseded: the
+      earlier target-per-script model (`/src/mk/<target>.sh` run through `sh`) was
+      replaced by the real single-`Makefile` `make` built-in described in the
+      "On-target `make`" entry above (`target:` blocks, prerequisites, default
+      first target, `all`/`clean`/`install`).
 
 - [ ] **Move `tools/clib.py` -> `compiler/clib.py`.** clib.py is a C-toolchain
       preprocessing pass (the `//#use lib_*.c` splicer) — conceptually a sibling
@@ -694,12 +802,14 @@ Last updated: 2026-07-08
       line at a time, no size cap** (the earlier 512-byte slurp is gone). Caveat:
       a script line can't use `< redirect` (it shares IBUF). Man page `os/man/sh`
       updated; `os_sh_test` covers it.
-- [x] **`make <target>` — scaled-down make — DONE (2026-07-10); REMOVED
-      (2026-07-14).** The `DOMAKE` built-in was pulled back out of the kernel (it
-      was a thin `/src/mk/<target>.sh` wrapper — a hack, not a real make). The
-      `/src/mk/*.sh` scripts remain and are run directly with `sh` (e.g. `sh
-      /src/mk/all.sh`); a proper single-`Makefile` front end is a future item (see
-      the open "on-target make" entry). Original note follows:** New OS built-in
+- [x] **`make <target>` — scaled-down make — DONE (2026-07-10); REMOVED then
+      REPLACED by real make (2026-07-14).** The original `DOMAKE` (a thin
+      `/src/mk/<target>.sh` wrapper — a hack, not a real make) was pulled out of
+      the kernel, and `make` was then re-implemented properly as a single-`Makefile`
+      front end (see the "On-target `make`" DONE entry above): it reads the CWD
+      `Makefile`, DFS-resolves prerequisites, and drives the toolchain. The
+      `/src/mk/*.sh` scripts are gone; each `/src` dir ships a real `Makefile`.
+      Original scaled-down note follows:** New OS built-in
       (`DOMAKE`): builds `/src/mk/<target>` and runs it through the `sh` engine.
       **Always rebuilds** — the FS has no mtimes yet, so there's no up-to-date
       check (dependency tracking is a future enhancement). `run.sh` pre-generates

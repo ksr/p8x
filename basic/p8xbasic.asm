@@ -3987,6 +3987,8 @@ KWTAB:  .ascii "PRINT"
 ;==============================================================================
 ; Console
 ;==============================================================================
+; SKIPSP — advance the parse cursor P2 past ASCII spaces. Stops on the first
+; non-space (including the 00 line terminator). Clobbers A/B only.
 SKIPSP: LDA  (P2)
         LDB  #' '
         CMP
@@ -3994,11 +3996,13 @@ SKIPSP: LDA  (P2)
         INP2
         JMP  SKIPSP
 sks:    RTS
+; PUTC — transmit the byte in A over the 6850 ACIA. Busy-waits on TDRE (status
+; bit 1 = transmit data register empty) so it never overruns. Preserves A.
 PUTC:   PHA
 putc1:  LDA  ACIAS
         LDB  #$02
         AND
-        JZ   putc1
+        JZ   putc1                   ; TDRE clear -> transmitter still busy, spin
         PLA
         STA  ACIAD
         RTS
@@ -4050,22 +4054,31 @@ pst_1:  LDA  STRSN
         LDA  SAVE2+1
         TAP1H
         RTS
+; GETC — block until the ACIA has a byte, then return it in A. Busy-waits on RDRF
+; (status bit 0 = receive data register full).
 GETC:   LDA  ACIAS
         LDB  #$01
         AND
         JZ   GETC
         LDA  ACIAD
         RTS
+; PUTS — print the NUL-terminated string at (P1) to the console. Advances P1 past
+; the terminator; uses PUTC (console only, never the data-file sink).
 PUTS:   LDA  (P1)+
         JZ   putsx
         JSR  PUTC
         JMP  PUTS
 putsx:  RTS
+; CRLF — emit a carriage return + line feed to the console.
 CRLF:   LDA  #CR
         JSR  PUTC
         LDA  #LF
         JSR  PUTC
         RTS
+; GETLINE — read one console line into LBUF, echoing as typed. CR ends the line;
+; backspace/DEL erase the last char (and rub it out on screen) but not past the
+; start of LBUF. NUL-terminates the buffer and prints a trailing CRLF. Uses P2 as
+; the write cursor. No length cap here — callers rely on LBUF being large enough.
 GETLINE: LDP2 #LBUF
 gl1:    JSR  GETC
         LDB  #CR

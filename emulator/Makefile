@@ -70,8 +70,9 @@ test-sysbuild: p8xemu ucode
 # The FULL system test: (1) `make test` assembles/compiles every source + runs the
 # whole emulator suite; (2) the native-assembler self-host; (3) the full system
 # build + headless boot + an on-emulator `make` rebuild. A COMPLETE on-emulator
-# rebuild of all 42 commands is `sh /src/mk/all` / `make` on the target itself
-# (minutes of emulated time); os_sysbuild rebuilds one command as CI-tractable proof.
+# rebuild of all 42 commands is `cd /src/commands/c && make all` (and the asm dir)
+# on the target itself (minutes of emulated time); os_sysbuild rebuilds one command
+# as CI-tractable proof.
 test-full: p8xemu ucode
 	$(MAKE) test
 	$(MAKE) test-asm-selfhost
@@ -118,8 +119,15 @@ test-os: p8xemu ucode
 	sh test/os_edit_test.sh
 	sh test/os_asm_test.sh
 	sh test/os_asm_use_test.sh
+	sh test/os_asm_inc_test.sh
 	sh test/os_sh_test.sh
+	sh test/os_hist_test.sh
+	sh test/os_complete_test.sh
+	sh test/os_examine_test.sh
+	sh test/os_awk_test.sh
+	sh test/os_cmp_test.sh
 	sh test/os_mk_test.sh
+	sh test/os_bootload_test.sh
 	sh test/os_dualvol_test.sh
 	sh test/os_cprecursive_test.sh
 	sh test/os_mountcmd_test.sh

@@ -13,11 +13,15 @@
  */
 //#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
 
-char *HD = "0123456789ABCDEF";
+/* Uses only leaf helpers: argstr() -> command-line tail, peek() -> raw byte at
+ * a 16-bit address, putchar()/puts() -> console out, and bios(CONIN,..) for a
+ * blocking key read. No file I/O, so nothing here clobbers P1/P2 across calls. */
+
+char *HD = "0123456789ABCDEF";                 /* hex-digit lookup table */
 
 /* ph2/ph4: print a byte / a 16-bit word as hex digits. */
 int ph2(int v) { putchar(HD[(v >> 4) & 15]); putchar(HD[v & 15]); return 0; }
-int ph4(int v) { ph2((v >> 8) & 255); ph2(v & 255); return 0; }
+int ph4(int v) { ph2((v >> 8) & 255); ph2(v & 255); return 0; } /* high byte first */
 
 /* hx: value of one hex digit (0..15), or 99 if not a hex digit. */
 int hx(int c) {
@@ -38,15 +42,19 @@ int main() {
     int b;
     int k;
 
-    a = argstr();
-    while (*a == 32) { a = a + 1; }
+    a = argstr();                            /* command tail after "DUMP" */
+    while (*a == 32) { a = a + 1; }          /* skip leading spaces (32 = ' ') */
+    /* Empty arg, a bare CR (13), or "-h"/"-H" -> print usage and exit 0. */
     if (*a == 0 || *a == 13 ||
         (*a == '-' && (*(a + 1) == 'h' || *(a + 1) == 'H'))) {
         puts("usage: DUMP addr   show 256 bytes from hex address addr");
         return 0;
     }
 
-    addr = 0;                                /* parse the hex address */
+    /* Parse the hex address: fold digits MSB-first (addr*16 + digit) until a
+     * non-hex char stops the run. hx() returns 99 for non-digits, so the
+     * (d < 16) test ends the loop. `any` guards against a zero-digit arg. */
+    addr = 0;
     any = 0;
     d = hx(*a);
     while (d < 16) {

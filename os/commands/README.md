@@ -39,12 +39,12 @@ print a one-line usage summary and exit.
 > binary, no man page, no source), matching its deprecation everywhere else.
 >
 > **Rebuild on-card.** Alongside the sources, `run.sh` lays down build-output
-> dirs `/src/commands/c/bin` and `/src/commands/asm/bin`, plus a `/src/mk/`
-> tree of build scripts. The OS **`sh`** built-in runs a script of shell
-> commands a line at a time, so `sh /src/mk/all.sh` rebuilds everything and
-> `sh /src/mk/pwd.sh` one command — always-rebuild (P8XFS has no mtimes yet).
-> See *Building on-target* below. (A `make`/Makefile front end is a future
-> item — see `BACKLOG.md`.)
+> dirs `/src/commands/c/bin` and `/src/commands/asm/bin`, and a real `Makefile`
+> in each source dir. The OS **`make`** built-in reads the CWD `Makefile`
+> (`target: deps` + TAB recipe), resolves prerequisites depth-first, and drives
+> `cc`/`asm`: `cd /src/commands/c && make pwd` rebuilds one command, `make all`
+> the whole dir, `make install` publishes to `/bin`, `make clean` wipes `bin/`
+> — always-rebuild (P8XFS has no mtimes yet). See *Building on-target* below.
 
 > **Drives.** A second CF is **mounted at `/d1`** in one unified namespace, so
 > these commands are **drive-unaware**: an ordinary `/d1/...` path reaches drive 1
@@ -82,6 +82,7 @@ print a one-line usage summary and exit.
 | [`sort.c`](sort.c) | `sort [file] [-h]` | Sort lines ascending (file or stdin). In-memory: ≤128 lines of ≤79 chars. |
 | [`uniq.c`](uniq.c) | `uniq [file] [-h]` | Collapse **adjacent** duplicate lines (pair with `sort`). |
 | [`sed.c`](sed.c) | `sed s/re/new/[g] [file] [-h]` | `s///` substitution; the left side is a **basic regex** (`.` `*` `+` `?` `^` `$`, via `lib_regex` — same matcher as grep), replacement is literal. First match or all with `g`; the whole matched span is replaced. `*` is non-greedy. |
+| [`awk.c`](awk.c) | `awk [-F c] 'program' [file]` | Small awk: records split into fields on whitespace (or `-F c`); one rule `[/regex/] { print items }` — `/regex/` (via `lib_regex`) or empty = every line, a bare pattern prints the line. `print` items: `$0`/`$N`/`$NF`/`NF`/`NR`/`"str"`, comma = a space between. File arg or stdin (pipes). The program is one quoted arg (awk strips the quotes). Hand-asm twin [`../commands-asm/awk.asm`](../commands-asm/awk.asm) (verified identical output). No BEGIN/END/printf/expr yet. |
 | [`find.c`](find.c) | `find pattern [-h]` | Recursively print CWD paths whose name matches `pattern`: a case-insensitive **glob** (`*`/`?`, via `lib_glob`) if it contains `*` or `?`, else a literal substring. So `find *.C`, `find TEST?.ASM`, and `find BIN` (substring) all work. |
 | [`diff.c`](diff.c) | `diff f1 f2 [-h]` | Prefix/suffix-anchored line diff: `<` lines only in f1, `>` only in f2. ≤96 lines/file (≤79 chars). |
 | [`touch.c`](touch.c) | `touch name [name...] [-h]` | Create each named file empty if missing; an existing file is left **untouched** (not truncated). No mtime yet (no RTC); no globbing (a pattern only ever matches existing files). |
@@ -90,6 +91,8 @@ print a one-line usage summary and exit.
 | [`man.c`](man.c) | `man name [-h]` | Print the manual page for a command: streams `/man/<name>` to stdout (a `cat` with a fixed `/man/` prefix, so it is CWD-independent). Works for both `/bin` commands and OS built-ins; an unknown name prints `no manual entry for NAME`. Pages are plain text authored in [`os/man/`](../man/) and installed to `/man` by `run.sh`. |
 | [`dump.c`](dump.c) | `dump addr [-h]` | Hex-dump 256 bytes from hex `addr` (16 rows of hex + ASCII); a console key pages, `.` exits. Memory-only (`peek` + CONIN). Formerly an OS built-in — moved out of the kernel (it needs no shell/FS state). |
 | [`dep.c`](dep.c) | `dep addr b b ... [-h]` | Deposit hex byte values into memory starting at hex `addr` (`poke`); quiet on success. The counterpart to `dump`. Formerly an OS built-in. Note both live in the TPA at `$6A00`, so don't `dep` over that region. |
+| [`cmp.c`](cmp.c) | `cmp file1 file2 [-h]` | Byte-for-byte file compare — silent if identical, else `cmp: files differ: byte N, line M`, or `cmp: EOF on fileX` when one is a prefix. Reads file1 into an 8 KB buffer, streams file2 (both via the single BIOS read stream, like diff). Hand-asm twin [`../commands-asm/cmp.asm`](../commands-asm/cmp.asm) (identical output). The byte-level companion to diff. |
+| [`examine.c`](examine.c) | `examine addr [-h]` | Interactive examine/modify from hex `addr` (`peek`/`poke`) — the shell counterpart of the monitor's `E`: shows `aaaa: vv`, then Enter advances, two hex digits write + advance, `.` quits. Console input via `getchar` (`SYS_GETC`). Runs in the `$6A00` TPA, so don't examine over that region. |
 | [`disasm.c`](disasm.c) | `disasm start end [-h]` | Disassemble the hex range `[start,end)` — one instruction per line (`AAAA: bb bb.. MNEMONIC operand`), unknown bytes print `???`. Memory-only (`peek`). The opcode table [`lib_distab.c`](lib_distab.c) is **generated** from `genucode.OPC` by [`generators/gen_p8xdis.py`](../../generators/gen_p8xdis.py) (spliced via `//#use distab`), so it never drifts from the ISA. Runs in the `$6A00` TPA, so don't disassemble that range. C-only (no hand-asm twin yet). |
 
 ### Implementation notes
@@ -152,34 +155,34 @@ print a one-line usage summary and exit.
 ## Building on-target
 
 You can rebuild any command **on the P8X itself**, from the sources shipped
-under `/src`. `run.sh` pre-generates a build script per target under `/src/mk`;
-run the one you want through the `sh` engine (always rebuilds; no timestamps
-yet):
+under `/src`. Each source dir carries a real `Makefile` (`target: deps` + TAB
+recipe, with `all`/`clean`/`install` targets); the **`make`** built-in reads the
+CWD `Makefile`, resolves prerequisites depth-first (shared deps built once), and
+runs the recipes through the toolchain (always rebuilds; no timestamps yet):
 
 ```
-sh /src/mk/pwd.sh        rebuild one command — BOTH twins (C and asm)
-sh /src/mk/c.sh          rebuild every C command   -> /src/commands/c/bin/*.bin
-sh /src/mk/asm.sh        rebuild every asm command -> /src/commands/asm/bin/*.bin
-sh /src/mk/all.sh        rebuild everything
-sh /src/mk/installc.sh   publish the C builds over /bin  (installa.sh: the asm twins)
+cd /src/commands/c
+make pwd        rebuild one command   -> bin/pwd.bin  (cc then asm)
+make all        rebuild every command -> bin/*.bin
+make install    publish this dir's bin/*.bin over /bin
+make clean      delete this dir's build outputs
 ```
 
-(A `make`/Makefile front end over these scripts is a future item — see
-`BACKLOG.md`.)
-
-Each script just chains the on-target toolchain. A C command compiles then
+The `/src/commands/asm` dir has the same targets (each recipe is a single `asm`
+of the hand-asm twin), and `/src/os-bios` builds the monitor + OS. Recipes run
+in the invoking CWD, so paths are dir-relative. A C command compiles then
 assembles; a hand-asm command assembles directly (with `;#use` includes pulled
 from `/lib`):
 
 ```
-cc /src/commands/c/pwd.c >T.ASM              # cc writes to a root scratch file
-asm T.ASM /src/commands/c/bin/pwd.bin        # (redirect targets aren't path-resolved)
-asm /src/commands/asm/pwd.asm /src/commands/asm/bin/pwd.bin
+cc pwd.c >T.ASM              # cc writes T.ASM in the CWD (via the > redirect)
+asm T.ASM bin/pwd.bin        # asm reads that relative T.ASM, writes the binary
+asm pwd.asm bin/pwd.bin      # (asm dir: assemble the hand-asm twin directly)
 ```
 
 So the loop is: edit a source under `/src/commands/{c,asm}` (with `edit`/`vi`),
-`make <name>`, and the fresh binary lands in that group's `bin/` dir. To put it
-on `PATH`, `cp` it to `/bin`.
+`cd` into that dir, `make <name>`, and the fresh binary lands in `bin/`. To put
+it on `PATH`, `make install` (or `cp` it to `/bin`).
 
 ## Building (host)
 

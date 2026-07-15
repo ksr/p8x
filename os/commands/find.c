@@ -72,8 +72,8 @@ int walk(int plen) {                          /* plen = length of cur (no traili
     int oldp;
 
     nsub = 0;
-    r = bios(FNEXT, 0, 0);                  /* FNEXT */
-    while ((r & 256) == 0) {
+    r = bios(FNEXT, 0, 0);                  /* FNEXT: next dir entry; bit 8 (256) set = end-of-dir */
+    while ((r & 256) == 0) {                 /* loop until FNEXT flags EOF */
         de_read();                           /* snapshot the entry (SYS_DIRENTRY) */
         if (de_isdot() == 0) {               /* skip '.' / '..' */
             rdname();
@@ -96,10 +96,13 @@ int walk(int plen) {                          /* plen = length of cur (no traili
         r = bios(FNEXT, 0, 0);
     }
 
+    /* Descend only AFTER this level is fully scanned: FNEXT shares one global
+     * BIOS cursor, so we could not interleave a child walk with the parent's
+     * FNEXT loop — hence recording child LBAs/names above, recursing here. */
     i = 0;                                    /* descend into each recorded child */
     while (i < nsub) {
         de_opendir(clba[i]);                 /* SYS_OPENDIR(child LBA, 16-bit) */
-        bios(FSDIRBUF, 0, 0xEA);               /* FSDIRBUF: our page */
+        bios(FSDIRBUF, 0, 0xEA);               /* point FNEXT's dir buffer at page $EA (our scratch page) */
         oldp = plen;
         if (plen != 1 || cur[0] != '/') { cur[plen] = '/'; plen = plen + 1; }
         k = 0;

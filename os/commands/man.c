@@ -18,6 +18,11 @@
 
 char path[80];                               /* "/man/" + the requested name */
 
+/* main — resolve the argument to /man/NAME and stream that file to stdout.
+ * Returns 0 on success (or after printing usage), 1 if the page is missing.
+ * bios() returns the BIOS result with the CPU carry flag folded into bit 8,
+ * so "& 256" tests carry: FOPEN sets it when the path is not found and FGETB
+ * sets it at end of file.  puts() (usage line) appends its own newline. */
 int main() {
     char *arg;
     char *p;
@@ -44,8 +49,10 @@ int main() {
     while (arg[j] != 0 && arg[j] != 13 && arg[j] != 32) {
         path[i] = arg[j]; i = i + 1; j = j + 1;
     }
-    path[i] = 0;
+    path[i] = 0;                              /* NUL-terminate the built path */
 
+    /* FRESOLVE walks "path" from root, leaving DIRLBA=parent dir and FNAME=leaf
+     * for the following FOPEN.  FOPEN reads into RDBUF (the $FC00 page buffer). */
     bios(FRESOLVE, path, 0);                    /* FRESOLVE: DIRLBA=parent, FNAME=leaf */
     if (bios(FOPEN, RDBUF, 0) & 256) {      /* FOPEN; carry=1 -> not found */
         p = "no manual entry for ";

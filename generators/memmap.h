@@ -219,4 +219,29 @@
 #define DRVINIT     0x67A5       /* bitmask: bit N set = drive N has been CFINIT'd this session */
 #define MPSAV       0x67A6       /* MNTPFX: saved P2 (2 bytes) while sniffing a 'd1' prefix */
 
+/* shell history */
+#define HISTST      0x608E       /* history ring: index where the next entry is written (0..HISTN-1) */
+#define HISTCT      0x608F       /* history ring: number of stored entries (0..HISTN) */
+#define HISTNV      0x6090       /* history ring: recall cursor (0 = not navigating; N = N lines back) */
+#define HISTRING    0x5800       /* history ring buffer base: HISTN x HISTLEN bytes ($5800..$5FFF) */
+
+/* shell completion */
+#define CMPPFX      0x5700       /* tab-complete: leaf prefix being completed (NUL-term) */
+#define CMPLCP      0x5740       /* tab-complete: longest common prefix of the matches (NUL-term) */
+#define CMPDIR      0x5760       /* tab-complete: directory-part path string, for CDPATH (NUL-term) */
+#define CMPPL       0x6091       /* tab-complete: length of the typed leaf prefix */
+#define CMPCNT      0x6092       /* tab-complete: number of matches (saturates at 255) */
+#define CMPFW       0x6093       /* tab-complete: 1 = completing the command word (first word) */
+#define CMPTABF     0x6094       /* tab-complete: 1 = the previous key was a no-progress Tab */
+#define CMPISD      0x6095       /* tab-complete: 1 = the sole match is a directory */
+#define CMPLM       0x6096       /* tab-complete: 1 = scan in list mode (print matches) */
+#define CMPDL       0x6097       /* tab-complete: target directory start LBA, low byte */
+#define CMPDLH      0x6098       /* tab-complete: target directory start LBA, high byte */
+#define CMPDN       0x6099       /* tab-complete: target directory sector count */
+#define CMPCUR      0x609A       /* tab-complete: saved line length (cursor) across the scan */
+#define CMPSAV      0x609B       /* tab-complete: saved SBUF entry cursor across a candidate (2) */
+#define CMPWLB      0x609D       /* tab-complete: directory-walk running sector LBA (2) */
+#define CMPWSC      0x609F       /* tab-complete: directory-walk sectors remaining */
+#define CMPIX       0x60A0       /* tab-complete: KWTAB index during the built-in scan */
+
 #endif

@@ -27,8 +27,10 @@
 //#use globx   /* glob_expand(pat, out, maxn): expand a glob into a path list */
 //#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
 
+/* bios() returns the callee's carry flag in bit 8 of its result, so `& 256`
+ * tests C: FOPEN sets C=1 for "not found", FGETB sets C=1 at EOF. */
 char path[80];                               /* absolute path we build per file */
-char gbuf[1536];                             /* glob_expand output: 24 slots x 64 */
+char gbuf[1536];                             /* glob_expand output: 24 slots x 64 (matches the 64 stride below) */
 
 /* catpath: stream one file (arg may be relative -> CWD, or absolute) to stdout.
  * Returns 1 if the file was not found, else 0. */
@@ -74,7 +76,7 @@ int main() {
     }
 
     if (*arg == 0 || *arg == 13) {           /* no file -> filter stdin */
-        c = getchar();
+        c = getchar();                       /* getchar() returns 65535 (-1 as unsigned) at EOF */
         while (c != 65535) { putchar(c); c = getchar(); }
         return 0;
     }
@@ -92,7 +94,7 @@ int main() {
         i = 0;
         while (i < n) {
             catpath(p);                       /* a match always exists -> ignore 1 */
-            p = p + 64;
+            p = p + 64;                       /* step to the next 64-byte slot in gbuf */
             i = i + 1;
         }
         return 0;

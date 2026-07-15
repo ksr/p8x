@@ -30,6 +30,11 @@ int lless(int x, int y) {
     }
 }
 
+/* main: parse the optional file arg (-h/-H prints usage), slurp input line by
+ * line into the flat `lines` buffer (LF-terminated, CR dropped, cols capped at
+ * 79 + NUL), selection-sort the occupied slots in place, then print them.
+ * Input is a named file (openarg -> fromfile=1) or stdin. Returns 1 if the
+ * named file was not found, else 0. */
 int main() {
     char *arg;
     int r;
@@ -42,7 +47,7 @@ int main() {
     int t;
 
     arg = argstr();
-    while (*arg == 32) { arg = arg + 1; }
+    while (*arg == 32) { arg = arg + 1; }      /* skip leading spaces (32 = ' ') */
     if (*arg == '-' && (*(arg + 1) == 'h' || *(arg + 1) == 'H')) {
         puts("usage: SORT [file]   sort lines ascending (file or stdin)");
         return 0;
@@ -55,7 +60,7 @@ int main() {
     nline = 0;                                /* read lines into the flat buffer */
     col = 0;
     c = nextc();
-    while (c != 65535 && nline < 128) {        /* stop at buffer full (192 lines) */
+    while (c != 65535 && nline < 128) {        /* 65535 = nextc() EOF; stop at 128-line cap */
         if (c == 10) {
             lines[nline * 80 + col] = 0;
             nline = nline + 1;

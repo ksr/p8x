@@ -1,0 +1,51 @@
+NAME
+    awk - pattern-directed field processing (a small subset)
+
+SYNOPSIS
+    awk [-F c] 'program' [file]
+
+DESCRIPTION
+    Reads input a line (record) at a time, splits each into fields, and runs a
+    program against it. Input is `file` if given, else standard input -- so it
+    works in a pipe: `cat data | awk '{print $2}'`.
+
+    The program is a single quoted argument (single or double quotes; awk strips
+    them itself). It has the form
+
+        [pattern] { action }
+
+    pattern    /regex/ selects lines matching a basic regular expression
+               (. * + ? ^ $, via the shared regex library); an empty pattern
+               selects every line. A pattern with no action prints the line.
+    action     { print items } prints a line; an empty action prints the whole
+               record ($0).
+
+    print items are comma-separated; a comma prints a space between them:
+        $0             the whole record
+        $1 .. $9       a field (by number)
+        $NF            the last field
+        NF             the number of fields on the record
+        NR             the current record number (1-based)
+        "text"         a string literal
+
+    Fields split on runs of whitespace by default. -F c splits on the single
+    character c instead (empty fields are kept).
+
+OPTIONS
+    -F c    use c as the field separator (default: whitespace)
+
+EXAMPLES
+    awk '{print $2}' data          print the 2nd field of each line
+    awk '/error/{print}' log       print lines matching /error/
+    awk '/error/' log              same (a bare pattern prints the line)
+    awk '{print $1, $NF}' data     first and last field, space-separated
+    awk -F: '{print $1}' pw        first colon-separated field
+    awk '{print NR, $0}' data      number each line
+    cat data | awk '{print $3}'    read from a pipe
+
+LIMITATIONS
+    A deliberately small subset: one rule per program, `print` only (no printf),
+    no BEGIN/END, no variables or expressions, and no multi-file arguments.
+
+SEE ALSO
+    grep, sed, cut, cat

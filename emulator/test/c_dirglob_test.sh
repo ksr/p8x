@@ -60,6 +60,14 @@ check() {   # $1 = compiler tag
     out=$(R 'dir')
     echo "$out" | grep -qE ' A\.ASM$' && echo "$out" | grep -qE ' C\.TXT$' && echo "$out" | grep -qE ' bin/$' \
         || fail "$1: plain DIR regressed"
+    # single file: dir NAME lists just that file (like ls), not "not found"
+    out=$(R 'dir C.TXT')
+    echo "$out" | grep -qE ' C\.TXT$' || fail "$1: dir <file> did not list the file"
+    echo "$out" | grep -qE ' A\.ASM$' && fail "$1: dir <file> listed other files"
+    # single file by path
+    R 'dir /bin/dir.bin' | grep -qE ' dir\.bin$' || fail "$1: dir <path/file> did not list the file"
+    # a truly missing name still reports not found
+    R 'dir NOPE.XYZ' | grep -q 'not found' || fail "$1: dir <missing> did not report not found"
     echo "C-DIRGLOB ($1): ok"
 }
 

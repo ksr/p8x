@@ -9,20 +9,22 @@
 ;#use glob
 ;#use abi
 
+; Save the arg-tail pointer (arrives in P2) into f_arg, then skip any leading
+; spaces so f_arg points at the first non-blank char of the pattern.
         .org $6A00
         TPA2L
         STA f_arg
         TPA2H
         STA f_arg+1
-f_sk:   LDA f_arg
+f_sk:   LDA f_arg                    ; reload P2 from f_arg each pass (16-bit incr below)
         TAP2L
         LDA f_arg+1
         TAP2H
         LDA (P2)
-        LDB #32
+        LDB #32                       ; space?
         CMP
         JNZ f_chk
-        LDA f_arg
+        LDA f_arg                     ; yes: f_arg++ (16-bit, carry into high byte)
         LDB #1
         ADD
         STA f_arg
@@ -31,6 +33,7 @@ f_sk:   LDA f_arg
         INC
         STA f_arg+1
         JMP f_sk
+; f_chk: reject empty arg (NUL/CR) or a -h/-H help flag -> usage.
 f_chk:  LDA (P2)
         LDB #0
         CMP
@@ -62,6 +65,8 @@ f_pat:  LDA #0
         TAP1H
         LDA #0
         STA fi
+; Copy chars into pat[] (cap 63 + NUL = 64-byte buffer) until NUL/space/CR.
+; Set isglob=1 if any '*' or '?' is seen, selecting glob vs substring matching.
 f_pl:   LDA fi
         LDB #63
         CMP
@@ -107,6 +112,7 @@ f_pd:   LDA #0
         TAP1H
         LDA #0
         STA fi
+; f_len: measure strlen(cur) into fi -> stored as parr[0], the level-0 path length.
 f_len:  LDA (P1)
         LDB #0
         CMP
@@ -130,7 +136,7 @@ f_len0: LDA #0                        ; w_depth=0; parr[0]=plen
         TAP1L
         TAP1H
         LDA #$EA
-        JSR FSDIRBUF                 ; FSDIRBUF $EA
+        JSR FSDIRBUF                 ; point FS at the $EA00 sector/dir buffer page
         JSR walk
         RTS
 f_usage:LDA #<u_use
@@ -144,6 +150,17 @@ f_usage:LDA #<u_use
         RTS
 
 ; ======================= walk ==============================================
+; walk: recursively scan the directory currently open in the FS at level w_depth.
+;   Pass 1 (w_next): iterate FNEXT entries. For each, read the dirent, skip
+;     dotfiles, test the name against the pattern and print on a hit. If the
+;     entry is a subdirectory (de+12==2) and this level has room (<24 kids),
+;     record its start LBA in clba[] and its name in cn[], then bump nsub.
+;   Pass 2 (w_desc): FNEXT exhausted (C set). Walk the nsub recorded children:
+;     open each, append "/name" onto cur[], w_depth++, recurse, then w_depth--
+;     and truncate cur[] back to this level's length (parr[w_depth]).
+; Recursion uses the hardware call stack (JSR/RTS); per-level state lives in the
+; w_depth-indexed arrays nsub/idx/parr/clba/cn, NOT in software stack frames.
+; MAXD=10 levels; guarding recursion depth is the caller's dir-tree shape.
 walk:   JSR nsub_a
         LDA #0
         STA (P1)
@@ -162,7 +179,7 @@ w_next: LDA #0
         TAP1H
         LDA #0
         JSR SYS_DIRENTRY             ; de_read
-        LDA de
+        LDA de                       ; skip entries whose name starts with '.'
         LDB #'.'
         CMP
         JZ w_next
@@ -177,7 +194,7 @@ w_next: LDA #0
         JZ w_nomatch
         JSR print_match
 w_nomatch:
-        LDA de+12
+        LDA de+12                     ; de+12 = entry type; 2 = subdirectory
         LDB #2
         CMP
         JNZ w_next
@@ -185,17 +202,18 @@ w_nomatch:
         LDA (P1)
         LDB #24
         CMP
-        JC w_next                    ; nsub>=24 -> skip
+        JC w_next                    ; nsub>=24 children recorded -> drop this one
         JSR nsub_a
         LDA (P1)
         STA fi
-        JSR clba_a
+        JSR clba_a                    ; store this child's start LBA (de+15..16, LE)
         LDA de+15
         STA (P1)+
         LDA de+16
         STA (P1)
         LDA #0
         STA fk
+; Copy the child name nm[] into cn[d][fi][] byte by byte (incl. trailing NUL).
 wcn_l:  JSR cn_a                     ; P1 = cn[d][fi][fk]
         LDA #<nm
         LDB fk
@@ -219,6 +237,7 @@ wcn_d:  JSR nsub_a
         INC
         STA (P1)
         JMP w_next
+; Pass 2: descend into each recorded child. idx[d] is the child cursor 0..nsub-1.
 w_desc: JSR idx_a
         LDA #0
         STA (P1)
@@ -250,7 +269,9 @@ w_dl:   JSR idx_a
         LDA (P1)
         STA fpl                      ; oldp
         LDA fpl
-        STA cp
+        STA cp                        ; cp = write cursor into cur[]
+; Append a '/' separator, unless cur[] is exactly the root "/" (len 1, cur[0]=='/')
+; in which case the name is written directly after it (no doubled slash).
         LDA fpl
         LDB #1
         CMP
@@ -272,6 +293,7 @@ wa1:    TAP1H
         LDA cp
         INC
         STA cp
+; Append the child's name (from cn[d][idx][]) onto cur[], advancing cp.
 w_nameonly:
         LDA #0
         STA fk
@@ -308,6 +330,7 @@ wnm_d:  LDA #<cur
 wn2:    TAP1H
         LDA #0
         STA (P1)
+; Descend: w_depth++, record new level's path length (cp) in parr[d], recurse.
         LDA w_depth
         INC
         STA w_depth
@@ -315,6 +338,7 @@ wn2:    TAP1H
         LDA cp
         STA (P1)
         JSR walk
+; Back up: w_depth--, then truncate cur[] to this level's length (NUL at parr[d]).
         LDA w_depth
         DEC
         STA w_depth
@@ -339,6 +363,9 @@ wr1:    TAP1H
 w_ret:  RTS
 
 ; ======================= print_match =======================================
+; print_match: emit the matched path + newline. Prints fpl bytes of cur[] (the
+; current directory prefix), a '/' separator (suppressed when cur is root "/"),
+; then the NUL-terminated name in nm[]. Uses SYS_PUTC (clobbers P1/P2 via syscall).
 print_match:
         LDA #<cur
         TAP1L
@@ -384,6 +411,8 @@ pm_eol: LDA #10
         RTS
 
 ; ======================= rdname / nmatch / contains ========================
+; rdname: copy the 12-byte fixed-width name field de[0..11] into NUL-terminated
+; nm[], dropping embedded spaces (name is space-padded on disk). Clobbers P1/P2.
 rdname: LDA #<nm
         TAP1L
         LDA #>nm
@@ -412,6 +441,8 @@ rd_d:   LDA #0
         STA (P1)
         RTS
 
+; nmatch: return A=1 if the name at nm_p matches pat[]. isglob picks the engine:
+; shared gmatch (glob, via gp/gs) when '*'/'?' present, else substring contains.
 nmatch: LDA isglob
         LDB #0
         CMP
@@ -437,7 +468,8 @@ nm_sub: LDA nm_p
         JSR contains
         RTS
 
-; contains: A = 1 if string cn_n is a substring of cn_h
+; contains: A = 1 if string cn_n is a substring of cn_h (naive O(n*m) scan;
+; ct_i = haystack start, ct_j = match offset, ct_ij = ct_i+ct_j). A=0 if no match.
 contains:
         LDA #0
         STA ct_i
@@ -501,6 +533,9 @@ ct_no:  LDA #0
         RTS
 
 ; ======================= index helpers =====================================
+; Each returns a pointer in P1 to a w_depth-indexed slot. nsub/idx/parr are flat
+; byte arrays (1 per level); clba/cn are 2-D/3-D and computed by strided add.
+; nsub_a: P1 = &nsub[w_depth]  (child count at this level)
 nsub_a: LDA #<nsub
         LDB w_depth
         ADD
@@ -510,6 +545,7 @@ nsub_a: LDA #<nsub
         INC
 nsa1:   TAP1H
         RTS
+; idx_a: P1 = &idx[w_depth]  (pass-2 descent cursor at this level)
 idx_a:  LDA #<idx
         LDB w_depth
         ADD
@@ -519,6 +555,7 @@ idx_a:  LDA #<idx
         INC
 ixa1:   TAP1H
         RTS
+; parr_a: P1 = &parr[w_depth]  (cur[] path length at this level)
 parr_a: LDA #<parr
         LDB w_depth
         ADD
@@ -528,7 +565,9 @@ parr_a: LDA #<parr
         INC
 pra1:   TAP1H
         RTS
-; clba_a: P1 = clba + w_depth*48 + fi*2
+; clba_a: P1 = &clba[w_depth][fi] (child start-LBA, 2 bytes). Stride 48 = 24*2.
+; No MUL opcode, so w_depth*48 is done by adding 48 in a loop (cla_m), then fi*2
+; via SHL, then the 16-bit base &clba. ft holds the running 16-bit offset/address.
 clba_a: LDA #0
         STA ft
         STA ft+1
@@ -578,7 +617,9 @@ cla_3:  STA fcar
         LDA ft+1
         TAP1H
         RTS
-; cn_a: P1 = cn + w_depth*384 + fi*16 + fk
+; cn_a: P1 = &cn[w_depth][fi][fk] (child name char). Level stride 384 = 24*16 is
+; summed as 3 x 128 per level (cna_1/2/3); the fi*16 term as 16 added fi times
+; (cna_fl); then + fk + 16-bit base &cn. Again no MUL, all repeated 8-bit adds.
 cn_a:   LDA #0
         STA ft
         STA ft+1
@@ -664,9 +705,10 @@ cna_b:  STA fcar
 
 u_use:  .asciiz "usage: FIND pattern   CWD paths matching pattern (glob if * or ?, else substring)"
 
-f_arg:  .fill 2
-isglob: .fill 1
-w_depth:.fill 1
+; ---- scratch vars and per-level arrays (all in TPA, uninitialized) ----------
+f_arg:  .fill 2                       ; 16-bit ptr to current char of the arg tail
+isglob: .fill 1                       ; 1 if pattern has '*'/'?' -> use gmatch
+w_depth:.fill 1                       ; current recursion depth, 0..MAXD-1, indexes arrays below
 fpl:    .fill 1
 cp:     .fill 1
 fi:     .fill 1
@@ -686,11 +728,11 @@ ct_nc:  .fill 1
 ft:     .fill 2
 fn:     .fill 1
 fcar:   .fill 1
-pat:    .fill 64
-nm:     .fill 16
-cur:    .fill 256
-nsub:   .fill 10
-idx:    .fill 10
-parr:   .fill 10
-clba:   .fill 480
-cn:     .fill 3840
+pat:    .fill 64                      ; pattern buffer (63 chars + NUL)
+nm:     .fill 16                      ; current entry name, NUL-terminated
+cur:    .fill 256                     ; running absolute path being built
+nsub:   .fill 10                      ; nsub[MAXD]:  child count per level
+idx:    .fill 10                      ; idx[MAXD]:   pass-2 descent cursor per level
+parr:   .fill 10                      ; parr[MAXD]:  cur[] length (path prefix) per level
+clba:   .fill 480                     ; clba[MAXD][24] x 2B: child start LBAs (10*24*2)
+cn:     .fill 3840                    ; cn[MAXD][24][16]: child names (10*24*16)

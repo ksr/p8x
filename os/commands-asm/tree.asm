@@ -16,7 +16,7 @@
 
         .org $6A00
 ; --- -h check (P2 = arg) ---------------------------------------------------
-tr_sk:  LDA (P2)
+tr_sk:  LDA (P2)                      ; skip leading spaces (32) in arg tail
         LDB #32
         CMP
         JNZ tr_chk
@@ -66,7 +66,7 @@ tr_usage:
 walk:
         LDA #0                        ; nsub[w_depth] = 0
         STA kk                        ; (temp: store 0 via nsub addr)
-        JSR nsub_addr                 ; P1 -> nsub[w_depth]
+        JSR nsub_addr                 ; P1 -> nsub[w_depth]; clobbers P1, A, B
         LDA #0
         STA (P1)
 ; --- FNEXT loop ------------------------------------------------------------
@@ -75,15 +75,15 @@ tw_next:
         TAP1L
         TAP1H
         LDA #0
-        JSR FNEXT                    ; FNEXT
-        JC tw_desc                    ; carry = end of directory
+        JSR FNEXT                    ; advance BIOS dir cursor; clobbers P1/P2
+        JC tw_desc                    ; carry = end of directory -> go descend
         LDA #<de                      ; de_read: SYS_DIRENTRY -> de
         TAP1L
         LDA #>de
         TAP1H
         LDA #0
         JSR SYS_DIRENTRY
-        LDA de                        ; skip '.' / '..'
+        LDA de                        ; skip '.' / '..' (any name starting '.')
         LDB #'.'
         CMP
         JZ tw_next
@@ -126,12 +126,12 @@ tw_ncont:
         INC
         STA cnt
         JMP tw_nl
-; directory? de[12]==2 -> '/', record LBA
+; directory? de[12] is the entry type; ==2 means dir -> print '/', record LBA
 tw_isdir:
         LDA de+12
         LDB #2
         CMP
-        JNZ tw_eol
+        JNZ tw_eol                    ; not a dir -> just end the line
         LDA #'/'
         JSR SYS_PUTC
         JSR nsub_addr                 ; nsub[w_depth] in *P1
@@ -144,7 +144,7 @@ tw_isdir:
         LDA (P1)
         STA kk
         JSR csub_addr                 ; P1 -> csub[w_depth][kk]
-        LDA de+15                     ; LBA lo
+        LDA de+15                     ; dir start LBA lo (de+15/16 = 16-bit LBA)
         STA (P1)+
         LDA de+16                     ; LBA hi
         STA (P1)
@@ -167,7 +167,7 @@ tw_dl:  JSR idx_addr
         LDA (P1)
         LDB kk
         CMP
-        JZ tw_ret                     ; idx == nsub -> done (kk-... ; equal)
+        JZ tw_ret                     ; idx == nsub -> all children done
         ; de_opendir(csub[w_depth][idx])
         JSR csub_addr                 ; P1 -> csub[w_depth][kk]
         LDA (P1)+
@@ -222,7 +222,9 @@ idx_addr:
         INC
 ia1:    TAP1H
         RTS
-; csub_addr: P1 = csub + w_depth*48 + kk*2
+; csub_addr: P1 = &csub[w_depth][kk] = csub + w_depth*48 + kk*2
+;   (48 = 24 entries * 2 bytes/LBA per level; each LBA is 16-bit lo,hi).
+;   caddr is a 16-bit scratch accumulator; clobbers P1, A, B, cnt, caddr.
 csub_addr:
         LDA #0
         STA caddr

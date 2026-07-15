@@ -7,6 +7,9 @@
 ; $0127, FWOPEN $012A, FPUTB $012D, FCLOSE $0130. Entry: P2 = arg tail.
 ;#use abi
 
+; Entry: P2 holds the argument tail (first char after the command name). The
+; block below saves it to v_arg, then v_sk skips leading spaces so v_arg points
+; at the first non-space char of the path argument.
         .org $6A00
         TPA2L
         STA v_arg
@@ -29,6 +32,7 @@ v_sk:   LDA v_arg
         INC
         STA v_arg+1
         JMP v_sk
+; No path, a bare CR, or a "-h"/"-H" flag all fall through to v_usage.
 v_chk:  LDA (P2)
         LDB #0
         CMP
@@ -74,6 +78,8 @@ v_path: LDA v_arg                     ; abspath(path, v_arg) — CWD-prefix if r
         STA havepat
         JSR redraw
 ; ======================= main key loop =====================================
+; Read a raw key each pass; dispatch to INSERT (mode==1) or NORMAL handler.
+; Exits when done!=0 (set by :q/:wq/:x/:q!), clearing screen and homing cursor.
 vi_loop:LDA done
         LDB #0
         CMP
@@ -103,6 +109,9 @@ v_usage:LDA #<u_use
         RTS
 
 ; ---- INSERT mode ----------------------------------------------------------
+; ESC leaves insert (stepping cx back one, like vi); CR/LF splits the line;
+; BS/DEL deletes left; printable bytes (32..126) are inserted. Non-printables
+; outside that range are ignored (fall through to nm_end).
 vi_ins: LDA key
         LDB #27
         CMP
@@ -178,6 +187,10 @@ im_ins: LDA key
         JMP nm_end
 
 ; ---- NORMAL mode ----------------------------------------------------------
+; pend==1 means the previous key was 'd', so we are waiting for the second key
+; of a "dd" (delete line). Any other second key just clears pend and is ignored.
+; Otherwise dispatch the single-key motions/commands: h l j k 0 $ G i a A o x
+; d(d) u / n : each as its own nm_* clause.
 vi_norm:LDA pend
         LDB #1
         CMP
@@ -465,6 +478,10 @@ nm_col: LDA key
 nm_end: JMP vi_loop
 
 ; ======================= terminal primitives ===============================
+; rawkey: blocking read of one key via BIOS CONIN, no echo. Returns byte in A.
+; Clobbers P1 (and P1/P2 per CONIN). outc: write byte in A via CONOUT.
+; outs: write NUL-terminated string at os_p. outn: print on_n as decimal.
+; esc/clrscr/clreol/gotoxy: emit the matching VT100/ANSI escape sequences.
 rawkey: LDA #0
         TAP1L
         TAP1H
@@ -498,6 +515,9 @@ os1:    TAP1H
         STA osk
         JMP os_l
 os_d:   RTS
+; outn: print on_n (0..255) as decimal. Values < 10 print one digit directly;
+; larger values recurse on the quotient (dm10 divides on_n by 10) then print the
+; remainder digit, so digits come out most-significant first.
 outn:   LDA on_n
         LDB #10
         CMP
@@ -520,6 +540,7 @@ on_rec: LDA on_n
         ADD
         JSR outc
         RTS
+; dm10: divide dv by 10 by repeated subtraction. Result: dvq=quotient, dvr=rem.
 dm10:   LDA #0
         STA dvq
 dm_l:   LDA dv
@@ -552,6 +573,9 @@ clreol: JSR esc
         LDA #'K'
         JSR outc
         RTS
+; gotoxy: move cursor to row g_r, col g_c (1-based) via ESC [ row ; col H.
+; The literal 59 emitted between the numbers is ';' (kept as a number here to
+; avoid a ';' in source, which the assembler would strip as a comment).
 gotoxy: JSR esc
         LDA g_r
         STA on_n
@@ -574,7 +598,10 @@ msg24:  LDA #24
         RTS
 
 ; ======================= line buffer helpers ===============================
-; laddr: P1 = line + va_i*80 + va_c
+; laddr: compute the 16-bit address of column va_c on line va_i and load it into
+; P1. Address = line + va_i*80 + va_c. va_i*80 is built by repeated +80 into the
+; 16-bit accumulator vat (va_ml loop), then va_c and the base label `line` are
+; added; vacar carries the low-byte overflow into the high byte. Clobbers A/B/P1.
 laddr:  LDA #0
         STA vat
         STA vat+1
@@ -623,6 +650,7 @@ va_3:   STA vacar
         LDA vat+1
         TAP1H
         RTS
+; llen: return in A the length (chars before the NUL) of line ll_i. Clobbers P1.
 llen:   LDA ll_i
         STA va_i
         LDA #0
@@ -641,6 +669,8 @@ lln_l:  LDA (P1)
         JMP lln_l
 lln_d:  LDA ll_n
         RTS
+; clampx: if cx runs past the end of the current line, pull it back to the last
+; valid column (line length). Used after vertical moves onto a shorter line.
 clampx: LDA cy
         STA ll_i
         JSR llen
@@ -655,6 +685,12 @@ clampx: LDA cy
 cx_ok:  RTS
 
 ; ======================= load / save =======================================
+; load: read the file whose path is at ld_p into the line buffer. Resets cursor
+; and scroll state. Uses BIOS FOPEN with a fixed read buffer at $FC00 (P1). If
+; FOPEN fails (JNC ld_read taken only on success/carry-clear), start with one
+; empty line. LF ('\n') ends a line; CR ('\r') is dropped; columns past 79 are
+; truncated; the buffer holds at most 110 lines. Trailing partial line and the
+; empty-file case are normalized so nlines >= 1 on return.
 load:   LDA ld_p
         TAP1L
         LDA ld_p+1
@@ -761,6 +797,10 @@ ld_chk0:LDA nlines
         STA (P1)
 ld_ret0:LDA #0
         RTS
+; save: write all nlines lines to the path at sv_p via BIOS FWOPEN/FPUTB/FCLOSE.
+; Each line's chars are emitted up to its NUL, then a single LF (Unix newline).
+; Clears dirty on success. sv_p2 is a working copy of the line pointer because
+; FPUTB clobbers P1/P2, so it is reloaded before every byte.
 save:   LDA sv_p
         TAP1L
         LDA sv_p+1
@@ -823,6 +863,9 @@ sv_done:LDA #0
         RTS
 
 ; ======================= redraw ============================================
+; drawrow: redraw one screen row dr_r (0..22). Screen row = dr_r+1; the buffer
+; line shown there is top+dr_r. Rows past the last line print a '~' like vi.
+; Clears to end of line afterward.
 drawrow:LDA dr_r
         INC
         STA g_r
@@ -869,6 +912,8 @@ dr_tilde:
         JSR outc
 dr_eol: JSR clreol
         RTS
+; status: draw the status line (screen row 24): "-- INSERT --" when in insert
+; mode (else blanks), then the file path, then " [+]" if the buffer is dirty.
 status: LDA #24
         STA g_r
         LDA #1
@@ -905,6 +950,8 @@ st_path:LDA #<path
         JSR outs
 st_eol: JSR clreol
         RTS
+; placecur: position the terminal cursor at the logical cursor (cx,cy). Screen
+; row = cy-top+1, screen col = cx+1 (both 1-based for gotoxy).
 placecur:
         LDA cy
         LDB top
@@ -916,6 +963,7 @@ placecur:
         STA g_c
         JSR gotoxy
         RTS
+; redraw: repaint the whole screen: clear, draw text rows 0..22, status, cursor.
 redraw: JSR clrscr
         LDA #0
         STA rd_r
@@ -933,6 +981,10 @@ rd_l:   LDA rd_r
 rd_d:   JSR status
         JSR placecur
         RTS
+; scroll: adjust the viewport origin `top` so the cursor line cy stays visible
+; in the 23-row text window (rows top..top+22). If cy < top, snap top to cy; if
+; cy is below the window, set top = cy-22. Returns A=1 when top changed (caller
+; must redraw), A=0 when no scroll was needed (caller only repositions cursor).
 scroll: LDA cy
         LDB top
         CMP
@@ -960,6 +1012,9 @@ sc_no:  LDA #0
         RTS
 
 ; ======================= editing ===========================================
+; inschar: insert char ic_c at column cx of the current line, shifting the tail
+; right by one and re-terminating. No-op if the line is already at the 78-char
+; cap (ic_ret). Advances cx and sets dirty.
 inschar:LDA cy
         STA ll_i
         JSR llen
@@ -1016,6 +1071,8 @@ ic_set: LDA cy
         LDA #1
         STA dirty
 ic_ret: RTS
+; delchar: delete the char at column cx of the current line, shifting the tail
+; left over it. No-op if cx is past the line end. Sets dirty when a char moved.
 delchar:LDA cy
         STA ll_i
         JSR llen
@@ -1057,6 +1114,8 @@ dc_l:   LDA cy
 dc_done:LDA #1
         STA dirty
 dc_ret: RTS
+; copyline: copy line cp_s to line cp_d, byte by byte including the NUL.
+; Used to shift whole lines up/down when opening, deleting, or splitting lines.
 copyline:
         LDA #0
         STA cl_k
@@ -1083,6 +1142,9 @@ cl_l:   LDA cp_s
         STA cl_k
         JMP cl_l
 cl_d:   RTS
+; opendown: open a new empty line below cy (vi 'o'). Shifts lines cy+1..end down
+; one slot, blanks the new line, bumps nlines, moves the cursor onto it, cx=0.
+; No-op if the buffer is full (110 lines). Sets dirty.
 opendown:
         LDA nlines
         LDB #110
@@ -1128,6 +1190,9 @@ od_set: LDA cy
         LDA #1
         STA dirty
 od_ret: RTS
+; delline: delete line cy (vi 'dd'). Shifts lines below it up one slot and
+; decrements nlines; if cy was the last line, cy steps back one. When only one
+; line exists (dl_one) the line is just blanked. Sets cx=0 and dirty.
 delline:LDA nlines
         LDB #1
         CMP
@@ -1179,6 +1244,10 @@ dl_one: LDA #0
         LDA #1
         STA dirty
         RTS
+; splitline: break the current line at cx (Enter in insert mode). Shifts lines
+; below cy down one to make room, copies the tail (from cx) into the new line
+; cy+1, truncates the current line at cx, then moves the cursor to col 0 of the
+; new line. No-op if the buffer is full. Sets dirty.
 splitline:
         LDA nlines
         LDB #110
@@ -1262,6 +1331,15 @@ sps_d:  LDA cy
 sp_ret: RTS
 
 ; ======================= undo ==============================================
+; Single-level undo. `uop` records the kind of the last undoable edit:
+;   0 = nothing to undo
+;   1 = in-place line edit  -> usave holds the pre-edit text of line uy; undo
+;                              copies usave back and restores cursor ux,uy
+;   2 = line opened (o)      -> undo deletes line uy
+;   3 = line deleted (dd)    -> usave holds the removed text; undo re-inserts it
+;                              at uy
+; usave is the 80-byte scratch line holding the saved copy.
+; saveline: copy the current line (cy) into usave. Uses (P1)+ auto-increment.
 saveline:
         LDA cy
         STA va_i
@@ -1288,6 +1366,8 @@ sl_l:   LDA (P2)
         INP2
         JMP sl_l
 sl_d:   RTS
+; snap1: take an undo snapshot before an in-place edit: save the line and record
+; uop=1 with the current cursor (uy=cy, ux=cx).
 snap1:  JSR saveline
         LDA #1
         STA uop
@@ -1296,6 +1376,9 @@ snap1:  JSR saveline
         LDA cx
         STA ux
         RTS
+; insline: insert a new line at index in_y, filling it from usave. Shifts lines
+; in_y..end down one and bumps nlines. No-op if the buffer is full. Used by undo
+; of a 'dd' (uop==3) to bring the deleted line back.
 insline:LDA nlines
         LDB #110
         CMP
@@ -1346,6 +1429,9 @@ ils_d:  LDA nlines
         INC
         STA nlines
 il_ret: RTS
+; undo: reverse the last edit per the uop code (see table above). Prints
+; "nothing to undo" when uop==0. Consumes uop (sets it to 0) so undo is single
+; level, then rescrolls and repaints. Note it marks the buffer dirty.
 undo:   LDA uop
         LDB #0
         CMP
@@ -1421,6 +1507,8 @@ un_fin: LDA #1
         RTS
 
 ; ======================= search ============================================
+; matchat: test whether pattern `pat` matches line ma_i starting at column ma_j.
+; Walks pat until its NUL (full match -> A=1) or a mismatched char (A=0).
 matchat:LDA #0
         STA ma_m
 mat_l:  LDA #<pat
@@ -1466,6 +1554,9 @@ ma_yes: LDA #1
         RTS
 ma_no:  LDA #0
         RTS
+; findfrom: scan forward from line ff_sy, column ff_sx for `pat`. On the first
+; line the scan starts at ff_sx; later lines start at column 0. On a hit, sets
+; cy,cx to the match position and returns A=1; returns A=0 if none through EOF.
 findfrom:
         LDA ff_sy
         STA ff_i
@@ -1515,6 +1606,9 @@ ff_in:  LDA ff_i
         JMP ff_il
 ff_no:  LDA #0
         RTS
+; search: find the next occurrence of `pat` after the cursor, wrapping to the
+; top of the buffer if not found ahead. Returns A=1 on a hit (cursor moved),
+; A=0 if the pattern is nowhere in the buffer.
 search: LDA cy
         STA ff_sy
         LDA cx
@@ -1535,6 +1629,10 @@ search: LDA cy
         RTS
 se_yes: LDA #1
         RTS
+; getpat: prompt on row 24 with '/' and read a search pattern into `pat` (max 38
+; chars, echoing keystrokes, BS/DEL erases). ESC cancels and returns A=0. On
+; Enter, NUL-terminates pat; a non-empty pattern sets havepat. Returns A=1 when
+; the prompt completed (whether or not text was entered).
 getpat: LDA #24
         STA g_r
         LDA #1
@@ -1625,6 +1723,14 @@ gp_r1:  LDA #1
         RTS
 
 ; ======================= ':' command line ==================================
+; docmd: prompt on row 24 with ':' and read a colon command into `cmd` (max 38
+; chars, echoed; BS/DEL erases; ESC cancels). Recognized commands:
+;   q      quit (refuses with a message if the buffer is dirty)
+;   q!     quit discarding changes
+;   w      write to `path`
+;   wq / x write then quit
+; Anything else prints "?unknown command". Sets `done` for the quitting cases;
+; the main loop checks `done` and exits.
 docmd:  LDA #24
         STA g_r
         LDA #1
@@ -1947,8 +2053,10 @@ ff_i:   .fill 1
 ff_j:   .fill 1
 gp_k:   .fill 1
 gp_c:   .fill 1
-cmd:    .fill 40
-pat:    .fill 40
-usave:  .fill 80
-path:   .fill 80
+cmd:    .fill 40                ; ':' command input buffer (uses up to 38 + NUL)
+pat:    .fill 40                ; '/' search pattern buffer (uses up to 38 + NUL)
+usave:  .fill 80                ; undo scratch: one saved line
+path:   .fill 80                ; absolute path of the file being edited
+; Flat line buffer: 110 lines x 80 bytes. Line i occupies line[i*80 .. i*80+79];
+; each line is NUL-terminated, so the usable text width is 79 chars.
 line:   .fill 8800

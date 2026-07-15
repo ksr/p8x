@@ -1,0 +1,33 @@
+NAME
+    examine - interactively examine and modify memory
+
+SYNOPSIS
+    examine addr
+
+DESCRIPTION
+    Shows the byte at hexadecimal address addr and waits for a key, then moves
+    through memory one byte at a time -- the shell counterpart of the ROM
+    monitor's `E` command. Each line is:
+
+        aaaa: vv _
+
+    where aaaa is the address and vv the current byte. At the prompt:
+
+        Enter          keep the byte and advance to the next address
+        two hex digits write that byte, then advance
+        .              quit to the shell
+
+    A key that is not a hex digit, Enter, or '.' just re-shows the same address.
+    examine is a /bin program (bare name runs it via PATH).
+
+    It reads and writes anywhere in the 64 KB space, including over the OS or
+    over itself -- there are no guard rails, exactly like the monitor. To view a
+    block without the risk of a stray keystroke, use `dump`; to write a run of
+    bytes non-interactively, use `dep`.
+
+EXAMPLES
+    examine 6A00        walk memory from $6A00; Enter steps, '.' quits
+    examine C000        show $C000; type e.g. `41` to store $41 there
+
+SEE ALSO
+    dump, dep, disasm

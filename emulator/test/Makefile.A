@@ -1,0 +1,14 @@
+all: a b
+	cp /HELLO.TXT /ALL.TXT
+a: shared
+	cp /HELLO.TXT /A.TXT
+b: shared
+	cp /HELLO.TXT /B.TXT
+shared:
+	cp /HELLO.TXT /S.TXT
+clean:
+	del /A.TXT
+x: y
+	cp /HELLO.TXT /X.TXT
+y: x
+	cp /HELLO.TXT /Y.TXT

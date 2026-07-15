@@ -14,6 +14,13 @@
 ;   MNEMONIC [operand]     operand: #expr | (Pn) | (Pn)+ | expr | none
 ;   LDPn #expr16           pseudo -> LPLn #<expr ; LPHn #>expr
 ;   .org .byte .word .ascii .asciiz .fill
+;   .include "path"        at line start: append the file (resolved relative to
+;                          THIS source's directory, so `.include "../x/y.inc"`
+;                          works) after the source. Equates are order-independent
+;                          (two-pass), so an EOF-append matches an inline splice.
+;                          One per file. Mirrors the host assembler's .include and
+;                          lets /src/os-bios build the OS/monitor on-target (they
+;                          .include "../generators/memmap.inc").
 ;   ;#use NAME             at line start: append /lib/NAME.inc after the source,
 ;                          so a command shares helpers (stdin/glob/regex) just as
 ;                          the host mkasm.sh splices lib_NAME.inc. Up to 4 per file,
@@ -36,6 +43,7 @@ PHEX8   = $0115
 FFIND   = $0118   ; used once at startup to report a missing source
 FOPEN   = $0124   ; open source for reading (P1 = 512-byte buffer)
 FGETB   = $0127   ; next source byte -> A; C=1 at EOF
+FDELETE = $011E   ; tombstone an existing file FNAME in DIRLBA (overwrite: del then create)
 FWOPEN  = $012A   ; open the output write stream
 FPUTB   = $012D   ; append a byte to the output stream
 FCLOSE  = $0130   ; flush + register the output file FNAME; C=1 if full
@@ -133,6 +141,14 @@ SRCFN   = $CB90   ; the source's own FNAME (12), so PASSINIT re-opens it each pa
 SRCDIR  = $CB9C   ; the source's dir context: DIRLBA, DIRLBA1, DIRN (3)
 UPATH   = $CBA0   ; built include path "/lib/NAME.inc" (24)
 USELIST = $CBC0   ; up to 4 include names, 12 bytes each (NUL-terminated)
+; .include "path" support: one per file, resolved relative to the source's dir
+; (SRCPATH minus its leaf) and appended at EOF like ;#use. INCPATH lives in the
+; free RAM window between the path args ($C0A4) and INCBUF ($C400).
+INCPATH = $C100   ; resolved absolute include path (NUL-terminated, <=128)
+INCHAVE = $C1A0   ; 1 = a .include was recorded this pass
+INCDONE = $C1A1   ; 1 = the .include has been opened (spliced) this pass
+PATHSAV = $C1A2   ; CHKINC: saved LINEBUF path cursor (2)
+LSPOS   = $C1A4   ; CHKINC: INCPATH position just after the source dir's last '/' (2)
 
         .org $6A00
 ; =============================================================================
@@ -188,6 +204,8 @@ ST_NOSRC:LDP1 #ENOSRC
 ST_WERR:LDP1 #EWRITE
         JMP  ASM_ERR
 
+; INITPC - reset PC and HIWAT to 0 at the start of each pass (ORGBASE/ORGSET are
+;   cleared once, before pass 1, so a single .org fixes the load address).
 INITPC: LDA  #0
         STA  PC
         STA  PC+1
@@ -1088,6 +1106,11 @@ OI_FN:  LDA  (P1)+
         DEC
         STA  DIG
         JNZ  OI_FN
+        ; overwrite semantics: tombstone any existing output file BEFORE opening
+        ; the write stream (FDELETE scans the directory via SBUF, which the open
+        ; stream also uses — so it must run first, not between FWOPEN and FCLOSE).
+        ; DIRLBA/FNAME still hold the FRESOLVE'd parent + leaf. C=1 (absent) is fine.
+        JSR  FDELETE
         JSR  FWOPEN
         LDA  #0
         STA  OUTPOS
@@ -1129,6 +1152,8 @@ PASSINIT:
         LDA  #0
         STA  USECOUNT          ; re-scan ;#use directives fresh each pass
         STA  USEDONE
+        STA  INCHAVE           ; ...and re-scan .include fresh each pass
+        STA  INCDONE
         LDP1 #SECBUF
         JSR  FOPEN             ; source existence already checked at startup
         LDA  #0
@@ -1167,6 +1192,8 @@ NL_DONE:LDA  #0
         STA  LEOF
         JSR  CHKUSE           ; ";#use NAME"? -> splice the include, read next line
         JC   NEXTLINE
+        JSR  CHKINC           ; '.include "path"'? -> record it, read next line
+        JC   NEXTLINE
         RTS
 NL_END: LDA  #1
         STA  LEOF
@@ -1200,7 +1227,7 @@ RESTP2: LDA  P2SAV
 NEXTUSE:LDA  USEDONE
         LDB  USECOUNT
         CMP                   ; C=1 if USEDONE >= USECOUNT
-        JC   NU_END
+        JC   NU_INC           ; ;#use exhausted -> try the .include
         LDA  USEDONE          ; P1 = USELIST + USEDONE*12  (page-local)
         JSR  SLOTLO
         TAP1L
@@ -1214,6 +1241,20 @@ NEXTUSE:LDA  USEDONE
         JSR  FRESOLVE
         JC   NU_ERR
         LDP1 #INCBUF          ; include streams on its own buffer
+        JSR  FOPEN
+        JC   NU_ERR
+        CLC
+        RTS
+NU_INC: LDA  INCDONE          ; a recorded .include still unopened?
+        LDB  INCHAVE
+        CMP                   ; C=1 if INCDONE >= INCHAVE (none left)
+        JC   NU_END
+        LDA  #1
+        STA  INCDONE
+        LDP1 #INCPATH         ; the pre-resolved absolute include path
+        JSR  FRESOLVE
+        JC   NU_ERR
+        LDP1 #INCBUF
         JSR  FOPEN
         JC   NU_ERR
         CLC
@@ -1334,6 +1375,143 @@ CU_GO:  LDA  (P1)            ; P1 at NAME; empty -> ignore
 CU_NO:  CLC
         RTS
 
+; CHKINC - if LINEBUF is '.include "path"', resolve it (relative to the source's
+;   directory) into INCPATH, mark INCHAVE, and return C=1 (the line is skipped);
+;   else C=0. One .include per file; opened at the source's EOF (NU_INC). Since
+;   equates are order-independent (two-pass), EOF-append matches an inline splice.
+CHKINC: LDA  INCHAVE          ; only one .include per file
+        JNZ  CI_NO
+        LDP1 #LINEBUF
+CI_SK:  LDA  (P1)             ; skip leading spaces / tabs
+        LDB  #' '
+        CMP
+        JZ   CI_SKA
+        LDB  #$09
+        CMP
+        JNZ  CI_M
+CI_SKA: INP1
+        JMP  CI_SK
+CI_M:   LDA  (P1)             ; match ".include"
+        LDB  #'.'
+        CMP
+        JNZ  CI_NO
+        INP1
+        LDA  (P1)
+        LDB  #'i'
+        CMP
+        JNZ  CI_NO
+        INP1
+        LDA  (P1)
+        LDB  #'n'
+        CMP
+        JNZ  CI_NO
+        INP1
+        LDA  (P1)
+        LDB  #'c'
+        CMP
+        JNZ  CI_NO
+        INP1
+        LDA  (P1)
+        LDB  #'l'
+        CMP
+        JNZ  CI_NO
+        INP1
+        LDA  (P1)
+        LDB  #'u'
+        CMP
+        JNZ  CI_NO
+        INP1
+        LDA  (P1)
+        LDB  #'d'
+        CMP
+        JNZ  CI_NO
+        INP1
+        LDA  (P1)
+        LDB  #'e'
+        CMP
+        JNZ  CI_NO
+        INP1
+CI_SP:  LDA  (P1)             ; skip spaces to the opening quote
+        LDB  #' '
+        CMP
+        JZ   CI_SPA
+        LDB  #$09
+        CMP
+        JNZ  CI_Q
+CI_SPA: INP1
+        JMP  CI_SP
+CI_Q:   LDA  (P1)             ; expect a '"'
+        LDB  #34
+        CMP
+        JNZ  CI_NO
+        INP1                  ; P1 at the path text
+        TPA1L                 ; save the path cursor (CI_PREFIX uses P1)
+        STA  PATHSAV
+        TPA1H
+        STA  PATHSAV+1
+        LDA  (P1)             ; absolute path -> INCPATH from the start
+        LDB  #'/'
+        CMP
+        JZ   CI_ABS
+        JSR  CI_PREFIX        ; else INCPATH = the source dir; P2 = append point
+        JMP  CI_APP
+CI_ABS: LDA  #<INCPATH
+        TAP2L
+        LDA  #>INCPATH
+        TAP2H
+CI_APP: LDA  PATHSAV          ; restore the path cursor
+        TAP1L
+        LDA  PATHSAV+1
+        TAP1H
+CI_CP:  LDA  (P1)             ; append the path until '"' / NUL
+        JZ   CI_CPD
+        LDB  #34
+        CMP
+        JZ   CI_CPD
+        STA  (P2)+
+        INP1
+        JMP  CI_CP
+CI_CPD: LDA  #0
+        STA  (P2)
+        LDA  #1
+        STA  INCHAVE
+        SEC
+        RTS
+CI_NO:  CLC
+        RTS
+
+; CI_PREFIX - INCPATH = SRCPATH truncated after its last '/'; leaves P2 at the
+;   append point (just past that '/'). Copies all of SRCPATH, tracking LSPOS.
+CI_PREFIX: LDP1 #SRCPATH
+        LDA  #<INCPATH
+        TAP2L
+        STA  LSPOS
+        LDA  #>INCPATH
+        TAP2H
+        STA  LSPOS+1
+CP_LP:  LDA  (P1)
+        JZ   CP_DONE
+        STA  (P2)
+        LDB  #'/'
+        CMP
+        JNZ  CP_NS
+        TPA2L                 ; LSPOS = P2 + 1 (just past this '/')
+        LDB  #1
+        ADD
+        STA  LSPOS
+        TPA2H
+        JNC  CP_LS
+        INC
+CP_LS:  STA  LSPOS+1
+CP_NS:  INP1
+        INP2
+        JMP  CP_LP
+CP_DONE: LDA LSPOS            ; P2 = append point
+        TAP2L
+        LDA  LSPOS+1
+        TAP2H
+        RTS
+
 ; ADDUSE - P1 = NAME cursor in LINEBUF. Append the name (NUL-terminated) to
 ;   USELIST[USECOUNT] and bump USECOUNT (capped at 4). Duplicates are not
 ;   dedup'd — each command declares each ;#use once (matches the shipped set).
@@ -1404,6 +1582,8 @@ RT_LP:  LDA  (P1)+
         STA  DIRN
         RTS
 
+; SKIPSP - advance P1 over spaces and tabs; returns with (P1) on the first
+;   non-blank (or the terminating NUL). Only P1 moves; A/B are scratch.
 SKIPSP: LDA  (P1)
         LDB  #' '
         CMP
@@ -1415,6 +1595,7 @@ SKIPSP: LDA  (P1)
 SK_A:   INP1
         JMP  SKIPSP
 
+; SKIPTOEOL - advance P1 to the end of the line (stops on NUL, CR, or LF).
 SKIPTOEOL:
         LDA  (P1)
         JZ   STE_D
@@ -1428,6 +1609,7 @@ SKIPTOEOL:
         JMP  SKIPTOEOL
 STE_D:  RTS
 
+; EATNL - consume one optional CR then one optional LF at P1 (a CRLF or bare LF).
 EATNL:  LDA  (P1)
         LDB  #CR
         CMP
@@ -1538,6 +1720,7 @@ IC_NO:  LDA  #1
 IC_YES: LDA  #0
         RTS
 
+; UPCASE - A -> uppercase if it is 'a'..'z', else A unchanged. Clobbers B/TMP2.
 UPCASE: STA  TMP2
         LDB  #'a'
         CMP
@@ -1710,6 +1893,8 @@ WC_CP:  LDA  (P2)
         STA  DIG
         JMP  WC_CP
 WC_DONE:RTS
+; SETFNOUT - copy the legacy OUTNAME (12) into FNAME. Superseded by the OUTFN /
+;   FRESOLVE path handling (OUTINIT/FINISHOUT); kept for reference, not called.
 SETFNOUT:
         LDP1 #OUTNAME
         LDP2 #FNAME

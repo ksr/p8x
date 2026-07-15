@@ -90,8 +90,8 @@ int load(char *p) {
         return 1;
     }
     col = 0;
-    c = bios(FGETB, 0, 0);                       /* FGETB */
-    while ((c & 256) == 0) {
+    c = bios(FGETB, 0, 0);                       /* FGETB: byte in low 8 bits, bit 8 = EOF */
+    while ((c & 256) == 0) {                       /* loop until FGETB flags end-of-file */
         c = c & 255;
         if (c == 10) {                            /* LF -> end of line */
             line[nlines * 80 + col] = 0;
@@ -104,6 +104,8 @@ int load(char *p) {
         c = bios(FGETB, 0, 0);
     }
     line[nlines * 80 + col] = 0;                  /* final (unterminated) line */
+    /* Count the trailing line only if it had text (no final LF) or the file was
+     * empty; a file ending in LF already bumped nlines, so don't double-count. */
     if (col > 0 || nlines == 0) { nlines = nlines + 1; }
     if (nlines == 0) { nlines = 1; line[0] = 0; }
     return 0;
@@ -185,10 +187,10 @@ int inschar(int c) {                             /* insert c at (cy,cx) */
     b = cy * 80;
     n = llen(cy);
     if (n >= 78) { return 0; }
-    j = n;
+    j = n;                                        /* shift [cx..n) right one to open a gap */
     while (j > cx) { line[b + j] = line[b + j - 1]; j = j - 1; }
     line[b + cx] = c;
-    line[b + n + 1] = 0;
+    line[b + n + 1] = 0;                           /* re-terminate after the grown line */
     cx = cx + 1;
     dirty = 1;
     return 0;
@@ -217,8 +219,8 @@ int opendown() {                                 /* empty line after cy */
     int i;
     if (nlines >= 110) { return 0; }
     i = nlines;
-    while (i > cy + 1) { copyline(i, i - 1); i = i - 1; }
-    line[(cy + 1) * 80] = 0;
+    while (i > cy + 1) { copyline(i, i - 1); i = i - 1; }  /* shift lines below cy down one */
+    line[(cy + 1) * 80] = 0;                       /* new blank line in the freed slot */
     nlines = nlines + 1;
     cy = cy + 1; cx = 0; dirty = 1;
     return 0;
@@ -399,8 +401,10 @@ int main() {
                 inschar(k); drawrow(cy - top); placecur();
             }
         } else {                                  /* ---- NORMAL ---- */
-            if (pend == 1) {
+            if (pend == 1) {                      /* second key of a 'd' prefix (pend set below) */
                 pend = 0;
+                /* 'dd': stash the line for undo (uop 3 = reinsert), then delete it. Any
+                 * other key silently aborts the pending 'd'. */
                 if (k == 'd') { saveline(); uop = 3; uy = cy; delline(); redraw(); }
             } else if (k == 'h') { if (cx > 0) { cx = cx - 1; placecur(); } }
             else if (k == 'l') { if (cx < llen(cy) - 1) { cx = cx + 1; placecur(); } }

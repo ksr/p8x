@@ -16,13 +16,17 @@
 
         .org $6A00
 ; ---- skip leading spaces in the arg tail, then look for -h / -H ------------
-        TPA2L                                ; P1 = P2 (the arg pointer)
+; Copy the arg pointer P2 into P1 (16-bit, low then high byte) so we can walk
+; the tail with LDA (P1)+ without clobbering the OS-supplied P2. There is no
+; direct pointer-to-pointer move, so it is routed byte-wise through A.
+        TPA2L                                ; A = P2 low  -> P1 low
         TAP1L
-        TPA2H
+        TPA2H                                ; A = P2 high -> P1 high
         TAP1H
+; CMP does A-B without storing: Z=1 when equal, C=1 when A>=B (unsigned).
 _skip:  LDA (P1)
-        LDB #32
-        CMP                                  ; A - B : Z set if space
+        LDB #32                              ; 32 = ASCII space
+        CMP                                  ; compare cur char to space; Z set if space
         JNZ _chk
         LDA (P1)+                            ; consume the space, advance P1
         JMP _skip
@@ -30,8 +34,8 @@ _chk:   LDA (P1)                             ; first non-space char
         LDB #'-'
         CMP
         JNZ _pwd                             ; not an option -> just print CWD
-        LDA (P1)+                            ; consume '-'
-        LDA (P1)                             ; the option letter
+        LDA (P1)+                            ; consume '-', advance to option letter
+        LDA (P1)                             ; the option letter (h or H)
         LDB #'h'
         CMP
         JZ _usage
@@ -40,18 +44,21 @@ _chk:   LDA (P1)                             ; first non-space char
         CMP
         JZ _usage
 ; ---- print the working directory ------------------------------------------
-_pwd:   LDA #<_buf
+; P1 must be reloaded with &_buf before each syscall: SYS_GETCWD (and any
+; syscall) may clobber P1/P2, so the pointer set up for GETCWD cannot be
+; reused for PUTS.
+_pwd:   LDA #<_buf                   ; P1 = &_buf (dest for GETCWD)
         TAP1L
         LDA #>_buf
         TAP1H
-        JSR SYS_GETCWD               ; SYS_GETCWD -> _buf
-        LDA #<_buf
+        JSR SYS_GETCWD               ; copy CWD string (incl. NUL) into _buf
+        LDA #<_buf                   ; reload P1 = &_buf; GETCWD may have trashed it
         TAP1L
         LDA #>_buf
         TAP1H
-        JSR SYS_PUTS                 ; SYS_PUTS
-        LDA #10
-        JSR SYS_PUTC                 ; newline
+        JSR SYS_PUTS                 ; print CWD (no trailing newline)
+        LDA #10                      ; 10 = '\n'
+        JSR SYS_PUTC                 ; emit the newline
         RTS
 ; ---- -h usage --------------------------------------------------------------
 _usage: LDA #<_msg
@@ -64,4 +71,6 @@ _usage: LDA #<_msg
         RTS
 
 _msg:   .asciiz "usage: PWD   print the working directory path"
+; Destination for SYS_GETCWD. 52 bytes holds the longest path the OS can
+; return (full path incl. separators) plus the terminating NUL.
 _buf:   .fill 52

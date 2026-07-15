@@ -13,11 +13,22 @@ DESCRIPTION
     /lib/NAME.inc after the program, so a command can share helpers the way
     the C compiler's //#use shares /lib/lib_NAME.c. Up to 4 per file.
 
+    A `.include "path"` line appends that file after the program, with the path
+    resolved relative to the including source's own directory (so
+    `.include "../generators/memmap.inc"` finds it a directory over). Equates are
+    resolved in a first pass, so the include may sit anywhere and still define
+    symbols the body uses. One .include per file. This is how /src/os-bios builds
+    the OS and monitor on the machine.
+
     Both the SRC and OUT arguments are path-aware -- a full path, not just a
     12-char root-only name -- so you can assemble a source out of a /src tree
-    straight into a build-output directory. This is what the /src/mk build scripts rely on. A
+    straight into a build-output directory. This is what the /src Makefiles rely on. A
     relative name (no leading /) resolves against the current directory, like the
     shell -- so `asm T.ASM out.bin` reads a `cc ... >T.ASM` redirect from any CWD.
+
+    If the output file already exists it is overwritten (the old copy is removed
+    first, then rewritten), so re-assembling never leaves a duplicate. The old
+    data sectors are reclaimed by the next `pack`.
 
 EXAMPLES
     asm hello.asm hello.bin

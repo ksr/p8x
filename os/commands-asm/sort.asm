@@ -3,14 +3,23 @@
 ; Shares the input engine via `;#use stdin`. Reads up to 128 lines x 79 chars
 ; into a flat buffer, selection-sorts the slots by unsigned byte value, prints.
 ; Entry: P2 = arg tail.
+;
+; Buffer layout: `lines` is 128 slots of 80 bytes each (10240 total). A slot holds
+; up to 79 chars plus a trailing NUL terminator; laddr computes slot base as
+; lines + row*80 + col. Selection sort reorders slot *contents* (byte copies), not
+; pointers. Line compare (lless) is a NUL-terminated unsigned byte compare.
+; Registers: laddr/lless clobber A, B, P1; nextc/openarg/SYS_* clobber P1/P2.
+; s_arg is a 16-bit walking pointer into the arg tail; all counters are 8-bit,
+; so the 128-line and 79-col caps keep every index within a single byte.
 ;#use stdin
 ;#use abi
 
         .org $6A00
-        TPA2L
+        TPA2L                        ; save P2 (arg tail) into 16-bit s_arg
         STA s_arg
         TPA2H
         STA s_arg+1
+; skip leading spaces (ASCII 32) in the arg tail so s_arg points at first token
 s_sk:   LDA s_arg
         TAP2L
         LDA s_arg+1
@@ -23,11 +32,12 @@ s_sk:   LDA s_arg
         LDB #1
         ADD
         STA s_arg
-        JNC s_sk
-        LDA s_arg+1
+        JNC s_sk                     ; no carry from low byte -> loop
+        LDA s_arg+1                  ; propagate carry into high byte
         INC
         STA s_arg+1
         JMP s_sk
+; if the token starts with '-', treat "-h"/"-H" as a request for usage text
 s_chk:  LDA (P2)
         LDB #'-'
         CMP
@@ -40,12 +50,13 @@ s_chk:  LDA (P2)
         LDB #'H'
         CMP
         JZ s_usage
+; open the source: openarg picks the file at s_arg, or stdin if the tail is empty
 s_open: LDA s_arg
         STA oa_a
         LDA s_arg+1
         STA oa_a+1
         JSR openarg
-        LDB #2
+        LDB #2                       ; openarg returns 2 = file-not-found
         CMP
         JZ s_nf
 ; ---- read lines into the flat buffer --------------------------------------
@@ -56,20 +67,20 @@ s_rl:   LDA nline                    ; stop at 128 lines
         LDB #128
         CMP
         JC s_rdone
-        JSR nextc
-        JC s_reof
+        JSR nextc                    ; fetch next input byte
+        JC s_reof                    ; carry set = EOF
         STA sch
-        LDB #10
+        LDB #10                      ; LF terminates the current line
         CMP
         JNZ s_rch
-        LDA nline                    ; end of line
+        LDA nline                    ; end of line: NUL-terminate at [nline,col]
         STA la_s
         LDA col
         STA la_c
         JSR laddr
         LDA #0
         STA (P1)
-        LDA nline
+        LDA nline                    ; advance to next slot, reset column
         INC
         STA nline
         LDA #0
@@ -78,12 +89,12 @@ s_rl:   LDA nline                    ; stop at 128 lines
 s_rch:  LDA sch
         LDB #13
         CMP
-        JZ s_rl                      ; drop CR
+        JZ s_rl                      ; drop CR (CRLF handled as bare LF)
         LDA col
         LDB #79
         CMP
-        JC s_rl                      ; col>=79 -> skip
-        LDA nline
+        JC s_rl                      ; col>=79 -> drop char (leave room for NUL)
+        LDA nline                    ; store char at [nline,col]
         STA la_s
         LDA col
         STA la_c
@@ -94,11 +105,12 @@ s_rch:  LDA sch
         INC
         STA col
         JMP s_rl
-s_reof: LDA col                      ; final line w/o LF
+; EOF: if the last line had no trailing LF, terminate and count it too
+s_reof: LDA col                      ; nothing buffered -> done
         LDB #0
         CMP
         JZ s_rdone
-        LDA nline
+        LDA nline                    ; buffer full (128)? then discard partial
         LDB #128
         CMP
         JC s_rdone
@@ -116,26 +128,28 @@ s_rdone:
 ; ---- selection sort -------------------------------------------------------
         LDA #0
         STA si
-so_i:   LDA si                       ; while si+1 < nline
+; outer loop: for si in 0..nline-2, find index of the minimum slot in [si..)
+so_i:   LDA si                       ; while si+1 < nline (CMP C=1 when si+1>=nline)
         INC
         LDB nline
         CMP
         JC so_done
-        LDA si
+        LDA si                       ; smin = si (best-so-far index)
         STA smin
-        LDA si
+        LDA si                       ; sj = si+1 (inner scan start)
         INC
         STA sj
+; inner loop: scan sj over [si+1..nline) tracking the smallest line in smin
 so_j:   LDA sj
         LDB nline
         CMP
-        JC so_swap
-        LDA sj
+        JC so_swap                   ; sj>=nline -> scan complete
+        LDA sj                       ; if line[sj] < line[smin], smin = sj
         STA ll_x
         LDA smin
         STA ll_y
         JSR lless
-        LDB #0
+        LDB #0                       ; lless returns 0 (not-less) or 1
         CMP
         JZ so_jn
         LDA sj
@@ -144,18 +158,19 @@ so_jn:  LDA sj
         INC
         STA sj
         JMP so_j
+; swap: exchange slot si with slot smin, one byte at a time over all 80 columns
 so_swap:LDA smin
         LDB si
         CMP
-        JZ so_in
+        JZ so_in                     ; smin==si -> already in place, no swap
         LDA #0
         STA k
-sw_l:   LDA k
+sw_l:   LDA k                        ; for k in 0..79
         LDB #80
         CMP
-        JC so_in
+        JC so_in                     ; k>=80 -> swap done
         LDA si
-        STA la_s
+        STA la_s                     ; ai = &slot[si][k] (cached; laddr reuses P1)
         LDA k
         STA la_c
         JSR laddr
@@ -163,7 +178,7 @@ sw_l:   LDA k
         STA ai
         TPA1H
         STA ai+1
-        LDA smin
+        LDA smin                     ; am = &slot[smin][k]
         STA la_s
         LDA k
         STA la_c
@@ -172,25 +187,25 @@ sw_l:   LDA k
         STA am
         TPA1H
         STA am+1
-        LDA ai
+        LDA ai                       ; swt = *ai (save si's byte)
         TAP1L
         LDA ai+1
         TAP1H
         LDA (P1)
         STA swt
-        LDA am
+        LDA am                       ; swu = *am (save smin's byte)
         TAP1L
         LDA am+1
         TAP1H
         LDA (P1)
         STA swu
-        LDA ai
+        LDA ai                       ; *ai = swu
         TAP1L
         LDA ai+1
         TAP1H
         LDA swu
         STA (P1)
-        LDA am
+        LDA am                       ; *am = swt
         TAP1L
         LDA am+1
         TAP1H
@@ -206,31 +221,33 @@ so_in:  LDA si
         JMP so_i
 so_done:
 ; ---- print ----------------------------------------------------------------
+; walk slots 0..nline-1, emit each NUL-terminated line followed by a newline
         LDA #0
         STA si
 sp_l:   LDA si
         LDB nline
         CMP
-        JC sp_done
-        LDA si
+        JC sp_done                   ; si>=nline -> all lines printed
+        LDA si                       ; P1 = &slot[si][0]
         STA la_s
         LDA #0
         STA la_c
         JSR laddr
-sp_cl:  LDA (P1)
+sp_cl:  LDA (P1)                     ; emit chars until the NUL terminator
         LDB #0
         CMP
         JZ sp_eol
         JSR SYS_PUTC
         INP1
         JMP sp_cl
-sp_eol: LDA #10
+sp_eol: LDA #10                      ; terminate the printed line with LF
         JSR SYS_PUTC
         LDA si
         INC
         STA si
         JMP sp_l
 sp_done:RTS
+; s_nf: file-not-found message; s_usage: usage text. Both print a line + RTS.
 s_nf:   LDA #<u_nf
         TAP1L
         LDA #>u_nf
@@ -250,13 +267,16 @@ s_usage:LDA #<u_use
         JSR SYS_PUTC
         RTS
 
-; laddr: P1 = lines + la_s*80 + la_c
-laddr:  LDA #0
+; laddr: compute slot byte address P1 = lines + la_s*80 + la_c.
+;   In:  la_s = row (0..127), la_c = column (0..79)
+;   Out: P1 = absolute address; la_t/la_n scratch clobbered, A/B clobbered.
+; No multiply instruction exists, so *80 is done by repeated 16-bit add of 80.
+laddr:  LDA #0                        ; la_t (16-bit accumulator) = 0
         STA la_t
         STA la_t+1
-        LDA la_s
+        LDA la_s                      ; la_n = row counter
         STA la_n
-la_ml:  LDA la_n
+la_ml:  LDA la_n                      ; while la_n != 0: la_t += 80
         LDB #0
         CMP
         JZ la_md
@@ -264,7 +284,7 @@ la_ml:  LDA la_n
         LDB #80
         ADD
         STA la_t
-        JNC la_m1
+        JNC la_m1                     ; carry -> bump high byte
         LDA la_t+1
         INC
         STA la_t+1
@@ -272,7 +292,7 @@ la_m1:  LDA la_n
         DEC
         STA la_n
         JMP la_ml
-la_md:  LDA la_t
+la_md:  LDA la_t                      ; la_t += la_c (column offset)
         LDB la_c
         ADD
         STA la_t
@@ -280,27 +300,30 @@ la_md:  LDA la_t
         LDA la_t+1
         INC
         STA la_t+1
-la_c1:  LDA la_t
-        LDB #<lines
+la_c1:  LDA la_t                      ; la_t += &lines (add 16-bit base address)
+        LDB #<lines                   ; low byte first; capture its carry in la_car
         ADD
         STA la_t
         LDA #0
         JNC la_b1
         LDA #1
 la_b1:  STA la_car
-        LDA la_t+1
+        LDA la_t+1                    ; high byte += >lines, then += saved carry
         LDB #>lines
         ADD
         LDB la_car
         ADD
         STA la_t+1
-        LDA la_t
+        LDA la_t                      ; move result into P1
         TAP1L
         LDA la_t+1
         TAP1H
         RTS
 
-; lless: A = 1 if line ll_x sorts before line ll_y (unsigned bytes), else 0
+; lless: A = 1 if line ll_x sorts before line ll_y (unsigned bytes), else 0.
+;   In:  ll_x, ll_y = row indices.  Uses la_*/ll_* scratch, clobbers A/B/P1.
+; Compares byte-by-byte; equal-and-both-nonzero advances, mismatch decides,
+; and a shared NUL (a==0 at an equal position) means the lines are equal.
 lless:  LDA #0
         STA ll_i
 ll_l:   LDA ll_x
@@ -308,23 +331,23 @@ ll_l:   LDA ll_x
         LDA ll_i
         STA la_c
         JSR laddr
-        LDA (P1)
+        LDA (P1)                     ; ll_a = ll_x[ll_i]
         STA ll_a
         LDA ll_y
         STA la_s
         LDA ll_i
         STA la_c
         JSR laddr
-        LDA (P1)
+        LDA (P1)                     ; ll_b = ll_y[ll_i]
         STA ll_b
-        LDA ll_a
+        LDA ll_a                     ; equal bytes -> defer to ll_eq
         LDB ll_b
         CMP
         JZ ll_eq
-        LDA ll_a
+        LDA ll_a                     ; differ: a<b (unsigned) means x sorts first
         LDB ll_b
         CMP
-        JC ll_no                     ; a >= b -> not less
+        JC ll_no                     ; C=1 means a >= b -> not less
         LDA #1
         RTS
 ll_no:  LDA #0
@@ -343,26 +366,27 @@ ll_z:   LDA #0
 u_nf:   .asciiz "sort: not found"
 u_use:  .asciiz "usage: SORT [file]   sort lines ascending (file or stdin)"
 
-s_arg:  .fill 2
-nline:  .fill 1
-col:    .fill 1
-sch:    .fill 1
-si:     .fill 1
-sj:     .fill 1
-smin:   .fill 1
-k:      .fill 1
-ai:     .fill 2
-am:     .fill 2
-swt:    .fill 1
-swu:    .fill 1
-la_s:   .fill 1
-la_c:   .fill 1
-la_n:   .fill 1
-la_t:   .fill 2
-la_car: .fill 1
-ll_x:   .fill 1
-ll_y:   .fill 1
-ll_i:   .fill 1
-ll_a:   .fill 1
-ll_b:   .fill 1
-lines:  .fill 10240
+; ---- state (BSS) ----------------------------------------------------------
+s_arg:  .fill 2                      ; 16-bit walking pointer into arg tail
+nline:  .fill 1                      ; number of lines buffered (0..128)
+col:    .fill 1                      ; current column while reading a line
+sch:    .fill 1                      ; last char read from input
+si:     .fill 1                      ; selection-sort outer index / print index
+sj:     .fill 1                      ; selection-sort inner scan index
+smin:   .fill 1                      ; index of smallest line found so far
+k:      .fill 1                      ; column counter during a slot swap
+ai:     .fill 2                      ; cached &slot[si][k]
+am:     .fill 2                      ; cached &slot[smin][k]
+swt:    .fill 1                      ; swap temp: byte from slot si
+swu:    .fill 1                      ; swap temp: byte from slot smin
+la_s:   .fill 1                      ; laddr input: row
+la_c:   .fill 1                      ; laddr input: column
+la_n:   .fill 1                      ; laddr scratch: row countdown
+la_t:   .fill 2                      ; laddr scratch: 16-bit address accumulator
+la_car: .fill 1                      ; laddr scratch: carry from base low-byte add
+ll_x:   .fill 1                      ; lless input: first row
+ll_y:   .fill 1                      ; lless input: second row
+ll_i:   .fill 1                      ; lless scratch: compare column
+ll_a:   .fill 1                      ; lless scratch: byte from row ll_x
+ll_b:   .fill 1                      ; lless scratch: byte from row ll_y
+lines:  .fill 10240                  ; 128 slots x 80 bytes flat line buffer

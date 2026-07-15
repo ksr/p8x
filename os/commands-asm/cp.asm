@@ -425,6 +425,11 @@ c_put:  LDA #0
         RTS
 
 ; ======================= copy_file / isdir =================================
+; copy_file: byte-copy the file named by cf_s (src abspath) to cf_d (dst
+;   abspath). Opens src read-only at page $FC00 (FOPEN buffer above the binary),
+;   opens dst for write (FWOPEN), then FGETB->FPUTB until EOF (FGETB sets C).
+;   FGETB/FPUTB clobber P1/P2, so cfch stashes each byte between the two calls.
+;   Returns A=0 on success, A=1 if the source could not be opened (cf_nf).
 copy_file:
         LDA cf_s
         TAP1L
@@ -463,6 +468,8 @@ cf_done:LDA #0
         RTS
 cf_nf:  LDA #1
         RTS
+; isdir: return A=1 if the path at id_p is a directory (FOPENDIR succeeds,
+;   C clear), else A=0. FOPENDIR sets C on failure.
 isdir:  LDA id_p
         TAP1L
         LDA id_p+1
@@ -476,6 +483,16 @@ id_no:  LDA #0
         RTS
 
 ; ======================= copy_tree =========================================
+; copy_tree: recursively copy directory ct_s -> ct_d. w_depth is the current
+;   recursion level; all per-level scratch (sp/dp/names/isd/nn/cidx) is indexed
+;   by w_depth via the index helpers below, so the P8X hardware stack (P3) only
+;   holds return addresses. Steps: stash src/dst abspaths into sp[d]/dp[d],
+;   SYS_MKDIR the dst, then FOPENDIR src and buffer the whole listing (dir page
+;   $E0, chosen above the enlarged binary) into names[d]/isd[d] BEFORE any
+;   recursion — FSDIRBUF/FNEXT share one global dir buffer, so the child names
+;   must be captured up front. Entries named "." (and ".." — first char '.')
+;   and names >=24 chars are skipped. Pass two (ct_proc) walks the captured
+;   entries: joinp the child src/dst, then recurse if isd[d][i], else copy_file.
 copy_tree:
         JSR spd_a                    ; sp[d] = *ct_s
         TPA1L
@@ -671,6 +688,8 @@ ct_pinc:JSR idx_a
 ct_ret: RTS
 
 ; ======================= scopy / joinp =====================================
+; scopy: strcpy from sc_s to sc_d (NUL-terminated). Returns A = length copied
+;   (not counting the terminator). Clobbers P1/P2.
 scopy:  LDA sc_d
         TAP1L
         LDA sc_d+1
@@ -695,6 +714,8 @@ sc_dn:  LDA #0
         STA (P1)
         LDA sc_n
         RTS
+; joinp: build jp_out = jp_dir + "/" + jp_name, inserting a single '/' only if
+;   jp_dir does not already end in one. Returns A = total length. Clobbers P1/P2.
 joinp:  LDA jp_out
         STA sc_d
         LDA jp_out+1
@@ -763,6 +784,10 @@ jp_nd:  LDA #0
         RTS
 
 ; ======================= abspath (P2 source, P1 dest) ======================
+; abspath: write an absolute path for ap_a into ap_out. If ap_a already starts
+;   with '/', copy it verbatim; otherwise prefix SYS_GETCWD, ensure it ends in
+;   '/', then append ap_a. The source copy stops at NUL, CR (13), or space (32)
+;   so a trailing arg on the command line is not included.
 abspath:LDA #0
         STA ap_n
         LDA ap_a
@@ -827,6 +852,12 @@ ab_dn:  LDA #0
         RTS
 
 ; ======================= index helpers =====================================
+; Each helper returns in P1 the address of the current recursion level's slot in
+;   a per-depth array, since the ISA has no indexed addressing — the offset is
+;   built by repeated addition (mul80 loops w_depth times, etc.). Stride per
+;   depth level: nn/cidx = 1 byte, sp/dp = 80, isd = 24, names = 288
+;   (= 24 entries * 12 chars). cti/ctk select the entry/char within a level.
+; nn_a:  P1 = nn + w_depth  (entry count for this level)
 nn_a:   LDA #<nn
         LDB w_depth
         ADD
@@ -836,6 +867,7 @@ nn_a:   LDA #<nn
         INC
 nna1:   TAP1H
         RTS
+; idx_a: P1 = cidx + w_depth  (pass-two loop cursor for this level)
 idx_a:  LDA #<cidx
         LDB w_depth
         ADD
@@ -1026,8 +1058,13 @@ u_nf:   .asciiz "cp: source not found"
 u_notdir:.asciiz "cp: target is not a directory"
 u_nomat:.asciiz "cp: no match"
 
-c_arg:  .fill 2
-rec:    .fill 1
+; --- static scratch / BSS (zero-initialized .fill) --------------------------
+; patw holds the copied source word; gfiles is glob_expand output (24 * 64).
+; The per-depth recursion arrays follow: sp/dp (8 levels * 80 bytes of path),
+; names (8 * 24 * 12), isd (8 * 24 is-dir flags), nn/cidx (8 counts/cursors) --
+; so copy_tree supports up to 8 nested directory levels.
+c_arg:  .fill 2                      ; pointer to current position in arg tail
+rec:    .fill 1                      ; -r flag (recurse into directories)
 cg:     .fill 1
 cpw:    .fill 1
 cgi:    .fill 1
