@@ -2,6 +2,8 @@
 ;   DEP addr b b ...   store hex byte values at hex address addr.
 ; Memory-only (no filesystem): parse hex, poke each byte, addr++. Quiet on
 ; success; usage on -h / empty; "dep: bad address" on a non-hex address.
+; Each value parses as 16-bit but only its low byte is stored, so "1FF" deposits
+; $FF; an address with no byte values is a no-op. Both match dep.c.
 ; Entry: P2 = arg tail.  SYS_PUTS=$200F, SYS_PUTC=$2009.
 ;#use abi
 
@@ -65,7 +67,6 @@ d_bad:  LDA #<m_bad
         TAP1L
         LDA #>m_bad
         TAP1H
-        LDA #0
         JSR SYS_PUTS
         LDA #10
         JSR SYS_PUTC
@@ -74,7 +75,6 @@ d_use:  LDA #<m_use
         TAP1L
         LDA #>m_use
         TAP1H
-        LDA #0
         JSR SYS_PUTS
         LDA #10
         JSR SYS_PUTC
@@ -108,15 +108,11 @@ gh_shl: LDA HXLO
         DEC
         STA SHC
         JNZ gh_shl
-        LDA HXLO                     ; |= digit
-        LDB DIGIT
-        ADD
-        STA HXLO
-        LDA HXHI
-        JNC gh_nc
-        INC
-gh_nc:  STA HXHI
-        INP2
+        LDA HXLO                     ; merge digit into the nibble the shift
+        LDB DIGIT                    ; just cleared: HXLO's low 4 bits are 0 and
+        ADD                          ; DIGIT is 0..15, so this cannot carry out
+        STA HXLO                     ; of the low byte -- HXHI stands as the ROL
+        INP2                         ; chain left it.
         LDA GCNT
         INC
         STA GCNT

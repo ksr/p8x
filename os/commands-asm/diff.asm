@@ -141,8 +141,7 @@ pfx_l:  LDA dp
         LDB na
         CMP
         JC pfx_d                      ; dp >= na -> ran off file1
-        LDA dp
-        LDB nb
+        LDB nb                        ; CMP left A = dp
         CMP
         JC pfx_d                      ; dp >= nb -> ran off file2
         LDA #<alines
@@ -214,8 +213,7 @@ sfx_d:  LDA dp                       ; identical?
         LDB dsa
         CMP
         JNZ d_emit
-        LDA dp
-        LDB dsb
+        LDB dsb                       ; CMP left A = dp
         CMP
         JNZ d_emit
         RTS
@@ -334,8 +332,7 @@ ll_rd:  LDA #0
         LDB #10
         CMP
         JZ ll_nl                      ; LF -> terminate current line
-        LDA llc
-        LDB #13
+        LDB #13                       ; CMP left A = llc
         CMP
         JZ ll_rd                      ; CR -> ignore (handles CRLF)
         LDA llcol
@@ -404,7 +401,8 @@ ll_ret: LDA lln
 
 ; leq: compare two NUL-terminated lines byte-by-byte.
 ; In: le_x/le_xi = base+index of line X, le_y/le_yi = base+index of line Y.
-; Out: A = 1 if equal (both reach NUL together), else 0. Clobbers P1, le_i/a/b.
+; Out: A = 1 if equal (both reach NUL together), else 0. Clobbers P1, le_i/a/b,
+; and the la* scratch vars (via laddr).
 leq:    LDA #0
         STA le_i
 le_l:   LDA le_x
@@ -433,8 +431,8 @@ le_l:   LDA le_x
         LDB le_b
         CMP
         JNZ le_no
-        LDA le_a                      ; bytes match; if both are NUL, lines equal
-        LDB #0
+        LDB #0                        ; bytes match (CMP left A = le_a); if both
+                                      ; are NUL, the lines are equal
         CMP
         JZ le_yes
         LDA le_i
@@ -517,8 +515,8 @@ lad_2:  LDA lat
         LDB la_base
         ADD
         STA lat
-        LDA #0
-        JNC lad_3
+        LDA #0                        ; LDA sets only Z/N, never C, so the JNC
+        JNC lad_3                     ; below still tests the ADD above
         LDA #1
 lad_3:  STA lacar
         LDA lat+1

@@ -37,9 +37,8 @@ _chk:   LDA (P1)                             ; first non-space char
         LDA (P1)+                            ; consume '-', advance to option letter
         LDA (P1)                             ; the option letter (h or H)
         LDB #'h'
-        CMP
+        CMP                                  ; CMP leaves A holding the option letter
         JZ _usage
-        LDA (P1)
         LDB #'H'
         CMP
         JZ _usage

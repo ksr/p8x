@@ -77,17 +77,14 @@ u_hex:  LDA (P1)+
         TAP1H
         LDA #16
         STA CNT
-u_asc:  LDA (P1)+                    ; ATMP saves the byte; CMP clobbers nothing
-        STA ATMP                     ;   but each reload re-fetches from ATMP
-        LDB #32
+u_asc:  LDA (P1)+                    ; CMP preserves A, so the byte stays live in
+        LDB #32                      ;   A across both range tests (LDB hits B only)
         CMP                          ; char >= 32 (printable low bound)?
         JNC u_dot                    ;   C=0 means char < 32 -> control, show '.'
-        LDA ATMP
         LDB #127
         CMP                          ; char >= 127 (DEL/high)?
         JC u_dot                     ;   C=1 means char >= 127 -> non-print, '.'
-        LDA ATMP                     ; 32..126: print the byte as-is
-        JMP u_put
+        JMP u_put                    ; 32..126: print the byte still held in A
 u_dot:  LDA #'.'
 u_put:  JSR $2009                    ; SYS_PUTC (raw addr; equals SYS_PUTC equate)
         LDA CNT
@@ -274,4 +271,3 @@ ADHI:   .fill 1
 ROWS:   .fill 1
 CNT:    .fill 1
 RHX:    .fill 1
-ATMP:   .fill 1

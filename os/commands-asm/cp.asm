@@ -491,7 +491,9 @@ id_no:  LDA #0
 ;   $E0, chosen above the enlarged binary) into names[d]/isd[d] BEFORE any
 ;   recursion — FSDIRBUF/FNEXT share one global dir buffer, so the child names
 ;   must be captured up front. Entries named "." (and ".." — first char '.')
-;   and names >=24 chars are skipped. Pass two (ct_proc) walks the captured
+;   are skipped; so is every entry past the 24th of a level (names[d]/isd[d]
+;   hold 24), and each name is truncated to its 12-byte slot. Both caps are
+;   silent. Pass two (ct_proc) walks the captured
 ;   entries: joinp the child src/dst, then recurse if isd[d][i], else copy_file.
 copy_tree:
         JSR spd_a                    ; sp[d] = *ct_s
@@ -993,11 +995,7 @@ na_m:   LDA hn
         LDB #0
         CMP
         JZ na_md
-        LDA ht                       ; +288 = +256 +32
-        LDB #0
-        ADD
-        STA ht
-        LDA ht+1
+        LDA ht+1                     ; +288 = +256 +32
         INC
         STA ht+1
         LDA ht

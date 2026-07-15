@@ -671,8 +671,9 @@ lln_l:  LDA (P1)
         JMP lln_l
 lln_d:  LDA ll_n
         RTS
-; clampx: if cx runs past the end of the current line, pull it back to the last
-; valid column (line length). Used after vertical moves onto a shorter line.
+; clampx: if cx runs past the end of the current line, pull it back to the line
+; length — the NUL slot, one column past the last character. Used after vertical
+; moves onto a shorter line.
 clampx: LDA cy
         STA ll_i
         JSR llen
@@ -690,8 +691,9 @@ cx_ok:  RTS
 ; load: read the file whose path is at ld_p into the line buffer. Resets cursor
 ; and scroll state. Uses BIOS FOPEN with a fixed read buffer at $FC00 (P1). If
 ; FOPEN fails (JNC ld_read taken only on success/carry-clear), start with one
-; empty line. LF ('\n') ends a line; CR ('\r') is dropped; columns past 79 are
-; truncated; the buffer holds at most 110 lines. Trailing partial line and the
+; empty line. LF ('\n') ends a line; CR ('\r') is dropped; only columns 0..78 are
+; stored (79 chars, leaving the NUL at 79) and the rest of the line is dropped;
+; the buffer holds at most 110 lines. Trailing partial line and the
 ; empty-file case are normalized so nlines >= 1 on return.
 load:   LDA ld_p
         TAP1L

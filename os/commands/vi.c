@@ -23,8 +23,9 @@
  * insert. A search is a literal substring, forward, wrapping once.
  * INSERT mode: type text; Enter splits the line; Backspace deletes; Esc -> NORMAL.
  *
- * Screen is 24x80 (VT100 default): 23 text rows + a status/command row. Lines
- * longer than 78 chars, or files taller than 110 lines, are truncated (v0 limits).
+ * Screen is 24x80 (VT100 default): 23 text rows + a status/command row. load()
+ * keeps the first 79 chars of a line and drops the rest; inschar() will not grow
+ * a line past 78. Files taller than 110 lines are truncated (v0 limits).
  * Within the p8cc subset: no ++/--, declarations at the top of each function,
  * no break/continue, functions defined before use.
  *

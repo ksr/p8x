@@ -497,7 +497,8 @@ col_nx: LDA #0
         TAP1H
         LDA #0
         JSR SYS_DIRENTRY             ; de_read
-        LDA de                       ; skip '.'/'..'
+        LDA de                       ; skip any leading-dot name (mirrors de_isdot:
+                                     ; only byte 0 is tested, so '.' and '..' both go)
         LDB #'.'
         CMP
         JZ col_nx
@@ -1035,7 +1036,7 @@ sh_eol: LDA #10
         JSR SYS_PUTC
 sh_ret: RTS
 
-; ======================= putsize / putnum / ndigits / divmod10 =============
+; ======================= putsize / divmod10 ================================
 putsize:LDA sh_dir
         LDB #0
         CMP
@@ -1177,91 +1178,6 @@ nz24:   LDA num24
         LDA #0
         RTS
 nz_y:   LDA #1
-        RTS
-
-; putnum: print the 16-bit unsigned value in pn as decimal, no padding.
-;   Extracts digits LS-first via divmod10, pushing each ASCII digit on the
-;   hardware stack (PHA), then pops (PLA) them to emit MS-first. pn==0 prints
-;   a single '0'. Clobbers dv/dvq/dvr/pncnt and pn (consumed). (Helper; the
-;   size column uses the 24-bit putsize path instead.)
-putnum: LDA #0
-        STA pncnt
-        LDA pn
-        LDB #0
-        CMP
-        JNZ pn_loop
-        LDA pn+1
-        LDB #0
-        CMP
-        JNZ pn_loop
-        LDA #'0'
-        JSR SYS_PUTC
-        RTS
-pn_loop:LDA pn
-        LDB #0
-        CMP
-        JNZ pn_go
-        LDA pn+1
-        LDB #0
-        CMP
-        JZ pn_print
-pn_go:  LDA pn
-        STA dv
-        LDA pn+1
-        STA dv+1
-        JSR divmod10
-        LDA dvr
-        LDB #48
-        ADD
-        PHA
-        LDA pncnt
-        INC
-        STA pncnt
-        LDA dvq
-        STA pn
-        LDA dvq+1
-        STA pn+1
-        JMP pn_loop
-pn_print:
-        LDA pncnt
-        LDB #0
-        CMP
-        JZ pn_done
-        PLA
-        JSR SYS_PUTC
-        LDA pncnt
-        DEC
-        STA pncnt
-        JMP pn_print
-pn_done:RTS
-
-; ndigits: A = number of decimal digits in the 16-bit value ndv (min 1).
-;   Repeatedly divides by 10 (divmod10) counting iterations; ndv unchanged,
-;   but dv/dvq are clobbered. (Helper.)
-ndigits:LDA #1
-        STA ndc
-        LDA ndv
-        STA dv
-        LDA ndv+1
-        STA dv+1
-nd_l:   LDA dv+1
-        LDB #0
-        CMP
-        JNZ nd_div
-        LDA dv
-        LDB #10
-        CMP
-        JNC nd_done                  ; dv<10 -> done
-nd_div: JSR divmod10
-        LDA dvq
-        STA dv
-        LDA dvq+1
-        STA dv+1
-        LDA ndc
-        INC
-        STA ndc
-        JMP nd_l
-nd_done:LDA ndc
         RTS
 
 ; divmod10: dv (word) -> dvq (word)=dv/10, dvr (byte)=dv%10 (destroys dv)
@@ -1610,10 +1526,6 @@ dmrem:  .fill 1
 dmi:    .fill 1
 psnd:   .fill 1
 pstmp:  .fill 1
-pn:     .fill 2
-pncnt:  .fill 1
-ndv:    .fill 2
-ndc:    .fill 1
 dv:     .fill 2
 dvq:    .fill 2
 dvr:    .fill 1

@@ -9,7 +9,8 @@
  * literal. Reads a named file (opened like cat) or stdin; on each line, replaces
  * the first match (or all with `g`) and prints the result. The matched span (not
  * a fixed length) is what gets replaced. `*` is non-greedy (shortest match);
- * a zero-length match is skipped. Lines capped at 128 chars, output at 255.
+ * a zero-length match is skipped. Input lines and output are both capped at 255
+ * chars (readline's cap); line/out are 260 bytes so the NUL always fits.
  */
 //#use stdin   /* path[80], fromfile, nextc(), openarg() */
 char pat[64];

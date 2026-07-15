@@ -156,8 +156,7 @@ c_cmp:  JSR b1_ptr                   ; P1 = b1 + off  (carry-correct)
         LDB rb
         CMP
         JNZ c_diff
-        LDA (P1)                     ; newline? line++
-        LDB #10
+        LDB #10                      ; A still holds b1[off] (CMP preserves A)
         CMP
         JNZ c_noln
         JSR line_inc

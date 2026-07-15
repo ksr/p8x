@@ -101,19 +101,16 @@ w_b1:   LDA wch                       ; if c==10 lines++ (24-bit)
         LDA lines+2
         INC
         STA lines+2
-w_wsq:  LDA wch                       ; whitespace?
-        LDB #32
+w_wsq:  LDA wch                       ; whitespace? (CMP leaves A = wch, so the
+        LDB #32                       ; ladder below re-tests it without reloading)
         CMP
         JZ w_ws
-        LDA wch
         LDB #9
         CMP
         JZ w_ws
-        LDA wch
         LDB #10
         CMP
         JZ w_ws
-        LDA wch
         LDB #13
         CMP
         JZ w_ws
@@ -193,7 +190,8 @@ w_usage:LDA #<u_use
 ;   dm10 (which divides num24 by 10 in place, returning the remainder). Digits
 ;   come out least-significant first, so they are pushed onto dg[] (count in
 ;   psnd) and replayed in reverse. The first dm10 runs unconditionally so a
-;   zero value still prints "0". Uses P1; clobbers A/B, num24, dg, psnd.
+;   zero value still prints "0". Uses P1; clobbers A/B, num24, dg, psnd,
+;   pstmp (via pu_push) and dm10's scratch (dmrem, dmi, dv, dvq, dvr).
 put24:  LDA pn
         STA num24
         LDA pn+1

@@ -76,9 +76,8 @@ a_F1:   LDA aarg                     ; skip spaces
         JSR aarg_inc
         JMP a_F1
 a_Fc:   LDA (P2)
-        STA sepc
-        LDA (P2)                     ; if sepc != 0, advance past it
-        LDB #0
+        STA sepc                     ; STA leaves A = sepc for the test below
+        LDB #0                       ; if sepc != 0, advance past it
         CMP
         JZ a_Fsk
         JSR aarg_inc
@@ -93,11 +92,7 @@ a_Fsk:  LDA aarg                     ; skip spaces after the separator
         JSR aarg_inc
         JMP a_Fsk
 ; ---- extract the program (quoted, else up to a space) ----
-a_prog: LDA #<prog
-        STA pp
-        LDA #>prog
-        STA pp+1
-        LDA aarg
+a_prog: LDA aarg
         TAP2L
         LDA aarg+1
         TAP2H
@@ -142,9 +137,7 @@ a_pqe:  INP2                         ; consume the closing quote
         JSR aarg_inc
 a_pqd:
 ; Copy done. NUL-terminate prog[] at pl, then hand off to parse_prog.
-a_pdone: LDA #0                      ; NUL-terminate prog
-        STA pp                       ; (pp used as scratch below — re-point)
-        LDA #<prog
+a_pdone: LDA #<prog                  ; NUL-terminate prog at prog+pl
         LDB pl
         ADD
         TAP1L
@@ -397,11 +390,10 @@ readrec: LDA #0
         STA li
         JSR nextc
         JC rr_no
-rr_lp:  STA rrc                      ; A = char
+rr_lp:  STA rrc                      ; A = char (CMP below preserves it)
         LDB #10
         CMP
         JZ rr_end
-        LDA rrc
         LDB #13
         CMP
         JZ rr_nx                     ; skip CR
@@ -618,14 +610,8 @@ pf_pl:  LDA pf_j
         LDB pf_ln
         CMP
         JC pf_r                      ; j >= len -> done
-        LDA pf_st
-        LDB pf_j
-        ADD
-        LDB #<line
-        ADD
-        TAP1L
-        LDA #>line
-        ; (start+j < 256 so at most one carry; recompute high with carry)
+        ; (start+j < 256 so the line[] index fits a byte; the ADD below can
+        ;  still carry out of the low half of the pointer, hence the JNC/INC)
         LDA pf_st
         LDB pf_j
         ADD
@@ -944,7 +930,10 @@ aci_inc: LDA aci
 m_nf:   .asciiz "awk: not found"
 m_use:  .asciiz "usage: awk [-F c] '[/re/]{print items}' [file]   items: $0 $N NF NR \"str\""
 
-; ---- scratch / state (uninitialized RAM; flat global labels) ----
+; ---- scratch / state (flat global labels) ----
+; .fill emits real zero bytes into the image, so every cell here starts at 0 on
+; each exec. Most counters are still zeroed explicitly; pl relies on the .fill
+; zero and so is only safe while the image is reloaded before every run.
 ; aarg  = running cursor through the command tail
 ; sepc  = field separator from -F (0 = whitespace mode)
 ; nr/nf = record number (16-bit) / field count for current line
@@ -952,7 +941,6 @@ m_use:  .asciiz "usage: awk [-F c] '[/re/]{print items}' [file]   items: $0 $N N
 ; line[]= current record; fstart[]/flen[] = field offsets+lengths within line[]
 aarg:   .fill 2
 sepc:   .fill 1
-pp:     .fill 2
 pl:     .fill 1
 pptmp:  .fill 1
 aq:     .fill 1

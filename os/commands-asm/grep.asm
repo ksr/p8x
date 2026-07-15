@@ -350,7 +350,9 @@ gst_ret:RTS
 
 ; do_match: run the shared regex match() on line[] against re[]. If it matches,
 ; print the line (preceded by "gs_pfx:" when gs_pfx is non-zero) plus a newline.
-; match() returns A: nonzero = match. match/SYS_PUTC clobber P1/P2.
+; match() returns A: nonzero = match. match() clobbers P1/P2; SYS_PUTC does not
+; (OUTCH preserves both on every path), which is why dmp_l may hold the prefix
+; pointer in P1 across the call.
 do_match:
         LDA #<re
         STA rx_re
@@ -797,8 +799,9 @@ rd_d:   LDA #0
 ;   idx_a   -> &gidxr[depth]  (which subdir we're currently descending)
 ;   parr_a  -> &parr[depth]   (length of "cur" path at this level, for truncation)
 ;   clba_a  -> &clba[depth][fi]  (2-byte LBA of subdir fi; stride 48 per depth, 2 per fi)
-;   cn_a    -> &cn[depth][fi][fk] (name char fk of subdir fi; stride 32 per depth,
-;              16 per subdir). All compute a 16-bit address via add-with-carry.
+;   cn_a    -> &cn[depth][fi][fk] (name char fk of subdir fi; stride 384 per
+;              depth = 24 subdirs * 16 bytes, 16 per subdir).
+; All compute a 16-bit address via add-with-carry.
 nsub_a: LDA #<nsub
         LDB w_depth
         ADD

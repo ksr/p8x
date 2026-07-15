@@ -4,12 +4,12 @@
  *     SORT f | UNIQ        the usual pairing (uniq only sees *adjacent* dups)
  *
  * Reads a named file (opened like cat) or stdin. Prints a line only when it
- * differs from the previous printed line. Lines capped at 128 chars.
+ * differs from the previous line read. Lines capped at 255 chars (rdline's cap).
  */
 //#use stdin   /* path[80], fromfile, nextc(), openarg() */
 /* Two 260-byte line buffers: `cur` holds the line just read, `prev` holds the
- * previous line read (updated every iteration). rdline caps a line at 128 chars, so 260 bytes is
- * comfortable headroom (data + NUL). Kept as file-scope globals rather than
+ * previous line read (updated every iteration). rdline caps a line at 255 chars,
+ * so 260 bytes is comfortable headroom (data + NUL). Kept as file-scope globals rather than
  * locals to avoid large stack frames on this 8-bit target. */
 char cur[260];
 char prev[260];
@@ -19,7 +19,7 @@ char prev[260];
 
 
 /* main — read from a named file or stdin, printing each line only when it
- * differs from the previously printed line (adjacent-duplicate collapse).
+ * differs from the previous line read (adjacent-duplicate collapse).
  * Returns 0 on success, 1 if the named file could not be opened.
  * a=arg pointer, r=openarg result, first=have-we-printed-yet flag, i=copy idx. */
 int main() {

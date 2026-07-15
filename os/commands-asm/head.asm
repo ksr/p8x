@@ -212,10 +212,9 @@ less:   LDA lines+1
         JC less_hge                  ; lines_hi >= n_hi -> need closer look
         LDA #1                        ; lines_hi < n_hi -> definitely less
         RTS
-less_hge:
-        LDA lines+1
-        LDB n+1
-        CMP
+less_hge:                            ; reached only by the JC above; branches do
+                                     ; not touch flags, so Z still holds the
+                                     ; lines_hi == n_hi result from that CMP
         JNZ less_no                  ; lines_hi > n_hi -> not less
         LDA lines                    ; high bytes equal: compare low bytes
         LDB n

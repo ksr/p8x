@@ -1,6 +1,6 @@
 /* dump.c — hex-dump memory: DUMP addr
  *
- *     DUMP 7A00        show 256 bytes from $6A00 (16 rows of 16), hex + ASCII
+ *     DUMP 6A00        show 256 bytes from $6A00 (16 rows of 16), hex + ASCII
  *
  * Prints one 256-byte block, then waits for a console key: "." returns to the
  * shell, any other key shows the next block. addr is hexadecimal. The

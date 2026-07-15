@@ -495,10 +495,10 @@ cgb_adv:INP1
         JMP cgb_l
 cgb_d:  RTS
 
-; abspath: ap_out <- absolute path of the word at ap_a; ap_n = chars consumed.
-abspath:LDA #0
-        STA ap_n
-        LDA ap_a
+; abspath: ap_out <- absolute path of the word at ap_a. The caller advances the
+; argument cursor itself (mpw for the source word; the dst word is the last
+; token), so no consumed-char count is returned.
+abspath:LDA ap_a
         TAP2L
         LDA ap_a+1
         TAP2H
@@ -551,9 +551,6 @@ ab_copy:LDA (P2)
         JZ ab_done
         STA (P1)+
         INP2
-        LDA ap_n
-        INC
-        STA ap_n
         JMP ab_copy
 ab_done:LDA #0
         STA (P1)
@@ -606,7 +603,6 @@ cgt:    .fill 1
 cgcar:  .fill 1
 ap_out: .fill 2
 ap_a:   .fill 2
-ap_n:   .fill 1
 se_p:   .fill 2
 se_q:   .fill 2
 se_c:   .fill 1

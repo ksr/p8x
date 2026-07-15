@@ -32,7 +32,9 @@ c_sk:   LDA c_arg
         INC
         STA c_arg+1
         JMP c_sk
-; c_chk: first non-space char reached. Handle the "-h"/"-H" help flag.
+; c_chk: first non-space char reached. Handle the "-h"/"-H" help flag. Only the
+; single char after '-' is tested, so any "-h..." word ("-help") also prints
+; usage; cat.c matches the same way, so the two twins agree.
 c_chk:  LDA (P2)
         LDB #'-'
         CMP
@@ -115,8 +117,7 @@ cg_l:   LDA c_i
         LDB ge_cnt
         CMP
         JC cg_d                      ; i >= cnt -> done
-        LDA c_i
-        STA gidx
+        STA gidx                     ; CMP preserves A, so A is still c_i
         JSR gfile_ptr                ; op_a = &gfiles[i*64]
         JSR catpath
         LDA c_i

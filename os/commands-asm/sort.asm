@@ -344,10 +344,8 @@ ll_l:   LDA ll_x
         LDB ll_b
         CMP
         JZ ll_eq
-        LDA ll_a                     ; differ: a<b (unsigned) means x sorts first
-        LDB ll_b
-        CMP
-        JC ll_no                     ; C=1 means a >= b -> not less
+        JC ll_no                     ; differ: carry from the CMP above still
+                                     ; holds; C=1 means a >= b -> not less
         LDA #1
         RTS
 ll_no:  LDA #0

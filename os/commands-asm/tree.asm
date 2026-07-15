@@ -8,7 +8,9 @@
 ; Recursion without a software stack: P8X has only P1/P2 general-purpose (P3 is
 ; the stack pointer), so per-level locals live in depth-indexed arrays and a
 ; single global w_depth that the descent loop inc/decs around each recursive
-; call. MAXD levels deep, 24 child dirs per level (as tree.c).
+; call. 24 child dirs per level, as tree.c. Depth is capped at MAXD=16 — an
+; asm-only limit the fixed-size depth-indexed arrays force; tree.c needs no cap
+; because its per-level locals ride the native call stack.
 ;
 ; BIOS: FNEXT $013C, FSDIRBUF $0145, SYS_DIRENTRY $201B, SYS_OPENDIR $201E.
 ; OS: SYS_OPENCWD $2012, SYS_PUTC $2009, SYS_PUTS $200F. Entry: P2 = arg tail.
@@ -64,8 +66,6 @@ tr_usage:
 ; w_depth. Uses nsub[w_depth], idx[w_depth], csub[w_depth][].
 ; ===========================================================================
 walk:
-        LDA #0                        ; nsub[w_depth] = 0
-        STA kk                        ; (temp: store 0 via nsub addr)
         JSR nsub_addr                 ; P1 -> nsub[w_depth]; clobbers P1, A, B
         LDA #0
         STA (P1)
@@ -139,10 +139,7 @@ tw_isdir:
         LDB #24
         CMP
         JC tw_eol                     ; nsub >= 24 -> don't record (JC: nsub-24>=0)
-        ; kk = nsub ; store LBA at csub[w_depth][kk]
-        JSR nsub_addr
-        LDA (P1)
-        STA kk
+        STA kk                        ; kk = nsub; CMP left A intact, so no reload
         JSR csub_addr                 ; P1 -> csub[w_depth][kk]
         LDA de+15                     ; dir start LBA lo (de+15/16 = 16-bit LBA)
         STA (P1)+

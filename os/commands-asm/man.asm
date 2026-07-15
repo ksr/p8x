@@ -44,20 +44,15 @@ m_save: TPA2L                        ; m_arg = start of the name word
 ; --- Build "/man/" + name into the path buffer via P1, then open and stream it.
 m_build: LDP1 #path                  ; path = "/man/" + name (prefix written inline)
         LDA #'/'
-        STA (P1)
-        INP1
+        STA (P1)+
         LDA #'m'
-        STA (P1)
-        INP1
+        STA (P1)+
         LDA #'a'
-        STA (P1)
-        INP1
+        STA (P1)+
         LDA #'n'
-        STA (P1)
-        INP1
+        STA (P1)+
         LDA #'/'
-        STA (P1)
-        INP1
+        STA (P1)+
 mb_l:   LDA (P2)                     ; copy the name (stop at NUL/CR/space)
         LDB #0
         CMP
@@ -68,8 +63,7 @@ mb_l:   LDA (P2)                     ; copy the name (stop at NUL/CR/space)
         LDB #32
         CMP
         JZ mb_e
-        STA (P1)
-        INP1
+        STA (P1)+
         INP2
         JMP mb_l
 mb_e:   LDA #0

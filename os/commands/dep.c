@@ -71,6 +71,5 @@ int main() {
         if (any == 0) { return 0; }          /* non-hex tail -> stop */
         poke(addr, v & 255);                 /* store low byte only; discard >8 bits */
         addr = addr + 1;
-    }
-    return 0;
+    }                                        /* only exit is the returns above */
 }

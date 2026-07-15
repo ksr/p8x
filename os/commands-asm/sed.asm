@@ -9,16 +9,8 @@
 
         .org $6A00                   ; TPA load address (see reference_p8x_memory_map)
 ; Entry: P2 -> arg tail. s_sav is a 2-byte scratch used throughout to stash a
-; pointer (P2) so a lookahead can be undone. Here it just round-trips P2 through
-; s_sav (no net effect) before the leading-space skip.
-        TPA2L
-        STA s_sav
-        TPA2H
-        STA s_sav+1
-        LDA s_sav
-        TAP2L
-        LDA s_sav+1
-        TAP2H
+; pointer (P2) so a lookahead can be undone; it is always written before it is
+; read, so it needs no setup here.
 sed_sk: LDA (P2)                     ; skip leading spaces in the arg tail
         LDB #32
         CMP

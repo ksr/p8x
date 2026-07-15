@@ -374,7 +374,9 @@ w_ret:  RTS
 ; ======================= print_match =======================================
 ; print_match: emit the matched path + newline. Prints fpl bytes of cur[] (the
 ; current directory prefix), a '/' separator (suppressed when cur is root "/"),
-; then the NUL-terminated name in nm[]. Uses SYS_PUTC (clobbers P1/P2 via syscall).
+; then the NUL-terminated name in nm[]. Uses SYS_PUTC, which preserves P1/P2 (the
+; pm_l/pm_nl loops hold P1 live across it); only A is clobbered. Unlike the FS
+; syscalls, no pointer reload is needed after a PUTC.
 print_match:
         LDA #<cur
         TAP1L

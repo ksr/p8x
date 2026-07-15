@@ -65,8 +65,7 @@ t_dl:   LDA (P2)
         LDB #48
         CMP
         JNC t_dd                     ; c < '0'
-        LDA (P2)
-        LDB #58
+        LDB #58                      ; c still in A: CMP does not write A
         CMP
         JC t_dd                      ; c >= ':'
         JSR mul10n                       ; n *= 10
@@ -111,8 +110,7 @@ t_clamp:LDA n+1
         LDB #0
         CMP
         JZ t_c1
-        LDA n
-        LDB #41
+        LDB #41                          ; n low still in A: CMP does not write A
         CMP
         JC t_c40
         JMP t_open
@@ -146,8 +144,7 @@ t_fl:   JSR nextc                     ; next input char; C=1 at EOF
         LDB #10
         CMP
         JZ t_nl                      ; LF ends the line
-        LDA tch
-        LDB #13
+        LDB #13                      ; char still in A: CMP does not write A
         CMP
         JZ t_fl                      ; drop CR
         LDA col

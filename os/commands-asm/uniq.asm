@@ -33,10 +33,10 @@ u_sk:   LDA u_arg
         INC
         STA u_arg+1
         JMP u_sk
-; u_chk: first non-space char. If it is '-', peek the next char for the -h/-H
-; help flag and jump to the usage message; otherwise fall through to open.
-u_chk:  LDA (P2)
-        LDB #'-'
+; u_chk: first non-space char, still in A from u_sk's compare (CMP preserves A).
+; If it is '-', peek the next char for the -h/-H help flag and jump to the usage
+; message; otherwise fall through to open.
+u_chk:  LDB #'-'
         CMP
         JNZ u_open
         INP2
@@ -113,8 +113,7 @@ uc_l:   LDA (P2)
         JMP uc_l
 uc_d:   LDA #0
         STA (P1)
-        LDA #0
-        STA first
+        STA first                    ; A still 0: STA writes memory only
         JMP u_loop
 u_end:  RTS                          ; EOF reached, normal exit
 ; u_nf: "not found" error, u_usage: help text. Both print msg + newline, return.
@@ -152,8 +151,7 @@ rl_l:   STA rlc                      ; rlc = current char from nextc
         LDB #10
         CMP
         JZ rl_done                   ; LF ends the line
-        LDA rlc
-        LDB #13
+        LDB #13                      ; A still holds rlc (CMP preserves A)
         CMP
         JZ rl_skip                   ; drop CR (CRLF -> LF), don't store
         LDA rln

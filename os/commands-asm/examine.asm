@@ -60,16 +60,13 @@ e_loop: LDA ADHI                     ; "AAAA: "
         JSR SYS_PUTC
         JSR SYS_GETC                 ; key -> A, C=1 at EOF (SYS_GETC echoes it)
         JC e_end
-        STA ECHR
-        LDB #'.'                     ; '.' -> quit
-        CMP
+        LDB #'.'                     ; the key stays live in A below: CMP leaves A
+        CMP                          ; alone and LDB writes only B  ('.' -> quit)
         JZ e_dot
-        LDA ECHR
         LDB #13                      ; Enter -> advance (swallow the queued LF)
         CMP
         JZ e_cr
-        LDA ECHR                     ; first hex digit
-        JSR HEXVAL
+        JSR HEXVAL                   ; first hex digit
         LDA MATCH
         JZ e_nl                      ; not hex -> newline, stay on this address
         LDA DIGIT
@@ -107,7 +104,8 @@ e_next: LDA ADLO                     ; addr += 1 (16-bit, carry into ADHI)
         LDB #1
         ADD
         STA ADLO
-        LDA ADHI                     ; ADD set C on low-byte overflow ($FF->$00)
+        LDA ADHI                     ; ADD set C on low-byte overflow ($FF->$00);
+                                     ; LDA sets only Z/N, so that C survives to JNC
         JNC e_nc
         INC
         STA ADHI
@@ -270,7 +268,6 @@ HVT:    .fill 1
 RHX:    .fill 1
 ADLO:   .fill 1
 ADHI:   .fill 1
-ECHR:   .fill 1
 HIN:    .fill 1
 LON:    .fill 1
 VAL:    .fill 1

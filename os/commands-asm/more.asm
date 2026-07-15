@@ -86,15 +86,13 @@ m_lc:   LDA lines+1                  ; if lines >= 23 (16-bit; hi!=0 or lo>=23)
         JNC m_loop                   ; lines < 23
 ; m_page: screen full. prompt returns the pressed key in A (and mkey).
 ; 'q'/'Q' quit; Enter (13) advances one line; space/anything else a full page.
-m_page: JSR prompt
-        LDB #'q'
+m_page: JSR prompt                   ; A = key on return; CMP leaves A intact, so
+        LDB #'q'                     ;   the three tests below share the one load
         CMP
         JZ m_done
-        LDA mkey
         LDB #'Q'
         CMP
         JZ m_done
-        LDA mkey
         LDB #13
         CMP
         JNZ m_full

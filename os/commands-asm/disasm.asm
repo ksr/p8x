@@ -170,22 +170,19 @@ d_nend: LDA #<M_NEND
         TAP1L
         LDA #>M_NEND
         TAP1H
-d_puts: LDA #0                       ; P1 = the string -> SYS_PUTS + LF
-        JSR SYS_PUTS
+d_puts: JSR SYS_PUTS                 ; P1 = the string; SYS_PUTS takes no A arg
         LDA #10
         JSR SYS_PUTC
         RTS
 
 ; CALC_LN: LN = ilen(SHAPE): sh1->2, sh2->3, sh9->5, else 1.
-CALC_LN:LDA SHAPE
-        LDB #1
+CALC_LN:LDA SHAPE                     ; CMP preserves A, so SHAPE stays live in A
+        LDB #1                        ; across the whole compare chain
         CMP
         JZ cl_2
-        LDA SHAPE
         LDB #2
         CMP
         JZ cl_3
-        LDA SHAPE
         LDB #9
         CMP
         JZ cl_5
@@ -203,23 +200,19 @@ cl_5:   LDA #5
         RTS
 
 ; DS_OPER: print the operand for SHAPE (mirrors disasm.c).
-DS_OPER:LDA SHAPE
+DS_OPER:LDA SHAPE                     ; CMP preserves A: SHAPE stays live throughout
         LDB #1
         CMP
         JZ do_imm
-        LDA SHAPE
         LDB #2
         CMP
         JZ do_adr
-        LDA SHAPE
         LDB #9
         CMP
         JZ do_mvw
-        LDA SHAPE                     ; 3..8 -> (Pn) ; else nothing
-        LDB #3
+        LDB #3                        ; 3..8 -> (Pn) ; else nothing
         CMP
         JNC do_non
-        LDA SHAPE
         LDB #9
         CMP
         JC do_non
@@ -277,7 +270,6 @@ do_preg:LDA #32                       ; " (P" digit ")" optional "+"
         LDB #5
         CMP
         JNC dp_1
-        LDA SHAPE
         LDB #7
         CMP
         JNC dp_2
@@ -311,8 +303,7 @@ pk_nc:  TAP1H
         RTS
 
 ; W16OFF: A = offset -> WL = peek(ADDR+off), WH = peek(ADDR+off+1).
-W16OFF: STA TMPB
-        LDA TMPB
+W16OFF: STA TMPB                      ; STA leaves A = the offset
         JSR PEEKAT
         STA WL
         LDA TMPB
@@ -357,8 +348,9 @@ df_no:  LDA #0
         STA FOUNDF
         RTS
 
-; PRS: print the NUL-terminated string at P1 (no trailing newline). Uses P2 as a
-; save; syscalls clobber P1, so copy the cursor to P2 and re-point each char.
+; PRS: print the NUL-terminated string at P1 (no trailing newline). Syscalls
+; clobber P1, so the cursor lives in PSL/PSH and P1 is re-pointed each char.
+; P2 is untouched (the arg tail is finished with by the time anything prints).
 PRS:    TPA1L
         STA PSL
         TPA1H
@@ -462,8 +454,8 @@ HEXVAL: STA HVT
         LDB #'g'
         CMP
         JC hv_u
-        LDA HVT                       ; upper case by subtracting $20
-        LDB #$20
+        LDB #$20                      ; upper case by subtracting $20 (A = HVT:
+                                      ; CMP preserves it)
         SUB
         STA HVT
 hv_u:   LDA HVT                       ; digit range: >= '0' and < ':' ($3A, one past '9')
@@ -473,7 +465,6 @@ hv_u:   LDA HVT                       ; digit range: >= '0' and < ':' ($3A, one 
         LDB #$3A
         CMP
         JC hv_af
-        LDA HVT
         LDB #'0'
         SUB
         STA DIGIT
@@ -487,7 +478,6 @@ hv_af:  LDA HVT                       ; letter range: >= 'A' and < 'G' ($47, one
         LDB #$47
         CMP
         JC hv_no
-        LDA HVT
         LDB #'A'
         SUB
         LDB #10
@@ -517,7 +507,7 @@ KCNT:   .fill 1
 FOUNDF: .fill 1
 WL:     .fill 1
 WH:     .fill 1
-TMPA:   .fill 2
+TMPA:   .fill 1
 TMPB:   .fill 1
 RHX:    .fill 1
 PSL:    .fill 1

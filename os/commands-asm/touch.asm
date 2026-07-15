@@ -89,7 +89,7 @@ t_ns:   LDA t_arg                    ; skip spaces before the next name
         TAP2L
         LDA t_arg+1
         TAP2H
-t_nsk:  LDA (P2)
+        LDA (P2)                     ; each iteration re-enters at t_ns to reload P2
         LDB #32
         CMP
         JNZ t_ex

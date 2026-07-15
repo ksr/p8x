@@ -7,8 +7,9 @@
  * subdirectory LBAs, then descends — because FNEXT's cursor is global BIOS
  * state. Searches the CWD; per-level children capped at 24.
  *
- * BIOS: FOPENDIRAT=$0142, FSDIRBUF=$0145, FNEXT=$013C (name->$704A, flag->$7070,
- * start LBA->$7047). OS: SYS_CWDLBA=$2006. Entry fields read via SYS_DIRENTRY.
+ * BIOS: FNEXT=$013C (C=1 at end), FSDIRBUF=$0145 (aim FNEXT's buffer at a page).
+ * OS: SYS_OPENCWD=$2012. Entry fields come from the de_* helpers (SYS_DIRENTRY
+ * $201B / SYS_OPENDIR $201E), never from raw BIOS scratch addresses.
  */
 //#use dirent   /* de_read/de_isdir/de_isdot/de_lba/de_opendir: entry via syscall */
 //#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */

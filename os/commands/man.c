@@ -14,7 +14,7 @@
  * FGETB=$0127 (->A, C=1 at EOF).  512-byte read buffer at $FC00 (page-aligned,
  * clear of code/globals at $6A00 and the stack at $FEFF).
  */
-//#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
+//#use abi     /* FRESOLVE, FOPEN, FGETB, RDBUF ($FC00); no SYS_GETCWD — man is CWD-independent */
 
 char path[80];                               /* "/man/" + the requested name */
 
