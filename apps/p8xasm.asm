@@ -278,7 +278,26 @@ ASM_RET:RTS
 ; Instruction / directive dispatch
 ; =============================================================================
 DOINSTR:
-        LDA  MNBUF              ; LDPn pseudo?
+        LDA  MNBUF              ; MOVW dst,src ? (the only two-operand instruction;
+        LDB  #'M'              ;   handled inline since the rest is single-operand)
+        CMP
+        JNZ  DI_LDPQ
+        LDA  MNBUF+1
+        LDB  #'O'
+        CMP
+        JNZ  DI_LDPQ
+        LDA  MNBUF+2
+        LDB  #'V'
+        CMP
+        JNZ  DI_LDPQ
+        LDA  MNBUF+3
+        LDB  #'W'
+        CMP
+        JNZ  DI_LDPQ
+        LDA  MNBUF+4
+        JNZ  DI_LDPQ           ; exactly "MOVW"
+        JMP  DO_MOVW
+DI_LDPQ:LDA  MNBUF             ; LDPn pseudo?
         LDB  #'L'
         CMP
         JNZ  DI_NORM
@@ -373,6 +392,29 @@ DO_LDP: LDA  MNBUF+3
         RTS
 DL_ERR: LDP1 #EBADOP
         JMP  ASM_ERR
+
+; ---- MOVW dst,src -> opcode $78 + dst16 + src16 (two abs16 operands) ----
+DO_MOVW:LDA  #$78
+        JSR  EMIT               ; opcode
+        JSR  SKIPSP
+        JSR  EVAL               ; VAL = dst address
+        LDA  VAL
+        JSR  EMIT
+        LDA  VAL+1
+        JSR  EMIT
+        JSR  SKIPSP
+        LDA  (P1)
+        LDB  #','
+        CMP
+        JNZ  DL_ERR             ; need a comma between dst and src
+        INP1
+        JSR  SKIPSP
+        JSR  EVAL               ; VAL = src address
+        LDA  VAL
+        JSR  EMIT
+        LDA  VAL+1
+        JSR  EMIT
+        RTS
 
 ; ---- directives ----
 DO_DIR: LDA  MNBUF+1

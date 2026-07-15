@@ -395,19 +395,10 @@ EM_LDIMM: LDP1 #MLDAI                ; __ax = CURV (16-bit literal)
         LDP1 #MSTAXH
         JSR  EMIT
         RTS
-EM_LDVAR: LDP1 #MLDAV                ; __ax = V<SYMIDX>
-        JSR  EMIT
+EM_LDVAR: LDP1 #MMVAXV               ; __ax = V<SYMIDX>  ->  MOVW __ax,__V+<2*n>
+        JSR  EMIT                    ;   (was LDA/STA x2 — one mem->mem word move)
         JSR  EMSY
         LDP1 #MNL
-        JSR  EMIT
-        LDP1 #MSTAX
-        JSR  EMIT
-        LDP1 #MLDAV
-        JSR  EMIT
-        JSR  EMSY
-        LDP1 #MP1
-        JSR  EMIT
-        LDP1 #MSTAXH
         JSR  EMIT
         RTS
 ; GSYMCHAR (A = slot) -> A = 1 if that slot is char-typed
@@ -541,19 +532,10 @@ EM_STOREW: LDP1 #MLPWT0              ; P1 = word @ __t0 (was LDA/TAP1L/LDA/TAP1H
         JSR  EMIT
         RTS
 
-EM_STVAR: LDP1 #MLDAX                ; V<LHSIDX> = __ax
-        JSR  EMIT
-        LDP1 #MSTAV
-        JSR  EMIT
+EM_STVAR: LDP1 #MMVV                 ; V<LHSIDX> = __ax  ->  MOVW __V+<2*n>,__ax
+        JSR  EMIT                    ;   (was LDA/STA x2 — one mem->mem word move)
         JSR  EMLH
-        LDP1 #MNL
-        JSR  EMIT
-        LDP1 #MLDAXH
-        JSR  EMIT
-        LDP1 #MSTAV
-        JSR  EMIT
-        JSR  EMLH
-        LDP1 #MP1
+        LDP1 #MCAX
         JSR  EMIT
         RTS
 EM_PUSH: LDP1 #MPHW                  ; push __ax (16-bit) -> one PHW instruction
@@ -4112,39 +4094,21 @@ ers_l:  LDA  VITER3
         JMP  ers_l
 ers_d:  RTS
 
-; EM_PUSHSLOT (A = slot number): emit  LDA V<n> / PHA / LDA V<n>+1 / PHA
+; EM_PUSHSLOT (A = slot number): emit  PHW __V+<2n>  (one wide push, 2 bytes of
+; stack — same footprint as the LDA/PHA/LDA/PHA pair it replaces, so the LIFO
+; nesting with EM_POPSLOT is unchanged).
 EM_PUSHSLOT: STA VITER2
-        LDP1 #MLDAV
+        LDP1 #MPHWV
         JSR  EMIT
         LDA  VITER2
         JSR  EMSB
         LDP1 #MNL
         JSR  EMIT
-        LDP1 #MPHA
-        JSR  EMIT
-        LDP1 #MLDAV
-        JSR  EMIT
-        LDA  VITER2
-        JSR  EMSB
-        LDP1 #MP1
-        JSR  EMIT
-        LDP1 #MPHA
-        JSR  EMIT
         RTS
 
-; EM_POPSLOT (A = slot number): emit  PLA / STA V<n>+1 / PLA / STA V<n>
+; EM_POPSLOT (A = slot number): emit  PLW __V+<2n>  (mirror of EM_PUSHSLOT)
 EM_POPSLOT: STA VITER2
-        LDP1 #MPLA
-        JSR  EMIT
-        LDP1 #MSTAV
-        JSR  EMIT
-        LDA  VITER2
-        JSR  EMSB
-        LDP1 #MP1
-        JSR  EMIT
-        LDP1 #MPLA
-        JSR  EMIT
-        LDP1 #MSTAV
+        LDP1 #MPLWV
         JSR  EMIT
         LDA  VITER2
         JSR  EMSB
@@ -4733,6 +4697,16 @@ MLDAV:  .byte $20,$20,$20,$20,$20,$20,$20,$20   ; prefix: "LDA __V+" + 2*slot + 
         .asciiz "LDA __V+"
 MSTAV:  .byte $20,$20,$20,$20,$20,$20,$20,$20   ; prefix: "STA __V+" + 2*slot + MNL
         .asciiz "STA __V+"
+MMVAXV: .byte $20,$20,$20,$20,$20,$20,$20,$20   ; "MOVW __ax,__V+" + 2*slot + MNL
+        .asciiz "MOVW __ax,__V+"
+MMVV:   .byte $20,$20,$20,$20,$20,$20,$20,$20   ; "MOVW __V+" + 2*slot + MCAX
+        .asciiz "MOVW __V+"
+MCAX:   .ascii ",__ax"
+        .byte LF,0
+MPHWV:  .byte $20,$20,$20,$20,$20,$20,$20,$20   ; "PHW __V+" + 2*slot + MNL
+        .asciiz "PHW __V+"
+MPLWV:  .byte $20,$20,$20,$20,$20,$20,$20,$20   ; "PLW __V+" + 2*slot + MNL
+        .asciiz "PLW __V+"
 MBOOT:  .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "LDA #<__cstktop"
         .byte LF
