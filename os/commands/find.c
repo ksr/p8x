@@ -69,6 +69,7 @@ int walk(int plen) {                          /* plen = length of cur (no traili
     int r;
     int i;
     int k;
+    int nl;
     int oldp;
 
     nsub = 0;
@@ -101,16 +102,26 @@ int walk(int plen) {                          /* plen = length of cur (no traili
      * FNEXT loop — hence recording child LBAs/names above, recursing here. */
     i = 0;                                    /* descend into each recorded child */
     while (i < nsub) {
-        de_opendir(clba[i]);                 /* SYS_OPENDIR(child LBA, 16-bit) */
-        bios(FSDIRBUF, 0, 0xEA);               /* point FNEXT's dir buffer at page $EA (our scratch page) */
-        oldp = plen;
-        if (plen != 1 || cur[0] != '/') { cur[plen] = '/'; plen = plen + 1; }
-        k = 0;
-        while (cn[i * 16 + k] != 0) { cur[plen] = cn[i * 16 + k]; plen = plen + 1; k = k + 1; }
-        cur[plen] = 0;
-        walk(plen);
-        cur[oldp] = 0;                       /* restore the prefix */
-        plen = oldp;
+        k = 0;                               /* k = child name length (rdname caps it at 12) */
+        while (cn[i * 16 + k] != 0) { k = k + 1; }
+        nl = plen + k;                       /* index the NUL would land on */
+        if (plen != 1 || cur[0] != '/') { nl = nl + 1; }   /* ... plus the '/' separator */
+        /* cur[] is 256 bytes, so prefix + '/' + name + NUL must terminate at
+         * cur[255] or below. A child whose path would not fit is skipped, the
+         * same silent cap this level already applies past 24 children. Every
+         * path that fits is unaffected. */
+        if (nl < 256) {
+            de_opendir(clba[i]);             /* SYS_OPENDIR(child LBA, 16-bit) */
+            bios(FSDIRBUF, 0, 0xEA);           /* point FNEXT's dir buffer at page $EA (our scratch page) */
+            oldp = plen;
+            if (plen != 1 || cur[0] != '/') { cur[plen] = '/'; plen = plen + 1; }
+            k = 0;
+            while (cn[i * 16 + k] != 0) { cur[plen] = cn[i * 16 + k]; plen = plen + 1; k = k + 1; }
+            cur[plen] = 0;
+            walk(plen);
+            cur[oldp] = 0;                   /* restore the prefix */
+            plen = oldp;
+        }
         i = i + 1;
     }
     return 0;

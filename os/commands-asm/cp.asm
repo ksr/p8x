@@ -591,7 +591,10 @@ ct_padl:LDA ctk
         INC
         STA ctk
         JMP ct_padl
-ct_isd: LDA de+12
+ct_isd: JSR names_a                  ; both paths arrive with ctk==12: force the
+        LDA #0                       ; slot's NUL (a 12-char name has no pad byte)
+        STA (P1)
+        LDA de+12
         LDB #2
         CMP
         JZ ct_isd1
@@ -665,7 +668,7 @@ ct_pl:  JSR idx_a
         STA ct_d
         LDA #>jdst
         STA ct_d+1
-; Depth cap: the per-level arrays hold exactly 8 levels (sp/dp 8*80, names 8*288,
+; Depth cap: the per-level arrays hold exactly 8 levels (sp/dp 8*80, names 8*312,
 ; isd 8*24), so descending at w_depth==8 would make spd_a run off sp into dp and
 ; names_a/isd_a into their neighbours. Skip the subtree instead of corrupting it.
         LDA w_depth
@@ -985,7 +988,9 @@ isa_b:  STA hcar
         LDA ht+1
         TAP1H
         RTS
-; names_a: P1 = names + w_depth*288 + cti*12 + ctk
+; names_a: P1 = names + w_depth*312 + cti*13 + ctk
+;   Slot stride is 13, not 12: de[0..11] is a 12-byte space-padded name field, so
+;   a full 12-char name has no pad -- byte 12 of the slot is the forced NUL.
 names_a:LDA #0
         STA ht
         STA ht+1
@@ -995,11 +1000,11 @@ na_m:   LDA hn
         LDB #0
         CMP
         JZ na_md
-        LDA ht+1                     ; +288 = +256 +32
+        LDA ht+1                     ; +312 = +256 +56
         INC
         STA ht+1
         LDA ht
-        LDB #32
+        LDB #56
         ADD
         STA ht
         JNC na_1
@@ -1010,14 +1015,14 @@ na_1:   LDA hn
         DEC
         STA hn
         JMP na_m
-na_md:  LDA cti                      ; + cti*12
+na_md:  LDA cti                      ; + cti*13
         STA hk
 na_cl:  LDA hk
         LDB #0
         CMP
         JZ na_cd
         LDA ht
-        LDB #12
+        LDB #13
         ADD
         STA ht
         JNC na_c1
@@ -1065,7 +1070,7 @@ u_nomat:.asciiz "cp: no match"
 ; --- static scratch / BSS (zero-initialized .fill) --------------------------
 ; patw holds the copied source word; gfiles is glob_expand output (24 * 64).
 ; The per-depth recursion arrays follow: sp/dp (8 levels * 80 bytes of path),
-; names (8 * 24 * 12), isd (8 * 24 is-dir flags), nn/cidx (8 counts/cursors) --
+; names (8 * 24 * 13), isd (8 * 24 is-dir flags), nn/cidx (8 counts/cursors) --
 ; so copy_tree supports up to 8 nested directory levels.
 c_arg:  .fill 2                      ; pointer to current position in arg tail
 rec:    .fill 1                      ; -r flag (recurse into directories)
@@ -1110,7 +1115,7 @@ jsrc:   .fill 80
 jdst:   .fill 80
 sp:     .fill 640
 dp:     .fill 640
-names:  .fill 2304
+names:  .fill 2496                   ; 8 levels * 24 entries * 13 (12 + forced NUL)
 isd:    .fill 192
 nn:     .fill 8
 cidx:   .fill 8

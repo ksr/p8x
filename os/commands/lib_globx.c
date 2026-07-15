@@ -51,6 +51,7 @@ int glob_expand(char *pat, char *out, int maxn) {
     int ls;
     int cnt;
     int base;
+    int lim;
     int c;
     int r;
 
@@ -62,13 +63,17 @@ int glob_expand(char *pat, char *out, int maxn) {
     ls = 0;
     dir[0] = 0;
     if (hasslash) {                          /* prefix = pat[0..slashpos] incl '/' */
+        if (slashpos > 62) { return 0; }     /* prefix + NUL must fit dir[64]; a
+                                              * longer one names no openable dir */
         ls = slashpos + 1;
         j = 0;
         while (j <= slashpos) { dir[j] = pat[j]; j = j + 1; }
         dir[j] = 0;
     }
     j = 0;                                    /* leaf = pattern after the last '/' */
-    while (ls < i) { leaf[j] = pat[ls]; j = j + 1; ls = ls + 1; }
+    /* leaf[16] holds 15 chars + NUL; P8XFS names are 12, so a longer leaf can
+     * match nothing anyway — cap it rather than run off the end. */
+    while (ls < i && j < 15) { leaf[j] = pat[ls]; j = j + 1; ls = ls + 1; }
     leaf[j] = 0;
 
     if (hasslash) { bios(FOPENDIR, dir, 0); }  /* FOPENDIR(dir) */
@@ -86,10 +91,11 @@ int glob_expand(char *pat, char *out, int maxn) {
             nm[j] = 0;
             if (gmatch(leaf, nm) && cnt < maxn) {
                 base = cnt * 64;              /* out[slot] = dir prefix + name */
+                lim = base + 63;              /* a slot is 64 bytes: 63 + NUL */
                 j = 0;
-                while (dir[j] != 0) { out[base] = dir[j]; base = base + 1; j = j + 1; }
+                while (dir[j] != 0 && base < lim) { out[base] = dir[j]; base = base + 1; j = j + 1; }
                 j = 0;
-                while (nm[j] != 0) { out[base] = nm[j]; base = base + 1; j = j + 1; }
+                while (nm[j] != 0 && base < lim) { out[base] = nm[j]; base = base + 1; j = j + 1; }
                 out[base] = 0;
                 cnt = cnt + 1;
             }

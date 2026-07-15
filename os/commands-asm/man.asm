@@ -53,7 +53,15 @@ m_build: LDP1 #path                  ; path = "/man/" + name (prefix written inl
         STA (P1)+
         LDA #'/'
         STA (P1)+
-mb_l:   LDA (P2)                     ; copy the name (stop at NUL/CR/space)
+        LDA #5                       ; mb_n = bytes written so far (the prefix)
+        STA mb_n
+; path is 80 bytes: "/man/" (5) + name + NUL caps the name at 74 chars. The
+; length test runs before LDA (P2) because the char must survive the CMP chain.
+mb_l:   LDA mb_n                     ; path full at 79 -> truncate, leave room for NUL
+        LDB #79
+        CMP
+        JZ mb_e
+        LDA (P2)                     ; copy the name (stop at NUL/CR/space)
         LDB #0
         CMP
         JZ mb_e
@@ -64,6 +72,10 @@ mb_l:   LDA (P2)                     ; copy the name (stop at NUL/CR/space)
         CMP
         JZ mb_e
         STA (P1)+
+        LDA mb_n                     ; mb_n++ (bounded by 79, so no carry chain)
+        LDB #1
+        ADD
+        STA mb_n
         INP2
         JMP mb_l
 mb_e:   LDA #0
@@ -118,3 +130,4 @@ m_use:  .asciiz "usage: MAN name   show the manual page for a command"
 m_msg:  .asciiz "no manual entry for "
 path:   .fill 80
 m_arg:  .fill 2
+mb_n:   .fill 1

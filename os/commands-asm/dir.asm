@@ -217,13 +217,22 @@ d_gp0:  TAP2H
         TAP1H
         LDA ls
         STA cnt                      ; index runs ls..plen
+        LDA #0
+        STA gpn                      ; chars written to gpat so far
 d_gpl:  LDA cnt
         LDB plen
         CMP
         JZ d_gpe
+        LDA gpn                      ; gpat is 16 bytes: 15 chars + NUL. A longer
+        LDB #15                      ; pattern truncates silently — it could never
+        CMP                          ; match a 12-char on-disk name anyway.
+        JZ d_gpe
         LDA (P2)
         STA (P1)+
         INP2
+        LDA gpn
+        INC
+        STA gpn
         LDA cnt
         INC
         STA cnt
@@ -1496,7 +1505,10 @@ u_nf:   .asciiz "dir: not found"
 ap_out: .fill 2
 ap_a:   .fill 2
 ap_n:   .fill 1
-apath:  .fill 80
+; abspath does not bound its output: apath must hold CWD (<=47, CWDPATH is 48
+; bytes) + '/' + the path word + NUL, and the word can be nearly the whole
+; 63-byte shell LINEBUF.
+apath:  .fill 128
 
 m_arg:  .fill 2
 rec:    .fill 1
@@ -1561,6 +1573,7 @@ nca:    .fill 1
 ncb:    .fill 1
 nbuf:   .fill 16
 gpat:   .fill 16
+gpn:    .fill 1    ; chars written to gpat (bounds the pattern copy at 15 + NUL)
 dbuf:   .fill 64
 de:     .fill 18   ; +[17] = length bits 16..23 (24-bit file size)
 ; --- per-directory entry buffers (reused at every recursion level) ---

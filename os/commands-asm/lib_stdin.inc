@@ -198,8 +198,12 @@ gfp_2:  STA gcarry
 ;   out: A = 1 opened / 2 not found
 ; A relative path (no leading '/') is prefixed with SYS_GETCWD into spath so
 ; FRESOLVE/FOPENDIR, which start at root rather than CWD, resolve it correctly.
-; Clobbers A/B/P1/P2 and spath.
+; spath[80] holds 79 chars + NUL; op_n counts what has been written so a long
+; CWD+name truncates (FRESOLVE then fails -> 2) instead of running past spath.
+; Clobbers A/B/P1/P2, op_n and spath.
 open_path:
+        LDA #0
+        STA op_n
         LDA op_a
         TAP2L
         LDA op_a+1
@@ -223,6 +227,9 @@ opa_sl: LDA (P1)
         CMP
         JZ opa_sld
         INP1
+        LDA op_n                      ; count the CWD prefix as written
+        INC
+        STA op_n
         JMP opa_sl
 opa_sld:DEP1
         LDA (P1)
@@ -232,6 +239,9 @@ opa_sld:DEP1
         JZ opa_cp
         LDA #'/'
         STA (P1)+
+        LDA op_n
+        INC
+        STA op_n
         JMP opa_cp
 opa_abs:LDA #<spath
         TAP1L
@@ -251,7 +261,15 @@ opa_cl: LDA (P2)
         LDB #32
         CMP
         JZ opa_end
+        LDA op_n                      ; C=1 -> op_n >= 79 chars: truncate here
+        LDB #79
+        CMP
+        JC opa_end
+        LDA (P2)                      ; reload the char (the cap CMP took A)
         STA (P1)+
+        LDA op_n
+        INC
+        STA op_n
         INP2
         JMP opa_cl
 opa_end:LDA #0
@@ -684,6 +702,7 @@ gcarry: .fill 1
 oa_a:   .fill 2
 oa_g:   .fill 1
 op_a:   .fill 2
+op_n:   .fill 1
 ge_pat: .fill 2
 ge_out: .fill 2
 ge_max: .fill 1

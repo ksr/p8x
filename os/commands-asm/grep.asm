@@ -619,7 +619,49 @@ cr1:    TAP1H
 c_ret:  RTS
 
 ; append_file: rfiles[nrf] = cur[0..fpl) + sep + nm ; nrf++
+; The path must fit its 80-byte slot, so afn = fpl + sep + strlen(nm) has to
+; leave room for the NUL (afn <= 79). A longer path is skipped without
+; advancing nrf — the same silent cap as the 36-file / 24-subdir limits.
+; afn cannot wrap: fpl <= 175, sep <= 1, strlen(nm) <= 15.
 append_file:
+        LDA fpl                        ; afn = fpl + (sep ? 1 : 0)
+        STA afn
+        LDA fpl
+        LDB #1
+        CMP
+        JNZ af_gsep                    ; fpl != 1 -> a separator is inserted
+        LDA cur
+        LDB #'/'
+        CMP
+        JZ af_gnm                      ; cur is exactly "/" -> no separator
+af_gsep:LDA afn
+        INC
+        STA afn
+af_gnm: LDA #0                         ; afn += strlen(nm)
+        STA afk
+af_gl:  LDA #<nm
+        LDB afk
+        ADD
+        TAP2L
+        LDA #>nm
+        JNC af_g1
+        INC
+af_g1:  TAP2H
+        LDA (P2)
+        LDB #0
+        CMP
+        JZ af_gd
+        LDA afn
+        INC
+        STA afn
+        LDA afk
+        INC
+        STA afk
+        JMP af_gl
+af_gd:  LDA afn
+        LDB #80
+        CMP
+        JC af_skip                     ; afn >= 80: no room for the NUL -> skip
         LDA nrf
         STA rfi
         JSR rf_addr
@@ -722,7 +764,7 @@ af_nd:  LDA rfp
         LDA nrf
         INC
         STA nrf
-        RTS
+af_skip:RTS
 
 ; rf_addr: rfp (word) = rfiles + rfi*80. rfiles[] holds up to 36 collected
 ; paths, each in an 80-byte fixed slot. Multiply is done by repeated add of 80
@@ -980,6 +1022,7 @@ rfn:    .fill 1
 rfcar:  .fill 1
 afk:    .fill 1
 afc:    .fill 1
+afn:    .fill 1                       ; append_file: assembled path length vs the 80-byte slot
 ft:     .fill 2
 fn:     .fill 1
 fcar:   .fill 1

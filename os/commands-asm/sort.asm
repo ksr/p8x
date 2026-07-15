@@ -6,7 +6,8 @@
 ;
 ; Buffer layout: `lines` is 128 slots of 80 bytes each (10240 total). A slot holds
 ; up to 79 chars plus a trailing NUL terminator; laddr computes slot base as
-; lines + row*80 + col. Selection sort reorders slot *contents* (byte copies), not
+; lines + row*80 + col, with the *80 done as (row<<6)+(row<<4) via shift-add.
+; Selection sort reorders slot *contents* (byte copies), not
 ; pointers. Line compare (lless) is a NUL-terminated unsigned byte compare.
 ; Registers: laddr/lless clobber A, B, P1; nextc/openarg/SYS_* clobber P1/P2.
 ; s_arg is a 16-bit walking pointer into the arg tail; all counters are 8-bit,
@@ -269,29 +270,73 @@ s_usage:LDA #<u_use
 
 ; laddr: compute slot byte address P1 = lines + la_s*80 + la_c.
 ;   In:  la_s = row (0..127), la_c = column (0..79)
-;   Out: P1 = absolute address; la_t/la_n scratch clobbered, A/B clobbered.
-; No multiply instruction exists, so *80 is done by repeated 16-bit add of 80.
-laddr:  LDA #0                        ; la_t (16-bit accumulator) = 0
+;   Out: P1 = absolute address; la_t/la_u/la_car scratch clobbered, A/B clobbered.
+; No multiply instruction exists, so *80 is done as (row<<6) + (row<<4) rather
+; than by repeated addition: laddr is the hot path (twice per byte in the swap
+; loop, twice per char in lless), so a fixed six shifts beats a loop of up to 127
+; 16-bit adds. Each <<1 is SHL on the low byte then ROL on the high byte, which
+; picks up SHL's shifted-out bit from C — LDA is ldzn-only and STA loads no flags,
+; so C survives between the two halves. row <= 127, so row<<6 <= 8128 and the
+; product <= 10160: the 16-bit accumulator never overflows and ROL never drops a
+; set bit off the top.
+laddr:  LDA la_s                      ; la_t (16-bit accumulator) = row
         STA la_t
+        LDA #0
         STA la_t+1
-        LDA la_s                      ; la_n = row counter
-        STA la_n
-la_ml:  LDA la_n                      ; while la_n != 0: la_t += 80
-        LDB #0
-        CMP
-        JZ la_md
-        LDA la_t
-        LDB #80
+        LDA la_t                      ; la_t <<= 1  (row*2)
+        SHL
+        STA la_t
+        LDA la_t+1
+        ROL
+        STA la_t+1
+        LDA la_t                      ; la_t <<= 1  (row*4)
+        SHL
+        STA la_t
+        LDA la_t+1
+        ROL
+        STA la_t+1
+        LDA la_t                      ; la_t <<= 1  (row*8)
+        SHL
+        STA la_t
+        LDA la_t+1
+        ROL
+        STA la_t+1
+        LDA la_t                      ; la_t <<= 1  (row*16)
+        SHL
+        STA la_t
+        LDA la_t+1
+        ROL
+        STA la_t+1
+        LDA la_t                      ; la_u = row*16 (saved for the final add)
+        STA la_u
+        LDA la_t+1
+        STA la_u+1
+        LDA la_t                      ; la_t <<= 1  (row*32)
+        SHL
+        STA la_t
+        LDA la_t+1
+        ROL
+        STA la_t+1
+        LDA la_t                      ; la_t <<= 1  (row*64)
+        SHL
+        STA la_t
+        LDA la_t+1
+        ROL
+        STA la_t+1
+        LDA la_t                      ; la_t += la_u -> row*64 + row*16 = row*80
+        LDB la_u                      ; low byte first; capture its carry in la_car
         ADD
         STA la_t
-        JNC la_m1                     ; carry -> bump high byte
-        LDA la_t+1
-        INC
+        LDA #0
+        JNC la_u1
+        LDA #1
+la_u1:  STA la_car
+        LDA la_t+1                    ; high byte += la_u+1, then += saved carry
+        LDB la_u+1
+        ADD
+        LDB la_car
+        ADD
         STA la_t+1
-la_m1:  LDA la_n
-        DEC
-        STA la_n
-        JMP la_ml
 la_md:  LDA la_t                      ; la_t += la_c (column offset)
         LDB la_c
         ADD
@@ -379,9 +424,9 @@ swt:    .fill 1                      ; swap temp: byte from slot si
 swu:    .fill 1                      ; swap temp: byte from slot smin
 la_s:   .fill 1                      ; laddr input: row
 la_c:   .fill 1                      ; laddr input: column
-la_n:   .fill 1                      ; laddr scratch: row countdown
 la_t:   .fill 2                      ; laddr scratch: 16-bit address accumulator
-la_car: .fill 1                      ; laddr scratch: carry from base low-byte add
+la_u:   .fill 2                      ; laddr scratch: row*16, held for the *80 add
+la_car: .fill 1                      ; laddr scratch: carry from a low-byte add
 ll_x:   .fill 1                      ; lless input: first row
 ll_y:   .fill 1                      ; lless input: second row
 ll_i:   .fill 1                      ; lless scratch: compare column

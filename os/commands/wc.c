@@ -32,14 +32,16 @@ int dm10() {
     int rem;
     int i;
     int cur;
+    int q;
     int n;
     rem = 0;
     i = 2;
     n = 3;                                     /* count down: p8cc's >= 0 is unsigned */
     while (n != 0) {
         cur = rem * 256 + (num24[i] & 255);
-        num24[i] = cur / 10;
-        rem = cur - (cur / 10) * 10;
+        q = cur / 10;                          /* divide is a subtract loop: do it once */
+        num24[i] = q;
+        rem = cur - q * 10;
         i = i - 1;
         n = n - 1;
     }

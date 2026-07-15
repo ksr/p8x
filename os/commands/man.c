@@ -46,7 +46,10 @@ int main() {
     path[4] = '/';
     i = 5;
     j = 0;
-    while (arg[j] != 0 && arg[j] != 13 && arg[j] != 32) {
+    /* path[80] holds "/man/" (5) + name + NUL, so the name caps at 74 chars;
+     * stop at i==79 to leave room for the terminator. Real page names are short
+     * command names, so the cap only bites input that no page could match. */
+    while (arg[j] != 0 && arg[j] != 13 && arg[j] != 32 && i < 79) {
         path[i] = arg[j]; i = i + 1; j = j + 1;
     }
     path[i] = 0;                              /* NUL-terminate the built path */

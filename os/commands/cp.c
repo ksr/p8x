@@ -88,7 +88,11 @@ int isdir(char *p) {
 int copy_tree(char *sp0, char *dp0) {
     char sp[80];                              /* local copies: recursion-safe */
     char dp[80];
-    char names[288];                          /* up to 24 entries x 12 bytes */
+    char names[312];                          /* up to 24 entries x 13 bytes:
+                                               * de[0..11] is a 12-byte name field
+                                               * space-padded by FNORM, so a full
+                                               * 12-char name carries no pad — the
+                                               * 13th byte is the forced NUL. */
     int  isd[24];                             /* 1 = subdirectory */
     int  n;
     int  i;
@@ -112,13 +116,14 @@ int copy_tree(char *sp0, char *dp0) {
         de_read();                             /* pull the entry into de[] */
         /* skip "." / ".." and stop collecting once the 24-slot arrays are full */
         if (de_isdot() == 0 && n < 24) {
-            k = 0;                             /* trim de[] name into names[n*12] */
+            k = 0;                             /* trim de[] name into names[n*13] */
             /* dir names are space-padded to 12 (0x20); copy up to the first pad */
             while (k < 12 && (de[k] & 255) != 32) {
-                names[n * 12 + k] = de[k];
+                names[n * 13 + k] = de[k];
                 k = k + 1;
             }
-            while (k < 12) { names[n * 12 + k] = 0; k = k + 1; }
+            while (k < 12) { names[n * 13 + k] = 0; k = k + 1; }
+            names[n * 13 + 12] = 0;            /* a 12-char name has no pad byte */
             isd[n] = de_isdir();
             n = n + 1;
         }
@@ -127,8 +132,8 @@ int copy_tree(char *sp0, char *dp0) {
 
     i = 0;                                     /* now process (safe to recurse) */
     while (i < n) {
-        joinp(jsrc, sp, names + i * 12);       /* <sp>/<name> ; global scratch */
-        joinp(jdst, dp, names + i * 12);
+        joinp(jsrc, sp, names + i * 13);       /* <sp>/<name> ; global scratch */
+        joinp(jdst, dp, names + i * 13);
         if (isd[i]) { copy_tree(jsrc, jdst); } /* recurse (copies args to locals) */
         else { copy_file(jsrc, jdst); }
         i = i + 1;

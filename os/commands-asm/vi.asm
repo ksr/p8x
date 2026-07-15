@@ -1120,31 +1120,61 @@ dc_done:LDA #1
 dc_ret: RTS
 ; copyline: copy line cp_s to line cp_d, byte by byte including the NUL.
 ; Used to shift whole lines up/down when opening, deleting, or splitting lines.
+; laddr is called once per line (column 0) for each side; cl_sp/cl_dp then walk
+; the two slots with 16-bit increments, the same idiom drawrow uses with dptr.
+; The addresses visited are identical to re-deriving line+i*80+k every column.
 copyline:
-        LDA #0
-        STA cl_k
-cl_l:   LDA cp_s
+        LDA cp_s
         STA va_i
-        LDA cl_k
+        LDA #0
         STA va_c
         JSR laddr
-        LDA (P1)
-        STA cl_c
+        TPA1L
+        STA cl_sp
+        TPA1H
+        STA cl_sp+1
         LDA cp_d
         STA va_i
-        LDA cl_k
+        LDA #0
         STA va_c
         JSR laddr
+        TPA1L
+        STA cl_dp
+        TPA1H
+        STA cl_dp+1
+cl_l:   LDA cl_sp
+        TAP1L
+        LDA cl_sp+1
+        TAP1H
+        LDA (P1)
+        STA cl_c
+        LDA cl_dp
+        TAP1L
+        LDA cl_dp+1
+        TAP1H
         LDA cl_c
         STA (P1)
         LDA cl_c
         LDB #0
         CMP
         JZ cl_d
-        LDA cl_k
+        LDA cl_sp
+        LDB #1
+        ADD
+        STA cl_sp
+        JNC cl_s1
+        LDA cl_sp+1
         INC
-        STA cl_k
-        JMP cl_l
+        STA cl_sp+1
+cl_s1:  LDA cl_dp
+        LDB #1
+        ADD
+        STA cl_dp
+        JNC cl_d1
+        LDA cl_dp+1
+        INC
+        STA cl_dp+1
+cl_d1:  JMP cl_l
 cl_d:   RTS
 ; opendown: open a new empty line below cy (vi 'o'). Shifts lines cy+1..end down
 ; one slot, blanks the new line, bumps nlines, moves the cursor onto it, cx=0.
@@ -2031,7 +2061,8 @@ dc_c:   .fill 1
 dc_k:   .fill 1
 cp_d:   .fill 1
 cp_s:   .fill 1
-cl_k:   .fill 1
+cl_sp:  .fill 2
+cl_dp:  .fill 2
 cl_c:   .fill 1
 od_i:   .fill 1
 od_t:   .fill 1

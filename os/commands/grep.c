@@ -102,6 +102,7 @@ int collect(int plen) {
     int nsub;
     int r;
     int i;
+    int j;
     int k;
     int oldp;
     int base;
@@ -115,17 +116,25 @@ int collect(int plen) {
     while ((r & 256) == 0) {
         de_read();                           /* snapshot the entry (SYS_DIRENTRY) */
         if (de_isdot() == 0) {               /* skip '.' / '..' */
-            rdname();
+            k = rdname();                    /* k = length of nm */
             if (de_isfile() && nrf < 36) {   /* a FILE -> record its path */
-                base = nrf * 80;             /* slot for this path (80-byte stride) */
-                i = 0;
-                while (i < plen) { rfiles[base] = cur[i]; base = base + 1; i = i + 1; }
-                /* insert a separator unless cur is exactly "/" (avoid "//name") */
-                if (plen != 1 || cur[0] != '/') { rfiles[base] = '/'; base = base + 1; }
-                k = 0;
-                while (nm[k] != 0) { rfiles[base] = nm[k]; base = base + 1; k = k + 1; }
-                rfiles[base] = 0;
-                nrf = nrf + 1;
+                /* The path is cur + sep + nm + NUL and must fit the 80-byte
+                 * slot, so its length j+k must leave room for the terminator.
+                 * A longer path is skipped rather than written into the next
+                 * slot — same silent cap as the 36-file / 24-subdir limits. */
+                j = plen;
+                if (plen != 1 || cur[0] != '/') { j = j + 1; }
+                if (j + k < 80) {
+                    base = nrf * 80;             /* slot for this path (80-byte stride) */
+                    i = 0;
+                    while (i < plen) { rfiles[base] = cur[i]; base = base + 1; i = i + 1; }
+                    /* insert a separator unless cur is exactly "/" (avoid "//name") */
+                    if (plen != 1 || cur[0] != '/') { rfiles[base] = '/'; base = base + 1; }
+                    k = 0;
+                    while (nm[k] != 0) { rfiles[base] = nm[k]; base = base + 1; k = k + 1; }
+                    rfiles[base] = 0;
+                    nrf = nrf + 1;
+                }
             }
             if (de_isdir() && nsub < 24) {   /* a subdirectory -> descend later */
                 clba[nsub] = de_lba();

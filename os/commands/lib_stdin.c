@@ -50,9 +50,10 @@ int open_path(char *a) {
     }
     j = 0;
     /* Copy the file word, stopping at NUL, CR (13), or space (32) so a trailing
-     * word or shell line-ending doesn't bleed into the path. No bounds check:
-     * path[80] assumes CWD + name stays under 80 bytes. */
-    while (a[j] != 0 && a[j] != 13 && a[j] != 32) {
+     * word or shell line-ending doesn't bleed into the path. path[80] holds 79
+     * chars + NUL; a CWD+name past that is truncated (FRESOLVE then fails -> 2)
+     * rather than written over the globals that follow. */
+    while (a[j] != 0 && a[j] != 13 && a[j] != 32 && i < 79) {
         path[i] = a[j]; i = i + 1; j = j + 1;
     }
     path[i] = 0;

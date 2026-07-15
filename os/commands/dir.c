@@ -291,7 +291,12 @@ int walk(int depth) {
 int main() {
     char *arg;
     char dbuf[64];                           /* the directory part of a glob path */
-    char abuf[80];                           /* dbuf/arg made absolute (CWD-prefixed) */
+    char abuf[128];                          /* dbuf/arg made absolute (CWD-prefixed);
+                                              * abspath() does not bound its output, so
+                                              * this must hold CWD (<=47, CWDPATH is 48
+                                              * bytes) + '/' + the path word + NUL, and
+                                              * the word can be nearly the whole 63-byte
+                                              * shell LINEBUF */
     int rec;
     int i;
     int j;
@@ -336,7 +341,9 @@ int main() {
         ls = 0;
         if (hasslash) { ls = slashpos + 1; } /* leaf starts after the last '/' */
         j = 0;
-        while (ls < i) { gpat[j] = arg[ls]; j = j + 1; ls = ls + 1; }
+        /* gpat is 16 bytes: 15 chars + NUL. A longer pattern is silently
+         * truncated — it could never match a 12-char on-disk name anyway. */
+        while (ls < i && j < 15) { gpat[j] = arg[ls]; j = j + 1; ls = ls + 1; }
         gpat[j] = 0;
         if (hasslash) {                      /* scan the named dir (incl trailing '/') */
             j = 0;
@@ -357,8 +364,8 @@ int main() {
             ls = 0;
             if (hasslash) { ls = slashpos + 1; }
             j = 0;
-            while (arg[ls] != 0 && arg[ls] != 13 && arg[ls] != 32) {
-                gpat[j] = arg[ls]; j = j + 1; ls = ls + 1;
+            while (arg[ls] != 0 && arg[ls] != 13 && arg[ls] != 32 && j < 15) {
+                gpat[j] = arg[ls]; j = j + 1; ls = ls + 1;   /* 15 chars + NUL max */
             }
             gpat[j] = 0;
             if (hasslash) {                  /* open the file's parent directory */

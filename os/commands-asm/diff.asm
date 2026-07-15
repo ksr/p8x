@@ -401,43 +401,45 @@ ll_ret: LDA lln
 
 ; leq: compare two NUL-terminated lines byte-by-byte.
 ; In: le_x/le_xi = base+index of line X, le_y/le_yi = base+index of line Y.
-; Out: A = 1 if equal (both reach NUL together), else 0. Clobbers P1, le_i/a/b,
+; Out: A = 1 if equal (both reach NUL together), else 0. Clobbers P1, P2, le_b,
 ; and the la* scratch vars (via laddr).
-leq:    LDA #0
-        STA le_i
-le_l:   LDA le_x
-        STA la_base
-        LDA le_x+1
-        STA la_base+1
-        LDA le_xi
-        STA la_s
-        LDA le_i
-        STA la_c
-        JSR laddr
-        LDA (P1)
-        STA le_a
-        LDA le_y
+; Each row base is computed once (laddr's line*80 is a repeated add, so calling
+; it per byte would cost O(line) adds per byte); P1/P2 then walk the two rows.
+; Both rows are always NUL-terminated within their 80 bytes, so the walk ends.
+leq:    LDA le_y
         STA la_base
         LDA le_y+1
         STA la_base+1
         LDA le_yi
         STA la_s
-        LDA le_i
+        LDA #0
         STA la_c
-        JSR laddr
-        LDA (P1)
+        JSR laddr                     ; P1 = &Y[le_yi][0]; lat holds the same addr
+        LDA lat
+        TAP2L
+        LDA lat+1
+        TAP2H                         ; P2 walks row Y (laddr never touches P2)
+        LDA le_x
+        STA la_base
+        LDA le_x+1
+        STA la_base+1
+        LDA le_xi
+        STA la_s
+        LDA #0
+        STA la_c
+        JSR laddr                     ; P1 walks row X
+le_l:   LDA (P2)
         STA le_b
-        LDA le_a
+        LDA (P1)
         LDB le_b
         CMP
         JNZ le_no
-        LDB #0                        ; bytes match (CMP left A = le_a); if both
-                                      ; are NUL, the lines are equal
+        LDB #0                        ; bytes match (CMP left A = the X byte); if
+                                      ; both are NUL, the lines are equal
         CMP
         JZ le_yes
-        LDA le_i
-        INC
-        STA le_i
+        INP1
+        INP2
         JMP le_l
 le_no:  LDA #0
         RTS
@@ -627,8 +629,6 @@ le_x:   .fill 2
 le_y:   .fill 2
 le_xi:  .fill 1
 le_yi:  .fill 1
-le_i:   .fill 1
-le_a:   .fill 1
 le_b:   .fill 1
 em_tag: .fill 2
 em_buf: .fill 2

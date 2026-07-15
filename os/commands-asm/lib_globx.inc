@@ -57,7 +57,14 @@ ge_scd: LDA #0
         LDB #0
         CMP
         JZ ge_leaf0                   ; no slash -> leaf starts at 0
-        LDA ge_sp
+        LDA #62                       ; ge_dir[64] holds ge_sp+1 chars + NUL,
+        LDB ge_sp                     ; so the last '/' must sit at index <= 62
+        CMP
+        JC ge_dok                     ; C=1 -> 62 >= ge_sp -> the prefix fits
+        LDA #0
+        STA ge_cnt                    ; oversize prefix names no openable dir
+        RTS
+ge_dok: LDA ge_sp
         INC
         STA ge_ls                     ; leaf starts just past the slash
         LDA ge_pat                    ; ge_dir = pat[0..slashpos]
@@ -100,13 +107,23 @@ ge_l0:  TAP2H
         TAP1H
         LDA ge_ls
         STA ge_j                      ; source index runs ge_ls..ge_pl
+        LDA #0
+        STA ge_k                      ; chars written: ge_leaf[16] = 15 + NUL
 ge_ll:  LDA ge_j
         LDB ge_pl
         CMP
         JZ ge_lle                     ; stop at end of pattern
+        LDA ge_k
+        LDB #15
+        CMP
+        JZ ge_lle                     ; leaf > 15 chars -> truncate; P8XFS names
+                                      ; are 12, so it could match nothing anyway
         LDA (P2)
         STA (P1)+
         INP2
+        LDA ge_k
+        INC
+        STA ge_k
         LDA ge_j
         INC
         STA ge_j
@@ -205,6 +222,8 @@ ge_tld: LDA #0
         JC ge_nl                      ; CMP: C=1 when cnt>=max -> table full, drop
 ; Emit "ge_dir + ge_nm" into the slot; P1 points at ge_out + cnt*64.
         JSR ge_slot                   ; P1 = ge_out + cnt*64
+        LDA #0
+        STA ge_k                      ; a slot is 64 bytes: 63 chars + NUL
         LDA #<ge_dir
         TAP2L
         LDA #>ge_dir
@@ -213,7 +232,15 @@ ge_od:  LDA (P2)                      ; append dir prefix (stops at its NUL)
         LDB #0
         CMP
         JZ ge_odn
+        LDA ge_k
+        LDB #63
+        CMP
+        JZ ge_ot                      ; slot full -> truncate, never overrun
+        LDA (P2)
         STA (P1)+
+        LDA ge_k
+        INC
+        STA ge_k
         INP2
         JMP ge_od
 ge_odn: LDA #<ge_nm                    ; then append the trimmed name
@@ -224,7 +251,15 @@ ge_onl: LDA (P2)
         LDB #0
         CMP
         JZ ge_ot
+        LDA ge_k
+        LDB #63
+        CMP
+        JZ ge_ot                      ; slot full -> truncate, never overrun
+        LDA (P2)
         STA (P1)+
+        LDA ge_k
+        INC
+        STA ge_k
         INP2
         JMP ge_onl
 ge_ot:  LDA #0
@@ -292,6 +327,7 @@ ge_pl:  .fill 1
 ge_ls:  .fill 1
 ge_j:   .fill 1
 ge_j2:  .fill 1
+ge_k:   .fill 1
 getmp:  .fill 2
 gecar:  .fill 1
 ge_dir: .fill 64
