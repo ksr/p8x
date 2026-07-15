@@ -5,6 +5,8 @@
 # `//#use` splicing, so a hand-asm command shares helpers (stdin/glob) the same
 # way the C command shares lib_*.c — and each command's binary therefore counts
 # the shared code, keeping the size comparison apples-to-apples.
+# The emitted source is SELF-CONTAINED: the `;#use` directives are rewritten as
+# we splice, so the output declares no includes of its own.
 here=$(cd "$(dirname "$0")" && pwd)
 f="$here/$1.asm"
 # Neutralise the directive as we splice: the include content is appended below,

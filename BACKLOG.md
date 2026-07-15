@@ -1063,6 +1063,27 @@ Last updated: 2026-07-08
         diff output). Codegen is a hardware-stack machine + one memory temp
         (`__t0`), since the ISA has no A<->B move.
 
+        **CODEGEN SHRINK — the native cc is now on par with host `p8cc.py`
+        (2026-07-15).** Its output was ~2x the host compiler's; it was emitting
+        byte-at-a-time sequences for operations the ISA already had single
+        instructions for. Three rounds, each a 1-for-4 substitution confined to
+        the emit helpers (so each also SHRANK cc.bin, 22797 -> 22655 B):
+          1. single-operand wide ops — `PHW`/`PLW`/`LPW1` for push/pop/deref;
+          2. `MOVW` for `LDVAR`/`STVAR` word moves. Needed teaching the NATIVE
+             assembler the two-operand `MOVW` form (`$78`) — the host assembler
+             already special-cased it, the native one was one-operand-only;
+          3. `PHW`/`PLW __V+<2n>` for the caller-saved slot save/restore, which
+             alone removed 860 `PHA`/`PLA` (host p8cc.py emits ZERO) plus the
+             `LDA`/`STA` each was paired with.
+        `wc.c`: 8829 -> 4617 instructions (**-48%**) vs 4467 for p8cc.py — a 3.4%
+        gap, down from ~98%. Verified byte-exact + behaviourally on-target.
+        NOT done, and judged not worth it: temp reuse and peephole fusion (e.g.
+        `MOVW __ax,V` + `PHW __ax` -> `PHW V`) would close the last 3.4%, but need
+        lookahead/buffering in a single-pass emit-as-you-parse compiler — growing
+        cc.bin (already 22.6 KB of the ~37 KB TPA, and it must fit WHILE compiling)
+        and risking the miscompile class the code review found. Revisit only if a
+        real command misses the TPA by a few KB.
+
         **cc — KNOWN LIMITATIONS / SHORTCOMINGS (as of v0.28).** The native cc
         covers the language needs of every shipped OS command and hand-written C
         in the same subset, but it is deliberately minimal. Gaps a future version

@@ -60,6 +60,7 @@ Accepted syntax is a subset of the host assembler, with identical encodings:
 | label | `loop:` |
 | equate | `COUNT = 3` |
 | instruction | `LDA #COUNT` · `STA $C000` · `LDA (P1)+` · `JSR done` |
+| `MOVW dst,src` | `MOVW __ax,__V+4` — the ISA's only two-operand instruction (`$78`), a 16-bit mem→mem word move |
 | `LDPn` pseudo | `LDP1 #msg` → `LPL1 #<msg` ; `LPH1 #>msg` |
 | directives | `.org .byte .word .ascii .asciiz .fill` |
 | expressions | `$hex` · decimal · `'c'` · symbol, joined with `+`/`-`, optional `<`/`>` prefix |
@@ -67,7 +68,15 @@ Accepted syntax is a subset of the host assembler, with identical encodings:
 A `;#use NAME` line (at column 0) appends the shared include `/lib/NAME.inc`
 after the program body (up to 4 per file, in declared order) — the on-target
 mirror of the host `mkasm.sh`, letting a hand-asm command share the same helper
-includes (`stdin`/`glob`/`globx`/`regex`) that the C `//#use` shares. Both the
+includes (`stdin`/`glob`/`globx`/`regex`) that the C `//#use` shares.
+
+> **`;#use` is live here but inert host-side.** The host `assembler/p8xasm.py`
+> sees the leading `;` and skips the line as an ordinary comment; only this
+> assembler acts on it. So a source spliced host-side must not keep the
+> directive, or the on-target build hunts for an include that isn't on the disk
+> while host builds stay green — `mkasm.sh` therefore rewrites the line as it
+> splices. The same asymmetry applies to any `;`-prefixed pseudo-directive:
+> reproduce toolchain bugs **on-target**, not just on the host. Both the
 `SRC` and `OUT` arguments are **path-aware** (a full path, not a 12-char
 root-only name), so a source under `/src` can be assembled straight into a
 build-output dir: `asm /src/commands/asm/pwd.asm /src/commands/asm/bin/pwd.bin`.

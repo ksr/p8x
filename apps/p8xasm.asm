@@ -12,6 +12,10 @@
 ;   label:                 define label = PC
 ;   NAME = expr            equate
 ;   MNEMONIC [operand]     operand: #expr | (Pn) | (Pn)+ | expr | none
+;   MOVW dst,src           the ISA's only TWO-operand instruction ($78): a 16-bit
+;                          mem->mem word move, encoded op + dst16 + src16 (5 B).
+;                          Handled as a special case before the ordinary
+;                          one-operand path (as the host assembler does).
 ;   LDPn #expr16           pseudo -> LPLn #<expr ; LPHn #>expr
 ;   .org .byte .word .ascii .asciiz .fill
 ;   .include "path"        at line start: append the file (resolved relative to
