@@ -589,6 +589,14 @@ class Gen:
                 "^": ("__xor", False, False), "<<": ("__shl", False, False),
                 ">>": ("__shr", False, False)}[op]
         helper, swap, neg = plan
+        # Relational compares are SIGNED for int/char, but POINTERS must stay
+        # unsigned — the TPA runs past $7FFF, so a signed compare would order a
+        # buffer straddling $8000 backwards. Either side being a pointer decides
+        # it (the choice is symmetric, so `swap` below doesn't affect it).
+        if helper == "__lt":
+            lt, rt = self.typeof(a), self.typeof(b)
+            if lt[1] > 0 or rt[1] > 0:
+                helper = "__ltu"
         # pointer arithmetic: scale the integer operand by element size.
         scale = 0
         if op in ("+", "-"):
@@ -937,13 +945,26 @@ class Gen:
                      "        CMP", "        JNZ __eq0", "        LDA #1",
                      "        JMP __eqs", "__eq0:  LDA #0", "__eqs:  STA __ax",
                      "        LDA #0", "        STA __ax+1", "        RTS"]
+        # __lt: SIGNED (int/char). High byte compared with BLT (LT = N^V, valid
+        # after CMP); when the high bytes are equal the low byte is compared
+        # UNSIGNED, which is the standard signed-16-bit compare.
         R["__lt"] = ["__lt:   LDA __t+1", "        LDB __ax+1", "        CMP",
-                     "        JZ __lt_lo", "        JC __lt0", "        JMP __lt1",
+                     "        JZ __lt_lo", "        BLT __lt1", "        JMP __lt0",
                      "__lt_lo: LDA __t", "        LDB __ax", "        CMP",
                      "        JC __lt0",
                      "__lt1:  LDA #1", "        JMP __lts",
                      "__lt0:  LDA #0", "__lts:  STA __ax", "        LDA #0",
                      "        STA __ax+1", "        RTS"]
+        # __ltu: UNSIGNED, for POINTER comparison. The TPA spans $6A00-$F800, so
+        # pointers routinely exceed $7FFF; comparing them signed would order a
+        # buffer straddling $8000 backwards.
+        R["__ltu"] = ["__ltu:  LDA __t+1", "        LDB __ax+1", "        CMP",
+                      "        JZ __ltu_lo", "        JC __ltu0", "        JMP __ltu1",
+                      "__ltu_lo: LDA __t", "        LDB __ax", "        CMP",
+                      "        JC __ltu0",
+                      "__ltu1: LDA #1", "        JMP __ltus",
+                      "__ltu0: LDA #0", "__ltus: STA __ax", "        LDA #0",
+                      "        STA __ax+1", "        RTS"]
         R["__push"] = ["__push: LDA __csp", "        LDB #2", "        SUB",
                        "        STA __csp", "        JC __pu1", "        LDA __csp+1",
                        "        LDB #1", "        SUB", "        STA __csp+1",
@@ -1091,7 +1112,7 @@ class Gen:
                       "        JMP __shr_l", "__shr_e: RTS"]
         order = ["__add", "__sub", "__mul", "__div", "__mod", "__divmod",
                  "__and", "__or", "__xor", "__shl", "__shr",
-                 "__not", "__eq", "__lt", "__push", "__enter", "__entf", "__leave",
+                 "__not", "__eq", "__lt", "__ltu", "__push", "__enter", "__entf", "__leave",
                  "__lea", "__ldw", "__ldb", "__stw", "__stb"]
         want = set(self.used)
         if {"__div", "__mod"} & want: want.add("__divmod")
