@@ -181,6 +181,42 @@ remainder is why it is still here.
 
 - [ ] Order backplane PCB first as the cheap validation article
 
+- [ ] **`SYS_OPEN` — open-by-name as a syscall (2026-07-16).** Commands each repeat
+      the same four steps: `SYS_GETCWD` -> build an absolute path in their OWN
+      `path[80]` -> `FRESOLVE` -> `FOPEN`. 16 of 25 commands call FOPEN directly;
+      15 build their own CWD-prefixed path. That per-command buffer is exactly where
+      Wave 2 found overflows in dir/cmp/mv/cat/find — five buffers, five bounds to
+      get wrong. Fold it into one OS call with ONE bounded buffer.
+      **No ABI change:** commands still receive a raw string, they just make one
+      call instead of four. `lib_apath.c`'s abspath() stays — cp/mv/diff need the
+      path STRING, not just an open.
+      **Also kills the FSDIRBUF/SBUF footgun** (see the cat fix, eda2b7f): any
+      command that opens a file while its stdout is a redirect must currently
+      remember to FSDIRBUF its dir scan off SBUF, or the scan overwrites the
+      redirect's buffered output. That belongs in the OS once, not in every command
+      forever — and pipes make it systematically likelier, since every pipe stage is
+      a redirect-writer.
+      **Scoped 2026-07-16 — the implementation is THIN, the OS already has the
+      primitive:** `RESOLVE` (p8xos.asm:1704) takes a path at **P2** and yields
+      `SDIR` = parent dir + `NAMEBUF` = leaf, already handling CWD-relative
+      resolution and the mount/drive redirect via `RV_START`. `SYS_MKDIR` (:1704
+      area) is the model for a path-taking syscall: it just moves P1->P2 and calls a
+      CORE routine. So SYS_OPEN is roughly `P2 = P1; JSR RESOLVE; bridge
+      SDIR/NAMEBUF -> the BIOS FNAME/DIRLBA; JSR FOPEN`. See `FINDP2` (:1484) for
+      the existing resolve-then-find bridge — reuse it rather than reinvent.
+      Free syscall slots: **$2024 and $2027** (the table ends at SYS_MKDIR $2021).
+      **Open design decision — no free 512-byte page in OS scratch** for SYS_OPEN to
+      own a private dir buffer ($6000-$62FF is BIOS scratch + SBUF $6100; $6300-$69FF
+      is fully allocated: RUNPATH $6740, PATHBUF, APBUF $6800...). Three routes:
+        1. bounded OS-side path buffer only; caller still supplies the scan page.
+           Kills the overflow class; cheapest; leaves FSDIRBUF with the caller.
+           RECOMMENDED — most of the win, least risk.
+        2. flush the write stream before the dir scan — no page needed and kills the
+           footgun outright, but partial-sector flush-then-append is FS surgery.
+        3. reclaim a page from $63xx-$69xx.
+      Pairs with shell-side glob+argv (IDEAS): together they are the whole "stop
+      making commands resolve paths and expand globs" thesis. This is the cheap half.
+
 ---
 
 ## IDEAS
