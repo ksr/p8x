@@ -1,0 +1,1741 @@
+# P8X Backlog — Completed
+
+The project log. Split out of [BACKLOG.md](BACKLOG.md) on 2026-07-16, which had
+grown to 2,353 lines with finished work interleaved among live items.
+
+Nothing here needs action. It is kept because the *why* is often the valuable
+part — several entries record analysis that would otherwise be re-done. Settled
+decisions NOT to do something live under **WONT-DO / SUPERSEDED** in BACKLOG.md.
+
+Sections below mirror where each item was completed. The **project log** at the
+end is the original DONE section, newest first.
+
+---
+
+## Completed — from NEXT
+
+- [x] **Overwrite semantics for streamed output — FIXED (2026-07-14).** Writing a
+      file that already existed left a DUPLICATE directory entry (P8XFS registers a
+      new entry at FCLOSE; there is no in-place replace), so `make wc` twice — or any
+      `asm src out` / `cmd >out` rerun — accreted stale twins of the output. Fix: the
+      writer now FDELETEs the existing target BEFORE FWOPEN (it must precede the open
+      stream — FDELETE scans the directory via SBUF, which the write stream then
+      claims). Applied in the `asm` app's `OUTINIT` (apps/p8xasm.asm) and the shell's
+      `>`/`>>` redirect `DR_OUT` (os/p8xos.asm); `>>` keeps the old data via the raw
+      APLBA/APCOPY path (a tombstone doesn't erase sectors). The orphaned old extent
+      is reclaimed by the next `pack`, same as EDIT's rewrite. This is the documented
+      "FDELETE then FCREATE" overwrite convention, now applied on the rebuild paths.
+
+- [x] **`awk` command (basic) — DONE (2026-07-14).** A small awk (os/commands/awk.c):
+      records split into `$1..$NF` on whitespace or `-F c`; one rule `[/regex/]
+      { print items }` (`/regex/` via the shared `lib_regex`; empty pattern = every
+      line; bare pattern = print the line); `print` items are `$0`/`$N`/`$NF`/`NF`/
+      `NR`/`"str"`, comma = a space between. File arg or stdin (pipes). The program
+      is one quoted arg (awk strips the quotes; the shell doesn't). Man page
+      `os/man/awk`; test `emulator/test/os_awk_test.sh`. **Hand-asm twin done
+      (2026-07-14):** os/commands-asm/awk.asm, verified byte-behaviour-identical to
+      the C twin (the test diffs both); awk is now a full dual-twin command in
+      `_mkcmds` + /bin + /bina. Follow-ups: `printf`, `BEGIN`/`END`, expr patterns,
+      multiple rules.
+
+- [x] **`bootload file` — install an OS image on-target — DONE (2026-07-14).** New
+      kernel built-in (`DOBOOTLOAD`): copies FILE's data extent to LBA 1.. (the OS
+      region the monitor's `B` loads) via raw `CFREAD`/`CFWRITE`, and writes
+      `ceil(len/512)` into boot-block byte 3 (OSCNT) — so `exit` -> `B` boots it.
+      Closes the self-hosting loop: `cd /src/os-bios && make os && bootload
+      asm/bin/p8xos.bin && exit && B`. The running OS is in RAM, so overwriting the
+      on-disk region is safe; max 32 sectors. Man `os/man/bootload`; test
+      `emulator/test/os_bootload_test.sh` (installs a variant OS, reboots, checks
+      the new banner + the OSCNT byte). NB: the MONITOR is EEPROM firmware, not on
+      disk — it can't be installed this way (reflash host-side); documented.
+
+- [x] **On-target `.include` for the native assembler — DONE (2026-07-14).** The
+      native `apps/p8xasm.asm` now supports `.include "path"` (one per file):
+      `CHKINC` (parallel to `CHKUSE`) records the path resolved relative to the
+      INCLUDING source's directory — it prefixes the source dir (SRCPATH minus its
+      leaf) and lets `FRESOLVE` walk the `..` entries (each dir has a real `..`), so
+      `../generators/memmap.inc` finds `/src/os-bios/generators/memmap.inc`. The file
+      is opened + spliced at the source's EOF like `;#use` (`NU_INC`); equates are
+      order-independent (two-pass). So `/src/os-bios` builds the OS/monitor on-target
+      (the memmap is bundled at `/src/os-bios/generators/memmap.inc`). Test
+      `emulator/test/os_asm_inc_test.sh` (relative include + the full-memmap os-bios
+      layout); `os/man/asm` + the p8xasm header updated.
+
+- [x] **`cmp` command (basic) — DONE (2026-07-14), incl. hand-asm twin.**
+      os/commands/cmp.c: byte-for-byte file compare — silent if identical, else
+      `cmp: files differ: byte N, line M`, or `cmp: EOF on fileX` when one is a
+      prefix of the other. Reads file1 into an 8 KB buffer, streams file2 (both via
+      the single BIOS read stream, like diff). **Hand-asm twin** os/commands-asm/
+      cmp.asm (16-bit offset/line + decimal print), verified byte-identical to the C
+      twin (the test diffs both). Full dual-twin in `_mkcmds` + /bin + /bina. Man
+      `os/man/cmp`; test `emulator/test/os_cmp_test.sh`.
+      NB while building it: the shared 16-bit decimal printer `pnum` had an inverted
+      borrow branch (`JNC`→`JC` on the low-byte SUB) that broke any value ≥ 10 — it
+      was latent in awk.asm too (its tests only printed single digits). Fixed in
+      both; both tests now exercise a 2-digit value.
+
+- [x] **Makefiles build every source in each dir — DONE (2026-07-14).** The C
+      Makefile already covered all command `.c` (via `_mkcmds`+`_ccmds`); the asm
+      Makefile now also builds the toolchain apps: `p8xedit`/`p8xcc` (standalone
+      `asm`) and `p8xasm` (its recipe `cat p8xasm.asm opctab.asm >T.ASM` then `asm`,
+      since the opcode table is generated). run.sh ships the generated `opctab.asm`
+      into `/src/commands/asm`. `all`/`clean` include the apps.
+
+- [x] **`examine` command (C + asm) — DONE (2026-07-14).** Interactive memory
+      examine/modify — the monitor's `E` as a /bin command: shows `aaaa: vv`, Enter
+      advances, two hex digits write + advance, `.` quits. C twin
+      (os/commands/examine.c, `getchar`/`peek`/`poke`) + byte-behaviour-identical
+      hand-asm twin (os/commands-asm/examine.asm, `SYS_GETC`/`SYS_PUTC` + the shared
+      GETHEX/HEXVAL/OPH8 helpers). Both echo via SYS_GETC (so nothing is echoed by
+      hand) and swallow the queued LF after Enter. Added to the c/asm Makefiles
+      (`_mkcmds`) + the /bin and /bina build lists in run.sh; man page
+      `os/man/examine`; test `emulator/test/os_examine_test.sh` (write→dump readback
+      + C-vs-asm output parity). `dump` (monitor-D block view) and `dep` (blind
+      write) already existed; `examine` completes the trio.
+
+- [x] **Shell autocomplete (Tab) — DONE (2026-07-14).** `DOTAB` in the line editor
+      completes the word at the cursor: the command word against built-in names
+      (`KWTAB`) + `/bin`, other words against the directory the word implies (the
+      CWD, or the path before its last `/`, resolved with `CDPATH`). Directories are
+      walked with `CFREAD`+`RDENT`. Fills the longest common prefix; a sole match
+      adds a trailing space (file/command) or `/` (directory); a second consecutive
+      Tab with nothing to add lists the matches and redraws the prompt. Scratch in
+      the free gap below the history ring (`CMPPFX`/`CMPLCP`/`CMPDIR` at $5700) +
+      state bytes in the $60xx tail. Test `emulator/test/os_complete_test.sh`; man
+      topic `os/man/history` (AUTOCOMPLETE section). Gotcha fixed: `CMPDIR` ($5760)
+      is not page-aligned, so offset indexing must add `<CMPDIR`, not just set the
+      high byte.
+
+- [x] **Shell command history (arrow-key recall) — DONE (2026-07-14).** The
+      interactive line editor (`GETLN`) now records finished lines in a 32-line RAM
+      ring (`HISTRING` $5800..$5FFF, state `HISTST`/`HISTCT`/`HISTNV` in the $60xx
+      scratch tail). Up/Down arrows (ESC `[` `A`/`B`) recall older/newer lines and
+      redraw `LINEBUF` in place; blank lines and consecutive duplicates are not
+      stored. `sh`-script lines are excluded. Man topic `os/man/history`; test
+      `emulator/test/os_hist_test.sh` (up recall, down-nav, dedup via piped ESC
+      sequences). Autocomplete (Tab) is the planned follow-on above.
+
+- [x] **On-target `make` — a real single-Makefile front end — DONE (2026-07-14).**
+      The old `/src/mk/<target>.sh` wrapper hack was removed; `make` is now a
+      proper kernel built-in that reads ONE CWD `Makefile` (`target: deps` + TAB
+      recipe), resolves prerequisites depth-first (dedup so shared deps build
+      once, cycle/too-deep guard), and runs deps-first — always-rebuild (no
+      mtimes). Implementation matches the validated design: slurp the Makefile
+      into free RAM, DFS the prerequisites into an ordered plan, flatten the
+      plan's recipes into the free TPA, write them to a temp file `MK.RUN` in one
+      FWOPEN session (all Makefile reads finish first — FOPEN's FFIND clobbers
+      FWOPEN's SBUF), then `SH_RUN` it. Targets `all`/`clean`/`install`. `run.sh`
+      ships a `Makefile` in `/src/commands/{c,asm}` and `/src/os-bios`. Tests:
+      `emulator/test/os_mk_test.sh` (semantics + cc/asm integration),
+      `os_sysbuild_test.sh` (full-system on-emulator rebuild). Gotchas fixed
+      along the way: FGETB/FPUTB and the MKF_PUT helper clobber P1/P2, so the
+      byte-stream loops keep their cursor in RAM (MKSP) and reload P1 each pass;
+      `cp`'s glob needs an absolute dir, so `install` names the source dir in full.
+
+- [x] **Minimal-kernel split: move the pure-viewer built-ins to /BIN.**
+      **DONE 2026-06-25** — removed the `DIR`/`PWD`/`TREE` built-ins from the OS
+      (`DODIR`/`DENT2OS`/`DPRENT`, `DOPWD`, `DOTREE`, their dispatch + keyword
+      strings + HELP lines + `MDIRHDR`/`MDIRTAG`); they now run from `/BIN` by
+      bare name (`dir.c`/`pwd.c`/`tree.c`, installed by `os/run.sh`). OS shrank
+      ~7977→7350 bytes. **`DUMP` kept native** — as a `/BIN` program it would load
+      into the `$B000` TPA and overwrite the very memory it's asked to dump (its
+      most common use). `TR_PUSH`/`TR_POP`/`READCUR` stayed (shared with
+      FSCK/PACK). Tests reworked: `os_test` installs `/BIN/DIR.BIN`; `os_v2_test`
+      installs `/BIN/{DIR,PWD,TREE}`; `os_format_test` verifies the post-FORMAT
+      tree host-side (no typed DIR); `os_basic`/`os_argv`/`os_lineedit` use native
+      sentinels (`MKDIR`/`HELP`) instead of the moved commands. Consequence
+      remains: a freshly-`FORMAT`ted card (no `/BIN`) can't `DIR` until `/BIN` is
+      repopulated (host, or the future second-CF master). Original analysis below.
+
+      Built-in CAT is already gone (2026-06-24): bare `CAT file` falls
+      through DISPATCH to implicit-RUN of `/BIN/CAT.BIN`. The open question is how
+      much further to push it. Reasoning (2026-06-24):
+      - In normal provisioning the OS boot region and `/BIN` are written together
+        (run.sh / p8xfs), so an "OS but no /BIN" disk basically never happens in
+        day-to-day use — the old bare-disk argument is weak.
+      - The ONE real exception: `FORMAT` preserves the OS (it stashes OSCNT; "card
+        stays bootable") but empties the filesystem, so a freshly-FORMATted card
+        boots the OS with no `/BIN`. Decision hinges on: should that card be usable
+        standalone, or is "re-image from the host after FORMAT" acceptable?
+      - **Irreducible — must stay native** (can't be /BIN programs): `RUN` (it
+        launches /BIN programs; chicken-and-egg) + the implicit-run dispatch; the
+        on-target authoring/FS primitives `SAVE`/`DEP`/`LOAD`/`DEL`/`MKDIR`/`RMDIR`
+        /`CD` (these let you rebuild /BIN with no host — DEP bytes + SAVE → a .BIN;
+        if they were /BIN-only a FORMATted card with no host would be a brick);
+        plus `HELP`/`EXIT`/`MON`/`FORMAT`/`FSCK`/`PACK`.
+      - **Movable (pure viewers, no bootstrap role):** `DIR`, `PWD`, `TREE`,
+        `DUMP`. DIR is the big win (~70 lines: DODIR/DENT2OS/DPRENT + MDIRHDR/
+        MDIRTAG); PWD ~4; TREE/DUMP each a chunk. `os_format_test` (DIRs a fresh
+        volume) and `os_test` (`DIR >DLIST`) lean on built-in DIR and would need
+        reworking (install /BIN/DIR.BIN, or verify via p8xfs host-side).
+      Lean: minimal kernel (Unix-ish) — keep the kernel above, push the viewers to
+      /BIN. Cost is only that a just-FORMATted card can't `DIR` until /BIN is
+      repopulated. Decide + do as one migration. NOTE: the "second CF master /
+      transfer drive" item above removes that last objection — `IMPORT 1:/BIN`
+      repopulates a fresh card with no host — so doing that first makes this safe.
+
+- [x] **Memory-card rev-E decode netlist (gen_eagle.py).** DONE 2026-07-14. The
+      rev-E decode is now in the schematic netlist, matching the emulator/software/
+      docs. A13 is routed into the decode; realized with ONE added 2-input gate
+      (U11.1, a 74HCT32) by reusing the rev-D gates in place: `U8.4 = OR(A13,A14) =
+      Q`; `U11.1 = OR(Q,A15)` = ROM `!CE` (`A13|A14|A15` → 8K $0000-$1FFF); `U7.3 =
+      NAND(!A15,Q)` = RAM-low U10 `!CE` (= `A15 OR NOR(A13,A14)` → $2000-$7FFF). U11
+      gets its CD11 100nF cap automatically via card(). gen_eagle validates
+      errors=0 across all 8 boards; the memory-card .sch/.brd + 3 PDFs are
+      regenerated. (Note: the earlier plan's "U8.2 is spare / add a NOR" was wrong —
+      U8 was fully used; the AND/NAND refactor above needed only one new OR.)
+
+---
+
+## Completed — from IDEAS
+
+- [x] **OS `make`: real Makefile parsing — DONE (2026-07-14).** Superseded: the
+      earlier target-per-script model (`/src/mk/<target>.sh` run through `sh`) was
+      replaced by the real single-`Makefile` `make` built-in described in the
+      "On-target `make`" entry above (`target:` blocks, prerequisites, default
+      first target, `all`/`clean`/`install`).
+
+- [x] **Wildcards on the filters — wc/grep/sort/sed/head/tail/more/uniq — DONE
+      (2026-06-27, see DONE).** Made `lib_stdin` glob-aware: `openarg` expands a
+      `*`/`?` arg via `lib_globx` and `nextc()` reads all matches as one
+      concatenated stream, so every `//#use stdin` command got globs for free
+      (`GREP x *.C`, `SORT *.TXT`, `WC *.LOG`). Unblocked by the TPA remap (~31.6
+      KB) + the ISA-shrink (~−24%); needed a `clib.py` recursive-`//#use` change
+      and a bump of `p8cc.c`'s 16 KB source buffer to 32 KB (sed's spliced source
+      is ~17 KB). Full suite green.
+      **Still open:** `DEL *.TMP` (destructive OS built-in in `p8xos.asm`, not a
+      `/BIN` command — needs the shell-level/asm `gmatch`+`FNEXT` path) and the
+      `CP`/`MV` multi-source-into-a-directory idiom (separate item below).
+
+- [x] **`cp -r` (recursive copy) — DONE (2026-07-08); retired `IMPORT`.** `cp`
+      gained `-r`: it recurses a directory tree (collecting each level's entries
+      before descending, since the FNEXT cursor is global) and works across the
+      `/D1` mount (`CP -r /D1/SRC /SRC`) — each file's read/write stream keeps its
+      own drive. Needed a new **`SYS_MKDIR` syscall** ($4021, factored from
+      `DOMKDIR` as `MKDIRCORE`) so a `/BIN` program can create directories. This
+      **superseded the `IMPORT` built-in** (flat, one-level, drive-1→CWD), which
+      was removed — the kernel shrank ~534 bytes. `os_cprecursive_test` covers
+      single-file, same-drive `-r`, and cross-mount `-r` with nesting.
+      cp/mv **wildcards** are now done too (see below). The `-r` iteration page
+      sits at `$A000` (just above cp's code), giving ~40 levels of recursion headroom
+      before the descending stack could reach it — deep enough for any real tree,
+      but there is no explicit depth cap.
+
+- [x] **`CP`/`MV` wildcards — `CP *.ASM /BAK`, `MV *.TMP TRASH/` — DONE
+      (2026-07-09).** Went with per-command inlined glob (option 2): a `*`/`?`
+      source is expanded via `lib_globx`'s `glob_expand`, and each match is copied/
+      moved INTO the destination, which must be an existing directory (each lands
+      at `<dst>/<basename>`; `cp -r` copies a matched subtree). Both the C builds
+      (`cp.c`/`mv.c`, `//#use globx`) and the hand-asm builds (`cp.asm`/`mv.asm`
+      via new `lib_globx.inc`) implemented and verified byte-identical. Adding
+      globx doubled cp's C binary, so `cp`'s `copy_tree` FSDIRBUF page moved
+      $A0 → $E0 (clear of the enlarged image). Also added **`TOUCH`** the same
+      day (C + hand-asm). No shell-level expansion was needed.
+
+- [x] **ASM vs C commands — hand-wrote ALL heavy `/BIN` utilities — DONE
+      (2026-07-08, see DONE).** The prototype-one-command experiment turned into a
+      full sweep: all 17 `/BIN` commands now have hand-written P8X assembler
+      counterparts in `os/commands-asm/`, each verified byte-identical in behavior
+      to its `p8cc` build and installed to a parallel `/BINA` on the demo disk.
+      Overall ~2.3× smaller, up to 5.8× (mv/pwd). See DONE.
+
+- [x] **Make OS/BIOS peek/poke a syscall ABI instead of fixed addresses**
+      (2026-06-26; DONE 2026-07-07). The C `/BIN` commands used to reach BIOS
+      scratch by hardcoded `peek`/`poke` of fixed addresses — FNAME `$704A`,
+      FFLAG `$7070`, FLEN `$7058`, entry LBA `$7047/$7048` — which is what made
+      the `$B000→$7A00` remap expensive (~30 sites across `dir`/`tree`/`find`/
+      `grep`/`lib_globx`/`p8lib` moving in lockstep with the firmware EQUs).
+      Resolved with the "current dir-entry accessor" option rather than one getter
+      per field: two OS syscalls —
+      - **`SYS_DIRENTRY` ($401B)**: copy the entry FNEXT (or FFIND) just matched
+        into a caller buffer as a 17-byte snapshot — name[12], flag, len(2),
+        LBA(2). One JSR + 17-byte copy per entry replaces ~5 scattered peeks.
+      - **`SYS_OPENDIR` ($401E)**: begin iterating a subdirectory whose 16-bit
+        start LBA is passed in P1 — replaces the `poke($7048)/poke($7049) +
+        FOPENDIRAT(A=low)` idiom used to descend.
+
+      New shared lib `os/commands/lib_dirent.c` (`//#use dirent`) wraps them as
+      `de_read()/de_isfile()/de_isdir()/de_isdot()/de_len()/de_lba()/de_opendir()`
+      with a `de[17]` buffer. `dir`/`find`/`grep`/`tree`/`lib_globx` converted;
+      `p8lib.c`'s `loadfile()` reads its length via `SYS_DIRENTRY` too. Zero
+      hardcoded scratch addresses remain in the commands — the firmware can now
+      relocate FNAME/FFLAG/FLEN/LBA without touching a single command. Verified by
+      the existing dir/tree/find/grep command tests (which now exercise both
+      syscalls, including recursion via `SYS_OPENDIR`) + full suite.
+
+- [x] **Recursive content search — `GREP -r pat`: match file CONTENTS by regex
+      across a directory tree — DONE (2026-06-27).** Implemented as a `-r` flag on
+      `grep` (Unix-familiar, reuses `lib_regex`'s `match()`). Two-phase to respect
+      the global FNEXT cursor: phase 1 walks the CWD tree depth-first (same
+      recursion shape as `FIND`/`DIR -R`, FSDIRBUF page `$EA`) collecting every
+      file's absolute path; phase 2 opens each (`open_path` from `lib_stdin`) and
+      greps it, printing hits as `path:line`. Capped at 48 files (frees C-stack —
+      grep -r ends `$E877`, ~9 dir-nesting levels of recursion headroom under the
+      `$F800` stack). Tested in `c_filters_test.sh` (root file + `/DOCS/D.TXT`
+      subdir, both compilers). Original analysis kept below.
+
+      The right home for regex, as
+      distinct from name-matching: glob (`*`/`?`) is for file *names* (what `dir`
+      and `find` already do); a **regex** is for the *search string* you look for
+      inside files. This tool combines `find`'s tree walk (FNEXT recursion +
+      `lib_globx`/`FSDIRBUF`) with `grep`'s regex matcher (`lib_regex`) — for each
+      file under the CWD, open it and print matching lines prefixed with the path
+      (`path:line`). Effectively `grep -r`. The pieces already exist as shared
+      libs (`lib_regex` + the find/dir recursion), and there's TPA room now, so it
+      mostly composes. (Decide: extend `grep` with a `-r` flag that walks, or a
+      separate `RGREP`/`FIND … -e pat` — leaning `GREP -r` for Unix familiarity.)
+      Note: this is why `find` itself stays name-glob only — regex lives where the
+      content is.
+
+- [x] **`TOUCH name` command — DONE (2026-07-09).** Unix `touch`: creates each
+      named file empty if missing (FWOPEN+FCLOSE, zero bytes), leaves an existing
+      file untouched (NOT truncated). Shipped as `os/commands/touch.c` and the
+      hand-asm `os/commands-asm/touch.asm`, verified byte-identical, on a
+      CWD-resolved absolute path like the other file commands. **Still future:**
+      once the **DS1302 RTC** lands (see IDEAS) and P8XFS entries carry an mtime,
+      extend it to bump the timestamp of an existing file (the classic behaviour;
+      P8XFS has no timestamps yet).
+
+- [x] **Hierarchy-aware BIOS file routines — DONE (2026-07-09).** Resolved in two
+      parts. The *resolver* already exists: **`$0133 FRESOLVE`** (FS upgrade 3)
+      walks a path through the `.`/`..` entries and sets the target directory +
+      leaf `FNAME`, so `FFIND`/`FCREATE`/`FOPEN` run in that directory. What was
+      left was the flat *clients*: BASIC `SAVE`/`LOAD` and the data-file `OPEN`
+      called `FFIND`/`FCREATE`/`FNORM` with no `FRESOLVE`, so they were root-only.
+      **Retrofitted them to FRESOLVE the name** (`GETPATH` reads a case-preserved
+      path, `SETFNAME` resolves the string), so `SAVE "/SRC/GAME"` and
+      `OPEN "/LOGS/A"` reach subdirectories while a bare name still means root.
+      Design decision (open question (a)): the **BIOS stays stateless — no CWD in
+      the ABI**. A current directory is shell/OS state (it would add shared mutable
+      state to a re-entrant ROM and has no meaning at boot), so clients resolve
+      absolute/root-relative paths; the OS owns the CWD. `basic_savepath_test`
+      covers root + subdir round-trips (program and data file).
+
+- [x] **On-target assembler `;#use` includes — DONE (2026-07-10).** `apps/p8xasm.asm`
+      now recognizes a `;#use NAME` line and APPENDS `/lib/NAME.inc` after the
+      program body (up to 4, in declared order) — the on-target mirror of the host
+      `mkasm.sh` (`cat SRC ; cat lib_*.inc`). So a command with shared helpers
+      (`cat`→`stdin`, `grep`→`stdin`+`regex`, …) can be rebuilt from source ON the
+      machine: `asm /src/commands/asm/cat.asm cat.bin`. Verified byte-identical to
+      the host build (`os_asm_use_test`, in `make test`); self-hosting unaffected.
+      Landmines handled: (1) `FSDIRBUF` repoints directory scans off `SBUF` so the
+      include's `FFIND` in pass 2 can't clobber the write stream's partial sector;
+      (2) the include reads on its own buffer (not the source's); (3) `SRCGET`
+      preserves the caller's `P2` (line cursor) across the stream switch; (4) the
+      source's `FNAME`/dir context is saved at startup and restored each pass so
+      `PASSINIT` re-opens the source after a `;#use` re-resolved `FNAME`. This is
+      the enabling half of on-target command rebuild-from-asm; the C half already
+      works (`cc` + `asm`). Next: a shell script runner + a `mk` build script (no
+      P8XFS mtimes, so always-rebuild, not a true make).
+
+- [x] **On-target assembler path-aware SRC/OUT — DONE (2026-07-10).** `asm`'s
+      SRC and OUT arguments were truncated to 12-char root-only names; they are
+      now full paths resolved via `FRESOLVE` (`SRCPATH`/`OUTPATH`; the output
+      parent dir + leaf are stashed at `OUTINIT` and restored for `FCLOSE` at
+      `FINISHOUT`). So a source under `/src` assembles straight into a build dir:
+      `asm /src/commands/asm/pwd.asm /src/commands/asm/bin/pwd.bin`. This is the
+      last piece that let command rebuild-from-asm live entirely on the machine.
+
+- [x] **`sh FILE` — shell script runner — DONE (2026-07-10).** New OS built-in
+      (`DOSH`/`GL_SCRIPT`): runs each line of FILE through the normal shell
+      dispatch (`>`/`<`/`|`/PATH all work). The script stream is kept open over
+      IBUF and saved/restored (`SAVESCR`) around every dispatched command — so
+      each command uses the BIOS file streams itself and the script **streams a
+      line at a time, no size cap** (the earlier 512-byte slurp is gone). Caveat:
+      a script line can't use `< redirect` (it shares IBUF). Man page `os/man/sh`
+      updated; `os_sh_test` covers it.
+
+- [x] **`make <target>` — scaled-down make — DONE (2026-07-10); REMOVED then
+      REPLACED by real make (2026-07-14).** The original `DOMAKE` (a thin
+      `/src/mk/<target>.sh` wrapper — a hack, not a real make) was pulled out of
+      the kernel, and `make` was then re-implemented properly as a single-`Makefile`
+      front end (see the "On-target `make`" DONE entry above): it reads the CWD
+      `Makefile`, DFS-resolves prerequisites, and drives the toolchain. The
+      `/src/mk/*.sh` scripts are gone; each `/src` dir ships a real `Makefile`.
+      Original scaled-down note follows:** New OS built-in
+      (`DOMAKE`): builds `/src/mk/<target>` and runs it through the `sh` engine.
+      **Always rebuilds** — the FS has no mtimes yet, so there's no up-to-date
+      check (dependency tracking is a future enhancement). `run.sh` pre-generates
+      the scripts: `/src/mk/<cmd>` rebuilds one command (both C and asm twins),
+      `/src/mk/{c,asm}` a whole group, `/src/mk/all` everything; bare `make` ==
+      `make all`. `os_mk_test`/`os_make_test`/`os_sysbuild_test` cover it. New man
+      page `os/man/make`; HELP lists `sh` and `make`.
+
+- [x] **`/src` build-output dirs + `/src/mk` scripts — DONE (2026-07-10).**
+      `run.sh`'s `ensure_src` now also lays down `/src/commands/{c,asm}/bin`
+      (where rebuilt binaries land) and the `/src/mk/` build scripts, idempotently
+      on both fresh and existing disks. The full recipe: C is `cc SRC >T.ASM`
+      (root scratch, since redirect targets aren't path-resolved) then
+      `asm T.ASM .../bin/NAME.bin`; asm is a single path-aware `asm`. Round-trip
+      exercised headlessly by `os_sysbuild_test` (build-only `run.sh` + boot).
+
+- [x] **`disasm` — memory-range disassembler, C + asm twin — DONE (2026-07-11).**
+      `disasm start end` decodes `[start,end)` to `AAAA: bytes MNEMONIC operand`,
+      one instruction per line (imm8 `#$NN`, addr16 `$NNNN`, `(Pn)`/`(Pn)+`, or
+      `a,a` for MOVW; unknown -> `???`). The opcode table is generated from
+      `genucode.OPC` by `generators/gen_p8xdis.py` in BOTH forms — C
+      `os/commands/lib_distab.c` (`//#use distab`) and asm
+      `os/commands-asm/lib_distab.inc` (`;#use distab`, added `--asm`) — so neither
+      twin can drift from the ISA. The hand-asm twin `os/commands-asm/disasm.asm`
+      (`DIS_FIND` table scan + hex formatting) is verified byte-identical to the C
+      twin across every operand shape incl. MOVW and `???` (`verify.sh disasm`;
+      /bina host-built). Restores the C+asm invariant for all `/bin` commands.
+      `/bin/disasm.bin`, `os/man/disasm`, `make disasm` (C twin on-target; the asm
+      rebuild line is >63 chars, see the LINEBUF backlog), `c_disasm_test`.
+
+- [x] **Man-page-style OS command reference — DONE (2026-07-09), on-target.**
+      Went further than the doc-only plan: authored a per-command manual page
+      (NAME / SYNOPSIS / DESCRIPTION / OPTIONS / EXAMPLES / SEE ALSO) for every
+      `/bin` command AND every OS built-in in `os/man/`, installed to `/man` by
+      `run.sh`, and added a **`man` command** (`os/commands/man.c` + byte-identical
+      `os/commands-asm/man.asm`) so `man dir` prints `/man/dir` on the machine.
+      HELP lists `man`; `os_man_test` covers it. **Still future:** a `man -k`
+      apropos/keyword search, and a `SEE ALSO`-driven index page.
+
+- [x] **C compiler — Milestone A DONE (self-ACCEPTING, host-run — NOT
+      self-compiling; see the Milestone A entry below); Milestone B
+      ACHIEVED via the from-scratch native `cc` (`apps/p8xcc.asm`), which compiles
+      C ENTIRELY on-target through v0.28 (see "NATIVE C COMPILER" below). The
+      earlier path-A front end (cpp|lex|cc1, host-side codegen) is DEPRECATED /
+      superseded and no longer shipped.** Both
+      compilers exist and are tested:
+      `compiler/p8cc.py` (Python, the everyday tool + reference oracle, never
+      removed) and `compiler/p8cc.c` (the same compiler in p8cc's own small-C
+      subset). p8cc.py compiles p8cc.c cleanly — "small C written in small C" —
+      and a differential test (`c_selfhost_test.sh`) proves the gcc-built
+      p8cc.c and p8cc.py agree on output. The language in p8cc.c is complete; see
+      DONE for details. **KEEP p8cc.py** — it bootstraps p8cc.c and is the diff
+      oracle.
+
+      **(B) Self-host: run `p8cc.c` ON the P8X.** Gated by RAM, exactly like the
+      assembler was. The P8X has 56 KB RAM ($2000–$FEFF) and a compiler's
+      working set (source buffer, symbol/struct tables, string pool) plus its own
+      ~20 KB+ code won't fit a whole translation unit at the $6A00 TPA — so it
+      needs the same streaming/single-pass discipline we gave ASM (stream source
+      in, emit asm out, bounded tables; today p8cc.c slurps stdin into a fixed
+      `src[]`). It depends on the on-target assembler (DONE) to turn the emitted
+      asm into a binary. Likely an even smaller working subset, possibly
+      multi-pass through temp files on disk. Forth remains an orthogonal track.
+      - **Multipass driver / separate pass binaries.** If the compiler won't fit
+        one TPA pass, split it into staged `/BIN` binaries driven through temp
+        files (like early Unix `cc` → `cpp`/`cc1`/`as`). The **source preprocessor
+        is naturally the first pass**: `tools/clib.py` (the host `//#use` splicer,
+        added 2026-06-26) is the prototype for that native pass — a C rewrite of
+        it (reading via BIOS `FOPEN`/`FGETB`, writing the combined source) becomes
+        the on-target `CPP.BIN`. So `clib.py` is a host-era convenience that this
+        milestone subsumes, not a throwaway.
+      - **Pass 1 — CPP.BIN DONE (2026-07-09).** `os/commands/cpp.c` (→ `/bin/cpp.bin`)
+        splices `//#use` on-target; its output compiles **byte-identical** to the
+        `clib.py` path (`os_cpp_test`). Single read stream → cpp emits libs ahead
+        of the source (compiles the same; p8cc orders by symbol table) and calls
+        `FSDIRBUF` so file-opens don't clobber a redirected write stream (the SBUF
+        read-scan vs write-partial conflict `cp -r` also hit). C-only (a compiler
+        pass, no asm twin). Sizing reality that shapes the rest: `p8cc.c` compiles
+        to **~72 KB** vs a ~32 KB TPA (~46 B/line), so the front/back split needs
+        the **codegen-shrink first** (frame-relative locals / MOVW) — even the
+        parser alone overflows today. Next: shrink, then the CC1/CG split. KNOWN
+        LIMIT (RESOLVED 2026-07-10): P8XFS's 12-char names truncated
+        `lib_abspath.c`/`lib_readline.c` on-card; renamed to `lib_apath.c`/
+        `lib_rdline.c` (tokens `//#use apath`/`//#use rdline`) so the full name
+        incl. `.c` fits the 12-byte field. Convention is now `lib_<token>.c`
+        with `token` ≤ 6 chars. Guarded going forward: `p8xfs.py put`/`mkdir`
+        WARN (or fail under `--strict`) on any name > 12 chars, and `fsck` flags
+        two live entries that alias to the same 12-byte name. Verified host and
+        target (firmware `FNORM`) truncate identically (first 12 bytes,
+        space-padded), so the two agree on every name.
+      - **Codegen-shrink step 1 — DONE (2026-07-09).** Added `__ldw`/`__ldb`
+        (load local word/byte) and `__stw`/`__stb` (store local) runtime helpers
+        + a `var = expr` fast path (scalar local via `__stw`, global via `MOVW`),
+        so a local read is `JSR __ldw ; .word off` instead of `__lea` + 4 loads,
+        and a scalar store skips the old address→AX→P1 round-trip. **p8cc.c's own
+        compiled asm: 30372 → 25383 lines (−16.4%)** (~72 KB → ~60 KB). Applied to
+        **`p8cc.py` only** — the compiler binary is host-built by p8cc.py, so this
+        shrinks it without touching `p8cc.c`; the self-host differential test is
+        behavioural (same program output), so it still passes. Mirroring to
+        `p8cc.c` (so the ON-target compiler emits the same tight code) is a
+        deferred refinement, not needed to fit the binary. Next: reduce the
+        binary-op `PHW/PLW` (779×) and revisit `__push` (1157×), then the split.
+        NOTE: this makes the `os/commands-asm` size scoreboard stale (p8cc builds
+        are now smaller) — regenerate it.
+      - **Codegen-shrink step 2 — `__entf` (2026-07-09).** Fold each function's
+        inline frame-alloc into `JSR __entf ; .word localsize`. Only +0.9% (most
+        functions have no locals — params need no frame), total now **−17.2%**
+        (30372 → 25157 lines, ~59 KB). PLATEAU: the remaining bulk is structural —
+        `__push` (1157×, call args) and `PHW/PLW` (779×, binary-op operand stack)
+        resist peephole shrinking, and the front end (lex+parser+symtab, ~70% of
+        the source) would still be ~40 KB after a 2-way split — over the ~32 KB
+        TPA. So fitting needs EITHER a bigger structural rewrite (an accumulator/
+        temp scheme to kill the per-op stack traffic) OR a **3-way split**
+        (lex | parse | codegen, each ~⅓ ≈ 20 KB) through two temp files. Decide
+        the direction before more peephole work — it's low ROI from here.
+      - **Split direction chosen: 3-way (lex | parse/cc1 | codegen/cg).** The
+        toolchain becomes `cpp | lex | cc1 | cg`, each a `/bin` binary chained
+        through temp files (like early Unix `cpp`/`cc1`/`as`). Temp files carry
+        text formats between passes so each is independently testable against a
+        host reference (`p8cc.py --tokens`, later `--ir`).
+      - **Pass 2 — LEX.BIN DONE (2026-07-09).** `os/commands/lex.c` (→
+        `/bin/lex.bin`, ~10.9 KB) tokenizes a (preprocessed) C source on-target
+        and emits the token stream `<line> <T> <payload>` (T = K/I/N/S/O/E). Its
+        output is **byte-identical** to the new host reference `p8cc.py --tokens`
+        (`dump_tokens`) — verified by `os_lex_test` on a mixed-token source AND a
+        ~1900-token real source. Streams via the BIOS read stream with a one-char
+        pushback (no whole-file buffer). Line counting matches p8cc.py to the
+        letter (only top-level newlines count; block-comment newlines don't). Char
+        literals emit as `N` (byte value); keyword set matches p8cc's lexer.
+        C-only (a compiler pass, no asm twin). NEXT: **CC1** (parse token stream →
+        IR) needs an IR text format + a `p8cc.py --ir` reference, then **CG**
+        (IR → asm). The parser+symtab is the ~70%-of-source risk; getting it under
+        the TPA on its own is the crux of the whole split.
+      - **IR format designed + host-validated (2026-07-09).** The pass-2→pass-3
+        boundary is the **AST** (not a lower three-address IR): cc1 = parse token
+        stream → serialize AST; cg = deserialize AST → the existing codegen (Gen).
+        This keeps the whole type/symbol/struct analysis in ONE pass (cg, mirroring
+        p8cc.py's `Gen`) instead of splitting it. Format: a whitespace-separated
+        pre-order atom stream (`<tag>` + fields; lists = `<count>` + nodes; options
+        = `0` | `1 <node>`; type triple = `<base> <ptr> <count>`, count -1 = infer;
+        byte string = `<len>` + decimal bytes). Added `p8cc.py --ast` (serialize)
+        and `--from-ast` (deserialize → Gen) as the references. PROVEN lossless:
+        `--ast | --from-ast` is **byte-identical** to direct compilation across all
+        23 command sources AND `p8cc.c` itself (85 KB AST). NB p8cc.c is single-pass
+        (emits asm while parsing, no AST), so cc1/cg aren't a mechanical split of it
+        — the AST layer is introduced fresh, following p8cc.py's two-phase shape.
+        NEXT: cc1.c (emit AST, byte-identical to `--ast`), then cg.c (AST → asm,
+        matching `--from-ast`).
+      - **Pass 3 — CC1.BIN DONE (2026-07-09).** `os/commands/cc1.c` (→
+        `/bin/cc1.bin`, ~29.5 KB) parses a LEX token stream into the serialized
+        AST. Recursive descent mirroring p8cc.py's `P`, emitting the AST as it
+        parses (no whole-program tree). Two tricks make streaming work: (1) infix
+        operators (`a+b`, `a=b`, `a[i]`, `a.b`) parse the left operand before the
+        tag is known, so cc1 splices the tag in front of it with an in-buffer
+        `einsert()`; (2) since an einsert only reaches back within one expression,
+        eb[] is flushed at every statement boundary — the buffer holds at most one
+        statement, so cc1 handles functions far larger than the TPA. Output is
+        **byte-identical** to `p8cc.py --ast` — verified on-target by `os_cc1_test`
+        (the real `lex | cc1` chain) and, during development, via a gcc build of
+        cc1.c against `--ast` across all 24 command sources AND p8cc.c itself.
+        Wire format switched from count-prefixed lists to `;`-terminated lists so
+        the append-only write stream needs no seek-back. Purely syntactic; all
+        type/symbol/struct analysis is deferred to cg. C-only (no asm twin).
+        Sizing: cc1.bin ~29.5 KB fits the TPA ($6A00+29.5K < $F800) with ~2.7 KB
+        headroom.
+      - **CG DOES NOT FIT — measured (2026-07-09).** The codegen cannot run
+        on-target as one pass, and a simple cg+runtime split doesn't rescue it:
+          * full p8cc.c compiles to ~82-96 KB (won't even ASSEMBLE — the assembler
+            has a hard 64 KB address ceiling and p8cc.c overflows it). Earlier
+            "~59 KB" was wrong.
+          * moving the runtime-helper emitters (emit_add..emit_lea, string-literal
+            heavy) OUT of the compiler saves only ~14 KB (→ ~82 KB).
+          * the NON-walk infrastructure alone — symbol tables + type analysis +
+            emit primitives + globals/struct/toplevel — is ~55 KB. It is SHARED by
+            every part of codegen, so sharding the expr/stmt walk (only ~18 KB)
+            into sub-passes doesn't help: each shard still needs most of that 55 KB.
+          vs a 31.5 KB TPA, codegen is ~2.5-3x too big and cannot be cleanly cut.
+        CONCLUSION: porting the existing optimizing p8cc codegen to run within the
+        TPA is not viable.
+      - **DECISION (2026-07-09), later SUPERSEDED: ship the self-hosted FRONT END
+        (cpp|lex|cc1); stop at cc1.** At the time this was the coherent shape of
+        Milestone B given the codegen wall (a port of the optimizing p8cc codegen
+        can't fit). It was correct that a native back end had to be a NEW,
+        deliberately-small codegen — and that is exactly what the **native `cc`**
+        (path B, below) became: it compiles C ENTIRELY on-target. So the
+        front-end-only decision is superseded, and cpp|lex|cc1 are deprecated.
+        Other rejected paths: sharding the existing codegen (the shared infra
+        defeats it); a bigger flat memory region (tops out ~46 KB, still < 82 KB —
+        would need banking, i.e. major firmware/OS/hardware work).
+      - [x] **NATIVE C COMPILER in asm (Milestone B, path B) — ACHIEVED
+        (through v0.28).** A from-scratch, single-pass C compiler written directly
+        in assembly (`apps/p8xcc.asm` -> `/bin/cc.bin`), dense enough to run on
+        the machine where the p8cc.c codegen (~82 KB) cannot. It streams the
+        source in (FOPEN/FGETB, one-char pushback) and emits asm to stdout
+        (SYS_PUTC, shell-redirectable), which the native `asm` turns into a
+        RUNnable binary — so C is compiled, assembled, and run entirely on-target.
+        Works end to end (`os_cc_test`, behavioural: compile -> asm -> run ->
+        diff output). Codegen is a hardware-stack machine + one memory temp
+        (`__t0`), since the ISA has no A<->B move.
+
+        **CODEGEN SHRINK — the native cc is now on par with host `p8cc.py`
+        (2026-07-15).** Its output was ~2x the host compiler's; it was emitting
+        byte-at-a-time sequences for operations the ISA already had single
+        instructions for. Three rounds, each a 1-for-4 substitution confined to
+        the emit helpers (so each also SHRANK cc.bin, 22797 -> 22655 B):
+          1. single-operand wide ops — `PHW`/`PLW`/`LPW1` for push/pop/deref;
+          2. `MOVW` for `LDVAR`/`STVAR` word moves. Needed teaching the NATIVE
+             assembler the two-operand `MOVW` form (`$78`) — the host assembler
+             already special-cased it, the native one was one-operand-only;
+          3. `PHW`/`PLW __V+<2n>` for the caller-saved slot save/restore, which
+             alone removed 860 `PHA`/`PLA` (host p8cc.py emits ZERO) plus the
+             `LDA`/`STA` each was paired with.
+        `wc.c`: 8829 -> 4617 instructions (**-48%**) vs 4467 for p8cc.py — a 3.4%
+        gap, down from ~98%. Verified byte-exact + behaviourally on-target.
+        NOT done, and judged not worth it: temp reuse and peephole fusion (e.g.
+        `MOVW __ax,V` + `PHW __ax` -> `PHW V`) would close the last 3.4%, but need
+        lookahead/buffering in a single-pass emit-as-you-parse compiler — growing
+        cc.bin (already 22.6 KB of the ~37 KB TPA, and it must fit WHILE compiling)
+        and risking the miscompile class the code review found. Revisit only if a
+        real command misses the TPA by a few KB.
+
+        **cc — KNOWN LIMITATIONS / SHORTCOMINGS (as of v0.28).** The native cc
+        covers the language needs of every shipped OS command and hand-written C
+        in the same subset, but it is deliberately minimal. Gaps a future version
+        could close (roughly by cost):
+
+        Types & values
+          * `int` is 16-bit; there is NO `unsigned`, `long`, `short`, or float —
+            all arithmetic and comparison is 16-bit signed-ish (comparisons via
+            `__cmp` use C/Z; no true signed `<` for negatives).
+          * A scalar `char` is stored in a WORD; the 1-byte width only applies to
+            char arrays and `char*` deref/index.
+          * No `typedef`, `enum`, `union`, `const`, `static`, `sizeof`.
+
+        Structs
+          * Member names must be UNIQUE program-wide (single global member table,
+            no per-variable tag). No struct parameters, struct returns, struct
+            assignment (`a = b`), nested structs, or arrays of structs.
+
+        Pointers & arrays
+          * Pointer arithmetic does NOT scale by element size in general (`p + 1`
+            adds 1, not `sizeof *p`); only `[]` scales (by 1 for char, 2 for int).
+            So a `char*` walks byte-wise (correct) but `int* + 1` is off unless
+            you write `&p[1]`.
+          * No multi-dimensional arrays (`a[i][j]`); no arrays of structs.
+          * `++`/`--` work on scalar variables only — not `arr[i]++` or `*p++`.
+
+        Functions & calls
+          * Recursion uses caller-saved STATIC slots, not a real stack frame
+            (the __csp/__fp frame design is captured below but superseded). So:
+            mutual recursion needs a forward prototype; taking `&local` across a
+            DIRECT recursive call is undefined; and within one call's argument
+            list a later argument must not read a parameter an earlier one
+            overwrote.
+          * A program must not redefine a builtin name (putchar/puts/getchar/
+            peek/poke/argstr/bios) — those are intercepted unconditionally.
+          * No function pointers; no variadic functions; no struct-by-value.
+          * `bios(ADDR, ...)`'s ADDR must be a compile-time constant.
+
+        Preprocessor & misc
+          * Preprocessor directives: `//#use NAME` (splices /lib/lib_NAME.c) and
+            object-like `//#define NAME value` (value = decimal or 0x hex; added
+            2026-07-14 — e.g. `//#use abi` names the BIOS/OS addresses). No
+            `#include`, `#if`, or function-like macros. No escape decoding beyond
+            \n \t \r \0 \\ \' \" in literals.
+          * No `switch`, `do`/`while`, `goto`, comma operator, or compound
+            literals; no aggregate/initializer lists; globals are zero-init only
+            (no `int x = 5;` at file scope).
+          * Single pass: a global used before its declaration won't resolve.
+          * A function's total slot count (locals+params, incl. arrays/structs)
+            must stay < 256; the //#use nesting depth is bounded (5) and the
+            per-program arg-stack buffer is 2 KB (recursion depth).
+          * Output redirect target must be a RELATIVE filename (an OS shell bug,
+            not the compiler).
+
+          * v0.1 — `int main() { putchar(<expr>); | return [<expr>]; }`, `+`/`-`,
+            8-bit ints.
+          * v0.2 — **variables**: `int NAME [= expr];` declarations, `NAME = expr;`
+            assignment, and NAME as an expression term. Symbol table
+            (SYMFIND/SYMADD, packed name pool); each variable is emitted as a
+            byte `V<idx>: .fill 1`.
+          * v0.3 — **control flow**: `if/else`, `while`, `{ }` blocks, and the six
+            comparisons `< <= > >= == !=` (two-char op lexing via CUR2; results
+            0/1). Codegen emits unique labels (NEWLBL); if/while save labels on
+            the hardware stack across the recursive body. GOTCHA fixed: a compare
+            must branch on the CMP flags BEFORE any LDA — LDA clobbers Z (not C),
+            which silently broke the Z-based ops (`== != > <=`).
+          * v0.4 — **`*` multiply** (8-bit), completing the multiplicative
+            precedence level. Introduces emitting a runtime helper on demand:
+            when the program uses `*`, cc appends an `__mul8` routine (repeated
+            addition) after the code; a `USEMUL` flag gates it. This "emit a
+            helper if used" pattern is the groundwork for 16-bit arithmetic.
+          * v0.5 — **`/` and `%`** (8-bit), completing the arithmetic operators.
+            A shared `__divmod8` helper (repeated subtraction; guards divide-by-
+            zero) leaves quotient in `__d1` and remainder in `__d0`; `USEDIV`
+            gates it. All of `* / %` are at the `GTERM` precedence level.
+          * v0.6 — **16-bit ints** (the big rewrite). Codegen switched from the
+            8-bit hardware `A` register to a 16-bit MEMORY accumulator `__ax`
+            (+ temp `__t0`); every op routes through runtime helpers emitted at
+            the program end — `__add`/`__sub`/`__cmp` (always), `__mul` (repeated
+            add) and `__div`/`__mod` (repeated subtract), all 16-bit. The lexer
+            now accumulates 16-bit literals (`*10` via shifts). GOTCHAS fixed: a
+            condition value now lives in `__ax`, so `if`/`while` must emit
+            `LDA __ax; LDB __ax+1; OR` before the `JZ` (the branch can't read the
+            stale hardware Z); and a comparison's false path must actually STORE 0
+            to `__ax` (the earlier `LDA #0` left `__ax` holding the right operand).
+            Verified with values >255 (`sum(1..10)*10 = 550`) end to end.
+          * v0.7 — **functions with parameters**. Multiple `int NAME(int p,...)
+            { }` definitions; calls `NAME(args)` in expressions; `return e`
+            (value in `__ax`, jumps to the function's `_e_NAME` epilogue). Each
+            function is `_f_NAME`. Params/locals use STATIC per-function storage:
+            a global slot counter, each function's vars at `SLOTBASE..`; the
+            caller stores each arg into the callee's param slots (FFB+i, found via
+            a small function table) before the JSR. LIMITATION: static slots mean
+            no recursion, and a function must not appear in its own arg list — a
+            software stack frame (the p8cc `__csp`/`__fp` model) is the next step.
+            Verified: `add(a,b)`, `m(a,b)=a*b`, nested `inc(inc(63))`, and
+            `max(a,b)` with if/return, plus a `sum(n)` loop over its parameter.
+          * v0.8 — **unary `-` and `!`** (a `GUNARY` level below `term`): `-e`
+            emits `JSR __neg` (16-bit two's complement), `!e` emits `JSR __lnot`
+            (-> 0/1); both helpers gated by USENEG/USENOT. Verified incl.
+            `70 - -5 - 10` and `-x` on a variable.
+          * v0.9 — **`&&` and `||`** (short-circuit). Lexer combines the doubled
+            punctuation; two parser levels above the relational parser (`GEXPR`=||
+            -> `GLAND`=&& -> `GREL`). Each emits a test + conditional jump so the
+            right operand is skipped when the result is already decided; the
+            result is normalised to 0/1 via EM_AX0/EM_AX1. Verified incl. chained
+            `2 && 3 && 1`, `if (x>0 && x<10)`, and short-circuit `0 && 9`.
+          * v0.10 — **`for (init; cond; post) body`** (`st_for`). init/post are
+            optional assignments (`FORCLAUSE`); cond is an optional expression
+            (empty = always true). Emitted single-pass with jump threading:
+            `init; Ltop: cond?JZ Lend; JMP Lbody; Lpost: post; JMP Ltop; Lbody:
+            body; JMP Lpost; Lend:`. The 4 labels are stack-saved across the body
+            so `for` nests. No `break`/`continue` yet. Verified incl. nested
+            loops, a block body, and a `for`-based factorial `fac(5)`.
+          * v0.11 — **`break` and `continue`**. A single innermost-loop context
+            (`CURBRK`/`CURCONT` label numbers) is saved/restored on the hardware
+            stack around every loop body, so the right target is used through
+            nesting; `break` -> loop end, `continue` -> while-top / for-post.
+            `st_while` was reworked to BSS labels (like `st_for`) to carry the
+            context. Verified: break/continue in both loop kinds and nested
+            `break` hitting only the inner loop. (No labelled break.)
+          * v0.12 — **recursion** (direct/self), via *caller-saved slots* rather
+            than a frame pointer: before every call a function pushes its own live
+            slots V<SLOTBASE..+SYMCNT-1> (EM_SAVESLOTS) and pops them after
+            (EM_RESTSLOTS), making the static per-function storage re-entrant.
+            Also fixed a latent bug this exposed: the callee name lived in IDNAME,
+            which argument parsing overwrites (any *variable* argument, e.g.
+            `fact(n-1)`, or `add(x,y)`, mis-emitted `JSR _f_<argname>`) — now the
+            callee's FPOOL index (FI) is saved across the arg parse and the name
+            emitted from the table (EMITFNAME). Function *prototypes*
+            `int f(int);` are parsed and skipped. Verified: fact(5), fib(10),
+            sum(10), a recursion-with-local, and var-arg calls. LIMITATION: mutual
+            recursion / forward calls unsupported (single pass, static slots — the
+            callee's param base isn't known before its definition); a full
+            __csp/__fp frame is the eventual fix.
+          * v0.13 — **pointers** (16-bit, word-sized): `&x` (EM_ADDROF -> the
+            address of V<slot>), `*p` deref read (EM_LOADW), `*p = e` store
+            (EM_STOREW, a new `st_derefasg` under st_punct), `int *p` /
+            `int f(int *p)` (the `*` is parsed and ignored — a pointer is just a
+            word). Added **expression statements** so a bare call `foo(args);`
+            works (st_exprstmt). This gives **pass-by-reference**: set(&x),
+            inc(&x), swap(&a,&b) all verified. Key interaction: caller-saved slots
+            (v0.12) would undo a callee's write through a pointer to a caller
+            local, so caller-saves is now emitted ONLY for direct self-recursive
+            calls (SELFREC = callee name == CURFN); calls to *other* functions
+            skip it, so pass-by-ref composes with recursion. Verified: deref
+            read/write, double deref, repoint, pass-by-ref, swap, call-stmt, plus
+            fact/fib still green. LIMITATION: no `char`/byte width yet (a char*
+            still moves a word), no arrays/`[]` yet, and &local across a *direct*
+            recursive call is undefined.
+          * v0.14 — **int arrays + indexing**. Required decoupling the name count
+            from the slot count: SYMCNT still counts names, new NLSLOT counts
+            slots (an array takes N), SYMSLOT[name]→slot, SYMARR[slot]=1 for array
+            bases. SYMFIND/SYMADD now key on the slot; EM_LDVAR/STVAR/ADDROF and
+            caller-saves loop over NLSLOT — all behaviour-preserving for scalars.
+            `int a[N]` reserves N contiguous word slots; `a[i]` / `p[i]` read and
+            write via ELEMADDR (base = &V<slot> for an array, the value for a
+            pointer; `+ index*2`; EM_LOADW/EM_STOREW). `&a[i]` yields an element
+            address, so `p = &a[0]` then `p[i]` and passing arrays to functions
+            (fill(&a[0],n)) work. Verified: a[i] read/write, for-loop fill/sum,
+            var index, &a[i], p[i] read/write, array passed to a function.
+            LIMITATION: word elements only (no char/byte), a bare array name does
+            not decay (use &a[0]), and slot count per function must stay < 256.
+          * v0.15 — **char literals + string literals + the `char` keyword**.
+            `'A'` lexes to a NUMBER (its ASCII value); `"..."` lexes to a new
+            token kind 4 (text built in STRBUF via **P2** — GC/FGETB clobbers P1,
+            same gotcha as identifiers). A string factor (`gf_str`) emits the
+            bytes inline, jumped over: `JMP Lskip; Ldata: .asciiz "..."; .byte 0;
+            Lskip:` then `__ax = &Ldata`. The extra pad zero means a WORD load at
+            the terminating NUL reads 0, and putchar already takes the low byte —
+            so `char *s; s="hi"; while(*s){putchar(*s); s=s+1;}` prints correctly
+            without a real 1-byte type. `char` is accepted as a type keyword
+            (EXPECTTYPE, synonym for int) in decls, params, and return types.
+            Verified: puts(), strlen(), multiple string literals, char params.
+            LIMITATION: still no true 1-byte type/width, and no escape sequences
+            in literals.
+          * v0.16 — **escape sequences** in char/string literals: \n \t \r \0
+            \\ \' \". Char literals decode at lex time (ESCMAP); string literals
+            keep the backslash text verbatim in STRBUF and rely on the assembler
+            (.asciiz uses Python unicode_escape). adv_stl now treats `\"` as a
+            literal quote, not the terminator. Verified '\n', "A\nB\n", '\t'.
+          * v0.17 — **true 1-byte `char`**. Per-variable type tracking via
+            SYMCHAR[slot] (EXPECTTYPE reports int vs char; the declaration and
+            each parameter record it). A `char` array packs its bytes (ceil(N/2)
+            word slots); indexing a char array/pointer scales by 1 and uses byte
+            load/store (EM_LOADB/EM_STOREB) instead of *2/word; `*p` on a char*
+            byte-derefs via an EXPRCHAR flag set by the variable/string factors.
+            int arrays/pointers unchanged (scale 2, word); a scalar `char c` is
+            still a word (width only matters for arrays/pointers). Verified: char
+            b[4] build+print, char* byte deref, strcpy(&d[0],s) into a buffer,
+            char scalar; all int/pointer/recursion/string regressions green.
+          * v0.19 — **mutual recursion / forward calls** via a runtime ARG
+            STACK, WITHOUT a frame-pointer rewrite (static V<slot> storage is
+            unchanged). The caller pushes args onto __sp (EM_PUSHARG); the
+            callee's prologue pops them into its own slots (EM_POPPARAMS). Because
+            the caller never references the callee's storage, a forward call just
+            needs the name -- so a prototype `int f(int);` now registers the name
+            (FADD) and forward calls resolve (two-pass JSR label). Re-entrancy:
+            EM_SAVESLOTS/RESTSLOTS still wrap a call, now SKIPPED when an argument
+            took an address (SAWADDRG) so pass-by-reference composes. This
+            supersedes the frame-pointer design above (kept for reference).
+            Verified: even/odd mutual recursion, plus fact/fib/pass-by-ref/arrays/
+            char/strings all still green; os_cc_test uses mutual recursion.
+          * v0.20 — **file-scope globals** (toward compiling the C command
+            sources). A top-level `type [*]NAME [ [N] ];` is a global: the
+            FUNCDEF entry now peeks after the name ('(' = function, else global)
+            and records it in a separate global table (GSYMPOOL/GVSLOT/GSYMCH/
+            GSYMAR). Globals reuse the static V<slot> storage (zero-init via
+            `.word 0`, which is exactly C's rule and what every command global
+            relies on -- none use initializers). SYMFIND now falls through to
+            GSYMFIND on a local miss and returns SYMIDX = gslot-SLOTBASE (so
+            V<SLOTBASE+SYMIDX> hits the fixed slot); char/array flags are resolved
+            into SYMRCH/SYMRAR and threaded (IDVARCH/IDVARAR/ELARR) so both locals
+            and globals deliver them uniformly. Verified: scalar globals shared
+            across functions, multiple globals, global int/char arrays, &global
+            pass-by-ref, and a global char* to a string literal. Regression green.
+          * v0.21 — **`//#use` splicer** (the on-target preprocessor, native
+            counterpart of tools/clib.py). On `//#use NAME` in the lexer's `//`
+            path, cc saves the BIOS read-stream state (ROLBA..ROCNT + ROSDRV),
+            opens /lib/lib_NAME.c into a per-level buffer, and lexes from it; GC
+            pops back to the parent at the lib's EOF. Nesting is a stack
+            (USESTATE + USEBUF, 5 levels); each library is spliced at most once
+            (USED dedup, so a diamond dependency doesn't double-define). run.sh
+            now ships os/commands/lib_*.c into /lib. Verified on-target: basic
+            splice, dedup (program + a lib both `//#use a`), a lib-declared global
+            used by main with main's own globals after the directive, and 3-level
+            nesting (c->b->a). No #define/#include at the time (`//#define` was
+            added 2026-07-14; still no #include). This completes "step 1" (globals + //#use) toward compiling
+            the C command sources; next is the bios() intrinsic + hex literals.
+          * v0.22 — **hex literals + the `bios()` intrinsic** (step 2). The
+            number lexer takes `0x..` (HEXVAL, upper/lower). `bios(ADDR, p1, a)`
+            (ADDR a constant) lowers exactly like p8cc: P1 = p1, A = a low byte,
+            `JSR $ADDR` (emitted via EMHEX), returned A -> __ax low, carry ->
+            __ax high -- so it returns `A | carry<<8`. gfi_call special-cases the
+            name "bios" (IDNAMEEQ) before FFIND. Verified: 0x41/0xFF hex, hex
+            arithmetic, mixed hex/decimal, and bios(0x4009,0,ch) (SYS_PUTC) ->
+            "AB". This is the OS-syscall primitive the commands use (21 files).
+            Remaining before a real command compiles: ++/--/+= and ?: (step 3).
+          * v0.23 — **binary bitwise `& | ^`** (three precedence levels
+            GBOR->GBXOR->GBAND between `&&` and the relational parser; `&`/`|`
+            require CUR2==0 so `&&`/`||` and unary `&` are unaffected). Runtime
+            helpers __and/__or/__xor (16-bit, gated by USEAND/USEOR/USEXOR).
+            MILESTONE: with this, the native cc compiled a REAL command library,
+            lib_dirent.c (via //#use, using globals + bios() + hex + `& 255`
+            byte masks), and the emitted asm assembled to a valid 3427-byte
+            binary. The full wc tree (wc -> stdin -> globx -> glob -> dirent) also
+            compiles; it's just slow to run the whole thing through the emulator.
+            NOTE: a survey found wc's tree uses NO ++/--/?: (lib_stdin was written
+            in the restricted subset on purpose) -- so those operators are not
+            needed for the simple filter commands, only the complex ones.
+          * v0.24 — **builtins + array decay: cc compiles & RUNS a real OS
+            command.** Added the p8cc builtins puts/getchar/peek/poke/argstr as
+            gfi_call intrinsics (puts=SYS_PUTS+\n, getchar=SYS_GETC->char/0xFFFF,
+            peek/poke=byte load/store, argstr=P2). A bare array name now DECAYS to
+            &name[0] in gfi_var (and sets SAWADDRG so a LOCAL array passed to a
+            callee isn't caller-saved over the callee's pointer writes). MILESTONE:
+            pwd.c -- an actual OS command -- compiled by cc on-target, assembled
+            (3054 bytes), installed, and ran CORRECTLY: `pwd` -> "/", `cd /foo;
+            pwd` -> "/foo". The full self-hosted pipeline (cc -> asm -> run) works
+            on real command source. A program must not redefine a builtin name
+            (same rule as p8cc). os_cc_test updated to use the puts() builtin.
+          * v0.25 — **shift operators `<< >>`** (the last feature any SHIPPED
+            command needed). Lexer routes `<`/`>` to adv_ltgt, which combines with
+            `=` (<=/>=) OR a doubled char (<</>>). New GSHIFT level between
+            relational and additive; runtime helpers __shl/__shr (variable count,
+            loop; __sc counter added to the MTEMP block). A robust survey (block/
+            line comments + string/char literals stripped) confirmed that across
+            ALL os/commands, the ONLY remaining unsupported features are `struct`
+            (only cc1.c, which is DEPRECATED/not shipped) and `<<`/`>>` (only
+            dump.c). So with shifts, the native cc covers every shipped command's
+            language needs. Verified: 1<<6, 260>>2, (1<<6)|1, byte/word combine,
+            and </<=/>/>= still correct; os_cc_test green.
+          * v0.26 — **ternary `?:`** (GEXPR wraps the || level GLOR; JZ/JMP with
+            two stack-saved labels; nests).
+          * v0.27 — **++ / -- / += / -= (scalar)**: lexer routes +/- to adv_pm;
+            statement compound-assign, prefix, and postfix (postfix keeps __ax via
+            in-place EM_INCVAR/EM_DECVAR of V<slot>).
+          * v0.28 — **structs** (minimal). A tag->size table (STAG*) and a GLOBAL
+            member->offset table (STM*, member names assumed unique across
+            structs). `struct TAG { type [*]m; ... };` defines it; `struct TAG v;`
+            / `struct TAG *p;` declare storage (ceil(size/2) word slots for a
+            value, 1 for a pointer). Member access: `.` uses &var, `->` uses
+            value(var); both add the member's byte offset (EM_ADDOFF) and
+            load/store a word (int/ptr member) or byte (char member). `->` is
+            lexed in adv_pm. Verified: int/char members, local + global structs,
+            `->` via a pointer, read + write. LIMITATION: member names must be
+            unique program-wide, no struct params/returns/assignment or nesting.
+          * v0.18 — **comments**: the lexer skips `//` line comments and
+            `/* ... */` block comments in its whitespace phase (a leading `/`
+            peeks ahead; a lone `/` is still the divide operator). Verified line,
+            block, a block containing `**` and `/`, and that 130/2 still divides.
+        Debug notes for future selves: FGETB clobbers P1 (build identifiers via
+        P2); variables must live in the program's own BSS, not a fixed high page
+        (OS/SYS_PUTC scratch collides); FRESOLVE's scan needs FSDIRBUF off SBUF
+        when a write stream is redirected; the shell's `>` target must be RELATIVE
+        (absolute `>/X` silently drops the file — pre-existing OS limitation,
+        filed separately below). NEXT, one tested step at a time toward the p8cc
+        subset: `*` and 16-bit ints, `if`/`while`, functions+params, then
+        pointers/char/arrays. Chief risk stays the symbol-table + type-analysis
+        machinery — must be far more compact than p8cc's ~55 KB.
+      - [ ] **Shell `>`/`<` redirect rejects an ABSOLUTE target path.** `cmd
+        >REL.TXT` works but `cmd >/DIR/X` silently produces no file (the redirect
+        code treats the name as a CWD leaf). Found while testing `cc`. Make the
+        redirect target go through FRESOLVE like other paths.
+
+- [x] **On-target `cc >file` builds large `//#use` commands (2026-07-12).** Two
+      independent bugs made `cc /src/commands/c/{dir,wc,grep,sed,...}.c >T.ASM` fail;
+      both are now fixed and covered by `os_cc_bigcmd_test`:
+      1. **SBUF read/write collision → truncation.** `cc` reading a `//#use` include
+         (or reopening the source for a later pass) while the `>` write stream was
+         open shared the BIOS sector buffer SBUF, clobbering the write so `T.ASM`
+         truncated ~5 KB in (missing the `__cstktop:` tail → `asm` `?undefined`).
+         Fixed by giving `cc`'s reads their own buffer at `RDBUF=$FC00`, off SBUF.
+      2. **Function-table overflow → blank `JSR _f_`.** `FNPAR`/`FSLOT`/`FPOOL` were
+         sized for only 16 functions; a source with 17+ functions (every command
+         once `//#use` splices in `lib_stdin`/`lib_globx`/… — wc has 17, dir 19,
+         grep 18, vi 34) overran them in `FADD`, silently corrupting a function name
+         into a blank `JSR _f_` that `asm` then rejected. Raised the tables to
+         `MAXFUNC=64` (64/64/384 B) with a clean "too many functions" bail past the
+         cap. cc1 (40 funcs) and vi (34) now fit.
+      3. **8-bit variable slots → `?undefined: V232` (2026-07-13).** `cc`'s variable
+         slots (`SLOTCNT`/`SLOTBASE`/indices/`EMITNUM`) were 8-bit and array sizes
+         were read low-byte-only, so `dir.c` (`char enam[768]` = 384 slots; ~838
+         slots total) overflowed → stray undefined `V232`. Reworked the whole slot
+         path to 16-bit (signed global-relative index) AND changed codegen to put all
+         variable storage in ONE array `__V` (slot n → `__V+2n`) instead of a
+         `V<n>:` label per slot — so slot-heavy programs no longer blow `asm`'s
+         ~850-symbol table either. dir now compiles AND assembles clean.
+      NEXT CEILING — **code SIZE, not slots/symbols.** `dir.c` compiles to a ~36 KB
+      binary (verbose codegen + `__cstack` 2 KB + `__V` 1.7 KB) which overflows the
+      TPA (`$6A00`–`$FE00`, ~37.9 KB), so the *binary won't run* even though the build
+      (`cc`+`asm`) now succeeds. Big C commands still ship via their **asm twin**
+      (`make installa`); shrinking codegen or relocating the TPA would let them run.
+
+- [x] **Toolchain path args are CWD-relative (2026-07-12).** Both `asm` and `cc`
+      now `abspath()` a relative SRC/OUT/source arg against the CWD (SYS_GETCWD),
+      mirroring `lib_apath`, so build scripts need no `cd /` and `cd /sub; cc x.c`
+      works. (A shell `>` redirect already registers its file in the CWD, not root —
+      `cd /sub; cat x > y` puts `y` in /sub, as expected.)
+
+- [x] **BASIC string-valued variables** — DONE (2026-07-09). `A$`-style
+      variables (16 fixed 32-byte slots), assignment, `+` concatenation,
+      `=`/`<>`/`<`/`>`/`<=`/`>=` comparison in `IF`, `PRINT`/`INPUT` of strings,
+      and `LEN`/`ASC`/`CHR$`/`LEFT$`/`RIGHT$`/`MID$`. `STR$`/`VAL` added later
+      (2026-07-09) — number↔string conversion, signed `VAL` stopping at the first
+      non-digit.
+
+- [x] **BASIC data files** — DONE (2026-07-09). One sequential channel over the
+      BIOS byte streams: `OPEN name$ [FOR] OUTPUT|INPUT`, `PRINT#`, `INPUT#`,
+      `CLOSE` (root files; one value per CR record). `EOF(n)` added later
+      (2026-07-09) via a 1-byte read-ahead, so `IF EOF(1) THEN ...` ends a read
+      loop cleanly.
+
+- [x] **BASIC: check syntax on line entry, not just at RUN** — DONE (2026-07-09)
+      via `CHECKLINE` (option (a): a lightweight structural validator — legal
+      statement leader, balanced parens, terminated strings; forward line
+      references stay runtime). Original notes below.
+      Today entering a
+      program line runs `CRUNCH` (tokenizes keywords in place) and stores it
+      (`DOLINE`, ~p8xbasic.asm:1821) with no grammar validation — a malformed
+      statement (`10 PRINT )`, a bad expression, a missing operand) is only
+      caught later when RUN reaches that line, so you can type a whole program
+      and not learn line 10 is broken until it executes. Add an entry-time
+      syntax pass so an error is reported immediately, against the line just
+      typed, with the line still on screen to fix. Options: (a) a lightweight
+      validator that walks the crunched line confirming each statement's shape
+      (keyword + well-formed operands/expression) and rejects on the spot; or
+      (b) reuse the real statement/expression parser in a "check, don't execute"
+      mode (no side effects — no variable writes, no I/O) so entry-time and
+      run-time grammar can't diverge — (b) is more code but keeps one source of
+      truth. Print the usual `SYNTAX ERROR` (SNERR) with the column/offset if
+      cheap. Keep it entry-only: don't try to resolve `GOTO`/`GOSUB` targets or
+      undefined variables at entry (those are legitimately runtime). Interactive
+      immediate-mode lines already execute (and error) at once; this is about
+      the *numbered* lines that are stored deferred.
+
+---
+
+## Completed — from VERIFY
+
+- [x] Opcodes the monitor needed: `JSR (P1)` is in the ISA (0x41) and the
+      assembler exists. `JMP (P1)` turned out unnecessary — the monitor uses
+      absolute JMP/JSR and never emits it (comment-only); not implemented.
+
+- [x] Backplane PWR LED: kept bottom-left, beside the +5V terminal block. Card
+      standard §9 (PWR LED top-right) is *card*-specific; the backplane's
+      top-right is occupied by the clock terminators (RT1/RT2/CT1/CT2/RN1), and
+      placing the LED by the power entry is sensible. No move.
+
+---
+
+## Project log
+
+> Convention: substantial features get a **bold-title** prose entry (what was
+> done + why + caveats). The original foundation milestones are a terse tick
+> list under *Early milestones* at the end of this section.
+
+- **ASM vs C commands — hand-coded assembler versions of all 17 `/BIN` commands**
+  (2026-07-08). What started as "prototype one heavy command to calibrate" became
+  a full sweep: every `/BIN` command was rewritten by hand in P8X assembler under
+  `os/commands-asm/` (`pwd mv more sed head wc uniq cat dir tree vi grep tail sort
+  cp find diff`), each a drop-in replacement (same `$6A00` entry, same `P2`
+  arg-tail ABI, same OS/BIOS calls) and verified **byte-identical in behavior** to
+  its `p8cc` build in the emulator (`compare.sh`/the behavioral harness), not just
+  assumed. Result: **~2.3× smaller overall**, ranging from 1.4× (diff) up to 5.8×
+  (mv) / 5.4× (pwd) — see the scoreboard in `os/commands-asm/README.md`. `run.sh`
+  installs the hand builds to a parallel **`/BINA`** (via `mkasm.sh` + `p8xasm.py
+  --base 0x7A00`) alongside the C `/BIN`, so the two can be run and compared
+  on-target (`RUN /BINA/GREP.BIN` vs `RUN /BIN/GREP.BIN`). This is the concrete
+  data behind the "reach for asm where a command is size-pressured and stable"
+  question (grep/sed/vi sit at the TPA ceiling on the C codegen). The C sources
+  stay as the primary builds + `p8cc` regression corpus.
+
+- **Wildcards on the stdin filters** (2026-06-27). Made `lib_stdin` glob-aware so
+  `wc`/`grep`/`sort`/`sed`/`head`/`tail`/`more`/`uniq` all accept a `*`/`?` arg:
+  `openarg` expands it via `lib_globx`'s `glob_expand`, and `nextc()` reads the
+  matched files back-to-back as ONE concatenated stream — identical to
+  `CAT *.X | cmd`, no per-command logic (`GREP foo *.C`, `SORT *.TXT >OUT`,
+  `WC *.LOG`). `wc` also gained file-arg support in the process. Enabled by the
+  recent headroom (TPA → ~37.9 KB after the remap, programs ~−24% after the
+  ISA-shrink ops) — the glob machinery (~12 KB) now fits in every filter. Two
+  supporting changes: `tools/clib.py` made recursive (`lib_stdin` declares
+  `//#use globx`, which declares `//#use glob`, deduped) so a lib can pull its own
+  deps; and `compiler/p8cc.c`'s source buffer bumped 16 KB → 32 KB (`slurp` cap
+  too) because sed's clib-spliced source is ~17 KB and silently truncated under
+  the host bootstrap. New `c_filters` glob assertions (`WC *.LOG`, `GREP key
+  *.LOG`); full suite green (53 PASS) on both compilers. (`DEL`/`CP`/`MV`
+  wildcards remain — they're OS-builtin / multi-source, see IDEAS.)
+
+- **Removed ROM-resident BASIC** (2026-06-26). BASIC was overlaid into the
+  monitor EEPROM at `$2000` and launched by the monitor `X` command (DONE #9).
+  Since it also ships as the disk program `/BIN/BASIC.BIN` (same source,
+  `basic/p8xbasic.asm`), the ROM copy was redundant; stripped it to reclaim ROM
+  space and simplify the program ROM to just the monitor + BIOS (~4.3 KB,
+  ends ~`$1100`; the chip is otherwise erased). Removed: the monitor `X`
+  command + `BASIC` equate + the `X` line from the in-ROM help (kept `?`/`H`);
+  `tools/build_basic_rom.py` (the monitor+BASIC overlay builder); the stale
+  `p8x-rom-basic.{bin,hex}`. `tools/build_rom.sh` and `os/run.sh` now assemble
+  the monitor directly; `emulator/test/basic_rom_test.sh` became
+  `mon_test.sh` (monitor D-paging + `?` help smoke test) and
+  `basic_saveload_test.sh` now boots **disk** BASIC (`B`) instead of ROM BASIC
+  (`X`). Docs swept (monitor ref, memory maps, basic/rom/tools/firmware READMEs,
+  the BASIC guide, system-design + hardware maps). Full suite green. This is a
+  first step toward the larger memory-map repack (see the TPA-expansion notes).
+
+- **`CAT *.glob` multi-file concatenation + FSCAN/write-stream firmware fix**
+  (2026-06-26). `cat` now expands a glob argument into multiple files: a new
+  shared helper `os/commands/lib_globx.c` (`glob_expand(pat, out, maxn)`, pulled
+  in by `//#use globx`, which depends on `lib_glob`'s `gmatch`) iterates the
+  pattern's directory (or the CWD via `SYS_OPENCWD`) and returns the matching
+  *file* paths; `cat` streams each in turn. So `CAT *.ASM` and, crucially,
+  `CAT *.ASM >ALL.TXT` work. The hard part was the redirect case: a write stream
+  is already open, and every file's `FRESOLVE` walks the directory through
+  `SBUF` — the same buffer the write stream uses — so the first version
+  overwrote each file's buffered output with directory bytes (`.   BBB`). Root
+  fix in **firmware**: `FSCAN` (the engine behind `FRESOLVE`/`FFIND`/`FOPEN`)
+  now reads directory sectors into the repointable `DIBUFH` page (the one
+  `FSDIRBUF`/`FNEXT` already use) instead of a hardcoded `SBUF`; `DIBUFH`
+  defaults to `$9E`=`SBUF` at COLD boot, so every caller that doesn't repoint it
+  is byte-identical. `cat` points `FSDIRBUF` at `$FA` (a high-TPA scratch page,
+  clear of the `$FC00` read buffer and the code below it), so its per-file path
+  walks leave the open write stream's `SBUF` intact. This is the general
+  enabler for *any* glob-expanding command that redirects to a file (future
+  `wc`/`grep`/`sort`). Both compilers; `c_cat_test.sh` gained glob + glob-redirect
+  assertions; clib.py wired into the cat-compiling sites (`os_v2`, `c_pipe`,
+  `c_stdin`; `os_append` already had it). Full suite green.
+
+- **Regex factored to `lib_regex.c`; sed gained regex** (2026-06-26). grep's
+  basic-regex matcher (`match`/`matchhere`, the `. * ^ $` dialect) — long flagged
+  as a future shared helper — is now `os/commands/lib_regex.c`, pulled in by
+  `//#use regex`. grep de-inlines it (no behavior change). **sed's `s///` is now
+  a regex** on the left side (was literal `matchat`): `matchhere` gained a global
+  `rend` (match end) so sed replaces the whole matched span; sed handles a leading
+  `^` (anchor to col 0), `$` is in the matcher, `*` is non-greedy, zero-length
+  matches are skipped. Tests: `c_filters` (grep, unchanged) + `c_textutils` (sed
+  `.`/`*`/`^`), both compilers. Gotcha hit & documented: a `*/` inside a C comment
+  (a regex example like `s/a*` + `/`...) closes the comment early — reword.
+
+- **DIR wildcards (glob) + `lib_glob.c`** (2026-06-26). `DIR` filters by a glob
+  when the path's last component has `*`/`?`: `DIR *.ASM`, `DIR /BIN/*.BIN`,
+  `DIR -R *.C` (case-insensitive). New shared `lib_glob.c` (`gmatch`, a
+  self-recursive `*`/`?` matcher in grep's style) via `//#use glob`; dir.c splits
+  the path into dir + pattern and filters entries (recursing all subdirs under
+  -R). Because dir.c gained `gmatch` its `p8cc.c` build grew to `$E31D`, past the
+  `$E000` FSDIRBUF page — same collision class as sed/diff — so dir/tree/find's
+  FSDIRBUF moved `$E0` → `$E8` (clears the bigger code, keeps ~5 KB for their
+  recursive stack). Test `c_dirglob_test.sh` (both compilers). Phase 2 (other
+  commands / shell-level expansion) is in IDEAS.
+  - **FIND glob mode** (2026-06-26): `FIND` now `//#use glob`s too — if its
+    pattern has `*`/`?` it `gmatch`es, else the original substring (so `FIND *.C`
+    works, `FIND BIN` still substring). find already walked+matched, so it was a
+    near-free fit. (find's `p8cc.c` build is ~14.2 KB ending `$E796`, so its
+    FSDIRBUF page moved `$E8` → `$EA` for margin.) Tested in `c_findiff_test.sh`.
+
+- **sed/diff on the native `p8cc.c` — was a buffer collision, not a miscompile**
+  (2026-06-26). For months `sed`/`diff` built with `p8cc.c` (host) misbehaved on
+  a file argument, filed as a "file-arg parse miscompile". The real cause: the
+  shared file read buffer was hardcoded at `$E000` (only ~12 KB above the `$B000`
+  TPA base), and `p8cc.c`'s codegen is ~8% larger than `p8cc.py`'s — so the two
+  biggest commands overran it (host `sed` ends `$E333`, `diff` `$F4C9`) and
+  `FGETB` read file data into their own code. Fix: moved the read buffer to
+  `$FC00` (just under the stack page) in `lib_stdin.c`/`cat`/`cp`/`mv`/`diff`.
+  Both now build+pass on **both** compilers; dropped the `p8cc.py`-only guards in
+  `c_textutils`/`c_findiff`. This also closes the last gap for Milestone B (every
+  `/BIN` command compiles correctly on the native compiler). Watch `diff`'s
+  headroom (~17.6 KB on `p8cc.c`).
+
+- **`>>` append redirection** (2026-06-26). The shell now appends a command's
+  stdout to a file with `>>` (programs and built-ins). P8XFS extents are
+  contiguous (no in-place growth), so it's copy-then-extend: stream the existing
+  file's bytes into a fresh write stream, then the command's output, then
+  `FCLOSE` registers it over the old entry (old extent → `PACK`). `REDSCAN`
+  parses `>>` (sets `REDAPP`); `DORUN` (programs) and `FLUSHRED` (built-in
+  capture) both prepend the old bytes via a shared `APCOPY` using **raw
+  `CFREAD`s** into `APBUF`, not the read stream. KEY fix vs. the 2026-06-25
+  attempt: every redirect target is resolved with `FFIND` *before* `FWOPEN` — an
+  `FFIND` after `FWOPEN` scans through the write stream's unflushed `SBUF` and
+  corrupted the output (the "< in >> out reads a directory sector" bug; the
+  original attempt also read into `$E000`, which overlaps the loaded program).
+  Test: `emulator/test/os_append_test.sh`.
+
+- **Shared-source helper convention for /BIN commands** (2026-06-26). Reusable
+  helpers are now shared by concatenation instead of copy-paste. A command opts
+  in with a `//#use NAME` directive; the build step `tools/clib.py` splices in
+  `os/commands/lib_NAME.c` ahead of the source before `p8cc` (no `#include`/
+  linker needed, both compilers see the same combined source). First library:
+  `lib_stdin.c` (`path`/`fromfile`/`nextc()`/`openarg()` — the file-or-stdin
+  input pair), adopted by `grep`/`head`/`tail`/`more`/`sort`/`uniq`/`sed` (was
+  duplicated in all 7). Wired into `run.sh` and the `c_filters`/`c_pager`/
+  `c_textutils` harness; spliced text goes above `main()` so callees precede
+  callers (stays in the `p8cc.c` subset). See `os/commands/README.md` "Shared
+  code".
+
+- **16-bit directory LBAs — directories at LBA ≥ 256 usable** (2026-06-25).
+  The whole directory-LBA path used 1-byte cursors, so a directory whose
+  4-sector extent started past sector 256 was truncated to its low byte:
+  `CD` into it + `DIR` iterated the wrong sector (garbage), and creating files
+  inside it corrupted the volume. The volume free pointer is 16-bit, so one
+  high byte per cursor suffices. Widened across two layers:
+  - **firmware/p8xmon.asm**: `DIRLBA`/`DILBA` gain high bytes; FSCAN, FNEXT,
+    FRESOLVE, FRESET, COLD, FCREATE carry + 16-bit-increment their sector
+    cursors; `FOPENDIRAT` takes a 16-bit LBA (A=low, `LBA1`/$9D48=high).
+  - **os/p8xos.asm**: `CWDL`/`SDIRL`/`STARTLO`/`DLBA`/`NEWLBA`/`PSL`/`RMDL`/
+    `CURLBA` gain high bytes through FINDENT/FINDSLOT/DESCEND/DIREMPTY/MKDIR/
+    MKEXT/SAVECORE/LOADF/CD/FORMAT; the scanners restore an "LBA1=0 at rest"
+    invariant so boot-block reads stay correct. New syscall `SYS_OPENCWD`
+    ($4012) opens the CWD with its full 16-bit LBA.
+  - **PACK + FSCK**: the shared tree-walk (`CDST`+`TFRAME` frames 3→4 bytes,
+    `READCUR`, `CHKDD`), `PK2FIND`/`PK2MOVE`/`PK2FIX`/`PK2DD`, and
+    `NF`/`MINSTRT`/`PPSEC`/`PARST`/`FMAXE`/`FUSED`/`FREE` are all 16-bit, so
+    PACK relocates high extents byte-exact and FSCK reports correctly. (This
+    was a pre-existing 8-bit limit affecting any extent ≥256, files included.)
+  - **os/commands/{dir,tree,find}.c**: use `SYS_OPENCWD` for the CWD and record
+    16-bit child LBAs (poking the high byte into `LBA1`) for `-R`/recursion.
+  - Tests: `os_bigdir_test.sh` (create/CD/DIR/SAVE at LBA≥256) and
+    `os_bigpack_test.sh` (DELETE→PACK relocates a high dir+file across sector
+    256; on-target FSCK OK + host fsck + byte-exact `get` of the moved file).
+
+- **OS stdio stream model + redirection + pipes** (2026-06-24). Gave the OS a
+  Unix-style I/O layer over the `$4000` syscall table. New syscalls `SYS_PUTC`
+  ($4009), `SYS_GETC` ($400C), `SYS_PUTS` ($400F) route through the OS output
+  sink `OUTCH`, which gained a file-stream mode (`REDIRF=2` -> `FPUTB`).
+  `DORUN` binds a program's stdout (`> file`, `FWOPEN`/`FCLOSE` around exec) and
+  stdin (`< file`, `FOPEN` into a dedicated `IBUF` at $A200, `SYS_GETC`->`FGETB`;
+  `getchar` returns -1 at EOF). Both compilers emit `putchar`/`puts`/`getchar`
+  as these syscalls, so every compiled program is redirectable with no source
+  change — `RUN CAT.BIN <IN >OUT` copies a file. **Pipes** (`cmd1 | cmd2`) are a
+  `SHELL` state machine (`PIPEF`): `INSCAN`/`PIPESCAN` split the line, the left
+  runs into `PIPE.TMP`, the right re-dispatches with stdin from it, then it's
+  deleted — no existing command changed. Examples `os/commands/cat.c`
+  (filter), `pwd.c`; tests `c_redirect_test`/`c_stdin_test`/`c_pipe_test`
+  (differential, both compilers). A program that iterates a directory *and*
+  streams output (`DIR`) calls `FSDIRBUF` ($0145) to move `FNEXT`'s sector
+  buffer off `SBUF` onto its own page, so it streams per entry and redirects/
+  pipes like any other program (no listing buffer, no size cap).
+
+- **C compiler Milestone A — p8cc.c is SELF-ACCEPTING ("small C in small C")**
+  (2026-06-24, #57). NOTE (2026-07-15): this was long summarised as
+  "self-compiling", which normally means "compiles itself" — p8cc.c does NOT and
+  cannot. The property actually built and tested is self-ACCEPT: the subset
+  accepts its own source, i.e. `p8cc.py p8cc.c` succeeds. The body below always
+  said so ("the subset accepts its own source"); only the shorthand misled.
+  True self-compilation is far out of reach, not a near miss — p8cc.c's own
+  demands vs its own fixed tables:
+      source 61,337 B   vs  src[32768]     (2x  — its source is twice its buffer)
+      780 string lits   vs  soff[64]       (12x)
+      168 globals       vs  goff[64]       (2.6x)
+  Measured: `cc -o p8cc_host p8cc.c && ./p8cc_host < p8cc.c` exits 0 and emits
+  20,512 lines of asm — from the first 32 KB, i.e. half a compiler — which then
+  fails to assemble with "duplicate label _g_T_EOF" (the >64 globals overrun goff
+  into the neighbouring tables). Silent garbage, no diagnostic.
+  The [64] table limits are otherwise LATENT: real commands peak at 39 globals
+  (vi), so nothing shipped approaches them, and the only workload that would is
+  the self-compilation that was never actually run. Left unbounded deliberately —
+  p8cc.c has no diagnostic mechanism at all (not one error string, and the subset
+  has no exit()), so a check would mean inventing one for a limit nothing real
+  hits. Revisit only if a command nears 64 globals / 64 string literals.
+  Rewrote the compiler in its own small-C subset as
+  `compiler/p8cc.c`, ALONGSIDE `p8cc.py` (kept as bootstrap + reference oracle).
+  p8cc.c is both valid standard C and valid p8cc-subset C, so it builds two
+  ways: `cc p8cc.c` → a native bootstrap that reads C on stdin and writes asm to
+  stdout, and `p8cc.py p8cc.c` → the self-compile proof (the subset accepts its
+  own source). Built in 8 increments, each behaviourally differential-tested
+  (host bootstrap vs p8cc.py, identical P8X output): lexer → first codegen slice
+  + harness → full operator ladder → globals/assignment/control-flow →
+  params/locals/recursion (a __csp/__fp frame; args pushed left-to-right so
+  param i is at __fp+2*(pcount-i)) → char/int types + pointers via an
+  lvalue-address model (a leaf leaves an lvalue's ADDRESS in __ax; rvalue()
+  derefs by width on demand, making &x free and *p/x= uniform) → arrays +
+  indexing + string-literal pool + puts → structs/unions with `.`/`->`.
+  Enabling subset additions to p8cc.py: `#`-line skipping (so `#include
+  <stdio.h>` works for gcc) and function prototypes (mutual recursion in a
+  recursive-descent parser needs forward decls). Single-pass, so declare-before-
+  use. Test: `emulator/test/c_selfhost_test.sh`. **Milestone B** (run p8cc.c ON
+  the P8X) stays open — a RAM/streaming problem, not a language gap.
+- **C cross-compiler v0.2/v0.3 — params, recursion, pointers, I/O** (2026-06-23,
+  #45–47). Grew `p8cc.py` from the v0.1 skeleton into a usable small-C:
+    - **#45 calling convention.** A software C-stack (`__csp`, grows down from
+      $F800) holds call frames; `__fp` is the frame pointer; params at
+      `__fp+2,+4,…`, locals at `__fp-2,-4,…`; helpers `__enter`/`__leave`. So
+      functions take arguments and **recursion/reentrancy works** (e.g. `fact`).
+    - **#46 pointers, arrays, `& * [] / %`.** Type-aware codegen `(base,ptr,
+      count)`: dereference loads/stores the right width (int/ptr 2 B, char 1 B),
+      pointer arithmetic scales by element size, `gen_address` handles `&lvalue`/
+      `*e`/`a[i]`. Added unsigned 16-bit `/` and `%` (`__divmod`). (Fixed a
+      `__divmod` high-byte/quotient-bit bug — quotients had garbage high bytes.)
+    - **#47 input + libc-in-C.** `getchar()` builtin (BIOS CONIN $0100) gives
+      programs console input; the realization is that with pointers/arrays/char
+      working, the rest of a libc (`strlen`, `getline`, …) is just ordinary C
+      compiled alongside the program — so the builtin surface stays at three
+      I/O calls. Test `c_libc_test.sh` proves it end to end.
+    Suite grew to 26 (`c_compile_test` covers recursion/multi-arg/ptr-fill/`&`+
+    ptr-param/`/`+`%`; `c_libc_test` covers getchar+a C-written strlen). The
+    compiler is still host-Python — see IDEAS "C compiler" for the bootstrapping
+    roadmap (rewrite in its own subset, then self-host on the P8X).
+- **C cross-compiler v0.1** (2026-06-23). `compiler/p8cc.py` — a tiny C compiler
+  on the host emitting P8X asm (for p8xasm.py), targeting the TPA so output is a
+  RUNnable `/BIN` program. Lexer + recursive-descent parser + codegen. Subset:
+  `int`(16)/`char`(8), function definitions (no params), global vars, `if`/`else`/
+  `while`/`return`, operators `= == != < > <= >= + - *` and unary `- !`, and the
+  `putchar`/`puts` builtins over the BIOS. Execution model: a 16-bit pseudo-
+  accumulator `AX` (memory word) since the machine has no 16-bit acc; the P3
+  hardware stack holds temporaries (PHA/PLA) + return addresses; binary ops are
+  compact runtime helper calls (`__add/__sub/__mul/__eq/__lt/__not`, emitted only
+  if used); `*` is a shift-add `__mul`. v0.1 gives every variable static storage
+  (no frame → no recursion/reentrancy, user funcs take no args) — the next phase
+  adds a stack frame + calling convention. Test `c_compile_test.sh` (`make
+  test-c`) compiles a while-loop + user-function program, assembles, RUNs it, and
+  checks the output (`12345`, `SQ-OK`). See IDEAS "C compiler" for the roadmap.
+- **Native toolchain: EDIT + ASM (on-target, self-hosting for machine code)**
+  (2026-06-23). The P8X can now edit a `.asm` file and assemble it to a runnable
+  binary without the host. Four pieces, all TPA programs / BIOS-only, tested:
+    - **Program-arg ABI:** `DORUN` enters a program with `P2` -> the command tail
+      after the program name (`SKIPWORD` past the name+spaces), so
+      `RUN EDIT FOO.ASM` hands `FOO.ASM` to the program; programs `RTS` to the
+      shell. Test os_argv_test.sh.
+    - **BIOS `FDELETE` ($011E):** tombstones a root file (flag -> $FF) so a file
+      can be overwritten (FDELETE + FCREATE). Append-only jump-table slot.
+      Test fdelete_test.sh. (Also fixed: FDELETE was clobbering the caller's
+      FSRC via dead scratch — surfaced by ASM.)
+    - **EDIT** (apps/p8xedit.asm): line editor, `RUN EDIT.BIN NAME` -> 12 KB
+      LF-line buffer at $C000; L/A/I n/D n/W/Q/?. DELETE forward-copies the gap
+      closed, INSERT opens it with DEP-based backward copy. Test os_edit_test.sh.
+    - **ASM** (apps/p8xasm.asm): two-pass assembler, `RUN ASM.BIN SRC OUT`.
+      Labels, equates, all operand shapes, LDPn pseudo, .org/.byte/.word/.ascii/
+      .asciiz/.fill, $/decimal/'c'/symbol exprs with +/- and </>. Opcode table
+      generated from genucode.OPC (generators/gen_p8xopc.py) and concatenated at
+      build — can't drift from the microcode. P1=source cursor, P3=system stack
+      untouched, errors long-jump to the OS via a saved SP. Output load/exec 0,
+      which the OS maps to TPA base $B000 (DEFADDR in DORUN) so `.org $B000`
+      programs are directly RUNnable. Test os_asm_test.sh assembles on-target,
+      proves the bytes are byte-identical to the host assembler, and RUNs the
+      result. run.sh installs /BIN/EDIT.BIN + /BIN/ASM.BIN on the demo disk.
+      Remaining polish in IDEAS ("Native toolchain follow-ups").
+- **BIOS file-operations upgrades — streams, paths, FNORM** (2026-06-23). Reworked
+  the monitor FS layer from flat-root, whole-file calls into a proper file API:
+    - **Read stream** `FOPEN` ($0124) + `FGETB` ($0127): sequential byte read over
+      a caller-supplied 512 B buffer; refills sectors internally.
+    - **Write stream** `FWOPEN` ($012A) + `FPUTB` ($012D) + `FCLOSE` ($0130):
+      streams output to disk a sector at a time, FCLOSE registers the file.
+    - **Path-aware** `FRESOLVE` ($0133): walks `/a/b` via the `.`/`..` tree to a
+      directory extent + leaf; `FFIND`/`FOPEN`/`FCREATE`/`FDELETE`/`FCLOSE` all run
+      in the resolved directory and revert to root after (so root-only callers
+      like BASIC SAVE/LOAD are unaffected). Subdir LBAs assumed <256, like the OS CWD.
+    - **`FNORM`** ($0136): string -> upper-cased, space-padded `FNAME`.
+    - **Directory iteration** `FOPENDIR` ($0139) + `FNEXT` ($013C): list a
+      directory's live entries (separate iteration state; skips deleted, stops at
+      the end marker). Enables offloading the OS DIR/TREE/PACK to loadable programs.
+    The assembler was migrated onto the read+write streams (−520 B; self-host
+    still byte-identical). Jump table grew, so the monitor body moved $0130->$0160.
+    Tests: fopen/fwrite/fresolve/fwrdir/fnorm/fnext (`make test-cf`); full suite green.
+    Caught two real bugs (FCLOSE/COLD jump-table collision; FFIND wrapper carry).
+    This supersedes the old "make BIOS file routines hierarchy-aware" idea (done).
+    Remaining FS ideas: richer error status (an FERR byte vs the carry flag) —
+    deferred until a consumer needs it; cluster allocation to retire PACK (v3);
+    actually offloading the OS commands onto FOPENDIR/FNEXT.
+- **P8XFS v1 retired — v2 is the only format** (2026-06-22). Removed all v1 (flat)
+  support now that v2 is mature and on-target FORMAT exists. Monitor `F` now writes
+  a v2 boot block + root extent at LBA 33 (inline `.`/`..` builder; host fsck
+  confirms it byte-for-byte). `p8xfs.py create` defaults to v2 (the `--v2` flag is
+  a no-op kept for compat); dropped the v1 constants, helper functions, and the
+  v1 branches in create/put/get/ls/fsck. OS dropped the COLD version-detect (sets
+  the v2 layout unconditionally), the `ROOTN==32` v1 guards in MKDIR/RMDIR/TREE/
+  FSCK, the `MK_NOV2`/`MNOV2` reject, and the entire single-pass v1 PACK path
+  (rename DOPACK2→DOPACK) — the OS shrank to 6967 B. Existing v1 cards no longer
+  mount (acceptable — solo project, no v1 cards in use). Full suite green.
+- **BASIC SAVE/LOAD + BIOS filesystem API** (2026-06-23). Added file-level calls
+  to the monitor ROM — `$0118 FFIND` (find a root file -> start LBA + length) and
+  `$011B FCREATE` (create a root file from a buffer: allocate at the free pointer,
+  write data + a directory entry, bump free) — a shared P8XFS v2 root-file layer
+  for BASIC, the OS, and any program (ABI: FNAME/FSRC/FLEN at $9D4A/$9D56/$9D58;
+  CFWRSEC refactored to expose CFWRP1). BASIC gained `SAVE "NAME"` / `LOAD "NAME"`
+  (tokens $97/$98) that round-trip the program through the filesystem in the ROM
+  and disk builds. Tests: fs_bios_test.sh (FCREATE/FFIND round-trip + host fsck)
+  and basic_saveload_test.sh (SAVE -> NEW -> LOAD -> LIST/RUN). Caught: FFIND
+  clobbered FLEN during its scan, so FCREATE saves/restores the requested length.
+- **On-target FORMAT (P8XFS v2)** (2026-06-22). Added the OS `FORMAT` command:
+  asks Y/N, then rewrites the boot block (`P8`, version 2, free pointer 37) and a
+  clean root extent at LBA 33 (4 sectors, `.`/`..`) by reusing the `MKDIR` extent
+  builder (`MKEXT` with NEWLBA=PSL=33, PSN=4), and adopts the v2 layout in RAM
+  (ROOTN/DATABASE/CWDL/CWDN + `PATHROOT`) so it lands exactly where `COLD` would
+  after booting a fresh v2 card. **OSCNT is preserved** (read from the old boot
+  block, kept across the rewrite), so the OS image at LBA 1–32 is untouched and
+  the card stays bootable. ~288 B; the OS is now 7453 B (15 sectors) — would not
+  have fit under the old $8000 14-sector ceiling, fits easily at $4000 (32). Test:
+  `emulator/test/os_format_test.sh` formats a populated card, checks /OLD is gone
+  + a fresh /NEW + on-target FSCK OK, and host-verifies the boot block (version 2,
+  OSCNT preserved, free=41 after one MKDIR). Wired into `make test-os`.
+- **OS load address moved to $4000 (rev D)** (2026-06-22). With rev D putting RAM
+  at $4000, the monitor's `CMD_B` now loads the OS image (and disk BASIC) to $4000
+  and JMPs there, instead of $8000. This lifts the boot ceiling from ~7 KB (14
+  sectors) to **16 KB** (32-sector on-disk OS region; the RAM ceiling at $9D47 is
+  ~23.8 KB), unblocking on-target FORMAT/editor/bigger programs. The BIOS ABI is
+  untouched — `$0100` jump table in ROM, LBA `$9D47` and SBUF `$9E00` still in RAM
+  — so only the load address changed. Changes: `CMD_B` ($8000→$4000), the OS's
+  `.org` + `--base`, disk BASIC's `BASORG` ($8000→$4000); the emulator needed
+  nothing (rev D already made $4000 RAM). os_test's self-check SAVE addresses
+  moved $8000→$4000. Full suite (OS/OS-v2/BASIC-disk/CF/...) green. Docs swept:
+  cf-os design, monitor + system-design, os/basic READMEs, programmer's guide.
+- **Memory card rev D: 16 KB ROM + 48 KB RAM** (2026-06-22). Shrank the ROM
+  window to `$0000–$1FFF` (16 KB; the 28C256 stays, only its low half is now
+  addressed — monitor+BASIC end at $3307, well under 16 KB) and grew RAM to 48 KB
+  (`$2000–$FEFF`) by adding a second 62256 (U10) at `$4000–$7FFF`. New decode from
+  A15+A14: ROM `!CE=A15|A14`, U10 `!CE=NAND(!A15,A14)`, main RAM (U2) unchanged
+  (`NAND(A15,-IOPG)`, $8000–$FEFF). It reuses spare gates in U7/U8 — **no added
+  logic IC**; the only new parts are U10 + its 100 nF. Memory card is the *only*
+  board that changed (backplane, CF, I/O, control, regbank, ALU untouched).
+  Emulator memory map updated to match; **no firmware/OS change** — everything at
+  $8000+ stays put, so the new `$4000–$7FFF` is just unused RAM for now. This sets
+  up (but doesn't yet take) the future move of loading the OS lower to lift the
+  14-sector boot ceiling. Test: `make test-mem` (write+readback of $5000). Full
+  suite (ISA/CF/OS/BASIC/IO) still green. Docs: memory-card theory + README,
+  cf-os design map, top-level README.
+- **Multi-byte LBA in the CF BIOS ABI** (2026-06-22). CFREAD/CFWRITE were
+  capped at 256 sectors (128 KB): CFSETL zeroed LBA1/LBA2. Widened to a 24-bit
+  little-endian LBA at `$9D47..$9D49` (LBA0/LBA1/LBA2). `CFINIT` now zeros
+  LBA1/LBA2, so the change is backward-compatible — legacy callers set only LBA0
+  and the high bytes stay 0, meaning **no OS code growth** (the OS is at its
+  14-sector boot ceiling). `CFSETL` reads all three bytes; the emulator already
+  assembled a 24-bit LBA, so no emulator change was needed. Test:
+  `emulator/test/cf_hilba_test.sh` reads sector 300 and writes sector 301 via the
+  BIOS on a 512-sector image, proving LBA1 is honoured (no mod-256 wrap). The
+  jump table at $0100 is unchanged — this is a compatible extension, not a
+  reorder. (To address >8 GB you'd also drive LBA3 in CFHEAD; not needed.)
+
+- **C flag polarity — RESOLVED (rev B).** Chose conventional active-high carry
+  (C=1 = carry / A≥B for SUB/CMP). The raw active-low 74181 Cn+4 is inverted by
+  a spare U25 NAND on the ALU card before the C-flag mux, and the microcode,
+  emulator, and monitor all use the conventional sense (BCP/JNC, CLC/SEC). The
+  old "add an inverter or adopt a borrow convention" was a rev-A open question.
+
+- **Monitor port (rev B ISA expansion) — DONE.** The monitor assumed a
+  conventional accumulator ISA; reconciled by expanding the ISA. Phase 1
+  (software/emulator): 3-bit PSEL + PT hidden scratch pointer; absolute
+  addressing via PT (LDA/LDB/STA/JSR `a`); loads set Z/N (LDZN); LDA (Pn),
+  INP/DEP, TAP/TPA, PHA/PLA, JZ/JNZ; CONVENTIONAL active-high carry (C=1 =
+  carry / A>=B); CLC/SEC, JC/JNC, ROL/ROR + carry-coupled shifter; assembler
+  char-literal tokenizer fix; firmware/p8xmon.asm converted to the p8xasm
+  dialect — assembles and boots in the emulator (banner, `?`, `D` dump work).
+
+- **Monitor port — Phase 2 (hardware) — DONE.** All rev-B microcode-word
+  changes realized in the CAD generators: backplane bus allocation (rev C3);
+  control-card pipeline-latch remap; reg-bank 3-bit PSEL decode + PT pointer;
+  ALU flag-register redesign — C split onto a 7474 (U26) with SETC/CLRC async
+  preset/clear; Z/N source-muxed on LDZN (U22) with a 74260 bus zero-detect
+  (U27); carry-coupled shifter (U28/U29/U30); U31 gates the C and Z/N/V clocks.
+  NB: pin/pad-validated only, not DRC'd; the rev-B *behaviour* is proven in the
+  emulator (make test-isa). A full Eagle DRC + airwire check stays on VERIFY.
+
+- **Connect IC power pins on the card()-built boards (schematic-review fix).**
+  The 2026-06 review found that the generator's `card()` helper wired the
+  connector and decoupling-cap pins to VCC/GND but never added each IC's own
+  VCC/GND supply pin — so on control, regbank, ALU, I/O, and CF the chips' power
+  pads weren't members of the power pours and wouldn't have been powered. (The
+  hand-built memory card already did this; the backplane has no ICs.) `validate()`
+  couldn't catch it — it checks pin-name legality, not connectivity. Fixed by a
+  loop in `card()` that appends `(ref,"VCC")`/`(ref,"GND")` for every IC, skipping
+  any pin already wired by hand (idempotent, so the few pre-existing ones don't
+  duplicate). Regenerated all 7 boards (0 validation errors); a board-level audit
+  confirms every IC on every card now has both VCC and GND on the power signals.
+
+- **OS FSCK — read-only on-target consistency check.** Mirrors the host
+  `p8xfs.py fsck`: verifies the `P8` boot signature, that every live extent
+  starts in the data area and ends at/below the boot-block free pointer, and
+  (v2) that every directory's `..` points at its true parent — via the same
+  read-only tree walk `TREE`/`PACK` use (shared sector buffer + explicit RAM
+  stack). Prints counts (dirs/files/deleted, free ptr, used sectors) and an
+  `FSCK OK` / `FSCK: PROBLEMS=n` verdict; output is redirectable (`FSCK >LOG`).
+  Read-only by design — no repair. Exhaustive cross-extent overlap and
+  volume-end checks stay in the host tool (8-bit on-target LBAs and the single
+  sector buffer make full overlap detection impractical on-target). On-target
+  verdict matches the host on the same image; os_test (v1) and os_v2_test assert
+  `FSCK OK` on a clean volume, and os_v2_test also corrupts the free pointer and
+  asserts FSCK flags it. OS grew to ~$9BFD (still under the ~$9D00 ceiling).
+
+- **I/O card in the emulator — switches + LEDs.** The emulator used to stub the
+  I/O card ($FF00 always read 0; $FF02 writes went to an unseen var), so the
+  switches/LEDs couldn't be exercised. Now `-s NN` sets the byte the switches
+  present at $FF00 (so BASIC `PEEK(65280)` and monitor/OS reads see it), and
+  `-L` traces every $FF02 LED write to stderr as it changes (`$NN  *.*..*.*`,
+  `*` = lit); the final LED byte is also in the halt status line. New regression
+  `make test-io` copies switches->LEDs and asserts both the value path and the
+  trace. A runtime switch hotkey is still possible later (raw-mode stdin already
+  feeds the ACIA, so it needs care) — the CLI flag covers the need for now.
+
+- **Burnable images persist in rom/ + Intel HEX (build).** `genucode.py` and
+  `tools/build_basic_rom.py` emit Intel HEX for an EEPROM programmer, and
+  `tools/build_rom.sh` (`make rom`) builds the whole burn set into `rom/`:
+  `p8x-ucode0..3.{bin,hex}` (the four 28C64 control-store EPROMs) and
+  `p8x-prog-rom.{bin,hex}` (the 28C256 monitor + ROM BASIC). `rom/` is the single
+  grab-and-burn folder and the sole home for the `.hex`; `microcode/` keeps the
+  `u?.bin` the emulator/tests load. Round-trip verified for every image.
+
+- **Reject duplicate names + errors bypass redirection (OS).** Two filesystem
+  polish fixes: (1) **no duplicate names** — SAVE and `>FILE` redirection now
+  run a `FINDENT` check on the parent directory before creating, and fail with
+  `?EXISTS` if the leaf name is already present (MKDIR already did this). In
+  SAVE the check is placed *before* the length calc because FINDENT clobbers
+  `LENLO/HI` (and P2, which is saved/restored). (2) **errors go to the console,
+  not the file** — the 12 OS error messages (`?...`) now print via the BIOS
+  `PUTS` (always console) instead of the redirectable `OPUTS` sink, so e.g.
+  `CAT missing >F` leaves the error on screen; and an empty capture creates no
+  file at all (was a degenerate 0-length entry that failed fsck). os_test
+  covers both. All 6 suites pass.
+
+- **OS output redirection to a file (`cmd >FILE`).** All command output now
+  flows through an OS sink (`OUTCH`, plus `OPUTS`/`OPHEX8` replacing the BIOS
+  `PUTS`/`PHEX8` that called ROM `CONOUT` directly — 46 call sites rerouted).
+  The shell (`REDSCAN`) splits a trailing `>name` off the command line, arms
+  capture (`REDIRF`, buffer at the TPA `$B000`), runs the command with its
+  output captured, then at the next prompt (`FLUSHRED`) writes the buffer to a
+  new file via `SAVECORE`. So `DIR >L`, `CAT a >b`, `TREE >t`, etc. all work and
+  the file has the exact captured length. Test: os_test does `DIR >DLIST` and
+  verifies (host-side) DLIST holds the listing. Pipes (`|`) remain — see NEXT.
+
+- **Monitor D paging + OS EXIT-to-monitor.** Two software-only quality-of-life
+  items: (1) the monitor `D` (dump) command now pages — after each 256-byte
+  block it waits for a key, CR/Enter dumps the next block (P1 keeps walking
+  forward), `.` returns to the prompt (mirrors the `E` command's convention).
+  (2) The OS shell gained `EXIT`/`MON`, which cold-restarts into the ROM monitor
+  via `JMP $0000`, mirroring BASIC's `BYE` — so the monitor can now launch the
+  OS (`B`), launch ROM BASIC (`X`), and both can get back. Tested: BASIC-ROM
+  test exercises D paging (rows 00F0 then 0100); OS test confirms the monitor
+  banner reappears after EXIT. The OS `DUMP` command pages the same way (CR=next
+  block, `.`=exit; DODUMP — separate code from CMD_D); OS test pages to row B100.
+
+- **RTC + CF-fallback footprints provisioned (rev C, DNP).** The last two
+  pre-fab board items, both as Do-Not-Populate so the options exist post-fab
+  without a respin:
+  - I/O card: DS1302 RTC (U16) + 32.768kHz crystal (X3) + backup coin cell (BT1)
+    + a 3-wire breakout header (J3). Fully isolated peripheral — crystal across
+    X1/X2, VCC1 from +5, VCC2 from the cell, CE/SCLK/IO to J3. No bus contention
+    possible. Reserved I/O address $FF08 (PORT DEC U2 Y3). VERIFY the crystal +
+    coin-cell land patterns against real parts before fab (placeholder THT pkgs).
+  - CF card: 8-bit-mode fallback latch (U9, 74374). The CF high data byte
+    (D8-15) is wired to its inputs; output forced high-Z and clock grounded, so
+    it's inert. Populate + wire the bus output + decode only if a CF card refuses
+    8-bit mode (see NEXT). New device defs: DS1302/XTAL32/COIN + a DIP8 package.
+    All 7 boards regenerate with 0 validation errors.
+
+- **Interrupt ARCHITECTURE (rev C) — microcode/emulator/ISA (hardware pending).**
+  Implemented and tested the whole interrupt model end to end in emulation;
+  only the physical control-card circuit remains (see NEXT, and the risk note
+  there). Design: a maskable IRQ with an interrupt-enable latch (IE), reset off.
+  - Instructions: `EI`/`DI` (set/clear IE), `RTI` (pop flags+PC, re-enable IE),
+    and `IRQ`/$08 (push PC+flags, vector to $0808) — $08 is also the opcode the
+    hardware forcing buffer injects on a real IRQ, so it doubles as a software
+    interrupt.
+  - Vector: fixed ROM $0808. The forcing buffer's hardwired byte ($08) is BOTH
+    the injected opcode AND both vector bytes — high $08, low $08 -> $0808 — so
+    one pattern, one buffer, no separate zero-source. $0808 is just past the
+    monitor code.
+  - PC handling: the injected fetch still does P0++, so the $08 micro-routine
+    starts with DEP0 to recover the true return address before pushing it.
+  - Emulator: IE + irq_pending state; writing $FF06 raises an IRQ (models a
+    device); injection at fetch when IE & pending (acknowledged: pending clear,
+    IE masked); forcing buffer drives $08 while $08 runs with DOE=idle.
+  - Test: ISA case 40 enables interrupts, raises one, confirms the $0808 handler
+    ran and the preempted instruction completed after RTI. All 6 suites pass.
+
+- **V flag + signed comparison (rev C).** Implemented the overflow flag and
+  signed-compare branches end to end. NOTE: the old "one 7486 from carry-into
+  vs carry-out-of bit 7" plan was **not feasible** — a 74181 handles a 4-bit
+  group and doesn't expose carry-into-bit-7. Used the **sign-bit method**
+  instead: `V = (A7 ^ F7) & (A7 ^ B7 ^ ~ALUS2)` (B7 = muxed B operand, F7 = raw
+  ALU result sign; isADD = ~S2 since add-like ops have S2=0, sub-like S2=1).
+  Ungated by M, so V is *valid after ADD/SUB/CMP* (documented convention).
+  - ALU card: U34 (74HCT86) XORs + U35 (74HCT08) AND derive V into the flag
+    register (was tied low). No bus change — FV is already bused.
+  - Control card: U19 (74HCT86) computes N^V -> cond-mux D6; a spare U6 OR gate
+    does (N^V)|Z -> D7 (D6/D7 were grounded). FCOND 6/7 select them.
+  - Microcode: `BLT/BGE/BLE/BGT` (0x44-0x47) via FC LT=6 (N^V), LE=7 ((N^V)|Z).
+    C still gives unsigned ordering (BCP/JNC); these give signed.
+  - Emulator computes V by the identical Boolean; new ISA tests cover the
+    sign-boundary cases where unsigned C would mislead (e.g. -128 < 1). All 6
+    suites pass; all 7 boards regenerate with 0 validation errors.
+  - Bring-up: confirm V/sign-compare on real silicon; the XOR/AND chain adds a
+    little delay off the flag path (not the ALU critical path).
+
+- **EEPROM ROM write-protect jumper (rev C).** Added a 3-pin select header
+  `JWP` (HDR3) on the memory card in the 28C256 `!WE` path: jumper 1-2 routes
+  `!WE` to the live `-WE` net (writable, the default), 2-3 ties it to VCC
+  (write-protected, immune to runaway-code writes). The 62256 RAM stays on
+  `-WE` unconditionally, so write-protecting the ROM doesn't touch RAM. Memory
+  card regenerates with 0 validation errors. Assembly note: a jumper must be
+  installed (1-2 by default) — leaving the header open floats the ROM `!WE`.
+
+- **Second ALU-input mux (rev C) — B-side can take T.** Added a 2:1 mux on the
+  ALU card B-operand path (U32/U33, 74157 ×2): B register when `BSEL=0`, T
+  register when `BSEL=1`. `BSEL` is microcode-word bit 31 (was the lone spare),
+  latched in control-card pipe U17.Q8 and carried to the ALU card on backplane
+  B28 (was SPARE9). New opcodes `ADDT/SUBT/ANDT/ORT/XORT/CMPT` (0x80-0x85) run
+  the usual ALU ops with T as the second operand — so e.g. `A := A + T` in one
+  step, **B preserved**. Also added `LDT #imm`/`LDT a` (0x86/0x87) since T was
+  otherwise microcode-scratch-only and had no programmer-visible load. Modelled
+  in the emulator (bit 31 selects the B operand), covered by new ISA tests
+  (ADDT/SUBT/CMPT/ANDT/ORT/XORT/LDT, all green), and documented in the
+  programmer's guide. All 7 boards regenerate with 0 validation errors. The mux
+  delay stacks ahead of the 74181/74182 carry path — confirm timing margin when
+  bringing up the ALU card.
+
+- **Datasheet pinout audit of the generator's device library.** Cross-checked
+  all ~25 devices (74161/169/374/377/151/74/02/10/139/157/175/244/257/260/181/
+  182, 7430, 7474, 74138, 28C64, 62256/28C256, 6850, MAX232, OSC can, IDE40,
+  resistor/LED arrays) against standard datasheet pinouts. **Found + fixed one
+  real error: the 74260** (dual 5-input NOR, the ALU bus zero-detect U27) had a
+  scrambled pin map — gate-1 `C1` on pin 3 (should be 11) and the `Y1`/`Y2`
+  outputs swapped (6↔8), among others. Corrected to the datasheet
+  (1=1A 2=1B 3=2A 4=2B 5=2C 6=2Y 7=GND 8=1Y 9=2D 10=2E 11=1C 12=1D 13=1E
+  14=VCC); the netlist uses logical pin names so it didn't change. All others
+  matched. NB the 74244 uses flat A1-A8/Y1-Y8 labels (not 1A1..2A4) but the
+  pins + An<->Yn pairing + the two `!G` enables are electrically correct.
+- **Decoupling caps on every card.** gen_eagle's `card()` now drops one 100nF
+  cap (`CDn`, C_DISC footprint) per IC, placed beside it and wired VCC<->GND;
+  the memory card's separate build does the same for U1-U9. Counts: control 18,
+  regbank 44, alu 31, io 15, cf 8, memory 9 (backplane already had its 10 +
+  bulk). All 7 boards regenerate with 0 validation errors; schematic PDFs
+  refreshed. (Placement is approximate pending Fusion routing.)
+- **P8X/OS v1.0 — v2-aware PACK (filesystem complete).** Compacts hierarchical
+  volumes in two phases. PHASE 1: a tree-walk min-find repeatedly picks the
+  live file/dir extent with the smallest start LBA >= the running free pointer
+  and copies it down, updating only the one parent directory entry that points
+  to it (the walk reaches each extent via that entry, so the location is in
+  hand; re-walking each pass reflects prior moves, and a moved directory
+  carries its child *listing* verbatim so child pointers stay valid). PHASE 2:
+  re-walk the compacted tree and rewrite every directory's '.' (=self) and '..'
+  (=parent) from final positions, so CD/.. and fsck stay correct. Verified the
+  hard case — a freed low extent forces A and its subdir SUB to move; after
+  PACK, CD .. walks SUB->A->root correctly, CAT of the moved file is intact,
+  and fsck reports 0 reclaimable. Also bumped the OS var base to $9A00 for code
+  headroom. os_v2_test now PACKs and asserts a fully-compacted, navigable tree.
+- **P8X/OS v0.8 — TREE.** Depth-first indented listing of the whole tree from
+  root, iterative with an explicit RAM stack of (dir start, dir sectors, next
+  entry index) frames (depth 8) — the single shared sector buffer rules out
+  recursion, so on return from a child the parent's sector is re-read and the
+  scan resumes. v2 only (a v1 root's 32-sector entry count overflows a byte,
+  and flat volumes have no tree). Output matches the host `p8xfs tree`;
+  os_v2_test asserts the indented hierarchy.
+- **P8X/OS v0.7 — MKDIR / RMDIR on-target.** MKDIR resolves the parent, checks
+  the name is free, allocates a SUBSECS (4) extent at the free pointer, writes
+  its '.'/'..' (MKEXT), and adds a F_DIR entry to the parent (FINDSLOT+WRENT,
+  now stamping a parameterized EFLAG). RMDIR resolves the dir, confirms it's a
+  directory and empty (DIREMPTY: nothing past '.'/'..'), then tombstones the
+  parent entry. Verified end to end (create / save-into / refuse-non-empty /
+  delete / remove) with a fsck-clean result; os_v2_test exercises it. Also
+  fixed a real collision the growth exposed: the OS image had reached ~4.1 KB
+  ($8000-$9009) and overran its own variables at LINEBUF=$9000 (typed lines
+  clobbered the tail of KW_MKDIR) — moved the OS variable block to $9600.
+- **P8X/OS v0.6 — directory navigation (reads v1 + v2).** Generalized directory
+  scanning from the fixed LBA 33-64 region to a (start LBA, sector count) pair,
+  so the current directory and any resolved path share one code path (FINDENT,
+  DIR, FINDSLOT). Cold start reads the boot-block version byte and sets the
+  layout (v1: root 33/32 sectors, data @65; v2: root 33/4, data @37) + CWD =
+  root. Added a RESOLVE routine (walks path components via the on-disk `.`/`..`
+  entries; absolute `/...` vs relative), `CD` (with a best-effort CWD-path
+  prompt), `DIR [path]`, and made LOAD/RUN/SAVE/DEL accept a path. PACK guarded
+  to flat (v1) volumes. Fixed a P2-clobber bug (FINDENT walks SBUF with P2, so
+  DESCEND now saves/restores the caller's path cursor). New regression
+  os_v2_test.sh: host-builds a v2 disk with a subdir + program, boots, and
+  checks CD/DIR/RUN (cwd + absolute path) + a rejected bad CD; v1 os_test still
+  green.
+- **P8XFS v2 host support (p8xfs.py).** `create --v2` lays a hierarchical
+  volume (version 2, 4-sector root directory at LBA 33, data from LBA 37); a
+  directory is a file whose extent holds entries with `.` (entry 0) and `..`
+  (entry 1). Added path resolution, `mkdir` (allocates a 4-sector extent, writes
+  `.`/`..`), path-based `put`/`get`/`ls [path]`, `tree`, and a version-aware
+  `fsck` that walks the tree and verifies every `..` points at its true parent
+  (negative-tested: a corrupted `..` is flagged). v1 (flat) volumes still work
+  and remain the default, so the v1 OS + emulator tests are unaffected. This is
+  the host reference + disk-builder for the on-target v2 work to come.
+- **P8X/OS v0.5 — PACK + host fsck.** PACK compacts the data area: each pass
+  scans the directory for the live file with the smallest start LBA >= the
+  running free pointer, copies its extent down to the free pointer (low-to-high
+  sector copy via SBUF — safe because dst <= src and extents are processed in
+  ascending start order), rewrites that entry's start LBA, and advances the
+  free pointer; finally the boot-block free pointer is lowered. Handles the
+  tricky case where a SAVE reused an early directory slot so directory order
+  != start-LBA order (min-find, not directory order). tools/p8xfs.py fsck
+  verifies a volume (signature, every extent in-bounds, no overlaps, free
+  pointer past the last extent) and reports reclaimable sectors. Verified:
+  create/DEL/PACK leaves fsck-clean volumes with data intact across the moves;
+  test-os runs PACK and fsck-checks the result.
+- **P8X/OS v0.4 — DUMP + DEP.** DUMP addr shows 256 bytes (16 x "AAAA: 16 hex
+  bytes  ASCII"); DEP addr b b ... deposits a series of hex byte values from
+  addr (reusing the SAVE hex parser + the BIOS PHEX8). Makes the OS
+  self-sufficient for inspecting/poking memory, and closes a self-hosting loop:
+  DEP machine code -> SAVE it -> RUN it (verified end to end — a DEP'd 6-byte
+  program saved and run prints its char). test-os now exercises DEP+DUMP.
+- **BASIC — three build targets from one source.** Parameterized the
+  interpreter on BASORG (code origin) + BASRAM (data base); PBUF fixed at
+  $C000. Standalone (default $0000/$8000) is byte-identical to before.
+  Disk build ($8000/$A000) installs as a bootable P8XFS image and runs via the
+  monitor's B; ROM build ($2000/$A000) is overlaid into the monitor EEPROM by
+  tools/build_basic_rom.py and launched by a new monitor X command; BASIC's
+  BYE command jumps to the reset vector to return to the monitor. Needed a new
+  assembler `-D NAME=VALUE` (CLI defines that win
+  over source `=` defaults). Regression: `make test-basic` (X launches ROM
+  BASIC; B boots disk BASIC; a program runs in each). BASIC code is ~4 KB so
+  it clears the $A000 data region in both relocated builds.
+- **P8X/OS v0.3 — SAVE (on-target file create).** SAVE name start end: parse
+  two hex addresses (GETHEX/HEXVAL; 16-bit accumulate via SHL/ROL), 16-bit
+  length = end - start (SUB + borrow into the high byte), sector count, then
+  allocate at the boot-block free pointer, copy memory -> SBUF -> CFWRITE per
+  sector, write a directory entry into the first free/$FF slot (FINDSLOT +
+  WRENT, load=exec=start), and bump the free pointer. Verified: files persist
+  across reboot, consecutive SAVEs allocate consecutive LBAs, and a SAVE'd
+  range round-trips byte-identical through `p8xfs.py get`. test-os now also
+  SAVEs and checks the bytes.
+- **P8X/OS v0.2 — shell with file commands.** Added LOAD (read a file into its
+  stored load address; sector count = ceil(len/512)), RUN (LOAD + JSR exec
+  address, program RTS returns to the shell), and DEL (mark the entry $FF and
+  write the directory sector back via CFWRITE — verified by re-reading DIR).
+  Whole-word command matching + a filename parser (upcase, space-pad to 12,
+  peek/INP2 so the line terminator isn't over-consumed); FINDENT walks the
+  directory and captures a pointer to the matched entry's flag byte. Regression
+  `make test-os` now boots, runs a program, deletes a file, and re-lists.
+- **P8X/OS v0.1 — boots from CF, runs a shell.** RAM-resident OS
+  (os/p8xos.asm) assembled with the new `--base 0x8000` mode, installed at
+  LBA 1 by p8xfs.py and booted via the monitor's `B`. Calls the monitor's
+  BIOS jump table at $0100 (CONIN/CONOUT/CONST/CFINIT/CFREAD/CFWRITE/PUTS/
+  PHEX8 — a stable ABI; monitor body relocated to $0130). Shell: HELP and
+  DIR (walks the flat P8XFS v1 directory LBA 33-64, prints name + hex size).
+  Regression: `make test-os`.
+- **Host tool p8xfs.py** (tools/): create/format a P8XFS v1 image, `boot`
+  (install an OS image + set OSCNT), `put`/`get`/`ls`. Matches the monitor's
+  on-disk layout (dir 33-64, data 65+).
+- **Assembler --base**: emit a RAM-resident blob (labels resolved to the run
+  address, only base..hi bytes written) for OS/program images that live above
+  $8000. No --base = unchanged 32K ROM image.
+
+- **Emulator: CF-IDE model** ($FF10-17). 8-bit True IDE task file backed by a
+  flat sector-image file, attached with `p8xemu -c <img>` (auto-created +
+  zero-filled to 256 sectors if absent). Models SET FEATURES/IDENTIFY/READ
+  SECTORS/WRITE SECTORS with the BSY/DRQ handshake the monitor's driver spins
+  on; IDENTIFY returns a byte-swapped model string. The monitor's filesystem
+  hooks now run emulated end to end — `I` (init), `F` (format P8XFS boot block
+  + directory), `B` (boot OS from LBA 1 to $8000). Regression: `make test-cf`
+  (formats a card, plants a tiny OS at LBA 1, boots it). Surfaced + fixed a
+  latent monitor bug: `CMD_F` compared `A` to `'Y'` *after* `CRLF` clobbered
+  it, so format always aborted; reload the key from GETC's `TMP` copy.
+
+- **Assembler (p8xasm.py)**: two-pass, imports the opcode table from
+  genucode.py (single source of truth). Labels, expressions with <lo/>hi,
+  .org/.byte/.word/.ascii(z)/.fill/equates, LDPn #imm16 pseudo-op,
+  listing output. mktest.py retired; tests are now .asm files
+  (message print / JSR-RTS / CMP-BZ countdown), all passing via make test.
+
+- **Emulator v1 + microcode toolchain**: genucode.py emits the four 28C64
+  images; p8xemu.c interprets the same images cycle-by-cycle (74181
+  active-high tables, shifter stages, pipeline FCOND timing, ACIA on
+  stdin/stdout). 35 opcodes defined. Verified: message print via ACIA
+  (580 cycles) and JSR (P1)/RTS push-pop round trip (30 cycles).
+
+- Bus rev C2: SPARE0-3 reallocated as flag lines FC/FZ/FN/FV (A27-A30,
+  ALU card to control card). SPARE8-11 opened on B27-B30 (guard now B3-B26);
+  eight official spares total (4-11). Backplane routes the B-row spares.
+- Eagle sch+brd generated and validated for all five remaining cards
+  (control, register bank, ALU, I/O, CF-IDE) + netlist-style PDF each.
+
+### Early milestones (original checklist)
+
+The foundational tick list from the project's first phase — kept as-is for the
+record. Newer work is logged as bold-title entries above.
+
+- [x] Architecture: P8X — 8-bit, microcoded, 4×16-bit pointer bank (74169s),
+      PC/SP/MAR unified into pointers
+- [x] Rev C bus pinout: 96-pin DIN, 6×+5V top / 6×GND bottom, row B guard
+- [x] Card set defined: control, register bank, ALU, memory, I/O, CF-IDE
+- [x] Memory card schematic (Eagle + KiCad, rev C), placed board
+- [x] 10-slot backplane: schematic + fully routed 4-layer board, 1" pitch,
+      compact <250 mm variant
+- [x] Termination analysis: AC termination provisioned on clocks only, DNP;
+      Thevenin rejected (HCT mid-rail bias); data-bus pull-ups instead
+- [x] ROM monitor written (p8xmon.asm): E/D/I/F/B/G commands
+- [x] P8X/OS designed: BIOS jump table, boot-from-CF, shell
+- [x] P8XFS v2 spec: hierarchical, directories-as-files, PACK algorithm
+- [x] CF-IDE interface design: 8-bit mode, 5 chips, memory-mapped $FF10
+- [x] Card design standards document (p8x-card-standards.md)
+
+    ### DEPRECATED: self-hosted front end (cpp | lex | cc1)
+
+    Superseded by the native `cc` (apps/p8xcc.asm), which compiles C entirely
+    on-target (front + back end). The cpp|lex|cc1 sources (os/commands/*.c),
+    man pages, the os_cpp/os_lex/os_cc1 tests, and p8cc.py's --tokens/--ast/
+    --from-ast modes were REMOVED (2026-07-14); git history retains them. Formerly
+    they were kept in the repo but no longer built or shipped on the disk
+    of the default `make test` suite (scripts remain, runnable by hand). The
+    //#use splicing cpp did still exists host-side as tools/clib.py. To resurrect:
+    restore the run.sh build/install + man steps and the Makefile test lines.
+
+    ### cc: frame-pointer calling convention (mutual recursion) — DESIGN
+
+    Goal: replace static per-function slots with a runtime stack frame so that
+    mutual recursion / forward calls work AND pass-by-reference still composes
+    (the two are incompatible under caller-saved static slots). This is an
+    ATOMIC re-architecture — the compiler is either all-static-slot or
+    all-frame-relative, so it lands as one change, not an incremental version.
+
+    Runtime model (compiled program):
+      * __sp  16-bit C-stack pointer, grows down; init in MBOOT (e.g. $F600).
+      * __fp  16-bit frame pointer.  (Return address stays on the P3 hw stack.)
+      * Prologue (_f_NAME): push __fp on the C stack; __fp = __sp; __sp -= FRAME
+        (FRAME = a fixed reservation, e.g. 64 bytes, to avoid a forward-referenced
+        frame size — documents a per-function local-size cap).
+      * Epilogue (_e_NAME): __sp = __fp; pop __fp; RTS.
+      * Args: caller pushes right-to-left, JSRs, then pops (cdecl). Param i is at
+        __fp + 2 + 2*i; local j at __fp - 2 - 2*j.  Forward calls resolve because
+        the caller never needs the callee's storage — only its name (JSR label,
+        two-pass) — so a prototype `int f(int);` just registers the name.
+
+    Addressing (the crux): a var carries a signed frame offset (stored as a
+    two's-complement byte). One emitted-once helper does the arithmetic:
+        __lea:  __ea = __fp + sign_extend(__off)   (offset preset in __off)
+    so each access is `LDA #<off>; STA __off; JSR __lea` then load/store via __ea
+    (word for int, byte for char — reuse EM_LOADB/EM_STOREB).  &x is just __ea.
+
+    Changes required (~15 routines): MBOOT (init __sp/__fp), FUNCDEF
+    (prologue/epilogue + FRAME reserve), SYMADD/SYMFIND (name -> frame offset,
+    params +/locals -), EM_LDVAR/EM_STVAR/EM_ADDROF (-> __lea-relative),
+    gfi_call (push args + pop, drop EM_STSLOT), DELETE EM_SAVESLOTS/RESTSLOTS +
+    SELFREC (no longer needed — each activation has its own frame), the V<slot>
+    storage trailer (gone), arrays/char (frame-relative offsets), and prototype
+    registration for forward calls.  Then re-verify the ENTIRE suite (scalars,
+    params, recursion, mutual recursion, pointers, pass-by-ref, arrays, char,
+    strings) — nothing is independently committable until it is all green.

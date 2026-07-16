@@ -36,7 +36,11 @@ memory, I/O, CF-IDE.
    VERIFY item in BACKLOG.md (invert in rev B vs adopt as convention).
 6. V flag is hardwired 0 in rev A (matches the ALU card).
 7. Check BACKLOG.md before and after working; keep it current
-   (NEXT / IDEAS / VERIFY / DONE sections).
+   (NEXT / IDEAS / VERIFY / WONT-DO sections — live work only). Completed items
+   move OUT to BACKLOG-DONE.md; don't let finished work pile up in BACKLOG.md.
+   Read WONT-DO / SUPERSEDED before starting anything that looks obviously
+   missing — several entries there are decisions NOT to do something, and one of
+   them (signed compares in p8cc) shipped a buffer overflow when acted on.
 
 ## Build & test
 - `cd emulator && make`         — build the emulator
