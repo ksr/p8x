@@ -7,6 +7,60 @@ Nothing here needs action. It is kept because the *why* is often the valuable
 part — several entries record analysis that would otherwise be re-done. Settled
 decisions NOT to do something live under **WONT-DO / SUPERSEDED** in BACKLOG.md.
 
+---
+
+## Userland text tools — the shipped parts (lifted from IDEAS 2026-07-16)
+
+Trimmed out of the "Userland text tools" IDEAS item, which had become a long
+research note whose checkbox said "open" while most of its content had shipped.
+The size-blocked remainder (full `awk` with an evaluator, regex classes `[a-z]`,
+`find` enhancements) stays in IDEAS.
+
+- **`vi` — DONE (2026-07-08).** Minimal modal VT100 screen editor,
+  `os/commands/vi.c`, `RUN /BIN/VI.BIN NAME`. No expression evaluator, so unlike
+  awk it fits: ~18 KB code + a flat line buffer = ~30 KB, ending `$EF6B`, below
+  the `$FC00` read buffer. Raw keys via BIOS CONIN (`$0100`, no echo), ANSI cursor
+  control, selective redraw (one line per char edit, full only on scroll) so it is
+  usable at real serial baud, not just in the emulator. Commands: `hjkl 0 $ G i a
+  A o x dd :w :q :wq :q!`, plus single-level op-based **`u` undo** and **`/`pat +
+  `n` search** (literal, forward, wraps once). Search+undo grew the binary, so the
+  line buffer was trimmed 150 -> **110 lines** to stay under `$FC00`;
+  `os_vi_test` drives all of it headlessly.
+  *Still future:* word motions (`w`/`b`), multi-level undo/redo, regex search,
+  arrow-key escape parsing, longer lines / bigger files. The capacity and
+  multi-level-undo limits both point at replacing the flat fixed-width line array
+  with a **gap buffer** (compact storage -> more lines + cheap snapshots) — the
+  natural next vi refactor.
+
+- **`awk` — the "field tool" alternative SHIPPED.** The item proposed dropping the
+  expression evaluator entirely as the fits-now design, and that is what exists:
+  `os/commands/awk.c` (242 lines) + a byte-identical hand-asm twin + man page.
+  `awk [-F c] 'program' [file]`: `[/regex/] { print items }`, items being `$0`,
+  `$1..$NF`, `NF`, `NR`, and string literals; whitespace or `-F` field splitting;
+  file arg or stdin, so `cat f | awk '{print $2}'` works. Deliberately no
+  arithmetic, variables, or `if` — that is the part still blocked on size.
+
+- **Regex `+` and `?` — DONE (2026-07-08).** `lib_regex` gained one-or-more and
+  zero-or-one single-char quantifiers, so `grep`/`sed` handle `colou?r`, `ab+c`
+  (`c_filters` covers both). Adding them pushed grep's **host (p8cc.c) build**
+  over — grep was already at the razor's edge where its globals overlap the
+  `$EA00` (-r) / `$FA00` (glob) FNEXT pages — so grep's `-r` buffer was trimmed
+  48 -> **36 files** and `line`/`cur` 256 -> 176 to land the host build back below
+  `$FA00`.
+
+- **`find` already existed** (`os/commands/find.c`: recursive name/glob/substring
+  over the CWD tree), with a hand-asm twin and man page.
+
+- **p8cc: forward declarations and mutual recursion now WORK (c57da4e).** The item
+  recorded "no forward declarations or mutual recursion" as a confirmed subset gap
+  and advised collapsing `expr`<->`primary` into one self-recursive `eval(minbp)`
+  to dodge it. That advice is obsolete: forward prototypes parse and mutual
+  recursion runs — verified on the machine with both compilers via an
+  `is_even`/`is_odd` round-trip (EVEN-OK/ODD-OK/MUTUAL-OK), and `p8cc.c` itself now
+  depends on a forward prototype (`int toobig(char *);`). Calls to an undeclared
+  function still default to `int`, so a prototype is only needed to keep the host
+  `cc` build warning-clean. **`break`/`continue` are still genuinely absent.**
+
 Sections below mirror where each item was completed. The **project log** at the
 end is the original DONE section, newest first.
 

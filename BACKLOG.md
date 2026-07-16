@@ -363,70 +363,52 @@ remainder is why it is still here.
         update the ISA docs (opcode table in `docs/p8x-monitor.md`, the
         programmer's-guide PDF via `gen_progguide.py`).
 
-- [ ] **Userland text tools — `awk`, `vi`, richer `find` (2026-07-08).** Wanted:
-      more `/BIN` utilities. Findings from a build attempt:
+- [ ] **Userland text tools — the size-blocked remainder (2026-07-08, trimmed
+      2026-07-16).** Most of this item SHIPPED — `vi`, `find`, regex `+`/`?`, and a
+      field-oriented `awk` are all in `/BIN` with C+asm twins and man pages; see
+      DONE. What is left is blocked on program size, not design:
 
-      - **`awk` does NOT fit — blocked on codegen size.** Built a genuine minimal
-        integer-only awk (rules/`BEGIN`/`END`, `/re/` + expression patterns,
-        fields `$0..$NF`/`NR`/`NF`, `a`–`z` vars, `+ - * / %`, comparisons, `~`,
-        `&& || !`, `print`/assignment/`if`). It compiles logically but the binary
-        is **> 64 KB** — over the whole address space and **~2.3× the ~37.9 KB TPA**
-        (`$6A00..$FE00`). 15,584 lines of asm from ~400 lines of C. Root cause is
-        p8cc's non-optimizing codegen exploding the recursive `eval()` (16-bit ops
-        expanded byte-by-byte); `grep` (much simpler) is already 32.5 KB at the
-        ceiling, so any expression language is over budget. **Not a design flaw —
-        blocked on program size.** Unblocked by the codegen/ISA-shrink work above
-        (frame-relative addressing, finishing the `LPW1`/`MOVW` adoption) and/or a
-        p8cc peephole/temp-reuse pass; or by a larger TPA (code overlays / bank
-        switching). Revisit awk once compiled command size drops materially.
-      - **`vi` — DONE (2026-07-08).** A minimal modal VT100 screen editor shipped
-        as `os/commands/vi.c` (`RUN /BIN/VI.BIN NAME`). Unlike awk it has no
-        expression evaluator, so it fits: ~18 KB code + a flat 150×80 line buffer
-        = 30 KB total, ending `$EF6B`, below the `$FC00` read buffer. Reads keys
-        raw via BIOS CONIN (`$0100`, no echo), drives the cursor with ANSI escapes
-        (VT100 committed), and uses selective redraw (one line per char edit, full
-        only on scroll) so it is usable at real serial baud, not just in the
-        emulator. Commands: `hjkl 0 $ G i a A o x dd :w :q :wq :q!`, plus **`u`
-        undo** (single-level, op-based — reverts the last x/dd/o/single-line
-        insert, so it costs one saved line, not a whole 2nd buffer) and **`/`pat +
-        `n` search** (literal substring, forward, wraps once) added 2026-07-08.
-        The search+undo code grew the binary, so the line buffer was trimmed from
-        150 to **110 lines** to stay below the `$FC00` read buffer; `os_vi_test`
-        drives all of it headlessly. **Still future:** word motions (`w`/`b`),
-        multi-level undo + redo, regex search, arrow-key escape parsing, and
-        longer lines / bigger files. The capacity and multi-level-undo limits both
-        point at replacing the flat fixed-width line array with a **gap buffer**
-        (compact storage → more lines + cheap snapshots) — the natural next vi
-        refactor.
-      - **`find` already exists** (`os/commands/find.c`: `FIND pattern`, recursive
-        name/glob/substring over the CWD tree). Enhancements if wanted: `-type f|d`,
-        `-name`, `-exec`, or an `N:` path arg (it's one of the two — with `tree` —
-        that still has no drive-prefix support). Small, in-budget.
-      - **Regex `+` and `?` — DONE (2026-07-08); classes `[..]` blocked.**
-        `lib_regex` gained `+` (one-or-more) and `?` (zero-or-one) single-char
-        quantifiers, so `grep`/`sed` handle `colou?r`, `ab+c`, etc. (`c_filters`
-        covers both). Adding them pushed grep's **host (p8cc.c) build** over —
-        grep was already at the razor's edge where its globals overlap the
-        `$EA00` (-r) / `$FA00` (glob) FNEXT iteration pages — so grep's `-r`
-        buffer was trimmed 48→**36 files** and `line`/`cur` 256→176 to land the
-        host build back below `$FA00`. **Character classes `[a-z]`/`[^..]` and
-        `\` escapes did NOT fit** — even minimal buffers overflowed once the class
-        code (variable-length atoms: atomlen/atomone) was added. They're the
-        highest-value regex feature but are **blocked on grep's host-build size**,
-        i.e. on the p8cc codegen-size work (ISA-shrink item above) or restructuring
-        grep (e.g. splitting `-r` content-search into its own command to free
-        grep's globals). vi search is still literal (would also need this).
-      - **Fits-now alternative — a "field tool," not awk.** Drop the expression
-        evaluator entirely: a `CUT`/`SELECT`-style filter — `/re/` or `$n OP num`
-        pattern + a fixed field list to print (`{print $2 $4}`), no arithmetic /
-        vars / `if`. No `eval()` ⇒ small enough to ship; covers the common awk use
-        (field extraction + simple filtering). Reuses `lib_stdin` + `lib_regex`.
+      - **Full `awk` with an expression evaluator — blocked.** The shipped `awk.c`
+        (242 lines) is the "field tool" this item proposed as the fits-now
+        alternative: `[/re/] { print items }`, `$0..$NF`, `NF`, `NR`, `-F c`, string
+        literals, stdin or file. It deliberately has **no** arithmetic, variables,
+        or `if`. A real awk needs a recursive `eval()`, and that was measured at
+        **>64 KB — over the whole address space, ~2.3x the ~37.9 KB TPA** (15,584
+        lines of asm from ~400 lines of C), because p8cc's non-optimizing codegen
+        expands 16-bit ops byte-by-byte. `grep` is already ~32.5 KB at the ceiling,
+        so any expression language is over budget. Unblocked by the codegen/ISA
+        shrink work, a p8cc peephole/temp-reuse pass, or a larger TPA (overlays /
+        bank switching). Revisit once compiled command size drops materially.
+        (The old note here said to dodge p8cc's lack of mutual recursion by writing
+        one self-recursive `eval(minbp)`. That limit is gone — see below — so the
+        parser shape is now free; only the SIZE blocks this.)
+      - **Regex character classes `[a-z]` / `[^..]` and `\` escapes — blocked.**
+        The highest-value remaining regex feature. Even minimal buffers overflowed
+        once variable-length atoms (atomlen/atomone) were added: it is blocked on
+        **grep's host (p8cc.c) build size**, where grep's globals already collide
+        with the `$EA00` (-r) / `$FA00` (glob) FNEXT pages. Unblocked by the same
+        codegen-size work, or by restructuring grep (e.g. splitting `-r` content
+        search into its own command to free grep's globals). vi's `/` search is
+        literal and would also benefit.
+      - **`find` enhancements — small, in-budget, just not done.** `-type f|d`,
+        `-name`, `-exec`, and **a path argument**: `find` and `tree` are the two
+        commands that take no path at all (`FIND pattern` / `TREE` walk the CWD
+        only), so searching elsewhere means `cd`-ing there first. Note this is no
+        longer a *drive* limitation — the `N:` prefix model was superseded by the
+        `/D1` mount, and commands are drive-unaware now, so a path arg would reach
+        `/D1` for free via `FRESOLVE`.
 
       **p8cc subset gaps confirmed while writing awk** (bite any ambitious command;
-      note in the compiler docs): **no `break`/`continue`** (restructure loops with
-      a flag / condition), and **no forward declarations or mutual recursion**
-      (self-recursion is fine — write one self-recursive function, e.g. a
-      precedence-climbing `eval(minbp)`, instead of `expr`↔`primary`).
+      note in the compiler docs): **no `break`/`continue`** — still true; restructure
+      loops with a flag / condition (`p8cc.c` itself does this in `register_struct`).
+
+      ~~no forward declarations or mutual recursion~~ — **NO LONGER TRUE (c57da4e).**
+      Forward prototypes parse and mutual recursion works; verified on the machine
+      with both compilers (`is_even`/`is_odd` round-trip: EVEN-OK/ODD-OK/MUTUAL-OK),
+      and `p8cc.c` now relies on a forward prototype itself (`int toobig(char *);`).
+      (Calls to an undeclared function still default to `int`, so a prototype is
+      only needed to keep the host `cc` build warning-clean.)
+
 
 - [~] **`MOVW dst,src` — 16-bit memory→memory move — SOFTWARE DONE (2026-06-27);
       register-bank hardware regen PENDING.** Opcode `$78`, shape `a,a` (5 bytes:
@@ -559,7 +541,8 @@ remainder is why it is still here.
       separate `stderr` stream (errors currently go to the console via the BIOS
       directly, which is the desired behaviour, just not a distinct syscall).
 
-- [ ] **Offload OS commands to loadable programs via the ROM FS routines.** Now
+- [~] **Offload OS commands to loadable programs — TREE/DUMP/DEP DONE; FSCK and
+      PACK remain resident.** Now
       that the monitor publishes a shared filesystem API (`$0118 FFIND` /
       `$011B FCREATE`, see DONE — BASIC SAVE/LOAD), the heavy/self-contained OS
       commands can move OUT of the resident OS image into `.COM`-style programs
