@@ -217,6 +217,22 @@ remainder is why it is still here.
       Pairs with shell-side glob+argv (IDEAS): together they are the whole "stop
       making commands resolve paths and expand globs" thesis. This is the cheap half.
 
+- [ ] **CWDPATH is 48 bytes — deep paths truncate (2026-07-16).** `SETPATH` now
+      bounds appends (b41f5f1), so a path deeper than the buffer clamps instead of
+      overflowing into INMODE/INARM/CWDLH — but it still *truncates*. A real tree
+      deeper than 47 chars leaves CWDPATH short, and since `SYS_GETCWD` hands that
+      string to programs to resolve relative paths, a command run from a deep
+      directory can resolve against the wrong (truncated) path. `CWDL`/`CWDN` stay
+      exact, so the OS itself is fine; only the string is short.
+      Bounded, not solved. Options: (a) grow CWDPATH — needs space in OS scratch
+      ($6300-$69FF is fully allocated, same wall as `SYS_OPEN`'s dir buffer);
+      (b) make `cd` refuse a path that would not fit, which is honest but makes a
+      legal directory unreachable; (c) store the CWD as LBAs and *render* the text
+      on demand by walking parents, which removes the buffer as a limit but costs
+      a directory walk per prompt. Depth of ~5 components with 8-char names is the
+      practical ceiling today. Nobody has hit this in normal use — /src/os-bios is
+      12 chars — so it is recorded, not urgent.
+
 ---
 
 ## IDEAS

@@ -219,7 +219,7 @@ The word burned to the 4× 28C64 EPROMs and interpreted by the emulator. Bit map
 
 | Term | Meaning |
 |------|---------|
-| **CWD / CWDPATH** | Current Working Directory / its textual path (for the prompt). |
+| **CWD / CWDPATH** | Current Working Directory / its textual path. Not just the prompt: `SYS_GETCWD` hands it to programs to resolve relative paths, and `DERIVEDRV` picks the drive by matching a leading `/d1`. 48 bytes — `SETPATH` keeps it collapsed (no `..`) and bounded. |
 | **REDIRF** | Redirect Flag — 1 while OS output is being captured to a file. |
 | **OUTCH / OPUTS / OPHEX8** | The OS output sink and its string / hex-byte helpers (route through it for redirection). |
 | **SDIR / DLBA / ECNT / ENTP** | Directory op state: scanned-dir start/count / dir-sector LBA / entries-left / entry pointer. |
