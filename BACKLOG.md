@@ -903,7 +903,8 @@ Last updated: 2026-07-08
     - Smoke tests test1-3.asm overlap test_isa.asm (per-opcode). They give
       higher-level scenario coverage (banner, JSR/RTS, countdown); keep as
       complementary unless trimming.
-- [x] **C compiler — Milestone A DONE (self-compiling, host-run); Milestone B
+- [x] **C compiler — Milestone A DONE (self-ACCEPTING, host-run — NOT
+      self-compiling; see the Milestone A entry below); Milestone B
       ACHIEVED via the from-scratch native `cc` (`apps/p8xcc.asm`), which compiles
       C ENTIRELY on-target through v0.28 (see "NATIVE C COMPILER" below). The
       earlier path-A front end (cpp|lex|cc1, host-side codegen) is DEPRECATED /
@@ -1761,8 +1762,28 @@ Last updated: 2026-07-08
   buffer off `SBUF` onto its own page, so it streams per entry and redirects/
   pipes like any other program (no listing buffer, no size cap).
 
-- **C compiler Milestone A — p8cc.c self-compiles ("small C in small C")**
-  (2026-06-24, #57). Rewrote the compiler in its own small-C subset as
+- **C compiler Milestone A — p8cc.c is SELF-ACCEPTING ("small C in small C")**
+  (2026-06-24, #57). NOTE (2026-07-15): this was long summarised as
+  "self-compiling", which normally means "compiles itself" — p8cc.c does NOT and
+  cannot. The property actually built and tested is self-ACCEPT: the subset
+  accepts its own source, i.e. `p8cc.py p8cc.c` succeeds. The body below always
+  said so ("the subset accepts its own source"); only the shorthand misled.
+  True self-compilation is far out of reach, not a near miss — p8cc.c's own
+  demands vs its own fixed tables:
+      source 61,337 B   vs  src[32768]     (2x  — its source is twice its buffer)
+      780 string lits   vs  soff[64]       (12x)
+      168 globals       vs  goff[64]       (2.6x)
+  Measured: `cc -o p8cc_host p8cc.c && ./p8cc_host < p8cc.c` exits 0 and emits
+  20,512 lines of asm — from the first 32 KB, i.e. half a compiler — which then
+  fails to assemble with "duplicate label _g_T_EOF" (the >64 globals overrun goff
+  into the neighbouring tables). Silent garbage, no diagnostic.
+  The [64] table limits are otherwise LATENT: real commands peak at 39 globals
+  (vi), so nothing shipped approaches them, and the only workload that would is
+  the self-compilation that was never actually run. Left unbounded deliberately —
+  p8cc.c has no diagnostic mechanism at all (not one error string, and the subset
+  has no exit()), so a check would mean inventing one for a limit nothing real
+  hits. Revisit only if a command nears 64 globals / 64 string literals.
+  Rewrote the compiler in its own small-C subset as
   `compiler/p8cc.c`, ALONGSIDE `p8cc.py` (kept as bootstrap + reference oracle).
   p8cc.c is both valid standard C and valid p8cc-subset C, so it builds two
   ways: `cc p8cc.c` → a native bootstrap that reads C on stdin and writes asm to

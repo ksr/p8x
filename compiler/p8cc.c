@@ -363,6 +363,19 @@ int use_push = 0;
 int g_ptr = 0;       /* pointer depth from the most recent parse_type() */
 
 /* ---- global variable table (single-pass, declared before use) ------------- */
+/* Fixed tables, NONE bounds-checked. This is deliberate, not an oversight: the
+ * limits are latent for everything this compiler is actually pointed at (the
+ * heaviest shipped command, vi, has 39 globals) and p8cc.c has no diagnostic
+ * mechanism to report an overflow with — no error string anywhere in the file,
+ * and the subset has no exit(), while the appenders sit deep in the parser.
+ * Overflow is therefore SILENT and corrupts codegen: the appenders below run off
+ * the end of one array into the next.
+ * The one workload that blows through them is p8cc.c compiling ITSELF (168
+ * globals, 780 string literals, 61 KB of source vs src[32768]) — which is not a
+ * supported capability; Milestone A is self-ACCEPT (p8cc.py compiles p8cc.c), not
+ * self-compilation. See BACKLOG "Milestone A".
+ * If a command ever approaches 64 globals or 64 string literals, these need
+ * raising AND a real diagnostic path — do not just widen them silently. */
 char gpool[1024];    /* packed NUL-terminated names */
 int gpooln = 0;
 int goff[64];        /* name offset in gpool */
