@@ -798,9 +798,22 @@ with real analysis; the full reasoning is in
   answer was a NEW deliberately-small codegen (`apps/p8xcc.asm`), which exists.
   The earlier cpp|lex|cc1 split front end is deprecated and no longer shipped.
 
-- **Milestone A is self-ACCEPT, not self-compiling.** p8cc.c cannot compile
-  itself and this is not a near miss — its own source (61,337 B) is twice its own
-  `src[32768]` buffer, and it has 780 string literals against `soff[64]`. The
-  property built and tested is that the subset accepts its own source
-  (`p8cc.py p8cc.c`). Do not "fix" the [64] tables to chase it: they are latent
-  for every real workload (heaviest command, vi, has 39 globals vs the 64 limit).
+- **Milestone A is self-ACCEPT; p8cc.c now ALSO self-compiles on the host, but it
+  is still NOT self-hosting** (updated 2026-07-16 — the earlier wording here was
+  overtaken by that day's fixes and every number in it is now wrong).
+  Three different properties, kept straight:
+    - **self-accept** — the subset accepts its own source (`p8cc.py p8cc.c`).
+      This is what Milestone A built and tested. TRUE, and the c_selfhost test
+      guards it.
+    - **self-compile** — the p8cc.c bootstrap compiles p8cc.c and emits complete,
+      correct asm. NOW TRUE (c57da4e fixed a forward-prototype bug that silently
+      dropped 22 of 90 function bodies; b19ae24 raised src 32K->64K and 32 other
+      host-side tables). 90/90 bodies, zero undefined.
+    - **self-host** — the compiler RUNS on the P8X. FALSE and staying that way:
+      the self-compiled output stops at the assembler with "address past 64K"
+      because the compiled p8cc exceeds the machine's entire address space. That
+      wall is exactly why Milestone B went the from-scratch `apps/p8xcc.asm`
+      route, and that is the compiler you use on-target.
+  So self-compilation is a correctness result — the compiler is good enough to
+  reproduce itself — not a step toward running it on the machine. Do not chase
+  self-hosting p8cc.c; `apps/p8xcc.asm` already is the native compiler.

@@ -377,19 +377,21 @@ int use_push = 0;
 int g_ptr = 0;       /* pointer depth from the most recent parse_type() */
 
 /* ---- global variable table (single-pass, declared before use) ------------- */
-/* Fixed tables, NONE bounds-checked. This is deliberate, not an oversight: the
- * limits are latent for everything this compiler is actually pointed at (the
- * heaviest shipped command, vi, has 39 globals) and p8cc.c has no diagnostic
- * mechanism to report an overflow with — no error string anywhere in the file,
- * and the subset has no exit(), while the appenders sit deep in the parser.
- * Overflow is therefore SILENT and corrupts codegen: the appenders below run off
- * the end of one array into the next.
- * The one workload that blows through them is p8cc.c compiling ITSELF (168
- * globals, 780 string literals, 61 KB of source vs src[32768]) — which is not a
- * supported capability; Milestone A is self-ACCEPT (p8cc.py compiles p8cc.c), not
- * self-compilation. See BACKLOG "Milestone A".
- * If a command ever approaches 64 globals or 64 string literals, these need
- * raising AND a real diagnostic path — do not just widen them silently. */
+/* Fixed tables, NONE bounds-checked — overflow is SILENT and corrupts codegen
+ * (the appenders below run off the end of one array into the next). They are sized
+ * generously rather than guarded, because this compiler is HOST-ONLY: it never
+ * runs on the P8X (apps/p8xcc.asm is the native one), so a big array costs the
+ * target nothing. Sized 2026-07-16 from the largest real input, p8cc.c itself:
+ * 168 globals, 781 string literals, 11,785 bytes of string text, 90 functions.
+ * The headroom is 3x+ on every table.
+ * They are UNGUARDED because p8cc.c has no diagnostic mechanism — no error string
+ * anywhere, the subset has no exit(), and stdout IS the generated asm — so the
+ * only failure it can raise is emitting a bad directive and letting the assembler
+ * reject it. slurp() does exactly that for src[] overflow; the tables below do
+ * not. Worth extending that trick here if one ever fills: silent truncation cost
+ * real debugging twice (16K->32K, then 32K->64K, the second time losing half of
+ * grep with no symptom but a missing match).
+ * Do not shrink these to "save space" — there is no space to save on the host. */
 char gpool[8192];    /* packed NUL-terminated names */
 int gpooln = 0;
 int goff[512];        /* name offset in gpool */
