@@ -42,14 +42,18 @@ int T_STR = 4;
 int T_PUNCT = 5;
 
 /* ---- scanner state -------------------------------------------------------- */
-char src[65536];     /* whole source, NUL-terminated. Host-side buffer only —
+char src[131072];    /* whole source, NUL-terminated. Host-side buffer only —
                       * this compiler never runs on the P8X (Milestone B streams the
                       * source on-target), so the size costs the target nothing and
                       * there is no reason to keep it tight.
                       * History: 16 KB -> 32 KB when a clib-spliced command (~17 KB)
                       * overflowed it; 32 KB -> 64 KB (2026-07-16) when grep.c sat
                       * 205 bytes under the limit and adding one //#use pushed it
-                      * over. Both times the overflow was SILENT (see slurp()). */
+                      * over. Both times the overflow was SILENT (see slurp()).
+                      * 64 KB -> 128 KB (2026-07-16) when p8cc.c itself grew past
+                      * 64 KB and could no longer read itself — that one was NOT
+                      * silent: slurp()'s guard named it in the output, which is the
+                      * whole point of the toobig() mechanism. */
 int srclen = 0;
 int spos = 0;        /* scan cursor */
 int tok = 0;         /* current token kind */
@@ -113,12 +117,16 @@ int is_keyword(char *s) {
     return 0;
 }
 
+int toobig(char *what);              /* defined with the other output helpers below */
+
 /* ---- object-like //#define: parse one directive, and look a name up -------- */
 /* mac_define: spos points just past "//#define"; read NAME then a dec/0xhex value. */
 int mac_define() {
     int v;
+    if (mac_cnt >= 256) { toobig("macros_256"); return 0; }   /* mac_vals[256] */
     while (src[spos] == 32 || src[spos] == 9) spos = spos + 1;
     while (is_alnum(src[spos])) {                 /* NAME -> packed pool */
+        if (mac_end >= 4095) { toobig("mac_names_4096"); return 0; }
         mac_names[mac_end] = src[spos];
         mac_end = mac_end + 1;
         spos = spos + 1;
@@ -167,7 +175,7 @@ int mac_lookup(char *name) {
 
 /* ---- read all of stdin into src[] ----------------------------------------- */
 /* Bounded by sizeof(src)-1 so an oversized file truncates safely instead of
- * overflowing the buffer.  (src is a host-side 32 KB buffer; on-target — the
+ * overflowing the buffer.  (src is a host-side 128 KB buffer; on-target — the
  * open Milestone B — this slurp would become a stream.) */
 /* slurp: read the whole source into src[]. If it does not fit, say so LOUDLY.
  * This used to stop at the buffer end and carry on compiling the prefix — exit 0,
@@ -181,7 +189,7 @@ int slurp() {
     int n;
     n = 0;
     c = getchar();
-    while (c != 0 && c != -1 && n < 65535) {
+    while (c != 0 && c != -1 && n < 131071) {   /* keep in step with src[131072] */
         src[n] = c;
         n = n + 1;
         c = getchar();
@@ -244,11 +252,17 @@ int lex() {
     /* identifier or keyword */
     if (is_alpha(c)) {
         n = 0;
+        /* Cap at 63, not tname's 127: every consumer copies tname into a char[64]
+         * (factor's nm, decl's nm/pn/dn, struct's tag), so 64 is the real limit —
+         * a longer name smashes a stack buffer before tname itself fills.
+         * Keep consuming past the cap rather than returning early: spos must still
+         * advance past the whole identifier or the parser re-lexes it forever. */
         while (is_alnum(src[spos])) {
-            tname[n] = src[spos];
-            n = n + 1;
+            if (n < 63) { tname[n] = src[spos]; n = n + 1; }
+            else if (n == 63) { toobig("identifier_longer_than_63_chars"); n = n + 1; }
             spos = spos + 1;
         }
+        if (n > 63) n = 63;                                /* truncate; already reported */
         tname[n] = 0;
         if (is_keyword(tname)) { tok = T_KW; return tok; }
         tval = mac_lookup(tname);                          /* //#define macro -> NUMBER */
@@ -301,20 +315,28 @@ int lex() {
     if (c == 34) {                                          /* " */
         spos = spos + 1;
         n = 0;
+        /* As with identifiers: past the cap keep scanning to the closing quote so
+         * spos lands correctly, but stop storing. Report once, at the boundary. */
         while (src[spos] != 34 && src[spos] != 0) {
+            if (n == 1023) { toobig("tstr_1024__string_literal_too_long"); n = n + 1; }
             if (src[spos] == 92) {                          /* backslash escape */
                 spos = spos + 1;
                 c = src[spos];
-                if (c == 110) tstr[n] = 10;
-                else if (c == 116) tstr[n] = 9;
-                else if (c == 114) tstr[n] = 13;
-                else if (c == 48) tstr[n] = 0;
-                else tstr[n] = c;
-                n = n + 1; spos = spos + 1;
+                if (n < 1023) {
+                    if (c == 110) tstr[n] = 10;
+                    else if (c == 116) tstr[n] = 9;
+                    else if (c == 114) tstr[n] = 13;
+                    else if (c == 48) tstr[n] = 0;
+                    else tstr[n] = c;
+                    n = n + 1;
+                }
+                spos = spos + 1;
             } else {
-                tstr[n] = src[spos]; n = n + 1; spos = spos + 1;
+                if (n < 1023) { tstr[n] = src[spos]; n = n + 1; }
+                spos = spos + 1;
             }
         }
+        if (n > 1023) n = 1023;                             /* truncate; already reported */
         if (src[spos] == 34) spos = spos + 1;
         tstr[n] = 0; tstrlen = n;
         tok = T_STR;
@@ -384,13 +406,18 @@ int g_ptr = 0;       /* pointer depth from the most recent parse_type() */
  * target nothing. Sized 2026-07-16 from the largest real input, p8cc.c itself:
  * 168 globals, 781 string literals, 11,785 bytes of string text, 90 functions.
  * The headroom is 3x+ on every table.
- * They are UNGUARDED because p8cc.c has no diagnostic mechanism — no error string
- * anywhere, the subset has no exit(), and stdout IS the generated asm — so the
- * only failure it can raise is emitting a bad directive and letting the assembler
- * reject it. slurp() does exactly that for src[] overflow; the tables below do
- * not. Worth extending that trick here if one ever fills: silent truncation cost
- * real debugging twice (16K->32K, then 32K->64K, the second time losing half of
- * grep with no symptom but a missing match).
+ * Every one of them is GUARDED: on overflow the writer calls toobig() and returns
+ * without storing, which emits an unparseable directive naming the table and makes
+ * the assembler reject the build. That is the only failure this compiler can raise
+ * — it has no error string, the subset has no exit(), and stdout IS the generated
+ * asm. Silent truncation cost real debugging twice (src[] 16K->32K, then 32K->64K,
+ * the second time losing half of grep with no symptom but a missing match), which
+ * is why none of these fail quietly any more.
+ * IF YOU RAISE A LIMIT HERE, raise the matching literal in the guard — the subset
+ * has no #define (//#define is invisible to the host cc), so the bounds are spelled
+ * out at both ends. The guard names in the poison text say which function to look
+ * in. Identifiers are capped at 63 in lex(), not by tname[128]: consumers copy
+ * tname into char[64] locals, so 64 is the real limit.
  * Do not shrink these to "save space" — there is no space to save on the host. */
 char gpool[8192];    /* packed NUL-terminated names */
 int gpooln = 0;
@@ -435,6 +462,22 @@ int emitstr(char *s) {
 
 int line(char *s) { emitstr(s); putchar(10); return 0; }
 
+/* toobig: a fixed table filled up. This is the ONLY way this compiler can report
+ * a problem — it has no error string, the subset has no exit(), and stdout IS the
+ * generated asm — so say it by emitting a directive the assembler cannot parse,
+ * with the table's name in it. The build then stops on the real reason instead of
+ * quietly producing a truncated program. Same trick as slurp(); see the note above
+ * the table declarations.
+ * Callers MUST return without writing after calling this — poisoning the output is
+ * not enough on its own, since the out-of-bounds write is what corrupts the host. */
+int toobig(char *what) {
+    emitstr("        .p8cc_table_full__");
+    emitstr(what);
+    emitstr("__raise_it_in_p8cc_c");
+    putchar(10);
+    return 0;
+}
+
 int emitdec(int v) {                 /* unsigned decimal (values are 0..65535) */
     char buf[6];
     int n;
@@ -454,12 +497,16 @@ int strcpy_(char *d, char *s) {
 int intern(char *s) {                /* copy a name into gpool, return its offset */
     int off;
     off = gpooln;
-    while (*s != 0) { gpool[gpooln] = *s; gpooln = gpooln + 1; s = s + 1; }
+    while (*s != 0) {
+        if (gpooln >= 8191) { toobig("gpool_8192"); return off; }
+        gpool[gpooln] = *s; gpooln = gpooln + 1; s = s + 1;
+    }
     gpool[gpooln] = 0; gpooln = gpooln + 1;
     return off;
 }
 
 int addglobal(char *nm, int base, int ptr, int cnt, int hasi, int v) {
+    if (gcount >= 512) { toobig("globals_512"); return 0; }   /* goff/gbase/... [512] */
     goff[gcount] = intern(nm);
     gbase[gcount] = base;
     gptr[gcount] = ptr;
@@ -473,12 +520,16 @@ int addglobal(char *nm, int base, int ptr, int cnt, int hasi, int v) {
 int intern_v(char *s) {              /* like intern, but into the per-fn vpool */
     int off;
     off = vpooln;
-    while (*s != 0) { vpool[vpooln] = *s; vpooln = vpooln + 1; s = s + 1; }
+    while (*s != 0) {
+        if (vpooln >= 4095) { toobig("vpool_4096"); return off; }
+        vpool[vpooln] = *s; vpooln = vpooln + 1; s = s + 1;
+    }
     vpool[vpooln] = 0; vpooln = vpooln + 1;
     return off;
 }
 
 int addvar(char *nm, int foff, int base, int ptr, int cnt) {
+    if (vcount >= 256) { toobig("locals_256__params_plus_locals_in_one_fn"); return 0; }
     vnoff[vcount] = intern_v(nm);
     vfoff[vcount] = foff;
     vbase[vcount] = base;
@@ -929,6 +980,15 @@ int factor() {
     ty = mkty(0, 0, 0);
     if (tok == T_NUM) { set_ax(tval); lex(); ty = mkty(0, 0, 0); }
     else if (tok == T_STR) {                     /* string literal -> char* */
+        /* Report, then still consume the token and return a char* type: bailing out
+         * without lex() would leave tok == T_STR and spin the parser on it.
+         * (spooln <= 32767 and tstrlen <= 1023, so the sum cannot wrap 16 bits.) */
+        if (scount >= 2048 || spooln + tstrlen >= 32768) {
+            if (scount >= 2048) toobig("strings_2048");      /* soff/slen[2048] */
+            else toobig("spool_32768");
+            lex();
+            return mkty(1, 1, 0);
+        }
         k = scount; scount = scount + 1;
         soff[k] = spooln; slen[k] = tstrlen;
         j = 0;
@@ -1498,14 +1558,20 @@ int count_locals() {                             /* total local bytes (arrays si
 int st_intern(char *s) {
     int o;
     o = stpooln;
-    while (*s != 0) { stpool[stpooln] = *s; stpooln = stpooln + 1; s = s + 1; }
+    while (*s != 0) {
+        if (stpooln >= 2047) { toobig("stpool_2048"); return o; }
+        stpool[stpooln] = *s; stpooln = stpooln + 1; s = s + 1;
+    }
     stpool[stpooln] = 0; stpooln = stpooln + 1;
     return o;
 }
 int m_intern(char *s) {
     int o;
     o = mpooln;
-    while (*s != 0) { mpool[mpooln] = *s; mpooln = mpooln + 1; s = s + 1; }
+    while (*s != 0) {
+        if (mpooln >= 8191) { toobig("mpool_8192"); return o; }
+        mpool[mpooln] = *s; mpooln = mpooln + 1; s = s + 1;
+    }
     mpool[mpooln] = 0; mpooln = mpooln + 1;
     return o;
 }
@@ -1517,11 +1583,15 @@ int register_struct(int isunion, char *tag) {
     int mbsz;
     int base;
     int cnt;
+    if (stcount >= 128) { toobig("structs_128"); return 0; }  /* stnoff/stsz/... [128] */
     stnoff[stcount] = st_intern(tag);
     stfirst[stcount] = mtotal;
     eat("{");
     off = 0; sz = 0;
-    while (is_punct("}") == 0 && tok != T_EOF) {
+    /* mtotal < 1024 is a guard, not a parse rule: the subset has no break, so the
+     * limit has to live in the loop condition. Stopping early misparses the rest of
+     * this struct, which is fine — toobig() below has already poisoned the output. */
+    while (is_punct("}") == 0 && tok != T_EOF && mtotal < 1024) {
         base = parse_type();                     /* member type; sets g_ptr */
         mnoff[mtotal] = m_intern(tname); lex();  /* member name */
         cnt = 0;
@@ -1534,6 +1604,7 @@ int register_struct(int isunion, char *tag) {
         mtotal = mtotal + 1;
         eat(";");
     }
+    if (mtotal >= 1024) toobig("members_1024__across_all_structs");
     eat("}"); eat(";");
     if (isunion) stsz[stcount] = sz;
     else stsz[stcount] = off;
