@@ -146,7 +146,7 @@ RS2H        = $63A3
 RPTRL       = $63A4              ; OUTCH: next free byte in the capture buffer
 RPTRH       = $63A5
 RHX         = $63A6              ; OPHEX8 scratch
-REDNAME     = $63A7              ; redirect target filename (null-terminated, <=48): $73A7..$73D6
+REDNAME     = $63A7              ; redirect target filename (null-terminated, <=48): $63A7..$63D6
 FNDIR       = $63D7              ; directories counted
 FNFIL       = $63D8              ; files counted
 FNDEL       = $63D9              ; deleted slots counted
@@ -166,7 +166,7 @@ LENHI2      = $63E2              ; entry length, bits 16..23 (the BIOS FLEN 3rd 
 SECCH       = $63E3              ; SECCOUNT sector-count high byte (files >255 sectors)
 MINSECH     = $63E4              ; PACK: chosen extent's sector count, high byte
 CPYNH       = $63E5              ; PK2MOVE: sectors-to-copy counter, high byte
-TFRAME      = $64B7              ; 8 frames x 4 bytes (dst_lo,dst_hi,dsc,idx): $74B7..$74D6
+TFRAME      = $64B7              ; 8 frames x 4 bytes (dst_lo,dst_hi,dsc,idx): $64B7..$64D6
 PPSEC       = $63FA              ; chosen extent's parent-entry: dir sector LBA / slot
 PPSLOT      = $63FB
 CANDSEC     = $63FC              ; candidate entry's location during the find walk
@@ -175,9 +175,9 @@ PARST       = $63FE              ; PK2FIX: parent directory start LBA (for '..')
 CWDPATH     = $6400              ; textual CWD path for the prompt (up to 48 bytes)
 INMODE      = $6430              ; SYS_GETC source: 0 = console, 1 = the read stream
 INARM       = $6431              ; shell armed a '< file' for the next RUN
-INNAME      = $6432              ; '< file' name (null-terminated, <=48): $7432..$7461
+INNAME      = $6432              ; '< file' name (null-terminated, <=48): $6432..$6461
 PIPEF       = $6462              ; pipe stage: 0 none, 1 left ran, 2 right ran
-PIPEBUF     = $6463              ; saved right-hand command of a 'cmd | cmd' ($7463..$74A2)
+PIPEBUF     = $6463              ; saved right-hand command of a 'cmd | cmd' ($6463..$64A2)
 CWDLH       = $64A3              ; CWDL high byte (current working directory start LBA)
 SDIRLH      = $64A4              ; SDIRL high byte (directory being scanned this op)
 STARTHI     = $64A5              ; STARTLO high byte (entry start LBA from FINDENT)
@@ -204,12 +204,12 @@ APLBA       = $64D9              ; >> : old file's start LBA (2 bytes)
 APREM       = $64DB              ; >> : old file bytes left to copy (2 bytes)
 APCHK       = $64DD              ; >> : bytes to emit from the current sector (2 bytes)
 SCRIPTM     = $64E0              ; 1 = the shell is running lines from a `sh` script
-SCRSAVE     = $64E1              ; saved script read-stream state (ROSTATE 13 + ROSDRV = 14: $74E1..$74EE)
+SCRSAVE     = $64E1              ; saved script read-stream state (ROSTATE 13 + ROSDRV = 14: $64E1..$64EE)
 SCRCNT      = $64EF              ; byte counter for SAVESCR/RESTSCR (1)
 APBUF       = $6800              ; >> prepend sector buffer (512B, below the TPA); also the
 IBUF        = $6500              ; 512-byte buffer for the stdin read stream
-PATHBUF     = $6700              ; search path, ';'-separated dirs; default '/BIN' ($7700..$773F)
-RUNPATH     = $6740              ; scratch: candidate program path built during a lookup ($7740..$779F)
+PATHBUF     = $6700              ; search path, ';'-separated dirs; default '/BIN' ($6700..$673F)
+RUNPATH     = $6740              ; scratch: candidate program path built during a lookup ($6740..$679F)
 RUNSKIP     = $67A0              ; DORUN: 1 = skip the program-name word for the arg pointer
 PSCANL      = $67A1              ; PATH search cursor into PATHBUF (low)
 PSCANH      = $67A2              ; PATH search cursor into PATHBUF (high)

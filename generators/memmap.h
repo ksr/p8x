@@ -147,7 +147,7 @@
 #define RPTRL       0x63A4       /* OUTCH: next free byte in the capture buffer */
 #define RPTRH       0x63A5
 #define RHX         0x63A6       /* OPHEX8 scratch */
-#define REDNAME     0x63A7       /* redirect target filename (null-terminated, <=48): $73A7..$73D6 */
+#define REDNAME     0x63A7       /* redirect target filename (null-terminated, <=48): $63A7..$63D6 */
 #define FNDIR       0x63D7       /* directories counted */
 #define FNFIL       0x63D8       /* files counted */
 #define FNDEL       0x63D9       /* deleted slots counted */
@@ -167,7 +167,7 @@
 #define SECCH       0x63E3       /* SECCOUNT sector-count high byte (files >255 sectors) */
 #define MINSECH     0x63E4       /* PACK: chosen extent's sector count, high byte */
 #define CPYNH       0x63E5       /* PK2MOVE: sectors-to-copy counter, high byte */
-#define TFRAME      0x64B7       /* 8 frames x 4 bytes (dst_lo,dst_hi,dsc,idx): $74B7..$74D6 */
+#define TFRAME      0x64B7       /* 8 frames x 4 bytes (dst_lo,dst_hi,dsc,idx): $64B7..$64D6 */
 #define PPSEC       0x63FA       /* chosen extent's parent-entry: dir sector LBA / slot */
 #define PPSLOT      0x63FB
 #define CANDSEC     0x63FC       /* candidate entry's location during the find walk */
@@ -176,9 +176,9 @@
 #define CWDPATH     0x6400       /* textual CWD path for the prompt (up to 48 bytes) */
 #define INMODE      0x6430       /* SYS_GETC source: 0 = console, 1 = the read stream */
 #define INARM       0x6431       /* shell armed a '< file' for the next RUN */
-#define INNAME      0x6432       /* '< file' name (null-terminated, <=48): $7432..$7461 */
+#define INNAME      0x6432       /* '< file' name (null-terminated, <=48): $6432..$6461 */
 #define PIPEF       0x6462       /* pipe stage: 0 none, 1 left ran, 2 right ran */
-#define PIPEBUF     0x6463       /* saved right-hand command of a 'cmd | cmd' ($7463..$74A2) */
+#define PIPEBUF     0x6463       /* saved right-hand command of a 'cmd | cmd' ($6463..$64A2) */
 #define CWDLH       0x64A3       /* CWDL high byte (current working directory start LBA) */
 #define SDIRLH      0x64A4       /* SDIRL high byte (directory being scanned this op) */
 #define STARTHI     0x64A5       /* STARTLO high byte (entry start LBA from FINDENT) */
@@ -205,12 +205,12 @@
 #define APREM       0x64DB       /* >> : old file bytes left to copy (2 bytes) */
 #define APCHK       0x64DD       /* >> : bytes to emit from the current sector (2 bytes) */
 #define SCRIPTM     0x64E0       /* 1 = the shell is running lines from a `sh` script */
-#define SCRSAVE     0x64E1       /* saved script read-stream state (ROSTATE 13 + ROSDRV = 14: $74E1..$74EE) */
+#define SCRSAVE     0x64E1       /* saved script read-stream state (ROSTATE 13 + ROSDRV = 14: $64E1..$64EE) */
 #define SCRCNT      0x64EF       /* byte counter for SAVESCR/RESTSCR (1) */
 #define APBUF       0x6800       /* >> prepend sector buffer (512B, below the TPA); also the */
 #define IBUF        0x6500       /* 512-byte buffer for the stdin read stream */
-#define PATHBUF     0x6700       /* search path, ';'-separated dirs; default '/BIN' ($7700..$773F) */
-#define RUNPATH     0x6740       /* scratch: candidate program path built during a lookup ($7740..$779F) */
+#define PATHBUF     0x6700       /* search path, ';'-separated dirs; default '/BIN' ($6700..$673F) */
+#define RUNPATH     0x6740       /* scratch: candidate program path built during a lookup ($6740..$679F) */
 #define RUNSKIP     0x67A0       /* DORUN: 1 = skip the program-name word for the arg pointer */
 #define PSCANL      0x67A1       /* PATH search cursor into PATHBUF (low) */
 #define PSCANH      0x67A2       /* PATH search cursor into PATHBUF (high) */
