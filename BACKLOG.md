@@ -181,6 +181,53 @@ remainder is why it is still here.
 
 - [ ] Order backplane PCB first as the cheap validation article
 
+- [ ] **`SYS_OPEN` — open-by-name as a syscall (2026-07-16).** Commands each do the
+      same four-step dance: `SYS_GETCWD` -> build an absolute path in their OWN
+      `path[80]` -> `FRESOLVE` -> `FOPEN`. 16 of 25 commands call FOPEN directly and
+      15 build their own CWD-prefixed path. That per-command path buffer is exactly
+      where Wave 2 found overflows in dir/cmp/mv/cat/find — five buffers, five
+      bounds to get wrong. Fold it into one OS call with ONE bounded buffer.
+      Needs no ABI change: commands still receive a raw string, they just make one
+      call instead of four. `lib_apath.c`'s abspath() is separate and stays — cp/mv/
+      diff need the path STRING, not just an open.
+      **Do this AND it kills the FSDIRBUF/SBUF footgun** (see the cat fix,
+      eda2b7f): every command that opens a file while its stdout is a redirect
+      must currently remember to `FSDIRBUF` its dir scan off SBUF, or the scan
+      overwrites the redirect's buffered output. That discipline should live in the
+      OS once, not in every command forever — and pipes make it systematically more
+      likely, since every pipe stage IS a redirect-writer.
+      **Design blocker to resolve first:** there is no free 512-byte page in OS
+      scratch for SYS_OPEN to own a private dir buffer — $6000-$62FF is BIOS
+      scratch + SBUF $6100, and $6300-$69FF is fully allocated (RUNPATH $6740,
+      PATHBUF, APBUF $6800...). Three routes:
+        1. bounded OS-side path buffer only; caller still supplies the scan page.
+           Kills the overflow class; cheapest; leaves the FSDIRBUF discipline out.
+        2. flush the write stream before the dir scan — no page needed and kills
+           the footgun outright, but partial-sector flush-then-append is real FS
+           surgery.
+        3. reclaim a page from $63xx-$69xx.
+      (This was item 1 of a 2-part plan; item 2, real stderr for /bin commands,
+      landed in b19ae24.)
+
+- [ ] **p8cc.c drops 22 function bodies when compiling itself (2026-07-16).** A real
+      codegen bug in p8cc.c that p8cc.py does NOT have — it compiles the same source
+      correctly. Only self-compilation stresses this path, and the differential
+      oracle cannot catch it because both compilers must AGREE to pass.
+      Symptom: `cc -o pc compiler/p8cc.c && ./pc < compiler/p8cc.c > self.asm`
+      exits 0, emits 40,632 lines and the full 781-string pool, but 22 of the 90
+      function bodies never get a label — they are CALLED and never DEFINED
+      (`JSR _f_addsub` with no `_f_addsub:`; same for `_f_main`), so the output
+      fails to assemble with "undefined symbol '_f_main'".
+      NOT a parse stop and NOT a buffer overflow: the missing set is scattered
+      (addsub at line 1111 is missing while expr at 1275 emitted fine), the whole
+      string pool is present, and the src[]/table limits were all raised in b19ae24
+      (src is now 64 KB vs p8cc.c's own 61 KB source, so it fits for the first time).
+      Missing include: addsub, bitand_, bitor_, bitxor_, block, count_locals,
+      emit_globals, emit_runtime, main, ...
+      Worth fixing on its own merits — it is a live compiler bug, not a
+      self-hosting stunt. Note this does NOT make p8cc.c self-HOSTING (the output
+      still could not run on the P8X; see WONT-DO), only self-compiling on the host.
+
 ---
 
 ## IDEAS
