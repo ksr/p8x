@@ -1587,6 +1587,16 @@ int toplevel() {
             }
         }
         eat(")");
+        /* A forward declaration -- `int expr();` -- has no body. Without this we
+         * treated it as a DEFINITION: emitted `_f_expr:` plus a full prologue, then
+         * tried to parse the `;` as the body, which desynced the parser and lost
+         * EVERY function defined after it (the real definition included). Only the
+         * prototype's own empty stub survived, so a file that forward-declares for
+         * mutual recursion silently lost most of itself and still exited 0.
+         * The params were parsed above only to reach the `)`; drop them with the
+         * scope and take nothing else from the declaration. */
+        if (is_punct(";")) { lex(); return 0; }
+
         i = 0;                                    /* param i at __fp + 2*(pcount-i) */
         while (i < pcount) { vfoff[i] = 2 * (pcount - i); i = i + 1; }
 
