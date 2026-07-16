@@ -11,6 +11,7 @@
  * console key, so it lives in /bin, not the resident kernel.
  */
 //#use abi     /* named BIOS/OS addresses (this command uses only the builtins) */
+//#use err     /* eputs(): errors -> console, never into a redirect/pipe */
 
 char *HD = "0123456789ABCDEF";
 
@@ -61,7 +62,7 @@ int main() {
         any = 1;
         d = hx(*a);
     }
-    if (any == 0) { puts("examine: bad address"); return 1; }
+    if (any == 0) { eputs("examine: bad address"); return 1; }
 
     /* getchar() (SYS_GETC) echoes the key itself; on Enter it echoes CRLF and
      * queues an LF that the next getchar() returns -- so we echo nothing here,

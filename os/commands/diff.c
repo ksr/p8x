@@ -22,6 +22,7 @@ int nb;                                       /* number of lines read from file 
 
 //#use apath
 //#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
+//#use err     /* eputs(): errors -> console, never into a redirect/pipe */
 
 /* openf: resolve the path in the global `path` and open it for reading.
  * The `a` parameter is unused (the routine reads the global `path`).
@@ -115,12 +116,18 @@ int main() {
     n = abspath(path, a);                     /* file 1: write absolute path, n = chars of arg consumed */
     a = a + n;                                /* advance past the first filename token */
     while (*a == 32) { a = a + 1; }
-    if (openf(path) == 0) { puts("diff: file1 not found"); return 1; }
+    /* The three messages below are all failure exits, so they use eputs(): they
+     * must reach the console even when stdout is a redirect or a pipe, or
+     * `diff a missing >OUT` would write the diagnostic INTO OUT and
+     * `diff a missing | wc` would feed it to wc as data. The -h/no-arg usage
+     * above returns 0 and is requested output, so it stays on puts(). */
+    if (openf(path) == 0) { eputs("diff: file1 not found"); return 1; }
     na = loadlines(alines);
 
-    if (*a == 0 || *a == 13) { puts("usage: DIFF file1 file2"); return 1; }
+    /* usage printed because file2 is missing -> an error, not a request */
+    if (*a == 0 || *a == 13) { eputs("usage: DIFF file1 file2"); return 1; }
     abspath(path, a);                         /* file 2 */
-    if (openf(path) == 0) { puts("diff: file2 not found"); return 1; }
+    if (openf(path) == 0) { eputs("diff: file2 not found"); return 1; }
     nb = loadlines(blines);
 
     p = 0;                                     /* common prefix */

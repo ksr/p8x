@@ -261,29 +261,44 @@ de_b:   LDA di
         STA di
         JMP de_b
 de_bd:  RTS
-; Error/usage exits: point P1 at a message string, fall through to d_pm which
-; prints it (SYS_PUTS) followed by a newline, then returns.
+; Message exits: point P1 at a string, then fall into one of two printers.
+; There are two, because the sink matters. d_perr (PUTS/CONOUT) is the raw
+; console: an ERROR must never enter a redirect or a pipe, or `diff a missing
+; >OUT` would write the diagnostic INTO OUT and `diff a missing | wc` would feed
+; it to wc as data. d_pm (SYS_PUTS/SYS_PUTC) is stdout, for output the user
+; actually asked for. Matches diff.c's eputs()/puts() split.
+;
+; d_usage is reached from -h/-H *and* from an empty arg tail, and returns 0
+; either way — it is requested output, so `diff -h >notes` still captures it.
 d_usage:LDA #<u_use
         TAP1L
         LDA #>u_use
         TAP1H
         JMP d_pm
+; d_usage2/d_nf1/d_nf2 are failure exits (diff.c returns 1) -> console.
+; d_usage2 is a usage line printed *because* file2 was missing, so it is an
+; error like the not-found pair, not a request.
 d_usage2:
         LDA #<u_use2
         TAP1L
         LDA #>u_use2
         TAP1H
-        JMP d_pm
+        JMP d_perr
 d_nf1:  LDA #<u_nf1
         TAP1L
         LDA #>u_nf1
         TAP1H
-        JMP d_pm
+        JMP d_perr
 d_nf2:  LDA #<u_nf2
         TAP1L
         LDA #>u_nf2
         TAP1H
-d_pm:   LDA #0
+d_perr: LDA #0                       ; error message -> raw console
+        JSR PUTS
+        LDA #10
+        JSR CONOUT                   ; its newline must go the same way
+        RTS
+d_pm:   LDA #0                       ; requested output -> stdout
         JSR SYS_PUTS
         LDA #10
         JSR SYS_PUTC

@@ -14,7 +14,8 @@
  * FGETB=$0127 (->A, C=1 at EOF).  512-byte read buffer at $FC00 (page-aligned,
  * clear of code/globals at $6A00 and the stack at $FEFF).
  */
-//#use abi     /* FRESOLVE, FOPEN, FGETB, RDBUF ($FC00); no SYS_GETCWD — man is CWD-independent */
+//#use abi     /* FRESOLVE, FOPEN, FGETB, RDBUF ($FC00), PUTS; no SYS_GETCWD — man is CWD-independent */
+//#use err     /* eputs(): errors -> console, never into a redirect/pipe */
 
 char path[80];                               /* "/man/" + the requested name */
 
@@ -58,12 +59,14 @@ int main() {
      * for the following FOPEN.  FOPEN reads into RDBUF (the $FC00 page buffer). */
     bios(FRESOLVE, path, 0);                    /* FRESOLVE: DIRLBA=parent, FNAME=leaf */
     if (bios(FOPEN, RDBUF, 0) & 256) {      /* FOPEN; carry=1 -> not found */
+        /* Failure path: this diagnostic must never enter a redirect or a pipe
+         * (`man nope >notes` would write it into notes, `man nope | wc` would
+         * count it as data), so both halves go straight to the console via PUTS
+         * — eputs() finishes the second half with the newline on the same sink. */
         p = "no manual entry for ";
-        i = 0;
-        while (p[i] != 0) { putchar(p[i]); i = i + 1; }
-        i = 5;                                /* the name part of "/man/NAME" */
-        while (path[i] != 0) { putchar(path[i]); i = i + 1; }
-        putchar(10);
+        bios(PUTS, p, 0);                     /* first half, no newline yet */
+        p = path + 5;                         /* the name part of "/man/NAME" */
+        eputs(p);                             /* name + its trailing newline */
         return 1;
     }
     c = bios(FGETB, 0, 0);                    /* FGETB */

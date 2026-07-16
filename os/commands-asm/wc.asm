@@ -166,14 +166,19 @@ w_done: LDA lines                     ; print lines words bytes
         LDA #10
         JSR SYS_PUTC
         RTS
+; w_nf is an ERROR: print it to the raw console (PUTS/CONOUT), never to stdout.
+; stdout may be a redirect or a pipe — `wc missing >F` would otherwise write the
+; message INTO F, and `wc missing | cmd` would hand it downstream as data.
+; Matches wc.c's eputs(). w_usage below is NOT an error (the user asked with -h),
+; so it stays on stdout and `wc -h >notes` still captures it.
 w_nf:   LDA #<u_nf
         TAP1L
         LDA #>u_nf
         TAP1H
         LDA #0
-        JSR SYS_PUTS
+        JSR PUTS
         LDA #10
-        JSR SYS_PUTC
+        JSR CONOUT
         RTS
 w_usage:LDA #<u_use
         TAP1L

@@ -322,13 +322,13 @@ c_notdir:
         TAP1L
         LDA #>u_notdir
         TAP1H
-        JMP c_put
+        JMP c_eput
 c_nomatch:
         LDA #<u_nomat
         TAP1L
         LDA #>u_nomat
         TAP1H
-        JMP c_put
+        JMP c_eput
 ; cg_ptr: cgp = gfiles + cgi*64
 cg_ptr: LDA #0
         STA cgp
@@ -403,6 +403,9 @@ cgb_adv:INP1
         STA cgk
         JMP cgb_l
 cgb_d:  RTS
+; c_usage: -h was asked for, so this is requested OUTPUT: it stays on stdout via
+; SYS_PUTS/SYS_PUTC and `cp -h >notes` still captures it. Everything below it is
+; on a failure path and takes the c_eput tail instead.
 c_usage:LDA #<u_use
         TAP1L
         LDA #>u_use
@@ -413,11 +416,21 @@ c_usage2:
         TAP1L
         LDA #>u_use2
         TAP1H
-        JMP c_put
+        JMP c_eput
 c_srcnf:LDA #<u_nf
         TAP1L
         LDA #>u_nf
         TAP1H
+; c_eput: ERROR tail — print P1's string on the raw console (PUTS/CONOUT), never
+; to stdout, which may be a redirect or a pipe: `cp x y >F` would otherwise write
+; the message INTO F and `cp x y | wc` would feed it to wc as data. The newline
+; goes to CONOUT for the same reason, or the message would split across two
+; sinks. Matches cp.c's eputs(). c_put below is the plain stdout tail (-h only).
+c_eput: LDA #0
+        JSR PUTS
+        LDA #10
+        JSR CONOUT
+        RTS
 c_put:  LDA #0
         JSR SYS_PUTS
         LDA #10

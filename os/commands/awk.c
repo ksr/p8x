@@ -18,6 +18,7 @@
  */
 //#use stdin   /* nextc(), openarg(), path[], fromfile — file/stdin input */
 //#use regex   /* match(re, t): basic-regex matcher . * + ? ^ $ */
+//#use err     /* eputs(): errors -> console, never into a redirect/pipe */
 
 char line[256];                              /* the current record ($0), NUL-term */
 int  fstart[40];                             /* field start offsets into line[] */
@@ -225,7 +226,11 @@ int main() {
 
     while (*a == 32) { a = a + 1; }           /* the rest = an input file, or stdin */
     r = openarg(a);   /* opens the named file, or wires up stdin if a is empty; 2 = missing file */
-    if (r == 2) { puts("awk: not found"); return 1; }
+    /* not-found is an ERROR: eputs() sends it to the console, since stdout may be
+     * a redirect or a pipe (`awk '{print}' missing | wc` must not feed wc the
+     * message as data). The -h usage above is requested output, so it stays on
+     * stdout. */
+    if (r == 2) { eputs("awk: not found"); return 1; }
 
     nr = 0;
     while (readrec()) {

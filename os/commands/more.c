@@ -17,6 +17,7 @@
  */
 //#use stdin   /* path[80], fromfile, nextc(), openarg() */
 //#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
+//#use err     /* eputs(): errors -> console, never into a redirect/pipe */
 
 /* prompt: draw "--More--", block on one console key, wipe the prompt off the
  * line, and return the key (low 8 bits). Read from CONIN, not stdin, so paging
@@ -52,7 +53,7 @@ int main() {
 
     fromfile = 0;
     r = openarg(a);
-    if (r == 2) { puts("more: not found"); return 1; }
+    if (r == 2) { eputs("more: not found"); return 1; }
     if (r == 1) { fromfile = 1; }
 
     lines = 0;

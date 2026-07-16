@@ -284,14 +284,19 @@ t_pdec: LDA count
         JMP t_pr
 t_end:  RTS
 ; Error/usage exits: print the message string, then a newline, then return.
+; t_nf is an ERROR: print it to the raw console (PUTS/CONOUT), never to stdout.
+; stdout may be a redirect or a pipe — `tail missing >F` would otherwise write the
+; message INTO F, and `tail missing | wc` would feed it to wc as data. Matches
+; tail.c's eputs(). t_usage below is NOT an error (the user asked with -h), so it
+; stays on stdout and `tail -h >notes` still captures it.
 t_nf:   LDA #<u_nf
         TAP1L
         LDA #>u_nf
         TAP1H
         LDA #0
-        JSR SYS_PUTS
+        JSR PUTS
         LDA #10
-        JSR SYS_PUTC
+        JSR CONOUT
         RTS
 t_usage:LDA #<u_use
         TAP1L

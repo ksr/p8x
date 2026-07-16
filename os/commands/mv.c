@@ -28,6 +28,7 @@ char gfiles[1536];                   /* glob_expand output: 24 slots x 64 bytes 
 //#use streq
 //#use globx     /* glob_expand(pat, out, maxn): expand a glob into a path list */
 //#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
+//#use err     /* eputs(): errors -> console, never into a redirect/pipe */
 
 /* joinp: out = dir + "/" + name (name NUL-terminated). */
 int joinp(char *out, char *dir, char *name) {
@@ -91,25 +92,29 @@ int main() {
         patw[i] = a[i]; i = i + 1;
     }
     patw[i] = 0;
-    if (i == 0) { puts("usage: MV src dst"); return 1; }
+    /* These two usages are printed BECAUSE the arguments were wrong (return 1),
+     * so they are diagnostics, not output: eputs() keeps them off stdout, which
+     * the shell may have aimed at a file or a pipe. The -h usage above is what
+     * the user asked for, so it stays on stdout. */
+    if (i == 0) { eputs("usage: MV src dst"); return 1; }
     a = a + i;
     while (*a == 32) { a = a + 1; }
-    if (*a == 0 || *a == 13) { puts("usage: MV src dst"); return 1; }
+    if (*a == 0 || *a == 13) { eputs("usage: MV src dst"); return 1; }
     abspath(dst, a);                           /* DST word */
 
     if (g == 0) {                              /* single named source */
         abspath(src, patw);
-        if (streq(src, dst)) { puts("mv: source and dest are the same"); return 1; }
-        if (move_one(src, dst)) { puts("mv: source not found"); return 1; }
+        if (streq(src, dst)) { eputs("mv: source and dest are the same"); return 1; }
+        if (move_one(src, dst)) { eputs("mv: source not found"); return 1; }
         return 0;
     }
 
     if (bios(FOPENDIR, dst, 0) & 256) {          /* glob -> dst must be a dir */
-        puts("mv: target is not a directory");
+        eputs("mv: target is not a directory");
         return 1;
     }
     nm = glob_expand(patw, gfiles, 24);
-    if (nm == 0) { puts("mv: no match"); return 1; }
+    if (nm == 0) { eputs("mv: no match"); return 1; }
     i = 0;
     while (i < nm) {
         m = gfiles + i * 64;                    /* one match (dir prefix + name) */

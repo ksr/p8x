@@ -42,21 +42,25 @@ int T_STR = 4;
 int T_PUNCT = 5;
 
 /* ---- scanner state -------------------------------------------------------- */
-char src[32768];     /* whole source, NUL-terminated. Host-side buffer only —
-                      * a clib-spliced command (e.g. sed + stdin/glob/regex libs)
-                      * is ~17 KB and overflowed the old 16 KB. (Milestone B streams
-                      * this on-target, so this size doesn't constrain the target.) */
+char src[65536];     /* whole source, NUL-terminated. Host-side buffer only —
+                      * this compiler never runs on the P8X (Milestone B streams the
+                      * source on-target), so the size costs the target nothing and
+                      * there is no reason to keep it tight.
+                      * History: 16 KB -> 32 KB when a clib-spliced command (~17 KB)
+                      * overflowed it; 32 KB -> 64 KB (2026-07-16) when grep.c sat
+                      * 205 bytes under the limit and adding one //#use pushed it
+                      * over. Both times the overflow was SILENT (see slurp()). */
 int srclen = 0;
 int spos = 0;        /* scan cursor */
 int tok = 0;         /* current token kind */
 int tval = 0;        /* numeric value when tok == T_NUM */
-char tname[64];      /* identifier / keyword / punctuation text */
-char tstr[256];      /* decoded bytes of the last T_STR token */
+char tname[128];      /* identifier / keyword / punctuation text */
+char tstr[1024];      /* decoded bytes of the last T_STR token */
 int tstrlen = 0;
 
 /* ---- object-like //#define macros (name -> 16-bit value) ------------------ */
-char mac_names[1024]; /* packed NUL-terminated macro names */
-int  mac_vals[64];    /* parallel values (k-th name -> mac_vals[k]) */
+char mac_names[4096]; /* packed NUL-terminated macro names */
+int  mac_vals[256];    /* parallel values (k-th name -> mac_vals[k]) */
 int  mac_cnt = 0;
 int  mac_end = 0;     /* next free offset in mac_names */
 int  mac_hit = 0;     /* set by mac_lookup: 1 if the name is a macro */
@@ -165,18 +169,28 @@ int mac_lookup(char *name) {
 /* Bounded by sizeof(src)-1 so an oversized file truncates safely instead of
  * overflowing the buffer.  (src is a host-side 32 KB buffer; on-target — the
  * open Milestone B — this slurp would become a stream.) */
+/* slurp: read the whole source into src[]. If it does not fit, say so LOUDLY.
+ * This used to stop at the buffer end and carry on compiling the prefix — exit 0,
+ * plausible-looking asm, half a program. It cost real debugging twice: grep.c
+ * silently lost half its code and the only symptom was a missing match. Emitting
+ * a bad directive makes the assembler reject the output with the reason attached,
+ * which is the strongest failure this compiler can raise — it has no exit() and
+ * no stderr, and stdout is the generated asm. */
 int slurp() {
     int c;
     int n;
     n = 0;
     c = getchar();
-    while (c != 0 && c != -1 && n < 32767) {
+    while (c != 0 && c != -1 && n < 65535) {
         src[n] = c;
         n = n + 1;
         c = getchar();
     }
     src[n] = 0;
     srclen = n;
+    if (c != 0 && c != -1) {                 /* input remained -> src[] overflowed */
+        puts("        .p8cc_source_too_large__raise_src_in_p8cc_c");
+    }
     return n;
 }
 
@@ -376,34 +390,34 @@ int g_ptr = 0;       /* pointer depth from the most recent parse_type() */
  * self-compilation. See BACKLOG "Milestone A".
  * If a command ever approaches 64 globals or 64 string literals, these need
  * raising AND a real diagnostic path — do not just widen them silently. */
-char gpool[1024];    /* packed NUL-terminated names */
+char gpool[8192];    /* packed NUL-terminated names */
 int gpooln = 0;
-int goff[64];        /* name offset in gpool */
-int gbase[64];       /* base type (0 int / 1 char) */
-int gptr[64];        /* pointer depth */
-int gcnt[64];        /* array element count (0 = scalar) */
-int ghas[64];        /* has a constant initializer? */
-int gini[64];        /* the initializer value */
+int goff[512];        /* name offset in gpool */
+int gbase[512];       /* base type (0 int / 1 char) */
+int gptr[512];        /* pointer depth */
+int gcnt[512];        /* array element count (0 = scalar) */
+int ghas[512];        /* has a constant initializer? */
+int gini[512];        /* the initializer value */
 int gcount = 0;
 
 /* ---- string-literal pool (emitted as __sN: .byte ... at the end) ---------- */
-char spool[1024];
+char spool[32768];
 int spooln = 0;
-int soff[64];        /* offset of string i in spool */
-int slen[64];        /* length of string i */
+int soff[2048];        /* offset of string i in spool */
+int slen[2048];        /* length of string i */
 int scount = 0;
 
 /* ---- per-function scope: params (frame offset +2,+4..) and locals (-2,-4..) */
-char vpool[512];     /* packed names of the current function's params+locals */
+char vpool[4096];     /* packed names of the current function's params+locals */
 int vpooln = 0;
-int vnoff[64];       /* name offset in vpool */
-int vfoff[64];       /* frame offset relative to __fp */
-int vbase[64];       /* base type */
-int vptr[64];        /* pointer depth */
-int vcnt[64];        /* array element count (0 = scalar) */
+int vnoff[256];       /* name offset in vpool */
+int vfoff[256];       /* frame offset relative to __fp */
+int vbase[256];       /* base type */
+int vptr[256];        /* pointer depth */
+int vcnt[256];        /* array element count (0 = scalar) */
 int vcount = 0;
 int nlocoff = 0;     /* running frame offset for locals (grows negative) */
-char curfunc[64];    /* name of the function being compiled (for _ret_) */
+char curfunc[128];    /* name of the function being compiled (for _ret_) */
 
 /* ---- variable lookup result ----------------------------------------------- */
 int look_off = 0;        /* frame offset (locals/params) */
@@ -494,20 +508,20 @@ int lookup(char *nm) {               /* 1 if found; sets look_* (local first) */
 }
 
 /* ---- struct/union layouts ------------------------------------------------- */
-char stpool[512];    /* tag names */
+char stpool[2048];    /* tag names */
 int stpooln = 0;
-int stnoff[16];      /* tag name offset */
-int stsz[16];        /* total size in bytes */
-int stfirst[16];     /* index of first member in the flat member arrays */
-int stnm[16];        /* number of members */
+int stnoff[128];      /* tag name offset */
+int stsz[128];        /* total size in bytes */
+int stfirst[128];     /* index of first member in the flat member arrays */
+int stnm[128];        /* number of members */
 int stcount = 0;
-char mpool[1024];    /* member names (flat across all structs) */
+char mpool[8192];    /* member names (flat across all structs) */
 int mpooln = 0;
-int mnoff[160];      /* member name offset */
-int moff[160];       /* member offset within its struct */
-int mbase[160];      /* member base type */
-int mptr[160];       /* member pointer depth */
-int mcnt[160];       /* member array count (0 = scalar) */
+int mnoff[1024];      /* member name offset */
+int moff[1024];       /* member offset within its struct */
+int mbase[1024];      /* member base type */
+int mptr[1024];       /* member pointer depth */
+int mcnt[1024];       /* member array count (0 = scalar) */
 int mtotal = 0;
 int mm_off = 0;      /* find_member result */
 int mm_base = 0;

@@ -203,14 +203,19 @@ a_l1:   JSR split
 a_run:  JSR run_action
         JMP a_lp
 a_end:  RTS
+; a_nf / a_use: print a message (P1 = string ptr, A=0 flags) + a trailing LF (10).
+; a_nf is an ERROR: it goes to the raw console (PUTS/CONOUT), never to stdout —
+; stdout may be a redirect or a pipe, so `awk '{print}' missing >F` would else
+; write the message INTO F. Matches awk.c's eputs(). a_use is NOT an error (the
+; user asked with -h), so it stays on stdout and `awk -h >notes` still captures it.
 a_nf:   LDA #<m_nf
         TAP1L
         LDA #>m_nf
         TAP1H
         LDA #0
-        JSR SYS_PUTS
+        JSR PUTS
         LDA #10
-        JSR SYS_PUTC
+        JSR CONOUT
         RTS
 a_use:  LDA #<m_use
         TAP1L

@@ -35,6 +35,7 @@ char re[64];                                 /* the compiled regex (first arg wo
 //#use stdin   /* path[80], fromfile, nextc(), openarg(), open_path() */
 //#use dirent  /* de_read/de_isfile/de_isdir/de_isdot/de_lba/de_opendir */
 //#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
+//#use err     /* eputs(): errors -> console, never into a redirect/pipe */
 
 /* grep_stream: read the currently-open input (file stream or stdin) line by
  * line and print each match. If pfx != 0, print "pfx:" before the line (for -r).
@@ -217,7 +218,7 @@ int main() {
 
     fromfile = 0;
     j = openarg(a);                           /* the optional file/glob arg, else stdin */
-    if (j == 2) { puts("grep: not found"); return 1; }
+    if (j == 2) { eputs("grep: not found"); return 1; }   /* error -> console: stdout may be a redirect/pipe */
     if (j == 1) { fromfile = 1; }
     grep_stream(0);                           /* no path prefix in non-recursive mode */
     return 0;

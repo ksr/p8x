@@ -249,14 +249,18 @@ sp_eol: LDA #10                      ; terminate the printed line with LF
         JMP sp_l
 sp_done:RTS
 ; s_nf: file-not-found message; s_usage: usage text. Both print a line + RTS.
+; s_nf is an error, so it goes to the raw console via PUTS/CONOUT, not SYS_PUTS/
+; SYS_PUTC: those are stdout, which the shell may have aimed at a file or a pipe,
+; and a diagnostic must never land in the redirect or be read as data downstream.
+; s_usage below is output the user asked for with -h, so it stays on stdout.
 s_nf:   LDA #<u_nf
         TAP1L
         LDA #>u_nf
         TAP1H
         LDA #0
-        JSR SYS_PUTS
+        JSR PUTS
         LDA #10
-        JSR SYS_PUTC
+        JSR CONOUT
         RTS
 s_usage:LDA #<u_use
         TAP1L

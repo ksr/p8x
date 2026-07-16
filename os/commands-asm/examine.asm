@@ -115,14 +115,17 @@ e_crlf: LDA #13
         LDA #10
         JSR SYS_PUTC
         RTS
+; e_bad: the failure path. PUTS/CONOUT, not SYS_PUTS/SYS_PUTC: an error must go to
+; the raw console, never into a redirect or a pipe (`examine zz >F` would file the
+; diagnostic away as output, and `examine zz | wc` would feed it downstream as data).
 e_bad:  LDA #<m_bad
         TAP1L
         LDA #>m_bad
         TAP1H
         LDA #0
-        JSR SYS_PUTS
+        JSR PUTS
         LDA #10
-        JSR SYS_PUTC
+        JSR CONOUT
         RTS
 e_use:  LDA #<m_use
         TAP1L

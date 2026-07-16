@@ -3,7 +3,8 @@
 ; Reads file1 into b1 (<= 8 KB), then streams file2 comparing byte for byte,
 ; tracking a 16-bit offset + line. abspath + openf inline (from diff.asm); the
 ; 16-bit decimal printer + compares mirror awk.asm. BIOS: FRESOLVE $0133,
-; FOPEN $0124, FGETB $0127. OS: SYS_GETCWD $2003, SYS_PUTC $2009, SYS_PUTS $200F.
+; FOPEN $0124, FGETB $0127, PUTS $0112, CONOUT $0103 (console, for errors).
+; OS: SYS_GETCWD $2003, SYS_PUTC $2009, SYS_PUTS $200F (stdout, for output).
 ;#use abi
 
         .org $6A00
@@ -204,39 +205,50 @@ c_d1:   STA dv+1
         LDA #10
         JSR SYS_PUTC
         RTS
+; The five diagnostics below (and m_use2) all sit on failure exits, so they print
+; through c_epln -> the raw console. stdout may be a redirect or a pipe:
+; `cmp a b >OUT` would otherwise write "cmp: file2 not found" INTO OUT, and
+; `cmp a b | wc` would hand it to wc as data. Mirrors cmp.c's eputs().
 c_eof1: LDA #<m_eof1
         TAP1L
         LDA #>m_eof1
         TAP1H
-        JMP c_pln
+        JMP c_epln
 c_eof2: LDA #<m_eof2
         TAP1L
         LDA #>m_eof2
         TAP1H
-        JMP c_pln
+        JMP c_epln
 c_nf1:  LDA #<m_nf1
         TAP1L
         LDA #>m_nf1
         TAP1H
-        JMP c_pln
+        JMP c_epln
 c_nf2:  LDA #<m_nf2
         TAP1L
         LDA #>m_nf2
         TAP1H
-        JMP c_pln
+        JMP c_epln
 c_big:  LDA #<m_big
         TAP1L
         LDA #>m_big
         TAP1H
-        JMP c_pln
-c_use:  LDA #<m_use
-        TAP1L
-        LDA #>m_use
-        TAP1H
-        JMP c_pln
+        JMP c_epln
+; m_use2 is usage printed *because* file2 was missing — a failure, so console.
 c_use2: LDA #<m_use2
         TAP1L
         LDA #>m_use2
+        TAP1H
+c_epln: LDA #0
+        JSR PUTS                     ; $0112: console, bypassing stdout
+        LDA #10
+        JSR CONOUT                   ; the newline must go the same way
+        RTS
+; c_use is NOT an error: the user asked for it with -h (or bare CMP) and it exits
+; 0, so it stays on stdout and `CMP -h >notes` still captures it.
+c_use:  LDA #<m_use
+        TAP1L
+        LDA #>m_use
         TAP1H
 c_pln:  LDA #0
         JSR SYS_PUTS

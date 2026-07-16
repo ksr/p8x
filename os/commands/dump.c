@@ -12,6 +12,7 @@
  * where non-printable bytes ($20..$7E outside) show as '.'.
  */
 //#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
+//#use err     /* eputs(): errors -> console, never into a redirect/pipe */
 
 /* Uses only leaf helpers: argstr() -> command-line tail, peek() -> raw byte at
  * a 16-bit address, putchar()/puts() -> console out, and bios(CONIN,..) for a
@@ -63,7 +64,10 @@ int main() {
         any = 1;
         d = hx(*a);
     }
-    if (any == 0) { puts("dump: bad address"); return 1; }
+    /* Failure: the message goes to the console via eputs(), not stdout — stdout
+     * may be a redirect or a pipe, and a diagnostic must never land in the dump
+     * output (`dump zz >F`) or be read as dump data by the next pipe stage. */
+    if (any == 0) { eputs("dump: bad address"); return 1; }
 
     while (1) {                              /* one 256-byte block per page */
         row = 0;

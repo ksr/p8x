@@ -13,6 +13,7 @@
  * chars (readline's cap); line/out are 260 bytes so the NUL always fits.
  */
 //#use stdin   /* path[80], fromfile, nextc(), openarg() */
+//#use err     /* eputs(): errors -> console, never into a redirect/pipe */
 char pat[64];
 char rep[64];
 char line[260];
@@ -62,7 +63,7 @@ int main() {
         puts("usage: SED s/re/new/[g] [file]   substitute (regex: . * + ? ^ $)");
         return 0;
     }
-    if (a[0] != 's' || a[1] != '/') { puts("sed: only s/re/new/[g]"); return 1; }
+    if (a[0] != 's' || a[1] != '/') { eputs("sed: only s/re/new/[g]"); return 1; }
     a = a + 2;
     i = 0;                                     /* pattern up to '/' */
     while (*a != 0 && *a != '/' && i < 63) { pat[i] = *a; i = i + 1; a = a + 1; }
@@ -70,7 +71,7 @@ int main() {
     anchored = 0;
     rpat = pat;
     if (pat[0] == '^') { anchored = 1; rpat = pat + 1; }   /* ^ anchors to start */
-    if (*a != '/') { puts("sed: bad s/// (no second /)"); return 1; }
+    if (*a != '/') { eputs("sed: bad s/// (no second /)"); return 1; }
     a = a + 1;
     j = 0;                                     /* replacement up to '/' */
     while (*a != 0 && *a != '/' && j < 63) { rep[j] = *a; j = j + 1; a = a + 1; }
@@ -83,7 +84,7 @@ int main() {
     while (*a == 32) { a = a + 1; }            /* optional file */
     fromfile = 0;
     r = openarg(a);
-    if (r == 2) { puts("sed: not found"); return 1; }
+    if (r == 2) { eputs("sed: not found"); return 1; }
     if (r == 1) { fromfile = 1; }
 
     /* Rebuild each line into out[]: walk src index i, copying literally until a

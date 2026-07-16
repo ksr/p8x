@@ -15,6 +15,7 @@
  */
 //#use apath   /* abspath(dst, src): CWD-prefix a relative path, return length */
 //#use abi     /* FRESOLVE, FOPEN, FGETB, RDBUF ($FC00) */
+//#use err     /* eputs(): errors -> console, never into a redirect/pipe */
 
 char path[80];
 char b1[8192];                               /* file 1 contents */
@@ -63,7 +64,9 @@ int main() {
 
     a = argstr();                             /* raw command tail after "CMP" */
     while (*a == 32) { a = a + 1; }           /* skip leading spaces (32 = ' ') */
-    /* No args, bare CR (13), or a -h/-H help flag -> print usage and succeed. */
+    /* No args, bare CR (13), or a -h/-H help flag -> print usage and succeed.
+     * This one succeeds (return 0), so it is requested output, not a
+     * diagnostic: keep it on stdout so `CMP -h >notes` still captures it. */
     if (*a == 0 || *a == 13 ||
         (*a == '-' && (*(a + 1) == 'h' || *(a + 1) == 'H'))) {
         puts("usage: CMP file1 file2   report the first differing byte (silent if equal)");
@@ -75,7 +78,11 @@ int main() {
     n = abspath(path, a);                     /* file 1 */
     a = a + n;
     while (*a == 32) { a = a + 1; }           /* skip spaces before file2 */
-    if (openf(path) == 0) { puts("cmp: file1 not found"); return 1; }
+    /* Every message below is on a `return 1` path, so it is a diagnostic and
+     * must reach the console: stdout may be a redirect or a pipe, and an error
+     * that lands in the output file (or is counted by the next pipe stage as
+     * data) is worse than no message at all. Hence eputs(), not puts(). */
+    if (openf(path) == 0) { eputs("cmp: file1 not found"); return 1; }
     n1 = 0;                                    /* slurp file 1 into b1 */
     c = bios(FGETB, 0, 0);
     while ((c & 256) == 0) {
@@ -86,11 +93,12 @@ int main() {
         c = bios(FGETB, 0, 0);
     }
     /* b1[] holds only 8192 bytes; a longer file1 can't be compared reliably. */
-    if (n1 > 8192) { puts("cmp: file1 too large (max 8K)"); return 1; }
+    if (n1 > 8192) { eputs("cmp: file1 too large (max 8K)"); return 1; }
 
-    if (*a == 0 || *a == 13) { puts("usage: CMP file1 file2"); return 1; }
+    /* Usage printed *because* file2 is missing — a failure, unlike the -h one. */
+    if (*a == 0 || *a == 13) { eputs("usage: CMP file1 file2"); return 1; }
     abspath(path, a);                         /* file 2 */
-    if (openf(path) == 0) { puts("cmp: file2 not found"); return 1; }
+    if (openf(path) == 0) { eputs("cmp: file2 not found"); return 1; }
 
     off = 0;                                   /* byte offset into file2 / b1 */
     line = 1;                                  /* 1-based line of current byte */
@@ -98,7 +106,7 @@ int main() {
     while ((c & 256) == 0) {
         /* Ran past the end of the buffered file1 while file2 still has bytes:
          * file1 is a proper prefix of file2, so file1 hit EOF first. */
-        if (off >= n1) { puts("cmp: EOF on file1"); return 1; }   /* file2 longer */
+        if (off >= n1) { eputs("cmp: EOF on file1"); return 1; }  /* file2 longer */
         if ((b1[off] & 255) != (c & 255)) {
             pstr("cmp: files differ: byte ");
             pnum(off + 1);
@@ -112,6 +120,6 @@ int main() {
         c = bios(FGETB, 0, 0);
     }
     /* file2 ended but file1 still has unread bytes: file2 is a proper prefix. */
-    if (off < n1) { puts("cmp: EOF on file2"); return 1; }        /* file1 longer */
+    if (off < n1) { eputs("cmp: EOF on file2"); return 1; }       /* file1 longer */
     return 0;                                                     /* identical: silent */
 }

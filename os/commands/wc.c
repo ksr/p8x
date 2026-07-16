@@ -19,6 +19,7 @@
  * the console and Ctrl-D ends input.
  */
 //#use stdin   /* path[80], fromfile, nextc(), openarg() — file/glob/stdin input */
+//#use err     /* eputs(): errors -> console, never into a redirect/pipe */
 
 char num24[3];                                /* scratch 24-bit for the printer */
 char dg[10];                                  /* digit buffer */
@@ -108,7 +109,7 @@ int main() {
 
     fromfile = 0;
     r = openarg(arg);                         /* file/glob, else stdin */
-    if (r == 2) { puts("wc: not found"); return 1; }
+    if (r == 2) { eputs("wc: not found"); return 1; }   /* error -> console: `wc missing | cmd` must not feed it as data */
     if (r == 1) { fromfile = 1; }
 
     clin[0] = 0; clin[1] = 0; clin[2] = 0;

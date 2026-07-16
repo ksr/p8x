@@ -10,6 +10,7 @@
  * -N sets it. A line ends at LF; CR is passed through. EOF = 65535.
  */
 //#use stdin   /* path[80], fromfile, nextc(), openarg() */
+//#use err     /* eputs(): errors -> console, never into a redirect/pipe */
 
 int main() {
     char *a;         /* walks the raw argument string */
@@ -37,7 +38,7 @@ int main() {
      * openarg() sets up path[]/FOPEN; a==empty means read stdin. */
     fromfile = 0;
     r = openarg(a);
-    if (r == 2) { puts("head: not found"); return 1; }
+    if (r == 2) { eputs("head: not found"); return 1; }
     if (r == 1) { fromfile = 1; }             /* got a file; else fall back to stdin */
 
     lines = 0;

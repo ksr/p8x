@@ -63,13 +63,18 @@ d_lp:   JSR GETHEX                   ; each following byte value
         STA ADHI
         JMP d_lp
 d_done: RTS
+; d_bad is an ERROR: print it to the raw console (PUTS/CONOUT), never to stdout.
+; stdout may be a redirect or a pipe — `dep zz >F` would otherwise write the
+; message INTO F, and `dep zz | wc` would feed it to wc as data. Matches dep.c's
+; eputs(). d_use below is NOT an error (the user asked with -h), so it stays on
+; stdout and `dep -h >notes` still captures it.
 d_bad:  LDA #<m_bad
         TAP1L
         LDA #>m_bad
         TAP1H
-        JSR SYS_PUTS
+        JSR PUTS
         LDA #10
-        JSR SYS_PUTC
+        JSR CONOUT
         RTS
 d_use:  LDA #<m_use
         TAP1L

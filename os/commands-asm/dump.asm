@@ -113,14 +113,19 @@ u_nc:   LDA ROWS
         JZ u_end
         JMP u_page
 u_end:  RTS
+; u_bad is an ERROR (bad address, or an unknown -x flag): print it to the raw
+; console with PUTS/CONOUT, never to stdout. stdout may be a redirect or a pipe,
+; so SYS_PUTS would drop the message into the dump file or feed it to the next
+; stage as data. Matches dump.c's eputs(). u_use below is NOT an error — the user
+; asked for it with -h — so it stays on stdout and `dump -h >notes` captures it.
 u_bad:  LDA #<m_bad
         TAP1L
         LDA #>m_bad
         TAP1H
         LDA #0
-        JSR SYS_PUTS
+        JSR PUTS
         LDA #10
-        JSR SYS_PUTC
+        JSR CONOUT
         RTS
 u_use:  LDA #<m_use
         TAP1L

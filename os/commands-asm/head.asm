@@ -138,14 +138,19 @@ h_loop: JSR less                     ; A = (lines < n) ? 1 : 0
         JMP h_loop
 h_done: RTS
         ; --- error/usage exits: print message + newline, then return ---
+; h_nf is an ERROR: print it to the raw console (PUTS/CONOUT), never to stdout.
+; stdout may be a redirect or a pipe — `head missing >F` would otherwise write the
+; message INTO F, and `head missing | wc` would feed it to wc as data. Matches
+; head.c's eputs(). h_usage below is NOT an error (the user asked with -h), so it
+; stays on stdout and `head -h >notes` still captures it.
 h_nf:   LDA #<u_nf
         TAP1L
         LDA #>u_nf
         TAP1H
         LDA #0
-        JSR SYS_PUTS
+        JSR PUTS
         LDA #10
-        JSR SYS_PUTC
+        JSR CONOUT
         RTS
 h_usage:LDA #<u_use
         TAP1L

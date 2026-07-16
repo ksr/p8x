@@ -16,6 +16,7 @@
  * Within the native p8cc.c subset (no ++/--, decls at top).
  */
 //#use distab   /* dt_n, dt_op[], dt_sh[], dt_mn[] — the generated opcode table */
+//#use err      /* eputs(): errors -> console, never into a redirect/pipe */
 
 char *HD = "0123456789ABCDEF";
 
@@ -72,16 +73,22 @@ int main() {
     while (*a == 32) { a = a + 1; }
     if (*a == 0 || *a == 13 ||
         (*a == '-' && (*(a + 1) == 'h' || *(a + 1) == 'H'))) {
+        /* One usage message serves both "-h" (requested output) and "no args at
+         * all"; it returns 0 either way, so it stays plain puts() on stdout and
+         * `disasm -h >notes` still captures it. */
         puts("usage: disasm start end   disassemble hex range [start,end)");
         return 0;
     }
     start = 0; any = 0; d = hx(*a);          /* parse the start hex address */
     while (d < 16) { start = start * 16 + d; a = a + 1; any = 1; d = hx(*a); }
-    if (any == 0) { puts("disasm: bad start address"); return 1; }
+    /* Parse failures are errors, so they go to the console via eputs(): stdout
+     * may be a redirect or a pipe, and `disasm zz >OUT` must not write the
+     * diagnostic INTO OUT, nor feed it to a pipe stage as if it were listing. */
+    if (any == 0) { eputs("disasm: bad start address"); return 1; }
     while (*a == 32) { a = a + 1; }
     end = 0; any = 0; d = hx(*a);            /* parse the end hex address */
     while (d < 16) { end = end * 16 + d; a = a + 1; any = 1; d = hx(*a); }
-    if (any == 0) { puts("disasm: need an end address"); return 1; }
+    if (any == 0) { eputs("disasm: need an end address"); return 1; }
 
     addr = start;
     while (addr < end) {

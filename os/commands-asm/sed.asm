@@ -323,13 +323,19 @@ sle1:   TAP1H
         JMP sed_loop
 sed_end:RTS
 
-; Error/usage exits: point P1 at a message, fall into sed_pm to print it.
+; sed_usage is NOT an error: the user asked for it with -h (or gave no argument
+; at all), so it stays on SYS_PUTS/SYS_PUTC and `sed -h >notes` still captures it.
 sed_usage:
         LDA #<u_use
         TAP1L
         LDA #>u_use
         TAP1H
-        JMP sed_pm
+        LDA #0
+        JSR SYS_PUTS
+        LDA #10
+        JSR SYS_PUTC
+        RTS
+; Error exits: point P1 at a message, fall into sed_pm to print it.
 sed_only:
         LDA #<u_only
         TAP1L
@@ -346,10 +352,14 @@ sed_nf: LDA #<u_nf
         TAP1L
         LDA #>u_nf
         TAP1H
-sed_pm: LDA #0                        ; print message in P1 + newline, return
-        JSR SYS_PUTS
+; sed_pm: print the error in P1 + newline on the RAW CONSOLE (PUTS/CONOUT), never
+; on stdout — stdout may be a redirect or a pipe, so `sed s/x/y/ missing >F` would
+; otherwise write the message INTO F, and `sed bogus | wc` would feed it to wc as
+; data. Matches sed.c's eputs().
+sed_pm: LDA #0
+        JSR PUTS
         LDA #10
-        JSR SYS_PUTC
+        JSR CONOUT
         RTS
 
 ; re_at: ra_i = start index in line -> A = length of a regex match here (0=none).

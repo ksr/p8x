@@ -51,6 +51,7 @@
 //#use dirent   /* de_read/de_isdir/de_len/de_lba/de_opendir: entry via syscall */
 //#use apath    /* abspath(out, a): CWD-prefix a relative path (FRESOLVE starts at root) */
 //#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
+//#use err     /* eputs(): errors -> console, never into a redirect/pipe */
 
 char nbuf[16];                               /* current entry name, NUL-terminated */
 char gpat[16];                               /* glob pattern, or empty = no filter */
@@ -379,7 +380,9 @@ int main() {
             }
         }
     }
-    if (nf) { puts("dir: not found"); return 1; }
+    /* eputs, not puts: a diagnostic must not land in `dir bogus >F` or be fed to
+     * a pipe stage as if it were a listing. The -h usage above stays on stdout. */
+    if (nf) { eputs("dir: not found"); return 1; }
     bios(FSDIRBUF, 0, 0xFA);                   /* FSDIRBUF: iterate in our own page $FA00 */
 
     if (rec) {
@@ -397,7 +400,7 @@ int main() {
         }
         /* a named file that survived FOPENDIR-fails but matched nothing in its
          * parent means the leaf doesn't actually exist -> report not found */
-        if (filemode && shown == 0) { puts("dir: not found"); return 1; }
+        if (filemode && shown == 0) { eputs("dir: not found"); return 1; }
     }
     return 0;
 }

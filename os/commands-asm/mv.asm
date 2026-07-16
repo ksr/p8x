@@ -7,7 +7,8 @@
 ; (which must exist). BIOS: FRESOLVE $0133, FOPEN $0124, FGETB $0127, FWOPEN
 ; $012A, FPUTB $012D, FCLOSE $0130, FDELETE $011E, FOPENDIR $0139, FNEXT $013C,
 ; FSDIRBUF $0145, SYS_DIRENTRY $201B. OS: SYS_GETCWD $2003, SYS_OPENCWD $2012,
-; SYS_PUTS $200F, SYS_PUTC $2009. Read buf $FC00. Entry: P2 = arg tail.
+; SYS_PUTS $200F, SYS_PUTC $2009, PUTS $0112, CONOUT $0103. Read buf $FC00.
+; Entry: P2 = arg tail.
 ;#use glob
 ;#use globx
 ;#use abi
@@ -273,44 +274,59 @@ mg_skip:LDA mgi
         JMP mg_l
 mg_done:RTS
 ; --- message exits ---------------------------------------------------------
+; Two sinks, because a message's kind decides where it may go. mv_put uses
+; SYS_PUTS/SYS_PUTC (stdout) and mv_eput uses PUTS/CONOUT (raw console).
+;
+; mv_usage is reached from -h/-H AND from a bare `MV` with no args, and both
+; just print help — the user asking for usage is requested OUTPUT, so it stays
+; on stdout and `MV -h >notes` still captures it.
 mv_usage:
         LDA #<u_use
         TAP1L
         LDA #>u_use
         TAP1H
-        JMP mv_put
+mv_put: LDA #0
+        JSR SYS_PUTS
+        LDA #10
+        JSR SYS_PUTC
+        RTS
+; Everything below is an ERROR exit (mv.c returns 1 on each), so it goes to the
+; raw console: stdout may be a redirect or a pipe, and `mv X Y >F` must not write
+; "mv: source not found" INTO F, nor feed it to a pipe reader as data. The
+; trailing newline uses CONOUT for the same reason — splitting the text and its
+; terminator across two sinks would be worse than either. Matches mv.c's eputs().
 mv_usage2:
         LDA #<u_use2
         TAP1L
         LDA #>u_use2
         TAP1H
-        JMP mv_put
+        JMP mv_eput
 mv_same:LDA #<u_same
         TAP1L
         LDA #>u_same
         TAP1H
-        JMP mv_put
+        JMP mv_eput
 mv_nosrc:
         LDA #<u_nosrc
         TAP1L
         LDA #>u_nosrc
         TAP1H
-        JMP mv_put
+        JMP mv_eput
 mv_notdir:
         LDA #<u_notdir
         TAP1L
         LDA #>u_notdir
         TAP1H
-        JMP mv_put
+        JMP mv_eput
 mv_nomatch:
         LDA #<u_nomat
         TAP1L
         LDA #>u_nomat
         TAP1H
-mv_put: LDA #0
-        JSR SYS_PUTS
+mv_eput:LDA #0
+        JSR PUTS
         LDA #10
-        JSR SYS_PUTC
+        JSR CONOUT
         RTS
 
 ; move_one: copy file mo_s -> mo_d then delete mo_s (P8XFS has no rename).

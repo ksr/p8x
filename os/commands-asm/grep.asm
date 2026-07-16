@@ -253,14 +253,20 @@ g_plain:LDA g_arg
         STA gs_pfx+1
         JSR grep_stream
         RTS
+; g_nf is an ERROR: print it to the raw console (PUTS/CONOUT), never to stdout.
+; stdout may be a redirect or a pipe — `grep x missing >F` would otherwise write
+; the message INTO F, and `grep x missing | wc` would feed it to wc as data.
+; Matches grep.c's eputs(). g_usage below is NOT an error (it returns 0, whether
+; asked for with -h or reached with no args), so it stays on stdout and
+; `grep -h >notes` still captures it.
 g_nf:   LDA #<u_nf
         TAP1L
         LDA #>u_nf
         TAP1H
         LDA #0
-        JSR SYS_PUTS
+        JSR PUTS
         LDA #10
-        JSR SYS_PUTC
+        JSR CONOUT
         RTS
 g_usage:LDA #<u_use
         TAP1L

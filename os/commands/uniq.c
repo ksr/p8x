@@ -7,6 +7,7 @@
  * differs from the previous line read. Lines capped at 255 chars (rdline's cap).
  */
 //#use stdin   /* path[80], fromfile, nextc(), openarg() */
+//#use err     /* eputs(): errors -> console, never into a redirect/pipe */
 /* Two 260-byte line buffers: `cur` holds the line just read, `prev` holds the
  * previous line read (updated every iteration). rdline caps a line at 255 chars,
  * so 260 bytes is comfortable headroom (data + NUL). Kept as file-scope globals rather than
@@ -42,7 +43,9 @@ int main() {
      *   r==2  named file not found -> error out. */
     fromfile = 0;
     r = openarg(a);
-    if (r == 2) { puts("uniq: not found"); return 1; }
+    /* eputs, not puts: stdout may be a redirect or a pipe, and `uniq missing >F`
+     * must not write the diagnostic into F (nor feed it to a pipe as data). */
+    if (r == 2) { eputs("uniq: not found"); return 1; }
     if (r == 1) { fromfile = 1; }
 
     /* first==1 forces the very first line to print (prev is not yet valid). */

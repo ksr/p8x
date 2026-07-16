@@ -9,6 +9,7 @@
  * in order at EOF. Lines are capped at 255 chars; CR is dropped, LF ends a line.
  */
 //#use stdin   /* path[80], fromfile, nextc(), openarg() */
+//#use err     /* eputs(): errors -> console, never into a redirect/pipe */
 char buf[10240];                            /* 40 slots x 256 bytes (ring) */
                                             /* Each slot holds one NUL-terminated line; slot i lives at
                                              * buf[i*256 .. i*256+255]. Only the first N slots are used
@@ -50,7 +51,7 @@ int main() {
 
     fromfile = 0;
     r = openarg(a);
-    if (r == 2) { puts("tail: not found"); return 1; }
+    if (r == 2) { eputs("tail: not found"); return 1; }   /* error -> console: stdout may be a redirect/pipe */
     if (r == 1) { fromfile = 1; }
 
     col = 0;                                  /* fill the ring */

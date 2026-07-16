@@ -9,6 +9,7 @@
  * slots. (Buffer sized to the larger rev-D TPA — was 96 x 63.)
  */
 //#use stdin   /* path[80], fromfile, nextc(), openarg() */
+//#use err     /* eputs(): errors -> console, never into a redirect/pipe */
 char lines[10240];                           /* 128 slots x 80 bytes */
 int nline;
 
@@ -54,7 +55,7 @@ int main() {
     }
     fromfile = 0;
     r = openarg(arg);
-    if (r == 2) { puts("sort: not found"); return 1; }
+    if (r == 2) { eputs("sort: not found"); return 1; }
     if (r == 1) { fromfile = 1; }
 
     nline = 0;                                /* read lines into the flat buffer */

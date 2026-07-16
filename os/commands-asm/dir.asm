@@ -296,14 +296,19 @@ d_ok:   LDA notf
         LDB #0
         CMP
         JZ d_go
+; ERROR: print to the raw console (PUTS/CONOUT), never stdout. stdout may be a
+; redirect or a pipe — `dir bogus >F` would otherwise write the message INTO F,
+; and `dir bogus | wc` would feed it to wc as if it were a listing. Matches
+; dir.c's eputs(). d_usage below is NOT an error (the user asked with -h), so it
+; stays on stdout and `dir -h >notes` still captures it.
         LDA #<u_nf                   ; "dir: not found"
         TAP1L
         LDA #>u_nf
         TAP1H
         LDA #0
-        JSR SYS_PUTS
+        JSR PUTS
         LDA #10
-        JSR SYS_PUTC
+        JSR CONOUT
         RTS
 d_go:   LDA #0                        ; FSDIRBUF page $FA
         TAP1L
@@ -348,14 +353,14 @@ d_fdone:LDA filemode                 ; a single-file arg that matched nothing?
         LDB #0
         CMP
         JNZ df_ok
-        LDA #<u_nf                    ; "dir: not found"
+        LDA #<u_nf                    ; "dir: not found" — ERROR, console only
         TAP1L
         LDA #>u_nf
         TAP1H
         LDA #0
-        JSR SYS_PUTS
+        JSR PUTS
         LDA #10
-        JSR SYS_PUTC
+        JSR CONOUT
 df_ok:  RTS
 d_usage:LDA #<u_use
         TAP1L

@@ -117,14 +117,19 @@ uc_d:   LDA #0
         JMP u_loop
 u_end:  RTS                          ; EOF reached, normal exit
 ; u_nf: "not found" error, u_usage: help text. Both print msg + newline, return.
+; u_nf is an ERROR: it goes to the raw console (PUTS/CONOUT), not stdout, which
+; may be a redirect or a pipe — `uniq missing >F` would otherwise write the
+; message INTO F, and `uniq missing | wc` would count it as data. Matches uniq.c's
+; eputs(). u_usage is NOT an error (the user asked with -h), so it stays on stdout
+; and `uniq -h >notes` still captures it.
 u_nf:   LDA #<m_nf
         TAP1L
         LDA #>m_nf
         TAP1H
         LDA #0
-        JSR SYS_PUTS
+        JSR PUTS
         LDA #10
-        JSR SYS_PUTC
+        JSR CONOUT
         RTS
 u_usage:LDA #<m_use
         TAP1L

@@ -3,7 +3,8 @@
 ; man is `cat` with a fixed "/man/" prefix: it builds the path, FRESOLVEs it
 ; (always from root, so CWD-independent) and streams the file with FGETB.
 ; Entry: P2 = arg tail.  BIOS FRESOLVE=$0133, FOPEN=$0124, FGETB=$0127; the
-; 512-byte read buffer is $FC00.  SYS_PUTS=$200F, SYS_PUTC=$2009.
+; 512-byte read buffer is $FC00.  SYS_PUTS=$200F, SYS_PUTC=$2009 (stdout);
+; PUTS=$0112, CONOUT=$0103 (raw console — used for the not-found error).
 ;#use abi
 
         .org $6A00
@@ -93,12 +94,18 @@ mo_l:   LDA #0
         JMP mo_l
 mo_d:   RTS
 ; --- Not-found path: print "no manual entry for " then the requested name + LF.
+; This is an ERROR, so the whole message goes to the raw console (PUTS/CONOUT),
+; never to stdout: stdout may be a redirect or a pipe, and `man nope >notes`
+; would otherwise write the message INTO notes while `man nope | wc` would feed
+; it to wc as data. Matches man.c's eputs(). CONOUT preserves P1, so the name
+; loop below can keep its cursor across the call. m_usage is NOT an error (the
+; user asked for it), so it stays on stdout.
 m_nf:   LDA #<m_msg                  ; "no manual entry for " (no newline)
         TAP1L
         LDA #>m_msg
         TAP1H
         LDA #0
-        JSR SYS_PUTS
+        JSR PUTS
         LDP1 #path                   ; then the name: skip the 5-char "/man/"
         INP1                         ;   prefix (path+5 = start of copied name)
         INP1
@@ -109,11 +116,11 @@ mn_l:   LDA (P1)
         LDB #0
         CMP
         JZ mn_d
-        JSR SYS_PUTC
+        JSR CONOUT
         INP1
         JMP mn_l
 mn_d:   LDA #10
-        JSR SYS_PUTC
+        JSR CONOUT
         RTS
 ; --- Usage: emit the one-line help string plus a trailing newline.
 m_usage: LDA #<m_use

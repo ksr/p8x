@@ -12,6 +12,7 @@
  * or over this program itself -- exactly like the old built-in. Quiet on success
  * (Unix-style); prints a usage line for -h or a missing address.
  */
+//#use err     /* eputs(): errors -> console, never into a redirect/pipe */
 
 /* hx: value of one hex digit (0..15), or 99 if not a hex digit. */
 int hx(int c) {
@@ -54,7 +55,11 @@ int main() {
         any = 1;
         d = hx(*a);
     }
-    if (any == 0) { puts("dep: bad address"); return 1; }
+    /* Failure path: the message goes to the console, not stdout — stdout may be a
+     * redirect or a pipe, and a diagnostic must never land in a file or be read
+     * as data by the next stage. The usage line above is NOT an error (the user
+     * asked for it with -h), so it stays on stdout. */
+    if (any == 0) { eputs("dep: bad address"); return 1; }
 
     while (1) {                              /* each following hex byte value */
         while (*a == 32) { a = a + 1; }

@@ -38,6 +38,7 @@ char gfiles[1536];                   /* glob_expand output: 24 slots x 64 */
 //#use dirent    /* de_read/de_isdir/de_isdot + de[] : current entry via syscall */
 //#use globx     /* glob_expand(pat, out, maxn): expand a glob into a path list */
 //#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
+//#use err     /* eputs(): errors -> console, never into a redirect/pipe */
 
 /* scopy: copy NUL-terminated s into d; return the length. */
 int scopy(char *d, char *s) {
@@ -153,6 +154,8 @@ int main() {
 
     a = argstr();
     while (*a == 32) { a = a + 1; }
+    /* -h was asked for: normal output, so plain puts() — `cp -h >notes` catches
+     * it. The usage below on the bad-args path is an error and uses eputs(). */
     if (*a == '-' && (*(a + 1) == 'h' || *(a + 1) == 'H')) {
         puts("usage: CP [-r] src dst   copy a file/glob, or -r a directory tree");
         return 0;
@@ -163,7 +166,7 @@ int main() {
         a = a + 2;
         while (*a == 32) { a = a + 1; }
     }
-    if (*a == 0 || *a == 13) { puts("usage: CP [-r] src dst"); return 1; }
+    if (*a == 0 || *a == 13) { eputs("usage: CP [-r] src dst"); return 1; }
 
     g = 0;                                      /* copy the SRC word; note glob */
     i = 0;
@@ -174,22 +177,22 @@ int main() {
     patw[i] = 0;
     a = a + i;
     while (*a == 32) { a = a + 1; }
-    if (*a == 0 || *a == 13) { puts("usage: CP [-r] src dst"); return 1; }
+    if (*a == 0 || *a == 13) { eputs("usage: CP [-r] src dst"); return 1; }
     abspath(dst, a);                           /* DST word */
 
     if (g == 0) {                               /* single named source */
         abspath(src, patw);
         if (rec && isdir(src)) { copy_tree(src, dst); return 0; }
-        if (copy_file(src, dst)) { puts("cp: source not found"); return 1; }
+        if (copy_file(src, dst)) { eputs("cp: source not found"); return 1; }
         return 0;
     }
 
     if (isdir(dst) == 0) {                       /* glob -> dst must be a dir */
-        puts("cp: target is not a directory");
+        eputs("cp: target is not a directory");
         return 1;
     }
     nm = glob_expand(patw, gfiles, 24);
-    if (nm == 0) { puts("cp: no match"); return 1; }
+    if (nm == 0) { eputs("cp: no match"); return 1; }
     i = 0;
     while (i < nm) {
         m = gfiles + i * 64;                    /* one match (dir prefix + name) */

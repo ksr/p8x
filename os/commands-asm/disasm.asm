@@ -155,24 +155,34 @@ d_unk:  LDA OP                       ; unknown byte: op + pad + "???"
         JMP d_loop
 d_ret:  RTS
 
-; usage / errors (puts = string + LF) -----------------------------------------
+; usage / errors (string + LF) -------------------------------------------------
+; Two sinks, because two kinds of message. d_bads/d_nend are ERRORS: they take
+; the PUTS/CONOUT tail, straight to the raw console. stdout may be a redirect or
+; a pipe, so SYS_PUTS would put the diagnostic INTO `disasm zz >OUT` or hand it
+; to a pipe stage as if it were disassembly. Matches disasm.c's eputs().
+; d_use is NOT an error — it also answers "-h", and returns 0 either way — so it
+; keeps SYS_PUTS/SYS_PUTC and `disasm -h >notes` still captures it.
 d_use:  LDA #<M_USE
         TAP1L
         LDA #>M_USE
         TAP1H
-        JMP d_puts
+        JSR SYS_PUTS                 ; P1 = the string; SYS_PUTS takes no A arg
+        LDA #10
+        JSR SYS_PUTC
+        RTS
 d_bads: LDA #<M_BADS
         TAP1L
         LDA #>M_BADS
         TAP1H
-        JMP d_puts
+        JMP d_eputs
 d_nend: LDA #<M_NEND
         TAP1L
         LDA #>M_NEND
         TAP1H
-d_puts: JSR SYS_PUTS                 ; P1 = the string; SYS_PUTS takes no A arg
+d_eputs:LDA #0                       ; PUTS: P1 = the string, A = 0 flags
+        JSR PUTS
         LDA #10
-        JSR SYS_PUTC
+        JSR CONOUT                   ; the newline must follow the text's sink
         RTS
 
 ; CALC_LN: LN = ilen(SHAPE): sh1->2, sh2->3, sh9->5, else 1.

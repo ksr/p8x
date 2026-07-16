@@ -106,16 +106,21 @@ m_full: LDA #0                       ; space/other -> reset count, show full pag
         STA lines+1
         JMP m_loop
 m_done: RTS
-; m_nf / m_usage: print a message via SYS_PUTS (P1 = string ptr), add a newline,
-; and return. SYS_PUTS/SYS_PUTC clobber P1/P2 per the syscall ABI.
+; m_nf / m_usage: print a message (P1 = string ptr), add a newline, and return.
+; The print calls clobber P1/P2 per the ABI.
+; m_nf is an ERROR: print it to the raw console (PUTS/CONOUT), never to stdout.
+; stdout may be a redirect or a pipe — `more missing >F` would otherwise write the
+; message INTO F, and `more missing | wc` would feed it to wc as data. Matches
+; more.c's eputs(). m_usage below is NOT an error (the user asked with -h), so it
+; stays on stdout and `more -h >notes` still captures it.
 m_nf:   LDA #<u_nf
         TAP1L
         LDA #>u_nf
         TAP1H
         LDA #0
-        JSR SYS_PUTS
+        JSR PUTS
         LDA #10
-        JSR SYS_PUTC
+        JSR CONOUT
         RTS
 m_usage:LDA #<u_use
         TAP1L
