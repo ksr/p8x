@@ -25,6 +25,13 @@ On entry the OS hands the program its argument tail in `P2` (the program-arg
 ABI); EDIT copies it to `FNAME` and loads that file if it exists, else starts an
 empty buffer. Text is held as LF-separated lines in `$C000..$F000` (12 KB).
 
+A file larger than that buffer is **refused** — `FILE TOO LARGE (MAX 12K)`, and
+EDIT returns to the OS without a buffer or a filename. It deliberately does not
+load the first 12 KB: a part-loaded file is indistinguishable from a short one,
+and the first `W` would write it back over the original. Input lines are capped
+at 255 characters (`LBUF` is one page at `$BE00`, and the editor's own state
+begins at `$BF00`).
+
 | cmd | action |
 |-----|--------|
 | `L` | list every line with its 1-based number |

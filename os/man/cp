@@ -16,6 +16,12 @@ DESCRIPTION
 OPTIONS
     -r    copy a directory and its contents recursively
 
+LIMITS
+    With -r, copies at most 8 levels deep and 24 entries per level;
+    anything beyond is silently skipped, so a deep tree copies
+    incompletely without an error. Names are held in 12-byte slots,
+    matching the on-disk name field.
+
 EXAMPLES
     cp OLD.TXT NEW.TXT       copy one file
     cp -r SRC DST            copy a subtree

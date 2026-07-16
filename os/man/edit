@@ -11,6 +11,13 @@ DESCRIPTION
     then write the file out. edit is a /bin program (a TPA program run at
     $6A00).
 
+LIMITS
+    The text buffer is 12 KB ($C000..$F000) and lines are capped at 255
+    characters. A file larger than 12 KB is REFUSED outright --
+    "FILE TOO LARGE (MAX 12K)" -- rather than part-loaded: a truncated
+    buffer would look like a short file, and writing it back out would
+    destroy the rest of it. Use vi or split the file.
+
 EXAMPLES
     edit hello.asm
     run /bin/edit.bin notes.txt

@@ -21,6 +21,11 @@ DESCRIPTION
 OPTIONS
     -r    recurse the CWD tree, grepping every file
 
+LIMITS
+    With -r, walks at most 8 levels below the CWD and collects at most
+    36 files; deeper or larger trees are searched only in part, with no
+    warning. The regex is capped at 63 characters and lines at 175.
+
 EXAMPLES
     grep "^al" FILE          lines starting with "al"
     grep "be.a" <FILE        be, any char, a  (from a redirect)

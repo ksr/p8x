@@ -10,6 +10,11 @@ DESCRIPTION
     trailing slash on directories. Per-level children are capped at 24.
     tree is a /bin program.
 
+LIMITS
+    Descends at most 16 levels below the CWD, and lists at most 24
+    subdirectories per level. Deeper or wider trees are silently
+    truncated -- the listing simply stops, with no warning.
+
 EXAMPLES
     tree
     cd /bin ; tree

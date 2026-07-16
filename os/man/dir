@@ -22,6 +22,11 @@ OPTIONS
     -R    list subdirectories recursively (like tree)
     -S    sort by file size, largest first (default is by name)
 
+LIMITS
+    With -R, descends at most 16 levels and buffers 64 entries per
+    level; beyond that the listing is silently truncated. A glob
+    pattern is capped at 15 characters.
+
 EXAMPLES
     dir              list the current directory, sorted by name
     dir /bin         list a directory by path

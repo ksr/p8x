@@ -11,6 +11,12 @@ DESCRIPTION
     literal substring match. Searches the CWD subtree only. find is a
     /bin program.
 
+LIMITS
+    Descends at most 10 levels below the CWD, and records at most 24
+    subdirectories per level. Anything deeper or wider is skipped
+    silently -- find prints what it found, with no warning that part of
+    the tree went unsearched.
+
 EXAMPLES
     find .TXT            names containing ".TXT"
     find *.c             names matching a glob
