@@ -67,6 +67,14 @@ int main() {
     int g;
     int n;
 
+    /* Move directory scans off SBUF ($6100). catpath()'s FRESOLVE reads directory
+     * sectors into the DIBUFH page, which defaults to SBUF — the very buffer the
+     * shell's redirect write-stream (`cat a b >OUT`) uses to hold pending output.
+     * Without this, the SECOND file's FRESOLVE overwrites the first file's
+     * buffered bytes with a directory sector. $FA00 is a free scratch page just
+     * below the $FC00 read buffer (the same page the glob path already uses). */
+    bios(FSDIRBUF, 0, 0xFA);
+
     arg = argstr();                          /* the command tail */
     while (*arg == 32) { arg = arg + 1; }    /* skip leading spaces */
 
@@ -81,25 +89,31 @@ int main() {
         return 0;
     }
 
-    g = 0;                                    /* glob if the arg has '*' or '?' */
-    i = 0;
-    while (arg[i] != 0 && arg[i] != 13 && arg[i] != 32) {
-        if (arg[i] == '*' || arg[i] == '?') { g = 1; }
-        i = i + 1;
-    }
-
-    if (g) {                                  /* concatenate every match */
-        n = glob_expand(arg, gbuf, 24);
-        p = gbuf;
+    /* One or more space-separated file/glob arguments, cat'd in order (Unix
+     * `cat a b c`). catpath() and glob_expand() each stop at the first space,
+     * CR or NUL, so each handles exactly one token; the loop advances arg past
+     * the token it just consumed, then past the following spaces. */
+    while (*arg != 0 && *arg != 13) {
+        g = 0;                                /* glob if THIS token has '*'/'?' */
         i = 0;
-        while (i < n) {
-            catpath(p);                       /* a match always exists -> ignore 1 */
-            p = p + 64;                       /* step to the next 64-byte slot in gbuf */
+        while (arg[i] != 0 && arg[i] != 13 && arg[i] != 32) {
+            if (arg[i] == '*' || arg[i] == '?') { g = 1; }
             i = i + 1;
         }
-        return 0;
+        if (g) {                              /* concatenate every match */
+            n = glob_expand(arg, gbuf, 24);
+            p = gbuf;
+            i = 0;
+            while (i < n) {
+                catpath(p);                   /* a match always exists -> ignore 1 */
+                p = p + 64;                   /* next 64-byte slot in gbuf */
+                i = i + 1;
+            }
+        } else {
+            if (catpath(arg)) { puts("cat: not found"); return 1; }
+        }
+        while (*arg != 0 && *arg != 13 && *arg != 32) { arg = arg + 1; }  /* past token */
+        while (*arg == 32) { arg = arg + 1; }                             /* past spaces */
     }
-
-    if (catpath(arg)) { puts("cat: not found"); return 1; }   /* single file */
     return 0;
 }

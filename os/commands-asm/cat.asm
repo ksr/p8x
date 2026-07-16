@@ -13,6 +13,16 @@
         STA c_arg
         TPA2H
         STA c_arg+1
+; Move directory scans off SBUF ($6100): catpath's FRESOLVE reads dir sectors into
+; the DIBUFH page, which defaults to SBUF — the same buffer the shell's redirect
+; write-stream (`cat a b >OUT`) holds pending output in. Without this the second
+; file's FRESOLVE overwrites the first file's buffered bytes with a dir sector.
+; $FA00 is a free scratch page below the $FC00 read buffer (the glob path's page).
+        LDA #0
+        TAP1L
+        TAP1H
+        LDA #$FA
+        JSR FSDIRBUF
 ; c_sk: skip leading spaces (ASCII 32) in the arg tail, advancing c_arg past them.
 c_sk:   LDA c_arg
         TAP2L
@@ -61,8 +71,10 @@ c_noarg:LDA c_arg                    ; empty arg -> filter stdin
         LDB #13
         CMP
         JZ c_stdin
+; c_next: loop head for one file/glob TOKEN. cat takes several space-separated
+; arguments (Unix `cat a b c`); c_arg points at the current token's first char.
 ; scan the word for a glob metachar ('*' or '?'); c_g = 1 if found, else 0
-        LDA #0
+c_next: LDA #0
         STA c_g
         LDA c_arg
         TAP2L
@@ -124,7 +136,7 @@ cg_l:   LDA c_i
         INC
         STA c_i
         JMP cg_l
-cg_d:   RTS
+cg_d:   JMP c_adv                     ; this glob token done -> next token
 ; c_single: no glob chars -> cat the one named file. catpath returns A=1 if
 ; the file was not found, in which case we print the not-found message.
 c_single:
@@ -135,8 +147,44 @@ c_single:
         JSR catpath
         LDB #1
         CMP
-        JZ c_nf                      ; A==1 -> not found
-        RTS
+        JZ c_nf                      ; A==1 -> not found (prints, then stops)
+        ; fall through to c_adv: this single-file token done -> next token
+; c_adv: advance c_arg past the token just consumed, then past trailing spaces.
+; If the next char is NUL or CR all arguments are done -> RTS; else -> c_next.
+c_adv:  LDA c_arg
+        TAP2L
+        LDA c_arg+1
+        TAP2H
+ca_tok: LDA (P2)                     ; skip the rest of this token
+        LDB #0
+        CMP
+        JZ ca_fin
+        LDB #13
+        CMP
+        JZ ca_fin
+        LDB #32
+        CMP
+        JZ ca_spc
+        INP2
+        JMP ca_tok
+ca_spc: INP2                         ; skip the space run between tokens
+        LDA (P2)
+        LDB #32
+        CMP
+        JZ ca_spc
+ca_fin: TPA2L                        ; write the advanced cursor back to c_arg
+        STA c_arg
+        TPA2H
+        STA c_arg+1
+        LDA (P2)                     ; more arguments?
+        LDB #0
+        CMP
+        JZ ca_ret
+        LDB #13
+        CMP
+        JZ ca_ret
+        JMP c_next
+ca_ret: RTS
 ; c_stdin: no filename given -> copy stdin to stdout byte by byte.
 ; SYS_GETC returns C=1 at EOF; each byte is echoed with SYS_PUTC.
 c_stdin:LDA #0                       ; stdin -> stdout filter

@@ -73,6 +73,18 @@ check() {   # $1 = label
     R 'run /bin/cat.bin *.LOG >GLB.TXT' >/dev/null
     python3 $ROOT/tools/p8xfs.py get cat.img GLB.TXT --out glb.txt >/dev/null 2>&1 || fail "$1: cat glob >OUT did not write"
     grep -q 'AAA' glb.txt && grep -q 'BBB' glb.txt || fail "$1: cat glob >OUT missing a match"
+    # MULTIPLE plain file args, in order (Unix `cat a b`). This is what the asm
+    # Makefile's `cat p8xasm.asm opctab.asm >T.ASM` needs; cat used to stop after
+    # the first arg, so opctab.asm was dropped -> `?undefined: OPCTAB`. Concatenate
+    # to a file and confirm BOTH contents landed.
+    R 'run /bin/cat.bin A.LOG B.LOG >MF.TXT' >/dev/null
+    python3 $ROOT/tools/p8xfs.py get cat.img MF.TXT --out mf.txt >/dev/null 2>&1 || fail "$1: cat a b >OUT did not write"
+    grep -q 'AAA' mf.txt || fail "$1: cat a b dropped the FIRST file"
+    grep -q 'BBB' mf.txt || fail "$1: cat a b dropped the SECOND file (the OPCTAB bug)"
+    # a plain arg followed by a glob arg, in one command -> both tokens honoured
+    R 'run /bin/cat.bin R.TXT *.LOG' > mfg.txt
+    grep -q 'ROOTOK' mfg.txt || fail "$1: cat <file> <glob> dropped the plain file"
+    grep -q 'AAA' mfg.txt && grep -q 'BBB' mfg.txt || fail "$1: cat <file> <glob> dropped the glob"
 }
 
 python3 $ROOT/tools/clib.py $ROOT/os/commands/cat.c -o cat.pp.c   # splice //#use glob,globx
