@@ -242,6 +242,24 @@ remainder is why it is still here.
       commands resolve paths and expand globs" thesis; SYS_OPEN is the cheap half
       and needs no ABI change, this is the expensive half.
 
+- [ ] **CODE_REVIEW.md — the remaining findings (2026-07-16).** ~417 items across
+      68 files from the fresh-eyes review. The 6 high-severity are all fixed; two
+      mechanical/logic sweeps landed (59c46f7 Wave 1, bbad538 Wave 2) plus the
+      hot-path bounds (ac6f414) and BASIC STEP (f0888da). What is left is mostly
+      efficiency and docs findings, and a tail of medium ones.
+      **The review is PLAUSIBLE CLAIMS, NOT VERIFIED DEFECTS.** Measured on the two sweeps: **215 claims rejected vs 85 applied** —
+      more than twice as many wrong as right. Several were already fixed but still
+      listed; several are right about the abstract rule and wrong as an action here
+      (acting on the signed-compare finding shipped a buffer overflow the 87-test
+      suite passed — see WONT-DO). So this is NOT a checklist to grind: verify each
+      item against current code, and treat rejecting one as a success.
+      What worked: fan out one agent per command owning BOTH twins, scoped to a
+      named category, told explicitly the review may be wrong. Keep the hot paths
+      (p8xasm/p8xcc/p8xos/p8xmon/p8xbasic/p8xedit/p8cc/p8lib) OUT of any fan-out —
+      a confident-but-wrong flag/carry edit there breaks everything.
+      Given the hit rate, "finish the review" is probably not worth doing as a
+      project; mine it for the real bugs when touching a file anyway.
+
 - [ ] **`ln` command — symbolic links (2026-07-12).** Wanted: `ln /bin/dir /bin/ls`
       so `ls` runs `dir` (command aliasing, and general path aliasing). Design
       decided after analysis: implement as a **symlink**, NOT a hard link. The
