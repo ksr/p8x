@@ -18,6 +18,8 @@ python3 $ROOT/tools/p8xfs.py create cd.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   cd.img oscd.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  cd.img /aa >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  cd.img /aa/bb >/dev/null
+python3 $ROOT/tools/p8xfs.py mkdir  cd.img /cc >/dev/null
+python3 $ROOT/tools/p8xfs.py mkdir  cd.img /cc/dd >/dev/null
 
 out=$(printf 'B\rcd aa/\rcd bb\rcd ..\rcd ..\r' | \
       ../p8xemu -l 300000000 -c cd.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r')
@@ -29,4 +31,36 @@ echo "$out" | grep -q '//'                && fail "a doubled slash appears somew
 # `cd ..` from /aa/bb -> /aa , then `cd ..` -> / (root prompt)
 echo "$out" | grep -q '/aa> cd \.\.'      || fail "cd .. from /aa/bb did not land on /aa"
 printf '%s' "$out" | grep -q '/> ' && :   # a bare "/> " prompt appears after the last cd ..
+# --- compound ".." components (the case bare `cd ..` above does not reach) -----
+# `cd ../../cc/dd` from /aa/bb must collapse to /cc/dd. SETPATH used to test only
+# whether the WHOLE argument was ".." and append anything else verbatim, giving
+# "/aa/bb/../../cc/dd". That was not cosmetic: nothing collapsed the "..", so each
+# relative cd grew the string past the real depth and CWDPATH is 48 bytes -- six
+# cds reached 63 chars, over $642F into INMODE/INARM (stdin-redirect state) and,
+# further, CWDLH itself. Walk components; keep them collapsed.
+out=$(printf 'B\rcd aa\rcd bb\rcd ../../cc/dd\rsave M.BIN 2000 2010\r' | \
+      ../p8xemu -l 500000000 -c cd.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r')
+echo "$out" | grep -q '/cc/dd> ' || fail "cd ../../cc/dd did not collapse to /cc/dd"
+# check the PROMPT PATHS only -- the echoed command line legitimately contains ".."
+printf '%s' "$out" | grep -o '^/[^ >]*' | grep -q '\.\.' \
+  && fail "a '..' survived into the displayed CWD path"
+# the displayed path must be the REAL cwd, not just a plausible string: the file
+# has to land in /cc/dd on disk.
+python3 $ROOT/tools/p8xfs.py ls cd.img /cc/dd 2>/dev/null | grep -q 'M.BIN' \
+  || fail "SAVE after cd ../../cc/dd did not write into /cc/dd (path desynced from CWDL)"
+
+# --- the path must never leave its 48-byte buffer --------------------------------
+# A real tree deeper than the buffer must CLAMP, not overflow into INMODE/CWDLH.
+rm -f deep.img
+python3 $ROOT/tools/p8xfs.py create deep.img >/dev/null
+python3 $ROOT/tools/p8xfs.py boot   deep.img oscd.bin >/dev/null
+dp=""
+for d in aaaaaaaa bbbbbbbb cccccccc dddddddd eeeeeeee ffffffff; do
+  dp="$dp/$d"; python3 $ROOT/tools/p8xfs.py mkdir deep.img "$dp" >/dev/null
+done
+out=$(printf 'B\rcd aaaaaaaa\rcd bbbbbbbb\rcd cccccccc\rcd dddddddd\rcd eeeeeeee\rcd ffffffff\r' | \
+      ../p8xemu -l 700000000 -c deep.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r')
+longest=$(printf '%s' "$out" | grep -o '^/[^ >]*' | awk '{print length($0)}' | sort -n | tail -1)
+[ "$longest" -le 47 ] || fail "CWD path reached $longest chars; the 48-byte CWDPATH buffer overflowed"
+
 echo "OS-CDNORM TEST: PASS"

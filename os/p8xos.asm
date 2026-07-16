@@ -1771,75 +1771,117 @@ PATHROOT:LDP1 #CWDPATH
         STA  (P1)
         RTS
 
-; SETPATH - best-effort update of the displayed CWD path from the CD argument:
-;   absolute  -> copy it;  ".." -> pop a component;  else -> append "/arg".
-; (CWDL/CWDN are always exact; this only affects the prompt text.)
+; SETPATH - rebuild the displayed CWD path from the CD argument by walking it one
+; component at a time: "." is skipped, ".." pops, anything else is appended.
+;
+; The old version only asked "is the whole argument exactly '..'?" and appended
+; anything else verbatim, so a COMPOUND `cd ../commands/asm` from /src/os-bios
+; produced "/src/os-bios/../commands/asm" instead of "/src/commands/asm". That was
+; not merely cosmetic: nothing collapsed the "..", so each relative cd made the
+; string longer than the directory is deep, and CWDPATH is only 48 bytes. Six cds
+; ran it to 63 chars, past $642F into INMODE/INARM/INNAME (stdin-redirect state)
+; and, further out, CWDLH — the working directory's own LBA. CWDPATH also feeds
+; SYS_GETCWD (programs resolve relative paths with it) and DERIVEDRV (which picks
+; the DRIVE by matching a leading "/d1"), so a wrong string is a correctness bug,
+; not a display glitch.
+;
+; Appends are now bounded by SPROOM: the path can never leave the 48-byte buffer.
 SETPATH:JSR  ARG2P2
         JSR  SKIPSPC
         LDA  (P2)
         LDB  #'/'
         CMP
-        JZ   sp_abs
-        LDA  (P2)
-        LDB  #'.'
-        CMP
-        JNZ  sp_app
-        INP2                    ; maybe ".."
-        LDA  (P2)
-        LDB  #'.'
-        CMP
-        JNZ  sp_app
+        JNZ  sp_lp              ; relative -> keep the current path and walk
+        JSR  PATHROOT           ; absolute -> restart from "/"
         INP2
-        LDA  (P2)               ; ".." must be the whole component
-        JZ   sp_pop
+sp_lp:  LDA  (P2)               ; ---- start of the next component ----
+        JZ   sp_ret
+        LDB  #' '
+        CMP
+        JZ   sp_ret             ; end of the argument word
+        LDB  #'/'
+        CMP
+        JNZ  sp_c
+        INP2                    ; collapse a run of '/'
+        JMP  sp_lp
+sp_c:   LDB  #'.'               ; CMP preserves A, so A is still (P2)
+        CMP
+        JNZ  sp_seg             ; ordinary name
+        INP2                    ; saw '.', inspect the next char
+        LDA  (P2)
+        JZ   sp_ret             ; "." ends the arg -> nothing to do
+        LDB  #'/'
+        CMP
+        JZ   sp_lp              ; "./" -> skip this component
+        LDB  #' '
+        CMP
+        JZ   sp_ret
+        LDB  #'.'
+        CMP
+        JNZ  sp_b1              ; ".name" -> ordinary; back up over the '.'
+        INP2                    ; saw "..", inspect the next char
+        LDA  (P2)
+        JZ   sp_pop             ; ".." ends the arg -> pop
+        LDB  #'/'
+        CMP
+        JZ   sp_pop             ; "../" -> pop; sp_lp eats the '/'
         LDB  #' '
         CMP
         JZ   sp_pop
-        JMP  sp_app             ; "../..." compound -> just append (approximate)
+        DEP2                    ; "..name" -> ordinary; back up over both dots
+sp_b1:  DEP2
+        JMP  sp_seg
 sp_pop: JSR  PATHPOP
-        RTS
-sp_abs: JSR  ARG2P2             ; copy the absolute path verbatim (upcased)
-        JSR  SKIPSPC
-        LDP1 #CWDPATH
-sa_lp:  LDA  (P2)
-        JZ   sa_end
-        LDB  #' '
-        CMP
-        JZ   sa_end
-        STA  (P1)               ; case preserved (case-sensitive CWD path)
-        INP1
-        INP2
-        JMP  sa_lp
-sa_end: LDA  #0
-        STA  (P1)
-        RTS
-sp_app: JSR  ARG2P2
-        JSR  SKIPSPC
-        LDA  CWDPATH+1          ; at root ("/")? then write name after the '/'
-        JNZ  sap_walk
+        JMP  sp_lp
+; append the component at P2 (ends at '/', ' ' or NUL) to CWDPATH
+sp_seg: LDA  CWDPATH+1          ; at root ("/")? then write straight after it
+        JNZ  ss_walk
         LDP1 #CWDPATH
         INP1
-        JMP  sap_copy
-sap_walk:LDP1 #CWDPATH          ; else walk to end and add a '/'
-sap_e:  LDA  (P1)
-        JZ   sap_sl
+        JMP  ss_cp
+ss_walk:LDP1 #CWDPATH           ; else walk to the end and add a separator
+ss_e:   LDA  (P1)
+        JZ   ss_sl
         INP1
-        JMP  sap_e
-sap_sl: LDA  #'/'
+        JMP  ss_e
+ss_sl:  JSR  SPROOM
+        JC   ss_full
+        LDA  #'/'
         STA  (P1)
         INP1
-sap_copy:LDA (P2)
-        JZ   sap_end
+ss_cp:  LDA  (P2)
+        JZ   ss_end
         LDB  #' '
         CMP
-        JZ   sap_end
-        STA  (P1)               ; case preserved (case-sensitive CWD path)
+        JZ   ss_end
+        LDB  #'/'
+        CMP
+        JZ   ss_end
+        JSR  SPROOM             ; clobbers A and B
+        JC   ss_full
+        LDA  (P2)
+        STA  (P1)
         INP1
         INP2
-        JMP  sap_copy
-sap_end:LDA  #0
+        JMP  ss_cp
+ss_end: LDA  #0
         STA  (P1)
-        RTS
+        JMP  sp_lp              ; on to the next component
+ss_full:LDA  #0                 ; no room: terminate what fits and stop
+        STA  (P1)
+sp_ret: RTS
+
+; SPROOM - room in CWDPATH for one more char at P1? C=0 = room, C=1 = full.
+; Full means P1 >= CWDPATH+47, leaving the last byte for the NUL. 16-bit compare
+; (high byte first) so this stays correct if CWDPATH ever moves off a page start.
+SPROOM: TPA1H
+        LDB  #>CWDPATH+47
+        CMP                     ; C=1 when A>=B
+        JNZ  spr_ret            ; high bytes differ -> carry already decides it
+        TPA1L
+        LDB  #<CWDPATH+47
+        CMP
+spr_ret:RTS
 
 ; PATHNORM - normalize CWDPATH in place: collapse runs of '/' into one and strip
 ; a trailing '/' (unless the path is exactly "/"). Runs after every SETPATH so
