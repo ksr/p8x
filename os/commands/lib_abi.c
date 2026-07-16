@@ -39,6 +39,11 @@
 //#define FOPENDIR     0x0139    /* begin iterating directory at path (P1); C=1 bad */
 //#define FNEXT        0x013C    /* next live entry; C=1 at end */
 //#define FSDIRBUF     0x0145    /* point FNEXT's buffer at page A */
+/* PUTS is the RAW CONSOLE string printer, and is NOT the puts() builtin: puts()
+ * compiles to SYS_PUTS/SYS_PUTC, i.e. stdout, which the shell may have pointed at
+ * a file or a pipe. PUTS always reaches the screen — it is what the OS's own
+ * `?...` errors use, and what eputs() (//#use err) is built from. */
+//#define PUTS         0x0112    /* print (P1)+ until NUL -> raw console */
 
 /* the shared 512-byte page-aligned read buffer FOPEN/FGETB stream through */
 //#define RDBUF        0xFC00

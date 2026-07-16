@@ -26,6 +26,7 @@
 //#use glob    /* gmatch() — required by glob_expand below */
 //#use globx   /* glob_expand(pat, out, maxn): expand a glob into a path list */
 //#use abi     /* named BIOS/OS addresses: FOPEN, FGETB, SYS_GETCWD, RDBUF, ... */
+//#use err     /* eputs(): errors -> console, never into a redirect/pipe */
 
 /* bios() returns the callee's carry flag in bit 8 of its result, so `& 256`
  * tests C: FOPEN sets C=1 for "not found", FGETB sets C=1 at EOF. */
@@ -110,7 +111,7 @@ int main() {
                 i = i + 1;
             }
         } else {
-            if (catpath(arg)) { puts("cat: not found"); return 1; }
+            if (catpath(arg)) { eputs("cat: not found"); return 1; }
         }
         while (*arg != 0 && *arg != 13 && *arg != 32) { arg = arg + 1; }  /* past token */
         while (*arg == 32) { arg = arg + 1; }                             /* past spaces */

@@ -195,14 +195,19 @@ c_stdin:LDA #0                       ; stdin -> stdout filter
 cs_d:   RTS
 ; c_nf / c_usage: print a message via SYS_PUTS (P1 = string ptr, A=0 flags),
 ; then emit a trailing newline (LF, 10). Both return to the shell.
+; c_nf is an ERROR: print it to the raw console (PUTS/CONOUT), never to stdout.
+; stdout may be a redirect or a pipe — `cat missing >F` would otherwise write the
+; message INTO F, and `cat missing | wc` would feed it to wc as data. Matches
+; cat.c's eputs(). c_usage below is NOT an error (the user asked with -h), so it
+; stays on stdout and `cat -h >notes` still captures it.
 c_nf:   LDA #<m_nf
         TAP1L
         LDA #>m_nf
         TAP1H
         LDA #0
-        JSR SYS_PUTS
+        JSR PUTS
         LDA #10
-        JSR SYS_PUTC
+        JSR CONOUT
         RTS
 c_usage:LDA #<m_use
         TAP1L
