@@ -220,3 +220,15 @@ emulator/test/cbopc.asm
 emulator/test/opc.asm
 emulator/test/opctab.asm
 emulator/test/shopc.asm
+
+# Generated per-command build outputs in emulator/test (a command's asm-twin or
+# p8cc build, emitted by the os_*_test.sh scripts). Compound-suffix .asm names —
+# hand-written sources here are h*.asm / test*.asm and never take these suffixes.
+emulator/test/*.a.asm
+emulator/test/*.a2.asm
+emulator/test/*.t.asm
+emulator/test/*.x.asm
+emulator/test/*.c.asm
+emulator/test/mm.asm
+emulator/test/t.asm
+emulator/test/tmp.asm
