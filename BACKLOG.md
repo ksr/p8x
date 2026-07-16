@@ -232,6 +232,27 @@ remainder is why it is still here.
 
 ## IDEAS
 
+- [ ] **Shell-side glob + an argv ABI (2026-07-16).** The biggest structural fix
+      available, and the one real architectural drift from Unix: **the shell does
+      not expand globs — the commands do.** `cat *.LOG` hands cat the literal
+      string `"*.LOG"` and cat expands it itself, carrying lib_glob + lib_globx
+      (~150 lines) into its binary; cat, cp, mv and lib_stdin each call
+      glob_expand independently. In Unix the shell expands and passes argv, and
+      the command never sees a `*`.
+      Blocker: **the program-arg ABI is a raw string** (P2 = arg tail), so the
+      shell *could not* pass expanded matches even if it wanted to. Fixing it
+      means an argv ABI — a breaking change across all 25 commands x 2 twins.
+      Payoff: lib_glob/lib_globx leave EVERY command binary; one glob
+      implementation instead of four; the per-command pattern-buffer overflow
+      class (e.g. dir's gpat[16], Wave 2) disappears.
+      **Trigger: do this when the TPA size ceiling actually bites.** That is the
+      real motivation — vi.c compiles to 32.7 KB of the 38 KB TPA, and grep sits
+      close enough that a single //#use pushed its SOURCE over p8cc.c's buffer
+      (b19ae24). Until something misses the TPA, the cost/benefit does not clear.
+      Pairs with `SYS_OPEN` in NEXT: together they are the whole "stop making
+      commands resolve paths and expand globs" thesis; SYS_OPEN is the cheap half
+      and needs no ABI change, this is the expensive half.
+
 - [ ] **`ln` command — symbolic links (2026-07-12).** Wanted: `ln /bin/dir /bin/ls`
       so `ls` runs `dir` (command aliasing, and general path aliasing). Design
       decided after analysis: implement as a **symlink**, NOT a hard link. The
@@ -744,6 +765,24 @@ remainder is why it is still here.
 Decisions already made and deliberately not being revisited. Each was reached
 with real analysis; the full reasoning is in
 [BACKLOG-DONE.md](BACKLOG-DONE.md) under the entry named.
+
+- **Do NOT convert the commands into pure stdin/stdout filters** (2026-07-16).
+  Sounds like the clean Unix answer; it is not the fix. The 25 commands split
+  three ways and only one third could convert:
+    ~10 pure filters (wc/head/tail/uniq/sort/sed/more/cat/awk/grep-no-r) —
+        these ALREADY work as filters via the shell's `<`, `>` and `|`.
+        Converting them gains nothing; the work is done.
+     2 multi-input (cmp, diff) — need two file handles; stdin gives one.
+        Blocked without an fd model.
+    ~12 FS manipulators (cp/mv/del/touch/mkdir/dir/tree/find/pack/fsck) —
+        inherently need the filesystem. Routing their calls through the OS
+        RELOCATES code, it does not remove it: dir/tree/find genuinely must
+        iterate directories.
+  Also note the pipe-able commands are already filters, so multi-stage pipes
+  (`a | b | c`) need ZERO command changes — that blocker is a loop in the shell's
+  splitter (PIPE_RHS re-scan), unrelated to this. The real drift is that commands
+  resolve paths and expand globs; see `SYS_OPEN` (NEXT) and shell-side glob+argv
+  (IDEAS) — those are the fix.
 
 - **Do NOT make p8cc's `<` `>` `/` `%` signed.** It looks like a bug and is not.
   p8cc has no `unsigned` type, so the codebase uses `int` AS an unsigned 16-bit
