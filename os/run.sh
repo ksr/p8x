@@ -70,7 +70,8 @@ ensure_src() {
     done
     # (the shared asm includes lib_*.inc are NOT copied here — like the C libs,
     #  they live only in /lib, where the on-target asm's ;#use opens /lib/<name>.inc)
-    for app in "$root"/apps/p8xcc.asm "$root"/apps/p8xasm.asm "$root"/apps/p8xedit.asm; do
+    # p8xasm.asm is shipped specially below (with a trailing .include appended).
+    for app in "$root"/apps/p8xcc.asm "$root"/apps/p8xedit.asm; do
         python3 "$root/tools/p8xfs.py" put "$disk" "$app" \
             --name "/src/commands/asm/$(basename "$app")" >/dev/null 2>&1 || true
     done
@@ -89,6 +90,20 @@ ensure_src() {
         || python3 "$root/tools/p8xfs.py" ls "$disk" /src/commands/asm 2>/dev/null \
              | grep -q '^opctab.asm ' \
         || { echo "run.sh: opctab.asm neither shipped nor already present" >&2; exit 1; }
+    # Ship p8xasm.asm with a trailing `.include "opctab.asm"` so the on-target
+    # Makefile can build it with a plain `asm p8xasm.asm` — no `cat` step. The
+    # earlier recipe (`cat p8xasm.asm opctab.asm >T.ASM`) is doubly broken on
+    # target: the on-target `cat` only ever emitted its first file arg, and even
+    # once fixed, `cat A B >T.ASM` corrupts the first file because the redirect
+    # write-stream and FRESOLVE's directory scan share SBUF. `.include` sidesteps
+    # both by concatenating inside the assembler. (Host tests still cat the two
+    # files — that path uses the host cat and is unaffected.)
+    printf '%s\n        .include "opctab.asm"\n' "$(cat "$root/apps/p8xasm.asm")" > "$build/p8xasm_ondisk.asm"
+    python3 "$root/tools/p8xfs.py" put "$disk" "$build/p8xasm_ondisk.asm" \
+        --name /src/commands/asm/p8xasm.asm >/dev/null 2>&1 \
+        || python3 "$root/tools/p8xfs.py" ls "$disk" /src/commands/asm 2>/dev/null \
+             | grep -q '^p8xasm.asm ' \
+        || { echo "run.sh: p8xasm.asm neither shipped nor already present" >&2; exit 1; }
     # The OS + BIOS monitor are asm too — their sources ride under /src/os-bios/asm
     # with a build-output dir, and they assemble on-target with `asm`.
     # The monitor (58 KB) and the 121 KB OS both assemble on-target now — the BIOS
@@ -149,7 +164,9 @@ ensure_src() {
     for c in $_mkcmds $_asmapps; do
         printf '%s:\n\tasm %s.asm bin/%s.bin\n' "$c" "$c" "$c" >> "$mf"
     done
-    printf 'p8xasm:\n\tcat p8xasm.asm opctab.asm >T.ASM\n\tasm T.ASM bin/p8xasm.bin\n' >> "$mf"
+    # p8xasm.asm is shipped with a trailing `.include "opctab.asm"` (see above),
+    # so it builds with a plain asm — no cat, no T.ASM intermediate.
+    printf 'p8xasm:\n\tasm p8xasm.asm bin/p8xasm.bin\n' >> "$mf"
     printf 'clean:\n' >> "$mf"
     for c in $_mkcmds $_asmapps p8xasm; do printf '\tdel bin/%s.bin\n' "$c" >> "$mf"; done
     printf 'install:\n\tcp /src/commands/asm/bin/*.bin /bin\n' >> "$mf"
