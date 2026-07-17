@@ -265,10 +265,11 @@ backplane. LEDs hang off the bus side; the probe header hangs off U5.
           │  device Ron (~25-50mA, abs-max-safe, not indefinite)  ┌──────────────┐
           │  → the `drive` assertion carries weight.              │ J2  2×5 hdr  │
           │                                                       │ 8 probes     │
-          ├──────────────► U7..U10  74HCT244 ──┐   probe 1k for   │ + 2 GND      │
-          │                bus monitors        │   over-V only    └──────┬───────┘
+          ├──────────────► U7  74HCT244 ───────┐   probe 1k for   │ + 2 GND      │
+          │                probe LED buffer    │   over-V only    └──────┬───────┘
           │                (~1 µA bus load)    ▼   (slipped grabber)  ribbon→grabbers
-          │                            32 LEDs: D0-7 / A0-15 / PR0-7
+          │                            16 LEDs: PR0-7 + 8 status
+          │   (D0-7 / A0-15 monitor arrays CUT — redundant w/ ASCII readback; §5.4)
           │
           │   NO bus pull-downs: firmware drives CLK/CLKB low on boot (the only
           │   line a floating word can latch through); everything else Hi-Z until
@@ -317,12 +318,12 @@ Per-chip allocation is in the block diagram above.
 |---|---|---|---|
 | U1–U5 | MCP23S17 (DIP-28) | 80 bidirectional 5 V lines, SPI | **add** |
 | U6 | 74HCT244 | SPI level-shift, 3.3 V → 5 V (SCK/MOSI/CS/RESET) | reuse |
-| U7–U10 | 74HCT244 | LED buffers (D, A-lo, A-hi, probes) | reuse |
+| U7 | 74HCT244 | probe LED buffer | reuse |
 | A1 | Pico (2×20 headers) | RP2040, USB CDC | **add** |
 | J2 | 2×5 header | 8 probes + 2 GND | **add** |
-| RN* | RNISO8 | LED current-limit (×5), 1k probe series (×1) | reuse |
+| RN* | RNISO8 | LED current-limit (×2), 1k probe series (×1) | reuse |
 | R5–R8 | RES | 5V-sense divider (×2), MISO divider (×2) | reuse |
-| LED* | LEDARR8 | 40 status/state LEDs | reuse |
+| LED* | LEDARR8 | 16 LEDs: probes (8) + status (8) | reuse |
 | J1 | MABC96R | DIN 41612 edge connector | supplied by `card()` |
 
 `card()` also supplies the per-IC 100 nF decoupling caps, so the project's caps
@@ -346,24 +347,27 @@ All from backplane +5 V (per-slot budget is not a constraint here).
   *off* leaves the Pico alive driving unpowered expander/buffer inputs — latch-up
   territory. Two resistors.
 
-Worst case ≈ 400 mA (40 LEDs ≈ 160 mA, Pico 30–100 mA, five expanders, buffers).
+Worst case ≈ 250 mA (16 LEDs ≈ 65 mA, Pico 30–100 mA, five expanders, 2 buffers).
 
 ### 5.4 LEDs
 
-The io-card already proves the pattern — its U11–U13 are `74244`s monitoring
-A0–7, A8–15, D0–7. Copied here, so LEDs cost **zero expander pins**: they tap the
-**bus side** of the series resistors through `74244` buffers, loading the bus with
-~1 µA instead of the ~4 mA an LED would steal from an HCT output.
+Two arrays, 16 LEDs. They cost **zero expander pins** — the probe display taps the
+bus side through a `74244` buffer (io-card monitor pattern, U11–U13), loading the
+line with ~1 µA; the status LEDs run straight off Pico GPIO.
 
 | LEDs | Source |
 |---|---|
-| `D0–D7` (8) | `74244` buffer |
-| `A0–A15` (16) | 2 × `74244` |
-| Probes 0–7 (8) | `74244` |
+| Probes 0–7 (8) | `74244` buffer (U7) |
 | Status (8) — 5V-OK, ARMED, LISTEN, CLK, CLKB, -RES, ERR, USB-ACT | Pico GPIO direct |
 
-The io-card duplicates the D/A display, but during card-level bring-up the io-card
-is not in the backplane — these are the only ones lit when it matters.
+**The D0–7 and A0–15 monitor arrays were cut.** They were redundant with the ASCII
+readback while stepping (the card reads the bus back over SPI and prints it
+exactly), and only an activity blur when the machine free-runs faster than SPI can
+sample. Removing all three took **3 × 74244 + 3 × RNISO8 + 3 × LEDARR8** off the
+board (10 ICs → 7). The two kept arrays each show something not otherwise visible:
+the probe display is the point of the probe feature, and status is card *state*.
+If you want the bus monitor back, it re-adds cleanly — the `_ledbuf()` helper and
+the io-card precedent are still there.
 
 ### 5.5 Board
 
@@ -487,7 +491,7 @@ listen-only. That is inherent to the approach, not a fixable gap.
   is limited only by device R<sub>on</sub> (~25–50 mA, abs-max-safe but not
   indefinite). Accepted for a careful bench tool; reversible by adding 100 Ω bus
   series (caps at ~5 mA) if it proves too sharp in use.
-- **Layout** — 5 × DIP-28 + 5 × 74244 + 6 resistor networks + 5 LED arrays + Pico
+- **Layout** — 5 × DIP-28 + 2 × 74244 + 3 resistor networks + 2 LED arrays + Pico
   + J1. Should fit 200 × 100 comfortably; confirm when placed.
 - **Nothing here is measured.** Every number above is calculated from datasheet
   values and the existing design docs.

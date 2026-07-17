@@ -417,101 +417,53 @@
 <attribute name="NAME" x="352.51" y="97.64" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="352.51" y="92.56" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="U8" library="p8x" package="DIP20" value="74HCT244" x="356.81" y="95.20" smashed="yes">
+<element name="A1" library="p8x" package="PICO40" value="RP2040" x="356.81" y="95.20" smashed="yes">
 <attribute name="NAME" x="356.81" y="97.74" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="356.81" y="92.66" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="CD8" library="p8x" package="C_DISC1" value="100N" x="368.73" y="95.10" smashed="yes">
-<attribute name="NAME" x="368.73" y="97.64" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="368.73" y="92.56" size="1.778" layer="27" ratio="10"/>
+<element name="J2" library="p8x" package="HDR10" value="PROBE 2x5" x="378.84" y="95.15" smashed="yes">
+<attribute name="NAME" x="378.84" y="97.69" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="378.84" y="92.61" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="U9" library="p8x" package="DIP20" value="74HCT244" x="373.03" y="95.20" smashed="yes">
-<attribute name="NAME" x="373.03" y="97.74" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="373.03" y="92.66" size="1.778" layer="27" ratio="10"/>
+<element name="D1" library="p8x" package="LED5" value="SCHOTTKY" x="385.73" y="95.10" smashed="yes">
+<attribute name="NAME" x="385.73" y="97.64" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="385.73" y="92.56" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="CD9" library="p8x" package="C_DISC1" value="100N" x="384.95" y="95.10" smashed="yes">
-<attribute name="NAME" x="384.95" y="97.64" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="384.95" y="92.56" size="1.778" layer="27" ratio="10"/>
+<element name="R5" library="p8x" package="R_AXIAL" value="10K" x="392.57" y="95.20" smashed="yes">
+<attribute name="NAME" x="392.57" y="97.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="392.57" y="92.66" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="U10" library="p8x" package="DIP20" value="74HCT244" x="389.25" y="95.20" smashed="yes">
-<attribute name="NAME" x="389.25" y="97.74" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="389.25" y="92.66" size="1.778" layer="27" ratio="10"/>
+<element name="R6" library="p8x" package="R_AXIAL" value="10K" x="406.93" y="95.20" smashed="yes">
+<attribute name="NAME" x="406.93" y="97.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="406.93" y="92.66" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="CD10" library="p8x" package="C_DISC1" value="100N" x="401.17" y="95.10" smashed="yes">
-<attribute name="NAME" x="401.17" y="97.64" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="401.17" y="92.56" size="1.778" layer="27" ratio="10"/>
+<element name="R7" library="p8x" package="R_AXIAL" value="1K8" x="243.27" y="42.74" smashed="yes">
+<attribute name="NAME" x="243.27" y="45.28" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="243.27" y="40.20" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="A1" library="p8x" package="PICO40" value="RP2040" x="243.27" y="57.98" smashed="yes">
-<attribute name="NAME" x="243.27" y="60.52" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="243.27" y="55.44" size="1.778" layer="27" ratio="10"/>
+<element name="R8" library="p8x" package="R_AXIAL" value="3K3" x="257.63" y="42.74" smashed="yes">
+<attribute name="NAME" x="257.63" y="45.28" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="257.63" y="40.20" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="J2" library="p8x" package="HDR10" value="PROBE 2x5" x="265.30" y="57.93" smashed="yes">
-<attribute name="NAME" x="265.30" y="60.47" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="265.30" y="55.39" size="1.778" layer="27" ratio="10"/>
+<element name="RPR" library="p8x" package="SIP16" value="8x330R" x="271.99" y="45.28" smashed="yes">
+<attribute name="NAME" x="271.99" y="47.82" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="271.99" y="42.74" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="D1" library="p8x" package="LED5" value="SCHOTTKY" x="272.19" y="57.88" smashed="yes">
-<attribute name="NAME" x="272.19" y="60.42" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="272.19" y="55.34" size="1.778" layer="27" ratio="10"/>
+<element name="RST" library="p8x" package="SIP16" value="8x330R" x="276.19" y="45.28" smashed="yes">
+<attribute name="NAME" x="276.19" y="47.82" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="276.19" y="42.74" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="R5" library="p8x" package="R_AXIAL" value="10K" x="279.03" y="57.98" smashed="yes">
-<attribute name="NAME" x="279.03" y="60.52" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="279.03" y="55.44" size="1.778" layer="27" ratio="10"/>
+<element name="RPRB" library="p8x" package="SIP16" value="8x1K" x="280.39" y="45.28" smashed="yes">
+<attribute name="NAME" x="280.39" y="47.82" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="280.39" y="42.74" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="R6" library="p8x" package="R_AXIAL" value="10K" x="293.39" y="57.98" smashed="yes">
-<attribute name="NAME" x="293.39" y="60.52" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="293.39" y="55.44" size="1.778" layer="27" ratio="10"/>
+<element name="LPR" library="p8x" package="DIP16" value="PROBES" x="284.59" y="42.74" smashed="yes">
+<attribute name="NAME" x="284.59" y="45.28" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="284.59" y="40.20" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="R7" library="p8x" package="R_AXIAL" value="1K8" x="307.75" y="57.98" smashed="yes">
-<attribute name="NAME" x="307.75" y="60.52" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="307.75" y="55.44" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="R8" library="p8x" package="R_AXIAL" value="3K3" x="322.11" y="57.98" smashed="yes">
-<attribute name="NAME" x="322.11" y="60.52" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="322.11" y="55.44" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="RLD" library="p8x" package="SIP16" value="8x330R" x="336.47" y="60.52" smashed="yes">
-<attribute name="NAME" x="336.47" y="63.06" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="336.47" y="57.98" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="RAL" library="p8x" package="SIP16" value="8x330R" x="340.67" y="60.52" smashed="yes">
-<attribute name="NAME" x="340.67" y="63.06" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="340.67" y="57.98" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="RAH" library="p8x" package="SIP16" value="8x330R" x="344.87" y="60.52" smashed="yes">
-<attribute name="NAME" x="344.87" y="63.06" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="344.87" y="57.98" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="RPR" library="p8x" package="SIP16" value="8x330R" x="349.07" y="60.52" smashed="yes">
-<attribute name="NAME" x="349.07" y="63.06" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="349.07" y="57.98" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="RST" library="p8x" package="SIP16" value="8x330R" x="353.27" y="60.52" smashed="yes">
-<attribute name="NAME" x="353.27" y="63.06" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="353.27" y="57.98" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="RPRB" library="p8x" package="SIP16" value="8x1K" x="357.47" y="60.52" smashed="yes">
-<attribute name="NAME" x="357.47" y="63.06" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="357.47" y="57.98" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="LDD" library="p8x" package="DIP16" value="D0-7" x="361.67" y="57.98" smashed="yes">
-<attribute name="NAME" x="361.67" y="60.52" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="361.67" y="55.44" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="LAL" library="p8x" package="DIP16" value="A0-7" x="373.49" y="57.98" smashed="yes">
-<attribute name="NAME" x="373.49" y="60.52" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="373.49" y="55.44" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="LAH" library="p8x" package="DIP16" value="A8-15" x="385.31" y="57.98" smashed="yes">
-<attribute name="NAME" x="385.31" y="60.52" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="385.31" y="55.44" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="LPR" library="p8x" package="DIP16" value="PROBES" x="397.13" y="57.98" smashed="yes">
-<attribute name="NAME" x="397.13" y="60.52" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="397.13" y="55.44" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="LST" library="p8x" package="DIP16" value="STATUS" x="408.95" y="57.98" smashed="yes">
-<attribute name="NAME" x="408.95" y="60.52" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="408.95" y="55.44" size="1.778" layer="27" ratio="10"/>
+<element name="LST" library="p8x" package="DIP16" value="STATUS" x="296.41" y="42.74" smashed="yes">
+<attribute name="NAME" x="296.41" y="45.28" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="296.41" y="40.20" size="1.778" layer="27" ratio="10"/>
 </element>
 </elements><signals>
 <signal name="-IRQ">
@@ -523,82 +475,66 @@
 </signal>
 <signal name="A0">
 <contactref element="U1" pad="1"/>
-<contactref element="U8" pad="2"/>
 <contactref element="J1" pad="C3"/>
 </signal>
 <signal name="A1">
 <contactref element="U1" pad="2"/>
-<contactref element="U8" pad="4"/>
 <contactref element="J1" pad="C4"/>
 </signal>
 <signal name="A10">
 <contactref element="U2" pad="23"/>
-<contactref element="U9" pad="6"/>
 <contactref element="J1" pad="C13"/>
 </signal>
 <signal name="A11">
 <contactref element="U2" pad="24"/>
-<contactref element="U9" pad="8"/>
 <contactref element="J1" pad="C14"/>
 </signal>
 <signal name="A12">
 <contactref element="U2" pad="25"/>
-<contactref element="U9" pad="11"/>
 <contactref element="J1" pad="C15"/>
 </signal>
 <signal name="A13">
 <contactref element="U2" pad="26"/>
-<contactref element="U9" pad="13"/>
 <contactref element="J1" pad="C16"/>
 </signal>
 <signal name="A14">
 <contactref element="U2" pad="27"/>
-<contactref element="U9" pad="15"/>
 <contactref element="J1" pad="C17"/>
 </signal>
 <signal name="A15">
 <contactref element="U2" pad="28"/>
-<contactref element="U9" pad="17"/>
 <contactref element="J1" pad="C18"/>
 </signal>
 <signal name="A2">
 <contactref element="U1" pad="3"/>
-<contactref element="U8" pad="6"/>
 <contactref element="J1" pad="C5"/>
 </signal>
 <signal name="A3">
 <contactref element="U1" pad="4"/>
-<contactref element="U8" pad="8"/>
 <contactref element="J1" pad="C6"/>
 </signal>
 <signal name="A4">
 <contactref element="U1" pad="5"/>
-<contactref element="U8" pad="11"/>
 <contactref element="J1" pad="C7"/>
 </signal>
 <signal name="A5">
 <contactref element="U1" pad="6"/>
-<contactref element="U8" pad="13"/>
 <contactref element="J1" pad="C8"/>
 </signal>
 <signal name="A6">
 <contactref element="U1" pad="7"/>
-<contactref element="U8" pad="15"/>
 <contactref element="J1" pad="C9"/>
 </signal>
 <signal name="A7">
 <contactref element="U1" pad="8"/>
-<contactref element="U8" pad="17"/>
 <contactref element="J1" pad="C10"/>
 </signal>
 <signal name="A8">
 <contactref element="U2" pad="21"/>
-<contactref element="U9" pad="2"/>
 <contactref element="J1" pad="C11"/>
 </signal>
 <signal name="A9">
 <contactref element="U2" pad="22"/>
-<contactref element="U9" pad="4"/>
 <contactref element="J1" pad="C12"/>
 </signal>
 <signal name="ALUM">
@@ -651,42 +587,34 @@
 </signal>
 <signal name="D0">
 <contactref element="U1" pad="21"/>
-<contactref element="U7" pad="2"/>
 <contactref element="J1" pad="A3"/>
 </signal>
 <signal name="D1">
 <contactref element="U1" pad="22"/>
-<contactref element="U7" pad="4"/>
 <contactref element="J1" pad="A4"/>
 </signal>
 <signal name="D2">
 <contactref element="U1" pad="23"/>
-<contactref element="U7" pad="6"/>
 <contactref element="J1" pad="A5"/>
 </signal>
 <signal name="D3">
 <contactref element="U1" pad="24"/>
-<contactref element="U7" pad="8"/>
 <contactref element="J1" pad="A6"/>
 </signal>
 <signal name="D4">
 <contactref element="U1" pad="25"/>
-<contactref element="U7" pad="11"/>
 <contactref element="J1" pad="A7"/>
 </signal>
 <signal name="D5">
 <contactref element="U1" pad="26"/>
-<contactref element="U7" pad="13"/>
 <contactref element="J1" pad="A8"/>
 </signal>
 <signal name="D6">
 <contactref element="U1" pad="27"/>
-<contactref element="U7" pad="15"/>
 <contactref element="J1" pad="A9"/>
 </signal>
 <signal name="D7">
 <contactref element="U1" pad="28"/>
-<contactref element="U7" pad="17"/>
 <contactref element="J1" pad="A10"/>
 </signal>
 <signal name="DLD0">
@@ -775,36 +703,6 @@
 <contactref element="R6" pad="2"/>
 <contactref element="U7" pad="1"/>
 <contactref element="U7" pad="19"/>
-<contactref element="LDD" pad="16"/>
-<contactref element="LDD" pad="15"/>
-<contactref element="LDD" pad="14"/>
-<contactref element="LDD" pad="13"/>
-<contactref element="LDD" pad="12"/>
-<contactref element="LDD" pad="11"/>
-<contactref element="LDD" pad="10"/>
-<contactref element="LDD" pad="9"/>
-<contactref element="U8" pad="1"/>
-<contactref element="U8" pad="19"/>
-<contactref element="LAL" pad="16"/>
-<contactref element="LAL" pad="15"/>
-<contactref element="LAL" pad="14"/>
-<contactref element="LAL" pad="13"/>
-<contactref element="LAL" pad="12"/>
-<contactref element="LAL" pad="11"/>
-<contactref element="LAL" pad="10"/>
-<contactref element="LAL" pad="9"/>
-<contactref element="U9" pad="1"/>
-<contactref element="U9" pad="19"/>
-<contactref element="LAH" pad="16"/>
-<contactref element="LAH" pad="15"/>
-<contactref element="LAH" pad="14"/>
-<contactref element="LAH" pad="13"/>
-<contactref element="LAH" pad="12"/>
-<contactref element="LAH" pad="11"/>
-<contactref element="LAH" pad="10"/>
-<contactref element="LAH" pad="9"/>
-<contactref element="U10" pad="1"/>
-<contactref element="U10" pad="19"/>
 <contactref element="LPR" pad="16"/>
 <contactref element="LPR" pad="15"/>
 <contactref element="LPR" pad="14"/>
@@ -848,14 +746,8 @@
 <contactref element="CD5" pad="2"/>
 <contactref element="CD6" pad="2"/>
 <contactref element="CD7" pad="2"/>
-<contactref element="CD8" pad="2"/>
-<contactref element="CD9" pad="2"/>
-<contactref element="CD10" pad="2"/>
 <contactref element="U6" pad="10"/>
 <contactref element="U7" pad="10"/>
-<contactref element="U8" pad="10"/>
-<contactref element="U9" pad="10"/>
-<contactref element="U10" pad="10"/>
 </signal>
 <signal name="LDF">
 <contactref element="U4" pad="21"/>
@@ -864,102 +756,6 @@
 <signal name="LDZN">
 <contactref element="U4" pad="22"/>
 <contactref element="J1" pad="C28"/>
-</signal>
-<signal name="LK_A0">
-<contactref element="RAL" pad="2"/>
-<contactref element="LAL" pad="1"/>
-</signal>
-<signal name="LK_A1">
-<contactref element="RAL" pad="4"/>
-<contactref element="LAL" pad="2"/>
-</signal>
-<signal name="LK_A10">
-<contactref element="RAH" pad="6"/>
-<contactref element="LAH" pad="3"/>
-</signal>
-<signal name="LK_A11">
-<contactref element="RAH" pad="8"/>
-<contactref element="LAH" pad="4"/>
-</signal>
-<signal name="LK_A12">
-<contactref element="RAH" pad="10"/>
-<contactref element="LAH" pad="5"/>
-</signal>
-<signal name="LK_A13">
-<contactref element="RAH" pad="12"/>
-<contactref element="LAH" pad="6"/>
-</signal>
-<signal name="LK_A14">
-<contactref element="RAH" pad="14"/>
-<contactref element="LAH" pad="7"/>
-</signal>
-<signal name="LK_A15">
-<contactref element="RAH" pad="16"/>
-<contactref element="LAH" pad="8"/>
-</signal>
-<signal name="LK_A2">
-<contactref element="RAL" pad="6"/>
-<contactref element="LAL" pad="3"/>
-</signal>
-<signal name="LK_A3">
-<contactref element="RAL" pad="8"/>
-<contactref element="LAL" pad="4"/>
-</signal>
-<signal name="LK_A4">
-<contactref element="RAL" pad="10"/>
-<contactref element="LAL" pad="5"/>
-</signal>
-<signal name="LK_A5">
-<contactref element="RAL" pad="12"/>
-<contactref element="LAL" pad="6"/>
-</signal>
-<signal name="LK_A6">
-<contactref element="RAL" pad="14"/>
-<contactref element="LAL" pad="7"/>
-</signal>
-<signal name="LK_A7">
-<contactref element="RAL" pad="16"/>
-<contactref element="LAL" pad="8"/>
-</signal>
-<signal name="LK_A8">
-<contactref element="RAH" pad="2"/>
-<contactref element="LAH" pad="1"/>
-</signal>
-<signal name="LK_A9">
-<contactref element="RAH" pad="4"/>
-<contactref element="LAH" pad="2"/>
-</signal>
-<signal name="LK_D0">
-<contactref element="RLD" pad="2"/>
-<contactref element="LDD" pad="1"/>
-</signal>
-<signal name="LK_D1">
-<contactref element="RLD" pad="4"/>
-<contactref element="LDD" pad="2"/>
-</signal>
-<signal name="LK_D2">
-<contactref element="RLD" pad="6"/>
-<contactref element="LDD" pad="3"/>
-</signal>
-<signal name="LK_D3">
-<contactref element="RLD" pad="8"/>
-<contactref element="LDD" pad="4"/>
-</signal>
-<signal name="LK_D4">
-<contactref element="RLD" pad="10"/>
-<contactref element="LDD" pad="5"/>
-</signal>
-<signal name="LK_D5">
-<contactref element="RLD" pad="12"/>
-<contactref element="LDD" pad="6"/>
-</signal>
-<signal name="LK_D6">
-<contactref element="RLD" pad="14"/>
-<contactref element="LDD" pad="7"/>
-</signal>
-<signal name="LK_D7">
-<contactref element="RLD" pad="16"/>
-<contactref element="LDD" pad="8"/>
 </signal>
 <signal name="LK_PR0">
 <contactref element="RPR" pad="2"/>
@@ -993,132 +789,36 @@
 <contactref element="RPR" pad="16"/>
 <contactref element="LPR" pad="8"/>
 </signal>
-<signal name="L_A0">
-<contactref element="U8" pad="18"/>
-<contactref element="RAL" pad="1"/>
-</signal>
-<signal name="L_A1">
-<contactref element="U8" pad="16"/>
-<contactref element="RAL" pad="3"/>
-</signal>
-<signal name="L_A10">
-<contactref element="U9" pad="14"/>
-<contactref element="RAH" pad="5"/>
-</signal>
-<signal name="L_A11">
-<contactref element="U9" pad="12"/>
-<contactref element="RAH" pad="7"/>
-</signal>
-<signal name="L_A12">
-<contactref element="U9" pad="9"/>
-<contactref element="RAH" pad="9"/>
-</signal>
-<signal name="L_A13">
-<contactref element="U9" pad="7"/>
-<contactref element="RAH" pad="11"/>
-</signal>
-<signal name="L_A14">
-<contactref element="U9" pad="5"/>
-<contactref element="RAH" pad="13"/>
-</signal>
-<signal name="L_A15">
-<contactref element="U9" pad="3"/>
-<contactref element="RAH" pad="15"/>
-</signal>
-<signal name="L_A2">
-<contactref element="U8" pad="14"/>
-<contactref element="RAL" pad="5"/>
-</signal>
-<signal name="L_A3">
-<contactref element="U8" pad="12"/>
-<contactref element="RAL" pad="7"/>
-</signal>
-<signal name="L_A4">
-<contactref element="U8" pad="9"/>
-<contactref element="RAL" pad="9"/>
-</signal>
-<signal name="L_A5">
-<contactref element="U8" pad="7"/>
-<contactref element="RAL" pad="11"/>
-</signal>
-<signal name="L_A6">
-<contactref element="U8" pad="5"/>
-<contactref element="RAL" pad="13"/>
-</signal>
-<signal name="L_A7">
-<contactref element="U8" pad="3"/>
-<contactref element="RAL" pad="15"/>
-</signal>
-<signal name="L_A8">
-<contactref element="U9" pad="18"/>
-<contactref element="RAH" pad="1"/>
-</signal>
-<signal name="L_A9">
-<contactref element="U9" pad="16"/>
-<contactref element="RAH" pad="3"/>
-</signal>
-<signal name="L_D0">
-<contactref element="U7" pad="18"/>
-<contactref element="RLD" pad="1"/>
-</signal>
-<signal name="L_D1">
-<contactref element="U7" pad="16"/>
-<contactref element="RLD" pad="3"/>
-</signal>
-<signal name="L_D2">
-<contactref element="U7" pad="14"/>
-<contactref element="RLD" pad="5"/>
-</signal>
-<signal name="L_D3">
-<contactref element="U7" pad="12"/>
-<contactref element="RLD" pad="7"/>
-</signal>
-<signal name="L_D4">
-<contactref element="U7" pad="9"/>
-<contactref element="RLD" pad="9"/>
-</signal>
-<signal name="L_D5">
-<contactref element="U7" pad="7"/>
-<contactref element="RLD" pad="11"/>
-</signal>
-<signal name="L_D6">
-<contactref element="U7" pad="5"/>
-<contactref element="RLD" pad="13"/>
-</signal>
-<signal name="L_D7">
-<contactref element="U7" pad="3"/>
-<contactref element="RLD" pad="15"/>
-</signal>
 <signal name="L_PR0">
-<contactref element="U10" pad="18"/>
+<contactref element="U7" pad="18"/>
 <contactref element="RPR" pad="1"/>
 </signal>
 <signal name="L_PR1">
-<contactref element="U10" pad="16"/>
+<contactref element="U7" pad="16"/>
 <contactref element="RPR" pad="3"/>
 </signal>
 <signal name="L_PR2">
-<contactref element="U10" pad="14"/>
+<contactref element="U7" pad="14"/>
 <contactref element="RPR" pad="5"/>
 </signal>
 <signal name="L_PR3">
-<contactref element="U10" pad="12"/>
+<contactref element="U7" pad="12"/>
 <contactref element="RPR" pad="7"/>
 </signal>
 <signal name="L_PR4">
-<contactref element="U10" pad="9"/>
+<contactref element="U7" pad="9"/>
 <contactref element="RPR" pad="9"/>
 </signal>
 <signal name="L_PR5">
-<contactref element="U10" pad="7"/>
+<contactref element="U7" pad="7"/>
 <contactref element="RPR" pad="11"/>
 </signal>
 <signal name="L_PR6">
-<contactref element="U10" pad="5"/>
+<contactref element="U7" pad="5"/>
 <contactref element="RPR" pad="13"/>
 </signal>
 <signal name="L_PR7">
-<contactref element="U10" pad="3"/>
+<contactref element="U7" pad="3"/>
 <contactref element="RPR" pad="15"/>
 </signal>
 <signal name="P5V">
@@ -1135,42 +835,42 @@
 </signal>
 <signal name="PR0">
 <contactref element="U5" pad="21"/>
-<contactref element="U10" pad="2"/>
+<contactref element="U7" pad="2"/>
 <contactref element="RPRB" pad="1"/>
 </signal>
 <signal name="PR1">
 <contactref element="U5" pad="22"/>
-<contactref element="U10" pad="4"/>
+<contactref element="U7" pad="4"/>
 <contactref element="RPRB" pad="3"/>
 </signal>
 <signal name="PR2">
 <contactref element="U5" pad="23"/>
-<contactref element="U10" pad="6"/>
+<contactref element="U7" pad="6"/>
 <contactref element="RPRB" pad="5"/>
 </signal>
 <signal name="PR3">
 <contactref element="U5" pad="24"/>
-<contactref element="U10" pad="8"/>
+<contactref element="U7" pad="8"/>
 <contactref element="RPRB" pad="7"/>
 </signal>
 <signal name="PR4">
 <contactref element="U5" pad="25"/>
-<contactref element="U10" pad="11"/>
+<contactref element="U7" pad="11"/>
 <contactref element="RPRB" pad="9"/>
 </signal>
 <signal name="PR5">
 <contactref element="U5" pad="26"/>
-<contactref element="U10" pad="13"/>
+<contactref element="U7" pad="13"/>
 <contactref element="RPRB" pad="11"/>
 </signal>
 <signal name="PR6">
 <contactref element="U5" pad="27"/>
-<contactref element="U10" pad="15"/>
+<contactref element="U7" pad="15"/>
 <contactref element="RPRB" pad="13"/>
 </signal>
 <signal name="PR7">
 <contactref element="U5" pad="28"/>
-<contactref element="U10" pad="17"/>
+<contactref element="U7" pad="17"/>
 <contactref element="RPRB" pad="15"/>
 </signal>
 <signal name="PRJ0">
@@ -1399,13 +1099,7 @@
 <contactref element="CD5" pad="1"/>
 <contactref element="CD6" pad="1"/>
 <contactref element="CD7" pad="1"/>
-<contactref element="CD8" pad="1"/>
-<contactref element="CD9" pad="1"/>
-<contactref element="CD10" pad="1"/>
 <contactref element="U6" pad="20"/>
 <contactref element="U7" pad="20"/>
-<contactref element="U8" pad="20"/>
-<contactref element="U9" pad="20"/>
-<contactref element="U10" pad="20"/>
 </signal>
 </signals></board></drawing></eagle>

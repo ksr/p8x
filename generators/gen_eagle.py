@@ -1457,10 +1457,9 @@ _map("U5","GPB",["SPARE1%d"%i for i in range(2,8)]+[None,None])            # SPA
 
 ic={"U%d"%i:("MCP23S17","MCP23S17") for i in range(1,6)}
 ic["U6"]=("74244","74HCT244")                                   # SPI 3.3->5 level shift
-for u in range(7,11): ic["U%d"%u]=("74244","74HCT244")          # LED buffers (bus monitors)
+ic["U7"]=("74244","74HCT244")                                   # probe LED buffer (only one kept)
 for u in range(1,6):  bt_labels["U%d"%u]="I/O EXPANDER %d"%u
-bt_labels["U6"]="SPI LEVEL SHIFT"; bt_labels["U7"]="D0-7 LED BUF"
-bt_labels["U8"]="A0-7 LED BUF"; bt_labels["U9"]="A8-15 LED BUF"; bt_labels["U10"]="PROBE LED BUF"
+bt_labels["U6"]="SPI LEVEL SHIFT"; bt_labels["U7"]="PROBE LED BUF"
 
 # --- expander power + shared SPI + per-chip hardware address --------------------
 for u in range(1,6):
@@ -1499,7 +1498,11 @@ N(n,"SENSE5",("A1","GP26"))                                    # ADC0: backplane
 N(n,"VCC",("D1","A")); N(n,"P5V",("D1","K"))
 N(n,"VCC",("R5","1")); N(n,"SENSE5",("R5","2"),("R6","1")); N(n,"GND",("R6","2"))
 
-# --- LED buffers (bus monitors, io-card pattern): tap bus, ~1uA load ------------
+# --- probe LED buffer (io-card monitor pattern): tap the probe lines, ~1uA load -
+# The D0-7 / A0-15 monitor arrays were CUT: they are redundant with the ASCII
+# readback when stepping and only an activity blur when free-running (design doc
+# §5.4). Only the probe display is kept — the immediate feedback the probe feature
+# exists for. Status LEDs (below) stay: they show card STATE, not otherwise visible.
 def _ledbuf(u,arr,rn,nets8):
     N(n,"GND",(u,"!G1"),(u,"!G2"))
     for i,net in enumerate(nets8):
@@ -1507,10 +1510,7 @@ def _ledbuf(u,arr,rn,nets8):
         N(n,"L_%s"%net,(u,"Y%d"%(i+1)),(rn,"A%d"%(i+1)))       # buffered copy
         N(n,"LK_%s"%net,(rn,"B%d"%(i+1)),(arr,"A%d"%(i+1)))    # through limit R
         N(n,"GND",(arr,"K%d"%(i+1)))
-_ledbuf("U7","LDD","RLD",["D%d"%i for i in range(8)])
-_ledbuf("U8","LAL","RAL",["A%d"%i for i in range(8)])
-_ledbuf("U9","LAH","RAH",["A%d"%i for i in range(8,16)])
-_ledbuf("U10","LPR","RPR",["PR%d"%i for i in range(8)])
+_ledbuf("U7","LPR","RPR",["PR%d"%i for i in range(8)])
 # status LEDs: driven straight from the Pico (no buffer), through their own limit R
 for i in range(8):
     N(n,"ST%d"%i,("RST","A%d"%(i+1)))
@@ -1535,10 +1535,8 @@ N(n,"GND",("J2","9"),("J2","10"))                              # pins 9,10 = gro
 sm={"A1":("PICO","RP2040"),"J2":("HDR10","PROBE 2x5"),
  "D1":("LED","SCHOTTKY"),   # placeholder 2-pin part for the power diode
  "R5":("RES","10K"),"R6":("RES","10K"),"R7":("RES","1K8"),"R8":("RES","3K3"),
- "RLD":("RNISO8","8x330R"),"RAL":("RNISO8","8x330R"),"RAH":("RNISO8","8x330R"),
  "RPR":("RNISO8","8x330R"),"RST":("RNISO8","8x330R"),
  "RPRB":("RNISO8","8x1K"),
- "LDD":("LEDARR8","D0-7"),"LAL":("LEDARR8","A0-7"),"LAH":("LEDARR8","A8-15"),
  "LPR":("LEDARR8","PROBES"),"LST":("LEDARR8","STATUS")}
 
 bt_labels.update({"A1":"RP2040 PICO","J2":"PROBE HEADER","D1":"5V FEED DIODE",
