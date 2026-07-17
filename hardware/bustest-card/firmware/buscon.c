@@ -193,14 +193,26 @@ static void handle(char *line, char *out){
     }
 }
 
-/* ---- init: everything Hi-Z, clocks parked low, safe power-on ---------------- */
+/* ---- init: everything Hi-Z except the clocks, which we hold low immediately ---
+ * There are NO bus pull-downs on this card. A floating word only matters while a
+ * clock edge can latch it, so the one line worth conditioning is CLK — and we do
+ * it here in firmware, not in copper: chip 2's CLK/CLKB bits are made OUTPUTS
+ * driving 0 as the very first thing after reset, so nothing downstream can latch
+ * a floating word. Everything else stays Hi-Z until a `drive` command claims it.
+ * The only unguarded moment is power-on-to-here (~tens of ms), closed by power
+ * sequencing the backplane up before/with USB. */
 static void bus_init(void){
     for(int c=0;c<NCHIP;c++){
-        iodir[c]=0xFFFF; olat[c]=0;                   /* all inputs; latch 0 */
-        mcp_write(c,R_IODIRA,0xFF); mcp_write(c,R_IODIRB,0xFF);
+        iodir[c]=0xFFFF; olat[c]=0;                   /* all inputs (Hi-Z); latch 0 */
         mcp_write(c,R_OLATA,0);     mcp_write(c,R_OLATB,0);
+        mcp_write(c,R_IODIRA,0xFF); mcp_write(c,R_IODIRB,0xFF);
     }
+    /* claim CLK/CLKB (chip 2, GPA bits 5,6) as outputs, driving both low = rest */
+    iodir[2] &= ~((1u<<5)|(1u<<6));
+    mcp_write(2,R_IODIRA, iodir[2]&0xFF);             /* bits 5,6 -> output, rest input */
+    set_clocks(0,0);                                  /* both low: inert, no edge */
     for(int g=0;g<NGROUP;g++) owned[g]=0;
+    owned[G_CTRL]=0;                                  /* we hold only the clocks, not "ctrl" */
 }
 
 int main(void){

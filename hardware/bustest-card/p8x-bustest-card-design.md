@@ -89,44 +89,75 @@ This works because contention is made *non-destructive*, not *impossible* (§3.2
 
 The idle state falls out of the bus's own encoding: **all-zeros is inert.**
 `DOE=0` is bus-idle, `DLD=0` is no-load, `PINC/PDEC/LDF=0` are no-ops — and `-RES`
-is active-low, so low means *held in reset*. A plain pull-down network therefore
-gives a safe power-on state before the Pico has even booted, and holds the ~40 HCT
-control inputs at a defined level when the control card is out (floating HCT inputs
-oscillate and burn current).
+is active-low, so low means *held in reset*.
 
-**`CLK` pulled low is the real interlock.** With no rising edge, nothing latches
+**There are no bus pull-downs on this card** (an earlier draft had six; they were
+cut — see §3.1a). A floating word is only dangerous when a clock edge can latch
+it, so the one line worth conditioning is the clock, and firmware does it: the
+Pico drives `CLK`/`CLKB` low as its **first action after reset** (`bus_init()` in
+`buscon.c`), before accepting any command. From that point nothing downstream can
+latch a floating word. Everything else stays Hi-Z until a `drive` command claims
+it.
+
+**`CLK` held low is the real interlock.** With no rising edge, nothing latches
 anywhere, whatever else is on the bus.
 
-### 3.2 Series resistors: 1 kΩ, and why they are free
+### 3.1a Why no pull-downs — the scenario they defended does not need them
 
-Every driven line and every probe goes through **1 kΩ** (RNISO8 networks).
+Pull-downs would only matter in one state: this card Hi-Z (not driving) **and**
+the control card absent, so nothing drives the ~40 control lines. That state:
 
-The machine is **entirely 74HCT** (24 distinct parts in the BOM; no LSTTL
-anywhere). HCT inputs are CMOS, drawing ~1 µA. So:
+- **only exists during bring-up** — the real machine always has the control card
+  driving these lines; "control card absent" is created solely by this workflow;
+- is a **brief power-on transient** — you power up, then your first command claims
+  a group and drives it;
+- has a **recoverable worst case** — floating `DOE` is one-hot decoded, so it
+  enables *one* wrong source onto `D0–7` (no contention); floating `DLD` + a
+  glitching float on `CLK` could fire *one* spurious SRAM write. On a bench tool
+  that is a byte you rewrite, not a dead chip.
 
-| | |
-|---|---|
-| DC drop across 1 kΩ | ~1 mV. **Zero cost.** |
-| Worst-case contention | expander driving 5 V into an HCT output held low (R<sub>on</sub>≈30 Ω): `4.9V / 1030Ω ≈ 4.8 mA` — safe **indefinitely** for both sides |
-| Drive level | against the 10 kΩ pull-down: `5V × 10k/11k = 4.55 V` — far above HCT's V<sub>IH</sub> = 2.0 V |
-| Rise time | `1k × ~100 pF ≈ 100 ns` — invisible when stepping by hand |
-| Probe over-voltage | a grabber slipped onto 12 V gives `(12−5)/1k = 7 mA` into the expander's internal ESD clamp, under its 20 mA rating — **so no external clamp diodes are needed** |
+Spending six resistor networks — half the board's passives — so a bench instrument
+can condition *other cards'* floating inputs during a transient the real machine
+never has is the wrong place to solve it. The only line with teeth (the clock) is
+handled in firmware (§3.1). The unguarded window shrinks to power-on-to-firmware
+(~tens of ms), closed by bringing the backplane up before/with USB.
 
-A wrong test therefore costs a wrong readback, not a dead chip. Had the machine
-been LSTTL, `10 loads × 0.4 mA × 1 kΩ = 4 V` of drop would have destroyed the idea.
+### 3.2 The 1 kΩ probe series, and the contention tradeoff
+
+**The bus lines carry no series resistors.** The MCP23S17 runs at VDD = 5 V, so
+its GPIO is native 5 V against the all-74HCT machine (24 HCT parts in the BOM, no
+LSTTL) — no level translation is needed, which is why the earlier 1 kΩ bus
+networks were dropped. Consequence, stated plainly:
+
+- **Driving** an HCT input (CMOS, ~1 µA) gives a full-rail ~5 V — better than the
+  old 4.55 V through a series R.
+- **Contention** — a test asserting `drive` on a group whose card is actually
+  *present* — is now limited only by the two parts' own R<sub>on</sub>, roughly
+  **25–50 mA**. That is within both the MCP's and the 74HCT's per-pin abs-max, so
+  it survives a brief mistake, but it is **not "safe indefinitely."** The `drive`
+  assertion therefore carries real weight; hold contention and you can cook a pin.
+  *(This is the one place the board traded safety margin for parts — see §10; if
+  it proves too sharp, 100 Ω bus series would cap contention at ~5 mA for the cost
+  of the networks back.)*
+
+**The 8 probe lines keep 1 kΩ** (RN `RPRB`), because a slipped grabber is
+over-voltage the operator cannot design away: a grabber onto 12 V gives
+`(12−5)/1k = 7 mA` into the MCP's internal ESD clamp, under its 20 mA rating — so
+no external clamp diodes are needed.
 
 ### 3.3 Passive allocation — do not double up
 
 A pull-up and a pull-down on the same line sit at mid-rail and leave every HCT
-input indeterminate. Each line gets exactly one owner:
+input indeterminate. After the pull-down cut, the only passives on the bus are the
+backplane's, plus this card's probe series:
 
-| Line | Passive | Where | Idle |
-|---|---|---|---|
-| `D0–D7` | 10k pull-**up** (RN1, exists) | backplane | high = bus idle, per the `DOE=0` spec |
-| `-RES` | 10k pull-**up** (**new**) | backplane | deasserted; control card or this card drives it low |
-| `-IRQ` | 10k pull-**up** (**new**) | backplane | wired-OR — see §7 |
-| `A0–A15` | 10k pull-**down** | this card | `0000` when the reg-bank is out |
-| ~40 control lines, `CLK`, `CLKB` | 10k pull-**down** | this card | all-zeros = inert |
+| Line | Passive | Where |
+|---|---|---|
+| `D0–D7` | 10k pull-**up** (RN1, exists) | backplane |
+| `-RES` | 10k pull-**up** (**new**) | backplane |
+| `-IRQ` | 10k pull-**up** (**new**) | backplane |
+| `A0–A15`, control, `CLK`/`CLKB` | **none** | — (firmware holds the clocks; §3.1) |
+| Probes | 1k series | this card (`RPRB`) |
 
 This card puts **no** passive on `D`, `-RES`, or `-IRQ` — those belong to the
 backplane.
@@ -136,10 +167,12 @@ backplane.
 When a test wants to *verify* its assumption before claiming lines, it can — with
 no straps and no card modifications:
 
-- **Control card**: `CLK` and `CLKB` are complements *by definition*. Release both
-  and read. `01`/`10` ⇒ something is driving them. `00` is just our pull-downs ⇒
-  no control card. This is guaranteed, unlike level-probing (a halted control card
-  and an absent one look identical if you only watch for edges).
+- **Control card**: `CLK`/`CLKB` are complements *by definition*. Enable the MCP's
+  internal pull-ups on both, release, and read: a driving control card overrides
+  the weak (~100 kΩ) pull-ups to give `01`/`10`; an absent one lets both float to
+  the pull-up rail = `11`. (With the old pull-downs this read `00`; the logic is
+  the same, the resting value differs.) Still guaranteed, unlike level-probing — a
+  halted control card and an absent one look identical if you only watch for edges.
 - **Reg-bank**: pulse `PINC` and see whether `A0–A15` changes.
 - **ALU**: drive an operation and see whether the flags respond.
 
@@ -227,23 +260,20 @@ backplane. LEDs hang off the bus side; the probe header hangs off U5.
   │   U5   GPA = PR0-7  (probes, high-Z) GPB = SPARE12-19                  │
   └───────┬──────────────────────────────────────────────────┬─────────────┘
           │                                                  │
-          │  1k SERIES  (RN1-9)                              │ 1k (RN9)
-          │  · contention → 4.8 mA, safe indefinitely        │
-          │  · DC drop ~1 mV (all-HCT ⇒ CMOS inputs)         ▼
-          │  · probe over-V → 7 mA into ESD clamp     ┌──────────────┐
-          │    ⇒ no clamp diodes needed               │ J2  2×5 hdr  │
-          │                                           │ 8 probes     │
-          ├──────────────► U7..U10  74HCT244 ──┐      │ + 2 GND      │
-          │                bus monitors        │      └──────┬───────┘
-          │                (~1 µA bus load)    ▼         ribbon → grabbers
+          │  NO bus series R: MCP@5V is native 5V (no level        │ 1k (RPRB)
+          │  shift needed). Trade: contention limited only by        ▼
+          │  device Ron (~25-50mA, abs-max-safe, not indefinite)  ┌──────────────┐
+          │  → the `drive` assertion carries weight.              │ J2  2×5 hdr  │
+          │                                                       │ 8 probes     │
+          ├──────────────► U7..U10  74HCT244 ──┐   probe 1k for   │ + 2 GND      │
+          │                bus monitors        │   over-V only    └──────┬───────┘
+          │                (~1 µA bus load)    ▼   (slipped grabber)  ribbon→grabbers
           │                            32 LEDs: D0-7 / A0-15 / PR0-7
+          │
+          │   NO bus pull-downs: firmware drives CLK/CLKB low on boot (the only
+          │   line a floating word can latch through); everything else Hi-Z until
+          │   a `drive` claims it. See §3.1/§3.1a.
           ▼
-  ┌────────────────────────────────────────────────────────────────────────┐
-  │  10k PULL-DOWNS (RN10-16) on A0-15 + ~40 control + CLK/CLKB            │
-  │  all-zeros = inert bus  ·  CLK low = nothing latches = the real        │
-  │  interlock  ·  (-RES is active-low, so the BACKPLANE pulls it UP)      │
-  └───────────────────────────────┬────────────────────────────────────────┘
-                                  ▼
   ┌────────────────────────────────────────────────────────────────────────┐
   │ J1   DIN 41612 96-pin (MABC96R)   →   P8X BACKPLANE                    │
   │   D0-7   A0-15   ~40 control   CLK/CLKB   -RES   -IRQ   FC/FZ/FN/FV    │
@@ -290,7 +320,8 @@ Per-chip allocation is in the block diagram above.
 | U7–U10 | 74HCT244 | LED buffers (D, A-lo, A-hi, probes) | reuse |
 | A1 | Pico (2×20 headers) | RP2040, USB CDC | **add** |
 | J2 | 2×5 header | 8 probes + 2 GND | **add** |
-| RN* | RNISO8 | 1k series (×9), 10k pull-down (×7), LED limit (×5) | reuse |
+| RN* | RNISO8 | LED current-limit (×5), 1k probe series (×1) | reuse |
+| R5–R8 | RES | 5V-sense divider (×2), MISO divider (×2) | reuse |
 | LED* | LEDARR8 | 40 status/state LEDs | reuse |
 | J1 | MABC96R | DIN 41612 edge connector | supplied by `card()` |
 
@@ -452,7 +483,11 @@ listen-only. That is inherent to the approach, not a fixable gap.
 - **Where `CLK` parks when halted** — affects listen-mode sampling only.
 - **Status LED set** — the eight in §5.4 are a guess and want a second opinion
   from whoever will stare at them.
-- **Layout** — 5 × DIP-28 + 5 × 74244 + ~21 resistor networks + 5 LED arrays + Pico
+- **Contention margin** — dropping the bus series R (§3.2) means a wrong `drive`
+  is limited only by device R<sub>on</sub> (~25–50 mA, abs-max-safe but not
+  indefinite). Accepted for a careful bench tool; reversible by adding 100 Ω bus
+  series (caps at ~5 mA) if it proves too sharp in use.
+- **Layout** — 5 × DIP-28 + 5 × 74244 + 6 resistor networks + 5 LED arrays + Pico
   + J1. Should fit 200 × 100 comfortably; confirm when placed.
 - **Nothing here is measured.** Every number above is calculated from datasheet
   values and the existing design docs.

@@ -513,30 +513,6 @@
 <attribute name="NAME" x="183.55" y="60.52" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="183.55" y="55.44" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="RPD1" library="p8x" package="SIP16" value="8x10K" x="17.87" y="8.06" smashed="yes">
-<attribute name="NAME" x="17.87" y="10.60" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="17.87" y="5.52" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="RPD2" library="p8x" package="SIP16" value="8x10K" x="22.07" y="8.06" smashed="yes">
-<attribute name="NAME" x="22.07" y="10.60" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="22.07" y="5.52" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="RPD3" library="p8x" package="SIP16" value="8x10K" x="26.27" y="8.06" smashed="yes">
-<attribute name="NAME" x="26.27" y="10.60" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="26.27" y="5.52" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="RPD4" library="p8x" package="SIP16" value="8x10K" x="30.47" y="8.06" smashed="yes">
-<attribute name="NAME" x="30.47" y="10.60" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="30.47" y="5.52" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="RPD5" library="p8x" package="SIP16" value="8x10K" x="34.67" y="8.06" smashed="yes">
-<attribute name="NAME" x="34.67" y="10.60" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="34.67" y="5.52" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="RPD6" library="p8x" package="SIP16" value="8x10K" x="38.87" y="8.06" smashed="yes">
-<attribute name="NAME" x="38.87" y="10.60" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="38.87" y="5.52" size="1.778" layer="27" ratio="10"/>
-</element>
 </elements><signals>
 <signal name="-IRQ">
 <contactref element="U4" pad="27"/>
@@ -548,147 +524,121 @@
 <signal name="A0">
 <contactref element="U1" pad="1"/>
 <contactref element="U8" pad="2"/>
-<contactref element="RPD1" pad="1"/>
 <contactref element="J1" pad="C3"/>
 </signal>
 <signal name="A1">
 <contactref element="U1" pad="2"/>
 <contactref element="U8" pad="4"/>
-<contactref element="RPD1" pad="3"/>
 <contactref element="J1" pad="C4"/>
 </signal>
 <signal name="A10">
 <contactref element="U2" pad="23"/>
 <contactref element="U9" pad="6"/>
-<contactref element="RPD2" pad="5"/>
 <contactref element="J1" pad="C13"/>
 </signal>
 <signal name="A11">
 <contactref element="U2" pad="24"/>
 <contactref element="U9" pad="8"/>
-<contactref element="RPD2" pad="7"/>
 <contactref element="J1" pad="C14"/>
 </signal>
 <signal name="A12">
 <contactref element="U2" pad="25"/>
 <contactref element="U9" pad="11"/>
-<contactref element="RPD2" pad="9"/>
 <contactref element="J1" pad="C15"/>
 </signal>
 <signal name="A13">
 <contactref element="U2" pad="26"/>
 <contactref element="U9" pad="13"/>
-<contactref element="RPD2" pad="11"/>
 <contactref element="J1" pad="C16"/>
 </signal>
 <signal name="A14">
 <contactref element="U2" pad="27"/>
 <contactref element="U9" pad="15"/>
-<contactref element="RPD2" pad="13"/>
 <contactref element="J1" pad="C17"/>
 </signal>
 <signal name="A15">
 <contactref element="U2" pad="28"/>
 <contactref element="U9" pad="17"/>
-<contactref element="RPD2" pad="15"/>
 <contactref element="J1" pad="C18"/>
 </signal>
 <signal name="A2">
 <contactref element="U1" pad="3"/>
 <contactref element="U8" pad="6"/>
-<contactref element="RPD1" pad="5"/>
 <contactref element="J1" pad="C5"/>
 </signal>
 <signal name="A3">
 <contactref element="U1" pad="4"/>
 <contactref element="U8" pad="8"/>
-<contactref element="RPD1" pad="7"/>
 <contactref element="J1" pad="C6"/>
 </signal>
 <signal name="A4">
 <contactref element="U1" pad="5"/>
 <contactref element="U8" pad="11"/>
-<contactref element="RPD1" pad="9"/>
 <contactref element="J1" pad="C7"/>
 </signal>
 <signal name="A5">
 <contactref element="U1" pad="6"/>
 <contactref element="U8" pad="13"/>
-<contactref element="RPD1" pad="11"/>
 <contactref element="J1" pad="C8"/>
 </signal>
 <signal name="A6">
 <contactref element="U1" pad="7"/>
 <contactref element="U8" pad="15"/>
-<contactref element="RPD1" pad="13"/>
 <contactref element="J1" pad="C9"/>
 </signal>
 <signal name="A7">
 <contactref element="U1" pad="8"/>
 <contactref element="U8" pad="17"/>
-<contactref element="RPD1" pad="15"/>
 <contactref element="J1" pad="C10"/>
 </signal>
 <signal name="A8">
 <contactref element="U2" pad="21"/>
 <contactref element="U9" pad="2"/>
-<contactref element="RPD2" pad="1"/>
 <contactref element="J1" pad="C11"/>
 </signal>
 <signal name="A9">
 <contactref element="U2" pad="22"/>
 <contactref element="U9" pad="4"/>
-<contactref element="RPD2" pad="3"/>
 <contactref element="J1" pad="C12"/>
 </signal>
 <signal name="ALUM">
 <contactref element="U3" pad="5"/>
-<contactref element="RPD6" pad="3"/>
 <contactref element="J1" pad="C23"/>
 </signal>
 <signal name="ALUS0">
 <contactref element="U3" pad="1"/>
-<contactref element="RPD5" pad="11"/>
 <contactref element="J1" pad="C19"/>
 </signal>
 <signal name="ALUS1">
 <contactref element="U3" pad="2"/>
-<contactref element="RPD5" pad="13"/>
 <contactref element="J1" pad="C20"/>
 </signal>
 <signal name="ALUS2">
 <contactref element="U3" pad="3"/>
-<contactref element="RPD5" pad="15"/>
 <contactref element="J1" pad="C21"/>
 </signal>
 <signal name="ALUS3">
 <contactref element="U3" pad="4"/>
-<contactref element="RPD6" pad="1"/>
 <contactref element="J1" pad="C22"/>
 </signal>
 <signal name="BSEL">
 <contactref element="U4" pad="25"/>
-<contactref element="RPD5" pad="7"/>
 <contactref element="J1" pad="B28"/>
 </signal>
 <signal name="CIN">
 <contactref element="U3" pad="6"/>
-<contactref element="RPD6" pad="5"/>
 <contactref element="J1" pad="C24"/>
 </signal>
 <signal name="CLK">
 <contactref element="U3" pad="26"/>
-<contactref element="RPD4" pad="11"/>
 <contactref element="J1" pad="A24"/>
 </signal>
 <signal name="CLKB">
 <contactref element="U3" pad="27"/>
-<contactref element="RPD4" pad="13"/>
 <contactref element="J1" pad="A25"/>
 </signal>
 <signal name="CLRC">
 <contactref element="U4" pad="24"/>
-<contactref element="RPD5" pad="5"/>
 <contactref element="J1" pad="B27"/>
 </signal>
 <signal name="CS5">
@@ -741,42 +691,34 @@
 </signal>
 <signal name="DLD0">
 <contactref element="U2" pad="5"/>
-<contactref element="RPD3" pad="9"/>
 <contactref element="J1" pad="A16"/>
 </signal>
 <signal name="DLD1">
 <contactref element="U2" pad="6"/>
-<contactref element="RPD3" pad="11"/>
 <contactref element="J1" pad="A17"/>
 </signal>
 <signal name="DLD2">
 <contactref element="U2" pad="7"/>
-<contactref element="RPD3" pad="13"/>
 <contactref element="J1" pad="A18"/>
 </signal>
 <signal name="DLD3">
 <contactref element="U2" pad="8"/>
-<contactref element="RPD3" pad="15"/>
 <contactref element="J1" pad="A19"/>
 </signal>
 <signal name="DOE0">
 <contactref element="U2" pad="1"/>
-<contactref element="RPD3" pad="1"/>
 <contactref element="J1" pad="A12"/>
 </signal>
 <signal name="DOE1">
 <contactref element="U2" pad="2"/>
-<contactref element="RPD3" pad="3"/>
 <contactref element="J1" pad="A13"/>
 </signal>
 <signal name="DOE2">
 <contactref element="U2" pad="3"/>
-<contactref element="RPD3" pad="5"/>
 <contactref element="J1" pad="A14"/>
 </signal>
 <signal name="DOE3">
 <contactref element="U2" pad="4"/>
-<contactref element="RPD3" pad="7"/>
 <contactref element="J1" pad="A15"/>
 </signal>
 <signal name="FC">
@@ -879,51 +821,6 @@
 <contactref element="LST" pad="11"/>
 <contactref element="LST" pad="10"/>
 <contactref element="LST" pad="9"/>
-<contactref element="RPD1" pad="2"/>
-<contactref element="RPD1" pad="4"/>
-<contactref element="RPD1" pad="6"/>
-<contactref element="RPD1" pad="8"/>
-<contactref element="RPD1" pad="10"/>
-<contactref element="RPD1" pad="12"/>
-<contactref element="RPD1" pad="14"/>
-<contactref element="RPD1" pad="16"/>
-<contactref element="RPD2" pad="2"/>
-<contactref element="RPD2" pad="4"/>
-<contactref element="RPD2" pad="6"/>
-<contactref element="RPD2" pad="8"/>
-<contactref element="RPD2" pad="10"/>
-<contactref element="RPD2" pad="12"/>
-<contactref element="RPD2" pad="14"/>
-<contactref element="RPD2" pad="16"/>
-<contactref element="RPD3" pad="2"/>
-<contactref element="RPD3" pad="4"/>
-<contactref element="RPD3" pad="6"/>
-<contactref element="RPD3" pad="8"/>
-<contactref element="RPD3" pad="10"/>
-<contactref element="RPD3" pad="12"/>
-<contactref element="RPD3" pad="14"/>
-<contactref element="RPD3" pad="16"/>
-<contactref element="RPD4" pad="2"/>
-<contactref element="RPD4" pad="4"/>
-<contactref element="RPD4" pad="6"/>
-<contactref element="RPD4" pad="8"/>
-<contactref element="RPD4" pad="10"/>
-<contactref element="RPD4" pad="12"/>
-<contactref element="RPD4" pad="14"/>
-<contactref element="RPD4" pad="16"/>
-<contactref element="RPD5" pad="2"/>
-<contactref element="RPD5" pad="4"/>
-<contactref element="RPD5" pad="6"/>
-<contactref element="RPD5" pad="8"/>
-<contactref element="RPD5" pad="10"/>
-<contactref element="RPD5" pad="12"/>
-<contactref element="RPD5" pad="14"/>
-<contactref element="RPD5" pad="16"/>
-<contactref element="RPD6" pad="2"/>
-<contactref element="RPD6" pad="4"/>
-<contactref element="RPD6" pad="6"/>
-<contactref element="RPD6" pad="8"/>
-<contactref element="RPD6" pad="10"/>
 <contactref element="J2" pad="9"/>
 <contactref element="J2" pad="10"/>
 <contactref element="J1" pad="A31"/>
@@ -968,12 +865,10 @@
 </signal>
 <signal name="LDF">
 <contactref element="U4" pad="21"/>
-<contactref element="RPD4" pad="15"/>
 <contactref element="J1" pad="A26"/>
 </signal>
 <signal name="LDZN">
 <contactref element="U4" pad="22"/>
-<contactref element="RPD5" pad="1"/>
 <contactref element="J1" pad="C28"/>
 </signal>
 <signal name="LK_A0">
@@ -1238,12 +1133,10 @@
 </signal>
 <signal name="PDEC">
 <contactref element="U3" pad="25"/>
-<contactref element="RPD4" pad="9"/>
 <contactref element="J1" pad="A23"/>
 </signal>
 <signal name="PINC">
 <contactref element="U3" pad="24"/>
-<contactref element="RPD4" pad="7"/>
 <contactref element="J1" pad="A22"/>
 </signal>
 <signal name="PR0">
@@ -1320,17 +1213,14 @@
 </signal>
 <signal name="PSEL0">
 <contactref element="U3" pad="21"/>
-<contactref element="RPD4" pad="1"/>
 <contactref element="J1" pad="A20"/>
 </signal>
 <signal name="PSEL1">
 <contactref element="U3" pad="22"/>
-<contactref element="RPD4" pad="3"/>
 <contactref element="J1" pad="A21"/>
 </signal>
 <signal name="PSEL2">
 <contactref element="U3" pad="23"/>
-<contactref element="RPD4" pad="5"/>
 <contactref element="J1" pad="C27"/>
 </signal>
 <signal name="P_CS">
@@ -1377,22 +1267,18 @@
 </signal>
 <signal name="SETC">
 <contactref element="U4" pad="23"/>
-<contactref element="RPD5" pad="3"/>
 <contactref element="J1" pad="C30"/>
 </signal>
 <signal name="SH0">
 <contactref element="U3" pad="7"/>
-<contactref element="RPD6" pad="7"/>
 <contactref element="J1" pad="C25"/>
 </signal>
 <signal name="SH1">
 <contactref element="U3" pad="8"/>
-<contactref element="RPD6" pad="9"/>
 <contactref element="J1" pad="C26"/>
 </signal>
 <signal name="SHCIN">
 <contactref element="U4" pad="26"/>
-<contactref element="RPD5" pad="9"/>
 <contactref element="J1" pad="C29"/>
 </signal>
 <signal name="SI5">

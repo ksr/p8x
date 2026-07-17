@@ -1517,14 +1517,14 @@ for i in range(8):
     N(n,"STK%d"%i,("RST","B%d"%(i+1)),("LST","A%d"%(i+1)))
     N(n,"GND",("LST","K%d"%(i+1)))
 
-# --- 10k pull-downs: hold A + control + clocks inert when the card is high-Z -----
-# NOT -RES/-IRQ (the backplane pulls those UP). Flags are inputs -> no pull needed.
-pd=["A%d"%i for i in range(16)]+["DOE0","DOE1","DOE2","DOE3","DLD0","DLD1","DLD2",
- "DLD3","PSEL0","PSEL1","PSEL2","PINC","PDEC","CLK","CLKB","LDF","LDZN","SETC",
- "CLRC","BSEL","SHCIN","ALUS0","ALUS1","ALUS2","ALUS3","ALUM","CIN","SH0","SH1"]
-for k,net in enumerate(pd):
-    rn="RPD%d"%(k//8+1); pin=k%8+1
-    N(n,net,(rn,"A%d"%pin)); N(n,"GND",(rn,"B%d"%pin))
+# NO bus pull-downs. They would only matter when this card is Hi-Z AND the control
+# card is absent — a state that exists only during bring-up and only as a brief
+# power-on transient, whose worst case is a recoverable spurious SRAM write, not
+# damage. Conditioning ~40 other-card inputs from a bench instrument is the wrong
+# place to solve it. The one line with teeth (a glitching CLK is what turns a
+# floating word into a latched write) is handled in firmware instead: buscon.c
+# drives CLK/CLKB low as its first boot action, so the only unguarded window is
+# power-on-to-firmware (~tens of ms), closed by power sequencing.
 
 # --- probe series (1k) + 2x5 header (8 probes + 2 GND) --------------------------
 for i in range(8):
@@ -1540,7 +1540,6 @@ sm={"A1":("PICO","RP2040"),"J2":("HDR10","PROBE 2x5"),
  "RPRB":("RNISO8","8x1K"),
  "LDD":("LEDARR8","D0-7"),"LAL":("LEDARR8","A0-7"),"LAH":("LEDARR8","A8-15"),
  "LPR":("LEDARR8","PROBES"),"LST":("LEDARR8","STATUS")}
-for k in range(1,7): sm["RPD%d"%k]=("RNISO8","8x10K")
 
 bt_labels.update({"A1":"RP2040 PICO","J2":"PROBE HEADER","D1":"5V FEED DIODE",
  "RPRB":"PROBE 1k SERIES","LST":"STATUS LEDS"})
