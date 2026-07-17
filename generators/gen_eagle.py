@@ -66,6 +66,12 @@ PKG={
  "DIP14": dip_pads(14,7.62), "DIP16": dip_pads(16,7.62),
  "DIP20": dip_pads(20,7.62), "DIP24W": dip_pads(24,15.24),
  "DIP28W": dip_pads(28,15.24),
+ # 300-mil skinny DIP-28. NOT interchangeable with DIP28W (600 mil): the
+ # MCP23S17-E/SP is SPDIP, so DIP28W would leave it unable to reach its pads.
+ "DIP28N": dip_pads(28,7.62),
+ # Pico module on 2x20 headers: 0.1" pitch, rows 0.7" (17.78 mm) apart.
+ # dip_pads numbering matches the board: 1-20 down the left, 21-40 up the right.
+ "PICO40": dip_pads(40,17.78),
  # DIN 41612 96-pin footprints from Eagle's con-vg library (geometry baked in so
  # the generator stays self-contained). Rows A/B/C at x=-2.54/0/+2.54, 32 positions
  # from y=+39.37 at 2.54mm pitch; octagon pads drill 0.9144 (round here — cosmetic);
@@ -88,6 +94,7 @@ PKG={
  "HDR3": [(str(k+1),0,-2.54*k,0.9,1.8) for k in range(3)],
  "SW2P": [("1",0,0,1.0,1.9),("2",5.08,0,1.0,1.9)],
  "HDR40": [(str(k+1),2.54*(k%2),-2.54*(k//2),0.9,1.7) for k in range(40)],
+ "HDR10": [(str(k+1),2.54*(k%2),-2.54*(k//2),0.9,1.7) for k in range(10)],
 }
 
 # Extra silkscreen geometry per package, beyond the standard >NAME/>VALUE text.
@@ -247,6 +254,39 @@ D("LEDARR8",["A%d"%i for i in range(1,9)],["K%d"%i for i in range(1,9)],
   dict([("A%d"%i,str(i)) for i in range(1,9)]+[("K%d"%i,str(17-i)) for i in range(1,9)]),"DIP16")
 D("IDE40",[str(k) for k in range(1,41,2)],[str(k) for k in range(2,41,2)],
   {str(k):str(k) for k in range(1,41)},"HDR40")
+
+# ---- bustest-card parts -----------------------------------------------------
+# MCP23S17: 16-bit SPI I/O expander, per-pin direction + per-pin pull-up, 5 V.
+# Pinout verified against the Microchip datasheet (DS20001952): GPB0-7 = 1-8,
+# VDD 9, VSS 10, CS 11, SCK 12, SI 13, SO 14, A0-2 = 15-17, RESET 18, INTB 19,
+# INTA 20, GPA0-7 = 21-28. Package is SPDIP (300 mil) -> DIP28N, NOT DIP28W.
+D("MCP23S17",
+  ["!CS","SCK","SI","A0","A1","A2","!RESET"],
+  ["GPA%d"%i for i in range(8)]+["GPB%d"%i for i in range(8)]+["SO","!INTA","!INTB","VDD","VSS"],
+  dict([("GPB%d"%i,str(i+1)) for i in range(8)]
+     + [("VDD","9"),("VSS","10"),("!CS","11"),("SCK","12"),("SI","13"),("SO","14"),
+        ("A0","15"),("A1","16"),("A2","17"),("!RESET","18"),("!INTB","19"),("!INTA","20")]
+     + [("GPA%d"%i,str(i+21)) for i in range(8)]),
+  "DIP28N")
+
+# Raspberry Pi Pico (RP2040) as a socketed 2x20 module. Power pins verified
+# against the official pinout: VBUS 40, VSYS 39, 3V3_EN 37, 3V3(OUT) 36,
+# AGND 33, GND 3/8/13/18/23/28/38, pin 1 = GP0.
+D("PICO",
+  ["VBUS","VSYS","!RUN","3V3EN"],
+  ["GP%d"%i for i in range(23)]+["GP26","GP27","GP28","3V3OUT","ADCVREF","AGND","GND"],
+  dict([("GP0","1"),("GP1","2"),("GND","3"),("GP2","4"),("GP3","5"),("GP4","6"),
+        ("GP5","7"),("GP6","9"),("GP7","10"),("GP8","11"),("GP9","12"),
+        ("GP10","14"),("GP11","15"),("GP12","16"),("GP13","17"),
+        ("GP14","19"),("GP15","20"),("GP16","21"),("GP17","22"),
+        ("GP18","24"),("GP19","25"),("GP20","26"),("GP21","27"),
+        ("GP22","29"),("!RUN","30"),("GP26","31"),("GP27","32"),("AGND","33"),
+        ("GP28","34"),("ADCVREF","35"),("3V3OUT","36"),("3V3EN","37"),
+        ("VSYS","39"),("VBUS","40")]),
+  "PICO40")
+
+# 2x5 probe header: 8 high-Z probe lines + 2 GND, ribbon fanned to grabbers.
+D("HDR10",[str(k) for k in range(1,11)],[],{str(k):str(k) for k in range(1,11)},"HDR10")
 
 # ===================== XML HELPERS =============================================
 # The COMPLETE standard EAGLE layer table (number, name, color, fill). Real
@@ -513,11 +553,17 @@ def fp_box(pkg):
     return (max(xs)-min(xs)+d, max(ys)-min(ys)+d, min(xs)-d/2, min(ys)-d/2)
 
 def card(name,title,parts_ic,parts_small,nets,used_bus,labels=None,
-         brd_outline_only=False,brd_unplaced=True):
+         brd_outline_only=False,brd_unplaced=True,W=160,H=100):
     """Build sch+brd for one plug-in card. `labels` maps ref -> logical-function
     text placed near the part on the schematic (the part's `value` is its part
     number). `brd_outline_only` emits a .brd with just the board dimensions;
-    `brd_unplaced` emits all parts + ratsnest parked off the board (no routing)."""
+    `brd_unplaced` emits all parts + ratsnest parked off the board (no routing).
+
+    W,H are the board outline in mm. The default 160x100 is a standard Eurocard
+    and every logic card uses it — do not pass W/H unless the card genuinely needs
+    the room, and note that J1 hugs the LEFT edge (x~0) with parts flowing +x, so
+    extra W lands at the OUTER end (the end you can reach with the card seated).
+    The bustest card takes W=200 for its USB socket, probe header and LED bank."""
     for pin in ALLPINS:
         net=busnet(pin)
         if net in ("VCC","GND") or net in used_bus:
@@ -569,7 +615,7 @@ def card(name,title,parts_ic,parts_small,nets,used_bus,labels=None,
     # This guarantees NO OVERLAPS. Dense cards may run past the board outline
     # (they genuinely don't fit 160x100 at safe pitch) — arrange by hand when
     # routing; the placement-view PDF flags the overflow.
-    BW,BH,EDGE,GAP=160.0,100.0,4.0,2.6
+    BW,BH,EDGE,GAP=W,H,4.0,2.6
     brd={}
     j1dev=parts["J1"][0]                       # DIN96C (card edge connector, has mounting holes)
     j1pkg=DEV[j1dev]["pkg"]
@@ -597,13 +643,13 @@ def card(name,title,parts_ic,parts_small,nets,used_bus,labels=None,
     if EMIT:
         write_sch(base+".sch",title,sch,nets,lab)
         validate(base+".sch",sch,nets)
-        write_brd(base+".brd",title,brd,nets,{},{"GND":[(2,)],"VCC":[(15,)]},160,100,
+        write_brd(base+".brd",title,brd,nets,{},{"GND":[(2,)],"VCC":[(15,)]},W,H,
                   outline_only=brd_outline_only,unplaced=brd_unplaced)
         if not brd_outline_only:
             validate(base+".brd",brd,nets)
             # companion "-full" board: same parts but with auto-placement attempted
             # (footprint flow on-board + GND/VCC pours + ratsnest) as a starting layout.
-            write_brd(base+"-full.brd",title+" (FULL)",brd,nets,{},{"GND":[(2,)],"VCC":[(15,)]},160,100)
+            write_brd(base+"-full.brd",title+" (FULL)",brd,nets,{},{"GND":[(2,)],"VCC":[(15,)]},W,H)
             validate(base+"-full.brd",brd,nets)
 
 def N(nets,n,*p): nets.setdefault(n,[]).extend(p)
