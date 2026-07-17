@@ -1424,4 +1424,128 @@ card("led-card","P8X LED OUTPUT CARD (test - write-only 8 LEDs at $FF0C)",ic,sm,
  {"D%d"%i for i in range(8)}|{"A1","A2","A3","A4"}|{"A%d"%i for i in range(8,16)}|
  {"DLD%d"%i for i in range(4)}|{"CLKB"},labels=led_labels)   # brd_unplaced is now the default
 
-if EMIT: print("ALL 8 BOARDS GENERATED")
+# ===================== BUS TEST CARD (USB-driven bring-up) ====================
+# See hardware/bustest-card/p8x-bustest-card-design.md. A Pico drives 5 MCP23S17
+# expanders (SPI) that source/sink all 59 backplane signals + 8 high-Z probes.
+# DESIGN, NOT BUILT. This is the first-cut netlist; numbers are calculated.
+#
+# Resistor decision (2026-07-17): the MCP23S17 runs at VDD=5V, so its GPIO is
+# native 5V and NO level translation is needed on the bus side. The 1k series
+# networks in the design doc were contention-limiting only, and are DROPPED here
+# on the bus per that reasoning. Two protections are kept because they are not
+# optional: the SPI level shift (U6, because the MCP's VIH=0.8*VDD=4.0V > the
+# Pico's 3.3V), and 1k series on the 8 probe lines (a slipped grabber onto a
+# higher voltage is over-voltage the operator cannot design away).
+n={}; bt_labels={}
+# --- field -> (expander, port-pin) allocation (matches the doc block diagram) --
+# GPA0..7 = pins in port A, GPB0..7 = port B. Each MCP GPIO is one atomic SPI
+# write, so fields that must change together share a chip/port where possible.
+alloc=[]  # (netname, Uref, portpin)
+def _map(u,port,names):
+    for i,nm in enumerate(names):
+        if nm: alloc.append((nm,u,"%s%d"%(port,i)))
+_map("U1","GPA",["D%d"%i for i in range(8)])
+_map("U1","GPB",["A%d"%i for i in range(8)])
+_map("U2","GPA",["A%d"%i for i in range(8,16)])
+_map("U2","GPB",["DOE0","DOE1","DOE2","DOE3","DLD0","DLD1","DLD2","DLD3"])
+_map("U3","GPA",["PSEL0","PSEL1","PSEL2","PINC","PDEC","CLK","CLKB","-RES"])
+_map("U3","GPB",["ALUS0","ALUS1","ALUS2","ALUS3","ALUM","CIN","SH0","SH1"])
+_map("U4","GPA",["LDF","LDZN","SETC","CLRC","BSEL","SHCIN","-IRQ",None])   # 1 spare
+_map("U4","GPB",["FC","FZ","FN","FV",None,None,None,None])                 # flags in +4 spare
+_map("U5","GPA",["PR%d"%i for i in range(8)])                              # probes (via 1k)
+_map("U5","GPB",["SPARE1%d"%i for i in range(2,8)]+[None,None])            # SPARE12-17 +2 spare
+
+ic={"U%d"%i:("MCP23S17","MCP23S17") for i in range(1,6)}
+ic["U6"]=("74244","74HCT244")                                   # SPI 3.3->5 level shift
+for u in range(7,11): ic["U%d"%u]=("74244","74HCT244")          # LED buffers (bus monitors)
+for u in range(1,6):  bt_labels["U%d"%u]="I/O EXPANDER %d"%u
+bt_labels["U6"]="SPI LEVEL SHIFT"; bt_labels["U7"]="D0-7 LED BUF"
+bt_labels["U8"]="A0-7 LED BUF"; bt_labels["U9"]="A8-15 LED BUF"; bt_labels["U10"]="PROBE LED BUF"
+
+# --- expander power + shared SPI + per-chip hardware address --------------------
+for u in range(1,6):
+    ur="U%d"%u
+    N(n,"VCC",(ur,"VDD")); N(n,"GND",(ur,"VSS"))               # MCP uses VDD/VSS, not VCC/GND
+    N(n,"SCK5",(ur,"SCK")); N(n,"SI5",(ur,"SI")); N(n,"SO5",(ur,"SO"))
+    N(n,"CS5",(ur,"!CS")); N(n,"RST5",(ur,"!RESET"))
+    # hardware address 0..4 strapped on A2:A1:A0 (all share one CS)
+    for bit,pin in enumerate(("A0","A1","A2")):
+        N(n, "VCC" if ((u-1)>>bit)&1 else "GND", (ur,pin))
+    N(n,"GND",(ur,"!INTA"),(ur,"!INTB"))                       # interrupts unused -> park
+
+# --- bus/probe field nets onto their allocated expander pins --------------------
+for netname,u,pp in alloc:
+    N(n,netname,(u,pp))
+
+# --- SPI level shift: Pico 3.3V -> U6 (74HCT244) -> 5V to the expanders ---------
+# A-side inputs from the Pico, Y-side outputs at 5V. Both enables tied low (on).
+N(n,"GND",("U6","!G1"),("U6","!G2"))
+N(n,"P_SCK",("U6","A1")); N(n,"SCK5",("U6","Y1"))
+N(n,"P_SI", ("U6","A2")); N(n,"SI5", ("U6","Y2"))
+N(n,"P_CS", ("U6","A3")); N(n,"CS5", ("U6","Y3"))
+N(n,"P_RST",("U6","A4")); N(n,"RST5",("U6","Y4"))
+N(n,"GND",("U6","A5"),("U6","A6"),("U6","A7"),("U6","A8"))     # spare buffers tied off
+# MISO comes back 5V -> resistor divider -> Pico (3.2V). R7 top, R8 bottom.
+N(n,"SO5",("R7","1")); N(n,"P_MISO",("R7","2"),("R8","1")); N(n,"GND",("R8","2"))
+
+# --- Pico (A1): power, SPI, 8 status LEDs, 5V sense -----------------------------
+N(n,"P5V",("A1","VSYS"))                                       # 5V via Schottky D1 (below)
+N(n,"GND",("A1","GND"),("A1","AGND"))
+N(n,"P_SCK",("A1","GP2")); N(n,"P_SI",("A1","GP3")); N(n,"P_MISO",("A1","GP4"))
+N(n,"P_CS",("A1","GP5")); N(n,"P_RST",("A1","GP6"))
+for i in range(8): N(n,"ST%d"%i,("A1","GP%d"%(7+i)))          # status LED drives
+N(n,"SENSE5",("A1","GP26"))                                    # ADC0: backplane-5V present?
+# backplane 5V -> Schottky -> VSYS; and -> divider -> SENSE5
+N(n,"VCC",("D1","A")); N(n,"P5V",("D1","K"))
+N(n,"VCC",("R5","1")); N(n,"SENSE5",("R5","2"),("R6","1")); N(n,"GND",("R6","2"))
+
+# --- LED buffers (bus monitors, io-card pattern): tap bus, ~1uA load ------------
+def _ledbuf(u,arr,rn,nets8):
+    N(n,"GND",(u,"!G1"),(u,"!G2"))
+    for i,net in enumerate(nets8):
+        N(n,net,(u,"A%d"%(i+1)))
+        N(n,"L_%s"%net,(u,"Y%d"%(i+1)),(rn,"A%d"%(i+1)))       # buffered copy
+        N(n,"LK_%s"%net,(rn,"B%d"%(i+1)),(arr,"A%d"%(i+1)))    # through limit R
+        N(n,"GND",(arr,"K%d"%(i+1)))
+_ledbuf("U7","LDD","RLD",["D%d"%i for i in range(8)])
+_ledbuf("U8","LAL","RAL",["A%d"%i for i in range(8)])
+_ledbuf("U9","LAH","RAH",["A%d"%i for i in range(8,16)])
+_ledbuf("U10","LPR","RPR",["PR%d"%i for i in range(8)])
+# status LEDs: driven straight from the Pico (no buffer), through their own limit R
+for i in range(8):
+    N(n,"ST%d"%i,("RST","A%d"%(i+1)))
+    N(n,"STK%d"%i,("RST","B%d"%(i+1)),("LST","A%d"%(i+1)))
+    N(n,"GND",("LST","K%d"%(i+1)))
+
+# --- 10k pull-downs: hold A + control + clocks inert when the card is high-Z -----
+# NOT -RES/-IRQ (the backplane pulls those UP). Flags are inputs -> no pull needed.
+pd=["A%d"%i for i in range(16)]+["DOE0","DOE1","DOE2","DOE3","DLD0","DLD1","DLD2",
+ "DLD3","PSEL0","PSEL1","PSEL2","PINC","PDEC","CLK","CLKB","LDF","LDZN","SETC",
+ "CLRC","BSEL","SHCIN","ALUS0","ALUS1","ALUS2","ALUS3","ALUM","CIN","SH0","SH1"]
+for k,net in enumerate(pd):
+    rn="RPD%d"%(k//8+1); pin=k%8+1
+    N(n,net,(rn,"A%d"%pin)); N(n,"GND",(rn,"B%d"%pin))
+
+# --- probe series (1k) + 2x5 header (8 probes + 2 GND) --------------------------
+for i in range(8):
+    N(n,"PR%d"%i,("RPRB","A%d"%(i+1)))
+    N(n,"PRJ%d"%i,("RPRB","B%d"%(i+1)),("J2","%d"%(i+1)))      # J2 pins 1-8 = probes
+N(n,"GND",("J2","9"),("J2","10"))                              # pins 9,10 = ground
+
+sm={"A1":("PICO","RP2040"),"J2":("HDR10","PROBE 2x5"),
+ "D1":("LED","SCHOTTKY"),   # placeholder 2-pin part for the power diode
+ "R5":("RES","10K"),"R6":("RES","10K"),"R7":("RES","1K8"),"R8":("RES","3K3"),
+ "RLD":("RNISO8","8x330R"),"RAL":("RNISO8","8x330R"),"RAH":("RNISO8","8x330R"),
+ "RPR":("RNISO8","8x330R"),"RST":("RNISO8","8x330R"),
+ "RPRB":("RNISO8","8x1K"),
+ "LDD":("LEDARR8","D0-7"),"LAL":("LEDARR8","A0-7"),"LAH":("LEDARR8","A8-15"),
+ "LPR":("LEDARR8","PROBES"),"LST":("LEDARR8","STATUS")}
+for k in range(1,7): sm["RPD%d"%k]=("RNISO8","8x10K")
+
+bt_labels.update({"A1":"RP2040 PICO","J2":"PROBE HEADER","D1":"5V FEED DIODE",
+ "RPRB":"PROBE 1k SERIES","LST":"STATUS LEDS"})
+card("bustest-card","P8X BUS TEST CARD (USB bring-up controller, DESIGN)",ic,sm,n,
+ set(net for net,_u,_pp in alloc if not net.startswith("PR") and not net.startswith("SPARE")),
+ labels=bt_labels, W=200)
+
+if EMIT: print("ALL 9 BOARDS GENERATED")
