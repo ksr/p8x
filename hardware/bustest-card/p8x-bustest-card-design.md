@@ -194,19 +194,92 @@ driven independently.
 
 ## 5. Circuit
 
+### 5.0 Block diagram
+
+Signal flow is top-to-bottom: host → Pico → SPI → expanders → series resistors →
+backplane. LEDs hang off the bus side; the probe header hangs off U5.
+
+```
+   host (Mac) ═══ USB ═══╗                                  8 STATUS LEDs
+   ASCII protocol        ║                          5V-OK ARMED LISTEN CLK
+   (line-oriented)       ║                          CLKB -RES ERR USB-ACT
+                         ▼                                   ▲
+                  ┌──────────────────────────────────────────┴──┐
+                  │ A1   Pico / RP2040   (C firmware, USB CDC)   │
+                  └──┬───────────────────────────────────────▲───┘
+        SCK SI CS RESET │ 3.3V                          5V │ SO
+                        ▼                                  │
+              ┌─────────────────────┐          ┌───────────┴────────┐
+              │ U6  74HCT244  @5V   │          │ 2-resistor divider │
+              │ 3.3V in → 5V out    │          │ 5V → 3.3V          │
+              │ (HCT VIH = 2.0 V)   │          └────────────────────┘
+              └─────────┬───────────┘   one chip, ONE direction: the Pico only
+                        │ SPI @5V       SENDS to the expanders. No '245 needed.
+                        ▼
+  ┌────────────────────────────────────────────────────────────────────────┐
+  │ U1..U5   5 × MCP23S17 @5V   —  80 lines, per-pin direction + pull-ups   │
+  │   U1   GPA = D0-7                    GPB = A0-7                        │
+  │   U2   GPA = A8-15                   GPB = DOE0-3, DLD0-3              │
+  │   U3   GPA = PSEL0-2 PINC PDEC       GPB = ALUS0-3, ALUM, CIN,         │
+  │              CLK CLKB -RES                 SH0, SH1                    │
+  │   U4   GPA = LDF LDZN SETC CLRC      GPB = FC FZ FN FV  (read-only)    │
+  │              BSEL SHCIN -IRQ               + 4 spare                   │
+  │   U5   GPA = PR0-7  (probes, high-Z) GPB = SPARE12-19                  │
+  └───────┬──────────────────────────────────────────────────┬─────────────┘
+          │                                                  │
+          │  1k SERIES  (RN1-9)                              │ 1k (RN9)
+          │  · contention → 4.8 mA, safe indefinitely        │
+          │  · DC drop ~1 mV (all-HCT ⇒ CMOS inputs)         ▼
+          │  · probe over-V → 7 mA into ESD clamp     ┌──────────────┐
+          │    ⇒ no clamp diodes needed               │ J2  2×5 hdr  │
+          │                                           │ 8 probes     │
+          ├──────────────► U7..U10  74HCT244 ──┐      │ + 2 GND      │
+          │                bus monitors        │      └──────┬───────┘
+          │                (~1 µA bus load)    ▼         ribbon → grabbers
+          │                            32 LEDs: D0-7 / A0-15 / PR0-7
+          ▼
+  ┌────────────────────────────────────────────────────────────────────────┐
+  │  10k PULL-DOWNS (RN10-16) on A0-15 + ~40 control + CLK/CLKB            │
+  │  all-zeros = inert bus  ·  CLK low = nothing latches = the real        │
+  │  interlock  ·  (-RES is active-low, so the BACKPLANE pulls it UP)      │
+  └───────────────────────────────┬────────────────────────────────────────┘
+                                  ▼
+  ┌────────────────────────────────────────────────────────────────────────┐
+  │ J1   DIN 41612 96-pin (MABC96R)   →   P8X BACKPLANE                    │
+  │   D0-7   A0-15   ~40 control   CLK/CLKB   -RES   -IRQ   FC/FZ/FN/FV    │
+  └────────────────────────────────────────────────────────────────────────┘
+     backplane owns these passives, NOT this card (never double up — a pull-up
+     and a pull-down on one line sit at mid-rail):
+       RN1  10k pull-UP on D0-7   (exists)
+       NEW  10k pull-UP on -RES, and on -IRQ (wired-OR, see §7)
+
+  POWER   backplane +5V ─┬─────────────────────► U1..U10  @5V
+                         ├──►|◄── Schottky ────► Pico VSYS (pin 39)
+                         │   (lets USB + external coexist; the Pico's own
+                         │    VBUS diode blocks backfeed into the host)
+                         └─── 2-R divider ─────► Pico GPIO — 5V SENSE.
+                              Firmware refuses to drive without it: USB-on /
+                              backplane-off would otherwise leave the Pico
+                              driving unpowered expander inputs (latch-up).
+```
+
 ### 5.1 Pin budget
 
-| Group | Lines |
-|---|---|
-| `D0–D7` | 8 |
-| `A0–A15` | 16 |
-| Control (`DOE`×4, `DLD`×4, `PSEL`×3, `PINC`, `PDEC`, `CLK`, `CLKB`, `LDF`, `LDZN`, `SETC`, `CLRC`, `BSEL`, `ALUS`×4, `ALUM`, `CIN`, `SH0`, `SH1`, `SHCIN`, `-RES`, `-IRQ`) | 35 |
-| Flags in (`FC`, `FZ`, `FN`, `FV`) | 4 |
-| Probes | 8 |
-| **Total** | **71** |
+| Group | Lines | Notes |
+|---|---|---|
+| `D0–D7` | 8 | bidirectional |
+| `A0–A15` | 16 | driven only when the reg-bank is out |
+| Control | 31 | `DOE`×4, `DLD`×4, `PSEL`×3, `PINC`, `PDEC`, `CLK`, `CLKB`, `LDF`, `LDZN`, `SETC`, `CLRC`, `BSEL`, `ALUS`×4, `ALUM`, `CIN`, `SH0`, `SH1`, `SHCIN`, `-RES`, `-IRQ` |
+| Flags | 4 | `FC`/`FZ`/`FN`/`FV` — **read-only** (ALU card drives them) |
+| | **59** | = the backplane signal count in §2 |
+| Probes | 8 | high-Z in |
+| **Total** | **67** | |
 
-**5 × MCP23S17** = 80 lines with per-pin direction and per-pin pull-ups. ~9 spare;
-some wired to `SPARE12–23` (already routed slot-to-slot) for future use.
+**5 × MCP23S17** = 80 lines with per-pin direction and per-pin pull-ups, so **13
+spare**. Eight of those are wired to `SPARE12–19` (already routed slot-to-slot, so
+they cost nothing now and need no backplane re-spin later); five are left free.
+
+Per-chip allocation is in the block diagram above.
 
 ### 5.2 Parts
 
