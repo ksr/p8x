@@ -605,7 +605,12 @@ def card(name,title,parts_ic,parts_small,nets,used_bus,labels=None,
         parts[ref]=(dev,val)
         if fn and ref not in lab: lab[ref]=fn          # explicit labels always win
     sch={}; order=[r for r in parts if r!="J1"]
-    sch["J1"]=("DIN96",parts["J1"][1],0,38.10)
+    # J1 is the CARD edge connector: DIN96C -> MABC96R (male right-angle), matching
+    # the board. It used to bind deviceset DIN96 (FABC96S, the female VERTICAL
+    # backplane socket) here in the schematic while the board used MABC96R — a
+    # schematic/board footprint mismatch on every card. The backplane's own slots
+    # (below) correctly stay DIN96/FABC96S; only the cards mate as male.
+    sch["J1"]=("DIN96C",parts["J1"][1],0,38.10)
     for i,ref in enumerate(order):
         dev,val=parts[ref]
         sch[ref]=(dev,val,140+(i%4)*101.6,38.10-(i//4)*139.7)

@@ -171,7 +171,20 @@
 <text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
 <text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
 </package>
-<package name="FABC96S">
+<package name="HDR3">
+<pad name="1" x="0.00" y="-0.00" drill="0.9" diameter="1.8"/>
+<pad name="2" x="0.00" y="-2.54" drill="0.9" diameter="1.8"/>
+<pad name="3" x="0.00" y="-5.08" drill="0.9" diameter="1.8"/>
+<text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
+<text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
+</package>
+<package name="LED5">
+<pad name="2" x="0.00" y="0.00" drill="0.9" diameter="1.8"/>
+<pad name="1" x="2.54" y="0.00" drill="0.9" diameter="1.8"/>
+<text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
+<text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
+</package>
+<package name="MABC96R">
 <pad name="A1" x="-2.54" y="39.37" drill="0.9144" diameter="1.524"/>
 <pad name="A2" x="-2.54" y="36.83" drill="0.9144" diameter="1.524"/>
 <pad name="A3" x="-2.54" y="34.29" drill="0.9144" diameter="1.524"/>
@@ -273,19 +286,6 @@
 <text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
 <text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
 </package>
-<package name="HDR3">
-<pad name="1" x="0.00" y="-0.00" drill="0.9" diameter="1.8"/>
-<pad name="2" x="0.00" y="-2.54" drill="0.9" diameter="1.8"/>
-<pad name="3" x="0.00" y="-5.08" drill="0.9" diameter="1.8"/>
-<text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
-<text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
-</package>
-<package name="LED5">
-<pad name="2" x="0.00" y="0.00" drill="0.9" diameter="1.8"/>
-<pad name="1" x="2.54" y="0.00" drill="0.9" diameter="1.8"/>
-<text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
-<text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
-</package>
 <package name="R_AXIAL">
 <pad name="1" x="0.00" y="0.00" drill="0.8" diameter="1.6"/>
 <pad name="2" x="10.16" y="0.00" drill="0.8" diameter="1.6"/>
@@ -375,7 +375,7 @@
 <pin name="1" x="-17.78" y="0" length="middle"/>
 <pin name="2" x="17.78" y="0" length="middle" rot="R180"/>
 </symbol>
-<symbol name="DIN96">
+<symbol name="DIN96C">
 <wire x1="-12.7" y1="2.54" x2="12.7" y2="2.54" width="0.254" layer="94"/>
 <wire x1="12.7" y1="2.54" x2="12.7" y2="-162.56" width="0.254" layer="94"/>
 <wire x1="12.7" y1="-162.56" x2="-12.7" y2="-162.56" width="0.254" layer="94"/>
@@ -644,8 +644,8 @@
 <connect gate="G$1" pin="1" pad="1"/>
 <connect gate="G$1" pin="2" pad="2"/>
 </connects><technologies><technology name=""/></technologies></device></devices></deviceset>
-<deviceset name="DIN96" prefix="U" uservalue="yes"><gates><gate name="G$1" symbol="DIN96" x="0" y="0"/></gates>
-<devices><device name="" package="FABC96S"><connects>
+<deviceset name="DIN96C" prefix="U" uservalue="yes"><gates><gate name="G$1" symbol="DIN96C" x="0" y="0"/></gates>
+<devices><device name="" package="MABC96R"><connects>
 <connect gate="G$1" pin="A1" pad="A1"/>
 <connect gate="G$1" pin="A2" pad="A2"/>
 <connect gate="G$1" pin="A3" pad="A3"/>
@@ -811,7 +811,7 @@
 </library></libraries>
 <classes><class number="0" name="default" width="0" drill="0"/></classes>
 <parts>
-<part name="J1" library="p8x" deviceset="DIN96" device="" value="MABC96R"/>
+<part name="J1" library="p8x" deviceset="DIN96C" device="" value="MABC96R"/>
 <part name="U1" library="p8x" deviceset="MEM28K8" device="" value="28C256"/>
 <part name="U2" library="p8x" deviceset="MEM28K8" device="" value="62256"/>
 <part name="U3" library="p8x" deviceset="74245" device="" value="74HCT245"/>

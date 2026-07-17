@@ -139,7 +139,57 @@
 <text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
 <text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
 </package>
-<package name="FABC96S">
+<package name="HDR40">
+<pad name="1" x="0.00" y="-0.00" drill="0.9" diameter="1.7"/>
+<pad name="2" x="2.54" y="-0.00" drill="0.9" diameter="1.7"/>
+<pad name="3" x="0.00" y="-2.54" drill="0.9" diameter="1.7"/>
+<pad name="4" x="2.54" y="-2.54" drill="0.9" diameter="1.7"/>
+<pad name="5" x="0.00" y="-5.08" drill="0.9" diameter="1.7"/>
+<pad name="6" x="2.54" y="-5.08" drill="0.9" diameter="1.7"/>
+<pad name="7" x="0.00" y="-7.62" drill="0.9" diameter="1.7"/>
+<pad name="8" x="2.54" y="-7.62" drill="0.9" diameter="1.7"/>
+<pad name="9" x="0.00" y="-10.16" drill="0.9" diameter="1.7"/>
+<pad name="10" x="2.54" y="-10.16" drill="0.9" diameter="1.7"/>
+<pad name="11" x="0.00" y="-12.70" drill="0.9" diameter="1.7"/>
+<pad name="12" x="2.54" y="-12.70" drill="0.9" diameter="1.7"/>
+<pad name="13" x="0.00" y="-15.24" drill="0.9" diameter="1.7"/>
+<pad name="14" x="2.54" y="-15.24" drill="0.9" diameter="1.7"/>
+<pad name="15" x="0.00" y="-17.78" drill="0.9" diameter="1.7"/>
+<pad name="16" x="2.54" y="-17.78" drill="0.9" diameter="1.7"/>
+<pad name="17" x="0.00" y="-20.32" drill="0.9" diameter="1.7"/>
+<pad name="18" x="2.54" y="-20.32" drill="0.9" diameter="1.7"/>
+<pad name="19" x="0.00" y="-22.86" drill="0.9" diameter="1.7"/>
+<pad name="20" x="2.54" y="-22.86" drill="0.9" diameter="1.7"/>
+<pad name="21" x="0.00" y="-25.40" drill="0.9" diameter="1.7"/>
+<pad name="22" x="2.54" y="-25.40" drill="0.9" diameter="1.7"/>
+<pad name="23" x="0.00" y="-27.94" drill="0.9" diameter="1.7"/>
+<pad name="24" x="2.54" y="-27.94" drill="0.9" diameter="1.7"/>
+<pad name="25" x="0.00" y="-30.48" drill="0.9" diameter="1.7"/>
+<pad name="26" x="2.54" y="-30.48" drill="0.9" diameter="1.7"/>
+<pad name="27" x="0.00" y="-33.02" drill="0.9" diameter="1.7"/>
+<pad name="28" x="2.54" y="-33.02" drill="0.9" diameter="1.7"/>
+<pad name="29" x="0.00" y="-35.56" drill="0.9" diameter="1.7"/>
+<pad name="30" x="2.54" y="-35.56" drill="0.9" diameter="1.7"/>
+<pad name="31" x="0.00" y="-38.10" drill="0.9" diameter="1.7"/>
+<pad name="32" x="2.54" y="-38.10" drill="0.9" diameter="1.7"/>
+<pad name="33" x="0.00" y="-40.64" drill="0.9" diameter="1.7"/>
+<pad name="34" x="2.54" y="-40.64" drill="0.9" diameter="1.7"/>
+<pad name="35" x="0.00" y="-43.18" drill="0.9" diameter="1.7"/>
+<pad name="36" x="2.54" y="-43.18" drill="0.9" diameter="1.7"/>
+<pad name="37" x="0.00" y="-45.72" drill="0.9" diameter="1.7"/>
+<pad name="38" x="2.54" y="-45.72" drill="0.9" diameter="1.7"/>
+<pad name="39" x="0.00" y="-48.26" drill="0.9" diameter="1.7"/>
+<pad name="40" x="2.54" y="-48.26" drill="0.9" diameter="1.7"/>
+<text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
+<text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
+</package>
+<package name="LED5">
+<pad name="2" x="0.00" y="0.00" drill="0.9" diameter="1.8"/>
+<pad name="1" x="2.54" y="0.00" drill="0.9" diameter="1.8"/>
+<text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
+<text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
+</package>
+<package name="MABC96R">
 <pad name="A1" x="-2.54" y="39.37" drill="0.9144" diameter="1.524"/>
 <pad name="A2" x="-2.54" y="36.83" drill="0.9144" diameter="1.524"/>
 <pad name="A3" x="-2.54" y="34.29" drill="0.9144" diameter="1.524"/>
@@ -238,56 +288,6 @@
 <pad name="C32" x="2.54" y="-39.37" drill="0.9144" diameter="1.524"/>
 <hole x="-0.30" y="45.00" drill="2.794"/>
 <hole x="-0.30" y="-45.00" drill="2.794"/>
-<text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
-<text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
-</package>
-<package name="HDR40">
-<pad name="1" x="0.00" y="-0.00" drill="0.9" diameter="1.7"/>
-<pad name="2" x="2.54" y="-0.00" drill="0.9" diameter="1.7"/>
-<pad name="3" x="0.00" y="-2.54" drill="0.9" diameter="1.7"/>
-<pad name="4" x="2.54" y="-2.54" drill="0.9" diameter="1.7"/>
-<pad name="5" x="0.00" y="-5.08" drill="0.9" diameter="1.7"/>
-<pad name="6" x="2.54" y="-5.08" drill="0.9" diameter="1.7"/>
-<pad name="7" x="0.00" y="-7.62" drill="0.9" diameter="1.7"/>
-<pad name="8" x="2.54" y="-7.62" drill="0.9" diameter="1.7"/>
-<pad name="9" x="0.00" y="-10.16" drill="0.9" diameter="1.7"/>
-<pad name="10" x="2.54" y="-10.16" drill="0.9" diameter="1.7"/>
-<pad name="11" x="0.00" y="-12.70" drill="0.9" diameter="1.7"/>
-<pad name="12" x="2.54" y="-12.70" drill="0.9" diameter="1.7"/>
-<pad name="13" x="0.00" y="-15.24" drill="0.9" diameter="1.7"/>
-<pad name="14" x="2.54" y="-15.24" drill="0.9" diameter="1.7"/>
-<pad name="15" x="0.00" y="-17.78" drill="0.9" diameter="1.7"/>
-<pad name="16" x="2.54" y="-17.78" drill="0.9" diameter="1.7"/>
-<pad name="17" x="0.00" y="-20.32" drill="0.9" diameter="1.7"/>
-<pad name="18" x="2.54" y="-20.32" drill="0.9" diameter="1.7"/>
-<pad name="19" x="0.00" y="-22.86" drill="0.9" diameter="1.7"/>
-<pad name="20" x="2.54" y="-22.86" drill="0.9" diameter="1.7"/>
-<pad name="21" x="0.00" y="-25.40" drill="0.9" diameter="1.7"/>
-<pad name="22" x="2.54" y="-25.40" drill="0.9" diameter="1.7"/>
-<pad name="23" x="0.00" y="-27.94" drill="0.9" diameter="1.7"/>
-<pad name="24" x="2.54" y="-27.94" drill="0.9" diameter="1.7"/>
-<pad name="25" x="0.00" y="-30.48" drill="0.9" diameter="1.7"/>
-<pad name="26" x="2.54" y="-30.48" drill="0.9" diameter="1.7"/>
-<pad name="27" x="0.00" y="-33.02" drill="0.9" diameter="1.7"/>
-<pad name="28" x="2.54" y="-33.02" drill="0.9" diameter="1.7"/>
-<pad name="29" x="0.00" y="-35.56" drill="0.9" diameter="1.7"/>
-<pad name="30" x="2.54" y="-35.56" drill="0.9" diameter="1.7"/>
-<pad name="31" x="0.00" y="-38.10" drill="0.9" diameter="1.7"/>
-<pad name="32" x="2.54" y="-38.10" drill="0.9" diameter="1.7"/>
-<pad name="33" x="0.00" y="-40.64" drill="0.9" diameter="1.7"/>
-<pad name="34" x="2.54" y="-40.64" drill="0.9" diameter="1.7"/>
-<pad name="35" x="0.00" y="-43.18" drill="0.9" diameter="1.7"/>
-<pad name="36" x="2.54" y="-43.18" drill="0.9" diameter="1.7"/>
-<pad name="37" x="0.00" y="-45.72" drill="0.9" diameter="1.7"/>
-<pad name="38" x="2.54" y="-45.72" drill="0.9" diameter="1.7"/>
-<pad name="39" x="0.00" y="-48.26" drill="0.9" diameter="1.7"/>
-<pad name="40" x="2.54" y="-48.26" drill="0.9" diameter="1.7"/>
-<text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
-<text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
-</package>
-<package name="LED5">
-<pad name="2" x="0.00" y="0.00" drill="0.9" diameter="1.8"/>
-<pad name="1" x="2.54" y="0.00" drill="0.9" diameter="1.8"/>
 <text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
 <text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
 </package>
@@ -443,7 +443,7 @@
 <pin name="1" x="-17.78" y="0" length="middle"/>
 <pin name="2" x="17.78" y="0" length="middle" rot="R180"/>
 </symbol>
-<symbol name="DIN96">
+<symbol name="DIN96C">
 <wire x1="-12.7" y1="2.54" x2="12.7" y2="2.54" width="0.254" layer="94"/>
 <wire x1="12.7" y1="2.54" x2="12.7" y2="-162.56" width="0.254" layer="94"/>
 <wire x1="12.7" y1="-162.56" x2="-12.7" y2="-162.56" width="0.254" layer="94"/>
@@ -792,8 +792,8 @@
 <connect gate="G$1" pin="1" pad="1"/>
 <connect gate="G$1" pin="2" pad="2"/>
 </connects><technologies><technology name=""/></technologies></device></devices></deviceset>
-<deviceset name="DIN96" prefix="U" uservalue="yes"><gates><gate name="G$1" symbol="DIN96" x="0" y="0"/></gates>
-<devices><device name="" package="FABC96S"><connects>
+<deviceset name="DIN96C" prefix="U" uservalue="yes"><gates><gate name="G$1" symbol="DIN96C" x="0" y="0"/></gates>
+<devices><device name="" package="MABC96R"><connects>
 <connect gate="G$1" pin="A1" pad="A1"/>
 <connect gate="G$1" pin="A2" pad="A2"/>
 <connect gate="G$1" pin="A3" pad="A3"/>
@@ -994,7 +994,7 @@
 </library></libraries>
 <classes><class number="0" name="default" width="0" drill="0"/></classes>
 <parts>
-<part name="J1" library="p8x" deviceset="DIN96" device="" value="MABC96R"/>
+<part name="J1" library="p8x" deviceset="DIN96C" device="" value="MABC96R"/>
 <part name="U1" library="p8x" deviceset="74245" device="" value="74HCT245"/>
 <part name="U2" library="p8x" deviceset="7430" device="" value="74HCT30"/>
 <part name="U3" library="p8x" deviceset="74138" device="" value="74HCT138"/>
