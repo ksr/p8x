@@ -2,7 +2,7 @@
 
 This document is the authoritative human-readable description of the P8X backplane
 bus. The machine-authoritative source is the `busnet()` function in
-`generators/gen_eagle_full.py`; the PDF rendering of this same table is generated
+`generators/gen_eagle.py`; the PDF rendering of this same table is generated
 by `generators/gen_bus_pdf.py`. When any conflict exists, trust the generator code.
 
 ---

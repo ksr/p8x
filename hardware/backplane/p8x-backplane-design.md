@@ -6,7 +6,7 @@
 
 The authoritative human-readable bus pinout is in **[p8x-bus-definition.md](p8x-bus-definition.md)**,
 which is generated from the same `busnet()` function as the Eagle CAD files.
-The machine-authoritative source is `generators/gen_eagle_full.py`.
+The machine-authoritative source is `generators/gen_eagle.py`.
 
 Summary for quick reference (rev C2):
 
