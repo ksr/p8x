@@ -142,10 +142,9 @@ for sig,rref,cref,drop in (("CLK","RT1","CT1",0),("CLKB","RT2","CT2",13)):
 # here RIRQ (10k) ties it to +5V so the open-drain line has a high state. Drawn
 # as IRQ -> RIRQ -> +5V, right of the "TO ALL SLOTS" label.
 py=rowy["IRQ"]
-line(PX+30,py,55-5.08,py)                       # extend past the stub label to RIRQ
-(a,_),(b,_)=disc("RES","RIRQ","10K",55,py)
-line(PX+30,py,a,py)
-vcc(b+3,py,d=1,label="+5V")
+(a,_),(b,_)=disc("RES","RIRQ","10K",55,py)      # left pin a≈49.9, right pin b≈70.1
+line(PX,py,a,py)                                # CONTINUOUS wire: IRQ bus line -> RIRQ
+vcc(b+3,py,d=1,label="+5V")                     # RIRQ other end -> +5V
 txt(72,py-3.4,"WIRED-OR PULL-UP (open-drain cards)",1.5,BLU)
 # power entry + bulk + per-slot decoupling + LED, drawn in a power section
 PYY=-225
