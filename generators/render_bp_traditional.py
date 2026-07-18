@@ -143,9 +143,9 @@ for sig,rref,cref,drop in (("CLK","RT1","CT1",0),("CLKB","RT2","CT2",13)):
 # as IRQ -> RIRQ -> +5V, right of the "TO ALL SLOTS" label.
 py=rowy["IRQ"]
 (a,_),(b,_)=disc("RES","RIRQ","10K",55,py)      # left pin a≈49.9, right pin b≈70.1
-line(PX,py,a,py)                                # CONTINUOUS wire: IRQ bus line -> RIRQ
-vcc(b+3,py,d=1,label="+5V")                     # RIRQ other end -> +5V
-txt(72,py-3.4,"WIRED-OR PULL-UP (open-drain cards)",1.5,BLU)
+line(PX,py,a,py)                                # wire: IRQ bus line -> RIRQ left pin (a)
+vcc(b,py,d=1,label="+5V")                       # +5V glyph starts AT the right pin (b), no gap
+txt(60,py-6.0,"WIRED-OR PULL-UP (open-drain cards)",1.5,BLU)
 # power entry + bulk + per-slot decoupling + LED, drawn in a power section
 PYY=-225
 txt(0,PYY+10,"POWER SECTION",2.6,BLK,bold=True)
