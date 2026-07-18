@@ -1282,14 +1282,21 @@ for i in range(10):
     bps["J%d"%(i+1)]=("DIN96","SLOT%d"%(i+1),35.56+101.6*(i%5),38.10-281.94*(i//5))
 small=[("J11","TB4","PWR-5V",35.56),("CB1","CAPP","470U",86.36),("CB2","CAPP","470U",137.16),
  ("RN1","SIP9","8X10K",187.96),("RT1","RES","100R",238.76),("CT1","CAP","150P",289.56),
- ("RT2","RES","100R",340.36),("CT2","CAP","150P",391.16),("RL1","RES","1K",441.96),("LED1","LED","PWR",492.76)]
+ ("RT2","RES","100R",340.36),("CT2","CAP","150P",391.16),("RL1","RES","1K",441.96),("LED1","LED","PWR",492.76),
+ # -IRQ (B29) is a wired-OR line: cards assert it with open-drain drivers (74HC07),
+ # so it has NO high state of its own. RIRQ is that high state — one 10k pull-up on
+ # the backplane serves all 10 slots and is always present. -RES gets nothing: the
+ # control card drives it push-pull (74HCT14 + power-on RC), so there is nothing to
+ # pull against. See hardware/backplane/p8x-bus-definition.md sec 3.12.
+ ("RIRQ","RES","10K",543.56)]
 for ref,dev,val,x in small: bps[ref]=(dev,val,x,-635.0)
 bpn={}
 def bnet(n,*p): bpn.setdefault(n,[]).extend(p)
 for i in range(10):
     for pin in ALLPINS: bnet(busnet(pin),("J%d"%(i+1),pin))
-bnet("VCC",("J11","1"),("J11","2"),("CB1","+"),("CB2","+"),("RN1","COM"),("RL1","1"),
+bnet("VCC",("J11","1"),("J11","2"),("CB1","+"),("CB2","+"),("RN1","COM"),("RL1","1"),("RIRQ","2"),
      *[("C%d"%(i+1),"1") for i in range(10)])
+bnet("IRQ",("RIRQ","1"))                                   # 10k pull-up: wired-OR high state
 bnet("GND",("J11","3"),("J11","4"),("CB1","-"),("CB2","-"),("LED1","K"),("CT1","2"),("CT2","2"),
      *[("C%d"%(i+1),"2") for i in range(10)])
 for i in range(10): bps["C%d"%(i+1)]=("CAP1","100N",35.56+50.8*i,-723.9)
@@ -1322,6 +1329,7 @@ bpb["RT1"]=("RES","100R",264.0,96.0)
 bpb["CT1"]=("CAP","150P",279.24,96.0)
 bpb["RT2"]=("RES","100R",264.0,80.0)
 bpb["CT2"]=("CAP","150P",279.24,80.0)
+bpb["RIRQ"]=("RES","10K",264.0,64.0)                       # -IRQ wired-OR pull-up, end zone
 # Power-entry cluster, pinned to the front (left) edge in the front bay opened by
 # the XOFF shift below. CB1/CB2 spread to 23mm apart (was ~10). RL1/LED1 brought
 # forward toward the front edge. These five are excluded from the X/Y shifts.

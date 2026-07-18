@@ -595,6 +595,7 @@
 <part name="CT2" library="p8x" deviceset="CAP" device="" value="150P"/>
 <part name="RL1" library="p8x" deviceset="RES" device="" value="1K"/>
 <part name="LED1" library="p8x" deviceset="LED" device="" value="PWR"/>
+<part name="RIRQ" library="p8x" deviceset="RES" device="" value="10K"/>
 <part name="C1" library="p8x" deviceset="CAP1" device="" value="100N"/>
 <part name="C2" library="p8x" deviceset="CAP1" device="" value="100N"/>
 <part name="C3" library="p8x" deviceset="CAP1" device="" value="100N"/>
@@ -628,6 +629,7 @@
 <instance part="CT2" gate="G$1" x="391.16" y="-635.0"/>
 <instance part="RL1" gate="G$1" x="441.96" y="-635.0"/>
 <instance part="LED1" gate="G$1" x="492.76" y="-635.0"/>
+<instance part="RIRQ" gate="G$1" x="543.56" y="-635.0"/>
 <instance part="C1" gate="G$1" x="35.56" y="-723.9"/>
 <instance part="C2" gate="G$1" x="86.36" y="-723.9"/>
 <instance part="C3" gate="G$1" x="137.16" y="-723.9"/>
@@ -838,6 +840,9 @@
 <segment><pinref part="RL1" gate="G$1" pin="1"/>
 <wire x1="424.18" y1="-635.00" x2="419.10" y2="-635.00" width="0.1524" layer="91"/>
 <label x="419.10" y="-634.49" size="1.778" layer="95"/></segment>
+<segment><pinref part="RIRQ" gate="G$1" pin="2"/>
+<wire x1="561.34" y1="-635.00" x2="566.42" y2="-635.00" width="0.1524" layer="91"/>
+<label x="566.42" y="-634.49" size="1.778" layer="95"/></segment>
 <segment><pinref part="C1" gate="G$1" pin="1"/>
 <wire x1="17.78" y1="-723.90" x2="12.70" y2="-723.90" width="0.1524" layer="91"/>
 <label x="12.70" y="-723.39" size="1.778" layer="95"/></segment>
@@ -2867,6 +2872,9 @@
 <segment><pinref part="J10" gate="G$1" pin="B29"/>
 <wire x1="424.18" y1="-396.24" x2="419.10" y2="-396.24" width="0.1524" layer="91"/>
 <label x="419.10" y="-395.73" size="1.778" layer="95"/></segment>
+<segment><pinref part="RIRQ" gate="G$1" pin="1"/>
+<wire x1="525.78" y1="-635.00" x2="520.70" y2="-635.00" width="0.1524" layer="91"/>
+<label x="520.70" y="-634.49" size="1.778" layer="95"/></segment>
 </net>
 <net name="SPARE11" class="0">
 <segment><pinref part="J1" gate="G$1" pin="B30"/>

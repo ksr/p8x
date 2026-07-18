@@ -154,13 +154,23 @@ backplane's, plus this card's probe series:
 | Line | Passive | Where |
 |---|---|---|
 | `D0–D7` | 10k pull-**up** (RN1, exists) | backplane |
-| `-RES` | 10k pull-**up** (**new**) | backplane |
-| `-IRQ` | 10k pull-**up** (**new**) | backplane |
+| `-IRQ` | 10k pull-**up** (`RIRQ`, added) | backplane |
+| `-RES` | **none** | — (control card drives it push-pull; see below) |
 | `A0–A15`, control, `CLK`/`CLKB` | **none** | — (firmware holds the clocks; §3.1) |
 | Probes | 1k series | this card (`RPRB`) |
 
 This card puts **no** passive on `D`, `-RES`, or `-IRQ` — those belong to the
 backplane.
+
+**`-IRQ` needs its pull-up; `-RES` does not.** `-IRQ` is wired-OR (open-drain), so
+the 10k is its only high state — added on the backplane as `RIRQ` (one resistor,
+all slots, always present). `-RES` is driven **push-pull** by the control card's
+74HCT14 (with a power-on RC), so there is nothing to pull against — a resistor
+there would be a weak load the gate overrides. An earlier draft listed a "new 10k
+pull-up on `-RES`"; that was wrong on both counts (unnecessary, and if anything the
+fail-safe polarity is a pull-*down*, since float-low = reset asserted). The only
+unguarded `-RES` moment is control-card-absent bring-up — and this card drives
+`-RES` then, so even that is covered.
 
 ### 3.4 Presence detection is functional, not electrical
 
@@ -281,8 +291,9 @@ backplane. LEDs hang off the bus side; the probe header hangs off U5.
   └────────────────────────────────────────────────────────────────────────┘
      backplane owns these passives, NOT this card (never double up — a pull-up
      and a pull-down on one line sit at mid-rail):
-       RN1  10k pull-UP on D0-7   (exists)
-       NEW  10k pull-UP on -RES, and on -IRQ (wired-OR, see §7)
+       RN1   10k pull-UP on D0-7   (exists)
+       RIRQ  10k pull-UP on -IRQ   (added; wired-OR needs it, see §7)
+       -RES  NO pull — control card drives it push-pull (§3.3)
 
   POWER   backplane +5V ─┬─────────────────────► U1..U10  @5V
                          ├──►|◄── Schottky ────► Pico VSYS (pin 39)
@@ -435,13 +446,19 @@ card may pull it"* — that is wired-OR, which means open-drain, which means
 interrupts abstractly (a write to `$FF06` sets `irq_pending`), never as a line.
 And the circuit is the one unbuilt hardware item (control card U20/U21, DNP).
 
-**Recommendation: rename to `-IRQ`, active-low, open-drain, 10 kΩ pull-up on the
-backplane.** Cards assert with an open-drain buffer — `74HC07` is a hex open-drain
-buffer in DIP, so the through-hole rule holds. This is what makes "any card may
-pull it" actually work: open-drain drivers cannot fight each other, whereas the
-HCT push-pull parts used everywhere else in this machine **physically cannot be
-wired-OR'd**. Active-high would need open-source drivers or a diode-OR — both
-worse. Nothing is built yet, so this costs nothing today.
+**Recommendation: treat it as `-IRQ`, active-low, open-drain, with a 10 kΩ pull-up
+on the backplane.** Cards assert with an open-drain buffer — `74HC07` is a hex
+open-drain buffer in DIP, so the through-hole rule holds. This is what makes "any
+card may pull it" actually work: open-drain drivers cannot fight each other,
+whereas the HCT push-pull parts used everywhere else in this machine **physically
+cannot be wire-ORed**. Active-high would need open-source drivers or a diode-OR —
+both worse.
+
+**Done (backplane not yet fabbed, so it cost nothing):** the 10 kΩ pull-up now
+exists on the backplane as `RIRQ` (end zone, beside `RN1`), so the wired-OR line
+has its high state regardless of which cards are installed. Still open, on the
+control card: the open-drain assert/sample side (U20/U21, DNP) — task #26. Note
+`-RES` did **not** get a matching pull (it is push-pull driven; §3.3).
 
 This card can then assert `-IRQ` on demand and single-step the machine into the
 `$08` vector — which is how the interrupt hardware should be brought up, with the

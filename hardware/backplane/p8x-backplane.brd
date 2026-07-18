@@ -304,6 +304,10 @@
 <attribute name="NAME" x="289.24" y="89.54" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="289.24" y="84.46" size="1.778" layer="27" ratio="10"/>
 </element>
+<element name="RIRQ" library="p8x" package="R_AXIAL" value="10K" x="274.00" y="71.00" smashed="yes">
+<attribute name="NAME" x="274.00" y="73.54" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="274.00" y="68.46" size="1.778" layer="27" ratio="10"/>
+</element>
 <element name="J11" library="p8x" package="TB4" value="PWR-5V" x="9.00" y="95.00" smashed="yes">
 <attribute name="NAME" x="9.00" y="97.54" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="9.00" y="92.46" size="1.778" layer="27" ratio="10"/>
@@ -1238,6 +1242,7 @@
 <contactref element="J8" pad="B29"/>
 <contactref element="J9" pad="B29"/>
 <contactref element="J10" pad="B29"/>
+<contactref element="RIRQ" pad="1"/>
 <wire x1="22.70" y1="28.59" x2="251.30" y2="28.59" width="0.4" layer="1"/>
 <wire x1="22.70" y1="29.86" x2="22.70" y2="28.59" width="0.4" layer="1"/>
 <wire x1="48.10" y1="29.86" x2="48.10" y2="28.59" width="0.4" layer="1"/>
@@ -1764,6 +1769,7 @@
 <contactref element="CB2" pad="1"/>
 <contactref element="RN1" pad="1"/>
 <contactref element="RL1" pad="1"/>
+<contactref element="RIRQ" pad="2"/>
 <contactref element="C1" pad="1"/>
 <contactref element="C2" pad="1"/>
 <contactref element="C3" pad="1"/>
