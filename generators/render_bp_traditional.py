@@ -43,9 +43,10 @@ c.drawString(20,1190-55,"Rail glyphs = +5V / GND planes (inner layers). RT/CT cl
 ROWS=( [("D%d"%i,"D") for i in range(8)]+[None]
       +[("A%d"%i,"S") for i in range(16)]+[None]
       +[("DOE%d"%i,"S") for i in range(4)]+[("DLD%d"%i,"S") for i in range(4)]+[None]
-      +[("PSEL0","S"),("PSEL1","S"),("PINC","S"),("PDEC","S"),("LDF","S"),
+      +[("PSEL0","S"),("PSEL1","S"),("PSEL2","S"),("PINC","S"),("PDEC","S"),("LDF","S"),
+        ("LDZN","S"),("SHCIN","S"),("SETC","S"),("CLRC","S"),("BSEL","S"),
         ("ALUS0","S"),("ALUS1","S"),("ALUS2","S"),("ALUS3","S"),("ALUM","S"),
-        ("CIN","S"),("SH0","S"),("SH1","S"),("-RES","S")]+[None]
+        ("CIN","S"),("SH0","S"),("SH1","S"),("-RES","S"),("IRQ","IRQ")]+[None]
       +[("CLK","CLK"),("CLKB","CLKB")]+[None]
       +[("FC","S"),("FZ","S"),("FN","S"),("FV","S")]+[None]
       +[("SPARE%d"%i,"S") for i in range(4,12)]+[None]
@@ -75,7 +76,7 @@ vcc(RNX,ytop+0.0,d=1,label="+5V (COM)")
 line(RNX,ytop,RNX+1.0,ytop,0)  # anchor
 # simple labeled stubs for the S rows (bused to all slots; no on-board circuitry)
 for name,kind in [r for r in ROWS if r]:
-    if kind=="S":
+    if kind in ("S","IRQ"):
         py=rowy[name]; line(PX,py,PX+6,py); txt(PX+6.8,py-0.7,"TO ALL SLOTS",1.3,GRN)
     elif kind=="V":
         vcc(PX,rowy[name],d=1)
@@ -109,6 +110,15 @@ for sig,rref,cref,drop in (("CLK","RT1","CT1",0),("CLKB","RT2","CT2",13)):
     line(b,py,c1,py)
     gnd(c2,py,d=1)
     txt(122,py-0.7,"AC TERM - FIT ONLY IF %s RINGS AT FAR SLOT"%sig,1.5,BLU)
+# -IRQ wired-OR pull-up: the IRQ row already shows a "TO ALL SLOTS" stub above;
+# here RIRQ (10k) ties it to +5V so the open-drain line has a high state. Drawn
+# as IRQ -> RIRQ -> +5V, right of the "TO ALL SLOTS" label.
+py=rowy["IRQ"]
+line(PX+30,py,55-5.08,py)                       # extend past the stub label to RIRQ
+(a,_),(b,_)=disc("RES","RIRQ","10K",55,py)
+line(PX+30,py,a,py)
+vcc(b+3,py,d=1,label="+5V")
+txt(72,py-3.4,"WIRED-OR PULL-UP (open-drain cards)",1.5,BLU)
 # power entry + bulk + per-slot decoupling + LED, drawn in a power section
 PYY=-225
 txt(0,PYY+10,"POWER SECTION",2.6,BLK,bold=True)
