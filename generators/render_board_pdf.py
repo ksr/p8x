@@ -20,6 +20,8 @@ sys.path.insert(0,_HERE)
 _os.makedirs(_HW,exist_ok=True); _os.chdir(_HW)
 import gen_eagle as G                 # regenerates boards; provides PKG
 from reportlab.pdfgen import canvas as pdfc
+from reportlab import rl_config as _rlc; _rlc.invariant=1  # reproducible PDFs (fixed date+ID) so a re-render is byte-identical when nothing changed -> freshness check works
+
 from reportlab.lib.colors import Color
 
 MM=2.83465                            # mm -> PDF points

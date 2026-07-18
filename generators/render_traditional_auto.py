@@ -9,6 +9,8 @@ sys.path.insert(0,_HERE)
 import gen_eagle as G              # regenerates all boards, provides DEV, busnet, ALLPINS, CARDS
 _HW=_os.path.join(_os.path.dirname(_HERE),"hardware")  # per-board dirs hold CAD + docs + PDFs
 from reportlab.pdfgen import canvas as pdfc
+from reportlab import rl_config as _rlc; _rlc.invariant=1  # reproducible PDFs (fixed date+ID) so a re-render is byte-identical when nothing changed -> freshness check works
+
 from reportlab.lib.colors import Color
 MM=2.83465; GR=2.54; HALFW=12.7; PINX=17.78
 BLK=Color(0,0,0); GRN=Color(0,0.42,0); RED=Color(0.72,0.08,0.08); BLU=Color(0,0,0.65)

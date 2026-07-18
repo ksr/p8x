@@ -6,6 +6,8 @@ import os as _os, sys as _sys; _DOCS=_os.path.join(_os.path.dirname(_os.path.dir
 _sys.path.insert(0,_os.path.dirname(_os.path.abspath(__file__)))
 import gen_eagle as GE   # EMIT is False on import, so this writes nothing — we only borrow PASSIVE_ART
 from reportlab.pdfgen import canvas as pdfc
+from reportlab import rl_config as _rlc; _rlc.invariant=1  # reproducible PDFs (fixed date+ID) so a re-render is byte-identical when nothing changed -> freshness check works
+
 from reportlab.lib.colors import Color
 MM=2.83465; G=2.54; HALFW=12.7; PINX=17.78
 BLK=Color(0,0,0); GRN=Color(0,0.42,0); RED=Color(0.72,0.08,0.08); BLU=Color(0,0,0.65)
@@ -39,18 +41,44 @@ c.drawString(20,1190-26,"P8X 10-SLOT BACKPLANE REV C - SCHEMATIC (traditional wi
 c.setFont("Helvetica",9.5)
 c.drawString(20,1190-42,"J1-J10: ALL TEN SLOTS ARE WIRED PIN-FOR-PIN IN PARALLEL - drawn once below. Decoupling C1-C10: one per slot.")
 c.drawString(20,1190-55,"Rail glyphs = +5V / GND planes (inner layers). RT/CT clock terminators ship DNP. FC/FZ/FN/FV = ALU flags (ex SPARE0-3). rev C3: C27-30=PSEL2/LDZN/SHCIN/SETC, B27=CLRC; B28=BSEL, B29=IRQ, SPARE11 on B30.")
-# representative connector rows
-ROWS=( [("D%d"%i,"D") for i in range(8)]+[None]
-      +[("A%d"%i,"S") for i in range(16)]+[None]
-      +[("DOE%d"%i,"S") for i in range(4)]+[("DLD%d"%i,"S") for i in range(4)]+[None]
-      +[("PSEL0","S"),("PSEL1","S"),("PSEL2","S"),("PINC","S"),("PDEC","S"),("LDF","S"),
-        ("LDZN","S"),("SHCIN","S"),("SETC","S"),("CLRC","S"),("BSEL","S"),
-        ("ALUS0","S"),("ALUS1","S"),("ALUS2","S"),("ALUS3","S"),("ALUM","S"),
-        ("CIN","S"),("SH0","S"),("SH1","S"),("-RES","S"),("IRQ","IRQ")]+[None]
-      +[("CLK","CLK"),("CLKB","CLKB")]+[None]
-      +[("FC","S"),("FZ","S"),("FN","S"),("FV","S")]+[None]
-      +[("SPARE%d"%i,"S") for i in range(4,12)]+[None]
-      +[("+5V (A1,B1,C1,A2,B2,C2)","V"),("GND (B3-B26)","G"),("GND (31/32 ALL ROWS)","G")])
+# representative connector rows — DERIVED from the bus (busnet), not hand-listed.
+# This used to be a hand-maintained list and it drifted: it was missing PSEL2,
+# LDZN, SHCIN, SETC, CLRC, BSEL, IRQ (added in rev C) and still named SPARE4-11
+# when the real spares are SPARE11-23. Deriving the row set from busnet() makes it
+# impossible for a bus signal to be absent from this schematic — a new/renamed line
+# flows in automatically, and the assertion below fails the render if anything is
+# dropped. Only the DISPLAY ORDER and the per-signal "kind" are hand-hinted.
+import re as _re
+_real = {GE.busnet(p) for p in GE.ALLPINS} - {"VCC","GND"}      # every bused signal
+def _kind(n): return n if n in ("CLK","CLKB") else ("IRQ" if n=="IRQ" else "S")
+# preferred grouping order for readability; anything not listed is appended (never
+# dropped), so an uncategorised new signal still appears rather than vanishing.
+_ORDER = (["D%d"%i for i in range(8)]
+        + ["A%d"%i for i in range(16)]
+        + ["DOE%d"%i for i in range(4)] + ["DLD%d"%i for i in range(4)]
+        + ["PSEL0","PSEL1","PSEL2","PINC","PDEC","LDF","LDZN","SHCIN","SETC","CLRC",
+           "BSEL","ALUS0","ALUS1","ALUS2","ALUS3","ALUM","CIN","SH0","SH1","-RES","IRQ"]
+        + ["CLK","CLKB"] + ["FC","FZ","FN","FV"]
+        + sorted((n for n in _real if n.startswith("SPARE")),
+                 key=lambda n:int(_re.search(r'(\d+)$',n).group(1))))
+_seq = [n for n in _ORDER if n in _real] + sorted(_real - set(_ORDER))
+assert set(_seq)==_real, ("backplane schematic ROWS out of sync with the bus; "
+                          "symmetric-difference = %r" % (set(_seq) ^ _real))
+def _grp(n):
+    if _re.fullmatch(r'D\d+',n): return 0
+    if _re.fullmatch(r'A\d+',n): return 1
+    if n.startswith("DOE") or n.startswith("DLD"): return 2
+    if n in ("CLK","CLKB"): return 4
+    if n in ("FC","FZ","FN","FV"): return 5
+    if n.startswith("SPARE"): return 6
+    return 3                                                    # control block
+ROWS=[]; _prev=None
+for n in _seq:
+    gk=_grp(n)
+    if _prev is not None and gk!=_prev: ROWS.append(None)       # blank row between groups
+    ROWS.append((n,_kind(n))); _prev=gk
+ROWS += [None,("+5V (A1,B1,C1,A2,B2,C2)","V"),
+              ("GND (B3-B26)","G"),("GND (31/32 ALL ROWS)","G")]
 JX=0; JY=0
 box("J1..J10","DIN41612 96P x10 SLOTS",JX,JY,len(ROWS),wide=15)
 rowy={}
