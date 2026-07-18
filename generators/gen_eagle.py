@@ -1304,6 +1304,37 @@ for b in range(8): bnet("D%d"%b,("RN1","R%d"%(b+1)))
 bnet("CLK",("RT1","1")); bnet("CLK_T",("RT1","2"),("CT1","1"))
 bnet("CLKB",("RT2","1")); bnet("CLKB_T",("RT2","2"),("CT2","1"))
 bnet("LED_A",("RL1","2"),("LED1","A"))
+
+def backplane_rep():
+    """Representative single-slot view of the backplane for the traditional-style
+    schematic PDF. All 10 slots are wired in parallel, so drawing one keeps it
+    readable. Returns (title, parts, nets) shaped for
+    render_traditional_auto.draw_card, so the backplane renders through the SAME
+    auto-router as every card: wires connect pin-to-pin from the netlist by
+    construction (no hand-placed coordinates), and draw_card's coverage assertion
+    guarantees every pin is drawn. Mirrors the real backplane nets above with one
+    J1 and one representative decoupling cap. J1 pins come from busnet(), so a bus
+    change flows in automatically — the schematic cannot silently drop a signal."""
+    parts={"J1":("DIN96","1 OF 10 SLOTS (PARALLEL)"),
+           "J11":("TB4","PWR-5V"),"CB1":("CAPP","470U"),"CB2":("CAPP","470U"),
+           "RN1":("SIP9","8X10K"),"RT1":("RES","100R DNP"),"CT1":("CAP","150P DNP"),
+           "RT2":("RES","100R DNP"),"CT2":("CAP","150P DNP"),
+           "RL1":("RES","1K"),"LED1":("LED","PWR"),
+           "RIRQ":("RES","10K"),"C1":("CAP1","100N x10")}
+    n={}
+    def a(net,*p): n.setdefault(net,[]).extend(p)
+    for pin in ALLPINS: a(busnet(pin),("J1",pin))          # every bus pin -> its net
+    a("VCC",("J11","1"),("J11","2"),("CB1","+"),("CB2","+"),
+            ("RN1","COM"),("RL1","1"),("RIRQ","2"),("C1","1"))
+    a("GND",("J11","3"),("J11","4"),("CB1","-"),("CB2","-"),
+            ("LED1","K"),("CT1","2"),("CT2","2"),("C1","2"))
+    a("IRQ",("RIRQ","1"))                                   # wired-OR pull-up
+    for b in range(8): a("D%d"%b,("RN1","R%d"%(b+1)))       # D0-7 pull-ups
+    a("CLK",("RT1","1"));  a("CLK_T",("RT1","2"),("CT1","1"))
+    a("CLKB",("RT2","1")); a("CLKB_T",("RT2","2"),("CT2","1"))
+    a("LED_A",("RL1","2"),("LED1","A"))
+    return ("P8X 10-SLOT BACKPLANE REV C",parts,n)
+
 if EMIT:
     write_sch("backplane/p8x-backplane.sch","P8X 10-SLOT BACKPLANE REV C",bps,bpn)
     validate("backplane/p8x-backplane.sch",bps,bpn)
