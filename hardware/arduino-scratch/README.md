@@ -13,8 +13,10 @@ no P8X bus connector). Regenerate:
 python3 generators/gen_arduino.py
 ```
 
-Parts are parked off the board outline (unplaced) with the ratsnest — place and
-route in Fusion.
+Parts are **placed** on the 76.2 × 50.8 mm outline (power down the left, U1 in the
+centre, crystal / decoupling / pin-13 LED / FTDI on the right), grouped by
+function and verified non-overlapping + in-bounds by the generator. Copper is
+unrouted — the ratsnest guides routing in Fusion. Nudge the placement to taste.
 
 ## Circuit
 
