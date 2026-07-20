@@ -136,13 +136,17 @@ def _hpwl():
         tot += (max(xs)-min(xs)) + (max(ys)-min(ys))
     return tot
 
-os.makedirs(OUTDIR, exist_ok=True)
-base = os.path.join(OUTDIR, "arduino-scratch")
-title = "BREADBOARD ARDUINO (ATmega328P) - Cowork/Fusion workflow test"
-G.write_sch(base + ".sch", title, sch, n)
-G.validate(base + ".sch", sch, n)
-G.write_brd(base + ".brd", title, brd, n, {}, {}, W, H)   # placed (unplaced=False) + ratsnest
-G.validate(base + ".brd", brd, n)
-print("wrote", base + ".sch", "and", base + ".brd")
-print("parts:", len(parts), " nets:", len(n),
-      " placed, no overlaps, in %gx%g mm, HPWL=%.0f mm" % (W, H, _hpwl()))
+# Only WRITE files when run as a script. Guarding this under __main__ keeps the
+# module import-safe: other code (e.g. an editor reusing the device/pad defs or
+# the netlist) can `import gen_arduino` without silently rewriting the .sch/.brd.
+if __name__ == "__main__":
+    os.makedirs(OUTDIR, exist_ok=True)
+    base = os.path.join(OUTDIR, "arduino-scratch")
+    title = "BREADBOARD ARDUINO (ATmega328P) - Cowork/Fusion workflow test"
+    G.write_sch(base + ".sch", title, sch, n)
+    G.validate(base + ".sch", sch, n)
+    G.write_brd(base + ".brd", title, brd, n, {}, {}, W, H)  # placed + ratsnest
+    G.validate(base + ".brd", brd, n)
+    print("wrote", base + ".sch", "and", base + ".brd")
+    print("parts:", len(parts), " nets:", len(n),
+          " placed, no overlaps, in %gx%g mm, HPWL=%.0f mm" % (W, H, _hpwl()))
