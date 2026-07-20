@@ -84,19 +84,20 @@ for i, ref in enumerate(order):
 W, H = 76.2, 50.8   # 3.0" x 2.0"
 
 # ---- board placement: ref -> (footprint bbox top-left cx, cyt) in mm -----------
-# Grouped by function: power down the left (DC in, 7805, bulk caps, reset pull-up,
-# power LED), U1 tall in the centre, and the crystal / decoupling / pin-13 LED /
-# FTDI header on the right. Verified non-overlapping + in-bounds below; the
-# ratsnest guides final routing in Fusion.
+# Placed to keep CONNECTED parts close (short ratsnest / air-wires). U1's XTAL,
+# RESET, RXD, TXD pins are all on its LEFT column, so the crystal cluster and the
+# FTDI/reset cluster hug U1's left; AVCC + the pin-13 LED sit on the right column;
+# the 5 V supply lives on the right edge (DC jack). HPWL 266 mm vs 511 for the
+# first pass (48% shorter) -- signal nets are all <18 mm; only VCC/GND span the
+# board. Verified non-overlapping + in-bounds below; ratsnest guides routing.
 PLACE = {
-    "J2":(2,48), "U2":(2,40), "C6":(2,35), "C7":(6,35), "R1":(2,26),
-    "R3":(2,20), "LED2":(2,15),
-    "U1":(28,49),
-    "C3":(41,49), "C4":(46,49),                # VCC / AVCC decoupling
-    "Y1":(41,33), "C1":(41,30), "C2":(45,30),  # crystal + load caps
-    "R2":(41,20), "LED1":(55,20),              # pin-13 (PB5) LED
-    "C5":(41,14),                              # DTR auto-reset cap
-    "J1":(72,44),                              # FTDI header, right edge
+    "U1":(34,46),                              # ATmega, centre
+    "J1":(24,47), "R1":(21.5,49), "C5":(27,44),# FTDI + reset, top-left (near pins 1-3)
+    "C3":(30,36),                              # VCC decoupling (near pin 7)
+    "Y1":(24,27), "C1":(28.5,24), "C2":(31.5,24),  # 16 MHz + load caps (near XTAL1/2, pins 9/10)
+    "C4":(44,27), "R2":(44,20), "LED1":(57,20),    # AVCC decoupling + pin-13 LED (right column)
+    "J2":(74,44), "U2":(64,44), "C6":(64,40), "C7":(68,40),  # 5 V supply, right edge
+    "R3":(60,30), "LED2":(60,26),              # power LED
 }
 
 def _bbox(ref):
@@ -121,6 +122,20 @@ for r in PLACE:
     dev, val = parts[r]; (_, _, _, _), (ox, oy, h) = _bbox(r); cx, cyt = PLACE[r]
     brd[r] = (dev, val, cx - ox, cyt - h - oy)
 
+# half-perimeter wire length (HPWL) — the standard placement quality metric; lower
+# = shorter total ratsnest. Reported so a placement edit's effect is measurable.
+def _hpwl():
+    pos = {}
+    for r, (cx, cyt) in PLACE.items():
+        pkg = G.DEV[parts[r][0]]["pkg"]; w, h, ox, oy = G.fp_box(pkg); ex, ey = cx-ox, cyt-h-oy
+        for (pad, px, py, dr, di) in G.PKG[pkg]: pos[(r, pad)] = (ex+px, ey+py)
+    tot = 0.0
+    for name, pins in n.items():
+        xs = [pos[(r, G.DEV[parts[r][0]]["pm"][pin])][0] for r, pin in pins]
+        ys = [pos[(r, G.DEV[parts[r][0]]["pm"][pin])][1] for r, pin in pins]
+        tot += (max(xs)-min(xs)) + (max(ys)-min(ys))
+    return tot
+
 os.makedirs(OUTDIR, exist_ok=True)
 base = os.path.join(OUTDIR, "arduino-scratch")
 title = "BREADBOARD ARDUINO (ATmega328P) - Cowork/Fusion workflow test"
@@ -129,4 +144,5 @@ G.validate(base + ".sch", sch, n)
 G.write_brd(base + ".brd", title, brd, n, {}, {}, W, H)   # placed (unplaced=False) + ratsnest
 G.validate(base + ".brd", brd, n)
 print("wrote", base + ".sch", "and", base + ".brd")
-print("parts:", len(parts), " nets:", len(n), " (placed, no overlaps, in %gx%g mm)" % (W, H))
+print("parts:", len(parts), " nets:", len(n),
+      " placed, no overlaps, in %gx%g mm, HPWL=%.0f mm" % (W, H, _hpwl()))

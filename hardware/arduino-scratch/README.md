@@ -13,10 +13,13 @@ no P8X bus connector). Regenerate:
 python3 generators/gen_arduino.py
 ```
 
-Parts are **placed** on the 76.2 × 50.8 mm outline (power down the left, U1 in the
-centre, crystal / decoupling / pin-13 LED / FTDI on the right), grouped by
-function and verified non-overlapping + in-bounds by the generator. Copper is
-unrouted — the ratsnest guides routing in Fusion. Nudge the placement to taste.
+Parts are **placed** on the 76.2 × 50.8 mm outline, positioned to keep connected
+parts close: U1's XTAL/RESET/RXD/TXD pins are all on its left column, so the
+crystal cluster and the FTDI/reset cluster hug U1's left; AVCC + the pin-13 LED
+sit on the right column; the 5 V supply is on the right edge. Signal nets are all
+< 18 mm; only VCC/GND span the board (HPWL 266 mm total). The generator verifies
+non-overlapping + in-bounds and reports HPWL on each run. Copper is unrouted — the
+ratsnest guides routing in Fusion; nudge the placement to taste.
 
 ## Circuit
 
