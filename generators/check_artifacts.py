@@ -25,7 +25,12 @@ def main():
         print("check-artifacts: BUILD FAILED"); return r.returncode
     diff = subprocess.run(["git", "status", "--porcelain", "--", "hardware/"],
                           cwd=ROOT, capture_output=True, text=True)
-    dirty = [l for l in diff.stdout.splitlines() if l.strip()]
+    # Only TRACKED changes mean an artifact drifted. Untracked ("??") files are
+    # not stale artifacts — they are scratch, e.g. the user's "-a" Fusion working
+    # copies, which live under hardware/ permanently. Counting them made the gate
+    # fail every run, and a check that always fails gets ignored.
+    dirty = [l for l in diff.stdout.splitlines()
+             if l.strip() and not l.startswith("??")]
     if dirty:
         print("\ncheck-artifacts: STALE — these committed artifacts do not match a fresh build:")
         for l in dirty: print("  " + l)
