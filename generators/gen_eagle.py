@@ -453,7 +453,18 @@ def write_brd(fn,title,parts,nets,wires,polys,W,H,vias=None,outline_only=False,u
         os.makedirs(os.path.dirname(fn) or ".",exist_ok=True)
         open(fn,"w").write("\n".join(o)+"\n")
         return
-    o.append(f'<text x="4" y="{H-6}" size="2.54" layer="21">{title}</text>')
+    # Board title, nudged clear of any mounting hole. It used to sit at a fixed
+    # (4, H-6), which on the backplane ran the text straight through the top
+    # hole row (y=123, x=50/150/250). Shift it down in steps until its box clears
+    # every hole. Cards pass no holes, so their title position is unchanged.
+    _tsz=2.54; _tx=4.0; _ty=H-6
+    _tw=len(title)*_tsz*0.75                       # approx Eagle vector-font width
+    for _ in range(12):
+        if not any((_tx-hd/2) < hx < (_tx+_tw+hd/2) and
+                   (_ty-hd/2) < hy < (_ty+_tsz+hd/2) for (hx,hy,hd) in (holes or [])):
+            break
+        _ty-=4.0
+    o.append(f'<text x="{_tx:g}" y="{_ty:g}" size="{_tsz}" layer="21">{title}</text>')
     for (hx,hy,hd) in (holes or []):                      # board mounting holes (mechanical, non-plated)
         o.append(f'<hole x="{hx:.2f}" y="{hy:.2f}" drill="{hd}"/>')
     o.append('</plain>')

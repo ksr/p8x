@@ -73,7 +73,7 @@
 <wire x1="300.0" y1="0" x2="300.0" y2="128.0" width="0" layer="20"/>
 <wire x1="300.0" y1="128.0" x2="0" y2="128.0" width="0" layer="20"/>
 <wire x1="0" y1="128.0" x2="0" y2="0" width="0" layer="20"/>
-<text x="4" y="122.0" size="2.54" layer="21">P8X 10-SLOT BACKPLANE REV C COMPACT</text>
+<text x="4" y="118" size="2.54" layer="21">P8X 10-SLOT BACKPLANE REV C COMPACT</text>
 <hole x="50.00" y="5.00" drill="3.2"/>
 <hole x="150.00" y="5.00" drill="3.2"/>
 <hole x="250.00" y="5.00" drill="3.2"/>
