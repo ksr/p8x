@@ -77,7 +77,7 @@ Layout rules:
   via-stitch generously into the planes (≥ 8 vias per terminal)
 - Stitch the row-B ground pins straight down into L2 at every slot — 280
   ground vias distributed along the bus is a beautifully low-inductance grid
-- Power LED (RL1 + LED1) so a dead PSU is diagnosed from across the room
+- Power LED (R1 + LED1) so a dead PSU is diagnosed from across the room
 
 If you must do 2-layer: top = signals + 10 mm power rails along each edge,
 bottom = ground pour flooded around a minimal number of crossing traces.
@@ -136,7 +136,7 @@ already solved it.
 | RN1 | 10 kΩ × 8 bussed SIP-9 |
 | RT1, RT2 | 100 Ω ¼ W (DNP initially) |
 | CT1, CT2 | 150 pF ceramic (DNP initially) |
-| RL1, LED1 | 1 kΩ + 5 mm LED |
+| R1, LED1 | 1 kΩ + 5 mm LED |
 
 Footprint caveat: verify the exact KiCad footprint names for your female
 DIN 41612 connectors (`Connector_DIN:DIN41612_C_3x32_Female_Vertical` is

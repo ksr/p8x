@@ -948,13 +948,13 @@
 <part name="RPRB" library="p8x" deviceset="RNISO8" device="" value="8x1K"/>
 <part name="LPR" library="p8x" deviceset="LEDARR8" device="" value="PROBES"/>
 <part name="LST" library="p8x" deviceset="LEDARR8" device="" value="STATUS"/>
-<part name="CD1" library="p8x" deviceset="CAP1" device="" value="100N"/>
-<part name="CD2" library="p8x" deviceset="CAP1" device="" value="100N"/>
-<part name="CD3" library="p8x" deviceset="CAP1" device="" value="100N"/>
-<part name="CD4" library="p8x" deviceset="CAP1" device="" value="100N"/>
-<part name="CD5" library="p8x" deviceset="CAP1" device="" value="100N"/>
-<part name="CD6" library="p8x" deviceset="CAP1" device="" value="100N"/>
-<part name="CD7" library="p8x" deviceset="CAP1" device="" value="100N"/>
+<part name="CD1" library="p8x" deviceset="CAP1" device="" value="100nF"/>
+<part name="CD2" library="p8x" deviceset="CAP1" device="" value="100nF"/>
+<part name="CD3" library="p8x" deviceset="CAP1" device="" value="100nF"/>
+<part name="CD4" library="p8x" deviceset="CAP1" device="" value="100nF"/>
+<part name="CD5" library="p8x" deviceset="CAP1" device="" value="100nF"/>
+<part name="CD6" library="p8x" deviceset="CAP1" device="" value="100nF"/>
+<part name="CD7" library="p8x" deviceset="CAP1" device="" value="100nF"/>
 </parts><sheets><sheet><plain>
 <text x="0" y="40" size="3.81" layer="97">P8X BUS TEST CARD (USB bring-up controller, DESIGN)</text>
 <text x="127.30" y="47.64" size="1.778" layer="97">I/O EXPANDER 1</text>

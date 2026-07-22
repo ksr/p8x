@@ -81,7 +81,7 @@ signals — slot position is electrically irrelevant (mechanical layout aside).
 
    CLK  ─► RT1 100R + CT1 150p  (AC termination at far slot, DNP)
    CLKB ─► RT2 100R + CT2 150p  (AC termination at far slot, DNP)
-   RL1 1k + LED1  = power indicator
+   R1 1k + LED1  = power indicator
 ```
 
 ---
@@ -93,7 +93,7 @@ signals — slot position is electrically irrelevant (mechanical layout aside).
 electrolytics (`CB1/CB2`) provide **bulk** charge near the entry for the whole
 backplane, and a 100 nF ceramic (`C1–C10`) sits across VCC/GND **at every slot** so
 each card has local high-frequency bypass right at its connector. (Each card *also*
-carries its own per-IC decoupling — see the card standards.) `LED1` (via `RL1`)
+carries its own per-IC decoupling — see the card standards.) `LED1` (via `R1`)
 indicates power-on.
 
 ### 4.2 Data-bus pull-ups (RN1)

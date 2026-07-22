@@ -1012,15 +1012,15 @@
 <part name="LED4" library="p8x" deviceset="LED" device="" value="YEL"/>
 <part name="R5" library="p8x" deviceset="RES" device="" value="330R"/>
 <part name="LED5" library="p8x" deviceset="LED" device="" value="GRN"/>
-<part name="CD1" library="p8x" deviceset="CAP1" device="" value="100N"/>
-<part name="CD2" library="p8x" deviceset="CAP1" device="" value="100N"/>
-<part name="CD3" library="p8x" deviceset="CAP1" device="" value="100N"/>
-<part name="CD4" library="p8x" deviceset="CAP1" device="" value="100N"/>
-<part name="CD5" library="p8x" deviceset="CAP1" device="" value="100N"/>
-<part name="CD6" library="p8x" deviceset="CAP1" device="" value="100N"/>
-<part name="CD7" library="p8x" deviceset="CAP1" device="" value="100N"/>
-<part name="CD8" library="p8x" deviceset="CAP1" device="" value="100N"/>
-<part name="CD9" library="p8x" deviceset="CAP1" device="" value="100N"/>
+<part name="CD1" library="p8x" deviceset="CAP1" device="" value="100nF"/>
+<part name="CD2" library="p8x" deviceset="CAP1" device="" value="100nF"/>
+<part name="CD3" library="p8x" deviceset="CAP1" device="" value="100nF"/>
+<part name="CD4" library="p8x" deviceset="CAP1" device="" value="100nF"/>
+<part name="CD5" library="p8x" deviceset="CAP1" device="" value="100nF"/>
+<part name="CD6" library="p8x" deviceset="CAP1" device="" value="100nF"/>
+<part name="CD7" library="p8x" deviceset="CAP1" device="" value="100nF"/>
+<part name="CD8" library="p8x" deviceset="CAP1" device="" value="100nF"/>
+<part name="CD9" library="p8x" deviceset="CAP1" device="" value="100nF"/>
 </parts><sheets><sheet><plain>
 <text x="0" y="40" size="3.81" layer="97">P8X CF-IDE CARD REV A - 8-BIT TRUE IDE AT 0xFF10</text>
 <text x="127.30" y="47.64" size="1.778" layer="97">DATA BUF</text>

@@ -846,12 +846,12 @@
 <part name="LED3" library="p8x" deviceset="LED" device="" value="GRN"/>
 <part name="R4" library="p8x" deviceset="RES" device="" value="1K"/>
 <part name="LED4" library="p8x" deviceset="LED" device="" value="YEL"/>
-<part name="CD1" library="p8x" deviceset="CAP1" device="" value="100N"/>
-<part name="CD2" library="p8x" deviceset="CAP1" device="" value="100N"/>
-<part name="CD3" library="p8x" deviceset="CAP1" device="" value="100N"/>
-<part name="CD4" library="p8x" deviceset="CAP1" device="" value="100N"/>
-<part name="CD5" library="p8x" deviceset="CAP1" device="" value="100N"/>
-<part name="CD6" library="p8x" deviceset="CAP1" device="" value="100N"/>
+<part name="CD1" library="p8x" deviceset="CAP1" device="" value="100nF"/>
+<part name="CD2" library="p8x" deviceset="CAP1" device="" value="100nF"/>
+<part name="CD3" library="p8x" deviceset="CAP1" device="" value="100nF"/>
+<part name="CD4" library="p8x" deviceset="CAP1" device="" value="100nF"/>
+<part name="CD5" library="p8x" deviceset="CAP1" device="" value="100nF"/>
+<part name="CD6" library="p8x" deviceset="CAP1" device="" value="100nF"/>
 </parts><sheets><sheet><plain>
 <text x="0" y="40" size="3.81" layer="97">P8X LED OUTPUT CARD (test - write-only 8 LEDs at $FF0C)</text>
 <text x="127.30" y="47.64" size="1.778" layer="97">I/O PAGE DEC</text>

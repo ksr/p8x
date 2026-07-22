@@ -471,9 +471,19 @@ def write_brd(fn,title,parts,nets,wires,polys,W,H,vias=None,outline_only=False,u
         # Smashed element with explicit NAME (tNames/25) + VALUE (tValues/27)
         # attributes — exactly how Eagle writes boards, so Fusion reliably shows
         # the refdes + part number instead of remapping them to scratch layers.
+        # Silkscreen text goes OUTSIDE the footprint: NAME just above the pad
+        # bounding box, VALUE just below it, both left-aligned to the box. These
+        # used to sit at origin +/- 2.54 regardless of part size, which landed the
+        # text ON the footprint for anything bigger than a 2-pin part — the 96-pin
+        # DIN connector had "J1"/"SLOT1" across its pads, and the caps had their
+        # values on top of them. (Not rotation-aware; nothing rotates today.)
+        _pw,_ph,_pox,_poy = fp_box(DEV[dev]["pkg"])
+        _tx = ex+_pox                       # left-align with the footprint
+        _ty_name = ey+_poy+_ph+0.7          # 0.7mm clear above the top edge
+        _ty_val  = ey+_poy-0.7-1.778        # text top 0.7mm clear below the bottom
         o.append(f'<element name="{ref}" library="p8x" package="{DEV[dev]["pkg"]}" value="{val}" x="{ex:.2f}" y="{ey:.2f}"{rot} smashed="yes">')
-        o.append(f'<attribute name="NAME" x="{ex:.2f}" y="{ey+2.54:.2f}" size="1.778" layer="25" ratio="10"/>')
-        o.append(f'<attribute name="VALUE" x="{ex:.2f}" y="{ey-2.54:.2f}" size="1.778" layer="27" ratio="10"/>')
+        o.append(f'<attribute name="NAME" x="{_tx:.2f}" y="{_ty_name:.2f}" size="1.778" layer="25" ratio="10"/>')
+        o.append(f'<attribute name="VALUE" x="{_tx:.2f}" y="{_ty_val:.2f}" size="1.778" layer="27" ratio="10"/>')
         o.append('</element>')
     o.append('</elements><signals>')
     allnets=set(nets)|set(wires)|set(polys)
@@ -575,7 +585,7 @@ def card(name,title,parts_ic,parts_small,nets,used_bus,labels=None,
     icrefs=list(parts_ic)
     for i,ref in enumerate(icrefs):
         c="CD%d"%(i+1)
-        decap[c]=("CAP1","100N")
+        decap[c]=("CAP1","100nF")
         nets.setdefault("VCC",[]).append((c,"1"))
         nets.setdefault("GND",[]).append((c,"2"))
     # Every IC's dedicated supply pins must be members of the VCC/GND nets — a
@@ -629,7 +639,7 @@ def card(name,title,parts_ic,parts_small,nets,used_bus,labels=None,
     flow=[]                                   # (ref,dev,val,pkg) in placement order
     for i,ref in enumerate(icrefs):           # each IC immediately followed by its cap
         dev,val=parts[ref]; flow.append((ref,dev,val,DEV[dev]["pkg"]))
-        flow.append(("CD%d"%(i+1),"CAP1","100N",DEV["CAP1"]["pkg"]))
+        flow.append(("CD%d"%(i+1),"CAP1","100nF",DEV["CAP1"]["pkg"]))
     for ref in parts_small:
         dev,val=parts[ref]; flow.append((ref,dev,val,DEV[dev]["pkg"]))
     x0=EDGE+j1w+GAP*2; cx=x0; cyt=BH-EDGE; rowh=0.0
@@ -677,7 +687,7 @@ ic={"U1":("74161","CLK DIV"),"U2":("HEX14","74HCT14"),"U3":("7474","74HCT74"),
  "U20":("74244","IRQ-FORCE DNP"),"U21":("7474","IRQ/IE FF DNP")}
 sm={"X1":("OSC","4MHZ"),"JP1":("HDR4","CLKSEL"),
  "SWR":("SW2","RUN/HALT"),"SWS":("SW2","STEP"),"SWT":("SW2","RESET"),
- "R1":("RES","10K"),"R2":("RES","10K"),"R3":("RES","10K"),"C1":("CAP","1U"),
+ "R1":("RES","10K"),"R2":("RES","10K"),"R3":("RES","10K"),"C1":("CAP","1uF"),
  "RP1":("RES","1K"),"LED3":("LED","PWR-GRN"),
  "R4":("RES","1K"),"LED4":("LED","RUN-GRN"),
  "R5":("RES","1K"),"LED5":("LED","HALT-RED")}
@@ -1040,8 +1050,8 @@ sm={"X2":("OSC","2.4576MHZ"),"SW1":("DIP8SW","INPUT"),"RNP":("SIP9","8X10K"),
  "RM1":("RNISO8","8X330R"),"LM1":("LEDARR8","A0-7"),
  "RM2":("RNISO8","8X330R"),"LM2":("LEDARR8","A8-15"),
  "RM3":("RNISO8","8X330R"),"LM3":("LEDARR8","D0-7"),
- "J2":("HDR3","SERIAL"),"C2":("CAP","1U"),"C3":("CAP","1U"),"C4":("CAP","1U"),
- "C5":("CAP","1U"),"RP1":("RES","1K"),"LED3":("LED","PWR-GRN"),
+ "J2":("HDR3","SERIAL"),"C2":("CAP","1uF"),"C3":("CAP","1uF"),"C4":("CAP","1uF"),
+ "C5":("CAP","1uF"),"RP1":("RES","1K"),"LED3":("LED","PWR-GRN"),
  "R4":("RES","1K"),"LED4":("LED","IOSEL-YEL"),
  # rev C RTC support parts (DNP): 32.768kHz crystal, backup coin cell, and a
  # 3-pin header breaking out the DS1302 3-wire (CE/SCLK/IO) so it can be jumpered
@@ -1280,9 +1290,9 @@ card("memory-card","P8X MEMORY CARD REV E",ic,sm,mcn,
 bps={}
 for i in range(10):
     bps["J%d"%(i+1)]=("DIN96","SLOT%d"%(i+1),35.56+101.6*(i%5),38.10-281.94*(i//5))
-small=[("J11","TB4","PWR-5V",35.56),("CB1","CAPP","470U",86.36),("CB2","CAPP","470U",137.16),
- ("RN1","SIP9","8X10K",187.96),("RT1","RES","100R",238.76),("CT1","CAP","150P",289.56),
- ("RT2","RES","100R",340.36),("CT2","CAP","150P",391.16),("RL1","RES","1K",441.96),("LED1","LED","PWR",492.76),
+small=[("J11","TB4","PWR-5V",35.56),("CB1","CAPP","470uF",86.36),("CB2","CAPP","470uF",137.16),
+ ("RN1","SIP9","8X10K",187.96),("RT1","RES","100R",238.76),("CT1","CAP","150pF",289.56),
+ ("RT2","RES","100R",340.36),("CT2","CAP","150pF",391.16),("R1","RES","1K",441.96),("LED1","LED","PWR",492.76),
  # -IRQ (B29) is a wired-OR line: cards assert it with open-drain drivers (74HC07),
  # so it has NO high state of its own. RIRQ is that high state — one 10k pull-up on
  # the backplane serves all 10 slots and is always present. -RES gets nothing: the
@@ -1294,16 +1304,16 @@ bpn={}
 def bnet(n,*p): bpn.setdefault(n,[]).extend(p)
 for i in range(10):
     for pin in ALLPINS: bnet(busnet(pin),("J%d"%(i+1),pin))
-bnet("VCC",("J11","1"),("J11","2"),("CB1","+"),("CB2","+"),("RN1","COM"),("RL1","1"),("RIRQ","2"),
+bnet("VCC",("J11","1"),("J11","2"),("CB1","+"),("CB2","+"),("RN1","COM"),("R1","1"),("RIRQ","2"),
      *[("C%d"%(i+1),"1") for i in range(10)])
 bnet("IRQ",("RIRQ","1"))                                   # 10k pull-up: wired-OR high state
 bnet("GND",("J11","3"),("J11","4"),("CB1","-"),("CB2","-"),("LED1","K"),("CT1","2"),("CT2","2"),
      *[("C%d"%(i+1),"2") for i in range(10)])
-for i in range(10): bps["C%d"%(i+1)]=("CAP1","100N",35.56+50.8*i,-723.9)
+for i in range(10): bps["C%d"%(i+1)]=("CAP1","100nF",35.56+50.8*i,-723.9)
 for b in range(8): bnet("D%d"%b,("RN1","R%d"%(b+1)))
 bnet("CLK",("RT1","1")); bnet("CLK_T",("RT1","2"),("CT1","1"))
 bnet("CLKB",("RT2","1")); bnet("CLKB_T",("RT2","2"),("CT2","1"))
-bnet("LED_A",("RL1","2"),("LED1","A"))
+bnet("LED_A",("R1","2"),("LED1","A"))
 
 def backplane_rep():
     """Representative single-slot view of the backplane for the traditional-style
@@ -1316,23 +1326,23 @@ def backplane_rep():
     J1 and one representative decoupling cap. J1 pins come from busnet(), so a bus
     change flows in automatically — the schematic cannot silently drop a signal."""
     parts={"J1":("DIN96","1 OF 10 SLOTS (PARALLEL)"),
-           "J11":("TB4","PWR-5V"),"CB1":("CAPP","470U"),"CB2":("CAPP","470U"),
-           "RN1":("SIP9","8X10K"),"RT1":("RES","100R DNP"),"CT1":("CAP","150P DNP"),
-           "RT2":("RES","100R DNP"),"CT2":("CAP","150P DNP"),
-           "RL1":("RES","1K"),"LED1":("LED","PWR"),
-           "RIRQ":("RES","10K"),"C1":("CAP1","100N x10")}
+           "J11":("TB4","PWR-5V"),"CB1":("CAPP","470uF"),"CB2":("CAPP","470uF"),
+           "RN1":("SIP9","8X10K"),"RT1":("RES","100R DNP"),"CT1":("CAP","150pF DNP"),
+           "RT2":("RES","100R DNP"),"CT2":("CAP","150pF DNP"),
+           "R1":("RES","1K"),"LED1":("LED","PWR"),
+           "RIRQ":("RES","10K"),"C1":("CAP1","100nF x10")}
     n={}
     def a(net,*p): n.setdefault(net,[]).extend(p)
     for pin in ALLPINS: a(busnet(pin),("J1",pin))          # every bus pin -> its net
     a("VCC",("J11","1"),("J11","2"),("CB1","+"),("CB2","+"),
-            ("RN1","COM"),("RL1","1"),("RIRQ","2"),("C1","1"))
+            ("RN1","COM"),("R1","1"),("RIRQ","2"),("C1","1"))
     a("GND",("J11","3"),("J11","4"),("CB1","-"),("CB2","-"),
             ("LED1","K"),("CT1","2"),("CT2","2"),("C1","2"))
     a("IRQ",("RIRQ","1"))                                   # wired-OR pull-up
     for b in range(8): a("D%d"%b,("RN1","R%d"%(b+1)))       # D0-7 pull-ups
     a("CLK",("RT1","1"));  a("CLK_T",("RT1","2"),("CT1","1"))
     a("CLKB",("RT2","1")); a("CLKB_T",("RT2","2"),("CT2","1"))
-    a("LED_A",("RL1","2"),("LED1","A"))
+    a("LED_A",("R1","2"),("LED1","A"))
     return ("P8X 10-SLOT BACKPLANE REV C",parts,n)
 
 if EMIT:
@@ -1357,17 +1367,17 @@ bpb["RN1"]=("SIP9","8X10K",252.0,91.44)
 # of RN1 and clear of every slot/bus column (x>=263). Each chain runs left->right:
 # clock in -> RTn (R0, pad1=CLK side, pad2=node) -> CTn (node -> GND via pour).
 bpb["RT1"]=("RES","100R",264.0,96.0)
-bpb["CT1"]=("CAP","150P",279.24,96.0)
+bpb["CT1"]=("CAP","150pF",279.24,96.0)
 bpb["RT2"]=("RES","100R",264.0,80.0)
-bpb["CT2"]=("CAP","150P",279.24,80.0)
+bpb["CT2"]=("CAP","150pF",279.24,80.0)
 bpb["RIRQ"]=("RES","10K",264.0,64.0)                       # -IRQ wired-OR pull-up, end zone
 # Power-entry cluster, pinned to the front (left) edge in the front bay opened by
-# the XOFF shift below. CB1/CB2 spread to 23mm apart (was ~10). RL1/LED1 brought
+# the XOFF shift below. CB1/CB2 spread to 23mm apart (was ~10). R1/LED1 brought
 # forward toward the front edge. These five are excluded from the X/Y shifts.
 bpb["J11"]=("TB4","PWR-5V",9.0,95.0)
-bpb["CB1"]=("CAPP","470U",9.0,68.0); bpb["CB2"]=("CAPP","470U",9.0,45.0)
-for s in range(10): bpb["C%d"%(s+1)]=("CAP1","100N",sx(s)+G,109.0)   # up off the slot connectors
-bpb["RL1"]=("RES","1K",5.08,3.0); bpb["LED1"]=("LED","PWR",21.0,3.0)
+bpb["CB1"]=("CAPP","470uF",9.0,68.0); bpb["CB2"]=("CAPP","470uF",9.0,45.0)
+for s in range(10): bpb["C%d"%(s+1)]=("CAP1","100nF",sx(s)+G,109.0)   # up off the slot connectors
+bpb["R1"]=("RES","1K",5.08,3.0); bpb["LED1"]=("LED","PWR",21.0,3.0)
 wires={}; viad={}
 def wadd(n,*w): wires.setdefault(n,[]).extend(w)
 def vadd(n,*v): viad.setdefault(n,[]).extend(v)
@@ -1388,7 +1398,7 @@ wadd("CLKB",(padx(9,"A"),py(25),259.0,py(25),1,0.4),
             (259.0,py(25),259.0,80.0,1,0.4),
             (259.0,80.0,264.0,80.0,1,0.4))
 wadd("CLKB_T",(274.16,80.0,279.24,80.0,1,0.4))
-wadd("LED_A",(15.24,3.0,21.0,3.0,1,0.4))   # RL1 pad2 -> LED1 anode (both at front)
+wadd("LED_A",(15.24,3.0,21.0,3.0,1,0.4))   # R1 pad2 -> LED1 anode (both at front)
 # Route the non-ground B-row signals slot-to-slot: B27=CLRC, B28=BSEL, B29=IRQ,
 # B30=SPARE11, plus the rev-D even-pin spares B4..B26 (SPARE12..23). Odd B pins
 # stay ground guards (handled by the GND pour).
@@ -1402,9 +1412,9 @@ for nn in range(3,31):
 # Shift the slot field + its routing right by XOFF (opens a front bay at the left
 # for the power connector and bulk caps) and up by YOFF (opens a bottom margin so
 # the bottom mounting holes clear the bus connectors). The power-entry cluster
-# (J11/CB1/CB2/RL1/LED1) and the LED_A net stay pinned to the front edge.
+# (J11/CB1/CB2/R1/LED1) and the LED_A net stay pinned to the front edge.
 YOFF=7.0; XOFF=10.0
-FRONT={"J11","CB1","CB2","RL1","LED1"}
+FRONT={"J11","CB1","CB2","R1","LED1"}
 bpb={r:(pv if r in FRONT else pv[:2]+(pv[2]+XOFF,pv[3]+YOFF)+pv[4:]) for r,pv in bpb.items()}
 wires={n:(segs if n=="LED_A" else [(a+XOFF,b+YOFF,c+XOFF,d+YOFF,ly,wd) for (a,b,c,d,ly,wd) in segs])
        for n,segs in wires.items()}

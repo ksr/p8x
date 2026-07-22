@@ -586,26 +586,26 @@
 <part name="J9" library="p8x" deviceset="DIN96" device="" value="SLOT9"/>
 <part name="J10" library="p8x" deviceset="DIN96" device="" value="SLOT10"/>
 <part name="J11" library="p8x" deviceset="TB4" device="" value="PWR-5V"/>
-<part name="CB1" library="p8x" deviceset="CAPP" device="" value="470U"/>
-<part name="CB2" library="p8x" deviceset="CAPP" device="" value="470U"/>
+<part name="CB1" library="p8x" deviceset="CAPP" device="" value="470uF"/>
+<part name="CB2" library="p8x" deviceset="CAPP" device="" value="470uF"/>
 <part name="RN1" library="p8x" deviceset="SIP9" device="" value="8X10K"/>
 <part name="RT1" library="p8x" deviceset="RES" device="" value="100R"/>
-<part name="CT1" library="p8x" deviceset="CAP" device="" value="150P"/>
+<part name="CT1" library="p8x" deviceset="CAP" device="" value="150pF"/>
 <part name="RT2" library="p8x" deviceset="RES" device="" value="100R"/>
-<part name="CT2" library="p8x" deviceset="CAP" device="" value="150P"/>
-<part name="RL1" library="p8x" deviceset="RES" device="" value="1K"/>
+<part name="CT2" library="p8x" deviceset="CAP" device="" value="150pF"/>
+<part name="R1" library="p8x" deviceset="RES" device="" value="1K"/>
 <part name="LED1" library="p8x" deviceset="LED" device="" value="PWR"/>
 <part name="RIRQ" library="p8x" deviceset="RES" device="" value="10K"/>
-<part name="C1" library="p8x" deviceset="CAP1" device="" value="100N"/>
-<part name="C2" library="p8x" deviceset="CAP1" device="" value="100N"/>
-<part name="C3" library="p8x" deviceset="CAP1" device="" value="100N"/>
-<part name="C4" library="p8x" deviceset="CAP1" device="" value="100N"/>
-<part name="C5" library="p8x" deviceset="CAP1" device="" value="100N"/>
-<part name="C6" library="p8x" deviceset="CAP1" device="" value="100N"/>
-<part name="C7" library="p8x" deviceset="CAP1" device="" value="100N"/>
-<part name="C8" library="p8x" deviceset="CAP1" device="" value="100N"/>
-<part name="C9" library="p8x" deviceset="CAP1" device="" value="100N"/>
-<part name="C10" library="p8x" deviceset="CAP1" device="" value="100N"/>
+<part name="C1" library="p8x" deviceset="CAP1" device="" value="100nF"/>
+<part name="C2" library="p8x" deviceset="CAP1" device="" value="100nF"/>
+<part name="C3" library="p8x" deviceset="CAP1" device="" value="100nF"/>
+<part name="C4" library="p8x" deviceset="CAP1" device="" value="100nF"/>
+<part name="C5" library="p8x" deviceset="CAP1" device="" value="100nF"/>
+<part name="C6" library="p8x" deviceset="CAP1" device="" value="100nF"/>
+<part name="C7" library="p8x" deviceset="CAP1" device="" value="100nF"/>
+<part name="C8" library="p8x" deviceset="CAP1" device="" value="100nF"/>
+<part name="C9" library="p8x" deviceset="CAP1" device="" value="100nF"/>
+<part name="C10" library="p8x" deviceset="CAP1" device="" value="100nF"/>
 </parts><sheets><sheet><plain>
 <text x="0" y="40" size="3.81" layer="97">P8X 10-SLOT BACKPLANE REV C</text>
 </plain><instances>
@@ -627,7 +627,7 @@
 <instance part="CT1" gate="G$1" x="289.56" y="-635.0"/>
 <instance part="RT2" gate="G$1" x="340.36" y="-635.0"/>
 <instance part="CT2" gate="G$1" x="391.16" y="-635.0"/>
-<instance part="RL1" gate="G$1" x="441.96" y="-635.0"/>
+<instance part="R1" gate="G$1" x="441.96" y="-635.0"/>
 <instance part="LED1" gate="G$1" x="492.76" y="-635.0"/>
 <instance part="RIRQ" gate="G$1" x="543.56" y="-635.0"/>
 <instance part="C1" gate="G$1" x="35.56" y="-723.9"/>
@@ -837,7 +837,7 @@
 <segment><pinref part="RN1" gate="G$1" pin="COM"/>
 <wire x1="170.18" y1="-635.00" x2="165.10" y2="-635.00" width="0.1524" layer="91"/>
 <label x="165.10" y="-634.49" size="1.778" layer="95"/></segment>
-<segment><pinref part="RL1" gate="G$1" pin="1"/>
+<segment><pinref part="R1" gate="G$1" pin="1"/>
 <wire x1="424.18" y1="-635.00" x2="419.10" y2="-635.00" width="0.1524" layer="91"/>
 <label x="419.10" y="-634.49" size="1.778" layer="95"/></segment>
 <segment><pinref part="RIRQ" gate="G$1" pin="2"/>
@@ -3821,7 +3821,7 @@
 <label x="368.30" y="-634.49" size="1.778" layer="95"/></segment>
 </net>
 <net name="LED_A" class="0">
-<segment><pinref part="RL1" gate="G$1" pin="2"/>
+<segment><pinref part="R1" gate="G$1" pin="2"/>
 <wire x1="459.74" y1="-635.00" x2="464.82" y2="-635.00" width="0.1524" layer="91"/>
 <label x="464.82" y="-634.49" size="1.778" layer="95"/></segment>
 <segment><pinref part="LED1" gate="G$1" pin="A"/>
