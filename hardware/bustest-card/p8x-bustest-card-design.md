@@ -407,7 +407,8 @@ socket, the 2×5 probe header and the LED bank remain at the **outer** end — t
 end you can reach with the card seated. That property came from the flow
 direction, not from the extra width, so nothing is lost by dropping it.
 
-Current auto-placement (`p8x-bustest-card-full.brd`):
+Auto-flow placement, as a fit check only (the parts ship parked off-board
+in `p8x-bustest-card.brd`, to be placed from the ratsnest):
 
 | row | contents | x extent |
 |---|---|---|

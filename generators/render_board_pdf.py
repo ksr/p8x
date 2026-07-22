@@ -148,7 +148,11 @@ def render(path,outpdf):
     return _os.path.basename(outpdf),len(els),dnp_n
 
 if __name__=="__main__":
-    brds=sorted(glob.glob(_os.path.join(_HW,"*","p8x-*.brd")))
+    # Skip "-a" boards: those are the user's live Fusion working copies, not
+    # generated artifacts. Rendering them would drop an untracked PDF beside a
+    # file we do not own and that changes outside this toolchain.
+    brds=[b for b in sorted(glob.glob(_os.path.join(_HW,"*","p8x-*.brd")))
+          if not _os.path.basename(b)[:-4].endswith("-a")]
     for b in brds:
         out=b[:-4]+"-placement.pdf"
         name,nparts,ndnp=render(b,out)

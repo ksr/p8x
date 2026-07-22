@@ -726,10 +726,16 @@ def card(name,title,parts_ic,parts_small,nets,used_bus,labels=None,
                   outline_only=brd_outline_only,unplaced=brd_unplaced)
         if not brd_outline_only:
             validate(base+".brd",brd,nets)
-            # companion "-full" board: same parts but with auto-placement attempted
-            # (footprint flow on-board + GND/VCC pours + ratsnest) as a starting layout.
-            write_brd(base+"-full.brd",title+" (FULL)",brd,nets,{},{"GND":[(2,)],"VCC":[(15,)]},W,H)
-            validate(base+"-full.brd",brd,nets)
+            # There used to be a companion "-full.brd" here: the same parts and
+            # netlist, but with the flow placement left ON the board instead of
+            # parked off it, as a "starting layout". Dropped -- it was never any
+            # use. The placer orders parts by dictionary order, not signal flow,
+            # so U1 sat next to U2 because of its name; nothing it produced was
+            # worth dragging into shape rather than placing from the ratsnest.
+            # It also shipped its own silkscreen collisions, which read as real
+            # defects in every audit. The flow placement itself is still computed
+            # above -- it is what gives the parked parts a tidy, non-overlapping
+            # order, and it is still how we answer "do these parts fit?".
 
 def N(nets,n,*p): nets.setdefault(n,[]).extend(p)
 
