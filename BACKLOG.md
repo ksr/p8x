@@ -1,7 +1,7 @@
 # P8X Project Backlog
 
 Add ideas as they come; move items between sections as they progress.
-Last updated: 2026-07-16
+Last updated: 2026-07-22
 
 ## How to use
 - **NEXT** — committed, in rough priority order
@@ -233,9 +233,70 @@ remainder is why it is still here.
       practical ceiling today. Nobody has hit this in normal use — /src/os-bios is
       12 chars — so it is recorded, not urgent.
 
+
+### Bus test card (USB bring-up controller)
+
+Design is settled and the schematic is complete at 27 parts on a standard
+160×100 Eurocard. See `hardware/bustest-card/p8x-bustest-card-design.md`. The
+thesis: a control card you can *type at*, driving the backplane one microcycle
+at a time over a USB serial line, with the emulator as the reference model.
+Nothing below has been built or measured.
+
+- [ ] **Make `buscon.c` actually build (2026-07-22).** The firmware
+      (`hardware/bustest-card/firmware/buscon.c`, 241 lines) has the whole
+      protocol — field lookup against the microcode's own `DOE`/`DLD`/`PSEL`
+      names, ownership groups, the rest→A→B→rest phasing, the 5V-present
+      interlock — but **there is no `CMakeLists.txt`, so it has never been
+      compiled**, and `mcp_write`/`mcp_read` are empty shells marked `TODO(hw)`.
+      Needs: pico-sdk build wiring, the real MCP23S17 SPI transaction, and SPI
+      timing chosen against the datasheet (clock rate, CS setup/hold).
+      **Do this before placing copper.** It is the cheapest way to find a design
+      error: the pin map, the field→(chip,bit) allocation and the netlist all
+      have to agree, and a compile plus a host-side harness catches a swapped
+      chip or an off-by-one bit while it is still a text edit.
+
+- [ ] **Generate the field→(chip,bit) map instead of asserting it
+      (2026-07-22).** `FIELDS[]` in `buscon.c` maps each microcode field to an
+      expander chip and bit, and the comment says it "MUST match the netlist
+      allocation" in `gen_eagle.py`. That agreement is currently maintained by
+      hand and checked by nobody — the classic way to lose an afternoon on the
+      bench. `gen_eagle` already computes the allocation (`alloc`), so it can
+      emit a `buscon_pins.h` the firmware includes, making the two structurally
+      one source. Same pattern as `gen_memmap.py`.
+
+- [ ] **Place and route the bus test card (2026-07-22).** The `.brd` is
+      forward-annotated but unplaced — all 27 parts parked off the outline, zero
+      copper. Auto-flow confirms they fit 160×100 at 31 % area with ~10 mm slack,
+      so this is a layout job, not a fit problem. Note the workflow rule: once
+      the `.brd` is touched in Fusion the generator is retired as an emitter for
+      it (regenerating would discard placement); schematic, BOM, PDFs and docs
+      can still be updated after that.
+
+- [ ] **Resolve the design doc's own open items before fab (2026-07-22).**
+      Carried in §10: where `CLK` parks when halted (affects listen-mode sampling
+      only); the eight status LEDs in §5.4 are a guess and want a second opinion;
+      and contention margin — dropping the bus series R means a wrong `drive` is
+      limited only by device R_on (~25–50 mA, abs-max-safe but not indefinite),
+      accepted for a careful bench tool and reversible by adding 100 Ω. Also
+      blocked on the project-wide **DIN 41612 mating-orientation** check already
+      listed above, which bites this card as much as any other.
+
 ---
 
 ## IDEAS
+
+- [ ] **Emulator bus server — run one script against the card AND the reference
+      model (2026-07-22).** The bus test card's design doc (§1.2) makes the
+      emulator the reference model, and the firmware deliberately uses the
+      microcode's own field names (`DOE`, `DLD`, `PSEL`, `ALUS`) so a script
+      means the same thing on both sides. But nothing in `emulator/` or `tools/`
+      speaks the card's ASCII protocol, so that equivalence is a claim, not a
+      test. A server that accepts the same `w FIELD=VAL` / `step` / `r` lines and
+      drives the emulated machine would let a single script run against silicon
+      and model and diff the answers — turning "the card behaves correctly" from
+      a judgement call into a check. This is what would make the card
+      trustworthy, and it is a host-side program, so it can be built before any
+      board exists.
 
 - [ ] **Shell-side glob + an argv ABI (2026-07-16).** The biggest structural fix
       available, and the one real architectural drift from Unix: **the shell does
@@ -789,6 +850,41 @@ with real analysis; the full reasoning is in
   splitter (PIPE_RHS re-scan), unrelated to this. The real drift is that commands
   resolve paths and expand globs; see `SYS_OPEN` (NEXT) and shell-side glob+argv
   (IDEAS) — those are the fix.
+
+- **Do NOT re-add the `-full.brd` companion boards** (2026-07-22, `3ab0ed9`).
+  Every card used to emit a second board with the auto-flow placement left ON
+  the outline, as a "starting layout". It was never any use: the placer walks
+  parts in dictionary order, not signal flow, so U1 sat beside U2 because of its
+  name — nothing it produced was worth dragging into shape rather than placing
+  from the ratsnest. They also shipped their own silkscreen collisions (regbank
+  alone had 117 labels over a neighbouring part) which read as real defects in
+  every audit and had to be explained away each time. The flow placement itself
+  is still computed: it orders the parked parts and answers "do these parts
+  fit?". It is just not emitted as if it were a layout.
+
+- **Do NOT widen the bus test card past 160×100** (2026-07-22, `5576bcb`). It
+  was scoped at `W=200` when it was ~45 parts. After the cuts it is 27 and
+  auto-flow fits them in two rows at 31 % area with 10 mm of slack. The reason
+  to stay standard is mechanical, not spatial: 200 mm cantilevered off the DIN
+  connector is carried by just the two mounting holes at y=±45, and this is the
+  card that gets handled most — every grabber clip and USB insertion puts a
+  moment through the connector. At 160 mm it sits in the card guides like
+  everything else. Fab also gets one panel size across the set. Nothing is lost:
+  J1 still hugs the left edge with parts flowing +x, so the USB socket, probe
+  header and LED bank stay at the OUTER (reachable) end — that came from the
+  flow direction, not the extra width.
+
+- **Do NOT add bus pull-downs, bus series resistors, or D0-7/A0-15 monitor LED
+  arrays to the bus test card** (2026-07-22). All three were in the first cut
+  and all three were removed after being challenged; the card went 45 → 27
+  parts. Pull-downs (`RPD1-6`): the scenario they defended does not need them —
+  the firmware holds `CLK` low from init, so nothing latches while the bus
+  floats (design doc §3.1a). Bus series R: MCP23S17 is 5 V tolerant, so the
+  level-shift argument does not apply; dropping it is a deliberate tradeoff
+  recorded in §3.2 (a wrong `drive` is then limited only by device R_on) and is
+  reversible with 100 Ω if it proves too sharp in use. Monitor LED arrays: 10
+  ICs → 7 by cutting them; the probe LEDs already cover what you actually watch.
+  Re-adding any of these needs a NEW argument, not the original one.
 
 - **Do NOT make p8cc's `<` `>` `/` `%` signed.** It looks like a bug and is not.
   p8cc has no `unsigned` type, so the codebase uses `int` AS an unsigned 16-bit
