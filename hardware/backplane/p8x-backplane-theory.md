@@ -68,7 +68,7 @@ signals — slot position is electrically irrelevant (mechanical layout aside).
 ## 3. Block diagram
 
 ```
-        +5V ─► J11 ─┬─ CB1/CB2 470µF bulk ─┬───────── VCC rail ───────────────┐
+        +5V ─► J11 ─┬─ C11/C12 470µF bulk ─┬───────── VCC rail ───────────────┐
                     │                       │                                  │
                     │   per-slot 100nF: C1..C10 across VCC/GND at each slot    │
                     ▼                                                          ▼
@@ -79,8 +79,8 @@ signals — slot position is electrically irrelevant (mechanical layout aside).
         ║           ║           ║      (every pin bused in parallel)
         ╚═══════════╩═══════════╩═══════ 96-pin DIN 41612 bus ═══════════════►
 
-   CLK  ─► RT1 100R + CT1 150p  (AC termination at far slot, DNP)
-   CLKB ─► RT2 100R + CT2 150p  (AC termination at far slot, DNP)
+   CLK  ─► R2 100R + C13 150p  (AC termination at far slot, DNP)
+   CLKB ─► R3 100R + C14 150p  (AC termination at far slot, DNP)
    R1 1k + LED1  = power indicator
 ```
 
@@ -90,7 +90,7 @@ signals — slot position is electrically irrelevant (mechanical layout aside).
 
 ### 4.1 Power distribution
 +5 V enters at terminal block `J11` onto the VCC rail; GND likewise. Two 470 µF
-electrolytics (`CB1/CB2`) provide **bulk** charge near the entry for the whole
+electrolytics (`C11/C12`) provide **bulk** charge near the entry for the whole
 backplane, and a 100 nF ceramic (`C1–C10`) sits across VCC/GND **at every slot** so
 each card has local high-frequency bypass right at its connector. (Each card *also*
 carries its own per-IC decoupling — see the card standards.) `LED1` (via `R1`)
@@ -104,7 +104,7 @@ gently pulls every data line high. 10 kΩ is weak enough not to fight any active
 driver but strong enough to define the idle level — this is why a read of an
 unmapped address returns `$FF` rather than garbage.
 
-### 4.3 Clock termination (RT1/CT1, RT2/CT2 — DNP)
+### 4.3 Clock termination (R2/C13, R3/C14 — DNP)
 `CLK` and `CLKB` are the fastest, most-loaded nets — they reach a clocked chip on
 nearly every card across the whole length of the board, so they are the most prone
 to reflections/ringing. Series-RC **AC termination** (100 Ω + 150 pF) is

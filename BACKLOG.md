@@ -756,7 +756,7 @@ remainder is why it is still here.
       columns — confirm against house DRC rules
 
 - [ ] Backplane CLK at far slot on scope after bring-up → decide whether to
-      populate RC terminators (RT1/CT1, RT2/CT2 shipped DNP)
+      populate RC terminators (R2/C13, R3/C14 shipped DNP)
 
 - [ ] PSU sizing — measure actual draw at bring-up vs the 4–5 A budget. ESTIMATE
       (~130 HCT chips + ~52 LEDs): HCT dynamic draw at a few MHz is a handful of

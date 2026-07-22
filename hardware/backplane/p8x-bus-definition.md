@@ -191,7 +191,7 @@ a VERIFY item in BACKLOG.md (add inverter in rev B vs. adopt as the convention).
 
 CLK and CLKB receive special layout treatment: guard traces on each side on
 the backplane; optionally a 33 Ω series resistor at the driver on the control
-card. AC termination footprints (RT1/CT1, RT2/CT2: 100 Ω + 150 pF to GND at
+card. AC termination footprints (R2/C13, R3/C14: 100 Ω + 150 pF to GND at
 the far slot) are provided DNP — populate only if ringing observed on scope.
 
 ### 3.10 LDF — Load Flags
@@ -218,7 +218,7 @@ microcode-word additions, all driven by the control card's pipeline latches:
 | SETC | C30 | ALU | Force C = 1 (SEC) |
 | CLRC | B27 | ALU | Force C = 0 (CLC) |
 | BSEL | B28 | ALU | ALU B-input mux select: 0 = B register, 1 = T register (microcode word bit 31, pipe U17.Q8; drives ALU-card U32/U33) |
-| IRQ | B29 | Control | Maskable interrupt request (rev C, reserved). **Wired-OR, active-low**: cards assert it with **open-drain** drivers (e.g. 74HC07) — the HCT push-pull parts used elsewhere cannot be wire-ORed. The line has no high state of its own, so the backplane provides it: **`RIRQ`, one 10 kΩ pull-up to VCC** (end zone, beside `RN1`). The control-card interrupt controller (DNP footprints U20/U21) samples it; that circuit is not yet built — see BACKLOG. (`-RES`, by contrast, is push-pull driven by the control card and needs no pull.) |
+| IRQ | B29 | Control | Maskable interrupt request (rev C, reserved). **Wired-OR, active-low**: cards assert it with **open-drain** drivers (e.g. 74HC07) — the HCT push-pull parts used elsewhere cannot be wire-ORed. The line has no high state of its own, so the backplane provides it: **`R4`, one 10 kΩ pull-up to VCC** (end zone, beside `RN1`). The control-card interrupt controller (DNP footprints U20/U21) samples it; that circuit is not yet built — see BACKLOG. (`-RES`, by contrast, is push-pull driven by the control card and needs no pull.) |
 
 SPARE11 (B30) remains bused across all 10 slots, reserved; no card may use it
 without a formal allocation recorded here.

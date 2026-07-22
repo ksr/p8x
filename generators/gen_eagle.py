@@ -1301,29 +1301,29 @@ card("memory-card","P8X MEMORY CARD REV E",ic,sm,mcn,
 bps={}
 for i in range(10):
     bps["J%d"%(i+1)]=("DIN96","SLOT%d"%(i+1),35.56+101.6*(i%5),38.10-281.94*(i//5))
-small=[("J11","TB4","PWR-5V",35.56),("CB1","CAPP","470uF",86.36),("CB2","CAPP","470uF",137.16),
- ("RN1","SIP9","8X10K",187.96),("RT1","RES","100R",238.76),("CT1","CAP","150pF",289.56),
- ("RT2","RES","100R",340.36),("CT2","CAP","150pF",391.16),("R1","RES","1K",441.96),("LED1","LED","PWR",492.76),
+small=[("J11","TB4","PWR-5V",35.56),("C11","CAPP","470uF",86.36),("C12","CAPP","470uF",137.16),
+ ("RN1","SIP9","8X10K",187.96),("R2","RES","100R",238.76),("C13","CAP","150pF",289.56),
+ ("R3","RES","100R",340.36),("C14","CAP","150pF",391.16),("R1","RES","1K",441.96),("LED1","LED","PWR",492.76),
  # -IRQ (B29) is a wired-OR line: cards assert it with open-drain drivers (74HC07),
- # so it has NO high state of its own. RIRQ is that high state — one 10k pull-up on
+ # so it has NO high state of its own. R4 is that high state — one 10k pull-up on
  # the backplane serves all 10 slots and is always present. -RES gets nothing: the
  # control card drives it push-pull (74HCT14 + power-on RC), so there is nothing to
  # pull against. See hardware/backplane/p8x-bus-definition.md sec 3.12.
- ("RIRQ","RES","10K",543.56)]
+ ("R4","RES","10K",543.56)]
 for ref,dev,val,x in small: bps[ref]=(dev,val,x,-635.0)
 bpn={}
 def bnet(n,*p): bpn.setdefault(n,[]).extend(p)
 for i in range(10):
     for pin in ALLPINS: bnet(busnet(pin),("J%d"%(i+1),pin))
-bnet("VCC",("J11","1"),("J11","2"),("CB1","+"),("CB2","+"),("RN1","COM"),("R1","1"),("RIRQ","2"),
+bnet("VCC",("J11","1"),("J11","2"),("C11","+"),("C12","+"),("RN1","COM"),("R1","1"),("R4","2"),
      *[("C%d"%(i+1),"1") for i in range(10)])
-bnet("IRQ",("RIRQ","1"))                                   # 10k pull-up: wired-OR high state
-bnet("GND",("J11","3"),("J11","4"),("CB1","-"),("CB2","-"),("LED1","K"),("CT1","2"),("CT2","2"),
+bnet("IRQ",("R4","1"))                                   # 10k pull-up: wired-OR high state
+bnet("GND",("J11","3"),("J11","4"),("C11","-"),("C12","-"),("LED1","K"),("C13","2"),("C14","2"),
      *[("C%d"%(i+1),"2") for i in range(10)])
 for i in range(10): bps["C%d"%(i+1)]=("CAP1","100nF",35.56+50.8*i,-723.9)
 for b in range(8): bnet("D%d"%b,("RN1","R%d"%(b+1)))
-bnet("CLK",("RT1","1")); bnet("CLK_T",("RT1","2"),("CT1","1"))
-bnet("CLKB",("RT2","1")); bnet("CLKB_T",("RT2","2"),("CT2","1"))
+bnet("CLK",("R2","1")); bnet("CLK_T",("R2","2"),("C13","1"))
+bnet("CLKB",("R3","1")); bnet("CLKB_T",("R3","2"),("C14","1"))
 bnet("LED_A",("R1","2"),("LED1","A"))
 
 def backplane_rep():
@@ -1337,22 +1337,22 @@ def backplane_rep():
     J1 and one representative decoupling cap. J1 pins come from busnet(), so a bus
     change flows in automatically — the schematic cannot silently drop a signal."""
     parts={"J1":("DIN96","1 OF 10 SLOTS (PARALLEL)"),
-           "J11":("TB4","PWR-5V"),"CB1":("CAPP","470uF"),"CB2":("CAPP","470uF"),
-           "RN1":("SIP9","8X10K"),"RT1":("RES","100R DNP"),"CT1":("CAP","150pF DNP"),
-           "RT2":("RES","100R DNP"),"CT2":("CAP","150pF DNP"),
+           "J11":("TB4","PWR-5V"),"C11":("CAPP","470uF"),"C12":("CAPP","470uF"),
+           "RN1":("SIP9","8X10K"),"R2":("RES","100R DNP"),"C13":("CAP","150pF DNP"),
+           "R3":("RES","100R DNP"),"C14":("CAP","150pF DNP"),
            "R1":("RES","1K"),"LED1":("LED","PWR"),
-           "RIRQ":("RES","10K"),"C1":("CAP1","100nF x10")}
+           "R4":("RES","10K"),"C1":("CAP1","100nF x10")}
     n={}
     def a(net,*p): n.setdefault(net,[]).extend(p)
     for pin in ALLPINS: a(busnet(pin),("J1",pin))          # every bus pin -> its net
-    a("VCC",("J11","1"),("J11","2"),("CB1","+"),("CB2","+"),
-            ("RN1","COM"),("R1","1"),("RIRQ","2"),("C1","1"))
-    a("GND",("J11","3"),("J11","4"),("CB1","-"),("CB2","-"),
-            ("LED1","K"),("CT1","2"),("CT2","2"),("C1","2"))
-    a("IRQ",("RIRQ","1"))                                   # wired-OR pull-up
+    a("VCC",("J11","1"),("J11","2"),("C11","+"),("C12","+"),
+            ("RN1","COM"),("R1","1"),("R4","2"),("C1","1"))
+    a("GND",("J11","3"),("J11","4"),("C11","-"),("C12","-"),
+            ("LED1","K"),("C13","2"),("C14","2"),("C1","2"))
+    a("IRQ",("R4","1"))                                   # wired-OR pull-up
     for b in range(8): a("D%d"%b,("RN1","R%d"%(b+1)))       # D0-7 pull-ups
-    a("CLK",("RT1","1"));  a("CLK_T",("RT1","2"),("CT1","1"))
-    a("CLKB",("RT2","1")); a("CLKB_T",("RT2","2"),("CT2","1"))
+    a("CLK",("R2","1"));  a("CLK_T",("R2","2"),("C13","1"))
+    a("CLKB",("R3","1")); a("CLKB_T",("R3","2"),("C14","1"))
     a("LED_A",("R1","2"),("LED1","A"))
     return ("P8X 10-SLOT BACKPLANE REV C",parts,n)
 
@@ -1377,16 +1377,16 @@ bpb["RN1"]=("SIP9","8X10K",252.0,91.44)
 # Ring-reduction (clock AC termination) parked in the lengthened end zone, right
 # of RN1 and clear of every slot/bus column (x>=263). Each chain runs left->right:
 # clock in -> RTn (R0, pad1=CLK side, pad2=node) -> CTn (node -> GND via pour).
-bpb["RT1"]=("RES","100R",264.0,96.0)
-bpb["CT1"]=("CAP","150pF",279.24,96.0)
-bpb["RT2"]=("RES","100R",264.0,80.0)
-bpb["CT2"]=("CAP","150pF",279.24,80.0)
-bpb["RIRQ"]=("RES","10K",264.0,64.0)                       # -IRQ wired-OR pull-up, end zone
+bpb["R2"]=("RES","100R",264.0,96.0)
+bpb["C13"]=("CAP","150pF",279.24,96.0)
+bpb["R3"]=("RES","100R",264.0,80.0)
+bpb["C14"]=("CAP","150pF",279.24,80.0)
+bpb["R4"]=("RES","10K",264.0,64.0)                       # -IRQ wired-OR pull-up, end zone
 # Power-entry cluster, pinned to the front (left) edge in the front bay opened by
-# the XOFF shift below. CB1/CB2 spread to 23mm apart (was ~10). R1/LED1 brought
+# the XOFF shift below. C11/C12 spread to 23mm apart (was ~10). R1/LED1 brought
 # forward toward the front edge. These five are excluded from the X/Y shifts.
 bpb["J11"]=("TB4","PWR-5V",9.0,95.0)
-bpb["CB1"]=("CAPP","470uF",9.0,68.0); bpb["CB2"]=("CAPP","470uF",9.0,45.0)
+bpb["C11"]=("CAPP","470uF",9.0,68.0); bpb["C12"]=("CAPP","470uF",9.0,45.0)
 for s in range(10): bpb["C%d"%(s+1)]=("CAP1","100nF",sx(s)+G,109.0)   # up off the slot connectors
 bpb["R1"]=("RES","1K",5.08,3.0); bpb["LED1"]=("LED","PWR",21.0,3.0)
 wires={}; viad={}
@@ -1423,9 +1423,9 @@ for nn in range(3,31):
 # Shift the slot field + its routing right by XOFF (opens a front bay at the left
 # for the power connector and bulk caps) and up by YOFF (opens a bottom margin so
 # the bottom mounting holes clear the bus connectors). The power-entry cluster
-# (J11/CB1/CB2/R1/LED1) and the LED_A net stay pinned to the front edge.
+# (J11/C11/C12/R1/LED1) and the LED_A net stay pinned to the front edge.
 YOFF=7.0; XOFF=10.0
-FRONT={"J11","CB1","CB2","R1","LED1"}
+FRONT={"J11","C11","C12","R1","LED1"}
 bpb={r:(pv if r in FRONT else pv[:2]+(pv[2]+XOFF,pv[3]+YOFF)+pv[4:]) for r,pv in bpb.items()}
 wires={n:(segs if n=="LED_A" else [(a+XOFF,b+YOFF,c+XOFF,d+YOFF,ly,wd) for (a,b,c,d,ly,wd) in segs])
        for n,segs in wires.items()}

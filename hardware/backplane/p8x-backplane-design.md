@@ -72,7 +72,7 @@ Layout rules:
   on each side (guard traces) or with one empty channel between them and
   neighbors; keep them on one layer end to end
 - **Decoupling**: one 100 nF within 10 mm of each slot's power pins (C1–C10
-  in the schematic), 2 × 470 µF bulk near the power entry (CB1/CB2)
+  in the schematic), 2 × 470 µF bulk near the power entry (C11/C12)
 - Power entry (J11, 4-pos screw terminal: 2 × +5V, 2 × GND) at one end;
   via-stitch generously into the planes (≥ 8 vias per terminal)
 - Stitch the row-B ground pins straight down into L2 at every slot — 280
@@ -116,7 +116,7 @@ heavily-loaded bus; overkill by an order of magnitude here.
 
 **What the board provisions instead — AC (RC) termination** on the two lines
 that merit it: CLK and CLKB each get 100 Ω + 150 pF to ground at the far end
-of the bus (RT1/CT1, RT2/CT2). AC termination damps reflections during edges
+of the bus (R2/C13, R3/C14). AC termination damps reflections during edges
 but draws zero DC and imposes no bias level — the CMOS-friendly choice.
 Assembly guidance: **leave them unpopulated at first**. Bring the machine up,
 probe CLK at the far slot, and fit them only if you see ringing that crosses
@@ -131,11 +131,11 @@ already solved it.
 |---|---|
 | J1–J10 | DIN 41612 96-pin female, vertical/press-fit or solder |
 | J11 | 4-pos screw terminal, 5.08 mm |
-| CB1, CB2 | 470 µF 10 V electrolytic |
+| C11, C12 | 470 µF 10 V electrolytic |
 | C1–C10 | 100 nF ceramic disc |
 | RN1 | 10 kΩ × 8 bussed SIP-9 |
-| RT1, RT2 | 100 Ω ¼ W (DNP initially) |
-| CT1, CT2 | 150 pF ceramic (DNP initially) |
+| R2, R3 | 100 Ω ¼ W (DNP initially) |
+| C13, C14 | 150 pF ceramic (DNP initially) |
 | R1, LED1 | 1 kΩ + 5 mm LED |
 
 Footprint caveat: verify the exact KiCad footprint names for your female

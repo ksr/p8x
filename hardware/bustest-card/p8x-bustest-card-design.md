@@ -154,7 +154,7 @@ backplane's, plus this card's probe series:
 | Line | Passive | Where |
 |---|---|---|
 | `D0–D7` | 10k pull-**up** (RN1, exists) | backplane |
-| `-IRQ` | 10k pull-**up** (`RIRQ`, added) | backplane |
+| `-IRQ` | 10k pull-**up** (`R4`, added) | backplane |
 | `-RES` | **none** | — (control card drives it push-pull; see below) |
 | `A0–A15`, control, `CLK`/`CLKB` | **none** | — (firmware holds the clocks; §3.1) |
 | Probes | 1k series | this card (`RPRB`) |
@@ -163,7 +163,7 @@ This card puts **no** passive on `D`, `-RES`, or `-IRQ` — those belong to the
 backplane.
 
 **`-IRQ` needs its pull-up; `-RES` does not.** `-IRQ` is wired-OR (open-drain), so
-the 10k is its only high state — added on the backplane as `RIRQ` (one resistor,
+the 10k is its only high state — added on the backplane as `R4` (one resistor,
 all slots, always present). `-RES` is driven **push-pull** by the control card's
 74HCT14 (with a power-on RC), so there is nothing to pull against — a resistor
 there would be a weak load the gate overrides. An earlier draft listed a "new 10k
@@ -292,7 +292,7 @@ backplane. LEDs hang off the bus side; the probe header hangs off U5.
      backplane owns these passives, NOT this card (never double up — a pull-up
      and a pull-down on one line sit at mid-rail):
        RN1   10k pull-UP on D0-7   (exists)
-       RIRQ  10k pull-UP on -IRQ   (added; wired-OR needs it, see §7)
+       R4  10k pull-UP on -IRQ   (added; wired-OR needs it, see §7)
        -RES  NO pull — control card drives it push-pull (§3.3)
 
   POWER   backplane +5V ─┬─────────────────────► U1..U10  @5V
@@ -455,7 +455,7 @@ cannot be wire-ORed**. Active-high would need open-source drivers or a diode-OR 
 both worse.
 
 **Done (backplane not yet fabbed, so it cost nothing):** the 10 kΩ pull-up now
-exists on the backplane as `RIRQ` (end zone, beside `RN1`), so the wired-OR line
+exists on the backplane as `R4` (end zone, beside `RN1`), so the wired-OR line
 has its high state regardless of which cards are installed. Still open, on the
 control card: the open-drain assert/sample side (U20/U21, DNP) — task #26. Note
 `-RES` did **not** get a matching pull (it is push-pull driven; §3.3).
