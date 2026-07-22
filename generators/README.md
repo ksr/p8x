@@ -16,9 +16,9 @@ pip3 install reportlab
 
 | Script | Produces | Output dir | Run from |
 |--------|----------|------------|----------|
-| `gen_eagle.py` | All 23 Eagle files (8 boards: `.sch`+`.brd`, plus a placed `-full.brd` per card) | `hardware/<board>/` | `hardware/` |
-| `render_traditional_auto.py` | All 7 card schematic PDFs | `hardware/<board>/` | `hardware/` |
-| `render_board_pdf.py` | Placement-view PDF for every `.brd` (incl. `-full`) | `hardware/<board>/` | anywhere |
+| `gen_eagle.py` | All 18 Eagle files (9 boards: `.sch` + `.brd`) | `hardware/<board>/` | `hardware/` |
+| `render_traditional_auto.py` | All 8 card schematic PDFs | `hardware/<board>/` | `hardware/` |
+| `render_board_pdf.py` | Placement-view PDF for every generated `.brd` (skips `-a` working copies) | `hardware/<board>/` | anywhere |
 | `gen_bus_pdf.py` | Bus-definition PDF | `hardware/backplane/` | anywhere |
 | `render_bp_traditional.py` | Backplane schematic PDF | `hardware/backplane/` | anywhere |
 | `gen_p8xopc.py` | Opcode-table `.asm` for the native assembler (`OPCTAB`), from `genucode.OPC` | stdout / arg path | anywhere |
@@ -34,11 +34,19 @@ the build concatenates it after the assembler logic. Sourcing it from
 ### `gen_eagle.py` — the canonical board generator
 The single source of truth for the hardware. It defines the device library (pin
 maps, packages), the 96-pin DIN 41612 bus map (`busnet()`), and the netlist for
-every board, then emits Autodesk Eagle schematic + board files for all eight:
-backplane, memory, control, register-bank, ALU, I/O, CF-IDE, and the LED output
-card. Every card also gets a placed `-full.brd` companion alongside its
-forward-annotated (unplaced) `.brd`. Each board is validated after generation
+every board, then emits Autodesk Eagle schematic + board files for all nine:
+backplane, memory, control, register-bank, ALU, I/O, CF-IDE, the LED output
+card, and the USB bus test card. Each board's `.brd` is forward-annotated but UNPLACED: every part is
+parked off the outline with the ratsnest showing connectivity, so placement is
+done by hand from the rubber bands. Each board is validated after generation
 (pin/pad names checked, no pin wired to two nets).
+
+There used to be a placed `-full.brd` companion per card, holding the auto-flow
+placement. It was dropped: the placer walks parts in dictionary order rather
+than signal flow, so nothing it produced was worth dragging into shape instead
+of placing from the ratsnest. The flow placement is still computed — it orders
+the parked parts and answers "do these parts fit?" — it is just no longer
+emitted as if it were a layout.
 
 It writes each board's `.sch`/`.brd` pair into its **own subdirectory** of the
 current directory (e.g. `control-card/p8x-control-card.sch`), creating the
@@ -62,8 +70,8 @@ covers every card from one run. Each card's PDF lands in its own
 regenerates the board files too, so run it from `hardware/`.
 
 ### `render_board_pdf.py` — placement views
-Imports `gen_eagle` and draws a placement-view PDF for every `.brd` (and
-`-full.brd`): board outline, component footprints from the canonical `PKG` pad
+Imports `gen_eagle` and draws a placement-view PDF for every generated `.brd`:
+board outline, component footprints from the canonical `PKG` pad
 geometry, ref designators/values, pin-1 markers, board mounting holes, and cap
 polarity marks. It is a pre-route sanity check (placement/spacing/overlap) — not
 routed copper; Gerbers come from Fusion after routing.
@@ -79,8 +87,8 @@ Standalone scripts (no `gen_eagle` import) that write straight to
 
 ```sh
 cd hardware
-python3 ../generators/gen_eagle.py                # 23 .sch/.brd files (8 boards + 7 -full.brd)
-python3 ../generators/render_traditional_auto.py  # all 7 card schematic PDFs
+python3 ../generators/gen_eagle.py                # 18 .sch/.brd files (9 boards)
+python3 ../generators/render_traditional_auto.py  # all 8 card schematic PDFs
 python3 ../generators/render_board_pdf.py         # placement-view PDFs
 python3 ../generators/gen_bus_pdf.py              # bus-definition PDF
 python3 ../generators/render_bp_traditional.py    # backplane schematic PDF
