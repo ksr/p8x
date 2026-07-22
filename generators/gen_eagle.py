@@ -453,17 +453,37 @@ def write_brd(fn,title,parts,nets,wires,polys,W,H,vias=None,outline_only=False,u
         os.makedirs(os.path.dirname(fn) or ".",exist_ok=True)
         open(fn,"w").write("\n".join(o)+"\n")
         return
-    # Board title, nudged clear of any mounting hole. It used to sit at a fixed
-    # (4, H-6), which on the backplane ran the text straight through the top
-    # hole row (y=123, x=50/150/250). Shift it down in steps until its box clears
-    # every hole. Cards pass no holes, so their title position is unchanged.
+    # Board title, kept clear of the mounting holes. It used to sit at a fixed
+    # (4, H-6), which on the backplane ran the text straight through the top hole
+    # row (y=123, x=50/150/250). Cards pass no holes, so their title is unchanged.
+    #
+    # When it does collide, prefer sliding the title ALONG the hole row into the
+    # gap between two holes rather than pushing it down the board: the strip level
+    # with the holes is otherwise dead space, whereas anything below it is wanted
+    # for parts. Falling down is kept only as the last resort for a board whose
+    # holes are packed too tightly to leave a gap wide enough.
     _tsz=2.54; _tx=4.0; _ty=H-6
     _tw=len(title)*_tsz*0.75                       # approx Eagle vector-font width
-    for _ in range(12):
-        if not any((_tx-hd/2) < hx < (_tx+_tw+hd/2) and
-                   (_ty-hd/2) < hy < (_ty+_tsz+hd/2) for (hx,hy,hd) in (holes or [])):
-            break
-        _ty-=4.0
+    def _hits(tx,ty):
+        return any(tx-hd/2 < hx < tx+_tw+hd/2 and ty-hd/2 < hy < ty+_tsz+hd/2
+                   for (hx,hy,hd) in (holes or []))
+    if _hits(_tx,_ty):
+        row=min({hy for (_,hy,_) in holes}, key=lambda y:abs(y-_ty))  # row in the way
+        rh=sorted((hx,hd) for (hx,hy,hd) in holes if hy==row)
+        # Free spans along the row: board edge -> first hole -> ... -> board edge,
+        # each hole masking its drill radius plus 2mm of silkscreen clearance.
+        edges=[2.0]+[e for (hx,hd) in rh for e in (hx-hd/2-2.0,hx+hd/2+2.0)]+[W-2.0]
+        gaps=[(edges[i+1]-edges[i],edges[i]) for i in range(0,len(edges)-1,2)]
+        # Widest gap wins; ties go to the leftmost, so the title sits toward the
+        # origin corner the way a title block conventionally does.
+        fit=max((g for g in gaps if g[0]>=_tw),key=lambda g:(g[0],-g[1]),default=None)
+        if fit:
+            _tx=fit[1]+(fit[0]-_tw)/2              # centre it in the widest gap
+            _ty=row-_tsz/2                         # and centre it on the hole row
+        else:
+            for _ in range(12):                    # fallback: walk down the board
+                if not _hits(_tx,_ty): break
+                _ty-=4.0
     o.append(f'<text x="{_tx:g}" y="{_ty:g}" size="{_tsz}" layer="21">{title}</text>')
     for (hx,hy,hd) in (holes or []):                      # board mounting holes (mechanical, non-plated)
         o.append(f'<hole x="{hx:.2f}" y="{hy:.2f}" drill="{hd}"/>')
@@ -488,10 +508,16 @@ def write_brd(fn,title,parts,nets,wires,polys,W,H,vias=None,outline_only=False,u
         # text ON the footprint for anything bigger than a 2-pin part — the 96-pin
         # DIN connector had "J1"/"SLOT1" across its pads, and the caps had their
         # values on top of them. (Not rotation-aware; nothing rotates today.)
-        _pw,_ph,_pox,_poy = fp_box(DEV[dev]["pkg"])
-        _tx = ex+_pox                       # left-align with the footprint
-        _ty_name = ey+_poy+_ph+0.7          # 0.7mm clear above the top edge
-        _ty_val  = ey+_poy-0.7-1.778        # text top 0.7mm clear below the bottom
+        _pw,_ph,_pox,_poy = body_box(DEV[dev]["pkg"])
+        _tx = ex+_pox                       # left-align with the body
+        _ty_name = ey+_poy+_ph+SILK_GAP     # clear above the top edge
+        _ty_val  = ey+_poy-SILK_GAP-1.778   # text top clear below the bottom edge
+        # A part hard against the bottom edge (the backplane's R1/LED1 sit at
+        # y=3.0) would push its value off the board, where it simply doesn't get
+        # printed. Stack it above the name instead. Moving the part is not an
+        # option -- the LED_A routing is pinned to it -- and this is silk only.
+        if not unplaced and _ty_val < 0.5:
+            _ty_val = _ty_name+1.778+0.6
         o.append(f'<element name="{ref}" library="p8x" package="{DEV[dev]["pkg"]}" value="{val}" x="{ex:.2f}" y="{ey:.2f}"{rot} smashed="yes">')
         o.append(f'<attribute name="NAME" x="{_tx:.2f}" y="{_ty_name:.2f}" size="1.778" layer="25" ratio="10"/>')
         o.append(f'<attribute name="VALUE" x="{_tx:.2f}" y="{_ty_val:.2f}" size="1.778" layer="27" ratio="10"/>')
@@ -572,6 +598,29 @@ def fp_box(pkg):
     the bbox bottom-left relative to the part origin (pad dia included)."""
     pads=PKG[pkg]; xs=[p[1] for p in pads]; ys=[p[2] for p in pads]; d=max(p[4] for p in pads)
     return (max(xs)-min(xs)+d, max(ys)-min(ys)+d, min(xs)-d/2, min(ys)-d/2)
+
+# Physical body outline (w,h,ox,oy in mm, same convention as fp_box) for packages
+# whose moulded body is LARGER than their pad field. Silkscreen must clear the
+# body, not the pads — text tucked just outside the pad box can still end up
+# underneath plastic, where it is unreadable on the assembled board.
+#
+# Only the DIN 41612 connectors need this today. Their pad box measures 92.79mm
+# tall, but that number is the M2.5 FIXING HOLES (at +/-45.0) plus pad diameter --
+# the pin field itself is only 78.74mm (31 x 2.54). The real type-C body is
+# 94.5mm long and ~12.5mm deep, so it overhangs the pad box on all four sides.
+# That is exactly how "J1" and "SLOT1" ended up under the connector.
+BODY={"FABC96S":(12.5,94.5,-6.25,-47.25),     # 96-way female, vertical (on backplane)
+      "MABC96R":(12.5,94.5,-6.25,-47.25)}     # 96-way male, right-angle (on cards)
+
+def body_box(pkg):
+    """Outline the silkscreen must stay clear of: the physical body where we know
+    it overhangs (BODY), else the pad bounding box."""
+    return BODY.get(pkg) or fp_box(pkg)
+
+# Gap between a part's body outline and its silkscreen text. 0.7mm was the bare
+# minimum and left the labels visually crowded against the parts; 1.2mm reads
+# clearly without pushing text into a neighbour.
+SILK_GAP=1.2
 
 def card(name,title,parts_ic,parts_small,nets,used_bus,labels=None,
          brd_outline_only=False,brd_unplaced=True,W=160,H=100):

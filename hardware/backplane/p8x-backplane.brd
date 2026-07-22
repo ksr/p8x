@@ -73,7 +73,7 @@
 <wire x1="300.0" y1="0" x2="300.0" y2="128.0" width="0" layer="20"/>
 <wire x1="300.0" y1="128.0" x2="0" y2="128.0" width="0" layer="20"/>
 <wire x1="0" y1="128.0" x2="0" y2="0" width="0" layer="20"/>
-<text x="4" y="118" size="2.54" layer="21">P8X 10-SLOT BACKPLANE REV C COMPACT</text>
+<text x="66.6625" y="121.73" size="2.54" layer="21">P8X 10-SLOT BACKPLANE REV C COMPACT</text>
 <hole x="50.00" y="5.00" drill="3.2"/>
 <hole x="150.00" y="5.00" drill="3.2"/>
 <hole x="250.00" y="5.00" drill="3.2"/>
@@ -245,128 +245,128 @@
 <designrules name="default"><param name="layerSetup" value="(1*2*15*16)"/></designrules>
 <elements>
 <element name="J1" library="p8x" package="FABC96S" value="SLOT1" x="22.70" y="61.61" smashed="yes">
-<attribute name="NAME" x="18.76" y="108.71" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="18.76" y="12.74" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="16.45" y="110.06" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="16.45" y="11.38" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="J2" library="p8x" package="FABC96S" value="SLOT2" x="48.10" y="61.61" smashed="yes">
-<attribute name="NAME" x="44.16" y="108.71" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="44.16" y="12.74" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="41.85" y="110.06" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="41.85" y="11.38" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="J3" library="p8x" package="FABC96S" value="SLOT3" x="73.50" y="61.61" smashed="yes">
-<attribute name="NAME" x="69.56" y="108.71" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="69.56" y="12.74" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="67.25" y="110.06" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="67.25" y="11.38" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="J4" library="p8x" package="FABC96S" value="SLOT4" x="98.90" y="61.61" smashed="yes">
-<attribute name="NAME" x="94.96" y="108.71" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="94.96" y="12.74" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="92.65" y="110.06" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="92.65" y="11.38" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="J5" library="p8x" package="FABC96S" value="SLOT5" x="124.30" y="61.61" smashed="yes">
-<attribute name="NAME" x="120.36" y="108.71" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="120.36" y="12.74" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="118.05" y="110.06" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="118.05" y="11.38" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="J6" library="p8x" package="FABC96S" value="SLOT6" x="149.70" y="61.61" smashed="yes">
-<attribute name="NAME" x="145.76" y="108.71" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="145.76" y="12.74" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="143.45" y="110.06" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="143.45" y="11.38" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="J7" library="p8x" package="FABC96S" value="SLOT7" x="175.10" y="61.61" smashed="yes">
-<attribute name="NAME" x="171.16" y="108.71" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="171.16" y="12.74" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="168.85" y="110.06" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="168.85" y="11.38" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="J8" library="p8x" package="FABC96S" value="SLOT8" x="200.50" y="61.61" smashed="yes">
-<attribute name="NAME" x="196.56" y="108.71" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="196.56" y="12.74" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="194.25" y="110.06" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="194.25" y="11.38" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="J9" library="p8x" package="FABC96S" value="SLOT9" x="225.90" y="61.61" smashed="yes">
-<attribute name="NAME" x="221.96" y="108.71" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="221.96" y="12.74" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="219.65" y="110.06" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="219.65" y="11.38" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="J10" library="p8x" package="FABC96S" value="SLOT10" x="251.30" y="61.61" smashed="yes">
-<attribute name="NAME" x="247.36" y="108.71" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="247.36" y="12.74" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="245.05" y="110.06" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="245.05" y="11.38" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="RN1" library="p8x" package="SIP9" value="8X10K" x="262.00" y="98.44" smashed="yes">
-<attribute name="NAME" x="261.20" y="99.94" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="261.20" y="74.84" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="261.20" y="100.44" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="261.20" y="74.34" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="R2" library="p8x" package="R_AXIAL" value="100R" x="274.00" y="103.00" smashed="yes">
-<attribute name="NAME" x="273.20" y="104.50" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="273.20" y="99.72" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="273.20" y="105.00" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="273.20" y="99.22" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="C13" library="p8x" package="C_DISC" value="150pF" x="289.24" y="103.00" smashed="yes">
-<attribute name="NAME" x="288.34" y="104.60" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="288.34" y="94.54" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="288.34" y="105.10" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="288.34" y="94.04" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="R3" library="p8x" package="R_AXIAL" value="100R" x="274.00" y="87.00" smashed="yes">
-<attribute name="NAME" x="273.20" y="88.50" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="273.20" y="83.72" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="273.20" y="89.00" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="273.20" y="83.22" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="C14" library="p8x" package="C_DISC" value="150pF" x="289.24" y="87.00" smashed="yes">
-<attribute name="NAME" x="288.34" y="88.60" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="288.34" y="78.54" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="288.34" y="89.10" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="288.34" y="78.04" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="R4" library="p8x" package="R_AXIAL" value="10K" x="274.00" y="71.00" smashed="yes">
-<attribute name="NAME" x="273.20" y="72.50" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="273.20" y="67.72" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="273.20" y="73.00" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="273.20" y="67.22" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="J11" library="p8x" package="TB4" value="PWR-5V" x="9.00" y="95.00" smashed="yes">
-<attribute name="NAME" x="7.50" y="97.20" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="7.50" y="75.78" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="7.50" y="97.70" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="7.50" y="75.28" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="C11" library="p8x" package="CP_RADIAL" value="470uF" x="9.00" y="68.00" smashed="yes">
-<attribute name="NAME" x="8.10" y="69.60" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="8.10" y="59.54" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="8.10" y="70.10" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="8.10" y="59.04" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="C12" library="p8x" package="CP_RADIAL" value="470uF" x="9.00" y="45.00" smashed="yes">
-<attribute name="NAME" x="8.10" y="46.60" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="8.10" y="36.54" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="8.10" y="47.10" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="8.10" y="36.04" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="C1" library="p8x" package="C_DISC1" value="100nF" x="27.78" y="116.00" smashed="yes">
-<attribute name="NAME" x="26.88" y="117.60" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="26.88" y="110.08" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="26.88" y="118.10" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="26.88" y="109.58" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="C2" library="p8x" package="C_DISC1" value="100nF" x="53.18" y="116.00" smashed="yes">
-<attribute name="NAME" x="52.28" y="117.60" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="52.28" y="110.08" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="52.28" y="118.10" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="52.28" y="109.58" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="C3" library="p8x" package="C_DISC1" value="100nF" x="78.58" y="116.00" smashed="yes">
-<attribute name="NAME" x="77.68" y="117.60" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="77.68" y="110.08" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="77.68" y="118.10" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="77.68" y="109.58" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="C4" library="p8x" package="C_DISC1" value="100nF" x="103.98" y="116.00" smashed="yes">
-<attribute name="NAME" x="103.08" y="117.60" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="103.08" y="110.08" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="103.08" y="118.10" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="103.08" y="109.58" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="C5" library="p8x" package="C_DISC1" value="100nF" x="129.38" y="116.00" smashed="yes">
-<attribute name="NAME" x="128.48" y="117.60" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="128.48" y="110.08" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="128.48" y="118.10" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="128.48" y="109.58" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="C6" library="p8x" package="C_DISC1" value="100nF" x="154.78" y="116.00" smashed="yes">
-<attribute name="NAME" x="153.88" y="117.60" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="153.88" y="110.08" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="153.88" y="118.10" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="153.88" y="109.58" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="C7" library="p8x" package="C_DISC1" value="100nF" x="180.18" y="116.00" smashed="yes">
-<attribute name="NAME" x="179.28" y="117.60" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="179.28" y="110.08" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="179.28" y="118.10" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="179.28" y="109.58" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="C8" library="p8x" package="C_DISC1" value="100nF" x="205.58" y="116.00" smashed="yes">
-<attribute name="NAME" x="204.68" y="117.60" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="204.68" y="110.08" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="204.68" y="118.10" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="204.68" y="109.58" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="C9" library="p8x" package="C_DISC1" value="100nF" x="230.98" y="116.00" smashed="yes">
-<attribute name="NAME" x="230.08" y="117.60" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="230.08" y="110.08" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="230.08" y="118.10" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="230.08" y="109.58" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="C10" library="p8x" package="C_DISC1" value="100nF" x="256.38" y="116.00" smashed="yes">
-<attribute name="NAME" x="255.48" y="117.60" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="255.48" y="110.08" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="255.48" y="118.10" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="255.48" y="109.58" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="R1" library="p8x" package="R_AXIAL" value="1K" x="5.08" y="3.00" smashed="yes">
-<attribute name="NAME" x="4.28" y="4.50" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="4.28" y="-0.28" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="4.28" y="5.00" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="4.28" y="7.38" size="1.778" layer="27" ratio="10"/>
 </element>
 <element name="LED1" library="p8x" package="LED5" value="PWR" x="21.00" y="3.00" smashed="yes">
-<attribute name="NAME" x="20.10" y="4.60" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="20.10" y="-0.38" size="1.778" layer="27" ratio="10"/>
+<attribute name="NAME" x="20.10" y="5.10" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="20.10" y="7.48" size="1.778" layer="27" ratio="10"/>
 </element>
 </elements><signals>
 <signal name="-RES">
