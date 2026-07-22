@@ -68,7 +68,7 @@ Bring-up becomes **"run the tests against real silicon and diff"** rather than
 | Timing | **Static/stepped only.** Not a logic analyser. |
 | Bus role | Drives when the owning card is out; listens otherwise |
 | Host link | USB CDC, line-oriented ASCII (typable by a human, parseable by a script) |
-| Board | 100 × 200 mm (`W=200, H=100`), DIN 41612 96-pin, MABC96R |
+| Board | 160 × 100 mm standard Eurocard (`W=160, H=100`), DIN 41612 96-pin, MABC96R |
 | Firmware | C, Pico SDK |
 
 **Static-only is the load-bearing decision.** It is what allows SPI port expanders
@@ -382,20 +382,42 @@ the io-card precedent are still there.
 
 ### 5.5 Board
 
-`W=200, H=100`. J1 hugs the left edge (x≈0) and parts flow left-to-right, so the
-extra 40 mm over a standard Eurocard lands at the **outer** end — where the USB
-socket, the 2×5 probe header, and the LED bank belong, because that is the end you
-can reach with the card seated.
+**160 × 100 mm — a standard Eurocard, same as every other card.**
 
-`card()` currently hardcodes `BW,BH = 160.0, 100.0`. Parameterize with defaults
-`W=160.0, H=100.0` so **every existing card stays byte-identical** (verify, do not
-assume).
+This card was originally scoped at `W=200` on the assumption it needed the extra
+40 mm for the USB socket, probe header and LED bank. That was decided at ~45
+parts. Three rounds of cuts (the bus pull-down networks, the D0-7/A0-15 monitor
+LED arrays, the bus series resistors) took it to 27, and at 27 the extra width is
+no longer earning its place: auto-placement fits everything in two rows using
+**31 % of the board area**, with the last part ending at x=150 — 10 mm of slack
+against the 160 mm edge.
 
-**Mechanical**: 200 mm cantilevered off the DIN connector, with only the two
-mounting holes at y=±45 carrying it. If the card guides are cut for 160 mm, the
-last 40 mm is unsupported and the connector absorbs the moment every time a
-grabber is clipped or USB is plugged. This card gets handled far more than the
-others — a guide rail or an outer standoff is wanted.
+Reverting to the standard size is worth more than the space it costs:
+
+- **Mechanical.** 200 mm cantilevered off the DIN connector, carried by just the
+  two mounting holes at y=±45, was the real problem. This card gets handled far
+  more than the others — every grabber clip and every USB insertion put a moment
+  through the connector. At 160 mm it sits in the card guides like everything
+  else, and the outer-standoff/guide-rail question disappears.
+- **Fabrication.** One panel size, one guide spacing, one mechanical drawing
+  across the whole set.
+
+J1 still hugs the left edge (x≈0) with parts flowing left-to-right, so the USB
+socket, the 2×5 probe header and the LED bank remain at the **outer** end — the
+end you can reach with the card seated. That property came from the flow
+direction, not from the extra width, so nothing is lost by dropping it.
+
+Current auto-placement (`p8x-bustest-card-full.brd`):
+
+| row | contents | x extent |
+|---|---|---|
+| edge | J1 | 1.7 → 14.2 |
+| 1 | U1–U7 + their decoupling caps, A1 (Pico) | 17.1 → 150.0 |
+| 2 | J2, D1, R5–R8, RPR/RST/RPRB, LPR/LST | 17.1 → 121.9 |
+
+0 parts overflowing the outline, 0 footprint overlaps. This is auto-flow output,
+not a considered layout — it proves the card *fits*, and is a starting point for
+hand placement, not the final arrangement.
 
 ---
 
@@ -508,7 +530,8 @@ listen-only. That is inherent to the approach, not a fixable gap.
   is limited only by device R<sub>on</sub> (~25–50 mA, abs-max-safe but not
   indefinite). Accepted for a careful bench tool; reversible by adding 100 Ω bus
   series (caps at ~5 mA) if it proves too sharp in use.
-- **Layout** — 5 × DIP-28 + 2 × 74244 + 3 resistor networks + 2 LED arrays + Pico
-  + J1. Should fit 200 × 100 comfortably; confirm when placed.
+- **Layout** — hand placement and routing. Auto-flow confirms the 27 parts fit
+  160 × 100 at 31 % utilisation, but nothing has been placed deliberately and no
+  copper is routed.
 - **Nothing here is measured.** Every number above is calculated from datasheet
   values and the existing design docs.

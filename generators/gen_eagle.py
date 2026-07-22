@@ -630,10 +630,14 @@ def card(name,title,parts_ic,parts_small,nets,used_bus,labels=None,
     `brd_unplaced` emits all parts + ratsnest parked off the board (no routing).
 
     W,H are the board outline in mm. The default 160x100 is a standard Eurocard
-    and every logic card uses it — do not pass W/H unless the card genuinely needs
-    the room, and note that J1 hugs the LEFT edge (x~0) with parts flowing +x, so
-    extra W lands at the OUTER end (the end you can reach with the card seated).
-    The bustest card takes W=200 for its USB socket, probe header and LED bank."""
+    and EVERY board uses it — do not pass W/H unless the card genuinely needs the
+    room. Note that J1 hugs the LEFT edge (x~0) with parts flowing +x, so extra W
+    lands at the OUTER end (the end you can reach with the card seated).
+
+    The bustest card used to pass W=200, scoped when it was ~45 parts. After the
+    part-count cuts it is 27 parts and auto-flow fits them in 160x100 at 31% area
+    with 10mm of slack, so it went back to standard: 200mm cantilevered off the
+    DIN connector was a mechanical liability on the card that gets handled most."""
     for pin in ALLPINS:
         net=busnet(pin)
         if net in ("VCC","GND") or net in used_bus:
@@ -1657,6 +1661,6 @@ bt_labels.update({"A1":"RP2040 PICO","J2":"PROBE HEADER","D1":"5V FEED DIODE",
  "RPRB":"PROBE 1k SERIES","LST":"STATUS LEDS"})
 card("bustest-card","P8X BUS TEST CARD (USB bring-up controller, DESIGN)",ic,sm,n,
  set(net for net,_u,_pp in alloc if not net.startswith("PR") and not net.startswith("SPARE")),
- labels=bt_labels, W=200)
+ labels=bt_labels)
 
 if EMIT: print("ALL 9 BOARDS GENERATED")

@@ -69,9 +69,9 @@
 <layer number="98" name="Guide" color="6" fill="1" visible="yes" active="yes"/>
 </layers>
 <board><plain>
-<wire x1="0" y1="0" x2="200" y2="0" width="0" layer="20"/>
-<wire x1="200" y1="0" x2="200" y2="100" width="0" layer="20"/>
-<wire x1="200" y1="100" x2="0" y2="100" width="0" layer="20"/>
+<wire x1="0" y1="0" x2="160" y2="0" width="0" layer="20"/>
+<wire x1="160" y1="0" x2="160" y2="100" width="0" layer="20"/>
+<wire x1="160" y1="100" x2="0" y2="100" width="0" layer="20"/>
 <wire x1="0" y1="100" x2="0" y2="0" width="0" layer="20"/>
 <text x="4" y="94" size="2.54" layer="21">P8X BUS TEST CARD (USB bring-up controller, DESIGN) (FULL)</text>
 </plain>
@@ -421,49 +421,49 @@
 <attribute name="NAME" x="130.61" y="97.20" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="130.61" y="43.16" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="J2" library="p8x" package="HDR10" value="PROBE 2x5" x="153.44" y="95.15" smashed="yes">
-<attribute name="NAME" x="152.59" y="97.20" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="152.59" y="81.16" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="D1" library="p8x" package="LED5" value="SCHOTTKY" x="160.33" y="95.10" smashed="yes">
-<attribute name="NAME" x="159.43" y="97.20" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="159.43" y="91.22" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="R5" library="p8x" package="R_AXIAL" value="10K" x="167.17" y="95.20" smashed="yes">
-<attribute name="NAME" x="166.37" y="97.20" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="166.37" y="91.42" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="R6" library="p8x" package="R_AXIAL" value="10K" x="181.53" y="95.20" smashed="yes">
-<attribute name="NAME" x="180.73" y="97.20" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="180.73" y="91.42" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="R7" library="p8x" package="R_AXIAL" value="1K8" x="17.87" y="42.74" smashed="yes">
+<element name="J2" library="p8x" package="HDR10" value="PROBE 2x5" x="17.92" y="42.69" smashed="yes">
 <attribute name="NAME" x="17.07" y="44.74" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="17.07" y="38.96" size="1.778" layer="27" ratio="10"/>
+<attribute name="VALUE" x="17.07" y="28.70" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="R8" library="p8x" package="R_AXIAL" value="3K3" x="32.23" y="42.74" smashed="yes">
-<attribute name="NAME" x="31.43" y="44.74" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="31.43" y="38.96" size="1.778" layer="27" ratio="10"/>
+<element name="D1" library="p8x" package="LED5" value="SCHOTTKY" x="24.81" y="42.64" smashed="yes">
+<attribute name="NAME" x="23.91" y="44.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="23.91" y="38.76" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="RPR" library="p8x" package="SIP16" value="8x330R" x="46.59" y="45.28" smashed="yes">
-<attribute name="NAME" x="45.79" y="44.74" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="45.79" y="0.86" size="1.778" layer="27" ratio="10"/>
+<element name="R5" library="p8x" package="R_AXIAL" value="10K" x="31.65" y="42.74" smashed="yes">
+<attribute name="NAME" x="30.85" y="44.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="30.85" y="38.96" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="RST" library="p8x" package="SIP16" value="8x330R" x="50.79" y="45.28" smashed="yes">
-<attribute name="NAME" x="49.99" y="44.74" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="49.99" y="0.86" size="1.778" layer="27" ratio="10"/>
+<element name="R6" library="p8x" package="R_AXIAL" value="10K" x="46.01" y="42.74" smashed="yes">
+<attribute name="NAME" x="45.21" y="44.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="45.21" y="38.96" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="RPRB" library="p8x" package="SIP16" value="8x1K" x="54.99" y="45.28" smashed="yes">
-<attribute name="NAME" x="54.19" y="44.74" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="54.19" y="0.86" size="1.778" layer="27" ratio="10"/>
+<element name="R7" library="p8x" package="R_AXIAL" value="1K8" x="60.37" y="42.74" smashed="yes">
+<attribute name="NAME" x="59.57" y="44.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="59.57" y="38.96" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="LPR" library="p8x" package="DIP16" value="PROBES" x="59.19" y="42.74" smashed="yes">
-<attribute name="NAME" x="58.39" y="44.74" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="58.39" y="21.18" size="1.778" layer="27" ratio="10"/>
+<element name="R8" library="p8x" package="R_AXIAL" value="3K3" x="74.73" y="42.74" smashed="yes">
+<attribute name="NAME" x="73.93" y="44.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="73.93" y="38.96" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="LST" library="p8x" package="DIP16" value="STATUS" x="71.01" y="42.74" smashed="yes">
-<attribute name="NAME" x="70.21" y="44.74" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="70.21" y="21.18" size="1.778" layer="27" ratio="10"/>
+<element name="RPR" library="p8x" package="SIP16" value="8x330R" x="89.09" y="45.28" smashed="yes">
+<attribute name="NAME" x="88.29" y="44.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="88.29" y="0.86" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="RST" library="p8x" package="SIP16" value="8x330R" x="93.29" y="45.28" smashed="yes">
+<attribute name="NAME" x="92.49" y="44.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="92.49" y="0.86" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="RPRB" library="p8x" package="SIP16" value="8x1K" x="97.49" y="45.28" smashed="yes">
+<attribute name="NAME" x="96.69" y="44.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="96.69" y="0.86" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="LPR" library="p8x" package="DIP16" value="PROBES" x="101.69" y="42.74" smashed="yes">
+<attribute name="NAME" x="100.89" y="44.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="100.89" y="21.18" size="1.778" layer="27" ratio="10"/>
+</element>
+<element name="LST" library="p8x" package="DIP16" value="STATUS" x="113.51" y="42.74" smashed="yes">
+<attribute name="NAME" x="112.71" y="44.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="112.71" y="21.18" size="1.778" layer="27" ratio="10"/>
 </element>
 </elements><signals>
 <signal name="-IRQ">
@@ -750,8 +750,8 @@
 <contactref element="U7" pad="10"/>
 <polygon width="0.254" layer="2" isolate="0.3" rank="1">
 <vertex x="0" y="0"/>
-<vertex x="200" y="0"/>
-<vertex x="200" y="100"/>
+<vertex x="160" y="0"/>
+<vertex x="160" y="100"/>
 <vertex x="0" y="100"/>
 </polygon>
 </signal>
@@ -1109,8 +1109,8 @@
 <contactref element="U7" pad="20"/>
 <polygon width="0.254" layer="15" isolate="0.3" rank="1">
 <vertex x="0" y="0"/>
-<vertex x="200" y="0"/>
-<vertex x="200" y="100"/>
+<vertex x="160" y="0"/>
+<vertex x="160" y="100"/>
 <vertex x="0" y="100"/>
 </polygon>
 </signal>
