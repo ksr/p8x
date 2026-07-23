@@ -1636,21 +1636,24 @@ N(n,"VCC",("R5","1")); N(n,"SENSE5",("R5","2"),("R6","1")); N(n,"GND",("R6","2")
 #   R9-R16   buffered-LED series 330R   (was RPR)
 #   R17-R24  status-LED series  330R    (was RST)
 #   R25-R32  probe series       1K      (was RPRB)
-def _ledbuf(u,arr,rbase,nets8):
+# 16 individual through-hole LEDs, each labelled, instead of two DIP-16 bar
+# arrays. Designators LED1-8 = probes, LED9-16 = status. Anode through the limit
+# resistor, cathode to GND. (Labels/colors assigned in the sm/bt_labels block.)
+def _ledbuf(u,ledbase,rbase,nets8):
     N(n,"GND",(u,"!G1"),(u,"!G2"))
     for i,net in enumerate(nets8):
-        r="R%d"%(rbase+i)
+        r="R%d"%(rbase+i); d="LED%d"%(ledbase+i)
         N(n,net,(u,"A%d"%(i+1)))
         N(n,"L_%s"%net,(u,"Y%d"%(i+1)),(r,"1"))                # buffered copy -> R
-        N(n,"LK_%s"%net,(r,"2"),(arr,"A%d"%(i+1)))             # through limit R -> LED
-        N(n,"GND",(arr,"K%d"%(i+1)))
-_ledbuf("U7","LPR",9,["PR%d"%i for i in range(8)])             # R9-R16
+        N(n,"LK_%s"%net,(r,"2"),(d,"A"))                       # through limit R -> LED
+        N(n,"GND",(d,"K"))
+_ledbuf("U7",1,9,["PR%d"%i for i in range(8)])                 # probes LED1-8, R9-16
 # status LEDs: driven straight from the Pico (no buffer), through their own limit R
 for i in range(8):
-    r="R%d"%(17+i)
+    r="R%d"%(17+i); d="LED%d"%(9+i)
     N(n,"ST%d"%i,(r,"1"))
-    N(n,"STK%d"%i,(r,"2"),("LST","A%d"%(i+1)))
-    N(n,"GND",("LST","K%d"%(i+1)))
+    N(n,"STK%d"%i,(r,"2"),(d,"A"))
+    N(n,"GND",(d,"K"))
 
 # NO bus pull-downs. They would only matter when this card is Hi-Z AND the control
 # card is absent — a state that exists only during bring-up and only as a brief
@@ -1670,17 +1673,25 @@ N(n,"GND",("J2","9"),("J2","10"))                              # pins 9,10 = gro
 
 sm={"A1":("PICO","RP2040"),"J2":("HDR10","PROBE 2x5"),
  "D1":("LED","SCHOTTKY"),   # placeholder 2-pin part for the power diode
- "R5":("RES","10K"),"R6":("RES","10K"),"R7":("RES","1K8"),"R8":("RES","3K3"),
- "LPR":("LEDARR8","PROBES"),"LST":("LEDARR8","STATUS")}
+ "R5":("RES","10K"),"R6":("RES","10K"),"R7":("RES","1K8"),"R8":("RES","3K3")}
 # discrete limiting resistors (replaced the RPR/RST/RPRB networks, see above)
 sm.update({"R%d"%(9+i):("RES","330R") for i in range(8)})     # buffered-LED series
 sm.update({"R%d"%(17+i):("RES","330R") for i in range(8)})    # status-LED series
 sm.update({"R%d"%(25+i):("RES","1K")   for i in range(8)})    # probe series
+# individual LEDs (replaced the LPR/LST bar arrays). LED1-8 probes, LED9-16 status.
+sm.update({"LED%d"%(1+i):("LED","GRN") for i in range(8)})    # probe activity
+# status colors are provisional — the set itself is a §10 open item (a guess
+# wanting a second opinion); easy to retune once someone stares at the panel.
+_STCOL=["GRN","GRN","GRN","YEL","YEL","RED","RED","GRN"]
+sm.update({"LED%d"%(9+i):("LED",_STCOL[i]) for i in range(8)})
 
-bt_labels.update({"A1":"RP2040 PICO","J2":"PROBE HEADER","D1":"5V FEED DIODE",
- "LST":"STATUS LEDS"})
+bt_labels.update({"A1":"RP2040 PICO","J2":"PROBE HEADER","D1":"5V FEED DIODE"})
 bt_labels["R9"]="LED SERIES 330R"; bt_labels["R17"]="STATUS SERIES 330R"
 bt_labels["R25"]="PROBE SERIES 1K"
+for i in range(8): bt_labels["LED%d"%(1+i)]="PROBE%d"%i
+# status meanings, in ST0..7 = Pico GP7..GP14 order (matches design doc §5.4)
+_STLBL=["5V-OK","ARMED","LISTEN","CLK","CLKB","-RES","ERR","USB-ACT"]
+for i in range(8): bt_labels["LED%d"%(9+i)]=_STLBL[i]
 card("bustest-card","P8X BUS TEST CARD (USB bring-up controller, DESIGN)",ic,sm,n,
  set(net for net,_u,_pp in alloc if not net.startswith("PR") and not net.startswith("SPARE")),
  labels=bt_labels)

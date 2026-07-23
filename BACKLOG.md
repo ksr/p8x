@@ -863,6 +863,16 @@ with real analysis; the full reasoning is in
   that outweighs the discrete/through-hole simplicity. The pull-up networks stay
   bussed SIP-9 (RN1 etc.) — those legs DO share a common (VCC) node.
 
+- **Bus test card indicators are 16 INDIVIDUAL labelled LEDs, not bar arrays**
+  (2026-07-22). LPR/LST (LEDARR8 / DIP-16) became LED1–16 (LED1–8 probes,
+  LED9–16 status), each with a silkscreen label — the point being a bench tool
+  you read by glancing needs a printed name at every indicator. Status meanings
+  map to ST0–7 = Pico GP7–GP14: 5V-OK, ARMED, LISTEN, CLK, CLKB, -RES, ERR,
+  USB-ACT. Colors are provisional (tied to the §10 status-set open item). This is
+  another deliberate part-count increase (48 → 62); same standing as the discrete
+  resistors above — not to be re-arrayed without a reason beating the labelled,
+  through-hole clarity.
+
 - **Do NOT re-add the `-full.brd` companion boards** (2026-07-22, `3ab0ed9`).
   Every card used to emit a second board with the auto-flow placement left ON
   the outline, as a "starting layout". It was never any use: the placer walks

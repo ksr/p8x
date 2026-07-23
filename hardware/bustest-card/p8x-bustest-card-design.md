@@ -336,7 +336,8 @@ Per-chip allocation is in the block diagram above.
 | R17–R24 | RES | status-LED current-limit, 330 Ω (×8 discrete) | reuse |
 | R25–R32 | RES | probe series, 1 kΩ (×8 discrete) | reuse |
 | R5–R8 | RES | 5V-sense divider (×2), MISO divider (×2) | reuse |
-| LED* | LEDARR8 | 16 LEDs: probes (8) + status (8) | reuse |
+| LED1–8 | LED (through-hole) | probe activity, 8 individual LEDs | reuse |
+| LED9–16 | LED (through-hole) | status, 8 individual labelled LEDs | reuse |
 | J1 | MABC96R | DIN 41612 edge connector | supplied by `card()` |
 
 `card()` also supplies the per-IC 100 nF decoupling caps, so the project's caps
@@ -364,14 +365,28 @@ Worst case ≈ 250 mA (16 LEDs ≈ 65 mA, Pico 30–100 mA, five expanders, 2 bu
 
 ### 5.4 LEDs
 
-Two arrays, 16 LEDs. They cost **zero expander pins** — the probe display taps the
-bus side through a `74244` buffer (io-card monitor pattern, U11–U13), loading the
-line with ~1 µA; the status LEDs run straight off Pico GPIO.
+**16 individual through-hole LEDs, each silkscreen-labelled** (LED1–8 probes,
+LED9–16 status) — replacing the two DIP-16 bar arrays. They still cost **zero
+expander pins**: the probe display taps the bus side through a `74244` buffer
+(io-card monitor pattern, U11–U13), loading the line with ~1 µA, and the status
+LEDs run straight off Pico GPIO (ST0–7 = GP7–GP14).
 
-| LEDs | Source |
-|---|---|
-| Probes 0–7 (8) | `74244` buffer (U7) |
-| Status (8) — 5V-OK, ARMED, LISTEN, CLK, CLKB, -RES, ERR, USB-ACT | Pico GPIO direct |
+| Ref | Label | Source |
+|---|---|---|
+| LED1–8 | PROBE0–7 | `74244` buffer (U7) |
+| LED9 | 5V-OK | Pico GP7 |
+| LED10 | ARMED | Pico GP8 |
+| LED11 | LISTEN | Pico GP9 |
+| LED12 | CLK | Pico GP10 |
+| LED13 | CLKB | Pico GP11 |
+| LED14 | -RES | Pico GP12 |
+| LED15 | ERR | Pico GP13 |
+| LED16 | USB-ACT | Pico GP14 |
+
+Individual parts cost more board space and 14 extra placements than the arrays,
+but every indicator gets a printed name next to it — worth it on a bench tool you
+read by glancing. Colors (probes green; status green/yellow/red by severity) are
+provisional, tied to the §10 open item on the status set.
 
 **The D0–7 and A0–15 monitor arrays were cut.** They were redundant with the ASCII
 readback while stepping (the card reads the bus back over SPI and prints it
@@ -416,7 +431,7 @@ in `p8x-bustest-card.brd`, to be placed from the ratsnest):
 |---|---|---|
 | edge | J1 | 1.7 → 14.2 |
 | 1 | U1–U7 + their decoupling caps, A1 (Pico) | 17.1 → 150.0 |
-| 2–5 | J2, D1, R5–R32 (28 discrete), LPR/LST | wraps to ~5 rows |
+| 2–5 | J2, D1, R5–R32 (28 discrete), LED1–16 | wraps to ~5 rows |
 
 0 parts overflowing the outline, 0 footprint overlaps. This is auto-flow output,
 not a considered layout — it proves the card *fits*, and is a starting point for
@@ -533,7 +548,7 @@ listen-only. That is inherent to the approach, not a fixable gap.
   is limited only by device R<sub>on</sub> (~25–50 mA, abs-max-safe but not
   indefinite). Accepted for a careful bench tool; reversible by adding 100 Ω bus
   series (caps at ~5 mA) if it proves too sharp in use.
-- **Layout** — hand placement and routing. Auto-flow confirms the 48 parts fit
+- **Layout** — hand placement and routing. Auto-flow confirms the 62 parts fit
   160 × 100 at 31 % utilisation, but nothing has been placed deliberately and no
   copper is routed.
 - **Nothing here is measured.** Every number above is calculated from datasheet
