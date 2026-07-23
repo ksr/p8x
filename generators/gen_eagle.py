@@ -593,6 +593,12 @@ PN={"74161":"74HCT161","74169":"74HCT169","74374":"74HCT374","74377V2":"74HCT377
  "74182":"74HCT182","74260":"74HCT260","28C64":"28C64","6850":"6850",
  "MAX232":"MAX232","DS1302":"DS1302"}
 
+# Recognized LED color suffixes. A LED value written "FUNC-COLOR" is split into
+# value=COLOR, label=FUNC — but ONLY when the trailing token is one of these, so
+# a hyphenated function name (5V-OK, -RES, USB-ACT) is not mistaken for a color.
+LEDCOLORS={"GRN","RED","YEL","GREEN","YELLOW","BLU","BLUE","ORG","ORANGE",
+           "WHT","WHITE","AMB","AMBER"}
+
 def fp_box(pkg):
     """Footprint bounding box from the pad geometry: (w,h,ox,oy) where ox,oy is
     the bbox bottom-left relative to the part origin (pad dia included)."""
@@ -670,8 +676,11 @@ def card(name,title,parts_ic,parts_small,nets,used_bus,labels=None,
     for ref,(dev,raw) in list(parts.items()):
         if dev in PN:                                  # deterministic logic/memory
             val,fn = PN[dev], (raw if raw and raw!=PN[dev] else None)
-        elif dev=="LED" and "-" in raw:                # "FUNC-COLOR" -> value=color, label=FUNC
-            fn,val = raw.rsplit("-",1)
+        elif dev=="LED" and "-" in raw and raw.rsplit("-",1)[1] in LEDCOLORS:
+            fn,val = raw.rsplit("-",1)                 # "FUNC-COLOR" -> value=color, label=FUNC
+            # Only split when the suffix is an actual color. A function name may
+            # itself contain a hyphen (5V-OK, -RES, USB-ACT) and must pass through
+            # whole as the value; the bustest LEDs put the FUNCTION on the silk.
         elif dev=="HDR3": val,fn = "1x3", (raw if raw not in ("1x3","") else None)
         elif dev=="HDR4": val,fn = "1x4", (raw if raw not in ("1x4","") else None)
         elif dev=="SW2":  val,fn = "SPST", (raw or None)
@@ -1678,20 +1687,20 @@ sm={"A1":("PICO","RP2040"),"J2":("HDR10","PROBE 2x5"),
 sm.update({"R%d"%(9+i):("RES","330R") for i in range(8)})     # buffered-LED series
 sm.update({"R%d"%(17+i):("RES","330R") for i in range(8)})    # status-LED series
 sm.update({"R%d"%(25+i):("RES","1K")   for i in range(8)})    # probe series
-# individual LEDs (replaced the LPR/LST bar arrays). LED1-8 probes, LED9-16 status.
-sm.update({"LED%d"%(1+i):("LED","GRN") for i in range(8)})    # probe activity
-# status colors are provisional — the set itself is a §10 open item (a guess
-# wanting a second opinion); easy to retune once someone stares at the panel.
-_STCOL=["GRN","GRN","GRN","YEL","YEL","RED","RED","GRN"]
-sm.update({"LED%d"%(9+i):("LED",_STCOL[i]) for i in range(8)})
+# individual LEDs (replaced the LPR/LST bar arrays). LED1-8 probes, LED9-16
+# status. VALUE = the FUNCTION, so the silk prints what each LED means; the color
+# (provisional; §10 open item) is carried as the schematic label instead.
+_PRBF=["PROBE%d"%i for i in range(8)]
+_STF=["5V-OK","ARMED","LISTEN","CLK","CLKB","-RES","ERR","USB-ACT"]   # ST0..7 = GP7..14
+sm.update({"LED%d"%(1+i):("LED",_PRBF[i]) for i in range(8)})
+sm.update({"LED%d"%(9+i):("LED",_STF[i])  for i in range(8)})
 
 bt_labels.update({"A1":"RP2040 PICO","J2":"PROBE HEADER","D1":"5V FEED DIODE"})
 bt_labels["R9"]="LED SERIES 330R"; bt_labels["R17"]="STATUS SERIES 330R"
 bt_labels["R25"]="PROBE SERIES 1K"
-for i in range(8): bt_labels["LED%d"%(1+i)]="PROBE%d"%i
-# status meanings, in ST0..7 = Pico GP7..GP14 order (matches design doc §5.4)
-_STLBL=["5V-OK","ARMED","LISTEN","CLK","CLKB","-RES","ERR","USB-ACT"]
-for i in range(8): bt_labels["LED%d"%(9+i)]=_STLBL[i]
+_STCOL=["GRN","GRN","GRN","YEL","YEL","RED","RED","GRN"]
+for i in range(8): bt_labels["LED%d"%(1+i)]="GRN"          # probe color (schematic note)
+for i in range(8): bt_labels["LED%d"%(9+i)]=_STCOL[i]      # status color (schematic note)
 card("bustest-card","P8X BUS TEST CARD (USB bring-up controller, DESIGN)",ic,sm,n,
  set(net for net,_u,_pp in alloc if not net.startswith("PR") and not net.startswith("SPARE")),
  labels=bt_labels)

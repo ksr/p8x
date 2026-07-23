@@ -841,22 +841,22 @@
 <part name="R30" library="p8x" deviceset="RES" device="" value="1K"/>
 <part name="R31" library="p8x" deviceset="RES" device="" value="1K"/>
 <part name="R32" library="p8x" deviceset="RES" device="" value="1K"/>
-<part name="LED1" library="p8x" deviceset="LED" device="" value="GRN"/>
-<part name="LED2" library="p8x" deviceset="LED" device="" value="GRN"/>
-<part name="LED3" library="p8x" deviceset="LED" device="" value="GRN"/>
-<part name="LED4" library="p8x" deviceset="LED" device="" value="GRN"/>
-<part name="LED5" library="p8x" deviceset="LED" device="" value="GRN"/>
-<part name="LED6" library="p8x" deviceset="LED" device="" value="GRN"/>
-<part name="LED7" library="p8x" deviceset="LED" device="" value="GRN"/>
-<part name="LED8" library="p8x" deviceset="LED" device="" value="GRN"/>
-<part name="LED9" library="p8x" deviceset="LED" device="" value="GRN"/>
-<part name="LED10" library="p8x" deviceset="LED" device="" value="GRN"/>
-<part name="LED11" library="p8x" deviceset="LED" device="" value="GRN"/>
-<part name="LED12" library="p8x" deviceset="LED" device="" value="YEL"/>
-<part name="LED13" library="p8x" deviceset="LED" device="" value="YEL"/>
-<part name="LED14" library="p8x" deviceset="LED" device="" value="RED"/>
-<part name="LED15" library="p8x" deviceset="LED" device="" value="RED"/>
-<part name="LED16" library="p8x" deviceset="LED" device="" value="GRN"/>
+<part name="LED1" library="p8x" deviceset="LED" device="" value="PROBE0"/>
+<part name="LED2" library="p8x" deviceset="LED" device="" value="PROBE1"/>
+<part name="LED3" library="p8x" deviceset="LED" device="" value="PROBE2"/>
+<part name="LED4" library="p8x" deviceset="LED" device="" value="PROBE3"/>
+<part name="LED5" library="p8x" deviceset="LED" device="" value="PROBE4"/>
+<part name="LED6" library="p8x" deviceset="LED" device="" value="PROBE5"/>
+<part name="LED7" library="p8x" deviceset="LED" device="" value="PROBE6"/>
+<part name="LED8" library="p8x" deviceset="LED" device="" value="PROBE7"/>
+<part name="LED9" library="p8x" deviceset="LED" device="" value="5V-OK"/>
+<part name="LED10" library="p8x" deviceset="LED" device="" value="ARMED"/>
+<part name="LED11" library="p8x" deviceset="LED" device="" value="LISTEN"/>
+<part name="LED12" library="p8x" deviceset="LED" device="" value="CLK"/>
+<part name="LED13" library="p8x" deviceset="LED" device="" value="CLKB"/>
+<part name="LED14" library="p8x" deviceset="LED" device="" value="-RES"/>
+<part name="LED15" library="p8x" deviceset="LED" device="" value="ERR"/>
+<part name="LED16" library="p8x" deviceset="LED" device="" value="USB-ACT"/>
 <part name="CD1" library="p8x" deviceset="CAP1" device="" value="100nF"/>
 <part name="CD2" library="p8x" deviceset="CAP1" device="" value="100nF"/>
 <part name="CD3" library="p8x" deviceset="CAP1" device="" value="100nF"/>
@@ -892,38 +892,38 @@
 <text x="330.50" y="-653.86" size="2.032" layer="96">330R</text>
 <text x="330.50" y="-930.26" size="1.778" layer="97">PROBE SERIES 1K</text>
 <text x="330.50" y="-933.26" size="2.032" layer="96">1K</text>
-<text x="330.50" y="-1209.66" size="1.778" layer="97">PROBE0</text>
-<text x="330.50" y="-1212.66" size="2.032" layer="96">GRN</text>
-<text x="432.10" y="-1209.66" size="1.778" layer="97">PROBE1</text>
-<text x="432.10" y="-1212.66" size="2.032" layer="96">GRN</text>
-<text x="127.30" y="-1349.36" size="1.778" layer="97">PROBE2</text>
-<text x="127.30" y="-1352.36" size="2.032" layer="96">GRN</text>
-<text x="228.90" y="-1349.36" size="1.778" layer="97">PROBE3</text>
-<text x="228.90" y="-1352.36" size="2.032" layer="96">GRN</text>
-<text x="330.50" y="-1349.36" size="1.778" layer="97">PROBE4</text>
-<text x="330.50" y="-1352.36" size="2.032" layer="96">GRN</text>
-<text x="432.10" y="-1349.36" size="1.778" layer="97">PROBE5</text>
-<text x="432.10" y="-1352.36" size="2.032" layer="96">GRN</text>
-<text x="127.30" y="-1489.06" size="1.778" layer="97">PROBE6</text>
-<text x="127.30" y="-1492.06" size="2.032" layer="96">GRN</text>
-<text x="228.90" y="-1489.06" size="1.778" layer="97">PROBE7</text>
-<text x="228.90" y="-1492.06" size="2.032" layer="96">GRN</text>
-<text x="330.50" y="-1489.06" size="1.778" layer="97">5V-OK</text>
-<text x="330.50" y="-1492.06" size="2.032" layer="96">GRN</text>
-<text x="432.10" y="-1489.06" size="1.778" layer="97">ARMED</text>
-<text x="432.10" y="-1492.06" size="2.032" layer="96">GRN</text>
-<text x="127.30" y="-1628.76" size="1.778" layer="97">LISTEN</text>
-<text x="127.30" y="-1631.76" size="2.032" layer="96">GRN</text>
-<text x="228.90" y="-1628.76" size="1.778" layer="97">CLK</text>
-<text x="228.90" y="-1631.76" size="2.032" layer="96">YEL</text>
-<text x="330.50" y="-1628.76" size="1.778" layer="97">CLKB</text>
-<text x="330.50" y="-1631.76" size="2.032" layer="96">YEL</text>
-<text x="432.10" y="-1628.76" size="1.778" layer="97">-RES</text>
-<text x="432.10" y="-1631.76" size="2.032" layer="96">RED</text>
-<text x="127.30" y="-1768.46" size="1.778" layer="97">ERR</text>
-<text x="127.30" y="-1771.46" size="2.032" layer="96">RED</text>
-<text x="228.90" y="-1768.46" size="1.778" layer="97">USB-ACT</text>
-<text x="228.90" y="-1771.46" size="2.032" layer="96">GRN</text>
+<text x="330.50" y="-1209.66" size="1.778" layer="97">GRN</text>
+<text x="330.50" y="-1212.66" size="2.032" layer="96">PROBE0</text>
+<text x="432.10" y="-1209.66" size="1.778" layer="97">GRN</text>
+<text x="432.10" y="-1212.66" size="2.032" layer="96">PROBE1</text>
+<text x="127.30" y="-1349.36" size="1.778" layer="97">GRN</text>
+<text x="127.30" y="-1352.36" size="2.032" layer="96">PROBE2</text>
+<text x="228.90" y="-1349.36" size="1.778" layer="97">GRN</text>
+<text x="228.90" y="-1352.36" size="2.032" layer="96">PROBE3</text>
+<text x="330.50" y="-1349.36" size="1.778" layer="97">GRN</text>
+<text x="330.50" y="-1352.36" size="2.032" layer="96">PROBE4</text>
+<text x="432.10" y="-1349.36" size="1.778" layer="97">GRN</text>
+<text x="432.10" y="-1352.36" size="2.032" layer="96">PROBE5</text>
+<text x="127.30" y="-1489.06" size="1.778" layer="97">GRN</text>
+<text x="127.30" y="-1492.06" size="2.032" layer="96">PROBE6</text>
+<text x="228.90" y="-1489.06" size="1.778" layer="97">GRN</text>
+<text x="228.90" y="-1492.06" size="2.032" layer="96">PROBE7</text>
+<text x="330.50" y="-1489.06" size="1.778" layer="97">GRN</text>
+<text x="330.50" y="-1492.06" size="2.032" layer="96">5V-OK</text>
+<text x="432.10" y="-1489.06" size="1.778" layer="97">GRN</text>
+<text x="432.10" y="-1492.06" size="2.032" layer="96">ARMED</text>
+<text x="127.30" y="-1628.76" size="1.778" layer="97">GRN</text>
+<text x="127.30" y="-1631.76" size="2.032" layer="96">LISTEN</text>
+<text x="228.90" y="-1628.76" size="1.778" layer="97">YEL</text>
+<text x="228.90" y="-1631.76" size="2.032" layer="96">CLK</text>
+<text x="330.50" y="-1628.76" size="1.778" layer="97">YEL</text>
+<text x="330.50" y="-1631.76" size="2.032" layer="96">CLKB</text>
+<text x="432.10" y="-1628.76" size="1.778" layer="97">RED</text>
+<text x="432.10" y="-1631.76" size="2.032" layer="96">-RES</text>
+<text x="127.30" y="-1768.46" size="1.778" layer="97">RED</text>
+<text x="127.30" y="-1771.46" size="2.032" layer="96">ERR</text>
+<text x="228.90" y="-1768.46" size="1.778" layer="97">GRN</text>
+<text x="228.90" y="-1771.46" size="2.032" layer="96">USB-ACT</text>
 </plain><instances>
 <instance part="J1" gate="G$1" x="0" y="38.1"/>
 <instance part="U1" gate="G$1" x="140.0" y="38.1"/>

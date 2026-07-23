@@ -385,8 +385,10 @@ LEDs run straight off Pico GPIO (ST0–7 = GP7–GP14).
 
 Individual parts cost more board space and 14 extra placements than the arrays,
 but every indicator gets a printed name next to it — worth it on a bench tool you
-read by glancing. Colors (probes green; status green/yellow/red by severity) are
-provisional, tied to the §10 open item on the status set.
+read by glancing. **The silkscreen VALUE is the function** (`PROBE0`, `5V-OK`,
+`-RES`, …), not the LED color, so the board reads as meaning rather than parts.
+Colors (probes green; status green/yellow/red by severity) are provisional — tied
+to the §10 open item on the status set — and ride along as the schematic label.
 
 **The D0–7 and A0–15 monitor arrays were cut.** They were redundant with the ASCII
 readback while stepping (the card reads the bus back over SPI and prints it
