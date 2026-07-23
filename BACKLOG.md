@@ -851,6 +851,18 @@ with real analysis; the full reasoning is in
   resolve paths and expand globs; see `SYS_OPEN` (NEXT) and shell-side glob+argv
   (IDEAS) — those are the fix.
 
+- **Bus test card limiting resistors are DISCRETE, not networks** (2026-07-22).
+  RPR/RST/RPRB were isolated arrays (RNISO8/SIP-16). They are series elements —
+  a different net on both ends of every leg — so a 9-pin bussed SIP-8 physically
+  cannot replace them (its shared COM pin would short all eight legs on one
+  side). Rather than keep them as SIP-16 isolated arrays, they were expanded to
+  24 discrete axial resistors (R9–R32: 8×330 Ω buffered-LED, 8×330 Ω status,
+  8×1 kΩ probe) for an all-through-hole, hand-sourced bench card. This takes the
+  card 27 → 48 parts on purpose; it is the deliberate opposite of the earlier
+  reduction and is not to be "cleaned up" back into a network without a reason
+  that outweighs the discrete/through-hole simplicity. The pull-up networks stay
+  bussed SIP-9 (RN1 etc.) — those legs DO share a common (VCC) node.
+
 - **Do NOT re-add the `-full.brd` companion boards** (2026-07-22, `3ab0ed9`).
   Every card used to emit a second board with the auto-flow placement left ON
   the outline, as a "starting layout". It was never any use: the placer walks
