@@ -315,11 +315,13 @@ LAYERS=[(1,"Top",4,1),(2,"Route2",1,1),(3,"Route3",4,1),(4,"Route4",1,1),(5,"Rou
  (97,"Info",7,1),(98,"Guide",6,1)]
 SCH_LAYERS=BRD_LAYERS=LAYERS
 
-def hdr(layers):
+def hdr(layers,grid=0.1):
+    # `grid` is the editor snap grid in inches. Schematics keep the 0.1" default;
+    # boards pass 0.05" so hand placement/routing in Fusion snaps to a 50-mil grid.
     o=['<?xml version="1.0" encoding="utf-8"?>','<!DOCTYPE eagle SYSTEM "eagle.dtd">',
        '<eagle version="9.6.2">','<drawing>',
        '<settings><setting alwaysvectorfont="no"/><setting verticaltext="up"/></settings>',
-       '<grid distance="0.1" unitdist="inch" unit="inch" style="lines" multiple="1" display="no" altdistance="0.01" altunitdist="inch" altunit="inch"/>',
+       f'<grid distance="{grid:g}" unitdist="inch" unit="inch" style="lines" multiple="1" display="no" altdistance="0.01" altunitdist="inch" altunit="inch"/>',
        '<layers>']
     for n,nm,c,f in layers:
         o.append(f'<layer number="{n}" name="{nm}" color="{c}" fill="{f}" visible="yes" active="yes"/>')
@@ -444,7 +446,7 @@ def write_brd(fn,title,parts,nets,wires,polys,W,H,vias=None,outline_only=False,u
     # unplaced: emit all parts (names+values) + the ratsnest (connectivity), but
     # parked OFF the board outline with no routing/pours — ready to place by hand.
     vias=vias or {}
-    o=hdr(BRD_LAYERS)
+    o=hdr(BRD_LAYERS,grid=0.05)
     o.append('<board><plain>')
     for (a,b,c,d) in [(0,0,W,0),(W,0,W,H),(W,H,0,H),(0,H,0,0)]:
         o.append(f'<wire x1="{a}" y1="{b}" x2="{c}" y2="{d}" width="0" layer="20"/>')
