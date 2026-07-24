@@ -250,6 +250,11 @@ D("DIP8SW",["A%d"%i for i in range(1,9)],["B%d"%i for i in range(1,9)],
   dict([("A%d"%i,str(i)) for i in range(1,9)]+[("B%d"%i,str(17-i)) for i in range(1,9)]),"DIP16")
 D("RNISO8",["A%d"%i for i in range(1,9)],["B%d"%i for i in range(1,9)],
   dict([("A%d"%i,str(2*i-1)) for i in range(1,9)]+[("B%d"%i,str(2*i)) for i in range(1,9)]),"SIP16")
+# Same electrical part as RNISO8 (8 isolated resistors) but in a 16-pin DIP: R_i
+# between pin i and pin (17-i), the standard isolated-DIP-network pinout (same as
+# DIP8SW / LEDARR8). Used for LED-current-limit and other 8-way isolated banks.
+D("RNISO8D",["A%d"%i for i in range(1,9)],["B%d"%i for i in range(1,9)],
+  dict([("A%d"%i,str(i)) for i in range(1,9)]+[("B%d"%i,str(17-i)) for i in range(1,9)]),"DIP16")
 D("LEDARR8",["A%d"%i for i in range(1,9)],["K%d"%i for i in range(1,9)],
   dict([("A%d"%i,str(i)) for i in range(1,9)]+[("K%d"%i,str(17-i)) for i in range(1,9)]),"DIP16")
 D("IDE40",[str(k) for k in range(1,41,2)],[str(k) for k in range(2,41,2)],
@@ -1636,32 +1641,30 @@ N(n,"VCC",("R5","1")); N(n,"SENSE5",("R5","2"),("R6","1")); N(n,"GND",("R6","2")
 # readback when stepping and only an activity blur when free-running (design doc
 # §5.4). Only the probe display is kept — the immediate feedback the probe feature
 # exists for. Status LEDs (below) stay: they show card STATE, not otherwise visible.
-# The three limiting-resistor banks are DISCRETE resistors, not networks. Each
-# is a series element with a different net on BOTH ends (driver->R->LED, or
-# Pico->R->probe), so a bussed SIP-8 (one shared COM pin) cannot do the job --
-# it would short all eight legs together on the common side. An isolated array
-# (RNISO8/SIP-16) would work, but the choice here is 8 discretes per bank for an
-# all-through-hole, trivially hand-sourced bench card. Sequential designators:
-#   R9-R16   buffered-LED series 330R   (was RPR)
-#   R17-R24  status-LED series  330R    (was RST)
-#   R25-R32  probe series       1K      (was RPRB)
-# 16 individual through-hole LEDs, each labelled, instead of two DIP-16 bar
-# arrays. Designators LED1-8 = probes, LED9-16 = status. Anode through the limit
-# resistor, cathode to GND. (Labels/colors assigned in the sm/bt_labels block.)
-def _ledbuf(u,ledbase,rbase,nets8):
+# The three 8-way limiting banks are isolated resistor NETWORKS in 16-pin DIPs
+# (RNISO8D). Each is a series element with a different net on BOTH ends
+# (driver->R->LED, or Pico->R->probe), so a bussed SIP-8 (one shared COM pin)
+# cannot do the job -- it would short all eight legs on the common side. An
+# isolated DIP-16 network is the right part: 8 resistors, one package.
+#   RN1  probe-LED series   330R   (A_i = buffer out, B_i = LED anode)
+#   RN2  status-LED series  330R   (A_i = Pico out,   B_i = LED anode)
+#   RN3  probe series       1K     (A_i = Pico out,   B_i = header pin)
+# 16 individual through-hole LEDs, each labelled: LED1-8 = probes, LED9-16 =
+# status. LED anode through the limit network, cathode to GND.
+def _ledbuf(u,ledbase,rn,nets8):
     N(n,"GND",(u,"!G1"),(u,"!G2"))
     for i,net in enumerate(nets8):
-        r="R%d"%(rbase+i); d="LED%d"%(ledbase+i)
+        d="LED%d"%(ledbase+i)
         N(n,net,(u,"A%d"%(i+1)))
-        N(n,"L_%s"%net,(u,"Y%d"%(i+1)),(r,"1"))                # buffered copy -> R
-        N(n,"LK_%s"%net,(r,"2"),(d,"A"))                       # through limit R -> LED
+        N(n,"L_%s"%net,(u,"Y%d"%(i+1)),(rn,"A%d"%(i+1)))       # buffered copy -> RN
+        N(n,"LK_%s"%net,(rn,"B%d"%(i+1)),(d,"A"))              # through limit R -> LED
         N(n,"GND",(d,"K"))
-_ledbuf("U7",1,9,["PR%d"%i for i in range(8)])                 # probes LED1-8, R9-16
+_ledbuf("U7",1,"RN1",["PR%d"%i for i in range(8)])             # probes LED1-8, RN1
 # status LEDs: driven straight from the Pico (no buffer), through their own limit R
 for i in range(8):
-    r="R%d"%(17+i); d="LED%d"%(9+i)
-    N(n,"ST%d"%i,(r,"1"))
-    N(n,"STK%d"%i,(r,"2"),(d,"A"))
+    d="LED%d"%(9+i)
+    N(n,"ST%d"%i,("RN2","A%d"%(i+1)))
+    N(n,"STK%d"%i,("RN2","B%d"%(i+1)),(d,"A"))
     N(n,"GND",(d,"K"))
 
 # NO bus pull-downs. They would only matter when this card is Hi-Z AND the control
@@ -1675,18 +1678,17 @@ for i in range(8):
 
 # --- probe series (1k) + 2x5 header (8 probes + 2 GND) --------------------------
 for i in range(8):
-    r="R%d"%(25+i)
-    N(n,"PR%d"%i,(r,"1"))
-    N(n,"PRJ%d"%i,(r,"2"),("J2","%d"%(i+1)))                   # J2 pins 1-8 = probes
+    N(n,"PR%d"%i,("RN3","A%d"%(i+1)))
+    N(n,"PRJ%d"%i,("RN3","B%d"%(i+1)),("J2","%d"%(i+1)))      # J2 pins 1-8 = probes
 N(n,"GND",("J2","9"),("J2","10"))                              # pins 9,10 = ground
 
 sm={"A1":("PICO","RP2040"),"J2":("HDR10","PROBE 2x5"),
  "D1":("LED","SCHOTTKY"),   # placeholder 2-pin part for the power diode
- "R5":("RES","10K"),"R6":("RES","10K"),"R7":("RES","1K8"),"R8":("RES","3K3")}
-# discrete limiting resistors (replaced the RPR/RST/RPRB networks, see above)
-sm.update({"R%d"%(9+i):("RES","330R") for i in range(8)})     # buffered-LED series
-sm.update({"R%d"%(17+i):("RES","330R") for i in range(8)})    # status-LED series
-sm.update({"R%d"%(25+i):("RES","1K")   for i in range(8)})    # probe series
+ "R5":("RES","10K"),"R6":("RES","10K"),"R7":("RES","1K8"),"R8":("RES","3K3"),
+ # isolated 8-resistor networks in 16-pin DIPs (RNISO8D)
+ "RN1":("RNISO8D","8x330R"),      # probe-LED current limit
+ "RN2":("RNISO8D","8x330R"),      # status-LED current limit
+ "RN3":("RNISO8D","8x1K")}        # probe series (protection)
 # individual LEDs (replaced the LPR/LST bar arrays). LED1-8 probes, LED9-16
 # status. VALUE = the FUNCTION, so the silk prints what each LED means; the color
 # (provisional; §10 open item) is carried as the schematic label instead.
@@ -1695,9 +1697,8 @@ _STF=["5V-OK","ARMED","LISTEN","CLK","CLKB","-RES","ERR","USB-ACT"]   # ST0..7 =
 sm.update({"LED%d"%(1+i):("LED",_PRBF[i]) for i in range(8)})
 sm.update({"LED%d"%(9+i):("LED",_STF[i])  for i in range(8)})
 
-bt_labels.update({"A1":"RP2040 PICO","J2":"PROBE HEADER","D1":"5V FEED DIODE"})
-bt_labels["R9"]="LED SERIES 330R"; bt_labels["R17"]="STATUS SERIES 330R"
-bt_labels["R25"]="PROBE SERIES 1K"
+bt_labels.update({"A1":"RP2040 PICO","J2":"PROBE HEADER","D1":"5V FEED DIODE",
+ "RN1":"PROBE LED Rs","RN2":"STATUS LED Rs","RN3":"PROBE SERIES 1K"})
 _STCOL=["GRN","GRN","GRN","YEL","YEL","RED","RED","GRN"]
 for i in range(8): bt_labels["LED%d"%(1+i)]="GRN"          # probe color (schematic note)
 for i in range(8): bt_labels["LED%d"%(9+i)]=_STCOL[i]      # status color (schematic note)

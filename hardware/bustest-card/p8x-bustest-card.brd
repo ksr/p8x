@@ -83,6 +83,26 @@
 <text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
 <text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
 </package>
+<package name="DIP16">
+<pad name="1" x="0.00" y="-0.00" drill="0.8128" diameter="1.6"/>
+<pad name="2" x="0.00" y="-2.54" drill="0.8128" diameter="1.6"/>
+<pad name="3" x="0.00" y="-5.08" drill="0.8128" diameter="1.6"/>
+<pad name="4" x="0.00" y="-7.62" drill="0.8128" diameter="1.6"/>
+<pad name="5" x="0.00" y="-10.16" drill="0.8128" diameter="1.6"/>
+<pad name="6" x="0.00" y="-12.70" drill="0.8128" diameter="1.6"/>
+<pad name="7" x="0.00" y="-15.24" drill="0.8128" diameter="1.6"/>
+<pad name="8" x="0.00" y="-17.78" drill="0.8128" diameter="1.6"/>
+<pad name="9" x="7.62" y="-17.78" drill="0.8128" diameter="1.6"/>
+<pad name="10" x="7.62" y="-15.24" drill="0.8128" diameter="1.6"/>
+<pad name="11" x="7.62" y="-12.70" drill="0.8128" diameter="1.6"/>
+<pad name="12" x="7.62" y="-10.16" drill="0.8128" diameter="1.6"/>
+<pad name="13" x="7.62" y="-7.62" drill="0.8128" diameter="1.6"/>
+<pad name="14" x="7.62" y="-5.08" drill="0.8128" diameter="1.6"/>
+<pad name="15" x="7.62" y="-2.54" drill="0.8128" diameter="1.6"/>
+<pad name="16" x="7.62" y="-0.00" drill="0.8128" diameter="1.6"/>
+<text x="0" y="2.54" size="1.778" layer="25">&gt;NAME</text>
+<text x="0" y="-2.54" size="1.778" layer="27">&gt;VALUE</text>
+</package>
 <package name="DIP20">
 <pad name="1" x="0.00" y="-0.00" drill="0.8128" diameter="1.6"/>
 <pad name="2" x="0.00" y="-2.54" drill="0.8128" diameter="1.6"/>
@@ -405,165 +425,81 @@
 <attribute name="NAME" x="259.33" y="44.74" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="259.33" y="38.96" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="R9" library="p8x" package="R_AXIAL" value="330R" x="274.49" y="42.74" smashed="yes">
+<element name="RN1" library="p8x" package="DIP16" value="8x330R" x="274.49" y="42.74" smashed="yes">
 <attribute name="NAME" x="273.69" y="44.74" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="273.69" y="38.96" size="1.778" layer="27" ratio="10"/>
+<attribute name="VALUE" x="273.69" y="21.18" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="R10" library="p8x" package="R_AXIAL" value="330R" x="288.85" y="42.74" smashed="yes">
-<attribute name="NAME" x="288.05" y="44.74" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="288.05" y="38.96" size="1.778" layer="27" ratio="10"/>
+<element name="RN2" library="p8x" package="DIP16" value="8x330R" x="286.31" y="42.74" smashed="yes">
+<attribute name="NAME" x="285.51" y="44.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="285.51" y="21.18" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="R11" library="p8x" package="R_AXIAL" value="330R" x="303.21" y="42.74" smashed="yes">
-<attribute name="NAME" x="302.41" y="44.74" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="302.41" y="38.96" size="1.778" layer="27" ratio="10"/>
+<element name="RN3" library="p8x" package="DIP16" value="8x1K" x="298.13" y="42.74" smashed="yes">
+<attribute name="NAME" x="297.33" y="44.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="297.33" y="21.18" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="R12" library="p8x" package="R_AXIAL" value="330R" x="317.57" y="42.74" smashed="yes">
-<attribute name="NAME" x="316.77" y="44.74" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="316.77" y="38.96" size="1.778" layer="27" ratio="10"/>
+<element name="LED1" library="p8x" package="LED5" value="PROBE0" x="310.05" y="42.64" smashed="yes">
+<attribute name="NAME" x="309.15" y="44.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="309.15" y="38.76" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="R13" library="p8x" package="R_AXIAL" value="330R" x="203.27" y="28.28" smashed="yes">
-<attribute name="NAME" x="202.47" y="30.28" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="202.47" y="24.50" size="1.778" layer="27" ratio="10"/>
+<element name="LED2" library="p8x" package="LED5" value="PROBE1" x="316.99" y="42.64" smashed="yes">
+<attribute name="NAME" x="316.09" y="44.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="316.09" y="38.76" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="R14" library="p8x" package="R_AXIAL" value="330R" x="217.63" y="28.28" smashed="yes">
-<attribute name="NAME" x="216.83" y="30.28" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="216.83" y="24.50" size="1.778" layer="27" ratio="10"/>
+<element name="LED3" library="p8x" package="LED5" value="PROBE2" x="323.93" y="42.64" smashed="yes">
+<attribute name="NAME" x="323.03" y="44.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="323.03" y="38.76" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="R15" library="p8x" package="R_AXIAL" value="330R" x="231.99" y="28.28" smashed="yes">
-<attribute name="NAME" x="231.19" y="30.28" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="231.19" y="24.50" size="1.778" layer="27" ratio="10"/>
+<element name="LED4" library="p8x" package="LED5" value="PROBE3" x="330.87" y="42.64" smashed="yes">
+<attribute name="NAME" x="329.97" y="44.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="329.97" y="38.76" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="R16" library="p8x" package="R_AXIAL" value="330R" x="246.35" y="28.28" smashed="yes">
-<attribute name="NAME" x="245.55" y="30.28" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="245.55" y="24.50" size="1.778" layer="27" ratio="10"/>
+<element name="LED5" library="p8x" package="LED5" value="PROBE4" x="337.81" y="42.64" smashed="yes">
+<attribute name="NAME" x="336.91" y="44.74" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="336.91" y="38.76" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="R17" library="p8x" package="R_AXIAL" value="330R" x="260.71" y="28.28" smashed="yes">
-<attribute name="NAME" x="259.91" y="30.28" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="259.91" y="24.50" size="1.778" layer="27" ratio="10"/>
+<element name="LED6" library="p8x" package="LED5" value="PROBE5" x="203.37" y="20.66" smashed="yes">
+<attribute name="NAME" x="202.47" y="22.76" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="202.47" y="16.78" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="R18" library="p8x" package="R_AXIAL" value="330R" x="275.07" y="28.28" smashed="yes">
-<attribute name="NAME" x="274.27" y="30.28" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="274.27" y="24.50" size="1.778" layer="27" ratio="10"/>
+<element name="LED7" library="p8x" package="LED5" value="PROBE6" x="210.31" y="20.66" smashed="yes">
+<attribute name="NAME" x="209.41" y="22.76" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="209.41" y="16.78" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="R19" library="p8x" package="R_AXIAL" value="330R" x="289.43" y="28.28" smashed="yes">
-<attribute name="NAME" x="288.63" y="30.28" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="288.63" y="24.50" size="1.778" layer="27" ratio="10"/>
+<element name="LED8" library="p8x" package="LED5" value="PROBE7" x="217.25" y="20.66" smashed="yes">
+<attribute name="NAME" x="216.35" y="22.76" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="216.35" y="16.78" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="R20" library="p8x" package="R_AXIAL" value="330R" x="303.79" y="28.28" smashed="yes">
-<attribute name="NAME" x="302.99" y="30.28" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="302.99" y="24.50" size="1.778" layer="27" ratio="10"/>
+<element name="LED9" library="p8x" package="LED5" value="5V-OK" x="224.19" y="20.66" smashed="yes">
+<attribute name="NAME" x="223.29" y="22.76" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="223.29" y="16.78" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="R21" library="p8x" package="R_AXIAL" value="330R" x="318.15" y="28.28" smashed="yes">
-<attribute name="NAME" x="317.35" y="30.28" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="317.35" y="24.50" size="1.778" layer="27" ratio="10"/>
+<element name="LED10" library="p8x" package="LED5" value="ARMED" x="231.13" y="20.66" smashed="yes">
+<attribute name="NAME" x="230.23" y="22.76" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="230.23" y="16.78" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="R22" library="p8x" package="R_AXIAL" value="330R" x="203.27" y="24.08" smashed="yes">
-<attribute name="NAME" x="202.47" y="26.08" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="202.47" y="20.30" size="1.778" layer="27" ratio="10"/>
+<element name="LED11" library="p8x" package="LED5" value="LISTEN" x="238.07" y="20.66" smashed="yes">
+<attribute name="NAME" x="237.17" y="22.76" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="237.17" y="16.78" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="R23" library="p8x" package="R_AXIAL" value="330R" x="217.63" y="24.08" smashed="yes">
-<attribute name="NAME" x="216.83" y="26.08" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="216.83" y="20.30" size="1.778" layer="27" ratio="10"/>
+<element name="LED12" library="p8x" package="LED5" value="CLK" x="245.01" y="20.66" smashed="yes">
+<attribute name="NAME" x="244.11" y="22.76" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="244.11" y="16.78" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="R24" library="p8x" package="R_AXIAL" value="330R" x="231.99" y="24.08" smashed="yes">
-<attribute name="NAME" x="231.19" y="26.08" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="231.19" y="20.30" size="1.778" layer="27" ratio="10"/>
+<element name="LED13" library="p8x" package="LED5" value="CLKB" x="251.95" y="20.66" smashed="yes">
+<attribute name="NAME" x="251.05" y="22.76" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="251.05" y="16.78" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="R25" library="p8x" package="R_AXIAL" value="1K" x="246.35" y="24.08" smashed="yes">
-<attribute name="NAME" x="245.55" y="26.08" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="245.55" y="20.30" size="1.778" layer="27" ratio="10"/>
+<element name="LED14" library="p8x" package="LED5" value="-RES" x="258.89" y="20.66" smashed="yes">
+<attribute name="NAME" x="257.99" y="22.76" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="257.99" y="16.78" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="R26" library="p8x" package="R_AXIAL" value="1K" x="260.71" y="24.08" smashed="yes">
-<attribute name="NAME" x="259.91" y="26.08" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="259.91" y="20.30" size="1.778" layer="27" ratio="10"/>
+<element name="LED15" library="p8x" package="LED5" value="ERR" x="265.83" y="20.66" smashed="yes">
+<attribute name="NAME" x="264.93" y="22.76" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="264.93" y="16.78" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="R27" library="p8x" package="R_AXIAL" value="1K" x="275.07" y="24.08" smashed="yes">
-<attribute name="NAME" x="274.27" y="26.08" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="274.27" y="20.30" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="R28" library="p8x" package="R_AXIAL" value="1K" x="289.43" y="24.08" smashed="yes">
-<attribute name="NAME" x="288.63" y="26.08" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="288.63" y="20.30" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="R29" library="p8x" package="R_AXIAL" value="1K" x="303.79" y="24.08" smashed="yes">
-<attribute name="NAME" x="302.99" y="26.08" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="302.99" y="20.30" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="R30" library="p8x" package="R_AXIAL" value="1K" x="318.15" y="24.08" smashed="yes">
-<attribute name="NAME" x="317.35" y="26.08" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="317.35" y="20.30" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="R31" library="p8x" package="R_AXIAL" value="1K" x="203.27" y="19.88" smashed="yes">
-<attribute name="NAME" x="202.47" y="21.88" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="202.47" y="16.10" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="R32" library="p8x" package="R_AXIAL" value="1K" x="217.63" y="19.88" smashed="yes">
-<attribute name="NAME" x="216.83" y="21.88" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="216.83" y="16.10" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="LED1" library="p8x" package="LED5" value="PROBE0" x="232.09" y="19.78" smashed="yes">
-<attribute name="NAME" x="231.19" y="21.88" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="231.19" y="15.90" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="LED2" library="p8x" package="LED5" value="PROBE1" x="239.03" y="19.78" smashed="yes">
-<attribute name="NAME" x="238.13" y="21.88" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="238.13" y="15.90" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="LED3" library="p8x" package="LED5" value="PROBE2" x="245.97" y="19.78" smashed="yes">
-<attribute name="NAME" x="245.07" y="21.88" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="245.07" y="15.90" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="LED4" library="p8x" package="LED5" value="PROBE3" x="252.91" y="19.78" smashed="yes">
-<attribute name="NAME" x="252.01" y="21.88" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="252.01" y="15.90" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="LED5" library="p8x" package="LED5" value="PROBE4" x="259.85" y="19.78" smashed="yes">
-<attribute name="NAME" x="258.95" y="21.88" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="258.95" y="15.90" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="LED6" library="p8x" package="LED5" value="PROBE5" x="266.79" y="19.78" smashed="yes">
-<attribute name="NAME" x="265.89" y="21.88" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="265.89" y="15.90" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="LED7" library="p8x" package="LED5" value="PROBE6" x="273.73" y="19.78" smashed="yes">
-<attribute name="NAME" x="272.83" y="21.88" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="272.83" y="15.90" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="LED8" library="p8x" package="LED5" value="PROBE7" x="280.67" y="19.78" smashed="yes">
-<attribute name="NAME" x="279.77" y="21.88" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="279.77" y="15.90" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="LED9" library="p8x" package="LED5" value="5V-OK" x="287.61" y="19.78" smashed="yes">
-<attribute name="NAME" x="286.71" y="21.88" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="286.71" y="15.90" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="LED10" library="p8x" package="LED5" value="ARMED" x="294.55" y="19.78" smashed="yes">
-<attribute name="NAME" x="293.65" y="21.88" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="293.65" y="15.90" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="LED11" library="p8x" package="LED5" value="LISTEN" x="301.49" y="19.78" smashed="yes">
-<attribute name="NAME" x="300.59" y="21.88" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="300.59" y="15.90" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="LED12" library="p8x" package="LED5" value="CLK" x="308.43" y="19.78" smashed="yes">
-<attribute name="NAME" x="307.53" y="21.88" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="307.53" y="15.90" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="LED13" library="p8x" package="LED5" value="CLKB" x="315.37" y="19.78" smashed="yes">
-<attribute name="NAME" x="314.47" y="21.88" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="314.47" y="15.90" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="LED14" library="p8x" package="LED5" value="-RES" x="322.31" y="19.78" smashed="yes">
-<attribute name="NAME" x="321.41" y="21.88" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="321.41" y="15.90" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="LED15" library="p8x" package="LED5" value="ERR" x="329.25" y="19.78" smashed="yes">
-<attribute name="NAME" x="328.35" y="21.88" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="328.35" y="15.90" size="1.778" layer="27" ratio="10"/>
-</element>
-<element name="LED16" library="p8x" package="LED5" value="USB-ACT" x="336.19" y="19.78" smashed="yes">
-<attribute name="NAME" x="335.29" y="21.88" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="335.29" y="15.90" size="1.778" layer="27" ratio="10"/>
+<element name="LED16" library="p8x" package="LED5" value="USB-ACT" x="272.77" y="20.66" smashed="yes">
+<attribute name="NAME" x="271.87" y="22.76" size="1.778" layer="25" ratio="10"/>
+<attribute name="VALUE" x="271.87" y="16.78" size="1.778" layer="27" ratio="10"/>
 </element>
 </elements><signals>
 <signal name="-IRQ">
@@ -858,68 +794,68 @@
 <contactref element="J1" pad="C28"/>
 </signal>
 <signal name="LK_PR0">
-<contactref element="R9" pad="2"/>
+<contactref element="RN1" pad="16"/>
 <contactref element="LED1" pad="2"/>
 </signal>
 <signal name="LK_PR1">
-<contactref element="R10" pad="2"/>
+<contactref element="RN1" pad="15"/>
 <contactref element="LED2" pad="2"/>
 </signal>
 <signal name="LK_PR2">
-<contactref element="R11" pad="2"/>
+<contactref element="RN1" pad="14"/>
 <contactref element="LED3" pad="2"/>
 </signal>
 <signal name="LK_PR3">
-<contactref element="R12" pad="2"/>
+<contactref element="RN1" pad="13"/>
 <contactref element="LED4" pad="2"/>
 </signal>
 <signal name="LK_PR4">
-<contactref element="R13" pad="2"/>
+<contactref element="RN1" pad="12"/>
 <contactref element="LED5" pad="2"/>
 </signal>
 <signal name="LK_PR5">
-<contactref element="R14" pad="2"/>
+<contactref element="RN1" pad="11"/>
 <contactref element="LED6" pad="2"/>
 </signal>
 <signal name="LK_PR6">
-<contactref element="R15" pad="2"/>
+<contactref element="RN1" pad="10"/>
 <contactref element="LED7" pad="2"/>
 </signal>
 <signal name="LK_PR7">
-<contactref element="R16" pad="2"/>
+<contactref element="RN1" pad="9"/>
 <contactref element="LED8" pad="2"/>
 </signal>
 <signal name="L_PR0">
 <contactref element="U7" pad="18"/>
-<contactref element="R9" pad="1"/>
+<contactref element="RN1" pad="1"/>
 </signal>
 <signal name="L_PR1">
 <contactref element="U7" pad="16"/>
-<contactref element="R10" pad="1"/>
+<contactref element="RN1" pad="2"/>
 </signal>
 <signal name="L_PR2">
 <contactref element="U7" pad="14"/>
-<contactref element="R11" pad="1"/>
+<contactref element="RN1" pad="3"/>
 </signal>
 <signal name="L_PR3">
 <contactref element="U7" pad="12"/>
-<contactref element="R12" pad="1"/>
+<contactref element="RN1" pad="4"/>
 </signal>
 <signal name="L_PR4">
 <contactref element="U7" pad="9"/>
-<contactref element="R13" pad="1"/>
+<contactref element="RN1" pad="5"/>
 </signal>
 <signal name="L_PR5">
 <contactref element="U7" pad="7"/>
-<contactref element="R14" pad="1"/>
+<contactref element="RN1" pad="6"/>
 </signal>
 <signal name="L_PR6">
 <contactref element="U7" pad="5"/>
-<contactref element="R15" pad="1"/>
+<contactref element="RN1" pad="7"/>
 </signal>
 <signal name="L_PR7">
 <contactref element="U7" pad="3"/>
-<contactref element="R16" pad="1"/>
+<contactref element="RN1" pad="8"/>
 </signal>
 <signal name="P5V">
 <contactref element="A1" pad="39"/>
@@ -936,73 +872,73 @@
 <signal name="PR0">
 <contactref element="U5" pad="21"/>
 <contactref element="U7" pad="2"/>
-<contactref element="R25" pad="1"/>
+<contactref element="RN3" pad="1"/>
 </signal>
 <signal name="PR1">
 <contactref element="U5" pad="22"/>
 <contactref element="U7" pad="4"/>
-<contactref element="R26" pad="1"/>
+<contactref element="RN3" pad="2"/>
 </signal>
 <signal name="PR2">
 <contactref element="U5" pad="23"/>
 <contactref element="U7" pad="6"/>
-<contactref element="R27" pad="1"/>
+<contactref element="RN3" pad="3"/>
 </signal>
 <signal name="PR3">
 <contactref element="U5" pad="24"/>
 <contactref element="U7" pad="8"/>
-<contactref element="R28" pad="1"/>
+<contactref element="RN3" pad="4"/>
 </signal>
 <signal name="PR4">
 <contactref element="U5" pad="25"/>
 <contactref element="U7" pad="11"/>
-<contactref element="R29" pad="1"/>
+<contactref element="RN3" pad="5"/>
 </signal>
 <signal name="PR5">
 <contactref element="U5" pad="26"/>
 <contactref element="U7" pad="13"/>
-<contactref element="R30" pad="1"/>
+<contactref element="RN3" pad="6"/>
 </signal>
 <signal name="PR6">
 <contactref element="U5" pad="27"/>
 <contactref element="U7" pad="15"/>
-<contactref element="R31" pad="1"/>
+<contactref element="RN3" pad="7"/>
 </signal>
 <signal name="PR7">
 <contactref element="U5" pad="28"/>
 <contactref element="U7" pad="17"/>
-<contactref element="R32" pad="1"/>
+<contactref element="RN3" pad="8"/>
 </signal>
 <signal name="PRJ0">
-<contactref element="R25" pad="2"/>
+<contactref element="RN3" pad="16"/>
 <contactref element="J2" pad="1"/>
 </signal>
 <signal name="PRJ1">
-<contactref element="R26" pad="2"/>
+<contactref element="RN3" pad="15"/>
 <contactref element="J2" pad="2"/>
 </signal>
 <signal name="PRJ2">
-<contactref element="R27" pad="2"/>
+<contactref element="RN3" pad="14"/>
 <contactref element="J2" pad="3"/>
 </signal>
 <signal name="PRJ3">
-<contactref element="R28" pad="2"/>
+<contactref element="RN3" pad="13"/>
 <contactref element="J2" pad="4"/>
 </signal>
 <signal name="PRJ4">
-<contactref element="R29" pad="2"/>
+<contactref element="RN3" pad="12"/>
 <contactref element="J2" pad="5"/>
 </signal>
 <signal name="PRJ5">
-<contactref element="R30" pad="2"/>
+<contactref element="RN3" pad="11"/>
 <contactref element="J2" pad="6"/>
 </signal>
 <signal name="PRJ6">
-<contactref element="R31" pad="2"/>
+<contactref element="RN3" pad="10"/>
 <contactref element="J2" pad="7"/>
 </signal>
 <signal name="PRJ7">
-<contactref element="R32" pad="2"/>
+<contactref element="RN3" pad="9"/>
 <contactref element="J2" pad="8"/>
 </signal>
 <signal name="PSEL0">
@@ -1111,66 +1047,66 @@
 </signal>
 <signal name="ST0">
 <contactref element="A1" pad="10"/>
-<contactref element="R17" pad="1"/>
+<contactref element="RN2" pad="1"/>
 </signal>
 <signal name="ST1">
 <contactref element="A1" pad="11"/>
-<contactref element="R18" pad="1"/>
+<contactref element="RN2" pad="2"/>
 </signal>
 <signal name="ST2">
 <contactref element="A1" pad="12"/>
-<contactref element="R19" pad="1"/>
+<contactref element="RN2" pad="3"/>
 </signal>
 <signal name="ST3">
 <contactref element="A1" pad="14"/>
-<contactref element="R20" pad="1"/>
+<contactref element="RN2" pad="4"/>
 </signal>
 <signal name="ST4">
 <contactref element="A1" pad="15"/>
-<contactref element="R21" pad="1"/>
+<contactref element="RN2" pad="5"/>
 </signal>
 <signal name="ST5">
 <contactref element="A1" pad="16"/>
-<contactref element="R22" pad="1"/>
+<contactref element="RN2" pad="6"/>
 </signal>
 <signal name="ST6">
 <contactref element="A1" pad="17"/>
-<contactref element="R23" pad="1"/>
+<contactref element="RN2" pad="7"/>
 </signal>
 <signal name="ST7">
 <contactref element="A1" pad="19"/>
-<contactref element="R24" pad="1"/>
+<contactref element="RN2" pad="8"/>
 </signal>
 <signal name="STK0">
-<contactref element="R17" pad="2"/>
+<contactref element="RN2" pad="16"/>
 <contactref element="LED9" pad="2"/>
 </signal>
 <signal name="STK1">
-<contactref element="R18" pad="2"/>
+<contactref element="RN2" pad="15"/>
 <contactref element="LED10" pad="2"/>
 </signal>
 <signal name="STK2">
-<contactref element="R19" pad="2"/>
+<contactref element="RN2" pad="14"/>
 <contactref element="LED11" pad="2"/>
 </signal>
 <signal name="STK3">
-<contactref element="R20" pad="2"/>
+<contactref element="RN2" pad="13"/>
 <contactref element="LED12" pad="2"/>
 </signal>
 <signal name="STK4">
-<contactref element="R21" pad="2"/>
+<contactref element="RN2" pad="12"/>
 <contactref element="LED13" pad="2"/>
 </signal>
 <signal name="STK5">
-<contactref element="R22" pad="2"/>
+<contactref element="RN2" pad="11"/>
 <contactref element="LED14" pad="2"/>
 </signal>
 <signal name="STK6">
-<contactref element="R23" pad="2"/>
+<contactref element="RN2" pad="10"/>
 <contactref element="LED15" pad="2"/>
 </signal>
 <signal name="STK7">
-<contactref element="R24" pad="2"/>
+<contactref element="RN2" pad="9"/>
 <contactref element="LED16" pad="2"/>
 </signal>
 <signal name="VCC">

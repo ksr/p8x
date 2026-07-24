@@ -116,7 +116,7 @@ the control card absent, so nothing drives the ~40 control lines. That state:
   glitching float on `CLK` could fire *one* spurious SRAM write. On a bench tool
   that is a byte you rewrite, not a dead chip.
 
-Spending discrete limit resistors — the bulk of the board's passives — so a bench instrument
+Spending three resistor networks — the bulk of the board's passives — so a bench instrument
 can condition *other cards'* floating inputs during a transient the real machine
 never has is the wrong place to solve it. The only line with teeth (the clock) is
 handled in firmware (§3.1). The unguarded window shrinks to power-on-to-firmware
@@ -140,7 +140,7 @@ networks were dropped. Consequence, stated plainly:
   it proves too sharp, 100 Ω bus series would cap contention at ~5 mA for the cost
   of the networks back.)*
 
-**The 8 probe lines keep 1 kΩ** (R25–R32, discrete), because a slipped grabber is
+**The 8 probe lines keep 1 kΩ** (RN3, DIP-16 network), because a slipped grabber is
 over-voltage the operator cannot design away: a grabber onto 12 V gives
 `(12−5)/1k = 7 mA` into the MCP's internal ESD clamp, under its 20 mA rating — so
 no external clamp diodes are needed.
@@ -157,7 +157,7 @@ backplane's, plus this card's probe series:
 | `-IRQ` | 10k pull-**up** (`R4`, added) | backplane |
 | `-RES` | **none** | — (control card drives it push-pull; see below) |
 | `A0–A15`, control, `CLK`/`CLKB` | **none** | — (firmware holds the clocks; §3.1) |
-| Probes | 1k series | this card (R25–R32, discrete) |
+| Probes | 1k series | this card (RN3, DIP-16 network) |
 
 This card puts **no** passive on `D`, `-RES`, or `-IRQ` — those belong to the
 backplane.
@@ -332,9 +332,9 @@ Per-chip allocation is in the block diagram above.
 | U7 | 74HCT244 | probe LED buffer | reuse |
 | A1 | Pico (2×20 headers) | RP2040, USB CDC | **add** |
 | J2 | 2×5 header | 8 probes + 2 GND | **add** |
-| R9–R16 | RES | buffered-LED current-limit, 330 Ω (×8 discrete) | reuse |
-| R17–R24 | RES | status-LED current-limit, 330 Ω (×8 discrete) | reuse |
-| R25–R32 | RES | probe series, 1 kΩ (×8 discrete) | reuse |
+| RN1 | RNISO8D (DIP-16) | probe-LED current-limit, 8×330 Ω isolated | **add** |
+| RN2 | RNISO8D (DIP-16) | status-LED current-limit, 8×330 Ω isolated | **add** |
+| RN3 | RNISO8D (DIP-16) | probe series, 8×1 kΩ isolated | **add** |
 | R5–R8 | RES | 5V-sense divider (×2), MISO divider (×2) | reuse |
 | LED1–8 | LED (through-hole) | probe activity, 8 individual LEDs | reuse |
 | LED9–16 | LED (through-hole) | status, 8 individual labelled LEDs | reuse |
@@ -433,7 +433,7 @@ in `p8x-bustest-card.brd`, to be placed from the ratsnest):
 |---|---|---|
 | edge | J1 | 1.7 → 14.2 |
 | 1 | U1–U7 + their decoupling caps, A1 (Pico) | 17.1 → 150.0 |
-| 2–5 | J2, D1, R5–R32 (28 discrete), LED1–16 | wraps to ~5 rows |
+| 2–3 | J2, D1, R5–R8, RN1–RN3, LED1–16 | wraps to ~3 rows |
 
 0 parts overflowing the outline, 0 footprint overlaps. This is auto-flow output,
 not a considered layout — it proves the card *fits*, and is a starting point for
@@ -550,7 +550,7 @@ listen-only. That is inherent to the approach, not a fixable gap.
   is limited only by device R<sub>on</sub> (~25–50 mA, abs-max-safe but not
   indefinite). Accepted for a careful bench tool; reversible by adding 100 Ω bus
   series (caps at ~5 mA) if it proves too sharp in use.
-- **Layout** — hand placement and routing. Auto-flow confirms the 62 parts fit
+- **Layout** — hand placement and routing. Auto-flow confirms the 41 parts fit
   160 × 100 at 31 % utilisation, but nothing has been placed deliberately and no
   copper is routed.
 - **Nothing here is measured.** Every number above is calculated from datasheet

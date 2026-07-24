@@ -851,17 +851,20 @@ with real analysis; the full reasoning is in
   resolve paths and expand globs; see `SYS_OPEN` (NEXT) and shell-side glob+argv
   (IDEAS) — those are the fix.
 
-- **Bus test card limiting resistors are DISCRETE, not networks** (2026-07-22).
-  RPR/RST/RPRB were isolated arrays (RNISO8/SIP-16). They are series elements —
-  a different net on both ends of every leg — so a 9-pin bussed SIP-8 physically
-  cannot replace them (its shared COM pin would short all eight legs on one
-  side). Rather than keep them as SIP-16 isolated arrays, they were expanded to
-  24 discrete axial resistors (R9–R32: 8×330 Ω buffered-LED, 8×330 Ω status,
-  8×1 kΩ probe) for an all-through-hole, hand-sourced bench card. This takes the
-  card 27 → 48 parts on purpose; it is the deliberate opposite of the earlier
-  reduction and is not to be "cleaned up" back into a network without a reason
-  that outweighs the discrete/through-hole simplicity. The pull-up networks stay
-  bussed SIP-9 (RN1 etc.) — those legs DO share a common (VCC) node.
+- **Bus test card resistor packaging policy** (2026-07-22, supersedes the
+  earlier "discrete resistors" decision). The banks were briefly all-discrete;
+  that was reverted. The rule now, project-wide:
+    - **DIP-16 isolated networks (RNISO8D)** for 8-way isolated banks — LED
+      current-limiting and any other bank where both ends of each leg differ.
+      On bustest: RN1 (probe-LED 330R), RN2 (status-LED 330R), RN3 (probe series
+      1k). One package per bank instead of eight parts.
+    - **SIP-8 / 9-pin bussed (SIP9)** for pull-ups / pull-downs, where one side
+      is a shared node. Already true of RN1/RNP on backplane/cf/io.
+    - **Discrete** only for 1s and 2s (dividers, single pull-ups) — e.g. bustest
+      R5–R8 (5V-sense + MISO dividers).
+  A bussed SIP-8 CANNOT substitute for an isolated bank (its shared COM would
+  short all eight legs), and 8 isolated resistors do not fit a 9-pin part, so
+  the isolated banks are DIP-16, not SIP. Do not "unify" the two network types.
 
 - **Bus test card indicators are 16 INDIVIDUAL labelled LEDs, not bar arrays**
   (2026-07-22). LPR/LST (LEDARR8 / DIP-16) became LED1–16 (LED1–8 probes,
