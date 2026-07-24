@@ -666,12 +666,18 @@ def card(name,title,parts_ic,parts_small,nets,used_bus,labels=None,
         if net in ("VCC","GND") or net in used_bus:
             nets.setdefault(net,[]).append(("J1",pin))
     # one 100nF decoupling cap per IC (card standards sec.5), each across
-    # VCC<->GND and placed next to its IC. Named CDn to avoid clashing with any
-    # functional caps a card already declares (C1, C2, ...).
+    # VCC<->GND and placed next to its IC. Numbered Cn, continuing AFTER any
+    # functional caps the card already declares, so the block never collides with
+    # a hand-placed C1/C2 (io-card has C2-C5, control has C1).
+    import re as _re
+    _cbase=max([int(_re.match(r'C(\d+)$',r).group(1))
+                for r in parts_small if _re.match(r'C\d+$',r)]+[0])
     decap={}
     icrefs=list(parts_ic)
+    decap_ref=[]                                   # keep the assigned names for the placer
     for i,ref in enumerate(icrefs):
-        c="CD%d"%(i+1)
+        c="C%d"%(_cbase+i+1)
+        decap_ref.append(c)
         decap[c]=("CAP1","100nF")
         nets.setdefault("VCC",[]).append((c,"1"))
         nets.setdefault("GND",[]).append((c,"2"))
@@ -729,7 +735,7 @@ def card(name,title,parts_ic,parts_small,nets,used_bus,labels=None,
     flow=[]                                   # (ref,dev,val,pkg) in placement order
     for i,ref in enumerate(icrefs):           # each IC immediately followed by its cap
         dev,val=parts[ref]; flow.append((ref,dev,val,DEV[dev]["pkg"]))
-        flow.append(("CD%d"%(i+1),"CAP1","100nF",DEV["CAP1"]["pkg"]))
+        flow.append((decap_ref[i],"CAP1","100nF",DEV["CAP1"]["pkg"]))
     for ref in parts_small:
         dev,val=parts[ref]; flow.append((ref,dev,val,DEV[dev]["pkg"]))
     x0=EDGE+j1w+GAP*2; cx=x0; cyt=BH-EDGE; rowh=0.0
@@ -1340,7 +1346,7 @@ mnet("-RAMCE",("U7","1Y"),("U2","!CE"))
 #   ROM8CE = OR(Q, A15)       -> U11.1 (the one new gate) = A13|A14|A15 = ROM !CE
 #   -RAM2CE= NAND(A15N, Q)    -> U7.3  (was rev-D NAND(A15N,A14); A14 input becomes Q)
 # U11 is a 74HCT32; only gate 1 is used (gates 2-4 tied off). Its 100nF decoupling cap is
-# CD11, added automatically by card() like every other IC.
+# C11, added automatically by card() like every other IC.
 mnet("Q",("U8","4Y"),("U7","3B"),("U11","1A"))        # U8.4 = OR(A13,A14); feeds ROM OR + RAM2 NAND
 mnet("ROM8CE",("U11","1Y"),("U1","!CE"),("U8","3A"))  # U11.1 = OR(Q,A15) = ROM !CE; also ROM-LED select
 mnet("A15N",("U7","2Y"),("U7","3A"))                  # U7.2 = NAND(A15,A15) = !A15

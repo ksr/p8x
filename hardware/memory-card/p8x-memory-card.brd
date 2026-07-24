@@ -312,7 +312,7 @@
 <attribute name="NAME" x="202.47" y="97.20" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="202.47" y="58.40" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="CD1" library="p8x" package="C_DISC1" value="100nF" x="222.81" y="95.10" smashed="yes">
+<element name="C1" library="p8x" package="C_DISC1" value="100nF" x="222.81" y="95.10" smashed="yes">
 <attribute name="NAME" x="221.91" y="97.20" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="221.91" y="88.68" size="1.778" layer="27" ratio="10"/>
 </element>
@@ -320,7 +320,7 @@
 <attribute name="NAME" x="226.31" y="97.20" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="226.31" y="58.40" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="CD2" library="p8x" package="C_DISC1" value="100nF" x="246.65" y="95.10" smashed="yes">
+<element name="C2" library="p8x" package="C_DISC1" value="100nF" x="246.65" y="95.10" smashed="yes">
 <attribute name="NAME" x="245.75" y="97.20" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="245.75" y="88.68" size="1.778" layer="27" ratio="10"/>
 </element>
@@ -328,7 +328,7 @@
 <attribute name="NAME" x="250.15" y="97.20" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="250.15" y="68.56" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="CD3" library="p8x" package="C_DISC1" value="100nF" x="262.87" y="95.10" smashed="yes">
+<element name="C3" library="p8x" package="C_DISC1" value="100nF" x="262.87" y="95.10" smashed="yes">
 <attribute name="NAME" x="261.97" y="97.20" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="261.97" y="88.68" size="1.778" layer="27" ratio="10"/>
 </element>
@@ -336,7 +336,7 @@
 <attribute name="NAME" x="266.37" y="97.20" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="266.37" y="76.18" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="CD4" library="p8x" package="C_DISC1" value="100nF" x="279.09" y="95.10" smashed="yes">
+<element name="C4" library="p8x" package="C_DISC1" value="100nF" x="279.09" y="95.10" smashed="yes">
 <attribute name="NAME" x="278.19" y="97.20" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="278.19" y="88.68" size="1.778" layer="27" ratio="10"/>
 </element>
@@ -344,7 +344,7 @@
 <attribute name="NAME" x="282.59" y="97.20" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="282.59" y="73.64" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="CD5" library="p8x" package="C_DISC1" value="100nF" x="295.31" y="95.10" smashed="yes">
+<element name="C5" library="p8x" package="C_DISC1" value="100nF" x="295.31" y="95.10" smashed="yes">
 <attribute name="NAME" x="294.41" y="97.20" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="294.41" y="88.68" size="1.778" layer="27" ratio="10"/>
 </element>
@@ -352,7 +352,7 @@
 <attribute name="NAME" x="298.81" y="97.20" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="298.81" y="73.64" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="CD6" library="p8x" package="C_DISC1" value="100nF" x="311.53" y="95.10" smashed="yes">
+<element name="C6" library="p8x" package="C_DISC1" value="100nF" x="311.53" y="95.10" smashed="yes">
 <attribute name="NAME" x="310.63" y="97.20" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="310.63" y="88.68" size="1.778" layer="27" ratio="10"/>
 </element>
@@ -360,7 +360,7 @@
 <attribute name="NAME" x="315.03" y="97.20" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="315.03" y="76.18" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="CD7" library="p8x" package="C_DISC1" value="100nF" x="327.75" y="95.10" smashed="yes">
+<element name="C7" library="p8x" package="C_DISC1" value="100nF" x="327.75" y="95.10" smashed="yes">
 <attribute name="NAME" x="326.85" y="97.20" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="326.85" y="88.68" size="1.778" layer="27" ratio="10"/>
 </element>
@@ -368,7 +368,7 @@
 <attribute name="NAME" x="331.25" y="97.20" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="331.25" y="76.18" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="CD8" library="p8x" package="C_DISC1" value="100nF" x="203.37" y="57.88" smashed="yes">
+<element name="C8" library="p8x" package="C_DISC1" value="100nF" x="203.37" y="57.88" smashed="yes">
 <attribute name="NAME" x="202.47" y="59.98" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="202.47" y="51.46" size="1.778" layer="27" ratio="10"/>
 </element>
@@ -376,7 +376,7 @@
 <attribute name="NAME" x="206.87" y="59.98" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="206.87" y="38.96" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="CD9" library="p8x" package="C_DISC1" value="100nF" x="219.59" y="57.88" smashed="yes">
+<element name="C9" library="p8x" package="C_DISC1" value="100nF" x="219.59" y="57.88" smashed="yes">
 <attribute name="NAME" x="218.69" y="59.98" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="218.69" y="51.46" size="1.778" layer="27" ratio="10"/>
 </element>
@@ -384,7 +384,7 @@
 <attribute name="NAME" x="223.09" y="59.98" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="223.09" y="21.18" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="CD10" library="p8x" package="C_DISC1" value="100nF" x="243.43" y="57.88" smashed="yes">
+<element name="C10" library="p8x" package="C_DISC1" value="100nF" x="243.43" y="57.88" smashed="yes">
 <attribute name="NAME" x="242.53" y="59.98" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="242.53" y="51.46" size="1.778" layer="27" ratio="10"/>
 </element>
@@ -392,7 +392,7 @@
 <attribute name="NAME" x="246.93" y="59.98" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="246.93" y="38.96" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="CD11" library="p8x" package="C_DISC1" value="100nF" x="259.65" y="57.88" smashed="yes">
+<element name="C11" library="p8x" package="C_DISC1" value="100nF" x="259.65" y="57.88" smashed="yes">
 <attribute name="NAME" x="258.75" y="59.98" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="258.75" y="51.46" size="1.778" layer="27" ratio="10"/>
 </element>
@@ -703,17 +703,17 @@
 <contactref element="J1" pad="B32"/>
 <contactref element="J1" pad="C31"/>
 <contactref element="J1" pad="C32"/>
-<contactref element="CD1" pad="2"/>
-<contactref element="CD2" pad="2"/>
-<contactref element="CD3" pad="2"/>
-<contactref element="CD4" pad="2"/>
-<contactref element="CD5" pad="2"/>
-<contactref element="CD6" pad="2"/>
-<contactref element="CD7" pad="2"/>
-<contactref element="CD8" pad="2"/>
-<contactref element="CD9" pad="2"/>
-<contactref element="CD10" pad="2"/>
-<contactref element="CD11" pad="2"/>
+<contactref element="C1" pad="2"/>
+<contactref element="C2" pad="2"/>
+<contactref element="C3" pad="2"/>
+<contactref element="C4" pad="2"/>
+<contactref element="C5" pad="2"/>
+<contactref element="C6" pad="2"/>
+<contactref element="C7" pad="2"/>
+<contactref element="C8" pad="2"/>
+<contactref element="C9" pad="2"/>
+<contactref element="C10" pad="2"/>
+<contactref element="C11" pad="2"/>
 <contactref element="U1" pad="14"/>
 <contactref element="U2" pad="14"/>
 <contactref element="U3" pad="10"/>
@@ -843,17 +843,17 @@
 <contactref element="J1" pad="B2"/>
 <contactref element="J1" pad="C1"/>
 <contactref element="J1" pad="C2"/>
-<contactref element="CD1" pad="1"/>
-<contactref element="CD2" pad="1"/>
-<contactref element="CD3" pad="1"/>
-<contactref element="CD4" pad="1"/>
-<contactref element="CD5" pad="1"/>
-<contactref element="CD6" pad="1"/>
-<contactref element="CD7" pad="1"/>
-<contactref element="CD8" pad="1"/>
-<contactref element="CD9" pad="1"/>
-<contactref element="CD10" pad="1"/>
-<contactref element="CD11" pad="1"/>
+<contactref element="C1" pad="1"/>
+<contactref element="C2" pad="1"/>
+<contactref element="C3" pad="1"/>
+<contactref element="C4" pad="1"/>
+<contactref element="C5" pad="1"/>
+<contactref element="C6" pad="1"/>
+<contactref element="C7" pad="1"/>
+<contactref element="C8" pad="1"/>
+<contactref element="C9" pad="1"/>
+<contactref element="C10" pad="1"/>
+<contactref element="C11" pad="1"/>
 <contactref element="U1" pad="28"/>
 <contactref element="U2" pad="28"/>
 <contactref element="U3" pad="20"/>

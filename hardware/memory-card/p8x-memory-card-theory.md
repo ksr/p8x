@@ -105,7 +105,7 @@ were exhausted, so rev E adds exactly one 2-input gate — **U11.1** (a 74HCT32 
 reusing the rev-D gates in place: `U8.4 = OR(A13,A14) = Q`, `U11.1 = OR(Q,A15)` =
 the ROM `!CE` (`A13|A14|A15`), and `U7.3 = NAND(!A15,Q)` = the RAM-low `!CE`
 (= `A15 OR NOR(A13,A14)`). The other added parts are U10 (the second 62256) and the
-two decoupling caps CD10/CD11.
+two decoupling caps C10/C11.
 
 ### 3.2 Read vs write strobes
 The control word's `DOE` and `DLD` fields are decoded locally:

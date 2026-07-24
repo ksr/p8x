@@ -53,7 +53,7 @@ The rev-E decode adds the A13 term to the ROM/RAM-low select. rev D's spare gate
 were used up, so rev E adds exactly one 2-input gate: **U11.1** (a 74HCT32 OR).
 The rev-D gates are reused in place — `U8.4` now ORs `A13,A14` into `Q`; `U11.1`
 ORs `Q` with `A15` for the ROM `!CE` (`A13|A14|A15`); and `U7.3` NANDs `!A15` with
-`Q` for the RAM-low `!CE` (= `A15 OR NOR(A13,A14)`). U11's 100 nF cap is `CD11`.
+`Q` for the RAM-low `!CE` (= `A15 OR NOR(A13,A14)`). U11's 100 nF cap is `C11`.
 
 ### Data-bus transceiver
 The 74245 (U3) connects on-card memory to the backplane data bus. Its **direction**
