@@ -437,69 +437,69 @@
 <attribute name="NAME" x="297.33" y="44.74" size="1.778" layer="25" ratio="10"/>
 <attribute name="VALUE" x="297.33" y="21.18" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="LED1" library="p8x" package="LED5" value="PRB0" x="310.05" y="42.64" smashed="yes">
-<attribute name="NAME" x="309.15" y="44.74" size="1.778" layer="25" ratio="10" display="off"/>
-<attribute name="VALUE" x="309.15" y="38.76" size="1.778" layer="27" ratio="10"/>
+<element name="LED1" library="p8x" package="LED5" value="PRB0" x="20.00" y="88.00" smashed="yes">
+<attribute name="NAME" x="19.10" y="90.10" size="1.778" layer="25" ratio="10" display="off"/>
+<attribute name="VALUE" x="19.10" y="84.12" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="LED2" library="p8x" package="LED5" value="PRB1" x="316.99" y="42.64" smashed="yes">
-<attribute name="NAME" x="316.09" y="44.74" size="1.778" layer="25" ratio="10" display="off"/>
-<attribute name="VALUE" x="316.09" y="38.76" size="1.778" layer="27" ratio="10"/>
+<element name="LED2" library="p8x" package="LED5" value="PRB1" x="37.00" y="88.00" smashed="yes">
+<attribute name="NAME" x="36.10" y="90.10" size="1.778" layer="25" ratio="10" display="off"/>
+<attribute name="VALUE" x="36.10" y="84.12" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="LED3" library="p8x" package="LED5" value="PRB2" x="323.93" y="42.64" smashed="yes">
-<attribute name="NAME" x="323.03" y="44.74" size="1.778" layer="25" ratio="10" display="off"/>
-<attribute name="VALUE" x="323.03" y="38.76" size="1.778" layer="27" ratio="10"/>
+<element name="LED3" library="p8x" package="LED5" value="PRB2" x="54.00" y="88.00" smashed="yes">
+<attribute name="NAME" x="53.10" y="90.10" size="1.778" layer="25" ratio="10" display="off"/>
+<attribute name="VALUE" x="53.10" y="84.12" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="LED4" library="p8x" package="LED5" value="PRB3" x="330.87" y="42.64" smashed="yes">
-<attribute name="NAME" x="329.97" y="44.74" size="1.778" layer="25" ratio="10" display="off"/>
-<attribute name="VALUE" x="329.97" y="38.76" size="1.778" layer="27" ratio="10"/>
+<element name="LED4" library="p8x" package="LED5" value="PRB3" x="71.00" y="88.00" smashed="yes">
+<attribute name="NAME" x="70.10" y="90.10" size="1.778" layer="25" ratio="10" display="off"/>
+<attribute name="VALUE" x="70.10" y="84.12" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="LED5" library="p8x" package="LED5" value="PRB4" x="337.81" y="42.64" smashed="yes">
-<attribute name="NAME" x="336.91" y="44.74" size="1.778" layer="25" ratio="10" display="off"/>
-<attribute name="VALUE" x="336.91" y="38.76" size="1.778" layer="27" ratio="10"/>
+<element name="LED5" library="p8x" package="LED5" value="PRB4" x="88.00" y="88.00" smashed="yes">
+<attribute name="NAME" x="87.10" y="90.10" size="1.778" layer="25" ratio="10" display="off"/>
+<attribute name="VALUE" x="87.10" y="84.12" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="LED6" library="p8x" package="LED5" value="PRB5" x="203.37" y="20.66" smashed="yes">
-<attribute name="NAME" x="202.47" y="22.76" size="1.778" layer="25" ratio="10" display="off"/>
-<attribute name="VALUE" x="202.47" y="16.78" size="1.778" layer="27" ratio="10"/>
+<element name="LED6" library="p8x" package="LED5" value="PRB5" x="105.00" y="88.00" smashed="yes">
+<attribute name="NAME" x="104.10" y="90.10" size="1.778" layer="25" ratio="10" display="off"/>
+<attribute name="VALUE" x="104.10" y="84.12" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="LED7" library="p8x" package="LED5" value="PRB6" x="210.31" y="20.66" smashed="yes">
-<attribute name="NAME" x="209.41" y="22.76" size="1.778" layer="25" ratio="10" display="off"/>
-<attribute name="VALUE" x="209.41" y="16.78" size="1.778" layer="27" ratio="10"/>
+<element name="LED7" library="p8x" package="LED5" value="PRB6" x="122.00" y="88.00" smashed="yes">
+<attribute name="NAME" x="121.10" y="90.10" size="1.778" layer="25" ratio="10" display="off"/>
+<attribute name="VALUE" x="121.10" y="84.12" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="LED8" library="p8x" package="LED5" value="PRB7" x="217.25" y="20.66" smashed="yes">
-<attribute name="NAME" x="216.35" y="22.76" size="1.778" layer="25" ratio="10" display="off"/>
-<attribute name="VALUE" x="216.35" y="16.78" size="1.778" layer="27" ratio="10"/>
+<element name="LED8" library="p8x" package="LED5" value="PRB7" x="139.00" y="88.00" smashed="yes">
+<attribute name="NAME" x="138.10" y="90.10" size="1.778" layer="25" ratio="10" display="off"/>
+<attribute name="VALUE" x="138.10" y="84.12" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="LED9" library="p8x" package="LED5" value="5V" x="224.19" y="20.66" smashed="yes">
-<attribute name="NAME" x="223.29" y="22.76" size="1.778" layer="25" ratio="10" display="off"/>
-<attribute name="VALUE" x="223.29" y="16.78" size="1.778" layer="27" ratio="10"/>
+<element name="LED9" library="p8x" package="LED5" value="5V" x="20.00" y="76.00" smashed="yes">
+<attribute name="NAME" x="19.10" y="78.10" size="1.778" layer="25" ratio="10" display="off"/>
+<attribute name="VALUE" x="19.10" y="72.12" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="LED10" library="p8x" package="LED5" value="ARM" x="231.13" y="20.66" smashed="yes">
-<attribute name="NAME" x="230.23" y="22.76" size="1.778" layer="25" ratio="10" display="off"/>
-<attribute name="VALUE" x="230.23" y="16.78" size="1.778" layer="27" ratio="10"/>
+<element name="LED10" library="p8x" package="LED5" value="ARM" x="37.00" y="76.00" smashed="yes">
+<attribute name="NAME" x="36.10" y="78.10" size="1.778" layer="25" ratio="10" display="off"/>
+<attribute name="VALUE" x="36.10" y="72.12" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="LED11" library="p8x" package="LED5" value="LIS" x="238.07" y="20.66" smashed="yes">
-<attribute name="NAME" x="237.17" y="22.76" size="1.778" layer="25" ratio="10" display="off"/>
-<attribute name="VALUE" x="237.17" y="16.78" size="1.778" layer="27" ratio="10"/>
+<element name="LED11" library="p8x" package="LED5" value="LIS" x="54.00" y="76.00" smashed="yes">
+<attribute name="NAME" x="53.10" y="78.10" size="1.778" layer="25" ratio="10" display="off"/>
+<attribute name="VALUE" x="53.10" y="72.12" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="LED12" library="p8x" package="LED5" value="CLK" x="245.01" y="20.66" smashed="yes">
-<attribute name="NAME" x="244.11" y="22.76" size="1.778" layer="25" ratio="10" display="off"/>
-<attribute name="VALUE" x="244.11" y="16.78" size="1.778" layer="27" ratio="10"/>
+<element name="LED12" library="p8x" package="LED5" value="CLK" x="71.00" y="76.00" smashed="yes">
+<attribute name="NAME" x="70.10" y="78.10" size="1.778" layer="25" ratio="10" display="off"/>
+<attribute name="VALUE" x="70.10" y="72.12" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="LED13" library="p8x" package="LED5" value="CKB" x="251.95" y="20.66" smashed="yes">
-<attribute name="NAME" x="251.05" y="22.76" size="1.778" layer="25" ratio="10" display="off"/>
-<attribute name="VALUE" x="251.05" y="16.78" size="1.778" layer="27" ratio="10"/>
+<element name="LED13" library="p8x" package="LED5" value="CKB" x="88.00" y="76.00" smashed="yes">
+<attribute name="NAME" x="87.10" y="78.10" size="1.778" layer="25" ratio="10" display="off"/>
+<attribute name="VALUE" x="87.10" y="72.12" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="LED14" library="p8x" package="LED5" value="RES" x="258.89" y="20.66" smashed="yes">
-<attribute name="NAME" x="257.99" y="22.76" size="1.778" layer="25" ratio="10" display="off"/>
-<attribute name="VALUE" x="257.99" y="16.78" size="1.778" layer="27" ratio="10"/>
+<element name="LED14" library="p8x" package="LED5" value="RES" x="105.00" y="76.00" smashed="yes">
+<attribute name="NAME" x="104.10" y="78.10" size="1.778" layer="25" ratio="10" display="off"/>
+<attribute name="VALUE" x="104.10" y="72.12" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="LED15" library="p8x" package="LED5" value="ERR" x="265.83" y="20.66" smashed="yes">
-<attribute name="NAME" x="264.93" y="22.76" size="1.778" layer="25" ratio="10" display="off"/>
-<attribute name="VALUE" x="264.93" y="16.78" size="1.778" layer="27" ratio="10"/>
+<element name="LED15" library="p8x" package="LED5" value="ERR" x="122.00" y="76.00" smashed="yes">
+<attribute name="NAME" x="121.10" y="78.10" size="1.778" layer="25" ratio="10" display="off"/>
+<attribute name="VALUE" x="121.10" y="72.12" size="1.778" layer="27" ratio="10"/>
 </element>
-<element name="LED16" library="p8x" package="LED5" value="USB" x="272.77" y="20.66" smashed="yes">
-<attribute name="NAME" x="271.87" y="22.76" size="1.778" layer="25" ratio="10" display="off"/>
-<attribute name="VALUE" x="271.87" y="16.78" size="1.778" layer="27" ratio="10"/>
+<element name="LED16" library="p8x" package="LED5" value="USB" x="139.00" y="76.00" smashed="yes">
+<attribute name="NAME" x="138.10" y="78.10" size="1.778" layer="25" ratio="10" display="off"/>
+<attribute name="VALUE" x="138.10" y="72.12" size="1.778" layer="27" ratio="10"/>
 </element>
 </elements><signals>
 <signal name="-IRQ">

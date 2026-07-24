@@ -443,7 +443,7 @@ def write_sch(fn,title,parts,nets,labels=None):
     open(fn,"w").write("\n".join(o)+"\n")
 
 def write_brd(fn,title,parts,nets,wires,polys,W,H,vias=None,outline_only=False,unplaced=False,holes=None,
-              hide_name=None,hide_val=None,center_title=False):
+              hide_name=None,hide_val=None,center_title=False,placed=None):
     # hide_name / hide_val: refs whose silkscreen NAME (refdes) or VALUE should be
     # suppressed. The attribute is still emitted (Fusion keeps the record) but with
     # display="off" so nothing prints -- used to de-clutter parts whose meaning is
@@ -514,7 +514,8 @@ def write_brd(fn,title,parts,nets,wires,polys,W,H,vias=None,outline_only=False,u
     offx = W+25.4 if unplaced else 0.0
     for ref,pv in parts.items():
         dev,val,x,y=pv[:4]; rot=f' rot="{pv[4]}"' if len(pv)>4 else ""
-        ex,ey=x+offx,y
+        _off = 0.0 if (placed and ref in placed) else offx   # `placed` refs stay on the board
+        ex,ey=x+_off,y
         # Smashed element with explicit NAME (tNames/25) + VALUE (tValues/27)
         # attributes — exactly how Eagle writes boards, so Fusion reliably shows
         # the refdes + part number instead of remapping them to scratch layers.
@@ -648,7 +649,7 @@ SILK_GAP=1.2
 
 def card(name,title,parts_ic,parts_small,nets,used_bus,labels=None,
          brd_outline_only=False,brd_unplaced=True,W=160,H=100,
-         hide_name=None,hide_val=None,center_title=False):
+         hide_name=None,hide_val=None,center_title=False,place=None):
     """Build sch+brd for one plug-in card. `labels` maps ref -> logical-function
     text placed near the part on the schematic (the part's `value` is its part
     number). `brd_outline_only` emits a .brd with just the board dimensions;
@@ -747,6 +748,11 @@ def card(name,title,parts_ic,parts_small,nets,used_bus,labels=None,
             cx=x0; cyt-=rowh+GAP; rowh=0.0
         brd[ref]=(dev,val,cx-ox,cyt-h-oy)     # top-left of this part at (cx,cyt)
         cx+=w+GAP; rowh=max(rowh,h)
+    # `place` pins specific refs to explicit (x,y) on the board (origin = pad
+    # reference point); write_brd keeps these on-board while everything else parks
+    # off to the right. Used to pre-lay the LED banks so they import already tidy.
+    for ref,(px,py) in (place or {}).items():
+        dev,val=parts[ref]; brd[ref]=(dev,val,px,py)
     # include J1 so CARDS is the full board (the BOM counts it; the schematic
     # renderer filters J1 by name). Without it the card edge connectors were
     # missing from the BOM.
@@ -758,7 +764,8 @@ def card(name,title,parts_ic,parts_small,nets,used_bus,labels=None,
         validate(base+".sch",sch,nets)
         write_brd(base+".brd",title,brd,nets,{},{"GND":[(2,)],"VCC":[(15,)]},W,H,
                   outline_only=brd_outline_only,unplaced=brd_unplaced,
-                  hide_name=hide_name,hide_val=hide_val,center_title=center_title)
+                  hide_name=hide_name,hide_val=hide_val,center_title=center_title,
+                  placed=set(place or []))
         if not brd_outline_only:
             validate(base+".brd",brd,nets)
             # There used to be a companion "-full.brd" here: the same parts and
@@ -1724,6 +1731,13 @@ bt_labels.update({"A1":"RP2040 PICO","J2":"PROBE HEADER","D1":"5V FEED DIODE",
 _STCOL=["GRN","GRN","GRN","YEL","YEL","RED","RED","GRN"]
 for i in range(8): bt_labels["LED%d"%(1+i)]="GRN"          # probe color (schematic note)
 for i in range(8): bt_labels["LED%d"%(9+i)]=_STCOL[i]      # status color (schematic note)
+# Pre-lay the 16 LEDs as two rows on the board: probes (LED1-8) on top, status
+# (LED9-16) below, evenly spaced across the width. Everything else stays parked
+# off-board for hand placement; this just saves arranging the LED banks in Fusion.
+_LEDX=[20.0+i*17.0 for i in range(8)]        # 8 columns, span 20..139 on the 160mm width
+bt_place={}
+for i in range(8): bt_place["LED%d"%(1+i)]=(_LEDX[i],88.0)   # probe row
+for i in range(8): bt_place["LED%d"%(9+i)]=(_LEDX[i],76.0)   # status row
 card("bustest-card","P8X Bus Test Card V1.0",ic,sm,n,
  set(net for net,_u,_pp in alloc if not net.startswith("PR") and not net.startswith("SPARE")),
  labels=bt_labels,
@@ -1731,6 +1745,7 @@ card("bustest-card","P8X Bus Test Card V1.0",ic,sm,n,
  # the "LEDn" refdes is noise; the lone power diode needs no "SCHOTTKY" value.
  hide_name={"LED%d"%i for i in range(1,17)},
  hide_val={"D1","J1"},          # J1: drop the "MABC96R" part-number silk
- center_title=True)
+ center_title=True,
+ place=bt_place)
 
 if EMIT: print("ALL 9 BOARDS GENERATED")
