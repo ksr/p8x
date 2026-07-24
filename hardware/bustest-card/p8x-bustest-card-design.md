@@ -371,22 +371,24 @@ expander pins**: the probe display taps the bus side through a `74244` buffer
 (io-card monitor pattern, U11–U13), loading the line with ~1 µA, and the status
 LEDs run straight off Pico GPIO (ST0–7 = GP7–GP14).
 
-| Ref | Label | Source |
-|---|---|---|
-| LED1–8 | PROBE0–7 | `74244` buffer (U7) |
-| LED9 | 5V-OK | Pico GP7 |
-| LED10 | ARMED | Pico GP8 |
-| LED11 | LISTEN | Pico GP9 |
-| LED12 | CLK | Pico GP10 |
-| LED13 | CLKB | Pico GP11 |
-| LED14 | -RES | Pico GP12 |
-| LED15 | ERR | Pico GP13 |
-| LED16 | USB-ACT | Pico GP14 |
+Silk labels are abbreviated (≤3 letters + a digit) to fit beside the LED5s.
+
+| Ref | Silk | Meaning | Source |
+|---|---|---|---|
+| LED1–8 | PRB0–PRB7 | probe 0–7 activity | `74244` buffer (U7) |
+| LED9 | 5V | 5 V present | Pico GP7 |
+| LED10 | ARM | armed (driving) | Pico GP8 |
+| LED11 | LIS | listen mode | Pico GP9 |
+| LED12 | CLK | clock | Pico GP10 |
+| LED13 | CKB | clock-bar (CLKB) | Pico GP11 |
+| LED14 | RES | -RES asserted | Pico GP12 |
+| LED15 | ERR | error | Pico GP13 |
+| LED16 | USB | USB activity | Pico GP14 |
 
 Individual parts cost more board space and 14 extra placements than the arrays,
 but every indicator gets a printed name next to it — worth it on a bench tool you
-read by glancing. **The silkscreen VALUE is the function** (`PROBE0`, `5V-OK`,
-`-RES`, …), not the LED color, so the board reads as meaning rather than parts.
+read by glancing. **The silkscreen VALUE is the (abbreviated) function** (`PRB0`, `5V`,
+`RES`, …), not the LED color, so the board reads as meaning rather than parts.
 Colors (probes green; status green/yellow/red by severity) are provisional — tied
 to the §10 open item on the status set — and ride along as the schematic label.
 

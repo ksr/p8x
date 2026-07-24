@@ -1711,8 +1711,9 @@ sm={"A1":("PICO","RP2040"),"J2":("HDR10","PROBE 2x5"),
 # individual LEDs (replaced the LPR/LST bar arrays). LED1-8 probes, LED9-16
 # status. VALUE = the FUNCTION, so the silk prints what each LED means; the color
 # (provisional; §10 open item) is carried as the schematic label instead.
-_PRBF=["PROBE%d"%i for i in range(8)]
-_STF=["5V-OK","ARMED","LISTEN","CLK","CLKB","-RES","ERR","USB-ACT"]   # ST0..7 = GP7..14
+# short silk labels: <=3 letters + optional digit, so they fit beside the LED5s.
+_PRBF=["PRB%d"%i for i in range(8)]                                   # PROBE0..7
+_STF=["5V","ARM","LIS","CLK","CKB","RES","ERR","USB"]  # 5V-OK ARMED LISTEN CLK CLKB -RES ERR USB-ACT
 sm.update({"LED%d"%(1+i):("LED",_PRBF[i]) for i in range(8)})
 sm.update({"LED%d"%(9+i):("LED",_STF[i])  for i in range(8)})
 
