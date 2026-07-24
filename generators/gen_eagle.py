@@ -442,7 +442,14 @@ def write_sch(fn,title,parts,nets,labels=None):
     os.makedirs(os.path.dirname(fn) or ".",exist_ok=True)
     open(fn,"w").write("\n".join(o)+"\n")
 
-def write_brd(fn,title,parts,nets,wires,polys,W,H,vias=None,outline_only=False,unplaced=False,holes=None):
+def write_brd(fn,title,parts,nets,wires,polys,W,H,vias=None,outline_only=False,unplaced=False,holes=None,
+              hide_name=None,hide_val=None):
+    # hide_name / hide_val: refs whose silkscreen NAME (refdes) or VALUE should be
+    # suppressed. The attribute is still emitted (Fusion keeps the record) but with
+    # display="off" so nothing prints -- used to de-clutter parts whose meaning is
+    # already obvious (e.g. LEDs labelled by function need no "LEDn", a lone diode
+    # needs no "SCHOTTKY").
+    hide_name=hide_name or set(); hide_val=hide_val or set()
     # unplaced: emit all parts (names+values) + the ratsnest (connectivity), but
     # parked OFF the board outline with no routing/pours — ready to place by hand.
     vias=vias or {}
@@ -526,8 +533,10 @@ def write_brd(fn,title,parts,nets,wires,polys,W,H,vias=None,outline_only=False,u
         if not unplaced and _ty_val < 0.5:
             _ty_val = _ty_name+1.778+0.6
         o.append(f'<element name="{ref}" library="p8x" package="{DEV[dev]["pkg"]}" value="{val}" x="{ex:.2f}" y="{ey:.2f}"{rot} smashed="yes">')
-        o.append(f'<attribute name="NAME" x="{_tx:.2f}" y="{_ty_name:.2f}" size="1.778" layer="25" ratio="10"/>')
-        o.append(f'<attribute name="VALUE" x="{_tx:.2f}" y="{_ty_val:.2f}" size="1.778" layer="27" ratio="10"/>')
+        _dn=' display="off"' if ref in hide_name else ""
+        _dv=' display="off"' if ref in hide_val else ""
+        o.append(f'<attribute name="NAME" x="{_tx:.2f}" y="{_ty_name:.2f}" size="1.778" layer="25" ratio="10"{_dn}/>')
+        o.append(f'<attribute name="VALUE" x="{_tx:.2f}" y="{_ty_val:.2f}" size="1.778" layer="27" ratio="10"{_dv}/>')
         o.append('</element>')
     o.append('</elements><signals>')
     allnets=set(nets)|set(wires)|set(polys)
@@ -636,7 +645,8 @@ def body_box(pkg):
 SILK_GAP=1.2
 
 def card(name,title,parts_ic,parts_small,nets,used_bus,labels=None,
-         brd_outline_only=False,brd_unplaced=True,W=160,H=100):
+         brd_outline_only=False,brd_unplaced=True,W=160,H=100,
+         hide_name=None,hide_val=None):
     """Build sch+brd for one plug-in card. `labels` maps ref -> logical-function
     text placed near the part on the schematic (the part's `value` is its part
     number). `brd_outline_only` emits a .brd with just the board dimensions;
@@ -739,7 +749,8 @@ def card(name,title,parts_ic,parts_small,nets,used_bus,labels=None,
         write_sch(base+".sch",title,sch,nets,lab)
         validate(base+".sch",sch,nets)
         write_brd(base+".brd",title,brd,nets,{},{"GND":[(2,)],"VCC":[(15,)]},W,H,
-                  outline_only=brd_outline_only,unplaced=brd_unplaced)
+                  outline_only=brd_outline_only,unplaced=brd_unplaced,
+                  hide_name=hide_name,hide_val=hide_val)
         if not brd_outline_only:
             validate(base+".brd",brd,nets)
             # There used to be a companion "-full.brd" here: the same parts and
@@ -1706,6 +1717,10 @@ for i in range(8): bt_labels["LED%d"%(1+i)]="GRN"          # probe color (schema
 for i in range(8): bt_labels["LED%d"%(9+i)]=_STCOL[i]      # status color (schematic note)
 card("bustest-card","P8X BUS TEST CARD (USB bring-up controller, DESIGN)",ic,sm,n,
  set(net for net,_u,_pp in alloc if not net.startswith("PR") and not net.startswith("SPARE")),
- labels=bt_labels)
+ labels=bt_labels,
+ # de-clutter the silk: the LEDs are labelled by function (PROBE0, 5V-OK, ...) so
+ # the "LEDn" refdes is noise; the lone power diode needs no "SCHOTTKY" value.
+ hide_name={"LED%d"%i for i in range(1,17)},
+ hide_val={"D1"})
 
 if EMIT: print("ALL 9 BOARDS GENERATED")
