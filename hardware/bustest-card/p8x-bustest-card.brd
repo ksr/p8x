@@ -339,7 +339,7 @@
 <elements>
 <element name="J1" library="p8x" package="MABC96R" value="MABC96R" x="193.34" y="49.60" smashed="yes">
 <attribute name="NAME" x="187.09" y="98.05" size="1.778" layer="25" ratio="10"/>
-<attribute name="VALUE" x="187.09" y="-0.62" size="1.778" layer="27" ratio="10"/>
+<attribute name="VALUE" x="187.09" y="-0.62" size="1.778" layer="27" ratio="10" display="off"/>
 </element>
 <element name="U1" library="p8x" package="DIP28N" value="MCP23S17" x="203.27" y="95.20" smashed="yes">
 <attribute name="NAME" x="202.47" y="97.20" size="1.778" layer="25" ratio="10"/>

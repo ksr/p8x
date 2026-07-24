@@ -1730,7 +1730,7 @@ card("bustest-card","P8X Bus Test Card V1.0",ic,sm,n,
  # de-clutter the silk: the LEDs are labelled by function (PROBE0, 5V-OK, ...) so
  # the "LEDn" refdes is noise; the lone power diode needs no "SCHOTTKY" value.
  hide_name={"LED%d"%i for i in range(1,17)},
- hide_val={"D1"},
+ hide_val={"D1","J1"},          # J1: drop the "MABC96R" part-number silk
  center_title=True)
 
 if EMIT: print("ALL 9 BOARDS GENERATED")
