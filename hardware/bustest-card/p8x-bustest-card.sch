@@ -874,7 +874,7 @@
 <part name="U6" library="p8x" deviceset="74244" device="" value="74HCT244"/>
 <part name="U7" library="p8x" deviceset="74244" device="" value="74HCT244"/>
 <part name="A1" library="p8x" deviceset="PICO" device="" value="RP2040"/>
-<part name="J2" library="p8x" deviceset="HDR10" device="" value="PROBE 2x5"/>
+<part name="J2" library="p8x" deviceset="HDR10" device="" value="PROBE"/>
 <part name="D1" library="p8x" deviceset="LED" device="" value="SCHOTTKY"/>
 <part name="R5" library="p8x" deviceset="RES" device="" value="10K"/>
 <part name="R6" library="p8x" deviceset="RES" device="" value="10K"/>
@@ -925,7 +925,7 @@
 <text x="432.10" y="-92.06" size="1.778" layer="97">RP2040 PICO</text>
 <text x="432.10" y="-95.06" size="2.032" layer="96">RP2040</text>
 <text x="127.30" y="-231.76" size="1.778" layer="97">PROBE HEADER</text>
-<text x="127.30" y="-234.76" size="2.032" layer="96">PROBE 2x5</text>
+<text x="127.30" y="-234.76" size="2.032" layer="96">PROBE</text>
 <text x="228.90" y="-231.76" size="1.778" layer="97">5V FEED DIODE</text>
 <text x="228.90" y="-234.76" size="2.032" layer="96">SCHOTTKY</text>
 <text x="330.50" y="-371.46" size="1.778" layer="97">PROBE LED Rs</text>

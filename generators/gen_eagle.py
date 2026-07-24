@@ -1701,7 +1701,7 @@ for i in range(8):
     N(n,"PRJ%d"%i,("RN3","B%d"%(i+1)),("J2","%d"%(i+1)))      # J2 pins 1-8 = probes
 N(n,"GND",("J2","9"),("J2","10"))                              # pins 9,10 = ground
 
-sm={"A1":("PICO","RP2040"),"J2":("HDR10","PROBE 2x5"),
+sm={"A1":("PICO","RP2040"),"J2":("HDR10","PROBE"),
  "D1":("LED","SCHOTTKY"),   # placeholder 2-pin part for the power diode
  "R5":("RES","10K"),"R6":("RES","10K"),"R7":("RES","1K8"),"R8":("RES","3K3"),
  # isolated 8-resistor networks in 16-pin DIPs (RNISO8D)
