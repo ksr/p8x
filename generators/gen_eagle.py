@@ -443,7 +443,7 @@ def write_sch(fn,title,parts,nets,labels=None):
     open(fn,"w").write("\n".join(o)+"\n")
 
 def write_brd(fn,title,parts,nets,wires,polys,W,H,vias=None,outline_only=False,unplaced=False,holes=None,
-              hide_name=None,hide_val=None):
+              hide_name=None,hide_val=None,center_title=False):
     # hide_name / hide_val: refs whose silkscreen NAME (refdes) or VALUE should be
     # suppressed. The attribute is still emitted (Fusion keeps the record) but with
     # display="off" so nothing prints -- used to de-clutter parts whose meaning is
@@ -478,6 +478,8 @@ def write_brd(fn,title,parts,nets,wires,polys,W,H,vias=None,outline_only=False,u
     # holes are packed too tightly to leave a gap wide enough.
     _tsz=2.54; _tx=4.0; _ty=H-6
     _tw=len(title)*_tsz*0.75                       # approx Eagle vector-font width
+    if center_title:                               # centre along the board length, near the top edge
+        _tx=max(2.0,(W-_tw)/2)
     def _hits(tx,ty):
         return any(tx-hd/2 < hx < tx+_tw+hd/2 and ty-hd/2 < hy < ty+_tsz+hd/2
                    for (hx,hy,hd) in (holes or []))
@@ -646,7 +648,7 @@ SILK_GAP=1.2
 
 def card(name,title,parts_ic,parts_small,nets,used_bus,labels=None,
          brd_outline_only=False,brd_unplaced=True,W=160,H=100,
-         hide_name=None,hide_val=None):
+         hide_name=None,hide_val=None,center_title=False):
     """Build sch+brd for one plug-in card. `labels` maps ref -> logical-function
     text placed near the part on the schematic (the part's `value` is its part
     number). `brd_outline_only` emits a .brd with just the board dimensions;
@@ -756,7 +758,7 @@ def card(name,title,parts_ic,parts_small,nets,used_bus,labels=None,
         validate(base+".sch",sch,nets)
         write_brd(base+".brd",title,brd,nets,{},{"GND":[(2,)],"VCC":[(15,)]},W,H,
                   outline_only=brd_outline_only,unplaced=brd_unplaced,
-                  hide_name=hide_name,hide_val=hide_val)
+                  hide_name=hide_name,hide_val=hide_val,center_title=center_title)
         if not brd_outline_only:
             validate(base+".brd",brd,nets)
             # There used to be a companion "-full.brd" here: the same parts and
@@ -1722,12 +1724,13 @@ bt_labels.update({"A1":"RP2040 PICO","J2":"PROBE HEADER","D1":"5V FEED DIODE",
 _STCOL=["GRN","GRN","GRN","YEL","YEL","RED","RED","GRN"]
 for i in range(8): bt_labels["LED%d"%(1+i)]="GRN"          # probe color (schematic note)
 for i in range(8): bt_labels["LED%d"%(9+i)]=_STCOL[i]      # status color (schematic note)
-card("bustest-card","P8X BUS TEST CARD (USB bring-up controller, DESIGN)",ic,sm,n,
+card("bustest-card","P8X Bus Test Card V1.0",ic,sm,n,
  set(net for net,_u,_pp in alloc if not net.startswith("PR") and not net.startswith("SPARE")),
  labels=bt_labels,
  # de-clutter the silk: the LEDs are labelled by function (PROBE0, 5V-OK, ...) so
  # the "LEDn" refdes is noise; the lone power diode needs no "SCHOTTKY" value.
  hide_name={"LED%d"%i for i in range(1,17)},
- hide_val={"D1"})
+ hide_val={"D1"},
+ center_title=True)
 
 if EMIT: print("ALL 9 BOARDS GENERATED")

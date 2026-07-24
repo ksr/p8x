@@ -73,7 +73,7 @@
 <wire x1="160" y1="0" x2="160" y2="100" width="0" layer="20"/>
 <wire x1="160" y1="100" x2="0" y2="100" width="0" layer="20"/>
 <wire x1="0" y1="100" x2="0" y2="0" width="0" layer="20"/>
-<text x="4" y="94" size="2.54" layer="21">P8X BUS TEST CARD (USB bring-up controller, DESIGN)</text>
+<text x="59.045" y="94" size="2.54" layer="21">P8X Bus Test Card V1.0</text>
 </plain>
 <libraries><library name="p8x">
 <packages>

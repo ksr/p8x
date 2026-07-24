@@ -907,7 +907,7 @@
 <part name="C6" library="p8x" deviceset="CAP1" device="" value="100nF"/>
 <part name="C7" library="p8x" deviceset="CAP1" device="" value="100nF"/>
 </parts><sheets><sheet><plain>
-<text x="0" y="40" size="3.81" layer="97">P8X BUS TEST CARD (USB bring-up controller, DESIGN)</text>
+<text x="0" y="40" size="3.81" layer="97">P8X Bus Test Card V1.0</text>
 <text x="127.30" y="47.64" size="1.778" layer="97">I/O EXPANDER 1</text>
 <text x="127.30" y="44.64" size="2.032" layer="96">MCP23S17</text>
 <text x="228.90" y="47.64" size="1.778" layer="97">I/O EXPANDER 2</text>
