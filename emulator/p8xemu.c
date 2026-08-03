@@ -46,7 +46,7 @@ static uint8_t rom[4][8192], eeprom[ROMSIZE], ram[RAMSIZE];  /* ROM 8K $0000..$1
 static uint16_t P[6];                 /* P0=PC P1 P2 P3=SP P4=PT P5=PT2 (2 hidden scratch) */
 static uint8_t A,B,T,T2,IR;
 static int stp, fC,fZ,fN,fV;          /* fC = conventional carry (1 = carry / A>=B) */
-static int prev_fcond=0, halted=0, trace=0;
+static int prev_fcond=0, halted=0, trace=0, mtrace=0;
 static int IE=0, irq_pending=0;   /* rev C: interrupt-enable latch + pending IRQ */
 static unsigned long long cycles=0;
 static uint8_t leds=0;
@@ -237,14 +237,16 @@ int main(int argc,char**argv){
     const char*ee="eeprom.bin"; const char*cfn=0,*cfn2=0; unsigned long long lim=200000000ULL;
     for(int i=1;i<argc;i++){
         if(!strcmp(argv[i],"-t")) trace=1;
+        else if(!strcmp(argv[i],"-T")) mtrace=1;   /* canonical machine trace (co-sim) */
         else if(!strcmp(argv[i],"-l")) lim=strtoull(argv[++i],0,0);
         else if(!strcmp(argv[i],"-c")) cfn=argv[++i];
         else if(!strcmp(argv[i],"-c2")) cfn2=argv[++i];   /* 2nd CF (drive 1) */
         else if(!strcmp(argv[i],"-s")) switches=(uint8_t)strtoul(argv[++i],0,0);  /* $FF00 input byte */
         else if(!strcmp(argv[i],"-L")) led_trace=1;                               /* trace $FF02 writes */
         else if(!strcmp(argv[i],"-h")||!strcmp(argv[i],"--help")){
-            fprintf(stderr,"usage: p8xemu [-t] [-l cycles] [-c disk.img] [-c2 disk2.img] "
+            fprintf(stderr,"usage: p8xemu [-t] [-T] [-l cycles] [-c disk.img] [-c2 disk2.img] "
                 "[-s switches] [-L] [rom.bin]\n"
+                "  -T     canonical per-cycle machine trace to stderr (FPGA co-sim)\n"
                 "  -s NN  value read at $FF00 (e.g. -s 0xA5); default 0\n"
                 "  -L     print $FF02 LED writes to stderr as they change\n"
                 "  -t trace  -l limit cycles  -c attach CF drive 0  -c2 attach CF drive 1\n");
@@ -324,6 +326,11 @@ int main(int argc,char**argv){
          * loads build P0 = $0808 (the ROM vector). */
         if(stp==0 && doe==7 && IE && irq_pending){ bus=0x08; irq_pending=0; IE=0; }
         else if(IR==0x08 && doe==0) bus=0x08;
+        if(mtrace)   /* canonical per-cycle state line -> stderr; matches tb_p8x.v */
+            fprintf(stderr,"%llu %02x %x %02x %02x %02x %02x "
+                    "%04x %04x %04x %04x %04x %04x %d%d%d%d\n",
+                    cycles,IR,stp,A,B,T,T2,P[0],P[1],P[2],P[3],P[4],P[5],
+                    fC,fZ,fN,fV);
         if(trace)
             printf("%9llu IR=%02X st=%X cd=%d | DOE=%X DLD=%X P%d=%04X "
                    "bus=%02X A=%02X B=%02X T=%02X%02X F=%c%c%c%c%s%s\n",

@@ -43,6 +43,14 @@ fpga/
 ├── README.md                 this file
 ├── docs/
 │   └── architecture.md       module hierarchy, memory/peripheral map, co-sim spec
+├── rtl/                       board-independent core (shared by sim and board)
+│   ├── p8x_cpu.v             CPU: one microcycle/clock (matches the emulator)
+│   └── p8x_soc.v             CPU + microcode ROM + 64K memory + sim I/O
+├── sim/                       Milestone-1 co-simulation vs the C emulator
+│   ├── README.md             how the trace-diff co-sim works
+│   ├── mk_ucode_mem.py       4 ROM images → 32-bit ucode.hex
+│   ├── tb_p8x.v              testbench (emits canonical per-cycle trace)
+│   └── run.sh                build + run + diff RTL vs `p8xemu -T`
 └── tang-nano-20k/
     ├── README.md             Milestone-0 build / flash / terminal steps
     ├── tangnano20k.cst        pin constraints (verified)
