@@ -1,0 +1,29 @@
+# Memory Index
+
+- [P8X Project](project_p8x.md) — Hand-built 8-bit TTL homebrew CPU at ~/Documents/Projects/p8x; architecture, conventions, current backlog
+- [P8X FPGA plan](project_p8x_fpga.md) — planned standalone FPGA P8X (same microarch, emulator = golden ref); TTL bus build continues but delayed
+- [P8X Workflow](feedback_p8x_workflow.md) — Commit directly to main, no PRs or feature branches (solo project)
+- [P8X Decoupling Caps](feedback_p8x_decoupling_caps.md) — every new card needs per-IC 100nF caps; all through-hole, no SMD
+- [Keep p8cc.py](project_p8cc_keep_python.md) — self-hosting the C compiler ADDS a C version alongside; never delete the Python bootstrap
+- [Docs before sync](feedback_p8x_docs_before_sync.md) — before asking to sync, verify ALL docs current (comments, HELP, READMEs, theory docs, tables, PDFs, BACKLOG)
+- [P8X test streaming](feedback_p8x_test_streaming.md) — run `make test` raw to a logfile, not through grep, so progress streams live
+- [P8X test scope](feedback_p8x_test_scope.md) — run only the relevant test(s); full `make test` only for broad changes (compiler/microcode/firmware/shared libs) or on request
+- [P8X self-host multipass](project_p8x_selfhost_multipass.md) — milestone B compiler likely splits into separate /BIN pass binaries; clib.py prototypes the preprocessor pass
+- [P8X sed/diff buffer](project_p8x_sed_diff_buffer.md) — the "p8cc.c miscompile" was an $E000 read-buffer collision; fixed by moving to $FC00
+- [P8X hand-asm gotchas](reference_p8x_hand_asm.md) — commands-asm experiment: P3=SP, only P1/P2 GP; CMP preserves A; syscalls clobber P1/P2; emu loads microcode from CWD
+- [New command = C + ASM](feedback_p8x_new_command_dual.md) — every new /BIN command ships in both os/commands/*.c and os/commands-asm/*.asm, verified byte-identical
+- [P8X man pages](project_p8x_man_pages.md) — on-target man system: os/man/<name> files, /man dir, `man` command; new commands need a page; doc reviews must review man pages
+- [P8X relative-path gotcha](reference_p8x_relpath_gotcha.md) — /bin commands must abspath() a relative path arg; FRESOLVE/FOPENDIR start at root, not CWD
+- [Keep /src tree + build scripts current](feedback_p8x_src_tree_upkeep.md) — any shipped-source change must update os/run.sh ensure_src (/src tree) AND /src/mk build scripts; /src is a real on-target rebuild deliverable
+- [P8X cc caps](reference_p8x_cc_caps.md) — on-target cc: MAXFUNC=64 functions; SLOTCNT now 16-bit; next ceiling is code SIZE (dir too big for TPA); build tests need a >16-func + >255-slot command
+- [P8X asm caps](reference_p8x_asm_caps.md) — on-target asm.bin symbol table ~1097 (SYMTAB $8400..$C000); `?too many symbols` self-hosting OS; `?undefined: OPCTAB` = empty/missing shipped opctab.asm (rebuild disk)
+- [P8X FDELETE 16-bit fix](reference_p8x_fdelete_16bit.md) — FDELETE was 8-bit on dir LBA; `make` in /src/os-bios "built everything" (stale MK.RUN); only bites subdirs past LBA 255; trust the on-hardware symptom over "stale disk"
+- [P8X run.sh reuses disks](reference_p8x_runsh_disk_reuse.md) — run.sh only creates/populates a disk `if [ ! -f ]`; a true rebuild needs `rm` of the img first (else the on-disk OS stays stale; eeprom always rebuilds)
+- [P8X memory map (rev E)](reference_p8x_memory_map.md) — 8K ROM $0000-$1FFF, RAM+OS at $2000, syscall ABI $20xx; scratch $6000-$69FF, TPA $6A00 (~37.9K)
+- [P8X named BIOS/OS addresses](reference_p8x_fs_wrappers.md) — both compilers support //#define; commands //#use abi (lib_abi.c #defines / lib_abi.inc equates) and write bios(FOPEN,...), never raw hex
+- [CODE_REVIEW.md is unreliable](reference_p8x_code_review_unreliable.md) — plausible claims, not verified defects; ~half get rejected on inspection, verify before acting
+- [p8cc int is used AS unsigned](reference_p8x_int_is_unsigned.md) — no unsigned type; unsigned compare/div is load-bearing, making `<` signed shipped a buffer overflow
+- [P8X CWDPATH](reference_p8x_cwdpath.md) — 48 bytes at $6400, NOT just the prompt: feeds SYS_GETCWD + DERIVEDRV; overflow hits INMODE/INARM/CWDLH
+- [P8XFS SBUF collision](reference_p8x_fs_sbuf_collision.md) — redirect write-stream and FRESOLVE dir-scan both default to SBUF $6100; read a 2nd file while stdout is `>`-redirected → first file corrupted. Fix: FSDIRBUF to a scratch page.
+- [ECAD workflow rules](feedback_ecad_schematic_truth.md) — `-a` suffix = user's LIVE Fusion files (edit those, not the unsuffixed baseline); .sch is always source of truth
+- [Arduino-scratch test board](project_arduino_scratch_board.md) — standalone Cowork<->Fusion round-trip probe in hardware/arduino-scratch; edit in place once placed
