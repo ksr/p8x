@@ -11,6 +11,16 @@ metadata:
 As of 2026-07-29 the user has committed to building a **standalone FPGA version
 of P8X** (whole system in one FPGA, NOT a bus/backplane-connected card set).
 
+**Status 2026-08-11: Milestone 1 is GREEN.** `fpga/sim/run.sh` matches the RTL
+against the emulator cycle-for-cycle to 200 000 microcycles (Icarus 13.0, via
+`brew install icarus-verilog`). The hand transliteration was correct on its first
+real execution — no RTL fix was needed. **But the PASS is narrow**: after boot the
+monitor idles in the console-poll loop, so 200k cycles cover no more than 20k —
+19 opcodes, 114 PCs. Most of the ISA is un-co-simulated; closing it needs
+*stimulus* (a directed all-opcode ROM, or deterministic scripted console input),
+not a bigger cycle count. Board toolchain (oss-cad-suite) still not installed —
+only needed from Milestone 3.
+
 - **Same microarchitecture** — keep the horizontal microcode word, the sequencer,
   the pointer model (PSEL address-source select), DOE/DLD selects. The microcode
   binary (from genucode) and the emulator stay the reference. NOT a clean-ISA soft
