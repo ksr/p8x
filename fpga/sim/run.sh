@@ -24,8 +24,11 @@ open("eeprom.hex","w").write("".join("%02x\n"%x for x in b))
 PY
 
 # --- golden trace from the emulator (machine trace on stderr) ---
+# -N: console RX always empty, matching p8x_soc.v's constant $FF04 = 0x02. Without
+# it the trace depends on what stdin is (a TTY reports no key; a redirected stdin
+# is at EOF, which reads as RDRF set) and the diff is only valid from a terminal.
 cc -O2 -o p8xemu "$EMU/p8xemu.c"
-./p8xemu -T -l "$CYCLES" eeprom.bin >/dev/null 2>emu.raw || true
+./p8xemu -T -N -l "$CYCLES" eeprom.bin >/dev/null 2>emu.raw || true
 grep -E '^[0-9]' emu.raw > emu.trace
 
 # --- RTL trace ---

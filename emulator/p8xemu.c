@@ -38,6 +38,7 @@
 #include "../generators/memmap.h"   /* RAMBASE/IOBASE/ROMSIZE/RAMSIZE — single-source memory map */
 
 static int interactive=0;             /* stdin is a TTY: raw + blocking console */
+static int norx=0;                    /* -N: console RX always empty (see rx_ready) */
 static int peeked=-1;                 /* one-char lookahead for ACIA status/data */
 static struct termios g_orig;
 static int g_raw=0;
@@ -154,6 +155,13 @@ static void on_sig(int s){ (void)s; term_restore(); _exit(0); }
 #define RX_SPIN 4000
 static long rx_misses=0;
 static int rx_ready(void){
+    /* -N: report "no key, ever". The FPGA co-sim needs this: p8x_soc.v models
+       $FF04 as a constant 0x02 (TDRE set, RDRF clear), and without -N the golden
+       trace depends on what stdin happens to be. A TTY with no keystrokes reports
+       not-ready, but a redirected/closed stdin (/dev/null, a script, CI) is at EOF,
+       which select() calls readable — so RDRF reads back set and the RTL "diverges"
+       at the first ACIA status poll. Same run, different shell, different trace. */
+    if(norx) return 0;
     if(!interactive) return stdin_pending();
     if(peeked>=0) return 1;
     if(stdin_pending()){
@@ -168,6 +176,7 @@ static int rx_ready(void){
     term_restore(); exit(0);
 }
 static int rx_char(void){
+    if(norx) return 0;                  /* -N: never any data behind RDRF */
     if(peeked>=0){ int c=peeked; peeked=-1; return c; }
     if(!interactive){ int ch=getchar(); return ch<0?0:ch; }
     unsigned char c;
@@ -243,10 +252,12 @@ int main(int argc,char**argv){
         else if(!strcmp(argv[i],"-c2")) cfn2=argv[++i];   /* 2nd CF (drive 1) */
         else if(!strcmp(argv[i],"-s")) switches=(uint8_t)strtoul(argv[++i],0,0);  /* $FF00 input byte */
         else if(!strcmp(argv[i],"-L")) led_trace=1;                               /* trace $FF02 writes */
+        else if(!strcmp(argv[i],"-N")) norx=1;     /* console RX always empty (FPGA co-sim) */
         else if(!strcmp(argv[i],"-h")||!strcmp(argv[i],"--help")){
-            fprintf(stderr,"usage: p8xemu [-t] [-T] [-l cycles] [-c disk.img] [-c2 disk2.img] "
+            fprintf(stderr,"usage: p8xemu [-t] [-T] [-N] [-l cycles] [-c disk.img] [-c2 disk2.img] "
                 "[-s switches] [-L] [rom.bin]\n"
                 "  -T     canonical per-cycle machine trace to stderr (FPGA co-sim)\n"
+                "  -N     console RX always empty; makes -T traces independent of stdin\n"
                 "  -s NN  value read at $FF00 (e.g. -s 0xA5); default 0\n"
                 "  -L     print $FF02 LED writes to stderr as they change\n"
                 "  -t trace  -l limit cycles  -c attach CF drive 0  -c2 attach CF drive 1\n");
