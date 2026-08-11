@@ -71,9 +71,9 @@ addition to genucode: emit a combined-word init file). Together with the 8 KB RO
 
 `emulator/p8xemu.c` is the golden model. The harness:
 
-1. Loads the same program image into both the Verilator-built RTL sim and the C
+1. Loads the same program image into both the Icarus-built RTL sim and the C
    emulator.
-2. Steps both one P8X instruction (or one microcycle) at a time.
+2. Steps both one microcycle at a time.
 3. Diffs architectural state after each step: PC, A, pointers/registers, flags
    (C/Z/N/V/IE), and any memory write (address + value).
 4. Stops at the first divergence and reports the step, the signal, and both
@@ -83,11 +83,20 @@ Console I/O in sim is piped through the modeled UART so the monitor/OS can be
 driven and its output checked. This is what lets Milestones 1–2 reach "OS boots"
 entirely in simulation, before the board exists.
 
+## Settled decisions
+
+- **Sim tool: Icarus** (`iverilog -g2012`), decided at Milestone 1. Verilator was
+  the earlier lean for speed, but the testbench is behavioral Verilog that Icarus
+  runs directly, where Verilator would need a C++ harness wrapped around it. The
+  traces are small and the runs are short, so simulation speed never became the
+  constraint. Icarus also ships in the same oss-cad-suite bundle as the board
+  flow, so it adds no extra dependency.
+- **Co-sim granularity: microcycle-accurate.** Instruction-accurate was the
+  planned starting point, but both sides already emit per-cycle state cheaply
+  (`p8xemu -T` and `-DP8X_TRACE` in the testbench), and a per-cycle diff names the
+  exact failing microcycle instead of just the instruction containing it.
+
 ## Open decisions (to settle as we build)
 
-- Sim tool: **Verilator** (fast, C++ testbench pairs naturally with the C
-  emulator) vs Icarus (simpler, slower). Leaning Verilator.
-- Microcycle-accurate vs instruction-accurate co-sim granularity (start
-  instruction-accurate; tighten if needed).
 - SD image format: reuse a P8XFS image written by `tools/p8xfs.py` directly onto
   the SD card.

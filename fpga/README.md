@@ -17,8 +17,8 @@ Milestone-0 build.
 ## The verification spine
 
 Every milestone is "make the RTL match the emulator." We run the **same program**
-on a Verilator sim of the RTL and on the C emulator (`emulator/`), and **diff
-architectural state** (PC, registers, flags, memory writes) step by step. The
+on an Icarus sim of the RTL and on the C emulator (`emulator/`), and **diff
+architectural state** (PC, registers, flags, memory writes) cycle by cycle. The
 emulator is the golden model; a divergence is a bug with an exact cycle and
 signal. Same adversarial-diff discipline used elsewhere in the project.
 

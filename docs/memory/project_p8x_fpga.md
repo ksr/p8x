@@ -23,9 +23,12 @@ of P8X** (whole system in one FPGA, NOT a bus/backplane-connected card set).
   become trivial RTL.
 - The memory map and ABI stay identical, so the monitor/OS/BASIC/C-compiler/asm
   boot **unmodified** — the FPGA is a new substrate, not a software re-port.
-- **Verification**: co-sim the Verilator RTL against the C emulator, diff
-  architectural state per cycle — the emulator is the golden model (same
-  adversarial-diff discipline used for [[project_p8x]] compiler + bustest work).
+- **Verification**: co-sim the RTL against the C emulator, diff architectural
+  state per cycle — the emulator is the golden model (same adversarial-diff
+  discipline used for [[project_p8x]] compiler + bustest work). Sim tool is
+  **Icarus** (`iverilog -g2012`), not Verilator: the testbench is behavioral
+  Verilog, sim speed was never the constraint, and Icarus is in the same
+  oss-cad-suite bundle as the board flow. Run it with `fpga/sim/run.sh`.
 - **Board chosen: Sipeed Tang Nano 20K** (Gowin GW2AR-18, GW2AR-LV18QN88C8/I7),
   ordered ~2026-07-29. Picked because ULX3S was hard to find; it's cheap (~$30),
   widely available, has onboard microSD (the disk) and an onboard BL616 USB bridge
