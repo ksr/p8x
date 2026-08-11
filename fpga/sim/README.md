@@ -53,6 +53,7 @@ diff is now identical regardless of how stdin is wired.
 | `isa_test.asm` | directed all-88-opcode exerciser (assembled by `run.sh`) |
 | `console_in.txt` | scripted keystrokes for the driven-monitor run (LF → CR) |
 | `run.sh` | build + run + diff; `run.sh [CYCLES] [ROM] [RXSCRIPT]` |
+| `console.sh` | **interactive** console on the RTL — type at the monitor |
 | `../rtl/p8x_cpu.v` | the CPU core (transliteration of the emulator microcycle) |
 | `../rtl/p8x_soc.v` | CPU + microcode ROM + 64K memory + minimal sim I/O |
 
@@ -129,6 +130,28 @@ clean against the emulator.
 
 Still not covered: the SD/disk path (Milestone 4), and any peripheral behaviour
 that depends on real timing rather than the polled, timing-free console model.
+
+## Driving it by hand
+
+```bash
+./console.sh                 # monitor, live, on the RTL
+./console.sh isa_test.asm    # any other ROM
+```
+
+You get a real terminal into the CPU running inside Icarus: type `?`, `D 0100`,
+`E 3000`, whatever the monitor takes. Ctrl-D quits. The script puts the terminal
+in raw mode so keystrokes arrive immediately and are echoed once (by the monitor,
+not the shell), and restores it on exit.
+
+This is **not** the co-sim — a live console is not reproducible, so nothing is
+diffed. `run.sh` verifies; `console.sh` lets you poke.
+
+How it gets a keystroke is worth knowing, because it is the one place the two
+consoles differ. Verilog has no non-blocking stdin read, so the testbench copies
+the emulator's rule: only after the machine has polled `$FF04` `SPIN` times with
+no output in between — i.e. it is genuinely sitting at a prompt — does it block on
+`$fgetc`. Any output resets the counter, so bulk printing never stalls waiting for
+a key you have not typed.
 
 ## Boot is deterministic (why the diff is valid)
 

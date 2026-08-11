@@ -26,6 +26,7 @@ module p8x_soc #(
   input  [7:0] rx_byte,
   input        rx_avail,
   output       rx_take,
+  output       st_rd,          // pulses on a read of $FF04 (ACIA status poll)
   // console TX: pulses with the byte written to $FF05
   output       tx_stb,
   output [7:0] tx_byte,
@@ -51,6 +52,7 @@ module p8x_soc #(
 
   wire mem_rd;
   assign rx_take = mem_rd && (mem_addr == 16'hFF05) && rx_avail;
+  assign st_rd   = mem_rd && (mem_addr == 16'hFF04);
   assign tx_stb  = mem_we && (mem_addr == 16'hFF05);
   assign tx_byte = mem_dout;
 
@@ -69,10 +71,15 @@ module p8x_soc #(
       mem[mem_addr] <= mem_dout;
   end
 
+  // ROM image is loaded into its own 8K array and copied in: $readmemh straight
+  // into mem[] would warn that a 64K range was under-filled on every run.
+  reg [7:0] romimg [0:8191];
   integer j;
   initial begin
-    for (j = 0; j < 65536; j = j + 1) mem[j] = 8'h00;  // RAM starts zero (as emulator)
+    for (j = 0; j < 65536; j = j + 1) mem[j]    = 8'h00; // RAM starts zero (as emulator)
+    for (j = 0; j < 8192;  j = j + 1) romimg[j] = 8'h00; // short ROMs pad with 0, not x
     $readmemh(UCODE_HEX, ucode);
-    $readmemh(MEM_HEX, mem);                            // monitor ROM -> mem[0..8191]
+    $readmemh(MEM_HEX, romimg);
+    for (j = 0; j < 8192;  j = j + 1) mem[j] = romimg[j];
   end
 endmodule
