@@ -20,8 +20,20 @@ that ends in HLT so both sides stop together. Monitor boot alone was only 12/88 
 it idles in the console-poll loop, so cycle count never bought coverage; stimulus
 did. The ISA count comes from `genucode.py`'s `OPC` dict (88 distinct codes, 91
 entries — JZ/BZ, JNZ/BNZ, JC/BCP are aliases); don't count it by regex over the
-source, that undercounts. Still uncovered: sustained console I/O and the SD path.
-Board toolchain (oss-cad-suite) still not installed — only needed from Milestone 3.
+source, that undercounts.
+
+**Milestone 2 is also GREEN (2026-08-11).** The ACIA is modelled on both sides and
+`./run.sh 200000 "" console_in.txt` drives the monitor with scripted keystrokes,
+matching 200k cycles AND diffing console output byte-for-byte (2380 bytes: banner,
+help, a $0100 dump, an examine session). The console model is deliberately
+timing-free — RDRF = "the script still has a byte", one byte consumed per $FF05
+read — which is what makes it co-simulable at all. Key gotcha: the consume must
+key off the new `mem_rd` CPU output (`doe==7`, the microcycles that source the bus
+from memory, mirroring where p8xemu calls memrd), NOT off `mem_addr==$FF05`, which
+lingers across microcycles and would double-consume.
+
+Still uncovered: the SD/disk path (Milestone 4). Board toolchain (oss-cad-suite)
+still not installed — only needed from Milestone 3.
 
 - **Same microarchitecture** — keep the horizontal microcode word, the sequencer,
   the pointer model (PSEL address-source select), DOE/DLD selects. The microcode

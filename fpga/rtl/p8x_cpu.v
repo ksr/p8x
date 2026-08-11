@@ -26,6 +26,7 @@ module p8x_cpu(
   input      [7:0]  mem_din,
   output     [7:0]  mem_dout,
   output            mem_we,
+  output            mem_rd,       // this microcycle sources the bus from memory
   input             irq_set,      // pulse: raise a maskable IRQ (models a device)
   output            halted);
 
@@ -146,6 +147,11 @@ module p8x_cpu(
   assign mem_addr = addr;
   assign mem_dout = bus;
   assign mem_we   = (dld == 4'd7) && !halt_r;
+  // A read happens on exactly the microcycles that source the bus from memory --
+  // the same points at which the emulator calls memrd(). Peripherals with
+  // read side effects (the ACIA data register pops a byte) must key off this,
+  // not off mem_addr alone, which can linger across microcycles.
+  assign mem_rd   = (doe == 4'd7) && !halt_r;
 
   // ---- next flags. Emulator order: DLD=5 loads flags from bus first, then
   // ldf/ldzn override, then setc/clrc force C. ----

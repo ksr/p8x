@@ -39,6 +39,8 @@
 
 static int interactive=0;             /* stdin is a TTY: raw + blocking console */
 static int norx=0;                    /* -N: console RX always empty (see rx_ready) */
+static uint8_t *scr=0;                /* -i FILE: scripted console input (co-sim) */
+static long scrlen=0, scrpos=0;
 static int peeked=-1;                 /* one-char lookahead for ACIA status/data */
 static struct termios g_orig;
 static int g_raw=0;
@@ -161,6 +163,9 @@ static int rx_ready(void){
        not-ready, but a redirected/closed stdin (/dev/null, a script, CI) is at EOF,
        which select() calls readable — so RDRF reads back set and the RTL "diverges"
        at the first ACIA status poll. Same run, different shell, different trace. */
+    /* -i: RDRF is exactly "the script still has a byte" -- no host timing in it,
+       so the FPGA co-sim can mirror the rule in RTL and step identically. */
+    if(scr) return scrpos<scrlen;
     if(norx) return 0;
     if(!interactive) return stdin_pending();
     if(peeked>=0) return 1;
@@ -176,6 +181,7 @@ static int rx_ready(void){
     term_restore(); exit(0);
 }
 static int rx_char(void){
+    if(scr) return scrpos<scrlen ? scr[scrpos++] : 0;   /* -i: consume one byte */
     if(norx) return 0;                  /* -N: never any data behind RDRF */
     if(peeked>=0){ int c=peeked; peeked=-1; return c; }
     if(!interactive){ int ch=getchar(); return ch<0?0:ch; }
@@ -253,11 +259,20 @@ int main(int argc,char**argv){
         else if(!strcmp(argv[i],"-s")) switches=(uint8_t)strtoul(argv[++i],0,0);  /* $FF00 input byte */
         else if(!strcmp(argv[i],"-L")) led_trace=1;                               /* trace $FF02 writes */
         else if(!strcmp(argv[i],"-N")) norx=1;     /* console RX always empty (FPGA co-sim) */
+        else if(!strcmp(argv[i],"-i")){            /* scripted console input (FPGA co-sim) */
+            FILE*sf=fopen(argv[++i],"rb");
+            if(!sf){ fprintf(stderr,"p8xemu: cannot open input script %s\n",argv[i]); return 1; }
+            fseek(sf,0,SEEK_END); scrlen=ftell(sf); fseek(sf,0,SEEK_SET);
+            scr=malloc(scrlen?scrlen:1);
+            if(scrlen && fread(scr,1,scrlen,sf)!=(size_t)scrlen){ fprintf(stderr,"p8xemu: short read on input script\n"); return 1; }
+            fclose(sf);
+        }
         else if(!strcmp(argv[i],"-h")||!strcmp(argv[i],"--help")){
             fprintf(stderr,"usage: p8xemu [-t] [-T] [-N] [-l cycles] [-c disk.img] [-c2 disk2.img] "
                 "[-s switches] [-L] [rom.bin]\n"
                 "  -T     canonical per-cycle machine trace to stderr (FPGA co-sim)\n"
                 "  -N     console RX always empty; makes -T traces independent of stdin\n"
+                "  -i F   scripted console input from file F (RDRF = bytes remain)\n"
                 "  -s NN  value read at $FF00 (e.g. -s 0xA5); default 0\n"
                 "  -L     print $FF02 LED writes to stderr as they change\n"
                 "  -t trace  -l limit cycles  -c attach CF drive 0  -c2 attach CF drive 1\n");

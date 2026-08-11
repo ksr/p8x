@@ -27,8 +27,8 @@ signal. Same adversarial-diff discipline used elsewhere in the project.
 | # | Milestone | Board? | Proves |
 |---|-----------|--------|--------|
 | **0** | First light: UART echo + heartbeat LED | yes | toolchain, bitstream, console path |
-| **1** | CPU core in simulation | no | the microarchitecture is correct |
-| **2** | Peripherals in simulation (ACIA-UART) | no | monitor/OS boots to a sim console |
+| **1** | CPU core in simulation ✅ | no | the microarchitecture is correct (all 88 opcodes) |
+| **2** | Peripherals in simulation (ACIA-UART) ✅ | no | monitor boots to a sim console; console output diffed |
 | **3** | Core on real hardware | yes | P8X talks over USB for real |
 | **4** | SD disk (SD-over-SPI behind the BIOS block API) | yes | OS boots from SD, full FS |
 | **5** | Polish: clock-up, IRQ (backlog #26), stretch goals | yes | performance + extras |

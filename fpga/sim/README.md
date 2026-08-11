@@ -51,7 +51,8 @@ diff is now identical regardless of how stdin is wired.
 | `mk_ucode_mem.py` | 4 ROM images → `ucode.hex` (8192 × 32-bit `$readmemh`) |
 | `tb_p8x.v` | testbench: run N cycles, emit the canonical trace |
 | `isa_test.asm` | directed all-88-opcode exerciser (assembled by `run.sh`) |
-| `run.sh` | build + run + diff RTL vs `p8xemu -T`; `run.sh [CYCLES] [ROM]` |
+| `console_in.txt` | scripted keystrokes for the driven-monitor run (LF → CR) |
+| `run.sh` | build + run + diff; `run.sh [CYCLES] [ROM] [RXSCRIPT]` |
 | `../rtl/p8x_cpu.v` | the CPU core (transliteration of the emulator microcycle) |
 | `../rtl/p8x_soc.v` | CPU + microcode ROM + 64K memory + minimal sim I/O |
 
@@ -82,9 +83,40 @@ overflow at both sign boundaries (`$7F + 1`, `$80 - 1`), zero, and carry-in for
 it writes `$FF06` to raise an IRQ, vectors through `$0808`, and returns via `RTI`.
 
 ```bash
-./run.sh 20000                  # monitor boot   -> PASS, 20000 cycles
-./run.sh 60000 isa_test.asm     # all 88 opcodes -> PASS, 509 cycles
+./run.sh 20000                            # monitor boot   -> PASS, 20000 cycles
+./run.sh 60000 isa_test.asm               # all 88 opcodes -> PASS, 509 cycles
+./run.sh 200000 "" console_in.txt         # driven monitor -> PASS + console diff
 ```
+
+### Milestone 2: the ACIA and a driven console
+
+`$FF04`/`$FF05` are now modelled properly on both sides, and the third command
+above drives the monitor with scripted keystrokes and additionally diffs its
+**console output**.
+
+The model is deliberately timing-free, because that is what makes it
+co-simulable: **RDRF is simply "the script still has a byte"**, and exactly one
+byte is consumed per `$FF05` read. There is no baud rate and no arrival race, so
+both implementations step identically by construction.
+
+The subtlety is *when* a read consumes. The emulator consumes inside `memrd()`,
+so the RTL keys off `mem_rd` — a new CPU output asserted on the microcycles that
+source the bus from memory (`doe == 7`). Keying off `mem_addr == $FF05` instead
+would double-consume, because the address can linger across microcycles.
+
+`console_in.txt` is plain text and **newlines are translated to CR** (what the
+monitor's line reader expects), so scripts stay readable:
+
+```
+?
+D 0100
+E 3000
+.
+```
+
+That drives the banner, the help text, a 256-byte hex dump of the BIOS jump
+table, and an examine/modify session — 2380 bytes of console output, byte-identical
+between the two models, and 44 of 88 opcodes along the way.
 
 It ends in `HLT`, so both sides stop at the same cycle rather than one being
 clipped to the other's length — check the two trace lengths match if you change it.
@@ -95,8 +127,8 @@ the exact microcycle. That also makes it the regression test for any future RTL
 change — clock-up, BRAM swap, the Milestone-5 IRQ work — which must still diff
 clean against the emulator.
 
-Still not covered: sustained console I/O (needs deterministic scripted input on
-both sides — the Milestone-2 ACIA work) and the SD/disk path.
+Still not covered: the SD/disk path (Milestone 4), and any peripheral behaviour
+that depends on real timing rather than the polled, timing-free console model.
 
 ## Boot is deterministic (why the diff is valid)
 
