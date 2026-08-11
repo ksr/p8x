@@ -50,7 +50,8 @@ diff is now identical regardless of how stdin is wired.
 |------|------|
 | `mk_ucode_mem.py` | 4 ROM images → `ucode.hex` (8192 × 32-bit `$readmemh`) |
 | `tb_p8x.v` | testbench: run N cycles, emit the canonical trace |
-| `run.sh` | build + run + diff RTL vs `p8xemu -T` |
+| `isa_test.asm` | directed all-88-opcode exerciser (assembled by `run.sh`) |
+| `run.sh` | build + run + diff RTL vs `p8xemu -T`; `run.sh [CYCLES] [ROM]` |
 | `../rtl/p8x_cpu.v` | the CPU core (transliteration of the emulator microcycle) |
 | `../rtl/p8x_soc.v` | CPU + microcode ROM + 64K memory + minimal sim I/O |
 
@@ -62,27 +63,40 @@ Generated files (`work/`, `*.hex`, `*.trace`, `*.vvp`) are git-ignored.
   formula).
 - Emulator `-T` machine trace + harness: **verified** (golden trace generated).
 - RTL (`p8x_cpu.v`, `p8x_soc.v`, `tb_p8x.v`): **PASSES** — the co-sim matches the
-  emulator cycle-for-cycle out to 200 000 microcycles, on Icarus 13.0. The
-  transliteration was correct on its first real execution; no RTL fix was needed.
+  emulator cycle-for-cycle out to 200 000 microcycles of monitor boot, and across
+  **all 88 opcodes** via `isa_test.asm`, on Icarus 13.0. The transliteration was
+  correct on its first real execution; no RTL fix has been needed.
 
-### Coverage caveat — the PASS is narrower than the cycle count suggests
+### Two payloads: the monitor boot, and the all-opcode exerciser
 
-200 000 cycles cover **no more of the machine than 20 000 do**: 19 distinct
-opcodes, 13 microcycle steps, 114 distinct PC values, max PC `$0f98`. The monitor
-boots, prints its prompt, then sits in the console-poll loop — and with `-N` no key
-ever arrives, so every additional cycle re-runs the same few microcycles. Raising
-the cycle count buys nothing after boot.
+The monitor boot alone is a **narrow** test. 200 000 cycles of it cover no more of
+the machine than 20 000 do — 12 of the 88 defined opcodes — because after printing
+its prompt the monitor sits in the console-poll loop, and with `-N` no key ever
+arrives. Raising the cycle count buys nothing.
 
-So what is proven is the **boot path plus the idle loop**, over 19 opcodes. The
-untested majority of the ISA — most ALU ops, the shifter, the signed branches, the
-pointer modes, RTI/interrupts — has never been co-simulated. Closing that needs
-stimulus, not more cycles:
+`isa_test.asm` closes that gap with stimulus instead of cycles. It executes **all
+88 opcodes** in `genucode.py`'s `OPC` table, choosing operands that move the flags
+rather than merely executing: carry out (`$FF + 1`), borrow (`$00 - 1`), signed
+overflow at both sign boundaries (`$7F + 1`, `$80 - 1`), zero, and carry-in for
+`ROL`/`ROR`. Every branch is taken **and** not taken. The interrupt path is real —
+it writes `$FF06` to raise an IRQ, vectors through `$0808`, and returns via `RTI`.
 
-- a directed ROM that exercises every opcode and flag case, run through the same
-  trace-diff, or
-- deterministic scripted console input (a fixed byte string fed identically to
-  both sides) so the monitor can be driven past the prompt — which is the
-  Milestone-2 ACIA modelling work anyway.
+```bash
+./run.sh 20000                  # monitor boot   -> PASS, 20000 cycles
+./run.sh 60000 isa_test.asm     # all 88 opcodes -> PASS, 509 cycles
+```
+
+It ends in `HLT`, so both sides stop at the same cycle rather than one being
+clipped to the other's length — check the two trace lengths match if you change it.
+
+It is a **payload, not a self-checking test**: it asserts nothing itself. A wrong
+ALU result or mis-set flag is caught because it makes the traces differ, naming
+the exact microcycle. That also makes it the regression test for any future RTL
+change — clock-up, BRAM swap, the Milestone-5 IRQ work — which must still diff
+clean against the emulator.
+
+Still not covered: sustained console I/O (needs deterministic scripted input on
+both sides — the Milestone-2 ACIA work) and the SD/disk path.
 
 ## Boot is deterministic (why the diff is valid)
 

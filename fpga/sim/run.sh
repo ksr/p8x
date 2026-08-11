@@ -2,7 +2,12 @@
 # Milestone-1 co-simulation: run the same boot on the RTL and the C emulator,
 # diff their per-cycle state traces. PASS = the RTL matches the golden model.
 #
-#   ./run.sh [CYCLES]      (default 20000)
+#   ./run.sh [CYCLES] [ROM]
+#
+#     CYCLES  microcycles to compare            (default 20000)
+#     ROM     alternate ROM image to boot       (default: the monitor,
+#             emulator/eeprom.bin). A path ending in .asm is assembled first,
+#             so `./run.sh 60000 isa_test.asm` runs the all-opcode exerciser.
 #
 # Needs: a C compiler (for the emulator) and iverilog (from oss-cad-suite).
 set -euo pipefail
@@ -10,11 +15,26 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 EMU="$ROOT/emulator"
 CYCLES="${1:-20000}"
+ROM="${2:-}"
 
 W="$HERE/work"; mkdir -p "$W"; cd "$W"
 
-# microcode + monitor ROM images (built artifacts in emulator/)
-for f in u0.bin u1.bin u2.bin u3.bin eeprom.bin; do ln -sf "$EMU/$f" .; done
+# microcode images (built artifacts in emulator/)
+for f in u0.bin u1.bin u2.bin u3.bin; do ln -sf "$EMU/$f" .; done
+
+# ROM under test: the monitor by default, else the given .bin (or assembled .asm)
+if [ -z "$ROM" ]; then
+  ln -sf "$EMU/eeprom.bin" .
+else
+  case "$ROM" in /*) src="$ROM";; *) src="$HERE/$ROM";; esac
+  [ -f "$src" ] || { echo "run.sh: no such ROM: $src" >&2; exit 2; }
+  case "$src" in
+    *.asm) python3 "$ROOT/assembler/p8xasm.py" "$src" -o rom.bin >/dev/null
+           rm -f eeprom.bin; cp rom.bin eeprom.bin ;;
+    *)     rm -f eeprom.bin; cp "$src" eeprom.bin ;;
+  esac
+  echo "ROM under test: $ROM ($(wc -c < eeprom.bin | tr -d ' ') bytes)"
+fi
 
 # $readmemh init files for the RTL
 python3 "$HERE/mk_ucode_mem.py" "$EMU" ucode.hex >/dev/null

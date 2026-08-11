@@ -14,12 +14,14 @@ of P8X** (whole system in one FPGA, NOT a bus/backplane-connected card set).
 **Status 2026-08-11: Milestone 1 is GREEN.** `fpga/sim/run.sh` matches the RTL
 against the emulator cycle-for-cycle to 200 000 microcycles (Icarus 13.0, via
 `brew install icarus-verilog`). The hand transliteration was correct on its first
-real execution — no RTL fix was needed. **But the PASS is narrow**: after boot the
-monitor idles in the console-poll loop, so 200k cycles cover no more than 20k —
-19 opcodes, 114 PCs. Most of the ISA is un-co-simulated; closing it needs
-*stimulus* (a directed all-opcode ROM, or deterministic scripted console input),
-not a bigger cycle count. Board toolchain (oss-cad-suite) still not installed —
-only needed from Milestone 3.
+real execution — no RTL fix has been needed. Coverage is now **all 88 opcodes**
+via `fpga/sim/isa_test.asm` (`./run.sh 60000 isa_test.asm`), a directed exerciser
+that ends in HLT so both sides stop together. Monitor boot alone was only 12/88 —
+it idles in the console-poll loop, so cycle count never bought coverage; stimulus
+did. The ISA count comes from `genucode.py`'s `OPC` dict (88 distinct codes, 91
+entries — JZ/BZ, JNZ/BNZ, JC/BCP are aliases); don't count it by regex over the
+source, that undercounts. Still uncovered: sustained console I/O and the SD path.
+Board toolchain (oss-cad-suite) still not installed — only needed from Milestone 3.
 
 - **Same microarchitecture** — keep the horizontal microcode word, the sequencer,
   the pointer model (PSEL address-source select), DOE/DLD selects. The microcode
