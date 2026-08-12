@@ -123,7 +123,25 @@ card, bad signature AND OSCNT=0, so its message alone proves nothing.) **Writing
 root (`dd` to /dev/rdiskN); ksr77 is not in `admin` or `operator`** — so either
 use another machine, or format on-target with the monitor's `F` command.
 
-Still uncovered: getting the OS image onto a card without admin rights.
+**Solved: the board installs its own disk.** `fpga/tang-nano-20k/tools/` —
+`osload.asm` (N<256 sectors to LBA 1.. + patch OSCNT) and `imgload.asm` (clone an
+arbitrary run from LBA 0). Assemble with `p8xasm --base 0x3000`, poke through the
+monitor's `E 3000` (two hex digits set a byte and auto-advance), `G 3000`, stream.
+**P8X/OS v1.0 BOOTS ON HARDWARE** from a card the board wrote itself — no root, no
+card reader.
+
+Pacing rules: poking through `E` must be **echo-paced** (the ACIA shim holds ONE
+byte and the monitor blocks ~87 us echoing each char); sector payload needs no
+pacing (receive loop ~4 us/byte vs 87 us on the wire) but the host MUST wait for
+the per-sector `.` ack, because CFWRITE takes ms and anything arriving then is lost.
+
+**GOTCHA that cost a debugging cycle: the bitstream is loaded to VOLATILE SRAM.**
+Any unplug/power-cycle reverts the board to the factory **LiteX** demo in its
+onboard flash — whose console also answers on the same port, so a script happily
+streams into it and reports a mysterious "no ack at sector 0". Always confirm the
+`*` monitor prompt before driving the board (`litex>` or `/>` means you are not
+talking to the monitor), and verify a poke by reading it back. `build.sh cpu flash`
+would make P8X persist, at the cost of the factory image.
 
 - **Same microarchitecture** — keep the horizontal microcode word, the sequencer,
   the pointer model (PSEL address-source select), DOE/DLD selects. The microcode
