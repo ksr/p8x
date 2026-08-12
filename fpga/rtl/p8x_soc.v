@@ -73,7 +73,7 @@ module p8x_soc #(
   wire irq_set = mem_we && (mem_addr == 16'hFF06);
 
   p8x_cpu CPU(
-    .clk(clk), .rst(rst),
+    .clk(clk), .rst(rst), .cen(1'b1),   // async model: one microcycle per clock
     .uc_addr(uc_addr), .uc_data(uc_data),
     .mem_addr(mem_addr), .mem_din(mem_din), .mem_dout(mem_dout), .mem_we(mem_we),
     .mem_rd(mem_rd),

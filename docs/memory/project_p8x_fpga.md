@@ -63,8 +63,34 @@ Hardware-flow gotchas, all cost time once:
   the console**, the other is JTAG and returns garbage. Use `cu.`, not `tty.`.
 - Design is tiny: 219/20736 LUT4 (1%), 109/15552 DFF — lots of room for the core.
 
-Still uncovered: SD-over-SPI (Milestone 4 — different silicon, same BIOS block
-API). Next is Milestone 3: drop the proven CPU core in where the echo logic sits.
+**MILESTONE 3 DONE ON HARDWARE (2026-08-12): the CPU runs the monitor on the
+Tang Nano.** `fpga/tang-nano-20k/build.sh cpu load`, then talk to the console
+port at 115200 — banner, `?` help, `D 0100` ROM dump, `E 3000` RAM write/read-back
+all verified on the board.
+
+Two substrate problems had to be solved, neither visible in the co-sim:
+
+1. **A microcycle needs TWO DEPENDENT BRAM reads.** Fetch the microcode word,
+   THEN use its PSEL field to pick the pointer that drives mem_addr, THEN read
+   memory. One clock edge cannot do both — a single falling-edge latch reads
+   memory with the *previous* word's PSEL and derails the machine within ten
+   cycles (symptom: IR=00 where the emulator has 37, at cycle 9). Fix: p8x_cpu
+   gained a **`cen` clock enable** (its only sequential block, so a one-line
+   change; p8x_soc ties it high and the co-sim is unaffected), and the board runs
+   **three fabric phases per microcycle** — phase 0 ucode read, phase 1 memory
+   read, phase 2 commit. 27 MHz / 3 = **9 MHz effective**.
+2. **BRAM does not fit.** 64K memory + 8192x32 microcode = 47 blocks; GW2AR-18
+   has 46. Every one of the 32 microcode bits is used, so there is nothing to
+   shave there. This build **aliases main memory to 32K (drops A15)**: 31/46
+   blocks, Fmax 52 MHz. The monitor is fine — ROM $0000-1FFF, scratch $6000-69FF,
+   stack $FEFF→$7EFF are disjoint — but **P8X/OS with a full TPA will NOT fit**.
+   Milestone 4 should move main memory to the board's 64 Mbit SDRAM (the 'R' in
+   GW2AR) to get the whole map back.
+
+Also: `openFPGALoader --detect` without `-b tangnano20k` intermittently reports
+no device; always pass `-b tangnano20k`.
+
+Still uncovered: SD-over-SPI, and the full 64K map (see above).
 
 - **Same microarchitecture** — keep the horizontal microcode word, the sequencer,
   the pointer model (PSEL address-source select), DOE/DLD selects. The microcode

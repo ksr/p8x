@@ -18,6 +18,12 @@
 module p8x_cpu(
   input             clk,
   input             rst,          // synchronous, active-high
+  // Clock enable: the CPU advances one microcycle per enabled edge. Tie high for
+  // the async-memory simulation model (p8x_soc.v). The board build holds it low
+  // while it walks the two DEPENDENT block-RAM reads a microcycle needs -- the
+  // microcode word first, because its PSEL field chooses which pointer drives
+  // mem_addr, and only then the memory byte. One clock edge cannot do both.
+  input             cen,
   // microcode ROM (13-bit addr = {cond, stp[3:0], IR[7:0]}), 32-bit word
   output     [12:0] uc_addr,
   input      [31:0] uc_data,
@@ -182,7 +188,7 @@ module p8x_cpu(
       A<=0; B<=0; T<=0; T2<=0; IR<=0; stp<=0;
       fC<=0; fZ<=0; fN<=0; fV<=0; IE<=0; irqp<=0; halt_r<=0;
       prev_fcond<=0; cyc<=0;
-    end else if (!halt_r) begin
+    end else if (cen && !halt_r) begin
 `ifdef P8X_TRACE
       // canonical machine trace: one line per cycle, pre-commit state.
       // MUST match the emulator's `-T` output for line-by-line co-sim diff.
