@@ -151,13 +151,14 @@ load the echo bitstream as a baseline; if that is silent too, power-cycle the
 board.** Also drain the port after a replug — the factory LiteX boot text sits
 buffered and will be misread as a reply.
 
-**GOTCHA that cost a debugging cycle: the bitstream is loaded to VOLATILE SRAM.**
-Any unplug/power-cycle reverts the board to the factory **LiteX** demo in its
-onboard flash — whose console also answers on the same port, so a script happily
-streams into it and reports a mysterious "no ack at sector 0". Always confirm the
-`*` monitor prompt before driving the board (`litex>` or `/>` means you are not
-talking to the monitor), and verify a poke by reading it back. `build.sh cpu flash`
-would make P8X persist, at the cost of the factory image.
+**P8X IS NOW IN ONBOARD FLASH (2026-08-12)** — `build.sh cpu flash` — so it is
+the power-on default and the factory LiteX demo is gone (Sipeed publish the image
+if it is ever wanted back). Historical note, still worth knowing: while the
+bitstream lived in **volatile SRAM**, any power cycle reverted the board to LiteX,
+whose console answers on the same port — a script then streams happily into it and
+reports a mysterious "no ack at sector 0". Always confirm the `*` monitor prompt
+before driving the board (`litex>` or `/>` means you are not talking to it) and
+verify a poke by reading it back.
 
 - **Same microarchitecture** — keep the horizontal microcode word, the sequencer,
   the pointer model (PSEL address-source select), DOE/DLD selects. The microcode
