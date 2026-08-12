@@ -127,13 +127,29 @@ use another machine, or format on-target with the monitor's `F` command.
 `osload.asm` (N<256 sectors to LBA 1.. + patch OSCNT) and `imgload.asm` (clone an
 arbitrary run from LBA 0). Assemble with `p8xasm --base 0x3000`, poke through the
 monitor's `E 3000` (two hex digits set a byte and auto-advance), `G 3000`, stream.
-**P8X/OS v1.0 BOOTS ON HARDWARE** from a card the board wrote itself — no root, no
-card reader.
+**MILESTONE 4 COMPLETE (2026-08-12): the whole 6 MB disk was cloned by the board
+itself and P8X/OS runs the full filesystem on hardware** — `dir` lists bin/ lib/
+man/ src/, `cat README.TXT` works, `dir /bin` shows all 30 commands including
+cc.bin and vi.bin. 12377 sectors in 687 s (~11 min at 115200). No root, no card
+reader.
+
+Verify a clone by reading sectors back: `tools/`-style probe that does
+`CFREAD` into $4000 then `D 4000`, diffed against the host image. Spot-checked
+LBA 0/1/2/33/37/125/1000/3239/8000/12376 — all match.
 
 Pacing rules: poking through `E` must be **echo-paced** (the ACIA shim holds ONE
 byte and the monitor blocks ~87 us echoing each char); sector payload needs no
 pacing (receive loop ~4 us/byte vs 87 us on the wire) but the host MUST wait for
 the per-sector `.` ack, because CFWRITE takes ms and anything arriving then is lost.
+
+**GOTCHA: the board's USB bridge can WEDGE.** After the long clone the console
+port went silent, JTAG stopped answering, and even the known-good Milestone-0
+echo bitstream produced nothing — it looked exactly like disk corruption (`B`
+spewed `?` endlessly). It was not: an unplug/replug fixed everything and the
+cloned card verified byte-perfect. **Before diagnosing a "disk" or "CPU" problem,
+load the echo bitstream as a baseline; if that is silent too, power-cycle the
+board.** Also drain the port after a replug — the factory LiteX boot text sits
+buffered and will be misread as a reply.
 
 **GOTCHA that cost a debugging cycle: the bitstream is loaded to VOLATILE SRAM.**
 Any unplug/power-cycle reverts the board to the factory **LiteX** demo in its
