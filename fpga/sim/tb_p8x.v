@@ -42,10 +42,42 @@ module tb_p8x;
   wire [7:0] tx_byte;
   integer    txf = 0;
 
+  // ---- CF-IDE model (mirrors the C model in p8xemu.c exactly) ----------------
+  // Two devices on a shared task file. Feature/LBA writes latch into BOTH (the
+  // firmware writes CFLBAx before CFHEAD); the DEV bit picks who executes the
+  // command. An absent drive reads back $FF, so the firmware's bounded waits
+  // time out instead of hanging. BSY is never asserted -- transfers here are
+  // instantaneous, exactly as in the emulator.
+  wire       cf_rd, cf_wr;
+  wire [2:0] cf_a;
+  wire [7:0] cf_wdata;
+  reg  [7:0] cf_rdata;
+
+  integer   cffd   [0:1];            // 0 = no image attached
+  reg [7:0] cfbuf  [0:1023];         // dev*512 + idx
+  integer   cfidx  [0:1];
+  reg       cfdrq  [0:1];
+  reg       cferr  [0:1];
+  reg       cfwr_m [0:1];            // WRITE SECTORS in progress
+  reg [7:0] cflba0 [0:1], cflba1 [0:1], cflba2 [0:1], cffeat [0:1];
+  reg       cfdev = 1'b0;            // ATA device select ($FF16 bit 0)
+  wire      cfpres = (cffd[cfdev] != 0);
+
+  always @* begin
+    case (cf_a)
+      3'd0: cf_rdata = cfpres ? cfbuf[cfdev*512 + cfidx[cfdev]] : 8'hFF;
+      3'd7: cf_rdata = cfpres ? (8'h40 | (cfdrq[cfdev] ? 8'h08 : 8'h00)
+                                       | (cferr[cfdev] ? 8'h01 : 8'h00)) : 8'hFF;
+      default: cf_rdata = 8'hFF;
+    endcase
+  end
+
   p8x_soc SOC(.clk(clk), .rst(rst),
               .rx_byte(rx_byte), .rx_avail(rx_avail), .rx_take(rx_take),
               .st_rd(st_rd),
               .tx_stb(tx_stb), .tx_byte(tx_byte),
+              .cf_rd(cf_rd), .cf_wr(cf_wr), .cf_a(cf_a),
+              .cf_wdata(cf_wdata), .cf_rdata(cf_rdata),
               .halted(halted));
 
   always #5 clk = ~clk;   // 100 MHz; functional sim only, frequency irrelevant
@@ -80,12 +112,91 @@ module tb_p8x;
     end
   end
 
+  // ---- CF behaviour ---------------------------------------------------------
+  integer cfi, cfc, cflba;
+
+  task cf_identify;                        // ATA IDENTIFY: byte-swapped model
+    reg [8*40:1] m;                        // string at words 27-46 (bytes 54..)
+    begin
+      m = "P8X-CF EMULATOR                         ";
+      for (cfi = 0; cfi < 512; cfi = cfi + 1) cfbuf[cfdev*512 + cfi] = 8'h00;
+      // reg [8*40:1] holds char 0 in the HIGH bits, so char i is m[(40-i)*8 -: 8].
+      // The pairs are swapped, which is what ATA IDENTIFY does and what the
+      // monitor's I command un-swaps when it prints the model string.
+      for (cfi = 0; cfi < 40; cfi = cfi + 2) begin
+        cfbuf[cfdev*512 + 54 + cfi]     = m[(40-(cfi+1))*8 -: 8];
+        cfbuf[cfdev*512 + 54 + cfi + 1] = m[(40-cfi)*8 -: 8];
+      end
+      cfidx[cfdev] = 0; cfdrq[cfdev] = 1; cferr[cfdev] = 0; cfwr_m[cfdev] = 0;
+    end
+  endtask
+
+  task cf_readsec;
+    begin
+      for (cfi = 0; cfi < 512; cfi = cfi + 1) cfbuf[cfdev*512 + cfi] = 8'h00;
+      cflba = (cflba2[cfdev] << 16) | (cflba1[cfdev] << 8) | cflba0[cfdev];
+      if (cffd[cfdev] != 0) begin
+        cfc = $fseek(cffd[cfdev], cflba * 512, 0);
+        for (cfi = 0; cfi < 512; cfi = cfi + 1) begin
+          cfc = $fgetc(cffd[cfdev]);
+          cfbuf[cfdev*512 + cfi] = (cfc < 0) ? 8'h00 : cfc[7:0];
+        end
+      end
+      cfidx[cfdev] = 0; cfdrq[cfdev] = 1; cferr[cfdev] = 0; cfwr_m[cfdev] = 0;
+    end
+  endtask
+
+  always @(posedge clk) begin
+    // data-port read: advance, drop DRQ when the 512-byte buffer drains
+    if (cf_rd && cf_a == 3'd0 && cfpres) begin
+      if (cfidx[cfdev] >= 511) begin cfidx[cfdev] <= 0; cfdrq[cfdev] <= 1'b0; end
+      else                           cfidx[cfdev] <= cfidx[cfdev] + 1;
+    end
+    if (cf_wr) begin
+      // shared task file: both devices latch feature and LBA
+      case (cf_a)
+        3'd1: begin cffeat[0] <= cf_wdata; cffeat[1] <= cf_wdata; end
+        3'd3: begin cflba0[0] <= cf_wdata; cflba0[1] <= cf_wdata; end
+        3'd4: begin cflba1[0] <= cf_wdata; cflba1[1] <= cf_wdata; end
+        3'd5: begin cflba2[0] <= cf_wdata; cflba2[1] <= cf_wdata; end
+        3'd6: cfdev <= cf_wdata[0];        // DEV select
+        default: ;                         // $FF12 sector count: single-sector model
+      endcase
+      // data and command route to the selected device, and only if present
+      if (cfpres) begin
+        if (cf_a == 3'd0) begin            // data port write
+          cfbuf[cfdev*512 + cfidx[cfdev]] = cf_wdata;
+          if (cfidx[cfdev] >= 511) begin
+            // read-only image: a completed WRITE drains but is not flushed
+            cfidx[cfdev] <= 0; cfdrq[cfdev] <= 1'b0; cfwr_m[cfdev] <= 1'b0;
+          end else cfidx[cfdev] <= cfidx[cfdev] + 1;
+        end
+        if (cf_a == 3'd7) case (cf_wdata)  // command
+          8'hEF: begin cferr[cfdev] <= 1'b0; cfdrq[cfdev] <= 1'b0; end  // SET FEATURES
+          8'hEC: cf_identify();                                          // IDENTIFY
+          8'h20: cf_readsec();                                           // READ SECTORS
+          8'h30: begin cfidx[cfdev] <= 0; cfdrq[cfdev] <= 1'b1;          // WRITE SECTORS
+                       cferr[cfdev] <= 1'b0; cfwr_m[cfdev] <= 1'b1; end
+          default: begin cferr[cfdev] <= 1'b1; cfdrq[cfdev] <= 1'b0; end
+        endcase
+      end
+    end
+  end
+
   integer ncyc;
-  reg [1023:0] rxfile, txfile;
+  reg [1023:0] rxfile, txfile, cffile, cffile1;
   integer fd, i, c;
   initial begin
     if (!$value$plusargs("cycles=%d", ncyc)) ncyc = 200000;
     if ($test$plusargs("con")) begin con = 1; ncyc = 1<<30; end
+    // CF images (read-only: a co-sim run must never mutate the disk)
+    for (i = 0; i < 2; i = i + 1) begin
+      cffd[i] = 0; cfidx[i] = 0; cfdrq[i] = 0; cferr[i] = 0; cfwr_m[i] = 0;
+      cflba0[i] = 0; cflba1[i] = 0; cflba2[i] = 0; cffeat[i] = 0;
+    end
+    for (i = 0; i < 1024; i = i + 1) cfbuf[i] = 8'h00;
+    if ($value$plusargs("cf=%s",  cffile))  cffd[0] = $fopen(cffile,  "rb");
+    if ($value$plusargs("cf1=%s", cffile1)) cffd[1] = $fopen(cffile1, "rb");
     // scripted input: count the bytes so rx_len is exact (an unread rxs[] entry
     // is x, which would make rx_avail meaningless if we guessed the length)
     if ($value$plusargs("rx=%s", rxfile)) begin

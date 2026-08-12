@@ -32,8 +32,23 @@ key off the new `mem_rd` CPU output (`doe==7`, the microcycles that source the b
 from memory, mirroring where p8xemu calls memrd), NOT off `mem_addr==$FF05`, which
 lingers across microcycles and would double-consume.
 
-Still uncovered: the SD/disk path (Milestone 4). Board toolchain (oss-cad-suite)
-still not installed — only needed from Milestone 3.
+**CF-IDE is modelled too (2026-08-11): P8X/OS BOOTS ON THE RTL.**
+`./run.sh 2000000 "" boot_in.txt os/run-disk.img` matches 2M cycles + console;
+`./console.sh "" os/run-disk.img` boots and runs `pwd`/`dir` off the simulated
+disk (shell wants **lowercase** command names; `DIR` gets `?`). The CF model
+lives in the testbench, reading sectors on demand with `$fseek` — a 6 MB image
+will not fit in a Verilog array. Disk is copied and opened read-only.
+
+**HAZARD, cost 80 GB:** p8xemu dropped its cycle cap whenever `isatty(0)` ("no
+cap while typing") — with `-T` that streams a trace line per cycle, so `run.sh`
+launched from a terminal ignored `-l` and filled the disk. Worse, an orphaned
+p8xemu kept the unlinked file open, so `rm` freed nothing until `pkill p8xemu`.
+Fixed: `-N`/`-i` suppress interactive mode, explicit `-l` always wins, and run.sh
+aborts if the trace exceeds the cycle count. **If a sim run dies oddly, check
+`pgrep p8xemu` first.**
+
+Still uncovered: SD-over-SPI (Milestone 4 — different silicon, same BIOS block
+API). Board toolchain (oss-cad-suite) still not installed — only from Milestone 3.
 
 - **Same microarchitecture** — keep the horizontal microcode word, the sequencer,
   the pointer model (PSEL address-source select), DOE/DLD selects. The microcode

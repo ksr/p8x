@@ -2,7 +2,7 @@
 # Milestone-1 co-simulation: run the same boot on the RTL and the C emulator,
 # diff their per-cycle state traces. PASS = the RTL matches the golden model.
 #
-#   ./run.sh [CYCLES] [ROM] [RXSCRIPT]
+#   ./run.sh [CYCLES] [ROM] [RXSCRIPT] [CFIMAGE]
 #
 #     CYCLES    microcycles to compare          (default 20000)
 #     ROM       alternate ROM image to boot     (default: the monitor,
@@ -13,6 +13,9 @@
 #               same rule -- RDRF = "bytes remain", one byte consumed per $FF05
 #               read -- so there is no timing to diverge on. When given, the
 #               console OUTPUT of both models is diffed too.
+#     CFIMAGE   CF disk image (e.g. os/run-disk.img). Copied into work/ first,
+#               so a run can never mutate the real disk. With it the monitor's
+#               B command boots the OS inside the simulation.
 #
 # Needs: a C compiler (for the emulator) and iverilog (from oss-cad-suite).
 set -euo pipefail
@@ -22,6 +25,7 @@ EMU="$ROOT/emulator"
 CYCLES="${1:-20000}"
 ROM="${2:-}"
 RXS="${3:-}"
+CF="${4:-}"      # CF disk image, attached read-only to both models
 
 W="$HERE/work"; mkdir -p "$W"; cd "$W"
 
@@ -40,6 +44,18 @@ else
     *)     rm -f eeprom.bin; cp "$src" eeprom.bin ;;
   esac
   echo "ROM under test: $ROM ($(wc -c < eeprom.bin | tr -d ' ') bytes)"
+fi
+
+# CF disk. Copied into work/ so the co-sim can never touch the real image: the
+# emulator opens it read-write and a stray WRITE SECTORS would corrupt a 6 MB
+# OS disk, while the RTL model opens read-only. Same bytes either way.
+EMU_CF=(); RTL_CF=()
+if [ -n "$CF" ]; then
+  case "$CF" in /*) csrc="$CF";; *) csrc="$ROOT/$CF";; esac
+  [ -f "$csrc" ] || { echo "run.sh: no such disk image: $csrc" >&2; exit 2; }
+  cp "$csrc" disk.img
+  EMU_CF=(-c disk.img); RTL_CF=("+cf=disk.img")
+  echo "CF disk: $CF ($(du -h disk.img | cut -f1 | tr -d ' '), copy, read-only)"
 fi
 
 # scripted console input: raw bytes for the emulator, one hex byte per line for
@@ -72,8 +88,19 @@ PY
 # it the trace depends on what stdin is (a TTY reports no key; a redirected stdin
 # is at EOF, which reads as RDRF set) and the diff is only valid from a terminal.
 cc -O2 -o p8xemu "$EMU/p8xemu.c"
-./p8xemu -T -N "${EMU_RX[@]+"${EMU_RX[@]}"}" -l "$CYCLES" eeprom.bin >emu.console.raw 2>emu.raw || true
+./p8xemu -T -N "${EMU_RX[@]+"${EMU_RX[@]}"}" "${EMU_CF[@]+"${EMU_CF[@]}"}" -l "$CYCLES" eeprom.bin >emu.console.raw 2>emu.raw || true
 grep -E '^[0-9]' emu.raw > emu.trace
+# Guard: the emulator must respect -l. It used to drop the cycle cap whenever
+# stdin was a TTY, so a -T run launched from a shell streamed a trace line per
+# cycle until the disk filled (80 GB in one sitting, held open by an orphaned
+# process so rm did not even free it). Fixed in p8xemu, but fail loudly rather
+# than silently regenerate the hazard.
+EL=$(wc -l < emu.trace | tr -d ' ')
+if [ "$EL" -gt $(( CYCLES + 1000 )) ]; then
+  echo "run.sh: emulator ignored -l ($EL trace lines for $CYCLES cycles) -- aborting" >&2
+  rm -f emu.raw emu.trace
+  exit 3
+fi
 # emulator console bytes -> the same one-hex-byte-per-line form the RTL logs
 python3 - <<'PY'
 b=open("emu.console.raw","rb").read()
@@ -89,7 +116,7 @@ fi
 iverilog -g2012 -DP8X_TRACE -o sim.vvp \
   "$ROOT/fpga/rtl/p8x_cpu.v" "$ROOT/fpga/rtl/p8x_soc.v" "$HERE/tb_p8x.v"
 rm -f rtl.console
-vvp sim.vvp +cycles="$CYCLES" "${RTL_RX[@]+"${RTL_RX[@]}"}" +tx=rtl.console \
+vvp sim.vvp +cycles="$CYCLES" "${RTL_RX[@]+"${RTL_RX[@]}"}" "${RTL_CF[@]+"${RTL_CF[@]}"}" +tx=rtl.console \
   | grep -E '^[0-9]' > rtl.trace
 touch rtl.console
 

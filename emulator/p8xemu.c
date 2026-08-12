@@ -250,10 +250,11 @@ static void cf_attach(struct cf_state*c,const char*fn){   /* open/create a CF im
 }
 int main(int argc,char**argv){
     const char*ee="eeprom.bin"; const char*cfn=0,*cfn2=0; unsigned long long lim=200000000ULL;
+    int lim_set=0;                       /* -l given explicitly: always honour it */
     for(int i=1;i<argc;i++){
         if(!strcmp(argv[i],"-t")) trace=1;
         else if(!strcmp(argv[i],"-T")) mtrace=1;   /* canonical machine trace (co-sim) */
-        else if(!strcmp(argv[i],"-l")) lim=strtoull(argv[++i],0,0);
+        else if(!strcmp(argv[i],"-l")){ lim=strtoull(argv[++i],0,0); lim_set=1; }
         else if(!strcmp(argv[i],"-c")) cfn=argv[++i];
         else if(!strcmp(argv[i],"-c2")) cfn2=argv[++i];   /* 2nd CF (drive 1) */
         else if(!strcmp(argv[i],"-s")) switches=(uint8_t)strtoul(argv[++i],0,0);  /* $FF00 input byte */
@@ -285,7 +286,11 @@ int main(int argc,char**argv){
     load(ee,eeprom,ROMSIZE);
     if(cfn)  cf_attach(&cf[0],cfn);                 /* attach CF disk images */
     if(cfn2) cf_attach(&cf[1],cfn2);
-    if(isatty(0) && tcgetattr(0,&g_orig)==0){       /* interactive console */
+    /* -N / -i mean the console is disabled or scripted, so this is a batch run
+       (the FPGA co-sim): do not seize the terminal and do not lift the cycle cap,
+       even when launched from a shell. Without this guard a `-T` run started from
+       a TTY ignores -l and streams a trace line per cycle until the disk fills. */
+    if(!norx && !scr && isatty(0) && tcgetattr(0,&g_orig)==0){   /* interactive console */
         interactive=1;
         struct termios t=g_orig;
         t.c_lflag &= ~(ICANON|ECHO);                /* char-at-a-time, BASIC echoes */
@@ -294,7 +299,7 @@ int main(int argc,char**argv){
         tcsetattr(0,TCSANOW,&t); g_raw=1;
         atexit(term_restore);
         signal(SIGINT,on_sig); signal(SIGTERM,on_sig);
-        lim=~0ULL;                                  /* no cycle cap while typing */
+        if(!lim_set) lim=~0ULL;   /* no cycle cap while typing -- unless -l was asked for */
     }
     P[0]=0; P[1]=P[2]=0; P[3]=0xFEFF; P[4]=P[5]=0; stp=0; IR=0;   /* reset: P0 forced 0 */
     while(!halted && cycles<lim){

@@ -52,8 +52,9 @@ diff is now identical regardless of how stdin is wired.
 | `tb_p8x.v` | testbench: run N cycles, emit the canonical trace |
 | `isa_test.asm` | directed all-88-opcode exerciser (assembled by `run.sh`) |
 | `console_in.txt` | scripted keystrokes for the driven-monitor run (LF → CR) |
-| `run.sh` | build + run + diff; `run.sh [CYCLES] [ROM] [RXSCRIPT]` |
-| `console.sh` | **interactive** console on the RTL — type at the monitor |
+| `cf_id.txt`, `boot_in.txt` | CF scripts: IDENTIFY, and boot the OS from disk |
+| `run.sh` | build + run + diff; `run.sh [CYCLES] [ROM] [RXSCRIPT] [CFIMAGE]` |
+| `console.sh` | **interactive** console; `console.sh [ROM] [CFIMAGE]` |
 | `../rtl/p8x_cpu.v` | the CPU core (transliteration of the emulator microcycle) |
 | `../rtl/p8x_soc.v` | CPU + microcode ROM + 64K memory + minimal sim I/O |
 
@@ -82,6 +83,15 @@ rather than merely executing: carry out (`$FF + 1`), borrow (`$00 - 1`), signed
 overflow at both sign boundaries (`$7F + 1`, `$80 - 1`), zero, and carry-in for
 `ROL`/`ROR`. Every branch is taken **and** not taken. The interrupt path is real —
 it writes `$FF06` to raise an IRQ, vectors through `$0808`, and returns via `RTI`.
+
+It ends in `HLT`, so both sides stop at the same cycle rather than one being
+clipped to the other's length — check the two trace lengths match if you change it.
+
+It is a **payload, not a self-checking test**: it asserts nothing itself. A wrong
+ALU result or mis-set flag is caught because it makes the traces differ, naming
+the exact microcycle. That also makes it the regression test for any future RTL
+change — clock-up, BRAM swap, the Milestone-5 IRQ work — which must still diff
+clean against the emulator.
 
 ```bash
 ./run.sh 20000                            # monitor boot   -> PASS, 20000 cycles
@@ -119,17 +129,52 @@ That drives the banner, the help text, a 256-byte hex dump of the BIOS jump
 table, and an examine/modify session — 2380 bytes of console output, byte-identical
 between the two models, and 44 of 88 opcodes along the way.
 
-It ends in `HLT`, so both sides stop at the same cycle rather than one being
-clipped to the other's length — check the two trace lengths match if you change it.
+### CF disk: the OS boots in simulation
 
-It is a **payload, not a self-checking test**: it asserts nothing itself. A wrong
-ALU result or mis-set flag is caught because it makes the traces differ, naming
-the exact microcycle. That also makes it the regression test for any future RTL
-change — clock-up, BRAM swap, the Milestone-5 IRQ work — which must still diff
-clean against the emulator.
+`$FF10..$FF17` (8-bit True IDE task file) is modelled too, mirroring `p8xemu.c`
+command for command: `$EF` SET FEATURES, `$EC` IDENTIFY, `$20` READ SECTORS,
+`$30` WRITE SECTORS, BSY never asserted, absent drive reads `$FF`. Feature and
+LBA writes latch into **both** devices (shared task file); the `$FF16` DEV bit
+picks who executes. The model lives in the testbench, which owns the image file
+and reads sectors on demand with `$fseek` — a 6 MB image will not fit in a
+Verilog array.
 
-Still not covered: the SD/disk path (Milestone 4), and any peripheral behaviour
-that depends on real timing rather than the polled, timing-free console model.
+```bash
+./run.sh 300000  "" cf_id.txt   os/run-disk.img   # I -> CF OK: P8X-CF EMULATOR
+./run.sh 2000000 "" boot_in.txt os/run-disk.img   # B -> boots P8X/OS
+```
+
+The disk is **copied into `work/` and opened read-only**, so a co-sim run can
+never mutate your real 6 MB OS image. A completed WRITE SECTORS drains the
+buffer but is not flushed.
+
+The boot run gets you this, byte-identical on both sides:
+
+```
+* B
+
+P8X/OS v1.0
+/>
+```
+
+and `console.sh "" os/run-disk.img` lets you go further by hand — `pwd`, `dir`,
+loading the 16 KB `/bin/dir.bin` off the simulated disk and listing the real
+filesystem. Note the shell wants **lowercase** command names on this image.
+
+Still not covered: SD-over-SPI (Milestone 4 replaces CF-IDE with different
+silicon behind the same BIOS block API), and any peripheral behaviour that
+depends on real timing rather than these polled, timing-free models.
+
+### A hazard worth knowing about
+
+`p8xemu` used to drop its cycle cap whenever `isatty(0)` — correct for
+interactive typing, catastrophic with `-T`, which writes a trace line per cycle.
+A `run.sh` launched from a terminal therefore ignored `-l` and streamed until the
+disk filled: 80 GB in one sitting here, and because an orphaned emulator still
+held the file open, `rm` did not even give the space back until the process was
+killed. `-N`/`-i` now suppress interactive mode entirely and an explicit `-l` is
+always honoured; `run.sh` additionally aborts if the trace is longer than the
+cycle count. If a run ever dies oddly, check `pgrep p8xemu` before anything else.
 
 ## Driving it by hand
 

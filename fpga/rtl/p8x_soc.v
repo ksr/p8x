@@ -30,6 +30,14 @@ module p8x_soc #(
   // console TX: pulses with the byte written to $FF05
   output       tx_stb,
   output [7:0] tx_byte,
+  // CF-IDE task file $FF10..$FF17: routed out to the testbench, which owns the
+  // disk image and the ATA handshake (same split as the console -- no file I/O
+  // in the SoC). cf_rd is a strobe, so the data port advances exactly once.
+  output       cf_rd,
+  output       cf_wr,
+  output [2:0] cf_a,
+  output [7:0] cf_wdata,
+  input  [7:0] cf_rdata,
   output halted);
 
   // ---- microcode ROM: 8192 x 32-bit, async read ----
@@ -46,13 +54,19 @@ module p8x_soc #(
   // ACIA: $FF04 status = TDRE always set, RDRF = "the script still has a byte";
   // $FF05 data = the current script byte. Matches p8xemu's memrd() exactly.
   wire [7:0]  acia_st = {6'b0, 1'b1, rx_avail};      // bit1 TDRE, bit0 RDRF
+  wire        is_cf = (mem_addr >= 16'hFF10) && (mem_addr <= 16'hFF17);
   wire [7:0]  io_rd = (mem_addr == 16'hFF04) ? acia_st :
-                      (mem_addr == 16'hFF05) ? (rx_avail ? rx_byte : 8'h00) : 8'hFF;
+                      (mem_addr == 16'hFF05) ? (rx_avail ? rx_byte : 8'h00) :
+                      is_cf                  ? cf_rdata : 8'hFF;
   wire [7:0]  mem_din = is_io ? io_rd : mem[mem_addr];
 
   wire mem_rd;
   assign rx_take = mem_rd && (mem_addr == 16'hFF05) && rx_avail;
   assign st_rd   = mem_rd && (mem_addr == 16'hFF04);
+  assign cf_rd    = mem_rd && is_cf;
+  assign cf_wr    = mem_we && is_cf;
+  assign cf_a     = mem_addr[2:0];
+  assign cf_wdata = mem_dout;
   assign tx_stb  = mem_we && (mem_addr == 16'hFF05);
   assign tx_byte = mem_dout;
 
