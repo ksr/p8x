@@ -32,6 +32,10 @@ module p8x_top(
   input        clk,        // 27 MHz (pin 4)
   input        uart_rx,    // from host (pin 70)
   output       uart_tx,    // to host   (pin 69)
+  output       sd_clk,     // microSD in SPI mode: CLK  (pin 83)
+  output       sd_mosi,    //   CMD  as MOSI (pin 82)
+  input        sd_miso,    //   DAT0 as MISO (pin 84)
+  output       sd_cs,      //   DAT3 as CS   (pin 81)
   output [5:0] led);       // active-LOW
 
   // ---- power-on reset: hold for 256 clocks after configuration ----
@@ -107,10 +111,20 @@ module p8x_top(
   wire is_io    = (mem_addr >= 16'hFF00);
   wire acia_st  = (mem_addr == 16'hFF04);
   wire acia_dat = (mem_addr == 16'hFF05);
+  wire is_cf    = (mem_addr >= 16'hFF10) && (mem_addr <= 16'hFF17);
 
   // TDRE (bit 1) = transmitter free; RDRF (bit 0) = a byte is waiting.
+  wire [7:0] cf_rdata;
+  wire       card_ready;
+  cf_sd CF(.clk(clk), .rst(rst),
+           .cf_rd(cen && mem_rd && is_cf), .cf_wr(cen && mem_we && is_cf),
+           .cf_a(mem_addr[2:0]), .cf_wdata(mem_dout), .cf_rdata(cf_rdata),
+           .sd_clk(sd_clk), .sd_mosi(sd_mosi), .sd_miso(sd_miso), .sd_cs(sd_cs),
+           .card_ready(card_ready));
+
   wire [7:0] io_rd = acia_st  ? {6'b0, ~tx_busy, rx_have} :
-                     acia_dat ? rx_hold : 8'hFF;
+                     acia_dat ? rx_hold :
+                     is_cf    ? cf_rdata : 8'hFF;
   assign mem_din = is_io ? io_rd : mem_q;
 
   // Reading $FF05 consumes the byte -- keyed off mem_rd (the microcycles that
@@ -143,6 +157,6 @@ module p8x_top(
   // ---- status LEDs (active low) ----
   reg [24:0] hb = 25'd0;
   always @(posedge clk) hb <= hb + 1'b1;
-  assign led = ~{3'b0, halted, ~rst, hb[24]};
-  // led0 heartbeat, led1 "running" (reset released), led2 halted
+  assign led = ~{2'b0, card_ready, halted, ~rst, hb[24]};
+  // led0 heartbeat, led1 running, led2 halted, led3 SD card initialised
 endmodule

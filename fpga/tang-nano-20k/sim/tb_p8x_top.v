@@ -24,8 +24,12 @@ module tb_p8x_top;
   reg  rx = 1'b1;
   wire tx;
   wire [5:0] led;
+  wire sd_clk, sd_mosi, sd_cs, sd_miso;
 
-  p8x_top DUT(.clk(clk), .uart_rx(rx), .uart_tx(tx), .led(led));
+  p8x_top DUT(.clk(clk), .uart_rx(rx), .uart_tx(tx),
+              .sd_clk(sd_clk), .sd_mosi(sd_mosi), .sd_miso(sd_miso), .sd_cs(sd_cs),
+              .led(led));
+  sd_model CARD(.sd_clk(sd_clk), .sd_mosi(sd_mosi), .sd_miso(sd_miso), .sd_cs(sd_cs));
 
   // --- decode the FPGA's serial output ---
   integer nchar = 0;
@@ -64,11 +68,11 @@ module tb_p8x_top;
   end
 
   initial begin
-    $display("=== Milestone-3 board bench: expecting the monitor banner ===");
-    // let the monitor boot and print its banner, then ask for help
+    $display("=== board bench: monitor + microSD ===");
     #(BIT_NS * 400);
-    send_byte("?");
-    #(BIT_NS * 900);
+    send_byte("B");          // BOOT: reads the OS image off the card
+    send_byte(8'h0D);
+    #(BIT_NS * 40000);
     $display("\n=== %0d bytes received ===", nchar);
     if (nchar > 20) $display("PASS: the CPU is talking over the real UART");
     else            $display("FAIL: little or no serial output");

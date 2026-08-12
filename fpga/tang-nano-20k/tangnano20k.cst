@@ -28,3 +28,16 @@ IO_LOC  "led[4]" 19;
 IO_PORT "led[4]" IO_TYPE=LVCMOS33 PULL_MODE=UP;
 IO_LOC  "led[5]" 20;
 IO_PORT "led[5]" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+
+// microSD in SPI mode. Pins from Sipeed's pinout / the same known-good project
+// the rest of this file was verified against:
+//   83 SDIO_CLK   82 SDIO_CMD(=MOSI)   84 SDIO_D0(=MISO)   81 SDIO_D3(=CS)
+// D1 (85) and D2 (80) are unused in SPI mode and left unconstrained.
+IO_LOC  "sd_clk" 83;
+IO_PORT "sd_clk" IO_TYPE=LVCMOS33 DRIVE=8;
+IO_LOC  "sd_mosi" 82;
+IO_PORT "sd_mosi" IO_TYPE=LVCMOS33 DRIVE=8;
+IO_LOC  "sd_miso" 84;
+IO_PORT "sd_miso" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+IO_LOC  "sd_cs" 81;
+IO_PORT "sd_cs" IO_TYPE=LVCMOS33 DRIVE=8;

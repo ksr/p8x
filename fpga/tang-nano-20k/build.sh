@@ -31,7 +31,7 @@ fi
 
 case "$TARGET" in
   echo) SRC="rtl/top.v rtl/uart.v";                      TOP=top;      FS=p8x.fs ;;
-  cpu)  SRC="../rtl/p8x_cpu.v rtl/p8x_top.v rtl/uart.v"; TOP=p8x_top;  FS=p8x_cpu.fs ;;
+  cpu)  SRC="../rtl/p8x_cpu.v rtl/p8x_top.v rtl/uart.v rtl/cf_sd.v rtl/sd_spi.v"; TOP=p8x_top;  FS=p8x_cpu.fs ;;
   *)    echo "unknown target: $TARGET (use echo|cpu)"; exit 2 ;;
 esac
 

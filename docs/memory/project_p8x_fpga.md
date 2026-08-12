@@ -96,7 +96,29 @@ Two substrate problems had to be solved, neither visible in the co-sim:
 Also: `openFPGALoader --detect` without `-b tangnano20k` intermittently reports
 no device; always pass `-b tangnano20k`.
 
-Still uncovered: SD-over-SPI, and the full 64K map (see above).
+**SD-over-SPI WORKS ON HARDWARE (2026-08-12).** `rtl/sd_spi.v` (CMD0/CMD8/
+ACMD41/CMD58 init ladder, CMD17 read, CMD24 write; 400 kHz until init then
+6.75 MHz) + `rtl/cf_sd.v` (presents the $FF10-$FF17 CF task file the BIOS
+already drives, unchanged firmware). microSD pins in SPI mode, verified against
+Sipeed's pinout: **CLK 83, CMD=MOSI 82, DAT0=MISO 84, DAT3=CS 81**.
+
+- The one real difference from the emulator: it never asserts **BSY** (instant
+  transfers), hardware must. CFWAIT spins on BSY ~4096 polls ≈ 14 ms at 9 MHz —
+  plenty for a single block, so the firmware needed no change.
+- SDHC vs SDSC: CMD58's CCS bit decides whether LBA is a **block** or a **byte**
+  offset. Getting it wrong reads 512x off and looks like a corrupt filesystem.
+- **IDENTIFY must be gated on sd_ready.** The model string is generated in RTL,
+  so without that gate `I` prints "CF OK" with no card at all and the failure
+  only surfaces later as mysterious garbage.
+- `sim/sd_model.v` is a behavioural card (serves a real image via $fseek) — the
+  OS boots off it in simulation before any hardware runs.
+
+Status on the board: card initialises, `I` reports CF OK. `B` says **NO OS ON
+CARD** because the microSD has no P8XFS image yet. **Writing a raw image needs
+root (`dd` to /dev/rdiskN); ksr77 is not in `admin` or `operator`** — so either
+use another machine, or format on-target with the monitor's `F` command.
+
+Still uncovered: getting the OS image onto a card without admin rights.
 
 - **Same microarchitecture** — keep the horizontal microcode word, the sequencer,
   the pointer model (PSEL address-source select), DOE/DLD selects. The microcode
