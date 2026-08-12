@@ -30,11 +30,23 @@ signal. Same adversarial-diff discipline used elsewhere in the project.
 | **1** | CPU core in simulation ✅ | no | the microarchitecture is correct (all 88 opcodes) |
 | **2** | Peripherals in simulation (ACIA-UART) ✅ | no | monitor boots to a sim console; console output diffed |
 | **3** | Core on real hardware ✅ | yes | P8X talks over USB for real, full 64K map |
-| **4** | SD disk (SD-over-SPI behind the BIOS block API) | yes | OS boots from SD, full FS |
+| **4** | SD disk (SD-over-SPI behind the BIOS block API) ✅ | yes | OS boots from SD, full FS |
 | **5** | Polish: clock-up, IRQ (backlog #26), stretch goals | yes | performance + extras |
 
 Milestones 0–2 are most of the effort and only 0 needs the board — the CPU is
 built and proven in simulation before the hardware ever runs it.
+
+**Status 2026-08-12: 0–4 done.** P8X/OS boots from a microSD on the Tang Nano
+20K. The CPU runs at 27/3 = 9 MHz (three fabric phases per microcycle, see
+`tang-nano-20k/rtl/p8x_top.v`) with the full 64K map — affordable because the
+microcode ROM is compacted from 8192 to 4096 words, so no SDRAM controller was
+needed. Build and flash with `tang-nano-20k/build.sh cpu load`.
+
+Two things to know before driving the board: the bitstream is loaded to
+**volatile SRAM**, so any power cycle reverts to the factory LiteX demo (whose
+console answers on the same serial port and will silently swallow anything you
+send it), and a disk can be installed without host root using the serial
+loaders in `tang-nano-20k/tools/`.
 
 ## Layout
 
