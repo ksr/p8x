@@ -86,7 +86,7 @@ Two substrate problems had to be solved, neither visible in the co-sim:
    microcode word** (verified, and `mk_compact_ucode.py` re-checks it and aborts
    if that ever changes). Squeeze IR through a combinational 256-entry map to a
    7-bit index (88 opcodes + 1 shared undefined slot) and the ROM halves to
-   4096x32 (~8 blocks). Result: **full 64K memory, 40/46 BSRAM, Fmax 55 MHz**,
+   4096x32 (~8 blocks). Result: **full 64K memory, 40/46 BSRAM, Fmax ~50 MHz**,
    and LUT use actually *dropped*. Verified on hardware: $2000 and $A000 are now
    distinct, and $F000 holds data. **No SDRAM controller needed** — the 'R' in
    GW2AR stays unused for now.

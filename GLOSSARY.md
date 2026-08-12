@@ -13,7 +13,13 @@ across the P8X project. Authoritative sources where a term has one:
 
 | Term | Meaning |
 |------|---------|
-| **P8X** | The project: a hand-built 8-bit microcoded TTL CPU (~130 74HCT chips, 10-slot DIN 41612 backplane). |
+| **P8X** | The project: a hand-built 8-bit microcoded TTL CPU (~130 74HCT chips, 10-slot DIN 41612 backplane) — and, since 2026-08, the same microarchitecture on an FPGA. |
+| **FPGA** | Field-Programmable Gate Array. The [`fpga/`](fpga/) track implements P8X on one, running the same microcode; a parallel build, not a replacement for the TTL cards. |
+| **RTL** | Register-Transfer Level — the Verilog description of the hardware in `fpga/rtl/`. |
+| **co-sim** | Co-simulation: running the same program on the RTL and on the C emulator and diffing their per-cycle architectural state. The emulator is the golden model, so a divergence names an exact microcycle. `fpga/sim/run.sh`. |
+| **BSRAM** | Block RAM — the FPGA's dedicated on-chip memory blocks (46 of them on the GW2AR-18), used for the microcode ROM and the 64K main memory. |
+| **Tang Nano 20K** | The Sipeed board the FPGA build targets: Gowin GW2AR-18, 27 MHz, onboard USB-JTAG/UART bridge and microSD slot. |
+| **SPI** | Serial Peripheral Interface — how the FPGA build talks to the microSD, behind the same `$FF10..$FF17` CF task file the BIOS already drives. |
 | **ISA** | Instruction Set Architecture — the opcodes/registers a programmer sees. |
 | **ABI** | Application Binary Interface — the fixed binary contracts (entry addresses, layouts, conventions) that let separately-built code interoperate. See the BIOS jump table, the TPA, SBUF/LBA. |
 | **API** | Application Programming Interface — the *source*-level contract (vs ABI, the binary one). |

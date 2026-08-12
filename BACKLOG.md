@@ -20,6 +20,34 @@ remainder is why it is still here.
 
 ## NEXT
 
+- [~] **FPGA build (Tang Nano 20K) — MILESTONES 0-4 DONE (2026-08-12); clock-up
+      and IRQ remain.** A standalone FPGA P8X running the same microcode and the
+      same unmodified monitor/OS/toolchain. Parallel track to the TTL build, not
+      a replacement. See [fpga/README.md](fpga/README.md).
+      - **Done:** first light (UART echo); the CPU core co-simulated against the
+        emulator cycle-for-cycle across all 88 opcodes; ACIA + driven console with
+        console output diffed; the core on real hardware with the full 64K map;
+        SD-over-SPI behind the `$FF10..$FF17` CF task file, with P8X/OS booting
+        from a microSD and running the whole `/bin` toolchain. P8X is in the
+        board's flash, so it comes up standalone on power.
+      - **Milestone 5 — clock up.** Currently **9 MHz**: the fabric runs at 27 MHz
+        and a microcycle takes three phases, because it needs two *dependent*
+        block-RAM reads (the microcode word first, since its PSEL field picks the
+        pointer that drives `mem_addr`, then the memory byte). Fmax is ~50 MHz, so
+        there is a lot on the table. Options: overlap the two reads by pipelining
+        the microcode fetch a cycle ahead; drop to two phases; or raise the fabric
+        clock with a PLL. Any change must still diff clean against the emulator
+        (`fpga/sim/run.sh` x3) — that is the regression test.
+      - **Milestone 5 — IRQ.** `irq_set` is currently tied low in
+        `fpga/tang-nano-20k/rtl/p8x_top.v`. The core already implements the rev-C
+        forcing-buffer entry ($08 injection, vector $0808, EI/DI/RTI) and
+        `isa_test.asm` exercises it in simulation; it just needs a real source
+        wired up (timer and/or the ACIA).
+      - **Not done:** nothing uses the board's 64 Mbit SDRAM — it turned out to be
+        unnecessary once the microcode ROM was compacted (see
+        `fpga/tang-nano-20k/mk_compact_ucode.py`), but it is there if a future
+        build wants more than 64K.
+
 - [~] **Second CF drive — FULL DUAL-VOLUME core DONE (2026-06-27); cross-drive
       single-command copy deferred.** Landed (emulator + firmware + OS, hardware
       card deferred): two CF cards as equal read/write P8XFS volumes, each with

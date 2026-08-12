@@ -11,6 +11,14 @@ their source in `../basic/`, `../os/`, etc.)
 | [p8x-monitor.md](p8x-monitor.md) | ROM monitor command reference and memory map. |
 | [p8x-programmers-guide.pdf](p8x-programmers-guide.pdf) | Generated instruction-set reference (built by `../microcode/gen_progguide.py`). |
 
+The **FPGA** track has its own documentation tree rather than living here:
+[`../fpga/README.md`](../fpga/README.md) (milestones + layout),
+[`../fpga/docs/architecture.md`](../fpga/docs/architecture.md) (module hierarchy,
+memory/peripheral map, co-sim spec), [`../fpga/sim/README.md`](../fpga/sim/README.md)
+(how the cycle-for-cycle diff against the emulator works) and
+[`../fpga/tang-nano-20k/README.md`](../fpga/tang-nano-20k/README.md) (board build,
+pinout, flashing).
+
 The PDF is a generated artifact — regenerate it rather than editing:
 
 ```sh

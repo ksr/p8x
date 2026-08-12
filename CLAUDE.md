@@ -50,6 +50,15 @@ memory, I/O, CF-IDE.
 - After ANY microcode change: regenerate images and re-run both tests
   (message print; JSR/RTS round trip in emulator/test/).
 
+FPGA (needs `iverilog`; the board flow needs oss-cad-suite):
+- `fpga/sim/run.sh 20000`                        — co-sim vs the emulator
+- `fpga/sim/run.sh 60000 isa_test.asm`           — all 88 opcodes
+- `fpga/sim/run.sh 200000 "" console_in.txt`     — driven monitor + console diff
+- `fpga/sim/console.sh "" os/run-disk.img`       — interactive console on the RTL
+- `fpga/tang-nano-20k/build.sh cpu load`         — build + program the board
+- After ANY change to fpga/rtl/ or the microcode: re-run all three co-sims. The
+  emulator is the golden model; a divergence names the exact microcycle.
+
 ## Layout
 - hardware/<board>/ — everything for one board in one place: generated CAD
   (.sch/.brd, artifacts; see rule 1) + schematic PDF + README + design docs.
@@ -63,12 +72,18 @@ memory, I/O, CF-IDE.
 - firmware/     — p8xmon.asm (ROM monitor source)
 - basic/        — p8xbasic.asm (BASIC interpreter; skeleton REPL so far)
 - emulator/     — p8xemu.c, Makefile, test/
+- fpga/         — the standalone FPGA P8X (parallel track to the TTL build, not a
+  replacement). fpga/rtl/ is the board-independent core (p8x_cpu.v, p8x_soc.v);
+  fpga/sim/ is the co-simulation harness that diffs the RTL against the emulator
+  cycle-for-cycle; fpga/tang-nano-20k/ is the Sipeed Tang Nano 20K board build
   (p8xasm.py and gen_progguide.py locate genucode.py automatically; the
    emulator Makefile's UC variable points at the microcode directory)
 
 ## Near-term roadmap (see BACKLOG.md)
-1. Assembler sharing the opcode table; assemble p8xmon.asm; boot the
-   monitor in the emulator (needs more opcodes in microcode: JMP (P1),
-   JSR abs, compare/branch variants the monitor uses).
-2. CF-IDE emulation against a P8XFS disk image file.
-3. Decoupling-cap generator pass + datasheet pinout verification before fab.
+(The original three items — assembler sharing the opcode table, CF-IDE emulation,
+the decoupling-cap generator pass — are all long done; see BACKLOG-DONE.md.)
+1. TTL build: the IRQ-controller card wiring, then hardware bring-up (Fusion DRC,
+   footprint confirmation, order the backplane first).
+2. FPGA build: Milestone 5 — clock up (currently 9 MHz against a ~50 MHz Fmax,
+   three fabric phases per microcycle) and wire IRQ through.
+3. OS: multi-stage pipes (`a | b | c`); a `path` command.

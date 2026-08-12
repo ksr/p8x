@@ -2,6 +2,11 @@
 
 A from-scratch 8-bit CPU built from ~130 74HCT logic chips on a 10-slot DIN41612 backplane. Fully microcoded; the microcode ROM images burned to the EPROMs are the same images the emulator interprets.
 
+The machine now exists **twice**: as the TTL card set, and as an [FPGA
+implementation](fpga/) of the same microarchitecture that boots the same
+unmodified monitor, OS and toolchain. Both run the microcode from
+`microcode/genucode.py`, and the C emulator is the golden reference for both.
+
 New to the abbreviations and signal names? See [GLOSSARY.md](GLOSSARY.md).
 
 ## Architecture
@@ -116,6 +121,38 @@ works chip by chip, and any board-specific design docs:
 | CF-IDE | [hardware/cf-card/](hardware/cf-card/README.md) |
 | Backplane | [hardware/backplane/](hardware/backplane/p8x-backplane-design.md) |
 
+## FPGA implementation
+
+A standalone [FPGA build](fpga/) on a **Sipeed Tang Nano 20K** (Gowin GW2AR-18)
+runs the whole machine — CPU, memory, ACIA console, microSD disk — from one chip
+and a USB cable. It is a **parallel track to the TTL build, not a replacement**:
+same horizontal microcode word, same sequencer, same pointer/address model, so
+the monitor, OS, BASIC, C compiler and assembler run **unmodified**.
+
+| Milestone | State |
+|-----------|-------|
+| 0 First light (UART echo + heartbeat) | done |
+| 1 CPU core in simulation, all 88 opcodes | done |
+| 2 ACIA + driven console in simulation | done |
+| 3 Core on real hardware, full 64K map | done |
+| 4 microSD disk — P8X/OS boots from card | done |
+| 5 Clock-up + IRQ | next |
+
+As built: **9 MHz** effective (27 MHz fabric, three phases per microcycle),
+~50 MHz Fmax (varies a little per place-and-route run), 40/46 block RAMs, and P8X is programmed into the board's flash so it
+comes up standalone on power.
+
+**Verification is the point.** Every milestone is "make the RTL match the
+emulator": the same program runs on both and their per-cycle architectural state
+is diffed, so a divergence is a bug with an exact microcycle and signal rather
+than a mystery. `fpga/sim/isa_test.asm` drives all 88 opcodes through that diff.
+
+```sh
+fpga/sim/run.sh 60000 isa_test.asm          # co-sim, all 88 opcodes
+fpga/sim/console.sh "" os/run-disk.img      # interactive console on the RTL
+fpga/tang-nano-20k/build.sh cpu load        # build + program the board
+```
+
 ## Status
 
 - Emulator working: 88 opcodes, ACIA on stdin/stdout, CF-IDE disk model (`-c <img>`), interactive I/O card (switches `-s`, LED trace `-L`), verified against microcode images
@@ -128,4 +165,5 @@ works chip by chip, and any board-specific design docs:
 - **Native C compiler — Milestone B achieved.** `apps/p8xcc.asm` (`/bin/cc`) is a from-scratch, single-pass C compiler written directly in assembly, small enough to compile C **entirely on the machine** (front *and* back end) where the optimizing `p8cc.c` codegen — ~82 KB, larger than the whole 64 KB address space — never could. Through v0.28 it covers: functions, direct **and mutual** recursion, pointers + pass-by-reference, `int`/`char` arrays with `[]` and decay, **structs** (`.`/`->`), globals, the full operator set (`+ - * / % << >> & ^ | && || ?:`, `++`/`--`/`+=`/`-=`, comparisons, unary `- ! * &`), hex/char/string literals with escapes, `//`+`/* */` comments, a recursive **`//#use`** preprocessor (splices `/lib/lib_*.c`) plus object-like **`//#define`** macros (e.g. `//#use abi` names the BIOS/OS addresses so a command writes `bios(FOPEN, RDBUF, 0)`), and the `putchar`/`puts`/`getchar`/`peek`/`poke`/`argstr`/`bios` builtins. It compiles real OS command source: **`pwd.c` → `cc` → `asm` → runs** correctly on-target. Known gaps are listed under "cc — KNOWN LIMITATIONS" in `BACKLOG-DONE.md` (with the Milestone A/B record).
 - **Host C compiler** — `compiler/p8cc.py` (the primary build tool: every `/bin` command is compiled with it) plus `compiler/p8cc.c`, the same compiler rewritten in its own subset that **self-compiles** ("small C in small C", Milestone A). Full subset incl. `struct`/`union`, global initializers, and the operators above (`make test-c`, host-vs-self differential `c_selfhost_test`, see [compiler/](compiler/README.md)).
 - BIOS **file API**: byte streams (`FOPEN`/`FGETB`, `FWOPEN`/`FPUTB`/`FCLOSE`), path resolution into subdirectories (`FRESOLVE`), name formatting (`FNORM`), and directory iteration (`FOPENDIR`/`FNEXT`) — the assembler rides on the streams and self-hosts (`make test-cf`)
-- **Next:** multi-stage pipes (`a | b | c`); a `path` command; the IRQ-controller hardware card; hardware bring-up checklist (Fusion DRC, footprint confirmation, order backplane first)
+- **FPGA (Tang Nano 20K):** the same microarchitecture in Verilog, verified against the emulator cycle-for-cycle across all 88 opcodes, then run on real hardware — monitor over USB serial, full 64K map, and **P8X/OS booting from a microSD** with the whole `/bin` toolchain. The board wrote its own disk: `fpga/tang-nano-20k/tools/imgload.asm` streams a P8XFS image over the console and writes it with `CFWRITE`, so no host root or card reader is needed. See [fpga/](fpga/README.md)
+- **Next:** multi-stage pipes (`a | b | c`); a `path` command; the IRQ-controller hardware card; hardware bring-up checklist (Fusion DRC, footprint confirmation, order backplane first); FPGA milestone 5 (clock-up + IRQ)
