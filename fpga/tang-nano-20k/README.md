@@ -19,44 +19,79 @@ Board: **Sipeed Tang Nano 20K**, Gowin **GW2AR-LV18QN88C8/I7**, 27 MHz clock.
 **None.** A single **USB-C cable** does both programming and the serial console,
 through the board's onboard BL616 USB↔JTAG/UART bridge.
 
-## Toolchain — open flow (recommended)
+## Toolchain — open flow
+
+**Verified working 2026-08-12** on macOS 26 / Apple Silicon with oss-cad-suite
+2026-08-12 (yosys 0.68, nextpnr 0.11.1, openFPGALoader 1.1.1).
 
 Install YosysHQ **oss-cad-suite** (bundles yosys, nextpnr-himbaechel, apicula's
-`gowin_pack`, and `openFPGALoader`). On macOS: download the release tarball,
-extract, then `source <path>/oss-cad-suite/environment`.
-
-From this directory:
+`gowin_pack`, and `openFPGALoader`): download the `darwin-arm64` release tarball,
+extract to `~/oss-cad-suite`, then **clear the Gatekeeper quarantine** or every
+binary fails to launch:
 
 ```bash
-# 1. synthesize
+xattr -dr com.apple.quarantine ~/oss-cad-suite
+```
+
+No admin rights are needed — it is a self-contained tarball in your home
+directory, which is why it sidesteps the Homebrew permission problem entirely.
+
+Then just:
+
+```bash
+./build.sh          # synthesize -> place & route -> pack
+./build.sh load     # ... and load to SRAM (volatile)
+./build.sh flash    # ... and write onboard flash (persistent)
+```
+
+`build.sh` sources `~/oss-cad-suite/environment` itself if the tools are not
+already on PATH. The steps it runs, if you want them by hand:
+
+```bash
 yosys -p "read_verilog rtl/top.v rtl/uart.v; synth_gowin -top top -json p8x.json"
 
-# 2. place & route
 nextpnr-himbaechel --json p8x.json --write pnr.json \
   --device "GW2AR-LV18QN88C8/I7" \
+  --vopt family=GW2A-18C \
   --vopt cst=tangnano20k.cst
 
-# 3. pack to a bitstream
 gowin_pack -d GW2A-18C -o p8x.fs pnr.json
-
-# 4. load to SRAM (volatile) — or add -f to write onboard flash (persistent)
 openFPGALoader -b tangnano20k p8x.fs
 ```
 
-> If the open-flow device strings fight you on the first try, the free vendor
-> **Gowin EDA** IDE is the fallback: new project → device
-> `GW2AR-LV18QN88C8/I7` → add `rtl/top.v`, `rtl/uart.v`, `tangnano20k.cst` →
-> Synthesize → Place & Route → Program. `openFPGALoader` still flashes it.
+> **`--vopt family=GW2A-18C` is required.** Without it nextpnr stops with
+> *"For the GW2A series you need to specify --vopt family=GW2A-18 or
+> --vopt family=GW2A-18C"*. The earlier version of this file omitted it.
+
+> If the open-flow device strings fight you, the free vendor **Gowin EDA** IDE is
+> the fallback: new project → device `GW2AR-LV18QN88C8/I7` → add `rtl/top.v`,
+> `rtl/uart.v`, `tangnano20k.cst` → Synthesize → Place & Route → Program.
+> `openFPGALoader` still flashes it.
+
+Resource use is tiny — 219/20736 LUT4 (1%), 109/15552 DFF — so there is ample
+room for the CPU core, the 64K memory, and the microcode BRAM in Milestone 3.
 
 ## Connect a terminal
 
+The BL616 bridge enumerates **two** serial devices. The **higher-numbered one is
+the UART**; the other is the JTAG side and returns garbage if you talk to it:
+
 ```bash
-ls /dev/tty.*                 # note devices, then plug in the board and re-run
-screen /dev/tty.usbserial-XXXX 115200      # exit: Ctrl-A then k
-# or: picocom -b 115200 /dev/tty.usbserial-XXXX
+ls /dev/cu.usbserial-*
+#   /dev/cu.usbserial-<N>0    <- JTAG   (not this one)
+#   /dev/cu.usbserial-<N>1    <- console
+
+screen /dev/cu.usbserial-<N>1 115200       # exit: Ctrl-A then k
+# or: picocom -b 115200 /dev/cu.usbserial-<N>1
 ```
 
-## Success looks like
+Use `/dev/cu.*`, not `/dev/tty.*` — the `tty.` node blocks on carrier detect.
+
+## Success looks like — confirmed on hardware 2026-08-12
+
+Sending `P8X Hello!` to the console port returned `P8X Hello!` byte for byte.
+
+
 
 - **LED0 blinks** ~once a second (heartbeat).
 - Every character you **type echoes back** in the terminal (type at a human pace;

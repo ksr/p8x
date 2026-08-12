@@ -26,7 +26,7 @@ signal. Same adversarial-diff discipline used elsewhere in the project.
 
 | # | Milestone | Board? | Proves |
 |---|-----------|--------|--------|
-| **0** | First light: UART echo + heartbeat LED | yes | toolchain, bitstream, console path |
+| **0** | First light: UART echo + heartbeat LED ✅ | yes | toolchain, bitstream, console path |
 | **1** | CPU core in simulation ✅ | no | the microarchitecture is correct (all 88 opcodes) |
 | **2** | Peripherals in simulation (ACIA-UART) ✅ | no | monitor boots to a sim console; console output diffed |
 | **3** | Core on real hardware | yes | P8X talks over USB for real |

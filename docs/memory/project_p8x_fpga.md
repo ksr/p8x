@@ -47,8 +47,24 @@ Fixed: `-N`/`-i` suppress interactive mode, explicit `-l` always wins, and run.s
 aborts if the trace exceeds the cycle count. **If a sim run dies oddly, check
 `pgrep p8xemu` first.**
 
+**MILESTONE 0 DONE ON REAL HARDWARE (2026-08-12): first light.** Tang Nano 20K
+echoes over USB serial — sent `P8X Hello!`, got it back byte for byte. Build with
+`fpga/tang-nano-20k/build.sh [build|load|flash]`.
+
+Hardware-flow gotchas, all cost time once:
+- oss-cad-suite is a tarball in `~/oss-cad-suite` — **no admin rights needed**, so
+  it sidesteps the `/opt/homebrew` permission problem (that dir is owned by
+  `ksr77-adm`, and `ksr77` is not in the `admin` group; see [[feedback_ecad_schematic_truth]]
+  for the general "check before assuming" habit).
+- **`xattr -dr com.apple.quarantine ~/oss-cad-suite`** or every binary refuses to run.
+- nextpnr **requires `--vopt family=GW2A-18C`** for this part; without it it errors
+  and stops. The original README omitted it.
+- The BL616 bridge exposes **two** `/dev/cu.usbserial-*`: the **higher-numbered is
+  the console**, the other is JTAG and returns garbage. Use `cu.`, not `tty.`.
+- Design is tiny: 219/20736 LUT4 (1%), 109/15552 DFF — lots of room for the core.
+
 Still uncovered: SD-over-SPI (Milestone 4 — different silicon, same BIOS block
-API). Board toolchain (oss-cad-suite) still not installed — only from Milestone 3.
+API). Next is Milestone 3: drop the proven CPU core in where the echo logic sits.
 
 - **Same microarchitecture** — keep the horizontal microcode word, the sequencer,
   the pointer model (PSEL address-source select), DOE/DLD selects. The microcode
