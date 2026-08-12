@@ -113,8 +113,13 @@ Sipeed's pinout: **CLK 83, CMD=MOSI 82, DAT0=MISO 84, DAT3=CS 81**.
 - `sim/sd_model.v` is a behavioural card (serves a real image via $fseek) — the
   OS boots off it in simulation before any hardware runs.
 
-Status on the board: card initialises, `I` reports CF OK. `B` says **NO OS ON
-CARD** because the microSD has no P8XFS image yet. **Writing a raw image needs
+Status on the board: **READ AND WRITE BOTH VERIFIED ON HARDWARE.** The monitor's
+`F` formatted a real microSD through the FPGA, and reading LBA 0 back gives
+`50 38 02 00 25` = 'P8', v2, OSCNT=0, free@LBA 37 — a valid P8XFS boot block the
+FPGA wrote itself. Trick for inspecting a sector without any extra tooling: `B`
+reads LBA 0 into SBUF ($6100) *before* it checks the signature, so `B` then
+`D 6100` dumps whatever the card returned. (`B` prints "NO OS ON CARD" for no
+card, bad signature AND OSCNT=0, so its message alone proves nothing.) **Writing a raw image needs
 root (`dd` to /dev/rdiskN); ksr77 is not in `admin` or `operator`** — so either
 use another machine, or format on-target with the monitor's `F` command.
 
