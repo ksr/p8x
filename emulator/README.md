@@ -9,7 +9,7 @@ approximation.
 
 ```sh
 make            # builds p8xemu and regenerates the microcode (u0-u3.bin)
-./p8xemu [-t] [-l N] [-c disk.img] [-c2 disk2.img] [-s NN] [-L] rom.bin
+./p8xemu [-t] [-T] [-N] [-i F] [-l N] [-c disk.img] [-c2 disk2.img] [-s NN] [-L] rom.bin
 ```
 
 - `rom.bin` — the EEPROM image (origin `$0000`), e.g. the monitor or combined
@@ -31,6 +31,25 @@ make            # builds p8xemu and regenerates the microcode (u0-u3.bin)
   the halt status line.
 - `-t` — instruction trace. `-l N` — halt after N cycles.
 - The 6850 ACIA is wired to stdin/stdout, so the monitor/OS/BASIC are interactive.
+
+### FPGA co-simulation flags
+
+These exist so [`fpga/sim/run.sh`](../fpga/sim/README.md) can diff the emulator
+against the Verilog RTL cycle for cycle. They are all off by default and change
+nothing about a normal run.
+
+- `-T` — the **canonical machine trace**: one line per cycle on stderr,
+  `cyc IR stp A B T T2 P0..P5 flags`. The RTL emits the identical line, so the
+  two traces `diff` directly.
+- `-N` — console RX always reports empty. Needed because `$FF04`'s RDRF bit
+  otherwise depends on *what stdin happens to be*: a TTY with no keystrokes reads
+  not-ready, but a redirected or closed stdin is at EOF, which `select()` calls
+  readable. Without `-N` the same command passes from a terminal and fails from a
+  script. `-N` also suppresses interactive mode, so an explicit `-l` is honoured
+  rather than silently dropped.
+- `-i FILE` — scripted console input. RDRF is simply "the script still has a
+  byte" and one byte is consumed per `$FF05` read, with no host timing in it, so
+  the RTL can mirror the rule exactly and both models step identically.
 
 On halt it prints `PC/A/B/...` register state (`A=00` is the convention for "test
 passed" in the self-checking suites).
