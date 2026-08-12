@@ -105,7 +105,9 @@ module tb_p8x;
     end else if (st_rd && pend < 0) begin
       if (misses >= SPIN) begin
         ch = $fgetc(32'h8000_0000);        // stdin
-        if (ch < 0) begin $write("\n"); $finish; end
+        // EOF, or Ctrl-D typed at a non-canonical terminal (where the tty layer
+        // does NOT turn ^D into EOF -- it arrives as a plain 0x04 byte).
+        if (ch < 0 || ch == 8'h04) begin $write("\n"); $finish; end
         pend   <= ch;
         misses <= 0;
       end else misses <= misses + 1;

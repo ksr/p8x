@@ -184,7 +184,15 @@ cycle count. If a run ever dies oddly, check `pgrep p8xemu` before anything else
 ```
 
 You get a real terminal into the CPU running inside Icarus: type `?`, `D 0100`,
-`E 3000`, whatever the monitor takes. Ctrl-D quits. The script puts the terminal
+`E 3000`, whatever the monitor takes. **Ctrl-D or Ctrl-C quits.**
+
+The terminal is put in `-icanon -echo -icrnl` — deliberately *not* `stty raw`,
+which also clears `ISIG` and would swallow Ctrl-C, leaving no way out but killing
+the process from another terminal. Ctrl-D is handled in the testbench, because a
+non-canonical tty delivers it as a plain `0x04` byte rather than EOF. And the
+script does not `exec` vvp, so its EXIT trap still runs and restores your
+terminal. If a session is ever orphaned anyway: `pkill -9 -f 'vvp console.vvp'`
+(vvp ignores SIGTERM), then `stty sane`. The script puts the terminal
 in raw mode so keystrokes arrive immediately and are echoed once (by the monitor,
 not the shell), and restores it on exit.
 

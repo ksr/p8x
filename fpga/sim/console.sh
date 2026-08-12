@@ -55,13 +55,17 @@ command -v iverilog >/dev/null 2>&1 || { echo "iverilog not found (brew install 
 iverilog -g2012 -o console.vvp \
   "$ROOT/fpga/rtl/p8x_cpu.v" "$ROOT/fpga/rtl/p8x_soc.v" "$HERE/tb_p8x.v"
 
-# Raw mode so keystrokes reach the simulation immediately and are not echoed
-# twice (the monitor echoes them itself). Restored on any exit.
+# Char-at-a-time, no echo (the monitor echoes), Enter stays CR. Deliberately NOT
+# `stty raw`: raw also clears ISIG, which would swallow Ctrl-C and leave no way
+# out but killing the process from another terminal. These are the same termios
+# bits p8xemu sets for its own interactive console.
 if [ -t 0 ]; then
   saved=$(stty -g)
   trap 'stty "$saved" 2>/dev/null; echo' EXIT INT TERM
-  stty raw -echo
+  stty -icanon -echo -icrnl
 fi
 
-echo "P8X on RTL -- Ctrl-D to quit"
-exec vvp console.vvp +con "${RTL_CF[@]+"${RTL_CF[@]}"}"
+echo "P8X on RTL -- Ctrl-D or Ctrl-C to quit"
+# No `exec`: exec would replace this shell and the EXIT trap would never run,
+# leaving the terminal with echo off after the simulation ends.
+vvp console.vvp +con "${RTL_CF[@]+"${RTL_CF[@]}"}"
