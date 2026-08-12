@@ -79,13 +79,19 @@ Two substrate problems had to be solved, neither visible in the co-sim:
    change; p8x_soc ties it high and the co-sim is unaffected), and the board runs
    **three fabric phases per microcycle** — phase 0 ucode read, phase 1 memory
    read, phase 2 commit. 27 MHz / 3 = **9 MHz effective**.
-2. **BRAM does not fit.** 64K memory + 8192x32 microcode = 47 blocks; GW2AR-18
-   has 46. Every one of the 32 microcode bits is used, so there is nothing to
-   shave there. This build **aliases main memory to 32K (drops A15)**: 31/46
-   blocks, Fmax 52 MHz. The monitor is fine — ROM $0000-1FFF, scratch $6000-69FF,
-   stack $FEFF→$7EFF are disjoint — but **P8X/OS with a full TPA will NOT fit**.
-   Milestone 4 should move main memory to the board's 64 Mbit SDRAM (the 'R' in
-   GW2AR) to get the whole map back.
+2. **BRAM did not fit — solved WITHOUT SDRAM (2026-08-12).** 64K memory +
+   8192x32 microcode = 47 blocks; GW2AR-18 has 46. All 32 microcode bits are
+   used, so width could not be shaved — but the *opcode axis* is mostly empty:
+   88 of 256 encodings are defined and **all 168 undefined ones hold the same
+   microcode word** (verified, and `mk_compact_ucode.py` re-checks it and aborts
+   if that ever changes). Squeeze IR through a combinational 256-entry map to a
+   7-bit index (88 opcodes + 1 shared undefined slot) and the ROM halves to
+   4096x32 (~8 blocks). Result: **full 64K memory, 40/46 BSRAM, Fmax 55 MHz**,
+   and LUT use actually *dropped*. Verified on hardware: $2000 and $A000 are now
+   distinct, and $F000 holds data. **No SDRAM controller needed** — the 'R' in
+   GW2AR stays unused for now.
+   The map MUST be LUT logic, not BRAM: it has to resolve inside the microcode
+   fetch phase. The CPU is untouched; the remap lives entirely in p8x_top.
 
 Also: `openFPGALoader --detect` without `-b tangnano20k` intermittently reports
 no device; always pass `-b tangnano20k`.

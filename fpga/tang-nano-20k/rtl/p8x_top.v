@@ -52,26 +52,38 @@ module p8x_top(
                         else     ph <= (ph == 2'd2) ? 2'd0 : ph + 2'd1;
   wire cen = (ph == 2'd2);
 
-  // ---- microcode ROM: 8192 x 32, initialised from genucode output ----
-  // Read in phase 0: uc_addr is {cond, stp, IR}, all settled at the commit edge.
-  reg [31:0] ucode [0:8191];
-  initial $readmemh("ucode.hex", ucode);
+  // ---- microcode ROM: COMPACTED to 4096 x 32 ----
+  //
+  // The CPU addresses microcode as {cond, stp, IR} -- 8192 words, 15 BSRAM
+  // blocks -- but only 88 of the 256 opcode encodings exist and all 168 undefined
+  // ones hold the same word. So IR is squeezed through a combinational map into a
+  // 7-bit index (88 opcodes + one shared undefined slot) and the ROM halves to
+  // 4096 words, ~8 blocks. That is what buys back the full 64K memory map.
+  //
+  // mk_compact_ucode.py generates both files and refuses to emit anything unless
+  // the compact image reproduces the original for all 8192 addresses.
+  //
+  // The map must be LUT logic, not a BRAM: it has to resolve inside phase 0,
+  // before the microcode read is issued.
+  wire       uc_cond = uc_addr[12];
+  wire [3:0] uc_stp  = uc_addr[11:8];
+  wire [7:0] ir      = uc_addr[7:0];
+  reg  [6:0] idx;
+  always @* begin
+`include "irmap.vh"
+  end
+  reg [31:0] ucode [0:4095];
+  initial $readmemh("ucode_c.hex", ucode);
   reg [31:0] uc_q;
-  always @(posedge clk) if (ph == 2'd0) uc_q <= ucode[uc_addr];
+  always @(posedge clk) if (ph == 2'd0) uc_q <= ucode[{uc_cond, uc_stp, idx}];
   assign uc_data = uc_q;
 
-  // ---- main memory: 32K, ALIASED (A15 ignored) ----
+  // ---- main memory: the FULL 64K ----
   //
-  // The full 64K plus the 8192x32 microcode needs 47 BSRAM blocks and the
-  // GW2AR-18 has 46. Rather than shave the microcode -- every one of its 32 bits
-  // is used -- this build drops A15, so $8000..$FFFF mirrors $0000..$7FFF.
-  //
-  // The monitor is unaffected: its ROM is $0000..$1FFF, its scratch $6000..$69FF,
-  // and its stack starts at $FEFF, which mirrors to $7EFF -- three disjoint
-  // regions. What this WILL break is anything genuinely using more than 32K,
-  // i.e. P8X/OS with a full TPA. Milestone 4 moves main memory to the board's
-  // 64 Mbit SDRAM (the 'R' in GW2AR) and gives back the whole map.
-  localparam MEMBITS = 15;
+  // Affordable now that the microcode is compacted: 32 blocks of memory plus
+  // ~8 of microcode fits the GW2AR-18's 46. No aliasing, no SDRAM controller --
+  // P8X/OS sees exactly the memory map the emulator gives it.
+  localparam MEMBITS = 16;
   wire [MEMBITS-1:0] mem_a = mem_addr[MEMBITS-1:0];
   reg [7:0] mem [0:(1<<MEMBITS)-1];
   initial $readmemh("mem.hex", mem);

@@ -38,14 +38,13 @@ esac
 # The CPU build initialises its BRAM from these; regenerate so a microcode or
 # monitor change can never be silently baked into a stale bitstream.
 if [ "$TARGET" = cpu ]; then
-  python3 ../sim/mk_ucode_mem.py ../../emulator ucode.hex >/dev/null
+  python3 mk_compact_ucode.py
   python3 - <<'PY'
 rom = open("../../emulator/eeprom.bin", "rb").read()[:8192]
 rom = rom + b"\x00" * (8192 - len(rom))
-# 32K aliased main memory -- see the note in rtl/p8x_top.v
-open("mem.hex", "w").write("".join("%02x\n" % b for b in rom) + "00\n" * (32768 - 8192))
+open("mem.hex", "w").write("".join("%02x\n" % b for b in rom) + "00\n" * (65536 - 8192))
 PY
-  echo "==> ucode.hex + mem.hex regenerated"
+  echo "==> ucode_c.hex + irmap.vh + mem.hex regenerated"
 fi
 
 DEVICE="GW2AR-LV18QN88C8/I7"

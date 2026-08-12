@@ -3,3 +3,9 @@ pnr.json
 p8x.fs
 *.log
 sim/*.vvp
+ucode.hex
+ucode_c.hex
+mem.hex
+irmap.vh
+sim/*.hex
+sim/*.vh
