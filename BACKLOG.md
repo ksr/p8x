@@ -347,7 +347,10 @@ Nothing below has been built or measured.
       commands resolve paths and expand globs" thesis; SYS_OPEN is the cheap half
       and needs no ABI change, this is the expensive half.
 
-- [ ] **CODE_REVIEW.md — the remaining findings (2026-07-16).** ~417 items across
+- [ ] **CODE_REVIEW.md — the remaining findings (2026-07-16).** *All 6 HIGH-severity
+      items were re-checked on 2026-08-12 and are already fixed; see the status block
+      at the top of the file. The medium/low items below remain unverified, and
+      nothing under `fpga/` has ever been reviewed.* ~417 items across
       68 files from the fresh-eyes review. The 6 high-severity are all fixed; two
       mechanical/logic sweeps landed (59c46f7 Wave 1, bbad538 Wave 2) plus the
       hot-path bounds (ac6f414) and BASIC STEP (f0888da). What is left is mostly

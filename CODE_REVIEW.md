@@ -2,6 +2,30 @@
 
 _Fresh-eyes, per-file review of every hand-written C and assembler source file (68 files). Each file was reviewed independently by a reviewer with the P8X ISA / C-subset spec but no prior project context. Grades: A (excellent) … F (poor). Severities are the reviewers' own; ISA-micro-behavior-dependent items were required to be marked low/unverified._
 
+> ## STATUS 2026-08-12 — all six high-severity findings are FIXED
+>
+> Re-checked against the current sources, one by one. Every "fix first" item
+> below has already been resolved, several carrying a comment that names the
+> exact defect the reviewer described:
+>
+> | # | Finding | Resolution in the source |
+> |---|---------|--------------------------|
+> | 1 | `grep.asm` cn_a per-depth stride 288 vs 384 | `LDB #128` at cn_a (+ comment: *"was 32 (=288), which overlapped the parent depth's name table"*) |
+> | 2 | `grep.asm` line[] cap 255 vs 176-byte buffer | `LDB #175` (+ comment: *"line[] is 176 bytes: 175 data + NUL"*) |
+> | 3 | `grep.c` fill guard `n < 255` vs `char line[176]` | `if (n < 175)` at grep.c:62 |
+> | 4 | `mv.c` glob path could move a file onto itself | `if (streq(src, jdst) == 0)` guard at mv.c:126 |
+> | 5 | `vi.c` search to an off-screen match never scrolled | `if (search()) { scroll(); redraw(); }` in both the `/` and `n` handlers |
+> | 6 | `p8xcc.asm` initialized scalar fell into `sd_arr` | `JMP sd_semi` at 2852 (+ comment: *"do NOT fall into"*) |
+>
+> **The medium and low findings below have NOT been re-verified.** Treat them as
+> they always should have been: plausible claims from a reviewer without project
+> context, not confirmed defects — roughly half do not survive inspection, and
+> acting on one of them without checking previously shipped a buffer overflow
+> (see BACKLOG.md). Verify before changing anything.
+>
+> This document also predates the FPGA track entirely; nothing under `fpga/` has
+> ever been reviewed here.
+
 ## Executive summary
 
 - **Coverage:** 68/68 files (31 asm, 37 C).

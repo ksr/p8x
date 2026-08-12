@@ -5,7 +5,11 @@
 // block write. Sector data comes from a real disk image via $fseek, so the
 // monitor can actually boot P8XFS in simulation.
 //
-//   +sd=FILE   disk image to serve (required for reads to return real data)
+//   +sd=FILE     disk image to serve (required for reads to return real data)
+//   +sdfail=N    fault injection, so the controller's error paths are actually
+//                exercised rather than assumed:
+//                  1 = card never initialises (ACMD41 stays busy forever)
+//                  2 = card never releases busy after a write
 //
 // Deliberately models an SDHC card (CMD58 reports CCS=1), because that is what
 // any modern card is and it is the case where LBA is a BLOCK number rather than
@@ -21,10 +25,13 @@ module sd_model(
   input  sd_cs);
 
   integer fd = 0;
+  integer sdfail = 0;                  // fault injection, see the header
+  reg     stuck  = 0;                  // sdfail=2: hold busy (0x00) forever
   reg [1023:0] fname;
   initial begin
     sd_miso = 1'b1;
     if ($value$plusargs("sd=%s", fname)) fd = $fopen(fname, "rb");
+    if ($value$plusargs("sdfail=%d", sdfail)) ;
   end
 
   reg [7:0]  rxsh = 8'hFF;
@@ -73,7 +80,11 @@ module sd_model(
       end else if (wr_cnt > 0) begin
         wr_cnt = wr_cnt - 1;
         if (wr_cnt == 0) begin
-          qreset; qput(8'hFF); qput(8'h05); qput(8'h00); qput(8'hFF); // accepted
+          qreset; qput(8'hFF); qput(8'h05);
+          qput(8'h00);
+          // sdfail=2: never release busy. `stuck` forces MISO low permanently,
+          // rather than queueing a finite run of 0x00 the controller can outlast.
+          if (sdfail == 2) stuck = 1; else qput(8'hFF);
         end
       end else if (infr) begin
         frame[fidx] = b; fidx = fidx + 1;
@@ -93,7 +104,9 @@ module sd_model(
       qput(8'hFF);                                   // Ncr gap
       if (expect_acmd && idx == 41) begin
         expect_acmd = 0;
-        if (acmd41_left > 0) begin acmd41_left = acmd41_left - 1; qput(8'h01); end
+        // sdfail=1: never report ready, so the init ladder must give up
+        if (sdfail == 1) qput(8'h01);
+        else if (acmd41_left > 0) begin acmd41_left = acmd41_left - 1; qput(8'h01); end
         else qput(8'h00);                            // ready
       end else case (idx)
         0:  qput(8'h01);                             // GO_IDLE -> idle state

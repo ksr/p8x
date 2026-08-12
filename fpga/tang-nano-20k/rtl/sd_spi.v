@@ -153,7 +153,11 @@ module sd_spi #(
             if (r1 == 8'h00) begin                            // card is ready
               cmd_idx <= 8'd58; cmd_arg <= 0; cmd_crc <= 8'hFF; cnt <= 0;
               st <= S_CMD;
-            end else if (tries > 16'd20000) st <= S_ERR;
+            end else if (tries > 16'd4000) st <= S_ERR;
+              // ~1.1 s at DIV_SLOW (a CMD55+CMD41 round is ~7600 clocks), which
+              // is the SD spec's own bound for ACMD41. The old 20000 was an
+              // iteration count with no time meaning and took 5.6 s -- so a
+              // missing card made the whole machine appear hung.
             else begin
               tries   <= tries + 1'b1;
               cmd_idx <= 8'd55; cmd_arg <= 0; cmd_crc <= 8'hFF; st <= S_CMD;
@@ -232,13 +236,32 @@ module sd_spi #(
           else begin cnt <= cnt + 1'b1; spi_send(8'hFF); end
         end
         S_WBUSY: if (!bbusy && !bgo) begin
+          // A card that dies mid-write holds MISO low forever. Without a bound
+          // this span waits for it indefinitely with busy asserted: the CPU's
+          // CFWAIT gives up after ~4096 polls and reports an error, but the
+          // controller never returns to S_IDLE, so every later read and write is
+          // silently dropped. Time it out and surface the error instead.
           if (brx == 8'hFF) st <= S_DONE;                     // card released busy
-          else spi_send(8'hFF);
+          else if (tries > 16'd60000) st <= S_ERR;            // ~70 ms at DIV_FAST
+          else begin tries <= tries + 1'b1; spi_send(8'hFF); end
         end
 
         S_DONE: begin sd_cs <= 1'b1; busy <= 1'b0; done <= 1'b1; st <= S_IDLE; end
-        S_ERR:  begin sd_cs <= 1'b1; busy <= 1'b0; err  <= 1'b1; done <= 1'b1;
-                      st <= ready ? S_IDLE : S_ERR; end
+        S_ERR:  begin
+          sd_cs <= 1'b1; busy <= 1'b0; err <= 1'b1;
+          if (ready) begin
+            done <= 1'b1; st <= S_IDLE;                       // failed one operation
+          end else begin
+            // Initialisation failed. Do NOT sit here: this state re-asserted
+            // `done` every clock, so cf_sd saw a permanent completion pulse and
+            // held its task file reset, and there was no way back short of
+            // reloading the bitstream -- a card inserted a moment late, or one
+            // that wants a second attempt, stayed dead forever. Back off and
+            // retry the whole ladder instead.
+            if (tries > 16'd60000) begin tries <= 0; st <= S_RESET; end
+            else tries <= tries + 1'b1;
+          end
+        end
         default: st <= S_ERR;
       endcase
     end
