@@ -87,6 +87,12 @@ screen /dev/cu.usbserial-<N>1 115200       # exit: Ctrl-A then k
 
 Use `/dev/cu.*`, not `/dev/tty.*` — the `tty.` node blocks on carrier detect.
 
+**`screen` staircases the OS output.** P8X emits a bare LF for a newline and the
+firmware does not translate it; the emulator only looks right because the host
+tty does LF → CRLF for you. The monitor sends proper CRLF so it is fine under
+`screen`, but everything from `/bin` will step diagonally across the screen. Use
+[`tools/term.py`](tools/README.md) instead — same thing, with the translation.
+
 ## Success looks like — confirmed on hardware 2026-08-12
 
 Sending `P8X Hello!` to the console port returned `P8X Hello!` byte for byte.

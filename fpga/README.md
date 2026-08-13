@@ -88,9 +88,13 @@ Then talk to it. The onboard bridge enumerates **two** serial devices and the
 use `/dev/cu.*`, not `/dev/tty.*`:
 
 ```sh
-ls /dev/cu.usbserial-*
-screen /dev/cu.usbserial-<N>1 115200      # exit: Ctrl-A then k
+tang-nano-20k/tools/term.py               # auto-picks the port; Ctrl-] quits
 ```
+
+`term.py` is a dependency-free terminal that translates P8X's bare-LF newlines
+(`screen` works for the monitor but staircases everything the OS prints — see
+[`tools/README.md`](tang-nano-20k/tools/README.md)). If you prefer `screen`:
+`screen /dev/cu.usbserial-<N>1 115200`, exit with Ctrl-A then k.
 
 Press Enter for the monitor's `*` prompt. `?` for help, `I` to identify the
 microSD, `B` to boot the OS from it.

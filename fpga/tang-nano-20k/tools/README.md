@@ -6,6 +6,7 @@ so P8X can install its own disk over the serial console.
 
 | file | what |
 |------|------|
+| `term.py` | serial terminal that fixes P8X's bare-LF output (see below) |
 | `osload.asm` | writes N (<256) sectors to LBA 1.. and patches OSCNT — installs just the OS onto an already-formatted card |
 | `imgload.asm` | writes an arbitrary run of sectors from LBA 0 — clones a whole P8XFS image |
 
@@ -38,3 +39,33 @@ boot block. Use on a card already formatted by the monitor's `F`.
 `imgload`: 2 bytes N little-endian, then N*512 bytes → LBA 0.. . Nothing is
 patched; the image carries its own boot block. 12377 sectors (the 6 MB
 `os/run-disk.img`) takes about 10 minutes at 115200.
+
+## term.py — a terminal that does not staircase
+
+```sh
+./term.py                       # auto-picks the console port, 115200
+./term.py /dev/cu.usbserial-XXX 115200
+```
+
+`Ctrl-]` quits. Dependency-free (termios only — no pyserial, no install).
+
+**Why you need it.** P8X emits a **bare LF** for a newline: p8cc's `puts` ends
+with `LDA #10` and the firmware's `PUTC` writes bytes to the ACIA untranslated.
+Under the emulator that looks right only because the host tty is doing LF → CRLF
+for you (`ONLCR`, on by default). `screen` puts the port in raw mode and renders
+the bytes itself, so nothing translates and everything from `/bin` staircases:
+
+```
+/> dir
+    18  README.TXT
+                    bin/
+                            bina/
+```
+
+`term.py` does what the tty would: LF from the machine is displayed as CRLF, and
+Enter is sent as CR (what the monitor and shell line-readers actually look for,
+`$0D`). A CRLF the machine already sent — the monitor's own messages do — is left
+alone, so nothing gets double-spaced.
+
+`screen` still works fine for the **monitor**, which sends proper CRLF. It is the
+OS and the `/bin` commands that need this.
