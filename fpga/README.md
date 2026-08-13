@@ -137,6 +137,7 @@ fpga/
 ├── README.md                 this file
 ├── docs/architecture.md      module hierarchy, memory/peripheral map, co-sim spec
 ├── rtl/                      board-independent core (shared by sim and board)
+│   ├── README.md             what is shared vs sim-only, and the `cen` contract
 │   ├── p8x_cpu.v             the CPU. `cen` clock enable; otherwise one
 │   │                         microcycle per clock, matching the emulator
 │   └── p8x_soc.v             sim-only SoC: async-read arrays + modelled I/O

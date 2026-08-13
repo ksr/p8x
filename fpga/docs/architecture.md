@@ -1,31 +1,50 @@
 # P8X-FPGA architecture (design notes)
 
 Same microarchitecture as the TTL P8X; the physical backplane becomes internal
-wiring. This is the plan we build to in Milestones 1+ — not final RTL yet.
+wiring. This described the *plan* until Milestone 4; it now describes what was
+actually built and runs.
 
-## Module hierarchy (TTL card → RTL module)
+## Module hierarchy (as built)
+
+There are two top levels over one shared core. The CPU is deliberately **flat** —
+the TTL cards map to regions of `p8x_cpu.v`, not to separate modules — because the
+co-sim diffs its architectural state against the emulator cycle for cycle, and
+splitting it would buy structure at the cost of that one-to-one correspondence.
 
 ```
-p8x_top
-├── clk_reset          PLL + power-on reset            (board glue)
-├── cpu_core
-│   ├── sequencer      ← control/microcode card: steps microwords, next-uaddr
-│   ├── ucode_rom      ← 4× 28C64 → ONE BRAM, 8192 × 32-bit, init from genucode
-│   ├── alu            ← ALU card: T-operand ops, V + N^V, carry-coupled shifter
-│   ├── regfile        ← register-bank card
-│   ├── pointers       ← PSEL: which pointer drives the 16-bit address
-│   └── busmux         ← DOE/DLD as MUX selects (no tri-state on FPGA)
-├── memory             ← memory card: 64 KB in BRAM (ROM region init from monitor)
-├── uart_6850          ← I/O card ACIA, wrapped to the 6850 register map
-├── sd_disk            ← CF card → SD-over-SPI behind the BIOS block interface
-└── irq_ctrl           ← IRQ enable/pending latches (backlog #26 — trivial in RTL)
+SIMULATION                              BOARD
+fpga/sim/tb_p8x.v                       fpga/tang-nano-20k/rtl/p8x_top.v
+└── fpga/rtl/p8x_soc.v                  ├── fpga/rtl/p8x_cpu.v      ← SHARED
+    └── fpga/rtl/p8x_cpu.v   ← SHARED   ├── uart_tx / uart_rx  (rtl/uart.v)
+                                        └── rtl/cf_sd.v   $FF10-$FF17 task file
+                                            └── rtl/sd_spi.v   microSD over SPI
 ```
+
+`p8x_cpu.v` is the machine and is the **only** file both paths share; it is what
+the co-sim verifies. `p8x_soc.v` is **simulation-only** — async-read arrays and
+modelled I/O, so a microcycle is one clock. The board cannot do that (block RAM is
+synchronous and a microcycle needs two *dependent* reads), so `p8x_top.v` runs
+three fabric phases per microcycle and gates the core with its `cen` input.
+
+Inside `p8x_cpu.v`, the TTL cards appear as these regions:
+
+| TTL card | Where it lives in `p8x_cpu.v` |
+|----------|-------------------------------|
+| control / microcode | `uc_addr = {cond, stp, IR}`, the step/`stp` sequencer, the condition mux off the previous word's `FCOND` |
+| ALU card | the 74181 model (`alu181`-equivalent logic), the two-stage shifter, sign-bit V |
+| register bank | `A`, `B`, `T`, `T2` and `P[0:5]` |
+| pointers / address | `PSEL` picks which `P[]` drives `mem_addr` — there is no MAR |
+| bus (tri-state) | the `DOE` **mux** into `bus`, and `DLD` as latch enables |
+
+The microcode ROM and the 64K memory are **not** in the CPU: each SoC supplies
+them, because their implementation is exactly what differs between the two
+(plain arrays in simulation, BRAM with a phase sequencer on the board).
 
 The key structural change from TTL: the shared tri-state data bus with `DOE`
-driver-enables becomes a **mux** — `data_bus = mux(doe_sel, {alu_out, mem_out,
-reg_out, …})`. `DLD` → latch enables, `PSEL` → address-source mux. The horizontal
-microcode word is unchanged and drives the datapath control lines directly (no
-instruction decode — that is what the microcode is for).
+driver-enables becomes a **mux** — FPGAs have no internal tri-state. `DLD` becomes
+latch enables, `PSEL` an address-source mux. The horizontal microcode word is
+unchanged and drives the datapath control lines directly (no instruction decode —
+that is what the microcode is for).
 
 ## Memory map (identical to the TTL build — see `generators/gen_memmap.py`)
 
@@ -51,21 +70,32 @@ BRAM region and whether writes are allowed below `$2000`).
 | `$FF16` | CFHEAD | `$E0` = LBA mode, drive 0 (bit0 = device select) |
 | `$FF17` | CFCMD/CFSTAT | command (wr) / status (rd) |
 
-- **`uart_6850`** presents ACIAS/ACIAD so the existing serial driver is unchanged;
-  baud is generated in the core (DIV=234 @ 27 MHz for 115200), not by the ACIA
-  register model.
-- **`sd_disk`** presents the CF task-file registers `$FF10–$FF17` and internally
-  translates a sector read/write into SD-over-SPI, so BIOS `CFRDSEC`/`CFWRSEC`
-  work unchanged. The dual-drive DEV bit (`CFHEAD` bit 0) maps to two SD images
-  or is stubbed to drive 0 initially.
+- **ACIAS/ACIAD** are presented by a shim inside `p8x_top.v` over `uart_tx`/
+  `uart_rx`, so the existing serial driver is unchanged; baud is generated in the
+  core (DIV=234 @ 27 MHz for 115200), not by an ACIA register model.
+- **`cf_sd.v`** presents the CF task-file registers `$FF10–$FF17` and translates a
+  sector read/write into SD-over-SPI via `sd_spi.v`, so BIOS `CFRDSEC`/`CFWRSEC`
+  work unchanged. Only device 0 is fitted (one slot); the DEV bit selecting
+  device 1 reads back `$FF`, which the firmware's bounded waits time out.
+  One deliberate difference from the emulator: **BSY is asserted** for the
+  duration of a transfer, because a real card takes milliseconds where the
+  emulator is instantaneous.
 
 ## Microcode BRAM
 
-`microcode/genucode.py` already emits the four 8 K×8 EEPROM images
-(`rom/p8x-ucode0..3.bin`) = one **8192 × 32-bit** control store = 256 Kbit. On the
-Tang Nano's ~800 Kbit BRAM this initializes directly from a `.mem`/`.hex` (a small
-addition to genucode: emit a combined-word init file). Together with the 8 KB ROM
-(64 Kbit) and 64 KB memory (512 Kbit) the total ≈ 768 Kbit fits comfortably.
+`microcode/genucode.py` emits the four 8 K×8 EEPROM images
+(`rom/p8x-ucode0..3.bin`) = one **8192 × 32-bit** control store = 256 Kbit.
+`fpga/sim/mk_ucode_mem.py` combines them into a `$readmemh` file for simulation.
+
+It did **not** fit on the board: 256 Kbit of microcode plus 512 Kbit of memory
+needs 47 BSRAM blocks and the GW2AR-18 has 46. All 32 control-word bits are used,
+so nothing could be shaved off the width — but only 88 of the 256 opcode
+encodings exist and all 168 undefined ones hold the same word. So the board build
+squeezes IR through a combinational 256-entry map into a 7-bit index (88 opcodes
+plus one shared undefined slot), halving the store to **4096 × 32**:
+`fpga/tang-nano-20k/mk_compact_ucode.py`, which re-verifies both properties and
+refuses to emit anything if either stops holding. Result: 40/46 blocks with the
+full 64K map, and no SDRAM controller needed.
 
 ## Co-sim harness (the workhorse test)
 
@@ -98,5 +128,14 @@ entirely in simulation, before the board exists.
 
 ## Open decisions (to settle as we build)
 
-- SD image format: reuse a P8XFS image written by `tools/p8xfs.py` directly onto
-  the SD card.
+- **Milestone 5, clock-up.** 9 MHz today (27 MHz fabric / three phases). Fmax is
+  ~50 MHz, so the headroom is real: overlap the two dependent reads by pipelining
+  the microcode fetch a cycle ahead, drop to two phases, or raise the fabric clock
+  with a PLL. Whatever changes, it must still diff clean against the emulator.
+- **Milestone 5, IRQ.** `irq_set` is tied low in `p8x_top.v`. The core already
+  implements the rev-C forcing-buffer entry ($08 injection, vector $0808,
+  EI/DI/RTI) and `isa_test.asm` exercises it; it needs a real source wired up.
+
+*(Settled: the SD image format is a P8XFS image written straight to the card —
+`tools/p8xfs.py` builds one, and `fpga/tang-nano-20k/tools/imgload.asm` installs
+it over the serial console when the host has no root.)*
