@@ -42,6 +42,17 @@ memory, I/O, CF-IDE.
    missing — several entries there are decisions NOT to do something, and one of
    them (signed compares in p8cc) shipped a buffer overflow when acted on.
 
+8. **`emulator/test/` and `fpga/tang-nano-20k/sim/` are .gitignore ALLOW-LISTS**
+   — everything is ignored, the hand-written sources are named. The tests write
+   scratch files (images, .bin/.asm twins, traces) next to their sources, and a
+   deny-list could not keep up: it reached ~200 lines and still leaked, letting
+   generated .asm twins get tracked and go stale, which silently made the
+   os_cmdbuild byte-compare check an out-of-date build.
+   So: **adding a new hand-written test source needs a `!` line in .gitignore**
+   (or a name matching the existing convention — `*.sh`, `test*.asm`). If `git
+   add` appears to do nothing, that is why. Never "fix" it by deleting the
+   `emulator/test/*` line; add the exception.
+
 ## Build & test
 - `cd emulator && make`         — build the emulator
 - `make ucode`                  — regenerate u0-u3.bin (UC var = microcode dir)
