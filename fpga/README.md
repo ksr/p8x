@@ -22,6 +22,88 @@ architectural state** (PC, registers, flags, memory writes) cycle by cycle. The
 emulator is the golden model; a divergence is a bug with an exact cycle and
 signal. Same adversarial-diff discipline used elsewhere in the project.
 
+## Getting started
+
+Two independent paths. **The simulator needs no hardware** and is the whole of
+Milestones 1-2; the board adds 0, 3 and 4.
+
+### Prerequisites
+
+| For | You need |
+|-----|----------|
+| Everything | `python3`, a C compiler (Apple clang / gcc) |
+| Simulation | **`iverilog`** — `brew install icarus-verilog` |
+| The board | **oss-cad-suite** (yosys, nextpnr-himbaechel, apicula, openFPGALoader) |
+| The board | a **Sipeed Tang Nano 20K** and a USB-C **data** cable |
+
+oss-cad-suite is a tarball, not a package: download the `darwin-arm64` (or your
+platform's) release from
+[oss-cad-suite-build](https://github.com/YosysHQ/oss-cad-suite-build/releases),
+extract to `~/oss-cad-suite`, then — on macOS, or every binary refuses to launch:
+
+```sh
+xattr -dr com.apple.quarantine ~/oss-cad-suite
+```
+
+No admin rights are needed for any of this; `build.sh` sources the environment
+itself.
+
+### Step 0 — build the emulator first (both paths need it)
+
+The microcode images `u0-u3.bin` are build products and are **not** in the repo,
+and the emulator is the co-sim's reference model. From the repo root:
+
+```sh
+cd emulator && make
+```
+
+### Path A — simulation only, no hardware
+
+```sh
+fpga/sim/run.sh 20000                        # monitor boot, RTL vs emulator
+fpga/sim/run.sh 60000 isa_test.asm           # all 88 opcodes
+fpga/sim/run.sh 200000 "" console_in.txt     # driven monitor + console diff
+fpga/sim/run.sh 2000000 "" boot_in.txt os/run-disk.img   # boots P8X/OS
+```
+
+Each prints `PASS: RTL matches emulator for N cycles`, or a `DIVERGENCE` dump
+naming the exact microcycle. To drive the machine by hand instead of diffing:
+
+```sh
+fpga/sim/console.sh "" os/run-disk.img       # real terminal into the RTL
+```
+
+`B` boots the OS, then `pwd` / `dir` / `cat README.TXT`. Ctrl-D or Ctrl-C quits.
+It is slow but usable — roughly 30-50k CPU cycles/second.
+
+### Path B — the real board
+
+```sh
+fpga/tang-nano-20k/build.sh cpu load     # build + program (volatile SRAM)
+fpga/tang-nano-20k/build.sh cpu flash    # ... or persist it across power cycles
+```
+
+Then talk to it. The onboard bridge enumerates **two** serial devices and the
+**higher-numbered one is the console** (the other is JTAG and returns garbage);
+use `/dev/cu.*`, not `/dev/tty.*`:
+
+```sh
+ls /dev/cu.usbserial-*
+screen /dev/cu.usbserial-<N>1 115200      # exit: Ctrl-A then k
+```
+
+Press Enter for the monitor's `*` prompt. `?` for help, `I` to identify the
+microSD, `B` to boot the OS from it.
+
+A card needs a P8XFS image on it. Writing one from the host needs root, so if you
+do not have it the board can install its own over the serial console — see
+[`tang-nano-20k/tools/`](tang-nano-20k/tools/README.md).
+
+**If the board goes silent**, load the Milestone-0 echo bitstream
+(`build.sh echo load`) as a known-good baseline; if that is silent too, the USB
+bridge has wedged and a replug fixes it. After any replug, drain the port before
+testing — the factory boot text sits buffered and reads like a reply.
+
 ## Milestones
 
 | # | Milestone | Board? | Proves |
@@ -42,33 +124,50 @@ built and proven in simulation before the hardware ever runs it.
 microcode ROM is compacted from 8192 to 4096 words, so no SDRAM controller was
 needed. Build and flash with `tang-nano-20k/build.sh cpu load`.
 
-Two things to know before driving the board: the bitstream is loaded to
-**volatile SRAM**, so any power cycle reverts to the factory LiteX demo (whose
-console answers on the same serial port and will silently swallow anything you
-send it), and a disk can be installed without host root using the serial
-loaders in `tang-nano-20k/tools/`.
+P8X is written to the board's **onboard flash**, so it comes up standalone on
+power with no host involvement. (`build.sh cpu load` puts a build in volatile
+SRAM instead, which is what you want while iterating — but note that a power
+cycle then reverts to whatever is in flash, and the factory LiteX demo answers on
+the same serial port and will silently swallow anything a script sends it.)
 
 ## Layout
 
 ```
 fpga/
 ├── README.md                 this file
-├── docs/
-│   └── architecture.md       module hierarchy, memory/peripheral map, co-sim spec
-├── rtl/                       board-independent core (shared by sim and board)
-│   ├── p8x_cpu.v             CPU: one microcycle/clock (matches the emulator)
-│   └── p8x_soc.v             CPU + microcode ROM + 64K memory + sim I/O
-├── sim/                       Milestone-1 co-simulation vs the C emulator
-│   ├── README.md             how the trace-diff co-sim works
+├── docs/architecture.md      module hierarchy, memory/peripheral map, co-sim spec
+├── rtl/                      board-independent core (shared by sim and board)
+│   ├── p8x_cpu.v             the CPU. `cen` clock enable; otherwise one
+│   │                         microcycle per clock, matching the emulator
+│   └── p8x_soc.v             sim-only SoC: async-read arrays + modelled I/O
+├── sim/                      co-simulation against the C emulator
+│   ├── README.md             how the trace-diff works, and why -N exists
+│   ├── run.sh                build + run + diff  [CYCLES] [ROM] [RX] [CF]
+│   ├── console.sh            interactive console on the RTL (not diffed)
 │   ├── mk_ucode_mem.py       4 ROM images → 32-bit ucode.hex
-│   ├── tb_p8x.v              testbench (emits canonical per-cycle trace)
-│   └── run.sh                build + run + diff RTL vs `p8xemu -T`
-└── tang-nano-20k/
-    ├── README.md             Milestone-0 build / flash / terminal steps
-    ├── tangnano20k.cst        pin constraints (verified)
-    └── rtl/
-        ├── uart.v            8N1 UART (TX+RX)
-        └── top.v             Milestone-0 top: echo + heartbeat
+│   ├── tb_p8x.v              testbench: canonical per-cycle trace, ACIA, CF
+│   ├── isa_test.asm          directed all-88-opcode exerciser
+│   └── console_in.txt, cf_id.txt, boot_in.txt   scripted keystrokes
+└── tang-nano-20k/            the board build
+    ├── README.md             toolchain, pinout, flashing, board-sim benches
+    ├── build.sh              [echo|cpu] [build|load|flash]
+    ├── mk_compact_ucode.py   8192→4096-word microcode remap (buys the 64K map)
+    ├── tangnano20k.cst       pin constraints (verified)
+    ├── rtl/
+    │   ├── top.v             Milestone-0: UART echo + heartbeat
+    │   ├── p8x_top.v         the real SoC: 3-phase microcycle, BRAM, ACIA, CF
+    │   ├── uart.v            8N1 UART (TX+RX)
+    │   ├── cf_sd.v           $FF10-$FF17 CF task file over the SD controller
+    │   └── sd_spi.v          microSD in SPI mode: init, read block, write block
+    ├── sim/                  board-level benches (see tang-nano-20k/README.md)
+    │   ├── tb_top.v          Milestone-0 echo path
+    │   ├── tb_p8x_top.v      whole board top: monitor + OS boot off a card
+    │   ├── sd_model.v        behavioural SPI card, with +sdfail fault injection
+    │   └── tb_sd_spi.v       sd_spi's error paths
+    └── tools/                install a disk over the serial console, no root
+        ├── README.md
+        ├── osload.asm        N sectors → LBA 1.., patch OSCNT
+        └── imgload.asm       clone a whole P8XFS image from LBA 0
 ```
 
 ## How we work

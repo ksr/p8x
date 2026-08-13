@@ -27,6 +27,19 @@ ROM="${2:-}"
 RXS="${3:-}"
 CF="${4:-}"      # CF disk image, attached read-only to both models
 
+# The microcode images and the monitor ROM are build products of the emulator
+# tree, and u0-u3.bin are gitignored -- a fresh clone does not have them. Check
+# before use: without this the first failure is a Python traceback out of
+# mk_ucode_mem.py, which says nothing about what to run.
+for f in u0.bin u1.bin u2.bin u3.bin eeprom.bin; do
+  if [ ! -f "$EMU/$f" ]; then
+    echo "run.sh: $EMU/$f is missing." >&2
+    echo "  The emulator tree builds it. From the repo root:" >&2
+    echo "      cd emulator && make" >&2
+    exit 2
+  fi
+done
+
 W="$HERE/work"; mkdir -p "$W"; cd "$W"
 
 # microcode images (built artifacts in emulator/)
