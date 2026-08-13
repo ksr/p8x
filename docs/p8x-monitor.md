@@ -79,7 +79,7 @@ knowing the monitor's internal addresses. These entry points are **stable**:
 | Address | Name | Behaviour |
 |---------|------|-----------|
 | `$0100` | CONIN | wait for a key; char → `A` |
-| `$0103` | CONOUT | `A` → serial |
+| `$0103` | CONOUT | `A` → serial (expands a bare LF to CR LF — [see below](#console-newlines-conout--0103)) |
 | `$0106` | CONST | `A` = RDRF bit; `Z=1` when no key is waiting |
 | `$0109` | CFINIT | reset CF + set 8-bit mode; `C=1` on error |
 | `$010C` | CFREAD | read sector `LBA` → `(P1)`; `P1 += 512` |
