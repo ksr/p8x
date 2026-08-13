@@ -1,14 +1,18 @@
+# Board build outputs — ALLOW-LIST for the generated-heavy directories.
+#
+# A deny-list missed artifacts twice: p8x_cpu.fs (6.9 MB, tracked for days
+# because the pattern only said p8x.fs) and mem.hex/ucode.hex (listed here but
+# already in the index, which .gitignore cannot undo). Everything below is
+# produced by build.sh or a simulator run.
 p8x.json
 pnr.json
 *.fs
 *.log
-sim/*.vvp
-ucode.hex
-ucode_c.hex
-mem.hex
-irmap.vh
-sim/*.hex
-sim/*.vh
-sim/*.trace
-sim/emu.raw
-sim/*.vvp
+*.hex
+*.vh
+disk.img
+
+# sim/ holds only hand-written benches; everything else there is generated
+# (.vvp binaries, hex images, trace dumps, emulator scratch).
+sim/*
+!sim/*.v
