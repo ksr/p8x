@@ -244,4 +244,9 @@
 #define CMPWSC      0x609F       /* tab-complete: directory-walk sectors remaining */
 #define CMPIX       0x60A0       /* tab-complete: KWTAB index during the built-in scan */
 
+/* console tty state */
+#define TTYRAW      0x60A1       /* 0 = expand a bare LF to CR LF on console output; nonzero = pass bytes through untouched (for binary over the serial link, like stty raw) */
+#define TTYLST      0x60A2       /* last byte PUTC transmitted, so an LF that already follows a CR is not doubled */
+#define TTYCH       0x60A3       /* PUTC's saved character (PUTC must preserve A) */
+
 #endif

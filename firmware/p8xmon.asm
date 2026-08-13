@@ -117,6 +117,9 @@ RESET:  JMP  COLD
         .org $0160
 ; ---------------- Cold start -------------------------------------------------
 COLD:   LDP3 #STKTOP        ; stack
+        LDA  #0             ; console: expand bare LF -> CR LF, no pending CR
+        STA  TTYRAW
+        STA  TTYLST
         LDA  #$03           ; ACIA master reset
         STA  ACIAS
         LDA  #$15           ; /16 clock, 8N1, no IRQ
@@ -1746,13 +1749,49 @@ ZS2:    LDA  #0
 ; PUTC - send the char in A out the ACIA. Spins until TDRE (transmit data
 ;   register empty) before writing. A is preserved via PHA/PLA; no other regs
 ;   touched. (CONOUT BIOS entry at $0103.)
-PUTC:   PHA
+; PUTC - send A to the console, expanding a bare LF into CR LF.
+;
+; P8X emits a bare LF for a newline (p8cc's puts ends LDA #10), which renders
+; correctly only if something adds the CR. Under the emulator the host tty does
+; it (ONLCR); a real serial terminal does not, and every line staircases. This is
+; that missing translation, and PUTC is the right place for it: it is the console
+; device. Redirected output never gets here -- OUTCH routes REDIRF>=1 to a file or
+; capture buffer -- so files and pipes keep clean single-byte LF, exactly as Unix
+; keeps ONLCR in the tty line discipline rather than in write().
+;
+; TTYLST holds the last byte sent, so a CR LF that a caller already emitted (the
+; monitor's CRLF, the OS's key echo) passes through unchanged instead of becoming
+; CR CR LF. TTYRAW nonzero disables the whole thing, for sending binary down the
+; serial link (the equivalent of stty raw); nothing needs it yet.
+;
+; Preserves A, as callers rely on ("CONOUT preserves A"). Clobbers B.
+PUTC:   STA  TTYCH          ; PUTC must return with A unchanged
+        LDA  TTYRAW
+        JNZ  PUTCS          ; raw mode: no translation at all
+        LDA  TTYCH
+        LDB  #LF
+        CMP
+        JNZ  PUTCS          ; not an LF: nothing to do
+        LDA  TTYLST
+        LDB  #CR
+        CMP
+        JZ   PUTCS          ; already preceded by CR: leave the pair alone
+        LDA  #CR            ; a BARE LF: emit the missing CR first
+        JSR  PUTCTX
+PUTCS:  LDA  TTYCH
+        JSR  PUTCTX
+        LDA  TTYCH          ; restore A for the caller
+        RTS
+
+; PUTCTX - the raw byte pusher: wait for TDRE, write the ACIA, remember the byte.
+PUTCTX: PHA
 PUTC1:  LDA  ACIAS
         LDB  #$02           ; TDRE
         AND
         JZ   PUTC1
         PLA
         STA  ACIAD
+        STA  TTYLST
         RTS
 
 ; GETC - block until a key arrives, return it in A (and a convenience copy in

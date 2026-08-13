@@ -175,6 +175,8 @@ TOK_VAL   = $A3          ; VAL   (string -> number)
 TOK_EOF   = $A4          ; EOF   (input channel at end -> 1/0)
 
 MONITOR = $0000          ; reset vector — BYE returns here
+CONIN   = $0100          ; BIOS: wait for a key -> A
+CONOUT  = $0103          ; BIOS: A -> console (expands a bare LF to CR LF)
 
 PROG   = BASRAM+$580          ; program storage (string table occupies $300..$57F)
 PBUF   = $C000          ; rebuild scratch buffer
@@ -4009,16 +4011,16 @@ SKIPSP: LDA  (P2)
         INP2
         JMP  SKIPSP
 sks:    RTS
-; PUTC — transmit the byte in A over the 6850 ACIA. Busy-waits on TDRE (status
-; bit 1 = transmit data register empty) so it never overruns. Preserves A.
-PUTC:   PHA
-putc1:  LDA  ACIAS
-        LDB  #$02
-        AND
-        JZ   putc1                   ; TDRE clear -> transmitter still busy, spin
-        PLA
-        STA  ACIAD
-        RTS
+; PUTC — emit the byte in A to the console through the BIOS (CONOUT, $0103).
+;
+; This used to drive the ACIA directly, a leftover from when BASIC could be built
+; as the whole ROM with no monitor underneath it. Nothing builds that variant any
+; more (every target passes -D BASORG=$2000 or $6A00, and the monitor ROM is
+; always present at $0000-$1FFF), so going through the BIOS costs nothing and
+; means BASIC inherits the console behaviour every other program gets — in
+; particular PUTC's bare-LF -> CR LF expansion, without which BASIC's output
+; staircases on a real serial terminal. Preserves A, as CONOUT does.
+PUTC:   JMP  CONOUT                  ; tail call: CONOUT RTSs to PUTC's caller
 
 ; PUTCH — emit A to the current sink: the open data file when OUTFILE is set
 ; (PRINT#), otherwise the console. Lets PRDEC/SPUT serve both PRINT and PRINT#.
@@ -4067,14 +4069,10 @@ pst_1:  LDA  STRSN
         LDA  SAVE2+1
         TAP1H
         RTS
-; GETC — block until the ACIA has a byte, then return it in A. Busy-waits on RDRF
-; (status bit 0 = receive data register full).
-GETC:   LDA  ACIAS
-        LDB  #$01
-        AND
-        JZ   GETC
-        LDA  ACIAD
-        RTS
+; GETC — block until a key arrives, then return it in A. Through the BIOS
+; (CONIN, $0100) for the same reason as PUTC above: one console implementation,
+; shared by the monitor, the OS and BASIC.
+GETC:   JMP  CONIN                   ; tail call: CONIN RTSs to GETC's caller
 ; PUTS — print the NUL-terminated string at (P1) to the console. Advances P1 past
 ; the terminator; uses PUTC (console only, never the data-file sink).
 PUTS:   LDA  (P1)+

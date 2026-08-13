@@ -243,6 +243,16 @@ MAP = [
     ('shell completion', 'CMPWLB', 0x609D, 'tab-complete: directory-walk running sector LBA (2)'),
     ('shell completion', 'CMPWSC', 0x609F, 'tab-complete: directory-walk sectors remaining'),
     ('shell completion', 'CMPIX', 0x60A0, 'tab-complete: KWTAB index during the built-in scan'),
+
+    # Console (tty) state for the BIOS PUTC. P8X emits a bare LF for a newline
+    # (p8cc's puts -> LDA #10), which only renders correctly if something adds the
+    # CR. Under the emulator the host tty does it (ONLCR); on a real serial link
+    # nothing does, and the output staircases. PUTC now performs that expansion,
+    # which is the same place Unix puts it -- on the terminal device, so file and
+    # pipe output (which never reaches CONOUT) stays clean single-byte LF.
+    ('console tty state', 'TTYRAW', 0x60A1, '0 = expand a bare LF to CR LF on console output; nonzero = pass bytes through untouched (for binary over the serial link, like stty raw)'),
+    ('console tty state', 'TTYLST', 0x60A2, 'last byte PUTC transmitted, so an LF that already follows a CR is not doubled'),
+    ('console tty state', 'TTYCH', 0x60A3, "PUTC's saved character (PUTC must preserve A)"),
 ]
 
 HERE = os.path.dirname(os.path.abspath(__file__))

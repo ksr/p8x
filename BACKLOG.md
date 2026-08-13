@@ -47,14 +47,18 @@ remainder is why it is still here.
         with `sd_model.v +sdfail=1|2`); that found and fixed two lockups. Still
         unexercised: CRC failure, a card that reports write-protect, and card
         removal mid-transfer.
-      - **Console newlines rely on the host tty.** P8X emits a bare LF (p8cc's
-        `puts` → `LDA #10`; `PUTC` does not translate), so output is only
-        correctly formatted because a host terminal does LF → CRLF. On a raw
-        serial link it staircases; `fpga/tang-nano-20k/tools/term.py` translates
-        for now. The real fix would be emitting CRLF at the source, but that
-        changes the console bytes everywhere — including the co-sim's
-        byte-for-byte console diff and any captured test expectations — so it is
-        a deliberate decision, not a quick patch.
+      - **Console newlines: FIXED (2026-08-13).** `CONOUT`/`PUTC` now expands a
+        bare LF into CR LF, so P8X no longer depends on a host tty doing it.
+        Files and pipes are untouched (they route through `OUTCH` to a file or
+        capture buffer and never reach `CONOUT`), and an existing CR LF is not
+        doubled (`TTYLST`). `TTYRAW` ($60A1) disables it for binary transfers.
+        BASIC's private PUTC/GETC — a leftover from the retired standalone build
+        — now tail-call the BIOS, so it inherits the same behaviour.
+        Still open: **BASIC's file I/O** still bypasses the BIOS/OS file API; only
+        console I/O was routed. And the **standalone BASIC build** (`BASORG=$0000`,
+        BASIC as the whole ROM) is now genuinely dead — nothing builds it and it
+        would fail at the BIOS call. Retire the target and the source default, or
+        restore it deliberately.
       - **Not done:** nothing uses the board's 64 Mbit SDRAM — it turned out to be
         unnecessary once the microcode ROM was compacted (see
         `fpga/tang-nano-20k/mk_compact_ucode.py`), but it is there if a future

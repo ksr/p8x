@@ -144,3 +144,32 @@ correctly.)
 
 Reset clears the PC to `$0000`; the stack pointer (P3) is initialised to the top
 of RAM.
+
+## Console newlines (CONOUT / `$0103`)
+
+P8X emits a **bare LF** for a newline — p8cc's `puts` ends with `LDA #10`, and
+most `/bin` commands follow suit. A bare LF moves the cursor down but not back,
+so on a real serial terminal every line would step diagonally across the screen.
+
+`CONOUT` (the monitor's `PUTC`) therefore **expands a bare LF into CR LF**. This
+is the same place Unix puts the translation — on the terminal device (`ONLCR` in
+the tty line discipline), not in the program and not in `write()`.
+
+Two consequences worth knowing:
+
+- **Files and pipes are unaffected.** The OS's `OUTCH` routes `REDIRF >= 1` to a
+  file or capture buffer, which never reaches `CONOUT`, so `dir > out.txt` and
+  `a | b` carry clean single-byte LF. Nothing has to check where its output is
+  going; the routing already answers that.
+- **An existing CR LF is not doubled.** `TTYLST` remembers the last byte sent, so
+  a caller that already emits CR LF — the monitor's own `CRLF`, the OS's key echo
+  — passes through unchanged rather than becoming CR CR LF.
+
+| Address | Name | Meaning |
+|---------|------|---------|
+| `$60A1` | `TTYRAW` | 0 = expand; nonzero = pass bytes through untouched |
+| `$60A2` | `TTYLST` | last byte transmitted (the anti-doubling state) |
+
+`TTYRAW` is the escape hatch for sending **binary** down the serial link, where a
+`$0A` is data rather than a newline — the equivalent of `stty raw`. Nothing in the
+tree needs it yet; set it, do the transfer, clear it.
