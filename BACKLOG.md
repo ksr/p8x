@@ -20,6 +20,28 @@ remainder is why it is still here.
 
 ## NEXT
 
+- [ ] **BASIC ignores the OS current directory — SAVE/LOAD always hit the root.**
+      Reproduced 2026-08-13: from the OS shell, `cd src` then `basic` then
+      `SAVE "T1"` writes **`/T1`**, not `/src/T1`.
+      - **Cause**, and it is the documented one: the BIOS path resolvers
+        (`FRESOLVE $0133`, `FOPEN $0124`, `FOPENDIR $0139`) always start at the
+        **root**. `/bin` commands work around this by making a relative argument
+        absolute first — prefixing the CWD — before any BIOS open. BASIC does not:
+        it contains no CWD handling and makes no OS syscalls at all, so every
+        filename it is given resolves from `/`.
+      - **Not** a case of bypassing the file API. BASIC already goes through the
+        BIOS for files (`FFIND`/`FCREATE`/`FOPEN`/`FGETB`/`FWOPEN`/`FPUTB`/
+        `FCLOSE`/`FRESOLVE`/`FNORM`); console I/O was the only direct-to-ACIA path
+        and that was fixed on 2026-08-13. The gap is purely the missing abspath.
+      - **Fix:** in the TPA build, prefix the OS CWD onto a filename that does not
+        start with `/` before calling FRESOLVE — the same step `lib_apath`'s
+        `abspath()` does for the C commands. Needs the OS CWD, so it only applies
+        when BASIC runs under the OS (`MONITOR=$2000`), not to the disk-boot build
+        where there is no OS and root is correct.
+      - Affects `SAVE`, `LOAD`, and the `OPEN`/`PRINT#` data-file path.
+      - See [[reference_p8x_relpath_gotcha]] — this is the same trap that has
+        caught `/bin` commands before.
+
 - [~] **FPGA build (Tang Nano 20K) — MILESTONES 0-4 DONE (2026-08-12); clock-up
       and IRQ remain.** A standalone FPGA P8X running the same microcode and the
       same unmodified monitor/OS/toolchain. Parallel track to the TTL build, not
@@ -54,11 +76,9 @@ remainder is why it is still here.
         doubled (`TTYLST`). `TTYRAW` ($60A1) disables it for binary transfers.
         BASIC's private PUTC/GETC — a leftover from the retired standalone build
         — now tail-call the BIOS, so it inherits the same behaviour.
-        Still open: **BASIC's file I/O** still bypasses the BIOS/OS file API; only
-        console I/O was routed. And the **standalone BASIC build** (`BASORG=$0000`,
-        BASIC as the whole ROM) is now genuinely dead — nothing builds it and it
-        would fail at the BIOS call. Retire the target and the source default, or
-        restore it deliberately.
+        The **standalone BASIC build** (`BASORG=$0000`, BASIC as the whole ROM) is
+        now genuinely dead — it would fail at the BIOS call — and is marked RETIRED
+        in `basic/README.md`. See the separate NEXT item for BASIC's CWD bug.
       - **Not done:** nothing uses the board's 64 Mbit SDRAM — it turned out to be
         unnecessary once the microcode ROM was compacted (see
         `fpga/tang-nano-20k/mk_compact_ucode.py`), but it is there if a future
