@@ -111,7 +111,17 @@ Sipeed's pinout: **CLK 83, CMD=MOSI 82, DAT0=MISO 84, DAT3=CS 81**.
   so without that gate `I` prints "CF OK" with no card at all and the failure
   only surfaces later as mysterious garbage.
 - `sim/sd_model.v` is a behavioural card (serves a real image via $fseek) — the
-  OS boots off it in simulation before any hardware runs.
+  OS boots off it in simulation before any hardware runs. It takes **`+sdfail=1`**
+  (never initialises) and **`+sdfail=2`** (never releases busy after a write), and
+  `sim/tb_sd_spi.v` drives sd_spi directly against them.
+- **Both injected faults found a LOCKUP that a healthy card never shows (fixed
+  2026-08-12).** `S_WBUSY` had no timeout, so a card dying mid-write left the
+  controller busy forever and *every later read and write was silently dropped*;
+  and a failed init parked in `S_ERR` re-pulsing `done` every clock, holding
+  cf_sd's task file reset with no way out but reloading the bitstream. Also
+  bounded ACMD41 by time (4000 rounds ≈ 1.1 s, the spec's limit) instead of an
+  arbitrary 20000 that took 5.6 s — long enough that a missing card looked like a
+  hang. **Lesson: a model that always behaves tests nothing; make it fail.**
 
 Status on the board: **READ AND WRITE BOTH VERIFIED ON HARDWARE.** The monitor's
 `F` formatted a real microSD through the FPGA, and reading LBA 0 back gives

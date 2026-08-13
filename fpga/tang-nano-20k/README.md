@@ -107,3 +107,56 @@ substrate the P8X core will sit on.
   to rescale.
 - Pins verified 2026-08 against Sipeed's pinout and a known-good project `.cst`.
 - Reset button KEY2 is pin 87 — unused here; `top.v` self-resets at power-on.
+
+## Simulation of the board build
+
+`sim/` holds benches for the board-level design — the things the co-sim in
+[`../sim/`](../sim/README.md) cannot cover, because they are about the *substrate*
+(block RAM, a real UART, an actual SD card) rather than the CPU core.
+
+| Bench | What it proves |
+|-------|----------------|
+| `sim/tb_top.v` | Milestone-0 echo path at the real 115200-for-27MHz bit period |
+| `sim/tb_p8x_top.v` | the whole board top: monitor banner out of the real UART, and P8X/OS booting off a modelled card |
+| `sim/sd_model.v` | a behavioural SPI microSD, serving a real disk image via `$fseek` |
+| `sim/tb_sd_spi.v` | `sd_spi.v`'s **error** paths, driven directly |
+
+```sh
+cd sim
+iverilog -g2012 -o tb.vvp ../../rtl/p8x_cpu.v ../rtl/p8x_top.v ../rtl/uart.v \
+                          ../rtl/cf_sd.v ../rtl/sd_spi.v sd_model.v tb_p8x_top.v
+vvp tb.vvp +sd=../../sim/work/disk.img          # boots the OS in simulation
+```
+
+### Making the card fail on purpose
+
+A card model that always behaves only ever exercises the happy path, and that is
+exactly where this controller had bugs. `sd_model.v` therefore takes `+sdfail=N`:
+
+| `+sdfail=` | Injected fault |
+|-----------|----------------|
+| `0` (default) | healthy card |
+| `1` | never initialises — ACMD41 reports busy forever |
+| `2` | never releases busy after a write |
+
+```sh
+iverilog -g2012 -o tb_sd_spi.vvp ../rtl/sd_spi.v sd_model.v tb_sd_spi.v
+for m in 0 1 2; do vvp tb_sd_spi.vvp +sd=../../sim/work/disk.img +sdfail=$m; done
+```
+
+Both faults found a **lockup** that a healthy card never reveals:
+
+- **`sdfail=2`** — `S_WBUSY` waited for the card to release busy with no bound. A
+  card that dies mid-write left the controller busy forever: the CPU's `CFWAIT`
+  gives up after ~4096 polls and reports an error, but the controller never
+  returned to idle, so *every later read and write was silently dropped*. Now
+  timed out.
+- **`sdfail=1`** — a failed initialisation parked in `S_ERR` re-asserting `done`
+  every clock, which held `cf_sd`'s task file permanently reset, and there was no
+  way out short of reloading the bitstream. A card inserted a second late stayed
+  dead. Now backs off and retries the ladder.
+
+The same work bounded ACMD41 by **time** rather than an arbitrary retry count:
+4000 rounds is ~1.1 s at the init clock, which is the SD spec's own limit. The
+previous 20000 took **5.6 s**, long enough that a missing card made the whole
+machine look hung.

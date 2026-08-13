@@ -9,3 +9,6 @@ mem.hex
 irmap.vh
 sim/*.hex
 sim/*.vh
+sim/*.trace
+sim/emu.raw
+sim/*.vvp

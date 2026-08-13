@@ -43,6 +43,10 @@ remainder is why it is still here.
         forcing-buffer entry ($08 injection, vector $0808, EI/DI/RTI) and
         `isa_test.asm` exercises it in simulation; it just needs a real source
         wired up (timer and/or the ACIA).
+      - **SD error paths are now tested** (`fpga/tang-nano-20k/sim/tb_sd_spi.v`
+        with `sd_model.v +sdfail=1|2`); that found and fixed two lockups. Still
+        unexercised: CRC failure, a card that reports write-protect, and card
+        removal mid-transfer.
       - **Not done:** nothing uses the board's 64 Mbit SDRAM — it turned out to be
         unnecessary once the microcode ROM was compacted (see
         `fpga/tang-nano-20k/mk_compact_ucode.py`), but it is there if a future
