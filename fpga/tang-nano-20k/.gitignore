@@ -1,6 +1,6 @@
 p8x.json
 pnr.json
-p8x.fs
+*.fs
 *.log
 sim/*.vvp
 ucode.hex
