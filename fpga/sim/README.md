@@ -21,13 +21,23 @@ match the emulator. A divergence prints the exact cycle and the differing state.
 
 ## Run it
 
+**First, once:** the microcode images `u0-u3.bin` are build products and are not
+in the repo, so a fresh clone has to make them before anything here works.
+
+```bash
+cd emulator && make        # from the repo root
+```
+
+Then, from this directory:
+
 ```bash
 ./run.sh [CYCLES]      # default 20000
 ```
 
 Needs a C compiler (builds the emulator) and **iverilog** (from oss-cad-suite —
 the same suite you install for the board). Without iverilog, `run.sh` still
-builds the emulator golden trace and tells you what's missing.
+builds the emulator golden trace and tells you what's missing; without the
+microcode images it tells you to run the `make` above.
 
 Output: `PASS: RTL matches emulator for N cycles`, or a `DIVERGENCE` dump.
 
