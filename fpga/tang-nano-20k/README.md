@@ -77,21 +77,28 @@ The BL616 bridge enumerates **two** serial devices. The **higher-numbered one is
 the UART**; the other is the JTAG side and returns garbage if you talk to it:
 
 ```bash
+tools/term.py                              # exit: Ctrl-]
+```
+
+That is the one to use: it picks the console port itself and translates P8X's
+newlines. **P8X emits a bare LF**, and the firmware does not translate it — the
+emulator only looks right because the host tty does LF → CRLF for you. The
+monitor sends proper CRLF so it survives any terminal, but everything the OS and
+`/bin` print will step diagonally across the screen without the translation.
+
+If you would rather use a stock terminal — fine for the monitor, staircases the
+OS:
+
+```bash
 ls /dev/cu.usbserial-*
 #   /dev/cu.usbserial-<N>0    <- JTAG   (not this one)
 #   /dev/cu.usbserial-<N>1    <- console
 
 screen /dev/cu.usbserial-<N>1 115200       # exit: Ctrl-A then k
-# or: picocom -b 115200 /dev/cu.usbserial-<N>1
+# or: picocom -b 115200 --imap lfcrlf /dev/cu.usbserial-<N>1   (translates too)
 ```
 
 Use `/dev/cu.*`, not `/dev/tty.*` — the `tty.` node blocks on carrier detect.
-
-**`screen` staircases the OS output.** P8X emits a bare LF for a newline and the
-firmware does not translate it; the emulator only looks right because the host
-tty does LF → CRLF for you. The monitor sends proper CRLF so it is fine under
-`screen`, but everything from `/bin` will step diagonally across the screen. Use
-[`tools/term.py`](tools/README.md) instead — same thing, with the translation.
 
 ## Success looks like — confirmed on hardware 2026-08-12
 

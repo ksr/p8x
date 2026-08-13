@@ -169,8 +169,9 @@ fpga/
     │   ├── tb_p8x_top.v      whole board top: monitor + OS boot off a card
     │   ├── sd_model.v        behavioural SPI card, with +sdfail fault injection
     │   └── tb_sd_spi.v       sd_spi's error paths
-    └── tools/                install a disk over the serial console, no root
+    └── tools/                host-side helpers, none needing root
         ├── README.md
+        ├── term.py           serial terminal; translates P8X's bare-LF output
         ├── osload.asm        N sectors → LBA 1.., patch OSCNT
         └── imgload.asm       clone a whole P8XFS image from LBA 0
 ```
