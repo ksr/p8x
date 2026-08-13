@@ -91,10 +91,10 @@ use `/dev/cu.*`, not `/dev/tty.*`:
 tang-nano-20k/tools/term.py               # auto-picks the port; Ctrl-] quits
 ```
 
-`term.py` is a dependency-free terminal that translates P8X's bare-LF newlines
-(`screen` works for the monitor but staircases everything the OS prints — see
-[`tools/README.md`](tang-nano-20k/tools/README.md)). If you prefer `screen`:
-`screen /dev/cu.usbserial-<N>1 115200`, exit with Ctrl-A then k.
+`term.py` is a dependency-free terminal that picks the console port for you and
+quits with Ctrl-]. A stock terminal is equally fine —
+`screen /dev/cu.usbserial-<N>1 115200`, exit with Ctrl-A then k — because the
+firmware expands newlines itself (see [`docs/p8x-monitor.md`](../docs/p8x-monitor.md)).
 
 Press Enter for the monitor's `*` prompt. `?` for help, `I` to identify the
 microSD, `B` to boot the OS from it.

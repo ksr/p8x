@@ -40,7 +40,7 @@ boot block. Use on a card already formatted by the monitor's `F`.
 patched; the image carries its own boot block. 12377 sectors (the 6 MB
 `os/run-disk.img`) takes about 10 minutes at 115200.
 
-## term.py — a terminal that does not staircase
+## term.py — a small serial terminal
 
 ```sh
 ./term.py                       # auto-picks the console port, 115200
@@ -49,23 +49,15 @@ patched; the image carries its own boot block. 12377 sectors (the 6 MB
 
 `Ctrl-]` quits. Dependency-free (termios only — no pyserial, no install).
 
-**Why you need it.** P8X emits a **bare LF** for a newline: p8cc's `puts` ends
-with `LDA #10` and the firmware's `PUTC` writes bytes to the ACIA untranslated.
-Under the emulator that looks right only because the host tty is doing LF → CRLF
-for you (`ONLCR`, on by default). `screen` puts the port in raw mode and renders
-the bytes itself, so nothing translates and everything from `/bin` staircases:
+**A stock terminal now works too.** This tool was written when P8X emitted a bare
+LF for a newline, which staircased on anything that did not translate. `CONOUT`
+does that expansion itself since 2026-08-13 (see
+[`docs/p8x-monitor.md`](../../../docs/p8x-monitor.md)), so `screen` renders the
+OS correctly and `term.py` is now a convenience rather than a fix:
 
-```
-/> dir
-    18  README.TXT
-                    bin/
-                            bina/
-```
-
-`term.py` does what the tty would: LF from the machine is displayed as CRLF, and
-Enter is sent as CR (what the monitor and shell line-readers actually look for,
-`$0D`). A CRLF the machine already sent — the monitor's own messages do — is left
-alone, so nothing gets double-spaced.
-
-`screen` still works fine for the **monitor**, which sends proper CRLF. It is the
-OS and the `/bin` commands that need this.
+- it finds the console port for you (the bridge exposes two, and the other one is
+  JTAG),
+- `Ctrl-]` beats `Ctrl-A k`,
+- its LF → CRLF mapping is harmless and idempotent — it leaves an existing CR LF
+  alone — so it still behaves correctly against the older firmware, or against
+  anything run with `TTYRAW` set.

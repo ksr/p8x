@@ -80,14 +80,16 @@ the UART**; the other is the JTAG side and returns garbage if you talk to it:
 tools/term.py                              # exit: Ctrl-]
 ```
 
-That is the one to use: it picks the console port itself and translates P8X's
-newlines. **P8X emits a bare LF**, and the firmware does not translate it — the
-emulator only looks right because the host tty does LF → CRLF for you. The
-monitor sends proper CRLF so it survives any terminal, but everything the OS and
-`/bin` print will step diagonally across the screen without the translation.
+Convenient because it finds the console port itself (the bridge exposes two) and
+quits with `Ctrl-]`. Nothing more than that: since 2026-08-13 `CONOUT` expands a
+bare LF into CR LF in firmware, so P8X renders correctly on **any** terminal.
 
-If you would rather use a stock terminal — fine for the monitor, staircases the
-OS:
+> **A flashed board keeps the ROM it was built with.** `build.sh cpu` bakes
+> `emulator/eeprom.bin` into the bitstream's BRAM, so a board flashed before that
+> firmware change still emits bare LF. Rebuild and reflash to pick it up:
+> `./build.sh cpu flash`.
+
+A stock terminal works just as well:
 
 ```bash
 ls /dev/cu.usbserial-*
@@ -95,7 +97,7 @@ ls /dev/cu.usbserial-*
 #   /dev/cu.usbserial-<N>1    <- console
 
 screen /dev/cu.usbserial-<N>1 115200       # exit: Ctrl-A then k
-# or: picocom -b 115200 --imap lfcrlf /dev/cu.usbserial-<N>1   (translates too)
+# or: picocom -b 115200 /dev/cu.usbserial-<N>1
 ```
 
 Use `/dev/cu.*`, not `/dev/tty.*` — the `tty.` node blocks on carrier detect.

@@ -106,9 +106,18 @@ origin), `BASRAM` (data base), `PBUF` (rebuild scratch), and `MONITOR` (where
 
 | Build | Code (`BASORG`) | Data (`BASRAM`) | Invoked by |
 |-------|-----------------|-----------------|------------|
-| Standalone | `$0000` | `$8000` | burned as the whole ROM; `run.sh` / scripted tests |
+| ~~Standalone~~ | `$0000` | `$8000` | **RETIRED (2026-08-13)** — see the note below |
 | Disk | `$2000` | `$A000` | installed on a P8XFS image, booted by the monitor `B` command (rev E: loads at `$2000`) |
 | Run-from-OS | `$6A00` | `$C500` | a TPA program (`PBUF=$E000`, `MONITOR=$2000`) installed as `BASIC.BIN`; `RUN` it from the OS, `BYE` returns to the OS (see below) |
+
+> **The standalone build no longer works.** BASIC's `PUTC`/`GETC` now tail-call the
+> BIOS (`CONOUT` `$0103` / `CONIN` `$0100`) instead of driving the ACIA directly,
+> so it needs the monitor resident at `$0000-$1FFF` — which the `$0000` build
+> replaces. Nothing had built that variant for some time (every target passes
+> `-D BASORG=$2000` or `$6A00`, and `build_rom.sh` states BASIC is no longer
+> ROM-resident), so this formalises an existing state rather than removing a
+> capability. The source defaults are still the `$0000` values; restoring the
+> target would mean giving BASIC back its own console routines.
 
 `Code` is where the interpreter runs (low ROM or RAM); `Data` is
 the base of its variables + program text; `PBUF` (rebuild scratch) defaults to
