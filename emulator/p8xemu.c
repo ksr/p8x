@@ -357,7 +357,18 @@ static int stdin_pending(void){
     return select(1,&s,0,0,&tv)>0;
 }
 static void term_restore(void){ if(g_raw){ tcsetattr(0,TCSANOW,&g_orig); g_raw=0; } }
-static void on_sig(int s){ (void)s; term_restore(); _exit(0); }
+/* Ctrl-C must still produce the display, or -g/-G would be useless for anything
+   INTERACTIVE: you drive BASIC by hand, then quit, and quitting is a signal.
+   fopen/fwrite in a handler is not strictly async-signal-safe, but this is a
+   debug emulator that is already calling tcsetattr here, and the alternative is
+   a feature that only works on scripted runs. */
+static void on_sig(int s){
+    (void)s;
+    term_restore();
+    if(gdump) gpu_writeppm(gdump);
+    if(gascii) gpu_writeascii();
+    _exit(0);
+}
 /* console RX status (RDRF). Must NOT block: the ACIA status register also
    carries TDRE, which PUTC polls before every transmitted byte, so a blocking
    status read would stall all output until a key is pressed. It is therefore
