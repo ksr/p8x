@@ -34,6 +34,7 @@ FLOADAT = $013F          ; bulk-read FLEN bytes from LBA into (P1)
 FFIND   = $0118          ; find file FNAME in the resolved dir -> LBA + FLEN; C=1 if not found
 FCREATE = $011B          ; create file FNAME (FSRC/FLEN) in the resolved dir; C=1 on error
 FRESOLVE= $0133          ; resolve NUL-terminated path (P1) -> dir extent + leaf FNAME; C=1 bad path
+SYS_GETCWD = $2003       ; OS: copy the CWD path string -> (P1), incl NUL (clobbers P2)
 ; sequential byte streams (for BASIC data files):
 FOPEN   = $0124          ; open file FNAME for reading (P1=512-byte buf); C=1 missing
 FGETB   = $0127          ; next byte -> A; C=1 at end of file
@@ -180,6 +181,10 @@ CONOUT  = $0103          ; BIOS: A -> console (expands a bare LF to CR LF)
 
 PROG   = BASRAM+$580          ; program storage (string table occupies $300..$57F)
 PBUF   = $C000          ; rebuild scratch buffer
+APBUF  = PBUF+128       ; absolute-path scratch (see APATH). Safe to overlay the
+                        ; rebuild buffer: GETPATH caps a path at 47 chars, and
+                        ; APATH only ever runs during SAVE/LOAD/OPEN, never
+                        ; during an edit rebuild.
 STKTOP = $FEFF
 
 ;==============================================================================
@@ -362,10 +367,73 @@ DOBYE:  JMP  MONITOR
 ; the monitor's BIOS FS calls (works in the ROM-in-monitor and disk builds;
 ; the standalone build has no resident monitor/BIOS).
 ; ---------------------------------------------------------------------------
+; APATH — turn the path at (P1) into an ABSOLUTE path, honouring the OS's
+; current directory.
+;
+;   in : P1 -> NUL-terminated path
+;   out: P1 -> NUL-terminated ABSOLUTE path (the input itself, or APBUF)
+;
+; Why: the BIOS resolvers (FRESOLVE/FOPEN/FOPENDIR) always start at the ROOT, so
+; a bare "T1" saved from /src used to land in /T1. The /bin commands avoid this
+; by prefixing the CWD before any BIOS open (lib_apath.c's abspath); BASIC did
+; not, because it made no OS calls at all. This is that same step.
+;
+; Only meaningful when an OS is underneath: MONITOR is $2000 for the run-from-OS
+; build and $0000 for the disk-boot build, where there is no OS and the BIOS root
+; is already the right base — so the constant test below compiles to a cheap
+; runtime no-op in that build rather than needing conditional assembly.
+;
+; Preserves P2 (the parse cursor); SYS_GETCWD clobbers it, hence the save.
+APATH:  LDA  #>MONITOR
+        JZ   ap_ret                  ; no OS underneath -> leave the path alone
+        LDA  (P1)
+        LDB  #'/'
+        CMP
+        JZ   ap_ret                  ; already absolute
+        TPA2L
+        PHA                          ; save the caller's parse cursor
+        TPA2H
+        PHA
+        TPA1L
+        PHA                          ; save the source path pointer
+        TPA1H
+        PHA
+        LDP1 #APBUF
+        JSR  SYS_GETCWD              ; APBUF <- CWD (clobbers P2)
+        LDP1 #APBUF                  ; walk to the NUL
+ap_f:   LDA  (P1)
+        JZ   ap_f2
+        INP1
+        JMP  ap_f
+ap_f2:  DEP1                         ; look at the last CWD character
+        LDA  (P1)
+        LDB  #'/'
+        CMP
+        INP1                         ; back to the NUL slot either way
+        JZ   ap_c                    ; CWD is "/" (or ends in one): no separator
+        LDA  #'/'
+        STA  (P1)+
+ap_c:   PLA
+        TAP2H                        ; source path -> P2 as the read cursor
+        PLA
+        TAP2L
+ap_c1:  LDA  (P2)+                   ; append the relative path, NUL included
+        STA  (P1)+
+        LDB  #0
+        CMP
+        JNZ  ap_c1
+        PLA
+        TAP2H                        ; restore the caller's parse cursor
+        PLA
+        TAP2L
+        LDP1 #APBUF
+ap_ret: RTS
+
 st_save:INP2                        ; consume the SAVE token
         JSR  GETPATH                ; "path" -> PBUF ; C set = syntax error
         JC   fs_serr
-        LDP1 #PBUF                   ; resolve it: subdir path or bare name (=root)
+        LDP1 #PBUF                   ; resolve it: subdir path or bare name
+        JSR  APATH                   ; ... relative to the OS CWD, not the root
         JSR  FRESOLVE                ; -> DIRLBA + leaf FNAME ; C=1 bad path
         JC   sv_ferr
         JSR  PROGLEN                 ; FLEN = program length (incl 00,00 marker)
@@ -387,6 +455,7 @@ st_load:INP2                        ; consume the LOAD token
         JSR  GETPATH
         JC   fs_serr
         LDP1 #PBUF
+        JSR  APATH                   ; relative to the OS CWD, not the root
         JSR  FRESOLVE                ; -> DIRLBA + leaf FNAME ; C=1 bad path
         JC   ld_nf
         JSR  FFIND                   ; -> LBA + FLEN, or C set if missing
@@ -3445,6 +3514,7 @@ sfn_z:  LDA  #0
         STA  (P1)                      ; NUL after the data
         LDP1 #STRACC                   ; FRESOLVE the path string (STRACC+1)
         INP1
+        JSR  APATH                     ; relative to the OS CWD, not the root
         JSR  FRESOLVE                  ; -> DIRLBA + leaf FNAME
         PLA
         TAP2H

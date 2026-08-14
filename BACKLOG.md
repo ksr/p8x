@@ -20,28 +20,21 @@ remainder is why it is still here.
 
 ## NEXT
 
-- [ ] **BASIC ignores the OS current directory — SAVE/LOAD always hit the root.**
-      Reproduced 2026-08-13: from the OS shell, `cd src` then `basic` then
-      `SAVE "T1"` writes **`/T1`**, not `/src/T1`.
-      - **Cause**, and it is the documented one: the BIOS path resolvers
-        (`FRESOLVE $0133`, `FOPEN $0124`, `FOPENDIR $0139`) always start at the
-        **root**. `/bin` commands work around this by making a relative argument
-        absolute first — prefixing the CWD — before any BIOS open. BASIC does not:
-        it contains no CWD handling and makes no OS syscalls at all, so every
-        filename it is given resolves from `/`.
-      - **Not** a case of bypassing the file API. BASIC already goes through the
-        BIOS for files (`FFIND`/`FCREATE`/`FOPEN`/`FGETB`/`FWOPEN`/`FPUTB`/
-        `FCLOSE`/`FRESOLVE`/`FNORM`); console I/O was the only direct-to-ACIA path
-        and that was fixed on 2026-08-13. The gap is purely the missing abspath.
-      - **Fix:** in the TPA build, prefix the OS CWD onto a filename that does not
-        start with `/` before calling FRESOLVE — the same step `lib_apath`'s
-        `abspath()` does for the C commands. Needs the OS CWD, so it only applies
-        when BASIC runs under the OS (`MONITOR=$2000`), not to the disk-boot build
-        where there is no OS and root is correct.
-      - Affects `SAVE`, `LOAD`, and the `OPEN`/`PRINT#` data-file path.
-      - See [[reference_p8x_relpath_gotcha]] — this is the same trap that has
-        caught `/bin` commands before.
-
+- [x] **BASIC now honours the OS current directory (fixed 2026-08-13).** From the
+      OS shell, `cd src` then `basic` then `SAVE "T"` used to write `/T`; it now
+      writes `/src/T`.
+      - **Cause:** the BIOS resolvers (`FRESOLVE`/`FOPEN`/`FOPENDIR`) always start
+        at the **root**. `/bin` commands prefix the CWD first (`lib_apath.c`'s
+        `abspath`); BASIC made no OS calls at all, so every name resolved from `/`.
+      - **Fix:** `APATH` in `basic/p8xbasic.asm` — prefixes `SYS_GETCWD` ($2003)
+        onto any path not starting with `/`, wired into `SAVE`, `LOAD` and the
+        `OPEN` data-file path. Gated on `MONITOR` being non-zero, so the disk-boot
+        build (no OS underneath, root already correct) compiles it to a no-op
+        without needing conditional assembly.
+      - **Regression test:** `emulator/test/basic_cwd_test.sh`, in `make test-basic`.
+        It checks the file lands in the subdirectory, does **not** also land in the
+        root, and that an absolute path still works — and was confirmed to FAIL
+        against the unfixed BASIC, so it actually detects the bug.
 - [~] **FPGA build (Tang Nano 20K) — MILESTONES 0-4 DONE (2026-08-12); clock-up
       and IRQ remain.** A standalone FPGA P8X running the same microcode and the
       same unmodified monitor/OS/toolchain. Parallel track to the TTL build, not

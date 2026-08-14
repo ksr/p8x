@@ -22,8 +22,14 @@ bug hid because tests only used absolute path args. When adding/reviewing a
 command with a path arg, check it abspath()'s a relative one, and that BOTH the C
 and asm twins do (verify.sh compares them). See [[feedback_p8x_new_command_dual]].
 
-**BASIC has this bug (found 2026-08-13, not yet fixed).** It contains no CWD
-handling and makes no OS syscalls, so `cd src` then `basic` then `SAVE "T1"`
-writes `/T1`, not `/src/T1`. Its file I/O does go through the BIOS — the gap is
-only the missing abspath step, and only for the TPA build that runs under the OS.
-See the NEXT item in BACKLOG.md.
+**BASIC had this bug; FIXED 2026-08-13** by `APATH` in `p8xbasic.asm` (prefixes
+`SYS_GETCWD` onto a relative path before `FRESOLVE`, gated on `MONITOR` so the
+disk-boot build is unaffected). Covered by `emulator/test/basic_cwd_test.sh`.
+
+**Trap that made the fix look broken for half an hour:** `tools/p8xfs.py put`
+does **not replace an existing file** — it silently leaves the old one in place.
+Installing a rebuilt `/bin/basic.bin` over the existing one therefore kept
+testing the OLD binary, and every symptom pointed at the new code. When an
+on-target change appears to have no effect, **verify the binary on the image**
+(`p8xfs.py get` + `cmp`) before debugging the source. Install under a fresh name,
+or rebuild the disk from scratch.

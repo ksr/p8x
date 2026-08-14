@@ -165,6 +165,7 @@ test-basic: p8xemu ucode
 	sh test/basic_fileio_test.sh
 	sh test/basic_strval_test.sh
 	sh test/basic_savepath_test.sh
+	sh test/basic_cwd_test.sh
 	sh test/basic_saveload_test.sh
 	sh test/os_basic_test.sh
 
