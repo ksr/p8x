@@ -9,7 +9,8 @@ approximation.
 
 ```sh
 make            # builds p8xemu and regenerates the microcode (u0-u3.bin)
-./p8xemu [-t] [-T] [-N] [-i F] [-l N] [-c disk.img] [-c2 disk2.img] [-s NN] [-L] rom.bin
+./p8xemu [-t] [-T] [-N] [-i F] [-l N] [-c disk.img] [-c2 disk2.img] [-s NN] [-L]
+         [-g out.ppm] [-G] rom.bin
 ```
 
 - `rom.bin` — the EEPROM image (origin `$0000`), e.g. the monitor or combined
@@ -29,6 +30,10 @@ make            # builds p8xemu and regenerates the microcode (u0-u3.bin)
 - `-L` — trace LED writes: each change to `$FF02` prints to stderr as
   `[LED $FF02] $NN  *.*..*.*` (`*` = lit). The final LED byte is always shown in
   the halt status line.
+- `-g out.ppm` — write the graphics display to `out.ppm` when the run ends, and
+  `-G` — render it as text to stderr. The display itself is **always present** at
+  `$FF20–$FF26`; these flags only decide whether you get to see it. See
+  [The graphics display](#the-graphics-display) below.
 - `-t` — instruction trace. `-l N` — halt after N cycles.
 - The 6850 ACIA is wired to stdin/stdout, so the monitor/OS/BASIC are interactive.
 
@@ -63,10 +68,88 @@ make test-cf     # monitor format/boot against the CF model
 make test-os     # P8X/OS boot + shell on flat and v2 volumes
 make test-basic  # monitor smoke test, disk BASIC (B), SAVE/LOAD
 make test-io     # switch input (-s) -> $FF00 and LED writes ($FF02, -L)
+make test-gfx    # $FF20 display: draw through the ports, assert on pixels
 ```
 
 Test scripts and fixtures live in [`test/`](test/); their build artifacts
 (`*.bin`, `*.img`, `*.hex`, …) are gitignored.
+
+## The graphics display
+
+A 240x136 four-colour framebuffer with a drawing engine, at `$FF20–$FF26`. It
+exists for the FPGA build, which drives a 4.3" 480x272 RGB panel — each logical
+pixel is drawn as a 2x2 block, so the framebuffer fills the panel exactly and
+pixels stay square.
+
+**Why 240x136 and not the panel's own 480x272:** the Tang Nano 20K has 6 spare
+block RAMs, which is 12288 bytes. 480x272 needs 16320 bytes at even *one* bit per
+pixel. Half resolution at 2 bits per pixel is 8160 bytes (4 blocks) and leaves
+margin. The four pens index a palette of 12-bit RGB, so the colours on screen are
+four chosen from 4096.
+
+**The same device serves both builds.** Inside the FPGA P8X it sits on the CPU's
+internal bus; as a **bus card** it is a Tang Nano 20K plus the same panel, behind
+a bus interface. One command set, one golden model, one RTL core — only the
+front-end differs.
+
+**The drawing engine is in the device, not in software.** Load the registers,
+then write `GCMD`:
+
+| Port | Name | |
+|------|------|---|
+| `$FF20`–`$FF23` | `GX0` `GY0` `GX1` `GY1` | coordinate low bytes (also R, G, B for `SETPAL`) |
+| `$FF29`–`$FF2C` | `GX0H` `GY0H` `GX1H` `GY1H` | coordinate high bytes — see below |
+| `$FF24` | `GCOL` | pen 0–3; **sticky** across commands |
+| `$FF28` | `GPARM` | scalar argument (`CIRCLE` radius) |
+| `$FF25` | `GCMD` | write to execute |
+| `$FF26` | `GSTAT` | read: bit 7 BUSY, bit 0 ERR (unknown command) |
+| `$FF27` | `GDATA` | read: the `IDENT` record, else the last `POINT` result |
+| `$FF2D`/`$FF2E` | `GID0`/`GID1` | read `$50`/`$47` — "PG" |
+
+| Cmd | | Cmd | |
+|---|---|---|---|
+| `$01` | `PLOT` (X0,Y0) | `$07` | `CIRCLE` centre (X0,Y0) radius `GPARM` |
+| `$02` | `LINE` (X0,Y0)–(X1,Y1) | `$08` | `CIRCLEFILL` |
+| `$03` | `BOX` outline | `$09` | `POINT` — pixel at (X0,Y0) → `GDATA` |
+| `$04` | `BOXFILL` solid | `$F0` | `SELFTEST` — built-in pattern |
+| `$05` | `CLS` to `GCOL` | `$F1` | `RESET` — clear, default palette |
+| `$06` | `SETPAL` pen `GCOL` := (X0,Y0,X1) as R,G,B | `$F2` | `IDENT` → 14 bytes via `GDATA` |
+
+**Detection and geometry.** An absent card floats the bus to `$FF`, so one magic
+byte proves nothing — `GID0`/`GID1` are two fixed bytes at two addresses. `IDENT`
+then streams a 14-byte record (`"P8X-GFX"`, version, width, height, pens, `$00`)
+so software can *ask* the geometry rather than assume it; that is what lets one
+BASIC binary drive a wider device later.
+
+**`SELFTEST` needs no software behind it** — one register write puts all four
+pens, both primitives, a circle and all four screen edges up, which is how you
+tell a dead card from a dead driver.
+
+**Coordinates are 16-bit pairs, and writing a low byte CLEARS its high byte.**
+So code that only ever writes low bytes can never inherit a stale high byte from
+something else; write the high byte *after* the low one when you need a
+coordinate past 255. The pairs exist because this same panel at its native
+480x272 needs 9 bits of X, which is where an SDRAM framebuffer would go.
+
+That matters for speed: a filled box is ~8 port writes instead of 32640
+read-modify-write cycles through a data port (2bpp packs four pixels per byte, so
+software plotting would have to mask every one). At 9 MHz that is the difference
+between about 1 ms and about 180 ms.
+
+Two behaviours are load-bearing, and `test/gfx_test.sh` pins both down because
+the RTL engine will have to match them exactly:
+
+- **Endpoints are inclusive.** A box from (0,0) to (239,135) paints all four
+  extreme edges.
+- **Off-screen pixels are discarded, not clipped.** The coordinate registers are
+  bytes, so x=240–255 is reachable, and the address arithmetic `y*60 + (x>>2)`
+  would fold those onto the *start of the next row*. Discarding per pixel is the
+  one rule that is trivially identical in C and in Verilog; a real clipper would
+  be two implementations that have to agree.
+
+`p8xemu` is the golden model for the FPGA, so this is the specification the
+Verilog engine gets written against — including `gpu_line`'s Bresenham, which the
+RTL must reproduce step for step.
 
 ## Other targets
 

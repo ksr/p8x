@@ -215,3 +215,79 @@ verify a poke by reading it back.
 **The TTL / bus-connected hardware build is NOT cancelled — just delayed.** The
 bustest card and backplane work ([[project_p8x]], [[feedback_ecad_schematic_truth]])
 still stands; the FPGA is a parallel track, not a replacement. Keep both in mind.
+
+**GRAPHICS DISPLAY -- emulator model done (2026-08-14).** BASIC is getting
+`LINE` / `COLOR` / `BOX fill|nofill`, driving a 4.3" Sipeed 480x272 RGB panel.
+Scope is deliberately BASIC-only: no text console, so no font, no PUTC hook, no
+OS changes, and serial stays the console.
+
+- **The physical bus card will be a Tang Nano 20K + the same panel**, so the
+  FPGA-internal device and the card are ONE design: same resolution, same
+  command set, same RTL core, same golden model. Only the front-end differs.
+  This retired the earlier concern that a hardware drawing engine was affordable
+  on FPGA but not in TTL -- there is no TTL engine to build.
+- **Geometry is forced by block RAM, not by taste.** 6 spare BSRAM blocks = 12288
+  bytes; 480x272 needs 16320 at even 1 bpp, so panel resolution does not fit at
+  ANY depth. Framebuffer is **240x136 at 2 bpp** (8160 B, 4 blocks), pixel-doubled
+  2x2 to fill the panel with square pixels. 4 pens index a 12-bit RGB palette.
+  The 40 used blocks decompose exactly: 32 for the 64K map + 8 for the 4096x32
+  compacted microcode.
+- **Ports $FF20-$FF2E**, in `gen_memmap.py` (canon). Commands: 01 PLOT 02 LINE
+  03 BOX 04 BOXFILL 05 CLS 06 SETPAL 07 CIRCLE 08 CIRCLEFILL 09 POINT, and
+  F0 SELFTEST F1 RESET F2 IDENT. `GID0`/`GID1` read $50/$47 ("PG") for presence --
+  a single magic byte is useless because an absent card floats to $FF. IDENT
+  streams a 14-byte record carrying the GEOMETRY so software can ask, not assume.
+- **Two rules the RTL must match exactly**, pinned by `emulator/test/gfx_test.sh`:
+  endpoints are INCLUSIVE, and off-screen pixels are DISCARDED (not clipped) --
+  coordinates are register pairs and `y*60 + (x>>2)` would otherwise fold x>=240
+  onto the start of the next row. Discarding per pixel is the one rule that is
+  trivially identical in C and Verilog.
+- Coordinates are 16-bit pairs and **a low-byte write CLEARS its high byte**, so
+  8-bit software cannot inherit a stale high byte. The pairs exist because this
+  panel at native 480x272 needs 9 bits of X (the SDRAM path).
+- **Debug-view trap worth remembering:** the first `-G` text renderer point-sampled
+  every 2nd column / 4th row, which never visits x=239 or y=135 -- it silently hid
+  the right and bottom edges of a full-screen box (exactly where off-by-ones live)
+  and lost isolated pixels. It now takes the MAX pen over each 2x4 block: a
+  feature can look fatter, but never vanish.
+- Card hardware still open: 5 V bus vs 3.3 V Nano needs level translation
+  (74LVC245-class) on D0-D7 + address/control; the bus strobe is asynchronous to
+  27 MHz and needs synchronising.
+
+**GRAPHICS DISPLAY -- emulator model done (2026-08-14).** BASIC is getting
+`LINE` / `COLOR` / `BOX fill|nofill`, driving a 4.3" Sipeed 480x272 RGB panel.
+Scope is deliberately BASIC-only: no text console, so no font, no PUTC hook, no
+OS changes, and serial stays the console.
+
+- **The physical bus card will be a Tang Nano 20K + the same panel**, so the
+  FPGA-internal device and the card are ONE design: same resolution, same
+  command set, same RTL core, same golden model. Only the front-end differs.
+  This retired the earlier concern that a hardware drawing engine was affordable
+  on FPGA but not in TTL -- there is no TTL engine to build.
+- **Geometry is forced by block RAM, not by taste.** 6 spare BSRAM blocks = 12288
+  bytes; 480x272 needs 16320 at even 1 bpp, so panel resolution does not fit at
+  ANY depth. Framebuffer is **240x136 at 2 bpp** (8160 B, 4 blocks), pixel-doubled
+  2x2 to fill the panel with square pixels. 4 pens index a 12-bit RGB palette.
+  The 40 used blocks decompose exactly: 32 for the 64K map + 8 for the 4096x32
+  compacted microcode.
+- **Ports $FF20-$FF2E**, in `gen_memmap.py` (canon). Commands: 01 PLOT 02 LINE
+  03 BOX 04 BOXFILL 05 CLS 06 SETPAL 07 CIRCLE 08 CIRCLEFILL 09 POINT, and
+  F0 SELFTEST F1 RESET F2 IDENT. `GID0`/`GID1` read $50/$47 ("PG") for presence --
+  a single magic byte is useless because an absent card floats to $FF. IDENT
+  streams a 14-byte record carrying the GEOMETRY so software can ask, not assume.
+- **Two rules the RTL must match exactly**, pinned by `emulator/test/gfx_test.sh`:
+  endpoints are INCLUSIVE, and off-screen pixels are DISCARDED (not clipped) --
+  coordinates are register pairs and `y*60 + (x>>2)` would otherwise fold x>=240
+  onto the start of the next row. Discarding per pixel is the one rule that is
+  trivially identical in C and Verilog.
+- Coordinates are 16-bit pairs and **a low-byte write CLEARS its high byte**, so
+  8-bit software cannot inherit a stale high byte. The pairs exist because this
+  panel at native 480x272 needs 9 bits of X (the SDRAM path).
+- **Debug-view trap worth remembering:** the first `-G` text renderer point-sampled
+  every 2nd column / 4th row, which never visits x=239 or y=135 -- it silently hid
+  the right and bottom edges of a full-screen box (exactly where off-by-ones live)
+  and lost isolated pixels. It now takes the MAX pen over each 2x4 block: a
+  feature can look fatter, but never vanish.
+- Card hardware still open: 5 V bus vs 3.3 V Nano needs level translation
+  (74LVC245-class) on D0-D7 + address/control; the bus strobe is asynchronous to
+  27 MHz and needs synchronising.

@@ -26,6 +26,15 @@
  *     FF10 data  FF11 feature  FF12 sector-count  FF13-15 LBA0-2
  *     FF16 head/dev  FF17 command(w)/status(r)  [BSY7 DRQ3 ERR0]
  *   Backs a flat sector-image file (LBA*512); SET FEATURES/IDENTIFY/READ/WRITE.
+ *   FF20-FF2E graphics display: a 240x136 4-colour framebuffer with a drawing
+ *     engine, pixel-doubled to a 480x272 panel. Same device whether it is inside
+ *     the FPGA P8X or on a bus card (a Tang Nano 20K + the same panel), so one
+ *     command set and one golden model serve both.
+ *     FF20-23 X0/Y0/X1/Y1 low  FF29-2C their high bytes  FF24 pen  FF28 scalar
+ *     FF25 command  FF26 status  FF27 data  FF2D/2E "PG" presence signature
+ *     Commands: 01 PLOT 02 LINE 03 BOX 04 BOXFILL 05 CLS 06 SETPAL 07 CIRCLE
+ *               08 CIRCLEFILL 09 POINT | F0 SELFTEST F1 RESET F2 IDENT
+ *     Always present; -g writes it out as a PPM, -G as text.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -111,6 +120,208 @@ static void cf_data_wr(struct cf_state*c, uint8_t v){
         if(c->write && c->img){ cf_seek(c); fwrite(c->buf,1,512,c->img); fflush(c->img); }
         c->idx=0; c->drq=0; c->write=0;
     }
+}
+
+/* ---- Graphics display model (always present; -g writes the image out) ------
+   The FPGA drives a 4.3" 480x272 RGB panel, but 480x272 does not fit in the
+   Tang Nano's spare block RAM at ANY depth: 6 free blocks are 12288 bytes and
+   even one bit per pixel needs 16320. So the framebuffer is 240x136 at 2 bits
+   per pixel (8160 bytes, 4 blocks) and each logical pixel is drawn as a 2x2
+   block, which fills the panel exactly and keeps pixels square. Four pens index
+   a palette of 12-bit RGB, so the 4 colours on screen are chosen from 4096.
+
+   The drawing engine belongs to the DEVICE, here and in the RTL -- not to the
+   software. BASIC loads GX0/GY0/GX1/GY1/GCOL and writes GCMD, so a filled box
+   costs a handful of port writes instead of 32640 read-modify-write cycles
+   through a data port (2bpp packs four pixels to a byte, so software plotting
+   would have to mask every single one). GSTAT bit 7 is the busy flag; drawing
+   is instantaneous here, the same way CF never asserts BSY, so it reads 0.
+
+   This is the GOLDEN MODEL. The Verilog engine has to reproduce gpu_line step
+   for step or the co-sim diverges, so the Bresenham below is written in the
+   plainest integer form there is and must not be "improved". */
+#define GW      240                    /* logical framebuffer; pixel-doubled */
+#define GH      136                    /* to 480x272 on the panel            */
+#define GSTRIDE (GW/4)                 /* 60 bytes/row: 4 pixels per byte    */
+static uint8_t  gfb[GSTRIDE*GH];
+static const uint16_t gpal_reset[4]={0x000,0xFFF,0xF00,0x0F0}; /* black white red green */
+static uint16_t gpal[4]={0x000,0xFFF,0xF00,0x0F0};             /* RGB444 */
+/* Coordinates are 16-bit register PAIRS. Writing the low byte clears the high
+   byte, so software that only ever writes lows (everything at 240x136) can
+   never be broken by a stale high byte left behind by something else. Write the
+   high byte AFTER the low one when you need a coordinate past 255. The pairs
+   exist because 480x272 -- this same panel at its native resolution, which is
+   where an SDRAM framebuffer would go -- needs 9 bits for X. */
+static uint16_t gx0,gy0,gx1,gy1;
+static uint8_t  gcol, gparm, gerr;
+/* GDATA ($FF27) is the one read-back port: it streams the IDENT record after an
+   IDENT command, and otherwise holds the result of the last POINT. gidx is the
+   stream cursor; POINT parks it at the end so a pixel read is not mistaken for
+   another IDENT byte. */
+#define GIDLEN 14
+static uint8_t  gident[GIDLEN], gdata=0;
+static int      gidx=GIDLEN;
+static const char *gdump=0;            /* -g FILE: write a PPM when the run ends */
+static int      gascii=0;              /* -G: also render as text to stderr      */
+
+/* One pixel. Off-screen writes are DISCARDED, not clipped: the coordinate
+   registers are 16-bit, so coordinates far past the screen are reachable, and
+   "drop the
+   pixel" is the one rule that is trivially identical in C and in Verilog. A
+   real clipper would have to match exactly, which is a bug waiting to happen. */
+static void gpu_px(int x,int y,uint8_t c){
+    if((unsigned)x>=GW || (unsigned)y>=GH) return;
+    int off=y*GSTRIDE+(x>>2), sh=(3-(x&3))*2;   /* leftmost pixel in the high bits */
+    gfb[off]=(gfb[off]&~(3<<sh))|((c&3)<<sh);
+}
+static uint8_t gpu_pixel(int x,int y){      /* pen at (x,y), for the dumps */
+    return (gfb[y*GSTRIDE+(x>>2)] >> ((3-(x&3))*2)) & 3;
+}
+/* Integer Bresenham, all eight octants, endpoints inclusive. dy is held
+   NEGATIVE, which is what lets one error term cover every direction. */
+static void gpu_line(int x0,int y0,int x1,int y1,uint8_t c){
+    int dx = x1>x0 ? x1-x0 : x0-x1,  sx = x0<x1 ? 1 : -1;
+    int dy = y1>y0 ? y0-y1 : y1-y0,  sy = y0<y1 ? 1 : -1;
+    int err = dx+dy;
+    for(;;){
+        gpu_px(x0,y0,c);
+        if(x0==x1 && y0==y1) break;
+        int e2 = 2*err;
+        if(e2>=dy){ err+=dy; x0+=sx; }
+        if(e2<=dx){ err+=dx; y0+=sy; }
+    }
+}
+static void gpu_box(int x0,int y0,int x1,int y1,uint8_t c,int fill){
+    int t;
+    if(x0>x1){ t=x0; x0=x1; x1=t; }             /* normalise: any two corners */
+    if(y0>y1){ t=y0; y0=y1; y1=t; }
+    if(fill){
+        for(int y=y0;y<=y1;y++) for(int x=x0;x<=x1;x++) gpu_px(x,y,c);
+        return;
+    }
+    for(int x=x0;x<=x1;x++){ gpu_px(x,y0,c); gpu_px(x,y1,c); }
+    for(int y=y0;y<=y1;y++){ gpu_px(x0,y,c); gpu_px(x1,y,c); }
+}
+static void gpu_hline(int xa,int xb,int y,uint8_t c){
+    for(int x=xa;x<=xb;x++) gpu_px(x,y,c);
+}
+/* Midpoint circle, integer, eight-way symmetric. Same rule as gpu_line: this is
+   the golden model and the RTL transliterates it, so it stays in this form. */
+static void gpu_circle(int cx,int cy,int r,uint8_t c,int fill){
+    int x=r, y=0, err=1-r;
+    while(x>=y){
+        if(fill){
+            gpu_hline(cx-x,cx+x,cy+y,c);  gpu_hline(cx-x,cx+x,cy-y,c);
+            gpu_hline(cx-y,cx+y,cy+x,c);  gpu_hline(cx-y,cx+y,cy-x,c);
+        }else{
+            gpu_px(cx+x,cy+y,c); gpu_px(cx-x,cy+y,c);
+            gpu_px(cx+x,cy-y,c); gpu_px(cx-x,cy-y,c);
+            gpu_px(cx+y,cy+x,c); gpu_px(cx-y,cy+x,c);
+            gpu_px(cx+y,cy-x,c); gpu_px(cx-y,cy-x,c);
+        }
+        y++;
+        if(err<0) err += 2*y+1;
+        else { x--; err += 2*(y-x)+1; }
+    }
+}
+/* IDENT builds a fixed 14-byte record that GDATA then streams out, the same
+   shape as the CF card's IDENTIFY -> data-port idiom the firmware already
+   knows. It carries the GEOMETRY, so software can ask the card how big it is
+   instead of assuming: that is what lets one BASIC binary drive both this
+   240x136 device and a wider one later. */
+static void gpu_ident(void){
+    memcpy(gident,"P8X-GFX",7);
+    gident[7]=1;                        /* protocol version */
+    gident[8]=GW&0xFF; gident[9]=GW>>8;
+    gident[10]=GH&0xFF; gident[11]=GH>>8;
+    gident[12]=4;                       /* colours (pens) */
+    gidx=0;                             /* GDATA now streams the record */
+}
+/* SELFTEST: a fixed pattern drawn entirely from the card's own state, so a
+   display with no software behind it can still be proven end to end -- power it
+   up, poke one register, and every pen, both drawing primitives and all four
+   edges are on screen. Deterministic, so a test can assert on it. */
+static void gpu_selftest(void){
+    memset(gfb,0,sizeof gfb);
+    for(int i=0;i<4;i++)                                  /* pen bars */
+        gpu_box(i*(GW/4), 0, i*(GW/4)+(GW/4)-1, GH/4, (uint8_t)i, 1);
+    gpu_box(0,0,GW-1,GH-1,1,0);                           /* extreme edges */
+    gpu_line(0,0,GW-1,GH-1,2); gpu_line(GW-1,0,0,GH-1,2); /* both diagonals */
+    gpu_circle(GW/2,GH/2,GH/3,3,0);
+}
+static void gpu_reset(void){
+    memset(gfb,0,sizeof gfb);
+    memcpy(gpal,gpal_reset,sizeof gpal);
+    gx0=gy0=gx1=gy1=0; gcol=1; gparm=0; gerr=0; gidx=GIDLEN; gdata=0;
+}
+static void gpu_cmd(uint8_t v){
+    switch(v){
+    case 0x01: gpu_px(gx0,gy0,gcol);                break;   /* PLOT       */
+    case 0x02: gpu_line(gx0,gy0,gx1,gy1,gcol);      break;   /* LINE       */
+    case 0x03: gpu_box(gx0,gy0,gx1,gy1,gcol,0);     break;   /* BOX        */
+    case 0x04: gpu_box(gx0,gy0,gx1,gy1,gcol,1);     break;   /* BOXFILL    */
+    /* CLS: every byte is 4 pixels of the same pen, so 0x00/0x55/0xAA/0xFF. */
+    case 0x05: memset(gfb,(gcol&3)*0x55,sizeof gfb); break;  /* CLS        */
+    /* SETPAL reuses the coordinate registers as R,G,B (0-15 each) and recolours
+       the pen in GCOL -- no extra port, and no two-write latch to keep in step. */
+    case 0x06: gpal[gcol&3]=((gx0&15)<<8)|((gy0&15)<<4)|(gx1&15); break;
+    case 0x07: gpu_circle(gx0,gy0,gparm,gcol,0);    break;   /* CIRCLE     */
+    case 0x08: gpu_circle(gx0,gy0,gparm,gcol,1);    break;   /* CIRCLEFILL */
+    /* POINT reads a pixel back into GDATA, which is what a BASIC POINT()
+       function needs. Off-screen reads as pen 0, matching the write side's
+       "off-screen simply is not there" rule. */
+    case 0x09: gdata = ((unsigned)gx0<GW && (unsigned)gy0<GH) ? gpu_pixel(gx0,gy0) : 0;
+               gidx = GIDLEN;         /* not an IDENT stream: GDATA holds the pixel */
+               break;                                        /* POINT      */
+    case 0xF0: gpu_selftest();                      break;   /* SELFTEST   */
+    case 0xF1: gpu_reset();                         break;   /* RESET      */
+    case 0xF2: gpu_ident();                         break;   /* IDENT      */
+    default:   gerr=1; break;         /* unknown command: flagged in GSTAT */
+    }
+}
+/* P6 PPM at PANEL resolution: each framebuffer pixel becomes a 2x2 block, so
+   the file shows what the panel shows, not what the framebuffer holds. */
+static void gpu_writeppm(const char*fn){
+    FILE*f=fopen(fn,"wb");
+    if(!f){ perror(fn); return; }
+    fprintf(f,"P6\n%d %d\n255\n",GW*2,GH*2);
+    for(int y=0;y<GH;y++)
+      for(int r=0;r<2;r++)                                  /* doubled down   */
+        for(int x=0;x<GW;x++){
+            uint16_t p=gpal[gpu_pixel(x,y)];
+            uint8_t rgb[3]={ (uint8_t)(((p>>8)&15)*17),     /* 0-15 -> 0-255  */
+                             (uint8_t)(((p>>4)&15)*17),
+                             (uint8_t)(( p     &15)*17) };
+            fwrite(rgb,1,3,f); fwrite(rgb,1,3,f);           /* doubled across */
+        }
+    fclose(f);
+}
+/* Quick eyeball with no image viewer in the loop. Each character covers a 2x4
+   block of pixels, which comes out about square once a character cell's own 1:2
+   aspect is allowed for, and shows the HIGHEST pen in that block.
+   Deliberately not a point sample: sampling every 2nd column and 4th row never
+   visits x=239 or y=135 at all, so it silently hid the right and bottom edges
+   of a full-screen box -- precisely where an off-by-one would be -- and lost
+   isolated pixels like a bare PLOT. A max is the honest reduction here: it can
+   make a feature look fatter than it is, but it can never make one vanish.
+   Pen 0 prints as blank so the drawing stands out from the background. */
+static void gpu_writeascii(void){
+    static const char pen[4]={' ','1','2','3'};
+    fputc('+',stderr); for(int i=0;i<GW/2;i++) fputc('-',stderr); fputs("+\n",stderr);
+    for(int y=0;y<GH;y+=4){
+        fputc('|',stderr);
+        for(int x=0;x<GW;x+=2){
+            int best=0;
+            for(int dy=0;dy<4;dy++) for(int dx=0;dx<2;dx++)
+                if(x+dx<GW && y+dy<GH){
+                    int p=gpu_pixel(x+dx,y+dy);
+                    if(p>best) best=p;
+                }
+            fputc(pen[best],stderr);
+        }
+        fputs("|\n",stderr);
+    }
+    fputc('+',stderr); for(int i=0;i<GW/2;i++) fputc('-',stderr); fputs("+\n",stderr);
 }
 
 /* ---- 74181, active-high data. Returns F; *cn4 gets the RAW pin level. */
@@ -199,6 +410,13 @@ static uint8_t memrd(uint16_t ad){
     case 0xFF10: return cf[cf_active].img? cf_data_rd(&cf[cf_active]) : 0xFF;  /* CF data */
     case 0xFF17: return cf[cf_active].img?                                     /* CF status */
                         (0x40|(cf[cf_active].drq?0x08:0)|(cf[cf_active].err?0x01:0)) : 0xFF;
+    /* GPU. BUSY is never set here: drawing is instantaneous, the same licence
+       the CF model takes with BSY. The RTL engine does raise it, and software
+       must poll -- so BASIC will spin on GSTAT even though it never spins here. */
+    case GSTAT:  return (uint8_t)(gerr?0x01:0x00);
+    case GDATA:  return (gidx<GIDLEN) ? gident[gidx++] : gdata;
+    case GID0:   return 0x50;                      /* 'P' */
+    case GID1:   return 0x47;                      /* 'G' -- "PG", not a floating $FF */
     default: return 0xFF;
     }
 }
@@ -215,6 +433,22 @@ static void memwr(uint16_t ad,uint8_t v){
     if(ad==0xFF06){ irq_pending=1; return; }   /* rev C: raise a maskable IRQ (models a device) */
     if(ad==0xFF05){ putchar(v); fflush(stdout); rx_misses=0; return; }
     if(ad==0xFF16){ cf_active=v&1; return; }  /* CFHEAD: ATA device select (bit 0) */
+    /* GPU: the coordinate/pen registers just latch; writing GCMD executes.
+       A low-byte write CLEARS the matching high byte -- see the note by the
+       register declarations -- so 8-bit software can never inherit a stale one. */
+    switch(ad){
+      case GX0:  gx0=v;  return;
+      case GY0:  gy0=v;  return;
+      case GX1:  gx1=v;  return;
+      case GY1:  gy1=v;  return;
+      case GX0H: gx0=(uint16_t)((gx0&0xFF)|(v<<8)); return;
+      case GY0H: gy0=(uint16_t)((gy0&0xFF)|(v<<8)); return;
+      case GX1H: gx1=(uint16_t)((gx1&0xFF)|(v<<8)); return;
+      case GY1H: gy1=(uint16_t)((gy1&0xFF)|(v<<8)); return;
+      case GCOL: gcol=v; return;
+      case GPARM:gparm=v; return;
+      case GCMD: gerr=0; gpu_cmd(v); return;
+    }
     /* The ATA task-file (feature + LBA) is a SHARED bus: both drives latch these
        writes; the CFHEAD DEV bit picks who executes the command. Mirror them to
        both devices so a drive switch after loading the LBA still sees it (the
@@ -260,6 +494,8 @@ int main(int argc,char**argv){
         else if(!strcmp(argv[i],"-s")) switches=(uint8_t)strtoul(argv[++i],0,0);  /* $FF00 input byte */
         else if(!strcmp(argv[i],"-L")) led_trace=1;                               /* trace $FF02 writes */
         else if(!strcmp(argv[i],"-N")) norx=1;     /* console RX always empty (FPGA co-sim) */
+        else if(!strcmp(argv[i],"-g")) gdump=argv[++i];   /* write the display as a PPM */
+        else if(!strcmp(argv[i],"-G")) gascii=1;          /* ... and/or as text to stderr */
         else if(!strcmp(argv[i],"-i")){            /* scripted console input (FPGA co-sim) */
             FILE*sf=fopen(argv[++i],"rb");
             if(!sf){ fprintf(stderr,"p8xemu: cannot open input script %s\n",argv[i]); return 1; }
@@ -270,12 +506,14 @@ int main(int argc,char**argv){
         }
         else if(!strcmp(argv[i],"-h")||!strcmp(argv[i],"--help")){
             fprintf(stderr,"usage: p8xemu [-t] [-T] [-N] [-l cycles] [-c disk.img] [-c2 disk2.img] "
-                "[-s switches] [-L] [rom.bin]\n"
+                "[-s switches] [-L] [-g out.ppm] [-G] [rom.bin]\n"
                 "  -T     canonical per-cycle machine trace to stderr (FPGA co-sim)\n"
                 "  -N     console RX always empty; makes -T traces independent of stdin\n"
                 "  -i F   scripted console input from file F (RDRF = bytes remain)\n"
                 "  -s NN  value read at $FF00 (e.g. -s 0xA5); default 0\n"
                 "  -L     print $FF02 LED writes to stderr as they change\n"
+                "  -g F   write the 240x136 display to F as a PPM when the run ends\n"
+                "  -G     render the display as text to stderr when the run ends\n"
                 "  -t trace  -l limit cycles  -c attach CF drive 0  -c2 attach CF drive 1\n");
             return 0;
         }
@@ -392,6 +630,8 @@ int main(int argc,char**argv){
         if(halt) halted=1;
         cycles++;
     }
+    if(gdump) gpu_writeppm(gdump);
+    if(gascii) gpu_writeascii();
     fprintf(stderr,"\n[%s after %llu cycles] PC=%04X A=%02X B=%02X "
             "P1=%04X P2=%04X SP=%04X F=%c%c%c%c LED=%02X\n",
             halted?"HALT":"cycle limit",cycles,P[0],A,B,P[1],P[2],P[3],

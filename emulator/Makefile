@@ -30,6 +30,7 @@ test: p8xemu ucode
 	$(MAKE) test-asm-selfhost
 	$(MAKE) test-io
 	$(MAKE) test-mem
+	$(MAKE) test-gfx
 
 # p8cc C cross-compiler: compile -> assemble -> run -> check console output.
 test-c: p8xemu ucode
@@ -172,6 +173,10 @@ test-basic: p8xemu ucode
 # I/O card model: switch input (-s) -> $FF00 and LED writes ($FF02, -L).
 test-io: p8xemu ucode
 	sh test/io_test.sh
+
+# $FF20 graphics display: draw through the ports, render, assert on pixels.
+test-gfx: p8xemu ucode
+	sh test/gfx_test.sh
 
 # rev E memory map: $2000-$FEFF is RAM (OS at $2000). Write+readback -> 'Y'.
 test-mem: p8xemu ucode

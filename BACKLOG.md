@@ -64,6 +64,55 @@ remainder is why it is still here.
         forcing-buffer entry ($08 injection, vector $0808, EI/DI/RTI) and
         `isa_test.asm` exercises it in simulation; it just needs a real source
         wired up (timer and/or the ACIA).
+      - **Milestone 6 — graphics display for BASIC.** A 4.3" Sipeed 480x272 RGB
+        panel, driven only by new BASIC statements (`LINE`, `COLOR`, `BOX
+        fill/nofill`) — NOT a text console, so no font ROM, no `PUTC` hook and no
+        OS changes; serial stays the console.
+        - **Geometry is forced by block RAM.** 6 spare blocks = 12288 bytes;
+          480x272 needs 16320 at even 1 bpp, so the panel resolution does not fit
+          at any depth. The framebuffer is **240x136 at 2 bpp** (8160 bytes, 4
+          blocks, 2 spare), pixel-doubled to fill the panel with square pixels.
+          Four pens index a 12-bit RGB palette. 8 colours (3 bpp) would cost all 6
+          remaining blocks and straddle byte boundaries; 16 colours at full
+          resolution is an SDRAM project.
+        - **The drawing engine is in the DEVICE**, not in software: BASIC loads
+          registers and writes a command byte. Spends the resource there is spare
+          (12.7k LUT4) instead of the one there is not. A full-screen fill is ~1 ms
+          instead of ~180 ms, and BASIC never has to mask sub-byte pixels.
+        - **DONE: the emulator models it** (`$FF20-$FF26`, `p8xemu -g/-G`,
+          `make test-gfx`), which is the golden model the RTL gets written against.
+          Two rules are load-bearing and pinned by `test/gfx_test.sh`: endpoints
+          are INCLUSIVE, and off-screen pixels are DISCARDED rather than clipped
+          (coordinates are bytes, and `y*60 + (x>>2)` would otherwise fold x>=240
+          onto the next row).
+        - **The bus card is the SAME device (2026-08-14).** The planned physical
+          card is a Tang Nano 20K plus this same 4.3" panel, so resolution,
+          command set, RTL core and golden model are shared; only the front-end
+          differs (internal CPU bus vs. an external bus interface). That kills the
+          earlier worry that a smart engine was affordable on the FPGA but not in
+          TTL — there is no TTL engine to build. Command set is settled and
+          modelled: PLOT/LINE/BOX/BOXFILL/CLS/SETPAL/CIRCLE/CIRCLEFILL/POINT plus
+          SELFTEST/RESET/IDENT, with a "PG" presence signature and an IDENT record
+          carrying the geometry. Coordinates are 16-bit pairs (a low-byte write
+          clears its high byte) so 480x272-over-SDRAM stays reachable without a
+          protocol change.
+        - **Card hardware, still open:** the P8X bus is 5 V TTL and the Nano is
+          3.3 V, so the interface needs level translation on D0-D7 (bidirectional)
+          plus the address/control inputs — `74LVC245`-class parts. Address decode
+          is the standard I/O-page detect from `docs/p8x-card-standards.md` plus
+          A7..A4 = `0010`. The bus write strobe is asynchronous to the Nano's
+          27 MHz, so it needs synchronising, and per-IC 100nF decoupling applies
+          as on every card.
+        - **Next:** `video_rgb.v` timing generator + `text_engine`-style scanout +
+          the Bresenham/fill engine transliterated from `gpu_line`, a testbench
+          that dumps a frame to PPM so the RTL is verified before the panel is
+          plugged in, then the BASIC statements (tokens `$A5+` are free; `CLS`
+          will be needed too, and the syntax should take commas to match `PRINT`).
+        - **Unverified:** the panel's exact timings and the 40-pin RGB mapping
+          against Sipeed's documentation. Arithmetic says 480x272 at 60 Hz wants
+          ~9.0 MHz, which is the 27 MHz crystal / 3 — a divider the board already
+          generates, so no PLL — but that must be confirmed, not assumed. Also
+          check the backlight's current draw against USB power.
       - **SD error paths are now tested** (`fpga/tang-nano-20k/sim/tb_sd_spi.v`
         with `sd_model.v +sdfail=1|2`); that found and fixed two lockups. Still
         unexercised: CRC failure, a card that reports write-protect, and card

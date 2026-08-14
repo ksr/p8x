@@ -141,6 +141,7 @@ correctly.)
 | `$FF02` | LED output port (write) |
 | `$FF04 / $FF05` | 6850 ACIA status / data |
 | `$FF10–$FF17` | CF-IDE task-file registers |
+| `$FF20–$FF2E` | graphics display (**no card built yet** — planned as a Tang Nano 20K + 4.3" panel on the bus; the FPGA P8X implements the identical device internally). A 240×136 four-colour framebuffer with a drawing engine. `GCMD` executes: 1 `PLOT`, 2 `LINE`, 3 `BOX`, 4 `BOXFILL`, 5 `CLS`, 6 `SETPAL`, 7 `CIRCLE`, 8 `CIRCLEFILL`, 9 `POINT`, `$F0` `SELFTEST`, `$F1` `RESET`, `$F2` `IDENT`. `GID0`/`GID1` read `$50`/`$47` ("PG") for presence, since an absent card floats to `$FF`. Modelled by `p8xemu` — see [emulator/README.md](../emulator/README.md#the-graphics-display) |
 
 Reset clears the PC to `$0000`; the stack pointer (P3) is initialised to the top
 of RAM.
