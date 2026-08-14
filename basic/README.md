@@ -42,8 +42,9 @@ README covers build internals and milestones.
 > `LEN`/`ASC`/`CHR$`/`LEFT$`/`RIGHT$`/`MID$`.
 >
 > Plus `SAVE "NAME"` / `LOAD "NAME"` — programs persist to the CompactFlash
-> filesystem (P8XFS v2 root) via the monitor's BIOS FS calls; ROM and disk
-> builds only — and **data files**: `OPEN name$ [FOR] OUTPUT|INPUT`, `PRINT#`,
+> filesystem via the monitor's BIOS FS calls, relative to the **current
+> directory** when running under P8X/OS (a leading `/` is absolute) — and
+> **data files**: `OPEN name$ [FOR] OUTPUT|INPUT`, `PRINT#`,
 > `INPUT#`, `CLOSE` (one sequential channel, one value per record).
 >
 > Lines are **syntax-checked on entry** (balanced parens, terminated strings,

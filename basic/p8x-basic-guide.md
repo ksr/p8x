@@ -28,7 +28,7 @@ where the code and its data live and how you start it):
 
 | Build | Code | Data | Invoked by |
 |-------|------|------|------------|
-| Standalone | `$0000` | `$8000` | burned as the whole ROM; `run.sh` / tests |
+| ~~Standalone~~ | `$0000` | `$8000` | **retired 2026-08** — BASIC's console I/O now goes through the BIOS, which this build replaces. See [README](README.md). |
 | Disk | `$2000` | `$A000` | a bootable P8XFS image, started with the monitor's `B` command (rev E loads the OS region at `$2000`) |
 | Run-from-OS | `$6A00` | `$C500` | a TPA program (`BASIC.BIN`); `RUN` it from the OS, `BYE` returns to the OS |
 
@@ -71,12 +71,20 @@ tokenized on entry (stored as single bytes) and expanded again by `LIST`.
 BIOS filesystem calls), so they work in the **disk** and **run-from-OS** builds —
 the standalone whole-ROM build has no card access and can't use them.
 
-The name may be a **path**: a bare name (`SAVE "GAME"`) writes to the root
-directory, and a slashed path (`SAVE "/SRC/GAME"`, `LOAD "/SRC/GAME"`) reaches a
-subdirectory — BASIC resolves the path through the filesystem, the same resolver
-the OS uses, so it can save into any existing directory. (BASIC has no notion of
-a "current directory": a bare name is always the root; make a subdirectory with
-`MKDIR` in the OS first.) Each leaf name is up to 12 characters and
+The name may be a **path**. A bare name (`SAVE "GAME"`) is relative to the
+**current directory**, so under P8X/OS `cd SRC` then `SAVE "GAME"` writes
+`/SRC/GAME`; a leading slash is absolute (`SAVE "/SRC/GAME"`, `LOAD "/SRC/GAME"`)
+and works from anywhere. BASIC resolves the path through the same filesystem
+resolver the OS uses, so it can save into any existing directory — make one with
+`MKDIR` in the OS first.
+
+> Before 2026-08 a bare name always went to the **root**, whatever directory you
+> were in, because BASIC handed the name straight to the BIOS resolver (which
+> starts at the root) without first prefixing the current directory the way the
+> `/bin` commands do. The disk-boot build still resolves from the root, correctly:
+> there is no OS underneath it and so no current directory to be relative to.
+
+Each leaf name is up to 12 characters and
 **case-sensitive** (`GAME` and `game` are different files). `SAVE` reports
 `?Save failed` if the name exists or the disk is full, `LOAD` reports `?No file`
 if it isn't found. Files created here are visible to P8X/OS (`DIR`) and the host
@@ -210,9 +218,12 @@ disk and run-from-OS builds (the standalone whole-ROM build has no card access).
 ```
 
 - The filename is any string expression (`OPEN F$ FOR INPUT`) and may be a
-  **path** — a bare name is a root file, `OPEN "/LOGS/A" FOR OUTPUT` writes into
-  a subdirectory (like `SAVE`/`LOAD` above; the leaf is up to 12 characters). The
-  files are visible to `DIR` and the host `p8xfs.py`. The `FOR` is optional.
+  **path** — a bare name is relative to the **current directory**, and a leading
+  slash is absolute: `OPEN "/LOGS/A" FOR OUTPUT` writes into that subdirectory
+  wherever you are (like `SAVE`/`LOAD` above; the leaf is up to 12 characters).
+  Under P8X/OS that means `cd LOGS` then `OPEN "A" FOR OUTPUT` and
+  `OPEN "/LOGS/A" FOR OUTPUT` are the same file. The files are visible to `DIR`
+  and the host `p8xfs.py`. The `FOR` is optional.
 - `PRINT#` writes exactly **one value per record** (its text form followed by a
   newline). `INPUT#` reads exactly **one record**: into a numeric variable it
   parses the decimal number, into a string variable (`INPUT# A$`) it takes the

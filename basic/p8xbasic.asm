@@ -398,9 +398,10 @@ DOBYE:  LDA  #>MONITOR
 by_rst: JMP  MONITOR
 
 ; ---------------------------------------------------------------------------
-; SAVE "name" / LOAD "name" — persist the program to a P8XFS v2 root file via
-; the monitor's BIOS FS calls (works in the ROM-in-monitor and disk builds;
-; the standalone build has no resident monitor/BIOS).
+; SAVE "name" / LOAD "name" — persist the program to a P8XFS v2 file via the
+; monitor's BIOS FS calls. Paths are relative to the OS current directory (see
+; APATH); a leading '/' is absolute. Works in the ROM-in-monitor and disk builds;
+; the retired standalone build had no resident monitor/BIOS.
 ; ---------------------------------------------------------------------------
 ; APATH — turn the path at (P1) into an ABSOLUTE path, honouring the OS's
 ; current directory.
@@ -506,8 +507,9 @@ ld_nf:  LDP1 #MNOFILE
 
 ; GETPATH — parse a quoted "path" at (P2) into PBUF as a NUL-terminated string,
 ;   CASE-PRESERVED (slashes kept), P2 past the closing quote. C set on syntax
-;   error (no opening quote). The caller FRESOLVEs it, so a bare "NAME" resolves
-;   in the root and "/SUB/NAME" descends — SAVE/LOAD reach subdirectories.
+;   error (no opening quote). The caller runs it through APATH and then FRESOLVE,
+;   so a bare "NAME" resolves in the CURRENT directory and "/SUB/NAME" is
+;   absolute — SAVE/LOAD reach subdirectories either way.
 ;   PBUF (the edit scratch) is free during immediate SAVE/LOAD; a path >47 chars
 ;   is truncated. Case-preserving matches the case-sensitive filesystem.
 GETPATH: JSR  SKIPSP
