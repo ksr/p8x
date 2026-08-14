@@ -5,7 +5,7 @@
 #   ./console.sh [ROM] [CFIMAGE]
 #                             ROM defaults to the monitor (emulator/eeprom.bin);
 #                             a .asm path is assembled first, as in run.sh.
-#                             CFIMAGE attaches a disk (read-only copy), so the
+#                             CFIMAGE attaches a disk (a WRITABLE copy), so the
 #                             monitor B command boots the OS: try os/run-disk.img
 #
 # This is NOT the co-sim: a live console is not reproducible, so nothing is

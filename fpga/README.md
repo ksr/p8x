@@ -74,6 +74,8 @@ fpga/sim/console.sh "" os/run-disk.img       # real terminal into the RTL
 ```
 
 `B` boots the OS, then `pwd` / `dir` / `cat README.TXT`. Ctrl-D or Ctrl-C quits.
+Writes persist for the session — they land in `fpga/sim/work/disk.img`, a copy, so
+your real image is untouched and your changes are replaced next launch.
 It is slow but usable — roughly 30-50k CPU cycles/second.
 
 ### Path B — the real board

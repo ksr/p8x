@@ -212,7 +212,8 @@ module tb_p8x;
   initial begin
     if (!$value$plusargs("cycles=%d", ncyc)) ncyc = 200000;
     if ($test$plusargs("con")) begin con = 1; ncyc = 1<<30; end
-    // CF images (read-only: a co-sim run must never mutate the disk)
+    // CF images. Read-only unless +cfrw: a co-sim run must never mutate the
+    // disk it is diffing, but an interactive console session should persist.
     for (i = 0; i < 2; i = i + 1) begin
       cffd[i] = 0; cfidx[i] = 0; cfdrq[i] = 0; cferr[i] = 0; cfwr_m[i] = 0;
       cflba0[i] = 0; cflba1[i] = 0; cflba2[i] = 0; cffeat[i] = 0;

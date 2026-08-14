@@ -37,7 +37,12 @@ lingers across microcycles and would double-consume.
 `./console.sh "" os/run-disk.img` boots and runs `pwd`/`dir` off the simulated
 disk (shell wants **lowercase** command names; `DIR` gets `?`). The CF model
 lives in the testbench, reading sectors on demand with `$fseek` — a 6 MB image
-will not fit in a Verilog array. Disk is copied and opened read-only.
+will not fit in a Verilog array. The disk is always a COPY in `work/`, but write
+behaviour differs by mode: `run.sh` opens it read-only and DISCARDS writes (the
+co-sim must not mutate what it is diffing), while `console.sh` passes **`+cfrw`**
+and flushes them. Discarding them in the interactive console was a real bug —
+BASIC's `SAVE` printed "Saved" and the file vanished on exit, because the CF model
+reported success and dropped the data.
 
 **HAZARD, cost 80 GB:** p8xemu dropped its cycle cap whenever `isatty(0)` ("no
 cap while typing") — with `-T` that streams a trace line per cycle, so `run.sh`
