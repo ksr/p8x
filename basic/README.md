@@ -197,3 +197,25 @@ literal — crunch on entry, uncrunch in `LIST`. Still open:
 
 - **Relationship to the system** — standalone ROM image (current, easiest to test),
   vs launched from the monitor's `G`, vs loaded from CF by the OS.
+
+## Leaving BASIC (`BYE`)
+
+Under **P8X/OS** (the run-from-OS build), `BYE` returns to the shell that ran it:
+the current directory, any redirection, and the rest of the OS state survive.
+
+It used to `JMP MONITOR`, which for that build is `$2000` — the OS's **COLD**
+entry. Leaving BASIC therefore rebooted the OS: it reprinted the banner and put
+you back in the root however deep you had `cd`'d. Since 2026-08-13 BASIC captures
+the caller's stack pointer at entry (`SPSAV`) and `BYE` restores it and `RTS`es,
+which is exactly how every `/bin` program returns — the OS launches them with
+`JSR (P1)`.
+
+Two consequences inside BASIC, both deliberate:
+
+- Under the OS, BASIC **adopts the caller's stack** rather than resetting `P3` to
+  `STKTOP`; resetting it would overwrite the caller's frame, including the return
+  address it needs.
+- `SYNERR` unwinds to that saved pointer instead of `STKTOP`, for the same reason.
+
+The disk-boot build has no caller, so it still owns the whole stack and `BYE`
+jumps to the reset vector as before.

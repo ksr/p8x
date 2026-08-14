@@ -118,6 +118,9 @@ FLOOK  = BASRAM+$D8          ; input-file 1-byte lookahead (for EOF)
 FLOOKC = BASRAM+$D9          ; 1 if the lookahead position is end-of-file
 RUNNING= BASRAM+$DA          ; 1 while a program is RUNning (else immediate mode)
 SEED   = BASRAM+$F4          ; RND state (2)
+SPSAV  = BASRAM+$F8          ; stack pointer to return to (2). Under the OS this
+                             ; is the caller's SP, captured at entry; standalone
+                             ; it is just STKTOP. See the entry code and DOBYE.
 POKEA  = BASRAM+$F6          ; POKE address (2)
 NAMLEN = 6                   ; significant variable-name length
 NVARS  = 32                  ; symbol-table capacity (entry = NAMLEN+2 = 8 bytes)
@@ -189,7 +192,26 @@ STKTOP = $FEFF
 
 ;==============================================================================
         .org BASORG
-        LDP3 #STKTOP
+; Stack: when P8X/OS launched us we were reached with `JSR (P1)` and the shell
+; expects an RTS back (that is how every /bin program returns). Resetting the
+; stack to STKTOP would overwrite the caller's frame -- including that return
+; address -- so under the OS we ADOPT the caller's stack and remember where it
+; was. Standalone/disk-boot there is no caller, so we own the whole stack.
+; MONITOR is $2000 for the run-from-OS build and $0000 otherwise, so this costs
+; two instructions in the build that does not need it.
+        LDA  #>MONITOR
+        JZ   bs_own
+        TPA3L                        ; running under the OS: keep its stack
+        STA  SPSAV
+        TPA3H
+        STA  SPSAV+1
+        JMP  bs_go
+bs_own: LDP3 #STKTOP                 ; no OS underneath: the stack is ours
+        LDA  #<STKTOP
+        STA  SPSAV
+        LDA  #>STKTOP
+        STA  SPSAV+1
+bs_go:
         LDA  #$03            ; ACIA master reset
         STA  ACIAS
         LDA  #$15            ; /16 clock, 8N1
@@ -357,10 +379,23 @@ st_help: INP2               ; consume the HELP token
         LDP1 #MHELP
         JSR  PUTS
         RTS
-; BYE — leave BASIC by jumping to the reset vector ($0000). In the ROM and
-; disk builds that re-enters the monitor (its ROM lives at $0000); standalone,
-; it just restarts BASIC.
-DOBYE:  JMP  MONITOR
+; BYE — leave BASIC.
+;
+; Under P8X/OS: restore the entry stack and RTS, so we return to the shell that
+; ran us with the CWD, redirection and everything else intact. This used to
+; `JMP MONITOR`, which for the TPA build is $2000 = the OS's COLD entry -- a full
+; reboot, so it reprinted the banner and dropped you back in the root directory
+; however deep you had cd'd.
+;
+; Disk-boot/standalone: there is no caller, so jump to the reset vector as before.
+DOBYE:  LDA  #>MONITOR
+        JZ   by_rst
+        LDA  SPSAV                   ; back to the shell
+        TAP3L
+        LDA  SPSAV+1
+        TAP3H
+        RTS
+by_rst: JMP  MONITOR
 
 ; ---------------------------------------------------------------------------
 ; SAVE "name" / LOAD "name" — persist the program to a P8XFS v2 root file via
@@ -546,7 +581,10 @@ stmt_nop: RTS
 ; SYNERR — abort current statement to the prompt (resets the stack). When a
 ; program is RUNning, report the offending line ("?SYNTAX ERROR IN 100"); in
 ; immediate mode there is no line, so just "?SYNTAX ERROR".
-SYNERR: LDP3 #STKTOP
+SYNERR: LDA  SPSAV                   ; unwind to our entry SP, not STKTOP: under
+        TAP3L                        ;   the OS that would eat the caller's frame
+        LDA  SPSAV+1
+        TAP3H
         LDA  #0                      ; a PRINT# aborted mid-record must not leave
         STA  OUTFILE                 ; console output redirected to the file
         STA  STRSINK                 ; nor an interrupted STR$ capture

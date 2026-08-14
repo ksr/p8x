@@ -31,6 +31,12 @@ remainder is why it is still here.
         `OPEN` data-file path. Gated on `MONITOR` being non-zero, so the disk-boot
         build (no OS underneath, root already correct) compiles it to a no-op
         without needing conditional assembly.
+      - **Also fixed the same day: `BYE` no longer reboots the OS.** It did
+        `JMP MONITOR` = `$2000` = the OS COLD entry, so leaving BASIC reprinted
+        the banner and reset the CWD to the root. It now restores the entry stack
+        and `RTS`es to the shell, as every `/bin` program does. `os_basic_test.sh`
+        had been asserting the banner appeared *twice*, i.e. encoding the reboot
+        as the pass condition; that expectation is inverted now.
       - **Regression test:** `emulator/test/basic_cwd_test.sh`, in `make test-basic`.
         It checks the file lands in the subdirectory, does **not** also land in the
         root, and that an absolute path still works — and was confirmed to FAIL

@@ -11,6 +11,9 @@
 #   1. a relative SAVE from a subdirectory lands in that subdirectory
 #   2. it does NOT also land in the root
 #   3. an ABSOLUTE path still works from a different directory (the early-out)
+#   4. BYE returns to the shell with the CWD intact -- it used to `JMP MONITOR`,
+#      which for the TPA build is the OS COLD entry, i.e. a reboot that reprinted
+#      the banner and dumped you back in the root
 set -e
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$(dirname "$0")"
@@ -27,7 +30,7 @@ cp "$ROOT/os/run-disk.img" bcwd.img 2>/dev/null || fail "need os/run-disk.img (r
 python3 "$ROOT/tools/p8xfs.py" put bcwd.img bcwd.bin --name /bin/bcwd.bin \
     --load 0x6A00 --exec 0x6A00 >/dev/null || fail "could not install the test BASIC"
 
-printf 'B\rcd src\rbcwd\r10 PRINT "C"\rSAVE "CWDT"\rBYE\rcd /\rbcwd\rLOAD "/src/CWDT"\rLIST\rBYE\r' \
+printf 'B\rcd src\rbcwd\r10 PRINT "C"\rSAVE "CWDT"\rBYE\rpwd\rcd /\rbcwd\rLOAD "/src/CWDT"\rLIST\rBYE\r' \
     > bcwd.in
 ../p8xemu -N -i bcwd.in -c bcwd.img -l 60000000 eeprom.bin > bcwd.out 2>/dev/null || true
 
@@ -37,5 +40,13 @@ python3 "$ROOT/tools/p8xfs.py" ls bcwd.img 2>/dev/null | grep -qi "CWDT" \
     && fail "SAVE from /src ALSO wrote /CWDT — the path was not made relative to the CWD"
 grep -q 'PRINT "C"' bcwd.out \
     || fail "LOAD of the absolute path /src/CWDT did not return the program"
+
+# BYE must come back to the shell in the directory we left, not reboot the OS.
+# The `pwd` right after the first BYE has to still say /src.
+# (the console emits CR LF, so strip the CR before matching whole lines)
+awk '{gsub(/\r/,"")} /BYE/{seen=1} seen && $0=="/src" {ok=1} END{exit !ok}' bcwd.out \
+    || fail "after BYE the CWD was not preserved (pwd did not report /src)"
+[ "$(grep -ac 'P8X/OS v' bcwd.out)" = "1" ] \
+    || fail "the OS banner appeared more than once — BYE rebooted the OS instead of returning"
 
 echo "BASIC-CWD TEST: PASS"

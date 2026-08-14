@@ -27,8 +27,16 @@ fail() { echo "OS-BASIC TEST: FAIL — $1"; echo "$out" | sed -n '/v1.0/,$p'; ex
 
 echo "$out" | grep -q 'P8X BASIC'  || fail "RUN BASIC.bin did not launch BASIC"
 echo "$out" | grep -q 'INBASIC'    || fail "program did not run inside BASIC"
-# BYE must return to the OS (its banner appears a 2nd time) and the shell works.
-[ "$(echo "$out" | grep -c 'P8X/OS v1.0')" -ge 2 ] || fail "BYE did not return to the OS"
+# BYE must return to the OS shell -- WITHOUT rebooting it.
+#
+# This assertion used to require the banner to appear a SECOND time, which was
+# encoding a bug as the pass condition: BYE did `JMP MONITOR`, and for the TPA
+# build MONITOR is $2000 = the OS COLD entry, so leaving BASIC rebooted the OS.
+# That reprinted the banner and, less visibly, threw away the current directory.
+# BYE now restores the entry stack and RTSes back to the shell that ran it, so
+# the banner appears exactly ONCE for the whole session.
+[ "$(echo "$out" | grep -c 'P8X/OS v1.0')" = "1" ] \
+    || fail "BYE rebooted the OS (banner printed more than once) instead of returning to the shell"
 # DIR is no longer a built-in (and this disk has no /bin), so prove the shell is
 # usable after BYE with a still-native command: MKDIR /Z -> "DIR CREATED".
 echo "$out" | sed -n '/INBASIC/,$p' | grep -q 'DIR CREATED' || fail "OS shell not usable after BYE (MKDIR)"
