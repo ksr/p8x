@@ -52,8 +52,12 @@ RTL_CF=()
 if [ -n "$CF" ]; then
   case "$CF" in /*) csrc="$CF";; *) csrc="$ROOT/$CF";; esac
   [ -f "$csrc" ] || { echo "console.sh: no such disk image: $csrc" >&2; exit 2; }
-  cp "$csrc" disk.img            # copy: never mutate the real disk
-  RTL_CF=("+cf=disk.img")
+  # A COPY, always: the session writes to it (+cfrw below), and the real image
+  # must not be modified by an exploratory run. Your changes therefore live in
+  # work/disk.img and are replaced the next time console.sh starts -- copy it out
+  # if you want to keep them.
+  cp "$csrc" disk.img
+  RTL_CF=("+cf=disk.img" "+cfrw")
 fi
 
 python3 "$HERE/mk_ucode_mem.py" "$EMU" ucode.hex >/dev/null

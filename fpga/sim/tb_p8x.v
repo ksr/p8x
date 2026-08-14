@@ -8,6 +8,12 @@
 //   +rx=FILE     scripted console input, one byte per line as hex (optional).
 //                Absent => the receiver is never ready, matching `p8xemu -N`.
 //   +tx=FILE     write console output bytes here (optional)
+//   +cfrw        open the CF image READ-WRITE and flush completed sector writes.
+//                Off by default: the co-sim must never mutate the image it is
+//                diffing, and a write that changed the disk would make a rerun
+//                non-reproducible. console.sh passes it, because an interactive
+//                session that reports "Saved" and silently discards the data is
+//                worse than useless.
 //   +con         INTERACTIVE console: keystrokes from stdin, output to stdout.
 //                For driving the monitor by hand (see console.sh). Not for
 //                co-sim -- a live console is not reproducible by definition.
@@ -59,6 +65,7 @@ module tb_p8x;
   reg       cfdrq  [0:1];
   reg       cferr  [0:1];
   reg       cfwr_m [0:1];            // WRITE SECTORS in progress
+  reg       cfrw = 1'b0;             // +cfrw: writes are flushed to the image
   reg [7:0] cflba0 [0:1], cflba1 [0:1], cflba2 [0:1], cffeat [0:1];
   reg       cfdev = 1'b0;            // ATA device select ($FF16 bit 0)
   wire      cfpres = (cffd[cfdev] != 0);
@@ -133,6 +140,18 @@ module tb_p8x;
     end
   endtask
 
+  task cf_writesec;                        // flush the sector buffer to the image
+    begin
+      cflba = (cflba2[cfdev] << 16) | (cflba1[cfdev] << 8) | cflba0[cfdev];
+      if (cfrw && cffd[cfdev] != 0) begin
+        cfc = $fseek(cffd[cfdev], cflba * 512, 0);
+        for (cfi = 0; cfi < 512; cfi = cfi + 1)
+          $fwrite(cffd[cfdev], "%c", cfbuf[cfdev*512 + cfi]);
+        $fflush(cffd[cfdev]);
+      end
+    end
+  endtask
+
   task cf_readsec;
     begin
       for (cfi = 0; cfi < 512; cfi = cfi + 1) cfbuf[cfdev*512 + cfi] = 8'h00;
@@ -169,7 +188,9 @@ module tb_p8x;
         if (cf_a == 3'd0) begin            // data port write
           cfbuf[cfdev*512 + cfidx[cfdev]] = cf_wdata;
           if (cfidx[cfdev] >= 511) begin
-            // read-only image: a completed WRITE drains but is not flushed
+            // buffer full: flush it if +cfrw, otherwise drain and discard (the
+            // co-sim must not mutate the image it is diffing)
+            cf_writesec();
             cfidx[cfdev] <= 0; cfdrq[cfdev] <= 1'b0; cfwr_m[cfdev] <= 1'b0;
           end else cfidx[cfdev] <= cfidx[cfdev] + 1;
         end
@@ -197,8 +218,11 @@ module tb_p8x;
       cflba0[i] = 0; cflba1[i] = 0; cflba2[i] = 0; cffeat[i] = 0;
     end
     for (i = 0; i < 1024; i = i + 1) cfbuf[i] = 8'h00;
-    if ($value$plusargs("cf=%s",  cffile))  cffd[0] = $fopen(cffile,  "rb");
-    if ($value$plusargs("cf1=%s", cffile1)) cffd[1] = $fopen(cffile1, "rb");
+    cfrw = $test$plusargs("cfrw");
+    if ($value$plusargs("cf=%s",  cffile))
+      cffd[0] = cfrw ? $fopen(cffile,  "r+b") : $fopen(cffile,  "rb");
+    if ($value$plusargs("cf1=%s", cffile1))
+      cffd[1] = cfrw ? $fopen(cffile1, "r+b") : $fopen(cffile1, "rb");
     // scripted input: count the bytes so rx_len is exact (an unread rxs[] entry
     // is x, which would make rx_avail meaningless if we guessed the length)
     if ($value$plusargs("rx=%s", rxfile)) begin

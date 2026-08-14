@@ -154,9 +154,22 @@ Verilog array.
 ./run.sh 2000000 "" boot_in.txt os/run-disk.img   # B -> boots P8X/OS
 ```
 
-The disk is **copied into `work/` and opened read-only**, so a co-sim run can
-never mutate your real 6 MB OS image. A completed WRITE SECTORS drains the
-buffer but is not flushed.
+The disk is **copied into `work/`**, so neither mode can touch your real image.
+Whether writes take effect then depends on which mode you are in, and the split
+is deliberate:
+
+| | disk opened | WRITE SECTORS |
+|---|---|---|
+| `run.sh` (co-sim) | read-only | accepted, **discarded** |
+| `console.sh` (interactive) | read-write (`+cfrw`) | **flushed to `work/disk.img`** |
+
+The co-sim must not mutate the image it is diffing — a run that changed the disk
+would not be reproducible, which is the whole point of the harness. But the
+interactive console has no such constraint, and discarding writes there was
+actively misleading: `SAVE` in BASIC printed `Saved` (truthfully — the CF model
+reported success) and the file was gone the moment you left. Your changes live in
+`work/disk.img` and are replaced next time `console.sh` starts; copy it out to
+keep them.
 
 The boot run gets you this, byte-identical on both sides:
 
