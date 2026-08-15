@@ -49,6 +49,7 @@ FUNCTIONS
     ABS(x)          absolute value
     RND(n)          pseudo-random integer 1..n
     PEEK(addr)      byte (0-255) at a memory address
+    POINT(x,y)      pen (0-3) at a screen pixel; 0 if off-screen
     LEN(s$)         number of characters in s$
     ASC(s$)         code of the first character (0 if empty)
     CHR$(n)         one-character string with code n
@@ -84,16 +85,28 @@ GRAPHICS
     simply not drawn.
         COLOR pen                 select pen 0-3 for later drawing
         CLS                       clear the screen; COLOR is unchanged
+        PLOT x,y                  one pixel
         LINE x0,y0,x1,y1          line, both endpoints drawn
         BOX x0,y0,x1,y1           rectangle outline
         BOX x0,y0,x1,y1,FILL      ... solid
         BOX x0,y0,x1,y1,NOFILL    ... outline, spelled out
+        CIRCLE x,y,r              circle outline, centre x,y radius r
+        CIRCLE x,y,r,FILL         ... solid
+        PALETTE pen,r,g,b         recolour a pen; r,g,b are 0-15 each
     Any two opposite corners work for BOX; they are sorted for you. The
     drawing itself is done by the device, not by BASIC, so a filled box is
     as quick as an empty one.
 
-    Pen colours are chosen from 4096; the defaults are 0 black, 1 white,
-    2 red, 3 green.
+    POINT(x,y) is a FUNCTION, not a statement: it returns the pen (0-3) at
+    a pixel, and 0 for anything off-screen. So
+        IF POINT(10,10) = 0 THEN PLOT 10,10
+    works, and PRINT POINT(x,y) reads the screen back.
+
+    Pen colours are chosen from 4096 (16 levels each of red, green, blue);
+    the defaults are 0 black, 1 white, 2 red, 3 green. PALETTE changes only
+    the colour a pen paints, not the pen you are drawing with, so
+        COLOR 2 : PALETTE 3,15,0,15 : BOX 0,0,20,20,FILL
+    still draws in pen 2.
 
 DATA FILES
     One sequential channel over the filesystem:

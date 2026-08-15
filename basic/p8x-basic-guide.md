@@ -135,6 +135,7 @@ like numeric comparisons, so they slot straight into `IF`:
 |------|---------|
 | `ABS(x)` | absolute value of `x` |
 | `RND(n)` | a pseudo-random integer **1..n** (LCG; `RND(6)` is a die) |
+| `POINT(x,y)` | pen (0–3) at a screen pixel; 0 if off-screen |
 | `PEEK(addr)` | the byte (0–255) at memory address `addr` |
 | `LEN(s$)` | number of characters in the string `s$` |
 | `ASC(s$)` | code (0–255) of the first character (0 if empty) |
@@ -175,8 +176,11 @@ A line may hold several statements separated by `:` —
 | `CLOSE` | close the data-file channel (commits an output file) |
 | `COLOR pen` | select pen 0–3 for later drawing (see *Graphics*) |
 | `CLS` | clear the screen; the current `COLOR` is **not** changed |
+| `PLOT x,y` | one pixel |
 | `LINE x0,y0,x1,y1` | draw a line, both endpoints included |
 | `BOX x0,y0,x1,y1[,FILL\|,NOFILL]` | rectangle — outline by default, solid with `FILL` |
+| `CIRCLE x,y,r[,FILL\|,NOFILL]` | circle of radius `r` about `x,y` |
+| `PALETTE pen,r,g,b` | recolour a pen; `r`,`g`,`b` are 0–15 |
 
 ### Graphics
 
@@ -205,6 +209,25 @@ anything off-screen is simply not drawn — it neither wraps nor errors.
 
 Any two opposite corners work for `BOX` — they are sorted for you, so
 `BOX 150,86,90,50` draws the same rectangle.
+
+**Reading the screen back.** `POINT(x,y)` is a *function*, not a statement, and
+returns the pen (0–3) at a pixel — 0 for anything off-screen:
+
+```basic
+100 IF POINT(X,Y) = 0 THEN PLOT X,Y
+```
+
+**Colours.** Each pen paints one of 4096 colours, set with `PALETTE`:
+
+```basic
+10 PALETTE 3,15,0,15            : REM pen 3 becomes magenta
+```
+
+`r`, `g` and `b` run 0–15. Defaults are 0 black, 1 white, 2 red, 3 green.
+`PALETTE` changes only what a pen *paints*, never which pen you are drawing
+with — so `COLOR 2 : PALETTE 3,15,0,15 : BOX 0,0,20,20,FILL` still draws in
+pen 2. (Internally the device names the pen being recoloured through the same
+register that selects the drawing pen, so BASIC restores it for you.)
 
 `NOFILL` exists so you can say it out loud; it is the default. It is a real
 keyword rather than just an absence, because otherwise `NOFILL` would be read as

@@ -31,13 +31,20 @@ GX1    = $FF22               ;   so the low byte must always be written first.
 GY1    = $FF23
 GCOL   = $FF24               ; pen 0-3 (write-only; GPEN shadows it)
 GCMD   = $FF25               ; write to execute
+GDATA  = $FF27               ; read-back: POINT result
+GPARM  = $FF28               ; scalar argument: CIRCLE radius
 GID0   = $FF2D               ; presence signature: 'P'
 GID1   = $FF2E               ;                     'G'
 GCHI   = 9                   ; a pair's high byte = its low address + GCHI
+GC_PLOT = 1
 GC_LINE = 2
 GC_BOX  = 3
 GC_BOXF = 4
 GC_CLS  = 5
+GC_PAL  = 6
+GC_CIRC = 7
+GC_CIRCF= 8
+GC_PONT = 9
 CR     = $0D
 LF     = $0A
 BS     = $08
@@ -207,6 +214,10 @@ TOK_BOX   = $A7          ; BOX x0,y0,x1,y1[,FILL|,NOFILL]
 TOK_FILL  = $A8          ; BOX modifier -- NOT a statement leader (see CKLEAD)
 TOK_NOFILL= $A9          ; ... the default, spelled out
 TOK_CLS   = $AA          ; CLS
+TOK_PLOT  = $AB          ; PLOT x,y
+TOK_CIRCLE= $AC          ; CIRCLE x,y,r[,FILL|,NOFILL]
+TOK_PALETT= $AD          ; PALETTE pen,r,g,b
+TOK_POINT = $AE          ; POINT(x,y) -- a FUNCTION, not a statement
 
 MONITOR = $0000          ; reset vector — BYE returns here
 CONIN   = $0100          ; BIOS: wait for a key -> A
@@ -362,6 +373,18 @@ STMT:   JSR  SKIPSP
         LDB  #TOK_CLS
         CMP
         JZ   DOCLS
+        LDA  (P2)
+        LDB  #TOK_PLOT
+        CMP
+        JZ   DOPLOT
+        LDA  (P2)
+        LDB  #TOK_CIRCLE
+        CMP
+        JZ   DOCIRC
+        LDA  (P2)
+        LDB  #TOK_PALETT
+        CMP
+        JZ   DOPAL
         LDA  (P2)
         LDB  #TOK_REM
         CMP
@@ -1212,6 +1235,82 @@ DOCLS:  INP2
         STA  GCOL
         RTS
 
+; PLOT x,y — a single pixel in the current pen.
+DOPLOT: INP2
+        JSR  GCHECK
+        JSR  EVAL
+        LDA  #<GX0
+        JSR  GSTORE
+        LDA  #<GY0
+        JSR  GARG
+        LDA  #GC_PLOT
+        STA  GCMD
+        RTS
+
+; CIRCLE x,y,r [,FILL | ,NOFILL] — centre and radius, outline unless filled.
+; The radius is a SCALAR (GPARM), not a coordinate, so it does not go through
+; GSTORE: there is no high-byte partner to clear.
+DOCIRC: INP2
+        JSR  GCHECK
+        JSR  EVAL
+        LDA  #<GX0
+        JSR  GSTORE
+        LDA  #<GY0
+        JSR  GARG
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #','
+        CMP
+        JNZ  ci_err
+        INP2
+        JSR  EVAL
+        LDA  RESULT
+        STA  GPARM                  ; radius
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #','
+        CMP
+        JNZ  ci_out                 ; no fifth argument -> outline
+        INP2
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #TOK_FILL
+        CMP                         ; CMP preserves A, so the next test is valid
+        JZ   ci_fill
+        LDB  #TOK_NOFILL
+        CMP
+        JNZ  ci_err
+        INP2
+ci_out: LDA  #GC_CIRC
+        STA  GCMD
+        RTS
+ci_fill: INP2
+        LDA  #GC_CIRCF
+        STA  GCMD
+        RTS
+ci_err: JMP  SYNERR
+
+; PALETTE pen,r,g,b — recolour a pen; r/g/b are 0-15, so 4096 colours.
+; SETPAL names its target through GCOL, the same register that selects the
+; DRAWING pen, so the pen has to be handed back from the GPEN shadow afterwards
+; or PALETTE would silently change what you draw with next.
+DOPAL:  INP2
+        JSR  GCHECK
+        JSR  EVAL
+        LDA  RESULT
+        STA  GCOL                   ; the pen being recoloured
+        LDA  #<GX0
+        JSR  GARG                   ; red
+        LDA  #<GY0
+        JSR  GARG                   ; green
+        LDA  #<GX1
+        JSR  GARG                   ; blue
+        LDA  #GC_PAL
+        STA  GCMD
+        LDA  GPEN                   ; give the drawing pen back
+        STA  GCOL
+        RTS
+
 ; REM — comment: ignore the rest of the line
 DOREM:  LDA  (P2)
         JZ   rem_d
@@ -1848,6 +1947,10 @@ FACTOR: JSR  SKIPSP
         CMP
         JZ   fa_peek
         LDA  (P2)
+        LDB  #TOK_POINT
+        CMP
+        JZ   fa_point
+        LDA  (P2)
         LDB  #TOK_LEN
         CMP
         JZ   fa_len
@@ -1971,6 +2074,44 @@ fa_abs: INP2
         INC
         STA  RESULT+1
 fa_abd: RTS
+; POINT(x,y) — the pen (0-3) at a pixel; 0 for anything off-screen, matching the
+; write side's "off-screen simply is not there" rule. Two arguments, so PARGET
+; (which parses exactly one) does not fit and the parens are handled here.
+fa_point: INP2
+        JSR  GCHECK
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #'('
+        CMP
+        JNZ  pt_err
+        INP2
+        JSR  EXPR
+        LDA  #<GX0
+        JSR  GSTORE
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #','
+        CMP
+        JNZ  pt_err
+        INP2
+        JSR  EXPR
+        LDA  #<GY0
+        JSR  GSTORE
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #')'
+        CMP
+        JNZ  pt_err
+        INP2
+        LDA  #GC_PONT
+        STA  GCMD
+        LDA  GDATA                  ; the device parks the pen in the data port
+        STA  RESULT
+        LDA  #0
+        STA  RESULT+1
+        RTS
+pt_err: JMP  SYNERR
+
 fa_peek: INP2
         JSR  PARGET              ; RESULT = address
         LDA  RESULT
@@ -4115,6 +4256,9 @@ ckd_1:  LDB  #TOK_REM
         LDB  #TOK_EOF
         CMP
         JZ   ckd_bad
+        LDB  #TOK_POINT
+        CMP
+        JZ   ckd_bad
         LDB  #TOK_FILL
         CMP
         JZ   ckd_bad
@@ -4319,6 +4463,14 @@ KWTAB:  .ascii "PRINT"
         .byte $A8
         .ascii "CLS"
         .byte $AA
+        .ascii "PLOT"
+        .byte $AB
+        .ascii "CIRCLE"
+        .byte $AC
+        .ascii "PALETTE"
+        .byte $AD
+        .ascii "POINT"
+        .byte $AE
         .byte $00
 
 ;==============================================================================
@@ -4462,7 +4614,11 @@ MHELP:  .byte CR,LF
         .byte CR,LF
         .ascii "GRAPHICS: COLOR p : LINE x0,y0,x1,y1 : CLS"
         .byte CR,LF
-        .ascii "  BOX x0,y0,x1,y1[,FILL|,NOFILL]   (240x136, pens 0-3)"
+        .ascii "  BOX x0,y0,x1,y1[,FILL|,NOFILL]   PLOT x,y"
+        .byte CR,LF
+        .ascii "  CIRCLE x,y,r[,FILL]  PALETTE p,r,g,b  POINT(x,y)"
+        .byte CR,LF
+        .ascii "  (240x136, pens 0-3, colours 0-15 each)"
         .byte CR,LF
         .ascii "STRINGS: A$ B$ (assign, + concat, compare)"
         .byte CR,LF

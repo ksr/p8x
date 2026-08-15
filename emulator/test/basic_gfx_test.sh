@@ -85,5 +85,64 @@ if bad:
     print("BASIC-GFX TEST: FAIL")
     for b in bad: print("  " + b)
     sys.exit(1)
-print("BASIC-GFX TEST: PASS")
+print("BASIC-GFX TEST: draw statements ok")
+PY
+
+# --- part 2: PLOT / CIRCLE / PALETTE / POINT --------------------------------
+# The trap here is PALETTE: SETPAL names the pen it recolours through GCOL, the
+# same register that selects the DRAWING pen. If BASIC does not hand the pen back
+# from its GPEN shadow afterwards, PALETTE silently changes what you draw with
+# next -- and since it only bites the *following* statement, it looks like that
+# statement is broken rather than PALETTE.
+printf 'B\rbgfx\r10 CLS\r20 COLOR 2\r30 PALETTE 3,15,0,15\r40 BOX 5,5,40,40,FILL\r50 COLOR 3\r60 CIRCLE 120,68,50,FILL\r70 COLOR 1\r80 CIRCLE 120,68,60\r90 PLOT 200,20\r100 PRINT POINT(120,68)\r110 PRINT POINT(200,20)\r120 PRINT POINT(0,135)\r130 PRINT POINT(7,7)\r140 END\rRUN\rLIST\rBYE\r' \
+    > bgfx2.in
+../p8xemu -N -i bgfx2.in -c bgfx.img -l 120000000 -g bgfx2.ppm eeprom.bin > bgfx2.out 2>/dev/null || true
+
+python3 - <<'PY' || exit 1
+import sys
+bad = []
+out = open("bgfx2.out","rb").read().replace(b"\r", b"")
+
+# POINT reads back what was drawn. 3 = filled circle, 1 = the plotted pixel,
+# 0 = untouched corner, 2 = inside the box drawn AFTER PALETTE.
+if b"\n3\n1\n0\n2\n" not in out:
+    bad.append("POINT sequence wrong; wanted 3,1,0,2 in %r"
+               % out[out.find(b"RUN"):out.find(b"RUN")+40])
+
+for kw in [b"30 PALETTE 3,15,0,15", b"60 CIRCLE 120,68,50,FILL",
+           b"80 CIRCLE 120,68,60", b"90 PLOT 200,20", b"100 PRINT POINT(120,68)"]:
+    if out.count(kw) < 2:
+        bad.append("LIST did not round-trip %r" % kw.decode())
+
+d  = open("bgfx2.ppm","rb").read()
+px = d[d.index(b"255\n")+4:]
+W  = 480
+BLACK, WHITE, RED, MAGENTA = (0,0,0), (255,255,255), (255,0,0), (255,0,255)
+NAME = {BLACK:"pen0", WHITE:"pen1", RED:"pen2", MAGENTA:"pen3=magenta"}
+def fb(x, y):
+    i = ((y*2*W) + x*2)*3
+    return tuple(px[i:i+3])
+def want(x, y, c, why):
+    got = fb(x,y)
+    if got != c:
+        bad.append("(%d,%d) is %s, want %s - %s"
+                   % (x, y, NAME.get(got,got), NAME.get(c,c), why))
+
+# PALETTE recoloured pen 3 to magenta, and did NOT steal the drawing pen:
+# the box on line 40 must still be pen 2 (red), not pen 3.
+want(  7,   7, RED,     "PALETTE stole the drawing pen (GPEN not restored)")
+want(120,  68, MAGENTA, "PALETTE did not recolour pen 3")
+# CIRCLE ,FILL is solid; the bare CIRCLE is an outline with a gap inside it
+want(120, 118, MAGENTA, "filled CIRCLE does not reach its bottom edge")
+want(120,   8, WHITE,   "outline CIRCLE top not drawn")
+want(120,  13, BLACK,   "gap between the two circles is filled - CIRCLE drew solid")
+# PLOT put a single pixel down
+want(200,  20, WHITE,   "PLOT did not draw")
+want(202,  20, BLACK,   "PLOT drew more than one pixel")
+
+if bad:
+    print("BASIC-GFX TEST: FAIL")
+    for b in bad: print("  " + b)
+    sys.exit(1)
+print("BASIC-GFX TEST: PASS (draw, plot, circle, palette, point)")
 PY

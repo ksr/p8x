@@ -47,11 +47,13 @@ README covers build internals and milestones.
 > **data files**: `OPEN name$ [FOR] OUTPUT|INPUT`, `PRINT#`,
 > `INPUT#`, `CLOSE` (one sequential channel, one value per record).
 >
-> Plus **graphics**: `COLOR pen`, `CLS`, `LINE x0,y0,x1,y1`, and
-> `BOX x0,y0,x1,y1[,FILL|,NOFILL]`, driving the `$FF20` display — 240x136,
-> four pens. The drawing is done by the DEVICE, so a filled box costs the same
-> few instructions as an empty one. With no display fitted they print
-> `?No display` instead of quietly doing nothing.
+> Plus **graphics**, driving the `$FF20` display (240x136, four pens):
+> `COLOR pen`, `CLS`, `PLOT x,y`, `LINE x0,y0,x1,y1`,
+> `BOX x0,y0,x1,y1[,FILL|,NOFILL]`, `CIRCLE x,y,r[,FILL|,NOFILL]`,
+> `PALETTE pen,r,g,b`, and the function `POINT(x,y)` which reads a pixel back.
+> The drawing is done by the DEVICE, so a filled box costs the same few
+> instructions as an empty one. With no display fitted they print `?No display`
+> instead of quietly doing nothing.
 >
 > Lines are **syntax-checked on entry** (balanced parens, terminated strings,
 > legal statement leader), so typos are caught as you type, not at RUN.

@@ -116,9 +116,15 @@ remainder is why it is still here.
           engine transliterated from `gpu_line`/`gpu_circle`, and a testbench that
           dumps a frame to PPM so the RTL is verified before the panel is ever
           plugged in. The software side is already done and is the reference.
-        - **Not exposed in BASIC yet** (the device does them; reachable by POKE):
-          `CIRCLE`/`CIRCLEFILL`, `PLOT`, `POINT` read-back, `SETPAL`. Adding them
-          is a token plus a handler each, following the same pattern.
+        - **DONE: the rest of the statements (2026-08-14).** `PLOT x,y`,
+          `CIRCLE x,y,r[,FILL|,NOFILL]`, `PALETTE pen,r,g,b`, and `POINT(x,y)` --
+          a FUNCTION, so it hangs off the factor dispatch, not the statement
+          chain, and joins PEEK in CKLEAD's blacklist. CIRCLE reuses the existing
+          FILL/NOFILL tokens. The trap was PALETTE: SETPAL names the pen it
+          recolours through GCOL, the same register that selects the DRAWING pen,
+          so without restoring from the GPEN shadow it silently changes what the
+          NEXT statement draws with -- which looks like that statement is broken.
+          Tokens now run to $AE; every device command is reachable from BASIC.
         - **Unverified:** the panel's exact timings and the 40-pin RGB mapping
           against Sipeed's documentation. Arithmetic says 480x272 at 60 Hz wants
           ~9.0 MHz, which is the 27 MHz crystal / 3 — a divider the board already
