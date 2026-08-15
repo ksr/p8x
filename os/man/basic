@@ -74,6 +74,25 @@ STATEMENTS
     REM text        comment
     END             stop the program
 
+GRAPHICS
+    Drawing goes to the display device, if one is fitted; without it these
+    print ?No display rather than doing nothing. The screen is 240x136
+    with four pens (0-3), pen 0 being the background. x runs 0..239 left
+    to right, y runs 0..135 top to bottom, and anything off-screen is
+    simply not drawn.
+        COLOR pen                 select pen 0-3 for later drawing
+        CLS                       clear the screen; COLOR is unchanged
+        LINE x0,y0,x1,y1          line, both endpoints drawn
+        BOX x0,y0,x1,y1           rectangle outline
+        BOX x0,y0,x1,y1,FILL      ... solid
+        BOX x0,y0,x1,y1,NOFILL    ... outline, spelled out
+    Any two opposite corners work for BOX; they are sorted for you. The
+    drawing itself is done by the device, not by BASIC, so a filled box is
+    as quick as an empty one.
+
+    Pen colours are chosen from 4096; the defaults are 0 black, 1 white,
+    2 red, 3 green.
+
 DATA FILES
     One sequential channel over the filesystem:
         OPEN name$ [FOR] OUTPUT|INPUT     open (name may be a path)
@@ -93,18 +112,22 @@ COMMANDS
     HELP            summary of statements/commands/functions
     BYE             leave BASIC (returns to the OS)
 
-    SAVE/LOAD and OPEN take a PATH: a bare name is a root file, and a
-    slashed path (SAVE "/SRC/GAME") reaches a subdirectory. Leaf names are
-    up to 12 characters and case-sensitive. BASIC has no current
-    directory, so make subdirectories with MKDIR in the OS first.
+    SAVE/LOAD and OPEN take a PATH: a bare name is relative to the OS
+    current directory, and a leading slash is absolute (SAVE "/SRC/GAME").
+    Leaf names are up to 12 characters and case-sensitive. Make
+    subdirectories with MKDIR in the OS first.
 
 MEMORY
     PEEK/POKE reach the whole map (decimal addresses): 0-8191 EEPROM
     (read-only), 8192-65279 RAM, 65280 switch input, 65282 LED output,
-    65284/65285 the serial port. So POKE 65282,170 lights an LED pattern.
+    65284/65285 the serial port, 65312-65326 the display. So POKE
+    65282,170 lights an LED pattern. The display has commands the
+    statements above do not reach (circles, single pixels, a self-test):
+    POKE 65317,240 runs the device's built-in test pattern.
 
 ERRORS
     ?                       unrecognized statement/command
+    ?No display             a graphics statement with no display fitted
     ?SYNTAX ERROR           malformed line (also reported at entry)
     ?SYNTAX ERROR IN n      the same, during RUN — names the failing line n
     ?UNDEF'D LINE           GOTO/GOSUB to a missing line

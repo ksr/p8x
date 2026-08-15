@@ -103,11 +103,22 @@ remainder is why it is still here.
           A7..A4 = `0010`. The bus write strobe is asynchronous to the Nano's
           27 MHz, so it needs synchronising, and per-IC 100nF decoupling applies
           as on every card.
-        - **Next:** `video_rgb.v` timing generator + `text_engine`-style scanout +
-          the Bresenham/fill engine transliterated from `gpu_line`, a testbench
-          that dumps a frame to PPM so the RTL is verified before the panel is
-          plugged in, then the BASIC statements (tokens `$A5+` are free; `CLS`
-          will be needed too, and the syntax should take commas to match `PRINT`).
+        - **DONE: the BASIC statements (2026-08-14).** `COLOR pen`, `CLS`,
+          `LINE x0,y0,x1,y1`, `BOX x0,y0,x1,y1[,FILL|,NOFILL]` — tokens `$A5-$AA`,
+          covered by `emulator/test/basic_gfx_test.sh`. Three things that are not
+          obvious: `NOFILL` HAS to be a real keyword (with `FILL` tokenised and
+          `NOFILL` not, CRUNCH matches `FILL` inside the word and an outline
+          silently comes out solid); `CLS` needs the `GPEN` RAM shadow because
+          `GCOL` is write-only in the device, so the pen cannot be read back and
+          restored; and `FILL`/`NOFILL` had to be added to `CKLEAD`'s blacklist or
+          a bare `FILL` line would be accepted as a statement.
+        - **Next:** `video_rgb.v` timing generator + scanout + the Bresenham/fill
+          engine transliterated from `gpu_line`/`gpu_circle`, and a testbench that
+          dumps a frame to PPM so the RTL is verified before the panel is ever
+          plugged in. The software side is already done and is the reference.
+        - **Not exposed in BASIC yet** (the device does them; reachable by POKE):
+          `CIRCLE`/`CIRCLEFILL`, `PLOT`, `POINT` read-back, `SETPAL`. Adding them
+          is a token plus a handler each, following the same pattern.
         - **Unverified:** the panel's exact timings and the 40-pin RGB mapping
           against Sipeed's documentation. Arithmetic says 480x272 at 60 Hz wants
           ~9.0 MHz, which is the 27 MHz crystal / 3 — a divider the board already

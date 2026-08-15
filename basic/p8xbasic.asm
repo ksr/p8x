@@ -22,6 +22,22 @@ BASRAM = $8000          ; data base   (override with -D BASRAM=...)
 
 ACIAS  = $FF04
 ACIAD  = $FF05
+; Graphics display ($FF20 device). The canonical definitions live in
+; generators/gen_memmap.py; they are repeated here because this file predates
+; that generator and still hand-declares its I/O addresses, as ACIAS/ACIAD above.
+GX0    = $FF20               ; coordinate LOW bytes. Writing one CLEARS its high
+GY0    = $FF21               ;   byte, which sits GCHI above it ($FF29-$FF2C),
+GX1    = $FF22               ;   so the low byte must always be written first.
+GY1    = $FF23
+GCOL   = $FF24               ; pen 0-3 (write-only; GPEN shadows it)
+GCMD   = $FF25               ; write to execute
+GID0   = $FF2D               ; presence signature: 'P'
+GID1   = $FF2E               ;                     'G'
+GCHI   = 9                   ; a pair's high byte = its low address + GCHI
+GC_LINE = 2
+GC_BOX  = 3
+GC_BOXF = 4
+GC_CLS  = 5
 CR     = $0D
 LF     = $0A
 BS     = $08
@@ -122,6 +138,13 @@ SPSAV  = BASRAM+$F8          ; stack pointer to return to (2). Under the OS this
                              ; is the caller's SP, captured at entry; standalone
                              ; it is just STKTOP. See the entry code and DOBYE.
 POKEA  = BASRAM+$F6          ; POKE address (2)
+; Graphics scratch. $DB-$E2 was the only run in this page with no references at
+; all -- note the JUMPADDR comment above for what happens when a "free" byte
+; turns out to alias something.
+GSADR  = BASRAM+$DB          ; GSTORE: target register address (page $FF)
+GSTGT  = BASRAM+$DC          ; GARG:   target held across EVAL
+GPEN   = BASRAM+$DD          ; shadow of GCOL -- the device register is WRITE-ONLY,
+                             ;   so CLS could not otherwise restore the pen
 NAMLEN = 6                   ; significant variable-name length
 NVARS  = 32                  ; symbol-table capacity (entry = NAMLEN+2 = 8 bytes)
 VARTAB = BASRAM+$100         ; NVARS x 8 = 256 bytes ($x100..$x1FF)
@@ -177,6 +200,13 @@ TOK_OUTPUT= $A1          ; OUTPUT (OPEN ... FOR OUTPUT)
 TOK_STRS  = $A2          ; STR$  (number -> string)
 TOK_VAL   = $A3          ; VAL   (string -> number)
 TOK_EOF   = $A4          ; EOF   (input channel at end -> 1/0)
+; graphics tokens
+TOK_LINE  = $A5          ; LINE x0,y0,x1,y1
+TOK_COLOR = $A6          ; COLOR pen
+TOK_BOX   = $A7          ; BOX x0,y0,x1,y1[,FILL|,NOFILL]
+TOK_FILL  = $A8          ; BOX modifier -- NOT a statement leader (see CKLEAD)
+TOK_NOFILL= $A9          ; ... the default, spelled out
+TOK_CLS   = $AA          ; CLS
 
 MONITOR = $0000          ; reset vector — BYE returns here
 CONIN   = $0100          ; BIOS: wait for a key -> A
@@ -225,6 +255,9 @@ bs_go:
         STA  SEED
         LDA  #$AC
         STA  SEED+1
+        LDA  #1              ; graphics: pen 1, shadow and device agreeing
+        STA  GPEN
+        STA  GCOL
         LDP1 #BANNER
         JSR  PUTS
 
@@ -313,6 +346,22 @@ STMT:   JSR  SKIPSP
         LDB  #TOK_POKE
         CMP
         JZ   DOPOKE
+        LDA  (P2)
+        LDB  #TOK_LINE
+        CMP
+        JZ   DOGLINE
+        LDA  (P2)
+        LDB  #TOK_COLOR
+        CMP
+        JZ   DOCOLOR
+        LDA  (P2)
+        LDB  #TOK_BOX
+        CMP
+        JZ   DOBOX
+        LDA  (P2)
+        LDB  #TOK_CLS
+        CMP
+        JZ   DOCLS
         LDA  (P2)
         LDB  #TOK_REM
         CMP
@@ -1017,6 +1066,151 @@ DOPOKE: INP2
         STA  (P1)
         RTS
 pk_err: JMP  SYNERR
+
+;==============================================================================
+; GRAPHICS — LINE / COLOR / BOX / CLS, driving the $FF20 display.
+;
+; The drawing engine is in the DEVICE: these statements evaluate expressions
+; straight into the coordinate registers and write one command byte. There is no
+; Bresenham here and no pixel masking -- which is the whole reason the engine was
+; put in hardware, since a filled box would otherwise be 32640 read-modify-write
+; cycles through a data port.
+;==============================================================================
+
+; GCHECK — is a display actually there? An absent card floats the bus to $FF, so
+; a single magic byte would prove nothing; GID0/GID1 are two fixed bytes at two
+; addresses. Without this, LINE on a machine with no card would silently do
+; nothing at all, which is the worst possible failure for a graphics statement.
+GCHECK: LDA  GID0
+        LDB  #'P'
+        CMP
+        JNZ  GNODEV
+        LDA  GID1
+        LDB  #'G'
+        CMP
+        JNZ  GNODEV
+        RTS
+; No display: abandon the statement. Same unwind as SYNERR -- we are giving up
+; part-way through, so the stack has to go back to our entry SP.
+GNODEV: LDA  SPSAV
+        TAP3L
+        LDA  SPSAV+1
+        TAP3H
+        LDA  #0
+        STA  OUTFILE
+        STA  STRSINK
+        LDP1 #MNOGFX
+        JSR  PUTS
+        JMP  REPL
+
+; GSTORE — RESULT -> a coordinate register PAIR.  A = the pair's LOW register
+; address within page $FF (every graphics register is in that page, so one byte
+; addresses them all). The DEVICE clears the high byte when the low one is
+; written, so low MUST go first -- writing high first would lose it.
+GSTORE: STA  GSADR
+        TAP1L
+        LDA  #$FF
+        TAP1H
+        LDA  RESULT
+        STA  (P1)                   ; low  (device zeroes the matching high byte)
+        LDA  GSADR
+        LDB  #GCHI
+        CLC
+        ADD
+        TAP1L
+        LDA  #$FF
+        TAP1H
+        LDA  RESULT+1
+        STA  (P1)                   ; high (0 for anything on a 240x136 screen)
+        RTS
+
+; GARG — consume ',' then an expression, storing it via GSTORE.  A = target.
+GARG:   STA  GSTGT
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #','
+        CMP
+        JNZ  g_err
+        INP2
+        JSR  EVAL
+        LDA  GSTGT
+        JMP  GSTORE
+g_err:  JMP  SYNERR
+
+; GCOORDS — the shared "x0,y0,x1,y1" argument list of LINE and BOX. The first
+; coordinate has no leading comma; the other three do.
+GCOORDS: JSR EVAL
+        LDA  #<GX0
+        JSR  GSTORE
+        LDA  #<GY0
+        JSR  GARG
+        LDA  #<GX1
+        JSR  GARG
+        LDA  #<GY1
+        JSR  GARG
+        RTS
+
+; LINE x0,y0,x1,y1
+; Named DOGLINE, not DOLINE: DOLINE is already the program-line parser.
+DOGLINE: INP2                       ; consume the LINE token
+        JSR  GCHECK
+        JSR  GCOORDS
+        LDA  #GC_LINE
+        STA  GCMD
+        RTS
+
+; COLOR pen   (0-3; the device masks to 2 bits)
+DOCOLOR: INP2
+        JSR  GCHECK
+        JSR  EVAL
+        LDA  RESULT
+        STA  GPEN                   ; shadow first: GCOL cannot be read back
+        STA  GCOL
+        RTS
+
+; BOX x0,y0,x1,y1 [,FILL | ,NOFILL]   -- outline unless FILL is given.
+; NOFILL has to be a real keyword, not just the default: with FILL tokenised and
+; NOFILL not, CRUNCH would match FILL *inside* the word NOFILL and a request for
+; an outline would silently draw a solid box.
+DOBOX:  INP2
+        JSR  GCHECK
+        JSR  GCOORDS
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #','
+        CMP
+        JNZ  bx_out                 ; no fifth argument -> outline
+        INP2
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #TOK_FILL
+        CMP                         ; CMP preserves A, so the next test is valid
+        JZ   bx_fill
+        LDB  #TOK_NOFILL
+        CMP
+        JNZ  bx_err
+        INP2
+bx_out: LDA  #GC_BOX
+        STA  GCMD
+        RTS
+bx_fill: INP2
+        LDA  #GC_BOXF
+        STA  GCMD
+        RTS
+bx_err: JMP  SYNERR
+
+; CLS — clear to the BACKGROUND (pen 0), not to the current pen, which is what
+; anyone typing CLS expects. The device fills with whatever GCOL holds, and GCOL
+; is write-only, so the pen is restored from the GPEN shadow afterwards.
+DOCLS:  INP2
+        JSR  GCHECK
+        LDA  #0
+        STA  GCOL
+        LDA  #GC_CLS
+        STA  GCMD
+        LDA  GPEN
+        STA  GCOL
+        RTS
 
 ; REM — comment: ignore the rest of the line
 DOREM:  LDA  (P2)
@@ -3921,6 +4115,12 @@ ckd_1:  LDB  #TOK_REM
         LDB  #TOK_EOF
         CMP
         JZ   ckd_bad
+        LDB  #TOK_FILL
+        CMP
+        JZ   ckd_bad
+        LDB  #TOK_NOFILL
+        CMP
+        JZ   ckd_bad
         LDB  #TOK_OUTPUT
         CMP
         JZ   ckd_bad
@@ -4107,6 +4307,18 @@ KWTAB:  .ascii "PRINT"
         .byte $A3
         .ascii "EOF"
         .byte $A4
+        .ascii "LINE"
+        .byte $A5
+        .ascii "COLOR"
+        .byte $A6
+        .ascii "NOFILL"
+        .byte $A9
+        .ascii "BOX"
+        .byte $A7
+        .ascii "FILL"
+        .byte $A8
+        .ascii "CLS"
+        .byte $AA
         .byte $00
 
 ;==============================================================================
@@ -4248,6 +4460,10 @@ MHELP:  .byte CR,LF
         .byte CR,LF
         .ascii "  LEN ASC CHR$ LEFT$ RIGHT$ MID$ STR$ VAL"
         .byte CR,LF
+        .ascii "GRAPHICS: COLOR p : LINE x0,y0,x1,y1 : CLS"
+        .byte CR,LF
+        .ascii "  BOX x0,y0,x1,y1[,FILL|,NOFILL]   (240x136, pens 0-3)"
+        .byte CR,LF
         .ascii "STRINGS: A$ B$ (assign, + concat, compare)"
         .byte CR,LF
         .ascii "OPERATORS: + - * / %  = <> < > <= >="
@@ -4262,6 +4478,8 @@ MLOADED:.ascii "Loaded"
 MFSERR: .ascii "?Save failed"
         .byte CR,LF,0
 MNOFILE:.ascii "?No file"
+        .byte CR,LF,0
+MNOGFX: .ascii "?No display"
         .byte CR,LF,0
 MSYN:   .ascii "?SYNTAX ERROR"
         .byte CR,LF,0

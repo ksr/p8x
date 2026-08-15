@@ -173,6 +173,48 @@ A line may hold several statements separated by `:` —
 | `PRINT# expr` | write one value + newline as a record to the open output file |
 | `INPUT# v` | read one record from the open input file into `v` (numeric or string) |
 | `CLOSE` | close the data-file channel (commits an output file) |
+| `COLOR pen` | select pen 0–3 for later drawing (see *Graphics*) |
+| `CLS` | clear the screen; the current `COLOR` is **not** changed |
+| `LINE x0,y0,x1,y1` | draw a line, both endpoints included |
+| `BOX x0,y0,x1,y1[,FILL\|,NOFILL]` | rectangle — outline by default, solid with `FILL` |
+
+### Graphics
+
+Drawing goes to the display device. If none is fitted these statements print
+`?No display` rather than quietly doing nothing.
+
+The screen is **240 × 136** with **four pens** (0–3), pen 0 being the
+background. `x` runs 0–239 left to right, `y` runs 0–135 top to bottom, and
+anything off-screen is simply not drawn — it neither wraps nor errors.
+
+```basic
+10 COLOR 1
+20 BOX 0,0,239,135              : REM a border, outline
+30 COLOR 2
+40 LINE 0,0,239,135             : REM corner to corner
+50 LINE 239,0,0,135
+60 COLOR 3
+70 BOX 90,50,150,86,FILL        : REM a solid block
+80 END
+```
+
+Any two opposite corners work for `BOX` — they are sorted for you, so
+`BOX 150,86,90,50` draws the same rectangle.
+
+`NOFILL` exists so you can say it out loud; it is the default. It is a real
+keyword rather than just an absence, because otherwise `NOFILL` would be read as
+the word `NO` followed by the keyword `FILL` — and your outline would silently
+come out solid.
+
+**The device does the drawing, not BASIC.** `LINE` and `BOX` load a few hardware
+registers and issue one command, so a filled box costs the same handful of
+instructions as an empty one. That is why there is no speed penalty for `FILL`,
+and why these statements are far faster than the equivalent `POKE` loop.
+
+Pen colours are chosen from 4096; the defaults are 0 black, 1 white, 2 red,
+3 green. The device supports more than these statements reach — circles, single
+pixels, reading a pixel back, and a built-in self-test — via `POKE`; see the
+port table below.
 
 ### PRINT details
 
@@ -244,9 +286,31 @@ disk and run-from-OS builds (the standalone whole-ROM build has no card access).
 | 65280 / `$FF00` | switch input port (`PEEK`) |
 | 65282 / `$FF02` | LED output port (`POKE`) |
 | 65284–65285 / `$FF04–05` | 6850 ACIA status / data |
+| 65312–65326 / `$FF20–2E` | the graphics display (see below) |
 
 So `POKE 65282, 170` lights an LED pattern, and `PRINT PEEK(65280)` reads the
-switches. **Caution:** BASIC keeps its program and variables in low RAM
+switches.
+
+The display's own registers are reachable too, which gets you the commands the
+statements above do not expose:
+
+| Address | | Address | |
+|---|---|---|---|
+| 65312 | X0 | 65316 | pen |
+| 65313 | Y0 | 65320 | radius |
+| 65314 | X1 | 65317 | **command** |
+| 65315 | Y1 | | |
+
+Commands: 1 plot, 2 line, 3 box, 4 box filled, 5 clear, 7 circle, 8 circle
+filled, 240 self-test. So a circle of radius 40 at the centre is:
+
+```basic
+10 POKE 65316,2 : POKE 65312,120 : POKE 65313,68
+20 POKE 65320,40 : POKE 65317,7
+```
+
+and `POKE 65317,240` alone runs the device's built-in test pattern — useful for
+telling a dead display from a dead program. **Caution:** BASIC keeps its program and variables in low RAM
 (around `$8000–$82xx`); poking there can corrupt your program.
 
 ## Examples
