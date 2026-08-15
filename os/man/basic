@@ -76,7 +76,9 @@ STATEMENTS
 
 GRAPHICS
     Drawing goes to the display device, if one is fitted; without it these
-    print ?No display rather than doing nothing. The screen is 240x136
+    print ?No display rather than doing nothing. Under the emulator there
+    is no live window: press Ctrl-\ to draw the screen in your terminal
+    and carry on, or Ctrl-C to draw it and quit. The screen is 240x136
     with four pens (0-3), pen 0 being the background. x runs 0..239 left
     to right, y runs 0..135 top to bottom, and anything off-screen is
     simply not drawn.

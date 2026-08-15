@@ -183,6 +183,11 @@ A line may hold several statements separated by `:` —
 Drawing goes to the display device. If none is fitted these statements print
 `?No display` rather than quietly doing nothing.
 
+> **Seeing it under the emulator.** There is no live window: press **Ctrl-\\** to
+> render the screen to your terminal and keep going, or **Ctrl-C** to render it
+> and quit. Run `p8xemu` with `-g out.ppm` as well and each of those also writes
+> a real image file.
+
 The screen is **240 × 136** with **four pens** (0–3), pen 0 being the
 background. `x` runs 0–239 left to right, `y` runs 0–135 top to bottom, and
 anything off-screen is simply not drawn — it neither wraps nor errors.

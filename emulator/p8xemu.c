@@ -357,6 +357,18 @@ static int stdin_pending(void){
     return select(1,&s,0,0,&tv)>0;
 }
 static void term_restore(void){ if(g_raw){ tcsetattr(0,TCSANOW,&g_orig); g_raw=0; } }
+/* SIGQUIT (Ctrl-\) shows the display WITHOUT ending the run. Dumping only on
+   exit makes the graphics almost unusable interactively -- you would have to
+   quit and restart to look at every change. With this you draw, peek, and carry
+   on in the same session.
+   If neither -g nor -G was given, print the text view anyway: someone pressing
+   this key wants to SEE something, and doing nothing is a useless answer. */
+static void on_show(int s){
+    (void)s;
+    if(gdump) gpu_writeppm(gdump);
+    if(gascii || !gdump) gpu_writeascii();
+    signal(SIGQUIT,on_show);          /* stay installed for the next peek */
+}
 /* Ctrl-C must still produce the display, or -g/-G would be useless for anything
    INTERACTIVE: you drive BASIC by hand, then quit, and quitting is a signal.
    fopen/fwrite in a handler is not strictly async-signal-safe, but this is a
@@ -533,6 +545,9 @@ int main(int argc,char**argv){
     char fn[64];
     for(int k=0;k<4;k++){ sprintf(fn,"u%d.bin",k); load(fn,rom[k],8192); }
     load(ee,eeprom,ROMSIZE);
+    /* Installed for EVERY run, not just interactive ones: the default action for
+       SIGQUIT is to kill the process, so a scripted run would die on a peek. */
+    signal(SIGQUIT,on_show);            /* Ctrl-\ : show the display, keep going */
     if(cfn)  cf_attach(&cf[0],cfn);                 /* attach CF disk images */
     if(cfn2) cf_attach(&cf[1],cfn2);
     /* -N / -i mean the console is disabled or scripted, so this is a batch run

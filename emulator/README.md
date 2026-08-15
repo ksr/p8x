@@ -32,7 +32,11 @@ make            # builds p8xemu and regenerates the microcode (u0-u3.bin)
   the halt status line.
 - `-g out.ppm` — write the graphics display to `out.ppm` when the run ends, and
   `-G` — render it as text to stderr. "Ends" includes **Ctrl-C**, so you can drive
-  BASIC by hand and then quit to get the picture. The display itself is **always present** at
+  BASIC by hand and then quit to get the picture.
+- **Ctrl-\\ shows the display without ending the run** (SIGQUIT), so you can draw,
+  look, and carry on in the same session — which is the only way experimenting
+  with graphics is bearable. It works with or without `-g`/`-G`: with neither, you
+  get the text view anyway, since pressing it means you want to see something. The display itself is **always present** at
   `$FF20–$FF26`; these flags only decide whether you get to see it. See
   [The graphics display](#the-graphics-display) below.
 - `-t` — instruction trace. `-l N` — halt after N cycles.
