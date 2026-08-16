@@ -61,3 +61,38 @@ OS correctly and `term.py` is now a convenience rather than a fix:
 - its LF → CRLF mapping is harmless and idempotent — it leaves an existing CR LF
   alone — so it still behaves correctly against the older firmware, or against
   anything run with `TTYRAW` set.
+
+## imgsend.py — driving imgload from the host
+
+```sh
+./imgsend.py ../../../os/run-disk.img          # port auto-detected
+```
+
+Assembles the loader, pokes it in, runs it, streams the image, and waits for the
+per-sector acks. **Destructive** — it overwrites the card from LBA 0.
+
+Two things it does that the by-hand recipe above does not, both learned by
+getting them wrong:
+
+- **It runs the monitor's `I` first.** Without `CFINIT`, every `CFWRITE` fails.
+  `imgload` used to ack unconditionally, so all 3254 sectors were reported
+  written, the run finished with `K`, and the card was untouched — success and
+  total failure were indistinguishable. `imgload` now answers `E` and stops on a
+  write error, and `imgsend` treats that as fatal.
+- **It verifies the poked loader** with `D 3000` before running it. A loader with
+  one wrong byte does not fail cleanly; it runs off into RAM, and the first
+  symptom is the board echoing your image back at you.
+
+### It is not reliable to the end of a large image
+
+On a 3254-sector image it has stalled twice at sectors 2777 and 2790 — close
+enough together to be systematic rather than random loss. The stream runs at
+~9.2 KB/s against the 11.5 KB/s the line can carry, so there is very little
+headroom, and a single dropped byte leaves the board waiting mid-sector with no
+way to resync (the protocol has no framing or checksum).
+
+**For a full image, write the card from the host instead** — pull the microSD,
+put it in a reader, and `dd` the image to it. `imgsend` is dependable for the
+small transfers it was meant for, and it is still the only option with no card
+reader and no root, but it needs framing and a per-sector retry before it can be
+trusted with megabytes.

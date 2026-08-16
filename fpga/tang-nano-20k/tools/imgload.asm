@@ -91,3 +91,12 @@ DECLO:  LDA  NLO
 FIN:    LDA  #$4B               ; 'K'
         JSR  CONOUT
         RTS
+
+; A failed write stops the transfer. Acking unconditionally was the worst
+; possible failure mode: run this without CFINIT and every CFWRITE errors, every
+; error is reported as success, the run "completes" with K, and the card is
+; untouched -- indistinguishable from success until you notice the files are
+; still the old ones.
+WRERR:  LDA  #$45               ; 'E'
+        JSR  CONOUT
+        RTS

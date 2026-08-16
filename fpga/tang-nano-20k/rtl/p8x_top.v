@@ -46,8 +46,7 @@ module p8x_top(
   // `build.sh cpu` is left exactly as it was and the panel is opt-in.
   output       lcd_clk,
   output       lcd_de,
-  output       lcd_hs,
-  output       lcd_vs,
+  // no lcd_hs / lcd_vs: the connector does not carry them (DE-only panel)
   output [4:0] lcd_r,
   output [5:0] lcd_g,
   output [4:0] lcd_b,
@@ -160,7 +159,7 @@ module p8x_top(
 
   video_rgb VID(.clk(clk), .rst(rst),
           .fb_addr(sc_addr), .fb_data(sc_data), .fb_pen(sc_pen), .fb_rgb(sc_rgb),
-          .pclk(lcd_clk), .de(lcd_de), .hs(lcd_hs), .vs(lcd_vs),
+          .pclk(lcd_clk), .de(lcd_de), .hs(), .vs(),
           .r(lcd_r), .g(lcd_g), .b(lcd_b));
 `else
   wire [7:0] gfx_rdata = 8'hFF;

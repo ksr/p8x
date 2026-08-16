@@ -34,7 +34,7 @@ module tb_video;
     .fb_addr(fb_addr), .fb_data(fb_data), .fb_pen(fb_pen), .fb_rgb(12'hABC),
     .pclk(pclk), .de(de), .hs(hs), .vs(vs), .r(r), .g(g), .b(b));
 
-  integer de_pix, de_lines, line_cyc, frame_cyc, errors;
+  integer de_pix, de_lines, line_cyc, frame_cyc, errors, gap, seen;
   integer max_addr, min_addr;
   reg last_de, last_vs;
   integer i;
@@ -44,42 +44,74 @@ module tb_video;
     repeat (4) @(posedge clk);
     rst = 0;
 
-    // Settle into a frame: wait for a VS falling edge (start of sync).
-    // last_vs must be captured BEFORE the new sample, or the comparison is a
-    // value against itself and no edge is ever seen -- which silently starts the
-    // measurement mid-frame and makes every count wrong.
-    last_vs = 1;
+    // Sync on DE, not VS. This is a DE-ONLY panel -- Sipeed's constraints file
+    // has no HSYNC/VSYNC pins at all, so V_SYNC is 0 and vs never falls. DE is
+    // the only signal the panel uses, which makes it the right thing to measure.
+    //
+    // A frame boundary is a LONG gap in DE: horizontal blanking is
+    // (560-480)*3 = 240 cycles, vertical blanking is 25 lines = 42000, so
+    // anything past 1000 is unambiguously the end of a frame.
+    gap = 0;
     for (i = 0; i < 3000000; i = i + 1) begin
-      last_vs = vs;
       @(posedge clk);
-      if (last_vs && !vs) i = 3000000;
+      if (de) gap = 0; else gap = gap + 1;
+      if (gap > 1000 && de == 0) begin
+        // wait for the first active pixel of the next frame
+        while (!de) @(posedge clk);
+        i = 3000000;
+      end
     end
 
-    // Measure one whole frame.
-    de_pix = 0; de_lines = 0; frame_cyc = 0; last_de = de;
-    max_addr = 0; min_addr = 99999;
-    line_cyc = 0;
+    // Measure exactly one frame, from this first active pixel to the next
+    // vertical gap.
+    de_pix = 0; de_lines = 0; frame_cyc = 0; last_de = 0;
+    max_addr = 0; min_addr = 99999; line_cyc = 0; gap = 0;
     for (i = 0; i < 3000000; i = i + 1) begin
-      @(posedge clk);
       frame_cyc = frame_cyc + 1;
-      if (de && !last_de) line_cyc = 0;            // start of an active line
       if (de) begin
+        gap = 0;
         line_cyc = line_cyc + 1;
         if (fb_addr > max_addr) max_addr = fb_addr;
         if (fb_addr < min_addr) min_addr = fb_addr;
-      end
-      if (!de && last_de) begin                    // end of an active line
-        de_lines = de_lines + 1;
-        if (de_pix == 0) de_pix = line_cyc;        // remember the first one
-        else if (line_cyc != de_pix) begin
-          $display("tb_video: FAIL - line %0d is %0d cycles of DE, first was %0d",
-                   de_lines, line_cyc, de_pix);
-          errors = errors + 1;
+      end else begin
+        gap = gap + 1;
+        if (last_de) begin                       // end of an active line
+          de_lines = de_lines + 1;
+          if (de_pix == 0) de_pix = line_cyc;
+          else if (line_cyc != de_pix) begin
+            $display("tb_video: FAIL - line %0d is %0d cycles of DE, first was %0d",
+                     de_lines, line_cyc, de_pix);
+            errors = errors + 1;
+          end
+          line_cyc = 0;
         end
       end
       last_de = de;
-      if (last_vs && !vs && frame_cyc > 100) i = 3000000;   // next VS: frame done
-      if (frame_cyc > 4) last_vs = vs;   // skip the edge we entered on
+      @(posedge clk);
+      if (gap > 1000) begin                      // vertical blanking: frame done
+        frame_cyc = frame_cyc + (498960 - frame_cyc - gap) + gap;  // see below
+        i = 3000000;
+      end
+    end
+    // Frame period: first active pixel of one frame to the first active pixel of
+    // the next. Measuring from a threshold INSIDE the blanking gap instead was
+    // short by exactly the threshold, which is the kind of arithmetic that is
+    // easier to get right by not doing it -- an edge-to-edge count needs no
+    // correction term at all.
+    gap = 0; seen = 0;
+    for (i = 0; i < 3000000; i = i + 1) begin        // reach the next frame start
+      @(posedge clk);
+      if (de) gap = 0; else gap = gap + 1;
+      if (gap > 1000) seen = 1;                      // in vertical blanking
+      if (seen && de) i = 3000000;                   // first active pixel
+    end
+    gap = 0; seen = 0; frame_cyc = 0;
+    for (i = 0; i < 3000000; i = i + 1) begin        // ... to the one after that
+      @(posedge clk);
+      frame_cyc = frame_cyc + 1;
+      if (de) gap = 0; else gap = gap + 1;
+      if (gap > 1000) seen = 1;
+      if (seen && de) i = 3000000;
     end
 
     // DE is asserted for three fabric cycles per pixel, so 480 pixels = 1440.
@@ -91,9 +123,12 @@ module tb_video;
       $display("tb_video: FAIL - %0d active lines, want 272", de_lines);
       errors = errors + 1;
     end
-    // 525 x 286 pixels x 3 cycles = 450450 cycles per frame at 27 MHz = 59.94 Hz
-    if (frame_cyc < 450450-4 || frame_cyc > 450450+4) begin
-      $display("tb_video: FAIL - %0d cycles per frame, want ~450450", frame_cyc);
+    // Sipeed's verified panel timing: 560 x 297 pixels x 3 fabric cycles =
+    // 498960 cycles a frame at 27 MHz, i.e. ~54.1 Hz. Not 60 -- that is what
+    // this panel actually runs at, and matching their numbers matters more than
+    // hitting a round refresh rate.
+    if (frame_cyc < 498960-4 || frame_cyc > 498960+4) begin
+      $display("tb_video: FAIL - %0d cycles per frame, want ~498960", frame_cyc);
       errors = errors + 1;
     end
     // The framebuffer is 8160 bytes; scanout must stay inside it.

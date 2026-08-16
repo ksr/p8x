@@ -41,3 +41,51 @@ IO_LOC  "sd_miso" 84;
 IO_PORT "sd_miso" IO_TYPE=LVCMOS33 PULL_MODE=UP;
 IO_LOC  "sd_cs" 81;
 IO_PORT "sd_cs" IO_TYPE=LVCMOS33 DRIVE=8;
+
+// 4.3" 480x272 parallel-RGB panel on the 40-pin connector. Pin numbers taken
+// VERBATIM from Sipeed's own example for this board -- TangNano-20K-example,
+// rgb_lcd/lcd_480_272/color_bar/src/tang_nano_20K_LCD.cst -- not derived and not
+// guessed, the same rule as the rest of this file.
+//
+// Note there is NO HSYNC or VSYNC: their constraints file has pins for CLK, DEN
+// and RGB only, so this is a DE-only panel and p8x_top does not drive them.
+// DRIVE=24 and PULL_MODE=UP are theirs as well.
+IO_LOC  "lcd_clk" 77;
+IO_PORT "lcd_clk" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=24;
+IO_LOC  "lcd_de" 48;
+IO_PORT "lcd_de" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=24;
+
+IO_LOC  "lcd_r[4]" 38;
+IO_PORT "lcd_r[4]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=24;
+IO_LOC  "lcd_r[3]" 39;
+IO_PORT "lcd_r[3]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=24;
+IO_LOC  "lcd_r[2]" 40;
+IO_PORT "lcd_r[2]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=24;
+IO_LOC  "lcd_r[1]" 41;
+IO_PORT "lcd_r[1]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=24;
+IO_LOC  "lcd_r[0]" 42;
+IO_PORT "lcd_r[0]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=24;
+
+IO_LOC  "lcd_g[5]" 32;
+IO_PORT "lcd_g[5]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=24;
+IO_LOC  "lcd_g[4]" 33;
+IO_PORT "lcd_g[4]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=24;
+IO_LOC  "lcd_g[3]" 34;
+IO_PORT "lcd_g[3]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=24;
+IO_LOC  "lcd_g[2]" 35;
+IO_PORT "lcd_g[2]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=24;
+IO_LOC  "lcd_g[1]" 36;
+IO_PORT "lcd_g[1]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=24;
+IO_LOC  "lcd_g[0]" 37;
+IO_PORT "lcd_g[0]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=24;
+
+IO_LOC  "lcd_b[4]" 27;
+IO_PORT "lcd_b[4]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=24;
+IO_LOC  "lcd_b[3]" 28;
+IO_PORT "lcd_b[3]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=24;
+IO_LOC  "lcd_b[2]" 29;
+IO_PORT "lcd_b[2]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=24;
+IO_LOC  "lcd_b[1]" 30;
+IO_PORT "lcd_b[1]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=24;
+IO_LOC  "lcd_b[0]" 31;
+IO_PORT "lcd_b[0]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=24;

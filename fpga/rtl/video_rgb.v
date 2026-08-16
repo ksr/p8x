@@ -15,15 +15,22 @@
 // AHEAD and latched at phase 2 -- the byte for pixel N is fetched during pixel
 // N-1. Without that the whole image sits one pixel to the right.
 //
-// Panel timings are the usual ones for this class of 480x272 TFT. DE-mode panels
-// ignore HS/VS entirely and latch on DE, which is why the exact sync widths are
-// not critical -- but they are still generated, and they MUST be checked against
-// Sipeed's datasheet before the first build. Guessed panel numbers are how a
-// display stays dark for a day.
+// Panel timings and pixel clock are VERIFIED against Sipeed's own 480x272
+// example for this board (TangNano-20K-example, rgb_lcd/lcd_480_272/color_bar):
+// H 480 active + 50 front + 30 back = 560, V 272 + 20 + 5 = 297, driven at
+// 9 MHz. That is 560*297 = 166320 pixels a frame, so ~54.1 Hz -- lower than the
+// 60 the arithmetic suggests, and it is what Sipeed ships on this panel.
+//
+// Their design reaches 9 MHz with an rPLL (IDIV_SEL=2, i.e. 27/3); we get the
+// same 9 MHz from the divide-by-three the CPU already runs on, so no PLL.
+//
+// The connector carries NO HSYNC/VSYNC -- Sipeed's constraints file has pins for
+// CLK, DEN and RGB only. This is a DE-only panel. hs/vs are still generated for
+// anyone wiring a different display, but the board top leaves them unconnected.
 
 module video_rgb #(
-  parameter H_ACT = 480, H_FP = 2, H_SYNC = 41, H_BP = 2,   // 525 total
-  parameter V_ACT = 272, V_FP = 2, V_SYNC = 10, V_BP = 2    // 286 total
+  parameter H_ACT = 480, H_FP = 50, H_SYNC = 0, H_BP = 30,  // 560 total (Sipeed)
+  parameter V_ACT = 272, V_FP = 20, V_SYNC = 0, V_BP = 5    // 297 total (Sipeed)
 )(
   input             clk,          // 27 MHz fabric clock
   input             rst,
