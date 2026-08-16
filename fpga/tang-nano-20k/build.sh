@@ -32,7 +32,13 @@ fi
 case "$TARGET" in
   echo) SRC="rtl/top.v rtl/uart.v";                      TOP=top;      FS=p8x.fs ;;
   cpu)  SRC="../rtl/p8x_cpu.v rtl/p8x_top.v rtl/uart.v rtl/cf_sd.v rtl/sd_spi.v"; TOP=p8x_top;  FS=p8x_cpu.fs ;;
-  *)    echo "unknown target: $TARGET (use echo|cpu)"; exit 2 ;;
+  # `lcd` = cpu + the 480x272 panel. Separate target because the 40-pin RGB
+  # mapping is NOT yet verified against Sipeed's documentation: tangnano20k.cst
+  # has no lcd_* entries, so this will fail place-and-route with "Unconstrained
+  # IO" until they are added. That failure is deliberate -- it is a great deal
+  # better than a bitstream built on guessed pin numbers.
+  lcd)  SRC="../rtl/p8x_cpu.v ../rtl/gfx.v ../rtl/video_rgb.v rtl/p8x_top.v rtl/uart.v rtl/cf_sd.v rtl/sd_spi.v"; TOP=p8x_top; FS=p8x_cpu.fs; YOSYS_DEFS="-DLCD" ;;
+  *)    echo "unknown target: $TARGET (use echo|cpu|lcd)"; exit 2 ;;
 esac
 
 # The CPU build initialises its BRAM from these; regenerate so a microcode or
@@ -53,7 +59,7 @@ FAMILY="GW2A-18C"          # nextpnr needs this explicitly for the GW2A series;
 PACKDEV="GW2A-18C"
 
 echo "==> synthesize ($TOP)"
-yosys -p "read_verilog $SRC; synth_gowin -top $TOP -json p8x.json" >synth.log 2>&1 \
+yosys -p "read_verilog ${YOSYS_DEFS:-} $SRC; synth_gowin -top $TOP -json p8x.json" >synth.log 2>&1 \
   || { tail -20 synth.log; exit 1; }
 
 echo "==> place & route"

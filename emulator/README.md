@@ -154,7 +154,23 @@ the RTL engine will have to match them exactly:
 
 `p8xemu` is the golden model for the FPGA, so this is the specification the
 Verilog engine gets written against — including `gpu_line`'s Bresenham, which the
-RTL must reproduce step for step.
+RTL must reproduce step for step. It does: `fpga/sim/gfx.sh` runs the same
+payloads on both and byte-compares the frames.
+
+### BUSY is real on hardware, and this model hides it
+
+**Software must poll `GSTAT` bit 7 before issuing a command.** Here, drawing is
+instantaneous and BUSY always reads 0 — but the RTL engine takes one clock per
+byte for `CLS` and two per pixel otherwise (a full-screen fill is ~2.4 ms), and
+**a command written while another is running aborts it**.
+
+That asymmetry is deliberate and it is the same licence the CF model takes with
+BSY, but it is worth stating plainly because of how it fails: code developed
+against this model alone looks perfect here and draws a handful of scattered
+pixels on the FPGA. Because the poll costs nothing when BUSY is never set, one
+binary is correct on both — which is exactly what makes the frame comparison in
+`gfx.sh` meaningful. BASIC does this in `GWAIT`/`GEXEC`; the test payloads call
+`GWAIT` before every command.
 
 ## Other targets
 

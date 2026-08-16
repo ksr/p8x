@@ -291,3 +291,59 @@ OS changes, and serial stays the console.
 - Card hardware still open: 5 V bus vs 3.3 V Nano needs level translation
   (74LVC245-class) on D0-D7 + address/control; the bus strobe is asynchronous to
   27 MHz and needs synchronising.
+
+**GRAPHICS RTL DONE IN SIM (2026-08-14).** `fpga/rtl/gfx.v` (registers, drawing
+engine, framebuffer, palette) + `fpga/rtl/video_rgb.v` (480x272 timing, 2x-doubled
+scanout). `fpga/sim/gfx.sh` byte-compares the RTL's frame against `p8xemu -g`:
+IDENTICAL for both payloads. Fits the board -- **BSRAM 44/46**, Fmax 49 MHz, and
+**no PLL** (9.009 MHz wanted, 27/3 = 9.000 from the divider the CPU already uses).
+
+- **THE BUSY CONTRACT is the big lesson.** The emulator draws instantaneously and
+  never raises BUSY; the RTL takes ~2.4 ms for a full fill, and **a command
+  written while another is running ABORTS it**. Software MUST poll GSTAT bit 7.
+  Code written against the emulator alone looks perfect there and draws a few
+  scattered pixels on the RTL. BASIC has GWAIT/GEXEC; the payloads call GWAIT
+  before every command. The poll is free when BUSY is never set, so ONE binary is
+  correct on both -- which is what makes the frame comparison meaningful.
+- **Graphics cannot be CYCLE-diffed**, unlike the CPU: a program polling GSTAT
+  legitimately reads different values on the two models. The FRAMEBUFFER is what
+  must agree, so `gfx.sh` is a frame diff, not a trace diff.
+- Two RTL bugs the frame diff caught, both invisible to inspection: the pixel
+  read-modify-write acted on `e_rdata` a cycle early (right for the first pixel of
+  every byte, wrong for its three neighbours, because 2bpp packs four per byte);
+  and `y*60` computed as `(y<<6)-(y<<2)` in a 13-bit expression WRAPPED for y>127,
+  folding the bottom rows back to the top. Intermediates must be wider than the
+  result.
+- **BLOCKED on the pinout:** `build.sh lcd` synthesises but fails PnR with
+  `Unconstrained IO:lcd_*` -- `tangnano20k.cst` has no `lcd_*` entries because the
+  40-pin RGB mapping is not verified against Sipeed's docs. 20 pins to add. This
+  is deliberate: guessed pin numbers are how a panel stays dark for a day.
+  `build.sh cpu` is untouched and still 40/46.
+
+**GRAPHICS RTL DONE IN SIM (2026-08-14).** `fpga/rtl/gfx.v` (registers, drawing
+engine, framebuffer, palette) + `fpga/rtl/video_rgb.v` (480x272 timing, 2x-doubled
+scanout). `fpga/sim/gfx.sh` byte-compares the RTL's frame against `p8xemu -g`:
+IDENTICAL for both payloads. Fits the board -- **BSRAM 44/46**, Fmax 49 MHz, and
+**no PLL** (9.009 MHz wanted, 27/3 = 9.000 from the divider the CPU already uses).
+
+- **THE BUSY CONTRACT is the big lesson.** The emulator draws instantaneously and
+  never raises BUSY; the RTL takes ~2.4 ms for a full fill, and **a command
+  written while another is running ABORTS it**. Software MUST poll GSTAT bit 7.
+  Code written against the emulator alone looks perfect there and draws a few
+  scattered pixels on the RTL. BASIC has GWAIT/GEXEC; the payloads call GWAIT
+  before every command. The poll is free when BUSY is never set, so ONE binary is
+  correct on both -- which is what makes the frame comparison meaningful.
+- **Graphics cannot be CYCLE-diffed**, unlike the CPU: a program polling GSTAT
+  legitimately reads different values on the two models. The FRAMEBUFFER is what
+  must agree, so `gfx.sh` is a frame diff, not a trace diff.
+- Two RTL bugs the frame diff caught, both invisible to inspection: the pixel
+  read-modify-write acted on `e_rdata` a cycle early (right for the first pixel of
+  every byte, wrong for its three neighbours, because 2bpp packs four per byte);
+  and `y*60` computed as `(y<<6)-(y<<2)` in a 13-bit expression WRAPPED for y>127,
+  folding the bottom rows back to the top. Intermediates must be wider than the
+  result.
+- **BLOCKED on the pinout:** `build.sh lcd` synthesises but fails PnR with
+  `Unconstrained IO:lcd_*` -- `tangnano20k.cst` has no `lcd_*` entries because the
+  40-pin RGB mapping is not verified against Sipeed's docs. 20 pins to add. This
+  is deliberate: guessed pin numbers are how a panel stays dark for a day.
+  `build.sh cpu` is untouched and still 40/46.

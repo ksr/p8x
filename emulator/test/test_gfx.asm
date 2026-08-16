@@ -34,6 +34,7 @@
         LDA  #0
         STA  GCOL
         LDA  #5                         ; CLS
+        JSR  GWAIT
         STA  GCMD
 
 ;=== SETPAL: pen 3 := yellow (R=15 G=15 B=0) ===============================
@@ -48,6 +49,7 @@
         LDA  #0
         STA  GX1                        ; blue
         LDA  #6                         ; SETPAL
+        JSR  GWAIT
         STA  GCMD
 
 ;=== border: BOX (0,0)-(239,135) in pen 1 ==================================
@@ -62,6 +64,7 @@
         LDA  #135
         STA  GY1
         LDA  #3                         ; BOX (outline)
+        JSR  GWAIT
         STA  GCMD
 
 ;=== diagonal 1: LINE (0,0)-(239,135) in pen 2 =============================
@@ -76,6 +79,7 @@
         LDA  #135
         STA  GY1
         LDA  #2                         ; LINE
+        JSR  GWAIT
         STA  GCMD
 
 ;=== diagonal 2: LINE (239,0)-(0,135) -- the other sign of sx ==============
@@ -88,6 +92,7 @@
         LDA  #135
         STA  GY1
         LDA  #2                         ; LINE
+        JSR  GWAIT
         STA  GCMD
 
 ;=== BOXFILL (90,50)-(150,86) in pen 3 (the yellow set above) ==============
@@ -102,6 +107,7 @@
         LDA  #86
         STA  GY1
         LDA  #4                         ; BOXFILL
+        JSR  GWAIT
         STA  GCMD
 
 ;=== BOX (80,100)-(140,124) in pen 2 -- an OUTLINE, so it must stay hollow ==
@@ -121,6 +127,7 @@
         LDA  #124
         STA  GY1
         LDA  #3                         ; BOX (outline)
+        JSR  GWAIT
         STA  GCMD
 
 ;=== clipping: LINE (200,120)-(255,120), x>239 must be DROPPED =============
@@ -138,6 +145,7 @@
         LDA  #120
         STA  GY1
         LDA  #2                         ; LINE
+        JSR  GWAIT
         STA  GCMD
 
 ;=== PLOT a single pixel at (10,10) in pen 2 ===============================
@@ -148,6 +156,20 @@
         LDA  #10
         STA  GY0
         LDA  #1                         ; PLOT
+        JSR  GWAIT
         STA  GCMD
 
         HLT                             ; stop; the emulator dumps on exit
+
+;=== waiting for the engine ================================================
+; The DEVICE draws in real time -- a full-screen fill is tens of thousands of
+; pixels -- and a command issued while another is running ABORTS it. The
+; emulator draws instantaneously and always reports not-busy, so this costs
+; nothing there; on the RTL it is the difference between a picture and a few
+; scattered pixels. GWAIT is called before every command so ONE payload is
+; correct on both, which is what makes the framebuffer diff meaningful.
+GWAIT:  LDA  GSTAT
+        LDB  #$80
+        AND
+        JNZ  GWAIT
+        RTS

@@ -55,9 +55,12 @@ module p8x_soc #(
   // $FF05 data = the current script byte. Matches p8xemu's memrd() exactly.
   wire [7:0]  acia_st = {6'b0, 1'b1, rx_avail};      // bit1 TDRE, bit0 RDRF
   wire        is_cf = (mem_addr >= 16'hFF10) && (mem_addr <= 16'hFF17);
+  wire        is_gfx = (mem_addr >= 16'hFF20) && (mem_addr <= 16'hFF2F);
+  wire [7:0]  gfx_rdata;
   wire [7:0]  io_rd = (mem_addr == 16'hFF04) ? acia_st :
                       (mem_addr == 16'hFF05) ? (rx_avail ? rx_byte : 8'h00) :
-                      is_cf                  ? cf_rdata : 8'hFF;
+                      is_cf                  ? cf_rdata :
+                      is_gfx                 ? gfx_rdata : 8'hFF;
   wire [7:0]  mem_din = is_io ? io_rd : mem[mem_addr];
 
   wire mem_rd;
@@ -71,6 +74,16 @@ module p8x_soc #(
   assign tx_byte = mem_dout;
 
   wire irq_set = mem_we && (mem_addr == 16'hFF06);
+
+  // Graphics display. No scanout here -- this SoC has no panel; the testbench
+  // reads the framebuffer array directly to dump a frame. rd_stb is keyed off
+  // mem_rd, not the address, so the IDENT stream cannot be double-consumed by a
+  // multi-microcycle address (the same rule the ACIA needs at $FF05).
+  gfx GFX(
+    .clk(clk), .rst(rst),
+    .sel(is_gfx), .a(mem_addr[3:0]), .wr(mem_we && is_gfx),
+    .rd_stb(mem_rd && is_gfx), .wdata(mem_dout), .rdata(gfx_rdata),
+    .sc_addr(13'd0), .sc_data(), .sc_pen(2'd0), .sc_rgb());
 
   p8x_cpu CPU(
     .clk(clk), .rst(rst), .cen(1'b1),   // async model: one microcycle per clock

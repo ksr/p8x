@@ -65,6 +65,8 @@ diff is now identical regardless of how stdin is wired.
 | `cf_id.txt`, `boot_in.txt` | CF scripts: IDENTIFY, and boot the OS from disk |
 | `run.sh` | build + run + diff; `run.sh [CYCLES] [ROM] [RXSCRIPT] [CFIMAGE]` |
 | `console.sh` | **interactive** console; `console.sh [ROM] [CFIMAGE]` |
+| `gfx.sh` | RTL drawing engine vs the emulator, **frame by frame** |
+| `tb_gfx.v` | runs a payload and dumps the framebuffer as a PPM |
 | `../rtl/p8x_cpu.v` | the CPU core (transliteration of the emulator microcycle) |
 | `../rtl/p8x_soc.v` | CPU + microcode ROM + 64K memory + minimal sim I/O |
 
@@ -187,6 +189,27 @@ filesystem. Note the shell wants **lowercase** command names on this image.
 Still not covered: SD-over-SPI (Milestone 4 replaces CF-IDE with different
 silicon behind the same BIOS block API), and any peripheral behaviour that
 depends on real timing rather than these polled, timing-free models.
+
+### Graphics: a frame diff, not a cycle diff
+
+```bash
+./gfx.sh            # runs the graphics payloads on both models, cmp's the frames
+```
+
+The drawing engine is verified by byte-comparing the **framebuffer** the RTL
+produces against the one `p8xemu -g` writes, not by diffing CPU traces. That is
+deliberate: the emulator draws instantaneously and never raises BUSY, while the
+RTL takes one clock per byte for `CLS` and two per pixel otherwise. A program
+that polls `GSTAT` therefore reads different values on the two models **by
+design**, so a cycle diff would report a divergence that is not a fault.
+
+What must agree is the picture, and it does — to the byte, for both payloads.
+
+This is also why the payloads call `GWAIT` before every command. The device draws
+in real time and **a command issued while another is running aborts it**; the wait
+costs nothing on the emulator (never busy) and is essential on the RTL, so one
+payload is correct on both. Without it the RTL renders a handful of scattered
+pixels while the emulator looks perfect — the first thing this test caught.
 
 ### A hazard worth knowing about
 

@@ -70,7 +70,7 @@ command -v iverilog >/dev/null 2>&1 || { echo "iverilog not found (brew install 
 
 # no -DP8X_TRACE: stdout belongs to the console, not the trace
 iverilog -g2012 -o console.vvp \
-  "$ROOT/fpga/rtl/p8x_cpu.v" "$ROOT/fpga/rtl/p8x_soc.v" "$HERE/tb_p8x.v"
+  "$ROOT/fpga/rtl/p8x_cpu.v" "$ROOT/fpga/rtl/p8x_soc.v" "$ROOT/fpga/rtl/gfx.v" "$HERE/tb_p8x.v"
 
 # Char-at-a-time, no echo (the monitor echoes), Enter stays CR. Deliberately NOT
 # `stty raw`: raw also clears ISIG, which would swallow Ctrl-C and leave no way

@@ -1,11 +1,24 @@
 # fpga/rtl/ — the board-independent core
 
-Two files, and they are **not** peers:
+Four files, and they are **not** peers:
 
 | File | What it is |
 |------|-----------|
 | `p8x_cpu.v` | **the machine.** Shared verbatim by the simulation and the board. |
-| `p8x_soc.v` | a **simulation-only** wrapper around it. The board does not use this. |
+| `gfx.v` | the **graphics display** — registers, drawing engine, framebuffer, palette. Also shared verbatim. |
+| `video_rgb.v` | 480x272 panel timing + scanout. Board-only in practice, but board-independent. |
+| `p8x_soc.v` | a **simulation-only** wrapper. The board does not use this. |
+
+`gfx.v` is a transliteration of the `gpu_*` functions in `emulator/p8xemu.c`, and
+the same rule applies to it as to the CPU: the emulator is the golden model, so a
+cleverer Bresenham that lights a different pixel is a **bug**. `../sim/gfx.sh`
+byte-compares the frames the two produce.
+
+Unlike the CPU, the graphics device **cannot be cycle-diffed**. The emulator draws
+instantaneously and never raises BUSY; the RTL takes thousands of clocks and does.
+A program that polls `GSTAT` therefore reads different values on the two by
+design, so their CPU traces legitimately diverge. The framebuffer is what must
+agree, and nothing else about the engine's timing is visible to software.
 
 `p8x_cpu.v` is a direct transliteration of the emulator's microcycle loop — the
 74181 model, the two-stage shifter, sign-bit V, the condition mux off the previous

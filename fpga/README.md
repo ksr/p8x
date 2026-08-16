@@ -71,6 +71,7 @@ naming the exact microcycle. To drive the machine by hand instead of diffing:
 
 ```sh
 fpga/sim/console.sh "" os/run-disk.img       # real terminal into the RTL
+fpga/sim/gfx.sh                              # graphics engine vs the emulator
 ```
 
 `B` boots the OS, then `pwd` / `dir` / `cat README.TXT`. Ctrl-D or Ctrl-C quits.
@@ -120,6 +121,7 @@ testing — the factory boot text sits buffered and reads like a reply.
 | **3** | Core on real hardware ✅ | yes | P8X talks over USB for real, full 64K map |
 | **4** | SD disk (SD-over-SPI behind the BIOS block API) ✅ | yes | OS boots from SD, full FS |
 | **5** | Polish: clock-up, IRQ (backlog #26), stretch goals | yes | performance + extras |
+| **6** | Graphics: 480x272 panel + drawing engine | partly | RTL engine matches the emulator pixel for pixel; panel pinout still unverified |
 
 Milestones 0–2 are most of the effort and only 0 needs the board — the CPU is
 built and proven in simulation before the hardware ever runs it.
@@ -146,10 +148,14 @@ fpga/
 │   ├── README.md             what is shared vs sim-only, and the `cen` contract
 │   ├── p8x_cpu.v             the CPU. `cen` clock enable; otherwise one
 │   │                         microcycle per clock, matching the emulator
+│   ├── gfx.v                 graphics: registers, drawing engine, framebuffer
+│   ├── video_rgb.v           480x272 panel timing + 2x-doubled scanout
 │   └── p8x_soc.v             sim-only SoC: async-read arrays + modelled I/O
 ├── sim/                      co-simulation against the C emulator
 │   ├── README.md             how the trace-diff works, and why -N exists
 │   ├── run.sh                build + run + diff  [CYCLES] [ROM] [RX] [CF]
+│   ├── gfx.sh                graphics: RTL frame vs the emulator's, byte-compared
+│   ├── tb_gfx.v             runs a payload, dumps the framebuffer as a PPM
 │   ├── console.sh            interactive console on the RTL (not diffed)
 │   ├── mk_ucode_mem.py       4 ROM images → 32-bit ucode.hex
 │   ├── tb_p8x.v              testbench: canonical per-cycle trace, ACIA, CF
@@ -157,7 +163,7 @@ fpga/
 │   └── console_in.txt, cf_id.txt, boot_in.txt   scripted keystrokes
 └── tang-nano-20k/            the board build
     ├── README.md             toolchain, pinout, flashing, board-sim benches
-    ├── build.sh              [echo|cpu] [build|load|flash]
+    ├── build.sh              [echo|cpu|lcd] [build|load|flash]
     ├── mk_compact_ucode.py   8192→4096-word microcode remap (buys the 64K map)
     ├── tangnano20k.cst       pin constraints (verified)
     ├── rtl/

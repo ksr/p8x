@@ -31,6 +31,7 @@ GX1    = $FF22               ;   so the low byte must always be written first.
 GY1    = $FF23
 GCOL   = $FF24               ; pen 0-3 (write-only; GPEN shadows it)
 GCMD   = $FF25               ; write to execute
+GSTAT  = $FF26               ; bit7 BUSY
 GDATA  = $FF27               ; read-back: POINT result
 GPARM  = $FF28               ; scalar argument: CIRCLE radius
 GID0   = $FF2D               ; presence signature: 'P'
@@ -152,6 +153,7 @@ GSADR  = BASRAM+$DB          ; GSTORE: target register address (page $FF)
 GSTGT  = BASRAM+$DC          ; GARG:   target held across EVAL
 GPEN   = BASRAM+$DD          ; shadow of GCOL -- the device register is WRITE-ONLY,
                              ;   so CLS could not otherwise restore the pen
+GCTMP  = BASRAM+$DE          ; GEXEC: the command byte, held across GWAIT
 NAMLEN = 6                   ; significant variable-name length
 NVARS  = 32                  ; symbol-table capacity (entry = NAMLEN+2 = 8 bytes)
 VARTAB = BASRAM+$100         ; NVARS x 8 = 256 bytes ($x100..$x1FF)
@@ -1126,6 +1128,25 @@ GNODEV: LDA  SPSAV
         JSR  PUTS
         JMP  REPL
 
+; GWAIT — spin until the drawing engine is idle.
+; The DEVICE draws in real time: a full-screen fill is ~32640 pixels, a couple of
+; milliseconds, and a second command issued meanwhile ABORTS the first. The
+; emulator draws instantaneously and always reports not-busy, so this loop costs
+; nothing there and is essential on hardware -- and because it costs nothing
+; there, one binary is correct on both. Same shape as the CF driver's BSY wait.
+GWAIT:  LDA  GSTAT
+        LDB  #$80
+        AND
+        JNZ  GWAIT
+        RTS
+
+; GEXEC — wait for the engine, then issue the command in A.
+GEXEC:  STA  GCTMP
+        JSR  GWAIT
+        LDA  GCTMP
+        STA  GCMD
+        RTS
+
 ; GSTORE — RESULT -> a coordinate register PAIR.  A = the pair's LOW register
 ; address within page $FF (every graphics register is in that page, so one byte
 ; addresses them all). The DEVICE clears the high byte when the low one is
@@ -1179,7 +1200,7 @@ DOGLINE: INP2                       ; consume the LINE token
         JSR  GCHECK
         JSR  GCOORDS
         LDA  #GC_LINE
-        STA  GCMD
+        JSR  GEXEC
         RTS
 
 ; COLOR pen   (0-3; the device masks to 2 bits)
@@ -1214,11 +1235,11 @@ DOBOX:  INP2
         JNZ  bx_err
         INP2
 bx_out: LDA  #GC_BOX
-        STA  GCMD
+        JSR  GEXEC
         RTS
 bx_fill: INP2
         LDA  #GC_BOXF
-        STA  GCMD
+        JSR  GEXEC
         RTS
 bx_err: JMP  SYNERR
 
@@ -1230,7 +1251,8 @@ DOCLS:  INP2
         LDA  #0
         STA  GCOL
         LDA  #GC_CLS
-        STA  GCMD
+        JSR  GEXEC
+        JSR  GWAIT                  ; the pen restore must not overtake the clear
         LDA  GPEN
         STA  GCOL
         RTS
@@ -1244,7 +1266,7 @@ DOPLOT: INP2
         LDA  #<GY0
         JSR  GARG
         LDA  #GC_PLOT
-        STA  GCMD
+        JSR  GEXEC
         RTS
 
 ; CIRCLE x,y,r [,FILL | ,NOFILL] — centre and radius, outline unless filled.
@@ -1282,11 +1304,11 @@ DOCIRC: INP2
         JNZ  ci_err
         INP2
 ci_out: LDA  #GC_CIRC
-        STA  GCMD
+        JSR  GEXEC
         RTS
 ci_fill: INP2
         LDA  #GC_CIRCF
-        STA  GCMD
+        JSR  GEXEC
         RTS
 ci_err: JMP  SYNERR
 
@@ -1306,7 +1328,8 @@ DOPAL:  INP2
         LDA  #<GX1
         JSR  GARG                   ; blue
         LDA  #GC_PAL
-        STA  GCMD
+        JSR  GEXEC
+        JSR  GWAIT                  ; SETPAL reads GCOL, so let it finish first
         LDA  GPEN                   ; give the drawing pen back
         STA  GCOL
         RTS
@@ -2104,7 +2127,8 @@ fa_point: INP2
         JNZ  pt_err
         INP2
         LDA  #GC_PONT
-        STA  GCMD
+        JSR  GEXEC
+        JSR  GWAIT                  ; the answer is only valid once it is done
         LDA  GDATA                  ; the device parks the pen in the data port
         STA  RESULT
         LDA  #0

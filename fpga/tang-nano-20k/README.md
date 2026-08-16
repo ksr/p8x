@@ -175,3 +175,40 @@ The same work bounded ACMD41 by **time** rather than an arbitrary retry count:
 4000 rounds is ~1.1 s at the init clock, which is the SD spec's own limit. The
 previous 20000 took **5.6 s**, long enough that a missing card made the whole
 machine look hung.
+
+## The graphics panel (`build.sh lcd`)
+
+`build.sh cpu` is unchanged and does **not** include the display. The panel is a
+separate target:
+
+```sh
+./build.sh lcd load
+```
+
+**It will fail place-and-route today**, with `ERROR: Unconstrained IO:lcd_*`, and
+that failure is deliberate. `tangnano20k.cst` has no `lcd_*` entries because the
+40-pin RGB mapping has not been verified against Sipeed's documentation, and this
+file's header records why that matters: every other pin here was checked against
+the official pinout and a known-good project first. A bitstream built on guessed
+pin numbers is how a display stays dark for a day.
+
+To finish it, add the verified `IO_LOC` lines for `lcd_clk`, `lcd_de`, `lcd_hs`,
+`lcd_vs`, `lcd_r[4:0]`, `lcd_g[5:0]`, `lcd_b[4:0]` — 20 pins — and check the
+panel's own timings against its datasheet while you are there.
+
+**It does fit.** Synthesised and placed with a scratch pinout:
+
+| | with graphics | without |
+|---|---|---|
+| BSRAM | **44 / 46** | 40 / 46 |
+| LUT4 | 10403 / 20736 | 8029 |
+| Fmax | 49.0 MHz | 48.8 MHz |
+
+The framebuffer costs 4 blocks (8160 bytes at 2 bits per pixel) and leaves two
+spare. **No PLL is needed**: 480x272 at 60 Hz wants 9.009 MHz and 27/3 is 9.000,
+the same divide-by-three the CPU already runs on, so both rPLLs stay free for the
+Milestone-5 clock-up.
+
+`sim/tb_video.v` checks the frame geometry without any hardware — 480 active
+pixels a line, 272 lines, 450450 cycles a frame (59.94 Hz), and a scanout that
+stays inside the framebuffer.

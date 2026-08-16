@@ -112,10 +112,28 @@ remainder is why it is still here.
           `GCOL` is write-only in the device, so the pen cannot be read back and
           restored; and `FILL`/`NOFILL` had to be added to `CKLEAD`'s blacklist or
           a bare `FILL` line would be accepted as a statement.
-        - **Next:** `video_rgb.v` timing generator + scanout + the Bresenham/fill
-          engine transliterated from `gpu_line`/`gpu_circle`, and a testbench that
-          dumps a frame to PPM so the RTL is verified before the panel is ever
-          plugged in. The software side is already done and is the reference.
+        - **DONE: the RTL (2026-08-14).** `fpga/rtl/gfx.v` (registers, drawing
+          engine, framebuffer, palette) + `fpga/rtl/video_rgb.v` (480x272 timing,
+          2x-doubled scanout). `fpga/sim/gfx.sh` byte-compares the frame the RTL
+          produces against `p8xemu -g` for both payloads: **identical**.
+          Fits the board: **BSRAM 44/46**, Fmax 49 MHz, and NO PLL (9.009 MHz
+          wanted, 27/3 = 9.000 delivered by the divider the CPU already uses).
+        - **The BUSY contract, learned the hard way.** The emulator draws
+          instantaneously; the RTL takes ~2.4 ms for a full fill, and a command
+          written while another runs ABORTS it. Software MUST poll GSTAT bit 7.
+          Code written against the emulator alone looks perfect there and draws a
+          few scattered pixels on the RTL -- which is exactly what the first frame
+          diff showed. BASIC now has GWAIT/GEXEC and the payloads call GWAIT before
+          every command; the poll is free when BUSY is never set, so one binary is
+          correct on both. This is also why graphics cannot be CYCLE-diffed: a
+          program polling GSTAT legitimately reads different values on the two
+          models, so the framebuffer is the thing that must agree.
+        - **BLOCKED on the pinout:** `build.sh lcd` exists and synthesises, but
+          fails place-and-route with `Unconstrained IO:lcd_*` because
+          `tangnano20k.cst` has no `lcd_*` entries -- the 40-pin RGB mapping has
+          not been verified against Sipeed's documentation. 20 pins to add
+          (clk/de/hs/vs + R5 G6 B5), plus the panel's own timings from its
+          datasheet. `build.sh cpu` is untouched and still 40/46 blocks.
         - **DONE: the rest of the statements (2026-08-14).** `PLOT x,y`,
           `CIRCLE x,y,r[,FILL|,NOFILL]`, `PALETTE pen,r,g,b`, and `POINT(x,y)` --
           a FUNCTION, so it hangs off the factor dispatch, not the statement

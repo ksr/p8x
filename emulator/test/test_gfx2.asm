@@ -26,6 +26,7 @@ CNT     = $3000                         ; loop counter (RAM scratch)
 
 ;=== IDENT: issue, then stream 14 bytes out of GDATA to the console ========
         LDA  #$F2                       ; IDENT
+        JSR  GWAIT
         STA  GCMD
         LDA  #14
         STA  CNT
@@ -46,6 +47,7 @@ id_lp:  LDA  GDATA
 
 ;=== RESET, then draw with the extended commands ===========================
         LDA  #$F1                       ; RESET (clears screen, default palette)
+        JSR  GWAIT
         STA  GCMD
 
 ; CIRCLE centred at (120,68) radius 40, pen 2 -- an OUTLINE, so its centre
@@ -59,6 +61,7 @@ id_lp:  LDA  GDATA
         LDA  #40
         STA  GPARM                      ; radius
         LDA  #$07                       ; CIRCLE
+        JSR  GWAIT
         STA  GCMD
 
 ;=== 16-bit coordinates, case 1: x = 356 is OFF-SCREEN =====================
@@ -72,6 +75,7 @@ id_lp:  LDA  GDATA
         LDA  #60
         STA  GY0
         LDA  #$01                       ; PLOT
+        JSR  GWAIT
         STA  GCMD
 
 ;=== 16-bit coordinates, case 2: a LOW write CLEARS the high byte ==========
@@ -83,6 +87,20 @@ id_lp:  LDA  GDATA
         LDA  #70
         STA  GY0
         LDA  #$01                       ; PLOT
+        JSR  GWAIT
         STA  GCMD
 
         HLT
+
+;=== waiting for the engine ================================================
+; The DEVICE draws in real time -- a full-screen fill is tens of thousands of
+; pixels -- and a command issued while another is running ABORTS it. The
+; emulator draws instantaneously and always reports not-busy, so this costs
+; nothing there; on the RTL it is the difference between a picture and a few
+; scattered pixels. GWAIT is called before every command so ONE payload is
+; correct on both, which is what makes the framebuffer diff meaningful.
+GWAIT:  LDA  GSTAT
+        LDB  #$80
+        AND
+        JNZ  GWAIT
+        RTS

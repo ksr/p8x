@@ -36,6 +36,22 @@ module p8x_top(
   output       sd_mosi,    //   CMD  as MOSI (pin 82)
   input        sd_miso,    //   DAT0 as MISO (pin 84)
   output       sd_cs,      //   DAT3 as CS   (pin 81)
+`ifdef LCD
+  // 4.3" 480x272 parallel-RGB panel, DE mode. The pixel clock is 27/3 = 9 MHz,
+  // the SAME divide-by-three the CPU runs on, so no PLL is needed.
+  //
+  // Behind `LCD` because the 40-pin RGB mapping has NOT been verified against
+  // Sipeed's documentation yet, and unconstrained pins fail place-and-route.
+  // Guessing pin numbers is how a panel stays dark for a day, so the default
+  // `build.sh cpu` is left exactly as it was and the panel is opt-in.
+  output       lcd_clk,
+  output       lcd_de,
+  output       lcd_hs,
+  output       lcd_vs,
+  output [4:0] lcd_r,
+  output [5:0] lcd_g,
+  output [4:0] lcd_b,
+`endif
   output [5:0] led);       // active-LOW
 
   // ---- power-on reset: hold for 256 clocks after configuration ----
@@ -112,6 +128,11 @@ module p8x_top(
   wire acia_st  = (mem_addr == 16'hFF04);
   wire acia_dat = (mem_addr == 16'hFF05);
   wire is_cf    = (mem_addr >= 16'hFF10) && (mem_addr <= 16'hFF17);
+`ifdef LCD
+  wire is_gfx   = (mem_addr >= 16'hFF20) && (mem_addr <= 16'hFF2F);
+`else
+  wire is_gfx   = 1'b0;
+`endif
 
   // TDRE (bit 1) = transmitter free; RDRF (bit 0) = a byte is waiting.
   wire [7:0] cf_rdata;
@@ -122,9 +143,33 @@ module p8x_top(
            .sd_clk(sd_clk), .sd_mosi(sd_mosi), .sd_miso(sd_miso), .sd_cs(sd_cs),
            .card_ready(card_ready));
 
+`ifdef LCD
+  // ---- graphics display ($FF20..$FF2E) + the panel ----
+  // The engine and the scanout use INDEPENDENT framebuffer ports: a scanout
+  // that had to wait for a fill would tear visibly.
+  wire [7:0]  gfx_rdata, sc_data;
+  wire [12:0] sc_addr;
+  wire [1:0]  sc_pen;
+  wire [11:0] sc_rgb;
+
+  gfx GFX(.clk(clk), .rst(rst),
+          .sel(is_gfx), .a(mem_addr[3:0]),
+          .wr(cen && mem_we && is_gfx), .rd_stb(cen && mem_rd && is_gfx),
+          .wdata(mem_dout), .rdata(gfx_rdata),
+          .sc_addr(sc_addr), .sc_data(sc_data), .sc_pen(sc_pen), .sc_rgb(sc_rgb));
+
+  video_rgb VID(.clk(clk), .rst(rst),
+          .fb_addr(sc_addr), .fb_data(sc_data), .fb_pen(sc_pen), .fb_rgb(sc_rgb),
+          .pclk(lcd_clk), .de(lcd_de), .hs(lcd_hs), .vs(lcd_vs),
+          .r(lcd_r), .g(lcd_g), .b(lcd_b));
+`else
+  wire [7:0] gfx_rdata = 8'hFF;
+`endif
+
   wire [7:0] io_rd = acia_st  ? {6'b0, ~tx_busy, rx_have} :
                      acia_dat ? rx_hold :
-                     is_cf    ? cf_rdata : 8'hFF;
+                     is_cf    ? cf_rdata :
+                     is_gfx   ? gfx_rdata : 8'hFF;
   assign mem_din = is_io ? io_rd : mem_q;
 
   // Reading $FF05 consumes the byte -- keyed off mem_rd (the microcycles that

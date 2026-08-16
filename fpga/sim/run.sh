@@ -127,7 +127,7 @@ if ! command -v iverilog >/dev/null 2>&1; then
   exit 2
 fi
 iverilog -g2012 -DP8X_TRACE -o sim.vvp \
-  "$ROOT/fpga/rtl/p8x_cpu.v" "$ROOT/fpga/rtl/p8x_soc.v" "$HERE/tb_p8x.v"
+  "$ROOT/fpga/rtl/p8x_cpu.v" "$ROOT/fpga/rtl/p8x_soc.v" "$ROOT/fpga/rtl/gfx.v" "$HERE/tb_p8x.v"
 rm -f rtl.console
 vvp sim.vvp +cycles="$CYCLES" "${RTL_RX[@]+"${RTL_RX[@]}"}" "${RTL_CF[@]+"${RTL_CF[@]}"}" +tx=rtl.console \
   | grep -E '^[0-9]' > rtl.trace
