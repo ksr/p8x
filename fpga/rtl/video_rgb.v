@@ -76,36 +76,57 @@ module video_rgb #(
   // leftmost pixel in the high bits.
   assign fb_pen = (fb_data >> ((2'd3 - ax[2:1]) << 1)) & 2'b11;
   reg [11:0] nxt_rgb;
+  reg        nxt_de, nxt_hs, nxt_vs;
 
+  // Data changes at phase 0; the panel samples on pclk's RISING edge at phase 2.
+  // That is two fabric cycles (~74 ns) of setup.
+  //
+  // Both used to happen on the SAME edge -- pclk went high in the very cycle the
+  // RGB lines changed, so the panel latched them mid-transition. The symptom is
+  // asymmetric and reads as a drawing bug rather than a timing one: a horizontal
+  // line is constant along x, so smearing sideways leaves it looking perfect,
+  // while a vertical line is a one-pixel feature IN x and comes out doubled.
+  // Nothing in simulation catches this -- tb_video checks pixel and line COUNTS,
+  // and setup time is not a thing an RTL testbench has an opinion about.
   always @(posedge clk) begin
     if (rst) begin
       ph <= 0; px <= 0; py <= 0;
       pclk <= 0; de <= 0; hs <= 1; vs <= 1; r <= 0; g <= 0; b <= 0;
+      nxt_rgb <= 0; nxt_de <= 0; nxt_hs <= 1; nxt_vs <= 1;
     end else begin
-      // phase 2 latches the fetched pixel; phase 0 presents it and steps on.
       case (ph)
-        2'd0: begin ph <= 2'd1; pclk <= 1'b0; end
-        2'd1: begin ph <= 2'd2; end
-        default: begin
-          ph   <= 2'd0;
-          pclk <= 1'b1;                       // rising edge mid-pixel: data is
-                                              // stable well before and after
-          px <= nx;
-          if (px == H_TOT-1) py <= ny;
-
-          de <= (nx < H_ACT) && (ny < V_ACT);
-          hs <= ~((nx >= H_ACT + H_FP) && (nx < H_ACT + H_FP + H_SYNC));
-          vs <= ~((ny >= V_ACT + V_FP) && (ny < V_ACT + V_FP + V_SYNC));
-
-          // 12-bit RGB444 out of the palette, spread over the panel's RGB565.
-          // The low bits are copied from the high ones so full-scale really is
-          // full-scale: 4'hF must light as 5'h1F, not 5'h1E.
+        // Present the pixel fetched during the previous period, and drop pclk.
+        2'd0: begin
+          ph   <= 2'd1;
+          pclk <= 1'b0;
+          de   <= nxt_de;
+          hs   <= nxt_hs;
+          vs   <= nxt_vs;
+          // 12-bit RGB444 spread over the panel's RGB565. The low bits copy the
+          // high ones so full-scale really is full-scale: 4'hF must light as
+          // 5'h1F, not 5'h1E.
           r <= {nxt_rgb[11:8], nxt_rgb[11]};
           g <= {nxt_rgb[7:4],  nxt_rgb[7:6]};
           b <= {nxt_rgb[3:0],  nxt_rgb[3]};
         end
+        // The byte for the NEXT pixel has settled by now (block RAM is
+        // synchronous, and fb_addr changed at phase 2 of the previous period).
+        2'd1: begin
+          ph      <= 2'd2;
+          nxt_rgb <= fb_rgb;
+          nxt_de  <= (nx < H_ACT) && (ny < V_ACT);
+          nxt_hs  <= ~((nx >= H_ACT + H_FP) && (nx < H_ACT + H_FP + H_SYNC));
+          nxt_vs  <= ~((ny >= V_ACT + V_FP) && (ny < V_ACT + V_FP + V_SYNC));
+        end
+        // Panel samples here. Advancing the counters now also points fb_addr at
+        // the pixel after next, ready for the fetch during the coming period.
+        default: begin
+          ph   <= 2'd0;
+          pclk <= 1'b1;
+          px   <= nx;
+          if (px == H_TOT-1) py <= ny;
+        end
       endcase
-      if (ph == 2'd1) nxt_rgb <= fb_rgb;      // fetched byte has settled by now
     end
   end
 
