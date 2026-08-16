@@ -461,10 +461,18 @@ CMD_H:  LDP1 #MHELP
 ; CFWAIT/CFDRQ are BOUNDED (up to 65536 status polls) so an ABSENT drive — whose
 ; task-file floats to $FF (BSY-looking) — times out instead of hanging. A present
 ; device is ready on the first poll, so this costs nothing in the common case.
-CFWAIT: LDA  #0             ; spin while BSY, bounded (~4096 polls)
+CFWAIT: LDA  #0             ; spin while BSY, bounded (~32768 polls)
         STA  CFTOL
-        LDA  #$F0           ; count 0xF000..0xFFFF then wrap -> 4096 iterations:
-        STA  CFTOH          ;   instant for a present device, quick on an absent one
+        LDA  #$80           ; count 0x8000..0xFFFF then wrap -> 32768 iterations.
+        STA  CFTOH          ;   4096 was too short for an SD card under SUSTAINED
+                            ;   writes: a one-off write is instant, but hundreds
+                            ;   back to back trigger internal erase/housekeeping
+                            ;   that can take 100-250 ms, and the bound fired
+                            ;   mid-transfer while cloning a disk image. A present
+                            ;   device still answers on the first poll, so this
+                            ;   costs nothing in the common case; an ABSENT drive
+                            ;   now takes ~8x longer to detect, which is still well
+                            ;   under a second and happens only on a probe.
 cfw_lp: LDA  CFSTAT
         LDB  #$80
         AND

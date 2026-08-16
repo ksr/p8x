@@ -385,6 +385,15 @@ module gfx (
           default: ;
         endcase
       end
+
+      // IDENT stream advance. This MUST live in the same always block as every
+      // other assignment to gidx: it started in its own `always @(posedge clk)`,
+      // which is two drivers on one register. Simulation happily picked a
+      // winner and the frame diff passed, but synthesis did not -- on hardware
+      // gidx came up 0 instead of 14, so the first POINT read returned $50 ('P',
+      // the first IDENT byte) instead of the pixel. A bug that only exists after
+      // place-and-route is exactly the kind the co-sim cannot see.
+      if (sel && rd_stb && a == 4'h7 && gidx < 4'd14) gidx <= gidx + 1;
     end
   end
 
@@ -401,10 +410,5 @@ module gfx (
       default: rdata = 8'hFF;
     endcase
   end
-
-  // IDENT stream advance, driven by the wrapper's read strobe.
-  // (declared here so the cursor lives with the register file)
-  always @(posedge clk)
-    if (!rst && sel && rd_stb && a == 4'h7 && gidx < 4'd14) gidx <= gidx + 1;
 
 endmodule

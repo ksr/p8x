@@ -29,6 +29,7 @@ NLO     = $3300                 ; sectors remaining, 16-bit
 NHI     = $3301
 CNT     = $3302
 OUTER   = $3303
+RETRY   = $3304                 ; CFWRITE attempts left for this sector
 
         .org $3000
 
@@ -58,9 +59,22 @@ BYTLP:  JSR  CONIN
         STA  OUTER
         JNZ  OUTLP
 
-        JSR  CFWRITE
-        LDA  #$2E               ; '.' ack -- the host waits on this
-        JSR  CONOUT
+        ; A CFWRITE failure here is usually TRANSIENT: the firmware's busy-wait
+        ; is bounded, and an SD card doing internal erase/housekeeping can hold
+        ; BSY for far longer than a card that is merely idle. Under sustained
+        ; sequential writes that happens often enough to kill a whole transfer,
+        ; so retry the sector rather than give up. Rewriting the same LBA is
+        ; harmless -- the data and the address are both unchanged.
+        LDA  #8
+        STA  RETRY
+WRTRY:  JSR  CFWRITE            ; C=1 on error
+        JNC  WROK
+        LDA  RETRY
+        DEC
+        STA  RETRY
+        JNZ  WRTRY
+        JMP  WRERR              ; eight attempts failed: this one is real
+WROK:
 
         LDA  LBA0               ; 24-bit LBA increment
         INC
@@ -84,13 +98,29 @@ NOCY1:
 DECLO:  LDA  NLO
         DEC
         STA  NLO
-        JNZ  SECLP
+        JNZ  NEXTS
         LDA  NHI
-        JNZ  SECLP
+        JNZ  NEXTS
 
-FIN:    LDA  #$4B               ; 'K'
+FIN:    LDA  #$2E               ; ack the final sector, then finish
+        JSR  CONOUT
+        LDA  #$4B               ; 'K'
         JSR  CONOUT
         RTS
+
+; The ack is emitted HERE -- after CFWRITE and after ALL the bookkeeping -- so it
+; means "ready for the next sector NOW", which is exactly how the host treats it.
+;
+; It used to fire immediately after CFWRITE, leaving ~30 instructions of LBA
+; increment and counter work between the ack and the receive loop. The host sends
+; the next 512 bytes the moment it sees the ack, the ACIA shim holds exactly ONE
+; byte, and a byte landing in that window is lost. The board then waits forever
+; for a sector one byte short, and the protocol has no framing to resync with --
+; so the transfer stops dead. That is what it did twice, both times around 85%
+; of a 3254-sector image.
+NEXTS:  LDA  #$2E               ; '.'
+        JSR  CONOUT
+        JMP  SECLP
 
 ; A failed write stops the transfer. Acking unconditionally was the worst
 ; possible failure mode: run this without CFINIT and every CFWRITE errors, every
