@@ -29,6 +29,41 @@
 // BUSY throughout and MUST poll it: a command issued while another is still
 // running aborts it.
 
+// The ellipse's error step, shared by both regions. A macro rather than a task
+// so it stays inline in the state machine and reads next to the C it mirrors:
+//   region 1: x++, dx += 2*ry2; err += 4*ry2 + 4*dx  (and y--, dy -= 2*rx2)
+//   region 2: y--, dy -= 2*rx2; err += 4*rx2 - 4*dy  (and x++, dx += 2*ry2)
+// Every `edx +` / `edy -` below uses the NEW value, exactly as the C does after
+// its increment -- reading the old one is the classic way to get this wrong.
+`define ELL_STEP                                                              \
+  if (!er2) begin                                                             \
+    elx <= elx + 1;                                                           \
+    edx <= edx + ($signed({14'd0, ery2}) <<< 1);                              \
+    if (eerr < 0)                                                             \
+      eerr <= eerr + ($signed({24'd0, ery2}) <<< 2)                           \
+                   + ((edx + ($signed({14'd0, ery2}) <<< 1)) <<< 2);          \
+    else begin                                                                \
+      ely <= ely - 1;                                                          \
+      edy <= edy - ($signed({14'd0, erx2}) <<< 1);                            \
+      eerr <= eerr + ($signed({24'd0, ery2}) <<< 2)                           \
+                   + ((edx + ($signed({14'd0, ery2}) <<< 1)) <<< 2)           \
+                   - ((edy - ($signed({14'd0, erx2}) <<< 1)) <<< 2);          \
+    end                                                                       \
+  end else begin                                                              \
+    ely <= ely - 1;                                                            \
+    edy <= edy - ($signed({14'd0, erx2}) <<< 1);                              \
+    if (eerr > 0)                                                             \
+      eerr <= eerr + ($signed({24'd0, erx2}) <<< 2)                           \
+                   - ((edy - ($signed({14'd0, erx2}) <<< 1)) <<< 2);          \
+    else begin                                                                \
+      elx <= elx + 1;                                                          \
+      edx <= edx + ($signed({14'd0, ery2}) <<< 1);                            \
+      eerr <= eerr + ((edx + ($signed({14'd0, ery2}) <<< 1)) <<< 2)           \
+                   + ($signed({24'd0, erx2}) <<< 2)                           \
+                   - ((edy - ($signed({14'd0, erx2}) <<< 1)) <<< 2);          \
+    end                                                                       \
+  end
+
 module gfx (
   input             clk,
   input             rst,
@@ -65,7 +100,7 @@ module gfx (
   // single routine.
   reg signed [17:0] gx0, gy0, gx1, gy1;
   reg  [1:0]  gcol;
-  reg  [7:0]  gparm;
+  reg  [7:0]  gparm, gparm2;                   // ELLIPSE: x- and y-radius
   reg         gerr;
   reg  [11:0] pal [0:3];
   reg  [7:0]  gdata;                           // POINT result / IDENT stream
@@ -149,11 +184,13 @@ module gfx (
   wire [2:0]  px_sh   = (2'd3 - px_x[1:0]) << 1;   // leftmost pixel in the high bits
 
   // ---- command sequencer ---------------------------------------------------
-  localparam S_IDLE  = 4'd0,  S_PIX   = 4'd1,  S_LINE  = 4'd2,
+  localparam S_IDLE  = 5'd0,  S_PIX   = 4'd1,  S_LINE  = 4'd2,
              S_BOXH  = 4'd3,  S_BOXV  = 4'd4,  S_FILL  = 4'd5,
              S_CLS   = 4'd6,  S_CIRC  = 4'd7,  S_CIRCF = 4'd8,
-             S_POINT = 4'd9,  S_CIRCI = 4'd10, S_DONE  = 4'd11;
-  reg [3:0] st;
+             S_POINT = 4'd9,  S_CIRCI = 4'd10, S_DONE  = 4'd11,
+             S_ELLI  = 4'd12, S_ELL   = 4'd13, S_ELLR2 = 4'd14,
+             S_ELLFI = 4'd15, S_ELLSI = 5'd16;
+  reg [4:0] st;
 
   // Bresenham / loop state
   reg signed [17:0] cx, cy, ex, ey;            // cursor and endpoint
@@ -165,6 +202,23 @@ module gfx (
   reg [2:0]  oct;                              // circle: which of the 8 points
   reg [12:0] clsi;
   reg [7:0]  cls_val;                          // byte S_CLS fills with
+
+  // ---- ellipse (midpoint, four-way symmetric) -------------------------------
+  // A transliteration of gpu_ellipse() in the emulator. Both decision variables
+  // are scaled by 4 there so the classic rx^2/4 term is exact rather than
+  // rounded, and the scaling is kept here: a rounding difference is exactly how
+  // two implementations of this quietly drift apart.
+  //
+  // Widths are set by the region-2 initialiser ry2*(2x+1)^2, which reaches ~35
+  // bits for the largest radii an 8-bit register can ask for. Everything inside
+  // the LOOPS is adds and shifts; every multiply is one-time, at setup or at the
+  // region boundary.
+  reg [15:0] erx2, ery2;
+  reg signed [29:0] edx, edy;
+  reg signed [39:0] eerr;
+  reg signed [17:0] elx, ely;
+  reg        er2;                              // 0 = region 1, 1 = region 2
+  reg        efill;
   reg [3:0]  stp;                              // SELFTEST step
   reg        busy;
 
@@ -190,7 +244,7 @@ module gfx (
     if (rst) begin
       st <= S_IDLE; px_go <= 0; px_busy <= 0; e_we <= 0;
       gx0 <= 0; gy0 <= 0; gx1 <= 0; gy1 <= 0;
-      gcol <= 2'd1; gparm <= 0; gerr <= 0; gdata <= 0; gidx <= 4'd14;
+      gcol <= 2'd1; gparm <= 0; gparm2 <= 0; gerr <= 0; gdata <= 0; gidx <= 4'd14;
       pal[0] <= 12'h000; pal[1] <= 12'hFFF; pal[2] <= 12'hF00; pal[3] <= 12'h0F0;
     end else if (sc_en) begin
       // The scanout owns the framebuffer this cycle, so the engine holds. It
@@ -359,13 +413,92 @@ module gfx (
           end
         end
 
+        // ---- ELLIPSE / ELLIPSEFILL ----------------------------------------
+        S_ELLI: begin                          // setup: region-1 error term
+          erx2 <= gparm  * gparm;
+          ery2 <= gparm2 * gparm2;
+          elx  <= 0;
+          ely  <= {10'd0, gparm2};
+          edx  <= 0;
+          er2  <= 0;
+          oct  <= 0;
+          st   <= (gparm == 0 || gparm2 == 0) ? S_DONE : S_ELLFI;
+        end
+        // erx2/ery2 are registered in S_ELLI, so the terms that need them wait
+        // one cycle. dy = 2*rx2*ry; err = 4*ry2 - 4*rx2*ry + rx2.
+        S_ELLFI: begin
+          edy  <= ($signed({14'd0, erx2}) * $signed({22'd0, gparm2})) <<< 1;
+          eerr <= ($signed({24'd0, ery2}) <<< 2)
+                - (($signed({24'd0, erx2}) * $signed({32'd0, gparm2})) <<< 2)
+                + $signed({24'd0, erx2});
+          // A fill must load its first span through S_ELLSI. The circle starts
+          // its walk at x=r, so seeding cx to ccx-r works there; the ellipse
+          // starts region 1 at x=0, where the span is the single pixel ccx.
+          // Seeding it the circle's way drew one spurious full-width span on
+          // the ellipse's extreme row.
+          st   <= efill ? S_ELLSI : S_ELL;
+        end
+
+        // One state walks both regions; er2 says which. Four points per step for
+        // an outline, two horizontal spans for a fill -- the same split the
+        // circle makes, with cx sweeping the span as S_CIRCF does.
+        S_ELL: if (!px_go && !px_busy) begin
+          if (!er2 && edx >= edy)      st <= S_ELLR2;   // region 1 -> 2
+          else if (er2 && ely < 0)     st <= S_DONE;
+          else begin
+            if (efill) begin
+              px_x <= cx;
+              px_y <= oct[0] ? (ccy - ely) : (ccy + ely);
+              px_go <= 1;
+              if (cx >= ccx + elx) begin
+                cx <= ccx - elx;
+                if (oct[0]) begin oct <= 0; `ELL_STEP st <= S_ELLSI; end
+                else oct <= 1;
+              end else cx <= cx + 1;
+            end else begin
+              case (oct[1:0])
+                2'd0: begin px_x <= ccx+elx; px_y <= ccy+ely; end
+                2'd1: begin px_x <= ccx-elx; px_y <= ccy+ely; end
+                2'd2: begin px_x <= ccx+elx; px_y <= ccy-ely; end
+                2'd3: begin px_x <= ccx-elx; px_y <= ccy-ely; end
+              endcase
+              px_go <= 1;
+              if (oct[1:0] == 2'd3) begin oct <= 0; `ELL_STEP end
+              else oct <= oct + 1;
+            end
+          end
+        end
+
+        S_ELLSI: begin cx <= ccx - elx; st <= S_ELL; end
+
+        S_ELLR2: begin                         // region-2 error initialiser
+          eerr <= $signed({24'd0, ery2}) * ((elx <<< 1) + 1) * ((elx <<< 1) + 1)
+                + (($signed({24'd0, erx2}) * (ely - 1) * (ely - 1)) <<< 2)
+                - (($signed({24'd0, erx2}) * $signed({24'd0, ery2})) <<< 2);
+          er2 <= 1;
+          cx  <= ccx - elx;
+          st  <= S_ELL;
+        end
+
         S_POINT: if (!px_go && !px_busy) st <= S_DONE;
 
         S_DONE: st <= S_IDLE;
         default: st <= S_IDLE;
       endcase
 
-      // ---- CPU writes ------------------------------------------------------
+    end
+  end
+
+  // ---- CPU register writes --------------------------------------------------
+  // Deliberately its OWN always block, outside the scanout hold. These used to
+  // live inside the engine's `else`, so any write landing on a scanout cycle was
+  // silently dropped -- one in four in simulation, one in three on the board.
+  // That is what made SETPAL and BOXFILL "missing" from gfx.sh for days: their
+  // GCMD write collided with a hold and the command simply never arrived. A
+  // register write touches no framebuffer port, so there is nothing to gate.
+  always @(posedge clk) begin
+    if (!rst) begin
+
       if (sel && wr) begin
         case (a)
           4'h0: gx0 <= {2'd0, wdata};          // low write CLEARS the high byte
@@ -377,7 +510,8 @@ module gfx (
           4'hB: gx1 <= {2'd0, wdata, gx1[7:0]};
           4'hC: gy1 <= {2'd0, wdata, gy1[7:0]};
           4'h4: gcol  <= wdata[1:0];
-          4'h8: gparm <= wdata;
+          4'h8: gparm  <= wdata;
+          4'hF: gparm2 <= wdata;   // GPARM2: ELLIPSE y-radius
           4'h5: begin
             gerr <= 0;
             case (wdata)
@@ -405,6 +539,16 @@ module gfx (
               end
               8'h05: begin clsi <= 0; cls_val <= {4{gcol}}; st <= S_CLS; end
               8'h06: pal[gcol] <= {gx0[3:0], gy0[3:0], gx1[3:0]};
+              // ELLIPSE / ELLIPSEFILL. ccx/ccy and cx are shared with the
+              // circle; S_ELLI needs one extra cycle before erx2/ery2 are
+              // available, which is what S_ELLFI is for.
+              8'h0A, 8'h0B: begin
+                ccx <= gx0; ccy <= gy0;
+                px_pen <= gcol; px_read <= 0;
+                efill <= (wdata == 8'h0B);
+                cx <= gx0 - {10'd0, gparm};
+                st <= S_ELLI;
+              end
               8'h07, 8'h08: begin
                 ccx <= gx0; ccy <= gy0;
                 cr  <= {10'd0, gparm};          // x = r

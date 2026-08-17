@@ -38,11 +38,12 @@ iverilog -g2012 -o tb_gfx.vvp \
   "$HERE/tb_gfx.v"
 
 fail=0
-for name in gfx gfx2; do
+for name in gfx gfx2 gfx3; do
   src="$EMU/test/test_${name#gfx}.asm"
   case "$name" in
     gfx)  src="$EMU/test/test_gfx.asm" ;;
     gfx2) src="$EMU/test/test_gfx2.asm" ;;
+    gfx3) src="$EMU/test/test_gfx3.asm" ;;
   esac
   python3 "$ROOT/assembler/p8xasm.py" "$src" -o "$name.bin" >/dev/null
 

@@ -28,14 +28,6 @@ remainder is why it is still here.
 > `$FF20` — `$FF26` read `$FF`, BASIC said `?No display` — until the SAME file
 > was loaded again. Verified: the clean rebuild was correct all along.
 >
-> **A TEST IS RED RIGHT NOW: `fpga/sim/gfx.sh`.** The RTL graphics engine misses
-> two of the nine commands its payload issues (SETPAL and BOXFILL), and the CPU
-> never writes `$FF25` for those two at all. Not root-caused; details under
-> *Milestone 6 — graphics* below. It is left failing on purpose — it went green
-> for days over payloads that drew nothing, and a red test naming a real
-> divergence is worth more than that. **This does not affect the board**: BASIC's
-> own wait is correct and drawing works on hardware.
-
 - [x] **BASIC now honours the OS current directory (fixed 2026-08-13).** From the
       OS shell, `cd src` then `basic` then `SAVE "T"` used to write `/T`; it now
       writes `/src/T`.
