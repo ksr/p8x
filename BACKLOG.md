@@ -20,6 +20,16 @@ remainder is why it is still here.
 
 ## NEXT
 
+> **THE BOARD'S GRAPHICS STOPPED ANSWERING AFTER A CLEAN REBUILD (2026-08-17).**
+> `$FF26` reads `$FF` instead of `$00` and BASIC says `?No display`. It was
+> drawing correctly before. Everything checkable looks right: GFX/VID cells are
+> in the netlist, the 18 LCD pins place (31 IOBs), BSRAM 44/46, the microcode
+> compaction self-verifies as identical, the rebuilt ROM differs from the
+> committed one by exactly one byte ($047A F0->80, the CFWAIT constant), and
+> gfx.v's read path is intact. NOT explained. Only three inputs changed in that
+> rebuild and two are provably identical, so it is the third or the bitstream
+> itself. Start there.
+>
 > **A TEST IS RED RIGHT NOW: `fpga/sim/gfx.sh`.** The RTL graphics engine misses
 > two of the nine commands its payload issues (SETPAL and BOXFILL), and the CPU
 > never writes `$FF25` for those two at all. Not root-caused; details under
