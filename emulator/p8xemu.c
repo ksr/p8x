@@ -26,14 +26,16 @@
  *     FF10 data  FF11 feature  FF12 sector-count  FF13-15 LBA0-2
  *     FF16 head/dev  FF17 command(w)/status(r)  [BSY7 DRQ3 ERR0]
  *   Backs a flat sector-image file (LBA*512); SET FEATURES/IDENTIFY/READ/WRITE.
- *   FF20-FF2E graphics display: a 240x136 4-colour framebuffer with a drawing
+ *   FF20-FF2F graphics display: a 240x136 4-colour framebuffer with a drawing
  *     engine, pixel-doubled to a 480x272 panel. Same device whether it is inside
  *     the FPGA P8X or on a bus card (a Tang Nano 20K + the same panel), so one
  *     command set and one golden model serve both.
- *     FF20-23 X0/Y0/X1/Y1 low  FF29-2C their high bytes  FF24 pen  FF28 scalar
- *     FF25 command  FF26 status  FF27 data  FF2D/2E "PG" presence signature
+ *     FF20-23 X0/Y0/X1/Y1 low  FF29-2C their high bytes  FF24 pen
+ *     FF28 x-radius  FF2F y-radius (ellipse)  FF25 command  FF26 status
+ *     FF27 data  FF2D/2E "PG" presence signature
  *     Commands: 01 PLOT 02 LINE 03 BOX 04 BOXFILL 05 CLS 06 SETPAL 07 CIRCLE
- *               08 CIRCLEFILL 09 POINT | F0 SELFTEST F1 RESET F2 IDENT
+ *               08 CIRCLEFILL 09 POINT 0A ELLIPSE 0B ELLIPSEFILL
+ *               | F0 SELFTEST (emulator only) F1 RESET F2 IDENT
  *     Always present; -g writes it out as a PPM, -G as text.
  */
 #include <stdio.h>

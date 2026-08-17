@@ -113,14 +113,13 @@ then write `GCMD`:
 
 | Cmd | | Cmd | |
 |---|---|---|---|
-| `$01` | `PLOT` (X0,Y0) | `$07` | `CIRCLE` centre (X0,Y0) radius `GPARM` |
-| `$0A` | `ELLIPSE` radii `GPARM` (x) and `GPARM2` (y) |
-| `$0B` | `ELLIPSEFILL` |
+| `$01` | `PLOT` (X0,Y0) | `$07` | `CIRCLE` centre (X0,Y0), radius `GPARM` |
 | `$02` | `LINE` (X0,Y0)–(X1,Y1) | `$08` | `CIRCLEFILL` |
 | `$03` | `BOX` outline | `$09` | `POINT` — pixel at (X0,Y0) → `GDATA` |
-| `$04` | `BOXFILL` solid | `$F0` | `SELFTEST` — built-in pattern |
-| `$05` | `CLS` to `GCOL` | `$F1` | `RESET` — clear, default palette |
-| `$06` | `SETPAL` pen `GCOL` := (X0,Y0,X1) as R,G,B | `$F2` | `IDENT` → 14 bytes via `GDATA` |
+| `$04` | `BOXFILL` solid | `$0A` | `ELLIPSE` — radii `GPARM` (x), `GPARM2` (y) |
+| `$05` | `CLS` to `GCOL` | `$0B` | `ELLIPSEFILL` |
+| `$06` | `SETPAL` pen `GCOL` := (X0,Y0,X1) as R,G,B | `$F1` | `RESET` — clear, default palette |
+| `$F0` | `SELFTEST` — pattern (**emulator only**) | `$F2` | `IDENT` → 14 bytes via `GDATA` |
 
 **Detection and geometry.** An absent card floats the bus to `$FF`, so one magic
 byte proves nothing — `GID0`/`GID1` are two fixed bytes at two addresses. `IDENT`
@@ -131,6 +130,10 @@ BASIC binary drive a wider device later.
 **`SELFTEST` needs no software behind it** — one register write puts all four
 pens, both primitives, a circle and all four screen edges up, which is how you
 tell a dead card from a dead driver.
+
+> **`SELFTEST` is emulator-only.** The RTL drops `$F0` into its `default` arm and
+> sets the error bit, so on the board it draws nothing. Every other command is
+> implemented in both. Tracked in [BACKLOG.md](../BACKLOG.md).
 
 **Coordinates are 16-bit pairs, and writing a low byte CLEARS its high byte.**
 So code that only ever writes low bytes can never inherit a stale high byte from

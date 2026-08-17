@@ -208,6 +208,26 @@ The word burned to the 4× 28C64 EPROMs and interpreted by the emulator. Bit map
 | **PC / SP / MAR** | Program Counter / Stack Pointer / Memory Address Register — the classic roles, all subsumed by the P0–P3 pointer bank here (no separate MAR). |
 | **UART** | Universal Asynchronous Receiver/Transmitter — the serial-port role the 6850 ACIA fills. |
 
+## Graphics display (`$FF20-$FF2F`)
+
+Same device whether it is inside the FPGA P8X or on a bus card, so one command
+set and one golden model (`gpu_*` in `emulator/p8xemu.c`) serve both.
+
+| Term | Meaning |
+|------|---------|
+| **framebuffer** | The pixel memory the display scans out of. 240x136 at 2 bits per pixel = 8160 bytes, four BSRAM blocks; each logical pixel is drawn 2x2 to fill the 480x272 panel. |
+| **pen** | One of the four values a pixel can hold (0-3) — an *index*, not a colour. `GCOL`/`COLOR` select which pen drawing uses. |
+| **palette** | The table mapping each of the four pens to a 12-bit RGB value, so the 4 colours on screen are chosen from 4096. Rewritten by `SETPAL` / BASIC `PALETTE`. |
+| **scanout** | The read side: `video_rgb.v` walking the framebuffer in step with the panel's timing and emitting RGB + DE. Shares the single framebuffer port with the drawing engine (`sc_en`). |
+| **drawing engine** | The state machine *in the device* that renders a primitive from the coordinate registers. Why a filled box is ~8 port writes and not 32640 read-modify-writes. |
+| **Bresenham / midpoint** | The integer line and circle/ellipse algorithms. Transliterated between C and Verilog step for step — a cleverer version that lights a different pixel is a bug, because the co-sim compares framebuffers byte for byte. |
+| **DE-only** | The panel takes a Data Enable strobe with no real HSYNC/VSYNC. 560x297 total at 9 MHz = 54.11 Hz. |
+| **GX0/GY0/GX1/GY1 (+H)** | Coordinate registers, 16-bit as low/high pairs. Writing a low byte clears its high byte. |
+| **GPARM / GPARM2** | Scalar arguments: `CIRCLE`/`ELLIPSE` x-radius and y-radius. |
+| **GCMD / GSTAT / GDATA** | Write-to-execute command / status (bit 7 BUSY, bit 0 ERR) / read-back for `POINT` and the `IDENT` stream. |
+| **GID0/GID1** | Presence signature, `$50 $47` = `"PG"`. Two fixed bytes because an absent card floats the bus to `$FF`, so one magic byte could not tell them apart. |
+| **SELFTEST (`$F0`)** | Built-in test pattern — **emulator only**; the RTL rejects it and sets ERR. See [BACKLOG.md](BACKLOG.md). |
+
 ## BASIC internals (`basic/p8xbasic.asm`)
 
 | Term | Meaning |
@@ -220,6 +240,10 @@ The word burned to the 4× 28C64 EPROMs and interpreted by the emulator. Bit map
 | **EVAL / TERM / FACTOR** | Recursive-descent expression parser levels. |
 | **TOK_xxx** | Keyword token bytes (e.g. `TOK_FOR`, `TOK_BYE`). |
 | **LCG** | Linear Congruential Generator — the `RND()` pseudo-random algorithm. |
+| **GPEN** | BASIC's shadow of `GCOL`. The device register is write-only, so the pen cannot be read back and restored — which is what `PALETTE` and `CLS` need in order not to steal the drawing colour. |
+| **GWAIT / GEXEC** | Poll `GSTAT`'s BUSY bit / issue a command byte and then wait. `GWAIT` preserves A: it once did not, which turned every command into a NOP. |
+| **GSADR / GSTGT / GCTMP / GELL** | Graphics scratch: target register address / target held across `EVAL` / the command byte held across `GWAIT` / "a second radius made this an ellipse". |
+| **DOGLINE** | The `LINE` *statement* handler — named around the pre-existing `DOLINE`, which parses a program line. |
 
 ## Code identifiers & internal abbreviations (OS / monitor)
 

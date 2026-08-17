@@ -143,10 +143,11 @@ the monitor, OS, BASIC, C compiler and assembler run **unmodified**.
 | 5 Clock-up + IRQ | next |
 | 6 Graphics: 480x272 panel + drawing engine | done |
 
-As built: **9 MHz** effective (27 MHz fabric, three phases per microcycle),
-~48 MHz Fmax (varies a little per place-and-route run), 40/46 block RAMs — 44/46
-with the graphics panel — and P8X is programmed into the board's flash so it comes
-up standalone on power.
+As built: **9 MHz** effective (27 MHz fabric, three phases per microcycle). The
+CPU-only build is 40/46 block RAMs at ~48 MHz Fmax; adding the graphics panel takes
+it to 44/46 and 13288/20736 LUT4, with Fmax measured at 38.8 MHz — still four times
+the clock it runs at. P8X is programmed into the board's flash, so it comes up
+standalone on power.
 
 **Graphics** (`build.sh lcd`) adds a 240x136 four-colour framebuffer with a
 drawing engine, pixel-doubled onto the panel, driven by new BASIC statements:

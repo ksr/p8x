@@ -1,8 +1,10 @@
-# Unix-style mount for the second CF (branch: `mount-drives`)
+# Unix-style mount for the second CF
 
-**Status: COMPLETE.** All five phases landed on this branch and the full suite is
-green (57 PASS). Drive 1 is mounted at `/D1`; commands are drive-unaware; the
-DOS-model `0:`/`1:` machinery is removed. Ready to merge.
+**Status: SHIPPED — this is a design record, not a plan.** All five phases are in
+`main`: drive 1 is mounted at `/D1`, commands are drive-unaware, and the DOS-model
+`0:`/`1:` machinery is gone. The behaviour it describes is live, so read it for the
+*reasoning*; for what the code does today, `os/p8xos.asm` and
+[p8x-monitor.md](p8x-monitor.md) are authoritative.
 
 
 ## Goal

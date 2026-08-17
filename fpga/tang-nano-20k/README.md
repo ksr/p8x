@@ -212,13 +212,19 @@ settled, all of which I had guessed wrong:
 
 Pins: CLK 77, DEN 48, R 38–42, G 32–37, B 27–31, `DRIVE=24 PULL_MODE=UP`.
 
-**It does fit.** Synthesised and placed with a scratch pinout:
+**It does fit** — but not with much room. Measured from the shipped `build.sh
+lcd` (the "without" column is the design-time `cpu` build):
 
 | | with graphics | without |
 |---|---|---|
-| BSRAM | **44 / 46** | 40 / 46 |
-| LUT4 | ~11600 / 20736 | 8029 |
-| Fmax | ~48 MHz | 48.8 MHz |
+| BSRAM | **44 / 46** (95%) | 40 / 46 |
+| LUT4 | **13288 / 20736** (64%) | 8029 |
+| DFF | 5365 / 15552 (34%) | — |
+| Fmax | **38.8 MHz** (tighter of the two reported domains; the other is 54.9) | 48.8 MHz |
+
+Still a wide margin over the 9 MHz the design actually runs at, but note that
+95% BSRAM occupancy puts place-and-route close to the edge: see the placement
+cliff noted in [BACKLOG.md](../../BACKLOG.md).
 
 The framebuffer costs 4 blocks (8160 bytes at 2 bits per pixel) and leaves two
 spare. **No PLL is needed**: 480x272 at 60 Hz wants 9.009 MHz and 27/3 is 9.000,

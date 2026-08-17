@@ -130,10 +130,10 @@ module gfx (
   // mode halves a block's usable depth, so 8160 bytes took EIGHT blocks instead
   // of four and the design went to 48/46, which will not place.
   //
-  // Sharing is nearly free here. The scanout needs one byte per eight panel
-  // pixels, i.e. one cycle in 24; the engine gets the other 23. sc_en marks the
-  // scanout's cycle and the engine holds, so nothing it is part-way through can
-  // be corrupted.
+  // Sharing costs a THIRD of the engine, not a 24th: sc_en is simply `ph == 0`
+  // in video_rgb.v, so it claims the port once per pixel period whether it has
+  // a byte to fetch or not. That is where the 7.5 clocks per pixel above comes
+  // from. The engine holds that cycle, so nothing part-way through is corrupted.
   reg [7:0] fb [0:FBBYTES-1];
   reg [12:0] e_addr;
   reg        e_we;

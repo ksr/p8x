@@ -4,11 +4,13 @@
 ; 6850 ACIA console at $FF04/05. Self-contained (own console + RAM), so it can
 ; run standalone, from ROM (launched by the monitor), or be booted from disk.
 ;
-; Build targets differ only in two -D symbols (see basic/README.md):
-;   BASORG  code origin   ($0000 standalone, $2000 in monitor ROM, $8000 disk)
-;   BASRAM  data base      ($8000 standalone, $A000 when code lives in low RAM)
-; PBUF (rebuild scratch) is fixed at $C000 for all. Defaults below give the
-; standalone $0000/$8000 build; the disk/ROM builds pass -D to relocate.
+; Build targets differ only in their -D symbols (see basic/README.md):
+;   BASORG  code origin   ($0000 standalone, $2000 in monitor ROM, $6A00 in the TPA)
+;   BASRAM  data base      ($8000 standalone, $C500 for the TPA build)
+;   PBUF    rebuild scratch ($C000 default; the TPA build moves it to $E000)
+;   MONITOR where BYE returns ($2000 = the OS cold start for the TPA build)
+; The defaults below give the standalone $0000/$8000 build; the disk/ROM builds
+; pass all four on the command line -- see os/run.sh for the canonical invocation.
 ;
 ; Program storage (PROG): a sorted sequence of records
 ;     [num-lo][num-hi][text bytes ...][00]
@@ -1097,7 +1099,8 @@ DOPOKE: INP2
 pk_err: JMP  SYNERR
 
 ;==============================================================================
-; GRAPHICS — LINE / COLOR / BOX / CLS, driving the $FF20 display.
+; GRAPHICS — COLOR / CLS / PLOT / LINE / BOX / CIRCLE (and its ellipse form) /
+; PALETTE, plus the POINT() function, driving the $FF20 display.
 ;
 ; The drawing engine is in the DEVICE: these statements evaluate expressions
 ; straight into the coordinate registers and write one command byte. There is no

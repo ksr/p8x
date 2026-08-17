@@ -29,7 +29,7 @@
 #define GX1         0xFF22       /* draw X1 / SETPAL blue  (0-239) */
 #define GY1         0xFF23       /* draw Y1 (0-135) */
 #define GCOL        0xFF24       /* pen 0-3 (also the pen SETPAL rewrites) */
-#define GCMD        0xFF25       /* write executes: 1 PLOT 2 LINE 3 BOX 4 BOXFILL 5 CLS 6 SETPAL */
+#define GCMD        0xFF25       /* write executes: 1 PLOT 2 LINE 3 BOX 4 BOXFILL 5 CLS 6 SETPAL 7 CIRCLE 8 CIRCLEFILL 9 POINT A ELLIPSE B ELLIPSEFILL / F1 RESET F2 IDENT */
 #define GSTAT       0xFF26       /* read: bit7 BUSY, bit0 ERR (unknown command) */
 #define GDATA       0xFF27       /* read: IDENT record stream, else the last POINT result */
 #define GPARM       0xFF28       /* scalar argument: CIRCLE/ELLIPSE x-radius */

@@ -116,11 +116,15 @@ statement. Rebuilding only the bitstream left the hardware understanding a
 command that nothing on the card could issue, which presents as `?SYNTAX ERROR`
 from BASIC — nothing about it points at the card being stale.
 
-**Check `p8x_cpu.fs`'s timestamp after a build.** `build.sh … load` runs
-openFPGALoader even when the build ahead of it failed, so it reports `DONE` while
-reprogramming a *stale* bitstream. That has concealed two separate build failures
-here. If a fix appears to do nothing on the board, check the mtime before
-debugging anything else — and if that is current, reload once: a freshly loaded
+**Check `p8x_cpu.fs`'s timestamp after a build.** This concealed two separate
+build failures here. The script itself is no longer the hole — it runs under
+`set -euo pipefail` and each of synthesise / place-and-route / pack exits `1` on
+failure, so `load` cannot be reached after a failed build. What remains is that
+**`cpu` and `lcd` write the same `p8x_cpu.fs`**: a failed `lcd` build leaves the
+previous file sitting there looking perfectly valid, and it may well be a `cpu`
+bitstream with no graphics in it at all. Note also that a `| tail`-style pipeline
+hides the exit status, which is how the failure reads as success. If a fix appears
+to do nothing on the board, check the mtime before debugging anything else — and if that is current, reload once: a freshly loaded
 bitstream has come up not answering more than once, and the same file loaded
 again fixed it.
 

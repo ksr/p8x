@@ -27,11 +27,39 @@ remainder is why it is still here.
 > the bitstream left the hardware understanding a command nothing could issue --
 > `?SYNTAX ERROR` from a BASIC that could not parse it. Check both.
 >
-> **And check `p8x_cpu.fs`'s MTIME after a build.** `build.sh ... load` runs
-> openFPGALoader even when the build ahead of it failed, so it happily reports
-> DONE while reprogramming a stale bitstream. That has now hidden two separate
-> failures (a 48/46 placement failure, and a multiply-driven `st` net).
+> **And check `p8x_cpu.fs`'s MTIME after a build.** This has hidden two separate
+> failures (a 48/46 placement failure, and a multiply-driven `st` net). `build.sh`
+> itself now stops correctly -- `set -euo pipefail` plus an explicit `exit 1` on
+> each of synthesise / P&R / pack, so `load` is unreachable after a failed build.
+> The remaining hole is that **`cpu` and `lcd` both write `p8x_cpu.fs`**, so a
+> failed `lcd` build leaves a valid-looking file that may be a graphics-less `cpu`
+> bitstream; and piping the build through `tail` discards its exit status.
 >
+> **THE `lcd` BUILD SITS ON A PLACEMENT CLIFF (found 2026-08-17).** At 44/46
+> BSRAM and 13288/20736 LUT4 with a fixed pinout, nextpnr only just finds a legal
+> placement, and a change with NO logical effect can tip it over. Reproduced:
+> deleting one dead `reg [3:0] stp;` from `gfx.v` -- declared, never read, never
+> written -- made `build.sh lcd` fail with *"Unable to find legal placement for
+> all cells"*, twice, on an identical placer trajectory; the unedited file built
+> clean (LUT4 13288/20736, BSRAM 44/46, Fmax 38.8 MHz).
+>
+> The mechanism is name mangling, not logic. Yosys embeds SOURCE LINE NUMBERS in
+> the identifiers it generates -- e.g. `GFX.ident_byte$func$../rtl/gfx.v:587$163`
+> becomes `:592` if you insert five lines above it -- and nextpnr's placement
+> order depends on names. So the placer takes a different trajectory, and on a
+> design this full the new one may not converge. **Any edit to `gfx.v` that
+> shifts line numbers is, in effect, a change to the build.**
+>
+> A comment fix can be made provably safe by keeping the line count identical:
+> synthesise before and after and compare the `-json` netlists ignoring `src`
+> attributes. If they match, every generated name matches and P&R repeats
+> exactly. That is how the duty-cycle comment correction in this sweep landed.
+>
+> Real fixes, in preference order: shrink the design (the dead `stp` reg and the
+> unimplemented `$F0` SELFTEST arm are the obvious slack), relax the `.cst` pin
+> constraints, or pass nextpnr an explicit `--seed` so the trajectory is pinned
+> instead of being an accident of line numbering.
+
 > **If the board misbehaves after a fresh load, RELOAD IT before debugging.**
 > Three times in one session a hardware symptom looked exactly like a code
 > regression and was not: the SD controller needed a reset after an imgload run
@@ -165,9 +193,11 @@ remainder is why it is still here.
              the shared read with two destination registers is NOT synthesisable
              as block RAM (falls back to 1020 RAM16SDP4); one read register
              feeding both is, at the cost of a pipeline stage.
-        - **`build.sh lcd` load can silently reprogram a STALE bitstream** when
-          the build ahead of it failed -- that hid the 48/46 failure for two
-          rounds. Check `p8x_cpu.fs`'s mtime if a fix appears to do nothing.
+        - **A STALE `p8x_cpu.fs` can be reprogrammed without anyone noticing** --
+          that hid the 48/46 failure for two rounds. The script's own guards are
+          now correct (see the note at the top of this file); what is left is the
+          shared bitstream FILENAME between the `cpu` and `lcd` targets. Check
+          `p8x_cpu.fs`'s mtime if a fix appears to do nothing.
         - **Test gap that let bug 1 through, now closed:** `tb_video` checked
           frame shape and `gfx.sh` checked framebuffer contents; nothing checked
           the MAPPING between them. `sim/tb_scanout.v` does.
