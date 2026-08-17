@@ -48,7 +48,14 @@ latch enables, `PSEL` an address-source mux. The horizontal microcode word is
 unchanged and drives the datapath control lines directly (no instruction decode —
 that is what the microcode is for).
 
-## Memory map (identical to the TTL build — see `generators/gen_memmap.py`)
+## Memory map (see `generators/gen_memmap.py`, which is canon for both builds)
+
+The RAM/ROM/IO split and every port up to `$FF17` are **identical to the TTL
+build** — that is the point of the parallel track. The one divergence is the
+graphics at `$FF20–$FF2E`: the addresses are reserved in `gen_memmap.py` so both
+builds agree, but **no TTL card exists yet**, so on the TTL machine they read as
+a floating bus. A card is planned (a Tang Nano 20K plus the same panel), which is
+why the device is defined in the shared map rather than as an FPGA special.
 
 | Range | Size | Contents | FPGA realization |
 |-------|------|----------|------------------|
