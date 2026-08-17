@@ -20,6 +20,18 @@ remainder is why it is still here.
 
 ## NEXT
 
+> **THE BOARD HAS TWO STALENESS SURFACES; A FEATURE MAY NEED BOTH.** The
+> BITSTREAM carries the CPU, microcode, monitor ROM and graphics RTL
+> (`build.sh lcd load`); the SD CARD carries the OS, `/bin` and BASIC
+> (`tools/imgsend.py`). The ellipse spanned RTL *and* BASIC, and updating only
+> the bitstream left the hardware understanding a command nothing could issue --
+> `?SYNTAX ERROR` from a BASIC that could not parse it. Check both.
+>
+> **And check `p8x_cpu.fs`'s MTIME after a build.** `build.sh ... load` runs
+> openFPGALoader even when the build ahead of it failed, so it happily reports
+> DONE while reprogramming a stale bitstream. That has now hidden two separate
+> failures (a 48/46 placement failure, and a multiply-driven `st` net).
+>
 > **If the board misbehaves after a fresh load, RELOAD IT before debugging.**
 > Three times in one session a hardware symptom looked exactly like a code
 > regression and was not: the SD controller needed a reset after an imgload run

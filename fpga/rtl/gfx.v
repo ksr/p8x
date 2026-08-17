@@ -246,7 +246,16 @@ module gfx (
       gx0 <= 0; gy0 <= 0; gx1 <= 0; gy1 <= 0;
       gcol <= 2'd1; gparm <= 0; gparm2 <= 0; gerr <= 0; gdata <= 0; gidx <= 4'd14;
       pal[0] <= 12'h000; pal[1] <= 12'hFFF; pal[2] <= 12'hF00; pal[3] <= 12'h0F0;
-    end else if (sc_en) begin
+    end else begin
+      // ONE always block. The ENGINE is gated by sc_en; the CPU register writes
+      // at the bottom are NOT. Splitting them into a second always block looked
+      // tidier and simulated fine, but both blocks assign `st`, `efill` and the
+      // command-setup registers -- two drivers on one reg. Icarus tolerates
+      // that; synthesis rejects it outright:
+      //   ERROR: Net 'GFX.efill...' is multiply driven by st_DFFRE_Q_3.Q and
+      //          st_DFFRE_Q_4.Q
+      // Same class as the gidx bug. Gate the engine, not the block.
+      if (sc_en) begin
       // The scanout owns the framebuffer this cycle, so the engine holds. It
       // costs one cycle in three -- fb_en fires once per panel pixel -- so the
       // engine runs at two thirds speed, which is invisible next to the tens of
@@ -486,18 +495,7 @@ module gfx (
         default: st <= S_IDLE;
       endcase
 
-    end
-  end
-
-  // ---- CPU register writes --------------------------------------------------
-  // Deliberately its OWN always block, outside the scanout hold. These used to
-  // live inside the engine's `else`, so any write landing on a scanout cycle was
-  // silently dropped -- one in four in simulation, one in three on the board.
-  // That is what made SETPAL and BOXFILL "missing" from gfx.sh for days: their
-  // GCMD write collided with a hold and the command simply never arrived. A
-  // register write touches no framebuffer port, so there is nothing to gate.
-  always @(posedge clk) begin
-    if (!rst) begin
+      end
 
       if (sel && wr) begin
         case (a)
@@ -576,15 +574,6 @@ module gfx (
           default: ;
         endcase
       end
-
-      // IDENT stream advance. This MUST live in the same always block as every
-      // other assignment to gidx: it started in its own `always @(posedge clk)`,
-      // which is two drivers on one register. Simulation happily picked a
-      // winner and the frame diff passed, but synthesis did not -- on hardware
-      // gidx came up 0 instead of 14, so the first POINT read returned $50 ('P',
-      // the first IDENT byte) instead of the pixel. A bug that only exists after
-      // place-and-route is exactly the kind the co-sim cannot see.
-      if (sel && rd_stb && a == 4'h7 && gidx < 4'd14) gidx <= gidx + 1;
     end
   end
 
