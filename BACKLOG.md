@@ -20,15 +20,13 @@ remainder is why it is still here.
 
 ## NEXT
 
-> **THE BOARD'S GRAPHICS STOPPED ANSWERING AFTER A CLEAN REBUILD (2026-08-17).**
-> `$FF26` reads `$FF` instead of `$00` and BASIC says `?No display`. It was
-> drawing correctly before. Everything checkable looks right: GFX/VID cells are
-> in the netlist, the 18 LCD pins place (31 IOBs), BSRAM 44/46, the microcode
-> compaction self-verifies as identical, the rebuilt ROM differs from the
-> committed one by exactly one byte ($047A F0->80, the CFWAIT constant), and
-> gfx.v's read path is intact. NOT explained. Only three inputs changed in that
-> rebuild and two are provably identical, so it is the third or the bitstream
-> itself. Start there.
+> **If the board misbehaves after a fresh load, RELOAD IT before debugging.**
+> Three times in one session a hardware symptom looked exactly like a code
+> regression and was not: the SD controller needed a reset after an imgload run
+> (`I` then failed with CF ERROR), the USB bridge wedged and needed a replug, and
+> a freshly loaded bitstream came up with the graphics device not answering at
+> `$FF20` — `$FF26` read `$FF`, BASIC said `?No display` — until the SAME file
+> was loaded again. Verified: the clean rebuild was correct all along.
 >
 > **A TEST IS RED RIGHT NOW: `fpga/sim/gfx.sh`.** The RTL graphics engine misses
 > two of the nine commands its payload issues (SETPAL and BOXFILL), and the CPU
