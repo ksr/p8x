@@ -72,6 +72,35 @@ So the drawing engine keeps well over 90% of the bus even at 256 colours. What
 is left to prove is **latency**, not throughput: SDRAM cannot promise a byte on
 demand the way block RAM does, and a scanout cannot stall. That is stage 1.
 
+## Finding 3: a scanout can live off SDRAM (verified on hardware 2026-08-17)
+
+`sdram_video_test.v` puts a 480x272 8-bpp image on the panel, fetched line by
+line from SDRAM. Confirmed on the board: the picture is correct -- border,
+both diagonals and the fine horizontal ramp all as designed, so line addressing,
+stride and the 32-bit byte lanes are all right.
+
+| | stage 1 | today's BSRAM framebuffer |
+|---|---|---|
+| LUT4 | 835 / 20736 (4%) | -- |
+| BSRAM | **1** (the line buffer) | **4** |
+| Fmax | 200 MHz | -- |
+
+**Four times the resolution and 64 times the colours, for three FEWER block
+RAMs.** That inverts the trade-off this started from: the SDRAM path is not a
+way to spend resources to get resolution, it is a way to get resolution and hand
+resources back to a design that is at 44/46 and on a placement cliff.
+
+### Still to confirm
+
+The `underruns` counter is the real measurement and has only been eyeballed, not
+watched over a long run. It should be read as "UR=0000 with FR climbing" over
+minutes, not seconds, before this is called settled -- and re-checked once a
+drawing engine is competing for the same bus, which is the case that matters.
+
+Stage 1 was also NOT simulated before loading, unlike stage 0. That is a gap: the
+stage 0 bench caught two real bugs, and the same discipline should be applied
+here before any of this is merged toward the P8X design.
+
 ## What this does and does not prove
 
 It proves the toolchain will *wire up* the SDRAM. It says nothing yet about
