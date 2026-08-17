@@ -101,7 +101,11 @@ are committed; see [rom/README.md](rom/README.md) for the chip map.
 | [hardware/cf-card/p8x-cf-os-design.md](hardware/cf-card/p8x-cf-os-design.md) | CF-IDE hardware + P8X/OS design |
 | [hardware/cf-card/p8xfs-v2-hierarchical.md](hardware/cf-card/p8xfs-v2-hierarchical.md) | P8XFS v2 hierarchical filesystem spec |
 | [docs/p8x-programmers-guide.pdf](docs/p8x-programmers-guide.pdf) | Generated instruction set reference |
-| [basic/p8x-basic-guide.md](basic/p8x-basic-guide.md) | P8X BASIC language reference (statements, expressions, examples) |
+| [basic/p8x-basic-guide.md](basic/p8x-basic-guide.md) | P8X BASIC language reference (statements, expressions, graphics, examples) |
+| [fpga/README.md](fpga/README.md) | FPGA build: milestones, getting started, both paths |
+| [fpga/docs/architecture.md](fpga/docs/architecture.md) | FPGA module hierarchy, peripheral map, graphics, co-sim spec |
+| [fpga/rtl/README.md](fpga/rtl/README.md) | What is shared vs sim-only, and the `cen` / `sc_en` contracts |
+| [fpga/sim/README.md](fpga/sim/README.md) | How the co-sim trace-diff works, and the graphics frame diff |
 | [BACKLOG.md](BACKLOG.md) | Live work only: NEXT / IDEAS / VERIFY / WONT-DO |
 | [BACKLOG-DONE.md](BACKLOG-DONE.md) | Completed work + the project log |
 
@@ -124,8 +128,8 @@ works chip by chip, and any board-specific design docs:
 ## FPGA implementation
 
 A standalone [FPGA build](fpga/) on a **Sipeed Tang Nano 20K** (Gowin GW2AR-18)
-runs the whole machine — CPU, memory, ACIA console, microSD disk — from one chip
-and a USB cable. It is a **parallel track to the TTL build, not a replacement**:
+runs the whole machine — CPU, memory, ACIA console, microSD disk, and a 4.3"
+480x272 graphics panel — from one chip and a USB cable. It is a **parallel track to the TTL build, not a replacement**:
 same horizontal microcode word, same sequencer, same pointer/address model, so
 the monitor, OS, BASIC, C compiler and assembler run **unmodified**.
 
@@ -137,10 +141,19 @@ the monitor, OS, BASIC, C compiler and assembler run **unmodified**.
 | 3 Core on real hardware, full 64K map | done |
 | 4 microSD disk — P8X/OS boots from card | done |
 | 5 Clock-up + IRQ | next |
+| 6 Graphics: 480x272 panel + drawing engine | done |
 
 As built: **9 MHz** effective (27 MHz fabric, three phases per microcycle),
-~50 MHz Fmax (varies a little per place-and-route run), 40/46 block RAMs, and P8X is programmed into the board's flash so it
-comes up standalone on power.
+~48 MHz Fmax (varies a little per place-and-route run), 40/46 block RAMs — 44/46
+with the graphics panel — and P8X is programmed into the board's flash so it comes
+up standalone on power.
+
+**Graphics** (`build.sh lcd`) adds a 240x136 four-colour framebuffer with a
+drawing engine, pixel-doubled onto the panel, driven by new BASIC statements:
+`COLOR`, `CLS`, `PLOT`, `LINE`, `BOX`, `CIRCLE`, `PALETTE`, and the `POINT(x,y)`
+function. The engine lives in the device, so a filled box costs the same handful
+of instructions as an empty one. The same device is modelled in `p8xemu`, and the
+two are byte-compared frame by frame.
 
 **Verification is the point.** Every milestone is "make the RTL match the
 emulator": the same program runs on both and their per-cycle architectural state
