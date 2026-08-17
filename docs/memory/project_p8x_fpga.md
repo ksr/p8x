@@ -314,7 +314,9 @@ IDENTICAL for both payloads. Fits the board -- **BSRAM 44/46**, Fmax 49 MHz, and
   and `y*60` computed as `(y<<6)-(y<<2)` in a 13-bit expression WRAPPED for y>127,
   folding the bottom rows back to the top. Intermediates must be wider than the
   result.
-- **BLOCKED on the pinout:** `build.sh lcd` synthesises but fails PnR with
+- **SUPERSEDED (2026-08-16): this is DONE on hardware** -- see the block at the
+  end of this note. The paragraph below is kept for the reasoning only.
+- **WAS BLOCKED on the pinout:** `build.sh lcd` synthesises but failed PnR with
   `Unconstrained IO:lcd_*` -- `tangnano20k.cst` has no `lcd_*` entries because the
   40-pin RGB mapping is not verified against Sipeed's docs. 20 pins to add. This
   is deliberate: guessed pin numbers are how a panel stays dark for a day.
@@ -342,8 +344,70 @@ IDENTICAL for both payloads. Fits the board -- **BSRAM 44/46**, Fmax 49 MHz, and
   and `y*60` computed as `(y<<6)-(y<<2)` in a 13-bit expression WRAPPED for y>127,
   folding the bottom rows back to the top. Intermediates must be wider than the
   result.
-- **BLOCKED on the pinout:** `build.sh lcd` synthesises but fails PnR with
+- **SUPERSEDED (2026-08-16): this is DONE on hardware** -- see the block at the
+  end of this note. The paragraph below is kept for the reasoning only.
+- **WAS BLOCKED on the pinout:** `build.sh lcd` synthesises but failed PnR with
   `Unconstrained IO:lcd_*` -- `tangnano20k.cst` has no `lcd_*` entries because the
   40-pin RGB mapping is not verified against Sipeed's docs. 20 pins to add. This
   is deliberate: guessed pin numbers are how a panel stays dark for a day.
   `build.sh cpu` is untouched and still 40/46.
+
+**GRAPHICS WORKING ON THE PANEL (2026-08-16).** `build.sh lcd load`, then
+`I`/`B`/`basic`, and BASIC's LINE/BOX/CIRCLE draw on the 4.3" panel.
+
+- **Pinout and timings came from Sipeed's own example**, not from arithmetic
+  (`TangNano-20K-example`, `rgb_lcd/lcd_480_272/color_bar`). Three things I had
+  guessed WRONG: there is no HSYNC/VSYNC (DE-only panel); the frame is 560x297,
+  i.e. **54.11 Hz not 60**; they clock it at 9 MHz via IDIV=2 (27/3), confirming
+  no PLL. Pins CLK 77, DEN 48, R 38-42, G 32-37, B 27-31.
+- **A shift AMOUNT is self-determined in Verilog.**
+  `fb_data >> ((2'd3 - ax[2:1]) << 1)` evaluated in TWO bits, giving shifts of
+  2,0,2,0 instead of 6,4,2,0 -- every pixel in the left half of a byte invisible,
+  every one in the right half drawn twice. Assignment context would have widened
+  it; a shift amount is not an assignment context. Same class as the `y*60`
+  truncation. **Symptom was asymmetric**: horizontal lines perfect, verticals
+  doubled or missing, because a horizontal line is constant along x.
+- **True dual-port halves a Gowin block's usable depth.** The framebuffer took 8
+  blocks instead of 4 (48/46, would not place). Now ONE shared port, engine holds
+  one cycle in three. And a shared read written as
+  `if (en) a <= mem[x]; else b <= mem[x];` is NOT synthesisable as block RAM --
+  yosys falls back to distributed LUT RAM. One read register feeding both works.
+- **`build.sh ... load` reprograms a STALE bitstream if the build failed.** That
+  hid the 48/46 failure for two rounds and made fixes look ineffective. Check
+  `p8x_cpu.fs` mtime when a change appears to do nothing.
+- **What the user's second data point bought:** I had diagnosed a setup-time
+  problem (real, and fixed) and would have kept chasing it. `BOX 10,10,20,20`
+  losing its right edge entirely falsified that -- a smear cannot DELETE a line.
+- **Unresolved:** the co-sim now exercises the shared port with an irregular
+  hold, but reintroducing the pending-write bug did not make it fail. Coverage
+  unproven.
+
+**GRAPHICS WORKING ON THE PANEL (2026-08-16).** `build.sh lcd load`, then
+`I`/`B`/`basic`, and BASIC's LINE/BOX/CIRCLE draw on the 4.3" panel.
+
+- **Pinout and timings came from Sipeed's own example**, not from arithmetic
+  (`TangNano-20K-example`, `rgb_lcd/lcd_480_272/color_bar`). Three things I had
+  guessed WRONG: there is no HSYNC/VSYNC (DE-only panel); the frame is 560x297,
+  i.e. **54.11 Hz not 60**; they clock it at 9 MHz via IDIV=2 (27/3), confirming
+  no PLL. Pins CLK 77, DEN 48, R 38-42, G 32-37, B 27-31.
+- **A shift AMOUNT is self-determined in Verilog.**
+  `fb_data >> ((2'd3 - ax[2:1]) << 1)` evaluated in TWO bits, giving shifts of
+  2,0,2,0 instead of 6,4,2,0 -- every pixel in the left half of a byte invisible,
+  every one in the right half drawn twice. Assignment context would have widened
+  it; a shift amount is not an assignment context. Same class as the `y*60`
+  truncation. **Symptom was asymmetric**: horizontal lines perfect, verticals
+  doubled or missing, because a horizontal line is constant along x.
+- **True dual-port halves a Gowin block's usable depth.** The framebuffer took 8
+  blocks instead of 4 (48/46, would not place). Now ONE shared port, engine holds
+  one cycle in three. And a shared read written as
+  `if (en) a <= mem[x]; else b <= mem[x];` is NOT synthesisable as block RAM --
+  yosys falls back to distributed LUT RAM. One read register feeding both works.
+- **`build.sh ... load` reprograms a STALE bitstream if the build failed.** That
+  hid the 48/46 failure for two rounds and made fixes look ineffective. Check
+  `p8x_cpu.fs` mtime when a change appears to do nothing.
+- **What the user's second data point bought:** I had diagnosed a setup-time
+  problem (real, and fixed) and would have kept chasing it. `BOX 10,10,20,20`
+  losing its right edge entirely falsified that -- a smear cannot DELETE a line.
+- **Unresolved:** the co-sim now exercises the shared port with an irregular
+  hold, but reintroducing the pending-write bug did not make it fail. Coverage
+  unproven.

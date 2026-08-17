@@ -121,7 +121,7 @@ testing — the factory boot text sits buffered and reads like a reply.
 | **3** | Core on real hardware ✅ | yes | P8X talks over USB for real, full 64K map |
 | **4** | SD disk (SD-over-SPI behind the BIOS block API) ✅ | yes | OS boots from SD, full FS |
 | **5** | Polish: clock-up, IRQ (backlog #26), stretch goals | yes | performance + extras |
-| **6** | Graphics: 480x272 panel + drawing engine | partly | RTL engine matches the emulator pixel for pixel; panel pinout still unverified |
+| **6** | Graphics: 480x272 panel + drawing engine ✅ | yes | BASIC draws on a real panel; the engine matches the emulator pixel for pixel |
 
 Milestones 0–2 are most of the effort and only 0 needs the board — the CPU is
 built and proven in simulation before the hardware ever runs it.

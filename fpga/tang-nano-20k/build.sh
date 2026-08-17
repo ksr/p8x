@@ -32,11 +32,9 @@ fi
 case "$TARGET" in
   echo) SRC="rtl/top.v rtl/uart.v";                      TOP=top;      FS=p8x.fs ;;
   cpu)  SRC="../rtl/p8x_cpu.v rtl/p8x_top.v rtl/uart.v rtl/cf_sd.v rtl/sd_spi.v"; TOP=p8x_top;  FS=p8x_cpu.fs ;;
-  # `lcd` = cpu + the 480x272 panel. Separate target because the 40-pin RGB
-  # mapping is NOT yet verified against Sipeed's documentation: tangnano20k.cst
-  # has no lcd_* entries, so this will fail place-and-route with "Unconstrained
-  # IO" until they are added. That failure is deliberate -- it is a great deal
-  # better than a bitstream built on guessed pin numbers.
+  # `lcd` = cpu + the 480x272 panel, verified working on hardware. Kept a
+  # separate target so the plain `cpu` build stays byte-for-byte what it was and
+  # costs no block RAM for a display it does not have.
   lcd)  SRC="../rtl/p8x_cpu.v ../rtl/gfx.v ../rtl/video_rgb.v rtl/p8x_top.v rtl/uart.v rtl/cf_sd.v rtl/sd_spi.v"; TOP=p8x_top; FS=p8x_cpu.fs; YOSYS_DEFS="-DLCD" ;;
   *)    echo "unknown target: $TARGET (use echo|cpu|lcd)"; exit 2 ;;
 esac

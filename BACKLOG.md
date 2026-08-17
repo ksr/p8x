@@ -128,26 +128,35 @@ remainder is why it is still here.
           correct on both. This is also why graphics cannot be CYCLE-diffed: a
           program polling GSTAT legitimately reads different values on the two
           models, so the framebuffer is the thing that must agree.
-        - **BLOCKED on the pinout:** `build.sh lcd` exists and synthesises, but
-          fails place-and-route with `Unconstrained IO:lcd_*` because
-          `tangnano20k.cst` has no `lcd_*` entries -- the 40-pin RGB mapping has
-          not been verified against Sipeed's documentation. 20 pins to add
-          (clk/de/hs/vs + R5 G6 B5), plus the panel's own timings from its
-          datasheet. `build.sh cpu` is untouched and still 40/46 blocks.
-        - **DONE: the rest of the statements (2026-08-14).** `PLOT x,y`,
-          `CIRCLE x,y,r[,FILL|,NOFILL]`, `PALETTE pen,r,g,b`, and `POINT(x,y)` --
-          a FUNCTION, so it hangs off the factor dispatch, not the statement
-          chain, and joins PEEK in CKLEAD's blacklist. CIRCLE reuses the existing
-          FILL/NOFILL tokens. The trap was PALETTE: SETPAL names the pen it
-          recolours through GCOL, the same register that selects the DRAWING pen,
-          so without restoring from the GPEN shadow it silently changes what the
-          NEXT statement draws with -- which looks like that statement is broken.
-          Tokens now run to $AE; every device command is reachable from BASIC.
-        - **Unverified:** the panel's exact timings and the 40-pin RGB mapping
-          against Sipeed's documentation. Arithmetic says 480x272 at 60 Hz wants
-          ~9.0 MHz, which is the 27 MHz crystal / 3 — a divider the board already
-          generates, so no PLL — but that must be confirmed, not assumed. Also
-          check the backlight's current draw against USB power.
+        - **DONE ON HARDWARE (2026-08-16).** `build.sh lcd load`, then `I`/`B`/
+          `basic`, and BASIC draws on the panel. Pinout and timings verified from
+          Sipeed's own 480x272 example (CLK 77, DEN 48, R 38-42, G 32-37,
+          B 27-31; 560x297 at 9 MHz = 54.11 Hz; DE-only, no HSYNC/VSYNC).
+          BSRAM 44/46, Fmax ~48 MHz, no PLL.
+        - **Two display bugs, both invisible in simulation:**
+          1. `fb_data >> ((2'd3 - ax[2:1]) << 1)` -- a shift AMOUNT is
+             self-determined in Verilog, so it evaluated in TWO bits and gave
+             shifts of 2,0,2,0 instead of 6,4,2,0. Every pixel in the left half
+             of a byte was invisible and every pixel in the right half drawn
+             twice. Same class as the `px_row` truncation.
+          2. the framebuffer inferred as TRUE dual port, which halves a Gowin
+             block's depth: 8 blocks instead of 4, 48/46, would not place. It now
+             shares ONE port with the engine holding one cycle in three. Writing
+             the shared read with two destination registers is NOT synthesisable
+             as block RAM (falls back to 1020 RAM16SDP4); one read register
+             feeding both is, at the cost of a pipeline stage.
+        - **`build.sh lcd` load can silently reprogram a STALE bitstream** when
+          the build ahead of it failed -- that hid the 48/46 failure for two
+          rounds. Check `p8x_cpu.fs`'s mtime if a fix appears to do nothing.
+        - **Test gap that let bug 1 through, now closed:** `tb_video` checked
+          frame shape and `gfx.sh` checked framebuffer contents; nothing checked
+          the MAPPING between them. `sim/tb_scanout.v` does.
+        - **OPEN:** the co-sim exercises the shared port (irregular LFSR hold),
+          but reintroducing the pending-write bug did NOT make it fail. The
+          contention coverage is therefore unproven and worth understanding.
+        - **Not exposed in BASIC:** SELFTEST ($F0) is implemented in the emulator
+          but NOT in the RTL -- it sets the error bit there. Worth closing for
+          parity.
       - **SD error paths are now tested** (`fpga/tang-nano-20k/sim/tb_sd_spi.v`
         with `sd_model.v +sdfail=1|2`); that found and fixed two lockups. Still
         unexercised: CRC failure, a card that reports write-protect, and card

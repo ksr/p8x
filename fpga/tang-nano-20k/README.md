@@ -185,30 +185,42 @@ separate target:
 ./build.sh lcd load
 ```
 
-**It will fail place-and-route today**, with `ERROR: Unconstrained IO:lcd_*`, and
-that failure is deliberate. `tangnano20k.cst` has no `lcd_*` entries because the
-40-pin RGB mapping has not been verified against Sipeed's documentation, and this
-file's header records why that matters: every other pin here was checked against
-the official pinout and a known-good project first. A bitstream built on guessed
-pin numbers is how a display stays dark for a day.
+The pinout and the panel timings are **verified**, taken from Sipeed's own
+480x272 example for this board (`TangNano-20K-example`,
+`rgb_lcd/lcd_480_272/color_bar`) rather than derived. Three things that example
+settled, all of which I had guessed wrong:
 
-To finish it, add the verified `IO_LOC` lines for `lcd_clk`, `lcd_de`, `lcd_hs`,
-`lcd_vs`, `lcd_r[4:0]`, `lcd_g[5:0]`, `lcd_b[4:0]` — 20 pins — and check the
-panel's own timings against its datasheet while you are there.
+- there is **no HSYNC or VSYNC** — their constraints file has pins for CLK, DEN
+  and RGB only, so this is a DE-only panel;
+- the real frame is **560x297**, not 525x286 (H 480+50+30, V 272+20+5), which is
+  **54.11 Hz**, not 60;
+- they clock it at **9 MHz** via an rPLL with IDIV=2 — i.e. 27/3, exactly the
+  divider the CPU already runs on, confirming no PLL is needed.
+
+Pins: CLK 77, DEN 48, R 38–42, G 32–37, B 27–31, `DRIVE=24 PULL_MODE=UP`.
 
 **It does fit.** Synthesised and placed with a scratch pinout:
 
 | | with graphics | without |
 |---|---|---|
 | BSRAM | **44 / 46** | 40 / 46 |
-| LUT4 | 10403 / 20736 | 8029 |
-| Fmax | 49.0 MHz | 48.8 MHz |
+| LUT4 | ~11600 / 20736 | 8029 |
+| Fmax | ~48 MHz | 48.8 MHz |
 
 The framebuffer costs 4 blocks (8160 bytes at 2 bits per pixel) and leaves two
 spare. **No PLL is needed**: 480x272 at 60 Hz wants 9.009 MHz and 27/3 is 9.000,
 the same divide-by-three the CPU already runs on, so both rPLLs stay free for the
 Milestone-5 clock-up.
 
-`sim/tb_video.v` checks the frame geometry without any hardware — 480 active
-pixels a line, 272 lines, 450450 cycles a frame (59.94 Hz), and a scanout that
-stays inside the framebuffer.
+**The framebuffer shares ONE port** between the drawing engine and the scanout.
+True dual port halves a Gowin block's usable depth, so 8160 bytes would cost 8
+blocks instead of 4 and the design would not place at 48/46. The scanout needs a
+byte only once per eight panel pixels, so the engine simply holds for that cycle.
+
+Two benches check this without hardware:
+
+- `sim/tb_video.v` — frame geometry: 480 active pixels a line, 272 lines,
+  498960 cycles a frame (54.11 Hz), scanout inside the framebuffer.
+- `sim/tb_scanout.v` — the **mapping**: which framebuffer pixel reaches which
+  panel pixel. Neither of the other tests covered that, which is how a
+  shift-width bug that blanked half of every byte reached hardware.

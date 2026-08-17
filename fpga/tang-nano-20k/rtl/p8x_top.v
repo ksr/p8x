@@ -40,10 +40,9 @@ module p8x_top(
   // 4.3" 480x272 parallel-RGB panel, DE mode. The pixel clock is 27/3 = 9 MHz,
   // the SAME divide-by-three the CPU runs on, so no PLL is needed.
   //
-  // Behind `LCD` because the 40-pin RGB mapping has NOT been verified against
-  // Sipeed's documentation yet, and unconstrained pins fail place-and-route.
-  // Guessing pin numbers is how a panel stays dark for a day, so the default
-  // `build.sh cpu` is left exactly as it was and the panel is opt-in.
+  // Behind `LCD` so the default `build.sh cpu` stays exactly as it was -- the
+  // panel is opt-in. The pin mapping IS verified (taken from Sipeed's own
+  // 480x272 example) and `build.sh lcd` builds, places and runs on hardware.
   output       lcd_clk,
   output       lcd_de,
   // no lcd_hs / lcd_vs: the connector does not carry them (DE-only panel)
@@ -144,8 +143,9 @@ module p8x_top(
 
 `ifdef LCD
   // ---- graphics display ($FF20..$FF2E) + the panel ----
-  // The engine and the scanout use INDEPENDENT framebuffer ports: a scanout
-  // that had to wait for a fill would tear visibly.
+  // The engine and the scanout SHARE one framebuffer port -- true dual port
+  // halves a Gowin block's usable depth and would cost 8 blocks instead of 4.
+  // sc_en hands the port to the scanout; the engine holds for that cycle.
   wire [7:0]  gfx_rdata, sc_data;
   wire [12:0] sc_addr;
   wire        sc_en;

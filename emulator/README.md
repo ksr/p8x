@@ -161,7 +161,8 @@ payloads on both and byte-compares the frames.
 
 **Software must poll `GSTAT` bit 7 before issuing a command.** Here, drawing is
 instantaneous and BUSY always reads 0 — but the RTL engine takes one clock per
-byte for `CLS` and two per pixel otherwise (a full-screen fill is ~2.4 ms), and
+byte for `CLS` and about seven and a half per pixel otherwise (a full-screen
+fill is roughly 9 ms), and
 **a command written while another is running aborts it**.
 
 That asymmetry is deliberate and it is the same licence the CF model takes with

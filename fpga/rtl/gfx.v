@@ -21,10 +21,13 @@
 //     are 16-bit, and the address arithmetic y*60 + (x>>2) would otherwise fold
 //     x>=240 onto the START OF THE NEXT ROW. px_go simply drops those.
 //
-// Timing: one pixel costs 2 clocks (read-modify-write; 2bpp packs four pixels to
-// a byte). A full-screen BOXFILL is 32640 pixels ~ 2.4 ms at 27 MHz. CLS is
-// special-cased to whole bytes and takes 8160 clocks (~0.3 ms). The CPU sees
-// GSTAT bit 7 = BUSY meanwhile.
+// Timing: a pixel costs five engine cycles (read-modify-write through a
+// registered read port), and the engine stands still one cycle in three while
+// the scanout uses the framebuffer -- about seven and a half clocks each. A
+// full-screen BOXFILL is 32640 pixels, roughly 9 ms at 27 MHz. CLS is
+// special-cased to whole bytes and is far quicker. The CPU sees GSTAT bit 7 =
+// BUSY throughout and MUST poll it: a command issued while another is still
+// running aborts it.
 
 module gfx (
   input             clk,
@@ -38,8 +41,8 @@ module gfx (
   input      [7:0]  wdata,
   output reg [7:0]  rdata,
 
-  // Scanout side: a byte-address read port into the framebuffer, plus the
-  // palette lookup. Wholly independent of the engine port.
+  // Scanout side: a byte-address read into the SHARED framebuffer port, plus
+  // the palette lookup. sc_en hands the port over for a cycle; the engine holds.
   input             sc_en,       // this cycle the scanout owns the fb port
   input      [12:0] sc_addr,
   output     [7:0]  sc_data,
@@ -203,7 +206,7 @@ module gfx (
       e_we <= 0;
 
       // ---- pixel unit ------------------------------------------------------
-      // THREE phases, not two. The framebuffer read is synchronous: e_addr is
+      // FOUR phases. The framebuffer read is synchronous: e_addr is
       // registered at the end of the cycle it is assigned, so e_rdata only holds
       // that location's byte TWO cycles later. Acting on it one cycle early
       // read the PREVIOUS address, and since 2bpp packs four pixels to a byte,
