@@ -61,8 +61,27 @@ PY
   if [ ! -f "$name.rtl.ppm" ]; then
     echo "GFX-RTL TEST: FAIL — $name produced no frame"; sed -n '1,5p' "$name.log"; fail=1; continue
   fi
+  # A BLANK frame is not a pass. Two models that both draw nothing agree
+  # perfectly, and that is exactly what happened when a GWAIT that clobbered A
+  # turned every command in the payloads into a NOP: this test stayed green while
+  # the payloads drew literally nothing, and only the emulator's own pixel
+  # assertions caught it. Identical is necessary, not sufficient.
+  lit=$(python3 - "$name.golden.ppm" <<'PY'
+import sys
+d = open(sys.argv[1], "rb").read()
+px = d[d.index(b"255\n")+4:]
+print(sum(1 for i in range(0, len(px), 3) if px[i:i+3] != b"\x00\x00\x00"))
+PY
+)
+  if [ "$lit" -lt 100 ]; then
+    echo "GFX-RTL TEST: FAIL — $name drew only $lit lit pixels; the payload is not"
+    echo "  drawing. Two blank frames compare equal, so this is checked separately."
+    fail=1
+    continue
+  fi
+
   if cmp -s "$name.golden.ppm" "$name.rtl.ppm"; then
-    echo "  $name: frames identical"
+    echo "  $name: frames identical ($lit lit pixels)"
   else
     echo "GFX-RTL TEST: FAIL — $name differs from the golden model"
     python3 - "$name" <<'PY'

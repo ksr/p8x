@@ -99,8 +99,16 @@ id_lp:  LDA  GDATA
 ; nothing there; on the RTL it is the difference between a picture and a few
 ; scattered pixels. GWAIT is called before every command so ONE payload is
 ; correct on both, which is what makes the framebuffer diff meaningful.
-GWAIT:  LDA  GSTAT
+;
+; It MUST preserve A. It is called between loading the command byte and storing
+; it to GCMD, so a GWAIT that clobbers A stores the status register instead --
+; which is 0, a NOP. Every command in this file silently became a no-op and the
+; whole payload drew nothing.
+GWSAV   = $3020
+GWAIT:  STA  GWSAV
+gw_lp:  LDA  GSTAT
         LDB  #$80
         AND
-        JNZ  GWAIT
+        JNZ  gw_lp
+        LDA  GWSAV
         RTS

@@ -164,6 +164,7 @@ module gfx (
   reg signed [19:0] cerr;
   reg [2:0]  oct;                              // circle: which of the 8 points
   reg [12:0] clsi;
+  reg [7:0]  cls_val;                          // byte S_CLS fills with
   reg [3:0]  stp;                              // SELFTEST step
   reg        busy;
 
@@ -299,7 +300,7 @@ module gfx (
         // 0x00/0x55/0xAA/0xFF. 8160 clocks instead of 65280.
         S_CLS: begin
           e_addr  <= clsi;
-          e_wdata <= {4{gcol}};
+          e_wdata <= cls_val;
           e_we    <= 1;
           if (clsi == FBBYTES-1) st <= S_DONE;
           else clsi <= clsi + 1;
@@ -402,7 +403,7 @@ module gfx (
                 oct <= 0; px_pen <= gcol; px_read <= 0;
                 st  <= (wdata == 8'h03) ? S_BOXH : S_FILL;
               end
-              8'h05: begin clsi <= 0; st <= S_CLS; end
+              8'h05: begin clsi <= 0; cls_val <= {4{gcol}}; st <= S_CLS; end
               8'h06: pal[gcol] <= {gx0[3:0], gy0[3:0], gx1[3:0]};
               8'h07, 8'h08: begin
                 ccx <= gx0; ccy <= gy0;
@@ -415,7 +416,12 @@ module gfx (
               8'h09: begin px_x<=gx0; px_y<=gy0; px_read<=1; px_go<=1;
                            gidx<=4'd14; st<=S_POINT; end
               8'hF1: begin                      // RESET
-                clsi <= 0; st <= S_CLS;
+                // Clears to pen 0, NOT to the pen it is about to select.
+                // S_CLS used {4{gcol}} directly and RESET assigns gcol <= 1 in
+                // this same cycle, so the clear came out WHITE while the
+                // emulator's gpu_reset memsets to zero -- 129644 of 130560
+                // pixels different, and invisible while the payload was a no-op.
+                clsi <= 0; cls_val <= 8'h00; st <= S_CLS;
                 gcol <= 2'd1; gparm <= 0; gdata <= 0; gidx <= 4'd14;
                 pal[0]<=12'h000; pal[1]<=12'hFFF; pal[2]<=12'hF00; pal[3]<=12'h0F0;
               end
