@@ -102,6 +102,28 @@ firmware expands newlines itself (see [`docs/p8x-monitor.md`](../docs/p8x-monito
 Press Enter for the monitor's `*` prompt. `?` for help, `I` to identify the
 microSD, `B` to boot the OS from it.
 
+### Updating the board — TWO surfaces, not one
+
+A change may live in either place, and a feature can need both:
+
+| Surface | Carries | Update with |
+|---------|---------|-------------|
+| **bitstream** | CPU, microcode, monitor ROM, graphics RTL | `build.sh lcd load` |
+| **SD card** | P8X/OS, `/bin`, BASIC | `tools/imgsend.py os/run-disk.img` |
+
+The graphics ellipse is the cautionary example: it is RTL **and** a BASIC
+statement. Rebuilding only the bitstream left the hardware understanding a
+command that nothing on the card could issue, which presents as `?SYNTAX ERROR`
+from BASIC — nothing about it points at the card being stale.
+
+**Check `p8x_cpu.fs`'s timestamp after a build.** `build.sh … load` runs
+openFPGALoader even when the build ahead of it failed, so it reports `DONE` while
+reprogramming a *stale* bitstream. That has concealed two separate build failures
+here. If a fix appears to do nothing on the board, check the mtime before
+debugging anything else — and if that is current, reload once: a freshly loaded
+bitstream has come up not answering more than once, and the same file loaded
+again fixed it.
+
 A card needs a P8XFS image on it. Writing one from the host needs root, so if you
 do not have it the board can install its own over the serial console — see
 [`tang-nano-20k/tools/`](tang-nano-20k/tools/README.md).
