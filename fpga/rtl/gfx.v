@@ -40,8 +40,9 @@ module gfx (
 
   // Scanout side: a byte-address read port into the framebuffer, plus the
   // palette lookup. Wholly independent of the engine port.
+  input             sc_en,       // this cycle the scanout owns the fb port
   input      [12:0] sc_addr,
-  output reg [7:0]  sc_data,
+  output     [7:0]  sc_data,
   input      [1:0]  sc_pen,
   output     [11:0] sc_rgb
 );
@@ -86,20 +87,42 @@ module gfx (
   endfunction
 
   // ---- framebuffer ---------------------------------------------------------
-  // True dual port: the engine reads AND writes on port A, scanout reads on
-  // port B. Scanout must never stall for the engine -- a paused beam is a
-  // visible tear -- so they do not share a port.
+  // ONE port, time-shared. It was two -- engine read/write plus a separate
+  // scanout read -- which reads better but costs double: Gowin's TRUE dual-port
+  // mode halves a block's usable depth, so 8160 bytes took EIGHT blocks instead
+  // of four and the design went to 48/46, which will not place.
+  //
+  // Sharing is nearly free here. The scanout needs one byte per eight panel
+  // pixels, i.e. one cycle in 24; the engine gets the other 23. sc_en marks the
+  // scanout's cycle and the engine holds, so nothing it is part-way through can
+  // be corrupted.
   reg [7:0] fb [0:FBBYTES-1];
   reg [12:0] e_addr;
   reg        e_we;
   reg [7:0]  e_wdata;
   reg [7:0]  e_rdata;
 
+  wire [12:0] fb_a  = sc_en ? sc_addr : e_addr;
+  wire        fb_we = sc_en ? 1'b0    : e_we;    // the scanout never writes
+
+  // ONE read register. Reading the array into two different destinations --
+  // `if (sc_en) sc_data <= ... else e_rdata <= ...` -- looks equivalent but is
+  // not synthesisable as block RAM: yosys cannot map it to a single read port
+  // and falls back to distributed LUT RAM (1020 RAM16SDP4 and 8113 LUT4 here,
+  // versus 4 BSRAM). Both consumers take fb_q instead.
+  reg [7:0] fb_q;
+  reg       sc_en_d;
+
   always @(posedge clk) begin
-    if (e_we) fb[e_addr] <= e_wdata;
-    e_rdata <= fb[e_addr];
-    sc_data <= fb[sc_addr];
+    if (fb_we) fb[fb_a] <= e_wdata;
+    fb_q    <= fb[fb_a];
+    sc_en_d <= sc_en;
+    // e_rdata holds across the scanout's cycles, so a read-modify-write that is
+    // part-way through is not clobbered by the byte the scanout fetched.
+    if (!sc_en_d) e_rdata <= fb_q;
   end
+
+  assign sc_data = fb_q;      // valid the cycle after sc_en, which is phase 1
 
   // ---- pixel unit ----------------------------------------------------------
   // One read-modify-write. px_go starts it, px_busy falls when done. An
@@ -165,6 +188,17 @@ module gfx (
       gx0 <= 0; gy0 <= 0; gx1 <= 0; gy1 <= 0;
       gcol <= 2'd1; gparm <= 0; gerr <= 0; gdata <= 0; gidx <= 4'd14;
       pal[0] <= 12'h000; pal[1] <= 12'hFFF; pal[2] <= 12'hF00; pal[3] <= 12'h0F0;
+    end else if (sc_en) begin
+      // The scanout owns the framebuffer this cycle, so the engine holds. It
+      // costs one cycle in three -- fb_en fires once per panel pixel -- so the
+      // engine runs at two thirds speed, which is invisible next to the tens of
+      // thousands of pixels a fill takes.
+      //
+      // e_we is deliberately NOT cleared here. It is set at the end of the
+      // read-modify-write's compute phase and the write lands on the FOLLOWING
+      // cycle; if that cycle is a hold, clearing it discards the write for good.
+      // At one collision in three that lost about a third of every shape drawn.
+      // Holding it means the write simply happens on the next engine cycle.
     end else begin
       e_we <= 0;
 
@@ -188,9 +222,13 @@ module gfx (
         end
       end else if (px_busy) begin
         case (px_ph)
-          2'd0: px_ph <= 2'd1;                 // phase 1: read data in flight
-          2'd1: begin                          // phase 2: e_rdata is now valid
-            px_ph <= 2'd2;
+          // FOUR phases now: fb_q is registered off the array and e_rdata is
+          // registered off fb_q, so a read costs one cycle more than it did
+          // when the engine had its own port.
+          2'd0: px_ph <= 2'd1;                 // address issued
+          2'd1: px_ph <= 2'd2;                 // fb_q loading
+          2'd2: begin                          // e_rdata is now valid
+            px_ph <= 2'd3;
             if (px_read) begin
               gdata   <= {6'd0, (e_rdata >> px_sh) & 2'b11};
               px_busy <= 0;

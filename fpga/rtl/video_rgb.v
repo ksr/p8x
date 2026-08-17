@@ -36,6 +36,7 @@ module video_rgb #(
   input             rst,
 
   // framebuffer read port on gfx.v
+  output            fb_en,        // this cycle the scanout owns the fb port
   output     [12:0] fb_addr,
   input      [7:0]  fb_data,
   output     [1:0]  fb_pen,       // which pixel of the fetched byte
@@ -72,11 +73,30 @@ module video_rgb #(
   wire [15:0] rowb   = ({8'd0,fbrow} << 6) - ({8'd0,fbrow} << 2);   // *60, wide
   assign fb_addr = rowb[12:0] + {7'd0, ax[9:3]};       // panel col / 8 = fb col / 4
   // gfx.v's sc_pen wants the PEN VALUE to look up, not the pixel's index within
-  // the byte -- so unpack it here. nx[2:1] is which of the four 2-bit fields,
+  // the byte -- so unpack it here. ax[2:1] is which of the four 2-bit fields,
   // leftmost pixel in the high bits.
-  assign fb_pen = (fb_data >> ((2'd3 - ax[2:1]) << 1)) & 2'b11;
+  //
+  // pen_sh MUST be its own 3-bit wire. Written inline as
+  //     fb_data >> ((2'd3 - ax[2:1]) << 1)
+  // the shift AMOUNT is self-determined in Verilog, so it was evaluated in the
+  // 2 bits of its left operand and the shifts came out 2,0,2,0 instead of
+  // 6,4,2,0. Indices 0 and 1 then read out indices 2 and 3, so every pixel in
+  // the left half of a byte was invisible and every pixel in the right half was
+  // drawn twice -- two columns apart. On the panel that is a vertical line
+  // doubled or missing depending on where it falls in the byte, while
+  // horizontal lines look perfect, because they are constant along x.
+  //
+  // Same class of bug as px_row in gfx.v: an expression evaluated narrower than
+  // its result needs. Assignment context would have widened it; a shift amount
+  // is not an assignment context.
+  wire [2:0] pen_sh = (3'd3 - {1'b0, ax[2:1]}) << 1;
+  assign fb_pen = (fb_data >> pen_sh) & 2'b11;
   reg [11:0] nxt_rgb;
   reg        nxt_de, nxt_hs, nxt_vs;
+
+  // Claim the framebuffer port on phase 0; the byte is then registered by the
+  // end of that cycle and ready for the phase-1 latch.
+  assign fb_en = (ph == 2'd0);
 
   // Data changes at phase 0; the panel samples on pclk's RISING edge at phase 2.
   // That is two fabric cycles (~74 ns) of setup.

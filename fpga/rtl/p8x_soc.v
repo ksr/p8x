@@ -79,11 +79,30 @@ module p8x_soc #(
   // reads the framebuffer array directly to dump a frame. rd_stb is keyed off
   // mem_rd, not the address, so the IDENT stream cannot be double-consumed by a
   // multi-microcycle address (the same rule the ACIA needs at $FF05).
+  // sc_en is EXERCISED here, not tied low. There is no panel in this SoC, but
+  // the board grants the scanout the framebuffer port one cycle in three and the
+  // engine has to hold for it. Tying this off meant the co-sim never ran the
+  // hold path at all -- and a bug where a pending write was cancelled by a hold,
+  // losing about a third of every shape, sailed through a green frame diff and
+  // only showed up on hardware. A free-running counter reproduces the contention
+  // without needing a display.
+  // The hold pattern is deliberately IRREGULAR, not the board's regular
+  // one-in-three. The engine's pixel loop is six cycles, so a regular one-in-
+  // three hold has a FIXED phase relationship with it: a given collision either
+  // always happens or never does, and a bug that depends on one lands on the
+  // hardware exactly half the time while the co-sim stays green. (Verified: with
+  // the pending-write bug reintroduced, a regular pattern still passed.) An
+  // LFSR walks every alignment and produces back-to-back holds too, and the
+  // engine has to be correct for any pattern regardless of what a panel does.
+  reg [7:0] sc_lfsr = 8'hA5;
+  always @(posedge clk)
+    sc_lfsr <= {sc_lfsr[6:0], sc_lfsr[7] ^ sc_lfsr[5] ^ sc_lfsr[4] ^ sc_lfsr[3]};
+
   gfx GFX(
     .clk(clk), .rst(rst),
     .sel(is_gfx), .a(mem_addr[3:0]), .wr(mem_we && is_gfx),
     .rd_stb(mem_rd && is_gfx), .wdata(mem_dout), .rdata(gfx_rdata),
-    .sc_addr(13'd0), .sc_data(), .sc_pen(2'd0), .sc_rgb());
+    .sc_en(sc_lfsr[1:0] == 2'b00), .sc_addr(13'd0), .sc_data(), .sc_pen(2'd0), .sc_rgb());
 
   p8x_cpu CPU(
     .clk(clk), .rst(rst), .cen(1'b1),   // async model: one microcycle per clock

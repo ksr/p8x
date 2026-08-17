@@ -148,6 +148,7 @@ module p8x_top(
   // that had to wait for a fill would tear visibly.
   wire [7:0]  gfx_rdata, sc_data;
   wire [12:0] sc_addr;
+  wire        sc_en;
   wire [1:0]  sc_pen;
   wire [11:0] sc_rgb;
 
@@ -155,10 +156,11 @@ module p8x_top(
           .sel(is_gfx), .a(mem_addr[3:0]),
           .wr(cen && mem_we && is_gfx), .rd_stb(cen && mem_rd && is_gfx),
           .wdata(mem_dout), .rdata(gfx_rdata),
-          .sc_addr(sc_addr), .sc_data(sc_data), .sc_pen(sc_pen), .sc_rgb(sc_rgb));
+          .sc_en(sc_en), .sc_addr(sc_addr), .sc_data(sc_data),
+          .sc_pen(sc_pen), .sc_rgb(sc_rgb));
 
   video_rgb VID(.clk(clk), .rst(rst),
-          .fb_addr(sc_addr), .fb_data(sc_data), .fb_pen(sc_pen), .fb_rgb(sc_rgb),
+          .fb_en(sc_en), .fb_addr(sc_addr), .fb_data(sc_data), .fb_pen(sc_pen), .fb_rgb(sc_rgb),
           .pclk(lcd_clk), .de(lcd_de), .hs(), .vs(),
           .r(lcd_r), .g(lcd_g), .b(lcd_b));
 `else
