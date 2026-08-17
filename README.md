@@ -141,7 +141,7 @@ the monitor, OS, BASIC, C compiler and assembler run **unmodified**.
 | 3 Core on real hardware, full 64K map | done |
 | 4 microSD disk — P8X/OS boots from card | done |
 | 5 Clock-up + IRQ | next |
-| 6 Graphics: 480x272 panel + drawing engine | done (one RTL/emulator diff open — see BACKLOG) |
+| 6 Graphics: 480x272 panel + drawing engine | done |
 
 As built: **9 MHz** effective (27 MHz fabric, three phases per microcycle),
 ~48 MHz Fmax (varies a little per place-and-route run), 40/46 block RAMs — 44/46
@@ -150,8 +150,8 @@ up standalone on power.
 
 **Graphics** (`build.sh lcd`) adds a 240x136 four-colour framebuffer with a
 drawing engine, pixel-doubled onto the panel, driven by new BASIC statements:
-`COLOR`, `CLS`, `PLOT`, `LINE`, `BOX`, `CIRCLE`, `PALETTE`, and the `POINT(x,y)`
-function. The engine lives in the device, so a filled box costs the same handful
+`COLOR`, `CLS`, `PLOT`, `LINE`, `BOX`, `CIRCLE` (a second radius gives an
+ellipse), `PALETTE`, and the `POINT(x,y)` function. The engine lives in the device, so a filled box costs the same handful
 of instructions as an empty one. The same device is modelled in `p8xemu`, and the
 two are byte-compared frame by frame.
 

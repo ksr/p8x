@@ -196,10 +196,8 @@ depends on real timing rather than these polled, timing-free models.
 ./gfx.sh            # runs the graphics payloads on both models, cmp's the frames
 ```
 
-> **RED TODAY.** The RTL misses two of the nine commands the payload issues
-> (`SETPAL` and `BOXFILL`); the CPU never writes `$FF25` for them at all. Left
-> failing deliberately — it was green for days over payloads that drew nothing.
-> Details in the banner at the top of [`../../BACKLOG.md`](../../BACKLOG.md).
+Three payloads: the drawing primitives, identify/diagnostics/16-bit
+coordinates, and the ellipse. All three match the emulator byte for byte.
 
 The drawing engine is verified by byte-comparing the **framebuffer** the RTL
 produces against the one `p8xemu -g` writes, not by diffing CPU traces. That is

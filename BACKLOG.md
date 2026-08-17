@@ -159,29 +159,31 @@ remainder is why it is still here.
         - **Test gap that let bug 1 through, now closed:** `tb_video` checked
           frame shape and `gfx.sh` checked framebuffer contents; nothing checked
           the MAPPING between them. `sim/tb_scanout.v` does.
-        - **OPEN, AND `fpga/sim/gfx.sh` FAILS ON IT TODAY.** The RTL misses two of
-          the nine commands `test_gfx.asm` issues: SETPAL ($06) and BOXFILL ($04).
-          Traced at register level -- the CPU never writes $FF25 for those two at
-          all (7 GCMD writes, not 9), while the same ROM on the emulator issues
-          all nine and draws correctly. 14424 of 130560 panel pixels differ on
-          `gfx`, 912 on `gfx2` (its whole circle).
-          The pattern: both skipped commands are ones where GWAIT actually had to
-          SPIN, because the previous command was still running. Every command that
-          found the engine already idle went through. So suspect the spin path --
-          GWAIT's loop, or how BUSY reads during it -- rather than the drawing
-          engine. NOT root-caused.
-          The test is left FAILING deliberately: the alternative is a green test
-          over payloads that draw nothing, which is what the previous days had.
+        - **FIXED (2026-08-17): CPU register writes were gated by the scanout
+          hold.** The `if (sel && wr)` block sat inside the engine's `else` -- the
+          branch that does not run while the scanout owns the framebuffer port --
+          so any write landing on a scanout cycle was silently dropped: one in
+          four in simulation, one in three on the board. That is the whole of the
+          "RTL misses SETPAL and BOXFILL" mystery: their GCMD write happened to
+          collide with a hold and the command never arrived, while every command
+          that did not collide went through. It also explains the earlier clue
+          that only commands where GWAIT had to SPIN were skipped -- a spin puts
+          the following write at a different, unluckier phase.
+          Register writes now live in their own always block, ungated; they touch
+          no framebuffer port, so there was never anything to gate. `gfx.sh`
+          passes on all three payloads.
         - **OPEN:** the co-sim exercises the shared port (irregular LFSR hold),
           but reintroducing the pending-write bug did NOT make it fail. The
           contention coverage is therefore unproven and worth understanding.
-        - **OPEN, emulator/RTL parity:** ELLIPSE ($0A) and ELLIPSEFILL ($0B) are
-          implemented in the emulator and reachable from BASIC (`CIRCLE x,y,rx,ry`),
-          but NOT in the RTL -- they fall through to `default` and set the error
-          bit, so on the board a two-radius CIRCLE draws nothing. The C is a
-          midpoint ellipse whose inner loop is adds and shifts only, chosen for
-          exactly this transliteration; the setup needs three multiplies and the
-          region-2 initialiser reaches ~35 bits, which is the only real work.
+        - **DONE (2026-08-17): ELLIPSE ($0A) / ELLIPSEFILL ($0B) in the RTL**,
+          matching the emulator pixel for pixel; `test_gfx3.asm` covers a wide
+          outline, a tall fill and a near-circle and is part of `gfx.sh`. Two
+          bugs the frame diff caught, neither visible by reading: the region-1
+          initialiser is 4*ry2 - 4*rx2*ry + rx2 and the middle term was written
+          ry2*ry, so the walk never started; and a FILL must load its first span
+          through the span-init state, because the circle begins its walk at x=r
+          (seeding cx to ccx-r is right there) while the ellipse begins region 1
+          at x=0, where the span is the single pixel ccx.
         - **OPEN, emulator/RTL parity:** SELFTEST ($F0) is implemented in the
           emulator but NOT in the RTL, where it falls through to `default` and
           sets the error bit. Nothing exercises it, so the frame diff stays green

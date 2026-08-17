@@ -82,7 +82,8 @@ BRAM region and whether writes are allowed below `$2000`).
 | `$FF25` | GCMD | write executes a drawing command |
 | `$FF26` | GSTAT | bit7 BUSY, bit0 ERR |
 | `$FF27` | GDATA | IDENT stream / POINT result |
-| `$FF28` | GPARM | scalar argument (CIRCLE radius) |
+| `$FF28` | GPARM | scalar argument (CIRCLE radius / ELLIPSE x-radius) |
+| `$FF2F` | GPARM2 | ELLIPSE y-radius |
 | `$FF29–$FF2C` | GX0H… | coordinate high bytes |
 | `$FF2D/$FF2E` | GID0/GID1 | `'P'`/`'G'` presence signature |
 | `$FF17` | CFCMD/CFSTAT | command (wr) / status (rd) |
@@ -130,6 +131,11 @@ The framebuffer uses **one port, time-shared**. True dual port halves a Gowin
 block's usable depth, so 8160 bytes would cost 8 blocks rather than 4 and the
 design would not place. The scanout needs a byte only once per eight panel pixels,
 so it takes the port for a cycle and the engine holds.
+
+Commands: `$01` PLOT, `$02` LINE, `$03` BOX, `$04` BOXFILL, `$05` CLS,
+`$06` SETPAL, `$07` CIRCLE, `$08` CIRCLEFILL, `$09` POINT, `$0A` ELLIPSE,
+`$0B` ELLIPSEFILL, plus `$F1` RESET and `$F2` IDENT. (`$F0` SELFTEST exists in
+the emulator only — see BACKLOG.)
 
 `video_rgb.v` generates the panel timing (560×297 at 9 MHz = 54.11 Hz, DE-only —
 this panel has no HSYNC/VSYNC) and scans the framebuffer out with 2× doubling.
