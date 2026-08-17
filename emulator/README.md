@@ -114,6 +114,8 @@ then write `GCMD`:
 | Cmd | | Cmd | |
 |---|---|---|---|
 | `$01` | `PLOT` (X0,Y0) | `$07` | `CIRCLE` centre (X0,Y0) radius `GPARM` |
+| `$0A` | `ELLIPSE` radii `GPARM` (x) and `GPARM2` (y) |
+| `$0B` | `ELLIPSEFILL` |
 | `$02` | `LINE` (X0,Y0)–(X1,Y1) | `$08` | `CIRCLEFILL` |
 | `$03` | `BOX` outline | `$09` | `POINT` — pixel at (X0,Y0) → `GDATA` |
 | `$04` | `BOXFILL` solid | `$F0` | `SELFTEST` — built-in pattern |

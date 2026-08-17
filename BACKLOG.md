@@ -183,6 +183,13 @@ remainder is why it is still here.
         - **OPEN:** the co-sim exercises the shared port (irregular LFSR hold),
           but reintroducing the pending-write bug did NOT make it fail. The
           contention coverage is therefore unproven and worth understanding.
+        - **OPEN, emulator/RTL parity:** ELLIPSE ($0A) and ELLIPSEFILL ($0B) are
+          implemented in the emulator and reachable from BASIC (`CIRCLE x,y,rx,ry`),
+          but NOT in the RTL -- they fall through to `default` and set the error
+          bit, so on the board a two-radius CIRCLE draws nothing. The C is a
+          midpoint ellipse whose inner loop is adds and shifts only, chosen for
+          exactly this transliteration; the setup needs three multiplies and the
+          region-2 initialiser reaches ~35 bits, which is the only real work.
         - **OPEN, emulator/RTL parity:** SELFTEST ($F0) is implemented in the
           emulator but NOT in the RTL, where it falls through to `default` and
           sets the error bit. Nothing exercises it, so the frame diff stays green

@@ -180,6 +180,7 @@ A line may hold several statements separated by `:` —
 | `LINE x0,y0,x1,y1` | draw a line, both endpoints included |
 | `BOX x0,y0,x1,y1[,FILL\|,NOFILL]` | rectangle — outline by default, solid with `FILL` |
 | `CIRCLE x,y,r[,FILL\|,NOFILL]` | circle of radius `r` about `x,y` |
+| `CIRCLE x,y,rx,ry[,FILL\|,NOFILL]` | **ellipse** — a second radius gives separate x and y radii |
 | `PALETTE pen,r,g,b` | recolour a pen; `r`,`g`,`b` are 0–15 |
 
 ### Graphics
@@ -209,6 +210,21 @@ anything off-screen is simply not drawn — it neither wraps nor errors.
 
 Any two opposite corners work for `BOX` — they are sorted for you, so
 `BOX 150,86,90,50` draws the same rectangle.
+
+**Ellipses.** A second radius turns `CIRCLE` into an ellipse — `rx` first, then
+`ry`:
+
+```basic
+10 CIRCLE 120,68,40             : REM circle, radius 40
+20 CIRCLE 120,68,90,30          : REM wide ellipse
+30 CIRCLE 120,68,20,60,FILL     : REM tall, filled
+```
+
+The parser tells a second radius from the `FILL` modifier by looking at the
+token: `FILL` and `NOFILL` are keywords, anything else begins an expression. That
+is the second reason `NOFILL` had to be a real keyword rather than merely the
+default — otherwise `CIRCLE x,y,r,NOFILL` would try to evaluate `NOFILL` as a
+radius.
 
 **Reading the screen back.** `POINT(x,y)` is a *function*, not a statement, and
 returns the pen (0–3) at a pixel — 0 for anything off-screen:

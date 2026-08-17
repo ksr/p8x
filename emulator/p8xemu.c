@@ -153,7 +153,7 @@ static uint16_t gpal[4]={0x000,0xFFF,0xF00,0x0F0};             /* RGB444 */
    exist because 480x272 -- this same panel at its native resolution, which is
    where an SDRAM framebuffer would go -- needs 9 bits for X. */
 static uint16_t gx0,gy0,gx1,gy1;
-static uint8_t  gcol, gparm, gerr;
+static uint8_t  gcol, gparm, gparm2, gerr;
 /* GDATA ($FF27) is the one read-back port: it streams the IDENT record after an
    IDENT command, and otherwise holds the result of the last POINT. gidx is the
    stream cursor; POINT parks it at the end so a pixel read is not mistaken for
@@ -224,6 +224,52 @@ static void gpu_circle(int cx,int cy,int r,uint8_t c,int fill){
         else { x--; err += 2*(y-x)+1; }
     }
 }
+/* Midpoint ellipse, integer, four-way symmetric. Chosen over a per-row "widest
+   x that still satisfies the equation" search because this inner loop is adds
+   and shifts only -- the RTL transliteration then needs no multiplier beyond the
+   three at setup.
+
+   The two regions meet where the curve's slope passes -1: region 1 steps x and
+   sometimes y, region 2 steps y and sometimes x. Both decision variables are
+   scaled by 4 so the classic rx^2/4 term is exact rather than rounded. A
+   rounding choice is precisely what two implementations quietly disagree about,
+   and this one has to stay bit-identical to the Verilog. */
+static void gpu_ellipse(int cx,int cy,int rx,int ry,uint8_t c,int fill){
+    long rx2 = (long)rx*rx, ry2 = (long)ry*ry;
+    long x = 0, y = ry;
+    long dx = 0, dy = 2*rx2*(long)ry;
+    long err;
+
+    if (rx <= 0 || ry <= 0) return;
+
+    err = 4*ry2 - 4*rx2*(long)ry + rx2;              /* region 1, x4 */
+    while (dx < dy) {
+        if (fill) {
+            gpu_hline(cx-(int)x, cx+(int)x, cy+(int)y, c);
+            gpu_hline(cx-(int)x, cx+(int)x, cy-(int)y, c);
+        } else {
+            gpu_px(cx+(int)x, cy+(int)y, c);  gpu_px(cx-(int)x, cy+(int)y, c);
+            gpu_px(cx+(int)x, cy-(int)y, c);  gpu_px(cx-(int)x, cy-(int)y, c);
+        }
+        x++;  dx += 2*ry2;
+        if (err < 0) err += 4*ry2 + 4*dx;
+        else { y--; dy -= 2*rx2; err += 4*ry2 + 4*dx - 4*dy; }
+    }
+    err = ry2*(2*x+1)*(2*x+1) + 4*rx2*(y-1)*(y-1) - 4*rx2*ry2;   /* region 2 */
+    while (y >= 0) {
+        if (fill) {
+            gpu_hline(cx-(int)x, cx+(int)x, cy+(int)y, c);
+            gpu_hline(cx-(int)x, cx+(int)x, cy-(int)y, c);
+        } else {
+            gpu_px(cx+(int)x, cy+(int)y, c);  gpu_px(cx-(int)x, cy+(int)y, c);
+            gpu_px(cx+(int)x, cy-(int)y, c);  gpu_px(cx-(int)x, cy-(int)y, c);
+        }
+        y--;  dy -= 2*rx2;
+        if (err > 0) err += 4*rx2 - 4*dy;
+        else { x++; dx += 2*ry2; err += 4*dx + 4*rx2 - 4*dy; }
+    }
+}
+
 /* IDENT builds a fixed 14-byte record that GDATA then streams out, the same
    shape as the CF card's IDENTIFY -> data-port idiom the firmware already
    knows. It carries the GEOMETRY, so software can ask the card how big it is
@@ -252,7 +298,7 @@ static void gpu_selftest(void){
 static void gpu_reset(void){
     memset(gfb,0,sizeof gfb);
     memcpy(gpal,gpal_reset,sizeof gpal);
-    gx0=gy0=gx1=gy1=0; gcol=1; gparm=0; gerr=0; gidx=GIDLEN; gdata=0;
+    gx0=gy0=gx1=gy1=0; gcol=1; gparm=0; gparm2=0; gerr=0; gidx=GIDLEN; gdata=0;
 }
 static void gpu_cmd(uint8_t v){
     switch(v){
@@ -267,6 +313,8 @@ static void gpu_cmd(uint8_t v){
     case 0x06: gpal[gcol&3]=((gx0&15)<<8)|((gy0&15)<<4)|(gx1&15); break;
     case 0x07: gpu_circle(gx0,gy0,gparm,gcol,0);    break;   /* CIRCLE     */
     case 0x08: gpu_circle(gx0,gy0,gparm,gcol,1);    break;   /* CIRCLEFILL */
+    case 0x0A: gpu_ellipse(gx0,gy0,gparm,gparm2,gcol,0); break; /* ELLIPSE     */
+    case 0x0B: gpu_ellipse(gx0,gy0,gparm,gparm2,gcol,1); break; /* ELLIPSEFILL */
     /* POINT reads a pixel back into GDATA, which is what a BASIC POINT()
        function needs. Off-screen reads as pen 0, matching the write side's
        "off-screen simply is not there" rule. */
@@ -469,7 +517,8 @@ static void memwr(uint16_t ad,uint8_t v){
       case GX1H: gx1=(uint16_t)((gx1&0xFF)|(v<<8)); return;
       case GY1H: gy1=(uint16_t)((gy1&0xFF)|(v<<8)); return;
       case GCOL: gcol=v; return;
-      case GPARM:gparm=v; return;
+      case GPARM: gparm=v;  return;
+      case GPARM2:gparm2=v; return;
       case GCMD: gerr=0; gpu_cmd(v); return;
     }
     /* The ATA task-file (feature + LBA) is a SHARED bus: both drives latch these

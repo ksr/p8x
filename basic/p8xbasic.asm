@@ -33,7 +33,8 @@ GCOL   = $FF24               ; pen 0-3 (write-only; GPEN shadows it)
 GCMD   = $FF25               ; write to execute
 GSTAT  = $FF26               ; bit7 BUSY
 GDATA  = $FF27               ; read-back: POINT result
-GPARM  = $FF28               ; scalar argument: CIRCLE radius
+GPARM  = $FF28               ; scalar argument: CIRCLE radius / ELLIPSE x-radius
+GPARM2 = $FF2F               ; ELLIPSE y-radius
 GID0   = $FF2D               ; presence signature: 'P'
 GID1   = $FF2E               ;                     'G'
 GCHI   = 9                   ; a pair's high byte = its low address + GCHI
@@ -45,6 +46,8 @@ GC_CLS  = 5
 GC_PAL  = 6
 GC_CIRC = 7
 GC_CIRCF= 8
+GC_ELL  = $0A
+GC_ELLF = $0B
 GC_PONT = 9
 CR     = $0D
 LF     = $0A
@@ -154,6 +157,7 @@ GSTGT  = BASRAM+$DC          ; GARG:   target held across EVAL
 GPEN   = BASRAM+$DD          ; shadow of GCOL -- the device register is WRITE-ONLY,
                              ;   so CLS could not otherwise restore the pen
 GCTMP  = BASRAM+$DE          ; GEXEC: the command byte, held across GWAIT
+GELL   = BASRAM+$DF          ; CIRCLE: 1 once a second radius made it an ellipse
 NAMLEN = 6                   ; significant variable-name length
 NVARS  = 32                  ; symbol-table capacity (entry = NAMLEN+2 = 8 bytes)
 VARTAB = BASRAM+$100         ; NVARS x 8 = 256 bytes ($x100..$x1FF)
@@ -1274,12 +1278,14 @@ DOPLOT: INP2
 ; GSTORE: there is no high-byte partner to clear.
 DOCIRC: INP2
         JSR  GCHECK
+        LDA  #0
+        STA  GELL                   ; a circle until a second radius says otherwise
         JSR  EVAL
         LDA  #<GX0
         JSR  GSTORE
         LDA  #<GY0
         JSR  GARG
-        JSR  SKIPSP
+        JSR  SKIPSP                 ; ',' then the (x-)radius
         LDA  (P2)
         LDB  #','
         CMP
@@ -1287,28 +1293,58 @@ DOCIRC: INP2
         INP2
         JSR  EVAL
         LDA  RESULT
-        STA  GPARM                  ; radius
+        STA  GPARM
+; What follows a comma here is EITHER the modifier or a second radius, and the
+; token tells them apart: FILL/NOFILL are keywords (>= $80), anything else starts
+; an expression. That is why NOFILL had to be a real keyword rather than merely
+; the default -- without it, `CIRCLE x,y,r,NOFILL` would try to EVAL "NOFILL".
         JSR  SKIPSP
         LDA  (P2)
         LDB  #','
         CMP
-        JNZ  ci_out                 ; no fifth argument -> outline
+        JNZ  ci_out                 ; nothing more: outline circle
         INP2
         JSR  SKIPSP
         LDA  (P2)
         LDB  #TOK_FILL
-        CMP                         ; CMP preserves A, so the next test is valid
+        CMP
+        JZ   ci_fill
+        LDB  #TOK_NOFILL
+        CMP
+        JZ   ci_nof
+        JSR  EVAL                   ; a second radius -> ellipse
+        LDA  RESULT
+        STA  GPARM2
+        LDA  #1
+        STA  GELL
+        JSR  SKIPSP                 ; ... and it may still take a modifier
+        LDA  (P2)
+        LDB  #','
+        CMP
+        JNZ  ci_out
+        INP2
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #TOK_FILL
+        CMP
         JZ   ci_fill
         LDB  #TOK_NOFILL
         CMP
         JNZ  ci_err
-        INP2
-ci_out: LDA  #GC_CIRC
-        JSR  GEXEC
-        RTS
+ci_nof: INP2
+ci_out: LDA  GELL
+        JNZ  ci_eo
+        LDA  #GC_CIRC
+        JMP  ci_go
+ci_eo:  LDA  #GC_ELL
+        JMP  ci_go
 ci_fill: INP2
+        LDA  GELL
+        JNZ  ci_ef
         LDA  #GC_CIRCF
-        JSR  GEXEC
+        JMP  ci_go
+ci_ef:  LDA  #GC_ELLF
+ci_go:  JSR  GEXEC
         RTS
 ci_err: JMP  SYNERR
 
@@ -4640,7 +4676,7 @@ MHELP:  .byte CR,LF
         .byte CR,LF
         .ascii "  BOX x0,y0,x1,y1[,FILL|,NOFILL]   PLOT x,y"
         .byte CR,LF
-        .ascii "  CIRCLE x,y,r[,FILL]  PALETTE p,r,g,b  POINT(x,y)"
+        .ascii "  CIRCLE x,y,r[,ry][,FILL]  PALETTE p,r,g,b  POINT(x,y)"
         .byte CR,LF
         .ascii "  (240x136, pens 0-3, colours 0-15 each)"
         .byte CR,LF

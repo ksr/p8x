@@ -92,6 +92,8 @@ GRAPHICS
         BOX x0,y0,x1,y1,NOFILL    ... outline, spelled out
         CIRCLE x,y,r              circle outline, centre x,y radius r
         CIRCLE x,y,r,FILL         ... solid
+        CIRCLE x,y,rx,ry          ELLIPSE: separate x and y radii
+        CIRCLE x,y,rx,ry,FILL     ... solid
         PALETTE pen,r,g,b         recolour a pen; r,g,b are 0-15 each
     Any two opposite corners work for BOX; they are sorted for you. The
     drawing itself is done by the device, not by BASIC, so a filled box is

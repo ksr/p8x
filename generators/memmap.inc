@@ -31,13 +31,14 @@ GCOL        = $FF24              ; pen 0-3 (also the pen SETPAL rewrites)
 GCMD        = $FF25              ; write executes: 1 PLOT 2 LINE 3 BOX 4 BOXFILL 5 CLS 6 SETPAL
 GSTAT       = $FF26              ; read: bit7 BUSY, bit0 ERR (unknown command)
 GDATA       = $FF27              ; read: IDENT record stream, else the last POINT result
-GPARM       = $FF28              ; scalar argument: CIRCLE radius
+GPARM       = $FF28              ; scalar argument: CIRCLE/ELLIPSE x-radius
 GX0H        = $FF29              ; X0 high byte (write AFTER GX0)
 GY0H        = $FF2A              ; Y0 high byte (write AFTER GY0)
 GX1H        = $FF2B              ; X1 high byte (write AFTER GX1)
 GY1H        = $FF2C              ; Y1 high byte (write AFTER GY1)
 GID0        = $FF2D              ; read: $50 'P' -- card-presence signature
 GID1        = $FF2E              ; read: $47 'G' -- with GID0 spells PG
+GPARM2      = $FF2F              ; ELLIPSE y-radius (GPARM is the x-radius)
 
 ; BIOS / FS scratch ($6000-$60FF)
 LBUF        = $6000              ; input line buffer

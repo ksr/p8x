@@ -144,5 +144,34 @@ if bad:
     print("BASIC-GFX TEST: FAIL")
     for b in bad: print("  " + b)
     sys.exit(1)
-print("BASIC-GFX TEST: PASS (draw, plot, circle, palette, point)")
+print("BASIC-GFX TEST: draw, plot, circle, palette, point ok")
+PY
+
+# --- part 3: CIRCLE's optional second radius makes it an ellipse ------------
+# The parser has to tell a second radius from the FILL modifier by TOKEN: a
+# keyword is >= $80, anything else starts an expression. That is also why NOFILL
+# must be a real keyword -- otherwise `CIRCLE x,y,r,NOFILL` would try to EVAL it.
+printf 'B\rbgfx\r10 CLS\r20 COLOR 1\r30 CIRCLE 60,68,30\r40 COLOR 2\r50 CIRCLE 170,68,60,20\r60 COLOR 3\r70 CIRCLE 170,110,15,20,FILL\r80 PRINT "A";POINT(90,68);POINT(60,68);POINT(230,68);POINT(10,130);POINT(170,110)\r90 END\rRUN\rBYE\r' \
+    > bgfx3.in
+../p8xemu -N -i bgfx3.in -c bgfx.img -l 120000000 eeprom.bin > bgfx3.out 2>/dev/null || true
+
+python3 - <<'PY' || exit 1
+import sys
+out = open("bgfx3.out","rb").read().replace(b"\r", b"")
+# POINT probes, in order:
+#   (90,68)  right edge of the pen-1 circle r=30 about (60,68)      -> 1
+#   (60,68)  its centre, an outline, so background                  -> 0
+#   (230,68) right edge of the pen-2 ellipse rx=60 about (170,68)   -> 2
+#   (10,130) far from every shape                                  -> 0
+#            (170,88) was the first choice and is WRONG: the ellipse is
+#            centred y=68 with ry=20, so y=88 is exactly its bottom edge.
+#   (170,110) centre of the pen-3 FILLED ellipse                    -> 3
+want = b"A10200" if False else b"A1"
+i = out.find(b"\nA")
+got = out[i+1:i+7] if i >= 0 else b"?"
+if got != b"A10203":
+    print("BASIC-GFX TEST: FAIL - ellipse probes are %r, want b'A10203'" % got)
+    print("  (circle edge, circle centre, ellipse edge, gap, filled-ellipse centre)")
+    sys.exit(1)
+print("BASIC-GFX TEST: PASS (draw, plot, circle, ellipse, palette, point)")
 PY

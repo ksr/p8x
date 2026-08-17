@@ -53,7 +53,7 @@ MAP = [
     ('I/O ports ($FF00-$FFFF)', 'GCMD', 0xFF25, 'write executes: 1 PLOT 2 LINE 3 BOX 4 BOXFILL 5 CLS 6 SETPAL'),
     ('I/O ports ($FF00-$FFFF)', 'GSTAT', 0xFF26, 'read: bit7 BUSY, bit0 ERR (unknown command)'),
     ('I/O ports ($FF00-$FFFF)', 'GDATA', 0xFF27, 'read: IDENT record stream, else the last POINT result'),
-    ('I/O ports ($FF00-$FFFF)', 'GPARM', 0xFF28, 'scalar argument: CIRCLE radius'),
+    ('I/O ports ($FF00-$FFFF)', 'GPARM', 0xFF28, 'scalar argument: CIRCLE/ELLIPSE x-radius'),
     # Coordinate HIGH bytes. Writing a low byte CLEARS its high byte, so software
     # that never touches these cannot be broken by a stale one; write the high
     # byte after the low when a coordinate exceeds 255. They exist because this
@@ -67,7 +67,7 @@ MAP = [
     # byte is not enough to detect one; two fixed bytes at fixed addresses are.
     ('I/O ports ($FF00-$FFFF)', 'GID0', 0xFF2D, "read: $50 'P' -- card-presence signature"),
     ('I/O ports ($FF00-$FFFF)', 'GID1', 0xFF2E, "read: $47 'G' -- with GID0 spells PG"),
-    # $FF2F reserved for the graphics device.
+    ('I/O ports ($FF00-$FFFF)', 'GPARM2', 0xFF2F, 'ELLIPSE y-radius (GPARM is the x-radius)'),
 
     ('BIOS / FS scratch ($6000-$60FF)', 'LBUF', 0x6000, 'input line buffer'),
     ('BIOS / FS scratch ($6000-$60FF)', 'ADDRL', 0x6040, 'parsed address'),

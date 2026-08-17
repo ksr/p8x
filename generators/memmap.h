@@ -32,13 +32,14 @@
 #define GCMD        0xFF25       /* write executes: 1 PLOT 2 LINE 3 BOX 4 BOXFILL 5 CLS 6 SETPAL */
 #define GSTAT       0xFF26       /* read: bit7 BUSY, bit0 ERR (unknown command) */
 #define GDATA       0xFF27       /* read: IDENT record stream, else the last POINT result */
-#define GPARM       0xFF28       /* scalar argument: CIRCLE radius */
+#define GPARM       0xFF28       /* scalar argument: CIRCLE/ELLIPSE x-radius */
 #define GX0H        0xFF29       /* X0 high byte (write AFTER GX0) */
 #define GY0H        0xFF2A       /* Y0 high byte (write AFTER GY0) */
 #define GX1H        0xFF2B       /* X1 high byte (write AFTER GX1) */
 #define GY1H        0xFF2C       /* Y1 high byte (write AFTER GY1) */
 #define GID0        0xFF2D       /* read: $50 'P' -- card-presence signature */
 #define GID1        0xFF2E       /* read: $47 'G' -- with GID0 spells PG */
+#define GPARM2      0xFF2F       /* ELLIPSE y-radius (GPARM is the x-radius) */
 
 /* BIOS / FS scratch ($6000-$60FF) */
 #define LBUF        0x6000       /* input line buffer */
