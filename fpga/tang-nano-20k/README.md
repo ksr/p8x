@@ -39,15 +39,25 @@ directory, which is why it sidesteps the Homebrew permission problem entirely.
 Then just:
 
 ```bash
-./build.sh          # synthesize -> place & route -> pack
-./build.sh load     # ... and load to SRAM (volatile)
-./build.sh flash    # ... and write onboard flash (persistent)
+./build.sh cpu            # synthesize -> place & route -> pack
+./build.sh cpu load       # ... and load to SRAM (volatile)
+./build.sh cpu flash      # ... and write onboard flash (persistent)
+./build.sh lcd load       # the CPU plus the 480x272 graphics panel
+./build.sh echo load      # Milestone-0 UART echo, a known-good baseline
 ```
+
+**Give the target explicitly.** The form is `build.sh [echo|cpu|lcd]
+[build|load|flash]`, and the first argument is the TARGET — it defaults to
+`echo`, so a bare `./build.sh` builds the Milestone-0 blinker, and
+`./build.sh load` is rejected outright with *"unknown target: load"* because
+`load` is an action in the second position. This block used to show exactly that
+target-less form, left over from when there was only one design.
 
 `build.sh` sources `~/oss-cad-suite/environment` itself if the tools are not
 already on PATH. The steps it runs, if you want them by hand:
 
 ```bash
+# (the Milestone-0 echo design; the cpu/lcd targets pass more sources and -DLCD)
 yosys -p "read_verilog rtl/top.v rtl/uart.v; synth_gowin -top top -json p8x.json"
 
 nextpnr-himbaechel --json p8x.json --write pnr.json \
@@ -68,8 +78,9 @@ openFPGALoader -b tangnano20k p8x.fs
 > `rtl/uart.v`, `tangnano20k.cst` → Synthesize → Place & Route → Program.
 > `openFPGALoader` still flashes it.
 
-Resource use is tiny — 219/20736 LUT4 (1%), 109/15552 DFF — so there is ample
-room for the CPU core, the 64K memory, and the microcode BRAM in Milestone 3.
+Resource use for that echo design is tiny — 219/20736 LUT4 (1%), 109/15552 DFF.
+The real builds are much larger: `cpu` is 40/46 block RAMs, and `lcd` 44/46 with
+the framebuffer. See *The graphics panel* below.
 
 ## Connect a terminal
 
