@@ -34,6 +34,44 @@ output [1:0]  O_sdram_ba,
 output [3:0]  O_sdram_dqm
 ```
 
+## Finding 2: it works (verified on hardware 2026-08-17)
+
+`sdram_test.v` reports `SDRAM SEQ=0000 SPR=0000 PASS` on the board:
+
+- 64 KB written and read back byte for byte, no errors
+- a sparse pass touching one byte every 64 KB across the **whole 8 MB**, no
+  errors -- so no address aliasing: rows, columns and banks are wired as
+  expected and high addresses do not fold onto low ones
+- refresh held throughout, the two passes being separated by the entire write
+  phase
+
+Costs, which was the other half of what stage 0 was for:
+
+| | |
+|---|---|
+| LUT4 | 916 / 20736 (4%) -- controller **plus** test FSM **plus** UART |
+| BSRAM | **0 / 46** |
+| Fmax | 147 MHz against the 27 MHz it runs at |
+
+The zero BSRAM is the important one. An SDRAM framebuffer does not add pressure
+to a design already at 44/46 -- it *returns* the four blocks the current
+framebuffer occupies, minus whatever a scanout line buffer needs (one block
+holds a 2048-byte line, which is more than a 480-pixel line needs at any depth
+we would pick).
+
+### Bandwidth is not the constraint either
+
+At 27 MHz the 32-bit bus is ~108 MB/s peak. Scanout needs:
+
+| mode | bytes/frame | at 54.11 Hz | % of peak |
+|---|---|---|---|
+| 480x272 @ 4 bpp | 65,280 | 3.5 MB/s | 3% |
+| 480x272 @ 8 bpp | 130,560 | 7.1 MB/s | 7% |
+
+So the drawing engine keeps well over 90% of the bus even at 256 colours. What
+is left to prove is **latency**, not throughput: SDRAM cannot promise a byte on
+demand the way block RAM does, and a scanout cannot stall. That is stage 1.
+
 ## What this does and does not prove
 
 It proves the toolchain will *wire up* the SDRAM. It says nothing yet about
