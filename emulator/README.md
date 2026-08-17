@@ -154,8 +154,13 @@ the RTL engine will have to match them exactly:
 
 `p8xemu` is the golden model for the FPGA, so this is the specification the
 Verilog engine gets written against — including `gpu_line`'s Bresenham, which the
-RTL must reproduce step for step. It does: `fpga/sim/gfx.sh` runs the same
-payloads on both and byte-compares the frames.
+RTL must reproduce step for step. `fpga/sim/gfx.sh` runs the same payloads on
+both and byte-compares the frames.
+
+> **That comparison is RED today.** The RTL misses two of the nine commands the
+> payload issues (`SETPAL` and `BOXFILL`) and 14424 panel pixels differ. Not
+> root-caused — see the banner at the top of [BACKLOG.md](../BACKLOG.md). The
+> emulator side is fine, and so is the board: BASIC's own wait is correct.
 
 ### BUSY is real on hardware, and this model hides it
 

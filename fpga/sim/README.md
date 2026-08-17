@@ -196,10 +196,16 @@ depends on real timing rather than these polled, timing-free models.
 ./gfx.sh            # runs the graphics payloads on both models, cmp's the frames
 ```
 
+> **RED TODAY.** The RTL misses two of the nine commands the payload issues
+> (`SETPAL` and `BOXFILL`); the CPU never writes `$FF25` for them at all. Left
+> failing deliberately — it was green for days over payloads that drew nothing.
+> Details in the banner at the top of [`../../BACKLOG.md`](../../BACKLOG.md).
+
 The drawing engine is verified by byte-comparing the **framebuffer** the RTL
 produces against the one `p8xemu -g` writes, not by diffing CPU traces. That is
 deliberate: the emulator draws instantaneously and never raises BUSY, while the
-RTL takes one clock per byte for `CLS` and two per pixel otherwise. A program
+RTL takes one clock per byte for `CLS` and about seven and a half per pixel
+otherwise. A program
 that polls `GSTAT` therefore reads different values on the two models **by
 design**, so a cycle diff would report a divergence that is not a fault.
 

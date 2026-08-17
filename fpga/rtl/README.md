@@ -19,7 +19,8 @@ irregular pattern so the contention is exercised (see below).
 `gfx.v` is a transliteration of the `gpu_*` functions in `emulator/p8xemu.c`, and
 the same rule applies to it as to the CPU: the emulator is the golden model, so a
 cleverer Bresenham that lights a different pixel is a **bug**. `../sim/gfx.sh`
-byte-compares the frames the two produce.
+byte-compares the frames the two produce — and **fails today**: the RTL misses
+`SETPAL` and `BOXFILL`. See the banner at the top of `../../BACKLOG.md`.
 
 Unlike the CPU, the graphics device **cannot be cycle-diffed**. The emulator draws
 instantaneously and never raises BUSY; the RTL takes thousands of clocks and does.

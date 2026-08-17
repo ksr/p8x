@@ -141,7 +141,7 @@ the monitor, OS, BASIC, C compiler and assembler run **unmodified**.
 | 3 Core on real hardware, full 64K map | done |
 | 4 microSD disk — P8X/OS boots from card | done |
 | 5 Clock-up + IRQ | next |
-| 6 Graphics: 480x272 panel + drawing engine | done |
+| 6 Graphics: 480x272 panel + drawing engine | done (one RTL/emulator diff open — see BACKLOG) |
 
 As built: **9 MHz** effective (27 MHz fabric, three phases per microcycle),
 ~48 MHz Fmax (varies a little per place-and-route run), 40/46 block RAMs — 44/46
