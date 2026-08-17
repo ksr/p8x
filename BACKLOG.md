@@ -20,6 +20,14 @@ remainder is why it is still here.
 
 ## NEXT
 
+> **A TEST IS RED RIGHT NOW: `fpga/sim/gfx.sh`.** The RTL graphics engine misses
+> two of the nine commands its payload issues (SETPAL and BOXFILL), and the CPU
+> never writes `$FF25` for those two at all. Not root-caused; details under
+> *Milestone 6 — graphics* below. It is left failing on purpose — it went green
+> for days over payloads that drew nothing, and a red test naming a real
+> divergence is worth more than that. **This does not affect the board**: BASIC's
+> own wait is correct and drawing works on hardware.
+
 - [x] **BASIC now honours the OS current directory (fixed 2026-08-13).** From the
       OS shell, `cd src` then `basic` then `SAVE "T"` used to write `/T`; it now
       writes `/src/T`.
@@ -151,6 +159,19 @@ remainder is why it is still here.
         - **Test gap that let bug 1 through, now closed:** `tb_video` checked
           frame shape and `gfx.sh` checked framebuffer contents; nothing checked
           the MAPPING between them. `sim/tb_scanout.v` does.
+        - **OPEN, AND `fpga/sim/gfx.sh` FAILS ON IT TODAY.** The RTL misses two of
+          the nine commands `test_gfx.asm` issues: SETPAL ($06) and BOXFILL ($04).
+          Traced at register level -- the CPU never writes $FF25 for those two at
+          all (7 GCMD writes, not 9), while the same ROM on the emulator issues
+          all nine and draws correctly. 14424 of 130560 panel pixels differ on
+          `gfx`, 912 on `gfx2` (its whole circle).
+          The pattern: both skipped commands are ones where GWAIT actually had to
+          SPIN, because the previous command was still running. Every command that
+          found the engine already idle went through. So suspect the spin path --
+          GWAIT's loop, or how BUSY reads during it -- rather than the drawing
+          engine. NOT root-caused.
+          The test is left FAILING deliberately: the alternative is a green test
+          over payloads that draw nothing, which is what the previous days had.
         - **OPEN:** the co-sim exercises the shared port (irregular LFSR hold),
           but reintroducing the pending-write bug did NOT make it fail. The
           contention coverage is therefore unproven and worth understanding.
