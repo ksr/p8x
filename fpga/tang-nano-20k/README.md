@@ -133,6 +133,8 @@ substrate the P8X core will sit on.
 |-------|----------------|
 | `sim/tb_top.v` | Milestone-0 echo path at the real 115200-for-27MHz bit period |
 | `sim/tb_p8x_top.v` | the whole board top: monitor banner out of the real UART, and P8X/OS booting off a modelled card |
+| `sim/tb_video.v` | panel frame geometry: 480x272 active, 54.11 Hz |
+| `sim/tb_scanout.v` | the framebuffer-to-panel **mapping**, pixel by pixel |
 | `sim/sd_model.v` | a behavioural SPI microSD, serving a real disk image via `$fseek` |
 | `sim/tb_sd_spi.v` | `sd_spi.v`'s **error** paths, driven directly |
 

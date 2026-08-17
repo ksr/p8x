@@ -7,6 +7,13 @@ Four files, and they are **not** peers:
 | `p8x_cpu.v` | **the machine.** Shared verbatim by the simulation and the board. |
 | `gfx.v` | the **graphics display** — registers, drawing engine, framebuffer, palette. Also shared verbatim. |
 | `video_rgb.v` | 480x272 panel timing + scanout. Board-only in practice, but board-independent. |
+
+**The `sc_en` contract, alongside `cen`.** `gfx.v`'s framebuffer has ONE port,
+shared between the drawing engine and the scanout — true dual port halves a Gowin
+block's usable depth, which would cost 8 blocks instead of 4 and not place.
+`sc_en` hands the port to the scanout for a cycle and the engine holds. A wrapper
+with no display ties it low; `p8x_soc.v` deliberately does **not** — it drives an
+irregular pattern so the contention is exercised (see below).
 | `p8x_soc.v` | a **simulation-only** wrapper. The board does not use this. |
 
 `gfx.v` is a transliteration of the `gpu_*` functions in `emulator/p8xemu.c`, and
@@ -47,7 +54,30 @@ test, and a divergence names the exact microcycle:
 ../sim/run.sh 20000                        # monitor boot
 ../sim/run.sh 60000 isa_test.asm           # all 88 opcodes
 ../sim/run.sh 200000 "" console_in.txt     # driven monitor + console diff
+../sim/gfx.sh                              # graphics engine vs the emulator
 ```
+
+Touching `gfx.v` or `video_rgb.v` additionally needs the two board benches, which
+cover what the co-sim structurally cannot:
+
+```sh
+cd ../tang-nano-20k/sim
+iverilog -g2012 -o tb.vvp ../../rtl/video_rgb.v tb_video.v   && vvp tb.vvp
+iverilog -g2012 -o tb.vvp ../../rtl/video_rgb.v tb_scanout.v && vvp tb.vvp
+```
+
+`tb_scanout.v` checks **which framebuffer pixel reaches which panel pixel**.
+`gfx.sh` only checks framebuffer *contents* and `tb_video.v` only frame *shape*,
+so the mapping between them went untested — and a shift-width bug that blanked
+half of every byte reached hardware through exactly that gap.
+
+**The co-sim's hold pattern is irregular on purpose.** The engine's pixel loop is
+six cycles, so the board's regular one-in-three hold has a *fixed* phase
+relationship with it: a given collision either always happens or never does, and
+a bug depending on one can be invisible in simulation while failing half the time
+on hardware. Caveat, recorded honestly: reintroducing a known pending-write bug
+did **not** make the frame diff fail, with either pattern, so this coverage is
+unproven.
 
 Then rebuild the board (`../tang-nano-20k/build.sh cpu`) — the co-sim cannot catch
 anything that is purely about the substrate, such as timing closure, block-RAM

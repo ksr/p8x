@@ -175,6 +175,8 @@ fpga/
     ├── sim/                  board-level benches (see tang-nano-20k/README.md)
     │   ├── tb_top.v          Milestone-0 echo path
     │   ├── tb_p8x_top.v      whole board top: monitor + OS boot off a card
+    │   ├── tb_video.v        panel frame geometry (480x272, 54.11 Hz)
+    │   ├── tb_scanout.v      which fb pixel reaches which panel pixel
     │   ├── sd_model.v        behavioural SPI card, with +sdfail fault injection
     │   └── tb_sd_spi.v       sd_spi's error paths
     └── tools/                host-side helpers, none needing root
