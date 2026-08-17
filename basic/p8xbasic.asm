@@ -160,6 +160,27 @@ GPEN   = BASRAM+$DD          ; shadow of GCOL -- the device register is WRITE-ON
                              ;   so CLS could not otherwise restore the pen
 GCTMP  = BASRAM+$DE          ; GEXEC: the command byte, held across GWAIT
 GELL   = BASRAM+$DF          ; CIRCLE: 1 once a second radius made it an ellipse
+; GTEXT working set. It rasterises glyphs itself (see DOGTEXT), so unlike the
+; other statements it needs real state. $E0-$E2 is the tail of the same free run
+; as the block above; $E6-$F1 is the next one ($E3 JUMPF, $E4 JUMPADDR are two
+; bytes, and SEED starts at $F4) -- which leaves $F2-$F3 as the only spare bytes
+; left in this page. Re-read the JUMPADDR note above before claiming any of it.
+GTBIT  = BASRAM+$E0          ; the glyph column being shifted out, one bit a row
+GTROW  = BASRAM+$E1          ; rows left in this column (7..1)
+GTCOL  = BASRAM+$E2          ; columns left in this glyph (5..1); also the scratch
+                             ;   the index*5 glyph-offset multiply borrows
+GTCX   = BASRAM+$E6          ; pen x (2) -- runs across the glyph AND on to the
+                             ;   next character, so no separate origin is kept
+GTY    = BASRAM+$E8          ; text top edge (2), constant for the whole string
+GTCY   = BASRAM+$EA          ; pen y (2), reset to GTY at the top of each column
+GTPTR  = BASRAM+$EC          ; read pointer into STRACC (2)
+GTGP   = BASRAM+$EE          ; read pointer into FONT57 (2)
+GTSZ   = BASRAM+$F0          ; size multiplier, >= 1
+GTN    = BASRAM+$F1          ; characters left to draw
+GTTMP  = BASRAM+$F2          ; carry captured between the halves of a 16-bit
+                             ;   add -- ADD has a FIXED carry-in and ignores C,
+                             ;   so the high half must be given the carry as a
+                             ;   number. Same shape as ADD16.
 NAMLEN = 6                   ; significant variable-name length
 NVARS  = 32                  ; symbol-table capacity (entry = NAMLEN+2 = 8 bytes)
 VARTAB = BASRAM+$100         ; NVARS x 8 = 256 bytes ($x100..$x1FF)
@@ -169,6 +190,7 @@ SLEN   = 32                  ; maximum stored string length
 SVENT  = 40                  ; string-var entry: NAMLEN name + 1 len + 32 data + pad
 NSVARS = 16                  ; string-variable table capacity
 STRACC = BASRAM+$200         ; SEVAL result accumulator (64 bytes)
+STRACCD= BASRAM+$201         ; STRACC data area (past the length byte)
 STRTMP = BASRAM+$240         ; current term being produced (64)
 STRTMPD= BASRAM+$241         ; STRTMP data area (past the length byte)
 STRARG = BASRAM+$280         ; a string function's string argument (64)
@@ -226,6 +248,7 @@ TOK_PLOT  = $AB          ; PLOT x,y
 TOK_CIRCLE= $AC          ; CIRCLE x,y,r[,FILL|,NOFILL]
 TOK_PALETT= $AD          ; PALETTE pen,r,g,b
 TOK_POINT = $AE          ; POINT(x,y) -- a FUNCTION, not a statement
+TOK_GTEXT = $AF          ; GTEXT x,y,size,string$
 
 MONITOR = $0000          ; reset vector — BYE returns here
 CONIN   = $0100          ; BIOS: wait for a key -> A
@@ -393,6 +416,10 @@ STMT:   JSR  SKIPSP
         LDB  #TOK_PALETT
         CMP
         JZ   DOPAL
+        LDA  (P2)
+        LDB  #TOK_GTEXT
+        CMP
+        JZ   DOGTEXT
         LDA  (P2)
         LDB  #TOK_REM
         CMP
@@ -1372,6 +1399,267 @@ DOPAL:  INP2
         LDA  GPEN                   ; give the drawing pen back
         STA  GCOL
         RTS
+
+;==============================================================================
+; GTEXT x,y,size,string$ — draw a string as GRAPHICS, in the current pen.
+;
+; Unlike every other statement here, the glyphs are rasterised IN SOFTWARE. The
+; display has no text command and adding one would mean a font ROM plus a glyph
+; state machine in gfx.v, which the FPGA build has no room for: the lcd bitstream
+; sits at 44/46 BSRAM and a change with no logical effect at all has already been
+; enough to break placement (see BACKLOG.md). Doing it here costs one device
+; command per LIT pixel and needs no bitstream change whatsoever, so GTEXT ships
+; as a new BASIC.BIN on the card and the board is not reflashed.
+;
+; Each font pixel becomes a size x size block -- PLOT at size 1, BOXFILL above
+; it -- so a big font costs exactly as many device commands as a small one.
+;
+; Clipping is free: the device DISCARDS off-screen pixels rather than wrapping
+; them (see gpu_px in the emulator), so nothing here tests a pixel. The only
+; bound checked is the x cursor, and only to stop early once the string has run
+; off the right-hand edge -- without which a long string would keep issuing
+; commands for pixels that can never appear.
+;
+; The font is 5x7 in a 6x8 cell: 40 columns across a 240-pixel screen at size 1,
+; 20 at size 2. Codes $20-$5F only; lowercase folds onto the uppercase glyph via
+; UPCHAR and anything else draws as a blank. See generators/gen_font57.py.
+;==============================================================================
+DOGTEXT: INP2                       ; consume the GTEXT token
+        JSR  GCHECK
+        JSR  EVAL                   ; x
+        LDA  RESULT
+        STA  GTCX
+        LDA  RESULT+1
+        STA  GTCX+1
+        JSR  GTSEP
+        JSR  EVAL                   ; y
+        LDA  RESULT
+        STA  GTY
+        LDA  RESULT+1
+        STA  GTY+1
+        JSR  GTSEP
+        JSR  EVAL                   ; size
+        LDA  RESULT+1
+        JNZ  gt_big                 ; >= 256: clamp, do not let it wrap to a
+        LDA  RESULT                 ;   stripe one pixel wide
+        JNZ  gt_szok
+        LDA  #1                     ; size 0 would draw nothing at all
+        JMP  gt_szok
+gt_big: LDA  #255
+gt_szok: STA GTSZ
+        JSR  GTSEP
+        JSR  SEVAL                  ; the string -> STRACC = [len][data...]
+        LDA  STRACC
+        STA  GTN
+        JZ   gt_ret                 ; "" is legal and draws nothing
+        LDA  #<STRACCD
+        STA  GTPTR
+        LDA  #>STRACCD
+        STA  GTPTR+1
+
+; ---- one character ---------------------------------------------------------
+gt_ch:  LDA  GTN
+        JZ   gt_ret
+        DEC
+        STA  GTN
+        LDA  GTCX+1                 ; run off the right edge -> stop. 240 is a
+        JNZ  gt_ret                 ;   byte, so any high byte is already past it
+        LDA  GTCX
+        LDB  #240
+        CMP
+        JC   gt_ret                 ; C=1 here means x >= 240
+        LDA  GTPTR                  ; fetch the character
+        TAP1L
+        LDA  GTPTR+1
+        TAP1H
+        LDA  (P1)
+        JSR  UPCHAR                 ; 'a'-'z' share the uppercase glyphs
+        LDB  #$20
+        CMP                         ; CMP preserves A, so both bounds can be
+        JNC  gt_spc                 ;   tested against the one load
+        LDB  #$60
+        CMP
+        JC   gt_spc
+        JMP  gt_have
+gt_spc: LDA  #$20                   ; outside the font -> blank
+gt_have: LDB #$20
+        SUB                         ; glyph index 0..63
+
+; ---- GTGP = FONT57 + index*5  (index*4 + index; no multiply in this ISA) ----
+        STA  GTCOL                  ; the index, needed once more for the +index;
+        STA  GTGP                   ;   GTCOL becomes the column counter below
+        LDA  #0
+        STA  GTGP+1
+        LDA  GTGP                   ; x2 -- SHL pushes bit 7 into C and ROL takes
+        SHL                         ;   it, so the pair shifts as one 16-bit value
+        STA  GTGP
+        LDA  GTGP+1
+        ROL
+        STA  GTGP+1
+        LDA  GTGP                   ; x4
+        SHL
+        STA  GTGP
+        LDA  GTGP+1
+        ROL
+        STA  GTGP+1
+        LDA  GTGP                   ; + index  ->  index*5
+        LDB  GTCOL
+        ADD
+        STA  GTGP
+        LDA  #0                     ; capture the carry (LDA leaves C alone)
+        JNC  gt_m1
+        LDA  #1
+gt_m1:  LDB  GTGP+1
+        ADD
+        STA  GTGP+1
+        LDA  GTGP                   ; + FONT57
+        LDB  #<FONT57
+        ADD
+        STA  GTGP
+        LDA  #0
+        JNC  gt_m2
+        LDA  #1
+gt_m2:  LDB  GTGP+1
+        ADD
+        LDB  #>FONT57
+        ADD
+        STA  GTGP+1
+
+; ---- five columns ----------------------------------------------------------
+        LDA  #5
+        STA  GTCOL
+gt_col: LDA  GTGP                   ; bits = *GTGP++
+        TAP1L
+        LDA  GTGP+1
+        TAP1H
+        LDA  (P1)
+        STA  GTBIT
+        LDA  GTGP
+        INC
+        STA  GTGP
+        JNZ  gt_c1
+        LDA  GTGP+1
+        INC
+        STA  GTGP+1
+gt_c1:  LDA  GTY                    ; every column restarts at the top row
+        STA  GTCY
+        LDA  GTY+1
+        STA  GTCY+1
+        LDA  #7
+        STA  GTROW
+gt_row: LDA  GTBIT                  ; bit 0 is the row we are on
+        LDB  #1
+        AND
+        JZ   gt_off
+        JSR  GTBLK
+gt_off: LDA  GTBIT
+        SHR
+        STA  GTBIT
+        LDA  GTCY                   ; cury += size
+        LDB  GTSZ
+        ADD
+        STA  GTCY
+        LDA  #0
+        JNC  gt_y1
+        LDA  #1
+gt_y1:  LDB  GTCY+1
+        ADD
+        STA  GTCY+1
+        LDA  GTROW
+        DEC
+        STA  GTROW
+        JNZ  gt_row
+        JSR  GTADVX                 ; curx += size
+        LDA  GTCOL
+        DEC
+        STA  GTCOL
+        JNZ  gt_col
+        JSR  GTADVX                 ; the sixth column is the inter-character gap
+        LDA  GTPTR                  ; next character
+        INC
+        STA  GTPTR
+        JNZ  gt_ch
+        LDA  GTPTR+1
+        INC
+        STA  GTPTR+1
+        JMP  gt_ch
+gt_ret: RTS
+
+; GTSEP — require the ',' between GTEXT's arguments.
+GTSEP:  JSR  SKIPSP
+        LDA  (P2)
+        LDB  #','
+        CMP
+        JNZ  gt_err
+        INP2
+        RTS
+gt_err: JMP  SYNERR
+
+; GTADVX — pen x += size, 16-bit.
+GTADVX: LDA  GTCX
+        LDB  GTSZ
+        ADD
+        STA  GTCX
+        LDA  #0
+        JNC  ax_nc
+        LDA  #1
+ax_nc:  LDB  GTCX+1
+        ADD
+        STA  GTCX+1
+        RTS
+
+; GTBLK — one lit font pixel: a size x size block at (GTCX,GTCY) in the current
+; pen. One device command either way, which is what makes scaling free.
+; Low bytes go first throughout: the device CLEARS a high byte when its low
+; partner is written, so the reverse order would silently drop it.
+GTBLK:  LDA  GTCX
+        STA  GX0
+        LDA  GTCX+1
+        STA  GX0+GCHI
+        LDA  GTCY
+        STA  GY0
+        LDA  GTCY+1
+        STA  GY0+GCHI
+        LDA  GTSZ
+        LDB  #1
+        CMP
+        JZ   gb_dot
+        LDA  GTSZ                   ; x1 = x0 + size-1
+        LDB  #1
+        SUB
+        LDB  GTCX
+        ADD
+        STA  GTTMP                  ; hold it: GX1 must not be written until the
+        LDA  #0                     ;   carry has been read out of C
+        JNC  gb_x
+        LDA  #1
+gb_x:   LDB  GTCX+1
+        ADD
+        PHA                         ; low first -- writing it CLEARS the high byte
+        LDA  GTTMP
+        STA  GX1
+        PLA
+        STA  GX1+GCHI
+        LDA  GTSZ                   ; y1 = y0 + size-1
+        LDB  #1
+        SUB
+        LDB  GTCY
+        ADD
+        STA  GTTMP
+        LDA  #0
+        JNC  gb_y
+        LDA  #1
+gb_y:   LDB  GTCY+1
+        ADD
+        PHA
+        LDA  GTTMP
+        STA  GY1
+        PLA
+        STA  GY1+GCHI
+        LDA  #GC_BOXF
+        JMP  GEXEC
+gb_dot: LDA  #GC_PLOT
+        JMP  GEXEC
 
 ; REM — comment: ignore the rest of the line
 DOREM:  LDA  (P2)
@@ -4440,6 +4728,9 @@ pk_d:   RTS
 
 ; keyword table: each entry = ASCII letters then the token byte (>= $80);
 ; a 00 ends the table.  (Token byte doubles as the entry's end marker.)
+; The 5x7 glyph table used by GTEXT. Generated -- see gen_font57.py.
+        .include "font57.inc"
+
 KWTAB:  .ascii "PRINT"
         .byte $80
         .ascii "LET"
@@ -4534,6 +4825,8 @@ KWTAB:  .ascii "PRINT"
         .byte $AD
         .ascii "POINT"
         .byte $AE
+        .ascii "GTEXT"
+        .byte $AF
         .byte $00
 
 ;==============================================================================
@@ -4680,6 +4973,8 @@ MHELP:  .byte CR,LF
         .ascii "  BOX x0,y0,x1,y1[,FILL|,NOFILL]   PLOT x,y"
         .byte CR,LF
         .ascii "  CIRCLE x,y,r[,ry][,FILL]  PALETTE p,r,g,b  POINT(x,y)"
+        .byte CR,LF
+        .ascii "  GTEXT x,y,size,s$   (5x7 text, 40 cols at size 1)"
         .byte CR,LF
         .ascii "  (240x136, pens 0-3, colours 0-15 each)"
         .byte CR,LF

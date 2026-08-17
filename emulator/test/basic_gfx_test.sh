@@ -173,5 +173,102 @@ if got != b"A10203":
     print("BASIC-GFX TEST: FAIL - ellipse probes are %r, want b'A10203'" % got)
     print("  (circle edge, circle centre, ellipse edge, gap, filled-ellipse centre)")
     sys.exit(1)
-print("BASIC-GFX TEST: PASS (draw, plot, circle, ellipse, palette, point)")
+print("BASIC-GFX TEST: ellipse ok")
 PY
+
+# --- part 4: GTEXT x,y,size,string$ ------------------------------------------
+# GTEXT is the one graphics statement BASIC rasterises ITSELF -- the device has
+# no text command -- so the things that can break here are different in kind
+# from parts 1-3:
+#
+#   1. The glyph must actually be the right glyph. The font offset is index*5
+#      built from shifts and adds, and P8X's ADD has a FIXED carry-in: it does
+#      NOT add C. A missing carry moves the font pointer by exactly 256 bytes
+#      and still draws something plausible-looking, which is how it hides.
+#   2. Lowercase must fold onto the uppercase glyph, not draw a blank.
+#   3. size must scale the glyph, not just move it.
+#   4. A string running off the right edge must STOP, not wrap onto the next
+#      row. The device discards off-screen pixels, so a wrap would not come from
+#      the device -- it would come from the 8-bit x cursor rolling over.
+#   5. GTEXT must draw in the CURRENT pen, and "" must be legal and draw nothing.
+printf 'B\rbgfx\r10 CLS\r20 COLOR 1\r30 GTEXT 10,10,1,"A"\r40 COLOR 2\r50 GTEXT 40,10,1,"a"\r60 COLOR 3\r70 GTEXT 4,40,2,"A"\r80 COLOR 1\r90 GTEXT 230,80,1,"WW"\r100 GTEXT 5,110,1,""\r110 END\rRUN\rLIST\rBYE\r' \
+    > bgfx4.in
+../p8xemu -N -i bgfx4.in -c bgfx.img -l 200000000 -g bgfx4.ppm eeprom.bin > bgfx4.out 2>/dev/null || true
+
+python3 - <<'PY' || exit 1
+import sys
+bad = []
+out = open("bgfx4.out","rb").read().replace(b"\r", b"")
+d  = open("bgfx4.ppm","rb").read()
+px = d[d.index(b"255\n")+4:]
+W  = 480
+BLACK, WHITE, RED, GREEN = (0,0,0), (255,255,255), (255,0,0), (0,255,0)
+NAME = {BLACK:"pen0", WHITE:"pen1", RED:"pen2", GREEN:"pen3"}
+def fb(x, y):
+    i = ((y*2*W) + x*2)*3
+    return tuple(px[i:i+3])
+def want(x, y, c, why):
+    got = fb(x,y)
+    if got != c:
+        bad.append("(%d,%d) is %s, want %s - %s"
+                   % (x, y, NAME.get(got,got), NAME.get(c,c), why))
+
+# The 5x7 'A': apex at column 2 of row 0, uprights at columns 0 and 4 from row 2
+# down, crossbar across the whole of row 4. Pinning the apex AND the empty
+# corner is what catches a font pointer that landed on the wrong glyph.
+want(12, 10, WHITE, "'A' apex missing - wrong glyph, or GTEXT drew nothing")
+want(10, 10, BLACK, "(10,10) is lit; 'A' has no top-left pixel - font off by a glyph")
+want(10, 12, WHITE, "'A' left upright missing")
+want(14, 12, WHITE, "'A' right upright missing")
+for x in range(10, 15):
+    want(x, 14, WHITE, "'A' crossbar broken at x=%d" % x)
+want(12, 16, BLACK, "row 6 of 'A' should be open between the uprights")
+
+# lowercase folds to the SAME shape, in its own pen
+want(42, 10, RED,   "lowercase 'a' did not fold onto the 'A' glyph")
+want(40, 10, BLACK, "folded 'a' is not aligned like 'A'")
+for x in range(40, 45):
+    want(x, 14, RED, "folded 'a' crossbar broken at x=%d" % x)
+
+# size 2: every font pixel becomes a 2x2 block, so the apex is 4 pixels and the
+# glyph occupies twice the extent. Origin (4,40), apex at column 2 => x 8..9.
+for x in (8, 9):
+    for y in (40, 41):
+        want(x, y, GREEN, "size-2 apex block incomplete at (%d,%d)" % (x, y))
+want(10, 40, BLACK, "size-2 apex is too wide - the block is not 2x2")
+want( 4, 44, GREEN, "size-2 left upright missing (row 2 should start at y=44)")
+want( 4, 42, BLACK, "size-2 upright started too early - rows are not scaled")
+
+# clipping: 'W' at x=230 is partly on screen, the second one is off it. Nothing
+# may appear at the left edge on those rows.
+for y in range(80, 87):
+    for x in range(0, 12):
+        if fb(x,y) != BLACK:
+            bad.append("(%d,%d) lit - GTEXT wrapped past the right edge" % (x,y))
+            break
+
+# "" is legal and draws nothing
+for y in range(110, 118):
+    for x in range(4, 20):
+        if fb(x,y) != BLACK:
+            bad.append('GTEXT ...,"" drew at (%d,%d)' % (x,y))
+            break
+
+for kw in [b'30 GTEXT 10,10,1,"A"', b'70 GTEXT 4,40,2,"A"', b'100 GTEXT 5,110,1,""']:
+    if out.count(kw) < 2:
+        bad.append("LIST did not round-trip %r" % kw.decode())
+
+if bad:
+    print("BASIC-GFX TEST: FAIL")
+    for b in bad[:12]: print("  " + b)
+    sys.exit(1)
+print("BASIC-GFX TEST: gtext ok (glyph, case folding, scaling, clipping)")
+PY
+
+# A missing separator is a syntax error, not a half-drawn string.
+printf 'B\rbgfx\r10 GTEXT 10,10,1\r20 END\rRUN\rBYE\r' > bgfx5.in
+../p8xemu -N -i bgfx5.in -c bgfx.img -l 120000000 eeprom.bin > bgfx5.out 2>/dev/null || true
+if ! grep -q "SYNTAX ERROR" bgfx5.out; then
+    fail "GTEXT with no string argument was accepted"
+fi
+echo "BASIC-GFX TEST: PASS (draw, plot, circle, ellipse, palette, point, gtext)"

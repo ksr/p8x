@@ -182,6 +182,7 @@ A line may hold several statements separated by `:` —
 | `CIRCLE x,y,r[,FILL\|,NOFILL]` | circle of radius `r` about `x,y` |
 | `CIRCLE x,y,rx,ry[,FILL\|,NOFILL]` | **ellipse** — a second radius gives separate x and y radii |
 | `PALETTE pen,r,g,b` | recolour a pen; `r`,`g`,`b` are 0–15 |
+| `GTEXT x,y,size,s$` | draw a string as graphics in the current `COLOR` |
 
 ### Graphics
 
@@ -233,6 +234,25 @@ returns the pen (0–3) at a pixel — 0 for anything off-screen:
 100 IF POINT(X,Y) = 0 THEN PLOT X,Y
 ```
 
+**Text on the screen.** `GTEXT x,y,size,s$` draws a string as graphics, in the
+current `COLOR`, with `x,y` the top-left corner:
+
+```basic
+10 COLOR 1
+20 GTEXT 4,4,2,"P8X BASIC"      : REM double size
+30 COLOR 2
+40 GTEXT 4,26,1,"SCORE "+S$     : REM any string expression
+```
+
+`size` is a plain multiplier. The glyphs are 5×7 in a 6×8 cell, so size 1 gives
+**40 columns and 17 rows**, size 2 gives 20 × 8, and so on. Only codes `$20`–`$5F`
+have glyphs: lowercase is drawn as uppercase, and anything else comes out blank.
+A string that runs off the right-hand edge simply stops — it does not wrap.
+
+`GTEXT` is not a console: there is no cursor, no scrolling and no line wrap, and
+it is the one drawing statement BASIC performs *itself* rather than handing to
+the device (see below).
+
 **Colours.** Each pen paints one of 4096 colours, set with `PALETTE`:
 
 ```basic
@@ -255,10 +275,18 @@ registers and issue one command, so a filled box costs the same handful of
 instructions as an empty one. That is why there is no speed penalty for `FILL`,
 and why these statements are far faster than the equivalent `POKE` loop.
 
+`GTEXT` is the exception, and deliberately so. The display has no text command,
+and adding one would mean a font ROM and a glyph state machine in the FPGA, which
+that build has no room for. So BASIC walks the glyph itself and issues one device
+operation per lit pixel — fast enough for labels and titles, and it needs no
+bitstream change at all, which is why `GTEXT` reached the board as nothing more
+than a new `BASIC.BIN`.
+
 Pen colours are chosen from 4096; the defaults are 0 black, 1 white, 2 red,
-3 green. The device supports more than these statements reach — circles, single
-pixels, reading a pixel back, and a built-in self-test — via `POKE`; see the
-port table below.
+3 green. Every drawing command the device implements is now reachable from
+BASIC; the one exception is its built-in self-test, which exists only in the
+emulator (see [BACKLOG.md](../BACKLOG.md)) and can be triggered with `POKE` —
+see the port table below.
 
 ### PRINT details
 
@@ -330,31 +358,40 @@ disk and run-from-OS builds (the standalone whole-ROM build has no card access).
 | 65280 / `$FF00` | switch input port (`PEEK`) |
 | 65282 / `$FF02` | LED output port (`POKE`) |
 | 65284–65285 / `$FF04–05` | 6850 ACIA status / data |
-| 65312–65326 / `$FF20–2E` | the graphics display (see below) |
+| 65312–65327 / `$FF20–2F` | the graphics display (see below) |
 
 So `POKE 65282, 170` lights an LED pattern, and `PRINT PEEK(65280)` reads the
 switches.
 
-The display's own registers are reachable too, which gets you the commands the
-statements above do not expose:
+The display's own registers are reachable too. The statements above now cover
+every command the device implements, so this is for poking at the hardware
+directly rather than for reaching anything you otherwise could not:
 
 | Address | | Address | |
 |---|---|---|---|
 | 65312 | X0 | 65316 | pen |
-| 65313 | Y0 | 65320 | radius |
-| 65314 | X1 | 65317 | **command** |
-| 65315 | Y1 | | |
+| 65313 | Y0 | 65317 | **command** |
+| 65314 | X1 | 65318 | status (bit 7 busy, bit 0 error) |
+| 65315 | Y1 | 65319 | data — `POINT` result / `IDENT` stream |
+| 65321–65324 | X0/Y0/X1/Y1 high bytes | 65320 | radius (x-radius for an ellipse) |
+| 65325/65326 | `"P"`/`"G"` presence signature | 65327 | y-radius (ellipse) |
 
-Commands: 1 plot, 2 line, 3 box, 4 box filled, 5 clear, 7 circle, 8 circle
-filled, 240 self-test. So a circle of radius 40 at the centre is:
+Write a coordinate's **low byte first** — the device clears the matching high
+byte when the low one is written, so the other order loses it.
+
+Commands: 1 plot, 2 line, 3 box, 4 box filled, 5 clear, 6 set palette, 7 circle,
+8 circle filled, 9 point, 10 ellipse, 11 ellipse filled, 241 reset, 242 ident.
+So a circle of radius 40 at the centre is:
 
 ```basic
 10 POKE 65316,2 : POKE 65312,120 : POKE 65313,68
 20 POKE 65320,40 : POKE 65317,7
 ```
 
-and `POKE 65317,240` alone runs the device's built-in test pattern — useful for
-telling a dead display from a dead program. **Caution:** BASIC keeps its program and variables in low RAM
+Command 240 is a built-in self-test pattern, and it is **emulator-only** — the
+FPGA rejects it and sets the error bit, so on real hardware it draws nothing.
+Use the presence signature at 65325/65326 to tell a missing display from a
+broken one. **Caution:** BASIC keeps its program and variables in low RAM
 (around `$8000–$82xx`); poking there can corrupt your program.
 
 ## Examples

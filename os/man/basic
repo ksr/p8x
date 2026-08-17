@@ -95,9 +95,23 @@ GRAPHICS
         CIRCLE x,y,rx,ry          ELLIPSE: separate x and y radii
         CIRCLE x,y,rx,ry,FILL     ... solid
         PALETTE pen,r,g,b         recolour a pen; r,g,b are 0-15 each
+        GTEXT x,y,size,s$         draw a string as graphics
     Any two opposite corners work for BOX; they are sorted for you. The
     drawing itself is done by the device, not by BASIC, so a filled box is
     as quick as an empty one.
+
+    GTEXT is the exception: BASIC draws the glyphs itself, because the
+    display has no text command. It costs one device operation per lit
+    pixel, which is fast enough for labels and titles but is not a console
+    -- there is no cursor, no scrolling and no line wrap.
+
+        GTEXT 10,10,1,"SCORE"     top-left corner at 10,10
+        GTEXT 0,0,2,A$+"!"        any string expression works
+    size multiplies the glyph: 1 is 5x7 in a 6x8 cell, so a full line is 40
+    characters across and 17 rows down; size 2 gives 20 x 8. Text is drawn
+    in the current COLOR. Only codes $20-$5F have glyphs -- lowercase is
+    drawn as uppercase, and anything else comes out blank. A string that
+    runs off the right-hand edge simply stops; it does not wrap.
 
     POINT(x,y) is a FUNCTION, not a statement: it returns the pen (0-3) at
     a pixel, and 0 for anything off-screen. So

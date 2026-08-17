@@ -22,6 +22,7 @@ pip3 install reportlab
 | `gen_bus_pdf.py` | Bus-definition PDF | `hardware/backplane/` | anywhere |
 | `render_bp_traditional.py` | Backplane schematic PDF | `hardware/backplane/` | anywhere |
 | `gen_p8xopc.py` | Opcode-table `.asm` for the native assembler (`OPCTAB`), from `genucode.OPC` | stdout / arg path | anywhere |
+| `gen_font57.py` | `font57.inc` — the 5×7 glyph table BASIC's `GTEXT` draws from | `basic/` | anywhere |
 
 `gen_p8xopc.py out.asm` emits the `(mnemonic, shape) → opcode` table that
 [`apps/p8xasm.asm`](../apps/p8xasm.asm) (the on-target assembler) is built with;
