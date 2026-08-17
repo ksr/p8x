@@ -80,9 +80,22 @@ on hardware. Caveat, recorded honestly: reintroducing a known pending-write bug
 did **not** make the frame diff fail, with either pattern, so this coverage is
 unproven.
 
-Then rebuild the board (`../tang-nano-20k/build.sh cpu`) — the co-sim cannot catch
-anything that is purely about the substrate, such as timing closure, block-RAM
-inference, or the phase sequencer.
+Then rebuild the board — the co-sim cannot catch anything that is purely about
+the substrate, such as timing closure, block-RAM inference, or the phase
+sequencer:
+
+```sh
+../tang-nano-20k/build.sh cpu      # p8x_cpu.v changes
+../tang-nano-20k/build.sh lcd      # ... or gfx.v / video_rgb.v: the `cpu`
+                                   #     target does NOT compile those two
+```
+
+That distinction matters. `gfx.v` and `video_rgb.v` live here, but only the `lcd`
+target passes them to yosys, so `build.sh cpu` after editing the graphics
+rebuilds a bitstream that does not contain your change — and loads it without
+complaint. Substrate bugs that only the board shows have been found this way more
+than once: block RAM inferring as true dual port (8 blocks, would not place) and
+a register driven from two `always` blocks, neither visible in simulation.
 
 Keep board-specific things **out** of this directory: pins, PLLs, BRAM style, and
 peripherals belong in `../tang-nano-20k/`. The point of the split is that the CPU
