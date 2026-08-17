@@ -15,7 +15,9 @@ splitting it would buy structure at the cost of that one-to-one correspondence.
 SIMULATION                              BOARD
 fpga/sim/tb_p8x.v                       fpga/tang-nano-20k/rtl/p8x_top.v
 └── fpga/rtl/p8x_soc.v                  ├── fpga/rtl/p8x_cpu.v      ← SHARED
-    └── fpga/rtl/p8x_cpu.v   ← SHARED   ├── uart_tx / uart_rx  (rtl/uart.v)
+    ├── fpga/rtl/p8x_cpu.v   ← SHARED   ├── uart_tx / uart_rx  (rtl/uart.v)
+    └── fpga/rtl/gfx.v       ← SHARED   ├── fpga/rtl/gfx.v         ← SHARED
+                                        ├── fpga/rtl/video_rgb.v   480x272 scanout
                                         └── rtl/cf_sd.v   $FF10-$FF17 task file
                                             └── rtl/sd_spi.v   microSD over SPI
 ```
@@ -68,6 +70,14 @@ BRAM region and whether writes are allowed below `$2000`).
 | `$FF12` | CFSCNT | sector count |
 | `$FF13–$FF15` | CFLBA0–2 | LBA bytes |
 | `$FF16` | CFHEAD | `$E0` = LBA mode, drive 0 (bit0 = device select) |
+| `$FF20–$FF23` | GX0 GY0 GX1 GY1 | graphics coordinates (low bytes) |
+| `$FF24` | GCOL | pen 0–3 |
+| `$FF25` | GCMD | write executes a drawing command |
+| `$FF26` | GSTAT | bit7 BUSY, bit0 ERR |
+| `$FF27` | GDATA | IDENT stream / POINT result |
+| `$FF28` | GPARM | scalar argument (CIRCLE radius) |
+| `$FF29–$FF2C` | GX0H… | coordinate high bytes |
+| `$FF2D/$FF2E` | GID0/GID1 | `'P'`/`'G'` presence signature |
 | `$FF17` | CFCMD/CFSTAT | command (wr) / status (rd) |
 
 - **ACIAS/ACIAD** are presented by a shim inside `p8x_top.v` over `uart_tx`/
@@ -96,6 +106,39 @@ plus one shared undefined slot), halving the store to **4096 × 32**:
 `fpga/tang-nano-20k/mk_compact_ucode.py`, which re-verifies both properties and
 refuses to emit anything if either stops holding. Result: 40/46 blocks with the
 full 64K map, and no SDRAM controller needed.
+
+## Graphics (`gfx.v` + `video_rgb.v`)
+
+`gfx.v` is the device: register file, drawing engine, framebuffer, palette. It is
+**shared verbatim** by the simulation and the board, like `p8x_cpu.v`, and it is a
+transliteration of the `gpu_*` functions in `emulator/p8xemu.c` — the emulator is
+the golden model, so a cleverer Bresenham that lights a different pixel is a bug.
+
+**240×136 at 2 bits per pixel**, every logical pixel drawn 2×2 on the 480×272
+panel. That geometry is forced by block RAM, not chosen: the Tang Nano has 6 spare
+BSRAM blocks (12288 bytes) and the panel's own resolution needs 16320 at even one
+bit per pixel.
+
+The framebuffer uses **one port, time-shared**. True dual port halves a Gowin
+block's usable depth, so 8160 bytes would cost 8 blocks rather than 4 and the
+design would not place. The scanout needs a byte only once per eight panel pixels,
+so it takes the port for a cycle and the engine holds.
+
+`video_rgb.v` generates the panel timing (560×297 at 9 MHz = 54.11 Hz, DE-only —
+this panel has no HSYNC/VSYNC) and scans the framebuffer out with 2× doubling.
+9 MHz is 27/3, the same divider the CPU runs on, so **no PLL is needed**.
+
+### Why the graphics is not cycle-diffed
+
+Unlike the CPU, it cannot be. The emulator draws instantaneously and never raises
+BUSY; the RTL takes thousands of clocks and does. Software that polls `GSTAT`
+therefore reads different values on the two models **by design**, so their traces
+diverge legitimately. What must agree is the **framebuffer**, and `fpga/sim/gfx.sh`
+byte-compares it.
+
+That leaves the mapping from framebuffer to panel untested by either — which is
+how a shift-width bug that blanked half of every byte reached hardware.
+`tang-nano-20k/sim/tb_scanout.v` covers it now.
 
 ## Co-sim harness (the workhorse test)
 

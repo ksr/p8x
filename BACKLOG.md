@@ -119,7 +119,7 @@ remainder is why it is still here.
           Fits the board: **BSRAM 44/46**, Fmax 49 MHz, and NO PLL (9.009 MHz
           wanted, 27/3 = 9.000 delivered by the divider the CPU already uses).
         - **The BUSY contract, learned the hard way.** The emulator draws
-          instantaneously; the RTL takes ~2.4 ms for a full fill, and a command
+          instantaneously; the RTL takes roughly 9 ms for a full fill, and a command
           written while another runs ABORTS it. Software MUST poll GSTAT bit 7.
           Code written against the emulator alone looks perfect there and draws a
           few scattered pixels on the RTL -- which is exactly what the first frame
@@ -154,9 +154,11 @@ remainder is why it is still here.
         - **OPEN:** the co-sim exercises the shared port (irregular LFSR hold),
           but reintroducing the pending-write bug did NOT make it fail. The
           contention coverage is therefore unproven and worth understanding.
-        - **Not exposed in BASIC:** SELFTEST ($F0) is implemented in the emulator
-          but NOT in the RTL -- it sets the error bit there. Worth closing for
-          parity.
+        - **OPEN, emulator/RTL parity:** SELFTEST ($F0) is implemented in the
+          emulator but NOT in the RTL, where it falls through to `default` and
+          sets the error bit. Nothing exercises it, so the frame diff stays green
+          -- the payloads never issue it. Worth closing: it is the one command
+          that proves a card with no software behind it.
       - **SD error paths are now tested** (`fpga/tang-nano-20k/sim/tb_sd_spi.v`
         with `sd_model.v +sdfail=1|2`); that found and fixed two lockups. Still
         unexercised: CRC failure, a card that reports write-protect, and card
