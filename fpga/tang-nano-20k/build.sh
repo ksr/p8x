@@ -39,9 +39,14 @@ case "$TARGET" in
   *)    echo "unknown target: $TARGET (use echo|cpu|lcd)"; exit 2 ;;
 esac
 
-# The CPU build initialises its BRAM from these; regenerate so a microcode or
-# monitor change can never be silently baked into a stale bitstream.
-if [ "$TARGET" = cpu ]; then
+# The CPU and LCD builds initialise their BRAM from these; regenerate so a
+# microcode or monitor change can never be silently baked into a stale bitstream.
+#
+# `lcd` was missing from this test, which defeated the whole point: a firmware
+# change followed by `build.sh lcd load` produced a bitstream carrying the OLD
+# monitor ROM, and loaded it without a word. A CFWAIT timeout fix was "verified"
+# on hardware this way and had in fact never reached the board.
+if [ "$TARGET" = cpu ] || [ "$TARGET" = lcd ]; then
   python3 mk_compact_ucode.py
   python3 - <<'PY'
 rom = open("../../emulator/eeprom.bin", "rb").read()[:8192]
