@@ -1,0 +1,7 @@
+# Build artifacts: yosys/nextpnr netlists, the packed bitstream, the compiled
+# testbench and the tool logs. All reproducible from the sources next to them,
+# and the netlists are megabytes each.
+*.json
+*.fs
+*.log
+tb

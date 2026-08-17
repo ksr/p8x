@@ -141,20 +141,34 @@ module sdram_test(
   reg [3:0]  st = S_IDLE, st_ret = S_IDLE;
   reg [22:0] idx = 0;
   reg [15:0] err_seq = 0, err_spr = 0;     // saturating error counts
-  reg [7:0]  expect;
+  reg [7:0]  want_b;                    // NOT `expect`: reserved in SystemVerilog
 
   wire [22:0] spr_addr = {idx[6:0], 16'd0};   // 0, 64K, 128K, ... 8M
+
+  // A command may only be issued when the controller is idle AND our own
+  // previous pulse has cleared. `busy` does not rise until the cycle AFTER the
+  // controller sees rd/wr, so testing !busy alone lets a second command be
+  // issued into that gap -- where it is silently swallowed. The symptom is
+  // beautifully misleading: exactly HALF of memory reads back wrong, which
+  // looks like a broken data bus rather than a handshake bug.
+  wire can_issue = !busy && !rd && !wr;
 
   always @(posedge clk) begin
     rd <= 0; wr <= 0; refresh <= 0; refresh_done <= 0;
 
     if (!resetn) begin
       st <= S_IDLE; idx <= 0; err_seq <= 0; err_spr <= 0;
-    end else if (refresh_needed && !busy && !rd && !wr && st != S_REFRESH
-                 && st != S_DONE && st != S_IDLE) begin
-      // Refresh takes priority over the test's own work, but only from a state
-      // boundary -- never in the middle of a read that has been issued and not
-      // yet answered.
+    end else if (refresh_needed && !busy && !rd && !wr
+                 && st != S_REFRESH && st != S_DONE && st != S_IDLE
+                 && st != S_RSEQ_W && st != S_RSPR_W) begin
+      // Refresh takes priority over the test's own work, but ONLY from a state
+      // where nothing is in flight. Excluding the two _W states is the whole
+      // point: a read is issued in one state and answered by a one-cycle
+      // data_ready pulse in the next, and the controller drops `busy` in the
+      // SAME cycle it raises data_ready. Without these two exclusions the
+      // refresh arm wins that cycle, the case() below never runs, the pulse is
+      // missed, and the FSM waits forever for an answer that already came --
+      // which on hardware is indistinguishable from the SDRAM having hung.
       refresh      <= 1;
       refresh_done <= 1;
       st_ret       <= st;
@@ -165,31 +179,31 @@ module sdram_test(
       S_REFRESH: if (!busy) st <= st_ret;
 
       // ---- 64 KB sequential write, then read back and compare
-      S_WSEQ: if (!busy) begin
+      S_WSEQ: if (can_issue) begin
         addr <= idx; din <= pattern(idx); wr <= 1;
         if (idx == SEQ_BYTES - 1) begin idx <= 0; st <= S_RSEQ; end
         else                            idx <= idx + 1'b1;
       end
-      S_RSEQ: if (!busy) begin
-        addr <= idx; rd <= 1; expect <= pattern(idx); st <= S_RSEQ_W;
+      S_RSEQ: if (can_issue) begin
+        addr <= idx; rd <= 1; want_b <= pattern(idx); st <= S_RSEQ_W;
       end
       S_RSEQ_W: if (data_ready) begin
-        if (dout != expect && err_seq != 16'hFFFF) err_seq <= err_seq + 1'b1;
+        if (dout != want_b && err_seq != 16'hFFFF) err_seq <= err_seq + 1'b1;
         if (idx == SEQ_BYTES - 1) begin idx <= 0; st <= S_WSPR; end
         else begin idx <= idx + 1'b1; st <= S_RSEQ; end
       end
 
       // ---- sparse pass over the full 8 MB
-      S_WSPR: if (!busy) begin
+      S_WSPR: if (can_issue) begin
         addr <= spr_addr; din <= pattern(spr_addr); wr <= 1;
         if (idx == SPARSE_N - 1) begin idx <= 0; st <= S_RSPR; end
         else                           idx <= idx + 1'b1;
       end
-      S_RSPR: if (!busy) begin
-        addr <= spr_addr; rd <= 1; expect <= pattern(spr_addr); st <= S_RSPR_W;
+      S_RSPR: if (can_issue) begin
+        addr <= spr_addr; rd <= 1; want_b <= pattern(spr_addr); st <= S_RSPR_W;
       end
       S_RSPR_W: if (data_ready) begin
-        if (dout != expect && err_spr != 16'hFFFF) err_spr <= err_spr + 1'b1;
+        if (dout != want_b && err_spr != 16'hFFFF) err_spr <= err_spr + 1'b1;
         if (idx == SPARSE_N - 1) st <= S_DONE;
         else begin idx <= idx + 1'b1; st <= S_RSPR; end
       end
