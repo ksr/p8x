@@ -50,11 +50,13 @@ id_lp:  LDA  GDATA
         JSR  GWAIT
         STA  GCMD
 
-; CIRCLE centred at (240,136) radius 80, pen $E0 -- an OUTLINE, so its centre
-; must stay background. Centred on the screen, so the four axis points sit at
-; (160,136) (320,136) (240,56) (240,216).
-        LDA  #$E0
+; CIRCLE centred at (240,136) radius 80 in $F800 red -- an OUTLINE, so its
+; centre must stay background. Centred on the screen, so the four axis points
+; sit at (160,136) (320,136) (240,56) (240,216).
+        LDA  #0
         STA  GCOL
+        LDA  #$F8
+        STA  GCOLH                      ; pen = $F800 red
         LDA  #240
         STA  GX0                        ; clears GX0H
         LDA  #136

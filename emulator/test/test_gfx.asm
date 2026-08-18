@@ -1,7 +1,7 @@
 ; test_gfx.asm -- exercises the $FF20 graphics display model.
 ;
-; Drives every command the device implements (CLS, SETPAL, BOX, BOXFILL, LINE,
-; PLOT) straight through the I/O ports, which is exactly what BASIC's LINE /
+; Drives every command the device implements (CLS, BOX, BOXFILL, LINE, PLOT)
+; straight through the I/O ports, which is exactly what BASIC's LINE /
 ; COLOR / BOX statements will emit once they exist. Written longhand rather than
 ; with helper subroutines so each port write is visible: this file doubles as
 ; the worked example of the register protocol.
@@ -21,7 +21,6 @@
 ;   - a line running off the right edge proves off-screen pixels are DISCARDED
 ;     rather than wrapping to the next row (the failure this catches is a
 ;     one-line bug in the RTL that a purely on-screen drawing would miss)
-;   - SETPAL recolours a pen before it is used
 ;
 ; The geometry is the old 240x136 drawing with every coordinate DOUBLED, since
 ; the panel went to exactly 2x in both axes. That is deliberate: the relative
@@ -29,11 +28,11 @@
 ; sit where nothing else can colour its interior) and doubling preserves every
 ; one of those properties instead of re-deriving them.
 ;
-; The PENS are not the old 0-3. At 8 bpp a pen is a whole byte, and pens 1/2/3
-; exercise only its bottom two bits -- exactly where an engine that still
-; thought in 2 bpp would look correct. So the payload draws in $E0, $1C, $03
-; and $FF: the 3-3-2 primaries, which are both unmistakable in a failure message
-; and proof that all eight bits reach the framebuffer.
+; The PEN is a whole RGB565 COLOUR now (stage 6): GCOL is its low byte and
+; GCOLH (the write side of $FF2D) its high byte, with the same low-write-
+; clears-high rule as the coordinates. The payload draws in the 565 primaries
+; -- $F800 red, $07E0 green, $001F blue, $FFE0 yellow -- which exercise both
+; bytes of the pen and expand to exact (255,0,0)-style RGB in the dump.
 ;
 ; Coordinates past 255 need the high byte, and it is written AFTER the low one
 ; because a low write CLEARS its high byte (the rule test_gfx2.asm pins down).
@@ -47,33 +46,19 @@
 
 ;=== CLS to pen 0 ==========================================================
         LDA  #0
-        STA  GCOL
+        STA  GCOL                       ; $0000 black (low write clears GCOLH)
         LDA  #5                         ; CLS
         JSR  GWAIT
         STA  GCMD
 
-;=== SETPAL: pen $FF := yellow (R=15 G=15 B=0) =============================
-; SETPAL reuses the coordinate registers as R,G,B and recolours the pen named
-; by GCOL, so the pen must be selected BEFORE the command is issued.
-; $FF is white in the default 3-3-2 ramp, so recolouring it to yellow is a
-; visible change rather than one that could pass by accident.
-        LDA  #$FF
-        STA  GCOL
-        LDA  #15
-        STA  GX0                        ; red
-        LDA  #15
-        STA  GY0                        ; green
-        LDA  #0
-        STA  GX1                        ; blue
-        LDA  #6                         ; SETPAL
-        JSR  GWAIT
-        STA  GCMD
-
-;=== border: BOX (0,0)-(479,271) in pen $E0 (red) ==========================
+;=== border: BOX (0,0)-(479,271) in $F800 (red) ===========================
+; (SETPAL is gone with the palette -- yellow is simply a colour below.)
 ; The whole point of this one is the four EXTREME edges, so it has to reach the
 ; real corners: 479 = $01DF and 271 = $010F both need their high byte.
-        LDA  #$E0
+        LDA  #0
         STA  GCOL
+        LDA  #$F8
+        STA  GCOLH                      ; pen = $F800 red
         LDA  #0
         STA  GX0
         LDA  #0
@@ -90,9 +75,11 @@
         JSR  GWAIT
         STA  GCMD
 
-;=== diagonal 1: LINE (0,0)-(479,271) in pen $1C (green) ===================
-        LDA  #$1C
+;=== diagonal 1: LINE (0,0)-(479,271) in $07E0 (green) =====================
+        LDA  #$E0
         STA  GCOL
+        LDA  #$07
+        STA  GCOLH                      ; pen = $07E0 green
         LDA  #0
         STA  GX0                        ; clears GX0H
         LDA  #0
@@ -126,11 +113,13 @@
         JSR  GWAIT
         STA  GCMD
 
-;=== BOXFILL (180,100)-(300,172) in pen $FF (the yellow set above) =========
+;=== BOXFILL (180,100)-(300,172) in $FFE0 (yellow) =========================
 ; Drawn AFTER the diagonals and covering the screen centre, so its interior
 ; also proves last-writer-wins over them.
-        LDA  #$FF
+        LDA  #$E0
         STA  GCOL
+        LDA  #$FF
+        STA  GCOLH                      ; pen = $FFE0 yellow
         LDA  #180
         STA  GX0
         LDA  #100
@@ -145,14 +134,16 @@
         JSR  GWAIT
         STA  GCMD
 
-;=== BOX (160,200)-(280,248) in pen $1C -- an OUTLINE, so it must stay hollow
+;=== BOX (160,200)-(280,248) in $07E0 -- an OUTLINE, so it must stay hollow
 ; Placed in the wedge between the two diagonals (at y=200..248 they sit at
 ; x~353..438 and x~126..41), so nothing else can colour its interior. Without
 ; this the only BOX on screen is the full-screen border, whose interior is
 ; covered by other drawing -- so BOX silently filling would go unnoticed.
-; GCOL is sticky across commands and BOXFILL left it at $FF, so re-select.
-        LDA  #$1C
+; GCOL is sticky across commands and BOXFILL left it yellow, so re-select.
+        LDA  #$E0
         STA  GCOL
+        LDA  #$07
+        STA  GCOLH                      ; pen = $07E0 green
         LDA  #160
         STA  GX0
         LDA  #200
@@ -171,8 +162,8 @@
 ; 510 is reachable because a coordinate register is a 16-bit pair and holds far
 ; more than the screen is wide. Pixels 480..510 are discarded one at a time;
 ; nothing wraps onto row 241.
-        LDA  #$03
-        STA  GCOL
+        LDA  #$1F
+        STA  GCOL                       ; pen = $001F blue (GCOLH cleared)
         LDA  #$90
         STA  GX0
         LDA  #1
@@ -189,9 +180,9 @@
         JSR  GWAIT
         STA  GCMD
 
-;=== PLOT a single pixel at (20,20) in pen $03 =============================
-        LDA  #$03
-        STA  GCOL
+;=== PLOT a single pixel at (20,20) in $001F blue ==========================
+        LDA  #$1F
+        STA  GCOL                       ; low write already cleared GCOLH
         LDA  #20
         STA  GX0                        ; clears GX0H
         LDA  #20

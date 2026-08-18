@@ -28,8 +28,8 @@
 #define GY0         0xFF21       /* draw Y0 / SETPAL green (0-271) */
 #define GX1         0xFF22       /* draw X1 / SETPAL blue  (0-479) */
 #define GY1         0xFF23       /* draw Y1 (0-271) */
-#define GCOL        0xFF24       /* pen 0-255 (also the pen SETPAL rewrites) */
-#define GCMD        0xFF25       /* write executes: 1 PLOT 2 LINE 3 BOX 4 BOXFILL 5 CLS 6 SETPAL 7 CIRCLE 8 CIRCLEFILL 9 POINT A ELLIPSE B ELLIPSEFILL / F1 RESET F2 IDENT */
+#define GCOL        0xFF24       /* pen LOW byte -- the pen is a whole RGB565 colour (see GCOLH) */
+#define GCMD        0xFF25       /* write executes: 1 PLOT 2 LINE 3 BOX 4 BOXFILL 5 CLS 7 CIRCLE 8 CIRCLEFILL 9 POINT A ELLIPSE B ELLIPSEFILL / F1 RESET F2 IDENT */
 #define GSTAT       0xFF26       /* read: bit7 BUSY, bit0 ERR (unknown command) */
 #define GDATA       0xFF27       /* read: IDENT record stream, else the last POINT result */
 #define GPARM       0xFF28       /* scalar argument: CIRCLE/ELLIPSE x-radius */
@@ -38,6 +38,7 @@
 #define GX1H        0xFF2B       /* X1 high byte (write AFTER GX1) */
 #define GY1H        0xFF2C       /* Y1 high byte (write AFTER GY1) */
 #define GID0        0xFF2D       /* read: $50 'P' -- card-presence signature */
+#define GCOLH       0xFF2D       /* write: pen HIGH byte (write AFTER GCOL; a GCOL write clears it) */
 #define GID1        0xFF2E       /* read: $47 'G' -- with GID0 spells PG */
 #define GPARM2      0xFF2F       /* ELLIPSE y-radius (GPARM is the x-radius) */
 

@@ -14,13 +14,12 @@
 #      bounds-checks instead of masking.
 #   3. BOX is an outline and BOXFILL is solid — checked on a box whose interior
 #      nothing else touches.
-#   4. SETPAL recolours the pen named by GCOL, and takes effect for later drawing.
-#   5. drawing order is last-writer-wins (the green diagonal overpaints the red
+#   4. drawing order is last-writer-wins (the green diagonal overpaints the red
 #      border at the origin).
-#   6. a pen is a whole BYTE. The payload draws in $E0/$1C/$03/$FF rather than
-#      1/2/3, so an engine that only carried the low bits of the pen — which is
-#      what a 2 bpp design left behind would look like — fails here instead of
-#      passing with plausible colours.
+#   5. a pen is a whole RGB565 COLOUR (stage 6): GCOL low byte, GCOLH high
+#      byte, low-write-clears-high. The payload draws in the 565 primaries, so
+#      an engine that dropped the high pen byte fails loudly. SETPAL and the
+#      palette no longer exist; yellow is simply the colour $FFE0.
 #
 # It renders to a PPM and inspects pixels rather than diffing a golden image: a
 # byte-diff would fail on any harmless change and tell you nothing about which
@@ -46,14 +45,13 @@ W, H = 480, 272
 if len(px) != W*H*3:
     print("GFX TEST: FAIL — %d payload bytes, expected %d" % (len(px), W*H*3)); sys.exit(1)
 
-# The default palette is the 3-3-2 ramp expanded to RGB444 then to 8 bits, so
-# these four pens are the unambiguous primaries. YELLOW is not from the ramp:
-# it is what SETPAL wrote over pen $FF (which is white by default).
+# RGB565 expands to 888 by bit replication, so the 565 primaries decode to
+# exact full-scale tuples: $F800 -> (255,0,0), $07E0 -> (0,255,0), $001F ->
+# (0,0,255), $FFE0 -> (255,255,0).
 BLACK, RED, GREEN, BLUE = (0,0,0), (255,0,0), (0,255,0), (0,0,255)
 YELLOW = (255,255,0)
-NAMES = {BLACK:"pen $00 black", RED:"pen $E0 red", GREEN:"pen $1C green",
-         BLUE:"pen $03 blue", YELLOW:"pen $FF, SETPAL'd yellow",
-         (255,255,255):"pen $FF, still the DEFAULT white — SETPAL did not take"}
+NAMES = {BLACK:"$0000 black", RED:"$F800 red", GREEN:"$07E0 green",
+         BLUE:"$001F blue", YELLOW:"$FFE0 yellow"}
 
 def fb(x, y):                       # the framebuffer IS the panel now: 1:1
     i = (y*W + x)*3
@@ -72,11 +70,11 @@ want(240, 271, RED, "bottom edge y=271 not drawn (exclusive end?)")
 want(  0, 136, RED, "left edge x=0 not drawn")
 want(479, 136, RED, "right edge x=479 not drawn (exclusive end?)")
 
-# 5. last writer wins: the green diagonal starts on the red border corner
+# 4. last writer wins: the green diagonal starts on the red border corner
 want(  0,   0, GREEN, "diagonal did not overpaint the border at the origin")
 
-# 4. SETPAL: pen $FF was recoloured to yellow BEFORE the fill used it
-want(240, 136, YELLOW, "BOXFILL interior is not the SETPAL yellow")
+# the fill drew in $FFE0 directly -- there is no palette to have set
+want(240, 136, YELLOW, "BOXFILL interior is not yellow")
 
 # BOXFILL covers its corners exactly, and stops one pixel later
 want(180, 100, YELLOW, "BOXFILL top-left corner missing")
@@ -116,11 +114,11 @@ import sys
 bad = []
 
 # The IDENT record and the presence signature, echoed to the console by the ROM.
-# Geometry is little-endian: 480 = e0 01, 272 = 10 01. The pen count is 256,
-# which wraps a byte to 0 -- that is the record saying "8 bpp", and it is the
-# one field a reader must not treat as "no pens".
+# Protocol 2: direct colour. Geometry little-endian (480 = e0 01, 272 = 10 01),
+# a pens byte of 0 now means NO palette, and byte 13 is the depth -- 16 -- so
+# software asks the card what it is instead of assuming.
 got  = open("gfx2.out","rb").read()
-want = b"P8X-GFX" + bytes([1, 224,1, 16,1, 0, 0]) + b"PG"
+want = b"P8X-GFX" + bytes([2, 224,1, 16,1, 0, 16]) + b"PG"
 if got != want:
     bad.append("IDENT/signature stream is %r, want %r" % (got, want))
 

@@ -145,19 +145,18 @@ static void cf_data_wr(struct cf_state*c, uint8_t v){
 /* 480x272 at 8 bpp, 256 pens from a 4096-colour palette. */
 #define GW_MAX  480
 #define GH_MAX  272
-static uint8_t  gfb[GW_MAX*GH_MAX];    /* 130560 bytes */
+static uint16_t gfb[GW_MAX*GH_MAX];    /* a pixel IS an RGB565 word: 261,120 bytes */
 /* SINGLE MODE. 240x136 at 2 bpp was retired once nothing needed it: four pixels
    to a byte forced a read-modify-write on every plot, and carrying both depths
    cost enough logic in the RTL that the design would not place. One depth means
    a pixel IS a byte -- no read, no masking, no mode muxing anywhere. */
 static const int gw=480, gh=272, gstride=480;
-static const size_t gfbytes=(size_t)480*272;
-/* RGB444, 256 entries. gpu_reset() runs only on a RESET command, never at
-   startup, so the power-on contents matter: gpu_defpal() is called from main()
-   before the run. A static initialiser cannot express the 3-3-2 ramp, and
-   leaving the old four classic pens here made the emulator and the RTL disagree
-   on pens 0-3 -- caught by the frame diff, twice, in both directions. */
-static uint16_t gpal[256];
+static const size_t gfpix=(size_t)480*272;      /* PIXELS, not bytes */
+/* No palette. RGB565 direct colour: the pixel's own bits are its colour,
+   exactly the panel's wiring (r[4:0] g[5:0] b[4:0]). The palette (and SETPAL,
+   and BASIC's PALETTE) died with stage 6 -- see STAGE6-DESIGN.md for what was
+   given up (recolour-without-redraw) and why 565 is the machine's natural
+   ceiling: panel depth, word size, two pixels per bus word, a line per row. */
 /* Coordinates are 16-bit register PAIRS. Writing the low byte clears the high
    byte, so software that only ever writes lows (everything at 240x136) can
    never be broken by a stale high byte left behind by something else. Write the
@@ -165,14 +164,26 @@ static uint16_t gpal[256];
    exist because 480x272 -- this same panel at its native resolution, which is
    where an SDRAM framebuffer would go -- needs 9 bits for X. */
 static uint16_t gx0,gy0,gx1,gy1;
-static uint8_t  gcol, gparm, gparm2, gerr;
+/* The pen is a whole RGB565 colour. GCOL is its low byte and follows the same
+   rule as the coordinate pairs: a low write CLEARS the high byte, so 8-bit
+   software can never inherit a stale one. GCOLH is the WRITE side of $FF2D --
+   the register page is full, and GID0's read-only signature leaves its write
+   decode free (see STAGE6-DESIGN.md). */
+static uint16_t gcol;
+static uint8_t  gparm, gparm2, gerr;
 /* GDATA ($FF27) is the one read-back port: it streams the IDENT record after an
    IDENT command, and otherwise holds the result of the last POINT. gidx is the
    stream cursor; POINT parks it at the end so a pixel read is not mistaken for
    another IDENT byte. */
 #define GIDLEN 14
-static uint8_t  gident[GIDLEN], gdata=0;
+static uint8_t  gident[GIDLEN];
 static int      gidx=GIDLEN;
+/* POINT's answer is 16 bits and GDATA is a byte port, so it STREAMS: low byte
+   then high, the same idiom as the IDENT record. Reads past the second byte
+   return the high byte again (parked), so a sloppy extra read is harmless and
+   deterministic. The RTL must match byte order and parking. */
+static uint8_t  gpt[2];
+static int      gpidx=2;
 static const char *gdump=0;            /* -g FILE: write a PPM when the run ends */
 static int      gascii=0;              /* -G: also render as text to stderr      */
 
@@ -181,16 +192,16 @@ static int      gascii=0;              /* -G: also render as text to stderr     
    "drop the
    pixel" is the one rule that is trivially identical in C and in Verilog. A
    real clipper would have to match exactly, which is a bug waiting to happen. */
-static void gpu_px(int x,int y,uint8_t c){
+static void gpu_px(int x,int y,uint16_t c){
     if((unsigned)x>=(unsigned)gw || (unsigned)y>=(unsigned)gh) return;
-    gfb[y*gstride+x]=c;                      /* one pixel, one byte */
+    gfb[y*gstride+x]=c;                      /* one pixel, one 565 word */
 }
-static uint8_t gpu_pixel(int x,int y){      /* pen at (x,y), for the dumps */
+static uint16_t gpu_pixel(int x,int y){     /* colour at (x,y), for the dumps */
     return gfb[y*gstride+x];
 }
 /* Integer Bresenham, all eight octants, endpoints inclusive. dy is held
    NEGATIVE, which is what lets one error term cover every direction. */
-static void gpu_line(int x0,int y0,int x1,int y1,uint8_t c){
+static void gpu_line(int x0,int y0,int x1,int y1,uint16_t c){
     int dx = x1>x0 ? x1-x0 : x0-x1,  sx = x0<x1 ? 1 : -1;
     int dy = y1>y0 ? y0-y1 : y1-y0,  sy = y0<y1 ? 1 : -1;
     int err = dx+dy;
@@ -202,7 +213,7 @@ static void gpu_line(int x0,int y0,int x1,int y1,uint8_t c){
         if(e2<=dx){ err+=dx; y0+=sy; }
     }
 }
-static void gpu_box(int x0,int y0,int x1,int y1,uint8_t c,int fill){
+static void gpu_box(int x0,int y0,int x1,int y1,uint16_t c,int fill){
     int t;
     if(x0>x1){ t=x0; x0=x1; x1=t; }             /* normalise: any two corners */
     if(y0>y1){ t=y0; y0=y1; y1=t; }
@@ -213,12 +224,12 @@ static void gpu_box(int x0,int y0,int x1,int y1,uint8_t c,int fill){
     for(int x=x0;x<=x1;x++){ gpu_px(x,y0,c); gpu_px(x,y1,c); }
     for(int y=y0;y<=y1;y++){ gpu_px(x0,y,c); gpu_px(x1,y,c); }
 }
-static void gpu_hline(int xa,int xb,int y,uint8_t c){
+static void gpu_hline(int xa,int xb,int y,uint16_t c){
     for(int x=xa;x<=xb;x++) gpu_px(x,y,c);
 }
 /* Midpoint circle, integer, eight-way symmetric. Same rule as gpu_line: this is
    the golden model and the RTL transliterates it, so it stays in this form. */
-static void gpu_circle(int cx,int cy,int r,uint8_t c,int fill){
+static void gpu_circle(int cx,int cy,int r,uint16_t c,int fill){
     int x=r, y=0, err=1-r;
     while(x>=y){
         if(fill){
@@ -245,7 +256,7 @@ static void gpu_circle(int cx,int cy,int r,uint8_t c,int fill){
    scaled by 4 so the classic rx^2/4 term is exact rather than rounded. A
    rounding choice is precisely what two implementations quietly disagree about,
    and this one has to stay bit-identical to the Verilog. */
-static void gpu_ellipse(int cx,int cy,int rx,int ry,uint8_t c,int fill){
+static void gpu_ellipse(int cx,int cy,int rx,int ry,uint16_t c,int fill){
     long rx2 = (long)rx*rx, ry2 = (long)ry*ry;
     long x = 0, y = ry;
     long dx = 0, dy = 2*rx2*(long)ry;
@@ -288,10 +299,11 @@ static void gpu_ellipse(int cx,int cy,int rx,int ry,uint8_t c,int fill){
    240x136 device and a wider one later. */
 static void gpu_ident(void){
     memcpy(gident,"P8X-GFX",7);
-    gident[7]=1;                        /* protocol version */
+    gident[7]=2;                        /* protocol 2: direct colour */
     gident[8]=gw&0xFF; gident[9]=gw>>8;     /* 480 */
     gident[10]=gh&0xFF; gident[11]=gh>>8;   /* 272 */
-    gident[12]=0;                       /* pens: 256, which wraps a byte to 0 */
+    gident[12]=0;                       /* pens: 0 = no palette, direct colour */
+    gident[13]=16;                      /* bits per pixel -- ask, don't assume */
     gidx=0;                             /* GDATA now streams the record */
 }
 /* SELFTEST: a fixed pattern drawn entirely from the card's own state, so a
@@ -299,12 +311,14 @@ static void gpu_ident(void){
    up, poke one register, and every pen, both drawing primitives and all four
    edges are on screen. Deterministic, so a test can assert on it. */
 static void gpu_selftest(void){
+    static const uint16_t bar[4]={0x0000,0xF800,0x07E0,0x001F}; /* K R G B */
     memset(gfb,0,sizeof gfb);
-    for(int i=0;i<4;i++)                                  /* pen bars */
-        gpu_box(i*(gw/4), 0, i*(gw/4)+(gw/4)-1, gh/4, (uint8_t)i, 1);
-    gpu_box(0,0,gw-1,gh-1,1,0);                           /* extreme edges */
-    gpu_line(0,0,gw-1,gh-1,2); gpu_line(gw-1,0,0,gh-1,2); /* both diagonals */
-    gpu_circle(gw/2,gh/2,gh/3,3,0);
+    for(int i=0;i<4;i++)                                  /* colour bars */
+        gpu_box(i*(gw/4), 0, i*(gw/4)+(gw/4)-1, gh/4, bar[i], 1);
+    gpu_box(0,0,gw-1,gh-1,0xFFFF,0);                      /* extreme edges */
+    gpu_line(0,0,gw-1,gh-1,0xFFE0);                       /* both diagonals */
+    gpu_line(gw-1,0,0,gh-1,0xFFE0);
+    gpu_circle(gw/2,gh/2,gh/3,0x07FF,0);
 }
 /* SETMODE. Changing mode reinterprets every byte of the framebuffer, so the old
    contents are meaningless -- it clears, and loads the palette that belongs to
@@ -313,16 +327,13 @@ static void gpu_selftest(void){
    black/white/red/green, while mode 1 comes up with a 3-3-2 ramp so that a
    program which never touches PALETTE still sees sensible colour.
    Returns 0 on an unknown mode, which the caller turns into GSTAT's ERR bit. */
-/* The default palette: 3-3-2 expanded to RGB444, so a program that never calls
-   SETPAL still sees sensible colour. SETPAL can then replace any of the 256. */
-static void gpu_defpal(void){
-    for(int i=0;i<256;i++)
-        gpal[i]=((((i>>5)&7)*15/7)<<8) | ((((i>>2)&7)*15/7)<<4) | (((i&3)*5));
-}
 static void gpu_reset(void){
-    memset(gfb,0,gfbytes);
-    gpu_defpal();
-    gx0=gy0=gx1=gy1=0; gcol=1; gparm=0; gparm2=0; gerr=0; gidx=GIDLEN; gdata=0;
+    memset(gfb,0,sizeof gfb);
+    /* The reset pen is WHITE (0xFFFF), because the historical default "pen 1"
+       meant white back when there were four pens, and a visible default is the
+       one that costs nobody a debugging round. The RTL must match. */
+    gx0=gy0=gx1=gy1=0; gcol=0xFFFF; gparm=0; gparm2=0; gerr=0; gidx=GIDLEN;
+    gpt[0]=gpt[1]=0; gpidx=2;
 }
 static void gpu_cmd(uint8_t v){
     switch(v){
@@ -331,10 +342,9 @@ static void gpu_cmd(uint8_t v){
     case 0x03: gpu_box(gx0,gy0,gx1,gy1,gcol,0);     break;   /* BOX        */
     case 0x04: gpu_box(gx0,gy0,gx1,gy1,gcol,1);     break;   /* BOXFILL    */
     /* CLS: every byte is 4 pixels of the same pen, so 0x00/0x55/0xAA/0xFF. */
-    case 0x05: memset(gfb, gcol, gfbytes); break;            /* CLS        */
-    /* SETPAL reuses the coordinate registers as R,G,B (0-15 each) and recolours
-       the pen in GCOL -- no extra port, and no two-write latch to keep in step. */
-    case 0x06: gpal[gcol] = ((gx0&15)<<8)|((gy0&15)<<4)|(gx1&15); break;
+    case 0x05: for(size_t i=0;i<gfpix;i++) gfb[i]=gcol; break;  /* CLS     */
+/* 0x06 was SETPAL. No palette, no command: an unknown code sets ERR, which
+       is exactly what old software probing for it should see. */
     case 0x07: gpu_circle(gx0,gy0,gparm,gcol,0);    break;   /* CIRCLE     */
     case 0x08: gpu_circle(gx0,gy0,gparm,gcol,1);    break;   /* CIRCLEFILL */
     case 0x0A: gpu_ellipse(gx0,gy0,gparm,gparm2,gcol,0); break; /* ELLIPSE     */
@@ -342,9 +352,11 @@ static void gpu_cmd(uint8_t v){
     /* POINT reads a pixel back into GDATA, which is what a BASIC POINT()
        function needs. Off-screen reads as pen 0, matching the write side's
        "off-screen simply is not there" rule. */
-    case 0x09: gdata = ((unsigned)gx0<(unsigned)gw && (unsigned)gy0<(unsigned)gh)
-                       ? gpu_pixel(gx0,gy0) : 0;
-               gidx = GIDLEN;         /* not an IDENT stream: GDATA holds the pixel */
+    case 0x09: { uint16_t p = ((unsigned)gx0<(unsigned)gw && (unsigned)gy0<(unsigned)gh)
+                                ? gpu_pixel(gx0,gy0) : 0;
+                 gpt[0]=(uint8_t)(p&0xFF); gpt[1]=(uint8_t)(p>>8);
+                 gpidx = 0;           /* GDATA now streams low, then high */
+                 gidx  = GIDLEN; }    /* and is NOT an IDENT stream */
                break;                                        /* POINT      */
     case 0xF0: gpu_selftest();                      break;   /* SELFTEST   */
     case 0xF1: gpu_reset();                         break;   /* RESET      */
@@ -361,10 +373,12 @@ static void gpu_writeppm(const char*fn){
     fprintf(f,"P6\n%d %d\n255\n",gw,gh);
     for(int y=0;y<gh;y++)
         for(int x=0;x<gw;x++){
-            uint16_t p=gpal[gpu_pixel(x,y)];
-            uint8_t rgb[3]={ (uint8_t)(((p>>8)&15)*17),     /* 0-15 -> 0-255  */
-                             (uint8_t)(((p>>4)&15)*17),
-                             (uint8_t)(( p     &15)*17) };
+            uint16_t p=gpu_pixel(x,y);           /* the pixel IS the colour */
+            uint8_t r5=(p>>11)&31, g6=(p>>5)&63, b5=p&31;
+            /* 565 -> 888 by bit replication, so full scale really is 255 */
+            uint8_t rgb[3]={ (uint8_t)((r5<<3)|(r5>>2)),
+                             (uint8_t)((g6<<2)|(g6>>4)),
+                             (uint8_t)((b5<<3)|(b5>>2)) };
             fwrite(rgb,1,3,f);
         }
     fclose(f);
@@ -379,7 +393,10 @@ static void gpu_writeppm(const char*fn){
    make a feature look fatter than it is, but it can never make one vanish.
    Pen 0 prints as blank so the drawing stands out from the background. */
 static void gpu_writeascii(void){
-    static const char pen[4]={' ','1','2','3'};
+    /* Brightness, not pen number: there are no pens. Four levels by a rough
+       luminance; the max over the block keeps single pixels from vanishing,
+       the same honesty argument as before. */
+    static const char lum[5]={' ','.','*','#','@'};
     fputc('+',stderr); for(int i=0;i<gw/2;i++) fputc('-',stderr); fputs("+\n",stderr);
     for(int y=0;y<gh;y+=4){
         fputc('|',stderr);
@@ -387,10 +404,11 @@ static void gpu_writeascii(void){
             int best=0;
             for(int dy=0;dy<4;dy++) for(int dx=0;dx<2;dx++)
                 if(x+dx<gw && y+dy<gh){
-                    int p=gpu_pixel(x+dx,y+dy);
-                    if(p>best) best=p;
+                    uint16_t p=gpu_pixel(x+dx,y+dy);
+                    int v=2*((p>>11)&31)+3*((p>>5)&63)/2+((p)&31);  /* ~0..218 */
+                    if(v>best) best=v;
                 }
-            fputc(pen[best],stderr);
+            fputc(lum[best==0?0: best<40?1: best<100?2: best<170?3:4],stderr);
         }
         fputs("|\n",stderr);
     }
@@ -510,7 +528,9 @@ static uint8_t memrd(uint16_t ad){
        the CF model takes with BSY. The RTL engine does raise it, and software
        must poll -- so BASIC will spin on GSTAT even though it never spins here. */
     case GSTAT:  return (uint8_t)(gerr?0x01:0x00);
-    case GDATA:  return (gidx<GIDLEN) ? gident[gidx++] : gdata;
+    case GDATA:  if (gidx<GIDLEN) return gident[gidx++];
+                 if (gpidx<2)     return gpt[gpidx++];
+                 return gpt[1];                /* parked on the high byte */
     case GID0:   return 0x50;                      /* 'P' */
     case GID1:   return 0x47;                      /* 'G' -- "PG", not a floating $FF */
     default: return 0xFF;
@@ -541,7 +561,8 @@ static void memwr(uint16_t ad,uint8_t v){
       case GY0H: gy0=(uint16_t)((gy0&0xFF)|(v<<8)); return;
       case GX1H: gx1=(uint16_t)((gx1&0xFF)|(v<<8)); return;
       case GY1H: gy1=(uint16_t)((gy1&0xFF)|(v<<8)); return;
-      case GCOL: gcol=v; return;
+      case GCOL: gcol=v; return;             /* low write CLEARS the high byte */
+      case GCOLH:gcol=(uint16_t)((gcol&0xFF)|(v<<8)); return;
       case GPARM: gparm=v;  return;
       case GPARM2:gparm2=v; return;
       case GCMD: gerr=0; gpu_cmd(v); return;
@@ -580,7 +601,6 @@ static void cf_attach(struct cf_state*c,const char*fn){   /* open/create a CF im
     }
 }
 int main(int argc,char**argv){
-    gpu_defpal();   /* power-on palette: see gpal above */
     const char*ee="eeprom.bin"; const char*cfn=0,*cfn2=0; unsigned long long lim=200000000ULL;
     int lim_set=0;                       /* -l given explicitly: always honour it */
     for(int i=1;i<argc;i++){

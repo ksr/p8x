@@ -52,8 +52,8 @@ MAP = [
     ('I/O ports ($FF00-$FFFF)', 'GY0', 0xFF21, 'draw Y0 / SETPAL green (0-271)'),
     ('I/O ports ($FF00-$FFFF)', 'GX1', 0xFF22, 'draw X1 / SETPAL blue  (0-479)'),
     ('I/O ports ($FF00-$FFFF)', 'GY1', 0xFF23, 'draw Y1 (0-271)'),
-    ('I/O ports ($FF00-$FFFF)', 'GCOL', 0xFF24, 'pen 0-255 (also the pen SETPAL rewrites)'),
-    ('I/O ports ($FF00-$FFFF)', 'GCMD', 0xFF25, 'write executes: 1 PLOT 2 LINE 3 BOX 4 BOXFILL 5 CLS 6 SETPAL 7 CIRCLE 8 CIRCLEFILL 9 POINT A ELLIPSE B ELLIPSEFILL / F1 RESET F2 IDENT'),
+    ('I/O ports ($FF00-$FFFF)', 'GCOL', 0xFF24, 'pen LOW byte -- the pen is a whole RGB565 colour (see GCOLH)'),
+    ('I/O ports ($FF00-$FFFF)', 'GCMD', 0xFF25, 'write executes: 1 PLOT 2 LINE 3 BOX 4 BOXFILL 5 CLS 7 CIRCLE 8 CIRCLEFILL 9 POINT A ELLIPSE B ELLIPSEFILL / F1 RESET F2 IDENT'),
     ('I/O ports ($FF00-$FFFF)', 'GSTAT', 0xFF26, 'read: bit7 BUSY, bit0 ERR (unknown command)'),
     ('I/O ports ($FF00-$FFFF)', 'GDATA', 0xFF27, 'read: IDENT record stream, else the last POINT result'),
     ('I/O ports ($FF00-$FFFF)', 'GPARM', 0xFF28, 'scalar argument: CIRCLE/ELLIPSE x-radius'),
@@ -69,6 +69,10 @@ MAP = [
     # Presence signature. An absent card floats the bus to $FF, so a single magic
     # byte is not enough to detect one; two fixed bytes at fixed addresses are.
     ('I/O ports ($FF00-$FFFF)', 'GID0', 0xFF2D, "read: $50 'P' -- card-presence signature"),
+    # The register page is FULL, and GID0/GID1 are read-only -- their write
+    # decodes are the only spare corners. GCOLH takes $FF2D's write side so a
+    # pen can carry a whole RGB565 colour; $FF2E's write side stays free.
+    ('I/O ports ($FF00-$FFFF)', 'GCOLH', 0xFF2D, 'write: pen HIGH byte (write AFTER GCOL; a GCOL write clears it)'),
     ('I/O ports ($FF00-$FFFF)', 'GID1', 0xFF2E, "read: $47 'G' -- with GID0 spells PG"),
     ('I/O ports ($FF00-$FFFF)', 'GPARM2', 0xFF2F, 'ELLIPSE y-radius (GPARM is the x-radius)'),
 
