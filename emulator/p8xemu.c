@@ -152,12 +152,12 @@ static uint8_t  gfb[GW_MAX*GH_MAX];    /* 130560 bytes */
    a pixel IS a byte -- no read, no masking, no mode muxing anywhere. */
 static const int gw=480, gh=272, gstride=480;
 static const size_t gfbytes=(size_t)480*272;
-/* RGB444. Mode 0 uses entries 0-3 and the initialiser IS the power-on state:
-   gpu_reset() runs only on a RESET command, never at startup, so a bare zero
-   fill here renders every pen black -- which is exactly what happened when this
-   array grew from 4 entries to 256. Entries 4-255 stay zero until SETMODE 1
-   loads the 3-3-2 ramp, and mode 0 can never address them. */
-static uint16_t gpal[256]={0x000,0xFFF,0xF00,0x0F0};
+/* RGB444, 256 entries. gpu_reset() runs only on a RESET command, never at
+   startup, so the power-on contents matter: gpu_defpal() is called from main()
+   before the run. A static initialiser cannot express the 3-3-2 ramp, and
+   leaving the old four classic pens here made the emulator and the RTL disagree
+   on pens 0-3 -- caught by the frame diff, twice, in both directions. */
+static uint16_t gpal[256];
 /* Coordinates are 16-bit register PAIRS. Writing the low byte clears the high
    byte, so software that only ever writes lows (everything at 240x136) can
    never be broken by a stale high byte left behind by something else. Write the
@@ -580,6 +580,7 @@ static void cf_attach(struct cf_state*c,const char*fn){   /* open/create a CF im
     }
 }
 int main(int argc,char**argv){
+    gpu_defpal();   /* power-on palette: see gpal above */
     const char*ee="eeprom.bin"; const char*cfn=0,*cfn2=0; unsigned long long lim=200000000ULL;
     int lim_set=0;                       /* -l given explicitly: always honour it */
     for(int i=1;i<argc;i++){

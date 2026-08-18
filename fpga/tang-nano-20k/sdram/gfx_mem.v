@@ -29,7 +29,6 @@
 module gfx_mem(
   input                clk,
   input                rst,
-  input                mode,          // 0 = 240x136 2bpp, 1 = 480x272 8bpp
 
   // ---- request from the drawing algorithms
   input  signed [17:0] px_x,
@@ -57,26 +56,14 @@ module gfx_mem(
   // onto the top, when y*60 wrapped inside 13 bits.
   wire [17:0] xw = px_x[17:0];
   wire [17:0] yw = px_y[17:0];
-  wire        on = mode
-        ? (!px_x[17] && !px_y[17] && xw < 18'd480 && yw < 18'd272)
-        : (!px_x[17] && !px_y[17] && xw < 18'd240 && yw < 18'd136);
+  wire        on = !px_x[17] && !px_y[17] && xw < 18'd480 && yw < 18'd272;
 
-  // y*480 = y*512 - y*32 ; y*60 = y*64 - y*4. Both in 23 bits, which holds
-  // 271*480 = 130,080 with room to spare.
-  wire [22:0] y23   = {5'd0, yw};
-  wire [22:0] row1  = (y23 << 9) - (y23 << 5);
-  wire [22:0] row0  = (y23 << 6) - (y23 << 2);
-  wire [22:0] a_m1  = row1 + {5'd0, xw};
-  wire [22:0] a_m0  = row0 + {5'd0, xw[17:2]};
-  wire [22:0] addr  = mode ? a_m1 : a_m0;
-  wire [2:0]  sh    = {1'b0, (2'd3 - xw[1:0])} << 1;   // mode 0: bits within the byte
+  // y*480 = y*512 - y*32, in 23 bits, which holds 271*480 = 130,080 easily.
+  wire [22:0] y23  = {5'd0, yw};
+  wire [22:0] addr = ((y23 << 9) - (y23 << 5)) + {5'd0, xw};
 
-  localparam S_IDLE=0, S_RD=1, S_RDW=2, S_WR=3;
+  localparam S_IDLE=0, S_RD=1, S_WR=3;
   reg [1:0] st;
-  reg [22:0] a_lat;
-  reg [2:0]  sh_lat;
-  reg [7:0]  pen_lat;
-  reg        read_lat, word_lat;
 
   always @(posedge clk) begin
     e_req <= e_req & ~e_ack;          // hold the request until it is taken
@@ -92,39 +79,23 @@ module gfx_mem(
           px_busy <= 0;
           if (px_read) px_out <= 8'd0;
         end else begin
-          px_busy  <= 1;
-          a_lat    <= addr;
-          sh_lat   <= sh;
-          pen_lat  <= px_pen;
-          read_lat <= px_read;
-          word_lat <= px_word;
+          px_busy <= 1;
+          e_addr  <= addr;
           if (px_read) begin
-            e_addr <= addr; e_we <= 0; e_word <= 0; e_req <= 1; st <= S_RD;
-          end else if (mode || px_word) begin
-            // mode 1 plot, or any span: a whole byte is written outright, so
-            // there is nothing to preserve and no read is needed.
-            e_addr <= addr; e_we <= 1; e_din <= mode ? px_pen : {4{px_pen[1:0]}};
-            // e_word is the controller's FOUR-LANE write, and only mode 1 wants
-            // it. In mode 0 a span is already four pixels inside ONE byte, so
-            // asking for four lanes would paint sixteen.
-            e_word <= px_word & mode; e_req <= 1; st <= S_WR;
+            e_we <= 0; e_word <= 0; e_req <= 1; st <= S_RD;
           end else begin
-            // mode 0 plot: four pixels share the byte, so the other three have
-            // to be read back before this one can be changed.
-            e_addr <= addr; e_we <= 0; e_word <= 0; e_req <= 1; st <= S_RD;
+            // A pixel IS a byte, so a plot is one write with nothing to
+            // preserve -- no read-modify-write at all. That was always an
+            // artefact of 2 bpp, never of SDRAM.
+            e_we <= 1; e_din <= px_pen; e_word <= px_word;
+            e_req <= 1; st <= S_WR;
           end
         end
       end
 
+      // Only POINT reads now.
       S_RD:  if (e_ready) begin
-        if (read_lat) begin
-          px_out  <= mode ? e_dout : ((e_dout >> sh_lat) & 8'd3);
-          px_busy <= 0; st <= S_IDLE;
-        end else begin
-          e_addr <= a_lat; e_we <= 1; e_word <= 0;
-          e_din  <= (e_dout & ~(8'd3 << sh_lat)) | ((pen_lat & 8'd3) << sh_lat);
-          e_req  <= 1; st <= S_WR;
-        end
+        px_out <= e_dout; px_busy <= 0; st <= S_IDLE;
       end
 
       S_WR:  if (e_ack) begin        // a write has no answer; the ack is the end

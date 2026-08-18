@@ -121,13 +121,13 @@ module gfx (
   // emulator, so a program that never calls SETPAL sees identical colour in
   // both. The awkward *15/7 is what the emulator does; matching it matters more
   // than tidiness.
-  function [11:0] mode1_pal(input [7:0] v);
+  function [11:0] def_pal(input [7:0] v);
     reg [3:0] rr, gg, bb;
     begin
       rr = ({4'd0, v[7:5]} * 15) / 7;
       gg = ({4'd0, v[4:2]} * 15) / 7;
       bb = {2'd0, v[1:0]} * 5;
-      mode1_pal = {rr, gg, bb};
+      def_pal = {rr, gg, bb};
     end
   endfunction
   reg  [7:0]  gdata;                           // POINT result / IDENT stream
@@ -144,7 +144,6 @@ module gfx (
   // GEOMETRY so software can ask instead of assume -- the same 14 bytes the
   // emulator builds in gpu_ident().
   // Geometry is per-mode and lives in gfx_mem now.
-  reg gmode;   // 0 = 240x136 2bpp, 1 = 480x272 8bpp
 
   function [7:0] ident_byte(input [3:0] i);
     case (i)
@@ -155,11 +154,9 @@ module gfx (
       // The CURRENT mode's geometry and pen count -- which is the point of
       // IDENT: software asks the device what it is, and in mode 1 that is a
       // different screen. Matches gpu_ident() in the emulator.
-      4'd8:  ident_byte = gmode ? 8'd224 : 8'd240;   // width  480 / 240
-      4'd9:  ident_byte = gmode ? 8'd1   : 8'd0;
-      4'd10: ident_byte = gmode ? 8'd16  : 8'd136;   // height 272 / 136
-      4'd11: ident_byte = gmode ? 8'd1   : 8'd0;
-      4'd12: ident_byte = gmode ? 8'd0   : 8'd4;     // pens (256 wraps to 0)
+      4'd8:  ident_byte = 8'd224;  4'd9:  ident_byte = 8'd1;   // width  480
+      4'd10: ident_byte = 8'd16;   4'd11: ident_byte = 8'd1;   // height 272
+      4'd12: ident_byte = 8'd0;                                // 256 pens
       default: ident_byte = 8'd0;
     endcase
   endfunction
@@ -187,7 +184,7 @@ module gfx (
   wire [7:0] px_out;
 
   gfx_mem u_mem(
-    .clk(clk), .rst(rst), .mode(gmode),
+    .clk(clk), .rst(rst),
     .px_x(px_x), .px_y(px_y), .px_pen(px_pen), .px_go(px_go),
     .px_read(px_read), .px_word(px_word),
     .px_busy(px_busy), .px_out(px_out),
@@ -212,8 +209,7 @@ module gfx (
   reg signed [19:0] cerr;
   reg [2:0]  oct;                              // circle: which of the 8 points
   reg signed [17:0] clsx, clsy;                 // CLS cursor
-  wire signed [17:0] cls_xmax = gmode ? 18'sd479 : 18'sd239;
-  wire signed [17:0] cls_ymax = gmode ? 18'sd271 : 18'sd135;
+  localparam signed [17:0] cls_xmax = 18'sd479, cls_ymax = 18'sd271;
   reg [7:0]  cls_val;                          // byte S_CLS fills with
 
   // ---- ellipse (midpoint, four-way symmetric) -------------------------------
@@ -255,10 +251,10 @@ module gfx (
 
   always @(posedge clk) begin
     if (rst) begin
-      st <= S_IDLE; px_go <= 0; px_word <= 0; pload <= 0; pidx <= 0;
+      st <= S_IDLE; px_go <= 0; px_word <= 0;
       gx0 <= 0; gy0 <= 0; gx1 <= 0; gy1 <= 0;
       gcol <= 8'd1; gparm <= 0; gparm2 <= 0; gerr <= 0; gdata <= 0; gidx <= 4'd14;
-      pal[0] <= 12'h000; pal[1] <= 12'hFFF; pal[2] <= 12'hF00; pal[3] <= 12'h0F0;
+      pload <= 1; pidx <= 0;    // load the 3-3-2 default palette
     end else begin
       // The engine is no longer gated by anything here. It used to hold for a
       // cycle whenever the scanout claimed the shared framebuffer port -- a
@@ -277,10 +273,7 @@ module gfx (
       // Palette reload walk: one entry a cycle, 256 cycles, overlapping the
       // CLS that a mode change performs anyway.
       if (pload) begin
-        pal[pidx] <= gmode ? mode1_pal(pidx)
-                   : (pidx == 8'd0) ? 12'h000 : (pidx == 8'd1) ? 12'hFFF
-                   : (pidx == 8'd2) ? 12'hF00 : (pidx == 8'd3) ? 12'h0F0
-                   : 12'h000;
+        pal[pidx] <= def_pal(pidx);
         if (pidx == 8'd255) pload <= 0;
         pidx <= pidx + 8'd1;
       end
@@ -522,7 +515,7 @@ module gfx (
               // cls_val is latched at command time: RESET sets gcol in the same
               // cycle, and reading gcol live cleared to the wrong pen.
               8'h05: begin clsx <= 0; clsy <= 0;
-                           cls_val <= gmode ? gcol : {4{gcol[1:0]}};
+                           cls_val <= gcol;
                            st <= S_CLS; end
               8'h06: pal[gcol] <= {gx0[3:0], gy0[3:0], gx1[3:0]};
               // ELLIPSE / ELLIPSEFILL. ccx/ccy and cx are shared with the
@@ -552,25 +545,9 @@ module gfx (
                 // emulator's gpu_reset memsets to zero -- 129644 of 130560
                 // pixels different, and invisible while the payload was a no-op.
                 clsx <= 0; clsy <= 0; cls_val <= 8'h00; st <= S_CLS;
-                gmode <= 1'b0;            // mode 0 is the reset default
                 gcol <= 8'd1; gparm <= 0; gdata <= 0; gidx <= 4'd14;
-                pal[0]<=12'h000; pal[1]<=12'hFFF; pal[2]<=12'hF00; pal[3]<=12'h0F0;
+                pload <= 1; pidx <= 0;   // reload the default palette
               end
-              // SETMODE. Refusing an unknown mode via ERR rather than
-              // ignoring it matters: a device that silently ignores SETMODE
-              // is indistinguishable from one that has no modes at all.
-              // SETMODE starts a palette RELOAD, one entry per cycle, rather
-              // than assigning all 256 at once. A parallel loop here gave the
-              // array 256 write ports, so yosys turned it into ~3072 flip-flops
-              // with 256-way enables and the async read became a 256:1 mux --
-              // about 2300 LUT4, which is what pushed the design past the point
-              // where it would place. The walk runs alongside the CLS the mode
-              // change needs anyway, so it costs no extra time.
-              8'h0C: if (gparm == 8'd0 || gparm == 8'd1) begin
-                       gmode <= gparm[0];
-                       clsx <= 0; clsy <= 0; cls_val <= 8'h00; st <= S_CLS;
-                       pload <= 1; pidx <= 0;
-                     end else gerr <= 1;
               8'hF2: gidx <= 0;                 // IDENT: GDATA now streams
               default: gerr <= 1;
             endcase
