@@ -141,8 +141,23 @@ module sdram_video #(
 
   assign want_bus = fetching;
 
-  wire [9:0] next_line = (py == V_TOT-1) ? 10'd0 : py + 10'd1;
-  wire [9:0] fetch_line = (next_line < V_ACT) ? next_line : 10'd0;
+  // A fetch started at the end of line py runs DURING line py+1 and is
+  // displayed during line py+2 -- because the swap at that same end-of-line
+  // hands over the buffer filled during py, not the one about to be filled. So
+  // the line to fetch is py+2, not py+1. Fetching py+1 puts every row on the
+  // panel one line late: the top row is duplicated (it is still there while the
+  // pipeline fills) and the last row falls off the bottom, which is exactly how
+  // it presented -- a thick top line and no bottom line on a full-screen box.
+  // UNRESOLVED -- see the note below. +2 leaves a uniform one-row lag; +3
+  // overshoots to a one-row lead. That both are wrong by one in opposite
+  // directions means the ACTIVE and BLANKING paths do not agree: the clamp
+  // `(adv < V_ACT) ? adv : 0` also truncates the tail of active video, so the
+  // last lines are fetched as line 0 rather than being left alone. The fix is
+  // probably to separate "which line to fetch" from "are we in blanking",
+  // rather than to keep adjusting the constant. Left at +2 as the closer of the
+  // two; tb_sdram_scanout.v reproduces the fault exactly.
+  wire [9:0] adv = (py >= V_TOT-2) ? (py + 10'd2 - V_TOT) : (py + 10'd2);
+  wire [9:0] fetch_line = (adv < V_ACT) ? adv : 10'd0;
 
   always @(posedge clk) begin
     // The arbiter takes a request when it can, which may not be this cycle, so

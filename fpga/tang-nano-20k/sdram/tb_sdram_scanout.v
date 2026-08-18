@@ -46,25 +46,29 @@ module tb;
   end
 
   // capture one displayed row: decode the byte at each active column
-  reg [7:0] seen [0:479];
-  integer col, bad=0;
+  reg [7:0] seen [0:479];        // row 0, for the column check
+  reg [7:0] rowval [0:271];      // first pixel of each displayed row
+  integer col, row, bad=0;
   reg capturing=0;
-  reg pclk_d=0;
+  reg pclk_d=0, de_d=0;
   always @(posedge clk) begin
     pclk_d <= pclk;
     if (capturing && pclk && !pclk_d && de) begin
-      if (col < 480) seen[col] = {r[4:2], g[5:3], b[4:3]};
+      if (row == 0 && col < 480) seen[col] = {r[4:2], g[5:3], b[4:3]};
+      if (col == 0 && row < 272)  rowval[row] = {r[4:2], g[5:3], b[4:3]};
       col = col + 1;
+      if (col == 480) begin col = 0; row = row + 1; end
     end
   end
 
-  task capture_row;
+  task capture_frame;
     begin
-      col = 0;
+      col = 0; row = 0;
       for (i=0;i<480;i=i+1) seen[i] = 8'hEE;
-      @(posedge dut.frame_tick);        // start of a frame
+      for (i=0;i<272;i=i+1) rowval[i] = 8'hEE;
+      @(posedge dut.frame_tick);
       capturing = 1;
-      while (col < 480) @(posedge clk);
+      while (row < 272) @(posedge clk);
       capturing = 0;
     end
   endtask
@@ -72,11 +76,14 @@ module tb;
   initial begin
     // Row 0 is a RAMP: column c must decode to c&255. A duplicated, shifted or
     // stale column shows up as a value that does not match its own index.
+    // Row 0 carries a column ramp (checks COLUMN mapping); every other row is
+    // filled with its own index (checks ROW mapping). Row mapping was the gap:
+    // the first version of this bench only ever captured one row, so a scanout
+    // that showed the right pixels one row late passed it -- which is exactly
+    // what reached the panel as a thick top line and a missing bottom row.
     for (y=0;y<272;y=y+1)
       for (x=0;x<480;x=x+1)
-        fb[y*480+x] = (y==0) ? x[7:0] : 8'h00;
-    // a single lit column at x=0 on row 1, which is the reported symptom
-    fb[1*480+0] = 8'hFF;
+        fb[y*480+x] = (y==0) ? x[7:0] : y[7:0];
 
     repeat(4) @(posedge clk); rst=0;
     // Let a couple of frames go by first. Frame 0 starts before any line has
@@ -88,8 +95,16 @@ module tb;
              dut.fetching, dut.fw, dut.inflight, rd, dut.bank, underruns);
     $display("probe: lbuf[0]=%08x lbuf[1]=%08x lbuf[128]=%08x",
              dut.lbuf[0], dut.lbuf[1], dut.lbuf[128]);
-    capture_row;
+    capture_frame;
 
+    // ROW mapping: panel row R must show framebuffer row R. Row 0 is the ramp
+    // whose first pixel is 0, and every other row is filled with its index.
+    for (i=1;i<272;i=i+1)
+      if (rowval[i] !== i[7:0]) begin
+        if (bad < 8)
+          $display("FAIL: panel ROW %0d shows fb row %0d", i, rowval[i]);
+        bad = bad + 1;
+      end
     for (i=0;i<480;i=i+1)
       if (seen[i] !== i[7:0]) begin
         if (bad < 8)
@@ -103,7 +118,7 @@ module tb;
                seen[0],seen[1],seen[2],seen[3],seen[4],seen[5]);
       $finish(1);
     end
-    $display("TB-SCANOUT: PASS (framebuffer pixel N appears at panel column N)");
+    $display("TB-SCANOUT: PASS (column AND row mapping)");
     $finish(0);
   end
 endmodule
