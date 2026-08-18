@@ -48,20 +48,20 @@ MAP = [
     # $F0 SELFTEST also exists, but only in the emulator -- the RTL rejects it
     # and sets GSTAT's ERR bit, so it is deliberately left off the GCMD list
     # below rather than advertised as something the board will do.
-    ('I/O ports ($FF00-$FFFF)', 'GX0', 0xFF20, 'draw X0 / SETPAL red   (0-239)'),
-    ('I/O ports ($FF00-$FFFF)', 'GY0', 0xFF21, 'draw Y0 / SETPAL green (0-135)'),
-    ('I/O ports ($FF00-$FFFF)', 'GX1', 0xFF22, 'draw X1 / SETPAL blue  (0-239)'),
-    ('I/O ports ($FF00-$FFFF)', 'GY1', 0xFF23, 'draw Y1 (0-135)'),
-    ('I/O ports ($FF00-$FFFF)', 'GCOL', 0xFF24, 'pen 0-3 (also the pen SETPAL rewrites)'),
-    ('I/O ports ($FF00-$FFFF)', 'GCMD', 0xFF25, 'write executes: 1 PLOT 2 LINE 3 BOX 4 BOXFILL 5 CLS 6 SETPAL 7 CIRCLE 8 CIRCLEFILL 9 POINT A ELLIPSE B ELLIPSEFILL C SETMODE / F1 RESET F2 IDENT'),
+    ('I/O ports ($FF00-$FFFF)', 'GX0', 0xFF20, 'draw X0 / SETPAL red   (0-479)'),
+    ('I/O ports ($FF00-$FFFF)', 'GY0', 0xFF21, 'draw Y0 / SETPAL green (0-271)'),
+    ('I/O ports ($FF00-$FFFF)', 'GX1', 0xFF22, 'draw X1 / SETPAL blue  (0-479)'),
+    ('I/O ports ($FF00-$FFFF)', 'GY1', 0xFF23, 'draw Y1 (0-271)'),
+    ('I/O ports ($FF00-$FFFF)', 'GCOL', 0xFF24, 'pen 0-255 (also the pen SETPAL rewrites)'),
+    ('I/O ports ($FF00-$FFFF)', 'GCMD', 0xFF25, 'write executes: 1 PLOT 2 LINE 3 BOX 4 BOXFILL 5 CLS 6 SETPAL 7 CIRCLE 8 CIRCLEFILL 9 POINT A ELLIPSE B ELLIPSEFILL / F1 RESET F2 IDENT'),
     ('I/O ports ($FF00-$FFFF)', 'GSTAT', 0xFF26, 'read: bit7 BUSY, bit0 ERR (unknown command)'),
     ('I/O ports ($FF00-$FFFF)', 'GDATA', 0xFF27, 'read: IDENT record stream, else the last POINT result'),
     ('I/O ports ($FF00-$FFFF)', 'GPARM', 0xFF28, 'scalar argument: CIRCLE/ELLIPSE x-radius'),
     # Coordinate HIGH bytes. Writing a low byte CLEARS its high byte, so software
     # that never touches these cannot be broken by a stale one; write the high
-    # byte after the low when a coordinate exceeds 255. They exist because this
-    # same panel at its native 480x272 needs 9 bits of X, which is where an SDRAM
-    # framebuffer would go.
+    # byte after the low when a coordinate exceeds 255. They are not optional
+    # any more: the panel is 480 wide, so 9 bits of X are needed to reach the
+    # right-hand edge at all.
     ('I/O ports ($FF00-$FFFF)', 'GX0H', 0xFF29, 'X0 high byte (write AFTER GX0)'),
     ('I/O ports ($FF00-$FFFF)', 'GY0H', 0xFF2A, 'Y0 high byte (write AFTER GY0)'),
     ('I/O ports ($FF00-$FFFF)', 'GX1H', 0xFF2B, 'X1 high byte (write AFTER GX1)'),

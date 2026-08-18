@@ -29,22 +29,32 @@ underestimate next to the RTL edit.
 
 ## Order (emulator first — it is the golden model)
 
-1. **Emulator**: `gpu_*` drops the mode, `gw/gh/gstride/gbpp` become constants
-   at 480/272/480/8, `gpu_setmode` goes, `SETMODE $0C` goes, `gpu_reset` loads
-   the 3-3-2 palette, the PPM stops doubling.
-2. **Tests**: rework the two graphics test scripts for the new geometry and
+1. [x] **Emulator**: `gpu_*` drops the mode, `gw/gh/gstride/gbpp` become
+   constants at 480/272/480/8, `gpu_setmode` goes, `SETMODE $0C` goes,
+   `gpu_reset` loads the 3-3-2 palette, the PPM stops doubling.
+2. [x] **Tests**: rework the two graphics test scripts for the new geometry and
    palette. Do this immediately after 1, so the golden model is re-pinned before
-   anything else moves.
-3. **BASIC**: remove `SCREEN`, token `$B0`, its KWTAB entry, dispatch and
-   `DOSCRN`; `COLOR`/`PALETTE` keep their widened 0-255 range.
-4. **RTL**: `gfx_mem` loses `mode` and the RMW path; `gfx.v` loses `gmode`,
+   anything else moves. — Done late, and that cost something: steps 4 and 6 ran
+   against test scripts that had been failing since step 1, so "co-sim green"
+   for a day meant less than it looked like. Two payload cases had also stopped
+   testing anything rather than failing (a clipping line to x=255, off-screen at
+   240 wide and well inside at 480).
+3. [x] **BASIC**: remove `SCREEN`, token `$B0`, its KWTAB entry, dispatch and
+   `DOSCRN`; `COLOR`/`PALETTE` keep their widened 0-255 range. `$B0` is left
+   unassigned on purpose — a saved `.BAS` is tokenised, so an old program on
+   disk still contains it.
+4. [x] **RTL**: `gfx_mem` loses `mode` and the RMW path; `gfx.v` loses `gmode`,
    `SETMODE` and the mode-conditional geometry; `tb_gfx.v` stops asking the
    device which mode it is in.
 5. **Generators/docs**: `gen_memmap.py` drops `$0C` from the GCMD list; the man
    page, language guide, READMEs, GLOSSARY and the stage 2 design doc all
-   describe one mode.
-6. Rebuild and place. The LUT saving from 1-4 is the point: the design failed to
-   place at 15,587/20,736 and this removes work rather than adding it.
+   describe one mode. — the man page, language guide, both READMEs and GLOSSARY
+   are done; `gen_memmap.py` and the stage 2 doc are not.
+6. [x] Rebuild and place. The LUT saving from 1-4 is the point: the design
+   failed to place at 15,587/20,736 and this removes work rather than adding it.
+   — It did not turn out to be the point. Removing the modes helped, but the
+   design still would not place; the actual blocker was the SD sector buffer
+   inferring 4,096 flip-flops, which is unrelated to graphics. See HANDOFF.md.
 
 ## Note
 

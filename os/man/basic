@@ -49,7 +49,7 @@ FUNCTIONS
     ABS(x)          absolute value
     RND(n)          pseudo-random integer 1..n
     PEEK(addr)      byte (0-255) at a memory address
-    POINT(x,y)      pen (0-3) at a screen pixel; 0 if off-screen
+    POINT(x,y)      pen (0-255) at a screen pixel; 0 if off-screen
     LEN(s$)         number of characters in s$
     ASC(s$)         code of the first character (0 if empty)
     CHR$(n)         one-character string with code n
@@ -79,11 +79,11 @@ GRAPHICS
     Drawing goes to the display device, if one is fitted; without it these
     print ?No display rather than doing nothing. Under the emulator there
     is no live window: press Ctrl-\ to draw the screen in your terminal
-    and carry on, or Ctrl-C to draw it and quit. The screen is 240x136
-    with four pens (0-3), pen 0 being the background. x runs 0..239 left
-    to right, y runs 0..135 top to bottom, and anything off-screen is
+    and carry on, or Ctrl-C to draw it and quit. The screen is 480x272
+    with 256 pens (0-255), pen 0 being the background. x runs 0..479 left
+    to right, y runs 0..271 top to bottom, and anything off-screen is
     simply not drawn.
-        COLOR pen                 select pen 0-3 for later drawing
+        COLOR pen                 select pen 0-255 for later drawing
         CLS                       clear the screen; COLOR is unchanged
         PLOT x,y                  one pixel
         LINE x0,y0,x1,y1          line, both endpoints drawn
@@ -96,21 +96,15 @@ GRAPHICS
         CIRCLE x,y,rx,ry,FILL     ... solid
         PALETTE pen,r,g,b         recolour a pen; r,g,b are 0-15 each
         GTEXT x,y,size,s$         draw a string as graphics
-        SCREEN n                  choose the display mode
     Any two opposite corners work for BOX; they are sorted for you. The
     drawing itself is done by the device, not by BASIC, so a filled box is
     as quick as an empty one.
 
-    SCREEN chooses the resolution and how many pens you get:
-        SCREEN 0    240x136, 4 pens     (the power-on mode)
-        SCREEN 1    480x272, 256 pens
-    Mode 0 is what every program written before modes existed assumes, so
-    nothing has to know this statement exists. Changing mode CLEARS the
-    screen and reloads the palette -- every byte of the display means
-    something different afterwards -- but leaves the drawing pen alone.
-    In mode 1, COLOR and PALETTE take pens 0-255 instead of 0-3, and GTEXT
-    gets 80 columns instead of 40. An unsupported mode is an error, not a
-    silent no-op.
+    There is no SCREEN statement and no display modes. The device is
+    480x272 at 8 bits a pixel and nothing else, so there is nothing to
+    select. A pen is a whole byte: the power-on palette is a 3-3-2 ramp
+    (three bits of red, three of green, two of blue), which is why pen 224
+    is red and pen 28 is green before you have called PALETTE at all.
 
     GTEXT is the exception: BASIC draws the glyphs itself, because the
     display has no text command. It costs one device operation per lit
@@ -119,22 +113,23 @@ GRAPHICS
 
         GTEXT 10,10,1,"SCORE"     top-left corner at 10,10
         GTEXT 0,0,2,A$+"!"        any string expression works
-    size multiplies the glyph: 1 is 5x7 in a 6x8 cell, so a full line is 40
-    characters across and 17 rows down; size 2 gives 20 x 8. Text is drawn
+    size multiplies the glyph: 1 is 5x7 in a 6x8 cell, so a full line is 80
+    characters across and 34 rows down; size 2 gives 40 x 17. Text is drawn
     in the current COLOR. Only codes $20-$5F have glyphs -- lowercase is
     drawn as uppercase, and anything else comes out blank. A string that
     runs off the right-hand edge simply stops; it does not wrap.
 
-    POINT(x,y) is a FUNCTION, not a statement: it returns the pen (0-3) at
+    POINT(x,y) is a FUNCTION, not a statement: it returns the pen (0-255) at
     a pixel, and 0 for anything off-screen. So
         IF POINT(10,10) = 0 THEN PLOT 10,10
     works, and PRINT POINT(x,y) reads the screen back.
 
     Pen colours are chosen from 4096 (16 levels each of red, green, blue);
-    the defaults are 0 black, 1 white, 2 red, 3 green. PALETTE changes only
-    the colour a pen paints, not the pen you are drawing with, so
-        COLOR 2 : PALETTE 3,15,0,15 : BOX 0,0,20,20,FILL
-    still draws in pen 2.
+    the defaults are the 3-3-2 ramp, so pen 0 is black, 224 red, 28 green,
+    3 blue and 255 white. PALETTE changes only the colour a pen paints, not
+    the pen you are drawing with, so
+        COLOR 224 : PALETTE 3,15,0,15 : BOX 0,0,20,20,FILL
+    still draws in pen 224.
 
 DATA FILES
     One sequential channel over the filesystem:

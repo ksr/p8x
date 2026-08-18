@@ -149,16 +149,15 @@ it to 44/46 and 13288/20736 LUT4, with Fmax measured at 38.8 MHz — still four 
 the clock it runs at. P8X is programmed into the board's flash, so it comes up
 standalone on power.
 
-**Graphics** (`build.sh lcd`) adds a 240x136 four-colour framebuffer with a
-drawing engine, pixel-doubled onto the panel, driven by new BASIC statements:
-`COLOR`, `CLS`, `PLOT`, `LINE`, `BOX`, `CIRCLE` (a second radius gives an
-ellipse), `PALETTE`, `GTEXT`, `SCREEN`, and the `POINT(x,y)` function. The engine
-lives in the device, so a filled box costs the same handful of instructions as an
-empty one — `GTEXT` is the one exception, rasterising its 5×7 glyphs in software
-because the device has no text command. `SCREEN 1` selects the panel's native
-480×272 at 256 colours (emulator only so far — the FPGA side needs the SDRAM
-framebuffer, which is on the `sdram-framebuffer` branch). The same device is modelled in `p8xemu`, and the
-two are byte-compared frame by frame.
+**Graphics** (`build.sh lcd`) adds the panel's native 480×272 framebuffer at 8
+bits a pixel — 256 pens from a palette of 4096 — with a drawing engine, driven
+by new BASIC statements: `COLOR`, `CLS`, `PLOT`, `LINE`, `BOX`, `CIRCLE` (a
+second radius gives an ellipse), `PALETTE`, `GTEXT`, and the `POINT(x,y)`
+function. The engine lives in the device, so a filled box costs the same handful
+of instructions as an empty one — `GTEXT` is the one exception, rasterising its
+5×7 glyphs in software because the device has no text command. There is one
+geometry and no modes to select. The same device is modelled in `p8xemu`, and
+the two are byte-compared frame by frame.
 
 **Verification is the point.** Every milestone is "make the RTL match the
 emulator": the same program runs on both and their per-cycle architectural state

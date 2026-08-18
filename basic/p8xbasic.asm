@@ -51,7 +51,8 @@ GC_CIRCF= 8
 GC_ELL  = $0A
 GC_ELLF = $0B
 GC_PONT = 9
-GC_MODE = $0C                 ; SETMODE, mode number in GPARM
+                              ; $0C was SETMODE. The device is single-mode now
+                              ; -- 480x272, 8 bpp -- so there is nothing to set.
 CR     = $0D
 LF     = $0A
 BS     = $08
@@ -250,7 +251,10 @@ TOK_CIRCLE= $AC          ; CIRCLE x,y,r[,FILL|,NOFILL]
 TOK_PALETT= $AD          ; PALETTE pen,r,g,b
 TOK_POINT = $AE          ; POINT(x,y) -- a FUNCTION, not a statement
 TOK_GTEXT = $AF          ; GTEXT x,y,size,string$
-TOK_SCREEN= $B0          ; SCREEN n -- display mode
+                         ; $B0 was SCREEN, removed with the display modes. Do
+                         ; not reuse it casually: a saved .BAS is tokenised, so
+                         ; an old program on disk still has $B0 in it and would
+                         ; run as whatever takes the number.
 
 MONITOR = $0000          ; reset vector — BYE returns here
 CONIN   = $0100          ; BIOS: wait for a key -> A
@@ -422,10 +426,6 @@ STMT:   JSR  SKIPSP
         LDB  #TOK_GTEXT
         CMP
         JZ   DOGTEXT
-        LDA  (P2)
-        LDB  #TOK_SCREEN
-        CMP
-        JZ   DOSCRN
         LDA  (P2)
         LDB  #TOK_REM
         CMP
@@ -1590,34 +1590,6 @@ gt_y1:  LDB  GTCY+1
         STA  GTPTR+1
         JMP  gt_ch
 gt_ret: RTS
-
-; SCREEN n — choose a display mode.
-;   0   240x136, 4 pens    -- the power-on mode, and what every program written
-;                             before modes existed assumes. Nothing has to know
-;                             this statement exists.
-;   1   480x272, 256 pens  -- the panel's native resolution.
-;
-; The DEVICE clears the screen and reloads the palette on a mode change, because
-; every byte of the framebuffer means something different afterwards. It leaves
-; GCOL alone, so the drawing pen (and BASIC's GPEN shadow) survive.
-;
-; A mode the device does not have sets GSTAT's ERR bit. Checking it matters: a
-; SCREEN that silently did nothing would leave the programmer drawing at the
-; wrong resolution and blaming the drawing statements.
-DOSCRN: INP2
-        JSR  GCHECK
-        JSR  EVAL
-        LDA  RESULT
-        STA  GPARM
-        LDA  #GC_MODE
-        JSR  GEXEC
-        JSR  GWAIT                  ; ERR is only meaningful once it has run
-        LDA  GSTAT
-        LDB  #1
-        AND
-        JNZ  sc_err
-        RTS
-sc_err: JMP  SYNERR
 
 ; GTSEP — require the ',' between GTEXT's arguments.
 GTSEP:  JSR  SKIPSP
@@ -4861,8 +4833,6 @@ KWTAB:  .ascii "PRINT"
         .byte $AE
         .ascii "GTEXT"
         .byte $AF
-        .ascii "SCREEN"
-        .byte $B0
         .byte $00
 
 ;==============================================================================
@@ -5010,11 +4980,9 @@ MHELP:  .byte CR,LF
         .byte CR,LF
         .ascii "  CIRCLE x,y,r[,ry][,FILL]  PALETTE p,r,g,b  POINT(x,y)"
         .byte CR,LF
-        .ascii "  GTEXT x,y,size,s$   (5x7 text, 40 cols at size 1)"
+        .ascii "  GTEXT x,y,size,s$   (5x7 text, 80 cols at size 1)"
         .byte CR,LF
-        .ascii "  SCREEN 0 = 240x136 4 pens, 1 = 480x272 256 pens"
-        .byte CR,LF
-        .ascii "  (colours 0-15 each of r,g,b)"
+        .ascii "  SCREEN IS 480x272, 256 PENS  (colours 0-15 each of r,g,b)"
         .byte CR,LF
         .ascii "STRINGS: A$ B$ (assign, + concat, compare)"
         .byte CR,LF
