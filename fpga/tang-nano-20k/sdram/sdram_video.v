@@ -42,13 +42,16 @@ module sdram_video #(
   input             clk,            // 27 MHz fabric clock
   input             rst,
 
-  // SDRAM controller port (shared; this module only ever reads)
-  output reg        rd,           // HELD until ack (arbiter request/ack)
-  input             ack,
-  output reg [22:0] addr,
-  input      [31:0] dout32,
-  input             data_ready,
-  output            want_bus,       // 1 while a line fetch is outstanding
+  // p8x_sdram stream port (this module only ever reads). One st_go per line;
+  // issuing the next line's st_go while the previous fetch is still running is
+  // the ABORT the controller defines for exactly this client: the panel has
+  // moved on and the stale line's remaining words are worthless.
+  output reg        st_go,
+  output reg [22:0] st_addr,
+  output     [8:0]  st_words,
+  input             st_valid,
+  input      [31:0] st_data,
+  input             st_done,
 
   // to the panel
   output reg        pclk,
@@ -138,14 +141,22 @@ module sdram_video #(
 
   // ---- line fetch -----------------------------------------------------------
   // Fetches the line that will be displayed NEXT into the buffer that is not
-  // being displayed. Kicked off at every end-of-line.
-  reg  [7:0]  fw;                  // words fetched so far this line (0..WORDS)
-  reg         inflight;            // a read is taken but not yet answered
-  reg         fetching;
+  // being displayed. One st_go per end-of-line; the controller streams the
+  // words back and the only bookkeeping left HERE is writing them down in
+  // order. The request/ack/inflight machinery this section used to carry
+  // lived to work around a word-at-a-time controller, and went with it.
+  reg  [7:0]  fw;                  // words landed this line (0..WORDS)
+  reg         fetching;            // st_go issued, st_done not yet seen
   reg         primed;              // a fetch has been started at least once
-  reg  [22:0] faddr;
+  // The flush window: for two cycles after eol, arriving st_valid words are
+  // DISCARDED. They can only be the tail of an aborted fetch (in-flight CAS
+  // answers the controller could not retract), and writing them would land at
+  // fw=0 and shift the whole replacement line by one. A genuine word from the
+  // new stream cannot arrive this early -- the controller has an activate and
+  // the CAS latency to get through first.
+  reg  [1:0]  flush;
 
-  assign want_bus = fetching;
+  assign st_words = WORDS[8:0];
 
   // A fetch started at the end of line py runs DURING line py+1 and is
   // displayed during line py+2 -- because the swap at that same end-of-line
@@ -164,40 +175,31 @@ module sdram_video #(
   // that same end-of-line hands over the buffer filled during the previous
   // line, not the one about to be filled. The counter is primed during vertical
   // blanking so it reaches 0 the right number of lines before active video.
-  //
-  // STILL OFF BY ONE ROW (panel row N shows fb row N-1). The counter DID fix
-  // the real problem -- the lag is now uniform, with no duplicated top row and
-  // no wrap anomaly, where the old modular expression was wrong by different
-  // amounts in different places. What is left is a single clean constant.
-  //
-  // The trap for whoever finishes this: moving the prime point by ONE line
-  // changes the mapping by TWO rows (V_TOT-3 gives lag 1, V_TOT-4 gives lead
-  // 1). So the answer is NOT another prime-point value -- something advances
-  // twice per line, or the fetch-to-display distance is not the 2 swaps assumed
-  // here. Instrument the actual swap/display relationship rather than bisecting
-  // the constant, which is what ate the last few iterations.
+  // (The row lag this section once documented is fixed and verified on
+  // hardware -- see 75e166a and the bench's row-mapping check.)
   reg [9:0] nextf;
 
   always @(posedge clk) begin
-    // The arbiter takes a request when it can, which may not be this cycle, so
-    // rd is a LEVEL held until ack -- not the one-cycle pulse the bare
-    // controller wanted. Pulsing it here would drop any fetch that arrived
-    // while the engine or refresh held the bus, and a dropped fetch is a
-    // dropped scanline.
-    rd <= rd & ~ack;
-    if (ack) inflight <= 1;            // taken by the arbiter, answer still to come
+    st_go <= 1'b0;
+    if (flush != 2'd0) flush <= flush - 2'd1;
+
+    // Words stream in; the only job left is writing them down in order. The
+    // index reads ~bank BEFORE the eol swap below (non-blocking), so a word
+    // landing exactly at eol still goes to the buffer its fetch belongs to.
+    if (st_valid && flush == 2'd0 && fw != WORDS[7:0]) begin
+      lbuf[{~bank, fw[6:0]}] <= st_data;
+      fw <= fw + 1'b1;
+    end
+    if (st_done) fetching <= 0;
+
     if (rst) begin
       fetching <= 0; fw <= 0; bank <= 0; underruns <= 0; primed <= 0;
-      // rd MUST be reset. It became self-referential (rd <= rd & ~ack) when
-      // this moved to the arbiter's request/ack, and a self-referential reg
-      // with no reset is X forever in simulation -- which is why this bench saw
-      // nothing fetched at all. On hardware the flop powers up at 0 and it
-      // limps along, so the fault is invisible on the board and total in sim.
-      rd <= 0; inflight <= 0; nextf <= 0;
+      st_go <= 0; nextf <= 0; flush <= 0;
     end else if (eol) begin
       // Swap, and judge the fetch that was supposed to have finished by now.
       // `primed` suppresses the very first line, where nothing has been asked
       // for yet -- otherwise every reset would report a phantom underrun.
+      // st_done is the fetch's word; fw is the audit of what actually landed.
       if (primed && (fetching || fw != WORDS[7:0]))
         if (underruns != 16'hFFFF) underruns <= underruns + 1'b1;
       bank     <= ~bank;
@@ -205,29 +207,14 @@ module sdram_video #(
       // Explicit width. `fetch_line * STRIDE` in a narrow context is how this
       // project already lost the top of a framebuffer address once: a y*60 that
       // wrapped inside 13 bits and folded the bottom of the screen onto the top.
-      faddr    <= FB_BASE + ({13'd0, nextf} * STRIDE);
+      st_addr  <= FB_BASE + ({13'd0, nextf} * STRIDE);
+      st_go    <= 1'b1;                // starts the fetch -- or aborts a stale one
       // prime so that the fetch two lines before active video loads line 0
-      if (py == V_TOT-3) nextf <= 10'd0;   // see the note below
+      if (py == V_TOT-3) nextf <= 10'd0;
       else if (nextf < V_ACT-1) nextf <= nextf + 10'd1;
       fw       <= 0;
       fetching <= 1;
-      inflight <= 0;
-    end else if (fetching) begin
-      if (data_ready) begin
-        lbuf[{~bank, fw[6:0]}] <= dout32;
-        inflight <= 0;
-        if (fw == WORDS[7:0]-1) begin fetching <= 0; fw <= WORDS[7:0]; end
-        else                          fw <= fw + 1'b1;
-      end else if (!rd && !inflight) begin
-        // `inflight` is NOT optional. ack means the arbiter TOOK the request,
-        // not that it answered it -- and rd clears on ack, so testing !rd alone
-        // fires a second read for the same word while the first is still in
-        // flight. The extra answer then lands at the NEXT fw, so a line ends up
-        // holding every other word twice and half its pixels never arrive.
-        // On the panel that is a doubled column at the left edge.
-        addr <= faddr + {13'd0, fw, 2'd0};
-        rd   <= 1;
-      end
+      flush    <= 2'd2;                // discard any aborted fetch's tail
     end
   end
 endmodule

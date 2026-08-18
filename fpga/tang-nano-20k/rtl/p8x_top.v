@@ -190,41 +190,47 @@ module p8x_top(
   wire [7:0]  sc_pen;
   wire [11:0] sc_rgb;
 
-  wire        sd_rd, sd_wr, sd_word, sd_refresh;
+  wire        sd_rd, sd_wr, sd_word;
   wire [22:0] sd_addr;
   wire [7:0]  sd_din, sd_dout;
   wire [31:0] sd_dout32;
   wire        sd_ready, sd_busy;
 
-  sdram #(.FREQ(27_000_000)) SDRAM(
+  // The scanout no longer goes through the arbiter: it talks the P8X
+  // controller's STREAM port directly (one st_go per line, words answered a
+  // cycle apiece), which is what makes a line fetch cost its word count
+  // instead of ~6 cycles a word. Refresh is INTERNAL to the controller now,
+  // so the 15 us timer this section used to keep is gone -- a forgotten
+  // refresh is silent data rot, and the controller owning its own deadline
+  // removes the class of bug. The arbiter keeps only the engine, whose word
+  // port is contract-identical to the vendored controller's.
+  wire        v_go, v_valid, v_done;
+  wire [22:0] v_addr;
+  wire [8:0]  v_words;
+  wire [31:0] v_data;
+
+  p8x_sdram #(.FREQ(27_000_000)) SDRAM(
     .clk(clk), .clk_sdram(clk_sdram), .resetn(!rst),
-    .addr(sd_addr), .rd(sd_rd), .wr(sd_wr), .wr_word(sd_word),
-    .refresh(sd_refresh), .din(sd_din),
+    .addr(sd_addr), .rd(sd_rd), .wr(sd_wr), .wr_word(sd_word), .din(sd_din),
     .dout(sd_dout), .dout32(sd_dout32), .data_ready(sd_ready), .busy(sd_busy),
+    .st_go(v_go), .st_addr(v_addr), .st_words(v_words),
+    .st_valid(v_valid), .st_data(v_data), .st_done(v_done),
     .SDRAM_DQ(IO_sdram_dq), .SDRAM_A(O_sdram_addr), .SDRAM_BA(O_sdram_ba),
     .SDRAM_nCS(O_sdram_cs_n), .SDRAM_nWE(O_sdram_wen_n),
     .SDRAM_nRAS(O_sdram_ras_n), .SDRAM_nCAS(O_sdram_cas_n),
     .SDRAM_CLK(O_sdram_clk), .SDRAM_CKE(O_sdram_cke), .SDRAM_DQM(O_sdram_dqm));
 
-  // Every row needs refreshing every 64 ms; a pulse every 15 us covers it,
-  // since the controller refreshes all banks per pulse.
-  reg [11:0] refr = 0;
-  wire       refr_now = (refr == 12'd405);
-  always @(posedge clk) refr <= refr_now ? 12'd0 : refr + 1'b1;
-
-  wire        v_req, v_ack, v_ready;
-  wire [22:0] v_addr;
   wire        e_req, e_we, e_word, e_ack, e_ready;
   wire [22:0] e_addr;
   wire [7:0]  e_din;
 
   sdram_arb ARB(
     .clk(clk), .rst(rst),
-    .c_rd(sd_rd), .c_wr(sd_wr), .c_wr_word(sd_word), .c_refresh(sd_refresh),
+    .c_rd(sd_rd), .c_wr(sd_wr), .c_wr_word(sd_word), .c_refresh(),
     .c_addr(sd_addr), .c_din(sd_din), .c_dout(sd_dout), .c_dout32(sd_dout32),
     .c_ready(sd_ready), .c_busy(sd_busy),
-    .s_req(v_req), .s_addr(v_addr), .s_ack(v_ack), .s_ready(v_ready),
-    .f_req(refr_now), .f_ack(),
+    .s_req(1'b0), .s_addr(23'd0), .s_ack(), .s_ready(),
+    .f_req(1'b0), .f_ack(),
     .e_req(e_req), .e_we(e_we), .e_word(e_word), .e_addr(e_addr),
     .e_din(e_din), .e_ack(e_ack), .e_ready(e_ready));
 
@@ -237,8 +243,8 @@ module p8x_top(
           .e_din(e_din), .e_ack(e_ack), .e_ready(e_ready), .e_dout(sd_dout));
 
   sdram_video VID(.clk(clk), .rst(rst),
-          .rd(v_req), .ack(v_ack), .addr(v_addr), .dout32(sd_dout32),
-          .data_ready(v_ready), .want_bus(),
+          .st_go(v_go), .st_addr(v_addr), .st_words(v_words),
+          .st_valid(v_valid), .st_data(v_data), .st_done(v_done),
           .pclk(lcd_clk), .de(lcd_de), .r(lcd_r), .g(lcd_g), .b(lcd_b),
           .underruns(), .frame_tick());
 

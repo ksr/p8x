@@ -434,6 +434,17 @@ module p8x_sdram #(
       default: state <= IDLE;
     endcase
 
+    // An abort must not leak the old stream's in-flight answers into the new
+    // stream's consumer: the client (scanout) resets its write index at st_go,
+    // so a stale st_valid would land at index 0 and shift the whole new line.
+    // Killing the pipe here -- AFTER the case, so it wins over SRUN's issue --
+    // silences everything from this edge on; the client flushes the one
+    // answer that can predate it. Harmless when no stream is running: the
+    // pipe is already empty.
+    if (st_go) begin
+      p0 <= 1'b0; p1 <= 1'b0; st_valid <= 1'b0;
+    end
+
     if (~resetn) begin
       busy <= 1'b1; dq_oen <= 1'b1; SDRAM_DQM <= 4'b0;
       state <= INIT; cycle <= 4'd0;
