@@ -31,7 +31,10 @@ GX0    = $FF20               ; coordinate LOW bytes. Writing one CLEARS its high
 GY0    = $FF21               ;   byte, which sits GCHI above it ($FF29-$FF2C),
 GX1    = $FF22               ;   so the low byte must always be written first.
 GY1    = $FF23
-GCOL   = $FF24               ; pen 0-3 (write-only; GPEN shadows it)
+GCOL   = $FF24               ; pen LOW byte (write-only; GPEN shadows it).
+                             ;   The pen is a whole RGB565 colour: a GCOL
+                             ;   write CLEARS GCOLH, same as the coordinates.
+GCOLH  = $FF2D               ; pen HIGH byte (the write side of GID0's address)
 GCMD   = $FF25               ; write to execute
 GSTAT  = $FF26               ; bit7 BUSY
 GDATA  = $FF27               ; read-back: POINT result
@@ -45,7 +48,7 @@ GC_LINE = 2
 GC_BOX  = 3
 GC_BOXF = 4
 GC_CLS  = 5
-GC_PAL  = 6
+                             ; 6 was SETPAL; no palette, no command
 GC_CIRC = 7
 GC_CIRCF= 8
 GC_ELL  = $0A
@@ -160,6 +163,12 @@ GSADR  = BASRAM+$DB          ; GSTORE: target register address (page $FF)
 GSTGT  = BASRAM+$DC          ; GARG:   target held across EVAL
 GPEN   = BASRAM+$DD          ; shadow of GCOL -- the device register is WRITE-ONLY,
                              ;   so CLS could not otherwise restore the pen
+GPENH  = BASRAM+$F2          ; ...and its high byte, now a pen is a whole RGB565
+                             ;   colour. One of the two bytes the scratch-page
+                             ;   note below called the last spares; $F3 (RGBH)
+                             ;   is the other. Page FULL.
+RGBH   = BASRAM+$F3          ; RGB(): the packed high byte, held across the
+                             ;   green and blue argument expressions
 GCTMP  = BASRAM+$DE          ; GEXEC: the command byte, held across GWAIT
 GELL   = BASRAM+$DF          ; CIRCLE: 1 once a second radius made it an ellipse
 ; GTEXT working set. It rasterises glyphs itself (see DOGTEXT), so unlike the
@@ -248,9 +257,12 @@ TOK_NOFILL= $A9          ; ... the default, spelled out
 TOK_CLS   = $AA          ; CLS
 TOK_PLOT  = $AB          ; PLOT x,y
 TOK_CIRCLE= $AC          ; CIRCLE x,y,r[,FILL|,NOFILL]
-TOK_PALETT= $AD          ; PALETTE pen,r,g,b
+                         ; $AD was PALETTE, removed with the palette. Like
+                         ; $B0, it stays unassigned: saved .BAS files are
+                         ; tokenised and old programs on disk still carry it.
 TOK_POINT = $AE          ; POINT(x,y) -- a FUNCTION, not a statement
 TOK_GTEXT = $AF          ; GTEXT x,y,size,string$
+TOK_RGB   = $B1          ; RGB(r,g,b) -- a FUNCTION: pack r,b 0-31, g 0-63 into 565
                          ; $B0 was SCREEN, removed with the display modes. Do
                          ; not reuse it casually: a saved .BAS is tokenised, so
                          ; an old program on disk still has $B0 in it and would
@@ -303,9 +315,11 @@ bs_go:
         STA  SEED
         LDA  #$AC
         STA  SEED+1
-        LDA  #1              ; graphics: pen 1, shadow and device agreeing
-        STA  GPEN
+        LDA  #$FF            ; graphics: pen WHITE ($FFFF), shadow and device
+        STA  GPEN            ;   agreeing. Low byte first -- a GCOL write
+        STA  GPENH           ;   clears GCOLH, so the order is load-bearing.
         STA  GCOL
+        STA  GCOLH
         LDP1 #BANNER
         JSR  PUTS
 
@@ -418,10 +432,6 @@ STMT:   JSR  SKIPSP
         LDB  #TOK_CIRCLE
         CMP
         JZ   DOCIRC
-        LDA  (P2)
-        LDB  #TOK_PALETT
-        CMP
-        JZ   DOPAL
         LDA  (P2)
         LDB  #TOK_GTEXT
         CMP
@@ -1243,13 +1253,18 @@ DOGLINE: INP2                       ; consume the LINE token
         JSR  GEXEC
         RTS
 
-; COLOR pen   (0-3; the device masks to 2 bits)
+; COLOR c -- the pen is a whole RGB565 colour; RGB(r,g,b) builds one. Values
+; 0-255 still parse and work (they are the dark blue-greens 565 makes of
+; them); the old pen numbers stopped meaning their old colours at stage 6.
 DOCOLOR: INP2
         JSR  GCHECK
         JSR  EVAL
         LDA  RESULT
         STA  GPEN                   ; shadow first: GCOL cannot be read back
-        STA  GCOL
+        STA  GCOL                   ; low byte first -- this clears GCOLH
+        LDA  RESULT+1
+        STA  GPENH
+        STA  GCOLH
         RTS
 
 ; BOX x0,y0,x1,y1 [,FILL | ,NOFILL]   -- outline unless FILL is given.
@@ -1294,7 +1309,9 @@ DOCLS:  INP2
         JSR  GEXEC
         JSR  GWAIT                  ; the pen restore must not overtake the clear
         LDA  GPEN
-        STA  GCOL
+        STA  GCOL                   ; low first -- clears GCOLH
+        LDA  GPENH
+        STA  GCOLH
         RTS
 
 ; PLOT x,y — a single pixel in the current pen.
@@ -1384,27 +1401,11 @@ ci_go:  JSR  GEXEC
         RTS
 ci_err: JMP  SYNERR
 
-; PALETTE pen,r,g,b — recolour a pen; r/g/b are 0-15, so 4096 colours.
-; SETPAL names its target through GCOL, the same register that selects the
-; DRAWING pen, so the pen has to be handed back from the GPEN shadow afterwards
-; or PALETTE would silently change what you draw with next.
-DOPAL:  INP2
-        JSR  GCHECK
-        JSR  EVAL
-        LDA  RESULT
-        STA  GCOL                   ; the pen being recoloured
-        LDA  #<GX0
-        JSR  GARG                   ; red
-        LDA  #<GY0
-        JSR  GARG                   ; green
-        LDA  #<GX1
-        JSR  GARG                   ; blue
-        LDA  #GC_PAL
-        JSR  GEXEC
-        JSR  GWAIT                  ; SETPAL reads GCOL, so let it finish first
-        LDA  GPEN                   ; give the drawing pen back
-        STA  GCOL
-        RTS
+; PALETTE is gone: there is no palette to write. An old tokenised program's
+; $AD byte no longer dispatches, so it falls through to the implicit-LET path
+; and reports ?SYNTAX ERROR -- the honest outcome for a statement whose
+; hardware left. RGB(r,g,b) is the forward path: colours are packed, not
+; installed.
 
 ;==============================================================================
 ; GTEXT x,y,size,string$ — draw a string as GRAPHICS, in the current pen.
@@ -2307,6 +2308,10 @@ FACTOR: JSR  SKIPSP
         CMP
         JZ   fa_point
         LDA  (P2)
+        LDB  #TOK_RGB
+        CMP
+        JZ   fa_rgb
+        LDA  (P2)
         LDB  #TOK_LEN
         CMP
         JZ   fa_len
@@ -2462,12 +2467,87 @@ fa_point: INP2
         LDA  #GC_PONT
         JSR  GEXEC
         JSR  GWAIT                  ; the answer is only valid once it is done
-        LDA  GDATA                  ; the device parks the pen in the data port
+        LDA  GDATA                  ; GDATA streams the 16-bit colour: low...
         STA  RESULT
-        LDA  #0
+        LDA  GDATA                  ; ...then high (and parks on the high byte)
         STA  RESULT+1
         RTS
 pt_err: JMP  SYNERR
+
+; RGB(r,g,b) -- pack a 565 colour: r,b are 0-31, g is 0-63 (its extra bit is
+; real: green gets six). Pure arithmetic, so no GCHECK -- RGB() works with no
+; display fitted, and COLOR stores whatever it is given either way. Arguments
+; are MASKED to their fields, the same forgiveness PEEK's address gets.
+; RGBH is not preserved across a nested RGB() in an argument -- the same class
+; of limitation POINT has with the coordinate registers, and as pointless to
+; hit. The (g&7)<<5 half rides the STACK across the blue argument instead;
+; SYNERR unwinds SP, so an error mid-argument cannot leak the push.
+fa_rgb: INP2
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #'('
+        CMP
+        JNZ  rgb_err
+        INP2
+        JSR  EXPR                   ; red
+        LDA  RESULT
+        LDB  #$1F
+        AND
+        SHL
+        SHL
+        SHL                         ; (r&31)<<3: the high byte top five bits
+        STA  RGBH
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #','
+        CMP
+        JNZ  rgb_err
+        INP2
+        JSR  EXPR                   ; green
+        LDA  RESULT
+        LDB  #$3F
+        AND
+        STA  RESULT                 ; masked g, parked while both halves pack
+        SHR
+        SHR
+        SHR                         ; g>>3: the high byte low three bits
+        LDB  RGBH
+        OR
+        STA  RGBH                   ; high byte complete
+        LDA  RESULT
+        LDB  #$07
+        AND
+        SHL
+        SHL
+        SHL
+        SHL
+        SHL                         ; (g&7)<<5: the low byte top three bits
+        PHA                         ; parked across the blue argument
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #','
+        CMP
+        JNZ  rgb_err
+        INP2
+        JSR  EXPR                   ; blue
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #')'
+        CMP
+        JNZ  rgb_err
+        INP2
+        LDA  RESULT
+        LDB  #$1F
+        AND
+        STA  RESULT                 ; b5
+        PLA                         ; the green low bits, back off the stack
+        LDB  RESULT
+        OR
+        STA  RESULT
+        LDA  RGBH
+        STA  RESULT+1
+        RTS
+rgb_err: JMP SYNERR
 
 fa_peek: INP2
         JSR  PARGET              ; RESULT = address
@@ -4616,6 +4696,9 @@ ckd_1:  LDB  #TOK_REM
         LDB  #TOK_POINT
         CMP
         JZ   ckd_bad
+        LDB  #TOK_RGB
+        CMP
+        JZ   ckd_bad
         LDB  #TOK_FILL
         CMP
         JZ   ckd_bad
@@ -4827,12 +4910,12 @@ KWTAB:  .ascii "PRINT"
         .byte $AB
         .ascii "CIRCLE"
         .byte $AC
-        .ascii "PALETTE"
-        .byte $AD
         .ascii "POINT"
         .byte $AE
         .ascii "GTEXT"
         .byte $AF
+        .ascii "RGB"
+        .byte $B1
         .byte $00
 
 ;==============================================================================
@@ -4978,11 +5061,11 @@ MHELP:  .byte CR,LF
         .byte CR,LF
         .ascii "  BOX x0,y0,x1,y1[,FILL|,NOFILL]   PLOT x,y"
         .byte CR,LF
-        .ascii "  CIRCLE x,y,r[,ry][,FILL]  PALETTE p,r,g,b  POINT(x,y)"
+        .ascii "  CIRCLE x,y,r[,ry][,FILL]  POINT(x,y)  RGB(r,g,b)"
         .byte CR,LF
         .ascii "  GTEXT x,y,size,s$   (5x7 text, 80 cols at size 1)"
         .byte CR,LF
-        .ascii "  SCREEN IS 480x272, 256 PENS  (colours 0-15 each of r,g,b)"
+        .ascii "  SCREEN IS 480x272 RGB565 - COLOR RGB(0-31,0-63,0-31)"
         .byte CR,LF
         .ascii "STRINGS: A$ B$ (assign, + concat, compare)"
         .byte CR,LF

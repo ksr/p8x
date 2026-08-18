@@ -49,7 +49,8 @@ FUNCTIONS
     ABS(x)          absolute value
     RND(n)          pseudo-random integer 1..n
     PEEK(addr)      byte (0-255) at a memory address
-    POINT(x,y)      pen (0-255) at a screen pixel; 0 if off-screen
+    POINT(x,y)      colour at a screen pixel; 0 if off-screen
+    RGB(r,g,b)      pack a colour: r,b 0-31, g 0-63 (see GRAPHICS)
     LEN(s$)         number of characters in s$
     ASC(s$)         code of the first character (0 if empty)
     CHR$(n)         one-character string with code n
@@ -79,11 +80,11 @@ GRAPHICS
     Drawing goes to the display device, if one is fitted; without it these
     print ?No display rather than doing nothing. Under the emulator there
     is no live window: press Ctrl-\ to draw the screen in your terminal
-    and carry on, or Ctrl-C to draw it and quit. The screen is 480x272
-    with 256 pens (0-255), pen 0 being the background. x runs 0..479 left
-    to right, y runs 0..271 top to bottom, and anything off-screen is
-    simply not drawn.
-        COLOR pen                 select pen 0-255 for later drawing
+    and carry on, or Ctrl-C to draw it and quit. The screen is 480x272 in
+    RGB565 direct colour: a pixel IS its colour, 65,536 of them, and 0 is
+    black. x runs 0..479 left to right, y runs 0..271 top to bottom, and
+    anything off-screen is simply not drawn.
+        COLOR c                   select the drawing colour; RGB() builds one
         CLS                       clear the screen; COLOR is unchanged
         PLOT x,y                  one pixel
         LINE x0,y0,x1,y1          line, both endpoints drawn
@@ -94,17 +95,20 @@ GRAPHICS
         CIRCLE x,y,r,FILL         ... solid
         CIRCLE x,y,rx,ry          ELLIPSE: separate x and y radii
         CIRCLE x,y,rx,ry,FILL     ... solid
-        PALETTE pen,r,g,b         recolour a pen; r,g,b are 0-15 each
         GTEXT x,y,size,s$         draw a string as graphics
     Any two opposite corners work for BOX; they are sorted for you. The
     drawing itself is done by the device, not by BASIC, so a filled box is
     as quick as an empty one.
 
-    There is no SCREEN statement and no display modes. The device is
-    480x272 at 8 bits a pixel and nothing else, so there is nothing to
-    select. A pen is a whole byte: the power-on palette is a 3-3-2 ramp
-    (three bits of red, three of green, two of blue), which is why pen 224
-    is red and pen 28 is green before you have called PALETTE at all.
+    There is no SCREEN statement, no display modes and no palette. The
+    device is 480x272 at 16 bits a pixel and nothing else. A colour is
+    RGB565 -- five bits of red, six of green (the eye is fussiest there),
+    five of blue -- and RGB(r,g,b) packs one:
+        COLOR RGB(31,0,0)         red      (r and b are 0-31, g is 0-63)
+        COLOR RGB(31,63,31)       white
+    Arguments are masked to their fields. Because BASIC's integers are
+    signed 16-bit, bright colours PRINT as negative numbers -- red is
+    -2048 -- but compare and store perfectly well.
 
     GTEXT is the exception: BASIC draws the glyphs itself, because the
     display has no text command. It costs one device operation per lit
@@ -119,17 +123,14 @@ GRAPHICS
     drawn as uppercase, and anything else comes out blank. A string that
     runs off the right-hand edge simply stops; it does not wrap.
 
-    POINT(x,y) is a FUNCTION, not a statement: it returns the pen (0-255) at
-    a pixel, and 0 for anything off-screen. So
+    POINT(x,y) is a FUNCTION, not a statement: it returns the COLOUR at a
+    pixel, and 0 for anything off-screen. So
         IF POINT(10,10) = 0 THEN PLOT 10,10
-    works, and PRINT POINT(x,y) reads the screen back.
-
-    Pen colours are chosen from 4096 (16 levels each of red, green, blue);
-    the defaults are the 3-3-2 ramp, so pen 0 is black, 224 red, 28 green,
-    3 blue and 255 white. PALETTE changes only the colour a pen paints, not
-    the pen you are drawing with, so
-        COLOR 224 : PALETTE 3,15,0,15 : BOX 0,0,20,20,FILL
-    still draws in pen 224.
+    works, and comparing against the same RGB() you drew with matches
+    exactly:
+        IF POINT(10,10) = RGB(31,0,0) THEN PRINT "STILL RED"
+    (A bright colour prints as a negative number -- see above -- but the
+    comparison is bit-for-bit either way.)
 
 DATA FILES
     One sequential channel over the filesystem:

@@ -11,7 +11,8 @@
 #      it is invisible unless something checks the middle of the box.
 #   2. CLS must clear to the BACKGROUND but leave the current COLOR alone. GCOL
 #      is write-only in the device, so the pen cannot be read back and restored;
-#      BASIC keeps the GPEN shadow for exactly this.
+#      BASIC keeps the GPEN/GPENH shadow pair for exactly this (a pen is a
+#      whole RGB565 colour since stage 6).
 #   3. LINE endpoints are inclusive.
 #   4. LIST must round-trip the new keywords -- a token with no KWTAB entry
 #      lists as garbage while running perfectly.
@@ -32,11 +33,12 @@ cp "$ROOT/os/run-disk.img" bgfx.img 2>/dev/null || fail "need os/run-disk.img (r
 python3 "$ROOT/tools/p8xfs.py" put bgfx.img bgfx.bin --name /bin/bgfx.bin \
     --load 0x6A00 --exec 0x6A00 >/dev/null || fail "could not install the test BASIC"
 
-# COLOR 28 then CLS: if CLS clobbered the pen, the filled box would come out
-# pen 0 and vanish. The NOFILL box is checked in its middle; the LINE at its
-# ends. The pens are the 3-3-2 primaries rather than 1/2/3 -- at 8 bpp a pen is
-# a whole byte, and COLOR 224 also proves BASIC hands all eight bits to GCOL.
-printf 'B\rbgfx\r10 COLOR 28\r20 CLS\r30 BOX 20,20,120,120,FILL\r40 COLOR 224\r50 BOX 200,20,300,120,NOFILL\r60 COLOR 3\r70 LINE 20,240,458,240\r80 END\rRUN\rLIST\rFILL\rBYE\r' \
+# COLOR RGB(0,63,0) then CLS: if CLS clobbered the pen, the filled box would
+# come out black and vanish. The NOFILL box is checked in its middle; the LINE
+# at its ends. Colours go through RGB(), which also proves BASIC hands all 16
+# pen bits to GCOL+GCOLH -- an interpreter that dropped the high byte draws
+# these primaries as near-black and fails every pixel check.
+printf 'B\rbgfx\r10 COLOR RGB(0,63,0)\r20 CLS\r30 BOX 20,20,120,120,FILL\r40 COLOR RGB(31,0,0)\r50 BOX 200,20,300,120,NOFILL\r60 COLOR RGB(0,0,31)\r70 LINE 20,240,458,240\r80 END\rRUN\rLIST\rFILL\rBYE\r' \
     > bgfx.in
 ../p8xemu -N -i bgfx.in -c bgfx.img -l 120000000 -g bgfx.ppm eeprom.bin > bgfx.out 2>/dev/null || true
 
@@ -46,7 +48,7 @@ bad = []
 out = open("bgfx.out","rb").read().replace(b"\r", b"")
 
 # 4. LIST round-trips every new keyword
-for kw in [b"10 COLOR 28", b"20 CLS", b"30 BOX 20,20,120,120,FILL",
+for kw in [b"10 COLOR RGB(0,63,0)", b"20 CLS", b"30 BOX 20,20,120,120,FILL",
            b"50 BOX 200,20,300,120,NOFILL", b"70 LINE 20,240,458,240"]:
     if out.count(kw) < 2:            # once as typed, once from LIST
         bad.append("LIST did not round-trip %r" % kw.decode())
@@ -59,7 +61,7 @@ d  = open("bgfx.ppm","rb").read()
 px = d[d.index(b"255\n")+4:]
 W  = 480
 BLACK, RED, GREEN, BLUE = (0,0,0), (255,0,0), (0,255,0), (0,0,255)
-NAME = {BLACK:"pen $00", RED:"pen $E0 red", GREEN:"pen $1C green", BLUE:"pen $03 blue"}
+NAME = {BLACK:"$0000", RED:"$F800 red", GREEN:"$07E0 green", BLUE:"$001F blue"}
 def fb(x, y):
     i = (y*W + x)*3
     return tuple(px[i:i+3])
@@ -71,7 +73,7 @@ def want(x, y, c, why):
 
 # 2. CLS cleared to background, and did NOT eat COLOR 28
 want(  0,   0, BLACK, "CLS did not clear to the background")
-want( 70,  70, GREEN, "CLS clobbered the current COLOR (GPEN shadow not restored)")
+want( 70,  70, GREEN, "CLS clobbered the current COLOR (GPEN pair not restored)")
 # 1. BOX ,FILL is solid; BOX ,NOFILL is an outline
 want( 20,  20, GREEN, "filled BOX corner missing")
 want(120, 120, GREEN, "filled BOX corner missing")
@@ -90,13 +92,13 @@ if bad:
 print("BASIC-GFX TEST: draw statements ok")
 PY
 
-# --- part 2: PLOT / CIRCLE / PALETTE / POINT --------------------------------
-# The trap here is PALETTE: SETPAL names the pen it recolours through GCOL, the
-# same register that selects the DRAWING pen. If BASIC does not hand the pen back
-# from its GPEN shadow afterwards, PALETTE silently changes what you draw with
-# next -- and since it only bites the *following* statement, it looks like that
-# statement is broken rather than PALETTE.
-printf 'B\rbgfx\r10 CLS\r20 COLOR 224\r30 PALETTE 3,15,0,15\r40 BOX 10,10,80,80,FILL\r50 COLOR 3\r60 CIRCLE 240,136,100,FILL\r70 COLOR 28\r80 CIRCLE 240,136,120\r90 PLOT 400,40\r100 PRINT POINT(240,136)\r110 PRINT POINT(400,40)\r120 PRINT POINT(0,271)\r130 PRINT POINT(14,14)\r140 END\rRUN\rLIST\rBYE\r' \
+# --- part 2: PLOT / CIRCLE / RGB / POINT ------------------------------------
+# PALETTE is gone with the palette; what this part pins instead is the 16-bit
+# colour path end to end: RGB() packs, the pen carries all 16 bits, and POINT
+# hands them back THROUGH BASIC'S SIGNED INTEGERS -- $F81F magenta prints as
+# -2017, which is the documented wart (STAGE6-DESIGN.md), asserted here so it
+# stays a wart and not a surprise.
+printf 'B\rbgfx\r10 CLS\r20 COLOR RGB(31,0,0)\r40 BOX 10,10,80,80,FILL\r50 COLOR RGB(31,0,31)\r60 CIRCLE 240,136,100,FILL\r70 COLOR RGB(0,63,0)\r80 CIRCLE 240,136,120\r90 PLOT 400,40\r100 PRINT POINT(240,136)\r110 PRINT POINT(400,40)\r120 PRINT POINT(0,271)\r130 PRINT POINT(14,14)\r140 END\rRUN\rLIST\rBYE\r' \
     > bgfx2.in
 ../p8xemu -N -i bgfx2.in -c bgfx.img -l 120000000 -g bgfx2.ppm eeprom.bin > bgfx2.out 2>/dev/null || true
 
@@ -105,15 +107,15 @@ import sys
 bad = []
 out = open("bgfx2.out","rb").read().replace(b"\r", b"")
 
-# POINT reads back what was drawn. 3 = filled circle, 28 = the plotted pixel,
-# 0 = untouched corner, 224 = inside the box drawn AFTER PALETTE. The two
-# large values matter on their own: POINT has to return a whole BYTE, which is
-# the read-back half of 8 bpp.
-if b"\n3\n28\n0\n224\n" not in out:
-    bad.append("POINT sequence wrong; wanted 3,28,0,224 in %r"
-               % out[out.find(b"RUN"):out.find(b"RUN")+40])
+# POINT reads back the 565 colour through SIGNED 16-bit ints:
+#   $F81F magenta = -2017, $07E0 green = 2016, 0 = untouched, $F800 red = -2048.
+# The negative prints are the high pen byte coming home -- the read-back half
+# of 16 bpp -- wearing the signed-integer wart on purpose.
+if b"\n-2017\n2016\n0\n-2048\n" not in out:
+    bad.append("POINT sequence wrong; wanted -2017,2016,0,-2048 in %r"
+               % out[out.find(b"RUN"):out.find(b"RUN")+48])
 
-for kw in [b"30 PALETTE 3,15,0,15", b"60 CIRCLE 240,136,100,FILL",
+for kw in [b"20 COLOR RGB(31,0,0)", b"60 CIRCLE 240,136,100,FILL",
            b"80 CIRCLE 240,136,120", b"90 PLOT 400,40", b"100 PRINT POINT(240,136)"]:
     if out.count(kw) < 2:
         bad.append("LIST did not round-trip %r" % kw.decode())
@@ -122,8 +124,8 @@ d  = open("bgfx2.ppm","rb").read()
 px = d[d.index(b"255\n")+4:]
 W  = 480
 BLACK, RED, GREEN, MAGENTA = (0,0,0), (255,0,0), (0,255,0), (255,0,255)
-NAME = {BLACK:"pen $00", RED:"pen $E0 red", GREEN:"pen $1C green",
-        MAGENTA:"pen 3, PALETTE'd magenta"}
+NAME = {BLACK:"$0000", RED:"$F800 red", GREEN:"$07E0 green",
+        MAGENTA:"$F81F magenta"}
 def fb(x, y):
     i = (y*W + x)*3
     return tuple(px[i:i+3])
@@ -133,10 +135,10 @@ def want(x, y, c, why):
         bad.append("(%d,%d) is %s, want %s - %s"
                    % (x, y, NAME.get(got,got), NAME.get(c,c), why))
 
-# PALETTE recoloured pen 3 to magenta, and did NOT steal the drawing pen:
-# the box on line 40 must still be pen $E0 (red), not pen 3.
-want( 14,  14, RED,     "PALETTE stole the drawing pen (GPEN not restored)")
-want(240, 136, MAGENTA, "PALETTE did not recolour pen 3")
+# the box drew in red and the filled circle in RGB(31,0,31) magenta -- both
+# halves of both pens intact
+want( 14,  14, RED,     "the box lost its red (high pen byte dropped?)")
+want(240, 136, MAGENTA, "filled CIRCLE is not magenta")
 # CIRCLE ,FILL is solid; the bare CIRCLE is an outline with a gap inside it
 want(240, 236, MAGENTA, "filled CIRCLE does not reach its bottom edge")
 want(240,  16, GREEN,   "outline CIRCLE top not drawn")
@@ -149,7 +151,7 @@ if bad:
     print("BASIC-GFX TEST: FAIL")
     for b in bad: print("  " + b)
     sys.exit(1)
-print("BASIC-GFX TEST: draw, plot, circle, palette, point ok")
+print("BASIC-GFX TEST: draw, plot, circle, rgb, point ok")
 PY
 
 # --- part 3: CIRCLE's optional second radius makes it an ellipse ------------
@@ -199,7 +201,7 @@ PY
 # The glyph is 5x7 device pixels whatever the screen is, so these origins do NOT
 # scale with the panel -- only the clipping case has to move, to a 'W' that
 # really does straddle x=479.
-printf 'B\rbgfx\r10 CLS\r20 COLOR 224\r30 GTEXT 10,10,1,"A"\r40 COLOR 28\r50 GTEXT 40,10,1,"a"\r60 COLOR 3\r70 GTEXT 4,40,2,"A"\r80 COLOR 224\r90 GTEXT 470,80,1,"WW"\r100 GTEXT 5,110,1,""\r110 END\rRUN\rLIST\rBYE\r' \
+printf 'B\rbgfx\r10 CLS\r20 COLOR RGB(31,0,0)\r30 GTEXT 10,10,1,"A"\r40 COLOR RGB(0,63,0)\r50 GTEXT 40,10,1,"a"\r60 COLOR RGB(0,0,31)\r70 GTEXT 4,40,2,"A"\r80 COLOR RGB(31,0,0)\r90 GTEXT 470,80,1,"WW"\r100 GTEXT 5,110,1,""\r110 END\rRUN\rLIST\rBYE\r' \
     > bgfx4.in
 ../p8xemu -N -i bgfx4.in -c bgfx.img -l 200000000 -g bgfx4.ppm eeprom.bin > bgfx4.out 2>/dev/null || true
 
@@ -211,7 +213,7 @@ d  = open("bgfx4.ppm","rb").read()
 px = d[d.index(b"255\n")+4:]
 W  = 480
 BLACK, RED, GREEN, BLUE = (0,0,0), (255,0,0), (0,255,0), (0,0,255)
-NAME = {BLACK:"pen $00", RED:"pen $E0 red", GREEN:"pen $1C green", BLUE:"pen $03 blue"}
+NAME = {BLACK:"$0000", RED:"$F800 red", GREEN:"$07E0 green", BLUE:"$001F blue"}
 def fb(x, y):
     i = (y*W + x)*3
     return tuple(px[i:i+3])
@@ -287,8 +289,8 @@ fi
 #
 #   1. the far corner (479,271) must read back, and one pixel past it must not
 #      -- an off-by-one in the stride shows up here and nowhere else;
-#   2. 8 bpp really is 256 pens, not 4 masked to 2 bits, so pen 200 has to
-#      survive a round trip through the framebuffer.
+#   2. the colour survives the framebuffer round trip -- 5 and 200 are dim
+#      blues now rather than pens, but the identity check is the same.
 printf 'B\rbgfx\r10 CLS\r20 COLOR 5\r30 BOX 0,0,479,271,FILL\r40 COLOR 200\r50 PLOT 400,250\r60 PRINT "A";POINT(479,271);",";POINT(400,250);",";POINT(480,0)\r70 END\rRUN\rLIST\rBYE\r' \
     > bgfx6.in
 ../p8xemu -N -i bgfx6.in -c bgfx.img -l 400000000 eeprom.bin > bgfx6.out 2>/dev/null || true
@@ -309,7 +311,7 @@ if bad:
     print("BASIC-GFX TEST: FAIL")
     for b in bad: print("  " + b)
     sys.exit(1)
-print("BASIC-GFX TEST: full screen ok (479,271 reachable, 256 pens survive)")
+print("BASIC-GFX TEST: full screen ok (479,271 reachable, colours survive)")
 PY
 
-echo "BASIC-GFX TEST: PASS (draw, plot, circle, ellipse, palette, point, gtext, full screen)"
+echo "BASIC-GFX TEST: PASS (draw, plot, circle, ellipse, rgb, point, gtext, full screen)"

@@ -181,7 +181,7 @@ A line may hold several statements separated by `:` —
 | `BOX x0,y0,x1,y1[,FILL\|,NOFILL]` | rectangle — outline by default, solid with `FILL` |
 | `CIRCLE x,y,r[,FILL\|,NOFILL]` | circle of radius `r` about `x,y` |
 | `CIRCLE x,y,rx,ry[,FILL\|,NOFILL]` | **ellipse** — a second radius gives separate x and y radii |
-| `PALETTE pen,r,g,b` | recolour a pen; `r`,`g`,`b` are 0–15 |
+| `RGB(r,g,b)` | *function*: pack a colour — `r`,`b` 0–31, `g` 0–63 |
 | `GTEXT x,y,size,s$` | draw a string as graphics in the current `COLOR` |
 
 ### Graphics
@@ -253,27 +253,22 @@ A string that runs off the right-hand edge simply stops — it does not wrap.
 it is the one drawing statement BASIC performs *itself* rather than handing to
 the device (see below).
 
-**The screen.** 480×272, 8 bits a pixel, 256 pens. There is one geometry and
-no way to select another, so there is no `SCREEN` statement — it existed only
-while the device had two modes, and went with them.
+**The screen.** 480×272 in **RGB565 direct colour** — a pixel *is* its
+colour, 65,536 of them, no palette and no modes. `RGB(r,g,b)` packs one:
+five bits of red, six of green (the eye is fussiest there), five of blue.
 
 ```basic
-10 COLOR 200 : BOX 0,0,479,271,FILL
+10 COLOR RGB(31,0,0) : BOX 0,0,479,271,FILL    : REM a red screen
+20 COLOR RGB(31,63,31)                          : REM white
 ```
 
-A pen is a whole byte, and the power-on palette is a **3-3-2 ramp**: three bits
-of red, three of green, two of blue, read out of the pen number itself. So
-before you touch `PALETTE` at all,
+Arguments are masked to their fields. One wart, worn openly: BASIC's
+integers are signed 16-bit, so a bright colour **prints** as a negative
+number — `PRINT RGB(31,0,0)` says `-2048` — but stores and compares
+bit-for-bit, so `IF POINT(x,y) = RGB(31,0,0)` works exactly.
 
-| pen | colour |
-|---|---|
-| `0` | black |
-| `224` | red |
-| `28` | green |
-| `3` | blue |
-| `255` | white |
-
-`PALETTE` then replaces any of the 256 with any of 4096 colours.
+`PALETTE` is gone with the palette: there is nothing to install a colour
+into. Recolour-by-redraw is the trade stage 6 made for true colour.
 
 **Colours.** Each pen paints one of 4096 colours, set with `PALETTE`:
 
