@@ -46,10 +46,10 @@ underestimate next to the RTL edit.
 4. [x] **RTL**: `gfx_mem` loses `mode` and the RMW path; `gfx.v` loses `gmode`,
    `SETMODE` and the mode-conditional geometry; `tb_gfx.v` stops asking the
    device which mode it is in.
-5. **Generators/docs**: `gen_memmap.py` drops `$0C` from the GCMD list; the man
-   page, language guide, READMEs, GLOSSARY and the stage 2 design doc all
-   describe one mode. — the man page, language guide, both READMEs and GLOSSARY
-   are done; `gen_memmap.py` and the stage 2 doc are not.
+5. [x] **Generators/docs**: `gen_memmap.py` drops `$0C` from the GCMD list; the
+   man page, language guide, READMEs, GLOSSARY and the stage 2 design doc all
+   describe one mode. — all done; `STAGE2-DESIGN.md` carries a HISTORICAL
+   header saying what survived it and what did not, per the note below.
 6. [x] Rebuild and place. The LUT saving from 1-4 is the point: the design
    failed to place at 15,587/20,736 and this removes work rather than adding it.
    — It did not turn out to be the point. Removing the modes helped, but the

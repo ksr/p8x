@@ -77,9 +77,12 @@ into the RAM (`merged address FF to cell`) and the buffer maps via
    exercised. All suites and the co-sim pass.
 3. [x] `SCREEN` removed from BASIC; `$B0` left deliberately unassigned (saved
    .BAS files are tokenised and old programs on disk still contain it).
-4. Docs: man page, language guide, READMEs, GLOSSARY, `gen_memmap.py` all done.
-   Remaining: `STAGE2-DESIGN.md` describes the two-mode ABI -- superseded, so
-   it likely just needs a "historical" label rather than a rewrite.
+4. [x] Docs: man page, language guide, READMEs, GLOSSARY, `gen_memmap.py`, and
+   `STAGE2-DESIGN.md` now opens with a HISTORICAL header recording what of that
+   design survived (16-bit coordinates, 0-255 pens, the 12-bit palette, 80-col
+   GTEXT) and what did not (the modes themselves).
+
+Nothing remains open in this handoff.
 
 ## Open question, not area-related
 

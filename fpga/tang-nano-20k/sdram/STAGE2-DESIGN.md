@@ -1,5 +1,19 @@
 # Stage 2 — SCREEN modes and 8 bpp: the ABI
 
+> **HISTORICAL — superseded by stage 5 (`STAGE5-SINGLE-MODE.md`).** This
+> document designed a TWO-mode device, and the two-mode device shipped and then
+> was retired within the same branch: once the SDRAM framebuffer made 480x272 at
+> 8 bpp work, nothing wanted 240x136 back, and keeping mode 0 meant keeping the
+> read-modify-write path — a 2 bpp artefact — for no user. SETMODE (`GCMD
+> $0C`), BASIC's `SCREEN` and the pixel-doubled mode are all gone; the device is
+> single-mode. What SURVIVES from this design: the 16-bit coordinate registers
+> (now load-bearing, not foresight), the widened 0–255 `GCOL`/`PALETTE`, the
+> 256-entry palette of 12-bit RGB, and GTEXT's 80 columns. The compatibility
+> argument below ("mode 0 is the reset default") is the part that did not:
+> there were no existing mode-0 programs worth preserving beyond the repo's own
+> tests, which were updated instead. Kept as the record of why those decisions
+> were made.
+
 Stages 0 and 1 answered the hardware questions. This is the design the software
 has to live with, written down before any of it is built, because it is the part
 that cannot be changed later without breaking programs.
