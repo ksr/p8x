@@ -183,6 +183,7 @@ A line may hold several statements separated by `:` —
 | `CIRCLE x,y,rx,ry[,FILL\|,NOFILL]` | **ellipse** — a second radius gives separate x and y radii |
 | `PALETTE pen,r,g,b` | recolour a pen; `r`,`g`,`b` are 0–15 |
 | `GTEXT x,y,size,s$` | draw a string as graphics in the current `COLOR` |
+| `SCREEN n` | choose the display mode — `0` 240×136/4 pens, `1` 480×272/256 pens |
 
 ### Graphics
 
@@ -252,6 +253,25 @@ A string that runs off the right-hand edge simply stops — it does not wrap.
 `GTEXT` is not a console: there is no cursor, no scrolling and no line wrap, and
 it is the one drawing statement BASIC performs *itself* rather than handing to
 the device (see below).
+
+**Screen modes.** `SCREEN` chooses resolution and pen count:
+
+```basic
+10 SCREEN 1                     : REM 480x272, 256 pens
+20 COLOR 200 : BOX 0,0,479,271,FILL
+30 SCREEN 0                     : REM back to 240x136, 4 pens
+```
+
+| mode | size | pens | notes |
+|---|---|---|---|
+| `0` | 240×136 | 4 | the power-on mode |
+| `1` | 480×272 | 256 | `GTEXT` gets 80 columns instead of 40 |
+
+Mode 0 is what every program written before modes existed assumes, so nothing
+has to know this exists. Changing mode **clears the screen and reloads the
+palette** — every byte of the display means something different afterwards —
+but leaves the drawing pen alone. In mode 1 `COLOR` and `PALETTE` take pens
+0–255. An unsupported mode is an error, not a silent no-op.
 
 **Colours.** Each pen paints one of 4096 colours, set with `PALETTE`:
 

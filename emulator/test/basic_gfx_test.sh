@@ -272,20 +272,18 @@ if ! grep -q "SYNTAX ERROR" bgfx5.out; then
     fail "GTEXT with no string argument was accepted"
 fi
 # --- part 5: SCREEN mode 1 (480x272, 8 bpp, 256 pens) ------------------------
-# Driven through POKE because BASIC has no SCREEN statement yet -- this section
-# should be rewritten to use it once it lands. What is pinned here is the DEVICE
-# contract, which the RTL will have to match:
+# What is pinned here is the DEVICE contract, which the RTL will have to match:
 #
 #   1. mode 1 really is 480x272: the far corner (479,271) must read back, and
 #      one pixel past it must not.
 #   2. 8 bpp really is 256 pens, not 4 masked to 2 bits -- pen 200 has to
 #      survive a round trip through the framebuffer.
-#   3. an unknown mode must be REFUSED (GSTAT bit 0), not silently accepted,
-#      because a device that ignores SETMODE looks identical to one that has no
-#      modes at all.
-#   4. mode 0 must still be reachable afterwards, since it is what every
+#   3. mode 0 must still be reachable afterwards, since it is what every
 #      existing program assumes.
-printf 'B\rbgfx\r10 POKE 65320,1 : POKE 65317,12\r20 COLOR 5\r30 BOX 0,0,479,271,FILL\r40 COLOR 200\r50 PLOT 400,250\r60 PRINT "A";POINT(479,271);",";POINT(400,250);",";POINT(480,0)\r70 POKE 65320,9 : POKE 65317,12\r80 PRINT "E";PEEK(65318)\r90 POKE 65320,0 : POKE 65317,12\r100 PRINT "B";POINT(0,0)\r110 END\rRUN\rBYE\r' \
+#   4. an unknown mode must be REFUSED, not silently ignored -- a SCREEN that
+#      did nothing would leave the programmer drawing at the wrong resolution
+#      and blaming the drawing statements. Checked separately below.
+printf 'B\rbgfx\r10 SCREEN 1\r20 COLOR 5\r30 BOX 0,0,479,271,FILL\r40 COLOR 200\r50 PLOT 400,250\r60 PRINT "A";POINT(479,271);",";POINT(400,250);",";POINT(480,0)\r70 SCREEN 0\r80 PRINT "B";POINT(0,0)\r90 END\rRUN\rLIST\rBYE\r' \
     > bgfx6.in
 ../p8xemu -N -i bgfx6.in -c bgfx.img -l 400000000 eeprom.bin > bgfx6.out 2>/dev/null || true
 
@@ -298,10 +296,9 @@ got = out[i+1:out.find(b"\n", i+1)] if i >= 0 else b"?"
 if got != b"A5,200,0":
     bad.append("mode-1 probes are %r, want b'A5,200,0'" % got)
     bad.append("  (far corner 479,271 = pen 5; a 200 that survived 8 bpp; 480,0 off-screen = 0)")
-j = out.find(b"\nE")
-err = out[j+1:out.find(b"\n", j+1)] if j >= 0 else b"?"
-if err != b"E1":
-    bad.append("SETMODE 9 gave GSTAT=%r, want b'E1' - a bad mode must set the ERR bit" % err)
+for kw in [b"10 SCREEN 1", b"70 SCREEN 0"]:
+    if out.count(kw) < 2:
+        bad.append("LIST did not round-trip %r" % kw.decode())
 k = out.find(b"\nB")
 back = out[k+1:out.find(b"\n", k+1)] if k >= 0 else b"?"
 if back != b"B0":
@@ -312,5 +309,12 @@ if bad:
     sys.exit(1)
 print("BASIC-GFX TEST: screen mode 1 ok (480x272, 256 pens, bad mode refused)")
 PY
+
+# A mode the device does not have must be an error, not a no-op.
+printf 'B\rbgfx\r10 SCREEN 9\r20 END\rRUN\rBYE\r' > bgfx7.in
+../p8xemu -N -i bgfx7.in -c bgfx.img -l 200000000 eeprom.bin > bgfx7.out 2>/dev/null || true
+if ! grep -q "SYNTAX ERROR IN 10" bgfx7.out; then
+    fail "SCREEN 9 was accepted - an unsupported mode must be refused"
+fi
 
 echo "BASIC-GFX TEST: PASS (draw, plot, circle, ellipse, palette, point, gtext, modes)"

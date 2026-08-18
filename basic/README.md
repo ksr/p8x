@@ -51,8 +51,9 @@ README covers build internals and milestones.
 > `COLOR pen`, `CLS`, `PLOT x,y`, `LINE x0,y0,x1,y1`,
 > `BOX x0,y0,x1,y1[,FILL|,NOFILL]`, `CIRCLE x,y,r[,ry][,FILL|,NOFILL]`
 > (a second radius makes it an ellipse),
-> `PALETTE pen,r,g,b`, `GTEXT x,y,size,s$`, and the function `POINT(x,y)` which
-> reads a pixel back.
+> `PALETTE pen,r,g,b`, `GTEXT x,y,size,s$`, `SCREEN n` (mode 0 = 240x136 with 4
+> pens, mode 1 = 480x272 with 256), and the function `POINT(x,y)` which reads a
+> pixel back.
 > The drawing is done by the DEVICE, so a filled box costs the same few
 > instructions as an empty one. With no display fitted they print `?No display`
 > instead of quietly doing nothing.
