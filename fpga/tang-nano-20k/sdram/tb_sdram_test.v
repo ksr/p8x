@@ -20,7 +20,7 @@
 // compiled without sdram.v, so this is what it binds to.
 module sdram #(parameter FREQ = 27_000_000) (
     input clk, input clk_sdram, input resetn,
-    input [22:0] addr, input rd, input wr, input refresh,
+    input [22:0] addr, input rd, input wr, input wr_word, input refresh,
     input [7:0] din, output reg [7:0] dout,
     output reg data_ready, output reg busy,
     inout [31:0] SDRAM_DQ, output [10:0] SDRAM_A, output [1:0] SDRAM_BA,
@@ -31,12 +31,16 @@ module sdram #(parameter FREQ = 27_000_000) (
   // sequential plus 128 sparse -- because 8 MB of reg would be absurd.
   reg [7:0] seq_mem [0:65535];
   reg [7:0] spr_mem [0:127];
-  wire is_sparse = (addr[15:0] == 16'd0) && (addr[22:16] != 7'd0 || addr == 23'd0);
+  reg [7:0] wrd_mem [0:1023];      // the word-write region at $108000
+  // Routing has to be exact or the passes silently overwrite each other.
+  wire is_wrd = (addr[22:16] == 7'd16) && addr[15];
+  wire is_spr = !is_wrd && (addr[15:0] == 16'd0);
 
   integer i;
   initial begin
     for (i = 0; i < 65536; i = i + 1) seq_mem[i] = 8'hFF;
     for (i = 0; i < 128;   i = i + 1) spr_mem[i] = 8'hFF;
+    for (i = 0; i < 1024;  i = i + 1) wrd_mem[i] = 8'hFF;
     busy = 0; data_ready = 0; dout = 0;
   end
 
@@ -55,14 +59,23 @@ module sdram #(parameter FREQ = 27_000_000) (
       if (cyc == 1) begin
         busy <= 0;
         if (op == 1) begin
-          dout <= (a_lat[15:0] == 16'd0) ? spr_mem[a_lat[22:16]] : seq_mem[a_lat[15:0]];
+          dout <= ((a_lat[22:16]==7'd16) && a_lat[15]) ? wrd_mem[a_lat[9:0]]
+                : (a_lat[15:0] == 16'd0)                ? spr_mem[a_lat[22:16]]
+                :                                         seq_mem[a_lat[15:0]];
           data_ready <= 1;
         end
         op <= 0;
       end
     end else if (wr) begin
-      if (addr[15:0] == 16'd0) spr_mem[addr[22:16]] <= din;
-      else                     seq_mem[addr[15:0]]  <= din;
+      // wr_word writes all four lanes -- the whole point of the local
+      // modification, so the stub has to model it or the bench proves nothing.
+      if (is_wrd) begin
+        if (wr_word) begin
+          wrd_mem[{addr[9:2],2'd0}]   <= din;  wrd_mem[{addr[9:2],2'd1}] <= din;
+          wrd_mem[{addr[9:2],2'd2}]   <= din;  wrd_mem[{addr[9:2],2'd3}] <= din;
+        end else wrd_mem[addr[9:0]] <= din;
+      end else if (is_spr) spr_mem[addr[22:16]] <= din;
+      else                 seq_mem[addr[15:0]]  <= din;
       busy <= 1; cyc <= 3; op <= 0;
     end else if (rd) begin
       a_lat <= addr; busy <= 1; cyc <= 3; op <= 1;
@@ -91,11 +104,12 @@ module tb;
   initial begin
     // The design waits 16384 cycles for the SDRAM's power-on delay; at ~27 MHz
     // that is ~600 us, and the two passes then take a few ms.
-    #120_000_000;                       // 120 ms -- the two passes are ~1.4M cycles
+    #200_000_000;                       // 200 ms -- three passes now
 
     $display("state    = %0d (8 = DONE)", dut.st);
     $display("err_seq  = %0d", dut.err_seq);
     $display("err_spr  = %0d", dut.err_spr);
+    $display("err_wrd  = %0d", dut.err_wrd);
     $display("cycles   = %0d", cycles);
 
     if (dut.st !== 4'd8) begin
@@ -103,7 +117,7 @@ module tb;
       $display("  A hang here is almost certainly the refresh-priority arm.");
       $finish(1);
     end
-    if (dut.err_seq !== 16'd0 || dut.err_spr !== 16'd0) begin
+    if (dut.err_seq !== 16'd0 || dut.err_spr !== 16'd0 || dut.err_wrd !== 16'd0) begin
       $display("TB-SDRAM: FAIL - against a PERFECT memory the counts must be 0.");
       $display("  That means the addressing or the compare is wrong, not the SDRAM.");
       $finish(1);

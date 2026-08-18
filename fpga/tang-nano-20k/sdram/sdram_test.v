@@ -19,7 +19,13 @@
 //      wrongly make high addresses fold back onto low ones -- and a sequential
 //      test near address 0 cannot see it. Both patterns are derived from the
 //      FULL address, so a fold writes a value that does not match on read-back.
-//   3. Refresh runs throughout. A controller that reads back fine immediately
+//   3. The word-write mode (the local modification to the controller): a
+//      single write with wr_word must land in ALL FOUR byte lanes. Read back
+//      byte by byte, because a mode that wrote only one lane while claiming
+//      four would make every span fill leave three pixels in four untouched --
+//      and a span of one colour on a background of another might still LOOK
+//      plausible.
+//   4. Refresh runs throughout. A controller that reads back fine immediately
 //      but drops bits after a few milliseconds is a refresh bug, so the two
 //      passes are separated in time by the whole write phase.
 //
@@ -87,7 +93,7 @@ module sdram_test(
   end
 
   // ---- the controller -------------------------------------------------------
-  reg         rd, wr, refresh;
+  reg         rd, wr, wr_word, refresh;
   reg  [22:0] addr;
   reg  [7:0]  din;
   wire [7:0]  dout;
@@ -95,7 +101,7 @@ module sdram_test(
 
   sdram #(.FREQ(FREQ)) u_sdram (
     .clk(clk), .clk_sdram(clk_sdram), .resetn(resetn),
-    .addr(addr), .rd(rd), .wr(wr), .refresh(refresh),
+    .addr(addr), .rd(rd), .wr(wr), .wr_word(wr_word), .refresh(refresh),
     .din(din), .dout(dout), .data_ready(data_ready), .busy(busy),
     .SDRAM_DQ(IO_sdram_dq), .SDRAM_A(O_sdram_addr), .SDRAM_BA(O_sdram_ba),
     .SDRAM_nCS(O_sdram_cs_n), .SDRAM_nWE(O_sdram_wen_n),
@@ -137,10 +143,16 @@ module sdram_test(
   localparam SPARSE_N  = 23'd128;          // sparse pass: one byte per 64 KB, 8 MB
 
   localparam S_IDLE=0, S_WSEQ=1, S_RSEQ=2, S_RSEQ_W=3,
-             S_WSPR=4, S_RSPR=5, S_RSPR_W=6, S_REFRESH=7, S_DONE=8;
+             S_WSPR=4, S_RSPR=5, S_RSPR_W=6, S_REFRESH=7, S_DONE=8,
+             S_WWRD=9, S_RWRD=10, S_RWRD_W=11;
+  localparam WORD_N    = 23'd256;          // 256 word writes = 1 KB
+  // Deliberately NOT 64 KB-aligned: the sparse pass owns exactly one byte at
+  // every 64 KB boundary, so an aligned base would have the two tests fighting
+  // over the same address and each blaming the other.
+  localparam WORD_BASE = 23'h108000;
   reg [3:0]  st = S_IDLE, st_ret = S_IDLE;
   reg [22:0] idx = 0;
-  reg [15:0] err_seq = 0, err_spr = 0;     // saturating error counts
+  reg [15:0] err_seq = 0, err_spr = 0, err_wrd = 0;  // saturating error counts
   reg [7:0]  want_b;                    // NOT `expect`: reserved in SystemVerilog
 
   wire [22:0] spr_addr = {idx[6:0], 16'd0};   // 0, 64K, 128K, ... 8M
@@ -154,13 +166,13 @@ module sdram_test(
   wire can_issue = !busy && !rd && !wr;
 
   always @(posedge clk) begin
-    rd <= 0; wr <= 0; refresh <= 0; refresh_done <= 0;
+    rd <= 0; wr <= 0; wr_word <= 0; refresh <= 0; refresh_done <= 0;
 
     if (!resetn) begin
-      st <= S_IDLE; idx <= 0; err_seq <= 0; err_spr <= 0;
+      st <= S_IDLE; idx <= 0; err_seq <= 0; err_spr <= 0; err_wrd <= 0;
     end else if (refresh_needed && !busy && !rd && !wr
                  && st != S_REFRESH && st != S_DONE && st != S_IDLE
-                 && st != S_RSEQ_W && st != S_RSPR_W) begin
+                 && st != S_RSEQ_W && st != S_RSPR_W && st != S_RWRD_W) begin
       // Refresh takes priority over the test's own work, but ONLY from a state
       // where nothing is in flight. Excluding the two _W states is the whole
       // point: a read is issued in one state and answered by a one-cycle
@@ -204,8 +216,30 @@ module sdram_test(
       end
       S_RSPR_W: if (data_ready) begin
         if (dout != want_b && err_spr != 16'hFFFF) err_spr <= err_spr + 1'b1;
-        if (idx == SPARSE_N - 1) st <= S_DONE;
+        if (idx == SPARSE_N - 1) begin idx <= 0; st <= S_WWRD; end
         else begin idx <= idx + 1'b1; st <= S_RSPR; end
+      end
+
+      // ---- word writes: one write must fill all four lanes
+      S_WWRD: if (can_issue) begin
+        addr <= WORD_BASE + {idx[20:0], 2'd0};    // word-aligned
+        din  <= pattern(WORD_BASE + {idx[20:0], 2'd0});
+        wr <= 1; wr_word <= 1;
+        if (idx == WORD_N - 1) begin idx <= 0; st <= S_RWRD; end
+        else                          idx <= idx + 1'b1;
+      end
+      // Read back every BYTE. idx counts bytes; the value expected is the one
+      // written for the word this byte belongs to, i.e. the address with the
+      // low two bits cleared.
+      S_RWRD: if (can_issue) begin
+        addr   <= WORD_BASE + idx;
+        want_b <= pattern(WORD_BASE + {idx[22:2], 2'd0});
+        rd     <= 1; st <= S_RWRD_W;
+      end
+      S_RWRD_W: if (data_ready) begin
+        if (dout != want_b && err_wrd != 16'hFFFF) err_wrd <= err_wrd + 1'b1;
+        if (idx == (WORD_N << 2) - 1) st <= S_DONE;
+        else begin idx <= idx + 1'b1; st <= S_RWRD; end
       end
 
       S_DONE: ;                            // hold; the reporter takes over
@@ -216,7 +250,7 @@ module sdram_test(
   // ---- report ---------------------------------------------------------------
   // "SDRAM SEQ=xxxx SPR=xxxx PASS\r\n", repeated about once a second so a
   // terminal attached at any time sees it.
-  wire pass = (err_seq == 0) && (err_spr == 0);
+  wire pass = (err_seq == 0) && (err_spr == 0) && (err_wrd == 0);
   reg  [7:0]  ch;
   reg  [5:0]  mi = 0;                      // message index
   reg  [24:0] tick = 0;
@@ -230,7 +264,7 @@ module sdram_test(
     hex = (n < 10) ? (8'h30 + n) : (8'h41 + n - 4'd10);
   endfunction
 
-  localparam MSGLEN = 6'd30;
+  localparam MSGLEN = 6'd38;
   always @(*) begin
     case (mi)
       0:  ch = "S";  1:  ch = "D";  2:  ch = "R";  3:  ch = "A";  4:  ch = "M";
@@ -240,12 +274,15 @@ module sdram_test(
       14: ch = " ";  15: ch = "S";  16: ch = "P";  17: ch = "R";  18: ch = "=";
       19: ch = hex(err_spr[15:12]);  20: ch = hex(err_spr[11:8]);
       21: ch = hex(err_spr[7:4]);    22: ch = hex(err_spr[3:0]);
-      23: ch = " ";
+      23: ch = " ";  29: ch = "W"; 30: ch = "D"; 31: ch = "=";
+      32: ch = hex(err_wrd[15:12]);  33: ch = hex(err_wrd[11:8]);
+      34: ch = hex(err_wrd[7:4]);    35: ch = hex(err_wrd[3:0]);
+      36: ch = 8'h0D;
       24: ch = pass ? "P" : "F";
-      25: ch = pass ? "A" : "A";
+      25: ch = "A";
       26: ch = pass ? "S" : "I";
       27: ch = pass ? "S" : "L";
-      28: ch = 8'h0D;
+      28: ch = " ";
       default: ch = 8'h0A;
     endcase
   end

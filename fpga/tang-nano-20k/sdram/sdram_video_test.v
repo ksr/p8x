@@ -86,7 +86,7 @@ module sdram_video_test(
 
   sdram #(.FREQ(FREQ)) u_sdram (
     .clk(clk), .clk_sdram(clk_sdram), .resetn(resetn),
-    .addr(c_addr), .rd(c_rd), .wr(c_wr), .refresh(c_refresh),
+    .addr(c_addr), .rd(c_rd), .wr(c_wr), .wr_word(1'b0), .refresh(c_refresh),
     .din(c_din), .dout(c_dout), .dout32(c_dout32),
     .data_ready(c_ready), .busy(c_busy),
     .SDRAM_DQ(IO_sdram_dq), .SDRAM_A(O_sdram_addr), .SDRAM_BA(O_sdram_ba),

@@ -1,7 +1,15 @@
 // sdram.v -- SDRAM controller for the Tang Nano 20K's in-package 64 Mbit SDRAM.
 //
-// VENDORED, NOT WRITTEN HERE. Source: nand2mario/sdram-tang-nano-20k, Apache
-// License 2.0. Unmodified except for this header.
+// VENDORED. Source: nand2mario/sdram-tang-nano-20k, Apache License 2.0.
+//
+// LOCAL MODIFICATION (2026-08-17): added the `wr_word` input, marked <P8X> in
+// the body. Asserted with `wr`, it writes all four byte lanes instead of one.
+// The change is three lines because the controller was already there: it drives
+// dq_out with the byte replicated across all four lanes and uses DQM to let
+// exactly one through, so clearing DQM writes the lot. That turns a run of four
+// same-coloured pixels into ONE write, which is what CLS, BOXFILL and the
+// span-filled circle and ellipse are made of -- see STAGE4-DESIGN.md. Nothing
+// else is touched; with wr_word tied low this is the original controller.
 //
 // It is here as a KNOWN-GOOD REFERENCE, deliberately, so that "does this SDRAM
 // work on this board" and "is my controller correct" stay two separate
@@ -76,6 +84,7 @@ module sdram
     input             resetn,
     input             rd,           // command: read
     input             wr,           // command: write
+    input             wr_word,      // <P8X> with wr: write all 4 lanes, not 1
     input             refresh,      // command: auto refresh. 4096 refresh cycles in 64ms. Once per 15us.
     input      [22:0] addr,         // byte address, buffered at rd/wr pulse time
     input       [7:0] din,          // data input, buffered at wr pulse time
@@ -127,6 +136,7 @@ localparam [10:0] MODE_REG = {4'b0, CAS[2:0], BURST_MODE, BURST_LEN};
 reg cfg_now;            // pulse for configuration
 reg [3:0] cycle;        // each operation (config/read/write) are max 7 cycles
 reg [7:0] din_buf;      // set at wr=1 pulse time
+reg       word_buf;     // <P8X> wr_word, latched with the address
 reg [22:0] addr_buf;
 
 //
@@ -178,7 +188,7 @@ always @(posedge clk) begin
             SDRAM_A <= addr[ROW_WIDTH+COL_WIDTH-1+2:COL_WIDTH+2];      // 12-bit row address
             state <= rd ? READ : WRITE;
             addr_buf <= addr;
-            if (wr) din_buf <= din;
+            if (wr) begin din_buf <= din; word_buf <= wr_word; end  // <P8X>
             cycle <= 4'd1;
             busy <= 1'b1;
         end else if (refresh) begin
@@ -226,7 +236,11 @@ always @(posedge clk) begin
             {SDRAM_nRAS, SDRAM_nCAS, SDRAM_nWE} <= CMD_Write;
             SDRAM_A[10] <= 1'b1;        // set auto precharge
             SDRAM_A[9:0] <= {1'b0, addr_buf[COL_WIDTH-1+2:2]};  // column address
-            SDRAM_DQM <= addr_buf[1:0] == 2'd0 ? 4'b1110 :
+            // <P8X> word_buf: 0 masks all but the addressed lane (the original
+            // behaviour); 1 opens all four, and dq_out already holds the byte
+            // replicated across them.
+            SDRAM_DQM <= word_buf         ? 4'b0000 :
+                         addr_buf[1:0] == 2'd0 ? 4'b1110 :
                          addr_buf[1:0] == 2'd1 ? 4'b1101 :
                          addr_buf[1:0] == 2'd2 ? 4'b1011 : 4'b0111;     // only write the correct byte
             off <= addr_buf[1:0];
