@@ -55,7 +55,10 @@ module tb;
     pclk_d <= pclk;
     if (capturing && pclk && !pclk_d && de) begin
       if (row == 0 && col < 480) seen[col] = {r[4:2], g[5:3], b[4:3]};
-      if (col == 0 && row < 272)  rowval[row] = {r[4:2], g[5:3], b[4:3]};
+      // Sample column 1, not column 0: the first pixel of every line is
+      // latched before the bank swap and comes from the previous buffer, so
+      // sampling it measures that bug instead of the row mapping.
+      if (col == 1 && row < 272)  rowval[row] = {r[4:2], g[5:3], b[4:3]};
       col = col + 1;
       if (col == 480) begin col = 0; row = row + 1; end
     end
@@ -72,6 +75,12 @@ module tb;
       capturing = 0;
     end
   endtask
+
+  reg trace=0;
+  always @(posedge clk)
+    if (trace && dut.eol)
+      $display("  eol py=%0d  fetching line %0d  (bank now %0d)",
+               dut.py, dut.nextf, dut.bank);
 
   initial begin
     // Row 0 is a RAMP: column c must decode to c&255. A duplicated, shifted or
@@ -95,6 +104,7 @@ module tb;
              dut.fetching, dut.fw, dut.inflight, rd, dut.bank, underruns);
     $display("probe: lbuf[0]=%08x lbuf[1]=%08x lbuf[128]=%08x",
              dut.lbuf[0], dut.lbuf[1], dut.lbuf[128]);
+    trace=1; @(posedge dut.frame_tick); trace=0;
     capture_frame;
 
     // ROW mapping: panel row R must show framebuffer row R. Row 0 is the ramp

@@ -87,7 +87,13 @@ module sdram_video #(
   wire [9:0] ax = (nx < H_ACT) ? nx : 10'd0;
 
   reg [31:0] lb_q;
-  always @(posedge clk) lb_q <= lbuf[{bank, ax[8:2]}];
+  // The pixel fetched during the LAST period of a line belongs to the NEXT
+  // line, and the next line lives in the other buffer -- but the swap does not
+  // happen until end-of-line, one phase later. Reading `bank` there hands back
+  // the previous line's first pixel, which is why column 0 of every row showed
+  // stale data while columns 1..479 were perfect.
+  wire rd_bank = bank ^ (px == H_TOT-1);
+  always @(posedge clk) lb_q <= lbuf[{rd_bank, ax[8:2]}];
   wire [7:0] pixel = (ax[1:0] == 2'd0) ? lb_q[7:0]   :
                      (ax[1:0] == 2'd1) ? lb_q[15:8]  :
                      (ax[1:0] == 2'd2) ? lb_q[23:16] : lb_q[31:24];
