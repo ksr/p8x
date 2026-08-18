@@ -148,16 +148,29 @@ module sdram_video #(
   // panel one line late: the top row is duplicated (it is still there while the
   // pipeline fills) and the last row falls off the bottom, which is exactly how
   // it presented -- a thick top line and no bottom line on a full-screen box.
-  // UNRESOLVED -- see the note below. +2 leaves a uniform one-row lag; +3
-  // overshoots to a one-row lead. That both are wrong by one in opposite
-  // directions means the ACTIVE and BLANKING paths do not agree: the clamp
-  // `(adv < V_ACT) ? adv : 0` also truncates the tail of active video, so the
-  // last lines are fetched as line 0 rather than being left alone. The fix is
-  // probably to separate "which line to fetch" from "are we in blanking",
-  // rather than to keep adjusting the constant. Left at +2 as the closer of the
-  // two; tb_sdram_scanout.v reproduces the fault exactly.
-  wire [9:0] adv = (py >= V_TOT-2) ? (py + 10'd2 - V_TOT) : (py + 10'd2);
-  wire [9:0] fetch_line = (adv < V_ACT) ? adv : 10'd0;
+  // Which framebuffer line the NEXT fetch should load, tracked explicitly
+  // rather than derived from py. Deriving it needed modular arithmetic whose
+  // wrap boundary disagreed with the blanking clamp, and the two together were
+  // wrong by one in opposite directions depending on the constant -- which is a
+  // sign the expression was encoding two different ideas at once.
+  //
+  // A fetch issued at end-of-line is displayed TWO swaps later: the swap at
+  // that same end-of-line hands over the buffer filled during the previous
+  // line, not the one about to be filled. The counter is primed during vertical
+  // blanking so it reaches 0 the right number of lines before active video.
+  //
+  // STILL OFF BY ONE ROW (panel row N shows fb row N-1). The counter DID fix
+  // the real problem -- the lag is now uniform, with no duplicated top row and
+  // no wrap anomaly, where the old modular expression was wrong by different
+  // amounts in different places. What is left is a single clean constant.
+  //
+  // The trap for whoever finishes this: moving the prime point by ONE line
+  // changes the mapping by TWO rows (V_TOT-3 gives lag 1, V_TOT-4 gives lead
+  // 1). So the answer is NOT another prime-point value -- something advances
+  // twice per line, or the fetch-to-display distance is not the 2 swaps assumed
+  // here. Instrument the actual swap/display relationship rather than bisecting
+  // the constant, which is what ate the last few iterations.
+  reg [9:0] nextf;
 
   always @(posedge clk) begin
     // The arbiter takes a request when it can, which may not be this cycle, so
@@ -174,7 +187,7 @@ module sdram_video #(
       // with no reset is X forever in simulation -- which is why this bench saw
       // nothing fetched at all. On hardware the flop powers up at 0 and it
       // limps along, so the fault is invisible on the board and total in sim.
-      rd <= 0; inflight <= 0;
+      rd <= 0; inflight <= 0; nextf <= 0;
     end else if (eol) begin
       // Swap, and judge the fetch that was supposed to have finished by now.
       // `primed` suppresses the very first line, where nothing has been asked
@@ -186,7 +199,10 @@ module sdram_video #(
       // Explicit width. `fetch_line * STRIDE` in a narrow context is how this
       // project already lost the top of a framebuffer address once: a y*60 that
       // wrapped inside 13 bits and folded the bottom of the screen onto the top.
-      faddr    <= FB_BASE + ({13'd0, fetch_line} * STRIDE);
+      faddr    <= FB_BASE + ({13'd0, nextf} * STRIDE);
+      // prime so that the fetch two lines before active video loads line 0
+      if (py == V_TOT-3) nextf <= 10'd0;   // see the note below
+      else if (nextf < V_ACT-1) nextf <= nextf + 10'd1;
       fw       <= 0;
       fetching <= 1;
       inflight <= 0;
