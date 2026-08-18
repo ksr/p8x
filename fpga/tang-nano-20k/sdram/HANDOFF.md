@@ -65,19 +65,21 @@ into the RAM (`merged address FF to cell`) and the buffer maps via
 
 ## Then, in order
 
-1. **Load and confirm on hardware.** Nothing since the 23:48 bitstream has been
-   on the board. `BOX 0,0,479,271` should have all four edges, and the `I`
-   command should still print the model string (the IDENTIFY path was rewritten).
-2. Pixel-assertion tests: `gfx_test.sh` and the five parts of
-   `basic_gfx_test.sh` still assume 240x136, four named pens and a 2x-doubled
-   PPM. Two mechanical changes throughout: PPM indexing loses the doubling
-   (`((y*2*W)+x*2)*3` -> `(y*480+x)*3`), and the pen->colour map becomes the
-   3-3-2 ramp (pen 1 = `(0,0,85)`, 2 = `(0,0,170)`, 3 = `(0,0,255)`).
-   THIS IS THE BULK OF THE REMAINING WORK.
-3. Remove `SCREEN` from BASIC (token `$B0`, KWTAB, dispatch, `DOSCRN`) -- it is
-   vestigial now and reports an error, since `SETMODE` no longer exists.
-4. Docs: `gen_memmap.py` GCMD list, man page, language guide, READMEs, GLOSSARY.
-   `STAGE2-DESIGN.md` describes the two-mode ABI and is superseded.
+1. [x] **Load and confirm on hardware.** Done, from FLASH, after a power cycle:
+   `I` prints the model string through the rewritten IDENTIFY against a real
+   card; `BOX 0,0,479,271` reads back pen 224 at all four extreme edges, with
+   the pixel one inside each edge background (outline exactly one pixel);
+   `BOX ...,FILL` interior reads back and stops at its edge.
+2. [x] Pixel-assertion tests -- reworked, and it was more than mechanical: two
+   payload cases had quietly stopped testing anything (a "full-screen" box at
+   (239,135), a clipping line to x=255 that is now on-screen), and the pens
+   moved to the 3-3-2 primaries $E0/$1C/$03 so all eight pen bits are
+   exercised. All suites and the co-sim pass.
+3. [x] `SCREEN` removed from BASIC; `$B0` left deliberately unassigned (saved
+   .BAS files are tokenised and old programs on disk still contain it).
+4. Docs: man page, language guide, READMEs, GLOSSARY, `gen_memmap.py` all done.
+   Remaining: `STAGE2-DESIGN.md` describes the two-mode ABI -- superseded, so
+   it likely just needs a "historical" label rather than a rewrite.
 
 ## Open question, not area-related
 
@@ -111,8 +113,17 @@ before trusting column 0.
 
 ## State
 
-Branch `sdram-framebuffer`, `main` untouched throughout. `p8x_lcd.fs` is current
-and has never been loaded -- the board still holds the 23:48 bitstream (left
-edge fixed, one-row shift, no bottom line at 271). Flash holds the original
-240x136 build, so a power cycle reverts. The SD card is current (`basic.bin`
-10,458).
+Branch `sdram-framebuffer`, `main` untouched throughout. The current
+`p8x_lcd.fs` (7,226 LUT4 build, md5 291571a2...) is IN FLASH and verified
+booting from it after a power cycle: monitor, SD IDENTIFY, OS boot, BASIC, and
+the full-screen box read-backs all pass. **The old 240x136 flash fallback is
+gone** -- a power cycle now brings up this build, so recovering from a bad
+future bitstream means re-flashing, not power-cycling. The SD card is current.
+
+Two operational notes for whoever drives the board over serial next:
+
+- **Opening the serial port resets the machine.** Any scripted interaction must
+  do everything in ONE session; a second open finds the monitor again, and its
+  `?` replies to BASIC lines look confusingly like an interpreter fault.
+- BASIC spells the filled box `BOX x0,y0,x1,y1,FILL`; `BOXFILL` is the DEVICE
+  command name and is a syntax error in BASIC.
