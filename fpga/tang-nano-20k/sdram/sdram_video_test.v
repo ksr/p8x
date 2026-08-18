@@ -119,8 +119,8 @@ module sdram_video_test(
 
   sdram_video #(.H_ACT(H_ACT), .V_ACT(V_ACT), .FB_BASE(23'd0)) u_video (
     .clk(clk), .rst(!resetn || painting),
-    .rd(v_rd), .addr(v_addr), .dout32(c_dout32),
-    .data_ready(c_ready && !painting), .busy(c_busy), .want_bus(v_want),
+    .rd(v_rd), .ack(v_rd && !c_busy && !painting), .addr(v_addr), .dout32(c_dout32),
+    .data_ready(c_ready && !painting), .want_bus(v_want),
     .pclk(lcd_clk), .de(lcd_de), .r(lcd_r), .g(lcd_g), .b(lcd_b),
     .underruns(underruns), .frame_tick(frame_tick));
 

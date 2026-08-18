@@ -50,7 +50,25 @@ module p8x_top(
   output [5:0] lcd_g,
   output [4:0] lcd_b,
 `endif
-  output [5:0] led);       // active-LOW
+  output [5:0] led         // active-LOW
+
+`ifdef LCD
+  ,
+  // The in-package SDRAM. These names are MAGIC -- apicula bonds them to the
+  // dedicated pads and they must NOT appear in the .cst. See
+  // fpga/tang-nano-20k/sdram/README.md for the controlled experiment.
+  output        O_sdram_clk,
+  output        O_sdram_cke,
+  output        O_sdram_cs_n,
+  output        O_sdram_cas_n,
+  output        O_sdram_ras_n,
+  output        O_sdram_wen_n,
+  inout  [31:0] IO_sdram_dq,
+  output [10:0] O_sdram_addr,
+  output [1:0]  O_sdram_ba,
+  output [3:0]  O_sdram_dqm
+`endif
+  );
 
   // ---- power-on reset: hold for 256 clocks after configuration ----
   reg [8:0] por = 9'd0;
@@ -142,27 +160,88 @@ module p8x_top(
            .card_ready(card_ready));
 
 `ifdef LCD
-  // ---- graphics display ($FF20..$FF2E) + the panel ----
-  // The engine and the scanout SHARE one framebuffer port -- true dual port
-  // halves a Gowin block's usable depth and would cost 8 blocks instead of 4.
-  // sc_en hands the port to the scanout; the engine holds for that cycle.
-  wire [7:0]  gfx_rdata, sc_data;
-  wire [12:0] sc_addr;
-  wire        sc_en;
-  wire [1:0]  sc_pen;
+  // The SDRAM chip is clocked from a 225-degree phase-shifted copy of the
+  // system clock -- the shift is what buys setup/hold at the pads. Same rPLL
+  // parameters Gowin's own generator produces for this board (see
+  // sdram/sdram_test.v), and the PLL does NOT multiply: 27 MHz in, 27 out.
+  wire clk_sdram, pll_lock;
+  rPLL #(
+    .FCLKIN("27"), .IDIV_SEL(1), .FBDIV_SEL(1), .ODIV_SEL(32),
+    .PSDA_SEL("1010"), .DUTYDA_SEL("1000"), .DEVICE("GW2A-18C"),
+    .DYN_IDIV_SEL("false"), .DYN_FBDIV_SEL("false"), .DYN_ODIV_SEL("false"),
+    .DYN_DA_EN("false"), .CLKFB_SEL("internal"),
+    .CLKOUT_BYPASS("false"), .CLKOUTP_BYPASS("false"), .CLKOUTD_BYPASS("false"),
+    .CLKOUTD_SRC("CLKOUT"), .CLKOUT_DLY_STEP(0), .CLKOUTP_DLY_STEP(0)
+  ) SDPLL (
+    .CLKIN(clk), .CLKFB(1'b0), .RESET(1'b0), .RESET_P(1'b0),
+    .FBDSEL(6'b0), .IDSEL(6'b0), .ODSEL(6'b0),
+    .PSDA(4'b0), .DUTYDA(4'b0), .FDLY(4'b0),
+    .CLKOUT(), .CLKOUTP(clk_sdram), .CLKOUTD(), .CLKOUTD3(), .LOCK(pll_lock));
+
+  // ---- graphics display ($FF20..$FF2F) + the panel ----
+  // The framebuffer lives in the in-package SDRAM now, not block RAM. Three
+  // masters share it through sdram_arb: the scanout (which cannot stall),
+  // refresh (which cannot be deferred), and the engine (which can wait). That
+  // trades the four blocks the old framebuffer used for the one the scanout's
+  // line buffer needs -- and it is what makes mode 1 (480x272, 256 pens)
+  // possible at all, since the panel's own resolution never fitted in BSRAM at
+  // any depth.
+  wire [7:0]  gfx_rdata;
+  wire [7:0]  sc_pen;
   wire [11:0] sc_rgb;
+
+  wire        sd_rd, sd_wr, sd_word, sd_refresh;
+  wire [22:0] sd_addr;
+  wire [7:0]  sd_din, sd_dout;
+  wire [31:0] sd_dout32;
+  wire        sd_ready, sd_busy;
+
+  sdram #(.FREQ(27_000_000)) SDRAM(
+    .clk(clk), .clk_sdram(clk_sdram), .resetn(!rst),
+    .addr(sd_addr), .rd(sd_rd), .wr(sd_wr), .wr_word(sd_word),
+    .refresh(sd_refresh), .din(sd_din),
+    .dout(sd_dout), .dout32(sd_dout32), .data_ready(sd_ready), .busy(sd_busy),
+    .SDRAM_DQ(IO_sdram_dq), .SDRAM_A(O_sdram_addr), .SDRAM_BA(O_sdram_ba),
+    .SDRAM_nCS(O_sdram_cs_n), .SDRAM_nWE(O_sdram_wen_n),
+    .SDRAM_nRAS(O_sdram_ras_n), .SDRAM_nCAS(O_sdram_cas_n),
+    .SDRAM_CLK(O_sdram_clk), .SDRAM_CKE(O_sdram_cke), .SDRAM_DQM(O_sdram_dqm));
+
+  // Every row needs refreshing every 64 ms; a pulse every 15 us covers it,
+  // since the controller refreshes all banks per pulse.
+  reg [11:0] refr = 0;
+  wire       refr_now = (refr == 12'd405);
+  always @(posedge clk) refr <= refr_now ? 12'd0 : refr + 1'b1;
+
+  wire        v_req, v_ack, v_ready;
+  wire [22:0] v_addr;
+  wire        e_req, e_we, e_word, e_ack, e_ready;
+  wire [22:0] e_addr;
+  wire [7:0]  e_din;
+
+  sdram_arb ARB(
+    .clk(clk), .rst(rst),
+    .c_rd(sd_rd), .c_wr(sd_wr), .c_wr_word(sd_word), .c_refresh(sd_refresh),
+    .c_addr(sd_addr), .c_din(sd_din), .c_dout(sd_dout), .c_dout32(sd_dout32),
+    .c_ready(sd_ready), .c_busy(sd_busy),
+    .s_req(v_req), .s_addr(v_addr), .s_ack(v_ack), .s_ready(v_ready),
+    .f_req(refr_now), .f_ack(),
+    .e_req(e_req), .e_we(e_we), .e_word(e_word), .e_addr(e_addr),
+    .e_din(e_din), .e_ack(e_ack), .e_ready(e_ready));
 
   gfx GFX(.clk(clk), .rst(rst),
           .sel(is_gfx), .a(mem_addr[3:0]),
           .wr(cen && mem_we && is_gfx), .rd_stb(cen && mem_rd && is_gfx),
           .wdata(mem_dout), .rdata(gfx_rdata),
-          .sc_en(sc_en), .sc_addr(sc_addr), .sc_data(sc_data),
-          .sc_pen(sc_pen), .sc_rgb(sc_rgb));
+          .sc_pen(sc_pen), .sc_rgb(sc_rgb),
+          .e_req(e_req), .e_we(e_we), .e_word(e_word), .e_addr(e_addr),
+          .e_din(e_din), .e_ack(e_ack), .e_ready(e_ready), .e_dout(sd_dout));
 
-  video_rgb VID(.clk(clk), .rst(rst),
-          .fb_en(sc_en), .fb_addr(sc_addr), .fb_data(sc_data), .fb_pen(sc_pen), .fb_rgb(sc_rgb),
-          .pclk(lcd_clk), .de(lcd_de), .hs(), .vs(),
-          .r(lcd_r), .g(lcd_g), .b(lcd_b));
+  sdram_video VID(.clk(clk), .rst(rst),
+          .rd(v_req), .ack(v_ack), .addr(v_addr), .dout32(sd_dout32),
+          .data_ready(v_ready), .want_bus(),
+          .pclk(lcd_clk), .de(lcd_de), .r(lcd_r), .g(lcd_g), .b(lcd_b),
+          .underruns(), .frame_tick());
+
 `else
   wire [7:0] gfx_rdata = 8'hFF;
 `endif

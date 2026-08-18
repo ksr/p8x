@@ -43,11 +43,11 @@ module sdram_video #(
   input             rst,
 
   // SDRAM controller port (shared; this module only ever reads)
-  output reg        rd,
+  output reg        rd,           // HELD until ack (arbiter request/ack)
+  input             ack,
   output reg [22:0] addr,
   input      [31:0] dout32,
   input             data_ready,
-  input             busy,
   output            want_bus,       // 1 while a line fetch is outstanding
 
   // to the panel
@@ -144,7 +144,12 @@ module sdram_video #(
   wire [9:0] fetch_line = (next_line < V_ACT) ? next_line : 10'd0;
 
   always @(posedge clk) begin
-    rd <= 0;
+    // The arbiter takes a request when it can, which may not be this cycle, so
+    // rd is a LEVEL held until ack -- not the one-cycle pulse the bare
+    // controller wanted. Pulsing it here would drop any fetch that arrived
+    // while the engine or refresh held the bus, and a dropped fetch is a
+    // dropped scanline.
+    rd <= rd & ~ack;
     if (rst) begin
       fetching <= 0; fw <= 0; bank <= 0; underruns <= 0; primed <= 0;
     end else if (eol) begin
@@ -166,10 +171,11 @@ module sdram_video #(
         lbuf[{~bank, fw[6:0]}] <= dout32;
         if (fw == WORDS[7:0]-1) begin fetching <= 0; fw <= WORDS[7:0]; end
         else                          fw <= fw + 1'b1;
-      end else if (!busy && !rd) begin
-        // Same handshake rule stage 0 had to learn: `busy` does not rise until
-        // the cycle after the controller sees rd, so !busy alone lets a second
-        // read into the gap where it is swallowed.
+      end else if (!rd) begin
+        // No busy test at all now: the arbiter owns that rule (see sdram_arb.v),
+        // which is precisely why it was given a request/ack interface -- every
+        // master reimplementing the controller's handshake is how stage 0 lost
+        // half of memory to a swallowed command.
         addr <= faddr + {13'd0, fw, 2'd0};
         rd   <= 1;
       end
