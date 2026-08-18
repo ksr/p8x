@@ -2,7 +2,7 @@
 
 - [P8X Project](project_p8x.md) — Hand-built 8-bit TTL homebrew CPU at ~/Documents/Projects/p8x; architecture, conventions, current backlog
 - [P8X FPGA plan](project_p8x_fpga.md) — planned standalone FPGA P8X (same microarch, emulator = golden ref); TTL bus build continues but delayed
-- [P8X Workflow](feedback_p8x_workflow.md) — Commit directly to main, no PRs or feature branches (solo project)
+- [P8X Workflow](feedback_p8x_workflow.md) — Commit directly to main, no PRs; branches only when the user asks (e.g. sdram-framebuffer)
 - [P8X Decoupling Caps](feedback_p8x_decoupling_caps.md) — every new card needs per-IC 100nF caps; all through-hole, no SMD
 - [Keep p8cc.py](project_p8cc_keep_python.md) — self-hosting the C compiler ADDS a C version alongside; never delete the Python bootstrap
 - [Docs before sync](feedback_p8x_docs_before_sync.md) — before asking to sync, verify ALL docs current (comments, HELP, READMEs, theory docs, tables, PDFs, BACKLOG)

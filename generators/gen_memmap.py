@@ -53,7 +53,7 @@ MAP = [
     ('I/O ports ($FF00-$FFFF)', 'GX1', 0xFF22, 'draw X1 / SETPAL blue  (0-239)'),
     ('I/O ports ($FF00-$FFFF)', 'GY1', 0xFF23, 'draw Y1 (0-135)'),
     ('I/O ports ($FF00-$FFFF)', 'GCOL', 0xFF24, 'pen 0-3 (also the pen SETPAL rewrites)'),
-    ('I/O ports ($FF00-$FFFF)', 'GCMD', 0xFF25, 'write executes: 1 PLOT 2 LINE 3 BOX 4 BOXFILL 5 CLS 6 SETPAL 7 CIRCLE 8 CIRCLEFILL 9 POINT A ELLIPSE B ELLIPSEFILL / F1 RESET F2 IDENT'),
+    ('I/O ports ($FF00-$FFFF)', 'GCMD', 0xFF25, 'write executes: 1 PLOT 2 LINE 3 BOX 4 BOXFILL 5 CLS 6 SETPAL 7 CIRCLE 8 CIRCLEFILL 9 POINT A ELLIPSE B ELLIPSEFILL C SETMODE / F1 RESET F2 IDENT'),
     ('I/O ports ($FF00-$FFFF)', 'GSTAT', 0xFF26, 'read: bit7 BUSY, bit0 ERR (unknown command)'),
     ('I/O ports ($FF00-$FFFF)', 'GDATA', 0xFF27, 'read: IDENT record stream, else the last POINT result'),
     ('I/O ports ($FF00-$FFFF)', 'GPARM', 0xFF28, 'scalar argument: CIRCLE/ELLIPSE x-radius'),
