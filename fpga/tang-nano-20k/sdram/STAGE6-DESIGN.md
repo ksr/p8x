@@ -146,6 +146,18 @@ tests looked greener than they were):
 ## Rejected alternatives, for the record
 
 - **4-4-4 packed (12 bpp):** byte-straddling pixels, RMW returns. No.
+- **24 bpp (8-8-8):** the panel's data bus is physically 16 wires, so the
+  bottom 3-2-3 bits of every pixel would be paid for and then discarded at the
+  pins every frame -- and a 24-bit colour does not fit the machine's 16-bit
+  integer model, so `POINT` could not return one and BASIC could not hold one.
+  Packing is the worst of any depth (every fourth pixel straddles a word);
+  padding to 32 bpp doubles bandwidth again and breaks one-activation-per-line
+  (480 words > a 256-word row). Dithering, the one honest use of deeper
+  source data on a 565 panel, belongs in the image-conversion tool on the
+  host, offline, not in the framebuffer. RGB565 is the natural ceiling: the
+  panel's native depth, the machine's word size, exactly two pixels per bus
+  word, and a line in one row. Everything below it is a choice; everything
+  above it fights the panel, the CPU and the memory at once. No.
 - **4 bpp / 16 pens:** halves bandwidth the design no longer needs (34% LUT4,
   scanout comfortably in budget) and packs two pixels per byte — RMW again,
   backwards. No.
