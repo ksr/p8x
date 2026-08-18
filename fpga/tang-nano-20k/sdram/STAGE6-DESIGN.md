@@ -1,11 +1,16 @@
 # Stage 6 — 16 bpp direct colour: RGB565 end to end
 
-> **DESIGN, not started.** Written after stage 5 shipped (single-mode 480x272
-> at 8 bpp, verified on hardware and in flash). Nothing here is built; the
-> point of writing it down first is the same as stage 2's: the ABI is the part
-> that cannot be changed later without breaking programs. The prerequisite —
-> the streaming SDRAM controller — is worth building even if the depth change
-> never happens.
+> **SHIPPED, 2026-08-18 — designed in the morning, on hardware by evening.**
+> Every step below is done: the streaming controller (proven at 8 bpp first,
+> as prescribed), the emulator, the re-pinned tests, BASIC's RGB()/16-bit
+> COLOR/POINT, the RTL (co-sim green pixel-for-pixel on the first run), and
+> the board — full-screen $F800 BOXFILL confirmed on the panel, POINT read
+> back through the two-byte GDATA stream, bitstream in flash. 16 bpp cost
+> +111 LUT4 over 8 bpp (7,450 total, 35%). The conversion surfaced two latent
+> bugs recorded in the commits: the palette lookup had been dead on the board
+> since the SDRAM scanout arrived, and the RTL's IDENT cursor never advanced.
+> The design text below is kept as written, decisions and rejected
+> alternatives included.
 
 ## Why, and why not
 

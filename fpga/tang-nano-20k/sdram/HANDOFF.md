@@ -116,12 +116,19 @@ before trusting column 0.
 
 ## State
 
-Branch `sdram-framebuffer`, `main` untouched throughout. The current
-`p8x_lcd.fs` (7,226 LUT4 build, md5 291571a2...) is IN FLASH and verified
-booting from it after a power cycle: monitor, SD IDENTIFY, OS boot, BASIC, and
-the full-screen box read-backs all pass. **The old 240x136 flash fallback is
-gone** -- a power cycle now brings up this build, so recovering from a bad
-future bitstream means re-flashing, not power-cycling. The SD card is current.
+Branch `sdram-framebuffer`, `main` untouched throughout. **STAGE 6 SHIPPED
+(2026-08-18, same day it was designed):** the board is RGB565 end to end. The
+7,450-LUT4 bitstream is IN FLASH; the SD card carries the RGB() BASIC (cloned
+over serial with imgsend.py, all 3,260 sectors acked). Verified on hardware
+from BASIC itself: COLOR RGB(31,0,0) box edges read back -2048 through
+POINT's two-byte GDATA stream, the green fill reads 2016, RGB() packs
+correctly on-target. The panel showed the full-screen $F800 fill. The
+streaming controller underneath was proven at 8 bpp first (0 underruns,
+asserted in a bench that runs the real controller against a protocol-checking
+chip model validated against the vendored RTL).
+
+One formality open: the flash content is byte-identical to the verified SRAM
+image, but a power-cycle boot from THIS flash has not itself been observed.
 
 Two operational notes for whoever drives the board over serial next:
 
