@@ -50,27 +50,31 @@ id_lp:  LDA  GDATA
         JSR  GWAIT
         STA  GCMD
 
-; CIRCLE centred at (120,68) radius 40, pen 2 -- an OUTLINE, so its centre
-; must stay background.
-        LDA  #2
+; CIRCLE centred at (240,136) radius 80, pen $E0 -- an OUTLINE, so its centre
+; must stay background. Centred on the screen, so the four axis points sit at
+; (160,136) (320,136) (240,56) (240,216).
+        LDA  #$E0
         STA  GCOL
-        LDA  #120
-        STA  GX0
-        LDA  #68
+        LDA  #240
+        STA  GX0                        ; clears GX0H
+        LDA  #136
         STA  GY0
-        LDA  #40
+        LDA  #80
         STA  GPARM                      ; radius
         LDA  #$07                       ; CIRCLE
         JSR  GWAIT
         STA  GCMD
 
-;=== 16-bit coordinates, case 1: x = 356 is OFF-SCREEN =====================
-; Write the low byte first, THEN the high byte: 100 + (1<<8) = 356. Nothing may
-; appear at (100,60) -- if the high byte were ignored, that is exactly where the
-; pixel would land, so this fails loudly rather than silently.
+;=== 16-bit coordinates, case 1: x = 612 is OFF-SCREEN =====================
+; Write the low byte first, THEN the high byte: 100 + (2<<8) = 612, which is
+; past the 480-wide screen. Nothing may appear at (100,60) -- if the high byte
+; were ignored, that is exactly where the pixel would land, so this fails
+; loudly rather than silently. (A high byte of 1 would give 356, which USED to
+; be off-screen at 240 wide and is now well inside it: the case had quietly
+; stopped testing anything.)
         LDA  #100
         STA  GX0
-        LDA  #1
+        LDA  #2
         STA  GX0H
         LDA  #60
         STA  GY0
@@ -79,8 +83,8 @@ id_lp:  LDA  GDATA
         STA  GCMD
 
 ;=== 16-bit coordinates, case 2: a LOW write CLEARS the high byte ==========
-; GX0H is still 1 from above. Writing GX0 must zero it, putting this pixel at
-; x=100 and not x=356. This is the rule that keeps 8-bit software safe from a
+; GX0H is still 2 from above. Writing GX0 must zero it, putting this pixel at
+; x=100 and not x=612. This is the rule that keeps 8-bit software safe from a
 ; stale high byte someone else left behind.
         LDA  #100
         STA  GX0                        ; ... clears GX0H

@@ -32,9 +32,11 @@ cp "$ROOT/os/run-disk.img" bgfx.img 2>/dev/null || fail "need os/run-disk.img (r
 python3 "$ROOT/tools/p8xfs.py" put bgfx.img bgfx.bin --name /bin/bgfx.bin \
     --load 0x6A00 --exec 0x6A00 >/dev/null || fail "could not install the test BASIC"
 
-# COLOR 3 then CLS: if CLS clobbered the pen, the filled box would come out pen 0
-# and vanish. The NOFILL box is checked in its middle; the LINE at its ends.
-printf 'B\rbgfx\r10 COLOR 3\r20 CLS\r30 BOX 10,10,60,60,FILL\r40 COLOR 1\r50 BOX 100,10,150,60,NOFILL\r60 COLOR 2\r70 LINE 10,120,229,120\r80 END\rRUN\rLIST\rFILL\rBYE\r' \
+# COLOR 28 then CLS: if CLS clobbered the pen, the filled box would come out
+# pen 0 and vanish. The NOFILL box is checked in its middle; the LINE at its
+# ends. The pens are the 3-3-2 primaries rather than 1/2/3 -- at 8 bpp a pen is
+# a whole byte, and COLOR 224 also proves BASIC hands all eight bits to GCOL.
+printf 'B\rbgfx\r10 COLOR 28\r20 CLS\r30 BOX 20,20,120,120,FILL\r40 COLOR 224\r50 BOX 200,20,300,120,NOFILL\r60 COLOR 3\r70 LINE 20,240,458,240\r80 END\rRUN\rLIST\rFILL\rBYE\r' \
     > bgfx.in
 ../p8xemu -N -i bgfx.in -c bgfx.img -l 120000000 -g bgfx.ppm eeprom.bin > bgfx.out 2>/dev/null || true
 
@@ -44,8 +46,8 @@ bad = []
 out = open("bgfx.out","rb").read().replace(b"\r", b"")
 
 # 4. LIST round-trips every new keyword
-for kw in [b"10 COLOR 3", b"20 CLS", b"30 BOX 10,10,60,60,FILL",
-           b"50 BOX 100,10,150,60,NOFILL", b"70 LINE 10,120,229,120"]:
+for kw in [b"10 COLOR 28", b"20 CLS", b"30 BOX 20,20,120,120,FILL",
+           b"50 BOX 200,20,300,120,NOFILL", b"70 LINE 20,240,458,240"]:
     if out.count(kw) < 2:            # once as typed, once from LIST
         bad.append("LIST did not round-trip %r" % kw.decode())
 
@@ -56,10 +58,10 @@ if b"?SYNTAX ERROR" not in out:
 d  = open("bgfx.ppm","rb").read()
 px = d[d.index(b"255\n")+4:]
 W  = 480
-BLACK, WHITE, RED, GREEN = (0,0,0), (255,255,255), (255,0,0), (0,255,0)
-NAME = {BLACK:"pen0", WHITE:"pen1", RED:"pen2", GREEN:"pen3"}
+BLACK, RED, GREEN, BLUE = (0,0,0), (255,0,0), (0,255,0), (0,0,255)
+NAME = {BLACK:"pen $00", RED:"pen $E0 red", GREEN:"pen $1C green", BLUE:"pen $03 blue"}
 def fb(x, y):
-    i = ((y*2*W) + x*2)*3
+    i = (y*W + x)*3
     return tuple(px[i:i+3])
 def want(x, y, c, why):
     got = fb(x,y)
@@ -67,19 +69,19 @@ def want(x, y, c, why):
         bad.append("(%d,%d) is %s, want %s - %s"
                    % (x, y, NAME.get(got,got), NAME.get(c,c), why))
 
-# 2. CLS cleared to background, and did NOT eat COLOR 3
+# 2. CLS cleared to background, and did NOT eat COLOR 28
 want(  0,   0, BLACK, "CLS did not clear to the background")
-want( 35,  35, GREEN, "CLS clobbered the current COLOR (GPEN shadow not restored)")
+want( 70,  70, GREEN, "CLS clobbered the current COLOR (GPEN shadow not restored)")
 # 1. BOX ,FILL is solid; BOX ,NOFILL is an outline
-want( 10,  10, GREEN, "filled BOX corner missing")
-want( 60,  60, GREEN, "filled BOX corner missing")
-want(100,  10, WHITE, "NOFILL BOX edge missing")
-want(150,  60, WHITE, "NOFILL BOX edge missing")
-want(125,  35, BLACK, "NOFILL drew a SOLID box - FILL was matched inside NOFILL")
+want( 20,  20, GREEN, "filled BOX corner missing")
+want(120, 120, GREEN, "filled BOX corner missing")
+want(200,  20, RED,   "NOFILL BOX edge missing")
+want(300, 120, RED,   "NOFILL BOX edge missing")
+want(250,  70, BLACK, "NOFILL drew a SOLID box - FILL was matched inside NOFILL")
 # 3. LINE endpoints are inclusive
-want( 10, 120, RED, "LINE start point not drawn")
-want(229, 120, RED, "LINE end point not drawn (exclusive end?)")
-want(120, 120, RED, "LINE middle missing")
+want( 20, 240, BLUE, "LINE start point not drawn")
+want(458, 240, BLUE, "LINE end point not drawn (exclusive end?)")
+want(240, 240, BLUE, "LINE middle missing")
 
 if bad:
     print("BASIC-GFX TEST: FAIL")
@@ -94,7 +96,7 @@ PY
 # from its GPEN shadow afterwards, PALETTE silently changes what you draw with
 # next -- and since it only bites the *following* statement, it looks like that
 # statement is broken rather than PALETTE.
-printf 'B\rbgfx\r10 CLS\r20 COLOR 2\r30 PALETTE 3,15,0,15\r40 BOX 5,5,40,40,FILL\r50 COLOR 3\r60 CIRCLE 120,68,50,FILL\r70 COLOR 1\r80 CIRCLE 120,68,60\r90 PLOT 200,20\r100 PRINT POINT(120,68)\r110 PRINT POINT(200,20)\r120 PRINT POINT(0,135)\r130 PRINT POINT(7,7)\r140 END\rRUN\rLIST\rBYE\r' \
+printf 'B\rbgfx\r10 CLS\r20 COLOR 224\r30 PALETTE 3,15,0,15\r40 BOX 10,10,80,80,FILL\r50 COLOR 3\r60 CIRCLE 240,136,100,FILL\r70 COLOR 28\r80 CIRCLE 240,136,120\r90 PLOT 400,40\r100 PRINT POINT(240,136)\r110 PRINT POINT(400,40)\r120 PRINT POINT(0,271)\r130 PRINT POINT(14,14)\r140 END\rRUN\rLIST\rBYE\r' \
     > bgfx2.in
 ../p8xemu -N -i bgfx2.in -c bgfx.img -l 120000000 -g bgfx2.ppm eeprom.bin > bgfx2.out 2>/dev/null || true
 
@@ -103,24 +105,27 @@ import sys
 bad = []
 out = open("bgfx2.out","rb").read().replace(b"\r", b"")
 
-# POINT reads back what was drawn. 3 = filled circle, 1 = the plotted pixel,
-# 0 = untouched corner, 2 = inside the box drawn AFTER PALETTE.
-if b"\n3\n1\n0\n2\n" not in out:
-    bad.append("POINT sequence wrong; wanted 3,1,0,2 in %r"
+# POINT reads back what was drawn. 3 = filled circle, 28 = the plotted pixel,
+# 0 = untouched corner, 224 = inside the box drawn AFTER PALETTE. The two
+# large values matter on their own: POINT has to return a whole BYTE, which is
+# the read-back half of 8 bpp.
+if b"\n3\n28\n0\n224\n" not in out:
+    bad.append("POINT sequence wrong; wanted 3,28,0,224 in %r"
                % out[out.find(b"RUN"):out.find(b"RUN")+40])
 
-for kw in [b"30 PALETTE 3,15,0,15", b"60 CIRCLE 120,68,50,FILL",
-           b"80 CIRCLE 120,68,60", b"90 PLOT 200,20", b"100 PRINT POINT(120,68)"]:
+for kw in [b"30 PALETTE 3,15,0,15", b"60 CIRCLE 240,136,100,FILL",
+           b"80 CIRCLE 240,136,120", b"90 PLOT 400,40", b"100 PRINT POINT(240,136)"]:
     if out.count(kw) < 2:
         bad.append("LIST did not round-trip %r" % kw.decode())
 
 d  = open("bgfx2.ppm","rb").read()
 px = d[d.index(b"255\n")+4:]
 W  = 480
-BLACK, WHITE, RED, MAGENTA = (0,0,0), (255,255,255), (255,0,0), (255,0,255)
-NAME = {BLACK:"pen0", WHITE:"pen1", RED:"pen2", MAGENTA:"pen3=magenta"}
+BLACK, RED, GREEN, MAGENTA = (0,0,0), (255,0,0), (0,255,0), (255,0,255)
+NAME = {BLACK:"pen $00", RED:"pen $E0 red", GREEN:"pen $1C green",
+        MAGENTA:"pen 3, PALETTE'd magenta"}
 def fb(x, y):
-    i = ((y*2*W) + x*2)*3
+    i = (y*W + x)*3
     return tuple(px[i:i+3])
 def want(x, y, c, why):
     got = fb(x,y)
@@ -129,16 +134,16 @@ def want(x, y, c, why):
                    % (x, y, NAME.get(got,got), NAME.get(c,c), why))
 
 # PALETTE recoloured pen 3 to magenta, and did NOT steal the drawing pen:
-# the box on line 40 must still be pen 2 (red), not pen 3.
-want(  7,   7, RED,     "PALETTE stole the drawing pen (GPEN not restored)")
-want(120,  68, MAGENTA, "PALETTE did not recolour pen 3")
+# the box on line 40 must still be pen $E0 (red), not pen 3.
+want( 14,  14, RED,     "PALETTE stole the drawing pen (GPEN not restored)")
+want(240, 136, MAGENTA, "PALETTE did not recolour pen 3")
 # CIRCLE ,FILL is solid; the bare CIRCLE is an outline with a gap inside it
-want(120, 118, MAGENTA, "filled CIRCLE does not reach its bottom edge")
-want(120,   8, WHITE,   "outline CIRCLE top not drawn")
-want(120,  13, BLACK,   "gap between the two circles is filled - CIRCLE drew solid")
+want(240, 236, MAGENTA, "filled CIRCLE does not reach its bottom edge")
+want(240,  16, GREEN,   "outline CIRCLE top not drawn")
+want(240,  26, BLACK,   "gap between the two circles is filled - CIRCLE drew solid")
 # PLOT put a single pixel down
-want(200,  20, WHITE,   "PLOT did not draw")
-want(202,  20, BLACK,   "PLOT drew more than one pixel")
+want(400,  40, GREEN,   "PLOT did not draw")
+want(404,  40, BLACK,   "PLOT drew more than one pixel")
 
 if bad:
     print("BASIC-GFX TEST: FAIL")
@@ -191,7 +196,10 @@ PY
 #      row. The device discards off-screen pixels, so a wrap would not come from
 #      the device -- it would come from the 8-bit x cursor rolling over.
 #   5. GTEXT must draw in the CURRENT pen, and "" must be legal and draw nothing.
-printf 'B\rbgfx\r10 CLS\r20 COLOR 1\r30 GTEXT 10,10,1,"A"\r40 COLOR 2\r50 GTEXT 40,10,1,"a"\r60 COLOR 3\r70 GTEXT 4,40,2,"A"\r80 COLOR 1\r90 GTEXT 230,80,1,"WW"\r100 GTEXT 5,110,1,""\r110 END\rRUN\rLIST\rBYE\r' \
+# The glyph is 5x7 device pixels whatever the screen is, so these origins do NOT
+# scale with the panel -- only the clipping case has to move, to a 'W' that
+# really does straddle x=479.
+printf 'B\rbgfx\r10 CLS\r20 COLOR 224\r30 GTEXT 10,10,1,"A"\r40 COLOR 28\r50 GTEXT 40,10,1,"a"\r60 COLOR 3\r70 GTEXT 4,40,2,"A"\r80 COLOR 224\r90 GTEXT 470,80,1,"WW"\r100 GTEXT 5,110,1,""\r110 END\rRUN\rLIST\rBYE\r' \
     > bgfx4.in
 ../p8xemu -N -i bgfx4.in -c bgfx.img -l 200000000 -g bgfx4.ppm eeprom.bin > bgfx4.out 2>/dev/null || true
 
@@ -202,10 +210,10 @@ out = open("bgfx4.out","rb").read().replace(b"\r", b"")
 d  = open("bgfx4.ppm","rb").read()
 px = d[d.index(b"255\n")+4:]
 W  = 480
-BLACK, WHITE, RED, GREEN = (0,0,0), (255,255,255), (255,0,0), (0,255,0)
-NAME = {BLACK:"pen0", WHITE:"pen1", RED:"pen2", GREEN:"pen3"}
+BLACK, RED, GREEN, BLUE = (0,0,0), (255,0,0), (0,255,0), (0,0,255)
+NAME = {BLACK:"pen $00", RED:"pen $E0 red", GREEN:"pen $1C green", BLUE:"pen $03 blue"}
 def fb(x, y):
-    i = ((y*2*W) + x*2)*3
+    i = (y*W + x)*3
     return tuple(px[i:i+3])
 def want(x, y, c, why):
     got = fb(x,y)
@@ -216,30 +224,30 @@ def want(x, y, c, why):
 # The 5x7 'A': apex at column 2 of row 0, uprights at columns 0 and 4 from row 2
 # down, crossbar across the whole of row 4. Pinning the apex AND the empty
 # corner is what catches a font pointer that landed on the wrong glyph.
-want(12, 10, WHITE, "'A' apex missing - wrong glyph, or GTEXT drew nothing")
+want(12, 10, RED,   "'A' apex missing - wrong glyph, or GTEXT drew nothing")
 want(10, 10, BLACK, "(10,10) is lit; 'A' has no top-left pixel - font off by a glyph")
-want(10, 12, WHITE, "'A' left upright missing")
-want(14, 12, WHITE, "'A' right upright missing")
+want(10, 12, RED,   "'A' left upright missing")
+want(14, 12, RED,   "'A' right upright missing")
 for x in range(10, 15):
-    want(x, 14, WHITE, "'A' crossbar broken at x=%d" % x)
+    want(x, 14, RED, "'A' crossbar broken at x=%d" % x)
 want(12, 16, BLACK, "row 6 of 'A' should be open between the uprights")
 
 # lowercase folds to the SAME shape, in its own pen
-want(42, 10, RED,   "lowercase 'a' did not fold onto the 'A' glyph")
+want(42, 10, GREEN, "lowercase 'a' did not fold onto the 'A' glyph")
 want(40, 10, BLACK, "folded 'a' is not aligned like 'A'")
 for x in range(40, 45):
-    want(x, 14, RED, "folded 'a' crossbar broken at x=%d" % x)
+    want(x, 14, GREEN, "folded 'a' crossbar broken at x=%d" % x)
 
 # size 2: every font pixel becomes a 2x2 block, so the apex is 4 pixels and the
 # glyph occupies twice the extent. Origin (4,40), apex at column 2 => x 8..9.
 for x in (8, 9):
     for y in (40, 41):
-        want(x, y, GREEN, "size-2 apex block incomplete at (%d,%d)" % (x, y))
+        want(x, y, BLUE, "size-2 apex block incomplete at (%d,%d)" % (x, y))
 want(10, 40, BLACK, "size-2 apex is too wide - the block is not 2x2")
-want( 4, 44, GREEN, "size-2 left upright missing (row 2 should start at y=44)")
+want( 4, 44, BLUE,  "size-2 left upright missing (row 2 should start at y=44)")
 want( 4, 42, BLACK, "size-2 upright started too early - rows are not scaled")
 
-# clipping: 'W' at x=230 is partly on screen, the second one is off it. Nothing
+# clipping: 'W' at x=470 is partly on screen, the second one is off it. Nothing
 # may appear at the left edge on those rows.
 for y in range(80, 87):
     for x in range(0, 12):
@@ -271,19 +279,17 @@ printf 'B\rbgfx\r10 GTEXT 10,10,1\r20 END\rRUN\rBYE\r' > bgfx5.in
 if ! grep -q "SYNTAX ERROR" bgfx5.out; then
     fail "GTEXT with no string argument was accepted"
 fi
-# --- part 5: SCREEN mode 1 (480x272, 8 bpp, 256 pens) ------------------------
-# What is pinned here is the DEVICE contract, which the RTL will have to match:
+# --- part 5: the whole screen is reachable -----------------------------------
+# This replaces the old SCREEN-mode part. There are no modes any more: the
+# device is 480x272 at 8 bpp and nothing else, so SETMODE and BASIC's SCREEN
+# both went away. What is still worth pinning is the half of that part which
+# was never about modes at all:
 #
-#   1. mode 1 really is 480x272: the far corner (479,271) must read back, and
-#      one pixel past it must not.
-#   2. 8 bpp really is 256 pens, not 4 masked to 2 bits -- pen 200 has to
+#   1. the far corner (479,271) must read back, and one pixel past it must not
+#      -- an off-by-one in the stride shows up here and nowhere else;
+#   2. 8 bpp really is 256 pens, not 4 masked to 2 bits, so pen 200 has to
 #      survive a round trip through the framebuffer.
-#   3. mode 0 must still be reachable afterwards, since it is what every
-#      existing program assumes.
-#   4. an unknown mode must be REFUSED, not silently ignored -- a SCREEN that
-#      did nothing would leave the programmer drawing at the wrong resolution
-#      and blaming the drawing statements. Checked separately below.
-printf 'B\rbgfx\r10 SCREEN 1\r20 COLOR 5\r30 BOX 0,0,479,271,FILL\r40 COLOR 200\r50 PLOT 400,250\r60 PRINT "A";POINT(479,271);",";POINT(400,250);",";POINT(480,0)\r70 SCREEN 0\r80 PRINT "B";POINT(0,0)\r90 END\rRUN\rLIST\rBYE\r' \
+printf 'B\rbgfx\r10 CLS\r20 COLOR 5\r30 BOX 0,0,479,271,FILL\r40 COLOR 200\r50 PLOT 400,250\r60 PRINT "A";POINT(479,271);",";POINT(400,250);",";POINT(480,0)\r70 END\rRUN\rLIST\rBYE\r' \
     > bgfx6.in
 ../p8xemu -N -i bgfx6.in -c bgfx.img -l 400000000 eeprom.bin > bgfx6.out 2>/dev/null || true
 
@@ -294,27 +300,16 @@ bad = []
 i = out.find(b"\nA")
 got = out[i+1:out.find(b"\n", i+1)] if i >= 0 else b"?"
 if got != b"A5,200,0":
-    bad.append("mode-1 probes are %r, want b'A5,200,0'" % got)
+    bad.append("full-screen probes are %r, want b'A5,200,0'" % got)
     bad.append("  (far corner 479,271 = pen 5; a 200 that survived 8 bpp; 480,0 off-screen = 0)")
-for kw in [b"10 SCREEN 1", b"70 SCREEN 0"]:
+for kw in [b"30 BOX 0,0,479,271,FILL", b"50 PLOT 400,250"]:
     if out.count(kw) < 2:
         bad.append("LIST did not round-trip %r" % kw.decode())
-k = out.find(b"\nB")
-back = out[k+1:out.find(b"\n", k+1)] if k >= 0 else b"?"
-if back != b"B0":
-    bad.append("after SETMODE 0 the screen is %r, want b'B0' - mode 0 must be reachable again" % back)
 if bad:
     print("BASIC-GFX TEST: FAIL")
     for b in bad: print("  " + b)
     sys.exit(1)
-print("BASIC-GFX TEST: screen mode 1 ok (480x272, 256 pens, bad mode refused)")
+print("BASIC-GFX TEST: full screen ok (479,271 reachable, 256 pens survive)")
 PY
 
-# A mode the device does not have must be an error, not a no-op.
-printf 'B\rbgfx\r10 SCREEN 9\r20 END\rRUN\rBYE\r' > bgfx7.in
-../p8xemu -N -i bgfx7.in -c bgfx.img -l 200000000 eeprom.bin > bgfx7.out 2>/dev/null || true
-if ! grep -q "SYNTAX ERROR IN 10" bgfx7.out; then
-    fail "SCREEN 9 was accepted - an unsupported mode must be refused"
-fi
-
-echo "BASIC-GFX TEST: PASS (draw, plot, circle, ellipse, palette, point, gtext, modes)"
+echo "BASIC-GFX TEST: PASS (draw, plot, circle, ellipse, palette, point, gtext, full screen)"

@@ -17,11 +17,26 @@
 ; The drawing is chosen to pin down the awkward cases, not to look pretty:
 ;   - a full-screen box outline puts pixels on all four extreme edges
 ;   - two diagonals crossing exercise Bresenham with both signs of sx and sy
-;   - a filled box covers the read-modify-write path on partial bytes
+;   - a filled box overpaints them, proving last-writer-wins
 ;   - a line running off the right edge proves off-screen pixels are DISCARDED
 ;     rather than wrapping to the next row (the failure this catches is a
 ;     one-line bug in the RTL that a purely on-screen drawing would miss)
-;   - SETPAL recolours pen 3 before it is used
+;   - SETPAL recolours a pen before it is used
+;
+; The geometry is the old 240x136 drawing with every coordinate DOUBLED, since
+; the panel went to exactly 2x in both axes. That is deliberate: the relative
+; layout was reasoned about carefully (see the hollow BOX below, which has to
+; sit where nothing else can colour its interior) and doubling preserves every
+; one of those properties instead of re-deriving them.
+;
+; The PENS are not the old 0-3. At 8 bpp a pen is a whole byte, and pens 1/2/3
+; exercise only its bottom two bits -- exactly where an engine that still
+; thought in 2 bpp would look correct. So the payload draws in $E0, $1C, $03
+; and $FF: the 3-3-2 primaries, which are both unmistakable in a failure message
+; and proof that all eight bits reach the framebuffer.
+;
+; Coordinates past 255 need the high byte, and it is written AFTER the low one
+; because a low write CLEARS its high byte (the rule test_gfx2.asm pins down).
 
         .include "../../generators/memmap.inc"
 
@@ -37,10 +52,12 @@
         JSR  GWAIT
         STA  GCMD
 
-;=== SETPAL: pen 3 := yellow (R=15 G=15 B=0) ===============================
+;=== SETPAL: pen $FF := yellow (R=15 G=15 B=0) =============================
 ; SETPAL reuses the coordinate registers as R,G,B and recolours the pen named
 ; by GCOL, so the pen must be selected BEFORE the command is issued.
-        LDA  #3
+; $FF is white in the default 3-3-2 ramp, so recolouring it to yellow is a
+; visible change rather than one that could pass by accident.
+        LDA  #$FF
         STA  GCOL
         LDA  #15
         STA  GX0                        ; red
@@ -52,108 +69,132 @@
         JSR  GWAIT
         STA  GCMD
 
-;=== border: BOX (0,0)-(239,135) in pen 1 ==================================
-        LDA  #1
+;=== border: BOX (0,0)-(479,271) in pen $E0 (red) ==========================
+; The whole point of this one is the four EXTREME edges, so it has to reach the
+; real corners: 479 = $01DF and 271 = $010F both need their high byte.
+        LDA  #$E0
         STA  GCOL
         LDA  #0
         STA  GX0
         LDA  #0
         STA  GY0
-        LDA  #239
+        LDA  #$DF
         STA  GX1
-        LDA  #135
+        LDA  #1
+        STA  GX1H                       ; ... = 479
+        LDA  #$0F
         STA  GY1
+        LDA  #1
+        STA  GY1H                       ; ... = 271
         LDA  #3                         ; BOX (outline)
         JSR  GWAIT
         STA  GCMD
 
-;=== diagonal 1: LINE (0,0)-(239,135) in pen 2 =============================
-        LDA  #2
+;=== diagonal 1: LINE (0,0)-(479,271) in pen $1C (green) ===================
+        LDA  #$1C
         STA  GCOL
         LDA  #0
-        STA  GX0
+        STA  GX0                        ; clears GX0H
         LDA  #0
-        STA  GY0
-        LDA  #239
+        STA  GY0                        ; clears GY0H
+        LDA  #$DF
         STA  GX1
-        LDA  #135
+        LDA  #1
+        STA  GX1H                       ; ... = 479
+        LDA  #$0F
         STA  GY1
+        LDA  #1
+        STA  GY1H                       ; ... = 271
         LDA  #2                         ; LINE
         JSR  GWAIT
         STA  GCMD
 
-;=== diagonal 2: LINE (239,0)-(0,135) -- the other sign of sx ==============
-        LDA  #239
+;=== diagonal 2: LINE (479,0)-(0,271) -- the other sign of sx ==============
+        LDA  #$DF
         STA  GX0
+        LDA  #1
+        STA  GX0H                       ; ... = 479
         LDA  #0
         STA  GY0
         LDA  #0
-        STA  GX1
-        LDA  #135
+        STA  GX1                        ; clears GX1H, so this really is 0
+        LDA  #$0F
         STA  GY1
+        LDA  #1
+        STA  GY1H                       ; ... = 271
         LDA  #2                         ; LINE
         JSR  GWAIT
         STA  GCMD
 
-;=== BOXFILL (90,50)-(150,86) in pen 3 (the yellow set above) ==============
-        LDA  #3
+;=== BOXFILL (180,100)-(300,172) in pen $FF (the yellow set above) =========
+; Drawn AFTER the diagonals and covering the screen centre, so its interior
+; also proves last-writer-wins over them.
+        LDA  #$FF
         STA  GCOL
-        LDA  #90
+        LDA  #180
         STA  GX0
-        LDA  #50
+        LDA  #100
         STA  GY0
-        LDA  #150
+        LDA  #$2C
         STA  GX1
-        LDA  #86
+        LDA  #1
+        STA  GX1H                       ; ... = 300
+        LDA  #172
         STA  GY1
         LDA  #4                         ; BOXFILL
         JSR  GWAIT
         STA  GCMD
 
-;=== BOX (80,100)-(140,124) in pen 2 -- an OUTLINE, so it must stay hollow ==
-; Placed in the wedge between the two diagonals (at y=100..124 they sit at
-; x~177..219 and x~62..21), so nothing else can colour its interior. Without
+;=== BOX (160,200)-(280,248) in pen $1C -- an OUTLINE, so it must stay hollow
+; Placed in the wedge between the two diagonals (at y=200..248 they sit at
+; x~353..438 and x~126..41), so nothing else can colour its interior. Without
 ; this the only BOX on screen is the full-screen border, whose interior is
 ; covered by other drawing -- so BOX silently filling would go unnoticed.
-; GCOL is sticky across commands and BOXFILL left it at 3, so re-select pen 2.
-        LDA  #2
+; GCOL is sticky across commands and BOXFILL left it at $FF, so re-select.
+        LDA  #$1C
         STA  GCOL
-        LDA  #80
+        LDA  #160
         STA  GX0
-        LDA  #100
+        LDA  #200
         STA  GY0
-        LDA  #140
+        LDA  #$18
         STA  GX1
-        LDA  #124
+        LDA  #1
+        STA  GX1H                       ; ... = 280
+        LDA  #248
         STA  GY1
         LDA  #3                         ; BOX (outline)
         JSR  GWAIT
         STA  GCMD
 
-;=== clipping: LINE (200,120)-(255,120), x>239 must be DROPPED =============
-; 255 is reachable because a coordinate register holds far more than the screen
-; is wide (they are 16-bit pairs). Pixels 240..255
-; are discarded one at a time; nothing wraps onto row 121.
-        LDA  #1
+;=== clipping: LINE (400,240)-(510,240), x>479 must be DROPPED =============
+; 510 is reachable because a coordinate register is a 16-bit pair and holds far
+; more than the screen is wide. Pixels 480..510 are discarded one at a time;
+; nothing wraps onto row 241.
+        LDA  #$03
         STA  GCOL
-        LDA  #200
+        LDA  #$90
         STA  GX0
-        LDA  #120
+        LDA  #1
+        STA  GX0H                       ; ... = 400
+        LDA  #240
         STA  GY0
-        LDA  #255
+        LDA  #$FE
         STA  GX1
-        LDA  #120
+        LDA  #1
+        STA  GX1H                       ; ... = 510, past the right edge
+        LDA  #240
         STA  GY1
         LDA  #2                         ; LINE
         JSR  GWAIT
         STA  GCMD
 
-;=== PLOT a single pixel at (10,10) in pen 2 ===============================
-        LDA  #2
+;=== PLOT a single pixel at (20,20) in pen $03 =============================
+        LDA  #$03
         STA  GCOL
-        LDA  #10
-        STA  GX0
-        LDA  #10
+        LDA  #20
+        STA  GX0                        ; clears GX0H
+        LDA  #20
         STA  GY0
         LDA  #1                         ; PLOT
         JSR  GWAIT
