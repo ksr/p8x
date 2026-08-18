@@ -142,25 +142,16 @@ static void cf_data_wr(struct cf_state*c, uint8_t v){
    This is the GOLDEN MODEL. The Verilog engine has to reproduce gpu_line step
    for step or the co-sim diverges, so the Bresenham below is written in the
    plainest integer form there is and must not be "improved". */
-/* SCREEN MODES (see fpga/tang-nano-20k/sdram/STAGE2-DESIGN.md).
-     mode 0  240x136, 2 bpp, 4 pens    -- pixel-doubled to the panel. THE RESET
-                                          DEFAULT, and bit-for-bit what this
-                                          device did before modes existed, so
-                                          every program written against it is
-                                          unaffected.
-     mode 1  480x272, 8 bpp, 256 pens  -- the panel's native resolution, which
-                                          needs an SDRAM framebuffer on real
-                                          hardware. Here it is just more array.
-   The geometry is variables now rather than macros. The drawing algorithms are
-   untouched by that: they bound against gw/gh and plot through gpu_px, so the
-   Bresenham and midpoint code that the Verilog has to match step for step reads
-   exactly as it did. */
+/* 480x272 at 8 bpp, 256 pens from a 4096-colour palette. */
 #define GW_MAX  480
 #define GH_MAX  272
-static uint8_t  gfb[GW_MAX*GH_MAX];    /* 130560 bytes: enough for mode 1 */
-static int      gmode=0;
-static int      gw=240, gh=136, gstride=60, gbpp=2;
-static size_t   gfbytes=60*136;        /* bytes actually in use this mode */
+static uint8_t  gfb[GW_MAX*GH_MAX];    /* 130560 bytes */
+/* SINGLE MODE. 240x136 at 2 bpp was retired once nothing needed it: four pixels
+   to a byte forced a read-modify-write on every plot, and carrying both depths
+   cost enough logic in the RTL that the design would not place. One depth means
+   a pixel IS a byte -- no read, no masking, no mode muxing anywhere. */
+static const int gw=480, gh=272, gstride=480;
+static const size_t gfbytes=(size_t)480*272;
 /* RGB444. Mode 0 uses entries 0-3 and the initialiser IS the power-on state:
    gpu_reset() runs only on a RESET command, never at startup, so a bare zero
    fill here renders every pen black -- which is exactly what happened when this
@@ -192,13 +183,10 @@ static int      gascii=0;              /* -G: also render as text to stderr     
    real clipper would have to match exactly, which is a bug waiting to happen. */
 static void gpu_px(int x,int y,uint8_t c){
     if((unsigned)x>=(unsigned)gw || (unsigned)y>=(unsigned)gh) return;
-    if(gbpp==8){ gfb[y*gstride+x]=c; return; }               /* mode 1: a byte */
-    int off=y*gstride+(x>>2), sh=(3-(x&3))*2;   /* leftmost pixel in the high bits */
-    gfb[off]=(gfb[off]&~(3<<sh))|((c&3)<<sh);
+    gfb[y*gstride+x]=c;                      /* one pixel, one byte */
 }
 static uint8_t gpu_pixel(int x,int y){      /* pen at (x,y), for the dumps */
-    if(gbpp==8) return gfb[y*gstride+x];
-    return (gfb[y*gstride+(x>>2)] >> ((3-(x&3))*2)) & 3;
+    return gfb[y*gstride+x];
 }
 /* Integer Bresenham, all eight octants, endpoints inclusive. dy is held
    NEGATIVE, which is what lets one error term cover every direction. */
@@ -301,9 +289,9 @@ static void gpu_ellipse(int cx,int cy,int rx,int ry,uint8_t c,int fill){
 static void gpu_ident(void){
     memcpy(gident,"P8X-GFX",7);
     gident[7]=1;                        /* protocol version */
-    gident[8]=gw&0xFF; gident[9]=gw>>8;   /* the CURRENT mode's geometry */
-    gident[10]=gh&0xFF; gident[11]=gh>>8;
-    gident[12]=4;                       /* colours (pens) */
+    gident[8]=gw&0xFF; gident[9]=gw>>8;     /* 480 */
+    gident[10]=gh&0xFF; gident[11]=gh>>8;   /* 272 */
+    gident[12]=0;                       /* pens: 256, which wraps a byte to 0 */
     gidx=0;                             /* GDATA now streams the record */
 }
 /* SELFTEST: a fixed pattern drawn entirely from the card's own state, so a
@@ -325,27 +313,15 @@ static void gpu_selftest(void){
    black/white/red/green, while mode 1 comes up with a 3-3-2 ramp so that a
    program which never touches PALETTE still sees sensible colour.
    Returns 0 on an unknown mode, which the caller turns into GSTAT's ERR bit. */
-static int gpu_setmode(int m){
-    if(m==0){ gw=240; gh=136; gbpp=2; gstride=gw/4; }
-    else if(m==1){ gw=480; gh=272; gbpp=8; gstride=gw; }
-    else return 0;
-    gmode=m;
-    gfbytes=(size_t)gstride*gh;
-    memset(gfb,0,sizeof gfb);
-    if(m==0){
-        static const uint16_t d[4]={0x000,0xFFF,0xF00,0x0F0}; /* black white red green */
-        for(int i=0;i<4;i++) gpal[i]=d[i];
-    }else{
-        /* 3-3-2 expanded to RGB444: 3 bits of red and green scaled 0-7 -> 0-15,
-           2 bits of blue scaled 0-3 -> 0-15. The same default the stage 1
-           hardware test used, so its picture looks the same through here. */
-        for(int i=0;i<256;i++)
-            gpal[i]=((((i>>5)&7)*15/7)<<8) | ((((i>>2)&7)*15/7)<<4) | (((i&3)*5));
-    }
-    return 1;
+/* The default palette: 3-3-2 expanded to RGB444, so a program that never calls
+   SETPAL still sees sensible colour. SETPAL can then replace any of the 256. */
+static void gpu_defpal(void){
+    for(int i=0;i<256;i++)
+        gpal[i]=((((i>>5)&7)*15/7)<<8) | ((((i>>2)&7)*15/7)<<4) | (((i&3)*5));
 }
 static void gpu_reset(void){
-    gpu_setmode(0);                    /* mode 0 is the reset default */
+    memset(gfb,0,gfbytes);
+    gpu_defpal();
     gx0=gy0=gx1=gy1=0; gcol=1; gparm=0; gparm2=0; gerr=0; gidx=GIDLEN; gdata=0;
 }
 static void gpu_cmd(uint8_t v){
@@ -355,12 +331,10 @@ static void gpu_cmd(uint8_t v){
     case 0x03: gpu_box(gx0,gy0,gx1,gy1,gcol,0);     break;   /* BOX        */
     case 0x04: gpu_box(gx0,gy0,gx1,gy1,gcol,1);     break;   /* BOXFILL    */
     /* CLS: every byte is 4 pixels of the same pen, so 0x00/0x55/0xAA/0xFF. */
-    case 0x05: memset(gfb, gbpp==8 ? gcol : (uint8_t)((gcol&3)*0x55), gfbytes);
-               break;                                        /* CLS        */
+    case 0x05: memset(gfb, gcol, gfbytes); break;            /* CLS        */
     /* SETPAL reuses the coordinate registers as R,G,B (0-15 each) and recolours
        the pen in GCOL -- no extra port, and no two-write latch to keep in step. */
-    case 0x06: gpal[gbpp==8 ? gcol : (gcol&3)]
-                 = ((gx0&15)<<8)|((gy0&15)<<4)|(gx1&15); break;
+    case 0x06: gpal[gcol] = ((gx0&15)<<8)|((gy0&15)<<4)|(gx1&15); break;
     case 0x07: gpu_circle(gx0,gy0,gparm,gcol,0);    break;   /* CIRCLE     */
     case 0x08: gpu_circle(gx0,gy0,gparm,gcol,1);    break;   /* CIRCLEFILL */
     case 0x0A: gpu_ellipse(gx0,gy0,gparm,gparm2,gcol,0); break; /* ELLIPSE     */
@@ -372,7 +346,6 @@ static void gpu_cmd(uint8_t v){
                        ? gpu_pixel(gx0,gy0) : 0;
                gidx = GIDLEN;         /* not an IDENT stream: GDATA holds the pixel */
                break;                                        /* POINT      */
-    case 0x0C: if(!gpu_setmode(gparm)) gerr=1;      break;   /* SETMODE    */
     case 0xF0: gpu_selftest();                      break;   /* SELFTEST   */
     case 0xF1: gpu_reset();                         break;   /* RESET      */
     case 0xF2: gpu_ident();                         break;   /* IDENT      */
@@ -384,20 +357,15 @@ static void gpu_cmd(uint8_t v){
 static void gpu_writeppm(const char*fn){
     FILE*f=fopen(fn,"wb");
     if(!f){ perror(fn); return; }
-    int z = (gw < GW_MAX) ? 2 : 1;   /* mode 0 is pixel-doubled to the panel;
-                                        mode 1 already IS the panel, so 1:1 --
-                                        either way the file shows what the panel
-                                        shows, which is the whole contract of
-                                        this dump and what the tests measure. */
-    fprintf(f,"P6\n%d %d\n255\n",gw*z,gh*z);
+    /* 1:1 -- the framebuffer IS the panel now, no pixel doubling. */
+    fprintf(f,"P6\n%d %d\n255\n",gw,gh);
     for(int y=0;y<gh;y++)
-      for(int r=0;r<z;r++)                                  /* doubled down   */
         for(int x=0;x<gw;x++){
             uint16_t p=gpal[gpu_pixel(x,y)];
             uint8_t rgb[3]={ (uint8_t)(((p>>8)&15)*17),     /* 0-15 -> 0-255  */
                              (uint8_t)(((p>>4)&15)*17),
                              (uint8_t)(( p     &15)*17) };
-            for(int c2=0;c2<z;c2++) fwrite(rgb,1,3,f);      /* doubled across */
+            fwrite(rgb,1,3,f);
         }
     fclose(f);
 }
