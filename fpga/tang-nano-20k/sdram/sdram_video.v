@@ -134,6 +134,7 @@ module sdram_video #(
   // Fetches the line that will be displayed NEXT into the buffer that is not
   // being displayed. Kicked off at every end-of-line.
   reg  [7:0]  fw;                  // words fetched so far this line (0..WORDS)
+  reg         inflight;            // a read is taken but not yet answered
   reg         fetching;
   reg         primed;              // a fetch has been started at least once
   reg  [22:0] faddr;
@@ -150,8 +151,15 @@ module sdram_video #(
     // while the engine or refresh held the bus, and a dropped fetch is a
     // dropped scanline.
     rd <= rd & ~ack;
+    if (ack) inflight <= 1;            // taken by the arbiter, answer still to come
     if (rst) begin
       fetching <= 0; fw <= 0; bank <= 0; underruns <= 0; primed <= 0;
+      // rd MUST be reset. It became self-referential (rd <= rd & ~ack) when
+      // this moved to the arbiter's request/ack, and a self-referential reg
+      // with no reset is X forever in simulation -- which is why this bench saw
+      // nothing fetched at all. On hardware the flop powers up at 0 and it
+      // limps along, so the fault is invisible on the board and total in sim.
+      rd <= 0; inflight <= 0;
     end else if (eol) begin
       // Swap, and judge the fetch that was supposed to have finished by now.
       // `primed` suppresses the very first line, where nothing has been asked
@@ -166,16 +174,20 @@ module sdram_video #(
       faddr    <= FB_BASE + ({13'd0, fetch_line} * STRIDE);
       fw       <= 0;
       fetching <= 1;
+      inflight <= 0;
     end else if (fetching) begin
       if (data_ready) begin
         lbuf[{~bank, fw[6:0]}] <= dout32;
+        inflight <= 0;
         if (fw == WORDS[7:0]-1) begin fetching <= 0; fw <= WORDS[7:0]; end
         else                          fw <= fw + 1'b1;
-      end else if (!rd) begin
-        // No busy test at all now: the arbiter owns that rule (see sdram_arb.v),
-        // which is precisely why it was given a request/ack interface -- every
-        // master reimplementing the controller's handshake is how stage 0 lost
-        // half of memory to a swallowed command.
+      end else if (!rd && !inflight) begin
+        // `inflight` is NOT optional. ack means the arbiter TOOK the request,
+        // not that it answered it -- and rd clears on ack, so testing !rd alone
+        // fires a second read for the same word while the first is still in
+        // flight. The extra answer then lands at the NEXT fw, so a line ends up
+        // holding every other word twice and half its pixels never arrive.
+        // On the panel that is a doubled column at the left edge.
         addr <= faddr + {13'd0, fw, 2'd0};
         rd   <= 1;
       end
