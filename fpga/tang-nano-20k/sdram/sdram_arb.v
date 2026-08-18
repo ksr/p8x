@@ -38,8 +38,8 @@ module sdram_arb(
   output reg        c_wr_word,
   output reg        c_refresh,
   output reg [22:0] c_addr,
-  output reg [7:0]  c_din,
-  input      [7:0]  c_dout,
+  output reg [15:0] c_din,
+  input      [15:0] c_dout,
   input      [31:0] c_dout32,
   input             c_ready,
   input             c_busy,
@@ -57,9 +57,9 @@ module sdram_arb(
   // ---- master 2: engine. Reads and writes, lowest priority.
   input             e_req,
   input             e_we,         // 1 = write, 0 = read
-  input             e_word,       // write all four lanes (span fill)
+  input             e_word,       // write both halves (span fill: a pixel pair)
   input      [22:0] e_addr,
-  input      [7:0]  e_din,
+  input      [15:0] e_din,
   output reg        e_ack,
   output reg        e_ready       // 1 cycle: c_dout is yours
 );

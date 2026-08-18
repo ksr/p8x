@@ -73,8 +73,8 @@ module tb_p8x_sdram;
 
   reg         p_rd = 0, p_wr = 0, p_word = 0;
   reg  [22:0] p_addr = 0;
-  reg   [7:0] p_din = 0;
-  wire  [7:0] p_dout;
+  reg  [15:0] p_din = 0;
+  wire [15:0] p_dout;
   wire [31:0] p_dout32;
   wire        p_ready, p_busy;
 
@@ -139,8 +139,8 @@ module tb_p8x_sdram;
     end
   endtask
 
-  // ---- new-controller word-port tasks (same discipline) ----------------------
-  task p_write8(input [22:0] ad, input [7:0] d, input word);
+  // ---- new-controller word-port tasks (same discipline, 16-bit data) ---------
+  task p_write16(input [22:0] ad, input [15:0] d, input word);
     begin
       wait (!p_busy); @(posedge clk);
       p_addr <= ad; p_din <= d; p_word <= word; p_wr <= 1;
@@ -148,7 +148,7 @@ module tb_p8x_sdram;
       @(posedge clk); wait (!p_busy); @(posedge clk);
     end
   endtask
-  task p_read8(input [22:0] ad, output [7:0] d);
+  task p_read16(input [22:0] ad, output [15:0] d);
     begin
       wait (!p_busy); @(posedge clk);
       p_addr <= ad; p_rd <= 1; @(posedge clk); p_rd <= 0;
@@ -158,8 +158,10 @@ module tb_p8x_sdram;
     end
   endtask
 
-  reg [7:0] shadow [0:65535];               // byte shadow for the random tests
-  reg [7:0] got8;
+  reg [7:0]  shadow [0:65535];              // byte shadow (vendored phase)
+  reg [15:0] shadow16 [0:32767];            // halfword shadow (16-bit port)
+  reg [7:0]  got8;
+  reg [15:0] got16;
   integer seed = 32'h5EED;
 
   initial begin
@@ -201,30 +203,30 @@ module tb_p8x_sdram;
     if (fails == 0) $display("phase V ok: model validated against the vendored controller");
 
     $display("P1 start t=%0d", cycles);
-    // ---- P1: word port, random bytes ----------------------------------------
+    // ---- P1: word port, random 16-bit pixels --------------------------------
     seed = 32'hCAFE;
     for (i = 0; i < 300; i = i + 1) begin
-      a = $random(seed) & 23'h00FFFF;
-      w = $random(seed) & 8'hFF;
-      shadow[a[15:0]] = w[7:0];
-      p_write8(a, w[7:0], 1'b0);
+      a = $random(seed) & 23'h00FFFE;         // halfword-aligned
+      w = $random(seed) & 16'hFFFF;
+      shadow16[a[15:1]] = w[15:0];
+      p_write16(a, w[15:0], 1'b0);
     end
     seed = 32'hCAFE;
     for (i = 0; i < 300; i = i + 1) begin
-      a = $random(seed) & 23'h00FFFF;
-      w = $random(seed) & 8'hFF;
-      p_read8(a, got8);
-      check(got8 === shadow[a[15:0]], "P1: word-port read-back mismatch");
+      a = $random(seed) & 23'h00FFFE;
+      w = $random(seed) & 16'hFFFF;
+      p_read16(a, got16);
+      check(got16 === shadow16[a[15:1]], "P1: word-port read-back mismatch");
     end
     if (fails == 0) $display("P1 ok: word port (internal refresh live throughout)");
 
-    // ---- P2: wr_word fills all four lanes -----------------------------------
-    p_write8(23'h010000, 8'hA5, 1'b1);
-    for (i = 0; i < 4; i = i + 1) begin
-      p_read8(23'h010000 + i, got8);
-      check(got8 === 8'hA5, "P2: wr_word lane missing");
-    end
-    if (fails == 0) $display("P2 ok: wr_word");
+    // ---- P2: wr_word paints the aligned PAIR --------------------------------
+    p_write16(23'h010000, 16'hA55A, 1'b1);
+    p_read16(23'h010000, got16);
+    check(got16 === 16'hA55A, "P2: wr_word low half missing");
+    p_read16(23'h010002, got16);
+    check(got16 === 16'hA55A, "P2: wr_word high half missing");
+    if (fails == 0) $display("P2 ok: wr_word pair");
 
     $display("P3 start t=%0d", cycles);
     // ---- P3: a straight 240-word stream, order and cost ---------------------

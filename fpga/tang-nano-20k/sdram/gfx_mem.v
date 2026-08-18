@@ -33,22 +33,22 @@ module gfx_mem(
   // ---- request from the drawing algorithms
   input  signed [17:0] px_x,
   input  signed [17:0] px_y,
-  input          [7:0] px_pen,
+  input         [15:0] px_pen,        // an RGB565 colour
   input                px_go,         // 1-cycle start
   input                px_read,       // 1 = POINT: read, do not write
-  input                px_word,       // 1 = span: cover four pixels at once
+  input                px_word,       // 1 = span: cover the aligned PAIR
   output reg           px_busy,
-  output reg     [7:0] px_out,        // POINT result (0 if off-screen)
+  output reg    [15:0] px_out,        // POINT result (0 if off-screen)
 
   // ---- arbiter port
   output reg           e_req,
   output reg           e_we,
   output reg           e_word,
   output reg    [22:0] e_addr,
-  output reg     [7:0] e_din,
+  output reg    [15:0] e_din,
   input                e_ack,
   input                e_ready,
-  input          [7:0] e_dout
+  input         [15:0] e_dout
 );
 
   // Geometry. Explicit widths throughout: a y*stride computed in a narrow
@@ -58,9 +58,10 @@ module gfx_mem(
   wire [17:0] yw = px_y[17:0];
   wire        on = !px_x[17] && !px_y[17] && xw < 18'd480 && yw < 18'd272;
 
-  // y*480 = y*512 - y*32, in 23 bits, which holds 271*480 = 130,080 easily.
-  wire [22:0] y23  = {5'd0, yw};
-  wire [22:0] addr = ((y23 << 9) - (y23 << 5)) + {5'd0, xw};
+  // Stride 1024 (STAGE6-DESIGN.md): a line fits one SDRAM row exactly, and
+  // the address is PURE WIRING -- {y, x, 0} -- so the y*stride multiply, and
+  // its whole 13-bit-wrap class of bugs, is gone rather than survived.
+  wire [22:0] addr = {4'd0, yw[8:0], xw[8:0], 1'b0};
 
   localparam S_IDLE=0, S_RD=1, S_WR=3;
   reg [1:0] st;
@@ -84,9 +85,10 @@ module gfx_mem(
           if (px_read) begin
             e_we <= 0; e_word <= 0; e_req <= 1; st <= S_RD;
           end else begin
-            // A pixel IS a byte, so a plot is one write with nothing to
-            // preserve -- no read-modify-write at all. That was always an
-            // artefact of 2 bpp, never of SDRAM.
+            // A pixel IS a 16-bit word half: one masked write, nothing to
+            // preserve -- still no read-modify-write. The SDRAM bus is 32
+            // bits with byte lanes, so the controller writes the addressed
+            // half (or, for px_word spans, the whole aligned pair).
             e_we <= 1; e_din <= px_pen; e_word <= px_word;
             e_req <= 1; st <= S_WR;
           end

@@ -14,9 +14,9 @@
 // with refresh interleaved, and the mapping -- with underruns and protocol
 // errors asserted at the end, not eyeballed.
 //
-// The panel output is decoded back to the pixel byte, which is exact: 3-3-2 is
-// spread as r={p[7:5],p[7:6]}, g={p[4:2],p[4:2]}, b={p[1:0],p[1:0],p[1]}, so
-// {r[4:2], g[5:3], b[4:3]} recovers p precisely.
+// The panel output IS the pixel now: RGB565 goes to the pins unmodified, so
+// {r,g,b} reassembles the 16-bit value exactly -- and the row-0 ramp holds
+// 480 DISTINCT column values where the 8 bpp bench had to wrap at 256.
 //
 //   iverilog -g2012 -o tbsc tb_sdram_scanout.v sdram_video.v p8x_sdram.v sdram_chip.v
 //   vvp tbsc
@@ -48,7 +48,7 @@ module tb;
   p8x_sdram #(.FREQ(27_000_000)) CTL(
     .clk(clk), .clk_sdram(~clk), .resetn(crst_n),
     .rd(1'b0), .wr(1'b0), .wr_word(1'b0),
-    .addr(23'd0), .din(8'd0), .dout(), .dout32(),
+    .addr(23'd0), .din(16'd0), .dout(), .dout32(),
     .data_ready(), .busy(c_busy),
     .st_go(st_go), .st_addr(st_addr), .st_words(st_words),
     .st_valid(st_valid), .st_data(st_data), .st_done(st_done),
@@ -63,22 +63,22 @@ module tb;
 
   integer i, x, y;
 
-  function [7:0] xb(input integer v); xb = v[7:0]; endfunction
+  function [15:0] xw(input integer v); xw = v[15:0]; endfunction
 
-  // capture one displayed row: decode the byte at each active column
-  reg [7:0] seen [0:479];        // row 0, for the column check
-  reg [7:0] rowval [0:271];      // pixel of each displayed row (column 1)
+  // capture one displayed row: reassemble the pixel at each active column
+  reg [15:0] seen [0:479];       // row 0, for the column check
+  reg [15:0] rowval [0:271];     // pixel of each displayed row (column 1)
   integer col, row, bad=0;
   reg capturing=0;
   reg pclk_d=0;
   always @(posedge clk) begin
     pclk_d <= pclk;
     if (capturing && pclk && !pclk_d && de) begin
-      if (row == 0 && col < 480) seen[col] = {r[4:2], g[5:3], b[4:3]};
+      if (row == 0 && col < 480) seen[col] = {r, g, b};
       // Sample column 1, not column 0: the first pixel of every line is
       // latched before the bank swap and comes from the previous buffer, so
       // sampling it measures that bug instead of the row mapping.
-      if (col == 1 && row < 272)  rowval[row] = {r[4:2], g[5:3], b[4:3]};
+      if (col == 1 && row < 272)  rowval[row] = {r, g, b};
       col = col + 1;
       if (col == 480) begin col = 0; row = row + 1; end
     end
@@ -87,8 +87,8 @@ module tb;
   task capture_frame;
     begin
       col = 0; row = 0;
-      for (i=0;i<480;i=i+1) seen[i] = 8'hEE;
-      for (i=0;i<272;i=i+1) rowval[i] = 8'hEE;
+      for (i=0;i<480;i=i+1) seen[i] = 16'hEEEE;
+      for (i=0;i<272;i=i+1) rowval[i] = 16'hEEEE;
       @(posedge dut.frame_tick);
       capturing = 1;
       while (row < 272) @(posedge clk);
@@ -97,15 +97,15 @@ module tb;
   endtask
 
   initial begin
-    // Row 0 is a RAMP: column c must decode to c&255. Every other row is
-    // filled with its own index (checks ROW mapping) -- see the history in
-    // the header about why both matter. The framebuffer is preloaded into
-    // the CHIP as words, little-endian, matching the write path's layout.
+    // Row 0 is a RAMP: column c must read back exactly c -- all 480 of them
+    // distinct at 16 bpp. Every other row is filled with its own index
+    // (checks ROW mapping). Preloaded as words at STRIDE 1024, two little-
+    // endian pixels a word, matching the write path's layout.
     for (y=0;y<272;y=y+1)
-      for (x=0;x<480;x=x+4) begin
-        CHIP.mem[(y*480+x)>>2] =
-          (y==0) ? { xb(x+3), xb(x+2), xb(x+1), xb(x) }
-                 : { y[7:0], y[7:0], y[7:0], y[7:0] };
+      for (x=0;x<480;x=x+2) begin
+        CHIP.mem[(y*1024+x*2)>>2] =
+          (y==0) ? { xw(x+1), xw(x) }
+                 : { y[15:0], y[15:0] };
       end
 
     // the controller inits alone (200 us); the scanout is held in reset until
@@ -123,15 +123,15 @@ module tb;
 
     // ROW mapping: panel row R must show framebuffer row R.
     for (i=1;i<272;i=i+1)
-      if (rowval[i] !== i[7:0]) begin
+      if (rowval[i] !== i[15:0]) begin
         if (bad < 8)
           $display("FAIL: panel ROW %0d shows fb row %0d", i, rowval[i]);
         bad = bad + 1;
       end
     for (i=0;i<480;i=i+1)
-      if (seen[i] !== i[7:0]) begin
+      if (seen[i] !== i[15:0]) begin
         if (bad < 8)
-          $display("FAIL: panel column %0d shows byte %02x, want %02x", i, seen[i], i[7:0]);
+          $display("FAIL: panel column %0d shows %04x, want %04x", i, seen[i], i[15:0]);
         bad = bad + 1;
       end
 

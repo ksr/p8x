@@ -33,14 +33,14 @@ module gfx_span(
   input  signed [17:0] sp_x0,        // inclusive
   input  signed [17:0] sp_x1,        // inclusive; a run of one has x0 == x1
   input  signed [17:0] sp_y,
-  input          [7:0] sp_pen,
+  input         [15:0] sp_pen,
   input                sp_go,
   output reg           sp_busy,
 
   // drives gfx_mem's pixel request
   output reg signed [17:0] px_x,
   output reg signed [17:0] px_y,
-  output reg     [7:0] px_pen,
+  output reg    [15:0] px_pen,
   output reg           px_go,
   output reg           px_word,
   input                px_busy
@@ -49,11 +49,11 @@ module gfx_span(
   reg signed [17:0] cur, last;
   reg               running;
 
-  // A word may be used only when the run is aligned here AND all four pixels
-  // are still inside it. Testing only the alignment would paint up to three
-  // pixels past x1 -- which on a filled circle is a visible spur on every row.
-  wire aligned  = (cur[1:0] == 2'd0);
-  wire fits     = (cur + 18'sd3 <= last);
+  // At 16 bpp a word holds TWO pixels. A word write may be used only when the
+  // run is aligned here AND both pixels are still inside it; testing only the
+  // alignment would paint one pixel past x1 -- a visible spur on every row.
+  wire aligned  = (cur[0] == 1'b0);
+  wire fits     = (cur + 18'sd1 <= last);
   wire use_word = aligned && fits;
 
   always @(posedge clk) begin
@@ -77,7 +77,7 @@ module gfx_span(
         px_pen  <= sp_pen;
         px_word <= use_word;
         px_go   <= 1;
-        cur     <= use_word ? (cur + 18'sd4) : (cur + 18'sd1);
+        cur     <= use_word ? (cur + 18'sd2) : (cur + 18'sd1);
       end
     end
   end

@@ -33,11 +33,11 @@ module tb_gfx;
     .halted(halted));
 
   integer fh, x, y, r, i, cyc;
-  reg [7:0] b;
-  reg [7:0] pen;   // 8 bits: mode 1 has 256 pens
-  reg [11:0] rgb;
+  reg [15:0] pix;  // an RGB565 colour -- the pixel is the colour
+  reg [4:0] r5, b5;
+  reg [5:0] g6;
 
-  localparam GW = 480, GH = 272, GSTR = 480;   // one mode, 8 bpp, 1:1
+  localparam GW = 480, GH = 272, GSTR = 1024;  // stride 1024: {y, x, 0} addressing
 
   initial begin
     if (!$value$plusargs("ppm=%s", ppmfile)) ppmfile = "rtl.ppm";
@@ -67,14 +67,15 @@ module tb_gfx;
     $fwrite(fh, "P6\n%0d %0d\n255\n", GW, GH);
     for (y = 0; y < GH; y = y + 1)
         for (x = 0; x < GW; x = x + 1) begin
-          // The framebuffer is in the memory model now, not inside GFX, and a
-          // pixel is a whole byte.
-          pen = DUT.SDRAM.mem[y*GSTR + x];
-          rgb = DUT.GFX.pal[pen];
+          // A pixel is two bytes in the memory model, little-endian, at
+          // stride 1024. 565 -> 888 by bit replication, byte-for-byte what
+          // gpu_writeppm() does -- the same expansion or the diff lies.
+          pix = {DUT.SDRAM.mem[y*GSTR + x*2 + 1], DUT.SDRAM.mem[y*GSTR + x*2]};
+          r5 = pix[15:11]; g6 = pix[10:5]; b5 = pix[4:0];
           begin
-            $fwrite(fh, "%c", ((rgb >> 8) & 4'hF) * 17);
-            $fwrite(fh, "%c", ((rgb >> 4) & 4'hF) * 17);
-            $fwrite(fh, "%c", ( rgb       & 4'hF) * 17);
+            $fwrite(fh, "%c", {r5, r5[4:2]});
+            $fwrite(fh, "%c", {g6, g6[5:4]});
+            $fwrite(fh, "%c", {b5, b5[4:2]});
           end
         end
     $fclose(fh);

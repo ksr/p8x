@@ -84,13 +84,17 @@ module p8x_sdram #(
     input             clk_sdram,          // 180/225-degree copy, straight to the pin
     input             resetn,
 
-    // word port (vendored-compatible; no refresh input -- that is internal now)
+    // word port (vendored-compatible handshake; no refresh input -- that is
+    // internal now). Data is 16 bits since stage 6: a pixel is an RGB565
+    // colour, `addr[1]` picks which half of the 32-bit SDRAM word it lives
+    // in, and `wr_word` writes the same colour to BOTH halves -- the span
+    // fill, now a pair of pixels rather than four.
     input             rd,
     input             wr,
     input             wr_word,
     input      [22:0] addr,
-    input       [7:0] din,
-    output      [7:0] dout,
+    input      [15:0] din,
+    output     [15:0] dout,
     output     [31:0] dout32,
     output reg        data_ready,
     output reg        busy,
@@ -125,10 +129,10 @@ module p8x_sdram #(
 
   reg        dq_oen;
   reg [31:0] dq_out;
-  reg [1:0]  off;
-  reg [7:0]  dout_buf;
+  reg        off;                         // which 16-bit half answered a read
+  reg [15:0] dout_buf;
 
-  reg [7:0]  din_buf;                     // word-op latches (vendored)
+  reg [15:0] din_buf;                     // word-op latches (vendored)
   reg        word_buf;
   reg [22:0] addr_buf;
 
@@ -157,7 +161,7 @@ module p8x_sdram #(
   // fill the latch, whose client then blocks. One deep is provably enough.
   reg        q_rd, q_wr, q_word;
   reg [22:0] q_addr;
-  reg [7:0]  q_din;
+  reg [15:0] q_din;
   reg        resume;                      // a service op returns to the stream
   reg [15:0] ref_cnt;
   reg        ref_due;
@@ -175,9 +179,7 @@ module p8x_sdram #(
   assign dout32    = dq_in;
   assign st_data   = dq_in;
 
-  wire [7:0] next_dout = off == 0 ? dq_in[7:0]   :
-                         off == 1 ? dq_in[15:8]  :
-                         off == 2 ? dq_in[23:16] : dq_in[31:24];
+  wire [15:0] next_dout = off ? dq_in[31:16] : dq_in[15:0];
   assign dout = data_ready ? next_dout : dout_buf;
 
   wire [1:0]  s_bank = s_wptr[20:19];
@@ -188,7 +190,7 @@ module p8x_sdram #(
   wire        e_rd   = rd | q_rd;
   wire        e_wr   = wr | q_wr;
   wire [22:0] e_addr = (q_rd | q_wr) ? q_addr : addr;
-  wire [7:0]  e_din  = (q_rd | q_wr) ? q_din  : din;
+  wire [15:0] e_din  = (q_rd | q_wr) ? q_din  : din;
   wire        e_word = (q_rd | q_wr) ? q_word : wr_word;
 
   always @(posedge clk) begin
@@ -296,7 +298,7 @@ module p8x_sdram #(
           SDRAM_A[10] <= 1'b1;                          // auto-precharge
           SDRAM_A[9:0] <= {2'b0, addr_buf[9:2]};
           SDRAM_DQM <= 4'b0;
-          off <= addr_buf[1:0];
+          off <= addr_buf[1];
         end
         if (cycle == T_RCD+CAS) data_ready <= 1'b1;
         if (cycle == T_RCD+CAS+4'd1) begin
@@ -311,12 +313,12 @@ module p8x_sdram #(
           {SDRAM_nRAS, SDRAM_nCAS, SDRAM_nWE} <= CMD_Write;
           SDRAM_A[10] <= 1'b1;
           SDRAM_A[9:0] <= {2'b0, addr_buf[9:2]};
-          SDRAM_DQM <= word_buf              ? 4'b0000 :
-                       addr_buf[1:0] == 2'd0 ? 4'b1110 :
-                       addr_buf[1:0] == 2'd1 ? 4'b1101 :
-                       addr_buf[1:0] == 2'd2 ? 4'b1011 : 4'b0111;
-          off <= addr_buf[1:0];
-          dq_out <= {din_buf, din_buf, din_buf, din_buf};
+          // one 565 pixel = one 16-bit half, byte lanes 0-1 or 2-3;
+          // wr_word opens all four lanes and the pair gets the same colour
+          SDRAM_DQM <= word_buf    ? 4'b0000 :
+                       addr_buf[1] ? 4'b0011 : 4'b1100;
+          off <= addr_buf[1];
+          dq_out <= {din_buf, din_buf};
           dq_oen <= 1'b0;
         end
         if (cycle == T_RCD+4'd1) dq_oen <= 1'b1;

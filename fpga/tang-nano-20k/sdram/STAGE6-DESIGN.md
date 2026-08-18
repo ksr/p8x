@@ -123,8 +123,29 @@ masked write at any depth.
 - **The engine's burst use.** Span fills could stream writes the way scanout
   streams reads (gfx_span feeding sub-bursts) — that is where the controller
   turns into fill rate. Its own design note, once the controller exists.
-- **The image loader** — the thing that would justify all of this. File format,
-  conversion tooling, where it lives (`/BIN` command? BASIC statement?).
+- **The image loader's implementation** — but its FILE FORMAT is settled, and
+  settled the way IDENT settled geometry: the file describes itself, so the
+  statement is `IMAGE X,Y,name$` and cannot be lied to. A statement that took
+  XSIZE,YSIZE would let a wrong guess SHEAR the image into plausible garbage —
+  the worst failure mode, wrong without erroring.
+
+  **P8I format:**
+
+  | bytes | field |
+  |---|---|
+  | 3 | magic `"P8I"` |
+  | 1 | version, `$01` |
+  | 2 | width, little-endian |
+  | 2 | height, little-endian |
+  | 1 | depth, `$10` = RGB565 — ask, don't assume |
+  | 1 | reserved (flags someday; a transparency key would live here) |
+  | … | width × height RGB565 words, row-major, little-endian, no padding |
+
+  Little-endian words match the GCOL/GCOLH write order exactly, so the
+  loader's inner loop is read-byte → GCOL, read-byte → GCOLH, PLOT, advance.
+  Off-screen pixels clip for free under the device's discard rule. The host
+  side is a small converter (PNG → P8I) next to p8xfs.py. Scaling, if ever
+  wanted, is a new OPTIONAL argument — never a mandatory geometry.
 
 ## Build order
 

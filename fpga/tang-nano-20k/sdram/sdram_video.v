@@ -65,13 +65,16 @@ module sdram_video #(
 );
   localparam H_TOT   = H_ACT + H_FP + H_SYNC + H_BP;
   localparam V_TOT   = V_ACT + V_FP + V_SYNC + V_BP;
-  localparam STRIDE  = H_ACT;                 // 8 bpp -> one byte per pixel
-  localparam WORDS   = H_ACT / 4;             // 120 32-bit reads per line
+  // Stride 1024, not 960 (STAGE6-DESIGN.md): a 960-byte 16 bpp line at a 1024
+  // stride starts every line on an SDRAM row boundary -- ONE activation per
+  // line -- and makes the line address {y, 10'b0}, pure wiring.
+  localparam STRIDE  = 1024;
+  localparam WORDS   = H_ACT / 2;             // 240 32-bit reads per line
 
   // ---- line buffers ---------------------------------------------------------
-  // 2 x 128 words of 32 bits = 1024 bytes, one BSRAM block. Word-wide rather
-  // than byte-wide so a fetched word lands in one write instead of four.
-  reg [31:0] lbuf [0:255];
+  // 2 x 240 words of 32 bits = 1,920 bytes in a 512x32 array -- still ONE
+  // BSRAM (16Kbit of data). Word-wide so a fetched word lands in one write.
+  reg [31:0] lbuf [0:511];
   reg        bank;                            // buffer currently being DISPLAYED
 
   // ---- timing ---------------------------------------------------------------
@@ -96,16 +99,14 @@ module sdram_video #(
   // the previous line's first pixel, which is why column 0 of every row showed
   // stale data while columns 1..479 were perfect.
   wire rd_bank = bank ^ (px == H_TOT-1);
-  always @(posedge clk) lb_q <= lbuf[{rd_bank, ax[8:2]}];
-  wire [7:0] pixel = (ax[1:0] == 2'd0) ? lb_q[7:0]   :
-                     (ax[1:0] == 2'd1) ? lb_q[15:8]  :
-                     (ax[1:0] == 2'd2) ? lb_q[23:16] : lb_q[31:24];
+  always @(posedge clk) lb_q <= lbuf[{rd_bank, ax[8:1]}];
+  // RGB565: the pixel IS the panel's wiring. Half-word select, no palette,
+  // no expansion -- the bits go straight to the pins.
+  wire [15:0] pixel = ax[0] ? lb_q[31:16] : lb_q[15:0];
 
-  // 3-3-2 direct colour, spread over the panel's RGB565. Low bits copy the high
-  // ones so full scale really is full scale, the same trick video_rgb.v uses.
-  wire [4:0] px_r = {pixel[7:5], pixel[7:6]};
-  wire [5:0] px_g = {pixel[4:2], pixel[4:2]};
-  wire [4:0] px_b = {pixel[1:0], pixel[1:0], pixel[1]};
+  wire [4:0] px_r = pixel[15:11];
+  wire [5:0] px_g = pixel[10:5];
+  wire [4:0] px_b = pixel[4:0];
 
   reg        nxt_de;
   reg [4:0]  nxt_r, nxt_b;
@@ -145,7 +146,7 @@ module sdram_video #(
   // words back and the only bookkeeping left HERE is writing them down in
   // order. The request/ack/inflight machinery this section used to carry
   // lived to work around a word-at-a-time controller, and went with it.
-  reg  [7:0]  fw;                  // words landed this line (0..WORDS)
+  reg  [8:0]  fw;                  // words landed this line (0..WORDS)
   reg         fetching;            // st_go issued, st_done not yet seen
   reg         primed;              // a fetch has been started at least once
   // The flush window: for two cycles after eol, arriving st_valid words are
@@ -186,8 +187,8 @@ module sdram_video #(
     // Words stream in; the only job left is writing them down in order. The
     // index reads ~bank BEFORE the eol swap below (non-blocking), so a word
     // landing exactly at eol still goes to the buffer its fetch belongs to.
-    if (st_valid && flush == 2'd0 && fw != WORDS[7:0]) begin
-      lbuf[{~bank, fw[6:0]}] <= st_data;
+    if (st_valid && flush == 2'd0 && fw != WORDS[8:0]) begin
+      lbuf[{~bank, fw[7:0]}] <= st_data;
       fw <= fw + 1'b1;
     end
     if (st_done) fetching <= 0;
@@ -200,14 +201,14 @@ module sdram_video #(
       // `primed` suppresses the very first line, where nothing has been asked
       // for yet -- otherwise every reset would report a phantom underrun.
       // st_done is the fetch's word; fw is the audit of what actually landed.
-      if (primed && (fetching || fw != WORDS[7:0]))
+      if (primed && (fetching || fw != WORDS[8:0]))
         if (underruns != 16'hFFFF) underruns <= underruns + 1'b1;
       bank     <= ~bank;
       primed   <= 1;
-      // Explicit width. `fetch_line * STRIDE` in a narrow context is how this
-      // project already lost the top of a framebuffer address once: a y*60 that
-      // wrapped inside 13 bits and folded the bottom of the screen onto the top.
-      st_addr  <= FB_BASE + ({13'd0, nextf} * STRIDE);
+      // Stride 1024 makes the line address pure wiring: {nextf, 10 zeros}.
+      // The y*STRIDE multiply -- and the 13-bit-wrap class of bugs this
+      // project paid for twice -- is gone rather than survived.
+      st_addr  <= FB_BASE + {3'd0, nextf, 10'd0};
       st_go    <= 1'b1;                // starts the fetch -- or aborts a stale one
       // prime so that the fetch two lines before active video loads line 0
       if (py == V_TOT-3) nextf <= 10'd0;

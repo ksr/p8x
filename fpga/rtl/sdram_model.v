@@ -14,8 +14,8 @@
 // already arrived. Anything that talks to this model and works will talk to the
 // controller and work.
 //
-// wr_word writes all four byte lanes, matching the local modification to the
-// controller (see fpga/tang-nano-20k/sdram/sdram.v).
+// Data is 16 bits since stage 6: a pixel is an RGB565 colour, addr[1] picks
+// the half of the 32-bit word, and wr_word writes the pair (the span fill).
 module sdram_model #(parameter FREQ = 27_000_000, parameter LAT = 4)(
     input             clk,
     input             clk_sdram,
@@ -25,13 +25,13 @@ module sdram_model #(parameter FREQ = 27_000_000, parameter LAT = 4)(
     input             wr,
     input             wr_word,
     input             refresh,
-    input       [7:0] din,
-    output reg  [7:0] dout,
+    input      [15:0] din,
+    output reg [15:0] dout,
     output reg [31:0] dout32,
     output reg        data_ready,
     output reg        busy
 );
-  localparam BYTES = 262144;                 // enough for either framebuffer
+  localparam BYTES = 524288;                 // stride 1024 x 272 rows, with room
   reg [7:0] mem [0:BYTES-1];
   integer i;
   initial begin
@@ -52,7 +52,7 @@ module sdram_model #(parameter FREQ = 27_000_000, parameter LAT = 4)(
       if (cyc == 1) begin
         busy <= 0;                            // (2): together with data_ready
         if (rdpend) begin
-          dout       <= mem[a_lat];
+          dout       <= {mem[{a_lat[22:1],1'd1}], mem[{a_lat[22:1],1'd0}]};
           dout32     <= {mem[{a_lat[22:2],2'd3}], mem[{a_lat[22:2],2'd2}],
                          mem[{a_lat[22:2],2'd1}], mem[{a_lat[22:2],2'd0}]};
           data_ready <= 1;
@@ -60,10 +60,13 @@ module sdram_model #(parameter FREQ = 27_000_000, parameter LAT = 4)(
         rdpend <= 0;
       end
     end else if (wr) begin
-      if (wr_word) begin
-        mem[{addr[22:2],2'd0}] <= din;  mem[{addr[22:2],2'd1}] <= din;
-        mem[{addr[22:2],2'd2}] <= din;  mem[{addr[22:2],2'd3}] <= din;
-      end else mem[addr] <= din;
+      if (wr_word) begin                      // the pair: both halves, one colour
+        mem[{addr[22:2],2'd0}] <= din[7:0];  mem[{addr[22:2],2'd1}] <= din[15:8];
+        mem[{addr[22:2],2'd2}] <= din[7:0];  mem[{addr[22:2],2'd3}] <= din[15:8];
+      end else begin
+        mem[{addr[22:1],1'd0}] <= din[7:0];
+        mem[{addr[22:1],1'd1}] <= din[15:8];
+      end
       busy <= 1; cyc <= LAT;                  // (1): busy from the NEXT cycle
     end else if (rd) begin
       a_lat <= addr; rdpend <= 1; busy <= 1; cyc <= LAT;

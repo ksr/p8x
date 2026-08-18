@@ -101,7 +101,7 @@ module p8x_soc #(
 
   wire        sd_rd, sd_wr, sd_word, sd_refresh;
   wire [22:0] sd_addr;
-  wire [7:0]  sd_din, sd_dout;
+  wire [15:0] sd_din, sd_dout;
   wire [31:0] sd_dout32;
   wire        sd_ready, sd_busy;
 
@@ -118,7 +118,7 @@ module p8x_soc #(
 
   wire e_req, e_we, e_word, e_ack, e_ready;
   wire [22:0] e_addr;
-  wire [7:0]  e_din;
+  wire [15:0] e_din;
 
   sdram_arb ARB(
     .clk(clk), .rst(rst),
@@ -135,7 +135,6 @@ module p8x_soc #(
     .clk(clk), .rst(rst),
     .sel(is_gfx), .a(mem_addr[3:0]), .wr(mem_we && is_gfx),
     .rd_stb(mem_rd && is_gfx), .wdata(mem_dout), .rdata(gfx_rdata),
-    .sc_pen(8'd0), .sc_rgb(),
     .e_req(e_req), .e_we(e_we), .e_word(e_word), .e_addr(e_addr),
     .e_din(e_din), .e_ack(e_ack), .e_ready(e_ready), .e_dout(sd_dout));
 

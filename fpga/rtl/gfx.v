@@ -76,22 +76,21 @@ module gfx (
   input      [7:0]  wdata,
   output reg [7:0]  rdata,
 
-  // Palette lookup for the scanout. The framebuffer itself is no longer here --
-  // it lives in SDRAM and the scanout reads it through the arbiter -- but the
-  // palette stays, because SETPAL writes it and this is where the registers are.
-  input      [7:0]  sc_pen,
-  output     [11:0] sc_rgb,
-
   // Arbiter port (engine side). Everything this module does to memory goes
-  // through gfx_mem below; nothing here touches the bus directly.
+  // through gfx_mem below; nothing here touches the bus directly. Data is 16
+  // bits: a pixel IS an RGB565 colour (stage 6), and the palette -- and the
+  // sc_pen/sc_rgb lookup it fed -- went with the depth change. (That lookup
+  // had been DEAD on the board since the SDRAM scanout arrived: sdram_video
+  // expanded 3-3-2 directly and never consulted it, so SETPAL silently never
+  // reached the panel. The co-sim compares pen indices and could not see it.)
   output            e_req,
   output            e_we,
   output            e_word,
   output     [22:0] e_addr,
-  output     [7:0]  e_din,
+  output     [15:0] e_din,
   input             e_ack,
   input             e_ready,
-  input      [7:0]  e_dout
+  input      [15:0] e_dout
 );
   // rd_stb: pulses on the microcycle the CPU actually READS a register. The
   // IDENT stream advances on it rather than on the address, because mem_addr
@@ -106,39 +105,15 @@ module gfx (
   // 9 above their low ones ($FF29-$FF2C), which is what makes BASIC's GSTORE a
   // single routine.
   reg signed [17:0] gx0, gy0, gx1, gy1;
-  reg  [7:0]  gcol;                            // 0-3 mode 0, 0-255 mode 1
+  // The pen is a whole RGB565 colour: GCOL its low byte, GCOLH ($FF2D's write
+  // side) its high, with the coordinates' low-write-clears-high rule.
+  reg  [15:0] gcol;
   reg  [7:0]  gparm, gparm2;                   // ELLIPSE: x- and y-radius
   reg         gerr;
-  // 256 entries, because mode 1 has 256 pens. Mode 0 uses only 0-3 and cannot
-  // address the rest, so it is unaffected. SETMODE reloads the table with the
-  // palette belonging to the mode, which is what stops the two contaminating
-  // each other's colours -- and matches gpu_setmode() in the emulator, which is
-  // the golden model for exactly this sort of detail.
-  reg  [11:0] pal [0:255];
-  reg        pload;      // walking the palette reload
-  reg [7:0]  pidx;
-  // mode 1's default: 3-3-2 expanded to RGB444. Same arithmetic as the
-  // emulator, so a program that never calls SETPAL sees identical colour in
-  // both. The awkward *15/7 is what the emulator does; matching it matters more
-  // than tidiness.
-  function [11:0] def_pal(input [7:0] v);
-    reg [3:0] rr, gg, bb;
-    begin
-      rr = ({4'd0, v[7:5]} * 15) / 7;
-      gg = ({4'd0, v[4:2]} * 15) / 7;
-      bb = {2'd0, v[1:0]} * 5;
-      def_pal = {rr, gg, bb};
-    end
-  endfunction
-  reg  [7:0]  gdata;                           // POINT result / IDENT stream
+  reg  [15:0] gdata;                           // POINT result (a 565 colour)
   reg  [3:0]  gidx;                            // IDENT cursor (0..13 = live)
-
-  // Registered, not combinational: an async read of a 256-entry array cannot be
-  // block RAM and becomes a 256:1 mux in LUTs. The scanout absorbs the extra
-  // cycle -- it already presents its address one pixel ahead.
-  reg [11:0] sc_rgb_r;
-  always @(posedge clk) sc_rgb_r <= pal[sc_pen];
-  assign sc_rgb = sc_rgb_r;
+  reg         ptid;                            // POINT stream: 0 = low next,
+                                               //   1 = high next (and parked)
 
   // IDENT record: "P8X-GFX", version, width, height, pens, 0. Carries the
   // GEOMETRY so software can ask instead of assume -- the same 14 bytes the
@@ -150,13 +125,14 @@ module gfx (
       4'd0: ident_byte = "P";   4'd1: ident_byte = "8";
       4'd2: ident_byte = "X";   4'd3: ident_byte = "-";
       4'd4: ident_byte = "G";   4'd5: ident_byte = "F";
-      4'd6: ident_byte = "X";   4'd7: ident_byte = 8'd1;
+      4'd6: ident_byte = "X";   4'd7: ident_byte = 8'd2;   // protocol 2: direct colour
       // The CURRENT mode's geometry and pen count -- which is the point of
       // IDENT: software asks the device what it is, and in mode 1 that is a
       // different screen. Matches gpu_ident() in the emulator.
       4'd8:  ident_byte = 8'd224;  4'd9:  ident_byte = 8'd1;   // width  480
       4'd10: ident_byte = 8'd16;   4'd11: ident_byte = 8'd1;   // height 272
-      4'd12: ident_byte = 8'd0;                                // 256 pens
+      4'd12: ident_byte = 8'd0;                                // 0 = no palette
+      4'd13: ident_byte = 8'd16;                               // bits per pixel
       default: ident_byte = 8'd0;
     endcase
   endfunction
@@ -177,11 +153,11 @@ module gfx (
   // change is the one that does not edit them.
   reg signed [17:0] px_x, px_y;
   reg        px_go;
-  reg [7:0]  px_pen;                           // 8 bits now: mode 1 has 256 pens
+  reg [15:0] px_pen;                           // the RGB565 colour to paint
   reg        px_read;                          // 1 = POINT (read, do not write)
-  reg        px_word;                          // 1 = span: four pixels at once
+  reg        px_word;                          // 1 = span: TWO pixels at once
   wire       px_busy;
-  wire [7:0] px_out;
+  wire [15:0] px_out;
 
   gfx_mem u_mem(
     .clk(clk), .rst(rst),
@@ -210,7 +186,7 @@ module gfx (
   reg [2:0]  oct;                              // circle: which of the 8 points
   reg signed [17:0] clsx, clsy;                 // CLS cursor
   localparam signed [17:0] cls_xmax = 18'sd479, cls_ymax = 18'sd271;
-  reg [7:0]  cls_val;                          // byte S_CLS fills with
+  reg [15:0] cls_val;                          // colour S_CLS fills with
 
   // ---- ellipse (midpoint, four-way symmetric) -------------------------------
   // A transliteration of gpu_ellipse() in the emulator. Both decision variables
@@ -253,8 +229,8 @@ module gfx (
     if (rst) begin
       st <= S_IDLE; px_go <= 0; px_word <= 0;
       gx0 <= 0; gy0 <= 0; gx1 <= 0; gy1 <= 0;
-      gcol <= 8'd1; gparm <= 0; gparm2 <= 0; gerr <= 0; gdata <= 0; gidx <= 4'd14;
-      pload <= 1; pidx <= 0;    // load the 3-3-2 default palette
+      gcol <= 16'hFFFF;         // white, matching the emulator's reset pen
+      gparm <= 0; gparm2 <= 0; gerr <= 0; gdata <= 0; gidx <= 4'd14; ptid <= 1;
     end else begin
       // The engine is no longer gated by anything here. It used to hold for a
       // cycle whenever the scanout claimed the shared framebuffer port -- a
@@ -270,12 +246,16 @@ module gfx (
       px_go   <= 0;
       px_word <= 0;
 
-      // Palette reload walk: one entry a cycle, 256 cycles, overlapping the
-      // CLS that a mode change performs anyway.
-      if (pload) begin
-        pal[pidx] <= def_pal(pidx);
-        if (pidx == 8'd255) pload <= 0;
-        pidx <= pidx + 8'd1;
+      // GDATA streams: the IDENT record, then POINT's two bytes (low, then
+      // high, then PARKED on high). The cursor advances on rd_stb -- the
+      // microcycle that actually reads -- never on the address, which lingers
+      // (the ACIA's $FF05 hazard). The IDENT advance was MISSING entirely
+      // before stage 6: nothing consumed the stream on the RTL (the co-sim
+      // checks it on the emulator's console), so the record streamed its
+      // first byte fourteen times, unobserved. Both streams advance here now.
+      if (rd_stb && sel && a == 4'h7) begin
+        if (gidx < 4'd14)  gidx <= gidx + 4'd1;
+        else if (!ptid)    ptid <= 1'b1;       // low consumed; park on high
       end
 
       // ---- command sequencer ----------------------------------------------
@@ -329,16 +309,13 @@ module gfx (
           end
         end
 
-        // CLS writes whole BYTES: every byte is four pixels of one pen, so
-        // 0x00/0x55/0xAA/0xFF. 8160 clocks instead of 65280.
-        // CLS, one row at a time. It used to walk the framebuffer as raw bytes,
-        // which it cannot now that the memory is behind gfx_mem -- and going
-        // through the span path is what makes it four pixels a write anyway.
+        // CLS, one row at a time through the span path. A 32-bit SDRAM word
+        // holds TWO 565 pixels now, so an aligned word write covers a pair.
         S_CLS: if (!px_go && !px_busy) begin
           px_x <= clsx; px_y <= clsy; px_pen <= cls_val; px_read <= 0;
-          px_word <= (clsx[1:0] == 2'd0);      // aligned: cover four at once
+          px_word <= (clsx[0] == 1'b0);        // aligned: cover the pair
           px_go <= 1;
-          if (clsx + (clsx[1:0] == 2'd0 ? 18'sd4 : 18'sd1) > cls_xmax) begin
+          if (clsx + (clsx[0] == 1'b0 ? 18'sd2 : 18'sd1) > cls_xmax) begin
             clsx <= 0;
             if (clsy == cls_ymax) st <= S_DONE;
             else                  clsy <= clsy + 18'sd1;
@@ -466,7 +443,10 @@ module gfx (
         end
 
         // gfx_mem has already put the pixel (or 0 for off-screen) in px_out.
-        S_POINT: if (!px_go && !px_busy) begin gdata <= px_out; st <= S_DONE; end
+        S_POINT: if (!px_go && !px_busy) begin
+          gdata <= px_out; ptid <= 1'b0;       // GDATA: low byte first
+          st <= S_DONE;
+        end
 
         S_DONE: st <= S_IDLE;
         default: st <= S_IDLE;
@@ -484,7 +464,8 @@ module gfx (
           4'hA: gy0 <= {2'd0, wdata, gy0[7:0]};
           4'hB: gx1 <= {2'd0, wdata, gx1[7:0]};
           4'hC: gy1 <= {2'd0, wdata, gy1[7:0]};
-          4'h4: gcol  <= wdata;
+          4'h4: gcol  <= {8'd0, wdata};      // low write CLEARS the high byte
+          4'hD: gcol  <= {wdata, gcol[7:0]};   // GCOLH (GID0's write side)
           4'h8: gparm  <= wdata;
           4'hF: gparm2 <= wdata;   // GPARM2: ELLIPSE y-radius
           4'h5: begin
@@ -517,7 +498,8 @@ module gfx (
               8'h05: begin clsx <= 0; clsy <= 0;
                            cls_val <= gcol;
                            st <= S_CLS; end
-              8'h06: pal[gcol] <= {gx0[3:0], gy0[3:0], gx1[3:0]};
+              // 8'h06 was SETPAL; with no palette an unknown code sets ERR
+              // below, which is what old software probing for it should see.
               // ELLIPSE / ELLIPSEFILL. ccx/ccy and cx are shared with the
               // circle; S_ELLI needs one extra cycle before erx2/ery2 are
               // available, which is what S_ELLFI is for.
@@ -539,14 +521,12 @@ module gfx (
               8'h09: begin px_x<=gx0; px_y<=gy0; px_read<=1; px_go<=1;
                            gidx<=4'd14; st<=S_POINT; end
               8'hF1: begin                      // RESET
-                // Clears to pen 0, NOT to the pen it is about to select.
-                // S_CLS used {4{gcol}} directly and RESET assigns gcol <= 1 in
-                // this same cycle, so the clear came out WHITE while the
-                // emulator's gpu_reset memsets to zero -- 129644 of 130560
-                // pixels different, and invisible while the payload was a no-op.
-                clsx <= 0; clsy <= 0; cls_val <= 8'h00; st <= S_CLS;
-                gcol <= 8'd1; gparm <= 0; gdata <= 0; gidx <= 4'd14;
-                pload <= 1; pidx <= 0;   // reload the default palette
+                // Clears to 0 (black), NOT to the pen it is about to select --
+                // the lesson recorded here before still applies, only the
+                // reset pen changed: WHITE, matching gpu_reset().
+                clsx <= 0; clsy <= 0; cls_val <= 16'h0000; st <= S_CLS;
+                gcol <= 16'hFFFF; gparm <= 0; gdata <= 0; gidx <= 4'd14;
+                ptid <= 1;
               end
               8'hF2: gidx <= 0;                 // IDENT: GDATA now streams
               default: gerr <= 1;
@@ -564,7 +544,8 @@ module gfx (
   always @(*) begin
     case (a)
       4'h6:    rdata = {busy, 6'd0, gerr};       // GSTAT
-      4'h7:    rdata = (gidx < 4'd14) ? ident_byte(gidx) : gdata;
+      4'h7:    rdata = (gidx < 4'd14) ? ident_byte(gidx)
+                     : (ptid ? gdata[15:8] : gdata[7:0]);
       4'hD:    rdata = 8'h50;                    // 'P'
       4'hE:    rdata = 8'h47;                    // 'G'
       default: rdata = 8'hFF;
