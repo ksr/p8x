@@ -67,15 +67,45 @@ module tb_p8x_top;
     end
   end
 
+  // Does everything received so far contain this string?
+  function seen(input [8*24:1] s, input integer len);
+    integer p, q;
+    begin
+      seen = 0;
+      for (p = 0; p + len <= nchar; p = p + 1) begin
+        for (q = 0; q < len && line[p+q] == s[(len-q)*8 -: 8]; q = q + 1) ;
+        if (q == len) seen = 1;
+      end
+    end
+  endfunction
+
+  integer fails = 0;
+
   initial begin
     $display("=== board bench: monitor + microSD ===");
     #(BIT_NS * 400);
+
+    // I: SET FEATURES, IDENTIFY, print the model string. This is the only
+    // command that exercises the IDENTIFY fill, and the fill is sequential --
+    // 512 clocks with BSY held -- so a monitor that trusted an instantaneous
+    // buffer would print rubbish here rather than fail outright.
+    send_byte("I");
+    send_byte(8'h0D);
+    #(BIT_NS * 40000);
+    if (!seen("P8X-SD TANG NANO 20K", 20)) begin
+      $display("\nFAIL: IDENTIFY did not report the model string");
+      fails = fails + 1;
+    end
+
     send_byte("B");          // BOOT: reads the OS image off the card
     send_byte(8'h0D);
     #(BIT_NS * 40000);
     $display("\n=== %0d bytes received ===", nchar);
-    if (nchar > 20) $display("PASS: the CPU is talking over the real UART");
-    else            $display("FAIL: little or no serial output");
+    if (nchar <= 20) begin
+      $display("FAIL: little or no serial output");
+      fails = fails + 1;
+    end
+    if (fails == 0) $display("PASS: the CPU is talking over the real UART");
     $finish;
   end
 endmodule

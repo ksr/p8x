@@ -35,9 +35,20 @@ remainder is why it is still here.
 > failed `lcd` build leaves a valid-looking file that may be a graphics-less `cpu`
 > bitstream; and piping the build through `tail` discards its exit status.
 >
-> **THE `lcd` BUILD SITS ON A PLACEMENT CLIFF (found 2026-08-17).** At 44/46
-> BSRAM and 13288/20736 LUT4 with a fixed pinout, nextpnr only just finds a legal
-> placement, and a change with NO logical effect can tip it over. Reproduced:
+> **THE `lcd` BUILD SAT ON A PLACEMENT CLIFF (found 2026-08-17, cause found and
+> removed 2026-08-18).** The cliff was real but the diagnosis below stopped one
+> level short. The design was full because `CF.buf_`, the 512-byte SD sector
+> buffer, was inferring 4,096 flip-flops plus a 512-entry read mux -- over half
+> the logic in the whole design -- because IDENTIFY wrote every entry in a single
+> cycle and a memory with 552 write ports cannot map onto any RAM primitive. With
+> the fill made sequential (`rtl/cf_sd.v`) the buffer maps to one BSRAM and the
+> `lcd` build drops from 15397/20736 LUT4 to **7226 (34%)**, DFF 5657 -> 1581,
+> BSRAM 41 -> 42, Fmax 51.6 MHz. Name mangling still perturbs placement, but at
+> a third of the fabric it no longer decides whether the build succeeds.
+>
+> The original finding, kept because the mechanism is still true: at 44/46
+> BSRAM and 13288/20736 LUT4 with a fixed pinout, nextpnr only just found a legal
+> placement, and a change with NO logical effect could tip it over. Reproduced:
 > deleting one dead `reg [3:0] stp;` from `gfx.v` -- declared, never read, never
 > written -- made `build.sh lcd` fail with *"Unable to find legal placement for
 > all cells"*, twice, on an identical placer trajectory; the unedited file built
@@ -59,6 +70,14 @@ remainder is why it is still here.
 > unimplemented `$F0` SELFTEST arm are the obvious slack), relax the `.cst` pin
 > constraints, or pass nextpnr an explicit `--seed` so the trajectory is pinned
 > instead of being an accident of line numbering.
+>
+> The lesson that generalises: **when the design grows, attribute the growth
+> before theorising about it.** Bucketing the flattened netlist's cells by
+> instance path found the real consumer in minutes, after sessions of blaming
+> whichever module had just been edited. And **any `for` loop that assigns every
+> element of an array in one cycle costs you a RAM** -- the palette hit this, then
+> the sector buffer. `using FF mapping for memory ...` in the yosys log is the
+> tell.
 
 > **If the board misbehaves after a fresh load, RELOAD IT before debugging.**
 > Three times in one session a hardware symptom looked exactly like a code

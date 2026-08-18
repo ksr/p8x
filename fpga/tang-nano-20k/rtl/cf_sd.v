@@ -35,9 +35,30 @@ module cf_sd(
   output       card_ready);
 
   // ---- sector buffer ----
+  //
+  // 512 bytes, and the SHAPE of the code below is what decides whether that
+  // costs one RAM or 4,096 flip-flops. yosys will only map an array onto a RAM
+  // primitive if the array has ONE write port; a memory written from several
+  // places at once has no primitive at all to map onto, so it falls back to
+  // discrete flops plus a 512-entry read mux. This buffer used to do exactly
+  // that -- IDENTIFY filled all 512 entries in a single cycle, which is 512
+  // write ports -- and the result was over half the logic in the whole design,
+  // with a mux whose cost re-optimised by thousands of LUTs whenever anything
+  // unrelated changed. That instability is what kept pushing the LCD build off
+  // the placement cliff. It is the same accident the palette hit earlier.
+  //
+  // So: every writer muxes onto the one port below, and every reader shares the
+  // one asynchronous read. Keep it that way.
   reg [7:0] buf_[0:511];
   reg [9:0] idx;
   reg       drq, errf, wmode, dev;
+
+  // The IDENTIFY fill walks the buffer a byte per clock instead of writing it
+  // all at once. 512 clocks is 19 us at 27 MHz, invisible next to an SD command,
+  // and BSY is held for the duration so a caller that does not poll DRQ still
+  // cannot read the buffer mid-fill.
+  reg       filling;
+  reg [9:0] fi;
 
   // ---- task file ----
   reg [7:0] lba0, lba1, lba2, feat;
@@ -60,10 +81,18 @@ module cf_sd(
   assign card_ready = sd_ready;
 
   // status: BSY | 0x40 | DRQ | ERR   (the 0x40 is DRDY, as in the emulator)
-  wire [7:0] status = {sd_busy, 1'b1, 6'b0} | (drq ? 8'h08 : 8'h00)
-                                            | (errf ? 8'h01 : 8'h00);
+  // `filling` reads as BSY: during an IDENTIFY fill the buffer genuinely is not
+  // ready, and the emulator's instantaneous fill is the thing being modelled.
+  wire [7:0] status = {sd_busy | filling, 1'b1, 6'b0} | (drq ? 8'h08 : 8'h00)
+                                                      | (errf ? 8'h01 : 8'h00);
+
+  // ONE asynchronous read port, shared by the data-port read and the write path
+  // that feeds the card. Two separate `buf_[idx]` reads would be two read ports
+  // and two copies of the RAM.
+  wire [7:0] bq = buf_[idx];
+
   assign cf_rdata = !present         ? 8'hFF :
-                    (cf_a == 3'd0)   ? buf_[idx] :
+                    (cf_a == 3'd0)   ? bq :
                     (cf_a == 3'd7)   ? status : 8'hFF;
 
   // IDENTIFY model string, byte-swapped into words 27-46 as ATA specifies.
@@ -71,7 +100,23 @@ module cf_sd(
   // I command tells you at a glance whether you are on hardware or in the model.
   localparam [8*40:1] MODEL = "P8X-SD TANG NANO 20K                    ";
 
-  integer i;
+  // The swap that the old paired writes did structurally, now done to the INDEX:
+  // buffer byte 54+j carries model character j^1. MODEL is declared [320:1] with
+  // the first character in the high bits, so character c sits at (40-c)*8 -: 8.
+  wire [9:0] moff  = fi - 10'd54;                   // 0..39 across the name field
+  wire [6:0] mk    = 7'd40 - {1'b0, moff[5:0] ^ 6'd1};
+  wire [7:0] fbyte = (fi >= 10'd54 && fi < 10'd94) ? MODEL[mk*8 -: 8] : 8'h00;
+
+  // The single write port. Priority matters only in that these never overlap:
+  // a fill runs with DRQ low and no transfer outstanding, and the card streams
+  // in only during a read command while the CPU can only write during a write.
+  wire       bw_en   = filling | sd_dstb
+                     | (cf_wr && cf_a == 3'd0 && present && drq && wmode);
+  wire [9:0] bw_addr = filling ? fi : idx;
+  wire [7:0] bw_data = filling ? fbyte : (sd_dstb ? sd_dout : cf_wdata);
+
+  always @(posedge clk) if (bw_en) buf_[bw_addr] <= bw_data;
+
   reg [1:0] cmd_pend;
 
   always @(posedge clk) begin
@@ -79,13 +124,24 @@ module cf_sd(
       idx <= 0; drq <= 0; errf <= 0; wmode <= 0; dev <= 0;
       lba0 <= 0; lba1 <= 0; lba2 <= 0; feat <= 0;
       rd_req <= 0; wr_req <= 0; cmd_pend <= 0;
+      filling <= 0; fi <= 0;
     end else begin
       rd_req <= 1'b0; wr_req <= 1'b0;
 
+      // ---- IDENTIFY fill, one byte a clock ----
+      // DRQ is raised only when the last byte has landed, so the monitor's
+      // CFDRQ spin (bounded at ~4096 polls, far more than the 512 clocks this
+      // takes) sees the buffer complete or not at all.
+      if (filling) begin
+        if (fi == 10'd511) begin
+          filling <= 1'b0; fi <= 0; idx <= 0; drq <= 1'b1;
+        end else fi <= fi + 1'b1;
+      end
+
       // ---- data arriving from the card during a read ----
-      if (sd_dstb) begin buf_[idx] <= sd_dout; idx <= idx + 1'b1; end
+      if (sd_dstb) idx <= idx + 1'b1;          // the write itself is on bw_*
       // ---- card pulling data from us during a write ----
-      if (sd_dreq) begin wbyte <= buf_[idx]; idx <= idx + 1'b1; end
+      if (sd_dreq) begin wbyte <= bq; idx <= idx + 1'b1; end
 
       if (sd_done) begin
         idx  <= 0;
@@ -105,7 +161,7 @@ module cf_sd(
           3'd5: lba2 <= cf_wdata;
           3'd6: dev  <= cf_wdata[0];
           3'd0: if (present && drq && wmode) begin       // data port write
-                  buf_[idx] <= cf_wdata;
+                  // the byte itself goes in through bw_*; this only sequences
                   if (idx == 10'd511) begin              // buffer full -> flush
                     idx <= 0; drq <= 0;
                     lba <= {8'd0, lba2, lba1, lba0};
@@ -121,12 +177,9 @@ module cf_sd(
                          // mysterious bad filesystem.
                          errf <= 1; drq <= 0;
                        end else begin                                 // IDENTIFY
-                         for (i = 0; i < 512; i = i + 1) buf_[i] <= 8'h00;
-                         for (i = 0; i < 40; i = i + 2) begin
-                           buf_[54+i]   <= MODEL[(40-(i+1))*8 -: 8];
-                           buf_[54+i+1] <= MODEL[(40-i)*8 -: 8];
-                         end
-                         idx <= 0; drq <= 1; errf <= 0; wmode <= 0;
+                         // Start the fill; DRQ comes up when it finishes.
+                         filling <= 1'b1; fi <= 0;
+                         idx <= 0; drq <= 0; errf <= 0; wmode <= 0;
                        end
                   8'h20: if (!sd_ready) begin errf <= 1; drq <= 0; end
                        else begin                                     // READ SECTORS

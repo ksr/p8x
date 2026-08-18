@@ -79,8 +79,8 @@ openFPGALoader -b tangnano20k p8x.fs
 > `openFPGALoader` still flashes it.
 
 Resource use for that echo design is tiny — 219/20736 LUT4 (1%), 109/15552 DFF.
-The real builds are much larger: `cpu` is 40/46 block RAMs, and `lcd` 44/46 with
-the framebuffer. See *The graphics panel* below.
+The real builds are much larger: `cpu` is 40/46 block RAMs, and `lcd` 42/46 with
+the panel and the SD sector buffer. See *The graphics panel* below.
 
 ## Connect a terminal
 
@@ -212,29 +212,46 @@ settled, all of which I had guessed wrong:
 
 Pins: CLK 77, DEN 48, R 38–42, G 32–37, B 27–31, `DRIVE=24 PULL_MODE=UP`.
 
-**It does fit** — but not with much room. Measured from the shipped `build.sh
-lcd` (the "without" column is the design-time `cpu` build):
+**It fits with room to spare.** Measured from the shipped `build.sh lcd` on the
+`sdram-framebuffer` branch:
 
-| | with graphics | without |
+| | `lcd` | history |
 |---|---|---|
-| BSRAM | **44 / 46** (95%) | 40 / 46 |
-| LUT4 | **13288 / 20736** (64%) | 8029 |
-| DFF | 5365 / 15552 (34%) | — |
-| Fmax | **38.8 MHz** (tighter of the two reported domains; the other is 54.9) | 48.8 MHz |
+| BSRAM | **42 / 46** (91%) | 44 / 46 when the framebuffer was in block RAM |
+| LUT4 | **7226 / 20736** (34%) | 13288 (64%), then 15397 (74%, would not place) |
+| DFF | 1581 / 15552 (10%) | 5657 |
+| Fmax | **51.6 MHz** | 38.8 MHz |
 
-Still a wide margin over the 9 MHz the design actually runs at, but note that
-95% BSRAM occupancy puts place-and-route close to the edge: see the placement
-cliff noted in [BACKLOG.md](../../BACKLOG.md).
+Two changes account for the drop, and neither is a graphics change. The
+framebuffer moved out of block RAM into the in-package SDRAM, and the SD sector
+buffer stopped inferring 4,096 flip-flops (see below). At 34% LUT4 the placement
+cliff described in [BACKLOG.md](../../BACKLOG.md) is no longer load-bearing —
+name mangling still perturbs the placer, it just no longer decides whether the
+build succeeds.
 
-The framebuffer costs 4 blocks (8160 bytes at 2 bits per pixel) and leaves two
-spare. **No PLL is needed**: 480x272 at 60 Hz wants 9.009 MHz and 27/3 is 9.000,
-the same divide-by-three the CPU already runs on, so both rPLLs stay free for the
+**No PLL is needed**: 480x272 at 60 Hz wants 9.009 MHz and 27/3 is 9.000, the
+same divide-by-three the CPU already runs on, so both rPLLs stay free for the
 Milestone-5 clock-up.
 
-**The framebuffer shares ONE port** between the drawing engine and the scanout.
-True dual port halves a Gowin block's usable depth, so 8160 bytes would cost 8
-blocks instead of 4 and the design would not place at 48/46. The scanout needs a
-byte only once per eight panel pixels, so the engine simply holds for that cycle.
+**The 512-byte SD sector buffer is one BSRAM, and staying that way is a
+constraint on how `rtl/cf_sd.v` is written.** yosys maps an array onto a RAM
+primitive only if it has ONE write port; the IDENTIFY command used to fill all
+512 entries in a single cycle, which is 512 write ports, so the buffer fell back
+to 4,096 discrete flops plus a 512-entry read mux — more than half the logic in
+the design. The fill is now sequential and every writer muxes onto one port. If
+you ever see `using FF mapping for memory p8x_top.CF.buf_` in `synth.log`,
+something has grown a second write port.
+
+> The section below describes the **superseded** block-RAM framebuffer
+> (240x136, 2 bpp). The device is now single-mode 480x272 at 8 bpp with the
+> framebuffer in SDRAM; see [sdram/README.md](sdram/README.md).
+
+The framebuffer cost 4 blocks (8160 bytes at 2 bits per pixel) and left two
+spare. **The framebuffer shared ONE port** between the drawing engine and the
+scanout. True dual port halves a Gowin block's usable depth, so 8160 bytes would
+have cost 8 blocks instead of 4 and the design would not have placed at 48/46.
+The scanout needed a byte only once per eight panel pixels, so the engine simply
+held for that cycle.
 
 Two benches check this without hardware:
 

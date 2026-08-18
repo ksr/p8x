@@ -88,7 +88,12 @@ stride and the 32-bit byte lanes are all right.
 **Four times the resolution and 64 times the colours, for three FEWER block
 RAMs.** That inverts the trade-off this started from: the SDRAM path is not a
 way to spend resources to get resolution, it is a way to get resolution and hand
-resources back to a design that is at 44/46 and on a placement cliff.
+resources back to a design that was at 44/46 and on a placement cliff.
+
+(The cliff itself turned out to have a second, larger cause that had nothing to
+do with graphics — the SD sector buffer inferring 4,096 flip-flops. With both
+fixed the `lcd` build sits at 7226/20736 LUT4 and 42/46 BSRAM. See
+[HANDOFF.md](HANDOFF.md).)
 
 ### Still to confirm
 
