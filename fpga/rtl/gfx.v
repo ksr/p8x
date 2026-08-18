@@ -115,7 +115,8 @@ module gfx (
   // each other's colours -- and matches gpu_setmode() in the emulator, which is
   // the golden model for exactly this sort of detail.
   reg  [11:0] pal [0:255];
-  integer pi;
+  reg        pload;      // walking the palette reload
+  reg [7:0]  pidx;
   // mode 1's default: 3-3-2 expanded to RGB444. Same arithmetic as the
   // emulator, so a program that never calls SETPAL sees identical colour in
   // both. The awkward *15/7 is what the emulator does; matching it matters more
@@ -132,7 +133,12 @@ module gfx (
   reg  [7:0]  gdata;                           // POINT result / IDENT stream
   reg  [3:0]  gidx;                            // IDENT cursor (0..13 = live)
 
-  assign sc_rgb = pal[sc_pen];
+  // Registered, not combinational: an async read of a 256-entry array cannot be
+  // block RAM and becomes a 256:1 mux in LUTs. The scanout absorbs the extra
+  // cycle -- it already presents its address one pixel ahead.
+  reg [11:0] sc_rgb_r;
+  always @(posedge clk) sc_rgb_r <= pal[sc_pen];
+  assign sc_rgb = sc_rgb_r;
 
   // IDENT record: "P8X-GFX", version, width, height, pens, 0. Carries the
   // GEOMETRY so software can ask instead of assume -- the same 14 bytes the
@@ -249,7 +255,7 @@ module gfx (
 
   always @(posedge clk) begin
     if (rst) begin
-      st <= S_IDLE; px_go <= 0; px_word <= 0;
+      st <= S_IDLE; px_go <= 0; px_word <= 0; pload <= 0; pidx <= 0;
       gx0 <= 0; gy0 <= 0; gx1 <= 0; gy1 <= 0;
       gcol <= 8'd1; gparm <= 0; gparm2 <= 0; gerr <= 0; gdata <= 0; gidx <= 4'd14;
       pal[0] <= 12'h000; pal[1] <= 12'hFFF; pal[2] <= 12'hF00; pal[3] <= 12'h0F0;
@@ -267,6 +273,17 @@ module gfx (
       // span flag and paint four pixels where one was asked for.
       px_go   <= 0;
       px_word <= 0;
+
+      // Palette reload walk: one entry a cycle, 256 cycles, overlapping the
+      // CLS that a mode change performs anyway.
+      if (pload) begin
+        pal[pidx] <= gmode ? mode1_pal(pidx)
+                   : (pidx == 8'd0) ? 12'h000 : (pidx == 8'd1) ? 12'hFFF
+                   : (pidx == 8'd2) ? 12'hF00 : (pidx == 8'd3) ? 12'h0F0
+                   : 12'h000;
+        if (pidx == 8'd255) pload <= 0;
+        pidx <= pidx + 8'd1;
+      end
 
       // ---- command sequencer ----------------------------------------------
       case (st)
@@ -542,16 +559,17 @@ module gfx (
               // SETMODE. Refusing an unknown mode via ERR rather than
               // ignoring it matters: a device that silently ignores SETMODE
               // is indistinguishable from one that has no modes at all.
+              // SETMODE starts a palette RELOAD, one entry per cycle, rather
+              // than assigning all 256 at once. A parallel loop here gave the
+              // array 256 write ports, so yosys turned it into ~3072 flip-flops
+              // with 256-way enables and the async read became a 256:1 mux --
+              // about 2300 LUT4, which is what pushed the design past the point
+              // where it would place. The walk runs alongside the CLS the mode
+              // change needs anyway, so it costs no extra time.
               8'h0C: if (gparm == 8'd0 || gparm == 8'd1) begin
                        gmode <= gparm[0];
                        clsx <= 0; clsy <= 0; cls_val <= 8'h00; st <= S_CLS;
-                       if (gparm[0])
-                         for (pi = 0; pi < 256; pi = pi + 1)
-                           pal[pi] <= mode1_pal(pi[7:0]);
-                       else begin
-                         pal[0]<=12'h000; pal[1]<=12'hFFF;
-                         pal[2]<=12'hF00; pal[3]<=12'h0F0;
-                       end
+                       pload <= 1; pidx <= 0;
                      end else gerr <= 1;
               8'hF2: gidx <= 0;                 // IDENT: GDATA now streams
               default: gerr <= 1;
