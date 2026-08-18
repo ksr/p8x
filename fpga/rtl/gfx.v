@@ -109,7 +109,26 @@ module gfx (
   reg  [7:0]  gcol;                            // 0-3 mode 0, 0-255 mode 1
   reg  [7:0]  gparm, gparm2;                   // ELLIPSE: x- and y-radius
   reg         gerr;
-  reg  [11:0] pal [0:3];
+  // 256 entries, because mode 1 has 256 pens. Mode 0 uses only 0-3 and cannot
+  // address the rest, so it is unaffected. SETMODE reloads the table with the
+  // palette belonging to the mode, which is what stops the two contaminating
+  // each other's colours -- and matches gpu_setmode() in the emulator, which is
+  // the golden model for exactly this sort of detail.
+  reg  [11:0] pal [0:255];
+  integer pi;
+  // mode 1's default: 3-3-2 expanded to RGB444. Same arithmetic as the
+  // emulator, so a program that never calls SETPAL sees identical colour in
+  // both. The awkward *15/7 is what the emulator does; matching it matters more
+  // than tidiness.
+  function [11:0] mode1_pal(input [7:0] v);
+    reg [3:0] rr, gg, bb;
+    begin
+      rr = ({4'd0, v[7:5]} * 15) / 7;
+      gg = ({4'd0, v[4:2]} * 15) / 7;
+      bb = {2'd0, v[1:0]} * 5;
+      mode1_pal = {rr, gg, bb};
+    end
+  endfunction
   reg  [7:0]  gdata;                           // POINT result / IDENT stream
   reg  [3:0]  gidx;                            // IDENT cursor (0..13 = live)
 
@@ -526,6 +545,13 @@ module gfx (
               8'h0C: if (gparm == 8'd0 || gparm == 8'd1) begin
                        gmode <= gparm[0];
                        clsx <= 0; clsy <= 0; cls_val <= 8'h00; st <= S_CLS;
+                       if (gparm[0])
+                         for (pi = 0; pi < 256; pi = pi + 1)
+                           pal[pi] <= mode1_pal(pi[7:0]);
+                       else begin
+                         pal[0]<=12'h000; pal[1]<=12'hFFF;
+                         pal[2]<=12'hF00; pal[3]<=12'h0F0;
+                       end
                      end else gerr <= 1;
               8'hF2: gidx <= 0;                 // IDENT: GDATA now streams
               default: gerr <= 1;

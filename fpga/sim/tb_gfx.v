@@ -34,10 +34,17 @@ module tb_gfx;
 
   integer fh, x, y, r, i, cyc;
   reg [7:0] b;
-  reg [1:0] pen;
+  reg [7:0] pen;   // 8 bits: mode 1 has 256 pens
   reg [11:0] rgb;
 
-  localparam GW = 240, GH = 136, GSTRIDE = 60;
+  // Geometry is per-mode now. The dump has to ask the DEVICE which mode it is
+  // in rather than assume, or a mode-1 payload would be read as mode 0 and the
+  // diff would fail for entirely the wrong reason.
+  wire       md  = DUT.GFX.gmode;
+  wire [9:0] GW  = md ? 10'd480 : 10'd240;
+  wire [9:0] GH  = md ? 10'd272 : 10'd136;
+  wire [9:0] GSTR= md ? 10'd480 : 10'd60;
+  wire [1:0] ZOOM= md ? 2'd1    : 2'd2;   // mode 0 is pixel-doubled to the panel
 
   initial begin
     if (!$value$plusargs("ppm=%s", ppmfile)) ppmfile = "rtl.ppm";
@@ -64,14 +71,15 @@ module tb_gfx;
     // the file shows what the panel shows. Byte-for-byte what gpu_writeppm does.
     fh = $fopen(ppmfile, "wb");
     if (fh == 0) begin $display("tb_gfx: cannot write %0s", ppmfile); $finish; end
-    $fwrite(fh, "P6\n%0d %0d\n255\n", GW*2, GH*2);
+    $fwrite(fh, "P6\n%0d %0d\n255\n", GW*ZOOM, GH*ZOOM);
     for (y = 0; y < GH; y = y + 1)
-      for (r = 0; r < 2; r = r + 1)
+      for (r = 0; r < ZOOM; r = r + 1)
         for (x = 0; x < GW; x = x + 1) begin
-          b   = DUT.GFX.fb[y*GSTRIDE + (x >> 2)];
-          pen = (b >> ((3 - (x % 4)) * 2)) & 2'b11;
+          // The framebuffer is in the memory model now, not inside GFX.
+          b   = DUT.SDRAM.mem[y*GSTR + (md ? x : (x >> 2))];
+          pen = md ? b : ((b >> ((3 - (x % 4)) * 2)) & 2'b11);
           rgb = DUT.GFX.pal[pen];
-          for (i = 0; i < 2; i = i + 1) begin          // doubled across
+          for (i = 0; i < ZOOM; i = i + 1) begin       // doubled across
             $fwrite(fh, "%c", ((rgb >> 8) & 4'hF) * 17);
             $fwrite(fh, "%c", ((rgb >> 4) & 4'hF) * 17);
             $fwrite(fh, "%c", ( rgb       & 4'hF) * 17);

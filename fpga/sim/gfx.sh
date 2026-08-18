@@ -35,6 +35,9 @@ python3 "$HERE/mk_ucode_mem.py" "$EMU" ucode.hex >/dev/null
 
 iverilog -g2012 -o tb_gfx.vvp \
   "$ROOT/fpga/rtl/p8x_cpu.v" "$ROOT/fpga/rtl/p8x_soc.v" "$ROOT/fpga/rtl/gfx.v" \
+  "$ROOT/fpga/rtl/sdram_model.v" \
+  "$ROOT/fpga/tang-nano-20k/sdram/gfx_mem.v" \
+  "$ROOT/fpga/tang-nano-20k/sdram/sdram_arb.v" \
   "$HERE/tb_gfx.v"
 
 fail=0

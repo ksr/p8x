@@ -75,34 +75,69 @@ module p8x_soc #(
 
   wire irq_set = mem_we && (mem_addr == 16'hFF06);
 
-  // Graphics display. No scanout here -- this SoC has no panel; the testbench
-  // reads the framebuffer array directly to dump a frame. rd_stb is keyed off
-  // mem_rd, not the address, so the IDENT stream cannot be double-consumed by a
-  // multi-microcycle address (the same rule the ACIA needs at $FF05).
-  // sc_en is EXERCISED here, not tied low. There is no panel in this SoC, but
-  // the board grants the scanout the framebuffer port one cycle in three and the
-  // engine has to hold for it. Tying this off meant the co-sim never ran the
-  // hold path at all -- and a bug where a pending write was cancelled by a hold,
-  // losing about a third of every shape, sailed through a green frame diff and
-  // only showed up on hardware. A free-running counter reproduces the contention
-  // without needing a display.
-  // The hold pattern is deliberately IRREGULAR, not the board's regular
-  // one-in-three. The engine's pixel loop is six cycles, so a regular one-in-
-  // three hold has a FIXED phase relationship with it: a given collision either
-  // always happens or never does, and a bug that depends on one lands on the
-  // hardware exactly half the time while the co-sim stays green. (Verified: with
-  // the pending-write bug reintroduced, a regular pattern still passed.) An
-  // LFSR walks every alignment and produces back-to-back holds too, and the
-  // engine has to be correct for any pattern regardless of what a panel does.
+  // Graphics display. No panel here -- the testbench reads the memory model to
+  // dump a frame. rd_stb is keyed off mem_rd, not the address, so the IDENT
+  // stream cannot be double-consumed by a multi-microcycle address (the same
+  // rule the ACIA needs at $FF05).
+  //
+  // The framebuffer now lives in SDRAM, so the engine reaches it through an
+  // arbiter shared with the scanout and refresh. THAT CONTENTION IS EXERCISED
+  // HERE, not tied off. The reasoning is inherited from the block-RAM version
+  // and applies more strongly now that arbitration is real logic: tying the
+  // scanout off meant the co-sim never ran the contention path at all, and a
+  // bug where a pending write was cancelled -- losing about a third of every
+  // shape -- sailed through a green frame diff and only appeared on hardware.
+  //
+  // The pattern is deliberately IRREGULAR rather than the board's regular
+  // cadence. The engine's pixel loop has a fixed length, so a regular hold has a
+  // fixed phase relationship with it: a given collision either always happens or
+  // never does, and a bug depending on one lands on hardware about half the time
+  // while the co-sim stays green. (Verified once: with the pending-write bug
+  // reintroduced, a regular pattern still passed.) An LFSR walks every
+  // alignment and produces back-to-back contention too.
   reg [7:0] sc_lfsr = 8'hA5;
   always @(posedge clk)
     sc_lfsr <= {sc_lfsr[6:0], sc_lfsr[7] ^ sc_lfsr[5] ^ sc_lfsr[4] ^ sc_lfsr[3]};
+
+  wire        sd_rd, sd_wr, sd_word, sd_refresh;
+  wire [22:0] sd_addr;
+  wire [7:0]  sd_din, sd_dout;
+  wire [31:0] sd_dout32;
+  wire        sd_ready, sd_busy;
+
+  sdram_model SDRAM(
+    .clk(clk), .clk_sdram(clk), .resetn(!rst),
+    .addr(sd_addr), .rd(sd_rd), .wr(sd_wr), .wr_word(sd_word),
+    .refresh(sd_refresh), .din(sd_din),
+    .dout(sd_dout), .dout32(sd_dout32), .data_ready(sd_ready), .busy(sd_busy));
+
+  // Refresh has no memory to preserve in simulation, but it must still compete
+  // for the bus or the co-sim would not exercise the arbiter's middle priority.
+  reg [8:0] refr = 0;
+  always @(posedge clk) refr <= refr + 1'b1;
+
+  wire e_req, e_we, e_word, e_ack, e_ready;
+  wire [22:0] e_addr;
+  wire [7:0]  e_din;
+
+  sdram_arb ARB(
+    .clk(clk), .rst(rst),
+    .c_rd(sd_rd), .c_wr(sd_wr), .c_wr_word(sd_word), .c_refresh(sd_refresh),
+    .c_addr(sd_addr), .c_din(sd_din), .c_dout(sd_dout), .c_dout32(sd_dout32),
+    .c_ready(sd_ready), .c_busy(sd_busy),
+    // a fake scanout: reads nobody uses, purely to contend for the bus
+    .s_req(sc_lfsr[1:0] == 2'b00), .s_addr(23'd0), .s_ack(), .s_ready(),
+    .f_req(refr == 9'd0), .f_ack(),
+    .e_req(e_req), .e_we(e_we), .e_word(e_word), .e_addr(e_addr),
+    .e_din(e_din), .e_ack(e_ack), .e_ready(e_ready));
 
   gfx GFX(
     .clk(clk), .rst(rst),
     .sel(is_gfx), .a(mem_addr[3:0]), .wr(mem_we && is_gfx),
     .rd_stb(mem_rd && is_gfx), .wdata(mem_dout), .rdata(gfx_rdata),
-    .sc_en(sc_lfsr[1:0] == 2'b00), .sc_addr(13'd0), .sc_data(), .sc_pen(2'd0), .sc_rgb());
+    .sc_pen(8'd0), .sc_rgb(),
+    .e_req(e_req), .e_we(e_we), .e_word(e_word), .e_addr(e_addr),
+    .e_din(e_din), .e_ack(e_ack), .e_ready(e_ready), .e_dout(sd_dout));
 
   p8x_cpu CPU(
     .clk(clk), .rst(rst), .cen(1'b1),   // async model: one microcycle per clock
