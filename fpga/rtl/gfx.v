@@ -76,13 +76,22 @@ module gfx (
   input      [7:0]  wdata,
   output reg [7:0]  rdata,
 
-  // Scanout side: a byte-address read into the SHARED framebuffer port, plus
-  // the palette lookup. sc_en hands the port over for a cycle; the engine holds.
-  input             sc_en,       // this cycle the scanout owns the fb port
-  input      [12:0] sc_addr,
-  output     [7:0]  sc_data,
-  input      [1:0]  sc_pen,
-  output     [11:0] sc_rgb
+  // Palette lookup for the scanout. The framebuffer itself is no longer here --
+  // it lives in SDRAM and the scanout reads it through the arbiter -- but the
+  // palette stays, because SETPAL writes it and this is where the registers are.
+  input      [7:0]  sc_pen,
+  output     [11:0] sc_rgb,
+
+  // Arbiter port (engine side). Everything this module does to memory goes
+  // through gfx_mem below; nothing here touches the bus directly.
+  output            e_req,
+  output            e_we,
+  output            e_word,
+  output     [22:0] e_addr,
+  output     [7:0]  e_din,
+  input             e_ack,
+  input             e_ready,
+  input      [7:0]  e_dout
 );
   // rd_stb: pulses on the microcycle the CPU actually READS a register. The
   // IDENT stream advances on it rather than on the address, because mem_addr
@@ -90,8 +99,6 @@ module gfx (
   // hazard the ACIA has at $FF05.
 
 
-  localparam GW = 240, GH = 136, GSTRIDE = 60;
-  localparam FBBYTES = GSTRIDE*GH;             // 8160
 
   // ---- register file -------------------------------------------------------
   // Coordinates are 16-bit pairs. Writing a LOW byte CLEARS its high byte, so
@@ -99,7 +106,7 @@ module gfx (
   // 9 above their low ones ($FF29-$FF2C), which is what makes BASIC's GSTORE a
   // single routine.
   reg signed [17:0] gx0, gy0, gx1, gy1;
-  reg  [1:0]  gcol;
+  reg  [7:0]  gcol;                            // 0-3 mode 0, 0-255 mode 1
   reg  [7:0]  gparm, gparm2;                   // ELLIPSE: x- and y-radius
   reg         gerr;
   reg  [11:0] pal [0:3];
@@ -111,77 +118,56 @@ module gfx (
   // IDENT record: "P8X-GFX", version, width, height, pens, 0. Carries the
   // GEOMETRY so software can ask instead of assume -- the same 14 bytes the
   // emulator builds in gpu_ident().
+  // Geometry is per-mode and lives in gfx_mem now.
+  reg gmode;   // 0 = 240x136 2bpp, 1 = 480x272 8bpp
+
   function [7:0] ident_byte(input [3:0] i);
     case (i)
       4'd0: ident_byte = "P";   4'd1: ident_byte = "8";
       4'd2: ident_byte = "X";   4'd3: ident_byte = "-";
       4'd4: ident_byte = "G";   4'd5: ident_byte = "F";
       4'd6: ident_byte = "X";   4'd7: ident_byte = 8'd1;
-      4'd8: ident_byte = GW[7:0];      4'd9:  ident_byte = GW[15:8];
-      4'd10: ident_byte = GH[7:0];     4'd11: ident_byte = GH[15:8];
-      4'd12: ident_byte = 8'd4;
+      // The CURRENT mode's geometry and pen count -- which is the point of
+      // IDENT: software asks the device what it is, and in mode 1 that is a
+      // different screen. Matches gpu_ident() in the emulator.
+      4'd8:  ident_byte = gmode ? 8'd224 : 8'd240;   // width  480 / 240
+      4'd9:  ident_byte = gmode ? 8'd1   : 8'd0;
+      4'd10: ident_byte = gmode ? 8'd16  : 8'd136;   // height 272 / 136
+      4'd11: ident_byte = gmode ? 8'd1   : 8'd0;
+      4'd12: ident_byte = gmode ? 8'd0   : 8'd4;     // pens (256 wraps to 0)
       default: ident_byte = 8'd0;
     endcase
   endfunction
 
   // ---- framebuffer ---------------------------------------------------------
-  // ONE port, time-shared. It was two -- engine read/write plus a separate
-  // scanout read -- which reads better but costs double: Gowin's TRUE dual-port
-  // mode halves a block's usable depth, so 8160 bytes took EIGHT blocks instead
-  // of four and the design went to 48/46, which will not place.
-  //
-  // Sharing costs a THIRD of the engine, not a 24th: sc_en is simply `ph == 0`
-  // in video_rgb.v, so it claims the port once per pixel period whether it has
-  // a byte to fetch or not. That is where the 7.5 clocks per pixel above comes
-  // from. The engine holds that cycle, so nothing part-way through is corrupted.
-  reg [7:0] fb [0:FBBYTES-1];
-  reg [12:0] e_addr;
-  reg        e_we;
-  reg [7:0]  e_wdata;
-  reg [7:0]  e_rdata;
-
-  wire [12:0] fb_a  = sc_en ? sc_addr : e_addr;
-  wire        fb_we = sc_en ? 1'b0    : e_we;    // the scanout never writes
-
-  // ONE read register. Reading the array into two different destinations --
-  // `if (sc_en) sc_data <= ... else e_rdata <= ...` -- looks equivalent but is
-  // not synthesisable as block RAM: yosys cannot map it to a single read port
-  // and falls back to distributed LUT RAM (1020 RAM16SDP4 and 8113 LUT4 here,
-  // versus 4 BSRAM). Both consumers take fb_q instead.
-  reg [7:0] fb_q;
-  reg       sc_en_d;
-
-  always @(posedge clk) begin
-    if (fb_we) fb[fb_a] <= e_wdata;
-    fb_q    <= fb[fb_a];
-    sc_en_d <= sc_en;
-    // e_rdata holds across the scanout's cycles, so a read-modify-write that is
-    // part-way through is not clobbered by the byte the scanout fetched.
-    if (!sc_en_d) e_rdata <= fb_q;
-  end
-
-  assign sc_data = fb_q;      // valid the cycle after sc_en, which is phase 1
+  // It is not here any more. Both screen modes live in SDRAM (STAGE4-DESIGN.md),
+  // so the four block RAMs this used to occupy are returned and the scanout no
+  // longer has to share a port with the engine. The whole sc_en hold -- which
+  // cost the engine a cycle in three, and once silently dropped a third of every
+  // shape when e_we was cleared during a hold -- is gone with it: contention is
+  // the arbiter's problem now, and it is the only thing that has to be right.
 
   // ---- pixel unit ----------------------------------------------------------
-  // One read-modify-write. px_go starts it, px_busy falls when done. An
-  // off-screen pixel completes immediately WITHOUT touching memory -- that is
-  // the "discarded, not clipped" rule, and doing it here means every command
-  // gets it for free.
+  // Now a gfx_mem instance. The ALGORITHMS below are untouched by that: they
+  // still raise px_go and wait on px_busy, exactly as they did against block
+  // RAM. That is deliberate -- every one of them has to stay step-for-step
+  // identical to the emulator's gpu_* or the co-sim diverges, so the safest
+  // change is the one that does not edit them.
   reg signed [17:0] px_x, px_y;
-  reg        px_go, px_busy;
-  reg [1:0]  px_ph;
-  reg [1:0]  px_pen;
+  reg        px_go;
+  reg [7:0]  px_pen;                           // 8 bits now: mode 1 has 256 pens
   reg        px_read;                          // 1 = POINT (read, do not write)
+  reg        px_word;                          // 1 = span: four pixels at once
+  wire       px_busy;
+  wire [7:0] px_out;
 
-  wire px_on = (px_x >= 0) && (px_x < GW) && (px_y >= 0) && (px_y < GH);
-  // y*60 = y*64 - y*4: no multiplier, and 60 is not a power of two. The
-  // intermediate must be WIDER than the result: y*64 reaches 8640 for y=135,
-  // which does not fit the 13 bits y*60 needs, and a 13-bit shift silently
-  // wrapped it -- putting the bottom rows back at the top of the framebuffer.
-  wire [15:0] px_y16  = {3'd0, px_y[12:0]};
-  wire [15:0] px_row  = (px_y16 << 6) - (px_y16 << 2);
-  wire [12:0] px_byte = px_row[12:0] + {2'd0, px_x[12:2]};
-  wire [2:0]  px_sh   = (2'd3 - px_x[1:0]) << 1;   // leftmost pixel in the high bits
+  gfx_mem u_mem(
+    .clk(clk), .rst(rst), .mode(gmode),
+    .px_x(px_x), .px_y(px_y), .px_pen(px_pen), .px_go(px_go),
+    .px_read(px_read), .px_word(px_word),
+    .px_busy(px_busy), .px_out(px_out),
+    .e_req(e_req), .e_we(e_we), .e_word(e_word), .e_addr(e_addr),
+    .e_din(e_din), .e_ack(e_ack), .e_ready(e_ready), .e_dout(e_dout));
 
   // ---- command sequencer ---------------------------------------------------
   localparam S_IDLE  = 5'd0,  S_PIX   = 4'd1,  S_LINE  = 4'd2,
@@ -200,7 +186,9 @@ module gfx (
   reg signed [17:0] ccx, ccy, cr, cq;          // circle centre, x, y
   reg signed [19:0] cerr;
   reg [2:0]  oct;                              // circle: which of the 8 points
-  reg [12:0] clsi;
+  reg signed [17:0] clsx, clsy;                 // CLS cursor
+  wire signed [17:0] cls_xmax = gmode ? 18'sd479 : 18'sd239;
+  wire signed [17:0] cls_ymax = gmode ? 18'sd271 : 18'sd135;
   reg [7:0]  cls_val;                          // byte S_CLS fills with
 
   // ---- ellipse (midpoint, four-way symmetric) -------------------------------
@@ -242,71 +230,24 @@ module gfx (
 
   always @(posedge clk) begin
     if (rst) begin
-      st <= S_IDLE; px_go <= 0; px_busy <= 0; e_we <= 0;
+      st <= S_IDLE; px_go <= 0; px_word <= 0;
       gx0 <= 0; gy0 <= 0; gx1 <= 0; gy1 <= 0;
-      gcol <= 2'd1; gparm <= 0; gparm2 <= 0; gerr <= 0; gdata <= 0; gidx <= 4'd14;
+      gcol <= 8'd1; gparm <= 0; gparm2 <= 0; gerr <= 0; gdata <= 0; gidx <= 4'd14;
       pal[0] <= 12'h000; pal[1] <= 12'hFFF; pal[2] <= 12'hF00; pal[3] <= 12'h0F0;
     end else begin
-      // ONE always block. The ENGINE is gated by sc_en; the CPU register writes
-      // at the bottom are NOT. Splitting them into a second always block looked
-      // tidier and simulated fine, but both blocks assign `st`, `efill` and the
-      // command-setup registers -- two drivers on one reg. Icarus tolerates
-      // that; synthesis rejects it outright:
-      //   ERROR: Net 'GFX.efill...' is multiply driven by st_DFFRE_Q_3.Q and
-      //          st_DFFRE_Q_4.Q
-      // Same class as the gidx bug. Gate the engine, not the block.
-      if (sc_en) begin
-      // The scanout owns the framebuffer this cycle, so the engine holds. It
-      // costs one cycle in three -- fb_en fires once per panel pixel -- so the
-      // engine runs at two thirds speed, which is invisible next to the tens of
-      // thousands of pixels a fill takes.
+      // The engine is no longer gated by anything here. It used to hold for a
+      // cycle whenever the scanout claimed the shared framebuffer port -- a
+      // third of every cycle, and the source of a bug where clearing e_we
+      // during a hold silently discarded a third of every shape drawn. The
+      // framebuffer is in SDRAM now and contention is the arbiter's business,
+      // so the engine simply asks gfx_mem for a pixel and waits on px_busy.
       //
-      // e_we is deliberately NOT cleared here. It is set at the end of the
-      // read-modify-write's compute phase and the write lands on the FOLLOWING
-      // cycle; if that cycle is a hold, clearing it discards the write for good.
-      // At one collision in three that lost about a third of every shape drawn.
-      // Holding it means the write simply happens on the next engine cycle.
-    end else begin
-      e_we <= 0;
-
-      // ---- pixel unit ------------------------------------------------------
-      // FOUR phases. The framebuffer read is synchronous: e_addr is
-      // registered at the end of the cycle it is assigned, so e_rdata only holds
-      // that location's byte TWO cycles later. Acting on it one cycle early
-      // read the PREVIOUS address, and since 2bpp packs four pixels to a byte,
-      // the read-modify-write then wrote the target pixel correctly while
-      // clobbering its three neighbours -- a frame that is right for the first
-      // pixel of every byte and wrong for the rest.
-      if (px_go) begin
-        px_go <= 0;
-        if (!px_on) begin
-          px_busy <= 0;                        // off-screen: discarded
-          if (px_read) gdata <= 8'd0;
-        end else begin
-          e_addr  <= px_byte;                  // phase 0: issue the address
-          px_ph   <= 2'd0;
-          px_busy <= 1;
-        end
-      end else if (px_busy) begin
-        case (px_ph)
-          // FOUR phases now: fb_q is registered off the array and e_rdata is
-          // registered off fb_q, so a read costs one cycle more than it did
-          // when the engine had its own port.
-          2'd0: px_ph <= 2'd1;                 // address issued
-          2'd1: px_ph <= 2'd2;                 // fb_q loading
-          2'd2: begin                          // e_rdata is now valid
-            px_ph <= 2'd3;
-            if (px_read) begin
-              gdata   <= {6'd0, (e_rdata >> px_sh) & 2'b11};
-              px_busy <= 0;
-            end else begin
-              e_wdata <= (e_rdata & ~(8'b11 << px_sh)) | ({6'd0,px_pen} << px_sh);
-              e_we    <= 1;
-            end
-          end
-          default: px_busy <= 0;               // phase 3: the write has landed
-        endcase
-      end
+      // px_go must default low: it is a one-cycle pulse, and the FSM that used
+      // to clear it went with the pixel unit. px_word must default low too --
+      // it is a reg, so a plot issued after a CLS would otherwise inherit the
+      // span flag and paint four pixels where one was asked for.
+      px_go   <= 0;
+      px_word <= 0;
 
       // ---- command sequencer ----------------------------------------------
       case (st)
@@ -361,15 +302,21 @@ module gfx (
 
         // CLS writes whole BYTES: every byte is four pixels of one pen, so
         // 0x00/0x55/0xAA/0xFF. 8160 clocks instead of 65280.
-        S_CLS: begin
-          e_addr  <= clsi;
-          e_wdata <= cls_val;
-          e_we    <= 1;
-          if (clsi == FBBYTES-1) st <= S_DONE;
-          else clsi <= clsi + 1;
+        // CLS, one row at a time. It used to walk the framebuffer as raw bytes,
+        // which it cannot now that the memory is behind gfx_mem -- and going
+        // through the span path is what makes it four pixels a write anyway.
+        S_CLS: if (!px_go && !px_busy) begin
+          px_x <= clsx; px_y <= clsy; px_pen <= cls_val; px_read <= 0;
+          px_word <= (clsx[1:0] == 2'd0);      // aligned: cover four at once
+          px_go <= 1;
+          if (clsx + (clsx[1:0] == 2'd0 ? 18'sd4 : 18'sd1) > cls_xmax) begin
+            clsx <= 0;
+            if (clsy == cls_ymax) st <= S_DONE;
+            else                  clsy <= clsy + 18'sd1;
+          end else
+            clsx <= clsx + (clsx[1:0] == 2'd0 ? 18'sd4 : 18'sd1);
         end
 
-        // CIRCLE: midpoint, eight-way symmetric, matching gpu_circle().
         S_CIRC: if (!px_go && !px_busy) begin
           if (cr < cq) st <= S_DONE;
           else begin
@@ -489,7 +436,8 @@ module gfx (
           st  <= S_ELL;
         end
 
-        S_POINT: if (!px_go && !px_busy) st <= S_DONE;
+        // gfx_mem has already put the pixel (or 0 for off-screen) in px_out.
+        S_POINT: if (!px_go && !px_busy) begin gdata <= px_out; st <= S_DONE; end
 
         S_DONE: st <= S_IDLE;
         default: st <= S_IDLE;
@@ -507,7 +455,7 @@ module gfx (
           4'hA: gy0 <= {2'd0, wdata, gy0[7:0]};
           4'hB: gx1 <= {2'd0, wdata, gx1[7:0]};
           4'hC: gy1 <= {2'd0, wdata, gy1[7:0]};
-          4'h4: gcol  <= wdata[1:0];
+          4'h4: gcol  <= wdata;
           4'h8: gparm  <= wdata;
           4'hF: gparm2 <= wdata;   // GPARM2: ELLIPSE y-radius
           4'h5: begin
@@ -535,7 +483,11 @@ module gfx (
                 oct <= 0; px_pen <= gcol; px_read <= 0;
                 st  <= (wdata == 8'h03) ? S_BOXH : S_FILL;
               end
-              8'h05: begin clsi <= 0; cls_val <= {4{gcol}}; st <= S_CLS; end
+              // cls_val is latched at command time: RESET sets gcol in the same
+              // cycle, and reading gcol live cleared to the wrong pen.
+              8'h05: begin clsx <= 0; clsy <= 0;
+                           cls_val <= gmode ? gcol : {4{gcol[1:0]}};
+                           st <= S_CLS; end
               8'h06: pal[gcol] <= {gx0[3:0], gy0[3:0], gx1[3:0]};
               // ELLIPSE / ELLIPSEFILL. ccx/ccy and cx are shared with the
               // circle; S_ELLI needs one extra cycle before erx2/ery2 are
@@ -563,17 +515,24 @@ module gfx (
                 // this same cycle, so the clear came out WHITE while the
                 // emulator's gpu_reset memsets to zero -- 129644 of 130560
                 // pixels different, and invisible while the payload was a no-op.
-                clsi <= 0; cls_val <= 8'h00; st <= S_CLS;
-                gcol <= 2'd1; gparm <= 0; gdata <= 0; gidx <= 4'd14;
+                clsx <= 0; clsy <= 0; cls_val <= 8'h00; st <= S_CLS;
+                gmode <= 1'b0;            // mode 0 is the reset default
+                gcol <= 8'd1; gparm <= 0; gdata <= 0; gidx <= 4'd14;
                 pal[0]<=12'h000; pal[1]<=12'hFFF; pal[2]<=12'hF00; pal[3]<=12'h0F0;
               end
+              // SETMODE. Refusing an unknown mode via ERR rather than
+              // ignoring it matters: a device that silently ignores SETMODE
+              // is indistinguishable from one that has no modes at all.
+              8'h0C: if (gparm == 8'd0 || gparm == 8'd1) begin
+                       gmode <= gparm[0];
+                       clsx <= 0; clsy <= 0; cls_val <= 8'h00; st <= S_CLS;
+                     end else gerr <= 1;
               8'hF2: gidx <= 0;                 // IDENT: GDATA now streams
               default: gerr <= 1;
             endcase
           end
           default: ;
         endcase
-      end
     end
   end
 
