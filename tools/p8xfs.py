@@ -17,7 +17,8 @@ Usage (paths are absolute /a/b or relative to the root):
     p8xfs.py create  img [--sectors N]          format a fresh v2 volume
     p8xfs.py boot    img osimage.bin            install OS image at LBA 1
     p8xfs.py mkdir   img /BIN
-    p8xfs.py put     img file [--name /BIN/F] [--load A] [--exec A]
+    p8xfs.py put     img file [--name /BIN/F] [--load A] [--exec A] [--replace]
+    p8xfs.py rm      img /BIN/F                 tombstone a file (like FDELETE)
     p8xfs.py get     img /BIN/F [--out path]
     p8xfs.py ls      img [path]
     p8xfs.py tree    img
@@ -243,22 +244,53 @@ def cmd_boot(a):
           (a.osimage, nsec, nsec))
 
 
-def cmd_put(a):
-    img = read_img(a.img)
-    data = read_img(a.file)
-    dest = a.name or os.path.basename(a.file)
+def put_file(img, srcpath, dest, load, exec_, replace=False):
+    """Copy host file srcpath into the image as dest. With replace, an existing
+    FILE of that name is tombstoned first (F_DEL, like the on-target FDELETE;
+    its sectors become reclaimable-by-PACK). Importable — fput.py batches
+    several of these between one read_img/write_img pair."""
+    data = read_img(srcpath)
     parent, leaf = split_path(dest)
     pdir = resolve_dir(img, parent)
-    if find_in_dir(img, pdir[0], pdir[1], leaf):
-        raise SystemExit("p8xfs: %s already exists" % leaf)
+    old = find_in_dir(img, pdir[0], pdir[1], leaf)
+    if old:
+        if old["flags"] == F_DIR:
+            raise SystemExit("p8xfs: %s is a directory" % leaf)
+        if not replace:
+            raise SystemExit("p8xfs: %s already exists (use --replace)" % leaf)
+        img[old["off"] + 24] = F_DEL
     nsec = max(1, math.ceil(len(data) / SEC))
     start = alloc(img, nsec)
     for s in range(nsec):
         sec(img, start + s)[:] = data[s * SEC:(s + 1) * SEC].ljust(SEC, b"\x00")
-    add_entry(img, pdir[0], pdir[1], leaf, start, len(data), a.load, a.exec, F_FILE)
+    add_entry(img, pdir[0], pdir[1], leaf, start, len(data), load, exec_, F_FILE)
+    return len(data), start, nsec
+
+
+def cmd_put(a):
+    img = read_img(a.img)
+    dest = a.name or os.path.basename(a.file)
+    n, start, nsec = put_file(img, a.file, dest, a.load, a.exec, a.replace)
     write_img(a.img, img)
-    print("put %s  %d bytes  LBA %d..%d" %
-          (dest, len(data), start, start + nsec - 1))
+    print("put %s  %d bytes  LBA %d..%d" % (dest, n, start, start + nsec - 1))
+
+
+def cmd_rm(a):
+    img = read_img(a.img)
+    require_v2(img)
+    parent, leaf = split_path(a.name)
+    if leaf in ("", ".", ".."):
+        raise SystemExit("p8xfs: cannot rm %r" % a.name)
+    pdir = resolve_dir(img, parent)
+    e = find_in_dir(img, pdir[0], pdir[1], leaf)
+    if e is None:
+        raise SystemExit("p8xfs: %s not found" % a.name)
+    if e["flags"] == F_DIR:
+        raise SystemExit("p8xfs: %s is a directory — rm removes files only" % a.name)
+    img[e["off"] + 24] = F_DEL
+    write_img(a.img, img)
+    print("rm %s  (%d bytes tombstoned; sectors reclaimable by PACK)" %
+          (a.name, e["length"]))
 
 
 def cmd_get(a):
@@ -426,7 +458,12 @@ def main():
     c.add_argument("--exec", type=lambda x: int(x, 0), default=0xB000)
     c.add_argument("--strict", action="store_true",
                    help="fail (don't just warn) if a name exceeds the 12-char field")
+    c.add_argument("--replace", action="store_true",
+                   help="tombstone an existing file of the same name first")
     c.set_defaults(fn=cmd_put)
+
+    c = sub.add_parser("rm"); c.add_argument("img"); c.add_argument("name")
+    c.set_defaults(fn=cmd_rm)
 
     c = sub.add_parser("get"); c.add_argument("img"); c.add_argument("name")
     c.add_argument("--out"); c.set_defaults(fn=cmd_get)
