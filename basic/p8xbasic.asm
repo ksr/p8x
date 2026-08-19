@@ -163,12 +163,18 @@ GSADR  = BASRAM+$DB          ; GSTORE: target register address (page $FF)
 GSTGT  = BASRAM+$DC          ; GARG:   target held across EVAL
 GPEN   = BASRAM+$DD          ; shadow of GCOL -- the device register is WRITE-ONLY,
                              ;   so CLS could not otherwise restore the pen
-GPENH  = BASRAM+$F2          ; ...and its high byte, now a pen is a whole RGB565
-                             ;   colour. One of the two bytes the scratch-page
-                             ;   note below called the last spares; $F3 (RGBH)
-                             ;   is the other. Page FULL.
+GPENH  = BASRAM+$FA          ; ...and its high byte, now a pen is a whole RGB565
+                             ;   colour. NOT $F2: that is GTTMP, GTEXT's carry
+                             ;   scratch -- the stale "last spares" comment
+                             ;   below said $F2-$F3 were free and was wrong,
+                             ;   and a GTEXT would have corrupted the shadow
+                             ;   the next CLS restores. $FA-$FF are the real
+                             ;   free run; this takes the first byte.
 RGBH   = BASRAM+$F3          ; RGB(): the packed high byte, held across the
-                             ;   green and blue argument expressions
+                             ;   green and blue argument expressions. $F3 IS
+                             ;   free (GTTMP is one byte at $F2), and scratch
+                             ;   here is safe: nothing else can run inside an
+                             ;   RGB() argument expression.
 GCTMP  = BASRAM+$DE          ; GEXEC: the command byte, held across GWAIT
 GELL   = BASRAM+$DF          ; CIRCLE: 1 once a second radius made it an ellipse
 ; GTEXT working set. It rasterises glyphs itself (see DOGTEXT), so unlike the
@@ -207,6 +213,16 @@ STRTMPD= BASRAM+$241         ; STRTMP data area (past the length byte)
 STRARG = BASRAM+$280         ; a string function's string argument (64)
 STRCMP = BASRAM+$2C0         ; saved left operand during a string comparison (64)
 SVARTAB= BASRAM+$300         ; NSVARS x SVENT = 640 bytes ($x300..$x57F)
+
+; IMAGE working set. Shares GTEXT's scratch run deliberately: two statements
+; never execute at once, and this page has no free run left. (IMAGE's own
+; sixteen bits of x survive the row loop in IMX; everything else is per-row.)
+IMX    = BASRAM+$E6          ; left edge (2)
+IMYC   = BASRAM+$E8          ; current row y (2)
+IMW    = BASRAM+$EA          ; image width (2)
+IMH    = BASRAM+$EC          ; rows remaining (2)
+IMXC   = BASRAM+$EE          ; current column x (2)
+IMCX   = BASRAM+$F0          ; columns remaining in this row (2)
 
 ; keyword tokens (>= $80 so they never collide with text or the 00 terminator)
 TOK_PRINT = $80
@@ -263,6 +279,7 @@ TOK_CIRCLE= $AC          ; CIRCLE x,y,r[,FILL|,NOFILL]
 TOK_POINT = $AE          ; POINT(x,y) -- a FUNCTION, not a statement
 TOK_GTEXT = $AF          ; GTEXT x,y,size,string$
 TOK_RGB   = $B1          ; RGB(r,g,b) -- a FUNCTION: pack r,b 0-31, g 0-63 into 565
+TOK_IMAGE = $B2          ; IMAGE x,y,name$ -- draw a P8I file
                          ; $B0 was SCREEN, removed with the display modes. Do
                          ; not reuse it casually: a saved .BAS is tokenised, so
                          ; an old program on disk still has $B0 in it and would
@@ -436,6 +453,10 @@ STMT:   JSR  SKIPSP
         LDB  #TOK_GTEXT
         CMP
         JZ   DOGTEXT
+        LDA  (P2)
+        LDB  #TOK_IMAGE
+        CMP
+        JZ   DOIMAGE
         LDA  (P2)
         LDB  #TOK_REM
         CMP
@@ -1591,6 +1612,179 @@ gt_y1:  LDB  GTCY+1
         STA  GTPTR+1
         JMP  gt_ch
 gt_ret: RTS
+
+; IMAGE x,y,name$ — draw a P8I image file with its top-left corner at (x,y).
+;
+; The file describes itself — magic, version, geometry, depth (see
+; tools/p8img.py and STAGE6-DESIGN.md) — so this statement cannot be lied to
+; about the size: geometry in the arguments would let a wrong guess SHEAR the
+; picture into plausible garbage. The payload is little-endian RGB565, matching
+; the GCOL/GCOLH write order, so the inner loop is two file bytes and a PLOT.
+; Off-screen pixels are DISCARDED by the device, so an image at the edge clips
+; for free, the same rule everything else follows.
+;
+; Uses the one data channel's machinery (SETFNAME, FOPEN into PBUF, FGETB), so
+; a file OPEN'd for INPUT is closed by IMAGE — same licence SAVE/LOAD take.
+; A file that is not P8I, the wrong version or depth, or that ends early says
+; ?NOT P8I; whatever pixels arrived before a truncation stay drawn.
+DOIMAGE: INP2
+        JSR  GCHECK
+        JSR  EVAL                   ; x
+        LDA  RESULT
+        STA  IMX
+        LDA  RESULT+1
+        STA  IMX+1
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #','
+        CMP
+        JNZ  img_syn
+        INP2
+        JSR  EVAL                   ; y
+        LDA  RESULT
+        STA  IMYC
+        LDA  RESULT+1
+        STA  IMYC+1
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #','
+        CMP
+        JNZ  img_syn
+        INP2
+        JSR  SETFNAME               ; DIRLBA + FNAME = the resolved path
+        TPA2L                       ; the parse cursor sleeps through the file
+        PHA                         ; phase: FGETB CLOBBERS P1 *AND* P2 on its
+        TPA2H                       ; refill path -- the OS says so at MKSP,
+        PHA                         ; and the claim here that it spares P2 was
+                                    ; wrong past the first buffer-load
+        LDP1 #PBUF
+        JSR  FOPEN
+        JC   img_nf
+        LDA  #0
+        STA  FMODE                  ; the channel is ours; it stays closed after
+        JSR  IMGB                   ; ---- the header owns the next ten bytes
+        LDB  #'P'
+        CMP
+        JNZ  img_bad
+        JSR  IMGB
+        LDB  #'8'
+        CMP
+        JNZ  img_bad
+        JSR  IMGB
+        LDB  #'I'
+        CMP
+        JNZ  img_bad
+        JSR  IMGB
+        LDB  #1                     ; version 1 or nothing
+        CMP
+        JNZ  img_bad
+        JSR  IMGB
+        STA  IMW                    ; width, little-endian
+        JSR  IMGB
+        STA  IMW+1
+        JSR  IMGB
+        STA  IMH                    ; height
+        JSR  IMGB
+        STA  IMH+1
+        JSR  IMGB
+        LDB  #16                    ; depth: RGB565 or nothing
+        CMP
+        JNZ  img_bad
+        JSR  IMGB                   ; reserved, ignored
+        LDA  IMW                    ; a zero dimension is legal and draws nothing
+        LDB  IMW+1
+        OR
+        JZ   img_done
+        LDA  IMH
+        LDB  IMH+1
+        OR
+        JZ   img_done
+img_row: LDA IMYC                    ; GY0 pair <- this row; low first (the low
+        STA  GY0                    ;   write clears GY0H), constant for the row
+        LDA  IMYC+1
+        STA  GY0+GCHI
+        LDA  IMX                    ; back to the left edge
+        STA  IMXC
+        LDA  IMX+1
+        STA  IMXC+1
+        LDA  IMW
+        STA  IMCX
+        LDA  IMW+1
+        STA  IMCX+1
+img_px: JSR  IMGB                   ; colour: low byte clears GCOLH...
+        STA  GCOL
+        JSR  IMGB                   ; ...high byte completes it
+        STA  GCOLH
+        LDA  IMXC                   ; GX0 pair, low first
+        STA  GX0
+        LDA  IMXC+1
+        STA  GX0+GCHI
+        LDA  #GC_PLOT
+        JSR  GEXEC
+        LDA  IMXC                   ; x++
+        INC
+        STA  IMXC
+        JNZ  img_x1
+        LDA  IMXC+1
+        INC
+        STA  IMXC+1
+img_x1: LDA  IMCX                   ; columns--
+        LDB  #1
+        SUB
+        STA  IMCX
+        JC   img_c1                 ; C=1: no borrow
+        LDA  IMCX+1
+        LDB  #1
+        SUB
+        STA  IMCX+1
+img_c1: LDA  IMCX
+        LDB  IMCX+1
+        OR
+        JNZ  img_px
+        LDA  IMYC                   ; y++
+        INC
+        STA  IMYC
+        JNZ  img_y1
+        LDA  IMYC+1
+        INC
+        STA  IMYC+1
+img_y1: LDA  IMH                    ; rows--
+        LDB  #1
+        SUB
+        STA  IMH
+        JC   img_r1
+        LDA  IMH+1
+        LDB  #1
+        SUB
+        STA  IMH+1
+img_r1: LDA  IMH
+        LDB  IMH+1
+        OR
+        JNZ  img_row
+img_done: PLA                     ; the parse cursor, back from before the file
+        TAP2H
+        PLA
+        TAP2L
+        RTS
+img_syn: JMP  SYNERR                ; pre-push: SYNERR unwinds SP itself
+img_nf: LDA  #0
+        STA  FMODE
+        LDP1 #MNOFILE
+        JSR  PUTS
+        JMP  img_done
+img_bad: LDP1 #MNOTIMG
+        JSR  PUTS
+        JMP  img_done
+
+; IMGB — the next file byte -> A. On EOF it ABANDONS the statement: the two
+; return-address bytes JSR pushed are popped and control goes to the ?NOT P8I
+; report, so a truncated file cannot hang the pixel loop waiting for data.
+IMGB:   JSR  FGETB
+        JC   imgb_e
+        RTS
+imgb_e: PLA                         ; drop IMGB's own return address...
+        PLA
+        JMP  img_bad                ; ...and report from the statement's level
 
 ; GTSEP — require the ',' between GTEXT's arguments.
 GTSEP:  JSR  SKIPSP
@@ -4916,6 +5110,8 @@ KWTAB:  .ascii "PRINT"
         .byte $AF
         .ascii "RGB"
         .byte $B1
+        .ascii "IMAGE"
+        .byte $B2
         .byte $00
 
 ;==============================================================================
@@ -5065,6 +5261,8 @@ MHELP:  .byte CR,LF
         .byte CR,LF
         .ascii "  GTEXT x,y,size,s$   (5x7 text, 80 cols at size 1)"
         .byte CR,LF
+        .ascii "  IMAGE x,y,f$   draw a P8I image file (tools/p8img.py makes them)"
+        .byte CR,LF
         .ascii "  SCREEN IS 480x272 RGB565 - COLOR RGB(0-31,0-63,0-31)"
         .byte CR,LF
         .ascii "STRINGS: A$ B$ (assign, + concat, compare)"
@@ -5081,6 +5279,8 @@ MLOADED:.ascii "Loaded"
 MFSERR: .ascii "?Save failed"
         .byte CR,LF,0
 MNOFILE:.ascii "?No file"
+        .byte CR,LF,0
+MNOTIMG:.ascii "?NOT P8I"
         .byte CR,LF,0
 MNOGFX: .ascii "?No display"
         .byte CR,LF,0

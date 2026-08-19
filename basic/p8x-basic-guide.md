@@ -182,6 +182,7 @@ A line may hold several statements separated by `:` —
 | `CIRCLE x,y,r[,FILL\|,NOFILL]` | circle of radius `r` about `x,y` |
 | `CIRCLE x,y,rx,ry[,FILL\|,NOFILL]` | **ellipse** — a second radius gives separate x and y radii |
 | `RGB(r,g,b)` | *function*: pack a colour — `r`,`b` 0–31, `g` 0–63 |
+| `IMAGE x,y,name$` | draw a P8I image file with its top-left at `x,y` |
 | `GTEXT x,y,size,s$` | draw a string as graphics in the current `COLOR` |
 
 ### Graphics
@@ -269,6 +270,15 @@ bit-for-bit, so `IF POINT(x,y) = RGB(31,0,0)` works exactly.
 
 `PALETTE` is gone with the palette: there is nothing to install a colour
 into. Recolour-by-redraw is the trade stage 6 made for true colour.
+
+**Images.** `IMAGE x,y,name$` draws a **P8I** file — the machine's own
+picture format, ten self-describing header bytes (magic, version, geometry,
+depth) and raw RGB565. The file knows its own size, so the statement cannot
+be lied to about it; anything that is not P8I says `?NOT P8I`. Convert any
+picture on the host with `tools/p8img.py photo.png` — it scales to fit the
+screen and dithers to the 565 grid. Off-screen pixels are discarded, so an
+image may hang off any edge. `IMAGE` borrows the data channel: a file
+`OPEN`'d for `INPUT` is closed by it, like `SAVE` and `LOAD`.
 
 **Colours.** Each pen paints one of 4096 colours, set with `PALETTE`:
 

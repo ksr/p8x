@@ -96,6 +96,7 @@ GRAPHICS
         CIRCLE x,y,rx,ry          ELLIPSE: separate x and y radii
         CIRCLE x,y,rx,ry,FILL     ... solid
         GTEXT x,y,size,s$         draw a string as graphics
+        IMAGE x,y,name$           draw a P8I image file at (x,y)
     Any two opposite corners work for BOX; they are sorted for you. The
     drawing itself is done by the device, not by BASIC, so a filled box is
     as quick as an empty one.
@@ -109,6 +110,14 @@ GRAPHICS
     Arguments are masked to their fields. Because BASIC's integers are
     signed 16-bit, bright colours PRINT as negative numbers -- red is
     -2048 -- but compare and store perfectly well.
+
+    IMAGE draws a picture file. The file carries its own geometry and
+    depth (the P8I format -- tools/p8img.py converts anything into it), so
+    the statement takes only the position; a file that is not P8I, is the
+    wrong version or depth, or ends early says ?NOT P8I, and a missing one
+    ?No file. Pixels past the screen edge are discarded, so an image can
+    hang off any side. IMAGE uses the data channel, so a file OPEN'd for
+    INPUT is closed by it -- the same licence SAVE and LOAD take.
 
     GTEXT is the exception: BASIC draws the glyphs itself, because the
     display has no text command. It costs one device operation per lit

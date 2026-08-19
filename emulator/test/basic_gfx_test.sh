@@ -314,4 +314,75 @@ if bad:
 print("BASIC-GFX TEST: full screen ok (479,271 reachable, colours survive)")
 PY
 
-echo "BASIC-GFX TEST: PASS (draw, plot, circle, ellipse, rgb, point, gtext, full screen)"
+# --- part 6: IMAGE x,y,name$ -- the P8I loader ------------------------------
+# What can break, each checked: the header must be VALIDATED (a text file or
+# a truncated file says ?NOT P8I, a missing one ?No file); the pixels must
+# land at (x,y) with nothing outside the image's rectangle touched; both
+# colour bytes must arrive (the values are chosen to exercise the high byte);
+# and an image at the screen edge must CLIP, not wrap or error.
+python3 - <<'MKPIC'
+import struct
+w, h = 8, 5
+px = [0x1111 * ((y*w + x) % 15 + 1) & 0xFFFF for y in range(h) for x in range(w)]
+px[0] = 0xF800; px[w-1] = 0x07E0; px[(h-1)*w] = 0x001F; px[-1] = 0xFFFF
+open("pic.p8i","wb").write(b"P8I" + bytes((1,)) + struct.pack("<HH", w, h)
+                           + bytes((16, 0)) + struct.pack("<%dH" % len(px), *px))
+open("junk.bin","wb").write(b"NOT AN IMAGE AT ALL, JUST BYTES")
+MKPIC
+python3 "$ROOT/tools/p8xfs.py" put bgfx.img pic.p8i  --name /PIC.P8I  >/dev/null
+python3 "$ROOT/tools/p8xfs.py" put bgfx.img junk.bin --name /JUNK.BIN >/dev/null
+
+printf 'B\rbgfx\r10 CLS\r20 IMAGE 100,50,"/PIC.P8I"\r30 IMAGE 476,269,"/PIC.P8I"\r40 IMAGE 0,0,"/JUNK.BIN"\r50 IMAGE 0,0,"/NOPE"\r60 END\rRUN\rLIST\rBYE\r' \
+    > bgfx8.in
+../p8xemu -N -i bgfx8.in -c bgfx.img -l 200000000 -g bgfx8.ppm eeprom.bin > bgfx8.out 2>/dev/null || true
+
+python3 - <<'PY' || exit 1
+import sys
+bad = []
+out = open("bgfx8.out","rb").read().replace(b"\r", b"")
+if b"?NOT P8I" not in out:
+    bad.append("a non-P8I file was accepted (no ?NOT P8I)")
+if b"?No file" not in out:
+    bad.append("a missing file did not say ?No file")
+for kw in [b'20 IMAGE 100,50,"/PIC.P8I"', b'30 IMAGE 476,269,"/PIC.P8I"']:
+    if out.count(kw) < 2:
+        bad.append("LIST did not round-trip %r" % kw.decode())
+
+d  = open("bgfx8.ppm","rb").read()
+px = d[d.index(b"255\n")+4:]
+W  = 480
+def fb(x, y):
+    i = (y*W + x)*3
+    return tuple(px[i:i+3])
+def x888(p):                       # the emulator's exact 565->888 expansion
+    r5,g6,b5 = (p>>11)&31, (p>>5)&63, p&31
+    return ((r5<<3)|(r5>>2), (g6<<2)|(g6>>4), (b5<<3)|(b5>>2))
+def want(x, y, p, why):
+    if fb(x,y) != x888(p):
+        bad.append("(%d,%d) is %s, want %s - %s" % (x, y, fb(x,y), x888(p), why))
+
+# the image landed at (100,50), corners exact, both colour bytes intact
+want(100, 50, 0xF800, "image top-left corner (its red marker)")
+want(107, 50, 0x07E0, "image top-right corner")
+want(100, 54, 0x001F, "image bottom-left corner")
+want(107, 54, 0xFFFF, "image bottom-right corner")
+want(103, 52, 0x1111*((2*8+3)%15+1) & 0xFFFF, "an interior pixel")
+# nothing outside the rectangle was touched
+want( 99, 50, 0x0000, "left of the image was painted")
+want(100, 49, 0x0000, "above the image was painted")
+want(108, 54, 0x0000, "right of the image was painted")
+want(107, 55, 0x0000, "below the image was painted")
+# the edge draw clipped: on-screen part present, nothing wrapped to (0,271)
+want(476, 269, 0xF800, "clipped image lost its on-screen corner")
+want(479, 269, 0x1111*4 & 0xFFFF, "clipped image wrong at the screen edge")
+for x in range(1, 6):
+    want(x, 270, 0x0000, "clipped image wrapped onto the left edge")
+
+if bad:
+    print("BASIC-GFX TEST: FAIL")
+    for b in bad: print("  " + b)
+    sys.exit(1)
+print("BASIC-GFX TEST: image ok (placement, colours, header rejects, clipping)")
+PY
+
+echo "BASIC-GFX TEST: PASS (draw, plot, circle, ellipse, rgb, point, gtext, full screen, image)"
