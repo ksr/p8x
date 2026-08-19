@@ -92,32 +92,31 @@ writing, at the same address, in the same cycle. Simulation is defined there;
 a Gowin SDPB on a same-address collision is not. Worth confirming on the panel
 before trusting column 0.
 
-## OPEN BUG (2026-08-19 evening): the border's edges on the PANEL only
+## RESOLVED (2026-08-19): the border's edges -- marginal capture on gapless CAS
 
-One defect remains, panel-visible, sim-exact. The monitor's boot splash (a
-1-px white border + three swatches on black) displays with NO left edge line
-and a DOUBLED right edge line on the hardware panel -- while tb_full_stack.v
-(real gfx.v + real p8x_sdram + real sdram_video + chip model) shows every one
-of the 272 rows' edges pixel-perfect. Identical RTL cannot diverge on
-identical inputs, so the mechanism is at or past the pins.
+The splash's 1-px border displayed with no left line and a doubled right line
+while every sim was pixel-exact. The chase burned three wrong theories
+(PLL-lock cold-init, capture-latency rotate, halfword-select skew -- each
+predicted a subtly different wrong picture and died on evidence), and the
+decisive instrument was the USER'S EYE on a two-line test pattern: both lines
+visible, single width, but with SNOW -- frame-to-frame sparkle inside drawn
+lines. Snow meant intermittent capture errors, which reframed everything:
 
-Candidate mechanisms, each predicting a DIFFERENT wrong picture, all within
-a couple of pixels (beyond eyeball resolution):
-  - fetch-index slip (first word discarded): left line absent, right edge
-    white at ~477 AND ~479 with black at 478
-  - capture one cycle late: left line INSET at column 2, right edge missing
-  - 16-bit half skew: white at column 1
-  - panel-side DE/pclk extra latch: right edge thick (478+479 both white)
+  GAPLESS CAS STREAMS ARE ELECTRICALLY MARGINAL ON THIS BOARD. Mid-burst
+  words mostly survive (occasional bit flips = snow); the first word of every
+  line burst -- right after bus turn-on -- failed systematically (missing
+  left edge); the last word misbehaved at the drain (doubled right edge).
+  Single-word reads, with idle cycles around every access, have been solid
+  since the vendored controller: POINT never misread once.
 
-NEXT STEP, agreed with the user: they photograph the panel's left and right
-edge regions zoomed (phone resolves pixel columns), paste AND save to
-~/Desktop; the exact white/black column positions pick the mechanism. The
-board was FLASHED with the splash build (CLS fix + lock-gated reset + fresh
-ROM), so a bare power-cycle brings the test pattern up with no host needed.
-
-History for whoever reads the photos: the "missing left / doubled right" was
-FIRST reported against uncleared-stripe camouflage and survived the CLS fix,
-so it is real. POINT confirms both border edges present in the framebuffer.
+The fix: the stream issues its CAS every OTHER cycle (s_ph in p8x_sdram.v),
+giving each capture the settled bus a single read enjoys. A 240-word line
+costs ~510-560 of 1,680 cycles -- still 3x faster than the panel needs.
+Verified on the panel: all four border lines, single width, no snow. The
+lesson for the traps list: THE CHIP MODEL CANNOT SEE ELECTRICAL MARGIN --
+sim-exact plus panel-wrong means analogue, and temporal noise (snow) is the
+signature that distinguishes marginal capture from any logic bug, which are
+deterministic. No logic theory explains sparkle.
 
 ## Traps this branch has already paid for
 

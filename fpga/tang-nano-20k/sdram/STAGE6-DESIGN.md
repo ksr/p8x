@@ -59,9 +59,11 @@ Everything else in this stage is bookkeeping. The scanout numbers at 27 MHz
 | 16 bpp | 240 | **1,200-1,680 — dead on arrival** | **~270** |
 
 The vendored controller precharges after every access (`BURST_LEN=1`), paying a
-full activation per word. A controller that activates once and streams ~1
-word/cycle fetches a 16 bpp line in ~270 cycles — the depth costs nothing it
-cannot afford.
+full activation per word. A controller that activates once and streams fetches
+a 16 bpp line in a few hundred cycles — the depth costs nothing it cannot
+afford. (As built, the stream issues every OTHER cycle — ~510-560 cycles a
+line — because fully gapless CAS proved electrically marginal on the real
+board: see HANDOFF.md's resolved border-edge bug. Still 3x the needed speed.)
 
 **Refresh shapes the design.** 4096 auto-refreshes per 64ms is one every ~420
 cycles at 27 MHz, so a ~270-cycle burst cannot be atomic and the drawing engine

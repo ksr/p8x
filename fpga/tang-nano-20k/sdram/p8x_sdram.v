@@ -145,6 +145,7 @@ module p8x_sdram #(
   reg        s_pend;
 
   reg        p0, p1;                      // CAS-deep issue pipeline for st_valid
+  reg        s_ph;                        // stream pacing: issue every OTHER cycle
 
   // A latched word-op pulse, and the invariant that makes ONE latch enough.
   //
@@ -335,25 +336,35 @@ module p8x_sdram #(
 
       // ---- the stream --------------------------------------------------------
       // The ACTIVATE was issued on the way in; wait out tRCD, then run.
-      SACT: if (cycle == T_RCD) state <= SRUN;
+      SACT: if (cycle == T_RCD) begin state <= SRUN; s_ph <= 1'b0; end
 
-      // One READ a cycle, no auto-precharge. Four reasons to wind down --
-      // done, end of row, chunk exhausted, refresh due or an abort pending --
-      // and they all take the same exit: drain the pipe, close the row, let
-      // SNEXT decide what happens next.
+      // One READ every OTHER cycle, no auto-precharge. Half rate is not a
+      // concession, it is the fix for a real panel symptom: gapless CAS on
+      // silicon captured the FIRST word of every line as garbage (missing
+      // left border), mangled the last (doubled right border) and sprinkled
+      // bit errors through the rest (visible snow in drawn lines), while
+      // single-word reads have been solid since the vendored controller.
+      // Alternate-cycle issue gives every capture the same settled bus a
+      // single read gets. A 240-word line costs ~510 of 1,680 cycles --
+      // three times faster than the panel needs. Four reasons to wind down
+      // -- done, end of row, chunk exhausted, refresh due or abort pending
+      // -- all take the same exit: drain, close the row, SNEXT decides.
       SRUN: begin
-        {SDRAM_nRAS, SDRAM_nCAS, SDRAM_nWE} <= CMD_Read;
-        SDRAM_A[10] <= 1'b0;
-        SDRAM_A[9:0] <= {2'b0, s_col};
-        SDRAM_BA <= s_bank;
-        SDRAM_DQM <= 4'b0;
-        p0 <= 1'b1;
-        s_wptr  <= s_wptr + 21'd1;
-        s_left  <= s_left - 9'd1;
-        s_chunk <= s_chunk - 9'd1;
-        if (s_left == 9'd1 || s_col == 8'hFF || s_chunk == 9'd1
-            || ref_due || s_pend) begin
-          state <= SDRAIN; cycle <= 4'd1;
+        s_ph <= ~s_ph;
+        if (!s_ph) begin
+          {SDRAM_nRAS, SDRAM_nCAS, SDRAM_nWE} <= CMD_Read;
+          SDRAM_A[10] <= 1'b0;
+          SDRAM_A[9:0] <= {2'b0, s_col};
+          SDRAM_BA <= s_bank;
+          SDRAM_DQM <= 4'b0;
+          p0 <= 1'b1;
+          s_wptr  <= s_wptr + 21'd1;
+          s_left  <= s_left - 9'd1;
+          s_chunk <= s_chunk - 9'd1;
+          if (s_left == 9'd1 || s_col == 8'hFF || s_chunk == 9'd1
+              || ref_due || s_pend) begin
+            state <= SDRAIN; cycle <= 4'd1;
+          end
         end
       end
 
@@ -466,7 +477,7 @@ module p8x_sdram #(
       state <= INIT; cycle <= 4'd0;
       s_pend <= 0; s_left <= 0;
       p0 <= 0; p1 <= 0; st_valid <= 0; st_done <= 0;
-      ref_cnt <= 0; ref_due <= 0; resume <= 0; win <= 0;
+      ref_cnt <= 0; ref_due <= 0; resume <= 0; win <= 0; s_ph <= 0;
       q_rd <= 0; q_wr <= 0;
     end
   end

@@ -28,3 +28,4 @@
 - [ECAD workflow rules](feedback_ecad_schematic_truth.md) — `-a` suffix = user's LIVE Fusion files (edit those, not the unsuffixed baseline); .sch is always source of truth
 - [Arduino-scratch test board](project_arduino_scratch_board.md) — standalone Cowork<->Fusion round-trip probe in hardware/arduino-scratch; edit in place once placed
 - [Git without -C](feedback_git_no_dash_c.md) — cd into the repo first; `git -C` prompts every time, plain git does not
+- [P8X open border bug](project_p8x_border_bug.md) — splash border wrong on panel only, sim exact; awaiting user edge photos; splash build in flash

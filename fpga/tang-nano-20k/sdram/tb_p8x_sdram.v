@@ -244,7 +244,7 @@ module tb_p8x_sdram;
         check(0, "P3: stream data mismatch"); i = 240;
       end
     $display("P3: 240 words in %0d cycles", cycles - cyc0);
-    check(cycles - cyc0 < 400, "P3: stream slower than words + chunk overhead");
+    check(cycles - cyc0 < 700, "P3: stream slower than half-rate words + chunk overhead");
     if (fails == 0) $display("P3 ok: stream");
 
     // ---- P4: a stream crossing a row boundary -------------------------------
