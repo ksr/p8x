@@ -84,7 +84,8 @@ GRAPHICS
     RGB565 direct colour: a pixel IS its colour, 65,536 of them, and 0 is
     black. x runs 0..479 left to right, y runs 0..271 top to bottom, and
     anything off-screen is simply not drawn.
-        COLOR c                   select the drawing colour; RGB() builds one
+        COLOR c                   drawing colour: one PACKED value...
+        COLOR r,g,b               ...or three numbers (r,b 0-31, g 0-63)
         CLS                       clear the screen; COLOR is unchanged
         PLOT x,y                  one pixel
         LINE x0,y0,x1,y1          line, both endpoints drawn
@@ -104,12 +105,15 @@ GRAPHICS
     There is no SCREEN statement, no display modes and no palette. The
     device is 480x272 at 16 bits a pixel and nothing else. A colour is
     RGB565 -- five bits of red, six of green (the eye is fussiest there),
-    five of blue -- and RGB(r,g,b) packs one:
-        COLOR RGB(31,0,0)         red      (r and b are 0-31, g is 0-63)
-        COLOR RGB(31,63,31)       white
-    Arguments are masked to their fields. Because BASIC's integers are
-    signed 16-bit, bright colours PRINT as negative numbers -- red is
-    -2048 -- but compare and store perfectly well.
+    five of blue:
+        COLOR 31,0,0              red      (r and b are 0-31, g is 0-63)
+        COLOR 31,63,31            white
+    The one-number form takes a PACKED colour, which is what RGB(r,g,b)
+    builds and what POINT returns -- so C=POINT(X,Y):COLOR C draws with a
+    colour read off the screen. Arguments are masked to their fields.
+    Because BASIC's integers are signed 16-bit, bright colours PRINT as
+    negative numbers -- red is -2048 -- but compare and store perfectly
+    well.
 
     IMAGE draws a picture file. The file carries its own geometry and
     depth (the P8I format -- tools/p8img.py converts anything into it), so

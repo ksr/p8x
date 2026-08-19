@@ -1274,13 +1274,21 @@ DOGLINE: INP2                       ; consume the LINE token
         JSR  GEXEC
         RTS
 
-; COLOR c -- the pen is a whole RGB565 colour; RGB(r,g,b) builds one. Values
-; 0-255 still parse and work (they are the dark blue-greens 565 makes of
-; them); the old pen numbers stopped meaning their old colours at stage 6.
+; COLOR c  |  COLOR r,g,b -- the pen is a whole RGB565 colour. One number is
+; a PACKED colour (RGB() builds one, and POINT returns one, so C=POINT(X,Y):
+; COLOR C round-trips); three numbers are r,b 0-31, g 0-63, packed here by
+; the same RGBTAIL the RGB() function uses. The comma decides, the same way
+; CIRCLE's optional second radius does.
 DOCOLOR: INP2
         JSR  GCHECK
         JSR  EVAL
-        LDA  RESULT
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #','
+        CMP
+        JNZ  dc_st                  ; no comma: RESULT is the packed colour
+        JSR  RGBTAIL                ; comma: RESULT was r; parse ,g,b and pack
+dc_st:  LDA  RESULT
         STA  GPEN                   ; shadow first: GCOL cannot be read back
         STA  GCOL                   ; low byte first -- this clears GCOLH
         LDA  RESULT+1
@@ -2684,18 +2692,34 @@ fa_rgb: INP2
         JNZ  rgb_err
         INP2
         JSR  EXPR                   ; red
-        LDA  RESULT
+        JSR  RGBTAIL                ; ,green ,blue -> RESULT packed
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #')'
+        CMP
+        JNZ  rgb_err
+        INP2
+        RTS
+rgb_err: JMP SYNERR
+
+; RGBTAIL -- RESULT holds r; parse ",g,b" and pack (r<<11)|(g<<5)|b into
+; RESULT. Shared by the RGB() function and COLOR's three-number form, so the
+; two can never drift. Arguments are MASKED to their fields. RGBH is not
+; preserved across a nested RGB() in an argument -- the same class of
+; limitation POINT has -- and the (g&7)<<5 half rides the STACK across the
+; blue argument; SYNERR unwinds SP, so an error mid-argument cannot leak it.
+RGBTAIL: LDA RESULT
         LDB  #$1F
         AND
         SHL
         SHL
-        SHL                         ; (r&31)<<3: the high byte top five bits
+        SHL                         ; (r&31)<<3: the high byte's top five bits
         STA  RGBH
         JSR  SKIPSP
         LDA  (P2)
         LDB  #','
         CMP
-        JNZ  rgb_err
+        JNZ  rgt_err
         INP2
         JSR  EXPR                   ; green
         LDA  RESULT
@@ -2704,7 +2728,7 @@ fa_rgb: INP2
         STA  RESULT                 ; masked g, parked while both halves pack
         SHR
         SHR
-        SHR                         ; g>>3: the high byte low three bits
+        SHR                         ; g>>3: the high byte's low three bits
         LDB  RGBH
         OR
         STA  RGBH                   ; high byte complete
@@ -2715,21 +2739,15 @@ fa_rgb: INP2
         SHL
         SHL
         SHL
-        SHL                         ; (g&7)<<5: the low byte top three bits
+        SHL                         ; (g&7)<<5: the low byte's top three bits
         PHA                         ; parked across the blue argument
         JSR  SKIPSP
         LDA  (P2)
         LDB  #','
         CMP
-        JNZ  rgb_err
+        JNZ  rgt_err
         INP2
         JSR  EXPR                   ; blue
-        JSR  SKIPSP
-        LDA  (P2)
-        LDB  #')'
-        CMP
-        JNZ  rgb_err
-        INP2
         LDA  RESULT
         LDB  #$1F
         AND
@@ -2741,7 +2759,7 @@ fa_rgb: INP2
         LDA  RGBH
         STA  RESULT+1
         RTS
-rgb_err: JMP SYNERR
+rgt_err: JMP SYNERR
 
 fa_peek: INP2
         JSR  PARGET              ; RESULT = address
@@ -5263,7 +5281,7 @@ MHELP:  .byte CR,LF
         .byte CR,LF
         .ascii "  IMAGE x,y,f$   draw a P8I image file (tools/p8img.py makes them)"
         .byte CR,LF
-        .ascii "  SCREEN IS 480x272 RGB565 - COLOR RGB(0-31,0-63,0-31)"
+        .ascii "  SCREEN IS 480x272 RGB565 - COLOR R,G,B (0-31,0-63,0-31)"
         .byte CR,LF
         .ascii "STRINGS: A$ B$ (assign, + concat, compare)"
         .byte CR,LF

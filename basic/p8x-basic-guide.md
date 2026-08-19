@@ -259,9 +259,14 @@ colour, 65,536 of them, no palette and no modes. `RGB(r,g,b)` packs one:
 five bits of red, six of green (the eye is fussiest there), five of blue.
 
 ```basic
-10 COLOR RGB(31,0,0) : BOX 0,0,479,271,FILL    : REM a red screen
-20 COLOR RGB(31,63,31)                          : REM white
+10 COLOR 31,0,0 : BOX 0,0,479,271,FILL    : REM a red screen
+20 COLOR 31,63,31                          : REM white
+30 C=POINT(240,136) : COLOR C              : REM draw with a colour off the screen
 ```
+
+`COLOR` takes either three numbers — `r,g,b` — or one *packed* colour: what
+`RGB(r,g,b)` builds and `POINT(x,y)` returns. The comma decides, the same
+way `CIRCLE`'s optional second radius does.
 
 Arguments are masked to their fields. One wart, worn openly: BASIC's
 integers are signed 16-bit, so a bright colour **prints** as a negative

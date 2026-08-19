@@ -12,7 +12,9 @@
 #   2. CLS must clear to the BACKGROUND but leave the current COLOR alone. GCOL
 #      is write-only in the device, so the pen cannot be read back and restored;
 #      BASIC keeps the GPEN/GPENH shadow pair for exactly this (a pen is a
-#      whole RGB565 colour since stage 6).
+#      whole RGB565 colour since stage 6). COLOR takes either one PACKED value
+#      (RGB(), or a POINT round-trip) or three numbers R,G,B -- part 1 uses
+#      BOTH forms on purpose, and LIST must round-trip the three-number one.
 #   3. LINE endpoints are inclusive.
 #   4. LIST must round-trip the new keywords -- a token with no KWTAB entry
 #      lists as garbage while running perfectly.
@@ -38,7 +40,7 @@ python3 "$ROOT/tools/p8xfs.py" put bgfx.img bgfx.bin --name /bin/bgfx.bin \
 # at its ends. Colours go through RGB(), which also proves BASIC hands all 16
 # pen bits to GCOL+GCOLH -- an interpreter that dropped the high byte draws
 # these primaries as near-black and fails every pixel check.
-printf 'B\rbgfx\r10 COLOR RGB(0,63,0)\r20 CLS\r30 BOX 20,20,120,120,FILL\r40 COLOR RGB(31,0,0)\r50 BOX 200,20,300,120,NOFILL\r60 COLOR RGB(0,0,31)\r70 LINE 20,240,458,240\r80 END\rRUN\rLIST\rFILL\rBYE\r' \
+printf 'B\rbgfx\r10 COLOR 0,63,0\r20 CLS\r30 BOX 20,20,120,120,FILL\r40 COLOR RGB(31,0,0)\r50 BOX 200,20,300,120,NOFILL\r60 COLOR 0,0,31\r70 LINE 20,240,458,240\r80 END\rRUN\rLIST\rFILL\rBYE\r' \
     > bgfx.in
 ../p8xemu -N -i bgfx.in -c bgfx.img -l 120000000 -g bgfx.ppm eeprom.bin > bgfx.out 2>/dev/null || true
 
@@ -48,7 +50,7 @@ bad = []
 out = open("bgfx.out","rb").read().replace(b"\r", b"")
 
 # 4. LIST round-trips every new keyword
-for kw in [b"10 COLOR RGB(0,63,0)", b"20 CLS", b"30 BOX 20,20,120,120,FILL",
+for kw in [b"10 COLOR 0,63,0", b"20 CLS", b"30 BOX 20,20,120,120,FILL",
            b"50 BOX 200,20,300,120,NOFILL", b"70 LINE 20,240,458,240"]:
     if out.count(kw) < 2:            # once as typed, once from LIST
         bad.append("LIST did not round-trip %r" % kw.decode())
