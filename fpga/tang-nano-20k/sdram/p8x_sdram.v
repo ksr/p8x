@@ -376,21 +376,35 @@ module p8x_sdram #(
         end
       end
 
-      // The chunk boundary: refresh first (deadline), then the engine window.
+      // The chunk boundary. Order matters for the same reason it does in
+      // IDLE, and getting it wrong here LOST WRITES: a LIVE pulse must be
+      // taken this edge (the latch guard excludes SNEXT because SNEXT is an
+      // acceptance point -- so a pulse preempted here by refresh was neither
+      // consumed nor latched, and on the board the engine, window and
+      // refresh cadences phase-lock, eating a write every ~400 cycles: the
+      // striped CLS). Live pulse > refresh > latched > the window.
       SNEXT: begin
-        if (ref_due) begin
+        if (rd | wr) begin
+          {SDRAM_nRAS, SDRAM_nCAS, SDRAM_nWE} <= CMD_BankActivate;
+          SDRAM_BA <= addr[22:21];
+          SDRAM_A  <= addr[20:10];
+          addr_buf <= addr;
+          if (wr) begin din_buf <= din; word_buf <= wr_word; end
+          resume <= 1'b1;
+          state <= wr ? WWRITE : WREAD; cycle <= 4'd1; busy <= 1'b1;
+        end else if (ref_due) begin
           {SDRAM_nRAS, SDRAM_nCAS, SDRAM_nWE} <= CMD_AutoRefresh;
           ref_due <= 1'b0; resume <= 1'b1;
           state <= REF; cycle <= 4'd1; busy <= 1'b1;
-        end else if (e_rd | e_wr) begin
+        end else if (q_rd | q_wr) begin
           {SDRAM_nRAS, SDRAM_nCAS, SDRAM_nWE} <= CMD_BankActivate;
-          SDRAM_BA <= e_addr[22:21];
-          SDRAM_A  <= e_addr[20:10];
-          addr_buf <= e_addr;
-          if (e_wr) begin din_buf <= e_din; word_buf <= e_word; end
+          SDRAM_BA <= q_addr[22:21];
+          SDRAM_A  <= q_addr[20:10];
+          addr_buf <= q_addr;
+          if (q_wr) begin din_buf <= q_din; word_buf <= q_word; end
           q_rd <= 1'b0; q_wr <= 1'b0;
           resume <= 1'b1;
-          state <= e_wr ? WWRITE : WREAD; cycle <= 4'd1; busy <= 1'b1;
+          state <= q_wr ? WWRITE : WREAD; cycle <= 4'd1; busy <= 1'b1;
         end else if (win == 2'd0) begin
           busy <= 1'b1;                                 // close the window...
           state <= SGRAB;                               // ...but expect a straggler

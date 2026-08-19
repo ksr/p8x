@@ -113,6 +113,18 @@ before trusting column 0.
   Anything about mapping to the panel needs `tb_sdram_scanout.v`.
 - **A test that samples one pixel to measure a row property** will report the
   wrong bug when that pixel is broken. That cost several wasted iterations.
+- **Writes are fire-and-forget, so their loss is silent -- and the panel is
+  the only witness.** The stage-6 controller lost one engine write per ~400
+  cycles under a scanout stream: a live pulse arriving in the chunk window at
+  the exact edge refresh came due was preempted and fell into the one gap the
+  rescue latch does not cover. Every bench passed, because no bench ever ran
+  a WRITE STORM against a live stream (the interleave test used reads; the
+  co-sim has no scanout). On the board the engine, window and refresh
+  cadences phase-locked, so the rare race became a metronome: CLS-speed
+  writes lost chunks at regular spacing -- striped bars -- while slow fills
+  landed intact. tb_cls_stream.v now runs that storm and audits every word;
+  the fix is SNEXT taking a live pulse before a due refresh, the ordering
+  IDLE already documented.
 
 ## State
 
@@ -127,8 +139,10 @@ streaming controller underneath was proven at 8 bpp first (0 underruns,
 asserted in a bench that runs the real controller against a protocol-checking
 chip model validated against the vendored RTL).
 
-One formality open: the flash content is byte-identical to the verified SRAM
-image, but a power-cycle boot from THIS flash has not itself been observed.
+The first flashed build turned out to lose engine writes under the scanout
+stream (see the trap below); the CORRECTED build (7,355 LUT4) is what is in
+flash now, verified on the panel: a CLS write-storm plus colour bars, solid.
+A power-cycle boot from this exact flash image has not itself been observed.
 
 Two operational notes for whoever drives the board over serial next:
 
