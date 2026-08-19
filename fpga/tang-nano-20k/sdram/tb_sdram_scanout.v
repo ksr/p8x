@@ -84,9 +84,12 @@ module tb;
     end
   end
 
+  integer u0;
   task capture_frame;
     begin
       col = 0; row = 0;
+      u0 = underruns;                 // startup underruns are the controller's
+                                      // init window; the FRAME must add none
       for (i=0;i<480;i=i+1) seen[i] = 16'hEEEE;
       for (i=0;i<272;i=i+1) rowval[i] = 16'hEEEE;
       @(posedge dut.frame_tick);
@@ -108,11 +111,12 @@ module tb;
                  : { y[15:0], y[15:0] };
       end
 
-    // the controller inits alone (200 us); the scanout is held in reset until
-    // the memory is actually there to fetch from, as the board top does
-    repeat(4) @(posedge clk); crst_n = 1;
+    // THE BOARD'S ordering, not a polite one: the scanout comes out of reset
+    // WITH the controller and fires st_go into its 200 us init from the very
+    // first end-of-line. Holding the video back here is how a first-boot
+    // fetch wedge stayed invisible while every warm reset healed it.
+    repeat(4) @(posedge clk); crst_n = 1; rst = 0;
     wait (!c_busy);
-    @(posedge clk); rst = 0;
 
     // Let a couple of frames go by first. Frame 0 starts before any line has
     // been fetched, so capturing it reads an empty line buffer and reports
@@ -135,8 +139,9 @@ module tb;
         bad = bad + 1;
       end
 
-    if (underruns !== 16'd0) begin
-      $display("FAIL: %0d underruns -- the stream did not keep up", underruns);
+    $display("startup underruns (init window): %0d", u0);
+    if (underruns !== u0[15:0]) begin
+      $display("FAIL: %0d underruns DURING the captured frame", underruns - u0);
       bad = bad + 1;
     end
     if (CHIP.protocol_errors != 0) begin
@@ -156,7 +161,7 @@ module tb;
                seen[0],seen[1],seen[2],seen[3],seen[4],seen[5]);
       $finish(1);
     end
-    $display("TB-SCANOUT: PASS (column AND row mapping, real controller, 0 underruns)");
+    $display("TB-SCANOUT: PASS (mapping, real controller, board boot ordering, 0 frame underruns)");
     $finish(0);
   end
 endmodule

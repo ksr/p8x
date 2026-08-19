@@ -51,6 +51,13 @@ esac
 # on hardware this way and had in fact never reached the board.
 if [ "$TARGET" = cpu ] || [ "$TARGET" = lcd ]; then
   python3 mk_compact_ucode.py
+  # Assemble the monitor FROM SOURCE, right here. This used to read
+  # emulator/eeprom.bin -- a binary someone else was trusted to have
+  # refreshed -- and in August 2026 that baked a three-day-old monitor into
+  # two consecutive bitstreams while the source grew a boot splash: the exact
+  # silent-staleness this block's comment warns about, one level up.
+  python3 ../../assembler/p8xasm.py ../../firmware/p8xmon.asm -o ../../emulator/eeprom.bin >/dev/null
+  echo "==> eeprom.bin reassembled from firmware/p8xmon.asm"
   python3 - <<'PY'
 rom = open("../../emulator/eeprom.bin", "rb").read()[:8192]
 rom = rom + b"\x00" * (8192 - len(rom))

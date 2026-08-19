@@ -92,6 +92,33 @@ writing, at the same address, in the same cycle. Simulation is defined there;
 a Gowin SDPB on a same-address collision is not. Worth confirming on the panel
 before trusting column 0.
 
+## OPEN BUG (2026-08-19 evening): the border's edges on the PANEL only
+
+One defect remains, panel-visible, sim-exact. The monitor's boot splash (a
+1-px white border + three swatches on black) displays with NO left edge line
+and a DOUBLED right edge line on the hardware panel -- while tb_full_stack.v
+(real gfx.v + real p8x_sdram + real sdram_video + chip model) shows every one
+of the 272 rows' edges pixel-perfect. Identical RTL cannot diverge on
+identical inputs, so the mechanism is at or past the pins.
+
+Candidate mechanisms, each predicting a DIFFERENT wrong picture, all within
+a couple of pixels (beyond eyeball resolution):
+  - fetch-index slip (first word discarded): left line absent, right edge
+    white at ~477 AND ~479 with black at 478
+  - capture one cycle late: left line INSET at column 2, right edge missing
+  - 16-bit half skew: white at column 1
+  - panel-side DE/pclk extra latch: right edge thick (478+479 both white)
+
+NEXT STEP, agreed with the user: they photograph the panel's left and right
+edge regions zoomed (phone resolves pixel columns), paste AND save to
+~/Desktop; the exact white/black column positions pick the mechanism. The
+board was FLASHED with the splash build (CLS fix + lock-gated reset + fresh
+ROM), so a bare power-cycle brings the test pattern up with no host needed.
+
+History for whoever reads the photos: the "missing left / doubled right" was
+FIRST reported against uncleared-stripe camouflage and survived the CLS fix,
+so it is real. POINT confirms both border edges present in the framebuffer.
+
 ## Traps this branch has already paid for
 
 - **A LUT count that improves unexpectedly means broken logic** -- twice on this

@@ -138,6 +138,7 @@ COLD:   LDP3 #STKTOP        ; stack
                             ;   alongside an open write stream without clobbering it
         LDP1 #MBANNER
         JSR  PUTS
+        JSR  DISPINIT       ; a fitted display gets cleared + the boot splash
 
 ; ---------------- Main loop --------------------------------------------------
 PROMPT: LDP1 #MPROMPT
@@ -274,6 +275,70 @@ DPUT:   JSR  PUTC
         CMP
         JZ   PROMPT
         JMP  DPAGE          ; P1 already points at the next 256 bytes
+
+; ---------------- display bring-up --------------------------------------------
+; A cold SDRAM powers up as NOISE and the scanout shows it faithfully, so the
+; first thing a fitted panel does after power-on is alarm whoever just flipped
+; the switch. If the display answers its presence signature ("PG" at GID0/GID1
+; -- two fixed bytes at two addresses, because an absent card floats $FF), it
+; is cleared and given a small splash: a white full-screen border and three
+; colour swatches. That is a welcome, a self-check (all three channels, both
+; pen bytes, the full-screen extremes), and the first write pass through a
+; freshly initialised SDRAM -- all before the prompt appears. No display:
+; silently skipped, which is also what the no-panel builds see ($FF reads).
+;
+; Table-driven: pairs of (register LOW byte, value), $00 ending the table.
+; A GCMD entry waits for BUSY to drop first, so the CLS finishes before the
+; border draws over it. This is the worked example of driving the device from
+; machine code with 16-bit coordinates: every low write clears its high byte,
+; so the highs are written after the lows, and only where a value needs them.
+DISPINIT: LDA GID0
+        LDB  #'P'
+        CMP
+        JNZ  dsp_rt
+        LDA  GID1
+        LDB  #'G'
+        CMP
+        JNZ  dsp_rt
+        LDP1 #DSPTAB
+dsp_lp: LDA  (P1)+          ; register low byte; $00 = done
+        JZ   dsp_rt
+        STA  TMP            ; keep it: no P2->A transfer in this ISA
+        LDB  #$25           ; a GCMD entry lets the engine finish first
+        CMP
+        JNZ  dsp_bp
+dsp_gw: LDA  GSTAT
+        LDB  #$80
+        AND
+        JNZ  dsp_gw
+dsp_bp: LDA  TMP            ; P2 -> $FF00 + reg
+        TAP2L
+        LDA  #$FF
+        TAP2H
+        LDA  (P1)+          ; the value
+        STA  (P2)
+        JMP  dsp_lp
+dsp_rt: RTS
+
+; CLS black; white border 0,0-479,271; swatches red/green/blue, 40x24 each,
+; centred: proof of both pen bytes and all three channels at a glance.
+DSPTAB: .byte $24,$00, $25,$05                          ; GCOL 0, CLS
+        .byte $24,$FF, $2D,$FF                          ; pen $FFFF white
+        .byte $20,$00, $21,$00                          ; 0,0 ...
+        .byte $22,$DF, $2B,$01, $23,$0F, $2C,$01        ; ... 479,271
+        .byte $25,$03                                   ; BOX outline
+        .byte $24,$00, $2D,$F8                          ; pen $F800 red
+        .byte $20,$B4, $21,$7C, $22,$DB, $23,$93        ; 180,124 - 219,147
+        .byte $25,$04                                   ; BOXFILL
+        .byte $24,$E0, $2D,$07                          ; pen $07E0 green
+        .byte $20,$DC, $21,$7C                          ; 220,124 ...
+        .byte $22,$03, $2B,$01, $23,$93                 ; ... 259,147
+        .byte $25,$04
+        .byte $24,$1F                                   ; pen $001F blue
+        .byte $20,$04, $29,$01, $21,$7C                 ; 260,124 ...
+        .byte $22,$2B, $2B,$01, $23,$93                 ; ... 299,147
+        .byte $25,$04
+        .byte $00
 
 ; ---------------- I : init CF + identify -------------------------------------
 CMD_I:  JSR  CFINIT

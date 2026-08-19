@@ -320,7 +320,14 @@ module gfx (
             if (clsy == cls_ymax) st <= S_DONE;
             else                  clsy <= clsy + 18'sd1;
           end else
-            clsx <= clsx + (clsx[1:0] == 2'd0 ? 18'sd4 : 18'sd1);
+            // step by the PAIR actually written -- stepping 4 here while
+            // px_word covers 2 skipped every other pair, and the co-sim was
+            // blind to it: both models start zeroed and every payload
+            // clears TO zero. The full-stack bench sentinels memory first,
+            // which is why it caught what the panel's own camouflage
+            // (uncleared stripes of the previous picture) had disguised as
+            // a missing border and a display rotate.
+            clsx <= clsx + (clsx[0] == 1'b0 ? 18'sd2 : 18'sd1);
         end
 
         S_CIRC: if (!px_go && !px_busy) begin

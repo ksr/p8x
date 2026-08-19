@@ -70,9 +70,23 @@ module p8x_top(
 `endif
   );
 
-  // ---- power-on reset: hold for 256 clocks after configuration ----
+  // ---- power-on reset ----
+  // Held until 256 clocks after configuration AND, on the LCD build, until
+  // the SDRAM's phase-shifted clock has LOCKED. The lock gate is the fix for
+  // a bug that hid behind every warm reset: the controller's 200 us init ran
+  // against a still-settling clk_sdram on the FIRST boot after
+  // configuration, so the chip was initialised on a bad clock and engine
+  // writes rotted -- cold power-on and JTAG loads showed noise and "drawing
+  // does not work", while any subsequent reset (PLL long since locked)
+  // healed everything. Symptom on the panel: the monitor's boot splash only
+  // appearing after a second reset.
   reg [8:0] por = 9'd0;
+`ifdef LCD
+  wire      pll_lock;
+  wire      rst = ~por[8] | ~pll_lock;
+`else
   wire      rst = ~por[8];
+`endif
   always @(posedge clk) if (~por[8]) por <= por + 1'b1;
 
   // ---- CPU ----
@@ -164,7 +178,7 @@ module p8x_top(
   // system clock -- the shift is what buys setup/hold at the pads. Same rPLL
   // parameters Gowin's own generator produces for this board (see
   // sdram/sdram_test.v), and the PLL does NOT multiply: 27 MHz in, 27 out.
-  wire clk_sdram, pll_lock;
+  wire clk_sdram;               // pll_lock is declared with the reset above
   rPLL #(
     .FCLKIN("27"), .IDIV_SEL(1), .FBDIV_SEL(1), .ODIV_SEL(32),
     .PSDA_SEL("1010"), .DUTYDA_SEL("1000"), .DEVICE("GW2A-18C"),
