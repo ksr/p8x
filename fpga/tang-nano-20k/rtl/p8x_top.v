@@ -163,6 +163,9 @@ module p8x_top(
 `else
   wire is_gfx   = 1'b0;
 `endif
+  // The MDU (stage 8a, $FF30-$FF3F) is display-independent: every build
+  // flavour carries it, so software's MDID probe answers on all of them.
+  wire is_mdu   = (mem_addr >= 16'hFF30) && (mem_addr <= 16'hFF3F);
 
   // TDRE (bit 1) = transmitter free; RDRF (bit 0) = a byte is waiting.
   wire [7:0] cf_rdata;
@@ -263,10 +266,17 @@ module p8x_top(
   wire [7:0] gfx_rdata = 8'hFF;
 `endif
 
+  wire [7:0] mdu_rdata;
+  p8x_mdu MDU(.clk(clk), .rst(rst),
+              .sel(is_mdu), .a(mem_addr[3:0]),
+              .wr(cen && mem_we && is_mdu),
+              .wdata(mem_dout), .rdata(mdu_rdata));
+
   wire [7:0] io_rd = acia_st  ? {6'b0, ~tx_busy, rx_have} :
                      acia_dat ? rx_hold :
                      is_cf    ? cf_rdata :
-                     is_gfx   ? gfx_rdata : 8'hFF;
+                     is_gfx   ? gfx_rdata :
+                     is_mdu   ? mdu_rdata : 8'hFF;
   assign mem_din = is_io ? io_rd : mem_q;
 
   // Reading $FF05 consumes the byte -- keyed off mem_rd (the microcycles that

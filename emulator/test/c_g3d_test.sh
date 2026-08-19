@@ -43,7 +43,7 @@ int pnum(int v) {
     putchar(10);
     return 0;
 }
-int main() {
+int vecs() {
     pnum(muldiv(240, 271, 240));
     pnum(muldiv(12345, 271, 240));
     pnum(muldiv(30000, 30000, 7));
@@ -58,6 +58,13 @@ int main() {
     pnum(muldiv(511, 513, 2));
     pnum(muldiv(90, 120, 128));
     pnum(muldiv(0 - 90, 120, 128));
+    return 0;
+}
+int main() {
+    m3has = 2;      /* force the stage-7 all-software path */
+    vecs();
+    m3has = 0;      /* re-probe: the MDU path where one is fitted (emulator) */
+    vecs();
     puts("MDONE");
     return 0;
 }
@@ -85,15 +92,16 @@ def muldiv(a, b, c):
 V = [(240,271,240),(12345,271,240),(30000,30000,7),(-300,250,100),
      (300,-250,100),(-300,-250,100),(25000,4,100),(100,0,5),(5,7,0),
      (-5,7,0),(32767,1,1),(511,513,2),(90,120,128),(-90,120,128)]
-for a,b,c in V: print(muldiv(a,b,c))
+for a,b,c in V: print(muldiv(a,b,c))       # the software path...
+for a,b,c in V: print(muldiv(a,b,c))       # ...and the MDU path, identical
 print("MDONE")
 EOF
 printf 'B\rrun /bin/g3md.bin\r' | ../p8xemu -l 400000000 -c g3d.img eeprom.bin 2>/dev/null \
     | LC_ALL=C tr -d '\0\r' | grep -A99 -m1 '^[0-9-]' > g3_md_got.txt || true
-head -15 g3_md_got.txt > g3_md_got15.txt
-diff g3_md_want.txt g3_md_got15.txt >/dev/null || {
-    echo "want:"; cat g3_md_want.txt; echo "got:"; cat g3_md_got15.txt
-    fail "muldiv vectors differ"; }
+head -29 g3_md_got.txt > g3_md_got29.txt
+diff g3_md_want.txt g3_md_got29.txt >/dev/null || {
+    echo "want:"; cat g3_md_want.txt; echo "got:"; cat g3_md_got29.txt
+    fail "muldiv vectors differ (software or MDU path)"; }
 
 # ---- 2: cube frame 0 spot pixels -------------------------------------------
 printf 'B\rcube 1\r' > g3_cube.in

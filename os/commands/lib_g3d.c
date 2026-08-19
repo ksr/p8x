@@ -33,12 +33,30 @@
 //#define E3MAX  512   /* edge pool capacity (x6 ints = 6K of TPA)         */
 //#define Z3NEAR 16    /* nothing nearer projects; clip slides edges here  */
 
+/* The MDU (stage 8a, STAGE8-DESIGN.md): a hardware muldiv at $FF30 that
+ * implements THIS library's contract bit for bit. muldiv() probes for it
+ * once (MDID reads 'M'; an absent unit floats to $FF) and routes through
+ * it when present -- the same source runs on an old bitstream, the
+ * emulator, and the new silicon, fastest path chosen at runtime. */
+//#define MDA    0xFF30  /* operand a low (write clears high; high at +9) */
+//#define MDB    0xFF31
+//#define MDC    0xFF32
+//#define MDQ    0xFF33  /* read: result low                              */
+//#define MDGO   0xFF34  /* write anything: start                         */
+//#define MDSTAT 0xFF35  /* read: bit7 busy                               */
+//#define MDID   0xFF36  /* read: 'M' ($4D) when the MDU is fitted        */
+//#define MDAH   0xFF39
+//#define MDBH   0xFF3A
+//#define MDCH   0xFF3B
+//#define MDQH   0xFF3C
+
 int e3p[3072];                      /* the pool: E3MAX edges x x0,y0,z0,x1,y1,z1 */
 int e3n;                            /* edges in the pool                   */
 int w3x0; int w3y0; int w3x1; int w3y1;   /* window (view-plane coords)    */
 int v3x0; int v3y0; int v3x1; int v3y1;   /* viewport (screen pixels)      */
 int p3d;                            /* focal length; 0 = orthographic      */
 int m3hi; int m3lo;                 /* m3mul's 32-bit product              */
+int m3has;                          /* MDU probe: 0 unknown, 1 yes, 2 no   */
 int c3x0; int c3y0; int c3x1; int c3y1;   /* clip workspace                */
 
 /* signed a < b (the < below is unsigned, which is correct once the signs
@@ -105,6 +123,17 @@ int u3div(int c) {
  * ~10k fast. */
 int muldiv(int a, int b, int c) {
     int s; int q;
+    if (m3has == 0) {                     /* probe once, remember */
+        if (peek(MDID) == 77) { m3has = 1; } else { m3has = 2; }
+    }
+    if (m3has == 1) {                     /* the MDU implements the contract */
+        poke(MDA, a); poke(MDAH, a >> 8); /* poke stores the LOW byte, so   */
+        poke(MDB, b); poke(MDBH, b >> 8); /*   no & 255 mask is needed      */
+        poke(MDC, c); poke(MDCH, c >> 8);
+        poke(MDGO, 1);
+        while (peek(MDSTAT) & 128) { }
+        return peek(MDQ) | (peek(MDQH) << 8);
+    }
     s = 0;
     if (a & 32768) { a = 0 - a; s = 1 - s; }
     if (b & 32768) { b = 0 - b; s = 1 - s; }

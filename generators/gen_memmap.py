@@ -76,6 +76,28 @@ MAP = [
     ('I/O ports ($FF00-$FFFF)', 'GID1', 0xFF2E, "read: $47 'G' -- with GID0 spells PG"),
     ('I/O ports ($FF00-$FFFF)', 'GPARM2', 0xFF2F, 'ELLIPSE y-radius (GPARM is the x-radius)'),
 
+    # Stage 8a: the MDU (multiply-divide unit), $FF30-$FF3F. Hardware muldiv,
+    # bit-exact to lib_g3d's software contract (STAGE8-DESIGN.md): q = (a*b)/c
+    # signed through a 32-bit intermediate, truncated toward zero, saturated at
+    # +/-32767; 0 when a or b is 0 (even with c=0); +/-32767 when c is 0.
+    # Operands follow the gfx register conventions: 16-bit pairs, a LOW write
+    # CLEARS the high byte, highs sit 9 above their lows. Write MDGO to start,
+    # poll MDSTAT bit 7, then read MDQ (the RTL divider is busy ~20 cycles; the
+    # emulator computes instantly, the same licence GPU BUSY takes -- so
+    # software must still poll). MDID is the presence probe: an absent unit
+    # floats the bus to $FF, the same rule as the display's "PG".
+    ('I/O ports ($FF00-$FFFF)', 'MDA', 0xFF30, 'MDU operand a, low byte (write clears the high byte)'),
+    ('I/O ports ($FF00-$FFFF)', 'MDB', 0xFF31, 'MDU operand b, low byte'),
+    ('I/O ports ($FF00-$FFFF)', 'MDC', 0xFF32, 'MDU divisor c, low byte'),
+    ('I/O ports ($FF00-$FFFF)', 'MDQ', 0xFF33, 'read: MDU result (a*b)/c, low byte (poll MDSTAT first)'),
+    ('I/O ports ($FF00-$FFFF)', 'MDGO', 0xFF34, 'write (any value): start the MDU operation'),
+    ('I/O ports ($FF00-$FFFF)', 'MDSTAT', 0xFF35, 'read: bit7 BUSY'),
+    ('I/O ports ($FF00-$FFFF)', 'MDID', 0xFF36, "read: $4D 'M' -- MDU-presence probe"),
+    ('I/O ports ($FF00-$FFFF)', 'MDAH', 0xFF39, 'MDU operand a, high byte (write AFTER MDA)'),
+    ('I/O ports ($FF00-$FFFF)', 'MDBH', 0xFF3A, 'MDU operand b, high byte'),
+    ('I/O ports ($FF00-$FFFF)', 'MDCH', 0xFF3B, 'MDU divisor c, high byte'),
+    ('I/O ports ($FF00-$FFFF)', 'MDQH', 0xFF3C, 'read: MDU result, high byte'),
+
     ('BIOS / FS scratch ($6000-$60FF)', 'LBUF', 0x6000, 'input line buffer'),
     ('BIOS / FS scratch ($6000-$60FF)', 'ADDRL', 0x6040, 'parsed address'),
     ('BIOS / FS scratch ($6000-$60FF)', 'ADDRH', 0x6041, ''),

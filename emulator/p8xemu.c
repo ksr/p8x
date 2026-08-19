@@ -178,6 +178,24 @@ static uint8_t  gparm, gparm2, gerr;
 #define GIDLEN 14
 static uint8_t  gident[GIDLEN];
 static int      gidx=GIDLEN;
+
+/* Stage 8a MDU ($FF30-$FF3F): hardware muldiv, bit-exact to lib_g3d's
+   software contract (STAGE8-DESIGN.md). Operands follow the gfx pair rules
+   (low write clears high). Computation is INSTANT here -- MDSTAT never shows
+   busy -- the same licence the GPU takes with BUSY: the RTL divider IS busy
+   ~20 cycles, so software must poll even though it never spins here. */
+static uint16_t mda, mdb, mdc, mdq;
+static uint16_t mdu_exec(uint16_t a, uint16_t b, uint16_t c){
+    int sa=a>>15, sb=b>>15, sc=c>>15;
+    uint32_t ua = sa ? (uint16_t)(0-a) : a;   /* $8000 negates to 32768, */
+    uint32_t ub = sb ? (uint16_t)(0-b) : b;   /*   the same 16-bit wrap  */
+    uint32_t uc = sc ? (uint16_t)(0-c) : c;   /*   the software relies on */
+    uint32_t uq;
+    if(ua==0 || ub==0) return 0;              /* 0 even when c==0 */
+    if(uc==0) uq=32767;                       /* /0 saturates */
+    else { uq=(ua*ub)/uc; if(uq>32767) uq=32767; }
+    return (uint16_t)((sa^sb^sc) ? 0-uq : uq);
+}
 /* POINT's answer is 16 bits and GDATA is a byte port, so it STREAMS: low byte
    then high, the same idiom as the IDENT record. Reads past the second byte
    return the high byte again (parked), so a sloppy extra read is harmless and
@@ -533,6 +551,11 @@ static uint8_t memrd(uint16_t ad){
                  return gpt[1];                /* parked on the high byte */
     case GID0:   return 0x50;                      /* 'P' */
     case GID1:   return 0x47;                      /* 'G' -- "PG", not a floating $FF */
+    /* MDU reads. Instant, so MDSTAT is never busy (see the mdu_exec note). */
+    case MDQ:    return (uint8_t)(mdq & 0xFF);
+    case MDQH:   return (uint8_t)(mdq >> 8);
+    case MDSTAT: return 0x00;
+    case MDID:   return 0x4D;                      /* 'M' -- presence probe */
     default: return 0xFF;
     }
 }
@@ -566,6 +589,16 @@ static void memwr(uint16_t ad,uint8_t v){
       case GPARM: gparm=v;  return;
       case GPARM2:gparm2=v; return;
       case GCMD: gerr=0; gpu_cmd(v); return;
+    }
+    /* MDU writes: pairs latch (low write clears high), MDGO computes. */
+    switch(ad){
+      case MDA:  mda=v; return;
+      case MDB:  mdb=v; return;
+      case MDC:  mdc=v; return;
+      case MDAH: mda=(uint16_t)((mda&0xFF)|(v<<8)); return;
+      case MDBH: mdb=(uint16_t)((mdb&0xFF)|(v<<8)); return;
+      case MDCH: mdc=(uint16_t)((mdc&0xFF)|(v<<8)); return;
+      case MDGO: mdq=mdu_exec(mda,mdb,mdc); return;
     }
     /* The ATA task-file (feature + LBA) is a SHARED bus: both drives latch these
        writes; the CFHEAD DEV bit picks who executes the command. Mirror them to

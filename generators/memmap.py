@@ -39,6 +39,17 @@ GID0        = 0xFF2D             # read: $50 'P' -- card-presence signature
 GCOLH       = 0xFF2D             # write: pen HIGH byte (write AFTER GCOL; a GCOL write clears it)
 GID1        = 0xFF2E             # read: $47 'G' -- with GID0 spells PG
 GPARM2      = 0xFF2F             # ELLIPSE y-radius (GPARM is the x-radius)
+MDA         = 0xFF30             # MDU operand a, low byte (write clears the high byte)
+MDB         = 0xFF31             # MDU operand b, low byte
+MDC         = 0xFF32             # MDU divisor c, low byte
+MDQ         = 0xFF33             # read: MDU result (a*b)/c, low byte (poll MDSTAT first)
+MDGO        = 0xFF34             # write (any value): start the MDU operation
+MDSTAT      = 0xFF35             # read: bit7 BUSY
+MDID        = 0xFF36             # read: $4D 'M' -- MDU-presence probe
+MDAH        = 0xFF39             # MDU operand a, high byte (write AFTER MDA)
+MDBH        = 0xFF3A             # MDU operand b, high byte
+MDCH        = 0xFF3B             # MDU divisor c, high byte
+MDQH        = 0xFF3C             # read: MDU result, high byte
 
 # BIOS / FS scratch ($6000-$60FF)
 LBUF        = 0x6000             # input line buffer

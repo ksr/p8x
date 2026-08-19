@@ -29,3 +29,4 @@
 - [Arduino-scratch test board](project_arduino_scratch_board.md) — standalone Cowork<->Fusion round-trip probe in hardware/arduino-scratch; edit in place once placed
 - [Git without -C](feedback_git_no_dash_c.md) — cd into the repo first; `git -C` prompts every time, plain git does not
 - [P8X border bug RESOLVED](project_p8x_border_bug.md) — was marginal capture on gapless CAS, stream now half-rate; snow = analogue signature
+- [C gfx + 3D libs SHIPPED](project_p8x_gfx_clib.md) — lib_gfx/lib_g3d/cube live (c29993f); p8cc.c lacks array initializers; muldiv fast path; unsigned coord regs
