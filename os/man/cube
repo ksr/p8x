@@ -1,0 +1,31 @@
+NAME
+    cube - spinning wireframe 3D cube (the stage-7 graphics demo)
+
+SYNOPSIS
+    cube [frames]
+
+DESCRIPTION
+    Draws a perspective wireframe cube on the display and spins it about
+    two axes, one frame at a time, then exits. With no argument it runs 64
+    frames (one full turn); a numeric argument runs that many. Needs the
+    display; prints ?No display without one.
+
+    The cube is the first client of the C 3D library (/lib/lib_g3d.c, used
+    as `//#use gfx` + `//#use g3d` from C): a retained pool of 3D edges
+    (g3line), a window on the view plane (g3window), a viewport on the
+    screen (g3view), perspective projection (g3persp), and a render call
+    (g3render) that clips, projects, maps and hands each surviving edge to
+    the display's hardware LINE. The rotation itself is the demo's own
+    integer sine table, not the library's.
+
+    Each frame renders in about 72 ms (roughly 14 frames a second): the
+    arithmetic is 16-bit software muldiv, the pixels are the display
+    engine's. The cube is rebuilt from constants every frame, so it never
+    accumulates rounding error and frame N looks the same on every run.
+
+EXAMPLES
+    cube            one full turn and exit
+    cube 500        keep spinning for 500 frames
+
+SEE ALSO
+    basic (GRAPHICS section), man g3d in the repo: STAGE7-DESIGN.md

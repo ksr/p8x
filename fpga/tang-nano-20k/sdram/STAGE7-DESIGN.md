@@ -1,5 +1,16 @@
 # Stage 7 — wireframe 3D: a world of vectors, a window, a viewport
 
+> **SHIPPED, 2026-08-19 — designed and on the machine the same day.**
+> lib_gfx.c (the parked C graphics library, register veneer + asm-equate
+> twin), lib_g3d.c (this pipeline, verbatim), and the `cube` demo command
+> (man page, /src, Makefile). Tested by emulator/test/c_g3d_test.sh: muldiv
+> vectors vs a host reference, cube frame-0 spot pixels computed by an
+> independent host replica of the pipeline, and native-p8cc.c parity for
+> both libraries (cube itself is p8cc.py/on-target-cc only — its sine/edge
+> tables are brace-initialized arrays, the disasm/lib_distab precedent).
+> The budget section below now carries MEASURED numbers; the one design
+> change measurement forced is recorded there (the muldiv fast path).
+
 > DESIGN. Unlike stages 2-6 this stage is SOFTWARE-ONLY: no RTL changes, no
 > new registers, no emulator changes. Everything below runs on the CPU and
 > draws through the existing engine — which is the point: the hardware LINE
@@ -117,17 +128,33 @@ then gline(px0,py0,px1,py1) — the engine takes it from there.
 scoped so it never wipes a neighbouring viewport), pen white, walk the pool.
 When stage 6.5/8 adds page flipping, only this erase line changes.
 
-## Budget (estimates — MEASURING them in the emulator is build step 1)
+## Budget — MEASURED (emulator cycle counts, 27 MHz)
 
-Per rendered edge, perspective, both ends in window: 4 muldivs (project)
-+ 4 (viewport map) + outcode tests. A muldiv is a few hundred instructions
-of shift-add/long-division; call it low-single-digit milliseconds per edge
-all-in. Meaning: a 12-edge cube redraws at tens of Hz — genuinely animated;
-a 200-edge scene at a few Hz — watchable; 1,000+ edges is a still image you
-wait a second for. The emulator counts cycles exactly (-l), so the FIRST
-implementation milestone is a measured table replacing this paragraph.
-Memory: 512 edges x 12 = 6K pool + code; comfortably inside the TPA beside
-a demo program.
+The estimate survived contact with the enemy only after a fight. As first
+built, the all-C muldiv cost **118k cycles (4.4 ms) each** — p8cc compiles
+each C statement through the __ax memory accumulator on a microcoded CPU,
+so a 32-round shift-add/long-division loop is ~500 cycles per statement —
+and the cube ran at 2.4 fps, all of it in the line pipeline (the rotate
+was 14 ms/frame, the erase effectively free). The fix that design missed:
+**when the product fits in 16 bits, the native * and / (asm runtime
+routines) do the whole job** — one native divide (a <= 65535/b) tests it —
+and in practice that is nearly every call: the viewport map's products are
+<= 240*271, a 256-focal projection's <= |x|*256. Identical results (both
+divides truncate the same way; the framebuffer was byte-identical), ~10x
+cheaper. The C slow path remains for genuinely 32-bit products.
+
+| | cycles | wall @27 MHz |
+|---|---|---|
+| muldiv, slow path (all-C 32-bit) | ~118k | 4.4 ms |
+| muldiv, fast path (native `*`/`/`) | ~10k | 0.4 ms |
+| rotate 8 verts + refill pool (demo side) | 0.39M/frame | 14 ms |
+| full cube frame (erase + 12 edges) | **1.94M** | **72 ms = 13.9 fps** |
+
+Scaling from the ~130k-cycles-per-edge slope: ~200 edges ≈ 1 fps. The
+next speed rungs, in order of honesty: an asm muldiv (the p8cc runtime's
+__div already keeps a 32-bit intermediate), an asm lib_g3d twin, and the
+stage-8 geometry engine. Memory: 512 edges x 12 bytes = 6K pool; cube.bin
+is 19.8K all-in — half the TPA free beside it.
 
 ## Verification
 
@@ -170,3 +197,8 @@ Recommendation: lib_gfx keeps its asm twin (register equates are exactly
 the lib_abi pattern), but lib_g3d and the demo ship C-ONLY — hand-porting
 muldiv-heavy render math has little of the pedagogical return the fileutils
 ports had. Flagged rather than assumed.
+
+> As shipped: the recommendation, following the existing `disasm` precedent
+> for a C-only command (lib_gfx.inc equates written; cube in run.sh's
+> `_ccmds`). An asm twin remains open — it is also the honest next speed
+> rung (see the measured budget). Say the word to reverse.
