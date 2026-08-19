@@ -144,6 +144,13 @@ stream (see the trap below); the CORRECTED build (7,355 LUT4) is what is in
 flash now, verified on the panel: a CLS write-storm plus colour bars, solid.
 A power-cycle boot from this exact flash image has not itself been observed.
 
+**2026-08-19: the machine drew its first photograph.** `IMAGE x,y,name$`
+(BASIC, token $B2) loaded a 256x256 P8I of the USC mandrill off the SD card
+and put it on the panel -- PNG -> tools/p8img.py -> P8I -> FGETB -> GCOL/
+GCOLH -> PLOT -> SDRAM -> the streaming scanout, every link built and
+verified on this branch. The emulator's -g screenshot predicted the panel
+exactly, as the golden model should.
+
 Two operational notes for whoever drives the board over serial next:
 
 - **Opening the serial port resets the machine.** Any scripted interaction must
