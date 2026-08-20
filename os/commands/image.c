@@ -16,9 +16,10 @@
  * is gpoint()ed and written little-endian after a 10-byte header. An
  * existing file of the same name is REPLACED (FDELETE then rewrite). Grabs
  * read the DRAW page, so if a geometry engine is fitted the command issues
- * PGSYNC first -- a grab always captures what the panel shows. A grab costs
- * a few hundred cycles per pixel: a full-screen 480x272 rectangle is ~130k
- * reads and takes tens of seconds. That is what it costs; it is a utility.
+ * PGSYNC first -- a grab always captures what the panel shows. Measured
+ * (emulator, 27 MHz): draw ~4.4k cycles/pixel (the 256x256 mandrill ~11 s),
+ * grab ~3.3k (a full 480x272 screen ~16 s). BASIC's hand-asm loader does
+ * 614/pixel -- that is the asm-twin/stream-command headroom.
  *
  * The pen is left on the last pixel colour drawn/probed -- like IMAGE in
  * BASIC, set COLOR/gcolor afterwards before drawing your own things. */
@@ -30,6 +31,14 @@ char path[80];
 
 //#define GEID   0xFF45  /* geometry-engine probe ('E' when fitted)        */
 //#define GECMD  0xFF43  /* its command port: 4 = PGSYNC (draw = display)  */
+
+/* The pixel loops below poke the display registers RAW instead of calling
+ * gplot()/gpoint(): p8cc's layered calls (gplot -> gw16 -> poke, each with
+ * a software-stack frame) cost ~11.5k cycles a pixel, 19x BASIC's hand-asm
+ * loader; inlining gets ~3x of that back, and the row's Y pair is written
+ * once per row since only a GY0 LOW write clears its high byte. Measured
+ * numbers live in the man page. (True parity would need an asm twin or a
+ * device-side pixel-stream command -- see BACKLOG.) */
 
 char *ap;                          /* argument cursor */
 int anum_ok;                       /* did anum() actually see digits?      */
@@ -80,17 +89,26 @@ int draw(int x, int y) {
     if ((bios(FGETB, 0, 0) & 511) != 16) { puts("?NOT P8I"); return 1; }
     bios(FGETB, 0, 0);                       /* reserved byte */
     if (w == 0 || h == 0) { puts("?NOT P8I"); return 1; }
-    py = 0;
-    while (py < h) {
-        px = 0;
-        while (px < w) {
+    py = y;
+    h = y + h;                               /* loop to absolute end rows */
+    while (py != h) {
+        poke(GY0, py);                       /* once per row: nothing     */
+        poke(GY0 + 9, py >> 8);              /*   below touches GY0       */
+        px = x;
+        w = w + x;                           /* absolute end column...    */
+        while (px != w) {
             lo = bios(FGETB, 0, 0);
             hi = bios(FGETB, 0, 0);
             if ((lo | hi) & 256) { puts("?NOT P8I"); return 1; }  /* short */
-            gcolor((lo & 255) | ((hi & 255) << 8));
-            gplot(x + px, y + py);           /* off-screen: discarded */
+            poke(GCOL, lo);                  /* clears the pen high byte  */
+            poke(GCOLH, hi);
+            poke(GX0, px);                   /* clears GX0's high byte    */
+            poke(GX0 + 9, px >> 8);
+            while (peek(GSTAT) & 128) { }
+            poke(GCMD, 1);                   /* PLOT */
             px = px + 1;
         }
+        w = w - x;                           /* ...restored for next row  */
         py = py + 1;
     }
     return 0;
@@ -115,11 +133,17 @@ int grab(int x0, int y0, int x1, int y1) {
     bios(FPUTB, 0, 16); bios(FPUTB, 0, 0);
     py = y0;
     while (py <= y1) {
+        poke(GY0, py);                      /* once per row (see draw)    */
+        poke(GY0 + 9, py >> 8);
         px = x0;
         while (px <= x1) {
-            c = gpoint(px, py);             /* 0 for anything off-screen  */
-            bios(FPUTB, 0, c);
-            bios(FPUTB, 0, c >> 8);
+            poke(GX0, px);
+            poke(GX0 + 9, px >> 8);
+            while (peek(GSTAT) & 128) { }
+            poke(GCMD, GC_PONT);            /* POINT: 0 if off-screen     */
+            while (peek(GSTAT) & 128) { }
+            bios(FPUTB, 0, peek(GDATA));    /* low byte, then high --     */
+            bios(FPUTB, 0, peek(GDATA));    /*   P8I is little-endian     */
             px = px + 1;
         }
         py = py + 1;
