@@ -68,3 +68,4 @@ emulator/test/*
 # Finder duplicate of the generated prog.asm. Kept tracked only so this change
 # is behaviour-preserving; safe to delete.
 !emulator/test/prog 2.asm
+__pycache__/
