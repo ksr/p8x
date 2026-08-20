@@ -2,7 +2,7 @@ NAME
     cube - spinning wireframe 3D cube (the stage-7 graphics demo)
 
 SYNOPSIS
-    cube [frames]
+    cube [frames] [s]
 
 DESCRIPTION
     Draws a perspective wireframe cube on the display and spins it about
@@ -18,10 +18,14 @@ DESCRIPTION
     the display's hardware LINE. The rotation itself is the demo's own
     integer sine table, not the library's.
 
-    Each frame renders in about 72 ms (roughly 14 frames a second): the
-    arithmetic is 16-bit software muldiv, the pixels are the display
-    engine's. The cube is rebuilt from constants every frame, so it never
-    accumulates rounding error and frame N looks the same on every run.
+    With the geometry engine fitted (stage 8b) the cube is uploaded to the
+    engine once and each frame is a matrix write plus one render command:
+    the CPU does ~3 ms of work, the fabric does the rest, and the page
+    flip paces the spin to the panel's refresh, tear-free. `cube N s`
+    forces the stage-7 all-software path (~72 ms a frame) for comparison;
+    without an engine that path is the automatic fallback. Either way the
+    cube is rebuilt from constants every frame, so it never accumulates
+    rounding error and frame N looks the same on every run.
 
 EXAMPLES
     cube            one full turn and exit

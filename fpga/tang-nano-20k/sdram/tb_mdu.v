@@ -9,7 +9,7 @@
 // 2000 random vectors with the corner cases forced in ($8000 operands,
 // zeros, c=0). Busy must clear within 24 cycles of MDGO, every time.
 //
-//   iverilog -g2012 -o tbmdu tb_mdu.v ../../rtl/p8x_mdu.v && ./tbmdu
+//   iverilog -g2012 -o tbmdu tb_mdu.v ../../rtl/p8x_mdu.v ../../rtl/mdu_core.v && ./tbmdu
 `timescale 1ns/1ps
 
 module tb;

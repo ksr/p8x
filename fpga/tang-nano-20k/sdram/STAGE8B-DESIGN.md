@@ -88,8 +88,11 @@ ONE ADDRESS BIT ({page, y, x[8:0], 1'b0}), preserving the no-multiplier
 addressing. The engine owns the page state: a display page (what scanout
 reads) and a draw page (what gfx_mem writes — the CPU's own PLOTs and
 the engine's lines alike; POINT reads the draw page, so read-back stays
-self-consistent). RENDER with flags.bit1: draw hidden, then swap. FLIP
-(GECMD 3) swaps alone, for CPU-drawn double buffering.
+self-consistent). The flip rule AS SHIPPED (a plain swap would be a no-op
+from the shared power-on page): display <= draw — show what was just
+drawn — and draw <= the OTHER page. Boot is single-buffered on page 0
+until the first flip splits the pages. RENDER with flags.bit1 flips after
+drawing; FLIP (GECMD 3) flips alone, for CPU-drawn double buffering.
 
 A pending flip is APPLIED BY SCANOUT at its frame boundary (frame_tick),
 never mid-frame — no tearing — and GESTAT stays busy until a pending
@@ -131,17 +134,24 @@ lib_g3d grows the engine path behind the same API plus three calls:
 
 cube.c v2 shows the pro path: upload the static +/-90 cube ONCE, then
 per frame compose the 12-word matrix from its sine table (the two
-rotations in closed form — table values double to 8.8, so frame 0 is
-bit-identical to stage 7's: x*240>>8 == x*120>>7) and g3go(). The CPU's
-per-frame work drops to ~60 pokes; the rate is set by the engine and the
-vsync-paced flip.
+rotations in closed form; the cross terms go through muldiv for the
+32-bit product) and g3go(). AS MEASURED, the composed matrix is NOT
+bit-identical to stage 7's two sequential shifts — one rounding
+(m22 = 240*240>>8 = 225) versus two (x*120>>7 twice) lands corners a
+pixel or two apart — so the engine cube is the software cube's sibling,
+not its twin, and the test replicates each path's own arithmetic. The
+CPU's per-frame work drops to ~60 pokes (~85k cycles, 3.2 ms, measured);
+the rate is set by the engine and the vsync-paced flip.
 
 ## Verification ladder (in build order)
 
 1. Emulator engine (golden model): same registers, instant busy, the
-   contract math in C. c_g3d_test grows: engine-path cube frame 0 ==
-   the SAME spot pixels as the software path (the strongest single
-   assertion available: two full pipelines, one answer).
+   contract math in C. c_g3d_test grows the strongest single assertion
+   available: the same pool rendered by the software walk and by the
+   engine with the IDENTITY matrix (exact: (v*256)>>8 == v) must be
+   BYTE-IDENTICAL framebuffers — two full pipelines, one answer — plus
+   engine-cube corners against an engine-math replica, and the page-flip
+   semantics (including the manual FLIP back).
 2. lib_g3d + cube v2 on the emulator; measure; software fallback re-run
    (m3has-style forcing) so both paths stay green.
 3. tb_mdu still passes with mdu_core extracted (wrapper refactor proven

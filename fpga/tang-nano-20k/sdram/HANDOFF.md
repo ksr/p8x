@@ -177,6 +177,29 @@ GCOLH -> PLOT -> SDRAM -> the streaming scanout, every link built and
 verified on this branch. The emulator's -g screenshot predicted the panel
 exactly, as the golden model should.
 
+**2026-08-19/20, stages 7-8b, one arc: the machine learned 3D.** Stage 7
+(SOFTWARE only, c29993f): lib_gfx.c (the C register veneer) + lib_g3d.c
+(edge pool, window/viewport, muldiv-based pipeline) + the `cube` command —
+2.4 fps as first built, 13.9 after the muldiv native-*// fast path, all
+measured in the emulator. Stage 8a (f781547): the MDU, a hardware muldiv
+at $FF30, bit-exact to the software contract, in BOTH build flavours;
+cube 19.6 fps, the rest of the frame being p8cc plumbing. Stage 8b
+(197f75e): the GEOMETRY ENGINE at $FF40 — edge list in SDRAM ($100000),
+S7.8 matrix registers, a walker FSM around the shared mdu_core that
+fetches/transforms/clips/projects/maps and then draws by mastering
+gfx.v's OWN registers (gfx.v unchanged); PAGE-FLIP double buffering
+(framebuffer pages at $00000/$80000, addr bit 19; flips latch at
+frame_tick, rule: display <= draw, draw <= ~draw); sdram_arb gained the
+g master (video > refresh > geometry > pixels). CPU cost of a cube frame:
+1.94M -> 1.38M -> 85k cycles across the three stages. Verification:
+tb_mdu (2,022 vectors), tb_geom (directed lines vs the SAME host replica
+that pins the emulator; caught a MAC state-return bug and an upload-FIFO
+overrun before silicon), all four prior SDRAM benches, and c_g3d_test's
+crown jewel — the same pool rendered by the software walk and by the
+engine (identity matrix) is BYTE-IDENTICAL. Designs:
+STAGE7-DESIGN.md / STAGE8-DESIGN.md / STAGE8B-DESIGN.md. The 8b
+bitstream places at 10,801 LUT4 (52%), 51 MHz.
+
 Two operational notes for whoever drives the board over serial next:
 
 - **Opening the serial port resets the machine.** Any scripted interaction must
