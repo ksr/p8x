@@ -35,7 +35,35 @@ lib_g3d probes (m3has) and falls back; tb_mdu.v 2022 vectors; 7964 LUT4
 38%, flashed + verified on silicon (PEEK(65334)=77, cube corners).
 muldiv ~4k cycles (poke-bound), cube 19.6 fps.
 
-**NEXT (user: "we can come back to 8b")**: stage 8b fabric geometry
+STAGE 8b SHIPPED AND ON SILICON (197f75e + fixes ff10c80, docs ea423ff):
+p8x_geom.v at $FF40 — SDRAM edge list ($100000), S7.8 matrix param file
+(GESEL/GEVAL/GEVALH indexed), walker FSM around shared mdu_core, draws by
+mastering gfx.v's registers; page flip (addr bit19, display<=draw,
+draw<=~draw at frame_tick); GECMD 4 = PGSYNC (draw rejoins display — the
+ONLY way back to single-buffer). sdram_arb g master. lib_g3d: g3probe/
+g3par/g3up/g3mat/g3flags/g3go/g3flip/g3sync; g3render auto-routes
+(identity = BIT-IDENTICAL to software, tested byte-for-byte). cube v2:
+static upload + per-frame matrix, ~85k CPU cycles/frame, vsync-paced.
+Board verified: 69/77/-1-1-1/0 (GEID/MDID/corners/centre). 10,801 LUT4.
+
+DURABLE LESSONS (sideband bug, ff10c80): power-on framebuffer pages are
+UNDEFINED (raw SDRAM stripes); engine erase is viewport-scoped BY DESIGN;
+flipping programs must clear BOTH pages once (gcls/g3flip/gcls with gwait
+between — flip mid-CLS splits the clear) and exit via g3sync. Emulator now
+powers both pages with FIXED garbage so this bug class dies in sim. Also:
+composed matrix != two sequential shifts (rounding) — engine cube is the
+software cube's sibling; identity is the bit-exact bridge.
+
+Man pages: man gfx / man g3d / man cube on-target. Docs fully swept
+2026-08-20 (BASIC guide four-pen fossils killed, all READMEs current).
+
+PUSHED to GitHub 2026-08-20 (user said "push"): origin/sdram-framebuffer
+tracks, synced through 086b885. Merge to main remains the user's call.
+
+**8b leftovers -> BACKLOG.md IDEAS** (stage-9: colour edges, list base,
+indexed meshes, BASIC statements; BASIC-on-MDU; board successors).
+
+Formerly: **NEXT (user: "we can come back to 8b")**: stage 8b fabric geometry
 engine — walker FSM around the MDU datapath, edge list in SDRAM via a
 streaming upload port, matrix regs, one render command; SDRAM gains a 4th
 client (priority scanout > refresh > geometry > pixels — the arbitration

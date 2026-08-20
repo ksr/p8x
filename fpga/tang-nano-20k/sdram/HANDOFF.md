@@ -224,8 +224,12 @@ Three operational notes for whoever drives the board over serial next:
   the terminal, with no failure indication on either side. One client at
   a time; check before scripting. (Also: characters sent while a command
   is still RUNNING are lost -- no flow control, one-byte ACIA hold -- so
-  scripted waits must exceed the slowest command; a 256x256 image draw is
-  a couple of MINUTES, not seconds.)
+  scripted waits must exceed the slowest command; a 256x256 image draw
+  was minutes before the inlined loops, ~11 s after.) And a KILLED session
+  can ORPHAN its serial-holding child, which then silently eats every byte
+  on the port with no error anywhere -- `lsof /dev/cu.usbserial*` before
+  any scripted board session is the pre-flight that catches both this and
+  a user terminal left attached.
 
 - **Opening the serial port resets the machine.** Any scripted interaction must
   do everything in ONE session; a second open finds the monitor again, and its

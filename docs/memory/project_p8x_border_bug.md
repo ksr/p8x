@@ -22,5 +22,11 @@ Durable lessons (also in the HANDOFF traps list):
 - Pasted images never reach the filesystem; have the user save to ~/Desktop.
 - The board's serial-open reset is UNRELIABLE (sometimes fires, sometimes
   not) — never assume a fresh boot from a connect.
+- TWO serial clients (user terminal + script) silently shred each other's
+  characters — no error either side. ASK if the user's terminal is closed
+  before scripting the board. And chars sent while a command RUNS are lost
+  (no flow control): scripted waits must exceed the slowest command — a
+  256x256 image draw is ~2+ MINUTES. Cheap on-board tests should grab the
+  BOOT SPLASH (already on screen) instead of drawing something big first.
 
 Related: [[p8x-project]] [[p8x-fpga-plan]]
