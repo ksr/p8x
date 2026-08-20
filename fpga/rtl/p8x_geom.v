@@ -83,23 +83,54 @@ module p8x_geom (
   wire       uf_empty = (uf_wp == uf_rp);
 
   // ---- walker state --------------------------------------------------------
-  reg [4:0]  state;
+  reg [5:0]  state;
   localparam S_IDLE=0,  S_ERA0=1,  S_ERA1=2,  S_ERAW=3,  S_ERAC=4,
              S_PEN=5,   S_NEXT=6,  S_FRD=7,   S_FRDW=8,
              S_MAC=9,   S_MACW=10,
              S_NC=11,   S_NCW=12,  S_PRJ=13,  S_PRJW=14,
              S_CS=15,   S_CSW=16,  S_MAP=17,  S_MAPW=18,
              S_LIN=19,  S_LINB=20, S_LINC=21, S_FLIP=22, S_START=23,
-             S_LIN2=24;
+             S_LIN2=24,
+             // stage 9b: the TRI record
+             T_NC=25,   T_NCA=26,  T_NI0=27,  T_NI0W=28, T_NI1=29,
+             T_NI1W=30, T_CPY=31,  T_MP=32,   T_PJX=33,  T_PJXW=34,
+             T_PJY=35,  T_PJYW=36, T_MX=37,   T_MXW=38,  T_MY=39,
+             T_MYW=40,  T_PENW=41, T_FAN=42,  T_SRT1=43, T_SRT2=44,
+             T_SRT3=45, T_DEG=46,  T_SY0=47,  T_SLOOP=48,T_SXA=49,
+             T_SXAW=50, T_SXB=51,  T_SXBW=52, T_SPAN=53, T_BX=54,
+             T_BXB=55,  T_BXC=56,  T_SNEXT=57,T_ED=58,   T_EC=59,
+             T_ECW=60;
 
   reg [12:0] ei, ecnt;               // record index / count
   reg [22:0] eaddr;                  // record cursor (bytes) -- records are
                                      //   self-sizing, so this ADVANCES by
                                      //   type instead of being computed
   reg [15:0] rcol;                   // the record's colour (stage 9)
-  reg [7:0]  rtype;                  // record type: 1 = LINE
-  reg [2:0]  k;                      // fetch word / general microstep
-  reg [15:0] v [0:5];                // fetched vertex words
+  reg [7:0]  rtype;                  // record type: 1 = LINE, 2 = TRI
+  reg        rfill;                  // TRI: the FILL flag
+  reg        tri_m;                  // MAC writeback goes to tv (TRI mode)
+  reg        lret;                   // S_LINC returns to the outline loop
+  reg [3:0]  k;                      // fetch word / general microstep
+  reg [15:0] v [0:8];                // fetched vertex words (TRI: 9)
+  reg [15:0] tvx [0:2];              // TRI: transformed vertices
+  reg [15:0] tvy [0:2];
+  reg [15:0] tvz [0:2];
+  reg [15:0] qx [0:7];               // near-clipped polygon
+  reg [15:0] qy [0:7];
+  reg [15:0] qz [0:7];
+  reg [15:0] qsx [0:7];              // ...mapped to screen space
+  reg [15:0] qsy [0:7];
+  reg [3:0]  np;                     // polygon vertex count
+  reg [3:0]  pp;                     // polygon iterator
+  reg [3:0]  ft;                     // fan triangle index
+  reg [15:0] nax, nay, naz;          // clip edge end A
+  reg [15:0] nbx, nby, nbz;          // clip edge end B
+  reg        nain, nbin;
+  reg [15:0] cxv, cyv;               // map scratch
+  reg [15:0] fx0, fy0, fx1, fy1, fx2, fy2;   // the fan triangle (sorted)
+  reg [15:0] fy;                     // scanline
+  reg [15:0] fxa, fxb;               // span ends
+  reg [15:0] ox0, oy0, ox1, oy1;     // outline edge workspace
   reg [15:0] wx0, wy0, wz0, wx1, wy1, wz1;   // the working edge
   reg [15:0] px0, py0, px1, py1;     // mapped endpoints
   reg [1:0]  mp;                     // MAC: vertex 0/1
@@ -144,6 +175,28 @@ module p8x_geom (
   wire z0_near = $signed(wz0) < $signed(16'd16);
   wire z1_near = $signed(wz1) < $signed(16'd16);
 
+  // TRI helpers: screen-space outcodes against the VIEWPORT (outlines),
+  // span min/max, and the degenerate triangle's x extremes
+  wire [3:0] soa = { $signed(oy0) > $signed(par[20]),
+                     $signed(oy0) < $signed(par[18]),
+                     $signed(ox0) > $signed(par[19]),
+                     $signed(ox0) < $signed(par[17]) };
+  wire [3:0] sob = { $signed(oy1) > $signed(par[20]),
+                     $signed(oy1) < $signed(par[18]),
+                     $signed(ox1) > $signed(par[19]),
+                     $signed(ox1) < $signed(par[17]) };
+  wire fy_in = !($signed(fy) < $signed(par[18])) &&
+               !($signed(par[20]) < $signed(fy));
+  wire [15:0] sp_lo = ($signed(fxa) < $signed(fxb)) ? fxa : fxb;
+  wire [15:0] sp_hi = ($signed(fxa) < $signed(fxb)) ? fxb : fxa;
+  wire [15:0] sp_l  = ($signed(sp_lo) < $signed(par[17])) ? par[17] : sp_lo;
+  wire [15:0] sp_r  = ($signed(par[19]) < $signed(sp_hi)) ? par[19] : sp_hi;
+  wire        sp_ok = !($signed(sp_r) < $signed(sp_l));
+  wire [15:0] dg_a  = ($signed(fx0) < $signed(fx1)) ? fx0 : fx1;
+  wire [15:0] dg_lo = ($signed(dg_a) < $signed(fx2)) ? dg_a : fx2;
+  wire [15:0] dg_b  = ($signed(fx0) < $signed(fx1)) ? fx1 : fx0;
+  wire [15:0] dg_hi = ($signed(dg_b) < $signed(fx2)) ? fx2 : dg_b;
+
   integer i;
   always @(posedge clk) begin
     md_go <= 1'b0;
@@ -154,6 +207,7 @@ module p8x_geom (
       g_req <= 0; g_we <= 0;
       draw_pg <= 0; disp_pg <= 0; flip_pend <= 0;
       ei <= 0; ecnt <= 0; seq <= 0; mdph <= 0; csn <= 0;
+      tri_m <= 0; lret <= 0; rfill <= 0; np <= 0; pp <= 0; ft <= 0;
       par[0] <= 16'd256; par[4] <= 16'd256; par[8] <= 16'd256;  // identity
       par[1]<=0; par[2]<=0; par[3]<=0; par[5]<=0; par[6]<=0; par[7]<=0;
       par[9]<=0; par[10]<=0; par[11]<=0;
@@ -265,20 +319,26 @@ module p8x_geom (
           end
         end
         S_FRDW: if (g_ready) begin
-          if (k == 3'd0) begin
+          if (k == 4'd0) begin
             rtype <= g_dout[7:0];      // type + flags halfword
-            if (g_dout[7:0] != 8'd1) begin
-              geerr <= 1; state <= S_IDLE;   // 9a: LINE only
-            end else begin k <= 3'd1; state <= S_FRD; end
-          end else if (k == 3'd1) begin
+            rfill <= g_dout[8];
+            if (g_dout[7:0] != 8'd1 && g_dout[7:0] != 8'd2) begin
+              geerr <= 1; state <= S_IDLE;
+            end else begin k <= 4'd1; state <= S_FRD; end
+          end else if (k == 4'd1) begin
             rcol <= g_dout;            // the record's colour
-            k <= 3'd2; state <= S_FRD;
+            k <= 4'd2; state <= S_FRD;
           end else begin
             v[k - 2] <= g_dout;
-            if (k == 3'd7) begin
+            if (rtype == 8'd1 && k == 4'd7) begin
               eaddr <= eaddr + 23'd16; // LINE record: 16 bytes
+              tri_m <= 0;
               mp <= 0; mr <= 0; mk <= 0; acc <= 0; state <= S_MAC;
-            end else begin k <= k + 3'd1; state <= S_FRD; end
+            end else if (rtype == 8'd2 && k == 4'd10) begin
+              eaddr <= eaddr + 23'd22; // TRI record: 22 bytes
+              tri_m <= 1;
+              mp <= 0; mr <= 0; mk <= 0; acc <= 0; state <= S_MAC;
+            end else begin k <= k + 4'd1; state <= S_FRD; end
           end
         end
 
@@ -288,16 +348,29 @@ module p8x_geom (
           if (mk == 2'd2) state <= S_MACW; else mk <= mk + 2'd1;
         end
         S_MACW: begin
-          case ({mp[0], mr})
-            3'b000: wx0 <= mac_res;  3'b001: wy0 <= mac_res;  3'b010: wz0 <= mac_res;
-            3'b100: wx1 <= mac_res;  3'b101: wy1 <= mac_res;  3'b110: wz1 <= mac_res;
-            default: ;
-          endcase
+          if (tri_m) begin
+            case (mr)
+              2'd0: tvx[mp] <= mac_res;
+              2'd1: tvy[mp] <= mac_res;
+              default: tvz[mp] <= mac_res;
+            endcase
+          end else begin
+            case ({mp[0], mr})
+              3'b000: wx0 <= mac_res;  3'b001: wy0 <= mac_res;  3'b010: wz0 <= mac_res;
+              3'b100: wx1 <= mac_res;  3'b101: wy1 <= mac_res;  3'b110: wz1 <= mac_res;
+              default: ;
+            endcase
+          end
           acc <= 0; mk <= 0;
           if (mr == 2'd2) begin
             mr <= 0;
-            if (mp == 2'd1) begin mdph <= 0; state <= S_NC; end
-            else begin mp <= 2'd1; state <= S_MAC; end
+            if (tri_m) begin
+              if (mp == 2'd2) begin pp <= 0; np <= 0; state <= T_NC; end
+              else begin mp <= mp + 2'd1; state <= S_MAC; end
+            end else begin
+              if (mp == 2'd1) begin mdph <= 0; state <= S_NC; end
+              else begin mp <= 2'd1; state <= S_MAC; end
+            end
           end else begin mr <= mr + 2'd1; state <= S_MAC; end
         end
 
@@ -412,7 +485,219 @@ module p8x_geom (
         S_LINB: begin gm_a <= 4'h6;
                       if (gm_a == 4'h6 && !gm_rdata[7] && !gm_wr) state <= S_LINC; end
         S_LINC: begin gm_a <= 4'h5; gm_wdata <= 8'h02; gm_wr <= 1;  // LINE
-                      ei <= ei + 13'd1; state <= S_NEXT; end
+                      if (lret) begin lret <= 0; pp <= pp + 4'd1; state <= T_ED; end
+                      else begin ei <= ei + 13'd1; state <= S_NEXT; end end
+
+        // ==== stage 9b: the TRI record ====================================
+        // near clip the polygon against z=16 (ortho copies straight through)
+        T_NC: begin
+          if (par[12] == 16'd0) begin pp <= 0; state <= T_CPY; end
+          else state <= T_NCA;
+        end
+        T_CPY: begin
+          qx[pp] <= tvx[pp[1:0]]; qy[pp] <= tvy[pp[1:0]]; qz[pp] <= tvz[pp[1:0]];
+          if (pp == 4'd2) begin np <= 4'd3; pp <= 0; state <= T_MP; end
+          else pp <= pp + 4'd1;
+        end
+        T_NCA: begin
+          if (pp == 4'd3) begin
+            if (np < 4'd3) begin ei <= ei + 13'd1; state <= S_NEXT; end
+            else begin pp <= 0; state <= T_MP; end
+          end else begin
+            nax <= tvx[pp[1:0]]; nay <= tvy[pp[1:0]]; naz <= tvz[pp[1:0]];
+            nbx <= tvx[(pp == 4'd2) ? 2'd0 : pp[1:0] + 2'd1];
+            nby <= tvy[(pp == 4'd2) ? 2'd0 : pp[1:0] + 2'd1];
+            nbz <= tvz[(pp == 4'd2) ? 2'd0 : pp[1:0] + 2'd1];
+            state <= T_NI0;
+          end
+        end
+        T_NI0: begin                   // classify; keep A; start x-intersect
+          nain <= !($signed(naz) < $signed(16'd16));
+          nbin <= !($signed(nbz) < $signed(16'd16));
+          if (!($signed(naz) < $signed(16'd16))) begin
+            qx[np] <= nax; qy[np] <= nay; qz[np] <= naz; np <= np + 4'd1;
+          end
+          state <= T_NI0W;
+        end
+        T_NI0W: begin
+          if (nain == nbin) begin pp <= pp + 4'd1; state <= T_NCA; end
+          else begin
+            md_a <= nbx - nax; md_b <= 16'd16 - naz; md_c <= nbz - naz;
+            md_go <= 1; state <= T_NI1;
+          end
+        end
+        T_NI1: if (md_done) begin
+          qx[np] <= nax + md_q;
+          md_a <= nby - nay; md_b <= 16'd16 - naz; md_c <= nbz - naz;
+          md_go <= 1; state <= T_NI1W;
+        end
+        T_NI1W: if (md_done) begin
+          qy[np] <= nay + md_q; qz[np] <= 16'd16; np <= np + 4'd1;
+          pp <= pp + 4'd1; state <= T_NCA;
+        end
+
+        // project + viewport-map each polygon vertex into qsx/qsy
+        T_MP: begin
+          if (pp == np) begin
+            if (rfill) begin seq <= 0; state <= T_PENW; end
+            else begin pp <= 0; state <= T_ED; end
+          end else begin
+            cxv <= qx[pp[2:0]]; cyv <= qy[pp[2:0]];
+            state <= (par[12] != 16'd0) ? T_PJX : T_MX;
+          end
+        end
+        T_PJX: begin
+          md_a <= cxv; md_b <= par[12]; md_c <= qz[pp[2:0]];
+          md_go <= 1; state <= T_PJXW;
+        end
+        T_PJXW: if (md_done) begin cxv <= md_q; state <= T_PJY; end
+        T_PJY: begin
+          md_a <= cyv; md_b <= par[12]; md_c <= qz[pp[2:0]];
+          md_go <= 1; state <= T_PJYW;
+        end
+        T_PJYW: if (md_done) begin cyv <= md_q; state <= T_MX; end
+        T_MX: begin
+          md_a <= cxv - par[13]; md_b <= par[19] - par[17]; md_c <= par[15] - par[13];
+          md_go <= 1; state <= T_MXW;
+        end
+        T_MXW: if (md_done) begin qsx[pp[2:0]] <= par[17] + md_q; state <= T_MY; end
+        T_MY: begin
+          md_a <= cyv - par[14]; md_b <= par[20] - par[18]; md_c <= par[16] - par[14];
+          md_go <= 1; state <= T_MYW;
+        end
+        T_MYW: if (md_done) begin
+          qsy[pp[2:0]] <= par[20] - md_q;
+          pp <= pp + 4'd1; state <= T_MP;
+        end
+
+        // fill: pen once, then fan (0,t,t+1), each sorted then scanned
+        T_PENW: begin
+          if (seq == 3'd0) begin gm_a<=4'h4; gm_wdata<=rcol[7:0];  gm_wr<=1; seq<=3'd1; end
+          else begin gm_a<=4'hD; gm_wdata<=rcol[15:8]; gm_wr<=1; seq<=0;
+                     ft <= 4'd1; state <= T_FAN; end
+        end
+        T_FAN: begin
+          if (ft + 4'd1 >= np) begin ei <= ei + 13'd1; state <= S_NEXT; end
+          else begin
+            fx0 <= qsx[0];        fy0 <= qsy[0];
+            fx1 <= qsx[ft[2:0]];  fy1 <= qsy[ft[2:0]];
+            fx2 <= qsx[ft[2:0] + 3'd1]; fy2 <= qsy[ft[2:0] + 3'd1];
+            state <= T_SRT1;
+          end
+        end
+        T_SRT1: begin                  // the 3-swap network, one per cycle
+          if ($signed(fy1) < $signed(fy0)) begin
+            fx0<=fx1; fx1<=fx0; fy0<=fy1; fy1<=fy0;
+          end
+          state <= T_SRT2;
+        end
+        T_SRT2: begin
+          if ($signed(fy2) < $signed(fy1)) begin
+            fx1<=fx2; fx2<=fx1; fy1<=fy2; fy2<=fy1;
+          end
+          state <= T_SRT3;
+        end
+        T_SRT3: begin
+          if ($signed(fy1) < $signed(fy0)) begin
+            fx0<=fx1; fx1<=fx0; fy0<=fy1; fy1<=fy0;
+          end
+          state <= T_DEG;
+        end
+        T_DEG: begin
+          if (fy2 == fy0) begin        // one scanline: span = min..max x
+            fy <= fy0; fxa <= dg_lo; fxb <= dg_hi;
+            state <= T_SPAN;
+          end else begin fy <= fy0; state <= T_SLOOP; end
+        end
+        T_SLOOP: begin
+          if (!fy_in) state <= T_SNEXT;
+          else state <= T_SXA;
+        end
+        T_SXA: begin                   // long edge: v0 -> v2
+          md_a <= fy - fy0; md_b <= fx2 - fx0; md_c <= fy2 - fy0;
+          md_go <= 1; state <= T_SXAW;
+        end
+        T_SXAW: if (md_done) begin fxa <= fx0 + md_q; state <= T_SXB; end
+        T_SXB: begin                   // split edge: v0v1 above y1, else v1v2
+          if (fy1 == fy0 && !($signed(fy1) <= $signed(fy))) begin
+            fxb <= fx1; state <= T_SPAN;         // unreachable guard
+          end else if (fy1 == fy0) begin
+            fxb <= fx1; state <= T_SPAN;
+          end else if ($signed(fy) < $signed(fy1)) begin
+            md_a <= fy - fy0; md_b <= fx1 - fx0; md_c <= fy1 - fy0;
+            md_go <= 1; state <= T_SXBW;
+          end else if (fy2 == fy1) begin
+            fxb <= fx1; state <= T_SPAN;
+          end else begin
+            md_a <= fy - fy1; md_b <= fx2 - fx1; md_c <= fy2 - fy1;
+            md_go <= 1; state <= T_SXBW;
+          end
+        end
+        T_SXBW: if (md_done) begin
+          fxb <= (($signed(fy) < $signed(fy1)) ? fx0 : fx1) + md_q;
+          state <= T_SPAN;
+        end
+        T_SPAN: begin                  // clamp; empty spans skip
+          if (!sp_ok || !fy_in) state <= T_SNEXT;
+          else begin seq <= 0; state <= T_BX; end
+        end
+        T_BX: begin                    // BOXFILL x0=sp_l y0=fy x1=sp_r y1=fy
+          case (seq)
+            3'd0: begin gm_a<=4'h0; gm_wdata<=sp_l[7:0];  end
+            3'd1: begin gm_a<=4'h9; gm_wdata<=sp_l[15:8]; end
+            3'd2: begin gm_a<=4'h1; gm_wdata<=fy[7:0];    end
+            3'd3: begin gm_a<=4'hA; gm_wdata<=fy[15:8];   end
+            3'd4: begin gm_a<=4'h2; gm_wdata<=sp_r[7:0];  end
+            3'd5: begin gm_a<=4'hB; gm_wdata<=sp_r[15:8]; end
+            3'd6: begin gm_a<=4'h3; gm_wdata<=fy[7:0];    end
+            3'd7: begin gm_a<=4'hC; gm_wdata<=fy[15:8];   end
+          endcase
+          gm_wr <= 1;
+          if (seq == 3'd7) state <= T_BXB; else seq <= seq + 3'd1;
+        end
+        T_BXB: begin gm_a <= 4'h6;
+                     if (gm_a == 4'h6 && !gm_rdata[7] && !gm_wr) state <= T_BXC; end
+        T_BXC: begin gm_a <= 4'h5; gm_wdata <= 8'h04; gm_wr <= 1;  // BOXFILL
+                     state <= T_SNEXT; end
+        T_SNEXT: begin
+          if (fy == fy2 || fy2 == fy0) begin ft <= ft + 4'd1; state <= T_FAN; end
+          else begin fy <= fy + 16'd1; state <= T_SLOOP; end
+        end
+
+        // outline: each polygon edge, screen-space CS against the viewport,
+        // then the LINE issuer (S_LIN) with a return ticket (lret)
+        T_ED: begin
+          if (pp == np) begin ei <= ei + 13'd1; state <= S_NEXT; end
+          else begin
+            ox0 <= qsx[pp[2:0]]; oy0 <= qsy[pp[2:0]];
+            ox1 <= qsx[(pp + 4'd1 == np) ? 3'd0 : pp[2:0] + 3'd1];
+            oy1 <= qsy[(pp + 4'd1 == np) ? 3'd0 : pp[2:0] + 3'd1];
+            csn <= 0; state <= T_EC;
+          end
+        end
+        T_EC: begin
+          if ((soa | sob) == 4'd0) begin
+            px0 <= ox0; py0 <= oy0; px1 <= ox1; py1 <= oy1;
+            lret <= 1; seq <= 0; state <= S_LIN;
+          end else if ((soa & sob) != 4'd0 || csn == 4'd8) begin
+            pp <= pp + 4'd1; state <= T_ED;
+          end else if (soa == 4'd0) begin
+            ox0 <= ox1; ox1 <= ox0; oy0 <= oy1; oy1 <= oy0;
+          end else begin
+            if (soa[0])      begin md_a <= oy1 - oy0; md_b <= par[17] - ox0; md_c <= ox1 - ox0; end
+            else if (soa[1]) begin md_a <= oy1 - oy0; md_b <= par[19] - ox0; md_c <= ox1 - ox0; end
+            else if (soa[2]) begin md_a <= ox1 - ox0; md_b <= par[18] - oy0; md_c <= oy1 - oy0; end
+            else             begin md_a <= ox1 - ox0; md_b <= par[20] - oy0; md_c <= oy1 - oy0; end
+            md_go <= 1; csn <= csn + 4'd1; state <= T_ECW;
+          end
+        end
+        T_ECW: if (md_done) begin
+          if (soa[0])      begin oy0 <= oy0 + md_q; ox0 <= par[17]; end
+          else if (soa[1]) begin oy0 <= oy0 + md_q; ox0 <= par[19]; end
+          else if (soa[2]) begin ox0 <= ox0 + md_q; oy0 <= par[18]; end
+          else             begin ox0 <= ox0 + md_q; oy0 <= par[20]; end
+          state <= T_EC;
+        end
 
         // flip: applied at the scanout frame boundary, then idle
         S_FLIP: if (flip_pend && frame_tick) begin

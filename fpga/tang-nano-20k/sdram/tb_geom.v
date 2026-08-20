@@ -73,6 +73,10 @@ module tb;
   integer    nlines = 0;
   reg [15:0] era_x0, era_y0, era_x1, era_y1, era_pen;
   integer    nera = 0;
+  reg [15:0] box_x0 [0:127]; reg [15:0] box_y0 [0:127];
+  reg [15:0] box_x1 [0:127]; reg [15:0] box_y1 [0:127];
+  reg [15:0] box_pen [0:127];
+  integer    nbox = 0;
   always @(posedge clk) begin
     if (gbusy != 0) gbusy <= gbusy - 4'd1;
     if (gm_own && gm_wr) begin
@@ -89,9 +93,12 @@ module tb;
         4'hD: rcol <= {gm_wdata, rcol[7:0]};
         4'h5: begin
           gbusy <= 4'd6;                       // hold busy: polling is real
-          if (gm_wdata == 8'h04) begin         // BOXFILL = the erase
+          if (gm_wdata == 8'h04) begin         // BOXFILL: erase or a SPAN
             era_x0 <= rx0; era_y0 <= ry0; era_x1 <= rx1; era_y1 <= ry1;
             era_pen <= rcol; nera = nera + 1;
+            box_x0[nbox] <= rx0; box_y0[nbox] <= ry0;
+            box_x1[nbox] <= rx1; box_y1[nbox] <= ry1;
+            box_pen[nbox] <= rcol; nbox = nbox + 1;
           end else if (gm_wdata == 8'h02) begin
             lines_x0[nlines] <= rx0; lines_y0[nlines] <= ry0;
             lines_x1[nlines] <= rx1; lines_y1[nlines] <= ry1;
@@ -248,6 +255,156 @@ module tb;
       errors = errors + 1;
     end
 
+    // ---- run 3: TRI records — filled spans + clipped outline ---------------
+    nlines = 0; nbox = 0;
+    wpar(5'd0, 16'd256); wpar(5'd1, 16'd0);   wpar(5'd2, 16'd0);   // identity
+    wpar(5'd3, 16'd0);   wpar(5'd4, 16'd256); wpar(5'd5, 16'd0);
+    wpar(5'd6, 16'd0);   wpar(5'd7, 16'd0);   wpar(5'd8, 16'd256);
+    wpar(5'd9, 16'd0);   wpar(5'd10, 16'd0);  wpar(5'd11, 16'd0);
+    wpar(5'd21, 16'd0);                       // no erase, no flip
+    wr8(4'h3, 8'h01);
+    // filled RED tri (type 2, FILL): 22-byte record
+    up16(16'h0102); up16(16'hF800);
+    up16(-16'sd80); up16(-16'sd80); up16(16'sd300);
+    up16( 16'sd80); up16(-16'sd80); up16(16'sd300);
+    up16( 16'sd0);  up16( 16'sd40); up16(16'sd420);
+    // outline BLUE tri, fully visible
+    up16(16'h0002); up16(16'h001F);
+    up16(-16'sd60); up16(-16'sd40); up16(16'sd300);
+    up16( 16'sd60); up16(-16'sd40); up16(16'sd300);
+    up16( 16'sd0);  up16( 16'sd50); up16(16'sd300);
+    wpar(5'd22, 16'd2);
+    wr8(4'h3, 8'h02);
+    wait_idle;
+    begin : trichk
+      reg [47:0] exp_sp [0:127];
+      integer j;
+      exp_sp[0] = {16'd109, 16'd239, 16'd239};
+      exp_sp[1] = {16'd110, 16'd239, 16'd239};
+      exp_sp[2] = {16'd111, 16'd238, 16'd240};
+      exp_sp[3] = {16'd112, 16'd237, 16'd241};
+      exp_sp[4] = {16'd113, 16'd237, 16'd241};
+      exp_sp[5] = {16'd114, 16'd236, 16'd242};
+      exp_sp[6] = {16'd115, 16'd235, 16'd243};
+      exp_sp[7] = {16'd116, 16'd234, 16'd244};
+      exp_sp[8] = {16'd117, 16'd234, 16'd244};
+      exp_sp[9] = {16'd118, 16'd233, 16'd245};
+      exp_sp[10] = {16'd119, 16'd232, 16'd246};
+      exp_sp[11] = {16'd120, 16'd231, 16'd247};
+      exp_sp[12] = {16'd121, 16'd231, 16'd247};
+      exp_sp[13] = {16'd122, 16'd230, 16'd248};
+      exp_sp[14] = {16'd123, 16'd229, 16'd249};
+      exp_sp[15] = {16'd124, 16'd228, 16'd250};
+      exp_sp[16] = {16'd125, 16'd228, 16'd250};
+      exp_sp[17] = {16'd126, 16'd227, 16'd251};
+      exp_sp[18] = {16'd127, 16'd226, 16'd252};
+      exp_sp[19] = {16'd128, 16'd225, 16'd253};
+      exp_sp[20] = {16'd129, 16'd225, 16'd253};
+      exp_sp[21] = {16'd130, 16'd224, 16'd254};
+      exp_sp[22] = {16'd131, 16'd223, 16'd255};
+      exp_sp[23] = {16'd132, 16'd222, 16'd256};
+      exp_sp[24] = {16'd133, 16'd222, 16'd256};
+      exp_sp[25] = {16'd134, 16'd221, 16'd257};
+      exp_sp[26] = {16'd135, 16'd220, 16'd258};
+      exp_sp[27] = {16'd136, 16'd220, 16'd258};
+      exp_sp[28] = {16'd137, 16'd219, 16'd259};
+      exp_sp[29] = {16'd138, 16'd218, 16'd260};
+      exp_sp[30] = {16'd139, 16'd217, 16'd261};
+      exp_sp[31] = {16'd140, 16'd217, 16'd261};
+      exp_sp[32] = {16'd141, 16'd216, 16'd262};
+      exp_sp[33] = {16'd142, 16'd215, 16'd263};
+      exp_sp[34] = {16'd143, 16'd214, 16'd264};
+      exp_sp[35] = {16'd144, 16'd214, 16'd264};
+      exp_sp[36] = {16'd145, 16'd213, 16'd265};
+      exp_sp[37] = {16'd146, 16'd212, 16'd266};
+      exp_sp[38] = {16'd147, 16'd211, 16'd267};
+      exp_sp[39] = {16'd148, 16'd211, 16'd267};
+      exp_sp[40] = {16'd149, 16'd210, 16'd268};
+      exp_sp[41] = {16'd150, 16'd209, 16'd269};
+      exp_sp[42] = {16'd151, 16'd208, 16'd270};
+      exp_sp[43] = {16'd152, 16'd208, 16'd270};
+      exp_sp[44] = {16'd153, 16'd207, 16'd271};
+      exp_sp[45] = {16'd154, 16'd206, 16'd272};
+      exp_sp[46] = {16'd155, 16'd205, 16'd273};
+      exp_sp[47] = {16'd156, 16'd205, 16'd273};
+      exp_sp[48] = {16'd157, 16'd204, 16'd274};
+      exp_sp[49] = {16'd158, 16'd203, 16'd275};
+      exp_sp[50] = {16'd159, 16'd202, 16'd276};
+      exp_sp[51] = {16'd160, 16'd202, 16'd276};
+      exp_sp[52] = {16'd161, 16'd201, 16'd277};
+      exp_sp[53] = {16'd162, 16'd200, 16'd278};
+      exp_sp[54] = {16'd163, 16'd200, 16'd278};
+      exp_sp[55] = {16'd164, 16'd199, 16'd279};
+      exp_sp[56] = {16'd165, 16'd198, 16'd280};
+      exp_sp[57] = {16'd166, 16'd197, 16'd281};
+      exp_sp[58] = {16'd167, 16'd197, 16'd281};
+      exp_sp[59] = {16'd168, 16'd196, 16'd282};
+      exp_sp[60] = {16'd169, 16'd195, 16'd283};
+      exp_sp[61] = {16'd170, 16'd194, 16'd284};
+      exp_sp[62] = {16'd171, 16'd194, 16'd284};
+      exp_sp[63] = {16'd172, 16'd193, 16'd285};
+      exp_sp[64] = {16'd173, 16'd192, 16'd286};
+      exp_sp[65] = {16'd174, 16'd191, 16'd287};
+      exp_sp[66] = {16'd175, 16'd191, 16'd287};
+      exp_sp[67] = {16'd176, 16'd190, 16'd288};
+      exp_sp[68] = {16'd177, 16'd189, 16'd289};
+      exp_sp[69] = {16'd178, 16'd188, 16'd290};
+      exp_sp[70] = {16'd179, 16'd188, 16'd290};
+      exp_sp[71] = {16'd180, 16'd187, 16'd291};
+      exp_sp[72] = {16'd181, 16'd186, 16'd292};
+      exp_sp[73] = {16'd182, 16'd185, 16'd293};
+      exp_sp[74] = {16'd183, 16'd185, 16'd293};
+      exp_sp[75] = {16'd184, 16'd184, 16'd294};
+      exp_sp[76] = {16'd185, 16'd183, 16'd295};
+      exp_sp[77] = {16'd186, 16'd182, 16'd296};
+      exp_sp[78] = {16'd187, 16'd182, 16'd296};
+      exp_sp[79] = {16'd188, 16'd181, 16'd297};
+      exp_sp[80] = {16'd189, 16'd180, 16'd298};
+      exp_sp[81] = {16'd190, 16'd180, 16'd298};
+      exp_sp[82] = {16'd191, 16'd179, 16'd299};
+      exp_sp[83] = {16'd192, 16'd178, 16'd300};
+      exp_sp[84] = {16'd193, 16'd177, 16'd301};
+      exp_sp[85] = {16'd194, 16'd177, 16'd301};
+      exp_sp[86] = {16'd195, 16'd176, 16'd302};
+      exp_sp[87] = {16'd196, 16'd175, 16'd303};
+      exp_sp[88] = {16'd197, 16'd174, 16'd304};
+      exp_sp[89] = {16'd198, 16'd174, 16'd304};
+      exp_sp[90] = {16'd199, 16'd173, 16'd305};
+      exp_sp[91] = {16'd200, 16'd172, 16'd306};
+      exp_sp[92] = {16'd201, 16'd171, 16'd307};
+      exp_sp[93] = {16'd202, 16'd171, 16'd307};
+      exp_sp[94] = {16'd203, 16'd170, 16'd308};
+      exp_sp[95] = {16'd204, 16'd169, 16'd309};
+      exp_sp[96] = {16'd205, 16'd168, 16'd310};
+      exp_sp[97] = {16'd206, 16'd168, 16'd310};
+      exp_sp[98] = {16'd207, 16'd167, 16'd311};
+      exp_sp[99] = {16'd208, 16'd166, 16'd312};
+      exp_sp[100] = {16'd209, 16'd165, 16'd313};
+      exp_sp[101] = {16'd210, 16'd165, 16'd313};
+      exp_sp[102] = {16'd211, 16'd164, 16'd314};
+      exp_sp[103] = {16'd212, 16'd163, 16'd315};
+      exp_sp[104] = {16'd213, 16'd162, 16'd316};
+      if (nbox !== 105) begin
+        $display("FAIL: TRI drew %0d spans, want 105", nbox); errors = errors + 1;
+      end else begin
+        for (j = 0; j < 105; j = j + 1)
+          if (box_y0[j] !== exp_sp[j][47:32] || box_x0[j] !== exp_sp[j][31:16] ||
+              box_x1[j] !== exp_sp[j][15:0]  || box_y1[j] !== exp_sp[j][47:32] ||
+              box_pen[j] !== 16'hF800) begin
+            $display("FAIL: span %0d = pen %04X (%0d,%0d)-(%0d,%0d), want y=%0d x=%0d..%0d",
+                     j, box_pen[j], box_x0[j], box_y0[j], box_x1[j], box_y1[j],
+                     exp_sp[j][47:32], exp_sp[j][31:16], exp_sp[j][15:0]);
+            errors = errors + 1;
+          end
+      end
+    end
+    if (nlines !== 3) begin
+      $display("FAIL: outline TRI drew %0d lines, want 3", nlines); errors = errors + 1;
+    end
+    expline(0, 16'h001F, 16'd181, 16'd174, 16'd297, 16'd174);
+    expline(1, 16'h001F, 16'd297, 16'd174, 16'd239, 16'd89);
+    expline(2, 16'h001F, 16'd239, 16'd89,  16'd181, 16'd174);
+
     // ---- manual FLIP -------------------------------------------------------
     wr8(4'h3, 8'h03);
     wait_idle;
@@ -264,7 +421,7 @@ module tb;
       errors = errors + 1;
     end
 
-    if (errors == 0) $display("TB-GEOM: PASS (erase, pen, 5+3 lines vs host replica, clip/drop/reject, flip + PGSYNC rules)");
+    if (errors == 0) $display("TB-GEOM: PASS (erase, pens, 5+3 lines, TRI: 105 exact spans + clipped outline, flip + PGSYNC)");
     else $display("TB-GEOM: %0d FAILURES", errors);
     $finish;
   end
