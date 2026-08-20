@@ -479,6 +479,21 @@ Nothing below has been built or measured.
 
 ## IDEAS
 
+- [ ] **g3cam — a look-at camera (user request, 2026-08-20).** `g3cam(ex,
+      ey,ez, ax,ay,az)`: the camera sits at the eye point and aims at the
+      target point, both in world space. Pure once-per-frame SOFTWARE on
+      top of the stage-8b matrix path (no RTL): forward = target-eye,
+      right = forward x world-up, up' = right x forward, each normalized
+      to 256 (S7.8) -- needs an integer 32-bit isqrt (shift-subtract on a
+      hi:lo pair, built on the existing m3mul) -- then matrix rows =
+      basis, translation = -(R*eye). Up is world +y; document the
+      degenerate straight-up/down aim. The SOFTWARE fallback needs a
+      matrix-apply mode in the walk (per-vertex (M*v>>8)+T via muldiv)
+      so behaviour stays identical without the engine -- and that same
+      mode is what makes g3cam usable by cube-style demos everywhere.
+      Optional second meaning worth a flag: a drawn camera GLYPH marker
+      (a small frustum of LINE records at the eye, pointing at the aim)
+      for visualizing a camera inside a scene.
 - [ ] **Stage 9 candidates for the geometry engine (2026-08-20).** The 8b
       engine (STAGE8B-DESIGN.md) deliberately left rungs: colour per edge
       (the engine draws white-only; a per-edge or per-list pen), a list-base
