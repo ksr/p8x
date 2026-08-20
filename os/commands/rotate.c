@@ -1,8 +1,11 @@
 /* rotate.c -- set the scene's rotation and redraw (stage 9c).
  *
- *     ROTATE                     identity: no rotation, redraw
- *     ROTATE x y z               rotate about the world origin
- *     ROTATE x y z px py pz      rotate about the PIVOT point (px,py,pz)
+ *     ROTATE                     identity rotation, translation kept; redraw
+ *     ROTATE x y z               rotate the MODEL about its own origin
+ *                                (translation kept -- cube-style scenes)
+ *     ROTATE x y z px py pz      rotate the SCENE about the PIVOT point
+ *                                (translation rewritten: T = P - R*P --
+ *                                tri-style scenes with z in the vertices)
  *
  * Angles are BRADS (256 = a full turn, 64 = 90 degrees), applied as Ry
  * (yaw), then Rx (pitch), then Rz (roll). The geometry engine's record
@@ -86,6 +89,7 @@ int matmul() {
 }
 
 int pv[3];
+int haspv;
 
 int main() {
     int x; int y; int z; int i; int c; int s;
@@ -99,12 +103,14 @@ int main() {
     if (g3probe() == 0) { puts("?No engine"); return 1; }
     x = 0; y = 0; z = 0;
     pv[0] = 0; pv[1] = 0; pv[2] = 0;
+    haspv = 0;
     i = anum(); if (anum_ok) { x = i;
         y = anum();
         z = anum();
         i = anum(); if (anum_ok) { pv[0] = i;
             pv[1] = anum();
             pv[2] = anum();
+            haspv = 1;
         }
     }
     /* ma = Ry(y): rows [c 0 -s / 0 1 0 / s 0 c] */
@@ -130,17 +136,25 @@ int main() {
     matmul();
     i = 0;
     while (i < 9) { g3par(i, mc[i]); i = i + 1; }
-    /* translation: T = P - R*P, so the pivot maps to itself */
-    i = 0;
-    while (i < 3) {
-        c = 0;
-        s = 0;
-        while (s < 3) {
-            c = c + muldiv(mc[i * 3 + s], pv[s], 256);
-            s = s + 1;
+    /* WITH a pivot: translation = P - R*P so the pivot maps to itself
+     * (scene-style: tri-built worlds with z baked into the vertices).
+     * WITHOUT one: translation is left UNTOUCHED -- the model rotates
+     * about its own origin and keeps its push-out, which is what
+     * origin-centred models like cube's need (cube uploads +/-90 verts
+     * and lives at T z=400; overwriting T dropped it into the near
+     * plane and it vanished). */
+    if (haspv) {
+        i = 0;
+        while (i < 3) {
+            c = 0;
+            s = 0;
+            while (s < 3) {
+                c = c + muldiv(mc[i * 3 + s], pv[s], 256);
+                s = s + 1;
+            }
+            g3par(9 + i, pv[i] - c);
+            i = i + 1;
         }
-        g3par(9 + i, pv[i] - c);
-        i = i + 1;
     }
     g3par(21, 1);                    /* erase, no flip */
     poke(GECMD, 2);                  /* RENDER the persisted scene */

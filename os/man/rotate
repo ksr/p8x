@@ -10,18 +10,21 @@ DESCRIPTION
     rotate it: this command rewrites only the engine's rotation matrix
     and redraws. Angles are in BRADS: 256 is a full turn, 64 is 90
     degrees, negative allowed. They apply as yaw (y), then pitch (x),
-    then roll (z), about the PIVOT point -- the world origin unless you
-    give one. The pivot matters: scenes live at z of a few hundred, and
-    spinning them about the origin swings them out of the window; give
-    the scene's own centre (0 0 400, say) and it turns in place. The
-    command writes the whole transform (matrix and translation). With no
-    arguments everything resets. Needs the engine.
+    then roll (z). WITHOUT a pivot the translation parameters are left
+    alone: the model turns about its own origin and keeps its push-out
+    -- right for origin-centred scenes like cube's (run cube, then
+    rotate 0 32 0). WITH a pivot (px py pz) the whole transform is
+    rewritten so the pivot maps to itself -- right for tri-built scenes
+    whose depth is baked into the vertices (pivot on the scene's middle,
+    0 0 400 say, and it turns in place). Bare rotate resets the rotation
+    and keeps the translation. Needs the engine.
 
 EXAMPLES
+    cube 1
+    rotate 0 16 0             yaw cube's model an eighth-turn in place
     tri -80 -80 300 80 -80 300 0 40 420 f 31 0 0
-    rotate 0 32 0 0 0 360     yaw an eighth-turn about the scene's middle
-    rotate 16 32 0 0 0 360    ...pitched too
-    rotate                    back to straight-on
+    rotate 0 32 0 0 0 360     yaw a tri scene about its middle
+    rotate                    reset the rotation
 
 SEE ALSO
     tri, cube, g3d

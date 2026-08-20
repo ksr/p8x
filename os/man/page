@@ -1,0 +1,22 @@
+NAME
+    page - rejoin or flip the framebuffer pages
+
+SYNOPSIS
+    page [sync|flip]
+
+DESCRIPTION
+    The display has two framebuffer pages (stage 8b double buffering).
+    With no argument (or `sync`) the draw page REJOINS the display page
+    -- the recovery move when a program died mid-flip and left them
+    split, which looks like a frozen screen that ignores drawing. With
+    `flip` the pages swap the other way: what was just drawn becomes
+    visible and drawing moves to the hidden page -- the manual
+    double-buffer step (draw, flip, draw, flip). Flips land at the
+    panel's frame boundary, tear-free. Needs the geometry engine.
+
+EXAMPLES
+    page              screen ignoring your drawing? this fixes it
+    page flip         show the hidden page you just drew
+
+SEE ALSO
+    g3d (g3flip/g3sync), rotate, tri
