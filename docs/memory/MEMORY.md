@@ -30,3 +30,4 @@
 - [Git without -C](feedback_git_no_dash_c.md) — cd into the repo first; `git -C` prompts every time, plain git does not
 - [P8X border bug RESOLVED](project_p8x_border_bug.md) — was marginal capture on gapless CAS, stream now half-rate; snow = analogue signature
 - [Full 3D stack SHIPPED](project_p8x_gfx_clib.md) — lib_gfx/lib_g3d/cube + MDU ($FF30) + geometry engine ($FF40, page flip, PGSYNC) all on silicon; sideband/undefined-DRAM lessons; pushed to origin 2026-08-20; merge to main = user's call
+- [ASM is the /bin default](feedback_p8x_bin_layout.md) — since 2026-08-20: /bin = asm twins (PATH default), /binc = C builds, /bina gone; new commands follow this split
