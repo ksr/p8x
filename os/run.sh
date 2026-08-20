@@ -7,10 +7,10 @@
 # the emulator attached to your terminal: it starts
 # in the MONITOR; type B to boot P8X/OS. Quit with Ctrl-C (or Ctrl-D).
 #
-# Commands ship twice: /bin holds the p8cc-compiled builds (run by bare name via
-# PATH, e.g. `grep`), and /bina holds the hand-assembled counterparts from
-# os/commands-asm (run explicitly, e.g. `run /bina/grep.bin`) so the two can be
-# compared on-target. Their SOURCES ride along under /src/commands/{c,asm} so you
+# Commands ship twice: /bin holds the HAND-ASSEMBLED builds (the default the
+# shell's PATH finds -- smaller and faster), and /binc holds the p8cc-compiled
+# counterparts (run explicitly, e.g. `run /binc/grep.bin`) so the two can be
+# compared on-target. A command with no asm twin (cube) ships C in /bin. Their SOURCES ride along under /src/commands/{c,asm} so you
 # can read (and, for C, `cc`-compile) any command right on the machine.
 #
 # Dual CompactFlash: a second data volume is attached as drive 1, mounted at
@@ -154,7 +154,7 @@ ensure_src() {
     printf 'clean:\n' >> "$mf"; for c in $_mkcmds $_ccmds; do printf '\tdel bin/%s.bin\n' "$c" >> "$mf"; done
     # install: cp's glob needs an absolute dir (it doesn't CWD-prefix a relative
     # `bin/`), so name the source dir in full — this Makefile is dir-specific.
-    printf 'install:\n\tcp /src/commands/c/bin/*.bin /bin\n' >> "$mf"
+    printf 'install:\n\tcp /src/commands/c/bin/*.bin /binc\n' >> "$mf"
     python3 "$root/tools/p8xfs.py" put "$disk" "$mf" --name /src/commands/c/Makefile >/dev/null 2>&1 || true
     # --- /src/commands/asm/Makefile : asm <cmd>.asm bin/<cmd>.bin
     # Every .asm source in the dir gets a target: the 22 command twins (built
@@ -192,10 +192,12 @@ if [ ! -f "$disk" ]; then
     python3 "$root/tools/p8xfs.py" create "$disk" --v2 >/dev/null
     python3 "$root/tools/p8xfs.py" boot   "$disk" "$build/p8xos.bin" >/dev/null
     python3 "$root/tools/p8xfs.py" mkdir  "$disk" /bin >/dev/null
-    # /bina: the hand-assembled counterparts of the /bin commands (the
-    # os/commands-asm experiment), so both can be run and compared on-target,
-    # e.g.  run /bina/grep.bin ...  vs  run /bin/grep.bin ...
-    python3 "$root/tools/p8xfs.py" mkdir  "$disk" /bina >/dev/null
+    # /bin holds the HAND-ASSEMBLED commands (the default since 2026-08-20 --
+    # smaller and faster, e.g. image at 563 vs 4,435 cycles/pixel); /binc holds
+    # the p8cc-compiled builds of the same commands, so both can still be run
+    # and compared on-target: run /binc/grep.bin ... vs plain grep. A command
+    # with no asm twin yet (cube) ships its C build in /bin -- the only build.
+    python3 "$root/tools/p8xfs.py" mkdir  "$disk" /binc >/dev/null
     # /d1 mount point: a placeholder dir so `dir /` shows the mount. Traversal
     # into /d1 is intercepted by the resolver (redirected to drive 1) before this
     # empty placeholder is ever read — it is just a signpost.
@@ -244,15 +246,20 @@ if [ ! -f "$disk" ]; then
         python3 "$root/compiler/p8cc.py" "$build/$ex.c" -o "$build/$ex.asm" >/dev/null
         python3 "$root/assembler/p8xasm.py" "$build/$ex.asm" -o "$build/$ex.bin" --base 0x6A00 >/dev/null
         python3 "$root/tools/p8xfs.py" put "$disk" "$build/$ex.bin" \
+            --name "/binc/$ex.bin" --load 0x6A00 --exec 0x6A00 >/dev/null
+    done
+    # C-only commands (no asm twin): their C build IS the /bin binary.
+    for ex in cube; do
+        python3 "$root/tools/p8xfs.py" put "$disk" "$build/$ex.bin" \
             --name "/bin/$ex.bin" --load 0x6A00 --exec 0x6A00 >/dev/null
     done
-    # Hand-assembled versions -> /bina (os/commands-asm). mkasm.sh splices any
-    # ;#use includes (lib_stdin/glob/regex/distab) just like clib.py does for C.
+    # Hand-assembled commands -> /bin, THE DEFAULT the shell's PATH finds.
+    # mkasm.sh splices ;#use includes just like clib.py does for C.
     for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch man dep dump examine disasm awk cmp image; do
         sh "$root/os/commands-asm/mkasm.sh" "$ex" > "$build/$ex.a.asm"
         python3 "$root/assembler/p8xasm.py" "$build/$ex.a.asm" -o "$build/$ex.a.bin" --base 0x6A00 >/dev/null
         python3 "$root/tools/p8xfs.py" put "$disk" "$build/$ex.a.bin" \
-            --name "/bina/$ex.bin" --load 0x6A00 --exec 0x6A00 >/dev/null
+            --name "/bin/$ex.bin" --load 0x6A00 --exec 0x6A00 >/dev/null
     done
     # /man: a Unix-style manual page per command (plain text in os/man/). The
     # `man` command (installed above) reads /man/<name>, so `man dir` works.

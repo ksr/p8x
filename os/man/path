@@ -12,7 +12,7 @@ DESCRIPTION
 
 EXAMPLES
     path                 show the current path
-    path /bin /bina      search /bin then /bina
+    path /bin /binc      search /bin then /binc
 
 SEE ALSO
     run, help

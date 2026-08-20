@@ -23,8 +23,11 @@ print a one-line usage summary and exit.
 > **Hand-assembled counterparts.** Each of these commands also has a hand-written
 > P8X assembler version in [`../commands-asm/`](../commands-asm/README.md),
 > verified byte-identical in behavior and ~2.3× smaller overall (up to 5.8×).
-> `run.sh` installs them to a parallel `/bina`, so you can compare on-target:
-> `run /bina/grep.bin …` vs `grep …`.
+> **Since 2026-08-20 the hand-asm builds ARE `/bin`** — the default the
+> shell's PATH finds — and `run.sh` installs these C builds to a parallel
+> `/binc`, so you can still compare on-target: `run /binc/grep.bin …` vs
+> `grep …`. A command with no asm twin yet (`cube`) ships its C build in
+> `/bin`.
 
 > **Sources on-card.** `run.sh` also ships the command *sources* under
 > `/src/commands/c` (the command `.c` files — the shared `lib_*.c` helpers are
@@ -95,7 +98,7 @@ print a one-line usage summary and exit.
 | [`examine.c`](examine.c) | `examine addr [-h]` | Interactive examine/modify from hex `addr` (`peek`/`poke`) — the shell counterpart of the monitor's `E`: shows `aaaa: vv`, then Enter advances, two hex digits write + advance, `.` quits. Console input via `getchar` (`SYS_GETC`). Runs in the `$6A00` TPA, so don't examine over that region. |
 | [`disasm.c`](disasm.c) | `disasm start end [-h]` | Disassemble the hex range `[start,end)` — one instruction per line (`AAAA: bb bb.. MNEMONIC operand`), unknown bytes print `???`. Memory-only (`peek`). The opcode table [`lib_distab.c`](lib_distab.c) is **generated** from `genucode.OPC` by [`generators/gen_p8xdis.py`](../../generators/gen_p8xdis.py) (spliced via `//#use distab`), so it never drifts from the ISA. Runs in the `$6A00` TPA, so don't disassemble that range. |
 | [`cube.c`](cube.c) | `cube [frames]` | Spinning perspective **wireframe cube** — the 3D demo and first client of `lib_g3d` (`//#use gfx` + `//#use g3d`). 64 frames (one full turn) by default. With the stage-8b geometry engine it uploads the static cube once and renders per frame with a matrix write (~3 ms of CPU, vsync-paced page flip, tear-free); `cube N s` forces the stage-7 software path (~72 ms/frame), which is also the automatic fallback without an engine. Rebuilt from constants each frame so it never accumulates rounding error. Needs the display (`?No display` without). C-only, and (like `disasm`) outside the `p8cc.c` self-host subset: its sine/edge tables are brace-initialized arrays. |
-| [`image.c`](image.c) | `image x y file` / `image read x0 y0 x1 y1 file` | Draw a **P8I picture** at (x,y), or GRAB a screen rectangle into a fresh P8I (replacing any existing file) — the two verbs are inverses, and a grab is immediately re-drawable here or by BASIC's `IMAGE`, or liftable to the host as a screenshot (`p8xfs get` + `p8img.py`). Grabs read what the panel shows (issues PGSYNC first when the geometry engine is fitted); corners self-sort; header errors say `?NOT P8I`. Built on `lib_gfx` + `lib_apath`. Hand-asm twin [`../commands-asm/image.asm`](../commands-asm/image.asm), verified pixel- AND file-identical: 563 cycles/pixel (vs the inlined C's 4,435 — it out-runs even BASIC's 614), the mandrill in ~1.4 s; `run /bina/image.bin …` to use it. |
+| [`image.c`](image.c) | `image x y file` / `image read x0 y0 x1 y1 file` | Draw a **P8I picture** at (x,y), or GRAB a screen rectangle into a fresh P8I (replacing any existing file) — the two verbs are inverses, and a grab is immediately re-drawable here or by BASIC's `IMAGE`, or liftable to the host as a screenshot (`p8xfs get` + `p8img.py`). Grabs read what the panel shows (issues PGSYNC first when the geometry engine is fitted); corners self-sort; header errors say `?NOT P8I`. Built on `lib_gfx` + `lib_apath`. Hand-asm twin [`../commands-asm/image.asm`](../commands-asm/image.asm), verified pixel- AND file-identical: 563 cycles/pixel (vs the inlined C's 4,435 — it out-runs even BASIC's 614), the mandrill in ~1.4 s; it is the `/bin` default (the C build lives at `/binc/image.bin`). |
 
 ### Implementation notes
 

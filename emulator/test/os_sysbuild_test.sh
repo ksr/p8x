@@ -1,7 +1,7 @@
 #!/bin/sh
 # FULL SYSTEM BUILD TEST — build the entire ready-to-boot system the way os/run.sh
 # does (monitor + OS + microcode + emulator + a P8XFS v2 disk carrying every /bin
-# C command, the /bina hand-asm twins, /man pages, /lib helpers, the /src source
+# C command, the hand-asm twins (now the /bin default; C in /binc), /man pages, /lib helpers, the /src source
 # tree with per-directory Makefiles, and a 2nd data volume), then boot it headless
 # and smoke-test the whole stack end to end:
 #   - boots P8X/OS from the built image

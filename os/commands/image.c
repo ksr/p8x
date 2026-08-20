@@ -19,8 +19,8 @@
  * PGSYNC first -- a grab always captures what the panel shows. Measured
  * (emulator, 27 MHz): draw ~4.4k cycles/pixel (the 256x256 mandrill ~11 s),
  * grab ~3.3k (a full 480x272 screen ~16 s). BASIC's hand-asm loader does
- * 614/pixel; the hand-asm twin (../commands-asm/image.asm, /bina) does
- * 563 -- run that one when speed matters.
+ * 614/pixel; the hand-asm twin (../commands-asm/image.asm) does 563 and
+ * is the /bin default -- this C build ships at /binc for comparison.
  *
  * The pen is left on the last pixel colour drawn/probed -- like IMAGE in
  * BASIC, set COLOR/gcolor afterwards before drawing your own things. */
