@@ -137,14 +137,14 @@ ensure_src() {
     for d in /src/commands/c/bin /src/commands/asm/bin; do
         python3 "$root/tools/p8xfs.py" mkdir "$disk" "$d" >/dev/null 2>&1 || true
     done
-    # 22 dual-twin commands (each has a C source in commands/ and a hand-asm twin
+    # 23 dual-twin commands (each has a C source in commands/ and a hand-asm twin
     # in commands-asm/); disasm included — its relative recipe line now fits.
-    _mkcmds="awk cat cmp cp dep diff dir disasm dump examine find grep head man more mv pwd sed sort tail touch tree uniq vi wc"
+    _mkcmds="awk cat cmp cp dep diff dir disasm dump examine find grep head image man more mv pwd sed sort tail touch tree uniq vi wc"
     # C-only commands (no hand-asm twin yet) — they appear in the C Makefile only.
     # cube: the stage-7 wireframe-3D demo (lib_gfx + lib_g3d); its sine/edge
     # tables are brace-initialized arrays, fine for p8cc.py and the on-target cc
     # (the lib_distab/disasm precedent) but outside the p8cc.c self-host subset.
-    _ccmds="cube image"
+    _ccmds="cube"
     # --- /src/commands/c/Makefile : cc <cmd>.c >T.ASM ; asm T.ASM bin/<cmd>.bin
     mf="$build/Makefile.c"
     printf 'all:' > "$mf"; for c in $_mkcmds $_ccmds; do printf ' %s' "$c" >> "$mf"; done; printf '\n' >> "$mf"
@@ -248,7 +248,7 @@ if [ ! -f "$disk" ]; then
     done
     # Hand-assembled versions -> /bina (os/commands-asm). mkasm.sh splices any
     # ;#use includes (lib_stdin/glob/regex/distab) just like clib.py does for C.
-    for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch man dep dump examine disasm awk cmp; do
+    for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch man dep dump examine disasm awk cmp image; do
         sh "$root/os/commands-asm/mkasm.sh" "$ex" > "$build/$ex.a.asm"
         python3 "$root/assembler/p8xasm.py" "$build/$ex.a.asm" -o "$build/$ex.a.bin" --base 0x6A00 >/dev/null
         python3 "$root/tools/p8xfs.py" put "$disk" "$build/$ex.a.bin" \

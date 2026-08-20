@@ -25,9 +25,11 @@ DESCRIPTION
 
     A grab reads what the panel SHOWS: if the geometry engine has been
     page-flipping (see man g3d), the command re-joins the pages first.
-    Speed, measured: drawing runs ~4,400 cycles a pixel -- the 256x256
-    mandrill paints in about ten seconds -- and a grab ~3,300, so a
-    full-screen 480x272 grab takes about fifteen seconds.
+    Speed, measured: this build draws at ~4,400 cycles a pixel (the
+    256x256 mandrill in about ten seconds; a full-screen grab about
+    fifteen). The hand-assembled twin at /bina/image.bin runs ~8x
+    faster -- the mandrill in under two seconds -- with identical
+    behaviour: run /bina/image.bin with the same arguments.
     The drawing pen is left on the last colour handled; set
     COLOR (BASIC) or gcolor (C) before drawing your own things after.
 

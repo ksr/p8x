@@ -74,4 +74,24 @@ EOF
 python3 $ROOT/tools/p8xfs.py get ci.img /G.P8I --out ci_g.p8i >/dev/null
 cmp ci_t.p8i ci_g.p8i || fail "grab is not byte-identical to the drawn file"
 
-echo "C-IMAGE TEST: PASS (draw, grab round-trip byte-identical, re-draw, errors, usage)"
+# ---- the hand-asm twin: SAME sequence, identical pixels, identical file ----
+sh $ROOT/os/commands-asm/mkasm.sh image > ci_image_a.asm
+python3 $ROOT/assembler/p8xasm.py ci_image_a.asm -o ci_image_a.bin --base 0x6A00 >/dev/null
+
+rm -f cia.img
+python3 $ROOT/tools/p8xfs.py create cia.img >/dev/null
+python3 $ROOT/tools/p8xfs.py boot   cia.img osc.bin >/dev/null
+python3 $ROOT/tools/p8xfs.py mkdir  cia.img /bin >/dev/null
+python3 $ROOT/tools/p8xfs.py put    cia.img ci_image_a.bin --name /bin/image.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    cia.img ci_t.p8i --name /T.P8I --load 0 --exec 0 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    cia.img ci_bad.txt --name /T.TXT --load 0 --exec 0 >/dev/null
+
+../p8xemu -N -i ci.in -c cia.img -l 600000000 -g cia.ppm eeprom.bin > cia.out 2>/dev/null || true
+grep -q '?No file'  cia.out || fail "asm twin: missing file did not say ?No file"
+grep -q '?NOT P8I'  cia.out || fail "asm twin: bad magic did not say ?NOT P8I"
+grep -q 'usage: IMAGE' cia.out || fail "asm twin: -h did not print usage"
+cmp ci.ppm cia.ppm || fail "asm twin framebuffer differs from the C build"
+python3 $ROOT/tools/p8xfs.py get cia.img /G.P8I --out cia_g.p8i >/dev/null
+cmp ci_t.p8i cia_g.p8i || fail "asm twin grab is not byte-identical"
+
+echo "C-IMAGE TEST: PASS (draw, grab round-trip byte-identical, re-draw, errors, usage; ASM TWIN pixel- and file-identical)"
