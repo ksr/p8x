@@ -39,9 +39,11 @@ engine must move in one sync.
 
 ## 9b: the TRI record
 
-**Outline** (flags.FILL=0): after transform + near clip + projection,
-each of the three edges runs the EXISTING per-edge tail — Cohen-
-Sutherland in window space, viewport map, LINE. Three lines, one record.
+**Outline** (flags.FILL=0): after transform + near clip + projection +
+viewport map, each polygon edge is Cohen-Sutherland-clipped in SCREEN
+space against the viewport box, then drawn as a LINE. (LINE records keep
+their established window-space clip; both are exact — the outline clips
+post-map so it shares the fill's vertices.)
 
 **Filled** is the new algorithm, and its clipping is the reason it is
 simple: a filled triangle needs NO Cohen-Sutherland. Pipeline:

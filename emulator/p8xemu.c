@@ -263,6 +263,133 @@ static void ge_flip(void){
     gfb  = (gfb == gfbmem[0]) ? gfbmem[1] : gfbmem[0];
 }
 
+/* transform one vertex (M*v >>> 8 + T) -- shared by both record types */
+static void ge_xform(const int16_t *v, int16_t *w){
+    for(int r=0;r<3;r++){
+        int32_t acc = (int32_t)gep[r*3+0]*v[0]
+                    + (int32_t)gep[r*3+1]*v[1]
+                    + (int32_t)gep[r*3+2]*v[2];
+        w[r] = (int16_t)((acc>>8) + gep[9+r]);
+    }
+}
+/* project + viewport-map one transformed vertex to screen space */
+static void ge_map(const int16_t *w, int16_t *sx, int16_t *sy){
+    int16_t x=w[0], y=w[1];
+    if(gep[12]){
+        x = ge_md(x, gep[12], w[2]);
+        y = ge_md(y, gep[12], w[2]);
+    }
+    *sx = (int16_t)(gep[17] + ge_md((int16_t)(x - gep[13]),
+                    (int16_t)(gep[19]-gep[17]), (int16_t)(gep[15]-gep[13])));
+    *sy = (int16_t)(gep[20] - ge_md((int16_t)(y - gep[14]),
+                    (int16_t)(gep[20]-gep[18]), (int16_t)(gep[16]-gep[14])));
+}
+/* the TRI record (STAGE9-DESIGN.md): near clip the polygon to <=4 verts,
+   fan, project+map each vertex, then outline (3 LINEs through the normal
+   tail is approximated here by direct screen-space lines between the
+   mapped vertices, clamped by the device's own discard) or scanline-fill
+   clamped to the viewport, each span the device's height-1 BOXFILL. */
+/* screen-space Cohen-Sutherland against the VIEWPORT box, for TRI outlines
+   (LINE records keep their window-space clip; both are exact) */
+static int ge_soc(int16_t x, int16_t y){
+    int c=0;
+    if(x<gep[17]) c|=1;
+    if(x>gep[19]) c|=2;
+    if(y<gep[18]) c|=4;
+    if(y>gep[20]) c|=8;
+    return c;
+}
+static void ge_sline(int16_t x0,int16_t y0,int16_t x1,int16_t y1){
+    int n=0;
+    while(n<8){
+        int a=ge_soc(x0,y0), b=ge_soc(x1,y1);
+        if(!(a|b)){ gpu_line(x0,y0,x1,y1,gcol); return; }
+        if(a&b) return;
+        if(!a){ int16_t t; t=x0;x0=x1;x1=t; t=y0;y0=y1;y1=t; a=b; }
+        if(a&1){ y0=(int16_t)(y0+ge_md((int16_t)(y1-y0),(int16_t)(gep[17]-x0),(int16_t)(x1-x0))); x0=gep[17]; }
+        else if(a&2){ y0=(int16_t)(y0+ge_md((int16_t)(y1-y0),(int16_t)(gep[19]-x0),(int16_t)(x1-x0))); x0=gep[19]; }
+        else if(a&4){ x0=(int16_t)(x0+ge_md((int16_t)(x1-x0),(int16_t)(gep[18]-y0),(int16_t)(y1-y0))); y0=gep[18]; }
+        else        { x0=(int16_t)(x0+ge_md((int16_t)(x1-x0),(int16_t)(gep[20]-y0),(int16_t)(y1-y0))); y0=gep[20]; }
+        n++;
+    }
+}
+static void ge_span(int16_t y, int16_t xl, int16_t xr){
+    if(xl > xr){ int16_t t=xl; xl=xr; xr=t; }
+    if(xl < gep[17]) xl = gep[17];
+    if(xr > gep[19]) xr = gep[19];
+    if(xl > xr) return;
+    gpu_box(xl, y, xr, y, gcol, 1);           /* the height-1 BOXFILL */
+}
+static void ge_filltri(int16_t x0,int16_t y0,int16_t x1,int16_t y1,
+                       int16_t x2,int16_t y2){
+    int16_t tx, ty;
+    /* sort ascending by y (stable comparison-swap network) */
+    if(y1 < y0){ tx=x0;x0=x1;x1=tx; ty=y0;y0=y1;y1=ty; }
+    if(y2 < y1){ tx=x1;x1=x2;x2=tx; ty=y1;y1=y2;y2=ty; }
+    if(y1 < y0){ tx=x0;x0=x1;x1=tx; ty=y0;y0=y1;y1=ty; }
+    if(y2 == y0){                             /* degenerate: one scanline */
+        int16_t lo=x0, hi=x0;
+        if(x1<lo)lo=x1; if(x2<lo)lo=x2;
+        if(x1>hi)hi=x1; if(x2>hi)hi=x2;
+        if(y0 >= gep[18] && y0 <= gep[20]) ge_span(y0, lo, hi);
+        return;
+    }
+    for(int16_t y=y0; ; y++){
+        if(y >= gep[18] && y <= gep[20]){
+            int16_t xa = (int16_t)(x0 + ge_md((int16_t)(y-y0),
+                              (int16_t)(x2-x0), (int16_t)(y2-y0)));
+            int16_t xb;
+            if(y < y1 || y1 == y0)
+                xb = (y1==y0) ? x1
+                   : (int16_t)(x0 + ge_md((int16_t)(y-y0),
+                              (int16_t)(x1-x0), (int16_t)(y1-y0)));
+            else
+                xb = (y2==y1) ? x1
+                   : (int16_t)(x1 + ge_md((int16_t)(y-y1),
+                              (int16_t)(x2-x1), (int16_t)(y2-y1)));
+            ge_span(y, xa, xb);
+        }
+        if(y == y2) break;
+    }
+}
+static void ge_tri(const uint8_t *e, int fill){
+    int16_t v[3][3], w[3];
+    int16_t pz[8][3]; int np = 0;             /* near-clipped polygon */
+    int16_t sx[8], sy[8];
+    for(int p=0;p<3;p++){
+        int16_t in[3];
+        for(int k=0;k<3;k++) in[k]=(int16_t)(e[p*6+k*2] | (e[p*6+k*2+1]<<8));
+        ge_xform(in, v[p]);
+    }
+    if(gep[12] == 0){                         /* ortho: no near clip */
+        for(int p=0;p<3;p++){ pz[np][0]=v[p][0]; pz[np][1]=v[p][1]; pz[np][2]=v[p][2]; np++; }
+    } else {
+        for(int p=0;p<3;p++){                 /* clip the polygon vs z=16 */
+            int16_t *a=v[p], *b=v[(p+1)%3];
+            int ain = a[2] >= 16, bin = b[2] >= 16;
+            if(ain){ pz[np][0]=a[0]; pz[np][1]=a[1]; pz[np][2]=a[2]; np++; }
+            if(ain != bin){
+                pz[np][0]=(int16_t)(a[0]+ge_md((int16_t)(b[0]-a[0]),
+                            (int16_t)(16-a[2]),(int16_t)(b[2]-a[2])));
+                pz[np][1]=(int16_t)(a[1]+ge_md((int16_t)(b[1]-a[1]),
+                            (int16_t)(16-a[2]),(int16_t)(b[2]-a[2])));
+                pz[np][2]=16; np++;
+            }
+        }
+        if(np < 3) return;                    /* wholly behind */
+    }
+    w[2]=0;
+    for(int p=0;p<np;p++){ w[0]=pz[p][0]; w[1]=pz[p][1]; w[2]=pz[p][2];
+                           ge_map(w, &sx[p], &sy[p]); }
+    if(fill){                                 /* fan: (0,1,2) [,(0,2,3)] */
+        for(int t=1;t+1<np;t++)
+            ge_filltri(sx[0],sy[0],sx[t],sy[t],sx[t+1],sy[t+1]);
+    } else {
+        for(int p=0;p<np;p++)
+            ge_sline(sx[p],sy[p],sx[(p+1)%np],sy[(p+1)%np]);
+    }
+}
+
 static void ge_render(void){
     int n = gep[22];
     size_t off = 0;
@@ -278,9 +405,15 @@ static void ge_render(void){
         int16_t x0,y0,z0,x1,y1,z1,d;
         uint8_t rtype, rflags;
         if(off + 16 > sizeof gemem){ geerr=1; return; }
-        rtype = e[0]; rflags = e[1]; (void)rflags;
+        rtype = e[0]; rflags = e[1];
         gcol = (uint16_t)(e[2] | (e[3]<<8));      /* the record's colour */
-        if(rtype != 1){ geerr=1; return; }        /* 9a: LINE only */
+        if(rtype == 2){                           /* TRI (stage 9b) */
+            if(off + 22 > sizeof gemem){ geerr=1; return; }
+            ge_tri(e + 4, rflags & 1);
+            off += 22;
+            continue;
+        }
+        if(rtype != 1){ geerr=1; return; }        /* else: LINE */
         off += 16;
         for(int k=0;k<6;k++) v[k]=(int16_t)(e[4+k*2] | (e[5+k*2]<<8));
         for(int p=0;p<2;p++)                    /* v' = (M*v >>> 8) + T */

@@ -173,6 +173,13 @@ make install    publish this dir's bin/*.bin over /bin
 make clean      delete this dir's build outputs
 ```
 
+> **Size caveat (stage 9):** the graphics-library clients (`cube`) are
+> p8cc.py-built; compiling them with the on-target `cc` (or the native
+> `p8cc.c`) now exceeds the TPA/64K — the native codegen runs ~2× the
+> Python compiler's and the stage-9 triangle machinery tipped it over.
+> The `make cube` recipe is therefore host-compiler territory until the
+> codegen-shrink is mirrored (see BACKLOG).
+
 The `/src/commands/asm` dir has the same targets (each recipe is a single `asm`
 of the hand-asm twin), and `/src/os-bios` builds the monitor + OS. Recipes run
 in the invoking CWD, so paths are dir-relative. A C command compiles then

@@ -89,10 +89,15 @@ module p8x_geom (
              S_MAC=9,   S_MACW=10,
              S_NC=11,   S_NCW=12,  S_PRJ=13,  S_PRJW=14,
              S_CS=15,   S_CSW=16,  S_MAP=17,  S_MAPW=18,
-             S_LIN=19,  S_LINB=20, S_LINC=21, S_FLIP=22, S_START=23;
+             S_LIN=19,  S_LINB=20, S_LINC=21, S_FLIP=22, S_START=23,
+             S_LIN2=24;
 
-  reg [12:0] ei, ecnt;               // edge index / count
-  reg [22:0] eaddr;                  // fetch cursor (bytes)
+  reg [12:0] ei, ecnt;               // record index / count
+  reg [22:0] eaddr;                  // record cursor (bytes) -- records are
+                                     //   self-sizing, so this ADVANCES by
+                                     //   type instead of being computed
+  reg [15:0] rcol;                   // the record's colour (stage 9)
+  reg [7:0]  rtype;                  // record type: 1 = LINE
   reg [2:0]  k;                      // fetch word / general microstep
   reg [15:0] v [0:5];                // fetched vertex words
   reg [15:0] wx0, wy0, wz0, wx1, wy1, wz1;   // the working edge
@@ -187,6 +192,7 @@ module p8x_geom (
               if (par[22] > {3'd0, LIST_MAX}) geerr <= 1;
               else begin
                 ecnt <= par[22][12:0]; ei <= 0;
+                eaddr <= LIST_BASE;     // the record cursor walks from here
                 state <= S_START;       // busy NOW; work starts once the
               end                       //   upload FIFO has drained
             end
@@ -240,20 +246,16 @@ module p8x_geom (
         S_ERAC: begin gm_a <= 4'h5; gm_wdata <= 8'h04; gm_wr <= 1;  // BOXFILL
                       state <= S_PEN; seq <= 0; end
 
-        // pen white for the lines (GCOL low first -- clears high -- then high)
-        S_PEN: begin
-          if (seq == 3'd0) begin gm_a <= 4'h4; gm_wdata <= 8'hFF; gm_wr <= 1; seq <= 3'd1; end
-          else begin gm_a <= 4'hD; gm_wdata <= 8'hFF; gm_wr <= 1; seq <= 0; state <= S_NEXT; end
-        end
+        // stage 9: no forced pen -- each record writes its own colour at
+        // S_LIN; the pen ends holding the LAST record's colour.
+        S_PEN: state <= S_NEXT;
 
         S_NEXT: begin
           if (ei == ecnt) begin
             if (par[21][1]) begin flip_pend <= 1; state <= S_FLIP; end
             else state <= S_IDLE;
           end else begin
-            // ei*12 = ei*16 - ei*4: adders only, no multiplier
-            eaddr <= LIST_BASE + {6'd0, ei, 4'd0} - {8'd0, ei, 2'd0};
-            k <= 0; state <= S_FRD;
+            k <= 0; state <= S_FRD;    // eaddr already sits on the record
           end
         end
         S_FRD: begin                        // one halfword of the edge
@@ -263,10 +265,21 @@ module p8x_geom (
           end
         end
         S_FRDW: if (g_ready) begin
-          v[k] <= g_dout;
-          if (k == 3'd5) begin
-            mp <= 0; mr <= 0; mk <= 0; acc <= 0; state <= S_MAC;
-          end else begin k <= k + 3'd1; state <= S_FRD; end
+          if (k == 3'd0) begin
+            rtype <= g_dout[7:0];      // type + flags halfword
+            if (g_dout[7:0] != 8'd1) begin
+              geerr <= 1; state <= S_IDLE;   // 9a: LINE only
+            end else begin k <= 3'd1; state <= S_FRD; end
+          end else if (k == 3'd1) begin
+            rcol <= g_dout;            // the record's colour
+            k <= 3'd2; state <= S_FRD;
+          end else begin
+            v[k - 2] <= g_dout;
+            if (k == 3'd7) begin
+              eaddr <= eaddr + 23'd16; // LINE record: 16 bytes
+              mp <= 0; mr <= 0; mk <= 0; acc <= 0; state <= S_MAC;
+            end else begin k <= k + 3'd1; state <= S_FRD; end
+          end
         end
 
         // transform: acc = m[r][0..2] . v[p], then w = (acc>>>8) + t
@@ -374,20 +387,27 @@ module p8x_geom (
           else begin mdph <= mdph + 2'd1; state <= S_MAP; end
         end
 
-        // issue the LINE: 8 coordinate bytes, wait engine idle, command
+        // issue the LINE: pen (2 bytes) + 8 coordinate bytes, wait, command.
+        // The pen is safe to write while the PREVIOUS line still draws --
+        // px_pen was latched at ITS command time (stage 9).
         S_LIN: begin
           case (seq)
-            3'd0: begin gm_a<=4'h0; gm_wdata<=px0[7:0];  end
-            3'd1: begin gm_a<=4'h9; gm_wdata<=px0[15:8]; end
-            3'd2: begin gm_a<=4'h1; gm_wdata<=py0[7:0];  end
-            3'd3: begin gm_a<=4'hA; gm_wdata<=py0[15:8]; end
-            3'd4: begin gm_a<=4'h2; gm_wdata<=px1[7:0];  end
-            3'd5: begin gm_a<=4'hB; gm_wdata<=px1[15:8]; end
-            3'd6: begin gm_a<=4'h3; gm_wdata<=py1[7:0];  end
-            3'd7: begin gm_a<=4'hC; gm_wdata<=py1[15:8]; end
+            3'd0: begin gm_a<=4'h4; gm_wdata<=rcol[7:0];  end  // GCOL
+            3'd1: begin gm_a<=4'hD; gm_wdata<=rcol[15:8]; end  // GCOLH
+            3'd2: begin gm_a<=4'h0; gm_wdata<=px0[7:0];  end
+            3'd3: begin gm_a<=4'h9; gm_wdata<=px0[15:8]; end
+            3'd4: begin gm_a<=4'h1; gm_wdata<=py0[7:0];  end
+            3'd5: begin gm_a<=4'hA; gm_wdata<=py0[15:8]; end
+            3'd6: begin gm_a<=4'h2; gm_wdata<=px1[7:0];  end
+            3'd7: begin gm_a<=4'hB; gm_wdata<=px1[15:8]; end
           endcase
           gm_wr <= 1;
-          if (seq == 3'd7) state <= S_LINB; else seq <= seq + 3'd1;
+          if (seq == 3'd7) begin seq <= 0; state <= S_LIN2; end
+          else seq <= seq + 3'd1;
+        end
+        S_LIN2: begin
+          if (seq == 3'd0) begin gm_a<=4'h3; gm_wdata<=py1[7:0];  gm_wr<=1; seq<=3'd1; end
+          else begin gm_a<=4'hC; gm_wdata<=py1[15:8]; gm_wr<=1; seq<=0; state<=S_LINB; end
         end
         S_LINB: begin gm_a <= 4'h6;
                       if (gm_a == 4'h6 && !gm_rdata[7] && !gm_wr) state <= S_LINC; end

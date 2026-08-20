@@ -79,6 +79,9 @@ int m3hi; int m3lo;                 /* m3mul's 32-bit product              */
 int m3has;                          /* MDU probe: 0 unknown, 1 yes, 2 no   */
 int g3has;                          /* engine probe: same three states     */
 int c3x0; int c3y0; int c3x1; int c3y1;   /* clip workspace                */
+int t3x[8]; int t3y[8]; int t3z[8];       /* near-clipped polygon (TRI)    */
+int t3sx[8]; int t3sy[8];                 /* ...mapped to screen space     */
+int t3n;                                  /* its vertex count              */
 
 /* signed a < b (the < below is unsigned, which is correct once the signs
  * are known equal; differing signs: the negative one is smaller) */
@@ -227,10 +230,161 @@ int v3mapy(int sy) {
     return v3y1 - muldiv(sy - w3y0, v3y1 - v3y0, w3y1 - w3y0);
 }
 
+/* ---- the TRI record (stage 9b, STAGE9-DESIGN.md) ------------------------
+ * Everything here mirrors the emulator's ge_tri to the operand: the
+ * identity byte-compare holds all implementations to one answer. */
+
+/* screen-space outcode against the VIEWPORT box (TRI outlines clip
+ * post-map; LINE records keep their window-space clip -- both exact) */
+int v3oc(int x, int y) {
+    int c;
+    c = 0;
+    if (s3lt(x, v3x0)) { c = 1; }
+    if (s3lt(v3x1, x)) { c = c + 2; }
+    if (s3lt(y, v3y0)) { c = c + 4; }
+    if (s3lt(v3y1, y)) { c = c + 8; }
+    return c;
+}
+
+/* clip + draw one screen-space line against the viewport box */
+int v3line(int x0, int y0, int x1, int y1) {
+    int a; int b; int t; int n;
+    n = 0;
+    while (n < 8) {
+        a = v3oc(x0, y0);
+        b = v3oc(x1, y1);
+        if ((a | b) == 0) { gline(x0, y0, x1, y1); return 0; }
+        if (a & b) { return 0; }
+        if (a == 0) {
+            t = x0; x0 = x1; x1 = t;
+            t = y0; y0 = y1; y1 = t;
+            a = b;
+        }
+        if (a & 1) { y0 = y0 + muldiv(y1 - y0, v3x0 - x0, x1 - x0); x0 = v3x0; }
+        else { if (a & 2) { y0 = y0 + muldiv(y1 - y0, v3x1 - x0, x1 - x0); x0 = v3x1; }
+        else { if (a & 4) { x0 = x0 + muldiv(x1 - x0, v3y0 - y0, y1 - y0); y0 = v3y0; }
+        else { x0 = x0 + muldiv(x1 - x0, v3y1 - y0, y1 - y0); y0 = v3y1; } } }
+        n = n + 1;
+    }
+    return 0;
+}
+
+/* one filled scanline: sort ends, clamp to the viewport, height-1 BOXFILL */
+int t3span(int y, int xl, int xr) {
+    int t;
+    if (s3lt(xr, xl)) { t = xl; xl = xr; xr = t; }
+    if (s3lt(xl, v3x0)) { xl = v3x0; }
+    if (s3lt(v3x1, xr)) { xr = v3x1; }
+    if (s3lt(xr, xl)) { return 0; }
+    gboxf(xl, y, xr, y);
+    return 0;
+}
+
+/* scanline-fill the screen-space triangle (vertices sorted here) */
+int t3fill(int x0, int y0, int x1, int y1, int x2, int y2) {
+    int t; int y; int xa; int xb; int lo; int hi;
+    if (s3lt(y1, y0)) { t=x0;x0=x1;x1=t; t=y0;y0=y1;y1=t; }
+    if (s3lt(y2, y1)) { t=x1;x1=x2;x2=t; t=y1;y1=y2;y2=t; }
+    if (s3lt(y1, y0)) { t=x0;x0=x1;x1=t; t=y0;y0=y1;y1=t; }
+    if (y2 == y0) {
+        lo = x0; hi = x0;
+        if (s3lt(x1, lo)) { lo = x1; }
+        if (s3lt(x2, lo)) { lo = x2; }
+        if (s3lt(hi, x1)) { hi = x1; }
+        if (s3lt(hi, x2)) { hi = x2; }
+        if (s3lt(y0, v3y0) == 0) { if (s3lt(v3y1, y0) == 0) { t3span(y0, lo, hi); } }
+        return 0;
+    }
+    y = y0;
+    while (1) {
+        if (s3lt(y, v3y0) == 0) { if (s3lt(v3y1, y) == 0) {
+            xa = x0 + muldiv(y - y0, x2 - x0, y2 - y0);
+            if (y1 == y0) { xb = x1; }
+            else { if (s3lt(y, y1)) {
+                xb = x0 + muldiv(y - y0, x1 - x0, y1 - y0);
+            } else {
+                if (y2 == y1) { xb = x1; }
+                else { xb = x1 + muldiv(y - y1, x2 - x1, y2 - y1); }
+            } }
+            t3span(y, xa, xb);
+        } }
+        if (y == y2) { return 0; }
+        y = y + 1;
+    }
+}
+
+/* the TRI record at pool offset k: near clip the polygon, map, draw.
+ * Returns the next record's offset. Software path: the pool holds the
+ * caller's coordinates (no matrix), same as LINE records. */
+int t3draw(int k) {
+    int p; int q; int ain; int bin; int fill;
+    int ax; int ay; int az; int bx; int by; int bz;
+    fill = (e3p[k] >> 8) & 1;
+    gcolor(e3p[k + 1]);
+    t3n = 0;
+    if (p3d == 0) {
+        p = 0;
+        while (p < 3) {
+            t3x[t3n] = e3p[k + 2 + p * 3];
+            t3y[t3n] = e3p[k + 3 + p * 3];
+            t3z[t3n] = e3p[k + 4 + p * 3];
+            t3n = t3n + 1;
+            p = p + 1;
+        }
+    } else {
+        p = 0;
+        while (p < 3) {
+            q = p + 1; if (q == 3) { q = 0; }
+            ax = e3p[k + 2 + p * 3]; ay = e3p[k + 3 + p * 3]; az = e3p[k + 4 + p * 3];
+            bx = e3p[k + 2 + q * 3]; by = e3p[k + 3 + q * 3]; bz = e3p[k + 4 + q * 3];
+            ain = 1; if (s3lt(az, Z3NEAR)) { ain = 0; }
+            bin = 1; if (s3lt(bz, Z3NEAR)) { bin = 0; }
+            if (ain) {
+                t3x[t3n] = ax; t3y[t3n] = ay; t3z[t3n] = az; t3n = t3n + 1;
+            }
+            if (ain != bin) {
+                t3x[t3n] = ax + muldiv(bx - ax, Z3NEAR - az, bz - az);
+                t3y[t3n] = ay + muldiv(by - ay, Z3NEAR - az, bz - az);
+                t3z[t3n] = Z3NEAR;
+                t3n = t3n + 1;
+            }
+            p = p + 1;
+        }
+        if (s3lt(t3n, 3)) { return k + 11; }
+    }
+    p = 0;
+    while (p < t3n) {
+        ax = t3x[p]; ay = t3y[p];
+        if (p3d) {
+            ax = muldiv(ax, p3d, t3z[p]);
+            ay = muldiv(ay, p3d, t3z[p]);
+        }
+        t3sx[p] = v3mapx(ax);
+        t3sy[p] = v3mapy(ay);
+        p = p + 1;
+    }
+    if (fill) {
+        p = 1;
+        while (s3lt(p + 1, t3n)) {
+            t3fill(t3sx[0], t3sy[0], t3sx[p], t3sy[p], t3sx[p+1], t3sy[p+1]);
+            p = p + 1;
+        }
+    } else {
+        p = 0;
+        while (p < t3n) {
+            q = p + 1; if (q == t3n) { q = 0; }
+            v3line(t3sx[p], t3sy[p], t3sx[q], t3sy[q]);
+            p = p + 1;
+        }
+    }
+    return k + 11;
+}
+
 /* the per-record pipeline: pen, near clip -> project -> clip -> map -> draw.
  * k is the record's POOL OFFSET (ints); returns the next record's offset. */
 int e3draw(int k) {
     int x0; int y0; int z0; int x1; int y1; int z1;
+    if ((e3p[k] & 255) == 2) { return t3draw(k); }
     gcolor(e3p[k + 1]);             /* the record's own colour */
     x0 = e3p[k + 2]; y0 = e3p[k + 3]; z0 = e3p[k + 4];
     x1 = e3p[k + 5]; y1 = e3p[k + 6]; z1 = e3p[k + 7];
@@ -373,6 +527,24 @@ int g3line(int x0, int y0, int z0, int x1, int y1, int z1) {
     e3p[k + 2] = x0; e3p[k + 3] = y0; e3p[k + 4] = z0;
     e3p[k + 5] = x1; e3p[k + 6] = y1; e3p[k + 7] = z1;
     e3o = e3o + 8;
+    e3n = e3n + 1;
+    return 1;
+}
+
+/* add one TRI record: p = int[9], three x,y,z vertices; fill 0/1.
+ * An N-gon is a fan of these, one line of C per triangle. */
+int g3tri(int *p, int fill) {
+    int k; int i;
+    if (p3ci == 0) { p3col = 65535; p3ci = 1; }
+    if (e3n >= E3MAX) { return 0; }
+    k = e3o;
+    i = 2;
+    if (fill) { i = 258; }
+    e3p[k] = i;
+    e3p[k + 1] = p3col;
+    i = 0;
+    while (i < 9) { e3p[k + 2 + i] = p[i]; i = i + 1; }
+    e3o = e3o + 11;
     e3n = e3n + 1;
     return 1;
 }

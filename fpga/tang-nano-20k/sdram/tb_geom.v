@@ -135,8 +135,12 @@ module tb;
       wr8(4'h2, v[15:8]); repeat (6) @(negedge clk);
     end
   endtask
-  task upedge(input [15:0] x0,y0,z0,x1,y1,z1);
-    begin up16(x0); up16(y0); up16(z0); up16(x1); up16(y1); up16(z1); end
+  task upedge(input [15:0] c, input [15:0] x0,y0,z0,x1,y1,z1);
+    // a stage-9 LINE record: type/flags halfword, colour, then the verts
+    begin
+      up16(16'h0001); up16(c);
+      up16(x0); up16(y0); up16(z0); up16(x1); up16(y1); up16(z1);
+    end
   endtask
   task wait_idle;
     integer n;
@@ -147,7 +151,7 @@ module tb;
       if (n >= 200000) begin $display("FAIL: engine never went idle"); errors = errors + 1; end
     end
   endtask
-  task expline(input integer i, input [15:0] x0,y0,x1,y1);
+  task expline(input integer i, input [15:0] pen, input [15:0] x0,y0,x1,y1);
     begin
       if (lines_x0[i] !== x0 || lines_y0[i] !== y0 ||
           lines_x1[i] !== x1 || lines_y1[i] !== y1) begin
@@ -155,8 +159,8 @@ module tb;
                  i, lines_x0[i], lines_y0[i], lines_x1[i], lines_y1[i], x0,y0,x1,y1);
         errors = errors + 1;
       end
-      if (lines_pen[i] !== 16'hFFFF) begin
-        $display("FAIL: line %0d pen %04X, want FFFF", i, lines_pen[i]);
+      if (lines_pen[i] !== pen) begin
+        $display("FAIL: line %0d pen %04X, want %04X", i, lines_pen[i], pen);
         errors = errors + 1;
       end
     end
@@ -179,15 +183,15 @@ module tb;
     wpar(5'd12,  16'sd256);
     wpar(5'd21,  16'sd1);
 
-    // upload the 7 identity-set edges
+    // upload the 7 identity-set records, each with a DISTINCT colour
     wr8(4'h3, 8'h01);                        // rewind cursor
-    upedge(-16'sd80, -16'sd60, 16'sd300,  16'sd80,  16'sd60, 16'sd500);
-    upedge(-16'sd90,  16'sd40, -16'sd30,  16'sd90,  16'sd40, 16'sd600);
-    upedge(-16'sd500, 16'sd0,  16'sd260,  16'sd500, 16'sd0,  16'sd260);
-    upedge( 16'sd0,  -16'sd400, 16'sd300, 16'sd0,   16'sd400, 16'sd300);
-    upedge( 16'sd10,  16'sd10, -16'sd50,  16'sd20,  16'sd20, -16'sd90);
-    upedge( 16'sd2000, 16'sd2000, 16'sd200, 16'sd3000, 16'sd3000, 16'sd200);
-    upedge(-16'sd110, -16'sd110, 16'sd280, 16'sd110, 16'sd110, 16'sd700);
+    upedge(16'hF800, -16'sd80, -16'sd60, 16'sd300,  16'sd80,  16'sd60, 16'sd500);
+    upedge(16'h07E0, -16'sd90,  16'sd40, -16'sd30,  16'sd90,  16'sd40, 16'sd600);
+    upedge(16'h001F, -16'sd500, 16'sd0,  16'sd260,  16'sd500, 16'sd0,  16'sd260);
+    upedge(16'hFFE0,  16'sd0,  -16'sd400, 16'sd300, 16'sd0,   16'sd400, 16'sd300);
+    upedge(16'h1234,  16'sd10,  16'sd10, -16'sd50,  16'sd20,  16'sd20, -16'sd90);
+    upedge(16'h4321,  16'sd2000, 16'sd2000, 16'sd200, 16'sd3000, 16'sd3000, 16'sd200);
+    upedge(16'hFFFF, -16'sd110, -16'sd110, 16'sd280, 16'sd110, 16'sd110, 16'sd700);
     wpar(5'd22, 16'd7);
     wr8(4'h3, 8'h02);                        // RENDER
     wait_idle;
@@ -207,11 +211,11 @@ module tb;
     if (nlines !== 5) begin
       $display("FAIL: %0d lines drawn, want 5", nlines); errors = errors + 1;
     end
-    expline(0, 16'd162, 16'd194, 16'd284, 16'd102);
-    expline(1, 16'd104, 16'd29,  16'd282, 16'd117);
-    expline(2, 16'd375, 16'd136, 16'd104, 16'd136);
-    expline(3, 16'd239, 16'd0,   16'd239, 16'd271);
-    expline(4, 16'd126, 16'd249, 16'd284, 16'd91);
+    expline(0, 16'hF800, 16'd162, 16'd194, 16'd284, 16'd102);
+    expline(1, 16'h07E0, 16'd104, 16'd29,  16'd282, 16'd117);
+    expline(2, 16'h001F, 16'd375, 16'd136, 16'd104, 16'd136);
+    expline(3, 16'hFFE0, 16'd239, 16'd0,   16'd239, 16'd271);
+    expline(4, 16'hFFFF, 16'd126, 16'd249, 16'd284, 16'd91);
 
     // no flip requested: pages untouched
     if (draw_pg !== 1'b0 || disp_pg !== 1'b0) begin
@@ -226,18 +230,18 @@ module tb;
     wpar(5'd9, 16'd0);   wpar(5'd10, 16'd0);  wpar(5'd11, 16'd400);
     wpar(5'd21, 16'd3);                      // erase + flip
     wr8(4'h3, 8'h01);
-    upedge(-16'sd90, -16'sd90, -16'sd90,  16'sd90, -16'sd90, -16'sd90);
-    upedge( 16'sd90, -16'sd90, -16'sd90,  16'sd90,  16'sd90, -16'sd90);
-    upedge(-16'sd90, -16'sd90, -16'sd90, -16'sd90, -16'sd90,  16'sd90);
+    upedge(16'hF800, -16'sd90, -16'sd90, -16'sd90,  16'sd90, -16'sd90, -16'sd90);
+    upedge(16'hF800,  16'sd90, -16'sd90, -16'sd90,  16'sd90,  16'sd90, -16'sd90);
+    upedge(16'h001F, -16'sd90, -16'sd90, -16'sd90, -16'sd90, -16'sd90,  16'sd90);
     wpar(5'd22, 16'd3);
     wr8(4'h3, 8'h02);                        // RENDER (holds busy to vsync)
     wait_idle;
     if (nlines !== 3) begin
       $display("FAIL: cube run drew %0d lines, want 3", nlines); errors = errors + 1;
     end
-    expline(0, 16'd162, 16'd213, 16'd315, 16'd213);
-    expline(1, 16'd315, 16'd213, 16'd315, 16'd60);
-    expline(2, 16'd162, 16'd213, 16'd188, 16'd187);
+    expline(0, 16'hF800, 16'd162, 16'd213, 16'd315, 16'd213);
+    expline(1, 16'hF800, 16'd315, 16'd213, 16'd315, 16'd60);
+    expline(2, 16'h001F, 16'd162, 16'd213, 16'd188, 16'd187);
     // the flip rule: display <- draw (0), draw <- other (1)
     if (disp_pg !== 1'b0 || draw_pg !== 1'b1) begin
       $display("FAIL: flip pages disp=%b draw=%b, want 0/1", disp_pg, draw_pg);
