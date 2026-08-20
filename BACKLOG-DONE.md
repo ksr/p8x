@@ -1,5 +1,12 @@
 # P8X Backlog — Completed
 
+- [x] **`image` OS command — view + screen-grab P8I from the shell (requested
+      and DONE 2026-08-20).** `image x y file` draws; `image read x0 y0 x1 y1
+      file` grabs the rectangle into a fresh, self-describing P8I (replacing
+      an existing name; PGSYNC first so grabs capture what the panel shows;
+      corners self-sort). Round-trip proven byte-identical in
+      emulator/test/c_image_test.sh; man page; /src + Makefile; C-only.
+
 The project log. Split out of [BACKLOG.md](BACKLOG.md) on 2026-07-16, which had
 grown to 2,353 lines with finished work interleaved among live items.
 

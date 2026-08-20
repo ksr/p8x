@@ -144,7 +144,7 @@ ensure_src() {
     # cube: the stage-7 wireframe-3D demo (lib_gfx + lib_g3d); its sine/edge
     # tables are brace-initialized arrays, fine for p8cc.py and the on-target cc
     # (the lib_distab/disasm precedent) but outside the p8cc.c self-host subset.
-    _ccmds="cube"
+    _ccmds="cube image"
     # --- /src/commands/c/Makefile : cc <cmd>.c >T.ASM ; asm T.ASM bin/<cmd>.bin
     mf="$build/Makefile.c"
     printf 'all:' > "$mf"; for c in $_mkcmds $_ccmds; do printf ' %s' "$c" >> "$mf"; done; printf '\n' >> "$mf"
@@ -237,7 +237,7 @@ if [ ! -f "$disk" ]; then
     # redirection and pipes out of the box. Run by bare name via PATH (/bin),
     # e.g.  dir /bin ,  cat README.TXT ,  cat README.TXT | grep hello | wc ,
     # cp README.TXT COPY.TXT ,  mv COPY.TXT MOVED.TXT .
-    for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch man dep dump examine disasm awk cmp cube; do
+    for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch man dep dump examine disasm awk cmp cube image; do
         # clib.py splices any //#use lib_*.c (shared helpers) into the source first;
         # a no-op passthrough for commands with no //#use directive.
         python3 "$root/tools/clib.py" "$root/os/commands/$ex.c" -o "$build/$ex.c"
