@@ -47,6 +47,7 @@ int c3ea[12] = {0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3};   /* edge: vertex a */
 int c3eb[12] = {1, 2, 3, 0, 5, 6, 7, 4, 4, 5, 6, 7};   /* edge: vertex b */
 int cvx[8]; int cvy[8]; int cvz[8];                     /* the model      */
 int rx[8]; int ry[8]; int rz[8];                        /* this frame     */
+int cm[12];                                             /* engine matrix  */
 
 /* sin(a) scaled to +/-120, binary angles (256 = a full turn). The table
  * stores value+128 so it initializes as unsigned chars; the subtract's
@@ -73,6 +74,8 @@ int main() {
     nf = 0;
     while (*a >= '0' && *a <= '9') { nf = nf * 10 + (*a - '0'); a = a + 1; }
     if (nf == 0) { nf = 64; }
+    while (*a == 32) { a = a + 1; }
+    if (*a == 's') { g3has = 2; }    /* CUBE n s: force the software path */
 
     if (gpresent() == 0) { puts("?No display"); return 1; }
 
@@ -90,6 +93,44 @@ int main() {
     g3window(0 - 120, 0 - 120, 120, 120);
     g3view(104, 0, 375, 271);        /* centred square (272 wide) */
     g3persp(256);
+
+    /* THE ENGINE PATH (stage 8b): upload the UNROTATED cube once, then a
+     * frame is just a matrix (composed from the same sine table -- values
+     * double from 7-bit to 8.8 scale; the cross terms need muldiv's 32-bit
+     * product) and a render command. Rotation happens in fabric; the CPU's
+     * per-frame work is ~60 pokes. Rounding differs microscopically from
+     * the software path (one composed matrix vs two sequential shifts), so
+     * this is a sibling of the software cube, not its twin -- the test
+     * replica models each path with its own arithmetic.
+     * `cube 1` renders without the page flip so POINT verification reads
+     * the frame it drew; longer runs flip for a tear-free spin. */
+    if (g3probe()) {
+        g3clear();
+        i = 0;
+        while (i < 12) {
+            k = c3ea[i]; t = c3eb[i];
+            g3line(cvx[k], cvy[k], cvz[k], cvx[t], cvy[t], cvz[t]);
+            i = i + 1;
+        }
+        g3up();
+        if (nf == 1) { g3flags(1); } else { g3flags(3); }
+        f = 0; ang = 0;
+        while (f < nf) {
+            ax = (ang >> 1) & 255;
+            c = rsin(ang + 64) * 2; s = rsin(ang) * 2;          /* 8.8 */
+            i = rsin(ax + 64) * 2;  k = rsin(ax) * 2;           /* c2, s2 */
+            cm[0] = c;                   cm[1] = 0;  cm[2] = 0 - s;
+            cm[3] = 0 - muldiv(k, s, 256); cm[4] = i; cm[5] = 0 - muldiv(k, c, 256);
+            cm[6] = muldiv(i, s, 256);   cm[7] = k;  cm[8] = muldiv(i, c, 256);
+            cm[9] = 0; cm[10] = 0; cm[11] = 400;
+            g3mat(cm);
+            g3go();
+            ang = (ang + 4) & 255;
+            f = f + 1;
+        }
+        puts("DONE");
+        return 0;
+    }
 
     f = 0; ang = 0;
     while (f < nf) {

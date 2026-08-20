@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: eb839e7b-2183-47af-84cd-a059555f72b5
-  modified: 2026-08-19T20:58:36.178Z
+  modified: 2026-08-19T22:23:48.250Z
 ---
 
 SHIPPED 2026-08-19, commit c29993f (branch sdram-framebuffer): os/commands/
@@ -28,8 +28,22 @@ Durable facts learned:
 - os/mandrill.p8i is now a TRACKED asset installed by run.sh (was only
   inside run-disk.img and a rebuild would have lost it).
 
-Next rungs (open): asm muldiv / lib_g3d twin, stage-8 fabric geometry
-engine (DSP multipliers, model in SDRAM), page-flip double buffer
-(deferred by user), `image X Y FILE` OS command (second lib_gfx client).
+STAGE 8a SHIPPED same day (f781547): the MDU — hardware muldiv at $FF30,
+bit-exact to the lib_g3d contract, in BOTH build flavours; regs in
+gen_memmap (MDA..MDQH, MDID probe reads 'M'/77); emulator instant-model;
+lib_g3d probes (m3has) and falls back; tb_mdu.v 2022 vectors; 7964 LUT4
+38%, flashed + verified on silicon (PEEK(65334)=77, cube corners).
+muldiv ~4k cycles (poke-bound), cube 19.6 fps.
+
+**NEXT (user: "we can come back to 8b")**: stage 8b fabric geometry
+engine — walker FSM around the MDU datapath, edge list in SDRAM via a
+streaming upload port, matrix regs, one render command; SDRAM gains a 4th
+client (priority scanout > refresh > geometry > pixels — the arbitration
+is where the hard bugs live); page-flip double buffer rides along. Sketch
+at the end of fpga/tang-nano-20k/sdram/STAGE8-DESIGN.md; needs its own
+full design doc first.
+
+Also open: asm muldiv/lib_g3d twin (smaller rung, partly obsoleted by the
+MDU), `image X Y FILE` OS command (second lib_gfx client).
 
 Related: [[p8x-project]] [[p8x-cc-caps]] [[p8x-new-command-dual]]

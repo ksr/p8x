@@ -145,7 +145,16 @@ static void cf_data_wr(struct cf_state*c, uint8_t v){
 /* 480x272 at 8 bpp, 256 pens from a 4096-colour palette. */
 #define GW_MAX  480
 #define GH_MAX  272
-static uint16_t gfb[GW_MAX*GH_MAX];    /* a pixel IS an RGB565 word: 261,120 bytes */
+/* TWO framebuffer pages (stage 8b): gfb is the DRAW page -- every engine
+   and CPU pixel, and POINT's read-back, all unchanged below -- and gfbd is
+   the DISPLAY page the PPM/ASCII dumps show. Both start on page 0, so
+   nothing that never flips can tell the second page exists. The geometry
+   engine's FLIP swaps the pointers (on the board the display half is
+   latched at the scanout frame boundary; here there are no frames -- the
+   same instant-completion licence as GPU BUSY). */
+static uint16_t gfbmem[2][GW_MAX*GH_MAX];  /* a pixel IS an RGB565 word */
+static uint16_t *gfb  = gfbmem[0];         /* draw page */
+static uint16_t *gfbd = gfbmem[0];         /* display page */
 /* SINGLE MODE. 240x136 at 2 bpp was retired once nothing needed it: four pixels
    to a byte forced a read-modify-write on every plot, and carrying both depths
    cost enough logic in the RTL that the design would not place. One depth means
@@ -195,6 +204,113 @@ static uint16_t mdu_exec(uint16_t a, uint16_t b, uint16_t c){
     if(uc==0) uq=32767;                       /* /0 saturates */
     else { uq=(ua*ub)/uc; if(uq>32767) uq=32767; }
     return (uint16_t)((sa^sb^sc) ? 0-uq : uq);
+}
+
+/* Stage 8b geometry engine ($FF40-$FF4F): the GOLDEN MODEL, and the third
+   implementation of the ONE pipeline -- lib_g3d's software walk is the
+   specification, this must match it pixel for pixel, and the RTL must match
+   both (c_g3d_test and tb_geom pin all three to the same reference).
+   Every variable that is 16 bits on the machine is int16_t here, so C's
+   assignment truncation reproduces the wrap; the transform accumulates in
+   int32 and arithmetic-shifts (FLOOR), muldiv truncates toward zero --
+   both per the contract. Rendering is instant (the GPU-BUSY licence). */
+static void gpu_line(int x0,int y0,int x1,int y1,uint16_t c);
+static void gpu_box(int x0,int y0,int x1,int y1,uint16_t c,int fill);
+#define GEMAXE 4096                    /* list cap: count reg sanity bound */
+static uint8_t  gemem[GEMAXE*12];      /* the edge list ($100000 on the board) */
+static uint32_t gecur;                 /* upload cursor */
+static uint8_t  gesel, gevlo, geerr;   /* param index, GEVAL low latch, err */
+static int16_t  gep[23];               /* the parameter file */
+
+static void ge_reset(void){            /* power-on parameter state */
+    memset(gep,0,sizeof gep);
+    gep[0]=gep[4]=gep[8]=256;          /* identity matrix, S7.8 */
+    gep[12]=256;                       /* focal d */
+    gep[21]=3;                         /* flags: erase + flip */
+    gesel=0; gevlo=0; gecur=0; geerr=0;
+}
+
+static int16_t ge_md(int16_t a,int16_t b,int16_t c){
+    return (int16_t)mdu_exec((uint16_t)a,(uint16_t)b,(uint16_t)c);
+}
+static int ge_oc(int16_t x,int16_t y){          /* window outcode L,R,B,T */
+    int c=0;
+    if(x<gep[13]) c|=1;
+    if(x>gep[15]) c|=2;
+    if(y<gep[14]) c|=4;
+    if(y>gep[16]) c|=8;
+    return c;
+}
+
+static void ge_flip(void){
+    /* display <- the page just drawn; draw toggles to the OTHER bank. This
+       exact rule (not a pointer swap, which from the shared power-on page
+       would be a no-op forever) is what makes the FIRST flip split the
+       pages: boot is single-buffered on page 0 until someone flips. */
+    gfbd = gfb;
+    gfb  = (gfb == gfbmem[0]) ? gfbmem[1] : gfbmem[0];
+}
+
+static void ge_render(void){
+    int n = gep[22];
+    if(n<0 || n>GEMAXE){ geerr=1; return; }
+    geerr=0;
+    /* erase = a pen-0 BOXF of the viewport; the engine then draws WHITE
+       and leaves the gfx pen white (B&W v1 -- colour is a later rung) */
+    if(gep[21]&1) gpu_box(gep[17],gep[18],gep[19],gep[20],0,1);
+    gcol=0xFFFF;
+    for(int i=0;i<n;i++){
+        const uint8_t *e = gemem + (size_t)i*12;
+        int16_t v[6], w[6];
+        int16_t x0,y0,z0,x1,y1,z1,d;
+        for(int k=0;k<6;k++) v[k]=(int16_t)(e[k*2] | (e[k*2+1]<<8));
+        for(int p=0;p<2;p++)                    /* v' = (M*v >>> 8) + T */
+            for(int r=0;r<3;r++){
+                int32_t acc = (int32_t)gep[r*3+0]*v[p*3+0]
+                            + (int32_t)gep[r*3+1]*v[p*3+1]
+                            + (int32_t)gep[r*3+2]*v[p*3+2];
+                w[p*3+r] = (int16_t)((acc>>8) + gep[9+r]);
+            }
+        x0=w[0]; y0=w[1]; z0=w[2]; x1=w[3]; y1=w[4]; z1=w[5];
+        d = gep[12];
+        if(d){                                  /* near clip BEFORE the divide */
+            if(z0<16 && z1<16) continue;
+            if(z0<16){
+                x0=(int16_t)(x0+ge_md((int16_t)(x1-x0),(int16_t)(16-z0),(int16_t)(z1-z0)));
+                y0=(int16_t)(y0+ge_md((int16_t)(y1-y0),(int16_t)(16-z0),(int16_t)(z1-z0)));
+                z0=16;
+            }
+            if(z1<16){
+                x1=(int16_t)(x1+ge_md((int16_t)(x0-x1),(int16_t)(16-z1),(int16_t)(z0-z1)));
+                y1=(int16_t)(y1+ge_md((int16_t)(y0-y1),(int16_t)(16-z1),(int16_t)(z0-z1)));
+                z1=16;
+            }
+            x0=ge_md(x0,d,z0); y0=ge_md(y0,d,z0);
+            x1=ge_md(x1,d,z1); y1=ge_md(y1,d,z1);
+        }
+        int vis=1, nit=0;                       /* Cohen-Sutherland, lib order */
+        while(nit<8){
+            int a=ge_oc(x0,y0), b=ge_oc(x1,y1);
+            if(!(a|b)) break;
+            if(a&b){ vis=0; break; }
+            if(!a){ int16_t t; t=x0;x0=x1;x1=t; t=y0;y0=y1;y1=t; a=b; }
+            if(a&1){ y0=(int16_t)(y0+ge_md((int16_t)(y1-y0),(int16_t)(gep[13]-x0),(int16_t)(x1-x0))); x0=gep[13]; }
+            else if(a&2){ y0=(int16_t)(y0+ge_md((int16_t)(y1-y0),(int16_t)(gep[15]-x0),(int16_t)(x1-x0))); x0=gep[15]; }
+            else if(a&4){ x0=(int16_t)(x0+ge_md((int16_t)(x1-x0),(int16_t)(gep[14]-y0),(int16_t)(y1-y0))); y0=gep[14]; }
+            else        { x0=(int16_t)(x0+ge_md((int16_t)(x1-x0),(int16_t)(gep[16]-y0),(int16_t)(y1-y0))); y0=gep[16]; }
+            nit++;
+        }
+        if(nit>=8) vis=0;
+        if(!vis) continue;
+        {   /* viewport map, constant denominators, y flips */
+            int16_t px0=(int16_t)(gep[17]+ge_md((int16_t)(x0-gep[13]),(int16_t)(gep[19]-gep[17]),(int16_t)(gep[15]-gep[13])));
+            int16_t py0=(int16_t)(gep[20]-ge_md((int16_t)(y0-gep[14]),(int16_t)(gep[20]-gep[18]),(int16_t)(gep[16]-gep[14])));
+            int16_t px1=(int16_t)(gep[17]+ge_md((int16_t)(x1-gep[13]),(int16_t)(gep[19]-gep[17]),(int16_t)(gep[15]-gep[13])));
+            int16_t py1=(int16_t)(gep[20]-ge_md((int16_t)(y1-gep[14]),(int16_t)(gep[20]-gep[18]),(int16_t)(gep[16]-gep[14])));
+            gpu_line(px0,py0,px1,py1,0xFFFF);
+        }
+    }
+    if(gep[21]&2) ge_flip();
 }
 /* POINT's answer is 16 bits and GDATA is a byte port, so it STREAMS: low byte
    then high, the same idiom as the IDENT record. Reads past the second byte
@@ -330,7 +446,7 @@ static void gpu_ident(void){
    edges are on screen. Deterministic, so a test can assert on it. */
 static void gpu_selftest(void){
     static const uint16_t bar[4]={0x0000,0xF800,0x07E0,0x001F}; /* K R G B */
-    memset(gfb,0,sizeof gfb);
+    memset(gfb,0,gfpix*sizeof *gfb);   /* gfb is a page POINTER now */
     for(int i=0;i<4;i++)                                  /* colour bars */
         gpu_box(i*(gw/4), 0, i*(gw/4)+(gw/4)-1, gh/4, bar[i], 1);
     gpu_box(0,0,gw-1,gh-1,0xFFFF,0);                      /* extreme edges */
@@ -346,7 +462,7 @@ static void gpu_selftest(void){
    program which never touches PALETTE still sees sensible colour.
    Returns 0 on an unknown mode, which the caller turns into GSTAT's ERR bit. */
 static void gpu_reset(void){
-    memset(gfb,0,sizeof gfb);
+    memset(gfb,0,gfpix*sizeof *gfb);   /* gfb is a page POINTER now */
     /* The reset pen is WHITE (0xFFFF), because the historical default "pen 1"
        meant white back when there were four pens, and a visible default is the
        one that costs nobody a debugging round. The RTL must match. */
@@ -391,7 +507,9 @@ static void gpu_writeppm(const char*fn){
     fprintf(f,"P6\n%d %d\n255\n",gw,gh);
     for(int y=0;y<gh;y++)
         for(int x=0;x<gw;x++){
-            uint16_t p=gpu_pixel(x,y);           /* the pixel IS the colour */
+            /* the DISPLAY page: the dump shows what the panel shows, which
+               matters once the geometry engine has flipped */
+            uint16_t p=gfbd[y*gstride+x];
             uint8_t r5=(p>>11)&31, g6=(p>>5)&63, b5=p&31;
             /* 565 -> 888 by bit replication, so full scale really is 255 */
             uint8_t rgb[3]={ (uint8_t)((r5<<3)|(r5>>2)),
@@ -422,7 +540,7 @@ static void gpu_writeascii(void){
             int best=0;
             for(int dy=0;dy<4;dy++) for(int dx=0;dx<2;dx++)
                 if(x+dx<gw && y+dy<gh){
-                    uint16_t p=gpu_pixel(x+dx,y+dy);
+                    uint16_t p=gfbd[(y+dy)*gstride+(x+dx)];  /* display page */
                     int v=2*((p>>11)&31)+3*((p>>5)&63)/2+((p)&31);  /* ~0..218 */
                     if(v>best) best=v;
                 }
@@ -556,6 +674,9 @@ static uint8_t memrd(uint16_t ad){
     case MDQH:   return (uint8_t)(mdq >> 8);
     case MDSTAT: return 0x00;
     case MDID:   return 0x4D;                      /* 'M' -- presence probe */
+    /* Geometry engine reads. Instant too: GESTAT never shows busy here. */
+    case GESTAT: return (uint8_t)(geerr ? 0x01 : 0x00);
+    case GEID:   return 0x45;                      /* 'E' -- presence probe */
     default: return 0xFF;
     }
 }
@@ -600,6 +721,23 @@ static void memwr(uint16_t ad,uint8_t v){
       case MDCH: mdc=(uint16_t)((mdc&0xFF)|(v<<8)); return;
       case MDGO: mdq=mdu_exec(mda,mdb,mdc); return;
     }
+    /* Geometry engine writes (stage 8b): the indexed parameter file, the
+       list upload, and the three commands. GEVAL low latches; GEVALH
+       commits reg[GESEL] and auto-increments, so a matrix uploads as one
+       GESEL poke + 24 GEVAL pokes. */
+    switch(ad){
+      case GESEL:  gesel=v; return;
+      case GEVAL:  gevlo=v; return;
+      case GEVALH: if(gesel<23) gep[gesel]=(int16_t)((v<<8)|gevlo);
+                   gesel++; return;
+      case GEUP:   if(gecur<sizeof gemem) gemem[gecur++]=v; return;
+      case GECMD:
+        if(v==1) gecur=0;
+        else if(v==2) ge_render();
+        else if(v==3) ge_flip();
+        else geerr=1;
+        return;
+    }
     /* The ATA task-file (feature + LBA) is a SHARED bus: both drives latch these
        writes; the CFHEAD DEV bit picks who executes the command. Mirror them to
        both devices so a drive switch after loading the LBA still sees it (the
@@ -635,6 +773,7 @@ static void cf_attach(struct cf_state*c,const char*fn){   /* open/create a CF im
 }
 int main(int argc,char**argv){
     const char*ee="eeprom.bin"; const char*cfn=0,*cfn2=0; unsigned long long lim=200000000ULL;
+    ge_reset();                          /* geometry engine power-on state */
     int lim_set=0;                       /* -l given explicitly: always honour it */
     for(int i=1;i<argc;i++){
         if(!strcmp(argv[i],"-t")) trace=1;

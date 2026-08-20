@@ -48,12 +48,14 @@ module tb;
   wire m_nCS, m_nWE, m_nRAS, m_nCAS, m_CLK, m_CKE;
   wire [3:0] m_DQM;
 
-  gfx GFX(.clk(clk), .rst(rst),
+  gfx GFX(.clk(clk), .rst(rst), .draw_pg(1'b0),
     .sel(sel), .a(a), .wr(wr), .rd_stb(rd_stb), .wdata(wdata), .rdata(rdata),
     .e_req(e_req), .e_we(e_we), .e_word(e_word), .e_addr(e_addr),
     .e_din(e_din), .e_ack(e_ack), .e_ready(e_ready), .e_dout(c_dout));
 
   sdram_arb ARB(.clk(clk), .rst(rst),
+    .g_req(1'b0), .g_we(1'b0), .g_addr(23'd0), .g_din(16'd0),
+    .g_ack(), .g_ready(),
     .c_rd(c_rd), .c_wr(c_wr), .c_wr_word(c_word), .c_refresh(),
     .c_addr(c_addr), .c_din(c_din), .c_dout(c_dout), .c_dout32(c_dout32),
     .c_ready(c_ready), .c_busy(c_busy),
@@ -73,7 +75,7 @@ module tb;
     .SDRAM_nWE(m_nWE), .SDRAM_nRAS(m_nRAS), .SDRAM_nCAS(m_nCAS),
     .SDRAM_CLK(m_CLK), .SDRAM_CKE(m_CKE), .SDRAM_DQM(m_DQM));
 
-  sdram_video #(.FB_BASE(23'd0)) VID(
+  sdram_video #(.FB_BASE(23'd0)) VID(.disp_pg(1'b0),
     .clk(clk), .rst(rst),
     .st_go(st_go), .st_addr(st_addr), .st_words(st_words),
     .st_valid(st_valid), .st_data(st_data), .st_done(st_done),

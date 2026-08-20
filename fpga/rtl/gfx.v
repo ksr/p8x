@@ -67,6 +67,8 @@
 module gfx (
   input             clk,
   input             rst,
+  input             draw_pg,     // framebuffer DRAW page (stage 8b) -- passed
+                                 //   straight to gfx_mem; POINT reads it too
 
   // CPU side. `sel` is the address decode ($FF20-$FF2F); `a` is the low nibble.
   input             sel,
@@ -160,7 +162,7 @@ module gfx (
   wire [15:0] px_out;
 
   gfx_mem u_mem(
-    .clk(clk), .rst(rst),
+    .clk(clk), .rst(rst), .draw_pg(draw_pg),
     .px_x(px_x), .px_y(px_y), .px_pen(px_pen), .px_go(px_go),
     .px_read(px_read), .px_word(px_word),
     .px_busy(px_busy), .px_out(px_out),

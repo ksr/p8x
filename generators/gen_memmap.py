@@ -93,6 +93,24 @@ MAP = [
     ('I/O ports ($FF00-$FFFF)', 'MDGO', 0xFF34, 'write (any value): start the MDU operation'),
     ('I/O ports ($FF00-$FFFF)', 'MDSTAT', 0xFF35, 'read: bit7 BUSY'),
     ('I/O ports ($FF00-$FFFF)', 'MDID', 0xFF36, "read: $4D 'M' -- MDU-presence probe"),
+    # Stage 8b: the geometry engine, $FF40-$FF4F (STAGE8B-DESIGN.md). An
+    # INDEXED parameter file: GESEL picks a parameter (0-8 matrix m00..m22
+    # row-major in S7.8, 9-11 tx/ty/tz, 12 focal d [0=ortho], 13-16 window,
+    # 17-20 viewport, 21 flags [bit0 erase, bit1 flip], 22 edge count);
+    # GEVAL low latches, GEVALH commits reg[GESEL] and auto-increments GESEL.
+    # GEUP streams the edge list (stage-7 pool format, 12 bytes/edge) to the
+    # fixed SDRAM base $100000; GECMD: 1 rewind cursor, 2 RENDER, 3 FLIP.
+    # The engine draws WHITE lines via the display's own registers and owns
+    # the page-flip state; a pending flip applies at the scanout frame
+    # boundary and GESTAT holds busy until then. GEID reads 'E' -- the probe.
+    ('I/O ports ($FF00-$FFFF)', 'GESEL', 0xFF40, 'geometry: parameter index (see the list above)'),
+    ('I/O ports ($FF00-$FFFF)', 'GEVAL', 0xFF41, 'geometry: parameter value, low byte (latched)'),
+    ('I/O ports ($FF00-$FFFF)', 'GEUP', 0xFF42, 'geometry: upload one edge-list byte, cursor++'),
+    ('I/O ports ($FF00-$FFFF)', 'GECMD', 0xFF43, 'geometry: 1 rewind upload cursor / 2 RENDER / 3 FLIP'),
+    ('I/O ports ($FF00-$FFFF)', 'GESTAT', 0xFF44, 'read: bit7 BUSY, bit0 ERR (bad count)'),
+    ('I/O ports ($FF00-$FFFF)', 'GEID', 0xFF45, "read: $45 'E' -- geometry-engine presence probe"),
+    ('I/O ports ($FF00-$FFFF)', 'GEVALH', 0xFF4A, 'geometry: value high byte -- commits reg[GESEL], GESEL++'),
+
     ('I/O ports ($FF00-$FFFF)', 'MDAH', 0xFF39, 'MDU operand a, high byte (write AFTER MDA)'),
     ('I/O ports ($FF00-$FFFF)', 'MDBH', 0xFF3A, 'MDU operand b, high byte'),
     ('I/O ports ($FF00-$FFFF)', 'MDCH', 0xFF3B, 'MDU divisor c, high byte'),

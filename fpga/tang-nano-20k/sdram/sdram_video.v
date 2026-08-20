@@ -41,6 +41,10 @@ module sdram_video #(
 )(
   input             clk,            // 27 MHz fabric clock
   input             rst,
+  input             disp_pg,        // framebuffer page to SHOW (stage 8b):
+                                    //   addr bit 19; owned by the geometry
+                                    //   engine, which changes it only at
+                                    //   frame_tick, so no fetch straddles it
 
   // p8x_sdram stream port (this module only ever reads). One st_go per line;
   // issuing the next line's st_go while the previous fetch is still running is
@@ -208,7 +212,7 @@ module sdram_video #(
       // Stride 1024 makes the line address pure wiring: {nextf, 10 zeros}.
       // The y*STRIDE multiply -- and the 13-bit-wrap class of bugs this
       // project paid for twice -- is gone rather than survived.
-      st_addr  <= FB_BASE + {3'd0, nextf, 10'd0};
+      st_addr  <= FB_BASE + {3'd0, nextf, 10'd0} + (disp_pg ? 23'h80000 : 23'd0);
       st_go    <= 1'b1;                // starts the fetch -- or aborts a stale one
       // prime so that the fetch two lines before active video loads line 0
       if (py == V_TOT-3) nextf <= 10'd0;

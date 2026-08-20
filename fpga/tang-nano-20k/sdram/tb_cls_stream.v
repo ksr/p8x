@@ -39,7 +39,7 @@ module tb;
   wire [15:0] c_din, c_dout;
   wire [31:0] c_dout32;
 
-  sdram_video #(.FB_BASE(23'd0)) VID(
+  sdram_video #(.FB_BASE(23'd0)) VID(.disp_pg(1'b0),
     .clk(clk), .rst(rst),
     .st_go(st_go), .st_addr(st_addr), .st_words(st_words),
     .st_valid(st_valid), .st_data(st_data), .st_done(st_done),
@@ -69,6 +69,8 @@ module tb;
   wire [15:0] e_din;
 
   sdram_arb ARB(
+    .g_req(1'b0), .g_we(1'b0), .g_addr(23'd0), .g_din(16'd0),
+    .g_ack(), .g_ready(),
     .clk(clk), .rst(rst),
     .c_rd(c_rd), .c_wr(c_wr), .c_wr_word(c_word), .c_refresh(),
     .c_addr(c_addr), .c_din(c_din), .c_dout(c_dout), .c_dout32(c_dout32),
@@ -84,7 +86,7 @@ module tb;
   wire        px_busy;
   wire [15:0] px_out;
 
-  gfx_mem MEM(
+  gfx_mem MEM(.draw_pg(1'b0), 
     .clk(clk), .rst(rst),
     .px_x(px_x), .px_y(px_y), .px_pen(px_pen), .px_go(px_go),
     .px_read(px_read), .px_word(px_word),

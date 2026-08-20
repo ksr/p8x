@@ -38,7 +38,7 @@ module tb;
   wire [3:0] m_DQM;
   wire c_busy;
 
-  sdram_video #(.FB_BASE(23'd0)) dut(
+  sdram_video #(.FB_BASE(23'd0)) dut(.disp_pg(1'b0),
     .clk(clk), .rst(rst),
     .st_go(st_go), .st_addr(st_addr), .st_words(st_words),
     .st_valid(st_valid), .st_data(st_data), .st_done(st_done),

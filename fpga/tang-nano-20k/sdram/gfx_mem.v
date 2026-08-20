@@ -29,6 +29,7 @@
 module gfx_mem(
   input                clk,
   input                rst,
+  input                draw_pg,       // framebuffer page (stage 8b): addr bit 19
 
   // ---- request from the drawing algorithms
   input  signed [17:0] px_x,
@@ -59,9 +60,9 @@ module gfx_mem(
   wire        on = !px_x[17] && !px_y[17] && xw < 18'd480 && yw < 18'd272;
 
   // Stride 1024 (STAGE6-DESIGN.md): a line fits one SDRAM row exactly, and
-  // the address is PURE WIRING -- {y, x, 0} -- so the y*stride multiply, and
+  // the address is PURE WIRING -- {page, y, x, 0} -- so the y*stride multiply, and
   // its whole 13-bit-wrap class of bugs, is gone rather than survived.
-  wire [22:0] addr = {4'd0, yw[8:0], xw[8:0], 1'b0};
+  wire [22:0] addr = {3'd0, draw_pg, yw[8:0], xw[8:0], 1'b0};
 
   localparam S_IDLE=0, S_RD=1, S_WR=3;
   reg [1:0] st;

@@ -48,6 +48,13 @@
 #define MDGO        0xFF34       /* write (any value): start the MDU operation */
 #define MDSTAT      0xFF35       /* read: bit7 BUSY */
 #define MDID        0xFF36       /* read: $4D 'M' -- MDU-presence probe */
+#define GESEL       0xFF40       /* geometry: parameter index (see the list above) */
+#define GEVAL       0xFF41       /* geometry: parameter value, low byte (latched) */
+#define GEUP        0xFF42       /* geometry: upload one edge-list byte, cursor++ */
+#define GECMD       0xFF43       /* geometry: 1 rewind upload cursor / 2 RENDER / 3 FLIP */
+#define GESTAT      0xFF44       /* read: bit7 BUSY, bit0 ERR (bad count) */
+#define GEID        0xFF45       /* read: $45 'E' -- geometry-engine presence probe */
+#define GEVALH      0xFF4A       /* geometry: value high byte -- commits reg[GESEL], GESEL++ */
 #define MDAH        0xFF39       /* MDU operand a, high byte (write AFTER MDA) */
 #define MDBH        0xFF3A       /* MDU operand b, high byte */
 #define MDCH        0xFF3B       /* MDU divisor c, high byte */

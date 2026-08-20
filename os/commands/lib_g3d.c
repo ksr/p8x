@@ -50,6 +50,23 @@
 //#define MDCH   0xFF3B
 //#define MDQH   0xFF3C
 
+/* The geometry engine (stage 8b, STAGE8B-DESIGN.md): the whole pipeline in
+ * fabric. The edge list lives in SDRAM (uploaded through GEUP), a 12-word
+ * S7.8 matrix+translation lives in an INDEXED parameter file (GESEL picks,
+ * GEVAL low latches, GEVALH commits and auto-increments), and one command
+ * renders the list. g3render() auto-routes through it with an identity
+ * matrix -- bit-identical pixels, ~30x fewer CPU cycles -- and the pro path
+ * (g3up/g3mat/g3go) uploads a STATIC model once and re-renders it per frame
+ * with only a matrix write. GEID reads 'E'; absent engines fall back to the
+ * stage-7 software walk, same source, forever. */
+//#define GESEL  0xFF40  /* parameter index: 0-8 matrix, 9-11 t, 12 focal,  */
+//#define GEVAL  0xFF41  /*   13-16 window, 17-20 viewport, 21 flags,      */
+//#define GEUP   0xFF42  /*   22 edge count                                 */
+//#define GECMD  0xFF43  /* 1 rewind upload cursor / 2 RENDER / 3 FLIP      */
+//#define GESTAT 0xFF44  /* bit7 busy, bit0 err                             */
+//#define GEID   0xFF45  /* reads 'E' ($45) when an engine is fitted        */
+//#define GEVALH 0xFF4A  /* value high: commits reg[GESEL], GESEL++         */
+
 int e3p[3072];                      /* the pool: E3MAX edges x x0,y0,z0,x1,y1,z1 */
 int e3n;                            /* edges in the pool                   */
 int w3x0; int w3y0; int w3x1; int w3y1;   /* window (view-plane coords)    */
@@ -57,6 +74,7 @@ int v3x0; int v3y0; int v3x1; int v3y1;   /* viewport (screen pixels)      */
 int p3d;                            /* focal length; 0 = orthographic      */
 int m3hi; int m3lo;                 /* m3mul's 32-bit product              */
 int m3has;                          /* MDU probe: 0 unknown, 1 yes, 2 no   */
+int g3has;                          /* engine probe: same three states     */
 int c3x0; int c3y0; int c3x1; int c3y1;   /* clip workspace                */
 
 /* signed a < b (the < below is unsigned, which is correct once the signs
@@ -233,6 +251,80 @@ int e3draw(int i) {
     return 0;
 }
 
+/* ---- the geometry engine path (stage 8b) ---- */
+
+/* 1 if the engine is fitted (GEID reads 'E'; an absent one floats to $FF) */
+int g3probe() {
+    if (g3has == 0) {
+        if (peek(GEID) == 69) { g3has = 1; } else { g3has = 2; }
+    }
+    if (g3has == 1) { return 1; }
+    return 0;
+}
+
+/* write one engine parameter: reg[s] = v (GEVALH commits) */
+int g3par(int s, int v) {
+    poke(GESEL, s);
+    poke(GEVAL, v);
+    poke(GEVALH, v >> 8);
+    return 0;
+}
+
+/* upload the pool as the engine's edge list; 1 if an engine took it */
+int g3up() {
+    int i; int n; int k;
+    if (g3probe() == 0) { return 0; }
+    poke(GECMD, 1);                    /* rewind the upload cursor */
+    n = e3n * 6;
+    i = 0;
+    while (i < n) {                    /* stream int16s little-endian */
+        k = e3p[i];
+        poke(GEUP, k);
+        poke(GEUP, k >> 8);
+        i = i + 1;
+    }
+    g3par(22, e3n);                    /* edge count */
+    return 1;
+}
+
+/* load the transform: m[12] = 8.8 matrix row-major, then tx,ty,tz.
+ * GEVALH's auto-increment makes this one GESEL poke + 24 GEVAL pokes. */
+int g3mat(int *m) {
+    int i;
+    if (g3probe() == 0) { return 0; }
+    poke(GESEL, 0);
+    i = 0;
+    while (i < 12) {
+        poke(GEVAL, m[i]);
+        poke(GEVALH, m[i] >> 8);
+        i = i + 1;
+    }
+    return 1;
+}
+
+/* render flags: bit0 = erase viewport first, bit1 = page-flip after
+ * (power-on default 3). Flip shows each finished frame at the scanout
+ * frame boundary -- but POINT reads the DRAW page, so a program that
+ * wants to read back what it just rendered should use flags 1. */
+int g3flags(int f) {
+    if (g3probe() == 0) { return 0; }
+    g3par(21, f);
+    return 1;
+}
+
+/* render the UPLOADED list with the current matrix and the library's
+ * window/viewport/focal; 1 when an engine did it, 0 when absent
+ * (caller falls back to the software walk -- see g3render). */
+int g3go() {
+    if (g3probe() == 0) { return 0; }
+    g3par(12, p3d);
+    g3par(13, w3x0); g3par(14, w3y0); g3par(15, w3x1); g3par(16, w3y1);
+    g3par(17, v3x0); g3par(18, v3y0); g3par(19, v3x1); g3par(20, v3y1);
+    poke(GECMD, 2);
+    while (peek(GESTAT) & 128) { }
+    return 1;
+}
+
 /* ---- the API ---- */
 
 int g3clear() { e3n = 0; return 0; }
@@ -261,11 +353,31 @@ int g3view(int x0, int y0, int x1, int y1) {
 int g3persp(int d) { p3d = d; return 0; }
 
 /* erase the viewport (black), then draw the whole pool in white.
- * The erase is viewport-scoped on purpose: a neighbouring viewport on the
- * same screen is left alone. (Page flipping, when it exists, replaces
- * exactly this one gboxf.) */
+ * With a geometry engine fitted this auto-routes: upload the pool, load
+ * the IDENTITY matrix (exact: (v*256)>>8 == v), erase-no-flip flags --
+ * bit-identical pixels to the software walk below, stage-7 semantics
+ * preserved (single page, POINT sees what was drawn), ~30x less CPU.
+ * The engine owns the matrix here; the pro path (g3mat/g3go) sets its
+ * own every frame anyway. Without an engine: the software walk, with
+ * the erase viewport-scoped on purpose -- a neighbouring viewport on
+ * the same screen is left alone. */
 int g3render() {
-    int i;
+    int i; int k;
+    if (g3probe()) {
+        g3up();
+        poke(GESEL, 0);
+        i = 0;
+        while (i < 12) {
+            k = 0;
+            if (i == 0 || i == 4 || i == 8) { k = 256; }
+            poke(GEVAL, k);
+            poke(GEVALH, k >> 8);
+            i = i + 1;
+        }
+        g3par(21, 1);                  /* erase, no flip */
+        g3go();
+        return 0;
+    }
     gcolor(0);
     gboxf(v3x0, v3y0, v3x1, v3y1);
     gcolor(65535);

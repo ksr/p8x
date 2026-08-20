@@ -30,6 +30,8 @@ module tb;
   wire        s_ack, s_ready, f_ack, e_ack, e_ready;
 
   sdram_arb dut(.clk(clk), .rst(rst),
+    .g_req(1'b0), .g_we(1'b0), .g_addr(23'd0), .g_din(16'd0),
+    .g_ack(), .g_ready(),
     .c_rd(c_rd), .c_wr(c_wr), .c_wr_word(c_wr_word), .c_refresh(c_refresh),
     .c_addr(c_addr), .c_din(c_din), .c_dout(c_dout), .c_dout32(c_dout32),
     .c_ready(c_ready), .c_busy(c_busy),

@@ -166,6 +166,14 @@ module p8x_top(
   // The MDU (stage 8a, $FF30-$FF3F) is display-independent: every build
   // flavour carries it, so software's MDID probe answers on all of them.
   wire is_mdu   = (mem_addr >= 16'hFF30) && (mem_addr <= 16'hFF3F);
+`ifdef LCD
+  // The geometry engine (stage 8b, $FF40-$FF4F) needs the display and the
+  // SDRAM, so it exists only on LCD builds; elsewhere the window floats to
+  // $FF and lib_g3d's GEID probe falls back to the software walk.
+  wire is_geom  = (mem_addr >= 16'hFF40) && (mem_addr <= 16'hFF4F);
+`else
+  wire is_geom  = 1'b0;
+`endif
 
   // TDRE (bit 1) = transmitter free; RDRF (bit 0) = a byte is waiting.
   wire [7:0] cf_rdata;
@@ -239,6 +247,10 @@ module p8x_top(
   wire [22:0] e_addr;
   wire [15:0] e_din;
 
+  wire        g_req, g_we, g_ack, g_ready;
+  wire [22:0] g_addr;
+  wire [15:0] g_din;
+
   sdram_arb ARB(
     .clk(clk), .rst(rst),
     .c_rd(sd_rd), .c_wr(sd_wr), .c_wr_word(sd_word), .c_refresh(),
@@ -246,24 +258,49 @@ module p8x_top(
     .c_ready(sd_ready), .c_busy(sd_busy),
     .s_req(1'b0), .s_addr(23'd0), .s_ack(), .s_ready(),
     .f_req(1'b0), .f_ack(),
+    .g_req(g_req), .g_we(g_we), .g_addr(g_addr), .g_din(g_din),
+    .g_ack(g_ack), .g_ready(g_ready),
     .e_req(e_req), .e_we(e_we), .e_word(e_word), .e_addr(e_addr),
     .e_din(e_din), .e_ack(e_ack), .e_ready(e_ready));
 
-  gfx GFX(.clk(clk), .rst(rst),
-          .sel(is_gfx), .a(mem_addr[3:0]),
-          .wr(cen && mem_we && is_gfx), .rd_stb(cen && mem_rd && is_gfx),
-          .wdata(mem_dout), .rdata(gfx_rdata),
+  // The geometry engine (stage 8b) owns the gfx register port while it
+  // renders -- it is a hardware BASIC, writing the same registers software
+  // does. A CPU gfx access during a render is dropped (writes) or reads the
+  // engine's register instead of its own: poll GESTAT first, the house rule.
+  wire        gm_own, gm_wr;
+  wire [3:0]  gm_a;
+  wire [7:0]  gm_wdata;
+  wire [7:0]  geom_rdata;
+  wire        draw_pg, disp_pg, frame_tick;
+
+  p8x_geom GEOM(.clk(clk), .rst(rst),
+          .sel(is_geom), .a(mem_addr[3:0]),
+          .wr(cen && mem_we && is_geom),
+          .wdata(mem_dout), .rdata(geom_rdata),
+          .gm_own(gm_own), .gm_wr(gm_wr), .gm_a(gm_a), .gm_wdata(gm_wdata),
+          .gm_rdata(gfx_rdata),
+          .g_req(g_req), .g_we(g_we), .g_addr(g_addr), .g_din(g_din),
+          .g_ack(g_ack), .g_ready(g_ready), .g_dout(sd_dout),
+          .frame_tick(frame_tick), .draw_pg(draw_pg), .disp_pg(disp_pg));
+
+  gfx GFX(.clk(clk), .rst(rst), .draw_pg(draw_pg),
+          .sel(gm_own ? 1'b1 : is_gfx),
+          .a(gm_own ? gm_a : mem_addr[3:0]),
+          .wr(gm_own ? gm_wr : (cen && mem_we && is_gfx)),
+          .rd_stb(gm_own ? 1'b0 : (cen && mem_rd && is_gfx)),
+          .wdata(gm_own ? gm_wdata : mem_dout), .rdata(gfx_rdata),
           .e_req(e_req), .e_we(e_we), .e_word(e_word), .e_addr(e_addr),
           .e_din(e_din), .e_ack(e_ack), .e_ready(e_ready), .e_dout(sd_dout));
 
-  sdram_video VID(.clk(clk), .rst(rst),
+  sdram_video VID(.clk(clk), .rst(rst), .disp_pg(disp_pg),
           .st_go(v_go), .st_addr(v_addr), .st_words(v_words),
           .st_valid(v_valid), .st_data(v_data), .st_done(v_done),
           .pclk(lcd_clk), .de(lcd_de), .r(lcd_r), .g(lcd_g), .b(lcd_b),
-          .underruns(), .frame_tick());
+          .underruns(), .frame_tick(frame_tick));
 
 `else
-  wire [7:0] gfx_rdata = 8'hFF;
+  wire [7:0] gfx_rdata  = 8'hFF;
+  wire [7:0] geom_rdata = 8'hFF;
 `endif
 
   wire [7:0] mdu_rdata;
@@ -276,6 +313,7 @@ module p8x_top(
                      acia_dat ? rx_hold :
                      is_cf    ? cf_rdata :
                      is_gfx   ? gfx_rdata :
+                     is_geom  ? geom_rdata :
                      is_mdu   ? mdu_rdata : 8'hFF;
   assign mem_din = is_io ? io_rd : mem_q;
 

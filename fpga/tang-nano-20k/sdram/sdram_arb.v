@@ -54,7 +54,17 @@ module sdram_arb(
   input             f_req,
   output reg        f_ack,
 
-  // ---- master 2: engine. Reads and writes, lowest priority.
+  // ---- master 2: geometry engine (stage 8b). Edge-list fetches and list
+  // uploads -- above the pixel engine (a stalled walker stalls the whole
+  // frame; a stalled pixel just draws later) and below refresh.
+  input             g_req,
+  input             g_we,
+  input      [22:0] g_addr,
+  input      [15:0] g_din,
+  output reg        g_ack,
+  output reg        g_ready,      // 1 cycle: c_dout is yours
+
+  // ---- master 3: engine pixels. Reads and writes, lowest priority.
   input             e_req,
   input             e_we,         // 1 = write, 0 = read
   input             e_word,       // write both halves (span fill: a pixel pair)
@@ -64,7 +74,7 @@ module sdram_arb(
   output reg        e_ready       // 1 cycle: c_dout is yours
 );
 
-  localparam OWN_NONE = 2'd0, OWN_SCAN = 2'd1, OWN_ENG = 2'd2;
+  localparam OWN_NONE = 2'd0, OWN_SCAN = 2'd1, OWN_ENG = 2'd2, OWN_GEOM = 2'd3;
   reg [1:0] owner;                // who has a READ in flight
 
   // The controller is ready for a new command only when it is idle AND our own
@@ -73,8 +83,8 @@ module sdram_arb(
 
   always @(posedge clk) begin
     c_rd <= 0; c_wr <= 0; c_refresh <= 0;
-    s_ack <= 0; f_ack <= 0; e_ack <= 0;
-    s_ready <= 0; e_ready <= 0;
+    s_ack <= 0; f_ack <= 0; g_ack <= 0; e_ack <= 0;
+    s_ready <= 0; g_ready <= 0; e_ready <= 0;
 
     if (rst) begin
       owner <= OWN_NONE; c_wr_word <= 0;
@@ -82,8 +92,9 @@ module sdram_arb(
       // A read is outstanding. Route its answer home and free the bus; issue
       // nothing meanwhile, however idle the controller looks.
       if (c_ready) begin
-        if (owner == OWN_SCAN) s_ready <= 1;
-        else                   e_ready <= 1;
+        if      (owner == OWN_SCAN) s_ready <= 1;
+        else if (owner == OWN_GEOM) g_ready <= 1;
+        else                        e_ready <= 1;
         owner <= OWN_NONE;
       end
     end else if (can_issue) begin
@@ -91,6 +102,13 @@ module sdram_arb(
         c_addr <= s_addr; c_rd <= 1; s_ack <= 1; owner <= OWN_SCAN;
       end else if (f_req) begin
         c_refresh <= 1; f_ack <= 1;         // no answer to wait for
+      end else if (g_req) begin
+        c_addr <= g_addr; g_ack <= 1;
+        if (g_we) begin
+          c_din <= g_din; c_wr_word <= 0; c_wr <= 1;   // halfword, no answer
+        end else begin
+          c_rd <= 1; owner <= OWN_GEOM;
+        end
       end else if (e_req) begin
         c_addr <= e_addr; e_ack <= 1;
         if (e_we) begin
