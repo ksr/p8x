@@ -100,6 +100,26 @@ crown-jewel test and now covers colour and fill.
 4. Bitstream (the walker FSM grows ~15 states; LUT budget has room),
    flash + disk TOGETHER (format change!), board POINT verification.
 
+## 9c: parameter READBACK, persistent scenes, and `rotate`
+
+The record list survives in SDRAM between commands and the parameter
+file survives in registers — the engine is already a SCENE STORE. What
+was missing: the parameter file was write-only, so no command could
+learn the current record count to APPEND. 9c adds the read side:
+reading GEVAL returns par[GESEL] low, GEVALH high (no auto-increment on
+reads; only the high WRITE commits-and-increments). That one readback
+makes stateful shell tools compose:
+
+- `tri ... k` now APPENDS to the engine list (read count, upload at the
+  persisted cursor without rewinding, count+1, render) — so triangles
+  stack into a scene the ENGINE owns. Without `k`: rewind, count=1.
+- `rotate [x y z]` — angles in brads (256 = a full turn, 64 = 90°) —
+  composes Ry*Rx*Rz about the WORLD ORIGIN into params 0-8 (translation
+  9-11 untouched), sets erase, and RENDERs the persisted list. No args:
+  identity. Model scenes near the origin if they are to rotate nicely.
+- cube's 12 records persist too: run cube, stack a tri with `k`, then
+  rotate the whole ensemble.
+
 ## Not in stage 9
 
 Shading/interpolated colour, depth sorting or hidden faces (painter's

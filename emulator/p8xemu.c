@@ -829,6 +829,10 @@ static uint8_t memrd(uint16_t ad){
     /* Geometry engine reads. Instant too: GESTAT never shows busy here. */
     case GESTAT: return (uint8_t)(geerr ? 0x01 : 0x00);
     case GEID:   return 0x45;                      /* 'E' -- presence probe */
+    /* 9c: the parameter file reads back (par[GESEL] lo/hi; reads do NOT
+       auto-increment -- only the high WRITE commits-and-increments) */
+    case GEVAL:  return (uint8_t)(gesel<23 ? ((uint16_t)gep[gesel] & 0xFF) : 0xFF);
+    case GEVALH: return (uint8_t)(gesel<23 ? ((uint16_t)gep[gesel] >> 8) : 0xFF);
     default: return 0xFF;
     }
 }

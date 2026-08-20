@@ -47,7 +47,7 @@ int anum() {
 }
 
 int main() {
-    int i; int fill; int keep; int k;
+    int i; int fill; int keep; int k; int go;
     ap = argstr();
     skipsp();
     if (*ap == 0 || *ap == 13 ||
@@ -66,17 +66,24 @@ int main() {
         }
         i = i + 1;
     }
+    /* trailing args in ANY order: flag letters f/k, and an optional
+     * colour as three numbers (the first digit starts it). No break in
+     * the p8cc subset: `go` folds the exits into the loop condition. */
     fill = 0; keep = 0;
-    skipsp();
-    while (*ap == 'f' || *ap == 'F' || *ap == 'k' || *ap == 'K' || *ap == 32) {
-        if (*ap == 'f' || *ap == 'F') { fill = 1; }
-        if (*ap == 'k' || *ap == 'K') { keep = 1; }
-        ap = ap + 1;
-    }
-    i = anum();                       /* optional colour: r g b */
-    if (anum_ok) {
-        k = anum();
-        g3color(grgb(i, k, anum()));
+    go = 1;
+    while (go) {
+        skipsp();
+        if (*ap == 0 || *ap == 13) { go = 0; }
+        else { if (*ap == 'f' || *ap == 'F') { fill = 1; ap = ap + 1; }
+        else { if (*ap == 'k' || *ap == 'K') { keep = 1; ap = ap + 1; }
+        else {
+            i = anum();
+            if (anum_ok == 0) { go = 0; }     /* junk: stop parsing */
+            else {
+                k = anum();
+                g3color(grgb(i, k, anum()));
+            }
+        } } }
     }
     g3window(0 - 120, 0 - 120, 120, 120);
     g3view(104, 0, 375, 271);
@@ -84,10 +91,24 @@ int main() {
     g3clear();
     g3tri(tp, fill);
     if (g3probe()) {
-        i = 1;                       /* engine: erase unless k, never flip */
-        if (keep) { i = 0; }
-        g3flags(i);
-        g3up();
+        /* the engine list is a persistent SCENE (stage 9c): `k` APPENDS
+         * this record after the persisted ones (the upload cursor survives
+         * between commands; count reads back), so triangles stack -- and
+         * rotate redraws the whole ensemble. Without k: a fresh scene. */
+        if (keep) {
+            i = g3parrd(22);         /* current record count */
+            k = 0;
+            while (k < e3o) {        /* upload WITHOUT rewinding */
+                poke(GEUP, e3p[k]);
+                poke(GEUP, e3p[k] >> 8);
+                k = k + 1;
+            }
+            g3par(22, i + e3n);
+            g3flags(0);              /* draw over the scene, no erase */
+        } else {
+            g3up();                  /* rewinds and replaces the scene */
+            g3flags(1);
+        }
         g3go();
         return 0;
     }

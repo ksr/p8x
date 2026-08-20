@@ -429,6 +429,13 @@ int g3par(int s, int v) {
     return 0;
 }
 
+/* read one engine parameter back (stage 9c: the file has a read side;
+ * reads do not auto-increment GESEL) */
+int g3parrd(int s) {
+    poke(GESEL, s);
+    return peek(GEVAL) | (peek(GEVALH) << 8);
+}
+
 /* upload the pool as the engine's edge list; 1 if an engine took it */
 int g3up() {
     int i; int n; int k;

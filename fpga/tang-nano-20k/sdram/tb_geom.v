@@ -405,6 +405,20 @@ module tb;
     expline(1, 16'h001F, 16'd297, 16'd174, 16'd239, 16'd89);
     expline(2, 16'h001F, 16'd239, 16'd89,  16'd181, 16'd174);
 
+    // ---- 9c: parameter readback --------------------------------------------
+    begin : rdbk
+      reg [15:0] got;
+      wpar(5'd22, 16'd777);
+      wr8(4'h0, 8'd22);
+      a = 4'h1; sel = 1; #1; got[7:0] = rdata;
+      a = 4'hA; #1; got[15:8] = rdata; sel = 0;
+      if (got !== 16'd777) begin
+        $display("FAIL: param readback = %0d, want 777", got);
+        errors = errors + 1;
+      end
+      wpar(5'd22, 16'd3);                    // restore for anything after
+    end
+
     // ---- manual FLIP -------------------------------------------------------
     wr8(4'h3, 8'h03);
     wait_idle;

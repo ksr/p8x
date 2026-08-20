@@ -716,6 +716,9 @@ module p8x_geom (
     case (a)
       4'h4:    rdata = {busy, 6'd0, geerr};   // GESTAT
       4'h5:    rdata = 8'h45;                 // GEID: 'E'
+      // 9c: parameter readback (no auto-increment on reads)
+      4'h1:    rdata = (gesel < 5'd23) ? par[gesel][7:0]  : 8'hFF;
+      4'hA:    rdata = (gesel < 5'd23) ? par[gesel][15:8] : 8'hFF;
       default: rdata = 8'hFF;
     endcase
   end

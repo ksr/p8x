@@ -1,0 +1,27 @@
+NAME
+    rotate - set the scene's rotation and redraw
+
+SYNOPSIS
+    rotate [x y z [px py pz]]
+
+DESCRIPTION
+    The geometry engine's record list survives between commands -- it IS
+    the scene. Build one (tri, tri ... k, or cube's aftermath), then
+    rotate it: this command rewrites only the engine's rotation matrix
+    and redraws. Angles are in BRADS: 256 is a full turn, 64 is 90
+    degrees, negative allowed. They apply as yaw (y), then pitch (x),
+    then roll (z), about the PIVOT point -- the world origin unless you
+    give one. The pivot matters: scenes live at z of a few hundred, and
+    spinning them about the origin swings them out of the window; give
+    the scene's own centre (0 0 400, say) and it turns in place. The
+    command writes the whole transform (matrix and translation). With no
+    arguments everything resets. Needs the engine.
+
+EXAMPLES
+    tri -80 -80 300 80 -80 300 0 40 420 f 31 0 0
+    rotate 0 32 0 0 0 360     yaw an eighth-turn about the scene's middle
+    rotate 16 32 0 0 0 360    ...pitched too
+    rotate                    back to straight-on
+
+SEE ALSO
+    tri, cube, g3d
