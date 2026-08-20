@@ -1,0 +1,36 @@
+NAME
+    tri - draw one 3D triangle from the shell
+
+SYNOPSIS
+    tri x0 y0 z0 x1 y1 z1 x2 y2 z2 [f] [k] [r g b]
+
+DESCRIPTION
+    Draws a triangle given three world-space corners (16-bit numbers;
+    x right, y UP, z into the screen, camera at the origin; keep z at
+    16 or more or the near plane clips it away). Flags after the nine
+    coordinates: `f` fills the triangle, `k` KEEPS the screen (skips
+    the erase, so several tri commands stack into a scene). An optional
+    colour follows as r g b (r and b 0-31, g 0-63); white if omitted.
+
+    The frame is the house default: window -120..120 on the view plane,
+    the centred square viewport, focal length 256 -- so a point at
+    z=256 maps roughly 1:1, nearer looms, farther shrinks. Rendering
+    uses the geometry engine when fitted (the fabric clips, projects
+    and scan-fills it) and the software pipeline otherwise -- the same
+    pixels either way. No page flip: POINT reads back what was drawn.
+
+EXAMPLES
+    tri -80 -80 300 80 -80 300 0 40 420 f 31 0 0
+        the stage-9 proof triangle, filled red
+
+    tri -100 -100 250 100 -100 250 0 100 250 f 0 63 0
+        a flat green filled triangle facing you at depth 250
+
+    tri -100 -100 250 100 -100 250 0 100 250 k
+        ...its white outline stacked on top (k = keep)
+
+    tri -110 0 100 110 0 900 0 90 400 f 0 0 31
+        a blue sliver leaning far into the distance
+
+SEE ALSO
+    g3d (the library this fronts), cube, basic
