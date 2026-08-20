@@ -30,7 +30,7 @@
  * thousands of dead steps) -- and it is what makes the viewport a true clip
  * rectangle, so viewports can sit side by side. */
 
-//#define E3MAX  512   /* edge pool capacity (x6 ints = 6K of TPA)         */
+//#define E3MAX  512   /* pool capacity in RECORDS (LINE = 8 ints; 8K)     */
 //#define Z3NEAR 16    /* nothing nearer projects; clip slides edges here  */
 
 /* The MDU (stage 8a, STAGE8-DESIGN.md): a hardware muldiv at $FF30 that
@@ -67,8 +67,11 @@
 //#define GEID   0xFF45  /* reads 'E' ($45) when an engine is fitted        */
 //#define GEVALH 0xFF4A  /* value high: commits reg[GESEL], GESEL++         */
 
-int e3p[3072];                      /* the pool: E3MAX edges x x0,y0,z0,x1,y1,z1 */
-int e3n;                            /* edges in the pool                   */
+int e3p[4096];                      /* the pool: E3MAX 16-byte LINE records */
+int e3n;                            /* RECORDS in the pool                 */
+int e3o;                            /* pool write offset (ints)            */
+int p3col;                          /* pool pen for new records            */
+int p3ci;                           /* pool pen initialized? (default white) */
 int w3x0; int w3y0; int w3x1; int w3y1;   /* window (view-plane coords)    */
 int v3x0; int v3y0; int v3x1; int v3y1;   /* viewport (screen pixels)      */
 int p3d;                            /* focal length; 0 = orthographic      */
@@ -224,15 +227,17 @@ int v3mapy(int sy) {
     return v3y1 - muldiv(sy - w3y0, v3y1 - v3y0, w3y1 - w3y0);
 }
 
-/* the per-edge pipeline: near clip -> project -> window clip -> map -> draw */
-int e3draw(int i) {
-    int x0; int y0; int z0; int x1; int y1; int z1; int k;
-    k = i * 6;
-    x0 = e3p[k];     y0 = e3p[k + 1]; z0 = e3p[k + 2];
-    x1 = e3p[k + 3]; y1 = e3p[k + 4]; z1 = e3p[k + 5];
+/* the per-record pipeline: pen, near clip -> project -> clip -> map -> draw.
+ * k is the record's POOL OFFSET (ints); returns the next record's offset. */
+int e3draw(int k) {
+    int x0; int y0; int z0; int x1; int y1; int z1;
+    gcolor(e3p[k + 1]);             /* the record's own colour */
+    x0 = e3p[k + 2]; y0 = e3p[k + 3]; z0 = e3p[k + 4];
+    x1 = e3p[k + 5]; y1 = e3p[k + 6]; z1 = e3p[k + 7];
+    k = k + 8;
     if (p3d) {
         if (s3lt(z0, Z3NEAR)) {
-            if (s3lt(z1, Z3NEAR)) { return 0; }   /* wholly behind: drop */
+            if (s3lt(z1, Z3NEAR)) { return k; }   /* wholly behind: drop */
             x0 = x0 + muldiv(x1 - x0, Z3NEAR - z0, z1 - z0);
             y0 = y0 + muldiv(y1 - y0, Z3NEAR - z0, z1 - z0);
             z0 = Z3NEAR;
@@ -246,9 +251,9 @@ int e3draw(int i) {
         x1 = muldiv(x1, p3d, z1); y1 = muldiv(y1, p3d, z1);
     }
     c3x0 = x0; c3y0 = y0; c3x1 = x1; c3y1 = y1;
-    if (c3clip() == 0) { return 0; }
+    if (c3clip() == 0) { return k; }
     gline(v3mapx(c3x0), v3mapy(c3y0), v3mapx(c3x1), v3mapy(c3y1));
-    return 0;
+    return k;
 }
 
 /* ---- the geometry engine path (stage 8b) ---- */
@@ -275,7 +280,7 @@ int g3up() {
     int i; int n; int k;
     if (g3probe() == 0) { return 0; }
     poke(GECMD, 1);                    /* rewind the upload cursor */
-    n = e3n * 6;
+    n = e3o;                           /* ints in the record stream */
     i = 0;
     while (i < n) {                    /* stream int16s little-endian */
         k = e3p[i];
@@ -346,15 +351,28 @@ int g3go() {
 
 /* ---- the API ---- */
 
-int g3clear() { e3n = 0; return 0; }
+int g3clear() { e3n = 0; e3o = 0; return 0; }
 
-/* add one edge; 0 (and no add) once the pool is full */
+/* the pool pen: every record added after this carries colour c
+ * (stage 9 -- records are typed and each owns its RGB565 colour).
+ * Before the first g3color the pen is white. */
+int g3color(int c) {
+    p3col = c;
+    p3ci = 1;
+    return 0;
+}
+
+/* add one LINE record; 0 (and no add) once the pool is full */
 int g3line(int x0, int y0, int z0, int x1, int y1, int z1) {
     int k;
+    if (p3ci == 0) { p3col = 65535; p3ci = 1; }
     if (e3n >= E3MAX) { return 0; }
-    k = e3n * 6;
-    e3p[k] = x0;     e3p[k + 1] = y0; e3p[k + 2] = z0;
-    e3p[k + 3] = x1; e3p[k + 4] = y1; e3p[k + 5] = z1;
+    k = e3o;
+    e3p[k] = 1;                     /* type 1 = LINE, flags 0     */
+    e3p[k + 1] = p3col;
+    e3p[k + 2] = x0; e3p[k + 3] = y0; e3p[k + 4] = z0;
+    e3p[k + 5] = x1; e3p[k + 6] = y1; e3p[k + 7] = z1;
+    e3o = e3o + 8;
     e3n = e3n + 1;
     return 1;
 }
@@ -399,8 +417,8 @@ int g3render() {
     }
     gcolor(0);
     gboxf(v3x0, v3y0, v3x1, v3y1);
-    gcolor(65535);
+    k = 0;
     i = 0;
-    while (i < e3n) { e3draw(i); i = i + 1; }
+    while (i < e3n) { k = e3draw(k); i = i + 1; }
     return 0;
 }

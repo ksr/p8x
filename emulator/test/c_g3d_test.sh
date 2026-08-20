@@ -133,16 +133,23 @@ for i in range(8):
 
 data = open("g3_cube.ppm", "rb").read()
 hdr = data.split(b"\n", 3); w, h = map(int, hdr[1].split()); px = hdr[3]
-def white(x, y):
+def expand(c):
+    r5,g6,b5 = (c>>11)&31, (c>>5)&63, c&31
+    return ((r5<<3)|(r5>>2), (g6<<2)|(g6>>4), (b5<<3)|(b5>>2))
+def expect(x, y, c):
     o = (y * w + x) * 3
-    return px[o] > 200 and px[o+1] > 200 and px[o+2] > 200
-bad = [c for c in corners if not white(*c)]
-if bad: raise SystemExit("C-G3D: corners not white: %r (all: %r)" % (bad, corners))
+    if tuple(px[o:o+3]) != expand(c):
+        raise SystemExit("C-G3D: (%d,%d) = %r, want %04X" % (x, y, tuple(px[o:o+3]), c))
+# stage 9: the FRONT face is red, the BACK face green, connecting edges
+# blue -- and blue draws last, so every cube corner is blue
+for c in corners: expect(c[0], c[1], 0x001F)
+expect((corners[0][0]+corners[1][0])//2, corners[0][1], 0xF800)   # front face
+expect((corners[4][0]+corners[5][0])//2, corners[4][1], 0x07E0)   # back face
 for (x, y) in [(239, 136), (50, 136), (430, 136), (10, 10), (470, 260)]:
     o = (y * w + x) * 3
     if px[o] or px[o+1] or px[o+2]:
         raise SystemExit("C-G3D: expected black at (%d,%d)" % (x, y))
-print("spot pixels OK: 8 corners white at", corners)
+print("spot pixels OK: blue corners + red/green ring midpoints at", corners)
 EOF
 
 # ---- 4: engine vs software -- IDENTITY BIT-EXACTNESS ------------------------
@@ -217,12 +224,17 @@ for i in range(8):
     corners.append((mapx(sx), mapy(sy)))
 data = open("g3_ec.ppm", "rb").read()
 hdr = data.split(b"\n", 3); w_, h_ = map(int, hdr[1].split()); px = hdr[3]
-def white(x, y):
+def expand(c):
+    r5,g6,b5 = (c>>11)&31, (c>>5)&63, c&31
+    return ((r5<<3)|(r5>>2), (g6<<2)|(g6>>4), (b5<<3)|(b5>>2))
+def expect(x, y, c):
     o = (y * w_ + x) * 3
-    return px[o] > 200 and px[o+1] > 200 and px[o+2] > 200
-bad = [c for c in corners if not white(*c)]
-if bad: raise SystemExit("C-G3D: engine-cube corners not white: %r (all %r)" % (bad, corners))
-print("engine cube frame-0 corners OK:", corners)
+    if tuple(px[o:o+3]) != expand(c):
+        raise SystemExit("C-G3D: engine (%d,%d) = %r, want %04X" % (x, y, tuple(px[o:o+3]), c))
+for c in corners: expect(c[0], c[1], 0x001F)
+expect((corners[0][0]+corners[1][0])//2, corners[0][1], 0xF800)   # front face
+expect((corners[4][0]+corners[5][0])//2, corners[4][1], 0x07E0)   # back face
+print("engine cube frame-0 colours OK:", corners)
 EOF
 
 # ---- 5b: flipped frames must not expose the second page's garbage ----------

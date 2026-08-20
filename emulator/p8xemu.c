@@ -265,17 +265,24 @@ static void ge_flip(void){
 
 static void ge_render(void){
     int n = gep[22];
+    size_t off = 0;
     if(n<0 || n>GEMAXE){ geerr=1; return; }
     geerr=0;
-    /* erase = a pen-0 BOXF of the viewport; the engine then draws WHITE
-       and leaves the gfx pen white (B&W v1 -- colour is a later rung) */
+    /* erase = a pen-0 BOXF of the viewport. Stage 9: records are TYPED and
+       carry their own colour (STAGE9-DESIGN.md) -- the engine sets the pen
+       per record and leaves it holding the LAST record's colour. */
     if(gep[21]&1) gpu_box(gep[17],gep[18],gep[19],gep[20],0,1);
-    gcol=0xFFFF;
     for(int i=0;i<n;i++){
-        const uint8_t *e = gemem + (size_t)i*12;
+        const uint8_t *e = gemem + off;
         int16_t v[6], w[6];
         int16_t x0,y0,z0,x1,y1,z1,d;
-        for(int k=0;k<6;k++) v[k]=(int16_t)(e[k*2] | (e[k*2+1]<<8));
+        uint8_t rtype, rflags;
+        if(off + 16 > sizeof gemem){ geerr=1; return; }
+        rtype = e[0]; rflags = e[1]; (void)rflags;
+        gcol = (uint16_t)(e[2] | (e[3]<<8));      /* the record's colour */
+        if(rtype != 1){ geerr=1; return; }        /* 9a: LINE only */
+        off += 16;
+        for(int k=0;k<6;k++) v[k]=(int16_t)(e[4+k*2] | (e[5+k*2]<<8));
         for(int p=0;p<2;p++)                    /* v' = (M*v >>> 8) + T */
             for(int r=0;r<3;r++){
                 int32_t acc = (int32_t)gep[r*3+0]*v[p*3+0]
@@ -319,7 +326,7 @@ static void ge_render(void){
             int16_t py0=(int16_t)(gep[20]-ge_md((int16_t)(y0-gep[14]),(int16_t)(gep[20]-gep[18]),(int16_t)(gep[16]-gep[14])));
             int16_t px1=(int16_t)(gep[17]+ge_md((int16_t)(x1-gep[13]),(int16_t)(gep[19]-gep[17]),(int16_t)(gep[15]-gep[13])));
             int16_t py1=(int16_t)(gep[20]-ge_md((int16_t)(y1-gep[14]),(int16_t)(gep[20]-gep[18]),(int16_t)(gep[16]-gep[14])));
-            gpu_line(px0,py0,px1,py1,0xFFFF);
+            gpu_line(px0,py0,px1,py1,gcol);
         }
     }
     if(gep[21]&2) ge_flip();

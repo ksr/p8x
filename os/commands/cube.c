@@ -118,6 +118,9 @@ int main() {
         g3clear();
         i = 0;
         while (i < 12) {
+            if (i == 0) { g3color(0xF800); }   /* front face red    */
+            if (i == 4) { g3color(0x07E0); }   /* back face green   */
+            if (i == 8) { g3color(0x001F); }   /* connecting: blue  */
             k = c3ea[i]; t = c3eb[i];
             g3line(cvx[k], cvy[k], cvz[k], cvx[t], cvy[t], cvz[t]);
             i = i + 1;
@@ -165,6 +168,9 @@ int main() {
         g3clear();
         i = 0;
         while (i < 12) {
+            if (i == 0) { g3color(0xF800); }
+            if (i == 4) { g3color(0x07E0); }
+            if (i == 8) { g3color(0x001F); }
             k = c3ea[i]; t = c3eb[i];
             g3line(rx[k], ry[k], rz[k], rx[t], ry[t], rz[t]);
             i = i + 1;
