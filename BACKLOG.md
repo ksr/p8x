@@ -479,6 +479,15 @@ Nothing below has been built or measured.
 
 ## IDEAS
 
+- [ ] **800x480 panel support (5"/7") — a stage, not a flag (2026-08-21).**
+      DE-only panels cannot be auto-detected (one-way interface, no EDID):
+      selection = a strap pin read at config, or an SD config byte the
+      monitor reads at boot. Both timing sets in one bitstream; software
+      asks IDENT, as designed. The real work: ~33 MHz pixel clock (PLL;
+      the 27/3 CPU symmetry breaks), stride 1024 -> 2048 (a line spans two
+      SDRAM rows; scanout pays 2 activations -- headroom exists), 768 KB
+      framebuffer pages (page-flip bit moves), ~4x scanout bandwidth.
+      Own design doc when a panel is actually in hand.
 - [ ] **g3cam — a look-at camera (user request, 2026-08-20).** `g3cam(ex,
       ey,ez, ax,ay,az)`: the camera sits at the eye point and aims at the
       target point, both in world space. Pure once-per-frame SOFTWARE on
