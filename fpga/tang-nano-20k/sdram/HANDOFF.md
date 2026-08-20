@@ -137,6 +137,11 @@ deterministic. No logic theory explains sparkle.
   `for` loop that assigns every element of an array in one cycle is the tell.
 - **Placement cliff.** Always check `p8x_lcd.fs`'s mtime before believing a
   result. (Much less pressing at 34%.)
+- **imgsend's ack is transport, not content.** One clone delivered a
+  binary with the right size and corrupt bytes; the program wild-jumped to
+  the monitor while the same image ran clean in the emulator. A board
+  program that crashes impossibly is PRESUMED CORRUPT: re-clone first,
+  debug logic second. (Backlog: a verify pass.)
 - **Two staleness surfaces**: bitstream and SD card. `?SYNTAX ERROR` on a
   graphics statement means the CARD is behind; `?No display` means the BITSTREAM
   is.

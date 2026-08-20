@@ -479,6 +479,21 @@ Nothing below has been built or measured.
 
 ## IDEAS
 
+- [ ] **imgsend: VERIFY pass (2026-08-21, from a real corruption).** A clone
+      delivered trit.bin with the right SIZE but corrupt content — "acked
+      every sector, finished with 'K'" certifies transport, not bytes — and
+      the corrupt program wild-jumped the machine to the monitor while the
+      identical image ran perfectly in the emulator. A re-clone fixed it.
+      Fix: per-sector checksum in the protocol, or a read-back verify pass
+      after the clone (loader-side CRC of the whole image vs host). Until
+      then: a board program that crashes impossibly while emulator-clean is
+      PRESUMED CORRUPT — re-clone before debugging logic.
+- [ ] **cube.bin is 161 bytes below the C-stack top (2026-08-21).** Stage-9
+      library growth pushed cube.bin (36,191 B from $6A00) to $F79F against
+      CSTACKTOP $F800 — a deep call chain will collide. Options: shrink the
+      E3MAX pool (512 records is generous for a demo), split lib_g3d so
+      LINE-only clients skip the TRI machinery, or the long-standing p8cc
+      codegen shrink. Any new g3d client must check its map.
 - [ ] **800x480 panel support (5"/7") — a stage, not a flag (2026-08-21).**
       DE-only panels cannot be auto-detected (one-way interface, no EDID):
       selection = a strap pin read at config, or an SD config byte the
