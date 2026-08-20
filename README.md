@@ -149,15 +149,27 @@ it to 44/46 and 13288/20736 LUT4, with Fmax measured at 38.8 MHz — still four 
 the clock it runs at. P8X is programmed into the board's flash, so it comes up
 standalone on power.
 
-**Graphics** (`build.sh lcd`) adds the panel's native 480×272 framebuffer at 8
-bits a pixel — 256 pens from a palette of 4096 — with a drawing engine, driven
-by new BASIC statements: `COLOR`, `CLS`, `PLOT`, `LINE`, `BOX`, `CIRCLE` (a
-second radius gives an ellipse), `PALETTE`, `GTEXT`, and the `POINT(x,y)`
-function. The engine lives in the device, so a filled box costs the same handful
-of instructions as an empty one — `GTEXT` is the one exception, rasterising its
-5×7 glyphs in software because the device has no text command. There is one
-geometry and no modes to select. The same device is modelled in `p8xemu`, and
-the two are byte-compared frame by frame.
+**Graphics** (`build.sh lcd`) adds the panel's native 480×272 framebuffer in
+**RGB565 direct colour** — a pixel IS its colour, 65,536 of them — living in
+the Tang Nano's in-package SDRAM behind a streaming controller, with a drawing
+engine driven by BASIC: `COLOR c` / `COLOR r,g,b`, `CLS`, `PLOT`, `LINE`,
+`BOX`, `CIRCLE` (a second radius gives an ellipse), `GTEXT`, `IMAGE` (draws a
+P8I picture file — `tools/p8img.py` converts anything into one), and the
+`POINT(x,y)` and `RGB(r,g,b)` functions. The engine lives in the device, so a
+filled box costs the same handful of instructions as an empty one — `GTEXT` is
+the one exception, rasterising its 5×7 glyphs in software because the device
+has no text command. There is one geometry and no modes or palette to manage.
+The same device is modelled in `p8xemu`, and the two are byte-compared frame
+by frame.
+
+**3D** (stages 7–8, `fpga/tang-nano-20k/sdram/STAGE*.md`): a wireframe
+pipeline available three ways from C — all in software (`//#use gfx` +
+`//#use g3d`), accelerated by the **MDU** (a memory-mapped hardware
+multiply-divide unit at `$FF30`), or fully in fabric via the **geometry
+engine** (`$FF40`): edge lists in SDRAM, an S7.8 matrix, one command to
+transform/clip/project/draw, and page-flipped double buffering. The same
+program picks the fastest fitted path at runtime; `cube` on the shipped disk
+demonstrates all of them (`man cube`, `man g3d`).
 
 **Verification is the point.** Every milestone is "make the RTL match the
 emulator": the same program runs on both and their per-cycle architectural state

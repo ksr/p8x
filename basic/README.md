@@ -48,12 +48,13 @@ README covers build internals and milestones.
 > `INPUT#`, `CLOSE` (one sequential channel, one value per record).
 >
 > Plus **graphics**, driving the `$FF20` display (480x272, RGB565 direct
-> colour): `COLOR c`, `CLS`, `PLOT x,y`, `LINE x0,y0,x1,y1`,
+> colour): `COLOR c` / `COLOR r,g,b`, `CLS`, `PLOT x,y`, `LINE x0,y0,x1,y1`,
 > `BOX x0,y0,x1,y1[,FILL|,NOFILL]`, `CIRCLE x,y,r[,ry][,FILL|,NOFILL]`
-> (a second radius makes it an ellipse), `GTEXT x,y,size,s$`, and the
-> functions `POINT(x,y)` (read a pixel back) and `RGB(r,g,b)` (pack a
-> colour). No display modes, no `SCREEN`, no palette -- one geometry, and
-> a pixel is its colour.
+> (a second radius makes it an ellipse), `GTEXT x,y,size,s$`,
+> `IMAGE x,y,name$` (draw a P8I picture file), and the functions
+> `POINT(x,y)` (read a pixel back) and `RGB(r,g,b)` (pack a colour). No
+> display modes, no `SCREEN`, no palette -- one geometry, and a pixel is
+> its colour.
 > The drawing is done by the DEVICE, so a filled box costs the same few
 > instructions as an empty one. With no display fitted they print `?No display`
 > instead of quietly doing nothing.

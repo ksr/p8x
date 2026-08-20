@@ -1,9 +1,14 @@
-# SDRAM framebuffer — where this stands (2026-08-18)
+# SDRAM framebuffer — where this stands (2026-08-20)
 
 ## Achieved and on hardware
 
-480x272, 8 bpp, 256 pens from a 4096 palette, framebuffer in the in-package
-SDRAM. Verified on the board: fills, circles, GTEXT, POINT read-back, 256 pens.
+480x272 **RGB565 direct colour** (stage 6 — the 8 bpp palette era below is
+history), framebuffer in the in-package SDRAM behind the streaming
+controller; `IMAGE`/P8I photographs; and the full 3D arc — the software
+pipeline (stage 7), the MDU (8a) and the geometry engine with page-flip
+double buffering (8b) — all verified on the board. The chronology below is
+kept as written, oldest first; the **State** section at the bottom is
+current.
 
 240x136 and `SCREEN` were retired -- nothing needed them, and dropping them
 removed the read-modify-write path entirely (a 2 bpp artefact, never an SDRAM
@@ -199,6 +204,17 @@ crown jewel — the same pool rendered by the software walk and by the
 engine (identity matrix) is BYTE-IDENTICAL. Designs:
 STAGE7-DESIGN.md / STAGE8-DESIGN.md / STAGE8B-DESIGN.md. The 8b
 bitstream places at 10,801 LUT4 (52%), 51 MHz.
+
+The first 8b board run found the FLASHING-SIDEBAND bug (ff10c80): flipping
+alternated the splash-cleared page 0 with never-written page 1 — raw SDRAM
+stripes outside the viewport-scoped erase — and exposed the latent gap that
+flips leave draw/display OPPOSITE with no way back. Fixes: GECMD 4 (PGSYNC,
+draw rejoins display), lib g3flip()/g3sync(), cube clears BOTH pages on
+entry and syncs on exit, and the EMULATOR now powers both framebuffer pages
+on with fixed garbage (undefined DRAM, like silicon) so the new sideband
+test fails on the unfixed cube — this class of bug now dies in simulation.
+Rules of thumb: power-on framebuffer contents are undefined; a flipping
+program clears both pages once and exits through g3sync.
 
 Two operational notes for whoever drives the board over serial next:
 

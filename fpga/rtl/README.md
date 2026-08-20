@@ -1,20 +1,21 @@
 # fpga/rtl/ — the board-independent core
 
-Four files, and they are **not** peers:
+The files are **not** peers:
 
 | File | What it is |
 |------|-----------|
 | `p8x_cpu.v` | **the machine.** Shared verbatim by the simulation and the board. |
-| `gfx.v` | the **graphics display** — registers, drawing engine, framebuffer, palette. Also shared verbatim. |
-| `video_rgb.v` | 480x272 panel timing + scanout. Board-only in practice, but board-independent. |
-
-**The `sc_en` contract, alongside `cen`.** `gfx.v`'s framebuffer has ONE port,
-shared between the drawing engine and the scanout — true dual port halves a Gowin
-block's usable depth, which would cost 8 blocks instead of 4 and not place.
-`sc_en` hands the port to the scanout for a cycle and the engine holds. A wrapper
-with no display ties it low; `p8x_soc.v` deliberately does **not** — it drives an
-irregular pattern so the contention is exercised (see below).
+| `gfx.v` | the **graphics display** — registers and the drawing engine. Since the SDRAM stages the framebuffer is NOT in here: pixels leave through the arbiter port (`e_*`) into the in-package SDRAM, and there is no palette (RGB565 direct colour, stage 6). Shared verbatim. |
+| `mdu_core.v` | THE muldiv datapath — the one silicon definition of the signed `(a*b)/c` contract (stage 8a), instantiated by both wrappers below. |
+| `p8x_mdu.v` | the CPU-facing **MDU** register wrapper at `$FF30` around `mdu_core`. |
+| `p8x_geom.v` | the **geometry engine** (`$FF40`, stage 8b): parameter file, SDRAM edge-list walker, transform + clip + project via its own `mdu_core`, drawing by mastering `gfx.v`'s registers; owns the page-flip state. |
+| `video_rgb.v` | the pre-SDRAM 480x272 scanout. **Superseded** on the board by `../tang-nano-20k/sdram/sdram_video.v`; kept for the simulation wrappers. |
 | `p8x_soc.v` | a **simulation-only** wrapper. The board does not use this. |
+
+(The old `sc_en` single-port-framebuffer contract died with the BSRAM
+framebuffer; the SDRAM stack's sharing story — arbiter, stream port,
+priorities — lives in [`../tang-nano-20k/sdram/`](../tang-nano-20k/sdram/)
+and its `STAGE*.md` design docs.)
 
 `gfx.v` is a transliteration of the `gpu_*` functions in `emulator/p8xemu.c`, and
 the same rule applies to it as to the CPU: the emulator is the golden model, so a

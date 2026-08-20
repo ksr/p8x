@@ -23,9 +23,9 @@ CFLBA2      = $FF15
 CFHEAD      = $FF16              ; $E0 = LBA mode, drive 0
 CFCMD       = $FF17              ; command (wr) / status (rd)
 CFSTAT      = $FF17
-GX0         = $FF20              ; draw X0 / SETPAL red   (0-479)
-GY0         = $FF21              ; draw Y0 / SETPAL green (0-271)
-GX1         = $FF22              ; draw X1 / SETPAL blue  (0-479)
+GX0         = $FF20              ; draw X0 (0-479)
+GY0         = $FF21              ; draw Y0 (0-271)
+GX1         = $FF22              ; draw X1 (0-479)
 GY1         = $FF23              ; draw Y1 (0-271)
 GCOL        = $FF24              ; pen LOW byte -- the pen is a whole RGB565 colour (see GCOLH)
 GCMD        = $FF25              ; write executes: 1 PLOT 2 LINE 3 BOX 4 BOXFILL 5 CLS 7 CIRCLE 8 CIRCLEFILL 9 POINT A ELLIPSE B ELLIPSEFILL / F1 RESET F2 IDENT

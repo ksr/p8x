@@ -89,6 +89,8 @@ Shared hand-asm includes mirror the C `//#use` model (spliced by `mkasm.sh`):
 `lib_stdin.inc` (open/read/glob engine), `lib_glob.inc` (gmatch + de[]),
 `lib_regex.inc` (the recursive `. * + ? ^ $` matcher for grep/sed),
 `lib_globx.inc` (glob expansion for cp/mv wildcards, on top of `lib_glob.inc`),
+`lib_gfx.inc` (equates for the display device's registers and commands —
+`GX0 = $FF20`, `GC_LINE = 2`, … — the asm twin of the C `//#use gfx` library),
 and `lib_abi.inc` (equates naming the BIOS jump table + OS syscalls — `FOPEN =
 $0124`, `SYS_GETCWD = $2003`, … — so a twin `;#use abi` and does `JSR FOPEN`, the
 asm counterpart of the C side's `//#use abi` / `os/commands/lib_abi.c` #defines).

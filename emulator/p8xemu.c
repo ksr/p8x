@@ -26,17 +26,21 @@
  *     FF10 data  FF11 feature  FF12 sector-count  FF13-15 LBA0-2
  *     FF16 head/dev  FF17 command(w)/status(r)  [BSY7 DRQ3 ERR0]
  *   Backs a flat sector-image file (LBA*512); SET FEATURES/IDENTIFY/READ/WRITE.
- *   FF20-FF2F graphics display: a 240x136 4-colour framebuffer with a drawing
- *     engine, pixel-doubled to a 480x272 panel. Same device whether it is inside
- *     the FPGA P8X or on a bus card (a Tang Nano 20K + the same panel), so one
- *     command set and one golden model serve both.
- *     FF20-23 X0/Y0/X1/Y1 low  FF29-2C their high bytes  FF24 pen
+ *   FF20-FF2F graphics display: 480x272 RGB565 direct colour (a pixel IS its
+ *     colour; no palette, no modes -- stage 6) with a drawing engine. Same
+ *     device inside the FPGA P8X or on a bus card, so one command set and one
+ *     golden model serve both.
+ *     FF20-23 X0/Y0/X1/Y1 low  FF29-2C their high bytes  FF24/2D pen low/high
  *     FF28 x-radius  FF2F y-radius (ellipse)  FF25 command  FF26 status
  *     FF27 data  FF2D/2E "PG" presence signature
- *     Commands: 01 PLOT 02 LINE 03 BOX 04 BOXFILL 05 CLS 06 SETPAL 07 CIRCLE
+ *     Commands: 01 PLOT 02 LINE 03 BOX 04 BOXFILL 05 CLS 07 CIRCLE
  *               08 CIRCLEFILL 09 POINT 0A ELLIPSE 0B ELLIPSEFILL
  *               | F0 SELFTEST (emulator only) F1 RESET F2 IDENT
- *     Always present; -g writes it out as a PPM, -G as text.
+ *     Always present; -g writes the DISPLAY page as a PPM, -G as text.
+ *   FF30-FF3F MDU: hardware muldiv, bit-exact to lib_g3d's contract (stage 8a).
+ *   FF40-FF4F geometry engine: SDRAM edge list, matrix transform, clip,
+ *     project, draw + page-flip double buffering (stage 8b). Both pages power
+ *     on holding a fixed garbage pattern, like real DRAM.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -125,12 +129,10 @@ static void cf_data_wr(struct cf_state*c, uint8_t v){
 }
 
 /* ---- Graphics display model (always present; -g writes the image out) ------
-   The FPGA drives a 4.3" 480x272 RGB panel, but 480x272 does not fit in the
-   Tang Nano's spare block RAM at ANY depth: 6 free blocks are 12288 bytes and
-   even one bit per pixel needs 16320. So the framebuffer is 240x136 at 2 bits
-   per pixel (8160 bytes, 4 blocks) and each logical pixel is drawn as a 2x2
-   block, which fills the panel exactly and keeps pixels square. Four pens index
-   a palette of 12-bit RGB, so the 4 colours on screen are chosen from 4096.
+   480x272 RGB565: the framebuffer lives in the board's in-package SDRAM behind
+   the streaming controller (fpga/tang-nano-20k/sdram/), so the old block-RAM
+   size arguments are history -- see STAGE2/5/6-DESIGN.md for how 240x136/2bpp
+   and 480x272/8bpp-palettized each lived and died on the way here.
 
    The drawing engine belongs to the DEVICE, here and in the RTL -- not to the
    software. BASIC loads GX0/GY0/GX1/GY1/GCOL and writes GCMD, so a filled box
@@ -142,7 +144,7 @@ static void cf_data_wr(struct cf_state*c, uint8_t v){
    This is the GOLDEN MODEL. The Verilog engine has to reproduce gpu_line step
    for step or the co-sim diverges, so the Bresenham below is written in the
    plainest integer form there is and must not be "improved". */
-/* 480x272 at 8 bpp, 256 pens from a 4096-colour palette. */
+/* 480x272 at 16 bpp, RGB565 direct colour. */
 #define GW_MAX  480
 #define GH_MAX  272
 /* TWO framebuffer pages (stage 8b): gfb is the DRAW page -- every engine

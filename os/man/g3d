@@ -1,0 +1,71 @@
+NAME
+    g3d - the C wireframe-3D library (//#use g3d)
+
+SYNOPSIS
+    //#use gfx
+    //#use g3d          in that order (g3d draws through gfx)
+
+DESCRIPTION
+    Wireframe 3D: describe a world as edges between 16-bit (x,y,z) points,
+    choose a window (what you look at) and a viewport (where on screen it
+    lands), and render. World axes: x right, y UP, z into the screen,
+    camera at the origin looking down +z. Keep coordinates within about
+    +/-16000. Black and white: the render erases its viewport to black and
+    draws white lines.
+
+    The SAME program runs three ways, fastest fitted path chosen at
+    runtime: all in software; with the MDU (the hardware multiply-divide
+    unit) accelerating the arithmetic; or through the GEOMETRY ENGINE,
+    which holds the edge list itself and does the whole transform / clip /
+    project / draw per frame in hardware, with page-flipped (tear-free)
+    output.
+
+BUILDING AND RENDERING A WORLD
+    g3clear()                        empty the edge pool (512 edges max)
+    g3line(x0,y0,z0, x1,y1,z1)       add one edge
+    g3window(wx0,wy0,wx1,wy1)        view-plane rectangle to look at
+    g3view(vx0,vy0,vx1,vy1)          screen rectangle to draw into --
+                                     also a true CLIP rectangle, so
+                                     viewports can sit side by side
+    g3persp(d)                       focal length; 0 = orthographic
+                                     (d=256: a point at z=256 maps 1:1)
+    g3render()                       erase the viewport, draw the pool.
+                                     Uses the engine when fitted
+                                     (identical pixels), else software.
+
+THE ENGINE PATH (when fitted -- probe with g3probe())
+    A static model is uploaded ONCE; each frame is then just a matrix and
+    one command, and the CPU is nearly idle:
+
+    g3up()                upload the pool as the engine's edge list
+    g3mat(m)              m = int[12]: a 3x3 matrix in 8.8 fixed point
+                          (256 = 1.0), row-major, then tx,ty,tz --
+                          applied to every vertex as (M*v >> 8) + T
+    g3flags(f)            bit0 = erase viewport, bit1 = page-flip after
+                          (power-on default 3)
+    g3go()                render the uploaded list now
+    g3flip()              flip pages by hand (CPU-drawn double buffering)
+    g3sync()              draw page REJOINS the display page. Flips leave
+                          the two pages opposite; call this before normal
+                          drawing/POINT use, and clear BOTH pages once
+                          before the first flip (their power-on contents
+                          are undefined). See cube.c for the idiom.
+
+    muldiv(a,b,c)         the library's arithmetic core, usable directly:
+                          (a*b)/c signed via a 32-bit intermediate,
+                          truncated toward zero, saturating at +/-32767.
+                          Routed through the MDU when one is fitted.
+
+EXAMPLE (spin a triangle)
+    //#use gfx
+    //#use g3d
+    ... build pool with g3line, set window/view/persp ...
+    g3up(); g3mat(m); g3go();        /* per frame: new m, g3go */
+
+NOTES
+    Sources: /lib/lib_g3d.c on this disk. The design and the measured
+    numbers live in the repo: fpga/tang-nano-20k/sdram/STAGE7-DESIGN.md,
+    STAGE8-DESIGN.md and STAGE8B-DESIGN.md. `cube` is the worked example.
+
+SEE ALSO
+    gfx, cube, basic

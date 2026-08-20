@@ -1,0 +1,54 @@
+NAME
+    gfx - the C graphics library (//#use gfx)
+
+SYNOPSIS
+    //#use gfx          at the top of a C program (cc splices /lib/lib_gfx.c)
+
+DESCRIPTION
+    A thin C veneer over the display device's registers ($FF20-$FF2F), so a
+    program draws with calls instead of raw peek/poke. The device does the
+    drawing itself, so a filled box costs the same as an empty one, and the
+    same program behaves identically on the emulator and the board.
+
+    The screen is 480x272 in RGB565 direct colour: a pixel IS its colour,
+    r and b are 0-31, g is 0-63, 0 is black. Off-screen pixels are simply
+    not drawn -- but the device treats coordinates as UNSIGNED, so a
+    negative value lands far off the right/bottom, not off the left edge.
+
+FUNCTIONS
+    gpresent()            1 if a display is fitted -- CALL THIS FIRST: an
+                          absent display floats the bus and every other
+                          call would poke the void
+    grgb(r,g,b)           pack a colour (fields masked)
+    gcolor(c)             set the pen to a packed colour
+    gcls()                clear the whole screen TO THE PEN colour
+    gplot(x,y)            one pixel
+    gline(x0,y0,x1,y1)    line, both endpoints drawn
+    gbox(x0,y0,x1,y1)     rectangle outline (any two opposite corners)
+    gboxf(...)            ... filled
+    gcircle(x,y,r)        circle outline; gcirclef(...) filled
+    gellipse(x,y,rx,ry)   ellipse outline; gellipsef(...) filled
+    gpoint(x,y)           the colour at (x,y); 0 off-screen
+    gwait()               spin until the engine is idle (each call above
+                          already waits before issuing, so back-to-back
+                          calls are safe without it)
+
+EXAMPLE
+    //#use gfx
+    int main() {
+        if (gpresent() == 0) { puts("?No display"); return 1; }
+        gcolor(0); gcls();
+        gcolor(grgb(31, 0, 0));
+        gboxf(40, 40, 200, 200);
+        if (gpoint(100, 100) == grgb(31, 0, 0)) { puts("RED"); }
+        return 0;
+    }
+
+NOTES
+    The source is /lib/lib_gfx.c on this disk (and os/commands/lib_gfx.c in
+    the repo); hand-asm programs get the same addresses as equates from
+    /lib/gfx.inc via `;#use gfx`. BASIC reaches the same device through its
+    own statements -- see man basic, GRAPHICS.
+
+SEE ALSO
+    g3d, cube, basic

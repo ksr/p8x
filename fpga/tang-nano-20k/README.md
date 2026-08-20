@@ -213,14 +213,16 @@ settled, all of which I had guessed wrong:
 Pins: CLK 77, DEN 48, R 38–42, G 32–37, B 27–31, `DRIVE=24 PULL_MODE=UP`.
 
 **It fits with room to spare.** Measured from the shipped `build.sh lcd` on the
-`sdram-framebuffer` branch:
+`sdram-framebuffer` branch (now including the stage-8 MDU at `$FF30` and the
+stage-8b geometry engine at `$FF40` — hardware muldiv, the 3D walker, and
+page-flip double buffering; see `sdram/STAGE8-DESIGN.md` / `STAGE8B-DESIGN.md`):
 
-| | `lcd` | history |
+| | `lcd` (with 3D engine) | history |
 |---|---|---|
 | BSRAM | **42 / 46** (91%) | 44 / 46 when the framebuffer was in block RAM |
-| LUT4 | **7226 / 20736** (34%) | 13288 (64%), then 15397 (74%, would not place) |
-| DFF | 1581 / 15552 (10%) | 5657 |
-| Fmax | **51.6 MHz** | 38.8 MHz |
+| LUT4 | **10801 / 20736** (52%) | 7226 pre-3D; 15397 (74%) once would not place |
+| DFF | 2815 / 15552 (18%) | 1581 pre-3D; 5657 in the FF-mapped-buffer era |
+| Fmax | **47-60 MHz** (PASS at 27) | 38.8 MHz |
 
 Two changes account for the drop, and neither is a graphics change. The
 framebuffer moved out of block RAM into the in-package SDRAM, and the SD sector

@@ -35,4 +35,4 @@ EXAMPLES
     cube 500        keep spinning for 500 frames
 
 SEE ALSO
-    basic (GRAPHICS section), man g3d in the repo: STAGE7-DESIGN.md
+    g3d, gfx, basic (GRAPHICS section)

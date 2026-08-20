@@ -534,6 +534,25 @@ Nothing below has been built or measured.
 
 ## IDEAS
 
+- [ ] **Stage 9 candidates for the geometry engine (2026-08-20).** The 8b
+      engine (STAGE8B-DESIGN.md) deliberately left rungs: colour per edge
+      (the engine draws white-only; a per-edge or per-list pen), a list-base
+      register / multiple lists (one fixed list at $100000 today), indexed
+      meshes (shared vertices instead of 12 bytes per edge), camera helpers
+      (sin/cos stays software by design — but a matrix-compose helper could
+      live in lib_g3d), and BASIC statements over the engine (needs arrays
+      or a statement-level world builder). Filled faces / hidden lines are
+      a different algorithm class — their own design first.
+- [ ] **BASIC could use the MDU (2026-08-20).** Interpreter multiply/divide
+      still runs the software loops; routing them through $FF30 (with the
+      probe-and-fallback idiom from lib_g3d) would speed every arithmetic
+      program. Measure first: interpreter overhead may dominate the way
+      p8cc poke overhead did.
+- [ ] **Board successor scouting (2026-08-20).** If the BSRAM wall (42/46)
+      arrives: ULX3S (ECP5-85F, SDR SDRAM, mature open flow) for continuity,
+      or Colorlight i5/i9 + hand-built carrier for the hardware route; avoid
+      DDR3-only boards (obsoletes the proven SDR controller). The emulator-
+      as-golden-model discipline makes a port mostly pinout + video backend.
 - [ ] **Emulator bus server — run one script against the card AND the reference
       model (2026-07-22).** The bus test card's design doc (§1.2) makes the
       emulator the reference model, and the firmware deliberately uses the

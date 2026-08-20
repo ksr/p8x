@@ -135,7 +135,7 @@ like numeric comparisons, so they slot straight into `IF`:
 |------|---------|
 | `ABS(x)` | absolute value of `x` |
 | `RND(n)` | a pseudo-random integer **1..n** (LCG; `RND(6)` is a die) |
-| `POINT(x,y)` | pen (0–3) at a screen pixel; 0 if off-screen |
+| `POINT(x,y)` | the COLOUR at a screen pixel; 0 if off-screen |
 | `PEEK(addr)` | the byte (0–255) at memory address `addr` |
 | `LEN(s$)` | number of characters in the string `s$` |
 | `ASC(s$)` | code (0–255) of the first character (0 if empty) |
@@ -174,7 +174,7 @@ A line may hold several statements separated by `:` —
 | `PRINT# expr` | write one value + newline as a record to the open output file |
 | `INPUT# v` | read one record from the open input file into `v` (numeric or string) |
 | `CLOSE` | close the data-file channel (commits an output file) |
-| `COLOR pen` | select pen 0–3 for later drawing (see *Graphics*) |
+| `COLOR c` / `COLOR r,g,b` | set the drawing colour: one PACKED RGB565 value, or three numbers (`r`,`b` 0–31, `g` 0–63) — see *Graphics* |
 | `CLS` | clear the screen; the current `COLOR` is **not** changed |
 | `PLOT x,y` | one pixel |
 | `LINE x0,y0,x1,y1` | draw a line, both endpoints included |
@@ -195,18 +195,19 @@ Drawing goes to the display device. If none is fitted these statements print
 > and quit. Run `p8xemu` with `-g out.ppm` as well and each of those also writes
 > a real image file.
 
-The screen is **240 × 136** with **four pens** (0–3), pen 0 being the
-background. `x` runs 0–239 left to right, `y` runs 0–135 top to bottom, and
-anything off-screen is simply not drawn — it neither wraps nor errors.
+The screen is **480 × 272** in **RGB565 direct colour** — a pixel *is* its
+colour, 0 is black; see *The screen* below for the colour model. `x` runs
+0–479 left to right, `y` runs 0–271 top to bottom, and anything off-screen
+is simply not drawn — it neither wraps nor errors.
 
 ```basic
-10 COLOR 1
-20 BOX 0,0,239,135              : REM a border, outline
-30 COLOR 2
-40 LINE 0,0,239,135             : REM corner to corner
-50 LINE 239,0,0,135
-60 COLOR 3
-70 BOX 90,50,150,86,FILL        : REM a solid block
+10 COLOR 31,63,31               : REM white
+20 BOX 0,0,479,271              : REM a border, outline
+30 COLOR 0,63,0                 : REM green
+40 LINE 0,0,479,271             : REM corner to corner
+50 LINE 479,0,0,271
+60 COLOR RGB(31,0,0)            : REM red, via the packing function
+70 BOX 180,100,300,172,FILL     : REM a solid block
 80 END
 ```
 
@@ -217,9 +218,9 @@ Any two opposite corners work for `BOX` — they are sorted for you, so
 `ry`:
 
 ```basic
-10 CIRCLE 120,68,40             : REM circle, radius 40
-20 CIRCLE 120,68,90,30          : REM wide ellipse
-30 CIRCLE 120,68,20,60,FILL     : REM tall, filled
+10 CIRCLE 240,136,80            : REM circle, radius 80
+20 CIRCLE 240,136,180,60        : REM wide ellipse
+30 CIRCLE 240,136,40,120,FILL   : REM tall, filled
 ```
 
 The parser tells a second radius from the `FILL` modifier by looking at the
@@ -229,7 +230,8 @@ default — otherwise `CIRCLE x,y,r,NOFILL` would try to evaluate `NOFILL` as a
 radius.
 
 **Reading the screen back.** `POINT(x,y)` is a *function*, not a statement, and
-returns the pen (0–3) at a pixel — 0 for anything off-screen:
+returns the COLOUR at a pixel — 0 for anything off-screen — so a colour read
+back compares exactly against the `RGB()` you drew with:
 
 ```basic
 100 IF POINT(X,Y) = 0 THEN PLOT X,Y
@@ -246,7 +248,7 @@ current `COLOR`, with `x,y` the top-left corner:
 ```
 
 `size` is a plain multiplier. The glyphs are 5×7 in a 6×8 cell, so size 1 gives
-**40 columns and 17 rows**, size 2 gives 20 × 8, and so on. Only codes `$20`–`$5F`
+**80 columns and 34 rows**, size 2 gives 40 × 17, and so on. Only codes `$20`–`$5F`
 have glyphs: lowercase is drawn as uppercase, and anything else comes out blank.
 A string that runs off the right-hand edge simply stops — it does not wrap.
 
@@ -285,17 +287,17 @@ screen and dithers to the 565 grid. Off-screen pixels are discarded, so an
 image may hang off any edge. `IMAGE` borrows the data channel: a file
 `OPEN`'d for `INPUT` is closed by it, like `SAVE` and `LOAD`.
 
-**Colours.** Each pen paints one of 4096 colours, set with `PALETTE`:
+**Colours.** There is no palette and no `PALETTE` statement (both retired
+with direct colour, stage 6): the pen IS a colour. Set it either way —
 
 ```basic
-10 PALETTE 3,15,0,15            : REM pen 3 becomes magenta
+10 COLOR 31,0,0                 : REM three numbers: r,b 0-31, g 0-63
+20 COLOR RGB(0,63,0)            : REM or one packed value
+30 C=POINT(10,10) : COLOR C     : REM ...including one read off the screen
 ```
 
-`r`, `g` and `b` run 0–15. Defaults are 0 black, 1 white, 2 red, 3 green.
-`PALETTE` changes only what a pen *paints*, never which pen you are drawing
-with — so `COLOR 2 : PALETTE 3,15,0,15 : BOX 0,0,20,20,FILL` still draws in
-pen 2. (Internally the device names the pen being recoloured through the same
-register that selects the drawing pen, so BASIC restores it for you.)
+Bright colours *print* as negative numbers (`PRINT RGB(31,0,0)` says
+`-2048` — signed 16-bit ints), but store and compare bit-for-bit.
 
 `NOFILL` exists so you can say it out loud; it is the default. It is a real
 keyword rather than just an absence, because otherwise `NOFILL` would be read as

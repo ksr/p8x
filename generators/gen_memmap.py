@@ -37,20 +37,21 @@ MAP = [
     ('I/O ports ($FF00-$FFFF)', 'CFCMD', 0xFF17, 'command (wr) / status (rd)'),
     ('I/O ports ($FF00-$FFFF)', 'CFSTAT', 0xFF17, ''),
 
-    # Graphics display (GPU). A 240x136 4-colour framebuffer with a drawing
-    # engine, for the FPGA's 4.3" 480x272 RGB panel (each logical pixel is drawn
-    # 2x2). The engine lives in the DEVICE, not in software: BASIC loads the
-    # coordinate registers and writes GCMD, so a filled box is ~8 port writes
-    # instead of 32640 read-modify-write cycles through a data port. Coordinates
-    # are 16-bit low/high pairs (see the high bytes below); anything off-screen is
-    # discarded per pixel (see gpu_px in the emulator) rather than clipped, so
-    # the C and Verilog models agree without a clipping algorithm.
+    # Graphics display (GPU). 480x272 RGB565 direct colour -- a pixel IS its
+    # colour, no palette, no modes (stage 6) -- framebuffer in the in-package
+    # SDRAM behind the streaming controller. The engine lives in the DEVICE,
+    # not in software: BASIC loads the coordinate registers and writes GCMD, so
+    # a filled box is ~8 port writes instead of a quarter-million through a
+    # data port. Coordinates are 16-bit low/high pairs (see the high bytes
+    # below); anything off-screen is discarded per pixel (see gpu_px in the
+    # emulator) rather than clipped, so the C and Verilog models agree without
+    # a clipping algorithm.
     # $F0 SELFTEST also exists, but only in the emulator -- the RTL rejects it
     # and sets GSTAT's ERR bit, so it is deliberately left off the GCMD list
     # below rather than advertised as something the board will do.
-    ('I/O ports ($FF00-$FFFF)', 'GX0', 0xFF20, 'draw X0 / SETPAL red   (0-479)'),
-    ('I/O ports ($FF00-$FFFF)', 'GY0', 0xFF21, 'draw Y0 / SETPAL green (0-271)'),
-    ('I/O ports ($FF00-$FFFF)', 'GX1', 0xFF22, 'draw X1 / SETPAL blue  (0-479)'),
+    ('I/O ports ($FF00-$FFFF)', 'GX0', 0xFF20, 'draw X0 (0-479)'),
+    ('I/O ports ($FF00-$FFFF)', 'GY0', 0xFF21, 'draw Y0 (0-271)'),
+    ('I/O ports ($FF00-$FFFF)', 'GX1', 0xFF22, 'draw X1 (0-479)'),
     ('I/O ports ($FF00-$FFFF)', 'GY1', 0xFF23, 'draw Y1 (0-271)'),
     ('I/O ports ($FF00-$FFFF)', 'GCOL', 0xFF24, 'pen LOW byte -- the pen is a whole RGB565 colour (see GCOLH)'),
     ('I/O ports ($FF00-$FFFF)', 'GCMD', 0xFF25, 'write executes: 1 PLOT 2 LINE 3 BOX 4 BOXFILL 5 CLS 7 CIRCLE 8 CIRCLEFILL 9 POINT A ELLIPSE B ELLIPSEFILL / F1 RESET F2 IDENT'),
