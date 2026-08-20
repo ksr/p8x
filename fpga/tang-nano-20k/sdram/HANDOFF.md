@@ -236,6 +236,13 @@ Three operational notes for whoever drives the board over serial next:
   any scripted board session is the pre-flight that catches both this and
   a user terminal left attached.
 
+- **The board can WEDGE where no scripted keystroke lands** (every line
+  answers `?` or nothing; the panel sits on the splash). A scripted session
+  cannot recover it — a HUMAN reset (button or power-cycle) can, and a
+  bitstream reload usually can. So: every scripted session should begin
+  with the openFPGALoader reload, and when sessions repeatedly bounce, ask
+  the person at the bench to reset rather than burning retries -- their
+  eyes on the panel are also the best verdict available.
 - **Opening the serial port resets the machine.** Any scripted interaction must
   do everything in ONE session; a second open finds the monitor again, and its
   `?` replies to BASIC lines look confusingly like an interpreter fault.
