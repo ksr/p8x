@@ -30,7 +30,7 @@
  * thousands of dead steps) -- and it is what makes the viewport a true clip
  * rectangle, so viewports can sit side by side. */
 
-//#define E3MAX  512   /* pool capacity in RECORDS (LINE = 8 ints; 8K)     */
+//#define E3INTS 2816  /* pool capacity in INTS (5.5K: 256 TRIs or 352 LINEs) */
 //#define Z3NEAR 16    /* nothing nearer projects; clip slides edges here  */
 
 /* The MDU (stage 8a, STAGE8-DESIGN.md): a hardware muldiv at $FF30 that
@@ -67,7 +67,7 @@
 //#define GEID   0xFF45  /* reads 'E' ($45) when an engine is fitted        */
 //#define GEVALH 0xFF4A  /* value high: commits reg[GESEL], GESEL++         */
 
-int e3p[4096];                      /* the pool: E3MAX 16-byte LINE records */
+int e3p[2816];                      /* the record pool (E3INTS ints)       */
 int e3n;                            /* RECORDS in the pool                 */
 int e3o;                            /* pool write offset (ints)            */
 int p3col;                          /* pool pen for new records            */
@@ -527,7 +527,7 @@ int g3color(int c) {
 int g3line(int x0, int y0, int z0, int x1, int y1, int z1) {
     int k;
     if (p3ci == 0) { p3col = 65535; p3ci = 1; }
-    if (e3n >= E3MAX) { return 0; }
+    if (e3o + 8 > E3INTS) { return 0; }   /* guard by INTS, not records */
     k = e3o;
     e3p[k] = 1;                     /* type 1 = LINE, flags 0     */
     e3p[k + 1] = p3col;
@@ -543,7 +543,7 @@ int g3line(int x0, int y0, int z0, int x1, int y1, int z1) {
 int g3tri(int *p, int fill) {
     int k; int i;
     if (p3ci == 0) { p3col = 65535; p3ci = 1; }
-    if (e3n >= E3MAX) { return 0; }
+    if (e3o + 11 > E3INTS) { return 0; }  /* guard by INTS, not records */
     k = e3o;
     i = 2;
     if (fill) { i = 258; }
