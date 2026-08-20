@@ -105,6 +105,16 @@ int main() {
      * `cube 1` renders without the page flip so POINT verification reads
      * the frame it drew; longer runs flip for a tear-free spin. */
     if (g3probe()) {
+        /* Power-on framebuffer contents are UNDEFINED -- the boot splash
+         * clears only the page it shows. Flipping alternates the display
+         * between BOTH pages, so clear both once (the engine's own erase
+         * is viewport-scoped by design and never touches the sidebands),
+         * then g3sync back to a known single-buffer state. */
+        gcolor(0);
+        gcls(); gwait();
+        g3flip();
+        gcls(); gwait();
+        g3sync();
         g3clear();
         i = 0;
         while (i < 12) {
@@ -128,6 +138,10 @@ int main() {
             ang = (ang + 4) & 255;
             f = f + 1;
         }
+        /* leave the machine single-buffered: flips end with draw and
+         * display OPPOSITE, and the next program's PLOT would land on
+         * the hidden page. g3sync rejoins them on the visible one. */
+        g3sync();
         puts("DONE");
         return 0;
     }

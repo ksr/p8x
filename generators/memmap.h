@@ -51,7 +51,7 @@
 #define GESEL       0xFF40       /* geometry: parameter index (see the list above) */
 #define GEVAL       0xFF41       /* geometry: parameter value, low byte (latched) */
 #define GEUP        0xFF42       /* geometry: upload one edge-list byte, cursor++ */
-#define GECMD       0xFF43       /* geometry: 1 rewind upload cursor / 2 RENDER / 3 FLIP */
+#define GECMD       0xFF43       /* geometry: 1 rewind cursor / 2 RENDER / 3 FLIP / 4 PGSYNC (draw rejoins display) */
 #define GESTAT      0xFF44       /* read: bit7 BUSY, bit0 ERR (bad count) */
 #define GEID        0xFF45       /* read: $45 'E' -- geometry-engine presence probe */
 #define GEVALH      0xFF4A       /* geometry: value high byte -- commits reg[GESEL], GESEL++ */

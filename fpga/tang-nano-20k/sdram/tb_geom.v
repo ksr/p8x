@@ -252,7 +252,15 @@ module tb;
       errors = errors + 1;
     end
 
-    if (errors == 0) $display("TB-GEOM: PASS (erase, pen, 5+3 lines vs host replica, clip/drop/reject, flip rule)");
+    // ---- PGSYNC: draw rejoins display, instantly ---------------------------
+    wr8(4'h3, 8'h04);
+    @(negedge clk);
+    if (disp_pg !== 1'b1 || draw_pg !== 1'b1) begin
+      $display("FAIL: PGSYNC disp=%b draw=%b, want 1/1", disp_pg, draw_pg);
+      errors = errors + 1;
+    end
+
+    if (errors == 0) $display("TB-GEOM: PASS (erase, pen, 5+3 lines vs host replica, clip/drop/reject, flip + PGSYNC rules)");
     else $display("TB-GEOM: %0d FAILURES", errors);
     $finish;
   end

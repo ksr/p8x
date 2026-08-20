@@ -106,7 +106,7 @@ MAP = [
     ('I/O ports ($FF00-$FFFF)', 'GESEL', 0xFF40, 'geometry: parameter index (see the list above)'),
     ('I/O ports ($FF00-$FFFF)', 'GEVAL', 0xFF41, 'geometry: parameter value, low byte (latched)'),
     ('I/O ports ($FF00-$FFFF)', 'GEUP', 0xFF42, 'geometry: upload one edge-list byte, cursor++'),
-    ('I/O ports ($FF00-$FFFF)', 'GECMD', 0xFF43, 'geometry: 1 rewind upload cursor / 2 RENDER / 3 FLIP'),
+    ('I/O ports ($FF00-$FFFF)', 'GECMD', 0xFF43, 'geometry: 1 rewind cursor / 2 RENDER / 3 FLIP / 4 PGSYNC (draw rejoins display)'),
     ('I/O ports ($FF00-$FFFF)', 'GESTAT', 0xFF44, 'read: bit7 BUSY, bit0 ERR (bad count)'),
     ('I/O ports ($FF00-$FFFF)', 'GEID', 0xFF45, "read: $45 'E' -- geometry-engine presence probe"),
     ('I/O ports ($FF00-$FFFF)', 'GEVALH', 0xFF4A, 'geometry: value high byte -- commits reg[GESEL], GESEL++'),

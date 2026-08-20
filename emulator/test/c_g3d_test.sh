@@ -225,6 +225,25 @@ if bad: raise SystemExit("C-G3D: engine-cube corners not white: %r (all %r)" % (
 print("engine cube frame-0 corners OK:", corners)
 EOF
 
+# ---- 5b: flipped frames must not expose the second page's garbage ----------
+# The emulator powers on BOTH framebuffer pages with a fixed garbage pattern
+# (undefined DRAM, like the board). cube's engine path clears both pages once
+# before flipping; without that, the displayed sidebands (outside the
+# viewport) alternate splash-cleared page 0 with raw page 1 -- the flashing
+# stripes seen on hardware. cube 2 ends displaying the second page.
+printf 'B\rcube 2\r' > g3_sb.in
+../p8xemu -N -i g3_sb.in -c g3d.img -l 400000000 -g g3_sb.ppm eeprom.bin > g3_sb.out 2>/dev/null || true
+grep -q DONE g3_sb.out || fail "sideband test cube did not finish"
+python3 - <<'EOF' || exit 1
+data = open("g3_sb.ppm", "rb").read()
+hdr = data.split(b"\n", 3); w, h = map(int, hdr[1].split()); px = hdr[3]
+for (x, y) in [(50, 136), (20, 20), (430, 136), (460, 250)]:
+    o = (y * w + x) * 3
+    if px[o] or px[o+1] or px[o+2]:
+        raise SystemExit("C-G3D: flipped page sideband not cleared at (%d,%d)" % (x, y))
+print("flipped-page sidebands clear OK")
+EOF
+
 # ---- 6: page-flip semantics -------------------------------------------------
 # Two renders with flip: the DISPLAY page must show the SECOND frame and not
 # the first. A third manual FLIP (GECMD 3) swaps back to the first. Ortho

@@ -155,6 +155,16 @@ static void cf_data_wr(struct cf_state*c, uint8_t v){
 static uint16_t gfbmem[2][GW_MAX*GH_MAX];  /* a pixel IS an RGB565 word */
 static uint16_t *gfb  = gfbmem[0];         /* draw page */
 static uint16_t *gfbd = gfbmem[0];         /* display page */
+/* Power-on framebuffer contents are UNDEFINED on the board -- raw SDRAM,
+   the cold-boot stripes. Model that with a fixed (deterministic: PPM
+   diffs between runs must stay meaningful) garbage pattern on BOTH pages,
+   so software that forgets to clear a page it shows fails HERE, not just
+   on the panel. The boot splash clears page 0; page 1 is software's job
+   (see man cube / STAGE8B-DESIGN on flipping). */
+static void gfb_poweron(void){
+    for(size_t i=0;i<2*(size_t)GW_MAX*GH_MAX;i++)
+        gfbmem[0][i]=(uint16_t)(0x2104u*((i&7)+1));   /* stripey, fixed */
+}
 /* SINGLE MODE. 240x136 at 2 bpp was retired once nothing needed it: four pixels
    to a byte forced a read-modify-write on every plot, and carrying both depths
    cost enough logic in the RTL that the design would not place. One depth means
@@ -735,6 +745,7 @@ static void memwr(uint16_t ad,uint8_t v){
         if(v==1) gecur=0;
         else if(v==2) ge_render();
         else if(v==3) ge_flip();
+        else if(v==4) gfb=gfbd;          /* PGSYNC: back to single-buffer */
         else geerr=1;
         return;
     }
@@ -774,6 +785,7 @@ static void cf_attach(struct cf_state*c,const char*fn){   /* open/create a CF im
 int main(int argc,char**argv){
     const char*ee="eeprom.bin"; const char*cfn=0,*cfn2=0; unsigned long long lim=200000000ULL;
     ge_reset();                          /* geometry engine power-on state */
+    gfb_poweron();                       /* both pages: undefined, like DRAM */
     int lim_set=0;                       /* -l given explicitly: always honour it */
     for(int i=1;i<argc;i++){
         if(!strcmp(argv[i],"-t")) trace=1;

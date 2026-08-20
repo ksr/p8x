@@ -11,6 +11,10 @@
 // STEP FOR STEP (operand order changes truncation; don't "improve" it):
 // the emulator's ge_render() is the golden model all three answer to.
 //
+// GECMD: 1 rewinds the upload cursor, 2 RENDER, 3 FLIP, 4 PGSYNC (the
+// draw page rejoins the display page -- the only way back to the
+// single-buffer state, since a flip always leaves the pages opposite).
+//
 // Pages: this module owns the framebuffer page state. draw_pg feeds
 // gfx_mem (all pixels, CPU's included, and POINT's read-back); disp_pg
 // feeds sdram_video. A flip waits for frame_tick, then: disp_pg <= draw_pg
@@ -187,6 +191,8 @@ module p8x_geom (
               end                       //   upload FIFO has drained
             end
             8'h03: begin flip_pend <= 1; state <= S_FLIP; end
+            8'h04: draw_pg <= disp_pg;  // PGSYNC: back to single-buffer,
+                                        //   instant (no vsync involved)
             default: geerr <= 1;
           endcase
           default: ;

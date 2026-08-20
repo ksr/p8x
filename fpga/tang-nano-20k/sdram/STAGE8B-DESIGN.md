@@ -59,7 +59,7 @@ GESEL poke + 24 GEVAL pokes).
 | $FF40 | GESEL: parameter index | — |
 | $FF41 | GEVAL low: value low byte | — |
 | $FF42 | GEUP: upload one list byte at the cursor, cursor++ | — |
-| $FF43 | GECMD: 1 rewind upload cursor / 2 RENDER / 3 FLIP only | — |
+| $FF43 | GECMD: 1 rewind cursor / 2 RENDER / 3 FLIP / 4 PGSYNC | — |
 | $FF44 | — | GESTAT: bit7 busy, bit0 err |
 | $FF45 | — | GEID: 'E' ($45) — presence probe |
 | $FF4A | GEVAL high: commits reg[GESEL], GESEL++ | — |
@@ -98,6 +98,15 @@ A pending flip is APPLIED BY SCANOUT at its frame boundary (frame_tick),
 never mid-frame — no tearing — and GESTAT stays busy until a pending
 flip is consumed, so back-to-back RENDERs self-pace to the panel's
 54.11 Hz and never draw into the visible page.
+
+Two rules the first board run taught (the flashing-sideband bug):
+**power-on framebuffer contents are UNDEFINED on both pages** — the boot
+splash clears only page 0, and the engine's erase is viewport-scoped by
+design — so a flipping program must clear BOTH pages once (gcls, g3flip,
+gcls, g3sync; cube does). And flips leave draw/display OPPOSITE by
+construction, which would strand the next program's PLOTs on the hidden
+page — **GECMD 4 (PGSYNC)** rejoins draw to display instantly, and every
+flipping program should exit through it (lib: g3sync()).
 
 ## Hardware plan
 

@@ -312,6 +312,25 @@ int g3flags(int f) {
     return 1;
 }
 
+/* flip the pages by hand (display <- draw, draw <- the other page); waits
+ * out the vsync-latched flip. For CPU-drawn double buffering. */
+int g3flip() {
+    if (g3probe() == 0) { return 0; }
+    poke(GECMD, 3);
+    while (peek(GESTAT) & 128) { }
+    return 1;
+}
+
+/* back to single-buffer: the draw page REJOINS the display page (instant).
+ * After any flipping, call this before handing the screen to code that
+ * expects PLOT/POINT to touch what it sees -- flips leave the two pages
+ * opposite by construction, and there is no other way back. */
+int g3sync() {
+    if (g3probe() == 0) { return 0; }
+    poke(GECMD, 4);
+    return 1;
+}
+
 /* render the UPLOADED list with the current matrix and the library's
  * window/viewport/focal; 1 when an engine did it, 0 when absent
  * (caller falls back to the software walk -- see g3render). */
