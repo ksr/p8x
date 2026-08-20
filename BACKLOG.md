@@ -31,6 +31,23 @@ remainder is why it is still here.
 > failures (a 48/46 placement failure, and a multiply-driven `st` net). `build.sh`
 > itself now stops correctly -- `set -euo pipefail` plus an explicit `exit 1` on
 > each of synthesise / P&R / pack, so `load` is unreachable after a failed build.
+
+- [ ] **`image` OS command — view and GRAB pictures from the shell, no BASIC
+      (user request, 2026-08-20).** Two verbs in one C command (`//#use gfx`,
+      the planned "second client" of lib_gfx):
+      `image X Y FILE` draws a P8I file at (X,Y) — the same loader loop as
+      BASIC's IMAGE (FGETB -> gcolor low/high -> gplot; mind the FGETB
+      P2-clobber lesson), off-screen pixels clip free.
+      `image read X0 Y0 X1 Y1 FILE` is the INVERSE: a screen grab — gpoint()
+      each pixel of the rectangle and write a P8I (the header carries the
+      geometry, so any grab is immediately re-drawable by `image`/IMAGE, and
+      p8xfs get + p8img can lift it to the host as a screenshot). Notes:
+      corners should self-sort like BOX; POINT reads the DRAW page, so grab
+      after g3sync when flipping was involved; per-pixel gpoint costs a few
+      hundred cycles — a full-screen 480x272 grab is ~130k reads, tens of
+      seconds, fine for a utility (document it, don't hide it). Ship with
+      man page, /src + Makefile rows, and a c_ test (draw known rect -> grab
+      -> re-draw elsewhere -> POINT-compare, all in the emulator).
 > The remaining hole is that **`cpu` and `lcd` both write `p8x_cpu.fs`**, so a
 > failed `lcd` build leaves a valid-looking file that may be a graphics-less `cpu`
 > bitstream; and piping the build through `tail` discards its exit status.
