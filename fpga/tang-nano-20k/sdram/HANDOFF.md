@@ -216,7 +216,16 @@ test fails on the unfixed cube — this class of bug now dies in simulation.
 Rules of thumb: power-on framebuffer contents are undefined; a flipping
 program clears both pages once and exits through g3sync.
 
-Two operational notes for whoever drives the board over serial next:
+Three operational notes for whoever drives the board over serial next:
+
+- **Two serial clients do not error -- they silently shred each other's
+  characters.** A user terminal left attached while a script drives the
+  port produces mangled commands on the machine and phantom fragments in
+  the terminal, with no failure indication on either side. One client at
+  a time; check before scripting. (Also: characters sent while a command
+  is still RUNNING are lost -- no flow control, one-byte ACIA hold -- so
+  scripted waits must exceed the slowest command; a 256x256 image draw is
+  a couple of MINUTES, not seconds.)
 
 - **Opening the serial port resets the machine.** Any scripted interaction must
   do everything in ONE session; a second open finds the monitor again, and its
