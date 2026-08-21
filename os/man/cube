@@ -5,8 +5,9 @@ SYNOPSIS
     cube [frames] [s]
 
 DESCRIPTION
-    Draws a perspective wireframe cube on the display and spins it about
-    two axes, one frame at a time, then exits. With no argument it runs 64
+    Draws a perspective wireframe cube -- front face red, back face
+    green, connecting edges blue (stage 9 colour-per-record) -- and
+    spins it about two axes, one frame at a time, then exits. With no argument it runs 64
     frames (one full turn); a numeric argument runs that many. Needs the
     display; prints ?No display without one.
 

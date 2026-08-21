@@ -38,9 +38,11 @@
  *               | F0 SELFTEST (emulator only) F1 RESET F2 IDENT
  *     Always present; -g writes the DISPLAY page as a PPM, -G as text.
  *   FF30-FF3F MDU: hardware muldiv, bit-exact to lib_g3d's contract (stage 8a).
- *   FF40-FF4F geometry engine: SDRAM edge list, matrix transform, clip,
- *     project, draw + page-flip double buffering (stage 8b). Both pages power
- *     on holding a fixed garbage pattern, like real DRAM.
+ *   FF40-FF4F geometry engine: TYPED, COLOURED records in SDRAM (LINE and
+ *     filled/outline TRI -- stage 9), matrix transform, clip, project, draw
+ *     + page-flip double buffering (stage 8b) + parameter readback (9c: the
+ *     list is a persistent scene). Both pages power on holding a fixed
+ *     garbage pattern, like real DRAM.
  */
 #include <stdio.h>
 #include <stdlib.h>

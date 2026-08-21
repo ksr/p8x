@@ -21,8 +21,13 @@ DESCRIPTION
     output.
 
 BUILDING AND RENDERING A WORLD
-    g3clear()                        empty the edge pool (512 edges max)
-    g3line(x0,y0,z0, x1,y1,z1)       add one edge
+    g3clear()                        empty the record pool
+    g3color(c)                       pool pen: records added after this
+                                     carry colour c (white by default)
+    g3line(x0,y0,z0, x1,y1,z1)       add one coloured edge
+    g3tri(p, fill)                   add a triangle: p = int[9], three
+                                     x,y,z corners; fill 0/1 (an N-gon
+                                     is a fan of these)
     g3window(wx0,wy0,wx1,wy1)        view-plane rectangle to look at
     g3view(vx0,vy0,vx1,vy1)          screen rectangle to draw into --
                                      also a true CLIP rectangle, so
@@ -45,6 +50,11 @@ THE ENGINE PATH (when fitted -- probe with g3probe())
                           (power-on default 3)
     g3go()                render the uploaded list now
     g3flip()              flip pages by hand (CPU-drawn double buffering)
+    g3par(s, v)           write engine parameter s; g3parrd(s) reads one
+                          back -- the scene count lives at parameter 22
+    g3cam(p)              the look-at camera (//#use g3cam): p = int[6],
+                          eye x,y,z then aim x,y,z -- view matrix and
+                          translation written; see man camera
     g3sync()              draw page REJOINS the display page. Flips leave
                           the two pages opposite; call this before normal
                           drawing/POINT use, and clear BOTH pages once

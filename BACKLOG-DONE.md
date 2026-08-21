@@ -1,5 +1,13 @@
 # P8X Backlog — Completed
 
+- [x] **g3cam / camera — the look-at eye+aim camera (requested and DONE
+      2026-08-21, stage 9d).** lib_g3cam (own spliced lib; i3sqrt 32-bit
+      integer sqrt; basis right/up/forward, T=-M*eye) + the `camera`
+      shell command redrawing the persisted scene from any viewpoint.
+      Identity view byte-identical to a plain render; oblique view
+      board-verified by POINT. The drawn camera-GLYPH marker idea stays
+      open for a future scene-tools pass.
+
 - [x] **`image` OS command — view + screen-grab P8I from the shell (requested
       and DONE 2026-08-20).** `image x y file` draws; `image read x0 y0 x1 y1
       file` grabs the rectangle into a fresh, self-describing P8I (replacing

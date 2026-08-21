@@ -221,6 +221,26 @@ test fails on the unfixed cube — this class of bug now dies in simulation.
 Rules of thumb: power-on framebuffer contents are undefined; a flipping
 program clears both pages once and exits through g3sync.
 
+**2026-08-20/21, stage 9 (branch g3d-stage9): colour, faces, and a
+console for 3D.** 9a: TYPED RECORDS — every primitive carries its own
+RGB565 colour (LINE 16 bytes). 9b: the TRI record (22 bytes), outline or
+FILLED — screen-space scanline fill clamped to the viewport, every span
+a height-1 BOXFILL, near clip to a quad fanned in fabric; tb_geom pins
+105 exact spans to the same host replica as the emulator. 9c: parameter
+READBACK (GEVAL/GEVALH read par[GESEL]) turned the engine into a
+PERSISTENT SCENE STORE, and the shell grew a console: `tri` builds and
+stacks (k appends via count readback), `rotate x y z [pivot]` respins
+(no pivot = translation preserved, cube-style; pivot = T=P-R*P,
+tri-style — the distinction was a user-found bug), `page` fronts the
+flip machinery. 9d: `camera ex ey ez ax ay az` — the look-at eye/aim
+camera, software-only on the matrix path (lib_g3cam, i3sqrt). 13,487
+LUT4 (65%). Everything verified emulator -> bench -> panel -> POINT.
+New traps paid: imgsend acks are transport not content (a corrupt clone
+wild-jumped the machine); pipeline exit codes laundered a red suite
+(twice); `break` is not p8cc; shared-lib growth taxes every client
+(64K); unsigned m3mul needs magnitudes; g3d clients must watch the
+CSTACKTOP gap; a wedged board needs a human reset.
+
 Three operational notes for whoever drives the board over serial next:
 
 - **Two serial clients do not error -- they silently shred each other's
