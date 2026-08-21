@@ -74,4 +74,43 @@ full design doc first.
 Also open: asm muldiv/lib_g3d twin (smaller rung, partly obsoleted by the
 MDU), `image X Y FILE` OS command (second lib_gfx client).
 
+STAGE 9 SHIPPED AND ON SILICON (branch g3d-stage9 through e1f3e00):
+TYPED RECORDS (type/flags byte + RGB565 colour + verts; LINE 16B, TRI
+22B), g3color pool pen, g3tri(p,fill) — filled = screen-space scanline
+fill clamped to viewport, spans as height-1 BOXFILLs; outline = screen-
+space CS. Four implementations, one oracle; RTL bench checks 105 exact
+spans. 13,487 LUT4 (65%). Board: coloured cube ✓, fabric-filled tri ✓
+(POINT -2048/-2048/-2048/0). STAGE 9c SHIPPED + ON SILICON (168fa31+): GEVAL/GEVALH READBACK of
+par[GESEL] (RTL+emu+bench); the engine list is a PERSISTENT SCENE —
+`tri` builds, `tri ... k` APPENDS (count readback, cursor persists),
+`rotate x y z [px py pz]` (brads; pivot T=P-R*P — origin-pivot swings
+z~400 scenes off-window) redraws it; bare rotate = identity. Board
+verified by user's eyes AND scripted POINT(-2048). Pool right-sized to
+2816 INTS with int-counted guards (cube was 51 bytes from CSTACKTOP).
+Scripted-session discipline that finally works: lsof pre-flight, ALWAYS
+openFPGALoader reload (unsilenced), sleep 6, then the session; a WEDGED
+board needs a human reset. STAGE 9d SHIPPED + ON SILICON (2c4d7b6+): the look-at CAMERA.
+lib_g3cam.c (//#use g3cam AFTER gfx+g3d — its OWN lib: folding ~6K of
+camera math into lib_g3d pushed EVERY g3d client past 64K): i3sqrt
+(32-bit try-a-bit sqrt on m3mul), n3orm/c3ross, g3cam(int[6] eye+aim)
+-> params 0-11 (rows right/up/forward, T=-M*eye). `camera [ex ey ez ax
+ay az]` command redraws the persisted scene from the eye; bare = home.
+LESSONS: m3mul is UNSIGNED — magnitudes before squaring (s3acc bug:
+identity tests can't catch sign bugs, off-axis views can); shared-lib
+growth is a fleet-wide size tax. Board proof: POINT -2048 at the
+replica-predicted oblique pixel. Toolkit complete: tri/rotate/camera/
+page/cube/image. Remaining BACKLOG: 800x480 notes, imgsend verify,
+stage-9 leftovers. Branch g3d-stage9 still unmerged per user.
+
+BRANCH STATE: g3d-stage9 (through 4dda75a: 9a/9b/9c + tri/rotate/page
+commands + fixes) is pushed but NOT merged to main — user said "no merge
+yet" (2026-08-21). Do NOT merge until they say so; keep committing to
+the branch.
+
+NEW TRAPS (2026-08-21): imgsend acks certify TRANSPORT NOT CONTENT — a
+clone delivered a right-sized corrupt binary that wild-jumped to the
+monitor while emulator-clean; re-clone first, debug logic second
+(backlog: verify pass). And cube.bin now ends 161 bytes below CSTACKTOP
+$F800 — g3d clients must check their memory map.
+
 Related: [[p8x-project]] [[p8x-cc-caps]] [[p8x-new-command-dual]]

@@ -120,6 +120,27 @@ makes stateful shell tools compose:
 - cube's 12 records persist too: run cube, stack a tri with `k`, then
   rotate the whole ensemble.
 
+## 9d: the look-at camera
+
+`camera [ex ey ez ax ay az]` — the camera AT the eye point LOOKING AT
+the aim point — closes the tool family, and it is pure software on the
+8b matrix path, as always promised: lib_g3cam.c builds the normalized
+look-at basis (forward = aim-eye; right = worldUp x forward; true up =
+forward x right) with the library's second 32-bit primitive, i3sqrt (a
+try-a-bit square root over m3mul), writes rows [right; up; forward] to
+params 0-8 and T = -M*eye to 9-11, and RENDERs the persisted scene.
+Bare `camera` is home (origin, +z). Coordinate budget +/-16383; aiming
+straight up/down falls back to a world-+x horizon.
+
+Two lessons paid for here: m3mul is UNSIGNED, so magnitudes must be
+taken before squaring (the identity view — all non-negative components
+— could never catch the sign bug; the oblique-view test found it at
+once), and the camera math lives in its OWN spliced lib because folding
+it into lib_g3d pushed every g3d client past the 64K address space.
+
+Board-verified: the oblique view's interior pixel reads back exactly
+where the emulator's replica predicted.
+
 ## Not in stage 9
 
 Shading/interpolated colour, depth sorting or hidden faces (painter's
