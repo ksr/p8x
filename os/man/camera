@@ -1,0 +1,28 @@
+NAME
+    camera - place the camera and redraw the scene
+
+SYNOPSIS
+    camera [ex ey ez ax ay az]
+
+DESCRIPTION
+    Puts the camera AT the eye point (ex,ey,ez) LOOKING AT the aim point
+    (ax,ay,az), both in world units (keep each coordinate within about
+    +/-16383), then redraws the geometry engine's persisted scene from
+    that viewpoint -- the same tri-built world or cube aftermath, seen
+    from anywhere. World +y is up; aiming straight up or down keeps a
+    fallback horizon. With no arguments the camera returns to the origin
+    looking down +z. The focal length is whatever the scene set (256 by
+    default: a point 256 units ahead maps 1:1). Needs the engine.
+
+    The view is the g3d look-at (man g3d): forward, right and true-up are
+    built from the two points and normalized with the library's 32-bit
+    integer square root -- a few tenths of a second per invocation.
+
+EXAMPLES
+    tri -80 -80 300 80 -80 300 0 40 420 f 31 0 0
+    camera -300 100 360 0 0 360    from up-left of the triangle
+    camera 0 0 900 0 0 0           from behind the scene, looking back
+    camera                         home: origin, looking down +z
+
+SEE ALSO
+    rotate, tri, cube, g3d
