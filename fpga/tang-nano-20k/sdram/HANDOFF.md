@@ -241,6 +241,27 @@ wild-jumped the machine); pipeline exit codes laundered a red suite
 (64K); unsigned m3mul needs magnitudes; g3d clients must watch the
 CSTACKTOP gap; a wedged board needs a human reset.
 
+**STAGE 10a IN PROGRESS (2026-08-23, branch graphic-test):** the GRAPHICS
+LANGUAGE — the PGC-class command port (STAGE10-DESIGN.md; the Matrox
+PG-640A manual at docs/reference/pg640a.pdf is the reference, its opcodes
+kept verbatim). $FF50 GLDATA feeds a 256-byte FIFO; a consumer FSM in
+p8x_geom decodes hex-mode commands and executes them through the SAME
+walker pipeline the record engine uses (S_MAC for 3D, S_CS for 2D lines,
+the T-path for fills, a new W-path for boxes), so the crown-jewel test is
+op-stream EQUALITY: tb_gl drives one scene through both interfaces and
+the register-write recordings must match element for element (they do);
+the emulator's c_gl_test does the same as a framebuffer byte-compare.
+Verbs live in 10a: COLOR/FLOOD/CLEARS (both pages!), MOVE/DRAW/POLY/RECT
+(+R, 2D window space, no matrix — PGC semantics), MOVE3/DRAW3/POLY3(+R),
+POINT/POINT3, PRMFIL, WINDOW/VWPORT (PGC x1 x2 y1 y2 order), FLIP/PGSYNC
+(P8X opcodes 02/03), WAIT (real frame pacing), CA/CX stubs, error FIFO.
+Trap paid: a walker state that raises gm_wr and drops to S_IDLE in the
+SAME cycle loses the write — gm_own is already low when the strobe lands;
+every issuing state must exit through a non-idle landing state (W_BOXC ->
+W_BOXD). POINT is a degenerate LINE (same pixel, no new datapath); POLY
+streams — one primitive per vertex, so 255 vertices never need more than
+one vertex of buffer.
+
 Three operational notes for whoever drives the board over serial next:
 
 - **Two serial clients do not error -- they silently shred each other's
