@@ -171,8 +171,13 @@ module p8x_top(
   // SDRAM, so it exists only on LCD builds; elsewhere the window floats to
   // $FF and lib_g3d's GEID probe falls back to the software walk.
   wire is_geom  = (mem_addr >= 16'hFF40) && (mem_addr <= 16'hFF4F);
+  // The GL command port (stage 10, $FF50-$FF57) lives inside the geometry
+  // engine and shares its fate: LCD builds only, floats to $FF elsewhere
+  // so software's GLID probe fails clean.
+  wire is_gl    = (mem_addr >= 16'hFF50) && (mem_addr <= 16'hFF57);
 `else
   wire is_geom  = 1'b0;
+  wire is_gl    = 1'b0;
 `endif
 
   // TDRE (bit 1) = transmitter free; RDRF (bit 0) = a byte is waiting.
@@ -276,6 +281,9 @@ module p8x_top(
   p8x_geom GEOM(.clk(clk), .rst(rst),
           .sel(is_geom), .a(mem_addr[3:0]),
           .wr(cen && mem_we && is_geom),
+          .gl_sel(is_gl),
+          .gl_wr(cen && mem_we && is_gl),
+          .gl_rd(cen && mem_rd && is_gl),
           .wdata(mem_dout), .rdata(geom_rdata),
           .gm_own(gm_own), .gm_wr(gm_wr), .gm_a(gm_a), .gm_wdata(gm_wdata),
           .gm_rdata(gfx_rdata),
@@ -314,6 +322,7 @@ module p8x_top(
                      is_cf    ? cf_rdata :
                      is_gfx   ? gfx_rdata :
                      is_geom  ? geom_rdata :
+                     is_gl    ? geom_rdata :
                      is_mdu   ? mdu_rdata : 8'hFF;
   assign mem_din = is_io ? io_rd : mem_q;
 

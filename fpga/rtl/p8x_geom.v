@@ -37,6 +37,12 @@ module p8x_geom (
   input      [7:0]  wdata,
   output reg [7:0]  rdata,
 
+  // stage 10: the GL command port ($FF50-$FF57). gl_wr/gl_rd are the
+  // strobes for that window; reads share the rdata mux via gl_sel.
+  input             gl_sel,
+  input             gl_wr,
+  input             gl_rd,
+
   // gfx register master (p8x_top muxes this over the CPU while gm_own).
   output            gm_own,
   output reg        gm_wr,
@@ -83,7 +89,7 @@ module p8x_geom (
   wire       uf_empty = (uf_wp == uf_rp);
 
   // ---- walker state --------------------------------------------------------
-  reg [5:0]  state;
+  reg [6:0]  state;
   localparam S_IDLE=0,  S_ERA0=1,  S_ERA1=2,  S_ERAW=3,  S_ERAC=4,
              S_PEN=5,   S_NEXT=6,  S_FRD=7,   S_FRDW=8,
              S_MAC=9,   S_MACW=10,
@@ -99,7 +105,12 @@ module p8x_geom (
              T_SRT3=45, T_DEG=46,  T_SY0=47,  T_SLOOP=48,T_SXA=49,
              T_SXAW=50, T_SXB=51,  T_SXBW=52, T_SPAN=53, T_BX=54,
              T_BXB=55,  T_BXC=56,  T_SNEXT=57,T_ED=58,   T_EC=59,
-             T_ECW=60;
+             T_ECW=60,
+             // stage 10: the GL box issuer (FLOOD/CLEARS/RECT fill) and
+             // the RECT corner map -- walker states, launched by the GL
+             // consumer below, so seq and the muldiv core are free
+             W_BOX0=61, W_BOX1=62, W_BOX2=63, W_BOXW=64, W_BOXC=65,
+             W_BOXD=66, W_RM=67,   W_RMW=68,  W_RC1=69,  W_RC2=70;
 
   reg [12:0] ei, ecnt;               // record index / count
   reg [22:0] eaddr;                  // record cursor (bytes) -- records are
@@ -141,6 +152,51 @@ module p8x_geom (
   reg [1:0]  mdph;                   // which muldiv of a 2/4-group is running
   reg        flip_pend;
   reg [2:0]  seq;                    // register-write microstep
+
+  // ---- stage 10: the GL command port (STAGE10-DESIGN.md) -------------------
+  // A byte FIFO the CPU can fill at ANY time (that is its whole point);
+  // the consumer FSM below decodes hex-mode commands and executes them
+  // through the walker's own pipeline states, one primitive at a time.
+  reg [7:0]  cf [0:255];             // command FIFO
+  reg [8:0]  cf_wp, cf_rp;
+  wire [8:0] cf_cnt  = cf_wp - cf_rp;
+  wire       cf_ne   = (cf_cnt != 9'd0);
+  wire       cf_full = cf_cnt[8];
+  reg [7:0]  ef [0:15];              // error FIFO: 1 unknown opcode,
+  reg [4:0]  ef_wp, ef_rp;           //   2 bad parameter, 3 mode not
+  wire       ef_ne = (ef_wp != ef_rp);  // fitted, 4 command-FIFO overflow
+  reg [7:0]  glop;                   // opcode being executed
+  reg [7:0]  pbuf [0:7];             // fixed parameter bytes (max 8)
+  reg [3:0]  pi, pneed;
+  reg [7:0]  glnv;                   // POLY: vertices still to stream
+  reg        glpoly3, glpfill;       // POLY: 3D flavour / fill path
+  reg [1:0]  glph;                   // POLY: 0 first vertex, 1 second, 2 rest
+  reg [1:0]  gred;                   // RECT outline: which edge
+  reg [15:0] c2x, c2y, c3x, c3y, c3z;   // the 2D and 3D current points
+  reg [15:0] vfx, vfy, vfz;          // POLY: the FIRST vertex (fan root)
+  reg [15:0] vpx, vpy, vpz;          // POLY: the PREVIOUS vertex
+  reg        glfill;                 // PRMFIL
+  reg [15:0] glproj, gldist;         // PROJCT/DISTAN: stored, meaning 10b
+  reg        glact;                  // pipeline exit returns to S_IDLE
+  reg        gl2d;                   // suppress projection in the T-map
+  reg [1:0]  glcls;                  // CLEARS page phase (0 = plain box)
+  reg [2:0]  glst;                   // consumer FSM
+  reg [15:0] wcnt;                   // WAIT frames remaining
+  reg [15:0] gbx0, gby0, gbx1, gby1, gbcol;    // the box issuer's box
+  localparam G_OP=0, G_PRM=1, G_RUN=2, G_PV=3, G_PRUN=4, G_PCLOSE=5,
+             G_WAIT=6, G_RE=7;
+  wire [15:0] pw0 = {pbuf[1], pbuf[0]};        // little-endian int16 params
+  wire [15:0] pw1 = {pbuf[3], pbuf[2]};
+  wire [15:0] pw2 = {pbuf[5], pbuf[4]};
+  wire [15:0] pw3 = {pbuf[7], pbuf[6]};
+  wire [15:0] prgb = {pbuf[0][4:0], pbuf[1][5:0], pbuf[2][4:0]};  // r g b
+  // POLY vertex, with the R-variants' current-point offset applied
+  wire [15:0] pvx = glop[0] ? (pw0 + (glpoly3 ? c3x : c2x)) : pw0;
+  wire [15:0] pvy = glop[0] ? (pw1 + (glpoly3 ? c3y : c2y)) : pw1;
+  wire [15:0] pvz = glop[0] ? (pw2 + c3z) : pw2;
+  // dispatch gate: the walker must be idle and the CPU must not be
+  // starting record work this very cycle (its write would be lost)
+  wire gl_can = (state == S_IDLE) && !(sel && wr);
 
   assign gm_own = (state != S_IDLE) && (state != S_FLIP);
   wire busy = (state != S_IDLE) || !uf_empty;
@@ -208,6 +264,13 @@ module p8x_geom (
       draw_pg <= 0; disp_pg <= 0; flip_pend <= 0;
       ei <= 0; ecnt <= 0; seq <= 0; mdph <= 0; csn <= 0;
       tri_m <= 0; lret <= 0; rfill <= 0; np <= 0; pp <= 0; ft <= 0;
+      cf_wp <= 0; cf_rp <= 0; ef_wp <= 0; ef_rp <= 0;
+      glst <= G_OP; glop <= 0; pi <= 0; pneed <= 0; glnv <= 0;
+      glpoly3 <= 0; glpfill <= 0; glph <= 0; gred <= 0;
+      c2x <= 0; c2y <= 0; c3x <= 0; c3y <= 0; c3z <= 0;
+      glfill <= 0; glproj <= 16'd60; gldist <= 16'd500;
+      glact <= 0; gl2d <= 0; glcls <= 0; wcnt <= 0;
+      rcol <= 16'hFFFF;                                     // GL pen: white
       par[0] <= 16'd256; par[4] <= 16'd256; par[8] <= 16'd256;  // identity
       par[1]<=0; par[2]<=0; par[3]<=0; par[5]<=0; par[6]<=0; par[7]<=0;
       par[9]<=0; par[10]<=0; par[11]<=0;
@@ -259,6 +322,19 @@ module p8x_geom (
         endcase
       end
 
+      // ---- stage 10: GL port accesses (any time -- that is the point) ------
+      if (gl_wr && a[2:0] == 3'd0) begin           // GLDATA: push one byte
+        if (cf_full) begin
+          if (ef_wp - ef_rp != 5'd16) begin ef[ef_wp[3:0]] <= 8'd4;
+                                            ef_wp <= ef_wp + 5'd1; end
+        end else begin
+          cf[cf_wp[7:0]] <= wdata;
+          cf_wp <= cf_wp + 9'd1;
+        end
+      end
+      if (gl_rd && a[2:0] == 3'd3 && ef_ne)        // GLERR read pops
+        ef_rp <= ef_rp + 5'd1;
+
       // ---- upload FIFO drain (runs whenever the walker owns no fetch) ------
       if (!uf_empty && !g_req &&
           (state == S_IDLE || state == S_FLIP || state == S_START)) begin
@@ -305,7 +381,10 @@ module p8x_geom (
         S_PEN: state <= S_NEXT;
 
         S_NEXT: begin
-          if (ei == ecnt) begin
+          if (glact) begin             // a GL-injected primitive finished:
+            glact <= 0; gl2d <= 0;     //   back to idle, the consumer
+            state <= S_IDLE;           //   resumes -- never the record loop
+          end else if (ei == ecnt) begin
             if (par[21][1]) begin flip_pend <= 1; state <= S_FLIP; end
             else state <= S_IDLE;
           end else begin
@@ -543,7 +622,9 @@ module p8x_geom (
             else begin pp <= 0; state <= T_ED; end
           end else begin
             cxv <= qx[pp[2:0]]; cyv <= qy[pp[2:0]];
-            state <= (par[12] != 16'd0) ? T_PJX : T_MX;
+            // gl2d: a 2D fill's vertices are already window-space -- map
+            // only, never project, whatever the focal parameter says
+            state <= (par[12] != 16'd0 && !gl2d) ? T_PJX : T_MX;
           end
         end
         T_PJX: begin
@@ -699,6 +780,80 @@ module p8x_geom (
           state <= T_EC;
         end
 
+        // ==== stage 10: the GL box issuer =================================
+        // BOXFILL gbx0/gby0-gbx1/gby1 in colour gbcol -- FLOOD, CLEARS and
+        // the filled RECT all come here. CLEARS (glcls != 0) runs it twice,
+        // toggling the draw page between passes so BOTH pages are cleared
+        // (the stage-8b sideband lesson), and waits out each fill before
+        // the toggle so no fill lands on the wrong page.
+        W_BOX0: begin gm_a <= 4'h4; gm_wdata <= gbcol[7:0]; gm_wr <= 1;
+                      state <= W_BOX1; end
+        W_BOX1: begin gm_a <= 4'hD; gm_wdata <= gbcol[15:8]; gm_wr <= 1;
+                      seq <= 0; state <= W_BOX2; end
+        W_BOX2: begin
+          case (seq)
+            3'd0: begin gm_a<=4'h0; gm_wdata<=gbx0[7:0];  end
+            3'd1: begin gm_a<=4'h9; gm_wdata<=gbx0[15:8]; end
+            3'd2: begin gm_a<=4'h1; gm_wdata<=gby0[7:0];  end
+            3'd3: begin gm_a<=4'hA; gm_wdata<=gby0[15:8]; end
+            3'd4: begin gm_a<=4'h2; gm_wdata<=gbx1[7:0];  end
+            3'd5: begin gm_a<=4'hB; gm_wdata<=gbx1[15:8]; end
+            3'd6: begin gm_a<=4'h3; gm_wdata<=gby1[7:0];  end
+            3'd7: begin gm_a<=4'hC; gm_wdata<=gby1[15:8]; end
+          endcase
+          gm_wr <= 1;
+          if (seq == 3'd7) state <= W_BOXW; else seq <= seq + 3'd1;
+        end
+        W_BOXW: begin gm_a <= 4'h6;
+                      if (gm_a == 4'h6 && !gm_rdata[7] && !gm_wr) state <= W_BOXC; end
+        W_BOXC: begin gm_a <= 4'h5; gm_wdata <= 8'h04; gm_wr <= 1;  // BOXFILL
+                      state <= W_BOXD; end  // NEVER straight to idle: the
+                                            // strobe needs gm_own next cycle
+        W_BOXD: begin
+          if (glcls == 2'd0) state <= S_IDLE;
+          else begin gm_a <= 4'h6;          // CLEARS: wait the fill out...
+            if (gm_a == 4'h6 && !gm_rdata[7] && !gm_wr) begin
+              draw_pg <= ~draw_pg;          // ...then swap pages
+              if (glcls == 2'd1) begin glcls <= 2'd2; state <= W_BOX0; end
+              else begin glcls <= 2'd0; state <= S_IDLE; end  // pg restored
+            end
+          end
+        end
+
+        // filled RECT: map both corners (4 muldivs), sort, clamp, box
+        W_RM: begin
+          case (mdph)
+            2'd0: begin md_a <= c2x - par[13]; md_b <= par[19] - par[17]; md_c <= par[15] - par[13]; end
+            2'd1: begin md_a <= c2y - par[14]; md_b <= par[20] - par[18]; md_c <= par[16] - par[14]; end
+            2'd2: begin md_a <= nbx - par[13]; md_b <= par[19] - par[17]; md_c <= par[15] - par[13]; end
+            2'd3: begin md_a <= nby - par[14]; md_b <= par[20] - par[18]; md_c <= par[16] - par[14]; end
+          endcase
+          md_go <= 1; state <= W_RMW;
+        end
+        W_RMW: if (md_done) begin
+          case (mdph)
+            2'd0: gbx0 <= par[17] + md_q;   2'd1: gby0 <= par[20] - md_q;
+            2'd2: gbx1 <= par[17] + md_q;   2'd3: gby1 <= par[20] - md_q;
+          endcase
+          if (mdph == 2'd3) state <= W_RC1;
+          else begin mdph <= mdph + 2'd1; state <= W_RM; end
+        end
+        W_RC1: begin                        // normalise: any two corners
+          if ($signed(gbx1) < $signed(gbx0)) begin gbx0 <= gbx1; gbx1 <= gbx0; end
+          if ($signed(gby1) < $signed(gby0)) begin gby0 <= gby1; gby1 <= gby0; end
+          state <= W_RC2;
+        end
+        W_RC2: begin                        // clamp to the viewport; empty
+          if ($signed(gbx0) < $signed(par[17])) gbx0 <= par[17];  // skips
+          if ($signed(par[19]) < $signed(gbx1)) gbx1 <= par[19];
+          if ($signed(gby0) < $signed(par[18])) gby0 <= par[18];
+          if ($signed(par[20]) < $signed(gby1)) gby1 <= par[20];
+          state <= (($signed(par[19]) < $signed(gbx0)) ||
+                    ($signed(gbx1) < $signed(par[17])) ||
+                    ($signed(par[20]) < $signed(gby0)) ||
+                    ($signed(gby1) < $signed(par[18]))) ? S_IDLE : W_BOX0;
+        end
+
         // flip: applied at the scanout frame boundary, then idle
         S_FLIP: if (flip_pend && frame_tick) begin
           disp_pg <= draw_pg;
@@ -709,18 +864,262 @@ module p8x_geom (
 
         default: state <= S_IDLE;
       endcase
+
+      // ---- stage 10: the GL consumer ---------------------------------------
+      // Decodes the command FIFO byte-at-a-time and executes each command
+      // by writing state and entering the walker's own pipeline: S_MAC for
+      // 3D (transform -> near clip -> project -> CS -> map -> LINE, or the
+      // T-path for a fill), S_CS for 2D lines (clip -> map -> LINE), T_MP
+      // for 2D fills (map -> scanline fill), W_BOX/W_RM for the boxes.
+      // Every dispatch is gated on gl_can: the walker idle and the CPU not
+      // starting record work this same cycle. Streaming verbs (POLY*)
+      // dispatch one primitive per vertex, so a 255-vertex polygon never
+      // needs more buffer than one vertex.
+      case (glst)
+        G_OP: if (cf_ne) begin
+          glop <= cf[cf_rp[7:0]]; cf_rp <= cf_rp + 9'd1; pi <= 0;
+          case (cf[cf_rp[7:0]])
+            8'h01, 8'h02, 8'h03, 8'h04,
+            8'h08, 8'h09:               begin pneed <= 4'd0; glst <= G_RUN; end
+            8'hE0:                      begin pneed <= 4'd1; glst <= G_PRM; end
+            8'h05, 8'h43, 8'hB0, 8'hB1: begin pneed <= 4'd2; glst <= G_PRM; end
+            8'h06, 8'h07, 8'h0F:        begin pneed <= 4'd3; glst <= G_PRM; end
+            8'h10, 8'h11, 8'h28, 8'h29,
+            8'h34, 8'h35:               begin pneed <= 4'd4; glst <= G_PRM; end
+            8'h12, 8'h13, 8'h2A, 8'h2B: begin pneed <= 4'd6; glst <= G_PRM; end
+            8'h30, 8'h31, 8'h32, 8'h33: begin pneed <= 4'd1; glst <= G_PRM; end
+            8'hB2, 8'hB3:               begin pneed <= 4'd8; glst <= G_PRM; end
+            default:                    // unknown opcode: log, skip a byte
+              if (ef_wp - ef_rp != 5'd16) begin
+                ef[ef_wp[3:0]] <= 8'd1; ef_wp <= ef_wp + 5'd1; end
+          endcase
+        end
+
+        G_PRM: if (pi == pneed) begin
+          if (glop >= 8'h30 && glop <= 8'h33) begin       // POLY header: n
+            glpoly3 <= glop[1];
+            glpfill <= glfill && (pbuf[0] >= 8'd3);
+            glph <= 0; glnv <= pbuf[0]; pi <= 0;
+            pneed <= glop[1] ? 4'd6 : 4'd4;
+            if (pbuf[0] == 8'd0) begin                    // n=0: bad parameter
+              if (ef_wp - ef_rp != 5'd16) begin
+                ef[ef_wp[3:0]] <= 8'd2; ef_wp <= ef_wp + 5'd1; end
+              glst <= G_OP;
+            end else glst <= G_PV;
+          end else glst <= G_RUN;
+        end else if (cf_ne) begin
+          pbuf[pi[2:0]] <= cf[cf_rp[7:0]];
+          cf_rp <= cf_rp + 9'd1; pi <= pi + 4'd1;
+        end
+
+        G_RUN: if (gl_can) begin
+          glst <= G_OP;                                   // default: done
+          case (glop)
+            8'h01: ;                                      // NOOP
+            8'h02: begin flip_pend <= 1; state <= S_FLIP; end   // FLIP
+            8'h03: draw_pg <= disp_pg;                    // PGSYNC
+            8'h04: begin                                  // RESETF
+              par[0] <= 16'd256; par[4] <= 16'd256; par[8] <= 16'd256;
+              par[1]<=0; par[2]<=0; par[3]<=0; par[5]<=0; par[6]<=0; par[7]<=0;
+              par[9]<=0; par[10]<=0; par[11]<=0;
+              par[12] <= 16'd256;
+              par[13]<=0; par[14]<=0; par[15]<=0; par[16]<=0;
+              par[17]<=0; par[18]<=0; par[19]<=0; par[20]<=0;
+              par[21] <= 16'd3; par[22] <= 0;
+              gesel <= 0; upcur <= 0; geerr <= 0;
+              glfill <= 0; c2x <= 0; c2y <= 0; c3x <= 0; c3y <= 0; c3z <= 0;
+              glproj <= 16'd60; gldist <= 16'd500; rcol <= 16'hFFFF;
+            end
+            8'h05: begin wcnt <= pw0; glst <= G_WAIT; end // WAIT
+            8'h06: rcol <= prgb;                          // COLOR
+            8'h07: begin                                  // FLOOD: viewport
+              gbcol <= prgb; glcls <= 0;
+              gbx0 <= par[17]; gby0 <= par[18];
+              gbx1 <= par[19]; gby1 <= par[20];
+              state <= W_BOX0;
+            end
+            8'h08: begin                                  // POINT: degenerate
+              wx0 <= c2x; wy0 <= c2y; wx1 <= c2x; wy1 <= c2y;   //   2D line
+              csn <= 0; glact <= 1; state <= S_CS;
+            end
+            8'h09: begin                                  // POINT3: degenerate
+              v[0] <= c3x; v[1] <= c3y; v[2] <= c3z;      //   3D line
+              v[3] <= c3x; v[4] <= c3y; v[5] <= c3z;
+              tri_m <= 0; mp <= 0; mr <= 0; mk <= 0; acc <= 0;
+              glact <= 1; state <= S_MAC;
+            end
+            8'h0F: begin                                  // CLEARS: BOTH pages
+              gbcol <= prgb; glcls <= 2'd1;
+              gbx0 <= 0; gby0 <= 0; gbx1 <= 16'd479; gby1 <= 16'd271;
+              state <= W_BOX0;
+            end
+            8'h10: begin c2x <= pw0; c2y <= pw1; end      // MOVE
+            8'h11: begin c2x <= c2x + pw0; c2y <= c2y + pw1; end
+            8'h12: begin c3x <= pw0; c3y <= pw1; c3z <= pw2; end
+            8'h13: begin c3x <= c3x + pw0; c3y <= c3y + pw1;
+                         c3z <= c3z + pw2; end
+            8'h28, 8'h29: begin                           // DRAW / DRAWR
+              wx0 <= c2x; wy0 <= c2y;
+              wx1 <= glop[0] ? c2x + pw0 : pw0;
+              wy1 <= glop[0] ? c2y + pw1 : pw1;
+              c2x <= glop[0] ? c2x + pw0 : pw0;
+              c2y <= glop[0] ? c2y + pw1 : pw1;
+              csn <= 0; glact <= 1; state <= S_CS;
+            end
+            8'h2A, 8'h2B: begin                           // DRAW3 / DRAWR3
+              v[0] <= c3x; v[1] <= c3y; v[2] <= c3z;
+              v[3] <= glop[0] ? c3x + pw0 : pw0;
+              v[4] <= glop[0] ? c3y + pw1 : pw1;
+              v[5] <= glop[0] ? c3z + pw2 : pw2;
+              c3x <= glop[0] ? c3x + pw0 : pw0;
+              c3y <= glop[0] ? c3y + pw1 : pw1;
+              c3z <= glop[0] ? c3z + pw2 : pw2;
+              tri_m <= 0; mp <= 0; mr <= 0; mk <= 0; acc <= 0;
+              glact <= 1; state <= S_MAC;
+            end
+            8'h34, 8'h35: begin                           // RECT / RECTR
+              nbx <= glop[0] ? c2x + pw0 : pw0;           // target corner
+              nby <= glop[0] ? c2y + pw1 : pw1;
+              if (glfill) begin
+                gbcol <= rcol; glcls <= 0; mdph <= 0; state <= W_RM;
+              end else begin
+                gred <= 0; glst <= G_RE;
+              end
+            end
+            8'h43:                                        // "CA " / "CX "
+              if (pbuf[0] == 8'h58 && pbuf[1] == 8'h20) ; // CX: already hex
+              else if (pbuf[0] == 8'h41 && pbuf[1] == 8'h20) begin
+                if (ef_wp - ef_rp != 5'd16) begin         // ASCII: stage 10d
+                  ef[ef_wp[3:0]] <= 8'd3; ef_wp <= ef_wp + 5'd1; end
+              end else
+                if (ef_wp - ef_rp != 5'd16) begin
+                  ef[ef_wp[3:0]] <= 8'd2; ef_wp <= ef_wp + 5'd1; end
+            8'hB0: glproj <= pw0;                         // PROJCT (10b)
+            8'hB1: gldist <= pw0;                         // DISTAN (10b)
+            8'hB2: begin par[17] <= pw0; par[19] <= pw1;  // VWPORT x1 x2 y1 y2
+                         par[18] <= pw2; par[20] <= pw3; end
+            8'hB3: begin par[13] <= pw0; par[15] <= pw1;  // WINDOW x1 x2 y1 y2
+                         par[14] <= pw2; par[16] <= pw3; end
+            8'hE0: glfill <= pbuf[0][0];                  // PRMFIL
+            default: ;
+          endcase
+        end
+
+        G_PV: if (pi == pneed) glst <= G_PRUN;            // one vertex ready
+              else if (cf_ne) begin
+                pbuf[pi[2:0]] <= cf[cf_rp[7:0]];
+                cf_rp <= cf_rp + 9'd1; pi <= pi + 4'd1;
+              end
+
+        G_PRUN: if (gl_can) begin                         // consume the vertex
+          glnv <= glnv - 8'd1; pi <= 0;
+          glst <= (glnv == 8'd1) ? (glpfill ? G_OP : G_PCLOSE) : G_PV;
+          vpx <= pvx; vpy <= pvy; vpz <= pvz;
+          case (glph)
+            2'd0: begin                                   // first: remember it
+              vfx <= pvx; vfy <= pvy; vfz <= pvz;
+              glph <= 2'd1;
+            end
+            2'd1: begin
+              glph <= 2'd2;
+              if (!glpfill) begin                         // outline: edge 0-1
+                if (glpoly3) begin
+                  v[0] <= vpx; v[1] <= vpy; v[2] <= vpz;
+                  v[3] <= pvx; v[4] <= pvy; v[5] <= pvz;
+                  tri_m <= 0; mp <= 0; mr <= 0; mk <= 0; acc <= 0;
+                  glact <= 1; state <= S_MAC;
+                end else begin
+                  wx0 <= vpx; wy0 <= vpy; wx1 <= pvx; wy1 <= pvy;
+                  csn <= 0; glact <= 1; state <= S_CS;
+                end
+              end                                         // fill: wait for 3rd
+            end
+            default:
+              if (glpfill) begin                          // fan tri vf,vp,v
+                if (glpoly3) begin
+                  v[0] <= vfx; v[1] <= vfy; v[2] <= vfz;
+                  v[3] <= vpx; v[4] <= vpy; v[5] <= vpz;
+                  v[6] <= pvx; v[7] <= pvy; v[8] <= pvz;
+                  tri_m <= 1; rfill <= 1; mp <= 0; mr <= 0; mk <= 0; acc <= 0;
+                  glact <= 1; state <= S_MAC;
+                end else begin                            // 2D: map-only fill
+                  qx[0] <= vfx; qy[0] <= vfy; qz[0] <= 0;
+                  qx[1] <= vpx; qy[1] <= vpy; qz[1] <= 0;
+                  qx[2] <= pvx; qy[2] <= pvy; qz[2] <= 0;
+                  np <= 4'd3; pp <= 0; rfill <= 1; gl2d <= 1;
+                  glact <= 1; state <= T_MP;
+                end
+              end else begin                              // outline: next edge
+                if (glpoly3) begin
+                  v[0] <= vpx; v[1] <= vpy; v[2] <= vpz;
+                  v[3] <= pvx; v[4] <= pvy; v[5] <= pvz;
+                  tri_m <= 0; mp <= 0; mr <= 0; mk <= 0; acc <= 0;
+                  glact <= 1; state <= S_MAC;
+                end else begin
+                  wx0 <= vpx; wy0 <= vpy; wx1 <= pvx; wy1 <= pvy;
+                  csn <= 0; glact <= 1; state <= S_CS;
+                end
+              end
+          endcase
+        end
+
+        G_PCLOSE: if (gl_can) begin                       // closing edge vp->vf
+          glst <= G_OP;
+          if (glpoly3) begin
+            v[0] <= vpx; v[1] <= vpy; v[2] <= vpz;
+            v[3] <= vfx; v[4] <= vfy; v[5] <= vfz;
+            tri_m <= 0; mp <= 0; mr <= 0; mk <= 0; acc <= 0;
+            glact <= 1; state <= S_MAC;
+          end else begin
+            wx0 <= vpx; wy0 <= vpy; wx1 <= vfx; wy1 <= vfy;
+            csn <= 0; glact <= 1; state <= S_CS;
+          end
+        end
+
+        G_RE: if (gl_can) begin                           // RECT outline edges
+          gred <= gred + 2'd1;
+          if (gred == 2'd3) glst <= G_OP;
+          case (gred)                                     // the emulator order
+            2'd0: begin wx0 <= c2x; wy0 <= c2y; wx1 <= nbx; wy1 <= c2y; end
+            2'd1: begin wx0 <= nbx; wy0 <= c2y; wx1 <= nbx; wy1 <= nby; end
+            2'd2: begin wx0 <= nbx; wy0 <= nby; wx1 <= c2x; wy1 <= nby; end
+            2'd3: begin wx0 <= c2x; wy0 <= nby; wx1 <= c2x; wy1 <= c2y; end
+          endcase
+          csn <= 0; glact <= 1; state <= S_CS;
+        end
+
+        G_WAIT: begin                                     // WAIT: real frames
+          if (wcnt == 16'd0) glst <= G_OP;
+          else if (frame_tick) wcnt <= wcnt - 16'd1;
+        end
+
+        default: glst <= G_OP;
+      endcase
     end
   end
 
+  // GL busy: the consumer is mid-command or bytes wait in the FIFO
+  wire glbusy = (glst != G_OP) || cf_ne;
+
   always @(*) begin
-    case (a)
-      4'h4:    rdata = {busy, 6'd0, geerr};   // GESTAT
-      4'h5:    rdata = 8'h45;                 // GEID: 'E'
-      // 9c: parameter readback (no auto-increment on reads)
-      4'h1:    rdata = (gesel < 5'd23) ? par[gesel][7:0]  : 8'hFF;
-      4'hA:    rdata = (gesel < 5'd23) ? par[gesel][15:8] : 8'hFF;
-      default: rdata = 8'hFF;
-    endcase
+    if (gl_sel) begin
+      case (a[2:0])
+        3'd1:    rdata = {cf_full, glbusy, 4'd0, ef_ne, 1'b0};  // GLSTAT
+        3'd2:    rdata = 8'h00;                 // GLRB: empty until 10e
+        3'd3:    rdata = ef_ne ? ef[ef_rp[3:0]] : 8'h00;        // GLERR
+        3'd4:    rdata = 8'h47;                 // GLID: 'G'
+        default: rdata = 8'hFF;
+      endcase
+    end else begin
+      case (a)
+        4'h4:    rdata = {busy, 6'd0, geerr};   // GESTAT
+        4'h5:    rdata = 8'h45;                 // GEID: 'E'
+        // 9c: parameter readback (no auto-increment on reads)
+        4'h1:    rdata = (gesel < 5'd23) ? par[gesel][7:0]  : 8'hFF;
+        4'hA:    rdata = (gesel < 5'd23) ? par[gesel][15:8] : 8'hFF;
+        default: rdata = 8'hFF;
+      endcase
+    end
   end
 
 endmodule

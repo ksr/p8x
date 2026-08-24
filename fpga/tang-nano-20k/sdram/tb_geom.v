@@ -42,6 +42,7 @@ module tb;
 
   p8x_geom dut(.clk(clk), .rst(rst),
                .sel(sel), .a(a), .wr(wr), .wdata(wdata), .rdata(rdata),
+               .gl_sel(1'b0), .gl_wr(1'b0), .gl_rd(1'b0),   // GL: tb_gl.v
                .gm_own(gm_own), .gm_wr(gm_wr), .gm_a(gm_a),
                .gm_wdata(gm_wdata), .gm_rdata(gm_rdata),
                .g_req(g_req), .g_we(g_we), .g_addr(g_addr), .g_din(g_din),
