@@ -86,9 +86,11 @@ module p8x_geom (
              // COMPOSE microprogram, and CONVRT's projection tail
              S_FC=71,   S_FCW=72,
              F_CA=73,   F_I0=74,   F_I0W=75,  F_I1=76,   F_I1W=77, F_CP=78,
-             C_NRM=79,  C_BLD=80,  C_OG0=81,  C_OG1=82,
-             C_ML0=83,  C_ML1=84,  C_CP=85,   C_RCK=86,  C_RCKW=87,
-             C_RCN=88,  CV_X=89,   CV_XW=90,  CV_YW=91;
+             C_NRM=79,  J_WR=80,   C_OGA=81,  C_OGW=82,
+             C_MLA=83,  C_MLB=84,  C_CPA=85,  C_RCK=86,  C_RCKW=87,
+             C_RCN=88,  CV_X=89,   CV_XW=90,  CV_YW=91,
+             C_OGB=92,  C_OGC=93,  C_MTB=94,  C_MTC=95,  C_MLC=96,
+             C_MLW=97,  C_CPB=98,  C_CPC=99,  J_RST2=100;
 
   reg [15:0] rcol;                   // the GL pen (COLOR)
   reg        rfill;                  // T-path: FILL (GL fills always set it)
@@ -152,14 +154,45 @@ module p8x_geom (
   // stage 10b: the two master matrices and the compose engine's workspace.
   // Verbs recompose the parameter file at COMMAND time -- the per-vertex
   // datapath never changes (STAGE10-DESIGN.md).
-  reg [15:0] glmm [0:11];            // modeling: 3x3 8.8 + T
-  reg [15:0] glvm [0:8];             // viewing rotation VR
+  // The two master matrices and the compose workspace live in ONE small
+  // 1W2R scratchpad (a mirrored distributed-RAM pair) instead of 45
+  // registers with computed-index muxes -- those muxes were ~1.5k LUT
+  // sites, the reason 10b would not place. Layout: M 0-11, VR 16-24,
+  // MS (submatrix) 32-43, CT (product) 48-59. Reads are registered
+  // twice (address reg, then q reg): set the address, wait a state,
+  // consume -- compose runs at command time, so latency is free.
+  reg [15:0] cmxa [0:63];            // the mirror pair: written together,
+  reg [15:0] cmxb [0:63];            //   read on independent ports
+  reg [5:0]  cm_aa, cm_ab;           // read addresses
+  reg [15:0] cm_qa, cm_qb;           // registered read data
+  reg        cm_we;
+  reg [5:0]  cm_wa;
+  reg [15:0] cm_wd;
+  integer ii;
+  initial begin                      // power-on: both masters identity
+    for (ii = 0; ii < 64; ii = ii + 1) begin cmxa[ii]=0; cmxb[ii]=0; end
+    cmxa[0]=16'd256;  cmxa[4]=16'd256;  cmxa[8]=16'd256;
+    cmxb[0]=16'd256;  cmxb[4]=16'd256;  cmxb[8]=16'd256;
+    cmxa[16]=16'd256; cmxa[20]=16'd256; cmxa[24]=16'd256;
+    cmxb[16]=16'd256; cmxb[20]=16'd256; cmxb[24]=16'd256;
+  end
+  always @(posedge clk) begin
+    if (cm_we) begin cmxa[cm_wa] <= cm_wd; cmxb[cm_wa] <= cm_wd; end
+    cm_qa <= cmxa[cm_aa];
+    cm_qb <= cmxb[cm_ab];
+  end
+  localparam [5:0] MB=6'd0, VB=6'd16, SB=6'd32, TB=6'd48;
   reg [15:0] glvrp [0:2];            // VWRPT reference point
   reg [15:0] glorg [0:2];            // MDORG pivot
   reg [15:0] glh, glyy;              // DISTH / DISTY plane distances
   reg        glch, glcy, glpmode;    // CLIPH / CLIPY / PROJCT-drives-K
-  reg [15:0] ms [0:11];              // the submatrix being composed
-  reg [15:0] ct [0:11];              // multiply result (copied after)
+  reg [3:0]  jcnt;                   // scratch-writer job: cell index,
+  reg [2:0]  jsrc;                   //   source (0 ident, 1 rot, 2 scal,
+  reg [5:0]  jbase;                  //   3 tran, 4 pbuf), base, last
+  reg [3:0]  jlast;                  //   cell, and the state after
+  reg [6:0]  jnext;
+  reg        mtf;                    // T-column ms[9+ci] prefetched...
+  reg [15:0] msT;                    //   ...into here
   reg [15:0] ang;                    // rotation angle, normalized 0..359
   reg [1:0]  cax;                    // rotation axis 0/1/2
   reg        vwf;                    // composing into VR (else into M)
@@ -214,18 +247,32 @@ module p8x_geom (
   trig_tanh TTAN(.clk(clk), .a(glproj[7:0]), .q(tanq));
   wire [15:0] cvz = ($signed(wz0) < $signed(par[23])) ? par[23]
                   : ($signed(par[24]) < $signed(wz0)) ? par[24] : wz0;
-  wire [15:0] cm_a = (cmode == 2'd2) ? glvm[{2'd0,ci}*3 + {2'd0,ck}]
-                                     : ms[{2'd0,ci}*3 + {2'd0,ck}];
-  wire [15:0] cm_b = (cj == 2'd3)
-                   ? ((cmode == 2'd2) ? glmm[9 + {2'd0,ck}] - glvrp[{2'd0,ck}]
-                                      : glmm[9 + {2'd0,ck}])
-                   : ((cmode == 2'd1) ? glvm[{2'd0,ck}*3 + {2'd0,cj}]
-                                      : glmm[{2'd0,ck}*3 + {2'd0,cj}]);
   wire [1:0]  cjmax = (cmode == 2'd1) ? 2'd2 : 2'd3;
-  // the finished element, with the T-column tails folded in
+  // the finished element, with the T-column tails folded in (msT is the
+  // prefetched ms[9+ci]; operands themselves arrive through cm_qa/cm_qb)
   wire [15:0] cm_res = csum + md_q
-       + ((cj == 2'd3 && cmode == 2'd0) ? ms[9 + {2'd0,ci}] : 16'd0)
+       + ((cj == 2'd3 && cmode == 2'd0) ? msT : 16'd0)
        + ((cj == 2'd3 && cmode == 2'd2 && ci == 2'd2) ? gldist : 16'd0);
+  // the scratch-writer's cell value, by job source
+  wire [15:0] jrot =
+      (cax == 2'd0) ? ((jcnt==4'd0)?16'd256:(jcnt==4'd4)?cosq:
+                       (jcnt==4'd5)?-sinq:(jcnt==4'd7)?sinq:
+                       (jcnt==4'd8)?cosq:16'd0)
+    : (cax == 2'd1) ? ((jcnt==4'd0)?cosq:(jcnt==4'd2)?sinq:
+                       (jcnt==4'd4)?16'd256:(jcnt==4'd6)?-sinq:
+                       (jcnt==4'd8)?cosq:16'd0)
+    :                 ((jcnt==4'd0)?cosq:(jcnt==4'd1)?-sinq:
+                       (jcnt==4'd3)?sinq:(jcnt==4'd4)?cosq:
+                       (jcnt==4'd8)?16'd256:16'd0);
+  wire [15:0] jval =
+      (jsrc == 3'd0) ? ((jcnt==4'd0||jcnt==4'd4||jcnt==4'd8)?16'd256:16'd0)
+    : (jsrc == 3'd1) ? jrot
+    : (jsrc == 3'd2) ? ((jcnt==4'd0)?pw0:(jcnt==4'd4)?pw1:
+                        (jcnt==4'd8)?pw2:16'd0)
+    : (jsrc == 3'd3) ? ((jcnt==4'd0||jcnt==4'd4||jcnt==4'd8)?16'd256:
+                        (jcnt==4'd9)?pw0:(jcnt==4'd10)?pw1:
+                        (jcnt==4'd11)?pw2:16'd0)
+    :                  {pbuf[{jcnt,1'b1}], pbuf[{jcnt,1'b0}]};
   wire        z0_far = $signed(wz0) > $signed(par[24]);
   wire        z1_far = $signed(wz1) > $signed(par[24]);
 
@@ -276,6 +323,7 @@ module p8x_geom (
   always @(posedge clk) begin
     md_go <= 1'b0;
     gm_wr <= 1'b0;
+    cm_we <= 1'b0;
     if (rst) begin
       state <= S_IDLE;
       draw_pg <= 0; disp_pg <= 0; flip_pend <= 0;
@@ -298,17 +346,17 @@ module p8x_geom (
       par[22] <= 0;
       par[23] <= 16'd16;                 // near plane (the stage-7..9 z>=16)
       par[24] <= 16'd32767;              // far plane: int16 max = no yon clip
-      for (i = 0; i < 12; i = i + 1) glmm[i] <= 0;
-      for (i = 0; i < 9;  i = i + 1) glvm[i] <= 0;
-      glmm[0] <= 16'd256; glmm[4] <= 16'd256; glmm[8] <= 16'd256;
-      glvm[0] <= 16'd256; glvm[4] <= 16'd256; glvm[8] <= 16'd256;
       glvrp[0]<=0; glvrp[1]<=0; glvrp[2]<=0;
       glorg[0]<=0; glorg[1]<=0; glorg[2]<=0;
       glh <= 0; glyy <= 0; glch <= 0; glcy <= 0; glpmode <= 0;
       ang <= 0; cax <= 0; vwf <= 0; cmode <= 0;
       ci <= 0; cj <= 0; ck <= 0; csum <= 0; cpi <= 0; nq2 <= 0;
-      glcvt <= 0;
+      glcvt <= 0; mtf <= 0;
       gldist <= 0;                       // dist 0 = the stage-9 camera
+      // the scratchpad is initial-block clean at power-on; a WARM reset
+      // (button) re-identities both masters through the writer job
+      jsrc <= 0; jbase <= MB; jlast <= 4'd11; jcnt <= 0; jnext <= J_RST2;
+      state <= J_WR;
     end else begin
 
       // ---- stage 10: GL port accesses (any time -- that is the point) ------
@@ -836,65 +884,96 @@ module p8x_geom (
         C_NRM: begin                   // rotation angle to 0..359
           if ($signed(ang) < 0) ang <= ang + 16'd360;
           else if ($signed(ang) >= 16'sd360) ang <= ang - 16'd360;
-          else state <= C_BLD;
+          else begin                   // build the submatrix via the writer
+            jsrc <= 3'd1; jbase <= SB; jlast <= 4'd11; jcnt <= 0;
+            ci <= 0; cj <= 0; ck <= 0; csum <= 0; mtf <= 0;
+            if (vwf) begin cmode <= 2'd1; jnext <= C_MLA; end
+            else begin cmode <= 2'd0; jnext <= C_OGA; end
+            state <= J_WR;
+          end
         end
-        C_BLD: begin                   // build the rotation submatrix
-          for (i = 0; i < 12; i = i + 1) ms[i] <= 0;
-          case (cax)
-            2'd0: begin ms[0] <= 16'd256;
-                        ms[4] <= cosq; ms[5] <= -sinq;
-                        ms[7] <= sinq; ms[8] <= cosq; end
-            2'd1: begin ms[0] <= cosq; ms[2] <= sinq;
-                        ms[4] <= 16'd256;
-                        ms[6] <= -sinq; ms[8] <= cosq; end
-            default: begin ms[0] <= cosq; ms[1] <= -sinq;
-                        ms[3] <= sinq; ms[4] <= cosq;
-                        ms[8] <= 16'd256; end
-          endcase
-          ci <= 0; cj <= 0; ck <= 0; csum <= 0;
-          if (vwf) begin cmode <= 2'd1; state <= C_ML0; end
-          else begin cmode <= 2'd0; state <= C_OG0; end   // MD: pivot first
+        J_WR: begin                    // one scratch cell per cycle
+          cm_we <= 1; cm_wa <= jbase + {2'd0, jcnt}; cm_wd <= jval;
+          if (jcnt == jlast) begin jcnt <= 0; state <= jnext; end
+          else jcnt <= jcnt + 4'd1;
         end
-        C_OG0: begin                   // pivot: T = org - (S*org)>>8
-          md_a <= ms[{2'd0,ci}*3 + {2'd0,ck}]; md_b <= glorg[{2'd0,ck}];
-          md_c <= 16'd256; md_go <= 1; state <= C_OG1;
+        J_RST2: begin                  // warm reset, part 2: VR identity
+          jsrc <= 0; jbase <= VB; jlast <= 4'd8; jcnt <= 0;
+          jnext <= S_IDLE; state <= J_WR;
         end
-        C_OG1: if (md_done) begin
+
+        // pivot: T = org - (S*org)>>8 -- ms cells fetched from the RAM
+        C_OGA: begin
+          cm_aa <= SB + {2'd0,ci}*3 + {2'd0,ck};
+          state <= C_OGB;
+        end
+        C_OGB: state <= C_OGC;         // the read pipeline's bubble
+        C_OGC: begin
+          md_a <= cm_qa; md_b <= glorg[ck]; md_c <= 16'd256;
+          md_go <= 1; state <= C_OGW;
+        end
+        C_OGW: if (md_done) begin
           if (ck == 2'd2) begin
-            ms[9 + {2'd0,ci}] <= glorg[{2'd0,ci}] - (csum + md_q);
+            cm_we <= 1; cm_wa <= SB + 6'd9 + {4'd0,ci};
+            cm_wd <= glorg[ci] - (csum + md_q);
             ck <= 0; csum <= 0;
-            if (ci == 2'd2) begin ci <= 0; cj <= 0; state <= C_ML0; end
-            else begin ci <= ci + 2'd1; state <= C_OG0; end
-          end else begin csum <= csum + md_q; ck <= ck + 2'd1; state <= C_OG0; end
+            if (ci == 2'd2) begin ci <= 0; cj <= 0; state <= C_MLA; end
+            else begin ci <= ci + 2'd1; state <= C_OGA; end
+          end else begin csum <= csum + md_q; ck <= ck + 2'd1; state <= C_OGA; end
         end
-        C_ML0: begin                   // one product term
-          md_a <= cm_a; md_b <= cm_b; md_c <= 16'd256;
-          md_go <= 1; state <= C_ML1;
+
+        // one product term: fetch both operands, muldiv, accumulate. A
+        // mode-0 T column first prefetches ms[9+ci] (the additive tail).
+        C_MLA: begin
+          if (cj == 2'd3 && cmode == 2'd0 && !mtf) begin
+            cm_aa <= SB + 6'd9 + {4'd0,ci}; state <= C_MTB;
+          end else begin
+            cm_aa <= ((cmode == 2'd2) ? VB : SB) + {2'd0,ci}*3 + {2'd0,ck};
+            cm_ab <= (cj == 2'd3) ? (MB + 6'd9 + {4'd0,ck})
+                   : (((cmode == 2'd1) ? VB : MB) + {2'd0,ck}*3 + {2'd0,cj});
+            state <= C_MLB;
+          end
         end
-        C_ML1: if (md_done) begin
+        C_MTB: state <= C_MTC;
+        C_MTC: begin msT <= cm_qa; mtf <= 1; state <= C_MLA; end
+        C_MLB: state <= C_MLC;
+        C_MLC: begin
+          md_a <= cm_qa;
+          md_b <= (cj == 2'd3 && cmode == 2'd2) ? cm_qb - glvrp[ck] : cm_qb;
+          md_c <= 16'd256; md_go <= 1; state <= C_MLW;
+        end
+        C_MLW: if (md_done) begin
           if (ck == 2'd2) begin
-            ct[(cj == 2'd3) ? 9 + {2'd0,ci} : {2'd0,ci}*3 + {2'd0,cj}] <= cm_res;
-            ck <= 0; csum <= 0;
+            cm_we <= 1;
+            cm_wa <= TB + ((cj == 2'd3) ? 6'd9 + {4'd0,ci}
+                                        : {2'd0,ci}*3 + {2'd0,cj});
+            cm_wd <= cm_res;
+            ck <= 0; csum <= 0; mtf <= 0;
             if (cj == cjmax) begin
               cj <= 0;
-              if (ci == 2'd2) begin cpi <= 0; state <= C_CP; end
-              else begin ci <= ci + 2'd1; state <= C_ML0; end
-            end else begin cj <= cj + 2'd1; state <= C_ML0; end
-          end else begin csum <= csum + md_q; ck <= ck + 2'd1; state <= C_ML0; end
+              if (ci == 2'd2) begin cpi <= 0; state <= C_CPA; end
+              else begin ci <= ci + 2'd1; state <= C_MLA; end
+            end else begin cj <= cj + 2'd1; state <= C_MLA; end
+          end else begin csum <= csum + md_q; ck <= ck + 2'd1; state <= C_MLA; end
         end
-        C_CP: begin                    // land the product, then chain
+
+        // land the product where it belongs, then chain
+        C_CPA: begin cm_aa <= TB + {2'd0,cpi}; state <= C_CPB; end
+        C_CPB: state <= C_CPC;
+        C_CPC: begin
           case (cmode)
-            2'd0: glmm[cpi] <= ct[cpi];
-            2'd1: if (cpi < 4'd9) glvm[cpi] <= ct[cpi];
-            default: par[cpi[3:0]] <= ct[cpi];
+            2'd0: begin cm_we <= 1; cm_wa <= MB + {2'd0,cpi}; cm_wd <= cm_qa; end
+            2'd1: begin cm_we <= 1; cm_wa <= VB + {2'd0,cpi}; cm_wd <= cm_qa; end
+            default: par[cpi[3:0]] <= cm_qa;
           endcase
           if (cpi == ((cmode == 2'd1) ? 4'd8 : 4'd11)) begin
             if (cmode != 2'd2) begin   // composed a master: now recompose
               cmode <= 2'd2; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
-              cpi <= 0; state <= C_ML0;
+              cpi <= 0; state <= C_MLA;
             end else state <= C_RCK;
-          end else cpi <= cpi + 4'd1;
+          end else begin cpi <= cpi + 4'd1; state <= C_CPA; end
         end
+
         C_RCK: begin                   // K: PROJCT's focal from the window
           if (!glpmode) state <= C_RCN;
           else if (glproj == 16'd0) begin par[12] <= 0; state <= C_RCN; end
@@ -995,10 +1074,8 @@ module p8x_geom (
               par[23] <= 16'd16; par[24] <= 16'd32767;
               glfill <= 0; c2x <= 0; c2y <= 0; c3x <= 0; c3y <= 0; c3z <= 0;
               glproj <= 16'd60; gldist <= 0; rcol <= 16'hFFFF;
-              for (i = 0; i < 12; i = i + 1) glmm[i] <= 0;
-              for (i = 0; i < 9;  i = i + 1) glvm[i] <= 0;
-              glmm[0] <= 16'd256; glmm[4] <= 16'd256; glmm[8] <= 16'd256;
-              glvm[0] <= 16'd256; glvm[4] <= 16'd256; glvm[8] <= 16'd256;
+              jsrc <= 0; jbase <= MB; jlast <= 4'd11; jcnt <= 0;
+              jnext <= J_RST2; state <= J_WR;
               glvrp[0] <= 0; glvrp[1] <= 0; glvrp[2] <= 0;
               glorg[0] <= 0; glorg[1] <= 0; glorg[2] <= 0;
               glh <= 0; glyy <= 0; glch <= 0; glcy <= 0; glpmode <= 0;
@@ -1069,46 +1146,40 @@ module p8x_geom (
                   ef[ef_wp[3:0]] <= 8'd2; ef_wp <= ef_wp + 5'd1; end
             // ---- stage 10b: the matrix verbs -------------------------------
             8'h90: begin                                  // MDIDEN
-              for (i = 0; i < 12; i = i + 1) glmm[i] <= 0;
-              glmm[0] <= 16'd256; glmm[4] <= 16'd256; glmm[8] <= 16'd256;
+              jsrc <= 0; jbase <= MB; jlast <= 4'd11; jcnt <= 0;
               cmode <= 2'd2; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
-              state <= C_ML0;
+              jnext <= C_MLA; state <= J_WR;
             end
             8'h91: begin glorg[0] <= pw0; glorg[1] <= pw1;   // MDORG
                          glorg[2] <= pw2; end
             8'h92: begin                                  // MDSCAL
-              for (i = 0; i < 12; i = i + 1) ms[i] <= 0;
-              ms[0] <= pw0; ms[4] <= pw1; ms[8] <= pw2;
-              cmode <= 2'd0; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
-              state <= C_OG0;
+              jsrc <= 3'd2; jbase <= SB; jlast <= 4'd11; jcnt <= 0;
+              cmode <= 2'd0; ci <= 0; cj <= 0; ck <= 0; csum <= 0; mtf <= 0;
+              jnext <= C_OGA; state <= J_WR;
             end
             8'h93, 8'h94, 8'h95: begin                    // MDROTX/Y/Z
               cax <= glop[1:0] - 2'd3; ang <= pw0; vwf <= 0;
               state <= C_NRM;
             end
             8'h96: begin                                  // MDTRAN
-              for (i = 0; i < 12; i = i + 1) ms[i] <= 0;
-              ms[0] <= 16'd256; ms[4] <= 16'd256; ms[8] <= 16'd256;
-              ms[9] <= pw0; ms[10] <= pw1; ms[11] <= pw2;
-              cmode <= 2'd0; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
-              state <= C_ML0;
+              jsrc <= 3'd3; jbase <= SB; jlast <= 4'd11; jcnt <= 0;
+              cmode <= 2'd0; ci <= 0; cj <= 0; ck <= 0; csum <= 0; mtf <= 0;
+              jnext <= C_MLA; state <= J_WR;
             end
             8'h97: begin                                  // MDMATX: 12 int16
-              for (i = 0; i < 12; i = i + 1)
-                glmm[i] <= {pbuf[2*i+1], pbuf[2*i]};
+              jsrc <= 3'd4; jbase <= MB; jlast <= 4'd11; jcnt <= 0;
               cmode <= 2'd2; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
-              state <= C_ML0;
+              jnext <= C_MLA; state <= J_WR;
             end
             8'hA0: begin                                  // VWIDEN
-              for (i = 0; i < 9; i = i + 1) glvm[i] <= 0;
-              glvm[0] <= 16'd256; glvm[4] <= 16'd256; glvm[8] <= 16'd256;
+              jsrc <= 0; jbase <= VB; jlast <= 4'd8; jcnt <= 0;
               cmode <= 2'd2; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
-              state <= C_ML0;
+              jnext <= C_MLA; state <= J_WR;
             end
             8'hA1: begin                                  // VWRPT
               glvrp[0] <= pw0; glvrp[1] <= pw1; glvrp[2] <= pw2;
               cmode <= 2'd2; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
-              state <= C_ML0;
+              state <= C_MLA;
             end
             8'hA3, 8'hA4, 8'hA5: begin                    // VWROTX/Y/Z: the
               cax <= glop[1:0] - 2'd3;                    //   viewer orbits,
@@ -1116,23 +1187,22 @@ module p8x_geom (
               state <= C_NRM;
             end
             8'hA7: begin                                  // VWMATX: 9 int16
-              for (i = 0; i < 9; i = i + 1)
-                glvm[i] <= {pbuf[2*i+1], pbuf[2*i]};
+              jsrc <= 3'd4; jbase <= VB; jlast <= 4'd8; jcnt <= 0;
               cmode <= 2'd2; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
-              state <= C_ML0;
+              jnext <= C_MLA; state <= J_WR;
             end
             8'hA8: begin glh <= pw0;                      // DISTH
               cmode <= 2'd2; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
-              state <= C_ML0; end
+              state <= C_MLA; end
             8'hA9: begin glyy <= pw0;                     // DISTY
               cmode <= 2'd2; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
-              state <= C_ML0; end
+              state <= C_MLA; end
             8'hAA: begin glch <= pbuf[0][0];              // CLIPH
               cmode <= 2'd2; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
-              state <= C_ML0; end
+              state <= C_MLA; end
             8'hAB: begin glcy <= pbuf[0][0];              // CLIPY
               cmode <= 2'd2; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
-              state <= C_ML0; end
+              state <= C_MLA; end
             8'hAF: begin                                  // CONVRT
               v[0] <= c3x; v[1] <= c3y; v[2] <= c3z;
               v[3] <= c3x; v[4] <= c3y; v[5] <= c3z;
@@ -1146,18 +1216,18 @@ module p8x_geom (
               end else begin
                 glproj <= pw0; glpmode <= 1;
                 cmode <= 2'd2; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
-                state <= C_ML0;
+                state <= C_MLA;
               end
             8'hB1: begin gldist <= pw0;                   // DISTAN
               cmode <= 2'd2; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
-              state <= C_ML0; end
+              state <= C_MLA; end
             8'hB2: begin par[17] <= pw0; par[19] <= pw1;  // VWPORT x1 x2 y1 y2
                          par[18] <= pw2; par[20] <= pw3; end
             8'hB3: begin par[13] <= pw0; par[15] <= pw1;  // WINDOW x1 x2 y1 y2
                          par[14] <= pw2; par[16] <= pw3;
                          if (glpmode) begin               // K tracks the window
                            cmode <= 2'd2; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
-                           state <= C_ML0;
+                           state <= C_MLA;
                          end end
             8'hE0: glfill <= pbuf[0][0];                  // PRMFIL
             default: ;

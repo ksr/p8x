@@ -258,13 +258,15 @@ the SAME physical LUT sites, so real demand was 19,249 LUT + 4,368 ALU
 ≈ 23.6k on 20,736 sites, ~114%. p8x_geom alone is 8,739 LUT + 1,766 ALU
 — half the chip — dominated by the indexed matrix/polygon register
 arrays (glmm/glvm/ms/ct, qx..qsy) whose read muxes and index arithmetic
-are pure fabric. The way out is the same trick as the trig tables:
-**the compose engine's scratch matrices belong in a BSRAM scratchpad**,
-serialized through one address port — the FSM is already sequential, so
-the cost is states, not wall-clock that matters. Until that lands, 10b
-is emulator-and-bench proven (byte-identical frames, all suites green)
-but not on silicon; 10a-with-retirement would fit (~15.4k) if an
-interim bitstream is wanted.
+are pure fabric. The fix (LANDED 2026-08-24): **the compose engine's
+scratch matrices moved into a small 1W2R scratchpad RAM** (a mirrored
+distributed-RAM pair; M/VR/MS/CT at fixed offsets), serialized through
+registered read ports — the FSM was already sequential, so the cost was
+nine states and a two-cycle read bubble per term, invisible at command
+time. With that, 10b PLACES: 18,703 LUT4 (90%) + 4,404 ALU, BSRAM
+44/46, Fmax 45 MHz against the 27 MHz clock. The proof chain held
+through the rework untouched: op-stream constants (tb_gl), both scenes
+byte-identical emulator-vs-RTL (c_gl_rtl_test), 92-PASS make test.
 
 ## Client story
 

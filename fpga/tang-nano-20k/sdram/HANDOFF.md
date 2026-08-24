@@ -296,11 +296,14 @@ multipliers into the idle DSP blocks -- but nextpnr's "LUT4 92%" line
 UNDER-REPORTS on Gowin: ALU carry-chain cells occupy the same physical
 LUT sites, so true demand is LUT 19,249 + ALU 4,368 ~ 114%. p8x_geom
 alone is 8,739 LUT + 1,766 ALU -- half the chip -- dominated by the
-indexed matrix/polygon register arrays. The fix on the table: move the
-compose engine's scratch matrices into a BSRAM scratchpad (the FSM is
-already sequential; same trick that saved the trig tables). Until then
-10b is emulator-and-bench proven only; a 10a-with-retirement bitstream
-(~15.4k) would fit if interim silicon is wanted.
+indexed matrix/polygon register arrays. THE FIX LANDED the same day:
+the compose scratch matrices moved into one mirrored distributed-RAM
+scratchpad (M/VR/MS/CT at fixed offsets, registered read ports, a
+job-driven writer state for identity/rotation/scale/translate/pbuf
+loads), and 10b PLACES -- 18,703 LUT4 (90%), Fmax 45 MHz, bitstream
+packed. Every suite stayed green through the rework, both pixel scenes
+still byte-identical emulator-vs-RTL. Board verification is the one
+step left (the card was unplugged).
 
 Three operational notes for whoever drives the board over serial next:
 
