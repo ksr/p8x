@@ -61,19 +61,24 @@ map, line/tri draw mastering gfx.v) is REUSED as the interpreter's
 execution back end — stage 10 replaces how work *arrives* (a language,
 not registers/records), not how pixels get drawn.
 
-### The GL port (proposed $FF48-4F; gen_memmap is the authority)
+### The GL port ($FF50-$FF57; gen_memmap is the authority)
 
-    GLDATA  write: push one byte into the command FIFO
-    GLSTAT  read:  bit7 FIFO full, bit6 interpreter busy,
-                   bit1 error FIFO non-empty, bit0 RB FIFO non-empty
-    GLRB    read:  pop one byte from the read-back FIFO
-    GLERR   read:  pop one byte from the error FIFO
-    GLID    read:  'G' (0x47) — the presence probe
+($FF48 was the first draft; GEVALH already sits at $FF4A, so the block
+moved to the free $FF50 range.)
+
+    GLDATA  $FF50  write: push one byte into the command FIFO
+    GLSTAT  $FF51  read:  bit7 FIFO full, bit6 interpreter busy,
+                          bit1 error FIFO non-empty, bit0 RB non-empty
+    GLRB    $FF52  read:  pop one byte from the read-back FIFO
+    GLERR   $FF53  read:  pop one byte from the error FIFO (0 = empty)
+    GLID    $FF54  read:  'G' ($47) — the presence probe
 
 Contract mirrors the PGC's three-FIFO model (manual 3.3) shrunk to a
 byte port: the host checks GLSTAT bit7 before writing (or trusts a
 depth-guaranteed burst), and drains GLRB after a read-back verb. FIFO
 depths: command 256 bytes, read-back 256, error 16 — BRAM, PGC-sized.
+Error codes: 1 unknown opcode, 2 bad parameter, 3 mode not fitted
+(ASCII before 10d), 4 command-FIFO overflow.
 
 ### Command encodings (manual 3.2)
 
@@ -125,15 +130,23 @@ matrices composed in command order (submatrix multiply on the MDU
 datapath, exactly the manual's model) ends that class of bug.
 
 Primitives (immediate; current-point pen model, one 2D and one 3D
-current point, manual 3.6):
+current point, manual 3.6). The PGC's 2D space has NO matrix — 2D
+primitives clip to the window and map to the viewport, nothing else.
+The R-variants take vertices relative to the current point:
 
     MOVE x y       MOVER dx dy        DRAW / DRAWR      POINT
-    POLY n x1 y1 ... / POLYR          RECT x y / RECTR
-    CIRCLE r       ELIPSE rx ry       ARC ...           (2D, window space)
+    POLY n x1 y1 ... / POLYR          RECT x y / RECTR  (2D, window space)
     MOVE3/MOVER3   DRAW3/DRAWR3       POINT3
-    POLY3 n .../POLYR3                TRI3 x0..z2       (3D)
-    PRMFIL flag    closed primitives fill when 1 (TRI3/POLY3/RECT/CIRCLE)
-    CONVRT         3D current point -> 2D current point
+    POLY3 n .../POLYR3                                  (3D)
+    PRMFIL flag    closed primitives fill when 1 (POLY/POLY3/RECT)
+    CONVRT         3D current point -> 2D current point (10b)
+
+There is NO separate TRI3 verb: `PRMFIL 1` + `POLY3 3 ...` IS the
+stage-9 filled triangle, and larger fills fan through it (convex, like
+the engine). POLY3 outlines draw as closed DRAW3 edges (window-space
+clip); CIRCLE/ELIPSE/ARC/SECTOR are deferred to the 10b+ rungs (ARC and
+SECTOR need the sin/cos table; the curve primitives need a
+viewport-clipped device path).
 
 Command lists (manual 3.9 — the retained-object system):
 
@@ -158,8 +171,32 @@ Final rungs (in scope, shipped last):
 
     LINFUN mode           drawing modes: replace/complement/OR/AND/XOR
                           (rubber-band + erase-by-redraw tricks)
-    FLOOD colour / AREA   seed fill (needs a pixel-readback walker)
+    AREA / AREABC         SEED fill (needs a pixel-readback walker; note
+                          FLOOD is NOT this -- PGC FLOOD just paints the
+                          viewport, so it ships in 10a as the erase verb)
     TEXT "s" TSIZE TANGLE TJUST TDEFIN...   on-card text in window space
+
+## Opcode assignments (verified against the manual, ch. 4 + appendix K)
+
+    01 NOOP    02 FLIP*   03 PGSYNC* 04 RESETF  05 WAIT    06 COLOR
+    07 FLOOD   08 POINT   09 POINT3  0F CLEARS  10 MOVE    11 MOVER
+    12 MOVE3   13 MOVER3  28 DRAW    29 DRAWR   2A DRAW3   2B DRAWR3
+    30 POLY    31 POLYR   32 POLY3   33 POLYR3  34 RECT    35 RECTR
+    38 CIRCLE  39 ELIPSE  3C ARC     3D SECTOR  43 CA/CX ("CA "/"CX ":
+                                        the mode switches are their own
+                                        ASCII bytes in BOTH modes)
+    61 FLAGRD  62 MATXRD  70 CLBEG   71 CLEND   72 CLRUN   73 CLOOP
+    74 CLDEL   76 CLRD    78 CLMOD   80 TEXT    81 TSIZE   82 TANGLE
+    90 MDIDEN  91 MDORG   92 MDSCAL  93 MDROTX  94 MDROTY  95 MDROTZ
+    96 MDTRAN  97 MDMATX  A0 VWIDEN  A1 VWRPT   A3 VWROTX  A4 VWROTY
+    A5 VWROTZ  A7 VWMATX  A8 DISTH   A9 DISTY   AA CLIPH   AB CLIPY
+    AF CONVRT  B0 PROJCT  B1 DISTAN  B2 VWPORT  B3 WINDOW  C0 AREA
+    C1 AREABC  E0 PRMFIL  EB LINFUN
+    (* = P8X-only verbs on opcodes the PGC leaves unused)
+
+WINDOW and VWPORT take parameters in the PGC's order: x1 x2 y1 y2 —
+manual examples must type in verbatim. P8X screen y runs DOWN (0-271);
+window y runs UP, the flip happens in the viewport map, as ever.
 
 ## Relationship to the stage-9 engine
 

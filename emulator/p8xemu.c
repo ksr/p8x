@@ -354,13 +354,16 @@ static void ge_filltri(int16_t x0,int16_t y0,int16_t x1,int16_t y1,
         if(y == y2) break;
     }
 }
-static void ge_tri(const uint8_t *e, int fill){
+/* one triangle from WORLD-space int16 vertices (vv[9] = three x,y,z).
+   Shared by the record walk (via the byte-decoding ge_tri wrapper) and the
+   stage-10 GL interpreter (POLY3's fill fans through here). */
+static void ge_tri3(const int16_t *vv, int fill){
     int16_t v[3][3], w[3];
     int16_t pz[8][3]; int np = 0;             /* near-clipped polygon */
     int16_t sx[8], sy[8];
     for(int p=0;p<3;p++){
         int16_t in[3];
-        for(int k=0;k<3;k++) in[k]=(int16_t)(e[p*6+k*2] | (e[p*6+k*2+1]<<8));
+        for(int k=0;k<3;k++) in[k]=vv[p*3+k];
         ge_xform(in, v[p]);
     }
     if(gep[12] == 0){                         /* ortho: no near clip */
@@ -391,6 +394,57 @@ static void ge_tri(const uint8_t *e, int fill){
             ge_sline(sx[p],sy[p],sx[(p+1)%np],sy[(p+1)%np]);
     }
 }
+static void ge_tri(const uint8_t *e, int fill){   /* record-byte wrapper */
+    int16_t vv[9];
+    for(int k=0;k<9;k++) vv[k]=(int16_t)(e[k*2] | (e[k*2+1]<<8));
+    ge_tri3(vv, fill);
+}
+
+/* the transformed-LINE tail: near clip -> perspective divide -> window
+   Cohen-Sutherland -> viewport map -> device LINE. w = the two vertices
+   AFTER ge_xform. Shared verbatim by the record walk and the stage-10 GL
+   interpreter's DRAW3 -- one tail, so the pixels cannot disagree. */
+static void ge_line3t(const int16_t *w){
+    int16_t x0,y0,z0,x1,y1,z1,d;
+    x0=w[0]; y0=w[1]; z0=w[2]; x1=w[3]; y1=w[4]; z1=w[5];
+    d = gep[12];
+    if(d){                                  /* near clip BEFORE the divide */
+        if(z0<16 && z1<16) return;
+        if(z0<16){
+            x0=(int16_t)(x0+ge_md((int16_t)(x1-x0),(int16_t)(16-z0),(int16_t)(z1-z0)));
+            y0=(int16_t)(y0+ge_md((int16_t)(y1-y0),(int16_t)(16-z0),(int16_t)(z1-z0)));
+            z0=16;
+        }
+        if(z1<16){
+            x1=(int16_t)(x1+ge_md((int16_t)(x0-x1),(int16_t)(16-z1),(int16_t)(z0-z1)));
+            y1=(int16_t)(y1+ge_md((int16_t)(y0-y1),(int16_t)(16-z1),(int16_t)(z0-z1)));
+            z1=16;
+        }
+        x0=ge_md(x0,d,z0); y0=ge_md(y0,d,z0);
+        x1=ge_md(x1,d,z1); y1=ge_md(y1,d,z1);
+    }
+    int vis=1, nit=0;                       /* Cohen-Sutherland, lib order */
+    while(nit<8){
+        int a=ge_oc(x0,y0), b=ge_oc(x1,y1);
+        if(!(a|b)) break;
+        if(a&b){ vis=0; break; }
+        if(!a){ int16_t t; t=x0;x0=x1;x1=t; t=y0;y0=y1;y1=t; a=b; }
+        if(a&1){ y0=(int16_t)(y0+ge_md((int16_t)(y1-y0),(int16_t)(gep[13]-x0),(int16_t)(x1-x0))); x0=gep[13]; }
+        else if(a&2){ y0=(int16_t)(y0+ge_md((int16_t)(y1-y0),(int16_t)(gep[15]-x0),(int16_t)(x1-x0))); x0=gep[15]; }
+        else if(a&4){ x0=(int16_t)(x0+ge_md((int16_t)(x1-x0),(int16_t)(gep[14]-y0),(int16_t)(y1-y0))); y0=gep[14]; }
+        else        { x0=(int16_t)(x0+ge_md((int16_t)(x1-x0),(int16_t)(gep[16]-y0),(int16_t)(y1-y0))); y0=gep[16]; }
+        nit++;
+    }
+    if(nit>=8) vis=0;
+    if(!vis) return;
+    {   /* viewport map, constant denominators, y flips */
+        int16_t px0=(int16_t)(gep[17]+ge_md((int16_t)(x0-gep[13]),(int16_t)(gep[19]-gep[17]),(int16_t)(gep[15]-gep[13])));
+        int16_t py0=(int16_t)(gep[20]-ge_md((int16_t)(y0-gep[14]),(int16_t)(gep[20]-gep[18]),(int16_t)(gep[16]-gep[14])));
+        int16_t px1=(int16_t)(gep[17]+ge_md((int16_t)(x1-gep[13]),(int16_t)(gep[19]-gep[17]),(int16_t)(gep[15]-gep[13])));
+        int16_t py1=(int16_t)(gep[20]-ge_md((int16_t)(y1-gep[14]),(int16_t)(gep[20]-gep[18]),(int16_t)(gep[16]-gep[14])));
+        gpu_line(px0,py0,px1,py1,gcol);
+    }
+}
 
 static void ge_render(void){
     int n = gep[22];
@@ -404,7 +458,6 @@ static void ge_render(void){
     for(int i=0;i<n;i++){
         const uint8_t *e = gemem + off;
         int16_t v[6], w[6];
-        int16_t x0,y0,z0,x1,y1,z1,d;
         uint8_t rtype, rflags;
         if(off + 16 > sizeof gemem){ geerr=1; return; }
         rtype = e[0]; rflags = e[1];
@@ -425,47 +478,245 @@ static void ge_render(void){
                             + (int32_t)gep[r*3+2]*v[p*3+2];
                 w[p*3+r] = (int16_t)((acc>>8) + gep[9+r]);
             }
-        x0=w[0]; y0=w[1]; z0=w[2]; x1=w[3]; y1=w[4]; z1=w[5];
-        d = gep[12];
-        if(d){                                  /* near clip BEFORE the divide */
-            if(z0<16 && z1<16) continue;
-            if(z0<16){
-                x0=(int16_t)(x0+ge_md((int16_t)(x1-x0),(int16_t)(16-z0),(int16_t)(z1-z0)));
-                y0=(int16_t)(y0+ge_md((int16_t)(y1-y0),(int16_t)(16-z0),(int16_t)(z1-z0)));
-                z0=16;
-            }
-            if(z1<16){
-                x1=(int16_t)(x1+ge_md((int16_t)(x0-x1),(int16_t)(16-z1),(int16_t)(z0-z1)));
-                y1=(int16_t)(y1+ge_md((int16_t)(y0-y1),(int16_t)(16-z1),(int16_t)(z0-z1)));
-                z1=16;
-            }
-            x0=ge_md(x0,d,z0); y0=ge_md(y0,d,z0);
-            x1=ge_md(x1,d,z1); y1=ge_md(y1,d,z1);
-        }
-        int vis=1, nit=0;                       /* Cohen-Sutherland, lib order */
-        while(nit<8){
-            int a=ge_oc(x0,y0), b=ge_oc(x1,y1);
-            if(!(a|b)) break;
-            if(a&b){ vis=0; break; }
-            if(!a){ int16_t t; t=x0;x0=x1;x1=t; t=y0;y0=y1;y1=t; a=b; }
-            if(a&1){ y0=(int16_t)(y0+ge_md((int16_t)(y1-y0),(int16_t)(gep[13]-x0),(int16_t)(x1-x0))); x0=gep[13]; }
-            else if(a&2){ y0=(int16_t)(y0+ge_md((int16_t)(y1-y0),(int16_t)(gep[15]-x0),(int16_t)(x1-x0))); x0=gep[15]; }
-            else if(a&4){ x0=(int16_t)(x0+ge_md((int16_t)(x1-x0),(int16_t)(gep[14]-y0),(int16_t)(y1-y0))); y0=gep[14]; }
-            else        { x0=(int16_t)(x0+ge_md((int16_t)(x1-x0),(int16_t)(gep[16]-y0),(int16_t)(y1-y0))); y0=gep[16]; }
-            nit++;
-        }
-        if(nit>=8) vis=0;
-        if(!vis) continue;
-        {   /* viewport map, constant denominators, y flips */
-            int16_t px0=(int16_t)(gep[17]+ge_md((int16_t)(x0-gep[13]),(int16_t)(gep[19]-gep[17]),(int16_t)(gep[15]-gep[13])));
-            int16_t py0=(int16_t)(gep[20]-ge_md((int16_t)(y0-gep[14]),(int16_t)(gep[20]-gep[18]),(int16_t)(gep[16]-gep[14])));
-            int16_t px1=(int16_t)(gep[17]+ge_md((int16_t)(x1-gep[13]),(int16_t)(gep[19]-gep[17]),(int16_t)(gep[15]-gep[13])));
-            int16_t py1=(int16_t)(gep[20]-ge_md((int16_t)(y1-gep[14]),(int16_t)(gep[20]-gep[18]),(int16_t)(gep[16]-gep[14])));
-            gpu_line(px0,py0,px1,py1,gcol);
-        }
+        ge_line3t(w);
     }
     if(gep[21]&2) ge_flip();
 }
+
+/* ---- Stage 10: the GRAPHICS LANGUAGE ($FF50-$FF57, STAGE10-DESIGN.md) ----
+   A PGC-style command STREAM (Matrox PG-640A, docs/reference/pg640a.pdf):
+   bytes poked at GLDATA queue in a FIFO; the interpreter executes one
+   opcode + parameters (hex mode -- ASCII mode is stage 10d) and draws
+   IMMEDIATELY through the exact stage-8b/9 datapath (ge_xform, ge_line3t,
+   ge_tri3, and the shared window/viewport/matrix parameter file gep[]),
+   so GL pixels and record-engine pixels cannot disagree. PGC opcodes are
+   kept verbatim where a verb is adopted (appendix K of the manual stays
+   the reference card); P8X-only verbs (FLIP 02, PGSYNC 03) take unused
+   opcodes. Parameters are P8X-flavoured: int16 LE wherever the PGC has
+   16.16 Reals, and COLOR/CLEARS/FLOOD take r g b bytes -> RGB565 (no
+   LUT). The PGC's 2D space has NO matrix: 2D primitives clip to the
+   window and map to the viewport, nothing else. Execution is instant
+   (the GPU-BUSY licence): GLSTAT busy never reads 1 here, and the FIFO
+   drains as far as complete commands allow -- a partial command waits. */
+#define GLFMAX 2048          /* holds the largest command: POLY3 255 verts */
+static uint8_t glf[GLFMAX];  static int glflen;         /* command FIFO */
+static uint8_t glef[16];     static int gleflen;        /* error FIFO */
+static uint8_t glrbf[256];   static int glrblen, glrbrd; /* read-back (10e) */
+static uint8_t glmode;       /* 0 = hex (10a default; ASCII lands in 10d) */
+static uint8_t glfill;       /* PRMFIL: closed primitives fill when 1 */
+static int16_t glc2[2], glc3[3];   /* the 2D and 3D current points */
+static int16_t glproj, gldist;     /* PROJCT/DISTAN: parsed now, meaning 10b */
+
+/* error codes: 1 unknown opcode, 2 bad parameter, 3 mode not fitted
+   (ASCII before stage 10d), 4 command-FIFO overflow */
+static void gl_err(uint8_t code){ if(gleflen<(int)sizeof glef) glef[gleflen++]=code; }
+
+static void gl_state_reset(void){          /* RESETF: state, NOT the FIFOs */
+    ge_reset();                            /* matrix/window/viewport/flags */
+    glfill=0; glc2[0]=glc2[1]=0; glc3[0]=glc3[1]=glc3[2]=0;
+    glproj=60; gldist=500;                 /* the PGC defaults */
+    gcol=0xFFFF;                           /* pen back to white */
+}
+static void gl_reset(void){                /* power-on */
+    glflen=0; gleflen=0; glrblen=glrbrd=0; glmode=0;
+    glfill=0; glc2[0]=glc2[1]=0; glc3[0]=glc3[1]=glc3[2]=0;
+    glproj=60; gldist=500;
+}
+
+static uint16_t gl_rgb(uint8_t r,uint8_t g,uint8_t b){
+    return (uint16_t)(((r&31)<<11)|((g&63)<<5)|(b&31));
+}
+/* map one WINDOW-space point to the screen -- the ge_line3t formulas */
+static void gl_map2(int16_t x,int16_t y,int16_t *px,int16_t *py){
+    *px=(int16_t)(gep[17]+ge_md((int16_t)(x-gep[13]),(int16_t)(gep[19]-gep[17]),(int16_t)(gep[15]-gep[13])));
+    *py=(int16_t)(gep[20]-ge_md((int16_t)(y-gep[14]),(int16_t)(gep[20]-gep[18]),(int16_t)(gep[16]-gep[14])));
+}
+/* a 2D line: window-space Cohen-Sutherland (the ge_line3t idiom, minus
+   transform and divide), then viewport map, then the device LINE */
+static void gl_line2(int16_t x0,int16_t y0,int16_t x1,int16_t y1){
+    int vis=1, nit=0;
+    while(nit<8){
+        int a=ge_oc(x0,y0), b=ge_oc(x1,y1);
+        if(!(a|b)) break;
+        if(a&b){ vis=0; break; }
+        if(!a){ int16_t t; t=x0;x0=x1;x1=t; t=y0;y0=y1;y1=t; a=b; }
+        if(a&1){ y0=(int16_t)(y0+ge_md((int16_t)(y1-y0),(int16_t)(gep[13]-x0),(int16_t)(x1-x0))); x0=gep[13]; }
+        else if(a&2){ y0=(int16_t)(y0+ge_md((int16_t)(y1-y0),(int16_t)(gep[15]-x0),(int16_t)(x1-x0))); x0=gep[15]; }
+        else if(a&4){ x0=(int16_t)(x0+ge_md((int16_t)(x1-x0),(int16_t)(gep[14]-y0),(int16_t)(y1-y0))); y0=gep[14]; }
+        else        { x0=(int16_t)(x0+ge_md((int16_t)(x1-x0),(int16_t)(gep[16]-y0),(int16_t)(y1-y0))); y0=gep[16]; }
+        nit++;
+    }
+    if(nit>=8 || !vis) return;
+    {   int16_t px0,py0,px1,py1;
+        gl_map2(x0,y0,&px0,&py0); gl_map2(x1,y1,&px1,&py1);
+        gpu_line(px0,py0,px1,py1,gcol);
+    }
+}
+static void gl_point2(int16_t x,int16_t y){
+    int16_t px,py;
+    if(ge_oc(x,y)) return;                 /* outside the window */
+    gl_map2(x,y,&px,&py);
+    gpu_box(px,py,px,py,gcol,1);           /* one pixel: the device PLOT */
+}
+static void gl_point3(void){
+    int16_t w[3]; int16_t x,y;
+    ge_xform(glc3,w);
+    x=w[0]; y=w[1];
+    if(gep[12]){
+        if(w[2]<16) return;                /* behind the near plane */
+        x=ge_md(x,gep[12],w[2]); y=ge_md(y,gep[12],w[2]);
+    }
+    gl_point2(x,y);
+}
+static void gl_line3(const int16_t *a,const int16_t *b){
+    int16_t w[6];
+    ge_xform(a,w); ge_xform(b,w+3);
+    ge_line3t(w);
+}
+/* one complete command at glf[0..]: returns bytes consumed, 0 = incomplete.
+   NEED(n) waits for n bytes total (opcode included) before touching state. */
+#define NEED(k) do{ if(n<(k)) return 0; }while(0)
+static int16_t gl_i16(const uint8_t *p){ return (int16_t)(p[0]|(p[1]<<8)); }
+static int gl_exec1(void){
+    const uint8_t *p=glf; int n=glflen;
+    switch(p[0]){
+    case 0x01: return 1;                                  /* NOOP */
+    case 0x02: ge_flip(); return 1;                       /* FLIP   (P8X) */
+    case 0x03: gfb=gfbd; return 1;                        /* PGSYNC (P8X) */
+    case 0x04: gl_state_reset(); return 1;                /* RESETF */
+    case 0x05: NEED(3); return 3;      /* WAIT frames: paces on real frame
+                                          ticks in RTL; instant here */
+    case 0x06: NEED(4); gcol=gl_rgb(p[1],p[2],p[3]); return 4;   /* COLOR */
+    case 0x07: NEED(4);                                   /* FLOOD: viewport */
+        gpu_box(gep[17],gep[18],gep[19],gep[20],gl_rgb(p[1],p[2],p[3]),1);
+        return 4;
+    case 0x08: gl_point2(glc2[0],glc2[1]); return 1;      /* POINT */
+    case 0x09: gl_point3(); return 1;                     /* POINT3 */
+    case 0x0F: NEED(4);                    /* CLEARS: BOTH pages, the whole
+                                              screen (the sideband lesson) */
+        { uint16_t c=gl_rgb(p[1],p[2],p[3]);
+          for(size_t i=0;i<gfpix;i++){ gfbmem[0][i]=c; gfbmem[1][i]=c; } }
+        return 4;
+    case 0x10: NEED(5); glc2[0]=gl_i16(p+1); glc2[1]=gl_i16(p+3); return 5;
+    case 0x11: NEED(5);                                   /* MOVER */
+        glc2[0]=(int16_t)(glc2[0]+gl_i16(p+1));
+        glc2[1]=(int16_t)(glc2[1]+gl_i16(p+3)); return 5;
+    case 0x12: NEED(7);                                   /* MOVE3 */
+        glc3[0]=gl_i16(p+1); glc3[1]=gl_i16(p+3); glc3[2]=gl_i16(p+5);
+        return 7;
+    case 0x13: NEED(7);                                   /* MOVER3 */
+        glc3[0]=(int16_t)(glc3[0]+gl_i16(p+1));
+        glc3[1]=(int16_t)(glc3[1]+gl_i16(p+3));
+        glc3[2]=(int16_t)(glc3[2]+gl_i16(p+5)); return 7;
+    case 0x28: case 0x29: NEED(5);                        /* DRAW / DRAWR */
+        { int16_t x=gl_i16(p+1), y=gl_i16(p+3);
+          if(p[0]==0x29){ x=(int16_t)(x+glc2[0]); y=(int16_t)(y+glc2[1]); }
+          gl_line2(glc2[0],glc2[1],x,y);
+          glc2[0]=x; glc2[1]=y; }
+        return 5;
+    case 0x2A: case 0x2B: NEED(7);                        /* DRAW3 / DRAWR3 */
+        { int16_t b[3];
+          b[0]=gl_i16(p+1); b[1]=gl_i16(p+3); b[2]=gl_i16(p+5);
+          if(p[0]==0x2B){ b[0]=(int16_t)(b[0]+glc3[0]);
+                          b[1]=(int16_t)(b[1]+glc3[1]);
+                          b[2]=(int16_t)(b[2]+glc3[2]); }
+          gl_line3(glc3,b);
+          glc3[0]=b[0]; glc3[1]=b[1]; glc3[2]=b[2]; }
+        return 7;
+    case 0x30: case 0x31: NEED(2);                        /* POLY / POLYR */
+        { int k=p[1];
+          NEED(2+4*k);
+          if(k==0){ gl_err(2); return 2; }
+          { int16_t vx[255], vy[255];
+            for(int i=0;i<k;i++){
+                vx[i]=gl_i16(p+2+4*i); vy[i]=gl_i16(p+4+4*i);
+                if(p[0]==0x31){ vx[i]=(int16_t)(vx[i]+glc2[0]);
+                                vy[i]=(int16_t)(vy[i]+glc2[1]); }
+            }
+            if(glfill && k>=3){        /* fan of viewport-clamped fills */
+                int16_t sx[255], sy[255];
+                for(int i=0;i<k;i++) gl_map2(vx[i],vy[i],&sx[i],&sy[i]);
+                for(int t=1;t+1<k;t++)
+                    ge_filltri(sx[0],sy[0],sx[t],sy[t],sx[t+1],sy[t+1]);
+            } else {
+                for(int i=0;i<k;i++)
+                    gl_line2(vx[i],vy[i],vx[(i+1)%k],vy[(i+1)%k]);
+            } }
+          return 2+4*k; }
+    case 0x32: case 0x33: NEED(2);                        /* POLY3 / POLYR3 */
+        { int k=p[1];
+          NEED(2+6*k);
+          if(k==0){ gl_err(2); return 2; }
+          { int16_t v[255][3];
+            for(int i=0;i<k;i++){
+                v[i][0]=gl_i16(p+2+6*i); v[i][1]=gl_i16(p+4+6*i);
+                v[i][2]=gl_i16(p+6+6*i);
+                if(p[0]==0x33){ v[i][0]=(int16_t)(v[i][0]+glc3[0]);
+                                v[i][1]=(int16_t)(v[i][1]+glc3[1]);
+                                v[i][2]=(int16_t)(v[i][2]+glc3[2]); }
+            }
+            if(glfill && k>=3){        /* fan of stage-9 TRIs */
+                int16_t vv[9];
+                for(int t=1;t+1<k;t++){
+                    vv[0]=v[0][0]; vv[1]=v[0][1]; vv[2]=v[0][2];
+                    vv[3]=v[t][0]; vv[4]=v[t][1]; vv[5]=v[t][2];
+                    vv[6]=v[t+1][0]; vv[7]=v[t+1][1]; vv[8]=v[t+1][2];
+                    ge_tri3(vv,1);
+                }
+            } else {
+                for(int i=0;i<k;i++) gl_line3(v[i],v[(i+1)%k]);
+            } }
+          return 2+6*k; }
+    case 0x34: case 0x35: NEED(5);                        /* RECT / RECTR */
+        { int16_t x=gl_i16(p+1), y=gl_i16(p+3);
+          if(p[0]==0x35){ x=(int16_t)(x+glc2[0]); y=(int16_t)(y+glc2[1]); }
+          if(glfill){                  /* map corners, clamp to the viewport */
+              int16_t px0,py0,px1,py1,t;
+              gl_map2(glc2[0],glc2[1],&px0,&py0); gl_map2(x,y,&px1,&py1);
+              if(px0>px1){ t=px0;px0=px1;px1=t; }
+              if(py0>py1){ t=py0;py0=py1;py1=t; }
+              if(px0<gep[17]) px0=gep[17];
+              if(px1>gep[19]) px1=gep[19];
+              if(py0<gep[18]) py0=gep[18];
+              if(py1>gep[20]) py1=gep[20];
+              if(px0<=px1 && py0<=py1) gpu_box(px0,py0,px1,py1,gcol,1);
+          } else {
+              gl_line2(glc2[0],glc2[1],x,glc2[1]);
+              gl_line2(x,glc2[1],x,y);
+              gl_line2(x,y,glc2[0],y);
+              gl_line2(glc2[0],y,glc2[0],glc2[1]);
+          } }
+        return 5;
+    case 0x43: NEED(3);                /* "CA " / "CX ": the mode switches
+                                          are their own ASCII bytes in BOTH
+                                          modes (the PGC's little joke) */
+        if(p[1]=='X' && p[2]==' ') return 3;         /* already hex */
+        if(p[1]=='A' && p[2]==' '){ gl_err(3); return 3; }  /* 10d */
+        gl_err(2); return 3;
+    case 0xB0: NEED(3); glproj=gl_i16(p+1); return 3;     /* PROJCT (10b) */
+    case 0xB1: NEED(3); gldist=gl_i16(p+1); return 3;     /* DISTAN (10b) */
+    case 0xB2: NEED(9);                /* VWPORT x1 x2 y1 y2 -- PGC order */
+        gep[17]=gl_i16(p+1); gep[19]=gl_i16(p+3);
+        gep[18]=gl_i16(p+5); gep[20]=gl_i16(p+7); return 9;
+    case 0xB3: NEED(9);                /* WINDOW x1 x2 y1 y2 -- PGC order */
+        gep[13]=gl_i16(p+1); gep[15]=gl_i16(p+3);
+        gep[14]=gl_i16(p+5); gep[16]=gl_i16(p+7); return 9;
+    case 0xE0: NEED(2); glfill=(uint8_t)(p[1]&1); return 2;   /* PRMFIL */
+    default: gl_err(1); return 1;      /* unknown opcode: log, skip a byte */
+    }
+}
+static void gl_push(uint8_t b){
+    if(glflen>=GLFMAX){ gl_err(4); return; }
+    glf[glflen++]=b;
+    for(;;){
+        int c=gl_exec1();
+        if(c<=0) break;
+        memmove(glf,glf+c,(size_t)(glflen-c));
+        glflen-=c;
+        if(glflen==0) break;
+    }
+}
+
 /* POINT's answer is 16 bits and GDATA is a byte port, so it STREAMS: low byte
    then high, the same idiom as the IDENT record. Reads past the second byte
    return the high byte again (parked), so a sloppy extra read is harmless and
@@ -835,6 +1086,17 @@ static uint8_t memrd(uint16_t ad){
        auto-increment -- only the high WRITE commits-and-increments) */
     case GEVAL:  return (uint8_t)(gesel<23 ? ((uint16_t)gep[gesel] & 0xFF) : 0xFF);
     case GEVALH: return (uint8_t)(gesel<23 ? ((uint16_t)gep[gesel] >> 8) : 0xFF);
+    /* Stage 10 GL port. busy (bit6) never reads 1: interpretation is
+       instant, the same licence as GPU BUSY / GESTAT above. */
+    case GLSTAT: return (uint8_t)((glflen>=GLFMAX?0x80:0) |
+                                  (gleflen?0x02:0) |
+                                  (glrblen>glrbrd?0x01:0));
+    case GLRB:   return (uint8_t)(glrblen>glrbrd ? glrbf[glrbrd++] : 0);
+    case GLERR:  if(gleflen){ uint8_t e=glef[0];
+                              memmove(glef,glef+1,(size_t)--gleflen);
+                              return e; }
+                 return 0;
+    case GLID:   return 0x47;                      /* 'G' -- presence probe */
     default: return 0xFF;
     }
 }
@@ -889,6 +1151,7 @@ static void memwr(uint16_t ad,uint8_t v){
       case GEVALH: if(gesel<23) gep[gesel]=(int16_t)((v<<8)|gevlo);
                    gesel++; return;
       case GEUP:   if(gecur<sizeof gemem) gemem[gecur++]=v; return;
+      case GLDATA: gl_push(v); return;   /* stage 10: one command-stream byte */
       case GECMD:
         if(v==1) gecur=0;
         else if(v==2) ge_render();
@@ -933,6 +1196,7 @@ static void cf_attach(struct cf_state*c,const char*fn){   /* open/create a CF im
 int main(int argc,char**argv){
     const char*ee="eeprom.bin"; const char*cfn=0,*cfn2=0; unsigned long long lim=200000000ULL;
     ge_reset();                          /* geometry engine power-on state */
+    gl_reset();                          /* stage 10 GL power-on state */
     gfb_poweron();                       /* both pages: undefined, like DRAM */
     int lim_set=0;                       /* -l given explicitly: always honour it */
     for(int i=1;i<argc;i++){

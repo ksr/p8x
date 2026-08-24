@@ -54,6 +54,11 @@ GECMD       = $FF43              ; geometry: 1 rewind cursor / 2 RENDER / 3 FLIP
 GESTAT      = $FF44              ; read: bit7 BUSY, bit0 ERR (bad count)
 GEID        = $FF45              ; read: $45 'E' -- geometry-engine presence probe
 GEVALH      = $FF4A              ; geometry: value high -- write commits reg[GESEL] and GESEL++; READ returns par[GESEL] high
+GLDATA      = $FF50              ; GL: write one command-stream byte into the FIFO
+GLSTAT      = $FF51              ; read: bit7 FIFO full, bit6 busy, bit1 error pending, bit0 read-back pending
+GLRB        = $FF52              ; read: pop one read-back FIFO byte
+GLERR       = $FF53              ; read: pop one error FIFO byte (0 = empty)
+GLID        = $FF54              ; read: $47 'G' -- graphics-language presence probe
 MDAH        = $FF39              ; MDU operand a, high byte (write AFTER MDA)
 MDBH        = $FF3A              ; MDU operand b, high byte
 MDCH        = $FF3B              ; MDU divisor c, high byte

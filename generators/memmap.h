@@ -55,6 +55,11 @@
 #define GESTAT      0xFF44       /* read: bit7 BUSY, bit0 ERR (bad count) */
 #define GEID        0xFF45       /* read: $45 'E' -- geometry-engine presence probe */
 #define GEVALH      0xFF4A       /* geometry: value high -- write commits reg[GESEL] and GESEL++; READ returns par[GESEL] high */
+#define GLDATA      0xFF50       /* GL: write one command-stream byte into the FIFO */
+#define GLSTAT      0xFF51       /* read: bit7 FIFO full, bit6 busy, bit1 error pending, bit0 read-back pending */
+#define GLRB        0xFF52       /* read: pop one read-back FIFO byte */
+#define GLERR       0xFF53       /* read: pop one error FIFO byte (0 = empty) */
+#define GLID        0xFF54       /* read: $47 'G' -- graphics-language presence probe */
 #define MDAH        0xFF39       /* MDU operand a, high byte (write AFTER MDA) */
 #define MDBH        0xFF3A       /* MDU operand b, high byte */
 #define MDCH        0xFF3B       /* MDU divisor c, high byte */

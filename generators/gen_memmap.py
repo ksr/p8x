@@ -111,6 +111,19 @@ MAP = [
     ('I/O ports ($FF00-$FFFF)', 'GESTAT', 0xFF44, 'read: bit7 BUSY, bit0 ERR (bad count)'),
     ('I/O ports ($FF00-$FFFF)', 'GEID', 0xFF45, "read: $45 'E' -- geometry-engine presence probe"),
     ('I/O ports ($FF00-$FFFF)', 'GEVALH', 0xFF4A, 'geometry: value high -- write commits reg[GESEL] and GESEL++; READ returns par[GESEL] high'),
+    # Stage 10: the GRAPHICS LANGUAGE port, $FF50-$FF57 (STAGE10-DESIGN.md).
+    # A PGC-style command stream (Matrox PG-640A manual is the reference):
+    # bytes written to GLDATA feed a command FIFO; an interpreter executes
+    # opcode + int16-LE parameters (hex mode; ASCII mode arrives stage 10d).
+    # The interpreter drives the SAME transform/draw datapath and parameter
+    # file as the $FF40 record engine -- WINDOW/VWPORT/COLOR written by
+    # either interface are one state. GLRB/GLERR drain the read-back and
+    # error FIFOs (an error byte per fault; see the design doc's code list).
+    ('I/O ports ($FF00-$FFFF)', 'GLDATA', 0xFF50, 'GL: write one command-stream byte into the FIFO'),
+    ('I/O ports ($FF00-$FFFF)', 'GLSTAT', 0xFF51, 'read: bit7 FIFO full, bit6 busy, bit1 error pending, bit0 read-back pending'),
+    ('I/O ports ($FF00-$FFFF)', 'GLRB', 0xFF52, 'read: pop one read-back FIFO byte'),
+    ('I/O ports ($FF00-$FFFF)', 'GLERR', 0xFF53, 'read: pop one error FIFO byte (0 = empty)'),
+    ('I/O ports ($FF00-$FFFF)', 'GLID', 0xFF54, "read: $47 'G' -- graphics-language presence probe"),
 
     ('I/O ports ($FF00-$FFFF)', 'MDAH', 0xFF39, 'MDU operand a, high byte (write AFTER MDA)'),
     ('I/O ports ($FF00-$FFFF)', 'MDBH', 0xFF3A, 'MDU operand b, high byte'),
