@@ -100,12 +100,10 @@ identity tests can't catch sign bugs, off-axis views can); shared-lib
 growth is a fleet-wide size tax. Board proof: POINT -2048 at the
 replica-predicted oblique pixel. Toolkit complete: tri/rotate/camera/
 page/cube/image. Remaining BACKLOG: 800x480 notes, imgsend verify,
-stage-9 leftovers. Branch g3d-stage9 still unmerged per user.
+stage-9 leftovers. g3d-stage9 MERGED to main + branch deleted 2026-08-21 (e3aa10b); back to main-only workflow.
 
-BRANCH STATE: g3d-stage9 (through 4dda75a: 9a/9b/9c + tri/rotate/page
-commands + fixes) is pushed but NOT merged to main — user said "no merge
-yet" (2026-08-21). Do NOT merge until they say so; keep committing to
-the branch.
+BRANCH STATE: g3d-stage9 merged to main and deleted 2026-08-21 (user
+said "sync"); commit to main per the normal workflow.
 
 NEW TRAPS (2026-08-21): imgsend acks certify TRANSPORT NOT CONTENT — a
 clone delivered a right-sized corrupt binary that wild-jumped to the
