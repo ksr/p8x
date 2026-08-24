@@ -53,6 +53,7 @@
 #include <termios.h>
 #include <signal.h>
 #include "../generators/memmap.h"   /* RAMBASE/IOBASE/ROMSIZE/RAMSIZE — single-source memory map */
+#include "../generators/trigtab.h"  /* SIN8/TANH8 — stage-10b GL trig, shared with the RTL */
 
 static int interactive=0;             /* stdin is a TTY: raw + blocking console */
 static int norx=0;                    /* -N: console RX always empty (see rx_ready) */
@@ -234,13 +235,16 @@ static void gpu_box(int x0,int y0,int x1,int y1,uint16_t c,int fill);
 static uint8_t  gemem[GEMAXE*12];      /* the edge list ($100000 on the board) */
 static uint32_t gecur;                 /* upload cursor */
 static uint8_t  gesel, gevlo, geerr;   /* param index, GEVAL low latch, err */
-static int16_t  gep[23];               /* the parameter file */
+static int16_t  gep[25];               /* the parameter file (stage 10b: 23
+                                          near plane, 24 far plane) */
 
 static void ge_reset(void){            /* power-on parameter state */
     memset(gep,0,sizeof gep);
     gep[0]=gep[4]=gep[8]=256;          /* identity matrix, S7.8 */
     gep[12]=256;                       /* focal d */
     gep[21]=3;                         /* flags: erase + flip */
+    gep[23]=16;                        /* near plane (the stage-7..9 z>=16) */
+    gep[24]=32767;                     /* far plane: int16 max = no far clip */
     gesel=0; gevlo=0; gecur=0; geerr=0;
 }
 
@@ -360,38 +364,53 @@ static void ge_filltri(int16_t x0,int16_t y0,int16_t x1,int16_t y1,
 static void ge_tri3(const int16_t *vv, int fill){
     int16_t v[3][3], w[3];
     int16_t pz[8][3]; int np = 0;             /* near-clipped polygon */
+    int16_t pq[8][3]; int nq = 0;             /* ...then far-clipped (10b) */
     int16_t sx[8], sy[8];
+    int16_t zn=gep[23], zf=gep[24];
     for(int p=0;p<3;p++){
         int16_t in[3];
         for(int k=0;k<3;k++) in[k]=vv[p*3+k];
         ge_xform(in, v[p]);
     }
-    if(gep[12] == 0){                         /* ortho: no near clip */
-        for(int p=0;p<3;p++){ pz[np][0]=v[p][0]; pz[np][1]=v[p][1]; pz[np][2]=v[p][2]; np++; }
+    if(gep[12] == 0){                         /* ortho: no z clipping */
+        for(int p=0;p<3;p++){ pq[nq][0]=v[p][0]; pq[nq][1]=v[p][1]; pq[nq][2]=v[p][2]; nq++; }
     } else {
-        for(int p=0;p<3;p++){                 /* clip the polygon vs z=16 */
+        for(int p=0;p<3;p++){                 /* clip the polygon vs z=near */
             int16_t *a=v[p], *b=v[(p+1)%3];
-            int ain = a[2] >= 16, bin = b[2] >= 16;
+            int ain = a[2] >= zn, bin = b[2] >= zn;
             if(ain){ pz[np][0]=a[0]; pz[np][1]=a[1]; pz[np][2]=a[2]; np++; }
             if(ain != bin){
                 pz[np][0]=(int16_t)(a[0]+ge_md((int16_t)(b[0]-a[0]),
-                            (int16_t)(16-a[2]),(int16_t)(b[2]-a[2])));
+                            (int16_t)(zn-a[2]),(int16_t)(b[2]-a[2])));
                 pz[np][1]=(int16_t)(a[1]+ge_md((int16_t)(b[1]-a[1]),
-                            (int16_t)(16-a[2]),(int16_t)(b[2]-a[2])));
-                pz[np][2]=16; np++;
+                            (int16_t)(zn-a[2]),(int16_t)(b[2]-a[2])));
+                pz[np][2]=zn; np++;
             }
         }
         if(np < 3) return;                    /* wholly behind */
+        for(int p=0;p<np;p++){                /* ...and vs z=far (yon) */
+            int16_t *a=pz[p], *b=pz[(p+1)%np];
+            int ain = a[2] <= zf, bin = b[2] <= zf;
+            if(ain){ pq[nq][0]=a[0]; pq[nq][1]=a[1]; pq[nq][2]=a[2]; nq++; }
+            if(ain != bin){
+                pq[nq][0]=(int16_t)(a[0]+ge_md((int16_t)(b[0]-a[0]),
+                            (int16_t)(zf-a[2]),(int16_t)(b[2]-a[2])));
+                pq[nq][1]=(int16_t)(a[1]+ge_md((int16_t)(b[1]-a[1]),
+                            (int16_t)(zf-a[2]),(int16_t)(b[2]-a[2])));
+                pq[nq][2]=zf; nq++;
+            }
+        }
+        if(nq < 3) return;                    /* wholly beyond */
     }
     w[2]=0;
-    for(int p=0;p<np;p++){ w[0]=pz[p][0]; w[1]=pz[p][1]; w[2]=pz[p][2];
+    for(int p=0;p<nq;p++){ w[0]=pq[p][0]; w[1]=pq[p][1]; w[2]=pq[p][2];
                            ge_map(w, &sx[p], &sy[p]); }
-    if(fill){                                 /* fan: (0,1,2) [,(0,2,3)] */
-        for(int t=1;t+1<np;t++)
+    if(fill){                                 /* fan: (0,1,2) [,(0,2,3)...] */
+        for(int t=1;t+1<nq;t++)
             ge_filltri(sx[0],sy[0],sx[t],sy[t],sx[t+1],sy[t+1]);
     } else {
-        for(int p=0;p<np;p++)
-            ge_sline(sx[p],sy[p],sx[(p+1)%np],sy[(p+1)%np]);
+        for(int p=0;p<nq;p++)
+            ge_sline(sx[p],sy[p],sx[(p+1)%nq],sy[(p+1)%nq]);
     }
 }
 static void ge_tri(const uint8_t *e, int fill){   /* record-byte wrapper */
@@ -405,20 +424,33 @@ static void ge_tri(const uint8_t *e, int fill){   /* record-byte wrapper */
    AFTER ge_xform. Shared verbatim by the record walk and the stage-10 GL
    interpreter's DRAW3 -- one tail, so the pixels cannot disagree. */
 static void ge_line3t(const int16_t *w){
-    int16_t x0,y0,z0,x1,y1,z1,d;
+    int16_t x0,y0,z0,x1,y1,z1,d,zn,zf;
     x0=w[0]; y0=w[1]; z0=w[2]; x1=w[3]; y1=w[4]; z1=w[5];
     d = gep[12];
+    zn = gep[23]; zf = gep[24];             /* near/far planes (10b: DISTH/
+                                               DISTY; defaults 16 / 32767) */
     if(d){                                  /* near clip BEFORE the divide */
-        if(z0<16 && z1<16) return;
-        if(z0<16){
-            x0=(int16_t)(x0+ge_md((int16_t)(x1-x0),(int16_t)(16-z0),(int16_t)(z1-z0)));
-            y0=(int16_t)(y0+ge_md((int16_t)(y1-y0),(int16_t)(16-z0),(int16_t)(z1-z0)));
-            z0=16;
+        if(z0<zn && z1<zn) return;
+        if(z0<zn){
+            x0=(int16_t)(x0+ge_md((int16_t)(x1-x0),(int16_t)(zn-z0),(int16_t)(z1-z0)));
+            y0=(int16_t)(y0+ge_md((int16_t)(y1-y0),(int16_t)(zn-z0),(int16_t)(z1-z0)));
+            z0=zn;
         }
-        if(z1<16){
-            x1=(int16_t)(x1+ge_md((int16_t)(x0-x1),(int16_t)(16-z1),(int16_t)(z0-z1)));
-            y1=(int16_t)(y1+ge_md((int16_t)(y0-y1),(int16_t)(16-z1),(int16_t)(z0-z1)));
-            z1=16;
+        if(z1<zn){
+            x1=(int16_t)(x1+ge_md((int16_t)(x0-x1),(int16_t)(zn-z1),(int16_t)(z0-z1)));
+            y1=(int16_t)(y1+ge_md((int16_t)(y0-y1),(int16_t)(zn-z1),(int16_t)(z0-z1)));
+            z1=zn;
+        }
+        if(z0>zf && z1>zf) return;          /* yon clip, same shape */
+        if(z0>zf){
+            x0=(int16_t)(x0+ge_md((int16_t)(x1-x0),(int16_t)(zf-z0),(int16_t)(z1-z0)));
+            y0=(int16_t)(y0+ge_md((int16_t)(y1-y0),(int16_t)(zf-z0),(int16_t)(z1-z0)));
+            z0=zf;
+        }
+        if(z1>zf){
+            x1=(int16_t)(x1+ge_md((int16_t)(x0-x1),(int16_t)(zf-z1),(int16_t)(z0-z1)));
+            y1=(int16_t)(y1+ge_md((int16_t)(y0-y1),(int16_t)(zf-z1),(int16_t)(z0-z1)));
+            z1=zf;
         }
         x0=ge_md(x0,d,z0); y0=ge_md(y0,d,z0);
         x1=ge_md(x1,d,z1); y1=ge_md(y1,d,z1);
@@ -505,22 +537,109 @@ static uint8_t glrbf[256];   static int glrblen, glrbrd; /* read-back (10e) */
 static uint8_t glmode;       /* 0 = hex (10a default; ASCII lands in 10d) */
 static uint8_t glfill;       /* PRMFIL: closed primitives fill when 1 */
 static int16_t glc2[2], glc3[3];   /* the 2D and 3D current points */
-static int16_t glproj, gldist;     /* PROJCT/DISTAN: parsed now, meaning 10b */
+static int16_t glproj, gldist;     /* PROJCT angle / DISTAN viewer distance */
+/* stage 10b: the card-side matrices (STAGE10-DESIGN.md). Vertices go
+   through ONE combined matrix in the parameter file, recomposed at COMMAND
+   time from two masters: v_screen <- project((VR*((M*v>>8)+Tm-r))>>8
+   + (0,0,dist)). MD* verbs compose submatrices into M (in command order,
+   about the MDORG origin); VW* verbs compose into VR about the VWRPT
+   reference point; DISTAN slides the viewer back along z. PROJCT switches
+   the focal K from the native 256 to WW*128/tan(angle/2) (TANH8). */
+static int16_t glmm[12];     /* modeling: 3x3 8.8 rows 0-8, T 9-11 */
+static int16_t glvm[9];      /* viewing rotation VR, 3x3 8.8 */
+static int16_t glvrp[3];     /* VWRPT: the viewing reference point */
+static int16_t glorg[3];     /* MDORG: rotation/scale pivot */
+static int16_t glh, gly;     /* DISTH / DISTY plane distances (from VRP) */
+static uint8_t glch, glcy;   /* CLIPH / CLIPY enables */
+static uint8_t glpmode;      /* 0 = native focal (par12 as-is); 1 = PROJCT */
 
 /* error codes: 1 unknown opcode, 2 bad parameter, 3 mode not fitted
    (ASCII before stage 10d), 4 command-FIFO overflow */
 static void gl_err(uint8_t code){ if(gleflen<(int)sizeof glef) glef[gleflen++]=code; }
 
+static void gl_mat_reset(void){            /* 10b matrix state to power-up */
+    memset(glmm,0,sizeof glmm); glmm[0]=glmm[4]=glmm[8]=256;
+    memset(glvm,0,sizeof glvm); glvm[0]=glvm[4]=glvm[8]=256;
+    memset(glvrp,0,sizeof glvrp); memset(glorg,0,sizeof glorg);
+    glh=0; gly=0; glch=0; glcy=0; glpmode=0;
+    glproj=60; gldist=0;                   /* dist 0 = the stage-9 camera */
+}
 static void gl_state_reset(void){          /* RESETF: state, NOT the FIFOs */
     ge_reset();                            /* matrix/window/viewport/flags */
     glfill=0; glc2[0]=glc2[1]=0; glc3[0]=glc3[1]=glc3[2]=0;
-    glproj=60; gldist=500;                 /* the PGC defaults */
+    gl_mat_reset();
     gcol=0xFFFF;                           /* pen back to white */
 }
 static void gl_reset(void){                /* power-on */
     glflen=0; gleflen=0; glrblen=glrbrd=0; glmode=0;
     glfill=0; glc2[0]=glc2[1]=0; glc3[0]=glc3[1]=glc3[2]=0;
-    glproj=60; gldist=500;
+    gl_mat_reset();
+}
+
+/* ---- 10b: composition, all in ge_md (the muldiv contract, /256) --------- */
+/* out = sub o m: apply m FIRST, then sub -- commands compose on the left
+   (MDSCAL then MDTRAN = scale first), the manual's order rule. m12 form:
+   rows 0-8 are the 3x3 in 8.8, 9-11 the translation in world units. */
+static void gl_mcomp(const int16_t *s, int16_t *m){
+    int16_t r[12];
+    for(int i=0;i<3;i++){
+        for(int j=0;j<3;j++)
+            r[i*3+j]=(int16_t)(ge_md(s[i*3+0],m[0*3+j],256)
+                              +ge_md(s[i*3+1],m[1*3+j],256)
+                              +ge_md(s[i*3+2],m[2*3+j],256));
+        r[9+i]=(int16_t)(ge_md(s[i*3+0],m[9],256)
+                        +ge_md(s[i*3+1],m[10],256)
+                        +ge_md(s[i*3+2],m[11],256)+s[9+i]);
+    }
+    memcpy(m,r,sizeof r);
+}
+static void gl_mcomp9(const int16_t *s, int16_t *m){   /* 3x3 only (VR) */
+    int16_t r[9];
+    for(int i=0;i<3;i++)
+        for(int j=0;j<3;j++)
+            r[i*3+j]=(int16_t)(ge_md(s[i*3+0],m[0*3+j],256)
+                              +ge_md(s[i*3+1],m[1*3+j],256)
+                              +ge_md(s[i*3+2],m[2*3+j],256));
+    memcpy(m,r,sizeof r);
+}
+static int16_t gl_sin(int16_t deg){ return SIN8[((deg%360)+360)%360]; }
+static int16_t gl_cos(int16_t deg){ return SIN8[((deg%360)+450)%360]; }
+/* rotation submatrices, rotate.c's exact row conventions */
+static void gl_rsub(int axis, int16_t deg, int16_t *s){
+    int16_t c=gl_cos(deg), n=gl_sin(deg);
+    memset(s,0,12*sizeof(int16_t));
+    if(axis==0){ s[0]=256; s[4]=c; s[5]=(int16_t)-n; s[7]=n; s[8]=c; }
+    else if(axis==1){ s[0]=c; s[2]=n; s[4]=256; s[6]=(int16_t)-n; s[8]=c; }
+    else { s[0]=c; s[1]=(int16_t)-n; s[3]=n; s[4]=c; s[8]=256; }
+}
+/* MDROT/MDSCAL pivot about the MDORG origin: T = o - (S*o)>>8 */
+static void gl_orgt(int16_t *s){
+    for(int i=0;i<3;i++)
+        s[9+i]=(int16_t)(glorg[i]-(int16_t)(ge_md(s[i*3+0],glorg[0],256)
+                                           +ge_md(s[i*3+1],glorg[1],256)
+                                           +ge_md(s[i*3+2],glorg[2],256)));
+}
+/* rebuild the parameter file from the two masters + projection state */
+static void gl_recompose(void){
+    int16_t tmr[3];
+    for(int i=0;i<3;i++){
+        for(int j=0;j<3;j++)
+            gep[i*3+j]=(int16_t)(ge_md(glvm[i*3+0],glmm[0*3+j],256)
+                                +ge_md(glvm[i*3+1],glmm[1*3+j],256)
+                                +ge_md(glvm[i*3+2],glmm[2*3+j],256));
+        tmr[i]=(int16_t)(glmm[9+i]-glvrp[i]);
+    }
+    for(int i=0;i<3;i++)
+        gep[9+i]=(int16_t)(ge_md(glvm[i*3+0],tmr[0],256)
+                          +ge_md(glvm[i*3+1],tmr[1],256)
+                          +ge_md(glvm[i*3+2],tmr[2],256));
+    gep[11]=(int16_t)(gep[11]+gldist);      /* viewer slides back on z */
+    if(glpmode)                             /* PROJCT: K from angle+window */
+        gep[12]=(glproj==0)?0
+               :ge_md((int16_t)(gep[15]-gep[13]),128,TANH8[glproj%180]);
+    /* hither/yon planes in eye z (plane distances are from the VRP) */
+    gep[23]=glch?(int16_t)((gldist+glh)<16?16:(gldist+glh)):16;
+    gep[24]=glcy?(int16_t)(gldist+gly):32767;
 }
 
 static uint16_t gl_rgb(uint8_t r,uint8_t g,uint8_t b){
@@ -563,7 +682,8 @@ static void gl_point3(void){
     ge_xform(glc3,w);
     x=w[0]; y=w[1];
     if(gep[12]){
-        if(w[2]<16) return;                /* behind the near plane */
+        if(w[2]<gep[23]) return;           /* behind the near plane */
+        if(w[2]>gep[24]) return;           /* beyond the far plane */
         x=ge_md(x,gep[12],w[2]); y=ge_md(y,gep[12],w[2]);
     }
     gl_point2(x,y);
@@ -693,14 +813,74 @@ static int gl_exec1(void){
         if(p[1]=='X' && p[2]==' ') return 3;         /* already hex */
         if(p[1]=='A' && p[2]==' '){ gl_err(3); return 3; }  /* 10d */
         gl_err(2); return 3;
-    case 0xB0: NEED(3); glproj=gl_i16(p+1); return 3;     /* PROJCT (10b) */
-    case 0xB1: NEED(3); gldist=gl_i16(p+1); return 3;     /* DISTAN (10b) */
+    /* ---- stage 10b: the matrix verbs ---------------------------------- */
+    case 0x90:                                            /* MDIDEN */
+        memset(glmm,0,sizeof glmm); glmm[0]=glmm[4]=glmm[8]=256;
+        gl_recompose(); return 1;
+    case 0x91: NEED(7);                                   /* MDORG */
+        glorg[0]=gl_i16(p+1); glorg[1]=gl_i16(p+3); glorg[2]=gl_i16(p+5);
+        return 7;
+    case 0x92: NEED(7);                                   /* MDSCAL (8.8) */
+        { int16_t s[12]; memset(s,0,sizeof s);
+          s[0]=gl_i16(p+1); s[4]=gl_i16(p+3); s[8]=gl_i16(p+5);
+          gl_orgt(s); gl_mcomp(s,glmm); gl_recompose(); }
+        return 7;
+    case 0x93: case 0x94: case 0x95: NEED(3);             /* MDROTX/Y/Z */
+        { int16_t s[12];
+          gl_rsub(p[0]-0x93, gl_i16(p+1), s);
+          gl_orgt(s); gl_mcomp(s,glmm); gl_recompose(); }
+        return 3;
+    case 0x96: NEED(7);                                   /* MDTRAN */
+        { int16_t s[12]; memset(s,0,sizeof s);
+          s[0]=s[4]=s[8]=256;
+          s[9]=gl_i16(p+1); s[10]=gl_i16(p+3); s[11]=gl_i16(p+5);
+          gl_mcomp(s,glmm); gl_recompose(); }
+        return 7;
+    case 0x97: NEED(25);                                  /* MDMATX: 12 int16 */
+        for(int k=0;k<12;k++) glmm[k]=gl_i16(p+1+2*k);
+        gl_recompose(); return 25;
+    case 0xA0:                                            /* VWIDEN */
+        memset(glvm,0,sizeof glvm); glvm[0]=glvm[4]=glvm[8]=256;
+        gl_recompose(); return 1;
+    case 0xA1: NEED(7);                                   /* VWRPT */
+        glvrp[0]=gl_i16(p+1); glvrp[1]=gl_i16(p+3); glvrp[2]=gl_i16(p+5);
+        gl_recompose(); return 7;
+    case 0xA3: case 0xA4: case 0xA5: NEED(3);             /* VWROTX/Y/Z */
+        { int16_t s[12];                     /* the viewer orbits: -angle */
+          gl_rsub(p[0]-0xA3, (int16_t)(0-gl_i16(p+1)), s);
+          gl_mcomp9(s,glvm); gl_recompose(); }
+        return 3;
+    case 0xA7: NEED(19);                                  /* VWMATX: 9 int16 */
+        for(int k=0;k<9;k++) glvm[k]=gl_i16(p+1+2*k);
+        gl_recompose(); return 19;
+    case 0xA8: NEED(3); glh=gl_i16(p+1); gl_recompose(); return 3;  /* DISTH */
+    case 0xA9: NEED(3); gly=gl_i16(p+1); gl_recompose(); return 3;  /* DISTY */
+    case 0xAA: NEED(2); glch=(uint8_t)(p[1]&1); gl_recompose(); return 2;
+    case 0xAB: NEED(2); glcy=(uint8_t)(p[1]&1); gl_recompose(); return 2;
+    case 0xAF:                                            /* CONVRT */
+        { int16_t w3[3]; ge_xform(glc3,w3);
+          if(gep[12]){
+              int16_t z=w3[2];
+              if(z<gep[23]) z=gep[23];       /* clamp, deterministically */
+              if(z>gep[24]) z=gep[24];
+              glc2[0]=ge_md(w3[0],gep[12],z);
+              glc2[1]=ge_md(w3[1],gep[12],z);
+          } else { glc2[0]=w3[0]; glc2[1]=w3[1]; } }
+        return 1;
+    case 0xB0: NEED(3);                                   /* PROJCT */
+        { int16_t ang=gl_i16(p+1);
+          if(ang<0 || ang>179) gl_err(2);
+          else { glproj=ang; glpmode=1; gl_recompose(); } }
+        return 3;
+    case 0xB1: NEED(3); gldist=gl_i16(p+1); gl_recompose(); return 3;
     case 0xB2: NEED(9);                /* VWPORT x1 x2 y1 y2 -- PGC order */
         gep[17]=gl_i16(p+1); gep[19]=gl_i16(p+3);
         gep[18]=gl_i16(p+5); gep[20]=gl_i16(p+7); return 9;
     case 0xB3: NEED(9);                /* WINDOW x1 x2 y1 y2 -- PGC order */
         gep[13]=gl_i16(p+1); gep[15]=gl_i16(p+3);
-        gep[14]=gl_i16(p+5); gep[16]=gl_i16(p+7); return 9;
+        gep[14]=gl_i16(p+5); gep[16]=gl_i16(p+7);
+        if(glpmode) gl_recompose();    /* PROJCT's K tracks window width */
+        return 9;
     case 0xE0: NEED(2); glfill=(uint8_t)(p[1]&1); return 2;   /* PRMFIL */
     default: gl_err(1); return 1;      /* unknown opcode: log, skip a byte */
     }
@@ -1084,8 +1264,8 @@ static uint8_t memrd(uint16_t ad){
     case GEID:   return 0x45;                      /* 'E' -- presence probe */
     /* 9c: the parameter file reads back (par[GESEL] lo/hi; reads do NOT
        auto-increment -- only the high WRITE commits-and-increments) */
-    case GEVAL:  return (uint8_t)(gesel<23 ? ((uint16_t)gep[gesel] & 0xFF) : 0xFF);
-    case GEVALH: return (uint8_t)(gesel<23 ? ((uint16_t)gep[gesel] >> 8) : 0xFF);
+    case GEVAL:  return (uint8_t)(gesel<25 ? ((uint16_t)gep[gesel] & 0xFF) : 0xFF);
+    case GEVALH: return (uint8_t)(gesel<25 ? ((uint16_t)gep[gesel] >> 8) : 0xFF);
     /* Stage 10 GL port. busy (bit6) never reads 1: interpretation is
        instant, the same licence as GPU BUSY / GESTAT above. */
     case GLSTAT: return (uint8_t)((glflen>=GLFMAX?0x80:0) |
@@ -1148,7 +1328,7 @@ static void memwr(uint16_t ad,uint8_t v){
     switch(ad){
       case GESEL:  gesel=v; return;
       case GEVAL:  gevlo=v; return;
-      case GEVALH: if(gesel<23) gep[gesel]=(int16_t)((v<<8)|gevlo);
+      case GEVALH: if(gesel<25) gep[gesel]=(int16_t)((v<<8)|gevlo);
                    gesel++; return;
       case GEUP:   if(gecur<sizeof gemem) gemem[gecur++]=v; return;
       case GLDATA: gl_push(v); return;   /* stage 10: one command-stream byte */
