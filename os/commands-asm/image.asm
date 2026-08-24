@@ -13,8 +13,9 @@
 ;#use abi
 ;#use gfx
 
-GEIDR   = $FF45                 ; geometry-engine probe ('E' when fitted)
-GECMDR  = $FF43                 ; its command port: 4 = PGSYNC
+GLIDR   = $FF54                 ; graphics-language probe ('G' when fitted)
+GLDATAR = $FF50                 ; its command FIFO: opcode 3 = PGSYNC
+GLSTATR = $FF51                 ; bit6 = busy: wait the PGSYNC out
 
         .org $6A00
         TPA2L
@@ -419,12 +420,16 @@ g_d5:   LDA v_h
         LDA v_h+1
         INC
         STA v_h+1
-g_sync: LDA GEIDR               ; geometry engine fitted? PGSYNC first, so
-        LDB #'E'                ;   the grab reads what the panel shows
+g_sync: LDA GLIDR               ; GL engine fitted? PGSYNC first, so
+        LDB #'G'                ;   the grab reads what the panel shows
         CMP
         JNZ g_open
-        LDA #4
-        STA GECMDR
+        LDA #3
+        STA GLDATAR
+g_syw:  LDA GLSTATR             ; wait the verb out before grabbing
+        LDB #64
+        AND
+        JNZ g_syw
 g_open: LDA #<path              ; replace an existing file: resolve, delete,
         TAP1L                   ;   re-resolve (FDELETE walked the dir)
         LDA #>path

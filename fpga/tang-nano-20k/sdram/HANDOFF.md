@@ -277,6 +277,31 @@ c_gl_rtl_test now byte-compares BOTH scenes emulator-vs-RTL through the
 real pixel stack (10a and the 10b matrix scene: both identical, every
 pixel). Board verification pending (card was unplugged).
 
+**THE RECORD ENGINE IS RETIRED (2026-08-24, user-approved):** the $FF40
+interface (GEUP/GECMD/GESEL/GEID) is gone from emulator and RTL; the GL
+port is the one hardware 3D path, and GLSTAT bit6 now covers the walker
+(there is no GESTAT to poll). Migrations shipped with it: image (C and
+asm twin) does PGSYNC through GL, page speaks GL FLIP/PGSYNC, tri is a
+GL emitter with the software path kept for the TTL machine; rotate and
+camera answer ?No engine until GL command lists (10c) restore retained
+scenes; cube runs its software path. Suites re-anchored: c_gl_test's
+crown jewel compares GL against the LIB'S SOFTWARE WALK (stage 9 proved
+software == engine), plus a new FLIP/PGSYNC semantics part; tb_geom is
+deleted; tb_gl checks directed constants (105 exact spans). The command
+FIFO shrank to 64 bytes -- poll GLSTAT bit7, the documented contract.
+
+**AND STILL 10b DOES NOT PLACE.** The retirement bought 2,504 LUTs and
+`synth_gowin -family gw2a` (a flag build.sh had never passed) moved 19
+multipliers into the idle DSP blocks -- but nextpnr's "LUT4 92%" line
+UNDER-REPORTS on Gowin: ALU carry-chain cells occupy the same physical
+LUT sites, so true demand is LUT 19,249 + ALU 4,368 ~ 114%. p8x_geom
+alone is 8,739 LUT + 1,766 ALU -- half the chip -- dominated by the
+indexed matrix/polygon register arrays. The fix on the table: move the
+compose engine's scratch matrices into a BSRAM scratchpad (the FSM is
+already sequential; same trick that saved the trig tables). Until then
+10b is emulator-and-bench proven only; a 10a-with-retirement bitstream
+(~15.4k) would fit if interim silicon is wanted.
+
 Three operational notes for whoever drives the board over serial next:
 
 - **Two serial clients do not error -- they silently shred each other's

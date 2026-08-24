@@ -240,9 +240,31 @@ tri, rotate, camera, and lib_g3d stay green through 10a-10c. Once
 command lists ship, the stage-9 scene store is redundant (a scene is a
 command list) and the console commands migrate to trivial GL emitters;
 retiring the record front end then reclaims fabric for the text/flood
-rungs. **LUT budget is the watch-item:** stage 9 sits at 13,487 LUT4
-(65%); the interpreter + ASCII parser + matrix composer must fit in the
-remainder, and the retirement of the record path is the relief valve.
+rungs. **LUT budget is the watch-item:** stage 9 sat at 13,487 LUT4
+(65%); 10a's interpreter took it to 17,693 (85%), and 10b's first build
+BROKE PLACEMENT at 22,151 (106%) — the trig tables had synthesized as
+LUT case-ROMs. Lesson paid: **big constant tables go in BSRAM as
+clocked ROMs** (gen_trig.py emits them that way now; callers hold the
+address stable a cycle, which the compose FSM's C_NRM state already
+guarantees).
+
+**The retirement ledger (2026-08-24).** The record front end was retired
+(user-approved): −2,504 LUT4. DSP inference was unlocked (`synth_gowin
+-family gw2a` — the flag build.sh had never passed; 19 multipliers moved
+to the chip's idle MULT blocks). And still 10b does not place. The
+second lesson paid: **nextpnr's "LUT4: 92%" line under-reports on
+Gowin** — ALU cells (carry chains: every 16-bit add/sub/compare) occupy
+the SAME physical LUT sites, so real demand was 19,249 LUT + 4,368 ALU
+≈ 23.6k on 20,736 sites, ~114%. p8x_geom alone is 8,739 LUT + 1,766 ALU
+— half the chip — dominated by the indexed matrix/polygon register
+arrays (glmm/glvm/ms/ct, qx..qsy) whose read muxes and index arithmetic
+are pure fabric. The way out is the same trick as the trig tables:
+**the compose engine's scratch matrices belong in a BSRAM scratchpad**,
+serialized through one address port — the FSM is already sequential, so
+the cost is states, not wall-clock that matters. Until that lands, 10b
+is emulator-and-bench proven (byte-identical frames, all suites green)
+but not on silicon; 10a-with-retirement would fit (~15.4k) if an
+interim bitstream is wanted.
 
 ## Client story
 

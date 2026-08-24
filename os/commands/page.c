@@ -1,4 +1,4 @@
-/* page.c -- the framebuffer pages, from the shell (stage 9c).
+/* page.c -- the framebuffer pages, from the shell (stage 9c; GL since 10b).
  *
  *     PAGE          rejoin: draw page = display page (PGSYNC)
  *     PAGE SYNC     the same, spelled out
@@ -9,11 +9,18 @@
  * pages SPLIT -- drawing lands on the hidden page and the screen seems
  * frozen. `page` is the recovery: it rejoins them instantly. `page flip`
  * is the front door to manual double-buffering: draw a frame, flip, draw
- * the next. A flip waits for the panel's frame boundary (tear-free). */
+ * the next. A flip waits for the panel's frame boundary (tear-free).
+ *
+ * Since stage 10b the page verbs are GRAPHICS-LANGUAGE opcodes (FLIP=2,
+ * PGSYNC=3 -- see man gl / STAGE10-DESIGN.md) poked at the GL command
+ * FIFO; the stage-9 record engine that used to carry them is retired. */
 char path[2];
 
 //#use gfx
-//#use g3d
+
+//#define GLID   0xFF54  /* GL presence probe: 'G' when fitted           */
+//#define GLDATA 0xFF50  /* the command FIFO: one opcode byte per verb   */
+//#define GLSTAT 0xFF51  /* bit6 = busy (a flip holds it to the frame)   */
 
 char *ap;
 
@@ -26,10 +33,11 @@ int main() {
         return 0;
     }
     if (gpresent() == 0) { puts("?No display"); return 1; }
-    if (g3probe() == 0) { puts("?No engine"); return 1; }
+    if (peek(GLID) != 71) { puts("?No GL engine"); return 1; }
     f = 0;
     if (*ap == 'f' || *ap == 'F') { f = 1; }
-    if (f) { g3flip(); }
-    else { g3sync(); }
+    if (f) { poke(GLDATA, 2); }
+    else { poke(GLDATA, 3); }
+    while (peek(GLSTAT) & 64) { }      /* a flip waits for the frame tick */
     return 0;
 }

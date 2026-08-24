@@ -22,7 +22,6 @@ module tb;
   reg clk=0, rst=1; always #5 clk=~clk;
 
   // ---- CPU-side buses -------------------------------------------------------
-  reg         sel=0, wr=0;             // geometry-engine window ($FF40)
   reg         gl_sel=0, gl_wr=0;       // GL window ($FF50)
   reg         gsel=0, gwr=0;           // gfx window ($FF20, boot replica)
   reg  [3:0]  a=0;
@@ -38,9 +37,6 @@ module tb;
   wire e_req, e_we, e_word, e_ack, e_ready;
   wire [22:0] e_addr;
   wire [15:0] e_din;
-  wire        g_req, g_we, g_ack, g_ready;
-  wire [22:0] g_addr;
-  wire [15:0] g_din;
 
   wire        c_rd, c_wr, c_word, c_ready, c_busy;
   wire [22:0] c_addr;
@@ -61,12 +57,10 @@ module tb;
   wire [3:0] m_DQM;
 
   p8x_geom GEOM(.clk(clk), .rst(rst),
-    .sel(sel), .a(a), .wr(wr), .wdata(wdata), .rdata(rdata),
+    .a(a), .wdata(wdata), .rdata(rdata),
     .gl_sel(gl_sel), .gl_wr(gl_wr), .gl_rd(1'b0),
     .gm_own(gm_own), .gm_wr(gm_wr), .gm_a(gm_a), .gm_wdata(gm_wdata),
     .gm_rdata(gfx_rdata),
-    .g_req(g_req), .g_we(g_we), .g_addr(g_addr), .g_din(g_din),
-    .g_ack(g_ack), .g_ready(g_ready), .g_dout(c_dout),
     .frame_tick(frame_tick), .draw_pg(draw_pg), .disp_pg(disp_pg));
 
   gfx GFX(.clk(clk), .rst(rst), .draw_pg(draw_pg),
@@ -84,8 +78,8 @@ module tb;
     .c_ready(c_ready), .c_busy(c_busy),
     .s_req(1'b0), .s_addr(23'd0), .s_ack(), .s_ready(),
     .f_req(1'b0), .f_ack(),
-    .g_req(g_req), .g_we(g_we), .g_addr(g_addr), .g_din(g_din),
-    .g_ack(g_ack), .g_ready(g_ready),
+    .g_req(1'b0), .g_we(1'b0), .g_addr(23'd0), .g_din(16'd0),
+    .g_ack(), .g_ready(),
     .e_req(e_req), .e_we(e_we), .e_word(e_word), .e_addr(e_addr),
     .e_din(e_din), .e_ack(e_ack), .e_ready(e_ready));
 
@@ -125,8 +119,13 @@ module tb;
       repeat (4) @(posedge clk);
     end
   endtask
-  task glb(input [7:0] v);                          // one GL stream byte
+  task glb(input [7:0] v);                          // one GL stream byte,
+    integer n;                                      //   with backpressure
     begin
+      n = 0; a = 4'h1; gl_sel = 1; #1;
+      while (rdata[7] && n < 1000000) begin @(negedge clk); #1; n = n + 1; end
+      gl_sel = 0;
+      if (n >= 1000000) begin $display("FAIL: FIFO never drained"); $finish(1); end
       @(posedge clk); gl_sel <= 1; gl_wr <= 1; a <= 4'h0; wdata <= v;
       @(posedge clk); gl_wr <= 0; gl_sel <= 0;
       repeat (6) @(posedge clk);                    // CPU-poke pacing
@@ -146,9 +145,7 @@ module tb;
     begin
       n = 0; a = 4'h1; gl_sel = 1; #1;
       while (rdata[6] && n < 4000000) begin @(negedge clk); #1; n = n + 1; end
-      gl_sel = 0; a = 4'h4; sel = 1; #1;
-      while (rdata[7] && n < 4000000) begin @(negedge clk); #1; n = n + 1; end
-      sel = 0;
+      gl_sel = 0;
       if (n >= 4000000) begin $display("TB-GL-MPX: FAIL (never idle)"); $finish(1); end
       // the walker hands the LAST op to the device and idles -- the device
       // (and the controller behind it) may still be drawing it. Software

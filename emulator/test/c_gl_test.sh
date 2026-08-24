@@ -6,10 +6,11 @@
 #      GLSTAT's error bit follows.
 #   2. THE crown-jewel: one mixed scene (coloured 3D lines -- clipped,
 #      near-clipped, plain -- and two filled TRIs) drawn twice, once through
-#      the stage-9 record engine (lib_g3d upload + render) and once as a GL
-#      hex command stream (WINDOW/VWPORT/FLOOD/COLOR/MOVE3/DRAW3/PRMFIL/
-#      POLY3). The two framebuffers must be BYTE-IDENTICAL: the language is
-#      a new transport, not new pixels.
+#      lib_g3d's SOFTWARE pipeline (g3render; the record engine is retired,
+#      and the stage-9 identity proof pinned software == engine pixels) and
+#      once as a GL hex command stream (WINDOW/VWPORT/FLOOD/COLOR/MOVE3/
+#      DRAW3/PRMFIL/POLY3). The two framebuffers must be BYTE-IDENTICAL:
+#      the language is a new transport, not new pixels.
 #   3. 2D verbs against an exact 1:1 window->viewport mapping (mapx(x)=x,
 #      mapy(y)=135-y): CLEARS ground colour, DRAW/DRAWR lines, a PRMFIL
 #      RECT, POINT -- spot-checked in the PPM by a host replica.
@@ -53,9 +54,9 @@ int main() {
     tp[3] = 140;    tp[4] = 60;      tp[5] = 260;
     tp[6] = 0 - 40; tp[7] = 10;      tp[8] = 200;
     g3tri(tp, 1);
-    g3up();
-    g3flags(1);
-    g3go();
+    g3render();                /* the lib's software walk: the record
+                                  engine is RETIRED (stage 10b), and stage
+                                  9 proved software == engine pixels */
     puts("ADONE");
     return 0;
 }
@@ -182,11 +183,11 @@ echo "GLID probe + error FIFO OK"
 # ---- 2: record engine vs GL stream, byte-identical --------------------------
 printf 'B\rrun /bin/gla.bin\r' > gl_a.in
 ../p8xemu -N -i gl_a.in -c gl.img -l 300000000 -g gl_a.ppm eeprom.bin > gl_a.out 2>/dev/null || true
-grep -q ADONE gl_a.out || fail "record-engine scene did not finish"
+grep -q ADONE gl_a.out || fail "software-lib scene did not finish"
 printf 'B\rrun /bin/glb.bin\r' > gl_b.in
 ../p8xemu -N -i gl_b.in -c gl.img -l 300000000 -g gl_b.ppm eeprom.bin > gl_b.out 2>/dev/null || true
 grep -q BDONE gl_b.out || fail "GL-stream scene did not finish"
-cmp gl_a.ppm gl_b.ppm || fail "GL stream and record engine framebuffers differ"
+cmp gl_a.ppm gl_b.ppm || fail "GL stream and software-lib framebuffers differ"
 python3 - <<'EOF' || exit 1
 # the scene must actually be THERE: the first tri's centroid is not black
 data = open("gl_b.ppm","rb").read()
@@ -194,7 +195,7 @@ hdr = data.split(b"\n",3); w,h = map(int,hdr[1].split()); px = hdr[3]
 o = (170*w + 239)*3          # inside tri 1 (screen ~239,170)
 assert px[o:o+3] != b"\x00\x00\x00", "filled tri missing at probe point"
 EOF
-echo "record engine vs GL stream byte-identical (and non-empty)"
+echo "software lib vs GL stream byte-identical (and non-empty)"
 
 # ---- 3: 2D verbs spot pixels ------------------------------------------------
 printf 'B\rrun /bin/gl2.bin\r' > gl_2.in
@@ -222,4 +223,57 @@ expect(100, 60, GREY,  "untouched viewport interior stays ground")
 EOF
 echo "2D verbs spot pixels OK"
 
-echo "C-GL TEST: PASS (probe+errors, engine-vs-GL byte-identical scene, 2D verbs)"
+# ---- 4: FLIP / PGSYNC semantics (the coverage the retired record-engine
+#         suite carried): display shows the FLIPPED frame, drawing after a
+#         flip lands on the hidden page, PGSYNC rejoins the pages ----------
+cat > gl_f.c <<'EOF'
+int glb(int v) { poke(65360, v); return 0; }
+int glw(int v) { glb(v & 255); glb(v >> 8); return 0; }
+int hline(int y) {
+    glb(16); glw(20); glw(y);          /* MOVE 20 y  */
+    glb(40); glw(220); glw(y);         /* DRAW 220 y */
+    return 0;
+}
+int main() {
+    int m;
+    m = *argstr();
+    glb(15); glb(0); glb(0); glb(0);               /* CLEARS black */
+    glb(179); glw(0); glw(239); glw(0); glw(135);  /* WINDOW 1:1 */
+    glb(178); glw(0); glw(239); glw(0); glw(135);
+    glb(6); glb(31); glb(63); glb(31);             /* COLOR white */
+    hline(10);                                     /* line A */
+    glb(2);                                        /* FLIP */
+    if (m == '2') { hline(20); }                   /* B: the hidden page */
+    if (m == '3') { hline(20); glb(2); }           /* ...flipped in */
+    if (m == '4') { glb(3); hline(30); }           /* PGSYNC, then C */
+    puts("FDONE");
+    return 0;
+}
+EOF
+python3 $ROOT/compiler/p8cc.py gl_f.c -o gl_f.asm >/dev/null
+python3 $ROOT/assembler/p8xasm.py gl_f.asm -o gl_f.bin --base 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put gl.img gl_f.bin --name /bin/glf.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+
+glf_check() {   # $1 = mode, $2 = visible rows, $3 = hidden rows
+    printf 'B\rrun /bin/glf.bin %s\r' "$1" > gl_f.in
+    ../p8xemu -N -i gl_f.in -c gl.img -l 300000000 -g gl_f.ppm eeprom.bin > gl_f.out 2>/dev/null || true
+    grep -q FDONE gl_f.out || fail "flip test run $1 did not finish"
+    python3 - "$2" "$3" <<'PYEOF' || exit 1
+import sys
+data = open("gl_f.ppm","rb").read()
+hdr = data.split(b"\n",3); W,H = map(int,hdr[1].split()); px = hdr[3]
+def lum(y):
+    return sum(px[(y*W+x)*3] for x in range(20,221))
+for y in [int(v) for v in sys.argv[1].split(",") if v]:
+    assert lum(y) > 600, "expected row %d visible" % y
+for y in [int(v) for v in sys.argv[2].split(",") if v]:
+    assert lum(y) == 0, "expected row %d hidden" % y
+PYEOF
+}
+glf_check 1 125 115,105        # A flipped in; nothing else
+glf_check 2 125 115            # B drawn after the flip stays hidden
+glf_check 3 115 125            # second flip shows B, hides A
+glf_check 4 125,105 115        # PGSYNC rejoins: C lands on the shown page
+echo "FLIP/PGSYNC semantics OK"
+
+echo "C-GL TEST: PASS (probe+errors, software-lib-vs-GL byte-identical scene, 2D verbs, FLIP/PGSYNC)"

@@ -1,0 +1,62 @@
+NAME
+    gl - the graphics language: the machine's hardware 3D/2D engine
+
+SYNOPSIS
+    POKE the command stream at GLDATA ($FF50), one byte at a time
+
+DESCRIPTION
+    A PGC-style graphics processor (modelled on the Matrox PG-640A) in
+    the FPGA fabric: it holds the modelling and viewing matrices, the
+    window, viewport and clip planes, and draws 2D and 3D primitives
+    through the display engine -- all driven by a byte COMMAND STREAM,
+    not registers. Anything that can poke a byte can render: C, BASIC,
+    even the monitor. Commands are an opcode byte plus little-endian
+    16-bit parameters (hex mode; an ASCII mode arrives at stage 10d).
+
+    The port ($FF50-$FF57):
+      GLDATA $FF50  write: push one command byte into the FIFO
+      GLSTAT $FF51  read: bit7 FIFO full (wait before pushing),
+                          bit6 busy, bit1 error pending, bit0 readback
+      GLRB   $FF52  read: readback FIFO (stage 10e; 0 for now)
+      GLERR  $FF53  read: pop one error byte (0 = none): 1 unknown
+                          opcode, 2 bad parameter, 3 mode not fitted,
+                          4 FIFO overflow
+      GLID   $FF54  read: 'G' ($47) -- the presence probe
+
+    The verbs (opcode / parameters):
+      01 NOOP        02 FLIP        03 PGSYNC      04 RESETF
+      05 WAIT n      06 COLOR r g b (bytes)        07 FLOOD r g b
+      08 POINT       09 POINT3      0F CLEARS r g b (BOTH pages)
+      10 MOVE x y    11 MOVER dx dy 12 MOVE3 x y z 13 MOVER3
+      28 DRAW x y    29 DRAWR       2A DRAW3 x y z 2B DRAWR3
+      30 POLY n xy.. 31 POLYR       32 POLY3 n xyz.. 33 POLYR3
+      34 RECT x y    35 RECTR       43 "CA "/"CX " (mode)
+      90 MDIDEN      91 MDORG x y z 92 MDSCAL sx sy sz (8.8)
+      93 MDROTX deg  94 MDROTY deg  95 MDROTZ deg  96 MDTRAN x y z
+      97 MDMATX 12w  A0 VWIDEN      A1 VWRPT x y z A3 VWROTX deg
+      A4 VWROTY deg  A5 VWROTZ deg  A7 VWMATX 9w   A8 DISTH d
+      A9 DISTY d     AA CLIPH f     AB CLIPY f     AF CONVRT
+      B0 PROJCT ang  B1 DISTAN d    B2 VWPORT x1 x2 y1 y2
+      B3 WINDOW x1 x2 y1 y2         E0 PRMFIL f
+
+    3D pipeline: modelling matrix (MD*, composed in command order about
+    the MDORG pivot), viewing matrix (VW*, orbiting the VWRPT reference
+    point, DISTAN backing the viewer off), projection (PROJCT angle;
+    0 = orthographic; power-up = the classic focal-256 camera), hither/
+    yon clipping (DISTH/DISTY from the reference point, enabled by
+    CLIPH/CLIPY), window clip, viewport map. 2D primitives live in
+    window space: no matrix, just clip and map. PRMFIL 1 fills closed
+    primitives (POLY3 3 ... is the filled triangle). WINDOW and VWPORT
+    take PGC parameter order: x1 x2 y1 y2.
+
+    From BASIC, a poke loop is the whole driver:
+      10 REM white filled triangle, house frame
+      20 POKE 65360,179 : REM WINDOW ... (see the opcode table)
+
+EXAMPLES
+    POKE 65360,2      flip the pages (PAGE FLIP does the same)
+    POKE 65360,3      rejoin them (PAGE)
+
+SEE ALSO
+    tri, page, image, g3d, gfx; STAGE10-DESIGN.md and the PG-640A
+    manual (docs/reference/pg640a.pdf) in the repo

@@ -231,10 +231,11 @@ static uint16_t mdu_exec(uint16_t a, uint16_t b, uint16_t c){
    both per the contract. Rendering is instant (the GPU-BUSY licence). */
 static void gpu_line(int x0,int y0,int x1,int y1,uint16_t c);
 static void gpu_box(int x0,int y0,int x1,int y1,uint16_t c,int fill);
-#define GEMAXE 4096                    /* list cap: count reg sanity bound */
-static uint8_t  gemem[GEMAXE*12];      /* the edge list ($100000 on the board) */
-static uint32_t gecur;                 /* upload cursor */
-static uint8_t  gesel, gevlo, geerr;   /* param index, GEVAL low latch, err */
+/* RETIRED (stage 10b): the $FF40 record-engine interface -- GEUP list
+   upload, GECMD RENDER, the GESEL/GEVAL register file, GEID. The GL
+   command port is the one hardware 3D interface now; gep[] lives on as
+   the INTERNAL parameter file the GL verbs compose into. lib_g3d's GEID
+   probe finds a floating bus and falls back to its software walk. */
 static int16_t  gep[25];               /* the parameter file (stage 10b: 23
                                           near plane, 24 far plane) */
 
@@ -245,7 +246,6 @@ static void ge_reset(void){            /* power-on parameter state */
     gep[21]=3;                         /* flags: erase + flip */
     gep[23]=16;                        /* near plane (the stage-7..9 z>=16) */
     gep[24]=32767;                     /* far plane: int16 max = no far clip */
-    gesel=0; gevlo=0; gecur=0; geerr=0;
 }
 
 static int16_t ge_md(int16_t a,int16_t b,int16_t c){
@@ -413,12 +413,6 @@ static void ge_tri3(const int16_t *vv, int fill){
             ge_sline(sx[p],sy[p],sx[(p+1)%nq],sy[(p+1)%nq]);
     }
 }
-static void ge_tri(const uint8_t *e, int fill){   /* record-byte wrapper */
-    int16_t vv[9];
-    for(int k=0;k<9;k++) vv[k]=(int16_t)(e[k*2] | (e[k*2+1]<<8));
-    ge_tri3(vv, fill);
-}
-
 /* the transformed-LINE tail: near clip -> perspective divide -> window
    Cohen-Sutherland -> viewport map -> device LINE. w = the two vertices
    AFTER ge_xform. Shared verbatim by the record walk and the stage-10 GL
@@ -476,43 +470,6 @@ static void ge_line3t(const int16_t *w){
         int16_t py1=(int16_t)(gep[20]-ge_md((int16_t)(y1-gep[14]),(int16_t)(gep[20]-gep[18]),(int16_t)(gep[16]-gep[14])));
         gpu_line(px0,py0,px1,py1,gcol);
     }
-}
-
-static void ge_render(void){
-    int n = gep[22];
-    size_t off = 0;
-    if(n<0 || n>GEMAXE){ geerr=1; return; }
-    geerr=0;
-    /* erase = a pen-0 BOXF of the viewport. Stage 9: records are TYPED and
-       carry their own colour (STAGE9-DESIGN.md) -- the engine sets the pen
-       per record and leaves it holding the LAST record's colour. */
-    if(gep[21]&1) gpu_box(gep[17],gep[18],gep[19],gep[20],0,1);
-    for(int i=0;i<n;i++){
-        const uint8_t *e = gemem + off;
-        int16_t v[6], w[6];
-        uint8_t rtype, rflags;
-        if(off + 16 > sizeof gemem){ geerr=1; return; }
-        rtype = e[0]; rflags = e[1];
-        gcol = (uint16_t)(e[2] | (e[3]<<8));      /* the record's colour */
-        if(rtype == 2){                           /* TRI (stage 9b) */
-            if(off + 22 > sizeof gemem){ geerr=1; return; }
-            ge_tri(e + 4, rflags & 1);
-            off += 22;
-            continue;
-        }
-        if(rtype != 1){ geerr=1; return; }        /* else: LINE */
-        off += 16;
-        for(int k=0;k<6;k++) v[k]=(int16_t)(e[4+k*2] | (e[5+k*2]<<8));
-        for(int p=0;p<2;p++)                    /* v' = (M*v >>> 8) + T */
-            for(int r=0;r<3;r++){
-                int32_t acc = (int32_t)gep[r*3+0]*v[p*3+0]
-                            + (int32_t)gep[r*3+1]*v[p*3+1]
-                            + (int32_t)gep[r*3+2]*v[p*3+2];
-                w[p*3+r] = (int16_t)((acc>>8) + gep[9+r]);
-            }
-        ge_line3t(w);
-    }
-    if(gep[21]&2) ge_flip();
 }
 
 /* ---- Stage 10: the GRAPHICS LANGUAGE ($FF50-$FF57, STAGE10-DESIGN.md) ----
@@ -1259,13 +1216,8 @@ static uint8_t memrd(uint16_t ad){
     case MDQH:   return (uint8_t)(mdq >> 8);
     case MDSTAT: return 0x00;
     case MDID:   return 0x4D;                      /* 'M' -- presence probe */
-    /* Geometry engine reads. Instant too: GESTAT never shows busy here. */
-    case GESTAT: return (uint8_t)(geerr ? 0x01 : 0x00);
-    case GEID:   return 0x45;                      /* 'E' -- presence probe */
-    /* 9c: the parameter file reads back (par[GESEL] lo/hi; reads do NOT
-       auto-increment -- only the high WRITE commits-and-increments) */
-    case GEVAL:  return (uint8_t)(gesel<25 ? ((uint16_t)gep[gesel] & 0xFF) : 0xFF);
-    case GEVALH: return (uint8_t)(gesel<25 ? ((uint16_t)gep[gesel] >> 8) : 0xFF);
+    /* The $FF40 record-engine window is RETIRED (stage 10b): reads float
+       to $FF like any absent card, so lib_g3d's GEID probe falls back. */
     /* Stage 10 GL port. busy (bit6) never reads 1: interpretation is
        instant, the same licence as GPU BUSY / GESTAT above. */
     case GLSTAT: return (uint8_t)((glflen>=GLFMAX?0x80:0) |
@@ -1326,19 +1278,7 @@ static void memwr(uint16_t ad,uint8_t v){
        commits reg[GESEL] and auto-increments, so a matrix uploads as one
        GESEL poke + 24 GEVAL pokes. */
     switch(ad){
-      case GESEL:  gesel=v; return;
-      case GEVAL:  gevlo=v; return;
-      case GEVALH: if(gesel<25) gep[gesel]=(int16_t)((v<<8)|gevlo);
-                   gesel++; return;
-      case GEUP:   if(gecur<sizeof gemem) gemem[gecur++]=v; return;
       case GLDATA: gl_push(v); return;   /* stage 10: one command-stream byte */
-      case GECMD:
-        if(v==1) gecur=0;
-        else if(v==2) ge_render();
-        else if(v==3) ge_flip();
-        else if(v==4) gfb=gfbd;          /* PGSYNC: back to single-buffer */
-        else geerr=1;
-        return;
     }
     /* The ATA task-file (feature + LBA) is a SHARED bus: both drives latch these
        writes; the CFHEAD DEV bit picks who executes the command. Mirror them to

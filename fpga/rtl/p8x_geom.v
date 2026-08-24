@@ -1,39 +1,38 @@
-// p8x_geom.v -- stage 8b: the geometry engine ($FF40-$FF4F).
+// p8x_geom.v -- the P8X graphics engine: the GL command port ($FF50) and
+// the transform/clip/draw pipeline behind it.
 //
-// The whole wireframe pipeline in fabric (STAGE8B-DESIGN.md): the edge list
-// lives in SDRAM at $100000 (uploaded through GEUP), a 12-word S7.8
-// matrix+translation lives in an indexed parameter file, and one RENDER
-// command fetches, transforms, near-clips, projects, window-clips, maps and
-// draws every edge -- by driving the DISPLAY'S OWN registers, exactly as
-// software would (gfx.v is unchanged; this module is a hardware BASIC).
-// The arithmetic is one mdu_core -- the same silicon contract as the MDU --
-// plus a sequential MAC for the matrix. The math is lib_g3d.c's pipeline
-// STEP FOR STEP (operand order changes truncation; don't "improve" it):
-// the emulator's ge_render() is the golden model all three answer to.
+// Stage 10 (STAGE10-DESIGN.md): a PGC-style graphics LANGUAGE. Bytes poked
+// at GLDATA queue in a FIFO; the consumer FSM decodes hex-mode commands
+// (opcode + int16-LE parameters) and executes each through the pipeline:
+// S_MAC transform -> near/yon clip -> perspective -> window CS -> viewport
+// map -> the display's own registers (gfx.v is unchanged; this module is
+// still a hardware BASIC). 2D primitives skip transform and projection.
+// Stage 10b adds the card-side matrices: MD*/VW* verbs compose submatrices
+// (trig ROMs, muldiv datapath) into the combined parameter-file matrix at
+// COMMAND time -- the per-vertex path never changed.
 //
-// GECMD: 1 rewinds the upload cursor, 2 RENDER, 3 FLIP, 4 PGSYNC (the
-// draw page rejoins the display page -- the only way back to the
-// single-buffer state, since a flip always leaves the pages opposite).
+// The stage-8b/9 record interface ($FF40 GEUP/GECMD/GESEL) is RETIRED
+// (stage 10b, for fabric): the GL language is the one hardware 3D path,
+// and lib_g3d's GEID probe finds a floating bus and falls back to its
+// software walk. The emulator's gl model is the golden model; tb_gl,
+// tb_gl_pix and tb_gl_mpx pin this module against it.
 //
 // Pages: this module owns the framebuffer page state. draw_pg feeds
 // gfx_mem (all pixels, CPU's included, and POINT's read-back); disp_pg
-// feeds sdram_video. A flip waits for frame_tick, then: disp_pg <= draw_pg
-// (show what was drawn), draw_pg <= ~draw_pg -- the rule that makes the
-// FIRST flip split the shared power-on page. GESTAT holds busy until a
-// pending flip is consumed, so back-to-back renders pace to the panel.
+// feeds sdram_video. A flip (GL FLIP, opcode 02) waits for frame_tick,
+// then: disp_pg <= draw_pg, draw_pg <= ~draw_pg -- the rule that makes
+// the FIRST flip split the shared power-on page. GLSTAT bit6 holds busy
+// through it; PGSYNC (03) rejoins the pages instantly.
 //
-// CPU writes while busy are dropped (poll GESTAT, the house rule), and the
-// gfx register port belongs to the engine while it renders -- don't draw
-// during a render. GEID reads 'E' ($45): the presence probe.
-
+// The gfx register port belongs to the engine while it draws (gm_own) --
+// software must not race it; poll GLSTAT bit6, the house rule.
 module p8x_geom (
   input             clk,
   input             rst,
 
-  // CPU register port: sel covers $FF40-$FF4F, a is the low nibble.
-  input             sel,
+  // The $FF40 record-engine register window is RETIRED (stage 10b): the
+  // GL command port is the one interface. a/wdata serve the GL window.
   input      [3:0]  a,
-  input             wr,
   input      [7:0]  wdata,
   output reg [7:0]  rdata,
 
@@ -50,53 +49,25 @@ module p8x_geom (
   output reg [7:0]  gm_wdata,
   input      [7:0]  gm_rdata,
 
-  // SDRAM port (arbiter master g): list fetches and uploads, halfwords.
-  output reg        g_req,
-  output reg        g_we,
-  output reg [22:0] g_addr,
-  output reg [15:0] g_din,
-  input             g_ack,
-  input             g_ready,
-  input      [15:0] g_dout,
-
   // page state + the scanout's frame pulse
   input             frame_tick,
   output reg        draw_pg,
   output reg        disp_pg
 );
 
-  localparam [22:0] LIST_BASE = 23'h100000;
-  localparam [12:0] LIST_MAX  = 13'd4096;
-
   // ---- parameter file ------------------------------------------------------
   // 0-8 matrix m00..m22 (S7.8, row-major), 9-11 tx/ty/tz, 12 focal d,
   // 13-16 window, 17-20 viewport, 21 flags, 22 edge count,
   // 23 near plane, 24 far plane (stage 10b hither/yon; 16 / 32767 default).
   reg [15:0] par [0:24];
-  reg [4:0]  gesel;
-  reg [7:0]  gevlo;
-  reg        geerr;
-
-  // ---- upload path ---------------------------------------------------------
-  // GEUP bytes pair into halfwords and drain through a 4-deep FIFO: the g
-  // port can wait out a scanout chunk (~100 cycles), longer than the gap
-  // between CPU pokes, so an unbuffered write would lose bytes.
-  reg [16:0] upcur;                  // BYTE cursor into the list
-  reg [7:0]  uplo;                   // latched even byte
-  reg [15:0] uf_data [0:3];
-  reg [15:0] uf_addr [0:3];          // halfword offset within the list
-  reg [2:0]  uf_wp, uf_rp;
-  wire [2:0] uf_fill = uf_wp - uf_rp;
-  wire       uf_empty = (uf_wp == uf_rp);
 
   // ---- walker state --------------------------------------------------------
   reg [6:0]  state;
-  localparam S_IDLE=0,  S_ERA0=1,  S_ERA1=2,  S_ERAW=3,  S_ERAC=4,
-             S_PEN=5,   S_NEXT=6,  S_FRD=7,   S_FRDW=8,
+  localparam S_IDLE=0,  S_NEXT=6,
              S_MAC=9,   S_MACW=10,
              S_NC=11,   S_NCW=12,  S_PRJ=13,  S_PRJW=14,
              S_CS=15,   S_CSW=16,  S_MAP=17,  S_MAPW=18,
-             S_LIN=19,  S_LINB=20, S_LINC=21, S_FLIP=22, S_START=23,
+             S_LIN=19,  S_LINB=20, S_LINC=21, S_FLIP=22,
              S_LIN2=24,
              // stage 9b: the TRI record
              T_NC=25,   T_NCA=26,  T_NI0=27,  T_NI0W=28, T_NI1=29,
@@ -105,8 +76,7 @@ module p8x_geom (
              T_MYW=40,  T_PENW=41, T_FAN=42,  T_SRT1=43, T_SRT2=44,
              T_SRT3=45, T_DEG=46,  T_SY0=47,  T_SLOOP=48,T_SXA=49,
              T_SXAW=50, T_SXB=51,  T_SXBW=52, T_SPAN=53, T_BX=54,
-             T_BXB=55,  T_BXC=56,  T_SNEXT=57,T_ED=58,   T_EC=59,
-             T_ECW=60,
+             T_BXB=55,  T_BXC=56,  T_SNEXT=57,
              // stage 10: the GL box issuer (FLOOD/CLEARS/RECT fill) and
              // the RECT corner map -- walker states, launched by the GL
              // consumer below, so seq and the muldiv core are free
@@ -120,15 +90,9 @@ module p8x_geom (
              C_ML0=83,  C_ML1=84,  C_CP=85,   C_RCK=86,  C_RCKW=87,
              C_RCN=88,  CV_X=89,   CV_XW=90,  CV_YW=91;
 
-  reg [12:0] ei, ecnt;               // record index / count
-  reg [22:0] eaddr;                  // record cursor (bytes) -- records are
-                                     //   self-sizing, so this ADVANCES by
-                                     //   type instead of being computed
-  reg [15:0] rcol;                   // the record's colour (stage 9)
-  reg [7:0]  rtype;                  // record type: 1 = LINE, 2 = TRI
-  reg        rfill;                  // TRI: the FILL flag
+  reg [15:0] rcol;                   // the GL pen (COLOR)
+  reg        rfill;                  // T-path: FILL (GL fills always set it)
   reg        tri_m;                  // MAC writeback goes to tv (TRI mode)
-  reg        lret;                   // S_LINC returns to the outline loop
   reg [3:0]  k;                      // fetch word / general microstep
   reg [15:0] v [0:8];                // fetched vertex words (TRI: 9)
   reg [15:0] tvx [0:2];              // TRI: transformed vertices
@@ -165,11 +129,11 @@ module p8x_geom (
   // A byte FIFO the CPU can fill at ANY time (that is its whole point);
   // the consumer FSM below decodes hex-mode commands and executes them
   // through the walker's own pipeline states, one primitive at a time.
-  reg [7:0]  cf [0:255];             // command FIFO
-  reg [8:0]  cf_wp, cf_rp;
-  wire [8:0] cf_cnt  = cf_wp - cf_rp;
-  wire       cf_ne   = (cf_cnt != 9'd0);
-  wire       cf_full = cf_cnt[8];
+  reg [7:0]  cf [0:63];              // command FIFO (poll GLSTAT bit7)
+  reg [6:0]  cf_wp, cf_rp;
+  wire [6:0] cf_cnt  = cf_wp - cf_rp;
+  wire       cf_ne   = (cf_cnt != 7'd0);
+  wire       cf_full = cf_cnt[6];
   reg [7:0]  ef [0:15];              // error FIFO: 1 unknown opcode,
   reg [4:0]  ef_wp, ef_rp;           //   2 bad parameter, 3 mode not
   wire       ef_ne = (ef_wp != ef_rp);  // fitted, 4 command-FIFO overflow
@@ -226,10 +190,10 @@ module p8x_geom (
   wire [15:0] pvz = glop[0] ? (pw2 + c3z) : pw2;
   // dispatch gate: the walker must be idle and the CPU must not be
   // starting record work this very cycle (its write would be lost)
-  wire gl_can = (state == S_IDLE) && !(sel && wr);
+  wire gl_can = (state == S_IDLE);
 
   assign gm_own = (state != S_IDLE) && (state != S_FLIP);
-  wire busy = (state != S_IDLE) || !uf_empty;
+
 
   // ---- the shared arithmetic ----------------------------------------------
   reg         md_go;
@@ -246,9 +210,8 @@ module p8x_geom (
   wire [8:0]  cosidx = ($signed(ang) >= 16'sd270) ? ang[8:0] - 9'd270
                                                   : ang[8:0] + 9'd90;
   wire signed [15:0] sinq, cosq, tanq;
-  trig_sin  TSIN(.d(ang[8:0]), .q(sinq));
-  trig_sin  TCOS(.d(cosidx),   .q(cosq));
-  trig_tanh TTAN(.a(glproj[7:0]), .q(tanq));
+  trig_sin  TSIN(.clk(clk), .d(ang[8:0]), .d2(cosidx), .q(sinq), .q2(cosq));
+  trig_tanh TTAN(.clk(clk), .a(glproj[7:0]), .q(tanq));
   wire [15:0] cvz = ($signed(wz0) < $signed(par[23])) ? par[23]
                   : ($signed(par[24]) < $signed(wz0)) ? par[24] : wz0;
   wire [15:0] cm_a = (cmode == 2'd2) ? glvm[{2'd0,ci}*3 + {2'd0,ck}]
@@ -314,12 +277,10 @@ module p8x_geom (
     md_go <= 1'b0;
     gm_wr <= 1'b0;
     if (rst) begin
-      state <= S_IDLE; geerr <= 0; gesel <= 0; gevlo <= 0;
-      upcur <= 0; uplo <= 0; uf_wp <= 0; uf_rp <= 0;
-      g_req <= 0; g_we <= 0;
+      state <= S_IDLE;
       draw_pg <= 0; disp_pg <= 0; flip_pend <= 0;
-      ei <= 0; ecnt <= 0; seq <= 0; mdph <= 0; csn <= 0;
-      tri_m <= 0; lret <= 0; rfill <= 0; np <= 0; pp <= 0; ft <= 0;
+      seq <= 0; mdph <= 0; csn <= 0;
+      tri_m <= 0; rfill <= 0; np <= 0; pp <= 0; ft <= 0;
       cf_wp <= 0; cf_rp <= 0; ef_wp <= 0; ef_rp <= 0;
       glst <= G_OP; glop <= 0; pi <= 0; pneed <= 0; glnv <= 0;
       glpoly3 <= 0; glpfill <= 0; glph <= 0; gred <= 0;
@@ -350,144 +311,27 @@ module p8x_geom (
       gldist <= 0;                       // dist 0 = the stage-9 camera
     end else begin
 
-      // ---- CPU register writes: gated on the WALKER, not on `busy` -- busy
-      // includes the upload FIFO, and a GEUP burst must not drop its own
-      // successor bytes (the FIFO carries its own overrun check). Writes
-      // during a render or a pending flip are dropped, the house rule. ----
-      if (sel && wr && state == S_IDLE) begin
-        case (a)
-          4'h0: gesel <= wdata[4:0];
-          4'h1: gevlo <= wdata;
-          4'hA: begin                       // GEVALH commits, auto-increments
-            if (gesel < 5'd25) par[gesel] <= {wdata, gevlo};
-            gesel <= gesel + 5'd1;
-          end
-          4'h2: begin                       // GEUP: pair bytes, queue halfwords
-            if (upcur[0] == 1'b0) uplo <= wdata;
-            else if (uf_fill < 3'd4) begin
-              uf_data[uf_wp[1:0]] <= {wdata, uplo};
-              uf_addr[uf_wp[1:0]] <= upcur[16:1];
-              uf_wp <= uf_wp + 3'd1;
-            end else geerr <= 1;            // overrun: visible, not silent
-            upcur <= upcur + 17'd1;
-          end
-          4'h3: case (wdata)
-            8'h01: upcur <= 0;              // rewind the upload cursor
-            8'h02: begin                    // RENDER
-              geerr <= 0; seq <= 0;
-              if (par[22] > {3'd0, LIST_MAX}) geerr <= 1;
-              else begin
-                ecnt <= par[22][12:0]; ei <= 0;
-                eaddr <= LIST_BASE;     // the record cursor walks from here
-                state <= S_START;       // busy NOW; work starts once the
-              end                       //   upload FIFO has drained
-            end
-            8'h03: begin flip_pend <= 1; state <= S_FLIP; end
-            8'h04: draw_pg <= disp_pg;  // PGSYNC: back to single-buffer,
-                                        //   instant (no vsync involved)
-            default: geerr <= 1;
-          endcase
-          default: ;
-        endcase
-      end
-
       // ---- stage 10: GL port accesses (any time -- that is the point) ------
       if (gl_wr && a[2:0] == 3'd0) begin           // GLDATA: push one byte
         if (cf_full) begin
           if (ef_wp - ef_rp != 5'd16) begin ef[ef_wp[3:0]] <= 8'd4;
                                             ef_wp <= ef_wp + 5'd1; end
         end else begin
-          cf[cf_wp[7:0]] <= wdata;
-          cf_wp <= cf_wp + 9'd1;
+          cf[cf_wp[5:0]] <= wdata;
+          cf_wp <= cf_wp + 7'd1;
         end
       end
       if (gl_rd && a[2:0] == 3'd3 && ef_ne)        // GLERR read pops
         ef_rp <= ef_rp + 5'd1;
 
-      // ---- upload FIFO drain (runs whenever the walker owns no fetch) ------
-      if (!uf_empty && !g_req &&
-          (state == S_IDLE || state == S_FLIP || state == S_START)) begin
-        g_addr <= LIST_BASE + {6'd0, uf_addr[uf_rp[1:0]], 1'b0};
-        g_din  <= uf_data[uf_rp[1:0]];
-        g_we   <= 1; g_req <= 1;
-      end
-      if (g_req && g_ack) begin
-        g_req <= 0;
-        if (g_we) begin g_we <= 0; uf_rp <= uf_rp + 3'd1; end
-      end
-
       // ---- the walker ------------------------------------------------------
       case (state)
         S_IDLE: ;
 
-        S_START: if (uf_empty && !g_req)
-          state <= (par[21][0]) ? S_ERA0 : S_PEN;
-
-        // erase: pen 0, box = viewport, BOXFILL (through the gfx registers)
-        S_ERA0: begin gm_a <= 4'h4; gm_wdata <= 8'h00; gm_wr <= 1;  // GCOL=0
-                      seq <= 0; state <= S_ERA1; end
-        S_ERA1: begin                       // 8 coordinate-byte writes
-          case (seq)
-            3'd0: begin gm_a<=4'h0; gm_wdata<=par[17][7:0];  end
-            3'd1: begin gm_a<=4'h9; gm_wdata<=par[17][15:8]; end
-            3'd2: begin gm_a<=4'h1; gm_wdata<=par[18][7:0];  end
-            3'd3: begin gm_a<=4'hA; gm_wdata<=par[18][15:8]; end
-            3'd4: begin gm_a<=4'h2; gm_wdata<=par[19][7:0];  end
-            3'd5: begin gm_a<=4'hB; gm_wdata<=par[19][15:8]; end
-            3'd6: begin gm_a<=4'h3; gm_wdata<=par[20][7:0];  end
-            3'd7: begin gm_a<=4'hC; gm_wdata<=par[20][15:8]; end
-          endcase
-          gm_wr <= 1;
-          if (seq == 3'd7) state <= S_ERAW; else seq <= seq + 3'd1;
-        end
-        S_ERAW: begin gm_a <= 4'h6;         // poll GSTAT until idle
-                      if (gm_a == 4'h6 && !gm_rdata[7] && !gm_wr) state <= S_ERAC; end
-        S_ERAC: begin gm_a <= 4'h5; gm_wdata <= 8'h04; gm_wr <= 1;  // BOXFILL
-                      state <= S_PEN; seq <= 0; end
-
-        // stage 9: no forced pen -- each record writes its own colour at
-        // S_LIN; the pen ends holding the LAST record's colour.
-        S_PEN: state <= S_NEXT;
-
+        // every GL primitive exits here; the record loop is retired
         S_NEXT: begin
-          if (glact) begin             // a GL-injected primitive finished:
-            glact <= 0; gl2d <= 0;     //   back to idle, the consumer
-            state <= S_IDLE;           //   resumes -- never the record loop
-          end else if (ei == ecnt) begin
-            if (par[21][1]) begin flip_pend <= 1; state <= S_FLIP; end
-            else state <= S_IDLE;
-          end else begin
-            k <= 0; state <= S_FRD;    // eaddr already sits on the record
-          end
-        end
-        S_FRD: begin                        // one halfword of the edge
-          if (!g_req && uf_empty) begin
-            g_addr <= eaddr + {19'd0, k, 1'b0};
-            g_we <= 0; g_req <= 1; state <= S_FRDW;
-          end
-        end
-        S_FRDW: if (g_ready) begin
-          if (k == 4'd0) begin
-            rtype <= g_dout[7:0];      // type + flags halfword
-            rfill <= g_dout[8];
-            if (g_dout[7:0] != 8'd1 && g_dout[7:0] != 8'd2) begin
-              geerr <= 1; state <= S_IDLE;
-            end else begin k <= 4'd1; state <= S_FRD; end
-          end else if (k == 4'd1) begin
-            rcol <= g_dout;            // the record's colour
-            k <= 4'd2; state <= S_FRD;
-          end else begin
-            v[k - 2] <= g_dout;
-            if (rtype == 8'd1 && k == 4'd7) begin
-              eaddr <= eaddr + 23'd16; // LINE record: 16 bytes
-              tri_m <= 0;
-              mp <= 0; mr <= 0; mk <= 0; acc <= 0; state <= S_MAC;
-            end else if (rtype == 8'd2 && k == 4'd10) begin
-              eaddr <= eaddr + 23'd22; // TRI record: 22 bytes
-              tri_m <= 1;
-              mp <= 0; mr <= 0; mk <= 0; acc <= 0; state <= S_MAC;
-            end else begin k <= k + 4'd1; state <= S_FRD; end
-          end
+          glact <= 0; gl2d <= 0;
+          state <= S_IDLE;
         end
 
         // transform: acc = m[r][0..2] . v[p], then w = (acc>>>8) + t
@@ -528,7 +372,7 @@ module p8x_geom (
         // near clip (perspective only), lib order: end 0 first, then end 1
         S_NC: begin
           if (par[12] == 16'd0) begin csn <= 0; state <= S_CS; end
-          else if (z0_near && z1_near) begin ei <= ei + 13'd1; state <= S_NEXT; end
+          else if (z0_near && z1_near) begin state <= S_NEXT; end
           else if (z0_near) begin
             md_a <= (mdph[0]==1'b0) ? (wx1 - wx0) : (wy1 - wy0);
             md_b <= par[23] - wz0;  md_c <= wz1 - wz0;
@@ -551,7 +395,7 @@ module p8x_geom (
         end
         // yon clip (stage 10b), the mirror image against par[24]
         S_FC: begin
-          if (z0_far && z1_far) begin ei <= ei + 13'd1; state <= S_NEXT; end
+          if (z0_far && z1_far) begin state <= S_NEXT; end
           else if (z0_far) begin
             md_a <= (mdph[0]==1'b0) ? (wx1 - wx0) : (wy1 - wy0);
             md_b <= par[24] - wz0;  md_c <= wz1 - wz0;
@@ -596,7 +440,7 @@ module p8x_geom (
         S_CS: begin
           if ((oca | ocb) == 4'd0) begin mdph <= 0; state <= S_MAP; end
           else if ((oca & ocb) != 4'd0 || csn == 4'd8) begin
-            ei <= ei + 13'd1; state <= S_NEXT;
+            state <= S_NEXT;
           end else if (oca == 4'd0) begin   // swap so end 0 is outside
             wx0 <= wx1; wx1 <= wx0; wy0 <= wy1; wy1 <= wy0;
           end else begin
@@ -659,8 +503,7 @@ module p8x_geom (
         S_LINB: begin gm_a <= 4'h6;
                       if (gm_a == 4'h6 && !gm_rdata[7] && !gm_wr) state <= S_LINC; end
         S_LINC: begin gm_a <= 4'h5; gm_wdata <= 8'h02; gm_wr <= 1;  // LINE
-                      if (lret) begin lret <= 0; pp <= pp + 4'd1; state <= T_ED; end
-                      else begin ei <= ei + 13'd1; state <= S_NEXT; end end
+                      state <= S_NEXT; end
 
         // ==== stage 9b: the TRI record ====================================
         // near clip the polygon against z=16 (ortho copies straight through)
@@ -675,7 +518,7 @@ module p8x_geom (
         end
         T_NCA: begin
           if (pp == 4'd3) begin
-            if (np < 4'd3) begin ei <= ei + 13'd1; state <= S_NEXT; end
+            if (np < 4'd3) begin state <= S_NEXT; end
             else if (par[24] == 16'd32767) begin pp <= 0; state <= T_MP; end
             else begin pp <= 0; nq2 <= 0; state <= F_CA; end  // yon fitted
           end else begin
@@ -716,7 +559,7 @@ module p8x_geom (
         // keeping z<=far and inserting intersections, then copying back ====
         F_CA: begin
           if (pp == np) begin
-            if (nq2 < 4'd3) begin ei <= ei + 13'd1; state <= S_NEXT; end
+            if (nq2 < 4'd3) begin state <= S_NEXT; end
             else begin cpi <= 0; state <= F_CP; end
           end else begin
             nax <= qx[pp[2:0]]; nay <= qy[pp[2:0]]; naz <= qz[pp[2:0]];
@@ -764,9 +607,8 @@ module p8x_geom (
         // project + viewport-map each polygon vertex into qsx/qsy
         T_MP: begin
           if (pp == np) begin
-            if (rfill) begin seq <= 0; state <= T_PENW; end
-            else begin pp <= 0; state <= T_ED; end
-          end else begin
+            seq <= 0; state <= T_PENW;   // GL fills only: outline TRIs
+          end else begin                 //   draw as DRAW3 edges instead
             cxv <= qx[pp[2:0]]; cyv <= qy[pp[2:0]];
             // gl2d: a 2D fill's vertices are already window-space -- map
             // only, never project, whatever the focal parameter says
@@ -804,7 +646,7 @@ module p8x_geom (
                      ft <= 4'd1; state <= T_FAN; end
         end
         T_FAN: begin
-          if (ft + 4'd1 >= np) begin ei <= ei + 13'd1; state <= S_NEXT; end
+          if (ft + 4'd1 >= np) begin state <= S_NEXT; end
           else begin
             fx0 <= qsx[0];        fy0 <= qsy[0];
             fx1 <= qsx[ft[2:0]];  fy1 <= qsy[ft[2:0]];
@@ -889,41 +731,6 @@ module p8x_geom (
         T_SNEXT: begin
           if (fy == fy2 || fy2 == fy0) begin ft <= ft + 4'd1; state <= T_FAN; end
           else begin fy <= fy + 16'd1; state <= T_SLOOP; end
-        end
-
-        // outline: each polygon edge, screen-space CS against the viewport,
-        // then the LINE issuer (S_LIN) with a return ticket (lret)
-        T_ED: begin
-          if (pp == np) begin ei <= ei + 13'd1; state <= S_NEXT; end
-          else begin
-            ox0 <= qsx[pp[2:0]]; oy0 <= qsy[pp[2:0]];
-            ox1 <= qsx[(pp + 4'd1 == np) ? 3'd0 : pp[2:0] + 3'd1];
-            oy1 <= qsy[(pp + 4'd1 == np) ? 3'd0 : pp[2:0] + 3'd1];
-            csn <= 0; state <= T_EC;
-          end
-        end
-        T_EC: begin
-          if ((soa | sob) == 4'd0) begin
-            px0 <= ox0; py0 <= oy0; px1 <= ox1; py1 <= oy1;
-            lret <= 1; seq <= 0; state <= S_LIN;
-          end else if ((soa & sob) != 4'd0 || csn == 4'd8) begin
-            pp <= pp + 4'd1; state <= T_ED;
-          end else if (soa == 4'd0) begin
-            ox0 <= ox1; ox1 <= ox0; oy0 <= oy1; oy1 <= oy0;
-          end else begin
-            if (soa[0])      begin md_a <= oy1 - oy0; md_b <= par[17] - ox0; md_c <= ox1 - ox0; end
-            else if (soa[1]) begin md_a <= oy1 - oy0; md_b <= par[19] - ox0; md_c <= ox1 - ox0; end
-            else if (soa[2]) begin md_a <= ox1 - ox0; md_b <= par[18] - oy0; md_c <= oy1 - oy0; end
-            else             begin md_a <= ox1 - ox0; md_b <= par[20] - oy0; md_c <= oy1 - oy0; end
-            md_go <= 1; csn <= csn + 4'd1; state <= T_ECW;
-          end
-        end
-        T_ECW: if (md_done) begin
-          if (soa[0])      begin oy0 <= oy0 + md_q; ox0 <= par[17]; end
-          else if (soa[1]) begin oy0 <= oy0 + md_q; ox0 <= par[19]; end
-          else if (soa[2]) begin ox0 <= ox0 + md_q; oy0 <= par[18]; end
-          else             begin ox0 <= ox0 + md_q; oy0 <= par[20]; end
-          state <= T_EC;
         end
 
         // ==== stage 10: the GL box issuer =================================
@@ -1129,8 +936,8 @@ module p8x_geom (
       // needs more buffer than one vertex.
       case (glst)
         G_OP: if (cf_ne) begin
-          glop <= cf[cf_rp[7:0]]; cf_rp <= cf_rp + 9'd1; pi <= 0;
-          case (cf[cf_rp[7:0]])
+          glop <= cf[cf_rp[5:0]]; cf_rp <= cf_rp + 7'd1; pi <= 0;
+          case (cf[cf_rp[5:0]])
             8'h01, 8'h02, 8'h03, 8'h04,
             8'h08, 8'h09,
             8'h90, 8'hA0, 8'hAF:        begin pneed <= 5'd0; glst <= G_RUN; end
@@ -1167,7 +974,7 @@ module p8x_geom (
             end else glst <= G_PV;
           end else glst <= G_RUN;
         end else if (cf_ne) begin
-          pbuf[pi] <= cf[cf_rp[7:0]];
+          pbuf[pi] <= cf[cf_rp[5:0]];
           cf_rp <= cf_rp + 9'd1; pi <= pi + 5'd1;
         end
 
@@ -1186,7 +993,6 @@ module p8x_geom (
               par[17]<=0; par[18]<=0; par[19]<=0; par[20]<=0;
               par[21] <= 16'd3; par[22] <= 0;
               par[23] <= 16'd16; par[24] <= 16'd32767;
-              gesel <= 0; upcur <= 0; geerr <= 0;
               glfill <= 0; c2x <= 0; c2y <= 0; c3x <= 0; c3y <= 0; c3z <= 0;
               glproj <= 16'd60; gldist <= 0; rcol <= 16'hFFFF;
               for (i = 0; i < 12; i = i + 1) glmm[i] <= 0;
@@ -1360,7 +1166,7 @@ module p8x_geom (
 
         G_PV: if (pi == pneed) glst <= G_PRUN;            // one vertex ready
               else if (cf_ne) begin
-                pbuf[pi] <= cf[cf_rp[7:0]];
+                pbuf[pi] <= cf[cf_rp[5:0]];
                 cf_rp <= cf_rp + 9'd1; pi <= pi + 5'd1;
               end
 
@@ -1452,27 +1258,18 @@ module p8x_geom (
   end
 
   // GL busy: the consumer is mid-command or bytes wait in the FIFO
-  wire glbusy = (glst != G_OP) || cf_ne;
+  // busy covers the consumer AND the walker: with GESTAT retired,
+  // GLSTAT bit6 is how software waits out its own GL work
+  wire glbusy = (glst != G_OP) || cf_ne || (state != S_IDLE);
 
   always @(*) begin
-    if (gl_sel) begin
-      case (a[2:0])
-        3'd1:    rdata = {cf_full, glbusy, 4'd0, ef_ne, 1'b0};  // GLSTAT
-        3'd2:    rdata = 8'h00;                 // GLRB: empty until 10e
-        3'd3:    rdata = ef_ne ? ef[ef_rp[3:0]] : 8'h00;        // GLERR
-        3'd4:    rdata = 8'h47;                 // GLID: 'G'
-        default: rdata = 8'hFF;
-      endcase
-    end else begin
-      case (a)
-        4'h4:    rdata = {busy, 6'd0, geerr};   // GESTAT
-        4'h5:    rdata = 8'h45;                 // GEID: 'E'
-        // 9c: parameter readback (no auto-increment on reads)
-        4'h1:    rdata = (gesel < 5'd25) ? par[gesel][7:0]  : 8'hFF;
-        4'hA:    rdata = (gesel < 5'd25) ? par[gesel][15:8] : 8'hFF;
-        default: rdata = 8'hFF;
-      endcase
-    end
+    case (a[2:0])
+      3'd1:    rdata = {cf_full, glbusy, 4'd0, ef_ne, 1'b0};  // GLSTAT
+      3'd2:    rdata = 8'h00;                 // GLRB: empty until 10e
+      3'd3:    rdata = ef_ne ? ef[ef_rp[3:0]] : 8'h00;        // GLERR
+      3'd4:    rdata = 8'h47;                 // GLID: 'G'
+      default: rdata = 8'hFF;
+    endcase
   end
 
 endmodule

@@ -18,6 +18,11 @@ DESCRIPTION
     built from the two points and normalized with the library's 32-bit
     integer square root -- a few tenths of a second per invocation.
 
+    INTERIM (stage 10b): the record engine that held the persisted scene
+    is retired from the fabric -- this command answers ?No engine until
+    GL command lists (stage 10c) bring the retained scene back. The
+    emulator and the design doc carry the details (STAGE10-DESIGN.md).
+
 EXAMPLES
     tri -80 -80 300 80 -80 300 0 40 420 f 31 0 0
     camera -300 100 360 0 0 360    from up-left of the triangle

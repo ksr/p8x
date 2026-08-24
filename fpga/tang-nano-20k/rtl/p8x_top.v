@@ -170,13 +170,12 @@ module p8x_top(
   // The geometry engine (stage 8b, $FF40-$FF4F) needs the display and the
   // SDRAM, so it exists only on LCD builds; elsewhere the window floats to
   // $FF and lib_g3d's GEID probe falls back to the software walk.
-  wire is_geom  = (mem_addr >= 16'hFF40) && (mem_addr <= 16'hFF4F);
-  // The GL command port (stage 10, $FF50-$FF57) lives inside the geometry
-  // engine and shares its fate: LCD builds only, floats to $FF elsewhere
-  // so software's GLID probe fails clean.
+  // The GL command port (stage 10, $FF50-$FF57): LCD builds only, floats
+  // to $FF elsewhere so software's GLID probe fails clean. The $FF40
+  // record-engine window is RETIRED (stage 10b) -- it floats everywhere,
+  // and lib_g3d's GEID probe falls back to the software walk.
   wire is_gl    = (mem_addr >= 16'hFF50) && (mem_addr <= 16'hFF57);
 `else
-  wire is_geom  = 1'b0;
   wire is_gl    = 1'b0;
 `endif
 
@@ -252,9 +251,6 @@ module p8x_top(
   wire [22:0] e_addr;
   wire [15:0] e_din;
 
-  wire        g_req, g_we, g_ack, g_ready;
-  wire [22:0] g_addr;
-  wire [15:0] g_din;
 
   sdram_arb ARB(
     .clk(clk), .rst(rst),
@@ -263,8 +259,8 @@ module p8x_top(
     .c_ready(sd_ready), .c_busy(sd_busy),
     .s_req(1'b0), .s_addr(23'd0), .s_ack(), .s_ready(),
     .f_req(1'b0), .f_ack(),
-    .g_req(g_req), .g_we(g_we), .g_addr(g_addr), .g_din(g_din),
-    .g_ack(g_ack), .g_ready(g_ready),
+    .g_req(1'b0), .g_we(1'b0), .g_addr(23'd0), .g_din(16'd0),
+    .g_ack(), .g_ready(),
     .e_req(e_req), .e_we(e_we), .e_word(e_word), .e_addr(e_addr),
     .e_din(e_din), .e_ack(e_ack), .e_ready(e_ready));
 
@@ -279,16 +275,13 @@ module p8x_top(
   wire        draw_pg, disp_pg, frame_tick;
 
   p8x_geom GEOM(.clk(clk), .rst(rst),
-          .sel(is_geom), .a(mem_addr[3:0]),
-          .wr(cen && mem_we && is_geom),
+          .a(mem_addr[3:0]),
           .gl_sel(is_gl),
           .gl_wr(cen && mem_we && is_gl),
           .gl_rd(cen && mem_rd && is_gl),
           .wdata(mem_dout), .rdata(geom_rdata),
           .gm_own(gm_own), .gm_wr(gm_wr), .gm_a(gm_a), .gm_wdata(gm_wdata),
           .gm_rdata(gfx_rdata),
-          .g_req(g_req), .g_we(g_we), .g_addr(g_addr), .g_din(g_din),
-          .g_ack(g_ack), .g_ready(g_ready), .g_dout(sd_dout),
           .frame_tick(frame_tick), .draw_pg(draw_pg), .disp_pg(disp_pg));
 
   gfx GFX(.clk(clk), .rst(rst), .draw_pg(draw_pg),
@@ -321,7 +314,6 @@ module p8x_top(
                      acia_dat ? rx_hold :
                      is_cf    ? cf_rdata :
                      is_gfx   ? gfx_rdata :
-                     is_geom  ? geom_rdata :
                      is_gl    ? geom_rdata :
                      is_mdu   ? mdu_rdata : 8'hFF;
   assign mem_din = is_io ? io_rd : mem_q;

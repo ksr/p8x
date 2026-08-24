@@ -15,7 +15,7 @@ DESCRIPTION
     The frame is the house default: window -120..120 on the view plane,
     the centred square viewport, focal length 256 -- so a point at
     z=256 maps roughly 1:1, nearer looms, farther shrinks. Rendering
-    uses the geometry engine when fitted (the fabric clips, projects
+    uses the GL engine when fitted (the fabric clips, projects
     and scan-fills it) and the software pipeline otherwise -- the same
     pixels either way. No page flip: POINT reads back what was drawn.
 

@@ -1,21 +1,25 @@
-// tb_gl.v -- the stage-10a GL command port and hex interpreter
+// tb_gl.v -- the stage-10 GL command port and hex interpreter
 // (STAGE10-DESIGN.md), bench 3 of the verification ladder.
 //
-// The oracle for the 3D verbs is EQUALITY OF THE OP STREAM: one mixed scene
-// (two coloured LINEs and a filled TRI) is rendered first through the
-// stage-9 record engine (upload + RENDER -- the path tb_geom pins against
-// the host replica) and then as a GL hex command stream. The gfx stub
-// records every register-level operation both times; the two recordings
-// must match op for op -- the language is a transport, not new pixels.
-// (The absolute pixel truth chain is: tb_geom + the emulator suites; the
-// emulator's own c_gl_test does the framebuffer byte-compare.)
+// The record engine is RETIRED (stage 10b), so the oracle here is a
+// DIRECTED op-stream check: the gfx stub records every register-level
+// operation the engine issues for a mixed 3D scene (FLOOD erase, a plain
+// and a window-clipped coloured LINE, a filled POLY3), and the recording
+// must match the host replica's expected coordinates -- the same numbers
+// c_gl_test pins in the emulator, and the same scene tb_gl_pix proves
+// pixel-for-pixel against the emulator through the real memory stack.
+// (Until stage 10b these values were ALSO cross-checked live against the
+// stage-9 record path, op for op, before it was retired.)
 //
 // On top of that: absolute 2D-verb checks against the exact 1:1 window
 // mapping (mapx(x)=x, mapy(y)=135-y), the filled RECT's clamped box, the
 // CLEARS both-pages rule (two full-screen fills, draw page toggled between
 // and restored), WAIT's frame pacing, GLID, GLSTAT and the error FIFO.
+// glb() honours GLSTAT bit7 -- the FIFO is 64 bytes and backpressure is
+// the documented contract.
 //
-//   iverilog -g2012 -o tbgl tb_gl.v ../../rtl/p8x_geom.v ../../rtl/mdu_core.v ../../rtl/trigtab.v
+//   iverilog -g2012 -o tbgl tb_gl.v ../../rtl/p8x_geom.v ../../rtl/mdu_core.v \
+//            ../../rtl/trigtab.v
 //   ./tbgl
 `timescale 1ns/1ps
 
@@ -23,7 +27,6 @@ module tb;
   reg clk = 0, rst = 1;
   always #5 clk = ~clk;
 
-  reg        sel = 0, wr = 0;
   reg        gl_sel = 0, gl_wr = 0, gl_rd = 0;
   reg  [3:0] a = 0;
   reg  [7:0] wdata = 0;
@@ -33,41 +36,19 @@ module tb;
   wire [3:0]  gm_a;
   wire [7:0]  gm_wdata;
   reg  [7:0]  gm_rdata;
-  wire        g_req, g_we;
-  wire [22:0] g_addr;
-  wire [15:0] g_din;
-  reg         g_ack = 0, g_ready = 0;
-  reg  [15:0] g_dout = 0;
   reg         frame_tick = 0;
   wire        draw_pg, disp_pg;
 
   p8x_geom dut(.clk(clk), .rst(rst),
-               .sel(sel), .a(a), .wr(wr), .wdata(wdata), .rdata(rdata),
+               .a(a), .wdata(wdata), .rdata(rdata),
                .gl_sel(gl_sel), .gl_wr(gl_wr), .gl_rd(gl_rd),
                .gm_own(gm_own), .gm_wr(gm_wr), .gm_a(gm_a),
                .gm_wdata(gm_wdata), .gm_rdata(gm_rdata),
-               .g_req(g_req), .g_we(g_we), .g_addr(g_addr), .g_din(g_din),
-               .g_ack(g_ack), .g_ready(g_ready), .g_dout(g_dout),
                .frame_tick(frame_tick), .draw_pg(draw_pg), .disp_pg(disp_pg));
 
   integer errors = 0;
 
-  // ---- SDRAM stub: the list memory, 3-cycle acks --------------------------
-  reg [15:0] lmem [0:8191];
-  reg [1:0]  glat = 0;
-  always @(posedge clk) begin
-    g_ack <= 0; g_ready <= 0;
-    if (g_req && !g_ack && glat != 3) glat <= glat + 2'd1;
-    else if (g_req && glat == 3) begin
-      glat <= 0;
-      g_ack <= 1;
-      if (g_we) lmem[(g_addr - 23'h100000) >> 1] <= g_din;
-      else begin g_dout <= lmem[(g_addr - 23'h100000) >> 1]; g_ready <= 1; end
-    end
-  end
-
   // ---- gfx stub: record EVERY drawing op as (cmd, pen, box) ---------------
-  // op codes: 2 = LINE, 4 = BOXFILL (the only commands the engine issues)
   reg [15:0] rx0, ry0, rx1, ry1, rcolr;
   reg [3:0]  gbusy = 0;
   reg [7:0]  op_cmd [0:255];
@@ -112,28 +93,16 @@ module tb;
   end
 
   // ---- drivers -------------------------------------------------------------
-  task wr8(input [3:0] ra, input [7:0] v);
-    begin
-      @(negedge clk); sel = 1; wr = 1; a = ra; wdata = v;
-      @(negedge clk); sel = 0; wr = 0;
-    end
-  endtask
-  task wpar(input [4:0] idx, input [15:0] v);
-    begin
-      wr8(4'h0, {3'd0, idx});
-      wr8(4'h1, v[7:0]);
-      wr8(4'hA, v[15:8]);
-    end
-  endtask
-  task up16(input [15:0] v);
-    begin
-      wr8(4'h2, v[7:0]);  repeat (6) @(negedge clk);
-      wr8(4'h2, v[15:8]); repeat (6) @(negedge clk);
-    end
-  endtask
-  // GL port pokes: same 6-cycle pacing a real CPU beats by 10x
+  // GL pokes honour the FIFO-full bit: the 64-byte FIFO plus backpressure
+  // is the documented contract (real CPU pokes are far slower than this).
   task glb(input [7:0] v);
+    integer n;
     begin
+      n = 0; a = 4'h1; gl_sel = 1; #1;
+      while (rdata[7] && n < 200000) begin @(negedge clk); #1; n = n + 1; end
+      gl_sel = 0;
+      if (n >= 200000) begin
+        $display("FAIL: FIFO never drained"); errors = errors + 1; end
       @(negedge clk); gl_sel = 1; gl_wr = 1; a = 4'h0; wdata = v;
       @(negedge clk); gl_sel = 0; gl_wr = 0;
       repeat (6) @(negedge clk);
@@ -145,12 +114,10 @@ module tb;
   task gl_wait_idle;
     integer n;
     begin
+      // GLSTAT bit6 covers the consumer AND the walker (GESTAT is retired)
       n = 0; a = 4'h1; gl_sel = 1; #1;
-      // GLSTAT bit6 = interpreter busy; also wait out the walker via GESTAT
       while (rdata[6] && n < 400000) begin @(negedge clk); #1; n = n + 1; end
-      gl_sel = 0; a = 4'h4; sel = 1; #1;
-      while (rdata[7] && n < 400000) begin @(negedge clk); #1; n = n + 1; end
-      sel = 0;
+      gl_sel = 0;
       if (n >= 400000) begin
         $display("FAIL: GL never went idle"); errors = errors + 1; end
     end
@@ -161,15 +128,25 @@ module tb;
       @(negedge clk); gl_sel = 0; gl_rd = 0;
     end
   endtask
+  task expop(input integer i, input [7:0] cmd, input [15:0] pen,
+             input [15:0] x0, input [15:0] y0,
+             input [15:0] x1, input [15:0] y1);
+    begin
+      if (op_cmd[i] !== cmd || op_pen[i] !== pen ||
+          op_x0[i] !== x0 || op_y0[i] !== y0 ||
+          op_x1[i] !== x1 || op_y1[i] !== y1) begin
+        $display("FAIL: op %0d = cmd %0d pen %04X (%0d,%0d)-(%0d,%0d), want cmd %0d pen %04X (%0d,%0d)-(%0d,%0d)",
+                 i, op_cmd[i], op_pen[i],
+                 $signed(op_x0[i]), $signed(op_y0[i]),
+                 $signed(op_x1[i]), $signed(op_y1[i]),
+                 cmd, pen, $signed(x0), $signed(y0), $signed(x1), $signed(y1));
+        errors = errors + 1;
+      end
+    end
+  endtask
 
-  // saved first recording (the record-engine pass)
-  reg [7:0]  sv_cmd [0:255];
-  reg [15:0] sv_x0 [0:255]; reg [15:0] sv_y0 [0:255];
-  reg [15:0] sv_x1 [0:255]; reg [15:0] sv_y1 [0:255];
-  reg [15:0] sv_pen [0:255];
-  integer    nsv = 0;
-  integer    i;
-  reg [7:0]  e0, e1, e2, e3;
+  integer i;
+  reg [7:0] e0, e1, e2, e3;
 
   initial begin
     repeat (4) @(negedge clk); rst = 0; repeat (2) @(negedge clk);
@@ -180,42 +157,7 @@ module tb;
       $display("FAIL: GLID != 'G' (%02X)", rdata); errors = errors + 1; end
     gl_sel = 0;
 
-    // ==== pass 1: the scene through the stage-9 record engine =============
-    wpar(5'd13, -16'sd120); wpar(5'd14, -16'sd120);
-    wpar(5'd15,  16'sd120); wpar(5'd16,  16'sd120);
-    wpar(5'd17,  16'sd104); wpar(5'd18,  16'sd0);
-    wpar(5'd19,  16'sd375); wpar(5'd20,  16'sd271);
-    wpar(5'd12,  16'sd256);
-    wpar(5'd21,  16'sd1);                     // erase, no flip
-    wr8(4'h3, 8'h01);                         // rewind
-    // LINE white, LINE clipped green, TRI filled red (the emulator scene's
-    // shape: plain + window-clipped + a fill)
-    up16(16'h0001); up16(16'hFFFF);
-    up16(-16'sd90); up16(-16'sd90); up16(16'sd300);
-    up16( 16'sd90); up16(-16'sd90); up16(16'sd300);
-    up16(16'h0001); up16(16'h07E0);
-    up16(-16'sd200); up16(16'sd0); up16(16'sd300);
-    up16( 16'sd200); up16(16'sd50); up16(16'sd300);
-    up16(16'h0102); up16(16'hF800);           // TRI, FILL
-    up16(-16'sd80); up16(-16'sd80); up16(16'sd300);
-    up16( 16'sd80); up16(-16'sd80); up16(16'sd300);
-    up16( 16'sd0);  up16( 16'sd40); up16(16'sd420);
-    wpar(5'd22, 16'sd3);
-    nops = 0;
-    wr8(4'h3, 8'h02);                         // RENDER
-    a = 4'h4; sel = 1;
-    while (rdata[7]) @(negedge clk);
-    sel = 0;
-    // save the recording
-    nsv = nops;
-    for (i = 0; i < nops; i = i + 1) begin
-      sv_cmd[i] = op_cmd[i];
-      sv_x0[i] = op_x0[i]; sv_y0[i] = op_y0[i];
-      sv_x1[i] = op_x1[i]; sv_y1[i] = op_y1[i];
-      sv_pen[i] = op_pen[i];
-    end
-
-    // ==== pass 2: the SAME scene as a GL hex stream ========================
+    // ==== the 3D scene, against the replica's expected ops ================
     nops = 0;
     glb(8'hB3); glw(-16'sd120); glw(16'sd120); glw(-16'sd120); glw(16'sd120);
     glb(8'hB2); glw(16'sd104); glw(16'sd375); glw(16'sd0); glw(16'sd271);
@@ -233,23 +175,20 @@ module tb;
     glw( 16'sd80); glw(-16'sd80); glw(16'sd300);
     glw( 16'sd0);  glw( 16'sd40); glw(16'sd420);
     gl_wait_idle;
-    if (nops !== nsv) begin
-      $display("FAIL: GL pass drew %0d ops, record pass drew %0d", nops, nsv);
+    if (nops !== 108) begin
+      $display("FAIL: scene drew %0d ops, want 108 (1 flood + 2 lines + 105 spans)", nops);
       errors = errors + 1;
     end else begin
-      for (i = 0; i < nsv; i = i + 1)
-        if (op_cmd[i] !== sv_cmd[i] || op_pen[i] !== sv_pen[i] ||
-            op_x0[i] !== sv_x0[i] || op_y0[i] !== sv_y0[i] ||
-            op_x1[i] !== sv_x1[i] || op_y1[i] !== sv_y1[i]) begin
-          $display("FAIL: op %0d differs: GL cmd=%0d pen=%04X (%0d,%0d)-(%0d,%0d), record cmd=%0d pen=%04X (%0d,%0d)-(%0d,%0d)",
-                   i, op_cmd[i], op_pen[i], op_x0[i], op_y0[i], op_x1[i], op_y1[i],
-                   sv_cmd[i], sv_pen[i], sv_x0[i], sv_y0[i], sv_x1[i], sv_y1[i]);
-          errors = errors + 1;
+      expop(0, 8'h04, 16'h0000, 16'd104, 16'd0, 16'd375, 16'd271);  // FLOOD
+      expop(1, 8'h02, 16'hFFFF, 16'd153, 16'd222, 16'd325, 16'd222);
+      expop(2, 8'h02, 16'h07E0, 16'd375, 16'd95, 16'd104, 16'd129); // clipped
+      expop(3,   8'h04, 16'hF800, 16'd239, 16'd109, 16'd239, 16'd109);
+      expop(55,  8'h04, 16'hF800, 16'd201, 16'd161, 16'd277, 16'd161);
+      expop(107, 8'h04, 16'hF800, 16'd162, 16'd213, 16'd316, 16'd213);
+      for (i = 3; i < 108; i = i + 1)
+        if (op_cmd[i] !== 8'h04 || op_pen[i] !== 16'hF800) begin
+          $display("FAIL: span %0d cmd/pen wrong", i); errors = errors + 1;
         end
-      if (nsv < 10) begin
-        $display("FAIL: only %0d ops recorded -- scene too small to trust", nsv);
-        errors = errors + 1;
-      end
     end
 
     // ==== 2D verbs: exact 1:1 mapping (mapx(x)=x, mapy(y)=135-y) ==========
@@ -273,27 +212,10 @@ module tb;
     if (nops !== 4) begin
       $display("FAIL: 2D pass drew %0d ops, want 4", nops); errors = errors + 1;
     end else begin
-      if (op_cmd[0] !== 8'h02 || op_pen[0] !== 16'hFFFF ||
-          op_x0[0] !== 16'd10 || op_y0[0] !== 16'd125 ||
-          op_x1[0] !== 16'd50 || op_y1[0] !== 16'd125) begin
-        $display("FAIL: DRAW line wrong (%0d,%0d)-(%0d,%0d)",
-                 op_x0[0], op_y0[0], op_x1[0], op_y1[0]); errors = errors + 1; end
-      if (op_cmd[1] !== 8'h02 ||
-          op_x0[1] !== 16'd50 || op_y0[1] !== 16'd125 ||
-          op_x1[1] !== 16'd50 || op_y1[1] !== 16'd95) begin
-        $display("FAIL: DRAWR line wrong (%0d,%0d)-(%0d,%0d)",
-                 op_x0[1], op_y0[1], op_x1[1], op_y1[1]); errors = errors + 1; end
-      if (op_cmd[2] !== 8'h04 || op_pen[2] !== 16'hF800 ||
-          op_x0[2] !== 16'd60 || op_y0[2] !== 16'd95 ||
-          op_x1[2] !== 16'd80 || op_y1[2] !== 16'd115) begin
-        $display("FAIL: RECT box wrong pen=%04X (%0d,%0d)-(%0d,%0d)",
-                 op_pen[2], op_x0[2], op_y0[2], op_x1[2], op_y1[2]);
-        errors = errors + 1; end
-      if (op_cmd[3] !== 8'h02 || op_pen[3] !== 16'h07E0 ||
-          op_x0[3] !== 16'd5 || op_y0[3] !== 16'd130 ||
-          op_x1[3] !== 16'd5 || op_y1[3] !== 16'd130) begin
-        $display("FAIL: POINT wrong (%0d,%0d)-(%0d,%0d)",
-                 op_x0[3], op_y0[3], op_x1[3], op_y1[3]); errors = errors + 1; end
+      expop(0, 8'h02, 16'hFFFF, 16'd10, 16'd125, 16'd50, 16'd125);
+      expop(1, 8'h02, 16'hFFFF, 16'd50, 16'd125, 16'd50, 16'd95);
+      expop(2, 8'h04, 16'hF800, 16'd60, 16'd95, 16'd80, 16'd115);
+      expop(3, 8'h02, 16'h07E0, 16'd5, 16'd130, 16'd5, 16'd130);
     end
 
     // ==== CLEARS: two full-screen fills, page toggled between =============
@@ -342,7 +264,7 @@ module tb;
     gl_sel = 0;
 
     if (errors == 0)
-      $display("TB-GL: PASS (GLID, record-vs-GL op streams identical, 2D verbs exact, RECT clamp box, CLEARS both pages, WAIT paces, error FIFO)");
+      $display("TB-GL: PASS (GLID, 3D scene ops exact incl. 105 spans, 2D verbs exact, RECT clamp box, CLEARS both pages, WAIT paces, error FIFO, FIFO backpressure)");
     else $display("TB-GL: %0d FAILURES", errors);
     $finish;
   end
