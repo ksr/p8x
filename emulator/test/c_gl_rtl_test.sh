@@ -23,11 +23,19 @@ sh c_gl_test.sh > /dev/null || fail "emulator GL suite failed"
 
 # 2: the RTL's frame, through the real pixel stack
 ( cd $SD && iverilog -g2012 -o tbglp tb_gl_pix.v ../../rtl/p8x_geom.v \
-      ../../rtl/mdu_core.v ../../rtl/gfx.v gfx_mem.v gfx_span.v \
-      sdram_arb.v p8x_sdram.v sdram_video.v sdram_chip.v \
+      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v gfx_mem.v \
+      gfx_span.v sdram_arb.v p8x_sdram.v sdram_video.v sdram_chip.v \
   && ./tbglp | grep -q "TB-GL-PIX: DONE" ) || fail "tb_gl_pix did not finish"
 
 # 3: every pixel, both implementations
 cmp gl_b.ppm $SD/tb_gl_pix.ppm || fail "RTL frame differs from emulator frame"
 
-echo "C-GL-RTL TEST: PASS (RTL and emulator framebuffers byte-identical for the GL scene)"
+# 4: the stage-10b matrix scene, the same way (needs gl_m.ppm)
+sh c_gl_mat_test.sh > /dev/null || fail "emulator matrix suite failed"
+( cd $SD && iverilog -g2012 -o tbglm tb_gl_mpx.v ../../rtl/p8x_geom.v \
+      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v gfx_mem.v \
+      gfx_span.v sdram_arb.v p8x_sdram.v sdram_video.v sdram_chip.v \
+  && ./tbglm | grep -q "TB-GL-MPX: DONE" ) || fail "tb_gl_mpx did not finish"
+cmp gl_m.ppm $SD/tb_gl_mpx.ppm || fail "RTL matrix frame differs from emulator frame"
+
+echo "C-GL-RTL TEST: PASS (RTL and emulator framebuffers byte-identical: 10a scene AND 10b matrix scene)"

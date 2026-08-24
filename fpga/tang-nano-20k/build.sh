@@ -38,7 +38,7 @@ case "$TARGET" in
   # lcd now pulls in the SDRAM framebuffer stack: the controller, the arbiter,
   # the engine's pixel back-end, the span filler and the line-buffered scanout.
   # video_rgb.v is gone -- sdram_video.v replaces it.
-  lcd)  SRC="../rtl/p8x_cpu.v ../rtl/gfx.v ../rtl/p8x_mdu.v ../rtl/mdu_core.v ../rtl/p8x_geom.v rtl/p8x_top.v rtl/uart.v rtl/cf_sd.v rtl/sd_spi.v sdram/p8x_sdram.v sdram/sdram_arb.v sdram/gfx_mem.v sdram/gfx_span.v sdram/sdram_video.v"; TOP=p8x_top; FS=p8x_lcd.fs; YOSYS_DEFS="-DLCD" ;;
+  lcd)  SRC="../rtl/p8x_cpu.v ../rtl/gfx.v ../rtl/p8x_mdu.v ../rtl/mdu_core.v ../rtl/p8x_geom.v ../rtl/trigtab.v rtl/p8x_top.v rtl/uart.v rtl/cf_sd.v rtl/sd_spi.v sdram/p8x_sdram.v sdram/sdram_arb.v sdram/gfx_mem.v sdram/gfx_span.v sdram/sdram_video.v"; TOP=p8x_top; FS=p8x_lcd.fs; YOSYS_DEFS="-DLCD" ;;
   *)    echo "unknown target: $TARGET (use echo|cpu|lcd)"; exit 2 ;;
 esac
 

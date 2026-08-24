@@ -262,6 +262,21 @@ W_BOXD). POINT is a degenerate LINE (same pixel, no new datapath); POLY
 streams — one primitive per vertex, so 255 vertices never need more than
 one vertex of buffer.
 
+**STAGE 10b BUILT AND SIM-PROVEN (2026-08-24, graphic-test):** the matrix
+verbs. MD*/VW* families, PROJCT/DISTAN, DISTH/DISTY/CLIPH/CLIPY, CONVRT
+-- all card-side, all at COMMAND time: verbs compose two master matrices
+(modeling, about the MDORG pivot; viewing, about VWRPT with negated
+angles) and rebuild par[0-11]; the per-vertex datapath gained only a
+parameterized near plane (par[23]) and its far mirror (par[24], 32767 =
+off). Trig from generated twin tables (gen_trig.py -> trigtab.h +
+trigtab.v). Defaults stay stage-9 native (K=256, dist=0): PGC projection
+is opt-in via PROJCT, and RESETF's replay of the 10a scene byte-matches
+gl_b.ppm -- the compatibility keystone test. Proof chain: c_gl_mat_test
+(host replica marks + RESETF replay), tb_geom/tb_gl unchanged-green,
+c_gl_rtl_test now byte-compares BOTH scenes emulator-vs-RTL through the
+real pixel stack (10a and the 10b matrix scene: both identical, every
+pixel). Board verification pending (card was unplugged).
+
 Three operational notes for whoever drives the board over serial next:
 
 - **Two serial clients do not error -- they silently shred each other's

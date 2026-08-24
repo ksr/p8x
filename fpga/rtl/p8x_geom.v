@@ -70,8 +70,9 @@ module p8x_geom (
 
   // ---- parameter file ------------------------------------------------------
   // 0-8 matrix m00..m22 (S7.8, row-major), 9-11 tx/ty/tz, 12 focal d,
-  // 13-16 window, 17-20 viewport, 21 flags, 22 edge count.
-  reg [15:0] par [0:22];
+  // 13-16 window, 17-20 viewport, 21 flags, 22 edge count,
+  // 23 near plane, 24 far plane (stage 10b hither/yon; 16 / 32767 default).
+  reg [15:0] par [0:24];
   reg [4:0]  gesel;
   reg [7:0]  gevlo;
   reg        geerr;
@@ -110,7 +111,14 @@ module p8x_geom (
              // the RECT corner map -- walker states, launched by the GL
              // consumer below, so seq and the muldiv core are free
              W_BOX0=61, W_BOX1=62, W_BOX2=63, W_BOXW=64, W_BOXC=65,
-             W_BOXD=66, W_RM=67,   W_RMW=68,  W_RC1=69,  W_RC2=70;
+             W_BOXD=66, W_RM=67,   W_RMW=68,  W_RC1=69,  W_RC2=70,
+             // stage 10b: line far (yon) clip, TRI far pass, the matrix
+             // COMPOSE microprogram, and CONVRT's projection tail
+             S_FC=71,   S_FCW=72,
+             F_CA=73,   F_I0=74,   F_I0W=75,  F_I1=76,   F_I1W=77, F_CP=78,
+             C_NRM=79,  C_BLD=80,  C_OG0=81,  C_OG1=82,
+             C_ML0=83,  C_ML1=84,  C_CP=85,   C_RCK=86,  C_RCKW=87,
+             C_RCN=88,  CV_X=89,   CV_XW=90,  CV_YW=91;
 
   reg [12:0] ei, ecnt;               // record index / count
   reg [22:0] eaddr;                  // record cursor (bytes) -- records are
@@ -166,8 +174,8 @@ module p8x_geom (
   reg [4:0]  ef_wp, ef_rp;           //   2 bad parameter, 3 mode not
   wire       ef_ne = (ef_wp != ef_rp);  // fitted, 4 command-FIFO overflow
   reg [7:0]  glop;                   // opcode being executed
-  reg [7:0]  pbuf [0:7];             // fixed parameter bytes (max 8)
-  reg [3:0]  pi, pneed;
+  reg [7:0]  pbuf [0:23];            // fixed parameter bytes (max: MDMATX 24)
+  reg [4:0]  pi, pneed;
   reg [7:0]  glnv;                   // POLY: vertices still to stream
   reg        glpoly3, glpfill;       // POLY: 3D flavour / fill path
   reg [1:0]  glph;                   // POLY: 0 first vertex, 1 second, 2 rest
@@ -176,7 +184,29 @@ module p8x_geom (
   reg [15:0] vfx, vfy, vfz;          // POLY: the FIRST vertex (fan root)
   reg [15:0] vpx, vpy, vpz;          // POLY: the PREVIOUS vertex
   reg        glfill;                 // PRMFIL
-  reg [15:0] glproj, gldist;         // PROJCT/DISTAN: stored, meaning 10b
+  reg [15:0] glproj, gldist;         // PROJCT angle / DISTAN viewer distance
+  // stage 10b: the two master matrices and the compose engine's workspace.
+  // Verbs recompose the parameter file at COMMAND time -- the per-vertex
+  // datapath never changes (STAGE10-DESIGN.md).
+  reg [15:0] glmm [0:11];            // modeling: 3x3 8.8 + T
+  reg [15:0] glvm [0:8];             // viewing rotation VR
+  reg [15:0] glvrp [0:2];            // VWRPT reference point
+  reg [15:0] glorg [0:2];            // MDORG pivot
+  reg [15:0] glh, glyy;              // DISTH / DISTY plane distances
+  reg        glch, glcy, glpmode;    // CLIPH / CLIPY / PROJCT-drives-K
+  reg [15:0] ms [0:11];              // the submatrix being composed
+  reg [15:0] ct [0:11];              // multiply result (copied after)
+  reg [15:0] ang;                    // rotation angle, normalized 0..359
+  reg [1:0]  cax;                    // rotation axis 0/1/2
+  reg        vwf;                    // composing into VR (else into M)
+  reg [1:0]  cmode;                  // 0 ms*M->M  1 ms*VR->VR  2 VR*M->par
+  reg [1:0]  ci, cj, ck;             // multiply loop: row / col (3=T) / term
+  reg [15:0] csum;                   // int16 wrap accumulator
+  reg [3:0]  cpi;                    // copy index
+  reg        glcvt;                  // CONVRT: capture projection, no draw
+  // far-pass polygon (TRI yon clip)
+  reg [15:0] q2x [0:7]; reg [15:0] q2y [0:7]; reg [15:0] q2z [0:7];
+  reg [3:0]  nq2;
   reg        glact;                  // pipeline exit returns to S_IDLE
   reg        gl2d;                   // suppress projection in the T-map
   reg [1:0]  glcls;                  // CLEARS page phase (0 = plain box)
@@ -210,6 +240,32 @@ module p8x_geom (
               .a(md_a), .b(md_b), .c(md_c), .q(md_q), .busy(md_busy));
   wire md_done = !md_busy && !md_go;
 
+  // stage 10b compose-engine operands and helpers. The trig ROMs are the
+  // generated trigtab.v modules -- gen_trig.py keeps them and the
+  // emulator's tables identical entry for entry.
+  wire [8:0]  cosidx = ($signed(ang) >= 16'sd270) ? ang[8:0] - 9'd270
+                                                  : ang[8:0] + 9'd90;
+  wire signed [15:0] sinq, cosq, tanq;
+  trig_sin  TSIN(.d(ang[8:0]), .q(sinq));
+  trig_sin  TCOS(.d(cosidx),   .q(cosq));
+  trig_tanh TTAN(.a(glproj[7:0]), .q(tanq));
+  wire [15:0] cvz = ($signed(wz0) < $signed(par[23])) ? par[23]
+                  : ($signed(par[24]) < $signed(wz0)) ? par[24] : wz0;
+  wire [15:0] cm_a = (cmode == 2'd2) ? glvm[{2'd0,ci}*3 + {2'd0,ck}]
+                                     : ms[{2'd0,ci}*3 + {2'd0,ck}];
+  wire [15:0] cm_b = (cj == 2'd3)
+                   ? ((cmode == 2'd2) ? glmm[9 + {2'd0,ck}] - glvrp[{2'd0,ck}]
+                                      : glmm[9 + {2'd0,ck}])
+                   : ((cmode == 2'd1) ? glvm[{2'd0,ck}*3 + {2'd0,cj}]
+                                      : glmm[{2'd0,ck}*3 + {2'd0,cj}]);
+  wire [1:0]  cjmax = (cmode == 2'd1) ? 2'd2 : 2'd3;
+  // the finished element, with the T-column tails folded in
+  wire [15:0] cm_res = csum + md_q
+       + ((cj == 2'd3 && cmode == 2'd0) ? ms[9 + {2'd0,ci}] : 16'd0)
+       + ((cj == 2'd3 && cmode == 2'd2 && ci == 2'd2) ? gldist : 16'd0);
+  wire        z0_far = $signed(wz0) > $signed(par[24]);
+  wire        z1_far = $signed(wz1) > $signed(par[24]);
+
   // MAC operand select (registered indices, combinational product)
   wire [15:0] mac_m = par[{2'd0, mr} * 3 + {2'd0, mk}];
   wire [15:0] mac_v = v[{1'd0, mp} * 3 + {1'd0, mk}];
@@ -228,8 +284,8 @@ module p8x_geom (
                      $signed(wx1) > $signed(par[15]),
                      $signed(wx1) < $signed(par[13]) };
 
-  wire z0_near = $signed(wz0) < $signed(16'd16);
-  wire z1_near = $signed(wz1) < $signed(16'd16);
+  wire z0_near = $signed(wz0) < $signed(par[23]);
+  wire z1_near = $signed(wz1) < $signed(par[23]);
 
   // TRI helpers: screen-space outcodes against the VIEWPORT (outlines),
   // span min/max, and the degenerate triangle's x extremes
@@ -279,6 +335,19 @@ module p8x_geom (
       par[17]<=0; par[18]<=0; par[19]<=0; par[20]<=0;
       par[21] <= 16'd3;                                          // erase+flip
       par[22] <= 0;
+      par[23] <= 16'd16;                 // near plane (the stage-7..9 z>=16)
+      par[24] <= 16'd32767;              // far plane: int16 max = no yon clip
+      for (i = 0; i < 12; i = i + 1) glmm[i] <= 0;
+      for (i = 0; i < 9;  i = i + 1) glvm[i] <= 0;
+      glmm[0] <= 16'd256; glmm[4] <= 16'd256; glmm[8] <= 16'd256;
+      glvm[0] <= 16'd256; glvm[4] <= 16'd256; glvm[8] <= 16'd256;
+      glvrp[0]<=0; glvrp[1]<=0; glvrp[2]<=0;
+      glorg[0]<=0; glorg[1]<=0; glorg[2]<=0;
+      glh <= 0; glyy <= 0; glch <= 0; glcy <= 0; glpmode <= 0;
+      ang <= 0; cax <= 0; vwf <= 0; cmode <= 0;
+      ci <= 0; cj <= 0; ck <= 0; csum <= 0; cpi <= 0; nq2 <= 0;
+      glcvt <= 0;
+      gldist <= 0;                       // dist 0 = the stage-9 camera
     end else begin
 
       // ---- CPU register writes: gated on the WALKER, not on `busy` -- busy
@@ -290,7 +359,7 @@ module p8x_geom (
           4'h0: gesel <= wdata[4:0];
           4'h1: gevlo <= wdata;
           4'hA: begin                       // GEVALH commits, auto-increments
-            if (gesel < 5'd23) par[gesel] <= {wdata, gevlo};
+            if (gesel < 5'd25) par[gesel] <= {wdata, gevlo};
             gesel <= gesel + 5'd1;
           end
           4'h2: begin                       // GEUP: pair bytes, queue halfwords
@@ -447,7 +516,10 @@ module p8x_geom (
               if (mp == 2'd2) begin pp <= 0; np <= 0; state <= T_NC; end
               else begin mp <= mp + 2'd1; state <= S_MAC; end
             end else begin
-              if (mp == 2'd1) begin mdph <= 0; state <= S_NC; end
+              if (mp == 2'd1) begin
+                mdph <= 0;
+                state <= glcvt ? CV_X : S_NC;   // CONVRT: capture, no draw
+              end
               else begin mp <= 2'd1; state <= S_MAC; end
             end
           end else begin mr <= mr + 2'd1; state <= S_MAC; end
@@ -459,23 +531,46 @@ module p8x_geom (
           else if (z0_near && z1_near) begin ei <= ei + 13'd1; state <= S_NEXT; end
           else if (z0_near) begin
             md_a <= (mdph[0]==1'b0) ? (wx1 - wx0) : (wy1 - wy0);
-            md_b <= 16'd16 - wz0;  md_c <= wz1 - wz0;
+            md_b <= par[23] - wz0;  md_c <= wz1 - wz0;
             md_go <= 1; state <= S_NCW;
           end else if (z1_near) begin
             md_a <= (mdph[0]==1'b0) ? (wx0 - wx1) : (wy0 - wy1);
-            md_b <= 16'd16 - wz1;  md_c <= wz0 - wz1;
+            md_b <= par[23] - wz1;  md_c <= wz0 - wz1;
             md_go <= 1; state <= S_NCW;
-          end else begin mdph <= 0; state <= S_PRJ; end
+          end else begin mdph <= 0; state <= S_FC; end
         end
         S_NCW: if (md_done) begin
           if (z0_near) begin
             if (mdph[0]==1'b0) begin wx0 <= wx0 + md_q; mdph <= 2'd1; end
-            else begin wy0 <= wy0 + md_q; wz0 <= 16'd16; mdph <= 0; end
+            else begin wy0 <= wy0 + md_q; wz0 <= par[23]; mdph <= 0; end
           end else begin
             if (mdph[0]==1'b0) begin wx1 <= wx1 + md_q; mdph <= 2'd1; end
-            else begin wy1 <= wy1 + md_q; wz1 <= 16'd16; mdph <= 0; end
+            else begin wy1 <= wy1 + md_q; wz1 <= par[23]; mdph <= 0; end
           end
           state <= S_NC;
+        end
+        // yon clip (stage 10b), the mirror image against par[24]
+        S_FC: begin
+          if (z0_far && z1_far) begin ei <= ei + 13'd1; state <= S_NEXT; end
+          else if (z0_far) begin
+            md_a <= (mdph[0]==1'b0) ? (wx1 - wx0) : (wy1 - wy0);
+            md_b <= par[24] - wz0;  md_c <= wz1 - wz0;
+            md_go <= 1; state <= S_FCW;
+          end else if (z1_far) begin
+            md_a <= (mdph[0]==1'b0) ? (wx0 - wx1) : (wy0 - wy1);
+            md_b <= par[24] - wz1;  md_c <= wz0 - wz1;
+            md_go <= 1; state <= S_FCW;
+          end else begin mdph <= 0; state <= S_PRJ; end
+        end
+        S_FCW: if (md_done) begin
+          if (z0_far) begin
+            if (mdph[0]==1'b0) begin wx0 <= wx0 + md_q; mdph <= 2'd1; end
+            else begin wy0 <= wy0 + md_q; wz0 <= par[24]; mdph <= 0; end
+          end else begin
+            if (mdph[0]==1'b0) begin wx1 <= wx1 + md_q; mdph <= 2'd1; end
+            else begin wy1 <= wy1 + md_q; wz1 <= par[24]; mdph <= 0; end
+          end
+          state <= S_FC;
         end
 
         // perspective projection: 4 muldivs (x0 y0 x1 y1)
@@ -581,7 +676,8 @@ module p8x_geom (
         T_NCA: begin
           if (pp == 4'd3) begin
             if (np < 4'd3) begin ei <= ei + 13'd1; state <= S_NEXT; end
-            else begin pp <= 0; state <= T_MP; end
+            else if (par[24] == 16'd32767) begin pp <= 0; state <= T_MP; end
+            else begin pp <= 0; nq2 <= 0; state <= F_CA; end  // yon fitted
           end else begin
             nax <= tvx[pp[1:0]]; nay <= tvy[pp[1:0]]; naz <= tvz[pp[1:0]];
             nbx <= tvx[(pp == 4'd2) ? 2'd0 : pp[1:0] + 2'd1];
@@ -591,9 +687,9 @@ module p8x_geom (
           end
         end
         T_NI0: begin                   // classify; keep A; start x-intersect
-          nain <= !($signed(naz) < $signed(16'd16));
-          nbin <= !($signed(nbz) < $signed(16'd16));
-          if (!($signed(naz) < $signed(16'd16))) begin
+          nain <= !($signed(naz) < $signed(par[23]));
+          nbin <= !($signed(nbz) < $signed(par[23]));
+          if (!($signed(naz) < $signed(par[23]))) begin
             qx[np] <= nax; qy[np] <= nay; qz[np] <= naz; np <= np + 4'd1;
           end
           state <= T_NI0W;
@@ -601,18 +697,68 @@ module p8x_geom (
         T_NI0W: begin
           if (nain == nbin) begin pp <= pp + 4'd1; state <= T_NCA; end
           else begin
-            md_a <= nbx - nax; md_b <= 16'd16 - naz; md_c <= nbz - naz;
+            md_a <= nbx - nax; md_b <= par[23] - naz; md_c <= nbz - naz;
             md_go <= 1; state <= T_NI1;
           end
         end
         T_NI1: if (md_done) begin
           qx[np] <= nax + md_q;
-          md_a <= nby - nay; md_b <= 16'd16 - naz; md_c <= nbz - naz;
+          md_a <= nby - nay; md_b <= par[23] - naz; md_c <= nbz - naz;
           md_go <= 1; state <= T_NI1W;
         end
         T_NI1W: if (md_done) begin
-          qy[np] <= nay + md_q; qz[np] <= 16'd16; np <= np + 4'd1;
+          qy[np] <= nay + md_q; qz[np] <= par[23]; np <= np + 4'd1;
           pp <= pp + 4'd1; state <= T_NCA;
+        end
+
+        // ==== stage 10b: the TRI far (yon) pass -- the near pass's mirror,
+        // walking the near-clipped polygon qx/qy/qz (np verts) into q2,
+        // keeping z<=far and inserting intersections, then copying back ====
+        F_CA: begin
+          if (pp == np) begin
+            if (nq2 < 4'd3) begin ei <= ei + 13'd1; state <= S_NEXT; end
+            else begin cpi <= 0; state <= F_CP; end
+          end else begin
+            nax <= qx[pp[2:0]]; nay <= qy[pp[2:0]]; naz <= qz[pp[2:0]];
+            nbx <= qx[(pp + 4'd1 == np) ? 3'd0 : pp[2:0] + 3'd1];
+            nby <= qy[(pp + 4'd1 == np) ? 3'd0 : pp[2:0] + 3'd1];
+            nbz <= qz[(pp + 4'd1 == np) ? 3'd0 : pp[2:0] + 3'd1];
+            state <= F_I0;
+          end
+        end
+        F_I0: begin
+          nain <= !($signed(par[24]) < $signed(naz));
+          nbin <= !($signed(par[24]) < $signed(nbz));
+          if (!($signed(par[24]) < $signed(naz))) begin
+            q2x[nq2[2:0]] <= nax; q2y[nq2[2:0]] <= nay; q2z[nq2[2:0]] <= naz;
+            nq2 <= nq2 + 4'd1;
+          end
+          state <= F_I0W;
+        end
+        F_I0W: begin
+          if (nain == nbin) begin pp <= pp + 4'd1; state <= F_CA; end
+          else begin
+            md_a <= nbx - nax; md_b <= par[24] - naz; md_c <= nbz - naz;
+            md_go <= 1; state <= F_I1;
+          end
+        end
+        F_I1: if (md_done) begin
+          q2x[nq2[2:0]] <= nax + md_q;
+          md_a <= nby - nay; md_b <= par[24] - naz; md_c <= nbz - naz;
+          md_go <= 1; state <= F_I1W;
+        end
+        F_I1W: if (md_done) begin
+          q2y[nq2[2:0]] <= nay + md_q; q2z[nq2[2:0]] <= par[24];
+          nq2 <= nq2 + 4'd1;
+          pp <= pp + 4'd1; state <= F_CA;
+        end
+        F_CP: begin                    // q2 -> q, then the normal map path
+          qx[cpi[2:0]] <= q2x[cpi[2:0]];
+          qy[cpi[2:0]] <= q2y[cpi[2:0]];
+          qz[cpi[2:0]] <= q2z[cpi[2:0]];
+          if (cpi + 4'd1 == nq2) begin
+            np <= nq2; pp <= 0; state <= T_MP;
+          end else cpi <= cpi + 4'd1;
         end
 
         // project + viewport-map each polygon vertex into qsx/qsy
@@ -854,6 +1000,112 @@ module p8x_geom (
                     ($signed(gby1) < $signed(par[18]))) ? S_IDLE : W_BOX0;
         end
 
+        // ==== stage 10b: CONVRT's projection tail =========================
+        // The 3D current point was transformed by the MAC (duplicated, like
+        // POINT3); project it with z clamped to the near/far planes and
+        // land it in the 2D current point. No drawing, no gm ownership use.
+        CV_X: begin
+          if (par[12] == 16'd0) begin
+            c2x <= wx0; c2y <= wy0; glcvt <= 0; state <= S_IDLE;
+          end else begin
+            md_a <= wx0; md_b <= par[12]; md_c <= cvz;
+            md_go <= 1; state <= CV_XW;
+          end
+        end
+        CV_XW: if (md_done) begin
+          c2x <= md_q;
+          md_a <= wy0; md_b <= par[12]; md_c <= cvz;
+          md_go <= 1; state <= CV_YW;
+        end
+        CV_YW: if (md_done) begin
+          c2y <= md_q; glcvt <= 0; state <= S_IDLE;
+        end
+
+        // ==== stage 10b: the matrix COMPOSE microprogram ==================
+        // One multiply loop serves three products (cmode): the submatrix
+        // into M, the submatrix into VR, and the recompose VR*M -> par[],
+        // all in ge_md semantics (muldiv /256, int16 wrap adds) so the
+        // emulator's gl_mcomp/gl_recompose agree term for term.
+        C_NRM: begin                   // rotation angle to 0..359
+          if ($signed(ang) < 0) ang <= ang + 16'd360;
+          else if ($signed(ang) >= 16'sd360) ang <= ang - 16'd360;
+          else state <= C_BLD;
+        end
+        C_BLD: begin                   // build the rotation submatrix
+          for (i = 0; i < 12; i = i + 1) ms[i] <= 0;
+          case (cax)
+            2'd0: begin ms[0] <= 16'd256;
+                        ms[4] <= cosq; ms[5] <= -sinq;
+                        ms[7] <= sinq; ms[8] <= cosq; end
+            2'd1: begin ms[0] <= cosq; ms[2] <= sinq;
+                        ms[4] <= 16'd256;
+                        ms[6] <= -sinq; ms[8] <= cosq; end
+            default: begin ms[0] <= cosq; ms[1] <= -sinq;
+                        ms[3] <= sinq; ms[4] <= cosq;
+                        ms[8] <= 16'd256; end
+          endcase
+          ci <= 0; cj <= 0; ck <= 0; csum <= 0;
+          if (vwf) begin cmode <= 2'd1; state <= C_ML0; end
+          else begin cmode <= 2'd0; state <= C_OG0; end   // MD: pivot first
+        end
+        C_OG0: begin                   // pivot: T = org - (S*org)>>8
+          md_a <= ms[{2'd0,ci}*3 + {2'd0,ck}]; md_b <= glorg[{2'd0,ck}];
+          md_c <= 16'd256; md_go <= 1; state <= C_OG1;
+        end
+        C_OG1: if (md_done) begin
+          if (ck == 2'd2) begin
+            ms[9 + {2'd0,ci}] <= glorg[{2'd0,ci}] - (csum + md_q);
+            ck <= 0; csum <= 0;
+            if (ci == 2'd2) begin ci <= 0; cj <= 0; state <= C_ML0; end
+            else begin ci <= ci + 2'd1; state <= C_OG0; end
+          end else begin csum <= csum + md_q; ck <= ck + 2'd1; state <= C_OG0; end
+        end
+        C_ML0: begin                   // one product term
+          md_a <= cm_a; md_b <= cm_b; md_c <= 16'd256;
+          md_go <= 1; state <= C_ML1;
+        end
+        C_ML1: if (md_done) begin
+          if (ck == 2'd2) begin
+            ct[(cj == 2'd3) ? 9 + {2'd0,ci} : {2'd0,ci}*3 + {2'd0,cj}] <= cm_res;
+            ck <= 0; csum <= 0;
+            if (cj == cjmax) begin
+              cj <= 0;
+              if (ci == 2'd2) begin cpi <= 0; state <= C_CP; end
+              else begin ci <= ci + 2'd1; state <= C_ML0; end
+            end else begin cj <= cj + 2'd1; state <= C_ML0; end
+          end else begin csum <= csum + md_q; ck <= ck + 2'd1; state <= C_ML0; end
+        end
+        C_CP: begin                    // land the product, then chain
+          case (cmode)
+            2'd0: glmm[cpi] <= ct[cpi];
+            2'd1: if (cpi < 4'd9) glvm[cpi] <= ct[cpi];
+            default: par[cpi[3:0]] <= ct[cpi];
+          endcase
+          if (cpi == ((cmode == 2'd1) ? 4'd8 : 4'd11)) begin
+            if (cmode != 2'd2) begin   // composed a master: now recompose
+              cmode <= 2'd2; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
+              cpi <= 0; state <= C_ML0;
+            end else state <= C_RCK;
+          end else cpi <= cpi + 4'd1;
+        end
+        C_RCK: begin                   // K: PROJCT's focal from the window
+          if (!glpmode) state <= C_RCN;
+          else if (glproj == 16'd0) begin par[12] <= 0; state <= C_RCN; end
+          else begin
+            md_a <= par[15] - par[13]; md_b <= 16'd128;
+            md_c <= tanq;
+            md_go <= 1; state <= C_RCKW;
+          end
+        end
+        C_RCKW: if (md_done) begin par[12] <= md_q; state <= C_RCN; end
+        C_RCN: begin                   // near/far planes in eye z
+          par[23] <= glch ? (($signed(gldist + glh) < 16'sd16)
+                             ? 16'd16 : gldist + glh)
+                          : 16'd16;
+          par[24] <= glcy ? gldist + glyy : 16'd32767;
+          state <= S_IDLE;
+        end
+
         // flip: applied at the scanout frame boundary, then idle
         S_FLIP: if (flip_pend && frame_tick) begin
           disp_pg <= draw_pg;
@@ -880,15 +1132,22 @@ module p8x_geom (
           glop <= cf[cf_rp[7:0]]; cf_rp <= cf_rp + 9'd1; pi <= 0;
           case (cf[cf_rp[7:0]])
             8'h01, 8'h02, 8'h03, 8'h04,
-            8'h08, 8'h09:               begin pneed <= 4'd0; glst <= G_RUN; end
-            8'hE0:                      begin pneed <= 4'd1; glst <= G_PRM; end
-            8'h05, 8'h43, 8'hB0, 8'hB1: begin pneed <= 4'd2; glst <= G_PRM; end
-            8'h06, 8'h07, 8'h0F:        begin pneed <= 4'd3; glst <= G_PRM; end
+            8'h08, 8'h09,
+            8'h90, 8'hA0, 8'hAF:        begin pneed <= 5'd0; glst <= G_RUN; end
+            8'hE0, 8'hAA, 8'hAB:        begin pneed <= 5'd1; glst <= G_PRM; end
+            8'h05, 8'h43, 8'hB0, 8'hB1,
+            8'h93, 8'h94, 8'h95,
+            8'hA3, 8'hA4, 8'hA5,
+            8'hA8, 8'hA9:               begin pneed <= 5'd2; glst <= G_PRM; end
+            8'h06, 8'h07, 8'h0F:        begin pneed <= 5'd3; glst <= G_PRM; end
             8'h10, 8'h11, 8'h28, 8'h29,
-            8'h34, 8'h35:               begin pneed <= 4'd4; glst <= G_PRM; end
-            8'h12, 8'h13, 8'h2A, 8'h2B: begin pneed <= 4'd6; glst <= G_PRM; end
-            8'h30, 8'h31, 8'h32, 8'h33: begin pneed <= 4'd1; glst <= G_PRM; end
-            8'hB2, 8'hB3:               begin pneed <= 4'd8; glst <= G_PRM; end
+            8'h34, 8'h35:               begin pneed <= 5'd4; glst <= G_PRM; end
+            8'h12, 8'h13, 8'h2A, 8'h2B,
+            8'h91, 8'h92, 8'h96, 8'hA1: begin pneed <= 5'd6; glst <= G_PRM; end
+            8'h30, 8'h31, 8'h32, 8'h33: begin pneed <= 5'd1; glst <= G_PRM; end
+            8'hB2, 8'hB3:               begin pneed <= 5'd8; glst <= G_PRM; end
+            8'hA7:                      begin pneed <= 5'd18; glst <= G_PRM; end
+            8'h97:                      begin pneed <= 5'd24; glst <= G_PRM; end
             default:                    // unknown opcode: log, skip a byte
               if (ef_wp - ef_rp != 5'd16) begin
                 ef[ef_wp[3:0]] <= 8'd1; ef_wp <= ef_wp + 5'd1; end
@@ -900,7 +1159,7 @@ module p8x_geom (
             glpoly3 <= glop[1];
             glpfill <= glfill && (pbuf[0] >= 8'd3);
             glph <= 0; glnv <= pbuf[0]; pi <= 0;
-            pneed <= glop[1] ? 4'd6 : 4'd4;
+            pneed <= glop[1] ? 5'd6 : 5'd4;
             if (pbuf[0] == 8'd0) begin                    // n=0: bad parameter
               if (ef_wp - ef_rp != 5'd16) begin
                 ef[ef_wp[3:0]] <= 8'd2; ef_wp <= ef_wp + 5'd1; end
@@ -908,8 +1167,8 @@ module p8x_geom (
             end else glst <= G_PV;
           end else glst <= G_RUN;
         end else if (cf_ne) begin
-          pbuf[pi[2:0]] <= cf[cf_rp[7:0]];
-          cf_rp <= cf_rp + 9'd1; pi <= pi + 4'd1;
+          pbuf[pi] <= cf[cf_rp[7:0]];
+          cf_rp <= cf_rp + 9'd1; pi <= pi + 5'd1;
         end
 
         G_RUN: if (gl_can) begin
@@ -926,9 +1185,17 @@ module p8x_geom (
               par[13]<=0; par[14]<=0; par[15]<=0; par[16]<=0;
               par[17]<=0; par[18]<=0; par[19]<=0; par[20]<=0;
               par[21] <= 16'd3; par[22] <= 0;
+              par[23] <= 16'd16; par[24] <= 16'd32767;
               gesel <= 0; upcur <= 0; geerr <= 0;
               glfill <= 0; c2x <= 0; c2y <= 0; c3x <= 0; c3y <= 0; c3z <= 0;
-              glproj <= 16'd60; gldist <= 16'd500; rcol <= 16'hFFFF;
+              glproj <= 16'd60; gldist <= 0; rcol <= 16'hFFFF;
+              for (i = 0; i < 12; i = i + 1) glmm[i] <= 0;
+              for (i = 0; i < 9;  i = i + 1) glvm[i] <= 0;
+              glmm[0] <= 16'd256; glmm[4] <= 16'd256; glmm[8] <= 16'd256;
+              glvm[0] <= 16'd256; glvm[4] <= 16'd256; glvm[8] <= 16'd256;
+              glvrp[0] <= 0; glvrp[1] <= 0; glvrp[2] <= 0;
+              glorg[0] <= 0; glorg[1] <= 0; glorg[2] <= 0;
+              glh <= 0; glyy <= 0; glch <= 0; glcy <= 0; glpmode <= 0;
             end
             8'h05: begin wcnt <= pw0; glst <= G_WAIT; end // WAIT
             8'h06: rcol <= prgb;                          // COLOR
@@ -994,12 +1261,98 @@ module p8x_geom (
               end else
                 if (ef_wp - ef_rp != 5'd16) begin
                   ef[ef_wp[3:0]] <= 8'd2; ef_wp <= ef_wp + 5'd1; end
-            8'hB0: glproj <= pw0;                         // PROJCT (10b)
-            8'hB1: gldist <= pw0;                         // DISTAN (10b)
+            // ---- stage 10b: the matrix verbs -------------------------------
+            8'h90: begin                                  // MDIDEN
+              for (i = 0; i < 12; i = i + 1) glmm[i] <= 0;
+              glmm[0] <= 16'd256; glmm[4] <= 16'd256; glmm[8] <= 16'd256;
+              cmode <= 2'd2; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
+              state <= C_ML0;
+            end
+            8'h91: begin glorg[0] <= pw0; glorg[1] <= pw1;   // MDORG
+                         glorg[2] <= pw2; end
+            8'h92: begin                                  // MDSCAL
+              for (i = 0; i < 12; i = i + 1) ms[i] <= 0;
+              ms[0] <= pw0; ms[4] <= pw1; ms[8] <= pw2;
+              cmode <= 2'd0; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
+              state <= C_OG0;
+            end
+            8'h93, 8'h94, 8'h95: begin                    // MDROTX/Y/Z
+              cax <= glop[1:0] - 2'd3; ang <= pw0; vwf <= 0;
+              state <= C_NRM;
+            end
+            8'h96: begin                                  // MDTRAN
+              for (i = 0; i < 12; i = i + 1) ms[i] <= 0;
+              ms[0] <= 16'd256; ms[4] <= 16'd256; ms[8] <= 16'd256;
+              ms[9] <= pw0; ms[10] <= pw1; ms[11] <= pw2;
+              cmode <= 2'd0; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
+              state <= C_ML0;
+            end
+            8'h97: begin                                  // MDMATX: 12 int16
+              for (i = 0; i < 12; i = i + 1)
+                glmm[i] <= {pbuf[2*i+1], pbuf[2*i]};
+              cmode <= 2'd2; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
+              state <= C_ML0;
+            end
+            8'hA0: begin                                  // VWIDEN
+              for (i = 0; i < 9; i = i + 1) glvm[i] <= 0;
+              glvm[0] <= 16'd256; glvm[4] <= 16'd256; glvm[8] <= 16'd256;
+              cmode <= 2'd2; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
+              state <= C_ML0;
+            end
+            8'hA1: begin                                  // VWRPT
+              glvrp[0] <= pw0; glvrp[1] <= pw1; glvrp[2] <= pw2;
+              cmode <= 2'd2; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
+              state <= C_ML0;
+            end
+            8'hA3, 8'hA4, 8'hA5: begin                    // VWROTX/Y/Z: the
+              cax <= glop[1:0] - 2'd3;                    //   viewer orbits,
+              ang <= 16'd0 - pw0; vwf <= 1;               //   so -angle
+              state <= C_NRM;
+            end
+            8'hA7: begin                                  // VWMATX: 9 int16
+              for (i = 0; i < 9; i = i + 1)
+                glvm[i] <= {pbuf[2*i+1], pbuf[2*i]};
+              cmode <= 2'd2; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
+              state <= C_ML0;
+            end
+            8'hA8: begin glh <= pw0;                      // DISTH
+              cmode <= 2'd2; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
+              state <= C_ML0; end
+            8'hA9: begin glyy <= pw0;                     // DISTY
+              cmode <= 2'd2; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
+              state <= C_ML0; end
+            8'hAA: begin glch <= pbuf[0][0];              // CLIPH
+              cmode <= 2'd2; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
+              state <= C_ML0; end
+            8'hAB: begin glcy <= pbuf[0][0];              // CLIPY
+              cmode <= 2'd2; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
+              state <= C_ML0; end
+            8'hAF: begin                                  // CONVRT
+              v[0] <= c3x; v[1] <= c3y; v[2] <= c3z;
+              v[3] <= c3x; v[4] <= c3y; v[5] <= c3z;
+              tri_m <= 0; mp <= 0; mr <= 0; mk <= 0; acc <= 0;
+              glcvt <= 1; state <= S_MAC;
+            end
+            8'hB0:                                        // PROJCT
+              if ($signed(pw0) < 0 || $signed(pw0) > 16'sd179) begin
+                if (ef_wp - ef_rp != 5'd16) begin
+                  ef[ef_wp[3:0]] <= 8'd2; ef_wp <= ef_wp + 5'd1; end
+              end else begin
+                glproj <= pw0; glpmode <= 1;
+                cmode <= 2'd2; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
+                state <= C_ML0;
+              end
+            8'hB1: begin gldist <= pw0;                   // DISTAN
+              cmode <= 2'd2; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
+              state <= C_ML0; end
             8'hB2: begin par[17] <= pw0; par[19] <= pw1;  // VWPORT x1 x2 y1 y2
                          par[18] <= pw2; par[20] <= pw3; end
             8'hB3: begin par[13] <= pw0; par[15] <= pw1;  // WINDOW x1 x2 y1 y2
-                         par[14] <= pw2; par[16] <= pw3; end
+                         par[14] <= pw2; par[16] <= pw3;
+                         if (glpmode) begin               // K tracks the window
+                           cmode <= 2'd2; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
+                           state <= C_ML0;
+                         end end
             8'hE0: glfill <= pbuf[0][0];                  // PRMFIL
             default: ;
           endcase
@@ -1007,8 +1360,8 @@ module p8x_geom (
 
         G_PV: if (pi == pneed) glst <= G_PRUN;            // one vertex ready
               else if (cf_ne) begin
-                pbuf[pi[2:0]] <= cf[cf_rp[7:0]];
-                cf_rp <= cf_rp + 9'd1; pi <= pi + 4'd1;
+                pbuf[pi] <= cf[cf_rp[7:0]];
+                cf_rp <= cf_rp + 9'd1; pi <= pi + 5'd1;
               end
 
         G_PRUN: if (gl_can) begin                         // consume the vertex
@@ -1115,8 +1468,8 @@ module p8x_geom (
         4'h4:    rdata = {busy, 6'd0, geerr};   // GESTAT
         4'h5:    rdata = 8'h45;                 // GEID: 'E'
         // 9c: parameter readback (no auto-increment on reads)
-        4'h1:    rdata = (gesel < 5'd23) ? par[gesel][7:0]  : 8'hFF;
-        4'hA:    rdata = (gesel < 5'd23) ? par[gesel][15:8] : 8'hFF;
+        4'h1:    rdata = (gesel < 5'd25) ? par[gesel][7:0]  : 8'hFF;
+        4'hA:    rdata = (gesel < 5'd25) ? par[gesel][15:8] : 8'hFF;
         default: rdata = 8'hFF;
       endcase
     end

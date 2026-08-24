@@ -15,7 +15,7 @@
 // and then swaps the pages by the display<=draw, draw<=~draw rule; GECMD 3
 // flips manually.
 //
-//   iverilog -g2012 -o tbgm tb_geom.v ../../rtl/p8x_geom.v ../../rtl/mdu_core.v
+//   iverilog -g2012 -o tbgm tb_geom.v ../../rtl/p8x_geom.v ../../rtl/mdu_core.v ../../rtl/trigtab.v
 //   ./tbgm
 `timescale 1ns/1ps
 

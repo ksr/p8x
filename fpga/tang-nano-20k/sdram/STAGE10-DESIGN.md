@@ -129,6 +129,40 @@ matrix is why `rotate` once clobbered `cube`'s translation. Two master
 matrices composed in command order (submatrix multiply on the MDU
 datapath, exactly the manual's model) ends that class of bug.
 
+**10b as implemented (the semantics contract).** Everything happens at
+COMMAND time; the per-vertex datapath is stage 9's, untouched:
+
+    v_screen = project( (VR*((M*v>>8) + Tm - r))>>8 + (0,0,dist) )
+
+- MD* verbs compose submatrices into M on the LEFT (issue order = apply
+  order: MDSCAL then MDTRAN scales first), about the MDORG pivot
+  (T = o - (S*o)>>8, the rotate.c rule); rotation rows are rotate.c's.
+- VW* verbs compose into VR with the NEGATED angle (the viewer orbits);
+  VWRPT (r) and DISTAN (dist) are state, not compositions. The viewer
+  sits dist behind the reference point: eye z = z_vw + dist, so dist=0
+  is exactly the stage-9 camera and 10a streams render unchanged.
+- Every verb rebuilds par[0-11] = VR o M (muldiv /256, int16 wrap adds
+  -- gl_mcomp/gl_recompose in the emulator, the C_ML microprogram in
+  RTL, term-for-term identical).
+- PROJCT angle switches K (par[12]) from the native 256 to
+  WW*128/TANH8[angle] (WW = window width; K re-derives when WINDOW
+  moves); PROJCT 0 = orthographic; out-of-range logs error 2. Power-up
+  and RESETF are NATIVE (K=256, dist=0) -- PGC-style projection is
+  opt-in, stage-9 compatibility is the default.
+- DISTH/DISTY set plane distances from the reference point; CLIPH/CLIPY
+  gate them into the NEW parameter-file entries par[23] (near, floor 16
+  -- the divide guard survives) and par[24] (far; 32767 = disabled,
+  which is why the yon pass costs nothing when off). The pipeline's
+  near clip is parameterized and a mirror-image far clip follows it
+  (lines interpolate at z=far; the TRI polygon gets a second clip pass,
+  up to 5 vertices, fan unchanged).
+- CONVRT projects the 3D current point (z clamped to near/far) into the
+  2D current point.
+- P8X divergences: MDMATX takes 12 int16 (3x3 8.8 + T), VWMATX 9 (VR
+  only); angles are integer degrees through the shared SIN8 table
+  (generators/gen_trig.py emits the emulator's trigtab.h and the RTL's
+  trigtab.v ROMs from one formula).
+
 Primitives (immediate; current-point pen model, one 2D and one 3D
 current point, manual 3.6). The PGC's 2D space has NO matrix — 2D
 primitives clip to the window and map to the viewport, nothing else.

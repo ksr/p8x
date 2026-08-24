@@ -15,7 +15,7 @@
 // CLEARS both-pages rule (two full-screen fills, draw page toggled between
 // and restored), WAIT's frame pacing, GLID, GLSTAT and the error FIFO.
 //
-//   iverilog -g2012 -o tbgl tb_gl.v ../../rtl/p8x_geom.v ../../rtl/mdu_core.v
+//   iverilog -g2012 -o tbgl tb_gl.v ../../rtl/p8x_geom.v ../../rtl/mdu_core.v ../../rtl/trigtab.v
 //   ./tbgl
 `timescale 1ns/1ps
 
