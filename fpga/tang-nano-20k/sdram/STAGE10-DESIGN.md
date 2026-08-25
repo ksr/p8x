@@ -296,7 +296,8 @@ byte-identical emulator-vs-RTL (c_gl_rtl_test), 92-PASS make test.
 
   **10c as designed (2026-08-24; emulator half + console family +
   RTL SHIPPED 2026-08-25 — places at 19,129 LUT4/92%, all three
-  emulator-vs-RTL frames byte-identical; board session pending).** The retained-scene system, PGC
+  emulator-vs-RTL frames byte-identical; BOARD-VERIFIED same day:
+  every POINT probe exact, cube spins itself via CLOOP).** The retained-scene system, PGC
   chapter 3.9 shrunk to the P8X:
 
   - **Storage**: 256 lists in SDRAM at $100000 (the retired record

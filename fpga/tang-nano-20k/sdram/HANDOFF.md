@@ -346,8 +346,15 @@ Proof chain unchanged and green through all of it: tb_gl (record draws
 nothing, CLRUN/CLOOP exact ops, errors 2/5/6/7), and c_gl_rtl_test's
 three byte-identical frames — 10a scene, 10b matrix scene, and the 10c
 CLOOP fly-through — emulator vs RTL through the real memory stack.
-REMAINING for stage 10c: the board session (flash + disk rebuild with
-the migrated console family + on-silicon POINT proofs).
+**BOARD-VERIFIED 2026-08-25**: bitstream flashed, fresh disk cloned
+(4,190 sectors, every ack + 'K'), and the whole console family proven
+on silicon in one scripted session — tri builds list 0, tri k appends,
+rotate (degrees) and camera (look-at) replay it, and every POINT probe
+matched the emulator's prediction exactly: -32/2047 at the oblique
+camera view, 2016/-2048/31 on cube's three rings after `cube 32` spun
+a CLOOP list with the CPU idle. Stage 10a+10b+10c are on silicon,
+frame-exact. (Scripting note: BASIC's banner is "P8X BASIC V0", not
+READY — match that in future sessions.)
 
 Three operational notes for whoever drives the board over serial next:
 
