@@ -39,14 +39,35 @@ module tb;
   reg         frame_tick = 0;
   wire        draw_pg, disp_pg;
 
+  wire        g_req, g_we;
+  wire [22:0] g_addr;
+  wire [15:0] g_din;
+  reg         g_ack = 0, g_ready = 0;
+  reg  [15:0] g_dout = 0;
   p8x_geom dut(.clk(clk), .rst(rst),
                .a(a), .wdata(wdata), .rdata(rdata),
+               .g_req(g_req), .g_we(g_we), .g_addr(g_addr), .g_din(g_din),
+               .g_ack(g_ack), .g_ready(g_ready), .g_dout(g_dout),
                .gl_sel(gl_sel), .gl_wr(gl_wr), .gl_rd(gl_rd),
                .gm_own(gm_own), .gm_wr(gm_wr), .gm_a(gm_a),
                .gm_wdata(gm_wdata), .gm_rdata(gm_rdata),
                .frame_tick(frame_tick), .draw_pg(draw_pg), .disp_pg(disp_pg));
 
   integer errors = 0;
+
+  // ---- SDRAM stub: the list slots, 3-cycle acks (the tb_geom pattern) ----
+  reg [15:0] lmem [0:262143];          // 512KB of halfwords: covers 64 slots
+  reg [1:0]  glat = 0;
+  always @(posedge clk) begin
+    g_ack <= 0; g_ready <= 0;
+    if (g_req && !g_ack && glat != 3) glat <= glat + 2'd1;
+    else if (g_req && glat == 3) begin
+      glat <= 0;
+      g_ack <= 1;
+      if (g_we) lmem[(g_addr - 23'h100000) >> 1] <= g_din;
+      else begin g_dout <= lmem[(g_addr - 23'h100000) >> 1]; g_ready <= 1; end
+    end
+  end
 
   // ---- gfx stub: record EVERY drawing op as (cmd, pen, box) ---------------
   reg [15:0] rx0, ry0, rx1, ry1, rcolr;
@@ -263,8 +284,76 @@ module tb;
       $display("FAIL: GLSTAT error bit stuck"); errors = errors + 1; end
     gl_sel = 0;
 
+    // ==== stage 10c: command lists ========================================
+    // record the SAME 3D scene into list 5, run it twice with a scribble
+    // between -- the op recording after the second CLRUN must repeat the
+    // scene's ops exactly (op-for-op the immediate stream's tail)
+    nops = 0;
+    glb(8'hB3); glw(-16'sd120); glw(16'sd120); glw(-16'sd120); glw(16'sd120);
+    glb(8'hB2); glw(16'sd104); glw(16'sd375); glw(16'sd0); glw(16'sd271);
+    glb(8'h70); glb(8'd5);                              // CLBEG 5
+    glb(8'h07); glb(8'd0); glb(8'd0); glb(8'd0);        // FLOOD (recorded)
+    glb(8'h06); glb(8'd31); glb(8'd63); glb(8'd31);
+    glb(8'h12); glw(-16'sd90); glw(-16'sd90); glw(16'sd300);
+    glb(8'h2A); glw( 16'sd90); glw(-16'sd90); glw(16'sd300);
+    glb(8'hE0); glb(8'd1);
+    glb(8'h06); glb(8'd31); glb(8'd0); glb(8'd0);
+    glb(8'h32); glb(8'd3);                              // POLY3 n=3
+    glw(-16'sd80); glw(-16'sd80); glw(16'sd300);
+    glw( 16'sd80); glw(-16'sd80); glw(16'sd300);
+    glw( 16'sd0);  glw( 16'sd40); glw(16'sd420);
+    glb(8'h71);                                         // CLEND
+    gl_wait_idle;
+    if (nops !== 0) begin
+      $display("FAIL: recording drew %0d ops (must draw nothing)", nops);
+      errors = errors + 1;
+    end
+    glb(8'h72); glb(8'd5);                              // CLRUN 5
+    gl_wait_idle;
+    if (nops !== 107) begin   // FLOOD + line + 105 spans
+      $display("FAIL: CLRUN drew %0d ops, want 107", nops);
+      errors = errors + 1;
+    end else begin
+      expop(0, 8'h04, 16'h0000, 16'd104, 16'd0, 16'd375, 16'd271);
+      expop(1, 8'h02, 16'hFFFF, 16'd153, 16'd222, 16'd325, 16'd222);
+      expop(2,   8'h04, 16'hF800, 16'd239, 16'd109, 16'd239, 16'd109);
+      expop(106, 8'h04, 16'hF800, 16'd162, 16'd213, 16'd316, 16'd213);
+    end
+    nops = 0;
+    glb(8'h06); glb(8'd0); glb(8'd63); glb(8'd0);       // scribble state
+    glb(8'h73); glb(8'd5); glw(16'd2);                  // CLOOP 5, 2 passes
+    gl_wait_idle;
+    if (nops !== 214) begin
+      $display("FAIL: CLOOP x2 drew %0d ops, want 214", nops);
+      errors = errors + 1;
+    end else begin
+      expop(0, 8'h04, 16'h0000, 16'd104, 16'd0, 16'd375, 16'd271);
+      expop(107, 8'h04, 16'h0000, 16'd104, 16'd0, 16'd375, 16'd271);
+      expop(108, 8'h02, 16'hFFFF, 16'd153, 16'd222, 16'd325, 16'd222);
+    end
+    // errors: CLRUN of an undefined slot, CLDEL then CLRUN, slot >= 64,
+    // stray CLEND, CLBEG-in-CLBEG
+    glb(8'h72); glb(8'd9);                              // undefined -> 6
+    glb(8'h74); glb(8'd5); glb(8'h72); glb(8'd5);       // deleted  -> 6
+    glb(8'h72); glb(8'd64);                             // cap      -> 2
+    glb(8'h71);                                         // stray    -> 5
+    glb(8'h70); glb(8'd6); glb(8'h70); glb(8'd7);       // nested   -> 5
+    glb(8'h71);                                         // end recording 6
+    gl_wait_idle;
+    rd_glerr(e0); rd_glerr(e1); rd_glerr(e2); rd_glerr(e3);
+    if (e0 !== 8'd6 || e1 !== 8'd6 || e2 !== 8'd2 || e3 !== 8'd5) begin
+      $display("FAIL: list errors %0d %0d %0d %0d, want 6 6 2 5",
+               e0, e1, e2, e3);
+      errors = errors + 1;
+    end
+    rd_glerr(e0); rd_glerr(e1);
+    if (e0 !== 8'd5 || e1 !== 8'd0) begin
+      $display("FAIL: nested error %0d %0d, want 5 0", e0, e1);
+      errors = errors + 1;
+    end
+
     if (errors == 0)
-      $display("TB-GL: PASS (GLID, 3D scene ops exact incl. 105 spans, 2D verbs exact, RECT clamp box, CLEARS both pages, WAIT paces, error FIFO, FIFO backpressure)");
+      $display("TB-GL: PASS (GLID, 3D scene ops exact incl. 105 spans, 2D verbs exact, RECT clamp box, CLEARS both pages, WAIT paces, error FIFO, FIFO backpressure, LISTS: record silent + CLRUN/CLOOP exact ops + errors)");
     else $display("TB-GL: %0d FAILURES", errors);
     $finish;
   end

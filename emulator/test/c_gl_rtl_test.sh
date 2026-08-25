@@ -38,4 +38,12 @@ sh c_gl_mat_test.sh > /dev/null || fail "emulator matrix suite failed"
   && ./tbglm | grep -q "TB-GL-MPX: DONE" ) || fail "tb_gl_mpx did not finish"
 cmp gl_m.ppm $SD/tb_gl_mpx.ppm || fail "RTL matrix frame differs from emulator frame"
 
-echo "C-GL-RTL TEST: PASS (RTL and emulator framebuffers byte-identical: 10a scene AND 10b matrix scene)"
+# 5: the stage-10c fly-through -- record + CLOOP through the real stack
+sh c_gl_list_test.sh > /dev/null || fail "emulator list suite failed"
+( cd $SD && iverilog -g2012 -o tbglx tb_gl_lpx.v ../../rtl/p8x_geom.v \
+      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v gfx_mem.v \
+      gfx_span.v sdram_arb.v p8x_sdram.v sdram_video.v sdram_chip.v \
+  && ./tbglx | grep -q "TB-GL-LPX: DONE" ) || fail "tb_gl_lpx did not finish"
+cmp gl_lc_l.ppm $SD/tb_gl_lpx.ppm || fail "RTL fly-through frame differs from emulator frame"
+
+echo "C-GL-RTL TEST: PASS (RTL and emulator framebuffers byte-identical: 10a scene, 10b matrix scene, 10c CLOOP fly-through)"

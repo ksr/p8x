@@ -42,6 +42,16 @@ module p8x_geom (
   input             gl_wr,
   input             gl_rd,
 
+  // SDRAM port (arbiter master g): stage-10c command lists -- the
+  // recorder streams bytes in, the replayer streams them back out.
+  output reg        g_req,
+  output reg        g_we,
+  output reg [22:0] g_addr,
+  output reg [15:0] g_din,
+  input             g_ack,
+  input             g_ready,
+  input      [15:0] g_dout,
+
   // gfx register master (p8x_top muxes this over the CPU while gm_own).
   output            gm_own,
   output reg        gm_wr,
@@ -136,9 +146,10 @@ module p8x_geom (
   wire [6:0] cf_cnt  = cf_wp - cf_rp;
   wire       cf_ne   = (cf_cnt != 7'd0);
   wire       cf_full = cf_cnt[6];
-  reg [7:0]  ef [0:15];              // error FIFO: 1 unknown opcode,
-  reg [4:0]  ef_wp, ef_rp;           //   2 bad parameter, 3 mode not
-  wire       ef_ne = (ef_wp != ef_rp);  // fitted, 4 command-FIFO overflow
+  reg [7:0]  ef [0:7];               // error FIFO: 1 unknown opcode,
+  reg [3:0]  ef_wp, ef_rp;           //   2 bad parameter, 3 mode not
+  wire       ef_ne = (ef_wp != ef_rp);  // fitted, 4 FIFO overflow, 5
+                                        // nesting, 6 undefined, 7 full
   reg [7:0]  glop;                   // opcode being executed
   reg [7:0]  pbuf [0:23];            // fixed parameter bytes (max: MDMATX 24)
   reg [4:0]  pi, pneed;
@@ -201,17 +212,69 @@ module p8x_geom (
   reg [15:0] csum;                   // int16 wrap accumulator
   reg [3:0]  cpi;                    // copy index
   reg        glcvt;                  // CONVRT: capture projection, no draw
-  // far-pass polygon (TRI yon clip)
-  reg [15:0] q2x [0:7]; reg [15:0] q2y [0:7]; reg [15:0] q2z [0:7];
+  // far-pass polygon (TRI yon clip): NO arrays of its own -- between the
+  // near clip and T_MP's mapping, qsx/qsy and v[0:7] are idle, so the
+  // pass borrows them (x->qsx, y->qsy, z->v) and copies back. Saved 3
+  // register arrays' worth of fabric at zero wall-clock.
   reg [3:0]  nq2;
   reg        glact;                  // pipeline exit returns to S_IDLE
   reg        gl2d;                   // suppress projection in the T-map
   reg [1:0]  glcls;                  // CLEARS page phase (0 = plain box)
-  reg [2:0]  glst;                   // consumer FSM
+  reg [3:0]  glst;                   // consumer FSM
   reg [15:0] wcnt;                   // WAIT frames remaining
   reg [15:0] gbx0, gby0, gbx1, gby1, gbcol;    // the box issuer's box
   localparam G_OP=0, G_PRM=1, G_RUN=2, G_PV=3, G_PRUN=4, G_PCLOSE=5,
-             G_WAIT=6, G_RE=7;
+             G_WAIT=6, G_RE=7,
+             // stage 10c: CLEND finish, CLAPP length read, CLRUN start
+             G_LE0=8, G_LE1=9, G_LE2=10, G_AL0=11, G_AL1=12,
+             G_RL0=13, G_RL1=14;
+
+  // ---- stage 10c: COMMAND LISTS (STAGE10-DESIGN.md) ----------------------
+  // 64 lists in 4KB SDRAM slots at CL_BASE + n*4096: byte length in the
+  // slot's first halfword, stream from byte 2. Recording rides the
+  // decoder's byte pops (execution suppressed, bytes paired into
+  // halfword writes); replay switches the consumer's byte SOURCE to a
+  // fetcher walking the slot. One SDRAM op in flight (sd_busy).
+  localparam [22:0] CL_BASE = 23'h100000;
+  reg [63:0]  cldef;                 // the DEFINED bitmap
+  reg         rec;                   // recording into rec_slot
+  reg [5:0]   rec_slot;
+  reg [12:0]  rec_len;               // bytes stored so far
+  reg [7:0]   rec_lo;                // byte-pair latch
+  reg         rskip;                 // consume one command, store/run nothing
+  reg         rp;                    // replaying from rp_slot
+  reg [5:0]   rp_slot;
+  reg [12:0]  rp_off, rp_len;
+  reg [15:0]  rp_cnt;                // CLOOP passes remaining
+  reg [7:0]   rpb0, rpb1;            // replay byte buffer
+  reg [1:0]   rp_have;
+  reg         fst;                   // fetcher: 0 idle, 1 read in flight
+  reg         sd_busy;               // one SDRAM op outstanding
+  // the consumer's byte source: the command FIFO, or the replay buffer
+  wire [7:0]  srcb   = rp ? rpb0 : cf[cf_rp[5:0]];
+  wire        src_ne = rp ? (rp_have != 2'd0) : cf_ne;
+  // opcode -> fixed parameter-byte count (the emulator's gl_cmdlen as a
+  // wire; POLY 30-33 report their 1-byte header, vertices stream after)
+  reg [4:0] opn; reg opok;
+  always @(*) begin
+    opok = 1'b1; opn = 5'd0;
+    case (srcb)
+      8'h01,8'h02,8'h03,8'h04,8'h08,8'h09,8'h90,8'hA0,8'hAF,8'h71: opn = 5'd0;
+      8'hE0,8'hAA,8'hAB,8'h70,8'h72,8'h74,8'h79: opn = 5'd1;
+      8'h05,8'h43,8'h93,8'h94,8'h95,8'hA3,8'hA4,8'hA5,
+      8'hA8,8'hA9,8'hB0,8'hB1: opn = 5'd2;
+      8'h06,8'h07,8'h0F,8'h73: opn = 5'd3;
+      8'h10,8'h11,8'h28,8'h29,8'h34,8'h35: opn = 5'd4;
+      8'h12,8'h13,8'h2A,8'h2B,8'h91,8'h92,8'h96,8'hA1: opn = 5'd6;
+      8'hB2,8'hB3: opn = 5'd8;
+      8'hA7: opn = 5'd18;
+      8'h97: opn = 5'd24;
+      8'h30,8'h31,8'h32,8'h33: opn = 5'd1;
+      default: opok = 1'b0;
+    endcase
+  end
+  wire [22:0] rec_wa = CL_BASE + {5'd0, rec_slot, 12'd0}
+                     + {10'd0, rec_len[12:1], 1'b0} + 23'd2;
   wire [15:0] pw0 = {pbuf[1], pbuf[0]};        // little-endian int16 params
   wire [15:0] pw1 = {pbuf[3], pbuf[2]};
   wire [15:0] pw2 = {pbuf[5], pbuf[4]};
@@ -331,6 +394,9 @@ module p8x_geom (
       tri_m <= 0; rfill <= 0; np <= 0; pp <= 0; ft <= 0;
       cf_wp <= 0; cf_rp <= 0; ef_wp <= 0; ef_rp <= 0;
       glst <= G_OP; glop <= 0; pi <= 0; pneed <= 0; glnv <= 0;
+      cldef <= 64'd0; rec <= 0; rskip <= 0; rp <= 0; rp_have <= 0;
+      fst <= 0; sd_busy <= 0; g_req <= 0; g_we <= 0;
+      rec_len <= 0; rp_off <= 0; rp_len <= 0; rp_cnt <= 0;
       glpoly3 <= 0; glpfill <= 0; glph <= 0; gred <= 0;
       c2x <= 0; c2y <= 0; c3x <= 0; c3y <= 0; c3z <= 0;
       glfill <= 0; glproj <= 16'd60; gldist <= 16'd500;
@@ -362,15 +428,41 @@ module p8x_geom (
       // ---- stage 10: GL port accesses (any time -- that is the point) ------
       if (gl_wr && a[2:0] == 3'd0) begin           // GLDATA: push one byte
         if (cf_full) begin
-          if (ef_wp - ef_rp != 5'd16) begin ef[ef_wp[3:0]] <= 8'd4;
-                                            ef_wp <= ef_wp + 5'd1; end
+          if (ef_wp - ef_rp != 4'd8) begin ef[ef_wp[2:0]] <= 8'd4;
+                                            ef_wp <= ef_wp + 4'd1; end
         end else begin
           cf[cf_wp[5:0]] <= wdata;
           cf_wp <= cf_wp + 7'd1;
         end
       end
       if (gl_rd && a[2:0] == 3'd3 && ef_ne)        // GLERR read pops
-        ef_rp <= ef_rp + 5'd1;
+        ef_rp <= ef_rp + 4'd1;
+
+      // ---- stage 10c: SDRAM op completion + the replay fetcher ------------
+      if (g_req && g_ack) begin
+        g_req <= 0;
+        if (g_we) begin g_we <= 0; sd_busy <= 0; end
+      end
+      if (g_ready) sd_busy <= 0;         // read data valid this cycle
+
+      case (fst)
+        1'b0: if (rp && rp_have == 2'd0 && !sd_busy && !g_req &&
+                  glst != G_RL1) begin
+          if (rp_off >= rp_len) begin    // a pass ended at a boundary
+            if (rp_cnt <= 16'd1) rp <= 0;
+            else begin rp_cnt <= rp_cnt - 16'd1; rp_off <= 0; end
+          end else begin
+            g_addr <= CL_BASE + {5'd0, rp_slot, 12'd0}
+                    + {10'd0, rp_off[12:1], 1'b0} + 23'd2;
+            g_we <= 0; g_req <= 1; sd_busy <= 1; fst <= 1'b1;
+          end
+        end
+        1'b1: if (g_ready) begin
+          rpb0 <= g_dout[7:0]; rpb1 <= g_dout[15:8];
+          rp_have <= (rp_len - rp_off >= 13'd2) ? 2'd2 : 2'd1;
+          fst <= 1'b0;
+        end
+      endcase
 
       // ---- the walker ------------------------------------------------------
       case (state)
@@ -621,7 +713,7 @@ module p8x_geom (
           nain <= !($signed(par[24]) < $signed(naz));
           nbin <= !($signed(par[24]) < $signed(nbz));
           if (!($signed(par[24]) < $signed(naz))) begin
-            q2x[nq2[2:0]] <= nax; q2y[nq2[2:0]] <= nay; q2z[nq2[2:0]] <= naz;
+            qsx[nq2[2:0]] <= nax; qsy[nq2[2:0]] <= nay; v[nq2[2:0]] <= naz;
             nq2 <= nq2 + 4'd1;
           end
           state <= F_I0W;
@@ -634,19 +726,19 @@ module p8x_geom (
           end
         end
         F_I1: if (md_done) begin
-          q2x[nq2[2:0]] <= nax + md_q;
+          qsx[nq2[2:0]] <= nax + md_q;
           md_a <= nby - nay; md_b <= par[24] - naz; md_c <= nbz - naz;
           md_go <= 1; state <= F_I1W;
         end
         F_I1W: if (md_done) begin
-          q2y[nq2[2:0]] <= nay + md_q; q2z[nq2[2:0]] <= par[24];
+          qsy[nq2[2:0]] <= nay + md_q; v[nq2[2:0]] <= par[24];
           nq2 <= nq2 + 4'd1;
           pp <= pp + 4'd1; state <= F_CA;
         end
         F_CP: begin                    // q2 -> q, then the normal map path
-          qx[cpi[2:0]] <= q2x[cpi[2:0]];
-          qy[cpi[2:0]] <= q2y[cpi[2:0]];
-          qz[cpi[2:0]] <= q2z[cpi[2:0]];
+          qx[cpi[2:0]] <= qsx[cpi[2:0]];
+          qy[cpi[2:0]] <= qsy[cpi[2:0]];
+          qz[cpi[2:0]] <= v[cpi[2:0]];
           if (cpi + 4'd1 == nq2) begin
             np <= nq2; pp <= 0; state <= T_MP;
           end else cpi <= cpi + 4'd1;
@@ -1014,30 +1106,45 @@ module p8x_geom (
       // dispatch one primitive per vertex, so a 255-vertex polygon never
       // needs more buffer than one vertex.
       case (glst)
-        G_OP: if (cf_ne) begin
-          glop <= cf[cf_rp[5:0]]; cf_rp <= cf_rp + 7'd1; pi <= 0;
-          case (cf[cf_rp[5:0]])
-            8'h01, 8'h02, 8'h03, 8'h04,
-            8'h08, 8'h09,
-            8'h90, 8'hA0, 8'hAF:        begin pneed <= 5'd0; glst <= G_RUN; end
-            8'hE0, 8'hAA, 8'hAB:        begin pneed <= 5'd1; glst <= G_PRM; end
-            8'h05, 8'h43, 8'hB0, 8'hB1,
-            8'h93, 8'h94, 8'h95,
-            8'hA3, 8'hA4, 8'hA5,
-            8'hA8, 8'hA9:               begin pneed <= 5'd2; glst <= G_PRM; end
-            8'h06, 8'h07, 8'h0F:        begin pneed <= 5'd3; glst <= G_PRM; end
-            8'h10, 8'h11, 8'h28, 8'h29,
-            8'h34, 8'h35:               begin pneed <= 5'd4; glst <= G_PRM; end
-            8'h12, 8'h13, 8'h2A, 8'h2B,
-            8'h91, 8'h92, 8'h96, 8'hA1: begin pneed <= 5'd6; glst <= G_PRM; end
-            8'h30, 8'h31, 8'h32, 8'h33: begin pneed <= 5'd1; glst <= G_PRM; end
-            8'hB2, 8'hB3:               begin pneed <= 5'd8; glst <= G_PRM; end
-            8'hA7:                      begin pneed <= 5'd18; glst <= G_PRM; end
-            8'h97:                      begin pneed <= 5'd24; glst <= G_PRM; end
-            default:                    // unknown opcode: log, skip a byte
-              if (ef_wp - ef_rp != 5'd16) begin
-                ef[ef_wp[3:0]] <= 8'd1; ef_wp <= ef_wp + 5'd1; end
-          endcase
+        // pop one byte from the active source (FIFO or replay buffer);
+        // while recording, pops also stream into the SDRAM store, so
+        // they gate on the store being free (sd_busy)
+        G_OP: if (src_ne && !(rec && sd_busy)) begin
+          glop <= srcb; pi <= 0;
+          if (rp) begin rpb0 <= rpb1; rp_have <= rp_have - 2'd1;
+                        rp_off <= rp_off + 13'd1; end
+          else cf_rp <= cf_rp + 7'd1;
+          if (rec && srcb == 8'h71) begin
+            glst <= G_LE0;                       // the REAL CLEND: finish
+          end else if (!opok) begin              // unknown: log, skip, and
+            if (ef_wp - ef_rp != 4'd8) begin     //   while recording, do
+              ef[ef_wp[2:0]] <= 8'd1;            //   NOT store the byte
+              ef_wp <= ef_wp + 4'd1; end
+          end else begin
+            pneed <= opn;
+            glst <= (opn == 5'd0) ? G_RUN : G_PRM;
+            if (rec) begin
+              if (srcb == 8'h70 || srcb == 8'h72 ||
+                  srcb == 8'h73 || srcb == 8'h79) begin
+                if (ef_wp - ef_rp != 4'd8) begin // no nesting: error 5,
+                  ef[ef_wp[2:0]] <= 8'd5;        //   consume unstored
+                  ef_wp <= ef_wp + 4'd1; end
+                rskip <= 1;
+              end else if (rec_len + {8'd0, opn} + 13'd1 > 13'd4094) begin
+                if (ef_wp - ef_rp != 4'd8) begin // slot full: error 7,
+                  ef[ef_wp[2:0]] <= 8'd7;        //   recording aborts
+                  ef_wp <= ef_wp + 4'd1; end
+                cldef[rec_slot] <= 1'b0; rec <= 0; rskip <= 1;
+              end else begin                     // store the opcode byte
+                if (!rec_len[0]) rec_lo <= srcb;
+                else begin
+                  g_addr <= rec_wa; g_din <= {srcb, rec_lo};
+                  g_we <= 1; g_req <= 1; sd_busy <= 1;
+                end
+                rec_len <= rec_len + 13'd1;
+              end
+            end
+          end
         end
 
         G_PRM: if (pi == pneed) begin
@@ -1046,24 +1153,48 @@ module p8x_geom (
             glpfill <= glfill && (pbuf[0] >= 8'd3);
             glph <= 0; glnv <= pbuf[0]; pi <= 0;
             pneed <= glop[1] ? 5'd6 : 5'd4;
-            if (pbuf[0] == 8'd0) begin                    // n=0: bad parameter
-              if (ef_wp - ef_rp != 5'd16) begin
-                ef[ef_wp[3:0]] <= 8'd2; ef_wp <= ef_wp + 5'd1; end
+            if (rec && !rskip &&
+                rec_len + {5'd0, pbuf[0]} * (glop[1] ? 13'd6 : 13'd4)
+                  > 13'd4094) begin               // vertices overflow: abort
+              if (ef_wp - ef_rp != 4'd8) begin
+                ef[ef_wp[2:0]] <= 8'd7; ef_wp <= ef_wp + 4'd1; end
+              cldef[rec_slot] <= 1'b0; rec <= 0; rskip <= 1;
+              glst <= (pbuf[0] == 8'd0) ? G_OP : G_PV;
+            end else if (pbuf[0] == 8'd0) begin           // n=0: recorded
+              if (!rec && !rskip) begin                   //   as-is; live =
+                if (ef_wp - ef_rp != 4'd8) begin          //   bad parameter
+                  ef[ef_wp[2:0]] <= 8'd2; ef_wp <= ef_wp + 4'd1; end
+              end
+              rskip <= 0;
               glst <= G_OP;
             end else glst <= G_PV;
           end else glst <= G_RUN;
-        end else if (cf_ne) begin
-          pbuf[pi] <= cf[cf_rp[5:0]];
-          cf_rp <= cf_rp + 9'd1; pi <= pi + 5'd1;
+        end else if (src_ne && !(rec && sd_busy)) begin
+          pbuf[pi] <= srcb;
+          if (rp) begin rpb0 <= rpb1; rp_have <= rp_have - 2'd1;
+                        rp_off <= rp_off + 13'd1; end
+          else cf_rp <= cf_rp + 7'd1;
+          pi <= pi + 5'd1;
+          if (rec && !rskip) begin                        // stream to store
+            if (!rec_len[0]) rec_lo <= srcb;
+            else begin
+              g_addr <= rec_wa; g_din <= {srcb, rec_lo};
+              g_we <= 1; g_req <= 1; sd_busy <= 1;
+            end
+            rec_len <= rec_len + 13'd1;
+          end
         end
 
-        G_RUN: if (gl_can) begin
+        G_RUN: if (rec || rskip) begin       // recorded/skipped: done
+          rskip <= 0; glst <= G_OP;
+        end else if (gl_can) begin
           glst <= G_OP;                                   // default: done
           case (glop)
             8'h01: ;                                      // NOOP
             8'h02: begin flip_pend <= 1; state <= S_FLIP; end   // FLIP
             8'h03: draw_pg <= disp_pg;                    // PGSYNC
             8'h04: begin                                  // RESETF
+              cldef <= 64'd0; rec <= 0;
               par[0] <= 16'd256; par[4] <= 16'd256; par[8] <= 16'd256;
               par[1]<=0; par[2]<=0; par[3]<=0; par[5]<=0; par[6]<=0; par[7]<=0;
               par[9]<=0; par[10]<=0; par[11]<=0;
@@ -1139,11 +1270,11 @@ module p8x_geom (
             8'h43:                                        // "CA " / "CX "
               if (pbuf[0] == 8'h58 && pbuf[1] == 8'h20) ; // CX: already hex
               else if (pbuf[0] == 8'h41 && pbuf[1] == 8'h20) begin
-                if (ef_wp - ef_rp != 5'd16) begin         // ASCII: stage 10d
-                  ef[ef_wp[3:0]] <= 8'd3; ef_wp <= ef_wp + 5'd1; end
+                if (ef_wp - ef_rp != 4'd8) begin         // ASCII: stage 10d
+                  ef[ef_wp[2:0]] <= 8'd3; ef_wp <= ef_wp + 4'd1; end
               end else
-                if (ef_wp - ef_rp != 5'd16) begin
-                  ef[ef_wp[3:0]] <= 8'd2; ef_wp <= ef_wp + 5'd1; end
+                if (ef_wp - ef_rp != 4'd8) begin
+                  ef[ef_wp[2:0]] <= 8'd2; ef_wp <= ef_wp + 4'd1; end
             // ---- stage 10b: the matrix verbs -------------------------------
             8'h90: begin                                  // MDIDEN
               jsrc <= 0; jbase <= MB; jlast <= 4'd11; jcnt <= 0;
@@ -1211,8 +1342,8 @@ module p8x_geom (
             end
             8'hB0:                                        // PROJCT
               if ($signed(pw0) < 0 || $signed(pw0) > 16'sd179) begin
-                if (ef_wp - ef_rp != 5'd16) begin
-                  ef[ef_wp[3:0]] <= 8'd2; ef_wp <= ef_wp + 5'd1; end
+                if (ef_wp - ef_rp != 4'd8) begin
+                  ef[ef_wp[2:0]] <= 8'd2; ef_wp <= ef_wp + 4'd1; end
               end else begin
                 glproj <= pw0; glpmode <= 1;
                 cmode <= 2'd2; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
@@ -1230,17 +1361,89 @@ module p8x_geom (
                            state <= C_MLA;
                          end end
             8'hE0: glfill <= pbuf[0][0];                  // PRMFIL
+            // ---- stage 10c: the list verbs -----------------------------
+            8'h71: begin                                  // stray CLEND
+              if (ef_wp - ef_rp != 4'd8) begin            //   (a real one is
+                ef[ef_wp[2:0]] <= 8'd5;                   //   caught at G_OP
+                ef_wp <= ef_wp + 4'd1; end                //   while recording)
+            end
+            8'h70: begin                                  // CLBEG
+              if (rp) begin
+                if (ef_wp - ef_rp != 4'd8) begin
+                  ef[ef_wp[2:0]] <= 8'd5; ef_wp <= ef_wp + 4'd1; end
+              end else if (pbuf[0] >= 8'd64) begin
+                if (ef_wp - ef_rp != 4'd8) begin
+                  ef[ef_wp[2:0]] <= 8'd2; ef_wp <= ef_wp + 4'd1; end
+              end else begin
+                rec <= 1; rec_slot <= pbuf[0][5:0]; rec_len <= 0;
+                cldef[pbuf[0][5:0]] <= 1'b0;
+              end
+            end
+            8'h79: begin                                  // CLAPP (P8X)
+              if (rp) begin
+                if (ef_wp - ef_rp != 4'd8) begin
+                  ef[ef_wp[2:0]] <= 8'd5; ef_wp <= ef_wp + 4'd1; end
+              end else if (pbuf[0] >= 8'd64) begin
+                if (ef_wp - ef_rp != 4'd8) begin
+                  ef[ef_wp[2:0]] <= 8'd2; ef_wp <= ef_wp + 4'd1; end
+              end else if (!cldef[pbuf[0][5:0]]) begin
+                if (ef_wp - ef_rp != 4'd8) begin
+                  ef[ef_wp[2:0]] <= 8'd6; ef_wp <= ef_wp + 4'd1; end
+              end else begin
+                rec_slot <= pbuf[0][5:0]; cldef[pbuf[0][5:0]] <= 1'b0;
+                glst <= G_AL0;           // fetch the stored length first
+              end
+            end
+            8'h72, 8'h73: begin                           // CLRUN / CLOOP
+              if (rp) begin
+                if (ef_wp - ef_rp != 4'd8) begin
+                  ef[ef_wp[2:0]] <= 8'd5; ef_wp <= ef_wp + 4'd1; end
+              end else if (pbuf[0] >= 8'd64) begin
+                if (ef_wp - ef_rp != 4'd8) begin
+                  ef[ef_wp[2:0]] <= 8'd2; ef_wp <= ef_wp + 4'd1; end
+              end else if (!cldef[pbuf[0][5:0]]) begin
+                if (ef_wp - ef_rp != 4'd8) begin
+                  ef[ef_wp[2:0]] <= 8'd6; ef_wp <= ef_wp + 4'd1; end
+              end else if (glop == 8'h73 && {pbuf[2], pbuf[1]} == 16'd0)
+                ;                        // CLOOP 0 times: nothing to do
+              else begin
+                rp_slot <= pbuf[0][5:0];
+                rp_cnt <= (glop == 8'h73) ? {pbuf[2], pbuf[1]} : 16'd1;
+                glst <= G_RL0;
+              end
+            end
+            8'h74: begin                                  // CLDEL
+              if (pbuf[0] >= 8'd64) begin
+                if (ef_wp - ef_rp != 4'd8) begin
+                  ef[ef_wp[2:0]] <= 8'd2; ef_wp <= ef_wp + 4'd1; end
+              end else cldef[pbuf[0][5:0]] <= 1'b0;
+            end
             default: ;
           endcase
         end
 
         G_PV: if (pi == pneed) glst <= G_PRUN;            // one vertex ready
-              else if (cf_ne) begin
-                pbuf[pi] <= cf[cf_rp[5:0]];
-                cf_rp <= cf_rp + 9'd1; pi <= pi + 5'd1;
+              else if (src_ne && !(rec && sd_busy)) begin
+                pbuf[pi] <= srcb;
+                if (rp) begin rpb0 <= rpb1; rp_have <= rp_have - 2'd1;
+                              rp_off <= rp_off + 13'd1; end
+                else cf_rp <= cf_rp + 7'd1;
+                pi <= pi + 5'd1;
+                if (rec && !rskip) begin                  // stream to store
+                  if (!rec_len[0]) rec_lo <= srcb;
+                  else begin
+                    g_addr <= rec_wa; g_din <= {srcb, rec_lo};
+                    g_we <= 1; g_req <= 1; sd_busy <= 1;
+                  end
+                  rec_len <= rec_len + 13'd1;
+                end
               end
 
-        G_PRUN: if (gl_can) begin                         // consume the vertex
+        G_PRUN: if (rec || rskip) begin      // recorded/skipped: count only
+          glnv <= glnv - 8'd1; pi <= 0;
+          if (glnv == 8'd1) begin rskip <= 0; glst <= G_OP; end
+          else glst <= G_PV;
+        end else if (gl_can) begin                        // consume the vertex
           glnv <= glnv - 8'd1; pi <= 0;
           glst <= (glnv == 8'd1) ? (glpfill ? G_OP : G_PCLOSE) : G_PV;
           vpx <= pvx; vpy <= pvy; vpz <= pvz;
@@ -1322,6 +1525,46 @@ module p8x_geom (
           else if (frame_tick) wcnt <= wcnt - 16'd1;
         end
 
+        // ---- stage 10c: CLEND finish -- flush the dangling byte, write
+        // the length halfword, set the DEFINED bit ------------------------
+        G_LE0: if (!sd_busy && !g_req) begin
+          if (rec_len[0]) begin
+            g_addr <= rec_wa; g_din <= {8'h00, rec_lo};
+            g_we <= 1; g_req <= 1; sd_busy <= 1;
+          end
+          glst <= G_LE1;
+        end
+        G_LE1: if (!sd_busy && !g_req) begin
+          g_addr <= CL_BASE + {5'd0, rec_slot, 12'd0};
+          g_din <= {3'd0, rec_len};
+          g_we <= 1; g_req <= 1; sd_busy <= 1;
+          glst <= G_LE2;
+        end
+        G_LE2: if (!sd_busy) begin
+          cldef[rec_slot] <= 1'b1; rec <= 0; glst <= G_OP;
+        end
+
+        // CLAPP: read the stored length, resume recording after it
+        G_AL0: if (!sd_busy && !g_req) begin
+          g_addr <= CL_BASE + {5'd0, rec_slot, 12'd0};
+          g_we <= 0; g_req <= 1; sd_busy <= 1;
+          glst <= G_AL1;
+        end
+        G_AL1: if (g_ready) begin
+          rec_len <= g_dout[12:0]; rec <= 1; glst <= G_OP;
+        end
+
+        // CLRUN/CLOOP: read the length, then the fetcher takes over
+        G_RL0: if (!sd_busy && !g_req) begin
+          g_addr <= CL_BASE + {5'd0, rp_slot, 12'd0};
+          g_we <= 0; g_req <= 1; sd_busy <= 1;
+          glst <= G_RL1;
+        end
+        G_RL1: if (g_ready) begin
+          rp_len <= g_dout[12:0]; rp_off <= 0; rp_have <= 0;
+          rp <= 1; glst <= G_OP;
+        end
+
         default: glst <= G_OP;
       endcase
     end
@@ -1330,13 +1573,13 @@ module p8x_geom (
   // GL busy: the consumer is mid-command or bytes wait in the FIFO
   // busy covers the consumer AND the walker: with GESTAT retired,
   // GLSTAT bit6 is how software waits out its own GL work
-  wire glbusy = (glst != G_OP) || cf_ne || (state != S_IDLE);
+  wire glbusy = (glst != G_OP) || cf_ne || (state != S_IDLE) || rp;
 
   always @(*) begin
     case (a[2:0])
       3'd1:    rdata = {cf_full, glbusy, 4'd0, ef_ne, 1'b0};  // GLSTAT
       3'd2:    rdata = 8'h00;                 // GLRB: empty until 10e
-      3'd3:    rdata = ef_ne ? ef[ef_rp[3:0]] : 8'h00;        // GLERR
+      3'd3:    rdata = ef_ne ? ef[ef_rp[2:0]] : 8'h00;        // GLERR
       3'd4:    rdata = 8'h47;                 // GLID: 'G'
       default: rdata = 8'hFF;
     endcase

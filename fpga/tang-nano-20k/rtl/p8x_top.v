@@ -252,6 +252,12 @@ module p8x_top(
   wire [15:0] e_din;
 
 
+  // stage 10c: the geometry module's SDRAM client returns -- command
+  // lists live at $100000+ and the recorder/replayer stream through it
+  wire        g_req, g_we, g_ack, g_ready;
+  wire [22:0] g_addr;
+  wire [15:0] g_din;
+
   sdram_arb ARB(
     .clk(clk), .rst(rst),
     .c_rd(sd_rd), .c_wr(sd_wr), .c_wr_word(sd_word), .c_refresh(),
@@ -259,8 +265,8 @@ module p8x_top(
     .c_ready(sd_ready), .c_busy(sd_busy),
     .s_req(1'b0), .s_addr(23'd0), .s_ack(), .s_ready(),
     .f_req(1'b0), .f_ack(),
-    .g_req(1'b0), .g_we(1'b0), .g_addr(23'd0), .g_din(16'd0),
-    .g_ack(), .g_ready(),
+    .g_req(g_req), .g_we(g_we), .g_addr(g_addr), .g_din(g_din),
+    .g_ack(g_ack), .g_ready(g_ready),
     .e_req(e_req), .e_we(e_we), .e_word(e_word), .e_addr(e_addr),
     .e_din(e_din), .e_ack(e_ack), .e_ready(e_ready));
 
@@ -276,6 +282,8 @@ module p8x_top(
 
   p8x_geom GEOM(.clk(clk), .rst(rst),
           .a(mem_addr[3:0]),
+          .g_req(g_req), .g_we(g_we), .g_addr(g_addr), .g_din(g_din),
+          .g_ack(g_ack), .g_ready(g_ready), .g_dout(sd_dout),
           .gl_sel(is_gl),
           .gl_wr(cen && mem_we && is_gl),
           .gl_rd(cen && mem_rd && is_gl),

@@ -659,8 +659,9 @@ static void gl_line3(const int16_t *a,const int16_t *b){
    interpreter. Nesting is refused (error 5); running an undefined list
    is error 6; outgrowing a slot is error 7 and the recording aborts. */
 #define CLSLOT 4096
-static uint8_t clmem[256][CLSLOT];
-static uint8_t cldef[256];             /* the DEFINED bitmap */
+#define CLNUM  64                      /* 64 lists (P8X cap; PGC had 256) */
+static uint8_t clmem[CLNUM][CLSLOT];
+static uint8_t cldef[CLNUM];           /* the DEFINED bitmap */
 static int     glrec;                  /* recording into slot glrec-1 */
 static int     glrlen;                 /* bytes recorded so far */
 static int     glreplay;               /* inside a replay (no nesting) */
@@ -743,6 +744,7 @@ static int gl_exec2(const uint8_t *p, int n){
     switch(p[0]){
     case 0x70: case 0x79: NEED(2);         /* CLBEG / CLAPP (P8X append) */
         if(glrec || glreplay){ gl_err(5); return 2; }
+        if(p[1] >= CLNUM){ gl_err(2); return 2; }
         if(p[0] == 0x79 && !cldef[p[1]]){ gl_err(6); return 2; }
         glrec = p[1] + 1;
         glrlen = (p[0] == 0x79)
@@ -757,15 +759,19 @@ static int gl_exec2(const uint8_t *p, int n){
         return 1;
     case 0x72: NEED(2);                    /* CLRUN */
         if(glreplay){ gl_err(5); return 2; }
+        if(p[1] >= CLNUM){ gl_err(2); return 2; }
         if(!cldef[p[1]]){ gl_err(6); return 2; }
         gl_replay(p[1], 1);
         return 2;
     case 0x73: NEED(4);                    /* CLOOP n count */
         if(glreplay){ gl_err(5); return 4; }
+        if(p[1] >= CLNUM){ gl_err(2); return 4; }
         if(!cldef[p[1]]){ gl_err(6); return 4; }
         gl_replay(p[1], (int)(uint16_t)(p[2] | (p[3] << 8)));
         return 4;
-    case 0x74: NEED(2); cldef[p[1]] = 0; return 2;   /* CLDEL */
+    case 0x74: NEED(2);                    /* CLDEL */
+        if(p[1] >= CLNUM){ gl_err(2); return 2; }
+        cldef[p[1]] = 0; return 2;
     case 0x01: return 1;                                  /* NOOP */
     case 0x02: ge_flip(); return 1;                       /* FLIP   (P8X) */
     case 0x03: gfb=gfbd; return 1;                        /* PGSYNC (P8X) */

@@ -56,8 +56,13 @@ module tb;
   wire m_nCS, m_nWE, m_nRAS, m_nCAS, m_CLK, m_CKE;
   wire [3:0] m_DQM;
 
+  wire        g_req, g_we, g_ack, g_ready;
+  wire [22:0] g_addr;
+  wire [15:0] g_din;
   p8x_geom GEOM(.clk(clk), .rst(rst),
     .a(a), .wdata(wdata), .rdata(rdata),
+    .g_req(g_req), .g_we(g_we), .g_addr(g_addr), .g_din(g_din),
+    .g_ack(g_ack), .g_ready(g_ready), .g_dout(c_dout),
     .gl_sel(gl_sel), .gl_wr(gl_wr), .gl_rd(1'b0),
     .gm_own(gm_own), .gm_wr(gm_wr), .gm_a(gm_a), .gm_wdata(gm_wdata),
     .gm_rdata(gfx_rdata),
@@ -78,8 +83,8 @@ module tb;
     .c_ready(c_ready), .c_busy(c_busy),
     .s_req(1'b0), .s_addr(23'd0), .s_ack(), .s_ready(),
     .f_req(1'b0), .f_ack(),
-    .g_req(1'b0), .g_we(1'b0), .g_addr(23'd0), .g_din(16'd0),
-    .g_ack(), .g_ready(),
+    .g_req(g_req), .g_we(g_we), .g_addr(g_addr), .g_din(g_din),
+    .g_ack(g_ack), .g_ready(g_ready),
     .e_req(e_req), .e_we(e_we), .e_word(e_word), .e_addr(e_addr),
     .e_din(e_din), .e_ack(e_ack), .e_ready(e_ready));
 

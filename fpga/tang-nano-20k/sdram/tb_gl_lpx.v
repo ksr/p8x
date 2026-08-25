@@ -1,22 +1,21 @@
-// tb_gl_pix.v -- stage-10a GL stream through the REAL pixel stack, and the
+// tb_gl_lpx.v -- the stage-10b MATRIX scene through the REAL pixel stack.
 // framebuffer OUT as an image.
 //
-// tb_gl proves the interpreter issues the right OPS (directed constants). This bench closes the last gap to the emulator: the
-// same GL byte stream c_gl_test feeds the emulator (its gl_b.c scene) is
-// poked at GLDATA here, through the real p8x_geom + gfx + arbiter +
-// controller + sdram chip model, and the chip's memory is then dumped as a
-// P6 PPM in the emulator's exact format (bit-replicated 565->888). The
-// harness (c_gl_rtl_test.sh) byte-compares it against the emulator's
-// gl_b.ppm: RTL pixels == emulator pixels, the whole frame.
+// The byte stream is c_gl_mat_test's gl_m.c scene verbatim: MDTRAN,
+// MDIDEN/MDORG/MDROTY (pivot), VWIDEN/VWRPT/VWROTY/DISTAN (orbit),
+// PROJCT, RESETF, CLIPY/DISTY (a yon-cut line), CONVRT -- every stage-10b
+// verb with a visible consequence. The chip's framebuffer is dumped in
+// the emulator's exact PPM format and the harness byte-compares it
+// against the emulator's gl_m.ppm: compose engine == golden model,
+// every pixel.
 //
 // The screen is prepared the way the machine's boot leaves it (CLS black +
 // the 1-px white border of the boot splash), so untouched pixels compare
 // too, not just the scene.
 //
-//   iverilog -g2012 -o tbglp tb_gl_pix.v ../../rtl/p8x_geom.v \
-//            ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v \
-//            gfx_mem.v gfx_span.v sdram_arb.v p8x_sdram.v sdram_video.v \
-//            sdram_chip.v
+//   iverilog -g2012 -o tbglm tb_gl_mpx.v ../../rtl/p8x_geom.v \
+//            ../../rtl/mdu_core.v ../../rtl/gfx.v gfx_mem.v gfx_span.v \
+//            sdram_arb.v p8x_sdram.v sdram_video.v sdram_chip.v
 //   vvp tbglp
 `timescale 1ns/1ps
 module tb;
@@ -152,7 +151,7 @@ module tb;
       n = 0; a = 4'h1; gl_sel = 1; #1;
       while (rdata[6] && n < 4000000) begin @(negedge clk); #1; n = n + 1; end
       gl_sel = 0;
-      if (n >= 4000000) begin $display("TB-GL-PIX: FAIL (never idle)"); $finish(1); end
+      if (n >= 4000000) begin $display("TB-GL-LPX: FAIL (never idle)"); $finish(1); end
       // the walker hands the LAST op to the device and idles -- the device
       // (and the controller behind it) may still be drawing it. Software
       // polls GSTAT before touching pixels; the bench must too, plus a
@@ -182,38 +181,35 @@ module tb;
     gpoke(4'h5, 8'h03);                       // BOX outline
     gwait;
 
-    // ---- the GL scene: byte for byte what c_gl_test's gl_b.c pokes --------
+    // ---- the stage-10c fly-through: c_gl_list_test's CLOOP scene,
+    // byte for byte -- record one frame (MDROTY 7 delta + erase + a
+    // wireframe box), then CLOOP it 5 passes; the accumulated result
+    // must byte-match the emulator's gl_lc_l.ppm
     glb(8'hB3); glw(-16'sd120); glw(16'sd120); glw(-16'sd120); glw(16'sd120);
     glb(8'hB2); glw(16'sd104); glw(16'sd375); glw(16'sd0); glw(16'sd271);
-    glb(8'h07); glb(8'd0); glb(8'd0); glb(8'd0);          // FLOOD = erase
-    glb(8'h06); glb(8'd31); glb(8'd63); glb(8'd31);       // COLOR white
-    line3(-16'sd90, -16'sd90, 16'sd300,  16'sd90, -16'sd90, 16'sd300);
-    glb(8'h06); glb(8'd31); glb(8'd0); glb(8'd0);         // red
-    line3( 16'sd90, -16'sd90, 16'sd300,  16'sd0,   16'sd90, 16'sd300);
-    glb(8'h06); glb(8'd0); glb(8'd63); glb(8'd0);         // green, clipped
-    line3(-16'sd200, 16'sd0,  16'sd300,  16'sd200, 16'sd50, 16'sd300);
-    glb(8'h06); glb(8'd0); glb(8'd0); glb(8'd31);         // blue, near-clip
-    line3( 16'sd0,   16'sd0, -16'sd50,   16'sd0,   16'sd0,  16'sd300);
-    glb(8'hE0); glb(8'd1);                                // PRMFIL 1
-    glb(8'h06); glb(8'd31); glb(8'd63); glb(8'd0);        // yellow
-    glb(8'h32); glb(8'd3);                                // POLY3 n=3
-    glw(-16'sd80); glw(-16'sd80); glw(16'sd300);
-    glw( 16'sd80); glw(-16'sd80); glw(16'sd300);
-    glw( 16'sd0);  glw( 16'sd40); glw(16'sd420);
-    glb(8'h06); glb(8'd0); glb(8'd63); glb(8'd31);        // cyan
-    glb(8'h32); glb(8'd3);
-    glw( 16'sd100); glw(-16'sd140); glw(16'sd260);
-    glw( 16'sd140); glw( 16'sd60);  glw(16'sd260);
-    glw(-16'sd40);  glw( 16'sd10);  glw(16'sd200);
+    glb(8'hB0); glw(16'sd60);                       // PROJCT 60
+    glb(8'hB1); glw(16'sd500);                      // DISTAN 500
+    glb(8'h70); glb(8'd2);                          // CLBEG 2
+    glb(8'h94); glw(16'sd7);                        // MDROTY 7 (delta/pass)
+    glb(8'h06); glb(8'd31); glb(8'd63); glb(8'd0);  // COLOR yellow
+    glb(8'h07); glb(8'd0); glb(8'd0); glb(8'd0);    // FLOOD
+    glb(8'h12); glw(-16'sd70); glw(-16'sd70); glw(16'sd40);
+    glb(8'h2A); glw( 16'sd70); glw(-16'sd70); glw(16'sd40);
+    glb(8'h2A); glw( 16'sd70); glw( 16'sd70); glw(16'sd40);
+    glb(8'h2A); glw(-16'sd70); glw( 16'sd70); glw(16'sd40);
+    glb(8'h2A); glw(-16'sd70); glw(-16'sd70); glw(16'sd40);
+    glb(8'h2A); glw(-16'sd70); glw(-16'sd70); glw(-16'sd40);
+    glb(8'h71);                                     // CLEND
+    glb(8'h73); glb(8'd2); glw(16'd5);              // CLOOP 2, 5 passes
     gl_wait_idle;
 
     if (CHIP.protocol_errors != 0) begin
-      $display("TB-GL-PIX: FAIL (%0d protocol errors)", CHIP.protocol_errors);
+      $display("TB-GL-LPX: FAIL (%0d protocol errors)", CHIP.protocol_errors);
       $finish(1);
     end
 
     // ---- dump page 0 as a P6 PPM, the emulator's exact format -------------
-    f = $fopen("tb_gl_pix.ppm", "wb");
+    f = $fopen("tb_gl_lpx.ppm", "wb");
     $fwrite(f, "P6\n480 272\n255\n");
     for (y = 0; y < 272; y = y + 1)
       for (x = 0; x < 480; x = x + 1) begin
@@ -223,9 +219,9 @@ module tb;
         $fwrite(f, "%c%c%c", {r5, r5[4:2]}, {g6, g6[5:4]}, {b5, b5[4:2]});
       end
     $fclose(f);
-    $display("TB-GL-PIX: DONE (tb_gl_pix.ppm written; compare against the emulator)");
+    $display("TB-GL-LPX: DONE (tb_gl_lpx.ppm written; compare against the emulator)");
     $finish(0);
   end
 
-  initial begin #400_000_000; $display("TB-GL-PIX: TIMEOUT"); $finish(1); end
+  initial begin #400_000_000; $display("TB-GL-LPX: TIMEOUT"); $finish(1); end
 endmodule
