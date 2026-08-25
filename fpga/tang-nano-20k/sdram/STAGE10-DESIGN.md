@@ -294,7 +294,8 @@ byte-identical emulator-vs-RTL (c_gl_rtl_test), 92-PASS make test.
 - **10c — command lists.** CLBEG/CLEND/CLRUN/CLOOP/CLDEL in SDRAM;
   cube becomes a stored list that spins with CLOOP, CPU idle.
 
-  **10c as designed (2026-08-24).** The retained-scene system, PGC
+  **10c as designed (2026-08-24; emulator half + console family
+  SHIPPED 2026-08-25 — c_gl_list_test; RTL pending, see HANDOFF).** The retained-scene system, PGC
   chapter 3.9 shrunk to the P8X:
 
   - **Storage**: 256 lists in SDRAM at $100000 (the retired record

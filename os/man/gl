@@ -31,6 +31,8 @@ DESCRIPTION
       28 DRAW x y    29 DRAWR       2A DRAW3 x y z 2B DRAWR3
       30 POLY n xy.. 31 POLYR       32 POLY3 n xyz.. 33 POLYR3
       34 RECT x y    35 RECTR       43 "CA "/"CX " (mode)
+      70 CLBEG n     71 CLEND       72 CLRUN n     73 CLOOP n cnt
+      74 CLDEL n     79 CLAPP n (P8X: append to list n)
       90 MDIDEN      91 MDORG x y z 92 MDSCAL sx sy sz (8.8)
       93 MDROTX deg  94 MDROTY deg  95 MDROTZ deg  96 MDTRAN x y z
       97 MDMATX 12w  A0 VWIDEN      A1 VWRPT x y z A3 VWROTX deg
@@ -48,6 +50,17 @@ DESCRIPTION
     window space: no matrix, just clip and map. PRMFIL 1 fills closed
     primitives (POLY3 3 ... is the filled triangle). WINDOW and VWPORT
     take PGC parameter order: x1 x2 y1 y2.
+
+    COMMAND LISTS (stage 10c): CLBEG n records everything up to CLEND
+    into list n (0-255, 4KB each, stored on the card) instead of
+    drawing it; CLRUN n replays the list, CLOOP n cnt replays it cnt
+    times -- and matrix verbs inside a looped list are DELTAS that
+    accumulate per pass, so a list that nudges MDROTY, draws, FLIPs and
+    WAITs is a self-spinning scene with the CPU idle. CLAPP appends to
+    an existing list; CLDEL forgets one. The shell convention: LIST 0
+    IS THE SCENE -- tri records/appends it, rotate and camera replay
+    it. Errors: 5 nesting (a list op inside recording/replay), 6 list
+    undefined, 7 list full (recording aborted).
 
     From BASIC, a poke loop is the whole driver:
       10 REM white filled triangle, house frame

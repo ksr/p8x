@@ -305,6 +305,23 @@ packed. Every suite stayed green through the rework, both pixel scenes
 still byte-identical emulator-vs-RTL. Board verification is the one
 step left (the card was unplugged).
 
+**STAGE 10c EMULATOR HALF SHIPPED (2026-08-25):** COMMAND LISTS. 256
+lists in 4KB slots; recording flows bytes through the normal decoder
+with execution suppressed (command boundaries tracked -- a parameter
+byte can never fake a CLEND); replay switches the interpreter's byte
+source; CLOOP accumulates matrix deltas per pass (the fly-through,
+proven byte-identical to N immediate frames); CLAPP is the P8X append.
+The console family speaks it: tri records/appends LIST 0 (the scene),
+rotate (DEGREES now, brads died with the sine table) and camera replay
+it with new matrices, cube CLOOPs a self-spinning frame with the CPU
+idle. Trap re-paid: cube's GL branch pushed the binary past CSTACKTOP
+and the stack ate the code (crash-to-monitor signature); deleting its
+dead stage-8b path fixed it. c_gl_list_test + the full gfx group green.
+STILL OPEN: the 10c RTL -- the SDRAM port returns (store/fetch/bitmap),
+paired with moving the walker's polygon arrays into the scratchpad RAM
+for placement headroom. Semantics are pinned; the benches will catch
+any divergence.
+
 Three operational notes for whoever drives the board over serial next:
 
 - **Two serial clients do not error -- they silently shred each other's

@@ -48,13 +48,6 @@
 #define MDGO        0xFF34       /* write (any value): start the MDU operation */
 #define MDSTAT      0xFF35       /* read: bit7 BUSY */
 #define MDID        0xFF36       /* read: $4D 'M' -- MDU-presence probe */
-#define GESEL       0xFF40       /* geometry: parameter index (see the list above) */
-#define GEVAL       0xFF41       /* geometry: parameter value low (write latches; READ returns par[GESEL] low) */
-#define GEUP        0xFF42       /* geometry: upload one edge-list byte, cursor++ */
-#define GECMD       0xFF43       /* geometry: 1 rewind cursor / 2 RENDER / 3 FLIP / 4 PGSYNC (draw rejoins display) */
-#define GESTAT      0xFF44       /* read: bit7 BUSY, bit0 ERR (bad count) */
-#define GEID        0xFF45       /* read: $45 'E' -- geometry-engine presence probe */
-#define GEVALH      0xFF4A       /* geometry: value high -- write commits reg[GESEL] and GESEL++; READ returns par[GESEL] high */
 #define GLDATA      0xFF50       /* GL: write one command-stream byte into the FIFO */
 #define GLSTAT      0xFF51       /* read: bit7 FIFO full, bit6 busy, bit1 error pending, bit0 read-back pending */
 #define GLRB        0xFF52       /* read: pop one read-back FIFO byte */

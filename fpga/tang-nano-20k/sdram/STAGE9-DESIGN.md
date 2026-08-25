@@ -1,5 +1,10 @@
 # Stage 9 — colour on the wire, faces on the screen
 
+> **HISTORICAL** — the $FF40 record interface this stage built was
+> RETIRED at stage 10b (STAGE10-DESIGN.md): the GL command port at $FF50
+> is the hardware 3D path now, reusing this stage's transform/clip/draw
+> pipeline unchanged. Kept as the design record of that pipeline.
+
 Stage 8b's engine draws white lines. This stage gives every primitive its
 own colour and adds the first FACE: a 3D triangle with a fill option —
 the polygon primitive (an N-gon is a fan of triangles, and the fan is the

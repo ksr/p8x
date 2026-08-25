@@ -5,31 +5,22 @@ SYNOPSIS
     rotate [x y z [px py pz]]
 
 DESCRIPTION
-    The geometry engine's record list survives between commands -- it IS
-    the scene. Build one (tri, tri ... k, or cube's aftermath), then
-    rotate it: this command rewrites only the engine's rotation matrix
-    and redraws. Angles are in BRADS: 256 is a full turn, 64 is 90
-    degrees, negative allowed. They apply as yaw (y), then pitch (x),
-    then roll (z). WITHOUT a pivot the translation parameters are left
-    alone: the model turns about its own origin and keeps its push-out
-    -- right for origin-centred scenes like cube's (run cube, then
-    rotate 0 32 0). WITH a pivot (px py pz) the whole transform is
-    rewritten so the pivot maps to itself -- right for tri-built scenes
-    whose depth is baked into the vertices (pivot on the scene's middle,
-    0 0 400 say, and it turns in place). Bare rotate resets the rotation
-    and keeps the translation. Needs the engine.
-
-    INTERIM (stage 10b): the record engine that held the persisted scene
-    is retired from the fabric -- this command answers ?No engine until
-    GL command lists (stage 10c) bring the retained scene back. The
-    emulator and the design doc carry the details (STAGE10-DESIGN.md).
+    The scene is GL command list 0 -- whatever tri built (stage 10c).
+    This command rewrites the card's MODELING matrix and replays the
+    list: five small commands, the fabric does the rest. Angles are
+    DEGREES (the card's native unit; the brads of stages 7-9 died with
+    the sine table): 360 is a full turn, 90 a quarter, negative allowed.
+    They apply as yaw (y), then pitch (x), then roll (z), about the
+    pivot point (px py pz; the origin without one). Scenes whose depth
+    is baked into their vertices turn in place when the pivot is their
+    centre (0 0 400, say). Bare ROTATE resets the rotation. Answers
+    ?No scene until a tri has recorded one. Needs the GL engine.
 
 EXAMPLES
-    cube 1
-    rotate 0 16 0             yaw cube's model an eighth-turn in place
     tri -80 -80 300 80 -80 300 0 40 420 f 31 0 0
-    rotate 0 32 0 0 0 360     yaw a tri scene about its middle
-    rotate                    reset the rotation
+    rotate 0 45 0 0 0 340     yaw the scene about its middle
+    rotate 20 45 0 0 0 340    ...and tip it forward 20 degrees
+    rotate                    back to unrotated
 
 SEE ALSO
-    tri, cube, g3d
+    tri, camera, gl, page

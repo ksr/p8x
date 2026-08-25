@@ -19,15 +19,16 @@ DESCRIPTION
     the display's hardware LINE. The rotation itself is the demo's own
     integer sine table, not the library's.
 
-    The record engine that once spun this in fabric is retired (stage
-    10b): cube now always runs the stage-7 all-software path (~72 ms a
-    frame -- watchable, and still the pipeline's proof). The GL engine
-    (man g3d, STAGE10-DESIGN.md) will take the demo over when command
-    lists land (stage 10c): the cube becomes a stored GL list the fabric
-    loops with zero CPU. `cube N s` spells the software path out
-    explicitly; it is the same path either way for now. The cube is
-    rebuilt from constants every frame, so it never accumulates rounding
-    error and frame N looks the same on every run.
+    With the GL engine fitted (stage 10c) the cube is a STORED COMMAND
+    LIST that spins itself: the list nudges the card's modeling matrix
+    (MDROTY 6, MDROTX 3 per pass), erases, draws the 12 edges, flips
+    and waits a frame tick -- and CLOOP runs it N times with the CPU
+    completely idle. On the way in it CLEARS both framebuffer pages
+    (power-on contents are undefined) and on the way out it rejoins
+    them (PGSYNC), so drawing afterwards behaves. `cube N s` forces the
+    stage-7 all-software path (~72 ms a frame, rebuilt from constants
+    every frame so frame N is identical on every run) -- without a GL
+    engine that path is the automatic fallback.
 
 EXAMPLES
     cube            one full turn and exit
