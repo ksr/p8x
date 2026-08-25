@@ -76,7 +76,7 @@ echo "==> synthesize ($TOP)"
 # mdu_core multiply, the ellipse setup) land in the chip's 24 idle
 # MULT18X18 blocks instead of ~450 LUT4 apiece -- the headroom that let
 # stage 10b place at all.
-yosys -p "read_verilog ${YOSYS_DEFS:-} $SRC; synth_gowin -family gw2a -top $TOP -json p8x.json" >synth.log 2>&1 \
+yosys -p "read_verilog -I../rtl ${YOSYS_DEFS:-} $SRC; synth_gowin -family gw2a -top $TOP -json p8x.json" >synth.log 2>&1 \
   || { tail -20 synth.log; exit 1; }
 
 echo "==> place & route"

@@ -267,7 +267,6 @@ module tb;
 
     // ==== errors ===========================================================
     glb(8'hEE);                                         // unknown opcode
-    glb(8'h43); glb(8'h41); glb(8'h20);                 // "CA " -> not fitted
     glb(8'h32); glb(8'd0);                              // POLY3 n=0 -> bad
     gl_wait_idle;
     a = 4'h1; gl_sel = 1; #1;
@@ -275,9 +274,37 @@ module tb;
       $display("FAIL: GLSTAT error bit clear"); errors = errors + 1; end
     gl_sel = 0;
     rd_glerr(e0); rd_glerr(e1); rd_glerr(e2); rd_glerr(e3);
-    if (e0 !== 8'd1 || e1 !== 8'd3 || e2 !== 8'd2 || e3 !== 8'd0) begin
-      $display("FAIL: error FIFO %0d %0d %0d %0d, want 1 3 2 0", e0, e1, e2, e3);
+    if (e0 !== 8'd1 || e1 !== 8'd2 || e2 !== 8'd0 || e3 !== 8'd0) begin
+      $display("FAIL: error FIFO %0d %0d %0d %0d, want 1 2 0 0", e0, e1, e2, e3);
       errors = errors + 1;
+    end
+
+    // ==== stage 10d: ASCII mode ===========================================
+    // CA, a short-form line drawn through the translator, CX -- the LINE
+    // op must equal the hex MOVE3/DRAW3 result; then hex still works
+    nops = 0;
+    glb(8'hB3); glw(-16'sd120); glw(16'sd120); glw(-16'sd120); glw(16'sd120);
+    glb(8'hB2); glw(16'sd104); glw(16'sd375); glw(16'sd0); glw(16'sd271);
+    glb(8'h06); glb(8'd31); glb(8'd63); glb(8'd31);
+    glb(8'h43); glb(8'h41); glb(8'h20);                 // "CA "
+    glb("M"); glb("3"); glb(" ");                       // M3 -90 -90 300
+    glb("-"); glb("9"); glb("0"); glb(" ");
+    glb("-"); glb("9"); glb("0"); glb(" ");
+    glb("3"); glb("0"); glb("0"); glb(8'h0D);
+    glb("d"); glb("3"); glb(" ");                       // d3 (case folds)
+    glb("9"); glb("0"); glb(",");
+    glb("-"); glb("9"); glb("0"); glb(";");
+    glb("3"); glb("0"); glb("0"); glb(8'h0A);
+    glb("C"); glb("X"); glb(" ");
+    gl_wait_idle;
+    if (nops !== 1) begin
+      $display("FAIL: ASCII line drew %0d ops, want 1", nops);
+      errors = errors + 1;
+    end else
+      expop(0, 8'h02, 16'hFFFF, 16'd153, 16'd222, 16'd325, 16'd222);
+    rd_glerr(e0);
+    if (e0 !== 8'd0) begin
+      $display("FAIL: ASCII line queued error %0d", e0); errors = errors + 1;
     end
     a = 4'h1; gl_sel = 1; #1;
     if (rdata[1]) begin
@@ -353,7 +380,7 @@ module tb;
     end
 
     if (errors == 0)
-      $display("TB-GL: PASS (GLID, 3D scene ops exact incl. 105 spans, 2D verbs exact, RECT clamp box, CLEARS both pages, WAIT paces, error FIFO, FIFO backpressure, LISTS: record silent + CLRUN/CLOOP exact ops + errors)");
+      $display("TB-GL: PASS (GLID, 3D scene ops exact incl. 105 spans, 2D verbs exact, RECT clamp box, CLEARS both pages, WAIT paces, error FIFO, FIFO backpressure, LISTS exact, ASCII short-form line == hex op)");
     else $display("TB-GL: %0d FAILURES", errors);
     $finish;
   end
