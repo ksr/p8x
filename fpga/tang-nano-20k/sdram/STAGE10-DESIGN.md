@@ -293,6 +293,49 @@ byte-identical emulator-vs-RTL (c_gl_rtl_test), 92-PASS make test.
   DISTH/DISTY/CLIPH/CLIPY. rotate/camera become one-line emitters.
 - **10c — command lists.** CLBEG/CLEND/CLRUN/CLOOP/CLDEL in SDRAM;
   cube becomes a stored list that spins with CLOOP, CPU idle.
+
+  **10c as designed (2026-08-24).** The retained-scene system, PGC
+  chapter 3.9 shrunk to the P8X:
+
+  - **Storage**: 256 lists in SDRAM at $100000 (the retired record
+    list's home; the g-port master returns for exactly this), fixed
+    4KB slots — list n at $100000 + n*4096, byte length in the slot's
+    first halfword, stream from byte 2. A 256-bit DEFINED bitmap lives
+    in fabric (CLRUN of a never-recorded slot must error, and SDRAM
+    powers on as garbage).
+  - **Recording** (CLBEG n ... CLEND): bytes flow through the NORMAL
+    decoder — it must track command boundaries anyway, or a parameter
+    byte equal to CLEND's opcode would end the list — but execution is
+    suppressed and every consumed byte is appended to the slot instead.
+    An unknown opcode logs error 1 and is skipped, not stored. CLEND at
+    a command boundary finishes the list, writes the length, sets the
+    bitmap bit.
+  - **Replay** (CLRUN n / CLOOP n count): the interpreter's byte SOURCE
+    switches from the command FIFO to a fetcher walking the slot; the
+    decode/execute machinery is untouched (one interpreter, two byte
+    sources). GLDATA bytes queue in the FIFO meanwhile and run after.
+    CLOOP rewinds and replays count times; matrix DELTAS inside a
+    looped list therefore accumulate — MDROTY 2 per pass spins, VWROTY
+    per pass orbits, and a tail of FLIP + WAIT 1 paces each pass to the
+    panel: the FLY-THROUGH, zero bytes from the CPU after launch.
+  - **CLAPP n** (P8X-only, opcode 79): CLBEG that APPENDS at the stored
+    length instead of replacing — the PGC has no append, but the shell
+    needs one (`tri ... k` grows the scene list without read-back,
+    which does not exist until 10e).
+  - **Nesting is refused**: CLBEG/CLAPP while recording, CLRUN/CLOOP
+    while recording or replaying — error 5. Undefined list — error 6.
+    A list outgrowing its 4KB slot — error 7, recording aborted, slot
+    left undefined. CLDEL n clears the bitmap bit; RESETF clears them
+    all (the SDRAM bytes are dead, not erased).
+  - **The console commands come home**: tri records/appends the SCENE
+    LIST (list 0) and runs it; rotate = MDROT* + CLRUN 0; camera =
+    VW*/DISTAN + CLRUN 0 — both shed their ?No engine interim. cube
+    records its cube once and CLOOPs a spin tail, CPU idle.
+  - **Fabric budget**: the g-port revival + fetcher + bitmap land near
+    the known placement cliff, so 10c also moves the T-path polygon
+    arrays (qx/qy/qz, the far-pass mirror, qsx/qsy) into the compose
+    scratchpad RAM — the same registered-read rework that made 10b
+    place, applied to the walker's biggest remaining register file.
 - **10d — ASCII mode in fabric.** Tokenizer + decimal parser, CA/CX;
   BASIC GL statement; the `gl` console command; manual examples run.
 - **10e — read-back + error FIFOs.** MATXRD/FLAGRD/CLRD/CLMOD; error

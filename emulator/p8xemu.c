@@ -650,17 +650,129 @@ static void gl_line3(const int16_t *a,const int16_t *b){
     ge_xform(a,w); ge_xform(b,w+3);
     ge_line3t(w);
 }
-/* one complete command at glf[0..]: returns bytes consumed, 0 = incomplete.
+/* ---- stage 10c: COMMAND LISTS (STAGE10-DESIGN.md) ---------------------
+   256 lists in 4KB slots ($100000 on the board; here a plain array), byte
+   length in the slot's first halfword. Recording flows bytes through the
+   NORMAL decoder (it must track command boundaries, or a parameter byte
+   equal to CLEND's opcode would end a list early) with execution
+   suppressed; replay feeds the stored stream back through the same
+   interpreter. Nesting is refused (error 5); running an undefined list
+   is error 6; outgrowing a slot is error 7 and the recording aborts. */
+#define CLSLOT 4096
+static uint8_t clmem[256][CLSLOT];
+static uint8_t cldef[256];             /* the DEFINED bitmap */
+static int     glrec;                  /* recording into slot glrec-1 */
+static int     glrlen;                 /* bytes recorded so far */
+static int     glreplay;               /* inside a replay (no nesting) */
+
+/* length of the complete command at p (opcode included); 0 = incomplete,
+   -1 = unknown opcode. The recorder's command-boundary oracle. */
+static int gl_cmdlen(const uint8_t *p, int n){
+    int k;
+    if(n < 1) return 0;
+    switch(p[0]){
+    case 0x01: case 0x02: case 0x03: case 0x04: case 0x08: case 0x09:
+    case 0x90: case 0xA0: case 0xAF: case 0x71: return 1;
+    case 0xE0: case 0xAA: case 0xAB: case 0x70: case 0x72: case 0x74:
+    case 0x79: return 2;
+    case 0x05: case 0x43: case 0x93: case 0x94: case 0x95:
+    case 0xA3: case 0xA4: case 0xA5: case 0xA8: case 0xA9:
+    case 0xB0: case 0xB1: return 3;
+    case 0x06: case 0x07: case 0x0F: case 0x73: return 4;
+    case 0x10: case 0x11: case 0x28: case 0x29: case 0x34: case 0x35:
+        return 5;
+    case 0x12: case 0x13: case 0x2A: case 0x2B:
+    case 0x91: case 0x92: case 0x96: case 0xA1:
+        return 7;
+    case 0xB2: case 0xB3: return 9;
+    case 0xA7: return 19;
+    case 0x97: return 25;
+    case 0x30: case 0x31: case 0x32: case 0x33:
+        if(n < 2) return 0;
+        k = p[1];
+        return 2 + k * ((p[0] & 2) ? 6 : 4);
+    default: return -1;
+    }
+}
+
+static int gl_exec2(const uint8_t *p, int n);
+
+/* replay list `slot` cnt times: the same interpreter, a different byte
+   source. WAIT paces on real frames in RTL; instant here (the licence). */
+static void gl_replay(int slot, int cnt){
+    const uint8_t *base = clmem[slot] + 2;
+    int len = clmem[slot][0] | (clmem[slot][1] << 8);
+    int pass, off, c;
+    glreplay = 1;
+    for(pass = 0; pass < cnt; pass++){
+        off = 0;
+        while(off < len){
+            c = gl_exec2(base + off, len - off);
+            if(c <= 0) break;
+            off += c;
+        }
+    }
+    glreplay = 0;
+}
+
+/* one complete command at p[0..]: returns bytes consumed, 0 = incomplete.
    NEED(n) waits for n bytes total (opcode included) before touching state. */
 #define NEED(k) do{ if(n<(k)) return 0; }while(0)
 static int16_t gl_i16(const uint8_t *p){ return (int16_t)(p[0]|(p[1]<<8)); }
-static int gl_exec1(void){
-    const uint8_t *p=glf; int n=glflen;
+static int gl_exec1(void){ return gl_exec2(glf, glflen); }
+static int gl_exec2(const uint8_t *p, int n){
+    if(n < 1) return 0;
+    if(glrec){                             /* recording: store, don't run */
+        int L;
+        if(p[0] != 0x71){                  /* CLEND ends it (real one: we
+                                              are at a command boundary) */
+            L = gl_cmdlen(p, n);
+            if(L == -1){ gl_err(1); return 1; }   /* skipped, not stored */
+            if(L == 0 || L > n) return 0;         /* wait for the rest */
+            if(p[0]==0x70 || p[0]==0x79 || p[0]==0x72 || p[0]==0x73){
+                gl_err(5); return L;       /* no nesting */
+            }
+            if(glrlen + L > CLSLOT - 2){   /* slot overflow: abort */
+                gl_err(7); cldef[glrec-1]=0; glrec=0; return L;
+            }
+            memcpy(clmem[glrec-1] + 2 + glrlen, p, L);
+            glrlen += L;
+            return L;
+        }
+    }
     switch(p[0]){
+    case 0x70: case 0x79: NEED(2);         /* CLBEG / CLAPP (P8X append) */
+        if(glrec || glreplay){ gl_err(5); return 2; }
+        if(p[0] == 0x79 && !cldef[p[1]]){ gl_err(6); return 2; }
+        glrec = p[1] + 1;
+        glrlen = (p[0] == 0x79)
+               ? (clmem[p[1]][0] | (clmem[p[1]][1] << 8)) : 0;
+        cldef[p[1]] = 0;                   /* undefined until CLEND */
+        return 2;
+    case 0x71:                             /* CLEND */
+        if(!glrec){ gl_err(5); return 1; }
+        clmem[glrec-1][0] = (uint8_t)(glrlen & 255);
+        clmem[glrec-1][1] = (uint8_t)(glrlen >> 8);
+        cldef[glrec-1] = 1; glrec = 0;
+        return 1;
+    case 0x72: NEED(2);                    /* CLRUN */
+        if(glreplay){ gl_err(5); return 2; }
+        if(!cldef[p[1]]){ gl_err(6); return 2; }
+        gl_replay(p[1], 1);
+        return 2;
+    case 0x73: NEED(4);                    /* CLOOP n count */
+        if(glreplay){ gl_err(5); return 4; }
+        if(!cldef[p[1]]){ gl_err(6); return 4; }
+        gl_replay(p[1], (int)(uint16_t)(p[2] | (p[3] << 8)));
+        return 4;
+    case 0x74: NEED(2); cldef[p[1]] = 0; return 2;   /* CLDEL */
     case 0x01: return 1;                                  /* NOOP */
     case 0x02: ge_flip(); return 1;                       /* FLIP   (P8X) */
     case 0x03: gfb=gfbd; return 1;                        /* PGSYNC (P8X) */
-    case 0x04: gl_state_reset(); return 1;                /* RESETF */
+    case 0x04:                                            /* RESETF */
+        gl_state_reset();
+        memset(cldef, 0, sizeof cldef); glrec = 0;
+        return 1;
     case 0x05: NEED(3); return 3;      /* WAIT frames: paces on real frame
                                           ticks in RTL; instant here */
     case 0x06: NEED(4); gcol=gl_rgb(p[1],p[2],p[3]); return 4;   /* COLOR */
