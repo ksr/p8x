@@ -54,6 +54,7 @@
 #include <signal.h>
 #include "../generators/memmap.h"   /* RAMBASE/IOBASE/ROMSIZE/RAMSIZE — single-source memory map */
 #include "../generators/trigtab.h"  /* SIN8/TANH8 — stage-10b GL trig, shared with the RTL */
+#include "../generators/glkwtab.h"  /* GL ASCII keywords — stage 10d, shared with the RTL */
 
 static int interactive=0;             /* stdin is a TTY: raw + blocking console */
 static int norx=0;                    /* -N: console RX always empty (see rx_ready) */
@@ -491,7 +492,10 @@ static void ge_line3t(const int16_t *w){
 static uint8_t glf[GLFMAX];  static int glflen;         /* command FIFO */
 static uint8_t glef[16];     static int gleflen;        /* error FIFO */
 static uint8_t glrbf[256];   static int glrblen, glrbrd; /* read-back (10e) */
-static uint8_t glmode;       /* 0 = hex (10a default; ASCII lands in 10d) */
+static uint8_t glmode;       /* 0 = hex (10a default; 1 = ASCII, stage 10d) */
+static char awb[8];  static int awn;      /* keyword accumulator */
+static int  axv, axneg, axhas;            /* number accumulator */
+static int  a_op, a_bcnt, a_left, a_var, a_vw, a_act, a_pi, a_skip;
 static uint8_t glfill;       /* PRMFIL: closed primitives fill when 1 */
 static int16_t glc2[2], glc3[3];   /* the 2D and 3D current points */
 static int16_t glproj, gldist;     /* PROJCT angle / DISTAN viewer distance */
@@ -529,6 +533,7 @@ static void gl_state_reset(void){          /* RESETF: state, NOT the FIFOs */
 }
 static void gl_reset(void){                /* power-on */
     glflen=0; gleflen=0; glrblen=glrbrd=0; glmode=0;
+    awn=0; axv=0; axneg=0; axhas=0; a_act=0; a_skip=0;
     glfill=0; glc2[0]=glc2[1]=0; glc3[0]=glc3[1]=glc3[2]=0;
     gl_mat_reset();
 }
@@ -886,7 +891,7 @@ static int gl_exec2(const uint8_t *p, int n){
                                           are their own ASCII bytes in BOTH
                                           modes (the PGC's little joke) */
         if(p[1]=='X' && p[2]==' ') return 3;         /* already hex */
-        if(p[1]=='A' && p[2]==' '){ gl_err(3); return 3; }  /* 10d */
+        if(p[1]=='A' && p[2]==' '){ glmode = 1; return 3; } /* -> ASCII */
         gl_err(2); return 3;
     /* ---- stage 10b: the matrix verbs ---------------------------------- */
     case 0x90:                                            /* MDIDEN */
@@ -960,7 +965,7 @@ static int gl_exec2(const uint8_t *p, int n){
     default: gl_err(1); return 1;      /* unknown opcode: log, skip a byte */
     }
 }
-static void gl_push(uint8_t b){
+static void gl_hexb(uint8_t b){
     if(glflen>=GLFMAX){ gl_err(4); return; }
     glf[glflen++]=b;
     for(;;){
@@ -970,6 +975,83 @@ static void gl_push(uint8_t b){
         glflen-=c;
         if(glflen==0) break;
     }
+}
+
+/* ---- stage 10d: the ASCII front-end -----------------------------------
+   A pure TRANSLATOR: keywords (long or short form, any case) become the
+   hex opcode, decimal numbers become parameters at the right width, and
+   the result flows into the unchanged hex machinery -- so recording
+   stores hex and replay is mode-independent. Grammar: delimiters are
+   space/tab/comma/semicolon/CR/LF, '-' negates, no reals (int16 only).
+   Recovery is deterministic: a keyword arriving before the previous
+   verb's parameters are complete logs error 2 and ZERO-FILLS the rest;
+   an excess or orphaned number logs error 2 and is dropped; an unknown
+   keyword logs error 1 and swallows its numbers. CA/CX switch modes in
+   the translator itself and emit nothing. */
+
+static void gl_aemit(int v){              /* one parameter, right width */
+    if(a_pi < a_bcnt) gl_hexb((uint8_t)(v & 255));
+    else { gl_hexb((uint8_t)(v & 255)); gl_hexb((uint8_t)((v >> 8) & 255)); }
+    if(a_var && a_pi == 0) a_left = (v & 255) * a_vw + 1;
+    a_pi++; a_left--;
+    if(a_left <= 0) a_act = 0;
+}
+static void gl_azfill(void){              /* early keyword: complete with 0s */
+    gl_err(2);
+    while(a_act) gl_aemit(0);
+}
+static void gl_akw(void){
+    int i;
+    awb[awn] = 0; awn = 0;
+    for(i = 0; i < GLKWN; i++)
+        if(strcmp(awb, GLKW[i].kw) == 0) break;
+    if(i == GLKWN){                        /* unknown keyword */
+        gl_err(1);
+        if(a_act) gl_azfill();
+        a_skip = 1;
+        return;
+    }
+    if(GLKW[i].op == 0xFE){ glmode = 1; return; }   /* CA */
+    if(GLKW[i].op == 0xFF){ glmode = 0; return; }   /* CX */
+    if(a_act) gl_azfill();
+    a_skip = 0;
+    gl_hexb(GLKW[i].op);
+    a_op = GLKW[i].op; a_bcnt = GLKW[i].bcnt; a_pi = 0;
+    a_var = (GLKW[i].arity == 15);
+    a_vw  = a_var ? ((GLKW[i].op & 2) ? 3 : 2) : 0;
+    a_left = a_var ? 1 : GLKW[i].arity;
+    a_act = (a_left > 0);
+}
+static void gl_anum(void){
+    int v = axneg ? -axv : axv;
+    axv = 0; axneg = 0; axhas = 0;
+    if(!a_act){ if(!a_skip) gl_err(2); return; }
+    gl_aemit(v);
+}
+static void gl_ascii(uint8_t b){
+    if(b >= 'a' && b <= 'z') b -= 32;
+    if(b == ' ' || b == 9 || b == ',' || b == ';' || b == 13 || b == 10){
+        if(awn) gl_akw();
+        else if(axhas) gl_anum();
+        return;
+    }
+    if(awn){                               /* inside a keyword */
+        if(awn < 7) awb[awn++] = (char)b;
+        return;
+    }
+    if(axhas || b == '-' || (b >= '0' && b <= '9')){
+        if(b == '-' && !axhas){ axneg = 1; axhas = 1; return; }
+        if(b >= '0' && b <= '9'){ axv = axv * 10 + (b - '0'); axhas = 1; return; }
+        gl_err(2); axv = 0; axneg = 0; axhas = 0;    /* junk in a number */
+        return;
+    }
+    if(b >= 'A' && b <= 'Z'){ awb[0] = (char)b; awn = 1; return; }
+    gl_err(2);                             /* stray byte */
+}
+
+static void gl_push(uint8_t b){
+    if(glmode) gl_ascii(b);
+    else gl_hexb(b);
 }
 
 /* POINT's answer is 16 bits and GDATA is a byte port, so it STREAMS: low byte

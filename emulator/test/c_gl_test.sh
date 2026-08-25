@@ -1,9 +1,9 @@
 #!/bin/sh
 # Stage-10a graphics language (STAGE10-DESIGN.md): the GL port at $FF50 and
 # the hex-mode interpreter.
-#   1. Probe + errors: GLID reads 'G'; an unknown opcode logs error 1, CA
-#      before stage 10d logs 3, POLY with n=0 logs 2; GLERR drains to 0 and
-#      GLSTAT's error bit follows.
+#   1. Probe + errors: GLID reads 'G'; an unknown opcode logs error 1,
+#      POLY with n=0 logs 2; a CA/CX mode round-trip (stage 10d) is
+#      error-free; GLERR drains to 0 and GLSTAT's error bit follows.
 #   2. THE crown-jewel: one mixed scene (coloured 3D lines -- clipped,
 #      near-clipped, plain -- and two filled TRIs) drawn twice, once through
 #      lib_g3d's SOFTWARE pipeline (g3render; the record engine is retired,
@@ -121,11 +121,13 @@ int pnum(int u) {
 int main() {
     pnum(peek(65364));               /* GLID: expect 71 'G' */
     poke(65360, 238);                /* unknown opcode $EE */
-    poke(65360, 67); poke(65360, 65); poke(65360, 32);   /* "CA " */
     poke(65360, 48); poke(65360, 0); /* POLY n=0 */
+    /* CA/CX round-trip (stage 10d): switch to ASCII, back to hex --
+       neither may error, and hex must still work after */
+    poke(65360, 67); poke(65360, 65); poke(65360, 32);   /* "CA " */
+    poke(65360, 67); poke(65360, 88); poke(65360, 32);   /* CX (ASCII) */
     pnum(peek(65361) & 2);           /* GLSTAT error bit: expect 2 */
     pnum(peek(65363));               /* GLERR: expect 1 (unknown opcode) */
-    pnum(peek(65363));               /* expect 3 (ASCII not fitted) */
     pnum(peek(65363));               /* expect 2 (bad parameter) */
     pnum(peek(65363));               /* expect 0 (drained) */
     pnum(peek(65361) & 2);           /* error bit clear: expect 0 */
@@ -175,8 +177,8 @@ python3 $ROOT/tools/p8xfs.py put    gl.img gl_2.bin --name /bin/gl2.bin --load 0
 printf 'B\rrun /bin/gle.bin\r' > gl_e.in
 ../p8xemu -N -i gl_e.in -c gl.img -l 300000000 eeprom.bin > gl_e.out 2>/dev/null || true
 grep -q EDONE gl_e.out || fail "error program did not finish"
-want="71 2 1 3 2 0 0"
-got=$(LC_ALL=C tr -d '\0\r' < gl_e.out | grep -E '^[0-9]+$' | head -7 | tr '\n' ' ' | sed 's/ $//')
+want="71 2 1 2 0 0"
+got=$(LC_ALL=C tr -d '\0\r' < gl_e.out | grep -E '^[0-9]+$' | head -6 | tr '\n' ' ' | sed 's/ $//')
 [ "$got" = "$want" ] || { echo "want: $want"; echo "got:  $got"; fail "probe/error sequence differs"; }
 echo "GLID probe + error FIFO OK"
 
