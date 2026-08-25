@@ -42,6 +42,9 @@ GPARM  = $FF28               ; scalar argument: CIRCLE radius / ELLIPSE x-radius
 GPARM2 = $FF2F               ; ELLIPSE y-radius
 GID0   = $FF2D               ; presence signature: 'P'
 GID1   = $FF2E               ;                     'G'
+GLDATAR = $FF50          ; GL command FIFO (stage 10d): one byte at a time
+GLSTATR = $FF51          ; bit7 = FIFO full (wait before pushing)
+GLIDR   = $FF54          ; reads 'G' when the GL engine is fitted
 GCHI   = 9                   ; a pair's high byte = its low address + GCHI
 GC_PLOT = 1
 GC_LINE = 2
@@ -223,6 +226,8 @@ IMW    = BASRAM+$EA          ; image width (2)
 IMH    = BASRAM+$EC          ; rows remaining (2)
 IMXC   = BASRAM+$EE          ; current column x (2)
 IMCX   = BASRAM+$F0          ; columns remaining in this row (2)
+GLN    = BASRAM+$E6          ; GL: bytes left to send (shares IMAGE's run --
+GLTMP  = BASRAM+$E7          ;   two statements never execute at once)
 
 ; keyword tokens (>= $80 so they never collide with text or the 00 terminator)
 TOK_PRINT = $80
@@ -280,6 +285,7 @@ TOK_POINT = $AE          ; POINT(x,y) -- a FUNCTION, not a statement
 TOK_GTEXT = $AF          ; GTEXT x,y,size,string$
 TOK_RGB   = $B1          ; RGB(r,g,b) -- a FUNCTION: pack r,b 0-31, g 0-63 into 565
 TOK_IMAGE = $B2          ; IMAGE x,y,name$ -- draw a P8I file
+TOK_GL    = $B3          ; GL string$ -- one ASCII graphics-language line
                          ; $B0 was SCREEN, removed with the display modes. Do
                          ; not reuse it casually: a saved .BAS is tokenised, so
                          ; an old program on disk still has $B0 in it and would
@@ -457,6 +463,10 @@ STMT:   JSR  SKIPSP
         LDB  #TOK_IMAGE
         CMP
         JZ   DOIMAGE
+        LDA  (P2)
+        LDB  #TOK_GL
+        CMP
+        JZ   DOGL
         LDA  (P2)
         LDB  #TOK_REM
         CMP
@@ -1620,6 +1630,59 @@ gt_y1:  LDB  GTCY+1
         STA  GTPTR+1
         JMP  gt_ch
 gt_ret: RTS
+
+;------------------------------------------------------------------------------
+; GL string$ — send one ASCII graphics-language line to the GL engine
+; (stage 10d, man gl). The string is wrapped "CA " ... CR "CX " so the
+; card is back in HEX mode afterwards (every other tool assumes hex).
+; Build fly-throughs with string arithmetic:  GL "VWY "+STR$(A)+" CR 0".
+; No display or no GL engine abandons the statement, the GNODEV way.
+DOGL:   INP2                        ; consume the GL token
+        JSR  GCHECK
+        LDA  GLIDR
+        LDB  #'G'
+        CMP
+        JNZ  GNODEV
+        JSR  SEVAL                  ; string -> STRACC=[len], data at STRACCD
+        LDA  #'C'
+        JSR  GLPUT
+        LDA  #'A'
+        JSR  GLPUT
+        LDA  #' '
+        JSR  GLPUT
+        LDA  #<STRACCD
+        TAP1L
+        LDA  #>STRACCD
+        TAP1H
+        LDA  STRACC
+        STA  GLN
+gl_ch:  LDA  GLN
+        JZ   gl_end
+        DEC
+        STA  GLN
+        LDA  (P1)
+        JSR  GLPUT
+        INP1
+        JMP  gl_ch
+gl_end: LDA  #13                    ; a CR finishes the last token
+        JSR  GLPUT
+        LDA  #'C'
+        JSR  GLPUT
+        LDA  #'X'
+        JSR  GLPUT
+        LDA  #' '
+        JSR  GLPUT
+        RTS
+
+; one byte to the GL FIFO, honouring the full bit (GLSTAT bit 7)
+GLPUT:  STA  GLTMP
+glp_w:  LDA  GLSTATR
+        LDB  #$80
+        AND
+        JNZ  glp_w
+        LDA  GLTMP
+        STA  GLDATAR
+        RTS
 
 ; IMAGE x,y,name$ — draw a P8I image file with its top-left corner at (x,y).
 ;
@@ -5130,6 +5193,8 @@ KWTAB:  .ascii "PRINT"
         .byte $B1
         .ascii "IMAGE"
         .byte $B2
+        .ascii "GL"
+        .byte $B3
         .byte $00
 
 ;==============================================================================

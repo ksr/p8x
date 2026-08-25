@@ -170,6 +170,7 @@ test-basic: p8xemu ucode
 	sh test/basic_cwd_test.sh
 	sh test/basic_saveload_test.sh
 	sh test/os_basic_test.sh
+	sh test/basic_gl_test.sh
 
 # I/O card model: switch input (-s) -> $FF00 and LED writes ($FF02, -L).
 test-io: p8xemu ucode
@@ -183,6 +184,7 @@ test-gfx: p8xemu ucode
 	sh test/c_gl_test.sh
 	sh test/c_gl_mat_test.sh
 	sh test/c_gl_list_test.sh
+	sh test/c_gl_ascii_test.sh
 # (c_gl_rtl_test.sh — the emulator-vs-RTL frame compare — needs iverilog;
 #  run it by hand or from the fpga flow, not from make test.)
 

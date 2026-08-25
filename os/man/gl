@@ -2,9 +2,21 @@ NAME
     gl - the graphics language: the machine's hardware 3D/2D engine
 
 SYNOPSIS
-    POKE the command stream at GLDATA ($FF50), one byte at a time
+    gl <command line>            one ASCII GL line from the shell
+    gl <FILE.GL>                 stream a .gl scene file to the card
+    POKE the stream at GLDATA ($FF50) from BASIC or C
 
 DESCRIPTION
+    Since stage 10d the card speaks ASCII: `gl DRAW3 90,-90,300` at the
+    shell just works (the command wraps the line in CA ... CX, so the
+    card is back in hex mode after), and `gl /SCENE.GL` streams a scene
+    file verbatim -- the file carries its own CA/CX, so it may be text,
+    raw hex bytes, or both. Keywords come in long and short forms
+    (DRAW3 / D3, the PG-640A's own abbreviations), any case; numbers
+    are decimal int16, '-' negates; delimiters are space, tab, comma,
+    semicolon and newline. Card-queued errors are reported after the
+    stream ("?GL: unknown command", "?GL: bad parameter", ...).
+
     A PGC-style graphics processor (modelled on the Matrox PG-640A) in
     the FPGA fabric: it holds the modelling and viewing matrices, the
     window, viewport and clip planes, and draws 2D and 3D primitives
@@ -67,8 +79,11 @@ DESCRIPTION
       20 POKE 65360,179 : REM WINDOW ... (see the opcode table)
 
 EXAMPLES
-    POKE 65360,2      flip the pages (PAGE FLIP does the same)
-    POKE 65360,3      rejoin them (PAGE)
+    gl WINDOW -120 120 -120 120
+    gl COLOR 31 0 0 PRMFIL 1 POLY3 3 -80 -80 300 80 -80 300 0 40 420
+    gl MDY 30 CLRUN 0             spin the scene 30 degrees, redraw
+    gl /DEMO.GL                   play a scene file (uppercase names)
+    POKE 65360,2                  flip the pages from BASIC (FLIP)
 
 SEE ALSO
     tri, page, image, g3d, gfx; STAGE10-DESIGN.md and the PG-640A
