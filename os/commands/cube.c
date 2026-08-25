@@ -25,6 +25,10 @@
 //#use gfx
 //#use g3d
 
+//#define GLID   0xFF54  /* GL presence probe: 'G' when fitted            */
+//#define GLDATA 0xFF50  /* the command FIFO, one byte at a time          */
+//#define GLSTAT 0xFF51  /* bit7 FIFO full, bit6 busy                     */
+
 char s3tab[256] = {
     128, 131, 134, 137, 140, 143, 146, 149, 151, 154, 157, 160, 163, 166, 168, 171,
     174, 177, 179, 182, 185, 187, 190, 192, 195, 197, 199, 202, 204, 206, 209, 211,
@@ -47,7 +51,6 @@ int c3ea[12] = {0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3};   /* edge: vertex a */
 int c3eb[12] = {1, 2, 3, 0, 5, 6, 7, 4, 4, 5, 6, 7};   /* edge: vertex b */
 int cvx[8]; int cvy[8]; int cvz[8];                     /* the model      */
 int rx[8]; int ry[8]; int rz[8];                        /* this frame     */
-int cm[12];                                             /* engine matrix  */
 
 /* sin(a) scaled to +/-120, binary angles (256 = a full turn). The table
  * stores value+128 so it initializes as unsigned chars; the subtract's
@@ -59,6 +62,14 @@ int sdiv7(int v) {
     if (v & 32768) { return 0 - ((0 - v) >> 7); }
     return v >> 7;
 }
+
+
+int glb(int v) {
+    while (peek(GLSTAT) & 128) { }
+    poke(GLDATA, v);
+    return 0;
+}
+int glw(int v) { glb(v & 255); glb(v >> 8); return 0; }
 
 int main() {
     char *a;
@@ -79,6 +90,7 @@ int main() {
 
     if (gpresent() == 0) { puts("?No display"); return 1; }
 
+
     /* the 8 corners of a +/-90 cube: x -,+,+,- per face ring, y - then +
      * within a ring, z - front ring / + back ring */
     i = 0;
@@ -88,6 +100,58 @@ int main() {
         if (k & 2) { cvy[i] = 90; } else { cvy[i] = 0 - 90; }
         if (i & 4) { cvz[i] = 90; } else { cvz[i] = 0 - 90; }
         i = i + 1;
+    }
+    if (g3has != 2 && peek(GLID) == 71) {
+        /* stage 10c: the cube is a stored GL command list that spins
+         * ITSELF -- per pass the list nudges the modeling matrix
+         * (MDROTY 6, MDROTX 3), erases, draws the 12 edges, flips and
+         * waits a frame tick; CLOOP runs it nf times with the CPU
+         * completely idle. CLEARS first: both framebuffer pages power
+         * on as garbage (the stage-8b sideband lesson), and the exit
+         * PGSYNC rejoins them, so drawing afterwards behaves. */
+        glb(179); glw(0 - 120); glw(120); glw(0 - 120); glw(120);
+        glb(178); glw(104); glw(375); glw(0); glw(271);
+        glb(160);                        /* VWIDEN */
+        glb(161); glw(0); glw(0); glw(0);
+        glb(177); glw(400);              /* DISTAN: viewer backs off */
+        glb(144);                        /* MDIDEN */
+        glb(145); glw(0); glw(0); glw(0);
+        glb(15); glb(0); glb(0); glb(0); /* CLEARS: BOTH pages */
+        glb(112); glb(1);                /* CLBEG 1: one frame of spin */
+        glb(148); glw(6);                /* MDROTY 6 (a delta per pass) */
+        glb(147); glw(3);                /* MDROTX 3 */
+        glb(7); glb(0); glb(0); glb(0);  /* FLOOD */
+        glb(6); glb(0); glb(0); glb(31); /* connectors: blue */
+        i = 0;
+        while (i < 4) {
+            glb(18); glw(cvx[i]); glw(cvy[i]); glw(0 - 90);
+            glb(42); glw(cvx[i]); glw(cvy[i]); glw(90);
+            i = i + 1;
+        }
+        glb(6); glb(31); glb(0); glb(0); /* front ring: red */
+        i = 0;
+        while (i < 4) {
+            k = (i + 1) & 3;
+            glb(18); glw(cvx[i]); glw(cvy[i]); glw(0 - 90);
+            glb(42); glw(cvx[k]); glw(cvy[k]); glw(0 - 90);
+            i = i + 1;
+        }
+        glb(6); glb(0); glb(63); glb(0); /* back ring: green */
+        i = 0;
+        while (i < 4) {
+            k = (i + 1) & 3;
+            glb(18); glw(cvx[i]); glw(cvy[i]); glw(90);
+            glb(42); glw(cvx[k]); glw(cvy[k]); glw(90);
+            i = i + 1;
+        }
+        glb(2);                          /* FLIP */
+        glb(5); glw(1);                  /* WAIT 1: pace to the panel */
+        glb(113);                        /* CLEND */
+        glb(115); glb(1); glw(nf);       /* CLOOP 1 nf: spin, CPU idle */
+        glb(3);                          /* PGSYNC on the way out */
+        while (peek(GLSTAT) & 64) { }
+        puts("DONE");
+        return 0;
     }
 
     g3window(0 - 120, 0 - 120, 120, 120);
@@ -104,50 +168,9 @@ int main() {
      * replica models each path with its own arithmetic.
      * `cube 1` renders without the page flip so POINT verification reads
      * the frame it drew; longer runs flip for a tear-free spin. */
-    if (g3probe()) {
-        /* Power-on framebuffer contents are UNDEFINED -- the boot splash
-         * clears only the page it shows. Flipping alternates the display
-         * between BOTH pages, so clear both once (the engine's own erase
-         * is viewport-scoped by design and never touches the sidebands),
-         * then g3sync back to a known single-buffer state. */
-        gcolor(0);
-        gcls(); gwait();
-        g3flip();
-        gcls(); gwait();
-        g3sync();
-        g3clear();
-        i = 0;
-        while (i < 12) {
-            if (i == 0) { g3color(0xF800); }   /* front face red    */
-            if (i == 4) { g3color(0x07E0); }   /* back face green   */
-            if (i == 8) { g3color(0x001F); }   /* connecting: blue  */
-            k = c3ea[i]; t = c3eb[i];
-            g3line(cvx[k], cvy[k], cvz[k], cvx[t], cvy[t], cvz[t]);
-            i = i + 1;
-        }
-        g3up();
-        if (nf == 1) { g3flags(1); } else { g3flags(3); }
-        f = 0; ang = 0;
-        while (f < nf) {
-            ax = (ang >> 1) & 255;
-            c = rsin(ang + 64) * 2; s = rsin(ang) * 2;          /* 8.8 */
-            i = rsin(ax + 64) * 2;  k = rsin(ax) * 2;           /* c2, s2 */
-            cm[0] = c;                   cm[1] = 0;  cm[2] = 0 - s;
-            cm[3] = 0 - muldiv(k, s, 256); cm[4] = i; cm[5] = 0 - muldiv(k, c, 256);
-            cm[6] = muldiv(i, s, 256);   cm[7] = k;  cm[8] = muldiv(i, c, 256);
-            cm[9] = 0; cm[10] = 0; cm[11] = 400;
-            g3mat(cm);
-            g3go();
-            ang = (ang + 4) & 255;
-            f = f + 1;
-        }
-        /* leave the machine single-buffered: flips end with draw and
-         * display OPPOSITE, and the next program's PLOT would land on
-         * the hidden page. g3sync rejoins them on the visible one. */
-        g3sync();
-        puts("DONE");
-        return 0;
-    }
+    /* (the stage-8b record-engine path lived here until stage 10c --
+     * retired with the $FF40 interface; the GL list path above is the
+     * hardware cube now, and below is the stage-7 software original) */
 
     f = 0; ang = 0;
     while (f < nf) {

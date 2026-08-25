@@ -182,6 +182,7 @@ test-gfx: p8xemu ucode
 	sh test/c_image_test.sh
 	sh test/c_gl_test.sh
 	sh test/c_gl_mat_test.sh
+	sh test/c_gl_list_test.sh
 # (c_gl_rtl_test.sh — the emulator-vs-RTL frame compare — needs iverilog;
 #  run it by hand or from the fpga flow, not from make test.)
 

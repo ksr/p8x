@@ -29,6 +29,7 @@ char path[2];                     /* unused; keeps the layout conventional */
 //#define GLID   0xFF54  /* GL presence probe: 'G' when fitted            */
 //#define GLDATA 0xFF50  /* the command FIFO, one byte at a time          */
 //#define GLSTAT 0xFF51  /* bit7 = FIFO full (wait), bit6 = busy          */
+//#define GLERR  0xFF53  /* pop one error byte; 6 = list undefined        */
 
 char *ap;
 int anum_ok;
@@ -105,16 +106,31 @@ int main() {
         } } }
     }
     if (peek(GLID) == 71) {
-        /* the GL engine path: emit the scene as a command stream */
+        /* the GL engine path (stage 10c): the scene IS command list 0.
+         * A fresh tri RECORDS the list (erase + this triangle); tri k
+         * APPENDS to it; either way CLRUN 0 redraws the whole ensemble
+         * -- and rotate/camera replay the same list from new angles. */
         glb(179); glw(0 - 120); glw(120); glw(0 - 120); glw(120);
         glb(178); glw(104); glw(375); glw(0); glw(271);
-        if (keep == 0) { glb(7); glb(0); glb(0); glb(0); }   /* FLOOD */
-        glb(6); glb(cr); glb(cg); glb(cb);                   /* COLOR  */
-        glb(224); glb(fill);                                 /* PRMFIL */
-        glb(50); glb(3);                                     /* POLY3  */
+        while (peek(GLERR)) { }          /* drain stale errors */
+        if (keep) {
+            glb(121); glb(0);            /* CLAPP 0... */
+            while (peek(GLSTAT) & 64) { }
+            if (peek(GLERR) == 6) {      /* ...no scene yet: start one */
+                glb(112); glb(0);
+            }
+        } else {
+            glb(112); glb(0);            /* CLBEG 0: a fresh scene */
+            glb(7); glb(0); glb(0); glb(0);          /* FLOOD (recorded) */
+        }
+        glb(6); glb(cr); glb(cg); glb(cb);           /* COLOR  */
+        glb(224); glb(fill);                         /* PRMFIL */
+        glb(50); glb(3);                             /* POLY3  */
         i = 0;
         while (i < 9) { glw(tp[i]); i = i + 1; }
-        while (peek(GLSTAT) & 64) { }                        /* drain  */
+        glb(113);                                    /* CLEND  */
+        glb(114); glb(0);                            /* CLRUN 0 */
+        while (peek(GLSTAT) & 64) { }
         return 0;
     }
     /* the software pipeline (the TTL machine): same pixels */
