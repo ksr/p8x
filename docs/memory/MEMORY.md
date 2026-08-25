@@ -31,3 +31,4 @@
 - [P8X border bug RESOLVED](project_p8x_border_bug.md) — was marginal capture on gapless CAS, stream now half-rate; snow = analogue signature
 - [Full 3D stack SHIPPED](project_p8x_gfx_clib.md) — lib_gfx/lib_g3d/cube + MDU ($FF30) + geometry engine ($FF40, page flip, PGSYNC) on silicon; sdram-framebuffer MERGED to main 2026-08-20 (212260b) — work on main again per the normal workflow
 - [ASM is the /bin default](feedback_p8x_bin_layout.md) — since 2026-08-20: /bin = asm twins (PATH default), /binc = C builds, /bina gone; new commands follow this split
+- [XT card is a separate project](feedback_xt_card_separate.md) — own git repo; first use targets a DIFFERENT computer, not P8X; never commit/sweep its files in p8x work
