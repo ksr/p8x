@@ -322,6 +322,33 @@ paired with moving the walker's polygon arrays into the scratchpad RAM
 for placement headroom. Semantics are pinned; the benches will catch
 any divergence.
 
+**STAGE 10c RTL LANDED (2026-08-25): command lists in fabric, and it
+PLACES — 19,129 LUT4 (92%), Fmax 44 MHz, bitstream packed.** The SDRAM
+g-port returned for the 64 x 4KB list slots; recording rides the
+decoder's byte pops (opcode-length table as a wire, execution
+suppressed, bytes paired into halfword writes, per-byte overflow abort);
+replay is a second byte source feeding the same interpreter; CLOOP
+rewinds with matrix deltas accumulating. Getting it to PLACE took three
+rounds of fabric surgery, each with its own lesson:
+
+- The T-path's polygon arrays (qx/qy/qz + the mapped pair) moved into
+  the compose scratchpad as lanes at 64/72/80/88/96 — every access
+  became set/bubble/capture, ~15 states, zero pixels changed.
+- A 128-deep scratchpad crosses yosys's BSRAM threshold: the mirrored
+  1W2R pair became 2 blocks -> 46/46 exact-fit, placement died. Forcing
+  it distributed cost ~700 LUT — ALSO died.
+- The unlock: ONE true-dual-port block. The FSM is single-threaded and
+  never captures a port-A read in a write cycle (reads latch on the
+  bubble before; cm_qa HOLDS through writes), so port A is
+  write-else-read and port B read-only. No mirror, no mux tax.
+
+Proof chain unchanged and green through all of it: tb_gl (record draws
+nothing, CLRUN/CLOOP exact ops, errors 2/5/6/7), and c_gl_rtl_test's
+three byte-identical frames — 10a scene, 10b matrix scene, and the 10c
+CLOOP fly-through — emulator vs RTL through the real memory stack.
+REMAINING for stage 10c: the board session (flash + disk rebuild with
+the migrated console family + on-silicon POINT proofs).
+
 Three operational notes for whoever drives the board over serial next:
 
 - **Two serial clients do not error -- they silently shred each other's

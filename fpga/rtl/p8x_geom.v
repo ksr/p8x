@@ -100,7 +100,9 @@ module p8x_geom (
              C_MLA=83,  C_MLB=84,  C_CPA=85,  C_RCK=86,  C_RCKW=87,
              C_RCN=88,  CV_X=89,   CV_XW=90,  CV_YW=91,
              C_OGB=92,  C_OGC=93,  C_MTB=94,  C_MTC=95,  C_MLC=96,
-             C_MLW=97,  C_CPB=98,  C_CPC=99,  J_RST2=100;
+             C_MLW=97,  C_CPB=98,  C_CPC=99,  J_RST2=100,
+             // stage 10c: the polygon-lane (scratchpad) T-path states
+             T_NIK=101, T_NIZ=102, F_CAF=103, F_IK=104;
 
   reg [15:0] rcol;                   // the GL pen (COLOR)
   reg        rfill;                  // T-path: FILL (GL fills always set it)
@@ -110,12 +112,8 @@ module p8x_geom (
   reg [15:0] tvx [0:2];              // TRI: transformed vertices
   reg [15:0] tvy [0:2];
   reg [15:0] tvz [0:2];
-  reg [15:0] qx [0:7];               // near-clipped polygon
-  reg [15:0] qy [0:7];
-  reg [15:0] qz [0:7];
-  reg [15:0] qsx [0:7];              // ...mapped to screen space
-  reg [15:0] qsy [0:7];
   reg [3:0]  np;                     // polygon vertex count
+  reg [3:0]  g2n;                    // consumer state after a G_2D load
   reg [3:0]  pp;                     // polygon iterator
   reg [3:0]  ft;                     // fan triangle index
   reg [15:0] nax, nay, naz;          // clip edge end A
@@ -172,27 +170,34 @@ module p8x_geom (
   // MS (submatrix) 32-43, CT (product) 48-59. Reads are registered
   // twice (address reg, then q reg): set the address, wait a state,
   // consume -- compose runs at command time, so latency is free.
-  reg [15:0] cmxa [0:63];            // the mirror pair: written together,
-  reg [15:0] cmxb [0:63];            //   read on independent ports
-  reg [5:0]  cm_aa, cm_ab;           // read addresses
+  // 128 deep since stage 10c: the T-path's POLYGON arrays moved in too
+  // (the same registered-read discipline; their indexed muxes were the
+  // walker's largest remaining register file). Lanes: qx 64, qy 72,
+  // qz 80, mapped-x 88, mapped-y 96 (8 apiece).
+  // ONE true-dual-port BSRAM: port A is write-else-read (the FSM is
+  // single-threaded and never captures a port-A read in a cycle it
+  // writes -- reads latch on the bubble cycle before, and cm_qa HOLDS
+  // through a write), port B is read-only. A mirrored pair cost either
+  // 2 BSRAM (46/46, exact-fit killed placement) or ~700 LUT distributed.
+  reg [15:0] cmx [0:127];
+  reg [6:0]  cm_aa, cm_ab;           // read addresses
   reg [15:0] cm_qa, cm_qb;           // registered read data
   reg        cm_we;
-  reg [5:0]  cm_wa;
+  reg [6:0]  cm_wa;
   reg [15:0] cm_wd;
   integer ii;
   initial begin                      // power-on: both masters identity
-    for (ii = 0; ii < 64; ii = ii + 1) begin cmxa[ii]=0; cmxb[ii]=0; end
-    cmxa[0]=16'd256;  cmxa[4]=16'd256;  cmxa[8]=16'd256;
-    cmxb[0]=16'd256;  cmxb[4]=16'd256;  cmxb[8]=16'd256;
-    cmxa[16]=16'd256; cmxa[20]=16'd256; cmxa[24]=16'd256;
-    cmxb[16]=16'd256; cmxb[20]=16'd256; cmxb[24]=16'd256;
+    for (ii = 0; ii < 128; ii = ii + 1) cmx[ii] = 0;
+    cmx[0]=16'd256;  cmx[4]=16'd256;  cmx[8]=16'd256;
+    cmx[16]=16'd256; cmx[20]=16'd256; cmx[24]=16'd256;
   end
   always @(posedge clk) begin
-    if (cm_we) begin cmxa[cm_wa] <= cm_wd; cmxb[cm_wa] <= cm_wd; end
-    cm_qa <= cmxa[cm_aa];
-    cm_qb <= cmxb[cm_ab];
+    if (cm_we) cmx[cm_wa] <= cm_wd;
+    else cm_qa <= cmx[cm_aa];
+    cm_qb <= cmx[cm_ab];
   end
-  localparam [5:0] MB=6'd0, VB=6'd16, SB=6'd32, TB=6'd48;
+  localparam [6:0] MB=7'd0, VB=7'd16, SB=7'd32, TB=7'd48,
+                   LQX=7'd64, LQY=7'd72, LQZ=7'd80, LSX=7'd88, LSY=7'd96;
   reg [15:0] glvrp [0:2];            // VWRPT reference point
   reg [15:0] glorg [0:2];            // MDORG pivot
   reg [15:0] glh, glyy;              // DISTH / DISTY plane distances
@@ -212,10 +217,8 @@ module p8x_geom (
   reg [15:0] csum;                   // int16 wrap accumulator
   reg [3:0]  cpi;                    // copy index
   reg        glcvt;                  // CONVRT: capture projection, no draw
-  // far-pass polygon (TRI yon clip): NO arrays of its own -- between the
-  // near clip and T_MP's mapping, qsx/qsy and v[0:7] are idle, so the
-  // pass borrows them (x->qsx, y->qsy, z->v) and copies back. Saved 3
-  // register arrays' worth of fabric at zero wall-clock.
+  // far-pass polygon (TRI yon clip) vertex count; the pass writes into
+  // the mapped lanes + v[0:7] (idle at that stage) and copies back
   reg [3:0]  nq2;
   reg        glact;                  // pipeline exit returns to S_IDLE
   reg        gl2d;                   // suppress projection in the T-map
@@ -227,7 +230,7 @@ module p8x_geom (
              G_WAIT=6, G_RE=7,
              // stage 10c: CLEND finish, CLAPP length read, CLRUN start
              G_LE0=8, G_LE1=9, G_LE2=10, G_AL0=11, G_AL1=12,
-             G_RL0=13, G_RL1=14;
+             G_RL0=13, G_RL1=14, G_2D=15;
 
   // ---- stage 10c: COMMAND LISTS (STAGE10-DESIGN.md) ----------------------
   // 64 lists in 4KB SDRAM slots at CL_BASE + n*4096: byte length in the
@@ -381,6 +384,14 @@ module p8x_geom (
   wire [15:0] dg_lo = ($signed(dg_a) < $signed(fx2)) ? dg_a : fx2;
   wire [15:0] dg_b  = ($signed(fx0) < $signed(fx1)) ? fx1 : fx0;
   wire [15:0] dg_hi = ($signed(dg_b) < $signed(fx2)) ? fx2 : dg_b;
+
+  task epush(input [7:0] c);         // one error byte, FIFO-full safe
+    begin
+      if (ef_wp - ef_rp != 4'd8) begin
+        ef[ef_wp[2:0]] <= c; ef_wp <= ef_wp + 4'd1;
+      end
+    end
+  endtask
 
   integer i;
   always @(posedge clk) begin
@@ -648,19 +659,27 @@ module p8x_geom (
         // ==== stage 9b: the TRI record ====================================
         // near clip the polygon against z=16 (ortho copies straight through)
         T_NC: begin
-          if (par[12] == 16'd0) begin pp <= 0; state <= T_CPY; end
+          if (par[12] == 16'd0) begin pp <= 0; k <= 0; state <= T_CPY; end
           else state <= T_NCA;
         end
-        T_CPY: begin
-          qx[pp] <= tvx[pp[1:0]]; qy[pp] <= tvy[pp[1:0]]; qz[pp] <= tvz[pp[1:0]];
-          if (pp == 4'd2) begin np <= 4'd3; pp <= 0; state <= T_MP; end
-          else pp <= pp + 4'd1;
+        T_CPY: begin                   // ortho: copy tv* into the q lanes
+          cm_we <= 1;
+          case (k[1:0])
+            2'd0: begin cm_wa <= LQX + {3'd0,pp[2:0]}; cm_wd <= tvx[pp[1:0]]; end
+            2'd1: begin cm_wa <= LQY + {3'd0,pp[2:0]}; cm_wd <= tvy[pp[1:0]]; end
+            default: begin cm_wa <= LQZ + {3'd0,pp[2:0]}; cm_wd <= tvz[pp[1:0]]; end
+          endcase
+          if (k[1:0] == 2'd2) begin
+            k <= 0;
+            if (pp == 4'd2) begin np <= 4'd3; pp <= 0; state <= T_MP; end
+            else pp <= pp + 4'd1;
+          end else k <= k + 4'd1;
         end
         T_NCA: begin
           if (pp == 4'd3) begin
             if (np < 4'd3) begin state <= S_NEXT; end
-            else if (par[24] == 16'd32767) begin pp <= 0; state <= T_MP; end
-            else begin pp <= 0; nq2 <= 0; state <= F_CA; end  // yon fitted
+            else if (par[24] == 16'd32767) begin pp <= 0; k <= 0; state <= T_MP; end
+            else begin pp <= 0; nq2 <= 0; k <= 0; state <= F_CA; end  // yon
           end else begin
             nax <= tvx[pp[1:0]]; nay <= tvy[pp[1:0]]; naz <= tvz[pp[1:0]];
             nbx <= tvx[(pp == 4'd2) ? 2'd0 : pp[1:0] + 2'd1];
@@ -669,13 +688,21 @@ module p8x_geom (
             state <= T_NI0;
           end
         end
-        T_NI0: begin                   // classify; keep A; start x-intersect
+        T_NI0: begin                   // classify; keep A via the writer
           nain <= !($signed(naz) < $signed(par[23]));
           nbin <= !($signed(nbz) < $signed(par[23]));
-          if (!($signed(naz) < $signed(par[23]))) begin
-            qx[np] <= nax; qy[np] <= nay; qz[np] <= naz; np <= np + 4'd1;
-          end
-          state <= T_NI0W;
+          k <= 0;
+          state <= (!($signed(naz) < $signed(par[23]))) ? T_NIK : T_NI0W;
+        end
+        T_NIK: begin                   // keep vertex A: three lane writes
+          cm_we <= 1;
+          case (k[1:0])
+            2'd0: begin cm_wa <= LQX + {3'd0,np[2:0]}; cm_wd <= nax; end
+            2'd1: begin cm_wa <= LQY + {3'd0,np[2:0]}; cm_wd <= nay; end
+            default: begin cm_wa <= LQZ + {3'd0,np[2:0]}; cm_wd <= naz; end
+          endcase
+          if (k[1:0] == 2'd2) begin np <= np + 4'd1; k <= 0; state <= T_NI0W; end
+          else k <= k + 4'd1;
         end
         T_NI0W: begin
           if (nain == nbin) begin pp <= pp + 4'd1; state <= T_NCA; end
@@ -685,38 +712,63 @@ module p8x_geom (
           end
         end
         T_NI1: if (md_done) begin
-          qx[np] <= nax + md_q;
+          cm_we <= 1; cm_wa <= LQX + {3'd0,np[2:0]}; cm_wd <= nax + md_q;
           md_a <= nby - nay; md_b <= par[23] - naz; md_c <= nbz - naz;
           md_go <= 1; state <= T_NI1W;
         end
         T_NI1W: if (md_done) begin
-          qy[np] <= nay + md_q; qz[np] <= par[23]; np <= np + 4'd1;
-          pp <= pp + 4'd1; state <= T_NCA;
+          cm_we <= 1; cm_wa <= LQY + {3'd0,np[2:0]}; cm_wd <= nay + md_q;
+          state <= T_NIZ;
+        end
+        T_NIZ: begin
+          cm_we <= 1; cm_wa <= LQZ + {3'd0,np[2:0]}; cm_wd <= par[23];
+          np <= np + 4'd1; pp <= pp + 4'd1; state <= T_NCA;
         end
 
         // ==== stage 10b: the TRI far (yon) pass -- the near pass's mirror,
-        // walking the near-clipped polygon qx/qy/qz (np verts) into q2,
-        // keeping z<=far and inserting intersections, then copying back ====
+        // walking the q lanes (np verts) into the mapped lanes + v[] (as
+        // scratch z), keeping z<=far, then copying back ====================
         F_CA: begin
           if (pp == np) begin
             if (nq2 < 4'd3) begin state <= S_NEXT; end
-            else begin cpi <= 0; state <= F_CP; end
-          end else begin
-            nax <= qx[pp[2:0]]; nay <= qy[pp[2:0]]; naz <= qz[pp[2:0]];
-            nbx <= qx[(pp + 4'd1 == np) ? 3'd0 : pp[2:0] + 3'd1];
-            nby <= qy[(pp + 4'd1 == np) ? 3'd0 : pp[2:0] + 3'd1];
-            nbz <= qz[(pp + 4'd1 == np) ? 3'd0 : pp[2:0] + 3'd1];
-            state <= F_I0;
-          end
+            else begin cpi <= 0; k <= 0; state <= F_CP; end
+          end else state <= F_CAF;     // fetch edge ends A and B
+        end
+        F_CAF: begin                   // three lane-pair fetches, pipelined
+          case (k[2:0])
+            3'd0: begin cm_aa <= LQX + {3'd0,pp[2:0]};
+                        cm_ab <= LQX + {3'd0,(pp + 4'd1 == np) ? 3'd0 : pp[2:0] + 3'd1};
+                        k <= k + 4'd1; end
+            3'd1: k <= k + 4'd1;
+            3'd2: begin nax <= cm_qa; nbx <= cm_qb;
+                        cm_aa <= LQY + {3'd0,pp[2:0]};
+                        cm_ab <= LQY + {3'd0,(pp + 4'd1 == np) ? 3'd0 : pp[2:0] + 3'd1};
+                        k <= k + 4'd1; end
+            3'd3: k <= k + 4'd1;
+            3'd4: begin nay <= cm_qa; nby <= cm_qb;
+                        cm_aa <= LQZ + {3'd0,pp[2:0]};
+                        cm_ab <= LQZ + {3'd0,(pp + 4'd1 == np) ? 3'd0 : pp[2:0] + 3'd1};
+                        k <= k + 4'd1; end
+            3'd5: k <= k + 4'd1;
+            default: begin naz <= cm_qa; nbz <= cm_qb; k <= 0; state <= F_I0; end
+          endcase
         end
         F_I0: begin
           nain <= !($signed(par[24]) < $signed(naz));
           nbin <= !($signed(par[24]) < $signed(nbz));
-          if (!($signed(par[24]) < $signed(naz))) begin
-            qsx[nq2[2:0]] <= nax; qsy[nq2[2:0]] <= nay; v[nq2[2:0]] <= naz;
-            nq2 <= nq2 + 4'd1;
+          k <= 0;
+          state <= (!($signed(par[24]) < $signed(naz))) ? F_IK : F_I0W;
+        end
+        F_IK: begin                    // keep A: two lane writes + v[] z
+          cm_we <= 1;
+          if (k[0] == 1'b0) begin
+            cm_wa <= LSX + {3'd0,nq2[2:0]}; cm_wd <= nax;
+            v[nq2[2:0]] <= naz;
+            k <= k + 4'd1;
+          end else begin
+            cm_wa <= LSY + {3'd0,nq2[2:0]}; cm_wd <= nay;
+            nq2 <= nq2 + 4'd1; k <= 0; state <= F_I0W;
           end
-          state <= F_I0W;
         end
         F_I0W: begin
           if (nain == nbin) begin pp <= pp + 4'd1; state <= F_CA; end
@@ -726,42 +778,64 @@ module p8x_geom (
           end
         end
         F_I1: if (md_done) begin
-          qsx[nq2[2:0]] <= nax + md_q;
+          cm_we <= 1; cm_wa <= LSX + {3'd0,nq2[2:0]}; cm_wd <= nax + md_q;
           md_a <= nby - nay; md_b <= par[24] - naz; md_c <= nbz - naz;
           md_go <= 1; state <= F_I1W;
         end
         F_I1W: if (md_done) begin
-          qsy[nq2[2:0]] <= nay + md_q; v[nq2[2:0]] <= par[24];
+          cm_we <= 1; cm_wa <= LSY + {3'd0,nq2[2:0]}; cm_wd <= nay + md_q;
+          v[nq2[2:0]] <= par[24];
           nq2 <= nq2 + 4'd1;
           pp <= pp + 4'd1; state <= F_CA;
         end
-        F_CP: begin                    // q2 -> q, then the normal map path
-          qx[cpi[2:0]] <= qsx[cpi[2:0]];
-          qy[cpi[2:0]] <= qsy[cpi[2:0]];
-          qz[cpi[2:0]] <= v[cpi[2:0]];
-          if (cpi + 4'd1 == nq2) begin
-            np <= nq2; pp <= 0; state <= T_MP;
-          end else cpi <= cpi + 4'd1;
+        F_CP: begin                    // mapped lanes + v -> q lanes
+          case (k[2:0])
+            3'd0: begin cm_aa <= LSX + {3'd0,cpi[2:0]};
+                        cm_ab <= LSY + {3'd0,cpi[2:0]}; k <= k + 4'd1; end
+            3'd1: k <= k + 4'd1;
+            3'd2: begin cm_we <= 1; cm_wa <= LQX + {3'd0,cpi[2:0]};
+                        cm_wd <= cm_qa; cyv <= cm_qb; k <= k + 4'd1; end
+            3'd3: begin cm_we <= 1; cm_wa <= LQY + {3'd0,cpi[2:0]};
+                        cm_wd <= cyv; k <= k + 4'd1; end
+            default: begin
+              cm_we <= 1; cm_wa <= LQZ + {3'd0,cpi[2:0]};
+              cm_wd <= v[cpi[2:0]];
+              k <= 0;
+              if (cpi + 4'd1 == nq2) begin np <= nq2; pp <= 0; state <= T_MP; end
+              else cpi <= cpi + 4'd1;
+            end
+          endcase
         end
 
-        // project + viewport-map each polygon vertex into qsx/qsy
+        // project + viewport-map each polygon vertex into the mapped lanes
         T_MP: begin
           if (pp == np) begin
             seq <= 0; state <= T_PENW;   // GL fills only: outline TRIs
           end else begin                 //   draw as DRAW3 edges instead
-            cxv <= qx[pp[2:0]]; cyv <= qy[pp[2:0]];
-            // gl2d: a 2D fill's vertices are already window-space -- map
-            // only, never project, whatever the focal parameter says
-            state <= (par[12] != 16'd0 && !gl2d) ? T_PJX : T_MX;
+            case (k[2:0])
+              3'd0: begin cm_aa <= LQX + {3'd0,pp[2:0]};
+                          cm_ab <= LQY + {3'd0,pp[2:0]}; k <= k + 4'd1; end
+              3'd1: k <= k + 4'd1;
+              3'd2: begin cxv <= cm_qa; cyv <= cm_qb;
+                          cm_aa <= LQZ + {3'd0,pp[2:0]}; k <= k + 4'd1; end
+              3'd3: k <= k + 4'd1;
+              default: begin
+                naz <= cm_qa;            // the vertex's z, held for T_PJ*
+                k <= 0;
+                // gl2d: a 2D fill's vertices are already window-space --
+                // map only, never project
+                state <= (par[12] != 16'd0 && !gl2d) ? T_PJX : T_MX;
+              end
+            endcase
           end
         end
         T_PJX: begin
-          md_a <= cxv; md_b <= par[12]; md_c <= qz[pp[2:0]];
+          md_a <= cxv; md_b <= par[12]; md_c <= naz;
           md_go <= 1; state <= T_PJXW;
         end
         T_PJXW: if (md_done) begin cxv <= md_q; state <= T_PJY; end
         T_PJY: begin
-          md_a <= cyv; md_b <= par[12]; md_c <= qz[pp[2:0]];
+          md_a <= cyv; md_b <= par[12]; md_c <= naz;
           md_go <= 1; state <= T_PJYW;
         end
         T_PJYW: if (md_done) begin cyv <= md_q; state <= T_MX; end
@@ -769,30 +843,41 @@ module p8x_geom (
           md_a <= cxv - par[13]; md_b <= par[19] - par[17]; md_c <= par[15] - par[13];
           md_go <= 1; state <= T_MXW;
         end
-        T_MXW: if (md_done) begin qsx[pp[2:0]] <= par[17] + md_q; state <= T_MY; end
+        T_MXW: if (md_done) begin
+          cm_we <= 1; cm_wa <= LSX + {3'd0,pp[2:0]}; cm_wd <= par[17] + md_q;
+          state <= T_MY;
+        end
         T_MY: begin
           md_a <= cyv - par[14]; md_b <= par[20] - par[18]; md_c <= par[16] - par[14];
           md_go <= 1; state <= T_MYW;
         end
         T_MYW: if (md_done) begin
-          qsy[pp[2:0]] <= par[20] - md_q;
-          pp <= pp + 4'd1; state <= T_MP;
+          cm_we <= 1; cm_wa <= LSY + {3'd0,pp[2:0]}; cm_wd <= par[20] - md_q;
+          pp <= pp + 4'd1; k <= 0; state <= T_MP;
         end
 
         // fill: pen once, then fan (0,t,t+1), each sorted then scanned
         T_PENW: begin
           if (seq == 3'd0) begin gm_a<=4'h4; gm_wdata<=rcol[7:0];  gm_wr<=1; seq<=3'd1; end
           else begin gm_a<=4'hD; gm_wdata<=rcol[15:8]; gm_wr<=1; seq<=0;
-                     ft <= 4'd1; state <= T_FAN; end
+                     ft <= 4'd1; k <= 0; state <= T_FAN; end
         end
         T_FAN: begin
           if (ft + 4'd1 >= np) begin state <= S_NEXT; end
-          else begin
-            fx0 <= qsx[0];        fy0 <= qsy[0];
-            fx1 <= qsx[ft[2:0]];  fy1 <= qsy[ft[2:0]];
-            fx2 <= qsx[ft[2:0] + 3'd1]; fy2 <= qsy[ft[2:0] + 3'd1];
-            state <= T_SRT1;
-          end
+          else case (k[2:0])           // fetch the fan corners lane-pairwise
+            3'd0: begin cm_aa <= LSX; cm_ab <= LSY; k <= k + 4'd1; end
+            3'd1: k <= k + 4'd1;
+            3'd2: begin fx0 <= cm_qa; fy0 <= cm_qb;
+                        cm_aa <= LSX + {3'd0,ft[2:0]};
+                        cm_ab <= LSY + {3'd0,ft[2:0]}; k <= k + 4'd1; end
+            3'd3: k <= k + 4'd1;
+            3'd4: begin fx1 <= cm_qa; fy1 <= cm_qb;
+                        cm_aa <= LSX + {3'd0,ft[2:0]} + 7'd1;
+                        cm_ab <= LSY + {3'd0,ft[2:0]} + 7'd1; k <= k + 4'd1; end
+            3'd5: k <= k + 4'd1;
+            default: begin fx2 <= cm_qa; fy2 <= cm_qb;
+                           k <= 0; state <= T_SRT1; end
+          endcase
         end
         T_SRT1: begin                  // the 3-swap network, one per cycle
           if ($signed(fy1) < $signed(fy0)) begin
@@ -869,7 +954,7 @@ module p8x_geom (
         T_BXC: begin gm_a <= 4'h5; gm_wdata <= 8'h04; gm_wr <= 1;  // BOXFILL
                      state <= T_SNEXT; end
         T_SNEXT: begin
-          if (fy == fy2 || fy2 == fy0) begin ft <= ft + 4'd1; state <= T_FAN; end
+          if (fy == fy2 || fy2 == fy0) begin ft <= ft + 4'd1; k <= 0; state <= T_FAN; end
           else begin fy <= fy + 16'd1; state <= T_SLOOP; end
         end
 
@@ -1130,18 +1215,19 @@ module p8x_geom (
                   ef[ef_wp[2:0]] <= 8'd5;        //   consume unstored
                   ef_wp <= ef_wp + 4'd1; end
                 rskip <= 1;
-              end else if (rec_len + {8'd0, opn} + 13'd1 > 13'd4094) begin
-                if (ef_wp - ef_rp != 4'd8) begin // slot full: error 7,
-                  ef[ef_wp[2:0]] <= 8'd7;        //   recording aborts
-                  ef_wp <= ef_wp + 4'd1; end
-                cldef[rec_slot] <= 1'b0; rec <= 0; rskip <= 1;
               end else begin                     // store the opcode byte
-                if (!rec_len[0]) rec_lo <= srcb;
-                else begin
-                  g_addr <= rec_wa; g_din <= {srcb, rec_lo};
-                  g_we <= 1; g_req <= 1; sd_busy <= 1;
+                if (rec_len >= 13'd4092) begin   // slot full: error 7,
+                  epush(8'd7);                   //   recording aborts (the
+                  cldef[rec_slot] <= 1'b0;       //   partial tail lies in a
+                  rec <= 0; rskip <= 1;          //   slot that stays
+                end else begin                   //   undefined)
+                  if (!rec_len[0]) rec_lo <= srcb;
+                  else begin
+                    g_addr <= rec_wa; g_din <= {srcb, rec_lo};
+                    g_we <= 1; g_req <= 1; sd_busy <= 1;
+                  end
+                  rec_len <= rec_len + 13'd1;
                 end
-                rec_len <= rec_len + 13'd1;
               end
             end
           end
@@ -1153,14 +1239,7 @@ module p8x_geom (
             glpfill <= glfill && (pbuf[0] >= 8'd3);
             glph <= 0; glnv <= pbuf[0]; pi <= 0;
             pneed <= glop[1] ? 5'd6 : 5'd4;
-            if (rec && !rskip &&
-                rec_len + {5'd0, pbuf[0]} * (glop[1] ? 13'd6 : 13'd4)
-                  > 13'd4094) begin               // vertices overflow: abort
-              if (ef_wp - ef_rp != 4'd8) begin
-                ef[ef_wp[2:0]] <= 8'd7; ef_wp <= ef_wp + 4'd1; end
-              cldef[rec_slot] <= 1'b0; rec <= 0; rskip <= 1;
-              glst <= (pbuf[0] == 8'd0) ? G_OP : G_PV;
-            end else if (pbuf[0] == 8'd0) begin           // n=0: recorded
+            if (pbuf[0] == 8'd0) begin                    // n=0: recorded
               if (!rec && !rskip) begin                   //   as-is; live =
                 if (ef_wp - ef_rp != 4'd8) begin          //   bad parameter
                   ef[ef_wp[2:0]] <= 8'd2; ef_wp <= ef_wp + 4'd1; end
@@ -1176,12 +1255,16 @@ module p8x_geom (
           else cf_rp <= cf_rp + 7'd1;
           pi <= pi + 5'd1;
           if (rec && !rskip) begin                        // stream to store
-            if (!rec_len[0]) rec_lo <= srcb;
-            else begin
-              g_addr <= rec_wa; g_din <= {srcb, rec_lo};
-              g_we <= 1; g_req <= 1; sd_busy <= 1;
+            if (rec_len >= 13'd4092) begin   // slot full: abort
+              epush(8'd7); cldef[rec_slot] <= 1'b0; rec <= 0; rskip <= 1;
+            end else begin
+              if (!rec_len[0]) rec_lo <= srcb;
+              else begin
+                g_addr <= rec_wa; g_din <= {srcb, rec_lo};
+                g_we <= 1; g_req <= 1; sd_busy <= 1;
+              end
+              rec_len <= rec_len + 13'd1;
             end
-            rec_len <= rec_len + 13'd1;
           end
         end
 
@@ -1430,12 +1513,16 @@ module p8x_geom (
                 else cf_rp <= cf_rp + 7'd1;
                 pi <= pi + 5'd1;
                 if (rec && !rskip) begin                  // stream to store
-                  if (!rec_len[0]) rec_lo <= srcb;
-                  else begin
-                    g_addr <= rec_wa; g_din <= {srcb, rec_lo};
-                    g_we <= 1; g_req <= 1; sd_busy <= 1;
+                  if (rec_len >= 13'd4092) begin   // slot full: abort
+                    epush(8'd7); cldef[rec_slot] <= 1'b0; rec <= 0; rskip <= 1;
+                  end else begin
+                    if (!rec_len[0]) rec_lo <= srcb;
+                    else begin
+                      g_addr <= rec_wa; g_din <= {srcb, rec_lo};
+                      g_we <= 1; g_req <= 1; sd_busy <= 1;
+                    end
+                    rec_len <= rec_len + 13'd1;
                   end
-                  rec_len <= rec_len + 13'd1;
                 end
               end
 
@@ -1475,11 +1562,9 @@ module p8x_geom (
                   tri_m <= 1; rfill <= 1; mp <= 0; mr <= 0; mk <= 0; acc <= 0;
                   glact <= 1; state <= S_MAC;
                 end else begin                            // 2D: map-only fill
-                  qx[0] <= vfx; qy[0] <= vfy; qz[0] <= 0;
-                  qx[1] <= vpx; qy[1] <= vpy; qz[1] <= 0;
-                  qx[2] <= pvx; qy[2] <= pvy; qz[2] <= 0;
-                  np <= 4'd3; pp <= 0; rfill <= 1; gl2d <= 1;
-                  glact <= 1; state <= T_MP;
+                  g2n <= (glnv == 8'd1) ? G_OP : G_PV;    // where to resume
+                  k <= 0;
+                  glst <= G_2D;                           // load the q lanes
                 end
               end else begin                              // outline: next edge
                 if (glpoly3) begin
@@ -1518,6 +1603,24 @@ module p8x_geom (
             2'd3: begin wx0 <= c2x; wy0 <= nby; wx1 <= c2x; wy1 <= c2y; end
           endcase
           csn <= 0; glact <= 1; state <= S_CS;
+        end
+
+        G_2D: if (gl_can) begin        // load a 2D fan triangle's window
+          cm_we <= 1;                  //   coords into the q lanes, then
+          case (k[2:0])                //   launch the map-only fill
+            3'd0: begin cm_wa <= LQX;          cm_wd <= vfx; end
+            3'd1: begin cm_wa <= LQX + 7'd1;   cm_wd <= vpx; end
+            3'd2: begin cm_wa <= LQX + 7'd2;   cm_wd <= pvx; end
+            3'd3: begin cm_wa <= LQY;          cm_wd <= vfy; end
+            3'd4: begin cm_wa <= LQY + 7'd1;   cm_wd <= vpy; end
+            default: begin cm_wa <= LQY + 7'd2; cm_wd <= pvy; end
+          endcase
+          if (k[2:0] == 3'd5) begin
+            k <= 0;
+            np <= 4'd3; pp <= 0; rfill <= 1; gl2d <= 1;
+            glact <= 1; state <= T_MP;
+            glst <= g2n;
+          end else k <= k + 4'd1;
         end
 
         G_WAIT: begin                                     // WAIT: real frames
