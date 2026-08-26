@@ -402,6 +402,20 @@ for GLSTAT bit 6 to clear (when GLID says a GL engine is fitted)
 before probing GID0 -- which also makes every graphics statement
 implicitly sequence after outstanding GL work.
 
+**2026-08-26: STAGE 10d BOARD-VERIFIED.** The 18,943-LUT bitstream is
+in FLASH, the fresh disk (new BASIC + gl) cloned (4,234 sectors, every
+ack + 'K'), and the same two programs as basic_gl_test ran on the
+machine itself: the GL-string program (the FABRIC ASCII translator
+end to end -- CA/keywords/decimals/CX) read POINT(364,204) = 2016,
+and the native-verb program (RESETF, CLEARS, WINDOW/VWPORT, the COLOR
+bridge, PRMFIL, CLBEG/MDROTY/CLEND recording, CLOOP 1,3+4, a native
+9-coordinate POLY3, FLIP) read -2048 -- both exactly the emulator's
+golden values. The red triangle is on the panel. Stage 10a-d are all
+on silicon, frame- and probe-exact. (Session notes: the port-open does
+NOT reset this board -- probe for state instead, and the machine may
+be sitting in BASIC from a dead session; imgsend needs the MONITOR, so
+reload the bitstream before cloning.)
+
 Three operational notes for whoever drives the board over serial next:
 
 - **Two serial clients do not error -- they silently shred each other's

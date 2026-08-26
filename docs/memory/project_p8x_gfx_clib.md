@@ -150,8 +150,14 @@ never carry). ANTI-LESSONS (tried, net WORSE, reverted): small reg
 arrays (3-deep tv*, par[0..8]) into BSRAM lanes; comparator banks
 time-shared behind state-keyed muxes — wide muxes are near-free as
 MUX2_LUT5 pairs, and new state-keyed selects cost more than the ALUs
-they save. Share only where the mux already exists. Bitstream BUILT,
-NOT yet flashed; board proof + disk rebuild (new BASIC + gl) pending.
+they save. Share only where the mux already exists. BOARD-VERIFIED
+2026-08-26: bitstream IN FLASH, fresh disk cloned, translator (GL
+strings) probe 2016 + native-verb probe -2048 both exact on silicon.
+SILICON TRAP FIXED: GL walker masters the 2D device -> GID reads
+garbage while busy -> GCHECK now drains GLSTAT bit6 first (emulator
+is synchronous, cannot see this class). Port-open does NOT reset the
+board; probe for state (may be sitting in BASIC); imgsend needs the
+MONITOR (reload bitstream first).
 BASIC NATIVE GL VERBS (2026-08-26): all 51 verbs are BASIC statements
 (tokens $B4-$E6, ONE generic handler + gen_glkw.py-emitted tables in
 basic/glkwtab.inc+glvtab.inc; token order is ABI append-only). They
