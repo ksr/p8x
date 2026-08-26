@@ -44,6 +44,7 @@ GID0   = $FF2D               ; presence signature: 'P'
 GID1   = $FF2E               ;                     'G'
 GLDATAR = $FF50          ; GL command FIFO (stage 10d): one byte at a time
 GLSTATR = $FF51          ; bit7 = FIFO full (wait before pushing)
+GLRBR   = $FF52          ; read-back FIFO pop (stage 10e; GLSTAT bit0 = has byte)
 GLIDR   = $FF54          ; reads 'G' when the GL engine is fitted
 GCHI   = 9                   ; a pair's high byte = its low address + GCHI
 GC_PLOT = 1
@@ -291,6 +292,11 @@ TOK_GTEXT = $AF          ; GTEXT x,y,size,string$
 TOK_RGB   = $B1          ; RGB(r,g,b) -- a FUNCTION: pack r,b 0-31, g 0-63 into 565
 TOK_IMAGE = $B2          ; IMAGE x,y,name$ -- draw a P8I file
 TOK_GL    = $B3          ; GL string$ -- one ASCII graphics-language line
+                         ; $B4.. are the GENERATED native GL verbs (glvtab.inc);
+                         ; $FB-$FF reserved for hand tokens so the verb table
+                         ; can keep growing underneath them
+TOK_GLRD  = $FB          ; GLRD -- pop one read-back byte (-1 empty); a bare
+                         ; factor like a variable, no parens (stage 10e)
                          ; $B4..$E6 are the NATIVE GL VERB block (FLIP,
                          ; DRAW3, MDROTY, CLBEG ... 51 statements), all
                          ; dispatched to DOGLV through GLVTAB. Names,
@@ -2763,6 +2769,10 @@ FACTOR: JSR  SKIPSP
         CMP
         JZ   fa_rgb
         LDA  (P2)
+        LDB  #TOK_GLRD
+        CMP
+        JZ   fa_glrd
+        LDA  (P2)
         LDB  #TOK_LEN
         CMP
         JZ   fa_len
@@ -2933,6 +2943,24 @@ pt_err: JMP  SYNERR
 ; of limitation POINT has with the coordinate registers, and as pointless to
 ; hit. The (g&7)<<5 half rides the STACK across the blue argument instead;
 ; SYNERR unwinds SP, so an error mid-argument cannot leak the push.
+; GLRD -- pop one byte of the GL read-back FIFO (FLAGRD/MATXRD/CLRD data).
+; No parens: reads like a variable. Empty FIFO -> -1, so a drain loop is
+; simply  V=GLRD : IF V>=0 THEN ...
+fa_glrd: INP2
+        LDA  GLSTATR
+        LDB  #1
+        AND
+        JZ   fg_emp
+        LDA  GLRBR
+        STA  RESULT
+        LDA  #0
+        STA  RESULT+1
+        RTS
+fg_emp: LDA  #$FF
+        STA  RESULT
+        STA  RESULT+1
+        RTS
+
 fa_rgb: INP2
         JSR  SKIPSP
         LDA  (P2)
@@ -5160,6 +5188,9 @@ ckd_1:  LDB  #TOK_REM
         LDB  #TOK_RGB
         CMP
         JZ   ckd_bad
+        LDB  #TOK_GLRD
+        CMP
+        JZ   ckd_bad
         LDB  #TOK_FILL
         CMP
         JZ   ckd_bad
@@ -5384,6 +5415,8 @@ KWTAB:
         .byte $B1
         .ascii "IMAGE"
         .byte $B2
+        .ascii "GLRD"
+        .byte $FB
         .ascii "GL"
         .byte $B3
         .byte $00

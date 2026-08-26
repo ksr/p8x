@@ -491,7 +491,9 @@ static void ge_line3t(const int16_t *w){
 #define GLFMAX 2048          /* holds the largest command: POLY3 255 verts */
 static uint8_t glf[GLFMAX];  static int glflen;         /* command FIFO */
 static uint8_t glef[16];     static int gleflen;        /* error FIFO */
-static uint8_t glrbf[256];   static int glrblen, glrbrd; /* read-back (10e) */
+static uint8_t glrbf[4352];  static int glrblen, glrbrd; /* read-back (10e):
+        sized for a full CLRD burst -- the RTL streams through a small
+        FIFO with backpressure; instant interpretation is the licence */
 static uint8_t glmode;       /* 0 = hex (10a default; 1 = ASCII, stage 10d) */
 static char awb[8];  static int awn;      /* keyword accumulator */
 static int  axv, axneg, axhas;            /* number accumulator */
@@ -517,6 +519,9 @@ static uint8_t glpmode;      /* 0 = native focal (par12 as-is); 1 = PROJCT */
 /* error codes: 1 unknown opcode, 2 bad parameter, 3 mode not fitted
    (ASCII before stage 10d), 4 command-FIFO overflow */
 static void gl_err(uint8_t code){ if(gleflen<(int)sizeof glef) glef[gleflen++]=code; }
+/* stage 10e read-back: bytes for the CPU to pop at GLRB (GLSTAT bit 0) */
+static void gl_rbb(uint8_t b){ if(glrblen<(int)sizeof glrbf) glrbf[glrblen++]=b; }
+static void gl_rbw(int16_t v){ gl_rbb((uint8_t)(v&255)); gl_rbb((uint8_t)((v>>8)&255)); }
 
 static void gl_mat_reset(void){            /* 10b matrix state to power-up */
     memset(glmm,0,sizeof glmm); glmm[0]=glmm[4]=glmm[8]=256;
@@ -680,7 +685,8 @@ static int gl_cmdlen(const uint8_t *p, int n){
     case 0x01: case 0x02: case 0x03: case 0x04: case 0x08: case 0x09:
     case 0x90: case 0xA0: case 0xAF: case 0x71: return 1;
     case 0xE0: case 0xAA: case 0xAB: case 0x70: case 0x72: case 0x74:
-    case 0x79: return 2;
+    case 0x79: case 0x61: case 0x62: case 0x76: return 2;
+    case 0x78: return 5;                   /* CLMOD n b off */
     case 0x05: case 0x43: case 0x93: case 0x94: case 0x95:
     case 0xA3: case 0xA4: case 0xA5: case 0xA8: case 0xA9:
     case 0xB0: case 0xB1: return 3;
@@ -777,12 +783,49 @@ static int gl_exec2(const uint8_t *p, int n){
     case 0x74: NEED(2);                    /* CLDEL */
         if(p[1] >= CLNUM){ gl_err(2); return 2; }
         cldef[p[1]] = 0; return 2;
+    /* ---- stage 10e: read-back ---- */
+    case 0x61: NEED(2);                    /* FLAGRD n -> RB (man gl table) */
+        switch(p[1]){
+        case 1: gl_rbw((int16_t)glfill); break;
+        case 2: gl_rbw((int16_t)gcol); break;
+        case 3: gl_rbw(glpmode ? glproj : (int16_t)-1); break;
+        case 4: gl_rbw(gldist); break;
+        case 5: gl_rbw(gep[13]); gl_rbw(gep[15]);       /* WINDOW x1 x2 y1 y2 */
+                gl_rbw(gep[14]); gl_rbw(gep[16]); break;
+        case 6: gl_rbw(gep[17]); gl_rbw(gep[19]);       /* VWPORT x1 x2 y1 y2 */
+                gl_rbw(gep[18]); gl_rbw(gep[20]); break;
+        case 9: gl_rbw(gep[23]); gl_rbw(gep[24]); break; /* near, far */
+        default: gl_err(2); break;
+        }
+        return 2;
+    case 0x62: NEED(2);                    /* MATXRD 1|2 -> RB */
+        if(p[1] == 1){ int i; for(i=0;i<12;i++) gl_rbw(glmm[i]); }
+        else if(p[1] == 2){ int i; for(i=0;i<9;i++) gl_rbw(glvm[i]); }
+        else gl_err(2);
+        return 2;
+    case 0x76: NEED(2);                    /* CLRD n: length then the bytes */
+        if(p[1] >= CLNUM){ gl_err(2); return 2; }
+        if(!cldef[p[1]]){ gl_err(6); return 2; }
+        { int L = clmem[p[1]][0] | (clmem[p[1]][1] << 8); int i;
+          gl_rbb(clmem[p[1]][0]); gl_rbb(clmem[p[1]][1]);
+          for(i = 0; i < L; i++) gl_rbb(clmem[p[1]][2 + i]); }
+        return 2;
+    case 0x78: NEED(5);                    /* CLMOD n b off: one-byte patch */
+        if(glrec || glreplay){ gl_err(5); return 5; }
+        if(p[1] >= CLNUM){ gl_err(2); return 5; }
+        if(!cldef[p[1]]){ gl_err(6); return 5; }
+        { int off = (uint16_t)(p[3] | (p[4] << 8));
+          int L = clmem[p[1]][0] | (clmem[p[1]][1] << 8);
+          if(off >= L){ gl_err(2); return 5; }
+          clmem[p[1]][2 + off] = p[2]; }
+        return 5;
     case 0x01: return 1;                                  /* NOOP */
     case 0x02: ge_flip(); return 1;                       /* FLIP   (P8X) */
     case 0x03: gfb=gfbd; return 1;                        /* PGSYNC (P8X) */
     case 0x04:                                            /* RESETF */
         gl_state_reset();
         memset(cldef, 0, sizeof cldef); glrec = 0;
+        glrblen = glrbrd = 0;              /* 10e: read-back FIFO clears */
         return 1;
     case 0x05: NEED(3); return 3;      /* WAIT frames: paces on real frame
                                           ticks in RTL; instant here */

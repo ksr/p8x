@@ -54,6 +54,10 @@
         .byte $E5
         .ascii "PRMFIL"
         .byte $E6
+        .ascii "FLAGRD"
+        .byte $E7
+        .ascii "MATXRD"
+        .byte $E8
         .ascii "FLOOD"
         .byte $B8
         .ascii "MOVER"
@@ -94,6 +98,8 @@
         .byte $DF
         .ascii "CLIPY"
         .byte $E0
+        .ascii "CLMOD"
+        .byte $EA
         .ascii "FLIP"
         .byte $B4
         .ascii "WAIT"
@@ -106,3 +112,5 @@
         .byte $C3
         .ascii "RECT"
         .byte $C7
+        .ascii "CLRD"
+        .byte $E9

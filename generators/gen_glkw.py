@@ -93,6 +93,11 @@ VERBS = [
     ("VWPORT",  "VWP",  0xB2, 0, 4),
     ("WINDOW",  "WI",   0xB3, 0, 4),
     ("PRMFIL",  "PF",   0xE0, 1, 1),
+    # stage 10e read-back (appended: BASIC token order is ABI)
+    ("FLAGRD",  "FR",   0x61, 1, 1),
+    ("MATXRD",  "MX",   0x62, 1, 1),
+    ("CLRD",    "CRD",  0x76, 1, 1),
+    ("CLMOD",   "CM",   0x78, 2, 3),   # n b off: one-byte patch (P8X shrink)
     ("CA",      "CA",   0xFE, 0, 0),   # mode switches: internal markers
     ("CX",      "CX",   0xFF, 0, 0),
 ]
