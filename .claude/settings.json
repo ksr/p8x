@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(make test)",
+      "Bash(./p8xemu *)",
+      "Bash(../p8xemu *)",
+      "Bash(emulator/p8xemu *)",
+      "Bash(../../emulator/p8xemu *)",
+      "Bash(iverilog *)",
+      "Bash(xxd *)"
+    ]
+  }
+}
