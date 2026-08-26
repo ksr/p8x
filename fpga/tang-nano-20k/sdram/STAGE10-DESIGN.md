@@ -274,6 +274,17 @@ byte-identical emulator-vs-RTL (c_gl_rtl_test), 92-PASS make test.
   `GL` statement (`GL "MDROTY 45"` / `GL "DRAW3";X;Y;Z`) that writes
   bytes to GLDATA honouring GLSTAT. Every manual example then types in
   almost verbatim.
+  **As built (2026-08-26), BASIC went further: the verbs are NATIVE
+  statements** — 51 of them (`MDROTY A*2`, `POLY3 3,-80,...`,
+  `CLBEG 1 : MDROTY 5 : CLEND : CLOOP 1,7`), tokens $B4..$E6 driven by
+  ONE generic handler through a table gen_glkw.py emits alongside the
+  C and Verilog ones (basic/glkwtab.inc + glvtab.inc — token order is
+  ABI). Native statements emit HEX opcodes directly (no translator
+  round-trip, no 32-char string cap — which a 9-coordinate POLY3
+  cannot fit anyway), record inside CLBEG/CLEND, and DRAIN GLSTAT
+  busy on exit so `POINT()` after a draw is deterministic on silicon;
+  `GL s$` stays the async text path. `COLOR` feeds both pens. The GL
+  `POINT` verb and `NOOP` stay string-only (name/ABI reasons).
 - **C:** lib_gl.c (//#use gl) — a thin emitter over GLDATA (hex mode
   for compactness), plus glrb()/glerr() drains. lib_g3d clients migrate
   only when stage-9 retirement lands.

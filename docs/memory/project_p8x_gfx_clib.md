@@ -152,5 +152,13 @@ time-shared behind state-keyed muxes — wide muxes are near-free as
 MUX2_LUT5 pairs, and new state-keyed selects cost more than the ALUs
 they save. Share only where the mux already exists. Bitstream BUILT,
 NOT yet flashed; board proof + disk rebuild (new BASIC + gl) pending.
+BASIC NATIVE GL VERBS (2026-08-26): all 51 verbs are BASIC statements
+(tokens $B4-$E6, ONE generic handler + gen_glkw.py-emitted tables in
+basic/glkwtab.inc+glvtab.inc; token order is ABI append-only). They
+emit hex directly (BASIC strings cap at 32 chars — a 9-coord POLY3
+never fit; the old basic_gl_test passed on a SPLASH pixel), record
+inside CLBEG/CLEND, and DRAIN GLSTAT bit6 on exit (sync semantics; GL
+s$ = async path). COLOR drives both pens. Scenes must RESETF first
+(the boot splash leaves composed matrices).
 Next rungs: 10e read-back, 10f-h LINFUN/AREA/TEXT. Console GL family
 is C-only (asm twins an open item). NO MERGE without ask.

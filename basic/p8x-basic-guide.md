@@ -184,6 +184,8 @@ A line may hold several statements separated by `:` —
 | `RGB(r,g,b)` | *function*: pack a colour — `r`,`b` 0–31, `g` 0–63 |
 | `IMAGE x,y,name$` | draw a P8I image file with its top-left at `x,y` |
 | `GTEXT x,y,size,s$` | draw a string as graphics in the current `COLOR` |
+| `GL s$` | send one raw graphics-language line as text — see *The graphics language* |
+| `WINDOW` `VWPORT` `MOVE3` `DRAW3` `POLY3` `MDROTY` `CLBEG` `FLIP` … | the GL engine's verbs as native statements (51 of them) — see *The graphics language* |
 
 ### Graphics
 
@@ -321,6 +323,80 @@ Pen colours are chosen from 4096; the defaults are 0 black, 1 white, 2 red,
 BASIC; the one exception is its built-in self-test, which exists only in the
 emulator (see [BACKLOG.md](../BACKLOG.md)) and can be triggered with `POKE` —
 see the port table below.
+
+### The graphics language (3D)
+
+With a GL engine fitted (stage 10 — `man gl` on the machine documents the
+device itself), the graphics language's verbs are **BASIC statements in
+their own right**. Arguments are ordinary expressions, comma-separated,
+the first one bare — so a rotation angle can be a variable, and a vertex
+can be computed:
+
+```basic
+10 RESETF                       : REM power-up state (see below!)
+20 CLEARS 0,0,0                 : REM both pages black (r,g,b)
+30 WINDOW -120,120,-120,120     : REM 2D window -- x1,x2,y1,y2 order!
+40 VWPORT 104,375,0,271         : REM where it lands on the screen
+50 COLOR RGB(31,0,0)            : REM ONE pen statement, BOTH engines
+60 PRMFIL 1                     : REM closed primitives fill
+70 MDROTY A                     : REM compose a rotation, in degrees
+80 POLY3 3,-80,-80,300,80,-80,300,0,40,420
+90 FLIP
+```
+
+The full set, grouped the way `man gl` groups the device's verbs:
+
+| Group | Statements |
+|-------|------------|
+| 2D | `MOVE` `MOVER` `DRAW` `DRAWR` `RECT` `RECTR` `POLY` `POLYR` `PRMFIL` `WINDOW` `VWPORT` `FLOOD` `CLEARS` |
+| 3D | `MOVE3` `MOVER3` `DRAW3` `DRAWR3` `POINT3` `POLY3` `POLYR3` `CONVRT` |
+| modeling matrix | `MDIDEN` `MDORG` `MDROTX` `MDROTY` `MDROTZ` `MDSCAL` `MDTRAN` `MDMATX` |
+| viewing matrix | `VWIDEN` `VWRPT` `VWROTX` `VWROTY` `VWROTZ` `VWMATX` `DISTAN` `PROJCT` `DISTH` `DISTY` `CLIPH` `CLIPY` |
+| command lists | `CLBEG` `CLEND` `CLRUN` `CLOOP` `CLDEL` `CLAPP` |
+| pages & control | `FLIP` `PGSYNC` `WAIT` `RESETF` |
+
+Parameters, units and order are exactly the device's — angles in degrees,
+`WINDOW`/`VWPORT` in the PGC's `x1,x2,y1,y2` order, `FLOOD`/`CLEARS`
+taking `r,g,b`. `POLY`/`POLY3` take a count and then that many vertices.
+Three deliberate absences: `COLOR` (the ordinary `COLOR` statement now
+sets the GL pen too, so one pen statement drives both drawing paths),
+the GL `POINT` verb (`POINT()` the *function* owns the name — `GL "POINT"`
+still reaches it), and `NOOP`.
+
+**Recording.** Between `CLBEG n` and `CLEND` these statements *record*
+into command list `n` instead of drawing, so a BASIC loop can build a
+scene once and replay it — `CLOOP n,count` replays with matrix deltas
+accumulating, which is how a stored scene spins with the CPU idle:
+
+```basic
+10 CLBEG 1 : MDROTY 5 : CLEND   : REM a list that nudges the world 5deg
+20 CLOOP 1,7                    : REM 35 degrees, applied by the card
+```
+
+**Start with `RESETF`.** The machine draws its boot splash through this
+same engine, and matrix verbs *compose* — without a reset, your first
+rotation lands on top of whatever the splash (or the last program) left
+behind.
+
+**`GL s$` is the text escape hatch** for anything without a native
+statement — short forms, the GL `POINT`, verbs newer than this guide:
+
+```basic
+50 GL "MDY "+STR$(A)
+```
+
+Mind the 32-character string limit: a GL line longer than that
+truncates — a 9-coordinate `POLY3` does not fit in a string, which is
+precisely why the native statements exist. Native statements also skip
+the card's ASCII translator entirely (BASIC sends the binary opcode and
+parameters), so they are faster and cannot mis-tokenize.
+
+Native statements are **synchronous**: each one waits for the card to
+finish before BASIC continues, so `POINT()` right after a draw reads
+finished pixels — on silicon exactly as in the emulator. The price is
+that a native `CLOOP` blocks until the whole replay ends; launch a
+long fly-through with `GL "CLOOP 0 100"` instead — the text path does
+not wait, and the card animates while BASIC runs on.
 
 ### PRINT details
 

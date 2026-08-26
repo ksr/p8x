@@ -376,6 +376,22 @@ rebuild carrying the new BASIC and /bin gl are the remaining rungs.
 (The GL console family — tri, rotate, camera, cube, page, gl — is
 C-only so far; the asm twins are an open item for the whole family.)
 
+**2026-08-26: the GL verbs are native BASIC statements.** All 51
+(2D/3D primitives, both matrix families, lists, pages — `MDROTY A*2`,
+`POLY3 3,...`, `CLBEG 1 : MDROTY 5 : CLEND : CLOOP 1,7`) as tokens
+$B4..$E6 through ONE generic handler; the name/opcode/arity tables are
+a third gen_glkw.py output (basic/glkwtab.inc + glvtab.inc — token
+order is ABI, append-only). Native statements send hex opcodes
+directly (no 32-char string cap — which, it turned out, had silently
+TRUNCATED basic_gl_test's 40-char POLY3 string all along, while the
+test's probe pixel passed on the boot splash's green triangle;
+the test now RESETFs, clears, and probes the real sliver), they
+record inside CLBEG/CLEND, drain GLSTAT busy on exit (deterministic
+POINT() on silicon; GL s$ stays the async path), and COLOR now feeds
+both pens. man basic, man gl, and the programmer's guide carry it.
+All 11 BASIC suites green. Another disk-rebuild deliverable for the
+same bench session as the 10d bitstream.
+
 Three operational notes for whoever drives the board over serial next:
 
 - **Two serial clients do not error -- they silently shred each other's

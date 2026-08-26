@@ -145,6 +145,55 @@ GRAPHICS
     (A bright colour prints as a negative number -- see above -- but the
     comparison is bit-for-bit either way.)
 
+THE GRAPHICS LANGUAGE (3D)
+    With a GL engine fitted (see man gl), the graphics language's verbs
+    are BASIC statements in their own right: windows and viewports, 3D
+    moves and draws, filled polygons, the modeling and viewing matrix
+    families, perspective, command lists and page flips. Arguments are
+    ordinary expressions, comma-separated:
+
+        WINDOW -120,120,-120,120      2D window     (x1,x2,y1,y2!)
+        VWPORT 104,375,0,271          screen viewport
+        PRMFIL 1                      closed primitives fill
+        MDROTY A*2                    compose a rotation, in degrees
+        DRAW3 90,-90,300              3D line from the 3D current point
+        POLY3 3,-80,-80,300,80,-80,300,0,40,420
+        CLBEG 1 ... CLEND             record statements into list 1
+        CLOOP 1,7                     replay it 7 times (deltas add up)
+        FLIP                          show the drawn page
+
+    The full set: MOVE MOVER DRAW DRAWR RECT RECTR POLY POLYR PRMFIL
+    WINDOW VWPORT FLOOD CLEARS / MOVE3 MOVER3 DRAW3 DRAWR3 POINT3 POLY3
+    POLYR3 CONVRT / MDIDEN MDORG MDROTX MDROTY MDROTZ MDSCAL MDTRAN
+    MDMATX / VWIDEN VWRPT VWROTX VWROTY VWROTZ VWMATX DISTAN PROJCT
+    DISTH DISTY CLIPH CLIPY / CLBEG CLEND CLRUN CLOOP CLDEL CLAPP /
+    FLIP PGSYNC WAIT RESETF. Verbs, parameters and order are exactly
+    the device's (man gl documents each); FLOOD and CLEARS take r,g,b
+    the way the device does. COLOR is not in the list because the
+    ordinary COLOR statement now sets the GL pen too -- one pen
+    statement drives both drawing paths. POINT the GL verb is not
+    either (POINT() the function owns the name); GL "POINT" still
+    reaches it. Between CLBEG and CLEND these statements RECORD instead
+    of drawing, so a program can build a command list. Without a GL
+    engine they say ?No GL engine.
+
+    Start a scene with RESETF: the machine draws a boot splash through
+    the same engine, and matrix verbs COMPOSE -- without a reset your
+    first rotation lands on top of whatever came before.
+
+    Native statements are SYNCHRONOUS -- each waits for the card to
+    finish, so POINT() right after a draw reads finished pixels. A
+    native CLOOP therefore blocks until the replay ends; launch a long
+    fly-through with GL "CLOOP 0 100" instead: the text path does not
+    wait, and the card animates while BASIC runs on.
+
+    GL s$ sends one raw graphics-language line as TEXT, for anything
+    else (short forms, the GL POINT, verbs newer than this page):
+        GL "MDY "+STR$(A)
+    Mind the 32-character string limit: a GL line longer than that
+    truncates, and a POLY3 with many coordinates will not fit -- that
+    is what the native statements are for.
+
 DATA FILES
     One sequential channel over the filesystem:
         OPEN name$ [FOR] OUTPUT|INPUT     open (name may be a path)
