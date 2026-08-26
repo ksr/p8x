@@ -356,6 +356,26 @@ a CLOOP list with the CPU idle. Stage 10a+10b+10c are on silicon,
 frame-exact. (Scripting note: BASIC's banner is "P8X BASIC V0", not
 READY — match that in future sessions.)
 
+**2026-08-25 (later): stage 10d — ASCII mode — built and placed.** The
+translator front-end (keywords → opcodes, decimals → width-correct
+params, CA/CX, deterministic error recovery) shipped in the emulator
+and in fabric; the proof chain grew a FOURTH byte-identical frame
+(c_gl_rtl_test: 10a scene, 10b matrix, 10c fly-through, 10d ASCII) and
+tb_gl's ASCII section. Clients: the `gl` console command (one ASCII
+line, or a .gl file streamed verbatim) and BASIC's GL statement
+(TOK_GL $B3, string expression, wrapped CA ... CX). The translator's
+~600 LUT4 blew the placement budget 10c left behind; the diet that
+landed it is written up in STAGE10-DESIGN.md ("10d as built") — the
+short of it: share arithmetic only where the routing mux already
+exists (three shared muldiv-operand subtractors, one shared ±md_q
+post-adder), and turn every aligned lane/slot address into a concat.
+Places at 18,943 LUT4 / 91%, seed 1, 40.8 MHz on the 12 MHz clock.
+The bitstream (p8x_lcd.fs) is BUILT but NOT YET FLASHED — the board
+proof (type `gl DRAW3 90,-90,300` live, run a .gl file) plus the disk
+rebuild carrying the new BASIC and /bin gl are the remaining rungs.
+(The GL console family — tri, rotate, camera, cube, page, gl — is
+C-only so far; the asm twins are an open item for the whole family.)
+
 Three operational notes for whoever drives the board over serial next:
 
 - **Two serial clients do not error -- they silently shred each other's

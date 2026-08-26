@@ -74,7 +74,7 @@ module p8x_geom (
   // ---- walker state --------------------------------------------------------
   reg [6:0]  state;
   localparam S_IDLE=0,  S_NEXT=6,
-             S_MAC=9,   S_MACW=10,
+             S_MAC=9,   S_MACW=10, S_MACB=105, S_MACC=106,
              S_NC=11,   S_NCW=12,  S_PRJ=13,  S_PRJW=14,
              S_CS=15,   S_CSW=16,  S_MAP=17,  S_MAPW=18,
              S_LIN=19,  S_LINB=20, S_LINC=21, S_FLIP=22,
@@ -108,12 +108,16 @@ module p8x_geom (
   reg        rfill;                  // T-path: FILL (GL fills always set it)
   reg        tri_m;                  // MAC writeback goes to tv (TRI mode)
   reg [3:0]  k;                      // fetch word / general microstep
-  reg [15:0] v [0:8];                // fetched vertex words (TRI: 9)
   reg [15:0] tvx [0:2];              // TRI: transformed vertices
   reg [15:0] tvy [0:2];
   reg [15:0] tvz [0:2];
   reg [3:0]  np;                     // polygon vertex count
-  reg [3:0]  g2n;                    // consumer state after a G_2D load
+  reg [3:0]  g2n;                    // consumer state after a G_2D/G_3L load
+  reg [15:0] f3x, f3y, f3z;          // G_3L: the staged vertices --
+  reg [15:0] m3x, m3y, m3z;          //   first, second, (tri) third
+  reg [15:0] t3x, t3y, t3z;
+  reg        g3t;                    // loading a tri (9 words, fill)
+  reg [15:0] fz [0:5];               // far-pass z scratch (was in v[])
   reg [3:0]  pp;                     // polygon iterator
   reg [3:0]  ft;                     // fan triangle index
   reg [15:0] nax, nay, naz;          // clip edge end A
@@ -139,11 +143,11 @@ module p8x_geom (
   // A byte FIFO the CPU can fill at ANY time (that is its whole point);
   // the consumer FSM below decodes hex-mode commands and executes them
   // through the walker's own pipeline states, one primitive at a time.
-  reg [7:0]  cf [0:63];              // command FIFO (poll GLSTAT bit7)
-  reg [6:0]  cf_wp, cf_rp;
-  wire [6:0] cf_cnt  = cf_wp - cf_rp;
-  wire       cf_ne   = (cf_cnt != 7'd0);
-  wire       cf_full = cf_cnt[6];
+  reg [7:0]  cf [0:31];              // command FIFO (poll GLSTAT bit7)
+  reg [5:0]  cf_wp, cf_rp;
+  wire [5:0] cf_cnt  = cf_wp - cf_rp;
+  wire       cf_ne   = (cf_cnt != 6'd0);
+  wire       cf_full = cf_cnt[5];
   reg [7:0]  ef [0:7];               // error FIFO: 1 unknown opcode,
   reg [3:0]  ef_wp, ef_rp;           //   2 bad parameter, 3 mode not
   wire       ef_ne = (ef_wp != ef_rp);  // fitted, 4 FIFO overflow, 5
@@ -226,7 +230,8 @@ module p8x_geom (
     cm_qb <= cmx[cm_ab];
   end
   localparam [6:0] MB=7'd0, VB=7'd16, SB=7'd32, TB=7'd48,
-                   LQX=7'd64, LQY=7'd72, LQZ=7'd80, LSX=7'd88, LSY=7'd96;
+                   LQX=7'd64, LQY=7'd72, LQZ=7'd80, LSX=7'd88, LSY=7'd96,
+                   LVV=7'd112;      // the working vertices (was reg v[0:8])
   reg [15:0] glvrp [0:2];            // VWRPT reference point
   reg [15:0] glorg [0:2];            // MDORG pivot
   reg [15:0] glh, glyy;              // DISTH / DISTY plane distances
@@ -252,14 +257,17 @@ module p8x_geom (
   reg        glact;                  // pipeline exit returns to S_IDLE
   reg        gl2d;                   // suppress projection in the T-map
   reg [1:0]  glcls;                  // CLEARS page phase (0 = plain box)
-  reg [3:0]  glst;                   // consumer FSM
+  reg [4:0]  glst;                   // consumer FSM
   reg [15:0] wcnt;                   // WAIT frames remaining
   reg [15:0] gbx0, gby0, gbx1, gby1, gbcol;    // the box issuer's box
   localparam G_OP=0, G_PRM=1, G_RUN=2, G_PV=3, G_PRUN=4, G_PCLOSE=5,
              G_WAIT=6, G_RE=7,
              // stage 10c: CLEND finish, CLAPP length read, CLRUN start
              G_LE0=8, G_LE1=9, G_LE2=10, G_AL0=11, G_AL1=12,
-             G_RL0=13, G_RL1=14, G_2D=15;
+             G_RL0=13, G_RL1=14, G_2D=15,
+             // stage 10d diet: 3D vertex loader -- stream the staged f3/m3
+             // (/t3) words into the LVV scratchpad lanes, then launch S_MAC
+             G_3L=16;
 
   // ---- stage 10c: COMMAND LISTS (STAGE10-DESIGN.md) ----------------------
   // 64 lists in 4KB SDRAM slots at CL_BASE + n*4096: byte length in the
@@ -283,7 +291,7 @@ module p8x_geom (
   reg         fst;                   // fetcher: 0 idle, 1 read in flight
   reg         sd_busy;               // one SDRAM op outstanding
   // the consumer's byte source: the command FIFO, or the replay buffer
-  wire [7:0]  srcb   = rp ? rpb0 : (glmode ? tq[tq_rp[1:0]] : cf[cf_rp[5:0]]);
+  wire [7:0]  srcb   = rp ? rpb0 : (glmode ? tq[tq_rp[1:0]] : cf[cf_rp[4:0]]);
   wire        src_ne = rp ? (rp_have != 2'd0) : (glmode ? tq_ne : cf_ne);
   // opcode -> fixed parameter-byte count (the emulator's gl_cmdlen as a
   // wire; POLY 30-33 report their 1-byte header, vertices stream after)
@@ -305,8 +313,10 @@ module p8x_geom (
       default: opok = 1'b0;
     endcase
   end
-  wire [22:0] rec_wa = CL_BASE + {5'd0, rec_slot, 12'd0}
-                     + {10'd0, rec_len[12:1], 1'b0} + 23'd2;
+  // 1MB base / 4KB slots are aligned and the recorder aborts at >=4092,
+  // so the in-slot offset never carries: the address is a concat
+  wire [11:0] rec_off = {rec_len[11:1], 1'b0} + 12'd2;
+  wire [22:0] rec_wa = {2'd0, 1'b1, 2'd0, rec_slot, rec_off};
   wire [15:0] pw0 = {pbuf[1], pbuf[0]};        // little-endian int16 params
   wire [15:0] pw1 = {pbuf[3], pbuf[2]};
   wire [15:0] pw2 = {pbuf[5], pbuf[4]};
@@ -325,8 +335,18 @@ module p8x_geom (
 
   // ---- the shared arithmetic ----------------------------------------------
   reg         md_go;
-  reg  [15:0] md_a, md_b, md_c;
+  // muldiv operands arrive as raw pairs; THREE shared subtractors form
+  // the differences (was: every FSM arm carrying its own 16-bit subtract)
+  reg  [15:0] md_a1, md_a2, md_b1, md_b2, md_c1, md_c2;
+  wire [15:0] md_a = md_a1 - md_a2;
+  // ONE shared post-adder forms every X +/- md_q apply (base loaded at
+  // launch time; md_rn selects subtract)
+  reg  [15:0] md_r;
+  reg         md_rn;
+  wire [15:0] md_b = md_b1 - md_b2;
+  wire [15:0] md_c = md_c1 - md_c2;
   wire [15:0] md_q;
+  wire [15:0] md_qr = md_rn ? md_r - md_q : md_r + md_q;
   wire        md_busy;
   mdu_core MD(.clk(clk), .rst(rst), .go(md_go),
               .a(md_a), .b(md_b), .c(md_c), .q(md_q), .busy(md_busy));
@@ -343,9 +363,18 @@ module p8x_geom (
   wire [15:0] cvz = ($signed(wz0) < $signed(par[23])) ? par[23]
                   : ($signed(par[24]) < $signed(wz0)) ? par[24] : wz0;
   wire [1:0]  cjmax = (cmode == 2'd1) ? 2'd2 : 2'd3;
+  // aligned-lane addressing: the scratchpad bases are 8/16-aligned and no
+  // offset crosses its window, so every address below is a concat, not an
+  // add. Only these little 4-bit in-window offsets keep real adders.
+  wire [3:0] mpk  = {2'd0, mp} * 3'd3 + {2'd0, mk};   // vertex word mp*3+mk
+  wire [3:0] cick = {2'd0, ci} * 3'd3 + {2'd0, ck};   // matrix cell ci*3+ck
+  wire [3:0] ckcj = {2'd0, ck} * 3'd3 + {2'd0, cj};
+  wire [3:0] cicj = {2'd0, ci} * 3'd3 + {2'd0, cj};
+  wire [3:0] c9i  = 4'd9 + {2'd0, ci};                // T column 9+ci
+  wire [3:0] c9k  = 4'd9 + {2'd0, ck};
   // the finished element, with the T-column tails folded in (msT is the
   // prefetched ms[9+ci]; operands themselves arrive through cm_qa/cm_qb)
-  wire [15:0] cm_res = csum + md_q
+  wire [15:0] cm_res = md_qr
        + ((cj == 2'd3 && cmode == 2'd0) ? msT : 16'd0)
        + ((cj == 2'd3 && cmode == 2'd2 && ci == 2'd2) ? gldist : 16'd0);
   // the scratch-writer's cell value, by job source
@@ -371,10 +400,11 @@ module p8x_geom (
   wire        z0_far = $signed(wz0) > $signed(par[24]);
   wire        z1_far = $signed(wz1) > $signed(par[24]);
 
-  // MAC operand select (registered indices, combinational product)
+  // MAC operand select: the matrix element is a par[] mux; the vertex
+  // arrives through the scratchpad's port B (set at S_MAC, consumed two
+  // cycles later at S_MACC -- the lane pipeline)
   wire [15:0] mac_m = par[{2'd0, mr} * 3 + {2'd0, mk}];
-  wire [15:0] mac_v = v[{1'd0, mp} * 3 + {1'd0, mk}];
-  wire signed [31:0] mac_p = $signed(mac_m) * $signed(mac_v);
+  wire signed [31:0] mac_p = $signed(mac_m) * $signed(cm_qb);
   wire signed [31:0] acc_sh = acc >>> 8;
   wire [15:0] mac_res = acc_sh[15:0] + par[9 + {2'd0, mr}];
 
@@ -495,8 +525,8 @@ module p8x_geom (
           if (ef_wp - ef_rp != 4'd8) begin ef[ef_wp[2:0]] <= 8'd4;
                                             ef_wp <= ef_wp + 4'd1; end
         end else begin
-          cf[cf_wp[5:0]] <= wdata;
-          cf_wp <= cf_wp + 7'd1;
+          cf[cf_wp[4:0]] <= wdata;
+          cf_wp <= cf_wp + 6'd1;
         end
       end
       if (gl_rd && a[2:0] == 3'd3 && ef_ne)        // GLERR read pops
@@ -516,8 +546,8 @@ module p8x_geom (
             if (rp_cnt <= 16'd1) rp <= 0;
             else begin rp_cnt <= rp_cnt - 16'd1; rp_off <= 0; end
           end else begin
-            g_addr <= CL_BASE + {5'd0, rp_slot, 12'd0}
-                    + {10'd0, rp_off[12:1], 1'b0} + 23'd2;
+            g_addr <= {2'd0, 1'b1, 2'd0, rp_slot,
+                       {rp_off[11:1], 1'b0} + 12'd2};
             g_we <= 0; g_req <= 1; sd_busy <= 1; fst <= 1'b1;
           end
         end
@@ -534,8 +564,8 @@ module p8x_geom (
       case (ast)
         A_IDLE: if (glmode && !rp && cf_ne && !tq_ne) begin : atok
           reg [7:0] b;
-          b = cf[cf_rp[5:0]];
-          cf_rp <= cf_rp + 7'd1;
+          b = cf[cf_rp[4:0]];
+          cf_rp <= cf_rp + 6'd1;
           if (b >= 8'h61 && b <= 8'h7A) b = b - 8'h20;   // fold case
           if (b == 8'h20 || b == 8'h09 || b == 8'h2C ||
               b == 8'h3B || b == 8'h0D || b == 8'h0A) begin
@@ -571,8 +601,8 @@ module p8x_geom (
         // match the keyword: fetch each ROM entry (4 halfwords at
         // 128 + entry*4) through port A, compare, walk on mismatch
         // the matcher reads the keyword ROM through port A: wait for the
-        // walker (and G_2D) to leave the scratchpad's ports alone
-        A_M0: if (state == S_IDLE && glst != G_2D) begin
+        // walker (and the G_2D/G_3L loaders) to leave the scratchpad alone
+        A_M0: if (state == S_IDLE && glst != G_2D && glst != G_3L) begin
           cm_aa <= 10'd128 + {1'd0, t_ent, 2'd0} + {8'd0, t_k};
           ast <= A_M1;
         end
@@ -642,9 +672,15 @@ module p8x_geom (
         end
 
         // transform: acc = m[r][0..2] . v[p], then w = (acc>>>8) + t
-        S_MAC: begin
+        S_MAC: begin                   // aim port B at v[mp*3+mk]...
+          cm_ab <= {6'd7, mpk};                    // LVV + mp*3 + mk
+          state <= S_MACB;
+        end
+        S_MACB: state <= S_MACC;       // ...the read pipeline's bubble...
+        S_MACC: begin                  // ...and accumulate the product
           acc <= acc + mac_p;
-          if (mk == 2'd2) state <= S_MACW; else mk <= mk + 2'd1;
+          if (mk == 2'd2) state <= S_MACW;
+          else begin mk <= mk + 2'd1; state <= S_MAC; end
         end
         S_MACW: begin
           if (tri_m) begin
@@ -681,22 +717,24 @@ module p8x_geom (
           if (par[12] == 16'd0) begin csn <= 0; state <= S_CS; end
           else if (z0_near && z1_near) begin state <= S_NEXT; end
           else if (z0_near) begin
-            md_a <= (mdph[0]==1'b0) ? (wx1 - wx0) : (wy1 - wy0);
-            md_b <= par[23] - wz0;  md_c <= wz1 - wz0;
+            md_a1 <= mdph[0] ? wy1 : wx1; md_a2 <= mdph[0] ? wy0 : wx0;
+            md_r <= mdph[0] ? wy0 : wx0; md_rn <= 0;
+            md_b1 <= par[23]; md_b2 <= wz0;  md_c1 <= wz1; md_c2 <= wz0;
             md_go <= 1; state <= S_NCW;
           end else if (z1_near) begin
-            md_a <= (mdph[0]==1'b0) ? (wx0 - wx1) : (wy0 - wy1);
-            md_b <= par[23] - wz1;  md_c <= wz0 - wz1;
+            md_a1 <= mdph[0] ? wy0 : wx0; md_a2 <= mdph[0] ? wy1 : wx1;
+            md_r <= mdph[0] ? wy1 : wx1; md_rn <= 0;
+            md_b1 <= par[23]; md_b2 <= wz1;  md_c1 <= wz0; md_c2 <= wz1;
             md_go <= 1; state <= S_NCW;
           end else begin mdph <= 0; state <= S_FC; end
         end
         S_NCW: if (md_done) begin
           if (z0_near) begin
-            if (mdph[0]==1'b0) begin wx0 <= wx0 + md_q; mdph <= 2'd1; end
-            else begin wy0 <= wy0 + md_q; wz0 <= par[23]; mdph <= 0; end
+            if (mdph[0]==1'b0) begin wx0 <= md_qr; mdph <= 2'd1; end
+            else begin wy0 <= md_qr; wz0 <= par[23]; mdph <= 0; end
           end else begin
-            if (mdph[0]==1'b0) begin wx1 <= wx1 + md_q; mdph <= 2'd1; end
-            else begin wy1 <= wy1 + md_q; wz1 <= par[23]; mdph <= 0; end
+            if (mdph[0]==1'b0) begin wx1 <= md_qr; mdph <= 2'd1; end
+            else begin wy1 <= md_qr; wz1 <= par[23]; mdph <= 0; end
           end
           state <= S_NC;
         end
@@ -704,22 +742,24 @@ module p8x_geom (
         S_FC: begin
           if (z0_far && z1_far) begin state <= S_NEXT; end
           else if (z0_far) begin
-            md_a <= (mdph[0]==1'b0) ? (wx1 - wx0) : (wy1 - wy0);
-            md_b <= par[24] - wz0;  md_c <= wz1 - wz0;
+            md_a1 <= mdph[0] ? wy1 : wx1; md_a2 <= mdph[0] ? wy0 : wx0;
+            md_r <= mdph[0] ? wy0 : wx0; md_rn <= 0;
+            md_b1 <= par[24]; md_b2 <= wz0;  md_c1 <= wz1; md_c2 <= wz0;
             md_go <= 1; state <= S_FCW;
           end else if (z1_far) begin
-            md_a <= (mdph[0]==1'b0) ? (wx0 - wx1) : (wy0 - wy1);
-            md_b <= par[24] - wz1;  md_c <= wz0 - wz1;
+            md_a1 <= mdph[0] ? wy0 : wx0; md_a2 <= mdph[0] ? wy1 : wx1;
+            md_r <= mdph[0] ? wy1 : wx1; md_rn <= 0;
+            md_b1 <= par[24]; md_b2 <= wz1;  md_c1 <= wz0; md_c2 <= wz1;
             md_go <= 1; state <= S_FCW;
           end else begin mdph <= 0; state <= S_PRJ; end
         end
         S_FCW: if (md_done) begin
           if (z0_far) begin
-            if (mdph[0]==1'b0) begin wx0 <= wx0 + md_q; mdph <= 2'd1; end
-            else begin wy0 <= wy0 + md_q; wz0 <= par[24]; mdph <= 0; end
+            if (mdph[0]==1'b0) begin wx0 <= md_qr; mdph <= 2'd1; end
+            else begin wy0 <= md_qr; wz0 <= par[24]; mdph <= 0; end
           end else begin
-            if (mdph[0]==1'b0) begin wx1 <= wx1 + md_q; mdph <= 2'd1; end
-            else begin wy1 <= wy1 + md_q; wz1 <= par[24]; mdph <= 0; end
+            if (mdph[0]==1'b0) begin wx1 <= md_qr; mdph <= 2'd1; end
+            else begin wy1 <= md_qr; wz1 <= par[24]; mdph <= 0; end
           end
           state <= S_FC;
         end
@@ -727,12 +767,12 @@ module p8x_geom (
         // perspective projection: 4 muldivs (x0 y0 x1 y1)
         S_PRJ: begin
           case (mdph)
-            2'd0: begin md_a <= wx0; md_c <= wz0; end
-            2'd1: begin md_a <= wy0; md_c <= wz0; end
-            2'd2: begin md_a <= wx1; md_c <= wz1; end
-            2'd3: begin md_a <= wy1; md_c <= wz1; end
+            2'd0: begin md_a1 <= wx0; md_a2 <= 16'd0; md_c1 <= wz0; md_c2 <= 16'd0; end
+            2'd1: begin md_a1 <= wy0; md_a2 <= 16'd0; md_c1 <= wz0; md_c2 <= 16'd0; end
+            2'd2: begin md_a1 <= wx1; md_a2 <= 16'd0; md_c1 <= wz1; md_c2 <= 16'd0; end
+            2'd3: begin md_a1 <= wy1; md_a2 <= 16'd0; md_c1 <= wz1; md_c2 <= 16'd0; end
           endcase
-          md_b <= par[12]; md_go <= 1; state <= S_PRJW;
+          md_b1 <= par[12]; md_b2 <= 16'd0; md_go <= 1; state <= S_PRJW;
         end
         S_PRJW: if (md_done) begin
           case (mdph)
@@ -751,35 +791,37 @@ module p8x_geom (
           end else if (oca == 4'd0) begin   // swap so end 0 is outside
             wx0 <= wx1; wx1 <= wx0; wy0 <= wy1; wy1 <= wy0;
           end else begin
-            if (oca[0])      begin md_a <= wy1 - wy0; md_b <= par[13] - wx0; md_c <= wx1 - wx0; end
-            else if (oca[1]) begin md_a <= wy1 - wy0; md_b <= par[15] - wx0; md_c <= wx1 - wx0; end
-            else if (oca[2]) begin md_a <= wx1 - wx0; md_b <= par[14] - wy0; md_c <= wy1 - wy0; end
-            else             begin md_a <= wx1 - wx0; md_b <= par[16] - wy0; md_c <= wy1 - wy0; end
+            if (oca[0])      begin md_a1 <= wy1; md_a2 <= wy0; md_b1 <= par[13]; md_b2 <= wx0; md_c1 <= wx1; md_c2 <= wx0; end
+            else if (oca[1]) begin md_a1 <= wy1; md_a2 <= wy0; md_b1 <= par[15]; md_b2 <= wx0; md_c1 <= wx1; md_c2 <= wx0; end
+            else if (oca[2]) begin md_a1 <= wx1; md_a2 <= wx0; md_b1 <= par[14]; md_b2 <= wy0; md_c1 <= wy1; md_c2 <= wy0; end
+            else             begin md_a1 <= wx1; md_a2 <= wx0; md_b1 <= par[16]; md_b2 <= wy0; md_c1 <= wy1; md_c2 <= wy0; end
+            md_r <= (oca[0] || oca[1]) ? wy0 : wx0; md_rn <= 0;
             md_go <= 1; csn <= csn + 4'd1; state <= S_CSW;
           end
         end
         S_CSW: if (md_done) begin
-          if (oca[0])      begin wy0 <= wy0 + md_q; wx0 <= par[13]; end
-          else if (oca[1]) begin wy0 <= wy0 + md_q; wx0 <= par[15]; end
-          else if (oca[2]) begin wx0 <= wx0 + md_q; wy0 <= par[14]; end
-          else             begin wx0 <= wx0 + md_q; wy0 <= par[16]; end
+          if (oca[0])      begin wy0 <= md_qr; wx0 <= par[13]; end
+          else if (oca[1]) begin wy0 <= md_qr; wx0 <= par[15]; end
+          else if (oca[2]) begin wx0 <= md_qr; wy0 <= par[14]; end
+          else             begin wx0 <= md_qr; wy0 <= par[16]; end
           state <= S_CS;
         end
 
         // viewport map: 4 muldivs, then the y flip in the apply
         S_MAP: begin
           case (mdph)
-            2'd0: begin md_a <= wx0 - par[13]; md_b <= par[19] - par[17]; md_c <= par[15] - par[13]; end
-            2'd1: begin md_a <= wy0 - par[14]; md_b <= par[20] - par[18]; md_c <= par[16] - par[14]; end
-            2'd2: begin md_a <= wx1 - par[13]; md_b <= par[19] - par[17]; md_c <= par[15] - par[13]; end
-            2'd3: begin md_a <= wy1 - par[14]; md_b <= par[20] - par[18]; md_c <= par[16] - par[14]; end
+            2'd0: begin md_a1 <= wx0; md_a2 <= par[13]; md_b1 <= par[19]; md_b2 <= par[17]; md_c1 <= par[15]; md_c2 <= par[13]; end
+            2'd1: begin md_a1 <= wy0; md_a2 <= par[14]; md_b1 <= par[20]; md_b2 <= par[18]; md_c1 <= par[16]; md_c2 <= par[14]; end
+            2'd2: begin md_a1 <= wx1; md_a2 <= par[13]; md_b1 <= par[19]; md_b2 <= par[17]; md_c1 <= par[15]; md_c2 <= par[13]; end
+            2'd3: begin md_a1 <= wy1; md_a2 <= par[14]; md_b1 <= par[20]; md_b2 <= par[18]; md_c1 <= par[16]; md_c2 <= par[14]; end
           endcase
+          md_r <= mdph[0] ? par[20] : par[17]; md_rn <= mdph[0];
           md_go <= 1; state <= S_MAPW;
         end
         S_MAPW: if (md_done) begin
           case (mdph)
-            2'd0: px0 <= par[17] + md_q;   2'd1: py0 <= par[20] - md_q;
-            2'd2: px1 <= par[17] + md_q;   2'd3: py1 <= par[20] - md_q;
+            2'd0: px0 <= md_qr;   2'd1: py0 <= md_qr;
+            2'd2: px1 <= md_qr;   2'd3: py1 <= md_qr;
           endcase
           if (mdph == 2'd3) begin seq <= 0; state <= S_LIN; end
           else begin mdph <= mdph + 2'd1; state <= S_MAP; end
@@ -821,9 +863,9 @@ module p8x_geom (
         T_CPY: begin                   // ortho: copy tv* into the q lanes
           cm_we <= 1;
           case (k[1:0])
-            2'd0: begin cm_wa <= LQX + {3'd0,pp[2:0]}; cm_wd <= tvx[pp[1:0]]; end
-            2'd1: begin cm_wa <= LQY + {3'd0,pp[2:0]}; cm_wd <= tvy[pp[1:0]]; end
-            default: begin cm_wa <= LQZ + {3'd0,pp[2:0]}; cm_wd <= tvz[pp[1:0]]; end
+            2'd0: begin cm_wa <= {7'd8,pp[2:0]}; cm_wd <= tvx[pp[1:0]]; end
+            2'd1: begin cm_wa <= {7'd9,pp[2:0]}; cm_wd <= tvy[pp[1:0]]; end
+            default: begin cm_wa <= {7'd10,pp[2:0]}; cm_wd <= tvz[pp[1:0]]; end
           endcase
           if (k[1:0] == 2'd2) begin
             k <= 0;
@@ -853,9 +895,9 @@ module p8x_geom (
         T_NIK: begin                   // keep vertex A: three lane writes
           cm_we <= 1;
           case (k[1:0])
-            2'd0: begin cm_wa <= LQX + {3'd0,np[2:0]}; cm_wd <= nax; end
-            2'd1: begin cm_wa <= LQY + {3'd0,np[2:0]}; cm_wd <= nay; end
-            default: begin cm_wa <= LQZ + {3'd0,np[2:0]}; cm_wd <= naz; end
+            2'd0: begin cm_wa <= {7'd8,np[2:0]}; cm_wd <= nax; end
+            2'd1: begin cm_wa <= {7'd9,np[2:0]}; cm_wd <= nay; end
+            default: begin cm_wa <= {7'd10,np[2:0]}; cm_wd <= naz; end
           endcase
           if (k[1:0] == 2'd2) begin np <= np + 4'd1; k <= 0; state <= T_NI0W; end
           else k <= k + 4'd1;
@@ -863,21 +905,23 @@ module p8x_geom (
         T_NI0W: begin
           if (nain == nbin) begin pp <= pp + 4'd1; state <= T_NCA; end
           else begin
-            md_a <= nbx - nax; md_b <= par[23] - naz; md_c <= nbz - naz;
+            md_a1 <= nbx; md_a2 <= nax; md_b1 <= par[23]; md_b2 <= naz; md_c1 <= nbz; md_c2 <= naz;
+            md_r <= nax; md_rn <= 0;
             md_go <= 1; state <= T_NI1;
           end
         end
         T_NI1: if (md_done) begin
-          cm_we <= 1; cm_wa <= LQX + {3'd0,np[2:0]}; cm_wd <= nax + md_q;
-          md_a <= nby - nay; md_b <= par[23] - naz; md_c <= nbz - naz;
+          cm_we <= 1; cm_wa <= {7'd8,np[2:0]}; cm_wd <= md_qr;
+          md_a1 <= nby; md_a2 <= nay; md_b1 <= par[23]; md_b2 <= naz; md_c1 <= nbz; md_c2 <= naz;
+          md_r <= nay; md_rn <= 0;
           md_go <= 1; state <= T_NI1W;
         end
         T_NI1W: if (md_done) begin
-          cm_we <= 1; cm_wa <= LQY + {3'd0,np[2:0]}; cm_wd <= nay + md_q;
+          cm_we <= 1; cm_wa <= {7'd9,np[2:0]}; cm_wd <= md_qr;
           state <= T_NIZ;
         end
         T_NIZ: begin
-          cm_we <= 1; cm_wa <= LQZ + {3'd0,np[2:0]}; cm_wd <= par[23];
+          cm_we <= 1; cm_wa <= {7'd10,np[2:0]}; cm_wd <= par[23];
           np <= np + 4'd1; pp <= pp + 4'd1; state <= T_NCA;
         end
 
@@ -892,18 +936,18 @@ module p8x_geom (
         end
         F_CAF: begin                   // three lane-pair fetches, pipelined
           case (k[2:0])
-            3'd0: begin cm_aa <= LQX + {3'd0,pp[2:0]};
-                        cm_ab <= LQX + {3'd0,(pp + 4'd1 == np) ? 3'd0 : pp[2:0] + 3'd1};
+            3'd0: begin cm_aa <= {7'd8,pp[2:0]};
+                        cm_ab <= {7'd8, (pp + 4'd1 == np) ? 3'd0 : pp[2:0] + 3'd1};
                         k <= k + 4'd1; end
             3'd1: k <= k + 4'd1;
             3'd2: begin nax <= cm_qa; nbx <= cm_qb;
-                        cm_aa <= LQY + {3'd0,pp[2:0]};
-                        cm_ab <= LQY + {3'd0,(pp + 4'd1 == np) ? 3'd0 : pp[2:0] + 3'd1};
+                        cm_aa <= {7'd9,pp[2:0]};
+                        cm_ab <= {7'd9, (pp + 4'd1 == np) ? 3'd0 : pp[2:0] + 3'd1};
                         k <= k + 4'd1; end
             3'd3: k <= k + 4'd1;
             3'd4: begin nay <= cm_qa; nby <= cm_qb;
-                        cm_aa <= LQZ + {3'd0,pp[2:0]};
-                        cm_ab <= LQZ + {3'd0,(pp + 4'd1 == np) ? 3'd0 : pp[2:0] + 3'd1};
+                        cm_aa <= {7'd10,pp[2:0]};
+                        cm_ab <= {7'd10, (pp + 4'd1 == np) ? 3'd0 : pp[2:0] + 3'd1};
                         k <= k + 4'd1; end
             3'd5: k <= k + 4'd1;
             default: begin naz <= cm_qa; nbz <= cm_qb; k <= 0; state <= F_I0; end
@@ -918,44 +962,46 @@ module p8x_geom (
         F_IK: begin                    // keep A: two lane writes + v[] z
           cm_we <= 1;
           if (k[0] == 1'b0) begin
-            cm_wa <= LSX + {3'd0,nq2[2:0]}; cm_wd <= nax;
-            v[nq2[2:0]] <= naz;
+            cm_wa <= {7'd11,nq2[2:0]}; cm_wd <= nax;
+            fz[nq2[2:0]] <= naz;
             k <= k + 4'd1;
           end else begin
-            cm_wa <= LSY + {3'd0,nq2[2:0]}; cm_wd <= nay;
+            cm_wa <= {7'd12,nq2[2:0]}; cm_wd <= nay;
             nq2 <= nq2 + 4'd1; k <= 0; state <= F_I0W;
           end
         end
         F_I0W: begin
           if (nain == nbin) begin pp <= pp + 4'd1; state <= F_CA; end
           else begin
-            md_a <= nbx - nax; md_b <= par[24] - naz; md_c <= nbz - naz;
+            md_a1 <= nbx; md_a2 <= nax; md_b1 <= par[24]; md_b2 <= naz; md_c1 <= nbz; md_c2 <= naz;
+            md_r <= nax; md_rn <= 0;
             md_go <= 1; state <= F_I1;
           end
         end
         F_I1: if (md_done) begin
-          cm_we <= 1; cm_wa <= LSX + {3'd0,nq2[2:0]}; cm_wd <= nax + md_q;
-          md_a <= nby - nay; md_b <= par[24] - naz; md_c <= nbz - naz;
+          cm_we <= 1; cm_wa <= {7'd11,nq2[2:0]}; cm_wd <= md_qr;
+          md_a1 <= nby; md_a2 <= nay; md_b1 <= par[24]; md_b2 <= naz; md_c1 <= nbz; md_c2 <= naz;
+          md_r <= nay; md_rn <= 0;
           md_go <= 1; state <= F_I1W;
         end
         F_I1W: if (md_done) begin
-          cm_we <= 1; cm_wa <= LSY + {3'd0,nq2[2:0]}; cm_wd <= nay + md_q;
-          v[nq2[2:0]] <= par[24];
+          cm_we <= 1; cm_wa <= {7'd12,nq2[2:0]}; cm_wd <= md_qr;
+          fz[nq2[2:0]] <= par[24];
           nq2 <= nq2 + 4'd1;
           pp <= pp + 4'd1; state <= F_CA;
         end
         F_CP: begin                    // mapped lanes + v -> q lanes
           case (k[2:0])
-            3'd0: begin cm_aa <= LSX + {3'd0,cpi[2:0]};
-                        cm_ab <= LSY + {3'd0,cpi[2:0]}; k <= k + 4'd1; end
+            3'd0: begin cm_aa <= {7'd11,cpi[2:0]};
+                        cm_ab <= {7'd12,cpi[2:0]}; k <= k + 4'd1; end
             3'd1: k <= k + 4'd1;
-            3'd2: begin cm_we <= 1; cm_wa <= LQX + {3'd0,cpi[2:0]};
+            3'd2: begin cm_we <= 1; cm_wa <= {7'd8,cpi[2:0]};
                         cm_wd <= cm_qa; cyv <= cm_qb; k <= k + 4'd1; end
-            3'd3: begin cm_we <= 1; cm_wa <= LQY + {3'd0,cpi[2:0]};
+            3'd3: begin cm_we <= 1; cm_wa <= {7'd9,cpi[2:0]};
                         cm_wd <= cyv; k <= k + 4'd1; end
             default: begin
-              cm_we <= 1; cm_wa <= LQZ + {3'd0,cpi[2:0]};
-              cm_wd <= v[cpi[2:0]];
+              cm_we <= 1; cm_wa <= {7'd10,cpi[2:0]};
+              cm_wd <= fz[cpi[2:0]];
               k <= 0;
               if (cpi + 4'd1 == nq2) begin np <= nq2; pp <= 0; state <= T_MP; end
               else cpi <= cpi + 4'd1;
@@ -969,11 +1015,11 @@ module p8x_geom (
             seq <= 0; state <= T_PENW;   // GL fills only: outline TRIs
           end else begin                 //   draw as DRAW3 edges instead
             case (k[2:0])
-              3'd0: begin cm_aa <= LQX + {3'd0,pp[2:0]};
-                          cm_ab <= LQY + {3'd0,pp[2:0]}; k <= k + 4'd1; end
+              3'd0: begin cm_aa <= {7'd8,pp[2:0]};
+                          cm_ab <= {7'd9,pp[2:0]}; k <= k + 4'd1; end
               3'd1: k <= k + 4'd1;
               3'd2: begin cxv <= cm_qa; cyv <= cm_qb;
-                          cm_aa <= LQZ + {3'd0,pp[2:0]}; k <= k + 4'd1; end
+                          cm_aa <= {7'd10,pp[2:0]}; k <= k + 4'd1; end
               3'd3: k <= k + 4'd1;
               default: begin
                 naz <= cm_qa;            // the vertex's z, held for T_PJ*
@@ -986,29 +1032,31 @@ module p8x_geom (
           end
         end
         T_PJX: begin
-          md_a <= cxv; md_b <= par[12]; md_c <= naz;
+          md_a1 <= cxv; md_a2 <= 16'd0; md_b1 <= par[12]; md_b2 <= 16'd0; md_c1 <= naz; md_c2 <= 16'd0;
           md_go <= 1; state <= T_PJXW;
         end
         T_PJXW: if (md_done) begin cxv <= md_q; state <= T_PJY; end
         T_PJY: begin
-          md_a <= cyv; md_b <= par[12]; md_c <= naz;
+          md_a1 <= cyv; md_a2 <= 16'd0; md_b1 <= par[12]; md_b2 <= 16'd0; md_c1 <= naz; md_c2 <= 16'd0;
           md_go <= 1; state <= T_PJYW;
         end
         T_PJYW: if (md_done) begin cyv <= md_q; state <= T_MX; end
         T_MX: begin
-          md_a <= cxv - par[13]; md_b <= par[19] - par[17]; md_c <= par[15] - par[13];
+          md_a1 <= cxv; md_a2 <= par[13]; md_b1 <= par[19]; md_b2 <= par[17]; md_c1 <= par[15]; md_c2 <= par[13];
+          md_r <= par[17]; md_rn <= 0;
           md_go <= 1; state <= T_MXW;
         end
         T_MXW: if (md_done) begin
-          cm_we <= 1; cm_wa <= LSX + {3'd0,pp[2:0]}; cm_wd <= par[17] + md_q;
+          cm_we <= 1; cm_wa <= {7'd11,pp[2:0]}; cm_wd <= md_qr;
           state <= T_MY;
         end
         T_MY: begin
-          md_a <= cyv - par[14]; md_b <= par[20] - par[18]; md_c <= par[16] - par[14];
+          md_a1 <= cyv; md_a2 <= par[14]; md_b1 <= par[20]; md_b2 <= par[18]; md_c1 <= par[16]; md_c2 <= par[14];
+          md_r <= par[20]; md_rn <= 1;
           md_go <= 1; state <= T_MYW;
         end
         T_MYW: if (md_done) begin
-          cm_we <= 1; cm_wa <= LSY + {3'd0,pp[2:0]}; cm_wd <= par[20] - md_q;
+          cm_we <= 1; cm_wa <= {7'd12,pp[2:0]}; cm_wd <= md_qr;
           pp <= pp + 4'd1; k <= 0; state <= T_MP;
         end
 
@@ -1024,12 +1072,12 @@ module p8x_geom (
             3'd0: begin cm_aa <= LSX; cm_ab <= LSY; k <= k + 4'd1; end
             3'd1: k <= k + 4'd1;
             3'd2: begin fx0 <= cm_qa; fy0 <= cm_qb;
-                        cm_aa <= LSX + {3'd0,ft[2:0]};
-                        cm_ab <= LSY + {3'd0,ft[2:0]}; k <= k + 4'd1; end
+                        cm_aa <= {7'd11,ft[2:0]};
+                        cm_ab <= {7'd12,ft[2:0]}; k <= k + 4'd1; end
             3'd3: k <= k + 4'd1;
             3'd4: begin fx1 <= cm_qa; fy1 <= cm_qb;
-                        cm_aa <= LSX + {3'd0,ft[2:0]} + 7'd1;
-                        cm_ab <= LSY + {3'd0,ft[2:0]} + 7'd1; k <= k + 4'd1; end
+                        cm_aa <= {7'd11, ft[2:0] + 3'd1};
+                        cm_ab <= {7'd12, ft[2:0] + 3'd1}; k <= k + 4'd1; end
             3'd5: k <= k + 4'd1;
             default: begin fx2 <= cm_qa; fy2 <= cm_qb;
                            k <= 0; state <= T_SRT1; end
@@ -1064,27 +1112,30 @@ module p8x_geom (
           else state <= T_SXA;
         end
         T_SXA: begin                   // long edge: v0 -> v2
-          md_a <= fy - fy0; md_b <= fx2 - fx0; md_c <= fy2 - fy0;
+          md_a1 <= fy; md_a2 <= fy0; md_b1 <= fx2; md_b2 <= fx0; md_c1 <= fy2; md_c2 <= fy0;
+          md_r <= fx0; md_rn <= 0;
           md_go <= 1; state <= T_SXAW;
         end
-        T_SXAW: if (md_done) begin fxa <= fx0 + md_q; state <= T_SXB; end
+        T_SXAW: if (md_done) begin fxa <= md_qr; state <= T_SXB; end
         T_SXB: begin                   // split edge: v0v1 above y1, else v1v2
           if (fy1 == fy0 && !($signed(fy1) <= $signed(fy))) begin
             fxb <= fx1; state <= T_SPAN;         // unreachable guard
           end else if (fy1 == fy0) begin
             fxb <= fx1; state <= T_SPAN;
           end else if ($signed(fy) < $signed(fy1)) begin
-            md_a <= fy - fy0; md_b <= fx1 - fx0; md_c <= fy1 - fy0;
+            md_a1 <= fy; md_a2 <= fy0; md_b1 <= fx1; md_b2 <= fx0; md_c1 <= fy1; md_c2 <= fy0;
+            md_r <= fx0; md_rn <= 0;
             md_go <= 1; state <= T_SXBW;
           end else if (fy2 == fy1) begin
             fxb <= fx1; state <= T_SPAN;
           end else begin
-            md_a <= fy - fy1; md_b <= fx2 - fx1; md_c <= fy2 - fy1;
+            md_a1 <= fy; md_a2 <= fy1; md_b1 <= fx2; md_b2 <= fx1; md_c1 <= fy2; md_c2 <= fy1;
+            md_r <= fx1; md_rn <= 0;
             md_go <= 1; state <= T_SXBW;
           end
         end
         T_SXBW: if (md_done) begin
-          fxb <= (($signed(fy) < $signed(fy1)) ? fx0 : fx1) + md_q;
+          fxb <= md_qr;
           state <= T_SPAN;
         end
         T_SPAN: begin                  // clamp; empty spans skip
@@ -1157,17 +1208,18 @@ module p8x_geom (
         // filled RECT: map both corners (4 muldivs), sort, clamp, box
         W_RM: begin
           case (mdph)
-            2'd0: begin md_a <= c2x - par[13]; md_b <= par[19] - par[17]; md_c <= par[15] - par[13]; end
-            2'd1: begin md_a <= c2y - par[14]; md_b <= par[20] - par[18]; md_c <= par[16] - par[14]; end
-            2'd2: begin md_a <= nbx - par[13]; md_b <= par[19] - par[17]; md_c <= par[15] - par[13]; end
-            2'd3: begin md_a <= nby - par[14]; md_b <= par[20] - par[18]; md_c <= par[16] - par[14]; end
+            2'd0: begin md_a1 <= c2x; md_a2 <= par[13]; md_b1 <= par[19]; md_b2 <= par[17]; md_c1 <= par[15]; md_c2 <= par[13]; end
+            2'd1: begin md_a1 <= c2y; md_a2 <= par[14]; md_b1 <= par[20]; md_b2 <= par[18]; md_c1 <= par[16]; md_c2 <= par[14]; end
+            2'd2: begin md_a1 <= nbx; md_a2 <= par[13]; md_b1 <= par[19]; md_b2 <= par[17]; md_c1 <= par[15]; md_c2 <= par[13]; end
+            2'd3: begin md_a1 <= nby; md_a2 <= par[14]; md_b1 <= par[20]; md_b2 <= par[18]; md_c1 <= par[16]; md_c2 <= par[14]; end
           endcase
+          md_r <= mdph[0] ? par[20] : par[17]; md_rn <= mdph[0];
           md_go <= 1; state <= W_RMW;
         end
         W_RMW: if (md_done) begin
           case (mdph)
-            2'd0: gbx0 <= par[17] + md_q;   2'd1: gby0 <= par[20] - md_q;
-            2'd2: gbx1 <= par[17] + md_q;   2'd3: gby1 <= par[20] - md_q;
+            2'd0: gbx0 <= md_qr;   2'd1: gby0 <= md_qr;
+            2'd2: gbx1 <= md_qr;   2'd3: gby1 <= md_qr;
           endcase
           if (mdph == 2'd3) state <= W_RC1;
           else begin mdph <= mdph + 2'd1; state <= W_RM; end
@@ -1196,13 +1248,13 @@ module p8x_geom (
           if (par[12] == 16'd0) begin
             c2x <= wx0; c2y <= wy0; glcvt <= 0; state <= S_IDLE;
           end else begin
-            md_a <= wx0; md_b <= par[12]; md_c <= cvz;
+            md_a1 <= wx0; md_a2 <= 16'd0; md_b1 <= par[12]; md_b2 <= 16'd0; md_c1 <= cvz; md_c2 <= 16'd0;
             md_go <= 1; state <= CV_XW;
           end
         end
         CV_XW: if (md_done) begin
           c2x <= md_q;
-          md_a <= wy0; md_b <= par[12]; md_c <= cvz;
+          md_a1 <= wy0; md_a2 <= 16'd0; md_b1 <= par[12]; md_b2 <= 16'd0; md_c1 <= cvz; md_c2 <= 16'd0;
           md_go <= 1; state <= CV_YW;
         end
         CV_YW: if (md_done) begin
@@ -1226,7 +1278,7 @@ module p8x_geom (
           end
         end
         J_WR: begin                    // one scratch cell per cycle
-          cm_we <= 1; cm_wa <= jbase + {2'd0, jcnt}; cm_wd <= jval;
+          cm_we <= 1; cm_wa <= {4'd0, jbase[5:4], jcnt}; cm_wd <= jval;
           if (jcnt == jlast) begin jcnt <= 0; state <= jnext; end
           else jcnt <= jcnt + 4'd1;
         end
@@ -1237,33 +1289,34 @@ module p8x_geom (
 
         // pivot: T = org - (S*org)>>8 -- ms cells fetched from the RAM
         C_OGA: begin
-          cm_aa <= SB + {2'd0,ci}*3 + {2'd0,ck};
+          cm_aa <= {6'd2, cick};                   // SB + ci*3 + ck
           state <= C_OGB;
         end
         C_OGB: state <= C_OGC;         // the read pipeline's bubble
         C_OGC: begin
-          md_a <= cm_qa; md_b <= glorg[ck]; md_c <= 16'd256;
+          md_a1 <= cm_qa; md_a2 <= 16'd0; md_b1 <= glorg[ck]; md_b2 <= 16'd0; md_c1 <= 16'd256; md_c2 <= 16'd0;
+          md_r <= csum; md_rn <= 0;
           md_go <= 1; state <= C_OGW;
         end
         C_OGW: if (md_done) begin
           if (ck == 2'd2) begin
-            cm_we <= 1; cm_wa <= SB + 6'd9 + {4'd0,ci};
-            cm_wd <= glorg[ci] - (csum + md_q);
+            cm_we <= 1; cm_wa <= {6'd2, c9i};
+            cm_wd <= glorg[ci] - md_qr;
             ck <= 0; csum <= 0;
             if (ci == 2'd2) begin ci <= 0; cj <= 0; state <= C_MLA; end
             else begin ci <= ci + 2'd1; state <= C_OGA; end
-          end else begin csum <= csum + md_q; ck <= ck + 2'd1; state <= C_OGA; end
+          end else begin csum <= md_qr; ck <= ck + 2'd1; state <= C_OGA; end
         end
 
         // one product term: fetch both operands, muldiv, accumulate. A
         // mode-0 T column first prefetches ms[9+ci] (the additive tail).
         C_MLA: begin
           if (cj == 2'd3 && cmode == 2'd0 && !mtf) begin
-            cm_aa <= SB + 6'd9 + {4'd0,ci}; state <= C_MTB;
+            cm_aa <= {6'd2, c9i}; state <= C_MTB;
           end else begin
-            cm_aa <= ((cmode == 2'd2) ? VB : SB) + {2'd0,ci}*3 + {2'd0,ck};
-            cm_ab <= (cj == 2'd3) ? (MB + 6'd9 + {4'd0,ck})
-                   : (((cmode == 2'd1) ? VB : MB) + {2'd0,ck}*3 + {2'd0,cj});
+            cm_aa <= {(cmode == 2'd2) ? 6'd1 : 6'd2, cick};
+            cm_ab <= (cj == 2'd3) ? {6'd0, c9k}
+                   : {(cmode == 2'd1) ? 6'd1 : 6'd0, ckcj};
             state <= C_MLB;
           end
         end
@@ -1271,15 +1324,16 @@ module p8x_geom (
         C_MTC: begin msT <= cm_qa; mtf <= 1; state <= C_MLA; end
         C_MLB: state <= C_MLC;
         C_MLC: begin
-          md_a <= cm_qa;
-          md_b <= (cj == 2'd3 && cmode == 2'd2) ? cm_qb - glvrp[ck] : cm_qb;
-          md_c <= 16'd256; md_go <= 1; state <= C_MLW;
+          md_a1 <= cm_qa; md_a2 <= 16'd0;
+          md_b1 <= cm_qb;
+          md_b2 <= (cj == 2'd3 && cmode == 2'd2) ? glvrp[ck] : 16'd0;
+          md_c1 <= 16'd256; md_c2 <= 16'd0;
+          md_r <= csum; md_rn <= 0; md_go <= 1; state <= C_MLW;
         end
         C_MLW: if (md_done) begin
           if (ck == 2'd2) begin
             cm_we <= 1;
-            cm_wa <= TB + ((cj == 2'd3) ? 6'd9 + {4'd0,ci}
-                                        : {2'd0,ci}*3 + {2'd0,cj});
+            cm_wa <= {6'd3, (cj == 2'd3) ? c9i : cicj};
             cm_wd <= cm_res;
             ck <= 0; csum <= 0; mtf <= 0;
             if (cj == cjmax) begin
@@ -1287,16 +1341,16 @@ module p8x_geom (
               if (ci == 2'd2) begin cpi <= 0; state <= C_CPA; end
               else begin ci <= ci + 2'd1; state <= C_MLA; end
             end else begin cj <= cj + 2'd1; state <= C_MLA; end
-          end else begin csum <= csum + md_q; ck <= ck + 2'd1; state <= C_MLA; end
+          end else begin csum <= md_qr; ck <= ck + 2'd1; state <= C_MLA; end
         end
 
         // land the product where it belongs, then chain
-        C_CPA: begin cm_aa <= TB + {2'd0,cpi}; state <= C_CPB; end
+        C_CPA: begin cm_aa <= {6'd3, cpi[3:0]}; state <= C_CPB; end
         C_CPB: state <= C_CPC;
         C_CPC: begin
           case (cmode)
-            2'd0: begin cm_we <= 1; cm_wa <= MB + {2'd0,cpi}; cm_wd <= cm_qa; end
-            2'd1: begin cm_we <= 1; cm_wa <= VB + {2'd0,cpi}; cm_wd <= cm_qa; end
+            2'd0: begin cm_we <= 1; cm_wa <= {6'd0, cpi[3:0]}; cm_wd <= cm_qa; end
+            2'd1: begin cm_we <= 1; cm_wa <= {6'd1, cpi[3:0]}; cm_wd <= cm_qa; end
             default: par[cpi[3:0]] <= cm_qa;
           endcase
           if (cpi == ((cmode == 2'd1) ? 4'd8 : 4'd11)) begin
@@ -1311,8 +1365,8 @@ module p8x_geom (
           if (!glpmode) state <= C_RCN;
           else if (glproj == 16'd0) begin par[12] <= 0; state <= C_RCN; end
           else begin
-            md_a <= par[15] - par[13]; md_b <= 16'd128;
-            md_c <= tanq;
+            md_a1 <= par[15]; md_a2 <= par[13]; md_b1 <= 16'd128; md_b2 <= 16'd0;
+            md_c1 <= tanq; md_c2 <= 16'd0;
             md_go <= 1; state <= C_RCKW;
           end
         end
@@ -1355,7 +1409,7 @@ module p8x_geom (
           if (rp) begin rpb0 <= rpb1; rp_have <= rp_have - 2'd1;
                         rp_off <= rp_off + 13'd1; end
           else if (glmode) tq_rp <= tq_rp + 3'd1;
-          else cf_rp <= cf_rp + 7'd1;
+          else cf_rp <= cf_rp + 6'd1;
           if (rec && srcb == 8'h71) begin
             glst <= G_LE0;                       // the REAL CLEND: finish
           end else if (!opok) begin              // unknown: log, skip, and
@@ -1410,7 +1464,7 @@ module p8x_geom (
           if (rp) begin rpb0 <= rpb1; rp_have <= rp_have - 2'd1;
                         rp_off <= rp_off + 13'd1; end
           else if (glmode) tq_rp <= tq_rp + 3'd1;
-          else cf_rp <= cf_rp + 7'd1;
+          else cf_rp <= cf_rp + 6'd1;
           pi <= pi + 5'd1;
           if (rec && !rskip) begin                        // stream to store
             if (rec_len >= 13'd4092) begin   // slot full: abort
@@ -1465,10 +1519,9 @@ module p8x_geom (
               csn <= 0; glact <= 1; state <= S_CS;
             end
             8'h09: begin                                  // POINT3: degenerate
-              v[0] <= c3x; v[1] <= c3y; v[2] <= c3z;      //   3D line
-              v[3] <= c3x; v[4] <= c3y; v[5] <= c3z;
-              tri_m <= 0; mp <= 0; mr <= 0; mk <= 0; acc <= 0;
-              glact <= 1; state <= S_MAC;
+              f3x <= c3x; f3y <= c3y; f3z <= c3z;         //   3D line
+              m3x <= c3x; m3y <= c3y; m3z <= c3z;
+              g3t <= 0; k <= 0; g2n <= G_OP; glst <= G_3L;
             end
             8'h0F: begin                                  // CLEARS: BOTH pages
               gbcol <= prgb; glcls <= 2'd1;
@@ -1489,15 +1542,14 @@ module p8x_geom (
               csn <= 0; glact <= 1; state <= S_CS;
             end
             8'h2A, 8'h2B: begin                           // DRAW3 / DRAWR3
-              v[0] <= c3x; v[1] <= c3y; v[2] <= c3z;
-              v[3] <= glop[0] ? c3x + pw0 : pw0;
-              v[4] <= glop[0] ? c3y + pw1 : pw1;
-              v[5] <= glop[0] ? c3z + pw2 : pw2;
+              f3x <= c3x; f3y <= c3y; f3z <= c3z;
+              m3x <= glop[0] ? c3x + pw0 : pw0;
+              m3y <= glop[0] ? c3y + pw1 : pw1;
+              m3z <= glop[0] ? c3z + pw2 : pw2;
               c3x <= glop[0] ? c3x + pw0 : pw0;
               c3y <= glop[0] ? c3y + pw1 : pw1;
               c3z <= glop[0] ? c3z + pw2 : pw2;
-              tri_m <= 0; mp <= 0; mr <= 0; mk <= 0; acc <= 0;
-              glact <= 1; state <= S_MAC;
+              g3t <= 0; k <= 0; g2n <= G_OP; glst <= G_3L;
             end
             8'h34, 8'h35: begin                           // RECT / RECTR
               nbx <= glop[0] ? c2x + pw0 : pw0;           // target corner
@@ -1574,10 +1626,10 @@ module p8x_geom (
               cmode <= 2'd2; ci <= 0; cj <= 0; ck <= 0; csum <= 0;
               state <= C_MLA; end
             8'hAF: begin                                  // CONVRT
-              v[0] <= c3x; v[1] <= c3y; v[2] <= c3z;
-              v[3] <= c3x; v[4] <= c3y; v[5] <= c3z;
-              tri_m <= 0; mp <= 0; mr <= 0; mk <= 0; acc <= 0;
-              glcvt <= 1; state <= S_MAC;
+              f3x <= c3x; f3y <= c3y; f3z <= c3z;
+              m3x <= c3x; m3y <= c3y; m3z <= c3z;
+              glcvt <= 1;              // G_3L launches S_MAC; CV_X captures
+              g3t <= 0; k <= 0; g2n <= G_OP; glst <= G_3L;
             end
             8'hB0:                                        // PROJCT
               if ($signed(pw0) < 0 || $signed(pw0) > 16'sd179) begin
@@ -1667,7 +1719,7 @@ module p8x_geom (
                 if (rp) begin rpb0 <= rpb1; rp_have <= rp_have - 2'd1;
                               rp_off <= rp_off + 13'd1; end
                 else if (glmode) tq_rp <= tq_rp + 3'd1;
-                else cf_rp <= cf_rp + 7'd1;
+                else cf_rp <= cf_rp + 6'd1;
                 pi <= pi + 5'd1;
                 if (rec && !rskip) begin                  // stream to store
                   if (rec_len >= 13'd4092) begin   // slot full: abort
@@ -1700,10 +1752,11 @@ module p8x_geom (
               glph <= 2'd2;
               if (!glpfill) begin                         // outline: edge 0-1
                 if (glpoly3) begin
-                  v[0] <= vpx; v[1] <= vpy; v[2] <= vpz;
-                  v[3] <= pvx; v[4] <= pvy; v[5] <= pvz;
-                  tri_m <= 0; mp <= 0; mr <= 0; mk <= 0; acc <= 0;
-                  glact <= 1; state <= S_MAC;
+                  f3x <= vpx; f3y <= vpy; f3z <= vpz;   // OLD vp: staged
+                  m3x <= pvx; m3y <= pvy; m3z <= pvz;   //   before vp<=pv
+                  g3t <= 0; k <= 0;
+                  g2n <= (glnv == 8'd1) ? G_PCLOSE : G_PV;
+                  glst <= G_3L;
                 end else begin
                   wx0 <= vpx; wy0 <= vpy; wx1 <= pvx; wy1 <= pvy;
                   csn <= 0; glact <= 1; state <= S_CS;
@@ -1713,11 +1766,12 @@ module p8x_geom (
             default:
               if (glpfill) begin                          // fan tri vf,vp,v
                 if (glpoly3) begin
-                  v[0] <= vfx; v[1] <= vfy; v[2] <= vfz;
-                  v[3] <= vpx; v[4] <= vpy; v[5] <= vpz;
-                  v[6] <= pvx; v[7] <= pvy; v[8] <= pvz;
-                  tri_m <= 1; rfill <= 1; mp <= 0; mr <= 0; mk <= 0; acc <= 0;
-                  glact <= 1; state <= S_MAC;
+                  f3x <= vfx; f3y <= vfy; f3z <= vfz;
+                  m3x <= vpx; m3y <= vpy; m3z <= vpz;     // OLD vp
+                  t3x <= pvx; t3y <= pvy; t3z <= pvz;
+                  g3t <= 1; k <= 0;
+                  g2n <= (glnv == 8'd1) ? G_OP : G_PV;
+                  glst <= G_3L;
                 end else begin                            // 2D: map-only fill
                   g2n <= (glnv == 8'd1) ? G_OP : G_PV;    // where to resume
                   k <= 0;
@@ -1725,10 +1779,11 @@ module p8x_geom (
                 end
               end else begin                              // outline: next edge
                 if (glpoly3) begin
-                  v[0] <= vpx; v[1] <= vpy; v[2] <= vpz;
-                  v[3] <= pvx; v[4] <= pvy; v[5] <= pvz;
-                  tri_m <= 0; mp <= 0; mr <= 0; mk <= 0; acc <= 0;
-                  glact <= 1; state <= S_MAC;
+                  f3x <= vpx; f3y <= vpy; f3z <= vpz;   // OLD vp: staged
+                  m3x <= pvx; m3y <= pvy; m3z <= pvz;   //   before vp<=pv
+                  g3t <= 0; k <= 0;
+                  g2n <= (glnv == 8'd1) ? G_PCLOSE : G_PV;
+                  glst <= G_3L;
                 end else begin
                   wx0 <= vpx; wy0 <= vpy; wx1 <= pvx; wy1 <= pvy;
                   csn <= 0; glact <= 1; state <= S_CS;
@@ -1740,10 +1795,9 @@ module p8x_geom (
         G_PCLOSE: if (gl_can) begin                       // closing edge vp->vf
           glst <= G_OP;
           if (glpoly3) begin
-            v[0] <= vpx; v[1] <= vpy; v[2] <= vpz;
-            v[3] <= vfx; v[4] <= vfy; v[5] <= vfz;
-            tri_m <= 0; mp <= 0; mr <= 0; mk <= 0; acc <= 0;
-            glact <= 1; state <= S_MAC;
+            f3x <= vpx; f3y <= vpy; f3z <= vpz;
+            m3x <= vfx; m3y <= vfy; m3z <= vfz;
+            g3t <= 0; k <= 0; g2n <= G_OP; glst <= G_3L;
           end else begin
             wx0 <= vpx; wy0 <= vpy; wx1 <= vfx; wy1 <= vfy;
             csn <= 0; glact <= 1; state <= S_CS;
@@ -1780,6 +1834,23 @@ module p8x_geom (
           end else k <= k + 4'd1;
         end
 
+        G_3L: if (gl_can) begin        // stream staged 3D verts into the
+          cm_we <= 1;                  //   LVV lanes (x,y,z per vertex),
+          cm_wa <= {6'd7, k[3:0]};            //   LVV + k, then transform
+          case (k)
+            4'd0: cm_wd <= f3x;  4'd1: cm_wd <= f3y;  4'd2: cm_wd <= f3z;
+            4'd3: cm_wd <= m3x;  4'd4: cm_wd <= m3y;  4'd5: cm_wd <= m3z;
+            4'd6: cm_wd <= t3x;  4'd7: cm_wd <= t3y;  default: cm_wd <= t3z;
+          endcase
+          if (k == (g3t ? 4'd8 : 4'd5)) begin
+            k <= 0;
+            tri_m <= g3t; if (g3t) rfill <= 1;
+            mp <= 0; mr <= 0; mk <= 0; acc <= 0;
+            glact <= 1; state <= S_MAC;
+            glst <= g2n;
+          end else k <= k + 4'd1;
+        end
+
         G_WAIT: begin                                     // WAIT: real frames
           if (wcnt == 16'd0) glst <= G_OP;
           else if (frame_tick) wcnt <= wcnt - 16'd1;
@@ -1795,7 +1866,7 @@ module p8x_geom (
           glst <= G_LE1;
         end
         G_LE1: if (!sd_busy && !g_req) begin
-          g_addr <= CL_BASE + {5'd0, rec_slot, 12'd0};
+          g_addr <= {2'd0, 1'b1, 2'd0, rec_slot, 12'd0};
           g_din <= {3'd0, rec_len};
           g_we <= 1; g_req <= 1; sd_busy <= 1;
           glst <= G_LE2;
@@ -1806,7 +1877,7 @@ module p8x_geom (
 
         // CLAPP: read the stored length, resume recording after it
         G_AL0: if (!sd_busy && !g_req) begin
-          g_addr <= CL_BASE + {5'd0, rec_slot, 12'd0};
+          g_addr <= {2'd0, 1'b1, 2'd0, rec_slot, 12'd0};
           g_we <= 0; g_req <= 1; sd_busy <= 1;
           glst <= G_AL1;
         end
