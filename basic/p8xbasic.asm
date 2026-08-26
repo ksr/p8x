@@ -1208,7 +1208,15 @@ pk_err: JMP  SYNERR
 ; a single magic byte would prove nothing; GID0/GID1 are two fixed bytes at two
 ; addresses. Without this, LINE on a machine with no card would silently do
 ; nothing at all, which is the worst possible failure for a graphics statement.
-GCHECK: LDA  GID0
+GCHECK: LDA  GLIDR                  ; a GL engine? let its walker go
+        LDB  #'G'                   ;   idle first: the walker MASTERS
+        CMP                         ;   the 2D device, and its registers
+        JNZ  gchk_p                 ;   (GID0 included) answer garbage
+gchk_w: LDA  GLSTATR                ;   while it draws -- found on
+        LDB  #$40                   ;   silicon as ?No display right
+        AND                         ;   after a CLEARS (the emulator is
+        JNZ  gchk_w                 ;   synchronous and cannot see it)
+gchk_p: LDA  GID0
         LDB  #'P'
         CMP
         JNZ  GNODEV

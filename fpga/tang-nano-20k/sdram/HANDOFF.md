@@ -392,6 +392,16 @@ both pens. man basic, man gl, and the programmer's guide carry it.
 All 11 BASIC suites green. Another disk-rebuild deliverable for the
 same bench session as the 10d bitstream.
 
+**Silicon-only trap, found by the first 10d board session: the GL
+walker MASTERS the 2D device, so $FF20-block reads (GID0/GID1
+included) answer garbage while it draws.** The emulator interprets
+synchronously and CANNOT see it. Symptom: `?No display` from the very
+next graphics statement after a GL command that leaves the walker
+busy (a CLEARS is milliseconds of box-fill). Fix: GCHECK now waits
+for GLSTAT bit 6 to clear (when GLID says a GL engine is fitted)
+before probing GID0 -- which also makes every graphics statement
+implicitly sequence after outstanding GL work.
+
 Three operational notes for whoever drives the board over serial next:
 
 - **Two serial clients do not error -- they silently shred each other's
