@@ -75,8 +75,9 @@ ceiling early (a RISK item: pixel-heavy pushes want every baud we can
 get; GL command streams do not care).
 
 Host-driven, binary, byte-oriented. The 6-bit register index addresses
-the window: idx $00-$0F -> $FF20+idx, idx $30-$37 -> $FF50+(idx-$30)
-(i.e. the low 6 bits of the I/O address, so the map is mechanical).
+the window: idx = I/O address minus $FF20, so idx $00-$0F is the 2D
+device ($FF20-$FF2F) and idx $30-$37 the GL port ($FF50-$FF57) -- one
+subtraction, mechanical in both directions.
 
     $00            PING: card replies 'P' '8' 'X' 'G' then BRIDGEV
     $80|idx  val   WRITE val to register idx          (no reply)
