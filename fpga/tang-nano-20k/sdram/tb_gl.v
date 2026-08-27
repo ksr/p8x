@@ -149,12 +149,6 @@ module tb;
       @(negedge clk); gl_sel = 0; gl_rd = 0;
     end
   endtask
-  task rd_glrb(output [7:0] v);       // pop one read-back byte (10e)
-    begin
-      @(negedge clk); gl_sel = 1; a = 4'h2; #1 v = rdata; gl_rd = 1;
-      @(negedge clk); gl_sel = 0; gl_rd = 0;
-    end
-  endtask
   task expop(input integer i, input [7:0] cmd, input [15:0] pen,
              input [15:0] x0, input [15:0] y0,
              input [15:0] x1, input [15:0] y1);
@@ -174,7 +168,6 @@ module tb;
 
   integer i;
   reg [7:0] e0, e1, e2, e3;
-  integer gi;
 
   initial begin
     repeat (4) @(negedge clk); rst = 0; repeat (2) @(negedge clk);
@@ -386,63 +379,8 @@ module tb;
       errors = errors + 1;
     end
 
-    // ---- stage 10e: read-back -----------------------------------------
-    glb(8'hE0); glb(8'd1);                              // PRMFIL 1
-    glb(8'h61); glb(8'd1);                              // FLAGRD 1
-    gl_wait_idle;
-    rd_glrb(e0); rd_glrb(e1);
-    if ({e1, e0} !== 16'd1) begin
-      $display("FAIL: FLAGRD 1 = %0d %0d, want 1 0", e0, e1);
-      errors = errors + 1;
-    end
-    gl_sel = 1; a = 4'h1; #1;
-    if (rdata[0]) begin
-      $display("FAIL: RB not drained after FLAGRD"); errors = errors + 1; end
-    gl_sel = 0;
-    glb(8'h62); glb(8'd2);                              // MATXRD 2: VR = I
-    gl_wait_idle;
-    for (gi = 0; gi < 9; gi = gi + 1) begin
-      rd_glrb(e0); rd_glrb(e1);
-      if ({e1, e0} !== ((gi == 0 || gi == 4 || gi == 8) ? 16'd256 : 16'd0))
-        begin $display("FAIL: MATXRD 2 word %0d = %0d", gi, {e1, e0});
-              errors = errors + 1; end
-    end
-    glb(8'h70); glb(8'd7);                              // CLBEG 7
-    glb(8'h12); glw(16'd1); glw(16'd2); glw(16'd3);     //   MOVE3 1 2 3
-    glb(8'h71);                                         // CLEND
-    glb(8'h76); glb(8'd7);                              // CLRD 7
-    gl_wait_idle;
-    rd_glrb(e0); rd_glrb(e1);
-    if ({e1, e0} !== 16'd7) begin
-      $display("FAIL: CLRD len = %0d, want 7", {e1, e0});
-      errors = errors + 1; end
-    rd_glrb(e0); rd_glrb(e1);
-    if (e0 !== 8'h12 || e1 !== 8'd1) begin
-      $display("FAIL: CLRD bytes %02X %02X, want 12 01", e0, e1);
-      errors = errors + 1; end
-    rd_glrb(e0); rd_glrb(e0); rd_glrb(e0); rd_glrb(e0); rd_glrb(e0);
-    glb(8'h78); glb(8'd7); glb(8'd9); glw(16'd1);       // CLMOD 7 9 1
-    glb(8'h76); glb(8'd7);                              // CLRD again
-    gl_wait_idle;
-    rd_glrb(e0); rd_glrb(e1);                           // length
-    rd_glrb(e0); rd_glrb(e1);                           // opcode, patched x
-    if (e0 !== 8'h12 || e1 !== 8'd9) begin
-      $display("FAIL: CLMOD patch reads %02X %02X, want 12 09", e0, e1);
-      errors = errors + 1; end
-    rd_glrb(e0); rd_glrb(e0); rd_glrb(e0); rd_glrb(e0); rd_glrb(e0);
-    glb(8'h61); glb(8'd0);                              // bad flag   -> 2
-    glb(8'h76); glb(8'd60);                             // undefined  -> 6
-    glb(8'h78); glb(8'd7); glb(8'd1); glw(16'd99);      // off >= len -> 2
-    gl_wait_idle;
-    rd_glerr(e0); rd_glerr(e1); rd_glerr(e2); rd_glerr(e3);
-    if (e0 !== 8'd2 || e1 !== 8'd6 || e2 !== 8'd2 || e3 !== 8'd0) begin
-      $display("FAIL: 10e errors %0d %0d %0d %0d, want 2 6 2 0",
-               e0, e1, e2, e3);
-      errors = errors + 1;
-    end
-
     if (errors == 0)
-      $display("TB-GL: PASS (GLID, 3D scene ops exact incl. 105 spans, 2D verbs exact, RECT clamp box, CLEARS both pages, WAIT paces, error FIFO, FIFO backpressure, LISTS exact, ASCII short-form line == hex op, READ-BACK exact incl. CLRD/CLMOD)");
+      $display("TB-GL: PASS (GLID, 3D scene ops exact incl. 105 spans, 2D verbs exact, RECT clamp box, CLEARS both pages, WAIT paces, error FIFO, FIFO backpressure, LISTS exact, ASCII short-form line == hex op)");
     else $display("TB-GL: %0d FAILURES", errors);
     $finish;
   end

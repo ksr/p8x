@@ -4,7 +4,7 @@
 ; count * (2 or 3 by opcode bit 1) int16s. Else bcnt byte params
 ; first, then (arity - bcnt) int16 params, little-endian.
 GLV0   = $B4
-GLVN   = 55
+GLVN   = 51
 GLVTAB:
         .byte $02, $00   ; $B4 FLIP
         .byte $03, $00   ; $B5 PGSYNC
@@ -57,7 +57,3 @@ GLVTAB:
         .byte $B2, $04   ; $E4 VWPORT
         .byte $B3, $04   ; $E5 WINDOW
         .byte $E0, $10   ; $E6 PRMFIL
-        .byte $61, $10   ; $E7 FLAGRD
-        .byte $62, $10   ; $E8 MATXRD
-        .byte $76, $10   ; $E9 CLRD
-        .byte $78, $21   ; $EA CLMOD
