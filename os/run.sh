@@ -287,6 +287,8 @@ if [ ! -f "$disk" ]; then
     _mddoc docs/p8x-monitor.md           MONITOR.MD
     _mddoc docs/p8x-system-design.md     SYSDESIGN.MD
     _mddoc docs/p8x-card-standards.md    CARDSTD.MD
+    _mddoc docs/p8x-programmers-guide.md PROGGUIDE.MD
+    _mddoc docs/p8x-isa-card.md          ISACARD.MD
 
     # /lib: the shared C library sources (lib_*.c). The native `cc`'s //#use
     # splicer opens /lib/lib_<name>.c on-target (its counterpart of clib.py), so

@@ -221,3 +221,36 @@ frame_w = landscape(letter)[0] - 18 * mm
 frame_h = landscape(letter)[1] - 14 * mm
 doc.build([KeepInFrame(frame_w, frame_h, story, mode="shrink")])
 print("ISA card written: %s  (%d opcodes)" % (os.path.join(_DOCS, "p8x-isa-card.pdf"), N_OPS))
+
+# ---- the Markdown twin (ships on-target as /docs/ISACARD.MD) ----------------
+# Same live OPC/U data, one table per group; the print-layout two-column
+# split is a PDF concern and does not apply.
+_md = []
+_md.append("# P8X Instruction Set — Quick Reference (rev D)\n")
+_md.append("Opcodes, mnemonics and cycle counts generated live from "
+           "`genucode.py` (the microcode source of truth) — cannot drift from "
+           "the hardware.\n")
+_md.append("**Operands:** `#imm` immediate | `addr` 16-bit absolute | `(Pn)` "
+           "ptr indirect | `(Pn)+` post-increment | (no operand) implied. "
+           "**By**=bytes, **Cy**=cycles (incl. fetch). **Flags:** C carry "
+           "(active-high: ADD carry-out / SUB,CMP no-borrow A>=B), Z zero, N "
+           "negative (bit7), V overflow; `-` = none. Signed branches test "
+           "N^V / Z. **Memory (rev E):** $0000-1FFF ROM | $2000-FEFF RAM | "
+           "$FF00-FFFF I/O. P0=PC, P3=stack (empty-descending). JZ/JNZ/JC are "
+           "aliases of BZ/BNZ/BCP.\n")
+for _g, _mns in GROUPS:
+    _md.append("## %s\n" % _g)
+    _md.append("| Op | Mnemonic | By | Cy | Fl | Description |")
+    _md.append("|---|---|---|---|---|---|")
+    _ents = [(c, m, sh) for (m, sh), c in OPC.items() if m in _mns]
+    for _c, _m, _sh in sorted(_ents):
+        if (_m, _sh) not in DESC:
+            continue
+        _fl, _ds = DESC[(_m, _sh)]
+        _md.append("| $%02X | `%s` | %d | %d | %s | %s |"
+                   % (_c, _m + SHN[_sh], BYTES[_sh], 1 + len(U[_c]), _fl,
+                      _ds.replace("|", "\\|")))
+    _md.append("")
+_mdp = os.path.join(_DOCS, "p8x-isa-card.md")
+open(_mdp, "w").write("\n".join(_md) + "\n")
+print("ISA card markdown written: %s" % _mdp)

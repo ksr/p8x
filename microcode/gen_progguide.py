@@ -249,3 +249,105 @@ E.append(Paragraph(
 
 doc.build(E)
 print("guide written")
+
+# ---- the Markdown twin: same live data, MD-native prose ---------------------
+# Ships to the machine as /docs/PROGGUIDE.MD (readable with `md`), so the
+# P8X can explain its own instruction set at the bench. The table content
+# is generated from the SAME OPC/U/DESC used above and cannot drift; the
+# prose is maintained beside the PDF prose in this one file.
+def _mdesc(t):
+    return t.replace("<i>n</i>", "n").replace("&gt;", ">").replace("&amp;", "&").replace("|", "\\|")
+
+_md = []
+_md.append("# P8X Programmer's Guide\n")
+_md.append("Instruction set rev 1 — generated from the microcode source "
+           "(`genucode.py`); opcode values, byte and cycle counts are extracted "
+           "from the same tables that build the EPROM images, so this document "
+           "cannot drift from the hardware.\n")
+_md.append("## Programming model\n")
+_md.append("**A, B** — 8-bit ALU operand registers; results land in A. "
+           "**P0-P3** — four 16-bit pointer registers; the address bus is always "
+           "driven by one of them. **P0** is the program counter. **P3** is the "
+           "stack pointer (empty-descending: push writes then decrements; "
+           "initialise it early — see note 3). P1 and P2 are general pointers "
+           "used by the (Pn) addressing modes. **FLAGS** — C, Z, N, V, latched "
+           "only by instructions marked in the Flags column.\n")
+_md.append("**Memory map (rev E):** $0000-$1FFF ROM (8K) | $2000-$FEFF RAM (56K) "
+           "| $FF00-$FFFF I/O: $FF00 switches (r), $FF02 LEDs (w), $FF04 ACIA "
+           "status (bit0 RX ready, bit1 TX ready), $FF05 ACIA data.\n")
+_md.append("**Reset:** P0 is forced to $0000; execution begins there. All other "
+           "registers (including P3) are undefined on real hardware.\n")
+_md.append("## Instruction set\n")
+for gname, mns in GROUPS:
+    _md.append("### %s\n" % gname)
+    _md.append("| Op | Mnemonic | Bytes | Cycles | Flags | Description |")
+    _md.append("|---|---|---|---|---|---|")
+    entries = [(code, mn, sh) for (mn, sh), code in OPC.items() if mn in mns]
+    for code, mn, sh in sorted(entries):
+        fl, ds = DESC[(mn, sh)]
+        cyc = 1 + len(U[code])
+        _md.append("| $%02X | `%s` | %d | %d | %s | %s |"
+                   % (code, mn + SHN[sh], BYTES[sh], cyc, fl, _mdesc(ds)))
+    _md.append("")
+_md.append("| — | `LDPn #imm16` | 4 | 6 | - | Assembler pseudo-op: LPLn + LPHn pair. Pn := imm16. |\n")
+_md.append("## Notes\n")
+_md.append("1. **Shifts & rotates:** SHL/SHR shift in 0 and latch the "
+           "shifted-out bit into C. ROL/ROR rotate through C (the shifted-in "
+           "bit is the current C). This makes multi-byte shifts work the "
+           "conventional way (SHL low byte, then ROL high byte).")
+_md.append("2. **C flag (rev B):** CONVENTIONAL active-high carry. After ADD, "
+           "C=1 means a carry occurred; after SUB/CMP, C=1 means no borrow "
+           "(A >= B). JC/BCP branch on C=1, JNC on C=0. CLC/SEC clear/set C "
+           "without disturbing Z/N/V.")
+_md.append("3. **Stack:** JSR pushes the return address high byte then low "
+           "byte, decrementing after each write (empty-descending). RTS "
+           "increments then reads. Software must initialise P3 (e.g. "
+           "`LDP3 #$FEFF`) before the first JSR.")
+_md.append("4. **V flag:** reads 0 in rev A.")
+_md.append("5. **Absolute addressing:** LDA/LDB/STA/JSR accept an absolute "
+           "address; the hardware forms it in the hidden PT scratch pointer.\n")
+_md.append("## Assembler quick reference (p8xasm.py)\n")
+_md.append("```")
+_md.append("""label:  MNEMONIC operand        ; comment
+operands:   #expr (immediate)  |  (Pn) / (Pn)+  |  expr (16-bit address)
+exprs:      $1F  0x1F  31  'c'  symbol   with +/-,  <expr = low byte, >expr = high
+directives: .org e   .byte e,...   .word e,...   .ascii "s"   .asciiz "s"
+            .fill n[,v]    NAME = expr    .equ NAME, expr
+pseudo-op:  LDPn #imm16              ; expands to LPLn #<imm, LPHn #>imm
+usage:      python3 p8xasm.py prog.asm -o eeprom.bin [-l prog.lst]""")
+_md.append("```\n")
+_md.append("## Example: print a string\n")
+_md.append("```")
+_md.append("""ACIA_D = $FF05
+        .org 0
+        LDP2 #ACIA_D        ; P2 -> ACIA data register
+        LDP1 #msg           ; P1 -> string
+        LDB  #0
+loop:   LDA  (P1)+          ; fetch byte, advance
+        OR                  ; A := A|0 - sets Z on the terminator
+        BZ   done
+        STA  (P2)           ; transmit
+        JMP  loop
+done:   HLT
+msg:    .asciiz "P8X lives!\\r\\n" """)
+_md.append("```\n")
+_md.append("## Writing a program for P8X/OS\n")
+_md.append("Programs launched by the OS **RUN** command load into the transient "
+           "program area at **$6A00** and run via a **JSR** to their exec "
+           "address. The program ABI: **return to the shell with RTS** (P3, the "
+           "stack, is the OS's — leave it balanced); on entry **P2 points at "
+           "the argument tail** — the command text after the program name, "
+           "NUL-terminated (so `RUN EDIT FOO.ASM` enters with P2 -> "
+           "`\"FOO.ASM\"`); programs that take no arguments ignore P2. Build "
+           "with `.org $6A00` and the host assembler's `--base 0x6A00`, or "
+           "assemble on-target with ASM. A file created on-target carries "
+           "load/exec 0, which the OS maps to $6A00, so it is directly "
+           "RUNnable. The BIOS jump table at $0100 (console + CF, the "
+           "FFIND/FCREATE/FDELETE/FCOMMIT file calls, the FOPEN/FGETB and "
+           "FWOPEN/FPUTB/FCLOSE byte streams, and FRESOLVE/FNORM/FOPENDIR/"
+           "FNEXT) is the only entry point a program needs — it must not call "
+           "into OS internals.")
+_mdp = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                    "docs", "p8x-programmers-guide.md")
+open(_mdp, "w").write("\n".join(_md) + "\n")
+print("guide markdown written: %s" % _mdp)

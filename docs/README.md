@@ -11,6 +11,8 @@ their source in `../basic/`, `../os/`, etc.)
 | [p8x-monitor.md](p8x-monitor.md) | ROM monitor command reference and memory map. |
 | [p8x-graphics-theory.md](p8x-graphics-theory.md) | Graphics engine theory of operation — the machines inside the card, from bus window to panel. |
 | [p8x-graphics-guide.md](p8x-graphics-guide.md) | Graphics programmer's guide — drawing from the shell, BASIC, C and assembly. |
+| [p8x-programmers-guide.md](p8x-programmers-guide.md) | CPU programmer's guide (GENERATED — regenerate via `microcode/gen_progguide.py`, never edit; PDF twin beside it). |
+| [p8x-isa-card.md](p8x-isa-card.md) | Instruction-set quick reference (GENERATED — `generators/gen_isa_card.py`; PDF twin beside it). |
 | [mount-drives-design.md](mount-drives-design.md) | Design record for the Unix-style `/D1` mount of the second CF — shipped; kept for the reasoning. |
 | [p8x-programmers-guide.pdf](p8x-programmers-guide.pdf) | Generated instruction-set reference (built by `../microcode/gen_progguide.py`). |
 
