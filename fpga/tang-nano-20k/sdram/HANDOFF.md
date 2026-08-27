@@ -391,8 +391,13 @@ circle error step through the SAME adder (-109). Silicon-shaped trap
 found in sim: the GL walker's GMODE write must WAIT for the engine to
 go idle (W_LF polls GSTAT) or the mode overtakes a primitive still
 drawing -- the frames diverged mid-line until it did. The proof chain
-is now SIX byte-identical frames. Board rungs (flash + disk + live
-proof) pending.
+is now SIX byte-identical frames. **BOARD-VERIFIED same day**: 19,048
+bitstream flashed, fresh disk cloned, and the native-verb program ran
+on the machine -- XOR line over the blue rect read POINT = -2017
+(blue^red), the second XOR RESTORED the ground (31: the machine's
+first un-draw), and a complement PLOT on black read -1. All three
+exactly the emulator's golden values. Stage 10a-d + 10f are on
+silicon; 10e waits for room; 10g/10h remain.
 
 **2026-08-26: the GL verbs are native BASIC statements.** All 51
 (2D/3D primitives, both matrix families, lists, pages — `MDROTY A*2`,

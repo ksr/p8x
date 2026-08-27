@@ -169,7 +169,9 @@ s$ = async path). COLOR drives both pens. Scenes must RESETF first
 STAGE 10e (2026-08-26): built sim-complete then BACKED OUT by user
 choice -- ~900 LUT4 over the cliff; commit c0931f0 + revert preserve
 it for the successor board.
-STAGE 10f (2026-08-27): LINFUN PLACED at 19,048 (seed 1). Mode lives
+STAGE 10f (2026-08-27): LINFUN PLACED at 19,048 (seed 1) and
+BOARD-VERIFIED same day (XOR -2017 / restore 31 / complement -1 --
+emulator-exact; the machine's first un-draw). Mode lives
 in the DEVICE (GMODE $FF2E write side) so BASIC LINE/PLOT honour it;
 single-pixel path only, fills always replace; GL's mode write WAITS
 for engine idle (else it overtakes an in-flight primitive -- frames
