@@ -5,6 +5,7 @@
 - [P8X Workflow](feedback_p8x_workflow.md) — Commit directly to main, no PRs; branches only when the user asks; ASK before merging any branch to main ("sync"/"push" ≠ merge approval)
 - [P8X Decoupling Caps](feedback_p8x_decoupling_caps.md) — every new card needs per-IC 100nF caps; all through-hole, no SMD
 - [Keep p8cc.py](project_p8cc_keep_python.md) — self-hosting the C compiler ADDS a C version alongside; never delete the Python bootstrap
+- [Keep /docs on the SD disk current](feedback_p8x_disk_docs_current.md) — shipped MD docs live at /docs (run.sh _mddoc list, read via `md`); every doc change updates the list + rebuilds/clones the disk
 - [Docs before sync](feedback_p8x_docs_before_sync.md) — before asking to sync, verify ALL docs current (comments, HELP, READMEs, theory docs, tables, PDFs, BACKLOG)
 - [P8X test streaming](feedback_p8x_test_streaming.md) — run `make test` raw to a logfile, not through grep, so progress streams live
 - [P8X test scope](feedback_p8x_test_scope.md) — run only the relevant test(s); full `make test` only for broad changes (compiler/microcode/firmware/shared libs) or on request

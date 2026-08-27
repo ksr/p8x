@@ -488,6 +488,24 @@ Nothing below has been built or measured.
       after the clone (loader-side CRC of the whole image vs host). Until
       then: a board program that crashes impossibly while emulator-clean is
       PRESUMED CORRUPT — re-clone before debugging logic.
+- [ ] **md: a panel (Tier B) renderer (2026-08-28).** The console `md`
+      command's parser, re-targeted at the 480x272 panel via GTEXT:
+      size-2 colour headings, green code, 80x34 grid, keypress paging.
+      ~200 extra lines; GTEXT paints a page in a second or two, fine
+      for reading. Gets genuinely good after stage 10h vector text
+      (proportional sizes). The parser is already structured for a
+      second back end (esc()/nl()/spaces() are the only output paths).
+- [ ] **p8cc: block-local declarations in NESTED blocks miscompile
+      (2026-08-28, found building md).** Locals declared in a block
+      nested deeper than function level (e.g. `char *t; char *u;`
+      inside an else-arm inside a while) silently corrupt: a branch
+      testing those pointers took the wrong path while the identical
+      shape at function scope worked, and the same shape in a tiny
+      standalone program ALSO worked -- it needs surrounding function
+      locals to collide with. Workaround (applied in md.c): declare
+      every local at function top, C89-style. Fix: p8cc block-scope
+      allocator; add a compiler test with nested-block locals beside
+      live function locals.
 - [ ] **Stage 10h subset — TEXT/TSIZE/TANGLE, costed and holdable
       (2026-08-27).** A fabric TEXT verb is ~260 LUT4 against ~100 of
       headroom plus ~150-200 of remaining verifiable diet (the ellipse

@@ -144,7 +144,7 @@ ensure_src() {
     # cube: the stage-7 wireframe-3D demo (lib_gfx + lib_g3d); its sine/edge
     # tables are brace-initialized arrays, fine for p8cc.py and the on-target cc
     # (the lib_distab/disasm precedent) but outside the p8cc.c self-host subset.
-    _ccmds="cube tri rotate page camera gl"
+    _ccmds="cube tri rotate page camera gl md"
     # --- /src/commands/c/Makefile : cc <cmd>.c >T.ASM ; asm T.ASM bin/<cmd>.bin
     mf="$build/Makefile.c"
     printf 'all:' > "$mf"; for c in $_mkcmds $_ccmds; do printf ' %s' "$c" >> "$mf"; done; printf '\n' >> "$mf"
@@ -239,7 +239,7 @@ if [ ! -f "$disk" ]; then
     # redirection and pipes out of the box. Run by bare name via PATH (/bin),
     # e.g.  dir /bin ,  cat README.TXT ,  cat README.TXT | grep hello | wc ,
     # cp README.TXT COPY.TXT ,  mv COPY.TXT MOVED.TXT .
-    for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch man dep dump examine disasm awk cmp cube tri rotate page camera gl image; do
+    for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch man dep dump examine disasm awk cmp cube tri rotate page camera gl md image; do
         # clib.py splices any //#use lib_*.c (shared helpers) into the source first;
         # a no-op passthrough for commands with no //#use directive.
         python3 "$root/tools/clib.py" "$root/os/commands/$ex.c" -o "$build/$ex.c"
@@ -249,7 +249,7 @@ if [ ! -f "$disk" ]; then
             --name "/binc/$ex.bin" --load 0x6A00 --exec 0x6A00 >/dev/null
     done
     # C-only commands (no asm twin): their C build IS the /bin binary.
-    for ex in cube tri rotate page camera gl; do
+    for ex in cube tri rotate page camera gl md; do
         python3 "$root/tools/p8xfs.py" put "$disk" "$build/$ex.bin" \
             --name "/bin/$ex.bin" --load 0x6A00 --exec 0x6A00 >/dev/null
     done
@@ -270,6 +270,24 @@ if [ ! -f "$disk" ]; then
         python3 "$root/tools/p8xfs.py" put "$disk" "$page" \
             --name "/man/$base" >/dev/null
     done
+    # /docs: the project's Markdown documentation, readable on-target with
+    # the `md` command (md /docs/GFXGUIDE.MD). Names fit the 12-byte P8XFS
+    # field. KEEP THIS LIST CURRENT: a new or renamed repo doc joins it here,
+    # and doc changes reach the machine via a disk rebuild + clone.
+    python3 "$root/tools/p8xfs.py" mkdir "$disk" /docs >/dev/null
+    _mddoc() {
+        python3 "$root/tools/p8xfs.py" put "$disk" "$root/$1" \
+            --name "/docs/$2" >/dev/null
+    }
+    _mddoc README.md                     README.MD
+    _mddoc GLOSSARY.md                   GLOSSARY.MD
+    _mddoc docs/p8x-graphics-theory.md   GFXTHEORY.MD
+    _mddoc docs/p8x-graphics-guide.md    GFXGUIDE.MD
+    _mddoc basic/p8x-basic-guide.md      BASGUIDE.MD
+    _mddoc docs/p8x-monitor.md           MONITOR.MD
+    _mddoc docs/p8x-system-design.md     SYSDESIGN.MD
+    _mddoc docs/p8x-card-standards.md    CARDSTD.MD
+
     # /lib: the shared C library sources (lib_*.c). The native `cc`'s //#use
     # splicer opens /lib/lib_<name>.c on-target (its counterpart of clib.py), so
     # e.g. `cc wc.c` can pull in `//#use stdin`. Plain source, not compiled here.

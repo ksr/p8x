@@ -1,0 +1,36 @@
+NAME
+    md - render a Markdown file on the console
+
+SYNOPSIS
+    md [-p] file.md
+
+DESCRIPTION
+    Renders a Markdown file as styled, paged console text, so the
+    project documentation in /docs reads well at the machine itself:
+
+        md /docs/GFXGUIDE.MD
+
+    Headings print bold (levels 1-2 underlined), prose word-wraps at
+    78 columns, lists keep a hanging indent, > quotes carry a  |
+    gutter, fenced code prints verbatim and dim, tables are re-emitted
+    with aligned columns, and [text](url) links print as text (url).
+    Inline **bold** and `code` become terminal attributes. Styling is
+    plain ANSI SGR escapes -- any ordinary terminal emulator shows
+    them; -p suppresses every escape for dumb terminals (the layout is
+    identical).
+
+    Output pauses every 22 lines at a --More-- prompt, exactly like
+    more: any key continues, q quits.
+
+    The subset is deliberately small; anything outside it (nested
+    emphasis, underscores, HTML) passes through as prose, so rendering
+    never fails.
+
+FILES
+    /docs/*.MD      the project documentation library, installed by the
+                    disk build (README, GLOSSARY, the graphics theory
+                    and guide, the BASIC guide, monitor and system
+                    design notes)
+
+SEE ALSO
+    more, man, cat
