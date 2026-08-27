@@ -53,6 +53,8 @@
 #include <termios.h>
 #include <signal.h>
 #include "../generators/memmap.h"   /* RAMBASE/IOBASE/ROMSIZE/RAMSIZE — single-source memory map */
+#include "../generators/trigtab.h"  /* SIN8/TANH8 — stage-10b GL trig, shared with the RTL */
+#include "../generators/glkwtab.h"  /* GL ASCII keywords — stage 10d, shared with the RTL */
 
 static int interactive=0;             /* stdin is a TTY: raw + blocking console */
 static int norx=0;                    /* -N: console RX always empty (see rx_ready) */
@@ -193,6 +195,7 @@ static uint16_t gx0,gy0,gx1,gy1;
    the register page is full, and GID0's read-only signature leaves its write
    decode free (see STAGE6-DESIGN.md). */
 static uint16_t gcol;
+static uint8_t  gmode;                 /* 10f LINFUN pixel-write mode */
 static uint8_t  gparm, gparm2, gerr;
 /* GDATA ($FF27) is the one read-back port: it streams the IDENT record after an
    IDENT command, and otherwise holds the result of the last POINT. gidx is the
@@ -230,18 +233,21 @@ static uint16_t mdu_exec(uint16_t a, uint16_t b, uint16_t c){
    both per the contract. Rendering is instant (the GPU-BUSY licence). */
 static void gpu_line(int x0,int y0,int x1,int y1,uint16_t c);
 static void gpu_box(int x0,int y0,int x1,int y1,uint16_t c,int fill);
-#define GEMAXE 4096                    /* list cap: count reg sanity bound */
-static uint8_t  gemem[GEMAXE*12];      /* the edge list ($100000 on the board) */
-static uint32_t gecur;                 /* upload cursor */
-static uint8_t  gesel, gevlo, geerr;   /* param index, GEVAL low latch, err */
-static int16_t  gep[23];               /* the parameter file */
+/* RETIRED (stage 10b): the $FF40 record-engine interface -- GEUP list
+   upload, GECMD RENDER, the GESEL/GEVAL register file, GEID. The GL
+   command port is the one hardware 3D interface now; gep[] lives on as
+   the INTERNAL parameter file the GL verbs compose into. lib_g3d's GEID
+   probe finds a floating bus and falls back to its software walk. */
+static int16_t  gep[25];               /* the parameter file (stage 10b: 23
+                                          near plane, 24 far plane) */
 
 static void ge_reset(void){            /* power-on parameter state */
     memset(gep,0,sizeof gep);
     gep[0]=gep[4]=gep[8]=256;          /* identity matrix, S7.8 */
     gep[12]=256;                       /* focal d */
     gep[21]=3;                         /* flags: erase + flip */
-    gesel=0; gevlo=0; gecur=0; geerr=0;
+    gep[23]=16;                        /* near plane (the stage-7..9 z>=16) */
+    gep[24]=32767;                     /* far plane: int16 max = no far clip */
 }
 
 static int16_t ge_md(int16_t a,int16_t b,int16_t c){
@@ -354,118 +360,705 @@ static void ge_filltri(int16_t x0,int16_t y0,int16_t x1,int16_t y1,
         if(y == y2) break;
     }
 }
-static void ge_tri(const uint8_t *e, int fill){
+/* one triangle from WORLD-space int16 vertices (vv[9] = three x,y,z).
+   Shared by the record walk (via the byte-decoding ge_tri wrapper) and the
+   stage-10 GL interpreter (POLY3's fill fans through here). */
+static void ge_tri3(const int16_t *vv, int fill){
     int16_t v[3][3], w[3];
     int16_t pz[8][3]; int np = 0;             /* near-clipped polygon */
+    int16_t pq[8][3]; int nq = 0;             /* ...then far-clipped (10b) */
     int16_t sx[8], sy[8];
+    int16_t zn=gep[23], zf=gep[24];
     for(int p=0;p<3;p++){
         int16_t in[3];
-        for(int k=0;k<3;k++) in[k]=(int16_t)(e[p*6+k*2] | (e[p*6+k*2+1]<<8));
+        for(int k=0;k<3;k++) in[k]=vv[p*3+k];
         ge_xform(in, v[p]);
     }
-    if(gep[12] == 0){                         /* ortho: no near clip */
-        for(int p=0;p<3;p++){ pz[np][0]=v[p][0]; pz[np][1]=v[p][1]; pz[np][2]=v[p][2]; np++; }
+    if(gep[12] == 0){                         /* ortho: no z clipping */
+        for(int p=0;p<3;p++){ pq[nq][0]=v[p][0]; pq[nq][1]=v[p][1]; pq[nq][2]=v[p][2]; nq++; }
     } else {
-        for(int p=0;p<3;p++){                 /* clip the polygon vs z=16 */
+        for(int p=0;p<3;p++){                 /* clip the polygon vs z=near */
             int16_t *a=v[p], *b=v[(p+1)%3];
-            int ain = a[2] >= 16, bin = b[2] >= 16;
+            int ain = a[2] >= zn, bin = b[2] >= zn;
             if(ain){ pz[np][0]=a[0]; pz[np][1]=a[1]; pz[np][2]=a[2]; np++; }
             if(ain != bin){
                 pz[np][0]=(int16_t)(a[0]+ge_md((int16_t)(b[0]-a[0]),
-                            (int16_t)(16-a[2]),(int16_t)(b[2]-a[2])));
+                            (int16_t)(zn-a[2]),(int16_t)(b[2]-a[2])));
                 pz[np][1]=(int16_t)(a[1]+ge_md((int16_t)(b[1]-a[1]),
-                            (int16_t)(16-a[2]),(int16_t)(b[2]-a[2])));
-                pz[np][2]=16; np++;
+                            (int16_t)(zn-a[2]),(int16_t)(b[2]-a[2])));
+                pz[np][2]=zn; np++;
             }
         }
         if(np < 3) return;                    /* wholly behind */
+        for(int p=0;p<np;p++){                /* ...and vs z=far (yon) */
+            int16_t *a=pz[p], *b=pz[(p+1)%np];
+            int ain = a[2] <= zf, bin = b[2] <= zf;
+            if(ain){ pq[nq][0]=a[0]; pq[nq][1]=a[1]; pq[nq][2]=a[2]; nq++; }
+            if(ain != bin){
+                pq[nq][0]=(int16_t)(a[0]+ge_md((int16_t)(b[0]-a[0]),
+                            (int16_t)(zf-a[2]),(int16_t)(b[2]-a[2])));
+                pq[nq][1]=(int16_t)(a[1]+ge_md((int16_t)(b[1]-a[1]),
+                            (int16_t)(zf-a[2]),(int16_t)(b[2]-a[2])));
+                pq[nq][2]=zf; nq++;
+            }
+        }
+        if(nq < 3) return;                    /* wholly beyond */
     }
     w[2]=0;
-    for(int p=0;p<np;p++){ w[0]=pz[p][0]; w[1]=pz[p][1]; w[2]=pz[p][2];
+    for(int p=0;p<nq;p++){ w[0]=pq[p][0]; w[1]=pq[p][1]; w[2]=pq[p][2];
                            ge_map(w, &sx[p], &sy[p]); }
-    if(fill){                                 /* fan: (0,1,2) [,(0,2,3)] */
-        for(int t=1;t+1<np;t++)
+    if(fill){                                 /* fan: (0,1,2) [,(0,2,3)...] */
+        for(int t=1;t+1<nq;t++)
             ge_filltri(sx[0],sy[0],sx[t],sy[t],sx[t+1],sy[t+1]);
     } else {
-        for(int p=0;p<np;p++)
-            ge_sline(sx[p],sy[p],sx[(p+1)%np],sy[(p+1)%np]);
+        for(int p=0;p<nq;p++)
+            ge_sline(sx[p],sy[p],sx[(p+1)%nq],sy[(p+1)%nq]);
+    }
+}
+/* the transformed-LINE tail: near clip -> perspective divide -> window
+   Cohen-Sutherland -> viewport map -> device LINE. w = the two vertices
+   AFTER ge_xform. Shared verbatim by the record walk and the stage-10 GL
+   interpreter's DRAW3 -- one tail, so the pixels cannot disagree. */
+static void ge_line3t(const int16_t *w){
+    int16_t x0,y0,z0,x1,y1,z1,d,zn,zf;
+    x0=w[0]; y0=w[1]; z0=w[2]; x1=w[3]; y1=w[4]; z1=w[5];
+    d = gep[12];
+    zn = gep[23]; zf = gep[24];             /* near/far planes (10b: DISTH/
+                                               DISTY; defaults 16 / 32767) */
+    if(d){                                  /* near clip BEFORE the divide */
+        if(z0<zn && z1<zn) return;
+        if(z0<zn){
+            x0=(int16_t)(x0+ge_md((int16_t)(x1-x0),(int16_t)(zn-z0),(int16_t)(z1-z0)));
+            y0=(int16_t)(y0+ge_md((int16_t)(y1-y0),(int16_t)(zn-z0),(int16_t)(z1-z0)));
+            z0=zn;
+        }
+        if(z1<zn){
+            x1=(int16_t)(x1+ge_md((int16_t)(x0-x1),(int16_t)(zn-z1),(int16_t)(z0-z1)));
+            y1=(int16_t)(y1+ge_md((int16_t)(y0-y1),(int16_t)(zn-z1),(int16_t)(z0-z1)));
+            z1=zn;
+        }
+        if(z0>zf && z1>zf) return;          /* yon clip, same shape */
+        if(z0>zf){
+            x0=(int16_t)(x0+ge_md((int16_t)(x1-x0),(int16_t)(zf-z0),(int16_t)(z1-z0)));
+            y0=(int16_t)(y0+ge_md((int16_t)(y1-y0),(int16_t)(zf-z0),(int16_t)(z1-z0)));
+            z0=zf;
+        }
+        if(z1>zf){
+            x1=(int16_t)(x1+ge_md((int16_t)(x0-x1),(int16_t)(zf-z1),(int16_t)(z0-z1)));
+            y1=(int16_t)(y1+ge_md((int16_t)(y0-y1),(int16_t)(zf-z1),(int16_t)(z0-z1)));
+            z1=zf;
+        }
+        x0=ge_md(x0,d,z0); y0=ge_md(y0,d,z0);
+        x1=ge_md(x1,d,z1); y1=ge_md(y1,d,z1);
+    }
+    int vis=1, nit=0;                       /* Cohen-Sutherland, lib order */
+    while(nit<8){
+        int a=ge_oc(x0,y0), b=ge_oc(x1,y1);
+        if(!(a|b)) break;
+        if(a&b){ vis=0; break; }
+        if(!a){ int16_t t; t=x0;x0=x1;x1=t; t=y0;y0=y1;y1=t; a=b; }
+        if(a&1){ y0=(int16_t)(y0+ge_md((int16_t)(y1-y0),(int16_t)(gep[13]-x0),(int16_t)(x1-x0))); x0=gep[13]; }
+        else if(a&2){ y0=(int16_t)(y0+ge_md((int16_t)(y1-y0),(int16_t)(gep[15]-x0),(int16_t)(x1-x0))); x0=gep[15]; }
+        else if(a&4){ x0=(int16_t)(x0+ge_md((int16_t)(x1-x0),(int16_t)(gep[14]-y0),(int16_t)(y1-y0))); y0=gep[14]; }
+        else        { x0=(int16_t)(x0+ge_md((int16_t)(x1-x0),(int16_t)(gep[16]-y0),(int16_t)(y1-y0))); y0=gep[16]; }
+        nit++;
+    }
+    if(nit>=8) vis=0;
+    if(!vis) return;
+    {   /* viewport map, constant denominators, y flips */
+        int16_t px0=(int16_t)(gep[17]+ge_md((int16_t)(x0-gep[13]),(int16_t)(gep[19]-gep[17]),(int16_t)(gep[15]-gep[13])));
+        int16_t py0=(int16_t)(gep[20]-ge_md((int16_t)(y0-gep[14]),(int16_t)(gep[20]-gep[18]),(int16_t)(gep[16]-gep[14])));
+        int16_t px1=(int16_t)(gep[17]+ge_md((int16_t)(x1-gep[13]),(int16_t)(gep[19]-gep[17]),(int16_t)(gep[15]-gep[13])));
+        int16_t py1=(int16_t)(gep[20]-ge_md((int16_t)(y1-gep[14]),(int16_t)(gep[20]-gep[18]),(int16_t)(gep[16]-gep[14])));
+        gpu_line(px0,py0,px1,py1,gcol);
     }
 }
 
-static void ge_render(void){
-    int n = gep[22];
-    size_t off = 0;
-    if(n<0 || n>GEMAXE){ geerr=1; return; }
-    geerr=0;
-    /* erase = a pen-0 BOXF of the viewport. Stage 9: records are TYPED and
-       carry their own colour (STAGE9-DESIGN.md) -- the engine sets the pen
-       per record and leaves it holding the LAST record's colour. */
-    if(gep[21]&1) gpu_box(gep[17],gep[18],gep[19],gep[20],0,1);
-    for(int i=0;i<n;i++){
-        const uint8_t *e = gemem + off;
-        int16_t v[6], w[6];
-        int16_t x0,y0,z0,x1,y1,z1,d;
-        uint8_t rtype, rflags;
-        if(off + 16 > sizeof gemem){ geerr=1; return; }
-        rtype = e[0]; rflags = e[1];
-        gcol = (uint16_t)(e[2] | (e[3]<<8));      /* the record's colour */
-        if(rtype == 2){                           /* TRI (stage 9b) */
-            if(off + 22 > sizeof gemem){ geerr=1; return; }
-            ge_tri(e + 4, rflags & 1);
-            off += 22;
-            continue;
-        }
-        if(rtype != 1){ geerr=1; return; }        /* else: LINE */
-        off += 16;
-        for(int k=0;k<6;k++) v[k]=(int16_t)(e[4+k*2] | (e[5+k*2]<<8));
-        for(int p=0;p<2;p++)                    /* v' = (M*v >>> 8) + T */
-            for(int r=0;r<3;r++){
-                int32_t acc = (int32_t)gep[r*3+0]*v[p*3+0]
-                            + (int32_t)gep[r*3+1]*v[p*3+1]
-                            + (int32_t)gep[r*3+2]*v[p*3+2];
-                w[p*3+r] = (int16_t)((acc>>8) + gep[9+r]);
-            }
-        x0=w[0]; y0=w[1]; z0=w[2]; x1=w[3]; y1=w[4]; z1=w[5];
-        d = gep[12];
-        if(d){                                  /* near clip BEFORE the divide */
-            if(z0<16 && z1<16) continue;
-            if(z0<16){
-                x0=(int16_t)(x0+ge_md((int16_t)(x1-x0),(int16_t)(16-z0),(int16_t)(z1-z0)));
-                y0=(int16_t)(y0+ge_md((int16_t)(y1-y0),(int16_t)(16-z0),(int16_t)(z1-z0)));
-                z0=16;
-            }
-            if(z1<16){
-                x1=(int16_t)(x1+ge_md((int16_t)(x0-x1),(int16_t)(16-z1),(int16_t)(z0-z1)));
-                y1=(int16_t)(y1+ge_md((int16_t)(y0-y1),(int16_t)(16-z1),(int16_t)(z0-z1)));
-                z1=16;
-            }
-            x0=ge_md(x0,d,z0); y0=ge_md(y0,d,z0);
-            x1=ge_md(x1,d,z1); y1=ge_md(y1,d,z1);
-        }
-        int vis=1, nit=0;                       /* Cohen-Sutherland, lib order */
-        while(nit<8){
-            int a=ge_oc(x0,y0), b=ge_oc(x1,y1);
-            if(!(a|b)) break;
-            if(a&b){ vis=0; break; }
-            if(!a){ int16_t t; t=x0;x0=x1;x1=t; t=y0;y0=y1;y1=t; a=b; }
-            if(a&1){ y0=(int16_t)(y0+ge_md((int16_t)(y1-y0),(int16_t)(gep[13]-x0),(int16_t)(x1-x0))); x0=gep[13]; }
-            else if(a&2){ y0=(int16_t)(y0+ge_md((int16_t)(y1-y0),(int16_t)(gep[15]-x0),(int16_t)(x1-x0))); x0=gep[15]; }
-            else if(a&4){ x0=(int16_t)(x0+ge_md((int16_t)(x1-x0),(int16_t)(gep[14]-y0),(int16_t)(y1-y0))); y0=gep[14]; }
-            else        { x0=(int16_t)(x0+ge_md((int16_t)(x1-x0),(int16_t)(gep[16]-y0),(int16_t)(y1-y0))); y0=gep[16]; }
-            nit++;
-        }
-        if(nit>=8) vis=0;
-        if(!vis) continue;
-        {   /* viewport map, constant denominators, y flips */
-            int16_t px0=(int16_t)(gep[17]+ge_md((int16_t)(x0-gep[13]),(int16_t)(gep[19]-gep[17]),(int16_t)(gep[15]-gep[13])));
-            int16_t py0=(int16_t)(gep[20]-ge_md((int16_t)(y0-gep[14]),(int16_t)(gep[20]-gep[18]),(int16_t)(gep[16]-gep[14])));
-            int16_t px1=(int16_t)(gep[17]+ge_md((int16_t)(x1-gep[13]),(int16_t)(gep[19]-gep[17]),(int16_t)(gep[15]-gep[13])));
-            int16_t py1=(int16_t)(gep[20]-ge_md((int16_t)(y1-gep[14]),(int16_t)(gep[20]-gep[18]),(int16_t)(gep[16]-gep[14])));
-            gpu_line(px0,py0,px1,py1,gcol);
+/* ---- Stage 10: the GRAPHICS LANGUAGE ($FF50-$FF57, STAGE10-DESIGN.md) ----
+   A PGC-style command STREAM (Matrox PG-640A, docs/reference/pg640a.pdf):
+   bytes poked at GLDATA queue in a FIFO; the interpreter executes one
+   opcode + parameters (hex mode -- ASCII mode is stage 10d) and draws
+   IMMEDIATELY through the exact stage-8b/9 datapath (ge_xform, ge_line3t,
+   ge_tri3, and the shared window/viewport/matrix parameter file gep[]),
+   so GL pixels and record-engine pixels cannot disagree. PGC opcodes are
+   kept verbatim where a verb is adopted (appendix K of the manual stays
+   the reference card); P8X-only verbs (FLIP 02, PGSYNC 03) take unused
+   opcodes. Parameters are P8X-flavoured: int16 LE wherever the PGC has
+   16.16 Reals, and COLOR/CLEARS/FLOOD take r g b bytes -> RGB565 (no
+   LUT). The PGC's 2D space has NO matrix: 2D primitives clip to the
+   window and map to the viewport, nothing else. Execution is instant
+   (the GPU-BUSY licence): GLSTAT busy never reads 1 here, and the FIFO
+   drains as far as complete commands allow -- a partial command waits. */
+#define GLFMAX 2048          /* holds the largest command: POLY3 255 verts */
+static uint8_t glf[GLFMAX];  static int glflen;         /* command FIFO */
+static uint8_t glef[16];     static int gleflen;        /* error FIFO */
+static uint8_t glrbf[256];   static int glrblen, glrbrd; /* read-back (10e) */
+static uint8_t glmode;       /* 0 = hex (10a default; 1 = ASCII, stage 10d) */
+static char awb[8];  static int awn;      /* keyword accumulator */
+static int  axv, axneg, axhas;            /* number accumulator */
+static int  a_op, a_bcnt, a_left, a_var, a_vw, a_act, a_pi, a_skip;
+static uint8_t glfill;       /* PRMFIL: closed primitives fill when 1 */
+static int16_t glc2[2], glc3[3];   /* the 2D and 3D current points */
+static int16_t glproj, gldist;     /* PROJCT angle / DISTAN viewer distance */
+/* stage 10b: the card-side matrices (STAGE10-DESIGN.md). Vertices go
+   through ONE combined matrix in the parameter file, recomposed at COMMAND
+   time from two masters: v_screen <- project((VR*((M*v>>8)+Tm-r))>>8
+   + (0,0,dist)). MD* verbs compose submatrices into M (in command order,
+   about the MDORG origin); VW* verbs compose into VR about the VWRPT
+   reference point; DISTAN slides the viewer back along z. PROJCT switches
+   the focal K from the native 256 to WW*128/tan(angle/2) (TANH8). */
+static int16_t glmm[12];     /* modeling: 3x3 8.8 rows 0-8, T 9-11 */
+static int16_t glvm[9];      /* viewing rotation VR, 3x3 8.8 */
+static int16_t glvrp[3];     /* VWRPT: the viewing reference point */
+static int16_t glorg[3];     /* MDORG: rotation/scale pivot */
+static int16_t glh, gly;     /* DISTH / DISTY plane distances (from VRP) */
+static uint8_t glch, glcy;   /* CLIPH / CLIPY enables */
+static uint8_t glpmode;      /* 0 = native focal (par12 as-is); 1 = PROJCT */
+
+/* error codes: 1 unknown opcode, 2 bad parameter, 3 mode not fitted
+   (ASCII before stage 10d), 4 command-FIFO overflow */
+static void gl_err(uint8_t code){ if(gleflen<(int)sizeof glef) glef[gleflen++]=code; }
+
+static void gl_mat_reset(void){            /* 10b matrix state to power-up */
+    memset(glmm,0,sizeof glmm); glmm[0]=glmm[4]=glmm[8]=256;
+    memset(glvm,0,sizeof glvm); glvm[0]=glvm[4]=glvm[8]=256;
+    memset(glvrp,0,sizeof glvrp); memset(glorg,0,sizeof glorg);
+    glh=0; gly=0; glch=0; glcy=0; glpmode=0;
+    glproj=60; gldist=0;                   /* dist 0 = the stage-9 camera */
+}
+static void gl_state_reset(void){          /* RESETF: state, NOT the FIFOs */
+    ge_reset();                            /* matrix/window/viewport/flags */
+    glfill=0; glc2[0]=glc2[1]=0; glc3[0]=glc3[1]=glc3[2]=0;
+    gl_mat_reset();
+    gcol=0xFFFF;                           /* pen back to white */
+}
+static void gl_reset(void){                /* power-on */
+    glflen=0; gleflen=0; glrblen=glrbrd=0; glmode=0;
+    awn=0; axv=0; axneg=0; axhas=0; a_act=0; a_skip=0;
+    glfill=0; glc2[0]=glc2[1]=0; glc3[0]=glc3[1]=glc3[2]=0;
+    gl_mat_reset();
+}
+
+/* ---- 10b: composition, all in ge_md (the muldiv contract, /256) --------- */
+/* out = sub o m: apply m FIRST, then sub -- commands compose on the left
+   (MDSCAL then MDTRAN = scale first), the manual's order rule. m12 form:
+   rows 0-8 are the 3x3 in 8.8, 9-11 the translation in world units. */
+static void gl_mcomp(const int16_t *s, int16_t *m){
+    int16_t r[12];
+    for(int i=0;i<3;i++){
+        for(int j=0;j<3;j++)
+            r[i*3+j]=(int16_t)(ge_md(s[i*3+0],m[0*3+j],256)
+                              +ge_md(s[i*3+1],m[1*3+j],256)
+                              +ge_md(s[i*3+2],m[2*3+j],256));
+        r[9+i]=(int16_t)(ge_md(s[i*3+0],m[9],256)
+                        +ge_md(s[i*3+1],m[10],256)
+                        +ge_md(s[i*3+2],m[11],256)+s[9+i]);
+    }
+    memcpy(m,r,sizeof r);
+}
+static void gl_mcomp9(const int16_t *s, int16_t *m){   /* 3x3 only (VR) */
+    int16_t r[9];
+    for(int i=0;i<3;i++)
+        for(int j=0;j<3;j++)
+            r[i*3+j]=(int16_t)(ge_md(s[i*3+0],m[0*3+j],256)
+                              +ge_md(s[i*3+1],m[1*3+j],256)
+                              +ge_md(s[i*3+2],m[2*3+j],256));
+    memcpy(m,r,sizeof r);
+}
+static int16_t gl_sin(int16_t deg){ return SIN8[((deg%360)+360)%360]; }
+static int16_t gl_cos(int16_t deg){ return SIN8[((deg%360)+450)%360]; }
+/* rotation submatrices, rotate.c's exact row conventions */
+static void gl_rsub(int axis, int16_t deg, int16_t *s){
+    int16_t c=gl_cos(deg), n=gl_sin(deg);
+    memset(s,0,12*sizeof(int16_t));
+    if(axis==0){ s[0]=256; s[4]=c; s[5]=(int16_t)-n; s[7]=n; s[8]=c; }
+    else if(axis==1){ s[0]=c; s[2]=n; s[4]=256; s[6]=(int16_t)-n; s[8]=c; }
+    else { s[0]=c; s[1]=(int16_t)-n; s[3]=n; s[4]=c; s[8]=256; }
+}
+/* MDROT/MDSCAL pivot about the MDORG origin: T = o - (S*o)>>8 */
+static void gl_orgt(int16_t *s){
+    for(int i=0;i<3;i++)
+        s[9+i]=(int16_t)(glorg[i]-(int16_t)(ge_md(s[i*3+0],glorg[0],256)
+                                           +ge_md(s[i*3+1],glorg[1],256)
+                                           +ge_md(s[i*3+2],glorg[2],256)));
+}
+/* rebuild the parameter file from the two masters + projection state */
+static void gl_recompose(void){
+    int16_t tmr[3];
+    for(int i=0;i<3;i++){
+        for(int j=0;j<3;j++)
+            gep[i*3+j]=(int16_t)(ge_md(glvm[i*3+0],glmm[0*3+j],256)
+                                +ge_md(glvm[i*3+1],glmm[1*3+j],256)
+                                +ge_md(glvm[i*3+2],glmm[2*3+j],256));
+        tmr[i]=(int16_t)(glmm[9+i]-glvrp[i]);
+    }
+    for(int i=0;i<3;i++)
+        gep[9+i]=(int16_t)(ge_md(glvm[i*3+0],tmr[0],256)
+                          +ge_md(glvm[i*3+1],tmr[1],256)
+                          +ge_md(glvm[i*3+2],tmr[2],256));
+    gep[11]=(int16_t)(gep[11]+gldist);      /* viewer slides back on z */
+    if(glpmode)                             /* PROJCT: K from angle+window */
+        gep[12]=(glproj==0)?0
+               :ge_md((int16_t)(gep[15]-gep[13]),128,TANH8[glproj%180]);
+    /* hither/yon planes in eye z (plane distances are from the VRP) */
+    gep[23]=glch?(int16_t)((gldist+glh)<16?16:(gldist+glh)):16;
+    gep[24]=glcy?(int16_t)(gldist+gly):32767;
+}
+
+static uint16_t gl_rgb(uint8_t r,uint8_t g,uint8_t b){
+    return (uint16_t)(((r&31)<<11)|((g&63)<<5)|(b&31));
+}
+/* map one WINDOW-space point to the screen -- the ge_line3t formulas */
+static void gl_map2(int16_t x,int16_t y,int16_t *px,int16_t *py){
+    *px=(int16_t)(gep[17]+ge_md((int16_t)(x-gep[13]),(int16_t)(gep[19]-gep[17]),(int16_t)(gep[15]-gep[13])));
+    *py=(int16_t)(gep[20]-ge_md((int16_t)(y-gep[14]),(int16_t)(gep[20]-gep[18]),(int16_t)(gep[16]-gep[14])));
+}
+/* a 2D line: window-space Cohen-Sutherland (the ge_line3t idiom, minus
+   transform and divide), then viewport map, then the device LINE */
+static void gl_line2(int16_t x0,int16_t y0,int16_t x1,int16_t y1){
+    int vis=1, nit=0;
+    while(nit<8){
+        int a=ge_oc(x0,y0), b=ge_oc(x1,y1);
+        if(!(a|b)) break;
+        if(a&b){ vis=0; break; }
+        if(!a){ int16_t t; t=x0;x0=x1;x1=t; t=y0;y0=y1;y1=t; a=b; }
+        if(a&1){ y0=(int16_t)(y0+ge_md((int16_t)(y1-y0),(int16_t)(gep[13]-x0),(int16_t)(x1-x0))); x0=gep[13]; }
+        else if(a&2){ y0=(int16_t)(y0+ge_md((int16_t)(y1-y0),(int16_t)(gep[15]-x0),(int16_t)(x1-x0))); x0=gep[15]; }
+        else if(a&4){ x0=(int16_t)(x0+ge_md((int16_t)(x1-x0),(int16_t)(gep[14]-y0),(int16_t)(y1-y0))); y0=gep[14]; }
+        else        { x0=(int16_t)(x0+ge_md((int16_t)(x1-x0),(int16_t)(gep[16]-y0),(int16_t)(y1-y0))); y0=gep[16]; }
+        nit++;
+    }
+    if(nit>=8 || !vis) return;
+    {   int16_t px0,py0,px1,py1;
+        gl_map2(x0,y0,&px0,&py0); gl_map2(x1,y1,&px1,&py1);
+        gpu_line(px0,py0,px1,py1,gcol);
+    }
+}
+static void gl_point2(int16_t x,int16_t y){
+    int16_t px,py;
+    if(ge_oc(x,y)) return;                 /* outside the window */
+    gl_map2(x,y,&px,&py);
+    gpu_box(px,py,px,py,gcol,1);           /* one pixel: the device PLOT */
+}
+static void gl_point3(void){
+    int16_t w[3]; int16_t x,y;
+    ge_xform(glc3,w);
+    x=w[0]; y=w[1];
+    if(gep[12]){
+        if(w[2]<gep[23]) return;           /* behind the near plane */
+        if(w[2]>gep[24]) return;           /* beyond the far plane */
+        x=ge_md(x,gep[12],w[2]); y=ge_md(y,gep[12],w[2]);
+    }
+    gl_point2(x,y);
+}
+static void gl_line3(const int16_t *a,const int16_t *b){
+    int16_t w[6];
+    ge_xform(a,w); ge_xform(b,w+3);
+    ge_line3t(w);
+}
+/* ---- stage 10c: COMMAND LISTS (STAGE10-DESIGN.md) ---------------------
+   256 lists in 4KB slots ($100000 on the board; here a plain array), byte
+   length in the slot's first halfword. Recording flows bytes through the
+   NORMAL decoder (it must track command boundaries, or a parameter byte
+   equal to CLEND's opcode would end a list early) with execution
+   suppressed; replay feeds the stored stream back through the same
+   interpreter. Nesting is refused (error 5); running an undefined list
+   is error 6; outgrowing a slot is error 7 and the recording aborts. */
+#define CLSLOT 4096
+#define CLNUM  64                      /* 64 lists (P8X cap; PGC had 256) */
+static uint8_t clmem[CLNUM][CLSLOT];
+static uint8_t cldef[CLNUM];           /* the DEFINED bitmap */
+static int     glrec;                  /* recording into slot glrec-1 */
+static int     glrlen;                 /* bytes recorded so far */
+static int     glreplay;               /* inside a replay (no nesting) */
+
+/* length of the complete command at p (opcode included); 0 = incomplete,
+   -1 = unknown opcode. The recorder's command-boundary oracle. */
+static int gl_cmdlen(const uint8_t *p, int n){
+    int k;
+    if(n < 1) return 0;
+    switch(p[0]){
+    case 0x01: case 0x02: case 0x03: case 0x04: case 0x08: case 0x09:
+    case 0x90: case 0xA0: case 0xAF: case 0x71: return 1;
+    case 0xE0: case 0xAA: case 0xAB: case 0x70: case 0x72: case 0x74:
+    case 0x79: case 0xEB: return 2;
+    case 0x05: case 0x43: case 0x93: case 0x94: case 0x95:
+    case 0xA3: case 0xA4: case 0xA5: case 0xA8: case 0xA9:
+    case 0xB0: case 0xB1: return 3;
+    case 0x06: case 0x07: case 0x0F: case 0x73: return 4;
+    case 0x10: case 0x11: case 0x28: case 0x29: case 0x34: case 0x35:
+        return 5;
+    case 0x12: case 0x13: case 0x2A: case 0x2B:
+    case 0x91: case 0x92: case 0x96: case 0xA1:
+        return 7;
+    case 0xB2: case 0xB3: return 9;
+    case 0xA7: return 19;
+    case 0x97: return 25;
+    case 0x30: case 0x31: case 0x32: case 0x33:
+        if(n < 2) return 0;
+        k = p[1];
+        return 2 + k * ((p[0] & 2) ? 6 : 4);
+    default: return -1;
+    }
+}
+
+static int gl_exec2(const uint8_t *p, int n);
+
+/* replay list `slot` cnt times: the same interpreter, a different byte
+   source. WAIT paces on real frames in RTL; instant here (the licence). */
+static void gl_replay(int slot, int cnt){
+    const uint8_t *base = clmem[slot] + 2;
+    int len = clmem[slot][0] | (clmem[slot][1] << 8);
+    int pass, off, c;
+    glreplay = 1;
+    for(pass = 0; pass < cnt; pass++){
+        off = 0;
+        while(off < len){
+            c = gl_exec2(base + off, len - off);
+            if(c <= 0) break;
+            off += c;
         }
     }
-    if(gep[21]&2) ge_flip();
+    glreplay = 0;
 }
+
+/* one complete command at p[0..]: returns bytes consumed, 0 = incomplete.
+   NEED(n) waits for n bytes total (opcode included) before touching state. */
+#define NEED(k) do{ if(n<(k)) return 0; }while(0)
+static int16_t gl_i16(const uint8_t *p){ return (int16_t)(p[0]|(p[1]<<8)); }
+static int gl_exec1(void){ return gl_exec2(glf, glflen); }
+static int gl_exec2(const uint8_t *p, int n){
+    if(n < 1) return 0;
+    if(glrec){                             /* recording: store, don't run */
+        int L;
+        if(p[0] != 0x71){                  /* CLEND ends it (real one: we
+                                              are at a command boundary) */
+            L = gl_cmdlen(p, n);
+            if(L == -1){ gl_err(1); return 1; }   /* skipped, not stored */
+            if(L == 0 || L > n) return 0;         /* wait for the rest */
+            if(p[0]==0x70 || p[0]==0x79 || p[0]==0x72 || p[0]==0x73){
+                gl_err(5); return L;       /* no nesting */
+            }
+            if(glrlen + L > CLSLOT - 2){   /* slot overflow: abort */
+                gl_err(7); cldef[glrec-1]=0; glrec=0; return L;
+            }
+            memcpy(clmem[glrec-1] + 2 + glrlen, p, L);
+            glrlen += L;
+            return L;
+        }
+    }
+    switch(p[0]){
+    case 0x70: case 0x79: NEED(2);         /* CLBEG / CLAPP (P8X append) */
+        if(glrec || glreplay){ gl_err(5); return 2; }
+        if(p[1] >= CLNUM){ gl_err(2); return 2; }
+        if(p[0] == 0x79 && !cldef[p[1]]){ gl_err(6); return 2; }
+        glrec = p[1] + 1;
+        glrlen = (p[0] == 0x79)
+               ? (clmem[p[1]][0] | (clmem[p[1]][1] << 8)) : 0;
+        cldef[p[1]] = 0;                   /* undefined until CLEND */
+        return 2;
+    case 0x71:                             /* CLEND */
+        if(!glrec){ gl_err(5); return 1; }
+        clmem[glrec-1][0] = (uint8_t)(glrlen & 255);
+        clmem[glrec-1][1] = (uint8_t)(glrlen >> 8);
+        cldef[glrec-1] = 1; glrec = 0;
+        return 1;
+    case 0x72: NEED(2);                    /* CLRUN */
+        if(glreplay){ gl_err(5); return 2; }
+        if(p[1] >= CLNUM){ gl_err(2); return 2; }
+        if(!cldef[p[1]]){ gl_err(6); return 2; }
+        gl_replay(p[1], 1);
+        return 2;
+    case 0x73: NEED(4);                    /* CLOOP n count */
+        if(glreplay){ gl_err(5); return 4; }
+        if(p[1] >= CLNUM){ gl_err(2); return 4; }
+        if(!cldef[p[1]]){ gl_err(6); return 4; }
+        gl_replay(p[1], (int)(uint16_t)(p[2] | (p[3] << 8)));
+        return 4;
+    case 0x74: NEED(2);                    /* CLDEL */
+        if(p[1] >= CLNUM){ gl_err(2); return 2; }
+        cldef[p[1]] = 0; return 2;
+    case 0x01: return 1;                                  /* NOOP */
+    case 0x02: ge_flip(); return 1;                       /* FLIP   (P8X) */
+    case 0x03: gfb=gfbd; return 1;                        /* PGSYNC (P8X) */
+    case 0x04:                                            /* RESETF */
+        gl_state_reset();
+        memset(cldef, 0, sizeof cldef); glrec = 0;
+        gmode = 0;                     /* 10f: drawing mode back to replace */
+        return 1;
+    case 0x05: NEED(3); return 3;      /* WAIT frames: paces on real frame
+                                          ticks in RTL; instant here */
+    case 0x06: NEED(4); gcol=gl_rgb(p[1],p[2],p[3]); return 4;   /* COLOR */
+    case 0x07: NEED(4);                                   /* FLOOD: viewport */
+        gpu_box(gep[17],gep[18],gep[19],gep[20],gl_rgb(p[1],p[2],p[3]),1);
+        return 4;
+    case 0x08: gl_point2(glc2[0],glc2[1]); return 1;      /* POINT */
+    case 0x09: gl_point3(); return 1;                     /* POINT3 */
+    case 0x0F: NEED(4);                    /* CLEARS: BOTH pages, the whole
+                                              screen (the sideband lesson) */
+        { uint16_t c=gl_rgb(p[1],p[2],p[3]);
+          for(size_t i=0;i<gfpix;i++){ gfbmem[0][i]=c; gfbmem[1][i]=c; } }
+        return 4;
+    case 0x10: NEED(5); glc2[0]=gl_i16(p+1); glc2[1]=gl_i16(p+3); return 5;
+    case 0x11: NEED(5);                                   /* MOVER */
+        glc2[0]=(int16_t)(glc2[0]+gl_i16(p+1));
+        glc2[1]=(int16_t)(glc2[1]+gl_i16(p+3)); return 5;
+    case 0x12: NEED(7);                                   /* MOVE3 */
+        glc3[0]=gl_i16(p+1); glc3[1]=gl_i16(p+3); glc3[2]=gl_i16(p+5);
+        return 7;
+    case 0x13: NEED(7);                                   /* MOVER3 */
+        glc3[0]=(int16_t)(glc3[0]+gl_i16(p+1));
+        glc3[1]=(int16_t)(glc3[1]+gl_i16(p+3));
+        glc3[2]=(int16_t)(glc3[2]+gl_i16(p+5)); return 7;
+    case 0x28: case 0x29: NEED(5);                        /* DRAW / DRAWR */
+        { int16_t x=gl_i16(p+1), y=gl_i16(p+3);
+          if(p[0]==0x29){ x=(int16_t)(x+glc2[0]); y=(int16_t)(y+glc2[1]); }
+          gl_line2(glc2[0],glc2[1],x,y);
+          glc2[0]=x; glc2[1]=y; }
+        return 5;
+    case 0x2A: case 0x2B: NEED(7);                        /* DRAW3 / DRAWR3 */
+        { int16_t b[3];
+          b[0]=gl_i16(p+1); b[1]=gl_i16(p+3); b[2]=gl_i16(p+5);
+          if(p[0]==0x2B){ b[0]=(int16_t)(b[0]+glc3[0]);
+                          b[1]=(int16_t)(b[1]+glc3[1]);
+                          b[2]=(int16_t)(b[2]+glc3[2]); }
+          gl_line3(glc3,b);
+          glc3[0]=b[0]; glc3[1]=b[1]; glc3[2]=b[2]; }
+        return 7;
+    case 0x30: case 0x31: NEED(2);                        /* POLY / POLYR */
+        { int k=p[1];
+          NEED(2+4*k);
+          if(k==0){ gl_err(2); return 2; }
+          { int16_t vx[255], vy[255];
+            for(int i=0;i<k;i++){
+                vx[i]=gl_i16(p+2+4*i); vy[i]=gl_i16(p+4+4*i);
+                if(p[0]==0x31){ vx[i]=(int16_t)(vx[i]+glc2[0]);
+                                vy[i]=(int16_t)(vy[i]+glc2[1]); }
+            }
+            if(glfill && k>=3){        /* fan of viewport-clamped fills */
+                int16_t sx[255], sy[255];
+                for(int i=0;i<k;i++) gl_map2(vx[i],vy[i],&sx[i],&sy[i]);
+                for(int t=1;t+1<k;t++)
+                    ge_filltri(sx[0],sy[0],sx[t],sy[t],sx[t+1],sy[t+1]);
+            } else {
+                for(int i=0;i<k;i++)
+                    gl_line2(vx[i],vy[i],vx[(i+1)%k],vy[(i+1)%k]);
+            } }
+          return 2+4*k; }
+    case 0x32: case 0x33: NEED(2);                        /* POLY3 / POLYR3 */
+        { int k=p[1];
+          NEED(2+6*k);
+          if(k==0){ gl_err(2); return 2; }
+          { int16_t v[255][3];
+            for(int i=0;i<k;i++){
+                v[i][0]=gl_i16(p+2+6*i); v[i][1]=gl_i16(p+4+6*i);
+                v[i][2]=gl_i16(p+6+6*i);
+                if(p[0]==0x33){ v[i][0]=(int16_t)(v[i][0]+glc3[0]);
+                                v[i][1]=(int16_t)(v[i][1]+glc3[1]);
+                                v[i][2]=(int16_t)(v[i][2]+glc3[2]); }
+            }
+            if(glfill && k>=3){        /* fan of stage-9 TRIs */
+                int16_t vv[9];
+                for(int t=1;t+1<k;t++){
+                    vv[0]=v[0][0]; vv[1]=v[0][1]; vv[2]=v[0][2];
+                    vv[3]=v[t][0]; vv[4]=v[t][1]; vv[5]=v[t][2];
+                    vv[6]=v[t+1][0]; vv[7]=v[t+1][1]; vv[8]=v[t+1][2];
+                    ge_tri3(vv,1);
+                }
+            } else {
+                for(int i=0;i<k;i++) gl_line3(v[i],v[(i+1)%k]);
+            } }
+          return 2+6*k; }
+    case 0x34: case 0x35: NEED(5);                        /* RECT / RECTR */
+        { int16_t x=gl_i16(p+1), y=gl_i16(p+3);
+          if(p[0]==0x35){ x=(int16_t)(x+glc2[0]); y=(int16_t)(y+glc2[1]); }
+          if(glfill){                  /* map corners, clamp to the viewport */
+              int16_t px0,py0,px1,py1,t;
+              gl_map2(glc2[0],glc2[1],&px0,&py0); gl_map2(x,y,&px1,&py1);
+              if(px0>px1){ t=px0;px0=px1;px1=t; }
+              if(py0>py1){ t=py0;py0=py1;py1=t; }
+              if(px0<gep[17]) px0=gep[17];
+              if(px1>gep[19]) px1=gep[19];
+              if(py0<gep[18]) py0=gep[18];
+              if(py1>gep[20]) py1=gep[20];
+              if(px0<=px1 && py0<=py1) gpu_box(px0,py0,px1,py1,gcol,1);
+          } else {
+              gl_line2(glc2[0],glc2[1],x,glc2[1]);
+              gl_line2(x,glc2[1],x,y);
+              gl_line2(x,y,glc2[0],y);
+              gl_line2(glc2[0],y,glc2[0],glc2[1]);
+          } }
+        return 5;
+    case 0x43: NEED(3);                /* "CA " / "CX ": the mode switches
+                                          are their own ASCII bytes in BOTH
+                                          modes (the PGC's little joke) */
+        if(p[1]=='X' && p[2]==' ') return 3;         /* already hex */
+        if(p[1]=='A' && p[2]==' '){ glmode = 1; return 3; } /* -> ASCII */
+        gl_err(2); return 3;
+    /* ---- stage 10b: the matrix verbs ---------------------------------- */
+    case 0x90:                                            /* MDIDEN */
+        memset(glmm,0,sizeof glmm); glmm[0]=glmm[4]=glmm[8]=256;
+        gl_recompose(); return 1;
+    case 0x91: NEED(7);                                   /* MDORG */
+        glorg[0]=gl_i16(p+1); glorg[1]=gl_i16(p+3); glorg[2]=gl_i16(p+5);
+        return 7;
+    case 0x92: NEED(7);                                   /* MDSCAL (8.8) */
+        { int16_t s[12]; memset(s,0,sizeof s);
+          s[0]=gl_i16(p+1); s[4]=gl_i16(p+3); s[8]=gl_i16(p+5);
+          gl_orgt(s); gl_mcomp(s,glmm); gl_recompose(); }
+        return 7;
+    case 0x93: case 0x94: case 0x95: NEED(3);             /* MDROTX/Y/Z */
+        { int16_t s[12];
+          gl_rsub(p[0]-0x93, gl_i16(p+1), s);
+          gl_orgt(s); gl_mcomp(s,glmm); gl_recompose(); }
+        return 3;
+    case 0x96: NEED(7);                                   /* MDTRAN */
+        { int16_t s[12]; memset(s,0,sizeof s);
+          s[0]=s[4]=s[8]=256;
+          s[9]=gl_i16(p+1); s[10]=gl_i16(p+3); s[11]=gl_i16(p+5);
+          gl_mcomp(s,glmm); gl_recompose(); }
+        return 7;
+    case 0x97: NEED(25);                                  /* MDMATX: 12 int16 */
+        for(int k=0;k<12;k++) glmm[k]=gl_i16(p+1+2*k);
+        gl_recompose(); return 25;
+    case 0xA0:                                            /* VWIDEN */
+        memset(glvm,0,sizeof glvm); glvm[0]=glvm[4]=glvm[8]=256;
+        gl_recompose(); return 1;
+    case 0xA1: NEED(7);                                   /* VWRPT */
+        glvrp[0]=gl_i16(p+1); glvrp[1]=gl_i16(p+3); glvrp[2]=gl_i16(p+5);
+        gl_recompose(); return 7;
+    case 0xA3: case 0xA4: case 0xA5: NEED(3);             /* VWROTX/Y/Z */
+        { int16_t s[12];                     /* the viewer orbits: -angle */
+          gl_rsub(p[0]-0xA3, (int16_t)(0-gl_i16(p+1)), s);
+          gl_mcomp9(s,glvm); gl_recompose(); }
+        return 3;
+    case 0xA7: NEED(19);                                  /* VWMATX: 9 int16 */
+        for(int k=0;k<9;k++) glvm[k]=gl_i16(p+1+2*k);
+        gl_recompose(); return 19;
+    case 0xA8: NEED(3); glh=gl_i16(p+1); gl_recompose(); return 3;  /* DISTH */
+    case 0xA9: NEED(3); gly=gl_i16(p+1); gl_recompose(); return 3;  /* DISTY */
+    case 0xAA: NEED(2); glch=(uint8_t)(p[1]&1); gl_recompose(); return 2;
+    case 0xAB: NEED(2); glcy=(uint8_t)(p[1]&1); gl_recompose(); return 2;
+    case 0xAF:                                            /* CONVRT */
+        { int16_t w3[3]; ge_xform(glc3,w3);
+          if(gep[12]){
+              int16_t z=w3[2];
+              if(z<gep[23]) z=gep[23];       /* clamp, deterministically */
+              if(z>gep[24]) z=gep[24];
+              glc2[0]=ge_md(w3[0],gep[12],z);
+              glc2[1]=ge_md(w3[1],gep[12],z);
+          } else { glc2[0]=w3[0]; glc2[1]=w3[1]; } }
+        return 1;
+    case 0xB0: NEED(3);                                   /* PROJCT */
+        { int16_t ang=gl_i16(p+1);
+          if(ang<0 || ang>179) gl_err(2);
+          else { glproj=ang; glpmode=1; gl_recompose(); } }
+        return 3;
+    case 0xB1: NEED(3); gldist=gl_i16(p+1); gl_recompose(); return 3;
+    case 0xB2: NEED(9);                /* VWPORT x1 x2 y1 y2 -- PGC order */
+        gep[17]=gl_i16(p+1); gep[19]=gl_i16(p+3);
+        gep[18]=gl_i16(p+5); gep[20]=gl_i16(p+7); return 9;
+    case 0xB3: NEED(9);                /* WINDOW x1 x2 y1 y2 -- PGC order */
+        gep[13]=gl_i16(p+1); gep[15]=gl_i16(p+3);
+        gep[14]=gl_i16(p+5); gep[16]=gl_i16(p+7);
+        if(glpmode) gl_recompose();    /* PROJCT's K tracks window width */
+        return 9;
+    case 0xE0: NEED(2); glfill=(uint8_t)(p[1]&1); return 2;   /* PRMFIL */
+    case 0xEB: NEED(2);                                       /* LINFUN */
+        if(p[1] > 4){ gl_err(2); return 2; }
+        gmode = p[1]; return 2;
+    default: gl_err(1); return 1;      /* unknown opcode: log, skip a byte */
+    }
+}
+static void gl_hexb(uint8_t b){
+    if(glflen>=GLFMAX){ gl_err(4); return; }
+    glf[glflen++]=b;
+    for(;;){
+        int c=gl_exec1();
+        if(c<=0) break;
+        memmove(glf,glf+c,(size_t)(glflen-c));
+        glflen-=c;
+        if(glflen==0) break;
+    }
+}
+
+/* ---- stage 10d: the ASCII front-end -----------------------------------
+   A pure TRANSLATOR: keywords (long or short form, any case) become the
+   hex opcode, decimal numbers become parameters at the right width, and
+   the result flows into the unchanged hex machinery -- so recording
+   stores hex and replay is mode-independent. Grammar: delimiters are
+   space/tab/comma/semicolon/CR/LF, '-' negates, no reals (int16 only).
+   Recovery is deterministic: a keyword arriving before the previous
+   verb's parameters are complete logs error 2 and ZERO-FILLS the rest;
+   an excess or orphaned number logs error 2 and is dropped; an unknown
+   keyword logs error 1 and swallows its numbers. CA/CX switch modes in
+   the translator itself and emit nothing. */
+
+static void gl_aemit(int v){              /* one parameter, right width */
+    if(a_pi < a_bcnt) gl_hexb((uint8_t)(v & 255));
+    else { gl_hexb((uint8_t)(v & 255)); gl_hexb((uint8_t)((v >> 8) & 255)); }
+    if(a_var && a_pi == 0) a_left = (v & 255) * a_vw + 1;
+    a_pi++; a_left--;
+    if(a_left <= 0) a_act = 0;
+}
+static void gl_azfill(void){              /* early keyword: complete with 0s */
+    gl_err(2);
+    while(a_act) gl_aemit(0);
+}
+static void gl_akw(void){
+    int i;
+    awb[awn] = 0; awn = 0;
+    for(i = 0; i < GLKWN; i++)
+        if(strcmp(awb, GLKW[i].kw) == 0) break;
+    if(i == GLKWN){                        /* unknown keyword */
+        gl_err(1);
+        if(a_act) gl_azfill();
+        a_skip = 1;
+        return;
+    }
+    if(GLKW[i].op == 0xFE){ glmode = 1; return; }   /* CA */
+    if(GLKW[i].op == 0xFF){ glmode = 0; return; }   /* CX */
+    if(a_act) gl_azfill();
+    a_skip = 0;
+    gl_hexb(GLKW[i].op);
+    a_op = GLKW[i].op; a_bcnt = GLKW[i].bcnt; a_pi = 0;
+    a_var = (GLKW[i].arity == 15);
+    a_vw  = a_var ? ((GLKW[i].op & 2) ? 3 : 2) : 0;
+    a_left = a_var ? 1 : GLKW[i].arity;
+    a_act = (a_left > 0);
+}
+static void gl_anum(void){
+    int v = axneg ? -axv : axv;
+    axv = 0; axneg = 0; axhas = 0;
+    if(!a_act){ if(!a_skip) gl_err(2); return; }
+    gl_aemit(v);
+}
+static void gl_ascii(uint8_t b){
+    if(b >= 'a' && b <= 'z') b -= 32;
+    if(b == ' ' || b == 9 || b == ',' || b == ';' || b == 13 || b == 10){
+        if(awn) gl_akw();
+        else if(axhas) gl_anum();
+        return;
+    }
+    if(awn){                               /* inside a keyword */
+        if(awn < 7) awb[awn++] = (char)b;
+        return;
+    }
+    if(axhas || b == '-' || (b >= '0' && b <= '9')){
+        if(b == '-' && !axhas){ axneg = 1; axhas = 1; return; }
+        if(b >= '0' && b <= '9'){ axv = axv * 10 + (b - '0'); axhas = 1; return; }
+        gl_err(2); axv = 0; axneg = 0; axhas = 0;    /* junk in a number */
+        return;
+    }
+    if(b >= 'A' && b <= 'Z'){ awb[0] = (char)b; awn = 1; return; }
+    gl_err(2);                             /* stray byte */
+}
+
+static void gl_push(uint8_t b){
+    if(glmode) gl_ascii(b);
+    else gl_hexb(b);
+}
+
 /* POINT's answer is 16 bits and GDATA is a byte port, so it STREAMS: low byte
    then high, the same idiom as the IDENT record. Reads past the second byte
    return the high byte again (parked), so a sloppy extra read is harmless and
@@ -480,9 +1073,24 @@ static int      gascii=0;              /* -G: also render as text to stderr     
    "drop the
    pixel" is the one rule that is trivially identical in C and in Verilog. A
    real clipper would have to match exactly, which is a bug waiting to happen. */
-static void gpu_px(int x,int y,uint16_t c){
+/* gmode (declared with the engine state above): stage 10f LINFUN --
+   0 replace, 1 complement, 2 OR, 3 AND, 4 XOR. Lines/points/outlines
+   only; the raw writer below serves every fill and span. */
+static void gpu_pxr(int x,int y,uint16_t c){       /* raw: fills, spans */
     if((unsigned)x>=(unsigned)gw || (unsigned)y>=(unsigned)gh) return;
-    gfb[y*gstride+x]=c;                      /* one pixel, one 565 word */
+    gfb[y*gstride+x]=c;
+}
+static void gpu_px(int x,int y,uint16_t c){
+    uint16_t *p;
+    if((unsigned)x>=(unsigned)gw || (unsigned)y>=(unsigned)gh) return;
+    p = &gfb[y*gstride+x];
+    switch(gmode){
+    case 1:  *p = (uint16_t)~*p;   break;    /* complement: pen ignored */
+    case 2:  *p |= c;              break;
+    case 3:  *p &= c;              break;
+    case 4:  *p ^= c;              break;
+    default: *p = c;               break;    /* replace (5-7 act as 0) */
+    }
 }
 static uint16_t gpu_pixel(int x,int y){     /* colour at (x,y), for the dumps */
     return gfb[y*gstride+x];
@@ -506,14 +1114,14 @@ static void gpu_box(int x0,int y0,int x1,int y1,uint16_t c,int fill){
     if(x0>x1){ t=x0; x0=x1; x1=t; }             /* normalise: any two corners */
     if(y0>y1){ t=y0; y0=y1; y1=t; }
     if(fill){
-        for(int y=y0;y<=y1;y++) for(int x=x0;x<=x1;x++) gpu_px(x,y,c);
+        for(int y=y0;y<=y1;y++) for(int x=x0;x<=x1;x++) gpu_pxr(x,y,c);
         return;
     }
     for(int x=x0;x<=x1;x++){ gpu_px(x,y0,c); gpu_px(x,y1,c); }
     for(int y=y0;y<=y1;y++){ gpu_px(x0,y,c); gpu_px(x1,y,c); }
 }
 static void gpu_hline(int xa,int xb,int y,uint16_t c){
-    for(int x=xa;x<=xb;x++) gpu_px(x,y,c);
+    for(int x=xa;x<=xb;x++) gpu_pxr(x,y,c);   /* spans always replace */
 }
 /* Midpoint circle, integer, eight-way symmetric. Same rule as gpu_line: this is
    the golden model and the RTL transliterates it, so it stays in this form. */
@@ -621,6 +1229,7 @@ static void gpu_reset(void){
        meant white back when there were four pens, and a visible default is the
        one that costs nobody a debugging round. The RTL must match. */
     gx0=gy0=gx1=gy1=0; gcol=0xFFFF; gparm=0; gparm2=0; gerr=0; gidx=GIDLEN;
+    gmode=0;
     gpt[0]=gpt[1]=0; gpidx=2;
 }
 static void gpu_cmd(uint8_t v){
@@ -828,13 +1437,19 @@ static uint8_t memrd(uint16_t ad){
     case MDQH:   return (uint8_t)(mdq >> 8);
     case MDSTAT: return 0x00;
     case MDID:   return 0x4D;                      /* 'M' -- presence probe */
-    /* Geometry engine reads. Instant too: GESTAT never shows busy here. */
-    case GESTAT: return (uint8_t)(geerr ? 0x01 : 0x00);
-    case GEID:   return 0x45;                      /* 'E' -- presence probe */
-    /* 9c: the parameter file reads back (par[GESEL] lo/hi; reads do NOT
-       auto-increment -- only the high WRITE commits-and-increments) */
-    case GEVAL:  return (uint8_t)(gesel<23 ? ((uint16_t)gep[gesel] & 0xFF) : 0xFF);
-    case GEVALH: return (uint8_t)(gesel<23 ? ((uint16_t)gep[gesel] >> 8) : 0xFF);
+    /* The $FF40 record-engine window is RETIRED (stage 10b): reads float
+       to $FF like any absent card, so lib_g3d's GEID probe falls back. */
+    /* Stage 10 GL port. busy (bit6) never reads 1: interpretation is
+       instant, the same licence as GPU BUSY / GESTAT above. */
+    case GLSTAT: return (uint8_t)((glflen>=GLFMAX?0x80:0) |
+                                  (gleflen?0x02:0) |
+                                  (glrblen>glrbrd?0x01:0));
+    case GLRB:   return (uint8_t)(glrblen>glrbrd ? glrbf[glrbrd++] : 0);
+    case GLERR:  if(gleflen){ uint8_t e=glef[0];
+                              memmove(glef,glef+1,(size_t)--gleflen);
+                              return e; }
+                 return 0;
+    case GLID:   return 0x47;                      /* 'G' -- presence probe */
     default: return 0xFF;
     }
 }
@@ -867,6 +1482,7 @@ static void memwr(uint16_t ad,uint8_t v){
       case GCOLH:gcol=(uint16_t)((gcol&0xFF)|(v<<8)); return;
       case GPARM: gparm=v;  return;
       case GPARM2:gparm2=v; return;
+      case GMODE: gmode=(uint8_t)(v&7); return;   /* 10f: pixel-write mode */
       case GCMD: gerr=0; gpu_cmd(v); return;
     }
     /* MDU writes: pairs latch (low write clears high), MDGO computes. */
@@ -884,18 +1500,7 @@ static void memwr(uint16_t ad,uint8_t v){
        commits reg[GESEL] and auto-increments, so a matrix uploads as one
        GESEL poke + 24 GEVAL pokes. */
     switch(ad){
-      case GESEL:  gesel=v; return;
-      case GEVAL:  gevlo=v; return;
-      case GEVALH: if(gesel<23) gep[gesel]=(int16_t)((v<<8)|gevlo);
-                   gesel++; return;
-      case GEUP:   if(gecur<sizeof gemem) gemem[gecur++]=v; return;
-      case GECMD:
-        if(v==1) gecur=0;
-        else if(v==2) ge_render();
-        else if(v==3) ge_flip();
-        else if(v==4) gfb=gfbd;          /* PGSYNC: back to single-buffer */
-        else geerr=1;
-        return;
+      case GLDATA: gl_push(v); return;   /* stage 10: one command-stream byte */
     }
     /* The ATA task-file (feature + LBA) is a SHARED bus: both drives latch these
        writes; the CFHEAD DEV bit picks who executes the command. Mirror them to
@@ -933,6 +1538,7 @@ static void cf_attach(struct cf_state*c,const char*fn){   /* open/create a CF im
 int main(int argc,char**argv){
     const char*ee="eeprom.bin"; const char*cfn=0,*cfn2=0; unsigned long long lim=200000000ULL;
     ge_reset();                          /* geometry engine power-on state */
+    gl_reset();                          /* stage 10 GL power-on state */
     gfb_poweron();                       /* both pages: undefined, like DRAM */
     int lim_set=0;                       /* -l given explicitly: always honour it */
     for(int i=1;i<argc;i++){

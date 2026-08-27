@@ -37,6 +37,7 @@
 #define GY0H        0xFF2A       /* Y0 high byte (write AFTER GY0) */
 #define GX1H        0xFF2B       /* X1 high byte (write AFTER GX1) */
 #define GY1H        0xFF2C       /* Y1 high byte (write AFTER GY1) */
+#define GMODE       0xFF2E       /* write: pixel-write mode (stage 10f LINFUN) -- 0 replace, 1 complement, 2 OR, 3 AND, 4 XOR; applies to lines/points/outlines, fills always replace; 5-7 act as replace. GID1 keeps the read side */
 #define GID0        0xFF2D       /* read: $50 'P' -- card-presence signature */
 #define GCOLH       0xFF2D       /* write: pen HIGH byte (write AFTER GCOL; a GCOL write clears it) */
 #define GID1        0xFF2E       /* read: $47 'G' -- with GID0 spells PG */
@@ -48,13 +49,11 @@
 #define MDGO        0xFF34       /* write (any value): start the MDU operation */
 #define MDSTAT      0xFF35       /* read: bit7 BUSY */
 #define MDID        0xFF36       /* read: $4D 'M' -- MDU-presence probe */
-#define GESEL       0xFF40       /* geometry: parameter index (see the list above) */
-#define GEVAL       0xFF41       /* geometry: parameter value low (write latches; READ returns par[GESEL] low) */
-#define GEUP        0xFF42       /* geometry: upload one edge-list byte, cursor++ */
-#define GECMD       0xFF43       /* geometry: 1 rewind cursor / 2 RENDER / 3 FLIP / 4 PGSYNC (draw rejoins display) */
-#define GESTAT      0xFF44       /* read: bit7 BUSY, bit0 ERR (bad count) */
-#define GEID        0xFF45       /* read: $45 'E' -- geometry-engine presence probe */
-#define GEVALH      0xFF4A       /* geometry: value high -- write commits reg[GESEL] and GESEL++; READ returns par[GESEL] high */
+#define GLDATA      0xFF50       /* GL: write one command-stream byte into the FIFO */
+#define GLSTAT      0xFF51       /* read: bit7 FIFO full, bit6 busy, bit1 error pending, bit0 read-back pending */
+#define GLRB        0xFF52       /* read: pop one read-back FIFO byte */
+#define GLERR       0xFF53       /* read: pop one error FIFO byte (0 = empty) */
+#define GLID        0xFF54       /* read: $47 'G' -- graphics-language presence probe */
 #define MDAH        0xFF39       /* MDU operand a, high byte (write AFTER MDA) */
 #define MDBH        0xFF3A       /* MDU operand b, high byte */
 #define MDCH        0xFF3B       /* MDU divisor c, high byte */

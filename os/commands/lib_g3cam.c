@@ -1,6 +1,6 @@
 /* lib_g3cam.c -- the look-at camera (stage 9d). Spliced with `//#use
  * g3cam`, AFTER `//#use gfx` and `//#use g3d` (it builds on g3probe/
- * g3par and the muldiv/m3mul machinery). Split from lib_g3d so the
+ * the muldiv/m3mul machinery). Split from lib_g3d so the
  * ~6K of square-root and basis math is paid for ONLY by camera-using
  * programs -- folding it into the shared lib pushed every g3d client
  * past the 64K address space. */
@@ -76,9 +76,8 @@ int c3ross(int *a, int *b, int *o) {
  * world +y up. Aiming straight up/down degenerates the basis: the right
  * vector falls back to world +x. Engine-only; 0 when absent or when
  * aim == eye. */
-int g3cam(int *p) {
-    int i; int t;
-    if (g3probe() == 0) { return 0; }
+int g3bas(int *p, int *m) {
+    int i;
     c3f[0] = p[3] - p[0];
     c3f[1] = p[4] - p[1];
     c3f[2] = p[5] - p[2];
@@ -92,17 +91,10 @@ int g3cam(int *p) {
     n3orm(c3u);
     i = 0;
     while (i < 3) {
-        g3par(i, c3r[i]);
-        g3par(3 + i, c3u[i]);
-        g3par(6 + i, c3f[i]);
+        m[i] = c3r[i];
+        m[3 + i] = c3u[i];
+        m[6 + i] = c3f[i];
         i = i + 1;
     }
-    t = muldiv(c3r[0], p[0], 256) + muldiv(c3r[1], p[1], 256) + muldiv(c3r[2], p[2], 256);
-    g3par(9, 0 - t);
-    t = muldiv(c3u[0], p[0], 256) + muldiv(c3u[1], p[1], 256) + muldiv(c3u[2], p[2], 256);
-    g3par(10, 0 - t);
-    t = muldiv(c3f[0], p[0], 256) + muldiv(c3f[1], p[1], 256) + muldiv(c3f[2], p[2], 256);
-    g3par(11, 0 - t);
     return 1;
 }
-

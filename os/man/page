@@ -12,11 +12,13 @@ DESCRIPTION
     `flip` the pages swap the other way: what was just drawn becomes
     visible and drawing moves to the hidden page -- the manual
     double-buffer step (draw, flip, draw, flip). Flips land at the
-    panel's frame boundary, tear-free. Needs the geometry engine.
+    panel's frame boundary, tear-free. Needs the GL engine (the page
+    verbs are graphics-language opcodes since stage 10b: FLIP=2,
+    PGSYNC=3, poked at the $FF50 command FIFO).
 
 EXAMPLES
     page              screen ignoring your drawing? this fixes it
     page flip         show the hidden page you just drew
 
 SEE ALSO
-    g3d (g3flip/g3sync), rotate, tri
+    tri, gfx, basic (GRAPHICS section)

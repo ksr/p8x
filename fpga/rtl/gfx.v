@@ -35,34 +35,17 @@
 //   region 2: y--, dy -= 2*rx2; err += 4*rx2 - 4*dy  (and x++, dx += 2*ry2)
 // Every `edx +` / `edy -` below uses the NEW value, exactly as the C does after
 // its increment -- reading the old one is the classic way to get this wrong.
-`define ELL_STEP                                                              \
-  if (!er2) begin                                                             \
-    elx <= elx + 1;                                                           \
-    edx <= edx + ($signed({14'd0, ery2}) <<< 1);                              \
-    if (eerr < 0)                                                             \
-      eerr <= eerr + ($signed({24'd0, ery2}) <<< 2)                           \
-                   + ((edx + ($signed({14'd0, ery2}) <<< 1)) <<< 2);          \
-    else begin                                                                \
-      ely <= ely - 1;                                                          \
-      edy <= edy - ($signed({14'd0, erx2}) <<< 1);                            \
-      eerr <= eerr + ($signed({24'd0, ery2}) <<< 2)                           \
-                   + ((edx + ($signed({14'd0, ery2}) <<< 1)) <<< 2)           \
-                   - ((edy - ($signed({14'd0, erx2}) <<< 1)) <<< 2);          \
-    end                                                                       \
-  end else begin                                                              \
-    ely <= ely - 1;                                                            \
-    edy <= edy - ($signed({14'd0, erx2}) <<< 1);                              \
-    if (eerr > 0)                                                             \
-      eerr <= eerr + ($signed({24'd0, erx2}) <<< 2)                           \
-                   - ((edy - ($signed({14'd0, erx2}) <<< 1)) <<< 2);          \
-    else begin                                                                \
-      elx <= elx + 1;                                                          \
-      edx <= edx + ($signed({14'd0, ery2}) <<< 1);                            \
-      eerr <= eerr + ((edx + ($signed({14'd0, ery2}) <<< 1)) <<< 2)           \
-                   + ($signed({24'd0, erx2}) <<< 2)                           \
-                   - ((edy - ($signed({14'd0, erx2}) <<< 1)) <<< 2);          \
-    end                                                                       \
-  end
+// The ellipse's error step used to be an inline macro -- four arms, each
+// with two or three 40-bit carry chains, ~526 bits of adders in parallel.
+// It is now the S_ELA/S_ELB/S_ELC micro-sequence below: one shared wide
+// add/sub walks err += 4*r2 [+ 4*dx'] [- 4*dy'], and the branch flags
+// reproduce the C exactly:
+//   region 1: x++, dx += 2*ry2; err += 4*ry2 + 4*dx  (and y--, dy -= 2*rx2)
+//   region 2: y--, dy -= 2*rx2; err += 4*rx2 - 4*dy  (and x++, dx += 2*ry2)
+// Every dx'/dy' term uses the NEW value, exactly as the C does after its
+// increment. Three extra cycles per step; the panel cannot tell.
+// PROOF: tb_gl_cpx.v -- both regions, both aspect ratios, fills and
+// outlines, byte-identical to the emulator through the real SDRAM stack.
 
 module gfx (
   input             clk,
@@ -157,6 +140,11 @@ module gfx (
   reg        px_go;
   reg [15:0] px_pen;                           // the RGB565 colour to paint
   reg        px_read;                          // 1 = POINT (read, do not write)
+  reg  [2:0] gmode2d;                          // 10f LINFUN: pixel-write mode
+  reg        px_modal;                         // this command's pixels are modal
+                                               // (lines/points/outlines; fills
+                                               // and CLS always replace)
+  wire [2:0] px_mode = px_modal ? gmode2d : 3'd0;
   reg        px_word;                          // 1 = span: TWO pixels at once
   wire       px_busy;
   wire [15:0] px_out;
@@ -164,7 +152,7 @@ module gfx (
   gfx_mem u_mem(
     .clk(clk), .rst(rst), .draw_pg(draw_pg),
     .px_x(px_x), .px_y(px_y), .px_pen(px_pen), .px_go(px_go),
-    .px_read(px_read), .px_word(px_word),
+    .px_read(px_read), .px_word(px_word), .px_mode(px_mode),
     .px_busy(px_busy), .px_out(px_out),
     .e_req(e_req), .e_we(e_we), .e_word(e_word), .e_addr(e_addr),
     .e_din(e_din), .e_ack(e_ack), .e_ready(e_ready), .e_dout(e_dout));
@@ -175,7 +163,13 @@ module gfx (
              S_CLS   = 4'd6,  S_CIRC  = 4'd7,  S_CIRCF = 4'd8,
              S_POINT = 4'd9,  S_CIRCI = 4'd10, S_DONE  = 4'd11,
              S_ELLI  = 4'd12, S_ELL   = 4'd13, S_ELLR2 = 4'd14,
-             S_ELLFI = 4'd15, S_ELLSI = 5'd16;
+             S_ELLFI = 4'd15, S_ELLSI = 5'd16,
+             // the ellipse error step, serialized through ONE shared
+             // wide adder (it was ~526 bits of parallel carry chains)
+             S_ELA   = 5'd17, S_ELB   = 5'd18, S_ELC   = 5'd19,
+             // the circle error step (outline AND fill), through the
+             // SAME shared adder -- three more mux arms, zero new chains
+             S_CCA   = 5'd20, S_CCB   = 5'd21, S_CCC   = 5'd22;
   reg [4:0] st;
 
   // Bresenham / loop state
@@ -205,6 +199,25 @@ module gfx (
   reg signed [39:0] eerr;
   reg signed [17:0] elx, ely;
   reg        er2;                              // 0 = region 1, 1 = region 2
+  reg signed [39:0] eacc;            // the step's running error sum
+  reg               ebr;             // took the short branch (no 2nd axis)
+  reg [4:0]         cret;            // circle step: state to resume
+  wire signed [29:0] edx_n = edx + $signed({13'd0, ery2, 1'b0});   // new dx
+  wire signed [29:0] edy_n = edy - $signed({13'd0, erx2, 1'b0});   // new dy
+  // ONE shared 40-bit add/sub serves all three phases
+  wire signed [39:0] ella = (st == S_ELA) ? eerr
+                          : (st == S_CCA) ? {{20{cerr[19]}}, cerr} : eacc;
+  wire signed [39:0] ellb = (st == S_ELA)
+                          ? (er2 ? $signed({22'd0, erx2, 2'b00})
+                                 : $signed({22'd0, ery2, 2'b00}))
+                          : (st == S_ELB) ? {{8{edx_n[29]}}, edx_n, 2'b00}
+                          : (st == S_ELC) ? {{8{edy_n[29]}}, edy_n, 2'b00}
+                          : (st == S_CCA) ? {{21{cq[17]}}, cq, 1'b0}
+                          : (st == S_CCB) ? {{21{cr[17]}}, cr, 1'b0}
+                          : (st == S_CCC) ? ((cerr < 0) ? 40'sd3 : 40'sd5)
+                          :                 40'sd0;
+  wire signed [39:0] ell_s = (st == S_ELC || st == S_CCB) ? (ella - ellb)
+                                                          : (ella + ellb);
   reg        efill;
   reg [3:0]  stp;                              // SELFTEST step
   reg        busy;
@@ -233,6 +246,7 @@ module gfx (
       gx0 <= 0; gy0 <= 0; gx1 <= 0; gy1 <= 0;
       gcol <= 16'hFFFF;         // white, matching the emulator's reset pen
       gparm <= 0; gparm2 <= 0; gerr <= 0; gdata <= 0; gidx <= 4'd14; ptid <= 1;
+      gmode2d <= 0; px_modal <= 0;
     end else begin
       // The engine is no longer gated by anything here. It used to hold for a
       // cycle whenever the scanout claimed the shared framebuffer port -- a
@@ -348,12 +362,7 @@ module gfx (
             px_go <= 1;
             if (oct == 3'd7) begin
               oct <= 0;
-              // y++, then the error step -- exactly the C order
-              if (cerr < 0) begin cerr <= cerr + ((cq+1) <<< 1) + 1; cq <= cq + 1; end
-              else begin
-                cerr <= cerr + (((cq+1) - (cr-1)) <<< 1) + 1;
-                cq <= cq + 1; cr <= cr - 1;
-              end
+              cret <= st; st <= S_CCA;   // the error step, serialized
             end else oct <= oct + 1;
           end
         end
@@ -370,14 +379,9 @@ module gfx (
         S_CIRCF: if (!px_go && !px_busy) begin
           if (cx > sp_hi) begin
             if (oct[1:0] == 2'd3) begin
-              oct <= 0;                        // last span: take the error step
-              if (cerr < 0) begin cerr <= cerr + ((cq+1) <<< 1) + 1; cq <= cq + 1; end
-              else begin
-                cerr <= cerr + (((cq+1) - (cr-1)) <<< 1) + 1;
-                cq <= cq + 1; cr <= cr - 1;
-              end
-            end else oct <= oct + 1;
-            st <= S_CIRCI;
+              oct <= 0;                        // last span: the error step
+              cret <= S_CIRCI; st <= S_CCA;    //   (serialized), then rescan
+            end else begin oct <= oct + 1; st <= S_CIRCI; end
           end else begin
             px_x <= cx; px_y <= sp_y; px_go <= 1;
             cx <= cx + 1;
@@ -423,7 +427,7 @@ module gfx (
               px_go <= 1;
               if (cx >= ccx + elx) begin
                 cx <= ccx - elx;
-                if (oct[0]) begin oct <= 0; `ELL_STEP st <= S_ELLSI; end
+                if (oct[0]) begin oct <= 0; st <= S_ELA; end
                 else oct <= 1;
               end else cx <= cx + 1;
             end else begin
@@ -434,10 +438,42 @@ module gfx (
                 2'd3: begin px_x <= ccx-elx; px_y <= ccy-ely; end
               endcase
               px_go <= 1;
-              if (oct[1:0] == 2'd3) begin oct <= 0; `ELL_STEP end
+              if (oct[1:0] == 2'd3) begin oct <= 0; st <= S_ELA; end
               else oct <= oct + 1;
             end
           end
+        end
+
+        // circle error step: cerr += 2(cq+1)+/-... == cerr + 2cq [- 2cr]
+        // + (3|5), cq++ [cr--]. The +1 fold: 2(cq+1)+1 = 2cq+3, and
+        // 2((cq+1)-(cr-1))+1 = 2cq-2cr+5 -- exactly the C, one add per
+        // cycle through the shared adder. cerr's sign picks the branch
+        // and stays stable until S_CCC writes it.
+        S_CCA: begin eacc <= ell_s; st <= (cerr < 0) ? S_CCC : S_CCB; end
+        S_CCB: begin eacc <= ell_s; st <= S_CCC; end
+        S_CCC: begin
+          cerr <= ell_s[19:0];
+          cq <= cq + 1;
+          if (!(cerr < 0)) cr <= cr - 1;
+          st <= cret;
+        end
+
+        S_ELA: begin                           // err += 4*r2; pick branch
+          ebr  <= er2 ? (eerr > 0) : (eerr < 0);
+          eacc <= ell_s;
+          st   <= S_ELB;
+        end
+        S_ELB: begin                           // the dx' term (and commit)
+          if (!er2 || !ebr) begin
+            eacc <= ell_s; edx <= edx_n; elx <= elx + 1;
+          end
+          st <= S_ELC;
+        end
+        S_ELC: begin                           // the dy' term (and commit)
+          if (er2 || !ebr) begin
+            eerr <= ell_s; edy <= edy_n; ely <= ely - 1;
+          end else eerr <= eacc;
+          st <= efill ? S_ELLSI : S_ELL;
         end
 
         S_ELLSI: begin cx <= ccx - elx; st <= S_ELL; end
@@ -477,8 +513,14 @@ module gfx (
           4'hD: gcol  <= {wdata, gcol[7:0]};   // GCOLH (GID0's write side)
           4'h8: gparm  <= wdata;
           4'hF: gparm2 <= wdata;   // GPARM2: ELLIPSE y-radius
+          4'hE: gmode2d <= wdata[2:0];   // GMODE (10f LINFUN; GID1 reads)
           4'h5: begin
             gerr <= 0;
+            // modal pixels: PLOT, LINE, BOX outline, CIRCLE, ELLIPSE --
+            // every fill (and CLS) replaces regardless of the mode
+            px_modal <= (wdata == 8'h01 || wdata == 8'h02 ||
+                         wdata == 8'h03 || wdata == 8'h07 ||
+                         wdata == 8'h0A);
             case (wdata)
               8'h01: begin px_x<=gx0; px_y<=gy0; px_pen<=gcol; px_read<=0;
                            px_go<=1; st<=S_PIX; end

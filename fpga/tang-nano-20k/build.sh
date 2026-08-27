@@ -38,7 +38,7 @@ case "$TARGET" in
   # lcd now pulls in the SDRAM framebuffer stack: the controller, the arbiter,
   # the engine's pixel back-end, the span filler and the line-buffered scanout.
   # video_rgb.v is gone -- sdram_video.v replaces it.
-  lcd)  SRC="../rtl/p8x_cpu.v ../rtl/gfx.v ../rtl/p8x_mdu.v ../rtl/mdu_core.v ../rtl/p8x_geom.v rtl/p8x_top.v rtl/uart.v rtl/cf_sd.v rtl/sd_spi.v sdram/p8x_sdram.v sdram/sdram_arb.v sdram/gfx_mem.v sdram/gfx_span.v sdram/sdram_video.v"; TOP=p8x_top; FS=p8x_lcd.fs; YOSYS_DEFS="-DLCD" ;;
+  lcd)  SRC="../rtl/p8x_cpu.v ../rtl/gfx.v ../rtl/p8x_mdu.v ../rtl/mdu_core.v ../rtl/p8x_geom.v ../rtl/trigtab.v rtl/p8x_top.v rtl/uart.v rtl/cf_sd.v rtl/sd_spi.v sdram/p8x_sdram.v sdram/sdram_arb.v sdram/gfx_mem.v sdram/gfx_span.v sdram/sdram_video.v"; TOP=p8x_top; FS=p8x_lcd.fs; YOSYS_DEFS="-DLCD" ;;
   *)    echo "unknown target: $TARGET (use echo|cpu|lcd)"; exit 2 ;;
 esac
 
@@ -72,11 +72,18 @@ FAMILY="GW2A-18C"          # nextpnr needs this explicitly for the GW2A series;
 PACKDEV="GW2A-18C"
 
 echo "==> synthesize ($TOP)"
-yosys -p "read_verilog ${YOSYS_DEFS:-} $SRC; synth_gowin -top $TOP -json p8x.json" >synth.log 2>&1 \
+# -family gw2a unlocks DSP inference: the 16x16 products (geometry MAC,
+# mdu_core multiply, the ellipse setup) land in the chip's 24 idle
+# MULT18X18 blocks instead of ~450 LUT4 apiece -- the headroom that let
+# stage 10b place at all.
+yosys -p "read_verilog -I../rtl ${YOSYS_DEFS:-} $SRC; synth_gowin -family gw2a -top $TOP -json p8x.json" >synth.log 2>&1 \
   || { tail -20 synth.log; exit 1; }
 
 echo "==> place & route"
-nextpnr-himbaechel --json p8x.json --write pnr.json \
+# PNR_SEED: at high utilization the analytical placer's legalization is
+# seed-sensitive -- stage 10b lands only on some seeds. Set PNR_SEED=n to
+# try another; the chosen seed is part of the reproducible build.
+nextpnr-himbaechel --json p8x.json --write pnr.json --seed "${PNR_SEED:-1}" \
   --device "$DEVICE" --vopt family="$FAMILY" --vopt cst=tangnano20k.cst >pnr.log 2>&1 \
   || { tail -20 pnr.log; exit 1; }
 grep -E "LUT4:|DFF:|BSRAM:" pnr.log | sed 's/^Info:/  /' || true

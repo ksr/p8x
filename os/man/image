@@ -23,8 +23,9 @@ DESCRIPTION
     command, or by BASIC's IMAGE -- and can be lifted to a host machine
     (p8xfs get, then tools/p8img.py) as a real screenshot.
 
-    A grab reads what the panel SHOWS: if the geometry engine has been
-    page-flipping (see man g3d), the command re-joins the pages first.
+    A grab reads what the panel SHOWS: if the GL engine has been
+    page-flipping (see man page), the command re-joins the pages first
+    (a GL PGSYNC, stage 10b).
     Speed, measured: the /bin build (hand-assembled, the default) draws
     at ~560 cycles a pixel -- the 256x256 mandrill in under two seconds,
     a full-screen grab in about three. The C build at /binc/image.bin is

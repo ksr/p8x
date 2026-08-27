@@ -1,5 +1,10 @@
 # Stage 8b — the geometry engine: vertices that never meet the CPU
 
+> **HISTORICAL** — the $FF40 record interface this stage built was
+> RETIRED at stage 10b (STAGE10-DESIGN.md): the GL command port at $FF50
+> is the hardware 3D path now, reusing this stage's transform/clip/draw
+> pipeline unchanged. Kept as the design record of that pipeline.
+
 The MDU (stage 8a) proved the arithmetic datapath and measured the wall
 that remains: at 19.6 fps, two-thirds of a cube frame is p8cc-compiled
 plumbing — call frames, pool indexing, port pokes. No peripheral absorbs

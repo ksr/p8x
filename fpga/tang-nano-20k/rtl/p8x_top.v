@@ -170,9 +170,13 @@ module p8x_top(
   // The geometry engine (stage 8b, $FF40-$FF4F) needs the display and the
   // SDRAM, so it exists only on LCD builds; elsewhere the window floats to
   // $FF and lib_g3d's GEID probe falls back to the software walk.
-  wire is_geom  = (mem_addr >= 16'hFF40) && (mem_addr <= 16'hFF4F);
+  // The GL command port (stage 10, $FF50-$FF57): LCD builds only, floats
+  // to $FF elsewhere so software's GLID probe fails clean. The $FF40
+  // record-engine window is RETIRED (stage 10b) -- it floats everywhere,
+  // and lib_g3d's GEID probe falls back to the software walk.
+  wire is_gl    = (mem_addr >= 16'hFF50) && (mem_addr <= 16'hFF57);
 `else
-  wire is_geom  = 1'b0;
+  wire is_gl    = 1'b0;
 `endif
 
   // TDRE (bit 1) = transmitter free; RDRF (bit 0) = a byte is waiting.
@@ -247,6 +251,9 @@ module p8x_top(
   wire [22:0] e_addr;
   wire [15:0] e_din;
 
+
+  // stage 10c: the geometry module's SDRAM client returns -- command
+  // lists live at $100000+ and the recorder/replayer stream through it
   wire        g_req, g_we, g_ack, g_ready;
   wire [22:0] g_addr;
   wire [15:0] g_din;
@@ -274,13 +281,15 @@ module p8x_top(
   wire        draw_pg, disp_pg, frame_tick;
 
   p8x_geom GEOM(.clk(clk), .rst(rst),
-          .sel(is_geom), .a(mem_addr[3:0]),
-          .wr(cen && mem_we && is_geom),
+          .a(mem_addr[3:0]),
+          .g_req(g_req), .g_we(g_we), .g_addr(g_addr), .g_din(g_din),
+          .g_ack(g_ack), .g_ready(g_ready), .g_dout(sd_dout),
+          .gl_sel(is_gl),
+          .gl_wr(cen && mem_we && is_gl),
+          .gl_rd(cen && mem_rd && is_gl),
           .wdata(mem_dout), .rdata(geom_rdata),
           .gm_own(gm_own), .gm_wr(gm_wr), .gm_a(gm_a), .gm_wdata(gm_wdata),
           .gm_rdata(gfx_rdata),
-          .g_req(g_req), .g_we(g_we), .g_addr(g_addr), .g_din(g_din),
-          .g_ack(g_ack), .g_ready(g_ready), .g_dout(sd_dout),
           .frame_tick(frame_tick), .draw_pg(draw_pg), .disp_pg(disp_pg));
 
   gfx GFX(.clk(clk), .rst(rst), .draw_pg(draw_pg),
@@ -313,7 +322,7 @@ module p8x_top(
                      acia_dat ? rx_hold :
                      is_cf    ? cf_rdata :
                      is_gfx   ? gfx_rdata :
-                     is_geom  ? geom_rdata :
+                     is_gl    ? geom_rdata :
                      is_mdu   ? mdu_rdata : 8'hFF;
   assign mem_din = is_io ? io_rd : mem_q;
 

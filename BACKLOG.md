@@ -488,6 +488,40 @@ Nothing below has been built or measured.
       after the clone (loader-side CRC of the whole image vs host). Until
       then: a board program that crashes impossibly while emulator-clean is
       PRESUMED CORRUPT — re-clone before debugging logic.
+- [ ] **Stage 10h subset — TEXT/TSIZE/TANGLE, costed and holdable
+      (2026-08-27).** A fabric TEXT verb is ~260 LUT4 against ~100 of
+      headroom plus ~150-200 of remaining verifiable diet (the ellipse
+      INITIALIZER adds and the Bresenham setup subtracts, both now
+      bench-covered) -- borderline reachable. The design that makes it
+      cheap: a glyph IS a command list (strokes as MOVER3/DRAWR3, so
+      MDSCAL/MDROTZ give TSIZE/TANGLE through the existing compose
+      path; a trailing MOVER3 advance walks the baseline in model
+      space for free); glyphs live in a SECOND 64-slot SDRAM bank at
+      $140000; the genuinely new fabric is the counted-string
+      parameter shape (~120). First version defers TEXT-inside-lists
+      (needs a second replay context, ~+100). Tier 0 (zero fabric:
+      FONT.GL records glyphs into slots, a host `text` command emits
+      CLRUNs) ships any time and proves the glyph format first.
+- [ ] **GETLN drops input past 63 chars SILENTLY (2026-08-26, found via a
+      long `gl` one-liner).** LINEBUF is 64 bytes; GETLN just stops storing
+      (and echoing) at 63 — no beep, no error, no truncation marker. The
+      dropped tail cost an afternoon: `gl ... CLRUN 2` lost its ` 2`, which
+      left the GL decoder legally WAITING for CLRUN's parameter (no error —
+      a partial command just waits), and the next `gl` invocation's
+      stale-error drain silently consumed the downstream evidence. Fix
+      candidates: BEL on the dropped char (one JSR), a bigger LINEBUF (the
+      history ring pairs 64-byte slots — HISTLEN moves with it), or both.
+      Until then: long GL content goes in a file (`gl FILE.GL` streams it),
+      never a one-liner.
+- [ ] **GL power-up viewport is degenerate; the PGC's is full-screen
+      (2026-08-26, found replaying the manual's HOUSE example).** par[17..20]
+      power up 0,0,0,0, so a faithful PGC stream that sets WINDOW but never
+      VWPORT (legal on the PGC — its power-on viewport is the whole screen)
+      maps every vertex into one pixel. Workaround: lead with
+      `VWPORT 0 479 0 271`. Real fix to consider: power-up + RESETF default
+      par[17..20] = 0,479,0,271 in emulator + RTL (small, and it is what the
+      manual's own examples assume). Check no test relies on the degenerate
+      default before changing it.
 - [ ] **cube.bin is 161 bytes below the C-stack top (2026-08-21).** Stage-9
       library growth pushed cube.bin (36,191 B from $6A00) to $F79F against
       CSTACKTOP $F800 — a deep call chain will collide. Options: shrink the

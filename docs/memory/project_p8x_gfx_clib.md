@@ -112,3 +112,73 @@ monitor while emulator-clean; re-clone first, debug logic second
 $F800 — g3d clients must check their memory map.
 
 Related: [[p8x-project]] [[p8x-cc-caps]] [[p8x-new-command-dual]]
+
+STAGE 10 (branch graphic-test, ON SILICON 2026-08-25): the GRAPHICS
+LANGUAGE — PGC-style command port $FF50 (GLDATA/GLSTAT/GLRB/GLERR/GLID
+'G'), hex opcodes per the PG-640A manual (docs/reference/pg640a.pdf).
+10a: primitives 2D/3D + WINDOW/VWPORT (PGC x1 x2 y1 y2 order!) + FLOOD/
+CLEARS(both pages)/FLIP(02)/PGSYNC(03). 10b: card-side MD*/VW* matrices
+composed at COMMAND time into par[] (per-vertex datapath unchanged);
+PROJCT/DISTAN (dist 0 = stage-9 camera); hither/yon par[23]/[24];
+CONVRT; trig via gen_trig.py twin tables. 10c: COMMAND LISTS — 64 x 4KB
+SDRAM slots at $100000, CLBEG/CLEND/CLRUN/CLOOP/CLDEL + P8X CLAPP(79);
+recording rides the decoder pops; CLOOP deltas accumulate = fly-through.
+THE $FF40 RECORD ENGINE IS RETIRED (user-approved); lib_g3d falls back
+to software; GESTAT gone — poll GLSTAT bit6. Console: tri records/
+appends LIST 0 (the scene), rotate (DEGREES now, not brads) + camera
+(g3bas basis → VWMATX/VWRPT) replay it, cube CLOOPs a self-spinning
+frame CPU-idle, page speaks GL, image PGSYNCs via GL.
+FABRIC LESSONS: nextpnr's LUT% under-reports (ALU carry cells share LUT
+sites — 92% shown was ~114% real); big tables/scratch → BSRAM as
+clocked ROMs; a 1W2R scratchpad = ONE true-dual-port BSRAM (port A
+write-else-read; a mirrored pair = exact-fit 46/46 death, distributed =
++700 LUT); build.sh now passes -family gw2a (DSP inference) + PNR_SEED.
+Proof chain: tb_gl directed ops, c_gl_rtl_test byte-identical frames,
+92-PASS make test, board POINT probes all exact (BASIC banner is
+"P8X BASIC V0", not READY).
+STAGE 10d (2026-08-25): ASCII mode — translator front-end ahead of the
+byte source (keywords→opcodes via a 110-entry BSRAM table from
+gen_glkw.py, decimals→width-correct params, CA/CX, deterministic err
+recovery); lists store hex either way. Clients: gl command + BASIC GL
+($B3). FOURTH byte-identical frame added. THE PLACEMENT DIET that made
+it fit (18,943 LUT4/91%, seed 1, was 19,747 failing all seeds):
+nextpnr LUT4 ≈ yosys LUT4 + 2·MUX2 + 2·ALU, so kill ADDERS —
+(1) three shared muldiv-operand subtractors (md_a1-md_a2; arms load
+raw pairs), (2) one shared ±md_q post-adder (md_r/md_rn at launch),
+(3) aligned lane/slot addresses as CONCATS (bases 8/16/4K-aligned
+never carry). ANTI-LESSONS (tried, net WORSE, reverted): small reg
+arrays (3-deep tv*, par[0..8]) into BSRAM lanes; comparator banks
+time-shared behind state-keyed muxes — wide muxes are near-free as
+MUX2_LUT5 pairs, and new state-keyed selects cost more than the ALUs
+they save. Share only where the mux already exists. BOARD-VERIFIED
+2026-08-26: bitstream IN FLASH, fresh disk cloned, translator (GL
+strings) probe 2016 + native-verb probe -2048 both exact on silicon.
+SILICON TRAP FIXED: GL walker masters the 2D device -> GID reads
+garbage while busy -> GCHECK now drains GLSTAT bit6 first (emulator
+is synchronous, cannot see this class). Port-open does NOT reset the
+board; probe for state (may be sitting in BASIC); imgsend needs the
+MONITOR (reload bitstream first).
+BASIC NATIVE GL VERBS (2026-08-26): all 51 verbs are BASIC statements
+(tokens $B4-$E6, ONE generic handler + gen_glkw.py-emitted tables in
+basic/glkwtab.inc+glvtab.inc; token order is ABI append-only). They
+emit hex directly (BASIC strings cap at 32 chars — a 9-coord POLY3
+never fit; the old basic_gl_test passed on a SPLASH pixel), record
+inside CLBEG/CLEND, and DRAIN GLSTAT bit6 on exit (sync semantics; GL
+s$ = async path). COLOR drives both pens. Scenes must RESETF first
+(the boot splash leaves composed matrices).
+STAGE 10e (2026-08-26): built sim-complete then BACKED OUT by user
+choice -- ~900 LUT4 over the cliff; commit c0931f0 + revert preserve
+it for the successor board.
+STAGE 10f (2026-08-27): LINFUN PLACED at 19,048 (seed 1) and
+BOARD-VERIFIED same day (XOR -2017 / restore 31 / complement -1 --
+emulator-exact; the machine's first un-draw). Mode lives
+in the DEVICE (GMODE $FF2E write side) so BASIC LINE/PLOT honour it;
+single-pixel path only, fills always replace; GL's mode write WAITS
+for engine idle (else it overtakes an in-flight primitive -- frames
+diverged until W_LF polled GSTAT). Funded by ellipse+circle error-step
+serialization through ONE shared 40-bit adder (-255 total), made legal
+by NEW tb_gl_cpx.v (circle/ellipse RTL pixel proof -- a coverage hole:
+those paths are unreachable from GL). SIX byte-identical frames now.
+Next rungs: 10g AREA, 10h TEXT (both need room or the successor
+board); 10e resurrection when room exists. Console GL family is C-only
+(asm twins an open item). NO MERGE without ask.

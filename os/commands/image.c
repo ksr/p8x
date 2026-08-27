@@ -30,8 +30,9 @@ char path[80];
 //#use abi     /* FRESOLVE/FOPEN/FGETB/FWOPEN/FPUTB/FCLOSE/FDELETE, RDBUF */
 //#use gfx     /* gpresent/gcolor/gplot/gpoint */
 
-//#define GEID   0xFF45  /* geometry-engine probe ('E' when fitted)        */
-//#define GECMD  0xFF43  /* its command port: 4 = PGSYNC (draw = display)  */
+//#define GLID   0xFF54  /* graphics-language probe ('G' when fitted)      */
+//#define GLDATA 0xFF50  /* its command FIFO: opcode 3 = PGSYNC            */
+//#define GLSTAT 0xFF51  /* bit6 = busy: wait the PGSYNC out before grabs  */
 
 /* The pixel loops below poke the display registers RAW instead of calling
  * gplot()/gpoint(): p8cc's layered calls (gplot -> gw16 -> poke, each with
@@ -122,7 +123,10 @@ int grab(int x0, int y0, int x1, int y1) {
     if (y1 < y0) { t = y0; y0 = y1; y1 = t; }     /* (coords 0..479/271)  */
     w = x1 - x0 + 1;
     h = y1 - y0 + 1;
-    if (peek(GEID) == 69) { poke(GECMD, 4); }     /* PGSYNC: grab what shows */
+    if (peek(GLID) == 71) {                       /* PGSYNC: grab what shows */
+        poke(GLDATA, 3);
+        while (peek(GLSTAT) & 64) { }             /* wait the verb out */
+    }
     bios(FRESOLVE, path, 0);
     bios(FDELETE, 0, 0);                    /* replace an existing file   */
     bios(FRESOLVE, path, 0);                /* FDELETE walked the dir     */

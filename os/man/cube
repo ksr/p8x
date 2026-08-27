@@ -19,17 +19,16 @@ DESCRIPTION
     the display's hardware LINE. The rotation itself is the demo's own
     integer sine table, not the library's.
 
-    With the geometry engine fitted (stage 8b) the cube is uploaded to the
-    engine once and each frame is a matrix write plus one render command:
-    the CPU does ~3 ms of work, the fabric does the rest, and the page
-    flip paces the spin to the panel's refresh, tear-free. On the way in
-    it clears BOTH framebuffer pages (their power-on contents are
-    undefined -- raw memory), and on the way out it rejoins the draw and
-    display pages, so drawing afterwards behaves normally. `cube N s`
-    forces the stage-7 all-software path (~72 ms a frame) for comparison;
-    without an engine that path is the automatic fallback. Either way the
-    cube is rebuilt from constants every frame, so it never accumulates
-    rounding error and frame N looks the same on every run.
+    With the GL engine fitted (stage 10c) the cube is a STORED COMMAND
+    LIST that spins itself: the list nudges the card's modeling matrix
+    (MDROTY 6, MDROTX 3 per pass), erases, draws the 12 edges, flips
+    and waits a frame tick -- and CLOOP runs it N times with the CPU
+    completely idle. On the way in it CLEARS both framebuffer pages
+    (power-on contents are undefined) and on the way out it rejoins
+    them (PGSYNC), so drawing afterwards behaves. `cube N s` forces the
+    stage-7 all-software path (~72 ms a frame, rebuilt from constants
+    every frame so frame N is identical on every run) -- without a GL
+    engine that path is the automatic fallback.
 
 EXAMPLES
     cube            one full turn and exit

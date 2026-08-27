@@ -241,6 +241,204 @@ wild-jumped the machine); pipeline exit codes laundered a red suite
 (64K); unsigned m3mul needs magnitudes; g3d clients must watch the
 CSTACKTOP gap; a wedged board needs a human reset.
 
+**STAGE 10a IN PROGRESS (2026-08-23, branch graphic-test):** the GRAPHICS
+LANGUAGE — the PGC-class command port (STAGE10-DESIGN.md; the Matrox
+PG-640A manual at docs/reference/pg640a.pdf is the reference, its opcodes
+kept verbatim). $FF50 GLDATA feeds a 256-byte FIFO; a consumer FSM in
+p8x_geom decodes hex-mode commands and executes them through the SAME
+walker pipeline the record engine uses (S_MAC for 3D, S_CS for 2D lines,
+the T-path for fills, a new W-path for boxes), so the crown-jewel test is
+op-stream EQUALITY: tb_gl drives one scene through both interfaces and
+the register-write recordings must match element for element (they do);
+the emulator's c_gl_test does the same as a framebuffer byte-compare.
+Verbs live in 10a: COLOR/FLOOD/CLEARS (both pages!), MOVE/DRAW/POLY/RECT
+(+R, 2D window space, no matrix — PGC semantics), MOVE3/DRAW3/POLY3(+R),
+POINT/POINT3, PRMFIL, WINDOW/VWPORT (PGC x1 x2 y1 y2 order), FLIP/PGSYNC
+(P8X opcodes 02/03), WAIT (real frame pacing), CA/CX stubs, error FIFO.
+Trap paid: a walker state that raises gm_wr and drops to S_IDLE in the
+SAME cycle loses the write — gm_own is already low when the strobe lands;
+every issuing state must exit through a non-idle landing state (W_BOXC ->
+W_BOXD). POINT is a degenerate LINE (same pixel, no new datapath); POLY
+streams — one primitive per vertex, so 255 vertices never need more than
+one vertex of buffer.
+
+**STAGE 10b BUILT AND SIM-PROVEN (2026-08-24, graphic-test):** the matrix
+verbs. MD*/VW* families, PROJCT/DISTAN, DISTH/DISTY/CLIPH/CLIPY, CONVRT
+-- all card-side, all at COMMAND time: verbs compose two master matrices
+(modeling, about the MDORG pivot; viewing, about VWRPT with negated
+angles) and rebuild par[0-11]; the per-vertex datapath gained only a
+parameterized near plane (par[23]) and its far mirror (par[24], 32767 =
+off). Trig from generated twin tables (gen_trig.py -> trigtab.h +
+trigtab.v). Defaults stay stage-9 native (K=256, dist=0): PGC projection
+is opt-in via PROJCT, and RESETF's replay of the 10a scene byte-matches
+gl_b.ppm -- the compatibility keystone test. Proof chain: c_gl_mat_test
+(host replica marks + RESETF replay), tb_geom/tb_gl unchanged-green,
+c_gl_rtl_test now byte-compares BOTH scenes emulator-vs-RTL through the
+real pixel stack (10a and the 10b matrix scene: both identical, every
+pixel). Board verification pending (card was unplugged).
+
+**THE RECORD ENGINE IS RETIRED (2026-08-24, user-approved):** the $FF40
+interface (GEUP/GECMD/GESEL/GEID) is gone from emulator and RTL; the GL
+port is the one hardware 3D path, and GLSTAT bit6 now covers the walker
+(there is no GESTAT to poll). Migrations shipped with it: image (C and
+asm twin) does PGSYNC through GL, page speaks GL FLIP/PGSYNC, tri is a
+GL emitter with the software path kept for the TTL machine; rotate and
+camera answer ?No engine until GL command lists (10c) restore retained
+scenes; cube runs its software path. Suites re-anchored: c_gl_test's
+crown jewel compares GL against the LIB'S SOFTWARE WALK (stage 9 proved
+software == engine), plus a new FLIP/PGSYNC semantics part; tb_geom is
+deleted; tb_gl checks directed constants (105 exact spans). The command
+FIFO shrank to 64 bytes -- poll GLSTAT bit7, the documented contract.
+
+**AND STILL 10b DOES NOT PLACE.** The retirement bought 2,504 LUTs and
+`synth_gowin -family gw2a` (a flag build.sh had never passed) moved 19
+multipliers into the idle DSP blocks -- but nextpnr's "LUT4 92%" line
+UNDER-REPORTS on Gowin: ALU carry-chain cells occupy the same physical
+LUT sites, so true demand is LUT 19,249 + ALU 4,368 ~ 114%. p8x_geom
+alone is 8,739 LUT + 1,766 ALU -- half the chip -- dominated by the
+indexed matrix/polygon register arrays. THE FIX LANDED the same day:
+the compose scratch matrices moved into one mirrored distributed-RAM
+scratchpad (M/VR/MS/CT at fixed offsets, registered read ports, a
+job-driven writer state for identity/rotation/scale/translate/pbuf
+loads), and 10b PLACES -- 18,703 LUT4 (90%), Fmax 45 MHz, bitstream
+packed. Every suite stayed green through the rework, both pixel scenes
+still byte-identical emulator-vs-RTL. Board verification is the one
+step left (the card was unplugged).
+
+**STAGE 10c EMULATOR HALF SHIPPED (2026-08-25):** COMMAND LISTS. 256
+lists in 4KB slots; recording flows bytes through the normal decoder
+with execution suppressed (command boundaries tracked -- a parameter
+byte can never fake a CLEND); replay switches the interpreter's byte
+source; CLOOP accumulates matrix deltas per pass (the fly-through,
+proven byte-identical to N immediate frames); CLAPP is the P8X append.
+The console family speaks it: tri records/appends LIST 0 (the scene),
+rotate (DEGREES now, brads died with the sine table) and camera replay
+it with new matrices, cube CLOOPs a self-spinning frame with the CPU
+idle. Trap re-paid: cube's GL branch pushed the binary past CSTACKTOP
+and the stack ate the code (crash-to-monitor signature); deleting its
+dead stage-8b path fixed it. c_gl_list_test + the full gfx group green.
+STILL OPEN: the 10c RTL -- the SDRAM port returns (store/fetch/bitmap),
+paired with moving the walker's polygon arrays into the scratchpad RAM
+for placement headroom. Semantics are pinned; the benches will catch
+any divergence.
+
+**STAGE 10c RTL LANDED (2026-08-25): command lists in fabric, and it
+PLACES — 19,129 LUT4 (92%), Fmax 44 MHz, bitstream packed.** The SDRAM
+g-port returned for the 64 x 4KB list slots; recording rides the
+decoder's byte pops (opcode-length table as a wire, execution
+suppressed, bytes paired into halfword writes, per-byte overflow abort);
+replay is a second byte source feeding the same interpreter; CLOOP
+rewinds with matrix deltas accumulating. Getting it to PLACE took three
+rounds of fabric surgery, each with its own lesson:
+
+- The T-path's polygon arrays (qx/qy/qz + the mapped pair) moved into
+  the compose scratchpad as lanes at 64/72/80/88/96 — every access
+  became set/bubble/capture, ~15 states, zero pixels changed.
+- A 128-deep scratchpad crosses yosys's BSRAM threshold: the mirrored
+  1W2R pair became 2 blocks -> 46/46 exact-fit, placement died. Forcing
+  it distributed cost ~700 LUT — ALSO died.
+- The unlock: ONE true-dual-port block. The FSM is single-threaded and
+  never captures a port-A read in a write cycle (reads latch on the
+  bubble before; cm_qa HOLDS through writes), so port A is
+  write-else-read and port B read-only. No mirror, no mux tax.
+
+Proof chain unchanged and green through all of it: tb_gl (record draws
+nothing, CLRUN/CLOOP exact ops, errors 2/5/6/7), and c_gl_rtl_test's
+three byte-identical frames — 10a scene, 10b matrix scene, and the 10c
+CLOOP fly-through — emulator vs RTL through the real memory stack.
+**BOARD-VERIFIED 2026-08-25**: bitstream flashed, fresh disk cloned
+(4,190 sectors, every ack + 'K'), and the whole console family proven
+on silicon in one scripted session — tri builds list 0, tri k appends,
+rotate (degrees) and camera (look-at) replay it, and every POINT probe
+matched the emulator's prediction exactly: -32/2047 at the oblique
+camera view, 2016/-2048/31 on cube's three rings after `cube 32` spun
+a CLOOP list with the CPU idle. Stage 10a+10b+10c are on silicon,
+frame-exact. (Scripting note: BASIC's banner is "P8X BASIC V0", not
+READY — match that in future sessions.)
+
+**2026-08-25 (later): stage 10d — ASCII mode — built and placed.** The
+translator front-end (keywords → opcodes, decimals → width-correct
+params, CA/CX, deterministic error recovery) shipped in the emulator
+and in fabric; the proof chain grew a FOURTH byte-identical frame
+(c_gl_rtl_test: 10a scene, 10b matrix, 10c fly-through, 10d ASCII) and
+tb_gl's ASCII section. Clients: the `gl` console command (one ASCII
+line, or a .gl file streamed verbatim) and BASIC's GL statement
+(TOK_GL $B3, string expression, wrapped CA ... CX). The translator's
+~600 LUT4 blew the placement budget 10c left behind; the diet that
+landed it is written up in STAGE10-DESIGN.md ("10d as built") — the
+short of it: share arithmetic only where the routing mux already
+exists (three shared muldiv-operand subtractors, one shared ±md_q
+post-adder), and turn every aligned lane/slot address into a concat.
+Places at 18,943 LUT4 / 91%, seed 1, 40.8 MHz on the 12 MHz clock.
+The bitstream (p8x_lcd.fs) is BUILT but NOT YET FLASHED — the board
+proof (type `gl DRAW3 90,-90,300` live, run a .gl file) plus the disk
+rebuild carrying the new BASIC and /bin gl are the remaining rungs.
+(The GL console family — tri, rotate, camera, cube, page, gl — is
+C-only so far; the asm twins are an open item for the whole family.)
+
+**2026-08-27: stage 10f — LINFUN — built, proven, PLACED (19,048 LUT4,
+seed 1, 54.5 MHz).** 10e was built sim-complete first and BACKED OUT
+(~900 LUT4 over the cliff; commit c0931f0 + revert hold it for the
+successor board). LINFUN m: 0 replace / 1 complement / 2 OR / 3 AND /
+4 XOR on the single-pixel path (lines, points, outlines); fills always
+replace. The mode is a DEVICE register (GMODE, $FF2E's write side), so
+BASIC LINE/PLOT honour it too; RESETF and power-up return it to
+replace. Funding the placement took two diets that only became legal
+when **tb_gl_cpx.v closed the circle/ellipse RTL coverage hole** (those
+paths are unreachable from GL and had never had pixel proof): the
+ellipse error step through ONE shared 40-bit adder (-146) and the
+circle error step through the SAME adder (-109). Silicon-shaped trap
+found in sim: the GL walker's GMODE write must WAIT for the engine to
+go idle (W_LF polls GSTAT) or the mode overtakes a primitive still
+drawing -- the frames diverged mid-line until it did. The proof chain
+is now SIX byte-identical frames. **BOARD-VERIFIED same day**: 19,048
+bitstream flashed, fresh disk cloned, and the native-verb program ran
+on the machine -- XOR line over the blue rect read POINT = -2017
+(blue^red), the second XOR RESTORED the ground (31: the machine's
+first un-draw), and a complement PLOT on black read -1. All three
+exactly the emulator's golden values. Stage 10a-d + 10f are on
+silicon; 10e waits for room; 10g/10h remain.
+
+**2026-08-26: the GL verbs are native BASIC statements.** All 51
+(2D/3D primitives, both matrix families, lists, pages — `MDROTY A*2`,
+`POLY3 3,...`, `CLBEG 1 : MDROTY 5 : CLEND : CLOOP 1,7`) as tokens
+$B4..$E6 through ONE generic handler; the name/opcode/arity tables are
+a third gen_glkw.py output (basic/glkwtab.inc + glvtab.inc — token
+order is ABI, append-only). Native statements send hex opcodes
+directly (no 32-char string cap — which, it turned out, had silently
+TRUNCATED basic_gl_test's 40-char POLY3 string all along, while the
+test's probe pixel passed on the boot splash's green triangle;
+the test now RESETFs, clears, and probes the real sliver), they
+record inside CLBEG/CLEND, drain GLSTAT busy on exit (deterministic
+POINT() on silicon; GL s$ stays the async path), and COLOR now feeds
+both pens. man basic, man gl, and the programmer's guide carry it.
+All 11 BASIC suites green. Another disk-rebuild deliverable for the
+same bench session as the 10d bitstream.
+
+**Silicon-only trap, found by the first 10d board session: the GL
+walker MASTERS the 2D device, so $FF20-block reads (GID0/GID1
+included) answer garbage while it draws.** The emulator interprets
+synchronously and CANNOT see it. Symptom: `?No display` from the very
+next graphics statement after a GL command that leaves the walker
+busy (a CLEARS is milliseconds of box-fill). Fix: GCHECK now waits
+for GLSTAT bit 6 to clear (when GLID says a GL engine is fitted)
+before probing GID0 -- which also makes every graphics statement
+implicitly sequence after outstanding GL work.
+
+**2026-08-26: STAGE 10d BOARD-VERIFIED.** The 18,943-LUT bitstream is
+in FLASH, the fresh disk (new BASIC + gl) cloned (4,234 sectors, every
+ack + 'K'), and the same two programs as basic_gl_test ran on the
+machine itself: the GL-string program (the FABRIC ASCII translator
+end to end -- CA/keywords/decimals/CX) read POINT(364,204) = 2016,
+and the native-verb program (RESETF, CLEARS, WINDOW/VWPORT, the COLOR
+bridge, PRMFIL, CLBEG/MDROTY/CLEND recording, CLOOP 1,3+4, a native
+9-coordinate POLY3, FLIP) read -2048 -- both exactly the emulator's
+golden values. The red triangle is on the panel. Stage 10a-d are all
+on silicon, frame- and probe-exact. (Session notes: the port-open does
+NOT reset this board -- probe for state instead, and the machine may
+be sitting in BASIC from a dead session; imgsend needs the MONITOR, so
+reload the bitstream before cloning.)
+
 Three operational notes for whoever drives the board over serial next:
 
 - **Two serial clients do not error -- they silently shred each other's
