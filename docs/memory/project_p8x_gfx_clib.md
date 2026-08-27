@@ -181,4 +181,10 @@ by NEW tb_gl_cpx.v (circle/ellipse RTL pixel proof -- a coverage hole:
 those paths are unreachable from GL). SIX byte-identical frames now.
 Next rungs: 10g AREA, 10h TEXT (both need room or the successor
 board); 10e resurrection when room exists. Console GL family is C-only
-(asm twins an open item). NO MERGE without ask.
+(asm twins an open item). MERGED TO MAIN 2026-08-27 (597c0b9, user-
+approved) -- work on main again per the normal workflow. NEXT ARC
+(explored, not started): cut the design at the bus -- the FPGA becomes
+a pure GRAPHICS CARD behind a card-edge contract ($FF20-$FF57 window),
+driven first by the Mac emulator over a serial bus bridge (frees
+~2,500 LUTs: CPU+CF/SD leave -- room for 10e/10g/10h), later by a
+second CPU FPGA or the real TTL bus on a DIN 41612 card.
