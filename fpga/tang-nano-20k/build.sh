@@ -39,7 +39,13 @@ case "$TARGET" in
   # the engine's pixel back-end, the span filler and the line-buffered scanout.
   # video_rgb.v is gone -- sdram_video.v replaces it.
   lcd)  SRC="../rtl/p8x_cpu.v ../rtl/gfx.v ../rtl/p8x_mdu.v ../rtl/mdu_core.v ../rtl/p8x_geom.v ../rtl/trigtab.v rtl/p8x_top.v rtl/uart.v rtl/cf_sd.v rtl/sd_spi.v sdram/p8x_sdram.v sdram/sdram_arb.v sdram/gfx_mem.v sdram/gfx_span.v sdram/sdram_video.v"; TOP=p8x_top; FS=p8x_lcd.fs; YOSYS_DEFS="-DLCD" ;;
-  *)    echo "unknown target: $TARGET (use echo|cpu|lcd)"; exit 2 ;;
+  # `card` = the pure GRAPHICS CARD personality (CARD-EDGE-DESIGN.md): the
+  # lcd build's graphics stack, byte-identical modules, with p8x_bridge in
+  # the CPU's seat speaking the serial card-edge protocol. No CPU, no
+  # CF/SD, no microcode -- the master is on the wire (glbridge.py or
+  # p8xemu -B today, an FPGA CPU board or the TTL bus later).
+  card) SRC="../rtl/p8x_bridge.v ../rtl/gfx.v ../rtl/mdu_core.v ../rtl/p8x_geom.v ../rtl/trigtab.v rtl/p8x_gcard_top.v rtl/uart.v sdram/p8x_sdram.v sdram/sdram_arb.v sdram/gfx_mem.v sdram/gfx_span.v sdram/sdram_video.v"; TOP=p8x_gcard_top; FS=p8x_card.fs; YOSYS_DEFS="-DLCD" ;;
+  *)    echo "unknown target: $TARGET (use echo|cpu|lcd|card)"; exit 2 ;;
 esac
 
 # The CPU and LCD builds initialise their BRAM from these; regenerate so a

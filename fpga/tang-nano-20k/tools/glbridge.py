@@ -145,10 +145,18 @@ class Bridge:
         self.burst(open(path, "rb").read())
 
     def wait_idle(self, timeout=10.0):
+        # GL idle AND 2D-engine idle. GLSTAT bit6 covers the interpreter
+        # and walker, but the engine may still be draining its final span
+        # to SDRAM when it clears (found by tb_gcard: 19 pixels short of
+        # a frame) -- so poll GSTAT busy too, GCHECK's own rule.
         t0 = time.time()
         while self.status() & 0x40:
             if time.time() - t0 > timeout:
                 raise TimeoutError("glbridge: GL busy did not clear")
+            time.sleep(0.002)
+        while self.rdreg(IDX_GSTAT) & 0x80:
+            if time.time() - t0 > timeout:
+                raise TimeoutError("glbridge: 2D engine busy did not clear")
             time.sleep(0.002)
 
     def drain_errors(self):

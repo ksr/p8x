@@ -162,3 +162,7 @@ state machine ~a dozen states. Estimated well under 300 LUTs against
 - One serial port, two personalities: scripts must PING to learn who
   is listening (a monitor banner means lcd personality; PING replies
   mean card) — never assume.
+- Idle means TWO polls: GLSTAT bit6 clears while the 2D engine may
+  still be draining its final span to SDRAM (tb_gcard found the frame
+  19 pixels short). Hosts poll GLSTAT.busy then GSTAT.busy — the same
+  order GCHECK uses on the all-in-one build.
