@@ -398,6 +398,32 @@ that a native `CLOOP` blocks until the whole replay ends; launch a
 long fly-through with `GL "CLOOP 0 100"` instead — the text path does
 not wait, and the card animates while BASIC runs on.
 
+### Drawing modes — LINFUN (stage 10f)
+
+`LINFUN m` picks how drawn pixels combine with what is already on the
+screen: `0` replace (the default), `1` complement (invert the pixel
+underneath — the pen is ignored), `2` OR, `3` AND, `4` XOR. It applies
+to **lines, points and outlines from every drawing statement** — the
+mode lives in the display device, so BASIC's own `LINE` and `PLOT`
+honour it just like the GL verbs. Fills always replace.
+
+XOR is the one to know: drawing the same thing twice removes it and
+restores whatever was underneath, pixel-perfect — rubber-band cursors,
+crosshairs, and erase-by-redraw animation without touching the scene:
+
+```
+10 LINFUN 4 : COLOR RGB(31,0,0)
+20 FOR I=1 TO 20
+30 LINE 50,100,430,200
+40 LINE 50,100,430,200
+50 NEXT I
+60 LINFUN 0
+```
+
+The line strobes across the picture and everything under it survives.
+`RESETF` (and a reboot) returns the mode to replace, so a scene that
+begins with `RESETF` never inherits a stale mode.
+
 ### PRINT details
 
 Items are separated by `,` or `;`:

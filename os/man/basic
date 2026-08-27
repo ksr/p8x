@@ -167,7 +167,7 @@ THE GRAPHICS LANGUAGE (3D)
     POLYR3 CONVRT / MDIDEN MDORG MDROTX MDROTY MDROTZ MDSCAL MDTRAN
     MDMATX / VWIDEN VWRPT VWROTX VWROTY VWROTZ VWMATX DISTAN PROJCT
     DISTH DISTY CLIPH CLIPY / CLBEG CLEND CLRUN CLOOP CLDEL CLAPP /
-    FLIP PGSYNC WAIT RESETF. Verbs, parameters and order are exactly
+    FLIP PGSYNC WAIT RESETF LINFUN. Verbs, parameters and order are exactly
     the device's (man gl documents each); FLOOD and CLEARS take r,g,b
     the way the device does. COLOR is not in the list because the
     ordinary COLOR statement now sets the GL pen too -- one pen
@@ -176,6 +176,14 @@ THE GRAPHICS LANGUAGE (3D)
     reaches it. Between CLBEG and CLEND these statements RECORD instead
     of drawing, so a program can build a command list. Without a GL
     engine they say ?No GL engine.
+
+    LINFUN m (stage 10f) sets the pixel-write mode for lines, points
+    and outlines from EVERY drawing statement -- BASIC's own LINE and
+    PLOT included, since the mode lives in the display device:
+    0 replace, 1 complement (invert what is there; pen ignored), 2 OR,
+    3 AND, 4 XOR. Draw a line twice in XOR and it is GONE, the picture
+    under it intact -- the rubber-band idiom. Fills always replace.
+    RESETF (or a reboot) returns to replace mode.
 
     Start a scene with RESETF: the machine draws a boot splash through
     the same engine, and matrix verbs COMPOSE -- without a reset your

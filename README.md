@@ -7,6 +7,12 @@ implementation](fpga/) of the same microarchitecture that boots the same
 unmodified monitor, OS and toolchain. Both run the microcode from
 `microcode/genucode.py`, and the C emulator is the golden reference for both.
 
+The FPGA build also carries a **PGC-class graphics engine** (480x272
+RGB565 panel, hardware 3D transforms, command lists, a fabric-parsed
+graphics language modeled on the Matrox PG-640A) — see the
+[theory of operation](docs/p8x-graphics-theory.md) and the
+[graphics programmer's guide](docs/p8x-graphics-guide.md).
+
 New to the abbreviations and signal names? See [GLOSSARY.md](GLOSSARY.md).
 
 ## Architecture

@@ -9,6 +9,8 @@ their source in `../basic/`, `../os/`, etc.)
 | [p8x-system-design.md](p8x-system-design.md) | System and card-by-card architecture reference; §3.2 has the as-built control-word layout. |
 | [p8x-card-standards.md](p8x-card-standards.md) | Design rules every plug-in card must follow (form factor, connector, decoupling, etc.). |
 | [p8x-monitor.md](p8x-monitor.md) | ROM monitor command reference and memory map. |
+| [p8x-graphics-theory.md](p8x-graphics-theory.md) | Graphics engine theory of operation — the machines inside the card, from bus window to panel. |
+| [p8x-graphics-guide.md](p8x-graphics-guide.md) | Graphics programmer's guide — drawing from the shell, BASIC, C and assembly. |
 | [mount-drives-design.md](mount-drives-design.md) | Design record for the Unix-style `/D1` mount of the second CF — shipped; kept for the reasoning. |
 | [p8x-programmers-guide.pdf](p8x-programmers-guide.pdf) | Generated instruction-set reference (built by `../microcode/gen_progguide.py`). |
 

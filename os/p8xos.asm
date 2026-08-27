@@ -5024,6 +5024,8 @@ MHELP:   .byte CR,LF
          .byte CR,LF
          .ascii "man name      show a command's manual page (/man)"
          .byte CR,LF
+         .ascii "graphics      tri/rotate/camera/cube/gl in /bin -- man gl, man basic"
+         .byte CR,LF
          .ascii "mkdir path    create a subdirectory"
          .byte CR,LF
          .ascii "name args     run a program by bare name, found on PATH (/bin)"

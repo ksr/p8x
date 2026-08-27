@@ -44,6 +44,13 @@ EXAMPLE
         return 0;
     }
 
+DRAWING MODES (stage 10f)
+    The device register GMODE ($FF2E write side) sets the pixel-write
+    mode for lines, points and outlines: 0 replace, 1 complement,
+    2 OR, 3 AND, 4 XOR. Fills and gcls() always replace. There is no
+    C wrapper yet -- poke(0xFF2E, m), or issue GL "LINFUN m" (man gl);
+    the mode applies to this library's lines and outlines too.
+
 NOTES
     The source is /lib/lib_gfx.c on this disk (and os/commands/lib_gfx.c in
     the repo); hand-asm programs get the same addresses as equates from
@@ -51,4 +58,4 @@ NOTES
     own statements -- see man basic, GRAPHICS.
 
 SEE ALSO
-    g3d, cube, basic
+    g3d, gl, cube, basic
