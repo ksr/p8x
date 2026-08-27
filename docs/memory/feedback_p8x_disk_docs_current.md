@@ -9,7 +9,9 @@ metadata:
 ---
 
 The SD disk carries the project's Markdown docs at /docs (README,
-GLOSSARY, GFXTHEORY, GFXGUIDE, BASGUIDE, MONITOR, SYSDESIGN, CARDSTD —
+GLOSSARY, GFXTHEORY, GFXGUIDE, BASGUIDE, MONITOR, SYSDESIGN, CARDSTD, and the
+GENERATED PROGGUIDE + ISACARD (regenerate via gen_progguide.py /
+gen_isa_card.py, never edit) —
 installed by os/run.sh's `_mddoc` list, read on-target with the `md`
 command). After changing any shipped doc — or adding one — (1) add or
 update its `_mddoc` line in run.sh (12-byte P8XFS names), and (2) get
