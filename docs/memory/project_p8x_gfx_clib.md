@@ -166,5 +166,17 @@ never fit; the old basic_gl_test passed on a SPLASH pixel), record
 inside CLBEG/CLEND, and DRAIN GLSTAT bit6 on exit (sync semantics; GL
 s$ = async path). COLOR drives both pens. Scenes must RESETF first
 (the boot splash leaves composed matrices).
-Next rungs: 10e read-back, 10f-h LINFUN/AREA/TEXT. Console GL family
-is C-only (asm twins an open item). NO MERGE without ask.
+STAGE 10e (2026-08-26): built sim-complete then BACKED OUT by user
+choice -- ~900 LUT4 over the cliff; commit c0931f0 + revert preserve
+it for the successor board.
+STAGE 10f (2026-08-27): LINFUN PLACED at 19,048 (seed 1). Mode lives
+in the DEVICE (GMODE $FF2E write side) so BASIC LINE/PLOT honour it;
+single-pixel path only, fills always replace; GL's mode write WAITS
+for engine idle (else it overtakes an in-flight primitive -- frames
+diverged until W_LF polled GSTAT). Funded by ellipse+circle error-step
+serialization through ONE shared 40-bit adder (-255 total), made legal
+by NEW tb_gl_cpx.v (circle/ellipse RTL pixel proof -- a coverage hole:
+those paths are unreachable from GL). SIX byte-identical frames now.
+Next rungs: 10g AREA, 10h TEXT (both need room or the successor
+board); 10e resurrection when room exists. Console GL family is C-only
+(asm twins an open item). NO MERGE without ask.

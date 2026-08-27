@@ -195,6 +195,7 @@ static uint16_t gx0,gy0,gx1,gy1;
    the register page is full, and GID0's read-only signature leaves its write
    decode free (see STAGE6-DESIGN.md). */
 static uint16_t gcol;
+static uint8_t  gmode;                 /* 10f LINFUN pixel-write mode */
 static uint8_t  gparm, gparm2, gerr;
 /* GDATA ($FF27) is the one read-back port: it streams the IDENT record after an
    IDENT command, and otherwise holds the result of the last POINT. gidx is the
@@ -680,7 +681,7 @@ static int gl_cmdlen(const uint8_t *p, int n){
     case 0x01: case 0x02: case 0x03: case 0x04: case 0x08: case 0x09:
     case 0x90: case 0xA0: case 0xAF: case 0x71: return 1;
     case 0xE0: case 0xAA: case 0xAB: case 0x70: case 0x72: case 0x74:
-    case 0x79: return 2;
+    case 0x79: case 0xEB: return 2;
     case 0x05: case 0x43: case 0x93: case 0x94: case 0x95:
     case 0xA3: case 0xA4: case 0xA5: case 0xA8: case 0xA9:
     case 0xB0: case 0xB1: return 3;
@@ -783,6 +784,7 @@ static int gl_exec2(const uint8_t *p, int n){
     case 0x04:                                            /* RESETF */
         gl_state_reset();
         memset(cldef, 0, sizeof cldef); glrec = 0;
+        gmode = 0;                     /* 10f: drawing mode back to replace */
         return 1;
     case 0x05: NEED(3); return 3;      /* WAIT frames: paces on real frame
                                           ticks in RTL; instant here */
@@ -962,6 +964,9 @@ static int gl_exec2(const uint8_t *p, int n){
         if(glpmode) gl_recompose();    /* PROJCT's K tracks window width */
         return 9;
     case 0xE0: NEED(2); glfill=(uint8_t)(p[1]&1); return 2;   /* PRMFIL */
+    case 0xEB: NEED(2);                                       /* LINFUN */
+        if(p[1] > 4){ gl_err(2); return 2; }
+        gmode = p[1]; return 2;
     default: gl_err(1); return 1;      /* unknown opcode: log, skip a byte */
     }
 }
@@ -1068,9 +1073,24 @@ static int      gascii=0;              /* -G: also render as text to stderr     
    "drop the
    pixel" is the one rule that is trivially identical in C and in Verilog. A
    real clipper would have to match exactly, which is a bug waiting to happen. */
-static void gpu_px(int x,int y,uint16_t c){
+/* gmode (declared with the engine state above): stage 10f LINFUN --
+   0 replace, 1 complement, 2 OR, 3 AND, 4 XOR. Lines/points/outlines
+   only; the raw writer below serves every fill and span. */
+static void gpu_pxr(int x,int y,uint16_t c){       /* raw: fills, spans */
     if((unsigned)x>=(unsigned)gw || (unsigned)y>=(unsigned)gh) return;
-    gfb[y*gstride+x]=c;                      /* one pixel, one 565 word */
+    gfb[y*gstride+x]=c;
+}
+static void gpu_px(int x,int y,uint16_t c){
+    uint16_t *p;
+    if((unsigned)x>=(unsigned)gw || (unsigned)y>=(unsigned)gh) return;
+    p = &gfb[y*gstride+x];
+    switch(gmode){
+    case 1:  *p = (uint16_t)~*p;   break;    /* complement: pen ignored */
+    case 2:  *p |= c;              break;
+    case 3:  *p &= c;              break;
+    case 4:  *p ^= c;              break;
+    default: *p = c;               break;    /* replace (5-7 act as 0) */
+    }
 }
 static uint16_t gpu_pixel(int x,int y){     /* colour at (x,y), for the dumps */
     return gfb[y*gstride+x];
@@ -1094,14 +1114,14 @@ static void gpu_box(int x0,int y0,int x1,int y1,uint16_t c,int fill){
     if(x0>x1){ t=x0; x0=x1; x1=t; }             /* normalise: any two corners */
     if(y0>y1){ t=y0; y0=y1; y1=t; }
     if(fill){
-        for(int y=y0;y<=y1;y++) for(int x=x0;x<=x1;x++) gpu_px(x,y,c);
+        for(int y=y0;y<=y1;y++) for(int x=x0;x<=x1;x++) gpu_pxr(x,y,c);
         return;
     }
     for(int x=x0;x<=x1;x++){ gpu_px(x,y0,c); gpu_px(x,y1,c); }
     for(int y=y0;y<=y1;y++){ gpu_px(x0,y,c); gpu_px(x1,y,c); }
 }
 static void gpu_hline(int xa,int xb,int y,uint16_t c){
-    for(int x=xa;x<=xb;x++) gpu_px(x,y,c);
+    for(int x=xa;x<=xb;x++) gpu_pxr(x,y,c);   /* spans always replace */
 }
 /* Midpoint circle, integer, eight-way symmetric. Same rule as gpu_line: this is
    the golden model and the RTL transliterates it, so it stays in this form. */
@@ -1209,6 +1229,7 @@ static void gpu_reset(void){
        meant white back when there were four pens, and a visible default is the
        one that costs nobody a debugging round. The RTL must match. */
     gx0=gy0=gx1=gy1=0; gcol=0xFFFF; gparm=0; gparm2=0; gerr=0; gidx=GIDLEN;
+    gmode=0;
     gpt[0]=gpt[1]=0; gpidx=2;
 }
 static void gpu_cmd(uint8_t v){
@@ -1461,6 +1482,7 @@ static void memwr(uint16_t ad,uint8_t v){
       case GCOLH:gcol=(uint16_t)((gcol&0xFF)|(v<<8)); return;
       case GPARM: gparm=v;  return;
       case GPARM2:gparm2=v; return;
+      case GMODE: gmode=(uint8_t)(v&7); return;   /* 10f: pixel-write mode */
       case GCMD: gerr=0; gpu_cmd(v); return;
     }
     /* MDU writes: pairs latch (low write clears high), MDGO computes. */

@@ -38,6 +38,9 @@ module gfx_mem(
   input                px_go,         // 1-cycle start
   input                px_read,       // 1 = POINT: read, do not write
   input                px_word,       // 1 = span: cover the aligned PAIR
+  input         [2:0]  px_mode,       // 10f LINFUN: 0 replace, 1 complement,
+                                      //   2 OR, 3 AND, 4 XOR (5-7 = replace);
+                                      //   nonzero turns the write into RMW
   output reg           px_busy,
   output reg    [15:0] px_out,        // POINT result (0 if off-screen)
 
@@ -64,7 +67,7 @@ module gfx_mem(
   // its whole 13-bit-wrap class of bugs, is gone rather than survived.
   wire [22:0] addr = {3'd0, draw_pg, yw[8:0], xw[8:0], 1'b0};
 
-  localparam S_IDLE=0, S_RD=1, S_WR=3;
+  localparam S_IDLE=0, S_RD=1, S_RM=2, S_WR=3;
   reg [1:0] st;
 
   always @(posedge clk) begin
@@ -85,20 +88,30 @@ module gfx_mem(
           e_addr  <= addr;
           if (px_read) begin
             e_we <= 0; e_word <= 0; e_req <= 1; st <= S_RD;
-          end else begin
+          end else if (px_mode == 3'd0 || px_mode > 3'd4 || px_word) begin
             // A pixel IS a 16-bit word half: one masked write, nothing to
-            // preserve -- still no read-modify-write. The SDRAM bus is 32
-            // bits with byte lanes, so the controller writes the addressed
-            // half (or, for px_word spans, the whole aligned pair).
+            // preserve -- no read-modify-write in replace mode. The SDRAM
+            // bus is 32 bits with byte lanes, so the controller writes the
+            // addressed half (or, for px_word spans, the whole pair).
             e_we <= 1; e_din <= px_pen; e_word <= px_word;
             e_req <= 1; st <= S_WR;
+          end else begin
+            // 10f LINFUN: read the pixel, combine, write it back
+            e_we <= 0; e_word <= 0; e_req <= 1; st <= S_RM;
           end
         end
       end
 
-      // Only POINT reads now.
-      S_RD:  if (e_ready) begin
+      S_RD:  if (e_ready) begin              // POINT read
         px_out <= e_dout; px_busy <= 0; st <= S_IDLE;
+      end
+
+      S_RM:  if (e_ready) begin              // LINFUN read-modify-write
+        e_din <= (px_mode == 3'd1) ? ~e_dout
+               : (px_mode == 3'd2) ? (e_dout | px_pen)
+               : (px_mode == 3'd3) ? (e_dout & px_pen)
+               :                     (e_dout ^ px_pen);
+        e_we <= 1; e_word <= 0; e_req <= 1; st <= S_WR;
       end
 
       S_WR:  if (e_ack) begin        // a write has no answer; the ack is the end

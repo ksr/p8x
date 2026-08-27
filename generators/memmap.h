@@ -37,6 +37,7 @@
 #define GY0H        0xFF2A       /* Y0 high byte (write AFTER GY0) */
 #define GX1H        0xFF2B       /* X1 high byte (write AFTER GX1) */
 #define GY1H        0xFF2C       /* Y1 high byte (write AFTER GY1) */
+#define GMODE       0xFF2E       /* write: pixel-write mode (stage 10f LINFUN) -- 0 replace, 1 complement, 2 OR, 3 AND, 4 XOR; applies to lines/points/outlines, fills always replace; 5-7 act as replace. GID1 keeps the read side */
 #define GID0        0xFF2D       /* read: $50 'P' -- card-presence signature */
 #define GCOLH       0xFF2D       /* write: pen HIGH byte (write AFTER GCOL; a GCOL write clears it) */
 #define GID1        0xFF2E       /* read: $47 'G' -- with GID0 spells PG */

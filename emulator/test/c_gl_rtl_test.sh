@@ -53,4 +53,13 @@ cmp gl_lc_l.ppm $SD/tb_gl_lpx.ppm || fail "RTL fly-through frame differs from em
   && ./tbgla | grep -q "TB-GL-APX: DONE" ) || fail "tb_gl_apx did not finish"
 cmp gl_b.ppm $SD/tb_gl_apx.ppm || fail "RTL ASCII frame differs from the hex frame"
 
-echo "C-GL-RTL TEST: PASS (RTL and emulator framebuffers byte-identical: 10a scene, 10b matrix, 10c fly-through, 10d ASCII)"
+# 7: the stage-10f LINFUN scene -- XOR/complement/OR through the real
+#    read-modify-write pixel path (needs gl_lf.ppm)
+sh c_gl_lf_test.sh > /dev/null || fail "emulator LINFUN suite failed"
+( cd $SD && iverilog -g2012 -I../../rtl -o tbglf tb_gl_fpx.v ../../rtl/p8x_geom.v \
+      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v gfx_mem.v \
+      gfx_span.v sdram_arb.v p8x_sdram.v sdram_video.v sdram_chip.v \
+  && ./tbglf | grep -q "TB-GL-FPX: DONE" ) || fail "tb_gl_fpx did not finish"
+cmp gl_lf.ppm $SD/tb_gl_fpx.ppm || fail "RTL LINFUN frame differs from emulator frame"
+
+echo "C-GL-RTL TEST: PASS (RTL and emulator framebuffers byte-identical: 10a scene, 10b matrix, 10c fly-through, 10d ASCII, 10f LINFUN)"

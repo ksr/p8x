@@ -396,7 +396,48 @@ byte-identical emulator-vs-RTL (c_gl_rtl_test), 92-PASS make test.
     Sharing pays only where the routing mux ALREADY exists.
 - **10e — read-back + error FIFOs.** MATXRD/FLAGRD/CLRD/CLMOD; error
   codes for every parse/exec fault.
+
+  **10e status (2026-08-26): built and sim-complete, then BACKED OUT** --
+  the rung costs ~900 LUT4 more than the chip has (20,047 vs the
+  ~19,150 cliff). The full implementation (emulator + BASIC GLRD + RTL
+  with the state-mirror design) lives in commit c0931f0 and its revert;
+  resurrect it when the successor board (or a retirement) frees room.
+  10f was taken instead -- smaller appetite, see below.
+
 - **10f — drawing modes.** LINFUN on the line/fill writers.
+
+  **10f as built (2026-08-27; emulator + RTL + BASIC SHIPPED, placed at
+  19,048 LUT4/91% seed 1, Fmax 54.5 MHz).**
+
+  - **LINFUN m** (EB, modes 0 replace / 1 complement / 2 OR / 3 AND /
+    4 XOR; >4 = error 2; RESETF and power-up = replace). The mode is
+    DEVICE state: a new GMODE register on the 2D engine ($FF2E's write
+    side, GID1 keeps the read; gen_memmap is the authority), so BASIC's
+    direct LINE/PLOT honour it exactly like GL primitives.
+  - **Scope: the single-pixel path only** -- lines, points, outlines
+    (PLOT/LINE/BOX outline/CIRCLE/ELLIPSE). Every fill and CLS always
+    replaces: the burst span filler stays a burst, and the modal
+    classifier is one per-command bit at dispatch. Divergence noted in
+    man gl.
+  - **RMW in gfx_mem**: nonzero mode turns the pixel write into
+    read-combine-write (one new state; the read path existed for
+    POINT). ~3 extra cycles per modal pixel, invisible at 12 MHz.
+  - **Ordering**: the GL walker's GMODE write WAITS for the engine to
+    go idle (W_LF polls GSTAT like S_LINB) -- found the hard way when
+    a mode change overtook a line still drawing and the frames diverged
+    mid-primitive. The emulator is synchronous; the contract is
+    "LINFUN applies between primitives".
+  - **The placement fight, round two**: 10f's gross cost was ~360 LUT4
+    (19,303, all seeds failed). Funded by TWO now-verifiable diets:
+    the ellipse error step serialized through ONE shared 40-bit
+    add/sub (was ~526 bits of parallel carry chains; -146) and the
+    circle error step (outline + fill) routed through the SAME shared
+    adder as three more mux arms (-109). Both became legitimate only
+    after **tb_gl_cpx.v** closed a real coverage hole: circle/ellipse
+    had never had RTL pixel proof (they are unreachable from GL). The
+    proof chain now has SIX byte-identical frames: 10a scene, 10b
+    matrix, 10c fly-through, 10d ASCII, 10f LINFUN, and the $FF20
+    circle/ellipse device scene.
 - **10g — flood fill.** FLOOD/AREA seed-fill walker.
 - **10h — text.** TEXT + attributes + user-defined glyphs (TDEFIN),
   drawn in window space through the 2D pipeline.

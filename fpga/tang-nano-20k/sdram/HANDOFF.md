@@ -376,6 +376,24 @@ rebuild carrying the new BASIC and /bin gl are the remaining rungs.
 (The GL console family — tri, rotate, camera, cube, page, gl — is
 C-only so far; the asm twins are an open item for the whole family.)
 
+**2026-08-27: stage 10f — LINFUN — built, proven, PLACED (19,048 LUT4,
+seed 1, 54.5 MHz).** 10e was built sim-complete first and BACKED OUT
+(~900 LUT4 over the cliff; commit c0931f0 + revert hold it for the
+successor board). LINFUN m: 0 replace / 1 complement / 2 OR / 3 AND /
+4 XOR on the single-pixel path (lines, points, outlines); fills always
+replace. The mode is a DEVICE register (GMODE, $FF2E's write side), so
+BASIC LINE/PLOT honour it too; RESETF and power-up return it to
+replace. Funding the placement took two diets that only became legal
+when **tb_gl_cpx.v closed the circle/ellipse RTL coverage hole** (those
+paths are unreachable from GL and had never had pixel proof): the
+ellipse error step through ONE shared 40-bit adder (-146) and the
+circle error step through the SAME adder (-109). Silicon-shaped trap
+found in sim: the GL walker's GMODE write must WAIT for the engine to
+go idle (W_LF polls GSTAT) or the mode overtakes a primitive still
+drawing -- the frames diverged mid-line until it did. The proof chain
+is now SIX byte-identical frames. Board rungs (flash + disk + live
+proof) pending.
+
 **2026-08-26: the GL verbs are native BASIC statements.** All 51
 (2D/3D primitives, both matrix families, lists, pages — `MDROTY A*2`,
 `POLY3 3,...`, `CLBEG 1 : MDROTY 5 : CLEND : CLOOP 1,7`) as tokens

@@ -109,7 +109,9 @@ GLKW[] = {
     { "WI", 0xB3, 0, 4 },
     { "PRMFIL", 0xE0, 1, 1 },
     { "PF", 0xE0, 1, 1 },
+    { "LINFUN", 0xEB, 1, 1 },
+    { "LF", 0xEB, 1, 1 },
     { "CA", 0xFE, 0, 0 },
     { "CX", 0xFF, 0, 0 },
 };
-#define GLKWN 110
+#define GLKWN 112

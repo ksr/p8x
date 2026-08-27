@@ -433,13 +433,21 @@
     cmx[557] = 16'h2020;
     cmx[558] = 16'h2020;
     cmx[559] = 16'h05E0;
-    cmx[560] = 16'h4341;
-    cmx[561] = 16'h2020;
-    cmx[562] = 16'h2020;
-    cmx[563] = 16'h00FE;
-    cmx[564] = 16'h4358;
+    cmx[560] = 16'h4C49;
+    cmx[561] = 16'h4E46;
+    cmx[562] = 16'h554E;
+    cmx[563] = 16'h05EB;
+    cmx[564] = 16'h4C46;
     cmx[565] = 16'h2020;
     cmx[566] = 16'h2020;
-    cmx[567] = 16'h00FF;
-    // 110 entries; the matcher stops at the first zero word
-    cmx[568] = 16'h0000;
+    cmx[567] = 16'h05EB;
+    cmx[568] = 16'h4341;
+    cmx[569] = 16'h2020;
+    cmx[570] = 16'h2020;
+    cmx[571] = 16'h00FE;
+    cmx[572] = 16'h4358;
+    cmx[573] = 16'h2020;
+    cmx[574] = 16'h2020;
+    cmx[575] = 16'h00FF;
+    // 112 entries; the matcher stops at the first zero word
+    cmx[576] = 16'h0000;

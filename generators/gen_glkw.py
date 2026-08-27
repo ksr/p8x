@@ -93,6 +93,8 @@ VERBS = [
     ("VWPORT",  "VWP",  0xB2, 0, 4),
     ("WINDOW",  "WI",   0xB3, 0, 4),
     ("PRMFIL",  "PF",   0xE0, 1, 1),
+    # stage 10f (appended: BASIC token order is ABI)
+    ("LINFUN",  "LF",   0xEB, 1, 1),
     ("CA",      "CA",   0xFE, 0, 0),   # mode switches: internal markers
     ("CX",      "CX",   0xFF, 0, 0),
 ]

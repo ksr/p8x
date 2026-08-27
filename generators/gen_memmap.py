@@ -69,6 +69,7 @@ MAP = [
     ('I/O ports ($FF00-$FFFF)', 'GY1H', 0xFF2C, 'Y1 high byte (write AFTER GY1)'),
     # Presence signature. An absent card floats the bus to $FF, so a single magic
     # byte is not enough to detect one; two fixed bytes at fixed addresses are.
+    ('I/O ports ($FF00-$FFFF)', 'GMODE', 0xFF2E, 'write: pixel-write mode (stage 10f LINFUN) -- 0 replace, 1 complement, 2 OR, 3 AND, 4 XOR; applies to lines/points/outlines, fills always replace; 5-7 act as replace. GID1 keeps the read side'),
     ('I/O ports ($FF00-$FFFF)', 'GID0', 0xFF2D, "read: $50 'P' -- card-presence signature"),
     # The register page is FULL, and GID0/GID1 are read-only -- their write
     # decodes are the only spare corners. GCOLH takes $FF2D's write side so a

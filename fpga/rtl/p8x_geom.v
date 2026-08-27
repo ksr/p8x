@@ -75,6 +75,7 @@ module p8x_geom (
   reg [6:0]  state;
   localparam S_IDLE=0,  S_NEXT=6,
              S_MAC=9,   S_MACW=10, S_MACB=105, S_MACC=106,
+             W_LF=107,  W_LF2=108,
              S_NC=11,   S_NCW=12,  S_PRJ=13,  S_PRJW=14,
              S_CS=15,   S_CSW=16,  S_MAP=17,  S_MAPW=18,
              S_LIN=19,  S_LINB=20, S_LINC=21, S_FLIP=22,
@@ -107,6 +108,7 @@ module p8x_geom (
   reg [15:0] rcol;                   // the GL pen (COLOR)
   reg        rfill;                  // T-path: FILL (GL fills always set it)
   reg        tri_m;                  // MAC writeback goes to tv (TRI mode)
+  reg [2:0]  glfm;                   // 10f: LINFUN mode on its way to GMODE
   reg [3:0]  k;                      // fetch word / general microstep
   reg [15:0] tvx [0:2];              // TRI: transformed vertices
   reg [15:0] tvy [0:2];
@@ -300,7 +302,7 @@ module p8x_geom (
     opok = 1'b1; opn = 5'd0;
     case (srcb)
       8'h01,8'h02,8'h03,8'h04,8'h08,8'h09,8'h90,8'hA0,8'hAF,8'h71: opn = 5'd0;
-      8'hE0,8'hAA,8'hAB,8'h70,8'h72,8'h74,8'h79: opn = 5'd1;
+      8'hE0,8'hAA,8'hAB,8'h70,8'h72,8'h74,8'h79,8'hEB: opn = 5'd1;
       8'h05,8'h43,8'h93,8'h94,8'h95,8'hA3,8'hA4,8'hA5,
       8'hA8,8'hA9,8'hB0,8'hB1: opn = 5'd2;
       8'h06,8'h07,8'h0F,8'h73: opn = 5'd3;
@@ -494,7 +496,7 @@ module p8x_geom (
       glpoly3 <= 0; glpfill <= 0; glph <= 0; gred <= 0;
       c2x <= 0; c2y <= 0; c3x <= 0; c3y <= 0; c3z <= 0;
       glfill <= 0; glproj <= 16'd60; gldist <= 16'd500;
-      glact <= 0; gl2d <= 0; glcls <= 0; wcnt <= 0;
+      glact <= 0; gl2d <= 0; glcls <= 0; wcnt <= 0; glfm <= 0;
       rcol <= 16'hFFFF;                                     // GL pen: white
       par[0] <= 16'd256; par[4] <= 16'd256; par[8] <= 16'd256;  // identity
       par[1]<=0; par[2]<=0; par[3]<=0; par[5]<=0; par[6]<=0; par[7]<=0;
@@ -1284,7 +1286,16 @@ module p8x_geom (
         end
         J_RST2: begin                  // warm reset, part 2: VR identity
           jsrc <= 0; jbase <= VB; jlast <= 4'd8; jcnt <= 0;
-          jnext <= S_IDLE; state <= J_WR;
+          jnext <= W_LF; state <= J_WR;  // part 3: GMODE back to replace
+        end
+
+        W_LF: begin                    // the mode must not overtake a
+          gm_a <= 4'h6;                //   primitive still drawing: wait
+          if (gm_a == 4'h6 && !gm_rdata[7] && !gm_wr) state <= W_LF2;
+        end
+        W_LF2: begin                   // one GMODE write ($FF2E's write side)
+          gm_a <= 4'hE; gm_wdata <= {5'd0, glfm}; gm_wr <= 1;
+          state <= S_NEXT;
         end
 
         // pivot: T = org - (S*org)>>8 -- ms cells fetched from the RAM
@@ -1489,7 +1500,7 @@ module p8x_geom (
             8'h02: begin flip_pend <= 1; state <= S_FLIP; end   // FLIP
             8'h03: draw_pg <= disp_pg;                    // PGSYNC
             8'h04: begin                                  // RESETF
-              cldef <= 64'd0; rec <= 0;
+              cldef <= 64'd0; rec <= 0; glfm <= 0;
               par[0] <= 16'd256; par[4] <= 16'd256; par[8] <= 16'd256;
               par[1]<=0; par[2]<=0; par[3]<=0; par[5]<=0; par[6]<=0; par[7]<=0;
               par[9]<=0; par[10]<=0; par[11]<=0;
@@ -1652,6 +1663,14 @@ module p8x_geom (
                            state <= C_MLA;
                          end end
             8'hE0: glfill <= pbuf[0][0];                  // PRMFIL
+            8'hEB:                                        // LINFUN (10f)
+              if (pbuf[0] > 8'd4) begin
+                if (ef_wp - ef_rp != 4'd8) begin
+                  ef[ef_wp[2:0]] <= 8'd2; ef_wp <= ef_wp + 4'd1; end
+              end else begin
+                glfm <= pbuf[0][2:0];
+                glact <= 1; state <= W_LF;                // one GMODE write
+              end
             // ---- stage 10c: the list verbs -----------------------------
             8'h71: begin                                  // stray CLEND
               if (ef_wp - ef_rp != 4'd8) begin            //   (a real one is

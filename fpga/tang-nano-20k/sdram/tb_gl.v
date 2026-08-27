@@ -78,6 +78,7 @@ module tb;
   reg [15:0] op_pen [0:255];
   reg        op_pg  [0:255];        // draw page at issue time (CLEARS check)
   integer    nops = 0;
+  reg [7:0]  rmode = 8'hAA;                  // GMODE mirror (AA = never written)
   always @(posedge clk) begin
     if (gbusy != 0) gbusy <= gbusy - 4'd1;
     if (gm_own && gm_wr) begin
@@ -91,6 +92,7 @@ module tb;
         4'hB: rx1   <= {gm_wdata, rx1[7:0]};
         4'hC: ry1   <= {gm_wdata, ry1[7:0]};
         4'h4: rcolr <= {8'd0, gm_wdata};
+        4'hE: rmode <= gm_wdata;             // GMODE (10f LINFUN)
         4'hD: rcolr <= {gm_wdata, rcolr[7:0]};
         4'h5: begin
           gbusy <= 4'd6;
@@ -379,8 +381,29 @@ module tb;
       errors = errors + 1;
     end
 
+    // ---- stage 10f: LINFUN ---------------------------------------------
+    glb(8'hEB); glb(8'd3);                              // LINFUN 3 (AND)
+    gl_wait_idle;
+    if (rmode !== 8'd3) begin
+      $display("FAIL: LINFUN 3 wrote GMODE=%02X, want 03", rmode);
+      errors = errors + 1;
+    end
+    glb(8'hEB); glb(8'd9);                              // bad mode -> err2,
+    gl_wait_idle;                                       //   GMODE untouched
+    rd_glerr(e0);
+    if (e0 !== 8'd2 || rmode !== 8'd3) begin
+      $display("FAIL: LINFUN 9 err=%0d GMODE=%02X, want 2 03", e0, rmode);
+      errors = errors + 1;
+    end
+    glb(8'h04);                                         // RESETF -> replace
+    gl_wait_idle;
+    if (rmode !== 8'd0) begin
+      $display("FAIL: RESETF left GMODE=%02X, want 00", rmode);
+      errors = errors + 1;
+    end
+
     if (errors == 0)
-      $display("TB-GL: PASS (GLID, 3D scene ops exact incl. 105 spans, 2D verbs exact, RECT clamp box, CLEARS both pages, WAIT paces, error FIFO, FIFO backpressure, LISTS exact, ASCII short-form line == hex op)");
+      $display("TB-GL: PASS (GLID, 3D scene ops exact incl. 105 spans, 2D verbs exact, RECT clamp box, CLEARS both pages, WAIT paces, error FIFO, FIFO backpressure, LISTS exact, ASCII short-form line == hex op, LINFUN reaches GMODE + RESETF clears)");
     else $display("TB-GL: %0d FAILURES", errors);
     $finish;
   end

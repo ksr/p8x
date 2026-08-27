@@ -54,6 +54,8 @@
         .byte $E5
         .ascii "PRMFIL"
         .byte $E6
+        .ascii "LINFUN"
+        .byte $E7
         .ascii "FLOOD"
         .byte $B8
         .ascii "MOVER"

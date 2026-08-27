@@ -7,7 +7,8 @@
       "Bash(emulator/p8xemu *)",
       "Bash(../../emulator/p8xemu *)",
       "Bash(iverilog *)",
-      "Bash(xxd *)"
+      "Bash(xxd *)",
+      "Bash(nextpnr-himbaechel *)"
     ]
   }
 }
