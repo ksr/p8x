@@ -152,7 +152,22 @@ state machine ~a dozen states. Estimated well under 300 LUTs against
   7. THEN: 10e resurrection in the roomy build; 10g/10h become
      schedulable again.
 
-## 8. Risks, named
+## 8. Status (2026-08-28): FIRST LIGHT — the ladder is climbed
+
+Every rung proven, same day: glbridge.py mock-proven; the `card`
+target PLACES at 16,808 LUT4 / 81% with BSRAM 5/46 (41 blocks + ~2.2k
+LUT freed -- the 10e/10g/10h room); tb_gcard renders the 10a frame
+byte-identical THROUGH protocol bytes; p8xemu -B drives a MockCard
+from a full BASIC session. Then the board: PING answered P8XG v1 with
+the full identity (P/G/G/1/B), a register-driven PLOT read back $F800
+exactly, the PG-640A house streamed from the Mac, recorded to a list
+and drawn -- a graphics card with NO CPU ON THE CHIP -- and p8xemu -B
+ran the LINFUN rubber-band program against real silicon: -2017 / 31 /
+-1, the emulator's golden values from the card's actual framebuffer.
+The card bitstream ran from SRAM for first light; flashing it (or
+keeping lcd in flash) is the user's personality choice.
+
+## 8b. Risks, named
 
 - UART integrity at speed: imgsend's history (transport acks are not
   content checks) — the protocol's per-burst ack helps, a periodic

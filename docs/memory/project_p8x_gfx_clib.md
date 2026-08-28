@@ -195,5 +195,8 @@ room), tb_gcard (the 10a frame byte-identical THROUGH protocol bytes),
 p8xemu -B (BASIC session against MockCard over a pty; GLDATA as single
 writes because P8X software already polls bit7). Mock gotcha: identity
 regs have CONSTANT read sides split from write sides (GCOLH vs GID0 at
-$FF2D). REMAINING: board first light (glbridge ping, a gl scene, then
-p8xemu -B against silicon), lcd-target regression stays mandatory.
+$FF2D). FIRST LIGHT 2026-08-28: PING v1 + identity on real silicon, PLOT
+readback $F800 exact, the PG-640A house drawn with NO CPU ON CHIP,
+and p8xemu -B ran the LINFUN program against the card: -2017/31/-1
+golden-exact. IDEA 1 COMPLETE. Card bitstream in SRAM only (flash
+personality = user's choice); lcd-target regression stays mandatory.
