@@ -82,7 +82,13 @@ class MockCard:
                 self.writes.append((idx, val))
                 self.rx = self.rx[2:]
             elif c & 0x40:                                   # READ
-                self.tx += bytes([self.reg[c & 0x3F]])
+                # identity registers have CONSTANT read sides on real
+                # silicon, split from their write sides (GCOLH writes
+                # share $FF2D with GID0's read) -- model that split
+                i = c & 0x3F
+                const = {0x0D: ord('P'), 0x0E: ord('G'), 0x34: ord('G'),
+                         0x35: 1, 0x36: ord('B')}
+                self.tx += bytes([const.get(i, self.reg[i])])
                 self.rx = self.rx[1:]
             else:                                            # unknown: ignore
                 self.rx = self.rx[1:]

@@ -1413,9 +1413,46 @@ static int rx_char(void){
     if(read(0,&c,1)==1) return c;
     term_restore(); exit(0);
 }
+/* ---- stage CARD-EDGE: the -B bridge client ------------------------------
+   With -B <tty>, every access to the CARD WINDOWS -- the 2D device
+   ($FF20-$FF2F) and the GL port ($FF50-$FF57) -- is forwarded over the
+   serial card-edge protocol (CARD-EDGE-DESIGN.md; the C twin of
+   glbridge.py) to a REAL graphics card. Everything else (CPU, RAM,
+   storage, console, MDU) stays local. The local framebuffer is never
+   painted in this mode: pixels exist on the card's panel, POINT reads
+   come back over the wire, and -g dumps stay black by design.
+   GLDATA writes go as single WRITEs -- the running P8X software already
+   polls GLSTAT bit7, exactly as it would on the real bus. */
+static int bridge_fd = -1;
+static int bridge_card(uint16_t ad){
+    return (ad>=0xFF20&&ad<=0xFF2F) || (ad>=0xFF50&&ad<=0xFF57);
+}
+static uint8_t bridge_recv1(void){
+    uint8_t b; int n; int spins=0;
+    for(;;){
+        n=read(bridge_fd,&b,1);
+        if(n==1) return b;
+        if(++spins>2000000){
+            fprintf(stderr,"p8xemu: bridge silent -- card detached?\n");
+            exit(1);
+        }
+    }
+}
+static void bridge_wr(uint16_t ad,uint8_t v){
+    uint8_t m[2];
+    m[0]=(uint8_t)(0x80|((ad-0xFF20)&0x3F)); m[1]=v;
+    if(write(bridge_fd,m,2)!=2){ perror("bridge write"); exit(1); }
+}
+static uint8_t bridge_rd(uint16_t ad){
+    uint8_t m=(uint8_t)(0x40|((ad-0xFF20)&0x3F));
+    if(write(bridge_fd,&m,1)!=1){ perror("bridge write"); exit(1); }
+    return bridge_recv1();
+}
+
 static uint8_t memrd(uint16_t ad){
     if(ad<RAMBASE) return eeprom[ad];
     if(ad<IOBASE) return ram[ad-RAMBASE];
+    if(bridge_fd>=0 && bridge_card(ad)) return bridge_rd(ad);
     switch(ad){
     case 0xFF00: return switches;                             /* switches (-s) */
     case 0xFF04: return 0x02 | (rx_ready()?0x01:0x00);        /* TDRE|RDRF */
@@ -1456,6 +1493,7 @@ static uint8_t memrd(uint16_t ad){
 static void memwr(uint16_t ad,uint8_t v){
     if(ad<RAMBASE){ fprintf(stderr,"[warn] write to EEPROM %04X\n",ad); return; }
     if(ad<IOBASE){ ram[ad-RAMBASE]=v; return; }
+    if(bridge_fd>=0 && bridge_card(ad)){ bridge_wr(ad,v); return; }
     if(ad==0xFF02){                                          /* LEDs */
         if(led_trace && v!=leds)
             fprintf(stderr,"[LED $FF02] $%02X  %c%c%c%c%c%c%c%c\n", v,
@@ -1550,6 +1588,29 @@ int main(int argc,char**argv){
         else if(!strcmp(argv[i],"-s")) switches=(uint8_t)strtoul(argv[++i],0,0);  /* $FF00 input byte */
         else if(!strcmp(argv[i],"-L")) led_trace=1;                               /* trace $FF02 writes */
         else if(!strcmp(argv[i],"-N")) norx=1;     /* console RX always empty (FPGA co-sim) */
+        else if(!strcmp(argv[i],"-B")){            /* card-edge bridge client */
+            const char *bdev=argv[++i];
+            struct termios bt;
+            bridge_fd=open(bdev,O_RDWR|O_NOCTTY|O_NONBLOCK);
+            if(bridge_fd<0){ perror(bdev); return 1; }
+            if(tcgetattr(bridge_fd,&bt)==0){
+                cfmakeraw(&bt);
+                cfsetispeed(&bt,B115200); cfsetospeed(&bt,B115200);
+                bt.c_cc[VMIN]=0; bt.c_cc[VTIME]=0;
+                tcsetattr(bridge_fd,TCSANOW,&bt);
+            }
+            /* PING: refuse to run against the wrong personality */
+            { uint8_t p=0x00, r[5]; int got=0;
+              if(write(bridge_fd,&p,1)!=1){ perror("bridge"); return 1; }
+              while(got<5) r[got++]=bridge_recv1();
+              if(memcmp(r,"P8XG",4)!=0){
+                  fprintf(stderr,"p8xemu: -B device is not a graphics card "
+                          "(PING got %02X %02X %02X %02X)\n",r[0],r[1],r[2],r[3]);
+                  return 1;
+              }
+              fprintf(stderr,"[bridge: graphics card protocol v%d on %s]\n",r[4],bdev);
+            }
+        }
         else if(!strcmp(argv[i],"-g")) gdump=argv[++i];   /* write the display as a PPM */
         else if(!strcmp(argv[i],"-G")) gascii=1;          /* ... and/or as text to stderr */
         else if(!strcmp(argv[i],"-i")){            /* scripted console input (FPGA co-sim) */
