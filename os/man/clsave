@@ -1,0 +1,24 @@
+NAME
+    clsave - save a recorded GL command list to a file
+
+SYNOPSIS
+    clsave n file
+
+DESCRIPTION
+    Reads GL command list n back from the card (the stage-10e CLRD
+    verb) and writes its raw hex command bytes to file. The file is a
+    pure hex-mode GL stream, so it replays directly:
+
+        gl file                      draw it now
+        gl CLBEG 3 + gl file + gl CLEND    ...or re-record it as a list
+
+    With clsave, a scene built on the card -- tri's list 0, house's
+    list 1, anything CLBEG recorded -- survives power: record, save,
+    replay any day. An undefined list reports ?No such list.
+
+    The read-back FIFO is small and the card stalls when it fills;
+    clsave's drain loop is the flow control, so lists up to the full
+    4KB slot save fine.
+
+SEE ALSO
+    gl, tri, house, man gl (CLRD, CLBEG/CLEND)

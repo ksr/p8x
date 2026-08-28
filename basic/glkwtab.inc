@@ -56,6 +56,12 @@
         .byte $E6
         .ascii "LINFUN"
         .byte $E7
+        .ascii "FLAGRD"
+        .byte $E8
+        .ascii "MATXRD"
+        .byte $E9
+        .ascii "AREABC"
+        .byte $ED
         .ascii "FLOOD"
         .byte $B8
         .ascii "MOVER"
@@ -96,6 +102,8 @@
         .byte $DF
         .ascii "CLIPY"
         .byte $E0
+        .ascii "CLMOD"
+        .byte $EB
         .ascii "FLIP"
         .byte $B4
         .ascii "WAIT"
@@ -108,3 +116,7 @@
         .byte $C3
         .ascii "RECT"
         .byte $C7
+        .ascii "CLRD"
+        .byte $EA
+        .ascii "AREA"
+        .byte $EC

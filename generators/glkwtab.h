@@ -111,7 +111,19 @@ GLKW[] = {
     { "PF", 0xE0, 1, 1 },
     { "LINFUN", 0xEB, 1, 1 },
     { "LF", 0xEB, 1, 1 },
+    { "FLAGRD", 0x61, 1, 1 },
+    { "FR", 0x61, 1, 1 },
+    { "MATXRD", 0x62, 1, 1 },
+    { "MX", 0x62, 1, 1 },
+    { "CLRD", 0x76, 1, 1 },
+    { "CRD", 0x76, 1, 1 },
+    { "CLMOD", 0x78, 2, 3 },
+    { "CM", 0x78, 2, 3 },
+    { "AREA", 0xC0, 0, 0 },
+    { "AR", 0xC0, 0, 0 },
+    { "AREABC", 0xC1, 3, 3 },
+    { "ARB", 0xC1, 3, 3 },
     { "CA", 0xFE, 0, 0 },
     { "CX", 0xFF, 0, 0 },
 };
-#define GLKWN 112
+#define GLKWN 124

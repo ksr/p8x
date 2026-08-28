@@ -26,8 +26,9 @@ char path[80];
 
 //#define GLID   0xFF54  /* GL presence probe: 'G' when fitted            */
 //#define GLDATA 0xFF50  /* the command FIFO, one byte at a time          */
-//#define GLSTAT 0xFF51  /* bit7 FIFO full, bit6 busy, bit1 error queued  */
+//#define GLSTAT 0xFF51  /* bit7 full, bit6 busy, bit1 error, bit0 rb     */
 //#define GLERR  0xFF53  /* pop one error byte (0 = none)                 */
+//#define GLRB   0xFF52  /* pop one read-back byte (stage 10e)            */
 
 char *ap;
 
@@ -37,9 +38,32 @@ int glb(int v) {
     return 0;
 }
 
+int hxd(int d) {
+    if (d < 10) { putchar(48 + d); } else { putchar(55 + d); }
+    return 0;
+}
+
 int drain() {
-    int e; int bad;
-    while (peek(GLSTAT) & 64) { }
+    int e; int bad; int n; int v;
+    /* pop read-back bytes WHILE waiting for idle: a CLRD bigger than
+     * the card's 32-byte RB FIFO stalls the walker until we drain, so
+     * waiting for bit6 first would deadlock. Bytes print as hex, 16
+     * per line (FLAGRD/MATXRD words are little-endian pairs). */
+    n = 0;
+    v = 1;
+    while (v) {
+        if (peek(GLSTAT) & 1) {
+            e = peek(GLRB);
+            if (n == 0) { putchar('R'); putchar('B'); putchar(':'); }
+            putchar(32);
+            hxd((e / 16) & 15);
+            hxd(e & 15);
+            n = n + 1;
+            if (n == 16) { putchar(10); n = 0; }
+        }
+        else { if ((peek(GLSTAT) & 64) == 0) { v = 0; } }
+    }
+    if (n) { putchar(10); }
     bad = 0;
     e = peek(GLERR);
     while (e) {

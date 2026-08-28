@@ -95,6 +95,14 @@ VERBS = [
     ("PRMFIL",  "PF",   0xE0, 1, 1),
     # stage 10f (appended: BASIC token order is ABI)
     ("LINFUN",  "LF",   0xEB, 1, 1),
+    # stage 10e read-back (appended AFTER 10f: token order is ABI)
+    ("FLAGRD",  "FR",   0x61, 1, 1),
+    ("MATXRD",  "MX",   0x62, 1, 1),
+    ("CLRD",    "CRD",  0x76, 1, 1),
+    ("CLMOD",   "CM",   0x78, 2, 3),   # n b off: one-byte patch (P8X shrink)
+    # stage 10g (appended: BASIC token order is ABI)
+    ("AREA",    "AR",   0xC0, 0, 0),
+    ("AREABC",  "ARB",  0xC1, 3, 3),
     ("CA",      "CA",   0xFE, 0, 0),   # mode switches: internal markers
     ("CX",      "CX",   0xFF, 0, 0),
 ]
@@ -130,7 +138,8 @@ with open(os.path.join(HERE, "..", "fpga", "rtl", "glkwtab.vh"), "w") as f:
         w += 4
     f.write("    // %d entries; the matcher stops at the first zero word\n" % len(entries))
     f.write("    cmx[%d] = 16'h0000;\n" % w)
-print("wrote fpga/rtl/glkwtab.vh (ends at scratch word %d of 1024)" % (w+1))
+assert w + 1 < 768, "keyword ROM reached the RBS mirror region (768) -- move RBS in p8x_geom.v"
+print("wrote fpga/rtl/glkwtab.vh (ends at scratch word %d of 1024; RBS mirror at 768)" % (w+1))
 
 # ---- BASIC's native GL statements ---------------------------------------
 # Long forms only (BASIC style; GL "..." still takes the short forms).

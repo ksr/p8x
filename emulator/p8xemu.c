@@ -233,6 +233,7 @@ static uint16_t mdu_exec(uint16_t a, uint16_t b, uint16_t c){
    int32 and arithmetic-shifts (FLOOR), muldiv truncates toward zero --
    both per the contract. Rendering is instant (the GPU-BUSY licence). */
 static void gpu_line(int x0,int y0,int x1,int y1,uint16_t c);
+static void gpu_hline(int xa,int xb,int y,uint16_t c);
 static void gpu_box(int x0,int y0,int x1,int y1,uint16_t c,int fill);
 /* RETIRED (stage 10b): the $FF40 record-engine interface -- GEUP list
    upload, GECMD RENDER, the GESEL/GEVAL register file, GEID. The GL
@@ -493,7 +494,9 @@ static void ge_line3t(const int16_t *w){
 #define GLFMAX 2048          /* holds the largest command: POLY3 255 verts */
 static uint8_t glf[GLFMAX];  static int glflen;         /* command FIFO */
 static uint8_t glef[16];     static int gleflen;        /* error FIFO */
-static uint8_t glrbf[256];   static int glrblen, glrbrd; /* read-back (10e) */
+static uint8_t glrbf[4352];  static int glrblen, glrbrd; /* read-back (10e):
+        sized for a full CLRD burst -- the RTL streams through a small
+        FIFO with backpressure; instant interpretation is the licence */
 static uint8_t glmode;       /* 0 = hex (10a default; 1 = ASCII, stage 10d) */
 static char awb[8];  static int awn;      /* keyword accumulator */
 static int  axv, axneg, axhas;            /* number accumulator */
@@ -519,6 +522,9 @@ static uint8_t glpmode;      /* 0 = native focal (par12 as-is); 1 = PROJCT */
 /* error codes: 1 unknown opcode, 2 bad parameter, 3 mode not fitted
    (ASCII before stage 10d), 4 command-FIFO overflow */
 static void gl_err(uint8_t code){ if(gleflen<(int)sizeof glef) glef[gleflen++]=code; }
+/* stage 10e read-back: bytes for the CPU to pop at GLRB (GLSTAT bit 0) */
+static void gl_rbb(uint8_t b){ if(glrblen<(int)sizeof glrbf) glrbf[glrblen++]=b; }
+static void gl_rbw(int16_t v){ gl_rbb((uint8_t)(v&255)); gl_rbb((uint8_t)((v>>8)&255)); }
 
 static void gl_mat_reset(void){            /* 10b matrix state to power-up */
     memset(glmm,0,sizeof glmm); glmm[0]=glmm[4]=glmm[8]=256;
@@ -641,6 +647,50 @@ static void gl_point2(int16_t x,int16_t y){
     gl_map2(x,y,&px,&py);
     gpu_box(px,py,px,py,gcol,1);           /* one pixel: the device PLOT */
 }
+/* ---- stage 10g: AREA / AREABC -- scanline boundary seed fill --------------
+   Fills from the mapped 2D current point with the pen, bounded by `bc`
+   (AREABC's colour, or the pen itself for AREA -- the classic boundary
+   fill: anything that is neither boundary nor already-pen is interior).
+   The EXACT algorithm below -- span probe left then right, paint the
+   span, seed one push per interior run on the rows above and below,
+   explicit stack, overflow = error 8 with a deterministic partial fill
+   -- is the contract: the RTL walker must reproduce it step for step,
+   and the SDRAM stack cap (16384 entries) is part of the semantics. */
+#define AFCAP 16384
+static uint16_t afsx[AFCAP], afsy[AFCAP];
+static int gl_af_in(int x,int y,uint16_t bc){
+    uint16_t v;
+    if(x<0||x>=480||y<0||y>=272) return 0;
+    v = gfb[y*gstride+x];
+    return v != bc && v != gcol;
+}
+static void gl_afill(uint16_t bc){
+    int sp=0, x, y, L, R, row, i;
+    int16_t px, py;
+    if(ge_oc(glc2[0],glc2[1])){ gl_err(2); return; }   /* seed off-window */
+    gl_map2(glc2[0],glc2[1],&px,&py);
+    if(!gl_af_in(px,py,bc)) return;                    /* seeded on bound */
+    afsx[0]=(uint16_t)px; afsy[0]=(uint16_t)py; sp=1;
+    while(sp){
+        sp--; x=afsx[sp]; y=afsy[sp];
+        if(!gl_af_in(x,y,bc)) continue;
+        L=x; while(gl_af_in(L-1,y,bc)) L--;
+        R=x; while(gl_af_in(R+1,y,bc)) R++;
+        gpu_hline(L,R,y,gcol);                         /* paint the span */
+        for(row=y-1; row<=y+1; row+=2){
+            if(row<0||row>=272) continue;
+            i=L;
+            while(i<=R){
+                if(gl_af_in(i,row,bc)){
+                    if(sp>=AFCAP){ gl_err(8); return; }  /* fill overflow */
+                    afsx[sp]=(uint16_t)i; afsy[sp]=(uint16_t)row; sp++;
+                    while(i<=R && gl_af_in(i,row,bc)) i++;
+                } else i++;
+            }
+        }
+    }
+}
+
 static void gl_point3(void){
     int16_t w[3]; int16_t x,y;
     ge_xform(glc3,w);
@@ -682,7 +732,10 @@ static int gl_cmdlen(const uint8_t *p, int n){
     case 0x01: case 0x02: case 0x03: case 0x04: case 0x08: case 0x09:
     case 0x90: case 0xA0: case 0xAF: case 0x71: return 1;
     case 0xE0: case 0xAA: case 0xAB: case 0x70: case 0x72: case 0x74:
-    case 0x79: case 0xEB: return 2;
+    case 0x79: case 0xEB: case 0x61: case 0x62: case 0x76: return 2;
+    case 0xC0: return 1;
+    case 0xC1: return 4;                   /* AREABC r g b */
+    case 0x78: return 5;                   /* CLMOD n b off */
     case 0x05: case 0x43: case 0x93: case 0x94: case 0x95:
     case 0xA3: case 0xA4: case 0xA5: case 0xA8: case 0xA9:
     case 0xB0: case 0xB1: return 3;
@@ -732,8 +785,12 @@ static int gl_exec2(const uint8_t *p, int n){
     if(n < 1) return 0;
     if(glrec){                             /* recording: store, don't run */
         int L;
-        if(p[0] != 0x71){                  /* CLEND ends it (real one: we
-                                              are at a command boundary) */
+        if(p[0] != 0x71 && p[0] != 0x43){  /* CLEND ends it; the CA/CX mode
+                                              switch is TRANSPORT, never
+                                              content -- it executes even
+                                              mid-recording (a multi-line
+                                              gl session re-enters ASCII
+                                              between lines) */
             L = gl_cmdlen(p, n);
             if(L == -1){ gl_err(1); return 1; }   /* skipped, not stored */
             if(L == 0 || L > n) return 0;         /* wait for the rest */
@@ -779,6 +836,42 @@ static int gl_exec2(const uint8_t *p, int n){
     case 0x74: NEED(2);                    /* CLDEL */
         if(p[1] >= CLNUM){ gl_err(2); return 2; }
         cldef[p[1]] = 0; return 2;
+    /* ---- stage 10e: read-back ---- */
+    case 0x61: NEED(2);                    /* FLAGRD n -> RB (man gl table) */
+        switch(p[1]){
+        case 1: gl_rbw((int16_t)glfill); break;
+        case 2: gl_rbw((int16_t)gcol); break;
+        case 3: gl_rbw(glpmode ? glproj : (int16_t)-1); break;
+        case 4: gl_rbw(gldist); break;
+        case 5: gl_rbw(gep[13]); gl_rbw(gep[15]);       /* WINDOW x1 x2 y1 y2 */
+                gl_rbw(gep[14]); gl_rbw(gep[16]); break;
+        case 6: gl_rbw(gep[17]); gl_rbw(gep[19]);       /* VWPORT x1 x2 y1 y2 */
+                gl_rbw(gep[18]); gl_rbw(gep[20]); break;
+        case 9: gl_rbw(gep[23]); gl_rbw(gep[24]); break; /* near, far */
+        default: gl_err(2); break;
+        }
+        return 2;
+    case 0x62: NEED(2);                    /* MATXRD 1|2 -> RB */
+        if(p[1] == 1){ int i; for(i=0;i<12;i++) gl_rbw(glmm[i]); }
+        else if(p[1] == 2){ int i; for(i=0;i<9;i++) gl_rbw(glvm[i]); }
+        else gl_err(2);
+        return 2;
+    case 0x76: NEED(2);                    /* CLRD n: length then the bytes */
+        if(p[1] >= CLNUM){ gl_err(2); return 2; }
+        if(!cldef[p[1]]){ gl_err(6); return 2; }
+        { int L = clmem[p[1]][0] | (clmem[p[1]][1] << 8); int i;
+          gl_rbb(clmem[p[1]][0]); gl_rbb(clmem[p[1]][1]);
+          for(i = 0; i < L; i++) gl_rbb(clmem[p[1]][2 + i]); }
+        return 2;
+    case 0x78: NEED(5);                    /* CLMOD n b off: one-byte patch */
+        if(glrec || glreplay){ gl_err(5); return 5; }
+        if(p[1] >= CLNUM){ gl_err(2); return 5; }
+        if(!cldef[p[1]]){ gl_err(6); return 5; }
+        { int off = (uint16_t)(p[3] | (p[4] << 8));
+          int L = clmem[p[1]][0] | (clmem[p[1]][1] << 8);
+          if(off >= L){ gl_err(2); return 5; }
+          clmem[p[1]][2 + off] = p[2]; }
+        return 5;
     case 0x01: return 1;                                  /* NOOP */
     case 0x02: ge_flip(); return 1;                       /* FLIP   (P8X) */
     case 0x03: gfb=gfbd; return 1;                        /* PGSYNC (P8X) */
@@ -786,6 +879,7 @@ static int gl_exec2(const uint8_t *p, int n){
         gl_state_reset();
         memset(cldef, 0, sizeof cldef); glrec = 0;
         gmode = 0;                     /* 10f: drawing mode back to replace */
+        glrblen = glrbrd = 0;              /* 10e: read-back FIFO clears */
         return 1;
     case 0x05: NEED(3); return 3;      /* WAIT frames: paces on real frame
                                           ticks in RTL; instant here */
@@ -794,6 +888,9 @@ static int gl_exec2(const uint8_t *p, int n){
         gpu_box(gep[17],gep[18],gep[19],gep[20],gl_rgb(p[1],p[2],p[3]),1);
         return 4;
     case 0x08: gl_point2(glc2[0],glc2[1]); return 1;      /* POINT */
+    case 0xC0: gl_afill(gcol); return 1;                  /* AREA (10g) */
+    case 0xC1: NEED(4);                                   /* AREABC r g b */
+        gl_afill(gl_rgb(p[1],p[2],p[3])); return 4;
     case 0x09: gl_point3(); return 1;                     /* POINT3 */
     case 0x0F: NEED(4);                    /* CLEARS: BOTH pages, the whole
                                               screen (the sideband lesson) */
