@@ -1424,6 +1424,37 @@ static int rx_char(void){
    GLDATA writes go as single WRITEs -- the running P8X software already
    polls GLSTAT bit7, exactly as it would on the real bus. */
 static int bridge_fd = -1;
+/* GLDATA write batching: the running software polls GLSTAT bit7 before
+   every byte (correct against the real bus, ruinous over serial -- two
+   round trips per payload byte). The client buffers GLDATA writes and
+   ships them as the protocol's ack'd 64-byte BURSTs, whose ack IS the
+   flow control; while bytes are pending, a GLSTAT read is answered
+   LOCALLY as busy-not-full ($40) -- truthful (the card owes us work,
+   the buffer accepts more) and poll-free. The buffer flushes on 64
+   bytes, on ANY other card access (an ordering barrier), or when a
+   GLSTAT poll finds it aged past BRIDGE_FLUSH_AGE cycles (the drain
+   loop after a stream spins polls without writes -- age is what turns
+   its synthetic busy into a flush and real answers). Same bytes, same
+   order, same semantics; the wire cost drops from ~4x to ~1.03x. */
+static uint8_t bridge_buf[64];
+static int     bridge_bn = 0;
+static unsigned long long bridge_bage = 0;
+#define BRIDGE_FLUSH_AGE 20000
+#define cycles_now() (cycles)
+static uint8_t bridge_recv1(void);
+static void bridge_flush(void){
+    uint8_t hdr[2];
+    if(bridge_bn == 0) return;
+    hdr[0]=0x01; hdr[1]=(uint8_t)bridge_bn;
+    if(write(bridge_fd,hdr,2)!=2 ||
+       write(bridge_fd,bridge_buf,bridge_bn)!=bridge_bn){
+        perror("bridge burst"); exit(1);
+    }
+    bridge_bn = 0;
+    if(bridge_recv1()!=0x06){
+        fprintf(stderr,"p8xemu: bridge burst not acked\n"); exit(1);
+    }
+}
 static int bridge_card(uint16_t ad){
     return (ad>=0xFF20&&ad<=0xFF2F) || (ad>=0xFF50&&ad<=0xFF57);
 }
@@ -1440,11 +1471,24 @@ static uint8_t bridge_recv1(void){
 }
 static void bridge_wr(uint16_t ad,uint8_t v){
     uint8_t m[2];
+    if(ad==0xFF50){                        /* GLDATA: batch into bursts */
+        if(bridge_bn==0) bridge_bage=cycles_now();
+        bridge_buf[bridge_bn++]=v;
+        if(bridge_bn==64) bridge_flush();
+        return;
+    }
+    bridge_flush();                        /* ordering barrier */
     m[0]=(uint8_t)(0x80|((ad-0xFF20)&0x3F)); m[1]=v;
     if(write(bridge_fd,m,2)!=2){ perror("bridge write"); exit(1); }
 }
 static uint8_t bridge_rd(uint16_t ad){
-    uint8_t m=(uint8_t)(0x40|((ad-0xFF20)&0x3F));
+    uint8_t m;
+    if(ad==0xFF51 && bridge_bn){           /* GLSTAT with bytes pending */
+        if(cycles_now()-bridge_bage < BRIDGE_FLUSH_AGE)
+            return 0x40;                   /* busy, not full: keep pushing */
+        bridge_flush();                    /* aged out: drain wants truth */
+    } else bridge_flush();                 /* ordering barrier */
+    m=(uint8_t)(0x40|((ad-0xFF20)&0x3F));
     if(write(bridge_fd,&m,1)!=1){ perror("bridge write"); exit(1); }
     return bridge_recv1();
 }
