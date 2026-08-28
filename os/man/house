@@ -1,0 +1,26 @@
+NAME
+    house - the PG-640A manual's house, animated
+
+SYNOPSIS
+    house [nf]
+
+DESCRIPTION
+    Draws the house from the Matrox PG-640A manual (the engine's
+    reference design; docs/reference in the repo) as a 3D model and
+    animates it: one full turn about its centre in nf frames (default
+    72, five degrees a step), a 24-frame zoom out, a 24-frame zoom
+    back in, and a straight-on resting frame.
+
+    The house is recorded into GL command list 1 with its erase, FLIP
+    and frame WAIT inside, so each animation step is one matrix delta
+    plus CLRUN -- eight bytes a frame; the card does the rest. Works
+    identically on the all-in-one build and across the bridge from
+    runcard.sh: same bytes, same bus contract.
+
+    The drawing is the manual's own worked example and is genuinely
+    three-dimensional -- the flat look of the printed page is just its
+    default viewpoint. List 1 is left recorded: gl MDROTY 30 CLRUN 1
+    keeps playing with it.
+
+SEE ALSO
+    cube, gl, rotate, camera
