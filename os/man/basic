@@ -167,7 +167,8 @@ THE GRAPHICS LANGUAGE (3D)
     POLYR3 CONVRT / MDIDEN MDORG MDROTX MDROTY MDROTZ MDSCAL MDTRAN
     MDMATX / VWIDEN VWRPT VWROTX VWROTY VWROTZ VWMATX DISTAN PROJCT
     DISTH DISTY CLIPH CLIPY / CLBEG CLEND CLRUN CLOOP CLDEL CLAPP /
-    FLIP PGSYNC WAIT RESETF LINFUN. Verbs, parameters and order are exactly
+    FLIP PGSYNC WAIT RESETF LINFUN AREA AREABC. Verbs, parameters and
+    order are exactly
     the device's (man gl documents each); FLOOD and CLEARS take r,g,b
     the way the device does. COLOR is not in the list because the
     ordinary COLOR statement now sets the GL pen too -- one pen
@@ -184,6 +185,13 @@ THE GRAPHICS LANGUAGE (3D)
     3 AND, 4 XOR. Draw a line twice in XOR and it is GONE, the picture
     under it intact -- the rubber-band idiom. Fills always replace.
     RESETF (or a reboot) returns to replace mode.
+
+    AREA (stage 10g) seed-fills from the GL 2D current point with the
+    pen, bounded by pen-coloured pixels: outline a shape, MOVE inside,
+    AREA. AREABC r,g,b bounds on a stated colour instead, so outline
+    and fill can differ. A seed outside the window is a GL error; a
+    seed on the boundary quietly fills nothing. AREA always paints in
+    replace mode, whatever LINFUN says.
 
     Start a scene with RESETF: the machine draws a boot splash through
     the same engine, and matrix verbs COMPOSE -- without a reset your

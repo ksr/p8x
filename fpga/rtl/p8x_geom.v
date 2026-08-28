@@ -55,6 +55,7 @@ module p8x_geom (
   // gfx register master (p8x_top muxes this over the CPU while gm_own).
   output            gm_own,
   output reg        gm_wr,
+  output reg        gm_rd,             // 10g: GDATA pops for pixel probes
   output reg [3:0]  gm_a,
   output reg [7:0]  gm_wdata,
   input      [7:0]  gm_rdata,
@@ -72,7 +73,7 @@ module p8x_geom (
   reg [15:0] par [0:24];
 
   // ---- walker state --------------------------------------------------------
-  reg [6:0]  state;
+  reg [7:0]  state;
   localparam S_IDLE=0,  S_NEXT=6,
              S_MAC=9,   S_MACW=10, S_MACB=105, S_MACC=106,
              W_LF=107,  W_LF2=108,
@@ -100,6 +101,21 @@ module p8x_geom (
              C_NRM=79,  J_WR=80,   C_OGA=81,  C_OGW=82,
              C_MLA=83,  C_MLB=84,  C_CPA=85,  C_RCK=86,  C_RCKW=87,
              C_RCN=88,  CV_X=89,   CV_XW=90,  CV_YW=91,  J_RB3=109,
+             // stage 10g: AREA/AREABC -- scanline boundary seed fill.
+             // The emulator's gl_afill is the contract, step for step:
+             // map the seed, push it, then pop/probe/span/paint/scan
+             // with an SDRAM stack at $180000 (16384 entries; overflow
+             // = error 8, deterministic partial fill).
+             AF_MAP0=110, AF_MAP1=111, AF_MAP2=112, AF_MAP3=113,
+             AF_L=114,    AF_R=115,
+             AF_PT0=116,  AF_PT1=117,  AF_PT2=118,  AF_PT3=119,
+             AF_SCAN=120, AF_SC1=121,  AF_SC2=122,
+             AF_PU0=123,  AF_PU1=124,  AF_SKIP=125,
+             AF_POP0=126, AF_POP1=127, AF_POP2=128, AF_CHK=129,
+             // the shared pixel-probe subroutine (gm POINT + GDATA pops)
+             AF_P0=130,   AF_P1=131,   AF_P2=132,   AF_P3=133,
+             AF_P4=134,   AF_P5=135,   AF_P6=136,   AF_P7=137,
+             AF_P8=138,   AF_P9=139,
              C_OGB=92,  C_OGC=93,  C_MTB=94,  C_MTC=95,  C_MLC=96,
              C_MLW=97,  C_CPB=98,  C_CPC=99,  J_RST2=100,
              // stage 10c: the polygon-lane (scratchpad) T-path states
@@ -165,6 +181,21 @@ module p8x_geom (
   reg [7:0]  rd_lo, rd_hi;           // fetched halfword
   reg        jrbs;                   // J_WR leg: RBS defaults, not a matrix
   reg        rcph;                   // C_RCN: which plane this cycle
+  // ---- stage 10g: the fill's working set ---------------------------------
+  reg [15:0] afbc;                   // boundary colour (pen for AREA)
+  reg [8:0]  afx, afy;               // popped seed (screen space)
+  reg [8:0]  afL, afR;               // the probed span
+  reg [8:0]  afi, afrow;             // above/below scan cursor
+  reg [8:0]  apx, apy;               // probe target
+  reg [14:0] afsp;                   // stack pointer (cap 16384)
+  reg        afovf;                  // afsp hit the cap
+  reg        afrsel;                 // 0 = row y-1, 1 = row y+1
+  reg [15:0] afpv;                   // probed pixel value
+  reg [3:0]  afret;                  // probe return: 0 seed 1 chk 2 L
+                                     //   3 R 4 scan 5 skip
+  // the verdict, exactly gl_af_in's: neither boundary nor already-painted
+  wire af_in = (afpv != afbc) && (afpv != rcol);
+  wire af_g  = (state >= AF_MAP0 && state <= AF_P9);  // fill owns the g port
   reg [3:0]  ef_wp, ef_rp;           //   2 bad parameter, 3 mode not
   wire       rb_ne   = (rb_wp != rb_rp);
   wire [12:0] mdba   = 13'd2 + rdo;  // CLMOD: target byte's file offset
@@ -339,6 +370,8 @@ module p8x_geom (
 8'hE0,8'hAA,8'hAB,8'h70,8'h72,8'h74,8'h79,8'hEB,
       8'h61,8'h62,8'h76: opn = 5'd1;
       8'h78: opn = 5'd4;               // CLMOD n b off
+      8'hC0: opn = 5'd0;
+      8'hC1: opn = 5'd3;               // AREABC r g b
       8'h05,8'h43,8'h93,8'h94,8'h95,8'hA3,8'hA4,8'hA5,
       8'hA8,8'hA9,8'hB0,8'hB1: opn = 5'd2;
       8'h06,8'h07,8'h0F,8'h73: opn = 5'd3;
@@ -515,6 +548,7 @@ module p8x_geom (
   always @(posedge clk) begin
     md_go <= 1'b0;
     gm_wr <= 1'b0;
+    gm_rd <= 1'b0;
     cm_we <= 1'b0;
     if (rst) begin
       state <= S_IDLE;
@@ -582,7 +616,8 @@ module p8x_geom (
 
       case (fst)
         1'b0: if (rp && rp_have == 2'd0 && !sd_busy && !g_req &&
-                  glst != G_RL1 && !(glst >= G_RD0 && glst <= G_MD3)) begin
+                  glst != G_RL1 && !(glst >= G_RD0 && glst <= G_MD3) &&
+                  !af_g) begin
           if (rp_off >= rp_len) begin    // a pass ended at a boundary
             if (rp_cnt <= 16'd1) rp <= 0;
             else begin rp_cnt <= rp_cnt - 16'd1; rp_off <= 0; end
@@ -1346,6 +1381,191 @@ module p8x_geom (
           state <= S_NEXT;
         end
 
+        // ==== stage 10g: AREA / AREABC boundary seed fill ================
+        // The emulator's gl_afill IS the contract, reproduced step for
+        // step: outcode the seed (err 2 off-window), viewport-map it,
+        // then pop/probe/span/paint/scan with an explicit stack in SDRAM
+        // at $180000 (16384 x/y halfword pairs; hitting the cap is err 8
+        // and a deterministic partial fill). A fill under XOR/AND would
+        // break its own visited-mark invariant, so GMODE is forced to 0
+        // first -- the documented rule.
+        AF_MAP0: begin
+          if (oca != 4'd0) begin epush(8'd2); state <= S_NEXT; end
+          else begin
+            gm_a <= 4'hE; gm_wdata <= 8'd0; gm_wr <= 1; glfm <= 0;
+            md_a1 <= wx0; md_a2 <= par[13]; md_b1 <= par[19];
+            md_b2 <= par[17]; md_c1 <= par[15]; md_c2 <= par[13];
+            md_r <= par[17]; md_rn <= 0; md_go <= 1; state <= AF_MAP1;
+          end
+        end
+        AF_MAP1: if (md_done) begin    // x mapped; launch y (flipped)
+          afx <= md_qr[8:0];
+          md_a1 <= wy0; md_a2 <= par[14]; md_b1 <= par[20];
+          md_b2 <= par[18]; md_c1 <= par[16]; md_c2 <= par[14];
+          md_r <= par[20]; md_rn <= 1; md_go <= 1; state <= AF_MAP2;
+        end
+        AF_MAP2: if (md_done) begin
+          afy <= md_qr[8:0]; state <= AF_MAP3;
+        end
+        AF_MAP3: begin                 // probe the seed itself
+          afsp <= 0; afovf <= 0;
+          apx <= afx; apy <= afy; afret <= 4'd0; state <= AF_P0;
+        end
+
+        // span probes: L-1 leftward, then R+1 rightward (9-bit unsigned
+        // wrap turns -1 into 511, which the probe's bounds check catches)
+        AF_L: begin
+          apx <= afL - 9'd1; apy <= afy; afret <= 4'd2; state <= AF_P0;
+        end
+        AF_R: begin
+          apx <= afR + 9'd1; apy <= afy; afret <= 4'd3; state <= AF_P0;
+        end
+
+        // paint the span: one device LINE, pen + both endpoints on row afy
+        AF_PT0: begin
+          case (seq)
+            3'd0: begin gm_a<=4'h4; gm_wdata<=rcol[7:0];       end
+            3'd1: begin gm_a<=4'hD; gm_wdata<=rcol[15:8];      end
+            3'd2: begin gm_a<=4'h0; gm_wdata<=afL[7:0];        end
+            3'd3: begin gm_a<=4'h9; gm_wdata<={7'd0,afL[8]};   end
+            3'd4: begin gm_a<=4'h1; gm_wdata<=afy[7:0];        end
+            3'd5: begin gm_a<=4'hA; gm_wdata<={7'd0,afy[8]};   end
+            3'd6: begin gm_a<=4'h2; gm_wdata<=afR[7:0];        end
+            3'd7: begin gm_a<=4'hB; gm_wdata<={7'd0,afR[8]};   end
+          endcase
+          gm_wr <= 1;
+          if (seq == 3'd7) begin seq <= 0; state <= AF_PT1; end
+          else seq <= seq + 3'd1;
+        end
+        AF_PT1: begin
+          if (seq == 3'd0) begin gm_a<=4'h3; gm_wdata<=afy[7:0]; gm_wr<=1; seq<=3'd1; end
+          else begin gm_a<=4'hC; gm_wdata<={7'd0,afy[8]}; gm_wr<=1; seq<=0;
+                     state<=AF_PT2; end
+        end
+        AF_PT2: begin gm_a <= 4'h6;    // engine idle before the command
+                      if (gm_a == 4'h6 && !gm_rdata[7] && !gm_wr)
+                        state <= AF_PT3; end
+        AF_PT3: begin gm_a <= 4'h5; gm_wdata <= 8'h02; gm_wr <= 1;  // LINE
+                      afrsel <= 0; state <= AF_SCAN; end
+
+        // scan rows afy-1 and afy+1 across [afL..afR]: one push per
+        // interior run (the probe waits out the paint via GSTAT first)
+        AF_SCAN: begin
+          if (!afrsel ? (afy == 9'd0) : (afy == 9'd271)) state <= AF_SC2;
+          else begin
+            afrow <= !afrsel ? afy - 9'd1 : afy + 9'd1;
+            afi <= afL; state <= AF_SC1;
+          end
+        end
+        AF_SC1: begin
+          if (afi > afR) state <= AF_SC2;
+          else begin apx <= afi; apy <= afrow; afret <= 4'd4;
+                     state <= AF_P0; end
+        end
+        AF_SC2: begin                  // row advance: below, then done->pop
+          if (!afrsel) begin afrsel <= 1; state <= AF_SCAN; end
+          else state <= AF_POP0;
+        end
+        AF_PU0: begin                  // push (afi, afrow): x halfword
+          if (afsp == 15'd16384) begin epush(8'd8); state <= S_NEXT; end
+          else if (!sd_busy && !g_req) begin
+            g_addr <= {2'd0, 2'b11, 2'd0, afsp, 2'b00};
+            g_din <= {7'd0, afi};
+            g_we <= 1; g_req <= 1; sd_busy <= 1; state <= AF_PU1;
+          end
+        end
+        AF_PU1: if (!sd_busy && !g_req) begin   // y halfword, bump, skip run
+          g_addr <= {2'd0, 2'b11, 2'd0, afsp, 2'b10};
+          g_din <= {7'd0, afrow};
+          g_we <= 1; g_req <= 1; sd_busy <= 1;
+          afsp <= afsp + 15'd1; afi <= afi + 9'd1; state <= AF_SKIP;
+        end
+        AF_SKIP: begin                 // advance past the interior run
+          if (afi > afR) state <= AF_SC2;
+          else begin apx <= afi; apy <= afrow; afret <= 4'd5;
+                     state <= AF_P0; end
+        end
+
+        // pop a seed (x at +0, y at +2) and re-probe it -- spans painted
+        // since it was pushed may have absorbed it, exactly the emulator
+        AF_POP0: begin
+          if (afsp == 15'd0) state <= S_NEXT;         // stack dry: done
+          else begin afsp <= afsp - 15'd1; state <= AF_POP1; end
+        end
+        AF_POP1: if (!sd_busy && !g_req) begin
+          g_addr <= {2'd0, 2'b11, 2'd0, afsp, 2'b00};
+          g_we <= 0; g_req <= 1; sd_busy <= 1; state <= AF_POP2;
+        end
+        AF_POP2: if (g_ready) begin    // capture x, chain the y read
+          afx <= g_dout[8:0];
+          g_addr <= {2'd0, 2'b11, 2'd0, afsp, 2'b10};
+          g_we <= 0; g_req <= 1; sd_busy <= 1; state <= AF_CHK;
+        end
+        AF_CHK: if (g_ready) begin
+          afy <= g_dout[8:0];
+          apx <= afx; apy <= g_dout[8:0]; afret <= 4'd1; state <= AF_P0;
+        end
+
+        // ---- the pixel probe (gm POINT + two GDATA pops) ----------------
+        // Off-screen forces the boundary verdict by loading afpv with the
+        // boundary colour itself (gl_af_in's x<0||x>=480||... return 0)
+        AF_P0: begin
+          if (apx > 9'd479 || apy > 9'd271) begin
+            afpv <= afbc; state <= AF_P9;
+          end else begin seq <= 0; state <= AF_P1; end
+        end
+        AF_P1: begin                   // the probe target's coordinates
+          case (seq)
+            3'd0: begin gm_a<=4'h0; gm_wdata<=apx[7:0];      end
+            3'd1: begin gm_a<=4'h9; gm_wdata<={7'd0,apx[8]}; end
+            3'd2: begin gm_a<=4'h1; gm_wdata<=apy[7:0];      end
+            default: begin gm_a<=4'hA; gm_wdata<={7'd0,apy[8]}; end
+          endcase
+          gm_wr <= 1;
+          if (seq == 3'd3) begin seq <= 0; state <= AF_P2; end
+          else seq <= seq + 3'd1;
+        end
+        AF_P2: begin gm_a <= 4'h6;     // engine idle (paint may be live)
+                     if (gm_a == 4'h6 && !gm_rdata[7] && !gm_wr)
+                       state <= AF_P3; end
+        AF_P3: begin gm_a <= 4'h5; gm_wdata <= 8'h09; gm_wr <= 1;  // POINT
+                     state <= AF_P4; end
+        AF_P4: begin gm_a <= 4'h6;     // wait for the pixel itself
+                     if (gm_a == 4'h6 && !gm_rdata[7] && !gm_wr)
+                       state <= AF_P5; end
+        AF_P5: begin gm_a <= 4'h7; state <= AF_P6; end
+        AF_P6: begin afpv[7:0] <= gm_rdata; gm_rd <= 1; state <= AF_P7; end
+        AF_P7: state <= AF_P8;         // the strobe's propagation cycle
+        AF_P8: begin afpv[15:8] <= gm_rdata; state <= AF_P9; end
+        AF_P9: begin                   // return: dispatch on the caller
+          case (afret)
+            4'd0: begin                // seed: boundary -> silent no-op
+              if (!af_in) state <= S_NEXT;
+              else begin afL <= afx; state <= AF_L; end
+            end
+            4'd1: begin                // popped seed's re-probe
+              if (!af_in) state <= AF_POP0;
+              else begin afL <= afx; state <= AF_L; end
+            end
+            4'd2: begin                // extend left?
+              if (af_in) begin afL <= afL - 9'd1; state <= AF_L; end
+              else begin afR <= afx; state <= AF_R; end
+            end
+            4'd3: begin                // extend right?
+              if (af_in) begin afR <= afR + 9'd1; state <= AF_R; end
+              else begin seq <= 0; state <= AF_PT0; end
+            end
+            4'd4: begin                // scan probe: interior -> push
+              if (af_in) state <= AF_PU0;
+              else begin afi <= afi + 9'd1; state <= AF_SC1; end
+            end
+            default: begin             // skip past the pushed run
+              afi <= afi + 9'd1;
+              state <= af_in ? AF_SKIP : AF_SC1;
+            end
+          endcase
+        end
+
         // pivot: T = org - (S*org)>>8 -- ms cells fetched from the RAM
         C_OGA: begin
           cm_aa <= {6'd2, cick};                   // SB + ci*3 + ck
@@ -1725,6 +1945,16 @@ module p8x_geom (
                          wvk <= glpmode; k <= 0; glst <= G_WV; end
             8'hE0: begin glfill <= pbuf[0][0];            // PRMFIL
               cm_we <= 1; cm_wa <= RBS; cm_wd <= {15'd0, pbuf[0][0]}; end
+            8'hC0: begin                                  // AREA (10g)
+              afbc <= rcol;                               //   pen-bounded
+              wx0 <= c2x; wy0 <= c2y;                     //   seed -> outcode
+              glact <= 1; state <= AF_MAP0;
+            end
+            8'hC1: begin                                  // AREABC r g b
+              afbc <= prgb;
+              wx0 <= c2x; wy0 <= c2y;
+              glact <= 1; state <= AF_MAP0;
+            end
             8'hEB:                                        // LINFUN (10f)
               if (pbuf[0] > 8'd4) begin
                 if (ef_wp - ef_rp != 4'd8) begin

@@ -51,7 +51,8 @@ DESCRIPTION
       A4 VWROTY deg  A5 VWROTZ deg  A7 VWMATX 9w   A8 DISTH d
       A9 DISTY d     AA CLIPH f     AB CLIPY f     AF CONVRT
       B0 PROJCT ang  B1 DISTAN d    B2 VWPORT x1 x2 y1 y2
-      B3 WINDOW x1 x2 y1 y2         E0 PRMFIL f
+      B3 WINDOW x1 x2 y1 y2         C0 AREA
+      C1 AREABC r g b               E0 PRMFIL f
       EB LINFUN m
 
     3D pipeline: modelling matrix (MD*, composed in command order about
@@ -71,6 +72,17 @@ DESCRIPTION
     not modal). Applies between primitives, never mid-draw; RESETF
     returns the mode to replace. BASIC LINE/PLOT honour it too (the
     mode lives in the display device at GMODE, $FF2E write side).
+
+    AREA (stage 10g) seed-fills from the 2D current point (set it with
+    MOVE) using the pen, bounded by pen-coloured pixels: outline a
+    shape, MOVE inside it, AREA. AREABC r g b bounds on a stated
+    colour instead, so the outline and the fill can differ. The fill
+    is a scanline flood walking actual framebuffer pixels: a seed
+    outside the window is error 2, a seed ON the boundary (or on
+    already-pen pixels) is a silent no-op, and a fill too convoluted
+    for the 16384-seed stack stops at error 8 with a deterministic
+    partial fill. AREA forces the write mode to replace (a fill under
+    XOR would erase its own boundary test).
 
     COMMAND LISTS (stage 10c): CLBEG n records everything up to CLEND
     into list n (0-255, 4KB each, stored on the card) instead of

@@ -121,7 +121,30 @@ primitives, and fills always replace. XOR is the rubber-band idiom;
 complement is visible on any background. `RESETF`, reset, and power-up
 restore replace mode.
 
-## 7. From BASIC
+## 7. Filling arbitrary shapes (AREA)
+
+    gl COLOR 31,0,0                       red pen
+    gl MOVE 100,100 RECT 200,150          an outline...
+    gl MOVE 150,125 AREA                  ...seed-filled from inside
+
+`AREA` flood-fills from the 2D current point with the pen, bounded by
+pen-coloured pixels. `AREABC r g b` bounds on a stated colour instead,
+so the fill and the outline can differ:
+
+    gl COLOR 0,0,31                       blue outline
+    gl POLY 4 300,200 350,150 400,200 350,250
+    gl COLOR 0,63,0 MOVE 350,200          green pen, seed at centre
+    gl AREABC 0,0,31                      fill up to the blue
+
+The fill walks real framebuffer pixels (a scanline flood), so anything
+already drawn is a boundary candidate. A seed outside the window is
+error 2; a seed sitting ON the boundary colour (or on pen-coloured
+pixels) quietly fills nothing. `PRMFIL 1` remains the right tool for
+filled primitives you are about to draw; `AREA` is for shapes that
+exist only as outlines — and it always paints in replace mode,
+whatever `LINFUN` says.
+
+## 8. From BASIC
 
 Every GL verb is a native statement (no quotes, expressions allowed):
 
@@ -140,7 +163,7 @@ non-blocking spin. POINT(x,y) reads pixels (screen space). The full
 statement list: `man basic`, GRAPHICS; the language guide chapter in
 `basic/p8x-basic-guide.md`.
 
-## 8. From C
+## 9. From C
 
     //#use gfx      screen-space primitives over $FF20 (man gfx)
     //#use g3d      the software 3D pipeline / GL-era compatibility (man g3d)
@@ -156,7 +179,7 @@ Wait for idle with `while (peek(0xFF51) & 64) { }` before reading
 results or exiting. Named constants: `//#use abi` + the `//#define`
 header pattern; never raw magic numbers in shipped code.
 
-## 9. Scene files
+## 10. Scene files
 
 A `.GL` file is the ASCII language verbatim — `gl FILE.GL` streams it.
 Start files with `CA ` (the hex-mode escape is the literal
@@ -165,7 +188,7 @@ The PG-640A manual's examples convert mechanically (its hex files
 carry 4-byte coordinates; re-emit as ASCII). `docs/reference/pg640a.pdf`
 chapter 3 is effectively this engine's extended manual.
 
-## 10. Performance model
+## 11. Performance model
 
 - Command bytes are cheap; PIXELS are the cost. A fullscreen fill is
   ~65k pixel-pairs through the burst filler; a spinning cube is ~40

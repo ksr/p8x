@@ -439,6 +439,43 @@ byte-identical emulator-vs-RTL (c_gl_rtl_test), 92-PASS make test.
     matrix, 10c fly-through, 10d ASCII, 10f LINFUN, and the $FF20
     circle/ellipse device scene.
 - **10g — flood fill.** FLOOD/AREA seed-fill walker.
+
+  **10g as built (2026-08-28; emulator + RTL pixel-exact on the first
+  bench run; card personality).**
+
+  - **AREA** (C0, no params: fill from the 2D current point with the
+    pen, boundary = pen) and **AREABC r g b** (C1: boundary = the
+    stated colour). The emulator's `gl_afill` IS the contract, and the
+    RTL walker reproduces it step for step: outcode the seed against
+    the window (off-window = error 2), viewport-map it, then the
+    classic scanline loop -- pop a seed, re-probe it (spans painted
+    since the push may have absorbed it), probe the span left and
+    right, paint it, and push ONE seed per interior run on the rows
+    above and below.
+  - **Seed on the boundary (or on already-pen pixels) is a silent
+    no-op** -- gl_af_in's verdict is `v != boundary && v != pen`, so
+    painted pixels are the visited mark. That is also why **AREA
+    forces GMODE to replace** before it starts: a fill under XOR/AND
+    would break its own invariant (documented in man gl).
+  - **The stack is explicit and in SDRAM**: 16384 x/y halfword pairs
+    at $180000 (the g-port address {00,11,00,sp,00}; lists sit at
+    $100000, so the region was free). Hitting the cap is error 8 and
+    a DETERMINISTIC partial fill -- both implementations stop the
+    same way. The replay fetcher defers to the fill (`af_g` gates it)
+    so an AREA inside a command list cannot race the walker's stack.
+  - **Probes are real device POINTs**: the walker gained a `gm_rd`
+    strobe (plumbed through both tops and every bench) and pops
+    GDATA's low/high bytes exactly as the CPU would -- the fill sees
+    the framebuffer only through the public register window, card-edge
+    clean. Paints are device LINEs (L..R on one row). Both waits use
+    the S_LINB idiom: engine idle before GCMD, engine idle before
+    reading the pixel back.
+  - **Proof**: tb_gl_arx.v replays c_gl_area_test's gl_ar.c scene
+    (red rect + AREA, blue diamond + green AREABC, off-window seed ->
+    GLERR 2 then 0) through the real pixel stack; the frame is
+    byte-identical to the emulator's gl_ar.ppm. The proof chain is now
+    SEVEN frames (stage 8 in c_gl_rtl_test.sh). tb_gl still passes
+    untouched -- the fill is purely additive to the walker.
 - **10h — text.** TEXT + attributes + user-defined glyphs (TDEFIN),
   drawn in window space through the 2D pipeline.
 

@@ -106,9 +106,15 @@ three resources: the scratchpad RAM, the muldiv core, and the 2D
 device's register port. Its jobs: the vertex transform MAC, near/far
 clipping, perspective projection, Cohen-Sutherland window clipping,
 viewport mapping, polygon fan filling, the box issuer
-(CLEARS/FLOOD/RECT), matrix composition, and single-register device
+(CLEARS/FLOOD/RECT), matrix composition, single-register device
 writes (the LINFUN mode, which must WAIT for the device to go idle so
-a mode change never overtakes a primitive still drawing).
+a mode change never overtakes a primitive still drawing), and the
+AREA flood-fill walker (stage 10g): a scanline seed fill that probes
+the framebuffer through real device POINT commands, paints spans as
+device LINEs, and keeps its 16384-entry seed stack in SDRAM at
+$180000 — the emulator's `gl_afill` reproduced state for state, with
+error 2 for an off-window seed and error 8 (deterministic partial
+fill) when the stack caps out.
 
 ## 5. Transforms: the matrix pipeline (stage 10b)
 
@@ -180,13 +186,13 @@ not asserted. The proof chain, in escalating strength:
 
 1. Directed op-level benches (`tb_gl.v`): the interpreter's exact
    operation stream, error sequences, FIFO backpressure.
-2. Six cross-implementation FRAMES (`emulator/test/c_gl_rtl_test.sh`):
+2. Seven cross-implementation FRAMES (`emulator/test/c_gl_rtl_test.sh`):
    the same command bytes rendered by the emulator on the emulated
    machine and by the real RTL stack (geometry + gfx + arbiter + SDRAM
    controller + a protocol-checking chip model), compared pixel for
    pixel — the 10a scene, the 10b matrix scene, the 10c fly-through,
-   the 10d ASCII scene, the 10f LINFUN scene, and the $FF20-driven
-   circle/ellipse scene.
+   the 10d ASCII scene, the 10f LINFUN scene, the 10g AREA fills, and
+   the $FF20-driven circle/ellipse scene.
 3. On-board probes: the same programs typed at the real machine, with
    POINT read-backs checked against the emulator's golden values.
 

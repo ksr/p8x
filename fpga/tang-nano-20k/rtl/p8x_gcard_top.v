@@ -119,7 +119,7 @@ module p8x_gcard_top(
     .e_req(e_req), .e_we(e_we), .e_word(e_word), .e_addr(e_addr),
     .e_din(e_din), .e_ack(e_ack), .e_ready(e_ready));
 
-  wire        gm_own, gm_wr;
+  wire        gm_own, gm_wr, gm_rd;
   wire [3:0]  gm_a;
   wire [7:0]  gm_wdata;
   wire        draw_pg, disp_pg, frame_tick;
@@ -132,7 +132,7 @@ module p8x_gcard_top(
           .gl_wr(br_gl_wr),
           .gl_rd(br_gl_rd),
           .wdata(br_wdata), .rdata(geom_rdata),
-          .gm_own(gm_own), .gm_wr(gm_wr), .gm_a(gm_a), .gm_wdata(gm_wdata),
+          .gm_own(gm_own), .gm_wr(gm_wr), .gm_rd(gm_rd), .gm_a(gm_a), .gm_wdata(gm_wdata),
           .gm_rdata(gfx_rdata),
           .frame_tick(frame_tick), .draw_pg(draw_pg), .disp_pg(disp_pg));
 
@@ -140,7 +140,7 @@ module p8x_gcard_top(
           .sel(gm_own ? 1'b1 : br_gx_sel),
           .a(gm_own ? gm_a : br_a),
           .wr(gm_own ? gm_wr : br_gx_wr),
-          .rd_stb(gm_own ? 1'b0 : br_gx_rd),
+          .rd_stb(gm_own ? gm_rd : br_gx_rd),
           .wdata(gm_own ? gm_wdata : br_wdata), .rdata(gfx_rdata),
           .e_req(e_req), .e_we(e_we), .e_word(e_word), .e_addr(e_addr),
           .e_din(e_din), .e_ack(e_ack), .e_ready(e_ready), .e_dout(sd_dout));

@@ -424,6 +424,30 @@ The line strobes across the picture and everything under it survives.
 `RESETF` (and a reboot) returns the mode to replace, so a scene that
 begins with `RESETF` never inherits a stale mode.
 
+### Flood fill — AREA / AREABC (stage 10g)
+
+`AREA` seed-fills from the GL 2D current point (set it with `MOVE`)
+using the pen, bounded by pen-coloured pixels: outline any closed
+shape, `MOVE` inside it, `AREA`. `AREABC r,g,b` bounds on a stated
+colour instead, so the fill and the outline can differ:
+
+```
+10 RESETF : CLEARS 0,0,0
+20 WINDOW 0,479,0,271 : VWPORT 0,479,0,271
+30 COLOR RGB(0,0,31)
+40 POLY 4,300,200,350,150,400,200,350,250
+50 COLOR RGB(0,63,0) : MOVE 350,200
+60 AREABC 0,0,31
+```
+
+draws a blue diamond and fills it green. The fill walks real
+framebuffer pixels, so anything already drawn bounds it. A seed
+outside the window raises a GL error; a seed sitting on the boundary
+(or on pen-coloured pixels) quietly fills nothing. `PRMFIL 1` remains
+the way to draw primitives filled in the first place; `AREA` fills
+what exists only as an outline — always in replace mode, whatever
+`LINFUN` says.
+
 ### PRINT details
 
 Items are separated by `,` or `;`:

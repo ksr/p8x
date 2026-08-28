@@ -274,7 +274,7 @@ module p8x_top(
   // renders -- it is a hardware BASIC, writing the same registers software
   // does. A CPU gfx access during a render is dropped (writes) or reads the
   // engine's register instead of its own: poll GESTAT first, the house rule.
-  wire        gm_own, gm_wr;
+  wire        gm_own, gm_wr, gm_rd;
   wire [3:0]  gm_a;
   wire [7:0]  gm_wdata;
   wire [7:0]  geom_rdata;
@@ -288,7 +288,7 @@ module p8x_top(
           .gl_wr(cen && mem_we && is_gl),
           .gl_rd(cen && mem_rd && is_gl),
           .wdata(mem_dout), .rdata(geom_rdata),
-          .gm_own(gm_own), .gm_wr(gm_wr), .gm_a(gm_a), .gm_wdata(gm_wdata),
+          .gm_own(gm_own), .gm_wr(gm_wr), .gm_rd(gm_rd), .gm_a(gm_a), .gm_wdata(gm_wdata),
           .gm_rdata(gfx_rdata),
           .frame_tick(frame_tick), .draw_pg(draw_pg), .disp_pg(disp_pg));
 
@@ -296,7 +296,7 @@ module p8x_top(
           .sel(gm_own ? 1'b1 : is_gfx),
           .a(gm_own ? gm_a : mem_addr[3:0]),
           .wr(gm_own ? gm_wr : (cen && mem_we && is_gfx)),
-          .rd_stb(gm_own ? 1'b0 : (cen && mem_rd && is_gfx)),
+          .rd_stb(gm_own ? gm_rd : (cen && mem_rd && is_gfx)),
           .wdata(gm_own ? gm_wdata : mem_dout), .rdata(gfx_rdata),
           .e_req(e_req), .e_we(e_we), .e_word(e_word), .e_addr(e_addr),
           .e_din(e_din), .e_ack(e_ack), .e_ready(e_ready), .e_dout(sd_dout));

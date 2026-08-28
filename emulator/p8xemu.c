@@ -667,6 +667,10 @@ static int gl_af_in(int x,int y,uint16_t bc){
 static void gl_afill(uint16_t bc){
     int sp=0, x, y, L, R, row, i;
     int16_t px, py;
+    gmode = 0;                     /* a fill under XOR/AND/... would break
+                                      the fill's own invariant (painted ==
+                                      pen is the visited mark), so AREA
+                                      forces replace mode -- documented */
     if(ge_oc(glc2[0],glc2[1])){ gl_err(2); return; }   /* seed off-window */
     gl_map2(glc2[0],glc2[1],&px,&py);
     if(!gl_af_in(px,py,bc)) return;                    /* seeded on bound */

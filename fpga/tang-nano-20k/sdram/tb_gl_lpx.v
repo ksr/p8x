@@ -29,7 +29,7 @@ module tb;
   wire [7:0]  rdata, gfx_rdata;
 
   // ---- the real stack, wired as in p8x_top ---------------------------------
-  wire        gm_own, gm_wr;
+  wire        gm_own, gm_wr, gm_rd;
   wire [3:0]  gm_a;
   wire [7:0]  gm_wdata;
   wire        draw_pg, disp_pg, frame_tick;
@@ -64,7 +64,7 @@ module tb;
     .g_req(g_req), .g_we(g_we), .g_addr(g_addr), .g_din(g_din),
     .g_ack(g_ack), .g_ready(g_ready), .g_dout(c_dout),
     .gl_sel(gl_sel), .gl_wr(gl_wr), .gl_rd(1'b0),
-    .gm_own(gm_own), .gm_wr(gm_wr), .gm_a(gm_a), .gm_wdata(gm_wdata),
+    .gm_own(gm_own), .gm_wr(gm_wr), .gm_rd(gm_rd), .gm_a(gm_a), .gm_wdata(gm_wdata),
     .gm_rdata(gfx_rdata),
     .frame_tick(frame_tick), .draw_pg(draw_pg), .disp_pg(disp_pg));
 
@@ -72,7 +72,7 @@ module tb;
     .sel(gm_own ? 1'b1 : gsel),
     .a(gm_own ? gm_a : a),
     .wr(gm_own ? gm_wr : gwr),
-    .rd_stb(1'b0),
+    .rd_stb(gm_own ? gm_rd : 1'b0),
     .wdata(gm_own ? gm_wdata : wdata), .rdata(gfx_rdata),
     .e_req(e_req), .e_we(e_we), .e_word(e_word), .e_addr(e_addr),
     .e_din(e_din), .e_ack(e_ack), .e_ready(e_ready), .e_dout(c_dout));

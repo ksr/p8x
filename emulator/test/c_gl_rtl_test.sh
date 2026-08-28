@@ -62,4 +62,13 @@ sh c_gl_lf_test.sh > /dev/null || fail "emulator LINFUN suite failed"
   && ./tbglf | grep -q "TB-GL-FPX: DONE" ) || fail "tb_gl_fpx did not finish"
 cmp gl_lf.ppm $SD/tb_gl_fpx.ppm || fail "RTL LINFUN frame differs from emulator frame"
 
-echo "C-GL-RTL TEST: PASS (RTL and emulator framebuffers byte-identical: 10a scene, 10b matrix, 10c fly-through, 10d ASCII, 10f LINFUN)"
+# 8: the stage-10g AREA scene -- the fill walker (gm POINT probes, gm LINE
+#    paints, SDRAM seed stack) against gl_afill (needs gl_ar.ppm)
+sh c_gl_area_test.sh > /dev/null || fail "emulator AREA suite failed"
+( cd $SD && iverilog -g2012 -I../../rtl -o tbglar tb_gl_arx.v ../../rtl/p8x_geom.v \
+      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v gfx_mem.v \
+      gfx_span.v sdram_arb.v p8x_sdram.v sdram_video.v sdram_chip.v \
+  && ./tbglar | grep -q "TB-GL-ARX: DONE" ) || fail "tb_gl_arx did not finish"
+cmp gl_ar.ppm $SD/tb_gl_arx.ppm || fail "RTL AREA frame differs from emulator frame"
+
+echo "C-GL-RTL TEST: PASS (RTL and emulator framebuffers byte-identical: 10a scene, 10b matrix, 10c fly-through, 10d ASCII, 10f LINFUN, 10g AREA)"

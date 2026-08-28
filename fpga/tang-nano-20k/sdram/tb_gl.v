@@ -32,7 +32,7 @@ module tb;
   reg  [7:0] wdata = 0;
   wire [7:0] rdata;
 
-  wire        gm_own, gm_wr;
+  wire        gm_own, gm_wr, gm_rd;
   wire [3:0]  gm_a;
   wire [7:0]  gm_wdata;
   reg  [7:0]  gm_rdata;
