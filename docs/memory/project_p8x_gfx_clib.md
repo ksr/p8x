@@ -182,9 +182,18 @@ those paths are unreachable from GL). SIX byte-identical frames now.
 Next rungs: 10g AREA, 10h TEXT (both need room or the successor
 board); 10e resurrection when room exists. Console GL family is C-only
 (asm twins an open item). MERGED TO MAIN 2026-08-27 (597c0b9, user-
-approved) -- work on main again per the normal workflow. NEXT ARC
-(explored, not started): cut the design at the bus -- the FPGA becomes
-a pure GRAPHICS CARD behind a card-edge contract ($FF20-$FF57 window),
-driven first by the Mac emulator over a serial bus bridge (frees
-~2,500 LUTs: CPU+CF/SD leave -- room for 10e/10g/10h), later by a
-second CPU FPGA or the real TTL bus on a DIN 41612 card.
+approved) -- work on main again per the normal workflow. CARD ARC
+(branch graphics-card, 2026-08-28, IN FLIGHT): the FPGA becomes a pure
+GRAPHICS CARD behind the card-edge contract (CARD-EDGE-DESIGN.md; the
+$FF20-$FF57 window + BRIDGEV/BRIDGID, serial protocol v1: PING /
+rd/wr / ack'd 64-byte bursts / STATUS; idx = ioaddr-$FF20; IDLE IS TWO
+POLLS: GLSTAT then GSTAT -- the engine drains its last span after GL
+busy clears). DONE sim-side: glbridge.py+MockCard (mock-proven),
+p8x_bridge.v + p8x_gcard_top.v + build.sh `card` (PLACES at 16,808
+LUT4/81%, BSRAM 5/46 -- 41 blocks + ~2.2k LUT freed = 10e/10g/10h
+room), tb_gcard (the 10a frame byte-identical THROUGH protocol bytes),
+p8xemu -B (BASIC session against MockCard over a pty; GLDATA as single
+writes because P8X software already polls bit7). Mock gotcha: identity
+regs have CONSTANT read sides split from write sides (GCOLH vs GID0 at
+$FF2D). REMAINING: board first light (glbridge ping, a gl scene, then
+p8xemu -B against silicon), lcd-target regression stays mandatory.
