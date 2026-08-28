@@ -195,8 +195,18 @@ room), tb_gcard (the 10a frame byte-identical THROUGH protocol bytes),
 p8xemu -B (BASIC session against MockCard over a pty; GLDATA as single
 writes because P8X software already polls bit7). Mock gotcha: identity
 regs have CONSTANT read sides split from write sides (GCOLH vs GID0 at
-$FF2D). FIRST LIGHT 2026-08-28: PING v1 + identity on real silicon, PLOT
-readback $F800 exact, the PG-640A house drawn with NO CPU ON CHIP,
-and p8xemu -B ran the LINFUN program against the card: -2017/31/-1
-golden-exact. IDEA 1 COMPLETE. Card bitstream in SRAM only (flash
-personality = user's choice); lcd-target regression stays mandatory.
+$FF2D). FIRST LIGHT + ARC COMPLETE 2026-08-28: PING/identity on silicon, PLOT
+readback exact, the house drawn with NO CPU ON CHIP; p8xemu -B ran
+LINFUN (-2017/31/-1), cube 32 (2016/31/-2048) and the tri/rotate/
+camera/gl family (2016/2016/0) ALL golden-exact -- the software stack
+runs UNCHANGED (that is the contract's point). -B batches GLDATA into
+ack'd bursts w/ synthetic busy-not-full polls + age-based flush;
+RESYNC-ON-CONNECT (66 zeros) recovers a card left mid-command by a
+dead host. os/runcard.sh = the daily driver (emulator CPU, card
+panel). CARD PERSONALITY IS IN FLASH, cold-boot verified -- power-up =
+graphics card, no CPU; lcd rebuildable (stage10-complete tag). NEW
+MODEL NOTES: the SD/imgsend clone flow is OBSOLETE in card mode
+(run-disk.img is the EMULATOR's disk now); panel shows garbage until
+a master CLEARS (no CPU to draw a splash); `house` joins cube as the
+demo (the manual's example is genuinely 3D). lcd-target regression
+stays mandatory.
