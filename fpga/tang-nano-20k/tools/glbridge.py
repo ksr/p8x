@@ -103,6 +103,18 @@ class Bridge:
     def __init__(self, xport):
         self.x = xport
 
+    def resync(self):
+        """Recover a card left mid-command by a dead host: 66 zeros
+        complete any dangling operand/burst (noise into GLDATA at
+        worst -- drain_errors after), then flush the reply junk."""
+        self.x.send(bytes(66))
+        time.sleep(0.1)
+        try:
+            while self.x.recv(1):
+                pass
+        except Exception:
+            pass
+
     def ping(self):
         """-> the card's protocol version. Raises on anything but magic."""
         self.x.send([CMD_PING])
@@ -181,6 +193,7 @@ def _cli():
     if not args:
         sys.exit(__doc__.split("\n\n")[1])
     b = Bridge(SerialXport(dev))
+    b.resync()
     op = args[0]
     if op == "ping":
         print("card protocol v%d" % b.ping())

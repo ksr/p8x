@@ -52,6 +52,7 @@
 #include <fcntl.h>
 #include <termios.h>
 #include <signal.h>
+#include <time.h>
 #include "../generators/memmap.h"   /* RAMBASE/IOBASE/ROMSIZE/RAMSIZE — single-source memory map */
 #include "../generators/trigtab.h"  /* SIN8/TANH8 — stage-10b GL trig, shared with the RTL */
 #include "../generators/glkwtab.h"  /* GL ASCII keywords — stage 10d, shared with the RTL */
@@ -1642,6 +1643,16 @@ int main(int argc,char**argv){
                 cfsetispeed(&bt,B115200); cfsetospeed(&bt,B115200);
                 bt.c_cc[VMIN]=0; bt.c_cc[VTIME]=0;
                 tcsetattr(bridge_fd,TCSANOW,&bt);
+            }
+            /* RESYNC: a previous host may have died mid-command, leaving
+               the card's FSM expecting operands. 66 zero bytes complete
+               any partial command (a dangling burst swallows them as
+               GLDATA noise -- harmless, drained below), then everything
+               is PINGs. Flush the reply junk, then do one clean PING. */
+            { uint8_t z[66]={0}; struct timespec ts={0,100000000};
+              write(bridge_fd,z,sizeof z);
+              nanosleep(&ts,0);
+              { uint8_t junk[256]; while(read(bridge_fd,junk,sizeof junk)>0){} }
             }
             /* PING: refuse to run against the wrong personality */
             { uint8_t p=0x00, r[5]; int got=0;
