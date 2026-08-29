@@ -506,6 +506,57 @@ Nothing below has been built or measured.
       every local at function top, C89-style. Fix: p8cc block-scope
       allocator; add a compiler test with nested-block locals beside
       live function locals.
+- [ ] **Faster image transfer (2026-08-29, user).** Moving pixels is
+      the slowest thing the machine does: host->board rides the 115200
+      bridge (a full-screen P8I is ~256KB = ~22 s of line time) and
+      on-target IMAGE draws pixel-by-pixel through the register window
+      (563 cycles/px asm; the mandrill ~1.4 s). Candidate rungs, mostly
+      independent: (a) raise the UART -- the BL616 USB-serial on the
+      Tang Nano runs 2 Mbaud+; bridge DIV is one parameter on each side
+      and protocol v1 is rate-agnostic; (b) a card-side BLIT command:
+      set a rect, then stream raw RGB565 bytes into the span filler
+      (the burst writer exists -- this is the P8I inner loop moved into
+      fabric, turning IMAGE into FGETB+poke at wire speed); (c) cheap
+      RLE in P8I v2 for flat-colour art (photos won't compress, UI
+      will). Measure (a) first; it may make (b) moot for the SD path.
+- [ ] **Mouse-type input (2026-08-29, user).** No pointer hardware on
+      the board, so two doors: forward the HOST's mouse over the card
+      bridge (a protocol v2 message pair -- runcard.sh's terminal can
+      capture deltas; cleanest for the emulator-CPU era) or real
+      hardware later (PS/2 needs two pins + a tiny shifter in fabric;
+      the TTL bus era could use a serial mouse on a second ACIA).
+      On-target shape either way: a pointer BIOS call (SYS_PTR: x, y,
+      buttons) + a cursor drawn in LINFUN 4 (XOR) -- draw/undraw is
+      board-proven, no save-under needed. First client: `md` paging,
+      or a BASIC PTR() function trio.
+- [ ] **LCD as a terminal (2026-08-29, user).** Let the console live
+      on the panel: mirror BIOS CONOUT to the display so the machine
+      is usable head-down, serial only for file transfer. With 10h the
+      card can already draw text (TEXT via the glyph bank -- ~60x33
+      chars at TSIZE 256), so the missing pieces are a console state
+      machine (cursor, CR/LF, backspace) and SCROLL, which the card
+      cannot do today (no blitter). Scroll options: (a) redraw the
+      whole screen from a line ring (TEXT is fast enough for a demo,
+      not for `dir` spam); (b) a scanout base-offset register --
+      vertical scroll becomes one register write, the classic
+      terminal trick, ~30 LUT in sdram_video + a wrap rule; (c) a
+      fabric copy-rect (a real blitter rung, also what image GRAB
+      wants). (b) is the cheap win. Keyboard stays the serial RX.
+      Fits the FPGA-CPU era (idea 2): CPU and console on one board.
+- [ ] **Simple graphics editor, a C program (2026-08-29, user).** An
+      on-target `draw` command (os/commands, //#use gfx): pick a tool
+      and colour, place points/lines/boxes/circles/fills on the panel,
+      save and reload the result. Everything it needs exists: lib_gfx
+      primitives + AREA for fills, LINFUN 4 (XOR) for the rubber-band
+      preview while placing (board-proven un-draw), `image grab` for
+      saving the canvas as P8I and IMAGE to reload it. Cursor from the
+      keyboard first (arrow keys move an XOR crosshair, step/fast
+      step); the mouse backlog item slots straight in later via the
+      same pointer abstraction. Save-as-GL-scene (emit the command
+      list instead of pixels) is the deluxe variant -- editable vector
+      drawings replayable with CLRUN, feeding the same glyph/list
+      machinery. New-command rules apply: C + asm twin, man page,
+      run.sh lists.
 - [x] **Stage 10h subset — SHIPPED 2026-08-29 (TEXT/TSIZE/TANGLE +
       TDEFIN; the card split paid for it). Remaining from the sketch:
       TEXT-inside-lists (needs a second replay context, ~+100), TJUST,

@@ -5,7 +5,7 @@
  *     HOUSE 36        the turn in 36 frames (10 degrees a step)
  *
  * The house is the manual's own worked example (docs/reference/
- * pg640a.pdf ch.3; docs' HOUSE.GL is the ASCII form), embedded here as
+ * pg640a.pdf ch.3; /examples/HOUSE.GL is the ASCII form), embedded here as
  * the raw hex GL bytes and recorded into command list 1 with its erase,
  * FLIP and frame WAIT inside -- so every CLRUN is one complete paced
  * frame. The animation is CPU-driven, eight bytes a frame: a matrix

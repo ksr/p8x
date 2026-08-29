@@ -35,7 +35,7 @@ DESCRIPTION
     COLOR (BASIC) or gcolor (C) before drawing your own things after.
 
 EXAMPLES
-    image 112 8 /MANDRILL.P8I          draw the demo photo
+    image 112 8 /examples/MANDRILL.P8I draw the demo photo
     image read 0 0 479 271 /SHOT.P8I   grab the whole screen
     image read 100 50 163 113 /Q.P8I   grab a 64x64 square
     image 200 100 /Q.P8I               ...and stamp it elsewhere
