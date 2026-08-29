@@ -195,7 +195,7 @@ THE GRAPHICS LANGUAGE (3D)
 
     TEXT s$ (stage 10h) draws vector text at the current 3D point --
     any string expression. Load the font once per power-up (the OS
-    ships it): from the shell `gl /font.gl`, or in a program stream it
+    ships it): from the shell `gl /FONT.GL`, or in a program stream it
     with GL. Use the ortho camera for window-space text, place with
     MOVE3, and size/rotate with TSIZE (8.8, 256 = design size) and
     TANGLE (degrees) -- both compose like matrix verbs, about MDORG:

@@ -230,8 +230,10 @@ teal diamond, PPM-probed). Card places 18,032 LUT4/86% (+562), Fmax
 74.6 vs 12. Docs swept (man gl/basic, guide new §7, theory, BASIC
 guide, STAGE10-DESIGN as-built), disks rebuilt. BOARD FLASH PENDING
 (no cable at commit time): ./build.sh card load, then glbridge AREA
-probe. STAGE 10h SHIPPED 2026-08-29 (emulator + RTL PIXEL-EXACT; board flash
-still pending with 10g): TEXT(80 count chars)/TSIZE(81)/TANGLE(82)/
+probe. STAGE 10h SHIPPED 2026-08-29 (b34d878; emulator + RTL PIXEL-EXACT and
+ON SILICON same day -- card 18,926 LUT4/91% FLASHED as power-up
+default, 10g+10h both board-verified over the bridge, every probe
+exact; STAGE 10 COMPLETE a-h): TEXT(80 count chars)/TSIZE(81)/TANGLE(82)/
 TDEFIN(84). A glyph IS a command list (relative MR3/DR3 strokes + pen-
 up advance) in a SECOND 64-slot bank $140000 (one addr bit + rec_bank/
 rp_bank on the UNCHANGED record/replay machinery); slots = ASCII
@@ -245,7 +247,7 @@ buffering in BOTH implementations (design decision, in STAGE10-DESIGN).
 TEXT/TDEFIN in lists DEFERRED (err5 recorded AND replayed). RESETF
 does NOT clear the font (installed resource; power does). gen_font.py
 authors the 5x7 stroke font -> os/font.gl (shipped /FONT.GL, load with
-`gl /font.gl`); scene files start "CA \n" -- the space is PART of the
+`gl /FONT.GL`); scene files start "CA \n" -- the space is PART of the
 hex-mode transport switch, and end "CX " with NO trailing newline (a
 stray 0A in hex mode = err1). TRAP FOUND: keyword ROM crossed 128
 entries and wedged the translator matcher's 7-bit t_ent (infinite

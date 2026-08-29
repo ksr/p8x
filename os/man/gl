@@ -89,7 +89,7 @@ DESCRIPTION
     relative strokes (MOVER3/DRAWR3 ending in a pen-up advance) in a
     second 64-slot bank, one slot per ASCII 32..95 (lowercase folds to
     upper). TDEFIN c records one exactly like CLBEG...CLEND records a
-    list; `gl /font.gl` loads the shipped font. TEXT draws each char
+    list; `gl /FONT.GL` loads the shipped font. TEXT draws each char
     at the current 3D point, so place with MOVE3 x y 0 -- and use the
     ORTHO camera (PROJCT 0) for window-space text, since z=0 sits
     behind the perspective camera's near plane. TSIZE s (8.8: 256 =

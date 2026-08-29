@@ -146,13 +146,13 @@ whatever `LINFUN` says.
 
 ## 8. Vector text (TEXT)
 
-    gl /font.gl                           load the font (once per power-up)
+    gl /FONT.GL                           load the font (once per power-up)
     gl PRO 0                              text lives in window space
     gl M3 40,200,0 TX "HELLO WORLD!"      draw at the current 3D point
 
 A glyph is a command list of relative strokes in a second 64-slot
 bank — `TDEFIN c` records one exactly like `CLBEG`…`CLEND` records a
-list, and the shipped `/font.gl` defines ASCII 32–95 (lowercase folds
+list, and the shipped `/FONT.GL` defines ASCII 32–95 (lowercase folds
 to uppercase). Because strokes ride the ordinary 3D pipeline, `TSIZE`
 (an alias of `MDSCAL s s s`, 8.8 fixed point: 256 = design size) and
 `TANGLE` (an alias of `MDROTZ deg`) scale and rotate the letterforms
@@ -166,7 +166,7 @@ or tilted text wants `MDORG` at its anchor (scaling happens about the
 model origin). Use `PROJCT 0` (ortho): at the perspective camera's
 power-up settings, z=0 geometry sits behind the near plane and nothing
 draws. Chars without a glyph skip silently; a font survives `RESETF`
-but not power loss (it lives in SDRAM — stream `/font.gl` again).
+but not power loss (it lives in SDRAM — stream `/FONT.GL` again).
 
 ## 9. From BASIC
 

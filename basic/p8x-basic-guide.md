@@ -452,7 +452,7 @@ what exists only as an outline — always in replace mode, whatever
 
 `TEXT s$` draws vector text at the GL current 3D point — any string
 expression. The font is a set of stroke glyphs the OS ships as
-`/font.gl`; load it once per power-up (`gl /font.gl` from the shell,
+`/FONT.GL`; load it once per power-up (`gl /FONT.GL` from the shell,
 or stream it with `GL` from a program). Text rides the 3D pipeline, so
 use the ortho camera and place with `MOVE3`:
 
