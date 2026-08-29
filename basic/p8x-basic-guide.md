@@ -448,6 +448,31 @@ the way to draw primitives filled in the first place; `AREA` fills
 what exists only as an outline — always in replace mode, whatever
 `LINFUN` says.
 
+### Vector text — TEXT / TSIZE / TANGLE / TDEFIN (stage 10h)
+
+`TEXT s$` draws vector text at the GL current 3D point — any string
+expression. The font is a set of stroke glyphs the OS ships as
+`/font.gl`; load it once per power-up (`gl /font.gl` from the shell,
+or stream it with `GL` from a program). Text rides the 3D pipeline, so
+use the ortho camera and place with `MOVE3`:
+
+```
+10 RESETF : PROJCT 0 : CLEARS 0,0,0
+20 WINDOW 0,479,0,271 : VWPORT 0,479,0,271
+30 COLOR RGB(31,63,0) : TSIZE 512
+40 MOVE3 40,100,0 : TEXT "HELLO"
+```
+
+`TSIZE s` (8.8 fixed point — 256 is design size, 512 doubles) and
+`TANGLE d` (degrees) are compose aliases of `MDSCAL s,s,s` and
+`MDROTZ d`: they transform the letterforms and the baseline together,
+compose like every matrix verb (`MDIDEN` resets), and scale about
+`MDORG` — anchor big or tilted text with `MDORG` at the same point as
+the `MOVE3`. `TDEFIN c` records a custom glyph for char c from native
+stroke statements (`MOVER3`/`DRAWR3`, closed by `CLEND`), so a program
+can add its own symbols. Characters without a glyph skip silently;
+lowercase folds to uppercase (the font covers ASCII 32–95).
+
 ### PRINT details
 
 Items are separated by `,` or `;`:

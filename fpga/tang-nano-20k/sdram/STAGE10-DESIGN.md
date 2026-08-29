@@ -479,6 +479,52 @@ byte-identical emulator-vs-RTL (c_gl_rtl_test), 92-PASS make test.
 - **10h — text.** TEXT + attributes + user-defined glyphs (TDEFIN),
   drawn in window space through the 2D pipeline.
 
+  **10h as built (2026-08-29; emulator + RTL pixel-exact; card
+  personality). The TEXT/TSIZE/TANGLE subset, plus TDEFIN because the
+  card NEEDS it: SDRAM is volatile, so a font must stream in after
+  power-up regardless -- TDEFIN is that loader.**
+
+  - **A glyph IS a command list**: relative MOVER3/DRAWR3 strokes plus
+    a trailing pen-up advance, in a SECOND 64-slot bank at $140000 --
+    one address bit (bit 18) on the existing slot concat, one
+    rec_bank/rp_bank flag pair, and the entire recording and replay
+    machinery is reused unchanged. Slots map ASCII 32..95 (space
+    through underscore -- the classic uppercase machine); lowercase
+    folds in TEXT and TDEFIN both.
+  - **TSIZE s / TANGLE d are compose ALIASES** of MDSCAL s s s and
+    MDROTZ d (TSIZE copies pw0 into the scale lanes and jumps into the
+    MDSCAL arm; TANGLE is the MDROTZ arm with cax forced to Z). So
+    size and angle transform strokes AND baseline through the ordinary
+    matrix path, compose like every matrix verb, and pivot about
+    MDORG. Divergence from the PGC (absolute TSIZE) is documented in
+    man gl. Window-space text wants PROJCT 0: at the power-up
+    perspective camera, z=0 sits behind the near plane.
+  - **TEXT (80, count + chars)** is a small per-char loop (G_TX): pop
+    a char, fold, map (slot = ch[5:0]^$20), and if the glyph is
+    defined replay it via the unchanged fetcher with rp_bank set; the
+    G_OP redirect re-enters the loop while chars remain. Undefined
+    glyphs skip silently. TEXT/TDEFIN inside a list is DEFERRED
+    (error 5, both when recorded and when replayed) -- a second replay
+    context is the cost, noted for a successor.
+  - **The ASCII form emits one single-char TEXT per character**
+    (`80 01 c` per char): the translator's quoted-string mode needs no
+    count-first buffering in EITHER implementation, and the glyph
+    state carries the baseline so the drawing is identical to the
+    counted hex shape. BASIC's TEXT statement (meta $FF in glvtab)
+    emits the counted form.
+  - **RESETF does not clear the font** (an installed resource, like
+    nothing else on the card); power loss does. The keyword ROM grew
+    past 128 entries and found the translator matcher's 7-bit entry
+    cursor -- t_ent is 8 bits now and gen_glkw.py asserts the bound.
+  - **Proof**: tb_gl_txx.v streams the GENERATED os/font.gl (64
+    TDEFIN recordings) and the gl_tx.gl scene (1x, MDORG-anchored 4x,
+    30-degree tilt, lowercase folding) through the real pixel stack --
+    byte-identical to the emulator's gl_tx.ppm. The chain is NINE
+    frames (stage 9 in c_gl_rtl_test.sh); basic_gl_test runs
+    TDEFIN/TSIZE/TEXT as native statements. gen_font.py authors the
+    5x7 stroke font (grid x 0..4, y 0..6, advance 6; TSIZE 256 =
+    7-unit capitals).
+
 Retirement of the stage-9 record front end is its own decision point
 after 10c — ASK the user (workflow rule: no silent breakage of shipped
 interfaces, and it is also a disk+bitstream lockstep change).

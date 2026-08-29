@@ -24,7 +24,7 @@ python3 $ROOT/tools/p8xfs.py boot   bgl.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  bgl.img /bin >/dev/null
 python3 $ROOT/tools/p8xfs.py put    bgl.img bgl_basic.bin --name /bin/basic.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 
-printf 'B\rbasic\r10 GL "RESETF CLEARS 0 0 0"\r20 GL "WINDOW -120 120 -120 120"\r30 GL "VWPORT 104 375 0 271"\r40 GL "COLOR 0 63 0 PRMFIL 1"\r50 A=35\r60 GL "MDY "+STR$(A)\r70 GL "POLY3 3 -8 -8 30 8 -8 30 0 4 42"\r80 PRINT POINT(364,204)\r90 END\rRUN\rNEW\r10 RESETF\r20 CLEARS 0,0,0\r30 WINDOW -120,120,-120,120\r40 VWPORT 104,375,0,271\r50 COLOR RGB(31,0,0)\r60 PRMFIL 1\r70 CLBEG 1\r80 MDROTY 5\r90 CLEND\r100 CLOOP 1,3+4\r110 POLY3 3,-80,-80,300,80,-80,300,0,40,420\r120 PRINT POINT(364,204)\r130 END\rRUN\rNEW\r10 RESETF\r20 CLEARS 0,0,0\r30 WINDOW 0,479,0,271\r40 VWPORT 0,479,0,271\r50 COLOR RGB(31,63,0)\r60 MOVE 100,100\r70 RECT 200,150\r80 MOVE 150,125\r90 AREA\r100 COLOR RGB(0,0,31)\r110 POLY 4,300,200,350,150,400,200,350,250\r120 COLOR RGB(0,63,31)\r130 MOVE 350,200\r140 AREABC 0,0,31\r150 PRINT POINT(150,146)\r160 PRINT POINT(320,71)\r170 END\rRUN\rBYE\r' > bgl.in
+printf 'B\rbasic\r10 GL "RESETF CLEARS 0 0 0"\r20 GL "WINDOW -120 120 -120 120"\r30 GL "VWPORT 104 375 0 271"\r40 GL "COLOR 0 63 0 PRMFIL 1"\r50 A=35\r60 GL "MDY "+STR$(A)\r70 GL "POLY3 3 -8 -8 30 8 -8 30 0 4 42"\r80 PRINT POINT(364,204)\r90 END\rRUN\rNEW\r10 RESETF\r20 CLEARS 0,0,0\r30 WINDOW -120,120,-120,120\r40 VWPORT 104,375,0,271\r50 COLOR RGB(31,0,0)\r60 PRMFIL 1\r70 CLBEG 1\r80 MDROTY 5\r90 CLEND\r100 CLOOP 1,3+4\r110 POLY3 3,-80,-80,300,80,-80,300,0,40,420\r120 PRINT POINT(364,204)\r130 END\rRUN\rNEW\r10 RESETF\r20 CLEARS 0,0,0\r30 WINDOW 0,479,0,271\r40 VWPORT 0,479,0,271\r50 COLOR RGB(31,63,0)\r60 MOVE 100,100\r70 RECT 200,150\r80 MOVE 150,125\r90 AREA\r100 COLOR RGB(0,0,31)\r110 POLY 4,300,200,350,150,400,200,350,250\r120 COLOR RGB(0,63,31)\r130 MOVE 350,200\r140 AREABC 0,0,31\r150 PRINT POINT(150,146)\r160 PRINT POINT(320,71)\r170 END\rRUN\rNEW\r10 RESETF : CLEARS 0,0,0 : PROJCT 0\r20 WINDOW 0,479,0,271\r30 VWPORT 0,479,0,271\r40 TDEFIN 65\r50 MOVER3 0,0,0 : DRAWR3 0,6,0\r60 MOVER3 6,-6,0\r70 CLEND\r80 COLOR RGB(31,63,0)\r90 TSIZE 512 : TANGLE 0\r100 MOVE3 100,100,0\r110 TEXT "A"\r120 PRINT POINT(200,71)\r130 PRINT PEEK(65363)\r140 END\rRUN\rBYE\r' > bgl.in
 ../p8xemu -N -i bgl.in -c bgl.img -l 1500000000 -g bgl.ppm eeprom.bin > bgl.out 2>/dev/null || true
 grep -q "Ok" bgl.out || fail "program did not run"
 # Both programs RESETF+CLEARS first: the OS boot splash paints its own GL
@@ -48,10 +48,18 @@ tr -d '\0\r' < bgl.out | grep -q -- "^-2048$" || fail "POINT(364,204) != -2048 (
 # boundary (window (320,200) -> screen (320,71); teal $07FF = 2047).
 tr -d '\0\r' < bgl.out | grep -q -- "^-32$" || fail "POINT(150,146) != -32 (AREA fill missing)"
 tr -d '\0\r' < bgl.out | grep -q "^2047$" || fail "POINT(320,71) != 2047 (AREABC fill missing)"
+# the stage-10h statements: TDEFIN records a one-stroke glyph through the
+# native verbs, TSIZE 512 (2x) scales it through the compose alias, and
+# TEXT "A" replays it -- the stem's base lands at model (100,100) scaled
+# to (200,200), screen (200,71), yellow (-32 again, distinct pixel). The
+# trailing PEEK(65363) proves the whole session errored nowhere.
+n32=$(tr -d '\0\r' < bgl.out | grep -c -- "^-32$")
+[ "$n32" = "2" ] || fail "TEXT stem probe: -32 seen $n32 times, want 2"
 python3 - <<'EOF' || exit 1
 d=open("bgl.ppm","rb").read(); px=d.split(b"\n",3)[3]
 def p(x,y): return px[(y*480+x)*3:(y*480+x)*3+3]
-assert p(150,146)==b"\xff\xff\x00", "AREA pixel not yellow"
-assert p(320, 71)==b"\x00\xff\xff", "AREABC pixel not teal"
+assert p(200,71)==b"\xff\xff\x00", "TEXT stem not yellow: %r" % (p(200,71),)
+assert p(200,59)==b"\xff\xff\x00", "TEXT stem top missing (TSIZE?): %r" % (p(200,59),)
+assert p(199,65)==b"\x00\x00\x00", "ink beside the stem"
 EOF
-echo "BASIC-GL TEST: PASS (GL statement + native verbs + recorded-list rotation + COLOR bridge + POINT + AREA/AREABC)"
+echo "BASIC-GL TEST: PASS (GL statement + native verbs + recorded-list rotation + COLOR bridge + POINT + AREA/AREABC + TDEFIN/TSIZE/TEXT)"

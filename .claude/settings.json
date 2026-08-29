@@ -8,7 +8,10 @@
       "Bash(../../emulator/p8xemu *)",
       "Bash(iverilog *)",
       "Bash(xxd *)",
-      "Bash(nextpnr-himbaechel *)"
+      "Bash(nextpnr-himbaechel *)",
+      "Bash(vvp *)",
+      "Bash(python3 generators/gen_glkw.py)",
+      "Bash(python3 generators/gen_font.py)"
     ]
   }
 }

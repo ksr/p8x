@@ -114,7 +114,13 @@ the framebuffer through real device POINT commands, paints spans as
 device LINEs, and keeps its 16384-entry seed stack in SDRAM at
 $180000 — the emulator's `gl_afill` reproduced state for state, with
 error 2 for an off-window seed and error 8 (deterministic partial
-fill) when the stack caps out.
+fill) when the stack caps out. Vector text (stage 10h) adds almost no
+datapath at all: a glyph IS a command list in a second SDRAM slot bank
+($140000), TDEFIN records into it through the unchanged recording
+machinery (one bank-select bit), and TEXT is a small per-char loop
+that replays glyph lists through the unchanged replay fetcher --
+TSIZE/TANGLE are compose aliases of MDSCAL/MDROTZ, so size, angle and
+the baseline advance all ride the ordinary matrix path.
 
 ## 5. Transforms: the matrix pipeline (stage 10b)
 
@@ -143,8 +149,10 @@ two registered read ports.
 
 ## 6. Command lists (stage 10c)
 
-64 slots x 4KB in SDRAM at $100000; slot n holds a byte length in its
-first halfword and hex command bytes from byte 2. CLBEG records —
+64 slots x 4KB in SDRAM at $100000 (a second, identical bank at
+$140000 holds the stage-10h GLYPHS -- same format, one address bit);
+slot n holds a byte length in its first halfword and hex command bytes
+from byte 2. The stage-10g fill's seed stack lives at $180000. CLBEG records —
 bytes ride the normal decoder (execution suppressed, boundaries
 tracked, unknown opcodes skipped not stored), CLEND finalizes, CLAPP
 (P8X-only) appends. CLRUN replays once; CLOOP replays n times — the
@@ -186,13 +194,14 @@ not asserted. The proof chain, in escalating strength:
 
 1. Directed op-level benches (`tb_gl.v`): the interpreter's exact
    operation stream, error sequences, FIFO backpressure.
-2. Seven cross-implementation FRAMES (`emulator/test/c_gl_rtl_test.sh`):
+2. Nine cross-implementation FRAMES (`emulator/test/c_gl_rtl_test.sh`):
    the same command bytes rendered by the emulator on the emulated
    machine and by the real RTL stack (geometry + gfx + arbiter + SDRAM
    controller + a protocol-checking chip model), compared pixel for
    pixel — the 10a scene, the 10b matrix scene, the 10c fly-through,
-   the 10d ASCII scene, the 10f LINFUN scene, the 10g AREA fills, and
-   the $FF20-driven circle/ellipse scene.
+   the 10d ASCII scene, the 10f LINFUN scene, the 10g AREA fills, the
+   10h TEXT scene (the whole generated font TDEFIN'd, then sized,
+   tilted and folded), and the $FF20-driven circle/ellipse scene.
 3. On-board probes: the same programs typed at the real machine, with
    POINT read-backs checked against the emulator's golden values.
 

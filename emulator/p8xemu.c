@@ -501,6 +501,8 @@ static uint8_t glmode;       /* 0 = hex (10a default; 1 = ASCII, stage 10d) */
 static char awb[8];  static int awn;      /* keyword accumulator */
 static int  axv, axneg, axhas;            /* number accumulator */
 static int  a_op, a_bcnt, a_left, a_var, a_vw, a_act, a_pi, a_skip;
+static int  a_str;                        /* 10h: 1 = await quote, 2 = in string */
+static uint8_t a_sop;                     /* the string verb's opcode */
 static uint8_t glfill;       /* PRMFIL: closed primitives fill when 1 */
 static int16_t glc2[2], glc3[3];   /* the 2D and 3D current points */
 static int16_t glproj, gldist;     /* PROJCT angle / DISTAN viewer distance */
@@ -541,7 +543,7 @@ static void gl_state_reset(void){          /* RESETF: state, NOT the FIFOs */
 }
 static void gl_reset(void){                /* power-on */
     glflen=0; gleflen=0; glrblen=glrbrd=0; glmode=0;
-    awn=0; axv=0; axneg=0; axhas=0; a_act=0; a_skip=0;
+    awn=0; axv=0; axneg=0; axhas=0; a_act=0; a_skip=0; a_str=0;
     glfill=0; glc2[0]=glc2[1]=0; glc3[0]=glc3[1]=glc3[2]=0;
     gl_mat_reset();
 }
@@ -723,7 +725,15 @@ static void gl_line3(const int16_t *a,const int16_t *b){
 #define CLNUM  64                      /* 64 lists (P8X cap; PGC had 256) */
 static uint8_t clmem[CLNUM][CLSLOT];
 static uint8_t cldef[CLNUM];           /* the DEFINED bitmap */
+/* stage 10h: the GLYPH bank -- a second 64-slot list bank ($140000 on
+   the card). A glyph IS a command list (relative MOVER3/DRAWR3 strokes
+   ending in a pen-up advance); TDEFIN records into it through the SAME
+   machinery, chars 32..95 (lowercase folds), slot = char - 32. RESETF
+   deliberately does NOT clear it: a font is an installed resource. */
+static uint8_t glgmem[CLNUM][CLSLOT];
+static uint8_t glgdef[CLNUM];
 static int     glrec;                  /* recording into slot glrec-1 */
+static int     glrbank;                /* recording target: 0 lists, 1 glyphs */
 static int     glrlen;                 /* bytes recorded so far */
 static int     glreplay;               /* inside a replay (no nesting) */
 
@@ -739,6 +749,11 @@ static int gl_cmdlen(const uint8_t *p, int n){
     case 0x79: case 0xEB: case 0x61: case 0x62: case 0x76: return 2;
     case 0xC0: return 1;
     case 0xC1: return 4;                   /* AREABC r g b */
+    case 0x80:                             /* TEXT: count + chars (10h) */
+        if(n < 2) return 0;
+        return 2 + p[1];
+    case 0x81: case 0x82: return 3;        /* TSIZE / TANGLE */
+    case 0x84: return 2;                   /* TDEFIN c */
     case 0x78: return 5;                   /* CLMOD n b off */
     case 0x05: case 0x43: case 0x93: case 0x94: case 0x95:
     case 0xA3: case 0xA4: case 0xA5: case 0xA8: case 0xA9:
@@ -798,13 +813,17 @@ static int gl_exec2(const uint8_t *p, int n){
             L = gl_cmdlen(p, n);
             if(L == -1){ gl_err(1); return 1; }   /* skipped, not stored */
             if(L == 0 || L > n) return 0;         /* wait for the rest */
-            if(p[0]==0x70 || p[0]==0x79 || p[0]==0x72 || p[0]==0x73){
-                gl_err(5); return L;       /* no nesting */
+            if(p[0]==0x70 || p[0]==0x79 || p[0]==0x72 || p[0]==0x73 ||
+               p[0]==0x80 || p[0]==0x84){
+                gl_err(5); return L;       /* no nesting (TEXT/TDEFIN in a
+                                              list is DEFERRED -- 10h) */
             }
             if(glrlen + L > CLSLOT - 2){   /* slot overflow: abort */
-                gl_err(7); cldef[glrec-1]=0; glrec=0; return L;
+                gl_err(7);
+                if(glrbank) glgdef[glrec-1]=0; else cldef[glrec-1]=0;
+                glrec=0; glrbank=0; return L;
             }
-            memcpy(clmem[glrec-1] + 2 + glrlen, p, L);
+            memcpy((glrbank?glgmem:clmem)[glrec-1] + 2 + glrlen, p, L);
             glrlen += L;
             return L;
         }
@@ -819,11 +838,11 @@ static int gl_exec2(const uint8_t *p, int n){
                ? (clmem[p[1]][0] | (clmem[p[1]][1] << 8)) : 0;
         cldef[p[1]] = 0;                   /* undefined until CLEND */
         return 2;
-    case 0x71:                             /* CLEND */
+    case 0x71:                             /* CLEND (either bank) */
         if(!glrec){ gl_err(5); return 1; }
-        clmem[glrec-1][0] = (uint8_t)(glrlen & 255);
-        clmem[glrec-1][1] = (uint8_t)(glrlen >> 8);
-        cldef[glrec-1] = 1; glrec = 0;
+        (glrbank?glgmem:clmem)[glrec-1][0] = (uint8_t)(glrlen & 255);
+        (glrbank?glgmem:clmem)[glrec-1][1] = (uint8_t)(glrlen >> 8);
+        (glrbank?glgdef:cldef)[glrec-1] = 1; glrec = 0; glrbank = 0;
         return 1;
     case 0x72: NEED(2);                    /* CLRUN */
         if(glreplay){ gl_err(5); return 2; }
@@ -876,12 +895,57 @@ static int gl_exec2(const uint8_t *p, int n){
           if(off >= L){ gl_err(2); return 5; }
           clmem[p[1]][2 + off] = p[2]; }
         return 5;
+    /* ---- stage 10h: TEXT (glyphs are lists in the second bank) ---- */
+    case 0x80:                             /* TEXT count chars */
+        if(n < 2) return 0;
+        { int L = 2 + p[1]; int i;
+          NEED(L);
+          if(glreplay){ gl_err(5); return L; }   /* deferred: no TEXT in
+                                                    a replayed list */
+          for(i = 0; i < p[1]; i++){
+              int c = p[2+i];
+              if(c >= 'a' && c <= 'z') c -= 32;
+              c -= 32;
+              if(c < 0 || c >= CLNUM || !glgdef[c]) continue; /* no glyph:
+                                                    silent skip (a font is
+                                                    optional per char) */
+              { const uint8_t *b = glgmem[c] + 2;
+                int len = glgmem[c][0] | (glgmem[c][1] << 8);
+                int off = 0, k;
+                glreplay = 1;              /* glyph content may not nest */
+                while(off < len){
+                    k = gl_exec2(b + off, len - off);
+                    if(k <= 0) break;
+                    off += k;
+                }
+                glreplay = 0; }
+          }
+          return L; }
+    case 0x81: NEED(3);                    /* TSIZE s == MDSCAL s s s (8.8) */
+        { int16_t sc[12]; memset(sc,0,sizeof sc);
+          sc[0]=sc[4]=sc[8]=gl_i16(p+1);
+          gl_orgt(sc); gl_mcomp(sc,glmm); gl_recompose(); }
+        return 3;
+    case 0x82: NEED(3);                    /* TANGLE d == MDROTZ d */
+        { int16_t sc[12];
+          gl_rsub(2, gl_i16(p+1), sc);
+          gl_orgt(sc); gl_mcomp(sc,glmm); gl_recompose(); }
+        return 3;
+    case 0x84: NEED(2);                    /* TDEFIN c: record a glyph */
+        if(glrec || glreplay){ gl_err(5); return 2; }
+        { int c = p[1];
+          if(c >= 'a' && c <= 'z') c -= 32;
+          c -= 32;
+          if(c < 0 || c >= CLNUM){ gl_err(2); return 2; }
+          glrec = c + 1; glrbank = 1; glrlen = 0; glgdef[c] = 0;
+ }
+        return 2;
     case 0x01: return 1;                                  /* NOOP */
     case 0x02: ge_flip(); return 1;                       /* FLIP   (P8X) */
     case 0x03: gfb=gfbd; return 1;                        /* PGSYNC (P8X) */
     case 0x04:                                            /* RESETF */
         gl_state_reset();
-        memset(cldef, 0, sizeof cldef); glrec = 0;
+        memset(cldef, 0, sizeof cldef); glrec = 0; glrbank = 0;
         gmode = 0;                     /* 10f: drawing mode back to replace */
         glrblen = glrbrd = 0;              /* 10e: read-back FIFO clears */
         return 1;
@@ -1121,6 +1185,16 @@ static void gl_akw(void){
     if(GLKW[i].op == 0xFE){ glmode = 1; return; }   /* CA */
     if(GLKW[i].op == 0xFF){ glmode = 0; return; }   /* CX */
     if(a_act) gl_azfill();
+    if(GLKW[i].arity == 14){               /* string verb (TEXT): the ASCII
+                                              form emits one SINGLE-CHAR
+                                              command per character -- the
+                                              glyph state (baseline) carries
+                                              across, so the drawing is
+                                              identical to the counted hex
+                                              form, and nobody buffers */
+        a_sop = GLKW[i].op; a_str = 1; a_skip = 0;
+        return;
+    }
     a_skip = 0;
     gl_hexb(GLKW[i].op);
     a_op = GLKW[i].op; a_bcnt = GLKW[i].bcnt; a_pi = 0;
@@ -1136,6 +1210,21 @@ static void gl_anum(void){
     gl_aemit(v);
 }
 static void gl_ascii(uint8_t b){
+    if(a_str == 2){                        /* inside "..." -- verbatim, no
+                                              folding, no delimiters */
+        if(b == '"'){ a_str = 0; return; }
+        if(b == 13 || b == 10){            /* the line ended the string */
+            gl_err(2); a_str = 0; return;
+        }
+        gl_hexb(a_sop); gl_hexb(1); gl_hexb(b);
+        return;
+    }
+    if(a_str == 1){                        /* awaiting the opening quote */
+        if(b == '"'){ a_str = 2; return; }
+        if(b == ' ' || b == 9 || b == ',' || b == ';') return;
+        gl_err(2); a_str = 0;              /* no string came: verb dropped */
+        if(b == 13 || b == 10) return;     /* fall through to process b */
+    }
     if(b >= 'a' && b <= 'z') b -= 32;
     if(b == ' ' || b == 9 || b == ',' || b == ';' || b == 13 || b == 10){
         if(awn) gl_akw();

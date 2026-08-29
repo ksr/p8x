@@ -167,8 +167,8 @@ THE GRAPHICS LANGUAGE (3D)
     POLYR3 CONVRT / MDIDEN MDORG MDROTX MDROTY MDROTZ MDSCAL MDTRAN
     MDMATX / VWIDEN VWRPT VWROTX VWROTY VWROTZ VWMATX DISTAN PROJCT
     DISTH DISTY CLIPH CLIPY / CLBEG CLEND CLRUN CLOOP CLDEL CLAPP /
-    FLIP PGSYNC WAIT RESETF LINFUN AREA AREABC. Verbs, parameters and
-    order are exactly
+    FLIP PGSYNC WAIT RESETF LINFUN AREA AREABC TEXT TSIZE TANGLE
+    TDEFIN. Verbs, parameters and order are exactly
     the device's (man gl documents each); FLOOD and CLEARS take r,g,b
     the way the device does. COLOR is not in the list because the
     ordinary COLOR statement now sets the GL pen too -- one pen
@@ -192,6 +192,22 @@ THE GRAPHICS LANGUAGE (3D)
     and fill can differ. A seed outside the window is a GL error; a
     seed on the boundary quietly fills nothing. AREA always paints in
     replace mode, whatever LINFUN says.
+
+    TEXT s$ (stage 10h) draws vector text at the current 3D point --
+    any string expression. Load the font once per power-up (the OS
+    ships it): from the shell `gl /font.gl`, or in a program stream it
+    with GL. Use the ortho camera for window-space text, place with
+    MOVE3, and size/rotate with TSIZE (8.8, 256 = design size) and
+    TANGLE (degrees) -- both compose like matrix verbs, about MDORG:
+
+        10 RESETF : PROJCT 0 : CLEARS 0,0,0
+        20 WINDOW 0,479,0,271 : VWPORT 0,479,0,271
+        30 COLOR RGB(31,63,0) : TSIZE 512
+        40 MOVE3 40,100,0 : TEXT "HELLO"
+
+    TDEFIN c records a custom glyph for char c through the same native
+    statements (strokes as MOVER3/DRAWR3, CLEND finishes), so a program
+    can define its own symbols. man gl has the full text model.
 
     Start a scene with RESETF: the machine draws a boot splash through
     the same engine, and matrix verbs COMPOSE -- without a reset your

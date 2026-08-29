@@ -209,4 +209,49 @@ MODEL NOTES: the SD/imgsend clone flow is OBSOLETE in card mode
 (run-disk.img is the EMULATOR's disk now); panel shows garbage until
 a master CLEARS (no CPU to draw a splash); `house` joins cube as the
 demo (the manual's example is genuinely 3D). lcd-target regression
-stays mandatory.
+stays mandatory (lcd RETIRED AS PLACEABLE 2026-08-28, user choice: new
+rungs land unconditionally in shared RTL, lcd keeps synthesizing for
+benches, stage10-complete tag preserves the all-in-one machine).
+
+STAGE 10e RESURRECTED ON THE CARD (a7f3206, 2026-08-28): FLAGRD/
+MATXRD/CLRD/CLMOD + GLRB + BASIC GLRD($FB) + clsave; card placed
+17,470/84%. STAGE 10g SHIPPED 2026-08-28 (0a971a8, RTL PIXEL-EXACT ON
+FIRST BENCH RUN): AREA(C0)/AREABC(C1) scanline seed fill -- 30-state
+walker mirroring gl_afill exactly; probes = real device POINTs via NEW
+gm_rd strobe (plumbed through both tops + all benches), paints =
+device LINEs, seed stack = SDRAM $180000 ({00,11,00,sp,00}, 16384
+pairs, cap = err8 deterministic partial fill), replay fetcher gated by
+af_g (AREA inside a list can't race the stack), GMODE forced replace
+first (visited-mark invariant -- now explicit in gl_afill too).
+Off-window seed = err2; seed on boundary/pen = silent no-op. Proof:
+tb_gl_arx.v frame == gl_ar.ppm; c_gl_rtl_test = SEVEN frames;
+basic_gl_test now executes AREA/$EC + AREABC/$ED tokens (yellow rect +
+teal diamond, PPM-probed). Card places 18,032 LUT4/86% (+562), Fmax
+74.6 vs 12. Docs swept (man gl/basic, guide new §7, theory, BASIC
+guide, STAGE10-DESIGN as-built), disks rebuilt. BOARD FLASH PENDING
+(no cable at commit time): ./build.sh card load, then glbridge AREA
+probe. STAGE 10h SHIPPED 2026-08-29 (emulator + RTL PIXEL-EXACT; board flash
+still pending with 10g): TEXT(80 count chars)/TSIZE(81)/TANGLE(82)/
+TDEFIN(84). A glyph IS a command list (relative MR3/DR3 strokes + pen-
+up advance) in a SECOND 64-slot bank $140000 (one addr bit + rec_bank/
+rp_bank on the UNCHANGED record/replay machinery); slots = ASCII
+32..95, lowercase folds. TSIZE/TANGLE = compose ALIASES of MDSCAL sss/
+MDROTZ (pw0 copied into scale lanes / cax=Z) -- divergence from PGC's
+absolute TSIZE documented; anchor big/tilted text with MDORG at the
+MOVE3 point. WINDOW-SPACE TEXT NEEDS PROJCT 0 (z=0 is behind the
+perspective camera's near plane -- cost a debugging round). ASCII form
+emits ONE SINGLE-CHAR TEXT PER CHAR (80 01 c): kills count-first
+buffering in BOTH implementations (design decision, in STAGE10-DESIGN).
+TEXT/TDEFIN in lists DEFERRED (err5 recorded AND replayed). RESETF
+does NOT clear the font (installed resource; power does). gen_font.py
+authors the 5x7 stroke font -> os/font.gl (shipped /FONT.GL, load with
+`gl /font.gl`); scene files start "CA \n" -- the space is PART of the
+hex-mode transport switch, and end "CX " with NO trailing newline (a
+stray 0A in hex mode = err1). TRAP FOUND: keyword ROM crossed 128
+entries and wedged the translator matcher's 7-bit t_ent (infinite
+walk, "FIFO never drained") -- now 8 bits + gen_glkw assert. tb_gl_txx
+drain timeouts need 5M cycles (CLS is a per-pixel-pair walk; >1M with
+a full FIFO). Proof chain = NINE frames; basic_gl_test runs TDEFIN/
+TSIZE/TEXT native (BASIC TEXT = glvtab meta $FF -> glv_str string
+handler; tokens $EE-$F1). Stage 10 rungs a-h ALL COMPLETE. Remaining
+text ideas: TEXT-in-lists (second replay context ~+100), TJUST, TEXTP.

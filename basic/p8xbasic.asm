@@ -1790,6 +1790,10 @@ glv_hi: LDB  #>GLVTAB
         STA  GLMETA
         LDA  GLOP
         JSR  GLPUT                  ; the opcode
+        LDA  GLMETA
+        LDB  #$FF                   ; meta $FF: the string statement (TEXT)
+        CMP                         ;   -- gen_glkw marks it; the hex shape
+        JZ   glv_str                ;   is opcode, count, then the chars
         LDA  #1
         STA  GLFST
         LDA  GLMETA
@@ -1830,6 +1834,24 @@ glv_dn: LDA  GLSTATR                ; native statements are SYNCHRONOUS:
         JNZ  glv_dn                 ;   pixels on silicon, exactly as it
         RTS                         ;   does in the emulator. GL s$ stays
                                     ;   the async path (fly-throughs).
+
+glv_str: JSR  SEVAL                 ; TEXT s$: any string expression
+        LDA  STRACC
+        JSR  GLPUT                  ; the count byte
+        LDA  #<STRACCD
+        TAP1L
+        LDA  #>STRACCD
+        TAP1H
+        LDA  STRACC
+        STA  GLN
+glv_sc: LDA  GLN
+        JZ   glv_dn                 ; then drain busy: synchronous, like
+        DEC                         ;   every native GL statement
+        STA  GLN
+        LDA  (P1)
+        JSR  GLPUT
+        INP1
+        JMP  glv_sc
 
 glv_var: JSR GLVSEP                 ; the vertex count
         LDA  RESULT

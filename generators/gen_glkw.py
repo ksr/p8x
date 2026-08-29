@@ -103,6 +103,16 @@ VERBS = [
     # stage 10g (appended: BASIC token order is ABI)
     ("AREA",    "AR",   0xC0, 0, 0),
     ("AREABC",  "ARB",  0xC1, 3, 3),
+    # stage 10h (appended: BASIC token order is ABI). TEXT's arity 14 is
+    # the COUNTED-STRING sentinel: the translator takes a quoted string
+    # and emits count + chars; BASIC routes the token to its own string
+    # handler (glvtab meta $FF). TSIZE/TANGLE are compose ALIASES
+    # (MDSCAL s s s / MDROTZ d); TDEFIN records a glyph list (CLBEG's
+    # shape, the glyph bank).
+    ("TEXT",    "TX",   0x80, 0, 14),
+    ("TSIZE",   "TS",   0x81, 0, 1),
+    ("TANGLE",  "TA",   0x82, 0, 1),
+    ("TDEFIN",  "TD",   0x84, 1, 1),
     ("CA",      "CA",   0xFE, 0, 0),   # mode switches: internal markers
     ("CX",      "CX",   0xFF, 0, 0),
 ]
@@ -139,6 +149,7 @@ with open(os.path.join(HERE, "..", "fpga", "rtl", "glkwtab.vh"), "w") as f:
     f.write("    // %d entries; the matcher stops at the first zero word\n" % len(entries))
     f.write("    cmx[%d] = 16'h0000;\n" % w)
 assert w + 1 < 768, "keyword ROM reached the RBS mirror region (768) -- move RBS in p8x_geom.v"
+assert len(entries) < 256, "matcher cursor t_ent is 8 bits -- widen it in p8x_geom.v"
 print("wrote fpga/rtl/glkwtab.vh (ends at scratch word %d of 1024; RBS mirror at 768)" % (w+1))
 
 # ---- BASIC's native GL statements ---------------------------------------
@@ -176,6 +187,8 @@ with open(os.path.join(HERE, "..", "basic", "glvtab.inc"), "w") as f:
     for i, (lng, op, b, a) in enumerate(bverbs):
         if a == 15:
             meta = 0x80 | (b << 4)
+        elif a == 14:
+            meta = 0xFF          # string statement: BASIC's own handler
         else:
             meta = (b << 4) | (a - b)
         f.write("        .byte $%02X, $%02X   ; $%02X %s\n"

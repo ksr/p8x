@@ -221,9 +221,11 @@ module p8x_geom (
   reg [1:0]  t_bcnt;
   reg [9:0]  t_left;                 // params left (255 verts * 3 max)
   reg        t_var, t_act, t_skip;
+  reg [1:0]  t_str;                  // 10h: 1 = await quote, 2 = in string
+  reg [7:0]  t_sop;                  // the string verb's opcode
   reg [1:0]  t_vw;
   reg [4:0]  t_pi;
-  reg [6:0]  t_ent;                  // ROM entry cursor
+  reg [7:0]  t_ent;                  // ROM entry cursor (10h: >128 entries)
   reg [1:0]  t_k;                    // fetch microstep
   reg [15:0] t_w0, t_w1, t_w2;       // fetched entry chars
   reg [2:0]  ast;                    // translator FSM
@@ -334,7 +336,9 @@ module p8x_geom (
              // CLMOD read-modify-write
              G_RBP=17, G_WV=18,
              G_RD0=19, G_RD1=20, G_RD2=21, G_RD3=22,
-             G_MD0=23, G_MD1=24, G_MD2=25, G_MD3=26;
+             G_MD0=23, G_MD1=24, G_MD2=25, G_MD3=26,
+             // stage 10h: TEXT's per-char loop (glyphs replay as lists)
+             G_TX=27;
 
   // ---- stage 10c: COMMAND LISTS (STAGE10-DESIGN.md) ----------------------
   // 64 lists in 4KB SDRAM slots at CL_BASE + n*4096: byte length in the
@@ -345,11 +349,15 @@ module p8x_geom (
   localparam [22:0] CL_BASE = 23'h100000;
   reg [63:0]  cldef;                 // the DEFINED bitmap
   reg         rec;                   // recording into rec_slot
+  reg         rec_bank;              // 10h: 0 = lists, 1 = the glyph bank
   reg [5:0]   rec_slot;
   reg [12:0]  rec_len;               // bytes stored so far
   reg [7:0]   rec_lo;                // byte-pair latch
   reg         rskip;                 // consume one command, store/run nothing
+  reg [63:0]  gdef;                  // 10h: the glyph DEFINED bitmap
+  reg [7:0]   txn;                   // 10h: TEXT chars still to consume
   reg         rp;                    // replaying from rp_slot
+  reg         rp_bank;               // 10h: glyph replays read bank 1
   reg [5:0]   rp_slot;
   reg [12:0]  rp_off, rp_len;
   reg [15:0]  rp_cnt;                // CLOOP passes remaining
@@ -372,6 +380,8 @@ module p8x_geom (
       8'h78: opn = 5'd4;               // CLMOD n b off
       8'hC0: opn = 5'd0;
       8'hC1: opn = 5'd3;               // AREABC r g b
+      8'h80,8'h84: opn = 5'd1;         // TEXT count / TDEFIN c (10h)
+      8'h81,8'h82: opn = 5'd2;         // TSIZE s / TANGLE d
       8'h05,8'h43,8'h93,8'h94,8'h95,8'hA3,8'hA4,8'hA5,
       8'hA8,8'hA9,8'hB0,8'hB1: opn = 5'd2;
       8'h06,8'h07,8'h0F,8'h73: opn = 5'd3;
@@ -387,7 +397,7 @@ module p8x_geom (
   // 1MB base / 4KB slots are aligned and the recorder aborts at >=4092,
   // so the in-slot offset never carries: the address is a concat
   wire [11:0] rec_off = {rec_len[11:1], 1'b0} + 12'd2;
-  wire [22:0] rec_wa = {2'd0, 1'b1, 2'd0, rec_slot, rec_off};
+  wire [22:0] rec_wa = {2'd0, 1'b1, 1'b0, rec_bank, rec_slot, rec_off};
   wire [15:0] pw0 = {pbuf[1], pbuf[0]};        // little-endian int16 params
   wire [15:0] pw1 = {pbuf[3], pbuf[2]};
   wire [15:0] pw2 = {pbuf[5], pbuf[4]};
@@ -559,8 +569,10 @@ module p8x_geom (
       rb_wp <= 0; rb_rp <= 0; jrbs <= 0; wvk <= 0; rcph <= 0;
       glst <= G_OP; glop <= 0; pi <= 0; pneed <= 0; glnv <= 0;
       cldef <= 64'd0; rec <= 0; rskip <= 0; rp <= 0; rp_have <= 0;
+      gdef <= 64'd0; rec_bank <= 0; rp_bank <= 0; txn <= 0;
       glmode <= 0; tq_wp <= 0; tq_rp <= 0; wn <= 0; tnv <= 0;
       tneg <= 0; thas <= 0; t_act <= 0; t_skip <= 0; ast <= A_IDLE;
+      t_str <= 0;
       t_ent <= 0; t_k <= 0;
       fst <= 0; sd_busy <= 0; g_req <= 0; g_we <= 0;
       rec_len <= 0; rp_off <= 0; rp_len <= 0; rp_cnt <= 0;
@@ -622,7 +634,7 @@ module p8x_geom (
             if (rp_cnt <= 16'd1) rp <= 0;
             else begin rp_cnt <= rp_cnt - 16'd1; rp_off <= 0; end
           end else begin
-            g_addr <= {2'd0, 1'b1, 2'd0, rp_slot,
+            g_addr <= {2'd0, 1'b1, 1'b0, rp_bank, rp_slot,
                        {rp_off[11:1], 1'b0} + 12'd2};
             g_we <= 0; g_req <= 1; sd_busy <= 1; fst <= 1'b1;
           end
@@ -639,8 +651,30 @@ module p8x_geom (
       // scratchpad's ports (the keyword ROM lives at word 128+) are free.
       case (ast)
         A_IDLE: if (glmode && !rp && cf_ne && !tq_ne) begin : atok
-          reg [7:0] b;
-          b = cf[cf_rp[4:0]];
+          reg [7:0] b0, b;
+          b0 = cf[cf_rp[4:0]];
+          if (t_str == 2'd2) begin           // inside "..." -- verbatim, no
+            cf_rp <= cf_rp + 6'd1;           //   folding, no delimiters.
+            if (b0 == 8'h22) t_str <= 0;     // The ASCII form emits one
+            else if (b0 == 8'h0D || b0 == 8'h0A) begin  // SINGLE-CHAR verb
+              epush(8'd2); t_str <= 0;       // per character (the glyph
+            end else begin                   // state carries the baseline),
+              tq[tq_wp[1:0]]         <= t_sop;   // so nobody buffers a
+              tq[tq_wp[1:0] + 2'd1]  <= 8'h01;   // count-first string.
+              tq[tq_wp[1:0] + 2'd2]  <= b0;  // (tq is empty here: the
+              tq_wp <= tq_wp + 3'd3;         //  A_IDLE guard said so)
+            end
+          end else if (t_str == 2'd1) begin  // awaiting the opening quote
+            if (b0 == 8'h22) begin cf_rp <= cf_rp + 6'd1; t_str <= 2'd2; end
+            else if (b0 == 8'h20 || b0 == 8'h09 ||
+                     b0 == 8'h2C || b0 == 8'h3B) cf_rp <= cf_rp + 6'd1;
+            else if (b0 == 8'h0D || b0 == 8'h0A) begin
+              cf_rp <= cf_rp + 6'd1; epush(8'd2); t_str <= 0;
+            end else begin                   // no string came: drop the
+              epush(8'd2); t_str <= 0;       //   verb, REPROCESS this byte
+            end
+          end else begin
+          b = b0;
           cf_rp <= cf_rp + 6'd1;
           if (b >= 8'h61 && b <= 8'h7A) b = b - 8'h20;   // fold case
           if (b == 8'h20 || b == 8'h09 || b == 8'h2C ||
@@ -672,6 +706,7 @@ module p8x_geom (
             wb3 <= 8'h20; wb4 <= 8'h20; wb5 <= 8'h20;
             wn <= 3'd1;
           end else epush(8'd2);                           // stray byte
+          end
         end
 
         // match the keyword: fetch each ROM entry (4 halfwords at
@@ -679,7 +714,7 @@ module p8x_geom (
         // the matcher reads the keyword ROM through port A: wait for the
         // walker (and the G_2D/G_3L loaders) to leave the scratchpad alone
         A_M0: if (state == S_IDLE && glst < G_2D) begin
-          cm_aa <= 10'd128 + {1'd0, t_ent, 2'd0} + {8'd0, t_k};
+          cm_aa <= 10'd128 + {t_ent, 2'd0} + {8'd0, t_k};
           ast <= A_M1;
         end
         A_M1: ast <= A_M2;
@@ -692,17 +727,17 @@ module p8x_geom (
                 else begin t_skip <= 1; wn <= 0; ast <= A_IDLE; end
                 t_op <= 8'h00;                            // no verb to start
               end else if (cm_qa != {wb0, wb1}) begin
-                t_ent <= t_ent + 7'd1; t_k <= 0; ast <= A_M0;
+                t_ent <= t_ent + 8'd1; t_k <= 0; ast <= A_M0;
               end else begin t_k <= 2'd1; ast <= A_M0; end
             end
             2'd1: begin
               if (cm_qa != {wb2, wb3}) begin
-                t_ent <= t_ent + 7'd1; t_k <= 0; ast <= A_M0;
+                t_ent <= t_ent + 8'd1; t_k <= 0; ast <= A_M0;
               end else begin t_k <= 2'd2; ast <= A_M0; end
             end
             2'd2: begin
               if (cm_qa != {wb4, wb5}) begin
-                t_ent <= t_ent + 7'd1; t_k <= 0; ast <= A_M0;
+                t_ent <= t_ent + 8'd1; t_k <= 0; ast <= A_M0;
               end else begin t_k <= 2'd3; ast <= A_M0; end
             end
             default: begin                                // the meta word
@@ -726,6 +761,10 @@ module p8x_geom (
         end
 
         A_ACT: if (tq_cnt <= 3'd3) begin                  // start the verb
+          if (t_w0[13:10] == 4'd14 && !t_w0[14]) begin    // a string verb
+            t_sop <= t_op; t_str <= 2'd1; t_act <= 0;     // (TEXT): emit
+            ast <= A_IDLE;                                // per char above
+          end else begin
           tq[tq_wp[1:0]] <= t_op; tq_wp <= tq_wp + 3'd1;
           t_bcnt <= t_w0[9:8];
           t_var  <= t_w0[14];
@@ -734,6 +773,7 @@ module p8x_geom (
           t_pi   <= 0;
           t_act  <= (t_w0[14] || t_w0[13:10] != 4'd0);
           ast <= A_IDLE;
+          end
         end
       endcase
 
@@ -1691,7 +1731,10 @@ module p8x_geom (
         // pop one byte from the active source (FIFO or replay buffer);
         // while recording, pops also stream into the SDRAM store, so
         // they gate on the store being free (sd_busy)
-        G_OP: if (src_ne && !(rec && sd_busy)) begin
+        G_OP: if (txn != 8'd0 && !rp) glst <= G_TX;  // 10h: the next
+                                                 // source byte is a string
+                                                 // char, not an opcode
+        else if (src_ne && !(rec && sd_busy)) begin
           glop <= srcb; pi <= 0;
           if (rp) begin rpb0 <= rpb1; rp_have <= rp_have - 2'd1;
                         rp_off <= rp_off + 13'd1; end
@@ -1708,19 +1751,21 @@ module p8x_geom (
             glst <= (opn == 5'd0) ? G_RUN : G_PRM;
             if (rec) begin
               if (srcb == 8'h70 || srcb == 8'h72 ||
-                  srcb == 8'h73 || srcb == 8'h79) begin
+                  srcb == 8'h73 || srcb == 8'h79 ||
+                  srcb == 8'h80 || srcb == 8'h84) begin
                 if (ef_wp - ef_rp != 4'd8) begin // no nesting: error 5,
                   ef[ef_wp[2:0]] <= 8'd5;        //   consume unstored
-                  ef_wp <= ef_wp + 4'd1; end
-                rskip <= 1;
+                  ef_wp <= ef_wp + 4'd1; end     //   (80/84: TEXT/TDEFIN
+                rskip <= 1;                      //   in a list is deferred)
               end else if (srcb == 8'h43) begin  // CA/CX: TRANSPORT, not
                                                  //   content -- executes
                                                  //   even mid-recording
               end else begin                     // store the opcode byte
                 if (rec_len >= 13'd4092) begin   // slot full: error 7,
                   epush(8'd7);                   //   recording aborts (the
-                  cldef[rec_slot] <= 1'b0;       //   partial tail lies in a
-                  rec <= 0; rskip <= 1;          //   slot that stays
+                  if (rec_bank) gdef[rec_slot] <= 1'b0;   // partial tail
+                  else cldef[rec_slot] <= 1'b0;  //   lies in a slot that
+                  rec <= 0; rec_bank <= 0; rskip <= 1;     // stays
                 end else begin                   //   undefined)
                   if (!rec_len[0]) rec_lo <= srcb;
                   else begin
@@ -1748,6 +1793,11 @@ module p8x_geom (
               rskip <= 0;
               glst <= G_OP;
             end else glst <= G_PV;
+          end else if (glop == 8'h80) begin               // TEXT: count then
+            txn <= pbuf[0];                               //   the chars
+            if (rp && !rec && !rskip) begin epush(8'd5); rskip <= 1; end
+            if (pbuf[0] == 8'd0) begin rskip <= 0; glst <= G_OP; end
+            else glst <= G_TX;
           end else glst <= G_RUN;
         end else if (src_ne && !(rec && sd_busy)) begin
           pbuf[pi] <= srcb;
@@ -1758,7 +1808,10 @@ module p8x_geom (
           pi <= pi + 5'd1;
           if (rec && !rskip && glop != 8'h43) begin       // stream to store
             if (rec_len >= 13'd4092) begin   // slot full: abort
-              epush(8'd7); cldef[rec_slot] <= 1'b0; rec <= 0; rskip <= 1;
+              epush(8'd7);
+              if (rec_bank) gdef[rec_slot] <= 1'b0;
+              else cldef[rec_slot] <= 1'b0;
+              rec <= 0; rec_bank <= 0; rskip <= 1;
             end else begin
               if (!rec_len[0]) rec_lo <= srcb;
               else begin
@@ -1779,7 +1832,9 @@ module p8x_geom (
             8'h02: begin flip_pend <= 1; state <= S_FLIP; end   // FLIP
             8'h03: draw_pg <= disp_pg;                    // PGSYNC
             8'h04: begin                                  // RESETF
-              cldef <= 64'd0; rec <= 0; glfm <= 0;
+              cldef <= 64'd0; rec <= 0; rec_bank <= 0; glfm <= 0;
+              txn <= 0;        // (gdef survives: a font is installed, not
+                               //  scene state -- matches the emulator)
               par[0] <= 16'd256; par[4] <= 16'd256; par[8] <= 16'd256;
               par[1]<=0; par[2]<=0; par[3]<=0; par[5]<=0; par[6]<=0; par[7]<=0;
               par[9]<=0; par[10]<=0; par[11]<=0;
@@ -2064,9 +2119,34 @@ module p8x_geom (
               end else if (glop == 8'h73 && {pbuf[2], pbuf[1]} == 16'd0)
                 ;                        // CLOOP 0 times: nothing to do
               else begin
-                rp_slot <= pbuf[0][5:0];
+                rp_slot <= pbuf[0][5:0]; rp_bank <= 0;
                 rp_cnt <= (glop == 8'h73) ? {pbuf[2], pbuf[1]} : 16'd1;
                 glst <= G_RL0;
+              end
+            end
+            8'h81: begin                                  // TSIZE s ==
+              pbuf[2] <= pbuf[0]; pbuf[3] <= pbuf[1];     // MDSCAL s s s
+              pbuf[4] <= pbuf[0]; pbuf[5] <= pbuf[1];     // (jsrc 2 reads
+              jsrc <= 3'd2; jbase <= SB; jlast <= 4'd11;  //  pw0/pw1/pw2)
+              jcnt <= 0; cmode <= 2'd0; ci <= 0; cj <= 0; ck <= 0;
+              csum <= 0; mtf <= 0;
+              jnext <= C_OGA; state <= J_WR;
+            end
+            8'h82: begin                                  // TANGLE d ==
+              cax <= 2'd2; ang <= pw0; vwf <= 0;          // MDROTZ d
+              state <= C_NRM;
+            end
+            8'h84: begin : tdef                           // TDEFIN c
+              reg [7:0] tdc;
+              tdc = (pbuf[0] >= 8'h61 && pbuf[0] <= 8'h7A)
+                  ? pbuf[0] - 8'h20 : pbuf[0];            // fold lowercase
+              if (rp) epush(8'd5);
+              else if (tdc < 8'h20 || tdc > 8'h5F) epush(8'd2);
+              else begin
+                rec <= 1; rec_bank <= 1;
+                rec_slot <= tdc[5:0] ^ 6'h20;             // slot = c - 32
+                rec_len <= 0;
+                gdef[tdc[5:0] ^ 6'h20] <= 1'b0;
               end
             end
             8'h74: begin                                  // CLDEL
@@ -2089,7 +2169,10 @@ module p8x_geom (
                 pi <= pi + 5'd1;
                 if (rec && !rskip) begin                  // stream to store
                   if (rec_len >= 13'd4092) begin   // slot full: abort
-                    epush(8'd7); cldef[rec_slot] <= 1'b0; rec <= 0; rskip <= 1;
+                    epush(8'd7);
+              if (rec_bank) gdef[rec_slot] <= 1'b0;
+              else cldef[rec_slot] <= 1'b0;
+              rec <= 0; rec_bank <= 0; rskip <= 1;
                   end else begin
                     if (!rec_len[0]) rec_lo <= srcb;
                     else begin
@@ -2302,6 +2385,29 @@ module p8x_geom (
           else if (frame_tick) wcnt <= wcnt - 16'd1;
         end
 
+        // ---- stage 10h: TEXT's per-char loop ----------------------------
+        // Pop one string char, fold lowercase, and replay its glyph as a
+        // one-pass list from the glyph bank (G_RL0 with rp_bank set); the
+        // G_OP redirect brings the loop back while txn chars remain. An
+        // undefined glyph is a silent skip; rskip discards the string of
+        // a refused TEXT (recorded, or arriving inside a replay).
+        G_TX: if (src_ne && !(rec && sd_busy)) begin : txch
+          reg [7:0] tch;
+          tch = (srcb >= 8'h61 && srcb <= 8'h7A) ? srcb - 8'h20 : srcb;
+          if (rp) begin rpb0 <= rpb1; rp_have <= rp_have - 2'd1;
+                        rp_off <= rp_off + 13'd1; end
+          else if (glmode) tq_rp <= tq_rp + 3'd1;
+          else cf_rp <= cf_rp + 6'd1;
+          txn <= txn - 8'd1;
+          if (rskip) begin
+            if (txn == 8'd1) begin rskip <= 0; glst <= G_OP; end
+          end else if (tch >= 8'h20 && tch <= 8'h5F &&
+                       gdef[tch[5:0] ^ 6'h20]) begin
+            rp_slot <= tch[5:0] ^ 6'h20; rp_bank <= 1;
+            rp_cnt <= 16'd1; glst <= G_RL0;
+          end else glst <= (txn == 8'd1) ? G_OP : G_TX;
+        end
+
         // ---- stage 10c: CLEND finish -- flush the dangling byte, write
         // the length halfword, set the DEFINED bit ------------------------
         G_LE0: if (!sd_busy && !g_req) begin
@@ -2312,13 +2418,15 @@ module p8x_geom (
           glst <= G_LE1;
         end
         G_LE1: if (!sd_busy && !g_req) begin
-          g_addr <= {2'd0, 1'b1, 2'd0, rec_slot, 12'd0};
+          g_addr <= {2'd0, 1'b1, 1'b0, rec_bank, rec_slot, 12'd0};
           g_din <= {3'd0, rec_len};
           g_we <= 1; g_req <= 1; sd_busy <= 1;
           glst <= G_LE2;
         end
         G_LE2: if (!sd_busy) begin
-          cldef[rec_slot] <= 1'b1; rec <= 0; glst <= G_OP;
+          if (rec_bank) gdef[rec_slot] <= 1'b1;
+          else cldef[rec_slot] <= 1'b1;
+          rec <= 0; rec_bank <= 0; glst <= G_OP;
         end
 
         // CLAPP: read the stored length, resume recording after it
@@ -2333,7 +2441,7 @@ module p8x_geom (
 
         // CLRUN/CLOOP: read the length, then the fetcher takes over
         G_RL0: if (!sd_busy && !g_req) begin
-          g_addr <= CL_BASE + {5'd0, rp_slot, 12'd0};
+          g_addr <= {2'd0, 1'b1, 1'b0, rp_bank, rp_slot, 12'd0};
           g_we <= 0; g_req <= 1; sd_busy <= 1;
           glst <= G_RL1;
         end
@@ -2350,7 +2458,8 @@ module p8x_geom (
   // GL busy: the consumer is mid-command or bytes wait in the FIFO
   // busy covers the consumer AND the walker: with GESTAT retired,
   // GLSTAT bit6 is how software waits out its own GL work
-  wire glbusy = (glst != G_OP) || cf_ne || (state != S_IDLE) || rp;
+  wire glbusy = (glst != G_OP) || cf_ne || (state != S_IDLE) || rp ||
+                (txn != 8'd0);
 
   always @(*) begin
     case (a[2:0])

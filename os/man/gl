@@ -45,6 +45,7 @@ DESCRIPTION
       34 RECT x y    35 RECTR       43 "CA "/"CX " (mode)
       70 CLBEG n     71 CLEND       72 CLRUN n     73 CLOOP n cnt
       74 CLDEL n     79 CLAPP n (P8X: append to list n)
+      80 TEXT n ch.. 81 TSIZE s (8.8) 82 TANGLE deg  84 TDEFIN c
       90 MDIDEN      91 MDORG x y z 92 MDSCAL sx sy sz (8.8)
       93 MDROTX deg  94 MDROTY deg  95 MDROTZ deg  96 MDTRAN x y z
       97 MDMATX 12w  A0 VWIDEN      A1 VWRPT x y z A3 VWROTX deg
@@ -83,6 +84,25 @@ DESCRIPTION
     for the 16384-seed stack stops at error 8 with a deterministic
     partial fill. AREA forces the write mode to replace (a fill under
     XOR would erase its own boundary test).
+
+    TEXT (stage 10h) draws vector text: a glyph is a COMMAND LIST of
+    relative strokes (MOVER3/DRAWR3 ending in a pen-up advance) in a
+    second 64-slot bank, one slot per ASCII 32..95 (lowercase folds to
+    upper). TDEFIN c records one exactly like CLBEG...CLEND records a
+    list; `gl /font.gl` loads the shipped font. TEXT draws each char
+    at the current 3D point, so place with MOVE3 x y 0 -- and use the
+    ORTHO camera (PROJCT 0) for window-space text, since z=0 sits
+    behind the perspective camera's near plane. TSIZE s (8.8: 256 =
+    design size, 512 = double) and TANGLE deg are compose ALIASES of
+    MDSCAL s s s and MDROTZ deg: they scale and rotate strokes AND
+    baseline together, they compose like every matrix verb (MDIDEN
+    resets), and scaling happens about MDORG -- anchor big or tilted
+    text with MDORG at the same point as the MOVE3. In ASCII mode the
+    string is quoted: TEXT "HELLO" (one line; the translator emits one
+    single-char command per char). Chars without a glyph skip
+    silently; TEXT/TDEFIN inside a command list is refused (error 5,
+    deferred); RESETF does NOT clear the font -- it is an installed
+    resource, though power loss does (SDRAM).
 
     COMMAND LISTS (stage 10c): CLBEG n records everything up to CLEND
     into list n (0-255, 4KB each, stored on the card) instead of

@@ -144,7 +144,31 @@ filled primitives you are about to draw; `AREA` is for shapes that
 exist only as outlines — and it always paints in replace mode,
 whatever `LINFUN` says.
 
-## 8. From BASIC
+## 8. Vector text (TEXT)
+
+    gl /font.gl                           load the font (once per power-up)
+    gl PRO 0                              text lives in window space
+    gl M3 40,200,0 TX "HELLO WORLD!"      draw at the current 3D point
+
+A glyph is a command list of relative strokes in a second 64-slot
+bank — `TDEFIN c` records one exactly like `CLBEG`…`CLEND` records a
+list, and the shipped `/font.gl` defines ASCII 32–95 (lowercase folds
+to uppercase). Because strokes ride the ordinary 3D pipeline, `TSIZE`
+(an alias of `MDSCAL s s s`, 8.8 fixed point: 256 = design size) and
+`TANGLE` (an alias of `MDROTZ deg`) scale and rotate the letterforms
+*and* the baseline walk together:
+
+    gl MDI MDO 240,136,0 TS 1024 TA 20    4x, tilted 20 degrees,
+    gl M3 240,136,0 TX "BIG"              anchored by MDORG
+
+The aliases compose like every matrix verb — `MDIDEN` resets, and big
+or tilted text wants `MDORG` at its anchor (scaling happens about the
+model origin). Use `PROJCT 0` (ortho): at the perspective camera's
+power-up settings, z=0 geometry sits behind the near plane and nothing
+draws. Chars without a glyph skip silently; a font survives `RESETF`
+but not power loss (it lives in SDRAM — stream `/font.gl` again).
+
+## 9. From BASIC
 
 Every GL verb is a native statement (no quotes, expressions allowed):
 
@@ -163,7 +187,7 @@ non-blocking spin. POINT(x,y) reads pixels (screen space). The full
 statement list: `man basic`, GRAPHICS; the language guide chapter in
 `basic/p8x-basic-guide.md`.
 
-## 9. From C
+## 10. From C
 
     //#use gfx      screen-space primitives over $FF20 (man gfx)
     //#use g3d      the software 3D pipeline / GL-era compatibility (man g3d)
@@ -179,7 +203,7 @@ Wait for idle with `while (peek(0xFF51) & 64) { }` before reading
 results or exiting. Named constants: `//#use abi` + the `//#define`
 header pattern; never raw magic numbers in shipped code.
 
-## 10. Scene files
+## 11. Scene files
 
 A `.GL` file is the ASCII language verbatim — `gl FILE.GL` streams it.
 Start files with `CA ` (the hex-mode escape is the literal
@@ -188,7 +212,7 @@ The PG-640A manual's examples convert mechanically (its hex files
 carry 4-byte coordinates; re-emit as ASCII). `docs/reference/pg640a.pdf`
 chapter 3 is effectively this engine's extended manual.
 
-## 11. Performance model
+## 12. Performance model
 
 - Command bytes are cheap; PIXELS are the cost. A fullscreen fill is
   ~65k pixel-pairs through the burst filler; a spinning cube is ~40

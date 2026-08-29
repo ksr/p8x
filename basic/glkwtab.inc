@@ -62,6 +62,10 @@
         .byte $E9
         .ascii "AREABC"
         .byte $ED
+        .ascii "TANGLE"
+        .byte $F0
+        .ascii "TDEFIN"
+        .byte $F1
         .ascii "FLOOD"
         .byte $B8
         .ascii "MOVER"
@@ -104,6 +108,8 @@
         .byte $E0
         .ascii "CLMOD"
         .byte $EB
+        .ascii "TSIZE"
+        .byte $EF
         .ascii "FLIP"
         .byte $B4
         .ascii "WAIT"
@@ -120,3 +126,5 @@
         .byte $EA
         .ascii "AREA"
         .byte $EC
+        .ascii "TEXT"
+        .byte $EE

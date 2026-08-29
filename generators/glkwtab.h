@@ -123,7 +123,15 @@ GLKW[] = {
     { "AR", 0xC0, 0, 0 },
     { "AREABC", 0xC1, 3, 3 },
     { "ARB", 0xC1, 3, 3 },
+    { "TEXT", 0x80, 0, 14 },
+    { "TX", 0x80, 0, 14 },
+    { "TSIZE", 0x81, 0, 1 },
+    { "TS", 0x81, 0, 1 },
+    { "TANGLE", 0x82, 0, 1 },
+    { "TA", 0x82, 0, 1 },
+    { "TDEFIN", 0x84, 1, 1 },
+    { "TD", 0x84, 1, 1 },
     { "CA", 0xFE, 0, 0 },
     { "CX", 0xFF, 0, 0 },
 };
-#define GLKWN 124
+#define GLKWN 132

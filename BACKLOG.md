@@ -506,8 +506,10 @@ Nothing below has been built or measured.
       every local at function top, C89-style. Fix: p8cc block-scope
       allocator; add a compiler test with nested-block locals beside
       live function locals.
-- [ ] **Stage 10h subset — TEXT/TSIZE/TANGLE, costed and holdable
-      (2026-08-27).** A fabric TEXT verb is ~260 LUT4 against ~100 of
+- [x] **Stage 10h subset — SHIPPED 2026-08-29 (TEXT/TSIZE/TANGLE +
+      TDEFIN; the card split paid for it). Remaining from the sketch:
+      TEXT-inside-lists (needs a second replay context, ~+100), TJUST,
+      TEXTP. Original costing (2026-08-27):** A fabric TEXT verb is ~260 LUT4 against ~100 of
       headroom plus ~150-200 of remaining verifiable diet (the ellipse
       INITIALIZER adds and the Bresenham setup subtracts, both now
       bench-covered) -- borderline reachable. The design that makes it
