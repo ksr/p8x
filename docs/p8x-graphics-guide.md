@@ -144,7 +144,33 @@ filled primitives you are about to draw; `AREA` is for shapes that
 exist only as outlines — and it always paints in replace mode,
 whatever `LINFUN` says.
 
-## 8. Vector text (TEXT)
+## 8. Curves and patterns
+
+    gl M 240,136 CI 60                    a circle at the current point
+    gl PF 1 SEC 50,0,90                   a filled quarter-pie
+    gl EL 80,30                           an ellipse
+    gl ARC 40,45,135                      an arc, degrees CCW from +x
+
+`CIRCLE`/`ELIPSE` rasterize on the device with radii mapped through the
+window→viewport scale (they clip to the screen; radii cap at 255 device
+pixels). `ARC`/`SECTOR` are 4°-stepped polylines on the card's trig
+table, so they clip to the window exactly like lines — and `PRMFIL 1`
+fills a sector as a fan, which makes `SECTOR r 0 0` the filled circle
+that honours fill patterns.
+
+    gl LPT -21846                         dashed lines ($AAAA)
+    gl LPT -1                             solid again
+    gl APT 43690,21845,43690,21845,...    a checkerboard fill mask
+
+`LINPAT` lives in the device like the LINFUN mode — every line from
+every door is patterned, BASIC's `LINE` included, restarting at the
+pattern's MSB each primitive. `AREAPT`'s sixteen words mask the fill
+spans of `POLY`/`POLY3`/`RECT`/`SECTOR` by screen position (row `y&15`,
+bit `15-(x&15)`). `CLEARS` and `FLOOD` are erases and stay solid, and
+`AREA` forces solid+replace to protect its own fill invariant.
+`RESETF` restores everything.
+
+## 9. Vector text (TEXT)
 
     gl /FONT.GL                           load the font (once per power-up)
     gl PRO 0                              text lives in window space
@@ -168,7 +194,13 @@ power-up settings, z=0 geometry sits behind the near plane and nothing
 draws. Chars without a glyph skip silently; a font survives `RESETF`
 but not power loss (it lives in SDRAM — stream `/FONT.GL` again).
 
-## 9. From BASIC
+Justify with `TJUST h v` (1/2/3 = left/centre/right and
+bottom/middle/top): the offset applies in model units, so size and
+angle transform it with the string. `TEXTP` is the same engine under
+its PGC name, and since 10k `TEXT` records into command lists and
+replays with the scene.
+
+## 10. From BASIC
 
 Every GL verb is a native statement (no quotes, expressions allowed):
 
@@ -187,7 +219,7 @@ non-blocking spin. POINT(x,y) reads pixels (screen space). The full
 statement list: `man basic`, GRAPHICS; the language guide chapter in
 `basic/p8x-basic-guide.md`.
 
-## 10. From C
+## 11. From C
 
     //#use gfx      screen-space primitives over $FF20 (man gfx)
     //#use g3d      the software 3D pipeline / GL-era compatibility (man g3d)
@@ -203,7 +235,7 @@ Wait for idle with `while (peek(0xFF51) & 64) { }` before reading
 results or exiting. Named constants: `//#use abi` + the `//#define`
 header pattern; never raw magic numbers in shipped code.
 
-## 11. Scene files
+## 12. Scene files
 
 A `.GL` file is the ASCII language verbatim — `gl FILE.GL` streams it.
 Start files with `CA ` (the hex-mode escape is the literal
@@ -212,7 +244,7 @@ The PG-640A manual's examples convert mechanically (its hex files
 carry 4-byte coordinates; re-emit as ASCII). `docs/reference/pg640a.pdf`
 chapter 3 is effectively this engine's extended manual.
 
-## 12. Performance model
+## 13. Performance model
 
 - Command bytes are cheap; PIXELS are the cost. A fullscreen fill is
   ~65k pixel-pairs through the burst filler; a spinning cube is ~40

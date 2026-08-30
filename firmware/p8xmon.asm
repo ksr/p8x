@@ -320,13 +320,24 @@ dsp_bp: LDA  TMP            ; P2 -> $FF00 + reg
         JMP  dsp_lp
 dsp_rt: RTS
 
-; CLS black; white border 0,0-479,271; swatches red/green/blue, 40x24 each,
-; centred: proof of both pen bytes and all three channels at a glance.
-DSPTAB: .byte $24,$00, $25,$05                          ; GCOL 0, CLS
-        .byte $24,$FF, $2D,$FF                          ; pen $FFFF white
+; Clear black (BOXFILL 0,0-479,271 -- the CLS command retired with the
+; stage-10 diet); white border as FOUR LINEs (BOX outline retired too);
+; swatches red/green/blue, 40x24 each, centred: proof of both pen bytes
+; and all three channels at a glance.
+DSPTAB: .byte $24,$00                                   ; GCOL 0 (black)
         .byte $20,$00, $21,$00                          ; 0,0 ...
         .byte $22,$DF, $2B,$01, $23,$0F, $2C,$01        ; ... 479,271
-        .byte $25,$03                                   ; BOX outline
+        .byte $25,$04                                   ; BOXFILL: the clear
+        .byte $24,$FF, $2D,$FF                          ; pen $FFFF white
+        .byte $20,$00, $21,$00                          ; border: top edge
+        .byte $22,$DF, $2B,$01, $23,$00
+        .byte $25,$02                                   ; LINE (0,0)-(479,0)
+        .byte $21,$0F, $2A,$01, $23,$0F, $2C,$01        ; bottom edge
+        .byte $25,$02                                   ; LINE (0,271)-(479,271)
+        .byte $22,$00, $21,$00                          ; left edge
+        .byte $25,$02                                   ; LINE (0,0)-(0,271)
+        .byte $20,$DF, $29,$01, $22,$DF, $2B,$01        ; right edge
+        .byte $25,$02                                   ; LINE (479,0)-(479,271)
         .byte $24,$00, $2D,$F8                          ; pen $F800 red
         .byte $20,$B4, $21,$7C, $22,$DB, $23,$93        ; 180,124 - 219,147
         .byte $25,$04                                   ; BOXFILL

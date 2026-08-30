@@ -131,7 +131,22 @@ GLKW[] = {
     { "TA", 0x82, 0, 1 },
     { "TDEFIN", 0x84, 1, 1 },
     { "TD", 0x84, 1, 1 },
+    { "CIRCLE", 0x38, 0, 1 },
+    { "CI", 0x38, 0, 1 },
+    { "ELIPSE", 0x39, 0, 2 },
+    { "EL", 0x39, 0, 2 },
+    { "ARC", 0x3C, 0, 3 },
+    { "SECTOR", 0x3D, 0, 3 },
+    { "SEC", 0x3D, 0, 3 },
+    { "LINPAT", 0xEA, 0, 1 },
+    { "LPT", 0xEA, 0, 1 },
+    { "AREAPT", 0xE7, 0, 16 },
+    { "APT", 0xE7, 0, 16 },
+    { "TEXTP", 0x83, 0, 14 },
+    { "TXP", 0x83, 0, 14 },
+    { "TJUST", 0x85, 2, 2 },
+    { "TJ", 0x85, 2, 2 },
     { "CA", 0xFE, 0, 0 },
     { "CX", 0xFF, 0, 0 },
 };
-#define GLKWN 132
+#define GLKWN 147

@@ -234,6 +234,15 @@ static uint16_t mdu_exec(uint16_t a, uint16_t b, uint16_t c){
    both per the contract. Rendering is instant (the GPU-BUSY licence). */
 static void gpu_line(int x0,int y0,int x1,int y1,uint16_t c);
 static void gpu_hline(int xa,int xb,int y,uint16_t c);
+static void gpu_ellipse(int cx,int cy,int rx,int ry,uint16_t c,int fill);
+/* stage 10j: LINPAT lives in the DEVICE (like GMODE) -- every line from
+   every door consults it, MSB first, restarting each primitive. AREAPT
+   is GL-side state masking the fill spans. */
+static uint16_t gpat = 0xFFFF;         /* device line pattern */
+static uint16_t apat[16] = {0xFFFF,0xFFFF,0xFFFF,0xFFFF,0xFFFF,0xFFFF,
+                            0xFFFF,0xFFFF,0xFFFF,0xFFFF,0xFFFF,0xFFFF,
+                            0xFFFF,0xFFFF,0xFFFF,0xFFFF};
+static int apat_on;                    /* any row not solid */
 static void gpu_box(int x0,int y0,int x1,int y1,uint16_t c,int fill);
 /* RETIRED (stage 10b): the $FF40 record-engine interface -- GEUP list
    upload, GECMD RENDER, the GESEL/GEVAL register file, GEID. The GL
@@ -323,12 +332,28 @@ static void ge_sline(int16_t x0,int16_t y0,int16_t x1,int16_t y1){
         n++;
     }
 }
+static void gl_prow(int16_t y, int16_t xl, int16_t xr){
+    /* one patterned fill row: maximal runs of set bits as raw hlines
+       (fills always replace). Bit for column x is 15-(x&15), MSB first,
+       row selects apat[y&15] -- the walker's splitter is the twin. */
+    uint16_t rp = apat[y & 15];
+    int x = xl, r0;
+    while(x <= xr){
+        if(rp & (0x8000 >> (x & 15))){
+            r0 = x;
+            while(x + 1 <= xr && (rp & (0x8000 >> ((x + 1) & 15)))) x++;
+            gpu_hline(r0, x, y, gcol);
+        }
+        x++;
+    }
+}
 static void ge_span(int16_t y, int16_t xl, int16_t xr){
     if(xl > xr){ int16_t t=xl; xl=xr; xr=t; }
     if(xl < gep[17]) xl = gep[17];
     if(xr > gep[19]) xr = gep[19];
     if(xl > xr) return;
-    gpu_box(xl, y, xr, y, gcol, 1);           /* the height-1 BOXFILL */
+    if(apat_on) gl_prow(y, xl, xr);
+    else gpu_box(xl, y, xr, y, gcol, 1);      /* the height-1 BOXFILL */
 }
 static void ge_filltri(int16_t x0,int16_t y0,int16_t x1,int16_t y1,
                        int16_t x2,int16_t y2){
@@ -503,6 +528,9 @@ static int  axv, axneg, axhas;            /* number accumulator */
 static int  a_op, a_bcnt, a_left, a_var, a_vw, a_act, a_pi, a_skip;
 static int  a_str;                        /* 10h: 1 = await quote, 2 = in string */
 static uint8_t a_sop;                     /* the string verb's opcode */
+static uint8_t a_sb[64]; static int a_sn; /* 10k: counted-string buffer --
+                                             TJUST needs the length FIRST,
+                                             so the per-char emission died */
 static uint8_t glfill;       /* PRMFIL: closed primitives fill when 1 */
 static int16_t glc2[2], glc3[3];   /* the 2D and 3D current points */
 static int16_t glproj, gldist;     /* PROJCT angle / DISTAN viewer distance */
@@ -673,6 +701,9 @@ static void gl_afill(uint16_t bc){
                                       the fill's own invariant (painted ==
                                       pen is the visited mark), so AREA
                                       forces replace mode -- documented */
+    gpat = 0xFFFF;                 /* 10j: and the line pattern solid, for
+                                      the same reason (spans paint as
+                                      device LINEs on the card) */
     if(ge_oc(glc2[0],glc2[1])){ gl_err(2); return; }   /* seed off-window */
     gl_map2(glc2[0],glc2[1],&px,&py);
     if(!gl_af_in(px,py,bc)) return;                    /* seeded on bound */
@@ -736,6 +767,9 @@ static int     glrec;                  /* recording into slot glrec-1 */
 static int     glrbank;                /* recording target: 0 lists, 1 glyphs */
 static int     glrlen;                 /* bytes recorded so far */
 static int     glreplay;               /* inside a replay (no nesting) */
+static int     glgrun;                 /* inside a GLYPH replay (10k) */
+static int     tjh = 1, tjv = 1;       /* TJUST: 1 left/bottom 2 centre
+                                          3 right/top (10k) */
 
 /* length of the complete command at p (opcode included); 0 = incomplete,
    -1 = unknown opcode. The recorder's command-boundary oracle. */
@@ -749,11 +783,17 @@ static int gl_cmdlen(const uint8_t *p, int n){
     case 0x79: case 0xEB: case 0x61: case 0x62: case 0x76: return 2;
     case 0xC0: return 1;
     case 0xC1: return 4;                   /* AREABC r g b */
-    case 0x80:                             /* TEXT: count + chars (10h) */
+    case 0xEA: return 3;                   /* LINPAT p (10j) */
+    case 0xE7: return 33;                  /* AREAPT: 16 words */
+    case 0x38: return 3;                   /* CIRCLE r (10i) */
+    case 0x39: return 5;                   /* ELIPSE rx ry */
+    case 0x3C: case 0x3D: return 7;        /* ARC / SECTOR r a0 a1 */
+    case 0x80: case 0x83:                  /* TEXT / TEXTP: count + chars */
         if(n < 2) return 0;
         return 2 + p[1];
     case 0x81: case 0x82: return 3;        /* TSIZE / TANGLE */
     case 0x84: return 2;                   /* TDEFIN c */
+    case 0x85: return 3;                   /* TJUST h v (10k) */
     case 0x78: return 5;                   /* CLMOD n b off */
     case 0x05: case 0x43: case 0x93: case 0x94: case 0x95:
     case 0xA3: case 0xA4: case 0xA5: case 0xA8: case 0xA9:
@@ -814,9 +854,10 @@ static int gl_exec2(const uint8_t *p, int n){
             if(L == -1){ gl_err(1); return 1; }   /* skipped, not stored */
             if(L == 0 || L > n) return 0;         /* wait for the rest */
             if(p[0]==0x70 || p[0]==0x79 || p[0]==0x72 || p[0]==0x73 ||
-               p[0]==0x80 || p[0]==0x84){
-                gl_err(5); return L;       /* no nesting (TEXT/TDEFIN in a
-                                              list is DEFERRED -- 10h) */
+               p[0]==0x84){
+                gl_err(5); return L;       /* no nesting (TEXT records fine
+                                              since 10k -- glyph replay is
+                                              its own context) */
             }
             if(glrlen + L > CLSLOT - 2){   /* slot overflow: abort */
                 gl_err(7);
@@ -895,13 +936,24 @@ static int gl_exec2(const uint8_t *p, int n){
           if(off >= L){ gl_err(2); return 5; }
           clmem[p[1]][2 + off] = p[2]; }
         return 5;
-    /* ---- stage 10h: TEXT (glyphs are lists in the second bank) ---- */
-    case 0x80:                             /* TEXT count chars */
+    /* ---- stage 10h/10k: TEXT (glyphs are lists in the second bank).
+       TEXTP (83) is the same engine: on the PGC, TEXT was the fixed
+       character generator and TEXTP the programmable stroke text --
+       P8X text IS stroke text, so both opcodes draw identically.
+       TJUST offsets the start point in MODEL units before drawing
+       (h: 0/-3n/-6n of the 6-unit advance; v: 0/-3/-7 of the 7-unit
+       cap), so the matrix scales and rotates the justification with
+       everything else. TEXT runs inside command lists since 10k (the
+       glyph replay is its own context); glyph CONTENT may not TEXT. */
+    case 0x80: case 0x83:                  /* TEXT / TEXTP count chars */
         if(n < 2) return 0;
         { int L = 2 + p[1]; int i;
           NEED(L);
-          if(glreplay){ gl_err(5); return L; }   /* deferred: no TEXT in
-                                                    a replayed list */
+          if(glgrun){ gl_err(5); return L; }   /* no text inside a glyph */
+          if(tjh == 2) glc3[0] = (int16_t)(glc3[0] - 3*p[1]);
+          else if(tjh == 3) glc3[0] = (int16_t)(glc3[0] - 6*p[1]);
+          if(tjv == 2) glc3[1] = (int16_t)(glc3[1] - 3);
+          else if(tjv == 3) glc3[1] = (int16_t)(glc3[1] - 7);
           for(i = 0; i < p[1]; i++){
               int c = p[2+i];
               if(c >= 'a' && c <= 'z') c -= 32;
@@ -911,16 +963,20 @@ static int gl_exec2(const uint8_t *p, int n){
                                                     optional per char) */
               { const uint8_t *b = glgmem[c] + 2;
                 int len = glgmem[c][0] | (glgmem[c][1] << 8);
-                int off = 0, k;
-                glreplay = 1;              /* glyph content may not nest */
+                int off = 0, k, sav = glreplay;
+                glreplay = 1; glgrun = 1;  /* glyph content may not nest */
                 while(off < len){
                     k = gl_exec2(b + off, len - off);
                     if(k <= 0) break;
                     off += k;
                 }
-                glreplay = 0; }
+                glreplay = sav; glgrun = 0; }
           }
           return L; }
+    case 0x85: NEED(3);                    /* TJUST h v */
+        if(p[1] < 1 || p[1] > 3 || p[2] < 1 || p[2] > 3){ gl_err(2); return 3; }
+        tjh = p[1]; tjv = p[2];
+        return 3;
     case 0x81: NEED(3);                    /* TSIZE s == MDSCAL s s s (8.8) */
         { int16_t sc[12]; memset(sc,0,sizeof sc);
           sc[0]=sc[4]=sc[8]=gl_i16(p+1);
@@ -946,6 +1002,9 @@ static int gl_exec2(const uint8_t *p, int n){
     case 0x04:                                            /* RESETF */
         gl_state_reset();
         memset(cldef, 0, sizeof cldef); glrec = 0; glrbank = 0;
+        gpat = 0xFFFF;                 /* 10j: patterns back to solid */
+        tjh = 1; tjv = 1;              /* 10k: justification home */
+        { int i; for(i=0;i<16;i++) apat[i]=0xFFFF; } apat_on = 0;
         gmode = 0;                     /* 10f: drawing mode back to replace */
         glrblen = glrbrd = 0;              /* 10e: read-back FIFO clears */
         return 1;
@@ -1047,7 +1106,11 @@ static int gl_exec2(const uint8_t *p, int n){
               if(px1>gep[19]) px1=gep[19];
               if(py0<gep[18]) py0=gep[18];
               if(py1>gep[20]) py1=gep[20];
-              if(px0<=px1 && py0<=py1) gpu_box(px0,py0,px1,py1,gcol,1);
+              if(px0<=px1 && py0<=py1){
+                  if(apat_on){ int16_t yy;
+                      for(yy=py0; yy<=py1; yy++) gl_prow(yy,px0,px1); }
+                  else gpu_box(px0,py0,px1,py1,gcol,1);
+              }
           } else {
               gl_line2(glc2[0],glc2[1],x,glc2[1]);
               gl_line2(x,glc2[1],x,y);
@@ -1055,6 +1118,84 @@ static int gl_exec2(const uint8_t *p, int n){
               gl_line2(glc2[0],y,glc2[0],glc2[1]);
           } }
         return 5;
+    /* ---- stage 10j: patterns -------------------------------------------
+       LINPAT p: the device line pattern (every line from every door --
+       glyph strokes included; LINPAT -1 restores solid). AREAPT im1..16:
+       masks the fill SPANS of POLY/POLY3/RECT/SECTOR; CLEARS and FLOOD
+       are erases and stay solid, filled CIRCLE/ELIPSE is a device
+       command (a patterned disc is SECTOR r 0 0), and AREA forces the
+       line pattern solid like it forces replace mode (its visited-mark
+       invariant). RESETF restores both. */
+    case 0xEA: NEED(3);                                   /* LINPAT */
+        gpat = (uint16_t)(p[1] | (p[2] << 8));
+        return 3;
+    case 0xE7: NEED(33);                                  /* AREAPT */
+        { int i;
+          apat_on = 0;
+          for(i = 0; i < 16; i++){
+              apat[i] = (uint16_t)(p[1+2*i] | (p[2+2*i] << 8));
+              if(apat[i] != 0xFFFF) apat_on = 1;
+          } }
+        return 33;
+    /* ---- stage 10i: curves (PG-640A ch.4) ------------------------------
+       All in 2D window space at the current point, like RECT; none move
+       the current point. CIRCLE/ELIPSE map their radii through the
+       window->viewport scale and draw as the DEVICE ellipse (clipped to
+       the screen, not the window -- documented divergence); ARC/SECTOR
+       are polylines through the CLIPPED 2D line path, stepping 4 degrees
+       on the shared trig table, so they window-clip exactly like lines.
+       PRMFIL fills CIRCLE/ELIPSE (device fill) and SECTOR (a screen-
+       space fan about the centre, the POLY idiom); ARC never fills. */
+    case 0x38: case 0x39:                                 /* CIRCLE/ELIPSE */
+        { int16_t rx, ry, cxs, cys, rxs, rys;
+          if(p[0]==0x38){ NEED(3); rx=ry=gl_i16(p+1); }
+          else          { NEED(5); rx=gl_i16(p+1); ry=gl_i16(p+3); }
+          if(rx<0 || ry<0){ gl_err(2); return p[0]==0x38?3:5; }
+          gl_map2(glc2[0],glc2[1],&cxs,&cys);
+          rxs=ge_md(rx,(int16_t)(gep[19]-gep[17]),(int16_t)(gep[15]-gep[13]));
+          rys=ge_md(ry,(int16_t)(gep[20]-gep[18]),(int16_t)(gep[16]-gep[14]));
+          if(rxs<0) rxs=(int16_t)-rxs;
+          if(rys<0) rys=(int16_t)-rys;
+          /* the DEVICE is the drawing contract: its radius registers are
+             8-bit (clamp at 255 -- still over half the screen), and its
+             coordinate registers are unsigned, so an off-window centre
+             wraps to a large positive and clips to nothing, exactly as
+             the walker writing the same 16 bits would */
+          if(rxs>255) rxs=255;
+          if(rys>255) rys=255;
+          gpu_ellipse((int)(uint16_t)cxs,(int)(uint16_t)cys,rxs,rys,gcol,glfill);
+          return p[0]==0x38?3:5; }
+    case 0x3C: case 0x3D: NEED(7);                        /* ARC / SECTOR */
+        { int16_t r=gl_i16(p+1), a0=gl_i16(p+3), a1=gl_i16(p+5);
+          int sweep, a, na, px, py, nx, ny, first=1;
+          if(r<0){ gl_err(2); return 7; }
+          a0=(int16_t)(((a0%360)+360)%360); a1=(int16_t)(((a1%360)+360)%360);
+          sweep=(((a1-a0)%360)+360)%360;
+          if(sweep==0) sweep=360;                         /* a0==a1: full */
+          px=py=0;
+          for(a=0; ; a+=4){
+              if(a>sweep) break;
+              na=(a<sweep && a+4>sweep) ? sweep : a;      /* land on a1 */
+              nx=glc2[0]+ge_md(r,gl_cos((int16_t)(a0+na)),256);
+              ny=glc2[1]+ge_md(r,gl_sin((int16_t)(a0+na)),256);
+              if(p[0]==0x3D && glfill){                   /* filled SECTOR */
+                  if(!first){
+                      int16_t s0x,s0y,s1x,s1y,s2x,s2y;
+                      gl_map2(glc2[0],glc2[1],&s0x,&s0y);
+                      gl_map2((int16_t)px,(int16_t)py,&s1x,&s1y);
+                      gl_map2((int16_t)nx,(int16_t)ny,&s2x,&s2y);
+                      ge_filltri(s0x,s0y,s1x,s1y,s2x,s2y);
+                  }
+              } else if(first && p[0]==0x3D)              /* outline: radius */
+                  gl_line2(glc2[0],glc2[1],(int16_t)nx,(int16_t)ny);
+              else if(!first)
+                  gl_line2((int16_t)px,(int16_t)py,(int16_t)nx,(int16_t)ny);
+              px=nx; py=ny; first=0;
+              if(na==sweep) break;
+          }
+          if(p[0]==0x3D && !glfill)                       /* closing radius */
+              gl_line2((int16_t)px,(int16_t)py,glc2[0],glc2[1]);
+          return 7; }
     case 0x43: NEED(3);                /* "CA " / "CX ": the mode switches
                                           are their own ASCII bytes in BOTH
                                           modes (the PGC's little joke) */
@@ -1185,14 +1326,11 @@ static void gl_akw(void){
     if(GLKW[i].op == 0xFE){ glmode = 1; return; }   /* CA */
     if(GLKW[i].op == 0xFF){ glmode = 0; return; }   /* CX */
     if(a_act) gl_azfill();
-    if(GLKW[i].arity == 14){               /* string verb (TEXT): the ASCII
-                                              form emits one SINGLE-CHAR
-                                              command per character -- the
-                                              glyph state (baseline) carries
-                                              across, so the drawing is
-                                              identical to the counted hex
-                                              form, and nobody buffers */
-        a_sop = GLKW[i].op; a_str = 1; a_skip = 0;
+    if(GLKW[i].arity == 14){               /* string verb (TEXT/TEXTP):
+                                              buffered and emitted COUNTED
+                                              (TJUST justifies by length,
+                                              so the count must lead) */
+        a_sop = GLKW[i].op; a_str = 1; a_sn = 0; a_skip = 0;
         return;
     }
     a_skip = 0;
@@ -1212,11 +1350,16 @@ static void gl_anum(void){
 static void gl_ascii(uint8_t b){
     if(a_str == 2){                        /* inside "..." -- verbatim, no
                                               folding, no delimiters */
-        if(b == '"'){ a_str = 0; return; }
-        if(b == 13 || b == 10){            /* the line ended the string */
-            gl_err(2); a_str = 0; return;
+        int i;
+        if(b == '"' || b == 13 || b == 10){
+            if(b != '"') gl_err(2);        /* the line ended the string:
+                                              emit what arrived, log it */
+            gl_hexb(a_sop); gl_hexb((uint8_t)a_sn);
+            for(i = 0; i < a_sn; i++) gl_hexb(a_sb[i]);
+            a_str = 0; return;
         }
-        gl_hexb(a_sop); gl_hexb(1); gl_hexb(b);
+        if(a_sn < 63) a_sb[a_sn++] = b;
+        else gl_err(2);                    /* over the 63-char cap: dropped */
         return;
     }
     if(a_str == 1){                        /* awaiting the opening quote */
@@ -1292,8 +1435,10 @@ static void gpu_line(int x0,int y0,int x1,int y1,uint16_t c){
     int dx = x1>x0 ? x1-x0 : x0-x1,  sx = x0<x1 ? 1 : -1;
     int dy = y1>y0 ? y0-y1 : y1-y0,  sy = y0<y1 ? 1 : -1;
     int err = dx+dy;
+    int pi = 0;
     for(;;){
-        gpu_px(x0,y0,c);
+        if(gpat & (0x8000 >> (pi & 15))) gpu_px(x0,y0,c);
+        pi++;
         if(x0==x1 && y0==y1) break;
         int e2 = 2*err;
         if(e2>=dy){ err+=dy; x0+=sx; }
@@ -1314,35 +1459,6 @@ static void gpu_box(int x0,int y0,int x1,int y1,uint16_t c,int fill){
 static void gpu_hline(int xa,int xb,int y,uint16_t c){
     for(int x=xa;x<=xb;x++) gpu_pxr(x,y,c);   /* spans always replace */
 }
-/* Midpoint circle, integer, eight-way symmetric. Same rule as gpu_line: this is
-   the golden model and the RTL transliterates it, so it stays in this form. */
-static void gpu_circle(int cx,int cy,int r,uint16_t c,int fill){
-    int x=r, y=0, err=1-r;
-    while(x>=y){
-        if(fill){
-            gpu_hline(cx-x,cx+x,cy+y,c);  gpu_hline(cx-x,cx+x,cy-y,c);
-            gpu_hline(cx-y,cx+y,cy+x,c);  gpu_hline(cx-y,cx+y,cy-x,c);
-        }else{
-            gpu_px(cx+x,cy+y,c); gpu_px(cx-x,cy+y,c);
-            gpu_px(cx+x,cy-y,c); gpu_px(cx-x,cy-y,c);
-            gpu_px(cx+y,cy+x,c); gpu_px(cx-y,cy+x,c);
-            gpu_px(cx+y,cy-x,c); gpu_px(cx-y,cy-x,c);
-        }
-        y++;
-        if(err<0) err += 2*y+1;
-        else { x--; err += 2*(y-x)+1; }
-    }
-}
-/* Midpoint ellipse, integer, four-way symmetric. Chosen over a per-row "widest
-   x that still satisfies the equation" search because this inner loop is adds
-   and shifts only -- the RTL transliteration then needs no multiplier beyond the
-   three at setup.
-
-   The two regions meet where the curve's slope passes -1: region 1 steps x and
-   sometimes y, region 2 steps y and sometimes x. Both decision variables are
-   scaled by 4 so the classic rx^2/4 term is exact rather than rounded. A
-   rounding choice is precisely what two implementations quietly disagree about,
-   and this one has to stay bit-identical to the Verilog. */
 static void gpu_ellipse(int cx,int cy,int rx,int ry,uint16_t c,int fill){
     long rx2 = (long)rx*rx, ry2 = (long)ry*ry;
     long x = 0, y = ry;
@@ -1405,7 +1521,7 @@ static void gpu_selftest(void){
     gpu_box(0,0,gw-1,gh-1,0xFFFF,0);                      /* extreme edges */
     gpu_line(0,0,gw-1,gh-1,0xFFE0);                       /* both diagonals */
     gpu_line(gw-1,0,0,gh-1,0xFFE0);
-    gpu_circle(gw/2,gh/2,gh/3,0x07FF,0);
+    gpu_ellipse(gw/2,gh/2,gh/3,gh/3,0x07FF,0);
 }
 /* SETMODE. Changing mode reinterprets every byte of the framebuffer, so the old
    contents are meaningless -- it clears, and loads the palette that belongs to
@@ -1415,6 +1531,7 @@ static void gpu_selftest(void){
    program which never touches PALETTE still sees sensible colour.
    Returns 0 on an unknown mode, which the caller turns into GSTAT's ERR bit. */
 static void gpu_reset(void){
+    gpat = 0xFFFF;                 /* 10j: line pattern to solid */
     memset(gfb,0,gfpix*sizeof *gfb);   /* gfb is a page POINTER now */
     /* The reset pen is WHITE (0xFFFF), because the historical default "pen 1"
        meant white back when there were four pens, and a visible default is the
@@ -1427,16 +1544,18 @@ static void gpu_cmd(uint8_t v){
     switch(v){
     case 0x01: gpu_px(gx0,gy0,gcol);                break;   /* PLOT       */
     case 0x02: gpu_line(gx0,gy0,gx1,gy1,gcol);      break;   /* LINE       */
-    case 0x03: gpu_box(gx0,gy0,gx1,gy1,gcol,0);     break;   /* BOX        */
     case 0x04: gpu_box(gx0,gy0,gx1,gy1,gcol,1);     break;   /* BOXFILL    */
-    /* CLS: every byte is 4 pixels of the same pen, so 0x00/0x55/0xAA/0xFF. */
-    case 0x05: for(size_t i=0;i<gfpix;i++) gfb[i]=gcol; break;  /* CLS     */
-/* 0x06 was SETPAL. No palette, no command: an unknown code sets ERR, which
-       is exactly what old software probing for it should see. */
-    case 0x07: gpu_circle(gx0,gy0,gparm,gcol,0);    break;   /* CIRCLE     */
-    case 0x08: gpu_circle(gx0,gy0,gparm,gcol,1);    break;   /* CIRCLEFILL */
+    /* 0x03 (BOX outline), 0x05 (CLS) and 0x07/0x08 (CIRCLE) are RETIRED
+       (stage-10 diet): four LINEs, BOXFILL 0,0,479,271 and ELLIPSE rx=ry
+       cover them, and the fabric they paid for bought the PGC's curves,
+       patterns and text. 0x06 was SETPAL (retired with the palette).
+       All of them read as unknown -> ERR now. */
     case 0x0A: gpu_ellipse(gx0,gy0,gparm,gparm2,gcol,0); break; /* ELLIPSE     */
     case 0x0B: gpu_ellipse(gx0,gy0,gparm,gparm2,gcol,1); break; /* ELLIPSEFILL */
+    case 0x0C: gpat = (uint16_t)(gparm | (gparm2 << 8)); break;  /* LINPAT (10j):
+                                      latch {GPARM2,GPARM} -- the register
+                                      map is full, so the pattern rides a
+                                      command, like the GL walker writes it */
     /* POINT reads a pixel back into GDATA, which is what a BASIC POINT()
        function needs. Off-screen reads as pen 0, matching the write side's
        "off-screen simply is not there" rule. */

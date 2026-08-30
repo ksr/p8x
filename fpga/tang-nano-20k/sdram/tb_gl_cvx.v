@@ -1,29 +1,28 @@
-// tb_gl_fpx.v -- stage-10a GL stream through the REAL pixel stack, and the
-// framebuffer OUT as an image.
+// tb_gl_cvx.v -- the stage-10i CURVE scene through the REAL pixel stack,
+// and the framebuffer OUT as an image.
 //
-// tb_gl proves the interpreter issues the right OPS (directed constants). This bench closes the last gap to the emulator: the
-// same GL byte stream c_gl_test feeds the emulator (its gl_b.c scene) is
-// poked at GLDATA here, through the real p8x_geom + gfx + arbiter +
-// controller + sdram chip model, and the chip's memory is then dumped as a
-// P6 PPM in the emulator's exact format (bit-replicated 565->888). The
-// harness (c_gl_rtl_test.sh) byte-compares it against the emulator's
-// gl_b.ppm: RTL pixels == emulator pixels, the whole frame.
+// The byte stream is c_gl_curve_test's gl_cv.c scene verbatim: circle
+// outline and fill (radius mapped through the window->viewport scale,
+// drawn as the device ellipse), an ellipse outline, a quarter ARC and a
+// filled SECTOR (4-degree polylines / fan triangles on the shared trig
+// table), and a negative radius that must come back as error 2. The
+// frame must byte-match the emulator's gl_cv.ppm.
 //
 // The screen is prepared the way the machine's boot leaves it (CLS black +
-// the 1-px white border of the boot splash), so untouched pixels compare
-// too, not just the scene.
+// the 1-px white border of the boot splash); the scene's CLEARS wipes it
+// on both sides identically.
 //
-//   iverilog -g2012 -o tbglp tb_gl_fpx.v ../../rtl/p8x_geom.v \
+//   iverilog -g2012 -I ../../rtl -o tbglcv tb_gl_cvx.v ../../rtl/p8x_geom.v \
 //            ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v \
 //            gfx_mem.v gfx_span.v sdram_arb.v p8x_sdram.v sdram_video.v \
 //            sdram_chip.v
-//   vvp tbglp
+//   vvp tbglcv
 `timescale 1ns/1ps
 module tb;
   reg clk=0, rst=1; always #5 clk=~clk;
 
   // ---- CPU-side buses -------------------------------------------------------
-  reg         gl_sel=0, gl_wr=0;       // GL window ($FF50)
+  reg         gl_sel=0, gl_wr=0, gl_rd=0; // GL window ($FF50)
   reg         gsel=0, gwr=0;           // gfx window ($FF20, boot replica)
   reg  [3:0]  a=0;
   reg  [7:0]  wdata=0;
@@ -64,7 +63,7 @@ module tb;
     .a(a), .wdata(wdata), .rdata(rdata),
     .g_req(g_req), .g_we(g_we), .g_addr(g_addr), .g_din(g_din),
     .g_ack(g_ack), .g_ready(g_ready), .g_dout(c_dout),
-    .gl_sel(gl_sel), .gl_wr(gl_wr), .gl_rd(1'b0),
+    .gl_sel(gl_sel), .gl_wr(gl_wr), .gl_rd(gl_rd),
     .gm_own(gm_own), .gm_wr(gm_wr), .gm_rd(gm_rd), .gm_a(gm_a), .gm_wdata(gm_wdata),
     .gm_rdata(gfx_rdata),
     .frame_tick(frame_tick), .draw_pg(draw_pg), .disp_pg(disp_pg));
@@ -129,9 +128,11 @@ module tb;
     integer n;                                      //   with backpressure
     begin
       n = 0; a = 4'h1; gl_sel = 1; #1;
-      while (rdata[7] && n < 10000000) begin @(negedge clk); #1; n = n + 1; end
+      // CLEARS with the FIFO already full = two full-screen pixel-pair
+      // walks before the consumer moves again -- give the drain room
+      while (rdata[7] && n < 5000000) begin @(negedge clk); #1; n = n + 1; end
       gl_sel = 0;
-      if (n >= 10000000) begin $display("FAIL: FIFO never drained"); $finish(1); end
+      if (n >= 5000000) begin $display("FAIL: FIFO never drained"); $finish(1); end
       @(posedge clk); gl_sel <= 1; gl_wr <= 1; a <= 4'h0; wdata <= v;
       @(posedge clk); gl_wr <= 0; gl_sel <= 0;
       repeat (6) @(posedge clk);                    // CPU-poke pacing
@@ -140,19 +141,15 @@ module tb;
   task glw(input [15:0] v);
     begin glb(v[7:0]); glb(v[15:8]); end
   endtask
-  task line3(input [15:0] x0,y0,z0,x1,y1,z1);
-    begin
-      glb(8'h12); glw(x0); glw(y0); glw(z0);        // MOVE3
-      glb(8'h2A); glw(x1); glw(y1); glw(z1);        // DRAW3
-    end
-  endtask
   task gl_wait_idle;
     integer n;
     begin
       n = 0; a = 4'h1; gl_sel = 1; #1;
-      while (rdata[6] && n < 4000000) begin @(negedge clk); #1; n = n + 1; end
+      // a fill probes every interior pixel through the arbiter: give the
+      // walker room (the rectangle alone is ~5000 pixels, 3 probes each)
+      while (rdata[6] && n < 40000000) begin @(negedge clk); #1; n = n + 1; end
       gl_sel = 0;
-      if (n >= 4000000) begin $display("TB-GL-FPX: FAIL (never idle)"); $finish(1); end
+      if (n >= 40000000) begin $display("TB-GL-CVX: FAIL (never idle)"); $finish(1); end
       // the walker hands the LAST op to the device and idles -- the device
       // (and the controller behind it) may still be drawing it. Software
       // polls GSTAT before touching pixels; the bench must too, plus a
@@ -161,12 +158,20 @@ module tb;
       repeat (400) @(posedge clk);
     end
   endtask
+  task rd_glerr(output [7:0] v);
+    begin
+      @(negedge clk); gl_sel = 1; a = 4'h3; #1 v = rdata; gl_rd = 1;
+      @(negedge clk); gl_sel = 0; gl_rd = 0;
+    end
+  endtask
 
   integer x, y, f;
   reg [31:0] w;
   reg [15:0] p;
   reg [4:0] r5, b5; reg [5:0] g6;
-initial begin
+  reg [7:0] e0, e1;
+
+  initial begin
     repeat (4) @(posedge clk); rst = 0;
     wait (!c_busy);
 
@@ -192,37 +197,45 @@ initial begin
     gpoke(4'h2, 8'hDF); gpoke(4'hB, 8'h01);
     gpoke(4'h5, 8'h02); gwait;                // right (479,0)-(479,271)
 
-    // ---- the GL scene: byte for byte what c_gl_lf_test's gl_lf.c pokes
-    // (stage 10f: LINFUN modes on the pixel path; fills stay replace) ----
-    glb(8'hB3); glw(16'sd0); glw(16'sd479); glw(16'sd0); glw(16'sd271);
-    glb(8'hB2); glw(16'sd0); glw(16'sd479); glw(16'sd0); glw(16'sd271);
-    glb(8'h0F); glb(8'd0); glb(8'd0); glb(8'd0);          // CLEARS
-    glb(8'h06); glb(8'd0); glb(8'd0); glb(8'd31);         // COLOR blue
-    glb(8'hE0); glb(8'd1);                                // PRMFIL 1
-    glb(8'h10); glw(16'sd100); glw(16'sd100);             // MOVE
-    glb(8'h34); glw(16'sd200); glw(16'sd120);             // RECT (filled)
-    glb(8'hE0); glb(8'd0);                                // PRMFIL 0
-    glb(8'h06); glb(8'd31); glb(8'd0); glb(8'd0);         // COLOR red
-    glb(8'hEB); glb(8'd4);                                // LINFUN 4: XOR
-    glb(8'h10); glw(16'sd90);  glw(16'sd110);
-    glb(8'h28); glw(16'sd210); glw(16'sd110);
-    glb(8'hEB); glb(8'd1);                                // complement
-    glb(8'h10); glw(16'sd90);  glw(16'sd130);
-    glb(8'h28); glw(16'sd210); glw(16'sd130);
-    glb(8'hEB); glb(8'd2);                                // OR
-    glb(8'h10); glw(16'sd90);  glw(16'sd140);
-    glb(8'h28); glw(16'sd210); glw(16'sd140);
-    glb(8'hEB); glb(8'd9);                                // bad -> err2 only
-    glb(8'h04);                                           // RESETF
+    // ---- gl_cv.c's scene, byte for byte -----------------------------------
+    glb(8'hB3); glw(16'd0); glw(16'd479); glw(16'd0); glw(16'd271); // WINDOW
+    glb(8'hB2); glw(16'd0); glw(16'd479); glw(16'd0); glw(16'd271); // VWPORT
+    glb(8'h0F); glb(8'd0); glb(8'd0); glb(8'd0);         // CLEARS black
+    glb(8'h06); glb(8'd31); glb(8'd0); glb(8'd0);        // COLOR red
+    glb(8'h10); glw(16'd100); glw(16'd136);              // MOVE
+    glb(8'h38); glw(16'd60);                             // CIRCLE 60
+    glb(8'h06); glb(8'd0); glb(8'd63); glb(8'd0);        // COLOR green
+    glb(8'hE0); glb(8'd1);                               // PRMFIL 1
+    glb(8'h10); glw(16'd300); glw(16'd136);
+    glb(8'h38); glw(16'd40);                             // filled CIRCLE
+    glb(8'hE0); glb(8'd0);
+    glb(8'h06); glb(8'd0); glb(8'd0); glb(8'd31);        // COLOR blue
+    glb(8'h10); glw(16'd100); glw(16'd60);
+    glb(8'h39); glw(16'd80); glw(16'd30);                // ELIPSE 80 30
+    glb(8'h06); glb(8'd31); glb(8'd63); glb(8'd0);       // COLOR yellow
+    glb(8'h10); glw(16'd380); glw(16'd60);
+    glb(8'h3C); glw(16'd40); glw(16'd0); glw(16'd90);    // ARC
+    glb(8'h06); glb(8'd0); glb(8'd63); glb(8'd31);       // COLOR teal
+    glb(8'hE0); glb(8'd1);
+    glb(8'h10); glw(16'd240); glw(16'd200);
+    glb(8'h3D); glw(16'd50); glw(16'd0); glw(16'd90);    // filled SECTOR
+    glb(8'hE0); glb(8'd0);
+    glb(8'h38); glw(-16'sd5);                            // CIRCLE -5: err 2
     gl_wait_idle;
 
+    rd_glerr(e0); rd_glerr(e1);
+    if (e0 !== 8'd2 || e1 !== 8'd0) begin
+      $display("TB-GL-CVX: FAIL (GLERR %0d then %0d, wanted 2 then 0)", e0, e1);
+      $finish(1);
+    end
+
     if (CHIP.protocol_errors != 0) begin
-      $display("TB-GL-FPX: FAIL (%0d protocol errors)", CHIP.protocol_errors);
+      $display("TB-GL-CVX: FAIL (%0d protocol errors)", CHIP.protocol_errors);
       $finish(1);
     end
 
     // ---- dump page 0 as a P6 PPM, the emulator's exact format -------------
-    f = $fopen("tb_gl_fpx.ppm", "wb");
+    f = $fopen("tb_gl_cvx.ppm", "wb");
     $fwrite(f, "P6\n480 272\n255\n");
     for (y = 0; y < 272; y = y + 1)
       for (x = 0; x < 480; x = x + 1) begin
@@ -232,9 +245,9 @@ initial begin
         $fwrite(f, "%c%c%c", {r5, r5[4:2]}, {g6, g6[5:4]}, {b5, b5[4:2]});
       end
     $fclose(f);
-    $display("TB-GL-FPX: DONE (tb_gl_fpx.ppm written; compare against the emulator)");
+    $display("TB-GL-CVX: DONE (tb_gl_cvx.ppm written; compare against the emulator)");
     $finish(0);
   end
 
-  initial begin #400_000_000; $display("TB-GL-FPX: TIMEOUT"); $finish(1); end
+  initial begin #2_000_000_000; $display("TB-GL-CVX: TIMEOUT"); $finish(1); end
 endmodule

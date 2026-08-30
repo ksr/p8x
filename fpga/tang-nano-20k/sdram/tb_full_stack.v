@@ -132,18 +132,30 @@ module tb;
     repeat (4) @(posedge clk); rst = 0;
     wait (!c_busy);                          // controller init done
 
-    // ---- CLS black, at the ENGINE's true cadence --------------------------
+    // ---- clear black, at the ENGINE's true cadence (BOXFILL: the
+    // device CLS is retired, stage-10 diet) --------------------------------
     poke(4'h4, 8'h00);                       // GCOL 0 (clears GCOLH)
-    poke(4'h5, 8'h05);                       // CLS
-    gwait;
-
-    // ---- a 1-px white border: the pattern that catches rotates ------------
-    poke(4'h4, 8'hFF); poke(4'hD, 8'hFF);    // pen $FFFF
     poke(4'h0, 8'h00); poke(4'h1, 8'h00);    // 0,0
     poke(4'h2, 8'hDF); poke(4'hB, 8'h01);    // 479
     poke(4'h3, 8'h0F); poke(4'hC, 8'h01);    // 271
-    poke(4'h5, 8'h03);                       // BOX outline
+    poke(4'h5, 8'h04);                       // BOXFILL
     gwait;
+
+    // ---- a 1-px white border as FOUR LINEs (BOX outline retired) ----------
+    poke(4'h4, 8'hFF); poke(4'hD, 8'hFF);    // pen $FFFF
+    poke(4'h0, 8'h00); poke(4'h1, 8'h00);
+    poke(4'h2, 8'hDF); poke(4'hB, 8'h01);
+    poke(4'h3, 8'h00);
+    poke(4'h5, 8'h02); gwait;                // top
+    poke(4'h1, 8'h0F); poke(4'hA, 8'h01);
+    poke(4'h3, 8'h0F); poke(4'hC, 8'h01);
+    poke(4'h5, 8'h02); gwait;                // bottom
+    poke(4'h2, 8'h00);
+    poke(4'h1, 8'h00);
+    poke(4'h5, 8'h02); gwait;                // left
+    poke(4'h0, 8'hDF); poke(4'h9, 8'h01);
+    poke(4'h2, 8'hDF); poke(4'hB, 8'h01);
+    poke(4'h5, 8'h02); gwait;                // right
 
     // ---- audit 1: the chip's memory, every pixel --------------------------
     for (y = 0; y < 272; y = y + 1)

@@ -172,29 +172,46 @@ initial begin
 
     // ---- the boot splash, as the machine leaves it: CLS + white border ----
     gpoke(4'h4, 8'h00);                       // GCOL 0
-    gpoke(4'h5, 8'h05);                       // CLS
+    gpoke(4'h0, 8'h00); gpoke(4'h1, 8'h00);   // the clear is a BOXFILL now
+    gpoke(4'h2, 8'hDF); gpoke(4'hB, 8'h01);   //   (device CLS retired)
+    gpoke(4'h3, 8'h0F); gpoke(4'hC, 8'h01);
+    gpoke(4'h5, 8'h04);                       // BOXFILL 0,0-479,271
     gwait;
-    gpoke(4'h4, 8'hFF); gpoke(4'hD, 8'hFF);   // pen $FFFF
-    gpoke(4'h0, 8'h00); gpoke(4'h1, 8'h00);
-    gpoke(4'h2, 8'hDF); gpoke(4'hB, 8'h01);   // 479
-    gpoke(4'h3, 8'h0F); gpoke(4'hC, 8'h01);   // 271
-    gpoke(4'h5, 8'h03);                       // BOX outline
-    gwait;
+    gpoke(4'h4, 8'hFF); gpoke(4'hD, 8'hFF);   // pen $FFFF; the border is
+    gpoke(4'h0, 8'h00); gpoke(4'h1, 8'h00);   //   FOUR LINEs (BOX retired)
+    gpoke(4'h2, 8'hDF); gpoke(4'hB, 8'h01);
+    gpoke(4'h3, 8'h00);
+    gpoke(4'h5, 8'h02); gwait;                // top (0,0)-(479,0)
+    gpoke(4'h1, 8'h0F); gpoke(4'hA, 8'h01);
+    gpoke(4'h3, 8'h0F); gpoke(4'hC, 8'h01);
+    gpoke(4'h5, 8'h02); gwait;                // bottom (0,271)-(479,271)
+    gpoke(4'h2, 8'h00);
+    gpoke(4'h1, 8'h00);
+    gpoke(4'h5, 8'h02); gwait;                // left (0,0)-(0,271)
+    gpoke(4'h0, 8'hDF); gpoke(4'h9, 8'h01);
+    gpoke(4'h2, 8'hDF); gpoke(4'hB, 8'h01);
+    gpoke(4'h5, 8'h02); gwait;                // right (479,0)-(479,271)
 
-    // ---- the device-level circle/ellipse scene: byte for byte what
-    // c_gfx_ce_test's gfx_ce.c pokes at $FF20 ------------------------------
+    // ---- the device-level curve scene: byte for byte what
+    // c_gfx_ce_test's gfx_ce.c pokes at $FF20. CLS and CIRCLE are
+    // RETIRED: the clear is a BOXFILL and a circle is the ellipse
+    // rx=ry (r=0 draws NOTHING now, the ellipse convention) ---------------
     gpoke(4'h4, 8'h00); gpoke(4'hD, 8'h00);
-    gpoke(4'h5, 8'h05); gwait;                          // CLS black
+    gpoke(4'h0, 8'd0);   gpoke(4'h9, 8'd0);
+    gpoke(4'h1, 8'd0);   gpoke(4'hA, 8'd0);
+    gpoke(4'h2, 8'hDF);  gpoke(4'hB, 8'h01);
+    gpoke(4'h3, 8'h0F);  gpoke(4'hC, 8'h01);
+    gpoke(4'h5, 8'h04); gwait;                          // BOXFILL: clear
     gpoke(4'h4, 8'hFF); gpoke(4'hD, 8'hFF);             // white
     gpoke(4'h0, 8'd100); gpoke(4'h9, 8'd0);
     gpoke(4'h1, 8'd100); gpoke(4'hA, 8'd0);
-    gpoke(4'h8, 8'd50);
-    gpoke(4'h5, 8'h07); gwait;                          // circle r=50
+    gpoke(4'h8, 8'd50);  gpoke(4'hF, 8'd50);
+    gpoke(4'h5, 8'h0A); gwait;                          // circle r=50
     gpoke(4'h4, 8'h00); gpoke(4'hD, 8'hF8);             // red
     gpoke(4'h0, 8'd200); gpoke(4'h9, 8'd0);
     gpoke(4'h1, 8'd80);  gpoke(4'hA, 8'd0);
-    gpoke(4'h8, 8'd30);
-    gpoke(4'h5, 8'h08); gwait;                          // circle fill r=30
+    gpoke(4'h8, 8'd30);  gpoke(4'hF, 8'd30);
+    gpoke(4'h5, 8'h0B); gwait;                          // circle fill r=30
     gpoke(4'h4, 8'hE0); gpoke(4'hD, 8'h07);             // green
     gpoke(4'h0, 8'd44);  gpoke(4'h9, 8'd1);             // x=300
     gpoke(4'h1, 8'd150); gpoke(4'hA, 8'd0);
@@ -208,11 +225,11 @@ initial begin
     gpoke(4'h4, 8'hFF); gpoke(4'hD, 8'hFF);             // white
     gpoke(4'h0, 8'd20); gpoke(4'h9, 8'd0);
     gpoke(4'h1, 8'd20); gpoke(4'hA, 8'd0);
-    gpoke(4'h8, 8'd1);
-    gpoke(4'h5, 8'h07); gwait;                          // r=1
+    gpoke(4'h8, 8'd1);  gpoke(4'hF, 8'd1);
+    gpoke(4'h5, 8'h0A); gwait;                          // r=1
     gpoke(4'h0, 8'd30); gpoke(4'h9, 8'd0);
-    gpoke(4'h8, 8'd0);
-    gpoke(4'h5, 8'h07); gwait;                          // r=0
+    gpoke(4'h8, 8'd0);  gpoke(4'hF, 8'd0);
+    gpoke(4'h5, 8'h0A); gwait;                          // r=0: nothing
     gl_wait_idle;
 
     if (CHIP.protocol_errors != 0) begin

@@ -94,6 +94,8 @@ module gfx (
   // side) its high, with the coordinates' low-write-clears-high rule.
   reg  [15:0] gcol;
   reg  [7:0]  gparm, gparm2;                   // ELLIPSE: x- and y-radius
+  reg  [15:0] lpat;                            // 10j: LINPAT, MSB first
+  reg  [3:0]  lpi;                             //   bit cursor, per primitive
   reg         gerr;
   reg  [15:0] gdata;                           // POINT result (a 565 colour)
   reg  [3:0]  gidx;                            // IDENT cursor (0..13 = live)
@@ -158,18 +160,18 @@ module gfx (
     .e_din(e_din), .e_ack(e_ack), .e_ready(e_ready), .e_dout(e_dout));
 
   // ---- command sequencer ---------------------------------------------------
+  // BOX outline (03), CLS (05) and CIRCLE/CIRCLEFILL (07/08) are RETIRED
+  // (stage-10 diet): four LINEs, BOXFILL 0,0,479,271 and ELLIPSE rx=ry
+  // cover them, and their walkers' fabric bought the PGC curves/patterns/
+  // text. RESET's clear rides S_FILL now.
   localparam S_IDLE  = 5'd0,  S_PIX   = 4'd1,  S_LINE  = 4'd2,
-             S_BOXH  = 4'd3,  S_BOXV  = 4'd4,  S_FILL  = 4'd5,
-             S_CLS   = 4'd6,  S_CIRC  = 4'd7,  S_CIRCF = 4'd8,
-             S_POINT = 4'd9,  S_CIRCI = 4'd10, S_DONE  = 4'd11,
+             S_FILL  = 4'd5,
+             S_POINT = 4'd9,  S_DONE  = 4'd11,
              S_ELLI  = 4'd12, S_ELL   = 4'd13, S_ELLR2 = 4'd14,
              S_ELLFI = 4'd15, S_ELLSI = 5'd16,
              // the ellipse error step, serialized through ONE shared
              // wide adder (it was ~526 bits of parallel carry chains)
-             S_ELA   = 5'd17, S_ELB   = 5'd18, S_ELC   = 5'd19,
-             // the circle error step (outline AND fill), through the
-             // SAME shared adder -- three more mux arms, zero new chains
-             S_CCA   = 5'd20, S_CCB   = 5'd21, S_CCC   = 5'd22;
+             S_ELA   = 5'd17, S_ELB   = 5'd18, S_ELC   = 5'd19;
   reg [4:0] st;
 
   // Bresenham / loop state
@@ -177,12 +179,8 @@ module gfx (
   reg signed [17:0] dx, dy, sx, sy;
   reg signed [19:0] err;
   reg signed [17:0] bx0, by0, bx1, by1;        // normalised box corners
-  reg signed [17:0] ccx, ccy, cr, cq;          // circle centre, x, y
-  reg signed [19:0] cerr;
-  reg [2:0]  oct;                              // circle: which of the 8 points
-  reg signed [17:0] clsx, clsy;                 // CLS cursor
-  localparam signed [17:0] cls_xmax = 18'sd479, cls_ymax = 18'sd271;
-  reg [15:0] cls_val;                          // colour S_CLS fills with
+  reg signed [17:0] ccx, ccy;                  // curve centre (ellipse)
+  reg [2:0]  oct;                              // ellipse: quadrant cursor
 
   // ---- ellipse (midpoint, four-way symmetric) -------------------------------
   // A transliteration of gpu_ellipse() in the emulator. Both decision variables
@@ -201,37 +199,22 @@ module gfx (
   reg        er2;                              // 0 = region 1, 1 = region 2
   reg signed [39:0] eacc;            // the step's running error sum
   reg               ebr;             // took the short branch (no 2nd axis)
-  reg [4:0]         cret;            // circle step: state to resume
   wire signed [29:0] edx_n = edx + $signed({13'd0, ery2, 1'b0});   // new dx
   wire signed [29:0] edy_n = edy - $signed({13'd0, erx2, 1'b0});   // new dy
   // ONE shared 40-bit add/sub serves all three phases
-  wire signed [39:0] ella = (st == S_ELA) ? eerr
-                          : (st == S_CCA) ? {{20{cerr[19]}}, cerr} : eacc;
+  wire signed [39:0] ella = (st == S_ELA) ? eerr : eacc;
   wire signed [39:0] ellb = (st == S_ELA)
                           ? (er2 ? $signed({22'd0, erx2, 2'b00})
                                  : $signed({22'd0, ery2, 2'b00}))
                           : (st == S_ELB) ? {{8{edx_n[29]}}, edx_n, 2'b00}
-                          : (st == S_ELC) ? {{8{edy_n[29]}}, edy_n, 2'b00}
-                          : (st == S_CCA) ? {{21{cq[17]}}, cq, 1'b0}
-                          : (st == S_CCB) ? {{21{cr[17]}}, cr, 1'b0}
-                          : (st == S_CCC) ? ((cerr < 0) ? 40'sd3 : 40'sd5)
-                          :                 40'sd0;
-  wire signed [39:0] ell_s = (st == S_ELC || st == S_CCB) ? (ella - ellb)
-                                                          : (ella + ellb);
+                          :                 {{8{edy_n[29]}}, edy_n, 2'b00};
+  wire signed [39:0] ell_s = (st == S_ELC) ? (ella - ellb)
+                                           : (ella + ellb);
   reg        efill;
   reg [3:0]  stp;                              // SELFTEST step
   reg        busy;
 
   wire signed [19:0] e2 = err <<< 1;
-
-  // CIRCLEFILL span bounds for the current octant. Spans 0/1 are cr wide and sit
-  // at ccy+/-cq; spans 2/3 are cq wide at ccy+/-cr.
-  wire signed [17:0] sp_half = oct[1] ? cq : cr;
-  wire signed [17:0] sp_lo   = ccx - sp_half;
-  wire signed [17:0] sp_hi   = ccx + sp_half;
-  wire signed [17:0] sp_y    = (oct[1:0] == 2'd0) ? ccy + cq :
-                               (oct[1:0] == 2'd1) ? ccy - cq :
-                               (oct[1:0] == 2'd2) ? ccy + cr : ccy - cr;
 
   // BUSY is what software polls. It is asserted the moment a command is
   // accepted and only drops in S_IDLE, so a CPU that writes GCMD and reads
@@ -246,6 +229,7 @@ module gfx (
       gx0 <= 0; gy0 <= 0; gx1 <= 0; gy1 <= 0;
       gcol <= 16'hFFFF;         // white, matching the emulator's reset pen
       gparm <= 0; gparm2 <= 0; gerr <= 0; gdata <= 0; gidx <= 4'd14; ptid <= 1;
+      lpat <= 16'hFFFF; lpi <= 0;
       gmode2d <= 0; px_modal <= 0;
     end else begin
       // The engine is no longer gated by anything here. It used to hold for a
@@ -292,27 +276,8 @@ module gfx (
             end
             px_x <= (e2 >= dy) ? cx + sx : cx;
             px_y <= (e2 <= dx) ? cy + sy : cy;
-            px_go <= 1;
-          end
-        end
-
-        // BOX outline: the two horizontal edges, then the two vertical ones.
-        // Order does not matter -- the pen is constant for a whole command, so
-        // only the SET of pixels has to match the C model.
-        S_BOXH: if (!px_go && !px_busy) begin
-          if (cx > bx1) begin cy <= by0; oct <= 0; st <= S_BOXV; end
-          else begin
-            px_x <= cx; px_y <= oct[0] ? by1 : by0; px_go <= 1;
-            if (oct[0]) cx <= cx + 1;
-            oct[0] <= ~oct[0];
-          end
-        end
-        S_BOXV: if (!px_go && !px_busy) begin
-          if (cy > by1) st <= S_DONE;
-          else begin
-            px_x <= oct[0] ? bx1 : bx0; px_y <= cy; px_go <= 1;
-            if (oct[0]) cy <= cy + 1;
-            oct[0] <= ~oct[0];
+            px_go <= lpat[4'd15 - lpi];                    // 10j: LINPAT
+            lpi <= lpi + 4'd1;                             //   (wraps at 16)
           end
         end
 
@@ -322,69 +287,6 @@ module gfx (
             px_x <= cx; px_y <= cy; px_go <= 1;
             if (cx >= bx1) begin cx <= bx0; cy <= cy + 1; end
             else cx <= cx + 1;
-          end
-        end
-
-        // CLS, one row at a time through the span path. A 32-bit SDRAM word
-        // holds TWO 565 pixels now, so an aligned word write covers a pair.
-        S_CLS: if (!px_go && !px_busy) begin
-          px_x <= clsx; px_y <= clsy; px_pen <= cls_val; px_read <= 0;
-          px_word <= (clsx[0] == 1'b0);        // aligned: cover the pair
-          px_go <= 1;
-          if (clsx + (clsx[0] == 1'b0 ? 18'sd2 : 18'sd1) > cls_xmax) begin
-            clsx <= 0;
-            if (clsy == cls_ymax) st <= S_DONE;
-            else                  clsy <= clsy + 18'sd1;
-          end else
-            // step by the PAIR actually written -- stepping 4 here while
-            // px_word covers 2 skipped every other pair, and the co-sim was
-            // blind to it: both models start zeroed and every payload
-            // clears TO zero. The full-stack bench sentinels memory first,
-            // which is why it caught what the panel's own camouflage
-            // (uncleared stripes of the previous picture) had disguised as
-            // a missing border and a display rotate.
-            clsx <= clsx + (clsx[0] == 1'b0 ? 18'sd2 : 18'sd1);
-        end
-
-        S_CIRC: if (!px_go && !px_busy) begin
-          if (cr < cq) st <= S_DONE;
-          else begin
-            case (oct)
-              3'd0: begin px_x <= ccx+cr; px_y <= ccy+cq; end
-              3'd1: begin px_x <= ccx-cr; px_y <= ccy+cq; end
-              3'd2: begin px_x <= ccx+cr; px_y <= ccy-cq; end
-              3'd3: begin px_x <= ccx-cr; px_y <= ccy-cq; end
-              3'd4: begin px_x <= ccx+cq; px_y <= ccy+cr; end
-              3'd5: begin px_x <= ccx-cq; px_y <= ccy+cr; end
-              3'd6: begin px_x <= ccx+cq; px_y <= ccy-cr; end
-              3'd7: begin px_x <= ccx-cq; px_y <= ccy-cr; end
-            endcase
-            px_go <= 1;
-            if (oct == 3'd7) begin
-              oct <= 0;
-              cret <= st; st <= S_CCA;   // the error step, serialized
-            end else oct <= oct + 1;
-          end
-        end
-
-        // CIRCLEFILL: the same midpoint walk, but each step paints FOUR
-        // horizontal spans instead of eight points, matching gpu_circle()'s
-        // fill branch. S_CIRCI loads the span's start; S_CIRCF sweeps it.
-        // Two states rather than one because the span bounds depend on both
-        // the octant and on cr/cq, which the error step changes underneath.
-        S_CIRCI: begin
-          if (cr < cq) st <= S_DONE;
-          else begin cx <= sp_lo; st <= S_CIRCF; end
-        end
-        S_CIRCF: if (!px_go && !px_busy) begin
-          if (cx > sp_hi) begin
-            if (oct[1:0] == 2'd3) begin
-              oct <= 0;                        // last span: the error step
-              cret <= S_CIRCI; st <= S_CCA;    //   (serialized), then rescan
-            end else begin oct <= oct + 1; st <= S_CIRCI; end
-          end else begin
-            px_x <= cx; px_y <= sp_y; px_go <= 1;
-            cx <= cx + 1;
           end
         end
 
@@ -449,15 +351,6 @@ module gfx (
         // 2((cq+1)-(cr-1))+1 = 2cq-2cr+5 -- exactly the C, one add per
         // cycle through the shared adder. cerr's sign picks the branch
         // and stays stable until S_CCC writes it.
-        S_CCA: begin eacc <= ell_s; st <= (cerr < 0) ? S_CCC : S_CCB; end
-        S_CCB: begin eacc <= ell_s; st <= S_CCC; end
-        S_CCC: begin
-          cerr <= ell_s[19:0];
-          cq <= cq + 1;
-          if (!(cerr < 0)) cr <= cr - 1;
-          st <= cret;
-        end
-
         S_ELA: begin                           // err += 4*r2; pick branch
           ebr  <= er2 ? (eerr > 0) : (eerr < 0);
           eacc <= ell_s;
@@ -519,7 +412,6 @@ module gfx (
             // modal pixels: PLOT, LINE, BOX outline, CIRCLE, ELLIPSE --
             // every fill (and CLS) replaces regardless of the mode
             px_modal <= (wdata == 8'h01 || wdata == 8'h02 ||
-                         wdata == 8'h03 || wdata == 8'h07 ||
                          wdata == 8'h0A);
             case (wdata)
               8'h01: begin px_x<=gx0; px_y<=gy0; px_pen<=gcol; px_read<=0;
@@ -533,24 +425,22 @@ module gfx (
                 err <= ((gx1 > gx0) ? gx1-gx0 : gx0-gx1)
                      + ((gy1 > gy0) ? gy0-gy1 : gy1-gy0);
                 px_pen <= gcol; px_read <= 0;
-                px_x <= gx0; px_y <= gy0; px_go <= 1;      // first point
+                px_x <= gx0; px_y <= gy0;
+                px_go <= lpat[15];                         // first point,
+                lpi <= 4'd1;                               //   pattern MSB
                 st <= S_LINE;
               end
-              8'h03, 8'h04: begin
+              // 03 (BOX outline), 05 (CLS), 06 (SETPAL) and 07/08 (CIRCLE)
+              // are RETIRED: four LINEs, BOXFILL 0,0,479,271 and ELLIPSE
+              // rx=ry cover them (stage-10 diet). Unknown -> ERR below.
+              8'h04: begin
                 bx0 <= (gx0 > gx1) ? gx1 : gx0;  bx1 <= (gx0 > gx1) ? gx0 : gx1;
                 by0 <= (gy0 > gy1) ? gy1 : gy0;  by1 <= (gy0 > gy1) ? gy0 : gy1;
                 cx  <= (gx0 > gx1) ? gx1 : gx0;
                 cy  <= (gy0 > gy1) ? gy1 : gy0;
-                oct <= 0; px_pen <= gcol; px_read <= 0;
-                st  <= (wdata == 8'h03) ? S_BOXH : S_FILL;
+                px_pen <= gcol; px_read <= 0;
+                st  <= S_FILL;
               end
-              // cls_val is latched at command time: RESET sets gcol in the same
-              // cycle, and reading gcol live cleared to the wrong pen.
-              8'h05: begin clsx <= 0; clsy <= 0;
-                           cls_val <= gcol;
-                           st <= S_CLS; end
-              // 8'h06 was SETPAL; with no palette an unknown code sets ERR
-              // below, which is what old software probing for it should see.
               // ELLIPSE / ELLIPSEFILL. ccx/ccy and cx are shared with the
               // circle; S_ELLI needs one extra cycle before erx2/ery2 are
               // available, which is what S_ELLFI is for.
@@ -561,24 +451,22 @@ module gfx (
                 cx <= gx0 - {10'd0, gparm};
                 st <= S_ELLI;
               end
-              8'h07, 8'h08: begin
-                ccx <= gx0; ccy <= gy0;
-                cr  <= {10'd0, gparm};          // x = r
-                cq  <= 0;                       // y = 0
-                cerr <= 20'sd1 - {10'd0, gparm};
-                oct <= 0; px_pen <= gcol; px_read <= 0;
-                st  <= (wdata == 8'h07) ? S_CIRC : S_CIRCI;
-              end
               8'h09: begin px_x<=gx0; px_y<=gy0; px_read<=1; px_go<=1;
                            gidx<=4'd14; st<=S_POINT; end
               8'hF1: begin                      // RESET
                 // Clears to 0 (black), NOT to the pen it is about to select --
-                // the lesson recorded here before still applies, only the
-                // reset pen changed: WHITE, matching gpu_reset().
-                clsx <= 0; clsy <= 0; cls_val <= 16'h0000; st <= S_CLS;
+                // the lesson recorded here still applies, only the clear
+                // rides S_FILL now (S_CLS retired): px_pen is latched HERE,
+                // before gcol flips to the reset white.
+                bx0 <= 0; by0 <= 0; bx1 <= 18'sd479; by1 <= 18'sd271;
+                cx <= 0; cy <= 0; px_pen <= 16'h0000; px_read <= 0;
+                st <= S_FILL;
                 gcol <= 16'hFFFF; gparm <= 0; gdata <= 0; gidx <= 4'd14;
-                ptid <= 1;
+                ptid <= 1; lpat <= 16'hFFFF;
               end
+              8'h0C: lpat <= {gparm2, gparm};   // LINPAT (10j): the register
+                                                //   map is full, so the
+                                                //   pattern rides a command
               8'hF2: gidx <= 0;                 // IDENT: GDATA now streams
               default: gerr <= 1;
             endcase

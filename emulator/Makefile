@@ -6,8 +6,8 @@ UC=../microcode
 
 all: p8xemu ucode
 
-p8xemu: p8xemu.c
-	$(CC) $(CFLAGS) -o $@ $<
+p8xemu: p8xemu.c ../generators/glkwtab.h ../generators/trigtab.h
+	$(CC) $(CFLAGS) -o $@ p8xemu.c
 
 ucode:
 	cd $(UC) && python3 genucode.py

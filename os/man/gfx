@@ -28,6 +28,11 @@ FUNCTIONS
     gboxf(...)            ... filled
     gcircle(x,y,r)        circle outline; gcirclef(...) filled
     gellipse(x,y,rx,ry)   ellipse outline; gellipsef(...) filled
+                          (a circle IS the ellipse with rx=ry since the
+                          stage-10 diet retired the separate circle
+                          rasterizer -- same call, radius capped at 255,
+                          r=0 draws nothing; gcls and gbox likewise ride
+                          BOXFILL and four lines, same pixels)
     gpoint(x,y)           the colour at (x,y); 0 off-screen
     gwait()               spin until the engine is idle (each call above
                           already waits before issuing, so back-to-back

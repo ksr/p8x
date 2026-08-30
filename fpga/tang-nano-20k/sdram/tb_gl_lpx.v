@@ -172,14 +172,25 @@ module tb;
 
     // ---- the boot splash, as the machine leaves it: CLS + white border ----
     gpoke(4'h4, 8'h00);                       // GCOL 0
-    gpoke(4'h5, 8'h05);                       // CLS
+    gpoke(4'h0, 8'h00); gpoke(4'h1, 8'h00);   // the clear is a BOXFILL now
+    gpoke(4'h2, 8'hDF); gpoke(4'hB, 8'h01);   //   (device CLS retired)
+    gpoke(4'h3, 8'h0F); gpoke(4'hC, 8'h01);
+    gpoke(4'h5, 8'h04);                       // BOXFILL 0,0-479,271
     gwait;
-    gpoke(4'h4, 8'hFF); gpoke(4'hD, 8'hFF);   // pen $FFFF
-    gpoke(4'h0, 8'h00); gpoke(4'h1, 8'h00);
-    gpoke(4'h2, 8'hDF); gpoke(4'hB, 8'h01);   // 479
-    gpoke(4'h3, 8'h0F); gpoke(4'hC, 8'h01);   // 271
-    gpoke(4'h5, 8'h03);                       // BOX outline
-    gwait;
+    gpoke(4'h4, 8'hFF); gpoke(4'hD, 8'hFF);   // pen $FFFF; the border is
+    gpoke(4'h0, 8'h00); gpoke(4'h1, 8'h00);   //   FOUR LINEs (BOX retired)
+    gpoke(4'h2, 8'hDF); gpoke(4'hB, 8'h01);
+    gpoke(4'h3, 8'h00);
+    gpoke(4'h5, 8'h02); gwait;                // top (0,0)-(479,0)
+    gpoke(4'h1, 8'h0F); gpoke(4'hA, 8'h01);
+    gpoke(4'h3, 8'h0F); gpoke(4'hC, 8'h01);
+    gpoke(4'h5, 8'h02); gwait;                // bottom (0,271)-(479,271)
+    gpoke(4'h2, 8'h00);
+    gpoke(4'h1, 8'h00);
+    gpoke(4'h5, 8'h02); gwait;                // left (0,0)-(0,271)
+    gpoke(4'h0, 8'hDF); gpoke(4'h9, 8'h01);
+    gpoke(4'h2, 8'hDF); gpoke(4'hB, 8'h01);
+    gpoke(4'h5, 8'h02); gwait;                // right (479,0)-(479,271)
 
     // ---- the stage-10c fly-through: c_gl_list_test's CLOOP scene,
     // byte for byte -- record one frame (MDROTY 7 delta + erase + a

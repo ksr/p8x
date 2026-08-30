@@ -36,11 +36,7 @@
 
 //#define GC_PLOT 1
 //#define GC_LINE 2
-//#define GC_BOX  3
 //#define GC_BOXF 4
-//#define GC_CLS  5
-//#define GC_CIRC 7
-//#define GC_CIRCF 8
 //#define GC_PONT 9
 //#define GC_ELL  10
 //#define GC_ELLF 11
@@ -79,8 +75,9 @@ int gcolor(int c) {
 }
 
 int gcls() {
-    gwait();
-    poke(GCMD, GC_CLS);
+    /* the device CLS is retired (stage-10 diet): a full-screen BOXFILL
+       is the same pixels through the same fill path */
+    gboxf(0, 0, 479, 271);
     return 0;
 }
 
@@ -99,9 +96,11 @@ int gline(int x0, int y0, int x1, int y1) {
 }
 
 int gbox(int x0, int y0, int x1, int y1) {
-    gw16(0, x0); gw16(1, y0); gw16(2, x1); gw16(3, y1);
-    gwait();
-    poke(GCMD, GC_BOX);
+    /* the device BOX outline is retired: four LINEs, same pixels */
+    gline(x0, y0, x1, y0);
+    gline(x0, y1, x1, y1);
+    gline(x0, y0, x0, y1);
+    gline(x1, y0, x1, y1);
     return 0;
 }
 
@@ -113,18 +112,13 @@ int gboxf(int x0, int y0, int x1, int y1) {
 }
 
 int gcircle(int x, int y, int r) {
-    gw16(0, x); gw16(1, y);
-    poke(GPARM, r);
-    gwait();
-    poke(GCMD, GC_CIRC);
+    /* the device CIRCLE is retired: a circle IS the ellipse rx=ry */
+    gellipse(x, y, r, r);
     return 0;
 }
 
 int gcirclef(int x, int y, int r) {
-    gw16(0, x); gw16(1, y);
-    poke(GPARM, r);
-    gwait();
-    poke(GCMD, GC_CIRCF);
+    gellipsef(x, y, r, r);
     return 0;
 }
 

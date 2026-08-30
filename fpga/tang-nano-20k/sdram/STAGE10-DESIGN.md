@@ -525,6 +525,69 @@ byte-identical emulator-vs-RTL (c_gl_rtl_test), 92-PASS make test.
     5x7 stroke font (grid x 0..4, y 0..6, advance 6; TSIZE 256 =
     7-unit capitals).
 
+- **10i/10j/10k — the PGC completion (2026-08-29; emulator + RTL
+  pixel-exact, all three).** Everything remaining from the manual that
+  was ever in scope:
+
+  - **10i curves**: CIRCLE (38, r) / ELIPSE (39, rx ry) map their radii
+    through the window->viewport scale and draw as ONE device ellipse
+    (the device's radius registers are 8-bit: clamp at 255; unsigned
+    coordinates clip an off-window centre to nothing; screen-clipped,
+    the sole curve/window divergence). ARC (3C) / SECTOR (3D, both
+    r a0 a1, integer degrees CCW from +x, a0=a1 = full turn) walk
+    4-degree polylines on the shared trig ROM through the CLIPPED 2D
+    line path -- the emulator's tail rule is the contract (the last
+    regular vertex jumps straight to a1; an extra 2-degree step cost
+    one apex pixel until the RTL matched it). PRMFIL fills
+    circle/ellipse (device) and SECTOR (a fan of map-only 2D tris
+    about the centre); SECTOR r 0 0 is the filled circle that honours
+    AREAPT. Negative radius = error 2; none move the current point.
+  - **10j patterns**: LINPAT p is DEVICE state like GMODE -- the
+    register map is full, so it rides GCMD 0C latching {GPARM2,GPARM};
+    the Bresenham loop gates px_go on the pattern, MSB first,
+    restarting each primitive, every line from every door (glyph
+    strokes included). AREAPT im1..16 lives in scratch words 784+
+    (streamed, not pbuf'd) and masks fill SPANS: the walker's run
+    splitter breaks each patterned row into maximal set-bit runs
+    issued as sub-BOXFILLs through the SHARED W_BOX writer (bit for
+    column x is 15-(x&15) of row word y&15 -- screen space). Scope:
+    POLY/POLY3/RECT/SECTOR fills; CLEARS and FLOOD are erases, filled
+    CIRCLE/ELIPSE is a device command, and AREA forces replace AND
+    solid (its visited-mark invariant) with the idle-waited setup the
+    W_LF lesson demands. RESETF restores everything.
+  - **10k text completion**: TJUST h v (1..3 each) offsets the start
+    point in MODEL units (h: 0/-3n/-6n of the 6-unit advance, v:
+    0/-3/-7 of the 7-unit cap), so TSIZE/TANGLE transform the
+    justification with the string. That forced the translator BACK to
+    counted strings (the count must lead): chars pack two per scratch
+    word at 800..831, cap 63. TEXTP (83) is TEXT's alias -- on the
+    PGC, TEXT was the fixed character generator and TEXTP the
+    programmable stroke text; P8X text IS stroke text. TEXT runs
+    inside command lists now: the glyph replay got its OWN context
+    (rpg) overlaying the list replay -- and its length-read state had
+    to join the fetcher's exclusion guards (the ISSUE states race the
+    prefetch leg on the same stale !sd_busy, found as glyph L's length
+    halfword arriving as the chars 'IS').
+  - **The placement fight, round three.** The three rungs cost ~3,100
+    LUT4 gross against ~1,800 of headroom. Serialization diets washed
+    out (state-arm deletions trade evenly against the source muxes
+    they need). What actually paid: RETIRING the redundant pre-PGC
+    device machinery (user-approved) -- the midpoint-circle rasterizer
+    (a circle IS the ellipse rx=ry; cardinal pixels identical, r=0
+    draws nothing now), the BOX-outline walker (four LINEs, same
+    pixels), and the CLS pair-writer (BOXFILL 0,0-479,271; RESET's
+    clear rides S_FILL). Monitor splash, BASIC (CIRCLE/BOX/CLS),
+    lib_gfx and every bench were repointed; frames are pixel-identical
+    except the circle's rasterizer change. Plus: MDMATX/VWMATX stream
+    into the lanes (pbuf shrank 24->8 and the 12-way pair mux died),
+    and AREA's span paint rides the S_LIN writer.
+  - **TRAP for the record**: the BASIC BOX shadows were first homed at
+    BASRAM $F2 -- which ALIASES SEED/POKEA/SPSAV. Every LINE wiped the
+    saved stack pointer and BYE reset the machine through a fresh
+    splash; the frame the test dumped was the splash. They live in the
+    statement-scratch run at $E6 now, with the warning comment the
+    file already carried about "free" bytes.
+
 Retirement of the stage-9 record front end is its own decision point
 after 10c — ASK the user (workflow rule: no silent breakage of shipped
 interfaces, and it is also a disk+bitstream lockstep change).

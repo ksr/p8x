@@ -66,6 +66,14 @@
         .byte $F0
         .ascii "TDEFIN"
         .byte $F1
+        .ascii "ELIPSE"
+        .byte $F2
+        .ascii "SECTOR"
+        .byte $F4
+        .ascii "LINPAT"
+        .byte $F5
+        .ascii "AREAPT"
+        .byte $F6
         .ascii "FLOOD"
         .byte $B8
         .ascii "MOVER"
@@ -110,6 +118,10 @@
         .byte $EB
         .ascii "TSIZE"
         .byte $EF
+        .ascii "TEXTP"
+        .byte $F7
+        .ascii "TJUST"
+        .byte $F8
         .ascii "FLIP"
         .byte $B4
         .ascii "WAIT"
@@ -128,3 +140,5 @@
         .byte $EC
         .ascii "TEXT"
         .byte $EE
+        .ascii "ARC"
+        .byte $F3

@@ -113,6 +113,24 @@ VERBS = [
     ("TSIZE",   "TS",   0x81, 0, 1),
     ("TANGLE",  "TA",   0x82, 0, 1),
     ("TDEFIN",  "TD",   0x84, 1, 1),
+    # stage 10i (appended: BASIC token order is ABI). PGC's own spelling
+    # (ELIPSE, one L). CIRCLE is BASIC_SKIP'd: BASIC's CIRCLE statement
+    # (token $AC, screen space) owns the name -- GL "CIRCLE r" remains.
+    ("CIRCLE",  "CI",   0x38, 0, 1),
+    ("ELIPSE",  "EL",   0x39, 0, 2),
+    ("ARC",     "ARC",  0x3C, 0, 3),
+    ("SECTOR",  "SEC",  0x3D, 0, 3),
+    # stage 10j (appended). AREAPT's arity 16 exceeds the ROM's 4-bit
+    # field: the RTL meta encodes it as the sentinel 13 and the BASIC
+    # meta as $FE; both mean "sixteen int16 words".
+    ("LINPAT",  "LPT",  0xEA, 0, 1),
+    ("AREAPT",  "APT",  0xE7, 0, 16),
+    # stage 10k (appended). TEXTP is the SAME engine as TEXT (PGC's
+    # fixed-cell/programmable split has no meaning here: P8X text IS
+    # stroke text); TJUST h v justifies 1..3 left/centre/right and
+    # bottom/middle/top about the current point, in model units.
+    ("TEXTP",   "TXP",  0x83, 0, 14),
+    ("TJUST",   "TJ",   0x85, 2, 2),
     ("CA",      "CA",   0xFE, 0, 0),   # mode switches: internal markers
     ("CX",      "CX",   0xFF, 0, 0),
 ]
@@ -143,12 +161,13 @@ with open(os.path.join(HERE, "..", "fpga", "rtl", "glkwtab.vh"), "w") as f:
         f.write("    cmx[%d] = 16'h%02X%02X;\n" % (w+1, ord(k[2]), ord(k[3])))
         f.write("    cmx[%d] = 16'h%02X%02X;\n" % (w+2, ord(k[4]), ord(k[5])))
         var = 1 if a == 15 else 0
-        meta = (var << 14) | ((a & 15) << 10) | ((b & 3) << 8) | op
+        ra = 13 if a == 16 else a          # 13 = the sixteen-word sentinel
+        meta = (var << 14) | ((ra & 15) << 10) | ((b & 3) << 8) | op
         f.write("    cmx[%d] = 16'h%04X;\n" % (w+3, meta))
         w += 4
     f.write("    // %d entries; the matcher stops at the first zero word\n" % len(entries))
     f.write("    cmx[%d] = 16'h0000;\n" % w)
-assert w + 1 < 768, "keyword ROM reached the RBS mirror region (768) -- move RBS in p8x_geom.v"
+assert w + 1 < 768, "keyword ROM reached the RBS mirror (768) -- the AREAPT block and string buffer live above it at 784+"
 assert len(entries) < 256, "matcher cursor t_ent is 8 bits -- widen it in p8x_geom.v"
 print("wrote fpga/rtl/glkwtab.vh (ends at scratch word %d of 1024; RBS mirror at 768)" % (w+1))
 
@@ -157,7 +176,7 @@ print("wrote fpga/rtl/glkwtab.vh (ends at scratch word %d of 1024; RBS mirror at
 # Excluded: NOOP (pointless), POINT (BASIC's POINT(x,y) function owns the
 # name -- GL "POINT" remains), COLOR (BASIC's COLOR statement now feeds
 # BOTH pens itself), CA/CX (mode plumbing the statement layer handles).
-BASIC_SKIP = {"NOOP", "POINT", "COLOR", "CA", "CX"}
+BASIC_SKIP = {"NOOP", "POINT", "COLOR", "CA", "CX", "CIRCLE"}
 GLV0 = 0xB4
 bverbs = [(l, op, b, a) for l, s, op, b, a in VERBS if l not in BASIC_SKIP]
 assert GLV0 + len(bverbs) <= 0x100, "token space overflow"
@@ -189,6 +208,8 @@ with open(os.path.join(HERE, "..", "basic", "glvtab.inc"), "w") as f:
             meta = 0x80 | (b << 4)
         elif a == 14:
             meta = 0xFF          # string statement: BASIC's own handler
+        elif a == 16:
+            meta = 0xFE          # sixteen int16 words (AREAPT)
         else:
             meta = (b << 4) | (a - b)
         f.write("        .byte $%02X, $%02X   ; $%02X %s\n"

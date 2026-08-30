@@ -79,6 +79,8 @@ module tb;
   reg        op_pg  [0:255];        // draw page at issue time (CLEARS check)
   integer    nops = 0;
   reg [7:0]  rmode = 8'hAA;                  // GMODE mirror (AA = never written)
+  reg [15:0] rpp = 16'h0000;                 // GPARM/GPARM2 pair (10j)
+  reg [15:0] lpm = 16'h0000;                 // LINPAT mirror (cmd 0C latch)
   always @(posedge clk) begin
     if (gbusy != 0) gbusy <= gbusy - 4'd1;
     if (gm_own && gm_wr) begin
@@ -94,9 +96,14 @@ module tb;
         4'h4: rcolr <= {8'd0, gm_wdata};
         4'hE: rmode <= gm_wdata;             // GMODE (10f LINFUN)
         4'hD: rcolr <= {gm_wdata, rcolr[7:0]};
-        4'h5: begin
-          gbusy <= 4'd6;
-          op_cmd[nops] <= gm_wdata;
+        4'h8: rpp[7:0]  <= gm_wdata;         // GPARM  (10j LINPAT rides
+        4'hF: rpp[15:8] <= gm_wdata;         //         GPARM/GPARM2)
+        4'h5: if (gm_wdata == 8'h0C) begin
+          lpm <= rpp;                        // LINPAT latch: a mirror, NOT
+        end else begin                       //   an op -- boot and every
+          gbusy <= 4'd6;                     //   RESETF now emit one, and
+          op_cmd[nops] <= gm_wdata;          //   counting them would shift
+                                             //   every expop index
           op_x0[nops] <= rx0; op_y0[nops] <= ry0;
           op_x1[nops] <= rx1; op_y1[nops] <= ry1;
           op_pen[nops] <= rcolr; op_pg[nops] <= draw_pg;

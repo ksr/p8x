@@ -116,6 +116,19 @@ module p8x_geom (
              AF_P0=130,   AF_P1=131,   AF_P2=132,   AF_P3=133,
              AF_P4=134,   AF_P5=135,   AF_P6=136,   AF_P7=137,
              AF_P8=138,   AF_P9=139,
+             // stage 10i: CIRCLE/ELIPSE (map centre + radii, one device
+             // ellipse) and the arc-vertex subroutine (trig ROM + 2 muldivs)
+             CVE0=140, CVE1=141, CVE2=142, CVE3=143, CVE4=144,
+             CVE5=145, CVE6=146, CVE7=147,
+             CVP0=148, CVP1=149, CVP2=150, CVP3=151, CVP4=152,
+             // stage 10j: LINPAT to the device (idle-waited, like GMODE),
+             // the RESETF pattern restores, AREAPT into the scratchpad,
+             // the AREA setup rework, and the patterned-box splitter
+             W_LPW=153, W_PL0=154, W_PL1=155, W_PL2=156,
+             W_APR=157, W_APL=158,
+             AF_W0=159, AF_W1=160, AF_W2=161, AF_W3=162, AF_W4=163,
+             WP_R0=164, WP_R1=165, WP_R2=166, WP_S0=167, WP_S1=168,
+             WP_I0=169, WP_I1=170, WP_I2=171, WP_I3=172, WP_I4=173,
              C_OGB=92,  C_OGC=93,  C_MTB=94,  C_MTC=95,  C_MLC=96,
              C_MLW=97,  C_CPB=98,  C_CPC=99,  J_RST2=100,
              // stage 10c: the polygon-lane (scratchpad) T-path states
@@ -195,6 +208,29 @@ module p8x_geom (
                                      //   3 R 4 scan 5 skip
   // the verdict, exactly gl_af_in's: neither boundary nor already-painted
   wire af_in = (afpv != afbc) && (afpv != rcol);
+  // ---- stage 10i: the curve working set -----------------------------------
+  reg [15:0] cvr, cvry;              // radius (x), y-radius (ELIPSE)
+  reg [15:0] cva, cvb;               // ARC/SECTOR angles, normalized 0..359
+  reg [9:0]  cvsw, cvo;              // sweep and the walking offset (<=360)
+  reg [1:0]  cvph;                   // loop phase: vertex / edge / tail
+  reg        cvfirst, cvsec;         // first point; SECTOR (vs ARC)
+  reg [15:0] cvpx, cvpy;             // previous vertex (window; CVE: centre)
+  reg [15:0] cvnx, cvny;             // current vertex  (window; CVE: radii)
+  // the emitted angle: multiples of 4, except that a step which would
+  // overshoot the sweep emits the sweep itself -- the emulator's exact
+  // tail rule (the last regular vertex jumps straight to a1)
+  wire [9:0] cvemit = (cvo < cvsw && cvo + 10'd4 > cvsw) ? cvsw : cvo;
+  // ---- stage 10j: patterns -----------------------------------------------
+  reg [15:0] lpv;                    // LINPAT value on its way to the device
+  reg        wrst;                   // this pattern write is RESETF's restore
+  reg        apon;                   // AREAPT has any non-solid row
+  reg        wpat;                   // this W_BOX is a PATTERNED fill (RECT)
+  reg        wpret;                  // splitter return: 0 box done, 1 tri span
+  reg        aflp;                   // S_LIN carries the FILL's span paint
+  reg [15:0] wp_pat;                 // the current row's pattern word
+  reg        apho;                   // G_AP: high-byte-pending toggle
+  reg [7:0]  aplo;                   //   and the buffered low byte
+  reg        jrst2;                  // W_LF came from the RESETF chain
   wire af_g  = (state >= AF_MAP0 && state <= AF_P9);  // fill owns the g port
   reg [3:0]  ef_wp, ef_rp;           //   2 bad parameter, 3 mode not
   wire       rb_ne   = (rb_wp != rb_rp);
@@ -223,13 +259,20 @@ module p8x_geom (
   reg        t_var, t_act, t_skip;
   reg [1:0]  t_str;                  // 10h: 1 = await quote, 2 = in string
   reg [7:0]  t_sop;                  // the string verb's opcode
+  reg [5:0]  t_sn;                   // 10k: captured length (cap 63)
+  reg [7:0]  t_sc;                   // the pending low byte of a pair
+  reg [5:0]  t_si;                   // emit cursor
   reg [1:0]  t_vw;
   reg [4:0]  t_pi;
   reg [7:0]  t_ent;                  // ROM entry cursor (10h: >128 entries)
   reg [1:0]  t_k;                    // fetch microstep
   reg [15:0] t_w0, t_w1, t_w2;       // fetched entry chars
-  reg [2:0]  ast;                    // translator FSM
-  localparam A_IDLE=0, A_M0=1, A_M1=2, A_M2=3, A_ACT=4, A_ZF=5;
+  reg [3:0]  ast;                    // translator FSM
+  localparam A_IDLE=0, A_M0=1, A_M1=2, A_M2=3, A_ACT=4, A_ZF=5,
+             // stage 10k: the counted-string capture/emit (TJUST needs
+             // the length FIRST, so the 10h per-char emission died).
+             // Chars pack two per scratch word at 800..831 (63 cap).
+             A_S0=6, A_S1=7, A_S2=8, A_S3=9;
 
   reg [7:0]  glop;                   // opcode being executed
   reg [7:0]  pbuf [0:23];            // fixed parameter bytes (max: MDMATX 24)
@@ -273,6 +316,13 @@ module p8x_geom (
     for (ii = 0; ii < 1024; ii = ii + 1) cmx[ii] = 0;
     cmx[769] = 16'hFFFF;            // COLOR: white pen
     cmx[770] = 16'hFFFF;            // PROJCT: native focal
+    // stage 10j: the AREAPT rows power up SOLID. They live ABOVE the RBS
+    // mirror (784..799; the string buffer follows at 800..831) so the
+    // keyword ROM below keeps its whole 128..767 range to grow into.
+    cmx[784]=16'hFFFF; cmx[785]=16'hFFFF; cmx[786]=16'hFFFF; cmx[787]=16'hFFFF;
+    cmx[788]=16'hFFFF; cmx[789]=16'hFFFF; cmx[790]=16'hFFFF; cmx[791]=16'hFFFF;
+    cmx[792]=16'hFFFF; cmx[793]=16'hFFFF; cmx[794]=16'hFFFF; cmx[795]=16'hFFFF;
+    cmx[796]=16'hFFFF; cmx[797]=16'hFFFF; cmx[798]=16'hFFFF; cmx[799]=16'hFFFF;
     cmx[780] = 16'd16;              // near plane
     cmx[781] = 16'd32767;           // far: disabled
     cmx[0]=16'd256;  cmx[4]=16'd256;  cmx[8]=16'd256;
@@ -320,7 +370,7 @@ module p8x_geom (
   reg        glact;                  // pipeline exit returns to S_IDLE
   reg        gl2d;                   // suppress projection in the T-map
   reg [1:0]  glcls;                  // CLEARS page phase (0 = plain box)
-  reg [4:0]  glst;                   // consumer FSM
+  reg [5:0]  glst;                   // consumer FSM
   reg [15:0] wcnt;                   // WAIT frames remaining
   reg [15:0] gbx0, gby0, gbx1, gby1, gbcol;    // the box issuer's box
   localparam G_OP=0, G_PRM=1, G_RUN=2, G_PV=3, G_PRUN=4, G_PCLOSE=5,
@@ -338,7 +388,14 @@ module p8x_geom (
              G_RD0=19, G_RD1=20, G_RD2=21, G_RD3=22,
              G_MD0=23, G_MD1=24, G_MD2=25, G_MD3=26,
              // stage 10h: TEXT's per-char loop (glyphs replay as lists)
-             G_TX=27;
+             G_TX=27,
+             // stage 10i: the ARC/SECTOR segment loop (normalize, then one
+             // vertex + one edge/fan-tri per pass) and its lane loader
+             G_CV=28, G_CVN=29, G_CV2D=30,
+             // stage 10k: the GLYPH replay's own length read -- glyphs run
+             // in a SECOND context (rpg) overlaying the list replay, so
+             // TEXT works inside command lists
+             G_RLG0=31, G_RLG1=32, G_AP=33;
 
   // ---- stage 10c: COMMAND LISTS (STAGE10-DESIGN.md) ----------------------
   // 64 lists in 4KB SDRAM slots at CL_BASE + n*4096: byte length in the
@@ -356,18 +413,28 @@ module p8x_geom (
   reg         rskip;                 // consume one command, store/run nothing
   reg [63:0]  gdef;                  // 10h: the glyph DEFINED bitmap
   reg [7:0]   txn;                   // 10h: TEXT chars still to consume
-  reg         rp;                    // replaying from rp_slot
-  reg         rp_bank;               // 10h: glyph replays read bank 1
-  reg [5:0]   rp_slot;
+  reg         rp;                    // replaying from rp_slot (bank 0;
+  reg [5:0]   rp_slot;               //   glyphs run in the rpg context)
   reg [12:0]  rp_off, rp_len;
   reg [15:0]  rp_cnt;                // CLOOP passes remaining
   reg [7:0]   rpb0, rpb1;            // replay byte buffer
   reg [1:0]   rp_have;
-  reg         fst;                   // fetcher: 0 idle, 1 read in flight
+  reg [1:0]   fst;                   // fetcher: 0 idle, 1 list, 2 glyph
+  // stage 10k: the glyph replay context. It OVERLAYS the list replay --
+  // while rpg is live the decoder reads glyph bytes, the list waits.
+  reg         rpg;
+  reg [5:0]   rpg_slot;
+  reg [12:0]  rpg_len, rpg_off;
+  reg [1:0]   rpg_have;
+  reg [7:0]   rpgb0, rpgb1;
+  // TJUST (10k): 1 left/bottom, 2 centre/middle, 3 right/top
+  reg [1:0]   tjh, tjv;
   reg         sd_busy;               // one SDRAM op outstanding
   // the consumer's byte source: the command FIFO, or the replay buffer
-  wire [7:0]  srcb   = rp ? rpb0 : (glmode ? tq[tq_rp[1:0]] : cf[cf_rp[4:0]]);
-  wire        src_ne = rp ? (rp_have != 2'd0) : (glmode ? tq_ne : cf_ne);
+  wire [7:0]  srcb   = rpg ? rpgb0
+                     : rp  ? rpb0 : (glmode ? tq[tq_rp[1:0]] : cf[cf_rp[4:0]]);
+  wire        src_ne = rpg ? (rpg_have != 2'd0)
+                     : rp  ? (rp_have != 2'd0) : (glmode ? tq_ne : cf_ne);
   // opcode -> fixed parameter-byte count (the emulator's gl_cmdlen as a
   // wire; POLY 30-33 report their 1-byte header, vertices stream after)
   reg [4:0] opn; reg opok;
@@ -380,8 +447,14 @@ module p8x_geom (
       8'h78: opn = 5'd4;               // CLMOD n b off
       8'hC0: opn = 5'd0;
       8'hC1: opn = 5'd3;               // AREABC r g b
-      8'h80,8'h84: opn = 5'd1;         // TEXT count / TDEFIN c (10h)
+      8'h80,8'h83,8'h84: opn = 5'd1;   // TEXT/TEXTP count / TDEFIN c
+      8'h85: opn = 5'd2;               // TJUST h v (10k)
       8'h81,8'h82: opn = 5'd2;         // TSIZE s / TANGLE d
+      8'h38: opn = 5'd2;               // CIRCLE r (10i)
+      8'hEA: opn = 5'd2;               // LINPAT p (10j)
+      8'hE7: opn = 5'd0;               // AREAPT: 16 words, STREAMED (G_AP)
+      8'h39: opn = 5'd4;               // ELIPSE rx ry
+      8'h3C,8'h3D: opn = 5'd6;         // ARC / SECTOR r a0 a1
       8'h05,8'h43,8'h93,8'h94,8'h95,8'hA3,8'hA4,8'hA5,
       8'hA8,8'hA9,8'hB0,8'hB1: opn = 5'd2;
       8'h06,8'h07,8'h0F,8'h73: opn = 5'd3;
@@ -569,10 +642,12 @@ module p8x_geom (
       rb_wp <= 0; rb_rp <= 0; jrbs <= 0; wvk <= 0; rcph <= 0;
       glst <= G_OP; glop <= 0; pi <= 0; pneed <= 0; glnv <= 0;
       cldef <= 64'd0; rec <= 0; rskip <= 0; rp <= 0; rp_have <= 0;
-      gdef <= 64'd0; rec_bank <= 0; rp_bank <= 0; txn <= 0;
+      gdef <= 64'd0; rec_bank <= 0; txn <= 0;
+      apon <= 0; wpat <= 0; wrst <= 0; apho <= 0; aflp <= 0;
+      rpg <= 0; rpg_have <= 0; tjh <= 2'd1; tjv <= 2'd1;
       glmode <= 0; tq_wp <= 0; tq_rp <= 0; wn <= 0; tnv <= 0;
       tneg <= 0; thas <= 0; t_act <= 0; t_skip <= 0; ast <= A_IDLE;
-      t_str <= 0;
+      t_str <= 0; t_sn <= 0;
       t_ent <= 0; t_k <= 0;
       fst <= 0; sd_busy <= 0; g_req <= 0; g_we <= 0;
       rec_len <= 0; rp_off <= 0; rp_len <= 0; rp_cnt <= 0;
@@ -627,22 +702,42 @@ module p8x_geom (
       if (g_ready) sd_busy <= 0;         // read data valid this cycle
 
       case (fst)
-        1'b0: if (rp && rp_have == 2'd0 && !sd_busy && !g_req &&
-                  glst != G_RL1 && !(glst >= G_RD0 && glst <= G_MD3) &&
-                  !af_g) begin
+        2'd0: if (rpg && rpg_have == 2'd0 && !sd_busy && !g_req &&
+                  glst != G_RL0 && glst != G_RL1 &&
+                  glst != G_RLG0 && glst != G_RLG1 &&
+                  !(glst >= G_RD0 && glst <= G_MD3) && !af_g) begin
+          if (rpg_off >= rpg_len) rpg <= 0;   // the glyph is done (one pass)
+          else begin
+            g_addr <= {2'd0, 1'b1, 1'b0, 1'b1, rpg_slot,   // bank 1: glyphs
+                       {rpg_off[11:1], 1'b0} + 12'd2};
+            g_we <= 0; g_req <= 1; sd_busy <= 1; fst <= 2'd2;
+          end
+        end else if (rp && rp_have == 2'd0 && !sd_busy && !g_req &&
+                  glst != G_RL0 && glst != G_RL1 &&
+                  glst != G_RLG0 && glst != G_RLG1 &&
+                  !(glst >= G_RD0 && glst <= G_MD3) && !af_g) begin
+          // (G_RL0/G_RLG0 are the ISSUE states: both they and this leg
+          //  test !sd_busy with the same pre-edge values, so firing in
+          //  their cycle double-issues and the capture crosses -- found
+          //  as glyph L's length halfword arriving as the chars 'IS')
           if (rp_off >= rp_len) begin    // a pass ended at a boundary
             if (rp_cnt <= 16'd1) rp <= 0;
             else begin rp_cnt <= rp_cnt - 16'd1; rp_off <= 0; end
           end else begin
-            g_addr <= {2'd0, 1'b1, 1'b0, rp_bank, rp_slot,
+            g_addr <= {2'd0, 1'b1, 2'd0, rp_slot,          // bank 0: lists
                        {rp_off[11:1], 1'b0} + 12'd2};
-            g_we <= 0; g_req <= 1; sd_busy <= 1; fst <= 1'b1;
+            g_we <= 0; g_req <= 1; sd_busy <= 1; fst <= 2'd1;
           end
         end
-        1'b1: if (g_ready) begin
+        2'd1: if (g_ready) begin
           rpb0 <= g_dout[7:0]; rpb1 <= g_dout[15:8];
           rp_have <= (rp_len - rp_off >= 13'd2) ? 2'd2 : 2'd1;
-          fst <= 1'b0;
+          fst <= 2'd0;
+        end
+        default: if (g_ready) begin
+          rpgb0 <= g_dout[7:0]; rpgb1 <= g_dout[15:8];
+          rpg_have <= (rpg_len - rpg_off >= 13'd2) ? 2'd2 : 2'd1;
+          fst <= 2'd0;
         end
       endcase
 
@@ -653,16 +748,29 @@ module p8x_geom (
         A_IDLE: if (glmode && !rp && cf_ne && !tq_ne) begin : atok
           reg [7:0] b0, b;
           b0 = cf[cf_rp[4:0]];
-          if (t_str == 2'd2) begin           // inside "..." -- verbatim, no
-            cf_rp <= cf_rp + 6'd1;           //   folding, no delimiters.
-            if (b0 == 8'h22) t_str <= 0;     // The ASCII form emits one
-            else if (b0 == 8'h0D || b0 == 8'h0A) begin  // SINGLE-CHAR verb
-              epush(8'd2); t_str <= 0;       // per character (the glyph
-            end else begin                   // state carries the baseline),
-              tq[tq_wp[1:0]]         <= t_sop;   // so nobody buffers a
-              tq[tq_wp[1:0] + 2'd1]  <= 8'h01;   // count-first string.
-              tq[tq_wp[1:0] + 2'd2]  <= b0;  // (tq is empty here: the
-              tq_wp <= tq_wp + 3'd3;         //  A_IDLE guard said so)
+          if (t_str == 2'd2) begin           // inside "..." -- verbatim,
+            // capture into the scratchpad (two chars per word at 800+),
+            // gated on the ports being quiet, the A_M0 way
+            if (state == S_IDLE && (glst < G_2D || glst == G_TX)) begin
+              cf_rp <= cf_rp + 6'd1;
+              if (b0 == 8'h22 || b0 == 8'h0D || b0 == 8'h0A) begin
+                if (b0 != 8'h22) epush(8'd2);  // the line ended the string
+                if (t_sn[0]) begin             // flush the dangling char
+                  cm_we <= 1;
+                  cm_wa <= 10'd800 + {5'd0, t_sn[5:1]};
+                  cm_wd <= {8'h00, t_sc};
+                end
+                t_str <= 0; ast <= A_S0;       // emit op, count, chars
+              end else if (t_sn == 6'd63) epush(8'd2);   // over the cap
+              else begin
+                if (!t_sn[0]) t_sc <= b0;
+                else begin
+                  cm_we <= 1;
+                  cm_wa <= 10'd800 + {5'd0, t_sn[5:1]};
+                  cm_wd <= {b0, t_sc};
+                end
+                t_sn <= t_sn + 6'd1;
+              end
             end
           end else if (t_str == 2'd1) begin  // awaiting the opening quote
             if (b0 == 8'h22) begin cf_rp <= cf_rp + 6'd1; t_str <= 2'd2; end
@@ -762,9 +870,9 @@ module p8x_geom (
 
         A_ACT: if (tq_cnt <= 3'd3) begin                  // start the verb
           if (t_w0[13:10] == 4'd14 && !t_w0[14]) begin    // a string verb
-            t_sop <= t_op; t_str <= 2'd1; t_act <= 0;     // (TEXT): emit
-            ast <= A_IDLE;                                // per char above
-          end else begin
+            t_sop <= t_op; t_str <= 2'd1; t_sn <= 0;      // (TEXT/TEXTP):
+            t_act <= 0; ast <= A_IDLE;                    // captured above,
+          end else begin                                  // emitted at A_S0
           tq[tq_wp[1:0]] <= t_op; tq_wp <= tq_wp + 3'd1;
           t_bcnt <= t_w0[9:8];
           t_var  <= t_w0[14];
@@ -774,6 +882,28 @@ module p8x_geom (
           t_act  <= (t_w0[14] || t_w0[13:10] != 4'd0);
           ast <= A_IDLE;
           end
+        end
+
+        A_S0: if (tq_cnt <= 3'd2) begin   // opcode + count (room for both)
+          tq[tq_wp[1:0]]        <= t_sop;
+          tq[tq_wp[1:0] + 2'd1] <= {2'd0, t_sn};
+          tq_wp <= tq_wp + 3'd2;
+          t_si <= 0;
+          ast <= (t_sn == 6'd0) ? A_IDLE : A_S1;
+        end
+        A_S1: if (state == S_IDLE && (glst < G_2D || glst == G_TX)) begin
+          cm_aa <= 10'd800 + {5'd0, t_si[5:1]};
+          ast <= A_S2;
+        end
+        A_S2: ast <= A_S3;                // the read pipeline's bubble
+        A_S3: if (tq_cnt <= 3'd2) begin   // push the pair as tq drains
+          tq[tq_wp[1:0]] <= cm_qa[7:0];
+          if (t_si + 6'd1 < t_sn) begin
+            tq[tq_wp[1:0] + 2'd1] <= cm_qa[15:8];
+            tq_wp <= tq_wp + 3'd2;
+          end else tq_wp <= tq_wp + 3'd1;
+          t_si <= t_si + 6'd2;
+          ast <= (t_si + 6'd2 >= t_sn) ? A_IDLE : A_S1;
         end
       endcase
 
@@ -968,7 +1098,10 @@ module p8x_geom (
         S_LINB: begin gm_a <= 4'h6;
                       if (gm_a == 4'h6 && !gm_rdata[7] && !gm_wr) state <= S_LINC; end
         S_LINC: begin gm_a <= 4'h5; gm_wdata <= 8'h02; gm_wr <= 1;  // LINE
-                      state <= S_NEXT; end
+                      if (aflp) begin              // the fill's span paint
+                        aflp <= 0; afrsel <= 0;    //   rode this writer --
+                        state <= AF_SCAN;          //   back to the scan
+                      end else state <= S_NEXT; end
 
         // ==== stage 9b: the TRI record ====================================
         // near clip the polygon against z=16 (ortho copies straight through)
@@ -1256,6 +1389,11 @@ module p8x_geom (
         end
         T_SPAN: begin                  // clamp; empty spans skip
           if (!sp_ok || !fy_in) state <= T_SNEXT;
+          else if (apon) begin         // 10j: AREAPT masks fill spans
+            gbx0 <= sp_l; gbx1 <= sp_r;
+            gby0 <= fy;   gby1 <= fy;
+            gbcol <= rcol; wpret <= 1; state <= WP_R0;
+          end
           else begin seq <= 0; state <= T_BX; end
         end
         T_BX: begin                    // BOXFILL x0=sp_l y0=fy x1=sp_r y1=fy
@@ -1287,8 +1425,12 @@ module p8x_geom (
         // toggling the draw page between passes so BOTH pages are cleared
         // (the stage-8b sideband lesson), and waits out each fill before
         // the toggle so no fill lands on the wrong page.
-        W_BOX0: begin gm_a <= 4'h4; gm_wdata <= gbcol[7:0]; gm_wr <= 1;
-                      state <= W_BOX1; end
+        W_BOX0: if (wpat && apon && glcls == 2'd0) begin
+                  wpret <= 0; state <= WP_R0;   // 10j: patterned RECT fill
+                end else begin
+                  gm_a <= 4'h4; gm_wdata <= gbcol[7:0]; gm_wr <= 1;
+                  state <= W_BOX1;
+                end
         W_BOX1: begin gm_a <= 4'hD; gm_wdata <= gbcol[15:8]; gm_wr <= 1;
                       seq <= 0; state <= W_BOX2; end
         W_BOX2: begin
@@ -1320,6 +1462,55 @@ module p8x_geom (
             end
           end
         end
+
+        // ==== stage 10j: the patterned-box splitter ======================
+        // A patterned fill row = maximal runs of set pattern bits issued
+        // as sub-BOXFILLs; bit for column x is 15-(x&15) of the row word
+        // apat[y&15] (scratch 720+). The emulator's gl_prow is the twin.
+        WP_R0: begin                   // fetch the row's pattern word
+          cm_aa <= 10'd784 + {6'd0, gby0[3:0]};
+          state <= WP_R1;
+        end
+        WP_R1: state <= WP_R2;         // the read pipeline's bubble
+        WP_R2: begin
+          wp_pat <= cm_qa; afi <= gbx0[8:0]; state <= WP_S0;
+        end
+        WP_S0: begin                   // scan for a run of set bits
+          if ({7'd0, afi} > gbx1) begin
+            if (gby0 == gby1) state <= wpret ? T_SNEXT : S_IDLE;
+            else begin gby0 <= gby0 + 16'd1; state <= WP_R0; end
+          end else if (wp_pat[~afi[3:0]]) begin
+            afL <= afi; state <= WP_S1;
+          end else afi <= afi + 9'd1;
+        end
+        WP_S1: begin                   // extend it
+          if ({7'd0, afi} + 16'd1 > gbx1 || !wp_pat[~(afi[3:0] + 4'd1)])
+            state <= WP_I0;
+          else afi <= afi + 9'd1;
+        end
+        WP_I0: begin gm_a <= 4'h4; gm_wdata <= gbcol[7:0]; gm_wr <= 1;
+                     state <= WP_I1; end
+        WP_I1: begin gm_a <= 4'hD; gm_wdata <= gbcol[15:8]; gm_wr <= 1;
+                     seq <= 0; state <= WP_I2; end
+        WP_I2: begin
+          case (seq)
+            3'd0: begin gm_a<=4'h0; gm_wdata<=afL[7:0];       end
+            3'd1: begin gm_a<=4'h9; gm_wdata<={7'd0,afL[8]};  end
+            3'd2: begin gm_a<=4'h1; gm_wdata<=gby0[7:0];      end
+            3'd3: begin gm_a<=4'hA; gm_wdata<=gby0[15:8];     end
+            3'd4: begin gm_a<=4'h2; gm_wdata<=afi[7:0];       end
+            3'd5: begin gm_a<=4'hB; gm_wdata<={7'd0,afi[8]};  end
+            3'd6: begin gm_a<=4'h3; gm_wdata<=gby0[7:0];      end
+            default: begin gm_a<=4'hC; gm_wdata<=gby0[15:8];  end
+          endcase
+          gm_wr <= 1;
+          if (seq == 3'd7) state <= WP_I3; else seq <= seq + 3'd1;
+        end
+        WP_I3: begin gm_a <= 4'h6;
+                     if (gm_a == 4'h6 && !gm_rdata[7] && !gm_wr)
+                       state <= WP_I4; end
+        WP_I4: begin gm_a <= 4'h5; gm_wdata <= 8'h04; gm_wr <= 1;  // BOXFILL
+                     afi <= afi + 9'd1; state <= WP_S0; end
 
         // filled RECT: map both corners (4 muldivs), sort, clamp, box
         W_RM: begin
@@ -1404,6 +1595,7 @@ module p8x_geom (
           else jcnt <= jcnt + 4'd1;
         end
         J_RST2: begin                  // warm reset, part 2: VR identity
+          jrst2 <= 1;                  //   (W_LF2 chains the 10j restores)
           jsrc <= 0; jbase <= VB; jlast <= 4'd8; jcnt <= 0;
           jnext <= J_RB3; state <= J_WR;
         end
@@ -1418,8 +1610,31 @@ module p8x_geom (
         end
         W_LF2: begin                   // one GMODE write ($FF2E's write side)
           gm_a <= 4'hE; gm_wdata <= {5'd0, glfm}; gm_wr <= 1;
-          state <= S_NEXT;
+          if (jrst2) begin             // RESETF: chain into the pattern
+            lpv <= 16'hFFFF; wrst <= 1; k <= 0;           // restores (10j)
+            state <= W_PL0;
+          end else state <= S_NEXT;
         end
+
+        // ==== stage 10j: LINPAT to the device ============================
+        // The pattern must not overtake a primitive still drawing (the
+        // W_LF lesson), so wait the engine out, then GPARM/GPARM2/GCMD 0C.
+        W_LPW: begin gm_a <= 4'h6;
+                     if (gm_a == 4'h6 && !gm_rdata[7] && !gm_wr)
+                       state <= W_PL0; end
+        W_PL0: begin gm_a <= 4'h8; gm_wdata <= lpv[7:0];  gm_wr <= 1;
+                     state <= W_PL1; end
+        W_PL1: begin gm_a <= 4'hF; gm_wdata <= lpv[15:8]; gm_wr <= 1;
+                     state <= W_PL2; end
+        W_PL2: begin gm_a <= 4'h5; gm_wdata <= 8'h0C; gm_wr <= 1;
+                     state <= wrst ? W_APR : S_NEXT; end
+        W_APR: begin                   // RESETF: AREAPT rows back to solid
+          cm_we <= 1; cm_wa <= 10'd784 + {6'd0, k}; cm_wd <= 16'hFFFF;
+          if (k == 4'd15) begin apon <= 0; wrst <= 0; k <= 0;
+                                state <= S_NEXT; end
+          else k <= k + 4'd1;
+        end
+
 
         // ==== stage 10g: AREA / AREABC boundary seed fill ================
         // The emulator's gl_afill IS the contract, reproduced step for
@@ -1431,12 +1646,21 @@ module p8x_geom (
         // first -- the documented rule.
         AF_MAP0: begin
           if (oca != 4'd0) begin epush(8'd2); state <= S_NEXT; end
-          else begin
-            gm_a <= 4'hE; gm_wdata <= 8'd0; gm_wr <= 1; glfm <= 0;
-            md_a1 <= wx0; md_a2 <= par[13]; md_b1 <= par[19];
-            md_b2 <= par[17]; md_c1 <= par[15]; md_c2 <= par[13];
-            md_r <= par[17]; md_rn <= 0; md_go <= 1; state <= AF_MAP1;
-          end
+          else state <= AF_W0;         // 10j rework: the mode writes must
+        end                            //   not overtake an in-flight
+        AF_W0: begin gm_a <= 4'h6;     //   primitive (the W_LF lesson)
+                     if (gm_a == 4'h6 && !gm_rdata[7] && !gm_wr)
+                       state <= AF_W1; end
+        AF_W1: begin gm_a <= 4'hE; gm_wdata <= 8'd0; gm_wr <= 1; glfm <= 0;
+                     state <= AF_W2; end     // replace mode...
+        AF_W2: begin gm_a <= 4'h8; gm_wdata <= 8'hFF; gm_wr <= 1;
+                     state <= AF_W3; end     // ...and a solid line pattern:
+        AF_W3: begin gm_a <= 4'hF; gm_wdata <= 8'hFF; gm_wr <= 1;
+                     state <= AF_W4; end     //   the fill's spans paint as
+        AF_W4: begin gm_a <= 4'h5; gm_wdata <= 8'h0C; gm_wr <= 1;
+          md_a1 <= wx0; md_a2 <= par[13]; md_b1 <= par[19];  // device LINEs
+          md_b2 <= par[17]; md_c1 <= par[15]; md_c2 <= par[13];
+          md_r <= par[17]; md_rn <= 0; md_go <= 1; state <= AF_MAP1;
         end
         AF_MAP1: if (md_done) begin    // x mapped; launch y (flipped)
           afx <= md_qr[8:0];
@@ -1461,32 +1685,7 @@ module p8x_geom (
           apx <= afR + 9'd1; apy <= afy; afret <= 4'd3; state <= AF_P0;
         end
 
-        // paint the span: one device LINE, pen + both endpoints on row afy
-        AF_PT0: begin
-          case (seq)
-            3'd0: begin gm_a<=4'h4; gm_wdata<=rcol[7:0];       end
-            3'd1: begin gm_a<=4'hD; gm_wdata<=rcol[15:8];      end
-            3'd2: begin gm_a<=4'h0; gm_wdata<=afL[7:0];        end
-            3'd3: begin gm_a<=4'h9; gm_wdata<={7'd0,afL[8]};   end
-            3'd4: begin gm_a<=4'h1; gm_wdata<=afy[7:0];        end
-            3'd5: begin gm_a<=4'hA; gm_wdata<={7'd0,afy[8]};   end
-            3'd6: begin gm_a<=4'h2; gm_wdata<=afR[7:0];        end
-            3'd7: begin gm_a<=4'hB; gm_wdata<={7'd0,afR[8]};   end
-          endcase
-          gm_wr <= 1;
-          if (seq == 3'd7) begin seq <= 0; state <= AF_PT1; end
-          else seq <= seq + 3'd1;
-        end
-        AF_PT1: begin
-          if (seq == 3'd0) begin gm_a<=4'h3; gm_wdata<=afy[7:0]; gm_wr<=1; seq<=3'd1; end
-          else begin gm_a<=4'hC; gm_wdata<={7'd0,afy[8]}; gm_wr<=1; seq<=0;
-                     state<=AF_PT2; end
-        end
-        AF_PT2: begin gm_a <= 4'h6;    // engine idle before the command
-                      if (gm_a == 4'h6 && !gm_rdata[7] && !gm_wr)
-                        state <= AF_PT3; end
-        AF_PT3: begin gm_a <= 4'h5; gm_wdata <= 8'h02; gm_wr <= 1;  // LINE
-                      afrsel <= 0; state <= AF_SCAN; end
+
 
         // scan rows afy-1 and afy+1 across [afL..afR]: one push per
         // interior run (the probe waits out the paint via GSTAT first)
@@ -1546,6 +1745,81 @@ module p8x_geom (
           apx <= afx; apy <= g_dout[8:0]; afret <= 4'd1; state <= AF_P0;
         end
 
+        // ==== stage 10i: CIRCLE/ELIPSE -- map centre + radii, then ONE
+        // device ellipse. The device's radius registers are 8-bit (clamp
+        // at 255) and its coordinates unsigned (an off-window centre wraps
+        // positive and clips to nothing) -- the emulator mimics both.
+        CVE0: begin                    // map centre x
+          md_a1 <= c2x; md_a2 <= par[13]; md_b1 <= par[19]; md_b2 <= par[17];
+          md_c1 <= par[15]; md_c2 <= par[13];
+          md_r <= par[17]; md_rn <= 0; md_go <= 1; state <= CVE1;
+        end
+        CVE1: if (md_done) begin       // centre y (flipped)
+          cvpx <= md_qr;
+          md_a1 <= c2y; md_a2 <= par[14]; md_b1 <= par[20]; md_b2 <= par[18];
+          md_c1 <= par[16]; md_c2 <= par[14];
+          md_r <= par[20]; md_rn <= 1; md_go <= 1; state <= CVE2;
+        end
+        CVE2: if (md_done) begin       // x radius through the x scale
+          cvpy <= md_qr;
+          md_a1 <= cvr; md_a2 <= 16'd0; md_b1 <= par[19]; md_b2 <= par[17];
+          md_c1 <= par[15]; md_c2 <= par[13];
+          md_r <= 16'd0; md_rn <= 0; md_go <= 1; state <= CVE3;
+        end
+        CVE3: if (md_done) begin : cve3a
+          reg [15:0] t;
+          t = md_qr[15] ? (16'd0 - md_qr) : md_qr;
+          cvnx <= (t > 16'd255) ? 16'd255 : t;
+          md_a1 <= cvry; md_a2 <= 16'd0; md_b1 <= par[20]; md_b2 <= par[18];
+          md_c1 <= par[16]; md_c2 <= par[14];
+          md_r <= 16'd0; md_rn <= 0; md_go <= 1; state <= CVE4;
+        end
+        CVE4: if (md_done) begin : cve4a
+          reg [15:0] t;
+          t = md_qr[15] ? (16'd0 - md_qr) : md_qr;
+          cvny <= (t > 16'd255) ? 16'd255 : t;
+          seq <= 0; state <= CVE5;
+        end
+        CVE5: begin                    // pen, centre, radii
+          case (seq)
+            3'd0: begin gm_a<=4'h4; gm_wdata<=rcol[7:0];   end
+            3'd1: begin gm_a<=4'hD; gm_wdata<=rcol[15:8];  end
+            3'd2: begin gm_a<=4'h0; gm_wdata<=cvpx[7:0];   end
+            3'd3: begin gm_a<=4'h9; gm_wdata<=cvpx[15:8];  end
+            3'd4: begin gm_a<=4'h1; gm_wdata<=cvpy[7:0];   end
+            3'd5: begin gm_a<=4'hA; gm_wdata<=cvpy[15:8];  end
+            3'd6: begin gm_a<=4'h8; gm_wdata<=cvnx[7:0];   end
+            default: begin gm_a<=4'hF; gm_wdata<=cvny[7:0]; end
+          endcase
+          gm_wr <= 1;
+          if (seq == 3'd7) state <= CVE6; else seq <= seq + 3'd1;
+        end
+        CVE6: begin gm_a <= 4'h6;      // engine idle before the command
+                    if (gm_a == 4'h6 && !gm_rdata[7] && !gm_wr)
+                      state <= CVE7; end
+        CVE7: begin gm_a <= 4'h5; gm_wdata <= glfill ? 8'h0B : 8'h0A;
+                    gm_wr <= 1; state <= S_NEXT; end
+
+        // ---- the arc vertex: p = current point + r*(cos,sin)(a0+off) ----
+        CVP0: begin
+          ang <= ({6'd0, cvemit} + cva >= 16'd360)
+               ? cva + {6'd0, cvemit} - 16'd360 : cva + {6'd0, cvemit};
+          state <= CVP1;
+        end
+        CVP1: state <= CVP2;           // the trig ROM's registered read
+        CVP2: begin
+          md_a1 <= cvr; md_a2 <= 16'd0; md_b1 <= cosq; md_b2 <= 16'd0;
+          md_c1 <= 16'd256; md_c2 <= 16'd0;
+          md_r <= c2x; md_rn <= 0; md_go <= 1; state <= CVP3;
+        end
+        CVP3: if (md_done) begin
+          cvnx <= md_qr;
+          md_a1 <= cvr; md_a2 <= 16'd0; md_b1 <= sinq; md_b2 <= 16'd0;
+          md_c1 <= 16'd256; md_c2 <= 16'd0;
+          md_r <= c2y; md_rn <= 0; md_go <= 1; state <= CVP4;
+        end
+        CVP4: if (md_done) begin cvny <= md_qr; state <= S_NEXT; end
+
         // ---- the pixel probe (gm POINT + two GDATA pops) ----------------
         // Off-screen forces the boundary verdict by loading afpv with the
         // boundary colour itself (gl_af_in's x<0||x>=480||... return 0)
@@ -1591,9 +1865,15 @@ module p8x_geom (
               if (af_in) begin afL <= afL - 9'd1; state <= AF_L; end
               else begin afR <= afx; state <= AF_R; end
             end
-            4'd3: begin                // extend right?
+
+
+            4'd3: begin                // extend right? else paint the
               if (af_in) begin afR <= afR + 9'd1; state <= AF_R; end
-              else begin seq <= 0; state <= AF_PT0; end
+              else begin                 //   span through the LINE writer
+                px0 <= {7'd0, afL}; py0 <= {7'd0, afy};
+                px1 <= {7'd0, afR}; py1 <= {7'd0, afy};
+                aflp <= 1; seq <= 0; state <= S_LIN;
+              end
             end
             4'd4: begin                // scan probe: interior -> push
               if (af_in) state <= AF_PU0;
@@ -1731,12 +2011,14 @@ module p8x_geom (
         // pop one byte from the active source (FIFO or replay buffer);
         // while recording, pops also stream into the SDRAM store, so
         // they gate on the store being free (sd_busy)
-        G_OP: if (txn != 8'd0 && !rp) glst <= G_TX;  // 10h: the next
+        G_OP: if (txn != 8'd0 && !rpg) glst <= G_TX; // 10h: the next
                                                  // source byte is a string
                                                  // char, not an opcode
         else if (src_ne && !(rec && sd_busy)) begin
           glop <= srcb; pi <= 0;
-          if (rp) begin rpb0 <= rpb1; rp_have <= rp_have - 2'd1;
+          if (rpg) begin rpgb0 <= rpgb1; rpg_have <= rpg_have - 2'd1;
+                         rpg_off <= rpg_off + 13'd1; end
+          else if (rp) begin rpb0 <= rpb1; rp_have <= rp_have - 2'd1;
                         rp_off <= rp_off + 13'd1; end
           else if (glmode) tq_rp <= tq_rp + 3'd1;
           else cf_rp <= cf_rp + 6'd1;
@@ -1748,15 +2030,20 @@ module p8x_geom (
               ef_wp <= ef_wp + 4'd1; end
           end else begin
             pneed <= opn;
+            if (srcb == 8'hE7) begin       // AREAPT: params stream (G_AP)
+              apho <= 0; k <= 0;
+              if (!rec) apon <= 0;
+              glst <= G_AP;
+            end else
             glst <= (opn == 5'd0) ? G_RUN : G_PRM;
             if (rec) begin
               if (srcb == 8'h70 || srcb == 8'h72 ||
                   srcb == 8'h73 || srcb == 8'h79 ||
-                  srcb == 8'h80 || srcb == 8'h84) begin
+                  srcb == 8'h84) begin
                 if (ef_wp - ef_rp != 4'd8) begin // no nesting: error 5,
                   ef[ef_wp[2:0]] <= 8'd5;        //   consume unstored
-                  ef_wp <= ef_wp + 4'd1; end     //   (80/84: TEXT/TDEFIN
-                rskip <= 1;                      //   in a list is deferred)
+                  ef_wp <= ef_wp + 4'd1; end     //   (TEXT records fine
+                rskip <= 1;                      //   since 10k)
               end else if (srcb == 8'h43) begin  // CA/CX: TRANSPORT, not
                                                  //   content -- executes
                                                  //   even mid-recording
@@ -1793,15 +2080,26 @@ module p8x_geom (
               rskip <= 0;
               glst <= G_OP;
             end else glst <= G_PV;
-          end else if (glop == 8'h80) begin               // TEXT: count then
-            txn <= pbuf[0];                               //   the chars
-            if (rp && !rec && !rskip) begin epush(8'd5); rskip <= 1; end
+          end else if (glop == 8'h80 || glop == 8'h83) begin  // TEXT/TEXTP:
+            txn <= pbuf[0];                               // count, chars
+            if (rpg && !rec && !rskip) begin              // no text INSIDE
+              epush(8'd5); rskip <= 1;                    //   a glyph
+            end else if (!rec && !rskip) begin            // TJUST offset,
+              c3x <= c3x -                                //   model units
+                (tjh == 2'd2 ? {6'd0, pbuf[0], 1'b0} + {7'd0, pbuf[0]}
+               : tjh == 2'd3 ? {5'd0, pbuf[0], 2'b0} + {6'd0, pbuf[0], 1'b0}
+               : 16'd0);
+              c3y <= c3y - (tjv == 2'd2 ? 16'd3
+                          : tjv == 2'd3 ? 16'd7 : 16'd0);
+            end
             if (pbuf[0] == 8'd0) begin rskip <= 0; glst <= G_OP; end
             else glst <= G_TX;
           end else glst <= G_RUN;
         end else if (src_ne && !(rec && sd_busy)) begin
           pbuf[pi] <= srcb;
-          if (rp) begin rpb0 <= rpb1; rp_have <= rp_have - 2'd1;
+          if (rpg) begin rpgb0 <= rpgb1; rpg_have <= rpg_have - 2'd1;
+                         rpg_off <= rpg_off + 13'd1; end
+          else if (rp) begin rpb0 <= rpb1; rp_have <= rp_have - 2'd1;
                         rp_off <= rp_off + 13'd1; end
           else if (glmode) tq_rp <= tq_rp + 3'd1;
           else cf_rp <= cf_rp + 6'd1;
@@ -1833,7 +2131,7 @@ module p8x_geom (
             8'h03: draw_pg <= disp_pg;                    // PGSYNC
             8'h04: begin                                  // RESETF
               cldef <= 64'd0; rec <= 0; rec_bank <= 0; glfm <= 0;
-              txn <= 0;        // (gdef survives: a font is installed, not
+              txn <= 0; tjh <= 2'd1; tjv <= 2'd1;        // (gdef survives: a font is installed, not
                                //  scene state -- matches the emulator)
               par[0] <= 16'd256; par[4] <= 16'd256; par[8] <= 16'd256;
               par[1]<=0; par[2]<=0; par[3]<=0; par[5]<=0; par[6]<=0; par[7]<=0;
@@ -1855,7 +2153,7 @@ module p8x_geom (
             8'h06: begin rcol <= prgb;                    // COLOR
               cm_we <= 1; cm_wa <= RBS + 10'd1; cm_wd <= prgb; end
             8'h07: begin                                  // FLOOD: viewport
-              gbcol <= prgb; glcls <= 0;
+              gbcol <= prgb; glcls <= 0; wpat <= 0;
               gbx0 <= par[17]; gby0 <= par[18];
               gbx1 <= par[19]; gby1 <= par[20];
               state <= W_BOX0;
@@ -1870,7 +2168,7 @@ module p8x_geom (
               g3t <= 0; k <= 0; g2n <= G_OP; glst <= G_3L;
             end
             8'h0F: begin                                  // CLEARS: BOTH pages
-              gbcol <= prgb; glcls <= 2'd1;
+              gbcol <= prgb; glcls <= 2'd1; wpat <= 0;
               gbx0 <= 0; gby0 <= 0; gbx1 <= 16'd479; gby1 <= 16'd271;
               state <= W_BOX0;
             end
@@ -1901,7 +2199,8 @@ module p8x_geom (
               nbx <= glop[0] ? c2x + pw0 : pw0;           // target corner
               nby <= glop[0] ? c2y + pw1 : pw1;
               if (glfill) begin
-                gbcol <= rcol; glcls <= 0; mdph <= 0; state <= W_RM;
+                gbcol <= rcol; glcls <= 0; wpat <= 1; mdph <= 0;
+                state <= W_RM;
               end else begin
                 gred <= 0; glst <= G_RE;
               end
@@ -2015,7 +2314,7 @@ module p8x_geom (
                 if (ef_wp - ef_rp != 4'd8) begin
                   ef[ef_wp[2:0]] <= 8'd2; ef_wp <= ef_wp + 4'd1; end
               end else begin
-                glfm <= pbuf[0][2:0];
+                glfm <= pbuf[0][2:0]; jrst2 <= 0;
                 glact <= 1; state <= W_LF;                // one GMODE write
               end
             // ---- stage 10e: read-back ------------------------------------
@@ -2058,7 +2357,7 @@ module p8x_geom (
               end
             end
             8'h78: begin                                  // CLMOD n b off
-              if (rp) begin                               //   no self-patching
+              if (rp || rpg) begin                               //   no self-patching
                 if (ef_wp - ef_rp != 4'd8) begin          //   mid-replay
                   ef[ef_wp[2:0]] <= 8'd5; ef_wp <= ef_wp + 4'd1; end
               end else if (pbuf[0] >= 8'd64) begin
@@ -2080,7 +2379,7 @@ module p8x_geom (
                 ef_wp <= ef_wp + 4'd1; end                //   while recording)
             end
             8'h70: begin                                  // CLBEG
-              if (rp) begin
+              if (rp || rpg) begin
                 if (ef_wp - ef_rp != 4'd8) begin
                   ef[ef_wp[2:0]] <= 8'd5; ef_wp <= ef_wp + 4'd1; end
               end else if (pbuf[0] >= 8'd64) begin
@@ -2092,7 +2391,7 @@ module p8x_geom (
               end
             end
             8'h79: begin                                  // CLAPP (P8X)
-              if (rp) begin
+              if (rp || rpg) begin
                 if (ef_wp - ef_rp != 4'd8) begin
                   ef[ef_wp[2:0]] <= 8'd5; ef_wp <= ef_wp + 4'd1; end
               end else if (pbuf[0] >= 8'd64) begin
@@ -2107,7 +2406,7 @@ module p8x_geom (
               end
             end
             8'h72, 8'h73: begin                           // CLRUN / CLOOP
-              if (rp) begin
+              if (rp || rpg) begin
                 if (ef_wp - ef_rp != 4'd8) begin
                   ef[ef_wp[2:0]] <= 8'd5; ef_wp <= ef_wp + 4'd1; end
               end else if (pbuf[0] >= 8'd64) begin
@@ -2119,10 +2418,35 @@ module p8x_geom (
               end else if (glop == 8'h73 && {pbuf[2], pbuf[1]} == 16'd0)
                 ;                        // CLOOP 0 times: nothing to do
               else begin
-                rp_slot <= pbuf[0][5:0]; rp_bank <= 0;
+                rp_slot <= pbuf[0][5:0];
                 rp_cnt <= (glop == 8'h73) ? {pbuf[2], pbuf[1]} : 16'd1;
                 glst <= G_RL0;
               end
+            end
+            8'h38, 8'h39: begin                           // CIRCLE/ELIPSE
+              if (pw0[15] || (glop[0] && pw1[15])) epush(8'd2);
+              else begin
+                cvr <= pw0; cvry <= glop[0] ? pw1 : pw0;
+                glact <= 1; state <= CVE0;
+              end
+            end
+            8'h3C, 8'h3D: begin                           // ARC / SECTOR
+              if (pw0[15]) epush(8'd2);
+              else begin
+                cvr <= pw0; cva <= pw1; cvb <= pw2;
+                cvo <= 0; cvph <= 0; cvfirst <= 1;
+                cvsec <= glop[0];
+                glst <= G_CVN;
+              end
+            end
+            8'h85: begin                                  // TJUST h v
+              if (pbuf[0] < 8'd1 || pbuf[0] > 8'd3 ||
+                  pbuf[1] < 8'd1 || pbuf[1] > 8'd3) epush(8'd2);
+              else begin tjh <= pbuf[0][1:0]; tjv <= pbuf[1][1:0]; end
+            end
+            8'hEA: begin                                  // LINPAT (10j)
+              lpv <= pw0; wrst <= 0;
+              glact <= 1; state <= W_LPW;
             end
             8'h81: begin                                  // TSIZE s ==
               pbuf[2] <= pbuf[0]; pbuf[3] <= pbuf[1];     // MDSCAL s s s
@@ -2140,7 +2464,7 @@ module p8x_geom (
               reg [7:0] tdc;
               tdc = (pbuf[0] >= 8'h61 && pbuf[0] <= 8'h7A)
                   ? pbuf[0] - 8'h20 : pbuf[0];            // fold lowercase
-              if (rp) epush(8'd5);
+              if (rp || rpg) epush(8'd5);
               else if (tdc < 8'h20 || tdc > 8'h5F) epush(8'd2);
               else begin
                 rec <= 1; rec_bank <= 1;
@@ -2162,7 +2486,9 @@ module p8x_geom (
         G_PV: if (pi == pneed) glst <= G_PRUN;            // one vertex ready
               else if (src_ne && !(rec && sd_busy)) begin
                 pbuf[pi] <= srcb;
-                if (rp) begin rpb0 <= rpb1; rp_have <= rp_have - 2'd1;
+                if (rpg) begin rpgb0 <= rpgb1; rpg_have <= rpg_have - 2'd1;
+                               rpg_off <= rpg_off + 13'd1; end
+                else if (rp) begin rpb0 <= rpb1; rp_have <= rp_have - 2'd1;
                               rp_off <= rp_off + 13'd1; end
                 else if (glmode) tq_rp <= tq_rp + 3'd1;
                 else cf_rp <= cf_rp + 6'd1;
@@ -2263,6 +2589,24 @@ module p8x_geom (
             2'd3: begin wx0 <= c2x; wy0 <= nby; wx1 <= c2x; wy1 <= c2y; end
           endcase
           csn <= 0; glact <= 1; state <= S_CS;
+        end
+
+        G_CV2D: if (gl_can) begin      // the G_2D loader, from the staged
+          cm_we <= 1;                  //   f3/m3/t3 window coords
+          case (k[2:0])
+            3'd0: begin cm_wa <= LQX;          cm_wd <= f3x; end
+            3'd1: begin cm_wa <= LQX + 7'd1;   cm_wd <= m3x; end
+            3'd2: begin cm_wa <= LQX + 7'd2;   cm_wd <= t3x; end
+            3'd3: begin cm_wa <= LQY;          cm_wd <= f3y; end
+            3'd4: begin cm_wa <= LQY + 7'd1;   cm_wd <= m3y; end
+            default: begin cm_wa <= LQY + 7'd2; cm_wd <= t3y; end
+          endcase
+          if (k[2:0] == 3'd5) begin
+            k <= 0;
+            np <= 4'd3; pp <= 0; rfill <= 1; gl2d <= 1;
+            glact <= 1; state <= T_MP;
+            glst <= G_CV;
+          end else k <= k + 4'd1;
         end
 
         G_2D: if (gl_can) begin        // load a 2D fan triangle's window
@@ -2394,18 +2738,133 @@ module p8x_geom (
         G_TX: if (src_ne && !(rec && sd_busy)) begin : txch
           reg [7:0] tch;
           tch = (srcb >= 8'h61 && srcb <= 8'h7A) ? srcb - 8'h20 : srcb;
-          if (rp) begin rpb0 <= rpb1; rp_have <= rp_have - 2'd1;
+          if (rpg) begin rpgb0 <= rpgb1; rpg_have <= rpg_have - 2'd1;
+                         rpg_off <= rpg_off + 13'd1; end
+          else if (rp) begin rpb0 <= rpb1; rp_have <= rp_have - 2'd1;
                         rp_off <= rp_off + 13'd1; end
           else if (glmode) tq_rp <= tq_rp + 3'd1;
           else cf_rp <= cf_rp + 6'd1;
           txn <= txn - 8'd1;
           if (rskip) begin
             if (txn == 8'd1) begin rskip <= 0; glst <= G_OP; end
+          end else if (rec) begin      // 10k: TEXT records -- store chars
+            if (rec_len >= 13'd4092) begin
+              epush(8'd7);
+              if (rec_bank) gdef[rec_slot] <= 1'b0;
+              else cldef[rec_slot] <= 1'b0;
+              rec <= 0; rec_bank <= 0; rskip <= 1;
+            end else begin
+              if (!rec_len[0]) rec_lo <= srcb;
+              else begin
+                g_addr <= rec_wa; g_din <= {srcb, rec_lo};
+                g_we <= 1; g_req <= 1; sd_busy <= 1;
+              end
+              rec_len <= rec_len + 13'd1;
+            end
+            if (txn == 8'd1) glst <= G_OP;
           end else if (tch >= 8'h20 && tch <= 8'h5F &&
                        gdef[tch[5:0] ^ 6'h20]) begin
-            rp_slot <= tch[5:0] ^ 6'h20; rp_bank <= 1;
-            rp_cnt <= 16'd1; glst <= G_RL0;
+            rpg_slot <= tch[5:0] ^ 6'h20;      // the glyph's own context
+            glst <= G_RLG0;
           end else glst <= (txn == 8'd1) ? G_OP : G_TX;
+        end
+
+        G_RLG0: if (!sd_busy && !g_req) begin  // glyph length (bank 1)
+          g_addr <= {2'd0, 1'b1, 1'b0, 1'b1, rpg_slot, 12'd0};
+          g_we <= 0; g_req <= 1; sd_busy <= 1; glst <= G_RLG1;
+        end
+        G_RLG1: if (g_ready) begin
+          rpg_len <= g_dout[12:0]; rpg_off <= 0; rpg_have <= 0;
+          rpg <= 1; glst <= G_OP;
+        end
+
+        // ---- stage 10j: AREAPT's byte stream -- pair up 32 bytes into
+        // the 16 scratch rows at 784+ (recording stores them like params)
+        G_AP: if (src_ne && !(rec && sd_busy)) begin
+          if (rpg) begin rpgb0 <= rpgb1; rpg_have <= rpg_have - 2'd1;
+                         rpg_off <= rpg_off + 13'd1; end
+          else if (rp) begin rpb0 <= rpb1; rp_have <= rp_have - 2'd1;
+                        rp_off <= rp_off + 13'd1; end
+          else if (glmode) tq_rp <= tq_rp + 3'd1;
+          else cf_rp <= cf_rp + 6'd1;
+          if (rec && !rskip) begin
+            if (rec_len >= 13'd4092) begin
+              epush(8'd7);
+              if (rec_bank) gdef[rec_slot] <= 1'b0;
+              else cldef[rec_slot] <= 1'b0;
+              rec <= 0; rec_bank <= 0; rskip <= 1;
+            end else begin
+              if (!rec_len[0]) rec_lo <= srcb;
+              else begin
+                g_addr <= rec_wa; g_din <= {srcb, rec_lo};
+                g_we <= 1; g_req <= 1; sd_busy <= 1;
+              end
+              rec_len <= rec_len + 13'd1;
+            end
+          end
+          if (!apho) begin aplo <= srcb; apho <= 1; end
+          else begin
+            apho <= 0;
+            if (!(rec || rskip)) begin
+              cm_we <= 1; cm_wa <= 10'd784 + {6'd0, k};
+              cm_wd <= {srcb, aplo};
+              if ({srcb, aplo} != 16'hFFFF) apon <= 1;
+            end
+            if (k == 4'd15) begin
+              k <= 0; rskip <= 0; glst <= G_OP;
+            end else k <= k + 4'd1;
+          end
+        end
+
+        // ---- stage 10i: ARC/SECTOR -- normalize, then walk 4-degree
+        // segments: each pass computes p(a0+off) in the walker (CVP), then
+        // draws prev->cur through the CLIPPED 2D line path (S_CS) or, for
+        // a filled SECTOR, fans (centre, prev, cur) through the map-only
+        // 2D fill. The emulator's 0x3C/0x3D arms are the contract.
+        G_CVN: begin                   // both angles to 0..359, the C_NRM way
+          if (cva[15]) cva <= cva + 16'd360;
+          else if (cva >= 16'd360) cva <= cva - 16'd360;
+          else if (cvb[15]) cvb <= cvb + 16'd360;
+          else if (cvb >= 16'd360) cvb <= cvb - 16'd360;
+          else begin
+            cvsw <= (cvb == cva) ? 10'd360                // a0==a1: full turn
+                  : (cvb > cva)  ? cvb[9:0] - cva[9:0]
+                  :                cvb[9:0] + 10'd360 - cva[9:0];
+            glst <= G_CV;
+          end
+        end
+        G_CV: if (gl_can) begin
+          case (cvph)
+            2'd0: begin                                   // fetch the vertex
+              glact <= 1; state <= CVP0; cvph <= 2'd1;
+            end
+            2'd1: begin                                   // emit its edge
+              if (cvfirst) begin
+                if (cvsec && !glfill) begin               // opening radius
+                  wx0 <= c2x; wy0 <= c2y; wx1 <= cvnx; wy1 <= cvny;
+                  csn <= 0; glact <= 1; state <= S_CS;
+                end
+              end else if (cvsec && glfill) begin         // fan triangle
+                f3x <= c2x;  f3y <= c2y;                  //   (centre,
+                m3x <= cvpx; m3y <= cvpy;                 //    prev, cur)
+                t3x <= cvnx; t3y <= cvny;
+                k <= 0; glst <= G_CV2D;
+              end else begin                              // polyline edge
+                wx0 <= cvpx; wy0 <= cvpy; wx1 <= cvnx; wy1 <= cvny;
+                csn <= 0; glact <= 1; state <= S_CS;
+              end
+              cvpx <= cvnx; cvpy <= cvny; cvfirst <= 0;
+              if (cvemit == cvsw) cvph <= 2'd2;
+              else begin cvo <= cvo + 10'd4; cvph <= 2'd0; end
+            end
+            default: begin                                // the tail
+              if (cvsec && !glfill) begin                 // closing radius
+                wx0 <= cvpx; wy0 <= cvpy; wx1 <= c2x; wy1 <= c2y;
+                csn <= 0; glact <= 1; state <= S_CS;
+              end
+              glst <= G_OP;
+            end
+          endcase
         end
 
         // ---- stage 10c: CLEND finish -- flush the dangling byte, write
@@ -2441,7 +2900,7 @@ module p8x_geom (
 
         // CLRUN/CLOOP: read the length, then the fetcher takes over
         G_RL0: if (!sd_busy && !g_req) begin
-          g_addr <= {2'd0, 1'b1, 1'b0, rp_bank, rp_slot, 12'd0};
+          g_addr <= {2'd0, 1'b1, 2'd0, rp_slot, 12'd0};
           g_we <= 0; g_req <= 1; sd_busy <= 1;
           glst <= G_RL1;
         end
@@ -2459,7 +2918,7 @@ module p8x_geom (
   // busy covers the consumer AND the walker: with GESTAT retired,
   // GLSTAT bit6 is how software waits out its own GL work
   wire glbusy = (glst != G_OP) || cf_ne || (state != S_IDLE) || rp ||
-                (txn != 8'd0);
+                rpg || (txn != 8'd0);
 
   always @(*) begin
     case (a[2:0])
