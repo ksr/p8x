@@ -33,7 +33,7 @@
  *     FF20-23 X0/Y0/X1/Y1 low  FF29-2C their high bytes  FF24/2D pen low/high
  *     FF28 x-radius  FF2F y-radius (ellipse)  FF25 command  FF26 status
  *     FF27 data  FF2D/2E "PG" presence signature
- *     Commands: 01 PLOT 02 LINE 03 BOX 04 BOXFILL 05 CLS 07 CIRCLE
+ *     Commands: 01 PIXELW 02 LINE 04 BOXFILL 09 PIXELR (read)
  *               08 CIRCLEFILL 09 POINT 0A ELLIPSE 0B ELLIPSEFILL
  *               | F0 SELFTEST (emulator only) F1 RESET F2 IDENT
  *     Always present; -g writes the DISPLAY page as a PPM, -G as text.
@@ -1542,7 +1542,7 @@ static void gpu_reset(void){
 }
 static void gpu_cmd(uint8_t v){
     switch(v){
-    case 0x01: gpu_px(gx0,gy0,gcol);                break;   /* PLOT       */
+    case 0x01: gpu_px(gx0,gy0,gcol);                break;   /* PIXELW     */
     case 0x02: gpu_line(gx0,gy0,gx1,gy1,gcol);      break;   /* LINE       */
     case 0x04: gpu_box(gx0,gy0,gx1,gy1,gcol,1);     break;   /* BOXFILL    */
     /* 0x03 (BOX outline), 0x05 (CLS) and 0x07/0x08 (CIRCLE) are RETIRED
@@ -1556,7 +1556,7 @@ static void gpu_cmd(uint8_t v){
                                       latch {GPARM2,GPARM} -- the register
                                       map is full, so the pattern rides a
                                       command, like the GL walker writes it */
-    /* POINT reads a pixel back into GDATA, which is what a BASIC POINT()
+    /* PIXELR reads a pixel back into GDATA, which is what BASIC's PIXELR()
        function needs. Off-screen reads as pen 0, matching the write side's
        "off-screen simply is not there" rule. */
     case 0x09: { uint16_t p = ((unsigned)gx0<(unsigned)gw && (unsigned)gy0<(unsigned)gh)

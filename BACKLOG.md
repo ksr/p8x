@@ -543,6 +543,20 @@ Nothing below has been built or measured.
       fabric copy-rect (a real blitter rung, also what image GRAB
       wants). (b) is the cheap win. Keyboard stays the serial RX.
       Fits the FPGA-CPU era (idea 2): CPU and console on one board.
+- [ ] **Move BASIC's remaining device drawing onto the PGC interface
+      (2026-08-30, user).** The naming epoch landed first (PIXELW/
+      PIXELR; POINT freed for the GL verb). Next: reimplement the
+      category-2 statements (LINE, BOX, CIRCLE, CLS, PIXELW) as GL
+      emission so BASIC's DRAWING all flows through $FF50, leaving the
+      device door only the DMA-gap pair (PIXELR read, IMAGE write).
+      Decisions on the way in: the screen-vs-window y-flip (per-call
+      flip vs redefining the statements as window-space), and PIXELW's
+      speed (a GL MOVE+POINT per pixel is ~20-40x the raw path -- fine
+      for singles, wrong for loops; IMAGE stays raw regardless). End
+      state enables the single-interface card: add a GL pixel-read
+      verb (IMAGER/PIXRD through the RB FIFO, ~50-80 LUT) and the
+      card-side blit (the faster-image-transfer item), and the $FF20
+      window can close for ~100-150 LUT net of the read verb.
 - [ ] **Simple graphics editor, a C program (2026-08-29, user).** An
       on-target `draw` command (os/commands, //#use gfx): pick a tool
       and colour, place points/lines/boxes/circles/fills on the panel,

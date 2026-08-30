@@ -179,6 +179,10 @@ print("wrote fpga/rtl/glkwtab.vh (ends at scratch word %d of 1024; RBS mirror at
 BASIC_SKIP = {"NOOP", "POINT", "COLOR", "CA", "CX", "CIRCLE"}
 GLV0 = 0xB4
 bverbs = [(l, op, b, a) for l, s, op, b, a in VERBS if l not in BASIC_SKIP]
+# POINT joined the natives once BASIC's pixel-read function became
+# PIXELR() and freed the name -- APPENDED (token order is ABI), not
+# spliced back into its VERBS position.
+bverbs.append(("POINT", 0x08, 0, 0))
 assert GLV0 + len(bverbs) <= 0x100, "token space overflow"
 
 with open(os.path.join(HERE, "..", "basic", "glkwtab.inc"), "w") as f:

@@ -47,13 +47,13 @@ GLSTATR = $FF51          ; bit7 = FIFO full (wait before pushing)
 GLRBR   = $FF52          ; read-back FIFO pop (stage 10e; GLSTAT bit0 = has byte)
 GLIDR   = $FF54          ; reads 'G' when the GL engine is fitted
 GCHI   = 9                   ; a pair's high byte = its low address + GCHI
-GC_PLOT = 1
+GC_PIXW = 1
 GC_LINE = 2
 GC_BOXF = 4
                              ; 6 was SETPAL; no palette, no command
 GC_ELL  = $0A
 GC_ELLF = $0B
-GC_PONT = 9
+GC_PIXR = 9
                               ; $0C was SETMODE. The device is single-mode now
                               ; -- 480x272, 8 bpp -- so there is nothing to set.
 CR     = $0D
@@ -288,12 +288,14 @@ TOK_BOX   = $A7          ; BOX x0,y0,x1,y1[,FILL|,NOFILL]
 TOK_FILL  = $A8          ; BOX modifier -- NOT a statement leader (see CKLEAD)
 TOK_NOFILL= $A9          ; ... the default, spelled out
 TOK_CLS   = $AA          ; CLS
-TOK_PLOT  = $AB          ; PLOT x,y
+TOK_PIXELW= $AB          ; PIXELW x,y -- device pixel write (was PLOT)
 TOK_CIRCLE= $AC          ; CIRCLE x,y,r[,FILL|,NOFILL]
                          ; $AD was PALETTE, removed with the palette. Like
                          ; $B0, it stays unassigned: saved .BAS files are
                          ; tokenised and old programs on disk still carry it.
-TOK_POINT = $AE          ; POINT(x,y) -- a FUNCTION, not a statement
+TOK_PIXELR= $AE          ; PIXELR(x,y) -- a FUNCTION, not a statement
+                         ;   (device pixel read; was POINT, renamed so
+                         ;   the name belongs to the PGC drawing verb)
 TOK_GTEXT = $AF          ; GTEXT x,y,size,string$
 TOK_RGB   = $B1          ; RGB(r,g,b) -- a FUNCTION: pack r,b 0-31, g 0-63 into 565
 TOK_IMAGE = $B2          ; IMAGE x,y,name$ -- draw a P8I file
@@ -472,9 +474,9 @@ STMT:   JSR  SKIPSP
         CMP
         JZ   DOCLS
         LDA  (P2)
-        LDB  #TOK_PLOT
+        LDB  #TOK_PIXELW
         CMP
-        JZ   DOPLOT
+        JZ   DOPIXW
         LDA  (P2)
         LDB  #TOK_CIRCLE
         CMP
@@ -1206,8 +1208,9 @@ DOPOKE: INP2
 pk_err: JMP  SYNERR
 
 ;==============================================================================
-; GRAPHICS — COLOR / CLS / PLOT / LINE / BOX / CIRCLE (and its ellipse form) /
-; PALETTE, plus the POINT() function, driving the $FF20 display.
+; GRAPHICS -- the DEVICE statements (screen space, $FF20): COLOR / CLS /
+; PIXELW / LINE / BOX / CIRCLE (and its ellipse form), plus the PIXELR()
+; function. The PGC statements (window space, $FF50) live in glkwtab.inc.
 ;
 ; The drawing engine is in the DEVICE: these statements evaluate expressions
 ; straight into the coordinate registers and write one command byte. There is no
@@ -1501,15 +1504,16 @@ DOCLS:  INP2
         STA  GCOLH
         RTS
 
-; PLOT x,y — a single pixel in the current pen.
-DOPLOT: INP2
+; PIXELW x,y -- a single pixel in the current pen (device write; the
+; read twin is the PIXELR() function).
+DOPIXW: INP2
         JSR  GCHECK
         JSR  EVAL
         LDA  #<GX0
         JSR  GSTORE
         LDA  #<GY0
         JSR  GARG
-        LDA  #GC_PLOT
+        LDA  #GC_PIXW
         JSR  GEXEC
         RTS
 
@@ -2081,7 +2085,7 @@ img_px: JSR  IMGB                   ; colour: low byte clears GCOLH...
         STA  GX0
         LDA  IMXC+1
         STA  GX0+GCHI
-        LDA  #GC_PLOT
+        LDA  #GC_PIXW
         JSR  GEXEC
         LDA  IMXC                   ; x++
         INC
@@ -2221,7 +2225,7 @@ gb_y:   LDB  GTCY+1
         STA  GY1+GCHI
         LDA  #GC_BOXF
         JMP  GEXEC
-gb_dot: LDA  #GC_PLOT
+gb_dot: LDA  #GC_PIXW
         JMP  GEXEC
 
 ; REM — comment: ignore the rest of the line
@@ -2860,7 +2864,7 @@ FACTOR: JSR  SKIPSP
         CMP
         JZ   fa_peek
         LDA  (P2)
-        LDB  #TOK_POINT
+        LDB  #TOK_PIXELR
         CMP
         JZ   fa_point
         LDA  (P2)
@@ -3024,7 +3028,7 @@ fa_point: INP2
         CMP
         JNZ  pt_err
         INP2
-        LDA  #GC_PONT
+        LDA  #GC_PIXR
         JSR  GEXEC
         JSR  GWAIT                  ; the answer is only valid once it is done
         LDA  GDATA                  ; GDATA streams the 16-bit colour: low...
@@ -5281,7 +5285,7 @@ ckd_1:  LDB  #TOK_REM
         LDB  #TOK_EOF
         CMP
         JZ   ckd_bad
-        LDB  #TOK_POINT
+        LDB  #TOK_PIXELR
         CMP
         JZ   ckd_bad
         LDB  #TOK_RGB
@@ -5502,11 +5506,11 @@ KWTAB:
         .byte $A8
         .ascii "CLS"
         .byte $AA
-        .ascii "PLOT"
+        .ascii "PIXELW"
         .byte $AB
         .ascii "CIRCLE"
         .byte $AC
-        .ascii "POINT"
+        .ascii "PIXELR"
         .byte $AE
         .ascii "GTEXT"
         .byte $AF

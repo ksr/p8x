@@ -28,14 +28,14 @@ GID0   = $FF2D   ; reads 'P' ($50) when a display is fitted
 GID1   = $FF2E   ; reads 'G' ($47)
 GPARM2 = $FF2F   ; ellipse y-radius
 
-GC_PLOT = 1      ; plot (GX0,GY0) in the pen colour
+GC_PIXW = 1      ; plot (GX0,GY0) in the pen colour
 GC_LINE = 2      ; line (GX0,GY0)-(GX1,GY1), both endpoints drawn
 ;GC_BOX = 3      ; RETIRED (stage-10 diet): draw four GC_LINEs
 GC_BOXF = 4      ; ... filled
 ;GC_CLS = 5      ; RETIRED: BOXFILL 0,0-479,271 is the same pixels
 ;GC_CIRC= 7      ; RETIRED: the ellipse with rx=ry is the circle now
 ;GC_CIRCF=8      ;   (GC_ELL/GC_ELLF with GPARM2 = GPARM)
-GC_PONT = 9      ; read the colour at (GX0,GY0) -> GDATA low, high
+GC_PIXR = 9      ; read the colour at (GX0,GY0) -> GDATA low, high
 GC_ELL  = $0A    ; ellipse outline, radii GPARM (x) / GPARM2 (y)
 GC_ELLF = $0B    ; ... filled
 GC_TEST = $F0    ; device self-test pattern

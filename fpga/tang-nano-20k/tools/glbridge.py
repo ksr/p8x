@@ -179,6 +179,26 @@ class Bridge:
                 return errs
             errs.append(e)
 
+    def pixelr(self, x, y, timeout=3.0):
+        """Read the pixel at screen (x, y) -> RGB565. The DEVICE's read
+        command (GCMD 9); the drawing verb named POINT is GL's."""
+        import time as _t
+        self.wrreg(0x00, x & 255); self.wrreg(0x09, (x >> 8) & 255)
+        self.wrreg(0x01, y & 255); self.wrreg(0x0A, (y >> 8) & 255)
+        self.wrreg(0x05, 0x09)
+        t0 = _t.time()
+        while self.rdreg(IDX_GSTAT) & 0x80:
+            if _t.time() - t0 > timeout:
+                raise TimeoutError("glbridge: PIXELR busy did not clear")
+        lo = self.rdreg(0x07); hi = self.rdreg(0x07)
+        return lo | (hi << 8)
+
+    def pixelw(self, x, y):
+        """Write one pixel at screen (x, y) in the current pen (GCMD 1)."""
+        self.wrreg(0x00, x & 255); self.wrreg(0x09, (x >> 8) & 255)
+        self.wrreg(0x01, y & 255); self.wrreg(0x0A, (y >> 8) & 255)
+        self.wrreg(0x05, 0x01)
+
     def probe(self):
         """The full identity: (GID0, GID1, GLID, BRIDGEV, BRIDGID)."""
         return tuple(self.rdreg(i) for i in

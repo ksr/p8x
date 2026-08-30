@@ -122,6 +122,8 @@
         .byte $F7
         .ascii "TJUST"
         .byte $F8
+        .ascii "POINT"
+        .byte $F9
         .ascii "FLIP"
         .byte $B4
         .ascii "WAIT"

@@ -207,7 +207,7 @@ not asserted. The proof chain, in escalating strength:
    10h TEXT scene (the whole generated font TDEFIN'd, then sized,
    tilted and folded), and the $FF20-driven circle/ellipse scene.
 3. On-board probes: the same programs typed at the real machine, with
-   POINT read-backs checked against the emulator's golden values.
+   PIXELR read-backs checked against the emulator's golden values.
 
 The corollary rules: algorithms are written once in C and transcribed,
 never re-derived; a divergence is a bug in the RTL by definition; and

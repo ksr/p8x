@@ -314,7 +314,7 @@ d_w:    LDA GSTAT               ; wait for the engine
         LDB #0
         CMP
         JNZ d_w
-        LDA #GC_PLOT
+        LDA #GC_PIXW
         STA GCMD
         LDA v_px                ; px += 1
         LDB #1
@@ -541,7 +541,7 @@ g_w1:   LDA GSTAT
         LDB #0
         CMP
         JNZ g_w1
-        LDA #GC_PONT
+        LDA #GC_PIXR
         STA GCMD
 g_w2:   LDA GSTAT
         LDB #$80

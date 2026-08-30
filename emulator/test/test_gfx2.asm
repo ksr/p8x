@@ -9,7 +9,7 @@
 ;   GID0/1  -> two fixed bytes, "PG". A single magic byte would be useless:
 ;              an absent card floats the bus to $FF, and $FF is a legal value
 ;              for most things. Two fixed bytes at two addresses are not.
-;   CIRCLE  -> the midpoint-circle primitive
+;   ELLIPSE rx=ry -> the circle (the midpoint-circle primitive is retired)
 ;   the 16-bit coordinate rule -- writing a LOW byte clears its HIGH byte
 ;
 ; The IDENT record and signature are echoed to the ACIA so the test can assert
@@ -50,8 +50,9 @@ id_lp:  LDA  GDATA
         JSR  GWAIT
         STA  GCMD
 
-; CIRCLE centred at (240,136) radius 80 in $F800 red -- an OUTLINE, so its
-; centre must stay background. Centred on the screen, so the four axis points
+; the circle: ELLIPSE rx=ry=80 centred at (240,136) in $F800 red (the
+; separate circle rasterizer is retired; the axis points are identical) --
+; an OUTLINE, so its centre must stay background. The four axis points
 ; sit at (160,136) (320,136) (240,56) (240,216).
         LDA  #0
         STA  GCOL
@@ -62,8 +63,10 @@ id_lp:  LDA  GDATA
         LDA  #136
         STA  GY0
         LDA  #80
-        STA  GPARM                      ; radius
-        LDA  #$07                       ; CIRCLE
+        STA  GPARM                      ; rx
+        LDA  #80
+        STA  GPARM2                     ; ry = rx: the circle
+        LDA  #$0A                       ; ELLIPSE
         JSR  GWAIT
         STA  GCMD
 

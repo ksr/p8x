@@ -55,7 +55,7 @@ script = ("B\rbasic\r"
           "20 PRINT PEEK(65364)\r"          # $FF54 GLID -> mock 'G' = 71
           "30 COLOR 1234\r"                 # feeds BOTH pens: gfx + GL bytes
           "40 LINE 3,4,5,6\r"
-          "50 PRINT POINT(3,4)\r"           # a read through GDATA
+          "50 PRINT PIXELR(3,4)\r"           # a read through GDATA
           "60 END\rRUN\rBYE\r")
 open("eb.in", "w").write(script)
 

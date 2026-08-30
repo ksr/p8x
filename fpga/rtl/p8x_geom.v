@@ -112,7 +112,7 @@ module p8x_geom (
              AF_SCAN=120, AF_SC1=121,  AF_SC2=122,
              AF_PU0=123,  AF_PU1=124,  AF_SKIP=125,
              AF_POP0=126, AF_POP1=127, AF_POP2=128, AF_CHK=129,
-             // the shared pixel-probe subroutine (gm POINT + GDATA pops)
+             // the shared pixel-probe subroutine (gm PIXELR + GDATA pops)
              AF_P0=130,   AF_P1=131,   AF_P2=132,   AF_P3=133,
              AF_P4=134,   AF_P5=135,   AF_P6=136,   AF_P7=137,
              AF_P8=138,   AF_P9=139,
@@ -1820,7 +1820,7 @@ module p8x_geom (
         end
         CVP4: if (md_done) begin cvny <= md_qr; state <= S_NEXT; end
 
-        // ---- the pixel probe (gm POINT + two GDATA pops) ----------------
+        // ---- the pixel probe (gm PIXELR + two GDATA pops) ---------------
         // Off-screen forces the boundary verdict by loading afpv with the
         // boundary colour itself (gl_af_in's x<0||x>=480||... return 0)
         AF_P0: begin
@@ -1842,7 +1842,7 @@ module p8x_geom (
         AF_P2: begin gm_a <= 4'h6;     // engine idle (paint may be live)
                      if (gm_a == 4'h6 && !gm_rdata[7] && !gm_wr)
                        state <= AF_P3; end
-        AF_P3: begin gm_a <= 4'h5; gm_wdata <= 8'h09; gm_wr <= 1;  // POINT
+        AF_P3: begin gm_a <= 4'h5; gm_wdata <= 8'h09; gm_wr <= 1;  // PIXELR
                      state <= AF_P4; end
         AF_P4: begin gm_a <= 4'h6;     // wait for the pixel itself
                      if (gm_a == 4'h6 && !gm_rdata[7] && !gm_wr)

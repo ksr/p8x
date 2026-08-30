@@ -19,7 +19,7 @@ Reference cards on-target: `man gl`, `man gfx`, `man g3d`, `man basic`.
 
 Probe first — an absent display floats the bus:
 
-    BASIC:  IF POINT(0,0) ... only after the OS booted with a display
+    BASIC:  IF PIXELR(0,0) ... only after the OS booted with a display
     C:      if (!gpresent()) { puts("?No display"); return 1; }
     shell:  gl (prints ?No display / ?No GL engine itself)
 
@@ -35,7 +35,8 @@ you). Numbers separate on spaces or commas; `man gl` is the verb card.
 ## 2. Coordinate spaces — the one thing to internalize
 
 - **Screen space**: 480x272, origin top-left, y DOWN. BASIC's own
-  statements (PLOT/LINE/BOX/CIRCLE/GTEXT/POINT) and the C gfx library
+  statements (PIXELW/LINE/BOX/CIRCLE/GTEXT and the PIXELR() read) and
+  the C gfx library
   live here, unclipped-but-discarded at the edges.
 - **Window space**: the GL 2D world, y UP. `WINDOW x1 x2 y1 y2` (PGC
   order: both x's first!) declares the world extent; `VWPORT x1 x2 y1
@@ -215,7 +216,7 @@ Every GL verb is a native statement (no quotes, expressions allowed):
 `COLOR` feeds both pens; `GL s$` sends a raw ASCII line when you need
 string-building (`GL "MDY "+STR$(A)`); native list verbs
 (CLBEG/CLEND/CLRUN) are synchronous, `GL "CLOOP 1 72"` is the
-non-blocking spin. POINT(x,y) reads pixels (screen space). The full
+non-blocking spin. PIXELR(x,y) reads pixels (screen space). The full
 statement list: `man basic`, GRAPHICS; the language guide chapter in
 `basic/p8x-basic-guide.md`.
 

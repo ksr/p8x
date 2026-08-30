@@ -22,7 +22,7 @@ FUNCTIONS
     grgb(r,g,b)           pack a colour (fields masked)
     gcolor(c)             set the pen to a packed colour
     gcls()                clear the whole screen TO THE PEN colour
-    gplot(x,y)            one pixel
+    gpixelw(x,y)          one pixel (was gplot)
     gline(x0,y0,x1,y1)    line, both endpoints drawn
     gbox(x0,y0,x1,y1)     rectangle outline (any two opposite corners)
     gboxf(...)            ... filled
@@ -33,7 +33,9 @@ FUNCTIONS
                           rasterizer -- same call, radius capped at 255,
                           r=0 draws nothing; gcls and gbox likewise ride
                           BOXFILL and four lines, same pixels)
-    gpoint(x,y)           the colour at (x,y); 0 off-screen
+    gpixelr(x,y)          the colour at (x,y); 0 off-screen
+                          (was gpoint -- the pixel pair renamed
+                          so POINT names only the PGC verb)
     gwait()               spin until the engine is idle (each call above
                           already waits before issuing, so back-to-back
                           calls are safe without it)
@@ -45,7 +47,7 @@ EXAMPLE
         gcolor(0); gcls();
         gcolor(grgb(31, 0, 0));
         gboxf(40, 40, 200, 200);
-        if (gpoint(100, 100) == grgb(31, 0, 0)) { puts("RED"); }
+        if (gpixelr(100, 100) == grgb(31, 0, 0)) { puts("RED"); }
         return 0;
     }
 

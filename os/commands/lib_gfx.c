@@ -34,10 +34,10 @@
 //#define GID1   0xFF2E  /* reads 'G' (71)                                */
 //#define GPARM2 0xFF2F  /* ellipse y-radius                              */
 
-//#define GC_PLOT 1
+//#define GC_PIXW 1
 //#define GC_LINE 2
 //#define GC_BOXF 4
-//#define GC_PONT 9
+//#define GC_PIXR 9
 //#define GC_ELL  10
 //#define GC_ELLF 11
 
@@ -67,7 +67,7 @@ int grgb(int r, int g, int b) {
     return ((r & 31) << 11) | ((g & 63) << 5) | (b & 31);
 }
 
-/* set the 16-bit pen (a packed colour: grgb(), or a gpoint() result) */
+/* set the 16-bit pen (a packed colour: grgb(), or a gpixelr() result) */
 int gcolor(int c) {
     poke(GCOL, c & 255);          /* low first -- clears the high */
     poke(GCOLH, c >> 8);
@@ -81,10 +81,12 @@ int gcls() {
     return 0;
 }
 
-int gplot(int x, int y) {
+/* the device pixel pair -- WRITE and READ (was gplot/gpoint; renamed
+   so POINT names only the PGC drawing verb) */
+int gpixelw(int x, int y) {
     gw16(0, x); gw16(1, y);
     gwait();
-    poke(GCMD, GC_PLOT);
+    poke(GCMD, GC_PIXW);
     return 0;
 }
 
@@ -140,11 +142,11 @@ int gellipsef(int x, int y, int rx, int ry) {
 
 /* the colour at (x,y): issue POINT, wait, read GDATA low then high.
  * 0 for anything off-screen (the device's discard rule). */
-int gpoint(int x, int y) {
+int gpixelr(int x, int y) {
     int lo;
     gw16(0, x); gw16(1, y);
     gwait();
-    poke(GCMD, GC_PONT);
+    poke(GCMD, GC_PIXR);
     gwait();
     lo = peek(GDATA);
     return lo | (peek(GDATA) << 8);

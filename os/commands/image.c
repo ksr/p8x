@@ -11,9 +11,9 @@
  *
  * Draw: FGETB the header, validate ("?NOT P8I" on bad magic/version/depth or
  * a truncated payload, "?No file" if missing), then per pixel: two bytes ->
- * gcolor -> gplot. Off-screen pixels are discarded by the device, so an
+ * gcolor -> gpixelw. Off-screen pixels are discarded by the device, so an
  * image may hang off any edge. Grab: corners self-sort like BOX; each pixel
- * is gpoint()ed and written little-endian after a 10-byte header. An
+ * is gpixelr()ed and written little-endian after a 10-byte header. An
  * existing file of the same name is REPLACED (FDELETE then rewrite). Grabs
  * read the DRAW page, so if a geometry engine is fitted the command issues
  * PGSYNC first -- a grab always captures what the panel shows. Measured
@@ -28,14 +28,14 @@ char path[80];
 
 //#use apath   /* abspath(out, arg): path word -> absolute, CWD-relative */
 //#use abi     /* FRESOLVE/FOPEN/FGETB/FWOPEN/FPUTB/FCLOSE/FDELETE, RDBUF */
-//#use gfx     /* gpresent/gcolor/gplot/gpoint */
+//#use gfx     /* gpresent/gcolor/gpixelw/gpixelr */
 
 //#define GLID   0xFF54  /* graphics-language probe ('G' when fitted)      */
 //#define GLDATA 0xFF50  /* its command FIFO: opcode 3 = PGSYNC            */
 //#define GLSTAT 0xFF51  /* bit6 = busy: wait the PGSYNC out before grabs  */
 
 /* The pixel loops below poke the display registers RAW instead of calling
- * gplot()/gpoint(): p8cc's layered calls (gplot -> gw16 -> poke, each with
+ * gpixelw()/gpixelr(): p8cc's layered calls (gpixelw -> gw16 -> poke, each with
  * a software-stack frame) cost ~11.5k cycles a pixel, 19x BASIC's hand-asm
  * loader; inlining gets ~3x of that back, and the row's Y pair is written
  * once per row since only a GY0 LOW write clears its high byte. Measured
@@ -145,7 +145,7 @@ int grab(int x0, int y0, int x1, int y1) {
             poke(GX0, px);
             poke(GX0 + 9, px >> 8);
             while (peek(GSTAT) & 128) { }
-            poke(GCMD, GC_PONT);            /* POINT: 0 if off-screen     */
+            poke(GCMD, GC_PIXR);            /* POINT: 0 if off-screen     */
             while (peek(GSTAT) & 128) { }
             bios(FPUTB, 0, peek(GDATA));    /* low byte, then high --     */
             bios(FPUTB, 0, peek(GDATA));    /*   P8I is little-endian     */

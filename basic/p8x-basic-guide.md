@@ -135,7 +135,7 @@ like numeric comparisons, so they slot straight into `IF`:
 |------|---------|
 | `ABS(x)` | absolute value of `x` |
 | `RND(n)` | a pseudo-random integer **1..n** (LCG; `RND(6)` is a die) |
-| `POINT(x,y)` | the COLOUR at a screen pixel; 0 if off-screen |
+| `PIXELR(x,y)` | the COLOUR at a screen pixel; 0 if off-screen (was `POINT()`) |
 | `PEEK(addr)` | the byte (0–255) at memory address `addr` |
 | `LEN(s$)` | number of characters in the string `s$` |
 | `ASC(s$)` | code (0–255) of the first character (0 if empty) |
@@ -176,7 +176,7 @@ A line may hold several statements separated by `:` —
 | `CLOSE` | close the data-file channel (commits an output file) |
 | `COLOR c` / `COLOR r,g,b` | set the drawing colour: one PACKED RGB565 value, or three numbers (`r`,`b` 0–31, `g` 0–63) — see *Graphics* |
 | `CLS` | clear the screen; the current `COLOR` is **not** changed |
-| `PLOT x,y` | one pixel |
+| `PIXELW x,y` | one pixel (was `PLOT`; a DEVICE statement, not PGC) |
 | `LINE x0,y0,x1,y1` | draw a line, both endpoints included |
 | `BOX x0,y0,x1,y1[,FILL\|,NOFILL]` | rectangle — outline by default, solid with `FILL` |
 | `CIRCLE x,y,r[,FILL\|,NOFILL]` | circle of radius `r` about `x,y` |
@@ -231,12 +231,12 @@ is the second reason `NOFILL` had to be a real keyword rather than merely the
 default — otherwise `CIRCLE x,y,r,NOFILL` would try to evaluate `NOFILL` as a
 radius.
 
-**Reading the screen back.** `POINT(x,y)` is a *function*, not a statement, and
+**Reading the screen back.** `PIXELR(x,y)` is a *function*, not a statement, and
 returns the COLOUR at a pixel — 0 for anything off-screen — so a colour read
 back compares exactly against the `RGB()` you drew with:
 
 ```basic
-100 IF POINT(X,Y) = 0 THEN PLOT X,Y
+100 IF PIXELR(X,Y) = 0 THEN PIXELW X,Y
 ```
 
 **Text on the screen.** `GTEXT x,y,size,s$` draws a string as graphics, in the
@@ -265,17 +265,17 @@ five bits of red, six of green (the eye is fussiest there), five of blue.
 ```basic
 10 COLOR 31,0,0 : BOX 0,0,479,271,FILL    : REM a red screen
 20 COLOR 31,63,31                          : REM white
-30 C=POINT(240,136) : COLOR C              : REM draw with a colour off the screen
+30 C=PIXELR(240,136) : COLOR C              : REM draw with a colour off the screen
 ```
 
 `COLOR` takes either three numbers — `r,g,b` — or one *packed* colour: what
-`RGB(r,g,b)` builds and `POINT(x,y)` returns. The comma decides, the same
+`RGB(r,g,b)` builds and `PIXELR(x,y)` returns. The comma decides, the same
 way `CIRCLE`'s optional second radius does.
 
 Arguments are masked to their fields. One wart, worn openly: BASIC's
 integers are signed 16-bit, so a bright colour **prints** as a negative
 number — `PRINT RGB(31,0,0)` says `-2048` — but stores and compares
-bit-for-bit, so `IF POINT(x,y) = RGB(31,0,0)` works exactly.
+bit-for-bit, so `IF PIXELR(x,y) = RGB(31,0,0)` works exactly.
 
 `PALETTE` is gone with the palette: there is nothing to install a colour
 into. Recolour-by-redraw is the trade stage 6 made for true colour.
@@ -295,7 +295,7 @@ with direct colour, stage 6): the pen IS a colour. Set it either way —
 ```basic
 10 COLOR 31,0,0                 : REM three numbers: r,b 0-31, g 0-63
 20 COLOR RGB(0,63,0)            : REM or one packed value
-30 C=POINT(10,10) : COLOR C     : REM ...including one read off the screen
+30 C=PIXELR(10,10) : COLOR C     : REM ...including one read off the screen
 ```
 
 Bright colours *print* as negative numbers (`PRINT RGB(31,0,0)` says
@@ -358,10 +358,11 @@ The full set, grouped the way `man gl` groups the device's verbs:
 Parameters, units and order are exactly the device's — angles in degrees,
 `WINDOW`/`VWPORT` in the PGC's `x1,x2,y1,y2` order, `FLOOD`/`CLEARS`
 taking `r,g,b`. `POLY`/`POLY3` take a count and then that many vertices.
-Three deliberate absences: `COLOR` (the ordinary `COLOR` statement now
-sets the GL pen too, so one pen statement drives both drawing paths),
-the GL `POINT` verb (`POINT()` the *function* owns the name — `GL "POINT"`
-still reaches it), and `NOOP`.
+Two deliberate absences: `COLOR` (the ordinary `COLOR` statement now
+sets the GL pen too, so one pen statement drives both drawing paths)
+and `NOOP`. The GL `POINT` verb IS native now: the pixel-read function
+became `PIXELR()` and freed the name (`GL "CIRCLE r"` remains the only
+name BASIC's own screen-space `CIRCLE` still shadows).
 
 **Recording.** Between `CLBEG n` and `CLEND` these statements *record*
 into command list `n` instead of drawing, so a BASIC loop can build a
@@ -379,7 +380,7 @@ rotation lands on top of whatever the splash (or the last program) left
 behind.
 
 **`GL s$` is the text escape hatch** for anything without a native
-statement — short forms, the GL `POINT`, verbs newer than this guide:
+statement — short forms, verbs newer than this guide:
 
 ```basic
 50 GL "MDY "+STR$(A)
@@ -392,7 +393,7 @@ the card's ASCII translator entirely (BASIC sends the binary opcode and
 parameters), so they are faster and cannot mis-tokenize.
 
 Native statements are **synchronous**: each one waits for the card to
-finish before BASIC continues, so `POINT()` right after a draw reads
+finish before BASIC continues, so `PIXELR()` right after a draw reads
 finished pixels — on silicon exactly as in the emulator. The price is
 that a native `CLOOP` blocks until the whole replay ends; launch a
 long fly-through with `GL "CLOOP 0 100"` instead — the text path does
@@ -404,7 +405,7 @@ not wait, and the card animates while BASIC runs on.
 screen: `0` replace (the default), `1` complement (invert the pixel
 underneath — the pen is ignored), `2` OR, `3` AND, `4` XOR. It applies
 to **lines, points and outlines from every drawing statement** — the
-mode lives in the display device, so BASIC's own `LINE` and `PLOT`
+mode lives in the display device, so BASIC's own `LINE` and `PIXELW`
 honour it just like the GL verbs. Fills always replace.
 
 XOR is the one to know: drawing the same thing twice removes it and

@@ -1,6 +1,8 @@
 ; test_gfx.asm -- exercises the $FF20 graphics display model.
 ;
-; Drives every command the device implements (CLS, BOX, BOXFILL, LINE, PLOT)
+; Drives every command the device implements (BOXFILL, LINE, PIXELW) --
+; CLS and the BOX outline are retired (stage-10 diet): the clear is a
+; full-screen BOXFILL and an outline is four LINEs, same pixels
 ; straight through the I/O ports, which is exactly what BASIC's LINE /
 ; COLOR / BOX statements will emit once they exist. Written longhand rather than
 ; with helper subroutines so each port write is visible: this file doubles as
@@ -44,24 +46,10 @@
         LPL3 #$00                       ; P3 = SP = $3F00 (unused, but set)
         LPH3 #$3F
 
-;=== CLS to pen 0 ==========================================================
+;=== clear to pen 0: BOXFILL 0,0-479,271 (CLS is retired) =================
         LDA  #0
         STA  GCOL                       ; $0000 black (low write clears GCOLH)
-        LDA  #5                         ; CLS
-        JSR  GWAIT
-        STA  GCMD
-
-;=== border: BOX (0,0)-(479,271) in $F800 (red) ===========================
-; (SETPAL is gone with the palette -- yellow is simply a colour below.)
-; The whole point of this one is the four EXTREME edges, so it has to reach the
-; real corners: 479 = $01DF and 271 = $010F both need their high byte.
-        LDA  #0
-        STA  GCOL
-        LDA  #$F8
-        STA  GCOLH                      ; pen = $F800 red
-        LDA  #0
         STA  GX0
-        LDA  #0
         STA  GY0
         LDA  #$DF
         STA  GX1
@@ -71,7 +59,49 @@
         STA  GY1
         LDA  #1
         STA  GY1H                       ; ... = 271
-        LDA  #3                         ; BOX (outline)
+        LDA  #4                         ; BOXFILL: the clear
+        JSR  GWAIT
+        STA  GCMD
+
+;=== border: FOUR LINEs (0,0)-(479,271) in $F800 (the BOX outline is
+;=== retired). The whole point is the four EXTREME edges, so it has to
+;=== reach the real corners: 479 = $01DF and 271 = $010F.
+        LDA  #0
+        STA  GCOL
+        LDA  #$F8
+        STA  GCOLH                      ; pen = $F800 red
+        LDA  #0                         ; top: (0,0)-(479,0) -- the fill
+        STA  GY1                        ;   left X0=0 Y0=0 X1=479; Y1 drops
+        LDA  #2                         ;   to 0 (low write clears the high)
+        JSR  GWAIT
+        STA  GCMD
+        LDA  #$0F                       ; bottom: (0,271)-(479,271)
+        STA  GY0
+        LDA  #1
+        STA  GY0H
+        LDA  #$0F
+        STA  GY1
+        LDA  #1
+        STA  GY1H
+        LDA  #2
+        JSR  GWAIT
+        STA  GCMD
+        LDA  #0                         ; left: (0,0)-(0,271)
+        STA  GX1
+        LDA  #0
+        STA  GY0
+        LDA  #2
+        JSR  GWAIT
+        STA  GCMD
+        LDA  #$DF                       ; right: (479,0)-(479,271)
+        STA  GX0
+        LDA  #1
+        STA  GX0H
+        LDA  #$DF
+        STA  GX1
+        LDA  #1
+        STA  GX1H
+        LDA  #2
         JSR  GWAIT
         STA  GCMD
 
@@ -144,7 +174,7 @@
         STA  GCOL
         LDA  #$07
         STA  GCOLH                      ; pen = $07E0 green
-        LDA  #160
+        LDA  #160                       ; the outline is FOUR LINEs now
         STA  GX0
         LDA  #200
         STA  GY0
@@ -152,9 +182,34 @@
         STA  GX1
         LDA  #1
         STA  GX1H                       ; ... = 280
+        LDA  #200                       ; top: (160,200)-(280,200)
+        STA  GY1
+        LDA  #2
+        JSR  GWAIT
+        STA  GCMD
+        LDA  #248                       ; bottom: (160,248)-(280,248)
+        STA  GY0
         LDA  #248
         STA  GY1
-        LDA  #3                         ; BOX (outline)
+        LDA  #2
+        JSR  GWAIT
+        STA  GCMD
+        LDA  #160                       ; left: (160,200)-(160,248)
+        STA  GX1
+        LDA  #200
+        STA  GY0
+        LDA  #2
+        JSR  GWAIT
+        STA  GCMD
+        LDA  #$18                       ; right: (280,200)-(280,248)
+        STA  GX0
+        LDA  #1
+        STA  GX0H
+        LDA  #$18
+        STA  GX1
+        LDA  #1
+        STA  GX1H
+        LDA  #2
         JSR  GWAIT
         STA  GCMD
 

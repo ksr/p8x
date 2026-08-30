@@ -255,5 +255,23 @@ walk, "FIFO never drained") -- now 8 bits + gen_glkw assert. tb_gl_txx
 drain timeouts need 5M cycles (CLS is a per-pixel-pair walk; >1M with
 a full FIFO). Proof chain = NINE frames; basic_gl_test runs TDEFIN/
 TSIZE/TEXT native (BASIC TEXT = glvtab meta $FF -> glv_str string
-handler; tokens $EE-$F1). Stage 10 rungs a-h ALL COMPLETE. Remaining
-text ideas: TEXT-in-lists (second replay context ~+100), TJUST, TEXTP.
+handler; tokens $EE-$F1). Stage 10 rungs a-h ALL COMPLETE. 10i/j/k SHIPPED
+2026-08-29/30 (a518415): curves CIRCLE/ELIPSE/ARC/SECTOR, patterns
+LINPAT/AREAPT, TJUST/TEXTP/TEXT-in-lists -- 12 byte-identical frames;
+funded by RETIRING device CLS/BOX-outline/CIRCLE (user-approved; a
+circle IS the ellipse rx=ry now; monitor splash = BOXFILL + 4 LINEs).
+Card synthesizes 20,679/20,736 (99.7%); PLACEMENT SEED SWEEP + FLASH
+STILL PENDING. Diet lesson PROVEN with clean flat builds: state-arm
+serialization diets trade ~evenly against their source muxes (two
+measured net-NEGATIVE and were reverted); only real REMOVALS and the
+paint-rides-S_LIN merge (-138) paid. NEVER run two build.sh in
+parallel (shared logs -> garbage numbers). NAMING EPOCH 2026-08-30:
+the pixel pair is PIXELW/PIXELR at EVERY layer (BASIC statements
+[tokens $AB/$AE unchanged, text renamed], lib_gfx gpixelw/gpixelr,
+GC_PIXW/GC_PIXR equates, RTL S_PIXW/S_PIXR, glbridge.pixelr()/pixelw()
+helpers); POINT now names ONLY the PGC drawing verb and is a native
+BASIC statement (appended token $F9). man basic marks DEVICE vs PGC
+statement families. USER DIRECTION: migrate BASIC's category-2 drawing
+(LINE/BOX/CIRCLE/CLS/PIXELW) onto GL, keep the DMA-gap pair
+(PIXELR/IMAGE) + GTEXT device-side; endgame = single-interface card
+via a GL pixel-read verb + card-side blit (BACKLOG'd).

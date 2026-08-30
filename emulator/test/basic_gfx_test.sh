@@ -94,13 +94,13 @@ if bad:
 print("BASIC-GFX TEST: draw statements ok")
 PY
 
-# --- part 2: PLOT / CIRCLE / RGB / POINT ------------------------------------
+# --- part 2: PIXELW / CIRCLE / RGB / POINT ------------------------------------
 # PALETTE is gone with the palette; what this part pins instead is the 16-bit
 # colour path end to end: RGB() packs, the pen carries all 16 bits, and POINT
 # hands them back THROUGH BASIC'S SIGNED INTEGERS -- $F81F magenta prints as
 # -2017, which is the documented wart (STAGE6-DESIGN.md), asserted here so it
 # stays a wart and not a surprise.
-printf 'B\rbgfx\r10 CLS\r20 COLOR RGB(31,0,0)\r40 BOX 10,10,80,80,FILL\r50 COLOR RGB(31,0,31)\r60 CIRCLE 240,136,100,FILL\r70 COLOR RGB(0,63,0)\r80 CIRCLE 240,136,120\r90 PLOT 400,40\r100 PRINT POINT(240,136)\r110 PRINT POINT(400,40)\r120 PRINT POINT(0,271)\r130 PRINT POINT(14,14)\r140 END\rRUN\rLIST\rBYE\r' \
+printf 'B\rbgfx\r10 CLS\r20 COLOR RGB(31,0,0)\r40 BOX 10,10,80,80,FILL\r50 COLOR RGB(31,0,31)\r60 CIRCLE 240,136,100,FILL\r70 COLOR RGB(0,63,0)\r80 CIRCLE 240,136,120\r90 PIXELW 400,40\r100 PRINT PIXELR(240,136)\r110 PRINT PIXELR(400,40)\r120 PRINT PIXELR(0,271)\r130 PRINT PIXELR(14,14)\r140 END\rRUN\rLIST\rBYE\r' \
     > bgfx2.in
 ../p8xemu -N -i bgfx2.in -c bgfx.img -l 120000000 -g bgfx2.ppm eeprom.bin > bgfx2.out 2>/dev/null || true
 
@@ -118,7 +118,7 @@ if b"\n-2017\n2016\n0\n-2048\n" not in out:
                % out[out.find(b"RUN"):out.find(b"RUN")+48])
 
 for kw in [b"20 COLOR RGB(31,0,0)", b"60 CIRCLE 240,136,100,FILL",
-           b"80 CIRCLE 240,136,120", b"90 PLOT 400,40", b"100 PRINT POINT(240,136)"]:
+           b"80 CIRCLE 240,136,120", b"90 PIXELW 400,40", b"100 PRINT PIXELR(240,136)"]:
     if out.count(kw) < 2:
         bad.append("LIST did not round-trip %r" % kw.decode())
 
@@ -145,9 +145,9 @@ want(240, 136, MAGENTA, "filled CIRCLE is not magenta")
 want(240, 236, MAGENTA, "filled CIRCLE does not reach its bottom edge")
 want(240,  16, GREEN,   "outline CIRCLE top not drawn")
 want(240,  26, BLACK,   "gap between the two circles is filled - CIRCLE drew solid")
-# PLOT put a single pixel down
-want(400,  40, GREEN,   "PLOT did not draw")
-want(404,  40, BLACK,   "PLOT drew more than one pixel")
+# PIXELW put a single pixel down
+want(400,  40, GREEN,   "PIXELW did not draw")
+want(404,  40, BLACK,   "PIXELW drew more than one pixel")
 
 if bad:
     print("BASIC-GFX TEST: FAIL")
@@ -160,7 +160,7 @@ PY
 # The parser has to tell a second radius from the FILL modifier by TOKEN: a
 # keyword is >= $80, anything else starts an expression. That is also why NOFILL
 # must be a real keyword -- otherwise `CIRCLE x,y,r,NOFILL` would try to EVAL it.
-printf 'B\rbgfx\r10 CLS\r20 COLOR 1\r30 CIRCLE 60,68,30\r40 COLOR 2\r50 CIRCLE 170,68,60,20\r60 COLOR 3\r70 CIRCLE 170,110,15,20,FILL\r80 PRINT "A";POINT(90,68);POINT(60,68);POINT(230,68);POINT(10,130);POINT(170,110)\r90 END\rRUN\rBYE\r' \
+printf 'B\rbgfx\r10 CLS\r20 COLOR 1\r30 CIRCLE 60,68,30\r40 COLOR 2\r50 CIRCLE 170,68,60,20\r60 COLOR 3\r70 CIRCLE 170,110,15,20,FILL\r80 PRINT "A";PIXELR(90,68);PIXELR(60,68);PIXELR(230,68);PIXELR(10,130);PIXELR(170,110)\r90 END\rRUN\rBYE\r' \
     > bgfx3.in
 ../p8xemu -N -i bgfx3.in -c bgfx.img -l 120000000 eeprom.bin > bgfx3.out 2>/dev/null || true
 
@@ -293,7 +293,7 @@ fi
 #      -- an off-by-one in the stride shows up here and nowhere else;
 #   2. the colour survives the framebuffer round trip -- 5 and 200 are dim
 #      blues now rather than pens, but the identity check is the same.
-printf 'B\rbgfx\r10 CLS\r20 COLOR 5\r30 BOX 0,0,479,271,FILL\r40 COLOR 200\r50 PLOT 400,250\r60 PRINT "A";POINT(479,271);",";POINT(400,250);",";POINT(480,0)\r70 END\rRUN\rLIST\rBYE\r' \
+printf 'B\rbgfx\r10 CLS\r20 COLOR 5\r30 BOX 0,0,479,271,FILL\r40 COLOR 200\r50 PIXELW 400,250\r60 PRINT "A";PIXELR(479,271);",";PIXELR(400,250);",";PIXELR(480,0)\r70 END\rRUN\rLIST\rBYE\r' \
     > bgfx6.in
 ../p8xemu -N -i bgfx6.in -c bgfx.img -l 400000000 eeprom.bin > bgfx6.out 2>/dev/null || true
 
@@ -306,7 +306,7 @@ got = out[i+1:out.find(b"\n", i+1)] if i >= 0 else b"?"
 if got != b"A5,200,0":
     bad.append("full-screen probes are %r, want b'A5,200,0'" % got)
     bad.append("  (far corner 479,271 = pen 5; a 200 that survived 8 bpp; 480,0 off-screen = 0)")
-for kw in [b"30 BOX 0,0,479,271,FILL", b"50 PLOT 400,250"]:
+for kw in [b"30 BOX 0,0,479,271,FILL", b"50 PIXELW 400,250"]:
     if out.count(kw) < 2:
         bad.append("LIST did not round-trip %r" % kw.decode())
 if bad:
@@ -387,4 +387,4 @@ if bad:
 print("BASIC-GFX TEST: image ok (placement, colours, header rejects, clipping)")
 PY
 
-echo "BASIC-GFX TEST: PASS (draw, plot, circle, ellipse, rgb, point, gtext, full screen, image)"
+echo "BASIC-GFX TEST: PASS (draw, pixelw, circle, ellipse, rgb, pixelr, gtext, full screen, image)"

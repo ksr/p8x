@@ -164,9 +164,9 @@ module gfx (
   // (stage-10 diet): four LINEs, BOXFILL 0,0,479,271 and ELLIPSE rx=ry
   // cover them, and their walkers' fabric bought the PGC curves/patterns/
   // text. RESET's clear rides S_FILL now.
-  localparam S_IDLE  = 5'd0,  S_PIX   = 4'd1,  S_LINE  = 4'd2,
+  localparam S_IDLE  = 5'd0,  S_PIXW  = 4'd1,  S_LINE  = 4'd2,
              S_FILL  = 4'd5,
-             S_POINT = 4'd9,  S_DONE  = 4'd11,
+             S_PIXR  = 4'd9,  S_DONE  = 4'd11,
              S_ELLI  = 4'd12, S_ELL   = 4'd13, S_ELLR2 = 4'd14,
              S_ELLFI = 4'd15, S_ELLSI = 5'd16,
              // the ellipse error step, serialized through ONE shared
@@ -246,7 +246,7 @@ module gfx (
       px_go   <= 0;
       px_word <= 0;
 
-      // GDATA streams: the IDENT record, then POINT's two bytes (low, then
+      // GDATA streams: the IDENT record, then PIXELR's two bytes (low, then
       // high, then PARKED on high). The cursor advances on rd_stb -- the
       // microcycle that actually reads -- never on the address, which lingers
       // (the ACIA's $FF05 hazard). The IDENT advance was MISSING entirely
@@ -262,7 +262,7 @@ module gfx (
       case (st)
         S_IDLE: ;                              // writes below start a command
 
-        S_PIX:   if (!px_go && !px_busy) st <= S_DONE;
+        S_PIXW:   if (!px_go && !px_busy) st <= S_DONE;
 
         // LINE: integer Bresenham, all eight octants, dy held NEGATIVE -- the
         // exact form in gpu_line(). Endpoints inclusive.
@@ -381,7 +381,7 @@ module gfx (
         end
 
         // gfx_mem has already put the pixel (or 0 for off-screen) in px_out.
-        S_POINT: if (!px_go && !px_busy) begin
+        S_PIXR: if (!px_go && !px_busy) begin
           gdata <= px_out; ptid <= 1'b0;       // GDATA: low byte first
           st <= S_DONE;
         end
@@ -415,7 +415,7 @@ module gfx (
                          wdata == 8'h0A);
             case (wdata)
               8'h01: begin px_x<=gx0; px_y<=gy0; px_pen<=gcol; px_read<=0;
-                           px_go<=1; st<=S_PIX; end
+                           px_go<=1; st<=S_PIXW; end
               8'h02: begin
                 cx <= gx0; cy <= gy0; ex <= gx1; ey <= gy1;
                 dx <= (gx1 > gx0) ? gx1-gx0 : gx0-gx1;
@@ -452,7 +452,7 @@ module gfx (
                 st <= S_ELLI;
               end
               8'h09: begin px_x<=gx0; px_y<=gy0; px_read<=1; px_go<=1;
-                           gidx<=4'd14; st<=S_POINT; end
+                           gidx<=4'd14; st<=S_PIXR; end
               8'hF1: begin                      // RESET
                 // Clears to 0 (black), NOT to the pen it is about to select --
                 // the lesson recorded here still applies, only the clear
