@@ -206,7 +206,7 @@ PY
 # doubles the glyph's rise; a string off the right edge clips, not wraps;
 # TEXT "" is legal and draws nothing; and a typed GTEXT line is rejected
 # AT ENTRY (the retired token no longer dispatches, like PALETTE).
-printf 'B\rbgfx\r10 CLS\r20 COLOR RGB(31,0,0)\r30 MOVE3 10,10,0 : TEXT "A"\r40 COLOR RGB(0,63,0)\r50 MOVE3 40,10,0 : TEXT "a"\r60 COLOR RGB(0,0,31)\r70 TSIZE 512\r80 MOVE3 30,20,0 : TEXT "A"\r90 TSIZE 256\r100 COLOR RGB(31,0,0)\r110 MOVE3 470,80,0 : TEXT "WW"\r120 MOVE3 5,110,0 : TEXT ""\r130 END\rRUN\rLIST\rGTEXT 1,1,1,"X"\rBYE\r' \
+printf 'B\rbgfx\r10 CLS\r20 COLOR RGB(31,0,0)\r30 MOVE3 10,10,0 : TEXT "A"\r40 COLOR RGB(0,63,0)\r50 MOVE3 40,10,0 : TEXT "a"\r60 COLOR RGB(0,0,31)\r70 TSIZE 512\r80 MOVE3 30,20,0 : TEXT "A"\r90 MDIDEN\r100 COLOR RGB(31,0,0)\r110 MOVE3 470,80,0 : TEXT "WW"\r120 MOVE3 5,110,0 : TEXT ""\r130 END\rRUN\rLIST\rGTEXT 1,1,1,"X"\rBYE\r' \
     > bgfx4.in
 ../p8xemu -N -i bgfx4.in -c bgfx.img -l 400000000 -g bgfx4.ppm eeprom.bin > bgfx4.out 2>/dev/null || true
 
@@ -241,6 +241,11 @@ big = cell(59, 38, 18, 20)
 if len(big) <= len(a): bad.append("TSIZE 512 'A' no bigger than 1x (%d vs %d px)" % (len(big), len(a)))
 if not any(j > 10 for (i,j) in big):
     bad.append("TSIZE 512 'A' never rises past the 1x cap - TSIZE ignored")
+# MDIDEN restored 1x (TSIZE COMPOUNDS; 256 is a no-op, not a restore --
+# the first version of this test "restored" with TSIZE 256 and its clip
+# check passed VACUOUSLY on invisible text): the WW must actually draw
+if not any(ink(x, wy) for x in range(468, 480) for wy in range(80, 89)):
+    bad.append("WW never drew at 1x - MDIDEN did not restore the matrix")
 # clipping: nothing wrapped to the left edge rows
 for wy in range(78, 90):
     for x in range(0, 12):
@@ -253,7 +258,7 @@ for wy in range(108, 120):
             bad.append('TEXT "" drew at (%d,wy%d)' % (x,wy)); break
 
 # LIST round-trips the TEXT lines; the dead GTEXT token is rejected at entry
-for kw in [b'30 MOVE3 10,10,0 : TEXT "A"', b'70 TSIZE 512', b'120 MOVE3 5,110,0 : TEXT ""']:
+for kw in [b'30 MOVE3 10,10,0 : TEXT "A"', b'70 TSIZE 512', b'90 MDIDEN', b'120 MOVE3 5,110,0 : TEXT ""']:
     if out.count(kw) < 2:
         bad.append("LIST did not round-trip %r" % kw.decode())
 if b"?SYNTAX ERROR" not in out.split(b"130 END")[-1]:

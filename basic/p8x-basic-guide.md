@@ -263,11 +263,13 @@ card at boot, so `TEXT` works out of the box, drawn card-side in the current
 ```
 
 The anchor is the **baseline-left at the 3D current point** (`MOVE3 x,y,0`
-— the 2D `MOVE` does not feed it), glyphs rising 7 units. `TSIZE n` scales
-(256 = 1×, 512 = 2× …) — and it scales the **anchor** too, the documented
-divergence: under `TSIZE 512`, `MOVE3` coordinates are model units, so
-model (30,20) lands at screen (60,40). `TANGLE` rotates, `TJUST h,v`
-justifies. Codes `$20`–`$5F` have glyphs, lowercase folds to uppercase, and
+— the 2D `MOVE` does not feed it), glyphs rising 7 units. `TSIZE n`
+(256 = 1×) and `TANGLE` **compose into the modeling matrix** like every
+matrix verb — `TSIZE 512` twice is 4×, and `TSIZE 256` is a ×1 no-op,
+*not* a restore: reset with `MDIDEN` (or `RESETF`, which also restores
+the native camera — reissue `PROJCT 0` after it). The anchor transforms
+too: under 2×, `MOVE3` coordinates are model units, so model (30,20)
+lands at screen (60,40). `TJUST h,v` justifies. Codes `$20`–`$5F` have glyphs, lowercase folds to uppercase, and
 off-window strokes clip. BASIC cold-starts with `PROJCT 0` because text
 strokes live at z=0, which the native camera near-clips; a `RESETF`
 restores the native camera, so issue `PROJCT 0` again before text after it.

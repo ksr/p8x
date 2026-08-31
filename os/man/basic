@@ -127,10 +127,14 @@ GRAPHICS
     not drawn). The idiom:
 
         MOVE3 x,y,0 : TEXT s$     baseline-left at (x,y); TSIZE n
-                                  scales (256 = 1x -- NOTE it scales
-                                  the ANCHOR too, the documented
-                                  divergence: model coords), TANGLE
-                                  rotates, TJUST justifies
+                                  scales (256 = 1x) and TANGLE
+                                  rotates -- both COMPOSE into the
+                                  modeling matrix like every matrix
+                                  verb (TSIZE 512 twice is 4x, and
+                                  the ANCHOR scales too: model
+                                  coords). MDIDEN resets the matrix;
+                                  TSIZE 256 is a no-op, NOT a
+                                  restore. TJUST justifies
 
     BASIC cold-starts with PROJCT 0 (text strokes live at z=0, which
     the native camera near-clips); RESETF restores the native camera

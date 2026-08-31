@@ -100,7 +100,11 @@ DESCRIPTION
     TJUST h v (stage 10k) justifies TEXT about the current point:
     h 1/2/3 = left/centre/right, v 1/2/3 = bottom/middle/top. The
     offset is applied in MODEL units before drawing, so TSIZE and
-    TANGLE scale and rotate the justification with the string. TEXTP
+    TANGLE scale and rotate the justification with the string. BOTH
+    are compose ALIASES of MDSCAL/MDROTZ: they COMPOUND per issue
+    (TSIZE 512 twice = 4x; TSIZE 256 = a no-op, not a restore --
+    MDIDEN resets), transform the anchor too, and pivot about MDORG.
+    The PGC's TSIZE was absolute; this divergence is deliberate. TEXTP
     is the SAME engine as TEXT (on the PGC, TEXT was the fixed
     character generator and TEXTP the programmable stroke text -- P8X
     text IS stroke text). TEXT records into command lists and replays

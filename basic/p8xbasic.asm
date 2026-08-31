@@ -5503,7 +5503,7 @@ MHELP:  .byte CR,LF
         .byte CR,LF
         .ascii "  CIRCLE x,y,r[,ry][,FILL]  PIXELW x,y  PIXELR(x,y)  RGB(r,g,b)"
         .byte CR,LF
-        .ascii "  text: MOVE3 x,y,0 then TEXT s$ (TSIZE n scales, 256 = 1x)"
+        .ascii "  text: MOVE3 x,y,0 then TEXT s$ (TSIZE COMPOUNDS, MDIDEN resets)"
         .byte CR,LF
         .ascii "  IMAGE x,y,f$   draw a P8I file, bottom-left at x,y"
         .byte CR,LF

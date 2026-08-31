@@ -316,8 +316,11 @@ BLIT must be lean/funded. GTEXT RETIRED OUTRIGHT 2026-09-01: PGC TEXT
 shadow died with it (COLOR = pure GL). CONTRACT FACTS: TEXT anchors at
 the 3D current point (MOVE3 x,y,0, NOT 2D MOVE) and strokes at z=0 are
 NEAR-CLIPPED by the native camera -> BASIC cold-starts PROJCT 0
-(2D-first; RESETF restores native); TSIZE scales the ANCHOR (absolute-
-TSIZE divergence: model coords). Glyph bank survives RESETF ("a font
+(2D-first; RESETF restores native); TSIZE/TANGLE are COMPOSE ALIASES of MDSCAL/MDROTZ -- they COMPOUND
+per issue (512 twice = 4x; 256 = no-op NOT restore; MDIDEN resets) and
+scale the ANCHOR (model coords). The PGC's TSIZE was absolute; P8X's
+diverges DELIBERATELY. A 'TSIZE restore' bug report is USER-MODEL
+error, not silicon: emulator and RTL agree. Glyph bank survives RESETF ("a font
 is installed, not drawn"). Device door now: IMAGE pixel writes ONLY.
 Debug lesson: a "shell broken by X" symptom was a STALE TEST IMAGE
 (p8xfs put lost by re-cp) -- rebuild the image in the SAME command as
