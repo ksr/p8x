@@ -568,6 +568,16 @@ Nothing below has been built or measured.
       history at a518415..HEAD; re-adding either is a revert plus
       keyword regeneration. Until then: arcs = short DRAW chains at
       4-degree steps, patterned fills = software span masks.
+- [ ] **Restore stage 10e read-back RTL on a successor board
+      (backed out 2026-08-27, entered here 2026-08-30).** FLAGRD /
+      MATXRD / CLRD / CLMOD through the RB FIFO at GLRB/$FF52 -- the
+      full implementation shipped sim-complete in c0931f0 and the
+      EMULATOR AND BASIC SIDES ARE STILL LIVE (they are the golden
+      model; only the card RTL was reverted, ~1,578 LUT4). After the
+      2026-08-30 removals the card sits at 18,065 (~1,100 under the
+      ~19,150 cliff), so 10e at ~1,578 still does NOT fit -- it lands
+      ~19,650. Re-adding is a revert of the RTL back-out; 41 BSRAM
+      blocks remain free for it.
 - [ ] **Simple graphics editor, a C program (2026-08-29, user).** An
       on-target `draw` command (os/commands, //#use gfx): pick a tool
       and colour, place points/lines/boxes/circles/fills on the panel,
