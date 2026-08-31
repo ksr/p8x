@@ -1924,6 +1924,29 @@ int main(int argc,char**argv){
               }
               fprintf(stderr,"[bridge: graphics card protocol v%d on %s]\n",r[4],bdev);
             }
+            /* GL-WALKER RESYNC (2026-09-01, found the hard way): the
+               zeros above resync the BRIDGE framing, but the WALKER
+               keeps its own stream state across host sessions -- a
+               session killed between an opcode and its parameters
+               leaves the walker waiting, and the next session's first
+               bytes get EATEN as the phantom command's operands (seen
+               as GLSTAT busy stuck 1 + an error FIFO full of err1).
+               One BURST of 64 zero GLDATA bytes completes any phantom
+               (zeros are harmless: operands of the phantom, then err1
+               skips), then the error FIFO is drained clean. */
+            { uint8_t frame[66]; int k;
+              frame[0]=0x01; frame[1]=64;
+              memset(frame+2,0,64);
+              if(write(bridge_fd,frame,66)==66 && bridge_recv1()==0x06){
+                  for(k=0;k<24;k++){            /* drain GLERR (reg $33) */
+                      uint8_t rd=0x40|0x33, e;
+                      if(write(bridge_fd,&rd,1)!=1) break;
+                      e=bridge_recv1();
+                      if(e==0) break;
+                  }
+              } else fprintf(stderr,"p8xemu: bridge GL resync burst "
+                                    "not acked -- card may be wedged\n");
+            }
         }
         else if(!strcmp(argv[i],"-g")) gdump=argv[++i];   /* write the display as a PPM */
         else if(!strcmp(argv[i],"-G")) gascii=1;          /* ... and/or as text to stderr */

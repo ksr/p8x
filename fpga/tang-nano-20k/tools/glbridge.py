@@ -105,13 +105,24 @@ class Bridge:
 
     def resync(self):
         """Recover a card left mid-command by a dead host: 66 zeros
-        complete any dangling operand/burst (noise into GLDATA at
-        worst -- drain_errors after), then flush the reply junk."""
+        complete any dangling operand/burst at the BRIDGE-framing
+        level (noise into GLDATA at worst), flush the reply junk --
+        then flush the GL WALKER too (2026-09-01): a session killed
+        between an opcode and its parameters leaves the walker eating
+        the next session's bytes as phantom operands (GLSTAT busy
+        stuck + err1 flood). One 64-zero burst completes any phantom;
+        the error FIFO is drained clean after."""
         self.x.send(bytes(66))
         time.sleep(0.1)
         try:
             while self.x.recv(1):
                 pass
+        except Exception:
+            pass
+        try:
+            self.burst(bytes(64))
+            time.sleep(0.1)
+            self.drain_errors()
         except Exception:
             pass
 
