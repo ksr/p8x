@@ -575,6 +575,18 @@ Nothing below has been built or measured.
       FIFO, ~50-80 LUT); (c) the card-side blit (the faster-image-
       transfer item) for IMAGE/GTEXT-class raw speed; then (d) the
       $FF20 window can close for ~100-150 LUT net of the read verb.
+- [ ] **Burn the font into the card (successor board; 2026-09-01,
+      user).** Today the OS streams /FONT.GL to the glyph bank at boot
+      (FONTLD) -- zero fabric cost, user-replaceable font, but the card
+      has no text STANDALONE (bare monitor, or a different host
+      machine driving the card). The PGC-authentic alternative: a
+      BSRAM ROM holding the font stream plus a power-up init FSM that
+      replays it into the glyph slots (SDRAM powers up undefined, so
+      the bitstream cannot hold the glyphs directly). BSRAM is
+      abundant (41/46 blocks free); the copier FSM is LUTs we do NOT
+      have at today's ~19,150 placement cliff -- hence successor
+      board. Keep /FONT.GL as the OVERRIDE path either way (a file
+      swap = a new typeface; TDEFIN = custom glyphs).
 - [ ] **Restore AREAPT and ARC/SECTOR on a successor board (2026-08-30,
       user-approved removals).** Two cuts bought placement headroom
       against the chip's PRACTICAL cliff (~19,150-19,250 LUT4, well
