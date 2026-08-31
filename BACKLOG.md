@@ -513,13 +513,21 @@ Nothing below has been built or measured.
       on-target IMAGE draws pixel-by-pixel through the register window
       (563 cycles/px asm; the mandrill ~1.4 s). USER REPORTS the
       current BASIC and C IMAGE are noticeably SLOWER than they used
-      to be -- measure before fixing (suspects: the stage-10-diet
-      retirement of the device CIRCLE/BOX/CLS shifted nothing here,
-      but the GL walker now masters the device between commands, so
-      per-pixel device writes may be paying gm-arbitration waits that
-      the pre-GL card never had; on the board, bridge round-trips per
-      pixel dominate either way). Fix rides the rungs below --
-      the card-side BLIT makes per-pixel IMAGE obsolete outright. Candidate rungs, mostly
+      to be. MEASURED 2026-09-01 (emulator cycle brackets, no board
+      needed): BASIC IMAGE of the mandrill is 39.09M cycles TODAY and
+      39.09M cycles at 66fe59e (pre-migration) -- byte-for-byte the
+      same CPU cost (~596 c/px), so the CODE did not regress. The
+      regression is ARCHITECTURAL: the card arc moved the CPU off the
+      chip, so what used to be on-chip register writes now cross the
+      115200 bridge -- ~8-10 wire bytes per pixel (colour pair, x,
+      GCMD) PLUS a GSTAT poll round-trip per pixel = tens of seconds
+      for a full-screen image where the on-chip era took ~1.4 s. The
+      fix is therefore exactly the rungs below (raise the UART;
+      card-side BLIT streaming raw pixels in BURST frames makes
+      per-pixel IMAGE obsolete outright) -- no point tuning the
+      per-pixel loop. Benchmark hook added for this: the emulator's
+      -L LED trace is cycle-stamped now, so POKE 65282,n brackets
+      time any code span. Candidate rungs, mostly
       independent: (a) raise the UART -- the BL616 USB-serial on the
       Tang Nano runs 2 Mbaud+; bridge DIV is one parameter on each side
       and protocol v1 is rate-agnostic; (b) a card-side BLIT command:

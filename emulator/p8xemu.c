@@ -1783,8 +1783,9 @@ static void memwr(uint16_t ad,uint8_t v){
     if(ad<IOBASE){ ram[ad-RAMBASE]=v; return; }
     if(bridge_fd>=0 && bridge_card(ad)){ bridge_wr(ad,v); return; }
     if(ad==0xFF02){                                          /* LEDs */
-        if(led_trace && v!=leds)
-            fprintf(stderr,"[LED $FF02] $%02X  %c%c%c%c%c%c%c%c\n", v,
+        if(led_trace && v!=leds)                 /* cycle-stamped: POKE 65282,n
+                                                    brackets time a code span */
+            fprintf(stderr,"[LED $FF02 @%llu] $%02X  %c%c%c%c%c%c%c%c\n", cycles, v,
                 (v&0x80)?'*':'.',(v&0x40)?'*':'.',(v&0x20)?'*':'.',(v&0x10)?'*':'.',
                 (v&0x08)?'*':'.',(v&0x04)?'*':'.',(v&0x02)?'*':'.',(v&0x01)?'*':'.');
         leds=v; return;
