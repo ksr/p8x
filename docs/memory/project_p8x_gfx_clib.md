@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: eb839e7b-2183-47af-84cd-a059555f72b5
-  modified: 2026-08-31T00:14:23.485Z
+  modified: 2026-08-31T05:10:07.963Z
 ---
 
 SHIPPED 2026-08-19, commit c29993f (branch sdram-framebuffer): os/commands/
@@ -284,4 +284,14 @@ BASIC statement (appended token $F9). man basic marks DEVICE vs PGC
 statement families. USER DIRECTION: migrate BASIC's category-2 drawing
 (LINE/BOX/CIRCLE/CLS/PIXELW) onto GL, keep the DMA-gap pair
 (PIXELR/IMAGE) + GTEXT device-side; endgame = single-interface card
-via a GL pixel-read verb + card-side blit (BACKLOG'd).
+via a GL pixel-read verb + card-side blit (BACKLOG'd). BASIC MIGRATION
+SHIPPED 2026-08-31: LINE/BOX/CIRCLE/CLS/PIXELW emit GL, WINDOW-space
+(user chose y-up redefinition over screen-compat); BASIC establishes
+the full-screen window at cold start AND after native RESETF because
+the raw port's power-up/RESETF window is DEGENERATE (all-zero, draws
+nothing -- the bug class to remember); PRMSH (BASRAM+$FB) shadows
+PRMFIL for BOX/CIRCLE force+restore; BXS moved $E6->$EA (GLPUT/GLVSEP
+scratch GLTMP $E7/GLFST $E9 are LIVE during migrated statements).
+Bridge protocol: GL bytes cross as BURST frames into the card FIFO,
+device regs as (idx,val) writes at $FFxx-$20 indexes. C lib_gfx still
+device-side -- next migration candidate.

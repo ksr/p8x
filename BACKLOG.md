@@ -543,20 +543,21 @@ Nothing below has been built or measured.
       fabric copy-rect (a real blitter rung, also what image GRAB
       wants). (b) is the cheap win. Keyboard stays the serial RX.
       Fits the FPGA-CPU era (idea 2): CPU and console on one board.
-- [ ] **Move BASIC's remaining device drawing onto the PGC interface
-      (2026-08-30, user).** The naming epoch landed first (PIXELW/
-      PIXELR; POINT freed for the GL verb). Next: reimplement the
-      category-2 statements (LINE, BOX, CIRCLE, CLS, PIXELW) as GL
-      emission so BASIC's DRAWING all flows through $FF50, leaving the
-      device door only the DMA-gap pair (PIXELR read, IMAGE write).
-      Decisions on the way in: the screen-vs-window y-flip (per-call
-      flip vs redefining the statements as window-space), and PIXELW's
-      speed (a GL MOVE+POINT per pixel is ~20-40x the raw path -- fine
-      for singles, wrong for loops; IMAGE stays raw regardless). End
-      state enables the single-interface card: add a GL pixel-read
-      verb (IMAGER/PIXRD through the RB FIFO, ~50-80 LUT) and the
-      card-side blit (the faster-image-transfer item), and the $FF20
-      window can close for ~100-150 LUT net of the read verb.
+- [ ] **Single-interface card: what remains after the BASIC migration
+      (2026-08-31).** DONE: the category-2 statements (LINE, BOX,
+      CIRCLE, CLS, PIXELW) emit GL -- user-decided WINDOW-space
+      semantics (y up), full-screen window established by BASIC at
+      cold start and after the native RESETF (the raw port's is
+      DEGENERATE), PRMFIL shadowed at PRMSH so BOX/CIRCLE restore it,
+      everything records inside CLBEG/CLEND, bridge-proven (BURST
+      frames on the wire). BASIC's device door is down to the DMA gap:
+      PIXELR() read, IMAGE write, GTEXT's rasterizer. REMAINING for
+      the single-interface end state: (a) the C gfx library (lib_gfx
+      C+asm twins) still drives $FF20 -- same migration decision
+      there; (b) a GL pixel-read verb (IMAGER/PIXRD through the RB
+      FIFO, ~50-80 LUT); (c) the card-side blit (the faster-image-
+      transfer item) for IMAGE/GTEXT-class raw speed; then (d) the
+      $FF20 window can close for ~100-150 LUT net of the read verb.
 - [ ] **Restore AREAPT and ARC/SECTOR on a successor board (2026-08-30,
       user-approved removals).** Two cuts bought placement headroom
       against the chip's PRACTICAL cliff (~19,150-19,250 LUT4, well

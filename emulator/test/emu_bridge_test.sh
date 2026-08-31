@@ -71,16 +71,25 @@ def seen(idx, val):
 ok = True
 if "80" not in out:  print("FAIL: GID0 PEEK missing");  ok = False
 if "71" not in out:  print("FAIL: GLID PEEK missing");  ok = False
-# LINE 3,4,5,6: coord registers then GCMD=2, all on the wire
-for idx, val in ((0x00, 3), (0x01, 4), (0x02, 5), (0x03, 6), (0x05, 2)):
-    if not seen(idx, val):
-        print("FAIL: write idx %02X val %d never crossed the wire" % (idx, val)); ok = False
+# LINE 3,4,5,6 is GL now (migrated 2026-08-30): the bytes cross as
+# BURST frames into the card's GL FIFO, not as register writes. The
+# stream must hold MOVE 3,4 DRAW 5,6 verbatim, and BASIC's cold-start
+# full-screen WINDOW/VWPORT pair (B3/B2) and the GL COLOR bridge (06)
+# must be in there too.
+fifo = bytes(mock.fifo)
+if bytes([0x10, 3, 0, 4, 0, 0x28, 5, 0, 6, 0]) not in fifo:
+    print("FAIL: GL MOVE/DRAW byte stream not in the FIFO: %r" % fifo); ok = False
+for b in (0xB3, 0xB2, 0x06):
+    if b not in fifo:
+        print("FAIL: GL byte %02X never crossed the wire" % b); ok = False
 # COLOR wrote the gfx pen low byte over the bridge (1234 & 255 = 210)
 if not seen(0x04, 210):
     print("FAIL: COLOR low byte missing"); ok = False
-# POINT: GCMD 9 then two GDATA reads happened (mock GDATA reads return 0)
-if not seen(0x05, 9):
-    print("FAIL: POINT command missing"); ok = False
+# PIXELR(3,4): the DEVICE door -- coords then GCMD 9, then two GDATA
+# reads (mock GDATA reads return 0)
+for idx, val in ((0x00, 3), (0x01, 4), (0x05, 9)):
+    if not seen(idx, val):
+        print("FAIL: write idx %02X val %d never crossed the wire" % (idx, val)); ok = False
 sys.exit(0 if ok else 1)
 EOF
-echo "EMU-BRIDGE TEST: PASS (BASIC drove a mock card over the pty: identity PEEKs, LINE/COLOR/POINT register traffic all on the wire)"
+echo "EMU-BRIDGE TEST: PASS (BASIC drove a mock card over the pty: identity PEEKs, GL LINE bytes, COLOR/PIXELR device traffic all on the wire)"

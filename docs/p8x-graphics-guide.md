@@ -34,10 +34,12 @@ you). Numbers separate on spaces or commas; `man gl` is the verb card.
 
 ## 2. Coordinate spaces — the one thing to internalize
 
-- **Screen space**: 480x272, origin top-left, y DOWN. BASIC's own
-  statements (PIXELW/LINE/BOX/CIRCLE/GTEXT and the PIXELR() read) and
-  the C gfx library
-  live here, unclipped-but-discarded at the edges.
+- **Screen space**: 480x272, origin top-left, y DOWN. The device door
+  ($FF20) lives here, unclipped-but-discarded at the edges: BASIC's
+  GTEXT/IMAGE and the PIXELR() read, and the C gfx library. (BASIC's
+  PIXELW/LINE/BOX/CIRCLE/CLS moved to WINDOW space 2026-08-30 — they
+  emit GL now; under BASIC's default full-screen window, window y is
+  271 - screen y.)
 - **Window space**: the GL 2D world, y UP. `WINDOW x1 x2 y1 y2` (PGC
   order: both x's first!) declares the world extent; `VWPORT x1 x2 y1
   y2` maps it to screen pixels, flipping y. GL 2D primitives

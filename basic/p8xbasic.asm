@@ -47,6 +47,10 @@ GLSTATR = $FF51          ; bit7 = FIFO full (wait before pushing)
 GLRBR   = $FF52          ; read-back FIFO pop (stage 10e; GLSTAT bit0 = has byte)
 GLIDR   = $FF54          ; reads 'G' when the GL engine is fitted
 GCHI   = 9                   ; a pair's high byte = its low address + GCHI
+; BASIC's own drawing migrated onto the GL port 2026-08-30: of the device
+; commands only PIXELW/BOXFILL (GTEXT's rasterizer) and PIXELR (the read
+; function) are still issued from here. GC_LINE/GC_ELL/GC_ELLF stay
+; documented -- the silicon keeps them for the GL walker's internal use.
 GC_PIXW = 1
 GC_LINE = 2
 GC_BOXF = 4
@@ -170,13 +174,19 @@ GPENH  = BASRAM+$FA          ; ...and its high byte, now a pen is a whole RGB565
                              ;   and a GTEXT would have corrupted the shadow
                              ;   the next CLS restores. $FA-$FF are the real
                              ;   free run; this takes the first byte.
+PRMSH  = BASRAM+$FB          ; shadow of the GL PRMFIL flag (write-only on the
+                             ;   card): the native PRMFIL statement records it,
+                             ;   RESETF clears it, and BOX/CIRCLE restore it
+                             ;   after forcing their own fill mode. A GL "PF 1"
+                             ;   STRING bypasses the shadow -- documented.
 RGBH   = BASRAM+$F3          ; RGB(): the packed high byte, held across the
                              ;   green and blue argument expressions. $F3 IS
                              ;   free (GTTMP is one byte at $F2), and scratch
                              ;   here is safe: nothing else can run inside an
                              ;   RGB() argument expression.
 GCTMP  = BASRAM+$DE          ; GEXEC: the command byte, held across GWAIT
-GELL   = BASRAM+$DF          ; CIRCLE: 1 once a second radius made it an ellipse
+                             ; ($DF free: was GELL, gone with CIRCLE's
+                             ;   2026-08-30 migration onto GL ELIPSE)
 ; GTEXT working set. It rasterises glyphs itself (see DOGTEXT), so unlike the
 ; other statements it needs real state. $E0-$E2 is the tail of the same free run
 ; as the block above; $E6-$F1 is the next one ($E3 JUMPF, $E4 JUMPADDR are two
@@ -230,16 +240,18 @@ GLMETA = BASRAM+$E1          ;   (GTEXT's scratch block -- a GL verb and a
 GLCNT  = BASRAM+$E2          ;   GTEXT never execute at once)
 GLDIM  = BASRAM+$E8          ;   POLY*: words per vertex (2 or 3)
 GLFST  = BASRAM+$E9          ;   1 until the first argument is parsed
-GSADR2 = BASRAM+$EE          ; bx_st: target register in flight
-BXS    = BASRAM+$E6          ; GCOORDS shadow: x0,y0,x1,y1 lo/hi (8) --
-                             ;   BOX's outline draws four LINEs from it
-                             ;   (the device BOX command is retired).
-                             ;   SHARES the GTEXT/GL-verb scratch run
-                             ;   $E6..$EE: one statement at a time, and
-                             ;   nothing here is live between statements.
-                             ;   (First homed at $F2 -- which ALIASED
-                             ;   SEED/POKEA/SPSAV: every LINE wiped the
-                             ;   saved SP and BYE reset the machine.)
+BXS    = BASRAM+$EA          ; BOX/CIRCLE argument shadow: 4 int16 lo/hi
+                             ;   (8 bytes, $EA..$F1) -- buffered because
+                             ;   the PRMFIL byte must be emitted before
+                             ;   them. SHARES GTEXT/IMAGE's transient run:
+                             ;   one statement at a time, nothing live
+                             ;   between statements. NOT $E6: the migrated
+                             ;   emission runs GLPUT/GLVSEP, whose GLTMP
+                             ;   ($E7) and GLFST ($E9) are LIVE during the
+                             ;   statement -- and never $F2+ (the first
+                             ;   home ALIASED SEED/POKEA/SPSAV: every LINE
+                             ;   wiped the saved SP and BYE reset the
+                             ;   machine).
 
 ; keyword tokens (>= $80 so they never collide with text or the 00 terminator)
 TOK_PRINT = $80
@@ -369,6 +381,14 @@ bs_go:
         STA  GPENH           ;   clears GCOLH, so the order is load-bearing.
         STA  GCOL
         STA  GCOLH
+        LDA  #0              ; PRMFIL shadow: the card powers up outline
+        STA  PRMSH
+        LDA  GLIDR           ; a GL engine? establish BASIC's full-screen
+        LDB  #'G'            ;   window -- the raw port powers up with a
+        CMP                  ;   DEGENERATE one that draws nothing (glwin)
+        JNZ  bnr_ng
+        JSR  glwin
+bnr_ng:
         LDP1 #BANNER
         JSR  PUTS
 
@@ -1306,49 +1326,101 @@ GARG:   STA  GSTGT
         JMP  GSTORE
 g_err:  JMP  SYNERR
 
-; GCOORDS — the shared "x0,y0,x1,y1" argument list of LINE and BOX. The first
-; coordinate has no leading comma; the other three do.
-GCOORDS: JSR EVAL
-        LDA  #<GX0
-        JSR  GSTORE
-        JSR  gcsh0
-        LDA  #<GY0
-        JSR  GARG
-        JSR  gcsh2
-        LDA  #<GX1
-        JSR  GARG
-        JSR  gcsh4
-        LDA  #<GY1
-        JSR  GARG
-        LDA  RESULT                 ; shadow y1 (BOX reads these back --
-        STA  BXS+6                  ;   the device registers are
-        LDA  RESULT+1               ;   write-only)
-        STA  BXS+7
+; ---- the MIGRATED drawing statements (2026-08-30) -----------------------
+; LINE/BOX/CIRCLE/CLS/PIXELW now EMIT GL: window space (y up), transformed
+; by WINDOW/VWPORT, honouring LINPAT/LINFUN, RECORDING inside CLBEG/CLEND
+; like every GL statement, synchronous via the glv_dn drain. The $FF20
+; device door keeps only PIXELR()/IMAGE/GTEXT (the DMA gap); PIXELR()
+; stays a SCREEN-space read -- under the default window, screen y is
+; 271 - window y.
+
+; glchk -- graphics present AND the GL engine, the DOGLV way (GNODEV
+; restores SP itself, so jumping there from inside a JSR is safe).
+; Also primes GLFST for the GLVSEP argument walk.
+glchk:  JSR  GCHECK
+        LDA  GLIDR
+        LDB  #'G'
+        CMP
+        JNZ  GNODEV
+        LDA  #1
+        STA  GLFST
         RTS
-gcsh0:  LDA  RESULT
+
+; glwin -- establish the FULL-SCREEN window and viewport. The raw port
+; powers up (and RESETF resets to) a DEGENERATE all-zero window that
+; draws nothing until a program speaks up -- correct for the PGC
+; stream, wrong for "10 CLS : 20 LINE ...". BASIC therefore emits this
+; pair at cold start and again after the native RESETF statement. A GL
+; "RF" STRING keeps the raw semantics -- documented in man basic.
+glwin:  LDP1 #glwtab
+        LDA  #18
+        STA  GLCNT
+glw_l:  LDA  (P1)+
+        JSR  GLPUT
+        LDA  GLCNT
+        DEC
+        STA  GLCNT
+        JNZ  glw_l
+        RTS
+glwtab: .byte $B3,$00,$00,$DF,$01,$00,$00,$0F,$01   ; WINDOW 0,479,0,271
+        .byte $B2,$00,$00,$DF,$01,$00,$00,$0F,$01   ; VWPORT 0,479,0,271
+
+; GLPW -- one int16 argument from RESULT to the GL FIFO, little-endian
+GLPW:   LDA  RESULT
+        JSR  GLPUT
+        LDA  RESULT+1
+        JMP  GLPUT
+
+; bxw -- one shadowed int16 (P1 -> lo,hi, both consumed) to the FIFO
+bxw:    LDA  (P1)+
+        JSR  GLPUT
+        LDA  (P1)+
+        JMP  GLPUT
+
+; bx_pf -- emit PRMFIL <A>, RAW: deliberately not through the PRMSH
+; capture, because BOX/CIRCLE's temporary flips are not the program's
+; setting (bx_rs puts the program's PRMSH back afterwards)
+bx_pf:  STA  GLDIM
+        LDA  #$E0
+        JSR  GLPUT
+        LDA  GLDIM
+        JMP  GLPUT
+
+; gxsh0/2/4 -- one parsed coordinate into its BXS shadow slot
+gxsh0:  LDA  RESULT
         STA  BXS
         LDA  RESULT+1
         STA  BXS+1
         RTS
-gcsh2:  LDA  RESULT
+gxsh2:  LDA  RESULT
         STA  BXS+2
         LDA  RESULT+1
         STA  BXS+3
         RTS
-gcsh4:  LDA  RESULT
+gxsh4:  LDA  RESULT
         STA  BXS+4
         LDA  RESULT+1
         STA  BXS+5
         RTS
 
-; LINE x0,y0,x1,y1
+; LINE x0,y0,x1,y1 -- GL: MOVE then DRAW. Nothing needs buffering, so
+; the bytes go out as the arguments parse.
 ; Named DOGLINE, not DOLINE: DOLINE is already the program-line parser.
 DOGLINE: INP2                       ; consume the LINE token
-        JSR  GCHECK
-        JSR  GCOORDS
-        LDA  #GC_LINE
-        JSR  GEXEC
-        RTS
+        JSR  glchk
+        LDA  #$10                   ; MOVE
+        JSR  GLPUT
+        JSR  GLVSEP
+        JSR  GLPW                   ; x0
+        JSR  GLVSEP
+        JSR  GLPW                   ; y0
+        LDA  #$28                   ; DRAW
+        JSR  GLPUT
+        JSR  GLVSEP
+        JSR  GLPW                   ; x1
+        JSR  GLVSEP
+        JSR  GLPW                   ; y1
+        JMP  glv_dn
 
 ; COLOR c  |  COLOR r,g,b -- the pen is a whole RGB565 colour. One number is
 ; a PACKED colour (RGB() builds one, and POINT returns one, so C=POINT(X,Y):
@@ -1404,12 +1476,25 @@ dc_st:  LDA  RESULT
 dc_rts: RTS
 
 ; BOX x0,y0,x1,y1 [,FILL | ,NOFILL]   -- outline unless FILL is given.
+; GL: PRMFIL, MOVE, RECT, PRMFIL restored from PRMSH. The coordinates
+; buffer in BXS because the PRMFIL byte must precede them and the
+; FILL/NOFILL decision arrives last.
 ; NOFILL has to be a real keyword, not just the default: with FILL tokenised and
 ; NOFILL not, CRUNCH would match FILL *inside* the word NOFILL and a request for
 ; an outline would silently draw a solid box.
 DOBOX:  INP2
-        JSR  GCHECK
-        JSR  GCOORDS
+        JSR  glchk
+        JSR  GLVSEP
+        JSR  gxsh0                  ; x0
+        JSR  GLVSEP
+        JSR  gxsh2                  ; y0
+        JSR  GLVSEP
+        JSR  gxsh4                  ; x1
+        JSR  GLVSEP
+        LDA  RESULT                 ; y1
+        STA  BXS+6
+        LDA  RESULT+1
+        STA  BXS+7
         JSR  SKIPSP
         LDA  (P2)
         LDB  #','
@@ -1425,122 +1510,74 @@ DOBOX:  INP2
         CMP
         JNZ  bx_err
         INP2
-bx_out: LDA  #<GY1                 ; the device BOX outline is retired:
-        LDP1 #BXS+2                 ;   four LINEs from the shadows.
-        JSR  bx_st                  ; top: y1 <- y0  ((x0,y0)-(x1,y0))
-        LDA  #GC_LINE
-        JSR  GEXEC
-        LDA  #<GY0                  ; bottom: y0 <- y1, y1 <- y1
-        LDP1 #BXS+6
-        JSR  bx_st
-        LDA  #<GY1
-        LDP1 #BXS+6
-        JSR  bx_st
-        LDA  #GC_LINE
-        JSR  GEXEC
-        LDA  #<GX1                  ; left: x1 <- x0, y0 <- y0
-        LDP1 #BXS
-        JSR  bx_st                  ;   (y1 still y1)
-        LDA  #<GY0
-        LDP1 #BXS+2
-        JSR  bx_st
-        LDA  #GC_LINE
-        JSR  GEXEC
-        LDA  #<GX0                  ; right: x0 <- x1, x1 <- x1
-        LDP1 #BXS+4
-        JSR  bx_st
-        LDA  #<GX1
-        LDP1 #BXS+4
-        JSR  bx_st
-        LDA  #GC_LINE
-        JSR  GEXEC
-        RTS
-
-; one shadowed 16-bit value -> a device coordinate pair. A = the pair's
-; low register ($FF page), P1 -> the shadow (lo, hi). The RESULT detour
-; lets GSTORE do the low-then-high dance it already knows.
-bx_st:  STA  GSADR2
-        LDA  (P1)+
-        STA  RESULT
-        LDA  (P1)
-        STA  RESULT+1
-        LDA  GSADR2
-        JMP  GSTORE
+bx_out: LDA  #0                     ; PRMFIL 0: outline
+        JMP  bx_go
 bx_fill: INP2
-        LDA  #GC_BOXF
-        JSR  GEXEC
-        RTS
+        LDA  #1                     ; PRMFIL 1: filled
+bx_go:  JSR  bx_pf
+        LDA  #$10                   ; MOVE x0 y0
+        JSR  GLPUT
+        LDP1 #BXS
+        JSR  bxw
+        JSR  bxw
+        LDA  #$34                   ; RECT x1 y1
+        JSR  GLPUT
+        JSR  bxw
+        JSR  bxw
+bx_rs:  LDA  #$E0                   ; PRMFIL back to the program's setting
+        JSR  GLPUT
+        LDA  PRMSH
+        JSR  GLPUT
+        JMP  glv_dn
 bx_err: JMP  SYNERR
 
-; CLS — clear to the BACKGROUND (pen 0), not to the current pen, which is what
-; anyone typing CLS expects. The device fills with whatever GCOL holds, and GCOL
-; is write-only, so the pen is restored from the GPEN shadow afterwards.
+; CLS — clear to the BACKGROUND, which is what anyone typing CLS expects.
+; GL: FLOOD 0,0,0 erases the DRAW page across the current viewport (the
+; full screen by default). FLOOD carries its own colour, so the old
+; write-only-GCOL pen save/restore dance is gone with the device path.
 DOCLS:  INP2
-        JSR  GCHECK
+        JSR  glchk
+        LDA  #$07                   ; FLOOD r g b
+        JSR  GLPUT
         LDA  #0
-        STA  GCOL
-        STA  RESULT                 ; the device CLS is retired (stage-10
-        STA  RESULT+1               ;   diet): BOXFILL 0,0-479,271 is the
-        LDA  #<GX0                  ;   same pixels through the same fill
-        JSR  GSTORE
-        LDA  #<GY0
-        JSR  GSTORE
-        LDA  #$DF                   ; 479 = $01DF
-        STA  RESULT
-        LDA  #$01
-        STA  RESULT+1
-        LDA  #<GX1
-        JSR  GSTORE
-        LDA  #$0F                   ; 271 = $010F
-        STA  RESULT
-        LDA  #<GY1
-        JSR  GSTORE
-        LDA  #GC_BOXF
-        JSR  GEXEC
-        JSR  GWAIT                  ; the pen restore must not overtake the clear
-        LDA  GPEN
-        STA  GCOL                   ; low first -- clears GCOLH
-        LDA  GPENH
-        STA  GCOLH
-        RTS
+        JSR  GLPUT
+        LDA  #0
+        JSR  GLPUT
+        LDA  #0
+        JSR  GLPUT
+        JMP  glv_dn
 
-; PIXELW x,y -- a single pixel in the current pen (device write; the
-; read twin is the PIXELR() function).
+; PIXELW x,y -- GL: MOVE then POINT, window space, current pen. (The
+; read twin PIXELR() stays a device SCREEN-space read: under the
+; default window, screen y = 271 - window y.)
 DOPIXW: INP2
-        JSR  GCHECK
-        JSR  EVAL
-        LDA  #<GX0
-        JSR  GSTORE
-        LDA  #<GY0
-        JSR  GARG
-        LDA  #GC_PIXW
-        JSR  GEXEC
-        RTS
+        JSR  glchk
+        LDA  #$10                   ; MOVE
+        JSR  GLPUT
+        JSR  GLVSEP
+        JSR  GLPW                   ; x
+        JSR  GLVSEP
+        JSR  GLPW                   ; y
+        LDA  #$08                   ; POINT
+        JSR  GLPUT
+        JMP  glv_dn
 
-; CIRCLE x,y,r [,FILL | ,NOFILL] — centre and radius, outline unless filled.
-; The radius is a SCALAR (GPARM), not a coordinate, so it does not go through
-; GSTORE: there is no high-byte partner to clear.
+; CIRCLE x,y,r [,ry] [,FILL | ,NOFILL] — centre and radius, outline unless
+; filled. GL: PRMFIL, MOVE, ELIPSE (rx=ry unless a second radius arrives),
+; PRMFIL restored from PRMSH. The radii map through the window->viewport
+; scale like every GL curve; a negative radius is GL error 2.
 DOCIRC: INP2
-        JSR  GCHECK
-        LDA  #0
-        STA  GELL                   ; a circle until a second radius says otherwise
-        JSR  EVAL
-        LDA  #<GX0
-        JSR  GSTORE
-        LDA  #<GY0
-        JSR  GARG
-        JSR  SKIPSP                 ; ',' then the (x-)radius
-        LDA  (P2)
-        LDB  #','
-        CMP
-        JNZ  ci_err
-        INP2
-        JSR  EVAL
-        LDA  RESULT
-        STA  GPARM
-        STA  GPARM2                 ; the device CIRCLE is retired (stage-10
-                                    ; diet): a circle IS the ellipse rx=ry,
-                                    ; so the one radius primes both
+        JSR  glchk
+        JSR  GLVSEP
+        JSR  gxsh0                  ; x
+        JSR  GLVSEP
+        JSR  gxsh2                  ; y
+        JSR  GLVSEP
+        JSR  gxsh4                  ; r -> rx, and ry until a second
+        LDA  RESULT                 ;   radius says otherwise
+        STA  BXS+6
+        LDA  RESULT+1
+        STA  BXS+7
 ; What follows a comma here is EITHER the modifier or a second radius, and the
 ; token tells them apart: FILL/NOFILL are keywords (>= $80), anything else starts
 ; an expression. That is why NOFILL had to be a real keyword rather than merely
@@ -1561,9 +1598,9 @@ DOCIRC: INP2
         JZ   ci_nof
         JSR  EVAL                   ; a second radius -> ellipse
         LDA  RESULT
-        STA  GPARM2
-        LDA  #1
-        STA  GELL
+        STA  BXS+6
+        LDA  RESULT+1
+        STA  BXS+7
         JSR  SKIPSP                 ; ... and it may still take a modifier
         LDA  (P2)
         LDB  #','
@@ -1579,12 +1616,21 @@ DOCIRC: INP2
         CMP
         JNZ  ci_err
 ci_nof: INP2
-ci_out: LDA  #GC_ELL                ; circle or ellipse: ONE rasterizer now
+ci_out: LDA  #0                     ; PRMFIL 0: outline
         JMP  ci_go
 ci_fill: INP2
-        LDA  #GC_ELLF
-ci_go:  JSR  GEXEC
-        RTS
+        LDA  #1                     ; PRMFIL 1: filled
+ci_go:  JSR  bx_pf
+        LDA  #$10                   ; MOVE x y
+        JSR  GLPUT
+        LDP1 #BXS
+        JSR  bxw
+        JSR  bxw
+        LDA  #$39                   ; ELIPSE rx ry
+        JSR  GLPUT
+        JSR  bxw
+        JSR  bxw
+        JMP  bx_rs                  ; PRMFIL restore + the drain
 ci_err: JMP  SYNERR
 
 ; PALETTE is gone: there is no palette to write. An old tokenised program's
@@ -1871,7 +1917,14 @@ glv_hi: LDB  #>GLVTAB
         STA  GLMETA
         LDA  GLOP
         JSR  GLPUT                  ; the opcode
-        LDA  GLMETA
+        LDA  GLOP
+        LDB  #$04                   ; RESETF: the card's PRMFIL goes home,
+        CMP                         ;   so the shadow follows it -- and the
+        JNZ  glv_nr                 ;   full-screen window comes back (the
+        LDA  #0                     ;   card resets it DEGENERATE; see glwin)
+        STA  PRMSH
+        JSR  glwin
+glv_nr: LDA  GLMETA
         LDB  #$FF                   ; meta $FF: the string statement (TEXT)
         CMP                         ;   -- gen_glkw marks it; the hex shape
         JZ   glv_str                ;   is opcode, count, then the chars
@@ -1892,7 +1945,13 @@ glv_bl: LDA  GLCNT
         DEC
         STA  GLCNT
         JSR  GLVSEP
+        LDA  GLOP
+        LDB  #$E0                   ; PRMFIL: shadow the program's setting
+        CMP                         ;   (BOX/CIRCLE restore from it)
+        JNZ  glv_np
         LDA  RESULT
+        STA  PRMSH
+glv_np: LDA  RESULT
         JSR  GLPUT                  ; byte param: the low byte only
         JMP  glv_bl
 glv_w0: LDA  GLMETA                 ; then the int16 params

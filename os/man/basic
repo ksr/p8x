@@ -82,32 +82,49 @@ GRAPHICS
     is no live window: press Ctrl-\ to draw the screen in your terminal
     and carry on, or Ctrl-C to draw it and quit. The screen is 480x272 in
     RGB565 direct colour: a pixel IS its colour, 65,536 of them, and 0 is
-    black. x runs 0..479 left to right, y runs 0..271 top to bottom, and
-    anything off-screen is simply not drawn.
+    black. x runs 0..479 left to right; the DRAWING statements below
+    count y 0..271 BOTTOM to top (window space -- see their section),
+    while GTEXT/IMAGE/PIXELR() count y 0..271 top to bottom (screen
+    space). Off-window drawing clips; off-screen device pixels are
+    simply not drawn.
         COLOR c                   drawing colour: one PACKED value...
         COLOR r,g,b               ...or three numbers (r,b 0-31, g 0-63)
 
-    DEVICE statements (screen space, y down, the $FF20 display -- NOT
-    part of the PGC language; kept as the raw fast path):
+    DRAWING statements (MIGRATED 2026-08-30: these emit PGC/GL now --
+    WINDOW space, y UP, transformed by WINDOW/VWPORT, honouring
+    LINPAT/LINFUN, recording inside CLBEG/CLEND. BASIC establishes the
+    full-screen window at startup and again after a RESETF statement,
+    so out of the box window (x,y) is screen (x, 271-y)):
 
-        CLS                       clear the screen; COLOR is unchanged
-        PIXELW x,y                one pixel (was PLOT)
+        CLS                       clear (GL FLOOD 0,0,0 over the
+                                  current viewport); COLOR unchanged
+        PIXELW x,y                one pixel (GL MOVE + POINT)
         LINE x0,y0,x1,y1          line, both endpoints drawn
-        BOX x0,y0,x1,y1           rectangle outline
+        BOX x0,y0,x1,y1           rectangle outline (GL RECT)
         BOX x0,y0,x1,y1,FILL      ... solid
         BOX x0,y0,x1,y1,NOFILL    ... outline, spelled out
-        CIRCLE x,y,r              circle outline, centre x,y radius r
-        CIRCLE x,y,r,FILL         ... solid (drawn as the ellipse with
-                                  rx=ry since the stage-10 diet; radius
-                                  caps at 255, r=0 draws nothing)
+        CIRCLE x,y,r              circle outline (GL ELIPSE rx=ry;
+                                  radius maps through the window scale,
+                                  caps at 255 device px, r=0 draws
+                                  nothing, negative radius = GL err 2)
+        CIRCLE x,y,r,FILL         ... solid
         CIRCLE x,y,rx,ry          ELLIPSE: separate x and y radii
         CIRCLE x,y,rx,ry,FILL     ... solid
+    BOX and CIRCLE force their own fill mode and then restore the
+    program's PRMFIL from a shadow the native PRMFIL/RESETF statements
+    keep -- a GL "PF 1" STRING bypasses that shadow.
+
+    DEVICE statements (SCREEN space, y DOWN, the $FF20 display -- the
+    DMA gap the PGC language cannot cover):
+
         GTEXT x,y,size,s$         draw a string as graphics (bitmap 5x7;
                                   needs no font load, unlike PGC TEXT)
         IMAGE x,y,name$           draw a P8I image file at (x,y)
         PIXELR(x,y)               FUNCTION: read a pixel's colour (was
                                   POINT(); the PGC never had a pixel
-                                  read -- this is the device's)
+                                  read -- this is the device's). Under
+                                  the default window, screen y is
+                                  271 - window y.
 
     Everything in the GL section further down (MOVE/DRAW/POLY/RECT,
     the 3D and matrix verbs, CIRCLE-as-GL, AREA, TEXT, patterns...)
@@ -189,11 +206,13 @@ THE GRAPHICS LANGUAGE (3D)
     ordinary COLOR statement now sets the GL pen too -- one pen
     statement drives both drawing paths. POINT (the GL verb: draw the
     2D current point) IS native now -- the pixel-read function became
-    PIXELR() and freed the name. GL CIRCLE is not either: BASIC's own CIRCLE x,y,r
-    statement (screen space) keeps the name, and GL "CIRCLE r" (window
-    space, at the GL current point) reaches the verb. Between CLBEG and CLEND these statements RECORD instead
-    of drawing, so a program can build a command list. Without a GL
-    engine they say ?No GL engine.
+    PIXELR() and freed the name. GL CIRCLE is not either: BASIC's own
+    CIRCLE x,y,r statement (window space since the 2026-08-30
+    migration, with its centre argument pair) keeps the name, and
+    GL "CIRCLE r" (at the GL current point) reaches the verb. Between
+    CLBEG and CLEND these statements RECORD instead of drawing, so a
+    program can build a command list -- the migrated drawing
+    statements record too. Without a GL engine they say ?No GL engine.
 
     LINFUN m (stage 10f) sets the pixel-write mode for lines, points
     and outlines from EVERY drawing statement -- BASIC's own LINE and

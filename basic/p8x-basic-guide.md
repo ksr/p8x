@@ -176,7 +176,7 @@ A line may hold several statements separated by `:` —
 | `CLOSE` | close the data-file channel (commits an output file) |
 | `COLOR c` / `COLOR r,g,b` | set the drawing colour: one PACKED RGB565 value, or three numbers (`r`,`b` 0–31, `g` 0–63) — see *Graphics* |
 | `CLS` | clear the screen; the current `COLOR` is **not** changed |
-| `PIXELW x,y` | one pixel (was `PLOT`; a DEVICE statement, not PGC) |
+| `PIXELW x,y` | one pixel (was `PLOT`) |
 | `LINE x0,y0,x1,y1` | draw a line, both endpoints included |
 | `BOX x0,y0,x1,y1[,FILL\|,NOFILL]` | rectangle — outline by default, solid with `FILL` |
 | `CIRCLE x,y,r[,FILL\|,NOFILL]` | circle of radius `r` about `x,y` |
@@ -198,9 +198,17 @@ Drawing goes to the display device. If none is fitted these statements print
 > a real image file.
 
 The screen is **480 × 272** in **RGB565 direct colour** — a pixel *is* its
-colour, 0 is black; see *The screen* below for the colour model. `x` runs
-0–479 left to right, `y` runs 0–271 top to bottom, and anything off-screen
-is simply not drawn — it neither wraps nor errors.
+colour, 0 is black; see *The screen* below for the colour model.
+
+**Coordinates are window space, y UP** (since 2026-08-30 the drawing
+statements emit the graphics language): `x` runs 0–479 left to right and
+`y` runs 0–271 **bottom to top**, mathematical convention. BASIC
+establishes that full-screen window at startup and again after a
+`RESETF` statement, and `WINDOW`/`VWPORT` re-map it like any GL drawing.
+Off-window geometry is clipped. Two statements stay screen-space (y
+down, top-left origin): `GTEXT`/`IMAGE`, and the `PIXELR()` read — under
+the default window, screen y is `271 - y`. The drawing statements also
+honour `LINPAT`/`LINFUN` and RECORD inside `CLBEG`/`CLEND`.
 
 ```basic
 10 COLOR 31,63,31               : REM white

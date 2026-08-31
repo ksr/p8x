@@ -1,7 +1,10 @@
 #!/bin/sh
 # BASIC's graphics statements: COLOR / LINE / BOX [,FILL|,NOFILL] / CLS.
 #
-# These drive the $FF20 display, whose own behaviour is covered by gfx_test.sh.
+# MIGRATED 2026-08-30: these statements now EMIT GL -- window space, y UP,
+# so window (x,wy) lands at screen (x, 271-wy) under the power-up identity
+# window. The frame probes below flip y accordingly; PIXELR() stays a
+# SCREEN-space device read, so its in-program probes name screen rows.
 # What is checked HERE is the interpreter side, where the failures are quiet:
 #
 #   1. NOFILL must draw an OUTLINE. It has to be a real keyword rather than just
@@ -9,12 +12,12 @@
 #      FILL *inside* the word NOFILL -- so asking for an outline would silently
 #      give you a solid box. That is the single nastiest bug available here, and
 #      it is invisible unless something checks the middle of the box.
-#   2. CLS must clear to the BACKGROUND but leave the current COLOR alone. GCOL
-#      is write-only in the device, so the pen cannot be read back and restored;
-#      BASIC keeps the GPEN/GPENH shadow pair for exactly this (a pen is a
-#      whole RGB565 colour since stage 6). COLOR takes either one PACKED value
-#      (RGB(), or a POINT round-trip) or three numbers R,G,B -- part 1 uses
-#      BOTH forms on purpose, and LIST must round-trip the three-number one.
+#   2. CLS must clear to the BACKGROUND but leave the current COLOR alone --
+#      it is a GL FLOOD 0,0,0 now, which carries its own colour and cannot
+#      touch the pen; the check stays because it once could. COLOR takes
+#      either one PACKED value (RGB(), or a POINT round-trip) or three
+#      numbers R,G,B -- part 1 uses BOTH forms on purpose, and LIST must
+#      round-trip the three-number one.
 #   3. LINE endpoints are inclusive.
 #   4. LIST must round-trip the new keywords -- a token with no KWTAB entry
 #      lists as garbage while running perfectly.
@@ -73,19 +76,20 @@ def want(x, y, c, why):
         bad.append("(%d,%d) is %s, want %s - %s"
                    % (x, y, NAME.get(got,got), NAME.get(c,c), why))
 
-# 2. CLS cleared to background, and did NOT eat COLOR 28
+# window (x,wy) -> screen (x, 271-wy): the statements draw y-UP now
+# 2. CLS cleared to background, and did NOT eat COLOR
 want(  0,   0, BLACK, "CLS did not clear to the background")
-want( 70,  70, GREEN, "CLS clobbered the current COLOR (GPEN pair not restored)")
+want( 70, 201, GREEN, "CLS clobbered the current COLOR")
 # 1. BOX ,FILL is solid; BOX ,NOFILL is an outline
-want( 20,  20, GREEN, "filled BOX corner missing")
-want(120, 120, GREEN, "filled BOX corner missing")
-want(200,  20, RED,   "NOFILL BOX edge missing")
-want(300, 120, RED,   "NOFILL BOX edge missing")
-want(250,  70, BLACK, "NOFILL drew a SOLID box - FILL was matched inside NOFILL")
-# 3. LINE endpoints are inclusive
-want( 20, 240, BLUE, "LINE start point not drawn")
-want(458, 240, BLUE, "LINE end point not drawn (exclusive end?)")
-want(240, 240, BLUE, "LINE middle missing")
+want( 20, 251, GREEN, "filled BOX corner missing")
+want(120, 151, GREEN, "filled BOX corner missing")
+want(200, 251, RED,   "NOFILL BOX edge missing")
+want(300, 151, RED,   "NOFILL BOX edge missing")
+want(250, 201, BLACK, "NOFILL drew a SOLID box - FILL was matched inside NOFILL")
+# 3. LINE endpoints are inclusive (window y 240 = screen row 31)
+want( 20,  31, BLUE, "LINE start point not drawn")
+want(458,  31, BLUE, "LINE end point not drawn (exclusive end?)")
+want(240,  31, BLUE, "LINE middle missing")
 
 if bad:
     print("BASIC-GFX TEST: FAIL")
@@ -100,7 +104,7 @@ PY
 # hands them back THROUGH BASIC'S SIGNED INTEGERS -- $F81F magenta prints as
 # -2017, which is the documented wart (STAGE6-DESIGN.md), asserted here so it
 # stays a wart and not a surprise.
-printf 'B\rbgfx\r10 CLS\r20 COLOR RGB(31,0,0)\r40 BOX 10,10,80,80,FILL\r50 COLOR RGB(31,0,31)\r60 CIRCLE 240,136,100,FILL\r70 COLOR RGB(0,63,0)\r80 CIRCLE 240,136,120\r90 PIXELW 400,40\r100 PRINT PIXELR(240,136)\r110 PRINT PIXELR(400,40)\r120 PRINT PIXELR(0,271)\r130 PRINT PIXELR(14,14)\r140 END\rRUN\rLIST\rBYE\r' \
+printf 'B\rbgfx\r10 CLS\r20 COLOR RGB(31,0,0)\r40 BOX 10,10,80,80,FILL\r50 COLOR RGB(31,0,31)\r60 CIRCLE 240,136,100,FILL\r70 COLOR RGB(0,63,0)\r80 CIRCLE 240,136,120\r90 PIXELW 400,40\r100 PRINT PIXELR(240,136)\r110 PRINT PIXELR(400,231)\r120 PRINT PIXELR(0,271)\r130 PRINT PIXELR(14,257)\r140 END\rRUN\rLIST\rBYE\r' \
     > bgfx2.in
 ../p8xemu -N -i bgfx2.in -c bgfx.img -l 120000000 -g bgfx2.ppm eeprom.bin > bgfx2.out 2>/dev/null || true
 
@@ -109,12 +113,13 @@ import sys
 bad = []
 out = open("bgfx2.out","rb").read().replace(b"\r", b"")
 
-# POINT reads back the 565 colour through SIGNED 16-bit ints:
+# PIXELR reads back the 565 colour through SIGNED 16-bit ints, in SCREEN
+# rows (the drawing is window space now, so the probes flip y):
 #   $F81F magenta = -2017, $07E0 green = 2016, 0 = untouched, $F800 red = -2048.
 # The negative prints are the high pen byte coming home -- the read-back half
 # of 16 bpp -- wearing the signed-integer wart on purpose.
 if b"\n-2017\n2016\n0\n-2048\n" not in out:
-    bad.append("POINT sequence wrong; wanted -2017,2016,0,-2048 in %r"
+    bad.append("PIXELR sequence wrong; wanted -2017,2016,0,-2048 in %r"
                % out[out.find(b"RUN"):out.find(b"RUN")+48])
 
 for kw in [b"20 COLOR RGB(31,0,0)", b"60 CIRCLE 240,136,100,FILL",
@@ -137,17 +142,17 @@ def want(x, y, c, why):
         bad.append("(%d,%d) is %s, want %s - %s"
                    % (x, y, NAME.get(got,got), NAME.get(c,c), why))
 
-# the box drew in red and the filled circle in RGB(31,0,31) magenta -- both
-# halves of both pens intact
-want( 14,  14, RED,     "the box lost its red (high pen byte dropped?)")
-want(240, 136, MAGENTA, "filled CIRCLE is not magenta")
+# the box drew in red (window y 10..80 = screen 191..261) and the filled
+# circle in RGB(31,0,31) magenta -- both halves of both pens intact
+want( 14, 257, RED,     "the box lost its red (high pen byte dropped?)")
+want(240, 135, MAGENTA, "filled CIRCLE is not magenta")
 # CIRCLE ,FILL is solid; the bare CIRCLE is an outline with a gap inside it
-want(240, 236, MAGENTA, "filled CIRCLE does not reach its bottom edge")
-want(240,  16, GREEN,   "outline CIRCLE top not drawn")
+want(240, 235, MAGENTA, "filled CIRCLE does not reach its screen-bottom edge")
+want(240,  15, GREEN,   "outline CIRCLE top not drawn")
 want(240,  26, BLACK,   "gap between the two circles is filled - CIRCLE drew solid")
-# PIXELW put a single pixel down
-want(400,  40, GREEN,   "PIXELW did not draw")
-want(404,  40, BLACK,   "PIXELW drew more than one pixel")
+# PIXELW put a single pixel down (window (400,40) = screen (400,231))
+want(400, 231, GREEN,   "PIXELW did not draw")
+want(404, 231, BLACK,   "PIXELW drew more than one pixel")
 
 if bad:
     print("BASIC-GFX TEST: FAIL")
@@ -160,21 +165,20 @@ PY
 # The parser has to tell a second radius from the FILL modifier by TOKEN: a
 # keyword is >= $80, anything else starts an expression. That is also why NOFILL
 # must be a real keyword -- otherwise `CIRCLE x,y,r,NOFILL` would try to EVAL it.
-printf 'B\rbgfx\r10 CLS\r20 COLOR 1\r30 CIRCLE 60,68,30\r40 COLOR 2\r50 CIRCLE 170,68,60,20\r60 COLOR 3\r70 CIRCLE 170,110,15,20,FILL\r80 PRINT "A";PIXELR(90,68);PIXELR(60,68);PIXELR(230,68);PIXELR(10,130);PIXELR(170,110)\r90 END\rRUN\rBYE\r' \
+printf 'B\rbgfx\r10 CLS\r20 COLOR 1\r30 CIRCLE 60,68,30\r40 COLOR 2\r50 CIRCLE 170,68,60,20\r60 COLOR 3\r70 CIRCLE 170,110,15,20,FILL\r80 PRINT "A";PIXELR(90,203);PIXELR(60,203);PIXELR(230,203);PIXELR(10,130);PIXELR(170,161)\r90 END\rRUN\rBYE\r' \
     > bgfx3.in
 ../p8xemu -N -i bgfx3.in -c bgfx.img -l 120000000 eeprom.bin > bgfx3.out 2>/dev/null || true
 
 python3 - <<'PY' || exit 1
 import sys
 out = open("bgfx3.out","rb").read().replace(b"\r", b"")
-# POINT probes, in order:
-#   (90,68)  right edge of the pen-1 circle r=30 about (60,68)      -> 1
-#   (60,68)  its centre, an outline, so background                  -> 0
-#   (230,68) right edge of the pen-2 ellipse rx=60 about (170,68)   -> 2
-#   (10,130) far from every shape                                  -> 0
-#            (170,88) was the first choice and is WRONG: the ellipse is
-#            centred y=68 with ry=20, so y=88 is exactly its bottom edge.
-#   (170,110) centre of the pen-3 FILLED ellipse                    -> 3
+# PIXELR probes (SCREEN rows; the shapes drew in window space, so each
+# window row wy reads at screen 271-wy), in order:
+#   (90,203)  right edge of the pen-1 circle r=30 about window (60,68) -> 1
+#   (60,203)  its centre, an outline, so background                    -> 0
+#   (230,203) right edge of the pen-2 ellipse rx=60, window (170,68)   -> 2
+#   (10,130)  far from every shape                                     -> 0
+#   (170,161) centre of the pen-3 FILLED ellipse, window (170,110)     -> 3
 want = b"A10200" if False else b"A1"
 i = out.find(b"\nA")
 got = out[i+1:i+7] if i >= 0 else b"?"
@@ -293,7 +297,7 @@ fi
 #      -- an off-by-one in the stride shows up here and nowhere else;
 #   2. the colour survives the framebuffer round trip -- 5 and 200 are dim
 #      blues now rather than pens, but the identity check is the same.
-printf 'B\rbgfx\r10 CLS\r20 COLOR 5\r30 BOX 0,0,479,271,FILL\r40 COLOR 200\r50 PIXELW 400,250\r60 PRINT "A";PIXELR(479,271);",";PIXELR(400,250);",";PIXELR(480,0)\r70 END\rRUN\rLIST\rBYE\r' \
+printf 'B\rbgfx\r10 CLS\r20 COLOR 5\r30 BOX 0,0,479,271,FILL\r40 COLOR 200\r50 PIXELW 400,250\r60 PRINT "A";PIXELR(479,271);",";PIXELR(400,21);",";PIXELR(480,0)\r70 END\rRUN\rLIST\rBYE\r' \
     > bgfx6.in
 ../p8xemu -N -i bgfx6.in -c bgfx.img -l 400000000 eeprom.bin > bgfx6.out 2>/dev/null || true
 
