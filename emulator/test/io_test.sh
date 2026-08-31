@@ -16,7 +16,7 @@ OUT=$(../p8xemu -L -s 0x5A -l 5000 io.bin 2>&1)
 # program must have seen switches=$5A (ends in A=5A) and driven the LEDs to $5A
 echo "$OUT" | grep -q 'A=5A .*LED=5A' || { echo "IO TEST: FAIL — switch/LED path"; echo "$OUT"; exit 1; }
 # -L must have surfaced the $FF02 write
-echo "$OUT" | grep -q '\[LED \$FF02\] \$5A' || { echo "IO TEST: FAIL — no LED trace"; echo "$OUT"; exit 1; }
+echo "$OUT" | grep -qE '\[LED \$FF02 @[0-9]+\] \$5A' || { echo "IO TEST: FAIL — no LED trace"; echo "$OUT"; exit 1; }
 
 # default: no -s means $FF00 reads 0, so A=00 and LEDs stay 00
 ../p8xemu -l 5000 io.bin 2>&1 | grep -q 'A=00 .*LED=00' || { echo "IO TEST: FAIL — default switches"; exit 1; }

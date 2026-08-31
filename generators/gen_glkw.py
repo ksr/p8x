@@ -130,6 +130,12 @@ VERBS = [
     # bottom/middle/top about the current point, in model units.
     ("TEXTP",   "TXP",  0x83, 0, 14),
     ("TJUST",   "TJ",   0x85, 2, 2),
+    # the single-interface migration (appended 2026-08-31). PIXRD x y:
+    # ONE pixel colour to the RB FIFO -- window coords through the same
+    # map as every 2D verb, the device's off-screen-reads-0 rule. The
+    # PGC never had a pixel read; this verb is what lets the $FF20 door
+    # close one day. BASIC_SKIP'd: BASIC's surface is PIXELR().
+    ("PIXRD",   "PXR",  0x63, 0, 2),
     ("CA",      "CA",   0xFE, 0, 0),   # mode switches: internal markers
     ("CX",      "CX",   0xFF, 0, 0),
 ]
@@ -175,7 +181,7 @@ print("wrote fpga/rtl/glkwtab.vh (ends at scratch word %d of 1024; RBS mirror at
 # Excluded: NOOP (pointless), POINT (BASIC's POINT(x,y) function owns the
 # name -- GL "POINT" remains), COLOR (BASIC's COLOR statement now feeds
 # BOTH pens itself), CA/CX (mode plumbing the statement layer handles).
-BASIC_SKIP = {"NOOP", "POINT", "COLOR", "CA", "CX", "CIRCLE"}
+BASIC_SKIP = {"NOOP", "POINT", "COLOR", "CA", "CX", "CIRCLE", "PIXRD"}
 GLV0 = 0xB4
 bverbs = [(l, op, b, a) for l, s, op, b, a in VERBS if l not in BASIC_SKIP]
 # POINT joined the natives once BASIC's pixel-read function became

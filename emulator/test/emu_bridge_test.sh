@@ -31,6 +31,7 @@ sys.path.insert(0, "../../fpga/tang-nano-20k/tools")
 from test_glbridge import MockCard
 
 mock = MockCard()
+mock.rb += [0xE0, 0x07]              # the canned PIXRD reply: $07E0 = 2016
 master, slave = pty.openpty()
 sdev = os.ttyname(slave)
 
@@ -89,11 +90,15 @@ if bytes([0x06, 0, 38, 18]) not in fifo:
     print("FAIL: GL COLOR bytes missing from the FIFO"); ok = False
 if seen(0x04, 210):
     print("FAIL: COLOR still writes the device pen (vestigial write is back)"); ok = False
-# PIXELR(3,267): the DEVICE door -- coords then GCMD 9, then two GDATA
-# reads (mock GDATA reads return 0)
-for idx, val in ((0x00, 3), (0x01, 4), (0x05, 9)):
-    if not seen(idx, val):
-        print("FAIL: write idx %02X val %d never crossed the wire" % (idx, val)); ok = False
+# PIXELR(3,267) is the GL verb PIXRD now (single-interface, 2026-08-31):
+# the bytes cross in the FIFO, the reply comes back through the mock's
+# RB FIFO, and NO device-door read traffic remains from BASIC
+if bytes([0x63, 3, 0, 11, 1]) not in fifo:
+    print("FAIL: PIXRD bytes not in the FIFO"); ok = False
+if "2016" not in out:
+    print("FAIL: PIXELR did not return the RB reply"); ok = False
+if seen(0x05, 9):
+    print("FAIL: BASIC still issues the device PIXELR"); ok = False
 sys.exit(0 if ok else 1)
 EOF
 echo "EMU-BRIDGE TEST: PASS (BASIC drove a mock card over the pty: identity PEEKs, GL LINE/COLOR bytes, PIXELR device traffic, no vestigial pen write)"

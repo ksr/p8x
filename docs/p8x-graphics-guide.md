@@ -41,7 +41,9 @@ you). Numbers separate on spaces or commas; `man gl` is the verb card.
   coordinates (y up). The drawing statements emit GL; GTEXT (baseline
   anchor), IMAGE (bottom-left anchor) and PIXELR() are
   device-implemented but BASIC flips their y at the door
-  (screen y = 271 - window y, the fixed full-screen mapping).
+  (screen y = 271 - window y, the fixed full-screen mapping) --
+  except PIXELR(), which became the GL `PIXRD` verb (2026-08-31)
+  and maps through the CURRENT window like the drawing statements.
 - **Window space**: the GL 2D world, y UP. `WINDOW x1 x2 y1 y2` (PGC
   order: both x's first!) declares the world extent; `VWPORT x1 x2 y1
   y2` maps it to screen pixels, flipping y. GL 2D primitives
@@ -218,7 +220,7 @@ Every GL verb is a native statement (no quotes, expressions allowed):
 `COLOR` sets the GL pen and the `GPEN` shadow `GTEXT` draws with; `GL s$` sends a raw ASCII line when you need
 string-building (`GL "MDY "+STR$(A)`); native list verbs
 (CLBEG/CLEND/CLRUN) are synchronous, `GL "CLOOP 1 72"` is the
-non-blocking spin. PIXELR(x,y) reads pixels (window coordinates, symmetric with PIXELW). The full
+non-blocking spin. PIXELR(x,y) reads pixels through the GL `PIXRD` verb (single-interface, 2026-08-31): window coordinates through the CURRENT window map, fully symmetric with PIXELW in any window. The full
 statement list: `man basic`, GRAPHICS; the language guide chapter in
 `basic/p8x-basic-guide.md`.
 

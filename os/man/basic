@@ -117,8 +117,9 @@ GRAPHICS
     DEVICE statements (the DMA gap the PGC language cannot cover --
     device-implemented, but they take the SAME window coordinates,
     y up, since 2026-08-31; BASIC flips y at the door. One caveat:
-    they use the fixed full-screen mapping and do NOT transform under
-    a program's WINDOW/VWPORT the way the drawing statements do):
+    GTEXT and IMAGE use the fixed full-screen mapping and do NOT
+    transform under a program's WINDOW/VWPORT the way the drawing
+    statements (and now PIXELR) do):
 
         GTEXT x,y,size,s$         draw a string as graphics (bitmap 5x7;
                                   needs no font load, unlike PGC TEXT).
@@ -128,10 +129,12 @@ GRAPHICS
         IMAGE x,y,name$           draw a P8I image file with its
                                   BOTTOM-left corner at (x,y)
         PIXELR(x,y)               FUNCTION: read a pixel's colour (was
-                                  POINT(); the PGC never had a pixel
-                                  read -- this is the device's).
-                                  Symmetric with PIXELW: PIXELW x,y
-                                  then PIXELR(x,y) round-trips
+                                  POINT()). SINGLE-INTERFACE since
+                                  2026-08-31: it is the GL verb PIXRD
+                                  now, so it maps through the CURRENT
+                                  WINDOW/VWPORT exactly like PIXELW --
+                                  PIXELW x,y then PIXELR(x,y)
+                                  round-trips in ANY window
 
     Everything in the GL section further down (MOVE/DRAW/POLY/RECT,
     the 3D and matrix verbs, CIRCLE-as-GL, AREA, TEXT, patterns...)

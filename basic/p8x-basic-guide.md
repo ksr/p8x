@@ -135,7 +135,7 @@ like numeric comparisons, so they slot straight into `IF`:
 |------|---------|
 | `ABS(x)` | absolute value of `x` |
 | `RND(n)` | a pseudo-random integer **1..n** (LCG; `RND(6)` is a die) |
-| `PIXELR(x,y)` | the COLOUR at a pixel, window coords like `PIXELW`; 0 if off-screen (was `POINT()`) |
+| `PIXELR(x,y)` | the COLOUR at a pixel — the GL `PIXRD` verb, so it maps through the current `WINDOW`/`VWPORT` like `PIXELW`; 0 if off-screen (was `POINT()`) |
 | `PEEK(addr)` | the byte (0–255) at memory address `addr` |
 | `LEN(s$)` | number of characters in the string `s$` |
 | `ASC(s$)` | code (0–255) of the first character (0 if empty) |

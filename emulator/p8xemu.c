@@ -233,6 +233,7 @@ static uint16_t mdu_exec(uint16_t a, uint16_t b, uint16_t c){
    int32 and arithmetic-shifts (FLOOR), muldiv truncates toward zero --
    both per the contract. Rendering is instant (the GPU-BUSY licence). */
 static void gpu_line(int x0,int y0,int x1,int y1,uint16_t c);
+static uint16_t gpu_pixel(int x,int y);
 static void gpu_hline(int xa,int xb,int y,uint16_t c);
 static void gpu_ellipse(int cx,int cy,int rx,int ry,uint16_t c,int fill);
 /* stage 10j: LINPAT lives in the DEVICE (like GMODE) -- every line from
@@ -763,6 +764,7 @@ static int gl_cmdlen(const uint8_t *p, int n){
     case 0x90: case 0xA0: case 0xAF: case 0x71: return 1;
     case 0xE0: case 0xAA: case 0xAB: case 0x70: case 0x72: case 0x74:
     case 0x79: case 0xEB: case 0x61: case 0x62: case 0x76: return 2;
+    case 0x63: return 5;                   /* PIXRD x y -> RB */
     case 0xC0: return 1;
     case 0xC1: return 4;                   /* AREABC r g b */
     case 0xEA: return 3;                   /* LINPAT p (10j) */
@@ -895,6 +897,19 @@ static int gl_exec2(const uint8_t *p, int n){
         default: gl_err(2); break;
         }
         return 2;
+    case 0x63: NEED(5);                    /* PIXRD x y -> RB: ONE colour.
+        The single-interface migration's first verb (2026-08-31): window
+        coordinates through the same gl_map2 as every 2D verb, the pixel
+        read with the DEVICE's exact rule (unsigned coords, off-screen
+        reads 0), the RGB565 colour pushed low-then-high like every
+        read-back. The PGC never had a pixel read -- this is P8X's. */
+        { int16_t px, py;
+          gl_map2(gl_i16(p+1), gl_i16(p+3), &px, &py);
+          gl_rbw((int16_t)(((unsigned)(uint16_t)px<(unsigned)gw &&
+                            (unsigned)(uint16_t)py<(unsigned)gh)
+                           ? gpu_pixel((uint16_t)px,(uint16_t)py) : 0));
+        }
+        return 5;
     case 0x62: NEED(2);                    /* MATXRD 1|2 -> RB */
         if(p[1] == 1){ int i; for(i=0;i<12;i++) gl_rbw(glmm[i]); }
         else if(p[1] == 2){ int i; for(i=0;i<9;i++) gl_rbw(glvm[i]); }

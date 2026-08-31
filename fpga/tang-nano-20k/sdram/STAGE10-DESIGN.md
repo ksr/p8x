@@ -614,6 +614,34 @@ Retirement of the stage-9 record front end is its own decision point
 after 10c — ASK the user (workflow rule: no silent breakage of shipped
 interfaces, and it is also a disk+bitstream lockstep change).
 
+## The single-interface migration (user-directed, 2026-08-31 ->)
+
+The endgame: extend the language until nothing needs the $FF20 register
+door, then close it. One verb at a time, each shipped end to end.
+
+- **PIXRD x y (opcode $63) -- DONE 2026-08-31.** One pixel's colour to
+  the RB FIFO: window coordinates through the same two-muldiv map as
+  CVE0/1 (the FULL 16-bit unsigned <480/<272 bounds check happens
+  BEFORE the 9-bit probe regs -- a wrapped negative must read 0), then
+  the AF pixel-probe subroutine (return code 6), the colour staged in
+  scratch word 782 and handed to the 10e G_RBP pusher (rbp_n=1). Five
+  states on the numbers AREAPT freed. Records into command lists and
+  reads at replay. BASIC's PIXELR() is the verb now -- its wflip died
+  the same day it was born (PIXRD takes window coords natively), and
+  PIXELR TRANSFORMS under WINDOW/VWPORT like PIXELW: the caveat list
+  shrank to GTEXT/IMAGE. BASIC's LAST device-door READ is gone.
+  MockCard grew a preloadable RB FIFO for bridge tests. Traps for the
+  record: basic_gl_test's probe-window restore hit BASIC's 32-char
+  string cap AGAIN (a 38-char two-verb GL string truncates and the
+  starved verb EATS the following PIXRD bytes -- split the string);
+  and the RTL battery's PRX bench is SELF-checking (RB words, no
+  frame to compare).
+- **BLIT (next):** declare a rect, stream raw RGB565 through the FIFO
+  in BURST frames; makes per-pixel IMAGE obsolete (the measured
+  bridge-bound slowdown) and GTEXT blit-capable.
+- **Then:** GTEXT via GL, the C gfx library, the monitor splash -- and
+  the door closes.
+
 ## Verification ladder (per rung, the usual order)
 
 1. **Emulator golden model first**: the interpreter (both encodings) in

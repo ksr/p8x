@@ -124,8 +124,14 @@ module p8x_geom (
              // stage 10j: LINPAT to the device (idle-waited, like GMODE),
              // the RESETF pattern restore, and the AREA setup rework.
              // AREAPT (W_APR + the WP_* patterned-box splitter, states
-             // 157..173) was REMOVED 2026-08-30 for placement headroom.
+             // 157..173) was REMOVED 2026-08-30 for placement headroom;
+             // PIXRD (the single-interface migration's first verb,
+             // 2026-08-31) reuses five of the freed numbers: map the
+             // window point (two muldivs, the CVE recipe), probe the
+             // pixel (the AF subroutine, return code 6), stage the
+             // colour in scratch 782 and hand it to the G_RBP pusher.
              W_LPW=153, W_PL0=154, W_PL1=155, W_PL2=156,
+             PR_M0=157, PR_M1=158, PR_M2=164, PR_W0=165, PR_W1=166,
              AF_W0=159, AF_W1=160, AF_W2=161, AF_W3=162, AF_W4=163,
              C_OGB=92,  C_OGC=93,  C_MTB=94,  C_MTC=95,  C_MLC=96,
              C_MLW=97,  C_CPB=98,  C_CPC=99,  J_RST2=100,
@@ -209,6 +215,7 @@ module p8x_geom (
   // ---- stage 10i: the curve working set (ARC/SECTOR's angle walk and
   // its regs left with them 2026-08-30) ------------------------------------
   reg [15:0] cvr, cvry;              // radius (x), y-radius (ELIPSE)
+  reg [15:0] prx;                    // PIXRD: the mapped screen x in flight
   reg [15:0] cvpx, cvpy;             // mapped centre (CVE)
   reg [15:0] cvnx, cvny;             // mapped radii  (CVE)
   // ---- stage 10j: patterns (AREAPT's regs REMOVED with it) ---------------
@@ -423,6 +430,7 @@ module p8x_geom (
       8'h01,8'h02,8'h03,8'h04,8'h08,8'h09,8'h90,8'hA0,8'hAF,8'h71: opn = 5'd0;
 8'hE0,8'hAA,8'hAB,8'h70,8'h72,8'h74,8'h79,8'hEB,
       8'h61,8'h62,8'h76: opn = 5'd1;
+      8'h63: opn = 5'd4;               // PIXRD x y (single-interface 1st)
       8'h78: opn = 5'd4;               // CLMOD n b off
       8'hC0: opn = 5'd0;
       8'hC1: opn = 5'd3;               // AREABC r g b
@@ -1719,6 +1727,38 @@ module p8x_geom (
 
         // (the CVP* arc-vertex subroutine left with ARC/SECTOR 2026-08-30)
 
+        // ---- PIXRD (2026-08-31): map the window point exactly as CVE0/1
+        // map a centre, bounds-check the FULL 16 bits (the emulator's
+        // unsigned <480/<272 rule -- a wrapped negative must read 0, and
+        // apx/apy are only 9 bits), then borrow the AF pixel probe.
+        PR_M0: begin                   // screen x
+          md_a1 <= nbx; md_a2 <= par[13]; md_b1 <= par[19]; md_b2 <= par[17];
+          md_c1 <= par[15]; md_c2 <= par[13];
+          md_r <= par[17]; md_rn <= 0; md_go <= 1; state <= PR_M1;
+        end
+        PR_M1: if (md_done) begin      // screen y (flipped)
+          prx <= md_qr;
+          md_a1 <= nby; md_a2 <= par[14]; md_b1 <= par[20]; md_b2 <= par[18];
+          md_c1 <= par[16]; md_c2 <= par[14];
+          md_r <= par[20]; md_rn <= 1; md_go <= 1; state <= PR_M2;
+        end
+        PR_M2: if (md_done) begin
+          if (prx >= 16'd480 || md_qr >= 16'd272) begin
+            afpv <= 16'd0; state <= PR_W0;            // off-screen reads 0
+          end else begin
+            apx <= prx[8:0]; apy <= md_qr[8:0];
+            afret <= 4'd6; state <= AF_P0;            // returns to PR_W0
+          end
+        end
+        PR_W0: begin                   // stage the colour for the pusher
+          cm_we <= 1; cm_wa <= 10'd782; cm_wd <= afpv;
+          state <= PR_W1;
+        end
+        PR_W1: begin                   // one word, scratch 782 -> RB FIFO
+          k <= 0; rbp_a <= 10'd782; rbp_n <= 4'd1;
+          glst <= G_RBP; state <= S_NEXT;
+        end
+
         // ---- the pixel probe (gm PIXELR + two GDATA pops) ---------------
         // Off-screen forces the boundary verdict by loading afpv with the
         // boundary colour itself (gl_af_in's x<0||x>=480||... return 0)
@@ -1778,10 +1818,11 @@ module p8x_geom (
               if (af_in) state <= AF_PU0;
               else begin afi <= afi + 9'd1; state <= AF_SC1; end
             end
-            default: begin             // skip past the pushed run
+            4'd5: begin                // skip past the pushed run
               afi <= afi + 9'd1;
               state <= af_in ? AF_SKIP : AF_SC1;
             end
+            default: state <= PR_W0;   // 6: PIXRD -- afpv to the pusher
           endcase
         end
 
@@ -2212,6 +2253,10 @@ module p8x_geom (
                 glact <= 1; state <= W_LF;                // one GMODE write
               end
             // ---- stage 10e: read-back ------------------------------------
+            8'h63: begin                                  // PIXRD x y
+              nbx <= pw0; nby <= pw1;    // (RECT's corner regs are free)
+              glact <= 1; state <= PR_M0;
+            end
             8'h61: begin                                  // FLAGRD n
               k <= 0; glst <= G_RBP;
               case (pbuf[0])

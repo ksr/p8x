@@ -141,7 +141,9 @@ GLKW[] = {
     { "TXP", 0x83, 0, 14 },
     { "TJUST", 0x85, 2, 2 },
     { "TJ", 0x85, 2, 2 },
+    { "PIXRD", 0x63, 0, 2 },
+    { "PXR", 0x63, 0, 2 },
     { "CA", 0xFE, 0, 0 },
     { "CX", 0xFF, 0, 0 },
 };
-#define GLKWN 142
+#define GLKWN 144

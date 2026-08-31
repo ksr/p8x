@@ -29,7 +29,8 @@ DESCRIPTION
       GLDATA $FF50  write: push one command byte into the FIFO
       GLSTAT $FF51  read: bit7 FIFO full (wait before pushing),
                           bit6 busy, bit1 error pending, bit0 readback
-      GLRB   $FF52  read: readback FIFO (stage 10e; 0 for now)
+      GLRB   $FF52  read: pop one read-back byte (stage 10e; GLSTAT
+                          bit0 says one is waiting; low byte first)
       GLERR  $FF53  read: pop one error byte (0 = none): 1 unknown
                           opcode, 2 bad parameter, 3 mode not fitted,
                           4 FIFO overflow
@@ -48,6 +49,8 @@ DESCRIPTION
       74 CLDEL n     79 CLAPP n (P8X: append to list n)
       80 TEXT n ch.. 81 TSIZE s (8.8) 82 TANGLE deg  83 TEXTP n ch..
       84 TDEFIN c    85 TJUST h v (1..3, 1..3)
+      61 FLAGRD n    62 MATXRD 1|2  76 CLRD n     (state -> read-back)
+      63 PIXRD x y   (one pixel's colour -> read-back; P8X's own)
       90 MDIDEN      91 MDORG x y z 92 MDSCAL sx sy sz (8.8)
       93 MDROTX deg  94 MDROTY deg  95 MDROTZ deg  96 MDTRAN x y z
       97 MDMATX 12w  A0 VWIDEN      A1 VWRPT x y z A3 VWROTX deg
@@ -102,6 +105,19 @@ DESCRIPTION
     character generator and TEXTP the programmable stroke text -- P8X
     text IS stroke text). TEXT records into command lists and replays
     since 10k; TDEFIN still may not.
+
+    READ-BACK (stage 10e + the single-interface migration): FLAGRD n
+    streams state (1 PRMFIL, 2 COLOR, 3 PROJCT, 4 DISTAN, 5 WINDOW,
+    6 VWPORT, 9 near/far), MATXRD 1|2 the composed modeling/viewing
+    matrices, CLRD n a stored command list (length halfword then the
+    bytes -- clsave's path), all as int16 words through GLRB. PIXRD
+    x y (2026-08-31, the first single-interface verb) reads ONE
+    pixel: window coordinates through the SAME map as every 2D verb
+    -- it transforms under WINDOW/VWPORT, so PIXELW-then-PIXRD
+    round-trips in any window -- answering one RGB565 word (0
+    off-screen, the device rule). All of them record into command
+    lists and perform their reads at replay time. The PGC had no
+    read-backs; these are P8X's.
 
     AREA (stage 10g) seed-fills from the 2D current point (set it with
     MOVE) using the pen, bounded by pen-coloured pixels: outline a

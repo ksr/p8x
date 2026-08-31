@@ -35,6 +35,7 @@ class MockCard:
         self.reg[IDX_BRIDGEV] = 1
         self.reg[IDX_BRIDGID] = ord('B')
         self.fifo = []
+        self.rb = []           # read-back FIFO: tests preload replies here
         self.fifo_cap = fifo_cap
         self.rx = b""          # bytes from the host, undecoded
         self.tx = b""          # replies waiting for the host
@@ -60,7 +61,8 @@ class MockCard:
                 self.tx += MAGIC + bytes([self.reg[IDX_BRIDGEV]])
                 self.rx = self.rx[1:]
             elif c == 0x02:                                  # STATUS
-                self.tx += bytes([self.reg[IDX_GLSTAT]])
+                self.tx += bytes([self.reg[IDX_GLSTAT]
+                                  | (1 if self.rb else 0)])
                 self.rx = self.rx[1:]
             elif c == 0x01:                                  # BURST
                 if len(self.rx) < 2:
@@ -88,7 +90,12 @@ class MockCard:
                 i = c & 0x3F
                 const = {0x0D: ord('P'), 0x0E: ord('G'), 0x34: ord('G'),
                          0x35: 1, 0x36: ord('B')}
-                self.tx += bytes([const.get(i, self.reg[i])])
+                if i == 0x31:                    # GLSTAT: bit0 = RB byte
+                    self.tx += bytes([self.reg[i] | (1 if self.rb else 0)])
+                elif i == 0x32 and self.rb:      # GLRB: pop a reply byte
+                    self.tx += bytes([self.rb.pop(0)])
+                else:
+                    self.tx += bytes([const.get(i, self.reg[i])])
                 self.rx = self.rx[1:]
             else:                                            # unknown: ignore
                 self.rx = self.rx[1:]

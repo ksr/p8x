@@ -3141,17 +3141,23 @@ fa_abd: RTS
 ; POINT(x,y) — the pen (0-3) at a pixel; 0 for anything off-screen, matching the
 ; write side's "off-screen simply is not there" rule. Two arguments, so PARGET
 ; (which parses exactly one) does not fit and the parens are handled here.
+; PIXELR(x,y) -- SINGLE-INTERFACE (2026-08-31): the read goes through the
+; GL verb PIXRD now, which takes window coordinates natively (no wflip)
+; and answers through the read-back FIFO (GLRB, GLSTAT bit0) -- BASIC's
+; last device-door READ is gone; only GTEXT's pixel writes remain on
+; $FF20. Semantics unchanged: the RGB565 colour, 0 off-screen.
 fa_point: INP2
-        JSR  GCHECK
-        JSR  SKIPSP
+        JSR  glchk                  ; GL engine + GLFST for GLVSEP-free
+        JSR  SKIPSP                 ;   parsing (the parens are ours)
         LDA  (P2)
         LDB  #'('
         CMP
         JNZ  pt_err
         INP2
+        LDA  #$63                   ; PIXRD
+        JSR  GLPUT
         JSR  EXPR
-        LDA  #<GX0
-        JSR  GSTORE
+        JSR  GLPW                   ; x
         JSR  SKIPSP
         LDA  (P2)
         LDB  #','
@@ -3159,33 +3165,24 @@ fa_point: INP2
         JNZ  pt_err
         INP2
         JSR  EXPR
-        LDA  RESULT                 ; window -> device row (wflip, extent
-        STA  NUM1                   ;   1): the read twin counts y UP too
-        LDA  RESULT+1
-        STA  NUM1+1
-        LDA  #1
-        STA  NUM2
-        LDA  #0
-        STA  NUM2+1
-        JSR  wflip
-        LDA  NUM1
-        STA  RESULT
-        LDA  NUM1+1
-        STA  RESULT+1
-        LDA  #<GY0
-        JSR  GSTORE
+        JSR  GLPW                   ; y
         JSR  SKIPSP
         LDA  (P2)
         LDB  #')'
         CMP
         JNZ  pt_err
         INP2
-        LDA  #GC_PIXR
-        JSR  GEXEC
-        JSR  GWAIT                  ; the answer is only valid once it is done
-        LDA  GDATA                  ; GDATA streams the 16-bit colour: low...
+pt_rb:  LDA  GLSTATR                ; wait for the colour (bit0: RB byte)
+        LDB  #$01
+        AND
+        JZ   pt_rb
+        LDA  GLRBR                  ; low byte...
         STA  RESULT
-        LDA  GDATA                  ; ...then high (and parks on the high byte)
+pt_rb2: LDA  GLSTATR                ; ...then the high byte's own wait
+        LDB  #$01
+        AND
+        JZ   pt_rb2
+        LDA  GLRBR
         STA  RESULT+1
         RTS
 pt_err: JMP  SYNERR
