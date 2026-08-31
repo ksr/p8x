@@ -165,8 +165,10 @@ POKEA  = BASRAM+$F6          ; POKE address (2)
 ; turns out to alias something.
 GSADR  = BASRAM+$DB          ; GSTORE: target register address (page $FF)
 GSTGT  = BASRAM+$DC          ; GARG:   target held across EVAL
-GPEN   = BASRAM+$DD          ; shadow of GCOL -- the device register is WRITE-ONLY,
-                             ;   so CLS could not otherwise restore the pen
+GPEN   = BASRAM+$DD          ; the pen of record (COLOR writes it): the device
+                             ;   GCOL is WRITE-ONLY and the GL walker clobbers
+                             ;   it while drawing, so GTEXT asserts this shadow
+                             ;   into GCOL/GCOLH at entry
 GPENH  = BASRAM+$FA          ; ...and its high byte, now a pen is a whole RGB565
                              ;   colour. NOT $F2: that is GTTMP, GTEXT's carry
                              ;   scratch -- the stale "last spares" comment
@@ -376,11 +378,10 @@ bs_go:
         STA  SEED
         LDA  #$AC
         STA  SEED+1
-        LDA  #$FF            ; graphics: pen WHITE ($FFFF), shadow and device
-        STA  GPEN            ;   agreeing. Low byte first -- a GCOL write
-        STA  GPENH           ;   clears GCOLH, so the order is load-bearing.
-        STA  GCOL
-        STA  GCOLH
+        LDA  #$FF            ; graphics: pen WHITE ($FFFF) in the GPEN
+        STA  GPEN            ;   shadow -- the pen of record; nothing
+        STA  GPENH           ;   writes the device GCOL directly any more
+                             ;   (GTEXT asserts the shadow at entry)
         LDA  #0              ; PRMFIL shadow: the card powers up outline
         STA  PRMSH
         LDA  GLIDR           ; a GL engine? establish BASIC's full-screen
@@ -1353,7 +1354,7 @@ glchk:  JSR  GCHECK
 ; pair at cold start and again after the native RESETF statement. A GL
 ; "RF" STRING keeps the raw semantics -- documented in man basic.
 glwin:  LDP1 #glwtab
-        LDA  #18
+        LDA  #22
         STA  GLCNT
 glw_l:  LDA  (P1)+
         JSR  GLPUT
@@ -1364,6 +1365,11 @@ glw_l:  LDA  (P1)+
         RTS
 glwtab: .byte $B3,$00,$00,$DF,$01,$00,$00,$0F,$01   ; WINDOW 0,479,0,271
         .byte $B2,$00,$00,$DF,$01,$00,$00,$0F,$01   ; VWPORT 0,479,0,271
+        .byte $06,$1F,$3F,$1F                       ; COLOR 31,63,31: the pen
+                                                    ;   starts WHITE, matching
+                                                    ;   the GPEN shadow, not
+                                                    ;   whatever a previous
+                                                    ;   session left on the card
 
 ; GLPW -- one int16 argument from RESULT to the GL FIFO, little-endian
 GLPW:   LDA  RESULT
@@ -1981,6 +1987,9 @@ glv_hi: LDB  #>GLVTAB
         JNZ  glv_nr                 ;   full-screen window comes back (the
         LDA  #0                     ;   card resets it DEGENERATE; see glwin)
         STA  PRMSH
+        LDA  #$FF                   ; the pen resets WHITE on the card;
+        STA  GPEN                   ;   the GPEN shadow (GTEXT's pen)
+        STA  GPENH                  ;   follows it
         JSR  glwin
 glv_nr: LDA  GLMETA
         LDB  #$FF                   ; meta $FF: the string statement (TEXT)

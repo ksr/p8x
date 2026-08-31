@@ -82,9 +82,13 @@ if bytes([0x10, 3, 0, 4, 0, 0x28, 5, 0, 6, 0]) not in fifo:
 for b in (0xB3, 0xB2, 0x06):
     if b not in fifo:
         print("FAIL: GL byte %02X never crossed the wire" % b); ok = False
-# COLOR wrote the gfx pen low byte over the bridge (1234 & 255 = 210)
-if not seen(0x04, 210):
-    print("FAIL: COLOR low byte missing"); ok = False
+# COLOR 1234 ($04D2) reaches the card ONLY as GL bytes now (r=0 g=38
+# b=18); the old direct device-pen write is gone -- GPEN shadows it and
+# GTEXT asserts the shadow when it draws
+if bytes([0x06, 0, 38, 18]) not in fifo:
+    print("FAIL: GL COLOR bytes missing from the FIFO"); ok = False
+if seen(0x04, 210):
+    print("FAIL: COLOR still writes the device pen (vestigial write is back)"); ok = False
 # PIXELR(3,267): the DEVICE door -- coords then GCMD 9, then two GDATA
 # reads (mock GDATA reads return 0)
 for idx, val in ((0x00, 3), (0x01, 4), (0x05, 9)):
@@ -92,4 +96,4 @@ for idx, val in ((0x00, 3), (0x01, 4), (0x05, 9)):
         print("FAIL: write idx %02X val %d never crossed the wire" % (idx, val)); ok = False
 sys.exit(0 if ok else 1)
 EOF
-echo "EMU-BRIDGE TEST: PASS (BASIC drove a mock card over the pty: identity PEEKs, GL LINE bytes, COLOR/PIXELR device traffic all on the wire)"
+echo "EMU-BRIDGE TEST: PASS (BASIC drove a mock card over the pty: identity PEEKs, GL LINE/COLOR bytes, PIXELR device traffic, no vestigial pen write)"
