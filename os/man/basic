@@ -86,8 +86,9 @@ GRAPHICS
     0..271 BOTTOM to top -- window space, the PGC's own, everywhere.
     Off-window drawing clips; off-screen device pixels are simply not
     drawn.
-        COLOR c                   drawing colour: one PACKED value...
-        COLOR r,g,b               ...or three numbers (r,b 0-31, g 0-63)
+        COLOR r,g,b               drawing colour: r,b 0-31, g 0-63...
+        COLOR c                   ...or ONE packed RGB565 value, for
+                                  RGB() and PIXELR() round-trips
 
     DRAWING statements (MIGRATED 2026-08-30: these emit PGC/GL now --
     WINDOW space, y UP, transformed by WINDOW/VWPORT, honouring

@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: eb839e7b-2183-47af-84cd-a059555f72b5
-  modified: 2026-08-31T05:10:07.963Z
+  modified: 2026-08-31T11:46:14.643Z
 ---
 
 SHIPPED 2026-08-19, commit c29993f (branch sdram-framebuffer): os/commands/
@@ -293,5 +293,15 @@ nothing -- the bug class to remember); PRMSH (BASRAM+$FB) shadows
 PRMFIL for BOX/CIRCLE force+restore; BXS moved $E6->$EA (GLPUT/GLVSEP
 scratch GLTMP $E7/GLFST $E9 are LIVE during migrated statements).
 Bridge protocol: GL bytes cross as BURST frames into the card FIFO,
-device regs as (idx,val) writes at $FFxx-$20 indexes. C lib_gfx still
-device-side -- next migration candidate.
+device regs as (idx,val) writes at $FFxx-$20 indexes. COORDINATE
+UNIFICATION 2026-08-31 (f1ef3eb, user rule): EVERYTHING counts y UP --
+GTEXT (BASELINE-left anchor, glyphs rise 7*size)/IMAGE (BOTTOM-left)/
+PIXELR() stay device-implemented but BASIC wflips y (272-y-extent);
+fixed mapping, no WINDOW re-scale. SILICON TRAP FOUND BY USER: the GL
+walker masters the device and leaves ITS colour in write-only GCOL
+(CLS=FLOOD 0,0,0 -> pen BLACK -> GTEXT invisible ON BOARD ONLY; the
+emulator passes colours as args and can't show it) -- GTEXT now
+asserts GPEN at entry. Emulator-vs-RTL divergences hide in WRITE-ONLY
+device state: check both when a device-door user misbehaves on silicon
+but passes emulation. C lib_gfx still device-side/screen-space -- next
+migration candidate.

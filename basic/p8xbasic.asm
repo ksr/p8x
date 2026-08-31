@@ -1459,11 +1459,13 @@ DOCOLOR: INP2
         JNZ  dc_st                  ; no comma: RESULT is the packed colour
         JSR  RGBTAIL                ; comma: RESULT was r; parse ,g,b and pack
 dc_st:  LDA  RESULT
-        STA  GPEN                   ; shadow first: GCOL cannot be read back
-        STA  GCOL                   ; low byte first -- this clears GCOLH
-        LDA  RESULT+1
-        STA  GPENH
-        STA  GCOLH
+        STA  GPEN                   ; the shadow is the pen of record now:
+        LDA  RESULT+1               ;   GTEXT asserts it into the device's
+        STA  GPENH                  ;   write-only GCOL at entry (the GL
+                                    ;   walker clobbers GCOL anyway), and
+                                    ;   no other device user reads a pen --
+                                    ;   the old direct GCOL/GCOLH writes
+                                    ;   were vestigial and are gone
         LDA  GLIDR                  ; a GL engine? ONE pen statement drives
         LDB  #'G'                   ;   both paths: unpack the 565 back to
         CMP                         ;   r g b and set the card's pen too
@@ -5806,17 +5808,19 @@ MHELP:  .byte CR,LF
         .byte CR,LF
         .ascii "  LEN ASC CHR$ LEFT$ RIGHT$ MID$ STR$ VAL"
         .byte CR,LF
-        .ascii "GRAPHICS: COLOR p : LINE x0,y0,x1,y1 : CLS"
+        .ascii "GRAPHICS (window coords, y UP 0-271): COLOR r,g,b : CLS"
         .byte CR,LF
-        .ascii "  BOX x0,y0,x1,y1[,FILL|,NOFILL]   PLOT x,y"
+        .ascii "  LINE x0,y0,x1,y1   BOX x0,y0,x1,y1[,FILL|,NOFILL]"
         .byte CR,LF
-        .ascii "  CIRCLE x,y,r[,ry][,FILL]  POINT(x,y)  RGB(r,g,b)"
+        .ascii "  CIRCLE x,y,r[,ry][,FILL]  PIXELW x,y  PIXELR(x,y)  RGB(r,g,b)"
         .byte CR,LF
-        .ascii "  GTEXT x,y,size,s$   (5x7 text, 80 cols at size 1)"
+        .ascii "  GTEXT x,y,size,s$   (5x7 text, y is the BASELINE)"
         .byte CR,LF
-        .ascii "  IMAGE x,y,f$   draw a P8I image file (tools/p8img.py makes them)"
+        .ascii "  IMAGE x,y,f$   draw a P8I file, bottom-left at x,y"
         .byte CR,LF
-        .ascii "  SCREEN IS 480x272 RGB565 - COLOR R,G,B (0-31,0-63,0-31)"
+        .ascii "  + the PGC verbs native: MOVE DRAW POLY RECT AREA TEXT ... (man basic)"
+        .byte CR,LF
+        .ascii "  SCREEN IS 480x272 RGB565 - COLOR r,g,b (0-31,0-63,0-31)"
         .byte CR,LF
         .ascii "STRINGS: A$ B$ (assign, + concat, compare)"
         .byte CR,LF

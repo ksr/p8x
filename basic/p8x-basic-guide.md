@@ -174,7 +174,7 @@ A line may hold several statements separated by `:` —
 | `PRINT# expr` | write one value + newline as a record to the open output file |
 | `INPUT# v` | read one record from the open input file into `v` (numeric or string) |
 | `CLOSE` | close the data-file channel (commits an output file) |
-| `COLOR c` / `COLOR r,g,b` | set the drawing colour: one PACKED RGB565 value, or three numbers (`r`,`b` 0–31, `g` 0–63) — see *Graphics* |
+| `COLOR r,g,b` / `COLOR c` | set the drawing colour: three numbers (`r`,`b` 0–31, `g` 0–63), or one PACKED RGB565 value (for `RGB()` and `PIXELR()` round-trips) — see *Graphics* |
 | `CLS` | clear the screen; the current `COLOR` is **not** changed |
 | `PIXELW x,y` | one pixel (was `PLOT`) |
 | `LINE x0,y0,x1,y1` | draw a line, both endpoints included |
