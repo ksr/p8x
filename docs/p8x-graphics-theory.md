@@ -36,7 +36,7 @@ is. An absent card floats the bus — software must probe before poking.
 
 A register file (X0/Y0/X1/Y1 as low+high byte pairs, a 16-bit pen,
 scalar parameters for radii) and a command register (`GCMD`, $FF25):
-PLOT, LINE, BOXFILL, POINT (a read), ELLIPSE, ELLIPSEFILL, and the
+PIXELW, LINE, BOXFILL, PIXELR (a read), ELLIPSE, ELLIPSEFILL, and the
 LINPAT latch. (BOX outline, CLS and CIRCLE/CIRCLEFILL were retired by
 the stage-10 diet: four LINEs, a full-screen BOXFILL and the ellipse
 with rx=ry are the same pixels, and their walkers' fabric bought the

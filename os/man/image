@@ -8,7 +8,10 @@ SYNOPSIS
 DESCRIPTION
     Two inverse verbs, straight from the shell (no BASIC needed).
 
-    `image x y file` draws a P8I picture with its top-left at (x,y). The
+    `image x y file` draws a P8I picture with its top-left at (x,y) --
+    SCREEN coordinates, y down: this shell command speaks the raw device
+    door, unlike BASIC's IMAGE statement, which takes window coordinates
+    (y up) anchored at the picture's bottom-left. The
     file carries its own width, height and depth, so nothing else is
     needed; a file that is missing prints ?No file, and one that is not
     P8I, the wrong version or depth, or ends early prints ?NOT P8I.

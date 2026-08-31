@@ -81,55 +81,52 @@ Test scripts and fixtures live in [`test/`](test/); their build artifacts
 
 ## The graphics display
 
-A 240x136 four-colour framebuffer with a drawing engine, at `$FF20–$FF26`. It
-exists for the FPGA build, which drives a 4.3" 480x272 RGB panel — each logical
-pixel is drawn as a 2x2 block, so the framebuffer fills the panel exactly and
-pixels stay square.
+A 480x272 framebuffer in **RGB565 direct colour** — a pixel IS its colour —
+with a drawing engine, at `$FF20–$FF2F`, plus the GL/PGC graphics-language
+port at `$FF50–$FF57`. On the board the device is the Tang Nano 20K graphics
+card: two framebuffer pages live in the FPGA's in-package SDRAM behind a
+streaming controller (`FLIP` swaps them). The emulator is the golden model —
+the RTL is byte-compared against it frame by frame.
 
-**Why 240x136 and not the panel's own 480x272:** the Tang Nano 20K has 6 spare
-block RAMs, which is 12288 bytes. 480x272 needs 16320 bytes at even *one* bit per
-pixel. Half resolution at 2 bits per pixel is 8160 bytes (4 blocks) and leaves
-margin. The four pens index a palette of 12-bit RGB, so the colours on screen are
-four chosen from 4096.
-
-**The same device serves both builds.** Inside the FPGA P8X it sits on the CPU's
-internal bus; as a **bus card** it is a Tang Nano 20K plus the same panel, behind
-a bus interface. One command set, one golden model, one RTL core — only the
-front-end differs.
+(The original stage-4 device was 240x136 with four palettized pens in block
+RAM; direct colour retired the palette, `SETPAL` and the modes in stages 5–6,
+and the SDRAM controller bought the full panel resolution.)
 
 **The drawing engine is in the device, not in software.** Load the registers,
 then write `GCMD`:
 
 | Port | Name | |
 |------|------|---|
-| `$FF20`–`$FF23` | `GX0` `GY0` `GX1` `GY1` | coordinate low bytes (also R, G, B for `SETPAL`) |
-| `$FF29`–`$FF2C` | `GX0H` `GY0H` `GX1H` `GY1H` | coordinate high bytes — see below |
-| `$FF24` | `GCOL` | pen 0–3; **sticky** across commands |
-| `$FF28` | `GPARM` | scalar argument (`CIRCLE` radius) |
+| `$FF20`–`$FF23` | `GX0` `GY0` `GX1` `GY1` | coordinate low bytes |
+| `$FF29`–`$FF2C` | `GX0H` `GY0H` `GX1H` `GY1H` | coordinate high bytes — a low-byte write clears its high partner |
+| `$FF24` / `$FF2D` | `GCOL` / `GCOLH` | the pen, a whole RGB565 colour (write-only; `GID0` is `$FF2D`'s read side); **sticky** across commands |
+| `$FF28` / `$FF2F` | `GPARM` / `GPARM2` | scalar arguments (ellipse radii; the `LINPAT` pattern pair) |
 | `$FF25` | `GCMD` | write to execute |
 | `$FF26` | `GSTAT` | read: bit 7 BUSY, bit 0 ERR (unknown command) |
-| `$FF27` | `GDATA` | read: the `IDENT` record, else the last `POINT` result |
-| `$FF2D`/`$FF2E` | `GID0`/`GID1` | read `$50`/`$47` — "PG" |
+| `$FF27` | `GDATA` | read: the `IDENT` record, else the last `PIXELR` colour (low byte then high) |
+| `$FF2E` | `GMODE` (write) | drawing mode: 0 replace, 1 complement, 2 OR, 3 AND, 4 XOR (stage 10f) |
+| `$FF2D`/`$FF2E` | `GID0`/`GID1` (read) | `$50`/`$47` — "PG" |
 
 | Cmd | | Cmd | |
 |---|---|---|---|
-| `$01` | `PLOT` (X0,Y0) | `$07` | `CIRCLE` centre (X0,Y0), radius `GPARM` |
-| `$02` | `LINE` (X0,Y0)–(X1,Y1) | `$08` | `CIRCLEFILL` |
-| `$03` | `BOX` outline | `$09` | `POINT` — pixel at (X0,Y0) → `GDATA` |
-| `$04` | `BOXFILL` solid | `$0A` | `ELLIPSE` — radii `GPARM` (x), `GPARM2` (y) |
-| `$05` | `CLS` to `GCOL` | `$0B` | `ELLIPSEFILL` |
-| `$06` | `SETPAL` pen `GCOL` := (X0,Y0,X1) as R,G,B | `$F1` | `RESET` — clear, default palette |
+| `$01` | `PIXELW` (X0,Y0) | `$0A` | `ELLIPSE` — radii `GPARM` (x), `GPARM2` (y) |
+| `$02` | `LINE` (X0,Y0)–(X1,Y1) | `$0B` | `ELLIPSEFILL` |
+| `$04` | `BOXFILL` solid | `$0C` | latch `LINPAT` — the 16-bit line pattern {`GPARM2`,`GPARM`} |
+| `$09` | `PIXELR` — pixel at (X0,Y0) → `GDATA` | `$F1` | `RESET` — clear, white pen, solid pattern |
 | `$F0` | `SELFTEST` — pattern (**emulator only**) | `$F2` | `IDENT` → 14 bytes via `GDATA` |
 
-**Detection and geometry.** An absent card floats the bus to `$FF`, so one magic
-byte proves nothing — `GID0`/`GID1` are two fixed bytes at two addresses. `IDENT`
-then streams a 14-byte record (`"P8X-GFX"`, version, width, height, pens, `$00`)
-so software can *ask* the geometry rather than assume it; that is what lets one
-BASIC binary drive a wider device later.
+`BOX` outline, `CLS` and `CIRCLE`/`CIRCLEFILL` were retired by the stage-10
+diet: four `LINE`s, a full-screen `BOXFILL` and the ellipse with rx=ry are
+the same pixels, and their walkers' fabric bought the PGC language's curves,
+patterns and text (see `fpga/tang-nano-20k/sdram/STAGE10-DESIGN.md`). The GL
+walker at `$FF50` **masters** this device internally — its drawing rewrites
+the pen and coordinate registers, which is why software that draws through
+this door directly (BASIC's `GTEXT`, the C gfx library) must set its own pen
+and never trust a previous value.
 
-**`SELFTEST` needs no software behind it** — one register write puts all four
-pens, both primitives, a circle and all four screen edges up, which is how you
-tell a dead card from a dead driver.
+**`SELFTEST` needs no software behind it** — one register write puts colour
+swatches, both primitives, an ellipse and all four screen edges up, which is
+how you tell a dead card from a dead driver.
 
 > **`SELFTEST` is emulator-only.** The RTL drops `$F0` into its `default` arm and
 > sets the error bit, so on the board it draws nothing. Every other command is
@@ -138,13 +135,13 @@ tell a dead card from a dead driver.
 **Coordinates are 16-bit pairs, and writing a low byte CLEARS its high byte.**
 So code that only ever writes low bytes can never inherit a stale high byte from
 something else; write the high byte *after* the low one when you need a
-coordinate past 255. The pairs exist because this same panel at its native
-480x272 needs 9 bits of X, which is where an SDRAM framebuffer would go.
+coordinate past 255. The pairs exist because 480x272 needs 9 bits of X.
 
-That matters for speed: a filled box is ~8 port writes instead of 32640
-read-modify-write cycles through a data port (2bpp packs four pixels per byte, so
-software plotting would have to mask every one). At 9 MHz that is the difference
-between about 1 ms and about 180 ms.
+That matters for speed: a filled box is a handful of port writes instead of
+a read-modify-write per pixel through a data port. On the wire to the real
+card the same arithmetic dominates the other way -- per-pixel drawing (IMAGE,
+GTEXT) pays bridge round-trips per pixel, which is the BACKLOG's
+faster-image-transfer item.
 
 Two behaviours are load-bearing, and `test/gfx_test.sh` pins both down because
 the RTL engine will have to match them exactly:

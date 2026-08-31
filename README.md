@@ -158,13 +158,17 @@ standalone on power.
 **Graphics** (`build.sh lcd`) adds the panel's native 480×272 framebuffer in
 **RGB565 direct colour** — a pixel IS its colour, 65,536 of them — living in
 the Tang Nano's in-package SDRAM behind a streaming controller, with a drawing
-engine driven by BASIC: `COLOR c` / `COLOR r,g,b`, `CLS`, `PLOT`, `LINE`,
+engine driven by BASIC in one window-space coordinate system (y up, the
+PGC's own): `COLOR r,g,b` (or one packed value), `CLS`, `PIXELW`, `LINE`,
 `BOX`, `CIRCLE` (a second radius gives an ellipse), `GTEXT`, `IMAGE` (draws a
-P8I picture file — `tools/p8img.py` converts anything into one), and the
-`POINT(x,y)` and `RGB(r,g,b)` functions. The engine lives in the device, so a
-filled box costs the same handful of instructions as an empty one — `GTEXT` is
-the one exception, rasterising its 5×7 glyphs in software because the device
-has no text command. There is one geometry and no modes or palette to manage.
+P8I picture file — `tools/p8img.py` converts anything into one), the
+`PIXELR(x,y)` and `RGB(r,g,b)` functions — plus the full PGC graphics
+language as native statements (`MOVE`/`DRAW`/`POLY`/`RECT`, matrices, 3D,
+command lists, `TEXT`; see `man basic`). The drawing statements emit that
+language; the engine lives in the device, so a filled box costs the same
+handful of instructions as an empty one — `GTEXT` is the one exception,
+rasterising its 5×7 glyphs in software because the device has no text
+command. There is one geometry and no modes or palette to manage.
 The same device is modelled in `p8xemu`, and the two are byte-compared frame
 by frame.
 

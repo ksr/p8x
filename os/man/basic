@@ -49,7 +49,7 @@ FUNCTIONS
     ABS(x)          absolute value
     RND(n)          pseudo-random integer 1..n
     PEEK(addr)      byte (0-255) at a memory address
-    PIXELR(x,y)     colour at a screen pixel; 0 if off-screen
+    PIXELR(x,y)     colour at a pixel (window coords); 0 if off-screen
     RGB(r,g,b)      pack a colour: r,b 0-31, g 0-63 (see GRAPHICS)
     LEN(s$)         number of characters in s$
     ASC(s$)         code of the first character (0 if empty)
@@ -166,7 +166,7 @@ GRAPHICS
     pixel, which is fast enough for labels and titles but is not a console
     -- there is no cursor, no scrolling and no line wrap.
 
-        GTEXT 10,10,1,"SCORE"     top-left corner at 10,10
+        GTEXT 10,10,1,"SCORE"     baseline at (10,10), text rises
         GTEXT 0,0,2,A$+"!"        any string expression works
     size multiplies the glyph: 1 is 5x7 in a 6x8 cell, so a full line is 80
     characters across and 34 rows down; size 2 gives 40 x 17. Text is drawn
