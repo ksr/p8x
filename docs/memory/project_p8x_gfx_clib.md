@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: eb839e7b-2183-47af-84cd-a059555f72b5
-  modified: 2026-08-19T22:23:48.250Z
+  modified: 2026-08-31T00:14:23.485Z
 ---
 
 SHIPPED 2026-08-19, commit c29993f (branch sdram-framebuffer): os/commands/
@@ -256,16 +256,26 @@ drain timeouts need 5M cycles (CLS is a per-pixel-pair walk; >1M with
 a full FIFO). Proof chain = NINE frames; basic_gl_test runs TDEFIN/
 TSIZE/TEXT native (BASIC TEXT = glvtab meta $FF -> glv_str string
 handler; tokens $EE-$F1). Stage 10 rungs a-h ALL COMPLETE. 10i/j/k SHIPPED
-2026-08-29/30 (a518415): curves CIRCLE/ELIPSE/ARC/SECTOR, patterns
-LINPAT/AREAPT, TJUST/TEXTP/TEXT-in-lists -- 12 byte-identical frames;
-funded by RETIRING device CLS/BOX-outline/CIRCLE (user-approved; a
-circle IS the ellipse rx=ry now; monitor splash = BOXFILL + 4 LINEs).
-Card synthesizes 20,679/20,736 (99.7%); PLACEMENT SEED SWEEP + FLASH
-STILL PENDING. Diet lesson PROVEN with clean flat builds: state-arm
-serialization diets trade ~evenly against their source muxes (two
-measured net-NEGATIVE and were reverted); only real REMOVALS and the
-paint-rides-S_LIN merge (-138) paid. NEVER run two build.sh in
-parallel (shared logs -> garbage numbers). NAMING EPOCH 2026-08-30:
+2026-08-29/30 (a518415): curves, patterns, TJUST/TEXTP/TEXT-in-lists --
+12 byte-identical frames; funded by RETIRING device CLS/BOX-outline/
+CIRCLE (user-approved; a circle IS the ellipse rx=ry now; monitor
+splash = BOXFILL + 4 LINEs). FIT ENDGAME 2026-08-30: the chip's
+PRACTICAL placement cliff is ~19,150-19,250 LUT4 (19,129 placed, 19,303+
+failed every seed; placer knobs incl. SA all failed) -- NOT the nominal
+20,736. User-approved removals to get under it: AREAPT (-569 measured;
+E7=err1) then ARC/SECTOR (-2,045 measured!! the fan lane-loader+angle
+walk carried huge mux fabric; 3C/3D=err1; CIRCLE/ELIPSE + trig ROM
+stay). CARD PLACES 18,065/87% seed 1, Fmax 73/88 vs 12, FLASHED +
+SILICON-CERTIFIED 2026-08-30 (silicon_10gh + silicon_10ijk both PASS
+incl. retired-keyword err paths). Both removals BACKLOG'd for the
+successor board; arcs = 4-degree DRAW chains meanwhile. Diet lesson
+PROVEN with clean flat builds: state-arm serialization diets trade
+~evenly against their source muxes (two measured net-NEGATIVE and were
+reverted); only real REMOVALS pay. NEVER run two build.sh in parallel
+(shared logs -> garbage numbers). macOS gotcha: oss-cad-suite's vvp is
+a bash WRAPPER -- iverilog-compiled benches can't exec via shebang
+(ENOEXEC); keep homebrew iverilog first in PATH for test runs, suite
+PATH only for yosys/nextpnr/openFPGALoader. NAMING EPOCH 2026-08-30:
 the pixel pair is PIXELW/PIXELR at EVERY layer (BASIC statements
 [tokens $AB/$AE unchanged, text renamed], lib_gfx gpixelw/gpixelr,
 GC_PIXW/GC_PIXR equates, RTL S_PIXW/S_PIXR, glbridge.pixelr()/pixelw()

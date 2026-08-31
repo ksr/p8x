@@ -182,7 +182,7 @@ THE GRAPHICS LANGUAGE (3D)
     MDMATX / VWIDEN VWRPT VWROTX VWROTY VWROTZ VWMATX DISTAN PROJCT
     DISTH DISTY CLIPH CLIPY / CLBEG CLEND CLRUN CLOOP CLDEL CLAPP /
     FLIP PGSYNC WAIT RESETF LINFUN AREA AREABC TEXT TSIZE TANGLE
-    TDEFIN ELIPSE ARC SECTOR LINPAT AREAPT TEXTP TJUST. Verbs,
+    TDEFIN ELIPSE LINPAT TEXTP TJUST. Verbs,
     parameters and order are exactly
     the device's (man gl documents each); FLOOD and CLEARS take r,g,b
     the way the device does. COLOR is not in the list because the
@@ -226,11 +226,13 @@ THE GRAPHICS LANGUAGE (3D)
     statements (strokes as MOVER3/DRAWR3, CLEND finishes), so a program
     can define its own symbols. man gl has the full text model.
 
-    ELIPSE rx,ry / ARC r,a0,a1 / SECTOR r,a0,a1 draw window-space
-    curves at the GL current point (PRMFIL 1 fills; SECTOR r,0,0 is a
-    filled circle). LINPAT p sets the device line pattern -- BASIC's
+    ELIPSE rx,ry draws a window-space curve at the GL current point
+    (PRMFIL 1 fills; rx=ry is the circle -- the CIRCLE name stays
+    with the DEVICE statement. ARC and SECTOR were removed
+    2026-08-30: draw arcs as short DRAW chains).
+    LINPAT p sets the device line pattern -- BASIC's
     own LINE and PIXELW honour it, like LINFUN; -1 restores solid.
-    AREAPT w1,...,w16 masks POLY/RECT/SECTOR fills; TJUST h,v
+    TJUST h,v
     justifies TEXT (1..3 each: left/centre/right, bottom/middle/top);
     TEXTP s$ is TEXT s$ under its PGC name. man gl has the details.
 

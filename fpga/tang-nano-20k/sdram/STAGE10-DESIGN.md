@@ -540,19 +540,16 @@ byte-identical emulator-vs-RTL (c_gl_rtl_test), 92-PASS make test.
     regular vertex jumps straight to a1; an extra 2-degree step cost
     one apex pixel until the RTL matched it). PRMFIL fills
     circle/ellipse (device) and SECTOR (a fan of map-only 2D tris
-    about the centre); SECTOR r 0 0 is the filled circle that honours
-    AREAPT. Negative radius = error 2; none move the current point.
+    about the centre); SECTOR r 0 0 is a filled circle drawn as a
+    fan. Negative radius = error 2; none move the current point.
   - **10j patterns**: LINPAT p is DEVICE state like GMODE -- the
     register map is full, so it rides GCMD 0C latching {GPARM2,GPARM};
     the Bresenham loop gates px_go on the pattern, MSB first,
     restarting each primitive, every line from every door (glyph
-    strokes included). AREAPT im1..16 lives in scratch words 784+
-    (streamed, not pbuf'd) and masks fill SPANS: the walker's run
-    splitter breaks each patterned row into maximal set-bit runs
-    issued as sub-BOXFILLs through the SHARED W_BOX writer (bit for
-    column x is 15-(x&15) of row word y&15 -- screen space). Scope:
-    POLY/POLY3/RECT/SECTOR fills; CLEARS and FLOOD are erases, filled
-    CIRCLE/ELIPSE is a device command, and AREA forces replace AND
+    strokes included). AREAPT shipped here too -- 16 words streamed
+    to scratch 784+ masking fill spans through a run splitter -- but
+    was REMOVED 2026-08-30 to buy placement headroom (see the round-
+    four note below); opcode E7 is err1 again. AREA forces replace AND
     solid (its visited-mark invariant) with the idle-waited setup the
     W_LF lesson demands. RESETF restores everything.
   - **10k text completion**: TJUST h v (1..3 each) offsets the start
@@ -587,6 +584,31 @@ byte-identical emulator-vs-RTL (c_gl_rtl_test), 92-PASS make test.
     splash; the frame the test dumped was the splash. They live in the
     statement-scratch run at $E6 now, with the warning comment the
     file already carried about "free" bytes.
+  - **The placement fight, round four (2026-08-30).** 20,679/20,736
+    (99.7%) SYNTHESIZED but would not legalize: seeds 1-4 all failed
+    placement ("design is probably at utilisation limit"). The design
+    fit logically; the placer had no slack to maneuver. User-approved
+    fix: REMOVE AREAPT (the patterned fill mask) end to end -- the E7
+    stream state (G_AP), the WP_* run splitter, the W_APR restore and
+    its regs, the scratch 784..799 rows, the keyword/glvtab entries
+    (BASIC GL tokens after it shift; the verbs were days old), and
+    the emulator model, with docs and the pattern tests reworked to
+    assert the err1 skip. LINPAT stays (a latch and a gate). That
+    measured -569 (20,679 -> 20,110) -- real, but the deeper truth
+    surfaced by rounds two and four together is that the PRACTICAL
+    placement cliff is ~19,150-19,250 LUT4 (19,129 placed; 19,303 and
+    everything above failed every seed; placer knobs -- heap-beta
+    0.98, longer legalization timeouts, the SA placer -- all failed
+    too, SA by crashing). So ARC/SECTOR went as well, user-approved:
+    the 3C/3D dispatch, G_CVN/G_CV/G_CV2D, the CVP0-4 arc-vertex
+    subroutine and the angle-walk regs. CIRCLE/ELIPSE (CVE0-7) and
+    the trig ROM (the rotation verbs' too) stay. Both removals are
+    successor-board candidates, recorded in BACKLOG. Measured:
+    ARC/SECTOR was worth a startling -2,045 (20,110 -> 18,065 -- the
+    fan's lane loader and the angle walk's muldiv scheduling carried
+    far more mux fabric than the state count suggested). **The card
+    PLACES at 18,065 LUT4 / 87%, seed 1, Fmax 73.2/88.0 MHz vs 12 --
+    ~1,100 under the cliff, real slack again.**
 
 Retirement of the stage-9 record front end is its own decision point
 after 10c — ASK the user (workflow rule: no silent breakage of shipped

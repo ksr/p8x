@@ -237,12 +237,10 @@ static void gpu_hline(int xa,int xb,int y,uint16_t c);
 static void gpu_ellipse(int cx,int cy,int rx,int ry,uint16_t c,int fill);
 /* stage 10j: LINPAT lives in the DEVICE (like GMODE) -- every line from
    every door consults it, MSB first, restarting each primitive. AREAPT
-   is GL-side state masking the fill spans. */
+   (patterned fill spans) was REMOVED 2026-08-30 to buy placement
+   headroom on the full card; opcode E7 is err1 again, a candidate for
+   the successor board. */
 static uint16_t gpat = 0xFFFF;         /* device line pattern */
-static uint16_t apat[16] = {0xFFFF,0xFFFF,0xFFFF,0xFFFF,0xFFFF,0xFFFF,
-                            0xFFFF,0xFFFF,0xFFFF,0xFFFF,0xFFFF,0xFFFF,
-                            0xFFFF,0xFFFF,0xFFFF,0xFFFF};
-static int apat_on;                    /* any row not solid */
 static void gpu_box(int x0,int y0,int x1,int y1,uint16_t c,int fill);
 /* RETIRED (stage 10b): the $FF40 record-engine interface -- GEUP list
    upload, GECMD RENDER, the GESEL/GEVAL register file, GEID. The GL
@@ -332,28 +330,12 @@ static void ge_sline(int16_t x0,int16_t y0,int16_t x1,int16_t y1){
         n++;
     }
 }
-static void gl_prow(int16_t y, int16_t xl, int16_t xr){
-    /* one patterned fill row: maximal runs of set bits as raw hlines
-       (fills always replace). Bit for column x is 15-(x&15), MSB first,
-       row selects apat[y&15] -- the walker's splitter is the twin. */
-    uint16_t rp = apat[y & 15];
-    int x = xl, r0;
-    while(x <= xr){
-        if(rp & (0x8000 >> (x & 15))){
-            r0 = x;
-            while(x + 1 <= xr && (rp & (0x8000 >> ((x + 1) & 15)))) x++;
-            gpu_hline(r0, x, y, gcol);
-        }
-        x++;
-    }
-}
 static void ge_span(int16_t y, int16_t xl, int16_t xr){
     if(xl > xr){ int16_t t=xl; xl=xr; xr=t; }
     if(xl < gep[17]) xl = gep[17];
     if(xr > gep[19]) xr = gep[19];
     if(xl > xr) return;
-    if(apat_on) gl_prow(y, xl, xr);
-    else gpu_box(xl, y, xr, y, gcol, 1);      /* the height-1 BOXFILL */
+    gpu_box(xl, y, xr, y, gcol, 1);           /* the height-1 BOXFILL */
 }
 static void ge_filltri(int16_t x0,int16_t y0,int16_t x1,int16_t y1,
                        int16_t x2,int16_t y2){
@@ -784,10 +766,8 @@ static int gl_cmdlen(const uint8_t *p, int n){
     case 0xC0: return 1;
     case 0xC1: return 4;                   /* AREABC r g b */
     case 0xEA: return 3;                   /* LINPAT p (10j) */
-    case 0xE7: return 33;                  /* AREAPT: 16 words */
     case 0x38: return 3;                   /* CIRCLE r (10i) */
     case 0x39: return 5;                   /* ELIPSE rx ry */
-    case 0x3C: case 0x3D: return 7;        /* ARC / SECTOR r a0 a1 */
     case 0x80: case 0x83:                  /* TEXT / TEXTP: count + chars */
         if(n < 2) return 0;
         return 2 + p[1];
@@ -1004,7 +984,6 @@ static int gl_exec2(const uint8_t *p, int n){
         memset(cldef, 0, sizeof cldef); glrec = 0; glrbank = 0;
         gpat = 0xFFFF;                 /* 10j: patterns back to solid */
         tjh = 1; tjv = 1;              /* 10k: justification home */
-        { int i; for(i=0;i<16;i++) apat[i]=0xFFFF; } apat_on = 0;
         gmode = 0;                     /* 10f: drawing mode back to replace */
         glrblen = glrbrd = 0;              /* 10e: read-back FIFO clears */
         return 1;
@@ -1106,11 +1085,8 @@ static int gl_exec2(const uint8_t *p, int n){
               if(px1>gep[19]) px1=gep[19];
               if(py0<gep[18]) py0=gep[18];
               if(py1>gep[20]) py1=gep[20];
-              if(px0<=px1 && py0<=py1){
-                  if(apat_on){ int16_t yy;
-                      for(yy=py0; yy<=py1; yy++) gl_prow(yy,px0,px1); }
-                  else gpu_box(px0,py0,px1,py1,gcol,1);
-              }
+              if(px0<=px1 && py0<=py1)
+                  gpu_box(px0,py0,px1,py1,gcol,1);
           } else {
               gl_line2(glc2[0],glc2[1],x,glc2[1]);
               gl_line2(x,glc2[1],x,y);
@@ -1120,32 +1096,21 @@ static int gl_exec2(const uint8_t *p, int n){
         return 5;
     /* ---- stage 10j: patterns -------------------------------------------
        LINPAT p: the device line pattern (every line from every door --
-       glyph strokes included; LINPAT -1 restores solid). AREAPT im1..16:
-       masks the fill SPANS of POLY/POLY3/RECT/SECTOR; CLEARS and FLOOD
-       are erases and stay solid, filled CIRCLE/ELIPSE is a device
-       command (a patterned disc is SECTOR r 0 0), and AREA forces the
-       line pattern solid like it forces replace mode (its visited-mark
-       invariant). RESETF restores both. */
+       glyph strokes included; LINPAT -1 restores solid). AREA forces it
+       solid like it forces replace mode (its visited-mark invariant).
+       RESETF restores it. AREAPT (E7, patterned fill spans) was REMOVED
+       2026-08-30 for placement headroom -- unknown opcode, err1. */
     case 0xEA: NEED(3);                                   /* LINPAT */
         gpat = (uint16_t)(p[1] | (p[2] << 8));
         return 3;
-    case 0xE7: NEED(33);                                  /* AREAPT */
-        { int i;
-          apat_on = 0;
-          for(i = 0; i < 16; i++){
-              apat[i] = (uint16_t)(p[1+2*i] | (p[2+2*i] << 8));
-              if(apat[i] != 0xFFFF) apat_on = 1;
-          } }
-        return 33;
     /* ---- stage 10i: curves (PG-640A ch.4) ------------------------------
-       All in 2D window space at the current point, like RECT; none move
-       the current point. CIRCLE/ELIPSE map their radii through the
-       window->viewport scale and draw as the DEVICE ellipse (clipped to
-       the screen, not the window -- documented divergence); ARC/SECTOR
-       are polylines through the CLIPPED 2D line path, stepping 4 degrees
-       on the shared trig table, so they window-clip exactly like lines.
-       PRMFIL fills CIRCLE/ELIPSE (device fill) and SECTOR (a screen-
-       space fan about the centre, the POLY idiom); ARC never fills. */
+       CIRCLE/ELIPSE draw in 2D window space at the current point, like
+       RECT, without moving it: radii map through the window->viewport
+       scale and draw as the DEVICE ellipse (clipped to the screen, not
+       the window -- documented divergence); PRMFIL fills. ARC/SECTOR
+       (3C/3D, trig polylines + the SECTOR fan) were REMOVED 2026-08-30
+       for placement headroom -- unknown opcodes, err1; software draws
+       arcs as short line chains through this same port. */
     case 0x38: case 0x39:                                 /* CIRCLE/ELIPSE */
         { int16_t rx, ry, cxs, cys, rxs, rys;
           if(p[0]==0x38){ NEED(3); rx=ry=gl_i16(p+1); }
@@ -1165,37 +1130,6 @@ static int gl_exec2(const uint8_t *p, int n){
           if(rys>255) rys=255;
           gpu_ellipse((int)(uint16_t)cxs,(int)(uint16_t)cys,rxs,rys,gcol,glfill);
           return p[0]==0x38?3:5; }
-    case 0x3C: case 0x3D: NEED(7);                        /* ARC / SECTOR */
-        { int16_t r=gl_i16(p+1), a0=gl_i16(p+3), a1=gl_i16(p+5);
-          int sweep, a, na, px, py, nx, ny, first=1;
-          if(r<0){ gl_err(2); return 7; }
-          a0=(int16_t)(((a0%360)+360)%360); a1=(int16_t)(((a1%360)+360)%360);
-          sweep=(((a1-a0)%360)+360)%360;
-          if(sweep==0) sweep=360;                         /* a0==a1: full */
-          px=py=0;
-          for(a=0; ; a+=4){
-              if(a>sweep) break;
-              na=(a<sweep && a+4>sweep) ? sweep : a;      /* land on a1 */
-              nx=glc2[0]+ge_md(r,gl_cos((int16_t)(a0+na)),256);
-              ny=glc2[1]+ge_md(r,gl_sin((int16_t)(a0+na)),256);
-              if(p[0]==0x3D && glfill){                   /* filled SECTOR */
-                  if(!first){
-                      int16_t s0x,s0y,s1x,s1y,s2x,s2y;
-                      gl_map2(glc2[0],glc2[1],&s0x,&s0y);
-                      gl_map2((int16_t)px,(int16_t)py,&s1x,&s1y);
-                      gl_map2((int16_t)nx,(int16_t)ny,&s2x,&s2y);
-                      ge_filltri(s0x,s0y,s1x,s1y,s2x,s2y);
-                  }
-              } else if(first && p[0]==0x3D)              /* outline: radius */
-                  gl_line2(glc2[0],glc2[1],(int16_t)nx,(int16_t)ny);
-              else if(!first)
-                  gl_line2((int16_t)px,(int16_t)py,(int16_t)nx,(int16_t)ny);
-              px=nx; py=ny; first=0;
-              if(na==sweep) break;
-          }
-          if(p[0]==0x3D && !glfill)                       /* closing radius */
-              gl_line2((int16_t)px,(int16_t)py,glc2[0],glc2[1]);
-          return 7; }
     case 0x43: NEED(3);                /* "CA " / "CX ": the mode switches
                                           are their own ASCII bytes in BOTH
                                           modes (the PGC's little joke) */

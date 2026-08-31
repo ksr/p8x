@@ -43,7 +43,7 @@ DESCRIPTION
       28 DRAW x y    29 DRAWR       2A DRAW3 x y z 2B DRAWR3
       30 POLY n xy.. 31 POLYR       32 POLY3 n xyz.. 33 POLYR3
       34 RECT x y    35 RECTR       38 CIRCLE r    39 ELIPSE rx ry
-      3C ARC r a0 a1 3D SECTOR r a0 a1              43 "CA "/"CX " (mode)
+      43 "CA "/"CX " (mode)
       70 CLBEG n     71 CLEND       72 CLRUN n     73 CLOOP n cnt
       74 CLDEL n     79 CLAPP n (P8X: append to list n)
       80 TEXT n ch.. 81 TSIZE s (8.8) 82 TANGLE deg  83 TEXTP n ch..
@@ -56,8 +56,7 @@ DESCRIPTION
       B0 PROJCT ang  B1 DISTAN d    B2 VWPORT x1 x2 y1 y2
       B3 WINDOW x1 x2 y1 y2         C0 AREA
       C1 AREABC r g b               E0 PRMFIL f
-      E7 AREAPT im1..im16 (16 words) EA LINPAT p
-      EB LINFUN m
+      EA LINPAT p                   EB LINFUN m
 
     3D pipeline: modelling matrix (MD*, composed in command order about
     the MDORG pivot), viewing matrix (VW*, orbiting the VWRPT reference
@@ -81,23 +80,19 @@ DESCRIPTION
     CIRCLE r and ELIPSE rx ry map their radii through the window->
     viewport scale and rasterize on the device (radii clamp at 255
     device pixels; PRMFIL 1 fills; they clip to the SCREEN, not the
-    window -- the one curve/window divergence). ARC r a0 a1 and
-    SECTOR r a0 a1 are 4-degree polylines on the shared trig table
-    (degrees, CCW from +x; a0=a1 means a full turn), so they window-
-    clip exactly like lines; SECTOR adds the two radii, and PRMFIL 1
-    fills it as a fan about the centre -- SECTOR r 0 0 is the filled
-    circle that honours AREAPT. A negative radius is error 2.
+    window -- the one curve/window divergence). A negative radius is
+    error 2. (The PGC's ARC and SECTOR were removed 2026-08-30 for
+    card placement headroom; opcodes 3C/3D are error 1. Draw partial
+    arcs as short DRAW chains -- 4-degree steps match what the card
+    did.)
 
     PATTERNS (stage 10j): LINPAT p sets a 16-bit line pattern in the
     DEVICE (like the LINFUN mode): every line from every door consults
     it, MSB first, restarting each primitive -- glyph strokes
-    included. LINPAT -1 restores solid. AREAPT im1..im16 masks the
-    fill spans of POLY/POLY3/RECT/SECTOR by screen position (row y&15
-    selects the word, bit 15-(x&15) the pixel): 16 words of $FFFF
-    restore solid. CLEARS and FLOOD are erases and stay solid, filled
-    CIRCLE/ELIPSE is a device command (use SECTOR for a patterned
-    disc), and AREA forces BOTH replace mode and a solid line pattern
-    (its visited-mark invariant). RESETF restores everything.
+    included. LINPAT -1 restores solid. AREA forces BOTH replace mode
+    and a solid line pattern (its visited-mark invariant). RESETF
+    restores everything. (The PGC's AREAPT fill mask was removed
+    2026-08-30 for card placement headroom; opcode E7 is error 1.)
 
     TJUST h v (stage 10k) justifies TEXT about the current point:
     h 1/2/3 = left/centre/right, v 1/2/3 = bottom/middle/top. The

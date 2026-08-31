@@ -3,10 +3,10 @@
 //
 // The byte stream is c_gl_curve_test's gl_cv.c scene verbatim: circle
 // outline and fill (radius mapped through the window->viewport scale,
-// drawn as the device ellipse), an ellipse outline, a quarter ARC and a
-// filled SECTOR (4-degree polylines / fan triangles on the shared trig
-// table), and a negative radius that must come back as error 2. The
-// frame must byte-match the emulator's gl_cv.ppm.
+// drawn as the device ellipse), an ellipse outline, the retired ARC and
+// SECTOR opcodes (3C/3D, REMOVED 2026-08-30: one err1 each, one byte
+// skipped, the stream lives), and a negative radius that must come back
+// as error 2. The frame must byte-match the emulator's gl_cv.ppm.
 //
 // The screen is prepared the way the machine's boot leaves it (CLS black +
 // the 1-px white border of the boot splash); the scene's CLEARS wipes it
@@ -169,7 +169,7 @@ module tb;
   reg [31:0] w;
   reg [15:0] p;
   reg [4:0] r5, b5; reg [5:0] g6;
-  reg [7:0] e0, e1;
+  reg [7:0] e0, e1, e2, e3;
 
   initial begin
     repeat (4) @(posedge clk); rst = 0;
@@ -212,20 +212,20 @@ module tb;
     glb(8'h06); glb(8'd0); glb(8'd0); glb(8'd31);        // COLOR blue
     glb(8'h10); glw(16'd100); glw(16'd60);
     glb(8'h39); glw(16'd80); glw(16'd30);                // ELIPSE 80 30
-    glb(8'h06); glb(8'd31); glb(8'd63); glb(8'd0);       // COLOR yellow
-    glb(8'h10); glw(16'd380); glw(16'd60);
-    glb(8'h3C); glw(16'd40); glw(16'd0); glw(16'd90);    // ARC
+    glb(8'h3C);                     // retired ARC opcode: err1, skip
+    glb(8'h3D);                     // retired SECTOR opcode: err1, skip
     glb(8'h06); glb(8'd0); glb(8'd63); glb(8'd31);       // COLOR teal
     glb(8'hE0); glb(8'd1);
     glb(8'h10); glw(16'd240); glw(16'd200);
-    glb(8'h3D); glw(16'd50); glw(16'd0); glw(16'd90);    // filled SECTOR
+    glb(8'h38); glw(16'd30);                             // CIRCLE fill
     glb(8'hE0); glb(8'd0);
     glb(8'h38); glw(-16'sd5);                            // CIRCLE -5: err 2
     gl_wait_idle;
 
-    rd_glerr(e0); rd_glerr(e1);
-    if (e0 !== 8'd2 || e1 !== 8'd0) begin
-      $display("TB-GL-CVX: FAIL (GLERR %0d then %0d, wanted 2 then 0)", e0, e1);
+    rd_glerr(e0); rd_glerr(e1); rd_glerr(e2); rd_glerr(e3);
+    if (e0 !== 8'd1 || e1 !== 8'd1 || e2 !== 8'd2 || e3 !== 8'd0) begin
+      $display("TB-GL-CVX: FAIL (GLERR %0d %0d %0d %0d, wanted 1 1 2 0)",
+               e0, e1, e2, e3);
       $finish(1);
     end
 

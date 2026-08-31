@@ -2,7 +2,7 @@
 // stack, and the framebuffer OUT as an image.
 //
 // The byte stream is c_gl_pat_test's gl_pt.c scene verbatim: a dashed
-// LINPAT line and its solid restore, an AREAPT checkerboard on a filled
+// LINPAT line and its solid restore, the retired-E7 err1 skip, a solid
 // RECT (the walker's run splitter), FLOOD exempt, AREA forcing both
 // replace mode and a solid pattern, and RESETF restoring everything.
 // The frame must byte-match the emulator's gl_pt.ppm.
@@ -203,16 +203,11 @@ module tb;
     glb(8'hEA); glw(-16'sd1);                            // LINPAT solid
     glb(8'h10); glw(16'd10); glw(16'd240);
     glb(8'h28); glw(16'd200); glw(16'd240);
-    glb(8'hE7);                                          // AREAPT checker
-    begin : ap
-      integer i;
-      for (i = 0; i < 16; i = i + 1)
-        if (i[0]) glw(16'h5555); else glw(16'hAAAA);
-    end
+    glb(8'hE7);                     // retired AREAPT opcode: err1, skip
     glb(8'h06); glb(8'd0); glb(8'd63); glb(8'd0);        // COLOR green
     glb(8'hE0); glb(8'd1);                               // PRMFIL 1
     glb(8'h10); glw(16'd48); glw(16'd48);
-    glb(8'h34); glw(16'd112); glw(16'd112);              // patterned RECT
+    glb(8'h34); glw(16'd112); glw(16'd112);              // solid RECT fill
     glb(8'hE0); glb(8'd0);
     glb(8'hB2); glw(16'd300); glw(16'd400); glw(16'd30); glw(16'd80);
     glb(8'h07); glb(8'd31); glb(8'd0); glb(8'd0);        // FLOOD (exempt)
@@ -235,9 +230,11 @@ module tb;
     glb(8'hE0); glb(8'd0);
     gl_wait_idle;
 
-    rd_glerr(e0);
-    if (e0 !== 8'd0) begin
-      $display("TB-GL-PTX: FAIL (GLERR %0d, wanted a clean run)", e0);
+    rd_glerr(e0);                   // exactly ONE error: the E7 skip's err1
+    rd_glerr(e1);
+    if (e0 !== 8'd1 || e1 !== 8'd0) begin
+      $display("TB-GL-PTX: FAIL (GLERR %0d then %0d, wanted 1 then empty)",
+               e0, e1);
       $finish(1);
     end
 

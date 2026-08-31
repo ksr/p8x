@@ -148,28 +148,26 @@ whatever `LINFUN` says.
 ## 8. Curves and patterns
 
     gl M 240,136 CI 60                    a circle at the current point
-    gl PF 1 SEC 50,0,90                   a filled quarter-pie
+    gl PF 1 CI 40                         a filled disc
     gl EL 80,30                           an ellipse
-    gl ARC 40,45,135                      an arc, degrees CCW from +x
 
 `CIRCLE`/`ELIPSE` rasterize on the device with radii mapped through the
 window→viewport scale (they clip to the screen; radii cap at 255 device
-pixels). `ARC`/`SECTOR` are 4°-stepped polylines on the card's trig
-table, so they clip to the window exactly like lines — and `PRMFIL 1`
-fills a sector as a fan, which makes `SECTOR r 0 0` the filled circle
-that honours fill patterns.
+pixels). The PGC's `ARC` and `SECTOR` were removed 2026-08-30 for card
+placement headroom (opcodes 3C/3D report error 1) — draw a partial arc
+as a chain of short `D` segments; the card stepped 4° per segment, and
+so can you.
 
     gl LPT -21846                         dashed lines ($AAAA)
     gl LPT -1                             solid again
-    gl APT 43690,21845,43690,21845,...    a checkerboard fill mask
 
 `LINPAT` lives in the device like the LINFUN mode — every line from
 every door is patterned, BASIC's `LINE` included, restarting at the
-pattern's MSB each primitive. `AREAPT`'s sixteen words mask the fill
-spans of `POLY`/`POLY3`/`RECT`/`SECTOR` by screen position (row `y&15`,
-bit `15-(x&15)`). `CLEARS` and `FLOOD` are erases and stay solid, and
-`AREA` forces solid+replace to protect its own fill invariant.
-`RESETF` restores everything.
+pattern's MSB each primitive. `AREA` forces solid+replace to protect
+its own fill invariant, and `RESETF` restores everything. (The PGC's
+`AREAPT` patterned fill mask was removed 2026-08-30 to buy placement
+headroom on the full card — a successor-board candidate; its opcode
+E7 reports error 1.)
 
 ## 9. Vector text (TEXT)
 

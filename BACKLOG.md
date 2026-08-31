@@ -557,6 +557,17 @@ Nothing below has been built or measured.
       verb (IMAGER/PIXRD through the RB FIFO, ~50-80 LUT) and the
       card-side blit (the faster-image-transfer item), and the $FF20
       window can close for ~100-150 LUT net of the read verb.
+- [ ] **Restore AREAPT and ARC/SECTOR on a successor board (2026-08-30,
+      user-approved removals).** Two cuts bought placement headroom
+      against the chip's PRACTICAL cliff (~19,150-19,250 LUT4, well
+      under the nominal 20,736 -- see STAGE10-DESIGN.md "round four"):
+      AREAPT (opcode E7, the patterned fill mask; -569 measured) and
+      ARC/SECTOR (3C/3D, the 4-degree polyline walk + fan fill).
+      CIRCLE/ELIPSE, LINPAT and the trig ROM stayed. The as-built
+      designs are fully documented in STAGE10-DESIGN.md and in git
+      history at a518415..HEAD; re-adding either is a revert plus
+      keyword regeneration. Until then: arcs = short DRAW chains at
+      4-degree steps, patterned fills = software span masks.
 - [ ] **Simple graphics editor, a C program (2026-08-29, user).** An
       on-target `draw` command (os/commands, //#use gfx): pick a tool
       and colour, place points/lines/boxes/circles/fills on the panel,

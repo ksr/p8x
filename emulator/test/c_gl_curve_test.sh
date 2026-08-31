@@ -1,9 +1,9 @@
 #!/bin/sh
 # Stage-10i curves: CIRCLE/ELIPSE map their radii through the window->
-# viewport scale and draw as the device ellipse (PRMFIL fills); ARC and
-# SECTOR are 4-degree polylines through the CLIPPED 2D line path on the
-# shared trig table (PRMFIL fills SECTOR as a fan about the centre; ARC
-# never fills). Negative radius = error 2. None move the current point.
+# viewport scale and draw as the device ellipse (PRMFIL fills); negative
+# radius = error 2; neither moves the current point. ARC/SECTOR (3C/3D)
+# were REMOVED 2026-08-30 for placement headroom: both opcodes are
+# err1/skip now, exercised here.
 set -e
 set -o pipefail
 cd "$(dirname "$0")"
@@ -47,18 +47,18 @@ int main() {
     glb(6); glb(0); glb(0); glb(31);
     glb(16); glw(100); glw(60);
     glb(57); glw(80); glw(30);                           /* ELIPSE */
-    /* yellow quarter arc r=40, 0..90 deg, at (380,60) */
-    glb(6); glb(31); glb(63); glb(0);
-    glb(16); glw(380); glw(60);
-    glb(60); glw(40); glw(0); glw(90);                   /* ARC */
-    /* teal filled sector r=50, 0..90 deg, at (240,200) */
+    /* retired ARC then SECTOR: err1 each, one byte skipped, stream
+       lives -- the teal fill after them must land */
+    glb(60);                                             /* ARC: unknown */
+    glb(61);                                             /* SECTOR: unknown */
     glb(6); glb(0); glb(63); glb(31);
     glb(224); glb(1);
     glb(16); glw(240); glw(200);
-    glb(61); glw(50); glw(0); glw(90);                   /* SECTOR */
+    glb(56); glw(30);                                    /* CIRCLE fill */
     glb(224); glb(0);
     /* negative radius -> error 2 */
     glb(56); glw(0 - 5);                                 /* CIRCLE -5 */
+    pnum(peek(65363)); pnum(peek(65363));                /* the two err1s */
     pnum(peek(65363)); pnum(peek(65363));                /* 2 then 0  */
     puts("CVDONE");
     return 0;
@@ -75,8 +75,8 @@ python3 $ROOT/tools/p8xfs.py put    gl_cv.img gl_cv.bin --name /bin/glcv.bin --l
 printf 'B\rrun /bin/glcv.bin\r' > gl_cv.in
 ../p8xemu -N -i gl_cv.in -c gl_cv.img -l 600000000 -g gl_cv.ppm eeprom.bin > gl_cv.out 2>/dev/null || true
 grep -q "CVDONE" gl_cv.out || fail "harness did not finish"
-got=$(LC_ALL=C tr -d '\0\r' < gl_cv.out | grep -E '^[0-9]+$' | head -2 | tr '\n' ' ' | sed 's/ $//')
-[ "$got" = "2 0" ] || fail "error sequence '$got', want '2 0'"
+got=$(LC_ALL=C tr -d '\0\r' < gl_cv.out | grep -E '^[0-9]+$' | head -4 | tr '\n' ' ' | sed 's/ $//')
+[ "$got" = "1 1 2 0" ] || fail "error sequence '$got', want '1 1 2 0'"
 
 python3 - <<'EOF' || exit 1
 d = open("gl_cv.ppm","rb").read(); px = d.split(b"\n",3)[3]
@@ -94,11 +94,8 @@ assert p(300,178)==BLACK, "fill leaked above circle: %r"%(p(300,178),)
 assert p(180,60)==BLUE,   "ellipse right point: %r"%(p(180,60),)
 assert p(100,90)==BLUE,   "ellipse top point: %r"%(p(100,90),)
 assert p(100,60)==BLACK,  "ellipse centre not hollow: %r"%(p(100,60),)
-assert p(420,60)==YEL,    "arc start (0 deg): %r"%(p(420,60),)
-assert p(380,100)==YEL,   "arc end (90 deg): %r"%(p(380,100),)
-assert p(340,60)==BLACK,  "arc overdrew past 90: %r"%(p(340,60),)
-assert p(380,60)==BLACK,  "arc drew its centre: %r"%(p(380,60),)
-assert p(257,217)==TEAL,  "sector interior: %r"%(p(257,217),)
-assert p(260,180)==BLACK, "sector fill below 0 deg: %r"%(p(260,180),)
+assert p(380,60)==BLACK,  "retired ARC drew something: %r"%(p(380,60),)
+assert p(240,200)==TEAL,  "fill after retired opcodes missing: %r"%(p(240,200),)
+assert p(255,215)==TEAL,  "fill after retired opcodes short: %r"%(p(255,215),)
 EOF
-echo "C-GL-CURVE TEST: PASS (circle/ellipse outline+fill, radius mapping, quarter arc, filled sector fan, err2)"
+echo "C-GL-CURVE TEST: PASS (circle/ellipse outline+fill, radius mapping, retired-3C/3D err1 skip, err2)"

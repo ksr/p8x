@@ -4,7 +4,7 @@
 ; count * (2 or 3 by opcode bit 1) int16s. Else bcnt byte params
 ; first, then (arity - bcnt) int16 params, little-endian.
 GLV0   = $B4
-GLVN   = 70
+GLVN   = 67
 GLVTAB:
         .byte $02, $00   ; $B4 FLIP
         .byte $03, $00   ; $B5 PGSYNC
@@ -69,10 +69,7 @@ GLVTAB:
         .byte $82, $01   ; $F0 TANGLE
         .byte $84, $10   ; $F1 TDEFIN
         .byte $39, $02   ; $F2 ELIPSE
-        .byte $3C, $03   ; $F3 ARC
-        .byte $3D, $03   ; $F4 SECTOR
-        .byte $EA, $01   ; $F5 LINPAT
-        .byte $E7, $FE   ; $F6 AREAPT
-        .byte $83, $FF   ; $F7 TEXTP
-        .byte $85, $20   ; $F8 TJUST
-        .byte $08, $00   ; $F9 POINT
+        .byte $EA, $01   ; $F3 LINPAT
+        .byte $83, $FF   ; $F4 TEXTP
+        .byte $85, $20   ; $F5 TJUST
+        .byte $08, $00   ; $F6 POINT

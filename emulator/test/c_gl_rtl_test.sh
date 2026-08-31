@@ -82,7 +82,7 @@ sh c_gl_text_test.sh > /dev/null || fail "emulator TEXT suite failed"
 cmp gl_tx.ppm $SD/tb_gl_txx.ppm || fail "RTL TEXT frame differs from emulator frame"
 
 # 10: the stage-10i CURVES -- circle/ellipse via the device (mapped radii),
-#     ARC/SECTOR as trig polylines and fan fills (needs gl_cv.ppm)
+#     plus the retired ARC/SECTOR err1 skips (needs gl_cv.ppm)
 sh c_gl_curve_test.sh > /dev/null || fail "emulator curve suite failed"
 ( cd $SD && iverilog -g2012 -I../../rtl -o tbglcv tb_gl_cvx.v ../../rtl/p8x_geom.v \
       ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v gfx_mem.v \
@@ -90,8 +90,8 @@ sh c_gl_curve_test.sh > /dev/null || fail "emulator curve suite failed"
   && ./tbglcv | grep -q "TB-GL-CVX: DONE" ) || fail "tb_gl_cvx did not finish"
 cmp gl_cv.ppm $SD/tb_gl_cvx.ppm || fail "RTL curve frame differs from emulator frame"
 
-# 11: the stage-10j PATTERNS -- LINPAT in the device line engine, AREAPT
-#     through the walker's run splitter (needs gl_pt.ppm)
+# 11: the stage-10j PATTERNS -- LINPAT in the device line engine, plus
+#     the retired-E7 err1 skip (needs gl_pt.ppm)
 sh c_gl_pat_test.sh > /dev/null || fail "emulator pattern suite failed"
 ( cd $SD && iverilog -g2012 -I../../rtl -o tbglpt tb_gl_ptx.v ../../rtl/p8x_geom.v \
       ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v gfx_mem.v \

@@ -1,9 +1,9 @@
 #!/bin/sh
 # Stage-10j patterns. LINPAT p is DEVICE line state (every line from any
-# door, MSB first, restarting each primitive; -1 = solid). AREAPT im1..16
-# masks the fill spans of POLY/POLY3/RECT/SECTOR (row y&15, bit 15-(x&15));
-# CLEARS/FLOOD are erases and stay solid; AREA forces the line pattern
-# solid like it forces replace mode. RESETF restores both.
+# door, MSB first, restarting each primitive; -1 = solid); AREA forces it
+# solid like it forces replace mode, and RESETF restores it. AREAPT was
+# REMOVED 2026-08-30 (placement headroom): opcode E7 is err1/skip again,
+# fills are always solid -- both exercised here.
 set -e
 set -o pipefail
 cd "$(dirname "$0")"
@@ -19,16 +19,6 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/
 cat > gl_pt.c <<'EOF'
 int glb(int v) { while (peek(65361) & 128) { } poke(65360, v); return 0; }
 int glw(int v) { glb(v & 255); glb((v / 256) & 255); return 0; }
-int apt(int even, int odd) {
-    int i;
-    glb(231);                                            /* AREAPT */
-    i = 0;
-    while (i < 16) {
-        if ((i & 1) == 0) { glw(even); } else { glw(odd); }
-        i = i + 1;
-    }
-    return 0;
-}
 int main() {
     glb(179); glw(0); glw(479); glw(0); glw(271);        /* WINDOW  */
     glb(178); glw(0); glw(479); glw(0); glw(271);        /* VWPORT  */
@@ -42,14 +32,15 @@ int main() {
     glb(234); glw(0 - 1);
     glb(16); glw(10); glw(240);
     glb(40); glw(200); glw(240);
-    /* checkerboard AREAPT on a filled RECT */
-    apt(43690, 21845);                                   /* $AAAA / $5555 */
+    /* the retired AREAPT opcode: err1, skip the byte, keep going --
+       the filled RECT after it must land, and land SOLID */
+    glb(231);                                            /* E7: unknown now */
     glb(6); glb(0); glb(63); glb(0);                     /* COLOR green */
     glb(224); glb(1);                                    /* PRMFIL 1 */
     glb(16); glw(48); glw(48);
     glb(52); glw(112); glw(112);                         /* RECT */
     glb(224); glb(0);
-    /* FLOOD is an erase: stays solid under AREAPT (viewport'd corner) */
+    /* FLOOD (an erase, always solid) into a viewport'd corner */
     glb(178); glw(300); glw(400); glw(30); glw(80);      /* small VWPORT */
     glb(7); glb(31); glb(0); glb(0);                     /* FLOOD red */
     glb(178); glw(0); glw(479); glw(0); glw(271);        /* VWPORT back */
@@ -63,7 +54,7 @@ int main() {
     glb(192);                                            /* AREA */
     glb(16); glw(10); glw(230);                          /* post-AREA line */
     glb(40); glw(200); glw(230);
-    /* RESETF restores AREAPT too */
+    /* RESETF (still restores LINPAT) */
     glb(4);                                              /* RESETF */
     glb(178); glw(0); glw(479); glw(0); glw(271);
     glb(179); glw(0); glw(479); glw(0); glw(271);
@@ -102,18 +93,16 @@ assert p(14,250)==B, "dash gap px4 painted: %r"%(p(14,250),)
 assert p(18,250)==W, "dash px8 missing: %r"%(p(18,250),)
 # LINPAT -1: solid
 assert p(14,240)==W and p(100,240)==W, "solid line broken after LINPAT -1"
-# checkerboard fill: the pattern is SCREEN-row indexed (apat[y&15],
-# bit 15-(x&15)) -- wy 51 is screen row 220 (even -> $AAAA)
-assert p(50,51)==G,  "checker even-row set bit missing: %r"%(p(50,51),)
-assert p(51,51)==B,  "checker even-row clear bit painted: %r"%(p(51,51),)
-assert p(50,50)==B,  "checker odd-row clear bit painted: %r"%(p(50,50),)
-assert p(51,50)==G,  "checker odd-row set bit missing: %r"%(p(51,50),)
-# FLOOD stays solid (VWPORT rows are SCREEN rows: y 30..80)
-assert p(350,221)==R and p(351,221)==R and p(350,220)==R, "FLOOD got patterned"
+# the fill after the retired E7 byte: present (err1 skipped one byte,
+# the stream recovered) and SOLID everywhere
+assert p(50,51)==G and p(51,51)==G, "RECT fill missing after E7 skip: %r"%(p(50,51),)
+assert p(50,50)==G and p(51,50)==G, "RECT fill not solid: %r"%(p(51,50),)
+# FLOOD solid (VWPORT rows are SCREEN rows: y 30..80)
+assert p(350,221)==R and p(351,221)==R and p(350,220)==R, "FLOOD broken"
 # AREA forced solid: interior complete, post-AREA line solid
 assert p(330,175)==Y and p(331,175)==Y, "AREA fill has pattern holes"
 assert p(14,230)==Y, "line after AREA still patterned (force failed)"
-# RESETF restored: teal fill solid
-assert p(430,210)==T and p(431,210)==T and p(431,211)==T, "RESETF left AREAPT on"
+# RESETF: teal fill solid
+assert p(430,210)==T and p(431,210)==T and p(431,211)==T, "post-RESETF fill broken"
 EOF
-echo "C-GL-PAT TEST: PASS (LINPAT dashes + solid restore, AREAPT checker fill, FLOOD exempt, AREA force, RESETF)"
+echo "C-GL-PAT TEST: PASS (LINPAT dashes + solid restore, retired-E7 err1 skip, FLOOD, AREA force, RESETF)"

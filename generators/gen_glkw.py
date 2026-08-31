@@ -118,13 +118,12 @@ VERBS = [
     # (token $AC, screen space) owns the name -- GL "CIRCLE r" remains.
     ("CIRCLE",  "CI",   0x38, 0, 1),
     ("ELIPSE",  "EL",   0x39, 0, 2),
-    ("ARC",     "ARC",  0x3C, 0, 3),
-    ("SECTOR",  "SEC",  0x3D, 0, 3),
-    # stage 10j (appended). AREAPT's arity 16 exceeds the ROM's 4-bit
-    # field: the RTL meta encodes it as the sentinel 13 and the BASIC
-    # meta as $FE; both mean "sixteen int16 words".
+    # ARC (3C) and SECTOR (3D) were REMOVED 2026-08-30 for placement
+    # headroom -- successor-board candidates; see STAGE10-DESIGN.md.
+    # stage 10j (appended). AREAPT (E7, arity 16, the meta-13/$FE
+    # sixteen-word sentinel) was REMOVED 2026-08-30 for placement
+    # headroom -- successor-board candidate; see STAGE10-DESIGN.md.
     ("LINPAT",  "LPT",  0xEA, 0, 1),
-    ("AREAPT",  "APT",  0xE7, 0, 16),
     # stage 10k (appended). TEXTP is the SAME engine as TEXT (PGC's
     # fixed-cell/programmable split has no meaning here: P8X text IS
     # stroke text); TJUST h v justifies 1..3 left/centre/right and
@@ -161,13 +160,13 @@ with open(os.path.join(HERE, "..", "fpga", "rtl", "glkwtab.vh"), "w") as f:
         f.write("    cmx[%d] = 16'h%02X%02X;\n" % (w+1, ord(k[2]), ord(k[3])))
         f.write("    cmx[%d] = 16'h%02X%02X;\n" % (w+2, ord(k[4]), ord(k[5])))
         var = 1 if a == 15 else 0
-        ra = 13 if a == 16 else a          # 13 = the sixteen-word sentinel
-        meta = (var << 14) | ((ra & 15) << 10) | ((b & 3) << 8) | op
+        assert a <= 12 or a in (14, 15), "arity exceeds the ROM's 4-bit field"
+        meta = (var << 14) | ((a & 15) << 10) | ((b & 3) << 8) | op
         f.write("    cmx[%d] = 16'h%04X;\n" % (w+3, meta))
         w += 4
     f.write("    // %d entries; the matcher stops at the first zero word\n" % len(entries))
     f.write("    cmx[%d] = 16'h0000;\n" % w)
-assert w + 1 < 768, "keyword ROM reached the RBS mirror (768) -- the AREAPT block and string buffer live above it at 784+"
+assert w + 1 < 768, "keyword ROM reached the RBS mirror (768) -- the string buffer lives above it at 800+"
 assert len(entries) < 256, "matcher cursor t_ent is 8 bits -- widen it in p8x_geom.v"
 print("wrote fpga/rtl/glkwtab.vh (ends at scratch word %d of 1024; RBS mirror at 768)" % (w+1))
 
@@ -212,8 +211,6 @@ with open(os.path.join(HERE, "..", "basic", "glvtab.inc"), "w") as f:
             meta = 0x80 | (b << 4)
         elif a == 14:
             meta = 0xFF          # string statement: BASIC's own handler
-        elif a == 16:
-            meta = 0xFE          # sixteen int16 words (AREAPT)
         else:
             meta = (b << 4) | (a - b)
         f.write("        .byte $%02X, $%02X   ; $%02X %s\n"
