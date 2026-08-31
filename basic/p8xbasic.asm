@@ -5822,6 +5822,8 @@ MHELP:  .byte CR,LF
         .byte CR,LF
         .ascii "  SCREEN IS 480x272 RGB565 - COLOR r,g,b (0-31,0-63,0-31)"
         .byte CR,LF
+        .ascii "  or COLOR c, one PACKED value - from RGB() or PIXELR()"
+        .byte CR,LF
         .ascii "STRINGS: A$ B$ (assign, + concat, compare)"
         .byte CR,LF
         .ascii "OPERATORS: + - * / %  = <> < > <= >="
