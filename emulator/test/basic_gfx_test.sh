@@ -1,10 +1,13 @@
 #!/bin/sh
 # BASIC's graphics statements: COLOR / LINE / BOX [,FILL|,NOFILL] / CLS.
 #
-# MIGRATED 2026-08-30: these statements now EMIT GL -- window space, y UP,
-# so window (x,wy) lands at screen (x, 271-wy) under the power-up identity
-# window. The frame probes below flip y accordingly; PIXELR() stays a
-# SCREEN-space device read, so its in-program probes name screen rows.
+# MIGRATED 2026-08-30/31: ONE coordinate system, the PGC's -- window
+# space, y UP, everywhere. The drawing statements emit GL; GTEXT (baseline
+# anchor), IMAGE (bottom-left anchor) and PIXELR() stay device-implemented
+# but BASIC flips their y at the door (272 - y - extent), so window (x,wy)
+# lands at screen (x, 271-wy). The frame probes below read the PPM in
+# screen rows; in-program PIXELR() probes use window coords like the
+# drawing that put the pixels there.
 # What is checked HERE is the interpreter side, where the failures are quiet:
 #
 #   1. NOFILL must draw an OUTLINE. It has to be a real keyword rather than just
@@ -104,7 +107,7 @@ PY
 # hands them back THROUGH BASIC'S SIGNED INTEGERS -- $F81F magenta prints as
 # -2017, which is the documented wart (STAGE6-DESIGN.md), asserted here so it
 # stays a wart and not a surprise.
-printf 'B\rbgfx\r10 CLS\r20 COLOR RGB(31,0,0)\r40 BOX 10,10,80,80,FILL\r50 COLOR RGB(31,0,31)\r60 CIRCLE 240,136,100,FILL\r70 COLOR RGB(0,63,0)\r80 CIRCLE 240,136,120\r90 PIXELW 400,40\r100 PRINT PIXELR(240,136)\r110 PRINT PIXELR(400,231)\r120 PRINT PIXELR(0,271)\r130 PRINT PIXELR(14,257)\r140 END\rRUN\rLIST\rBYE\r' \
+printf 'B\rbgfx\r10 CLS\r20 COLOR RGB(31,0,0)\r40 BOX 10,10,80,80,FILL\r50 COLOR RGB(31,0,31)\r60 CIRCLE 240,136,100,FILL\r70 COLOR RGB(0,63,0)\r80 CIRCLE 240,136,120\r90 PIXELW 400,40\r100 PRINT PIXELR(240,136)\r110 PRINT PIXELR(400,40)\r120 PRINT PIXELR(0,271)\r130 PRINT PIXELR(14,14)\r140 END\rRUN\rLIST\rBYE\r' \
     > bgfx2.in
 ../p8xemu -N -i bgfx2.in -c bgfx.img -l 120000000 -g bgfx2.ppm eeprom.bin > bgfx2.out 2>/dev/null || true
 
@@ -113,8 +116,8 @@ import sys
 bad = []
 out = open("bgfx2.out","rb").read().replace(b"\r", b"")
 
-# PIXELR reads back the 565 colour through SIGNED 16-bit ints, in SCREEN
-# rows (the drawing is window space now, so the probes flip y):
+# PIXELR reads back the 565 colour through SIGNED 16-bit ints, in the
+# SAME window coordinates the drawing used (the flip is BASIC's now):
 #   $F81F magenta = -2017, $07E0 green = 2016, 0 = untouched, $F800 red = -2048.
 # The negative prints are the high pen byte coming home -- the read-back half
 # of 16 bpp -- wearing the signed-integer wart on purpose.
@@ -165,7 +168,7 @@ PY
 # The parser has to tell a second radius from the FILL modifier by TOKEN: a
 # keyword is >= $80, anything else starts an expression. That is also why NOFILL
 # must be a real keyword -- otherwise `CIRCLE x,y,r,NOFILL` would try to EVAL it.
-printf 'B\rbgfx\r10 CLS\r20 COLOR 1\r30 CIRCLE 60,68,30\r40 COLOR 2\r50 CIRCLE 170,68,60,20\r60 COLOR 3\r70 CIRCLE 170,110,15,20,FILL\r80 PRINT "A";PIXELR(90,203);PIXELR(60,203);PIXELR(230,203);PIXELR(10,130);PIXELR(170,161)\r90 END\rRUN\rBYE\r' \
+printf 'B\rbgfx\r10 CLS\r20 COLOR 1\r30 CIRCLE 60,68,30\r40 COLOR 2\r50 CIRCLE 170,68,60,20\r60 COLOR 3\r70 CIRCLE 170,110,15,20,FILL\r80 PRINT "A";PIXELR(90,68);PIXELR(60,68);PIXELR(230,68);PIXELR(10,130);PIXELR(170,110)\r90 END\rRUN\rBYE\r' \
     > bgfx3.in
 ../p8xemu -N -i bgfx3.in -c bgfx.img -l 120000000 eeprom.bin > bgfx3.out 2>/dev/null || true
 
@@ -207,7 +210,7 @@ PY
 # The glyph is 5x7 device pixels whatever the screen is, so these origins do NOT
 # scale with the panel -- only the clipping case has to move, to a 'W' that
 # really does straddle x=479.
-printf 'B\rbgfx\r10 CLS\r20 COLOR RGB(31,0,0)\r30 GTEXT 10,10,1,"A"\r40 COLOR RGB(0,63,0)\r50 GTEXT 40,10,1,"a"\r60 COLOR RGB(0,0,31)\r70 GTEXT 4,40,2,"A"\r80 COLOR RGB(31,0,0)\r90 GTEXT 470,80,1,"WW"\r100 GTEXT 5,110,1,""\r110 END\rRUN\rLIST\rBYE\r' \
+printf 'B\rbgfx\r10 CLS\r20 COLOR RGB(31,0,0)\r30 GTEXT 10,255,1,"A"\r40 COLOR RGB(0,63,0)\r50 GTEXT 40,255,1,"a"\r60 COLOR RGB(0,0,31)\r70 GTEXT 4,218,2,"A"\r80 COLOR RGB(31,0,0)\r90 GTEXT 470,185,1,"WW"\r100 GTEXT 5,155,1,""\r110 END\rRUN\rLIST\rBYE\r' \
     > bgfx4.in
 ../p8xemu -N -i bgfx4.in -c bgfx.img -l 200000000 -g bgfx4.ppm eeprom.bin > bgfx4.out 2>/dev/null || true
 
@@ -270,7 +273,7 @@ for y in range(110, 118):
             bad.append('GTEXT ...,"" drew at (%d,%d)' % (x,y))
             break
 
-for kw in [b'30 GTEXT 10,10,1,"A"', b'70 GTEXT 4,40,2,"A"', b'100 GTEXT 5,110,1,""']:
+for kw in [b'30 GTEXT 10,255,1,"A"', b'70 GTEXT 4,218,2,"A"', b'100 GTEXT 5,155,1,""']:
     if out.count(kw) < 2:
         bad.append("LIST did not round-trip %r" % kw.decode())
 
@@ -297,7 +300,7 @@ fi
 #      -- an off-by-one in the stride shows up here and nowhere else;
 #   2. the colour survives the framebuffer round trip -- 5 and 200 are dim
 #      blues now rather than pens, but the identity check is the same.
-printf 'B\rbgfx\r10 CLS\r20 COLOR 5\r30 BOX 0,0,479,271,FILL\r40 COLOR 200\r50 PIXELW 400,250\r60 PRINT "A";PIXELR(479,271);",";PIXELR(400,21);",";PIXELR(480,0)\r70 END\rRUN\rLIST\rBYE\r' \
+printf 'B\rbgfx\r10 CLS\r20 COLOR 5\r30 BOX 0,0,479,271,FILL\r40 COLOR 200\r50 PIXELW 400,250\r60 PRINT "A";PIXELR(479,271);",";PIXELR(400,250);",";PIXELR(480,0)\r70 END\rRUN\rLIST\rBYE\r' \
     > bgfx6.in
 ../p8xemu -N -i bgfx6.in -c bgfx.img -l 400000000 eeprom.bin > bgfx6.out 2>/dev/null || true
 
@@ -338,7 +341,7 @@ MKPIC
 python3 "$ROOT/tools/p8xfs.py" put bgfx.img pic.p8i  --name /PIC.P8I  >/dev/null
 python3 "$ROOT/tools/p8xfs.py" put bgfx.img junk.bin --name /JUNK.BIN >/dev/null
 
-printf 'B\rbgfx\r10 CLS\r20 IMAGE 100,50,"/PIC.P8I"\r30 IMAGE 476,269,"/PIC.P8I"\r40 IMAGE 0,0,"/JUNK.BIN"\r50 IMAGE 0,0,"/NOPE"\r60 END\rRUN\rLIST\rBYE\r' \
+printf 'B\rbgfx\r10 CLS\r20 IMAGE 100,217,"/PIC.P8I"\r30 IMAGE 476,-2,"/PIC.P8I"\r40 IMAGE 0,0,"/JUNK.BIN"\r50 IMAGE 0,0,"/NOPE"\r60 END\rRUN\rLIST\rBYE\r' \
     > bgfx8.in
 ../p8xemu -N -i bgfx8.in -c bgfx.img -l 200000000 -g bgfx8.ppm eeprom.bin > bgfx8.out 2>/dev/null || true
 
@@ -350,7 +353,7 @@ if b"?NOT P8I" not in out:
     bad.append("a non-P8I file was accepted (no ?NOT P8I)")
 if b"?No file" not in out:
     bad.append("a missing file did not say ?No file")
-for kw in [b'20 IMAGE 100,50,"/PIC.P8I"', b'30 IMAGE 476,269,"/PIC.P8I"']:
+for kw in [b'20 IMAGE 100,217,"/PIC.P8I"', b'30 IMAGE 476,-2,"/PIC.P8I"']:
     if out.count(kw) < 2:
         bad.append("LIST did not round-trip %r" % kw.decode())
 

@@ -34,12 +34,14 @@ you). Numbers separate on spaces or commas; `man gl` is the verb card.
 
 ## 2. Coordinate spaces — the one thing to internalize
 
-- **Screen space**: 480x272, origin top-left, y DOWN. The device door
-  ($FF20) lives here, unclipped-but-discarded at the edges: BASIC's
-  GTEXT/IMAGE and the PIXELR() read, and the C gfx library. (BASIC's
-  PIXELW/LINE/BOX/CIRCLE/CLS moved to WINDOW space 2026-08-30 — they
-  emit GL now; under BASIC's default full-screen window, window y is
-  271 - screen y.)
+- **Screen space**: 480x272, origin top-left, y DOWN. The raw device
+  door ($FF20) lives here, unclipped-but-discarded at the edges — the
+  C gfx library speaks it directly. BASIC no longer does: since
+  2026-08-30/31 EVERY BASIC graphics statement takes window
+  coordinates (y up). The drawing statements emit GL; GTEXT (baseline
+  anchor), IMAGE (bottom-left anchor) and PIXELR() are
+  device-implemented but BASIC flips their y at the door
+  (screen y = 271 - window y, the fixed full-screen mapping).
 - **Window space**: the GL 2D world, y UP. `WINDOW x1 x2 y1 y2` (PGC
   order: both x's first!) declares the world extent; `VWPORT x1 x2 y1
   y2` maps it to screen pixels, flipping y. GL 2D primitives
@@ -61,10 +63,10 @@ lead scene files with `VWPORT 0 479 0 271` (BACKLOG has the note).
     gl RECT 200,100                       rect from current point
     gl FLOOD 0 0 0                        erase the viewport
 
-BASIC's screen-space statements coexist: `LINE 0,0,479,271` draws
-corner to corner regardless of the GL window. Use GL 2D when you want
-clipping and a world coordinate system; use the BASIC/C primitives
-when you want pixels.
+BASIC's statements ARE this language now (migrated 2026-08-30/31):
+`LINE 0,0,479,271` is `MOVE`+`DRAW` in window space, corner to corner
+under the default window and re-mapped by `WINDOW`/`VWPORT` like any
+GL drawing. The C gfx library remains the raw screen-space path.
 
 ## 4. Drawing 3D
 
@@ -216,7 +218,7 @@ Every GL verb is a native statement (no quotes, expressions allowed):
 `COLOR` feeds both pens; `GL s$` sends a raw ASCII line when you need
 string-building (`GL "MDY "+STR$(A)`); native list verbs
 (CLBEG/CLEND/CLRUN) are synchronous, `GL "CLOOP 1 72"` is the
-non-blocking spin. PIXELR(x,y) reads pixels (screen space). The full
+non-blocking spin. PIXELR(x,y) reads pixels (window coordinates, symmetric with PIXELW). The full
 statement list: `man basic`, GRAPHICS; the language guide chapter in
 `basic/p8x-basic-guide.md`.
 

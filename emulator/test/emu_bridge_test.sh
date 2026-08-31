@@ -55,7 +55,7 @@ script = ("B\rbasic\r"
           "20 PRINT PEEK(65364)\r"          # $FF54 GLID -> mock 'G' = 71
           "30 COLOR 1234\r"                 # feeds BOTH pens: gfx + GL bytes
           "40 LINE 3,4,5,6\r"
-          "50 PRINT PIXELR(3,4)\r"           # a read through GDATA
+          "50 PRINT PIXELR(3,267)\r"           # a read through GDATA
           "60 END\rRUN\rBYE\r")
 open("eb.in", "w").write(script)
 
@@ -85,7 +85,7 @@ for b in (0xB3, 0xB2, 0x06):
 # COLOR wrote the gfx pen low byte over the bridge (1234 & 255 = 210)
 if not seen(0x04, 210):
     print("FAIL: COLOR low byte missing"); ok = False
-# PIXELR(3,4): the DEVICE door -- coords then GCMD 9, then two GDATA
+# PIXELR(3,267): the DEVICE door -- coords then GCMD 9, then two GDATA
 # reads (mock GDATA reads return 0)
 for idx, val in ((0x00, 3), (0x01, 4), (0x05, 9)):
     if not seen(idx, val):

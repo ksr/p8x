@@ -1386,6 +1386,28 @@ bx_pf:  STA  GLDIM
         LDA  GLDIM
         JMP  GLPUT
 
+; wflip -- window y to device row for the DEVICE-implemented statements
+; (2026-08-31: ONE coordinate system, the user's rule -- everything
+; counts y UP like the PGC). NUM1 = window y, NUM2 = the shape's extent
+; in device rows; returns NUM1 = 272 - (y + extent) = the device TOP
+; row. Extent 1 flips a single row (PIXELR), 7*size a glyph column
+; (GTEXT anchors at its BASELINE, like PGC TEXT), the image height an
+; IMAGE (anchored at its BOTTOM-left). This is the fixed full-screen
+; mapping: unlike the drawing statements, these do NOT transform under
+; a program's WINDOW/VWPORT.
+wflip:  JSR  ADD16
+        JSR  n2n1
+        LDA  #$10                   ; 272 = $0110
+        STA  NUM1
+        LDA  #$01
+        STA  NUM1+1
+        JMP  SUB16
+n2n1:   LDA  NUM1                   ; NUM1 -> NUM2
+        STA  NUM2
+        LDA  NUM1+1
+        STA  NUM2+1
+        RTS
+
 ; gxsh0/2/4 -- one parsed coordinate into its BXS shadow slot
 gxsh0:  LDA  RESULT
         STA  BXS
@@ -1665,6 +1687,14 @@ ci_err: JMP  SYNERR
 ;==============================================================================
 DOGTEXT: INP2                       ; consume the GTEXT token
         JSR  GCHECK
+        LDA  GPEN                   ; assert the pen: ON SILICON the GL
+        STA  GCOL                   ;   walker masters the device and its
+        LDA  GPENH                  ;   last operation (a CLS = FLOOD
+        STA  GCOLH                  ;   0,0,0!) leaves ITS colour in the
+                                    ;   write-only GCOL -- the emulator
+                                    ;   passes colours as arguments and
+                                    ;   never shows it. Low byte first:
+                                    ;   the GCOL write clears GCOLH.
         JSR  EVAL                   ; x
         LDA  RESULT
         STA  GTCX
@@ -1686,6 +1716,32 @@ DOGTEXT: INP2                       ; consume the GTEXT token
         JMP  gt_szok
 gt_big: LDA  #255
 gt_szok: STA GTSZ
+        LDA  GTSZ                   ; window -> device (wflip): the column
+        STA  NUM1                   ;   is 7*size rows tall and (x,y) is
+        STA  NUM2                   ;   its BASELINE; 7*size by doublings
+        LDA  #0                     ;   (2s, 4s, 8s) minus one s
+        STA  NUM1+1
+        STA  NUM2+1
+        JSR  ADD16                  ; 2s
+        JSR  n2n1
+        JSR  ADD16                  ; 4s
+        JSR  n2n1
+        JSR  ADD16                  ; 8s
+        LDA  GTSZ
+        STA  NUM2
+        LDA  #0
+        STA  NUM2+1
+        JSR  SUB16                  ; 7s
+        JSR  n2n1
+        LDA  GTY
+        STA  NUM1
+        LDA  GTY+1
+        STA  NUM1+1
+        JSR  wflip
+        LDA  NUM1
+        STA  GTY
+        LDA  NUM1+1
+        STA  GTY+1
         JSR  GTSEP
         JSR  SEVAL                  ; the string -> STRACC = [len][data...]
         LDA  STRACC
@@ -2124,6 +2180,19 @@ DOIMAGE: INP2
         LDB  IMH+1
         OR
         JZ   img_done
+        LDA  IMYC                   ; window -> device (wflip): (x,y) is
+        STA  NUM1                   ;   the image's BOTTOM-left corner,
+        LDA  IMYC+1                 ;   so the top device row is
+        STA  NUM1+1                 ;   272 - y - height
+        LDA  IMH
+        STA  NUM2
+        LDA  IMH+1
+        STA  NUM2+1
+        JSR  wflip
+        LDA  NUM1
+        STA  IMYC
+        LDA  NUM1+1
+        STA  IMYC+1
 img_row: LDA IMYC                    ; GY0 pair <- this row; low first (the low
         STA  GY0                    ;   write clears GY0H), constant for the row
         LDA  IMYC+1
@@ -3079,6 +3148,19 @@ fa_point: INP2
         JNZ  pt_err
         INP2
         JSR  EXPR
+        LDA  RESULT                 ; window -> device row (wflip, extent
+        STA  NUM1                   ;   1): the read twin counts y UP too
+        LDA  RESULT+1
+        STA  NUM1+1
+        LDA  #1
+        STA  NUM2
+        LDA  #0
+        STA  NUM2+1
+        JSR  wflip
+        LDA  NUM1
+        STA  RESULT
+        LDA  NUM1+1
+        STA  RESULT+1
         LDA  #<GY0
         JSR  GSTORE
         JSR  SKIPSP

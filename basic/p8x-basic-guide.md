@@ -135,7 +135,7 @@ like numeric comparisons, so they slot straight into `IF`:
 |------|---------|
 | `ABS(x)` | absolute value of `x` |
 | `RND(n)` | a pseudo-random integer **1..n** (LCG; `RND(6)` is a die) |
-| `PIXELR(x,y)` | the COLOUR at a screen pixel; 0 if off-screen (was `POINT()`) |
+| `PIXELR(x,y)` | the COLOUR at a pixel, window coords like `PIXELW`; 0 if off-screen (was `POINT()`) |
 | `PEEK(addr)` | the byte (0–255) at memory address `addr` |
 | `LEN(s$)` | number of characters in the string `s$` |
 | `ASC(s$)` | code (0–255) of the first character (0 if empty) |
@@ -182,7 +182,7 @@ A line may hold several statements separated by `:` —
 | `CIRCLE x,y,r[,FILL\|,NOFILL]` | circle of radius `r` about `x,y` |
 | `CIRCLE x,y,rx,ry[,FILL\|,NOFILL]` | **ellipse** — a second radius gives separate x and y radii |
 | `RGB(r,g,b)` | *function*: pack a colour — `r`,`b` 0–31, `g` 0–63 |
-| `IMAGE x,y,name$` | draw a P8I image file with its top-left at `x,y` |
+| `IMAGE x,y,name$` | draw a P8I image file with its bottom-left at `x,y` |
 | `GTEXT x,y,size,s$` | draw a string as graphics in the current `COLOR` |
 | `GL s$` | send one raw graphics-language line as text — see *The graphics language* |
 | `WINDOW` `VWPORT` `MOVE3` `DRAW3` `POLY3` `MDROTY` `CLBEG` `FLIP` … | the GL engine's verbs as native statements (51 of them) — see *The graphics language* |
@@ -200,15 +200,20 @@ Drawing goes to the display device. If none is fitted these statements print
 The screen is **480 × 272** in **RGB565 direct colour** — a pixel *is* its
 colour, 0 is black; see *The screen* below for the colour model.
 
-**Coordinates are window space, y UP** (since 2026-08-30 the drawing
-statements emit the graphics language): `x` runs 0–479 left to right and
-`y` runs 0–271 **bottom to top**, mathematical convention. BASIC
-establishes that full-screen window at startup and again after a
-`RESETF` statement, and `WINDOW`/`VWPORT` re-map it like any GL drawing.
-Off-window geometry is clipped. Two statements stay screen-space (y
-down, top-left origin): `GTEXT`/`IMAGE`, and the `PIXELR()` read — under
-the default window, screen y is `271 - y`. The drawing statements also
-honour `LINPAT`/`LINFUN` and RECORD inside `CLBEG`/`CLEND`.
+**One coordinate system: window space, y UP** — `x` runs 0–479 left to
+right and `y` runs 0–271 **bottom to top**, mathematical convention,
+the PGC's own, for *every* graphics statement. The drawing statements
+emit the graphics language directly: they transform under
+`WINDOW`/`VWPORT`, honour `LINPAT`/`LINFUN`, clip to the window, and
+RECORD inside `CLBEG`/`CLEND`. BASIC establishes the full-screen window
+at startup and again after a `RESETF` statement. `GTEXT`, `IMAGE`, and
+the `PIXELR()` read are device-implemented (the DMA gap) but take the
+same window coordinates — BASIC flips y at the door. Anchors follow the
+PGC's habit: `GTEXT x,y` is the **baseline**-left (glyphs rise `7*size`
+rows above it), `IMAGE x,y` is the image's **bottom-left** corner, and
+`PIXELW x,y` / `PIXELR(x,y)` round-trip the same pixel. The one caveat:
+the device trio uses the fixed full-screen mapping and does not re-map
+under a program's `WINDOW`/`VWPORT`.
 
 ```basic
 10 COLOR 31,63,31               : REM white
@@ -248,13 +253,14 @@ back compares exactly against the `RGB()` you drew with:
 ```
 
 **Text on the screen.** `GTEXT x,y,size,s$` draws a string as graphics, in the
-current `COLOR`, with `x,y` the top-left corner:
+current `COLOR`, with `x,y` the baseline-left — glyphs rise `7*size` rows
+above it, like PGC `TEXT` at a current point:
 
 ```basic
 10 COLOR 1
-20 GTEXT 4,4,2,"P8X BASIC"      : REM double size
+20 GTEXT 4,250,2,"P8X BASIC"    : REM double size, near the top
 30 COLOR 2
-40 GTEXT 4,26,1,"SCORE "+S$     : REM any string expression
+40 GTEXT 4,236,1,"SCORE "+S$    : REM any string expression
 ```
 
 `size` is a plain multiplier. The glyphs are 5×7 in a 6×8 cell, so size 1 gives
@@ -370,7 +376,7 @@ Two deliberate absences: `COLOR` (the ordinary `COLOR` statement now
 sets the GL pen too, so one pen statement drives both drawing paths)
 and `NOOP`. The GL `POINT` verb IS native now: the pixel-read function
 became `PIXELR()` and freed the name (`GL "CIRCLE r"` remains the only
-name BASIC's own screen-space `CIRCLE` still shadows).
+name BASIC's own centre-taking `CIRCLE x,y,r` still shadows).
 
 **Recording.** Between `CLBEG n` and `CLEND` these statements *record*
 into command list `n` instead of drawing, so a BASIC loop can build a

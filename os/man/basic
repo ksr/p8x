@@ -82,11 +82,10 @@ GRAPHICS
     is no live window: press Ctrl-\ to draw the screen in your terminal
     and carry on, or Ctrl-C to draw it and quit. The screen is 480x272 in
     RGB565 direct colour: a pixel IS its colour, 65,536 of them, and 0 is
-    black. x runs 0..479 left to right; the DRAWING statements below
-    count y 0..271 BOTTOM to top (window space -- see their section),
-    while GTEXT/IMAGE/PIXELR() count y 0..271 top to bottom (screen
-    space). Off-window drawing clips; off-screen device pixels are
-    simply not drawn.
+    black. ONE coordinate system: x runs 0..479 left to right, y runs
+    0..271 BOTTOM to top -- window space, the PGC's own, everywhere.
+    Off-window drawing clips; off-screen device pixels are simply not
+    drawn.
         COLOR c                   drawing colour: one PACKED value...
         COLOR r,g,b               ...or three numbers (r,b 0-31, g 0-63)
 
@@ -114,17 +113,24 @@ GRAPHICS
     program's PRMFIL from a shadow the native PRMFIL/RESETF statements
     keep -- a GL "PF 1" STRING bypasses that shadow.
 
-    DEVICE statements (SCREEN space, y DOWN, the $FF20 display -- the
-    DMA gap the PGC language cannot cover):
+    DEVICE statements (the DMA gap the PGC language cannot cover --
+    device-implemented, but they take the SAME window coordinates,
+    y up, since 2026-08-31; BASIC flips y at the door. One caveat:
+    they use the fixed full-screen mapping and do NOT transform under
+    a program's WINDOW/VWPORT the way the drawing statements do):
 
         GTEXT x,y,size,s$         draw a string as graphics (bitmap 5x7;
-                                  needs no font load, unlike PGC TEXT)
-        IMAGE x,y,name$           draw a P8I image file at (x,y)
+                                  needs no font load, unlike PGC TEXT).
+                                  (x,y) is the BASELINE-left; glyphs
+                                  rise 7*size rows above it, like PGC
+                                  TEXT at a current point
+        IMAGE x,y,name$           draw a P8I image file with its
+                                  BOTTOM-left corner at (x,y)
         PIXELR(x,y)               FUNCTION: read a pixel's colour (was
                                   POINT(); the PGC never had a pixel
-                                  read -- this is the device's). Under
-                                  the default window, screen y is
-                                  271 - window y.
+                                  read -- this is the device's).
+                                  Symmetric with PIXELW: PIXELW x,y
+                                  then PIXELR(x,y) round-trips
 
     Everything in the GL section further down (MOVE/DRAW/POLY/RECT,
     the 3D and matrix verbs, CIRCLE-as-GL, AREA, TEXT, patterns...)
