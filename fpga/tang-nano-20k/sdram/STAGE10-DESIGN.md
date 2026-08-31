@@ -636,11 +636,29 @@ door, then close it. One verb at a time, each shipped end to end.
   starved verb EATS the following PIXRD bytes -- split the string);
   and the RTL battery's PRX bench is SELF-checking (RB words, no
   frame to compare).
+- **GTEXT -- RETIRED OUTRIGHT 2026-09-01 (user: "go full with PGC
+  TEXT").** No migration: PGC TEXT with a LOADED font replaced it.
+  The OS streams /FONT.GL to the GL port at boot (FONTLD, after
+  PATHINIT; GLID probe + FOPEN/FGETB with GLSTAT backpressure; no
+  engine or no file = silent skip) -- the glyph bank survives RESETF
+  by design, so one load per power-on. BASIC lost the whole software
+  rasterizer, the font57 bitmap table (generator deleted), the GT*
+  BASRAM working set, AND the GPEN pen shadow (GTEXT was its last
+  consumer -- COLOR is pure GL emission now). Two contract facts the
+  rung surfaced, now load-bearing in tests and docs: (1) TEXT anchors
+  at the 3D current point and its strokes live at z=0, which the
+  NATIVE camera near-clips (the stage-9 z>=16 rule) -- so BASIC
+  cold-starts with PROJCT 0 (2D-first; RESETF deliberately restores
+  the native camera); the idiom is MOVE3 x,y,0 : TEXT s$. (2) TSIZE
+  scales the ANCHOR too (the documented absolute-TSIZE divergence):
+  under TSIZE 512, MOVE3 coordinates are model units. Text is now
+  card-side stroke replay -- on the board this replaces GTEXT's
+  per-pixel bridge writes with a few dozen stream bytes.
 - **BLIT (next):** declare a rect, stream raw RGB565 through the FIFO
   in BURST frames; makes per-pixel IMAGE obsolete (the measured
-  bridge-bound slowdown) and GTEXT blit-capable.
-- **Then:** GTEXT via GL, the C gfx library, the monitor splash -- and
-  the door closes.
+  bridge-bound slowdown).
+- **Then:** the C gfx library, the monitor splash -- and the door
+  closes.
 
 ## Verification ladder (per rung, the usual order)
 

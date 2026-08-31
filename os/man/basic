@@ -114,20 +114,28 @@ GRAPHICS
     program's PRMFIL from a shadow the native PRMFIL/RESETF statements
     keep -- a GL "PF 1" STRING bypasses that shadow.
 
-    DEVICE statements (the DMA gap the PGC language cannot cover --
-    device-implemented, but they take the SAME window coordinates,
-    y up, since 2026-08-31; BASIC flips y at the door. One caveat:
-    GTEXT and IMAGE use the fixed full-screen mapping and do NOT
-    transform under a program's WINDOW/VWPORT the way the drawing
-    statements (and now PIXELR) do):
+    DEVICE statement (the one DMA gap left -- device-implemented, but
+    window coordinates, y up; BASIC flips y at the door. Caveat: the
+    fixed full-screen mapping, no WINDOW/VWPORT re-map):
 
-        GTEXT x,y,size,s$         draw a string as graphics (bitmap 5x7;
-                                  needs no font load, unlike PGC TEXT).
-                                  (x,y) is the BASELINE-left; glyphs
-                                  rise 7*size rows above it, like PGC
-                                  TEXT at a current point
         IMAGE x,y,name$           draw a P8I image file with its
                                   BOTTOM-left corner at (x,y)
+
+    TEXT replaced GTEXT (2026-09-01): text is the PGC's own stroke
+    text, drawn card-side from the font the OS streams from /FONT.GL
+    at boot (the glyph bank survives RESETF -- a font is INSTALLED,
+    not drawn). The idiom:
+
+        MOVE3 x,y,0 : TEXT s$     baseline-left at (x,y); TSIZE n
+                                  scales (256 = 1x -- NOTE it scales
+                                  the ANCHOR too, the documented
+                                  divergence: model coords), TANGLE
+                                  rotates, TJUST justifies
+
+    BASIC cold-starts with PROJCT 0 (text strokes live at z=0, which
+    the native camera near-clips); RESETF restores the native camera
+    for 3D work -- issue PROJCT 0 again for text after it. A saved
+    program's GTEXT line reports ?SYNTAX ERROR, like PALETTE's.
         PIXELR(x,y)               FUNCTION: read a pixel's colour (was
                                   POINT()). SINGLE-INTERFACE since
                                   2026-08-31: it is the GL verb PIXRD

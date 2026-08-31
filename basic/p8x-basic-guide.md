@@ -183,7 +183,6 @@ A line may hold several statements separated by `:` —
 | `CIRCLE x,y,rx,ry[,FILL\|,NOFILL]` | **ellipse** — a second radius gives separate x and y radii |
 | `RGB(r,g,b)` | *function*: pack a colour — `r`,`b` 0–31, `g` 0–63 |
 | `IMAGE x,y,name$` | draw a P8I image file with its bottom-left at `x,y` |
-| `GTEXT x,y,size,s$` | draw a string as graphics in the current `COLOR` |
 | `GL s$` | send one raw graphics-language line as text — see *The graphics language* |
 | `WINDOW` `VWPORT` `MOVE3` `DRAW3` `POLY3` `MDROTY` `CLBEG` `FLIP` … | the GL engine's verbs as native statements (51 of them) — see *The graphics language* |
 
@@ -206,13 +205,12 @@ the PGC's own, for *every* graphics statement. The drawing statements
 emit the graphics language directly: they transform under
 `WINDOW`/`VWPORT`, honour `LINPAT`/`LINFUN`, clip to the window, and
 RECORD inside `CLBEG`/`CLEND`. BASIC establishes the full-screen window
-at startup and again after a `RESETF` statement. `GTEXT`, `IMAGE`, and
-the `PIXELR()` read are device-implemented (the DMA gap) but take the
-same window coordinates — BASIC flips y at the door. Anchors follow the
-PGC's habit: `GTEXT x,y` is the **baseline**-left (glyphs rise `7*size`
-rows above it), `IMAGE x,y` is the image's **bottom-left** corner, and
-`PIXELW x,y` / `PIXELR(x,y)` round-trip the same pixel. The one caveat:
-the device trio uses the fixed full-screen mapping and does not re-map
+at startup and again after a `RESETF` statement. `IMAGE` is the one
+device-implemented statement left (the DMA gap) but takes the same
+window coordinates — BASIC flips y at the door — anchored at the
+image's **bottom-left** corner; `PIXELW x,y` / `PIXELR(x,y)` round-trip
+the same pixel through the GL port. The one caveat: `IMAGE` uses the
+fixed full-screen mapping and does not re-map
 under a program's `WINDOW`/`VWPORT`.
 
 ```basic
@@ -252,25 +250,29 @@ back compares exactly against the `RGB()` you drew with:
 100 IF PIXELR(X,Y) = 0 THEN PIXELW X,Y
 ```
 
-**Text on the screen.** `GTEXT x,y,size,s$` draws a string as graphics, in the
-current `COLOR`, with `x,y` the baseline-left — glyphs rise `7*size` rows
-above it, like PGC `TEXT` at a current point:
+**Text on the screen** is the PGC's own stroke text (`GTEXT` was retired
+2026-09-01 — the single-interface migration): the OS streams `/FONT.GL` to the
+card at boot, so `TEXT` works out of the box, drawn card-side in the current
+`COLOR`:
 
 ```basic
 10 COLOR 1
-20 GTEXT 4,250,2,"P8X BASIC"    : REM double size, near the top
+20 MOVE3 4,250,0 : TEXT "P8X BASIC"
 30 COLOR 2
-40 GTEXT 4,236,1,"SCORE "+S$    : REM any string expression
+40 MOVE3 4,236,0 : TEXT "SCORE "+S$   : REM any string expression
 ```
 
-`size` is a plain multiplier. The glyphs are 5×7 in a 6×8 cell, so size 1 gives
-**80 columns and 34 rows**, size 2 gives 40 × 17, and so on. Only codes `$20`–`$5F`
-have glyphs: lowercase is drawn as uppercase, and anything else comes out blank.
-A string that runs off the right-hand edge simply stops — it does not wrap.
-
-`GTEXT` is not a console: there is no cursor, no scrolling and no line wrap, and
-it is the one drawing statement BASIC performs *itself* rather than handing to
-the device (see below).
+The anchor is the **baseline-left at the 3D current point** (`MOVE3 x,y,0`
+— the 2D `MOVE` does not feed it), glyphs rising 7 units. `TSIZE n` scales
+(256 = 1×, 512 = 2× …) — and it scales the **anchor** too, the documented
+divergence: under `TSIZE 512`, `MOVE3` coordinates are model units, so
+model (30,20) lands at screen (60,40). `TANGLE` rotates, `TJUST h,v`
+justifies. Codes `$20`–`$5F` have glyphs, lowercase folds to uppercase, and
+off-window strokes clip. BASIC cold-starts with `PROJCT 0` because text
+strokes live at z=0, which the native camera near-clips; a `RESETF`
+restores the native camera, so issue `PROJCT 0` again before text after it.
+The glyph bank survives `RESETF` — a font is *installed*, not drawn — and a
+program may replace any glyph with `TDEFIN`.
 
 **The screen.** 480×272 in **RGB565 direct colour** — a pixel *is* its
 colour, 65,536 of them, no palette and no modes. `RGB(r,g,b)` packs one:

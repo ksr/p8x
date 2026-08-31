@@ -289,6 +289,7 @@ COLD:   LDP3 #STKTOP
         STA  HISTST
         STA  HISTCT
         STA  CMPTABF            ; no Tab-completion streak
+        JSR  FONTLD             ; stream /FONT.GL to the card, if both exist
 
 ; ---------------- Shell main loop --------------------------------------------
 SHELL:  JSR  FLUSHRED           ; if the previous command was redirected, write its file
@@ -4583,6 +4584,36 @@ GS_DONE:LDA  #0
         JSR  CRLF               ; echo the newline after the command
         JSR  SAVESCR            ; remember the position for the next line
         RTS
+
+; FONTLD - stream /FONT.GL to the GL port at boot (single-interface text,
+; 2026-09-01: PGC TEXT with a LOADED font replaced BASIC's GTEXT). The
+; card's glyph bank survives RESETF by design ("a font is installed, not
+; drawn"), so ONE load per power-on serves every program and the shell.
+; No GL engine, or no /FONT.GL on the boot drive: skip silently -- text
+; then simply needs a manual `gl /FONT.GL` later.
+FONTLD: LDA  $FF54              ; GLID: 'G' when the GL engine is fitted
+        LDB  #'G'
+        CMP
+        JNZ  fl_rts
+        JSR  SETCWDDIR          ; boot CWD is the root
+        LDP1 #MFONTN
+        JSR  FNORM              ; FNAME = /FONT.GL
+        LDP1 #IBUF
+        JSR  FOPEN
+        JC   fl_rts             ; no file: silently skip
+fl_lp:  JSR  FGETB              ; -> A, C=1 at EOF (clobbers P1/P2)
+        JC   fl_rts
+        STA  TMP
+fl_w:   LDA  $FF51              ; GLSTAT bit7: FIFO full, wait it out
+        LDB  #$80
+        AND
+        JNZ  fl_w
+        LDA  TMP
+        STA  $FF50              ; GLDATA
+        JMP  fl_lp
+fl_rts: RTS
+MFONTN: .ascii "FONT.GL"
+        .byte 0
 GS_EOF: LDA  #0                 ; script exhausted -> console next time
         STA  SCRIPTM
         STA  (P2)

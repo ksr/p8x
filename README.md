@@ -160,15 +160,16 @@ standalone on power.
 the Tang Nano's in-package SDRAM behind a streaming controller, with a drawing
 engine driven by BASIC in one window-space coordinate system (y up, the
 PGC's own): `COLOR r,g,b` (or one packed value), `CLS`, `PIXELW`, `LINE`,
-`BOX`, `CIRCLE` (a second radius gives an ellipse), `GTEXT`, `IMAGE` (draws a
+`BOX`, `CIRCLE` (a second radius gives an ellipse), `IMAGE` (draws a
 P8I picture file — `tools/p8img.py` converts anything into one), the
 `PIXELR(x,y)` and `RGB(r,g,b)` functions — plus the full PGC graphics
 language as native statements (`MOVE`/`DRAW`/`POLY`/`RECT`, matrices, 3D,
-command lists, `TEXT`; see `man basic`). The drawing statements emit that
-language; the engine lives in the device, so a filled box costs the same
-handful of instructions as an empty one — `GTEXT` is the one exception,
-rasterising its 5×7 glyphs in software because the device has no text
-command. There is one geometry and no modes or palette to manage.
+command lists; see `man basic`). Text is the PGC's own stroke `TEXT`,
+drawn card-side from the font the OS streams from `/FONT.GL` at boot
+(GTEXT and its software rasterizer retired 2026-09-01). The drawing
+statements emit that language; the engine lives in the device, so a
+filled box costs the same handful of instructions as an empty one.
+There is one geometry and no modes or palette to manage.
 The same device is modelled in `p8xemu`, and the two are byte-compared frame
 by frame.
 

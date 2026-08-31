@@ -51,8 +51,9 @@ README covers build internals and milestones.
 > 480x272 RGB565 direct colour): `COLOR r,g,b` (or one packed value),
 > `CLS`, `PIXELW x,y`, `LINE x0,y0,x1,y1`,
 > `BOX x0,y0,x1,y1[,FILL|,NOFILL]`, `CIRCLE x,y,r[,ry][,FILL|,NOFILL]`
-> (a second radius makes it an ellipse), `GTEXT x,y,size,s$` (baseline at
-> y), `IMAGE x,y,name$` (P8I file, bottom-left at x,y), the functions
+> (a second radius makes it an ellipse), PGC stroke TEXT out of the box
+> (`MOVE3 x,y,0 : TEXT s$` -- the OS boot-loads /FONT.GL; GTEXT retired
+> 2026-09-01), `IMAGE x,y,name$` (P8I file, bottom-left at x,y), the functions
 > `PIXELR(x,y)` (read a pixel back) and `RGB(r,g,b)` (pack a colour) --
 > and the whole PGC graphics language as native statements (man basic,
 > GRAPHICS). No display modes, no `SCREEN`, no palette -- one geometry,

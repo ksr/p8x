@@ -130,6 +130,11 @@ DESCRIPTION
     partial fill. AREA forces the write mode to replace (a fill under
     XOR would erase its own boundary test).
 
+    The OS streams /FONT.GL to this port at BOOT (since 2026-09-01,
+    when PGC TEXT replaced BASIC's GTEXT outright), so TEXT works out
+    of the box everywhere; the glyph bank survives RESETF -- a font
+    is INSTALLED, not drawn -- and dies only at power-off.
+
     TEXT (stage 10h) draws vector text: a glyph is a COMMAND LIST of
     relative strokes (MOVER3/DRAWR3 ending in a pen-up advance) in a
     second 64-slot bank, one slot per ASCII 32..95 (lowercase folds to

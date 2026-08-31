@@ -305,3 +305,21 @@ asserts GPEN at entry. Emulator-vs-RTL divergences hide in WRITE-ONLY
 device state: check both when a device-door user misbehaves on silicon
 but passes emulation. C lib_gfx still device-side/screen-space -- next
 migration candidate.
+
+SINGLE-INTERFACE MIGRATION (user-directed 2026-08-31->): goal = extend
+GL until $FF20 closes. PIXRD DONE+ON SILICON (9a222b6): opcode $63,
+window coords through the 2D map, RB FIFO reply; BASIC PIXELR() IS the
+verb (transforms under WINDOW like PIXELW); cost a startling ~1,040
+LUT4 (muldiv source muxes) -> card 19,103/92%, JUST under the cliff --
+BLIT must be lean/funded. GTEXT RETIRED OUTRIGHT 2026-09-01: PGC TEXT
++ OS boot-streamed /FONT.GL (FONTLD after PATHINIT) replaced it; GPEN
+shadow died with it (COLOR = pure GL). CONTRACT FACTS: TEXT anchors at
+the 3D current point (MOVE3 x,y,0, NOT 2D MOVE) and strokes at z=0 are
+NEAR-CLIPPED by the native camera -> BASIC cold-starts PROJCT 0
+(2D-first; RESETF restores native); TSIZE scales the ANCHOR (absolute-
+TSIZE divergence: model coords). Glyph bank survives RESETF ("a font
+is installed, not drawn"). Device door now: IMAGE pixel writes ONLY.
+Debug lesson: a "shell broken by X" symptom was a STALE TEST IMAGE
+(p8xfs put lost by re-cp) -- rebuild the image in the SAME command as
+the probe. MockCard has a preloadable rb FIFO for RB-verb bridge tests.
+Silicon scripts live IN THE REPO now: fpga/tang-nano-20k/tools/silicon_*.py.

@@ -38,6 +38,10 @@ python3 "$ROOT/assembler/p8xasm.py" "$ROOT/basic/p8xbasic.asm" -o bgfx.bin --bas
 # A fresh disk copy each run: p8xfs put does NOT replace an existing file, so
 # re-installing over a stale name would silently keep testing the OLD binary.
 cp "$ROOT/os/run-disk.img" bgfx.img 2>/dev/null || fail "need os/run-disk.img (run os/run.sh once)"
+python3 "$ROOT/assembler/p8xasm.py" "$ROOT/os/p8xos.asm" -o bgfx_os.bin --base 0x2000 >/dev/null \
+    || fail "the OS did not assemble"
+python3 "$ROOT/tools/p8xfs.py" boot bgfx.img bgfx_os.bin >/dev/null \
+    || fail "could not install the fresh OS (part 4 needs its boot font load)"
 python3 "$ROOT/tools/p8xfs.py" put bgfx.img bgfx.bin --name /bin/bgfx.bin \
     --load 0x6A00 --exec 0x6A00 >/dev/null || fail "could not install the test BASIC"
 
@@ -192,27 +196,19 @@ if got != b"A10203":
 print("BASIC-GFX TEST: ellipse ok")
 PY
 
-# --- part 4: GTEXT x,y,size,string$ ------------------------------------------
-# GTEXT is the one graphics statement BASIC rasterises ITSELF -- the device has
-# no text command -- so the things that can break here are different in kind
-# from parts 1-3:
-#
-#   1. The glyph must actually be the right glyph. The font offset is index*5
-#      built from shifts and adds, and P8X's ADD has a FIXED carry-in: it does
-#      NOT add C. A missing carry moves the font pointer by exactly 256 bytes
-#      and still draws something plausible-looking, which is how it hides.
-#   2. Lowercase must fold onto the uppercase glyph, not draw a blank.
-#   3. size must scale the glyph, not just move it.
-#   4. A string running off the right edge must STOP, not wrap onto the next
-#      row. The device discards off-screen pixels, so a wrap would not come from
-#      the device -- it would come from the 8-bit x cursor rolling over.
-#   5. GTEXT must draw in the CURRENT pen, and "" must be legal and draw nothing.
-# The glyph is 5x7 device pixels whatever the screen is, so these origins do NOT
-# scale with the panel -- only the clipping case has to move, to a 'W' that
-# really does straddle x=479.
-printf 'B\rbgfx\r10 CLS\r20 COLOR RGB(31,0,0)\r30 GTEXT 10,255,1,"A"\r40 COLOR RGB(0,63,0)\r50 GTEXT 40,255,1,"a"\r60 COLOR RGB(0,0,31)\r70 GTEXT 4,218,2,"A"\r80 COLOR RGB(31,0,0)\r90 GTEXT 470,185,1,"WW"\r100 GTEXT 5,155,1,""\r110 END\rRUN\rLIST\rBYE\r' \
+# --- part 4: text is PGC TEXT with the boot-loaded font --------------------
+# GTEXT died 2026-09-01 (the single-interface migration): the OS streams
+# /FONT.GL to the card at boot (bgfx.img is a run-disk copy, so it HAS the
+# font), BASIC cold-starts with PROJCT 0 (text strokes live at z=0, which
+# the native camera near-clips), and the idiom is MOVE3 x,y,0 : TEXT s$.
+# Checked: strokes actually land (out-of-the-box, no manual font load);
+# lowercase folds to the SAME cell as uppercase (ink-for-ink); TSIZE 512
+# doubles the glyph's rise; a string off the right edge clips, not wraps;
+# TEXT "" is legal and draws nothing; and a typed GTEXT line is rejected
+# AT ENTRY (the retired token no longer dispatches, like PALETTE).
+printf 'B\rbgfx\r10 CLS\r20 COLOR RGB(31,0,0)\r30 MOVE3 10,10,0 : TEXT "A"\r40 COLOR RGB(0,63,0)\r50 MOVE3 40,10,0 : TEXT "a"\r60 COLOR RGB(0,0,31)\r70 TSIZE 512\r80 MOVE3 30,20,0 : TEXT "A"\r90 TSIZE 256\r100 COLOR RGB(31,0,0)\r110 MOVE3 470,80,0 : TEXT "WW"\r120 MOVE3 5,110,0 : TEXT ""\r130 END\rRUN\rLIST\rGTEXT 1,1,1,"X"\rBYE\r' \
     > bgfx4.in
-../p8xemu -N -i bgfx4.in -c bgfx.img -l 200000000 -g bgfx4.ppm eeprom.bin > bgfx4.out 2>/dev/null || true
+../p8xemu -N -i bgfx4.in -c bgfx.img -l 400000000 -g bgfx4.ppm eeprom.bin > bgfx4.out 2>/dev/null || true
 
 python3 - <<'PY' || exit 1
 import sys
@@ -221,67 +217,53 @@ out = open("bgfx4.out","rb").read().replace(b"\r", b"")
 d  = open("bgfx4.ppm","rb").read()
 px = d[d.index(b"255\n")+4:]
 W  = 480
-BLACK, RED, GREEN, BLUE = (0,0,0), (255,0,0), (0,255,0), (0,0,255)
-NAME = {BLACK:"$0000", RED:"$F800 red", GREEN:"$07E0 green", BLUE:"$001F blue"}
+BLACK = (0,0,0)
 def fb(x, y):
     i = (y*W + x)*3
     return tuple(px[i:i+3])
-def want(x, y, c, why):
-    got = fb(x,y)
-    if got != c:
-        bad.append("(%d,%d) is %s, want %s - %s"
-                   % (x, y, NAME.get(got,got), NAME.get(c,c), why))
+def ink(x, wy):                       # window coords, any colour
+    return fb(x, 271-wy) != BLACK
+def cell(x0, wy0, w=6, h=8):
+    return [(i,j) for i in range(w) for j in range(h) if ink(x0+i, wy0+j)]
 
-# The 5x7 'A': apex at column 2 of row 0, uprights at columns 0 and 4 from row 2
-# down, crossbar across the whole of row 4. Pinning the apex AND the empty
-# corner is what catches a font pointer that landed on the wrong glyph.
-want(12, 10, RED,   "'A' apex missing - wrong glyph, or GTEXT drew nothing")
-want(10, 10, BLACK, "(10,10) is lit; 'A' has no top-left pixel - font off by a glyph")
-want(10, 12, RED,   "'A' left upright missing")
-want(14, 12, RED,   "'A' right upright missing")
-for x in range(10, 15):
-    want(x, 14, RED, "'A' crossbar broken at x=%d" % x)
-want(12, 16, BLACK, "row 6 of 'A' should be open between the uprights")
-
-# lowercase folds to the SAME shape, in its own pen
-want(42, 10, GREEN, "lowercase 'a' did not fold onto the 'A' glyph")
-want(40, 10, BLACK, "folded 'a' is not aligned like 'A'")
-for x in range(40, 45):
-    want(x, 14, GREEN, "folded 'a' crossbar broken at x=%d" % x)
-
-# size 2: every font pixel becomes a 2x2 block, so the apex is 4 pixels and the
-# glyph occupies twice the extent. Origin (4,40), apex at column 2 => x 8..9.
-for x in (8, 9):
-    for y in (40, 41):
-        want(x, y, BLUE, "size-2 apex block incomplete at (%d,%d)" % (x, y))
-want(10, 40, BLACK, "size-2 apex is too wide - the block is not 2x2")
-want( 4, 44, BLUE,  "size-2 left upright missing (row 2 should start at y=44)")
-want( 4, 42, BLACK, "size-2 upright started too early - rows are not scaled")
-
-# clipping: 'W' at x=470 is partly on screen, the second one is off it. Nothing
-# may appear at the left edge on those rows.
-for y in range(80, 87):
+# the 1x 'A' drew, inside its cell, nothing under the baseline or above cap
+a = cell(10, 10)
+if len(a) < 5: bad.append("1x TEXT 'A' drew %d px - font not loaded at boot?" % len(a))
+for x in range(8, 18):
+    if ink(x, 8):  bad.append("ink under the baseline at x=%d" % x); break
+# lowercase folds: the SAME ink pattern, cell for cell
+if cell(40, 10) != a:
+    bad.append("'a' did not fold onto the 'A' glyph (cells differ)")
+# TSIZE 512 doubles the rise -- AND the anchor: TSIZE scales the whole
+# model transform (the documented PGC divergence), so MODEL (30,20)
+# lands at screen (60,40)
+big = cell(59, 38, 18, 20)
+if len(big) <= len(a): bad.append("TSIZE 512 'A' no bigger than 1x (%d vs %d px)" % (len(big), len(a)))
+if not any(j > 10 for (i,j) in big):
+    bad.append("TSIZE 512 'A' never rises past the 1x cap - TSIZE ignored")
+# clipping: nothing wrapped to the left edge rows
+for wy in range(78, 90):
     for x in range(0, 12):
-        if fb(x,y) != BLACK:
-            bad.append("(%d,%d) lit - GTEXT wrapped past the right edge" % (x,y))
-            break
+        if ink(x, wy):
+            bad.append("(%d,wy%d) lit - TEXT wrapped past the right edge" % (x,wy)); break
+# "" drew nothing
+for wy in range(108, 120):
+    for x in range(4, 24):
+        if ink(x, wy):
+            bad.append('TEXT "" drew at (%d,wy%d)' % (x,wy)); break
 
-# "" is legal and draws nothing
-for y in range(110, 118):
-    for x in range(4, 20):
-        if fb(x,y) != BLACK:
-            bad.append('GTEXT ...,"" drew at (%d,%d)' % (x,y))
-            break
-
-for kw in [b'30 GTEXT 10,255,1,"A"', b'70 GTEXT 4,218,2,"A"', b'100 GTEXT 5,155,1,""']:
+# LIST round-trips the TEXT lines; the dead GTEXT token is rejected at entry
+for kw in [b'30 MOVE3 10,10,0 : TEXT "A"', b'70 TSIZE 512', b'120 MOVE3 5,110,0 : TEXT ""']:
     if out.count(kw) < 2:
         bad.append("LIST did not round-trip %r" % kw.decode())
+if b"?SYNTAX ERROR" not in out.split(b"130 END")[-1]:
+    bad.append("immediate GTEXT was ACCEPTED - the dead token still dispatches")
 
 if bad:
     print("BASIC-GFX TEST: FAIL")
     for b in bad[:12]: print("  " + b)
     sys.exit(1)
-print("BASIC-GFX TEST: gtext ok (glyph, case folding, scaling, clipping)")
+print("BASIC-GFX TEST: text ok (boot font, fold, TSIZE, clip, empty, GTEXT dead)")
 PY
 
 # A missing separator is a syntax error, not a half-drawn string.
@@ -394,4 +376,4 @@ if bad:
 print("BASIC-GFX TEST: image ok (placement, colours, header rejects, clipping)")
 PY
 
-echo "BASIC-GFX TEST: PASS (draw, pixelw, circle, ellipse, rgb, pixelr, gtext, full screen, image)"
+echo "BASIC-GFX TEST: PASS (draw, pixelw, circle, ellipse, rgb, pixelr, text, full screen, image)"

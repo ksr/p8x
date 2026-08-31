@@ -31,9 +31,10 @@ GX0    = $FF20               ; coordinate LOW bytes. Writing one CLEARS its high
 GY0    = $FF21               ;   byte, which sits GCHI above it ($FF29-$FF2C),
 GX1    = $FF22               ;   so the low byte must always be written first.
 GY1    = $FF23
-GCOL   = $FF24               ; pen LOW byte (write-only; GPEN shadows it).
-                             ;   The pen is a whole RGB565 colour: a GCOL
-                             ;   write CLEARS GCOLH, same as the coordinates.
+GCOL   = $FF24               ; pen LOW byte (write-only; IMAGE streams its
+                             ;   pixel colours through it -- BASIC's last
+                             ;   device-pen writer). A whole RGB565 colour:
+                             ;   a GCOL write CLEARS GCOLH, like the coords.
 GCOLH  = $FF2D               ; pen HIGH byte (the write side of GID0's address)
 GCMD   = $FF25               ; write to execute
 GSTAT  = $FF26               ; bit7 BUSY
@@ -48,7 +49,7 @@ GLRBR   = $FF52          ; read-back FIFO pop (stage 10e; GLSTAT bit0 = has byte
 GLIDR   = $FF54          ; reads 'G' when the GL engine is fitted
 GCHI   = 9                   ; a pair's high byte = its low address + GCHI
 ; BASIC's own drawing migrated onto the GL port 2026-08-30: of the device
-; commands only PIXELW/BOXFILL (GTEXT's rasterizer) and PIXELR (the read
+; commands only PIXELW (IMAGE's pixel loop) and nothing else -- PIXELR (the
 ; function) are still issued from here. GC_LINE/GC_ELL/GC_ELLF stay
 ; documented -- the silicon keeps them for the GL walker's internal use.
 GC_PIXW = 1
@@ -165,51 +166,26 @@ POKEA  = BASRAM+$F6          ; POKE address (2)
 ; turns out to alias something.
 GSADR  = BASRAM+$DB          ; GSTORE: target register address (page $FF)
 GSTGT  = BASRAM+$DC          ; GARG:   target held across EVAL
-GPEN   = BASRAM+$DD          ; the pen of record (COLOR writes it): the device
-                             ;   GCOL is WRITE-ONLY and the GL walker clobbers
-                             ;   it while drawing, so GTEXT asserts this shadow
-                             ;   into GCOL/GCOLH at entry
-GPENH  = BASRAM+$FA          ; ...and its high byte, now a pen is a whole RGB565
-                             ;   colour. NOT $F2: that is GTTMP, GTEXT's carry
-                             ;   scratch -- the stale "last spares" comment
-                             ;   below said $F2-$F3 were free and was wrong,
-                             ;   and a GTEXT would have corrupted the shadow
-                             ;   the next CLS restores. $FA-$FF are the real
-                             ;   free run; this takes the first byte.
+                             ; ($DD and $FA free: were GPEN/GPENH, the
+                             ;   device-pen shadow -- gone 2026-09-01 with
+                             ;   GTEXT, its last consumer; the pen is pure
+                             ;   GL state now)
 PRMSH  = BASRAM+$FB          ; shadow of the GL PRMFIL flag (write-only on the
                              ;   card): the native PRMFIL statement records it,
                              ;   RESETF clears it, and BOX/CIRCLE restore it
                              ;   after forcing their own fill mode. A GL "PF 1"
                              ;   STRING bypasses the shadow -- documented.
 RGBH   = BASRAM+$F3          ; RGB(): the packed high byte, held across the
-                             ;   green and blue argument expressions. $F3 IS
-                             ;   free (GTTMP is one byte at $F2), and scratch
-                             ;   here is safe: nothing else can run inside an
-                             ;   RGB() argument expression.
+                             ;   green and blue argument expressions --
+                             ;   scratch here is safe: nothing else can run
+                             ;   inside an RGB() argument expression.
 GCTMP  = BASRAM+$DE          ; GEXEC: the command byte, held across GWAIT
                              ; ($DF free: was GELL, gone with CIRCLE's
                              ;   2026-08-30 migration onto GL ELIPSE)
-; GTEXT working set. It rasterises glyphs itself (see DOGTEXT), so unlike the
-; other statements it needs real state. $E0-$E2 is the tail of the same free run
-; as the block above; $E6-$F1 is the next one ($E3 JUMPF, $E4 JUMPADDR are two
-; bytes, and SEED starts at $F4) -- which leaves $F2-$F3 as the only spare bytes
-; left in this page. Re-read the JUMPADDR note above before claiming any of it.
-GTBIT  = BASRAM+$E0          ; the glyph column being shifted out, one bit a row
-GTROW  = BASRAM+$E1          ; rows left in this column (7..1)
-GTCOL  = BASRAM+$E2          ; columns left in this glyph (5..1); also the scratch
-                             ;   the index*5 glyph-offset multiply borrows
-GTCX   = BASRAM+$E6          ; pen x (2) -- runs across the glyph AND on to the
-                             ;   next character, so no separate origin is kept
-GTY    = BASRAM+$E8          ; text top edge (2), constant for the whole string
-GTCY   = BASRAM+$EA          ; pen y (2), reset to GTY at the top of each column
-GTPTR  = BASRAM+$EC          ; read pointer into STRACC (2)
-GTGP   = BASRAM+$EE          ; read pointer into FONT57 (2)
-GTSZ   = BASRAM+$F0          ; size multiplier, >= 1
-GTN    = BASRAM+$F1          ; characters left to draw
-GTTMP  = BASRAM+$F2          ; carry captured between the halves of a 16-bit
-                             ;   add -- ADD has a FIXED carry-in and ignores C,
-                             ;   so the high half must be given the carry as a
-                             ;   number. Same shape as ADD16.
+; (GTEXT's working set, $E0-$F2, left with it 2026-09-01: the whole run
+; $E0-$E2, $E6-$F2 is transient scratch again -- $E3/$E4 JUMPF/JUMPADDR
+; and $F4+ SEED are still the live bytes to respect. Re-read the
+; JUMPADDR note above before claiming any of it.)
 NAMLEN = 6                   ; significant variable-name length
 NVARS  = 32                  ; symbol-table capacity (entry = NAMLEN+2 = 8 bytes)
 VARTAB = BASRAM+$100         ; NVARS x 8 = 256 bytes ($x100..$x1FF)
@@ -310,7 +286,9 @@ TOK_CIRCLE= $AC          ; CIRCLE x,y,r[,FILL|,NOFILL]
 TOK_PIXELR= $AE          ; PIXELR(x,y) -- a FUNCTION, not a statement
                          ;   (device pixel read; was POINT, renamed so
                          ;   the name belongs to the PGC drawing verb)
-TOK_GTEXT = $AF          ; GTEXT x,y,size,string$
+                         ; ($AF was GTEXT, removed 2026-09-01: PGC TEXT
+                         ;   with the boot-loaded font replaced it -- the
+                         ;   token no longer dispatches, like PALETTE's)
 TOK_RGB   = $B1          ; RGB(r,g,b) -- a FUNCTION: pack r,b 0-31, g 0-63 into 565
 TOK_IMAGE = $B2          ; IMAGE x,y,name$ -- draw a P8I file
 TOK_GL    = $B3          ; GL string$ -- one ASCII graphics-language line
@@ -378,10 +356,6 @@ bs_go:
         STA  SEED
         LDA  #$AC
         STA  SEED+1
-        LDA  #$FF            ; graphics: pen WHITE ($FFFF) in the GPEN
-        STA  GPEN            ;   shadow -- the pen of record; nothing
-        STA  GPENH           ;   writes the device GCOL directly any more
-                             ;   (GTEXT asserts the shadow at entry)
         LDA  #0              ; PRMFIL shadow: the card powers up outline
         STA  PRMSH
         LDA  GLIDR           ; a GL engine? establish BASIC's full-screen
@@ -389,6 +363,11 @@ bs_go:
         CMP                  ;   DEGENERATE one that draws nothing (glwin)
         JNZ  bnr_ng
         JSR  glwin
+        LDA  #$B0            ; COLD START ONLY: PROJCT 0 -- BASIC is
+        JSR  GLPUT           ;   2D-first, and TEXT strokes live at z=0,
+        LDA  #0              ;   which the native camera NEAR-CLIPS (the
+        JSR  GLPUT           ;   stage-9 z>=16 rule). RESETF deliberately
+        JSR  GLPUT           ;   restores the native camera for 3D work.
 bnr_ng:
         LDP1 #BANNER
         JSR  PUTS
@@ -502,10 +481,6 @@ STMT:   JSR  SKIPSP
         LDB  #TOK_CIRCLE
         CMP
         JZ   DOCIRC
-        LDA  (P2)
-        LDB  #TOK_GTEXT
-        CMP
-        JZ   DOGTEXT
         LDA  (P2)
         LDB  #TOK_IMAGE
         CMP
@@ -1331,7 +1306,9 @@ g_err:  JMP  SYNERR
 ; LINE/BOX/CIRCLE/CLS/PIXELW now EMIT GL: window space (y up), transformed
 ; by WINDOW/VWPORT, honouring LINPAT/LINFUN, RECORDING inside CLBEG/CLEND
 ; like every GL statement, synchronous via the glv_dn drain. The $FF20
-; device door keeps only PIXELR()/IMAGE/GTEXT (the DMA gap); PIXELR()
+; device door keeps only IMAGE (the DMA gap; PIXELR() is the GL PIXRD
+; verb since 2026-08-31, and GTEXT died 2026-09-01 -- text is PGC TEXT
+; with the boot-loaded font); the old note continued: PIXELR()
 ; stays a SCREEN-space read -- under the default window, screen y is
 ; 271 - window y.
 
@@ -1366,8 +1343,7 @@ glw_l:  LDA  (P1)+
 glwtab: .byte $B3,$00,$00,$DF,$01,$00,$00,$0F,$01   ; WINDOW 0,479,0,271
         .byte $B2,$00,$00,$DF,$01,$00,$00,$0F,$01   ; VWPORT 0,479,0,271
         .byte $06,$1F,$3F,$1F                       ; COLOR 31,63,31: the pen
-                                                    ;   starts WHITE, matching
-                                                    ;   the GPEN shadow, not
+                                                    ;   starts WHITE, not
                                                     ;   whatever a previous
                                                     ;   session left on the card
 
@@ -1397,7 +1373,7 @@ bx_pf:  STA  GLDIM
 ; counts y UP like the PGC). NUM1 = window y, NUM2 = the shape's extent
 ; in device rows; returns NUM1 = 272 - (y + extent) = the device TOP
 ; row. Extent 1 flips a single row (PIXELR), 7*size a glyph column
-; (GTEXT anchors at its BASELINE, like PGC TEXT), the image height an
+; (once GTEXT's glyph column too -- gone 2026-09-01), the image height an
 ; IMAGE (anchored at its BOTTOM-left). This is the fixed full-screen
 ; mapping: unlike the drawing statements, these do NOT transform under
 ; a program's WINDOW/VWPORT.
@@ -1464,15 +1440,10 @@ DOCOLOR: INP2
         CMP
         JNZ  dc_st                  ; no comma: RESULT is the packed colour
         JSR  RGBTAIL                ; comma: RESULT was r; parse ,g,b and pack
-dc_st:  LDA  RESULT
-        STA  GPEN                   ; the shadow is the pen of record now:
-        LDA  RESULT+1               ;   GTEXT asserts it into the device's
-        STA  GPENH                  ;   write-only GCOL at entry (the GL
-                                    ;   walker clobbers GCOL anyway), and
-                                    ;   no other device user reads a pen --
-                                    ;   the old direct GCOL/GCOLH writes
-                                    ;   were vestigial and are gone
-        LDA  GLIDR                  ; a GL engine? ONE pen statement drives
+dc_st:  LDA  GLIDR                  ; the pen is PURE GL now (2026-09-01:
+                                    ;   GTEXT died and took the GPEN shadow
+                                    ;   with it -- IMAGE writes its own
+                                    ;   colours; nothing reads a pen back)
         LDB  #'G'                   ;   both paths: unpack the 565 back to
         CMP                         ;   r g b and set the card's pen too
         JNZ  dc_rts                 ;   (and it records, inside a list)
@@ -1670,223 +1641,15 @@ ci_err: JMP  SYNERR
 ; installed.
 
 ;==============================================================================
-; GTEXT x,y,size,string$ — draw a string as GRAPHICS, in the current pen.
-;
-; Unlike every other statement here, the glyphs are rasterised IN SOFTWARE. The
-; display has no text command and adding one would mean a font ROM plus a glyph
-; state machine in gfx.v, which the FPGA build has no room for: the lcd bitstream
-; sits at 44/46 BSRAM and a change with no logical effect at all has already been
-; enough to break placement (see BACKLOG.md). Doing it here costs one device
-; command per LIT pixel and needs no bitstream change whatsoever, so GTEXT ships
-; as a new BASIC.BIN on the card and the board is not reflashed.
-;
-; Each font pixel becomes a size x size block -- PLOT at size 1, BOXFILL above
-; it -- so a big font costs exactly as many device commands as a small one.
-;
-; Clipping is free: the device DISCARDS off-screen pixels rather than wrapping
-; them (see gpu_px in the emulator), so nothing here tests a pixel. The only
-; bound checked is the x cursor, and only to stop early once the string has run
-; off the right-hand edge -- without which a long string would keep issuing
-; commands for pixels that can never appear.
-;
-; The font is 5x7 in a 6x8 cell: 40 columns across a 240-pixel screen at size 1,
-; 20 at size 2. Codes $20-$5F only; lowercase folds onto the uppercase glyph via
-; UPCHAR and anything else draws as a blank. See generators/gen_font57.py.
+; GTEXT is GONE (2026-09-01, the single-interface migration): text is the
+; PGC's own -- MOVE x,y : TEXT s$ (TSIZE/TANGLE/TJUST scale, rotate and
+; justify), drawn card-side from the stroke font the OS streams from
+; /FONT.GL at boot (the glyph bank survives RESETF by design). The old
+; token $AF no longer dispatches, so a saved program's GTEXT line reports
+; ?SYNTAX ERROR -- the PALETTE precedent. With it went the software
+; rasterizer, the font57 bitmap table, its BASRAM working set, and the
+; GPEN device-pen shadow (GTEXT was its last consumer).
 ;==============================================================================
-DOGTEXT: INP2                       ; consume the GTEXT token
-        JSR  GCHECK
-        LDA  GPEN                   ; assert the pen: ON SILICON the GL
-        STA  GCOL                   ;   walker masters the device and its
-        LDA  GPENH                  ;   last operation (a CLS = FLOOD
-        STA  GCOLH                  ;   0,0,0!) leaves ITS colour in the
-                                    ;   write-only GCOL -- the emulator
-                                    ;   passes colours as arguments and
-                                    ;   never shows it. Low byte first:
-                                    ;   the GCOL write clears GCOLH.
-        JSR  EVAL                   ; x
-        LDA  RESULT
-        STA  GTCX
-        LDA  RESULT+1
-        STA  GTCX+1
-        JSR  GTSEP
-        JSR  EVAL                   ; y
-        LDA  RESULT
-        STA  GTY
-        LDA  RESULT+1
-        STA  GTY+1
-        JSR  GTSEP
-        JSR  EVAL                   ; size
-        LDA  RESULT+1
-        JNZ  gt_big                 ; >= 256: clamp, do not let it wrap to a
-        LDA  RESULT                 ;   stripe one pixel wide
-        JNZ  gt_szok
-        LDA  #1                     ; size 0 would draw nothing at all
-        JMP  gt_szok
-gt_big: LDA  #255
-gt_szok: STA GTSZ
-        LDA  GTSZ                   ; window -> device (wflip): the column
-        STA  NUM1                   ;   is 7*size rows tall and (x,y) is
-        STA  NUM2                   ;   its BASELINE; 7*size by doublings
-        LDA  #0                     ;   (2s, 4s, 8s) minus one s
-        STA  NUM1+1
-        STA  NUM2+1
-        JSR  ADD16                  ; 2s
-        JSR  n2n1
-        JSR  ADD16                  ; 4s
-        JSR  n2n1
-        JSR  ADD16                  ; 8s
-        LDA  GTSZ
-        STA  NUM2
-        LDA  #0
-        STA  NUM2+1
-        JSR  SUB16                  ; 7s
-        JSR  n2n1
-        LDA  GTY
-        STA  NUM1
-        LDA  GTY+1
-        STA  NUM1+1
-        JSR  wflip
-        LDA  NUM1
-        STA  GTY
-        LDA  NUM1+1
-        STA  GTY+1
-        JSR  GTSEP
-        JSR  SEVAL                  ; the string -> STRACC = [len][data...]
-        LDA  STRACC
-        STA  GTN
-        JZ   gt_ret                 ; "" is legal and draws nothing
-        LDA  #<STRACCD
-        STA  GTPTR
-        LDA  #>STRACCD
-        STA  GTPTR+1
-
-; ---- one character ---------------------------------------------------------
-gt_ch:  LDA  GTN
-        JZ   gt_ret
-        DEC
-        STA  GTN
-        LDA  GTCX+1                 ; run off the right edge -> stop. 240 is a
-        JNZ  gt_ret                 ;   byte, so any high byte is already past it
-        LDA  GTCX
-        LDB  #240
-        CMP
-        JC   gt_ret                 ; C=1 here means x >= 240
-        LDA  GTPTR                  ; fetch the character
-        TAP1L
-        LDA  GTPTR+1
-        TAP1H
-        LDA  (P1)
-        JSR  UPCHAR                 ; 'a'-'z' share the uppercase glyphs
-        LDB  #$20
-        CMP                         ; CMP preserves A, so both bounds can be
-        JNC  gt_spc                 ;   tested against the one load
-        LDB  #$60
-        CMP
-        JC   gt_spc
-        JMP  gt_have
-gt_spc: LDA  #$20                   ; outside the font -> blank
-gt_have: LDB #$20
-        SUB                         ; glyph index 0..63
-
-; ---- GTGP = FONT57 + index*5  (index*4 + index; no multiply in this ISA) ----
-        STA  GTCOL                  ; the index, needed once more for the +index;
-        STA  GTGP                   ;   GTCOL becomes the column counter below
-        LDA  #0
-        STA  GTGP+1
-        LDA  GTGP                   ; x2 -- SHL pushes bit 7 into C and ROL takes
-        SHL                         ;   it, so the pair shifts as one 16-bit value
-        STA  GTGP
-        LDA  GTGP+1
-        ROL
-        STA  GTGP+1
-        LDA  GTGP                   ; x4
-        SHL
-        STA  GTGP
-        LDA  GTGP+1
-        ROL
-        STA  GTGP+1
-        LDA  GTGP                   ; + index  ->  index*5
-        LDB  GTCOL
-        ADD
-        STA  GTGP
-        LDA  #0                     ; capture the carry (LDA leaves C alone)
-        JNC  gt_m1
-        LDA  #1
-gt_m1:  LDB  GTGP+1
-        ADD
-        STA  GTGP+1
-        LDA  GTGP                   ; + FONT57
-        LDB  #<FONT57
-        ADD
-        STA  GTGP
-        LDA  #0
-        JNC  gt_m2
-        LDA  #1
-gt_m2:  LDB  GTGP+1
-        ADD
-        LDB  #>FONT57
-        ADD
-        STA  GTGP+1
-
-; ---- five columns ----------------------------------------------------------
-        LDA  #5
-        STA  GTCOL
-gt_col: LDA  GTGP                   ; bits = *GTGP++
-        TAP1L
-        LDA  GTGP+1
-        TAP1H
-        LDA  (P1)
-        STA  GTBIT
-        LDA  GTGP
-        INC
-        STA  GTGP
-        JNZ  gt_c1
-        LDA  GTGP+1
-        INC
-        STA  GTGP+1
-gt_c1:  LDA  GTY                    ; every column restarts at the top row
-        STA  GTCY
-        LDA  GTY+1
-        STA  GTCY+1
-        LDA  #7
-        STA  GTROW
-gt_row: LDA  GTBIT                  ; bit 0 is the row we are on
-        LDB  #1
-        AND
-        JZ   gt_off
-        JSR  GTBLK
-gt_off: LDA  GTBIT
-        SHR
-        STA  GTBIT
-        LDA  GTCY                   ; cury += size
-        LDB  GTSZ
-        ADD
-        STA  GTCY
-        LDA  #0
-        JNC  gt_y1
-        LDA  #1
-gt_y1:  LDB  GTCY+1
-        ADD
-        STA  GTCY+1
-        LDA  GTROW
-        DEC
-        STA  GTROW
-        JNZ  gt_row
-        JSR  GTADVX                 ; curx += size
-        LDA  GTCOL
-        DEC
-        STA  GTCOL
-        JNZ  gt_col
-        JSR  GTADVX                 ; the sixth column is the inter-character gap
-        LDA  GTPTR                  ; next character
-        INC
-        STA  GTPTR
-        JNZ  gt_ch
-        LDA  GTPTR+1
-        INC
-        STA  GTPTR+1
-        JMP  gt_ch
-gt_ret: RTS
 
 ;------------------------------------------------------------------------------
 ; GL string$ — send one ASCII graphics-language line to the GL engine
@@ -1987,9 +1750,6 @@ glv_hi: LDB  #>GLVTAB
         JNZ  glv_nr                 ;   full-screen window comes back (the
         LDA  #0                     ;   card resets it DEGENERATE; see glwin)
         STA  PRMSH
-        LDA  #$FF                   ; the pen resets WHITE on the card;
-        STA  GPEN                   ;   the GPEN shadow (GTEXT's pen)
-        STA  GPENH                  ;   follows it
         JSR  glwin
 glv_nr: LDA  GLMETA
         LDB  #$FF                   ; meta $FF: the string statement (TEXT)
@@ -2291,81 +2051,8 @@ imgb_e: PLA                         ; drop IMGB's own return address...
         PLA
         JMP  img_bad                ; ...and report from the statement's level
 
-; GTSEP — require the ',' between GTEXT's arguments.
-GTSEP:  JSR  SKIPSP
-        LDA  (P2)
-        LDB  #','
-        CMP
-        JNZ  gt_err
-        INP2
-        RTS
-gt_err: JMP  SYNERR
 
-; GTADVX — pen x += size, 16-bit.
-GTADVX: LDA  GTCX
-        LDB  GTSZ
-        ADD
-        STA  GTCX
-        LDA  #0
-        JNC  ax_nc
-        LDA  #1
-ax_nc:  LDB  GTCX+1
-        ADD
-        STA  GTCX+1
-        RTS
-
-; GTBLK — one lit font pixel: a size x size block at (GTCX,GTCY) in the current
-; pen. One device command either way, which is what makes scaling free.
-; Low bytes go first throughout: the device CLEARS a high byte when its low
-; partner is written, so the reverse order would silently drop it.
-GTBLK:  LDA  GTCX
-        STA  GX0
-        LDA  GTCX+1
-        STA  GX0+GCHI
-        LDA  GTCY
-        STA  GY0
-        LDA  GTCY+1
-        STA  GY0+GCHI
-        LDA  GTSZ
-        LDB  #1
-        CMP
-        JZ   gb_dot
-        LDA  GTSZ                   ; x1 = x0 + size-1
-        LDB  #1
-        SUB
-        LDB  GTCX
-        ADD
-        STA  GTTMP                  ; hold it: GX1 must not be written until the
-        LDA  #0                     ;   carry has been read out of C
-        JNC  gb_x
-        LDA  #1
-gb_x:   LDB  GTCX+1
-        ADD
-        PHA                         ; low first -- writing it CLEARS the high byte
-        LDA  GTTMP
-        STA  GX1
-        PLA
-        STA  GX1+GCHI
-        LDA  GTSZ                   ; y1 = y0 + size-1
-        LDB  #1
-        SUB
-        LDB  GTCY
-        ADD
-        STA  GTTMP
-        LDA  #0
-        JNC  gb_y
-        LDA  #1
-gb_y:   LDB  GTCY+1
-        ADD
-        PHA
-        LDA  GTTMP
-        STA  GY1
-        PLA
-        STA  GY1+GCHI
-        LDA  #GC_BOXF
-        JMP  GEXEC
-gb_dot: LDA  #GC_PIXW
-        JMP  GEXEC
+; (GTADVX/GTBLK, GTEXT's advance and block plotter, left with it 2026-09-01)
 
 ; REM — comment: ignore the rest of the line
 DOREM:  LDA  (P2)
@@ -5561,8 +5248,6 @@ pk_d:   RTS
 
 ; keyword table: each entry = ASCII letters then the token byte (>= $80);
 ; a 00 ends the table.  (Token byte doubles as the entry's end marker.)
-; The 5x7 glyph table used by GTEXT. Generated -- see gen_font57.py.
-        .include "font57.inc"
 
 KWTAB:
         ; the GL verbs come FIRST: the fragment is longest-first inside
@@ -5661,8 +5346,6 @@ KWTAB:
         .byte $AC
         .ascii "PIXELR"
         .byte $AE
-        .ascii "GTEXT"
-        .byte $AF
         .ascii "RGB"
         .byte $B1
         .ascii "IMAGE"
@@ -5820,7 +5503,7 @@ MHELP:  .byte CR,LF
         .byte CR,LF
         .ascii "  CIRCLE x,y,r[,ry][,FILL]  PIXELW x,y  PIXELR(x,y)  RGB(r,g,b)"
         .byte CR,LF
-        .ascii "  GTEXT x,y,size,s$   (5x7 text, y is the BASELINE)"
+        .ascii "  text: MOVE3 x,y,0 then TEXT s$ (TSIZE n scales, 256 = 1x)"
         .byte CR,LF
         .ascii "  IMAGE x,y,f$   draw a P8I file, bottom-left at x,y"
         .byte CR,LF
