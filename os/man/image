@@ -9,14 +9,16 @@ DESCRIPTION
     Two inverse verbs, straight from the shell (no BASIC needed).
 
     `image x y file` draws a P8I picture with its top-left at (x,y) --
-    SCREEN coordinates, y down: this shell command speaks the raw device
-    door, unlike BASIC's IMAGE statement, which takes window coordinates
-    (y up) anchored at the picture's bottom-left. The
+    SCREEN coordinates, y down: this shell command keeps the historical
+    screen-space contract, unlike BASIC's IMAGE statement, which takes
+    window coordinates (y up) anchored at the picture's bottom-left.
+    (Both ride the same GL BLIT verb underneath -- one BLIT per row,
+    the file bytes streamed verbatim as the payload.) The
     file carries its own width, height and depth, so nothing else is
     needed; a file that is missing prints ?No file, and one that is not
     P8I, the wrong version or depth, or ends early prints ?NOT P8I.
-    Pixels past any screen edge are simply discarded, so a picture may
-    hang off any side (x and y may be negative).
+    Pixels past any screen edge are clipped by the engine, so a picture
+    may hang off any side (x and y may be negative).
 
     `image read x0 y0 x1 y1 file` is the screen GRAB: it reads every
     pixel of the rectangle (any two opposite corners, sorted for you,
@@ -28,14 +30,14 @@ DESCRIPTION
 
     A grab reads what the panel SHOWS: if the GL engine has been
     page-flipping (see man page), the command re-joins the pages first
-    (a GL PGSYNC, stage 10b).
-    Speed, measured: the /bin build (hand-assembled, the default) draws
-    at ~560 cycles a pixel -- the 256x256 mandrill in under two seconds,
-    a full-screen grab in about three. The C build at /binc/image.bin is
-    behaviour-identical and ~8x slower; it exists for on-target
-    comparison and rebuilding (man cc).
-    The drawing pen is left on the last colour handled; set
-    COLOR (BASIC) or gcolor (C) before drawing your own things after.
+    (a GL PGSYNC, stage 10b); each pixel is a GL PIXRD, answered
+    through the read-back FIFO.
+    The draw is BLIT-fast: the inner loop is one file byte to one port
+    write, so a picture streams at wire speed on the card bridge. The
+    C build at /binc/image.bin is behaviour-identical and slower; it
+    exists for on-target comparison and rebuilding (man cc).
+    The command establishes the GL ground state on entry (identity
+    window and viewport) and leaves the pen WHITE.
 
 EXAMPLES
     image 112 8 /examples/MANDRILL.P8I draw the demo photo

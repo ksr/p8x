@@ -279,77 +279,67 @@ DPUT:   JSR  PUTC
 ; ---------------- display bring-up --------------------------------------------
 ; A cold SDRAM powers up as NOISE and the scanout shows it faithfully, so the
 ; first thing a fitted panel does after power-on is alarm whoever just flipped
-; the switch. If the display answers its presence signature ("PG" at GID0/GID1
-; -- two fixed bytes at two addresses, because an absent card floats $FF), it
-; is cleared and given a small splash: a white full-screen border and three
-; colour swatches. That is a welcome, a self-check (all three channels, both
-; pen bytes, the full-screen extremes), and the first write pass through a
-; freshly initialised SDRAM -- all before the prompt appears. No display:
-; silently skipped, which is also what the no-panel builds see ($FF reads).
+; the switch. If the card answers the graphics-language presence probe ('G'
+; at GLID -- an absent card floats $FF), it is cleared and given a small
+; splash: a white full-screen border and three colour swatches. That is a
+; welcome, a self-check (all three channels, both pen bytes, the full-screen
+; extremes), and the first write pass through a freshly initialised SDRAM --
+; all before the prompt appears. No display: silently skipped, which is also
+; what the no-panel builds see ($FF reads).
 ;
-; Table-driven: pairs of (register LOW byte, value), $00 ending the table.
-; A GCMD entry waits for BUSY to drop first, so the CLS finishes before the
-; border draws over it. This is the worked example of driving the device from
-; machine code with 16-bit coordinates: every low write clears its high byte,
-; so the highs are written after the lows, and only where a value needs them.
-DISPINIT: LDA GID0
-        LDB  #'P'
-        CMP
-        JNZ  dsp_rt
-        LDA  GID1
+; Table-driven: DSPTAB is a flat GL byte program, streamed into the command
+; FIFO with GLSTAT bit7 (FIFO full) as the only handshake -- the FIFO
+; serializes, so no busy dance is needed between primitives. The program
+; opens by establishing the identity window/viewport (the port powers up
+; DEGENERATE) and closes back in outline fill mode. This is the worked
+; example of driving the GL port from machine code.
+DISPINIT: LDA GLID
         LDB  #'G'
         CMP
         JNZ  dsp_rt
         LDP1 #DSPTAB
-dsp_lp: LDA  (P1)+          ; register low byte; $00 = done
-        JZ   dsp_rt
-        STA  TMP            ; keep it: no P2->A transfer in this ISA
-        LDB  #$25           ; a GCMD entry lets the engine finish first
-        CMP
-        JNZ  dsp_bp
-dsp_gw: LDA  GSTAT
+        LDA  #DSPLEN
+        STA  TMP
+dsp_lp: LDA  GLSTAT         ; FIFO backpressure
         LDB  #$80
         AND
-        JNZ  dsp_gw
-dsp_bp: LDA  TMP            ; P2 -> $FF00 + reg
-        TAP2L
-        LDA  #$FF
-        TAP2H
-        LDA  (P1)+          ; the value
-        STA  (P2)
-        JMP  dsp_lp
+        JNZ  dsp_lp
+        LDA  (P1)+
+        STA  GLDATA
+        LDA  TMP
+        LDB  #1
+        SUB
+        STA  TMP
+        JNZ  dsp_lp
 dsp_rt: RTS
 
-; Clear black (BOXFILL 0,0-479,271 -- the CLS command retired with the
-; stage-10 diet); white border as FOUR LINEs (BOX outline retired too);
-; swatches red/green/blue, 40x24 each, centred: proof of both pen bytes
-; and all three channels at a glance.
-DSPTAB: .byte $24,$00                                   ; GCOL 0 (black)
-        .byte $20,$00, $21,$00                          ; 0,0 ...
-        .byte $22,$DF, $2B,$01, $23,$0F, $2C,$01        ; ... 479,271
-        .byte $25,$04                                   ; BOXFILL: the clear
-        .byte $24,$FF, $2D,$FF                          ; pen $FFFF white
-        .byte $20,$00, $21,$00                          ; border: top edge
-        .byte $22,$DF, $2B,$01, $23,$00
-        .byte $25,$02                                   ; LINE (0,0)-(479,0)
-        .byte $21,$0F, $2A,$01, $23,$0F, $2C,$01        ; bottom edge
-        .byte $25,$02                                   ; LINE (0,271)-(479,271)
-        .byte $22,$00, $21,$00                          ; left edge
-        .byte $25,$02                                   ; LINE (0,0)-(0,271)
-        .byte $20,$DF, $29,$01, $22,$DF, $2B,$01        ; right edge
-        .byte $25,$02                                   ; LINE (479,0)-(479,271)
-        .byte $24,$00, $2D,$F8                          ; pen $F800 red
-        .byte $20,$B4, $21,$7C, $22,$DB, $23,$93        ; 180,124 - 219,147
-        .byte $25,$04                                   ; BOXFILL
-        .byte $24,$E0, $2D,$07                          ; pen $07E0 green
-        .byte $20,$DC, $21,$7C                          ; 220,124 ...
-        .byte $22,$03, $2B,$01, $23,$93                 ; ... 259,147
-        .byte $25,$04
-        .byte $24,$1F                                   ; pen $001F blue
-        .byte $20,$04, $29,$01, $21,$7C                 ; 260,124 ...
-        .byte $22,$2B, $2B,$01, $23,$93                 ; ... 299,147
-        .byte $25,$04
-        .byte $00
+; The splash as GL bytes (window coords, y UP -- the band 124..147 maps to
+; itself under the flip): identity window+viewport, filled black RECT as
+; the clear, white outline RECT as the border, three filled 40x24 swatches
+; red/green/blue centred -- proof of both pen bytes and all three channels
+; at a glance.
+DSPLEN  = 96
+DSPTAB: .byte $B3, $00,$00, $DF,$01, $00,$00, $0F,$01   ; WINDOW 0 479 0 271
+        .byte $B2, $00,$00, $DF,$01, $00,$00, $0F,$01   ; VWPORT 0 479 0 271
+        .byte $E0, $01                                  ; PRMFIL 1 (fill)
+        .byte $06, $00,$00,$00                          ; COLOR black
+        .byte $10, $00,$00, $00,$00                     ; MOVE 0,0
+        .byte $34, $DF,$01, $0F,$01                     ; RECT 479,271: the clear
+        .byte $E0, $00                                  ; PRMFIL 0 (outline)
+        .byte $06, $1F,$3F,$1F                          ; COLOR white
+        .byte $10, $00,$00, $00,$00                     ; MOVE 0,0
+        .byte $34, $DF,$01, $0F,$01                     ; RECT: the border
+        .byte $E0, $01                                  ; PRMFIL 1
+        .byte $06, $1F,$00,$00                          ; COLOR red
+        .byte $10, $B4,$00, $7C,$00                     ; MOVE 180,124
+        .byte $34, $DB,$00, $93,$00                     ; RECT 219,147
+        .byte $06, $00,$3F,$00                          ; COLOR green
+        .byte $10, $DC,$00, $7C,$00                     ; MOVE 220,124
+        .byte $34, $03,$01, $93,$00                     ; RECT 259,147
+        .byte $06, $00,$00,$1F                          ; COLOR blue
+        .byte $10, $04,$01, $7C,$00                     ; MOVE 260,124
+        .byte $34, $2B,$01, $93,$00                     ; RECT 299,147
+        .byte $E0, $00                                  ; PRMFIL 0 again
 
 ; ---------------- I : init CF + identify -------------------------------------
 CMD_I:  JSR  CFINIT

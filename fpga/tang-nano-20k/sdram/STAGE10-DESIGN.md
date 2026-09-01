@@ -682,8 +682,26 @@ door, then close it. One verb at a time, each shipped end to end.
   The ~15 s over the 23 s line-rate floor is host-side (FGETB
   interleave + per-burst ACKs); the UART raise remains the next
   lever.
-- **Then:** the C gfx library, the monitor splash -- and the door
-  closes.
+- **The last CPU-side users -- MIGRATED 2026-09-01 (door-closing phase
+  A).** lib_gfx.c became a GL veneer that KEEPS its screen-space API
+  (y mapped through the identity flip, 271-y): compressed emission
+  helpers (glmov/glrgb/glpf, RECT for the box) because the first
+  version overflowed cube.bin past CSTACKTOP, and LAZY ground-state
+  init in glbyt (identity window/viewport + outline fill + white pen,
+  flag set first so the init's own bytes recurse safely) because g3d
+  clients never call gpresent(). The shell `image` twins ride BLIT
+  (draw) and PIXRD (grab), keeping screen-space coords -- and the ASM
+  twin re-taught the same lesson: it probed GLID but skipped the
+  ground state, and the power-up DEGENERATE window garbled every row
+  mapping (found as one phantom row at screen 0; the fix is the same
+  24 init bytes the C side emits). The monitor splash is a flat GL
+  byte table (DSPTAB) streamed with GLSTAT bit7 backpressure; BASIC's
+  GCHECK is GLID-only and the dead device helpers (GWAIT/GEXEC/
+  GSTORE/GARG + their BASRAM scratch and every $FF2x equate) are
+  gone. NOTHING SHIPPED TOUCHES $FF20 ANY MORE.
+- **Then (phase B):** remove the CPU-facing $FF20 window from the
+  fabric -- the register file stays as the walker's internal property
+  -- and measure what the door was costing.
 
 ## Verification ladder (per rung, the usual order)
 

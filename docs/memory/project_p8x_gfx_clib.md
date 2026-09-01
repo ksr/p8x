@@ -342,3 +342,35 @@ TRAP: BASIC IMX was $E6/$E7 -- $E7 IS GLTMP, GLPUT scribbles it per
 byte; any BASIC var alive across GLPUT emission must avoid $E7 (and
 the $E0-$F1 scratch map generally). Removed so far, all BACKLOG'd:
 AREAPT, ARC/SECTOR, CLMOD, GTEXT(+GPEN), device BOX/CLS/CIRCLE.
+
+GTEXT REBORN 2026-09-01 (a482764, user demand: 'easier 2D text... use
+the PGC interface'): old signature GTEXT x,y,size,s$ + old token $AF
+(saved programs dispatch again), PURE GL emission -- PROJCT 0, MDIDEN,
+TSIZE size*256, MDTRAN x y 0, MOVE3 0 0 0, TEXT via glv_str. THE KEY
+TRICK: MDTRAN composes AFTER TSIZE (issue order = apply order), so the
+anchor lands UNSCALED at window (x,y) at any size. Resets matrix+camera
+each call BY DESIGN (documented); 3D uses raw verbs. Lesson: sugar
+statements over GL emission are cheap (~70 lines asm, no FPGA change)
+-- the right answer to ergonomics complaints about raw PGC idioms.
+
+DOOR-CLOSING PHASE A COMPLETE 2026-09-01 (software $FF20-free; commit
+pending): lib_gfx.c = GL veneer keeping the screen-space API (271-y
+flip inside), compressed helpers glmov/glrgb/glpf + RECT-as-box
+(first draft overflowed cube.bin past CSTACKTOP), LAZY ground-state
+init inside glbyt (flag set BEFORE init bytes so recursion passes;
+needed because g3d clients never call gpresent). image twins = BLIT
+draw + PIXRD grab, screen-space kept. THE ASM-TWIN BUG: probed GLID
+but skipped ground state -- the power-up DEGENERATE window garbled
+the BLIT map (symptom: one phantom row at screen 0, everything else
+missing; bridge/mock traces looked PERFECT because the mock doesn't
+render and my "asm" traces actually ran the C disk ci.img -- trace
+the artifact the failing test actually built, cia.img). Fix: 24
+init bytes (WINDOW+VWPORT identity, PRMFIL 0, COLOR white) at
+i_disp. Monitor splash = flat GL table DSPTAB (96 bytes, GLSTAT
+bit7 backpressure, band 124..147 maps to itself under the flip).
+BASIC: GCHECK = GLID-only (no walker drain needed -- GLID answers
+while busy); GWAIT/GEXEC/GSTORE/GARG + all $FF2x equates deleted
+($DB/$DC/$DE freed). PHASE B NEXT: remove the CPU-facing $FF20
+window from gfx.v/p8x_bridge.v + emulator door, glbridge pixelr/w
+-> GL, retire gfx_test/test_gfx*.asm/c_gfx_ce_test, tb splash preps
+gpoke->GL, GID0/GID1 sweep, measure freed LUTs, flash + silicon.

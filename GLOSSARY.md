@@ -252,9 +252,9 @@ set and one golden model (`gpu_*` in `emulator/p8xemu.c`) serve both.
 | **EVAL / TERM / FACTOR** | Recursive-descent expression parser levels. |
 | **TOK_xxx** | Keyword token bytes (e.g. `TOK_FOR`, `TOK_BYE`). |
 | **LCG** | Linear Congruential Generator — the `RND()` pseudo-random algorithm. |
-| **GPEN** | RETIRED (2026-09-01, with GTEXT, its last consumer): BASIC's shadow of the write-only device pen. The pen is pure GL state now — `COLOR` emits the GL COLOR verb and nothing else; `IMAGE` streams its own per-pixel colours through `GCOL` directly. |
-| **GWAIT / GEXEC** | Poll `GSTAT`'s BUSY bit / issue a command byte and then wait. `GWAIT` preserves A: it once did not, which turned every command into a NOP. |
-| **GSADR / GSTGT / GCTMP / GELL** | Graphics scratch: target register address / target held across `EVAL` / the command byte held across `GWAIT` / "a second radius made this an ellipse". |
+| **GPEN** | RETIRED (2026-09-01, with GTEXT, its last consumer): BASIC's shadow of the write-only device pen. The pen is pure GL state now — `COLOR` emits the GL COLOR verb and nothing else; `IMAGE` rides the GL BLIT verb, whose payload carries its own colours. |
+| **GWAIT / GEXEC / GSTORE / GARG** | RETIRED (2026-09-01, single-interface migration): BASIC's device-door helpers — busy-poll, command issue, register-pair write, argument-to-register. Everything emits GL through `GLPUT` now. (`GWAIT` once clobbered A, which turned every command into a NOP — the war story survives the code.) |
+| **GSADR / GSTGT / GCTMP / GELL** | RETIRED graphics scratch bytes, freed with their owners above (GELL with CIRCLE's move onto GL ELIPSE). |
 | **DOGLINE** | The `LINE` *statement* handler — named around the pre-existing `DOLINE`, which parses a program line. |
 
 ## Code identifiers & internal abbreviations (OS / monitor)

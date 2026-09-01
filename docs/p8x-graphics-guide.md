@@ -34,17 +34,17 @@ you). Numbers separate on spaces or commas; `man gl` is the verb card.
 
 ## 2. Coordinate spaces — the one thing to internalize
 
-- **Screen space**: 480x272, origin top-left, y DOWN. The raw device
-  door ($FF20) lives here, unclipped-but-discarded at the edges — the
-  C gfx library speaks it directly. BASIC no longer does: since
-  2026-08-30/31 EVERY BASIC graphics statement takes window
-  coordinates (y up). The drawing statements emit GL; PIXELR() is the
-  GL `PIXRD` verb (2026-08-31) and maps through the CURRENT window;
-  text is PGC `TEXT` with the boot-loaded font (GTEXT retired
-  2026-09-01); IMAGE is the GL `BLIT` verb (2026-09-01, one per row,
-  bottom-left anchor mapped through the current window). BASIC no
-  longer touches the device door at all -- only the C gfx library
-  still speaks it directly.
+- **Screen space**: 480x272, origin top-left, y DOWN. The C gfx
+  library and the shell `image` command keep this historical contract
+  as an API convention — underneath they emit GL and map y through the
+  identity flip (271−y); nothing speaks the old $FF20 device door any
+  more. BASIC doesn't use screen space at all: since 2026-08-30/31
+  EVERY BASIC graphics statement takes window coordinates (y up). The
+  drawing statements emit GL; PIXELR() is the GL `PIXRD` verb
+  (2026-08-31) and maps through the CURRENT window; text is PGC `TEXT`
+  with the boot-loaded font (GTEXT is pure-GL 2D sugar over it); IMAGE
+  is the GL `BLIT` verb (2026-09-01, one per row, bottom-left anchor
+  mapped through the current window).
 - **Window space**: the GL 2D world, y UP. `WINDOW x1 x2 y1 y2` (PGC
   order: both x's first!) declares the world extent; `VWPORT x1 x2 y1
   y2` maps it to screen pixels, flipping y. GL 2D primitives
@@ -227,7 +227,7 @@ statement list: `man basic`, GRAPHICS; the language guide chapter in
 
 ## 11. From C
 
-    //#use gfx      screen-space primitives over $FF20 (man gfx)
+    //#use gfx      screen-space primitives, GL underneath (man gfx)
     //#use g3d      the software 3D pipeline / GL-era compatibility (man g3d)
 
 For the GL port itself the idiom is three lines (as used by gl.c,

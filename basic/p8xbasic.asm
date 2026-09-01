@@ -24,43 +24,15 @@ BASRAM = $8000          ; data base   (override with -D BASRAM=...)
 
 ACIAS  = $FF04
 ACIAD  = $FF05
-; Graphics display ($FF20 device). The canonical definitions live in
-; generators/gen_memmap.py; they are repeated here because this file predates
-; that generator and still hand-declares its I/O addresses, as ACIAS/ACIAD above.
-GX0    = $FF20               ; coordinate LOW bytes. Writing one CLEARS its high
-GY0    = $FF21               ;   byte, which sits GCHI above it ($FF29-$FF2C),
-GX1    = $FF22               ;   so the low byte must always be written first.
-GY1    = $FF23
-GCOL   = $FF24               ; pen LOW byte (write-only; IMAGE streams its
-                             ;   pixel colours through it -- BASIC's last
-                             ;   device-pen writer). A whole RGB565 colour:
-                             ;   a GCOL write CLEARS GCOLH, like the coords.
-GCOLH  = $FF2D               ; pen HIGH byte (the write side of GID0's address)
-GCMD   = $FF25               ; write to execute
-GSTAT  = $FF26               ; bit7 BUSY
-GDATA  = $FF27               ; read-back: POINT result
-GPARM  = $FF28               ; scalar argument: CIRCLE radius / ELLIPSE x-radius
-GPARM2 = $FF2F               ; ELLIPSE y-radius
-GID0   = $FF2D               ; presence signature: 'P'
-GID1   = $FF2E               ;                     'G'
+; Graphics: the GL port ($FF50) is the ONLY interface since the 2026-09-01
+; single-interface migration ($FF20 device door closed). The canonical
+; definitions live in generators/gen_memmap.py; they are repeated here because
+; this file predates that generator and still hand-declares its I/O addresses,
+; as ACIAS/ACIAD above.
 GLDATAR = $FF50          ; GL command FIFO (stage 10d): one byte at a time
 GLSTATR = $FF51          ; bit7 = FIFO full (wait before pushing)
 GLRBR   = $FF52          ; read-back FIFO pop (stage 10e; GLSTAT bit0 = has byte)
 GLIDR   = $FF54          ; reads 'G' when the GL engine is fitted
-GCHI   = 9                   ; a pair's high byte = its low address + GCHI
-; BASIC's own drawing migrated onto the GL port 2026-08-30: of the device
-; commands only PIXELW (IMAGE's pixel loop) and nothing else -- PIXELR (the
-; function) are still issued from here. GC_LINE/GC_ELL/GC_ELLF stay
-; documented -- the silicon keeps them for the GL walker's internal use.
-GC_PIXW = 1
-GC_LINE = 2
-GC_BOXF = 4
-                             ; 6 was SETPAL; no palette, no command
-GC_ELL  = $0A
-GC_ELLF = $0B
-GC_PIXR = 9
-                              ; $0C was SETMODE. The device is single-mode now
-                              ; -- 480x272, 8 bpp -- so there is nothing to set.
 CR     = $0D
 LF     = $0A
 BS     = $08
@@ -164,12 +136,12 @@ POKEA  = BASRAM+$F6          ; POKE address (2)
 ; Graphics scratch. $DB-$E2 was the only run in this page with no references at
 ; all -- note the JUMPADDR comment above for what happens when a "free" byte
 ; turns out to alias something.
-GSADR  = BASRAM+$DB          ; GSTORE: target register address (page $FF)
-GSTGT  = BASRAM+$DC          ; GARG:   target held across EVAL
-                             ; ($DD and $FA free: were GPEN/GPENH, the
-                             ;   device-pen shadow -- gone 2026-09-01 with
-                             ;   GTEXT, its last consumer; the pen is pure
-                             ;   GL state now)
+                             ; ($DB/$DC free: were GSADR/GSTGT, the device
+                             ;   register-write helpers' scratch -- gone with
+                             ;   the single-interface migration. $FA free:
+                             ;   was GPENH, the device-pen shadow, gone
+                             ;   2026-09-01 with GTEXT, its last consumer;
+                             ;   the pen is pure GL state now)
 PRMSH  = BASRAM+$FB          ; shadow of the GL PRMFIL flag (write-only on the
                              ;   card): the native PRMFIL statement records it,
                              ;   RESETF clears it, and BOX/CIRCLE restore it
@@ -179,8 +151,9 @@ RGBH   = BASRAM+$F3          ; RGB(): the packed high byte, held across the
                              ;   green and blue argument expressions --
                              ;   scratch here is safe: nothing else can run
                              ;   inside an RGB() argument expression.
-GCTMP  = BASRAM+$DE          ; GEXEC: the command byte, held across GWAIT
-                             ; ($DF free: was GELL, gone with CIRCLE's
+                             ; ($DE free: was GCTMP, GEXEC's scratch, gone
+                             ;   with the single-interface migration; $DF
+                             ;   free: was GELL, gone with CIRCLE's
                              ;   2026-08-30 migration onto GL ELIPSE)
 ; (GTEXT's working set, $E0-$F2, left with it 2026-09-01: the whole run
 ; $E0-$E2, $E6-$F2 is transient scratch again -- $E3/$E4 JUMPF/JUMPADDR
@@ -210,9 +183,8 @@ IMX    = BASRAM+$DD          ; left edge (2) -- NOT $E6: IMAGE emits
                              ;   and $E6/$E7 would put the anchor's high
                              ;   byte UNDER every byte sent (found as an
                              ;   image that vanished off-window with no
-                             ;   errors). $DD/$DE = the freed GPEN slot
-                             ;   + GCTMP, whose GEXEC never runs inside
-                             ;   an IMAGE statement.
+                             ;   errors). $DD/$DE = the freed GPEN and
+                             ;   GCTMP slots.
 IMYC   = BASRAM+$E8          ; current row y (2)
 IMW    = BASRAM+$EA          ; image width (2)
 IMH    = BASRAM+$EC          ; rows remaining (2)
@@ -1216,34 +1188,22 @@ DOPOKE: INP2
 pk_err: JMP  SYNERR
 
 ;==============================================================================
-; GRAPHICS -- the DEVICE statements (screen space, $FF20): COLOR / CLS /
-; PIXELW / LINE / BOX / CIRCLE (and its ellipse form), plus the PIXELR()
-; function. The PGC statements (window space, $FF50) live in glkwtab.inc.
-;
-; The drawing engine is in the DEVICE: these statements evaluate expressions
-; straight into the coordinate registers and write one command byte. There is no
-; Bresenham here and no pixel masking -- which is the whole reason the engine was
-; put in hardware, since a filled box would otherwise be 32640 read-modify-write
-; cycles through a data port.
+; GRAPHICS -- the classic statements (window space, like everything else
+; since 2026-08-30): COLOR / CLS / PIXELW / LINE / BOX / CIRCLE (and its
+; ellipse form), plus the PIXELR() function. All of them EMIT GL bytes
+; through GLPUT -- convenience spellings of the same verbs the PGC
+; statements in glkwtab.inc expose directly. The drawing engine is in the
+; card: there is no Bresenham here and no pixel masking -- which is the
+; whole reason the engine was put in hardware, since a filled box would
+; otherwise be 32640 read-modify-write cycles through a data port.
 ;==============================================================================
 
-; GCHECK — is a display actually there? An absent card floats the bus to $FF, so
-; a single magic byte would prove nothing; GID0/GID1 are two fixed bytes at two
-; addresses. Without this, LINE on a machine with no card would silently do
-; nothing at all, which is the worst possible failure for a graphics statement.
-GCHECK: LDA  GLIDR                  ; a GL engine? let its walker go
-        LDB  #'G'                   ;   idle first: the walker MASTERS
-        CMP                         ;   the 2D device, and its registers
-        JNZ  gchk_p                 ;   (GID0 included) answer garbage
-gchk_w: LDA  GLSTATR                ;   while it draws -- found on
-        LDB  #$40                   ;   silicon as ?No display right
-        AND                         ;   after a CLEARS (the emulator is
-        JNZ  gchk_w                 ;   synchronous and cannot see it)
-gchk_p: LDA  GID0
-        LDB  #'P'
-        CMP
-        JNZ  GNODEV
-        LDA  GID1
+; GCHECK — is a display actually there? An absent card floats the bus to $FF,
+; so 'G' at GLID is the ONE presence signal (the device door and its "PG"
+; signature closed with the single-interface migration). Without this, LINE on
+; a machine with no card would silently do nothing at all, which is the worst
+; possible failure for a graphics statement.
+GCHECK: LDA  GLIDR
         LDB  #'G'
         CMP
         JNZ  GNODEV
@@ -1261,77 +1221,21 @@ GNODEV: LDA  SPSAV
         JSR  PUTS
         JMP  REPL
 
-; GWAIT — spin until the drawing engine is idle.
-; The DEVICE draws in real time: a full-screen fill is ~32640 pixels, a couple of
-; milliseconds, and a second command issued meanwhile ABORTS the first. The
-; emulator draws instantaneously and always reports not-busy, so this loop costs
-; nothing there and is essential on hardware -- and because it costs nothing
-; there, one binary is correct on both. Same shape as the CF driver's BSY wait.
-GWAIT:  LDA  GSTAT
-        LDB  #$80
-        AND
-        JNZ  GWAIT
-        RTS
-
-; GEXEC — wait for the engine, then issue the command in A.
-GEXEC:  STA  GCTMP
-        JSR  GWAIT
-        LDA  GCTMP
-        STA  GCMD
-        RTS
-
-; GSTORE — RESULT -> a coordinate register PAIR.  A = the pair's LOW register
-; address within page $FF (every graphics register is in that page, so one byte
-; addresses them all). The DEVICE clears the high byte when the low one is
-; written, so low MUST go first -- writing high first would lose it.
-GSTORE: STA  GSADR
-        TAP1L
-        LDA  #$FF
-        TAP1H
-        LDA  RESULT
-        STA  (P1)                   ; low  (device zeroes the matching high byte)
-        LDA  GSADR
-        LDB  #GCHI
-        CLC
-        ADD
-        TAP1L
-        LDA  #$FF
-        TAP1H
-        LDA  RESULT+1
-        STA  (P1)                   ; high (0 for anything on a 240x136 screen)
-        RTS
-
-; GARG — consume ',' then an expression, storing it via GSTORE.  A = target.
-GARG:   STA  GSTGT
-        JSR  SKIPSP
-        LDA  (P2)
-        LDB  #','
-        CMP
-        JNZ  g_err
-        INP2
-        JSR  EVAL
-        LDA  GSTGT
-        JMP  GSTORE
-g_err:  JMP  SYNERR
-
 ; ---- the MIGRATED drawing statements (2026-08-30) -----------------------
-; LINE/BOX/CIRCLE/CLS/PIXELW now EMIT GL: window space (y up), transformed
+; LINE/BOX/CIRCLE/CLS/PIXELW EMIT GL: window space (y up), transformed
 ; by WINDOW/VWPORT, honouring LINPAT/LINFUN, RECORDING inside CLBEG/CLEND
-; like every GL statement, synchronous via the glv_dn drain. The $FF20
-; device door keeps only IMAGE (the DMA gap; PIXELR() is the GL PIXRD
-; verb since 2026-08-31, and GTEXT died 2026-09-01 -- text is PGC TEXT
-; with the boot-loaded font); the old note continued: PIXELR()
-; stays a SCREEN-space read -- under the default window, screen y is
-; 271 - window y.
+; like every GL statement, synchronous via the glv_dn drain. Every other
+; graphics statement followed: IMAGE rides the GL BLIT verb, PIXELR() is
+; the GL PIXRD verb (2026-08-31), and GTEXT is pure-GL 2D sugar over PGC
+; TEXT with the boot-loaded font (2026-09-01). Nothing here touches $FF20
+; any more -- the door itself closed with the single-interface migration.
+; PIXELR() stays a SCREEN-space read -- under the default window, screen
+; y is 271 - window y.
 
-; glchk -- graphics present AND the GL engine, the DOGLV way (GNODEV
-; restores SP itself, so jumping there from inside a JSR is safe).
-; Also primes GLFST for the GLVSEP argument walk.
+; glchk -- graphics present, the DOGLV way (GNODEV restores SP itself, so
+; jumping there from inside a JSR is safe). Also primes GLFST for the
+; GLVSEP argument walk.
 glchk:  JSR  GCHECK
-        LDA  GLIDR
-        LDB  #'G'
-        CMP
-        JNZ  GNODEV
         LDA  #1
         STA  GLFST
         RTS
@@ -1948,10 +1852,10 @@ glvs_x: JMP  SYNERR
 ; The file describes itself — magic, version, geometry, depth (see
 ; tools/p8img.py and STAGE6-DESIGN.md) — so this statement cannot be lied to
 ; about the size: geometry in the arguments would let a wrong guess SHEAR the
-; picture into plausible garbage. The payload is little-endian RGB565, matching
-; the GCOL/GCOLH write order, so the inner loop is two file bytes and a PLOT.
-; Off-screen pixels are DISCARDED by the device, so an image at the edge clips
-; for free, the same rule everything else follows.
+; picture into plausible garbage. The payload is little-endian RGB565, which is
+; exactly the order BLIT's payload wants, so the inner loop is two file bytes
+; pushed verbatim. Off-screen pixels are CLIPPED by the engine, so an image at
+; the edge clips for free, the same rule everything else follows.
 ;
 ; Uses the one data channel's machinery (SETFNAME, FOPEN into PBUF, FGETB), so
 ; a file OPEN'd for INPUT is closed by IMAGE — same licence SAVE/LOAD take.
@@ -2942,14 +2846,12 @@ fa_abs: INP2
         INC
         STA  RESULT+1
 fa_abd: RTS
-; POINT(x,y) — the pen (0-3) at a pixel; 0 for anything off-screen, matching the
-; write side's "off-screen simply is not there" rule. Two arguments, so PARGET
-; (which parses exactly one) does not fit and the parens are handled here.
-; PIXELR(x,y) -- SINGLE-INTERFACE (2026-08-31): the read goes through the
-; GL verb PIXRD now, which takes window coordinates natively (no wflip)
-; and answers through the read-back FIFO (GLRB, GLSTAT bit0) -- BASIC's
-; last device-door READ is gone; only GTEXT's pixel writes remain on
-; $FF20. Semantics unchanged: the RGB565 colour, 0 off-screen.
+; PIXELR(x,y) -- the colour at a pixel; 0 for anything off-screen, matching
+; the write side's "off-screen simply is not there" rule. Two arguments, so
+; PARGET (which parses exactly one) does not fit and the parens are handled
+; here. SINGLE-INTERFACE (2026-08-31): the read is the GL verb PIXRD, which
+; takes window coordinates natively (no wflip) and answers through the
+; read-back FIFO (GLRB, GLSTAT bit0). The RGB565 colour, 0 off-screen.
 fa_point: INP2
         JSR  glchk                  ; GL engine + GLFST for GLVSEP-free
         JSR  SKIPSP                 ;   parsing (the parens are ours)

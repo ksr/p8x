@@ -13,9 +13,7 @@
 ;#use abi
 ;#use gfx
 
-GLIDR   = $FF54                 ; graphics-language probe ('G' when fitted)
-GLDATAR = $FF50                 ; its command FIFO: opcode 3 = PGSYNC
-GLSTATR = $FF51                 ; bit6 = busy: wait the PGSYNC out
+; (the GL port equates come from ;#use gfx -- lib_gfx.inc)
 
         .org $6A00
         TPA2L
@@ -42,14 +40,24 @@ GLSTATR = $FF51                 ; bit6 = busy: wait the PGSYNC out
         CMP
         JZ  i_use0
         DEP2                    ; a '-number' first arg: back onto the '-'
-i_disp: LDA GID0                ; display probe: "PG" or ?No display
-        LDB #'P'
-        CMP
+i_disp: LDA GLID                ; the GL engine's probe ('G'), the ONE
+        LDB #'G'                ;   presence signal since the device
+        CMP                     ;   door closed
         JNZ i_nodisp
-        LDA GID1
-        LDB #'G'
-        CMP
-        JNZ i_nodisp
+        LDA #<i_gs              ; ground state: the port powers up with a
+        TAP1L                   ;   DEGENERATE window, so establish the
+        LDA #>i_gs              ;   identity window/viewport, outline
+        TAP1H                   ;   fill and a white pen -- the same
+        LDA #24                 ;   bytes the C twin's gpresent() emits
+        STA i_gn
+i_gsl:  LDA (P1)
+        JSR glput
+        INP1
+        LDA i_gn
+        LDB #1
+        SUB
+        STA i_gn
+        JNZ i_gsl
         LDA #0                  ; READ verb? (a draw starts with a number)
         STA i_rd
         LDA (P2)
@@ -270,23 +278,48 @@ d_row:  LDA v_py
         CMP
         JNZ d_row1
         RTS                     ; py == ye -> done
-d_row1: LDA v_py
-        STA GY0
-        LDA v_py+1
-        STA GY0H
-        LDA v_x
-        STA v_px
+d_row1: LDA #$64                ; one GL BLIT per row: header, then the
+        JSR glput               ;   row's 2*w file bytes stream VERBATIM
+        LDA v_x                 ;   (P8I rows ARE the payload)
+        JSR glput
         LDA v_x+1
-        STA v_px+1
-; --- pixel loop: FGETB x2 -> pen, X pair, wait idle, PLOT -------------------
-d_px:   LDA v_px
-        LDB v_xe
-        CMP
-        JNZ d_px1
-        LDA v_px+1
-        LDB v_xe+1
-        CMP
-        JNZ d_px1
+        JSR glput
+        LDA #$0F                ; wy = 271 - py (this row's window y):
+        LDB v_py                ;   compute FULLY first -- glput clobbers
+        SUB                     ;   the flags, so the borrow must be
+        STA v_wy                ;   read before any call
+        LDA #0
+        JC  d_wyh
+        LDA #1
+d_wyh:  STA v_t
+        LDA #$01
+        LDB v_t
+        SUB
+        LDB v_py+1
+        SUB
+        STA v_wy+1
+        LDA v_wy
+        JSR glput
+        LDA v_wy+1
+        JSR glput
+        LDA v_w
+        JSR glput
+        LDA v_w+1
+        JSR glput
+        LDA #1                  ; h = 1
+        JSR glput
+        LDA #0
+        JSR glput
+        LDA v_w                 ; n = 2*w payload bytes
+        SHL
+        STA v_n
+        LDA v_w+1
+        ROL
+        STA v_n+1
+d_pl:   LDA v_n
+        LDB v_n+1
+        OR
+        JNZ d_pb
         LDA v_py                ; row done: py += 1
         LDB #1
         ADD
@@ -296,35 +329,19 @@ d_px:   LDA v_px
         INC
         STA v_py+1
         JMP d_row
-d_px1:  LDA #0
-        JSR FGETB               ; pixel low byte (C=1 -> truncated)
-        JC  d_bad
-        STA GCOL                ; clears the pen high byte
-        LDA #0
-        JSR FGETB
-        JC  d_bad
-        STA GCOLH
-        LDA v_px
-        STA GX0                 ; clears GX0's high byte
-        LDA v_px+1
-        STA GX0H
-d_w:    LDA GSTAT               ; wait for the engine
-        LDB #$80
-        AND
-        LDB #0
-        CMP
-        JNZ d_w
-        LDA #GC_PIXW
-        STA GCMD
-        LDA v_px                ; px += 1
-        LDB #1
-        ADD
-        STA v_px
-        JNC d_px
-        LDA v_px+1
-        INC
-        STA v_px+1
-        JMP d_px
+d_pb:   LDA #0
+        JSR FGETB               ; one payload byte (C=1 -> truncated)
+        JC  d_pad
+        JSR glput
+        JSR ndec
+        JMP d_pl
+d_pad:  LDA #0                  ; short file: the walker is owed the rest
+        JSR glput               ;   of the row -- zeros keep the stream
+        JSR ndec                ;   in sync, then report ?NOT P8I
+        LDA v_n
+        LDB v_n+1
+        OR
+        JNZ d_pad
 d_bad:  LDA #<m_bad
         TAP1L
         LDA #>m_bad
@@ -420,13 +437,13 @@ g_d5:   LDA v_h
         LDA v_h+1
         INC
         STA v_h+1
-g_sync: LDA GLIDR               ; GL engine fitted? PGSYNC first, so
+g_sync: LDA GLID               ; GL engine fitted? PGSYNC first, so
         LDB #'G'                ;   the grab reads what the panel shows
         CMP
         JNZ g_open
         LDA #3
-        STA GLDATAR
-g_syw:  LDA GLSTATR             ; wait the verb out before grabbing
+        STA GLDATA
+g_syw:  LDA GLSTAT             ; wait the verb out before grabbing
         LDB #64
         AND
         JNZ g_syw
@@ -506,10 +523,20 @@ g_row:  LDA v_py
         LDA #10
         JSR SYS_PUTC
 g_ok:   RTS
-g_row1: LDA v_py
-        STA GY0
-        LDA v_py+1
-        STA GY0H
+g_row1: LDA #$0F                ; wy = 271 - py for this row
+        LDB v_py
+        SUB
+        STA v_wy
+        LDA #0
+        JC  g_wyh
+        LDA #1
+g_wyh:  STA v_t
+        LDA #$01
+        LDB v_t
+        SUB
+        LDB v_py+1
+        SUB
+        STA v_wy+1
         LDA v_x
         STA v_px
         LDA v_x+1
@@ -531,27 +558,31 @@ g_px:   LDA v_px
         INC
         STA v_py+1
         JMP g_row
-g_px1:  LDA v_px
-        STA GX0
+g_px1:  LDA #$63                ; PIXRD px wy -> the RB FIFO
+        JSR glput
+        LDA v_px
+        JSR glput
         LDA v_px+1
-        STA GX0H
-g_w1:   LDA GSTAT
-        LDB #$80
+        JSR glput
+        LDA v_wy
+        JSR glput
+        LDA v_wy+1
+        JSR glput
+g_w1:   LDA GLSTAT              ; wait the reply byte (bit0)
+        LDB #1
         AND
         LDB #0
         CMP
-        JNZ g_w1
-        LDA #GC_PIXR
-        STA GCMD
-g_w2:   LDA GSTAT
-        LDB #$80
-        AND
-        LDB #0
-        CMP
-        JNZ g_w2
-        LDA GDATA               ; low byte, then high — little-endian P8I
+        JZ  g_w1
+        LDA GLRB                ; low byte, then high -- little-endian P8I
         JSR FPUTB
-        LDA GDATA
+g_w2:   LDA GLSTAT
+        LDB #1
+        AND
+        LDB #0
+        CMP
+        JZ  g_w2
+        LDA GLRB
         JSR FPUTB
         LDA v_px
         LDB #1
@@ -786,6 +817,41 @@ v_xe:   .fill 2
 v_ye:   .fill 2
 v_px:   .fill 2
 v_py:   .fill 2
+v_wy:   .fill 2
+v_n:    .fill 2
+v_t:    .fill 1
+i_gn:   .fill 1
+
+; the ground-state GL bytes (see i_disp): WINDOW + VWPORT identity,
+; PRMFIL 0, COLOR white
+i_gs:   .byte $B3, 0, 0, $DF, 1, 0, 0, $0F, 1
+        .byte $B2, 0, 0, $DF, 1, 0, 0, $0F, 1
+        .byte $E0, 0
+        .byte $06, 31, 63, 31
+
+; glput: one GL byte with FIFO backpressure (A = the byte; preserved)
+glput:  STA v_t
+glp_w:  LDA GLSTAT
+        LDB #$80
+        AND
+        LDB #0
+        CMP
+        JNZ glp_w
+        LDA v_t
+        STA GLDATA
+        RTS
+
+; ndec: v_n -= 1 (16-bit)
+ndec:   LDA v_n
+        LDB #1
+        SUB
+        STA v_n
+        JC  ndec_r
+        LDA v_n+1
+        LDB #1
+        SUB
+        STA v_n+1
+ndec_r: RTS
 ap_out: .fill 2
 ap_a:   .fill 2
 ap_n:   .fill 1

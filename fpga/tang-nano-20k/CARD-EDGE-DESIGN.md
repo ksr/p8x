@@ -179,5 +179,7 @@ keeping lcd in flash) is the user's personality choice.
   mean card) — never assume.
 - Idle means TWO polls: GLSTAT bit6 clears while the 2D engine may
   still be draining its final span to SDRAM (tb_gcard found the frame
-  19 pixels short). Hosts poll GLSTAT.busy then GSTAT.busy — the same
-  order GCHECK uses on the all-in-one build.
+  19 pixels short). Hosts poll GLSTAT.busy then GSTAT.busy. (BASIC's
+  GCHECK once did the same dance before probing GID0; it is GLID-only
+  since the single-interface migration — GLID answers regardless of
+  walker state.)

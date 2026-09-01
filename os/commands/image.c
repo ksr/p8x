@@ -9,21 +9,19 @@
  * re-drawable by either this command or BASIC's IMAGE, and `p8xfs get` +
  * p8img can lift a grab to the host as a real screenshot.
  *
- * Draw: FGETB the header, validate ("?NOT P8I" on bad magic/version/depth or
- * a truncated payload, "?No file" if missing), then per pixel: two bytes ->
- * gcolor -> gpixelw. Off-screen pixels are discarded by the device, so an
- * image may hang off any edge. Grab: corners self-sort like BOX; each pixel
- * is gpixelr()ed and written little-endian after a 10-byte header. An
- * existing file of the same name is REPLACED (FDELETE then rewrite). Grabs
- * read the DRAW page, so if a geometry engine is fitted the command issues
- * PGSYNC first -- a grab always captures what the panel shows. Measured
- * (emulator, 27 MHz): draw ~4.4k cycles/pixel (the 256x256 mandrill ~11 s),
- * grab ~3.3k (a full 480x272 screen ~16 s). BASIC's hand-asm loader does
- * 614/pixel; the hand-asm twin (../commands-asm/image.asm) does 563 and
- * is the /bin default -- this C build ships at /binc for comparison.
- *
- * The pen is left on the last pixel colour drawn/probed -- like IMAGE in
- * BASIC, set COLOR/gcolor afterwards before drawing your own things. */
+ * SINGLE-INTERFACE since 2026-09-01: both verbs speak the GL port only.
+ * Draw: FGETB the header, validate ("?NOT P8I" on bad magic/version/depth,
+ * "?No file" if missing), then ONE GL BLIT PER ROW with the file bytes
+ * streamed VERBATIM into the FIFO (P8I rows are already the BLIT payload);
+ * a short file pads the row in flight with zeros -- the walker must get
+ * every byte it is owed -- then reports ?NOT P8I. Grab: corners self-sort
+ * like BOX; each pixel is a PIXRD verb answered through the read-back
+ * FIFO, written little-endian after a 10-byte header. An existing file of
+ * the same name is REPLACED (FDELETE then rewrite). Grabs read the DRAW
+ * page; PGSYNC is issued first so a grab always captures what the panel
+ * shows. NOTE this shell command keeps its SCREEN coordinates (top-left
+ * anchor, y down) -- unlike BASIC's IMAGE statement, which is window-
+ * space; the flip happens here, per row / per probe. */
 char path[80];
 
 //#use apath   /* abspath(out, arg): path word -> absolute, CWD-relative */
@@ -31,16 +29,13 @@ char path[80];
 //#use gfx     /* gpresent/gcolor/gpixelw/gpixelr */
 
 //#define GLID   0xFF54  /* graphics-language probe ('G' when fitted)      */
-//#define GLDATA 0xFF50  /* its command FIFO: opcode 3 = PGSYNC            */
-//#define GLSTAT 0xFF51  /* bit6 = busy: wait the PGSYNC out before grabs  */
+//#define GLDATA 0xFF50  /* the command FIFO (BLIT payload streams here)   */
+//#define GLSTAT 0xFF51  /* bit7 FIFO full, bit6 busy, bit0 read-back      */
+//#define GLRB   0xFF52  /* pop one read-back byte (PIXRD's reply)         */
 
-/* The pixel loops below poke the display registers RAW instead of calling
- * gpixelw()/gpixelr(): p8cc's layered calls (gpixelw -> gw16 -> poke, each with
- * a software-stack frame) cost ~11.5k cycles a pixel, 19x BASIC's hand-asm
- * loader; inlining gets ~3x of that back, and the row's Y pair is written
- * once per row since only a GY0 LOW write clears its high byte. Measured
- * numbers live in the man page. (True parity would need an asm twin or a
- * device-side pixel-stream command -- see BACKLOG.) */
+/* The loops below poke the GL port RAW instead of layering through the
+ * library (p8cc call frames cost ~500 cycles each); the library still
+ * provides gpresent()'s probe+init and the odd helper. */
 
 char *ap;                          /* argument cursor */
 int anum_ok;                       /* did anum() actually see digits?      */
@@ -73,44 +68,55 @@ int usage() {
     return 0;
 }
 
-/* draw the P8I at `path` with its top-left at (x,y) */
+/* push one GL byte with FIFO backpressure (raw: speed) */
+int gput(int v) {
+    while (peek(GLSTAT) & 128) { }
+    poke(GLDATA, v);
+    return 0;
+}
+
+/* draw the P8I at `path` with its top-left at SCREEN (x,y): one BLIT
+ * per row, the file bytes streamed verbatim */
 int draw(int x, int y) {
-    int w; int h; int px; int py; int lo; int hi;
+    int w; int h; int py; int n; int lo; int wy;
     bios(FRESOLVE, path, 0);
     if (bios(FOPEN, RDBUF, 0) & 256) { puts("?No file"); return 1; }
     if ((bios(FGETB, 0, 0) & 511) != 'P') { puts("?NOT P8I"); return 1; }
     if ((bios(FGETB, 0, 0) & 511) != '8') { puts("?NOT P8I"); return 1; }
     if ((bios(FGETB, 0, 0) & 511) != 'I') { puts("?NOT P8I"); return 1; }
     if ((bios(FGETB, 0, 0) & 511) != 1)   { puts("?NOT P8I"); return 1; }
-    lo = bios(FGETB, 0, 0); hi = bios(FGETB, 0, 0);
-    if ((lo | hi) & 256) { puts("?NOT P8I"); return 1; }
-    w = (lo & 255) | ((hi & 255) << 8);
-    lo = bios(FGETB, 0, 0); hi = bios(FGETB, 0, 0);
-    if ((lo | hi) & 256) { puts("?NOT P8I"); return 1; }
-    h = (lo & 255) | ((hi & 255) << 8);
+    lo = bios(FGETB, 0, 0); n = bios(FGETB, 0, 0);
+    if ((lo | n) & 256) { puts("?NOT P8I"); return 1; }
+    w = (lo & 255) | ((n & 255) << 8);
+    lo = bios(FGETB, 0, 0); n = bios(FGETB, 0, 0);
+    if ((lo | n) & 256) { puts("?NOT P8I"); return 1; }
+    h = (lo & 255) | ((n & 255) << 8);
     if ((bios(FGETB, 0, 0) & 511) != 16) { puts("?NOT P8I"); return 1; }
     bios(FGETB, 0, 0);                       /* reserved byte */
-    if (w == 0 || h == 0) { puts("?NOT P8I"); return 1; }
+    if (w == 0 || h == 0 || w > 512) { puts("?NOT P8I"); return 1; }
     py = y;
-    h = y + h;                               /* loop to absolute end rows */
+    h = y + h;                               /* absolute end row */
     while (py != h) {
-        poke(GY0, py);                       /* once per row: nothing     */
-        poke(GY0 + 9, py >> 8);              /*   below touches GY0       */
-        px = x;
-        w = w + x;                           /* absolute end column...    */
-        while (px != w) {
+        wy = 271 - py;                       /* this row's window y */
+        gput(100);                           /* BLIT x wy w 1 */
+        gput(x); gput(x >> 8);
+        gput(wy); gput(wy >> 8);
+        gput(w); gput(w >> 8);
+        gput(1); gput(0);
+        n = w + w;                           /* 2*w payload bytes */
+        while (n) {
             lo = bios(FGETB, 0, 0);
-            hi = bios(FGETB, 0, 0);
-            if ((lo | hi) & 256) { puts("?NOT P8I"); return 1; }  /* short */
-            poke(GCOL, lo);                  /* clears the pen high byte  */
-            poke(GCOLH, hi);
-            poke(GX0, px);                   /* clears GX0's high byte    */
-            poke(GX0 + 9, px >> 8);
-            while (peek(GSTAT) & 128) { }
-            poke(GCMD, 1);                   /* PLOT */
-            px = px + 1;
+            if (lo & 256) {                  /* short file: the walker is
+                                                owed the rest -- pad with
+                                                zeros to keep the stream
+                                                in sync, then report */
+                while (n) { gput(0); n = n - 1; }
+                puts("?NOT P8I");
+                return 1;
+            }
+            gput(lo & 255);
+            n = n - 1;
         }
-        w = w - x;                           /* ...restored for next row  */
         py = py + 1;
     }
     return 0;
@@ -138,17 +144,16 @@ int grab(int x0, int y0, int x1, int y1) {
     bios(FPUTB, 0, 16); bios(FPUTB, 0, 0);
     py = y0;
     while (py <= y1) {
-        poke(GY0, py);                      /* once per row (see draw)    */
-        poke(GY0 + 9, py >> 8);
+        c = 271 - py;                       /* this row's window y */
         px = x0;
         while (px <= x1) {
-            poke(GX0, px);
-            poke(GX0 + 9, px >> 8);
-            while (peek(GSTAT) & 128) { }
-            poke(GCMD, GC_PIXR);            /* POINT: 0 if off-screen     */
-            while (peek(GSTAT) & 128) { }
-            bios(FPUTB, 0, peek(GDATA));    /* low byte, then high --     */
-            bios(FPUTB, 0, peek(GDATA));    /*   P8I is little-endian     */
+            gput(99);                       /* PIXRD px wy: 0 off-screen */
+            gput(px); gput(px >> 8);
+            gput(c); gput(c >> 8);
+            while ((peek(GLSTAT) & 1) == 0) { }
+            bios(FPUTB, 0, peek(GLRB));     /* low byte, then high --    */
+            while ((peek(GLSTAT) & 1) == 0) { }
+            bios(FPUTB, 0, peek(GLRB));     /*   P8I is little-endian    */
             px = px + 1;
         }
         py = py + 1;

@@ -120,9 +120,10 @@ diet: four `LINE`s, a full-screen `BOXFILL` and the ellipse with rx=ry are
 the same pixels, and their walkers' fabric bought the PGC language's curves,
 patterns and text (see `fpga/tang-nano-20k/sdram/STAGE10-DESIGN.md`). The GL
 walker at `$FF50` **masters** this device internally — its drawing rewrites
-the pen and coordinate registers, which is why software that draws through
-this door directly (the C gfx library; BASIC's `IMAGE` pixel loop) must set
-its own pen and never trust a previous value.
+the pen and coordinate registers. No shipped software drives this door
+directly any more (the single-interface migration moved the C gfx library,
+`image` and the monitor splash onto GL); it remains the walker's internal
+register file and a debugging window.
 
 **`SELFTEST` needs no software behind it** — one register write puts colour
 swatches, both primitives, an ellipse and all four screen edges up, which is

@@ -5,40 +5,48 @@ SYNOPSIS
     //#use gfx          at the top of a C program (cc splices /lib/lib_gfx.c)
 
 DESCRIPTION
-    A thin C veneer over the display device's registers ($FF20-$FF2F), so a
-    program draws with calls instead of raw peek/poke. The device does the
-    drawing itself, so a filled box costs the same as an empty one, and the
-    same program behaves identically on the emulator and the board.
+    A thin C veneer over the GRAPHICS LANGUAGE port ($FF50-$FF54) -- the
+    single graphics interface since the $FF20 device door closed. Every
+    call emits GL bytes into the command FIFO; the engine does the
+    drawing itself, so a filled box costs the same as an empty one, and
+    the same program behaves identically on the emulator and the board.
 
-    The screen is 480x272 in RGB565 direct colour: a pixel IS its colour,
-    r and b are 0-31, g is 0-63, 0 is black. Off-screen pixels are simply
-    not drawn -- but the device treats coordinates as UNSIGNED, so a
-    negative value lands far off the right/bottom, not off the left edge.
+    The API keeps its historical SCREEN-SPACE semantics: origin top-left,
+    y DOWN, 480x272 in RGB565 direct colour (a pixel IS its colour, r and
+    b are 0-31, g is 0-63, 0 is black). The library maps y through the
+    identity window flip (271 - y) on the way out, so callers never see
+    GL's y-up window space. Off-screen coordinates CLIP at the screen
+    edges (the GL primitives window-clip) -- the one semantic upgrade
+    over the old device door, which discarded whole off-screen pixels.
+
+    The library establishes its own ground state (identity window and
+    viewport -- the port powers up DEGENERATE -- outline fill, white pen)
+    lazily on the first call, so even programs that skip gpresent() draw
+    correctly.
 
 FUNCTIONS
-    gpresent()            1 if a display is fitted -- CALL THIS FIRST: an
-                          absent display floats the bus and every other
-                          call would poke the void
+    gpresent()            1 if the GL engine is fitted ('G' at GLID) --
+                          CALL THIS FIRST: an absent card floats the bus
+                          and every other call would poke the void
     grgb(r,g,b)           pack a colour (fields masked)
-    gcolor(c)             set the pen to a packed colour
-    gcls()                clear the whole screen TO THE PEN colour
-    gpixelw(x,y)          one pixel (was gplot)
-    gline(x0,y0,x1,y1)    line, both endpoints drawn
-    gbox(x0,y0,x1,y1)     rectangle outline (any two opposite corners)
-    gboxf(...)            ... filled
+    gcolor(c)             set the pen to a packed colour (GL COLOR)
+    gcls()                clear the whole screen TO THE PEN colour (FLOOD)
+    gpixelw(x,y)          one pixel (MOVE + POINT)
+    gline(x0,y0,x1,y1)    line, both endpoints drawn (MOVE + DRAW)
+    gbox(x0,y0,x1,y1)     rectangle outline (MOVE + RECT; any two
+                          opposite corners); gboxf(...) filled
     gcircle(x,y,r)        circle outline; gcirclef(...) filled
     gellipse(x,y,rx,ry)   ellipse outline; gellipsef(...) filled
-                          (a circle IS the ellipse with rx=ry since the
-                          stage-10 diet retired the separate circle
-                          rasterizer -- same call, radius capped at 255,
-                          r=0 draws nothing; gcls and gbox likewise ride
-                          BOXFILL and four lines, same pixels)
-    gpixelr(x,y)          the colour at (x,y); 0 off-screen
-                          (was gpoint -- the pixel pair renamed
-                          so POINT names only the PGC verb)
-    gwait()               spin until the engine is idle (each call above
-                          already waits before issuing, so back-to-back
-                          calls are safe without it)
+                          (a circle IS the ellipse with rx=ry -- GL
+                          ELIPSE underneath; r=0 draws nothing)
+    gpixelr(x,y)          the colour at (x,y); 0 off-screen (the GL
+                          PIXRD verb, reply through the read-back FIFO)
+    gwait()               spin until the walker is idle (GLSTAT bit6).
+                          The FIFO serializes back-to-back calls by
+                          itself; gwait() is for code that must SEE a
+                          finished frame (e.g. before gpixelr of its
+                          own drawing -- the library does not add one
+                          per call)
 
 EXAMPLE
     //#use gfx
@@ -47,22 +55,23 @@ EXAMPLE
         gcolor(0); gcls();
         gcolor(grgb(31, 0, 0));
         gboxf(40, 40, 200, 200);
+        gwait();
         if (gpixelr(100, 100) == grgb(31, 0, 0)) { puts("RED"); }
         return 0;
     }
 
 DRAWING MODES (stage 10f)
-    The device register GMODE ($FF2E write side) sets the pixel-write
-    mode for lines, points and outlines: 0 replace, 1 complement,
-    2 OR, 3 AND, 4 XOR. Fills and gcls() always replace. There is no
-    C wrapper yet -- poke(0xFF2E, m), or issue GL "LINFUN m" (man gl);
-    the mode applies to this library's lines and outlines too.
+    The GL LINFUN verb sets the pixel-write mode for lines, points and
+    outlines: 0 replace, 1 complement, 2 OR, 3 AND, 4 XOR. Fills and
+    gcls() always replace. There is no C wrapper -- issue GL "LINFUN m"
+    (man gl); the mode applies to this library's lines and outlines too.
 
 NOTES
-    The source is /lib/lib_gfx.c on this disk (and os/commands/lib_gfx.c in
-    the repo); hand-asm programs get the same addresses as equates from
-    /lib/gfx.inc via `;#use gfx`. BASIC reaches the same device through its
-    own statements -- see man basic, GRAPHICS.
+    The source is /lib/lib_gfx.c on this disk (and os/commands/lib_gfx.c
+    in the repo); hand-asm programs get the same port addresses as
+    equates from /lib/gfx.inc via `;#use gfx`. BASIC reaches the same
+    engine through its own statements -- see man basic, GRAPHICS. For
+    the full command language (3D, text, recording), see man gl.
 
 SEE ALSO
     g3d, gl, cube, basic
