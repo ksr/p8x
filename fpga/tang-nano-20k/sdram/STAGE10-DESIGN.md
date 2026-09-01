@@ -672,8 +672,16 @@ door, then close it. One verb at a time, each shipped end to end.
   vanished off-window with no errors (IMX now \$DD/\$DE); and iverilog
   multi-line comments must not swallow code lines. FUNDED by removing
   CLMOD (user-approved; measured 342 LUT4 by ablation synth -- always
-  measure before asking): 19,296 failed EVERY seed, 18,954/91% places
-  seed 1, Fmax 67/84. The cliff ledger stands at ~19,250.
+  measure before asking): 19,296 failed EVERY seed, 18,916/91% places
+  seed 1, Fmax 68/85. The cliff ledger stands at ~19,250. ON SILICON
+  2026-09-01: silicon_blit.py PASSES (golden 4x3 spot reads, retired-
+  CLMOD err1, the full mandrill streamed and file-verified by PIXRD),
+  and the MEASURED payoff through the real runcard path: BASIC
+  IMAGE of the 256x256 mandrill went from 393.5 s (the device
+  per-pixel loop, HEAD~1, measured the same way) to 37.7 s -- 10.4x.
+  The ~15 s over the 23 s line-rate floor is host-side (FGETB
+  interleave + per-burst ACKs); the UART raise remains the next
+  lever.
 - **Then:** the C gfx library, the monitor splash -- and the door
   closes.
 

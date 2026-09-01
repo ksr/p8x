@@ -527,7 +527,9 @@ Nothing below has been built or measured.
       streamed verbatim, ~14 wire bytes + a GWAIT round trip per
       pixel down to 2 burst-streamed bytes. The remaining floor is
       the UART itself (262KB at 115200 is ~23 s however framed); the
-      2 Mbaud raise below is the next lever. The C `image` command
+      2 Mbaud raise below is the next lever. MEASURED ON THE BOARD
+      2026-09-01: the mandrill via BASIC IMAGE fell 393.5 s -> 37.7 s
+      (10.4x). The C `image` command
       still walks the device door until the C-library rung. Benchmark hook added for this: the emulator's
       -L LED trace is cycle-stamped now, so POKE 65282,n brackets
       time any code span. Candidate rungs, mostly

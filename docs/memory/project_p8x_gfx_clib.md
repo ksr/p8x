@@ -326,3 +326,19 @@ Debug lesson: a "shell broken by X" symptom was a STALE TEST IMAGE
 (p8xfs put lost by re-cp) -- rebuild the image in the SAME command as
 the probe. MockCard has a preloadable rb FIFO for RB-verb bridge tests.
 Silicon scripts live IN THE REPO now: fpga/tang-nano-20k/tools/silicon_*.py.
+
+BLIT SHIPPED + ON SILICON 2026-09-01 (6768a9b; silicon_blit.py PASS;
+MEASURED: mandrill via BASIC IMAGE 393.5s -> 37.7s = 10.4x on the
+real bridge): opcode $64, window
+bottom-left anchor via PIXRD's map, 2*w*h raw P8I-layout bytes eaten
+pre-buffer (emulator) / glst G_BL (RTL), pixels = real PIXELW (GMODE
+applies). IMAGE = one BLIT/row, file bytes verbatim; BASIC's last
+device WRITE gone -- $FF20 now BASIC-free (C lib + monitor remain).
+FUNDED by CLMOD removal (user-approved, MEASURED 342 LUT4 by ablation
+synth BEFORE asking -- the pattern that works): card 18,916/91% seed 1.
+Wire: ~14B+poll/px -> 2B bursts (the -B bridge answers GLPUT bit7
+LOCALLY while bursting); floor = 115200 itself, UART raise backlogged.
+TRAP: BASIC IMX was $E6/$E7 -- $E7 IS GLTMP, GLPUT scribbles it per
+byte; any BASIC var alive across GLPUT emission must avoid $E7 (and
+the $E0-$F1 scratch map generally). Removed so far, all BACKLOG'd:
+AREAPT, ARC/SECTOR, CLMOD, GTEXT(+GPEN), device BOX/CLS/CIRCLE.
