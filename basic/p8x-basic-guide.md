@@ -205,12 +205,13 @@ the PGC's own, for *every* graphics statement. The drawing statements
 emit the graphics language directly: they transform under
 `WINDOW`/`VWPORT`, honour `LINPAT`/`LINFUN`, clip to the window, and
 RECORD inside `CLBEG`/`CLEND`. BASIC establishes the full-screen window
-at startup and again after a `RESETF` statement. `IMAGE` is the one
-device-implemented statement left (the DMA gap) but takes the same
-window coordinates — BASIC flips y at the door — anchored at the
-image's **bottom-left** corner; `PIXELW x,y` / `PIXELR(x,y)` round-trip
-the same pixel through the GL port. The one caveat: `IMAGE` uses the
-fixed full-screen mapping and does not re-map
+at startup and again after a `RESETF` statement. `IMAGE` is the GL
+`BLIT` verb since 2026-09-01 (one per row, the P8I file bytes streamed
+verbatim), anchored at the image's **bottom-left** corner and mapped
+through the current window like everything else — the last caveat is
+gone, and BASIC no longer writes the device door at all; `PIXELW x,y` /
+`PIXELR(x,y)` round-trip the same pixel through the GL port. Image
+pixels stay 1:1 device pixels and do not scale
 under a program's `WINDOW`/`VWPORT`.
 
 ```basic

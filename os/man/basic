@@ -114,12 +114,14 @@ GRAPHICS
     program's PRMFIL from a shadow the native PRMFIL/RESETF statements
     keep -- a GL "PF 1" STRING bypasses that shadow.
 
-    DEVICE statement (the one DMA gap left -- device-implemented, but
-    window coordinates, y up; BASIC flips y at the door. Caveat: the
-    fixed full-screen mapping, no WINDOW/VWPORT re-map):
-
-        IMAGE x,y,name$           draw a P8I image file with its
-                                  BOTTOM-left corner at (x,y)
+    IMAGE x,y,name$ draws a P8I image file with its BOTTOM-LEFT
+    corner at (x,y) -- SINGLE-INTERFACE since 2026-09-01: it is the
+    GL BLIT verb now (one per row, the file bytes streamed verbatim),
+    so the anchor maps through the CURRENT WINDOW/VWPORT like every
+    other statement -- the old fixed-mapping caveat is GONE, and with
+    it BASIC's last device-door write. The pixels themselves stay
+    1:1 device pixels (no scaling). On the card this replaces ~14
+    wire bytes and a round-trip poll per pixel with 2 streamed bytes.
 
     TEXT replaced GTEXT (2026-09-01): text is the PGC's own stroke
     text, drawn card-side from the font the OS streams from /FONT.GL

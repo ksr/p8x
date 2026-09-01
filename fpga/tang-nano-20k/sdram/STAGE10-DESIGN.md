@@ -654,9 +654,26 @@ door, then close it. One verb at a time, each shipped end to end.
   under TSIZE 512, MOVE3 coordinates are model units. Text is now
   card-side stroke replay -- on the board this replaces GTEXT's
   per-pixel bridge writes with a few dozen stream bytes.
-- **BLIT (next):** declare a rect, stream raw RGB565 through the FIFO
-  in BURST frames; makes per-pixel IMAGE obsolete (the measured
-  bridge-bound slowdown).
+- **BLIT (opcode $64) -- DONE 2026-09-01.** Header x y w h (window-
+  coord BOTTOM-left anchor through the PIXRD/CVE map; w,h device
+  pixels <= 512), then 2*w*h RAW bytes eaten straight off the source
+  (glst G_BL, the G_AP pattern) -- paired into pixels, each written
+  as a REAL PIXELW (BL_W0..2: colour+coords, idle-wait, GCMD -- GMODE
+  applies, patterns do not; the emulator draws through the same
+  gpu_px). Rows top-down = the P8I layout, so BASIC's IMAGE is one
+  BLIT per row with file bytes streamed verbatim -- ~14 wire bytes +
+  a GWAIT round trip per pixel became 2 streamed bytes (the emulator
+  -B layer answers GLPUT's bit7 polls LOCALLY while a burst builds,
+  so the wire sees ~97% payload). Recording refuses it err2 with the
+  payload consumed-and-discarded (rskip grew the discard arm); replay
+  headers err2 owing nothing. TRAPS for the record: BASIC's IMX sat
+  at \$E6/\$E7 -- and \$E7 is GLTMP, which GLPUT scribbles per byte:
+  the anchor's high byte became the last byte sent and the image
+  vanished off-window with no errors (IMX now \$DD/\$DE); and iverilog
+  multi-line comments must not swallow code lines. FUNDED by removing
+  CLMOD (user-approved; measured 342 LUT4 by ablation synth -- always
+  measure before asking): 19,296 failed EVERY seed, 18,954/91% places
+  seed 1, Fmax 67/84. The cliff ledger stands at ~19,250.
 - **Then:** the C gfx library, the monitor splash -- and the door
   closes.
 

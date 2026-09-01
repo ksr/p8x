@@ -430,22 +430,23 @@ module tb;
       $display("FAIL: CLRD bytes %02X %02X, want 12 01", e0, e1);
       errors = errors + 1; end
     rd_glrb(e0); rd_glrb(e0); rd_glrb(e0); rd_glrb(e0); rd_glrb(e0);
-    glb(8'h78); glb(8'd7); glb(8'd9); glw(16'd1);       // CLMOD 7 9 1
+    // retired CLMOD (2026-09-01, funded BLIT): err1, one byte skipped,
+    // the list untouched
+    glb(8'h78);                                         // CLMOD -> err1
     glb(8'h76); glb(8'd7);                              // CLRD again
     gl_wait_idle;
     rd_glrb(e0); rd_glrb(e1);                           // length
-    rd_glrb(e0); rd_glrb(e1);                           // opcode, patched x
-    if (e0 !== 8'h12 || e1 !== 8'd9) begin
-      $display("FAIL: CLMOD patch reads %02X %02X, want 12 09", e0, e1);
+    rd_glrb(e0); rd_glrb(e1);                           // opcode, x low
+    if (e0 !== 8'h12 || e1 !== 8'd1) begin
+      $display("FAIL: post-CLMOD CLRD reads %02X %02X, want 12 01", e0, e1);
       errors = errors + 1; end
     rd_glrb(e0); rd_glrb(e0); rd_glrb(e0); rd_glrb(e0); rd_glrb(e0);
     glb(8'h61); glb(8'd0);                              // bad flag   -> 2
     glb(8'h76); glb(8'd60);                             // undefined  -> 6
-    glb(8'h78); glb(8'd7); glb(8'd1); glw(16'd99);      // off >= len -> 2
     gl_wait_idle;
     rd_glerr(e0); rd_glerr(e1); rd_glerr(e2); rd_glerr(e3);
-    if (e0 !== 8'd2 || e1 !== 8'd6 || e2 !== 8'd2 || e3 !== 8'd0) begin
-      $display("FAIL: 10e errors %0d %0d %0d %0d, want 2 6 2 0",
+    if (e0 !== 8'd1 || e1 !== 8'd2 || e2 !== 8'd6 || e3 !== 8'd0) begin
+      $display("FAIL: 10e errors %0d %0d %0d %0d, want 1 2 6 0",
                e0, e1, e2, e3);
       errors = errors + 1;
     end
@@ -472,7 +473,7 @@ module tb;
     end
 
     if (errors == 0)
-      $display("TB-GL: PASS (GLID, 3D scene ops exact incl. 105 spans, 2D verbs exact, RECT clamp box, CLEARS both pages, WAIT paces, error FIFO, FIFO backpressure, LISTS exact, ASCII short-form line == hex op, READ-BACK exact incl. CLRD/CLMOD, LINFUN reaches GMODE + RESETF clears)");
+      $display("TB-GL: PASS (GLID, 3D scene ops exact incl. 105 spans, 2D verbs exact, RECT clamp box, CLEARS both pages, WAIT paces, error FIFO, FIFO backpressure, LISTS exact, ASCII short-form line == hex op, READ-BACK exact incl. CLRD, retired-CLMOD err1, LINFUN reaches GMODE + RESETF clears)");
     else $display("TB-GL: %0d FAILURES", errors);
     $finish;
   end

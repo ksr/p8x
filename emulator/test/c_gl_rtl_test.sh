@@ -118,4 +118,14 @@ sh c_gl_pixrd_test.sh > /dev/null || fail "emulator PIXRD suite failed"
       gfx_span.v sdram_arb.v p8x_sdram.v sdram_video.v sdram_chip.v \
   && ./tbglprx | grep -q "TB-GL-PRX: PASS" ) || fail "tb_gl_prx failed"
 
-echo "C-GL-RTL TEST: PASS (RTL and emulator framebuffers byte-identical: 10a scene, 10b matrix, 10c fly-through, 10d ASCII, 10f LINFUN, 10g AREA, 10h TEXT, 10i curves, 10j patterns, 10k text2, PIXRD read-backs)"
+# 14: BLIT (the single-interface DMA verb) -- the bench replays the
+#     emulator suite's whole scene, checks every PIXRD reply, and the
+#     frames must byte-match
+sh c_gl_blit_test.sh > /dev/null || fail "emulator BLIT suite failed"
+( cd $SD && iverilog -g2012 -I../../rtl -o tbglblx tb_gl_blx.v ../../rtl/p8x_geom.v \
+      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v gfx_mem.v \
+      gfx_span.v sdram_arb.v p8x_sdram.v sdram_video.v sdram_chip.v \
+  && ./tbglblx | grep -q "TB-GL-BLX: DONE" ) || fail "tb_gl_blx failed"
+cmp gl_bl.ppm $SD/tb_gl_blx.ppm || fail "RTL BLIT frame differs from emulator frame"
+
+echo "C-GL-RTL TEST: PASS (RTL and emulator framebuffers byte-identical: 10a scene, 10b matrix, 10c fly-through, 10d ASCII, 10f LINFUN, 10g AREA, 10h TEXT, 10i curves, 10j patterns, 10k text2, PIXRD read-backs, BLIT)"

@@ -51,6 +51,7 @@ DESCRIPTION
       84 TDEFIN c    85 TJUST h v (1..3, 1..3)
       61 FLAGRD n    62 MATXRD 1|2  76 CLRD n     (state -> read-back)
       63 PIXRD x y   (one pixel's colour -> read-back; P8X's own)
+      64 BLIT x y w h + 2*w*h RAW RGB565 bytes (P8X's own; hex only)
       90 MDIDEN      91 MDORG x y z 92 MDSCAL sx sy sz (8.8)
       93 MDROTX deg  94 MDROTY deg  95 MDROTZ deg  96 MDTRAN x y z
       97 MDMATX 12w  A0 VWIDEN      A1 VWRPT x y z A3 VWROTX deg
@@ -114,7 +115,9 @@ DESCRIPTION
     streams state (1 PRMFIL, 2 COLOR, 3 PROJCT, 4 DISTAN, 5 WINDOW,
     6 VWPORT, 9 near/far), MATXRD 1|2 the composed modeling/viewing
     matrices, CLRD n a stored command list (length halfword then the
-    bytes -- clsave's path), all as int16 words through GLRB. PIXRD
+    bytes -- clsave's path), all as int16 words through GLRB. (CLMOD,
+    the one-byte in-place list patch, was removed 2026-09-01 -- its
+    342 LUT4 funded BLIT; CLRD out and re-record instead.) PIXRD
     x y (2026-08-31, the first single-interface verb) reads ONE
     pixel: window coordinates through the SAME map as every 2D verb
     -- it transforms under WINDOW/VWPORT, so PIXELW-then-PIXRD
@@ -122,6 +125,22 @@ DESCRIPTION
     off-screen, the device rule). All of them record into command
     lists and perform their reads at replay time. The PGC had no
     read-backs; these are P8X's.
+
+    BLIT x y w h (the single-interface DMA verb, 2026-09-01): after
+    the header, exactly 2*w*h RAW RGB565 bytes follow in the SAME
+    stream -- rows top-down, little-endian, the P8I file layout
+    verbatim. (x,y) is the image's BOTTOM-LEFT in window coordinates,
+    mapped through the current window like every verb; w,h are DEVICE
+    pixels, unscaled (the CIRCLE-radius precedent), each written as a
+    real PIXELW: GMODE applies, patterns do not, off-screen clips by
+    the device rule. HEX MODE ONLY (no ASCII keyword -- a decimal
+    payload would be absurd). w or h of 0 owes no payload; w or h
+    over 512 (or negative) is error 2 with NO payload owed -- the
+    sender must not stream one. Inside CLBEG it is error 2, the
+    header is not recorded, and the payload is consumed and DISCARDED
+    so the stream stays in sync; a replayed header (none should
+    exist) is error 2 with no payload owed. BASIC's IMAGE is this
+    verb, one BLIT per row.
 
     AREA (stage 10g) seed-fills from the 2D current point (set it with
     MOVE) using the pen, bounded by pen-coloured pixels: outline a

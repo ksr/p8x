@@ -234,6 +234,7 @@ static uint16_t mdu_exec(uint16_t a, uint16_t b, uint16_t c){
    both per the contract. Rendering is instant (the GPU-BUSY licence). */
 static void gpu_line(int x0,int y0,int x1,int y1,uint16_t c);
 static uint16_t gpu_pixel(int x,int y);
+static void gpu_px(int x,int y,uint16_t c);
 static void gpu_hline(int xa,int xb,int y,uint16_t c);
 static void gpu_ellipse(int cx,int cy,int rx,int ry,uint16_t c,int fill);
 /* stage 10j: LINPAT lives in the DEVICE (like GMODE) -- every line from
@@ -242,6 +243,18 @@ static void gpu_ellipse(int cx,int cy,int rx,int ry,uint16_t c,int fill);
    headroom on the full card; opcode E7 is err1 again, a candidate for
    the successor board. */
 static uint16_t gpat = 0xFFFF;         /* device line pattern */
+/* BLIT (0x64, the single-interface DMA verb, 2026-09-01): after the
+   9-byte header, 2*w*h RAW RGB565 bytes stream through the FIFO and
+   are eaten HERE, before the command buffer (a full-screen payload
+   dwarfs GLFMAX). Rows run top-down, little-endian -- the P8I file
+   layout verbatim. All coordinate arithmetic wraps in uint16 and each
+   pixel bounds-checks unsigned <480/<272: the device's own rule, and
+   the exact contract the RTL mirrors. Always replaces, like fills. */
+static long     bl_rem;                /* payload bytes still owed */
+static uint16_t bl_px, bl_py;          /* current device pixel */
+static uint16_t bl_x0;                 /* row-start x */
+static int      bl_xn, bl_w;           /* columns left / width */
+static uint8_t  bl_lo; static int bl_ph, bl_skip;
 static void gpu_box(int x0,int y0,int x1,int y1,uint16_t c,int fill);
 /* RETIRED (stage 10b): the $FF40 record-engine interface -- GEUP list
    upload, GECMD RENDER, the GESEL/GEVAL register file, GEID. The GL
@@ -554,6 +567,7 @@ static void gl_state_reset(void){          /* RESETF: state, NOT the FIFOs */
 }
 static void gl_reset(void){                /* power-on */
     glflen=0; gleflen=0; glrblen=glrbrd=0; glmode=0;
+    bl_rem=0; bl_ph=0; bl_skip=0;
     awn=0; axv=0; axneg=0; axhas=0; a_act=0; a_skip=0; a_str=0;
     glfill=0; glc2[0]=glc2[1]=0; glc3[0]=glc3[1]=glc3[2]=0;
     gl_mat_reset();
@@ -765,6 +779,7 @@ static int gl_cmdlen(const uint8_t *p, int n){
     case 0xE0: case 0xAA: case 0xAB: case 0x70: case 0x72: case 0x74:
     case 0x79: case 0xEB: case 0x61: case 0x62: case 0x76: return 2;
     case 0x63: return 5;                   /* PIXRD x y -> RB */
+    case 0x64: return 9;                   /* BLIT header (payload eaten raw) */
     case 0xC0: return 1;
     case 0xC1: return 4;                   /* AREABC r g b */
     case 0xEA: return 3;                   /* LINPAT p (10j) */
@@ -776,7 +791,6 @@ static int gl_cmdlen(const uint8_t *p, int n){
     case 0x81: case 0x82: return 3;        /* TSIZE / TANGLE */
     case 0x84: return 2;                   /* TDEFIN c */
     case 0x85: return 3;                   /* TJUST h v (10k) */
-    case 0x78: return 5;                   /* CLMOD n b off */
     case 0x05: case 0x43: case 0x93: case 0x94: case 0x95:
     case 0xA3: case 0xA4: case 0xA5: case 0xA8: case 0xA9:
     case 0xB0: case 0xB1: return 3;
@@ -841,6 +855,16 @@ static int gl_exec2(const uint8_t *p, int n){
                                               since 10k -- glyph replay is
                                               its own context) */
             }
+            /* BLIT: refused in a list (the payload dwarfs a slot) --
+               err2, and the payload is eaten+DISCARDED to keep sync */
+            if(p[0]==0x64){
+                long w=gl_i16(p+5), h=gl_i16(p+7);
+                gl_err(2);
+                if(w>0&&h>0&&w<=512&&h<=512){
+                    bl_rem=2L*w*h; bl_ph=0; bl_skip=1;
+                }
+                return L;
+            }
             if(glrlen + L > CLSLOT - 2){   /* slot overflow: abort */
                 gl_err(7);
                 if(glrbank) glgdef[glrec-1]=0; else cldef[glrec-1]=0;
@@ -897,6 +921,23 @@ static int gl_exec2(const uint8_t *p, int n){
         default: gl_err(2); break;
         }
         return 2;
+    case 0x64: NEED(9);                    /* BLIT x y w h + 2*w*h raw bytes.
+        (x,y) = the image's BOTTOM-LEFT in window coords, mapped through
+        the current window like every verb; w,h are DEVICE pixels
+        (unscaled -- the CIRCLE-radius precedent) and the payload rows
+        run top-down. Hex mode only (the keyword ROM has no entry); a
+        zero dimension owes no payload; out-of-range dims are err2 with
+        no payload owed -- the SENDER must not stream one. */
+        { int16_t w=gl_i16(p+5), h=gl_i16(p+7), dx, dy;
+          if(w<0||h<0||w>512||h>512){ gl_err(2); return 9; }
+          if(w==0||h==0) return 9;
+          gl_map2(gl_i16(p+1), gl_i16(p+3), &dx, &dy);
+          bl_x0=bl_px=(uint16_t)dx;
+          bl_py=(uint16_t)((uint16_t)dy-(uint16_t)(h-1));
+          bl_w=bl_xn=w; bl_ph=0; bl_skip=0;
+          bl_rem=2L*w*h;
+        }
+        return 9;
     case 0x63: NEED(5);                    /* PIXRD x y -> RB: ONE colour.
         The single-interface migration's first verb (2026-08-31): window
         coordinates through the same gl_map2 as every 2D verb, the pixel
@@ -922,15 +963,9 @@ static int gl_exec2(const uint8_t *p, int n){
           gl_rbb(clmem[p[1]][0]); gl_rbb(clmem[p[1]][1]);
           for(i = 0; i < L; i++) gl_rbb(clmem[p[1]][2 + i]); }
         return 2;
-    case 0x78: NEED(5);                    /* CLMOD n b off: one-byte patch */
-        if(glrec || glreplay){ gl_err(5); return 5; }
-        if(p[1] >= CLNUM){ gl_err(2); return 5; }
-        if(!cldef[p[1]]){ gl_err(6); return 5; }
-        { int off = (uint16_t)(p[3] | (p[4] << 8));
-          int L = clmem[p[1]][0] | (clmem[p[1]][1] << 8);
-          if(off >= L){ gl_err(2); return 5; }
-          clmem[p[1]][2 + off] = p[2]; }
-        return 5;
+    /* (0x78 CLMOD, the one-byte list patch, removed 2026-09-01: its
+       342 LUT4 funded BLIT -- unknown opcode, err1; successor-board
+       candidate. CLRD out + re-record is the workaround.) */
     /* ---- stage 10h/10k: TEXT (glyphs are lists in the second bank).
        TEXTP (83) is the same engine: on the PGC, TEXT was the fixed
        character generator and TEXTP the programmable stroke text --
@@ -1227,6 +1262,23 @@ static int gl_exec2(const uint8_t *p, int n){
     }
 }
 static void gl_hexb(uint8_t b){
+    if(bl_rem){                        /* BLIT payload: raw, pre-buffer */
+        bl_rem--;
+        if(!bl_ph){ bl_lo=b; bl_ph=1; }
+        else {
+            bl_ph=0;
+            if(!bl_skip)               /* THE device pixel write: bounds,
+                                          GMODE -- BLIT pixels behave
+                                          exactly like PIXELW, both
+                                          worlds (the RTL issues real
+                                          PIXELW commands) */
+                gpu_px((int)bl_px,(int)bl_py,(uint16_t)(bl_lo|(b<<8)));
+            bl_px=(uint16_t)(bl_px+1);
+            if(--bl_xn==0){ bl_xn=bl_w; bl_px=bl_x0;
+                            bl_py=(uint16_t)(bl_py+1); }
+        }
+        return;
+    }
     if(glflen>=GLFMAX){ gl_err(4); return; }
     glf[glflen++]=b;
     for(;;){

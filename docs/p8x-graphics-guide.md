@@ -41,9 +41,10 @@ you). Numbers separate on spaces or commas; `man gl` is the verb card.
   coordinates (y up). The drawing statements emit GL; PIXELR() is the
   GL `PIXRD` verb (2026-08-31) and maps through the CURRENT window;
   text is PGC `TEXT` with the boot-loaded font (GTEXT retired
-  2026-09-01). Only IMAGE (bottom-left anchor) remains
-  device-implemented, its y flipped by BASIC at the door
-  (screen y = 271 - window y, the fixed full-screen mapping).
+  2026-09-01); IMAGE is the GL `BLIT` verb (2026-09-01, one per row,
+  bottom-left anchor mapped through the current window). BASIC no
+  longer touches the device door at all -- only the C gfx library
+  still speaks it directly.
 - **Window space**: the GL 2D world, y UP. `WINDOW x1 x2 y1 y2` (PGC
   order: both x's first!) declares the world extent; `VWPORT x1 x2 y1
   y2` maps it to screen pixels, flipping y. GL 2D primitives

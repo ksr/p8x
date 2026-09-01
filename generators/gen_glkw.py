@@ -99,7 +99,7 @@ VERBS = [
     ("FLAGRD",  "FR",   0x61, 1, 1),
     ("MATXRD",  "MX",   0x62, 1, 1),
     ("CLRD",    "CRD",  0x76, 1, 1),
-    ("CLMOD",   "CM",   0x78, 2, 3),   # n b off: one-byte patch (P8X shrink)
+    # CLMOD (78) removed 2026-09-01: its 342 LUT4 funded BLIT.
     # stage 10g (appended: BASIC token order is ABI)
     ("AREA",    "AR",   0xC0, 0, 0),
     ("AREABC",  "ARB",  0xC1, 3, 3),

@@ -205,7 +205,14 @@ SVARTAB= BASRAM+$300         ; NSVARS x SVENT = 640 bytes ($x300..$x57F)
 ; IMAGE working set. Shares GTEXT's scratch run deliberately: two statements
 ; never execute at once, and this page has no free run left. (IMAGE's own
 ; sixteen bits of x survive the row loop in IMX; everything else is per-row.)
-IMX    = BASRAM+$E6          ; left edge (2)
+IMX    = BASRAM+$DD          ; left edge (2) -- NOT $E6: IMAGE emits
+                             ;   through GLPUT now, whose GLTMP is $E7,
+                             ;   and $E6/$E7 would put the anchor's high
+                             ;   byte UNDER every byte sent (found as an
+                             ;   image that vanished off-window with no
+                             ;   errors). $DD/$DE = the freed GPEN slot
+                             ;   + GCTMP, whose GEXEC never runs inside
+                             ;   an IMAGE statement.
 IMYC   = BASRAM+$E8          ; current row y (2)
 IMW    = BASRAM+$EA          ; image width (2)
 IMH    = BASRAM+$EC          ; rows remaining (2)
@@ -1951,53 +1958,72 @@ DOIMAGE: INP2
         LDB  IMH+1
         OR
         JZ   img_done
-        LDA  IMYC                   ; window -> device (wflip): (x,y) is
-        STA  NUM1                   ;   the image's BOTTOM-left corner,
-        LDA  IMYC+1                 ;   so the top device row is
-        STA  NUM1+1                 ;   272 - y - height
-        LDA  IMH
+        ; ---- SINGLE-INTERFACE (2026-09-01): the drawing is ONE GL BLIT
+        ; per row -- header (x, row-y, w, 1) then 2*w raw file bytes
+        ; STRAIGHT to the FIFO (P8I rows are already top-down RGB565
+        ; little-endian, the BLIT payload verbatim). BLIT maps the
+        ; anchor through the CURRENT window like every verb, so IMAGE's
+        ; old fixed-mapping caveat is GONE -- and so is BASIC's last
+        ; device-door write. Per-row headers keep every count 16-bit
+        ; and bound the damage of a SHORT file: the row in flight is
+        ; padded with zeros (the walker must get every byte it is owed
+        ; -- underfeeding wedges the stream), then the statement stops.
+        ; IMYC = the current row's window y, starting at y + h - 1
+        ; (the file's first row is the image's TOP); IMCX counts the
+        ; row's payload bytes; IMH counts rows.
+        LDA  IMH                    ; IMYC = y + (h-1): the top row
         STA  NUM2
         LDA  IMH+1
         STA  NUM2+1
-        JSR  wflip
-        LDA  NUM1
-        STA  IMYC
-        LDA  NUM1+1
-        STA  IMYC+1
-img_row: LDA IMYC                    ; GY0 pair <- this row; low first (the low
-        STA  GY0                    ;   write clears GY0H), constant for the row
+        LDA  IMYC
+        STA  NUM1
         LDA  IMYC+1
-        STA  GY0+GCHI
-        LDA  IMX                    ; back to the left edge
-        STA  IMXC
+        STA  NUM1+1
+        JSR  ADD16
+        LDA  NUM1
+        LDB  #1
+        SUB
+        STA  IMYC
+        LDA  #0
+        JC   img_tc
+        LDA  #1
+img_tc: STA  GLCNT                  ; borrow into the high byte
+        LDA  NUM1+1
+        LDB  GLCNT
+        SUB
+        STA  IMYC+1
+img_row: LDA #$64                   ; BLIT header: opcode
+        JSR  GLPUT
+        LDA  IMX                    ; x (bottom-left of THIS row)
+        JSR  GLPUT
         LDA  IMX+1
-        STA  IMXC+1
-        LDA  IMW
+        JSR  GLPUT
+        LDA  IMYC                   ; the row's window y
+        JSR  GLPUT
+        LDA  IMYC+1
+        JSR  GLPUT
+        LDA  IMW                    ; w
+        JSR  GLPUT
+        LDA  IMW+1
+        JSR  GLPUT
+        LDA  #1                     ; h = 1
+        JSR  GLPUT
+        LDA  #0
+        JSR  GLPUT
+        LDA  IMW                    ; IMCX = 2*w payload bytes
+        SHL
         STA  IMCX
         LDA  IMW+1
+        ROL
         STA  IMCX+1
-img_px: JSR  IMGB                   ; colour: low byte clears GCOLH...
-        STA  GCOL
-        JSR  IMGB                   ; ...high byte completes it
-        STA  GCOLH
-        LDA  IMXC                   ; GX0 pair, low first
-        STA  GX0
-        LDA  IMXC+1
-        STA  GX0+GCHI
-        LDA  #GC_PIXW
-        JSR  GEXEC
-        LDA  IMXC                   ; x++
-        INC
-        STA  IMXC
-        JNZ  img_x1
-        LDA  IMXC+1
-        INC
-        STA  IMXC+1
-img_x1: LDA  IMCX                   ; columns--
+img_px: JSR  IMGB                   ; one payload byte...
+        JC   img_pad                ; short file: pad + abort
+        JSR  GLPUT                  ; ...straight to the FIFO
+img_nx: LDA  IMCX                   ; bytes--
         LDB  #1
         SUB
         STA  IMCX
-        JC   img_c1                 ; C=1: no borrow
+        JC   img_c1
         LDA  IMCX+1
         LDB  #1
         SUB
@@ -2006,26 +2032,46 @@ img_c1: LDA  IMCX
         LDB  IMCX+1
         OR
         JNZ  img_px
-        LDA  IMYC                   ; y++
-        INC
+        LDA  IMYC                   ; row done: y-- (down the screen)
+        LDB  #1
+        SUB
         STA  IMYC
-        JNZ  img_y1
+        JC   img_y1
         LDA  IMYC+1
-        INC
+        LDB  #1
+        SUB
         STA  IMYC+1
 img_y1: LDA  IMH                    ; rows--
         LDB  #1
         SUB
         STA  IMH
-        JC   img_r1
+        JC   img_h1
         LDA  IMH+1
         LDB  #1
         SUB
         STA  IMH+1
-img_r1: LDA  IMH
+img_h1: LDA  IMH
         LDB  IMH+1
         OR
         JNZ  img_row
+        JMP  img_done
+img_pad: LDA #0                     ; the walker is owed the rest of the
+        JSR  GLPUT                  ;   row: zeros keep the stream in
+        LDA  IMCX                   ;   sync, then the statement aborts
+        LDB  #1                     ;   the NOT-P8I way
+        SUB
+        STA  IMCX
+        JC   img_p1
+        LDA  IMCX+1
+        LDB  #1
+        SUB
+        STA  IMCX+1
+img_p1: LDA  IMCX
+        LDB  IMCX+1
+        OR
+        JNZ  img_pad
+        JMP  img_bad
+
 img_done: PLA                     ; the parse cursor, back from before the file
         TAP2H
         PLA

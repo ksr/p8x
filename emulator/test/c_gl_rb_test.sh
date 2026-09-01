@@ -1,9 +1,10 @@
 #!/bin/sh
 # Stage-10e read-back (STAGE10-DESIGN.md): FLAGRD/MATXRD stream state to
 # the RB FIFO (GLRB $FF52, GLSTAT bit0), CLRD streams a stored list back
-# (length halfword then bytes -- the clsave path), CLMOD patches one byte
-# in place (n b off; the P8X shrink of the PGC's block form). Errors: 2
-# for a bad flag/slot/offset, 6 for an undefined list.
+# (length halfword then bytes -- the clsave path). CLMOD, the one-byte
+# in-place patch, was REMOVED 2026-09-01 (its 342 LUT4 funded BLIT):
+# opcode 78 is err1/skip, asserted here; the ASCII keyword is gone from
+# the ROM. Errors: 2 for a bad flag, 6 for an undefined list.
 set -e
 set -o pipefail
 cd "$(dirname "$0")"
@@ -64,23 +65,19 @@ int main() {
     glb(118); glb(3);                          /* CLRD 3: len halfword + bytes */
     { int L; int i; L = rbw(); pnum(L);
       i = 0; while (i < L) { pnum(rbb()); i = i + 1; } }
-    /* CLMOD hex: patch x low byte (offset 1) to 9 */
-    glb(120); glb(3); glb(9); glw(1);
-    glb(118); glb(3);
-    { int L; int i; L = rbw();
-      i = 0; while (i < L) { pnum(rbb()); i = i + 1; } }
-    /* CLMOD via the ASCII translator (bcnt=2 shape): patch to 5 */
-    gls("CA CM 3 5 1 CX ");
-    glb(118); glb(3);
+    /* retired CLMOD: err1, ONE byte skipped, its old params execute
+       as garbage-free NOOP-ish bytes? NO -- send just the opcode and
+       let the errored skip prove the stream survives */
+    glb(120);                                  /* CLMOD opcode -> err1 */
+    glb(118); glb(3);                          /* CLRD 3 again: unchanged */
     { int L; int i; L = rbw();
       i = 0; while (i < L) { pnum(rbb()); i = i + 1; } }
     pnum(peek(65361) & 1);                     /* RB drained -> 0 */
-    /* errors: bad flag, undefined list, offset past end */
+    /* errors: the retired opcode, bad flag, undefined list */
     glb(97); glb(0);                           /* FLAGRD 0 -> err2 */
     glb(118); glb(9);                          /* CLRD 9 -> err6 */
-    glb(120); glb(3); glb(1); glw(99);         /* CLMOD off 99 -> err2 */
     pnum(peek(65363)); pnum(peek(65363));
-    pnum(peek(65363)); pnum(peek(65363));      /* 2 6 2 0 */
+    pnum(peek(65363)); pnum(peek(65363));      /* 1 2 6 0 */
     puts("RBDONE");
     return 0;
 }
@@ -101,10 +98,9 @@ want="1 -32 -1 400 -120 120 -100 100 16 32767 2 \
 256 0 0 0 256 0 0 0 256 10 20 30 \
 256 0 0 0 256 0 0 0 256 \
 7 18 1 0 2 0 3 0 \
-18 9 0 2 0 3 0 \
-18 5 0 2 0 3 0 \
-0 2 6 2 0"
+18 1 0 2 0 3 0 \
+0 1 2 6 0"
 got=$(LC_ALL=C tr -d '\0\r' < gl_rb.out | grep -E '^-?[0-9]+$' | tr '\n' ' ' | sed 's/ $//')
 want=$(echo $want)
 [ "$got" = "$want" ] || { echo "want: $want"; echo "got:  $got"; fail "read-back values differ"; }
-echo "C-GL-RB TEST: PASS (FLAGRD state, MATXRD both matrices, CLRD round-trip, CLMOD hex+ASCII, RB drain, errors 2/6/2)"
+echo "C-GL-RB TEST: PASS (FLAGRD state, MATXRD both matrices, CLRD round-trip, retired-CLMOD err1, RB drain, errors 2/6)"

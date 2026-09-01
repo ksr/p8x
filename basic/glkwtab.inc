@@ -61,15 +61,15 @@
         .ascii "MATXRD"
         .byte $E9
         .ascii "AREABC"
-        .byte $ED
+        .byte $EC
         .ascii "TANGLE"
-        .byte $F0
+        .byte $EF
         .ascii "TDEFIN"
-        .byte $F1
+        .byte $F0
         .ascii "ELIPSE"
-        .byte $F2
+        .byte $F1
         .ascii "LINPAT"
-        .byte $F3
+        .byte $F2
         .ascii "FLOOD"
         .byte $B8
         .ascii "MOVER"
@@ -110,16 +110,14 @@
         .byte $DF
         .ascii "CLIPY"
         .byte $E0
-        .ascii "CLMOD"
-        .byte $EB
         .ascii "TSIZE"
-        .byte $EF
+        .byte $EE
         .ascii "TEXTP"
-        .byte $F4
+        .byte $F3
         .ascii "TJUST"
-        .byte $F5
+        .byte $F4
         .ascii "POINT"
-        .byte $F6
+        .byte $F5
         .ascii "FLIP"
         .byte $B4
         .ascii "WAIT"
@@ -135,6 +133,6 @@
         .ascii "CLRD"
         .byte $EA
         .ascii "AREA"
-        .byte $EC
+        .byte $EB
         .ascii "TEXT"
-        .byte $EE
+        .byte $ED

@@ -522,10 +522,13 @@ Nothing below has been built or measured.
       115200 bridge -- ~8-10 wire bytes per pixel (colour pair, x,
       GCMD) PLUS a GSTAT poll round-trip per pixel = tens of seconds
       for a full-screen image where the on-chip era took ~1.4 s. The
-      fix is therefore exactly the rungs below (raise the UART;
-      card-side BLIT streaming raw pixels in BURST frames makes
-      per-pixel IMAGE obsolete outright) -- no point tuning the
-      per-pixel loop. Benchmark hook added for this: the emulator's
+      fix is therefore exactly the rungs below -- and BLIT LANDED
+      2026-09-01: BASIC's IMAGE is one GL BLIT per row, the P8I bytes
+      streamed verbatim, ~14 wire bytes + a GWAIT round trip per
+      pixel down to 2 burst-streamed bytes. The remaining floor is
+      the UART itself (262KB at 115200 is ~23 s however framed); the
+      2 Mbaud raise below is the next lever. The C `image` command
+      still walks the device door until the C-library rung. Benchmark hook added for this: the emulator's
       -L LED trace is cycle-stamped now, so POKE 65282,n brackets
       time any code span. Candidate rungs, mostly
       independent: (a) raise the UART -- the BL616 USB-serial on the
@@ -587,8 +590,12 @@ Nothing below has been built or measured.
       have at today's ~19,150 placement cliff -- hence successor
       board. Keep /FONT.GL as the OVERRIDE path either way (a file
       swap = a new typeface; TDEFIN = custom glyphs).
-- [ ] **Restore AREAPT and ARC/SECTOR on a successor board (2026-08-30,
-      user-approved removals).** Two cuts bought placement headroom
+- [ ] **Restore AREAPT, ARC/SECTOR and CLMOD on a successor board
+      (2026-08-30/09-01, user-approved removals).** CLMOD (opcode 78,
+      the one-byte in-place list patch) went 2026-09-01: its measured
+      342 LUT4 funded BLIT at the placement cliff; zero ecosystem
+      users beyond its own test, and CLRD-out + re-record is the
+      workaround. The original entry: Two cuts bought placement headroom
       against the chip's PRACTICAL cliff (~19,150-19,250 LUT4, well
       under the nominal 20,736 -- see STAGE10-DESIGN.md "round four"):
       AREAPT (opcode E7, the patterned fill mask; -569 measured) and

@@ -117,8 +117,6 @@ GLKW[] = {
     { "MX", 0x62, 1, 1 },
     { "CLRD", 0x76, 1, 1 },
     { "CRD", 0x76, 1, 1 },
-    { "CLMOD", 0x78, 2, 3 },
-    { "CM", 0x78, 2, 3 },
     { "AREA", 0xC0, 0, 0 },
     { "AR", 0xC0, 0, 0 },
     { "AREABC", 0xC1, 3, 3 },
@@ -146,4 +144,4 @@ GLKW[] = {
     { "CA", 0xFE, 0, 0 },
     { "CX", 0xFF, 0, 0 },
 };
-#define GLKWN 144
+#define GLKWN 142

@@ -132,6 +132,9 @@ module p8x_geom (
              // colour in scratch 782 and hand it to the G_RBP pusher.
              W_LPW=153, W_PL0=154, W_PL1=155, W_PL2=156,
              PR_M0=157, PR_M1=158, PR_M2=164, PR_W0=165, PR_W1=166,
+             // BLIT (2026-09-01): the per-pixel writer -- colour+coords
+             // (the AF_P1 ordering), idle-wait, GCMD PIXELW
+             BL_W0=167, BL_W1=168, BL_W2=169,
              AF_W0=159, AF_W1=160, AF_W2=161, AF_W3=162, AF_W4=163,
              C_OGB=92,  C_OGC=93,  C_MTB=94,  C_MTC=95,  C_MLC=96,
              C_MLW=97,  C_CPB=98,  C_CPC=99,  J_RST2=100,
@@ -192,8 +195,8 @@ module p8x_geom (
   reg [9:0]  rbp_a;                  // pusher: next lane, words left
   reg [3:0]  rbp_n;
   reg        wvk;                    // G_WV tail: relaunch the K recompose
-  reg [5:0]  rd_slot;                // CLRD/CLMOD: the slot
-  reg [12:0] rdo;                    // CLRD: byte offset / CLMOD: target
+  reg [5:0]  rd_slot;                // CLRD: the slot
+  reg [12:0] rdo;                    // CLRD: byte offset
   reg [13:0] rdn;                    // CLRD: bytes still to push
   reg [7:0]  rd_lo, rd_hi;           // fetched halfword
   reg        jrbs;                   // J_WR leg: RBS defaults, not a matrix
@@ -216,6 +219,14 @@ module p8x_geom (
   // its regs left with them 2026-08-30) ------------------------------------
   reg [15:0] cvr, cvry;              // radius (x), y-radius (ELIPSE)
   reg [15:0] prx;                    // PIXRD: the mapped screen x in flight
+  // ---- BLIT (0x64) working set: the emulator's bl_* twins ---------------
+  reg        blmap;                  // anchor map in flight (PR_M* reused)
+  reg        bldrop;                 // refused-in-recording: eat + discard
+  reg        blph, blfin;            // byte-pair phase / payload done
+  reg [7:0]  bllo;                   // buffered low byte
+  reg [15:0] blcol, blwx, blwy;      // the pixel being written
+  reg [15:0] blpx, blpy, blx0;       // cursor (uint16 wrap, device rule)
+  reg [9:0]  blcw, blw, blh;         // columns left / width / rows left
   reg [15:0] cvpx, cvpy;             // mapped centre (CVE)
   reg [15:0] cvnx, cvny;             // mapped radii  (CVE)
   // ---- stage 10j: patterns (AREAPT's regs REMOVED with it) ---------------
@@ -225,7 +236,6 @@ module p8x_geom (
   wire af_g  = (state >= AF_MAP0 && state <= AF_P9);  // fill owns the g port
   reg [3:0]  ef_wp, ef_rp;           //   2 bad parameter, 3 mode not
   wire       rb_ne   = (rb_wp != rb_rp);
-  wire [12:0] mdba   = 13'd2 + rdo;  // CLMOD: target byte's file offset
   wire       rb_full = (rb_wp - rb_rp == 6'd32);
   wire       ef_ne = (ef_wp != ef_rp);  // fitted, 4 FIFO overflow, 5
                                         // nesting, 6 undefined, 7 full
@@ -370,7 +380,7 @@ module p8x_geom (
              G_3L=16,
              // stage 10e: read-back -- the lane-walk pusher (FLAGRD/MATXRD),
              // the WINDOW/VWPORT mirror loader, the CLRD streamer and the
-             // CLMOD read-modify-write
+             // (CLMOD's read-modify-write, removed 2026-09-01)
              G_RBP=17, G_WV=18,
              G_RD0=19, G_RD1=20, G_RD2=21, G_RD3=22,
              G_MD0=23, G_MD1=24, G_MD2=25, G_MD3=26,
@@ -381,7 +391,10 @@ module p8x_geom (
              // stage 10k: the GLYPH replay's own length read -- glyphs run
              // in a SECOND context (rpg) overlaying the list replay, so
              // TEXT works inside command lists
-             G_RLG0=31, G_RLG1=32;    // (G_AP=33 left with AREAPT)
+             G_RLG0=31, G_RLG1=32,    // (G_AP=33 left with AREAPT)
+             // BLIT: the raw-payload eater -- 2*w*h bytes straight off
+             // the source, paired into pixels, each handed to BL_W0
+             G_BL=34;
 
   // ---- stage 10c: COMMAND LISTS (STAGE10-DESIGN.md) ----------------------
   // 64 lists in 4KB SDRAM slots at CL_BASE + n*4096: byte length in the
@@ -431,7 +444,7 @@ module p8x_geom (
 8'hE0,8'hAA,8'hAB,8'h70,8'h72,8'h74,8'h79,8'hEB,
       8'h61,8'h62,8'h76: opn = 5'd1;
       8'h63: opn = 5'd4;               // PIXRD x y (single-interface 1st)
-      8'h78: opn = 5'd4;               // CLMOD n b off
+      8'h64: opn = 5'd8;               // BLIT x y w h (+ raw payload)
       8'hC0: opn = 5'd0;
       8'hC1: opn = 5'd3;               // AREABC r g b
       8'h80,8'h83,8'h84: opn = 5'd1;   // TEXT/TEXTP count / TDEFIN c
@@ -629,6 +642,7 @@ module p8x_geom (
       cldef <= 64'd0; rec <= 0; rskip <= 0; rp <= 0; rp_have <= 0;
       gdef <= 64'd0; rec_bank <= 0; txn <= 0;
       aflp <= 0;
+      blmap <= 0; bldrop <= 0; blph <= 0; blfin <= 0;
       rpg <= 0; rpg_have <= 0; tjh <= 2'd1; tjv <= 2'd1;
       glmode <= 0; tq_wp <= 0; tq_rp <= 0; wn <= 0; tnv <= 0;
       tneg <= 0; thas <= 0; t_act <= 0; t_skip <= 0; ast <= A_IDLE;
@@ -1727,6 +1741,29 @@ module p8x_geom (
 
         // (the CVP* arc-vertex subroutine left with ARC/SECTOR 2026-08-30)
 
+        // ---- BLIT's pixel writer: colour + coords low-then-high (a low
+        // write CLEARS its high partner), idle-wait, GCMD PIXELW -- the
+        // AF_P1 ordering. BLIT pixels behave EXACTLY like PIXELW: GMODE
+        // (LINFUN) applies, patterns do not -- the emulator draws each
+        // payload pixel through the same gpu_px the device command uses.
+        BL_W0: begin
+          case (seq)
+            3'd0: begin gm_a<=4'h4; gm_wdata<=blcol[7:0];   end
+            3'd1: begin gm_a<=4'hD; gm_wdata<=blcol[15:8];  end
+            3'd2: begin gm_a<=4'h0; gm_wdata<=blwx[7:0];    end
+            3'd3: begin gm_a<=4'h9; gm_wdata<=blwx[15:8];   end
+            3'd4: begin gm_a<=4'h1; gm_wdata<=blwy[7:0];    end
+            default: begin gm_a<=4'hA; gm_wdata<=blwy[15:8]; end
+          endcase
+          gm_wr <= 1;
+          if (seq == 3'd5) state <= BL_W1; else seq <= seq + 3'd1;
+        end
+        BL_W1: begin gm_a <= 4'h6;     // previous pixel may still draw
+                     if (gm_a == 4'h6 && !gm_rdata[7] && !gm_wr)
+                       state <= BL_W2; end
+        BL_W2: begin gm_a <= 4'h5; gm_wdata <= 8'h01; gm_wr <= 1;  // PIXELW
+                     state <= S_NEXT; end
+
         // ---- PIXRD (2026-08-31): map the window point exactly as CVE0/1
         // map a centre, bounds-check the FULL 16 bits (the emulator's
         // unsigned <480/<272 rule -- a wrapped negative must read 0, and
@@ -1743,7 +1780,12 @@ module p8x_geom (
           md_r <= par[20]; md_rn <= 1; md_go <= 1; state <= PR_M2;
         end
         PR_M2: if (md_done) begin
-          if (prx >= 16'd480 || md_qr >= 16'd272) begin
+          if (blmap) begin             // BLIT: the mapped point is the
+            blx0 <= prx; blpx <= prx;  //   image's BOTTOM-left; the first
+            blpy <= md_qr - {6'd0, blh} + 16'd1;  // payload row is the TOP
+            blmap <= 0; state <= S_NEXT;          // (uint16 wrap, device
+          end                                     //  rule per pixel)
+          else if (prx >= 16'd480 || md_qr >= 16'd272) begin
             afpv <= 16'd0; state <= PR_W0;            // off-screen reads 0
           end else begin
             apx <= prx[8:0]; apy <= md_qr[8:0];
@@ -1979,6 +2021,12 @@ module p8x_geom (
                   ef[ef_wp[2:0]] <= 8'd5;        //   consume unstored
                   ef_wp <= ef_wp + 4'd1; end     //   (TEXT records fine
                 rskip <= 1;                      //   since 10k)
+              end else if (srcb == 8'h64) begin  // BLIT: never in a list
+                if (ef_wp - ef_rp != 4'd8) begin //   (the payload dwarfs a
+                  ef[ef_wp[2:0]] <= 8'd2;        //   slot): error 2, the
+                  ef_wp <= ef_wp + 4'd1; end     //   header unstored, the
+                rskip <= 1;                      //   payload discarded at
+                                                 //   G_RUN's rskip arm
               end else if (srcb == 8'h43) begin  // CA/CX: TRANSPORT, not
                                                  //   content -- executes
                                                  //   even mid-recording
@@ -2057,7 +2105,14 @@ module p8x_geom (
         end
 
         G_RUN: if ((rec && glop != 8'h43) || rskip) begin // recorded/skipped
-          rskip <= 0; glst <= G_OP;
+          if (rskip && glop == 8'h64 &&                  // refused BLIT
+              !pw2[15] && !pw3[15] &&                    //   still owes its
+              pw2 <= 16'd512 && pw3 <= 16'd512 &&        //   payload: eat +
+              pw2 != 16'd0 && pw3 != 16'd0) begin        //   DISCARD it
+            bldrop <= 1; blph <= 0; blfin <= 0; blmap <= 0;
+            blcw <= pw2[9:0]; blw <= pw2[9:0]; blh <= pw3[9:0];
+            rskip <= 0; glst <= G_BL;
+          end else begin rskip <= 0; glst <= G_OP; end
         end else if (gl_can) begin
           glst <= G_OP;                                   // default: done
           case (glop)
@@ -2257,6 +2312,20 @@ module p8x_geom (
               nbx <= pw0; nby <= pw1;    // (RECT's corner regs are free)
               glact <= 1; state <= PR_M0;
             end
+            8'h64: begin                                  // BLIT x y w h
+              if (rp || rpg) epush(8'd2);                 // replayed header:
+              else if (pw2[15] || pw3[15] ||              //   err2, NO
+                       pw2 > 16'd512 || pw3 > 16'd512)    //   payload owed
+                epush(8'd2);                              // bad dims: same
+              else if (pw2 == 16'd0 || pw3 == 16'd0) ;    // nothing owed
+              else begin
+                nbx <= pw0; nby <= pw1;                   // anchor to map
+                blw <= pw2[9:0]; blcw <= pw2[9:0]; blh <= pw3[9:0];
+                bldrop <= 0; blph <= 0; blfin <= 0; blmap <= 1;
+                glact <= 1; state <= PR_M0;               // PIXRD's map
+                glst <= G_BL;                             // eater waits on
+              end                                         //   blmap
+            end
             8'h61: begin                                  // FLAGRD n
               k <= 0; glst <= G_RBP;
               case (pbuf[0])
@@ -2295,21 +2364,7 @@ module p8x_geom (
                 rd_slot <= pbuf[0][5:0]; rdo <= 0; glst <= G_RD0;
               end
             end
-            8'h78: begin                                  // CLMOD n b off
-              if (rp || rpg) begin                               //   no self-patching
-                if (ef_wp - ef_rp != 4'd8) begin          //   mid-replay
-                  ef[ef_wp[2:0]] <= 8'd5; ef_wp <= ef_wp + 4'd1; end
-              end else if (pbuf[0] >= 8'd64) begin
-                if (ef_wp - ef_rp != 4'd8) begin
-                  ef[ef_wp[2:0]] <= 8'd2; ef_wp <= ef_wp + 4'd1; end
-              end else if (!cldef[pbuf[0][5:0]]) begin
-                if (ef_wp - ef_rp != 4'd8) begin
-                  ef[ef_wp[2:0]] <= 8'd6; ef_wp <= ef_wp + 4'd1; end
-              end else begin
-                rd_slot <= pbuf[0][5:0];
-                rdo <= {pbuf[3][4:0], pbuf[2]}; glst <= G_MD0;
-              end
-            end
+            // (8'h78 CLMOD left 2026-09-01: its 342 LUT4 funded BLIT)
 
             // ---- stage 10c: the list verbs -----------------------------
             8'h71: begin                                  // stray CLEND
@@ -2614,27 +2669,8 @@ module p8x_geom (
           end
         end
 
-        G_MD0: if (!sd_busy && !g_req) begin  // CLMOD: read the length
-          g_addr <= {2'd0, 1'b1, 2'd0, rd_slot, 12'd0};
-          g_we <= 0; g_req <= 1; sd_busy <= 1; glst <= G_MD1;
-        end
-        G_MD1: if (g_ready) begin             // offset must be inside
-          if ({3'd0, rdo} >= g_dout) begin
-            if (ef_wp - ef_rp != 4'd8) begin
-              ef[ef_wp[2:0]] <= 8'd2; ef_wp <= ef_wp + 4'd1; end
-            glst <= G_OP;
-          end else glst <= G_MD2;
-        end
-        G_MD2: if (!sd_busy && !g_req) begin  // read the target halfword
-          g_addr <= {2'd0, 1'b1, 2'd0, rd_slot, mdba[11:1], 1'b0};
-          g_we <= 0; g_req <= 1; sd_busy <= 1; glst <= G_MD3;
-        end
-        G_MD3: if (g_ready) begin             // write it back, one byte new
-          g_addr <= {2'd0, 1'b1, 2'd0, rd_slot, mdba[11:1], 1'b0};
-          g_din <= rdo[0] ? {pbuf[1], g_dout[7:0]}
-                          : {g_dout[15:8], pbuf[1]};
-          g_we <= 1; g_req <= 1; sd_busy <= 1; glst <= G_OP;
-        end
+        // (G_MD0..G_MD3, CLMOD's read-modify-write, left 2026-09-01 --
+        //  its 342 LUT4 funded BLIT; the localparams stay as tombstones)
 
         G_WAIT: begin                                     // WAIT: real frames
           if (wcnt == 16'd0) glst <= G_OP;
@@ -2691,6 +2727,39 @@ module p8x_geom (
         end
 
         // (G_AP, AREAPT's byte stream, left with AREAPT 2026-08-30)
+
+        // ---- BLIT's raw payload (2026-09-01): pair bytes into pixels,
+        // hand each to the BL_W0 writer (pops stall while it runs), walk
+        // the cursor in uint16 wrap exactly as the emulator does. bldrop
+        // eats a refused-in-recording payload without writing a pixel.
+        G_BL: if (blfin) begin
+          if (state == S_IDLE) begin blfin <= 0; glst <= G_OP; end
+        end else if (!blmap && src_ne && state == S_IDLE) begin
+          if (rpg) begin rpgb0 <= rpgb1; rpg_have <= rpg_have - 2'd1;
+                         rpg_off <= rpg_off + 13'd1; end
+          else if (rp) begin rpb0 <= rpb1; rp_have <= rp_have - 2'd1;
+                        rp_off <= rp_off + 13'd1; end
+          else if (glmode) tq_rp <= tq_rp + 3'd1;
+          else cf_rp <= cf_rp + 6'd1;
+          if (!blph) begin bllo <= srcb; blph <= 1; end
+          else begin
+            blph <= 0;
+            if (!bldrop) begin
+              blcol <= {srcb, bllo};
+              blwx <= blpx; blwy <= blpy;
+              seq <= 0; glact <= 1; state <= BL_W0;
+            end
+            if (blcw == 10'd1) begin               // row done
+              blcw <= blw; blpx <= blx0;
+              blpy <= blpy + 16'd1;
+              if (blh == 10'd1) blfin <= 1;        // payload done
+              else blh <= blh - 10'd1;
+            end else begin
+              blcw <= blcw - 10'd1;
+              blpx <= blpx + 16'd1;
+            end
+          end
+        end
 
         // (G_CVN/G_CV/G_CV2D, ARC/SECTOR's angle walk and fan, left with
         // them 2026-08-30 -- placement headroom; STAGE10-DESIGN.md)
