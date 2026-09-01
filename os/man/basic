@@ -123,10 +123,21 @@ GRAPHICS
     1:1 device pixels (no scaling). On the card this replaces ~14
     wire bytes and a round-trip poll per pixel with 2 streamed bytes.
 
-    TEXT replaced GTEXT (2026-09-01): text is the PGC's own stroke
-    text, drawn card-side from the font the OS streams from /FONT.GL
-    at boot (the glyph bank survives RESETF -- a font is INSTALLED,
-    not drawn). The idiom:
+    TEXT is the PGC's own stroke text, drawn card-side from the font
+    the OS streams from /FONT.GL at boot (the glyph bank survives
+    RESETF -- a font is INSTALLED, not drawn). The EASY form:
+
+        GTEXT x,y,size,s$         2D text sugar (reborn 2026-09-01 as
+                                  pure GL emission -- the PGC port,
+                                  never the device): window coords,
+                                  baseline-left, ABSOLUTE size (the
+                                  old multiplier: 1 = 1x, 2 = 2x),
+                                  correct in ANY session state. The
+                                  deliberate cost: it resets the
+                                  modeling matrix and camera each
+                                  call -- 3D work uses the raw verbs.
+
+    The raw idiom:
 
         MOVE3 x,y,0 : TEXT s$     baseline-left at (x,y); TSIZE n
                                   scales (256 = 1x) and TANGLE

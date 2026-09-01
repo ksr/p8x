@@ -204,9 +204,12 @@ PY
 # Checked: strokes actually land (out-of-the-box, no manual font load);
 # lowercase folds to the SAME cell as uppercase (ink-for-ink); TSIZE 512
 # doubles the glyph's rise; a string off the right edge clips, not wraps;
-# TEXT "" is legal and draws nothing; and a typed GTEXT line is rejected
-# AT ENTRY (the retired token no longer dispatches, like PALETTE).
-printf 'B\rbgfx\r10 CLS\r20 COLOR RGB(31,0,0)\r30 MOVE3 10,10,0 : TEXT "A"\r40 COLOR RGB(0,63,0)\r50 MOVE3 40,10,0 : TEXT "a"\r60 COLOR RGB(0,0,31)\r70 TSIZE 512\r80 MOVE3 30,20,0 : TEXT "A"\r90 MDIDEN\r100 COLOR RGB(31,0,0)\r110 MOVE3 470,80,0 : TEXT "WW"\r120 MOVE3 5,110,0 : TEXT ""\r130 END\rRUN\rLIST\rGTEXT 1,1,1,"X"\rBYE\r' \
+# TEXT "" is legal and draws nothing; and GTEXT -- REBORN 2026-09-01 as
+# the easy 2D-text sugar (old signature, window coords, absolute size,
+# pure GL emission) -- must place text EXACTLY even after hostile state
+# (a stale TSIZE/TANGLE and a RESETF), because it resets the matrix and
+# camera itself.
+printf 'B\rbgfx\r10 CLS\r20 COLOR RGB(31,0,0)\r30 MOVE3 10,10,0 : TEXT "A"\r40 COLOR RGB(0,63,0)\r50 MOVE3 40,10,0 : TEXT "a"\r60 COLOR RGB(0,0,31)\r70 TSIZE 512\r80 MOVE3 30,20,0 : TEXT "A"\r90 MDIDEN\r100 COLOR RGB(31,0,0)\r110 MOVE3 470,80,0 : TEXT "WW"\r120 MOVE3 5,110,0 : TEXT ""\r122 TSIZE 20 : TANGLE 45 : RESETF\r124 COLOR RGB(31,0,31)\r126 GTEXT 200,150,1,"A"\r128 GTEXT 260,140,2,"A"\r130 END\rRUN\rLIST\rBYE\r' \
     > bgfx4.in
 ../p8xemu -N -i bgfx4.in -c bgfx.img -l 400000000 -g bgfx4.ppm eeprom.bin > bgfx4.out 2>/dev/null || true
 
@@ -261,8 +264,18 @@ for wy in range(108, 120):
 for kw in [b'30 MOVE3 10,10,0 : TEXT "A"', b'70 TSIZE 512', b'90 MDIDEN', b'120 MOVE3 5,110,0 : TEXT ""']:
     if out.count(kw) < 2:
         bad.append("LIST did not round-trip %r" % kw.decode())
-if b"?SYNTAX ERROR" not in out.split(b"130 END")[-1]:
-    bad.append("immediate GTEXT was ACCEPTED - the dead token still dispatches")
+# the reborn GTEXT: 1x cell exact at (200,150) after the hostile state,
+# and the 2x anchor UNSCALED at (260,140) with a taller cell
+ga = cell(200, 150)
+if len(ga) < 5: bad.append("GTEXT 1x drew %d px - the sugar failed" % len(ga))
+if ga != a: bad.append("GTEXT 1x 'A' differs from TEXT's 'A' cell")
+gb = cell(260, 140, 14, 18)
+if len(gb) <= len(ga): bad.append("GTEXT size 2 no bigger than size 1")
+if not any(j > 10 for (i,j) in gb):
+    bad.append("GTEXT size 2 never rises past the 1x cap")
+for kw2 in [b'126 GTEXT 200,150,1,"A"', b'128 GTEXT 260,140,2,"A"']:
+    if out.count(kw2) < 2:
+        bad.append("LIST did not round-trip %r" % kw2.decode())
 
 if bad:
     print("BASIC-GFX TEST: FAIL")

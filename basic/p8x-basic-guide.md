@@ -251,16 +251,24 @@ back compares exactly against the `RGB()` you drew with:
 100 IF PIXELR(X,Y) = 0 THEN PIXELW X,Y
 ```
 
-**Text on the screen** is the PGC's own stroke text (`GTEXT` was retired
-2026-09-01 — the single-interface migration): the OS streams `/FONT.GL` to the
-card at boot, so `TEXT` works out of the box, drawn card-side in the current
-`COLOR`:
+**Text on the screen** is the PGC's own stroke text: the OS streams
+`/FONT.GL` to the card at boot, and `GTEXT` (reborn 2026-09-01 as *pure GL
+emission* — the PGC port, never the device) is the easy way to use it:
 
 ```basic
 10 COLOR 1
-20 MOVE3 4,250,0 : TEXT "P8X BASIC"
+20 GTEXT 4,250,2,"P8X BASIC"    : REM window coords, absolute 2x
 30 COLOR 2
-40 MOVE3 4,236,0 : TEXT "SCORE "+S$   : REM any string expression
+40 GTEXT 4,236,1,"SCORE "+S$    : REM any string expression
+```
+
+It places correctly in *any* session state because it resets the modeling
+matrix and camera itself (`PROJCT 0 : MDIDEN : TSIZE : MDTRAN : MOVE3 :
+TEXT` under the hood) — which is also its deliberate cost: 3D programs
+should use the raw verbs instead:
+
+```basic
+50 MOVE3 4,220,0 : TEXT "RAW"   : REM composes with TSIZE/TANGLE/TJUST
 ```
 
 The anchor is the **baseline-left at the 3D current point** (`MOVE3 x,y,0`

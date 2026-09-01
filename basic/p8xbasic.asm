@@ -293,9 +293,10 @@ TOK_CIRCLE= $AC          ; CIRCLE x,y,r[,FILL|,NOFILL]
 TOK_PIXELR= $AE          ; PIXELR(x,y) -- a FUNCTION, not a statement
                          ;   (device pixel read; was POINT, renamed so
                          ;   the name belongs to the PGC drawing verb)
-                         ; ($AF was GTEXT, removed 2026-09-01: PGC TEXT
-                         ;   with the boot-loaded font replaced it -- the
-                         ;   token no longer dispatches, like PALETTE's)
+TOK_GTEXT = $AF          ; GTEXT x,y,size,s$ -- REBORN 2026-09-01 as the
+                         ;   easy 2D text sugar (the old software
+                         ;   rasterizer's token, so old programs' GTEXT
+                         ;   lines dispatch again): pure GL emission
 TOK_RGB   = $B1          ; RGB(r,g,b) -- a FUNCTION: pack r,b 0-31, g 0-63 into 565
 TOK_IMAGE = $B2          ; IMAGE x,y,name$ -- draw a P8I file
 TOK_GL    = $B3          ; GL string$ -- one ASCII graphics-language line
@@ -492,6 +493,10 @@ STMT:   JSR  SKIPSP
         LDB  #TOK_IMAGE
         CMP
         JZ   DOIMAGE
+        LDA  (P2)
+        LDB  #TOK_GTEXT
+        CMP
+        JZ   DOGTEXT
         LDA  (P2)
         LDB  #TOK_GL
         CMP
@@ -1648,7 +1653,73 @@ ci_err: JMP  SYNERR
 ; installed.
 
 ;==============================================================================
-; GTEXT is GONE (2026-09-01, the single-interface migration): text is the
+; GTEXT x,y,size,s$ -- REBORN 2026-09-01 as the easy 2D text sugar, by
+; user demand (retired the same morning as the software rasterizer; back
+; as pure GL emission). Window coords, baseline-left anchor, ABSOLUTE
+; size in the old multiplier (1 = 1x, 2 = 2x ... = TSIZE size*256, low
+; byte, 0 clamps to 1), and it works in ANY session state: the emission
+; is PROJCT 0, MDIDEN, TSIZE, MDTRAN x y 0 (translation composes AFTER
+; the scale, so the anchor lands UNSCALED at window x,y), MOVE3 0 0 0,
+; then the string through glv_str (count + chars + the synchronous
+; drain). The DELIBERATE cost: the modeling matrix and the camera are
+; reset every call -- exactly what 2D programs want; 3D work keeps the
+; raw TEXT/TSIZE/TANGLE/TJUST verbs and their composing semantics.
+DOGTEXT: INP2
+        JSR  glchk                  ; GL engine + GLFST for GLVSEP
+        JSR  GLVSEP                 ; x
+        JSR  gxsh0
+        JSR  GLVSEP                 ; y
+        JSR  gxsh2
+        JSR  GLVSEP                 ; size: the old multiplier
+        LDA  RESULT
+        JNZ  gt_sz
+        LDA  #1                     ; size 0 would draw nothing at all
+gt_sz:  STA  BXS+4                  ; -> TSIZE's HIGH byte (= *256)
+        JSR  SKIPSP                 ; ',' then the string
+        LDA  (P2)
+        LDB  #','
+        CMP
+        JNZ  gt_err
+        INP2
+        LDA  #$B0                   ; PROJCT 0: text lives at z=0, which
+        JSR  GLPUT                  ;   the native camera near-clips
+        LDA  #0
+        JSR  GLPUT
+        LDA  #0
+        JSR  GLPUT
+        LDA  #$90                   ; MDIDEN
+        JSR  GLPUT
+        LDA  #$81                   ; TSIZE 0,size = size*256
+        JSR  GLPUT
+        LDA  #0
+        JSR  GLPUT
+        LDA  BXS+4
+        JSR  GLPUT
+        LDA  #$96                   ; MDTRAN x y 0
+        JSR  GLPUT
+        LDP1 #BXS
+        JSR  bxw                    ; x
+        JSR  bxw                    ; y
+        LDA  #0
+        JSR  GLPUT
+        LDA  #0
+        JSR  GLPUT
+        LDA  #$12                   ; MOVE3 0 0 0
+        JSR  GLPUT
+        LDA  #0
+        JSR  GLPUT
+        JSR  GLPUT
+        JSR  GLPUT
+        JSR  GLPUT
+        JSR  GLPUT
+        JSR  GLPUT
+        LDA  #$80                   ; TEXT, then glv_str does the string
+        JSR  GLPUT
+        JMP  glv_str
+gt_err: JMP  SYNERR
+
+;==============================================================================
+; (the OLD GTEXT, the software rasterizer, is GONE: text is the
 ; PGC's own -- MOVE x,y : TEXT s$ (TSIZE/TANGLE/TJUST scale, rotate and
 ; justify), drawn card-side from the stroke font the OS streams from
 ; /FONT.GL at boot (the glyph bank survives RESETF by design). The old
@@ -5392,6 +5463,8 @@ KWTAB:
         .byte $AC
         .ascii "PIXELR"
         .byte $AE
+        .ascii "GTEXT"
+        .byte $AF
         .ascii "RGB"
         .byte $B1
         .ascii "IMAGE"
@@ -5549,7 +5622,9 @@ MHELP:  .byte CR,LF
         .byte CR,LF
         .ascii "  CIRCLE x,y,r[,ry][,FILL]  PIXELW x,y  PIXELR(x,y)  RGB(r,g,b)"
         .byte CR,LF
-        .ascii "  text: MOVE3 x,y,0 then TEXT s$ (TSIZE COMPOUNDS, MDIDEN resets)"
+        .ascii "  GTEXT x,y,size,s$  easy 2D text (window coords, absolute size)"
+        .byte CR,LF
+        .ascii "  raw: MOVE3 x,y,0 then TEXT s$ (TSIZE COMPOUNDS, MDIDEN resets)"
         .byte CR,LF
         .ascii "  IMAGE x,y,f$   draw a P8I file, bottom-left at x,y"
         .byte CR,LF
