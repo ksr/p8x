@@ -177,9 +177,11 @@ test-io: p8xemu ucode
 	sh test/io_test.sh
 
 # Graphics: everything through the GL port ($FF50) since the device door
-# closed -- the C library, the image twins, the GL language suites.
+# closed -- the C library, the image twins, the GL language suites, and
+# the demo fleet (size-vs-CSTACKTOP + frame smoke).
 test-gfx: p8xemu ucode
 	sh test/c_g3d_test.sh
+	sh test/c_demo_test.sh
 	sh test/c_image_test.sh
 	sh test/c_gl_test.sh
 	sh test/c_gl_mat_test.sh
