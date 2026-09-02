@@ -190,11 +190,11 @@ remainder is why it is still here.
           through the span-init state, because the circle begins its walk at x=r
           (seeding cx to ccx-r is right there) while the ellipse begins region 1
           at x=0, where the span is the single pixel ccx.
-        - **OPEN, emulator/RTL parity:** SELFTEST ($F0) is implemented in the
-          emulator but NOT in the RTL, where it falls through to `default` and
-          sets the error bit. Nothing exercises it, so the frame diff stays green
-          -- the payloads never issue it. Worth closing: it is the one command
-          that proves a card with no software behind it.
+        - **CLOSED by retirement (2026-09-01):** SELFTEST ($F0) was emulator-only
+          (the RTL always rejected it), and the single-interface migration
+          removed it with the rest of the CPU door -- there is no register to
+          poke it through any more. Its "prove a card with no software" role
+          belongs to the bridge PING + GLID probe and the monitor's GL splash.
       - **SD error paths are now tested** (`fpga/tang-nano-20k/sim/tb_sd_spi.v`
         with `sd_model.v +sdfail=1|2`); that found and fixed two lockups. Still
         unexercised: CRC failure, a card that reports write-protect, and card

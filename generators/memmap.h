@@ -24,24 +24,6 @@
 #define CFHEAD      0xFF16       /* $E0 = LBA mode, drive 0 */
 #define CFCMD       0xFF17       /* command (wr) / status (rd) */
 #define CFSTAT      0xFF17
-#define GX0         0xFF20       /* draw X0 (0-479) */
-#define GY0         0xFF21       /* draw Y0 (0-271) */
-#define GX1         0xFF22       /* draw X1 (0-479) */
-#define GY1         0xFF23       /* draw Y1 (0-271) */
-#define GCOL        0xFF24       /* pen LOW byte -- the pen is a whole RGB565 colour (see GCOLH) */
-#define GCMD        0xFF25       /* write executes: 1 PLOT 2 LINE 3 BOX 4 BOXFILL 5 CLS 7 CIRCLE 8 CIRCLEFILL 9 POINT A ELLIPSE B ELLIPSEFILL / F1 RESET F2 IDENT */
-#define GSTAT       0xFF26       /* read: bit7 BUSY, bit0 ERR (unknown command) */
-#define GDATA       0xFF27       /* read: IDENT record stream, else the last POINT result */
-#define GPARM       0xFF28       /* scalar argument: CIRCLE/ELLIPSE x-radius */
-#define GX0H        0xFF29       /* X0 high byte (write AFTER GX0) */
-#define GY0H        0xFF2A       /* Y0 high byte (write AFTER GY0) */
-#define GX1H        0xFF2B       /* X1 high byte (write AFTER GX1) */
-#define GY1H        0xFF2C       /* Y1 high byte (write AFTER GY1) */
-#define GMODE       0xFF2E       /* write: pixel-write mode (stage 10f LINFUN) -- 0 replace, 1 complement, 2 OR, 3 AND, 4 XOR; applies to lines/points/outlines, fills always replace; 5-7 act as replace. GID1 keeps the read side */
-#define GID0        0xFF2D       /* read: $50 'P' -- card-presence signature */
-#define GCOLH       0xFF2D       /* write: pen HIGH byte (write AFTER GCOL; a GCOL write clears it) */
-#define GID1        0xFF2E       /* read: $47 'G' -- with GID0 spells PG */
-#define GPARM2      0xFF2F       /* ELLIPSE y-radius (GPARM is the x-radius) */
 #define MDA         0xFF30       /* MDU operand a, low byte (write clears the high byte) */
 #define MDB         0xFF31       /* MDU operand b, low byte */
 #define MDC         0xFF32       /* MDU divisor c, low byte */

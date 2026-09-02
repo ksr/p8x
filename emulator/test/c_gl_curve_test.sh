@@ -47,6 +47,19 @@ int main() {
     glb(6); glb(0); glb(0); glb(31);
     glb(16); glw(100); glw(60);
     glb(57); glw(80); glw(30);                           /* ELIPSE */
+    /* TALL filled ellipse 25x60 (the OTHER aspect's region walk) plus
+       the r=1 and r=0 edges -- coverage inherited from the retired
+       device-door ce test */
+    glb(6); glb(31); glb(63); glb(0);
+    glb(224); glb(1);
+    glb(16); glw(420); glw(90);
+    glb(57); glw(25); glw(60);                           /* ELIPSE fill */
+    glb(224); glb(0);
+    glb(6); glb(31); glb(63); glb(31);
+    glb(16); glw(20); glw(250);
+    glb(56); glw(1);                                     /* r=1 */
+    glb(16); glw(30); glw(250);
+    glb(56); glw(0);                                     /* r=0: nothing */
     /* retired ARC then SECTOR: err1 each, one byte skipped, stream
        lives -- the teal fill after them must land */
     glb(60);                                             /* ARC: unknown */
@@ -97,5 +110,12 @@ assert p(100,60)==BLACK,  "ellipse centre not hollow: %r"%(p(100,60),)
 assert p(380,60)==BLACK,  "retired ARC drew something: %r"%(p(380,60),)
 assert p(240,200)==TEAL,  "fill after retired opcodes missing: %r"%(p(240,200),)
 assert p(255,215)==TEAL,  "fill after retired opcodes short: %r"%(p(255,215),)
+YELG = (255,255,0)
+assert p(420,90)==YELG,   "tall ellipse fill centre: %r"%(p(420,90),)
+assert p(420,149)==YELG,  "tall ellipse fill top: %r"%(p(420,149),)
+assert p(446,90)==BLACK,  "tall ellipse leaked right: %r"%(p(446,90),)
+WHITE = (255,255,255)
+assert p(21,250)==WHITE,  "r=1 circle right point: %r"%(p(21,250),)
+assert p(30,250)==BLACK,  "r=0 drew a dot: %r"%(p(30,250),)
 EOF
-echo "C-GL-CURVE TEST: PASS (circle/ellipse outline+fill, radius mapping, retired-3C/3D err1 skip, err2)"
+echo "C-GL-CURVE TEST: PASS (circle/ellipse outline+fill, both aspects, r=1/r=0 edges, radius mapping, retired-3C/3D err1 skip, err2)"

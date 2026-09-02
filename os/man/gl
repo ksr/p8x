@@ -77,8 +77,8 @@ DESCRIPTION
     pen ignored), 2 OR, 3 AND, 4 XOR. XOR twice restores the ground --
     the rubber-band idiom. FILLS ALWAYS REPLACE (the burst filler is
     not modal). Applies between primitives, never mid-draw; RESETF
-    returns the mode to replace. BASIC LINE/PIXELW honour it too (the
-    mode lives in the display device at GMODE, $FF2E write side).
+    returns the mode to replace. BASIC LINE/PIXELW honour it too --
+    the mode is engine state that every drawing path shares.
 
     CURVES (stage 10i) draw at the 2D current point and move nothing:
     CIRCLE r and ELIPSE rx ry map their radii through the window->

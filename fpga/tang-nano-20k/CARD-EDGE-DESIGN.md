@@ -20,12 +20,14 @@ TTL bus exists. This document is the contract.
 
 The card IS its register window — the same one software already knows:
 
-    $FF20-$FF2F   the 2D device     (registers, GCMD, GMODE, GID0/GID1)
     $FF50-$FF57   the GL port       (GLDATA/GLSTAT/GLRB/GLERR/GLID)
 
-Semantics are EXACTLY today's (gen_memmap stays the authority; the
-graphics theory doc stays true). No graphics software changes: BASIC,
-lib_gfx, the GL clients and every test speak this window unchanged.
+(As designed, v1 also carried the $FF20-$FF2F 2D-device window; the
+single-interface migration closed it on 2026-09-01 — device idx now
+read $FF and swallow writes, exactly like the closed window on the
+bus. The protocol frames are unchanged.) Semantics are EXACTLY the
+memory map's (gen_memmap stays the authority; the graphics theory doc
+stays true).
 
 New, bridge-era additions to the window (unused addresses):
 
@@ -35,9 +37,10 @@ New, bridge-era additions to the window (unused addresses):
                                                     can only add this
                                                     cheaply NOW)
 
-A master that reads GID0='P', GID1='G', GLID='G' sees a graphics card;
-BRIDGID='B' additionally identifies a bridge front-end (absent on the
-all-in-one build and, later, on the TTL bus card).
+A master that reads GLID='G' sees a graphics card (the GID0/GID1 "PG"
+signature retired with the device window); BRIDGID='B' additionally
+identifies a bridge front-end (absent on the all-in-one build and,
+later, on the TTL bus card).
 
 ## 2. What leaves the chip, what stays
 
@@ -75,9 +78,9 @@ ceiling early (a RISK item: pixel-heavy pushes want every baud we can
 get; GL command streams do not care).
 
 Host-driven, binary, byte-oriented. The 6-bit register index addresses
-the window: idx = I/O address minus $FF20, so idx $00-$0F is the 2D
-device ($FF20-$FF2F) and idx $30-$37 the GL port ($FF50-$FF57) -- one
-subtraction, mechanical in both directions.
+the window: idx = I/O address minus $FF20, so idx $30-$37 is the GL
+port ($FF50-$FF57) -- one subtraction, mechanical in both directions.
+(idx $00-$0F was the 2D device, retired: reads $FF, writes swallowed.)
 
     $00            PING: card replies 'P' '8' 'X' 'G' then BRIDGEV
     $80|idx  val   WRITE val to register idx          (no reply)
@@ -103,7 +106,7 @@ graphics state, and a wedged bridge FSM is reflash territory.
 
 ## 5. The emulator as CPU
 
-`p8xemu -B <serial-device>`: every CPU access to $FF20-$FF5F forwards
+`p8xemu -B <serial-device>`: every CPU access to the GL port forwards
 over the bridge; everything else (CPU, RAM, storage, console) stays
 emulated locally. Flag-gated: default behavior is byte-identical to
 today, so every existing test runs unchanged.

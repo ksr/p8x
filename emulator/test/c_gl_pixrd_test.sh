@@ -5,8 +5,8 @@
 # every 2D verb; the device's rule off-screen (reads 0). Checked: an
 # identity-window read of a drawn pixel, background 0, off-screen 0, a
 # NON-identity window (the map is real, not a flip), the ASCII forms,
-# agreement with the device PIXELR at the mapped screen pixel, and
-# PIXRD recorded in a command list replaying its read at CLRUN time.
+# and PIXRD recorded in a command list replaying its read at CLRUN
+# time. (The device-PIXELR agreement check retired with the door.)
 set -e
 set -o pipefail
 cd "$(dirname "$0")"
@@ -37,14 +37,6 @@ int gls(char *s) { while (*s) { glb(*s); s = s + 1; } return 0; }
 int rbb() { while ((peek(65361) & 1) == 0) { } return peek(65362); }
 int rbw() { int l; l = rbb(); return l + 256 * rbb(); }
 int gwt() { while (peek(65361) & 64) { } return 0; }
-int devrd(int x, int y) {
-    poke(65312, x & 255); poke(65321, (x / 256) & 255);
-    poke(65313, y & 255); poke(65322, (y / 256) & 255);
-    poke(65317, 9);                            /* device PIXELR */
-    while (peek(65318) & 128) { }
-    x = peek(65319);
-    return x + 256 * peek(65319);
-}
 int main() {
     glb(4);                                    /* RESETF */
     glb(179); glw(0); glw(479); glw(0); glw(271);   /* WINDOW  */
@@ -58,8 +50,6 @@ int main() {
     glb(99); glw(101); glw(50); pnum(rbw());   /* neighbour: 0         */
     glb(99); glw(0-5);  glw(50); pnum(rbw());  /* off-window: 0        */
     glb(99); glw(100); glw(300); pnum(rbw());  /* above the window: 0  */
-    /* the device agrees at the mapped screen pixel (y flip) */
-    pnum(devrd(100, 221));                     /* screen (100, 271-50): -32 */
     /* a NON-identity window: same world point, kept through the map */
     glb(179); glw(0-120); glw(120); glw(0-120); glw(120);  /* WINDOW +-120 */
     glb(178); glw(104); glw(375); glw(0); glw(271);        /* VWPORT box  */
@@ -98,7 +88,7 @@ printf 'B\rrun /bin/glpr.bin\r' > gl_pr.in
 grep -q "PRDONE" gl_pr.out || fail "harness did not finish"
 
 got=$(LC_ALL=C tr -d '\0\r' < gl_pr.out | grep -E '^-?[0-9]+$' | tr '\n' ' ' | sed 's/ $//')
-want="-32 0 0 0 -32 2047 0 2047 0 2047 0"
+want="-32 0 0 0 2047 0 2047 0 2047 0"
 [ "$got" = "$want" ] || fail "read sequence '$got', want '$want'"
 
-echo "C-GL-PIXRD TEST: PASS (identity + mapped windows, off-screen 0, device agreement, ASCII forms, list replay)"
+echo "C-GL-PIXRD TEST: PASS (identity + mapped windows, off-screen 0, ASCII forms, list replay)"

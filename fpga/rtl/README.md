@@ -19,8 +19,9 @@ and its `STAGE*.md` design docs.)
 
 `gfx.v` is a transliteration of the `gpu_*` functions in `emulator/p8xemu.c`, and
 the same rule applies to it as to the CPU: the emulator is the golden model, so a
-cleverer Bresenham that lights a different pixel is a **bug**. `../sim/gfx.sh`
-byte-compares the frames the two produce, across all three payloads.
+cleverer Bresenham that lights a different pixel is a **bug**. The GL RTL
+battery (`emulator/test/c_gl_rtl_test.sh`) byte-compares the frames the two
+produce, streaming identical GL bytes through the walker into this engine.
 
 Unlike the CPU, the graphics device **cannot be cycle-diffed**. The emulator draws
 instantaneously and never raises BUSY; the RTL takes thousands of clocks and does.
@@ -55,8 +56,9 @@ test, and a divergence names the exact microcycle:
 ../sim/run.sh 20000                        # monitor boot
 ../sim/run.sh 60000 isa_test.asm           # all 88 opcodes
 ../sim/run.sh 200000 "" console_in.txt     # driven monitor + console diff
-../sim/gfx.sh                              # graphics engine vs the emulator
 ```
+
+(Graphics: `emulator/test/c_gl_rtl_test.sh`, the GL battery.)
 
 Touching `gfx.v` or `video_rgb.v` additionally needs the two board benches, which
 cover what the co-sim structurally cannot:

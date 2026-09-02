@@ -52,10 +52,12 @@ that is what the microcode is for).
 
 The RAM/ROM/IO split and every port up to `$FF17` are **identical to the TTL
 build** — that is the point of the parallel track. The one divergence is the
-graphics at `$FF20–$FF2E`: the addresses are reserved in `gen_memmap.py` so both
-builds agree, but **no TTL card exists yet**, so on the TTL machine they read as
-a floating bus. A card is planned (a Tang Nano 20K plus the same panel), which is
-why the device is defined in the shared map rather than as an FPGA special.
+graphics: the GL port at `$FF50–$FF57` is defined in `gen_memmap.py` so both
+builds agree, but **no TTL card exists yet**, so on the TTL machine those
+addresses read as a floating bus. A card exists (a Tang Nano 20K plus the
+panel, `card` personality), which is why the port is defined in the shared map
+rather than as an FPGA special. (`$FF20–$FF2F` was the graphics DEVICE window;
+the single-interface migration retired it — it floats `$FF` everywhere now.)
 
 | Range | Size | Contents | FPGA realization |
 |-------|------|----------|------------------|
@@ -77,16 +79,13 @@ BRAM region and whether writes are allowed below `$2000`).
 | `$FF12` | CFSCNT | sector count |
 | `$FF13–$FF15` | CFLBA0–2 | LBA bytes |
 | `$FF16` | CFHEAD | `$E0` = LBA mode, drive 0 (bit0 = device select) |
-| `$FF20–$FF23` | GX0 GY0 GX1 GY1 | graphics coordinates (low bytes) |
-| `$FF24` | GCOL | pen 0–3 |
-| `$FF25` | GCMD | write executes a drawing command |
-| `$FF26` | GSTAT | bit7 BUSY, bit0 ERR |
-| `$FF27` | GDATA | IDENT stream / POINT result |
-| `$FF28` | GPARM | scalar argument (CIRCLE radius / ELLIPSE x-radius) |
-| `$FF2F` | GPARM2 | ELLIPSE y-radius |
-| `$FF29–$FF2C` | GX0H… | coordinate high bytes |
-| `$FF2D/$FF2E` | GID0/GID1 | `'P'`/`'G'` presence signature |
 | `$FF17` | CFCMD/CFSTAT | command (wr) / status (rd) |
+| `$FF50` | GLDATA | GL command-stream byte (wr) |
+| `$FF51` | GLSTAT | bit7 FIFO full, bit6 busy, bit1 error, bit0 read-back |
+| `$FF52` | GLRB | pop one read-back byte |
+| `$FF53` | GLERR | pop one error byte |
+| `$FF54` | GLID | `'G'` presence probe |
+| `$FF20–$FF2F` | — | retired device window: floats `$FF` |
 
 - **ACIAS/ACIAD** are presented by a shim inside `p8x_top.v` over `uart_tx`/
   `uart_rx`, so the existing serial driver is unchanged; baud is generated in the
@@ -117,6 +116,13 @@ full 64K map, and no SDRAM controller needed.
 
 ## Graphics (`gfx.v` + `video_rgb.v`)
 
+> **Dated section** — this describes the stage-4 block-RAM design. Since then:
+> direct colour retired the palette (stage 6), the framebuffer moved to SDRAM
+> at the panel's own 480×272 (see `fpga/tang-nano-20k/sdram/`), the GL/PGC
+> language arrived (stage 10), and the single-interface migration closed the
+> CPU register window — the engine is the GL walker's private property now.
+> The golden-model rule below is the part that never changed.
+
 `gfx.v` is the device: register file, drawing engine, framebuffer, palette. It is
 **shared verbatim** by the simulation and the board, like `p8x_cpu.v`, and it is a
 transliteration of the `gpu_*` functions in `emulator/p8xemu.c` — the emulator is
@@ -132,10 +138,11 @@ block's usable depth, so 8160 bytes would cost 8 blocks rather than 4 and the
 design would not place. The scanout needs a byte only once per eight panel pixels,
 so it takes the port for a cycle and the engine holds.
 
-Commands: `$01` PLOT, `$02` LINE, `$03` BOX, `$04` BOXFILL, `$05` CLS,
-`$06` SETPAL, `$07` CIRCLE, `$08` CIRCLEFILL, `$09` POINT, `$0A` ELLIPSE,
-`$0B` ELLIPSEFILL, plus `$F1` RESET and `$F2` IDENT. (`$F0` SELFTEST exists in
-the emulator only — see BACKLOG.)
+Commands (as of this era): `$01` PLOT, `$02` LINE, `$03` BOX, `$04` BOXFILL,
+`$05` CLS, `$06` SETPAL, `$07` CIRCLE, `$08` CIRCLEFILL, `$09` POINT, `$0A`
+ELLIPSE, `$0B` ELLIPSEFILL, `$F1` RESET, `$F2` IDENT. (Today the walker
+issues the surviving subset — PIXELW/LINE/BOXFILL/PIXELR/ELLIPSE(FILL)/the
+LINPAT latch — and the rest are retired.)
 
 `video_rgb.v` generates the panel timing (560×297 at 9 MHz = 54.11 Hz, DE-only —
 this panel has no HSYNC/VSYNC) and scans the framebuffer out with 2× doubling.
@@ -146,8 +153,8 @@ this panel has no HSYNC/VSYNC) and scans the framebuffer out with 2× doubling.
 Unlike the CPU, it cannot be. The emulator draws instantaneously and never raises
 BUSY; the RTL takes thousands of clocks and does. Software that polls `GSTAT`
 therefore reads different values on the two models **by design**, so their traces
-diverge legitimately. What must agree is the **framebuffer**, and `fpga/sim/gfx.sh`
-byte-compares it.
+diverge legitimately. What must agree is the **framebuffer**, and the GL RTL
+battery (`emulator/test/c_gl_rtl_test.sh`) byte-compares it.
 
 That leaves the mapping from framebuffer to panel untested by either — which is
 how a shift-width bug that blanked half of every byte reached hardware.

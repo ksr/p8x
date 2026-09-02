@@ -374,3 +374,24 @@ while busy); GWAIT/GEXEC/GSTORE/GARG + all $FF2x equates deleted
 window from gfx.v/p8x_bridge.v + emulator door, glbridge pixelr/w
 -> GL, retire gfx_test/test_gfx*.asm/c_gfx_ce_test, tb splash preps
 gpoke->GL, GID0/GID1 sweep, measure freed LUTs, flash + silicon.
+
+PHASE B COMPLETE 2026-09-01 (commit pending): the $FF20 door is out of
+the DESIGN. Emulator: door cases deleted (floats $FF), gpu_cmd/IDENT/
+SELFTEST/RESET + gx0..gparm2/gpt/gident state gone (gcol+gmode stay --
+GL-owned), bridge_card = $FF50-57 only. RTL: bridge gx path removed
+(device idx: reads $FF, writes swallowed -- protocol frames unchanged),
+gcard top mux collapsed (walker sole master), gfx.v trimmed (IDENT+
+gidx, GID0/GID1, F1/F2 decode, gerr; ptid/GDATA stream stays -- the
+walker's PIXELR pops it), lcd top door also closed. MEASURED: 18,912
+vs 18,916 LUT4 -- the door cost ~4 LUTs, NOTHING; the win is
+architectural. Silicon: flashed + ALL scripts pass (pixrd/blit/10gh/
+10ijk); mandrill 24.6s ~ wire floor. glbridge pixelr/pixelw/probe are
+GL now (scripts unchanged); wait_idle dropped its GSTAT arm -- SAFE
+because the walker sequences PIXRD behind the engine drain (only
+wall-clock timing could tell); GLSTAT bit6 does NOT include engine
+drain (known, documented). Coverage lore: retire a test only after
+folding its unique cases into a survivor (ce radii -> curve rung both
+sides); tb_gcard now asserts the closed-door $FF float on the wire.
+Traps: c_gl_pixrd's devrd() cross-check spun forever on the floating
+$FF (busy bit reads 1) -- grep tests for 6531x/6532x pokes when
+closing a window; emu_bridge echo string "$FF" got shell-interpolated.

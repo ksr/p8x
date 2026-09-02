@@ -15,7 +15,7 @@
 // (8160 bytes, 4 blocks) and every logical pixel is drawn 2x2 on the panel,
 // which fills it exactly and keeps pixels square.
 //
-// Two rules are load-bearing (see emulator/test/gfx_test.sh, which pins them):
+// Two rules are load-bearing (pinned by the GL RTL battery, c_gl_rtl_test.sh):
 //   - endpoints are INCLUSIVE
 //   - off-screen pixels are DISCARDED, not clipped and not wrapped. Coordinates
 //     are 16-bit, and the address arithmetic y*60 + (x>>2) would otherwise fold
@@ -44,8 +44,9 @@
 //   region 2: y--, dy -= 2*rx2; err += 4*rx2 - 4*dy  (and x++, dx += 2*ry2)
 // Every dx'/dy' term uses the NEW value, exactly as the C does after its
 // increment. Three extra cycles per step; the panel cannot tell.
-// PROOF: tb_gl_cpx.v -- both regions, both aspect ratios, fills and
-// outlines, byte-identical to the emulator through the real SDRAM stack.
+// PROOF: tb_gl_cvx.v (battery rung 10) -- both regions, both aspect ratios,
+// fills, outlines and the r=1/r=0 edges, byte-identical to the emulator
+// through the real SDRAM stack.
 
 module gfx (
   input             clk,
@@ -53,7 +54,11 @@ module gfx (
   input             draw_pg,     // framebuffer DRAW page (stage 8b) -- passed
                                  //   straight to gfx_mem; POINT reads it too
 
-  // CPU side. `sel` is the address decode ($FF20-$FF2F); `a` is the low nibble.
+  // Master side. Since the single-interface migration this port belongs to
+  // the GL WALKER (p8x_geom's gm_* signals, wired straight through in the
+  // card top); testbenches drive it directly as scaffolding. `a` is the low
+  // nibble of the old $FF20 register map, which survives as the walker's
+  // private register file.
   input             sel,
   input      [3:0]  a,
   input             wr,
@@ -96,33 +101,14 @@ module gfx (
   reg  [7:0]  gparm, gparm2;                   // ELLIPSE: x- and y-radius
   reg  [15:0] lpat;                            // 10j: LINPAT, MSB first
   reg  [3:0]  lpi;                             //   bit cursor, per primitive
-  reg         gerr;
   reg  [15:0] gdata;                           // POINT result (a 565 colour)
-  reg  [3:0]  gidx;                            // IDENT cursor (0..13 = live)
   reg         ptid;                            // POINT stream: 0 = low next,
                                                //   1 = high next (and parked)
 
-  // IDENT record: "P8X-GFX", version, width, height, pens, 0. Carries the
-  // GEOMETRY so software can ask instead of assume -- the same 14 bytes the
-  // emulator builds in gpu_ident().
-  // Geometry is per-mode and lives in gfx_mem now.
-
-  function [7:0] ident_byte(input [3:0] i);
-    case (i)
-      4'd0: ident_byte = "P";   4'd1: ident_byte = "8";
-      4'd2: ident_byte = "X";   4'd3: ident_byte = "-";
-      4'd4: ident_byte = "G";   4'd5: ident_byte = "F";
-      4'd6: ident_byte = "X";   4'd7: ident_byte = 8'd2;   // protocol 2: direct colour
-      // The CURRENT mode's geometry and pen count -- which is the point of
-      // IDENT: software asks the device what it is, and in mode 1 that is a
-      // different screen. Matches gpu_ident() in the emulator.
-      4'd8:  ident_byte = 8'd224;  4'd9:  ident_byte = 8'd1;   // width  480
-      4'd10: ident_byte = 8'd16;   4'd11: ident_byte = 8'd1;   // height 272
-      4'd12: ident_byte = 8'd0;                                // 0 = no palette
-      4'd13: ident_byte = 8'd16;                               // bits per pixel
-      default: ident_byte = 8'd0;
-    endcase
-  endfunction
+  // (The IDENT record and its cursor, the GID0/GID1 "PG" signature and the
+  // GSTAT ERR bit retired with the CPU door: only the GL walker masters this
+  // register file now, and identity questions are GLID's and the bridge
+  // PING's to answer.)
 
   // ---- framebuffer ---------------------------------------------------------
   // It is not here any more. Both screen modes live in SDRAM (STAGE4-DESIGN.md),
@@ -211,7 +197,7 @@ module gfx (
   wire signed [39:0] ell_s = (st == S_ELC) ? (ella - ellb)
                                            : (ella + ellb);
   reg        efill;
-  reg [3:0]  stp;                              // SELFTEST step
+  
   reg        busy;
 
   wire signed [19:0] e2 = err <<< 1;
@@ -228,7 +214,7 @@ module gfx (
       st <= S_IDLE; px_go <= 0; px_word <= 0;
       gx0 <= 0; gy0 <= 0; gx1 <= 0; gy1 <= 0;
       gcol <= 16'hFFFF;         // white, matching the emulator's reset pen
-      gparm <= 0; gparm2 <= 0; gerr <= 0; gdata <= 0; gidx <= 4'd14; ptid <= 1;
+      gparm <= 0; gparm2 <= 0; gdata <= 0; ptid <= 1;
       lpat <= 16'hFFFF; lpi <= 0;
       gmode2d <= 0; px_modal <= 0;
     end else begin
@@ -246,16 +232,12 @@ module gfx (
       px_go   <= 0;
       px_word <= 0;
 
-      // GDATA streams: the IDENT record, then PIXELR's two bytes (low, then
-      // high, then PARKED on high). The cursor advances on rd_stb -- the
-      // microcycle that actually reads -- never on the address, which lingers
-      // (the ACIA's $FF05 hazard). The IDENT advance was MISSING entirely
-      // before stage 6: nothing consumed the stream on the RTL (the co-sim
-      // checks it on the emulator's console), so the record streamed its
-      // first byte fourteen times, unobserved. Both streams advance here now.
+      // GDATA streams PIXELR's two bytes (low, then high, then PARKED on
+      // high). The cursor advances on rd_stb -- the microcycle that actually
+      // reads -- never on the address, which lingers (the ACIA's $FF05
+      // hazard, inherited by the walker's gm_rd pops).
       if (rd_stb && sel && a == 4'h7) begin
-        if (gidx < 4'd14)  gidx <= gidx + 4'd1;
-        else if (!ptid)    ptid <= 1'b1;       // low consumed; park on high
+        if (!ptid) ptid <= 1'b1;               // low consumed; park on high
       end
 
       // ---- command sequencer ----------------------------------------------
@@ -408,7 +390,6 @@ module gfx (
           4'hF: gparm2 <= wdata;   // GPARM2: ELLIPSE y-radius
           4'hE: gmode2d <= wdata[2:0];   // GMODE (10f LINFUN; GID1 reads)
           4'h5: begin
-            gerr <= 0;
             // modal pixels: PLOT, LINE, BOX outline, CIRCLE, ELLIPSE --
             // every fill (and CLS) replaces regardless of the mode
             px_modal <= (wdata == 8'h01 || wdata == 8'h02 ||
@@ -452,23 +433,15 @@ module gfx (
                 st <= S_ELLI;
               end
               8'h09: begin px_x<=gx0; px_y<=gy0; px_read<=1; px_go<=1;
-                           gidx<=4'd14; st<=S_PIXR; end
-              8'hF1: begin                      // RESET
-                // Clears to 0 (black), NOT to the pen it is about to select --
-                // the lesson recorded here still applies, only the clear
-                // rides S_FILL now (S_CLS retired): px_pen is latched HERE,
-                // before gcol flips to the reset white.
-                bx0 <= 0; by0 <= 0; bx1 <= 18'sd479; by1 <= 18'sd271;
-                cx <= 0; cy <= 0; px_pen <= 16'h0000; px_read <= 0;
-                st <= S_FILL;
-                gcol <= 16'hFFFF; gparm <= 0; gdata <= 0; gidx <= 4'd14;
-                ptid <= 1; lpat <= 16'hFFFF;
-              end
+                           st<=S_PIXR; end
+              // F1 RESET and F2 IDENT are RETIRED with the CPU door: the
+              // walker never issues them (GL RF owns reset semantics, and
+              // the bridge PING answers identity). Unknown commands are
+              // simply ignored -- only the walker speaks here now.
               8'h0C: lpat <= {gparm2, gparm};   // LINPAT (10j): the register
                                                 //   map is full, so the
                                                 //   pattern rides a command
-              8'hF2: gidx <= 0;                 // IDENT: GDATA now streams
-              default: gerr <= 1;
+              default: ;
             endcase
           end
           default: ;
@@ -476,17 +449,13 @@ module gfx (
     end
   end
 
-  // ---- CPU reads -----------------------------------------------------------
-  // Combinational, and GDATA's IDENT cursor advances on the read strobe in the
-  // wrapper (see p8x_soc/p8x_top) so a multi-microcycle address cannot consume
-  // two bytes -- the same hazard the ACIA has at $FF05.
+  // ---- register reads (the WALKER's side now: GSTAT busy poll and the
+  // PIXELR byte stream; the GID0/GID1 "PG" signature and the IDENT record
+  // retired with the CPU door -- GLID and the bridge PING answer identity)
   always @(*) begin
     case (a)
-      4'h6:    rdata = {busy, 6'd0, gerr};       // GSTAT
-      4'h7:    rdata = (gidx < 4'd14) ? ident_byte(gidx)
-                     : (ptid ? gdata[15:8] : gdata[7:0]);
-      4'hD:    rdata = 8'h50;                    // 'P'
-      4'hE:    rdata = 8'h47;                    // 'G'
+      4'h6:    rdata = {busy, 7'd0};             // GSTAT
+      4'h7:    rdata = ptid ? gdata[15:8] : gdata[7:0];
       default: rdata = 8'hFF;
     endcase
   end

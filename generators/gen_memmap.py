@@ -37,46 +37,13 @@ MAP = [
     ('I/O ports ($FF00-$FFFF)', 'CFCMD', 0xFF17, 'command (wr) / status (rd)'),
     ('I/O ports ($FF00-$FFFF)', 'CFSTAT', 0xFF17, ''),
 
-    # Graphics display (GPU). 480x272 RGB565 direct colour -- a pixel IS its
-    # colour, no palette, no modes (stage 6) -- framebuffer in the in-package
-    # SDRAM behind the streaming controller. The engine lives in the DEVICE,
-    # not in software: BASIC loads the coordinate registers and writes GCMD, so
-    # a filled box is ~8 port writes instead of a quarter-million through a
-    # data port. Coordinates are 16-bit low/high pairs (see the high bytes
-    # below); anything off-screen is discarded per pixel (see gpu_px in the
-    # emulator) rather than clipped, so the C and Verilog models agree without
-    # a clipping algorithm.
-    # $F0 SELFTEST also exists, but only in the emulator -- the RTL rejects it
-    # and sets GSTAT's ERR bit, so it is deliberately left off the GCMD list
-    # below rather than advertised as something the board will do.
-    ('I/O ports ($FF00-$FFFF)', 'GX0', 0xFF20, 'draw X0 (0-479)'),
-    ('I/O ports ($FF00-$FFFF)', 'GY0', 0xFF21, 'draw Y0 (0-271)'),
-    ('I/O ports ($FF00-$FFFF)', 'GX1', 0xFF22, 'draw X1 (0-479)'),
-    ('I/O ports ($FF00-$FFFF)', 'GY1', 0xFF23, 'draw Y1 (0-271)'),
-    ('I/O ports ($FF00-$FFFF)', 'GCOL', 0xFF24, 'pen LOW byte -- the pen is a whole RGB565 colour (see GCOLH)'),
-    ('I/O ports ($FF00-$FFFF)', 'GCMD', 0xFF25, 'write executes: 1 PLOT 2 LINE 3 BOX 4 BOXFILL 5 CLS 7 CIRCLE 8 CIRCLEFILL 9 POINT A ELLIPSE B ELLIPSEFILL / F1 RESET F2 IDENT'),
-    ('I/O ports ($FF00-$FFFF)', 'GSTAT', 0xFF26, 'read: bit7 BUSY, bit0 ERR (unknown command)'),
-    ('I/O ports ($FF00-$FFFF)', 'GDATA', 0xFF27, 'read: IDENT record stream, else the last POINT result'),
-    ('I/O ports ($FF00-$FFFF)', 'GPARM', 0xFF28, 'scalar argument: CIRCLE/ELLIPSE x-radius'),
-    # Coordinate HIGH bytes. Writing a low byte CLEARS its high byte, so software
-    # that never touches these cannot be broken by a stale one; write the high
-    # byte after the low when a coordinate exceeds 255. They are not optional
-    # any more: the panel is 480 wide, so 9 bits of X are needed to reach the
-    # right-hand edge at all.
-    ('I/O ports ($FF00-$FFFF)', 'GX0H', 0xFF29, 'X0 high byte (write AFTER GX0)'),
-    ('I/O ports ($FF00-$FFFF)', 'GY0H', 0xFF2A, 'Y0 high byte (write AFTER GY0)'),
-    ('I/O ports ($FF00-$FFFF)', 'GX1H', 0xFF2B, 'X1 high byte (write AFTER GX1)'),
-    ('I/O ports ($FF00-$FFFF)', 'GY1H', 0xFF2C, 'Y1 high byte (write AFTER GY1)'),
-    # Presence signature. An absent card floats the bus to $FF, so a single magic
-    # byte is not enough to detect one; two fixed bytes at fixed addresses are.
-    ('I/O ports ($FF00-$FFFF)', 'GMODE', 0xFF2E, 'write: pixel-write mode (stage 10f LINFUN) -- 0 replace, 1 complement, 2 OR, 3 AND, 4 XOR; applies to lines/points/outlines, fills always replace; 5-7 act as replace. GID1 keeps the read side'),
-    ('I/O ports ($FF00-$FFFF)', 'GID0', 0xFF2D, "read: $50 'P' -- card-presence signature"),
-    # The register page is FULL, and GID0/GID1 are read-only -- their write
-    # decodes are the only spare corners. GCOLH takes $FF2D's write side so a
-    # pen can carry a whole RGB565 colour; $FF2E's write side stays free.
-    ('I/O ports ($FF00-$FFFF)', 'GCOLH', 0xFF2D, 'write: pen HIGH byte (write AFTER GCOL; a GCOL write clears it)'),
-    ('I/O ports ($FF00-$FFFF)', 'GID1', 0xFF2E, "read: $47 'G' -- with GID0 spells PG"),
-    ('I/O ports ($FF00-$FFFF)', 'GPARM2', 0xFF2F, 'ELLIPSE y-radius (GPARM is the x-radius)'),
+    # $FF20-$FF2F: RETIRED (the single-interface migration closed the device
+    # door). The window's registers -- GX0..GY1 pairs, GCOL/GCOLH, GCMD,
+    # GSTAT, GDATA, GPARM/GPARM2, GMODE, the GID0/GID1 "PG" signature -- are
+    # no longer bus-decoded anywhere: the drawing engine survives inside the
+    # card as the GL walker's private register file, and the GL port at
+    # $FF50 is the ONE graphics interface ('G' at GLID is the presence
+    # probe). Reads float $FF like any absent card.
 
     # Stage 8a: the MDU (multiply-divide unit), $FF30-$FF3F. Hardware muldiv,
     # bit-exact to lib_g3d's software contract (STAGE8-DESIGN.md): q = (a*b)/c

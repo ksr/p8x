@@ -46,7 +46,7 @@ b.gl_line("PXR 101 50")
 ok(rbw(b) == 0x0000, "neighbour reads 0")
 b.gl_line("PXR -5 50")
 ok(rbw(b) == 0x0000, "off-window reads 0")
-ok(b.pixelr(100, 221) == 0xFFE0, "device PIXELR agrees at screen (100,221)")
+ok(b.pixelr(100, 221) == 0xFFE0, "pixelr() helper agrees at screen (100,221)")
 # the mapped window
 for line in ["WI -120 120 -120 120", "VWP 104 375 0 271",
              "C 0 63 31", "M 60 60", "POINT"]:

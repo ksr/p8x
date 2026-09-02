@@ -65,8 +65,6 @@ diff is now identical regardless of how stdin is wired.
 | `cf_id.txt`, `boot_in.txt` | CF scripts: IDENTIFY, and boot the OS from disk |
 | `run.sh` | build + run + diff; `run.sh [CYCLES] [ROM] [RXSCRIPT] [CFIMAGE]` |
 | `console.sh` | **interactive** console; `console.sh [ROM] [CFIMAGE]` |
-| `gfx.sh` | RTL drawing engine vs the emulator, **frame by frame** |
-| `tb_gfx.v` | runs a payload and dumps the framebuffer as a PPM |
 | `../rtl/p8x_cpu.v` | the CPU core (transliteration of the emulator microcycle) |
 | `../rtl/p8x_soc.v` | CPU + microcode ROM + 64K memory + minimal sim I/O |
 
@@ -192,12 +190,12 @@ depends on real timing rather than these polled, timing-free models.
 
 ### Graphics: a frame diff, not a cycle diff
 
-```bash
-./gfx.sh            # runs the graphics payloads on both models, cmp's the frames
-```
-
-Three payloads: the drawing primitives, identify/diagnostics/16-bit
-coordinates, and the ellipse. All three match the emulator byte for byte.
+Graphics frame comparison lives with the GL battery now
+(`emulator/test/c_gl_rtl_test.sh`): identical GL byte streams rendered by
+the emulator and by the real RTL stack, whole frames byte-compared. (The
+old `gfx.sh`/`tb_gfx.v` device-door co-sim retired with the
+single-interface migration — the CPU can no longer poke the engine's
+registers, so there is nothing on that path left to compare.)
 
 The drawing engine is verified by byte-comparing the **framebuffer** the RTL
 produces against the one `p8xemu -g` writes, not by diffing CPU traces. That is
@@ -207,13 +205,13 @@ otherwise. A program
 that polls `GSTAT` therefore reads different values on the two models **by
 design**, so a cycle diff would report a divergence that is not a fault.
 
-What must agree is the picture, and it does — to the byte, for both payloads.
-
-This is also why the payloads call `GWAIT` before every command. The device draws
-in real time and **a command issued while another is running aborts it**; the wait
-costs nothing on the emulator (never busy) and is essential on the RTL, so one
-payload is correct on both. Without it the RTL renders a handful of scattered
-pixels while the emulator looks perfect — the first thing this test caught.
+What must agree is the picture, and it does — to the byte, on every battery
+rung. Inside the engine **a command issued while another is running aborts
+it**; the GL walker polls the engine's busy between the primitives it issues
+(the discipline the old payloads carried as `GWAIT` calls), which is why one
+byte stream is correct on both models. Without that wait the RTL renders a
+handful of scattered pixels while the emulator looks perfect — the first
+thing the original frame diff caught.
 
 ### A hazard worth knowing about
 

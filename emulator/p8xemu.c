@@ -26,17 +26,10 @@
  *     FF10 data  FF11 feature  FF12 sector-count  FF13-15 LBA0-2
  *     FF16 head/dev  FF17 command(w)/status(r)  [BSY7 DRQ3 ERR0]
  *   Backs a flat sector-image file (LBA*512); SET FEATURES/IDENTIFY/READ/WRITE.
- *   FF20-FF2F graphics display: 480x272 RGB565 direct colour (a pixel IS its
- *     colour; no palette, no modes -- stage 6) with a drawing engine. Same
- *     device inside the FPGA P8X or on a bus card, so one command set and one
- *     golden model serve both.
- *     FF20-23 X0/Y0/X1/Y1 low  FF29-2C their high bytes  FF24/2D pen low/high
- *     FF28 x-radius  FF2F y-radius (ellipse)  FF25 command  FF26 status
- *     FF27 data  FF2D/2E "PG" presence signature
- *     Commands: 01 PIXELW 02 LINE 04 BOXFILL 09 PIXELR (read)
- *               08 CIRCLEFILL 09 POINT 0A ELLIPSE 0B ELLIPSEFILL
- *               | F0 SELFTEST (emulator only) F1 RESET F2 IDENT
- *     Always present; -g writes the DISPLAY page as a PPM, -G as text.
+ *   FF20-FF2F: CLOSED (single-interface migration). The old device door --
+ *     the graphics engine is still inside (480x272 RGB565, stage 6), but
+ *     only the GL walker drives it now; these addresses float $FF.
+ *     -g writes the DISPLAY page as a PPM, -G as text.
  *   FF30-FF3F MDU: hardware muldiv, bit-exact to lib_g3d's contract (stage 8a).
  *   FF40-FF4F geometry engine: TYPED, COLOURED records in SDRAM (LINE and
  *     filled/outline TRI -- stage 9), matrix transform, clip, project, draw
@@ -139,12 +132,12 @@ static void cf_data_wr(struct cf_state*c, uint8_t v){
    size arguments are history -- see STAGE2/5/6-DESIGN.md for how 240x136/2bpp
    and 480x272/8bpp-palettized each lived and died on the way here.
 
-   The drawing engine belongs to the DEVICE, here and in the RTL -- not to the
-   software. BASIC loads GX0/GY0/GX1/GY1/GCOL and writes GCMD, so a filled box
-   costs a handful of port writes instead of 32640 read-modify-write cycles
-   through a data port (2bpp packs four pixels to a byte, so software plotting
-   would have to mask every single one). GSTAT bit 7 is the busy flag; drawing
-   is instantaneous here, the same way CF never asserts BSY, so it reads 0.
+   The drawing engine belongs to the CARD, here and in the RTL -- not to the
+   software. The GL port ($FF50) is the ONE way in since the single-interface
+   migration closed the $FF20 device door: software streams command bytes and
+   the engine below draws them, so a filled box costs a few stream bytes
+   instead of 32640 read-modify-write cycles through a data port. The gpu_*
+   functions below are the ENGINE the GL walker drives internally.
 
    This is the GOLDEN MODEL. The Verilog engine has to reproduce gpu_line step
    for step or the co-sim diverges, so the Bresenham below is written in the
@@ -183,28 +176,12 @@ static const size_t gfpix=(size_t)480*272;      /* PIXELS, not bytes */
    and BASIC's PALETTE) died with stage 6 -- see STAGE6-DESIGN.md for what was
    given up (recolour-without-redraw) and why 565 is the machine's natural
    ceiling: panel depth, word size, two pixels per bus word, a line per row. */
-/* Coordinates are 16-bit register PAIRS. Writing the low byte clears the high
-   byte, so software that only ever writes lows (everything at 240x136) can
-   never be broken by a stale high byte left behind by something else. Write the
-   high byte AFTER the low one when you need a coordinate past 255. The pairs
-   exist because 480x272 -- this same panel at its native resolution, which is
-   where an SDRAM framebuffer would go -- needs 9 bits for X. */
-static uint16_t gx0,gy0,gx1,gy1;
-/* The pen is a whole RGB565 colour. GCOL is its low byte and follows the same
-   rule as the coordinate pairs: a low write CLEARS the high byte, so 8-bit
-   software can never inherit a stale one. GCOLH is the WRITE side of $FF2D --
-   the register page is full, and GID0's read-only signature leaves its write
-   decode free (see STAGE6-DESIGN.md). */
+/* The pen is a whole RGB565 colour, owned by the GL COLOR verb. (The old
+   $FF20 register pairs -- gx0..gy1, the GCOL/GCOLH split, GPARM, the IDENT
+   record -- left with the device door: the walker passes coordinates as
+   arguments and reads pixels directly.) */
 static uint16_t gcol;
 static uint8_t  gmode;                 /* 10f LINFUN pixel-write mode */
-static uint8_t  gparm, gparm2, gerr;
-/* GDATA ($FF27) is the one read-back port: it streams the IDENT record after an
-   IDENT command, and otherwise holds the result of the last POINT. gidx is the
-   stream cursor; POINT parks it at the end so a pixel read is not mistaken for
-   another IDENT byte. */
-#define GIDLEN 14
-static uint8_t  gident[GIDLEN];
-static int      gidx=GIDLEN;
 
 /* Stage 8a MDU ($FF30-$FF3F): hardware muldiv, bit-exact to lib_g3d's
    software contract (STAGE8-DESIGN.md). Operands follow the gfx pair rules
@@ -1394,12 +1371,6 @@ static void gl_push(uint8_t b){
     else gl_hexb(b);
 }
 
-/* POINT's answer is 16 bits and GDATA is a byte port, so it STREAMS: low byte
-   then high, the same idiom as the IDENT record. Reads past the second byte
-   return the high byte again (parked), so a sloppy extra read is harmless and
-   deterministic. The RTL must match byte order and parking. */
-static uint8_t  gpt[2];
-static int      gpidx=2;
 static const char *gdump=0;            /* -g FILE: write a PPM when the run ends */
 static int      gascii=0;              /* -G: also render as text to stderr      */
 
@@ -1496,82 +1467,10 @@ static void gpu_ellipse(int cx,int cy,int rx,int ry,uint16_t c,int fill){
     }
 }
 
-/* IDENT builds a fixed 14-byte record that GDATA then streams out, the same
-   shape as the CF card's IDENTIFY -> data-port idiom the firmware already
-   knows. It carries the GEOMETRY, so software can ask the card how big it is
-   instead of assuming: that is what lets one BASIC binary drive both this
-   240x136 device and a wider one later. */
-static void gpu_ident(void){
-    memcpy(gident,"P8X-GFX",7);
-    gident[7]=2;                        /* protocol 2: direct colour */
-    gident[8]=gw&0xFF; gident[9]=gw>>8;     /* 480 */
-    gident[10]=gh&0xFF; gident[11]=gh>>8;   /* 272 */
-    gident[12]=0;                       /* pens: 0 = no palette, direct colour */
-    gident[13]=16;                      /* bits per pixel -- ask, don't assume */
-    gidx=0;                             /* GDATA now streams the record */
-}
-/* SELFTEST: a fixed pattern drawn entirely from the card's own state, so a
-   display with no software behind it can still be proven end to end -- power it
-   up, poke one register, and every pen, both drawing primitives and all four
-   edges are on screen. Deterministic, so a test can assert on it. */
-static void gpu_selftest(void){
-    static const uint16_t bar[4]={0x0000,0xF800,0x07E0,0x001F}; /* K R G B */
-    memset(gfb,0,gfpix*sizeof *gfb);   /* gfb is a page POINTER now */
-    for(int i=0;i<4;i++)                                  /* colour bars */
-        gpu_box(i*(gw/4), 0, i*(gw/4)+(gw/4)-1, gh/4, bar[i], 1);
-    gpu_box(0,0,gw-1,gh-1,0xFFFF,0);                      /* extreme edges */
-    gpu_line(0,0,gw-1,gh-1,0xFFE0);                       /* both diagonals */
-    gpu_line(gw-1,0,0,gh-1,0xFFE0);
-    gpu_ellipse(gw/2,gh/2,gh/3,gh/3,0x07FF,0);
-}
-/* SETMODE. Changing mode reinterprets every byte of the framebuffer, so the old
-   contents are meaningless -- it clears, and loads the palette that belongs to
-   the mode. Loading the palette here rather than sharing one across both is
-   what keeps mode 0 exactly as it was: its four pens are the classic
-   black/white/red/green, while mode 1 comes up with a 3-3-2 ramp so that a
-   program which never touches PALETTE still sees sensible colour.
-   Returns 0 on an unknown mode, which the caller turns into GSTAT's ERR bit. */
-static void gpu_reset(void){
-    gpat = 0xFFFF;                 /* 10j: line pattern to solid */
-    memset(gfb,0,gfpix*sizeof *gfb);   /* gfb is a page POINTER now */
-    /* The reset pen is WHITE (0xFFFF), because the historical default "pen 1"
-       meant white back when there were four pens, and a visible default is the
-       one that costs nobody a debugging round. The RTL must match. */
-    gx0=gy0=gx1=gy1=0; gcol=0xFFFF; gparm=0; gparm2=0; gerr=0; gidx=GIDLEN;
-    gmode=0;
-    gpt[0]=gpt[1]=0; gpidx=2;
-}
-static void gpu_cmd(uint8_t v){
-    switch(v){
-    case 0x01: gpu_px(gx0,gy0,gcol);                break;   /* PIXELW     */
-    case 0x02: gpu_line(gx0,gy0,gx1,gy1,gcol);      break;   /* LINE       */
-    case 0x04: gpu_box(gx0,gy0,gx1,gy1,gcol,1);     break;   /* BOXFILL    */
-    /* 0x03 (BOX outline), 0x05 (CLS) and 0x07/0x08 (CIRCLE) are RETIRED
-       (stage-10 diet): four LINEs, BOXFILL 0,0,479,271 and ELLIPSE rx=ry
-       cover them, and the fabric they paid for bought the PGC's curves,
-       patterns and text. 0x06 was SETPAL (retired with the palette).
-       All of them read as unknown -> ERR now. */
-    case 0x0A: gpu_ellipse(gx0,gy0,gparm,gparm2,gcol,0); break; /* ELLIPSE     */
-    case 0x0B: gpu_ellipse(gx0,gy0,gparm,gparm2,gcol,1); break; /* ELLIPSEFILL */
-    case 0x0C: gpat = (uint16_t)(gparm | (gparm2 << 8)); break;  /* LINPAT (10j):
-                                      latch {GPARM2,GPARM} -- the register
-                                      map is full, so the pattern rides a
-                                      command, like the GL walker writes it */
-    /* PIXELR reads a pixel back into GDATA, which is what BASIC's PIXELR()
-       function needs. Off-screen reads as pen 0, matching the write side's
-       "off-screen simply is not there" rule. */
-    case 0x09: { uint16_t p = ((unsigned)gx0<(unsigned)gw && (unsigned)gy0<(unsigned)gh)
-                                ? gpu_pixel(gx0,gy0) : 0;
-                 gpt[0]=(uint8_t)(p&0xFF); gpt[1]=(uint8_t)(p>>8);
-                 gpidx = 0;           /* GDATA now streams low, then high */
-                 gidx  = GIDLEN; }    /* and is NOT an IDENT stream */
-               break;                                        /* POINT      */
-    case 0xF0: gpu_selftest();                      break;   /* SELFTEST   */
-    case 0xF1: gpu_reset();                         break;   /* RESET      */
-    case 0xF2: gpu_ident();                         break;   /* IDENT      */
-    default:   gerr=1; break;         /* unknown command: flagged in GSTAT */
-    }
-}
+/* (The device door's command dispatcher -- gpu_cmd, with IDENT, SELFTEST
+   and RESET -- left with the $FF20 window: the GL walker calls the gpu_*
+   primitives above directly, passing coordinates as arguments, and the GL
+   RF verb owns reset semantics.) */
 /* P6 PPM at PANEL resolution: each framebuffer pixel becomes a 2x2 block, so
    the file shows what the panel shows, not what the framebuffer holds. */
 static void gpu_writeppm(const char*fn){
@@ -1725,11 +1624,11 @@ static int rx_char(void){
     term_restore(); exit(0);
 }
 /* ---- stage CARD-EDGE: the -B bridge client ------------------------------
-   With -B <tty>, every access to the CARD WINDOWS -- the 2D device
-   ($FF20-$FF2F) and the GL port ($FF50-$FF57) -- is forwarded over the
-   serial card-edge protocol (CARD-EDGE-DESIGN.md; the C twin of
-   glbridge.py) to a REAL graphics card. Everything else (CPU, RAM,
-   storage, console, MDU) stays local. The local framebuffer is never
+   With -B <tty>, every access to the CARD WINDOW -- the GL port
+   ($FF50-$FF57), the one graphics interface since the device door
+   closed -- is forwarded over the serial card-edge protocol
+   (CARD-EDGE-DESIGN.md; the C twin of glbridge.py) to a REAL graphics
+   card. Everything else (CPU, RAM, storage, console, MDU) stays local. The local framebuffer is never
    painted in this mode: pixels exist on the card's panel, POINT reads
    come back over the wire, and -g dumps stay black by design.
    GLDATA writes go as single WRITEs -- the running P8X software already
@@ -1767,7 +1666,7 @@ static void bridge_flush(void){
     }
 }
 static int bridge_card(uint16_t ad){
-    return (ad>=0xFF20&&ad<=0xFF2F) || (ad>=0xFF50&&ad<=0xFF57);
+    return (ad>=0xFF50&&ad<=0xFF57);    /* GL only: the device door is closed */
 }
 static uint8_t bridge_recv1(void){
     uint8_t b; int n; int spins=0;
@@ -1815,15 +1714,9 @@ static uint8_t memrd(uint16_t ad){
     case 0xFF10: return cf[cf_active].img? cf_data_rd(&cf[cf_active]) : 0xFF;  /* CF data */
     case 0xFF17: return cf[cf_active].img?                                     /* CF status */
                         (0x40|(cf[cf_active].drq?0x08:0)|(cf[cf_active].err?0x01:0)) : 0xFF;
-    /* GPU. BUSY is never set here: drawing is instantaneous, the same licence
-       the CF model takes with BSY. The RTL engine does raise it, and software
-       must poll -- so BASIC will spin on GSTAT even though it never spins here. */
-    case GSTAT:  return (uint8_t)(gerr?0x01:0x00);
-    case GDATA:  if (gidx<GIDLEN) return gident[gidx++];
-                 if (gpidx<2)     return gpt[gpidx++];
-                 return gpt[1];                /* parked on the high byte */
-    case GID0:   return 0x50;                      /* 'P' */
-    case GID1:   return 0x47;                      /* 'G' -- "PG", not a floating $FF */
+    /* The $FF20-$FF2F device door is CLOSED (single-interface migration):
+       reads float to $FF like any absent card, exactly as the fabric now
+       behaves. The engine survives inside -- the GL walker drives it. */
     /* MDU reads. Instant, so MDSTAT is never busy (see the mdu_exec note). */
     case MDQ:    return (uint8_t)(mdq & 0xFF);
     case MDQH:   return (uint8_t)(mdq >> 8);
@@ -1860,25 +1753,8 @@ static void memwr(uint16_t ad,uint8_t v){
     if(ad==0xFF06){ irq_pending=1; return; }   /* rev C: raise a maskable IRQ (models a device) */
     if(ad==0xFF05){ putchar(v); fflush(stdout); rx_misses=0; return; }
     if(ad==0xFF16){ cf_active=v&1; return; }  /* CFHEAD: ATA device select (bit 0) */
-    /* GPU: the coordinate/pen registers just latch; writing GCMD executes.
-       A low-byte write CLEARS the matching high byte -- see the note by the
-       register declarations -- so 8-bit software can never inherit a stale one. */
-    switch(ad){
-      case GX0:  gx0=v;  return;
-      case GY0:  gy0=v;  return;
-      case GX1:  gx1=v;  return;
-      case GY1:  gy1=v;  return;
-      case GX0H: gx0=(uint16_t)((gx0&0xFF)|(v<<8)); return;
-      case GY0H: gy0=(uint16_t)((gy0&0xFF)|(v<<8)); return;
-      case GX1H: gx1=(uint16_t)((gx1&0xFF)|(v<<8)); return;
-      case GY1H: gy1=(uint16_t)((gy1&0xFF)|(v<<8)); return;
-      case GCOL: gcol=v; return;             /* low write CLEARS the high byte */
-      case GCOLH:gcol=(uint16_t)((gcol&0xFF)|(v<<8)); return;
-      case GPARM: gparm=v;  return;
-      case GPARM2:gparm2=v; return;
-      case GMODE: gmode=(uint8_t)(v&7); return;   /* 10f: pixel-write mode */
-      case GCMD: gerr=0; gpu_cmd(v); return;
-    }
+    /* The $FF20-$FF2F device door is CLOSED: writes fall through to nothing,
+       like any absent card. */
     /* MDU writes: pairs latch (low write clears high), MDGO computes. */
     switch(ad){
       case MDA:  mda=v; return;

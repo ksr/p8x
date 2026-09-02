@@ -571,41 +571,38 @@ disk and run-from-OS builds (the standalone whole-ROM build has no card access).
 | 65280 / `$FF00` | switch input port (`PEEK`) |
 | 65282 / `$FF02` | LED output port (`POKE`) |
 | 65284–65285 / `$FF04–05` | 6850 ACIA status / data |
-| 65312–65327 / `$FF20–2F` | the graphics display (see below) |
+| 65360–65367 / `$FF50–57` | the graphics display's GL port (see below) |
 
 So `POKE 65282, 170` lights an LED pattern, and `PRINT PEEK(65280)` reads the
 switches.
 
-The display's own registers are reachable too. The statements above now cover
-every command the device implements, so this is for poking at the hardware
-directly rather than for reaching anything you otherwise could not:
+The display's GL port is reachable too. The statements above cover the whole
+language, so this is for poking at the hardware directly rather than for
+reaching anything you otherwise could not:
 
-| Address | | Address | |
-|---|---|---|---|
-| 65312 | X0 | 65316 | pen |
-| 65313 | Y0 | 65317 | **command** |
-| 65314 | X1 | 65318 | status (bit 7 busy, bit 0 error) |
-| 65315 | Y1 | 65319 | data — `POINT` result / `IDENT` stream |
-| 65321–65324 | X0/Y0/X1/Y1 high bytes | 65320 | radius (x-radius for an ellipse) |
-| 65325/65326 | `"P"`/`"G"` presence signature | 65327 | y-radius (ellipse) |
+| Address | |
+|---|---|
+| 65360 | `GLDATA` — write one GL command byte |
+| 65361 | `GLSTAT` — bit 7 FIFO full, bit 6 busy, bit 1 error queued, bit 0 read-back byte ready |
+| 65362 | `GLRB` — pop one read-back byte (a `PIXRD` reply, low then high) |
+| 65363 | `GLERR` — pop one error byte (0 = none) |
+| 65364 | `GLID` — reads `"G"` (71) when the engine is fitted |
 
-Write a coordinate's **low byte first** — the device clears the matching high
-byte when the low one is written, so the other order loses it.
-
-Commands: 1 plot, 2 line, 3 box, 4 box filled, 5 clear, 6 set palette, 7 circle,
-8 circle filled, 9 point, 10 ellipse, 11 ellipse filled, 241 reset, 242 ident.
-So a circle of radius 40 at the centre is:
+Poll `GLSTAT` bit 7 before each `GLDATA` write (the FIFO can fill), and use
+`GLID` to tell a missing display from a broken one — an absent card floats
+every address to 255. A hand-poked white pixel at the centre of the window:
 
 ```basic
-10 POKE 65316,2 : POKE 65312,120 : POKE 65313,68
-20 POKE 65320,40 : POKE 65317,7
+10 POKE 65360,6 : POKE 65360,31 : POKE 65360,63 : POKE 65360,31
+20 POKE 65360,16 : POKE 65360,240 : POKE 65360,0 : POKE 65360,136 : POKE 65360,0
+30 POKE 65360,8
 ```
 
-Command 240 is a built-in self-test pattern, and it is **emulator-only** — the
-FPGA rejects it and sets the error bit, so on real hardware it draws nothing.
-Use the presence signature at 65325/65326 to tell a missing display from a
-broken one. **Caution:** BASIC keeps its program and variables in low RAM
-(around `$8000–$82xx`); poking there can corrupt your program.
+(The `GL` statement does exactly this with less typing.) The old device
+register window at `$FF20–2F` closed with the single-interface migration —
+those addresses read 255 now. **Caution:** BASIC keeps its program and
+variables in low RAM (around `$8000–$82xx`); poking there can corrupt your
+program.
 
 ## Examples
 

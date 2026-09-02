@@ -1,8 +1,8 @@
 #!/bin/sh
 # Run the P8X interactively with the GRAPHICS CARD as the display: the
 # CPU, OS, BASIC and disk live in the emulator on this machine; every
-# $FF20/$FF50 access crosses the serial bridge to the card, whose panel
-# shows the pixels (CARD-EDGE-DESIGN.md -- idea 1's daily driver).
+# GL-port ($FF50) access crosses the serial bridge to the card, whose
+# panel shows the pixels (CARD-EDGE-DESIGN.md -- idea 1's daily driver).
 #
 #   ./os/runcard.sh [serial-device]
 #

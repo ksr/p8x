@@ -158,11 +158,9 @@ module p8x_top(
   wire acia_st  = (mem_addr == 16'hFF04);
   wire acia_dat = (mem_addr == 16'hFF05);
   wire is_cf    = (mem_addr >= 16'hFF10) && (mem_addr <= 16'hFF17);
-`ifdef LCD
-  wire is_gfx   = (mem_addr >= 16'hFF20) && (mem_addr <= 16'hFF2F);
-`else
-  wire is_gfx   = 1'b0;
-`endif
+  // $FF20-$FF2F: the retired device door -- no decode; the register file
+  // behind it is the GL walker's private property (single-interface
+  // migration). Reads fall through to the $FF float below.
   // The MDU (stage 8a, $FF30-$FF3F) is display-independent: every build
   // flavour carries it, so software's MDID probe answers on all of them.
   wire is_mdu   = (mem_addr >= 16'hFF30) && (mem_addr <= 16'hFF3F);
@@ -270,10 +268,9 @@ module p8x_top(
     .e_req(e_req), .e_we(e_we), .e_word(e_word), .e_addr(e_addr),
     .e_din(e_din), .e_ack(e_ack), .e_ready(e_ready));
 
-  // The geometry engine (stage 8b) owns the gfx register port while it
-  // renders -- it is a hardware BASIC, writing the same registers software
-  // does. A CPU gfx access during a render is dropped (writes) or reads the
-  // engine's register instead of its own: poll GESTAT first, the house rule.
+  // The geometry engine owns the gfx register port outright since the
+  // single-interface migration -- its walker writes the same registers
+  // software once poked through the door.
   wire        gm_own, gm_wr, gm_rd;
   wire [3:0]  gm_a;
   wire [7:0]  gm_wdata;
@@ -293,11 +290,11 @@ module p8x_top(
           .frame_tick(frame_tick), .draw_pg(draw_pg), .disp_pg(disp_pg));
 
   gfx GFX(.clk(clk), .rst(rst), .draw_pg(draw_pg),
-          .sel(gm_own ? 1'b1 : is_gfx),
-          .a(gm_own ? gm_a : mem_addr[3:0]),
-          .wr(gm_own ? gm_wr : (cen && mem_we && is_gfx)),
-          .rd_stb(gm_own ? gm_rd : (cen && mem_rd && is_gfx)),
-          .wdata(gm_own ? gm_wdata : mem_dout), .rdata(gfx_rdata),
+          .sel(gm_own),
+          .a(gm_a),
+          .wr(gm_wr),
+          .rd_stb(gm_rd),
+          .wdata(gm_wdata), .rdata(gfx_rdata),
           .e_req(e_req), .e_we(e_we), .e_word(e_word), .e_addr(e_addr),
           .e_din(e_din), .e_ack(e_ack), .e_ready(e_ready), .e_dout(sd_dout));
 
@@ -321,7 +318,6 @@ module p8x_top(
   wire [7:0] io_rd = acia_st  ? {6'b0, ~tx_busy, rx_have} :
                      acia_dat ? rx_hold :
                      is_cf    ? cf_rdata :
-                     is_gfx   ? gfx_rdata :
                      is_gl    ? geom_rdata :
                      is_mdu   ? mdu_rdata : 8'hFF;
   assign mem_din = is_io ? io_rd : mem_q;

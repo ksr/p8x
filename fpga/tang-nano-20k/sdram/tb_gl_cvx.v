@@ -212,6 +212,18 @@ module tb;
     glb(8'h06); glb(8'd0); glb(8'd0); glb(8'd31);        // COLOR blue
     glb(8'h10); glw(16'd100); glw(16'd60);
     glb(8'h39); glw(16'd80); glw(16'd30);                // ELIPSE 80 30
+    // tall filled ellipse + r=1/r=0 edges (inherited from the retired
+    // device-door ce test) -- byte for byte with gl_cv.c
+    glb(8'h06); glb(8'd31); glb(8'd63); glb(8'd0);       // COLOR yellow
+    glb(8'hE0); glb(8'd1);
+    glb(8'h10); glw(16'd420); glw(16'd90);
+    glb(8'h39); glw(16'd25); glw(16'd60);                // ELIPSE fill 25x60
+    glb(8'hE0); glb(8'd0);
+    glb(8'h06); glb(8'd31); glb(8'd63); glb(8'd31);      // COLOR white
+    glb(8'h10); glw(16'd20); glw(16'd250);
+    glb(8'h38); glw(16'd1);                              // CIRCLE r=1
+    glb(8'h10); glw(16'd30); glw(16'd250);
+    glb(8'h38); glw(16'd0);                              // CIRCLE r=0: nothing
     glb(8'h3C);                     // retired ARC opcode: err1, skip
     glb(8'h3D);                     // retired SECTOR opcode: err1, skip
     glb(8'h06); glb(8'd0); glb(8'd63); glb(8'd31);       // COLOR teal

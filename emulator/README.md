@@ -36,8 +36,8 @@ make            # builds p8xemu and regenerates the microcode (u0-u3.bin)
 - **Ctrl-\\ shows the display without ending the run** (SIGQUIT), so you can draw,
   look, and carry on in the same session — which is the only way experimenting
   with graphics is bearable. It works with or without `-g`/`-G`: with neither, you
-  get the text view anyway, since pressing it means you want to see something. The display itself is **always present** at
-  `$FF20–$FF26`; these flags only decide whether you get to see it. See
+  get the text view anyway, since pressing it means you want to see something. The display itself is **always present** behind
+  the GL port at `$FF50`; these flags only decide whether you get to see it. See
   [The graphics display](#the-graphics-display) below.
 - `-t` — instruction trace. `-l N` — halt after N cycles.
 - The 6850 ACIA is wired to stdin/stdout, so the monitor/OS/BASIC are interactive.
@@ -73,7 +73,7 @@ make test-cf     # monitor format/boot against the CF model
 make test-os     # P8X/OS boot + shell on flat and v2 volumes
 make test-basic  # monitor smoke test, disk BASIC (B), SAVE/LOAD
 make test-io     # switch input (-s) -> $FF00 and LED writes ($FF02, -L)
-make test-gfx    # $FF20 display: draw through the ports, assert on pixels
+make test-gfx    # graphics: the GL port, the C library, the image twins
 ```
 
 Test scripts and fixtures live in [`test/`](test/); their build artifacts
@@ -82,101 +82,70 @@ Test scripts and fixtures live in [`test/`](test/); their build artifacts
 ## The graphics display
 
 A 480x272 framebuffer in **RGB565 direct colour** — a pixel IS its colour —
-with a drawing engine, at `$FF20–$FF2F`, plus the GL/PGC graphics-language
-port at `$FF50–$FF57`. On the board the device is the Tang Nano 20K graphics
-card: two framebuffer pages live in the FPGA's in-package SDRAM behind a
-streaming controller (`FLIP` swaps them). The emulator is the golden model —
-the RTL is byte-compared against it frame by frame.
+with a drawing engine behind the GL/PGC graphics-language port at
+`$FF50–$FF57`, the ONE graphics interface since the single-interface
+migration. On the board the device is the Tang Nano 20K graphics card: two
+framebuffer pages live in the FPGA's in-package SDRAM behind a streaming
+controller (`FLIP` swaps them). The emulator is the golden model — the RTL
+is byte-compared against it frame by frame.
 
 (The original stage-4 device was 240x136 with four palettized pens in block
-RAM; direct colour retired the palette, `SETPAL` and the modes in stages 5–6,
-and the SDRAM controller bought the full panel resolution.)
+RAM; direct colour retired the palette, `SETPAL` and the modes in stages
+5–6, and the SDRAM controller bought the full panel resolution. Until
+2026-09-01 the engine was also CPU-poked directly through a register window
+at `$FF20–$FF2F` — the "device door". That window is CLOSED: those
+addresses float `$FF` here and on the fabric, and the register file behind
+it survives only as the GL walker's internal property. Its primitives —
+PIXELW, LINE, BOXFILL, PIXELR, ELLIPSE(FILL), the LINPAT latch — are
+exactly what the walker issues while interpreting GL.)
 
-**The drawing engine is in the device, not in software.** Load the registers,
-then write `GCMD`:
+**The drawing engine is in the card, not in software.** Software streams GL
+bytes; the `gpu_*` functions here are the engine those bytes drive, and the
+RTL must reproduce them step for step.
 
-| Port | Name | |
-|------|------|---|
-| `$FF20`–`$FF23` | `GX0` `GY0` `GX1` `GY1` | coordinate low bytes |
-| `$FF29`–`$FF2C` | `GX0H` `GY0H` `GX1H` `GY1H` | coordinate high bytes — a low-byte write clears its high partner |
-| `$FF24` / `$FF2D` | `GCOL` / `GCOLH` | the pen, a whole RGB565 colour (write-only; `GID0` is `$FF2D`'s read side); **sticky** across commands |
-| `$FF28` / `$FF2F` | `GPARM` / `GPARM2` | scalar arguments (ellipse radii; the `LINPAT` pattern pair) |
-| `$FF25` | `GCMD` | write to execute |
-| `$FF26` | `GSTAT` | read: bit 7 BUSY, bit 0 ERR (unknown command) |
-| `$FF27` | `GDATA` | read: the `IDENT` record, else the last `PIXELR` colour (low byte then high) |
-| `$FF2E` | `GMODE` (write) | drawing mode: 0 replace, 1 complement, 2 OR, 3 AND, 4 XOR (stage 10f) |
-| `$FF2D`/`$FF2E` | `GID0`/`GID1` (read) | `$50`/`$47` — "PG" |
+**Inside the walker's register file, coordinates are 16-bit pairs and a
+low-byte write CLEARS its high partner** — the rule that once protected
+8-bit software from stale high bytes, now simply how the walker loads its
+own registers. The pairs exist because 480x272 needs 9 bits of X.
 
-| Cmd | | Cmd | |
-|---|---|---|---|
-| `$01` | `PIXELW` (X0,Y0) | `$0A` | `ELLIPSE` — radii `GPARM` (x), `GPARM2` (y) |
-| `$02` | `LINE` (X0,Y0)–(X1,Y1) | `$0B` | `ELLIPSEFILL` |
-| `$04` | `BOXFILL` solid | `$0C` | latch `LINPAT` — the 16-bit line pattern {`GPARM2`,`GPARM`} |
-| `$09` | `PIXELR` — pixel at (X0,Y0) → `GDATA` | `$F1` | `RESET` — clear, white pen, solid pattern |
-| `$F0` | `SELFTEST` — pattern (**emulator only**) | `$F2` | `IDENT` → 14 bytes via `GDATA` |
+That matters for speed: a filled box is a handful of stream bytes instead of
+a read-modify-write per pixel through a data port -- and bulk pixel traffic
+rides the GL `BLIT` verb, whose payload is two wire bytes per pixel.
 
-`BOX` outline, `CLS` and `CIRCLE`/`CIRCLEFILL` were retired by the stage-10
-diet: four `LINE`s, a full-screen `BOXFILL` and the ellipse with rx=ry are
-the same pixels, and their walkers' fabric bought the PGC language's curves,
-patterns and text (see `fpga/tang-nano-20k/sdram/STAGE10-DESIGN.md`). The GL
-walker at `$FF50` **masters** this device internally — its drawing rewrites
-the pen and coordinate registers. No shipped software drives this door
-directly any more (the single-interface migration moved the C gfx library,
-`image` and the monitor splash onto GL); it remains the walker's internal
-register file and a debugging window.
+Two engine behaviours are load-bearing, and the GL RTL battery
+(`test/c_gl_rtl_test.sh`) pins both down because the RTL engine has to match
+them exactly:
 
-**`SELFTEST` needs no software behind it** — one register write puts colour
-swatches, both primitives, an ellipse and all four screen edges up, which is
-how you tell a dead card from a dead driver.
-
-> **`SELFTEST` is emulator-only.** The RTL drops `$F0` into its `default` arm and
-> sets the error bit, so on the board it draws nothing. Every other command is
-> implemented in both. Tracked in [BACKLOG.md](../BACKLOG.md).
-
-**Coordinates are 16-bit pairs, and writing a low byte CLEARS its high byte.**
-So code that only ever writes low bytes can never inherit a stale high byte from
-something else; write the high byte *after* the low one when you need a
-coordinate past 255. The pairs exist because 480x272 needs 9 bits of X.
-
-That matters for speed: a filled box is a handful of port writes instead of
-a read-modify-write per pixel through a data port. On the wire to the real
-card the same arithmetic dominates the other way -- per-pixel drawing (IMAGE,
-GTEXT) pays bridge round-trips per pixel, which is the BACKLOG's
-faster-image-transfer item.
-
-Two behaviours are load-bearing, and `test/gfx_test.sh` pins both down because
-the RTL engine will have to match them exactly:
-
-- **Endpoints are inclusive.** A box from (0,0) to (239,135) paints all four
+- **Endpoints are inclusive.** A box from (0,0) to (479,271) paints all four
   extreme edges.
-- **Off-screen pixels are discarded, not clipped.** The coordinate registers are
-  bytes, so x=240–255 is reachable, and the address arithmetic `y*60 + (x>>2)`
-  would fold those onto the *start of the next row*. Discarding per pixel is the
-  one rule that is trivially identical in C and in Verilog; a real clipper would
-  be two implementations that have to agree.
+- **Off-screen pixels are discarded, not clipped.** The engine's coordinates
+  are 16-bit, so far-off-screen values are reachable, and the address
+  arithmetic would fold them onto the *start of the next row*. Discarding per
+  pixel is the one rule that is trivially identical in C and in Verilog; a
+  real clipper would be two implementations that have to agree. (The GL 2D
+  primitives ALSO window-clip before the engine sees them -- this rule is
+  about what the engine itself does with what arrives.)
 
 `p8xemu` is the golden model for the FPGA, so this is the specification the
-Verilog engine gets written against — including `gpu_line`'s Bresenham, which the
-RTL must reproduce step for step. `fpga/sim/gfx.sh` runs the same payloads on
-both and byte-compares the frames.
-
-It matches, on all three payloads.
+Verilog engine gets written against — including `gpu_line`'s Bresenham, which
+the RTL must reproduce step for step. The battery streams identical GL bytes
+to both and byte-compares whole frames.
 
 ### BUSY is real on hardware, and this model hides it
 
-**Software must poll `GSTAT` bit 7 before issuing a command.** Here, drawing is
-instantaneous and BUSY always reads 0 — but the RTL engine takes one clock per
-byte for `CLS` and about seven and a half per pixel otherwise (a full-screen
-fill is roughly 9 ms), and
-**a command written while another is running aborts it**.
+**Software must poll `GLSTAT` bit 6 to see its own GL work finish.** Here,
+interpretation and drawing are instantaneous and busy always reads 0 — but the
+RTL walker takes real clocks (a full-screen fill is milliseconds), and inside
+the engine **a command issued while another is running aborts it** — which is
+why the RTL walker polls the engine's busy between every primitive it issues,
+the discipline software used to carry when the device door was open.
 
 That asymmetry is deliberate and it is the same licence the CF model takes with
 BSY, but it is worth stating plainly because of how it fails: code developed
-against this model alone looks perfect here and draws a handful of scattered
-pixels on the FPGA. Because the poll costs nothing when BUSY is never set, one
-binary is correct on both — which is exactly what makes the frame comparison in
-`gfx.sh` meaningful. BASIC does this in `GWAIT`/`GEXEC`; the test payloads call
-`GWAIT` before every command.
+against this model alone looks perfect here and misbehaves on the FPGA.
+Because the poll costs nothing when busy is never set, one binary is correct
+on both — which is exactly what makes the battery's frame comparisons
+meaningful. BASIC drains through `glv_dn` after every drawing statement.
 
 ## Other targets
 

@@ -699,9 +699,25 @@ door, then close it. One verb at a time, each shipped end to end.
   GCHECK is GLID-only and the dead device helpers (GWAIT/GEXEC/
   GSTORE/GARG + their BASRAM scratch and every $FF2x equate) are
   gone. NOTHING SHIPPED TOUCHES $FF20 ANY MORE.
-- **Then (phase B):** remove the CPU-facing $FF20 window from the
-  fabric -- the register file stays as the walker's internal property
-  -- and measure what the door was costing.
+- **THE DOOR CLOSED -- phase B, 2026-09-01.** The $FF20 CPU window is
+  gone from the fabric: the bridge dropped its device path (device idx
+  read $FF, writes swallowed -- the wire contract of a closed window),
+  the card top wires the walker straight into gfx with no mux, and
+  gfx.v shed the CPU-only furniture (IDENT record + cursor, the
+  GID0/GID1 "PG" signature, RESET/SELFTEST decode, the GSTAT ERR bit).
+  The register file survives as the walker's private property. The
+  emulator matches: $FF20-$FF2F floats $FF, gpu_cmd and its state
+  deleted, -B forwards GL only. glbridge's pixelr/pixelw/probe became
+  GL verbs, so every silicon script ran unchanged -- ALL PASS on the
+  flashed doorless bitstream, retired-idx float verified on the wire.
+  MEASURED: 18,912/91% LUT4 seed 1 vs 18,916 before -- the door's
+  fabric cost was ~4 LUT4, i.e. NOTHING (narrow plumbing; the walkers
+  were always where the area went). The payoff is architectural: one
+  interface to define, test, bridge and co-simulate. Coverage moved,
+  not lost: the door tests retired after their unique radii/edge cases
+  were folded into the GL curve rung (both sides); tb_gcard asserts
+  the closed-door $FF float through real protocol bytes; the 14-rung
+  battery stayed byte-identical throughout.
 
 ## Verification ladder (per rung, the usual order)
 

@@ -222,10 +222,10 @@ set and one golden model (`gpu_*` in `emulator/p8xemu.c`) serve both.
 | **drawing engine** | The state machine *in the device* that renders a primitive from the coordinate registers. Why a filled box is ~8 port writes and not 32640 read-modify-writes. |
 | **Bresenham / midpoint** | The integer line and circle/ellipse algorithms. Transliterated between C and Verilog step for step — a cleverer version that lights a different pixel is a bug, because the co-sim compares framebuffers byte for byte. |
 | **DE-only** | The panel takes a Data Enable strobe with no real HSYNC/VSYNC. 560x297 total at 9 MHz = 54.11 Hz. |
-| **GX0/GY0/GX1/GY1 (+H)** | Coordinate registers, 16-bit as low/high pairs. Writing a low byte clears its high byte. |
-| **GPARM / GPARM2** | Scalar arguments: `CIRCLE`/`ELLIPSE` x-radius and y-radius. |
-| **GCMD / GSTAT / GDATA** | Write-to-execute command / status (bit 7 BUSY, bit 0 ERR) / read-back for `PIXELR` and the `IDENT` stream. |
-| **GID0/GID1** | Presence signature, `$50 $47` = `"PG"`. Two fixed bytes because an absent card floats the bus to `$FF`, so one magic byte could not tell them apart. |
+| **GX0/GY0/GX1/GY1 (+H)** | Coordinate registers, 16-bit as low/high pairs (low write clears high) — since the single-interface migration, the GL walker's PRIVATE register file, no longer bus-decoded. |
+| **GPARM / GPARM2** | Scalar arguments in that register file: `ELLIPSE` x/y radius, the `LINPAT` pattern pair. |
+| **GCMD / GSTAT / GDATA** | The walker-facing command register / busy status / `PIXELR` read-back of the same file. (`IDENT` and `RESET` retired with the CPU door.) |
+| **GID0/GID1** | RETIRED (single-interface migration): the device door's `$50 $47` = `"PG"` presence signature — two fixed bytes because an absent card floats the bus to `$FF`. `'G'` at **GLID** ($FF54) is the one presence signal now. |
 | **Screen geometry** | 480×272 at 16 bpp RGB565 — a pixel is its colour — and nothing else. The display was briefly two palettized modes (240×136/2 bpp, 480×272/8 bpp); SETMODE, `SCREEN`, the palette and `PALETTE` were all retired on the way to direct colour (stages 5–6). |
 | **RGB565** | The pixel and pen format: 5 bits red, 6 green, 5 blue — the panel's own wiring, the machine's word size, two pixels per SDRAM word. `RGB(r,g,b)` packs one in BASIC; bright colours print negative through signed 16-bit ints but compare bit-for-bit. |
 | **MDU** | The multiply-divide unit at `$FF30` (stage 8a): hardware `(a*b)/c`, signed, 32-bit intermediate, truncate-toward-zero, saturate ±32767 — bit-exact to `lib_g3d`'s software `muldiv`. Probe: `MDID` reads `'M'`. One datapath (`mdu_core.v`) serves it and the geometry engine. |

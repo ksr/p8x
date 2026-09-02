@@ -334,13 +334,15 @@ COMMANDS
 MEMORY
     PEEK/POKE reach the whole map (decimal addresses): 0-8191 EEPROM
     (read-only), 8192-65279 RAM, 65280 switch input, 65282 LED output,
-    65284/65285 the serial port, 65312-65326 the display, 65328-65340 the
-    MDU (a hardware multiply-divide unit: poke operands a,b,c as 16-bit
-    pairs at 65328/65337, 65329/65338, 65330/65339, poke 65332 to start,
-    then peek 65331/65340 for (a*b)/c -- signed, saturating at +/-32767).
-    So POKE 65282,170 lights an LED pattern. The display has commands the
-    statements above do not reach (circles, single pixels, a self-test):
-    POKE 65317,240 runs the device's built-in test pattern.
+    65284/65285 the serial port, 65360-65364 the display's GL port,
+    65328-65340 the MDU (a hardware multiply-divide unit: poke operands
+    a,b,c as 16-bit pairs at 65328/65337, 65329/65338, 65330/65339,
+    poke 65332 to start, then peek 65331/65340 for (a*b)/c -- signed,
+    saturating at +/-32767). So POKE 65282,170 lights an LED pattern.
+    The graphics statements cover the whole GL language, so poking
+    65360 (one GL byte per POKE, after checking bit 7 of PEEK(65361))
+    is only for exploring the port by hand -- the GL statement does the
+    same with less typing.
 
 ERRORS
     ?                       unrecognized statement/command

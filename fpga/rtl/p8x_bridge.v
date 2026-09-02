@@ -1,7 +1,10 @@
 // p8x_bridge.v -- the card-edge bridge FSM (CARD-EDGE-DESIGN.md, v1).
 //
 // Sits where the CPU used to: decodes the host's serial protocol and
-// drives the SAME gfx/geom register ports the CPU's I/O window did.
+// drives the geometry engine's GL register port -- the ONE graphics
+// interface since the single-interface migration closed the $FF20
+// device door (device-window idx are dead: writes are swallowed,
+// reads answer $FF like a floating bus).
 // Byte-level interface (rxd/rxv in, txd/txs/txb out) so it neither
 // knows nor cares that a UART is behind it -- the card top wires the
 // real uart_rx/uart_tx, the bench pokes bytes directly.
@@ -17,10 +20,10 @@
 //                            parallel; the ack is the flow control.
 //   $02           STATUS  -> GLSTAT (fast-poll alias, no pop)
 //
-// idx = I/O address - $FF20: $00-$0F the 2D device, $30-$37 the GL
-// port. BRIDGEV ($35) and BRIDGID ($36) answer HERE -- they identify
-// the bridge front-end, absent on the all-in-one build and on a
-// future TTL-bus card. Unknown commands are swallowed in one byte.
+// idx = I/O address - $FF20: $30-$37 the GL port; $00-$0F was the 2D
+// device, retired. BRIDGEV ($35) and BRIDGID ($36) answer HERE -- they
+// identify the bridge front-end, absent on the all-in-one build and on
+// a future TTL-bus card. Unknown commands are swallowed in one byte.
 module p8x_bridge(
   input             clk,
   input             rst,
@@ -32,19 +35,13 @@ module p8x_bridge(
   output reg        txs,
   input             txb,
 
-  // the 2D device's register port (the CPU's old mux slot)
-  output reg        gx_sel,
-  output reg        gx_wr,
-  output reg        gx_rd,
-  input      [7:0]  gx_rdata,
-
   // the geometry engine's GL port
   output reg        gl_sel,
   output reg        gl_wr,
   output reg        gl_rd,
   input      [7:0]  gl_rdata,
 
-  // shared address/data to both (as mem_addr[3:0]/mem_dout were)
+  // address/data (as mem_addr[3:0]/mem_dout were)
   output reg [3:0]  a,
   output reg [7:0]  wdata
 );
@@ -60,12 +57,10 @@ module p8x_bridge(
   reg [7:0] tq [0:4];             // reply queue (PING is 5 bytes)
   reg [2:0] tqn, tqi;
 
-  wire idx_gfx = (idx[5:4] == 2'b00);            // $00-$0F
   wire idx_gl  = (idx[5:3] == 3'b110);           // $30-$37
 
   always @(posedge clk) begin
     // strobes are one-shot; selects idle low unless a state drives them
-    gx_sel <= 0; gx_wr <= 0; gx_rd <= 0;
     gl_sel <= 0; gl_wr <= 0; gl_rd <= 0;
     txs <= 0;
 
@@ -92,9 +87,8 @@ module p8x_bridge(
             tqn <= 3'd1; tqi <= 0; st <= TX;
           end else begin
             // present the address a cycle ahead of the strobe so the
-            // combinational rdata muxes are settled when we sample
+            // combinational rdata mux is settled when we sample
             a <= rxd[3:0];
-            gx_sel <= (rxd[5:4] == 2'b00);
             gl_sel <= (rxd[5:3] == 3'b110);
             st <= RD1;
           end
@@ -104,9 +98,8 @@ module p8x_bridge(
 
       WV: if (rxv) begin                              // the write value
         wdata <= rxd; a <= idx[3:0];
-        gx_sel <= idx_gfx; gx_wr <= idx_gfx;
         gl_sel <= idx_gl;  gl_wr <= idx_gl;
-        st <= I;                                      // off-window: dropped
+        st <= I;                     // off-window (device idx included): dropped
       end
 
       BN: if (rxv) begin
@@ -135,12 +128,11 @@ module p8x_bridge(
       end
 
       RD1: begin                                      // sample, queue reply
-        gx_sel <= idx_gfx && idx != 6'h31;            // hold sel this cycle
-        gl_sel <= idx_gl || idx == 6'h31;
+        gl_sel <= idx_gl || idx == 6'h31;             // hold sel this cycle
         a <= idx[3:0];
-        gx_rd <= (idx[5:4] == 2'b00);                 // pop semantics where
-        gl_rd <= idx_gl;                              //   the window has them
-        tq[0] <= (idx[5:4] == 2'b00) ? gx_rdata : gl_rdata;
+        gl_rd <= idx_gl;                              // pop semantics where
+                                                      //   the window has them
+        tq[0] <= idx_gl ? gl_rdata : 8'hFF;           // device idx: floating $FF
         tqn <= 3'd1; tqi <= 0; st <= TX;
       end
 

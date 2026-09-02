@@ -14,7 +14,7 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from glbridge import (Bridge, MAGIC, ACK, BURST_MAX,
                       IDX_GLDATA, IDX_GLSTAT, IDX_GLERR, IDX_GLID,
-                      IDX_GID0, IDX_GID1, IDX_BRIDGEV, IDX_BRIDGID)
+                      IDX_BRIDGEV, IDX_BRIDGID)
 
 FAILS = 0
 def ok(cond, what):
@@ -29,8 +29,6 @@ class MockCard:
 
     def __init__(self, fifo_cap=256):
         self.reg = [0] * 64
-        self.reg[IDX_GID0] = ord('P')
-        self.reg[IDX_GID1] = ord('G')
         self.reg[IDX_GLID] = ord('G')
         self.reg[IDX_BRIDGEV] = 1
         self.reg[IDX_BRIDGID] = ord('B')
@@ -80,17 +78,19 @@ class MockCard:
                 if len(self.rx) < 2:
                     return
                 idx, val = c & 0x3F, self.rx[1]
-                self.reg[idx] = val
+                if idx >= 0x30:            # device window ($00-$0F): swallowed
+                    self.reg[idx] = val
                 self.writes.append((idx, val))
                 self.rx = self.rx[2:]
             elif c & 0x40:                                   # READ
                 # identity registers have CONSTANT read sides on real
-                # silicon, split from their write sides (GCOLH writes
-                # share $FF2D with GID0's read) -- model that split
+                # silicon; the retired device window ($00-$0F) answers
+                # $FF like a floating bus
                 i = c & 0x3F
-                const = {0x0D: ord('P'), 0x0E: ord('G'), 0x34: ord('G'),
-                         0x35: 1, 0x36: ord('B')}
-                if i == 0x31:                    # GLSTAT: bit0 = RB byte
+                const = {0x34: ord('G'), 0x35: 1, 0x36: ord('B')}
+                if i < 0x30:                     # device window: floats
+                    self.tx += bytes([0xFF])
+                elif i == 0x31:                  # GLSTAT: bit0 = RB byte
                     self.tx += bytes([self.reg[i] | (1 if self.rb else 0)])
                 elif i == 0x32 and self.rb:      # GLRB: pop a reply byte
                     self.tx += bytes([self.rb.pop(0)])
@@ -106,11 +106,11 @@ def main():
     b = Bridge(m)
 
     ok(b.ping() == 1, "ping version")
-    ok(b.probe() == (ord('P'), ord('G'), ord('G'), 1, ord('B')), "identity probe")
+    ok(b.probe() == (ord('G'), 1, ord('B')), "identity probe")
 
-    b.wrreg(0x00, 0xAB)                       # GX0
-    ok(b.rdreg(0x00) == 0xAB, "write/read roundtrip")
-    ok(m.writes[-1] == (0x00, 0xAB), "write reached the register file")
+    b.wrreg(0x00, 0xAB)                       # retired device idx: swallowed
+    ok(b.rdreg(0x00) == 0xFF, "device window reads float $FF")
+    ok(m.reg[0x00] == 0, "device write swallowed, not latched")
 
     m.reg[IDX_GLSTAT] = 0x42
     ok(b.status() == 0x42, "STATUS aliases GLSTAT")
@@ -130,7 +130,7 @@ def main():
 
     # unknown command from a confused host: the card ignores, stays in sync
     m.send([0x03])
-    ok(b.rdreg(IDX_GID0) == ord('P'), "card in sync after unknown cmd")
+    ok(b.rdreg(IDX_GLID) == ord('G'), "card in sync after unknown cmd")
 
     # error drain: queue two, expect [2,6] then empty
     seq = [2, 6, 0]
@@ -152,7 +152,7 @@ def main():
     ok(b.drain_errors() == [2, 6], "drain_errors pops until zero")
 
     if FAILS == 0:
-        print("GLBRIDGE TEST: PASS (ping/identity, rd/wr, STATUS, chunked "
+        print("GLBRIDGE TEST: PASS (ping/identity, closed device window, STATUS, chunked "
               "bursts + acks, CA/CX wrap, unknown-cmd sync, error drain)")
         return 0
     print("GLBRIDGE TEST: %d FAILURES" % FAILS)

@@ -141,7 +141,7 @@ correctly.)
 | `$FF02` | LED output port (write) |
 | `$FF04 / $FF05` | 6850 ACIA status / data |
 | `$FF10–$FF17` | CF-IDE task-file registers |
-| `$FF20–$FF2F` | graphics display: the Tang Nano 20K card (480×272 RGB565 direct colour, SDRAM framebuffer). The DEVICE door — `GCMD` executes 1 `PIXELW`, 2 `LINE`, 4 `BOXFILL`, 9 `PIXELR` (a read), `$0A` `ELLIPSE`, `$0B` `ELLIPSEFILL`, `$0C` the `LINPAT` latch, `$F1` `RESET`, `$F2` `IDENT` (`BOX`/`CLS`/`CIRCLE` and `SETPAL` were retired: composites and direct colour replaced them). `GID0`/`GID1` read `$50`/`$47` ("PG") for presence, since an absent card floats to `$FF`. The GL/PGC port lives at `$FF50` — see [p8x-graphics-theory.md](p8x-graphics-theory.md). Modelled by `p8xemu` — see [emulator/README.md](../emulator/README.md#the-graphics-display) |
+| `$FF20–$FF2F` | retired — was the graphics display's DEVICE door (register pokes drew immediately). Closed by the single-interface migration: reads float `$FF` like any absent card, and the register file survives only as the GL walker's internal property. The GL/PGC port at `$FF50` is the one graphics interface — see [p8x-graphics-theory.md](p8x-graphics-theory.md). Modelled by `p8xemu` — see [emulator/README.md](../emulator/README.md#the-graphics-display) |
 
 Reset clears the PC to `$0000`; the stack pointer (P3) is initialised to the top
 of RAM.

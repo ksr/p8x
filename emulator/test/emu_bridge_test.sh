@@ -3,8 +3,9 @@
 # here -- the "card" is test_glbridge's MockCard behind a pty -- but the
 # whole path is real: BASIC statements -> the emulator's bus -> the
 # card-edge protocol over a tty -> a register file on the far side.
-# GCHECK's probes must read the mock's identity, LINE's register writes
-# and GCMD must arrive on the wire, and PEEK must round-trip.
+# GCHECK's GLID probe must read the mock's identity, the GL byte
+# streams must arrive on the wire, and the retired device door must
+# read $FF (it is not even forwarded).
 set -e
 set -o pipefail
 cd "$(dirname "$0")"
@@ -52,7 +53,7 @@ t = threading.Thread(target=serve, daemon=True)
 t.start()
 
 script = ("B\rbasic\r"
-          "10 PRINT PEEK(65325)\r"          # $FF2D GID0 -> mock 'P' = 80
+          "10 PRINT PEEK(65325)\r"          # $FF2D: closed door -> $FF = 255
           "20 PRINT PEEK(65364)\r"          # $FF54 GLID -> mock 'G' = 71
           "30 COLOR 1234\r"                 # feeds BOTH pens: gfx + GL bytes
           "40 LINE 3,4,5,6\r"
@@ -70,7 +71,7 @@ def seen(idx, val):
     return (idx, val) in mock.writes
 
 ok = True
-if "80" not in out:  print("FAIL: GID0 PEEK missing");  ok = False
+if "255" not in out: print("FAIL: closed door did not read $FF"); ok = False
 if "71" not in out:  print("FAIL: GLID PEEK missing");  ok = False
 # LINE 3,4,5,6 is GL now (migrated 2026-08-30): the bytes cross as
 # BURST frames into the card's GL FIFO, not as register writes. The
@@ -101,4 +102,4 @@ if seen(0x05, 9):
     print("FAIL: BASIC still issues the device PIXELR"); ok = False
 sys.exit(0 if ok else 1)
 EOF
-echo "EMU-BRIDGE TEST: PASS (BASIC drove a mock card over the pty: identity PEEKs, GL LINE/COLOR bytes, PIXELR device traffic, no vestigial pen write)"
+echo "EMU-BRIDGE TEST: PASS (BASIC drove a mock card over the pty: GLID identity, closed-door FF-float, GL LINE/COLOR bytes, PIXRD reply, no device traffic)"

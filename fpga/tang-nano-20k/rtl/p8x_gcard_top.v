@@ -64,7 +64,8 @@ module p8x_gcard_top(
                             .send(tx_send), .tx(uart_tx), .busy(tx_busy));
 
   // ---- the bridge, in the CPU's seat -------------------------------------
-  wire        br_gx_sel, br_gx_wr, br_gx_rd;
+  // GL only: the $FF20 device window is gone from the card edge -- the
+  // walker is the register file's sole master now.
   wire        br_gl_sel, br_gl_wr, br_gl_rd;
   wire [3:0]  br_a;
   wire [7:0]  br_wdata;
@@ -73,8 +74,6 @@ module p8x_gcard_top(
   p8x_bridge BRIDGE(.clk(clk), .rst(rst),
           .rxd(rx_data), .rxv(rx_valid),
           .txd(tx_data), .txs(tx_send), .txb(tx_busy),
-          .gx_sel(br_gx_sel), .gx_wr(br_gx_wr), .gx_rd(br_gx_rd),
-          .gx_rdata(gfx_rdata),
           .gl_sel(br_gl_sel), .gl_wr(br_gl_wr), .gl_rd(br_gl_rd),
           .gl_rdata(geom_rdata),
           .a(br_a), .wdata(br_wdata));
@@ -137,11 +136,11 @@ module p8x_gcard_top(
           .frame_tick(frame_tick), .draw_pg(draw_pg), .disp_pg(disp_pg));
 
   gfx GFX(.clk(clk), .rst(rst), .draw_pg(draw_pg),
-          .sel(gm_own ? 1'b1 : br_gx_sel),
-          .a(gm_own ? gm_a : br_a),
-          .wr(gm_own ? gm_wr : br_gx_wr),
-          .rd_stb(gm_own ? gm_rd : br_gx_rd),
-          .wdata(gm_own ? gm_wdata : br_wdata), .rdata(gfx_rdata),
+          .sel(gm_own),
+          .a(gm_a),
+          .wr(gm_wr),
+          .rd_stb(gm_rd),
+          .wdata(gm_wdata), .rdata(gfx_rdata),
           .e_req(e_req), .e_we(e_we), .e_word(e_word), .e_addr(e_addr),
           .e_din(e_din), .e_ack(e_ack), .e_ready(e_ready), .e_dout(sd_dout));
 

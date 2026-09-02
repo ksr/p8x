@@ -40,14 +40,12 @@ module tb;
   integer errors = 0;
 
   wire        gl_sel, gl_wr, gl_rd;    // the bridge drives what the CPU did
-  wire        gsel, gwr, grd;
   wire [3:0]  a;
   wire [7:0]  wdata;
   wire [7:0]  rdata, gfx_rdata;
 
   p8x_bridge BRIDGE(.clk(clk), .rst(rst),
     .rxd(rxd), .rxv(rxv), .txd(txd), .txs(txs), .txb(1'b0),
-    .gx_sel(gsel), .gx_wr(gwr), .gx_rd(grd), .gx_rdata(gfx_rdata),
     .gl_sel(gl_sel), .gl_wr(gl_wr), .gl_rd(gl_rd), .gl_rdata(rdata),
     .a(a), .wdata(wdata));
 
@@ -92,11 +90,11 @@ module tb;
     .frame_tick(frame_tick), .draw_pg(draw_pg), .disp_pg(disp_pg));
 
   gfx GFX(.clk(clk), .rst(rst), .draw_pg(draw_pg),
-    .sel(gm_own ? 1'b1 : gsel),
-    .a(gm_own ? gm_a : a),
-    .wr(gm_own ? gm_wr : gwr),
-    .rd_stb(gm_own ? gm_rd : grd),
-    .wdata(gm_own ? gm_wdata : wdata), .rdata(gfx_rdata),
+    .sel(gm_own),
+    .a(gm_a),
+    .wr(gm_wr),
+    .rd_stb(gm_rd),
+    .wdata(gm_wdata), .rdata(gfx_rdata),
     .e_req(e_req), .e_we(e_we), .e_word(e_word), .e_addr(e_addr),
     .e_din(e_din), .e_ack(e_ack), .e_ready(e_ready), .e_dout(c_dout));
 
@@ -161,17 +159,6 @@ module tb;
   task brd_reg(input [5:0] ix);
     begin
       bsend(8'h40 | {2'd0, ix}); brecv;
-    end
-  endtask
-  task gpoke(input [3:0] ra, input [7:0] v);       // WRITE $80|idx
-    begin
-      bsend(8'h80 | {4'd0, ra}); bsend(v);
-    end
-  endtask
-  task gwait;                                      // poll GSTAT.busy
-    begin
-      brd_reg(6'h06);
-      while (rply[7]) brd_reg(6'h06);
     end
   endtask
   // GL stream: collect, then flush as ack'd 64-byte bursts
@@ -240,30 +227,23 @@ module tb;
     if (rply !== 8'd1) begin $display("FAIL: BRIDGEV=%02x", rply); errors = errors + 1; end
     brd_reg(6'h36);
     if (rply !== "B") begin $display("FAIL: BRIDGID=%02x", rply); errors = errors + 1; end
-    brd_reg(6'h0D);
-    if (rply !== "P") begin $display("FAIL: GID0=%02x", rply); errors = errors + 1; end
+    brd_reg(6'h0D);                                // retired device window
+    if (rply !== 8'hFF) begin $display("FAIL: closed door read %02x, not FF", rply); errors = errors + 1; end
 
-    // ---- the boot splash, as the machine leaves it: CLS + white border ----
-    gpoke(4'h4, 8'h00);                       // GCOL 0
-    gpoke(4'h0, 8'h00); gpoke(4'h1, 8'h00);   // the clear is a BOXFILL now
-    gpoke(4'h2, 8'hDF); gpoke(4'hB, 8'h01);   //   (device CLS retired)
-    gpoke(4'h3, 8'h0F); gpoke(4'hC, 8'h01);
-    gpoke(4'h5, 8'h04);                       // BOXFILL 0,0-479,271
-    gwait;
-    gpoke(4'h4, 8'hFF); gpoke(4'hD, 8'hFF);   // pen $FFFF; the border is
-    gpoke(4'h0, 8'h00); gpoke(4'h1, 8'h00);   //   FOUR LINEs (BOX retired)
-    gpoke(4'h2, 8'hDF); gpoke(4'hB, 8'h01);
-    gpoke(4'h3, 8'h00);
-    gpoke(4'h5, 8'h02); gwait;                // top (0,0)-(479,0)
-    gpoke(4'h1, 8'h0F); gpoke(4'hA, 8'h01);
-    gpoke(4'h3, 8'h0F); gpoke(4'hC, 8'h01);
-    gpoke(4'h5, 8'h02); gwait;                // bottom (0,271)-(479,271)
-    gpoke(4'h2, 8'h00);
-    gpoke(4'h1, 8'h00);
-    gpoke(4'h5, 8'h02); gwait;                // left (0,0)-(0,271)
-    gpoke(4'h0, 8'hDF); gpoke(4'h9, 8'h01);
-    gpoke(4'h2, 8'hDF); gpoke(4'hB, 8'h01);
-    gpoke(4'h5, 8'h02); gwait;                // right (479,0)-(479,271)
+    // ---- the boot splash region the scene does not repaint: clear +
+    // white border, as GL bytes (the monitor speaks GL now; the swatches
+    // it also draws sit inside the scene's viewport and are erased, so
+    // clear + border is the part that must match the emulator's frame)
+    glb(8'hB3); glw(16'd0); glw(16'd479); glw(16'd0); glw(16'd271);  // WINDOW
+    glb(8'hB2); glw(16'd0); glw(16'd479); glw(16'd0); glw(16'd271);  // VWPORT
+    glb(8'h06); glb(8'd0); glb(8'd0); glb(8'd0);       // COLOR black
+    glb(8'hE0); glb(8'd1);                             // PRMFIL 1
+    glb(8'h10); glw(16'd0); glw(16'd0);                // MOVE 0,0
+    glb(8'h34); glw(16'd479); glw(16'd271);            // RECT: the clear
+    glb(8'hE0); glb(8'd0);                             // PRMFIL 0
+    glb(8'h06); glb(8'd31); glb(8'd63); glb(8'd31);    // COLOR white
+    glb(8'h10); glw(16'd0); glw(16'd0);
+    glb(8'h34); glw(16'd479); glw(16'd271);            // RECT: the border
 
     // ---- the GL scene: byte for byte what c_gl_test's gl_b.c pokes --------
     glb(8'hB3); glw(-16'sd120); glw(16'sd120); glw(-16'sd120); glw(16'sd120);
@@ -291,10 +271,10 @@ module tb;
     gl_wait_idle;
 
     // GL idle covers the interpreter+walker; the 2D engine may still be
-    // draining its last span to SDRAM -- poll IT too (GCHECK's own rule),
-    // then let the write land
-    gwait;
-    repeat (400) @(posedge clk);
+    // draining its last span to SDRAM, and its busy is unreachable from
+    // the host since the device window closed -- a settle delay covers
+    // the handful of cycles one span needs
+    repeat (2000) @(posedge clk);
 
     if (CHIP.protocol_errors != 0) begin
       $display("TB-GCARD: FAIL (%0d protocol errors)", CHIP.protocol_errors);

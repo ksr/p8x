@@ -71,8 +71,11 @@ naming the exact microcycle. To drive the machine by hand instead of diffing:
 
 ```sh
 fpga/sim/console.sh "" os/run-disk.img       # real terminal into the RTL
-fpga/sim/gfx.sh                              # graphics engine vs the emulator
 ```
+
+(The graphics engine is byte-compared against the emulator by the GL RTL
+battery, `emulator/test/c_gl_rtl_test.sh` — the old `sim/gfx.sh` device-door
+co-sim retired with the single-interface migration.)
 
 `B` boots the OS, then `pwd` / `dir` / `cat README.TXT`. Ctrl-D or Ctrl-C quits.
 Writes persist for the session — they land in `fpga/sim/work/disk.img`, a copy, so

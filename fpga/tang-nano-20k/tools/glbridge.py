@@ -10,7 +10,7 @@ register window as if it were on the P8X bus. Used three ways:
                    ./glbridge.py rd 0x34            # GLID ('G')
                    ./glbridge.py gl "MDY 20 CLRUN 0"
                    ./glbridge.py glfile HOUSE.GL
-  by the emulator  p8xemu -B forwards $FF20-$FF5F accesses through the
+  by the emulator  p8xemu -B forwards GL-port accesses through the
                    same framing (its C twin of this file)
 
 Protocol v1 (host-driven; the card only ever replies):
@@ -23,18 +23,15 @@ Protocol v1 (host-driven; the card only ever replies):
                                     at most one burst in flight)
   $02           STATUS           -> GLSTAT (fast-poll alias)
 
-idx = I/O address - $FF20: $00-$0F the 2D device, $30-$37 the GL port.
-Unknown commands are ignored by the card; the version byte behind PING
-gates any v2. Dependency-free (termios only), like term.py/imgsend.py.
+idx = I/O address - $FF20: $30-$37 the GL port -- the ONE graphics
+interface since the single-interface migration closed the $FF20 device
+window ($00-$0F reads answer $FF, writes are swallowed). Unknown
+commands are ignored by the card; the version byte behind PING gates
+any v2. Dependency-free (termios only), like term.py/imgsend.py.
 """
 import os, sys, glob, time, termios
 
 # ---- register indexes (idx = I/O address - $FF20) ---------------------------
-IDX_GX0    = 0x00
-IDX_GCMD   = 0x05
-IDX_GSTAT  = 0x06
-IDX_GID0   = 0x0D
-IDX_GID1   = 0x0E
 IDX_GLDATA = 0x30
 IDX_GLSTAT = 0x31
 IDX_GLRB   = 0x32
@@ -168,18 +165,17 @@ class Bridge:
         self.burst(open(path, "rb").read())
 
     def wait_idle(self, timeout=10.0):
-        # GL idle AND 2D-engine idle. GLSTAT bit6 covers the interpreter
-        # and walker, but the engine may still be draining its final span
-        # to SDRAM when it clears (found by tb_gcard: 19 pixels short of
-        # a frame) -- so poll GSTAT busy too, GCHECK's own rule.
+        # GLSTAT bit6: the interpreter and walker. The engine may still be
+        # draining its final span to SDRAM for a few microseconds after it
+        # clears (tb_gcard once caught a frame 19 pixels short) -- that
+        # cannot be observed from the host since the device window closed,
+        # and it does not need to be: any subsequent GL work (a PIXRD
+        # read-back included) is sequenced behind the drain by the walker
+        # itself. Only a wall-clock measurement could notice.
         t0 = time.time()
         while self.status() & 0x40:
             if time.time() - t0 > timeout:
                 raise TimeoutError("glbridge: GL busy did not clear")
-            time.sleep(0.002)
-        while self.rdreg(IDX_GSTAT) & 0x80:
-            if time.time() - t0 > timeout:
-                raise TimeoutError("glbridge: 2D engine busy did not clear")
             time.sleep(0.002)
 
     def drain_errors(self):
@@ -191,29 +187,36 @@ class Bridge:
             errs.append(e)
 
     def pixelr(self, x, y, timeout=3.0):
-        """Read the pixel at screen (x, y) -> RGB565. The DEVICE's read
-        command (GCMD 9); the drawing verb named POINT is GL's."""
+        """Read the pixel at SCREEN (x, y) -> RGB565: the GL PIXRD verb
+        (window coords, so wy = 271 - y), reply popped from the RB FIFO.
+        Sequencing is the walker's: PIXRD runs after every prior command
+        finishes drawing, so no host-side idle dance is needed."""
         import time as _t
-        self.wrreg(0x00, x & 255); self.wrreg(0x09, (x >> 8) & 255)
-        self.wrreg(0x01, y & 255); self.wrreg(0x0A, (y >> 8) & 255)
-        self.wrreg(0x05, 0x09)
+        wy = 271 - y
+        self.burst(bytes([0x63, x & 255, (x >> 8) & 255,
+                          wy & 255, (wy >> 8) & 255]))
+        out = []
         t0 = _t.time()
-        while self.rdreg(IDX_GSTAT) & 0x80:
-            if _t.time() - t0 > timeout:
-                raise TimeoutError("glbridge: PIXELR busy did not clear")
-        lo = self.rdreg(0x07); hi = self.rdreg(0x07)
-        return lo | (hi << 8)
+        while len(out) < 2:
+            if self.rdreg(IDX_GLSTAT) & 1:
+                out.append(self.rdreg(IDX_GLRB))
+            elif _t.time() - t0 > timeout:
+                raise TimeoutError("glbridge: PIXRD reply did not arrive")
+        return out[0] | (out[1] << 8)
 
     def pixelw(self, x, y):
-        """Write one pixel at screen (x, y) in the current pen (GCMD 1)."""
-        self.wrreg(0x00, x & 255); self.wrreg(0x09, (x >> 8) & 255)
-        self.wrreg(0x01, y & 255); self.wrreg(0x0A, (y >> 8) & 255)
-        self.wrreg(0x05, 0x01)
+        """Write one pixel at SCREEN (x, y) in the current pen: GL MOVE +
+        POINT (window coords, wy = 271 - y)."""
+        wy = 271 - y
+        self.burst(bytes([0x10, x & 255, (x >> 8) & 255,
+                          wy & 255, (wy >> 8) & 255, 0x08]))
 
     def probe(self):
-        """The full identity: (GID0, GID1, GLID, BRIDGEV, BRIDGID)."""
+        """The card identity: (GLID, BRIDGEV, BRIDGID). 'G' at GLID is the
+        ONE presence signal since the device door (and its GID0/GID1 "PG"
+        signature) closed."""
         return tuple(self.rdreg(i) for i in
-                     (IDX_GID0, IDX_GID1, IDX_GLID, IDX_BRIDGEV, IDX_BRIDGID))
+                     (IDX_GLID, IDX_BRIDGEV, IDX_BRIDGID))
 
 
 def _cli():
@@ -228,10 +231,9 @@ def _cli():
     op = args[0]
     if op == "ping":
         print("card protocol v%d" % b.ping())
-        g0, g1, gl, bv, bi = b.probe()
-        print("GID0=%02X('%c') GID1=%02X('%c') GLID=%02X('%c') "
-              "BRIDGEV=%02X BRIDGID=%02X('%c')"
-              % (g0, g0, g1, g1, gl, gl, bv, bi, bi))
+        gl, bv, bi = b.probe()
+        print("GLID=%02X('%c') BRIDGEV=%02X BRIDGID=%02X('%c')"
+              % (gl, gl, bv, bi, bi))
     elif op == "rd":
         print("$%02X" % b.rdreg(int(args[1], 0)))
     elif op == "wr":
