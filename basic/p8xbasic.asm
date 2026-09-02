@@ -5530,7 +5530,11 @@ MHELP:  .byte CR,LF
         .byte CR,LF
         .ascii "  IMAGE x,y,f$   draw a P8I file, bottom-left at x,y"
         .byte CR,LF
-        .ascii "  + the PGC verbs native: MOVE DRAW POLY RECT AREA TEXT ... (man basic)"
+        .ascii "  + the PGC verbs native: MOVE DRAW POLY RECT AREA TEXT"
+        .byte CR,LF
+        .ascii "    LINPAT p (dash bits)  LINFUN m (0=set 1=compl 2=OR 3=AND 4=XOR)"
+        .byte CR,LF
+        .ascii "    and the rest - man basic / man gl"
         .byte CR,LF
         .ascii "  SCREEN IS 480x272 RGB565 - COLOR r,g,b (0-31,0-63,0-31)"
         .byte CR,LF
