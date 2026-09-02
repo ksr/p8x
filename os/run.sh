@@ -29,6 +29,7 @@ build=$(mktemp -d)
 
 # Monitor + BIOS EEPROM. BASIC is no longer ROM-resident — it ships as the disk
 # program /bin/basic.bin (installed below), so the EEPROM is just the monitor.
+echo "==> assembling monitor + OS, building microcode + emulator" >&2
 python3 "$root/assembler/p8xasm.py" "$root/firmware/p8xmon.asm" -o "$build/eeprom.bin" >/dev/null
 python3 "$root/assembler/p8xasm.py" "$root/os/p8xos.asm" -o "$build/p8xos.bin" --base 0x2000 >/dev/null
 ( cd "$root/microcode" && python3 genucode.py >/dev/null )
@@ -239,6 +240,7 @@ if [ ! -f "$disk" ]; then
     # redirection and pipes out of the box. Run by bare name via PATH (/bin),
     # e.g.  dir /bin ,  cat README.TXT ,  cat README.TXT | grep hello | wc ,
     # cp README.TXT COPY.TXT ,  mv COPY.TXT MOVED.TXT .
+    echo "==> $disk: compiling the C commands (the slow part, ~15 s)" >&2
     for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch man dep dump examine disasm awk cmp cube tri rotate page camera gl md house clsave image; do
         # clib.py splices any //#use lib_*.c (shared helpers) into the source first;
         # a no-op passthrough for commands with no //#use directive.
@@ -306,6 +308,7 @@ if [ ! -f "$disk" ]; then
         python3 "$root/tools/p8xfs.py" put "$disk" "$inc" \
             --name "/lib/$base" >/dev/null
     done
+    echo "==> $disk: /lib, /src, /man, /docs, /examples" >&2
     ensure_src            # /src/commands/{c,asm}: browsable sources (see the function)
     printf 'hello from P8X/OS\n' > "$build/readme.txt"
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/readme.txt" --name /README.TXT >/dev/null
