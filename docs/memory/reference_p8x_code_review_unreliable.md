@@ -30,3 +30,13 @@ Wave 1 clean. Also keep the hot paths (`p8xasm.asm`, `p8xcc.asm`, `p8xos.asm`,
 fan-out — a confident-but-wrong flag/carry edit there breaks everything.
 
 Progress marker: items resolved are prefixed `**[FIXED <date>]**` in the doc.
+
+2026-09-02, the trap bites ME: ablation-synth cuts must verify their
+BOUNDARIES. Cutting "to the next section marker" in p8x_geom swept the
+projection+fan-fill machinery into the "yon pass" measurement -> a
+phantom 1,758-LUT finding that died on a corrected cut (yon alone =
+noise, -153). Rule: after any ablation, diff WHAT was removed and
+re-measure with exact block boundaries before reporting a number. The
+walker is already tightly shared (near clip 66, yon ~0); the only
+verified space win is the ASCII translator FSM (714, boundaries
+checked twice) -- and it is a port-contract change, not a free cut.
