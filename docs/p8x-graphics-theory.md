@@ -202,15 +202,17 @@ not asserted. The proof chain, in escalating strength:
 
 1. Directed op-level benches (`tb_gl.v`): the interpreter's exact
    operation stream, error sequences, FIFO backpressure.
-2. Nine cross-implementation FRAMES (`emulator/test/c_gl_rtl_test.sh`):
+2. Eleven cross-implementation FRAMES (`emulator/test/c_gl_rtl_test.sh`):
    the same command bytes rendered by the emulator on the emulated
    machine and by the real RTL stack (geometry + gfx + arbiter + SDRAM
    controller + a protocol-checking chip model), compared pixel for
    pixel — the 10a scene, the 10b matrix scene, the 10c fly-through,
    the 10d ASCII scene, the 10f LINFUN scene, the 10g AREA fills, the
    10h TEXT scene (the whole generated font TDEFIN'd, then sized,
-   tilted and folded), and the 10i curve scene (both midpoint regions,
-   both aspects, the r=1/r=0 edges).
+   tilted and folded), the 10i curve scene (both midpoint regions,
+   both aspects, the r=1/r=0 edges), the 10j pattern scene, the 10k
+   text2 scene and the BLIT frame — plus self-checking PIXRD/BLIT
+   read-back rungs that compare RB words instead of frames.
 3. On-board probes: the same programs typed at the real machine, with
    PIXELR read-backs checked against the emulator's golden values.
 

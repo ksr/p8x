@@ -183,8 +183,6 @@ fpga/
 ├── sim/                      co-simulation against the C emulator
 │   ├── README.md             how the trace-diff works, and why -N exists
 │   ├── run.sh                build + run + diff  [CYCLES] [ROM] [RX] [CF]
-│   ├── gfx.sh                graphics: RTL frame vs the emulator's, byte-compared
-│   ├── tb_gfx.v             runs a payload, dumps the framebuffer as a PPM
 │   ├── console.sh            interactive console on the RTL (not diffed)
 │   ├── mk_ucode_mem.py       4 ROM images → 32-bit ucode.hex
 │   ├── tb_p8x.v              testbench: canonical per-cycle trace, ACIA, CF

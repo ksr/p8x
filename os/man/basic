@@ -185,22 +185,21 @@ GRAPHICS
     depth (the P8I format -- tools/p8img.py converts anything into it), so
     the statement takes only the position; a file that is not P8I, is the
     wrong version or depth, or ends early says ?NOT P8I, and a missing one
-    ?No file. Pixels past the screen edge are discarded, so an image can
-    hang off any side. IMAGE uses the data channel, so a file OPEN'd for
+    ?No file. Pixels past the window edge clip, so an image can hang
+    off any side. IMAGE uses the data channel, so a file OPEN'd for
     INPUT is closed by it -- the same licence SAVE and LOAD take.
 
-    GTEXT is the exception: BASIC draws the glyphs itself, because the
-    display has no text command. It costs one device operation per lit
-    pixel, which is fast enough for labels and titles but is not a console
-    -- there is no cursor, no scrolling and no line wrap.
+    GTEXT is 2D sugar over the card's own stroke text (see the GTEXT
+    entry above): a few GL bytes per call, not per pixel -- fast enough
+    for anything, but still not a console: there is no cursor, no
+    scrolling and no line wrap.
 
         GTEXT 10,10,1,"SCORE"     baseline at (10,10), text rises
         GTEXT 0,0,2,A$+"!"        any string expression works
-    size multiplies the glyph: 1 is 5x7 in a 6x8 cell, so a full line is 80
-    characters across and 34 rows down; size 2 gives 40 x 17. Text is drawn
-    in the current COLOR. Only codes $20-$5F have glyphs -- lowercase is
-    drawn as uppercase, and anything else comes out blank. A string that
-    runs off the right-hand edge simply stops; it does not wrap.
+    size multiplies the glyph (1 = 1x, 2 = 2x). Text is drawn in the
+    current COLOR. Only codes $20-$5F have glyphs -- lowercase folds
+    onto uppercase, and anything else comes out blank. Strokes clip at
+    the window edge like every GL primitive; there is no wrap.
 
     PIXELR(x,y) is a FUNCTION, not a statement: it returns the COLOUR at a
     pixel, and 0 for anything off-screen. So
