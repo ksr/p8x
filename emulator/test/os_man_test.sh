@@ -22,7 +22,7 @@ python3 $ROOT/tools/p8xfs.py create man.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   man.img osm.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  man.img /bin >/dev/null
 python3 $ROOT/tools/p8xfs.py put    man.img man.bin --name /bin/man.bin --load 0x6A00 --exec 0x6A00 >/dev/null
-python3 $ROOT/tools/p8xfs.py mkdir  man.img /man >/dev/null
+python3 $ROOT/tools/p8xfs.py mkdir  man.img /man --secs 8 >/dev/null
 for page in $ROOT/os/man/*; do
     base=$(basename "$page")
     [ "$base" = "README.md" ] && continue

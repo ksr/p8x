@@ -337,11 +337,12 @@ def cmd_mkdir(a):
     pdir = resolve_dir(img, parent)
     if find_in_dir(img, pdir[0], pdir[1], leaf):
         raise SystemExit("p8xfs: %s already exists" % leaf)
-    newlba = alloc(img, SUBDIR_SECS)
-    init_dir_extent(img, newlba, SUBDIR_SECS, pdir[0], pdir[1])
-    add_entry(img, pdir[0], pdir[1], leaf, newlba, SUBDIR_SECS * SEC, 0, 0, F_DIR)
+    nsec = getattr(a, "secs", SUBDIR_SECS)
+    newlba = alloc(img, nsec)
+    init_dir_extent(img, newlba, nsec, pdir[0], pdir[1])
+    add_entry(img, pdir[0], pdir[1], leaf, newlba, nsec * SEC, 0, 0, F_DIR)
     write_img(a.img, img)
-    print("mkdir %s  (extent LBA %d..%d)" % (a.path, newlba, newlba + SUBDIR_SECS - 1))
+    print("mkdir %s  (extent LBA %d..%d)" % (a.path, newlba, newlba + nsec - 1))
 
 
 def cmd_tree(a):
@@ -475,6 +476,11 @@ def main():
     c = sub.add_parser("mkdir"); c.add_argument("img"); c.add_argument("path")
     c.add_argument("--strict", action="store_true",
                    help="fail (don't just warn) if a name exceeds the 12-char field")
+    c.add_argument("--secs", type=int, default=SUBDIR_SECS,
+                   help="directory extent size in sectors (default %d = %d "
+                        "entries; the OS reads the size from the entry, so "
+                        "any size works on-target)" % (SUBDIR_SECS,
+                        SUBDIR_SECS * 16 - 2))
     c.set_defaults(fn=cmd_mkdir)
 
     c = sub.add_parser("tree"); c.add_argument("img"); c.set_defaults(fn=cmd_tree)

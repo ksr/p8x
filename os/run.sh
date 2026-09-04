@@ -56,8 +56,11 @@ python3 "$root/generators/gen_p8xdis.py" --asm >/dev/null 2>&1 || true
 # (p8xfs put never overwrites, so your files are kept and only MISSING sources are
 # added — e.g. an older disk that predates a source gets it on the next run).
 ensure_src() {
-    for d in /src /src/commands /src/commands/c /src/commands/asm; do
+    for d in /src /src/commands; do
         python3 "$root/tools/p8xfs.py" mkdir "$disk" "$d" >/dev/null 2>&1 || true
+    done
+    for d in /src/commands/c /src/commands/asm; do
+        python3 "$root/tools/p8xfs.py" mkdir "$disk" "$d" --secs 8 >/dev/null 2>&1 || true
     done
     for cf in "$root"/os/commands/*.c; do
         base=$(basename "$cf")
@@ -192,13 +195,13 @@ if [ ! -f "$disk" ]; then
     # tree/cd/run have something to show.
     python3 "$root/tools/p8xfs.py" create "$disk" --v2 >/dev/null
     python3 "$root/tools/p8xfs.py" boot   "$disk" "$build/p8xos.bin" >/dev/null
-    python3 "$root/tools/p8xfs.py" mkdir  "$disk" /bin >/dev/null
+    python3 "$root/tools/p8xfs.py" mkdir  "$disk" /bin --secs 8 >/dev/null
     # /bin holds the HAND-ASSEMBLED commands (the default since 2026-08-20 --
     # smaller and faster, e.g. image at 563 vs 4,435 cycles/pixel); /binc holds
     # the p8cc-compiled builds of the same commands, so both can still be run
     # and compared on-target: run /binc/grep.bin ... vs plain grep. A command
     # with no asm twin yet (cube) ships its C build in /bin -- the only build.
-    python3 "$root/tools/p8xfs.py" mkdir  "$disk" /binc >/dev/null
+    python3 "$root/tools/p8xfs.py" mkdir  "$disk" /binc --secs 8 >/dev/null
     # /d1 mount point: a placeholder dir so `dir /` shows the mount. Traversal
     # into /d1 is intercepted by the resolver (redirected to drive 1) before this
     # empty placeholder is ever read — it is just a signpost.
@@ -265,7 +268,7 @@ if [ ! -f "$disk" ]; then
     done
     # /man: a Unix-style manual page per command (plain text in os/man/). The
     # `man` command (installed above) reads /man/<name>, so `man dir` works.
-    python3 "$root/tools/p8xfs.py" mkdir "$disk" /man >/dev/null
+    python3 "$root/tools/p8xfs.py" mkdir "$disk" /man --secs 8 >/dev/null
     for page in "$root"/os/man/*; do
         base=$(basename "$page")
         [ "$base" = "README.md" ] && continue      # repo doc, not a man page
