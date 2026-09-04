@@ -1,0 +1,50 @@
+NAME
+    desk - overlapping windows on the graphics card (rung 1)
+
+SYNOPSIS
+    desk
+
+DESCRIPTION
+    The window system's first rung: two draggable, overlapping windows
+    proving the machinery a real GUI needs -- per-window hardware
+    clipping, painter's-algorithm repaint, focus, and text drawn by
+    the card inside a window.
+
+    THE MECHANISM: each window's content is drawn in its own LOCAL
+    coordinates under a per-window WINDOW/VWPORT pair. WINDOW declares
+    the local extent (0..w-1, 0..h-1), VWPORT places it on screen;
+    with matching extents the map is a pure translation and the
+    window edge is a hardware CLIP -- content cannot escape, so
+    occlusion reduces to paint order, bottom to top. The CPU keeps
+    only rectangles and a z-order.
+
+    The SHAPES window draws primitives that deliberately overrun its
+    edge (the card clips them); the TERM window is a small terminal:
+    typed characters echo into its input line while it has focus,
+    ENTER scrolls them into history. Its text is the card's own
+    stroke TEXT, placed in window-local coordinates like every other
+    primitive -- the 3D pipeline clips through the same window.
+
+KEYS AND MOUSE
+    TAB               raise and focus the other window
+    arrow keys        move the focused window 8 px
+    printable keys    type into a focused TERM; ENTER scrolls;
+                      backspace erases
+    Ctrl-D            quit
+    mouse             press a title bar and drag -- a complement-mode
+                      outline follows (the classic outline drag),
+                      release places the window; press anywhere in a
+                      window to raise it (see man paint, MOUSE, for
+                      how the mouse reaches the machine)
+
+NOTES
+    Curves (CIRCLE/ELIPSE) clip at the SCREEN, not the window -- the
+    engine draws them in device space after mapping (man gl). Windowed
+    programs must keep curves inside their extent themselves; lines,
+    RECTs, fills and TEXT all clip properly. Repaint is a full
+    back-to-front replay; window content as card-resident command
+    lists (CLBEG/CLRUN -- repaint for two wire bytes) is the planned
+    next rung, along with menus and widgets.
+
+SEE ALSO
+    paint, gl, gfx, basic

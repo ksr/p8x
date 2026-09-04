@@ -25,7 +25,7 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/
 # (the list mirrors run.sh's _ccmds + image; CSTACKTOP comes from the
 #  generated memory map, never hardcoded)
 CTOP=$(python3 -c "import sys; sys.path.insert(0,'$ROOT/generators'); import memmap; print(memmap.CSTACKTOP)")
-for p in cube tri rotate page camera gl md house clsave paint image; do
+for p in cube tri rotate page camera gl md house clsave paint desk image; do
     python3 $ROOT/tools/clib.py $ROOT/os/commands/$p.c > dm_$p.c \
         || fail "$p: clib.py splice failed"
     python3 $ROOT/compiler/p8cc.py dm_$p.c -o dm_$p.asm >/dev/null \
@@ -37,7 +37,7 @@ for p in cube tri rotate page camera gl md house clsave paint image; do
     [ "$end" -lt "$CTOP" ] \
         || fail "$p: end \$$(printf %X $end) is past CSTACKTOP \$$(printf %X $CTOP)"
 done
-echo "all eleven clients compile and fit below CSTACKTOP"
+echo "all twelve clients compile and fit below CSTACKTOP"
 
 # ---- 2: runtime smoke on a fresh disk --------------------------------------
 rm -f dm.img
@@ -74,4 +74,4 @@ assert lit > red, "only the fill drew -- outlines/edges missing"
 print("house frame lit; tri survives camera + rotate with %d red px" % red)
 EOF
 
-echo "C-DEMO TEST: PASS (eleven clients fit under CSTACKTOP; house/tri/camera/rotate/page draw and exit clean)"
+echo "C-DEMO TEST: PASS (twelve clients fit under CSTACKTOP; house/tri/camera/rotate/page draw and exit clean)"
