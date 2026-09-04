@@ -1,9 +1,10 @@
 # P8X Resident Window Manager — design
 
-Status: **skeleton running (2026-09-04).** Memory reserved and the survival
-assumption proven (`wm_reside_test`); the resident kernel skeleton draws
-windows from records that outlive the app (`wm_kernel_test`). Content
-lists, events, and launch-and-resume are the work ahead.
+Status: **kernel draws windows + content (2026-09-04).** Memory reserved
+and the survival assumption proven (`wm_reside_test`); the resident kernel
+draws windows -- chrome, titles, and card-list CONTENT -- from records
+and lists that outlive the app (`wm_kernel_test`). Events and
+launch-and-resume are the work ahead.
 
 ## Why resident, and why assembler
 
@@ -101,11 +102,18 @@ Appended to the OS syscall table after `SYS_EXEC` ($2024):
    and -- the debugging saga of the rung -- a test that `exit`s to the
    monitor gets the BOOT SPLASH redrawn over its frame, so GUI frame tests
    must dump at the shell, never the monitor.
-3. **Content lists + events (next):** each window's content as a
-   card-resident command list the kernel replays with `CLRUN` (so it
-   outlives its author -- the card holds the picture); then `lib_ptr`-equivalent parsing in asm (or
-   the kernel calls back into a small resident event helper), focus, drag,
-   close, the menu.
+3. **Content lists -- DONE 2026-09-04; events next.** wk_draw maps each
+   window's content rect (WINDOW/VWPORT, the lib_wm mapping) and replays
+   its card list with `CLRUN` -- so window content lives on the card and
+   redraws when the app is gone. `wm_kernel_test` now proves it end to
+   end: the stub records a red box into card list 40, opens SHAPES with
+   that list, and EXITS; the redraw-only program's frame still shows the
+   red content, drawn by the resident kernel from a list on the card.
+   THE REAL BUG this rung surfaced: **RESETF clears the card command
+   lists** (`memset(cldef,...)`), so a resident repaint must never RESETF
+   -- it sets PROJCT 0 / MDIDEN / TSIZE directly instead. Events are next:
+   `lib_ptr`-equivalent parsing in asm (or a small resident C helper the
+   kernel calls), focus, drag, close, the menu.
 4. **Launch + resume:** `SYS_EXEC` from inside the loop; the launched app is
    a WM client (paint recompiled `--cstacktop WMBASE`, drawing into its
    window's card list); on exit the loop resumes with every other window

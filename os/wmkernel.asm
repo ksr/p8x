@@ -14,9 +14,12 @@
 ;   WMBASE+9  .byte 'W','M'    presence signature (the launcher checks it
 ;                              to skip reloading a resident kernel)
 ;
-; v1 draws chrome + title only. Content (each window's card-resident
-; command list, replayed with CLRUN so it outlives its author) is the
-; next slice. All coordinates are window space, y UP (the GL default).
+; Draws chrome + stroke-font title + CONTENT: each window's content is a
+; card-resident command list (its `list` field), replayed with CLRUN into
+; the content rect -- so the picture lives on the CARD and redraws even
+; when the program that recorded it is gone. wk_repaint must NOT RESETF
+; (RESETF clears the card lists); it sets the text camera directly.
+; All coordinates are window space, y UP (the GL default).
 
 GLDATA = $FF50
 GLSTAT = $FF51
@@ -153,8 +156,9 @@ wko_ret:RTS
 
 ; ==== wk_repaint : desktop + every window, from the resident records ========
 wk_repaint:
-        LDA  #$04                       ; RESETF: known GL state
-        JSR  kput
+        ; NOTE: no RESETF here -- RESETF clears the card command lists
+        ; (cldef[]), which would wipe every window's recorded content. The
+        ; text camera is set directly instead.
         LDA  #$B0                       ; PROJCT 0 -> orthographic, so z=0
         JSR  kput                       ;   TEXT strokes are NOT near-clipped
         LDA  #0
@@ -334,7 +338,114 @@ wkd_tl: LDA  (P1)+
         DEC
         STA  kt
         JNZ  wkd_tl
+        ; content: if klist != 0, map the content rect and CLRUN its card
+        ; list -- the picture lives on the CARD, so it redraws even when
+        ; the program that recorded it is long gone.
+wkd_cnt:LDA  klist
+        JZ   wkd_ret
+        JSR  k_content                  ; WINDOW/VWPORT -> the content rect
+        LDA  #$72                       ; CLRUN klist
+        JSR  kput
+        LDA  klist
+        JSR  kput
+        JSR  k_ident                    ; restore identity for the next window
 wkd_ret:RTS
+
+; k_content: set WINDOW (0..cw-1, 0..ch-1) + VWPORT (the content rect,
+; inside the border and below the title bar) so a CLRUN replays into the
+; window in LOCAL coords. cw=kcw-2, ch=kch-15 (the lib_wm mapping).
+k_content:
+        LDA  #$B3                       ; WINDOW 0 (kcw-3) 0 (kch-16)
+        JSR  kput
+        LDA  #0                         ; x1 = 0
+        STA  kw
+        STA  kw+1
+        JSR  ksw
+        LDA  kcw                        ; x2 = kcw - 3
+        STA  ka
+        LDA  kcw+1
+        STA  ka+1
+        LDA  #3
+        STA  kb
+        LDA  #0
+        STA  kb+1
+        JSR  k16sub
+        JSR  ksw
+        LDA  #0                         ; y1 = 0
+        STA  kw
+        STA  kw+1
+        JSR  ksw
+        LDA  kch                        ; y2 = kch - 16
+        STA  ka
+        LDA  kch+1
+        STA  ka+1
+        LDA  #16
+        STA  kb
+        LDA  #0
+        STA  kb+1
+        JSR  k16sub
+        JSR  ksw
+        LDA  #$B2                       ; VWPORT vx1 vx2 vy1 vy2
+        JSR  kput
+        LDA  kx                         ; vx1 = kx + 1
+        STA  ka
+        LDA  kx+1
+        STA  ka+1
+        LDA  #1
+        STA  kb
+        LDA  #0
+        STA  kb+1
+        JSR  k16add
+        JSR  ksw
+        LDA  kx                         ; vx2 = kx + kcw - 2
+        STA  ka
+        LDA  kx+1
+        STA  ka+1
+        LDA  kcw
+        STA  kb
+        LDA  kcw+1
+        STA  kb+1
+        JSR  k16add
+        LDA  kw
+        STA  ka
+        LDA  kw+1
+        STA  ka+1
+        LDA  #2
+        STA  kb
+        LDA  #0
+        STA  kb+1
+        JSR  k16sub
+        JSR  ksw
+        LDA  #30                        ; vy1 = 286 - ky - kch   (286 = $011E)
+        STA  ka
+        LDA  #1
+        STA  ka+1
+        LDA  ky
+        STA  kb
+        LDA  ky+1
+        STA  kb+1
+        JSR  k16sub                     ; 286 - ky
+        LDA  kw
+        STA  ka
+        LDA  kw+1
+        STA  ka+1
+        LDA  kch
+        STA  kb
+        LDA  kch+1
+        STA  kb+1
+        JSR  k16sub                     ; - kch
+        JSR  ksw
+        LDA  #14                        ; vy2 = 270 - ky   (270 = $010E)
+        STA  ka
+        LDA  #1
+        STA  ka+1
+        LDA  ky
+        STA  kb
+        LDA  ky+1
+        STA  kb+1
+        JSR  k16sub
+        JSR  ksw
+        RTS
 
 ; MOVE(kx,ky)
 kmove_xy:
