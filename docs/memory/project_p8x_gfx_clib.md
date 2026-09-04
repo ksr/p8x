@@ -395,3 +395,25 @@ sides); tb_gcard now asserts the closed-door $FF float on the wire.
 Traps: c_gl_pixrd's devrd() cross-check spun forever on the floating
 $FF (busy bit reads 1) -- grep tests for 6531x/6532x pokes when
 closing a window; emu_bridge echo string "$FF" got shell-interpolated.
+
+THE GUI LADDER (2026-09-04, rungs 1-4 SHIPPED on graphics-card):
+lib_ptr (//#use ptr: console keys + xterm SGR mouse, strict termsize
+w/ _pseq CSI handoff), lib_wm (//#use wm: 4 windows, z-order, focus,
+chrome+close boxes, complement drag outline, Mac press-drag-release
+menu), desk (menu bar, TERM terminal window, FILES browser via
+lib_dirent, VIEW = BLIT-in-window-local-coords picture viewer,
+SHAPES = card-resident CLRUN list), paint refactored onto lib_ptr.
+SYS_EXEC $2024 (OS syscall 11): P1="path [args]" -> BECOME that
+program (LINEBUF copy, resolve, LOADF over the TPA, SP:=STKTOP,
+never returns; C=1 not found). desk launches .BIN with -d; paint
+chains back = the System-1/Finder model. KEY WM MECHANISM: per-window
+WINDOW+VWPORT moved TOGETHER = local coords + pure translation +
+hardware clip (VWPORT y = top-down device rows: canvas rows 27..271
+pairs WINDOW 0..244). Traps pinned: p8cc UNSIGNED compares (no -1
+sentinels; clamps must catch wrapped negatives >30000); FNEXT yields
+'.', '..' AND deleted $E5 slots (filter by printable first byte);
+TEXT draws undefined glyphs as SILENT SKIP (phantom empty rows);
+static CSTACKTOP margin != stack budget (desk ran 9 bytes past and
+"worked"; 80-byte stack locals are the hazard); TEXT can't record
+into lists; curves clip at SCREEN not window. c_desk_test = 7
+scripted sessions incl. the desk->paint->desk chain.
