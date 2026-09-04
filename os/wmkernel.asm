@@ -205,7 +205,9 @@ wkr_done:
 ; so the app that called SYS_WMRUN is still in the TPA -- but a launched
 ; program will replace it while the loop persists (the launch-and-resume
 ; rung).
-wk_run: JSR  wk_repaint
+wk_run: LDA  #99                       ; no window grabbed yet
+        STA  kdragw
+        JSR  wk_repaint
 wru_lp: JSR  $0100                      ; CONIN -> A (blocks for a key)
         LDB  #4                         ; ^D -> quit
         CMP
@@ -270,7 +272,9 @@ wru_ret:RTS
 ; that proves the parse + map + MDU path; grab-relative drag + hit test come
 ; next.
 wru_mouse:
-        JSR  k_rdnum                    ; b (button) -> knum ; term ';'  (ignored)
+        JSR  k_rdnum                    ; b (button) -> knum ; term ';'
+        LDA  knum
+        STA  mbtn                       ; keep the button byte (bit5 = drag)
         JSR  k_rdnum                    ; x -> knum ; term ';'
         JSR  k_dec1n                    ; ka = knum - 1
         LDA  #6
@@ -302,13 +306,219 @@ wru_mouse:
         STA  kmy
         LDA  kw+1
         STA  kmy+1
-        LDA  kterm                      ; only act on 'M' (press/drag)
-        LDB  #$4D
+        ; ---- dispatch: release (m), or press/drag (M) -----------------------
+        LDA  kterm
+        LDB  #$6D                       ; 'm' -> release: end any drag
         CMP
-        JNZ  wru_lp
-        JSR  k_settop                   ; top window bottom-left -> (kmx,kmy)
+        JZ   wru_mrel
+        LDA  mbtn                       ; 'M' with bit5 set -> a drag motion
+        LDB  #$20
+        AND
+        JZ   wru_mpress
+        ; drag: move the grabbed window so the grab point stays under the
+        ; cursor: origin = cursor - grab-offset
+        LDA  kdragw
+        LDB  #4
+        CMP
+        JC   wru_lp                     ; no window grabbed
+        JSR  k_dragmove
         JSR  wk_repaint
         JMP  wru_lp
+wru_mpress:
+        JSR  k_intop                    ; is the cursor in the TOP window?
+        JZ   wru_mnohit
+        ; grab it: kdragw = top index, grab-offset = cursor - origin
+        LDA  wcnt
+        LDB  #1
+        SUB
+        STA  kdragw
+        LDA  kmx                        ; kgx = kmx - kx  (kx/ky loaded by k_intop)
+        STA  ka
+        LDA  kmx+1
+        STA  ka+1
+        LDA  kx
+        STA  kb
+        LDA  kx+1
+        STA  kb+1
+        JSR  k16sub
+        LDA  kw
+        STA  kgx
+        LDA  kw+1
+        STA  kgx+1
+        LDA  kmy                        ; kgy = kmy - ky
+        STA  ka
+        LDA  kmy+1
+        STA  ka+1
+        LDA  ky
+        STA  kb
+        LDA  ky+1
+        STA  kb+1
+        JSR  k16sub
+        LDA  kw
+        STA  kgy
+        LDA  kw+1
+        STA  kgy+1
+        JMP  wru_lp
+wru_mnohit:
+        LDA  #99                        ; press missed: no drag target
+        STA  kdragw
+        JMP  wru_lp
+wru_mrel:
+        LDA  #99
+        STA  kdragw
+        JMP  wru_lp
+
+; k_ge: A = 1 if ka >= kb (unsigned 16-bit), else 0.
+k_ge:   LDA  ka+1
+        LDB  kb+1
+        CMP
+        JZ   kge_lo
+        LDA  #0
+        JNC  kge_r
+        LDA  #1
+        JMP  kge_r
+kge_lo: LDA  ka
+        LDB  kb
+        CMP
+        LDA  #0
+        JNC  kge_r
+        LDA  #1
+kge_r:  RTS
+
+; k_intop: A = 1 (Z=0) if (kmx,kmy) is inside the TOP window, else 0. Loads
+; the top window's rect into kx,ky,kcw,kch as a side effect.
+k_intop:LDA  wcnt
+        JZ   kit_no
+        LDB  #1
+        SUB
+        STA  ki
+        JSR  koff
+        JSR  kp1
+        LDA  (P1)+
+        STA  kx
+        LDA  (P1)+
+        STA  kx+1
+        LDA  (P1)+
+        STA  ky
+        LDA  (P1)+
+        STA  ky+1
+        LDA  (P1)+
+        STA  kcw
+        LDA  (P1)+
+        STA  kcw+1
+        LDA  (P1)+
+        STA  kch
+        LDA  (P1)+
+        STA  kch+1
+        ; kmx >= kx ?
+        LDA  kmx
+        STA  ka
+        LDA  kmx+1
+        STA  ka+1
+        LDA  kx
+        STA  kb
+        LDA  kx+1
+        STA  kb+1
+        JSR  k_ge
+        JZ   kit_no
+        ; kmx < kx+kcw ?  (reject if kmx >= kx+kcw)
+        LDA  kx
+        STA  ka
+        LDA  kx+1
+        STA  ka+1
+        LDA  kcw
+        STA  kb
+        LDA  kcw+1
+        STA  kb+1
+        JSR  k16add                     ; kw = kx+kcw
+        LDA  kmx
+        STA  ka
+        LDA  kmx+1
+        STA  ka+1
+        LDA  kw
+        STA  kb
+        LDA  kw+1
+        STA  kb+1
+        JSR  k_ge
+        JNZ  kit_no                     ; kmx >= kx+kcw -> outside
+        ; kmy >= ky ?
+        LDA  kmy
+        STA  ka
+        LDA  kmy+1
+        STA  ka+1
+        LDA  ky
+        STA  kb
+        LDA  ky+1
+        STA  kb+1
+        JSR  k_ge
+        JZ   kit_no
+        ; kmy < ky+kch ?
+        LDA  ky
+        STA  ka
+        LDA  ky+1
+        STA  ka+1
+        LDA  kch
+        STA  kb
+        LDA  kch+1
+        STA  kb+1
+        JSR  k16add
+        LDA  kmy
+        STA  ka
+        LDA  kmy+1
+        STA  ka+1
+        LDA  kw
+        STA  kb
+        LDA  kw+1
+        STA  kb+1
+        JSR  k_ge
+        JNZ  kit_no                     ; kmy >= ky+kch -> outside
+        LDA  #1                         ; inside
+        RTS
+kit_no: LDA  #0
+        RTS
+
+; k_dragmove: the grabbed window's origin := cursor - grab-offset.
+k_dragmove:
+        LDA  kmx                        ; x = kmx - kgx
+        STA  ka
+        LDA  kmx+1
+        STA  ka+1
+        LDA  kgx
+        STA  kb
+        LDA  kgx+1
+        STA  kb+1
+        JSR  k16sub
+        LDA  kw
+        STA  kmx2
+        LDA  kw+1
+        STA  kmx2+1
+        LDA  kmy                        ; y = kmy - kgy
+        STA  ka
+        LDA  kmy+1
+        STA  ka+1
+        LDA  kgy
+        STA  kb
+        LDA  kgy+1
+        STA  kb+1
+        JSR  k16sub
+        LDA  kw
+        STA  kmy2
+        LDA  kw+1
+        STA  kmy2+1
+        ; write (kmx2,kmy2) into the grabbed window's origin
+        LDA  kdragw
+        STA  ki
+        JSR  koff
+        JSR  kp1
+        LDA  kmx2
+        STA  (P1)+
+        LDA  kmx2+1
+        STA  (P1)+
+        LDA  kmy2
+        STA  (P1)+
+        LDA  kmy2+1
+        STA  (P1)
+        RTS
 
 ; k_rdnum: read a decimal from the console into knum (16-bit); the first
 ; non-digit terminates and is left in kterm. Uses the MDU for the x10.
@@ -789,5 +999,11 @@ knum:   .fill 2
 kterm:  .fill 1
 kmx:    .fill 2
 kmy:    .fill 2
+kmx2:   .fill 2
+kmy2:   .fill 2
+mbtn:   .fill 1
+kdragw: .fill 1
+kgx:    .fill 2
+kgy:    .fill 2
 ktlen:  .fill 1
 recs:   .fill 96                        ; 4 windows x 24 bytes

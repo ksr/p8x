@@ -58,8 +58,10 @@ python3 $ROOT/tools/p8xfs.py put    ms.img wmk.bin --name /bin/wmk.bin --load $W
 python3 $ROOT/tools/p8xfs.py put    ms.img ms_run.bin --name /bin/ms.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    ms.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
 
-# a mouse PRESS at cell (30,15): px=(30-1)*6=174, py=271-(15-1)*11=117
-printf 'B\rrun /bin/ms.bin\r\033[<0;30;15M\004' > ms.in
+# grab-relative DRAG: press INSIDE the window at cell (22,12) -> panel
+# (126,150), grab-offset (26,50); drag to cell (30,12) -> panel (174,150),
+# so the window origin follows to (174-26, 150-50) = (148,100); release.
+printf 'B\rrun /bin/ms.bin\r\033[<0;22;12M\033[<32;30;12M\033[<0;30;12m\004' > ms.in
 ../p8xemu -N -i ms.in -c ms.img -l 900000000 -g ms.ppm eeprom.bin > ms.out 2>/dev/null || true
 grep -q "RUN-DONE" ms.out || fail "the event loop did not return on ^D"
 
@@ -70,11 +72,12 @@ def p(x, wy):
     i = ((271 - wy) * 480 + x) * 3
     return tuple(px[i:i+3])
 GREY = (49, 48, 74)
-# the window's bottom-left border corner should now be at ~(174,117)
-assert p(174,117)==(255,255,255), "window not at the mouse-mapped spot (174,117): %r" % (p(174,117),)
-# and its start position (100,100) is vacated to desktop
-assert p(100,100)==GREY,          "window did not leave its start (100,100): %r" % (p(100,100),)
-print("the resident loop parsed an SGR mouse press and moved the window to the cursor")
+# a grab-relative drag moves the window by the CURSOR DELTA: press (126,150)
+# grabbed at offset (26,50); drag to (174,150) -> origin (148,100).
+assert p(148,100)==(255,255,255), "window not at the drag destination (148,100): %r" % (p(148,100),)
+# the start-position corner is vacated (the window moved, it did not snap)
+assert p(100,100)==GREY,          "window did not move off its start (100,100): %r" % (p(100,100),)
+print("the resident loop hit-tested a press, then dragged the window grab-relative")
 EOF
 
-echo "WM-MOUSE TEST: PASS (resident kernel: xterm SGR mouse parse + MDU cell->pixel map)"
+echo "WM-MOUSE TEST: PASS (resident kernel: SGR parse, hit test, grab-relative window drag)"
