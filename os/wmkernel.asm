@@ -212,10 +212,30 @@ wru_lp: JSR  $0100                      ; CONIN -> A (blocks for a key)
         LDB  #4                         ; ^D -> quit
         CMP
         JZ   wru_ret
+        LDB  #$6C                       ; 'l' -> LAUNCH a WM-client program
+        CMP
+        JZ   wru_launch
         LDB  #27                        ; ESC -> an arrow sequence
         CMP
         JZ   wru_esc
         JMP  wru_lp
+
+; LAUNCH: SYS_EXEC a WM client into the TPA below us. SYS_EXEC replaces the
+; TPA (this loop's original caller included) and never returns here -- but
+; the kernel and its window records are RESIDENT at WMBASE, above the TPA,
+; so they survive untouched. The launched program resumes the desktop by
+; calling wk_run again (it is a WM client): a fresh event loop, redrawing
+; the SAME resident records. That is launch-and-resume -- the windows
+; persist across the launch for free, because nothing reloaded the WM.
+wru_launch:
+        LDA  #<kpath
+        TAP1L
+        LDA  #>kpath
+        TAP1H
+        JSR  $2024                      ; SYS_EXEC (does not return)
+        JMP  wru_lp                      ; only reached if the exec failed
+kpath:  .ascii "/bin/wapp.bin"
+        .byte 0
 wru_esc:JSR  $0100                      ; expect '['
         LDB  #$5B
         CMP

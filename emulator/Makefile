@@ -188,6 +188,7 @@ test-gfx: p8xemu ucode
 	sh test/wm_kernel_test.sh
 	sh test/wm_events_test.sh
 	sh test/wm_mouse_test.sh
+	sh test/wm_launch_test.sh
 	sh test/c_image_test.sh
 	sh test/c_gl_test.sh
 	sh test/c_gl_mat_test.sh

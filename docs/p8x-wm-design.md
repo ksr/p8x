@@ -1,12 +1,13 @@
 # P8X Resident Window Manager — design
 
-Status: **kernel draws + is interactive (2026-09-04).** Memory reserved,
-survival proven (`wm_reside_test`); the resident kernel draws windows --
-chrome, titles, card-list CONTENT -- from records/lists that outlive the
-app (`wm_kernel_test`), and its resident event loop moves windows by
-ARROW KEYS (`wm_events_test`) and by grab-relative MOUSE DRAG parsed
-from xterm SGR (`wm_mouse_test`). Multi-window focus, close boxes, the
-menu, and launch-and-resume are the work ahead.
+Status: **launch-and-resume WORKS -- the payoff (2026-09-04).** The
+resident kernel draws windows (chrome, titles, card-list content) from
+records/lists that outlive the app, its event loop takes keyboard and
+grab-relative mouse-drag input, and -- the point of it all -- it
+LAUNCHES a program and RESUMES with every window intact
+(`wm_launch_test`): launching an app no longer destroys the WM. Left:
+multi-window focus/close/menu polish, and the per-window context
+switcher (move between several running apps).
 
 ## Why resident, and why assembler
 
