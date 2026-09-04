@@ -11,8 +11,10 @@
 ;                              list, tlen, title(12)]; copied resident
 ;   WMBASE+6  wk_repaint       FLOOD the desktop + draw every window's
 ;                              chrome, title and CONTENT from the records
-;   WMBASE+9  wk_run           the resident event loop (keyboard; mouse next)
-;   WMBASE+12 .byte 'W','M'    presence signature (the launcher checks it
+;   WMBASE+9  wk_run           the resident event loop (keyboard + mouse)
+;   WMBASE+12 wk_save   P1=blob(4) A=win -> save the window's state
+;   WMBASE+15 wk_load   P1=dest(4) A=win -> load the window's state
+;   WMBASE+18 .byte 'W','M'    presence signature (the launcher checks it
 ;                              to skip reloading a resident kernel)
 ;
 ; Draws chrome + stroke-font title + CONTENT: each window's content is a
@@ -27,12 +29,14 @@ GLSTAT = $FF51
 
         .org $D800                       ; WMBASE (match --base)
 
-; ---- jump table: MUST be first so the entries land at WMBASE+0/3/6/9 --------
+; ---- jump table: MUST be first so the entries land at fixed offsets ---------
         JMP  wk_init                    ; +0
         JMP  wk_open                    ; +3
         JMP  wk_repaint                 ; +6
-        JMP  wk_run                     ; +9  the resident event loop
-ksig:   .byte $57, $4D                  ; +12 'W','M'
+        JMP  wk_run                     ; +9   the resident event loop
+        JMP  wk_save                    ; +12  P1=blob(4), A=win -> save state
+        JMP  wk_load                    ; +15  P1=dest(4), A=win -> load state
+ksig:   .byte $57, $4D                  ; +18  'W','M'
 
 ; ==== helpers ================================================================
 ; kput: send one GL byte (A), honouring FIFO backpressure.
@@ -119,6 +123,60 @@ koff:   LDA  ki
 ; ==== wk_init ================================================================
 wk_init:LDA  #0
         STA  wcnt
+        RTS
+
+; ==== wk_save / wk_load : per-window STATE, held RESIDENT across launches ====
+; Each window owns a 4-byte state blob (wstate[]) that outlives the app --
+; so a program can save where it was, and when it (or the next app) is
+; launched into that window it resumes from there. This is the switcher's
+; core: state survives switching, because the kernel holding it is resident.
+;   wk_save: P1 = a 4-byte blob, A = window index -> copy into wstate[win]
+;   wk_load: P1 = a 4-byte dest, A = window index -> copy wstate[win] out
+wk_save:STA  ki                         ; window index
+        LDA  ki                         ; P2 = wstate + 4*index
+        SHL
+        SHL
+        STA  kt
+        LDA  #<wstate
+        LDB  kt
+        ADD
+        TAP2L
+        LDA  #>wstate
+        JNC  ws_h
+        LDB  #1
+        ADD
+ws_h:   TAP2H
+        LDA  #4
+        STA  kt
+ws_cp:  LDA  (P1)+
+        STA  (P2)+
+        LDA  kt
+        DEC
+        STA  kt
+        JNZ  ws_cp
+        RTS
+wk_load:STA  ki
+        LDA  ki
+        SHL
+        SHL
+        STA  kt
+        LDA  #<wstate
+        LDB  kt
+        ADD
+        TAP2L
+        LDA  #>wstate
+        JNC  wl_h
+        LDB  #1
+        ADD
+wl_h:   TAP2H
+        LDA  #4
+        STA  kt
+wl_cp:  LDA  (P2)+
+        STA  (P1)+
+        LDA  kt
+        DEC
+        STA  kt
+        JNZ  wl_cp
         RTS
 
 ; ==== wk_open : copy the 22-byte record at (P1) into slot wcnt ===============
@@ -1026,4 +1084,5 @@ kdragw: .fill 1
 kgx:    .fill 2
 kgy:    .fill 2
 ktlen:  .fill 1
+wstate: .fill 16                        ; 4 windows x 4-byte state blob
 recs:   .fill 96                        ; 4 windows x 24 bytes

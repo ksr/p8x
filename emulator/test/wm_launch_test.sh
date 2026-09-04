@@ -19,7 +19,7 @@ fail() { echo "WM-LAUNCH TEST: FAIL — $1"; exit 1; }
 WMBASE=$(python3 -c "import sys; sys.path.insert(0,'$ROOT/generators'); import memmap; print(memmap.WMBASE)")
 WK_OPEN=$((WMBASE + 3))
 WK_RUN=$((WMBASE + 9))
-WK_SIG=$((WMBASE + 12))
+WK_SIG=$((WMBASE + 18))
 
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
