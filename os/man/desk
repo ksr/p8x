@@ -26,7 +26,10 @@ DESCRIPTION
     characters echo into its input line while it has focus, ENTER
     scrolls); FILES browses the filesystem -- click or arrow to
     select, ENTER (or the OPEN menu item) opens: a directory
-    navigates ('..' walks up), and a .P8I picture opens in VIEW,
+    navigates ('..' walks up), a .BIN LAUNCHES -- desk SYS_EXECs the
+    program, which loads over desk's own memory, the System-1 way;
+    programs that understand the "-d" argument (paint does) chain
+    back to desk when they quit -- and a .P8I picture opens in VIEW,
     where the image BLITs from its file into window-local
     coordinates -- drag the window and the picture rides along. All
     text is the card's own stroke TEXT, placed in window-local
@@ -60,6 +63,14 @@ NOTES
     documented limitation). The library is /lib/lib_wm.c -- windows,
     z-order, chrome, hit tests, drag, the menu; a client provides
     wm_content()/wm_title() and pumps lib_ptr events.
+
+NOTES ON LAUNCHING
+    The TPA holds ONE program, so launching replaces desk in memory
+    (SYS_EXEC, man basic has none of this -- see /src/os-bios for the
+    syscall). A launched program that ignores "-d" simply exits to
+    the shell; type desk to return. This is exactly how the original
+    Finder worked: the application replaced it in RAM, and quitting
+    brought it back.
 
 SEE ALSO
     paint, gl, gfx, basic

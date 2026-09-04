@@ -23,6 +23,7 @@
 //#define SYS_DIRENTRY 0x201B    /* snapshot current dir entry -> (P1) */
 //#define SYS_OPENDIR  0x201E    /* P1 = 16-bit dir LBA -> open for FNEXT */
 //#define SYS_MKDIR    0x2021    /* P1 = path -> mkdir; C=1 on real failure */
+//#define SYS_EXEC     0x2024    /* P1="path [args]": BECOME that program (no return; C=1 not found) */
 
 /* BIOS jump table ($01xx): low-level console + file-stream primitives. The read
  * (FOPEN/FGETB) and write (FWOPEN/FPUTB/FCLOSE) streams are separate single-file

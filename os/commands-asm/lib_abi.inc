@@ -25,6 +25,7 @@ SYS_OPENCWD  = $2012    ; begin iterating the CWD (16-bit LBA)
 SYS_DIRENTRY = $201B    ; snapshot the current dir entry -> (P1) 18 bytes
 SYS_OPENDIR  = $201E    ; P1 = 16-bit dir start LBA -> open for FNEXT
 SYS_MKDIR    = $2021    ; P1 = path -> create a directory; C=1 on real failure
+SYS_EXEC   = $2024      ; P1="path [args]": become that program (no return; C=1 not found)
 
 ; --- BIOS jump table ($01xx) ---
 CONIN      = $0100      ; wait for key, char -> A (raw console, not stdin)

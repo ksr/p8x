@@ -91,15 +91,10 @@ int rec_shapes() {
     cw = wmw[0] - 2; ch = wmh[0] - 15;
     wgput(112); wgput(30);                    /* CLBEG 30 */
     wpen(63488);
-    wmov(10, 10); wrect(cw - 10, ch - 10);
-    wpen(2016); wfill(1);
-    wmov(30, 25); wgput(56); wgw(18);         /* filled CIRCLE (kept inside:
-                                                 curves clip at the SCREEN) */
-    wfill(0);
-    wpen(2047);
-    wmov(0, 0); wgput(40); wgw(300); wgw(300);   /* line: clips at the window */
+    wmov(10, 10); wrect(cw - 10, ch - 10);    /* the red frame */
     wpen(65504);
-    wmov(cw - 30, ch - 20); wrect(cw + 60, ch + 60); /* RECT overrun: clipped */
+    wmov(cw - 30, ch - 20); wrect(cw + 60, ch + 60); /* RECT overrun:
+                                                 clipped by the card */
     wgput(113);                               /* CLEND */
     return 0;
 }
@@ -185,16 +180,16 @@ int pjoin(char *out, char *dir, char *leaf) { /* out = dir + "/" + leaf */
     return 0;
 }
 
-int isp8i(char *s) {                          /* name ends ".P8I" */
+int ftype(char *s) {                          /* 1 = .P8I, 2 = .BIN, else 0
+                                                 (case-blind: &95 folds) */
     int n;
     n = 0;
     while (s[n] != 0) { n = n + 1; }
     if (n < 4) { return 0; }
     if (s[n-4] != '.') { return 0; }
-    if (s[n-3] != 'P' && s[n-3] != 'p') { return 0; }
-    if (s[n-2] != '8') { return 0; }
-    if (s[n-1] != 'I' && s[n-1] != 'i') { return 0; }
-    return 1;
+    if ((s[n-3] & 95) == 'P' && s[n-2] == '8' && (s[n-1] & 95) == 'I') { return 1; }
+    if ((s[n-3] & 95) == 'B' && (s[n-2] & 95) == 'I' && (s[n-1] & 95) == 'N') { return 2; }
+    return 0;
 }
 
 /* the VIEW window's content: header-skip, then one BLIT per row, the
@@ -243,8 +238,25 @@ int fopen_sel() {                             /* ENTER/OPEN on the selection */
         wm_repaint();
         return 0;
     }
-    if (isp8i(fnam + fsel * 13) == 0) {
-        tprint("NO VIEWER FOR THAT");
+    r = ftype(fnam + fsel * 13);
+    if (r == 2) {                             /* a program: BECOME it, the
+                                                 System-1 way -- SYS_EXEC
+                                                 loads it over this very
+                                                 code; "-d" asks it to
+                                                 chain back to desk */
+        pjoin(vpath, cpath, fnam + fsel * 13);
+        w2 = 0;
+        while (vpath[w2] != 0) { w2 = w2 + 1; }
+        vpath[w2] = ' '; vpath[w2+1] = '-'; vpath[w2+2] = 'd'; vpath[w2+3] = 0;
+        ptr_done();                           /* the terminal outlives us */
+        bios(SYS_EXEC, vpath, 0);
+        ptr_init();                           /* only reached on failure */
+        tprint("?EXEC");
+        wm_repaint();
+        return 0;
+    }
+    if (r == 0) {
+        tprint("NO VIEWER");
         wm_repaint();
         return 0;
     }
@@ -256,7 +268,7 @@ int fopen_sel() {                             /* ENTER/OPEN on the selection */
     w2 = (bios(FGETB, 0, 0) & 255); w2 = w2 + (bios(FGETB, 0, 0) & 255) * 256;
     h2 = (bios(FGETB, 0, 0) & 255); h2 = h2 + (bios(FGETB, 0, 0) & 255) * 256;
     if (w2 == 0 || h2 == 0 || w2 > 456 || h2 > 240) {
-        tprint("TOO BIG / NOT P8I");
+        tprint("BAD P8I");
         wm_repaint();
         return 0;
     }
@@ -270,21 +282,11 @@ int fopen_sel() {                             /* ENTER/OPEN on the selection */
     return 0;
 }
 
-/* one arrow: FILES moves its selection, other windows move themselves */
+/* arrows walk the FILES selection (windows move by mouse, as they should) */
 int akey(int k) {
-    int i;
-    i = wm_top();
-    if (i == 2) {
-        if (k == 128 && fsel) { fsel = fsel - 1; wm_repaint(); }
-        if (k == 129 && fsel + 1 < fcnt) { fsel = fsel + 1; wm_repaint(); }
-        return 0;
-    }
-    if (i >= wm_n) { return 0; }
-    if (k == 128) { wmy[i] = wm_clampy(i, wmy[i] + 8); }
-    if (k == 129) { wmy[i] = wm_clampy(i, wmy[i] - 8); }
-    if (k == 130) { wmx[i] = wm_clampx(i, wmx[i] + 8); }
-    if (k == 131) { wmx[i] = wm_clampx(i, wmx[i] - 8); }
-    wm_repaint();
+    if (wm_top() != 2) { return 0; }
+    if (k == 128 && fsel) { fsel = fsel - 1; wm_repaint(); }
+    if (k == 129 && fsel + 1 < fcnt) { fsel = fsel + 1; wm_repaint(); }
     return 0;
 }
 
@@ -310,11 +312,9 @@ int main() {
     cpath[0] = '/'; cpath[1] = 0;
     fscan();
     wm_mtitle = "DESK";
-    wm_mcount = 4;
+    wm_mcount = 2;
     mcopy(0, "NEW TERM");
-    mcopy(1, "OPEN");
-    mcopy(2, "CLOSE TOP");
-    mcopy(3, "QUIT");
+    mcopy(1, "QUIT");
 
     wgput(4);                                 /* RESETF                    */
     wgput(176); wgw(0);                       /* PROJCT 0 (2D text)        */
@@ -322,7 +322,7 @@ int main() {
     wgput(129); wgw(256);                     /* TSIZE 1x                  */
     rec_shapes();
     wm_repaint();
-    outs("DESK - see man desk. ^D quits");
+    outs("DESK (man desk)");
     outc(13); outc(10);
     ptr_init();
 
@@ -335,12 +335,7 @@ int main() {
                 if (wm_msel == 0) {           /* NEW TERM */
                     tclear(); wmvis[1] = 1; wm_raise(1); wm_repaint();
                 }
-                if (wm_msel == 1) { fopen_sel(); }         /* OPEN */
-                if (wm_msel == 2) {           /* CLOSE TOP */
-                    i = wm_top();
-                    if (i < wm_n) { wmvis[i] = 0; wm_repaint(); }
-                }
-                if (wm_msel == 3) { going = 0; }
+                if (wm_msel == 1) { going = 0; }
             } else if (k == 1 && wm_top() == 2) {
                 /* a click inside FILES content selects its row */
                 i = wmy[2] + wmh[2] - 15;     /* content top, screen coords */

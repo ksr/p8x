@@ -61,6 +61,7 @@ int armed;                         /* anchor placed, ghost live */
 int pal[8];
 
 int mdown;                         /* a mouse press is being dragged */
+int fromdesk;                      /* launched by desk (-d): chain back */
 
 /* ---- GL emission ----------------------------------------------------------- */
 int gput(int v) {
@@ -332,7 +333,12 @@ int m_release(int x, int y) {
 
 int main() {
     int k; int step;
+    char *ap;
     if (peek(GLID) != 71) { puts("?No display"); return 1; }
+    ap = argstr();
+    while (*ap == 32) { ap = ap + 1; }
+    fromdesk = 0;
+    if (ap[0] == '-' && ap[1] == 'd') { fromdesk = 1; }
     pal[0] = 65535;  pal[1] = 63488; pal[2] = 2016;  pal[3] = 31;
     pal[4] = 65504;  pal[5] = 2047;  pal[6] = 63519; pal[7] = 64512;
     nsh = 0; tool = 0; col = 0; armed = 0; mdown = 0;
@@ -409,5 +415,6 @@ int main() {
     ptr_done();
     gwait();
     outc(13); outc(10); puts("bye");
+    if (fromdesk) { bios(SYS_EXEC, "/bin/desk.bin", 0); }
     return 0;
 }

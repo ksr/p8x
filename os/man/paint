@@ -2,7 +2,7 @@ NAME
     paint - keyboard-driven vector paint on the graphics card
 
 SYNOPSIS
-    paint
+    paint [-d]
 
 DESCRIPTION
     A little vector editor: pick a primitive and a colour from the
@@ -12,6 +12,9 @@ DESCRIPTION
     makes erase possible: the last shape is popped and the canvas
     replays. All input is the console keyboard (this machine has no
     mouse); all output is the panel.
+
+    With -d (how desk launches it), quitting chains back to desk via
+    SYS_EXEC instead of exiting to the shell.
 
 KEYS
     w a s d           move the crosshair 1 px (window sense: w is UP)

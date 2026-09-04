@@ -199,7 +199,6 @@ int wm_line(int i, int x, int y) {
 }
 
 /* ---- the menu: press-drag-release tracking ---------------------------------- */
-int wm_mwidth() { return 110; }
 int wm_mitem(int y) {                         /* dropdown item under wy, 99 */
     int top; int i;
     top = 258;
@@ -213,7 +212,7 @@ int wm_mitem(int y) {                         /* dropdown item under wy, 99 */
 int wm_mhl(int i) {                           /* highlight row i (complement) */
     if (i >= wm_mcount) { return 0; }
     wmode(1); wfill(1);
-    wmov(4, 258 - 14 - i * 14); wrect(wm_mwidth() - 4, 257 - i * 14);
+    wmov(4, 258 - 14 - i * 14); wrect(110 - 4, 257 - i * 14);
     wfill(0); wmode(0);
     return 0;
 }
@@ -221,10 +220,10 @@ int wm_menu() {                               /* returns the item, or 99 */
     int i; int t; int sel; int ns;
     wm_vall();
     wpen(65535); wfill(1);                    /* the dropdown sheet */
-    wmov(2, 258 - wm_mcount * 14 - 2); wrect(wm_mwidth(), 257);
+    wmov(2, 258 - wm_mcount * 14 - 2); wrect(110, 257);
     wfill(0);
     wpen(0);
-    wmov(2, 258 - wm_mcount * 14 - 2); wrect(wm_mwidth(), 257);
+    wmov(2, 258 - wm_mcount * 14 - 2); wrect(110, 257);
     i = 0;
     while (i < wm_mcount) {
         wm_text(10, 258 - 11 - i * 14, wm_mitems + i * 16);
@@ -234,7 +233,7 @@ int wm_menu() {                               /* returns the item, or 99 */
     t = 2;
     while (t == 2 || t == 1) {                /* until release */
         ns = wm_mitem(ptr_y);
-        if (ptr_x > wm_mwidth()) { ns = 99; }
+        if (ptr_x > 110) { ns = 99; }
         if (ns != sel) {
             wm_mhl(sel); wm_mhl(ns);          /* move the highlight */
             sel = ns;
@@ -250,7 +249,7 @@ int wm_menu() {                               /* returns the item, or 99 */
 int wm_press(int x, int y) {
     int i;
     if (y >= 258) {                           /* the menu bar */
-        if (x < wm_mwidth()) {
+        if (x < 110) {
             wm_msel = wm_menu();
             if (wm_msel < wm_mcount) { return 2; }
         }

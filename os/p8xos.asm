@@ -130,6 +130,7 @@ HISTLEN = 64           ; bytes per history slot (matches LINEBUF width)
         JMP  SYS_DIRENTRY       ; $201B SYS_DIRENTRY: snapshot the current dir entry -> (P1) 18 bytes
         JMP  SYS_OPENDIR        ; $201E SYS_OPENDIR: P1 = 16-bit dir start LBA -> open for FNEXT
         JMP  SYS_MKDIR          ; $2021 SYS_MKDIR: P1 = path -> create a directory; C=1 on real failure
+        JMP  SYS_EXEC           ; $2024 SYS_EXEC: P1 = "path [args]" -> BECOME that program (no return; C=1 = not found)
 ; Reached only via the table above (COLD jumps past them).
 SYS_GETDRIVE:                   ; derived: 1 if the CWD is under the /d1 mount
         LDA  CURDRIVE
@@ -1497,6 +1498,66 @@ FINDP2: JSR  RESOLVE            ; resolve the path at P2: SDIR = parent, NAMEBUF
         RTS
 FA_NO:  LDA  #0
         STA  MATCH
+        RTS
+
+; SYS_EXEC -- replace the RUNNING PROGRAM with another, the System-1 way
+; (the new binary loads over the TPA, caller included, so this never
+; returns on success). P1 = a full invocation "path [args]", exactly as
+; typed at the prompt minus PATH search -- name the .BIN explicitly.
+; The command is copied into LINEBUF (the caller's own memory dies at
+; LOADF; args must live somewhere durable), the stack RESETS to STKTOP
+; (there is no caller to return to), and the chained program's RTS
+; lands in a shell that looks freshly entered. Failure to resolve is
+; the one surviving path: C=1, caller still alive. Redirects and stdin
+; bindings are CLEARED -- a chain is a clean launch.
+SYS_EXEC:
+        LDP2 #LINEBUF           ; copy "(P1)" -> LINEBUF, NUL included,
+        LDA  #63                ;   capped to the buffer (TMP counts down)
+        STA  TMP
+sxe_cp: LDA  TMP
+        JZ   sxe_tr
+        LDB  #1
+        SUB
+        STA  TMP
+        LDA  (P1)
+        STA  (P2)
+        JZ   sxe_cd
+        INP1
+        INP2
+        JMP  sxe_cp
+sxe_tr: LDA  #0                 ; over-long: truncate
+        STA  (P2)
+sxe_cd: LDA  #<LINEBUF          ; ARGP -> the copy; RUNSKIP skips the
+        STA  ARGPL              ;   name word so the program's args are
+        LDA  #>LINEBUF          ;   the tail, as with explicit RUN
+        STA  ARGPH
+        LDA  #1
+        STA  RUNSKIP
+        LDP2 #LINEBUF
+        JSR  FINDP2             ; resolve + find; directory args refused
+        LDA  MATCH
+        JZ   sxe_no
+        JSR  DEFADDR
+        JSR  LOADF              ; THE CALLER IS GONE from here on
+        LDA  #0                 ; a chain launches clean: console stdio,
+        STA  REDIRF             ;   no redirect, no pending LF
+        STA  INMODE
+        STA  INARM
+        STA  APHAVE
+        STA  GPLF
+        LDP3 #STKTOP            ; no caller: a fresh stack
+        JSR  ARG2P2
+        JSR  SKIPWORD           ; P2 -> the arg tail after the name
+        LDA  EXECLO
+        TAP1L
+        LDA  EXECHI
+        TAP1H
+        JSR  (P1)               ; run; RTS lands back here...
+        LDA  #0
+        STA  INMODE
+        STA  INARM
+        JMP  SHELL              ; ...and the shell carries on
+sxe_no: SEC
         RTS
 
 ; ARG2P2 - point P2 at the saved argument position in LINEBUF.

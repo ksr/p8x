@@ -16,6 +16,10 @@
 #      image BLITs from its file into window-local coords.
 #   6. navigation: ENTER on a directory re-scans; a picture opened
 #      from inside /PICS proves the whole path.
+#   7. THE APP MODEL, the System-1 way: ENTER on a .BIN makes desk
+#      SYS_EXEC it -- the program loads over desk's own TPA; launched
+#      with "-d", paint chains back to desk on quit. One key script
+#      drives desk -> paint -> desk; the final frame is desk's again.
 set -e
 cd "$(dirname "$0")"
 ROOT=../..
@@ -60,7 +64,7 @@ printf 'B\rdesk\r\033[<0;51;5M\033[<32;41;5M\033[<32;31;5M\033[<0;31;5m\004' > c
 grep -q "bye" cd2.out || fail "mouse session did not quit cleanly"
 
 # 3: the menu -- press DESK in the bar, slide to QUIT, release
-printf 'B\rdesk\r\033[<0;5;1M\033[<32;5;3M\033[<32;5;5M\033[<32;5;6M\033[<0;5;6m' > cd3.in
+printf 'B\rdesk\r\033[<0;5;1M\033[<32;5;3M\033[<32;5;4M\033[<0;5;4m' > cd3.in
 ../p8xemu -N -i cd3.in -c cd.img -l 1200000000 eeprom.bin > cd3.out 2>/dev/null || true
 grep -q "bye" cd3.out || fail "menu QUIT did not exit the program"
 
@@ -78,6 +82,16 @@ grep -q "bye" cd5.out || fail "browser session did not quit cleanly"
 printf 'B\rdesk\r\011\011\033[B\033[B\033[B\033[B\r\033[B\r\004' > cd6.in
 ../p8xemu -N -i cd6.in -c cd.img -l 1800000000 -g cd6.ppm eeprom.bin > cd6.out 2>/dev/null || true
 grep -q "bye" cd6.out || fail "navigation session did not quit cleanly"
+
+# 7: launch paint from FILES (/bin -> paint.bin), quit it, desk returns
+python3 $ROOT/tools/clib.py $ROOT/os/commands/paint.c > cd_paint.c
+python3 $ROOT/compiler/p8cc.py cd_paint.c -o cd_paint.asm >/dev/null
+python3 $ROOT/assembler/p8xasm.py cd_paint.asm -o cd_paint.bin --base 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put cd.img cd_paint.bin --name /bin/paint.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+printf 'B\rdesk\r\011\011\033[B\r\033[B\033[B\rq\004' > cd7.in
+../p8xemu -N -i cd7.in -c cd.img -l 2500000000 -g cd7.ppm eeprom.bin > cd7.out 2>/dev/null || true
+seq=$(tr -d '\0' < cd7.out | grep -oE "PAINT|DESK" | tr '\n' ' ')
+case "$seq" in *"DESK PAINT "*"DESK"*) ;; *) fail "chain sequence was '$seq', want DESK PAINT ... DESK";; esac
 
 python3 - <<'EOF' || exit 1
 def load(f):
@@ -118,7 +132,9 @@ assert p(e,22,22)==(255,0,0),       "opened T.P8I not drawn in the viewer"
 assert p(e,24,21)==(255,0,0),       "viewer image incomplete"
 f = load("cd6.ppm")
 assert p(f,22,22)==(0,0,255),       "B.P8I via /PICS navigation not drawn"
-print("menu, close box, card-list repaint, clip, drag, browser+viewer: pixel-exact")
+g = load("cd7.ppm")
+assert p(g,240,265)==(255,255,255), "desk's menu bar missing after the chain back"
+print("menu, close box, card-list repaint, clip, drag, browser+viewer, app chain: pixel-exact")
 EOF
 
-echo "C-DESK TEST: PASS (lib_wm: menu, close boxes, card-list repaint, clip, drag; FILES browser + BLIT viewer)"
+echo "C-DESK TEST: PASS (lib_wm windows/menu/close; FILES browser + viewer; SYS_EXEC app chain desk->paint->desk)"

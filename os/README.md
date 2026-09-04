@@ -261,6 +261,7 @@ from C, the `p8cc` `bios()` intrinsic). The table is **append-only**:
 | `$201B` | `SYS_DIRENTRY` | snapshot the entry `FNEXT`/`FFIND` just matched into `(P1)` — 18 bytes: name[12], flag, len(lo/mid), start-LBA(lo/hi), len(hi) — a 24-bit length. Lets commands read directory metadata without hardcoding BIOS scratch addresses |
 | `$201E` | `SYS_OPENDIR` | begin iterating the directory whose 16-bit start LBA is in `P1` (then `FNEXT`); the drive-agnostic way to descend into a subdirectory found via `SYS_DIRENTRY` |
 | `$2021` | `SYS_MKDIR` | create the directory named by the path in `P1` (applies the `/d1` mount); `C=1` on real failure, idempotent if it already exists. Lets a `/bin` program (`cp -r`) make directories |
+| `$2024` | `SYS_EXEC` | `P1` = a full invocation `"path [args]"` (the `.BIN` named explicitly — no PATH search): **become that program**. The binary loads over the caller's own TPA, the stack resets, and the new program's exit lands in a freshly-entered shell — a chain, not a call, so on success this never returns (`C=1` = not found, caller still alive). Redirects and stdin bindings are cleared. What lets `desk` launch programs the System-1 way, and lets a launched program chain back |
 
 `SYS_GETCWD`/`SYS_CWDLBA`/`SYS_OPENCWD` operate on the single CWD in the unified
 namespace (the path shows `/d1/...` when it is on the mounted drive); `SYS_OPENCWD`
