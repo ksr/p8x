@@ -1,5 +1,5 @@
 NAME
-    desk - windows, menus and close boxes on the graphics card
+    desk - windows, menus, a file browser and a picture viewer
 
 SYNOPSIS
     desk
@@ -21,16 +21,22 @@ DESCRIPTION
     occlusion reduces to paint order, bottom to top. The CPU keeps
     only rectangles and a z-order.
 
-    The SHAPES window draws primitives that deliberately overrun its
-    edge (the card clips them); the TERM window is a small terminal:
-    typed characters echo into its input line while it has focus,
-    ENTER scrolls them into history. Its text is the card's own
-    stroke TEXT, placed in window-local coordinates like every other
-    primitive -- the 3D pipeline clips through the same window.
+    Four windows: SHAPES draws primitives that deliberately overrun
+    its edge (the card clips them); TERM is a small terminal (typed
+    characters echo into its input line while it has focus, ENTER
+    scrolls); FILES browses the filesystem -- click or arrow to
+    select, ENTER (or the OPEN menu item) opens: a directory
+    navigates ('..' walks up), and a .P8I picture opens in VIEW,
+    where the image BLITs from its file into window-local
+    coordinates -- drag the window and the picture rides along. All
+    text is the card's own stroke TEXT, placed in window-local
+    coordinates like every other primitive.
 
 KEYS AND MOUSE
     TAB               raise and focus the next window
-    arrow keys        move the focused window 8 px
+    arrow keys        move the focused window 8 px -- except FILES,
+                      where up/down move the SELECTION
+    ENTER             open the FILES selection (when FILES has focus)
     printable keys    type into a focused TERM; ENTER scrolls;
                       backspace erases
     Ctrl-D            quit
