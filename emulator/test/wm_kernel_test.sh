@@ -18,7 +18,7 @@ WMBASE=$(python3 -c "import sys; sys.path.insert(0,'$ROOT/generators'); import m
 WK_INIT=$WMBASE
 WK_OPEN=$((WMBASE + 3))
 WK_PAINT=$((WMBASE + 6))
-WK_SIG=$((WMBASE + 9))
+WK_SIG=$((WMBASE + 12))
 
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
