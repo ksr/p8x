@@ -541,16 +541,64 @@ Nothing below has been built or measured.
       fabric, turning IMAGE into FGETB+poke at wire speed); (c) cheap
       RLE in P8I v2 for flat-colour art (photos won't compress, UI
       will). Measure (a) first; it may make (b) moot for the SD path.
-- [ ] **Mouse-type input (2026-08-29, user).** No pointer hardware on
-      the board, so two doors: forward the HOST's mouse over the card
-      bridge (a protocol v2 message pair -- runcard.sh's terminal can
-      capture deltas; cleanest for the emulator-CPU era) or real
-      hardware later (PS/2 needs two pins + a tiny shifter in fabric;
-      the TTL bus era could use a serial mouse on a second ACIA).
-      On-target shape either way: a pointer BIOS call (SYS_PTR: x, y,
-      buttons) + a cursor drawn in LINFUN 4 (XOR) -- draw/undraw is
-      board-proven, no save-under needed. First client: `md` paging,
-      or a BASIC PTR() function trio.
+- [x] **Mouse-type input, door one -- DELIVERED 2026-09-04 (496bca1),
+      simpler than the 2026-08-29 sketch imagined.** No protocol v2,
+      no bridge change: the TERMINAL forwards the host mouse as xterm
+      SGR escape sequences on the console it already has, and paint
+      parses them off CONIN next to the arrow keys (press/drag/release
+      + palette clicks; ESC[18t size query, CONST-probed and strict,
+      80x24 fallback; cell resolution -- a bigger terminal window is a
+      finer brush; SGR-Pixels 1016 is the upgrade for terminals that
+      speak it). CONST joined the C/asm ABI books. Still open from the
+      sketch: a shared pointer ABSTRACTION (SYS_PTR or a lib) once a
+      second client wants events, and BASIC's PTR() trio. Door two --
+      real pointer hardware -- is the PS/2 card entry below.
+- [ ] **PS/2 keyboard + mouse card (2026-09-04, user; the sketch).**
+      A TTL bus card giving the machine native human input -- and,
+      with the LCD-as-a-terminal entry, a fully HEAD-DOWN P8X: panel,
+      keyboard, mouse, no Mac. Philosophy: hardware receives, software
+      understands -- the card is two dumb PS/2 receivers; scan-code
+      decode, mouse-packet assembly and device init all live in a
+      shipped library, the P8X way.
+      WINDOW $FF58-$FF5F (free, adjacent to the GL port -- the
+      human-interface corner of the I/O page):
+        $FF58 PSADAT r: port A (keyboard) byte, ready-flag cleared on
+                        read -- raw Set-2 scan codes, no translation
+        $FF59 PSAST  r: bit0 ready, bit1 OVERRUN (byte arrived while
+                        one waited -- 1-byte holding register, the
+                        ACIA/CF precedent; PS/2 is ~1 ms/byte, the
+                        CPU laps it), bit2 parity error
+                     w: bit0 = force CLOCK low, bit1 = drive DATA low
+                        (open collector) -- the host-to-device
+                        transmit is BIT-BANGED by software, hardware
+                        does only the receive shift
+        $FF5A PSBDAT r: port B (mouse) byte           } same shape,
+        $FF5B PSBST  rw: as PSAST                     } second port
+        $FF5C PSLINE r: live line states (Aclk Adat Bclk Bdat) for
+                        the bit-banged transmit's polling
+        $FF5E PSID   r: 'K' ($4B) -- presence, the single-byte GLID
+                        convention (an absent card floats $FF)
+      RECEIVE PATH per port, ~5 TTL ICs: 74HC164 shifter clocked by
+      the device's falling clock edges, 74HC161 bit counter to 11
+      (start + 8 data + parity + stop), 74HC574 latch + ready FF,
+      7407 open-collector drivers for the two lines. Two ports + bus
+      decode + presence ~= a dozen through-hole ICs, one 100nF per
+      IC (house rule). 5V logic throughout -- PS/2 is native TTL.
+      TRANSMIT (needed once: $F4 enable-streaming to the mouse;
+      keyboards talk unasked): software holds clock low >100 us via
+      PSAST bit0, pulls data, releases clock, then feeds bits as the
+      DEVICE clocks them -- pure polling against PSLINE, no timing
+      the CPU cannot make.
+      SOFTWARE: lib_ps2.c/.inc -- Set-2 make/break -> ASCII with
+      shift/caps state, 3-byte mouse packets -> (dx, dy, buttons),
+      the $F4 init dance; then the pointer abstraction above, with
+      paint's event loop as the first client and the OS console
+      (CONIN from the keyboard port when present) as the second --
+      that is the standalone-machine door. IRQ is optional sugar
+      ($FF06 convention) -- polling suffices at PS/2 rates.
+      EMULATOR: model the window (PSID 'K', script-fed FIFOs) so
+      lib_ps2 and its tests run before any solder melts -- the
+      golden-model discipline, as ever.
 - [ ] **LCD as a terminal (2026-08-29, user).** Let the console live
       on the panel: mirror BIOS CONOUT to the display so the machine
       is usable head-down, serial only for file transfer. With 10h the
@@ -607,20 +655,20 @@ Nothing below has been built or measured.
       history at a518415..HEAD; re-adding either is a revert plus
       keyword regeneration. Until then: arcs = short DRAW chains at
       4-degree steps, patterned fills = software span masks.
-- [ ] **Simple graphics editor, a C program (2026-08-29, user).** An
-      on-target `draw` command (os/commands, //#use gfx): pick a tool
-      and colour, place points/lines/boxes/circles/fills on the panel,
-      save and reload the result. Everything it needs exists: lib_gfx
-      primitives + AREA for fills, LINFUN 4 (XOR) for the rubber-band
-      preview while placing (board-proven un-draw), `image grab` for
-      saving the canvas as P8I and IMAGE to reload it. Cursor from the
-      keyboard first (arrow keys move an XOR crosshair, step/fast
-      step); the mouse backlog item slots straight in later via the
-      same pointer abstraction. Save-as-GL-scene (emit the command
-      list instead of pixels) is the deluxe variant -- editable vector
-      drawings replayable with CLRUN, feeding the same glyph/list
-      machinery. New-command rules apply: C + asm twin, man page,
-      run.sh lists.
+- [x] **Simple graphics editor -- SHIPPED 2026-09-04 as `paint`
+      (4bb1487 + 496bca1; the 2026-08-29 sketch, delivered).** Vector
+      display list (erase pops + replays), 8-colour palette + tool
+      cells drawn with the primitives themselves, LINFUN-COMPLEMENT
+      crosshair and rubber-band (mode 1 beats the sketched XOR: it
+      restores ANY background), AREABC fills with the boundary colour
+      probed by a PIXELR ray, and the MOUSE through the console's
+      xterm SGR reports -- press-drag-release, palette clicks. The
+      palette strip is guarded by the card (WINDOW+VWPORT moved
+      TOGETHER = identity-with-clip; a viewport alone REMAPS -- the
+      build's recorded lesson). c_paint_test pins it pixel-exact,
+      keyboard and mouse sessions both. Remaining from the sketch,
+      still open: SAVE/LOAD -- as P8I via the grab path, or the
+      deluxe save-as-GL-scene (the display list IS a command list).
 - [x] **Stage 10h subset — SHIPPED 2026-08-29 (TEXT/TSIZE/TANGLE +
       TDEFIN; the card split paid for it). Remaining from the sketch:
       TEXT-inside-lists (needs a second replay context, ~+100), TJUST,
