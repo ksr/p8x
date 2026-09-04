@@ -29,6 +29,7 @@
  * pipes; FRESOLVE/FOPENDIR/FNEXT handle path lookup and directory walking. */
 //#define CONIN        0x0100    /* wait for key -> A (raw console) */
 //#define CONOUT       0x0103    /* A -> serial (raw console) */
+//#define CONST        0x0106    /* console status: A = key-waiting (no wait) */
 //#define FDELETE      0x011E    /* tombstone file FNAME; C=1 not found */
 //#define FOPEN        0x0124    /* open file FNAME for read (P1=buf); C=1 missing */
 //#define FGETB        0x0127    /* next byte -> A; C=1 at EOF */

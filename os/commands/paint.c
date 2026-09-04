@@ -23,6 +23,17 @@
  * l/b/c/f pick the tool, 1-8 the colour; SPACE anchors then commits;
  * x cancels a rubber-band; e (or u) erases the last shape; n clears;
  * q quits. Status echoes on the serial console.
+ *
+ * THE MOUSE comes through the same console: paint enables xterm mouse
+ * tracking (ESC[?1002h + SGR ESC[?1006h), so a supporting terminal
+ * reports press/drag/release as escape sequences on CONIN. Press
+ * moves the crosshair and anchors (or drops, for fill), drag rubber-
+ * bands live, release commits; a click on the palette strip selects a
+ * swatch or tool; right-click cancels. Terminal cells map onto the
+ * panel through the size the terminal reports to ESC[18t (80x24
+ * assumed if it stays silent -- probed with CONST, never a blocking
+ * read). A terminal without mouse reporting ignores the enables and
+ * the keyboard drives everything, as before.
  */
 
 //#use abi
@@ -47,6 +58,13 @@ int armed;                         /* anchor placed, ghost live */
 
 /* the 8 pens, RGB565 */
 int pal[8];
+
+/* terminal geometry (for the cell->panel mouse map) and its step/rem
+ * split -- (mx-1)*480 overflows 16 bits, so the map is computed as
+ * (mx-1)*step + (mx-1)*rem/size, every term small */
+int tcols; int trows;
+int txs; int txr; int tys; int tyr;
+int mdown;                         /* a mouse press is being dragged */
 
 /* ---- GL emission ----------------------------------------------------------- */
 int gput(int v) {
@@ -96,7 +114,67 @@ int vp_canvas() {
 /* ---- console status -------------------------------------------------------- */
 int outc(int c) { bios(CONOUT, 0, c & 255); return 0; }
 int outs(char *s) { int i; i = 0; while (s[i] != 0) { outc(s[i]); i = i + 1; } return 0; }
-int rawkey() { return bios(CONIN, 0, 0) & 255; }
+int pushk;                                               /* one-key pushback */
+int rawkey() {
+    int k;
+    if (pushk) { k = pushk; pushk = 0; return k; }
+    return bios(CONIN, 0, 0) & 255;
+}
+int keyrdy() { return bios(CONST, 0, 0) & 255; }         /* no wait */
+
+int mouse_on() {                   /* button+drag tracking, SGR coords.
+                                      (p8cc has no \033 escape: ESC is
+                                      outc(27), the vi.c idiom) */
+    outc(27); outs("[?1002h"); outc(27); outs("[?1006h");
+    return 0;
+}
+int mouse_off() {
+    outc(27); outs("[?1006l"); outc(27); outs("[?1002l");
+    return 0;
+}
+
+/* ask the terminal its size (ESC[18t -> ESC[8;rows;colst). CONST-polled
+ * with a bounded spin so a silent terminal cannot hang us -- and STRICT:
+ * if the first waiting byte is not ESC it was a real keystroke (a fast
+ * typist, or a scripted session), so it is pushed back untouched and
+ * the 80x24 default stands. */
+int termsize() {
+    int i; int k; int st; int a; int b; int c;
+    tcols = 80; trows = 24;
+    outc(27); outs("[18t");
+    i = 0;
+    while (i < 20000 && keyrdy() == 0) { i = i + 1; }
+    if (keyrdy() == 0) { return 0; }
+    k = rawkey();
+    if (k != 27) { pushk = k; return 0; }
+    st = 0; a = 0; b = 0; c = 0;
+    k = rawkey();                              /* '[' */
+    while (k != 't' && k != 27 && keyrdy()) {
+        k = rawkey();
+        if (k >= '0' && k <= '9') {
+            if (st == 0) { a = a * 10 + k - '0'; }
+            if (st == 1) { b = b * 10 + k - '0'; }
+            if (st == 2) { c = c * 10 + k - '0'; }
+        }
+        if (k == ';') { st = st + 1; }
+    }
+    if (k == 't' && a == 8 && b > 0 && c > 0) { trows = b; tcols = c; }
+    return 0;
+}
+
+int tmapinit() {
+    txs = 480 / tcols; txr = 480 - txs * tcols;
+    tys = 272 / trows; tyr = 272 - tys * trows;
+    return 0;
+}
+int mapx(int mx) {                 /* 1-based cell -> panel x */
+    mx = mx - 1;
+    return mx * txs + (mx * txr) / tcols;
+}
+int mapwy(int my) {                /* 1-based cell -> window y (up) */
+    my = my - 1;
+    return 271 - (my * tys + (my * tyr) / trows);
+}
 
 int status() {
     outc(13);
@@ -265,13 +343,82 @@ int mvcur(int dx, int dy) {
     return 0;
 }
 
+int jumpcur(int nx, int ny) {                 /* mouse: absolute move */
+    cross();
+    if (armed && tool != 3) { ghost(); }
+    cx = nx; cy = ny;
+    if (cx < 2) { cx = 2; }
+    if (cx > 477) { cx = 477; }
+    if (cy < 2) { cy = 2; }
+    if (cy > 242) { cy = 242; }
+    if (armed && tool != 3) { ghost(); }
+    cross();
+    return 0;
+}
+
+/* one SGR mouse report, after ESC [ < is consumed: b;x;y then M or m */
+int mouse_ev() {
+    int b; int x; int y; int st; int k; int fin;
+    b = 0; x = 0; y = 0; st = 0; fin = 0;
+    while (fin == 0) {
+        k = rawkey();
+        if (k >= '0' && k <= '9') {
+            if (st == 0) { b = b * 10 + k - '0'; }
+            if (st == 1) { x = x * 10 + k - '0'; }
+            if (st == 2) { y = y * 10 + k - '0'; }
+        } else if (k == ';') { st = st + 1; }
+        else { fin = k; }                     /* 'M' press/drag, 'm' release */
+    }
+    if (b >= 64) { return 0; }                /* wheel: ignored */
+    if ((b & 3) == 2 && fin == 'M') {         /* right press: cancel */
+        if (armed) { cross(); ghost(); cross(); armed = 0; status(); }
+        return 0;
+    }
+    x = mapx(x); y = mapwy(y);
+    if (fin == 'M' && (b & 32) == 0 && y >= 246) {   /* palette click */
+        st = 0;
+        while (st < 8) {
+            if (x >= swx(st) && x <= swx(st) + 20) { pick_col(st); }
+            st = st + 1;
+        }
+        st = 0;
+        while (st < 4) {
+            if (x >= tcx(st) && x <= tcx(st) + 24) { pick_tool(st); }
+            st = st + 1;
+        }
+        return 0;
+    }
+    if (fin == 'M' && (b & 32) == 0) {        /* press in the canvas */
+        jumpcur(x, y);
+        cross();
+        if (tool == 3) { drop(); }
+        else { ax = cx; ay = cy; armed = 1; ghost(); mdown = 1; }
+        cross();
+        status();
+        return 0;
+    }
+    if (fin == 'M' && (b & 32)) {             /* drag: live rubber-band */
+        if (mdown) { jumpcur(x, y); }
+        return 0;
+    }
+    if (fin == 'm' && mdown) {                /* release: commit */
+        jumpcur(x, y);
+        cross();
+        ghost(); commit(); armed = 0; mdown = 0;
+        cross();
+        status();
+    }
+    return 0;
+}
+
 int main() {
     int k; int step;
     if (peek(GLID) != 71) { puts("?No display"); return 1; }
     pal[0] = 65535;  pal[1] = 63488; pal[2] = 2016;  pal[3] = 31;
     pal[4] = 65504;  pal[5] = 2047;  pal[6] = 63519; pal[7] = 64512;
-    nsh = 0; tool = 0; col = 0; armed = 0;
+    nsh = 0; tool = 0; col = 0; armed = 0; mdown = 0;
     cx = 240; cy = 120;
+    termsize(); tmapinit();
 
     vp_all();
     fillm(1); pen(0);                            /* clear the whole screen */
@@ -282,6 +429,9 @@ int main() {
     outc(13); outc(10);
     outs("SPACE anchor/commit, x cancel, e erase last, n new, q quit");
     outc(13); outc(10);
+    outs("mouse: press-drag-release draws; click the palette to select");
+    outc(13); outc(10);
+    mouse_on();
     status();
     cross();
 
@@ -293,9 +443,15 @@ int main() {
             if (k == '[') {
                 k = rawkey();
                 if (k == 'A') { mvcur(0, 4); }
-                if (k == 'B') { mvcur(0, 0 - 4); }
-                if (k == 'C') { mvcur(4, 0); }
-                if (k == 'D') { mvcur(0 - 4, 0); }
+                else if (k == 'B') { mvcur(0, 0 - 4); }
+                else if (k == 'C') { mvcur(4, 0); }
+                else if (k == 'D') { mvcur(0 - 4, 0); }
+                else if (k == '<') { mouse_ev(); }
+                else {
+                    /* any other CSI (a late size reply, an unasked-for
+                       report): swallow parameters up to its final byte */
+                    while ((k >= '0' && k <= '9') || k == ';') { k = rawkey(); }
+                }
             }
             step = 1;
         }
@@ -337,6 +493,7 @@ int main() {
     }
     cross();                                     /* leave a clean screen */
     if (armed) { ghost(); }
+    mouse_off();
     gwait();
     outc(13); outc(10); puts("bye");
     return 0;

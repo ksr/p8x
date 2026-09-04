@@ -29,6 +29,7 @@ SYS_MKDIR    = $2021    ; P1 = path -> create a directory; C=1 on real failure
 ; --- BIOS jump table ($01xx) ---
 CONIN      = $0100      ; wait for key, char -> A (raw console, not stdin)
 CONOUT     = $0103      ; A -> serial (raw console, not stdout)
+CONST      = $0106      ; console status: A = key-waiting bit (no wait)
 PUTS       = $0112      ; print (P1)+ until $00 (raw console)
 PHEX8      = $0115      ; print A as two hex digits
 FFIND      = $0118      ; root file FNAME -> LBA+FLEN; C=0 found

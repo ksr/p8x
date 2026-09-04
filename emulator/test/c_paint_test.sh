@@ -8,6 +8,10 @@
 #      WINDOW/VWPORT canvas clip -- the bug the first build had).
 #   3. circle tool + fill inside it; drop ON an outline is refused;
 #      'n' clears the canvas to zero lit pixels.
+#   4. THE MOUSE, as SGR escape sequences through the console: press-
+#      drag-release draws a box at the cell-mapped coordinates (80x24
+#      fallback map -- the scripted session answers no size query),
+#      and a click on the palette strip selects a colour.
 set -e
 cd "$(dirname "$0")"
 ROOT=../..
@@ -66,4 +70,21 @@ assert lit == 0, "clear left %d canvas pixels" % lit
 print("box+fill+erase, circle+fill, palette survival, clear: all pixel-exact")
 EOF
 
-echo "C-PAINT TEST: PASS (display-list draw/fill/erase/clear; palette protected by the canvas clip)"
+# session 4: mouse -- box tool, press (30,15) drag release (50,10), then
+# a palette click on the red swatch
+printf 'B\rpaint\rb\033[<0;30;15M\033[<32;40;12M\033[<0;50;10m\033[<0;7;1M\033[<0;7;1mq' > cp4.in
+../p8xemu -N -i cp4.in -c cp.img -l 900000000 -g cp4.ppm eeprom.bin > cp4.out 2>/dev/null || true
+python3 - <<'EOF2' || exit 1
+def p(px, x, wy):
+    i = ((271 - wy) * 480 + x) * 3
+    return tuple(px[i:i+3])
+d = open("cp4.ppm","rb").read(); a = d.split(b"\n", 3)[3]
+assert p(a,174,113)==(255,255,255), "mouse box corner missing: %r"%(p(a,174,113),)
+assert p(a,294,169)==(255,255,255), "mouse box far corner missing"
+assert p(a,230,140)==(0,0,0),       "mouse box not an outline"
+out = open("cp4.out","rb").read().decode("latin1").replace("\x00","")
+assert "BOX    RED" in out, "palette click did not select red"
+print("mouse press-drag-release box + palette click: pixel-exact")
+EOF2
+
+echo "C-PAINT TEST: PASS (display-list draw/fill/erase/clear; palette protected by the canvas clip; mouse via SGR reports)"

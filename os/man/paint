@@ -32,6 +32,17 @@ KEYS
     x/y distance. The current tool and colour are bracketed in the
     palette strip and echoed on the console.
 
+MOUSE
+    In a terminal with xterm mouse reporting (iTerm2, Terminal.app,
+    xterm...), the mouse works through the SAME serial console: press
+    moves the crosshair and anchors (or drops, for Fill), dragging
+    rubber-bands live, release commits; a click on the palette strip
+    selects a swatch or tool; right-click cancels. Position lands at
+    terminal-CELL resolution, mapped through the size the terminal
+    reports (80x24 assumed if it stays silent) -- a larger terminal
+    window gives finer strokes. The keyboard always works regardless;
+    a terminal without mouse reporting simply ignores the feature.
+
 FILL
     The drop must land on background inside a CLOSED outline. paint
     probes rightward from the drop point to find the enclosing
