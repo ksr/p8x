@@ -83,11 +83,17 @@ printf 'B\rdesk\r\011\011\033[B\033[B\033[B\033[B\r\033[B\r\004' > cd6.in
 ../p8xemu -N -i cd6.in -c cd.img -l 1800000000 -g cd6.ppm eeprom.bin > cd6.out 2>/dev/null || true
 grep -q "bye" cd6.out || fail "navigation session did not quit cleanly"
 
-# 7: launch paint from FILES (/bin -> paint.bin), quit it, desk returns
 python3 $ROOT/tools/clib.py $ROOT/os/commands/paint.c > cd_paint.c
 python3 $ROOT/compiler/p8cc.py cd_paint.c -o cd_paint.asm >/dev/null
 python3 $ROOT/assembler/p8xasm.py cd_paint.asm -o cd_paint.bin --base 0x6A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put cd.img cd_paint.bin --name /bin/paint.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+# 7b (same disk): the LIVE TERM -- a typed invocation launches too
+printf 'B\rdesk\r/bin/paint.bin\rq\004' > cd8.in
+../p8xemu -N -i cd8.in -c cd.img -l 2500000000 eeprom.bin > cd8.out 2>/dev/null || true
+seq2=$(tr -d '\0' < cd8.out | grep -oE "PAINT|DESK" | tr '\n' ' ')
+case "$seq2" in *"DESK PAINT "*"DESK"*) ;; *) fail "typed launch sequence was '$seq2'";; esac
+
+# 7: launch paint from FILES (/bin -> paint.bin), quit it, desk returns
 printf 'B\rdesk\r\011\011\033[B\r\033[B\033[B\rq\004' > cd7.in
 ../p8xemu -N -i cd7.in -c cd.img -l 2500000000 -g cd7.ppm eeprom.bin > cd7.out 2>/dev/null || true
 seq=$(tr -d '\0' < cd7.out | grep -oE "PAINT|DESK" | tr '\n' ' ')
@@ -137,4 +143,4 @@ assert p(g,240,265)==(255,255,255), "desk's menu bar missing after the chain bac
 print("menu, close box, card-list repaint, clip, drag, browser+viewer, app chain: pixel-exact")
 EOF
 
-echo "C-DESK TEST: PASS (lib_wm windows/menu/close; FILES browser + viewer; SYS_EXEC app chain desk->paint->desk)"
+echo "C-DESK TEST: PASS (lib_wm windows/menu/close; FILES browser + viewer; SYS_EXEC chains via click AND the live TERM)"

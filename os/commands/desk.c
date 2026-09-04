@@ -25,8 +25,8 @@
 //#use wm
 //#use dirent
 
-/* the TERM window's text: 5 history lines + the input line, 28 cols */
-char tln[168];
+/* the TERM window's text: 4 history lines + the input line, 28 cols */
+char tln[140];
 int tcur;
 
 /* the FILES window: current path, entries, selection */
@@ -58,26 +58,23 @@ int wm_content(int i) {
     if (i == 1) {
         wpen(2016);
         r = 0;
-        while (r < 5) {
-            wm_text(3, ch - 13 - r * 13, tln + (4 - r) * 28);
+        while (r < 4) {
+            wm_text(3, ch - 13 - r * 13, tln + (3 - r) * 28);
             r = r + 1;
         }
         wpen(65535);
-        wm_text(3, 4, tln + 140);
+        wm_text(3, 4, tln + 112);
         return 0;
     }
     if (i == 2) {                             /* FILES: the listing */
         r = 0;
-        while (r < fcnt) {
-            if (r == fsel) { wpen(65504); } else { wpen(65535); }
-            if (fdir[r]) { wpen(2047); }
-            if (r == fsel && fdir[r]) { wpen(65504); }
+        while (r < fcnt) {                    /* selection = yellow row;
+                                                 directories = cyan */
+            if (r == fsel) { wpen(65504); }
+            else if (fdir[r]) { wpen(2047); }
+            else { wpen(65535); }
             wm_text(4, ch - 13 - r * 13, fnam + r * 13);
             r = r + 1;
-        }
-        if (fsel < fcnt) {                    /* the selection tick */
-            wpen(65504);
-            wmov(1, ch - 9 - fsel * 13); wgput(40); wgw(3); wgw(ch - 9 - fsel * 13);
         }
         return 0;
     }
@@ -102,27 +99,39 @@ int rec_shapes() {
 int tclear() {
     int i;
     i = 0;
-    while (i < 168) { tln[i] = 0; i = i + 1; }
-    tln[140] = '>'; tln[141] = ' '; tcur = 2;
+    while (i < 140) { tln[i] = 0; i = i + 1; }
+    tln[112] = '>'; tln[113] = ' '; tcur = 2;
     return 0;
 }
 int tscroll() {
     int i;
     i = 0;
-    while (i < 4 * 28) { tln[i] = tln[i + 28]; i = i + 1; }
-    i = 0;
-    while (i < 28) { tln[4 * 28 + i] = tln[5 * 28 + i]; i = i + 1; }
-    tln[140] = '>'; tln[141] = ' '; tcur = 2;
+    while (i < 3 * 28) { tln[i] = tln[i + 28]; i = i + 1; }
+    i = 0;                                    /* input -> history row 3 */
+    while (i < 28) { tln[3 * 28 + i] = tln[4 * 28 + i]; i = i + 1; }
+    tln[112] = '>'; tln[113] = ' '; tln[114] = 0; tcur = 2;
     return 0;
 }
+/* the TERM shell, one rule: the line ENTER scrolled into history is
+ * a PROGRAM INVOCATION -- "paint.bin", "/bin/cube.bin", args and all
+ * -- launched exactly like a click in FILES (SYS_EXEC, chained with
+ * -d). Navigation is FILES' job; the window IS dir, the Mac way. */
+int tcmd() {
+    char *c;
+    c = tln + 86;
+    while (*c == 32) { c = c + 1; }
+    if (c[0] != 0) { runbin(c); }
+    return 0;
+}
+
 int tkey(int k) {
-    if (k == 13 || k == 10) { tscroll(); wm_repaint(); return 0; }
+    if (k == 13 || k == 10) { tscroll(); tcmd(); wm_repaint(); return 0; }
     if (k == 8 || k == 127) {
-        if (tcur > 2) { tcur = tcur - 1; tln[140 + tcur] = 0; wm_repaint(); }
+        if (tcur > 2) { tcur = tcur - 1; tln[112 + tcur] = 0; wm_repaint(); }
         return 0;
     }
     if (k >= 32 && k < 127 && tcur < 27) {
-        tln[140 + tcur] = k; tln[141 + tcur] = 0; tcur = tcur + 1;
+        tln[112 + tcur] = k; tln[113 + tcur] = 0; tcur = tcur + 1;
         wm_repaint();
     }
     return 0;
@@ -133,8 +142,8 @@ int tprint(char *s) {                         /* a line into TERM's history */
     int i;
     tscroll();
     i = 0;
-    while (s[i] != 0 && i < 27) { tln[4 * 28 + i] = s[i]; i = i + 1; }
-    tln[4 * 28 + i] = 0;
+    while (s[i] != 0 && i < 27) { tln[3 * 28 + i] = s[i]; i = i + 1; }
+    tln[3 * 28 + i] = 0;
     return 0;
 }
 
@@ -166,6 +175,42 @@ int fscan() {                                 /* read cpath's entries */
         }
         r = bios(FNEXT, 0, 0);
     }
+    return 0;
+}
+
+int scopy(char *d, char *c, int cap) {        /* bounded strcpy */
+    int i;
+    i = 0;
+    while (c[i] != 0 && i < cap) { d[i] = c[i]; i = i + 1; }
+    d[i] = 0;
+    return 0;
+}
+
+/* launch a program, the chain way: vpath = its path + " -d", then
+ * SYS_EXEC -- shared by the FILES click-launcher and the TERM shell */
+int runbin(char *c) {
+    int i;
+    if (c[0] == '/') { scopy(vpath, c, 40); }
+    else { pjoin(vpath, cpath, c); }
+    i = 0;
+    while (vpath[i] != 0) { i = i + 1; }
+    vpath[i] = ' '; vpath[i+1] = '-'; vpath[i+2] = 'd'; vpath[i+3] = 0;
+    ptr_done();
+    bios(SYS_EXEC, vpath, 0);
+    ptr_init();
+    tprint("?EXEC");
+    wm_repaint();
+    return 0;
+}
+
+int pup() {                                   /* cpath: strip a component */
+    int r;
+    r = 0;
+    while (cpath[r] != 0) { r = r + 1; }
+    while (r > 1 && cpath[r] != '/') { r = r - 1; }
+    if (r == 0) { r = 1; }
+    cpath[r] = 0;
+    if (cpath[1] == 0) { cpath[0] = '/'; cpath[1] = 0; }
     return 0;
 }
 
@@ -221,14 +266,8 @@ int fopen_sel() {                             /* ENTER/OPEN on the selection */
     int r; int w2; int h2;
     if (fsel >= fcnt) { return 0; }
     if (fdir[fsel]) {                         /* navigate */
-        if (fnam[fsel * 13] == '.') {         /* ".." -> strip a component */
-            r = 0;
-            while (cpath[r] != 0) { r = r + 1; }
-            while (r > 1 && cpath[r] != '/') { r = r - 1; }
-            if (r == 0) { r = 1; }
-            cpath[r] = 0;
-            if (cpath[1] == 0) { cpath[0] = '/'; cpath[1] = 0; }
-        } else {                              /* vpath doubles as scratch */
+        if (fnam[fsel * 13] == '.') { pup(); }   /* ".." */
+        else {                              /* vpath doubles as scratch */
             pjoin(vpath, cpath, fnam + fsel * 13);
             r = 0;
             while (vpath[r] != 0) { cpath[r] = vpath[r]; r = r + 1; }
@@ -256,19 +295,19 @@ int fopen_sel() {                             /* ENTER/OPEN on the selection */
         return 0;
     }
     if (r == 0) {
-        tprint("NO VIEWER");
+        tprint("?OPEN");
         wm_repaint();
         return 0;
     }
     pjoin(vpath, cpath, fnam + fsel * 13);
     bios(FRESOLVE, vpath, 0);                 /* read the header for size */
-    if (bios(FOPEN, RDBUF, 0) & 256) { tprint("?NO FILE"); wm_repaint(); return 0; }
+    if (bios(FOPEN, RDBUF, 0) & 256) { tprint("?OPEN"); wm_repaint(); return 0; }
     bios(FGETB, 0, 0); bios(FGETB, 0, 0);     /* P 8 */
     bios(FGETB, 0, 0); bios(FGETB, 0, 0);     /* I ver */
     w2 = (bios(FGETB, 0, 0) & 255); w2 = w2 + (bios(FGETB, 0, 0) & 255) * 256;
     h2 = (bios(FGETB, 0, 0) & 255); h2 = h2 + (bios(FGETB, 0, 0) & 255) * 256;
     if (w2 == 0 || h2 == 0 || w2 > 456 || h2 > 240) {
-        tprint("BAD P8I");
+        tprint("?OPEN");
         wm_repaint();
         return 0;
     }

@@ -22,9 +22,11 @@ DESCRIPTION
     only rectangles and a z-order.
 
     Four windows: SHAPES draws primitives that deliberately overrun
-    its edge (the card clips them); TERM is a small terminal (typed
-    characters echo into its input line while it has focus, ENTER
-    scrolls); FILES browses the filesystem -- click or arrow to
+    its edge (the card clips them); TERM is a LIVE terminal with one
+    rule: the line you type is a program invocation -- "paint.bin",
+    "/bin/cube.bin", args and all -- launched on ENTER exactly like a
+    click in FILES (SYS_EXEC, chained with -d). Navigation is FILES'
+    job; the window IS dir, the Mac way; FILES browses the filesystem -- click or arrow to
     select, ENTER (or the OPEN menu item) opens: a directory
     navigates ('..' walks up), a .BIN LAUNCHES -- desk SYS_EXECs the
     program, which loads over desk's own memory, the System-1 way;
