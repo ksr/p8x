@@ -25,6 +25,13 @@ MAP = [
     ('memory-region anchors', 'OSORG', 0x2000, 'OS load/link address (= RAMBASE)'),
     ('memory-region anchors', 'TPABASE', 0x6A00, 'transient program area base (RUNnable programs load here)'),
     ('memory-region anchors', 'CSTACKTOP', 0xF800, 'compiler C-stack top (grows down; p8cc __csp init)'),
+    # Resident window-manager reservation (the GUI kernel, loaded high once by
+    # `desk` and surviving app launches into the TPA below -- proven by
+    # zz_wmreside_test). WMBASE splits the TPA: apps load $6A00..WMBASE and are
+    # compiled with CSTACKTOP=WMBASE so their C stack never enters the kernel;
+    # the kernel + its records live WMBASE..$F800. Boot is unaffected -- nothing
+    # is loaded here until the GUI is asked for.
+    ('memory-region anchors', 'WMBASE', 0xD800, 'resident window-manager kernel base (GUI apps: TPA $6A00..WMBASE, CSTACKTOP=WMBASE)'),
     ('I/O ports ($FF00-$FFFF)', 'ACIAS', 0xFF04, 'ACIA status (rd) / control (wr)'),
     ('I/O ports ($FF00-$FFFF)', 'ACIAD', 0xFF05, 'ACIA data'),
     ('I/O ports ($FF00-$FFFF)', 'CFDATA', 0xFF10, 'CF task file'),

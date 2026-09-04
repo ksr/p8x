@@ -45,7 +45,7 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "generators"))
 import memmap
 
-CSTACK_TOP = memmap.CSTACKTOP
+CSTACK_TOP = memmap.CSTACKTOP   # default; --cstacktop overrides for GUI apps
 TPA_BASE   = memmap.TPABASE
 
 # --------------------------------------------------------------------------- #
@@ -1108,10 +1108,13 @@ def compile_src(src):
 
 
 def main():
+    global CSTACK_TOP
     a = sys.argv[1:]
-    if not a: sys.exit("usage: p8cc.py prog.c [-o out]")
+    if not a: sys.exit("usage: p8cc.py prog.c [-o out] [--cstacktop N]")
     src_path = a[0]; out = "a.asm"
     if "-o" in a: out = a[a.index("-o") + 1]
+    if "--cstacktop" in a:              # GUI apps link BELOW a resident WM
+        CSTACK_TOP = int(a[a.index("--cstacktop") + 1], 0)
     open(out, "w").write(compile_src(open(src_path).read()))
     print("p8cc: %s -> %s" % (src_path, out))
 

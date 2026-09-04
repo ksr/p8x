@@ -9,6 +9,7 @@ RAMSIZE     = 0xDF00             # RAM span $2000-$FEFF (IOBASE-RAMBASE)
 OSORG       = 0x2000             # OS load/link address (= RAMBASE)
 TPABASE     = 0x6A00             # transient program area base (RUNnable programs load here)
 CSTACKTOP   = 0xF800             # compiler C-stack top (grows down; p8cc __csp init)
+WMBASE      = 0xD800             # resident window-manager kernel base (GUI apps: TPA $6A00..WMBASE, CSTACKTOP=WMBASE)
 
 # I/O ports ($FF00-$FFFF)
 ACIAS       = 0xFF04             # ACIA status (rd) / control (wr)
