@@ -10,8 +10,9 @@
 ;   WMBASE+3  wk_open   P1 ->  a 22-byte record [x,y,w,h (LE pairs),
 ;                              list, tlen, title(12)]; copied resident
 ;   WMBASE+6  wk_repaint       FLOOD the desktop + draw every window's
-;                              chrome and title from the RESIDENT records
-;   WMBASE+9  .byte 'W','M'    presence signature (the launcher checks it
+;                              chrome, title and CONTENT from the records
+;   WMBASE+9  wk_run           the resident event loop (keyboard; mouse next)
+;   WMBASE+12 .byte 'W','M'    presence signature (the launcher checks it
 ;                              to skip reloading a resident kernel)
 ;
 ; Draws chrome + stroke-font title + CONTENT: each window's content is a
@@ -26,11 +27,12 @@ GLSTAT = $FF51
 
         .org $D800                       ; WMBASE (match --base)
 
-; ---- jump table: MUST be first so the entries land at WMBASE+0/3/6 ----------
-        JMP  wk_init
-        JMP  wk_open
-        JMP  wk_repaint
-ksig:   .byte $57, $4D                  ; 'W','M'
+; ---- jump table: MUST be first so the entries land at WMBASE+0/3/6/9 --------
+        JMP  wk_init                    ; +0
+        JMP  wk_open                    ; +3
+        JMP  wk_repaint                 ; +6
+        JMP  wk_run                     ; +9  the resident event loop
+ksig:   .byte $57, $4D                  ; +12 'W','M'
 
 ; ==== helpers ================================================================
 ; kput: send one GL byte (A), honouring FIFO backpressure.
@@ -195,6 +197,98 @@ wkr_lp: LDA  ki
 wkr_done:
         JSR  k_ident
         RTS
+
+; ==== wk_run : the resident event loop (keyboard first) =====================
+; Draws once, then reads the console. Arrow keys move the TOP window (the
+; last opened, drawn on top); ^D returns to the caller. Mouse (xterm SGR)
+; parsing + focus/drag/close/menu are the next slice. The loop is resident,
+; so the app that called SYS_WMRUN is still in the TPA -- but a launched
+; program will replace it while the loop persists (the launch-and-resume
+; rung).
+wk_run: JSR  wk_repaint
+wru_lp: JSR  $0100                      ; CONIN -> A (blocks for a key)
+        LDB  #4                         ; ^D -> quit
+        CMP
+        JZ   wru_ret
+        LDB  #27                        ; ESC -> an arrow sequence
+        CMP
+        JZ   wru_esc
+        JMP  wru_lp
+wru_esc:JSR  $0100                      ; expect '['
+        LDB  #$5B
+        CMP
+        JNZ  wru_lp
+        JSR  $0100                      ; the final byte: A/B/C/D
+        LDB  #$41                       ; 'A' up    -> y += 8
+        CMP
+        JZ   wru_up
+        LDB  #$42                       ; 'B' down  -> y -= 8
+        CMP
+        JZ   wru_dn
+        LDB  #$43                       ; 'C' right -> x += 8
+        CMP
+        JZ   wru_rt
+        LDB  #$44                       ; 'D' left  -> x -= 8
+        CMP
+        JZ   wru_lf
+        JMP  wru_lp
+wru_up: LDA  #8
+        STA  kdxy
+        LDA  #0
+        STA  kdxy+1
+        LDA  #2                         ; field = y
+        JMP  wru_mv
+wru_dn: LDA  #$F8                       ; -8, two's complement
+        STA  kdxy
+        LDA  #$FF
+        STA  kdxy+1
+        LDA  #2
+        JMP  wru_mv
+wru_rt: LDA  #8
+        STA  kdxy
+        LDA  #0
+        STA  kdxy+1
+        LDA  #0                         ; field = x
+        JMP  wru_mv
+wru_lf: LDA  #$F8
+        STA  kdxy
+        LDA  #$FF
+        STA  kdxy+1
+        LDA  #0
+wru_mv: JSR  k_movetop
+        JSR  wk_repaint
+        JMP  wru_lp
+wru_ret:RTS
+
+; k_movetop: add the 16-bit signed delta in kdxy to the TOP window's field
+; (A = 0 for x, 2 for y). The top window is the last opened (wcnt-1).
+k_movetop:
+        STA  kt                         ; field offset
+        LDA  wcnt
+        JZ   kmt_ret                    ; no windows
+        LDB  #1
+        SUB
+        STA  ki                         ; top index
+        JSR  koff                       ; A = 24*ki
+        LDB  kt
+        ADD                             ; + field offset
+        JSR  kp1                        ; P1 = recs + 24*top + field
+        LDA  (P1)                       ; read the 16-bit field -> ka
+        STA  ka
+        INP1
+        LDA  (P1)
+        STA  ka+1
+        LDA  kdxy                       ; kb = delta
+        STA  kb
+        LDA  kdxy+1
+        STA  kb+1
+        JSR  k16add                     ; kw = field + delta
+        LDA  kw+1                        ; P1 is at field+1 -> write high
+        STA  (P1)
+        DEP1
+        LDA  kw                          ; write low
+        STA  (P1)
+kmt_ret:RTS
 
 ; ---- draw window ki : body (black fill), border (white), title (white) -----
 wk_draw:JSR  koff                       ; A = 24*ki
@@ -544,5 +638,6 @@ ky1:    .fill 2
 ktx:    .fill 2
 kty:    .fill 2
 klist:  .fill 1
+kdxy:   .fill 2
 ktlen:  .fill 1
 recs:   .fill 96                        ; 4 windows x 24 bytes

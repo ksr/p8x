@@ -114,11 +114,11 @@ Appended to the OS syscall table after `SYS_EXEC` ($2024):
    -- it sets PROJCT 0 / MDIDEN / TSIZE directly instead. Events are next:
    `lib_ptr`-equivalent parsing in asm (or a small resident C helper the
    kernel calls), focus, drag, close, the menu.
-4. **Launch + resume:** `SYS_EXEC` from inside the loop; the launched app is
+5. **Launch + resume:** `SYS_EXEC` from inside the loop; the launched app is
    a WM client (paint recompiled `--cstacktop WMBASE`, drawing into its
    window's card list); on exit the loop resumes with every other window
    intact. This is the payoff — desk survives the launch.
-5. **Saved per-window context (the switcher):** each window keeps its app's
+6. **Saved per-window context (the switcher):** each window keeps its app's
    state; focus-switch swaps the active TPA (state-only first, full-TPA-swap
    to disk as the deluxe variant — the two later options from the fork).
 
