@@ -182,6 +182,7 @@ test-io: p8xemu ucode
 test-gfx: p8xemu ucode
 	sh test/c_g3d_test.sh
 	sh test/c_demo_test.sh
+	sh test/c_paint_test.sh
 	sh test/c_image_test.sh
 	sh test/c_gl_test.sh
 	sh test/c_gl_mat_test.sh

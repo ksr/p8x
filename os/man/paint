@@ -1,0 +1,55 @@
+NAME
+    paint - keyboard-driven vector paint on the graphics card
+
+SYNOPSIS
+    paint
+
+DESCRIPTION
+    A little vector editor: pick a primitive and a colour from the
+    on-screen palette, rubber-band shapes onto the canvas, drop fills
+    into closed outlines, and erase mistakes one shape at a time. The
+    drawing is a DISPLAY LIST -- shapes, not pixels -- which is what
+    makes erase possible: the last shape is popped and the canvas
+    replays. All input is the console keyboard (this machine has no
+    mouse); all output is the panel.
+
+KEYS
+    w a s d           move the crosshair 1 px (window sense: w is UP)
+    W A S D           move 8 px
+    arrow keys        move 4 px
+    l b c f           tool: Line, Box, Circle, Fill (drop)
+    1 .. 8            colour: white red green blue yellow cyan
+                      magenta orange
+    SPACE             anchor the shape, then (second press) commit it;
+                      for Fill: drop at the crosshair
+    x                 cancel a rubber-band in progress
+    e (or u)          erase the LAST shape and replay the rest
+    n                 new drawing (clear the canvas)
+    q                 quit
+
+    Line and box rubber-band from the anchor to the crosshair. Circle
+    anchors at the CENTRE; the radius is the larger of the crosshair's
+    x/y distance. The current tool and colour are bracketed in the
+    palette strip and echoed on the console.
+
+FILL
+    The drop must land on background inside a CLOSED outline. paint
+    probes rightward from the drop point to find the enclosing
+    outline's colour, then issues the PGC's AREABC: the selected
+    colour flood-fills, bounded by pixels of the outline's colour. A
+    drop on a coloured pixel, or in a region open to the right, is
+    refused. A fill is a shape like any other: erase removes it, and
+    a replayed fill re-probes nothing -- its boundary colour was
+    recorded at drop time.
+
+NOTES
+    The palette strip is protected by the card itself: the drawing
+    session runs with WINDOW/VWPORT set to the canvas, so every
+    stroke, ghost and fill clips at the canvas edge. The crosshair
+    and rubber-bands draw in LINFUN complement mode -- drawing one
+    twice restores the screen exactly, over any colours -- and solid
+    commits return to replace mode. Circles cap at radius 255 (the
+    PGC ELIPSE rule); a drawing holds up to 150 shapes.
+
+SEE ALSO
+    gl, basic (GRAPHICS), gfx, image
