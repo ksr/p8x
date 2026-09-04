@@ -1,8 +1,9 @@
 # P8X Resident Window Manager — design
 
-Status: **foundation laid (2026-09-04).** Memory reserved, the load-bearing
-assumption proven (`emulator/test/wm_reside_test.sh`), `p8cc --cstacktop`
-in place. The kernel itself is the work ahead.
+Status: **skeleton running (2026-09-04).** Memory reserved and the survival
+assumption proven (`wm_reside_test`); the resident kernel skeleton draws
+windows from records that outlive the app (`wm_kernel_test`). Content
+lists, events, and launch-and-resume are the work ahead.
 
 ## Why resident, and why assembler
 
@@ -84,11 +85,25 @@ Appended to the OS syscall table after `SYS_EXEC` ($2024):
 
 1. **Foundation — DONE 2026-09-04.** `WMBASE` reserved; `p8cc --cstacktop`;
    `wm_reside_test` proves the high region survives launches.
-2. **The kernel skeleton (asm):** window records + `SYS_WMOPEN`/`SYS_WMRUN`
-   + a resident repaint (FLOOD, chrome, `CLRUN` each content list). A stub
-   app opens two windows and hands off; the kernel draws and holds. Proven
-   by a frame test, kernel resident, app gone.
-3. **Events + chrome interaction:** `lib_ptr`-equivalent parsing in asm (or
+2. **The kernel skeleton (asm) -- DONE 2026-09-04.** `os/wmkernel.asm`,
+   assembled at WMBASE, loaded once by a stub via FRESOLVE+FFIND+FLOADAT.
+   A bios()-callable jump table (WMBASE+0/3/6 = wk_init/wk_open/wk_repaint,
+   +9 = 'WM' signature). Window records are copied RESIDENT (22 bytes each,
+   up to 4); wk_repaint sets the text camera (RESETF, PROJCT 0 so z=0 TEXT
+   is not near-clipped, MDIDEN, TSIZE), identity WINDOW/VWPORT, FLOODs the
+   desktop, and draws each window's chrome + stroke-font title from the
+   records. `wm_kernel_test` proves it: a stub opens two windows and EXITS,
+   then a SEPARATE program calls wk_repaint and nothing else -- the two
+   titled windows reappear, drawn wholly by the resident kernel from
+   records the departed app left behind. ~1KB of the ~10KB budget.
+   Traps: `.org $WMBASE` is required (pc starts at 0 even with --base);
+   bios() needs a literal address (precompute WMBASE+3, not an expression);
+   and -- the debugging saga of the rung -- a test that `exit`s to the
+   monitor gets the BOOT SPLASH redrawn over its frame, so GUI frame tests
+   must dump at the shell, never the monitor.
+3. **Content lists + events (next):** each window's content as a
+   card-resident command list the kernel replays with `CLRUN` (so it
+   outlives its author -- the card holds the picture); then `lib_ptr`-equivalent parsing in asm (or
    the kernel calls back into a small resident event helper), focus, drag,
    close, the menu.
 4. **Launch + resume:** `SYS_EXEC` from inside the loop; the launched app is
