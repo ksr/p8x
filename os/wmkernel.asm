@@ -218,7 +218,10 @@ wru_esc:JSR  $0100                      ; expect '['
         LDB  #$5B
         CMP
         JNZ  wru_lp
-        JSR  $0100                      ; the final byte: A/B/C/D
+        JSR  $0100                      ; '<' (xterm SGR mouse) or A/B/C/D
+        LDB  #$3C                       ; '<'
+        CMP
+        JZ   wru_mouse
         LDB  #$41                       ; 'A' up    -> y += 8
         CMP
         JZ   wru_up
@@ -259,6 +262,149 @@ wru_mv: JSR  k_movetop
         JSR  wk_repaint
         JMP  wru_lp
 wru_ret:RTS
+
+; ---- xterm SGR mouse: ESC [ < b ; x ; y (M press/drag | m release) --------
+; b;x;y are decimal; x,y are 1-based terminal CELLS mapped to the panel via
+; the MDU (80x24 assumed: px = (x-1)*6, py = 271-(y-1)*11). This slice moves
+; the TOP window's bottom-left to the cursor on any M event -- a crude drag
+; that proves the parse + map + MDU path; grab-relative drag + hit test come
+; next.
+wru_mouse:
+        JSR  k_rdnum                    ; b (button) -> knum ; term ';'  (ignored)
+        JSR  k_rdnum                    ; x -> knum ; term ';'
+        JSR  k_dec1n                    ; ka = knum - 1
+        LDA  #6
+        STA  kb
+        LDA  #0
+        STA  kb+1
+        JSR  k_mul                      ; kw = (x-1)*6
+        LDA  kw
+        STA  kmx
+        LDA  kw+1
+        STA  kmx+1
+        JSR  k_rdnum                    ; y -> knum ; term M/m
+        JSR  k_dec1n                    ; ka = knum - 1
+        LDA  #11
+        STA  kb
+        LDA  #0
+        STA  kb+1
+        JSR  k_mul                      ; kw = (y-1)*11
+        LDA  #15                        ; kmy = 271 - kw   (271 = $010F)
+        STA  ka
+        LDA  #1
+        STA  ka+1
+        LDA  kw
+        STA  kb
+        LDA  kw+1
+        STA  kb+1
+        JSR  k16sub
+        LDA  kw
+        STA  kmy
+        LDA  kw+1
+        STA  kmy+1
+        LDA  kterm                      ; only act on 'M' (press/drag)
+        LDB  #$4D
+        CMP
+        JNZ  wru_lp
+        JSR  k_settop                   ; top window bottom-left -> (kmx,kmy)
+        JSR  wk_repaint
+        JMP  wru_lp
+
+; k_rdnum: read a decimal from the console into knum (16-bit); the first
+; non-digit terminates and is left in kterm. Uses the MDU for the x10.
+k_rdnum:LDA  #0
+        STA  knum
+        STA  knum+1
+krn_lp: JSR  $0100
+        STA  kterm
+        LDB  #$30                       ; '0'
+        CMP
+        JNC  krn_ret                    ; < '0' -> terminator
+        LDB  #$3A                       ; ':'
+        CMP
+        JC   krn_ret                    ; >= ':' (i.e. > '9') -> terminator
+        LDB  #$30                       ; digit value
+        SUB
+        STA  kt                         ; kt = 0..9
+        LDA  knum                       ; knum *= 10
+        STA  ka
+        LDA  knum+1
+        STA  ka+1
+        LDA  #10
+        STA  kb
+        LDA  #0
+        STA  kb+1
+        JSR  k_mul                      ; kw = knum*10
+        LDA  kw                         ; knum = kw + digit
+        STA  ka
+        LDA  kw+1
+        STA  ka+1
+        LDA  kt
+        STA  kb
+        LDA  #0
+        STA  kb+1
+        JSR  k16add
+        LDA  kw
+        STA  knum
+        LDA  kw+1
+        STA  knum+1
+        JMP  krn_lp
+krn_ret:RTS
+
+; k_mul: kw = ka * kb (16-bit * 16-bit -> 16-bit) via the MDU, divisor 1.
+k_mul:  LDA  ka
+        STA  $FF30                      ; MDA  (write clears MDAH)
+        LDA  ka+1
+        STA  $FF39                      ; MDAH
+        LDA  kb
+        STA  $FF31                      ; MDB
+        LDA  kb+1
+        STA  $FF3A                      ; MDBH
+        LDA  #1
+        STA  $FF32                      ; MDC = 1
+        LDA  #0
+        STA  $FF3B                      ; MDCH
+        STA  $FF34                      ; MDGO
+kml_w:  LDA  $FF35                      ; MDSTAT bit7 = busy
+        LDB  #$80
+        AND
+        JNZ  kml_w
+        LDA  $FF33                      ; MDQ
+        STA  kw
+        LDA  $FF3C                      ; MDQH
+        STA  kw+1
+        RTS
+
+; k_dec1n: ka = knum - 1 (16-bit).
+k_dec1n:LDA  knum
+        LDB  #1
+        SUB
+        STA  ka
+        LDA  knum+1
+        JC   kd1_r
+        LDB  #1
+        SUB
+kd1_r:  STA  ka+1
+        RTS
+
+; k_settop: the TOP window's origin (x,y) := (kmx, kmy).
+k_settop:
+        LDA  wcnt
+        JZ   kst_ret
+        LDB  #1
+        SUB
+        STA  ki
+        JSR  koff                       ; A = 24*top
+        JSR  kp1                        ; P1 = recs + 24*top (x field)
+        LDA  kmx
+        STA  (P1)+
+        LDA  kmx+1
+        STA  (P1)+
+        LDA  kmy
+        STA  (P1)+
+        LDA  kmy+1
+        STA  (P1)
+kst_ret:RTS
 
 ; k_movetop: add the 16-bit signed delta in kdxy to the TOP window's field
 ; (A = 0 for x, 2 for y). The top window is the last opened (wcnt-1).
@@ -639,5 +785,9 @@ ktx:    .fill 2
 kty:    .fill 2
 klist:  .fill 1
 kdxy:   .fill 2
+knum:   .fill 2
+kterm:  .fill 1
+kmx:    .fill 2
+kmy:    .fill 2
 ktlen:  .fill 1
 recs:   .fill 96                        ; 4 windows x 24 bytes
