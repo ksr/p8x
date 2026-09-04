@@ -1,14 +1,17 @@
 NAME
-    desk - overlapping windows on the graphics card (rung 1)
+    desk - windows, menus and close boxes on the graphics card
 
 SYNOPSIS
     desk
 
 DESCRIPTION
-    The window system's first rung: two draggable, overlapping windows
-    proving the machinery a real GUI needs -- per-window hardware
-    clipping, painter's-algorithm repaint, focus, and text drawn by
-    the card inside a window.
+    The window system (lib_wm, //#use wm): draggable overlapping
+    windows with close boxes, a menu bar with press-drag-release
+    pull-downs, per-window hardware clipping, painter's-algorithm
+    repaint, focus, and text drawn by the card inside a window.
+    The SHAPES window's content is recorded ONCE into a card-resident
+    command list, so its every repaint costs TWO wire bytes (CLRUN)
+    -- the scene lives on the card, the machine keeps geometry.
 
     THE MECHANISM: each window's content is drawn in its own LOCAL
     coordinates under a per-window WINDOW/VWPORT pair. WINDOW declares
@@ -26,25 +29,31 @@ DESCRIPTION
     primitive -- the 3D pipeline clips through the same window.
 
 KEYS AND MOUSE
-    TAB               raise and focus the other window
+    TAB               raise and focus the next window
     arrow keys        move the focused window 8 px
     printable keys    type into a focused TERM; ENTER scrolls;
                       backspace erases
     Ctrl-D            quit
-    mouse             press a title bar and drag -- a complement-mode
-                      outline follows (the classic outline drag),
-                      release places the window; press anywhere in a
-                      window to raise it (see man paint, MOUSE, for
-                      how the mouse reaches the machine)
+    mouse             press a title bar and drag (complement outline;
+                      release places it); press anywhere in a window
+                      to raise it; click the small box on a title
+                      bar to CLOSE the window; press DESK in the
+                      menu bar and SLIDE, the Mac way -- release on
+                      NEW TERM (a fresh terminal), CLOSE TOP, or
+                      QUIT (see man paint, MOUSE, for how the mouse
+                      reaches the machine)
 
 NOTES
     Curves (CIRCLE/ELIPSE) clip at the SCREEN, not the window -- the
     engine draws them in device space after mapping (man gl). Windowed
     programs must keep curves inside their extent themselves; lines,
     RECTs, fills and TEXT all clip properly. Repaint is a full
-    back-to-front replay; window content as card-resident command
-    lists (CLBEG/CLRUN -- repaint for two wire bytes) is the planned
-    next rung, along with menus and widgets.
+    back-to-front replay; static window content rides card-resident
+    lists (SHAPES does), dynamic content draws immediate (TERM must:
+    its text changes, and TEXT cannot be recorded into a list -- the
+    documented limitation). The library is /lib/lib_wm.c -- windows,
+    z-order, chrome, hit tests, drag, the menu; a client provides
+    wm_content()/wm_title() and pumps lib_ptr events.
 
 SEE ALSO
     paint, gl, gfx, basic
