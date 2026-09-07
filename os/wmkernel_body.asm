@@ -59,6 +59,13 @@ k16s_h: STA  kt
         STA  kw+1
         RTS
 
+; k_off16: kw = ka + A  (A a small 0..255 offset; ka preserved). Tail-calls
+; k16add, whose RTS returns to OUR caller.
+k_off16:STA  kb
+        LDA  #0
+        STA  kb+1
+        JMP  k16add
+
 ; kseta/ksetb: ka/kb := the 16-bit value at the address in P0-relative
 ; source is inconvenient; instead the callers load ka/kb directly. Small
 ; movers keep the draw code readable:
@@ -239,6 +246,9 @@ wru_lp: JSR  $0100                      ; CONIN -> A (blocks for a key)
         LDB  #4                         ; ^D -> quit
         CMP
         JZ   wru_ret
+        LDB  #9                         ; TAB -> cycle focus (bottom window to top)
+        CMP
+        JZ   wru_tab
         LDB  #$6C                       ; 'l' -> LAUNCH a WM-client program
         CMP
         JZ   wru_launch
@@ -330,6 +340,18 @@ wru_mv: JSR  k_movetop
         JSR  wk_repaint
         JMP  wru_lp
 wru_ret:RTS
+; TAB: cycle focus -- raise the BOTTOM window (index 0) to the top, exactly
+; what desk's TAB does. Focus IS the top record; it draws with a white title
+; bar, the rest grey. Needs two windows to mean anything.
+wru_tab:LDA  wcnt
+        LDB  #2
+        CMP
+        JC   wrt_go                     ; C=1 -> wcnt >= 2
+        JMP  wru_lp
+wrt_go: LDA  #0
+        JSR  k_raise
+        JSR  wk_repaint
+        JMP  wru_lp
 
 ; ---- xterm SGR mouse: ESC [ < b ; x ; y (M press/drag | m release) --------
 ; b;x;y are decimal; x,y are 1-based terminal CELLS mapped to the panel via
@@ -391,8 +413,86 @@ wru_mouse:
         JSR  wk_repaint
         JMP  wru_lp
 wru_mpress:
-        JSR  k_intop                    ; is the cursor in the TOP window?
+        JSR  k_hit                      ; which window is under the cursor?
         JZ   wru_mnohit
+        LDA  ki
+        JSR  k_raise                    ; focus it: its record moves to the top
+        ; the CLOSE BOX? in the title bar (kmy >= ky+kch-14) and within
+        ; kx+3..kx+11 -- desk's box. k_inwin left the rect in kx,ky,kcw,kch.
+        LDA  ky                         ; kw = ky + kch - 14  (the bar's bottom)
+        STA  ka
+        LDA  ky+1
+        STA  ka+1
+        LDA  kch
+        STA  kb
+        LDA  kch+1
+        STA  kb+1
+        JSR  k16add
+        LDA  kw
+        STA  ka
+        LDA  kw+1
+        STA  ka+1
+        LDA  #14
+        STA  kb
+        LDA  #0
+        STA  kb+1
+        JSR  k16sub
+        LDA  kmy                        ; kmy >= bar bottom ?
+        STA  ka
+        LDA  kmy+1
+        STA  ka+1
+        LDA  kw
+        STA  kb
+        LDA  kw+1
+        STA  kb+1
+        JSR  k_ge
+        JZ   wru_grab                   ; a body press: just grab
+        LDA  kx                         ; kmx2 = kx+3, kmy2 = kx+11 (as temps)
+        STA  ka
+        LDA  kx+1
+        STA  ka+1
+        LDA  #3
+        JSR  k_off16
+        LDA  kw
+        STA  kmx2
+        LDA  kw+1
+        STA  kmx2+1
+        LDA  #11
+        JSR  k_off16                    ; ka is still kx
+        LDA  kw
+        STA  kmy2
+        LDA  kw+1
+        STA  kmy2+1
+        LDA  kmx                        ; kmx >= kx+3 ?
+        STA  ka
+        LDA  kmx+1
+        STA  ka+1
+        LDA  kmx2
+        STA  kb
+        LDA  kmx2+1
+        STA  kb+1
+        JSR  k_ge
+        JZ   wru_grab                   ; left of the box
+        LDA  kmy2                       ; kx+11 >= kmx ?
+        STA  ka
+        LDA  kmy2+1
+        STA  ka+1
+        LDA  kmx
+        STA  kb
+        LDA  kmx+1
+        STA  kb+1
+        JSR  k_ge
+        JZ   wru_grab                   ; right of the box
+        ; CLOSE: the window is the top record now, so closing it = pop
+        LDA  wcnt
+        DEC
+        STA  wcnt
+        LDA  #99
+        STA  kdragw
+        JSR  wk_repaint
+        JMP  wru_lp
+wru_grab:
+        JSR  wk_repaint                 ; the raise changed the z-order
         ; grab it: kdragw = top index, grab-offset = cursor - origin
         LDA  wcnt
         LDB  #1
@@ -451,14 +551,27 @@ kge_lo: LDA  ka
         LDA  #1
 kge_r:  RTS
 
-; k_intop: A = 1 (Z=0) if (kmx,kmy) is inside the TOP window, else 0. Loads
-; the top window's rect into kx,ky,kcw,kch as a side effect.
-k_intop:LDA  wcnt
+; k_hit: the topmost window containing (kmx,kmy): A=1 (Z=0) with ki = its
+; index and its rect in kx,ky,kcw,kch; A=0 if none. Scans top-down like
+; lib_wm's wm_hit, so a press on a LOWER window finds that window (which the
+; press handler then raises = focuses).
+k_hit:  LDA  wcnt
         JZ   kit_no
         LDB  #1
         SUB
+        STA  ki                         ; start at the top
+kh_lp:  JSR  k_inwin
+        JNZ  kh_yes
+        LDA  ki
+        JZ   kit_no                     ; index 0 missed too: nothing hit
+        DEC
         STA  ki
-        JSR  koff
+        JMP  kh_lp
+kh_yes: LDA  #1
+        RTS
+; k_inwin: A = 1 (Z=0) if (kmx,kmy) is inside window ki, else 0. Loads its
+; rect into kx,ky,kcw,kch as a side effect.
+k_inwin:JSR  koff
         JSR  kp1
         LDA  (P1)+
         STA  kx
@@ -712,7 +825,80 @@ k_movetop:
         STA  (P1)
 kmt_ret:RTS
 
-; ---- draw window ki : body (black fill), border (white), title (white) -----
+; kp2: P2 = recs + (A)  -- the P2 twin of kp1.
+kp2:    STA  kt
+        LDA  #<recs
+        LDB  kt
+        ADD
+        TAP2L
+        LDA  #>recs
+        JNC  kp2_r
+        LDB  #1
+        ADD
+kp2_r:  TAP2H
+        RTS
+
+; k_raise: A = window index -> move its 24-byte record to the TOP slot
+; (wcnt-1), sliding the records above it down one. The record order IS the
+; z-order and the top record IS the focus, so this is raise + focus in one:
+; TAB calls it with 0 (bottom to top), a mouse press with the hit window.
+k_raise:STA  kri
+        LDA  wcnt
+        LDB  #1
+        SUB
+        LDB  kri
+        CMP
+        JZ   krs_ret                    ; already on top
+        LDA  kri                        ; save rec[kri] -> ktmp
+        STA  ki
+        JSR  koff
+        JSR  kp1                        ; P1 = rec[kri]
+        LDP2 #ktmp
+        LDA  #24
+        STA  kt
+krs_sv: LDA  (P1)+
+        STA  (P2)+
+        LDA  kt
+        DEC
+        STA  kt
+        JNZ  krs_sv
+        ; slide rec[kri+1..top] down one slot: (top-kri)*24 bytes, forward,
+        ; from P1 (now = rec[kri+1]) to P2 = rec[kri]
+        LDA  kri
+        STA  ki
+        JSR  koff
+        JSR  kp2                        ; P2 = rec[kri]
+        LDA  wcnt
+        LDB  #1
+        SUB
+        LDB  kri
+        SUB                             ; n = top - kri  (1..3)
+        SHL
+        SHL
+        SHL                             ; 8n
+        STA  kt3
+        SHL                             ; 16n
+        LDB  kt3
+        ADD                             ; 24n bytes
+        STA  kt
+krs_sh: LDA  (P1)+
+        STA  (P2)+
+        LDA  kt
+        DEC
+        STA  kt
+        JNZ  krs_sh
+        LDP1 #ktmp                      ; ktmp -> rec[top] (P2 is there now)
+        LDA  #24
+        STA  kt
+krs_rs: LDA  (P1)+
+        STA  (P2)+
+        LDA  kt
+        DEC
+        STA  kt
+        JNZ  krs_rs
+krs_ret:RTS
+
+; ---- draw window ki : body (black fill), title bar, border (white), title ----
 wk_draw:JSR  koff                       ; A = 24*ki
         JSR  kp1                        ; P1 = recs + 24*ki
         LDA  (P1)+                      ; unpack x,y,w,h
@@ -772,6 +958,93 @@ wk_draw:JSR  koff                       ; A = 24*ki
         JSR  kcol_blk
         JSR  kmove_xy                   ; MOVE(kx,ky)
         JSR  krect_11                   ; RECT(kx1,ky1)
+        ; title bar: the top 14 rows, WHITE for the focused (top) window and
+        ; GREY for the rest -- desk's look (lib_wm wm_chrome). Still PRMFIL 1.
+        LDA  ky                         ; kty = ky + kch - 14  (the bar's bottom)
+        STA  ka
+        LDA  ky+1
+        STA  ka+1
+        LDA  kch
+        STA  kb
+        LDA  kch+1
+        STA  kb+1
+        JSR  k16add
+        LDA  kw
+        STA  ka
+        LDA  kw+1
+        STA  ka+1
+        LDA  #14
+        STA  kb
+        LDA  #0
+        STA  kb+1
+        JSR  k16sub
+        LDA  kw
+        STA  kty
+        LDA  kw+1
+        STA  kty+1
+        LDA  ki                         ; focused <=> ki == wcnt-1
+        INC
+        LDB  wcnt
+        CMP
+        JZ   wkd_fw
+        LDA  #6                         ; COLOR grey (16,32,16 = 33808)
+        JSR  kput
+        LDA  #16
+        JSR  kput
+        LDA  #32
+        JSR  kput
+        LDA  #16
+        JSR  kput
+        JMP  wkd_bar
+wkd_fw: JSR  kcol_wht
+wkd_bar:LDA  #$10                       ; MOVE(kx, kty)
+        JSR  kput
+        LDA  kx
+        STA  kw
+        LDA  kx+1
+        STA  kw+1
+        JSR  ksw
+        LDA  kty
+        STA  kw
+        LDA  kty+1
+        STA  kw+1
+        JSR  ksw
+        JSR  krect_11                   ; RECT(kx1,ky1): the bar
+        ; close box: a black 9x9 on the bar at (kx+3,kty+2)..(kx+11,kty+10)
+        ; -- desk's (wmx+3, wmy+wmh-12)..(wmx+11, wmy+wmh-4). PRMFIL still 1.
+        JSR  kcol_blk
+        LDA  #$10                       ; MOVE(kx+3, kty+2)
+        JSR  kput
+        LDA  kx
+        STA  ka
+        LDA  kx+1
+        STA  ka+1
+        LDA  #3
+        JSR  k_off16
+        JSR  ksw
+        LDA  kty
+        STA  ka
+        LDA  kty+1
+        STA  ka+1
+        LDA  #2
+        JSR  k_off16
+        JSR  ksw
+        LDA  #$34                       ; RECT(kx+11, kty+10)
+        JSR  kput
+        LDA  kx
+        STA  ka
+        LDA  kx+1
+        STA  ka+1
+        LDA  #11
+        JSR  k_off16
+        JSR  ksw
+        LDA  kty
+        STA  ka
+        LDA  kty+1
+        STA  ka+1
+        LDA  #10
+        JSR  k_off16
+        JSR  ksw
         ; border: PRMFIL 0, COLOR white, MOVE(kx,ky), RECT(kx1,ky1)
         LDA  #$E0
         JSR  kput
@@ -780,14 +1053,15 @@ wk_draw:JSR  koff                       ; A = 24*ki
         JSR  kcol_wht
         JSR  kmove_xy
         JSR  krect_11
-        ; title: COLOR white, MOVE3(kx+5, ky+kch-11, 0), TEXT ktlen chars
-        JSR  kcol_wht
-        ; anchor x = kx + 5
+        ; title: COLOR black on the bar, MOVE3(kx+16, ky+kch-11, 0) -- past the
+        ; close box at kx+3..kx+11 -- then TEXT ktlen chars (desk's placement)
+        JSR  kcol_blk
+        ; anchor x = kx + 16
         LDA  kx
         STA  ka
         LDA  kx+1
         STA  ka+1
-        LDA  #5
+        LDA  #16
         STA  kb
         LDA  #0
         STA  kb+1
@@ -1070,6 +1344,8 @@ kmx2:   .fill 2
 kmy2:   .fill 2
 mbtn:   .fill 1
 kdragw: .fill 1
+kri:    .fill 1                         ; k_raise: the index being raised
+ktmp:   .fill 24                        ; k_raise: one record in transit
 kgx:    .fill 2
 kgy:    .fill 2
 ktlen:  .fill 1

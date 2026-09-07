@@ -27,11 +27,19 @@ DESCRIPTION
     was reloaded.
 
 KEYS AND MOUSE
-    arrow keys        move the top window 8 px
+    The FOCUSED window is the top one: it draws a WHITE title bar, the
+    others GREY -- desk's look, now drawn by the kernel.
+
+    TAB               cycle focus: raise the bottom window to the top
+    arrow keys        move the focused (top) window 8 px
     l                 launch the program set by SYS_WKPATH (paint -w)
     Ctrl-D            leave the desktop for the shell
-    mouse             press inside a window and drag; release places it
-                      (xterm SGR reports; see man paint, MOUSE)
+    mouse             press ANY window to raise and focus it; keep the
+                      button down and drag to move it, release to place
+                      it. Press the small black CLOSE BOX at the left of
+                      a title bar to close that window (its record is
+                      removed; a program can open it again with
+                      SYS_WKOPEN). Xterm SGR reports; see man paint, MOUSE.
 
 NOTES
     This is the resident-kernel rung of the window-system ladder

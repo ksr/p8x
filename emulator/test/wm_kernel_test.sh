@@ -116,12 +116,13 @@ for name in ("wk1.ppm", "wk2.ppm"):
     # the grey desktop fills the backdrop (the FLOOD ran)
     grey = sum(1 for i in range(0,len(a),3) if a[i:i+3]==bytes(GREY))
     assert grey > 40000, "%s: desktop FLOOD missing (%d grey px)" % (name, grey)
-    # the SHAPES title strokes (white TEXT inside the window; card stroke
-    # font, drawn by the resident kernel -- needs PROJCT 0 so z=0 is not
-    # near-clipped) leave a cluster of white pixels in the interior
-    tt = sum(1 for X in range(42,120) for Y in range(178,188)
-             if p(a,X,Y)==(255,255,255))
-    assert tt > 40, "%s: SHAPES title not drawn (%d px)" % (name, tt)
+    # the SHAPES title strokes: BLACK stroke TEXT on the title bar (SHAPES is
+    # not the top window, so its bar is grey), drawn by the resident kernel
+    # -- needs PROJCT 0 so z=0 is not near-clipped. Sampled past the close
+    # box (x >= kx+16 = 56) so only the text can contribute black pixels.
+    tt = sum(1 for X in range(56,120) for Y in range(178,188)
+             if p(a,X,Y)==(0,0,0))
+    assert tt > 40, "%s: SHAPES title not drawn (%d black px)" % (name, tt)
     # the SHAPES content -- a red box from CARD LIST 40 -- must be present
     # in BOTH frames (in frame 2 the recording app is gone; the card holds it)
     red = sum(1 for i in range(0,len(a),3) if a[i:i+3]==bytes((255,0,0)))

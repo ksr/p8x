@@ -148,8 +148,25 @@ Appended to the OS syscall table after `SYS_EXEC` ($2024):
    `SYS_WKPATH` (`$2039`) makes the launch target the client's choice (the
    default `/bin/wapp.bin` keeps the WM tests' client). This is the payoff —
    the desktop survives launching an app — which `desk` (WM in the TPA)
-   cannot do. Still to migrate into the kernel: menu, close boxes, focus/TAB,
-   FILES, TERM, VIEW.
+   cannot do.
+6. **Focus + close boxes in the kernel — DONE 2026-09-07.** Focus IS the top
+   record: `k_raise` moves a record to the top slot (TAB raises the bottom
+   window; a mouse press hit-tests ALL windows top-down via `k_hit` and raises
+   the hit one). `wk_draw` gives every window desk's chrome — a 14-row title
+   bar, white when focused and grey otherwise, a 9×9 black close box at
+   `x+3..x+11`, black title text at `x+16`; pressing the close box pops the
+   (now top) record. `wm_focus_test` proves TAB, the bar colours and the
+   close. Cost: **+673 B** — the OS image now ends `$5E16`, **234 B** short of
+   the completion scratch at `$5F00`.
+   **THE WALL.** A menu bar with a press-slide-release pull-down is ~400 B of
+   this asm and does not fit; FILES, TERM and VIEW (thousands of bytes) never
+   will. The OS image is at the 16 KB cap, so the kernel must stay a SMALL
+   resident core — windows, z-order, chrome, drag, launch-and-resume — and the
+   rich UI belongs in the CLIENT, which has the 37 KB TPA. The missing piece
+   is an event path: `SYS_WKEVENT` (one key/pointer event, kernel-routed —
+   already sketched in the syscall list above) lets `wdesk` draw its own menu
+   bar and handle menu/FILES/TERM presses while the kernel keeps the windows
+   alive across launches. That split is the recommended next rung.
 6. **Saved per-window context (the switcher):** each window keeps its app's
    state; focus-switch swaps the active TPA (state-only first, full-TPA-swap
    to disk as the deluxe variant — the two later options from the fork).
