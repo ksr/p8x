@@ -367,6 +367,11 @@ int main() {
     wgput(129); wgw(256);                     /* TSIZE 1x                  */
     rec_shapes();
     wm_repaint();
+    puts("DESK (man desk)");                  /* console marker: tests + users
+                                                 rely on it to see desk start.
+                                                 puts (already linked for "bye")
+                                                 costs ~20 B; outs would pull a
+                                                 whole routine back in (~120 B) */
     ptr_init();
 
     going = 1;
