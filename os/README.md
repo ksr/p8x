@@ -269,7 +269,8 @@ from C, the `p8cc` `bios()` intrinsic). The table is **append-only**:
 | `$2033` | `SYS_WKSAVE` | `P1` = a 4-byte blob, `A` = window index → saved in the kernel's per-window state, resident across launches (the switcher's core) |
 | `$2036` | `SYS_WKLOAD` | `P1` = a 4-byte destination, `A` = window index → that window's saved state |
 | `$2039` | `SYS_WKPATH` | `P1` = `"path [args]"` (≤ 23 chars) → what the `l` key launches (default `/bin/wapp.bin`; `wdesk` sets `/bin/paint.bin -w`) |
-| `$203C` | `SYS_WKEVENT` | **one step** of the resident loop, so the CLIENT owns the outer loop and its own UI (menu bar, FILES, TERM). Reads a console event, handles what the kernel owns (TAB focus, arrows, mouse press/drag/release → raise/drag/close), and returns: **carry set = quit** (`^D`); else `A = 0` when the kernel handled it, or the **key byte** for a key the kernel does not own — the client acts on that (a menu hotkey, TERM input, launch…). `SYS_WKRUN` is the thin built-in loop over this; a rich client (wdesk) drives it directly |
+| `$203C` | `SYS_WKEVENT` | **one step** of the resident loop, so the CLIENT owns the outer loop and its own UI (menu bar, FILES, TERM). Reads a console event, handles what the kernel owns (TAB focus, arrows, mouse press/drag/release → raise/drag/close), and returns: **carry set = quit** (`^D`); else `A = 0` when the kernel handled it, or the **key byte** for a key the kernel does not own — the client acts on that (a menu hotkey, TERM input, launch…). `SYS_WKRUN` is the thin built-in loop over this; a rich client (`wdesk`, which draws its own menu bar) drives it directly |
+| `$203F` | `SYS_WKCLOSE` | pop the top (focused) window — the client's menu/keyboard "close" (the mouse close box does the same pop inline) |
 
 `SYS_GETCWD`/`SYS_CWDLBA`/`SYS_OPENCWD` operate on the single CWD in the unified
 namespace (the path shows `/d1/...` when it is on the mounted drive); `SYS_OPENCWD`

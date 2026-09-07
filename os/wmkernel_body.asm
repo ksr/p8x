@@ -311,6 +311,14 @@ wkp_cp: LDA  (P1)+
         LDA  #0                         ; hit the cap: force a terminator
         STA  (P2)+
 wkp_ret:RTS
+; ==== wk_close : pop the top (focused) window (SYS_WKCLOSE, $203F) ==========
+; The client's menu/keyboard "close" -- the mouse close box does the same pop
+; inline. Records above it don't exist (top is the last), so this is a decrement.
+wk_close:LDA  wcnt
+        JZ   wkc_ret
+        DEC
+        STA  wcnt
+wkc_ret:RTS
 kpath:  .ascii "/bin/wapp.bin"          ; 13 + NUL + 10 pad = a 24-byte buffer
         .byte 0
         .fill 10

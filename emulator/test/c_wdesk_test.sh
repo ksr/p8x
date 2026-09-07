@@ -36,11 +36,18 @@ python3 $ROOT/tools/p8xfs.py put    wd.img $ROOT/os/font.gl --name /FONT.GL --lo
 # wdesk -> 'l' (kernel launches paint -w over wdesk) -> 'q' (paint quits and
 # resumes the desktop via SYS_WKRUN) -> ^D (leave to the shell; the frame is
 # dumped at the shell, never the monitor -- the boot splash would overwrite it)
-printf 'B\rrun /bin/wdesk.bin\rlq\004' > wd.in
+# wdesk (menu bar + SYS_WKEVENT loop); 'l' from the menu launches paint OVER
+# wdesk; 'q' quits paint, which -- launched with -w -- re-execs "wdesk -r",
+# resuming the SAME resident windows AND the menu bar. No trailing ^D: the
+# frame is dumped with the RESUMED desktop up (dumping after a quit-to-shell
+# would catch the boot splash, not the desktop).
+printf 'B\rrun /bin/wdesk.bin\rlq' > wd.in
 ../p8xemu -N -i wd.in -c wd.img -l 3000000000 -g wd.ppm eeprom.bin > wd.out 2>/dev/null || true
 
-seq=$(tr -d '\0' < wd.out | grep -oE "WDESK|PAINT|bye" | tr '\n' ' ')
-case "$seq" in *"WDESK "*"PAINT "*"bye"*) ;; *) fail "launch sequence was '$seq', want WDESK ... PAINT ... bye";; esac
+# WDESK (fresh) ... PAINT (launched) ... WDESK (resumed via -r) proves the
+# desktop CLIENT -- not the kernel's bare loop -- came back after the launch.
+seq=$(tr -d '\0' < wd.out | grep -oE "WDESK|PAINT" | tr '\n' ' ')
+case "$seq" in *"WDESK "*"PAINT "*"WDESK"*) ;; *) fail "launch sequence was '$seq', want WDESK ... PAINT ... WDESK (resume)";; esac
 
 python3 - <<'EOF' || exit 1
 d = open("wd.ppm", "rb").read()
@@ -49,15 +56,21 @@ def p(x, wy):
     i = ((271 - wy) * 480 + x) * 3
     return tuple(px[i:i+3])
 GREY = (49, 48, 74)
-# the RESUMED desktop, drawn by the resident kernel after paint quit:
+# the RESUMED desktop (wdesk -r), drawn by the resident kernel + this client:
 assert p(40,40)==(255,255,255),   "SHAPES border gone after the launch/resume: %r" % (p(40,40),)
-assert p(190,90)==(255,255,255),  "second window gone after the launch/resume: %r" % (p(190,90),)
+assert p(190,90)==(255,255,255),  "NOTES window gone after the launch/resume: %r" % (p(190,90),)
 assert p(460,20)==GREY,           "desktop backdrop missing: %r" % (p(460,20),)
-# SHAPES' card-list content (a red frame) must be back too -- it lived on the card
+# SHAPES' card-list content (a red frame) survived on the card
 red = sum(1 for i in range(0,len(px),3) if px[i:i+3]==bytes((255,0,0)))
 assert red > 300, "SHAPES card-list content missing after resume (%d red px)" % red
-print("after launching paint OVER wdesk and quitting it, the resident kernel")
-print("redrew both windows and the card-list content: the desktop SURVIVED the app")
+# THE MENU BAR (drawn by the CLIENT, not the kernel): a white strip across the
+# top rows with black text. It must be redrawn on resume.
+assert p(460,265)==(255,255,255), "menu bar background not white at top-right: %r" % (p(460,265),)
+bartext = sum(1 for X in range(8,240) for Y in range(259,268) if p(X,Y)==(0,0,0))
+assert bartext > 30, "menu bar text not drawn (%d black px in the bar)" % bartext
+print("wdesk drew its own MENU BAR and drove the kernel via SYS_WKEVENT; after")
+print("launching paint and quitting it, 'wdesk -r' resumed -- windows, content")
+print("AND the menu bar all back. The rich UI lives in the client, the OS stays tight.")
 EOF
 
-echo "C-WDESK TEST: PASS (desktop on the resident kernel survives launching paint and resumes intact)"
+echo "C-WDESK TEST: PASS (client menu bar over SYS_WKEVENT; launch + resume the client, windows intact)"

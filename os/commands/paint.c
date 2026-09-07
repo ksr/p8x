@@ -420,9 +420,11 @@ int main() {
     gwait();
     outc(13); outc(10); puts("bye");
     if (fromdesk) { bios(SYS_EXEC, "/bin/desk.bin", 0); }
-    if (fromwm) { bios(SYS_WKRUN, 0, 0); }    /* resume the resident desktop:
-                                                 the kernel redraws its windows
-                                                 (records in the OS, content on
-                                                 the card); returns on ^D */
+    if (fromwm) { bios(SYS_EXEC, "/bin/wdesk.bin -r", 0); }
+                                              /* resume the desktop CLIENT (not
+                                                 the kernel's bare loop): wdesk
+                                                 -r redraws the resident windows
+                                                 AND its own menu bar, then runs
+                                                 its SYS_WKEVENT loop again */
     return 0;
 }

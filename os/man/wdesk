@@ -2,7 +2,7 @@ NAME
     wdesk - the desktop on the resident window-manager kernel
 
 SYNOPSIS
-    wdesk
+    wdesk [-r]
 
 DESCRIPTION
     A desktop whose window manager lives in the OPERATING SYSTEM, not in
@@ -26,20 +26,40 @@ DESCRIPTION
     SHAPES picture survived on the card (CLRUN replays it), and nothing
     was reloaded.
 
-KEYS AND MOUSE
-    The FOCUSED window is the top one: it draws a WHITE title bar, the
-    others GREY -- desk's look, now drawn by the kernel.
+    THE MENU BAR (the white strip across the top, drawn by wdesk itself,
+    not the kernel):
+
+        DESK   L=PAINT   C=CLOSE   Q=QUIT
+
+    The desktop and its windows are the KERNEL's; the menu bar and the
+    launch/close/quit policy are the CLIENT's. wdesk drives the kernel
+    one event at a time (SYS_WKEVENT): the kernel handles the window
+    mechanics itself and hands wdesk the keys it does not own, which the
+    menu bar acts on.
+
+    L                 launch paint OVER wdesk. paint runs in the same
+                      TPA; the kernel keeps the windows alive. Quitting
+                      paint (it was launched with -w) re-runs "wdesk -r",
+                      which redraws the SAME windows and this menu bar --
+                      the desktop survives the launch.
+    C                 close the top (focused) window (SYS_WKCLOSE)
+    Q  or  Ctrl-D     leave the desktop for the shell
+
+    The FOCUSED window is the top one: WHITE title bar, the others GREY.
 
     TAB               cycle focus: raise the bottom window to the top
     arrow keys        move the focused (top) window 8 px
-    l                 launch the program set by SYS_WKPATH (paint -w)
-    Ctrl-D            leave the desktop for the shell
-    mouse             press ANY window to raise and focus it; keep the
-                      button down and drag to move it, release to place
-                      it. Press the small black CLOSE BOX at the left of
-                      a title bar to close that window (its record is
-                      removed; a program can open it again with
-                      SYS_WKOPEN). Xterm SGR reports; see man paint, MOUSE.
+    mouse             press ANY window to raise and focus it; hold and
+                      drag to move it, release to place it. Press the
+                      small black CLOSE BOX at the left of a title bar
+                      to close that window. Xterm SGR reports; see
+                      man paint, MOUSE.
+
+OPTIONS
+    -r  RESUME: the windows are already in the resident kernel (a
+        launched app is returning), so skip init and just redraw. Not
+        for interactive use -- it is how paint -w brings the desktop
+        back.
 
 NOTES
     This is the resident-kernel rung of the window-system ladder

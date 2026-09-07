@@ -174,9 +174,22 @@ Appended to the OS syscall table after `SYS_EXEC` ($2024):
    unowned `x`. This is the split that lets the rich desktop live in the
    client: `wdesk` can now draw its own menu bar and run FILES/TERM/VIEW,
    acting on the keys and (next) the menu-bar clicks the kernel returns, while
-   the kernel keeps the windows alive across launches. **Next:** grow the desk
-   client on `SYS_WKEVENT` — menu bar first — in C (fast to write and test),
-   then port to an asm `/bin` twin once the design settles.
+   the kernel keeps the windows alive across launches.
+8. **The client's menu bar — DONE 2026-09-07.** `wdesk` is now a real
+   `SYS_WKEVENT`-driven client with **its own menu bar** (`DESK  L=PAINT
+   C=CLOSE  Q=QUIT`, drawn in the top rows by the client, not the kernel). It
+   drives the kernel one event at a time; the kernel handles window mechanics
+   and returns the keys it does not own, and the bar acts on them: **L** launches
+   paint over wdesk, **C** closes the top window (the one new kernel primitive,
+   `SYS_WKCLOSE` `$203F`, +14 B), **Q**/`^D` quits. The launch/resume now brings
+   back the *client*: paint `-w` re-execs `wdesk -r` (RESUME: windows are in the
+   kernel, so it just redraws them and the bar) instead of the kernel's bare
+   `SYS_WKRUN`. `c_wdesk_test` proves the bar is drawn, the launch runs paint,
+   and the resume restores windows + content + bar. The rich UI is in the client
+   (37 KB TPA); the OS grew only the 14-byte primitive. **Next:** a Mac-style
+   *mouse* pull-down (needs `SYS_WKEVENT` to return menu-bar-region clicks, not
+   just keys), then FILES / TERM / VIEW in the client — and, once the design
+   settles, the asm `/bin` twin.
 6. **Saved per-window context (the switcher):** each window keeps its app's
    state; focus-switch swaps the active TPA (state-only first, full-TPA-swap
    to disk as the deluxe variant — the two later options from the fork).

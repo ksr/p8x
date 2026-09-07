@@ -35,6 +35,7 @@ SYS_WKSAVE = $2033      ; P1=blob(4) A=win -> save window state
 SYS_WKLOAD = $2036      ; P1=dest(4) A=win -> load window state
 SYS_WKPATH = $2039      ; P1 = "path [args]" -> the 'l'-key launch target
 SYS_WKEVENT = $203C     ; one event; C=quit, A=0 handled, A=key (unowned)
+SYS_WKCLOSE = $203F     ; pop the top (focused) window
 
 ; --- BIOS jump table ($01xx) ---
 CONIN      = $0100      ; wait for key, char -> A (raw console, not stdin)
