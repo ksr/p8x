@@ -35,11 +35,16 @@
 ; A file/dir argument may be a path; directory scanning works on any extent
 ; (start LBA + sector count), so CWD and resolved paths share one code path.
 ; The prompt shows the current path. Verify a volume with p8xfs.py fsck.
-; RAM layout: OS code $2000..$5FFF (16K reserve = disk cap) | scratch block
+; RAM layout: OS image $2000..~$5B4C -- INCLUDING the resident WM kernel
+; (wmkernel_body.asm, syscalls $2027-$2036) -- with growth room to $5F00 (the
+; 16K disk cap is $6000) | tab-complete scratch $5F00..$5FFF | scratch block
 ; $6000..$69FF (firmware/BIOS scratch $6000-$60xx, SBUF $6100, OS shell scratch
 ; $6300, IBUF/PATHBUF/APBUF $6500-$69FF) | TPA (programs / RUN / ">" capture)
-; $6A00..; stack (P3) grows down from $FEFF. (rev E: OS at $2000; scratch+TPA
-; dropped -$1000 vs rev D, growing the TPA to ~37.9K.)
+; $6A00..CSTACKTOP $F800 | shell command-history ring $F800..$FBFF (HISTN=16 x
+; 64) | stack (P3) grows down from $FEFF into $FC00..$FEFF. (rev E: OS at $2000;
+; scratch+TPA dropped -$1000 vs rev D, growing the TPA to ~37.9K. 2026-09-07:
+; the history ring moved here from $5800 -- that "reserve" was never free, and
+; the folded-in kernel overlapped it; see gen_memmap.py HISTRING.)
 
 ; ---- BIOS jump table (stable ABI, in ROM) ----------------------------------
 CONIN   = $0100          ; wait for key, char -> A

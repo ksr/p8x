@@ -15,7 +15,7 @@ DESCRIPTION
     you can then edit its end and press Enter to run it. Pressing Down past the
     newest entry returns you to an empty line.
 
-    History is a ring of the last 32 command lines, kept in RAM. Blank lines are
+    History is a ring of the last 16 command lines, kept in RAM. Blank lines are
     not recorded, and a command identical to the one just before it is stored
     only once (no consecutive duplicates). The ring is cleared at power-on / cold
     start; it is not (yet) saved to disk between sessions.
