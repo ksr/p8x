@@ -553,6 +553,21 @@ Nothing below has been built or measured.
       sketch: a shared pointer ABSTRACTION (SYS_PTR or a lib) once a
       second client wants events, and BASIC's PTR() trio. Door two --
       real pointer hardware -- is the PS/2 card entry below.
+- [ ] **Restore a 16-line shell history by relocating the C commands' high
+      scratch pages (2026-09-07, user).** The command-history ring shrank
+      32 -> 16 -> 8 lines when the WM kernel was folded into the OS image:
+      the only free block above CSTACKTOP is $F800..$F9FF (512 B), because
+      $FA00..$FBFF is the FSDIRBUF dir/glob sector page (dir, cat,
+      glob_expand: bios(FSDIRBUF,0,0xFA)) and $FC00..$FDFF is RDBUF, the
+      shared file-read buffer -- both `//#define`s in os/commands/lib_*.c,
+      NOT memmap anchors (which is how a 16-line ring briefly overlapped
+      FSDIRBUF). To get 16 lines (1 KB) back: move those two pages (e.g.
+      both down 512 B with CSTACKTOP lowered to match, costing the TPA
+      512 B), touch every command that names page $FA / RDBUF, update
+      HISTN + HISTRING in gen_memmap.py and the monitor-doc memory map,
+      then run the full suite -- and ADD the missing test: history recall
+      after a globbing command. The OS region's spare 907 B is not 1 KB.
+      Judged invasive for the gain on 2026-09-07; 8 lines shipped instead.
 - [ ] **PS/2 keyboard + mouse card (2026-09-04, user; the sketch).**
       A TTL bus card giving the machine native human input -- and,
       with the LCD-as-a-terminal entry, a fully HEAD-DOWN P8X: panel,
