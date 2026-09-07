@@ -29,21 +29,23 @@ DESCRIPTION
     THE MENU BAR (the white strip across the top, drawn by wdesk itself,
     not the kernel):
 
-        DESK   L=PAINT   C=CLOSE   Q=QUIT
+        DESK      PAINT      CLOSE      QUIT
 
-    The desktop and its windows are the KERNEL's; the menu bar and the
-    launch/close/quit policy are the CLIENT's. wdesk drives the kernel
-    one event at a time (SYS_WKEVENT): the kernel handles the window
-    mechanics itself and hands wdesk the keys it does not own, which the
-    menu bar acts on.
+    The desktop and its windows are the KERNEL's; the menu bar is the
+    CLIENT's. wdesk drives the kernel one event at a time (SYS_WKEVENT):
+    the kernel handles the window mechanics and hands wdesk the keys it
+    does not own AND any mouse click in the bar's top rows (with the
+    cursor column, via SYS_WKARG) -- wdesk maps the column to a word.
 
-    L                 launch paint OVER wdesk. paint runs in the same
+    CLICK a bar word, or press its letter -- both do the same:
+
+    PAINT  or  L      launch paint OVER wdesk. paint runs in the same
                       TPA; the kernel keeps the windows alive. Quitting
                       paint (it was launched with -w) re-runs "wdesk -r",
                       which redraws the SAME windows and this menu bar --
                       the desktop survives the launch.
-    C                 close the top (focused) window (SYS_WKCLOSE)
-    Q  or  Ctrl-D     leave the desktop for the shell
+    CLOSE  or  C      close the top (focused) window (SYS_WKCLOSE)
+    QUIT   or  Q      leave the desktop for the shell (Ctrl-D also quits)
 
     The FOCUSED window is the top one: WHITE title bar, the others GREY.
 

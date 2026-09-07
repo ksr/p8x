@@ -186,10 +186,23 @@ Appended to the OS syscall table after `SYS_EXEC` ($2024):
    kernel, so it just redraws them and the bar) instead of the kernel's bare
    `SYS_WKRUN`. `c_wdesk_test` proves the bar is drawn, the launch runs paint,
    and the resume restores windows + content + bar. The rich UI is in the client
-   (37 KB TPA); the OS grew only the 14-byte primitive. **Next:** a Mac-style
-   *mouse* pull-down (needs `SYS_WKEVENT` to return menu-bar-region clicks, not
-   just keys), then FILES / TERM / VIEW in the client — and, once the design
-   settles, the asm `/bin` twin.
+   (37 KB TPA); the OS grew only the 14-byte primitive.
+9. **A CLICKABLE menu bar — DONE 2026-09-07.** `SYS_WKEVENT` now returns a
+   third kind of event: a mouse press in the top rows (cell y ≤ 2, below no
+   window) comes back as `A = 2` with the cursor **column** in a new one-byte
+   accessor `SYS_WKARG` (`$2042`). Keys likewise moved behind `SYS_WKARG`
+   (event `A = 1`, byte via `SYS_WKARG`), so the `SYS_WKEVENT` return is now a
+   clean event *code* (0 handled / 1 key / 2 bar-click / carry quit). `wdesk`
+   draws its words (`DESK  PAINT  CLOSE  QUIT`) at known columns and maps a
+   click's column to the same action as the L/C/Q keys. `wm_barmenu_test`
+   clicks the CLOSE zone and the window closes. **Gotcha fixed:** an accessor
+   that returns a value must `CLC` — `SYS_WKARG` first returned a stray carry,
+   which `bios()` folded in as bit 256 (`26 → 282`), picking the wrong action
+   nondeterministically. Kernel headroom is now ~143 B before `$5F00` — the
+   core is nearly full, as intended. **Next:** the Mac press-slide-release
+   *pull-down* (a menu-mode in the kernel that forwards the gesture to the
+   client) if wanted, then FILES / TERM / VIEW in the client, then the asm
+   `/bin` twin once the design settles.
 6. **Saved per-window context (the switcher):** each window keeps its app's
    state; focus-switch swaps the active TPA (state-only first, full-TPA-swap
    to disk as the deluxe variant — the two later options from the fork).

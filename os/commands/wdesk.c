@@ -47,8 +47,10 @@ int wtext(int x, int y, char *s) {
     return 0;
 }
 
-/* the menu bar: a white strip across the top 14 rows with black text. Drawn
- * AFTER every kernel repaint (the repaint's FLOOD covers these rows too). */
+/* the menu bar: a white strip across the top 14 rows with black CLICKABLE
+ * words. Drawn after every kernel repaint (its FLOOD covers these rows too).
+ * The words sit at columns that match the click zones in act_at() below:
+ * PAINT ~col 11, CLOSE ~col 26, QUIT ~col 41. The keys L/C/Q do the same. */
 int menubar() {
     gp(224); gp(1);                           /* PRMFIL 1 (filled)     */
     gp(6); gp(31); gp(63); gp(31);            /* COLOR white           */
@@ -56,8 +58,36 @@ int menubar() {
     gp(52); gw(479); gw(271);                 /* RECT: the bar         */
     gp(224); gp(0);                           /* PRMFIL 0              */
     gp(6); gp(0); gp(0); gp(0);               /* COLOR black           */
-    wtext(8, 261, "DESK   L=PAINT   C=CLOSE   Q=QUIT");
+    wtext(6,   261, "DESK");                  /* the label (not clickable) */
+    wtext(60,  261, "PAINT");
+    wtext(150, 261, "CLOSE");
+    wtext(240, 261, "QUIT");
     return 0;
+}
+
+/* run a menu action: 0 = launch paint, 1 = close top, 2 = quit. Returns 1
+ * when the caller should quit. Shared by the L/C/Q keys and the bar clicks. */
+int act(int a) {
+    if (a == 0) {
+        bios(SYS_EXEC, "/bin/paint.bin -w", 0);   /* becomes paint; no return */
+        menubar();                                /* only if exec failed */
+        return 0;
+    }
+    if (a == 1) {
+        bios(SYS_WKCLOSE, 0, 0);
+        bios(SYS_WKREPAINT, 0, 0);
+        menubar();
+        return 0;
+    }
+    return 1;                                     /* a == 2: quit */
+}
+
+/* map a menu-bar click COLUMN to an action, or -1 for the DESK label / gaps */
+int act_at(int col) {
+    if (col >= 8 && col < 20) { return 0; }       /* PAINT */
+    if (col >= 20 && col < 36) { return 1; }      /* CLOSE */
+    if (col >= 36) { return 2; }                  /* QUIT */
+    return -1;                                    /* the label, or a gap */
 }
 
 /* one 22-byte window record -> SYS_WKOPEN */
@@ -95,7 +125,7 @@ int scene() {
 }
 
 int main() {
-    char *ap; int k; int going;
+    char *ap; int k; int going; int e; int a;
     if (peek(GLID) != 71) { puts("?No display"); return 1; }
     ap = argstr();
     while (*ap == 32) { ap = ap + 1; }
@@ -112,19 +142,21 @@ int main() {
 
     going = 1;
     while (going) {
-        k = bios(SYS_WKEVENT, 0, 0);          /* one event */
-        if (k & 256) { going = 0; }           /* carry -> quit (^D) */
-        else if (k == 0) { menubar(); }       /* kernel repainted -> redraw bar */
-        else if (k == 108 || k == 76) {       /* L: launch paint OVER wdesk */
-            bios(SYS_EXEC, "/bin/paint.bin -w", 0);   /* never returns on ok */
-            menubar();                        /* only reached if exec failed */
+        e = bios(SYS_WKEVENT, 0, 0);          /* one event */
+        if (e & 256) { going = 0; }           /* carry -> quit (^D) */
+        else if (e == 0) { menubar(); }       /* kernel repainted -> redraw bar */
+        else if (e == 1) {                    /* an unowned key */
+            k = bios(SYS_WKARG, 0, 0);
+            a = -1;
+            if (k == 108 || k == 76) { a = 0; }        /* L = paint  */
+            else if (k == 99 || k == 67) { a = 1; }    /* C = close  */
+            else if (k == 113 || k == 81) { a = 2; }   /* Q = quit   */
+            if (a >= 0 && act(a)) { going = 0; }
         }
-        else if (k == 99 || k == 67) {        /* C: close the top window */
-            bios(SYS_WKCLOSE, 0, 0);
-            bios(SYS_WKREPAINT, 0, 0);
-            menubar();
+        else if (e == 2) {                    /* a menu-bar click */
+            a = act_at(bios(SYS_WKARG, 0, 0));
+            if (a >= 0 && act(a)) { going = 0; }
         }
-        else if (k == 113 || k == 81) { going = 0; }  /* Q: quit */
     }
 
     gp(116); gp(30);                          /* CLDEL 30: tidy the card */

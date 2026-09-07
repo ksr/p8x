@@ -242,14 +242,17 @@ wkr_done:
 wk_run: LDA  #99                       ; no window grabbed yet
         STA  kdragw
         JSR  wk_repaint
-wkrun_lp:JSR wk_event                  ; one event: C set = quit; else A = 0
-        JC   wkr_end                   ;   (kernel handled) or an unowned key
-        JZ   wkrun_lp                  ; A=0: handled -> keep looping
-        LDB  #$6C                      ; the built-in loop owns just 'l' = LAUNCH
+wkrun_lp:JSR wk_event                  ; one event: C=quit, A=0 handled, A=1 key,
+        JC   wkr_end                   ;   A=2 bar click (key/col in kev_arg)
+        LDB  #1                        ; the built-in loop owns just the 'l' key
+        CMP
+        JNZ  wkrun_lp                  ; A=0 (handled) or A=2 (bar): ignore
+        LDA  kev_arg                   ; A=1: a key -> is it 'l' = LAUNCH?
+        LDB  #$6C
         CMP
         JZ   wru_launch
-        JMP  wkrun_lp                  ; any other unowned key: ignore (wk_run
-                                       ;   has no client; wdesk uses wk_event)
+        JMP  wkrun_lp                  ; any other key: ignore (wk_run has no
+                                       ;   client; wdesk uses wk_event)
 wkr_end:RTS
 
 ; ==== wk_event : ONE step of the resident loop (SYS_WKEVENT, $203C) =========
@@ -271,8 +274,10 @@ wk_event:
         LDB  #27                        ; ESC -> arrow / mouse sequence
         CMP
         JZ   wru_esc
-        CLC                             ; any other byte: an unowned key ->
-        RTS                             ;   return it (A = key, C=0, Z=0)
+        STA  kev_arg                    ; an unowned key -> event 1, key in kev_arg
+        CLC
+        LDA  #1
+        RTS
 wev_quit:SEC                            ; carry set = quit
         RTS
 wev_h1: CLC                             ; kernel handled it: A=0, C=0, Z=1
@@ -319,6 +324,13 @@ wk_close:LDA  wcnt
         DEC
         STA  wcnt
 wkc_ret:RTS
+; ==== wk_arg : the data byte for the last SYS_WKEVENT (SYS_WKARG, $2042) ====
+; After SYS_WKEVENT returns event 1 (a key) or event 2 (a menu-bar click), the
+; client reads the payload here: the key byte, or the cursor COLUMN of the
+; click. One byte keeps the SYS_WKEVENT return itself a clean event code.
+wk_arg: CLC                             ; a clean byte: bios() must not see a
+        LDA  kev_arg                    ;   stray carry as bit 256 in the result
+        RTS
 kpath:  .ascii "/bin/wapp.bin"          ; 13 + NUL + 10 pad = a 24-byte buffer
         .byte 0
         .fill 10
@@ -393,6 +405,8 @@ wru_mouse:
         LDA  knum
         STA  mbtn                       ; keep the button byte (bit5 = drag)
         JSR  k_rdnum                    ; x -> knum ; term ';'
+        LDA  knum                       ; save the x CELL (menu-bar click column)
+        STA  kcellx
         JSR  k_dec1n                    ; ka = knum - 1
         LDA  #6
         STA  kb
@@ -404,6 +418,8 @@ wru_mouse:
         LDA  kw+1
         STA  kmx+1
         JSR  k_rdnum                    ; y -> knum ; term M/m
+        LDA  knum                       ; save the y CELL (menu-bar test)
+        STA  kcelly
         JSR  k_dec1n                    ; ka = knum - 1
         LDA  #11
         STA  kb
@@ -442,7 +458,21 @@ wru_mouse:
         JSR  wk_repaint
         JMP  wev_h1
 wru_mpress:
-        JSR  k_hit                      ; which window is under the cursor?
+        ; a PRESS in the menu bar (top rows, cell y <= 2)? Hand it to the
+        ; client as a bar CLICK, cursor column in kev_arg -- the client owns
+        ; the menu; the kernel owns only the windows below.
+        LDA  kcelly
+        LDB  #3
+        CMP
+        JC   wmp_win                    ; C=1 -> cell y >= 3: a window press
+        LDA  kcellx
+        STA  kev_arg
+        LDA  #99                        ; a bar press is not a window drag
+        STA  kdragw
+        CLC
+        LDA  #2                         ; event 2 = menu-bar click (SYS_WKARG=col)
+        RTS
+wmp_win:JSR  k_hit                      ; which window is under the cursor?
         JZ   wru_mnohit
         LDA  ki
         JSR  k_raise                    ; focus it: its record moves to the top
@@ -1375,6 +1405,9 @@ mbtn:   .fill 1
 kdragw: .fill 1
 kri:    .fill 1                         ; k_raise: the index being raised
 ktmp:   .fill 24                        ; k_raise: one record in transit
+kcellx: .fill 1                         ; mouse: last cursor column (cell x)
+kcelly: .fill 1                         ; mouse: last cursor row (cell y)
+kev_arg:.fill 1                         ; SYS_WKARG payload: last key / click column
 kgx:    .fill 2
 kgy:    .fill 2
 ktlen:  .fill 1

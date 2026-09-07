@@ -19,6 +19,7 @@ WK_INIT=0x2027
 WK_OPEN=0x202A
 WK_PAINT=0x202D
 WK_EVENT=0x203C
+WK_ARG=0x2042
 
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
@@ -49,7 +50,7 @@ int main() {
         k = bios($WK_EVENT, 0, 0);        /* one event */
         if (k & 256) { going = 0; }       /* carry set -> quit */
         else if (k == 0) { }              /* 0 -> the kernel handled it */
-        else { putchar(k); }              /* an unowned key -> the CLIENT acts */
+        else if (k == 1) { putchar(bios($WK_ARG, 0, 0)); }  /* 1 -> unowned key */
     }
     puts("EV-DONE");
     return 0;

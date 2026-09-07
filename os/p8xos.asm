@@ -150,6 +150,7 @@ HISTLEN = 64           ; bytes per history slot (matches LINEBUF width)
         JMP  wk_path            ; $2039 SYS_WKPATH: P1 = "path [args]" -> the WM 'l'-key launch target
         JMP  wk_event           ; $203C SYS_WKEVENT: one event; C=quit, A=0 handled, A=key (unowned)
         JMP  wk_close           ; $203F SYS_WKCLOSE: pop the top (focused) window
+        JMP  wk_arg             ; $2042 SYS_WKARG: payload of the last SYS_WKEVENT (key / click column)
 ; Reached only via the table above (COLD jumps past them).
 SYS_GETDRIVE:                   ; derived: 1 if the CWD is under the /d1 mount
         LDA  CURDRIVE
