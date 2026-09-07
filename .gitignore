@@ -69,3 +69,6 @@ emulator/test/*
 # is behaviour-preserving; safe to delete.
 !emulator/test/prog 2.asm
 __pycache__/
+
+# compiled p8mouse host helper (build from tools/p8mouse.c)
+/p8mouse
