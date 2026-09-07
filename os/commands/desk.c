@@ -186,20 +186,41 @@ int scopy(char *d, char *c, int cap) {        /* bounded strcpy */
     return 0;
 }
 
-/* launch a program, the chain way: vpath = its path + " -d", then
- * SYS_EXEC -- shared by the FILES click-launcher and the TERM shell */
+/* a short status line into TERM's history, then repaint (the ?EXEC/?OPEN
+ * failure tail -- factored so each site costs one call, not three) */
+int fail(char *s) { tprint(s); wm_repaint(); return 0; }
+
+/* launch p: append " -d" (ask the program to chain back to desk), hand the
+ * terminal over, SYS_EXEC -- which BECOMES the program and never returns on
+ * success. On failure it returns; we take the terminal back and show ?EXEC.
+ * Shared by the FILES click-launcher and the TERM shell. */
+int launch(char *p) {
+    int i;
+    i = 0;
+    while (p[i] != 0) { i = i + 1; }
+    p[i] = ' '; p[i+1] = '-'; p[i+2] = 'd'; p[i+3] = 0;
+    ptr_done();
+    bios(SYS_EXEC, p, 0);
+    ptr_init();
+    return fail("?EXEC");
+}
+
+/* launch a program typed into TERM. SYS_EXEC resolves only a LITERAL path,
+ * so we do what the shell does for a bare command name: an absolute path
+ * runs as typed; a bare name resolves against the program directory /bin;
+ * and ".bin" is appended when missing. So "paint", "paint.bin" and
+ * "/bin/cube.bin" all launch. (For a program elsewhere, type its full path
+ * or open it from the FILES window.) */
 int runbin(char *c) {
     int i;
-    if (c[0] == '/') { scopy(vpath, c, 40); }
-    else { pjoin(vpath, cpath, c); }
-    i = 0;
-    while (vpath[i] != 0) { i = i + 1; }
-    vpath[i] = ' '; vpath[i+1] = '-'; vpath[i+2] = 'd'; vpath[i+3] = 0;
-    ptr_done();
-    bios(SYS_EXEC, vpath, 0);
-    ptr_init();
-    tprint("?EXEC");
-    wm_repaint();
+    if (c[0] == '/') { scopy(vpath, c, 40); } else { pjoin(vpath, "/bin", c); }
+    if (ftype(vpath) != 2) {                  /* no ".bin" -> append it */
+        i = 0;
+        while (vpath[i] != 0) { i = i + 1; }
+        vpath[i] = '.'; vpath[i+1] = 'b'; vpath[i+2] = 'i'; vpath[i+3] = 'n';
+        vpath[i+4] = 0;
+    }
+    launch(vpath);
     return 0;
 }
 
@@ -281,36 +302,21 @@ int fopen_sel() {                             /* ENTER/OPEN on the selection */
     if (r == 2) {                             /* a program: BECOME it, the
                                                  System-1 way -- SYS_EXEC
                                                  loads it over this very
-                                                 code; "-d" asks it to
-                                                 chain back to desk */
+                                                 code; launch() chains it
+                                                 back to desk with "-d" */
         pjoin(vpath, cpath, fnam + fsel * 13);
-        w2 = 0;
-        while (vpath[w2] != 0) { w2 = w2 + 1; }
-        vpath[w2] = ' '; vpath[w2+1] = '-'; vpath[w2+2] = 'd'; vpath[w2+3] = 0;
-        ptr_done();                           /* the terminal outlives us */
-        bios(SYS_EXEC, vpath, 0);
-        ptr_init();                           /* only reached on failure */
-        tprint("?EXEC");
-        wm_repaint();
+        launch(vpath);                        /* the terminal outlives us */
         return 0;
     }
-    if (r == 0) {
-        tprint("?OPEN");
-        wm_repaint();
-        return 0;
-    }
+    if (r == 0) { return fail("?OPEN"); }
     pjoin(vpath, cpath, fnam + fsel * 13);
     bios(FRESOLVE, vpath, 0);                 /* read the header for size */
-    if (bios(FOPEN, RDBUF, 0) & 256) { tprint("?OPEN"); wm_repaint(); return 0; }
+    if (bios(FOPEN, RDBUF, 0) & 256) { return fail("?OPEN"); }
     bios(FGETB, 0, 0); bios(FGETB, 0, 0);     /* P 8 */
     bios(FGETB, 0, 0); bios(FGETB, 0, 0);     /* I ver */
     w2 = (bios(FGETB, 0, 0) & 255); w2 = w2 + (bios(FGETB, 0, 0) & 255) * 256;
     h2 = (bios(FGETB, 0, 0) & 255); h2 = h2 + (bios(FGETB, 0, 0) & 255) * 256;
-    if (w2 == 0 || h2 == 0 || w2 > 456 || h2 > 240) {
-        tprint("?OPEN");
-        wm_repaint();
-        return 0;
-    }
+    if (w2 == 0 || h2 == 0 || w2 > 456 || h2 > 240) { return fail("?OPEN"); }
     vw = w2; vh = h2;
     wmw[3] = w2 + 2; if (wmw[3] < 70) { wmw[3] = 70; }
     wmh[3] = h2 + 15;
@@ -361,8 +367,6 @@ int main() {
     wgput(129); wgw(256);                     /* TSIZE 1x                  */
     rec_shapes();
     wm_repaint();
-    outs("DESK (man desk)");
-    outc(13); outc(10);
     ptr_init();
 
     going = 1;
@@ -405,6 +409,6 @@ int main() {
     wgput(116); wgput(30);                    /* CLDEL 30: tidy the card */
     ptr_done();
     while (peek(GLSTAT) & 64) { }
-    outc(13); outc(10); puts("bye");
+    puts("bye");
     return 0;
 }
