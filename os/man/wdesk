@@ -65,11 +65,26 @@ OPTIONS
 
 WINDOWS
     SHAPES   a demo scene recorded into a card list (the card replays it).
-    FILES    a listing of the current directory, drawn by wdesk itself
+    FILES    a browser for the current directory, drawn by wdesk itself
              inside the window (the kernel gives the rect via SYS_WKGET;
              the client draws the text and clips it to the window body).
              The listing shows while FILES is the focused (top) window.
-             Selecting and opening entries is a later step.
+
+             With FILES focused (click it to the top, or TAB to it):
+
+                 n  or  p    move the selection down / up one entry (the
+                             selected row is highlighted yellow)
+                 ENTER       open the selected entry --
+                               a directory  -> navigate into it and relist
+                                               (".." goes up; ".", up too)
+                               a .BIN file   -> launch it (as paint does,
+                                               with -w so it resumes here)
+                               any other file is skipped for now
+
+             The whole browser is the CLIENT's: the kernel only hands over
+             the window rect and the keys FILES does not own. Navigation
+             re-reads the directory into wdesk's own cache; the SHAPES
+             card list is untouched, so both windows keep their content.
 
 NOTES
     This is the resident-kernel rung of the window-system ladder

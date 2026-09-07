@@ -56,4 +56,31 @@ print("the FILES window lists the current directory (%d px of stroke text in its
 print("body), drawn by the client into the kernel-owned window; SHAPES' content coexists")
 EOF
 
-echo "C-WFILES TEST: PASS (client draws a directory listing inside a kernel window via SYS_WKGET/SYS_WKTOP)"
+# --- interactive: 'n' moves the selection; 'n' then ENTER navigates a dir ----
+# 'nn' -> selection down to row 2 (a yellow-highlighted row at a different y)
+printf 'B\rrun /bin/wdesk.bin\rnn' > wf2.in
+../p8xemu -N -i wf2.in -c wf.img -l 1600000000 -g wf2.ppm eeprom.bin > wf2.out 2>/dev/null || true
+# 'n' then ENTER -> open the first real dir (row 1) -> the listing changes
+printf 'B\rrun /bin/wdesk.bin\rn\r' > wf3.in
+../p8xemu -N -i wf3.in -c wf.img -l 1700000000 -g wf3.ppm eeprom.bin > wf3.out 2>/dev/null || true
+
+python3 - <<'EOF' || exit 1
+def rows(f):                       # screen-y rows carrying the yellow selection
+    px = open(f,"rb").read().split(b"\n",3)[3]
+    def p(x,wy):
+        i=((271-wy)*480+x)*3; return tuple(px[i:i+3])
+    return sorted({Y for Y in range(70,215) if any(p(X,Y)==(255,255,0) for X in range(196,420))})
+a = rows("wf.ppm")                 # fresh: selection on row 0
+b = rows("wf2.ppm")                # after 'nn': selection on row 2
+assert a and b, "no selection highlight drawn (a=%r b=%r)" % (a,b)
+assert min(b) < min(a) - 8, "selection did not move down on 'n' (row0 y=%r, row2 y=%r)" % (a,b)
+# navigation changed the listing (root vs the opened subdirectory)
+import hashlib
+h1 = hashlib.md5(open("wf.ppm","rb").read()).hexdigest()
+h3 = hashlib.md5(open("wf3.ppm","rb").read()).hexdigest()
+assert h1 != h3, "ENTER on a directory did not change the listing"
+print("n/p move the highlighted selection, and ENTER navigates into a directory --")
+print("the FILES browser is interactive, all in the client")
+EOF
+
+echo "C-WFILES TEST: PASS (FILES: listing + selection (n/p) + ENTER navigation, client-side over the WM syscalls)"

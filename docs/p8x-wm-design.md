@@ -219,7 +219,23 @@ Appended to the OS syscall table after `SYS_EXEC` ($2024):
     callback is the alternative if per-window compositing is needed). **Next:**
     FILES selection + open (click a row → launch a `.BIN` / navigate a dir),
     then TERM, then the asm `/bin` twin.
-6. **Saved per-window context (the switcher):** each window keeps its app's
+11. **FILES is now interactive — DONE 2026-09-07 — pure client, no kernel
+    change.** With FILES focused, `n`/`p` move a highlighted selection (the
+    selected row is drawn yellow, the rest cyan-for-dir / white-for-file) and
+    `ENTER` opens it: a directory re-reads the CWD into `wdesk`'s cache and
+    relists (`..`/`.` go up), a `.BIN` launches via `SYS_EXEC` with `-w` so it
+    resumes the desktop on quit, other files are skipped. Keys that FILES does
+    not own still fall through to the menu-bar letters. This validated the
+    rung-10 content model end to end — the kernel handed over only the window
+    rect and the unowned keys; selection, the directory cache, navigation and
+    launch are all in the ~37 KB TPA client. **The p8cc unsigned-compare trap
+    bit here:** the "no action" sentinel was `-1`, but p8cc compares are
+    UNSIGNED, so `a = -1; a >= 0` is *true* (`-1` == `0xFFFF`); non-menu keys
+    fell into `act(-1)` → the default `return 1` → quit. Fixed with a `99`
+    sentinel and an explicit `a < 3` test (in both the key branch and the
+    bar-click branch, and `act_at` returns `99`). `c_wfiles_test` now also
+    asserts the selection moves on `n` and that `ENTER` changes the listing.
+12. **Saved per-window context (the switcher):** each window keeps its app's
    state; focus-switch swaps the active TPA (state-only first, full-TPA-swap
    to disk as the deluxe variant — the two later options from the fork).
 

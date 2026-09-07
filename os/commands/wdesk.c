@@ -34,7 +34,11 @@
 char param[22];
 char frec[22];                     /* a window's record, read via SYS_WKGET */
 char fnam[156];                    /* the FILES listing: up to 12 names x 13 */
+char fdir[12];                     /* per entry: 1 = a directory */
+char cpath[64];                    /* the FILES current directory path */
+char fpath[68];                    /* scratch: a full path + " -w" to open */
 int  fcnt;                         /* how many names are cached */
+int  fsel;                         /* the selected row (0..fcnt-1) */
 int  files_win;                    /* the FILES window's index */
 
 int gp(int v) { while (peek(GLSTAT) & 128) { } poke(GLDATA, v); return 0; }
@@ -87,12 +91,13 @@ int act(int a) {
     return 1;                                     /* a == 2: quit */
 }
 
-/* map a menu-bar click COLUMN to an action, or -1 for the DESK label / gaps */
+/* map a menu-bar click COLUMN to an action, or 99 for the DESK label / gaps
+ * (99 not -1: p8cc compares are unsigned, so a -1 would test as a valid < 3) */
 int act_at(int col) {
     if (col >= 8 && col < 20) { return 0; }       /* PAINT */
     if (col >= 20 && col < 36) { return 1; }      /* CLOSE */
     if (col >= 36) { return 2; }                  /* QUIT */
-    return -1;                                    /* the label, or a gap */
+    return 99;                                    /* the label, or a gap */
 }
 
 /* reset WINDOW + VWPORT to the full screen (identity) -- the kernel leaves
@@ -109,19 +114,22 @@ int camfull() {
  * and the volume label, the way desk's FILES does. */
 int files_scan() {
     int r; int j; int k;
-    fcnt = 0;
-    r = bios(FOPENDIR, "/", 0);
+    fcnt = 0; fsel = 0;
+    r = bios(FOPENDIR, cpath, 0);
     if (r & 256) { return 1; }
     r = bios(FNEXT, 0, 0);
     while ((r & 256) == 0 && fcnt < 12) {
         de_read();
-        j = de[0] & 255;
+        j = de[0] & 255;                          /* keep files/dirs with a
+                                                     printable name, and '..',
+                                                     but skip '.', deleted slots
+                                                     and the volume label */
         if ((de_isfile() || de_isdir()) && j >= 33 && j <= 126 &&
             (de_isdot() == 0 || (de[1] & 255) == '.')) {
             j = 0; k = fcnt * 13;
             while (j < 12) { if ((de[j] & 255) > 32) { fnam[k] = de[j]; k = k + 1; } j = j + 1; }
             fnam[k] = 0;
-            if (k > fcnt * 13) { fcnt = fcnt + 1; }
+            if (k > fcnt * 13) { fdir[fcnt] = de_isdir(); fcnt = fcnt + 1; }
         }
         r = bios(FNEXT, 0, 0);
     }
@@ -143,9 +151,11 @@ int files_draw() {
     cw = w - 2; ch = h - 15;
     gp(179); gw(0); gw(cw-1); gw(0); gw(ch-1);              /* WINDOW local  */
     gp(178); gw(x+1); gw(x+cw); gw(271-(y+ch)); gw(271-(y+1)); /* VWPORT rect */
-    gp(6); gp(31); gp(63); gp(31);                         /* COLOR white   */
     row = 0;
     while (row < fcnt) {
+        if (row == fsel) { gp(6); gp(31); gp(63); gp(0); }        /* selected: yellow */
+        else if (fdir[row]) { gp(6); gp(0); gp(63); gp(31); }     /* a dir: cyan */
+        else { gp(6); gp(31); gp(63); gp(31); }                   /* a file: white */
         s = fnam + row*13;
         k = 0; while (s[k]) { k = k + 1; }
         gp(18); gw(4); gw(ch - 13 - row*13); gw(0);        /* MOVE3 x,y,0   */
@@ -154,6 +164,64 @@ int files_draw() {
         row = row + 1;
     }
     camfull();                                             /* restore identity */
+    return 0;
+}
+
+/* --- path helpers (from desk) + FILES open ---------------------------------- */
+int scopy(char *d, char *c, int cap) { int i; i=0; while (c[i] && i<cap) { d[i]=c[i]; i=i+1; } d[i]=0; return 0; }
+
+int pjoin(char *out, char *dir, char *leaf) {          /* out = dir + "/" + leaf */
+    int i; int jj;
+    i=0; while (dir[i]) { out[i]=dir[i]; i=i+1; }
+    if (i > 1) { out[i]='/'; i=i+1; }                  /* "/" needs no extra slash */
+    jj=0; while (leaf[jj]) { out[i]=leaf[jj]; i=i+1; jj=jj+1; }
+    out[i]=0; return 0;
+}
+
+int pup() {                                            /* cpath: strip a component */
+    int r; r=0; while (cpath[r]) { r=r+1; }
+    while (r > 1 && cpath[r] != '/') { r=r-1; }
+    if (r == 0) { r=1; }
+    cpath[r]=0;
+    if (cpath[1]==0) { cpath[0]='/'; cpath[1]=0; }
+    return 0;
+}
+
+int ftype(char *s) {                                   /* 2 = .BIN (case-blind) */
+    int n; n=0; while (s[n]) { n=n+1; }
+    if (n < 4) { return 0; }
+    if (s[n-4] != '.') { return 0; }
+    if ((s[n-3]&95)=='B' && (s[n-2]&95)=='I' && (s[n-1]&95)=='N') { return 2; }
+    return 0;
+}
+
+/* open the selected entry: navigate a directory, or launch a .BIN (chained
+ * with -w so a WM-aware app resumes the desktop; others just exit to the shell) */
+int files_open() {
+    char *nm; int j;
+    if (fsel >= fcnt) { return 0; }
+    nm = fnam + fsel*13;
+    if (fdir[fsel]) {
+        if (nm[0]=='.') { pup(); }                     /* ".." -> up */
+        else { pjoin(fpath, cpath, nm); scopy(cpath, fpath, 60); }
+        files_scan();
+        return 0;
+    }
+    if (ftype(nm) == 2) {                              /* a .BIN -> launch it */
+        pjoin(fpath, cpath, nm);
+        j = 0; while (fpath[j]) { j=j+1; }
+        fpath[j]=' '; fpath[j+1]='-'; fpath[j+2]='w'; fpath[j+3]=0;
+        bios(SYS_EXEC, fpath, 0);                      /* becomes it; no return */
+    }
+    return 0;                                          /* non-.BIN: ignore */
+}
+
+/* FILES key handling (only when FILES is the focused window): n/p move the
+ * selection, ENTER opens. Returns 1 if the caller must redraw. */
+int files_key(int key) {
+    if (key==110 && fsel+1 < fcnt) { fsel=fsel+1; return 1; }      /* n = next */
+    if (key==112 && fsel > 0)      { fsel=fsel-1; return 1; }      /* p = prev */
+    if (key==13 || key==10)        { files_open(); return 1; }     /* ENTER   */
     return 0;
 }
 
@@ -201,6 +269,7 @@ int main() {
     while (*ap == 32) { ap = ap + 1; }
 
     files_win = 1;                            /* SHAPES is 0, FILES is 1 */
+    cpath[0] = '/'; cpath[1] = 0;             /* FILES starts at the root */
     scene();                                  /* card list 30, always */
     files_scan();                             /* read the CWD into fnam[] */
     if (ap[0] != '-' || ap[1] != 'r') {       /* fresh (not a resume) */
@@ -219,15 +288,20 @@ int main() {
         else if (e == 0) { redraw(); }        /* kernel repainted -> our layers */
         else if (e == 1) {                    /* an unowned key */
             k = bios(SYS_WKARG, 0, 0);
-            a = -1;
+            a = 99;                            /* 99 = not a menu key (p8cc
+                                                  compares are UNSIGNED, so a
+                                                  -1 sentinel tests as >= 0) */
             if (k == 108 || k == 76) { a = 0; }        /* L = paint  */
             else if (k == 99 || k == 67) { a = 1; }    /* C = close  */
             else if (k == 113 || k == 81) { a = 2; }   /* Q = quit   */
-            if (a >= 0 && act(a)) { going = 0; }
+            if (a < 3) { if (act(a)) { going = 0; } }  /* a menu action */
+            else if (bios(SYS_WKTOP, 0, 0) == files_win) {   /* else FILES nav */
+                if (files_key(k)) { redraw(); }              /* n/p/ENTER */
+            }
         }
         else if (e == 2) {                    /* a menu-bar click */
             a = act_at(bios(SYS_WKARG, 0, 0));
-            if (a >= 0 && act(a)) { going = 0; }
+            if (a < 3 && act(a)) { going = 0; }
         }
     }
 
