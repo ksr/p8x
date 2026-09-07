@@ -42,8 +42,10 @@ boot, reached through the OS syscall table.
   $6000            OS/BIOS scratch
   $6A00  TPABASE   ── full TPA for apps ($6A00..CSTACKTOP, ~37.9 KB) ──
   $F800  CSTACKTOP  apps' C stack top
-  $F800..$FBFF     shell command-history ring (16 × 64 B)
-  $FC00..$FEFF     hardware (P3) stack, grows down from STKTOP
+  $F800..$F9FF     shell command-history ring (8 × 64 B)
+  $FA00..$FBFF     FSDIRBUF: the C commands' dir/glob sector page (dir, cat, glob_expand)
+  $FC00..$FDFF     RDBUF: the C commands' shared file-read buffer
+  $FE00..$FEFF     hardware (P3) stack, grows down from STKTOP
 ```
 
 The kernel body (`os/wmkernel_body.asm`) is `.include`d at the end of
@@ -59,9 +61,12 @@ sat at `$5800..$5FFF` and its tab-complete scratch at `$5700`. Folding the
 kernel in grew the image to `$5B4C` — straight into the ring — and every typed
 command line overwrote live kernel code with ASCII (the crash trace showed
 `wk_draw` executing the bytes of "`un /bin/d`"). OS + kernel + a 32-line
-history cannot fit in 16 KB in *any* arrangement, so the ring shrank to 16
-lines and moved to the otherwise-unused hardware-stack gap at `$F800`, and the
-completion scratch moved to `$5F00`. Both are single-sourced in
+history cannot fit in 16 KB in *any* arrangement, so the ring shrank and moved
+above `CSTACKTOP` — to `$F800`, and to **8 lines**, because only `$F800..$F9FF`
+(512 B) is free up there: `$FA00` is the commands' FSDIRBUF dir/glob page and
+`$FC00` their RDBUF read buffer — fixed `#define`s in `lib_*.c`, invisible to a
+memmap-anchor search, which is how a first 16-line attempt briefly overlapped
+FSDIRBUF. The completion scratch moved to `$5F00`. All single-sourced in
 `gen_memmap.py`; the ring code is fully symbolic (`#HISTN-1` mask,
 `#>HISTRING`), so no shell code changed.
 
@@ -134,10 +139,17 @@ Appended to the OS syscall table after `SYS_EXEC` ($2024):
    -- it sets PROJCT 0 / MDIDEN / TSIZE directly instead. Events are next:
    `lib_ptr`-equivalent parsing in asm (or a small resident C helper the
    kernel calls), focus, drag, close, the menu.
-5. **Launch + resume:** `SYS_EXEC` from inside the loop; the launched app is
-   a WM client (drawing into its window's card list) running in the full TPA;
-   on exit the loop resumes with every other window intact. This is the
-   payoff — desk survives the launch.
+5. **Launch + resume — DONE 2026-09-07, as a real program.** `wdesk` is the
+   thin launcher: `SYS_WKINIT`, `SYS_WKOPEN` its windows (SHAPES with a
+   card-list scene), `SYS_WKPATH "/bin/paint.bin -w"`, `SYS_WKRUN`. Pressing
+   `l` makes the kernel `SYS_EXEC` paint OVER wdesk; paint, seeing `-w`, calls
+   `SYS_WKRUN` on quit and the desktop returns with every window and its
+   card-list content intact. `c_wdesk_test` proves it end to end. The new
+   `SYS_WKPATH` (`$2039`) makes the launch target the client's choice (the
+   default `/bin/wapp.bin` keeps the WM tests' client). This is the payoff —
+   the desktop survives launching an app — which `desk` (WM in the TPA)
+   cannot do. Still to migrate into the kernel: menu, close boxes, focus/TAB,
+   FILES, TERM, VIEW.
 6. **Saved per-window context (the switcher):** each window keeps its app's
    state; focus-switch swaps the active TPA (state-only first, full-TPA-swap
    to disk as the deluxe variant — the two later options from the fork).

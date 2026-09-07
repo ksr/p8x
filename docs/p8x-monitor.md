@@ -132,10 +132,10 @@ correctly.)
 | Range | Use |
 |-------|-----|
 | `$0000–$1FFF` | EEPROM (8 KB, rev E; 28C64 or low 8 KB of a 28C256) — monitor + BIOS at `$0000` (~4.7 KB used). BASIC is no longer ROM-resident; it ships as `/BIN/BASIC.BIN` on disk. |
-| `$2000–$5FFF` | RAM — **P8X/OS code** loads here (`$2000`, ~9.5 KB; 16 KB reserve = the on-disk LBA 1–32 cap). |
+| `$2000–$5FFF` | RAM — **P8X/OS image** loads here (`$2000`, ~15.2 KB **including the resident window-manager kernel**, ending ~`$5B4C`, with growth room to `$5F00`; `$5F00–$5FFF` is the shell's tab-complete scratch; the 16 KB cap = the on-disk LBA 1–32 boot region). |
 | `$6000–$62FF` | RAM — **firmware/BIOS scratch** (fixed by the BIOS): monitor line buffer `$6000` (64 bytes, so an input line is capped at **63 characters** — further input is ignored rather than echoed, since the parameter block below would otherwise be overwritten), the parameter block + read/write/dir-iteration state `$6040` (CF `LBA` `$6047–$6049`, `FNAME` `$604A`, `FSRC`/`FLEN`, `FFLAG` `$6075`, `DIBUFH` `$607E`), and the sector buffer `SBUF` at `$6100`. |
 | `$6300–$69FF` | RAM — **OS data**: variables `$6300`, the stdin read buffer `IBUF` `$6500`, search `PATH` `$6700`, the `>>` prepend buffer `APBUF` `$6800`. |
-| `$6A00–$FDFF` | RAM — **TPA**: user programs + data (`RUN` loads at `$6A00`, ~37.9 KB). Commands keep their 512-byte scratch buffers near the top — the file-read buffer at `$FC00` and the glob/dir-iteration buffer at `$FA00`. |
+| `$6A00–$FDFF` | RAM — **TPA**: user programs + data (`RUN` loads at `$6A00`, ~37.9 KB; the C stack grows down from `CSTACKTOP $F800`). Above `$F800` sit the fixed scratch pages: the shell's **8-line command-history ring at `$F800–$F9FF`**, commands' glob/dir-iteration page (FSDIRBUF) at `$FA00`, and the file-read buffer (RDBUF) at `$FC00`. |
 | `$FE00–$FEFF` | RAM — stack (P3 grows down from `$FEFF`). |
 | `$FF00` | switch input port (read) |
 | `$FF02` | LED output port (write) |

@@ -1,0 +1,50 @@
+NAME
+    wdesk - the desktop on the resident window-manager kernel
+
+SYNOPSIS
+    wdesk
+
+DESCRIPTION
+    A desktop whose window manager lives in the OPERATING SYSTEM, not in
+    the program. The kernel (os/wmkernel_body.asm, folded into the OS
+    image) holds the window records and runs the event loop; it is
+    reached through syscalls right after SYS_EXEC -- SYS_WKINIT ($2027),
+    SYS_WKOPEN ($202A), SYS_WKREPAINT ($202D), SYS_WKRUN ($2030),
+    SYS_WKSAVE ($2033), SYS_WKLOAD ($2036), SYS_WKPATH ($2039) -- and is
+    resident from boot, so wdesk itself is only a thin LAUNCHER: it
+    records the SHAPES scene into a card-resident command list, opens
+    its windows, points the launch key at paint, and hands over to
+    SYS_WKRUN.
+
+    THE POINT: the TPA holds one program, so launching an application
+    replaces the desktop in memory (System-1 style, see man desk). With
+    `desk`, that destroys the window manager -- the app must re-exec
+    desk from scratch. With wdesk the manager is in the OS: press 'l',
+    paint loads OVER wdesk, and when you quit paint it calls SYS_WKRUN
+    (it was launched with -w) and the desktop reappears with every
+    window exactly where it was. The records survived in the OS, the
+    SHAPES picture survived on the card (CLRUN replays it), and nothing
+    was reloaded.
+
+KEYS AND MOUSE
+    arrow keys        move the top window 8 px
+    l                 launch the program set by SYS_WKPATH (paint -w)
+    Ctrl-D            leave the desktop for the shell
+    mouse             press inside a window and drag; release places it
+                      (xterm SGR reports; see man paint, MOUSE)
+
+NOTES
+    This is the resident-kernel rung of the window-system ladder
+    (docs/p8x-wm-design.md). The full-featured standalone `desk` -- menus,
+    close boxes, the FILES browser, the live TERM, the VIEW picture
+    window -- is unchanged and still the richer desktop today; those
+    features migrate into the kernel in later rungs. Boot is unchanged:
+    monitor, B, the shell -- the GUI is opt-in by command.
+
+    A program launched by the kernel gets the arguments in the SYS_WKPATH
+    string. paint understands -w (resume the resident desktop on quit)
+    as well as -d (re-exec desk). A program that ignores both simply
+    exits to the shell; type wdesk to return.
+
+SEE ALSO
+    desk, paint, gl

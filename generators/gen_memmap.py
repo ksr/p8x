@@ -274,19 +274,23 @@ MAP = [
     ('OS scratch ($6300-$69FF)', 'CURDRIVE', 0x67A4, 'derived: 1 if the CWD is under /d1 (drive 1), else 0'),
     ('OS scratch ($6300-$69FF)', 'DRVINIT', 0x67A5, "bitmask: bit N set = drive N has been CFINIT'd this session"),
     ('OS scratch ($6300-$69FF)', 'MPSAV', 0x67A6, "MNTPFX: saved P2 (2 bytes) while sniffing a 'd1' prefix"),
-    # Command-line history (interactive line editor). The ring lives in the
-    # otherwise-unused hardware-stack gap ABOVE CSTACKTOP: 16 slots x 64 bytes =
-    # $F800..$FBFF, leaving $FC00..$FEFF (768 B) for the P3 stack, which never
-    # gets deeper than a few dozen bytes. (It used to be 32 slots at $5800..$5FFF
-    # in the "OS growth reserve" -- but that reserve was never free: once the WM
-    # kernel was folded into the OS image (ending ~$5B49) every shell command line
-    # written into the ring overwrote live kernel code. Moving the ring here frees
-    # $51C5..$5F00 for the OS image to grow into.) State bytes sit in the free
-    # tail of the $6000 FS-scratch page (after CNTW).
+    # Command-line history (interactive line editor). The ring lives in the ONE
+    # free block above CSTACKTOP: 8 slots x 64 bytes = $F800..$F9FF. The rest of
+    # that gap is NOT free -- it is the C commands' fixed scratch, defined as
+    # #defines in os/commands/lib_*.c rather than as anchors here: $FA00..$FBFF is
+    # the FSDIRBUF directory/glob sector page (dir, cat, glob_expand), $FC00..$FDFF
+    # is RDBUF (the shared file-read buffer), and $FE00..$FEFF is the P3 stack.
+    # (History: 32 slots at $5800..$5FFF inside the "OS growth reserve" -- which
+    # was never free either: once the WM kernel was folded into the OS image
+    # (ending ~$5B4C) every typed command line overwrote live kernel code. A first
+    # move to 16 slots at $F800..$FBFF then collided with the FSDIRBUF page. Two
+    # lessons: grep THIS file for anchors AND the C libs for 0x... literals before
+    # calling any region free.) State bytes sit in the free tail of the $6000
+    # FS-scratch page (after CNTW).
     ('shell history', 'HISTST', 0x608E, 'history ring: index where the next entry is written (0..HISTN-1)'),
     ('shell history', 'HISTCT', 0x608F, 'history ring: number of stored entries (0..HISTN)'),
     ('shell history', 'HISTNV', 0x6090, 'history ring: recall cursor (0 = not navigating; N = N lines back)'),
-    ('shell history', 'HISTRING', 0xF800, 'history ring buffer base: HISTN x HISTLEN bytes ($F800..$FBFF, hardware-stack gap above CSTACKTOP)'),
+    ('shell history', 'HISTRING', 0xF800, 'history ring buffer base: HISTN x HISTLEN bytes ($F800..$F9FF, the free 512 B above CSTACKTOP; $FA00 = glob page, $FC00 = RDBUF, $FE00 = stack)'),
     # Tab autocomplete scratch (interactive line editor). 256 B at the very top of
     # the OS region, just below the $6000 scratch band ($5F00..$5FFF); state bytes
     # in the $6000 FS-scratch tail. (Moved up from $5700 when the WM kernel was

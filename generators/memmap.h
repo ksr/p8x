@@ -239,7 +239,7 @@
 #define HISTST      0x608E       /* history ring: index where the next entry is written (0..HISTN-1) */
 #define HISTCT      0x608F       /* history ring: number of stored entries (0..HISTN) */
 #define HISTNV      0x6090       /* history ring: recall cursor (0 = not navigating; N = N lines back) */
-#define HISTRING    0xF800       /* history ring buffer base: HISTN x HISTLEN bytes ($F800..$FBFF, hardware-stack gap above CSTACKTOP) */
+#define HISTRING    0xF800       /* history ring buffer base: HISTN x HISTLEN bytes ($F800..$F9FF, the free 512 B above CSTACKTOP; $FA00 = glob page, $FC00 = RDBUF, $FE00 = stack) */
 
 /* shell completion */
 #define CMPPFX      0x5F00       /* tab-complete: leaf prefix being completed (NUL-term) */

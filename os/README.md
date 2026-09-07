@@ -262,6 +262,13 @@ from C, the `p8cc` `bios()` intrinsic). The table is **append-only**:
 | `$201E` | `SYS_OPENDIR` | begin iterating the directory whose 16-bit start LBA is in `P1` (then `FNEXT`); the drive-agnostic way to descend into a subdirectory found via `SYS_DIRENTRY` |
 | `$2021` | `SYS_MKDIR` | create the directory named by the path in `P1` (applies the `/d1` mount); `C=1` on real failure, idempotent if it already exists. Lets a `/bin` program (`cp -r`) make directories |
 | `$2024` | `SYS_EXEC` | `P1` = a full invocation `"path [args]"` (the `.BIN` named explicitly — no PATH search): **become that program**. The binary loads over the caller's own TPA, the stack resets, and the new program's exit lands in a freshly-entered shell — a chain, not a call, so on success this never returns (`C=1` = not found, caller still alive). Redirects and stdin bindings are cleared. What lets `desk` launch programs the System-1 way, and lets a launched program chain back |
+| `$2027` | `SYS_WKINIT` | **resident window manager** (`os/wmkernel_body.asm`, folded into the OS image): clear the window list |
+| `$202A` | `SYS_WKOPEN` | `P1` = a 22-byte window record `[x,y,w,h (LE pairs), content-list id, title len, title(12)]` → copied into the kernel's resident table (up to 4 windows). The record outlives the program that opened it |
+| `$202D` | `SYS_WKREPAINT` | FLOOD the desktop and redraw every window's chrome, title and content (a card-resident command list replayed with `CLRUN`) from the resident records. Never issues `RESETF` (that would wipe the card's lists) |
+| `$2030` | `SYS_WKRUN` | the resident event loop: arrow keys move the top window, xterm SGR mouse press/drag/release drags it, `l` `SYS_EXEC`s the launch target, `Ctrl-D` returns to the caller. A launched WM client resumes the desktop by calling this itself (paint does, launched with `-w`) |
+| `$2033` | `SYS_WKSAVE` | `P1` = a 4-byte blob, `A` = window index → saved in the kernel's per-window state, resident across launches (the switcher's core) |
+| `$2036` | `SYS_WKLOAD` | `P1` = a 4-byte destination, `A` = window index → that window's saved state |
+| `$2039` | `SYS_WKPATH` | `P1` = `"path [args]"` (≤ 23 chars) → what the `l` key launches (default `/bin/wapp.bin`; `wdesk` sets `/bin/paint.bin -w`) |
 
 `SYS_GETCWD`/`SYS_CWDLBA`/`SYS_OPENCWD` operate on the single CWD in the unified
 namespace (the path shows `/d1/...` when it is on the mounted drive); `SYS_OPENCWD`

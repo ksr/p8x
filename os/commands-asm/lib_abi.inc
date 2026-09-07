@@ -26,6 +26,14 @@ SYS_DIRENTRY = $201B    ; snapshot the current dir entry -> (P1) 18 bytes
 SYS_OPENDIR  = $201E    ; P1 = 16-bit dir start LBA -> open for FNEXT
 SYS_MKDIR    = $2021    ; P1 = path -> create a directory; C=1 on real failure
 SYS_EXEC   = $2024      ; P1="path [args]": become that program (no return; C=1 not found)
+; the resident window-manager kernel (os/wmkernel_body.asm, folded into the OS)
+SYS_WKINIT = $2027      ; clear the window list
+SYS_WKOPEN = $202A      ; P1 = 22-byte window record -> add it
+SYS_WKREPAINT = $202D   ; FLOOD the desktop + draw every window
+SYS_WKRUN  = $2030      ; the resident event loop; returns on ^D
+SYS_WKSAVE = $2033      ; P1=blob(4) A=win -> save window state
+SYS_WKLOAD = $2036      ; P1=dest(4) A=win -> load window state
+SYS_WKPATH = $2039      ; P1 = "path [args]" -> the 'l'-key launch target
 
 ; --- BIOS jump table ($01xx) ---
 CONIN      = $0100      ; wait for key, char -> A (raw console, not stdin)

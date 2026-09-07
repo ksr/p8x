@@ -261,8 +261,27 @@ wru_launch:
         TAP1H
         JSR  $2024                      ; SYS_EXEC (does not return)
         JMP  wru_lp                      ; only reached if the exec failed
-kpath:  .ascii "/bin/wapp.bin"
+; ==== wk_path : set the 'l'-key launch target (SYS_WKPATH, $2039) ==========
+; P1 -> NUL-terminated "path [args]" (up to 23 chars), copied into kpath. The
+; default "/bin/wapp.bin" is the WM tests' client; wdesk sets
+; "/bin/paint.bin -w", and paint (launched with -w) resumes the desktop via
+; SYS_WKRUN when it quits -- launch-and-resume from a real program.
+wk_path:LDP2 #kpath
+        LDA  #23
+        STA  kt
+wkp_cp: LDA  (P1)+
+        STA  (P2)+
+        JZ   wkp_ret                    ; copied the NUL (Z is the LDA's)
+        LDA  kt
+        DEC
+        STA  kt
+        JNZ  wkp_cp
+        LDA  #0                         ; hit the cap: force a terminator
+        STA  (P2)+
+wkp_ret:RTS
+kpath:  .ascii "/bin/wapp.bin"          ; 13 + NUL + 10 pad = a 24-byte buffer
         .byte 0
+        .fill 10
 wru_esc:JSR  $0100                      ; expect '['
         LDB  #$5B
         CMP

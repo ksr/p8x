@@ -24,6 +24,14 @@
 //#define SYS_OPENDIR  0x201E    /* P1 = 16-bit dir LBA -> open for FNEXT */
 //#define SYS_MKDIR    0x2021    /* P1 = path -> mkdir; C=1 on real failure */
 //#define SYS_EXEC     0x2024    /* P1="path [args]": BECOME that program (no return; C=1 not found) */
+/* the resident window-manager kernel (os/wmkernel_body.asm, folded into the OS) */
+//#define SYS_WKINIT   0x2027    /* clear the window list */
+//#define SYS_WKOPEN   0x202A    /* P1 = 22-byte window record [x,y,w,h LE pairs, list, tlen, title(12)] -> add it */
+//#define SYS_WKREPAINT 0x202D   /* FLOOD the desktop + draw every window from the resident records */
+//#define SYS_WKRUN    0x2030    /* the resident event loop (keys + mouse); returns on ^D */
+//#define SYS_WKSAVE   0x2033    /* P1=blob(4) A=win -> save the window's 4-byte state */
+//#define SYS_WKLOAD   0x2036    /* P1=dest(4) A=win -> load the window's 4-byte state */
+//#define SYS_WKPATH   0x2039    /* P1 = "path [args]" (<=23 chars) -> what the 'l' key launches */
 
 /* BIOS jump table ($01xx): low-level console + file-stream primitives. The read
  * (FOPEN/FGETB) and write (FWOPEN/FPUTB/FCLOSE) streams are separate single-file

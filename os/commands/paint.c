@@ -62,6 +62,9 @@ int pal[8];
 
 int mdown;                         /* a mouse press is being dragged */
 int fromdesk;                      /* launched by desk (-d): chain back */
+int fromwm;                        /* launched by the resident WM (-w): on quit,
+                                      resume it via SYS_WKRUN -- its windows
+                                      survived us, they live in the OS */
 
 /* ---- GL emission ----------------------------------------------------------- */
 int gput(int v) {
@@ -337,8 +340,9 @@ int main() {
     if (peek(GLID) != 71) { puts("?No display"); return 1; }
     ap = argstr();
     while (*ap == 32) { ap = ap + 1; }
-    fromdesk = 0;
+    fromdesk = 0; fromwm = 0;
     if (ap[0] == '-' && ap[1] == 'd') { fromdesk = 1; }
+    if (ap[0] == '-' && ap[1] == 'w') { fromwm = 1; }
     pal[0] = 65535;  pal[1] = 63488; pal[2] = 2016;  pal[3] = 31;
     pal[4] = 65504;  pal[5] = 2047;  pal[6] = 63519; pal[7] = 64512;
     nsh = 0; tool = 0; col = 0; armed = 0; mdown = 0;
@@ -416,5 +420,9 @@ int main() {
     gwait();
     outc(13); outc(10); puts("bye");
     if (fromdesk) { bios(SYS_EXEC, "/bin/desk.bin", 0); }
+    if (fromwm) { bios(SYS_WKRUN, 0, 0); }    /* resume the resident desktop:
+                                                 the kernel redraws its windows
+                                                 (records in the OS, content on
+                                                 the card); returns on ^D */
     return 0;
 }

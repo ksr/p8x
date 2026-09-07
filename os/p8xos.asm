@@ -40,8 +40,10 @@
 ; 16K disk cap is $6000) | tab-complete scratch $5F00..$5FFF | scratch block
 ; $6000..$69FF (firmware/BIOS scratch $6000-$60xx, SBUF $6100, OS shell scratch
 ; $6300, IBUF/PATHBUF/APBUF $6500-$69FF) | TPA (programs / RUN / ">" capture)
-; $6A00..CSTACKTOP $F800 | shell command-history ring $F800..$FBFF (HISTN=16 x
-; 64) | stack (P3) grows down from $FEFF into $FC00..$FEFF. (rev E: OS at $2000;
+; $6A00..CSTACKTOP $F800 | shell command-history ring $F800..$F9FF (HISTN=8 x 64)
+; | FSDIRBUF dir/glob sector page $FA00..$FBFF and RDBUF file-read buffer
+; $FC00..$FDFF (the C commands' fixed scratch, lib_*.c) | stack (P3) $FE00..$FEFF,
+; grows down from $FEFF. (rev E: OS at $2000;
 ; scratch+TPA dropped -$1000 vs rev D, growing the TPA to ~37.9K. 2026-09-07:
 ; the history ring moved here from $5800 -- that "reserve" was never free, and
 ; the folded-in kernel overlapped it; see gen_memmap.py HISTRING.)
@@ -114,9 +116,10 @@ CNT     = $6362
 CR      = $0D
 LF      = $0A
 ESC     = $1B          ; arrow keys arrive as ESC '[' 'A'/'B' (up/down)
-HISTN   = 16           ; command-history ring capacity (lines); HISTRING = HISTN*HISTLEN
-                       ; (16 = 1K at $F800, see memmap; was 32 at $5800, which the
-                       ;  folded-in WM kernel now overlaps -- must stay a power of 2)
+HISTN   = 8            ; command-history ring capacity (lines); HISTRING = HISTN*HISTLEN
+                       ; (8 = 512 B at $F800..$F9FF, the ONLY free block above CSTACKTOP:
+                       ;  $FA00 is glob_expand's page, $FC00 RDBUF, $FE00 the stack. Was 32
+                       ;  at $5800, which the folded-in WM kernel overlaps. Power of 2.)
 HISTLEN = 64           ; bytes per history slot (matches LINEBUF width)
 
         .org $2000          ; rev E: OS loads at $2000 (match the monitor's CMD_B + --base)
@@ -144,6 +147,7 @@ HISTLEN = 64           ; bytes per history slot (matches LINEBUF width)
         JMP  wk_run             ; $2030 SYS_WKRUN: the resident WM event loop
         JMP  wk_save            ; $2033 SYS_WKSAVE: P1=blob(4) A=win -> save the window's state
         JMP  wk_load            ; $2036 SYS_WKLOAD: P1=dest(4) A=win -> load the window's state
+        JMP  wk_path            ; $2039 SYS_WKPATH: P1 = "path [args]" -> the WM 'l'-key launch target
 ; Reached only via the table above (COLD jumps past them).
 SYS_GETDRIVE:                   ; derived: 1 if the CWD is under the /d1 mount
         LDA  CURDRIVE
