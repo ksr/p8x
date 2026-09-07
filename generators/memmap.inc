@@ -10,7 +10,6 @@ RAMSIZE     = $DF00              ; RAM span $2000-$FEFF (IOBASE-RAMBASE)
 OSORG       = $2000              ; OS load/link address (= RAMBASE)
 TPABASE     = $6A00              ; transient program area base (RUNnable programs load here)
 CSTACKTOP   = $F800              ; compiler C-stack top (grows down; p8cc __csp init)
-WMBASE      = $5600              ; resident window-manager kernel base (OS reserve, below the TPA; apps keep the full TPA $6A00..CSTACKTOP)
 
 ; I/O ports ($FF00-$FFFF)
 ACIAS       = $FF04              ; ACIA status (rd) / control (wr)
@@ -239,12 +238,12 @@ MPSAV       = $67A6              ; MNTPFX: saved P2 (2 bytes) while sniffing a '
 HISTST      = $608E              ; history ring: index where the next entry is written (0..HISTN-1)
 HISTCT      = $608F              ; history ring: number of stored entries (0..HISTN)
 HISTNV      = $6090              ; history ring: recall cursor (0 = not navigating; N = N lines back)
-HISTRING    = $5800              ; history ring buffer base: HISTN x HISTLEN bytes ($5800..$5FFF)
+HISTRING    = $F800              ; history ring buffer base: HISTN x HISTLEN bytes ($F800..$FBFF, hardware-stack gap above CSTACKTOP)
 
 ; shell completion
-CMPPFX      = $5700              ; tab-complete: leaf prefix being completed (NUL-term)
-CMPLCP      = $5740              ; tab-complete: longest common prefix of the matches (NUL-term)
-CMPDIR      = $5760              ; tab-complete: directory-part path string, for CDPATH (NUL-term)
+CMPPFX      = $5F00              ; tab-complete: leaf prefix being completed (NUL-term)
+CMPLCP      = $5F40              ; tab-complete: longest common prefix of the matches (NUL-term)
+CMPDIR      = $5F60              ; tab-complete: directory-part path string, for CDPATH (NUL-term)
 CMPPL       = $6091              ; tab-complete: length of the typed leaf prefix
 CMPCNT      = $6092              ; tab-complete: number of matches (saturates at 255)
 CMPFW       = $6093              ; tab-complete: 1 = completing the command word (first word)

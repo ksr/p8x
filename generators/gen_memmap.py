@@ -25,16 +25,13 @@ MAP = [
     ('memory-region anchors', 'OSORG', 0x2000, 'OS load/link address (= RAMBASE)'),
     ('memory-region anchors', 'TPABASE', 0x6A00, 'transient program area base (RUNnable programs load here)'),
     ('memory-region anchors', 'CSTACKTOP', 0xF800, 'compiler C-stack top (grows down; p8cc __csp init)'),
-    # Resident window-manager reservation (the GUI kernel). Loaded once by
-    # `desk` into the OS growth reserve BELOW the TPA -- the ~1K of $2000..$6000
-    # the 12.4K OS does not use -- and resident thereafter, surviving app
-    # launches into the TPA ABOVE it (proven by zz_wmreside_test). Sitting below
-    # the TPA (not above it, as in the original $D800 design), the kernel leaves
-    # apps the FULL TPA $6A00..CSTACKTOP -- no TPA split, no per-app CSTACKTOP
-    # override. Boot is unaffected: nothing loads here until the GUI is asked
-    # for, and $2000..WMBASE stays free for OS growth. (Staged relocation off
-    # $D800; a later step folds the kernel into the OS image as syscalls.)
-    ('memory-region anchors', 'WMBASE', 0x5600, 'resident window-manager kernel base (OS reserve, below the TPA; apps keep the full TPA $6A00..CSTACKTOP)'),
+    # Resident window-manager kernel: there is NO separate base address any more.
+    # It is folded into the OS image (os/p8xos.asm .includes os/wmkernel_body.asm)
+    # and reached through the OS syscall table, $2027..$2036 (SYS_WKINIT, WKOPEN,
+    # WKREPAINT, WKRUN, WKSAVE, WKLOAD), so it is always resident from boot and
+    # needs no loading. Apps keep the FULL TPA $6A00..CSTACKTOP. (History: a
+    # standalone blob lived at $D800 above the TPA, then at $5600 -- both retired;
+    # $5600 sat inside the shell history ring, which is why the ring moved.)
     ('I/O ports ($FF00-$FFFF)', 'ACIAS', 0xFF04, 'ACIA status (rd) / control (wr)'),
     ('I/O ports ($FF00-$FFFF)', 'ACIAD', 0xFF05, 'ACIA data'),
     ('I/O ports ($FF00-$FFFF)', 'CFDATA', 0xFF10, 'CF task file'),
@@ -277,19 +274,26 @@ MAP = [
     ('OS scratch ($6300-$69FF)', 'CURDRIVE', 0x67A4, 'derived: 1 if the CWD is under /d1 (drive 1), else 0'),
     ('OS scratch ($6300-$69FF)', 'DRVINIT', 0x67A5, "bitmask: bit N set = drive N has been CFINIT'd this session"),
     ('OS scratch ($6300-$69FF)', 'MPSAV', 0x67A6, "MNTPFX: saved P2 (2 bytes) while sniffing a 'd1' prefix"),
-    # Command-line history (interactive line editor). The ring lives in the free
-    # RAM gap between the OS image end (~$4900) and the $6000 scratch band; 32
-    # slots x 64 bytes fills $5800..$5FFF exactly. State bytes sit in the free
+    # Command-line history (interactive line editor). The ring lives in the
+    # otherwise-unused hardware-stack gap ABOVE CSTACKTOP: 16 slots x 64 bytes =
+    # $F800..$FBFF, leaving $FC00..$FEFF (768 B) for the P3 stack, which never
+    # gets deeper than a few dozen bytes. (It used to be 32 slots at $5800..$5FFF
+    # in the "OS growth reserve" -- but that reserve was never free: once the WM
+    # kernel was folded into the OS image (ending ~$5B49) every shell command line
+    # written into the ring overwrote live kernel code. Moving the ring here frees
+    # $51C5..$5F00 for the OS image to grow into.) State bytes sit in the free
     # tail of the $6000 FS-scratch page (after CNTW).
     ('shell history', 'HISTST', 0x608E, 'history ring: index where the next entry is written (0..HISTN-1)'),
     ('shell history', 'HISTCT', 0x608F, 'history ring: number of stored entries (0..HISTN)'),
     ('shell history', 'HISTNV', 0x6090, 'history ring: recall cursor (0 = not navigating; N = N lines back)'),
-    ('shell history', 'HISTRING', 0x5800, 'history ring buffer base: HISTN x HISTLEN bytes ($5800..$5FFF)'),
-    # Tab autocomplete scratch (interactive line editor). Buffers in the free gap
-    # below the history ring; state bytes in the $6000 FS-scratch tail.
-    ('shell completion', 'CMPPFX', 0x5700, 'tab-complete: leaf prefix being completed (NUL-term)'),
-    ('shell completion', 'CMPLCP', 0x5740, 'tab-complete: longest common prefix of the matches (NUL-term)'),
-    ('shell completion', 'CMPDIR', 0x5760, 'tab-complete: directory-part path string, for CDPATH (NUL-term)'),
+    ('shell history', 'HISTRING', 0xF800, 'history ring buffer base: HISTN x HISTLEN bytes ($F800..$FBFF, hardware-stack gap above CSTACKTOP)'),
+    # Tab autocomplete scratch (interactive line editor). 256 B at the very top of
+    # the OS region, just below the $6000 scratch band ($5F00..$5FFF); state bytes
+    # in the $6000 FS-scratch tail. (Moved up from $5700 when the WM kernel was
+    # folded into the OS image, which now ends ~$5B49 and must not overlap them.)
+    ('shell completion', 'CMPPFX', 0x5F00, 'tab-complete: leaf prefix being completed (NUL-term)'),
+    ('shell completion', 'CMPLCP', 0x5F40, 'tab-complete: longest common prefix of the matches (NUL-term)'),
+    ('shell completion', 'CMPDIR', 0x5F60, 'tab-complete: directory-part path string, for CDPATH (NUL-term)'),
     ('shell completion', 'CMPPL', 0x6091, 'tab-complete: length of the typed leaf prefix'),
     ('shell completion', 'CMPCNT', 0x6092, 'tab-complete: number of matches (saturates at 255)'),
     ('shell completion', 'CMPFW', 0x6093, 'tab-complete: 1 = completing the command word (first word)'),

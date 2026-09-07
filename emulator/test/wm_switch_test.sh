@@ -20,17 +20,16 @@ UC=../../microcode
 
 fail() { echo "WM-SWITCH TEST: FAIL — $1"; exit 1; }
 
-WMBASE=$(python3 -c "import sys; sys.path.insert(0,'$ROOT/generators'); import memmap; print(memmap.WMBASE)")
-WK_OPEN=$((WMBASE + 3))
-WK_RUN=$((WMBASE + 9))
-WK_SAVE=$((WMBASE + 12))
-WK_LOAD=$((WMBASE + 15))
-WK_SIG=$((WMBASE + 18))
+# WM syscalls: JMP table in os/p8xos.asm right after SYS_EXEC ($2024)
+WK_INIT=0x2027
+WK_OPEN=0x202A
+WK_RUN=0x2030
+WK_SAVE=0x2033
+WK_LOAD=0x2036
 
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/dev/null
-python3 $ROOT/assembler/p8xasm.py $ROOT/os/wmkernel.asm -o wmk.bin --base $WMBASE >/dev/null
 
 # the launcher: load the kernel, open one window, run the loop
 cat > sw_run.c <<EOF
@@ -49,10 +48,7 @@ int setw(int x, int y, int w, int h, int list, char *t) {
     return 0;
 }
 int main() {
-    bios(0x0133, "/bin/wmk.bin", 0);
-    if (bios(0x0118, 0, 0) & 256) { puts("?NOKERNEL"); return 1; }
-    bios(0x013F, $WMBASE, 0);
-    bios($WMBASE, 0, 0);                            /* wk_init */
+    bios($WK_INIT, 0, 0);                           /* SYS_WKINIT (kernel is in the OS) */
     setw(60, 60, 200, 150, 0, "COUNT");
     bios($WK_RUN, 0, 0);
     puts("RUN-DONE");
@@ -64,8 +60,7 @@ EOF
 cat > sw_app.c <<EOF
 char blob[4];
 int main() {
-    if (peek($WK_SIG) != 0x57) { return 1; }
-    bios($WK_LOAD, blob, 0);                        /* window 0 state -> blob */
+    bios($WK_LOAD, blob, 0);                        /* window 0 state -> blob (kernel in OS) */
     blob[0] = blob[0] + 1;                          /* remember one more visit */
     bios($WK_SAVE, blob, 0);                        /* keep it in the kernel */
     bios($WK_RUN, 0, 0);                            /* resume the desktop */
@@ -77,7 +72,6 @@ EOF
 cat > sw_chk.c <<EOF
 char blob[4];
 int main() {
-    if (peek($WK_SIG) != 0x57) { puts("?NOKERNEL"); return 1; }
     bios($WK_LOAD, blob, 0);
     putchar('N'); putchar('0' + (blob[0] & 255)); putchar(10);
     return 0;
@@ -93,7 +87,6 @@ rm -f sw.img
 python3 $ROOT/tools/p8xfs.py create sw.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   sw.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  sw.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    sw.img wmk.bin --name /bin/wmk.bin --load $WMBASE --exec $WMBASE >/dev/null
 python3 $ROOT/tools/p8xfs.py put    sw.img sw_run.bin --name /bin/sw.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    sw.img sw_app.bin --name /bin/wapp.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    sw.img sw_chk.bin --name /bin/chk.bin --load 0x6A00 --exec 0x6A00 >/dev/null

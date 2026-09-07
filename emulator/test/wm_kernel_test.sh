@@ -1,12 +1,14 @@
 #!/bin/sh
-# The resident WM kernel skeleton (os/wmkernel.asm), end to end.
-#   A stub app loads the kernel to WMBASE (FRESOLVE+FFIND+FLOADAT), calls
-#   its bios()-style jump table -- wk_init, wk_open x2, wk_repaint -- and
-#   EXITS. A second, separate program then calls wk_repaint again and
-#   nothing else: the two titled windows must reappear, drawn entirely by
-#   the RESIDENT kernel from records the first app left behind. That is
-#   the whole point of the resident architecture -- window state outlives
-#   the program that created it.
+# The resident WM kernel, FOLDED INTO THE OS (syscalls $2027-$2036), end to end.
+#   A stub app calls the WM syscalls -- SYS_WKINIT, SYS_WKOPEN x2,
+#   SYS_WKREPAINT -- and EXITS. A second, separate program then calls
+#   SYS_WKREPAINT again and nothing else: the two titled windows must reappear,
+#   drawn entirely by the RESIDENT kernel from records the first app left
+#   behind. Window state outlives the program that created it -- and the kernel
+#   needs no loading, it is always present in the OS.
+#   (Historical note: this once crashed because the shell's command-history
+#   ring sat at $5800, inside the OS image once the kernel was folded in --
+#   typing "run ..." overwrote wk_draw with ASCII. The ring now lives at $F800.)
 set -e
 cd "$(dirname "$0")"
 ROOT=../..
@@ -14,16 +16,14 @@ UC=../../microcode
 
 fail() { echo "WM-KERNEL TEST: FAIL — $1"; exit 1; }
 
-WMBASE=$(python3 -c "import sys; sys.path.insert(0,'$ROOT/generators'); import memmap; print(memmap.WMBASE)")
-WK_INIT=$WMBASE
-WK_OPEN=$((WMBASE + 3))
-WK_PAINT=$((WMBASE + 6))
-WK_SIG=$((WMBASE + 18))
+# WM syscalls: JMP table entries in os/p8xos.asm right after SYS_EXEC ($2024)
+WK_INIT=0x2027
+WK_OPEN=0x202A
+WK_PAINT=0x202D
 
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/dev/null
-python3 $ROOT/assembler/p8xasm.py $ROOT/os/wmkernel.asm -o wmk.bin --base $WMBASE >/dev/null
 
 # --- the stub: load the kernel, open two windows, repaint ---
 cat > wk_stub.c <<EOF
@@ -44,10 +44,8 @@ int setw(int x, int y, int w, int h, int list, char *t) {
     return 0;
 }
 int main() {
-    bios(0x0133, "/bin/wmk.bin", 0);               /* FRESOLVE */
-    if (bios(0x0118, 0, 0) & 256) { puts("?NOKERNEL"); return 1; }  /* FFIND */
-    bios(0x013F, $WMBASE, 0);                      /* FLOADAT -> WMBASE */
-    /* record SHAPES' content into card list 40 -- a red filled box in
+    /* the kernel is in the OS -- no load; just call the WM syscalls.
+     * record SHAPES' content into card list 40 -- a red filled box in
      * window-LOCAL content coordinates; the CARD keeps it */
     gp(112); gp(40);                               /* CLBEG 40 */
     gp(224); gp(1);                                /* PRMFIL 1 */
@@ -69,8 +67,7 @@ EOF
 #     set by THIS program (they belong to the departed stub) ---
 cat > wk_redraw.c <<EOF
 int main() {
-    if (peek($WK_SIG) != 0x57) { puts("?NOKERNEL"); return 1; }       /* 'W' */
-    bios($WK_PAINT, 0, 0);                         /* wk_repaint */
+    bios($WK_PAINT, 0, 0);                         /* SYS_WKREPAINT */
     puts("REDRAW-DONE");
     return 0;
 }
@@ -85,8 +82,6 @@ rm -f wk.img
 python3 $ROOT/tools/p8xfs.py create wk.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   wk.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  wk.img /bin >/dev/null
-# the kernel is stored with its fixed load address; a plain FLOADAT to WMBASE
-python3 $ROOT/tools/p8xfs.py put    wk.img wmk.bin --name /bin/wmk.bin --load $WMBASE --exec $WMBASE >/dev/null
 python3 $ROOT/tools/p8xfs.py put    wk.img wk_stub.bin --name /bin/st.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    wk.img wk_redraw.bin --name /bin/rd.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    wk.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null

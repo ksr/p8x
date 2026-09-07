@@ -1,10 +1,12 @@
-; wmkernel_body.asm -- the resident P8X window-manager kernel BODY (routines
-; + data), shared by two includers so the code lives in ONE place:
-;   os/wmkernel.asm  -- standalone harness: .org $5600 + jump table (the tests)
-;   os/p8xos.asm     -- OS-integrated: wk_* exposed via the $2000 syscall table
-; No .org and no equates here -- GLDATA/GLSTAT come from the includer (the
-; harness defines them; the OS gets them from memmap.inc). All code is
-; label-relative, so it links correctly at either address.
+; wmkernel_body.asm -- the resident P8X window-manager kernel (routines + data).
+; .included by os/p8xos.asm at the END of the OS image, and reached through the
+; OS syscall table right after SYS_EXEC:
+;   $2027 SYS_WKINIT   $202A SYS_WKOPEN   $202D SYS_WKREPAINT
+;   $2030 SYS_WKRUN    $2033 SYS_WKSAVE   $2036 SYS_WKLOAD
+; So it is resident from boot and needs no loading. No .org and no equates here
+; -- GLDATA/GLSTAT come from memmap.inc via the OS. All code is label-relative.
+; (A standalone .org'd harness once loaded this as a blob at $D800, then $5600;
+; both retired -- $5600 sat inside the shell's command-history ring.)
 ; ==== helpers ================================================================
 ; kput: send one GL byte (A), honouring FIFO backpressure.
 kput:   STA  kt2
@@ -227,7 +229,7 @@ wkr_done:
 ; Draws once, then reads the console. Arrow keys move the TOP window (the
 ; last opened, drawn on top); ^D returns to the caller. Mouse (xterm SGR)
 ; parsing + focus/drag/close/menu are the next slice. The loop is resident,
-; so the app that called SYS_WMRUN is still in the TPA -- but a launched
+; so the app that called SYS_WKRUN is still in the TPA -- but a launched
 ; program will replace it while the loop persists (the launch-and-resume
 ; rung).
 wk_run: LDA  #99                       ; no window grabbed yet
@@ -245,9 +247,9 @@ wru_lp: JSR  $0100                      ; CONIN -> A (blocks for a key)
         JZ   wru_esc
         JMP  wru_lp
 
-; LAUNCH: SYS_EXEC a WM client into the TPA below us. SYS_EXEC replaces the
-; TPA (this loop's original caller included) and never returns here -- but
-; the kernel and its window records are RESIDENT at WMBASE, above the TPA,
+; LAUNCH: SYS_EXEC a WM client into the TPA. SYS_EXEC replaces the TPA (this
+; loop's original caller included) and never returns here -- but the kernel
+; and its window records are RESIDENT inside the OS image, below the TPA,
 ; so they survive untouched. The launched program resumes the desktop by
 ; calling wk_run again (it is a WM client): a fresh event loop, redrawing
 ; the SAME resident records. That is launch-and-resume -- the windows

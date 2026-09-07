@@ -31,32 +31,44 @@ C-vs-asm ratio (2.3–5.8×) puts it at ~4–6 KB.
 
 ## Memory layout
 
-Boot is **unchanged**: monitor → `B` → shell, nothing resident, the full TPA
-free. The GUI is opt-in — `desk` loads the kernel into the OS reserve, once,
-and it stays.
+Boot is **unchanged**: monitor → `B` → shell. The GUI is opt-in — but the
+kernel needs **no loading at all**: it is part of the OS image, resident from
+boot, reached through the OS syscall table.
 
 ```
-  $2000            OS (resident)
-  $51C5            OS growth reserve (~1 KB free)
-  $5600  WMBASE    ── resident WM kernel: code + window records + stack ──
+  $2000            OS (resident) — INCLUDING the WM kernel (syscalls $2027-$2036)
+  $5B4C            end of the OS+kernel image (~950 B growth room)
+  $5F00            tab-complete scratch (256 B)
   $6000            OS/BIOS scratch
   $6A00  TPABASE   ── full TPA for apps ($6A00..CSTACKTOP, ~37.9 KB) ──
   $F800  CSTACKTOP  apps' C stack top
-  $FEFF  STKTOP    OS/monitor hardware stack
+  $F800..$FBFF     shell command-history ring (16 × 64 B)
+  $FC00..$FEFF     hardware (P3) stack, grows down from STKTOP
 ```
 
-The kernel lives **below** the TPA, in the OS growth reserve — the ~1 KB of
-`$2000..$6000` the 12.4 KB OS does not use. Apps load into the **full** TPA
-above it (`$6A00..$F800`) with the normal C stack: nothing is compiled with a
-special `--cstacktop`, and no TPA is surrendered to the kernel. `wm_reside_test`
-proves the reservation: a program stamps `WMBASE`, a second *full-TPA* app
-(running a real call chain) runs and exits, and the stamp is intact.
+The kernel body (`os/wmkernel_body.asm`) is `.include`d at the end of
+`p8xos.asm` and exposed as six syscalls right after `SYS_EXEC`: `$2027
+SYS_WKINIT`, `$202A SYS_WKOPEN`, `$202D SYS_WKREPAINT`, `$2030 SYS_WKRUN`,
+`$2033 SYS_WKSAVE`, `$2036 SYS_WKLOAD`. Apps load into the **full** TPA with
+the normal C stack — nothing is compiled with a special `--cstacktop`, no TPA
+is surrendered. The OS image grew from 12.4 KB to 15.2 KB.
 
-The 36 KB C `desk` also runs in the full TPA (it ignores `WMBASE`); it is
-superseded by the resident kernel, not broken by it — and since the kernel is
-no longer at `$D800`, a large desk no longer collides with it. (Staged
-relocation off `$D800`, 2026-09-07; a later step folds the kernel into the OS
-image as syscalls, freeing even the reserve.)
+**Why the history ring moved.** The old map called `$51C5..$6000` the "OS
+growth reserve", but it was never free: the shell's 2 KB command-history ring
+sat at `$5800..$5FFF` and its tab-complete scratch at `$5700`. Folding the
+kernel in grew the image to `$5B4C` — straight into the ring — and every typed
+command line overwrote live kernel code with ASCII (the crash trace showed
+`wk_draw` executing the bytes of "`un /bin/d`"). OS + kernel + a 32-line
+history cannot fit in 16 KB in *any* arrangement, so the ring shrank to 16
+lines and moved to the otherwise-unused hardware-stack gap at `$F800`, and the
+completion scratch moved to `$5F00`. Both are single-sourced in
+`gen_memmap.py`; the ring code is fully symbolic (`#HISTN-1` mask,
+`#>HISTRING`), so no shell code changed.
+
+The 36 KB C `desk` also runs in the full TPA; it is superseded by the resident
+kernel, not broken by it. (History: the kernel was first a standalone blob at
+`$D800` above the TPA — a 28 KB app cap, and it collided with desk — then
+briefly at `$5600`, which sat inside the history ring; both retired 2026-09-07.)
 
 ## The card-resident-list lever
 
@@ -87,8 +99,8 @@ Appended to the OS syscall table after `SYS_EXEC` ($2024):
 - `SYS_WMEVENT()` → for apps that want to cooperate with the loop rather than
   own the screen: one pointer/key event, kernel-routed to the focused window.
 
-`desk` becomes a ~1 KB launcher: ensure the kernel blob is loaded at `WMBASE`
-(from `/bin/wmkernel.bin`, once), then `SYS_WMRUN`.
+`desk` becomes a ~1 KB launcher with no loading step at all: `SYS_WKINIT`,
+`SYS_WKOPEN` its windows, then `SYS_WKRUN`. The kernel is already resident.
 
 ## Build ladder
 
@@ -135,10 +147,12 @@ Appended to the OS syscall table after `SYS_EXEC` ($2024):
 - **Kernel event parsing in asm.** `lib_ptr`'s SGR-mouse + arrow parsing is
   ~2 KB of C. In asm it is the biggest single piece; may warrant staying a
   small loaded-high C helper the kernel calls, if the budget allows.
-- **Reduced app stack.** RESOLVED by the `$5600` relocation (2026-09-07): with
-  the kernel *below* the TPA, GUI apps regain the full ~37.9 KB TPA and the
-  normal `CSTACKTOP` (`$F800`) — no per-app `--cstacktop`, same budget as any
-  program. (The old `$D800` design gave apps only 28 KB.)
-- **Kernel loading.** The blob is `/bin/wmkernel.bin` loaded to `WMBASE` on
-  first `desk`; it is position-fixed (assembled `--base WMBASE`), not a TPA
-  program. A presence byte at `WMBASE` lets `desk` skip reloading.
+- **Reduced app stack.** RESOLVED (2026-09-07): with the kernel folded into the
+  OS image (below the TPA), GUI apps have the full ~37.9 KB TPA and the normal
+  `CSTACKTOP` (`$F800`) — no per-app `--cstacktop`, same budget as any program.
+  (The old `$D800` design gave apps only 28 KB.)
+- **Kernel loading.** RESOLVED (2026-09-07): there is no blob and no load step.
+  The kernel is `.include`d into `p8xos.asm` and reached via syscalls
+  `$2027..$2036`, resident from boot. The standalone `.org`'d harness
+  (`os/wmkernel.asm`) and `wm_reside_test` are retired — OS residency across
+  launches is exercised by every remaining WM test.

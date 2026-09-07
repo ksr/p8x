@@ -184,7 +184,6 @@ test-gfx: p8xemu ucode
 	sh test/c_demo_test.sh
 	sh test/c_paint_test.sh
 	sh test/c_desk_test.sh
-	sh test/wm_reside_test.sh
 	sh test/wm_kernel_test.sh
 	sh test/wm_events_test.sh
 	sh test/wm_mouse_test.sh

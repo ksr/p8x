@@ -109,7 +109,9 @@ CNT     = $6362
 CR      = $0D
 LF      = $0A
 ESC     = $1B          ; arrow keys arrive as ESC '[' 'A'/'B' (up/down)
-HISTN   = 32           ; command-history ring capacity (lines); HISTRING = HISTN*HISTLEN
+HISTN   = 16           ; command-history ring capacity (lines); HISTRING = HISTN*HISTLEN
+                       ; (16 = 1K at $F800, see memmap; was 32 at $5800, which the
+                       ;  folded-in WM kernel now overlaps -- must stay a power of 2)
 HISTLEN = 64           ; bytes per history slot (matches LINEBUF width)
 
         .org $2000          ; rev E: OS loads at $2000 (match the monitor's CMD_B + --base)
@@ -131,6 +133,12 @@ HISTLEN = 64           ; bytes per history slot (matches LINEBUF width)
         JMP  SYS_OPENDIR        ; $201E SYS_OPENDIR: P1 = 16-bit dir start LBA -> open for FNEXT
         JMP  SYS_MKDIR          ; $2021 SYS_MKDIR: P1 = path -> create a directory; C=1 on real failure
         JMP  SYS_EXEC           ; $2024 SYS_EXEC: P1 = "path [args]" -> BECOME that program (no return; C=1 = not found)
+        JMP  wk_init            ; $2027 SYS_WKINIT: clear the WM window list
+        JMP  wk_open            ; $202A SYS_WKOPEN: P1 = 22-byte window record -> add it, resident
+        JMP  wk_repaint         ; $202D SYS_WKREPAINT: FLOOD the desktop + draw every window
+        JMP  wk_run             ; $2030 SYS_WKRUN: the resident WM event loop
+        JMP  wk_save            ; $2033 SYS_WKSAVE: P1=blob(4) A=win -> save the window's state
+        JMP  wk_load            ; $2036 SYS_WKLOAD: P1=dest(4) A=win -> load the window's state
 ; Reached only via the table above (COLD jumps past them).
 SYS_GETDRIVE:                   ; derived: 1 if the CWD is under the /d1 mount
         LDA  CURDRIVE
@@ -5247,3 +5255,8 @@ MK_ERUL: .byte CR,LF
          .asciiz "make: no rule to make target "
 MK_ECYC: .byte CR,LF
          .asciiz "make: prerequisite cycle (or too deep)"
+
+; ===========================================================================
+; Resident window-manager kernel -- folded into the OS image, reached via
+; the syscall table above ($2027-$2036). GLDATA/GLSTAT come from memmap.inc.
+        .include "wmkernel_body.asm"

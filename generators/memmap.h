@@ -11,7 +11,6 @@
 #define OSORG       0x2000       /* OS load/link address (= RAMBASE) */
 #define TPABASE     0x6A00       /* transient program area base (RUNnable programs load here) */
 #define CSTACKTOP   0xF800       /* compiler C-stack top (grows down; p8cc __csp init) */
-#define WMBASE      0x5600       /* resident window-manager kernel base (OS reserve, below the TPA; apps keep the full TPA $6A00..CSTACKTOP) */
 
 /* I/O ports ($FF00-$FFFF) */
 #define ACIAS       0xFF04       /* ACIA status (rd) / control (wr) */
@@ -240,12 +239,12 @@
 #define HISTST      0x608E       /* history ring: index where the next entry is written (0..HISTN-1) */
 #define HISTCT      0x608F       /* history ring: number of stored entries (0..HISTN) */
 #define HISTNV      0x6090       /* history ring: recall cursor (0 = not navigating; N = N lines back) */
-#define HISTRING    0x5800       /* history ring buffer base: HISTN x HISTLEN bytes ($5800..$5FFF) */
+#define HISTRING    0xF800       /* history ring buffer base: HISTN x HISTLEN bytes ($F800..$FBFF, hardware-stack gap above CSTACKTOP) */
 
 /* shell completion */
-#define CMPPFX      0x5700       /* tab-complete: leaf prefix being completed (NUL-term) */
-#define CMPLCP      0x5740       /* tab-complete: longest common prefix of the matches (NUL-term) */
-#define CMPDIR      0x5760       /* tab-complete: directory-part path string, for CDPATH (NUL-term) */
+#define CMPPFX      0x5F00       /* tab-complete: leaf prefix being completed (NUL-term) */
+#define CMPLCP      0x5F40       /* tab-complete: longest common prefix of the matches (NUL-term) */
+#define CMPDIR      0x5F60       /* tab-complete: directory-part path string, for CDPATH (NUL-term) */
 #define CMPPL       0x6091       /* tab-complete: length of the typed leaf prefix */
 #define CMPCNT      0x6092       /* tab-complete: number of matches (saturates at 255) */
 #define CMPFW       0x6093       /* tab-complete: 1 = completing the command word (first word) */

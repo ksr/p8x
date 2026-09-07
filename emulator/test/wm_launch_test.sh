@@ -4,8 +4,8 @@
 #   (wk_run). The 'l' key makes the loop SYS_EXEC a WM-client program
 #   (wapp) into the TPA -- replacing the launcher. wapp opens a THIRD
 #   window through the RESIDENT kernel and calls wk_run to resume the
-#   desktop. Because the kernel and its window records live at WMBASE
-#   (above the TPA), the launcher's two windows SURVIVE the launch
+#   desktop. Because the kernel and its window records live inside the OS
+#   image (below the TPA), the launcher's two windows SURVIVE the launch
 #   untouched -- so the resumed desktop shows all three. That is what
 #   the whole resident architecture was for: launching an app no longer
 #   destroys the window manager.
@@ -16,15 +16,14 @@ UC=../../microcode
 
 fail() { echo "WM-LAUNCH TEST: FAIL — $1"; exit 1; }
 
-WMBASE=$(python3 -c "import sys; sys.path.insert(0,'$ROOT/generators'); import memmap; print(memmap.WMBASE)")
-WK_OPEN=$((WMBASE + 3))
-WK_RUN=$((WMBASE + 9))
-WK_SIG=$((WMBASE + 18))
+# WM syscalls: JMP table in os/p8xos.asm right after SYS_EXEC ($2024)
+WK_INIT=0x2027
+WK_OPEN=0x202A
+WK_RUN=0x2030
 
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/dev/null
-python3 $ROOT/assembler/p8xasm.py $ROOT/os/wmkernel.asm -o wmk.bin --base $WMBASE >/dev/null
 
 # a shared setw + main tail; both programs open windows through the kernel
 SETW='char param[22];
@@ -46,10 +45,7 @@ int setw(int x, int y, int w, int h, int list, char *t) {
 cat > wl_run.c <<EOF
 $SETW
 int main() {
-    bios(0x0133, "/bin/wmk.bin", 0);
-    if (bios(0x0118, 0, 0) & 256) { puts("?NOKERNEL"); return 1; }
-    bios(0x013F, $WMBASE, 0);
-    bios($WMBASE, 0, 0);                            /* wk_init */
+    bios($WK_INIT, 0, 0);                           /* SYS_WKINIT (kernel is in the OS) */
     setw(40, 40, 210, 150, 0, "SHAPES");
     setw(190, 90, 240, 140, 0, "TERM");
     bios($WK_RUN, 0, 0);                            /* the resident loop */
@@ -63,8 +59,7 @@ EOF
 cat > wl_app.c <<EOF
 $SETW
 int main() {
-    if (peek($WK_SIG) != 0x57) { puts("?NOKERNEL"); return 1; }
-    setw(300, 30, 140, 120, 0, "APP");             /* a third window */
+    setw(300, 30, 140, 120, 0, "APP");             /* a third window (kernel is in the OS) */
     bios($WK_RUN, 0, 0);                            /* resume the desktop */
     puts("APP-DONE");
     return 0;
@@ -80,7 +75,6 @@ rm -f wl.img
 python3 $ROOT/tools/p8xfs.py create wl.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   wl.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  wl.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    wl.img wmk.bin --name /bin/wmk.bin --load $WMBASE --exec $WMBASE >/dev/null
 python3 $ROOT/tools/p8xfs.py put    wl.img wl_run.bin --name /bin/wl.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    wl.img wl_app.bin --name /bin/wapp.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    wl.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
