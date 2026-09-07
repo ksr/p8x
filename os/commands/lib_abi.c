@@ -32,6 +32,7 @@
 //#define SYS_WKSAVE   0x2033    /* P1=blob(4) A=win -> save the window's 4-byte state */
 //#define SYS_WKLOAD   0x2036    /* P1=dest(4) A=win -> load the window's 4-byte state */
 //#define SYS_WKPATH   0x2039    /* P1 = "path [args]" (<=23 chars) -> what the 'l' key launches */
+//#define SYS_WKEVENT  0x203C    /* one event, client-driven loop: returns &256 = quit, 0 = kernel handled it, else the key byte the kernel does not own */
 
 /* BIOS jump table ($01xx): low-level console + file-stream primitives. The read
  * (FOPEN/FGETB) and write (FWOPEN/FPUTB/FCLOSE) streams are separate single-file

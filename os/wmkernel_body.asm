@@ -242,20 +242,42 @@ wkr_done:
 wk_run: LDA  #99                       ; no window grabbed yet
         STA  kdragw
         JSR  wk_repaint
-wru_lp: JSR  $0100                      ; CONIN -> A (blocks for a key)
-        LDB  #4                         ; ^D -> quit
-        CMP
-        JZ   wru_ret
-        LDB  #9                         ; TAB -> cycle focus (bottom window to top)
-        CMP
-        JZ   wru_tab
-        LDB  #$6C                       ; 'l' -> LAUNCH a WM-client program
+wkrun_lp:JSR wk_event                  ; one event: C set = quit; else A = 0
+        JC   wkr_end                   ;   (kernel handled) or an unowned key
+        JZ   wkrun_lp                  ; A=0: handled -> keep looping
+        LDB  #$6C                      ; the built-in loop owns just 'l' = LAUNCH
         CMP
         JZ   wru_launch
-        LDB  #27                        ; ESC -> an arrow sequence
+        JMP  wkrun_lp                  ; any other unowned key: ignore (wk_run
+                                       ;   has no client; wdesk uses wk_event)
+wkr_end:RTS
+
+; ==== wk_event : ONE step of the resident loop (SYS_WKEVENT, $203C) =========
+; Reads a console event and handles everything the KERNEL owns -- TAB focus,
+; arrow move, mouse press/drag/release (raise, drag, close) -- then RETURNS to
+; the client, so the client owns the outer loop and its own UI (a menu bar,
+; FILES, TERM...). Return: carry SET = quit (^D); else A = 0 when the kernel
+; handled the event, or the key byte for a key the kernel does NOT own (the
+; client decides). This is the split that keeps the kernel a small resident
+; core while the rich desktop lives in the client's 37 KB TPA.
+wk_event:
+        JSR  $0100                      ; CONIN -> A (blocks for a key)
+        LDB  #4                         ; ^D -> quit
+        CMP
+        JZ   wev_quit
+        LDB  #9                         ; TAB -> cycle focus
+        CMP
+        JZ   wru_tab
+        LDB  #27                        ; ESC -> arrow / mouse sequence
         CMP
         JZ   wru_esc
-        JMP  wru_lp
+        CLC                             ; any other byte: an unowned key ->
+        RTS                             ;   return it (A = key, C=0, Z=0)
+wev_quit:SEC                            ; carry set = quit
+        RTS
+wev_h1: CLC                             ; kernel handled it: A=0, C=0, Z=1
+        LDA  #0
+        RTS
 
 ; LAUNCH: SYS_EXEC a WM client into the TPA. SYS_EXEC replaces the TPA (this
 ; loop's original caller included) and never returns here -- but the kernel
@@ -270,7 +292,7 @@ wru_launch:
         LDA  #>kpath
         TAP1H
         JSR  $2024                      ; SYS_EXEC (does not return)
-        JMP  wru_lp                      ; only reached if the exec failed
+        JMP  wkrun_lp                    ; only reached if the exec failed
 ; ==== wk_path : set the 'l'-key launch target (SYS_WKPATH, $2039) ==========
 ; P1 -> NUL-terminated "path [args]" (up to 23 chars), copied into kpath. The
 ; default "/bin/wapp.bin" is the WM tests' client; wdesk sets
@@ -295,7 +317,7 @@ kpath:  .ascii "/bin/wapp.bin"          ; 13 + NUL + 10 pad = a 24-byte buffer
 wru_esc:JSR  $0100                      ; expect '['
         LDB  #$5B
         CMP
-        JNZ  wru_lp
+        JNZ  wev_h1
         JSR  $0100                      ; '<' (xterm SGR mouse) or A/B/C/D
         LDB  #$3C                       ; '<'
         CMP
@@ -312,7 +334,7 @@ wru_esc:JSR  $0100                      ; expect '['
         LDB  #$44                       ; 'D' left  -> x -= 8
         CMP
         JZ   wru_lf
-        JMP  wru_lp
+        JMP  wev_h1
 wru_up: LDA  #8
         STA  kdxy
         LDA  #0
@@ -338,8 +360,7 @@ wru_lf: LDA  #$F8
         LDA  #0
 wru_mv: JSR  k_movetop
         JSR  wk_repaint
-        JMP  wru_lp
-wru_ret:RTS
+        JMP  wev_h1
 ; TAB: cycle focus -- raise the BOTTOM window (index 0) to the top, exactly
 ; what desk's TAB does. Focus IS the top record; it draws with a white title
 ; bar, the rest grey. Needs two windows to mean anything.
@@ -347,11 +368,11 @@ wru_tab:LDA  wcnt
         LDB  #2
         CMP
         JC   wrt_go                     ; C=1 -> wcnt >= 2
-        JMP  wru_lp
+        JMP  wev_h1
 wrt_go: LDA  #0
         JSR  k_raise
         JSR  wk_repaint
-        JMP  wru_lp
+        JMP  wev_h1
 
 ; ---- xterm SGR mouse: ESC [ < b ; x ; y (M press/drag | m release) --------
 ; b;x;y are decimal; x,y are 1-based terminal CELLS mapped to the panel via
@@ -408,10 +429,10 @@ wru_mouse:
         LDA  kdragw
         LDB  #4
         CMP
-        JC   wru_lp                     ; no window grabbed
+        JC   wev_h1                     ; no window grabbed
         JSR  k_dragmove
         JSR  wk_repaint
-        JMP  wru_lp
+        JMP  wev_h1
 wru_mpress:
         JSR  k_hit                      ; which window is under the cursor?
         JZ   wru_mnohit
@@ -490,7 +511,7 @@ wru_mpress:
         LDA  #99
         STA  kdragw
         JSR  wk_repaint
-        JMP  wru_lp
+        JMP  wev_h1
 wru_grab:
         JSR  wk_repaint                 ; the raise changed the z-order
         ; grab it: kdragw = top index, grab-offset = cursor - origin
@@ -524,15 +545,15 @@ wru_grab:
         STA  kgy
         LDA  kw+1
         STA  kgy+1
-        JMP  wru_lp
+        JMP  wev_h1
 wru_mnohit:
         LDA  #99                        ; press missed: no drag target
         STA  kdragw
-        JMP  wru_lp
+        JMP  wev_h1
 wru_mrel:
         LDA  #99
         STA  kdragw
-        JMP  wru_lp
+        JMP  wev_h1
 
 ; k_ge: A = 1 if ka >= kb (unsigned 16-bit), else 0.
 k_ge:   LDA  ka+1

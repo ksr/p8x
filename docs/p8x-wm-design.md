@@ -162,11 +162,21 @@ Appended to the OS syscall table after `SYS_EXEC` ($2024):
    this asm and does not fit; FILES, TERM and VIEW (thousands of bytes) never
    will. The OS image is at the 16 KB cap, so the kernel must stay a SMALL
    resident core — windows, z-order, chrome, drag, launch-and-resume — and the
-   rich UI belongs in the CLIENT, which has the 37 KB TPA. The missing piece
-   is an event path: `SYS_WKEVENT` (one key/pointer event, kernel-routed —
-   already sketched in the syscall list above) lets `wdesk` draw its own menu
-   bar and handle menu/FILES/TERM presses while the kernel keeps the windows
-   alive across launches. That split is the recommended next rung.
+   rich UI belongs in the CLIENT, which has the 37 KB TPA.
+7. **`SYS_WKEVENT` — the client-driven loop — DONE 2026-09-07.** `wk_run`'s
+   internal loop is now a one-event *step*, `wk_event` (`SYS_WKEVENT`, `$203C`):
+   it handles the events the kernel owns (TAB focus, arrows, mouse press/drag/
+   release → raise/drag/close) and returns to the client — **carry set = quit**,
+   else `A = 0` (kernel handled it) or the **key byte** the kernel does not own.
+   `SYS_WKRUN` becomes a thin loop over it, so every existing test still passes
+   (behaviour unchanged) at **+20 B**. `wm_event_test` proves a client drives
+   the loop: the kernel moved the window on an arrow and handed the client an
+   unowned `x`. This is the split that lets the rich desktop live in the
+   client: `wdesk` can now draw its own menu bar and run FILES/TERM/VIEW,
+   acting on the keys and (next) the menu-bar clicks the kernel returns, while
+   the kernel keeps the windows alive across launches. **Next:** grow the desk
+   client on `SYS_WKEVENT` — menu bar first — in C (fast to write and test),
+   then port to an asm `/bin` twin once the design settles.
 6. **Saved per-window context (the switcher):** each window keeps its app's
    state; focus-switch swaps the active TPA (state-only first, full-TPA-swap
    to disk as the deluxe variant — the two later options from the fork).
