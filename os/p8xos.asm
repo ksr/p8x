@@ -151,6 +151,8 @@ HISTLEN = 64           ; bytes per history slot (matches LINEBUF width)
         JMP  wk_event           ; $203C SYS_WKEVENT: one event; C=quit, A=0 handled, A=key (unowned)
         JMP  wk_close           ; $203F SYS_WKCLOSE: pop the top (focused) window
         JMP  wk_arg             ; $2042 SYS_WKARG: payload of the last SYS_WKEVENT (key / click column)
+        JMP  wk_get             ; $2045 SYS_WKGET: A=window index, P1=dest -> copy its 22-byte record
+        JMP  wk_top             ; $2048 SYS_WKTOP: A = top (focused) window index, 99 if none
 ; Reached only via the table above (COLD jumps past them).
 SYS_GETDRIVE:                   ; derived: 1 if the CWD is under the /d1 mount
         LDA  CURDRIVE

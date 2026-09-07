@@ -25,12 +25,17 @@
  */
 
 //#use abi
+//#use dirent
 
 //#define GLDATA 0xFF50
 //#define GLSTAT 0xFF51
 //#define GLID   0xFF54
 
 char param[22];
+char frec[22];                     /* a window's record, read via SYS_WKGET */
+char fnam[156];                    /* the FILES listing: up to 12 names x 13 */
+int  fcnt;                         /* how many names are cached */
+int  files_win;                    /* the FILES window's index */
 
 int gp(int v) { while (peek(GLSTAT) & 128) { } poke(GLDATA, v); return 0; }
 int gw(int v) { gp(v & 255); gp((v / 256) & 255); return 0; }
@@ -70,13 +75,13 @@ int menubar() {
 int act(int a) {
     if (a == 0) {
         bios(SYS_EXEC, "/bin/paint.bin -w", 0);   /* becomes paint; no return */
-        menubar();                                /* only if exec failed */
+        redraw();                                 /* only if exec failed */
         return 0;
     }
     if (a == 1) {
         bios(SYS_WKCLOSE, 0, 0);
         bios(SYS_WKREPAINT, 0, 0);
-        menubar();
+        redraw();
         return 0;
     }
     return 1;                                     /* a == 2: quit */
@@ -89,6 +94,71 @@ int act_at(int col) {
     if (col >= 36) { return 2; }                  /* QUIT */
     return -1;                                    /* the label, or a gap */
 }
+
+/* reset WINDOW + VWPORT to the full screen (identity) -- the kernel leaves
+ * this after a repaint; a client that changes it (to draw window content)
+ * must restore it before drawing anything full-screen (the menu bar). */
+int camfull() {
+    gp(179); gw(0); gw(479); gw(0); gw(271);  /* WINDOW  0..479, 0..271 */
+    gp(178); gw(0); gw(479); gw(0); gw(271);  /* VWPORT  identity        */
+    return 0;
+}
+
+/* read the current directory into fnam[] once (not per repaint -- disk is
+ * slow). Keeps files/dirs with a printable name; skips '.', deleted slots
+ * and the volume label, the way desk's FILES does. */
+int files_scan() {
+    int r; int j; int k;
+    fcnt = 0;
+    r = bios(FOPENDIR, "/", 0);
+    if (r & 256) { return 1; }
+    r = bios(FNEXT, 0, 0);
+    while ((r & 256) == 0 && fcnt < 12) {
+        de_read();
+        j = de[0] & 255;
+        if ((de_isfile() || de_isdir()) && j >= 33 && j <= 126 &&
+            (de_isdot() == 0 || (de[1] & 255) == '.')) {
+            j = 0; k = fcnt * 13;
+            while (j < 12) { if ((de[j] & 255) > 32) { fnam[k] = de[j]; k = k + 1; } j = j + 1; }
+            fnam[k] = 0;
+            if (k > fcnt * 13) { fcnt = fcnt + 1; }
+        }
+        r = bios(FNEXT, 0, 0);
+    }
+    return 0;
+}
+
+/* draw the cached listing INSIDE the FILES window, but only when FILES is the
+ * top (focused) window -- then its content, drawn after the kernel's repaint,
+ * correctly sits on top. SYS_WKGET gives the rect; WINDOW/VWPORT map the body
+ * to window-LOCAL coords (the card clips to it), exactly desk's lib_wm idiom. */
+int files_draw() {
+    int x; int y; int w; int h; int cw; int ch; int row; int j; int k; char *s;
+    if (bios(SYS_WKTOP, 0, 0) != files_win) { return 0; }
+    bios(SYS_WKGET, frec, files_win);
+    x = (frec[0]&255) + (frec[1]&255)*256;
+    y = (frec[2]&255) + (frec[3]&255)*256;
+    w = (frec[4]&255) + (frec[5]&255)*256;
+    h = (frec[6]&255) + (frec[7]&255)*256;
+    cw = w - 2; ch = h - 15;
+    gp(179); gw(0); gw(cw-1); gw(0); gw(ch-1);              /* WINDOW local  */
+    gp(178); gw(x+1); gw(x+cw); gw(271-(y+ch)); gw(271-(y+1)); /* VWPORT rect */
+    gp(6); gp(31); gp(63); gp(31);                         /* COLOR white   */
+    row = 0;
+    while (row < fcnt) {
+        s = fnam + row*13;
+        k = 0; while (s[k]) { k = k + 1; }
+        gp(18); gw(4); gw(ch - 13 - row*13); gw(0);        /* MOVE3 x,y,0   */
+        gp(128); gp(k);                                    /* TEXT <len>    */
+        j = 0; while (j < k) { gp(s[j]); j = j + 1; }
+        row = row + 1;
+    }
+    camfull();                                             /* restore identity */
+    return 0;
+}
+
+/* redraw the client's own layers on top of the kernel's window repaint */
+int redraw() { menubar(); files_draw(); return 0; }
 
 /* one 22-byte window record -> SYS_WKOPEN */
 int setw(int x, int y, int w, int h, int list, char *t) {
@@ -130,21 +200,23 @@ int main() {
     ap = argstr();
     while (*ap == 32) { ap = ap + 1; }
 
+    files_win = 1;                            /* SHAPES is 0, FILES is 1 */
     scene();                                  /* card list 30, always */
+    files_scan();                             /* read the CWD into fnam[] */
     if (ap[0] != '-' || ap[1] != 'r') {       /* fresh (not a resume) */
         bios(SYS_WKINIT, 0, 0);
         setw(40, 40, 210, 150, 30, "SHAPES"); /* content = card list 30 */
-        setw(190, 90, 240, 130, 0, "NOTES");  /* both sit below the bar */
+        setw(190, 60, 240, 170, 0, "FILES");  /* content = the CWD listing */
     }
     bios(SYS_WKREPAINT, 0, 0);
-    menubar();
+    redraw();                                 /* menu bar + FILES listing */
     puts("WDESK (man wdesk)");
 
     going = 1;
     while (going) {
         e = bios(SYS_WKEVENT, 0, 0);          /* one event */
         if (e & 256) { going = 0; }           /* carry -> quit (^D) */
-        else if (e == 0) { menubar(); }       /* kernel repainted -> redraw bar */
+        else if (e == 0) { redraw(); }        /* kernel repainted -> our layers */
         else if (e == 1) {                    /* an unowned key */
             k = bios(SYS_WKARG, 0, 0);
             a = -1;

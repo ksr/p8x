@@ -63,6 +63,14 @@ OPTIONS
         for interactive use -- it is how paint -w brings the desktop
         back.
 
+WINDOWS
+    SHAPES   a demo scene recorded into a card list (the card replays it).
+    FILES    a listing of the current directory, drawn by wdesk itself
+             inside the window (the kernel gives the rect via SYS_WKGET;
+             the client draws the text and clips it to the window body).
+             The listing shows while FILES is the focused (top) window.
+             Selecting and opening entries is a later step.
+
 NOTES
     This is the resident-kernel rung of the window-system ladder
     (docs/p8x-wm-design.md). The full-featured standalone `desk` -- menus,

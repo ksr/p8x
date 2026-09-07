@@ -331,6 +331,32 @@ wkc_ret:RTS
 wk_arg: CLC                             ; a clean byte: bios() must not see a
         LDA  kev_arg                    ;   stray carry as bit 256 in the result
         RTS
+; ==== wk_get : copy window A's 22-byte record to (P1) (SYS_WKGET, $2045) ====
+; Lets a client read a window's rect so it can draw its OWN dynamic content
+; inside it (a directory listing, a terminal): the kernel owns the chrome and
+; z-order, the client fills the body. A = window index, P1 = dest buffer.
+wk_get: STA  ki
+        JSR  koff                       ; A = 24*ki
+        JSR  kp2                        ; P2 = recs + 24*ki (source)
+        LDA  #22
+        STA  kt
+wkg_cp: LDA  (P2)+
+        STA  (P1)+
+        LDA  kt
+        DEC
+        STA  kt
+        JNZ  wkg_cp
+        RTS
+; ==== wk_top : A = the top (focused) window index, 99 if none (SYS_WKTOP) ====
+wk_top: LDA  wcnt
+        JZ   wkt_no
+        LDB  #1
+        SUB
+        CLC                             ; clean byte return
+        RTS
+wkt_no: LDA  #99
+        CLC
+        RTS
 kpath:  .ascii "/bin/wapp.bin"          ; 13 + NUL + 10 pad = a 24-byte buffer
         .byte 0
         .fill 10

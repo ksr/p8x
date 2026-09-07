@@ -35,6 +35,8 @@
 //#define SYS_WKEVENT  0x203C    /* one event, client-driven loop: returns &256 = quit, 0 = kernel handled it, 1 = an unowned key (SYS_WKARG=byte), 2 = a menu-bar click (SYS_WKARG=column) */
 //#define SYS_WKCLOSE  0x203F    /* pop the top (focused) window */
 //#define SYS_WKARG    0x2042    /* payload of the last SYS_WKEVENT: the key byte (event 1) or the click column (event 2) */
+//#define SYS_WKGET    0x2045    /* A = window index, P1 = dest buffer -> copy its 22-byte record (x,y,w,h LE, list, tlen, title(12)) */
+//#define SYS_WKTOP    0x2048    /* A = the top (focused) window index, or 99 if none */
 
 /* BIOS jump table ($01xx): low-level console + file-stream primitives. The read
  * (FOPEN/FGETB) and write (FWOPEN/FPUTB/FCLOSE) streams are separate single-file

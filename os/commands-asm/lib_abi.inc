@@ -37,6 +37,8 @@ SYS_WKPATH = $2039      ; P1 = "path [args]" -> the 'l'-key launch target
 SYS_WKEVENT = $203C     ; one event; C=quit, A=0 handled, A=key (unowned)
 SYS_WKCLOSE = $203F     ; pop the top (focused) window
 SYS_WKARG  = $2042      ; payload of the last SYS_WKEVENT (key / click column)
+SYS_WKGET  = $2045      ; A=window index, P1=dest -> copy its 22-byte record
+SYS_WKTOP  = $2048      ; A = top (focused) window index, 99 if none
 
 ; --- BIOS jump table ($01xx) ---
 CONIN      = $0100      ; wait for key, char -> A (raw console, not stdin)

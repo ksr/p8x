@@ -272,6 +272,8 @@ from C, the `p8cc` `bios()` intrinsic). The table is **append-only**:
 | `$203C` | `SYS_WKEVENT` | **one step** of the resident loop, so the CLIENT owns the outer loop and its own UI (menu bar, FILES, TERM). Reads a console event, handles what the kernel owns (TAB focus, arrows, mouse press/drag/release → raise/drag/close), and returns: **carry set = quit** (`^D`); else `A = 0` when the kernel handled it, `A = 1` for an unowned **key** (byte via `SYS_WKARG`), or `A = 2` for a **menu-bar click** in the top rows (cursor column via `SYS_WKARG`). `SYS_WKRUN` is the thin built-in loop over this; a rich client (`wdesk`, which draws its own clickable menu bar) drives it directly |
 | `$203F` | `SYS_WKCLOSE` | pop the top (focused) window — the client's menu/keyboard "close" (the mouse close box does the same pop inline) |
 | `$2042` | `SYS_WKARG` | the payload of the last `SYS_WKEVENT`: the key byte (event 1) or the click column (event 2). Returns a clean byte (carry clear) so it reads back cleanly in C |
+| `$2045` | `SYS_WKGET` | `A` = window index, `P1` = a 22-byte dest → copy that window's record (`x,y,w,h` LE pairs, list, tlen, title(12)). Lets a client read a window's rect to draw its own **dynamic** content inside it (a directory listing, a terminal) — the kernel owns chrome + z-order, the client fills the body |
+| `$2048` | `SYS_WKTOP` | `A` = the top (focused) window index, or 99 if none — a client draws a window's dynamic content only when it is on top, so it composites correctly |
 
 `SYS_GETCWD`/`SYS_CWDLBA`/`SYS_OPENCWD` operate on the single CWD in the unified
 namespace (the path shows `/d1/...` when it is on the mounted drive); `SYS_OPENCWD`

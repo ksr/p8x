@@ -199,10 +199,26 @@ Appended to the OS syscall table after `SYS_EXEC` ($2024):
    that returns a value must `CLC` — `SYS_WKARG` first returned a stray carry,
    which `bios()` folded in as bit 256 (`26 → 282`), picking the wrong action
    nondeterministically. Kernel headroom is now ~143 B before `$5F00` — the
-   core is nearly full, as intended. **Next:** the Mac press-slide-release
-   *pull-down* (a menu-mode in the kernel that forwards the gesture to the
-   client) if wanted, then FILES / TERM / VIEW in the client, then the asm
-   `/bin` twin once the design settles.
+   core is nearly full, as intended.
+10. **FILES — a directory listing in a client-drawn window — DONE 2026-09-07
+    (read-only).** The content model that FILES / TERM / VIEW all need: the
+    kernel exposes a window's rect (`SYS_WKGET` `$2045`, index in `A`, record →
+    `P1`) and the top index (`SYS_WKTOP` `$2048`). `wdesk` opens a FILES window,
+    reads the CWD once (`FOPENDIR`/`FNEXT`, cached — not per repaint), and after
+    each kernel repaint draws the entries as stroke text **inside** the window:
+    it sets `WINDOW`/`VWPORT` to the body (desk's `wm_vwin` idiom, `cw=w-2`,
+    `ch=h-15`) so the card clips the text to the window, then restores the
+    identity camera for the menu bar. It draws the listing **only when FILES is
+    the top window** (`SYS_WKTOP`), so client-drawn dynamic content composites
+    correctly without a full kernel compositor. `c_wfiles_test` proves the
+    listing text is in the window body while SHAPES' card-list content coexists.
+    **The kernel is now essentially full: ~94 B before `$5F00`.** Further window
+    *accessors* are cheap, but no more sizable kernel code fits — which is the
+    point: FILES selection + open, TERM, and VIEW are all CLIENT work from here
+    (in-window clicks/keys can ride the existing `SYS_WKEVENT` return; a content
+    callback is the alternative if per-window compositing is needed). **Next:**
+    FILES selection + open (click a row → launch a `.BIN` / navigate a dir),
+    then TERM, then the asm `/bin` twin.
 6. **Saved per-window context (the switcher):** each window keeps its app's
    state; focus-switch swaps the active TPA (state-only first, full-TPA-swap
    to disk as the deluxe variant — the two later options from the fork).
