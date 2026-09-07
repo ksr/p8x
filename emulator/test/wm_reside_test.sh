@@ -1,14 +1,15 @@
 #!/bin/sh
 # The load-bearing assumption of the resident window manager: a region
-# reserved HIGH in RAM (WMBASE..$F800) survives a program launching into
-# the TPA below it and exiting. The resident GUI kernel will live there,
-# loaded once by `desk`; apps launch beneath it and must not touch it.
+# reserved in the OS growth reserve (WMBASE, BELOW the TPA) survives a
+# program launching into the TPA above it and exiting. The resident GUI
+# kernel lives there, loaded once by `desk`; apps launch above it in the
+# full TPA and must not reach down to it.
 #
-# One program writes a sentinel at WMBASE ($D800); a second program --
-# compiled with CSTACKTOP=WMBASE so its C stack cannot grow into the
-# kernel -- runs, does real work (a deep-ish call chain + a buffer), and
-# checks the sentinel is intact. If this ever fails, the resident-WM
-# memory split is unsafe and must be revisited.
+# One program writes a sentinel at WMBASE; a second program -- compiled
+# with the DEFAULT full-TPA C stack (no --cstacktop cap), so it exercises
+# the whole TPA the way a real app does -- runs, does real work (a deep-ish
+# call chain + a buffer), and checks the sentinel is intact. If this ever
+# fails, the resident-WM memory reservation is unsafe and must be revisited.
 set -e
 cd "$(dirname "$0")"
 ROOT=../..
@@ -53,7 +54,7 @@ EOF
 python3 $ROOT/compiler/p8cc.py wr_poke.c -o wr_poke.asm >/dev/null
 python3 $ROOT/assembler/p8xasm.py wr_poke.asm -o wr_poke.bin --base 0x6A00 >/dev/null
 # the working app links with CSTACKTOP = WMBASE (its stack stays below the kernel)
-python3 $ROOT/compiler/p8cc.py wr_work.c -o wr_work.asm --cstacktop $WMBASE >/dev/null
+python3 $ROOT/compiler/p8cc.py wr_work.c -o wr_work.asm >/dev/null
 python3 $ROOT/assembler/p8xasm.py wr_work.asm -o wr_work.bin --base 0x6A00 >/dev/null
 
 rm -f wr.img

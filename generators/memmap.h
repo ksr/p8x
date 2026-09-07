@@ -11,7 +11,7 @@
 #define OSORG       0x2000       /* OS load/link address (= RAMBASE) */
 #define TPABASE     0x6A00       /* transient program area base (RUNnable programs load here) */
 #define CSTACKTOP   0xF800       /* compiler C-stack top (grows down; p8cc __csp init) */
-#define WMBASE      0xD800       /* resident window-manager kernel base (GUI apps: TPA $6A00..WMBASE, CSTACKTOP=WMBASE) */
+#define WMBASE      0x5600       /* resident window-manager kernel base (OS reserve, below the TPA; apps keep the full TPA $6A00..CSTACKTOP) */
 
 /* I/O ports ($FF00-$FFFF) */
 #define ACIAS       0xFF04       /* ACIA status (rd) / control (wr) */

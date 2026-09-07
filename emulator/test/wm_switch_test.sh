@@ -1,8 +1,8 @@
 #!/bin/sh
 # The switcher's core: PER-WINDOW STATE that the resident kernel holds
 # across app launches. This machine runs one program in the TPA at a
-# time, so a true suspend/resume switcher would swap 28KB TPAs to disk
-# per switch -- impractical. The realistic "state-only" variant: each
+# time, so a true suspend/resume switcher would swap whole ~37.9KB TPAs to
+# disk per switch -- impractical. The realistic "state-only" variant: each
 # window owns a small state blob (wk_save/wk_load) the resident kernel
 # keeps, so an app can save where it was and pick up there next time it
 # is launched into that window. Apps thus REMEMBER their state as you

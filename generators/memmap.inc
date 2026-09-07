@@ -10,7 +10,7 @@ RAMSIZE     = $DF00              ; RAM span $2000-$FEFF (IOBASE-RAMBASE)
 OSORG       = $2000              ; OS load/link address (= RAMBASE)
 TPABASE     = $6A00              ; transient program area base (RUNnable programs load here)
 CSTACKTOP   = $F800              ; compiler C-stack top (grows down; p8cc __csp init)
-WMBASE      = $D800              ; resident window-manager kernel base (GUI apps: TPA $6A00..WMBASE, CSTACKTOP=WMBASE)
+WMBASE      = $5600              ; resident window-manager kernel base (OS reserve, below the TPA; apps keep the full TPA $6A00..CSTACKTOP)
 
 ; I/O ports ($FF00-$FFFF)
 ACIAS       = $FF04              ; ACIA status (rd) / control (wr)

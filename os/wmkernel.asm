@@ -1,10 +1,11 @@
 ; wmkernel.asm -- the resident P8X window-manager kernel (skeleton, v1).
 ;
-; Assembled at WMBASE ($D800) and loaded there ONCE by the launcher
-; (`desk`); resident thereafter, surviving apps that come and go in the
-; TPA below it (proven by wm_reside_test). The jump table at the base is
-; bios()-callable at fixed addresses, exactly like the BIOS table at
-; $0100 or the OS syscalls at $2000:
+; Assembled at WMBASE ($5600, in the OS growth reserve below the TPA) and
+; loaded there ONCE by the launcher (`desk`); resident thereafter, surviving
+; apps that come and go in the TPA ABOVE it (proven by wm_reside_test). Living
+; below the TPA, it leaves apps the full TPA $6A00..CSTACKTOP. The jump table
+; at the base is bios()-callable at fixed addresses, exactly like the BIOS
+; table at $0100 or the OS syscalls at $2000:
 ;
 ;   WMBASE+0  wk_init          clear the window list
 ;   WMBASE+3  wk_open   P1 ->  a 22-byte record [x,y,w,h (LE pairs),
@@ -27,7 +28,7 @@
 GLDATA = $FF50
 GLSTAT = $FF51
 
-        .org $D800                       ; WMBASE (match --base)
+        .org $5600                       ; WMBASE (match --base; OS reserve, below TPA)
 
 ; ---- jump table: MUST be first so the entries land at fixed offsets ---------
         JMP  wk_init                    ; +0

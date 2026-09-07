@@ -32,26 +32,31 @@ C-vs-asm ratio (2.3–5.8×) puts it at ~4–6 KB.
 ## Memory layout
 
 Boot is **unchanged**: monitor → `B` → shell, nothing resident, the full TPA
-free. The GUI is opt-in — `desk` loads the kernel high, once, and it stays.
+free. The GUI is opt-in — `desk` loads the kernel into the OS reserve, once,
+and it stays.
 
 ```
   $2000            OS (resident)
-  $51C5            free gap
+  $51C5            OS growth reserve (~1 KB free)
+  $5600  WMBASE    ── resident WM kernel: code + window records + stack ──
   $6000            OS/BIOS scratch
-  $6A00  TPABASE   ── TPA for GUI apps ($6A00..WMBASE, ~28 KB) ──
-  $D800  WMBASE    ── resident WM kernel: code + window records + stack ──
-  $F800  CSTACKTOP (normal apps' C stack top)
+  $6A00  TPABASE   ── full TPA for apps ($6A00..CSTACKTOP, ~37.9 KB) ──
+  $F800  CSTACKTOP  apps' C stack top
   $FEFF  STKTOP    OS/monitor hardware stack
 ```
 
-GUI apps load into `$6A00..WMBASE` and are compiled `p8cc --cstacktop WMBASE`
-so their C stack grows down from `WMBASE` and can never enter the kernel.
-28 KB fits `paint` (24 KB) and every demo. `wm_reside_test` proves the split:
-a program stamps `WMBASE`, a second app (linked at the low stack top, running
-a real call chain) runs and exits, and the stamp is intact.
+The kernel lives **below** the TPA, in the OS growth reserve — the ~1 KB of
+`$2000..$6000` the 12.4 KB OS does not use. Apps load into the **full** TPA
+above it (`$6A00..$F800`) with the normal C stack: nothing is compiled with a
+special `--cstacktop`, and no TPA is surrendered to the kernel. `wm_reside_test`
+proves the reservation: a program stamps `WMBASE`, a second *full-TPA* app
+(running a real call chain) runs and exits, and the stamp is intact.
 
-The current 36 KB C `desk` still runs normally in the *full* TPA (it ignores
-`WMBASE`); it is superseded by the resident kernel, not broken by it.
+The 36 KB C `desk` also runs in the full TPA (it ignores `WMBASE`); it is
+superseded by the resident kernel, not broken by it — and since the kernel is
+no longer at `$D800`, a large desk no longer collides with it. (Staged
+relocation off `$D800`, 2026-09-07; a later step folds the kernel into the OS
+image as syscalls, freeing even the reserve.)
 
 ## The card-resident-list lever
 
@@ -118,9 +123,9 @@ Appended to the OS syscall table after `SYS_EXEC` ($2024):
    `lib_ptr`-equivalent parsing in asm (or a small resident C helper the
    kernel calls), focus, drag, close, the menu.
 5. **Launch + resume:** `SYS_EXEC` from inside the loop; the launched app is
-   a WM client (paint recompiled `--cstacktop WMBASE`, drawing into its
-   window's card list); on exit the loop resumes with every other window
-   intact. This is the payoff — desk survives the launch.
+   a WM client (drawing into its window's card list) running in the full TPA;
+   on exit the loop resumes with every other window intact. This is the
+   payoff — desk survives the launch.
 6. **Saved per-window context (the switcher):** each window keeps its app's
    state; focus-switch swaps the active TPA (state-only first, full-TPA-swap
    to disk as the deluxe variant — the two later options from the fork).
@@ -130,9 +135,10 @@ Appended to the OS syscall table after `SYS_EXEC` ($2024):
 - **Kernel event parsing in asm.** `lib_ptr`'s SGR-mouse + arrow parsing is
   ~2 KB of C. In asm it is the biggest single piece; may warrant staying a
   small loaded-high C helper the kernel calls, if the budget allows.
-- **Reduced app stack.** 28 KB TPA minus app code is the C stack; `paint`
-  at 24 KB leaves ~4 KB — enough (its deepest chain measured well under),
-  but every GUI-app addition must watch it, same discipline as CSTACKTOP.
+- **Reduced app stack.** RESOLVED by the `$5600` relocation (2026-09-07): with
+  the kernel *below* the TPA, GUI apps regain the full ~37.9 KB TPA and the
+  normal `CSTACKTOP` (`$F800`) — no per-app `--cstacktop`, same budget as any
+  program. (The old `$D800` design gave apps only 28 KB.)
 - **Kernel loading.** The blob is `/bin/wmkernel.bin` loaded to `WMBASE` on
   first `desk`; it is position-fixed (assembled `--base WMBASE`), not a TPA
   program. A presence byte at `WMBASE` lets `desk` skip reloading.
