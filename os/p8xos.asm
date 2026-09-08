@@ -36,8 +36,10 @@
 ; (start LBA + sector count), so CWD and resolved paths share one code path.
 ; The prompt shows the current path. Verify a volume with p8xfs.py fsck.
 ; RAM layout: OS image $2000..~$5ED7 -- INCLUDING the resident WM kernel
-; (wmkernel_body.asm, syscalls $2027-$204B) -- with growth room to $5F00 (the
-; 16K disk cap is $6000) | tab-complete scratch $5F00..$5FFF | scratch block
+; (wmkernel_body.asm, syscalls $2027-$204B) -- with growth room to $5F70 (the
+; 16K disk cap is $6000) | tab-complete scratch $5F70..$5FFF (packed to the top
+; of its page so the OS can grow into $5F00..$5F6F for the OUTCH->window sink) |
+; scratch block
 ; $6000..$69FF (firmware/BIOS scratch $6000-$60xx, SBUF $6100, OS shell scratch
 ; $6300, IBUF/PATHBUF/APBUF $6500-$69FF) | TPA (programs / RUN / ">" capture)
 ; $6A00..CSTACKTOP $F800 | shell command-history ring $F800..$F9FF (HISTN=8 x 64)

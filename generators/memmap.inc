@@ -241,9 +241,9 @@ HISTNV      = $6090              ; history ring: recall cursor (0 = not navigati
 HISTRING    = $F800              ; history ring buffer base: HISTN x HISTLEN bytes ($F800..$F9FF, the free 512 B above CSTACKTOP; $FA00 = glob page, $FC00 = RDBUF, $FE00 = stack)
 
 ; shell completion
-CMPPFX      = $5F00              ; tab-complete: leaf prefix being completed (NUL-term)
-CMPLCP      = $5F40              ; tab-complete: longest common prefix of the matches (NUL-term)
-CMPDIR      = $5F60              ; tab-complete: directory-part path string, for CDPATH (NUL-term)
+CMPPFX      = $5F70              ; tab-complete: leaf prefix being completed (NUL-term, 64)
+CMPLCP      = $5FB0              ; tab-complete: longest common prefix of the matches (NUL-term, 16)
+CMPDIR      = $5FC0              ; tab-complete: directory-part path string, for CDPATH (NUL-term, 64)
 CMPPL       = $6091              ; tab-complete: length of the typed leaf prefix
 CMPCNT      = $6092              ; tab-complete: number of matches (saturates at 255)
 CMPFW       = $6093              ; tab-complete: 1 = completing the command word (first word)
