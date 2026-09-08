@@ -37,6 +37,7 @@
 //#define SYS_WKARG    0x2042    /* payload of the last SYS_WKEVENT: the key byte (event 1) or the click column (event 2) */
 //#define SYS_WKGET    0x2045    /* A = window index, P1 = dest buffer -> copy its 22-byte record (x,y,w,h LE, list, tlen, title(12)) */
 //#define SYS_WKTOP    0x2048    /* A = the top (focused) window index, or 99 if none */
+//#define SYS_WKRAISE  0x204B    /* A = window index -> raise it to the top (focus it); client repaints */
 
 /* BIOS jump table ($01xx): low-level console + file-stream primitives. The read
  * (FOPEN/FGETB) and write (FWOPEN/FPUTB/FCLOSE) streams are separate single-file

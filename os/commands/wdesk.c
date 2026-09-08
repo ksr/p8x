@@ -22,8 +22,15 @@
  *   TERM    a command line with scrollback: when focused, type a program
  *           name and ENTER launches it with -w (the shell's resolver:
  *           bare name -> /bin, ".bin" appended). l/c/q TYPE here.
- *   FILES   a directory browser: n/p select, ENTER opens (navigate a dir
- *           or launch a .BIN). Drawn only while it is the focused window.
+ *   FILES   a directory browser: n/p select, ENTER opens (navigate a dir,
+ *           launch a .BIN, or show a .p8i in VIEW). Drawn while focused.
+ *   VIEW    a picture window: opening a .p8i from FILES opens VIEW sized to
+ *           the image (or re-fronts an existing one via SYS_WKRAISE) and
+ *           streams the pixels in, one BLIT per row.
+ *
+ * Windows are addressed by TITLE letter (S/T/F/V), never by array index --
+ * the kernel reorders records on a focus change (k_raise); the title is
+ * stable. SYS_WKRAISE (a kernel z-order primitive) focuses a window by index.
  *
  * -r  RESUME: the windows are already in the kernel (a launched app is
  *     coming back), so skip init/open -- just redraw and re-enter the loop.
@@ -55,11 +62,15 @@ char tbuf[32];                     /* scratch: build "$ cmd" for the echo */
 int  thn;                          /* scrollback lines in use (0..5) */
 int  tlen;                         /* length of the input line */
 
+char vpath[68];                    /* the .p8i image the VIEW window shows */
+int  vw;                           /* its pixel width  (from the header) */
+int  vh;                           /* its pixel height */
+
 /* Windows are identified by the FIRST LETTER of their title, NOT by array
  * index: the kernel PHYSICALLY REORDERS records when a window is raised
  * (k_raise), so an index does not track a given window across a focus change.
  * The title rides in the record (the kernel only displays it) and is stable.
- *   'S' SHAPES  (kernel-drawn: a card list)   'T' TERM   'F' FILES  */
+ *   'S' SHAPES (kernel-drawn card list)  'T' TERM  'F' FILES  'V' VIEW  */
 
 int gp(int v) { while (peek(GLSTAT) & 128) { } poke(GLDATA, v); return 0; }
 int gw(int v) { gp(v & 255); gp((v / 256) & 255); return 0; }
@@ -206,10 +217,11 @@ int pup() {                                            /* cpath: strip a compone
     return 0;
 }
 
-int ftype(char *s) {                                   /* 2 = .BIN (case-blind) */
+int ftype(char *s) {                                   /* 1 = .P8I, 2 = .BIN (case-blind) */
     int n; n=0; while (s[n]) { n=n+1; }
     if (n < 4) { return 0; }
     if (s[n-4] != '.') { return 0; }
+    if ((s[n-3]&95)=='P' && s[n-2]=='8' && (s[n-1]&95)=='I') { return 1; }
     if ((s[n-3]&95)=='B' && (s[n-2]&95)=='I' && (s[n-1]&95)=='N') { return 2; }
     return 0;
 }
@@ -226,10 +238,50 @@ int launchw(char *p) {
     return 1;
 }
 
+/* find an open window by its title letter -> its CURRENT index, or 99 if none.
+ * Indices shift as windows are raised, so this scans every slot each time (the
+ * counterpart to title-dispatch: it is how the client turns a title back into
+ * the index SYS_WKRAISE needs). Clobbers frec[]. */
+int win_index(int letter) {
+    int i; int top;
+    top = bios(SYS_WKTOP, 0, 0);                        /* = wcnt-1, or 99 */
+    if (top == 99) { return 99; }
+    i = 0;
+    while (i <= top) {
+        bios(SYS_WKGET, frec, i);
+        if ((frec[10]&255) == letter) { return i; }
+        i = i + 1;
+    }
+    return 99;
+}
+
+/* open a .p8i into the VIEW window. Reads the 10-byte header for the picture
+ * size, then opens VIEW sized to it (the 4th window -> added on top, focused)
+ * or -- if a VIEW window already exists -- RAISES it (SYS_WKRAISE) and reuses
+ * it. view_body() streams the pixels on each repaint while VIEW is focused. */
+int view_open(char *nm) {
+    int w2; int h2; int vi;
+    pjoin(vpath, cpath, nm);
+    bios(FRESOLVE, vpath, 0);
+    if (bios(FOPEN, RDBUF, 0) & 256) { vpath[0]=0; return 0; }
+    bios(FGETB,0,0); bios(FGETB,0,0);                  /* P 8            */
+    bios(FGETB,0,0); bios(FGETB,0,0);                  /* I version      */
+    w2 = bios(FGETB,0,0)&255; w2 = w2 + (bios(FGETB,0,0)&255)*256;
+    h2 = bios(FGETB,0,0)&255; h2 = h2 + (bios(FGETB,0,0)&255)*256;
+    if (w2==0 || h2==0 || w2>456 || h2>240) { vpath[0]=0; return 0; }
+    vw = w2; vh = h2;
+    vi = win_index('V');
+    if (vi == 99) { setw(20, 20, w2+2, h2+15, 0, "VIEW"); }  /* open it (4th) */
+    else { bios(SYS_WKRAISE, 0, vi); }                       /* re-front it   */
+    bios(SYS_WKREPAINT, 0, 0);
+    redraw();
+    return 0;
+}
+
 /* open the selected entry: navigate a directory, or launch a .BIN (chained
  * with -w so a WM-aware app resumes the desktop; others just exit to the shell) */
 int files_open() {
-    char *nm;
+    char *nm; int t;
     if (fsel >= fcnt) { return 0; }
     nm = fnam + fsel*13;
     if (fdir[fsel]) {
@@ -238,11 +290,13 @@ int files_open() {
         files_scan();
         return 0;
     }
-    if (ftype(nm) == 2) {                              /* a .BIN -> launch it */
+    t = ftype(nm);
+    if (t == 2) {                                      /* a .BIN -> launch it */
         pjoin(fpath, cpath, nm);
         launchw(fpath);                                /* becomes it; no return */
     }
-    return 0;                                          /* non-.BIN: ignore */
+    else if (t == 1) { view_open(nm); }                /* a .p8i -> show in VIEW */
+    return 0;                                          /* anything else: ignore */
 }
 
 /* FILES key handling (only when FILES is the focused window): n/p move the
@@ -338,6 +392,45 @@ int term_key(int key) {
     return 0;
 }
 
+/* stream the .p8i into the VIEW window body: skip the 10-byte header, then one
+ * BLIT per row (bytes streamed verbatim), anchored in window-LOCAL coords so the
+ * picture rides wherever the window is dragged -- desk's drawview, into a kernel
+ * window. Re-read from disk each repaint (no framebuffer), exactly as desk does. */
+int view_body() {
+    int x; int y; int w; int h; int cw; int ch; int py; int n; int r;
+    x = (frec[0]&255) + (frec[1]&255)*256;
+    y = (frec[2]&255) + (frec[3]&255)*256;
+    w = (frec[4]&255) + (frec[5]&255)*256;
+    h = (frec[6]&255) + (frec[7]&255)*256;
+    cw = w - 2; ch = h - 15;
+    gp(179); gw(0); gw(cw-1); gw(0); gw(ch-1);                 /* WINDOW local  */
+    gp(178); gw(x+1); gw(x+cw); gw(271-(y+ch)); gw(271-(y+1)); /* VWPORT rect   */
+    if (vpath[0] == 0) {                                       /* nothing loaded */
+        gp(6); gp(31); gp(63); gp(31);
+        gp(18); gw(4); gw(ch-13); gw(0);
+        gp(128); gp(16); gp('o'); gp('p'); gp('e'); gp('n'); gp(' ');
+        gp('a'); gp(' '); gp('.'); gp('p'); gp('8'); gp('i'); gp(' ');
+        gp('i'); gp('n'); gp(' '); gp('F');
+        camfull(); return 0;
+    }
+    bios(FRESOLVE, vpath, 0);
+    if (bios(FOPEN, RDBUF, 0) & 256) { camfull(); return 0; }
+    py = 0; while (py < 10) { bios(FGETB, 0, 0); py = py + 1; }   /* the header */
+    py = 0;
+    while (py < vh) {
+        gp(100); gw(0); gw(vh-1-py); gw(vw); gw(1);            /* BLIT 0,y,vw,1 */
+        n = vw + vw;                                           /* 2 bytes/pixel */
+        while (n) {
+            r = bios(FGETB, 0, 0);
+            if (r & 256) { gp(0); } else { gp(r & 255); }
+            n = n - 1;
+        }
+        py = py + 1;
+    }
+    camfull();
+    return 0;
+}
+
 /* draw the FOCUSED window's client content. Reads the top window's record and
  * dispatches on its title letter -- only the focused window gets client content,
  * so the overlay never paints over a window stacked above it. Windows the kernel
@@ -348,6 +441,7 @@ int content_draw() {
     bios(SYS_WKGET, frec, top);
     if ((frec[10]&255) == 'T') { term_body(); }
     else if ((frec[10]&255) == 'F') { files_body(); }
+    else if ((frec[10]&255) == 'V') { view_body(); }
     return 0;
 }
 

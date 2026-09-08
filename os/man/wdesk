@@ -104,6 +104,22 @@ WINDOWS
              re-reads the directory into wdesk's own cache; the SHAPES
              card list is untouched, so both windows keep their content.
 
+             ENTER on a .P8I image opens it in the VIEW window (below).
+    VIEW     a picture window. It is not there at first; opening a .P8I
+             from FILES opens VIEW sized to the image and streams the
+             picture into it (one card BLIT per row, the desk viewer moved
+             into a kernel window). Opening another .P8I while VIEW is up
+             re-fronts the same window (the kernel's SYS_WKRAISE) and shows
+             the new picture. CLOSE (the menu, the C key, or the title-bar
+             box) removes it. The image is re-streamed from disk on each
+             repaint -- there is no framebuffer -- so dragging VIEW is slow.
+
+    Windows are addressed by the FIRST LETTER of their title (S/T/F/V), not
+    by position: the kernel physically reorders the window records when one
+    is raised, so wdesk reads the focused window's record and dispatches on
+    its title -- which is why focus, content and keys always follow the
+    right window.
+
 NOTES
     This is the resident-kernel rung of the window-system ladder
     (docs/p8x-wm-design.md). The full-featured standalone `desk` -- menus,

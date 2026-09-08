@@ -259,7 +259,27 @@ Appended to the OS syscall table after `SYS_EXEC` ($2024):
     and submit each change the frame) plus a pixel check that the white
     scrollback GROWS when a command is submitted (SHAPES has no white and TERM
     is on top of its region, so that white is TERM's own).
-13. **Saved per-window context (the switcher):** each window keeps its app's
+13. **VIEW — a picture window — DONE 2026-09-07 — and a small kernel primitive,
+    `SYS_WKRAISE`.** Opening a `.p8i` from FILES opens a VIEW window sized to the
+    image and streams the picture into its body, one card `BLIT` per row — desk's
+    `drawview`, moved into a kernel window via the rung-10 content model (`WINDOW`/
+    `VWPORT` to the body, re-read from disk each repaint, no framebuffer). VIEW is
+    the on-demand 4th window (`MAXWIN` is 4): the first `.p8i` opens it (added on
+    top = focused); a later `.p8i` re-fronts the *same* window. That re-front is
+    the one thing the client could not do — z-order is the kernel's, and only
+    `SYS_WKEVENT`'s TAB raised anything — so this rung adds **`SYS_WKRAISE`**
+    (`$204B`): `A` = window index → raise it to top. It just exposes the existing
+    internal `k_raise`, so it is ~7 bytes (OS ends `$5EAA`, 86 B before the
+    `$5F00` ceiling). The client turns a *title* back into the *index* the syscall
+    needs with `win_index()` (scan the records for the title letter) — the exact
+    inverse of title-dispatch. Adding a z-order primitive to the kernel is
+    on-strategy (mechanism in the kernel, policy — *which* window — in the
+    client), unlike the UI, which stays out. `c_wview_test` opens a 40×30 green
+    `.p8i` and asserts ~1200 green pixels appear inside a VIEW window that was not
+    there before. Note the cost model: with no framebuffer the image re-streams
+    from disk on every repaint, so dragging VIEW is slow — a per-window content
+    cache is a later refinement.
+14. **Saved per-window context (the switcher):** each window keeps its app's
    state; focus-switch swaps the active TPA (state-only first, full-TPA-swap
    to disk as the deluxe variant — the two later options from the fork).
 

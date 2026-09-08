@@ -357,6 +357,14 @@ wk_top: LDA  wcnt
 wkt_no: LDA  #99
         CLC
         RTS
+
+; ==== wk_raise : SYS_WKRAISE ($204B) -- raise window (A) to the top (focus it) =
+; z-order is the kernel's job, so a "focus window N" primitive belongs here (the
+; client picks WHICH window by title, then asks the kernel to raise that index).
+; k_raise already exists for TAB/mouse; this just exposes it. Client repaints.
+wk_raise:JSR  k_raise                    ; A = window index -> reorder to top slot
+        CLC                             ; clean return (no stray carry for bios)
+        RTS
 kpath:  .ascii "/bin/wapp.bin"          ; 13 + NUL + 10 pad = a 24-byte buffer
         .byte 0
         .fill 10
