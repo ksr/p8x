@@ -35,8 +35,8 @@
 ; A file/dir argument may be a path; directory scanning works on any extent
 ; (start LBA + sector count), so CWD and resolved paths share one code path.
 ; The prompt shows the current path. Verify a volume with p8xfs.py fsck.
-; RAM layout: OS image $2000..~$5B4C -- INCLUDING the resident WM kernel
-; (wmkernel_body.asm, syscalls $2027-$2036) -- with growth room to $5F00 (the
+; RAM layout: OS image $2000..~$5ED7 -- INCLUDING the resident WM kernel
+; (wmkernel_body.asm, syscalls $2027-$204B) -- with growth room to $5F00 (the
 ; 16K disk cap is $6000) | tab-complete scratch $5F00..$5FFF | scratch block
 ; $6000..$69FF (firmware/BIOS scratch $6000-$60xx, SBUF $6100, OS shell scratch
 ; $6300, IBUF/PATHBUF/APBUF $6500-$69FF) | TPA (programs / RUN / ">" capture)
@@ -5141,6 +5141,8 @@ MHELP:   .byte CR,LF
          .byte CR,LF
          .ascii "graphics      tri/rotate/camera/cube/gl in /bin -- man gl, man basic"
          .byte CR,LF
+         .ascii "desk / wdesk  the windowed GUI -- man wdesk"
+         .byte CR,LF
          .ascii "mkdir path    create a subdirectory"
          .byte CR,LF
          .ascii "name args     run a program by bare name, found on PATH (/bin)"
@@ -5273,5 +5275,5 @@ MK_ECYC: .byte CR,LF
 
 ; ===========================================================================
 ; Resident window-manager kernel -- folded into the OS image, reached via
-; the syscall table above ($2027-$2036). GLDATA/GLSTAT come from memmap.inc.
+; the syscall table above ($2027-$204B). GLDATA/GLSTAT come from memmap.inc.
         .include "wmkernel_body.asm"

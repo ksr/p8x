@@ -568,6 +568,16 @@ Nothing below has been built or measured.
       then run the full suite -- and ADD the missing test: history recall
       after a globbing command. The OS region's spare 907 B is not 1 KB.
       Judged invasive for the gain on 2026-09-07; 8 lines shipped instead.
+- [ ] **wdesk VIEW: cache the picture instead of re-streaming per repaint
+      (2026-09-07).** `view_body()` re-opens the `.p8i` and streams every
+      row from disk (FGETB) on EVERY kernel repaint while VIEW is focused,
+      exactly as desk's `drawview` does -- there is no framebuffer. So
+      dragging the VIEW window (each drag step is a repaint) re-reads the
+      whole file from CF, which is slow for a large image. Options: keep a
+      dirty flag and redraw content only when it actually changed (not on a
+      bare move), or decode the image once into a RAM/card scratch and
+      BLIT from there. Cosmetic (correctness is fine); revisit if VIEW gets
+      real use. See docs/p8x-wm-design.md rung 13.
 - [ ] **PS/2 keyboard + mouse card (2026-09-04, user; the sketch).**
       A TTL bus card giving the machine native human input -- and,
       with the LCD-as-a-terminal entry, a fully HEAD-DOWN P8X: panel,

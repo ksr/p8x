@@ -36,8 +36,8 @@ kernel needs **no loading at all**: it is part of the OS image, resident from
 boot, reached through the OS syscall table.
 
 ```
-  $2000            OS (resident) — INCLUDING the WM kernel (syscalls $2027-$2036)
-  $5B4C            end of the OS+kernel image (~950 B growth room)
+  $2000            OS (resident) — INCLUDING the WM kernel (syscalls $2027-$204B)
+  $5ED7            end of the OS+kernel image (~41 B growth room)
   $5F00            tab-complete scratch (256 B)
   $6000            OS/BIOS scratch
   $6A00  TPABASE   ── full TPA for apps ($6A00..CSTACKTOP, ~37.9 KB) ──

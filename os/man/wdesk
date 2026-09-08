@@ -122,11 +122,14 @@ WINDOWS
 
 NOTES
     This is the resident-kernel rung of the window-system ladder
-    (docs/p8x-wm-design.md). The full-featured standalone `desk` -- menus,
-    close boxes, the FILES browser, the live TERM, the VIEW picture
-    window -- is unchanged and still the richer desktop today; those
-    features migrate into the kernel in later rungs. Boot is unchanged:
-    monitor, B, the shell -- the GUI is opt-in by command.
+    (docs/p8x-wm-design.md). The window manager lives in the OS; the rich
+    UI -- the menu bar and the TERM, FILES and VIEW windows -- lives here in
+    the CLIENT, so the two grow independently. The older standalone `desk`
+    keeps its whole GUI inside one program (WM and app share the TPA, so
+    launching an app destroys the desktop); it is unchanged and still a
+    useful reference, but wdesk is the successor built on the resident
+    kernel. Boot is unchanged: monitor, B, the shell -- the GUI is opt-in
+    by command.
 
     A program launched by the kernel gets the arguments in the SYS_WKPATH
     string. paint understands -w (resume the resident desktop on quit)

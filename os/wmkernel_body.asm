@@ -3,6 +3,9 @@
 ; OS syscall table right after SYS_EXEC:
 ;   $2027 SYS_WKINIT   $202A SYS_WKOPEN   $202D SYS_WKREPAINT
 ;   $2030 SYS_WKRUN    $2033 SYS_WKSAVE   $2036 SYS_WKLOAD
+;   $2039 SYS_WKPATH   $203C SYS_WKEVENT  $203F SYS_WKCLOSE
+;   $2042 SYS_WKARG    $2045 SYS_WKGET    $2048 SYS_WKTOP
+;   $204B SYS_WKRAISE
 ; So it is resident from boot and needs no loading. No .org and no equates here
 ; -- GLDATA/GLSTAT come from memmap.inc via the OS. All code is label-relative.
 ; (A standalone .org'd harness once loaded this as a blob at $D800, then $5600;

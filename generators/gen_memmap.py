@@ -27,8 +27,9 @@ MAP = [
     ('memory-region anchors', 'CSTACKTOP', 0xF800, 'compiler C-stack top (grows down; p8cc __csp init)'),
     # Resident window-manager kernel: there is NO separate base address any more.
     # It is folded into the OS image (os/p8xos.asm .includes os/wmkernel_body.asm)
-    # and reached through the OS syscall table, $2027..$2036 (SYS_WKINIT, WKOPEN,
-    # WKREPAINT, WKRUN, WKSAVE, WKLOAD), so it is always resident from boot and
+    # and reached through the OS syscall table, $2027..$204B (SYS_WKINIT, WKOPEN,
+    # WKREPAINT, WKRUN, WKSAVE, WKLOAD, WKPATH, WKEVENT, WKCLOSE, WKARG, WKGET,
+    # WKTOP, WKRAISE), so it is always resident from boot and
     # needs no loading. Apps keep the FULL TPA $6A00..CSTACKTOP. (History: a
     # standalone blob lived at $D800 above the TPA, then at $5600 -- both retired;
     # $5600 sat inside the shell history ring, which is why the ring moved.)
@@ -282,7 +283,7 @@ MAP = [
     # is RDBUF (the shared file-read buffer), and $FE00..$FEFF is the P3 stack.
     # (History: 32 slots at $5800..$5FFF inside the "OS growth reserve" -- which
     # was never free either: once the WM kernel was folded into the OS image
-    # (ending ~$5B4C) every typed command line overwrote live kernel code. A first
+    # (ending ~$5B4C then) every typed command line overwrote live kernel code. A first
     # move to 16 slots at $F800..$FBFF then collided with the FSDIRBUF page. Two
     # lessons: grep THIS file for anchors AND the C libs for 0x... literals before
     # calling any region free.) State bytes sit in the free tail of the $6000
