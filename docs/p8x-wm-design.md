@@ -283,6 +283,69 @@ Appended to the OS syscall table after `SYS_EXEC` ($2024):
    state; focus-switch swaps the active TPA (state-only first, full-TPA-swap
    to disk as the deluxe variant — the two later options from the fork).
 
+## Per-window command output — the OUTCH→window sink (design, 2026-09-08)
+
+The endgame: type `dir` (or `cat`, `wc`, any text command) in a window and see
+its output **in that window**, with ZERO changes to the command. This is the
+"real TERM" the launcher-TERM (rung 12) stands in for. It is a multi-rung OS
+change; this section fixes the architecture so the rungs are well-founded.
+
+**The stdout seam already exists.** Every text command writes through the OS's
+`OUTCH` ($2009 `SYS_PUTC`), which already branches on `REDIRF`: 0 = console
+(ACIA), 1 = append to a RAM capture buffer at `RPTR`, 2 = stream to an open
+file (`FPUTB`). Adding a **mode 3 = "draw into the active window"** is the whole
+idea — every command then renders in a window through the same seam it already
+uses, unchanged.
+
+**The scrollback is the card list, not CPU RAM.** The naïve worry — per-window
+scrollback buffers (~250 B × 4 windows) in a machine with no spare RAM — is a
+non-problem, because the kernel already **replays each window's card list on
+every repaint** (`wkd_cnt: if klist!=0 CLRUN klist` — this is how SHAPES draws).
+So mode 3 does not buffer text in RAM; it **records `MOVE3`+`TEXT` into the
+window's card list** as bytes arrive. The card retains it; a repaint replays it;
+persistence is free. Per-window state shrinks to a tiny **cursor** (col, row,
+list-id) — a handful of bytes in a small kernel table, not a record blow-up.
+Scrolling past the window bottom is the one hard case (card lists do not scroll);
+v1 wraps and, on overflow, clears the list and restarts at the top (a simple
+"screen-full then clear" terminal), with a real scroll a later refinement.
+
+**Control flow — the script-chain, so wdesk stays the client.** The wall is
+`SYS_EXEC`: it BECOMES the command, so control returns to the shell, not to
+wdesk. Rather than move the desktop loop into the OS shell (which would undo the
+kernel-lean/client-rich split we just built), wdesk chains through the OS's
+existing **script mode** (`SCRIPTM`, the `sh` machinery): on TERM ENTER it (1)
+points the sink at the TERM window (mode 3, cursor home), (2) writes a two-line
+script — `<cmd>` then `run /bin/wdesk.bin -o` — and (3) hands the shell that
+script and returns. The shell runs the command (its `OUTCH` bytes record into
+the window's list) then re-execs wdesk, which resumes with the output already on
+the card. wdesk stays the desktop driver; the OS gains only the sink. (Cost: the
+screen shows the command run on the desktop, not live-in-window mid-run — output
+appears when wdesk resumes. Acceptable for v1; true live rendering needs the
+shell itself WM-aware, a later fork.)
+
+**The budget wall is the real prerequisite.** Mode-3 code (record a glyph, wrap,
+newline, clear-on-overflow) is ~80–120 B and MUST be OS-resident (it runs while
+the command owns the TPA, so it cannot live in wdesk). The OS ends `$5ED7`, only
+~41 B before the `$5F00` tab-complete scratch. So the first rung frees room by
+relocating that scratch (`CMPPFX`/`CMPLCP`/`CMPDIR`, three strings at `$5F00`)
+down into the `$6000` BIOS/FS scratch page (or folding them into existing
+buffers), lifting the ceiling ~256 B. This is invasive (the completion code
+names those addresses) and gated on the full suite + a tab-complete test.
+
+**Slice plan (each a shippable, tested rung):**
+- **15a — reclaim OS budget.** Relocate the tab-complete scratch off `$5F00`;
+  prove tab-complete still works; the OS now has ~256 B of head-room.
+- **15b — the sink (mode 3).** Add `REDIRF=3` to `OUTCH`: record `MOVE3`+`TEXT`
+  into a target window's card list at a cursor; handle space/newline/wrap and
+  clear-on-overflow. A new syscall arms it: `SYS_WKSINK` (window index → set
+  sink, home the cursor) / disarm. Test in isolation: arm it, `SYS_PUTS` a
+  string, assert the glyphs land in the window and survive a repaint.
+- **15c — wire TERM through the script-chain.** wdesk TERM ENTER arms the sink,
+  writes the `<cmd>` + `wdesk -o` script, hands it to the shell; `wdesk -o`
+  resumes. `dir`, `cat FOO.TXT`, `wc` now render in the TERM window.
+- **15d (later) — real scroll**, and eventually a shell-WM path for live
+  mid-command rendering.
+
 ## Risks / open questions
 
 - **Kernel event parsing in asm.** `lib_ptr`'s SGR-mouse + arrow parsing is
