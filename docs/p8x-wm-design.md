@@ -235,7 +235,31 @@ Appended to the OS syscall table after `SYS_EXEC` ($2024):
     sentinel and an explicit `a < 3` test (in both the key branch and the
     bar-click branch, and `act_at` returns `99`). `c_wfiles_test` now also
     asserts the selection moves on `n` and that `ENTER` changes the listing.
-12. **Saved per-window context (the switcher):** each window keeps its app's
+12. **TERM — a command line in a client-drawn window — DONE 2026-09-07 — and
+    windows are now addressed by TITLE, not index.** TERM is a scrollback
+    (5 lines) plus an input line, drawn by `wdesk` in its window body exactly
+    like FILES. While TERM is focused it owns the whole keyboard (so `l`/`c`/`q`
+    type, they do not fire the menu — the bar stays clickable); `ENTER` runs the
+    typed line, resolved the way the shell resolves a bare command (absolute
+    path as typed, else `/bin/<name>`, `.bin` appended when missing) and
+    launched with `-w`, so a WM-aware app resumes the desktop and a failed exec
+    shows `?EXEC`. It is a launcher with history, like desk's TERM — `SYS_EXEC`
+    *becomes* the program, so TERM does not capture a program's output (that is
+    the per-window tty, a separate later rung). **The rung forced a real fix:**
+    `k_raise` PHYSICALLY REORDERS the window records, so a fixed array index
+    (`files_win = 1`) does not track a given window across any focus change —
+    the rung-10/11 FILES code only worked because its test never changed focus
+    first. wdesk now identifies the focused window by the FIRST LETTER of its
+    title (`S`/`T`/`F`), which rides in the record and is stable across
+    reorders: `content_draw()` reads the top window's record (`SYS_WKGET` of
+    `SYS_WKTOP`) and dispatches on `title[0]`, and the key router does the same.
+    This both enables TERM and fixes the latent FILES-after-TAB bug. Three
+    windows now (SHAPES/TERM/FILES) against the kernel's `MAXWIN` 4, no kernel
+    change. `c_wterm_test` proves it by frame-hash differentials (focus, typing
+    and submit each change the frame) plus a pixel check that the white
+    scrollback GROWS when a command is submitted (SHAPES has no white and TERM
+    is on top of its region, so that white is TERM's own).
+13. **Saved per-window context (the switcher):** each window keeps its app's
    state; focus-switch swaps the active TPA (state-only first, full-TPA-swap
    to disk as the deluxe variant — the two later options from the fork).
 

@@ -16,6 +16,15 @@
  * re-execs "wdesk -r", which redraws the SAME resident windows AND this
  * menu bar. The desktop survives; nothing is reloaded.
  *
+ * WINDOWS (all client-drawn where they carry live content -- the kernel
+ * only hands over each window's rect via SYS_WKGET/SYS_WKTOP):
+ *   SHAPES  a demo scene recorded into a card list (the card replays it)
+ *   TERM    a command line with scrollback: when focused, type a program
+ *           name and ENTER launches it with -w (the shell's resolver:
+ *           bare name -> /bin, ".bin" appended). l/c/q TYPE here.
+ *   FILES   a directory browser: n/p select, ENTER opens (navigate a dir
+ *           or launch a .BIN). Drawn only while it is the focused window.
+ *
  * -r  RESUME: the windows are already in the kernel (a launched app is
  *     coming back), so skip init/open -- just redraw and re-enter the loop.
  *
@@ -39,7 +48,18 @@ char cpath[64];                    /* the FILES current directory path */
 char fpath[68];                    /* scratch: a full path + " -w" to open */
 int  fcnt;                         /* how many names are cached */
 int  fsel;                         /* the selected row (0..fcnt-1) */
-int  files_win;                    /* the FILES window's index */
+
+char thist[150];                   /* TERM scrollback: 5 lines x 30 cols */
+char tline[30];                    /* the TERM input line (being typed) */
+char tbuf[32];                     /* scratch: build "$ cmd" for the echo */
+int  thn;                          /* scrollback lines in use (0..5) */
+int  tlen;                         /* length of the input line */
+
+/* Windows are identified by the FIRST LETTER of their title, NOT by array
+ * index: the kernel PHYSICALLY REORDERS records when a window is raised
+ * (k_raise), so an index does not track a given window across a focus change.
+ * The title rides in the record (the kernel only displays it) and is stable.
+ *   'S' SHAPES  (kernel-drawn: a card list)   'T' TERM   'F' FILES  */
 
 int gp(int v) { while (peek(GLSTAT) & 128) { } poke(GLDATA, v); return 0; }
 int gw(int v) { gp(v & 255); gp((v / 256) & 255); return 0; }
@@ -136,14 +156,13 @@ int files_scan() {
     return 0;
 }
 
-/* draw the cached listing INSIDE the FILES window, but only when FILES is the
- * top (focused) window -- then its content, drawn after the kernel's repaint,
- * correctly sits on top. SYS_WKGET gives the rect; WINDOW/VWPORT map the body
- * to window-LOCAL coords (the card clips to it), exactly desk's lib_wm idiom. */
-int files_draw() {
+/* draw the cached listing INSIDE the FILES window body. The caller has already
+ * fetched the focused window's record into frec[] and dispatched here because it
+ * is the FILES window; content_draw() draws only the FOCUSED window, so this
+ * overlay (after the kernel's repaint) correctly sits on top. WINDOW/VWPORT map
+ * the body to window-LOCAL coords (the card clips to it), desk's lib_wm idiom. */
+int files_body() {
     int x; int y; int w; int h; int cw; int ch; int row; int j; int k; char *s;
-    if (bios(SYS_WKTOP, 0, 0) != files_win) { return 0; }
-    bios(SYS_WKGET, frec, files_win);
     x = (frec[0]&255) + (frec[1]&255)*256;
     y = (frec[2]&255) + (frec[3]&255)*256;
     w = (frec[4]&255) + (frec[5]&255)*256;
@@ -195,10 +214,22 @@ int ftype(char *s) {                                   /* 2 = .BIN (case-blind) 
     return 0;
 }
 
+/* append " -w" to a path and launch it. SYS_EXEC BECOMES the program, so on
+ * success this never returns; the -w tells a WM-aware app (paint, wdesk) to
+ * resume this desktop on quit. Returns 1 only if the exec failed. Shared by
+ * the FILES opener and the TERM command line. */
+int launchw(char *p) {
+    int j;
+    j = 0; while (p[j]) { j = j + 1; }
+    p[j]=' '; p[j+1]='-'; p[j+2]='w'; p[j+3]=0;
+    bios(SYS_EXEC, p, 0);
+    return 1;
+}
+
 /* open the selected entry: navigate a directory, or launch a .BIN (chained
  * with -w so a WM-aware app resumes the desktop; others just exit to the shell) */
 int files_open() {
-    char *nm; int j;
+    char *nm;
     if (fsel >= fcnt) { return 0; }
     nm = fnam + fsel*13;
     if (fdir[fsel]) {
@@ -209,9 +240,7 @@ int files_open() {
     }
     if (ftype(nm) == 2) {                              /* a .BIN -> launch it */
         pjoin(fpath, cpath, nm);
-        j = 0; while (fpath[j]) { j=j+1; }
-        fpath[j]=' '; fpath[j+1]='-'; fpath[j+2]='w'; fpath[j+3]=0;
-        bios(SYS_EXEC, fpath, 0);                      /* becomes it; no return */
+        launchw(fpath);                                /* becomes it; no return */
     }
     return 0;                                          /* non-.BIN: ignore */
 }
@@ -225,8 +254,105 @@ int files_key(int key) {
     return 0;
 }
 
+/* --- TERM: a command line with scrollback, drawn in its own window ---------- */
+
+/* push one line into the scrollback ring (5 lines). When full, scroll up. */
+int tpush(char *s) {
+    int i; int k;
+    if (thn >= 5) {                                    /* full -> scroll up one */
+        i = 0; while (i < 4*30) { thist[i]=thist[i+30]; i=i+1; }
+        thn = 4;
+    }
+    k = thn*30;
+    i = 0; while (s[i] && i < 29) { thist[k+i]=s[i]; i=i+1; }
+    thist[k+i]=0;
+    thn = thn + 1;
+    return 0;
+}
+
+/* resolve a typed name the way the shell does -- an absolute path as typed,
+ * a bare name against /bin, ".bin" appended when missing -- then launch it
+ * with -w (so a WM-aware app resumes us). Returns 1 only if the exec failed. */
+int runbin(char *c) {
+    int i;
+    if (c[0]=='/') { scopy(fpath, c, 60); } else { pjoin(fpath, "/bin", c); }
+    if (ftype(fpath) != 2) {                           /* no ".bin" -> append it */
+        i = 0; while (fpath[i]) { i = i + 1; }
+        fpath[i]='.'; fpath[i+1]='b'; fpath[i+2]='i'; fpath[i+3]='n'; fpath[i+4]=0;
+    }
+    return launchw(fpath);                             /* becomes it on success */
+}
+
+/* draw the scrollback + the input line inside the TERM window body. Like
+ * files_body, the caller has already put the focused window's record in frec[]
+ * (same content model: WINDOW/VWPORT to the body so the card clips, restore
+ * identity after). */
+int term_body() {
+    int x; int y; int w; int h; int cw; int ch; int row; int j; int k; char *s;
+    x = (frec[0]&255) + (frec[1]&255)*256;
+    y = (frec[2]&255) + (frec[3]&255)*256;
+    w = (frec[4]&255) + (frec[5]&255)*256;
+    h = (frec[6]&255) + (frec[7]&255)*256;
+    cw = w - 2; ch = h - 15;
+    gp(179); gw(0); gw(cw-1); gw(0); gw(ch-1);                 /* WINDOW local  */
+    gp(178); gw(x+1); gw(x+cw); gw(271-(y+ch)); gw(271-(y+1)); /* VWPORT rect   */
+    gp(6); gp(31); gp(63); gp(31);                             /* white history */
+    row = 0;
+    while (row < thn) {
+        s = thist + row*30;
+        k = 0; while (s[k]) { k = k + 1; }
+        gp(18); gw(4); gw(ch - 13 - row*13); gw(0);
+        gp(128); gp(k);
+        j = 0; while (j < k) { gp(s[j]); j = j + 1; }
+        row = row + 1;
+    }
+    gp(6); gp(31); gp(63); gp(0);                              /* yellow prompt */
+    gp(18); gw(4); gw(ch - 13 - row*13); gw(0);
+    gp(128); gp(tlen+3);                                       /* "$ " + line + _ */
+    gp('$'); gp(' ');
+    j = 0; while (j < tlen) { gp(tline[j]); j = j + 1; }
+    gp('_');
+    camfull();
+    return 0;
+}
+
+/* TERM key handling (only when TERM is focused): printable keys type into the
+ * line, BACKSPACE deletes, ENTER echoes the line and runs it. Returns 1 when
+ * the caller must redraw. */
+int term_key(int key) {
+    int i;
+    if (key==13 || key==10) {                          /* ENTER: run the line */
+        if (tlen > 0) {
+            tline[tlen]=0;
+            tbuf[0]='$'; tbuf[1]=' ';                  /* echo "$ cmd" to history */
+            i = 0; while (tline[i] && i < 28) { tbuf[2+i]=tline[i]; i=i+1; }
+            tbuf[2+i]=0; tpush(tbuf);
+            runbin(tline);                             /* becomes it on success */
+            tpush("?EXEC");                            /* only if the exec failed */
+        }
+        tlen = 0; tline[0]=0;
+        return 1;
+    }
+    if ((key==8 || key==127) && tlen > 0) { tlen=tlen-1; tline[tlen]=0; return 1; }
+    if (key>=32 && key<=126 && tlen < 28) { tline[tlen]=key; tlen=tlen+1; tline[tlen]=0; return 1; }
+    return 0;
+}
+
+/* draw the FOCUSED window's client content. Reads the top window's record and
+ * dispatches on its title letter -- only the focused window gets client content,
+ * so the overlay never paints over a window stacked above it. Windows the kernel
+ * draws itself (SHAPES, a card list) need nothing here. */
+int content_draw() {
+    int top;
+    top = bios(SYS_WKTOP, 0, 0);
+    bios(SYS_WKGET, frec, top);
+    if ((frec[10]&255) == 'T') { term_body(); }
+    else if ((frec[10]&255) == 'F') { files_body(); }
+    return 0;
+}
+
 /* redraw the client's own layers on top of the kernel's window repaint */
-int redraw() { menubar(); files_draw(); return 0; }
+int redraw() { menubar(); content_draw(); return 0; }
 
 /* one 22-byte window record -> SYS_WKOPEN */
 int setw(int x, int y, int w, int h, int list, char *t) {
@@ -263,22 +389,23 @@ int scene() {
 }
 
 int main() {
-    char *ap; int k; int going; int e; int a;
+    char *ap; int k; int going; int e; int a; int top;
     if (peek(GLID) != 71) { puts("?No display"); return 1; }
     ap = argstr();
     while (*ap == 32) { ap = ap + 1; }
 
-    files_win = 1;                            /* SHAPES is 0, FILES is 1 */
     cpath[0] = '/'; cpath[1] = 0;             /* FILES starts at the root */
     scene();                                  /* card list 30, always */
     files_scan();                             /* read the CWD into fnam[] */
     if (ap[0] != '-' || ap[1] != 'r') {       /* fresh (not a resume) */
         bios(SYS_WKINIT, 0, 0);
-        setw(40, 40, 210, 150, 30, "SHAPES"); /* content = card list 30 */
-        setw(190, 60, 240, 170, 0, "FILES");  /* content = the CWD listing */
+        setw(40, 40, 210, 150, 30, "SHAPES"); /* kernel-drawn card list 30 */
+        setw(70, 100, 300, 150, 0, "TERM");   /* client-drawn command line */
+        setw(190, 60, 240, 170, 0, "FILES");  /* opened last -> top, listing shows */
+        tpush("wdesk term - type a command");
     }
     bios(SYS_WKREPAINT, 0, 0);
-    redraw();                                 /* menu bar + FILES listing */
+    redraw();                                 /* menu bar + focused content */
     puts("WDESK (man wdesk)");
 
     going = 1;
@@ -288,15 +415,22 @@ int main() {
         else if (e == 0) { redraw(); }        /* kernel repainted -> our layers */
         else if (e == 1) {                    /* an unowned key */
             k = bios(SYS_WKARG, 0, 0);
-            a = 99;                            /* 99 = not a menu key (p8cc
+            top = bios(SYS_WKTOP, 0, 0);
+            bios(SYS_WKGET, frec, top);        /* who is focused? (by title) */
+            if ((frec[10]&255) == 'T') {       /* TERM focused: it owns the whole
+                                                  keyboard, so l/c/q type here */
+                if (term_key(k)) { redraw(); }
+            } else {
+                a = 99;                        /* 99 = not a menu key (p8cc
                                                   compares are UNSIGNED, so a
                                                   -1 sentinel tests as >= 0) */
-            if (k == 108 || k == 76) { a = 0; }        /* L = paint  */
-            else if (k == 99 || k == 67) { a = 1; }    /* C = close  */
-            else if (k == 113 || k == 81) { a = 2; }   /* Q = quit   */
-            if (a < 3) { if (act(a)) { going = 0; } }  /* a menu action */
-            else if (bios(SYS_WKTOP, 0, 0) == files_win) {   /* else FILES nav */
-                if (files_key(k)) { redraw(); }              /* n/p/ENTER */
+                if (k == 108 || k == 76) { a = 0; }        /* L = paint  */
+                else if (k == 99 || k == 67) { a = 1; }    /* C = close  */
+                else if (k == 113 || k == 81) { a = 2; }   /* Q = quit   */
+                if (a < 3) { if (act(a)) { going = 0; } }  /* a menu action */
+                else if ((frec[10]&255) == 'F') {          /* else FILES nav */
+                    if (files_key(k)) { redraw(); }        /* n/p/ENTER */
+                }
             }
         }
         else if (e == 2) {                    /* a menu-bar click */

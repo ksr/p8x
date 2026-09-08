@@ -65,6 +65,24 @@ OPTIONS
 
 WINDOWS
     SHAPES   a demo scene recorded into a card list (the card replays it).
+    TERM     a command line with a small scrollback, drawn by wdesk inside
+             the window. While TERM is the focused (top) window it owns the
+             WHOLE keyboard -- so l, c and q TYPE, they do not fire the menu
+             (the menu bar is still clickable). Type a program name and:
+
+                 ENTER       run it. The name is resolved the way the shell
+                             does -- an absolute path as typed, a bare name
+                             against /bin, ".bin" appended when missing -- so
+                             "paint", "paint.bin" and "/bin/cube.bin" all
+                             launch. It is launched with -w, so a WM-aware
+                             app (paint, wdesk) resumes this desktop on quit;
+                             a plain program runs and exits to the shell.
+                             A launch that fails shows "?EXEC".
+                 BACKSPACE   erase the last character of the line.
+
+             SYS_EXEC BECOMES the program, so a successful launch replaces
+             wdesk (the kernel keeps the windows); TERM does not capture a
+             program's output -- it is a launcher with history, as desk's is.
     FILES    a browser for the current directory, drawn by wdesk itself
              inside the window (the kernel gives the rect via SYS_WKGET;
              the client draws the text and clips it to the window body).
