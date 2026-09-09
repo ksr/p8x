@@ -1,0 +1,45 @@
+Matrox PG-Series
+
+
+
+Downloads       
+
+Files are zipped using the latest version of WinZip. If you do not have this version, download a copy from http://www.winzip.com/.
+
+
+
+PLEASE NOTE: NO WINDOWS-NT OR WINDOWS-95 DRIVERS AVAILABLE
+
+FOR THIS PRODUCT LINE.
+
+
+
+Following are all the currently released versions of software. 
+
+1434_100.zip PG Windows 3.1 driver
+
+1131_212.zip PG/PG-2 Diagnostics rev 2.12
+
+1170_210.zip Pg ACAD 10 C7 driver
+
+1363_300.zip PG Acad11 driver rev 3.00
+
+pgacad12.zip PG AutoCAD 12 driver rev 1.0B (beta)
+
+
+
+PG Utilities
+
+1095a800.zip PGM Shell User's Kit DOS rev8.00 (1/2)
+
+1095b800.zip PGM Shell User's Kit DOS rev8.00 (2/2)
+
+1262_100.zip PG LibShell Installation rev1.00 (1/1)
+
+1106_330.zip PG LibShell PGMR Kit/DOS rev3.30 (1/1)
+
+
+
+PG-2 Utilities
+
+pg21281.zip PG-2-1281 utilities

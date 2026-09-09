@@ -72,3 +72,17 @@ __pycache__/
 
 # compiled p8mouse host helper (build from tools/p8mouse.c)
 /p8mouse
+
+# Stray GL-demo scratch left at the repo root by running house/mandrill and
+# dumping (the real house scene asset is tracked at os/house.gl). Regenerable
+# outputs, not sources — keep them out of the tree.
+/HOUSE.DIS.txt
+/HOUSE.GL
+/HOUSE.PGH
+/HOUSE.png
+/Mandrill-Image-on-Synthetic-Surface.ppm.png
+
+# hardware/reference/ is a deliberate, curated archive of external datasheets and
+# firmware — keep everything under it tracked despite the global *.zip / binary
+# ignore rules above.
+!hardware/reference/**
