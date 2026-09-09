@@ -584,6 +584,9 @@ DR_BIND:LDA  INARM              ; stdin "< name": bind it (its FFIND runs BEFORE
         STA  INMODE             ; SYS_GETC now reads the file
 DR_OUT: LDA  REDIRF             ; open the write stream if redirecting output
         JZ   DR_NOIN
+        LDB  #3                 ; mode 3 = the window sink: not a file, run as-is
+        CMP
+        JZ   DR_NOIN            ;   (leave REDIRF=3 armed; the client disarms it)
         JSR  SETCWDDIR          ; overwrite: tombstone any existing target BEFORE
         LDP1 #REDNAME           ;   FWOPEN (FDELETE scans the dir via SBUF, which the
         JSR  FNORM              ;   open stream then claims — so it must run first).
@@ -606,10 +609,10 @@ DR_ARGS:LDA  EXECLO             ; P1 <- exec address
         LDA  EXECHI
         TAP1H
         JSR  (P1)               ; execute; program RTS returns here, P2 = arg tail
-        LDA  REDIRF             ; if streaming to a file, name it + flush + register
-        LDB  #2
-        CMP
-        JNC  DR_NOOUT
+        LDA  REDIRF             ; close+register ONLY a streamed file (REDIRF==2);
+        LDB  #2                 ; the window sink (3) stays armed for the next
+        CMP                     ; command, and capture (1) is flushed by FLUSHRED
+        JNZ  DR_NOOUT
         JSR  SETCWDDIR          ; register the file in the CWD, not root
         LDP1 #REDNAME           ; FNAME = redirect target (set now: the program may
         JSR  FNORM              ; have clobbered the BIOS FNAME via its own FS calls)
@@ -3973,7 +3976,9 @@ GL1:    JSR  CONIN
         CMP                    ; never spans a page, so the low byte is the length.
         JC   GL1               ; C = (len >= 63) -> drop the char, keep reading
         LDA  TMP
-        JSR  OUTCH             ; echo (CONOUT preserves A)
+        JSR  CONOUT            ; echo to the RAW console (never the redirect/sink:
+                              ; typed & script line-echo must not land in a file
+                              ; or, with the window sink armed, in the window)
         STA  (P2)+
         JMP  GL1
 GLTAB:  JSR  DOTAB             ; complete the word at the cursor
@@ -5032,6 +5037,10 @@ APC_RET:RTS
 ; captured bytes [RBUF, RPTR) to the file REDNAME (via SAVECORE), then disarm.
 FLUSHRED:LDA REDIRF
         JZ   FR_RET
+        LDB  #3               ; mode 3 = the window sink (SYS_WKSINK): NOT a file
+        CMP                   ; capture -- leave it ARMED across the prompt so a
+        JZ   FR_RET           ; command's output keeps flowing to the window; the
+                              ; client disarms it (SYS_WKSINK 255), not FLUSHRED.
         LDA  #0
         STA  REDIRF            ; console again (flush errors print normally)
         LDA  RPTRH             ; nothing captured (RPTR still at RBUF)? -> no file

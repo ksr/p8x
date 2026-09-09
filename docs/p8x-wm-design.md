@@ -356,11 +356,25 @@ names those addresses) and gated on the full suite + a tab-complete test.
   window (content = card list 40), prints two lines, disarms, repaints — and the
   text appears ONLY via the kernel's `CLRUN` of the list (recording draws nothing
   live), proving it recorded into the list and persists.
-- **15c — wire TERM through the script-chain.** wdesk TERM ENTER arms the sink,
-  writes the `<cmd>` + `wdesk -o` script, hands it to the shell; `wdesk -o`
-  resumes. `dir`, `cat FOO.TXT`, `wc` now render in the TERM window. Open issue to
-  settle here: whether `REDIRF=3` survives the shell's command dispatch (the shell
-  resets `REDIRF` at the prompt) — the arm may need to move into the script path.
+- **15c-i — the arm survives the shell — DONE 2026-09-08.** The open question was
+  real and had *three* answers, not one: the shell resets/repurposes `REDIRF` per
+  command in three places, all now taught about mode 3. (1) `FLUSHRED` (top of each
+  shell iteration) reset it to 0 — now it leaves `REDIRF=3` armed (the client
+  disarms it, not the prompt). (2) `DR_OUT` treated *any* nonzero `REDIRF` as a
+  file redirect (it opened a write stream to `REDNAME` and forced `REDIRF=2`) — now
+  mode 3 passes through untouched, and the post-command close fires only for an
+  actual streamed file (`REDIRF==2`, was `>=2`). (3) `GETLN`'s line echo went
+  through `OUTCH`, so with the sink armed the *typed/script text* would land in the
+  window — now it echoes to the raw console (`CONOUT`), which is a no-op in every
+  normal case (echo always runs at `REDIRF=0`). ~18 B of OS. `c_wshell_test` arms
+  the sink from a program, returns to the shell, runs the **stock `pwd`**, and
+  shows the window: pwd's output is in it. os_append (`>`/`>>`) and os_argv still
+  pass.
+- **15c-ii — wire wdesk's TERM to it.** TERM ENTER arms the sink at the TERM window
+  (which needs its own card list id), writes a `<cmd>` + `run wdesk -o` script,
+  hands it to the shell's script mode; `wdesk -o` disarms and resumes. This is the
+  client (TPA) half: the TERM window's rendering moves from the client-drawn
+  scrollback to the sink's card list, with the input line as an overlay.
 - **15d (later) — real scroll**, and eventually a shell-WM path for live
   mid-command rendering.
 
