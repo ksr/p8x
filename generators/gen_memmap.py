@@ -330,6 +330,12 @@ MAP = [
     ('console tty state', 'TTYRAW', 0x60A1, '0 = expand a bare LF to CR LF on console output; nonzero = pass bytes through untouched (for binary over the serial link, like stty raw)'),
     ('console tty state', 'TTYLST', 0x60A2, 'last byte PUTC transmitted, so an LF that already follows a CR is not doubled'),
     ('console tty state', 'TTYCH', 0x60A3, "PUTC's saved character (PUTC must preserve A)"),
+
+    # graphics presence: probed once by the monitor at wake (GLID=='G' at $FF54),
+    # re-affirmed by the OS at boot, read by every GL program via has_graphics().
+    # This is the two-mode selector: headless serial console vs. graphics desktop
+    # (see docs/p8x-two-mode-design.md). One shared byte across monitor + OS + programs.
+    ('graphics presence', 'GFXPRES', 0x60A4, '1 = GL card fitted (screen is the display); 0 = headless serial console'),
 ]
 
 HERE = os.path.dirname(os.path.abspath(__file__))

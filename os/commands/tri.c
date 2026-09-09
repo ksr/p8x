@@ -105,7 +105,7 @@ int main() {
             }
         } } }
     }
-    if (peek(GLID) == 71) {
+    if (has_graphics()) {
         /* the GL engine path (stage 10c): the scene IS command list 0.
          * A fresh tri RECORDS the list (erase + this triangle); tri k
          * APPENDS to it; either way CLRUN 0 redraws the whole ensemble

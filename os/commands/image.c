@@ -129,7 +129,7 @@ int grab(int x0, int y0, int x1, int y1) {
     if (y1 < y0) { t = y0; y0 = y1; y1 = t; }     /* (coords 0..479/271)  */
     w = x1 - x0 + 1;
     h = y1 - y0 + 1;
-    if (peek(GLID) == 71) {                       /* PGSYNC: grab what shows */
+    if (has_graphics()) {                         /* PGSYNC: grab what shows */
         poke(GLDATA, 3);
         while (peek(GLSTAT) & 64) { }             /* wait the verb out */
     }

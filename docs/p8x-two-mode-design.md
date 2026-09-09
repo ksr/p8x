@@ -106,9 +106,19 @@ command. Independent of the graphics work; needed before the transfer app.
 
 ## Phases (dependency order)
 
-- **P1 — `graphics_present` flag.** Monitor probes + prints + sets `GFXPRES`; OS
-  re-affirms; `has_graphics()` helper; convert GL programs to it. Small, unblocks
-  everything.
+- **P1 — `graphics_present` flag. DONE (2026-09-09).** The monitor's `DISPINIT`
+  probes `GLID` at wake, records the result in the resident byte `GFXPRES`
+  (`$60A4`, a memmap anchor shared by firmware + OS + programs), and prints
+  `GRAPHICS AVAILABLE` / `NO GRAPHICS` on serial; the OS `COLD` re-affirms
+  `GFXPRES` after the banner so programs can trust it across the monitor→OS
+  handoff. `has_graphics()` (in `lib_gfx.c`) reads the flag, and `gpresent()` now
+  sources presence from it rather than a fresh `GLID` probe. Every GL program was
+  converted off the scattered `peek(GLID)` checks (the redundant second probe was
+  removed where `gpresent()` already gated; `desk`/`paint`/`wdesk` read `GFXPRES`
+  directly). The emulator gained `-ng` (float `GLID` to `$FF`) so both modes boot
+  from one build; `c_gfxpres_test.sh` boots the same disk with and without `-ng`
+  and checks the monitor message, the flag a program reads, and the GL-program
+  `?No display` exit all track the mode.
 - **P2 — Glass TTY behind `CONOUT`.** Text console on the GL screen (framebuffer,
   cursor, scroll) in ROM; `CONOUT` draws+mirrors when `GFXPRES`; monitor inits the
   screen + prints "Graphics Available"; console-suspend hook for apps. The big

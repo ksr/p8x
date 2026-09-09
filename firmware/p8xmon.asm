@@ -293,10 +293,19 @@ DPUT:   JSR  PUTC
 ; opens by establishing the identity window/viewport (the port powers up
 ; DEGENERATE) and closes back in outline fill mode. This is the worked
 ; example of driving the GL port from machine code.
+; Probe the GL card (GLID reads 'G' at $FF54 when fitted) and record the result
+; in the resident GFXPRES byte -- the two-mode selector read by the OS and every
+; GL program (see docs/p8x-two-mode-design.md). Print the outcome on serial so a
+; headless operator sees which mode the machine came up in. When the card is
+; present, stream the splash; when absent, this is the last graphics touch.
 DISPINIT: LDA GLID
         LDB  #'G'
         CMP
-        JNZ  dsp_rt
+        JNZ  dsp_no         ; no card fitted -> headless serial console
+        LDA  #1             ; GL card present
+        STA  GFXPRES
+        LDP1 #MHASGFX
+        JSR  PUTS
         LDP1 #DSPTAB
         LDA  #DSPLEN
         STA  TMP
@@ -312,6 +321,11 @@ dsp_lp: LDA  GLSTAT         ; FIFO backpressure
         STA  TMP
         JNZ  dsp_lp
 dsp_rt: RTS
+dsp_no: LDA  #0             ; no display -> serial-only mode
+        STA  GFXPRES
+        LDP1 #MNOGFX
+        JSR  PUTS
+        RTS
 
 ; The splash as GL bytes (window coords, y UP -- the band 124..147 maps to
 ; itself under the flip): identity window+viewport, filled black RECT as
@@ -2077,6 +2091,10 @@ MBANNER: .byte CR,LF
         .byte CR,LF
          .ascii "? FOR HELP"
          .byte CR,LF,0
+MHASGFX: .ascii "GRAPHICS AVAILABLE"
+        .byte CR,LF,0
+MNOGFX: .ascii "NO GRAPHICS"
+        .byte CR,LF,0
 MPROMPT: .ascii "* "
         .byte 0
 MWHAT:  .ascii "?"

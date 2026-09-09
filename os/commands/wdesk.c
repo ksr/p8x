@@ -48,7 +48,7 @@
 
 //#define GLDATA 0xFF50
 //#define GLSTAT 0xFF51
-//#define GLID   0xFF54
+//#define GFXPRES 0x60A4  /* two-mode flag: 1 = GL card fitted (monitor/OS set it) */
 
 char param[22];
 char frec[22];                     /* a window's record, read via SYS_WKGET */
@@ -472,7 +472,7 @@ int scene() {
 
 int main() {
     char *ap; int k; int going; int e; int a; int top; int resume;
-    if (peek(GLID) != 71) { puts("?No display"); return 1; }
+    if (peek(GFXPRES) == 0) { puts("?No display"); return 1; }
     ap = argstr();
     while (*ap == 32) { ap = ap + 1; }
     /* -r = a launched app is returning; -o = a TERM sink command is returning

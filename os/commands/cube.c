@@ -101,7 +101,7 @@ int main() {
         if (i & 4) { cvz[i] = 90; } else { cvz[i] = 0 - 90; }
         i = i + 1;
     }
-    if (g3has != 2 && peek(GLID) == 71) {
+    if (g3has != 2 && has_graphics()) {
         /* stage 10c: the cube is a stored GL command list that spins
          * ITSELF -- per pass the list nudges the modeling matrix
          * (MDROTY 6, MDROTX 3), erases, draws the 12 edges, flips and

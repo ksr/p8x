@@ -262,3 +262,6 @@ CMPIX       = 0x60A0             # tab-complete: KWTAB index during the built-in
 TTYRAW      = 0x60A1             # 0 = expand a bare LF to CR LF on console output; nonzero = pass bytes through untouched (for binary over the serial link, like stty raw)
 TTYLST      = 0x60A2             # last byte PUTC transmitted, so an LF that already follows a CR is not doubled
 TTYCH       = 0x60A3             # PUTC's saved character (PUTC must preserve A)
+
+# graphics presence
+GFXPRES     = 0x60A4             # 1 = GL card fitted (screen is the display); 0 = headless serial console

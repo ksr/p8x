@@ -42,7 +42,7 @@
 //#define GLDATA 0xFF50
 //#define GLSTAT 0xFF51
 //#define GLRB   0xFF52
-//#define GLID   0xFF54
+//#define GFXPRES 0x60A4  /* two-mode flag: 1 = GL card fitted (monitor/OS set it) */
 
 /* ---- the display list: 6 ints per shape, flat ------------------------------
  * [tool, x0, y0, x1, y1, colour]; tool 0=line 1=box 2=circle 3=fill.
@@ -337,7 +337,7 @@ int m_release(int x, int y) {
 int main() {
     int k; int step;
     char *ap;
-    if (peek(GLID) != 71) { puts("?No display"); return 1; }
+    if (peek(GFXPRES) == 0) { puts("?No display"); return 1; }
     ap = argstr();
     while (*ap == 32) { ap = ap + 1; }
     fromdesk = 0; fromwm = 0;

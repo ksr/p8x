@@ -317,6 +317,19 @@ COLD:   LDP3 #STKTOP
         STA  HISTST
         STA  HISTCT
         STA  CMPTABF            ; no Tab-completion streak
+        ; Re-affirm the two-mode selector the monitor set at wake: re-probe GLID
+        ; and record it in GFXPRES so programs can trust the byte across the
+        ; monitor->OS handoff (headless serial vs. graphics desktop; see
+        ; docs/p8x-two-mode-design.md). has_graphics() in lib_gfx.c reads it.
+        LDA  #0                 ; assume no display
+        STA  GFXPRES
+        LDA  GLID
+        LDB  #'G'
+        CMP
+        JNZ  COLD_NOGFX
+        LDA  #1                 ; GL card fitted
+        STA  GFXPRES
+COLD_NOGFX:
         JSR  FONTLD             ; stream /FONT.GL to the card, if both exist
 
 ; ---------------- Shell main loop --------------------------------------------

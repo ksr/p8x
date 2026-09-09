@@ -31,8 +31,14 @@ reach. One Bresenham, one span filler, one pixel path; one way of
 asking.
 
 Presence probe: `GLID` ($FF54) reads 'G' when the engine is fitted. An
-absent card floats the bus — software must probe before poking. (The
-old two-byte "PG" signature at GID0/GID1 retired with its window.)
+absent card floats the bus — software must know before poking. Since
+2026-09-09 the monitor probes `GLID` **once** at wake and records the
+result in the resident byte `GFXPRES` ($60A4); the OS re-affirms it at
+boot. Programs read that flag — `has_graphics()` in `lib_gfx.c`, which
+`gpresent()` now sources from — rather than re-probing the bus. This is
+the two-mode selector (headless serial console vs. graphics desktop; see
+p8x-two-mode-design.md). (The old two-byte "PG" signature at GID0/GID1
+retired with its window.)
 
 ## 2. The 2D engine (the walker's private register file)
 

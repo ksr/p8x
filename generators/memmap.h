@@ -265,4 +265,7 @@
 #define TTYLST      0x60A2       /* last byte PUTC transmitted, so an LF that already follows a CR is not doubled */
 #define TTYCH       0x60A3       /* PUTC's saved character (PUTC must preserve A) */
 
+/* graphics presence */
+#define GFXPRES     0x60A4       /* 1 = GL card fitted (screen is the display); 0 = headless serial console */
+
 #endif

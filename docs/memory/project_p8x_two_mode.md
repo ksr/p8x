@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 6ffcfef7-73ca-445b-bcdb-f57735fdc98f
-  modified: 2026-09-09T15:10:51.096Z
+  modified: 2026-09-09T16:18:26.125Z
 ---
 
 **BIG DIRECTION CHANGE, user, 2026-09-09.** Full design in
@@ -43,6 +43,17 @@ app. **RETIRED:** tiled windows, z-order, drag, per-window records, most SYS_WK*
 CONOUT (big, ROM work, "monitor on screen") -> P3 2nd serial port (emu+hw, for
 Kermit) -> P4 Finder desktop + full-screen-app frame (retire tiled wdesk) ->
 P5 apps: Paint(adapt)/Image(adapt)/Term/Write(NEW)/serial-terminal(Kermit).
+
+**P1 DONE (2026-09-09), on graphics-card:** GFXPRES = resident byte $60A4 (memmap
+anchor, gen_memmap.py). Monitor DISPINIT probes GLID -> sets GFXPRES + prints
+"GRAPHICS AVAILABLE"/"NO GRAPHICS" on serial; OS COLD re-affirms after banner.
+lib_gfx.c gained has_graphics() (reads GFXPRES); gpresent() now sources from it.
+ALL GL programs converted off peek(GLID): redundant 2nd probe removed where
+gpresent() already gated (house/camera/gl/page/rotate/clsave), peek(GLID)==71 ->
+has_graphics() (cube/tri/image), and desk/paint/wdesk (no //#use gfx) read GFXPRES
+directly. Emulator: `-ng` floats GLID to $FF (test headless). Test
+c_gfxpres_test.sh boots same disk +/- -ng. NOTE monitor now prints a line between
+"? FOR HELP" and prompt on EVERY boot -- os_test's `P8X MONITOR` count unaffected.
 
 **OPEN Qs:** ROM budget for the glass TTY (8KB ROM — if it doesn't fit, fall back
 to OS-level console, losing "monitor on screen"); font geometry (480x272 -> cols

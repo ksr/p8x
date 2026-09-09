@@ -33,7 +33,6 @@ int main() {
         return 0;
     }
     if (gpresent() == 0) { puts("?No display"); return 1; }
-    if (peek(GLID) != 71) { puts("?No GL engine"); return 1; }
     f = 0;
     if (*ap == 'f' || *ap == 'F') { f = 1; }
     if (f) { poke(GLDATA, 2); }

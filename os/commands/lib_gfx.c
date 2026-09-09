@@ -26,6 +26,7 @@
 //#define GLSTAT 0xFF51  /* bit7 FIFO full, bit6 busy, bit0 read-back   */
 //#define GLRB   0xFF52  /* pop one read-back byte (PIXRD's reply)      */
 //#define GLID   0xFF54  /* reads 'G' (71) when the engine is fitted    */
+//#define GFXPRES 0x60A4 /* RAM: 1 = GL card fitted; two-mode selector  */
 
 int __gfxpen;
 int __gfxini;
@@ -62,11 +63,20 @@ int gwait() {
     return 0;
 }
 
-/* 1 if the GL engine is fitted ('G' at GLID), else 0 -- and on success
- * establish the library's ground state: identity window + viewport
- * (the port powers up degenerate), outline fill, a known white pen */
+/* 1 if graphics is present, else 0 -- read from the resident GFXPRES flag the
+ * monitor sets at wake and the OS re-affirms at boot (the two-mode selector).
+ * Prefer this over probing GLID directly: it is the single source of truth for
+ * "which mode did the machine come up in" (docs/p8x-two-mode-design.md). */
+int has_graphics() {
+    return peek(GFXPRES);
+}
+
+/* 1 if the GL engine is fitted, else 0 -- and on success establish the
+ * library's ground state: identity window + viewport (the port powers up
+ * degenerate), outline fill, a known white pen. Presence now comes from the
+ * GFXPRES flag (has_graphics) rather than a fresh GLID probe. */
 int gpresent() {
-    if (peek(GLID) != 71) { return 0; }
+    if (!has_graphics()) { return 0; }
     gcolor(65535);           /* triggers the lazy init + a known pen */
     return 1;
 }

@@ -19,7 +19,7 @@
 
 //#define GLDATA 0xFF50
 //#define GLSTAT 0xFF51
-//#define GLID   0xFF54
+//#define GFXPRES 0x60A4  /* two-mode flag: 1 = GL card fitted (monitor/OS set it) */
 
 //#use ptr
 //#use wm
@@ -345,7 +345,7 @@ int mcopy(int row, char *s) {
 
 int main() {
     int t; int k; int going; int i;
-    if (peek(GLID) != 71) { puts("?No display"); return 1; }
+    if (peek(GFXPRES) == 0) { puts("?No display"); return 1; }
     wm_init();
     wm_n = 4;
     wmx[0] = 40;  wmy[0] = 40; wmw[0] = 210; wmh[0] = 150; wmvis[0] = 1;

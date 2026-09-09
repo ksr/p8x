@@ -60,7 +60,6 @@ int main() {
         return 0;
     }
     if (gpresent() == 0) { puts("?No display"); return 1; }
-    if (peek(GLID) != 71) { puts("?No GL engine"); return 1; }
     while (peek(GLERR)) { }              /* drain stale errors */
 
     glb(118); glb(n);                    /* CLRD n */

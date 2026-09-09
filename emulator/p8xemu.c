@@ -52,6 +52,7 @@
 
 static int interactive=0;             /* stdin is a TTY: raw + blocking console */
 static int norx=0;                    /* -N: console RX always empty (see rx_ready) */
+static int nogfx=0;                    /* -ng: no GL card fitted (GLID floats $FF) */
 static uint8_t *scr=0;                /* -i FILE: scripted console input (co-sim) */
 static long scrlen=0, scrpos=0;
 static int peeked=-1;                 /* one-char lookahead for ACIA status/data */
@@ -1734,7 +1735,7 @@ static uint8_t memrd(uint16_t ad){
                               memmove(glef,glef+1,(size_t)--gleflen);
                               return e; }
                  return 0;
-    case GLID:   return 0x47;                      /* 'G' -- presence probe */
+    case GLID:   return nogfx ? 0xFF : 0x47;       /* 'G' -- presence probe (-ng: absent) */
     default: return 0xFF;
     }
 }
@@ -1770,7 +1771,7 @@ static void memwr(uint16_t ad,uint8_t v){
        commits reg[GESEL] and auto-increments, so a matrix uploads as one
        GESEL poke + 24 GEVAL pokes. */
     switch(ad){
-      case GLDATA: gl_push(v); return;   /* stage 10: one command-stream byte */
+      case GLDATA: if(nogfx) return; gl_push(v); return;   /* stage 10: one command-stream byte (-ng: card absent, drop) */
     }
     /* The ATA task-file (feature + LBA) is a SHARED bus: both drives latch these
        writes; the CFHEAD DEV bit picks who executes the command. Mirror them to
@@ -1820,6 +1821,7 @@ int main(int argc,char**argv){
         else if(!strcmp(argv[i],"-s")) switches=(uint8_t)strtoul(argv[++i],0,0);  /* $FF00 input byte */
         else if(!strcmp(argv[i],"-L")) led_trace=1;                               /* trace $FF02 writes */
         else if(!strcmp(argv[i],"-N")) norx=1;     /* console RX always empty (FPGA co-sim) */
+        else if(!strcmp(argv[i],"-ng")) nogfx=1;   /* no GL card fitted: GLID floats $FF (headless-mode test) */
         else if(!strcmp(argv[i],"-B")){            /* card-edge bridge client */
             const char *bdev=argv[++i];
             struct termios bt;
@@ -1887,10 +1889,11 @@ int main(int argc,char**argv){
             fclose(sf);
         }
         else if(!strcmp(argv[i],"-h")||!strcmp(argv[i],"--help")){
-            fprintf(stderr,"usage: p8xemu [-t] [-T] [-N] [-l cycles] [-c disk.img] [-c2 disk2.img] "
+            fprintf(stderr,"usage: p8xemu [-t] [-T] [-N] [-ng] [-l cycles] [-c disk.img] [-c2 disk2.img] "
                 "[-s switches] [-L] [-g out.ppm] [-G] [rom.bin]\n"
                 "  -T     canonical per-cycle machine trace to stderr (FPGA co-sim)\n"
                 "  -N     console RX always empty; makes -T traces independent of stdin\n"
+                "  -ng    no GL card fitted: GLID floats $FF (test headless-console mode)\n"
                 "  -i F   scripted console input from file F (RDRF = bytes remain)\n"
                 "  -s NN  value read at $FF00 (e.g. -s 0xA5); default 0\n"
                 "  -L     print $FF02 LED writes to stderr as they change\n"

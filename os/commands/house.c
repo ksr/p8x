@@ -118,7 +118,6 @@ int main() {
     step = 360 / nf;
     if (step < 1) { step = 1; }
     if (gpresent() == 0) { puts("?No display"); return 1; }
-    if (peek(GLID) != 71) { puts("?No GL engine"); return 1; }
 
     setup();
     glb(15); glb(0); glb(0); glb(0);           /* CLEARS both pages */
