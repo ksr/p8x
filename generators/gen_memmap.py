@@ -293,15 +293,19 @@ MAP = [
     ('shell history', 'HISTNV', 0x6090, 'history ring: recall cursor (0 = not navigating; N = N lines back)'),
     ('shell history', 'HISTRING', 0xF800, 'history ring buffer base: HISTN x HISTLEN bytes ($F800..$F9FF, the free 512 B above CSTACKTOP; $FA00 = glob page, $FC00 = RDBUF, $FE00 = stack)'),
     # Tab autocomplete scratch (interactive line editor). 256 B at the very top of
-    # the OS region, packed into the TOP of the $5F00..$5FFF band; state bytes in
-    # the $6000 FS-scratch tail. (Moved up from $5700 when the WM kernel was folded
-    # into the OS image; then packed to $5F70..$5FFF on 2026-09-08 so the OS image
-    # -- which ends ~$5ED7 -- can grow down to $5F70 for the OUTCH->window sink,
-    # per docs/p8x-wm-design.md. Sizes: CMPPFX 64, CMPLCP 16, CMPDIR 64 -- all
-    # NUL-terminated and bounded by the 64-byte LINEBUF, so a word/leaf is <=63.)
-    ('shell completion', 'CMPPFX', 0x5F70, 'tab-complete: leaf prefix being completed (NUL-term, 64)'),
-    ('shell completion', 'CMPLCP', 0x5FB0, 'tab-complete: longest common prefix of the matches (NUL-term, 16)'),
-    ('shell completion', 'CMPDIR', 0x5FC0, 'tab-complete: directory-part path string, for CDPATH (NUL-term, 64)'),
+    # the three completion STRINGS alias the $6800 APBUF region; state bytes in
+    # the $6000 FS-scratch tail. (History: at $5700, then $5F00, then packed to
+    # $5F70 on 2026-09-08; then moved OUT of the $5F00 page entirely on 2026-09-08
+    # so the OS image -- which grows to hold the OUTCH->window sink -- can use the
+    # whole $5F00..$5FFF page. They alias APBUF ($6800, the ">>" redirect-append
+    # buffer, 512 B) because the two are DISJOINT IN TIME: completion runs only in
+    # the interactive line editor at the prompt, the append buffer only during a
+    # redirect flush -- never both at once, and no program is loaded in either
+    # case. Sizes: CMPPFX 64, CMPLCP 16, CMPDIR 64 -- all NUL-terminated and
+    # bounded by the 64-byte LINEBUF, so a word/leaf is <=63.)
+    ('shell completion', 'CMPPFX', 0x6800, 'tab-complete: leaf prefix being completed (NUL-term, 64; aliases APBUF)'),
+    ('shell completion', 'CMPLCP', 0x6840, 'tab-complete: longest common prefix of the matches (NUL-term, 16; aliases APBUF)'),
+    ('shell completion', 'CMPDIR', 0x6850, 'tab-complete: directory-part path string, for CDPATH (NUL-term, 64; aliases APBUF)'),
     ('shell completion', 'CMPPL', 0x6091, 'tab-complete: length of the typed leaf prefix'),
     ('shell completion', 'CMPCNT', 0x6092, 'tab-complete: number of matches (saturates at 255)'),
     ('shell completion', 'CMPFW', 0x6093, 'tab-complete: 1 = completing the command word (first word)'),

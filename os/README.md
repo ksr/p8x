@@ -275,6 +275,7 @@ from C, the `p8cc` `bios()` intrinsic). The table is **append-only**:
 | `$2045` | `SYS_WKGET` | `A` = window index, `P1` = a 22-byte dest → copy that window's record (`x,y,w,h` LE pairs, list, tlen, title(12)). Lets a client read a window's rect to draw its own **dynamic** content inside it (a directory listing, a terminal) — the kernel owns chrome + z-order, the client fills the body |
 | `$2048` | `SYS_WKTOP` | `A` = the top (focused) window index, or 99 if none — a client draws a window's dynamic content only when it is on top, so it composites correctly |
 | `$204B` | `SYS_WKRAISE` | `A` = window index → raise it to the top (focus it). Z-order is the kernel's job, so "focus window N" is a kernel primitive; the client picks *which* window by title (`SYS_WKGET` scan), then raises that index. The client repaints after |
+| `$204E` | `SYS_WKSINK` | `A` = window index → route stdout into it: arm `OUTCH` mode 3 (`REDIRF=3`), which **records** each byte as GL `TEXT` into that window's card list (the kernel already `CLRUN`s it on repaint, so the output persists with no CPU-side buffer). `A` = 255 disarms (`CLEND`, `REDIRF=0`). The mechanism half of the OUTCH→window sink — run a text command with this armed and its output lands in the window |
 
 `SYS_GETCWD`/`SYS_CWDLBA`/`SYS_OPENCWD` operate on the single CWD in the unified
 namespace (the path shows `/d1/...` when it is on the mounted drive); `SYS_OPENCWD`

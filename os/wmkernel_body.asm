@@ -368,6 +368,122 @@ wkt_no: LDA  #99
 wk_raise:JSR  k_raise                    ; A = window index -> reorder to top slot
         CLC                             ; clean return (no stray carry for bios)
         RTS
+
+; ==== wk_sink : SYS_WKSINK ($204E) -- route stdout into a window ==============
+; A = window index -> ARM: record command output as TEXT into that window's card
+; list (which the kernel already CLRUNs on repaint, so it persists), and set
+; OUTCH's REDIRF=3 so every SYS_PUTC lands there. A = 255 -> DISARM (CLEND the
+; list, REDIRF back to console). This is the mode-3 half of the OUTCH->window
+; sink (docs/p8x-wm-design.md); the client arms it, runs a text command, disarms.
+; Text flows because GL TEXT auto-advances the pen -- one "TEXT 1 char" per byte,
+; a MOVE3 only on newline. No wrap/scroll yet: long lines / overflow just clip.
+wk_sink: LDB  #255
+        CMP
+        JZ   wks_off
+        STA  ki                         ; arm: ki = window index
+        JSR  koff                       ; A = 24*ki
+        LDB  #6
+        ADD                             ; A = 24*ki + 6  (offset of h)
+        JSR  kp1                        ; P1 = &record.h
+        LDA  (P1)+                      ; h lo -> ka
+        STA  ka
+        LDA  (P1)+                      ; h hi -> ka+1
+        STA  ka+1
+        LDA  (P1)                       ; list id (offset 8)
+        STA  sinklst
+        LDA  #29                        ; homeY = h - 29 (top line, y-up local)
+        STA  kb
+        LDA  #0
+        STA  kb+1
+        JSR  k16sub                     ; kw = h - 29
+        LDA  kw
+        STA  sinky
+        LDA  kw+1
+        STA  sinky+1
+        LDA  #112                       ; CLBEG sinklst  (fresh recording)
+        JSR  kput
+        LDA  sinklst
+        JSR  kput
+        LDA  #6                         ; COLOR white
+        JSR  kput
+        LDA  #31
+        JSR  kput
+        LDA  #63
+        JSR  kput
+        LDA  #31
+        JSR  kput
+        JSR  sink_home                  ; MOVE3 to the first line
+        LDA  #3                         ; arm OUTCH mode 3
+        STA  REDIRF
+        RTS
+wks_off:LDA  #113                       ; CLEND -> close the list
+        JSR  kput
+        LDA  #0
+        STA  REDIRF
+        RTS
+
+; sink_home: record MOVE3 4, sinky, 0 -- move the text pen to the line start.
+sink_home:
+        LDA  #18                        ; MOVE3
+        JSR  kput
+        LDA  #4                         ; x = 4 (left margin)
+        STA  kw
+        LDA  #0
+        STA  kw+1
+        JSR  ksw
+        LDA  sinky                      ; y = sinky
+        STA  kw
+        LDA  sinky+1
+        STA  kw+1
+        JSR  ksw
+        LDA  #0                         ; z = 0
+        STA  kw
+        STA  kw+1
+        JSR  ksw
+        RTS
+
+; OUTWIN: OUTCH's REDIRF=3 sink (char in RCH). Printable -> TEXT 1 char (the pen
+; auto-advances); LF -> drop a line + home; CR -> home. Records into the open
+; card list. RTS to OUTCH's caller.
+OUTWIN: LDA  RCH
+        LDB  #10                        ; LF
+        CMP
+        JZ   ow_lf
+        LDB  #13                        ; CR
+        CMP
+        JZ   ow_cr
+        LDA  RCH                        ; printable 32..126 ?
+        LDB  #32
+        CMP
+        JNC  ow_ret                     ; < 32 -> ignore
+        LDB  #127
+        CMP
+        JC   ow_ret                     ; >= 127 -> ignore
+        LDA  #128                       ; TEXT 1 <char>
+        JSR  kput
+        LDA  #1
+        JSR  kput
+        LDA  RCH
+        JSR  kput
+ow_ret: RTS
+ow_lf:  LDA  sinky                      ; sinky -= 13
+        STA  ka
+        LDA  sinky+1
+        STA  ka+1
+        LDA  #13
+        STA  kb
+        LDA  #0
+        STA  kb+1
+        JSR  k16sub
+        LDA  kw
+        STA  sinky
+        LDA  kw+1
+        STA  sinky+1
+        JSR  sink_home
+        RTS
+ow_cr:  JSR  sink_home
+        RTS
+
 kpath:  .ascii "/bin/wapp.bin"          ; 13 + NUL + 10 pad = a 24-byte buffer
         .byte 0
         .fill 10
@@ -1448,5 +1564,7 @@ kev_arg:.fill 1                         ; SYS_WKARG payload: last key / click co
 kgx:    .fill 2
 kgy:    .fill 2
 ktlen:  .fill 1
+sinklst:.fill 1                         ; OUTCH mode-3 sink: target window's card list id
+sinky:  .fill 2                         ; OUTCH mode-3 sink: text cursor y (window-local, drops 13/line)
 wstate: .fill 16                        ; 4 windows x 4-byte state blob
 recs:   .fill 96                        ; 4 windows x 24 bytes

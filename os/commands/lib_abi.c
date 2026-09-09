@@ -38,6 +38,7 @@
 //#define SYS_WKGET    0x2045    /* A = window index, P1 = dest buffer -> copy its 22-byte record (x,y,w,h LE, list, tlen, title(12)) */
 //#define SYS_WKTOP    0x2048    /* A = the top (focused) window index, or 99 if none */
 //#define SYS_WKRAISE  0x204B    /* A = window index -> raise it to the top (focus it); client repaints */
+//#define SYS_WKSINK   0x204E    /* A = window index -> route stdout (OUTCH mode 3) into its card list; A=255 disarms */
 
 /* BIOS jump table ($01xx): low-level console + file-stream primitives. The read
  * (FOPEN/FGETB) and write (FWOPEN/FPUTB/FCLOSE) streams are separate single-file

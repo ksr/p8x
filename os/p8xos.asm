@@ -36,9 +36,9 @@
 ; (start LBA + sector count), so CWD and resolved paths share one code path.
 ; The prompt shows the current path. Verify a volume with p8xfs.py fsck.
 ; RAM layout: OS image $2000..~$5ED7 -- INCLUDING the resident WM kernel
-; (wmkernel_body.asm, syscalls $2027-$204B) -- with growth room to $5F70 (the
-; 16K disk cap is $6000) | tab-complete scratch $5F70..$5FFF (packed to the top
-; of its page so the OS can grow into $5F00..$5F6F for the OUTCH->window sink) |
+; (wmkernel_body.asm, syscalls $2027-$204E) -- with growth room to $6000, the
+; whole $5F00..$5FFF page (the tab-complete scratch strings that used to sit here
+; now alias APBUF at $6800; the OUTCH->window sink needed the space) |
 ; scratch block
 ; $6000..$69FF (firmware/BIOS scratch $6000-$60xx, SBUF $6100, OS shell scratch
 ; $6300, IBUF/PATHBUF/APBUF $6500-$69FF) | TPA (programs / RUN / ">" capture)
@@ -156,6 +156,7 @@ HISTLEN = 64           ; bytes per history slot (matches LINEBUF width)
         JMP  wk_get             ; $2045 SYS_WKGET: A=window index, P1=dest -> copy its 22-byte record
         JMP  wk_top             ; $2048 SYS_WKTOP: A = top (focused) window index, 99 if none
         JMP  wk_raise           ; $204B SYS_WKRAISE: A = window index -> raise it to the top (focus it)
+        JMP  wk_sink            ; $204E SYS_WKSINK: A = window index -> route stdout (OUTCH mode 3) into it; A=255 disarms
 ; Reached only via the table above (COLD jumps past them).
 SYS_GETDRIVE:                   ; derived: 1 if the CWD is under the /d1 mount
         LDA  CURDRIVE
@@ -4749,6 +4750,9 @@ CRLF:   LDA  #CR
 OUTCH:  STA  RCH
         LDA  REDIRF
         JZ   OUTTTY             ; 0 = console
+        LDB  #3
+        CMP
+        JZ   OUTWIN             ; 3 = draw into the active window (wk_sink)
         LDB  #2
         CMP                     ; C = REDIRF >= 2
         JC   OUTFILE            ; 2 = stream to file

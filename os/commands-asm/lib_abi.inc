@@ -40,6 +40,7 @@ SYS_WKARG  = $2042      ; payload of the last SYS_WKEVENT (key / click column)
 SYS_WKGET  = $2045      ; A=window index, P1=dest -> copy its 22-byte record
 SYS_WKTOP  = $2048      ; A = top (focused) window index, 99 if none
 SYS_WKRAISE = $204B     ; A = window index -> raise it to the top (focus it)
+SYS_WKSINK = $204E      ; A = window index -> route stdout (OUTCH mode 3) into it; A=255 disarms
 
 ; --- BIOS jump table ($01xx) ---
 CONIN      = $0100      ; wait for key, char -> A (raw console, not stdin)

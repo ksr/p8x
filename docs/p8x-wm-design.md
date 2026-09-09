@@ -333,16 +333,34 @@ buffers), lifting the ceiling ~256 B. This is invasive (the completion code
 names those addresses) and gated on the full suite + a tab-complete test.
 
 **Slice plan (each a shippable, tested rung):**
-- **15a — reclaim OS budget.** Relocate the tab-complete scratch off `$5F00`;
-  prove tab-complete still works; the OS now has ~256 B of head-room.
-- **15b — the sink (mode 3).** Add `REDIRF=3` to `OUTCH`: record `MOVE3`+`TEXT`
-  into a target window's card list at a cursor; handle space/newline/wrap and
-  clear-on-overflow. A new syscall arms it: `SYS_WKSINK` (window index → set
-  sink, home the cursor) / disarm. Test in isolation: arm it, `SYS_PUTS` a
-  string, assert the glyphs land in the window and survive a repaint.
+- **15a — reclaim OS budget — DONE 2026-09-08.** The tab-complete scratch strings
+  (`CMPPFX`/`CMPLCP`/`CMPDIR`) pinned the OS ceiling at `$5F00`. First packed to
+  the top of their page (`$5F70`, +112 B); then, when 15b's sink turned out to be
+  **255 B** (the 16-bit idiom is ~2× a first estimate — a MOVE3 is one opcode plus
+  three little-endian pairs), the whole page was needed, so the strings were moved
+  OUT of it to **alias `APBUF`** (`$6800`, the `>>` redirect-append buffer): the
+  two are disjoint in time — completion runs only in the interactive line editor,
+  the append buffer only during a redirect flush, and no program is loaded in
+  either case. The OS may now grow to `$6000` (the full 256 B page). Safe by
+  construction and referenced only symbolically; `os_complete_test` passes with
+  the aliased buffers.
+- **15b — the sink (mode 3) — DONE 2026-09-08.** `OUTCH` gained `REDIRF=3`
+  (`OUTWIN`): each stdout byte is recorded into the target window's card list —
+  printable → `TEXT 1 char` (the card's TEXT auto-advances the pen, so no per-char
+  `MOVE3`), LF → drop a line + `MOVE3` home, CR → `MOVE3` home. `SYS_WKSINK`
+  (`$204E`) arms it: `A` = window index → read the record's list id + height, home
+  the cursor near the top (`y = h-29`, y-up local), `CLBEG` the list, set
+  `REDIRF=3`; `A = 255` disarms (`CLEND`, `REDIRF=0`). No wrap/scroll yet — long
+  lines and past-the-bottom output just clip. The whole thing is ~130 B of new
+  asm; OS ends `$5FD6`, 42 B under `$6000`. `c_wsink_test` arms the sink at a
+  window (content = card list 40), prints two lines, disarms, repaints — and the
+  text appears ONLY via the kernel's `CLRUN` of the list (recording draws nothing
+  live), proving it recorded into the list and persists.
 - **15c — wire TERM through the script-chain.** wdesk TERM ENTER arms the sink,
   writes the `<cmd>` + `wdesk -o` script, hands it to the shell; `wdesk -o`
-  resumes. `dir`, `cat FOO.TXT`, `wc` now render in the TERM window.
+  resumes. `dir`, `cat FOO.TXT`, `wc` now render in the TERM window. Open issue to
+  settle here: whether `REDIRF=3` survives the shell's command dispatch (the shell
+  resets `REDIRF` at the prompt) — the arm may need to move into the script path.
 - **15d (later) — real scroll**, and eventually a shell-WM path for live
   mid-command rendering.
 
