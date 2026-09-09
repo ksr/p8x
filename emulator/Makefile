@@ -190,6 +190,7 @@ test-gfx: p8xemu ucode
 	sh test/c_wview_test.sh
 	sh test/c_wsink_test.sh
 	sh test/c_wshell_test.sh
+	sh test/c_runsh_test.sh
 	sh test/wm_kernel_test.sh
 	sh test/wm_events_test.sh
 	sh test/wm_mouse_test.sh

@@ -41,6 +41,7 @@ SYS_WKGET  = $2045      ; A=window index, P1=dest -> copy its 22-byte record
 SYS_WKTOP  = $2048      ; A = top (focused) window index, 99 if none
 SYS_WKRAISE = $204B     ; A = window index -> raise it to the top (focus it)
 SYS_WKSINK = $204E      ; A = window index -> route stdout (OUTCH mode 3) into it; A=255 disarms
+SYS_RUNSH  = $2051      ; P1 = script path -> run via the shell (script mode); does not return
 
 ; --- BIOS jump table ($01xx) ---
 CONIN      = $0100      ; wait for key, char -> A (raw console, not stdin)

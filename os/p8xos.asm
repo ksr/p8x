@@ -157,6 +157,7 @@ HISTLEN = 64           ; bytes per history slot (matches LINEBUF width)
         JMP  wk_top             ; $2048 SYS_WKTOP: A = top (focused) window index, 99 if none
         JMP  wk_raise           ; $204B SYS_WKRAISE: A = window index -> raise it to the top (focus it)
         JMP  wk_sink            ; $204E SYS_WKSINK: A = window index -> route stdout (OUTCH mode 3) into it; A=255 disarms
+        JMP  sys_runsh          ; $2051 SYS_RUNSH: P1 = script path -> run it via the shell (script mode); does not return to the caller
 ; Reached only via the table above (COLD jumps past them).
 SYS_GETDRIVE:                   ; derived: 1 if the CWD is under the /d1 mount
         LDA  CURDRIVE
@@ -938,6 +939,24 @@ SH_RUN: LDA  STARTLO            ; point a read stream at the script's extent (IB
         LDA  #1
         STA  SCRIPTM
         JMP  SHELL
+
+; sys_runsh (SYS_RUNSH $2051): P1 = a script path -> run it through the shell's
+; script engine, exactly as `sh FILE` does. Lets a PROGRAM hand the shell a
+; script (e.g. the window-sink TERM: "<cmd>" then "run /bin/wdesk.bin -o") and
+; the shell runs it after the program returns. Enters SHELL (does NOT return to
+; the caller); the last script line typically re-launches the caller. Bad path
+; (not found) -> RTS with A=0 so the caller can react.
+sys_runsh:
+        TPA1L                   ; P2 = P1 (the script path, for FINDP2/RESOLVE)
+        TAP2L
+        TPA1H
+        TAP2H
+        JSR  FINDP2             ; resolve + find -> STARTLO/STARTHI, LENLO/LENHI, MATCH
+        LDA  MATCH
+        JZ   srsh_no
+        JMP  SH_RUN             ; open the script stream + SCRIPTM, then JMP SHELL
+srsh_no:LDA  #0
+        RTS
 
 
 ; =============================================================================
