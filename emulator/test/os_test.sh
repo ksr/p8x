@@ -49,15 +49,23 @@ python3 $ROOT/compiler/p8cc.py os_dir.pp.c -o os_dir.asm >/dev/null
 python3 $ROOT/assembler/p8xasm.py os_dir.asm -o os_dir.bin --base 0x6A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir os.img /bin >/dev/null
 python3 $ROOT/tools/p8xfs.py put os.img os_dir.bin --name /bin/dir.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+# DEL is no longer a built-in either (moved to /bin 2026-09-09) — install
+# /bin/del.bin so `del HELLO.TXT` / `del NOPE` resolve via implicit RUN.
+python3 $ROOT/tools/clib.py $ROOT/os/commands/del.c -o os_del.pp.c >/dev/null
+python3 $ROOT/compiler/p8cc.py os_del.pp.c -o os_del.asm >/dev/null
+python3 $ROOT/assembler/p8xasm.py os_del.asm -o os_del.bin --base 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put os.img os_del.bin --name /bin/del.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 printf 'hi' > os_h.tmp
 python3 $ROOT/tools/p8xfs.py put os.img os_h.tmp --name HELLO.TXT >/dev/null
 rm -f os_h.tmp prog.asm
 
 # 'DIR >DLIST' captures the directory listing into a file (output redirection),
 # and EXIT returns to the monitor.
-# Also: SAVE over an existing name must be rejected (?EXISTS), and a redirected
-# command's error must still reach the console (DEL NOPE >X -> ?NO FILE on screen;
-# built-in errors use PUTS, not the redirectable OUTCH, so they bypass redirection).
+# Also: SAVE over an existing name must be rejected (?EXISTS). And DEL NOPE >X
+# exercises redirection of a /bin PROGRAM's error: del is no longer a built-in
+# (built-in PUTS errors bypassed redirection and hit the console); the program's
+# "?No such file" goes through puts -> OUTCH, so `>X` captures it INTO the file X,
+# not the console. Verified on the host below (X holds the error, console does not).
 out=$(printf 'B\rdir\rrun PROG.bin\rdel HELLO.TXT\rsave C.bin 2000 2010\rpack\rfsck\rdir\rdir >DLIST\rsave PROG.bin 2000 2001\rdel NOPE >X\rexit\r' | \
       ../p8xemu -l 80000000 -c os.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0')
 
@@ -66,7 +74,9 @@ echo "$out" | grep -q 'P8X/OS v1.0' || fail "OS did not boot"
 echo "$out" | grep -q 'PROG.bin'    || fail "DIR missing PROG.bin"
 echo "$out" | grep -q 'HELLO.TXT'   || fail "DIR missing HELLO.TXT"
 echo "$out" | grep -q 'RAN'         || fail "RUN did not execute the program"
-echo "$out" | grep -q 'DELETED'     || fail "DEL did not report success"
+# /bin/del is silent on success (Unix `rm` style — the old built-in printed
+# DELETED; the program does not). Deletion is verified below: the post-PACK DIR
+# must no longer list HELLO.TXT.
 echo "$out" | grep -q 'SAVED'       || fail "SAVE did not report success"
 echo "$out" | grep -q 'PACKED'       || fail "PACK did not report success"
 echo "$out" | grep -q 'FSCK OK'      || fail "FSCK reported problems on a clean v2 volume"
@@ -94,8 +104,12 @@ LC_ALL=C tr -d '\0\r' < os_dl.tmp | grep -q 'PROG.bin' || { echo "--- DLIST ---"
 rm -f os_dl.tmp
 # Duplicate name rejected: SAVE PROG.bin (already exists) -> ?EXISTS.
 echo "$out" | grep -q 'EXISTS'  || fail "duplicate SAVE not rejected (?EXISTS missing)"
-# stderr: a redirected command's error still prints on the console.
-echo "$out" | grep -q 'NO FILE' || fail "redirected command's error did not reach the console"
+# A /bin program's error output honours `>` redirection: `del NOPE >X` sent the
+# "?No such file" into X (via puts -> OUTCH), so X holds it and the console does not.
+python3 $ROOT/tools/p8xfs.py get os.img X --out os_x.tmp >/dev/null || fail "redirect: X not created by del NOPE >X"
+LC_ALL=C tr -d '\0\r' < os_x.tmp | grep -q 'No such file' || { echo "--- X ---"; cat os_x.tmp; fail "del's error was not redirected into X"; }
+rm -f os_x.tmp
+echo "$out" | grep -q 'No such file' && fail "del's error reached the console despite >X (redirection not applied to the program)" || true
 # PACK must leave a consistent volume with nothing reclaimable.
 python3 $ROOT/tools/p8xfs.py fsck os.img >os_fsck.tmp 2>&1 || { cat os_fsck.tmp; fail "fsck failed after PACK"; }
 grep -q '0 reclaimable' os_fsck.tmp || { cat os_fsck.tmp; fail "PACK left reclaimable space"; }

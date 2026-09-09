@@ -43,9 +43,10 @@ python3 $ROOT/tools/clib.py $ROOT/os/commands/cat.c -o v2cat.pp.c   # splice //#
 python3 $ROOT/compiler/p8cc.py v2cat.pp.c -o v2cat.asm >/dev/null
 python3 $ROOT/assembler/p8xasm.py v2cat.asm -o v2cat.bin --base 0x6A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    v2.img v2cat.bin --name /bin/cat.bin --load 0x6A00 --exec 0x6A00 >/dev/null
-# DIR/PWD/TREE are no longer built-ins either — install their C versions so the
-# bare names resolve via PATH (/bin).
-for c in dir pwd tree; do
+# DIR/PWD/TREE/DEL are no longer built-ins either — install their C versions so
+# the bare names resolve via PATH (/bin). (DEL went to /bin 2026-09-09; the
+# `del /TMP/T.bin` step below needs /bin/del.bin to empty TMP before rmdir.)
+for c in dir pwd tree del; do
     python3 $ROOT/tools/clib.py $ROOT/os/commands/$c.c -o v2$c.pp.c   # splice //#use (dir: glob)
     python3 $ROOT/compiler/p8cc.py v2$c.pp.c -o v2$c.asm >/dev/null
     python3 $ROOT/assembler/p8xasm.py v2$c.asm -o v2$c.bin --base 0x6A00 >/dev/null

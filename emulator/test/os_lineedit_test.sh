@@ -2,9 +2,9 @@
 # Shell line editing in GETLN: backspace ($08) and DEL ($7F) erase the last
 # typed character (and rub it out on screen with BS/space/BS), and the input is
 # capped at the 64-byte LINEBUF so a long line can't overrun CMDBUF.
-#   typed "XYZ" + 3 backspaces + "PWD"  -> runs PWD (no "?" unknown-command line)
-#   typed "PWDQ" + DEL                  -> runs PWD
-#   control: "XYZPWD" (no edit)         -> unknown command, a lone "?" line
+#   typed "XYZ" + 3 backspaces + "fsck" -> runs FSCK (no "?" unknown-command line)
+#   typed "fsckX" + DEL                 -> runs FSCK
+#   control: "XYZfsck" (no edit)        -> unknown command, a lone "?" line
 set -e
 cd "$(dirname "$0")"
 ROOT=../..
@@ -25,19 +25,20 @@ run() {  # $1 = bytes to type (printf escapes ok) -> stripped console output
         | LC_ALL=C tr -d '\0\r'
 }
 
-# Sentinel command is HELP — a still-native built-in (DIR/PWD moved to /bin, which
-# this minimal disk doesn't carry). A valid command produces no lone "?" line; an
-# unknown one does (the banner's "? FOR HELP" isn't a lone line, so -x distinguishes).
+# Sentinel command is FSCK — a still-native, read-only built-in (DIR/PWD/HELP/DEL
+# all moved to /bin, which this minimal OS-only disk doesn't carry; FSCK takes no
+# args and prints "FSCK OK"). A valid command produces no lone "?" line; an unknown
+# one does (the banner's "? FOR HELP" isn't a lone line, so -x distinguishes).
 # control: an uncorrected bad command must produce a lone "?".
-run 'XYZHELP' | grep -qx '?' || fail "control: unknown command did not print '?'"
+run 'XYZFSCK' | grep -qx '?' || fail "control: unknown command did not print '?'"
 
-# backspace: "XYZ" + 3x BS clears the word, leaving "HELP" -> valid, no lone "?"
-if run 'XYZ\b\b\bhelp' | grep -qx '?'; then fail "backspace did not erase (got '?')"; fi
+# backspace: "XYZ" + 3x BS clears the word, leaving "fsck" -> valid, no lone "?"
+if run 'XYZ\b\b\bfsck' | grep -qx '?'; then fail "backspace did not erase (got '?')"; fi
 
-# DEL key ($7F=\177): "HELPX" + DEL -> "HELP" -> valid, no lone "?"
-if run 'helpx\177' | grep -qx '?'; then fail "DEL did not erase (got '?')"; fi
+# DEL key ($7F=\177): "fsckX" + DEL -> "fsck" -> valid, no lone "?"
+if run 'fsckx\177' | grep -qx '?'; then fail "DEL did not erase (got '?')"; fi
 
 # backspace at the start of an empty line must be harmless, then a real command runs
-if run '\b\b\bhelp' | grep -qx '?'; then fail "backspace past start of line corrupted input"; fi
+if run '\b\b\bfsck' | grep -qx '?'; then fail "backspace past start of line corrupted input"; fi
 
 echo "OS-LINEEDIT TEST: PASS"
