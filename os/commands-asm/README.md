@@ -43,6 +43,9 @@ size table with the ratio. Ported commands only in the TOTAL.
 |---------|-----:|---------:|------:|
 | touch   | 3420 |      524 | 6.5×  |
 | pwd     |  939 |      174 | 5.4×  |
+| del     | 2623 |      508 | 5.2×  |
+| mkdir   | 2614 |      547 | 4.8×  |
+| help    | 2257 |     1544 | 1.5×  |
 | more    |13542 |     3418 | 4.0×  |
 | sed     |21491 |     5430 | 4.0×  |
 | mv      |15526 |     4089 | 3.8×  |
@@ -59,7 +62,7 @@ size table with the ratio. Ported commands only in the TOTAL.
 | sort    |25844 |    14117 | 1.8×  |
 | find    | 9415 |     6413 | 1.5×  |
 | diff    |23080 |    16858 | 1.4×  |
-| **TOTAL** |**283948** | **120171** | **2.4×** |
+| **TOTAL** |**291442** | **122770** | **2.4×** |
 
 (Regenerate with `compare.sh`; the C sizes include the `//#use` shared libs
 spliced by `clib.py`, and each hand-asm binary that declares `;#use` likewise
@@ -67,7 +70,7 @@ counts its include, so the comparison is apples-to-apples.)
 
 ## Takeaways
 
-All 18 `/bin` commands are ported and verified **byte-identical** to their p8cc
+All 21 `/bin` commands are ported and verified **byte-identical** to their p8cc
 twin by `verify.sh` (diff of emulator transcripts) — so the sizes compare
 equivalent behavior, not a cut-down reimplementation. The overall win is **2.4×**
 (284 KB → 120 KB), but it splits cleanly by what a command's binary is *made of*:

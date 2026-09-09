@@ -5,8 +5,14 @@ SYNOPSIS
     mkdir path
 
 DESCRIPTION
-    Creates a new, empty subdirectory at the given path. mkdir is an OS
-    built-in command. Prints "DIR CREATED" on success.
+    Creates a new, empty subdirectory at the given path. Prints "DIR
+    CREATED" on success.
+
+    mkdir is an OS built-in command (unlike del/help, which moved to /bin):
+    it is a filesystem BOOTSTRAP primitive -- you need it to create /bin on
+    a freshly-formatted card before any /bin program can exist, and format
+    wipes /bin, so it cannot depend on a /bin binary. (It shares the work
+    with the SYS_MKDIR syscall that /bin programs like cp use.)
 
 EXAMPLES
     mkdir /src

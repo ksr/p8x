@@ -2083,6 +2083,11 @@ SC_GO:  RTS
 ; ---------------- MKDIR path -------------------------------------------------
 ; Create a subdirectory: allocate a SUBSECS-sector extent at the free pointer,
 ; lay down its '.' / '..', and add an entry to the parent directory.
+; MKDIR stays a built-in (unlike del/help): it is a filesystem BOOTSTRAP
+; primitive -- a freshly-formatted card has no /bin, so you need mkdir to create
+; /bin before any /bin program can exist, and `format` wipes /bin, so a
+; format-then-mkdir sanity check must not depend on a /bin binary. MKDIRCORE is
+; shared with the SYS_MKDIR syscall.
 DOMKDIR:JSR  ARG2P2             ; P2 -> the path argument
         JSR  MKDIRCORE          ; create it; A = status, C=1 on error
         JNC  mk_ok

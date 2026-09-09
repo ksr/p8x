@@ -28,6 +28,11 @@ python3 $ROOT/tools/p8xfs.py create ap.img --v2 >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   ap.img apos.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  ap.img /bin >/dev/null
 python3 $ROOT/tools/p8xfs.py put    ap.img apcat.bin --name /bin/cat.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+# the test redirects `help`'s output; help is now a /bin program -> put it too
+python3 $ROOT/tools/clib.py $ROOT/os/commands/help.c -o aphelp.pp.c
+python3 $ROOT/compiler/p8cc.py aphelp.pp.c -o aphelp.asm >/dev/null
+python3 $ROOT/assembler/p8xasm.py aphelp.asm -o aphelp.bin --base 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    ap.img aphelp.bin --name /bin/help.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 printf 'oneline\n' > apin.dat
 python3 $ROOT/tools/p8xfs.py put    ap.img apin.dat --name /IN.TXT >/dev/null
 

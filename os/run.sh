@@ -254,15 +254,13 @@ if [ ! -f "$disk" ]; then
             --name "/binc/$ex.bin" --load 0x6A00 --exec 0x6A00 >/dev/null
     done
     # C-only commands (no asm twin): their C build IS the /bin binary.
-    # (del is C-first here until its hand-asm twin lands, then it moves to the
-    #  asm-twin loop below like touch/cp/mv -- the "asm is the /bin default" rule.)
-    for ex in cube tri rotate page camera gl md house clsave paint desk wdesk del help; do
+    for ex in cube tri rotate page camera gl md house clsave paint desk wdesk; do
         python3 "$root/tools/p8xfs.py" put "$disk" "$build/$ex.bin" \
             --name "/bin/$ex.bin" --load 0x6A00 --exec 0x6A00 >/dev/null
     done
     # Hand-assembled commands -> /bin, THE DEFAULT the shell's PATH finds.
     # mkasm.sh splices ;#use includes just like clib.py does for C.
-    for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch man dep dump examine disasm awk cmp image; do
+    for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch man dep dump examine disasm awk cmp image del help; do
         sh "$root/os/commands-asm/mkasm.sh" "$ex" > "$build/$ex.a.asm"
         python3 "$root/assembler/p8xasm.py" "$build/$ex.a.asm" -o "$build/$ex.a.bin" --base 0x6A00 >/dev/null
         python3 "$root/tools/p8xfs.py" put "$disk" "$build/$ex.a.bin" \

@@ -79,6 +79,10 @@ cmd_script() {
         # create a missing file, then touch an existing one and confirm it is
         # NOT truncated (cat still shows its content). find/cat are helpers.
         TOUCH) printf 'touch NEW.TXT\rfind NEW\rtouch T.TXT\rcat T.TXT\rtouch -h\r' ;;
+        # delete a file (find confirms it's gone), a missing one (?No such
+        # file), two at once, and a CWD-relative name; then usage.
+        DEL)  printf 'del T.TXT\rfind T.TXT\rdel NOPE.TXT\rdel U.TXT S.TXT\rcd /SUB\rdel M.TXT\rdel -h\r' ;;
+        HELP) printf 'help\r' ;;
         MAN)  printf 'man dir\rman nope\rman -h\r' ;;
         # dep is quiet on success (both builds); usage/bad-addr paths print.
         DEP)  printf 'dep -h\rdep\rdep zz\rdep 9000 41 42 43\r' ;;

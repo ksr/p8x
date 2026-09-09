@@ -40,6 +40,11 @@ python3 $ROOT/tools/p8xfs.py mkdir  bf.img /bin >/dev/null
 python3 $ROOT/tools/p8xfs.py put    bf.img bfcat.bin --name /bin/cat.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    bf.img bfdir.bin --name /bin/dir.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    bf.img bfwc.bin  --name /bin/wc.bin  --load 0x6A00 --exec 0x6A00 >/dev/null
+# `del` is a /bin program (moved out of the shell) -> put it on the disk
+python3 $ROOT/tools/clib.py $ROOT/os/commands/del.c -o bfdel.pp.c
+python3 $ROOT/compiler/p8cc.py bfdel.pp.c -o bfdel.asm >/dev/null
+python3 $ROOT/assembler/p8xasm.py bfdel.asm -o bfdel.bin --base 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    bf.img bfdel.bin --name /bin/del.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    bf.img bf_big.txt --name /BIG.TXT >/dev/null
 
 # read the 66 KB file and stream it back out to a new file (read + write past 64 KB)

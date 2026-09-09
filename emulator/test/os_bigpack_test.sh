@@ -31,6 +31,11 @@ python3 $ROOT/tools/clib.py $ROOT/os/commands/dep.c -o bpdep.pp.c >/dev/null
 python3 $ROOT/compiler/p8cc.py bpdep.pp.c -o bpdep.asm >/dev/null
 python3 $ROOT/assembler/p8xasm.py bpdep.asm -o bpdep.bin --base 0x6A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    bp.img bpdep.bin --name /bin/dep.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+# `del` is a /bin program (moved out of the shell) -> put it on the disk
+python3 $ROOT/tools/clib.py $ROOT/os/commands/del.c -o bpdel.pp.c
+python3 $ROOT/compiler/p8cc.py bpdel.pp.c -o bpdel.asm >/dev/null
+python3 $ROOT/assembler/p8xasm.py bpdel.asm -o bpdel.bin --base 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    bp.img bpdel.bin --name /bin/del.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 head -c 30000 /dev/zero > bppad.bin
 for i in 1 2 3 4 5 6 7 8; do python3 $ROOT/tools/p8xfs.py put bp.img bppad.bin --name /PAD$i >/dev/null; done
 python3 $ROOT/tools/p8xfs.py mkdir bp.img /BIG >/dev/null

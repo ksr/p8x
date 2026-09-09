@@ -62,11 +62,16 @@ print a one-line usage summary and exit.
 > (the minimal-kernel split): they were removed from the OS and run from `/bin`
 > by bare name, so `dir -R`, `pwd`, `cat file`, `tree`, `del name`, `help` all
 > just work. `del` tombstones via the `FDELETE` BIOS call; `help` is ~1.4 KB of
-> reference text that no longer sits in the resident OS. The shell keeps only
-> what can't be a `/bin` program — `run`/`load` (the loader), `sh`/`make` (the
-> script engine), `cd`/`path` (shell state), `save`/`dep`, `mkdir`/`rmdir`/
-> `pack`/`fsck`/`format`, `exit`/`mon`, `mount`/`umount`, `bootload` (the FS
-> ones are candidates to move next). **`dump` stays native** — as a `/bin`
+> reference text that no longer sits in the resident OS.
+> The shell keeps only what can't be a `/bin` program, in four groups:
+> (1) shell state / the loader / the script engine — `run`/`load`, `sh`/`make`,
+> `cd`/`path`, `exit`/`mon`, `mount`/`umount`, `bootload`; (2) deep-FS-internal
+> ops with no syscall surface — `rmdir`/`pack`/`fsck`/`format` (moving them would
+> *add* OS code, not save it); (3) memory tools that would overwrite themselves
+> in the `$6A00` TPA — `save`/`dep`; (4) filesystem BOOTSTRAP — `mkdir` (you need
+> it to create `/bin` on a freshly-`format`ted card, which has no `/bin` to run a
+> `/bin` program from). **`dump` stays native** for that same
+> group-(3) reason — as a `/bin`
 > program it would load into the `$6A00` TPA and overwrite the very memory it
 > dumps. Consequence: a freshly-`format`ted card (no `/bin`) can't `dir`/`cat`
 > until `/bin` is repopulated (from the host, or a future master CF — backlog).
