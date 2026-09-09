@@ -268,4 +268,17 @@
 /* graphics presence */
 #define GFXPRES     0x60A4       /* 1 = GL card fitted (screen is the display); 0 = headless serial console */
 
+/* glass tty */
+#define GTCOL       0x60A5       /* glass TTY cursor column (0..GTCOLS-1) */
+#define GTROW       0x60A6       /* glass TTY cursor row (0..GTROWS-1) */
+#define GTSUSP      0x60A7       /* nonzero = glass TTY suspended (a full-screen GL app owns the screen; CONOUT is serial-only) */
+#define GCONEN      0x60AF       /* 1 = glass TTY console ENABLED (CONOUT mirrors to the GL screen); 0 = off (serial-only, the default -- `screen on` enables it) */
+#define GTXL        0x60A8       /* glass TTY cursor pixel x, low byte (0..474, step 6) */
+#define GTXH        0x60A9       /* glass TTY cursor pixel x, high byte */
+#define GTYL        0x60AA       /* glass TTY text-baseline pixel y (window, y-up), low byte */
+#define GTYH        0x60AB       /* glass TTY text-baseline pixel y, high byte */
+#define GTCH        0x60AC       /* glass TTY: the byte currently being drawn */
+#define GTTMP       0x60AD       /* glass TTY: FIFO-push scratch (holds the byte across the backpressure wait) */
+#define GTCNT       0x60AE       /* glass TTY: table-stream byte counter */
+
 #endif

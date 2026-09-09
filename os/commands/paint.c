@@ -43,6 +43,7 @@
 //#define GLSTAT 0xFF51
 //#define GLRB   0xFF52
 //#define GFXPRES 0x60A4  /* two-mode flag: 1 = GL card fitted (monitor/OS set it) */
+//#define GTSUSP  0x60A7  /* glass TTY suspend: 1 = this app owns the screen */
 
 /* ---- the display list: 6 ints per shape, flat ------------------------------
  * [tool, x0, y0, x1, y1, colour]; tool 0=line 1=box 2=circle 3=fill.
@@ -338,6 +339,7 @@ int main() {
     int k; int step;
     char *ap;
     if (peek(GFXPRES) == 0) { puts("?No display"); return 1; }
+    poke(GTSUSP, 1);   /* claim the screen: suspend the glass TTY console (P2) */
     ap = argstr();
     while (*ap == 32) { ap = ap + 1; }
     fromdesk = 0; fromwm = 0;

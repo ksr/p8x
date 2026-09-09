@@ -119,10 +119,65 @@ command. Independent of the graphics work; needed before the transfer app.
   from one build; `c_gfxpres_test.sh` boots the same disk with and without `-ng`
   and checks the monitor message, the flag a program reads, and the GL-program
   `?No display` exit all track the mode.
-- **P2 — Glass TTY behind `CONOUT`.** Text console on the GL screen (framebuffer,
-  cursor, scroll) in ROM; `CONOUT` draws+mirrors when `GFXPRES`; monitor inits the
-  screen + prints "Graphics Available"; console-suspend hook for apps. The big
-  foundational piece.
+- **P2 — Glass TTY behind `CONOUT`. MVP DONE, OPT-IN (2026-09-09).** `PUTCTX`
+  (the byte-pusher every output funnels through) can mirror each console byte to
+  the GL screen via GL `TEXT` as well as the serial ACIA — so the OS and every
+  program render on-screen with no change to their output code. **It is OFF by
+  default (`GCONEN=0`); `screen on` enables it** (`screen off` disables). Default
+  behaviour is byte-identical to pre-P2: the boot splash still shows, `CONOUT` is
+  serial-only, and the whole graphics ecosystem is untouched. Cursor state
+  (`GTCOL/GTROW/GTX/GTY`), the `GTSUSP` console-suspend flag, and the `GCONEN`
+  enable flag are memmap bytes; a `GCLS` BIOS entry (`$014E`) clears+homes the
+  console (called by `screen on`). Geometry is 80×30 (6px advance × 9px line).
+  Verified by `c_glasstty_test.sh` (`screen on`, then OS output renders in the top
+  rows; gated off + serial-clean when headless).
+  - **Why opt-in (the hard lesson).** An always-on global `CONOUT` mirror has a
+    large blast radius: the console and every GL program share ONE card's screen
+    and global pipeline state, which surfaced **three distinct collisions** — (1)
+    returning to the console clears the screen (correct per the takeover principle,
+    but it wiped a program's frame before a test's framebuffer grab); (2) the
+    console echo drew INTO a card list the OUTCH→window sink was recording,
+    corrupting it; (3) the console's command echo landed on the shared framebuffer
+    that byte-exact GL tests compare. Making the always-on mirror coexist cleanly
+    with the whole ecosystem (every program, the software-lib path that never
+    calls `gpresent`, and every byte-exact test) is a real sub-project — deferred.
+    Opt-in ships the mechanism now with zero default blast radius.
+  - **Console-suspend hook (`GTSUSP`) — DONE.** The glass TTY and GL programs
+    share one screen, so a program that draws graphics must suspend the console
+    or its text (and clear-on-full) corrupt the graphics. `gpresent()` sets
+    `GTSUSP=1` (covers every `//#use gfx` program); `paint`/`desk`/`wdesk` and
+    BASIC set it directly; the OS shell clears it (`GTSUSP=0`) at each prompt, so
+    the console resumes when a program returns. `PUTCTX` skips the screen when
+    `GTSUSP`. (Found the hard way: without it, BASIC's console output triggered
+    clear-on-full and wiped its own graphics.)
+  - **Screen-owner configures from scratch (the governing principle).** Because
+    the glass TTY and GL programs share one card's global state, the rule is:
+    **whoever takes the screen fully configures the GL pipeline it needs and never
+    trusts what the last owner left; and the console reconfigures (clears) when it
+    takes control back.** A program establishes its own window/viewport/camera/
+    matrix (they already do); the console clears on takeover (the monitor's
+    `DISPINIT`→`GTCLS` on `exit`, the OS `GCLS` at boot). This is why returning to
+    the console from a graphics program clears its picture — by design.
+  - **State hygiene the glass TTY must respect** (shared card port): `GTCLS`
+    leaves `PRMFIL 0` (outline) so later stroke `TEXT` — the console's own and a
+    GL client's — isn't filled; `GTDRAW` ends with `MDIDEN` so its per-glyph
+    `MDTRAN` doesn't translate the next client's geometry (BASIC's raw
+    `MOVE3/TEXT` assumes an identity matrix).
+  - **Testing gotcha (cost a lot of debugging):** a graphics program's picture
+    must be grabbed **while the program owns the screen** — after `exit`, the
+    monitor reboots and `GTCLS` clears it (correct: the console reclaiming). Tests
+    that framebuffer-grab at the cycle cap must not send `exit`/return-to-console
+    first (see the `c_demo` fix), or they capture a cleared screen and wrongly
+    read the program as "drew nothing."
+  - **ROM budget resolved:** the driver fits with ~3 KB of ROM to spare, so
+    "monitor on screen" stays viable (see the pre-boot-font item below).
+  - **Deferred to BACKLOG (deliberate MVP cuts):** proper **scrollback** (MVP is
+    clear-on-full — there is NO free RAM for a text framebuffer, so the intended
+    fix is card-list scrollback); **per-cell erase** (`BS` moves the cursor but
+    leaves a ghost); and **true pre-boot monitor-on-screen** (GL `TEXT` needs the
+    glyph bank, which only the OS loads from `/FONT.GL` — the monitor would need
+    to load a font itself to render its own pre-`B` banner). Also a speed pass
+    (batching / set-projection-once).
 - **P3 — Second serial port** (emulator + hardware). Enables Kermit later.
 - **P4 — Finder desktop + full-screen-app frame.** File browser (navigate/open
   first; rename/duplicate/move next), menu bar, launch/return. Retire the tiled

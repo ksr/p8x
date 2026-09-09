@@ -27,6 +27,7 @@
 //#define GLRB   0xFF52  /* pop one read-back byte (PIXRD's reply)      */
 //#define GLID   0xFF54  /* reads 'G' (71) when the engine is fitted    */
 //#define GFXPRES 0x60A4 /* RAM: 1 = GL card fitted; two-mode selector  */
+//#define GTSUSP  0x60A7 /* RAM: 1 = glass TTY suspended (this app owns screen) */
 
 int __gfxpen;
 int __gfxini;
@@ -77,6 +78,10 @@ int has_graphics() {
  * GFXPRES flag (has_graphics) rather than a fresh GLID probe. */
 int gpresent() {
     if (!has_graphics()) { return 0; }
+    /* claim the screen: suspend the glass TTY (the on-screen text console) so its
+     * output and clear-on-full don't corrupt this program's graphics. The shell
+     * releases it (GTSUSP=0) at the next prompt when we return (two-mode P2). */
+    poke(GTSUSP, 1);
     gcolor(65535);           /* triggers the lazy init + a known pen */
     return 1;
 }

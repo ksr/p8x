@@ -20,6 +20,7 @@
 //#define GLDATA 0xFF50
 //#define GLSTAT 0xFF51
 //#define GFXPRES 0x60A4  /* two-mode flag: 1 = GL card fitted (monitor/OS set it) */
+//#define GTSUSP  0x60A7  /* glass TTY suspend: 1 = this app owns the screen */
 
 //#use ptr
 //#use wm
@@ -346,6 +347,7 @@ int mcopy(int row, char *s) {
 int main() {
     int t; int k; int going; int i;
     if (peek(GFXPRES) == 0) { puts("?No display"); return 1; }
+    poke(GTSUSP, 1);   /* claim the screen: suspend the glass TTY console (P2) */
     wm_init();
     wm_n = 4;
     wmx[0] = 40;  wmy[0] = 40; wmw[0] = 210; wmh[0] = 150; wmvis[0] = 1;

@@ -266,3 +266,16 @@ TTYCH       = $60A3              ; PUTC's saved character (PUTC must preserve A)
 
 ; graphics presence
 GFXPRES     = $60A4              ; 1 = GL card fitted (screen is the display); 0 = headless serial console
+
+; glass tty
+GTCOL       = $60A5              ; glass TTY cursor column (0..GTCOLS-1)
+GTROW       = $60A6              ; glass TTY cursor row (0..GTROWS-1)
+GTSUSP      = $60A7              ; nonzero = glass TTY suspended (a full-screen GL app owns the screen; CONOUT is serial-only)
+GCONEN      = $60AF              ; 1 = glass TTY console ENABLED (CONOUT mirrors to the GL screen); 0 = off (serial-only, the default -- `screen on` enables it)
+GTXL        = $60A8              ; glass TTY cursor pixel x, low byte (0..474, step 6)
+GTXH        = $60A9              ; glass TTY cursor pixel x, high byte
+GTYL        = $60AA              ; glass TTY text-baseline pixel y (window, y-up), low byte
+GTYH        = $60AB              ; glass TTY text-baseline pixel y, high byte
+GTCH        = $60AC              ; glass TTY: the byte currently being drawn
+GTTMP       = $60AD              ; glass TTY: FIFO-push scratch (holds the byte across the backpressure wait)
+GTCNT       = $60AE              ; glass TTY: table-stream byte counter

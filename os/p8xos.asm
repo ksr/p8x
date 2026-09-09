@@ -57,6 +57,7 @@ CONST   = $0106          ; A = RDRF bit; Z=1 when no key waiting
 CFINIT  = $0109          ; reset + 8-bit mode (current drive); C=1 on error
 CFSEL   = $0148          ; A = drive (0/1) -> route CF/FS sector I/O to that card
 CFCURDRV= $014B          ; -> A = current CF drive
+GCLS    = $014E          ; clear the glass TTY (on-screen console) + home the cursor
 FFIND   = $0118          ; find file FNAME in current dir -> LBA+FLEN; C=1 absent
 CFREAD  = $010C          ; sector LBA -> (P1); P1 += 512
 CFWRITE = $010F          ; SBUF -> sector LBA
@@ -331,6 +332,8 @@ COLD:   LDP3 #STKTOP
         STA  GFXPRES
 COLD_NOGFX:
         JSR  FONTLD             ; stream /FONT.GL to the card, if both exist
+        ; The glass TTY (on-screen console) is opt-in and OFF at boot; `screen on`
+        ; clears+homes it (GCLS) when the user enables it. Nothing to do here.
 
 ; ---------------- Shell main loop --------------------------------------------
 SHELL:  JSR  FLUSHRED           ; if the previous command was redirected, write its file
@@ -350,7 +353,12 @@ SHELL:  JSR  FLUSHRED           ; if the previous command was redirected, write 
         STA  PIPEF
 SH_PROMPT:
         LDA  SCRIPTM            ; running a script: no prompt (GETLN pulls + echoes)
-        JNZ  SH_GL
+        JNZ  SH_GL             ;   -- and DON'T resume the glass TTY: a script is
+                               ;   run on behalf of a program that owns the screen
+                               ;   (e.g. wdesk's SYS_RUNSH); resuming here would let
+                               ;   the console echo pollute a card list it's recording
+        LDA  #0                 ; interactive prompt: the console owns the screen
+        STA  GTSUSP             ;   again (a graphics program that ran claimed it)
         JSR  CRLF
         LDP1 #CWDPATH           ; prompt = "<path>> " (drive 1 shows as /d1/...)
         JSR  OPUTS

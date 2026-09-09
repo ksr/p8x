@@ -336,6 +336,22 @@ MAP = [
     # This is the two-mode selector: headless serial console vs. graphics desktop
     # (see docs/p8x-two-mode-design.md). One shared byte across monitor + OS + programs.
     ('graphics presence', 'GFXPRES', 0x60A4, '1 = GL card fitted (screen is the display); 0 = headless serial console'),
+
+    # glass TTY (two-mode P2): the on-screen text console behind BIOS CONOUT.
+    # When GFXPRES and not GTSUSP, CONOUT draws each byte to the GL screen (via GL
+    # TEXT) as well as the serial ACIA. Cursor is (col,row); clear-on-full MVP (no
+    # framebuffer). Shared monitor + OS state. See docs/p8x-two-mode-design.md.
+    ('glass tty', 'GTCOL', 0x60A5, 'glass TTY cursor column (0..GTCOLS-1)'),
+    ('glass tty', 'GTROW', 0x60A6, 'glass TTY cursor row (0..GTROWS-1)'),
+    ('glass tty', 'GTSUSP', 0x60A7, 'nonzero = glass TTY suspended (a full-screen GL app owns the screen; CONOUT is serial-only)'),
+    ('glass tty', 'GCONEN', 0x60AF, '1 = glass TTY console ENABLED (CONOUT mirrors to the GL screen); 0 = off (serial-only, the default -- `screen on` enables it)'),
+    ('glass tty', 'GTXL', 0x60A8, 'glass TTY cursor pixel x, low byte (0..474, step 6)'),
+    ('glass tty', 'GTXH', 0x60A9, 'glass TTY cursor pixel x, high byte'),
+    ('glass tty', 'GTYL', 0x60AA, 'glass TTY text-baseline pixel y (window, y-up), low byte'),
+    ('glass tty', 'GTYH', 0x60AB, 'glass TTY text-baseline pixel y, high byte'),
+    ('glass tty', 'GTCH', 0x60AC, 'glass TTY: the byte currently being drawn'),
+    ('glass tty', 'GTTMP', 0x60AD, 'glass TTY: FIFO-push scratch (holds the byte across the backpressure wait)'),
+    ('glass tty', 'GTCNT', 0x60AE, 'glass TTY: table-stream byte counter'),
 ]
 
 HERE = os.path.dirname(os.path.abspath(__file__))

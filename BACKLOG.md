@@ -32,6 +32,46 @@ remainder is why it is still here.
 > itself now stops correctly -- `set -euo pipefail` plus an explicit `exit 1` on
 > each of synthesise / P&R / pack, so `load` is unreachable after a failed build.
 
+- **Glass TTY (two-mode P2) — always-on coexistence, proper scroll, monitor-on-screen.**
+  The P2 MVP (2026-09-09) put the OS and program output on the GL screen via a
+  glass TTY behind BIOS `CONOUT`, but it is **OPT-IN, OFF by default** (`GCONEN=0`;
+  `screen on` enables it). Making it **always-on** is the big deferred piece:
+  - **Always-on coexistence.** With the console permanently mirroring, it shares
+    ONE screen + card pipeline state with every GL program, which collided three
+    ways (see docs/p8x-two-mode-design.md): return-to-console clears a program's
+    frame; the console echo pollutes a card list the OUTCH→window sink is
+    recording; and the command echo dirties the framebuffer byte-exact GL tests
+    compare. Resolving these needs every GL program (and the software-lib path
+    that never calls `gpresent`) to configure/clear from scratch on claim, plus
+    adapting the byte-exact tests — a real sub-project. Until then, opt-in.
+  - **`screen` command asm twin.** `os/commands/screen.c` shipped C-only; per the
+    /bin dual-twin rule it needs an `os/commands-asm/screen.asm` twin (and the
+    run.sh build lists updated) — see [[feedback_p8x_new_command_dual]].
+  - Two more deliberate cuts were deferred here:
+  - **Proper scrollback.** The MVP is **clear-on-full**: when the cursor passes
+    the bottom row it clears the screen and homes to the top (zero CPU RAM). A
+    real console scrolls. There is NO free RAM block for a text framebuffer (high
+    RAM is fully allocated — TPA `$6A00`, history `$F800`, FSDIRBUF `$FA00`, RDBUF
+    `$FC00`, stack `$FE00`), so the intended design is **card-list scrollback**:
+    store text on the card as GL command lists (the WM-sink pattern), keep a ring
+    of line-lists, and `CLRUN` the visible window on scroll (drop the oldest).
+    ~zero CPU RAM, no TPA cost; the work is the list-ring management in ROM.
+  - **True "monitor on screen" (pre-boot text).** GL `TEXT` needs the glyph bank,
+    which only the **OS** streams from `/FONT.GL` at boot (`FONTLD`). So the MVP
+    renders OS + program output but NOT the monitor's own pre-`B` banner/prompt.
+    To get the headline "monitor on screen from power-up", the monitor must load
+    the font itself at cold start (CFINIT drive 0 + stream `/FONT.GL` to `GLDATA`,
+    degrading gracefully with no disk), or a minimal font is embedded in ROM.
+  - **Per-cell erase / backspace.** The MVP draws glyphs forward on a black
+    screen and does NOT clear a cell before drawing. `BS` moves the cursor back
+    but leaves the old glyph on screen (a ghost), and re-typing after `BS`
+    overlaps. Fix: clear the target cell (a black `BOXFILL` at the cell rect, pen
+    toggled black then back to white) before each glyph, or at least on `BS`/space.
+    Deferred to keep the first cut small; the char stream / cursor logic is
+    already correct, only the on-screen erase is missing.
+  - Speed: batching / set-projection-once (vs. the per-char PROJCT/MDIDEN/TSIZE/
+    MDTRAN/MOVE3/TEXT program) is a win once scroll and erase land.
+
 - [x] **BASIC now honours the OS current directory (fixed 2026-08-13).** From the
       OS shell, `cd src` then `basic` then `SAVE "T"` used to write `/T`; it now
       writes `/src/T`.

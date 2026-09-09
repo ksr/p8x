@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 6ffcfef7-73ca-445b-bcdb-f57735fdc98f
-  modified: 2026-09-09T16:18:26.125Z
+  modified: 2026-09-09T22:55:15.375Z
 ---
 
 **BIG DIRECTION CHANGE, user, 2026-09-09.** Full design in
@@ -43,6 +43,53 @@ app. **RETIRED:** tiled windows, z-order, drag, per-window records, most SYS_WK*
 CONOUT (big, ROM work, "monitor on screen") -> P3 2nd serial port (emu+hw, for
 Kermit) -> P4 Finder desktop + full-screen-app frame (retire tiled wdesk) ->
 P5 apps: Paint(adapt)/Image(adapt)/Term/Write(NEW)/serial-terminal(Kermit).
+
+**P2 MVP DONE, OPT-IN (2026-09-09), on graphics-card:** glass TTY is OFF by
+default (GCONEN $60AF = 0); `screen on` (os/commands/screen.c, C-only, needs asm
+twin) enables it, `screen off` disables. PUTCTX gates on GCONEN first, so default
+== pre-P2 EXACTLY (boot splash restored, CONOUT serial-only, whole graphics
+ecosystem untouched, all tests green). WENT OPT-IN because an always-on global
+CONOUT mirror had a huge blast radius: console + every GL program share ONE
+screen + card pipeline state -> THREE collision classes (return-to-console clears
+a program's frame before a test grabs it; console echo pollutes a card list the
+OUTCH->window sink is recording -> fixed for the ENABLED case by SH_PROMPT NOT
+resuming GTSUSP during a script; command echo dirties the framebuffer byte-exact
+GL tests compare). Always-on coexistence = deferred sub-project (BACKLOG). glass
+TTY = on-screen text console behind BIOS CONOUT. Monitor DISPINIT clears the GL screen + homes a
+cursor when GFXPRES; PUTCTX (firmware/p8xmon.asm, the byte-pusher every output
+funnels through) mirrors each byte to the screen via GL TEXT + serial. Draws with
+the GTEXT recipe (PROJCT 0/MDIDEN/TSIZE/MDTRAN x,y,0/MOVE3 0,0,0/TEXT); glyphs
+need the card glyph bank (OS FONTLD streams /FONT.GL at boot, THEN OS calls new
+GCLS BIOS $014E to clear+home so the prompt starts clean). State = memmap bytes
+GTCOL/GTROW/GTSUSP/GTXL..GTYH/GTCH/GTTMP/GTCNT ($60A5+). Geometry 80x30 (6px adv,
+9px line). GOTCHA that bit: PUTCTX must SAVE/RESTORE P1 (TPA1L/PHA...) around
+GTPUT -- PUTS/commands keep their string cursor in P1 and the glass code uses it
+(else serial spews garbage). Emulator framebuffer is UNDEFINED under -ng (card
+absent) so don't assert "black screen"; assert serial-clean instead. Test
+c_glasstty_test.sh. CONSOLE-SUSPEND HOOK (GTSUSP $60A7) IS REQUIRED not optional:
+glass TTY + GL programs share ONE screen, so a graphics program must suspend the
+console (else its text + clear-on-full WIPE the graphics -- this broke
+basic_gfx). Wiring: gpresent() sets GTSUSP=1 (all //#use gfx); paint/desk/wdesk +
+BASIC set it directly; OS shell SH_PROMPT clears GTSUSP=0 (console resumes on
+return); PUTCTX skips screen if GTSUSP. STATE-HYGIENE the glass TTY MUST leave
+clean (shared card port): GTCLS ends PRMFIL 0 (outline, else stroke TEXT fills
+invisible) and GTDRAW ends MDIDEN (else its per-glyph MDTRAN translates the next
+client's geometry off-screen -- BASIC raw MOVE3/TEXT assumes identity matrix).
+Both bit basic_gfx (BASIC captures mid-session via BYE->shell, no reboot-clear, so
+that breakage was REAL). ARCH PRINCIPLE (user, 2026-09-09): each screen-owner
+(program AND console) CONFIGURES THE GL PIPELINE FROM SCRATCH; nobody trusts
+inherited state -- and the console CLEARS on takeover. BIG TIME-SINK LESSON: house
+"drew 0px" and tri "red=0" were a PHANTOM -- the c_demo test sent `exit`, which
+reboots the monitor -> DISPINIT -> GTCLS CLEARS the screen (correct: console
+reclaiming per the principle) BEFORE the -g PPM grab at the cycle cap. house/tri
+draw FINE (1557/813 px) when captured WHILE the program owns the screen. Fix:
+c_demo drops `exit` before the framebuffer grab + dropped a bogus `lit>red`
+assertion (its non-red px came from the old exit->splash swatches, not tri). No
+PROJCT-native op / gpresent glpmode reset was needed (both were phantom fixes
+chasing the exit-clear -- REMOVED). Test c_glasstty_test.sh. MVP CUTS -> BACKLOG: proper scroll (clear-on-full now; no
+free RAM for a framebuffer -> card-list scrollback intended), per-cell erase (BS
+ghosts), pre-boot monitor-on-screen (needs a monitor-side font load), speed.
+ROM after P2: ends ~$144B, ~3KB free of the 8K.
 
 **P1 DONE (2026-09-09), on graphics-card:** GFXPRES = resident byte $60A4 (memmap
 anchor, gen_memmap.py). Monitor DISPINIT probes GLID -> sets GFXPRES + prints

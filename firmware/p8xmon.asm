@@ -107,12 +107,12 @@ RESET:  JMP  COLD
         JMP  FSDIRBUF       ; $0145 FSDIRBUF  point FNEXT's sector buffer at page A (high byte; call after FOPENDIR)
         JMP  CFSEL          ; $0148 CFSEL     A = drive (0/1) -> route sector/FS I/O to that CF card
         JMP  CFCURDRV       ; $014B CFCURDRV  -> A = current CF drive
+        JMP  GTINIT         ; $014E GCLS      clear the glass TTY + home the cursor (no-op path is caller-gated on GFXPRES)
 
 ;==============================================================================
 ; Monitor body (relocated above the BIOS table; reset vectors here).
-; The BIOS jump table now runs to $0145 (FSDIRBUF), so the body starts at $0160
-; to leave headroom for further BIOS entries (now runs to $014B). RESET ($0000)
-; jumps here by label.
+; The BIOS jump table now runs to $014E (GCLS), so the body starts at $0160
+; to leave headroom for further BIOS entries. RESET ($0000) jumps here by label.
 ;==============================================================================
         .org $0160
 ; ---------------- Cold start -------------------------------------------------
@@ -136,9 +136,11 @@ COLD:   LDP3 #STKTOP        ; stack
         LDA  #$61           ; FSCAN/FNEXT directory-buffer page defaults to SBUF;
         STA  DIBUFH         ;   a program repoints it (FSDIRBUF) to run a dir walk
                             ;   alongside an open write stream without clobbering it
+        JSR  DISPINIT       ; detect the display, set GFXPRES, init the glass TTY
+                            ; -- MUST precede any PUTC: PUTCTX's screen mirror
+                            ; reads GFXPRES/GTSUSP, which DISPINIT establishes
         LDP1 #MBANNER
         JSR  PUTS
-        JSR  DISPINIT       ; a fitted display gets cleared + the boot splash
 
 ; ---------------- Main loop --------------------------------------------------
 PROMPT: LDP1 #MPROMPT
@@ -295,18 +297,20 @@ DPUT:   JSR  PUTC
 ; example of driving the GL port from machine code.
 ; Probe the GL card (GLID reads 'G' at $FF54 when fitted) and record the result
 ; in the resident GFXPRES byte -- the two-mode selector read by the OS and every
-; GL program (see docs/p8x-two-mode-design.md). Print the outcome on serial so a
-; headless operator sees which mode the machine came up in. When the card is
-; present, stream the splash; when absent, this is the last graphics touch.
-DISPINIT: LDA GLID
+; GL program. When a card is present, show the boot splash. The glass TTY (the
+; on-screen text console) is OPT-IN, OFF by default (GCONEN=0): CONOUT stays
+; serial-only until `screen on` enables it, so the graphics ecosystem is
+; unaffected by default (see docs/p8x-two-mode-design.md). The serial message
+; reports the mode either way.
+DISPINIT: LDA  #0
+        STA  GCONEN         ; glass TTY console off by default (opt-in)
+        LDA  GLID
         LDB  #'G'
         CMP
         JNZ  dsp_no         ; no card fitted -> headless serial console
         LDA  #1             ; GL card present
         STA  GFXPRES
-        LDP1 #MHASGFX
-        JSR  PUTS
-        LDP1 #DSPTAB
+        LDP1 #DSPTAB        ; the boot splash (proof the card + all 3 channels work)
         LDA  #DSPLEN
         STA  TMP
 dsp_lp: LDA  GLSTAT         ; FIFO backpressure
@@ -320,18 +324,19 @@ dsp_lp: LDA  GLSTAT         ; FIFO backpressure
         SUB
         STA  TMP
         JNZ  dsp_lp
-dsp_rt: RTS
+        LDP1 #MHASGFX
+        JSR  PUTS
+        RTS
 dsp_no: LDA  #0             ; no display -> serial-only mode
         STA  GFXPRES
         LDP1 #MNOGFX
         JSR  PUTS
         RTS
 
-; The splash as GL bytes (window coords, y UP -- the band 124..147 maps to
-; itself under the flip): identity window+viewport, filled black RECT as
-; the clear, white outline RECT as the border, three filled 40x24 swatches
-; red/green/blue centred -- proof of both pen bytes and all three channels
-; at a glance.
+; The boot splash as GL bytes (window coords, y UP): identity window/viewport,
+; a filled black RECT (the clear), a white outline RECT (the border), then three
+; filled 40x24 red/green/blue swatches -- proof of both pen bytes and all three
+; channels at a glance. (The glass TTY console, when enabled, clears this.)
 DSPLEN  = 96
 DSPTAB: .byte $B3, $00,$00, $DF,$01, $00,$00, $0F,$01   ; WINDOW 0 479 0 271
         .byte $B2, $00,$00, $DF,$01, $00,$00, $0F,$01   ; VWPORT 0 479 0 271
@@ -354,6 +359,188 @@ DSPTAB: .byte $B3, $00,$00, $DF,$01, $00,$00, $0F,$01   ; WINDOW 0 479 0 271
         .byte $10, $04,$01, $7C,$00                     ; MOVE 260,124
         .byte $34, $2B,$01, $93,$00                     ; RECT 299,147
         .byte $E0, $00                                  ; PRMFIL 0 again
+
+;==============================================================================
+; Glass TTY (two-mode P2): the on-screen text console behind BIOS CONOUT.
+; When GFXPRES and not GTSUSP, PUTCTX draws each output byte to the GL screen
+; with GL TEXT as well as sending it to serial -- so the monitor, the OS and
+; every program appear on-screen with NO change to their output code. Glyphs
+; come from the card's glyph bank (the OS streams /FONT.GL at boot), so text
+; renders once that is loaded; undefined glyphs are silently skipped card-side.
+; MVP: 80x30 cells (6px advance x 9px line), CLEAR-ON-FULL (no scrollback), and
+; forward-draw only (no per-cell erase yet) -- both deferred to BACKLOG.md.
+;==============================================================================
+GTCOLS = 80            ; 480 / 6px advance
+GTROWS = 30            ; 272 / 9px line
+GTADV  = 6             ; pixel advance per column
+GTLH   = 9             ; pixel line height
+GTY0   = 264           ; window-y (y-up) baseline of the top row (271 - 7)
+
+; GTPB - push A into the GL command FIFO, honouring backpressure (GLSTAT bit7).
+GTPB:   STA  GTTMP
+gtpb1:  LDA  GLSTAT
+        LDB  #$80
+        AND
+        JNZ  gtpb1
+        LDA  GTTMP
+        STA  GLDATA
+        RTS
+
+; GTSTREAM - push A bytes from (P1) into the FIFO.
+GTSTREAM: STA GTCNT
+gts1:   LDA  GTCNT
+        JZ   gtsx
+        LDA  (P1)+
+        JSR  GTPB
+        LDA  GTCNT
+        DEC
+        STA  GTCNT
+        JMP  gts1
+gtsx:   RTS
+
+; GTCLS - set the port (window/viewport), clear the screen to black, and leave a
+; white pen for glyphs. Run at init and on clear-on-full.
+GTCLS:  LDP1 #GTCLST
+        LDA  #40            ; GTPRE-GTCLST (port setup + clear + outline mode)
+        JSR  GTSTREAM
+        RTS
+
+; GTHOME - cursor to the top-left cell.
+GTHOME: LDA  #0
+        STA  GTCOL
+        STA  GTROW
+        STA  GTXL
+        STA  GTXH
+        LDA  #<GTY0
+        STA  GTYL
+        LDA  #>GTY0
+        STA  GTYH
+        RTS
+
+; GTINIT - clear + home + un-suspend (a fitted display becomes a blank console).
+GTINIT: LDA  #0
+        STA  GTSUSP         ; console owns the screen (garbage at power-on)
+        JSR  GTCLS
+        JSR  GTHOME
+        RTS
+
+; GTDRAW - draw the glyph in GTCH at the cursor pixel (GTX,GTY). Emits the GTEXT
+; recipe: PROJCT 0 / MDIDEN / TSIZE 1.0 / MDTRAN x,y,0 / MOVE3 0,0,0 / TEXT 1,ch.
+GTDRAW: LDP1 #GTPRE
+        LDA  #8             ; GTMID-GTPRE (GTEXT program head)
+        JSR  GTSTREAM
+        LDA  GTXL
+        JSR  GTPB
+        LDA  GTXH
+        JSR  GTPB
+        LDA  GTYL
+        JSR  GTPB
+        LDA  GTYH
+        JSR  GTPB
+        LDP1 #GTMID
+        LDA  #11            ; GTEND-GTMID (GTEXT program tail)
+        JSR  GTSTREAM
+        LDA  GTCH
+        JSR  GTPB
+        LDA  #$90           ; MDIDEN: leave the model matrix at identity so the
+        JSR  GTPB           ;   glass TTY doesn't pollute it for the next GL user
+        RTS                 ;   (e.g. BASIC's raw MOVE3/TEXT assumes identity)
+
+; GTNL - newline: column 0, next row, drop the baseline; clear-on-full at bottom.
+GTNL:   LDA  #0
+        STA  GTCOL
+        STA  GTXL
+        STA  GTXH
+        LDA  GTYL           ; baseline -= line height
+        LDB  #GTLH
+        SUB
+        STA  GTYL
+        JC   gtnl_row       ; C=1 -> no borrow
+        LDA  GTYH
+        DEC
+        STA  GTYH
+gtnl_row: LDA GTROW
+        INC
+        STA  GTROW
+        LDB  #GTROWS
+        CMP                 ; C=1 -> GTROW >= GTROWS: full
+        JC   GTINIT         ; clear-on-full: clear + home (tail)
+        RTS
+
+; GTCR - carriage return: back to column 0 on this line.
+GTCR:   LDA  #0
+        STA  GTCOL
+        STA  GTXL
+        STA  GTXH
+        RTS
+
+; GTBS - backspace: step the cursor left one cell (no on-screen erase yet).
+GTBS:   LDA  GTCOL
+        JZ   gtbsx
+        DEC
+        STA  GTCOL
+        LDA  GTXL
+        LDB  #GTADV
+        SUB
+        STA  GTXL
+        JC   gtbsx
+        LDA  GTXH
+        DEC
+        STA  GTXH
+gtbsx:  RTS
+
+; GTPUT - the CONOUT mirror entry: draw byte A on the glass TTY. Interprets
+; CR/LF/BS, ignores other controls, draws printables and advances (wrap = NL).
+GTPUT:  STA  GTCH
+        LDB  #CR
+        CMP
+        JZ   GTCR
+        LDA  GTCH
+        LDB  #LF
+        CMP
+        JZ   GTNL
+        LDA  GTCH
+        LDB  #$08
+        CMP
+        JZ   GTBS
+        LDA  GTCH
+        LDB  #$20
+        CMP                 ; C=1 -> byte >= $20 (printable)
+        JNC  gtputx         ; an unhandled control char -> ignore
+        JSR  GTDRAW
+        LDA  GTXL           ; advance one column
+        LDB  #GTADV
+        ADD
+        STA  GTXL
+        JNC  gtp_col
+        LDA  GTXH
+        INC
+        STA  GTXH
+gtp_col: LDA GTCOL
+        INC
+        STA  GTCOL
+        LDB  #GTCOLS
+        CMP                 ; C=1 -> GTCOL >= GTCOLS: wrap
+        JC   GTNL           ; wrap = newline (tail)
+gtputx: RTS
+
+; GTCLST - port setup + full-screen black clear + white glyph pen (window coords,
+; y UP). GTPRE/GTMID are the fixed halves of the per-glyph GTEXT program, split
+; where the variable x,y (then the char) are spliced in by GTDRAW.
+GTCLST: .byte $B3, $00,$00, $DF,$01, $00,$00, $0F,$01   ; WINDOW 0 479 0 271
+        .byte $B2, $00,$00, $DF,$01, $00,$00, $0F,$01   ; VWPORT 0 479 0 271
+        .byte $E0, $01                                  ; PRMFIL 1 (fill)
+        .byte $06, $00,$00,$00                          ; COLOR black
+        .byte $10, $00,$00, $00,$00                     ; MOVE 0,0
+        .byte $34, $DF,$01, $0F,$01                     ; RECT 479,271: the clear
+        .byte $E0, $00                                  ; PRMFIL 0 (outline): leave
+                                                        ;   stroke mode so glyph TEXT
+                                                        ;   -- ours AND a later GL
+                                                        ;   client's (BASIC) -- draws
+        .byte $06, $1F,$3F,$1F                          ; COLOR white (glyph pen)
+GTPRE:  .byte $B0,$00,$00, $90, $81,$00,$01, $96        ; PROJCT 0; MDIDEN; TSIZE 1.0; MDTRAN...
+GTMID:  .byte $00,$00, $12, $00,$00,$00,$00,$00,$00, $80,$01  ; ...z=0; MOVE3 0,0,0; TEXT count 1
+GTEND:
 
 ; ---------------- I : init CF + identify -------------------------------------
 CMD_I:  JSR  CFINIT
@@ -1879,8 +2066,25 @@ PUTC1:  LDA  ACIAS
         JZ   PUTC1
         PLA
         STA  ACIAD
-        STA  TTYLST
-        RTS
+        STA  TTYLST         ; A = the transmitted byte
+        ; --- glass TTY mirror (two-mode P2): also draw it on the GL screen ---
+        LDB  GCONEN
+        JZ   pctx_rt        ; console off (default, opt-in) -> serial only
+        LDB  GFXPRES
+        JZ   pctx_rt        ; no display -> serial only
+        LDB  GTSUSP
+        JNZ  pctx_rt        ; a full-screen app owns the screen -> serial only
+        TPA1L               ; the glass code uses P1; the caller (PUTS / a command
+        PHA                 ;   walking a string) keeps ITS cursor there, so save
+        TPA1H               ;   and restore P1 across the draw
+        PHA
+        LDA  TTYLST         ; the byte to draw (unchanged in TTYLST)
+        JSR  GTPUT
+        PLA
+        TAP1H
+        PLA
+        TAP1L
+pctx_rt: RTS
 
 ; GETC - block until a key arrives, return it in A (and a convenience copy in
 ;   TMP, since callers often clobber A before re-testing the char). Spins on

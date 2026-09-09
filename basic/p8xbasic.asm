@@ -33,6 +33,8 @@ GLDATAR = $FF50          ; GL command FIFO (stage 10d): one byte at a time
 GLSTATR = $FF51          ; bit7 = FIFO full (wait before pushing)
 GLRBR   = $FF52          ; read-back FIFO pop (stage 10e; GLSTAT bit0 = has byte)
 GLIDR   = $FF54          ; reads 'G' when the GL engine is fitted
+GTSUSP  = $60A7          ; glass TTY suspend flag: 1 = BASIC owns the GL screen
+                         ;   (two-mode P2; the OS shell clears it on return)
 CR     = $0D
 LF     = $0A
 BS     = $08
@@ -343,6 +345,9 @@ bs_go:
         CMP                  ;   DEGENERATE one that draws nothing (glwin)
         JNZ  bnr_ng
         JSR  glwin
+        LDA  #1              ; claim the GL screen: suspend the glass TTY so the
+        STA  GTSUSP          ;   on-screen console + clear-on-full don't corrupt
+                            ;   BASIC's graphics (the OS shell clears it on BYE)
         LDA  #$B0            ; COLD START ONLY: PROJCT 0 -- BASIC is
         JSR  GLPUT           ;   2D-first, and TEXT strokes live at z=0,
         LDA  #0              ;   which the native camera NEAR-CLIPS (the
