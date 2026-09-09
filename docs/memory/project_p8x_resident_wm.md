@@ -8,6 +8,8 @@ metadata:
   modified: 2026-09-09T03:32:35.565Z
 ---
 
+**SUPERSEDED 2026-09-09 by [[project_p8x_two_mode]]:** the user pivoted to a full-screen-app + Finder desktop; the TILED resident-window UI below is RETIRED. Plumbing (OUTCH sink -> glass TTY, SYS_RUNSH launch-return, FILES -> Finder, TERM -> Term app) carries forward; tiling/z-order/drag/records do not. The rungs below are history.
+
 Multi-session effort to make the P8X window manager RESIDENT (so launching an app doesn't destroy the desktop) and give windows real terminal I/O. See [[project_p8x_gfx_clib]] and docs/p8x-wm-design.md.
 
 **Two WM implementations exist:** `os/commands/desk.c` = the standalone 35KB C GUI shipped on the card today (WM + apps share one TPA; launching an app destroys desk). `os/wmkernel_body.asm` = the RESIDENT kernel (hand asm), now FOLDED INTO THE OS IMAGE (`.include`d at the end of p8xos.asm) and reached via OS syscalls right after SYS_EXEC: $2027 SYS_WKINIT, $202A SYS_WKOPEN, $202D SYS_WKREPAINT, $2030 SYS_WKRUN, $2033 SYS_WKSAVE, $2036 SYS_WKLOAD. No load step, resident from boot. The 5 `emulator/test/wm_*_test.sh` (kernel/events/mouse/launch/switch) pass via syscalls. NO separate WMBASE any more (anchor removed from memmap); `os/wmkernel.asm` harness + `wm_reside_test` RETIRED.
