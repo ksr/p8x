@@ -4686,13 +4686,16 @@ GS_LP:  JSR  FGETB
         LDB  #63               ;   aligned, so P2 low = length); full -> drop the char
         CMP                    ;   but keep scanning to end of line
         JC   GS_LP
-        LDA  TMP                ; store + echo
-        STA  (P2)+
-        JSR  OUTCH
+        LDA  TMP                ; store + echo to the RAW console (not the sink:
+        STA  (P2)+              ;   a script's line echo must not land in the
+        JSR  CONOUT             ;   window when the OUTCH->window sink is armed)
         JMP  GS_LP
 GS_DONE:LDA  #0
         STA  (P2)               ; NUL-terminate the line
-        JSR  CRLF               ; echo the newline after the command
+        LDA  #CR                ; echo the newline to the console (not the sink)
+        JSR  CONOUT
+        LDA  #LF
+        JSR  CONOUT
         JSR  SAVESCR            ; remember the position for the next line
         RTS
 

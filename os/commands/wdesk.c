@@ -19,9 +19,12 @@
  * WINDOWS (all client-drawn where they carry live content -- the kernel
  * only hands over each window's rect via SYS_WKGET/SYS_WKTOP):
  *   SHAPES  a demo scene recorded into a card list (the card replays it)
- *   TERM    a command line with scrollback: when focused, type a program
- *           name and ENTER launches it with -w (the shell's resolver:
- *           bare name -> /bin, ".bin" appended). l/c/q TYPE here.
+ *   TERM    a real terminal: type a command and ENTER RUNS it with its
+ *           OUTPUT rendered IN the window. wdesk arms the OS's OUTCH->window
+ *           sink (SYS_WKSINK) at TERM's card list, writes a "<cmd>\nrun
+ *           /bin/wdesk.bin -o" script and hands it to the shell (SYS_RUNSH);
+ *           the command's stdout records into the list, and `wdesk -o`
+ *           disarms + repaints so it appears. l/c/q TYPE here.
  *   FILES   a directory browser: n/p select, ENTER opens (navigate a dir,
  *           launch a .BIN, or show a .p8i in VIEW). Drawn while focused.
  *   VIEW    a picture window: opening a .p8i from FILES opens VIEW sized to
@@ -56,10 +59,7 @@ char fpath[68];                    /* scratch: a full path + " -w" to open */
 int  fcnt;                         /* how many names are cached */
 int  fsel;                         /* the selected row (0..fcnt-1) */
 
-char thist[150];                   /* TERM scrollback: 5 lines x 30 cols */
 char tline[30];                    /* the TERM input line (being typed) */
-char tbuf[32];                     /* scratch: build "$ cmd" for the echo */
-int  thn;                          /* scrollback lines in use (0..5) */
 int  tlen;                         /* length of the input line */
 
 char vpath[68];                    /* the .p8i image the VIEW window shows */
@@ -308,41 +308,15 @@ int files_key(int key) {
     return 0;
 }
 
-/* --- TERM: a command line with scrollback, drawn in its own window ---------- */
+/* --- TERM: a command line whose output goes INTO the window via the sink ----- */
 
-/* push one line into the scrollback ring (5 lines). When full, scroll up. */
-int tpush(char *s) {
-    int i; int k;
-    if (thn >= 5) {                                    /* full -> scroll up one */
-        i = 0; while (i < 4*30) { thist[i]=thist[i+30]; i=i+1; }
-        thn = 4;
-    }
-    k = thn*30;
-    i = 0; while (s[i] && i < 29) { thist[k+i]=s[i]; i=i+1; }
-    thist[k+i]=0;
-    thn = thn + 1;
-    return 0;
-}
-
-/* resolve a typed name the way the shell does -- an absolute path as typed,
- * a bare name against /bin, ".bin" appended when missing -- then launch it
- * with -w (so a WM-aware app resumes us). Returns 1 only if the exec failed. */
-int runbin(char *c) {
-    int i;
-    if (c[0]=='/') { scopy(fpath, c, 60); } else { pjoin(fpath, "/bin", c); }
-    if (ftype(fpath) != 2) {                           /* no ".bin" -> append it */
-        i = 0; while (fpath[i]) { i = i + 1; }
-        fpath[i]='.'; fpath[i+1]='b'; fpath[i+2]='i'; fpath[i+3]='n'; fpath[i+4]=0;
-    }
-    return launchw(fpath);                             /* becomes it on success */
-}
-
-/* draw the scrollback + the input line inside the TERM window body. Like
- * files_body, the caller has already put the focused window's record in frec[]
- * (same content model: WINDOW/VWPORT to the body so the card clips, restore
- * identity after). */
+/* draw the TERM INPUT LINE at the bottom of the window body. The command OUTPUT
+ * is no longer client-drawn -- it lives in the window's card list (id TLIST),
+ * recorded there by the OUTCH->window sink and replayed by the kernel's CLRUN on
+ * repaint. So this only overlays the prompt "$ <line>_" the user is typing, near
+ * the bottom (y small, y-up local) so it clears the output above it. */
 int term_body() {
-    int x; int y; int w; int h; int cw; int ch; int row; int j; int k; char *s;
+    int x; int y; int w; int h; int cw; int ch; int j;
     x = (frec[0]&255) + (frec[1]&255)*256;
     y = (frec[2]&255) + (frec[3]&255)*256;
     w = (frec[4]&255) + (frec[5]&255)*256;
@@ -350,18 +324,8 @@ int term_body() {
     cw = w - 2; ch = h - 15;
     gp(179); gw(0); gw(cw-1); gw(0); gw(ch-1);                 /* WINDOW local  */
     gp(178); gw(x+1); gw(x+cw); gw(271-(y+ch)); gw(271-(y+1)); /* VWPORT rect   */
-    gp(6); gp(31); gp(63); gp(31);                             /* white history */
-    row = 0;
-    while (row < thn) {
-        s = thist + row*30;
-        k = 0; while (s[k]) { k = k + 1; }
-        gp(18); gw(4); gw(ch - 13 - row*13); gw(0);
-        gp(128); gp(k);
-        j = 0; while (j < k) { gp(s[j]); j = j + 1; }
-        row = row + 1;
-    }
     gp(6); gp(31); gp(63); gp(0);                              /* yellow prompt */
-    gp(18); gw(4); gw(ch - 13 - row*13); gw(0);
+    gp(18); gw(4); gw(4); gw(0);                               /* bottom line   */
     gp(128); gp(tlen+3);                                       /* "$ " + line + _ */
     gp('$'); gp(' ');
     j = 0; while (j < tlen) { gp(tline[j]); j = j + 1; }
@@ -370,20 +334,44 @@ int term_body() {
     return 0;
 }
 
+/* write /TERM.SCR = "<cmd>\nrun /bin/wdesk.bin -o\n": run the typed command, then
+ * re-launch wdesk in resume mode. The command's stdout is recorded into the TERM
+ * window (the sink was armed just before); `wdesk -o` disarms and repaints. */
+int write_script(char *cmd) {
+    int i; char *r;
+    bios(FRESOLVE, "/TERM.SCR", 0);
+    bios(FDELETE, "/TERM.SCR", 0);                     /* replace any old one */
+    bios(FRESOLVE, "/TERM.SCR", 0);
+    bios(FWOPEN, 0, 0);
+    i=0; while (cmd[i]) { bios(FPUTB, 0, cmd[i]); i=i+1; }
+    bios(FPUTB, 0, 10);
+    r = "run /bin/wdesk.bin -o";
+    i=0; while (r[i]) { bios(FPUTB, 0, r[i]); i=i+1; }
+    bios(FPUTB, 0, 10);
+    bios(FCLOSE, 0, 0);
+    return 0;
+}
+
+/* run the typed command with its output going INTO the TERM window: arm the sink
+ * at the TERM window (found by title, since indices shift), write the two-line
+ * script, and hand it to the shell (SYS_RUNSH -- does not return; the script's
+ * `wdesk -o` brings the desktop back with the output on the card). */
+int term_run(char *cmd) {
+    int ti;
+    ti = win_index('T');
+    if (ti == 99) { return 0; }
+    bios(SYS_WKSINK, 0, ti);                           /* arm: stdout -> TERM list */
+    write_script(cmd);
+    bios(SYS_RUNSH, "/TERM.SCR", 0);                   /* run it; no return */
+    return 0;
+}
+
 /* TERM key handling (only when TERM is focused): printable keys type into the
- * line, BACKSPACE deletes, ENTER echoes the line and runs it. Returns 1 when
- * the caller must redraw. */
+ * line, BACKSPACE deletes, ENTER runs it with output in the window. Returns 1
+ * when the caller must redraw. */
 int term_key(int key) {
-    int i;
     if (key==13 || key==10) {                          /* ENTER: run the line */
-        if (tlen > 0) {
-            tline[tlen]=0;
-            tbuf[0]='$'; tbuf[1]=' ';                  /* echo "$ cmd" to history */
-            i = 0; while (tline[i] && i < 28) { tbuf[2+i]=tline[i]; i=i+1; }
-            tbuf[2+i]=0; tpush(tbuf);
-            runbin(tline);                             /* becomes it on success */
-            tpush("?EXEC");                            /* only if the exec failed */
-        }
+        if (tlen > 0) { tline[tlen]=0; term_run(tline); }   /* no return on run */
         tlen = 0; tline[0]=0;
         return 1;
     }
@@ -483,20 +471,24 @@ int scene() {
 }
 
 int main() {
-    char *ap; int k; int going; int e; int a; int top;
+    char *ap; int k; int going; int e; int a; int top; int resume;
     if (peek(GLID) != 71) { puts("?No display"); return 1; }
     ap = argstr();
     while (*ap == 32) { ap = ap + 1; }
+    /* -r = a launched app is returning; -o = a TERM sink command is returning
+     * (disarm the sink first). Both RESUME: the windows are already resident. */
+    resume = (ap[0] == '-' && (ap[1] == 'r' || ap[1] == 'o'));
+    if (ap[0] == '-' && ap[1] == 'o') { bios(SYS_WKSINK, 0, 255); }
 
     cpath[0] = '/'; cpath[1] = 0;             /* FILES starts at the root */
     scene();                                  /* card list 30, always */
     files_scan();                             /* read the CWD into fnam[] */
-    if (ap[0] != '-' || ap[1] != 'r') {       /* fresh (not a resume) */
+    if (!resume) {                            /* fresh: open the windows */
         bios(SYS_WKINIT, 0, 0);
         setw(40, 40, 210, 150, 30, "SHAPES"); /* kernel-drawn card list 30 */
-        setw(70, 100, 300, 150, 0, "TERM");   /* client-drawn command line */
+        setw(70, 100, 300, 150, 31, "TERM");  /* output = card list 31 (the sink) */
         setw(190, 60, 240, 170, 0, "FILES");  /* opened last -> top, listing shows */
-        tpush("wdesk term - type a command");
+        gp(112); gp(31); gp(113);             /* define list 31 empty (CLRUN-safe) */
     }
     bios(SYS_WKREPAINT, 0, 0);
     redraw();                                 /* menu bar + focused content */

@@ -65,24 +65,30 @@ OPTIONS
 
 WINDOWS
     SHAPES   a demo scene recorded into a card list (the card replays it).
-    TERM     a command line with a small scrollback, drawn by wdesk inside
-             the window. While TERM is the focused (top) window it owns the
+    TERM     a real terminal: a command you type runs and its OUTPUT appears
+             IN the window. While TERM is the focused (top) window it owns the
              WHOLE keyboard -- so l, c and q TYPE, they do not fire the menu
-             (the menu bar is still clickable). Type a program name and:
+             (the menu bar is still clickable). Type a command and:
 
-                 ENTER       run it. The name is resolved the way the shell
-                             does -- an absolute path as typed, a bare name
-                             against /bin, ".bin" appended when missing -- so
-                             "paint", "paint.bin" and "/bin/cube.bin" all
-                             launch. It is launched with -w, so a WM-aware
-                             app (paint, wdesk) resumes this desktop on quit;
-                             a plain program runs and exits to the shell.
-                             A launch that fails shows "?EXEC".
+                 ENTER       run it. The shell runs the command (any /bin
+                             program, a builtin like pwd) with its stdout
+                             routed into this window; when it finishes the
+                             desktop returns with the output on screen. Try
+                             `pwd`, `dir`, `cat FILE`.
                  BACKSPACE   erase the last character of the line.
 
-             SYS_EXEC BECOMES the program, so a successful launch replaces
-             wdesk (the kernel keeps the windows); TERM does not capture a
-             program's output -- it is a launcher with history, as desk's is.
+             How: wdesk arms the OS's OUTCH->window sink (SYS_WKSINK) at TERM's
+             card list, writes a two-line script -- the command, then
+             `run /bin/wdesk.bin -o` -- and hands it to the shell (SYS_RUNSH).
+             The command's output records into the card list (which the kernel
+             replays on repaint, so it needs no memory buffer); `wdesk -o`
+             disarms the sink and repaints. The command itself is echoed to the
+             serial console, not the window, so only its output shows here.
+
+             v1 limits: each command clears the window first (no scrollback
+             across commands yet), long lines and past-the-bottom output clip
+             (no wrap/scroll), and a GUI app (paint) is better launched from
+             the menu or FILES than typed here.
     FILES    a browser for the current directory, drawn by wdesk itself
              inside the window (the kernel gives the rect via SYS_WKGET;
              the client draws the text and clips it to the window body).

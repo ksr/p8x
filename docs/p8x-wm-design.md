@@ -370,11 +370,26 @@ names those addresses) and gated on the full suite + a tab-complete test.
   the sink from a program, returns to the shell, runs the **stock `pwd`**, and
   shows the window: pwd's output is in it. os_append (`>`/`>>`) and os_argv still
   pass.
-- **15c-ii — wire wdesk's TERM to it.** TERM ENTER arms the sink at the TERM window
-  (which needs its own card list id), writes a `<cmd>` + `run wdesk -o` script,
-  hands it to the shell's script mode; `wdesk -o` disarms and resumes. This is the
-  client (TPA) half: the TERM window's rendering moves from the client-drawn
-  scrollback to the sink's card list, with the input line as an overlay.
+- **15c-ii — wdesk's TERM renders command output — DONE 2026-09-08. THE FEATURE
+  IS COMPLETE.** Type a command in TERM, ENTER runs it, its output appears in the
+  window. `term_run()` finds the TERM window by title, arms the sink at it
+  (`SYS_WKSINK`), writes `/TERM.SCR` = `<cmd>\nrun /bin/wdesk.bin -o`, and hands it
+  to the shell (`SYS_RUNSH`, added as 15c-ii-a -- a program handing the shell a
+  script). The command's stdout records into TERM's card list (id 31); the script's
+  second line re-launches `wdesk -o`, which disarms the sink and repaints, so the
+  kernel's `CLRUN` shows the output. TERM's window opened with `list=31` (the sink
+  target); `term_body` now draws only the input line (bottom of the body); the card
+  list is the scrollback. A THIRD script-echo path turned up during bring-up:
+  `GL_SCRIPT` (the `sh`/script-mode line reader) echoed through `OUTCH`, so the
+  script's own lines (`pwd`, `run /bin/wdesk.bin -o`) landed in the window -- routed
+  to the raw console like the interactive `GETLN` echo, so only real command output
+  shows. `c_wtermout_test`: boot into `/WTERM`, focus TERM, run `pwd` -> `/WTERM`
+  renders in the window (0 -> 88 px vs an empty TERM). The OS is now completely full
+  (ends `$5FFF`, 1 B under `$6000`) -- any further sink work needs more budget.
+  Known v1 edges: each command clears the window (`CLBEG`), no scroll/wrap, the
+  input line can smear on backspace (no per-keystroke FLOOD), and a GUI app typed
+  in TERM runs through the script chain rather than launching cleanly (launch apps
+  from the menu / FILES).
 - **15d (later) — real scroll**, and eventually a shell-WM path for live
   mid-command rendering.
 

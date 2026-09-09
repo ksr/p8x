@@ -1,15 +1,14 @@
 #!/bin/sh
-# wdesk's TERM window: a command line with scrollback, drawn by the CLIENT in a
-# kernel-owned window (the same content model as FILES). This test proves TERM
-# is interactive AND that windows are addressed by TITLE, not by array index --
-# the kernel PHYSICALLY REORDERS records on a focus change (k_raise), so wdesk
-# identifies the focused window by its title letter (S/T/F), which rides in the
-# record. TAB cycles focus by raising the bottom window; from the fresh stack
-# (SHAPES, TERM, FILES-on-top) two TABs put TERM on top.
+# wdesk's TERM window: the interactive INPUT LINE. This test proves TERM is
+# focusable and typeable, AND that windows are addressed by TITLE, not by array
+# index -- the kernel PHYSICALLY REORDERS records on a focus change (k_raise), so
+# wdesk identifies the focused window by its title letter (S/T/F/V), which rides
+# in the record. TAB cycles focus by raising the bottom window; from the fresh
+# stack (SHAPES, TERM, FILES-on-top) two TABs put TERM on top. Running a command
+# and seeing its OUTPUT in the window is covered by c_wtermout_test (the sink).
 #   0 fresh           -> FILES focused (baseline)
-#   T +\t\t           -> TERM focused: its scrollback + prompt now show
-#   Y +\t\t HELLO     -> typing echoes into the input line (frame changes)
-#   X +\t\t zz\r      -> a bogus command: "$ zz" + "?EXEC" join the scrollback
+#   T +\t\t           -> TERM focused: the yellow "$ _" prompt shows
+#   Y +\t\t HELLO     -> typing extends the input line (frame changes)
 # Behaviour is proven by frame-hash differentials; TERM's own signature (white
 # scrollback text GROWING when a command is submitted) is proven by pixels --
 # SHAPES has no white, and TERM sits on top of its screen region, so white text
@@ -43,37 +42,31 @@ run() {  # $1 = input tail after "run wdesk", $2 = ppm out
 }
 
 run ''            wt0.ppm     # FILES focused (fresh)
-run '\t\t'        wtT.ppm     # TERM focused, empty prompt
-run '\t\tHELLO'   wtY.ppm     # typed into TERM
-run '\t\tzz\r'    wtX.ppm     # a bogus command -> ?EXEC
+run '\t\t'        wtT.ppm     # TERM focused, empty prompt "$ _"
+run '\t\tHELLO'   wtY.ppm     # typed into the TERM input line
 
 python3 - <<'EOF' || exit 1
 import hashlib
 def h(f): return hashlib.md5(open(f,"rb").read()).hexdigest()
-def px(f):
-    return open(f,"rb").read().split(b"\n",3)[3]
-def white_in_term(f):
-    d = px(f)
+def yellow_in_term(f):
+    d = open(f,"rb").read().split(b"\n",3)[3]
     def p(x,wy):
         i=((271-wy)*480+x)*3; return d[i:i+3]
-    # TERM window is (70,100)+300x150; count WHITE stroke pixels strictly INSIDE
-    # its body (below the ~14px title bar, inside the borders). SHAPES (red +
-    # yellow, no white) sits BEHIND TERM here, so this white is TERM's own.
-    return sum(1 for X in range(74,364) for Y in range(120,240)
-               if p(X,Y)==b"\xff\xff\xff")
+    # The TERM INPUT LINE is drawn yellow at the bottom of the body. TERM's black
+    # body covers SHAPES (whose only yellow box is behind it) where they overlap,
+    # so yellow inside the TERM body is the input prompt "$ <line>_".
+    return sum(1 for X in range(74,364) for Y in range(104,150)
+               if p(X,Y)==b"\xff\xff\x00")
 
-h0,hT,hY,hX = h("wt0.ppm"),h("wtT.ppm"),h("wtY.ppm"),h("wtX.ppm")
+h0,hT,hY = h("wt0.ppm"),h("wtT.ppm"),h("wtY.ppm")
 assert hT != h0, "focusing TERM (\\t\\t) did not change the frame -- title dispatch or TAB focus wrong"
-assert hY != hT, "typing HELLO into TERM did not change the frame"
-assert hX != hT and hX != hY, "submitting a command did not change the frame"
-
-wT = white_in_term("wtT.ppm")           # 1 white line: the greeting
-wX = white_in_term("wtX.ppm")           # +2 white lines: "$ zz" and "?EXEC"
-assert wT > 20, "TERM body shows no white scrollback text when focused (%d px)" % wT
-assert wX > wT + 40, "submitting a command did not grow the white scrollback (%d -> %d px)" % (wT, wX)
-print("TERM is focused by TITLE (survives k_raise reorder), shows its scrollback,")
-print("echoes typed input, and a failed command appends '$ zz' + '?EXEC'")
-print("  white scrollback px: focus=%d  after-command=%d  (grew by %d)" % (wT, wX, wX-wT))
+assert hY != hT, "typing into TERM did not change the frame"
+yT = yellow_in_term("wtT.ppm")          # "$ _"
+yY = yellow_in_term("wtY.ppm")          # "$ HELLO_"
+assert yT > 4, "no yellow input prompt when TERM is focused (%d px)" % yT
+assert yY > yT + 20, "typing did not extend the input line (%d -> %d px)" % (yT, yY)
+print("TERM is focused by TITLE (survives k_raise reorder) and shows a yellow input")
+print("line that extends as you type; input px: empty=%d  after HELLO=%d" % (yT, yY))
 EOF
 
-echo "C-WTERM TEST: PASS (TERM: title-addressed window, scrollback, typed input, command launch via the shell resolver)"
+echo "C-WTERM TEST: PASS (TERM: title-addressed window, interactive input line; output via the sink -- see c_wtermout)"
