@@ -5,6 +5,7 @@ metadata:
   node_type: memory
   type: reference
   originSessionId: df90e3f3-8668-416d-bc7b-83f2952ba723
+  modified: 2026-09-09T13:34:02.562Z
 ---
 
 The on-target C compiler `apps/p8xcc.asm` uses fixed-size tables with **no bounds
@@ -20,6 +21,18 @@ checks** except where noted. Known caps (as of 2026-07-12):
   variable storage now lives in ONE array `__V` (slot n → `__V+2n`) instead of a
   `V<n>:` label per slot — so slot count no longer inflates `asm`'s ~850-symbol
   table. dir (~838 slots) compiles + assembles clean.
+- **//#define macros: now 64** (2026-09-09). Was `MACVALS .fill 64` = **32 max**
+  with **no bounds check** in `MAC_ADD`. `lib_abi.c` grew to **37 `//#define`s**,
+  so compiling ANY C file that `//#use abi` (nearly all of them -- e.g. pwd.c)
+  overflowed MACVALS by 5 entries straight into `USESTATE` (the saved `//#use`
+  read-stream state, the next `.fill` after it) -> when the lib_abi splice
+  finished, the popped/restored stream was garbage -> **the machine RESET to the
+  monitor**. THIS was the "on-board cc crash" (os_mk_test's `make pwd` failure)
+  -- NOT a capacity limit hit cleanly, a silent corruption. Fix: `MACVALS .fill
+  128` (64), `MACNAMES .fill 384 -> 768`, + a `MAC_ADD` guard that bails "cc: too
+  many //#define macros" like `FADD` does. Same class as the MAXFUNC bug above.
+  os_mk_test also needed `/bin/del.bin` on its disk (its `make clean` recipe runs
+  `del`, now a /bin program not a builtin).
 - **NEXT CEILING = code SIZE** — but much less tight since 2026-07-15. The native
   codegen WAS ~2x the host `p8cc.py`; emitting the wide ops it always had access
   to but never used closed that to **~3.4%** (wc.c: 8829 -> 4617 instructions,

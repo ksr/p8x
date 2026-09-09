@@ -30,6 +30,7 @@ build_c() { # build_c <src.c> <out.bin>
 }
 build_c $ROOT/os/commands/cat.c cat.bin
 build_c $ROOT/os/commands/cp.c  cp.bin
+build_c $ROOT/os/commands/del.c del.bin   # `make clean` recipe runs `del` (a /bin program now)
 
 rm -f mk.img
 python3 $ROOT/tools/p8xfs.py create mk.img >/dev/null
@@ -42,6 +43,7 @@ python3 $ROOT/tools/p8xfs.py put mk.img cc.bin  --name /bin/cc.bin  --load 0x6A0
 python3 $ROOT/tools/p8xfs.py put mk.img asm.bin --name /bin/asm.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put mk.img cat.bin --name /bin/cat.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put mk.img cp.bin  --name /bin/cp.bin  --load 0x6A00 --exec 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put mk.img del.bin --name /bin/del.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 printf 'hi\n' > HELLO.TXT
 python3 $ROOT/tools/p8xfs.py put mk.img HELLO.TXT --name /HELLO.TXT >/dev/null
 

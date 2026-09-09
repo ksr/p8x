@@ -957,7 +957,18 @@ td_sl:  JSR GC
         RTS
 
 ; MAC_ADD: append NAMEBUF to MACNAMES, store CURV in MACVALS[MACCNT], MACCNT++.
-MAC_ADD: LDA #<MACNAMES               ; walk past the MACCNT names already packed
+MAC_ADD: LDA MACCNT                    ; capacity guard: MACVALS holds 64. Past
+        LDB #64                       ; that, appending corrupts USESTATE below
+        CMP                           ; and resets the machine -- error instead.
+        JNC ma_room                   ; MACCNT < 64 -> room, proceed
+        LDP1 #MTOOMAC                 ; else: print error and bail to the OS
+        JSR EMIT
+        LDA STK0                      ; restore the entry SP (P3) saved by START
+        TAP3L
+        LDA STK0+1
+        TAP3H
+        RTS                           ; returns straight to the OS, not the parser
+ma_room:LDA #<MACNAMES               ; walk past the MACCNT names already packed
         TAP1L
         LDA #>MACNAMES
         TAP1H
@@ -5492,6 +5503,7 @@ MFRAMEDEF:
 MUSAGE: .asciiz "usage: cc src.c >out.asm"
 MNOSRC: .asciiz "cc: cannot open source"
 MTOOFUN: .asciiz "cc: too many functions"
+MTOOMAC: .asciiz "cc: too many //#define macros"
 
 ; =============================================================================
 ; BSS - in this program's own space (safe from OS scratch)
@@ -5545,8 +5557,11 @@ USED:   .fill 128   ; packed names of already-spliced libraries
 MACCNT:  .fill 1    ; number of object-like //#define macros
 MACF:    .fill 1    ; MACLOOKUP result: 1 if TID is a macro
 MACVAL:  .fill 2    ; MACLOOKUP result: the macro's 16-bit value
-MACNAMES: .fill 384 ; packed NUL-terminated macro names
-MACVALS:  .fill 64  ; parallel 16-bit values (32 macros max)
+MACNAMES: .fill 768 ; packed NUL-terminated macro names (was 384 -- lib_abi.c
+                    ; alone is ~370 bytes / 37 //#defines; overflow corrupted
+                    ; USESTATE below and reset the machine when splicing it)
+MACVALS:  .fill 128 ; parallel 16-bit values (64 macros max; was 64 = 32 max,
+                    ; which lib_abi.c's 37 //#defines overflowed -> reset)
 USESTATE: .fill 70  ; saved read-stream state, 14 bytes x 5 levels
 USEBUF: .fill 2560  ; per-level 512-byte read buffers (5 levels)
 BIOSAD: .fill 2    ; bios() intrinsic: the constant call address
