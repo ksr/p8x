@@ -8,9 +8,9 @@ as `/man/<name>`, and the [`man`](../commands/man.c) command prints them:
 man dir       ->  streams /man/dir
 ```
 
-Pages cover both the `/bin` userland programs (`cat`, `grep`, `cp`, `vi`, …) and
-the OS built-in commands (`cd`, `del`, `pack`, `mount`, …); `man` doesn't care
-which — it just resolves `/man/<name>`.
+Pages cover both the `/bin` userland programs (`cat`, `grep`, `cp`, `vi`, `del`,
+`help`, …) and the OS shell built-ins (`cd`, `pack`, `mount`, …); `man` doesn't
+care which — it just resolves `/man/<name>`.
 
 ## Format
 

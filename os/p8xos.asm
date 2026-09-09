@@ -358,18 +358,12 @@ DISPATCH:
         LDA  CMDBUF
         JZ   SHELL              ; blank line
         JSR  SYNCDRV            ; baseline CF routing = the current drive (CWD's card)
-        LDP1 #KW_HELP
-        JSR  CMPCMD
-        JNZ  DOHELP
         LDP1 #KW_LOAD
         JSR  CMPCMD
         JNZ  DOLOAD
         LDP1 #KW_RUN
         JSR  CMPCMD
         JNZ  DORUN
-        LDP1 #KW_DEL
-        JSR  CMPCMD
-        JNZ  DODEL
         LDP1 #KW_SAVE
         JSR  CMPCMD
         JNZ  DOSAVE
@@ -425,9 +419,9 @@ CMPCMD: LDP2 #CMDBUF
         RTS
 
 ; ---------------- HELP -------------------------------------------------------
-DOHELP: LDP1 #MHELP
-        JSR  OPUTS
-        JMP  SHELL
+; HELP moved to /bin (os/commands/help.c): the ~1.4 KB command-reference text no
+; longer sits in the resident OS -- a bare `help` falls through DISPATCH to the
+; implicit-RUN of /BIN/HELP.BIN, which just prints it.
 
 ; PWD is no longer a built-in — bare `PWD` falls through DISPATCH to /BIN/PWD.BIN
 ; (os/commands/pwd.c). DIR and TREE likewise moved to /BIN. DUMP stays native.
@@ -790,27 +784,9 @@ PI_LP:  LDA  (P1)+
         RTS
 DEFPATH:.asciiz "/bin"
 
-; ---------------- DEL name ---------------------------------------------------
-DODEL:  JSR  FINDARG
-        JZ   NOFILE
-        LDA  ENTPL              ; P1 <- &flags of the matched entry (in SBUF)
-        TAP1L
-        LDA  ENTPH
-        TAP1H
-        LDA  #F_DEL
-        STA  (P1)               ; mark deleted in the buffered sector
-        LDA  DLBA               ; persist that directory sector (16-bit)
-        STA  LBA
-        LDA  DLBAH
-        STA  LBA1
-        LDA  #0
-        STA  LBA2
-        JSR  CFWRITE
-        LDA  #0                 ; restore LBA1=0 at rest
-        STA  LBA1
-        LDP1 #MDELETED
-        JSR  OPUTS
-        JMP  SHELL
+; DEL moved to /bin (os/commands/del.c): a bare `del NAME` falls through DISPATCH
+; to the implicit-RUN of /BIN/DEL.BIN, which tombstones via the FDELETE BIOS call
+; -- like touch/cp/mv, a self-contained file op that need not sit in the OS.
 
 NOFILE: LDP1 #MNOFILE
         JSR  PUTS
@@ -5151,64 +5127,6 @@ MBANNER: .byte CR,LF
 MPROMPT: .asciiz "> "
 MNODRV:  .byte CR,LF
          .asciiz "?NO DRIVE"
-MHELP:   .byte CR,LF
-         .ascii "P8X/OS COMMANDS:"
-         .byte CR,LF
-         .ascii "/d1           drive 1 is mounted here (cd /d1, cat /d1/FILE)"
-         .byte CR,LF
-         .ascii "bootload file install file as the boot OS, then exit + B to run"
-         .byte CR,LF
-         .ascii "cd path       change directory (/abs, rel, .., .)"
-         .byte CR,LF
-         .ascii "del path      delete a file"
-         .byte CR,LF
-         .ascii "exit / mon    return to the ROM monitor"
-         .byte CR,LF
-         .ascii "format        erase card, make a fresh v2 volume (asks Y/N)"
-         .byte CR,LF
-         .ascii "fsck          check filesystem integrity (read-only)"
-         .byte CR,LF
-         .ascii "help          this help"
-         .byte CR,LF
-         .ascii "load path     read a file to its load address"
-         .byte CR,LF
-         .ascii "make [target] build a target from the Makefile in the CWD"
-         .byte CR,LF
-         .ascii "man name      show a command's manual page (/man)"
-         .byte CR,LF
-         .ascii "graphics      tri/rotate/camera/cube/gl in /bin -- man gl, man basic"
-         .byte CR,LF
-         .ascii "desk / wdesk  the windowed GUI -- man wdesk"
-         .byte CR,LF
-         .ascii "mkdir path    create a subdirectory"
-         .byte CR,LF
-         .ascii "name args     run a program by bare name, found on PATH (/bin)"
-         .byte CR,LF
-         .ascii "pack          reclaim deleted space"
-         .byte CR,LF
-         .ascii "path [dirs]   show/set the program search path (default /bin)"
-         .byte CR,LF
-         .ascii "rmdir path    remove an empty subdirectory"
-         .byte CR,LF
-         .ascii "run path args load+run a program (args in P2, RTS to exit)"
-         .byte CR,LF
-         .ascii "save path s e save memory [s,e) to a new file"
-         .byte CR,LF
-         .ascii "sh file       run shell commands from a script file (streamed)"
-         .byte CR,LF
-         .ascii "umount/mount  swap the /d1 card: umount, swap, mount"
-         .byte CR,LF
-         .byte CR,LF
-         .ascii "cmd >FILE     send output to FILE instead of the screen"
-         .byte CR,LF
-         .ascii "cmd <FILE     take input from FILE instead of the keyboard"
-         .byte CR,LF
-         .ascii "a | b         pipe a's output into b's input"
-         .byte CR,LF
-         .ascii "programs:     run /bin/basic.bin | edit.bin f | asm.bin s o"
-         .byte CR,LF
-         .ascii "  path=file/dir (drive 1 at /d1), s e a=hex, b=byte"
-         .byte CR,LF,0
 MUNK:    .byte CR,LF
          .asciiz "?"
 MNOFILE: .byte CR,LF
@@ -5221,8 +5139,6 @@ MBLEMP:  .byte CR,LF
          .asciiz "bootload: empty file"
 MLOADED: .byte CR,LF
          .asciiz "LOADED"
-MDELETED: .byte CR,LF
-         .asciiz "DELETED"
 MSAVED:  .byte CR,LF
          .asciiz "SAVED"
 MSVERR:  .byte CR,LF
@@ -5276,10 +5192,8 @@ MFKBAD:  .byte CR,LF
 MFKOK:   .byte CR,LF
          .asciiz "FSCK OK"
 
-KW_HELP: .asciiz "help"
 KW_LOAD: .asciiz "load"
 KW_RUN:  .asciiz "run"
-KW_DEL:  .asciiz "del"
 KW_SAVE: .asciiz "save"
 KW_PACK: .asciiz "pack"
 KW_CD:   .asciiz "cd"
@@ -5297,7 +5211,7 @@ KW_MAKE: .asciiz "make"
 KW_BOOTLOAD: .asciiz "bootload"
 ; KWTAB - pointers to every built-in command name, for Tab completion of the
 ; command word. NUL-terminated list. (`mon` is the `exit` alias.)
-KWTAB:   .word KW_HELP,KW_LOAD,KW_RUN,KW_DEL,KW_SAVE,KW_PACK,KW_CD,KW_MKDIR
+KWTAB:   .word KW_LOAD,KW_RUN,KW_SAVE,KW_PACK,KW_CD,KW_MKDIR
          .word KW_RMDIR,KW_FSCK,KW_PATH,KW_EXIT,KW_MON,KW_FORMAT,KW_MOUNT
          .word KW_UMOUNT,KW_SH,KW_MAKE,KW_BOOTLOAD,0
 BINDIR:  .asciiz "/bin"

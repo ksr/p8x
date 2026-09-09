@@ -58,12 +58,15 @@ print a one-line usage summary and exit.
 > even the stdin-filter tools (`grep`, `wc`, `head`, …) get the mount for free
 > without growing. See [../README.md](../README.md) "Two drives".
 
-> **Note — DIR, PWD, CAT, and TREE are no longer shell built-ins** (the
-> minimal-kernel split): they were removed from the OS and run from `/bin` by
-> bare name, so `dir -R`, `pwd`, `cat file`, `tree` all just work (and honour
-> `-h`). The kernel keeps only what can't be a `/bin` program — `run`, the
-> authoring/FS primitives (`save`/`dep`/`load`/`del`/`mkdir`/`rmdir`/`cd`), and
-> `help`/`exit`/`pack`/`fsck`/`format`. **`dump` stays native** — as a `/bin`
+> **Note — DIR, PWD, CAT, TREE, DEL and HELP are no longer shell built-ins**
+> (the minimal-kernel split): they were removed from the OS and run from `/bin`
+> by bare name, so `dir -R`, `pwd`, `cat file`, `tree`, `del name`, `help` all
+> just work. `del` tombstones via the `FDELETE` BIOS call; `help` is ~1.4 KB of
+> reference text that no longer sits in the resident OS. The shell keeps only
+> what can't be a `/bin` program — `run`/`load` (the loader), `sh`/`make` (the
+> script engine), `cd`/`path` (shell state), `save`/`dep`, `mkdir`/`rmdir`/
+> `pack`/`fsck`/`format`, `exit`/`mon`, `mount`/`umount`, `bootload` (the FS
+> ones are candidates to move next). **`dump` stays native** — as a `/bin`
 > program it would load into the `$6A00` TPA and overwrite the very memory it
 > dumps. Consequence: a freshly-`format`ted card (no `/bin`) can't `dir`/`cat`
 > until `/bin` is repopulated (from the host, or a future master CF — backlog).
@@ -89,6 +92,8 @@ print a one-line usage summary and exit.
 | [`find.c`](find.c) | `find pattern [-h]` | Recursively print CWD paths whose name matches `pattern`: a case-insensitive **glob** (`*`/`?`, via `lib_glob`) if it contains `*` or `?`, else a literal substring. So `find *.C`, `find TEST?.ASM`, and `find BIN` (substring) all work. |
 | [`diff.c`](diff.c) | `diff f1 f2 [-h]` | Prefix/suffix-anchored line diff: `<` lines only in f1, `>` only in f2. ≤96 lines/file (≤79 chars). |
 | [`touch.c`](touch.c) | `touch name [name...] [-h]` | Create each named file empty if missing; an existing file is left **untouched** (not truncated). No mtime yet (no RTC); no globbing (a pattern only ever matches existing files). |
+| [`del.c`](del.c) | `del name [name...] [-h]` | Remove file(s) — tombstone each entry via the `FDELETE` BIOS call (space reclaimed later by `pack`). CWD-relative or absolute; a missing name reports `?No such file` and the rest still go. Files only (use `rmdir`). **Moved out of the shell** (was a built-in) so it sits with `touch`/`cp`/`mv`. |
+| [`help.c`](help.c) | `help` | Print the shell command reference — commands, redirection/pipe syntax, standard programs. **Moved out of the shell** (was a built-in): its ~1.4 KB of static text no longer occupies the resident OS. `man name` gives the full page on any one. |
 | [`tree.c`](tree.c) | `tree [-h]` | Depth-first indented listing of the CWD tree (same recursion as `dir -R`). |
 | [`vi.c`](vi.c) | `vi name [-h]` | Minimal modal **VT100 screen editor**. Reads keys raw (CONIN, no echo) and drives the cursor with ANSI escapes, so it needs a VT100-compatible terminal. `h j k l` move, `i`/`a`/`A`/`o` insert, `x` delete char, `dd` delete line, `0`/`$`/`G`, **`u` undo** (single-level), **`/`pat + `n`** search (literal, forward, wraps), `:w`/`:q`/`:wq`/`:q!`. Selective redraw (one line per edit, full only on scroll) keeps it usable at serial baud. Flat 110×80 line buffer. Complements the line-oriented [`EDIT`](../../apps/README.md) app. |
 | [`man.c`](man.c) | `man name [-h]` | Print the manual page for a command: streams `/man/<name>` to stdout (a `cat` with a fixed `/man/` prefix, so it is CWD-independent). Works for both `/bin` commands and OS built-ins; an unknown name prints `no manual entry for NAME`. Pages are plain text authored in [`os/man/`](../man/) and installed to `/man` by `run.sh`. |

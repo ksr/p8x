@@ -2,14 +2,22 @@ NAME
     del - delete a file
 
 SYNOPSIS
-    del path
+    del name [name...]
 
 DESCRIPTION
-    Deletes a file. The space it used is reclaimed later by pack, not
-    immediately. del is an OS built-in command.
+    Deletes one or more files. The space they used is reclaimed later by
+    pack, not immediately. A name that does not exist reports "?No such
+    file" and the rest are still removed. Files only -- use rmdir for a
+    directory.
+
+    del is a /bin program (os/commands/del.c), not a shell built-in: it
+    tombstones each entry with the FDELETE BIOS call, like the other
+    external file commands (touch, cp, mv). A bare `del NAME` is found on
+    PATH and run, so it works exactly as before.
 
 EXAMPLES
     del OLD.TXT
+    del A.TXT B.TXT C.TXT
     del /d1/JUNK.DAT
 
 SEE ALSO

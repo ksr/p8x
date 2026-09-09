@@ -17,7 +17,8 @@ P8X has a Unix-style manual-page system (added 2026-07-09).
   streams `/man/<arg>` — a `cat` with a fixed `/man/` prefix; unknown → "no
   manual entry for NAME". Test: `emulator/test/os_man_test.sh`.
 - Pages exist for all `/bin` commands, edit/asm/basic, `man`, and the OS
-  built-ins (cd, del, pack, mount, …).
+  shell built-ins (cd, pack, mount, …). NOTE: del + help were de-built-in'd to
+  /bin 2026-09-09 (their man pages stay; just re-described as /bin programs).
 
 **When adding a `/bin` command or OS built-in, also add its `os/man/<name>` page**
 (auto-picked-up by run.sh + the test). A doc review must review the man pages —

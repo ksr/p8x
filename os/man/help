@@ -5,9 +5,13 @@ SYNOPSIS
     help
 
 DESCRIPTION
-    Prints a short summary of the OS built-in commands, redirection and
-    pipe syntax, and the standard programs. For a full page on any one
-    command, use man. help is an OS built-in command.
+    Prints a short summary of the shell commands, redirection and pipe
+    syntax, and the standard programs. For a full page on any one command,
+    use man.
+
+    help is a /bin program (os/commands/help.c), not a shell built-in --
+    its ~1.4 KB of reference text lives in the program, not the resident
+    OS. A bare `help` is found on PATH and run, so it works as before.
 
 EXAMPLES
     help

@@ -41,6 +41,8 @@ test-c: p8xemu ucode
 	sh test/c_selfhost_test.sh
 	sh test/c_bios_test.sh
 	sh test/c_libfile_test.sh
+	sh test/c_del_test.sh
+	sh test/c_help_test.sh
 	sh test/c_dir_test.sh
 	sh test/c_dir_recursive_test.sh
 	sh test/c_dirglob_test.sh

@@ -176,8 +176,8 @@ python3 assembler/p8xasm.py firmware/p8xmon.asm -o eeprom.bin
 ./emulator/p8xemu -c disk.img eeprom.bin
 ```
 
-At the monitor `*` prompt type `B` to boot the OS, then `help` (a built-in) or
-`dir` (a `/bin` program — present on an `os/run.sh` disk).
+At the monitor `*` prompt type `B` to boot the OS, then `help` or `dir` (both
+`/bin` programs — present on an `os/run.sh` disk).
 
 The full path is covered by a regression test: `make test-os` (in `emulator/`)
 builds an image with the OS + two files, boots it, and asserts `dir` lists
