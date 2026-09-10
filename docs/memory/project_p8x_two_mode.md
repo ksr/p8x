@@ -44,6 +44,21 @@ CONOUT (big, ROM work, "monitor on screen") -> P3 2nd serial port (emu+hw, for
 Kermit) -> P4 Finder desktop + full-screen-app frame (retire tiled wdesk) ->
 P5 apps: Paint(adapt)/Image(adapt)/Term/Write(NEW)/serial-terminal(Kermit).
 
+**P4 FINDER FILE OPS DONE (2026-09-10), on graphics-card:** finder gained a FILE
+menu (press `f`, mirrors apps_menu): R rename / D duplicate / M move / N new folder
+/ X delete. KEY DESIGN: no reimplemented FS -- each op builds a shell command line
+(mv/cp/del/rmdir/mkdir) into cmdbuf and run_op() writes /FINDER.SCR = "<cmd>\nrun
+/bin/finder.bin <cpath>\n" + SYS_RUNSH (the SAME launch-and-return chain as apps),
+so the command runs and finder re-launches showing the result. P8XFS has NO
+rename/rmdir primitive (mv=copy+delete, rmdir=shell builtin) -- delegation sidesteps
+that; rmdir needs an EMPTY dir, duplicate is files-only. prompt_input() = a modal
+text box (draw dialog + read chars via getkey, printable append/backspace, ENTER ok
+/ ESC cancel, <=14 chars); confirm() = Y/N for delete. Test c_finder_fileops_test.sh:
+drives the real dialogs over scripted console (DOWN=\033[B x3 selects the lone /Z.TXT
+since fscan lists ".." first then creation order) and checks the IMAGE with p8xfs ls
+after each op (emulator persists CF writes to -c img). finder now 27570 B (was 20297,
+ample TPA). NEXT for P4: mouse (lib_ptr), real pull-down menus (vs key-hint bar).
+
 **P4 APPS MENU + P5 TERM/WRITE DONE (2026-09-10), on graphics-card:** finder
 APPS menu (press 'a' -> dropdown, letter launches: P paint/T term/W write/C cube/
 H house/G gl; reuses launch()). term.c = on-screen shell (enables glass console

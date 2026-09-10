@@ -34,9 +34,16 @@ remainder is why it is still here.
 
 - **Finder desktop (two-mode P4) — the rest of the app frame.** `finder.c` shipped
   a full-screen file browser + full-screen launch (`SYS_EXEC`). Still to do:
-  - **Mouse** support (via lib_ptr, keyboard-only today) and the file ops
-    **rename / duplicate / move** (grow from cp/mv/mkdir/del). (The Apps menu
-    -- press `a` -- shipped.)
+  - **Mouse** support (via lib_ptr, keyboard-only today). (The Apps menu -- press
+    `a` -- and the **FILE menu** -- press `f`: rename / duplicate / move / new
+    folder / delete -- both shipped 2026-09-10. The file ops delegate to
+    mv/cp/del/rmdir/mkdir through the launch-and-return chain, so P8XFS needs no
+    rename/rmdir primitive; `c_finder_fileops_test.sh`.)
+  - **Real pull-down menus.** The APPS and FILE menus are dropdowns picked by a
+    letter, and the top bar is a key-hint strip -- not Mac-style press-drag-release
+    pull-downs from named bar titles (the old tiled `desk` had those via lib_wm).
+    Apps should likewise take over the bar with a File/Quit pull-down. Pairs with
+    the mouse work above.
   - (**Kermit shipped 2026-09-10** — `kermit send|recv /path` over the P3 second
     port ($FF08/$FF09), P5's last app; P5 is now complete. Term, Write, and the
     Paint/Image frame adaptation had already shipped. See the asm-twin note below.)

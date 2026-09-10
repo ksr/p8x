@@ -9,15 +9,20 @@
  *   ENTER                  open -- a directory navigates INTO it; a .BIN LAUNCHES
  *                          full-screen and AUTO-RETURNS here when it quits
  *   Backspace / Left       go UP a directory
+ *   a                      the APPS menu (paint / term / write / ...)
+ *   f                      the FILE menu (rename / duplicate / move / new / delete)
  *   q  or  ESC             quit the desktop -> back to the command-line OS
  *
  * Launching an app is a full-screen swap that comes back: Finder writes a two-line
  * script -- "run <app>" then "run /bin/finder.bin <dir>" -- and hands it to the
  * shell (SYS_RUNSH). The app quitting is a plain return to the shell, which flows
  * straight on to the second line, re-launching Finder in the same directory. No
- * per-app flag is needed (the mechanism the WM TERM used). An Apps menu, mouse,
- * and the file ops (rename/duplicate/move) are follow-ups -- see BACKLOG.md. Grows
- * out of desk.c's FILES logic, made full-screen (docs/p8x-two-mode-design.md).
+ * per-app flag is needed (the mechanism the WM TERM used). The file operations
+ * reuse that exact chain: an op builds a shell command (mv/cp/del/rmdir/mkdir) and
+ * run_op runs it then re-launches Finder -- so P8XFS needs no rename/rmdir
+ * primitive of its own. Still follow-ups (BACKLOG.md): mouse, and real pull-down
+ * menus in place of the key-hint bar. Grows out of desk.c's FILES logic, made
+ * full-screen (docs/p8x-two-mode-design.md).
  */
 
 //#use abi        /* SYS_GETCWD / SYS_EXEC, FOPENDIR/FNEXT, CONIN */
@@ -37,8 +42,11 @@ char fdir[24];           /* per entry: 1 = a directory */
 int  fcnt;               /* how many entries */
 int  fsel;               /* selected row (0..fcnt-1) */
 int  ftop;               /* first visible row (scroll) */
-char vpath[68];          /* scratch: a full path to launch */
+char vpath[68];          /* scratch: a full path to launch (also the op SOURCE path) */
+char dpath[68];          /* scratch: a file op's DESTINATION path */
 char icmd[96];           /* scratch: a "run" command with an argument (image) */
+char cmdbuf[168];        /* scratch: a built shell command line for a file op */
+char nbuf[16];           /* scratch: a name/path typed into the input dialog */
 
 /* ---- GL emission (full-screen, no window offset) --------------------------- */
 int gp(int v) { while (peek(GLSTAT) & 128) { } poke(GLDATA, v); return 0; }
@@ -161,7 +169,7 @@ int draw() {
     gtext(4, 261, "FINDER");
     gtext(72, 261, cpath);
     pen(0);
-    gtext(250, 261, "A APPS  ENTER OPEN  BKSP UP  Q QUIT");
+    gtext(206, 261, "F FILE  A APPS  ENTER OPEN  BKSP UP  Q QUIT");
     /* file list, top-down from just below the bar */
     r = ftop; y = 244;
     while (r < fcnt && y > 6) {
@@ -260,6 +268,169 @@ int apps_menu() {
     return 0;                                       /* ESC/other: caller redraws, menu gone */
 }
 
+/* ---- file operations ------------------------------------------------------ *
+ * P8XFS has no rename/rmdir primitive of its own, so rather than reimplement the
+ * filesystem here the Finder DELEGATES to the shell commands that already do the
+ * job (mv/cp/del/rmdir/mkdir): each op builds a command line and hands it to the
+ * same script-and-return chain that launches apps -- run_op writes
+ *   <command>\nrun /bin/finder.bin <cpath>\n
+ * and SYS_RUNSHs it, so the command runs and the Finder re-launches in the same
+ * directory (re-scanning, so the result is on screen). That gets cross-directory
+ * moves and empty-directory removal for free from tested commands. */
+
+/* append s to cmdbuf at pos; return the new position (cmdbuf stays NUL-terminated) */
+int apnd(int pos, char *s) {
+    int i; i = 0;
+    while (s[i]) { cmdbuf[pos] = s[i]; pos = pos + 1; i = i + 1; }
+    cmdbuf[pos] = 0;
+    return pos;
+}
+
+/* a modal text-entry dialog: draw a box with the label and the text typed so far,
+ * read a name into dst (<=14 chars). ENTER accepts (returns 1 if non-empty), ESC
+ * cancels (returns 0, dst emptied). Redraws every keystroke; the caller repaints
+ * the desktop afterwards. */
+int prompt_input(char *label, char *dst) {
+    int k; int n; int going;
+    n = 0; dst[0] = 0; going = 1;
+    while (going) {
+        pen(65535); fillrect(48, 116, 432, 156);       /* white dialog */
+        pen(0);     fillrect(50, 148, 430, 154);       /* title band */
+        pen(65535); gtext(56, 149, label);
+        pen(0);     gtext(56, 130, dst);
+        gtext(56, 119, "ENTER OK   ESC CANCEL");
+        k = getkey();
+        if (k == 13 || k == 10) { going = 0; }
+        else if (k == 27) { dst[0] = 0; return 0; }
+        else if (k == 8 || k == 127) { if (n > 0) { n = n - 1; dst[n] = 0; } }
+        else if (k >= 32 && k < 127 && n < 14) { dst[n] = k; n = n + 1; dst[n] = 0; }
+    }
+    return n > 0;
+}
+
+/* a modal Y/N confirmation (for the destructive delete). 1 = the user pressed Y. */
+int confirm(char *label) {
+    int k;
+    pen(65535); fillrect(48, 120, 432, 156);
+    pen(0); gtext(56, 140, label);
+    gtext(56, 126, "Y = YES   any other key = NO");
+    k = getkey();
+    return k == 'y' || k == 'Y';
+}
+
+/* write /FINDER.SCR = cmdbuf then the Finder re-launch, and run it (no return). */
+int run_op() {
+    bios(FRESOLVE, "/FINDER.SCR", 0);
+    bios(FDELETE, "/FINDER.SCR", 0);
+    bios(FRESOLVE, "/FINDER.SCR", 0);
+    bios(FWOPEN, 0, 0);
+    putstr(cmdbuf); bios(FPUTB, 0, 10);
+    putstr("run /bin/finder.bin "); putstr(cpath); bios(FPUTB, 0, 10);
+    bios(FCLOSE, 0, 0);
+    bios(SYS_RUNSH, "/FINDER.SCR", 0);                  /* no return */
+    return 0;
+}
+
+/* 1 if the selection is a real, operable entry (exists and is not "..") */
+int op_target(char **nmp) {
+    char *nm;
+    if (fcnt == 0) { return 0; }
+    nm = fnam + fsel * 13;
+    if (nm[0] == '.' && nm[1] == '.') { return 0; }
+    *nmp = nm;
+    return 1;
+}
+
+/* rename the selected entry (mv within the same directory) */
+int op_rename() {
+    char *nm; int p;
+    if (op_target(&nm) == 0) { return 0; }
+    if (prompt_input("RENAME TO:", nbuf) == 0) { return 0; }
+    pjoin(vpath, cpath, nm);                            /* source */
+    pjoin(dpath, cpath, nbuf);                          /* dest (same dir) */
+    p = apnd(0, "mv "); p = apnd(p, vpath);
+    cmdbuf[p] = 32; p = p + 1; cmdbuf[p] = 0;
+    p = apnd(p, dpath);
+    run_op();
+    return 0;
+}
+
+/* duplicate the selected FILE (cp to a new name in the same directory) */
+int op_dup() {
+    char *nm; int p;
+    if (op_target(&nm) == 0) { return 0; }
+    if (fdir[fsel]) { return 0; }                       /* files only (cp -r is heavy) */
+    if (prompt_input("DUPLICATE AS:", nbuf) == 0) { return 0; }
+    pjoin(vpath, cpath, nm);
+    pjoin(dpath, cpath, nbuf);
+    p = apnd(0, "cp "); p = apnd(p, vpath);
+    cmdbuf[p] = 32; p = p + 1; cmdbuf[p] = 0;
+    p = apnd(p, dpath);
+    run_op();
+    return 0;
+}
+
+/* move the selected entry into another directory (an absolute dir path typed in) */
+int op_move() {
+    char *nm; int p;
+    if (op_target(&nm) == 0) { return 0; }
+    if (prompt_input("MOVE TO DIR:", nbuf) == 0) { return 0; }
+    pjoin(vpath, cpath, nm);                            /* source */
+    pjoin(dpath, nbuf, nm);                             /* dest = <typed dir>/<name> */
+    p = apnd(0, "mv "); p = apnd(p, vpath);
+    cmdbuf[p] = 32; p = p + 1; cmdbuf[p] = 0;
+    p = apnd(p, dpath);
+    run_op();
+    return 0;
+}
+
+/* make a new folder in the current directory */
+int op_newdir() {
+    int p;
+    if (prompt_input("NEW FOLDER:", nbuf) == 0) { return 0; }
+    pjoin(dpath, cpath, nbuf);
+    p = apnd(0, "mkdir "); p = apnd(p, dpath);
+    run_op();
+    return 0;
+}
+
+/* delete the selected entry (del for a file, rmdir for an empty directory) */
+int op_delete() {
+    char *nm; int p;
+    if (op_target(&nm) == 0) { return 0; }
+    if (confirm("DELETE THIS ITEM?") == 0) { return 0; }
+    pjoin(vpath, cpath, nm);
+    if (fdir[fsel]) { p = apnd(0, "rmdir "); }          /* directory: must be empty */
+    else { p = apnd(0, "del "); }                       /* file */
+    p = apnd(p, vpath);
+    run_op();
+    return 0;
+}
+
+/* the FILE menu: a dropdown of the file operations, picked by their letter.
+ * Each op prompts as needed and (on confirm) does NOT return -- it re-launches
+ * the Finder through run_op; a cancel returns so the caller repaints. */
+int file_menu() {
+    int k;
+    pen(65535); fillrect(58, 116, 258, 256);
+    pen(0);     fillrect(60, 240, 256, 254);
+    pen(65535); gtext(66, 244, "FILE");
+    pen(0);
+    gtext(66, 226, "R  RENAME");
+    gtext(66, 214, "D  DUPLICATE");
+    gtext(66, 202, "M  MOVE");
+    gtext(66, 190, "N  NEW FOLDER");
+    gtext(66, 178, "X  DELETE");
+    gtext(66, 162, "ESC CANCEL");
+    k = getkey();
+    if (k == 'r' || k == 'R') { op_rename(); }
+    if (k == 'd' || k == 'D') { op_dup(); }
+    if (k == 'm' || k == 'M') { op_move(); }
+    if (k == 'n' || k == 'N') { op_newdir(); }
+    if (k == 'x' || k == 'X') { op_delete(); }
+    return 0;
+}
+
 int main() {
     int k; int going; int i; char *a;
     if (peek(GFXPRES) == 0) { puts("?No display"); return 1; }
@@ -288,6 +459,7 @@ int main() {
         else if (k == 13 || k == 10) { open_sel(); }                                   /* open */
         else if (k == 8 || k == 127 || k == 130) { pup(); fscan(); }                   /* up dir */
         else if (k == 'a' || k == 'A') { apps_menu(); }                                /* APPS menu */
+        else if (k == 'f' || k == 'F') { file_menu(); }                                /* FILE menu */
         if (going) { reveal(); draw(); }
     }
     poke(GTSUSP, 0);                               /* release the console */

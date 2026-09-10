@@ -215,9 +215,14 @@ command. Independent of the graphics work; needed before the transfer app.
   `run /bin/finder.bin <dir>` script (`SYS_RUNSH`), so the app quitting flows on to
   re-launch Finder in the same dir -- no per-app flag (the WM-TERM mechanism);
   `c_finder_ret_test.sh` proves it. An **Apps menu** (press `a`) launches Paint/Term/Write/... by letter
-  (`c_finder_apps_test.sh`). Deferred to BACKLOG: **mouse**, the file ops
-  (**rename/duplicate/move**), the **Term** and **Write**
-  apps, and **retiring the tiled `desk`/`wdesk`**.
+  (`c_finder_apps_test.sh`). **File ops DONE (2026-09-10):** a **FILE menu**
+  (press `f`) does rename / duplicate / move / new folder / delete -- each op
+  builds a shell command (mv/cp/del/rmdir/mkdir) and runs it through the same
+  launch-and-return chain, so P8XFS needs no rename/rmdir primitive of its own;
+  a modal text box takes the typed name, delete asks Y/N. Verified by
+  `c_finder_fileops_test.sh` (checks the filesystem after each op). Deferred to
+  BACKLOG: **mouse**, real **pull-down menus** (vs the key-hint bar), and
+  **retiring the tiled `desk`/`wdesk`**.
 - **P5 — Apps. Term DONE (2026-09-10).** `os/commands/term.c` -- an on-screen
   console in the app frame: enables the glass TTY, each typed command runs with
   output on the GL screen, Term persists by re-launching itself (`-c` continue
