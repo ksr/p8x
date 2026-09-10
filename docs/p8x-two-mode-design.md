@@ -178,7 +178,16 @@ command. Independent of the graphics work; needed before the transfer app.
     glyph bank, which only the OS loads from `/FONT.GL` — the monitor would need
     to load a font itself to render its own pre-`B` banner). Also a speed pass
     (batching / set-projection-once).
-- **P3 — Second serial port** (emulator + hardware). Enables Kermit later.
+- **P3 — Second serial port. Emulator DONE (2026-09-09).** A 2nd ACIA at
+  `ACIA2S $FF08` / `ACIA2D $FF09`, register-identical to the console ACIA
+  (`$FF04`/`$FF05`): status bit0 RDRF, bit1 TDRE; data read = RX, write = TX. The
+  emulator backs it with a file pair — `-2i <file>` feeds RX bytes, `-2o <file>`
+  captures TX — which is both self-testable and pipeable to a host `kermit`.
+  Verified by `c_serial2_test.sh` (a probe drains `-2i` to both the console and
+  `-2o`). **Hardware:** a second 6850 (or equivalent) at the same `$FF08/$FF09`
+  window, its own baud clock + line driver to a second connector — a card/wiring
+  task on the FPGA/TTL track, not yet built. The serial-terminal / Kermit command
+  that drives this port is P5. Independent of the graphics work.
 - **P4 — Finder desktop + full-screen-app frame.** File browser (navigate/open
   first; rename/duplicate/move next), menu bar, launch/return. Retire the tiled
   wdesk.

@@ -21,7 +21,8 @@
  * Memory map: 0000-1FFF ROM (8K) | 2000-FEFF RAM (56K) | FF00-FFFF I/O
  *   (ROM = 8K low; RAM = 2x 62256 covering 2000-FEFF; OS loads at 2000)
  *   FF00 switches(r, set with -s)  FF02 LEDs(w, trace with -L)
- *   FF04 ACIA status(r)  FF05 ACIA data(rw)
+ *   FF04 ACIA status(r)  FF05 ACIA data(rw)  [console serial]
+ *   FF08 ACIA2 status(r) FF09 ACIA2 data(rw) [2nd serial: -2i RX file, -2o TX file]
  *   FF10-FF17 CF-IDE task file (8-bit True IDE), modelled when -c <img> given:
  *     FF10 data  FF11 feature  FF12 sector-count  FF13-15 LBA0-2
  *     FF16 head/dev  FF17 command(w)/status(r)  [BSY7 DRQ3 ERR0]
@@ -55,6 +56,9 @@ static int norx=0;                    /* -N: console RX always empty (see rx_rea
 static int nogfx=0;                    /* -ng: no GL card fitted (GLID floats $FF) */
 static uint8_t *scr=0;                /* -i FILE: scripted console input (co-sim) */
 static long scrlen=0, scrpos=0;
+static uint8_t *s2rx=0;               /* -2i FILE: 2nd-ACIA RX bytes (the Kermit/serial-terminal port, $FF08/$FF09) */
+static long s2rxlen=0, s2rxpos=0;
+static FILE *s2tx=0;                  /* -2o FILE: 2nd-ACIA TX sink */
 static int peeked=-1;                 /* one-char lookahead for ACIA status/data */
 static struct termios g_orig;
 static int g_raw=0;
@@ -1712,6 +1716,8 @@ static uint8_t memrd(uint16_t ad){
     case 0xFF00: return switches;                             /* switches (-s) */
     case 0xFF04: return 0x02 | (rx_ready()?0x01:0x00);        /* TDRE|RDRF */
     case 0xFF05: return rx_char();
+    case 0xFF08: return 0x02 | (s2rxpos<s2rxlen?0x01:0x00);   /* 2nd ACIA: TDRE|RDRF */
+    case 0xFF09: return s2rxpos<s2rxlen ? s2rx[s2rxpos++] : 0;/* 2nd ACIA data (RX) */
     case 0xFF10: return cf[cf_active].img? cf_data_rd(&cf[cf_active]) : 0xFF;  /* CF data */
     case 0xFF17: return cf[cf_active].img?                                     /* CF status */
                         (0x40|(cf[cf_active].drq?0x08:0)|(cf[cf_active].err?0x01:0)) : 0xFF;
@@ -1753,6 +1759,8 @@ static void memwr(uint16_t ad,uint8_t v){
     }
     if(ad==0xFF06){ irq_pending=1; return; }   /* rev C: raise a maskable IRQ (models a device) */
     if(ad==0xFF05){ putchar(v); fflush(stdout); rx_misses=0; return; }
+    if(ad==0xFF09){ if(s2tx){ putc(v,s2tx); fflush(s2tx); } return; }  /* 2nd ACIA TX */
+    if(ad==0xFF08){ return; }                  /* 2nd ACIA control write: ignored (as $FF04) */
     if(ad==0xFF16){ cf_active=v&1; return; }  /* CFHEAD: ATA device select (bit 0) */
     /* The $FF20-$FF2F device door is CLOSED: writes fall through to nothing,
        like any absent card. */
@@ -1888,12 +1896,26 @@ int main(int argc,char**argv){
             if(scrlen && fread(scr,1,scrlen,sf)!=(size_t)scrlen){ fprintf(stderr,"p8xemu: short read on input script\n"); return 1; }
             fclose(sf);
         }
+        else if(!strcmp(argv[i],"-2i")){           /* 2nd-ACIA RX from a file (Kermit peer) */
+            FILE*sf=fopen(argv[++i],"rb");
+            if(!sf){ fprintf(stderr,"p8xemu: cannot open 2nd-serial input %s\n",argv[i]); return 1; }
+            fseek(sf,0,SEEK_END); s2rxlen=ftell(sf); fseek(sf,0,SEEK_SET);
+            s2rx=malloc(s2rxlen?s2rxlen:1);
+            if(s2rxlen && fread(s2rx,1,s2rxlen,sf)!=(size_t)s2rxlen){ fprintf(stderr,"p8xemu: short read on 2nd-serial input\n"); return 1; }
+            fclose(sf);
+        }
+        else if(!strcmp(argv[i],"-2o")){           /* 2nd-ACIA TX to a file */
+            s2tx=fopen(argv[++i],"wb");
+            if(!s2tx){ fprintf(stderr,"p8xemu: cannot open 2nd-serial output %s\n",argv[i]); return 1; }
+        }
         else if(!strcmp(argv[i],"-h")||!strcmp(argv[i],"--help")){
             fprintf(stderr,"usage: p8xemu [-t] [-T] [-N] [-ng] [-l cycles] [-c disk.img] [-c2 disk2.img] "
                 "[-s switches] [-L] [-g out.ppm] [-G] [rom.bin]\n"
                 "  -T     canonical per-cycle machine trace to stderr (FPGA co-sim)\n"
                 "  -N     console RX always empty; makes -T traces independent of stdin\n"
                 "  -ng    no GL card fitted: GLID floats $FF (test headless-console mode)\n"
+                "  -2i F  2nd serial port ($FF08/$FF09) RX from file F (the Kermit/serial-term port)\n"
+                "  -2o F  2nd serial port TX to file F\n"
                 "  -i F   scripted console input from file F (RDRF = bytes remain)\n"
                 "  -s NN  value read at $FF00 (e.g. -s 0xA5); default 0\n"
                 "  -L     print $FF02 LED writes to stderr as they change\n"

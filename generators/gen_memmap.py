@@ -35,6 +35,11 @@ MAP = [
     # $5600 sat inside the shell history ring, which is why the ring moved.)
     ('I/O ports ($FF00-$FFFF)', 'ACIAS', 0xFF04, 'ACIA status (rd) / control (wr)'),
     ('I/O ports ($FF00-$FFFF)', 'ACIAD', 0xFF05, 'ACIA data'),
+    # Second serial port (two-mode P3): a 2nd ACIA, register-identical to the
+    # first, for the serial-terminal / Kermit file-transfer command. Emulator
+    # backs it with a file pair (-2i RX / -2o TX); real hardware is a 2nd 6850.
+    ('I/O ports ($FF00-$FFFF)', 'ACIA2S', 0xFF08, '2nd ACIA status (rd) / control (wr) -- the Kermit/serial-terminal port'),
+    ('I/O ports ($FF00-$FFFF)', 'ACIA2D', 0xFF09, '2nd ACIA data'),
     ('I/O ports ($FF00-$FFFF)', 'CFDATA', 0xFF10, 'CF task file'),
     ('I/O ports ($FF00-$FFFF)', 'CFFEAT', 0xFF11, ''),
     ('I/O ports ($FF00-$FFFF)', 'CFSCNT', 0xFF12, ''),

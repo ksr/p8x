@@ -177,6 +177,7 @@ test-basic: p8xemu ucode
 # I/O card model: switch input (-s) -> $FF00 and LED writes ($FF02, -L).
 test-io: p8xemu ucode
 	sh test/io_test.sh
+	sh test/c_serial2_test.sh
 
 # Graphics: everything through the GL port ($FF50) since the device door
 # closed -- the C library, the image twins, the GL language suites, and

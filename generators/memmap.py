@@ -13,6 +13,8 @@ CSTACKTOP   = 0xF800             # compiler C-stack top (grows down; p8cc __csp 
 # I/O ports ($FF00-$FFFF)
 ACIAS       = 0xFF04             # ACIA status (rd) / control (wr)
 ACIAD       = 0xFF05             # ACIA data
+ACIA2S      = 0xFF08             # 2nd ACIA status (rd) / control (wr) -- the Kermit/serial-terminal port
+ACIA2D      = 0xFF09             # 2nd ACIA data
 CFDATA      = 0xFF10             # CF task file
 CFFEAT      = 0xFF11
 CFSCNT      = 0xFF12

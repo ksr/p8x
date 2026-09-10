@@ -15,6 +15,8 @@
 /* I/O ports ($FF00-$FFFF) */
 #define ACIAS       0xFF04       /* ACIA status (rd) / control (wr) */
 #define ACIAD       0xFF05       /* ACIA data */
+#define ACIA2S      0xFF08       /* 2nd ACIA status (rd) / control (wr) -- the Kermit/serial-terminal port */
+#define ACIA2D      0xFF09       /* 2nd ACIA data */
 #define CFDATA      0xFF10       /* CF task file */
 #define CFFEAT      0xFF11
 #define CFSCNT      0xFF12

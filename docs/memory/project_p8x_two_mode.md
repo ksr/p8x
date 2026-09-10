@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 6ffcfef7-73ca-445b-bcdb-f57735fdc98f
-  modified: 2026-09-09T22:55:15.375Z
+  modified: 2026-09-09T23:32:41.342Z
 ---
 
 **BIG DIRECTION CHANGE, user, 2026-09-09.** Full design in
@@ -43,6 +43,14 @@ app. **RETIRED:** tiled windows, z-order, drag, per-window records, most SYS_WK*
 CONOUT (big, ROM work, "monitor on screen") -> P3 2nd serial port (emu+hw, for
 Kermit) -> P4 Finder desktop + full-screen-app frame (retire tiled wdesk) ->
 P5 apps: Paint(adapt)/Image(adapt)/Term/Write(NEW)/serial-terminal(Kermit).
+
+**P3 emulator DONE (2026-09-09), on graphics-card:** 2nd serial port = 2nd ACIA
+at ACIA2S $FF08 / ACIA2D $FF09 (memmap), register-identical to the console ACIA
+($FF04/$FF05): status bit0 RDRF, bit1 TDRE; data rd=RX, wr=TX. Emulator backs it
+with a FILE PAIR -- `-2i <file>` RX, `-2o <file>` TX (self-testable + pipeable to
+host kermit). Additive (new addrs/flags, nothing else touched). Test
+c_serial2_test.sh (in test-io). HW = a 2nd 6850 at the same window (FPGA/TTL
+track, not built). The serial-terminal/Kermit command that drives it is P5.
 
 **P2 MVP DONE, OPT-IN (2026-09-09), on graphics-card:** glass TTY is OFF by
 default (GCONEN $60AF = 0); `screen on` (os/commands/screen.c, C-only, needs asm

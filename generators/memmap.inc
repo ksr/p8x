@@ -14,6 +14,8 @@ CSTACKTOP   = $F800              ; compiler C-stack top (grows down; p8cc __csp 
 ; I/O ports ($FF00-$FFFF)
 ACIAS       = $FF04              ; ACIA status (rd) / control (wr)
 ACIAD       = $FF05              ; ACIA data
+ACIA2S      = $FF08              ; 2nd ACIA status (rd) / control (wr) -- the Kermit/serial-terminal port
+ACIA2D      = $FF09              ; 2nd ACIA data
 CFDATA      = $FF10              ; CF task file
 CFFEAT      = $FF11
 CFSCNT      = $FF12
