@@ -60,8 +60,17 @@ line re-launches finder (paint's -d/-w chain to desk/wdesk is legacy, unused by
 Finder). IMAGE gained a VIEW mode: `image /abspath` (bare absolute path) clears +
 draws full-screen at 0,0 + waits for a key (bios CONIN $0100) + returns; Finder's
 open_sel now launches "run /bin/image.bin <path>" for a .P8I (isp8i helper; builds
-the cmd in a global icmd[]). Test c_finder_open_test.sh. P5 REMAINING: the
-serial-terminal/Kermit command (drives P3 $FF08/$FF09) = the LAST app.
+the cmd in a global icmd[]). Test c_finder_open_test.sh. **KERMIT DONE (2026-09-10)
+-> P5 COMPLETE, ALL PHASES P1-P5 DONE:** os/commands/kermit.c = `kermit send|recv
+/path` over the P3 2nd ACIA ($FF08/$FF09): minimal Kermit-style packets SEQ/LEN/
+data[LEN]/CHK (CHK = sum of data & 255), LEN=0 packet = EOF; a2put/a2get poll the
+port directly (status bit1 TDRE to send, bit0 RDRF to recv). Fire-and-forward
+(no ACK/NAK). recv DELETES then FWOPENs the target, verifies each CHK (?checksum
+on mismatch). Run from the shell or Term, NOT the APPS menu (needs a verb+path
+arg). C-only (asm twin BACKLOGGED with screen's -- twin needs the 2nd-ACIA poll +
+FS wrappers). Wired into run.sh 3 lists + man/kermit + Makefile test-io. Test
+c_kermit_test.sh = byte-exact send->cap.dat(-2o)->recv->cmp round-trip, one P8X as
+both peers via the emulator's file-backed 2nd port.
 
 **P4 FIRST CUT DONE (2026-09-09), on graphics-card:** finder.c = full-screen
 Finder desktop (NO tiling): white menu bar (FINDER + cwd + key hints) + the dir

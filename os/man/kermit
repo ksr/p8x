@@ -1,0 +1,52 @@
+NAME
+    kermit - transfer a file over the second serial port
+
+SYNOPSIS
+    kermit send /path/file      frame a file into packets, send out port 2
+    kermit recv /path/file      read packets from port 2, write to a file
+
+DESCRIPTION
+    kermit moves a file between the P8X and whatever is on the other end
+    of the SECOND serial port (the 2nd ACIA at $FF08/$FF09, added with
+    two-mode operation). The console keeps port 1, so a transfer can run
+    while you still have a shell -- launch kermit from the Term app, or
+    straight from the command line.
+
+    The framing is a minimal Kermit-style block protocol -- a
+    fire-and-forward stream, not the full ACK/NAK Kermit. Each packet is
+
+        SEQ  LEN  data[LEN]  CHK
+
+    where SEQ is a wrapping 0-255 counter, LEN is 1..64 payload bytes,
+    and CHK is the sum of the payload bytes AND 255. A LEN=0 packet marks
+    end of file. `recv` verifies each CHK and prints ?checksum (and exits
+    non-zero) if any block is corrupt; otherwise it prints "kermit:
+    received". `send` prints "kermit: sent" when the whole file, plus the
+    EOF packet, is on the wire.
+
+    The port is polled directly: status bit0 (RDRF) means a byte is
+    waiting to be read from $FF09, bit1 (TDRE) means the transmitter is
+    ready for the next byte. Both sides must run a matching peer; two
+    P8X machines wired port-2 to port-2 can send/recv to each other, and
+    the emulator's -2i/-2o file-backed port makes a single machine its
+    own peer (that is how the round-trip is tested).
+
+    recv REPLACES any existing file of that name (it deletes first, then
+    writes). Give absolute paths -- a /bin command must resolve a bare
+    name itself, so lead with '/'.
+
+EXAMPLES
+    kermit send /README.TXT     push README.TXT out port 2
+    kermit recv /INBOX.DAT      pull the next file in off port 2
+
+    On the emulator, capture a send and play it back into a recv:
+        p8xemu ... -2o cap.dat      (kermit send /A.DAT writes cap.dat)
+        p8xemu ... -2i cap.dat      (kermit recv /B.DAT reads it back)
+
+NOTES
+    kermit is a C-only command for now (no hand-assembled twin yet -- it
+    is on the backlog, like `screen`). The C build at /binc/kermit.bin
+    and /bin/kermit.bin are the same binary.
+
+SEE ALSO
+    term, finder, sh

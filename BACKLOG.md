@@ -37,9 +37,9 @@ remainder is why it is still here.
   - **Mouse** support (via lib_ptr, keyboard-only today) and the file ops
     **rename / duplicate / move** (grow from cp/mv/mkdir/del). (The Apps menu
     -- press `a` -- shipped.)
-  - The serial-terminal / **Kermit** command driving the P3 second port (P5, the
-    last app) -- Kermit-style file transfer over $FF08/$FF09. (Term, Write, and
-    the Paint/Image frame adaptation all shipped.)
+  - (**Kermit shipped 2026-09-10** — `kermit send|recv /path` over the P3 second
+    port ($FF08/$FF09), P5's last app; P5 is now complete. Term, Write, and the
+    Paint/Image frame adaptation had already shipped. See the asm-twin note below.)
   - **Retire the tiled `desk`/`wdesk`** once Finder covers their use; their FILES/
     launch logic carried forward, the tiling did not.
   - Real-serial arrow-key timing: `finder`'s ESC-sequence decode uses a bounded
@@ -58,9 +58,11 @@ remainder is why it is still here.
     compare. Resolving these needs every GL program (and the software-lib path
     that never calls `gpresent`) to configure/clear from scratch on claim, plus
     adapting the byte-exact tests — a real sub-project. Until then, opt-in.
-  - **`screen` command asm twin.** `os/commands/screen.c` shipped C-only; per the
-    /bin dual-twin rule it needs an `os/commands-asm/screen.asm` twin (and the
-    run.sh build lists updated) — see [[feedback_p8x_new_command_dual]].
+  - **`screen` and `kermit` command asm twins.** `os/commands/screen.c` and
+    `os/commands/kermit.c` both shipped C-only; per the /bin dual-twin rule each
+    needs an `os/commands-asm/*.asm` twin (and the run.sh build lists updated) —
+    see [[feedback_p8x_new_command_dual]]. kermit's twin needs the 2nd-ACIA poll
+    ($FF08/$FF09) plus the FS wrappers it already uses.
   - Two more deliberate cuts were deferred here:
   - **Proper scrollback.** The MVP is **clear-on-full**: when the cursor passes
     the bottom row it clears the screen and homes to the top (zero CPU RAM). A

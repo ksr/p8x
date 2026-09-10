@@ -212,8 +212,14 @@ command. Independent of the graphics work; needed before the transfer app.
   by `c_write_test.sh`. **Paint/Image adapted (2026-09-10):** Paint launches from
   the APPS menu and auto-returns (no change -- the launch script does it); Image
   gained a full-screen VIEW mode (`image /path`) and Finder opens a `.P8I` in it
-  (`c_finder_open_test.sh`). Only the serial-terminal / **Kermit** command (drives
-  the P3 second port) remains -- the last app.
+  (`c_finder_open_test.sh`). **Kermit DONE (2026-09-10) -- P5 COMPLETE:**
+  `os/commands/kermit.c` -- `kermit send|recv /path` moves a file over the P3
+  second ACIA ($FF08/$FF09) in minimal Kermit-style packets (SEQ/LEN/data/CHK,
+  LEN=0 = EOF), the console keeping port 1. Run from the shell or the Term app,
+  not the APPS menu (it needs a send/recv verb + path argument). Verified by
+  `c_kermit_test.sh` -- a byte-exact send->cap.dat->recv round-trip using the
+  emulator's file-backed 2nd port (-2o/-2i). C-only for now; the hand-asm twin
+  is on the backlog (as with `screen`). **All five phases (P1-P5) are done.**
 
 ## Open questions (resolve as we go)
 
