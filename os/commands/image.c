@@ -172,6 +172,17 @@ int main() {
         return 0;
     }
     if (gpresent() == 0) { puts("?No display"); return 1; }
+    /* VIEW mode: a bare ABSOLUTE path (how Finder opens a .P8I) -- clear the
+     * screen, draw the picture full-screen at the top-left, wait for a key, then
+     * return (the Finder launch script re-launches the desktop). gpresent() has
+     * already claimed the screen (GTSUSP=1). */
+    if (*ap == '/') {
+        gcolor(0); gcls();                  /* black background */
+        if (abspath(path, ap) == 0) { usage(); return 1; }
+        draw(0, 0);                          /* top-left; prints ?No file / ?NOT P8I on error */
+        bios(0x0100, 0, 0);                  /* CONIN: any key returns */
+        return 0;
+    }
     rd = 0;
     if (*ap == 'r' || *ap == 'R') {         /* the READ verb (draw starts */
         rd = 1;                             /*   with a number)           */

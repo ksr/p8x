@@ -38,6 +38,7 @@ int  fcnt;               /* how many entries */
 int  fsel;               /* selected row (0..fcnt-1) */
 int  ftop;               /* first visible row (scroll) */
 char vpath[68];          /* scratch: a full path to launch */
+char icmd[96];           /* scratch: a "run" command with an argument (image) */
 
 /* ---- GL emission (full-screen, no window offset) --------------------------- */
 int gp(int v) { while (peek(GLSTAT) & 128) { } poke(GLDATA, v); return 0; }
@@ -117,6 +118,13 @@ int isbin(char *s) {                               /* 1 if name ends .BIN (case-
     if (n < 4) { return 0; }
     if (s[n-4] != '.') { return 0; }
     return (s[n-3] & 95) == 'B' && (s[n-2] & 95) == 'I' && (s[n-1] & 95) == 'N';
+}
+int isp8i(char *s) {                               /* 1 if name ends .P8I (case-blind) */
+    int n; n = 0;
+    while (s[n] != 0) { n = n + 1; }
+    if (n < 4) { return 0; }
+    if (s[n-4] != '.') { return 0; }
+    return (s[n-3] & 95) == 'P' && s[n-2] == '8' && (s[n-1] & 95) == 'I';
 }
 
 /* ---- read cpath's entries into fnam[]/fdir[] (from desk.c's fscan) ---------- */
@@ -211,11 +219,19 @@ int open_sel() {
         fscan();
         return 0;
     }
+    pjoin(vpath, cpath, nm);                       /* the file's absolute path */
     if (isbin(nm)) {                               /* a program: launch full-screen */
-        pjoin(vpath, cpath, nm);
         launch(vpath);                             /* no return on success */
     }
-    return 0;                                      /* other files: ignored for now */
+    if (isp8i(nm)) {                               /* a picture: open it in image */
+        char *pfx; int i; int j;
+        pfx = "/bin/image.bin ";
+        i = 0; while (pfx[i]) { icmd[i] = pfx[i]; i = i + 1; }
+        j = 0; while (vpath[j]) { icmd[i] = vpath[j]; i = i + 1; j = j + 1; }
+        icmd[i] = 0;
+        launch(icmd);                              /* "run /bin/image.bin <path>"; no return */
+    }
+    return 0;                                      /* other files: ignored */
 }
 
 /* the APPS menu: a dropdown of the desktop's apps, launched by their letter.

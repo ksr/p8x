@@ -209,8 +209,11 @@ command. Independent of the graphics work; needed before the transfer app.
   APPS menu (T). Verified by `c_term_test.sh`. **Write DONE (2026-09-10):**
   `os/commands/write.c` -- a full-screen text editor (open/edit/save a file,
   cursor + insert/delete/newline, ^O save, ^X -> Finder; APPS menu W); verified
-  by `c_write_test.sh`. Still: adapting Paint/Image to the frame, and the
-  serial-terminal / **Kermit** command (drives the P3 second port).
+  by `c_write_test.sh`. **Paint/Image adapted (2026-09-10):** Paint launches from
+  the APPS menu and auto-returns (no change -- the launch script does it); Image
+  gained a full-screen VIEW mode (`image /path`) and Finder opens a `.P8I` in it
+  (`c_finder_open_test.sh`). Only the serial-terminal / **Kermit** command (drives
+  the P3 second port) remains -- the last app.
 
 ## Open questions (resolve as we go)
 

@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 6ffcfef7-73ca-445b-bcdb-f57735fdc98f
-  modified: 2026-09-10T10:59:10.195Z
+  modified: 2026-09-10T12:35:34.523Z
 ---
 
 **BIG DIRECTION CHANGE, user, 2026-09-09.** Full design in
@@ -54,8 +54,14 @@ cursor offset, insert/backspace/newline, arrows incl up/down via lstart/lnext/co
 helpers, ^O save ^X/ESC quit->finder, wraps at 78 col, no vscroll yet). Both
 C-only, in run.sh 3 lists + man pages + tests c_finder_apps/c_term/c_write
 (test-gfx). WHY term re-launches: NO run-and-return syscall (SYS_EXEC/SYS_RUNSH
-both REPLACE the caller). P5 REMAINING: adapt paint/image to frame; the
-serial-terminal/Kermit command (drives P3 $FF08/$FF09) = the last app.
+both REPLACE the caller). PAINT/IMAGE ADAPTED (2026-09-10): PAINT needed NO change -- launched from the
+APPS menu (no -d flag) it RTS's to the shell and the Finder launch-script's 2nd
+line re-launches finder (paint's -d/-w chain to desk/wdesk is legacy, unused by
+Finder). IMAGE gained a VIEW mode: `image /abspath` (bare absolute path) clears +
+draws full-screen at 0,0 + waits for a key (bios CONIN $0100) + returns; Finder's
+open_sel now launches "run /bin/image.bin <path>" for a .P8I (isp8i helper; builds
+the cmd in a global icmd[]). Test c_finder_open_test.sh. P5 REMAINING: the
+serial-terminal/Kermit command (drives P3 $FF08/$FF09) = the LAST app.
 
 **P4 FIRST CUT DONE (2026-09-09), on graphics-card:** finder.c = full-screen
 Finder desktop (NO tiling): white menu bar (FINDER + cwd + key hints) + the dir

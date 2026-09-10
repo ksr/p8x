@@ -2,11 +2,17 @@ NAME
     image - draw a P8I picture, or grab the screen into one
 
 SYNOPSIS
+    image /path/file            view a picture full-screen (any key returns)
     image x y file
     image read x0 y0 x1 y1 file
 
 DESCRIPTION
-    Two inverse verbs, straight from the shell (no BASIC needed).
+    `image /path/file` (a bare ABSOLUTE path) is VIEW mode: it clears the
+    screen, draws the picture full-screen at the top-left, and waits for a
+    key before returning. This is how the Finder desktop opens a .P8I --
+    select it and press ENTER (image quits back to Finder on any key).
+
+    The two inverse verbs below run straight from the shell (no BASIC needed).
 
     `image x y file` draws a P8I picture with its top-left at (x,y) --
     SCREEN coordinates, y down: this shell command keeps the historical
