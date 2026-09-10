@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 6ffcfef7-73ca-445b-bcdb-f57735fdc98f
-  modified: 2026-09-09T23:32:41.342Z
+  modified: 2026-09-10T00:36:36.640Z
 ---
 
 **BIG DIRECTION CHANGE, user, 2026-09-09.** Full design in
@@ -43,6 +43,22 @@ app. **RETIRED:** tiled windows, z-order, drag, per-window records, most SYS_WK*
 CONOUT (big, ROM work, "monitor on screen") -> P3 2nd serial port (emu+hw, for
 Kermit) -> P4 Finder desktop + full-screen-app frame (retire tiled wdesk) ->
 P5 apps: Paint(adapt)/Image(adapt)/Term/Write(NEW)/serial-terminal(Kermit).
+
+**P4 FIRST CUT DONE (2026-09-09), on graphics-card:** finder.c = full-screen
+Finder desktop (NO tiling): white menu bar (FINDER + cwd + key hints) + the dir
+as a scrolling file list (dirs cyan, selection = yellow bar). Keyboard: Up/Down,
+ENTER opens dir / LAUNCHES .BIN full-screen (SYS_EXEC = BECOME the app),
+Backspace up, q quits to shell. Claims screen (GTSUSP=1) + draws own GL; MUST set
+PROJCT 0 itself (gsetup: WINDOW/VWPORT/PROJCT 0/MDIDEN/TSIZE -- no WM kernel to do
+it) else TEXT near-clips invisible. Decodes arrow ESC-seqs ITSELF (rawkey is RAW,
+returns bytes; the 128-131 arrow codes came from the WM kernel which finder
+doesn't use). p8cc GOTCHAS hit: NO `break` (use a `going` flag); array size must
+be a LITERAL (char fnam[312], not [NN*13]). Reuses desk's fscan/pjoin/pup/ftype.
+In run.sh's 3 GUI build lists + man page (os/man/finder, auto-installs) + test
+c_finder_test.sh (test-gfx). C-ONLY (like desk/wdesk/paint, no asm twin). DEFER
+-> BACKLOG: auto-return chain (apps re-exec finder on quit; today they return to
+SHELL), Apps menu, mouse, rename/dup/move, Term+Write apps (P5), retire
+desk/wdesk.
 
 **P3 emulator DONE (2026-09-09), on graphics-card:** 2nd serial port = 2nd ACIA
 at ACIA2S $FF08 / ACIA2D $FF09 (memmap), register-identical to the console ACIA

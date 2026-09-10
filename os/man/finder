@@ -1,0 +1,38 @@
+NAME
+    finder - the full-screen desktop / file browser (graphics mode)
+
+SYNOPSIS
+    finder
+
+DESCRIPTION
+    The Mac-style desktop for the graphics display (two-mode P4). One
+    program owns the whole screen -- no tiling, no overlapping windows.
+    A white menu bar runs across the top showing the current directory;
+    the rest of the screen is that directory as a scrolling file list.
+
+    Requires a display (a GL card fitted, GFXPRES=1); on a headless
+    machine it prints "?No display" and exits. Finder claims the screen
+    (it suspends the on-screen text console while it runs) and draws its
+    own UI with the card's stroke font.
+
+KEYS
+    Up / Down  (or k / j)   move the selection
+    ENTER                   open the selection:
+                              a directory  -> navigate INTO it
+                              a .BIN        -> LAUNCH it full-screen
+                                               (this program BECOMES the app)
+    Backspace / Left        go up one directory
+    q  or  ESC              quit the desktop -> back to the command line
+
+    Directories show in cyan with a leading "/"; the selected row is a
+    yellow bar.
+
+NOTES
+    Launching an app is a full-screen program swap (SYS_EXEC). Automatic
+    return to the desktop when the app quits (the -d/-w resume chain), an
+    Apps menu, mouse support, and the file operations (rename, duplicate,
+    move) are not yet wired -- see the project backlog. Grows out of the
+    older tiled `desk`, made full-screen.
+
+SEE ALSO
+    desk, paint, screen

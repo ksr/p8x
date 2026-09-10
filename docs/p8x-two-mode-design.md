@@ -188,9 +188,18 @@ command. Independent of the graphics work; needed before the transfer app.
   window, its own baud clock + line driver to a second connector — a card/wiring
   task on the FPGA/TTL track, not yet built. The serial-terminal / Kermit command
   that drives this port is P5. Independent of the graphics work.
-- **P4 — Finder desktop + full-screen-app frame.** File browser (navigate/open
-  first; rename/duplicate/move next), menu bar, launch/return. Retire the tiled
-  wdesk.
+- **P4 — Finder desktop + full-screen-app frame. FIRST CUT DONE (2026-09-09).**
+  `os/commands/finder.c` -- a full-screen file browser (no tiling): a white menu
+  bar across the top with the current directory, the directory as a scrolling
+  file list below (dirs cyan, selection a yellow bar). Keyboard-driven (Up/Down,
+  ENTER opens a dir or LAUNCHES a `.BIN` full-screen via `SYS_EXEC`, Backspace
+  goes up, `q` quits to the shell). It claims the screen (`GTSUSP`) and draws its
+  own UI + text (sets `PROJCT 0` etc. from scratch); decodes arrow escape
+  sequences itself (no WM kernel). Verified by `c_finder_test.sh`. Deferred to
+  BACKLOG: the **auto-return chain** (apps re-exec the desktop on quit -- the
+  `-d`/`-w` mechanism, currently apps return to the shell), the **Apps menu**,
+  **mouse**, the file ops (**rename/duplicate/move**), the **Term** and **Write**
+  apps, and **retiring the tiled `desk`/`wdesk`**.
 - **P5 — Apps.** Adapt Paint/Image; the Term app; **Write** (new); the
   serial-terminal / Kermit command.
 

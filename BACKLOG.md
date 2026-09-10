@@ -32,6 +32,22 @@ remainder is why it is still here.
 > itself now stops correctly -- `set -euo pipefail` plus an explicit `exit 1` on
 > each of synthesise / P&R / pack, so `load` is unreachable after a failed build.
 
+- **Finder desktop (two-mode P4) — the rest of the app frame.** `finder.c` shipped
+  a full-screen file browser + full-screen launch (`SYS_EXEC`). Still to do:
+  - **Auto-return chain:** launching an app should re-exec `/bin/finder.bin` on the
+    app's quit (generalise the `-d` "chain back to desk" / `-w` resume flags).
+    Right now an app launched from Finder returns to the SHELL, not the desktop.
+  - **Apps menu** (a dropdown to launch Paint/Term/... without hunting for the
+    `.bin`), **mouse** support (via lib_ptr, keyboard-only today), and the file
+    ops **rename / duplicate / move** (grow from cp/mv/mkdir/del).
+  - The **Term** app (the glass TTY in an app frame -- runs any /bin command,
+    output on-screen) and **Write** (a new text editor) -- P5.
+  - **Retire the tiled `desk`/`wdesk`** once Finder covers their use; their FILES/
+    launch logic carried forward, the tiling did not.
+  - Real-serial arrow-key timing: `finder`'s ESC-sequence decode uses a bounded
+    keyrdy() spin; over a slow link a lone ESC vs an arrow may still race -- revisit
+    if it misbehaves on hardware.
+
 - **Glass TTY (two-mode P2) — always-on coexistence, proper scroll, monitor-on-screen.**
   The P2 MVP (2026-09-09) put the OS and program output on the GL screen via a
   glass TTY behind BIOS `CONOUT`, but it is **OPT-IN, OFF by default** (`GCONEN=0`;
