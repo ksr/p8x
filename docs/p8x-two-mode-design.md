@@ -202,8 +202,15 @@ command. Independent of the graphics work; needed before the transfer app.
   (`c_finder_apps_test.sh`). Deferred to BACKLOG: **mouse**, the file ops
   (**rename/duplicate/move**), the **Term** and **Write**
   apps, and **retiring the tiled `desk`/`wdesk`**.
-- **P5 — Apps.** Adapt Paint/Image; the Term app; **Write** (new); the
-  serial-terminal / Kermit command.
+- **P5 — Apps. Term DONE (2026-09-10).** `os/commands/term.c` -- an on-screen
+  console in the app frame: enables the glass TTY, each typed command runs with
+  output on the GL screen, Term persists by re-launching itself (`-c` continue
+  mode, since no run-and-return call exists), `exit` -> Finder. Launched from the
+  APPS menu (T). Verified by `c_term_test.sh`. **Write DONE (2026-09-10):**
+  `os/commands/write.c` -- a full-screen text editor (open/edit/save a file,
+  cursor + insert/delete/newline, ^O save, ^X -> Finder; APPS menu W); verified
+  by `c_write_test.sh`. Still: adapting Paint/Image to the frame, and the
+  serial-terminal / **Kermit** command (drives the P3 second port).
 
 ## Open questions (resolve as we go)
 

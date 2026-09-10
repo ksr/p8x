@@ -200,6 +200,8 @@ test-gfx: p8xemu ucode
 	sh test/c_finder_test.sh
 	sh test/c_finder_ret_test.sh
 	sh test/c_finder_apps_test.sh
+	sh test/c_term_test.sh
+	sh test/c_write_test.sh
 	sh test/wm_kernel_test.sh
 	sh test/wm_events_test.sh
 	sh test/wm_mouse_test.sh

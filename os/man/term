@@ -1,0 +1,35 @@
+NAME
+    term - an on-screen console in the desktop app frame (graphics mode)
+
+SYNOPSIS
+    term
+
+DESCRIPTION
+    The Term app (two-mode P5): a full-screen terminal on the GL display.
+    It IS the glass TTY (the on-screen console) presented as a desktop app.
+    Type a command at the "term>" prompt and it runs with its output drawn
+    ON THE SCREEN; the session accumulates as you go.
+
+    Requires a display (a GL card fitted). Launch it from the Finder APPS
+    menu (press 'a', then T), or run it from the shell.
+
+USAGE
+    term> ls              run any /bin command; output appears on screen
+    term> cube            a graphics program takes the screen, then returns
+    term> exit            leave Term -> back to the Finder desktop
+
+    (quit is a synonym for exit.)
+
+NOTES
+    There is no "run a program and return" call on the P8X, so Term persists
+    the way the desktop auto-returns: after a command it writes a two-line
+    script -- the command, then "run /bin/term.bin -c" -- and hands it to the
+    shell (SYS_RUNSH). The command runs; Term re-launches in continue mode
+    (-c), which keeps the screen instead of re-clearing it. `exit` becomes
+    /bin/finder.bin instead.
+
+    The console it uses is the opt-in glass TTY; Term turns it on (and turns
+    it off on exit). See `screen`.
+
+SEE ALSO
+    finder, screen, paint

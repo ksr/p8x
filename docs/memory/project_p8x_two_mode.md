@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 6ffcfef7-73ca-445b-bcdb-f57735fdc98f
-  modified: 2026-09-10T01:42:37.918Z
+  modified: 2026-09-10T10:59:10.195Z
 ---
 
 **BIG DIRECTION CHANGE, user, 2026-09-09.** Full design in
@@ -43,6 +43,19 @@ app. **RETIRED:** tiled windows, z-order, drag, per-window records, most SYS_WK*
 CONOUT (big, ROM work, "monitor on screen") -> P3 2nd serial port (emu+hw, for
 Kermit) -> P4 Finder desktop + full-screen-app frame (retire tiled wdesk) ->
 P5 apps: Paint(adapt)/Image(adapt)/Term/Write(NEW)/serial-terminal(Kermit).
+
+**P4 APPS MENU + P5 TERM/WRITE DONE (2026-09-10), on graphics-card:** finder
+APPS menu (press 'a' -> dropdown, letter launches: P paint/T term/W write/C cube/
+H house/G gl; reuses launch()). term.c = on-screen shell (enables glass console
+GCONEN=1, each cmd runs via /TERM.RUN = "<cmd>\nrun /bin/term.bin -c" SYS_RUNSH,
+persists by re-launching in continue mode -c which SKIPS GCLS to keep the screen;
+exit -> SYS_EXEC finder). write.c = full-screen text editor (2KB flat buf +
+cursor offset, insert/backspace/newline, arrows incl up/down via lstart/lnext/col
+helpers, ^O save ^X/ESC quit->finder, wraps at 78 col, no vscroll yet). Both
+C-only, in run.sh 3 lists + man pages + tests c_finder_apps/c_term/c_write
+(test-gfx). WHY term re-launches: NO run-and-return syscall (SYS_EXEC/SYS_RUNSH
+both REPLACE the caller). P5 REMAINING: adapt paint/image to frame; the
+serial-terminal/Kermit command (drives P3 $FF08/$FF09) = the last app.
 
 **P4 FIRST CUT DONE (2026-09-09), on graphics-card:** finder.c = full-screen
 Finder desktop (NO tiling): white menu bar (FINDER + cwd + key hints) + the dir

@@ -1,0 +1,32 @@
+NAME
+    write - a full-screen text editor for the GL display (graphics mode)
+
+SYNOPSIS
+    write [file]
+
+DESCRIPTION
+    The Write app (two-mode P5): edit a text file on the GL screen. With a
+    file argument it opens that file (creating it on save if absent); with no
+    argument it edits a scratch buffer that saves to /WRITE.TXT.
+
+    Requires a display (a GL card fitted). Launch it from the Finder APPS menu
+    (press 'a', then W), or run it from the shell. A white menu bar shows the
+    file name (and a "*" when there are unsaved edits); the cursor is a yellow
+    block.
+
+KEYS
+    printable          insert at the cursor
+    ENTER              insert a newline
+    Backspace          delete the character before the cursor
+    Left / Right       move within the text
+    Up / Down          move to the same column on the line above / below
+    ^O                 save
+    ^X   or  ESC       quit -> back to the Finder desktop
+
+NOTES
+    A single 2 KB text buffer; the whole screen redraws on each keystroke.
+    Long lines wrap at 78 columns; text past the bottom of the screen is not
+    shown (no vertical scroll yet). Save writes the buffer back verbatim.
+
+SEE ALSO
+    finder, term, vi

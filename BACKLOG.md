@@ -37,8 +37,10 @@ remainder is why it is still here.
   - **Mouse** support (via lib_ptr, keyboard-only today) and the file ops
     **rename / duplicate / move** (grow from cp/mv/mkdir/del). (The Apps menu
     -- press `a` -- shipped.)
-  - The **Term** app (the glass TTY in an app frame -- runs any /bin command,
-    output on-screen) and **Write** (a new text editor) -- P5.
+  - Adapt **Paint/Image** to the desktop app frame (P5). (Term and Write shipped:
+    os/commands/term.c, write.c.)
+  - The serial-terminal / **Kermit** command driving the P3 second port (P5, the
+    last app) -- Kermit-style file transfer over $FF08/$FF09.
   - **Retire the tiled `desk`/`wdesk`** once Finder covers their use; their FILES/
     launch logic carried forward, the tiling did not.
   - Real-serial arrow-key timing: `finder`'s ESC-sequence decode uses a bounded
