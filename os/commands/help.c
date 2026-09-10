@@ -22,7 +22,10 @@ int main() {
     puts("make [target] build a target from the Makefile in the CWD");
     puts("man name      show a command's manual page (/man)");
     puts("graphics      tri/rotate/camera/cube/gl in /bin -- man gl, man basic");
-    puts("desk / wdesk  the windowed GUI -- man wdesk");
+    puts("finder        two-mode GUI desktop: files + apps -- man finder");
+    puts("desk / wdesk  the older tiled GUI (finder supersedes) -- man wdesk");
+    puts("screen on|off mirror the console onto the GL screen -- man screen");
+    puts("kermit s|r f  file transfer over the 2nd serial port -- man kermit");
     puts("mkdir path    create a subdirectory");
     puts("name args     run a program by bare name, found on PATH (/bin)");
     puts("pack          reclaim deleted space");

@@ -1,0 +1,42 @@
+NAME
+    screen - turn the on-screen text console (glass TTY) on or off
+
+SYNOPSIS
+    screen on       mirror the console onto the GL screen (clears it first)
+    screen off      back to a serial-only console
+    screen          report the current state
+
+DESCRIPTION
+    With a GL card fitted, the BIOS CONOUT can MIRROR every console byte
+    onto the GL screen as well as the serial port, so the OS and every
+    program appear on the display -- the "glass TTY" of two-mode
+    operation (see the two-mode design). screen is the switch for it.
+
+    The mirror is OPT-IN and OFF by default (the flag GCONEN=0). The
+    whole graphics ecosystem -- cube, paint, BASIC, the window manager,
+    and the byte-exact GL tests -- shares that one screen, so the console
+    is only drawn on it when you ask. `screen on` sets the flag and calls
+    the GCLS BIOS to clear the screen and home the text cursor; `screen
+    off` clears the flag and the console goes back to serial only. With
+    no argument screen reports on or off.
+
+    A full-screen GL program still SUSPENDS the console while it draws
+    (the GTSUSP flag) and quitting back to the shell resumes it, so
+    turning the console on does not interfere with an app that owns the
+    screen. On a machine with no display, `screen on` is a no-op and
+    prints "screen: no display fitted".
+
+    The always-on console (mirroring without this switch) is a deferred
+    piece: an always-mirrored console shares screen and card state with
+    every GL program and collides with it in several ways, so until that
+    is resolved the mirror stays opt-in. Proper scrollback is likewise
+    deferred -- the console currently CLEARS and homes when it fills the
+    bottom row.
+
+EXAMPLES
+    screen on       put the shell and command output on the GL display
+    term            ...or launch the Term app, which enables it for you
+    screen off      go back to the serial console
+
+SEE ALSO
+    term, finder, gfx

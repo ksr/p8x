@@ -105,6 +105,7 @@ knowing the monitor's internal addresses. These entry points are **stable**:
 
 | `$0148` | CFSEL | select the active CF drive for subsequent sector/FS I/O: `A` = drive (0/1) → `DRVSEL`. The OS's mount redirect (in `FRESOLVE`/`RV_START`) calls this to route a `/D1` path to drive 1 — there is no drive-letter prefix. Both cards share the `$FF10` task-file port; `DRVSEL` is ORed into `CFHEAD` as the ATA device bit |
 | `$014B` | CFCURDRV | current CF drive → `A` (0/1) |
+| `$014E` | GCLS | clear the on-screen text console (the "glass TTY") and home its cursor; a no-op when no GL card is fitted. Added for **two-mode operation** — the glass TTY that mirrors `CONOUT` onto a GL display; see [p8x-two-mode-design.md](p8x-two-mode-design.md) |
 
 Call them with `JSR $0103` etc. (P8X/OS is built entirely on this table.)
 
@@ -139,7 +140,8 @@ correctly.)
 | `$FE00–$FEFF` | RAM — stack (P3 grows down from `$FEFF`). |
 | `$FF00` | switch input port (read) |
 | `$FF02` | LED output port (write) |
-| `$FF04 / $FF05` | 6850 ACIA status / data |
+| `$FF04 / $FF05` | 6850 ACIA status / data (the console serial port) |
+| `$FF08 / $FF09` | **second** 6850 ACIA status / data — the 2nd serial port added for **two-mode operation** (register-identical to the console ACIA: status bit0 RDRF, bit1 TDRE). Drives host file transfer via the `kermit` command while the console keeps `$FF04`. Modelled by `p8xemu` (`-2i`/`-2o` file-backed RX/TX). |
 | `$FF10–$FF17` | CF-IDE task-file registers |
 | `$FF20–$FF2F` | retired — was the graphics display's DEVICE door (register pokes drew immediately). Closed by the single-interface migration: reads float `$FF` like any absent card, and the register file survives only as the GL walker's internal property. The GL/PGC port at `$FF50` is the one graphics interface — see [p8x-graphics-theory.md](p8x-graphics-theory.md). Modelled by `p8xemu` — see [emulator/README.md](../emulator/README.md#the-graphics-display) |
 
@@ -170,6 +172,16 @@ Two consequences worth knowing:
 |---------|------|---------|
 | `$60A1` | `TTYRAW` | 0 = expand; nonzero = pass bytes through untouched |
 | `$60A2` | `TTYLST` | last byte transmitted (the anti-doubling state) |
+
+The **two-mode / glass-TTY** state lives just above, in the same console page
+(generated in [generators/gen_memmap.py](../generators/gen_memmap.py); see
+[p8x-two-mode-design.md](p8x-two-mode-design.md)):
+
+| Address | Name | Meaning |
+|---------|------|---------|
+| `$60A4` | `GFXPRES` | 1 = a GL card is fitted (the mode flag the monitor sets at wake); GL programs and the on-screen console gate on it |
+| `$60A5–$60AE` | glass-TTY state | the on-screen console's own cursor and scratch: `GTCOL`/`GTROW` (text cursor), `GTSUSP` (`$60A7`, 1 = a full-screen program owns the screen, so the console stops drawing), `GTXL…GTYH` (pixel position), `GTCH`/`GTTMP`/`GTCNT` |
+| `$60AF` | `GCONEN` | 1 = mirror `CONOUT` onto the GL screen (the glass TTY). **Opt-in, 0 by default**; the `screen on` command (or the `term` app) sets it |
 
 `TTYRAW` is the escape hatch for sending **binary** down the serial link, where a
 `$0A` is data rather than a newline — the equivalent of `stty raw`. Nothing in the

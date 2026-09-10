@@ -14,6 +14,7 @@ their source in `../basic/`, `../os/`, etc.)
 | [p8x-programmers-guide.md](p8x-programmers-guide.md) | CPU programmer's guide (GENERATED — regenerate via `microcode/gen_progguide.py`, never edit; PDF twin beside it). |
 | [p8x-isa-card.md](p8x-isa-card.md) | Instruction-set quick reference (GENERATED — `generators/gen_isa_card.py`; PDF twin beside it). |
 | [mount-drives-design.md](mount-drives-design.md) | Design record for the Unix-style `/D1` mount of the second CF — shipped; kept for the reasoning. |
+| [p8x-two-mode-design.md](p8x-two-mode-design.md) | Two-mode operation: the same OS runs headless-serial OR as a GL graphics desktop (Finder + full-screen apps), selected by a graphics-present flag. Design + phase log (P1–P5 shipped in the emulator). |
 | [p8x-programmers-guide.pdf](p8x-programmers-guide.pdf) | Generated instruction-set reference (built by `../microcode/gen_progguide.py`). |
 
 The **FPGA** track has its own documentation tree rather than living here:

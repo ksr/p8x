@@ -128,6 +128,11 @@ The word burned to the 4× 28C64 EPROMs and interpreted by the emulator. Bit map
 | **CFINIT / CFREAD / CFWRITE** | BIOS CompactFlash init / read-sector / write-sector (`$0109/$010C/$010F`). |
 | **CFSEL / CFCURDRV / DRVSEL** | Dual-volume drive select: `CFSEL` (`$0148`, `A`=0/1) routes sector/FS I/O to that CF card via the `DRVSEL` byte (ORed into `CFHEAD` as the ATA device-select bit); `CFCURDRV` (`$014B`) reads the current drive. Two cards share the `$FF10` task-file port. |
 | **PUTS / PHEX8** | BIOS print-string / print-byte-as-hex (`$0112/$0115`). |
+| **GCLS** | BIOS clear-the-glass-TTY + home-cursor (`$014E`) — the on-screen text console of two-mode operation. A no-op when no GL card is fitted. |
+| **two-mode operation** | The same OS runs headless over serial OR as a GL graphics desktop, auto-selected at wake by the `GFXPRES` flag. See [`docs/p8x-two-mode-design.md`](docs/p8x-two-mode-design.md). |
+| **glass TTY** | The on-screen text console: with a GL card, `CONOUT` can MIRROR every byte onto the display via stroke `TEXT` as well as the serial port. Opt-in (`GCONEN=0` by default; `screen on` enables it). |
+| **GFXPRES / GCONEN / GTSUSP** | The two-mode flags at `$60A4`/`$60AF`/`$60A7`: GL card present / glass-TTY console enabled / console suspended because a full-screen program owns the screen. Generated in `generators/gen_memmap.py`. |
+| **2nd ACIA** | The second 6850 serial port at `$FF08`/`$FF09` (status/data), register-identical to the console ACIA — added for two-mode operation; the `kermit` command transfers files over it while the console keeps `$FF04`. Emulator: `-2i`/`-2o`. |
 
 ---
 
