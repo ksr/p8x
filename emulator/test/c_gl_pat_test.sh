@@ -75,7 +75,9 @@ python3 $ROOT/tools/p8xfs.py create gl_pt.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   gl_pt.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  gl_pt.img /bin >/dev/null
 python3 $ROOT/tools/p8xfs.py put    gl_pt.img gl_pt.bin --name /bin/glpt.bin --load 0x6A00 --exec 0x6A00 >/dev/null
-printf 'B\rrun /bin/glpt.bin\r' > gl_pt.in
+# console OFF from the monitor for the RTL-compared grab (the RTL bench renders
+# the pure scene, no always-on console): E 60AF->00 (GCONEN off) -> . ; G 014E (GCLS).
+printf 'E 60AF\r00.G 014E\rB\rrun /bin/glpt.bin\r' > gl_pt.in
 ../p8xemu -N -i gl_pt.in -c gl_pt.img -l 900000000 -g gl_pt.ppm eeprom.bin > gl_pt.out 2>/dev/null || true
 grep -q "PTDONE" gl_pt.out || fail "harness did not finish"
 

@@ -50,12 +50,17 @@ for p in house tri rotate page camera; do
 done
 
 # house: the animated demo's single frame, then DONE
-printf 'B\rhouse\rexit\r' > dm.in
+# NO `exit` before the grab: a program's frame must be captured WHILE it owns the
+# screen. `exit` reboots the monitor, whose DISPINIT blanks the display (the console
+# reclaiming it) -- and the old boot splash it then drew (border + swatches, >1000 px,
+# one of them red) was silently satisfying these pixel assertions in place of the
+# program. Retiring the splash (always-on glass TTY) exposed that false positive.
+printf 'B\rhouse\r' > dm.in
 ../p8xemu -N -i dm.in -c dm.img -l 500000000 -g dm_house.ppm eeprom.bin > dm.out 2>/dev/null || true
 grep -q "DONE" dm.out || fail "house did not reach DONE"
 
 # tri + camera + rotate + page: draw, re-render, and leave no errors
-printf 'B\rtri -80 -80 300 80 -80 300 0 40 420 f 31 0 0\rcamera 0 0 0 0 0 340\rrotate 0 45 0 0 0 340\rpage sync\rexit\r' > dm.in
+printf 'B\rtri -80 -80 300 80 -80 300 0 40 420 f 31 0 0\rcamera 0 0 0 0 0 340\rrotate 0 45 0 0 0 340\rpage sync\r' > dm.in
 ../p8xemu -N -i dm.in -c dm.img -l 900000000 -g dm_tri.ppm eeprom.bin > dm2.out 2>/dev/null || true
 grep -q "usage" dm2.out && fail "a demo rejected its documented arguments"
 
@@ -70,7 +75,9 @@ px = frame("dm_tri.ppm")
 red = sum(1 for i in range(0, len(px), 3) if px[i:i+3] == b"\xff\x00\x00")
 lit = sum(1 for i in range(0, len(px), 3) if px[i:i+3] != b"\x00\x00\x00")
 assert red > 200, "tri's red fill missing after rotate (%d red)" % red
-assert lit > red, "only the fill drew -- outlines/edges missing"
+# (an older `lit > red` "outlines/edges" check was dropped: tri's `f` draws a FILLED
+#  triangle with no outline -- the non-red pixels that satisfied it came from the
+#  retired boot splash's white border, drawn after the `exit` this test used to send)
 print("house frame lit; tri survives camera + rotate with %d red px" % red)
 EOF
 

@@ -87,7 +87,9 @@ python3 $ROOT/tools/p8xfs.py mkdir  gl_t2.img /bin >/dev/null
 python3 $ROOT/tools/p8xfs.py put    gl_t2.img gl_t2.bin --name /bin/glt2.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    gl_t2.img $ROOT/os/font.gl --name /FONT.GL >/dev/null
 python3 $ROOT/tools/p8xfs.py put    gl_t2.img gl_t2.gl --name /GLT2.GL >/dev/null
-printf 'B\rrun /bin/glt2.bin\r' > gl_t2.in
+# console OFF from the monitor for the RTL-compared grab (the RTL bench renders
+# the pure scene, no always-on console): E 60AF->00 (GCONEN off) -> . ; G 014E (GCLS).
+printf 'E 60AF\r00.G 014E\rB\rrun /bin/glt2.bin\r' > gl_t2.in
 ../p8xemu -N -i gl_t2.in -c gl_t2.img -l 900000000 -g gl_t2.ppm eeprom.bin > gl_t2.out 2>/dev/null || true
 grep -q "T2DONE" gl_t2.out || fail "streamer did not finish"
 tr -d '\0\r' < gl_t2.out | grep -qE '^[0-9]+$' && fail "GL errors logged"

@@ -35,12 +35,12 @@ python3 $ROOT/tools/p8xfs.py put    wd.img $ROOT/os/font.gl --name /FONT.GL --lo
 
 # wdesk -> 'l' (kernel launches paint -w over wdesk) -> 'q' (paint quits and
 # resumes the desktop via SYS_WKRUN) -> ^D (leave to the shell; the frame is
-# dumped at the shell, never the monitor -- the boot splash would overwrite it)
+# dumped at the shell, never the monitor -- its wake-up blanks the screen)
 # wdesk (menu bar + SYS_WKEVENT loop); 'l' from the menu launches paint OVER
 # wdesk; 'q' quits paint, which -- launched with -w -- re-execs "wdesk -r",
 # resuming the SAME resident windows AND the menu bar. No trailing ^D: the
 # frame is dumped with the RESUMED desktop up (dumping after a quit-to-shell
-# would catch the boot splash, not the desktop).
+# would catch the monitor's blanked console, not the desktop).
 printf 'B\rrun /bin/wdesk.bin\rlq' > wd.in
 ../p8xemu -N -i wd.in -c wd.img -l 3000000000 -g wd.ppm eeprom.bin > wd.out 2>/dev/null || true
 

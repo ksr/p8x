@@ -119,29 +119,40 @@ command. Independent of the graphics work; needed before the transfer app.
   from one build; `c_gfxpres_test.sh` boots the same disk with and without `-ng`
   and checks the monitor message, the flag a program reads, and the GL-program
   `?No display` exit all track the mode.
-- **P2 — Glass TTY behind `CONOUT`. MVP DONE, OPT-IN (2026-09-09).** `PUTCTX`
-  (the byte-pusher every output funnels through) can mirror each console byte to
-  the GL screen via GL `TEXT` as well as the serial ACIA — so the OS and every
-  program render on-screen with no change to their output code. **It is OFF by
-  default (`GCONEN=0`); `screen on` enables it** (`screen off` disables). Default
-  behaviour is byte-identical to pre-P2: the boot splash still shows, `CONOUT` is
-  serial-only, and the whole graphics ecosystem is untouched. Cursor state
-  (`GTCOL/GTROW/GTX/GTY`), the `GTSUSP` console-suspend flag, and the `GCONEN`
-  enable flag are memmap bytes; a `GCLS` BIOS entry (`$014E`) clears+homes the
-  console (called by `screen on`). Geometry is 80×30 (6px advance × 9px line).
-  Verified by `c_glasstty_test.sh` (`screen on`, then OS output renders in the top
-  rows; gated off + serial-clean when headless).
-  - **Why opt-in (the hard lesson).** An always-on global `CONOUT` mirror has a
+- **P2 — Glass TTY behind `CONOUT`. DONE, ALWAYS-ON + MONITOR ON SCREEN
+  (2026-09-10; shipped opt-in on 2026-09-09 first, see below).** `PUTCTX` (the
+  byte-pusher every output funnels through) mirrors each console byte to the GL
+  screen via GL `TEXT` as well as the serial ACIA — so the ROM monitor, the OS
+  and every program render on-screen with no change to their output code. **It
+  is ON by default whenever a card is fitted:** the monitor's `DISPINIT` sets
+  `GCONEN=1`, installs the stroke font from `/FONT.GL` on the CF root (`MONFONT`
+  — the 5.3 KB font can't fit the ~3 KB of free ROM, so it lives on disk and the
+  card keeps it), blanks the screen (`GTINIT`) and prints `GRAPHICS AVAILABLE`
+  as the first text ON THE LCD — the pre-boot monitor is on screen. `screen off`
+  disables the mirror for a session. The colour-swatch boot splash was retired
+  (the notes want blank screen + text). No CF / no font: skipped silently and
+  the OS's own `FONTLD` installs it at boot. Cursor state (`GTCOL/GTROW/GTX/GTY`),
+  the `GTSUSP` console-suspend flag, and the `GCONEN` enable flag are memmap
+  bytes; a `GCLS` BIOS entry (`$014E`) clears+homes the console. Geometry is
+  80×30 (6px advance × 9px line). Verified by `c_glasstty_test.sh` (OS output
+  renders in the top rows; gated off + serial-clean when headless).
+  - **The opt-in detour, and how always-on was made safe.** The first cut
+    (2026-09-09) shipped OPT-IN because an always-on global `CONOUT` mirror has a
     large blast radius: the console and every GL program share ONE card's screen
     and global pipeline state, which surfaced **three distinct collisions** — (1)
-    returning to the console clears the screen (correct per the takeover principle,
-    but it wiped a program's frame before a test's framebuffer grab); (2) the
-    console echo drew INTO a card list the OUTCH→window sink was recording,
-    corrupting it; (3) the console's command echo landed on the shared framebuffer
-    that byte-exact GL tests compare. Making the always-on mirror coexist cleanly
-    with the whole ecosystem (every program, the software-lib path that never
-    calls `gpresent`, and every byte-exact test) is a real sub-project — deferred.
-    Opt-in ships the mechanism now with zero default blast radius.
+    returning to the console cleared the screen, wiping a program's frame before
+    a test's framebuffer grab; (2) the console echo drew INTO a card list the
+    OUTCH→window sink was recording; (3) the console's command echo landed on the
+    shared framebuffer that byte-exact GL tests compare. Going always-on
+    (2026-09-10) resolved them by settling the **console model**: (1) dissolved —
+    resuming the console at the prompt does NOT clear (see the principle below);
+    (2) fixed — `SH_PROMPT` doesn't resume the console while a script runs, so
+    the sink never records the echo; (3) is a *measurement* problem — the echo is
+    an independent variable in a byte-exact compare — so those tests switch the
+    console off (`screen off` / `GCONEN=0`) before grabbing, exactly as a lab
+    blanks a monitor. Note why a program-side "clear from scratch" can't cover
+    it: programs clear only their own viewport (`gla`/`glb` use x 104–375), so
+    the top-left echo region is never theirs to clear.
   - **Console-suspend hook (`GTSUSP`) — DONE.** The glass TTY and GL programs
     share one screen, so a program that draws graphics must suspend the console
     or its text (and clear-on-full) corrupt the graphics. `gpresent()` sets
@@ -153,11 +164,16 @@ command. Independent of the graphics work; needed before the transfer app.
   - **Screen-owner configures from scratch (the governing principle).** Because
     the glass TTY and GL programs share one card's global state, the rule is:
     **whoever takes the screen fully configures the GL pipeline it needs and never
-    trusts what the last owner left; and the console reconfigures (clears) when it
-    takes control back.** A program establishes its own window/viewport/camera/
-    matrix (they already do); the console clears on takeover (the monitor's
-    `DISPINIT`→`GTCLS` on `exit`, the OS `GCLS` at boot). This is why returning to
-    the console from a graphics program clears its picture — by design.
+    trusts what the last owner left.** A program establishes its own window/
+    viewport/camera/matrix (they already do). The console **clears on TAKEOVER
+    but not on RESUME**: it blanks the screen when it first takes the card — the
+    monitor's `DISPINIT`→`GTINIT` at wake, and again on `exit` — but when a
+    program returns to the shell prompt the console simply resumes drawing text
+    where it left off, over the program's last frame. Not clearing on resume is
+    deliberate: it is what keeps incremental drawing across separate commands
+    working (`gl` chains, `tri … k` scenes, `rotate`/`camera` replays), which a
+    clear-on-every-prompt would destroy. `screen on` is the explicit "give me a
+    clean console" when the frame has become clutter.
   - **State hygiene the glass TTY must respect** (shared card port): `GTCLS`
     leaves `PRMFIL 0` (outline) so later stroke `TEXT` — the console's own and a
     GL client's — isn't filled; `GTDRAW` ends with `MDIDEN` so its per-glyph
@@ -169,15 +185,15 @@ command. Independent of the graphics work; needed before the transfer app.
     that framebuffer-grab at the cycle cap must not send `exit`/return-to-console
     first (see the `c_demo` fix), or they capture a cleared screen and wrongly
     read the program as "drew nothing."
-  - **ROM budget resolved:** the driver fits with ~3 KB of ROM to spare, so
-    "monitor on screen" stays viable (see the pre-boot-font item below).
-  - **Deferred to BACKLOG (deliberate MVP cuts):** proper **scrollback** (MVP is
-    clear-on-full — there is NO free RAM for a text framebuffer, so the intended
-    fix is card-list scrollback); **per-cell erase** (`BS` moves the cursor but
-    leaves a ghost); and **true pre-boot monitor-on-screen** (GL `TEXT` needs the
-    glyph bank, which only the OS loads from `/FONT.GL` — the monitor would need
-    to load a font itself to render its own pre-`B` banner). Also a speed pass
-    (batching / set-projection-once).
+  - **ROM budget resolved:** the driver + `MONFONT` fit in the 8 KB with room to
+    spare; the font itself lives on disk (5.3 KB), which is what made "monitor on
+    screen" viable without a font in ROM.
+  - **Deferred to BACKLOG (deliberate cuts):** proper **scrollback** (the console
+    is clear-on-full — there is NO free RAM for a text framebuffer, so the
+    intended fix is card-list scrollback); **per-cell erase** (`BS` moves the
+    cursor but leaves a ghost); and a speed pass (batching /
+    set-projection-once). (Pre-boot monitor-on-screen, once listed here, shipped
+    with `MONFONT` on 2026-09-10.)
 - **P3 — Second serial port. Emulator DONE (2026-09-09).** A 2nd ACIA at
   `ACIA2S $FF08` / `ACIA2D $FF09`, register-identical to the console ACIA
   (`$FF04`/`$FF05`): status bit0 RDRF, bit1 TDRE; data read = RX, write = TX. The

@@ -181,7 +181,7 @@ The **two-mode / glass-TTY** state lives just above, in the same console page
 |---------|------|---------|
 | `$60A4` | `GFXPRES` | 1 = a GL card is fitted (the mode flag the monitor sets at wake); GL programs and the on-screen console gate on it |
 | `$60A5–$60AE` | glass-TTY state | the on-screen console's own cursor and scratch: `GTCOL`/`GTROW` (text cursor), `GTSUSP` (`$60A7`, 1 = a full-screen program owns the screen, so the console stops drawing), `GTXL…GTYH` (pixel position), `GTCH`/`GTTMP`/`GTCNT` |
-| `$60AF` | `GCONEN` | 1 = mirror `CONOUT` onto the GL screen (the glass TTY). **Opt-in, 0 by default**; the `screen on` command (or the `term` app) sets it |
+| `$60AF` | `GCONEN` | 1 = mirror `CONOUT` onto the GL screen (the glass TTY). **On by default whenever a card is fitted** — `DISPINIT` sets it at wake, installs the stroke font from `/FONT.GL` on the CF root, and blanks the screen, so the monitor itself is on the LCD pre-boot; `screen off` disables the mirror for a session |
 
 `TTYRAW` is the escape hatch for sending **binary** down the serial link, where a
 `$0A` is data rather than a newline — the equivalent of `stty raw`. Nothing in the

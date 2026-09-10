@@ -112,7 +112,9 @@ python3 $ROOT/tools/p8xfs.py create gl_bl.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   gl_bl.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  gl_bl.img /bin >/dev/null
 python3 $ROOT/tools/p8xfs.py put    gl_bl.img gl_bl.bin --name /bin/glbl.bin --load 0x6A00 --exec 0x6A00 >/dev/null
-printf 'B\rrun /bin/glbl.bin\r' > gl_bl.in
+# console OFF from the monitor for the RTL-compared grab (the RTL bench renders
+# the pure scene, no always-on console): E 60AF->00 (GCONEN off) -> . ; G 014E (GCLS).
+printf 'E 60AF\r00.G 014E\rB\rrun /bin/glbl.bin\r' > gl_bl.in
 ../p8xemu -N -i gl_bl.in -c gl_bl.img -l 600000000 -g gl_bl.ppm eeprom.bin > gl_bl.out 2>/dev/null || true
 grep -q "BLDONE" gl_bl.out || fail "harness did not finish"
 

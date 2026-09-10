@@ -100,7 +100,30 @@ host kermit). Additive (new addrs/flags, nothing else touched). Test
 c_serial2_test.sh (in test-io). HW = a 2nd 6850 at the same window (FPGA/TTL
 track, not built). The serial-terminal/Kermit command that drives it is P5.
 
-**P2 MVP DONE, OPT-IN (2026-09-09), on graphics-card:** glass TTY is OFF by
+**P2 ALWAYS-ON + MONITOR ON SCREEN DONE (2026-09-10), on graphics-card:** the
+user REVERSED the opt-in call (notes review: "the screen is the text display for
+the monitor and the OS"). DISPINIT now: GCONEN=1 when GLID='G'; MONFONT installs
+/FONT.GL from the CF root (CFSTAT==$FF pre-check = absent CF, skip; CFINIT; FNORM/
+FOPEN with P1=IBUF/FGETB -> GLDATA with GLSTAT bit7 backpressure; root dir extent
+is already the default after COLD); GTINIT blanks + homes; the GRAPHICS AVAILABLE
+banner is the first text ON THE LCD pre-boot (proven: 568 px top-left, no OS).
+Font is 5376 B vs ~3 KB free ROM -> disk, not ROM. Boot splash (DSPTAB) RETIRED.
+CONSOLE MODEL (the key decision): clear on TAKEOVER (wake/exit) but NOT on RESUME
+at the prompt -- keeps gl chains / tri k / rotate+camera replays working; `screen
+on` = explicit clean console. Collision (3) (echo in byte-exact tests) is a
+MEASUREMENT problem: tests switch the console off via the MONITOR from the -i
+script -- `E 60AF\r00.G 014E\r` before `B\r` (E=examine/modify: two hex digits
+write+advance, `.` quits; G 014E = JSR GCLS clears the E-echo) -> proven 0 px
+pristine black, serial intact, NO per-disk screen.bin. LESSON: retiring the splash
+EXPOSED a latent FALSE POSITIVE -- c_demo sent `exit` then asserted lit>1000 /
+red px, which the splash (border + red swatch after exit->DISPINIT) satisfied,
+not house/tri; fixed by grabbing while the program owns the screen. house DOES
+draw fine under always-on (1557 px) -- a "PROJCT-0 glpmode pollution" theory was
+tested and REJECTED (don't chase it again). ALSO: editing help.c text broke
+c_help_test's literal grep ("windowed GUI") -- run a command's test after
+rewording its output, not just compile it.
+
+**P2 FIRST CUT, OPT-IN (2026-09-09), superseded above:** glass TTY WAS OFF by
 default (GCONEN $60AF = 0); `screen on` (os/commands/screen.c, C-only, needs asm
 twin) enables it, `screen off` disables. PUTCTX gates on GCONEN first, so default
 == pre-P2 EXACTLY (boot splash restored, CONOUT serial-only, whole graphics

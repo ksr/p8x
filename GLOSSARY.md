@@ -130,7 +130,7 @@ The word burned to the 4× 28C64 EPROMs and interpreted by the emulator. Bit map
 | **PUTS / PHEX8** | BIOS print-string / print-byte-as-hex (`$0112/$0115`). |
 | **GCLS** | BIOS clear-the-glass-TTY + home-cursor (`$014E`) — the on-screen text console of two-mode operation. A no-op when no GL card is fitted. |
 | **two-mode operation** | The same OS runs headless over serial OR as a GL graphics desktop, auto-selected at wake by the `GFXPRES` flag. See [`docs/p8x-two-mode-design.md`](docs/p8x-two-mode-design.md). |
-| **glass TTY** | The on-screen text console: with a GL card, `CONOUT` can MIRROR every byte onto the display via stroke `TEXT` as well as the serial port. Opt-in (`GCONEN=0` by default; `screen on` enables it). |
+| **glass TTY** | The on-screen text console: with a GL card, `CONOUT` MIRRORS every byte onto the display via stroke `TEXT` as well as the serial port — so the ROM monitor, the OS and every program are on the LCD. On by default whenever a card is fitted (the monitor switches it on and installs the font at wake); `screen off` disables it for a session. |
 | **GFXPRES / GCONEN / GTSUSP** | The two-mode flags at `$60A4`/`$60AF`/`$60A7`: GL card present / glass-TTY console enabled / console suspended because a full-screen program owns the screen. Generated in `generators/gen_memmap.py`. |
 | **2nd ACIA** | The second 6850 serial port at `$FF08`/`$FF09` (status/data), register-identical to the console ACIA — added for two-mode operation; the `kermit` command transfers files over it while the console keeps `$FF04`. Emulator: `-2i`/`-2o`. |
 
@@ -243,7 +243,7 @@ set and one golden model (`gpu_*` in `emulator/p8xemu.c`) serve both.
 | **P8I** | The display's own picture format: `"P8I"`, version, width/height little-endian, depth `$10`, then raw RGB565 row-major. Self-describing, so BASIC's `IMAGE x,y,name$` cannot be lied to. `tools/p8img.py` converts anything into one. |
 | **GTEXT** | Died and was REBORN (2026-09-01): the old software-rasterized bitmap text is gone — PGC `TEXT` draws stroke glyphs card-side from the font the OS streams from `/FONT.GL` at boot (raw 3D idiom: `MOVE3 x,y,0 : TEXT s$`). The `GTEXT x,y,size,s$` statement survives as pure-GL 2D sugar over it: it resets the matrix and camera each call and anchors unscaled at window (x,y). |
 | **FONT57** | RETIRED (2026-09-01, with the GTEXT rasterizer): the 5x7 bitmap glyph table and its generator. Text is stroke glyphs now — `generators/gen_font.py` builds `/FONT.GL`, the TDEFIN stream the OS loads at boot; lowercase still folds onto uppercase. |
-| **SELFTEST (`$F0`)** | RETIRED (single-interface migration): the emulator-only test pattern went with the device door — there is no register to poke it through. A card with no software behind it is proven by the bridge PING, the GLID probe and the monitor's GL splash. |
+| **SELFTEST (`$F0`)** | RETIRED (single-interface migration): the emulator-only test pattern went with the device door — there is no register to poke it through. A card with no software behind it is proven by the bridge PING, the GLID probe and the monitor's wake-up console (blank screen + banner on the LCD; it replaced the boot splash). |
 
 ## BASIC internals (`basic/p8xbasic.asm`)
 

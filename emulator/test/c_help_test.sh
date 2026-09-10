@@ -26,6 +26,7 @@ printf 'B\rhelp\r' > hlp.in      # BARE help (implicit run, not "run /bin/...")
 ../p8xemu -N -i hlp.in -c hlp.img -l 200000000 eeprom.bin > hlp.out 2>/dev/null || true
 
 grep -q "P8X/OS COMMANDS" hlp.out || fail "help header missing"
-grep -q "windowed GUI"    hlp.out || fail "help body missing (desk/wdesk line)"
+grep -q "tiled GUI"       hlp.out || fail "help body missing (desk/wdesk line)"
+grep -q "man finder"      hlp.out || fail "help body missing (finder two-mode desktop line)"
 grep -q "pipe a's output" hlp.out || fail "help tail missing (pipe line)"
 echo "C-HELP TEST: PASS (help is a /bin command: bare 'help' prints the full command reference)"

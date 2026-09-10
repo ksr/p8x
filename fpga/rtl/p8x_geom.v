@@ -2267,8 +2267,15 @@ module p8x_geom (
               g3t <= 0; k <= 0; g2n <= G_OP; glst <= G_3L;
             end
             8'hB0:                                        // PROJCT
-              if ($signed(pw0) < 0 || $signed(pw0) > 16'sd179) begin
-                if (ef_wp - ef_rp != 4'd8) begin
+              if ($signed(pw0) < 0) begin                 // PROJCT -1 (any negative):
+                glpmode <= 0; par[12] <= 16'd256;         //   back to the NATIVE focal
+                cm_we <= 1; cm_wa <= RBS + 10'd2; cm_wd <= 16'hFFFF;  // (256; a prior
+                cmode <= 2'd2; ci <= 0; cj <= 0; ck <= 0; csum <= 0;  // PROJCT 0 set it
+                state <= C_MLA;                           //   to 0 and the glpmode=0
+                                                          //   recompose skips par[12]).
+                                                          //   Read-back says FFFF. Parity
+              end else if ($signed(pw0) > 16'sd179) begin //   with p8xemu: the glass TTY
+                if (ef_wp - ef_rp != 4'd8) begin          //   emits it after every glyph.
                   ef[ef_wp[2:0]] <= 8'd2; ef_wp <= ef_wp + 4'd1; end
               end else begin
                 glproj <= pw0; glpmode <= 1;

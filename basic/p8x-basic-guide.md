@@ -401,9 +401,9 @@ accumulating, which is how a stored scene spins with the CPU idle:
 20 CLOOP 1,7                    : REM 35 degrees, applied by the card
 ```
 
-**Start with `RESETF`.** The machine draws its boot splash through this
-same engine, and matrix verbs *compose* — without a reset, your first
-rotation lands on top of whatever the splash (or the last program) left
+**Start with `RESETF`.** The machine draws its on-screen console text through
+this same engine, and matrix verbs *compose* — without a reset, your first
+rotation lands on top of whatever the console (or the last program) left
 behind.
 
 **`GL s$` is the text escape hatch** for anything without a native

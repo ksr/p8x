@@ -28,8 +28,8 @@ NOTES
     (-c), which keeps the screen instead of re-clearing it. `exit` becomes
     /bin/finder.bin instead.
 
-    The console it uses is the opt-in glass TTY; Term turns it on (and turns
-    it off on exit). See `screen`.
+    The console it uses is the glass TTY, which is on by default whenever a
+    card is fitted (see `screen`); Term just claims the app frame over it.
 
 SEE ALSO
     finder, screen, paint

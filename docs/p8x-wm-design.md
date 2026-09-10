@@ -125,8 +125,9 @@ Appended to the OS syscall table after `SYS_EXEC` ($2024):
    Traps: `.org $WMBASE` is required (pc starts at 0 even with --base);
    bios() needs a literal address (precompute WMBASE+3, not an expression);
    and -- the debugging saga of the rung -- a test that `exit`s to the
-   monitor gets the BOOT SPLASH redrawn over its frame, so GUI frame tests
-   must dump at the shell, never the monitor.
+   monitor gets its frame BLANKED (the console reclaiming the screen at wake --
+   in that build, the boot splash), so GUI frame tests must dump at the shell,
+   never the monitor.
 3. **Content lists -- DONE 2026-09-04; events next.** wk_draw maps each
    window's content rect (WINDOW/VWPORT, the lib_wm mapping) and replays
    its card list with `CLRUN` -- so window content lives on the card and

@@ -66,7 +66,9 @@ python3 $ROOT/tools/p8xfs.py create gl_lf.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   gl_lf.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  gl_lf.img /bin >/dev/null
 python3 $ROOT/tools/p8xfs.py put    gl_lf.img gl_lf.bin --name /bin/gllf.bin --load 0x6A00 --exec 0x6A00 >/dev/null
-printf 'B\rrun /bin/gllf.bin\r' > gl_lf.in
+# console OFF from the monitor for the RTL-compared grab (the RTL bench renders
+# the pure scene, no always-on console): E 60AF->00 (GCONEN off) -> . ; G 014E (GCLS).
+printf 'E 60AF\r00.G 014E\rB\rrun /bin/gllf.bin\r' > gl_lf.in
 ../p8xemu -N -i gl_lf.in -c gl_lf.img -l 400000000 -g gl_lf.ppm eeprom.bin > gl_lf.out 2>/dev/null || true
 
 got=$(LC_ALL=C tr -d '\0\r' < gl_lf.out | grep -E '^[0-9]+$' | head -2 | tr '\n' ' ' | sed 's/ $//')

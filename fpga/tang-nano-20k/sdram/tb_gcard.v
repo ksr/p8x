@@ -10,7 +10,7 @@
 // gl_b.ppm: RTL pixels == emulator pixels, the whole frame.
 //
 // The screen is prepared the way the machine's boot leaves it (CLS black +
-// the 1-px white border of the boot splash), so untouched pixels compare
+// the console's black wake-up clear, no splash border), so untouched pixels compare
 // too, not just the scene.
 //
 // TB-GCARD VARIANT: the same scene, but every register access travels as
@@ -230,20 +230,20 @@ module tb;
     brd_reg(6'h0D);                                // retired device window
     if (rply !== 8'hFF) begin $display("FAIL: closed door read %02x, not FF", rply); errors = errors + 1; end
 
-    // ---- the boot splash region the scene does not repaint: clear +
-    // white border, as GL bytes (the monitor speaks GL now; the swatches
-    // it also draws sit inside the scene's viewport and are erased, so
-    // clear + border is the part that must match the emulator's frame)
+    // ---- the console's wake-up clear the scene does not repaint: a black
+    // full-screen fill, NO border. The monitor speaks GL now and its glass
+    // TTY (GTINIT) blanks the screen at wake; the boot splash -- border and
+    // swatches -- was retired when the console went always-on, so untouched
+    // pixels are black, and that black clear is the part that must match the
+    // emulator's frame.
     glb(8'hB3); glw(16'd0); glw(16'd479); glw(16'd0); glw(16'd271);  // WINDOW
     glb(8'hB2); glw(16'd0); glw(16'd479); glw(16'd0); glw(16'd271);  // VWPORT
     glb(8'h06); glb(8'd0); glb(8'd0); glb(8'd0);       // COLOR black
     glb(8'hE0); glb(8'd1);                             // PRMFIL 1
     glb(8'h10); glw(16'd0); glw(16'd0);                // MOVE 0,0
     glb(8'h34); glw(16'd479); glw(16'd271);            // RECT: the clear
-    glb(8'hE0); glb(8'd0);                             // PRMFIL 0
-    glb(8'h06); glb(8'd31); glb(8'd63); glb(8'd31);    // COLOR white
-    glb(8'h10); glw(16'd0); glw(16'd0);
-    glb(8'h34); glw(16'd479); glw(16'd271);            // RECT: the border
+    glb(8'hE0); glb(8'd0);                             // PRMFIL 0 (stroke, as GTCLS leaves)
+    glb(8'h06); glb(8'd31); glb(8'd63); glb(8'd31);    // COLOR white (glyph pen)
 
     // ---- the GL scene: byte for byte what c_gl_test's gl_b.c pokes --------
     glb(8'hB3); glw(-16'sd120); glw(16'sd120); glw(-16'sd120); glw(16'sd120);

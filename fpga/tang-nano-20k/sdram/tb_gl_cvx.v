@@ -9,7 +9,7 @@
 // as error 2. The frame must byte-match the emulator's gl_cv.ppm.
 //
 // The screen is prepared the way the machine's boot leaves it (CLS black +
-// the 1-px white border of the boot splash); the scene's CLEARS wipes it
+// the console's black wake-up clear, no splash border); the scene's CLEARS wipes it
 // on both sides identically.
 //
 //   iverilog -g2012 -I ../../rtl -o tbglcv tb_gl_cvx.v ../../rtl/p8x_geom.v \
@@ -175,27 +175,15 @@ module tb;
     repeat (4) @(posedge clk); rst = 0;
     wait (!c_busy);
 
-    // ---- the boot splash, as the machine leaves it: CLS + white border ----
+    // ---- the console's wake-up clear: a black full-screen fill (GTINIT),
+    //      NO border -- the boot splash was retired when the glass TTY went
+    //      always-on, so untouched pixels are black, not the splash frame ----
     gpoke(4'h4, 8'h00);                       // GCOL 0
     gpoke(4'h0, 8'h00); gpoke(4'h1, 8'h00);   // the clear is a BOXFILL now
     gpoke(4'h2, 8'hDF); gpoke(4'hB, 8'h01);   //   (device CLS retired)
     gpoke(4'h3, 8'h0F); gpoke(4'hC, 8'h01);
     gpoke(4'h5, 8'h04);                       // BOXFILL 0,0-479,271
     gwait;
-    gpoke(4'h4, 8'hFF); gpoke(4'hD, 8'hFF);   // pen $FFFF; the border is
-    gpoke(4'h0, 8'h00); gpoke(4'h1, 8'h00);   //   FOUR LINEs (BOX retired)
-    gpoke(4'h2, 8'hDF); gpoke(4'hB, 8'h01);
-    gpoke(4'h3, 8'h00);
-    gpoke(4'h5, 8'h02); gwait;                // top (0,0)-(479,0)
-    gpoke(4'h1, 8'h0F); gpoke(4'hA, 8'h01);
-    gpoke(4'h3, 8'h0F); gpoke(4'hC, 8'h01);
-    gpoke(4'h5, 8'h02); gwait;                // bottom (0,271)-(479,271)
-    gpoke(4'h2, 8'h00);
-    gpoke(4'h1, 8'h00);
-    gpoke(4'h5, 8'h02); gwait;                // left (0,0)-(0,271)
-    gpoke(4'h0, 8'hDF); gpoke(4'h9, 8'h01);
-    gpoke(4'h2, 8'hDF); gpoke(4'hB, 8'h01);
-    gpoke(4'h5, 8'h02); gwait;                // right (479,0)-(479,271)
 
     // ---- gl_cv.c's scene, byte for byte -----------------------------------
     glb(8'hB3); glw(16'd0); glw(16'd479); glw(16'd0); glw(16'd271); // WINDOW

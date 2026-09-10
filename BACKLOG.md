@@ -64,24 +64,31 @@ remainder is why it is still here.
     keyrdy() spin; over a slow link a lone ESC vs an arrow may still race -- revisit
     if it misbehaves on hardware.
 
-- **Glass TTY (two-mode P2) — always-on coexistence, proper scroll, monitor-on-screen.**
-  The P2 MVP (2026-09-09) put the OS and program output on the GL screen via a
-  glass TTY behind BIOS `CONOUT`, but it is **OPT-IN, OFF by default** (`GCONEN=0`;
-  `screen on` enables it). Making it **always-on** is the big deferred piece:
-  - **Always-on coexistence.** With the console permanently mirroring, it shares
-    ONE screen + card pipeline state with every GL program, which collided three
-    ways (see docs/p8x-two-mode-design.md): return-to-console clears a program's
-    frame; the console echo pollutes a card list the OUTCH→window sink is
-    recording; and the command echo dirties the framebuffer byte-exact GL tests
-    compare. Resolving these needs every GL program (and the software-lib path
-    that never calls `gpresent`) to configure/clear from scratch on claim, plus
-    adapting the byte-exact tests — a real sub-project. Until then, opt-in.
+- **Glass TTY (two-mode P2) — proper scroll, per-cell erase, asm twins.**
+  The glass TTY behind BIOS `CONOUT` is **ALWAYS-ON (2026-09-10)**: the monitor's
+  `DISPINIT` enables it whenever a card is fitted, installs `/FONT.GL` from the CF
+  root (`MONFONT`), blanks the screen and puts its own banner on the LCD — so the
+  **pre-boot monitor is on screen** too (both once listed here; done). `screen
+  off` disables it for a session. Still open:
+  - (**Always-on coexistence — RESOLVED 2026-09-10** by settling the console model:
+    the console clears on TAKEOVER (wake/`exit`) but NOT on RESUME at the prompt, so
+    a program's frame and incremental `gl`/`tri …k` drawing survive; `SH_PROMPT`
+    doesn't resume during a script, so the OUTCH→window sink never records the
+    echo; byte-exact framebuffer tests switch the console off first — from the `-i`
+    script via the monitor, `E 60AF` → `00` → `.` then `G 014E` (GCLS), no per-disk
+    `screen.bin` needed — because the echo is an independent variable in a
+    measurement, and programs only clear their own viewport. Retiring the boot
+    splash also exposed `c_demo` asserting on the splash's pixels after `exit`
+    instead of the program's frame; fixed by grabbing while the program owns the
+    screen.)
   - **`screen` and `kermit` command asm twins.** `os/commands/screen.c` and
     `os/commands/kermit.c` both shipped C-only; per the /bin dual-twin rule each
     needs an `os/commands-asm/*.asm` twin (and the run.sh build lists updated) —
     see [[feedback_p8x_new_command_dual]]. kermit's twin needs the 2nd-ACIA poll
     ($FF08/$FF09) plus the FS wrappers it already uses.
-  - Two more deliberate cuts were deferred here:
+  - Two deliberate cuts remain deferred here (the third once listed, **pre-boot
+    "monitor on screen"**, shipped 2026-09-10 as `MONFONT` — the monitor loads
+    `/FONT.GL` from the CF root at cold start, degrading gracefully with no disk):
   - **Proper scrollback.** The MVP is **clear-on-full**: when the cursor passes
     the bottom row it clears the screen and homes to the top (zero CPU RAM). A
     real console scrolls. There is NO free RAM block for a text framebuffer (high
@@ -90,12 +97,6 @@ remainder is why it is still here.
     store text on the card as GL command lists (the WM-sink pattern), keep a ring
     of line-lists, and `CLRUN` the visible window on scroll (drop the oldest).
     ~zero CPU RAM, no TPA cost; the work is the list-ring management in ROM.
-  - **True "monitor on screen" (pre-boot text).** GL `TEXT` needs the glyph bank,
-    which only the **OS** streams from `/FONT.GL` at boot (`FONTLD`). So the MVP
-    renders OS + program output but NOT the monitor's own pre-`B` banner/prompt.
-    To get the headline "monitor on screen from power-up", the monitor must load
-    the font itself at cold start (CFINIT drive 0 + stream `/FONT.GL` to `GLDATA`,
-    degrading gracefully with no disk), or a minimal font is embedded in ROM.
   - **Per-cell erase / backspace.** The MVP draws glyphs forward on a black
     screen and does NOT clear a cell before drawing. `BS` moves the cursor back
     but leaves the old glyph on screen (a ghost), and re-typing after `BS`
@@ -268,7 +269,8 @@ remainder is why it is still here.
           (the RTL always rejected it), and the single-interface migration
           removed it with the rest of the CPU door -- there is no register to
           poke it through any more. Its "prove a card with no software" role
-          belongs to the bridge PING + GLID probe and the monitor's GL splash.
+          belongs to the bridge PING + GLID probe and the monitor's wake-up
+          console (its blank screen + banner on the LCD, which replaced the splash).
       - **SD error paths are now tested** (`fpga/tang-nano-20k/sim/tb_sd_spi.v`
         with `sd_model.v +sdfail=1|2`); that found and fixed two lockups. Still
         unexercised: CRC failure, a card that reports write-protect, and card

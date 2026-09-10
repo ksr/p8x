@@ -183,10 +183,18 @@ got=$(LC_ALL=C tr -d '\0\r' < gl_e.out | grep -E '^[0-9]+$' | head -6 | tr '\n' 
 echo "GLID probe + error FIFO OK"
 
 # ---- 2: record engine vs GL stream, byte-identical --------------------------
-printf 'B\rrun /bin/gla.bin\r' > gl_a.in
+# Console OFF + blank screen for every framebuffer grab below. The always-on glass
+# TTY echoes each command line onto the shared screen (top-left, OUTSIDE these
+# programs' x 104-375 viewport, so their own clear cannot remove it) -- "gla" vs
+# "glb" alone would make the byte-exact compare differ. Done from the MONITOR so no
+# test disk needs screen.bin: E 60AF -> 00 (GCONEN off) -> . ; then G 014E (GCLS)
+# blanks the E-echo itself. A measurement control, not a workaround: the echo is an
+# independent variable in a rendering comparison.
+LAB='E 60AF\r00.G 014E\r'
+printf "${LAB}B\rrun /bin/gla.bin\r" > gl_a.in
 ../p8xemu -N -i gl_a.in -c gl.img -l 300000000 -g gl_a.ppm eeprom.bin > gl_a.out 2>/dev/null || true
 grep -q ADONE gl_a.out || fail "software-lib scene did not finish"
-printf 'B\rrun /bin/glb.bin\r' > gl_b.in
+printf "${LAB}B\rrun /bin/glb.bin\r" > gl_b.in
 ../p8xemu -N -i gl_b.in -c gl.img -l 300000000 -g gl_b.ppm eeprom.bin > gl_b.out 2>/dev/null || true
 grep -q BDONE gl_b.out || fail "GL-stream scene did not finish"
 cmp gl_a.ppm gl_b.ppm || fail "GL stream and software-lib framebuffers differ"
@@ -200,7 +208,7 @@ EOF
 echo "software lib vs GL stream byte-identical (and non-empty)"
 
 # ---- 3: 2D verbs spot pixels ------------------------------------------------
-printf 'B\rrun /bin/gl2.bin\r' > gl_2.in
+printf "${LAB}B\rrun /bin/gl2.bin\r" > gl_2.in
 ../p8xemu -N -i gl_2.in -c gl.img -l 300000000 -g gl_2.ppm eeprom.bin > gl_2.out 2>/dev/null || true
 grep -q 2DONE gl_2.out || fail "2D program did not finish"
 python3 - <<'EOF' || exit 1
@@ -257,7 +265,7 @@ python3 $ROOT/assembler/p8xasm.py gl_f.asm -o gl_f.bin --base 0x6A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put gl.img gl_f.bin --name /bin/glf.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 
 glf_check() {   # $1 = mode, $2 = visible rows, $3 = hidden rows
-    printf 'B\rrun /bin/glf.bin %s\r' "$1" > gl_f.in
+    printf "${LAB}B\rrun /bin/glf.bin %s\r" "$1" > gl_f.in
     ../p8xemu -N -i gl_f.in -c gl.img -l 300000000 -g gl_f.ppm eeprom.bin > gl_f.out 2>/dev/null || true
     grep -q FDONE gl_f.out || fail "flip test run $1 did not finish"
     python3 - "$2" "$3" <<'PYEOF' || exit 1

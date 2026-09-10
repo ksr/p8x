@@ -1,14 +1,15 @@
 /* screen.c -- turn the on-screen text console (the "glass TTY") on or off.
  *
  * Two-mode P2 (docs/p8x-two-mode-design.md): when a GL card is fitted, the BIOS
- * CONOUT can MIRROR every console byte onto the GL screen as well as the serial
- * ACIA, so the OS and every program appear on the display. That mirror is OPT-IN
- * and OFF by default (GCONEN=0) -- the graphics ecosystem (cube, paint, BASIC,
- * the WM, and the byte-exact GL tests) shares that one screen, so the console is
- * only drawn on it when you ask.
+ * CONOUT MIRRORS every console byte onto the GL screen as well as the serial
+ * ACIA, so the monitor, the OS and every program appear on the display. The
+ * mirror is ON BY DEFAULT whenever a card is present (the monitor's DISPINIT
+ * sets GCONEN=1 at wake). This command is the switch -- `screen off` turns the
+ * mirror off (back to serial only) when a program's graphics should be left
+ * undisturbed by the prompt, or a byte-exact test needs a pristine framebuffer.
  *
- *     screen on    enable  -- clear the screen + start mirroring CONOUT to it
  *     screen off   disable -- back to serial-only console
+ *     screen on    enable  -- clear the screen + resume mirroring CONOUT to it
  *     screen       (report the current state)
  *
  * `on` also calls GCLS (clear the screen + home the text cursor). A full-screen

@@ -95,7 +95,10 @@ python3 $ROOT/tools/p8xfs.py mkdir  gl_tx.img /bin >/dev/null
 python3 $ROOT/tools/p8xfs.py put    gl_tx.img gl_tx.bin --name /bin/gltx.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    gl_tx.img $ROOT/os/font.gl --name /FONT.GL >/dev/null
 python3 $ROOT/tools/p8xfs.py put    gl_tx.img gl_tx.gl --name /GLTX.GL >/dev/null
-printf 'B\rrun /bin/gltx.bin\r' > gl_tx.in
+# Console OFF from the monitor before the grab: the always-on glass TTY would draw
+# the shell prompt onto the shared screen, which the RTL bench (pure scene) has no
+# console for. E 60AF -> 00 (GCONEN off) -> . ; then G 014E (GCLS) blanks the echo.
+printf 'E 60AF\r00.G 014E\rB\rrun /bin/gltx.bin\r' > gl_tx.in
 ../p8xemu -N -i gl_tx.in -c gl_tx.img -l 900000000 -g gl_tx.ppm eeprom.bin > gl_tx.out 2>/dev/null || true
 grep -q "TXDONE" gl_tx.out || fail "streamer did not finish"
 

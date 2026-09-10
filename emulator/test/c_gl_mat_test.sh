@@ -133,7 +133,12 @@ python3 $ROOT/tools/p8xfs.py put    glm.img gl_m.bin --name /bin/glm.bin --load 
 python3 $ROOT/tools/p8xfs.py put    glm.img gl_r.bin --name /bin/glr.bin --load 0x6A00 --exec 0x6A00 >/dev/null
 
 # ---- 1: matrix semantics vs the host replica --------------------------------
-printf 'B\rrun /bin/glm.bin\r' > gl_m.in
+# Console OFF from the monitor for every framebuffer grab (the always-on glass TTY
+# would echo the command line onto the shared screen). Matches c_gl_test, whose
+# gl_b.ppm this test compares against below. E 60AF -> 00 (GCONEN off) -> . ; then
+# G 014E (GCLS) blanks the E-echo.
+LAB='E 60AF\r00.G 014E\r'
+printf "${LAB}B\rrun /bin/glm.bin\r" > gl_m.in
 ../p8xemu -N -i gl_m.in -c glm.img -l 300000000 -g gl_m.ppm eeprom.bin > gl_m.out 2>/dev/null || true
 grep -q MDONE gl_m.out || fail "matrix program did not finish"
 
@@ -255,7 +260,7 @@ EOF
 echo "matrix verbs vs host replica OK"
 
 # ---- 2: RESETF restores stage-9 semantics exactly ---------------------------
-printf 'B\rrun /bin/glr.bin\r' > gl_r.in
+printf "${LAB}B\rrun /bin/glr.bin\r" > gl_r.in
 ../p8xemu -N -i gl_r.in -c glm.img -l 300000000 -g gl_r.ppm eeprom.bin > gl_r.out 2>/dev/null || true
 grep -q RDONE gl_r.out || fail "RESETF program did not finish"
 cmp gl_r.ppm gl_b.ppm || fail "RESETF replay differs from the 10a frame"

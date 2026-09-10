@@ -1,42 +1,48 @@
 NAME
-    screen - turn the on-screen text console (glass TTY) on or off
+    screen - the on-screen text console (glass TTY): off, on, or report
 
 SYNOPSIS
-    screen on       mirror the console onto the GL screen (clears it first)
-    screen off      back to a serial-only console
+    screen off      stop mirroring the console onto the GL screen
+    screen on       mirror again (clears the screen and homes the cursor first)
     screen          report the current state
 
 DESCRIPTION
-    With a GL card fitted, the BIOS CONOUT can MIRROR every console byte
-    onto the GL screen as well as the serial port, so the OS and every
-    program appear on the display -- the "glass TTY" of two-mode
-    operation (see the two-mode design). screen is the switch for it.
+    With a GL card fitted, the BIOS CONOUT MIRRORS every console byte onto
+    the GL screen as well as the serial port, so the ROM monitor, the OS
+    and every program appear on the display -- the "glass TTY" of two-mode
+    operation (see the two-mode design). The mirror is ON BY DEFAULT
+    whenever a card is present: the monitor switches it on at wake
+    (GCONEN=1), installs the stroke font from /FONT.GL on the CF root, and
+    blanks the screen, so the very first banner is already on the LCD.
+    Serial always carries the same output, and input stays on serial.
 
-    The mirror is OPT-IN and OFF by default (the flag GCONEN=0). The
-    whole graphics ecosystem -- cube, paint, BASIC, the window manager,
-    and the byte-exact GL tests -- shares that one screen, so the console
-    is only drawn on it when you ask. `screen on` sets the flag and calls
-    the GCLS BIOS to clear the screen and home the text cursor; `screen
-    off` clears the flag and the console goes back to serial only. With
-    no argument screen reports on or off.
+    screen is the switch. `screen off` clears the GCONEN flag and the
+    console goes back to serial only -- use it when you want a program's
+    graphics left undisturbed by the prompt, or when a test needs a
+    pristine framebuffer. `screen on` sets the flag and calls the GCLS
+    BIOS to clear the screen and home the text cursor. With no argument
+    screen reports on or off. The setting lasts for the session: `exit`
+    back to the monitor re-runs its wake-up, which switches the mirror on
+    again.
 
     A full-screen GL program still SUSPENDS the console while it draws
-    (the GTSUSP flag) and quitting back to the shell resumes it, so
-    turning the console on does not interfere with an app that owns the
-    screen. On a machine with no display, `screen on` is a no-op and
-    prints "screen: no display fitted".
+    (the GTSUSP flag) and quitting back to the shell resumes it. Resuming
+    does NOT clear the screen: a program's last frame stays put and the
+    prompt draws over it, so incremental drawing across commands -- `gl`
+    chains, `tri ... k` scenes -- keeps working. When you want a clean
+    console again, `screen on` gives you one.
 
-    The always-on console (mirroring without this switch) is a deferred
-    piece: an always-mirrored console shares screen and card state with
-    every GL program and collides with it in several ways, so until that
-    is resolved the mirror stays opt-in. Proper scrollback is likewise
-    deferred -- the console currently CLEARS and homes when it fills the
-    bottom row.
+    On a machine with no display, `screen on` is a no-op and prints
+    "screen: no display fitted".
+
+    Deferred: proper scrollback -- the console currently CLEARS and homes
+    when it fills the bottom row -- and per-cell erase (backspace leaves
+    the old glyph).
 
 EXAMPLES
-    screen on       put the shell and command output on the GL display
-    term            ...or launch the Term app, which enables it for you
-    screen off      go back to the serial console
+    screen off      keep the GL screen for graphics; console on serial only
+    screen on       console back on the LCD, from a clean screen
+    term            the Term app: an on-screen shell in the app frame
 
 SEE ALSO
     term, finder, gfx

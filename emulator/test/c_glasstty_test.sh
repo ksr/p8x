@@ -4,8 +4,9 @@
 # the monitor's DISPINIT clears the screen and homes a text cursor, and PUTCTX
 # mirrors every output byte to the GL screen via GL TEXT as well as the serial
 # ACIA. So the OS and every program render on-screen with no change to their
-# output code. Glyphs come from the card glyph bank (the OS streams /FONT.GL at
-# boot; the OS then calls the GCLS BIOS entry to give the console a clean start).
+# output code. Glyphs come from the card glyph bank: the MONITOR installs /FONT.GL
+# from the CF root at wake (MONFONT) and blanks the screen -- the console is ON by
+# default whenever a card is fitted, so even the pre-boot monitor is on the LCD.
 #
 # This boots the OS with a font present, runs `fsck` (prints "FSCK OK"), and
 # checks that (1) serial still carries the output, and (2) glyph pixels actually
@@ -23,7 +24,8 @@ cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o gtos.bin --base 0x2000 >/dev/null
 
-# the glass TTY console is OPT-IN (off by default) -- `screen on` enables it.
+# screen.bin is installed so `screen off`/`on` exist on the disk; the console itself
+# is ON by default -- this test deliberately does NOT run `screen on`.
 python3 $ROOT/tools/clib.py $ROOT/os/commands/screen.c -o sc.pp.c >/dev/null
 python3 $ROOT/compiler/p8cc.py sc.pp.c -o sc.asm >/dev/null
 python3 $ROOT/assembler/p8xasm.py sc.asm -o sc.bin --base 0x6A00 >/dev/null
@@ -36,7 +38,7 @@ python3 $ROOT/tools/p8xfs.py put    gt.img sc.bin --name /bin/screen.bin --load 
 python3 $ROOT/tools/p8xfs.py put    gt.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
 
 # ---- console enabled: text must render on the GL screen --------------------
-printf 'B\rscreen on\rfsck\r' > gt.in
+printf 'B\rfsck\r' > gt.in
 ../p8xemu -N -i gt.in -c gt.img -l 200000000 -g gt.ppm eeprom.bin > gt.out 2>/dev/null || true
 tr -d '\0' < gt.out | grep -q 'FSCK OK' || fail "serial lost the command output (FSCK OK)"
 

@@ -58,6 +58,7 @@ CFINIT  = $0109          ; reset + 8-bit mode (current drive); C=1 on error
 CFSEL   = $0148          ; A = drive (0/1) -> route CF/FS sector I/O to that card
 CFCURDRV= $014B          ; -> A = current CF drive
 GCLS    = $014E          ; clear the glass TTY (on-screen console) + home the cursor
+GTRESUME = $0151         ; re-establish the console's GL ground state, NO clear (console back after a program)
 FFIND   = $0118          ; find file FNAME in current dir -> LBA+FLEN; C=1 absent
 CFREAD  = $010C          ; sector LBA -> (P1); P1 += 512
 CFWRITE = $010F          ; SBUF -> sector LBA
@@ -332,8 +333,11 @@ COLD:   LDP3 #STKTOP
         STA  GFXPRES
 COLD_NOGFX:
         JSR  FONTLD             ; stream /FONT.GL to the card, if both exist
-        ; The glass TTY (on-screen console) is opt-in and OFF at boot; `screen on`
-        ; clears+homes it (GCLS) when the user enables it. Nothing to do here.
+        ; The glass TTY (on-screen console) is ON whenever a card is fitted: the
+        ; monitor's DISPINIT enabled it, installed the font and blanked the screen,
+        ; so console output has landed on the LCD from the first byte. Don't clear
+        ; here -- the monitor's text and the OS boot are one continuous console
+        ; (`screen off` disables the mirror for a session).
 
 ; ---------------- Shell main loop --------------------------------------------
 SHELL:  JSR  FLUSHRED           ; if the previous command was redirected, write its file
@@ -357,8 +361,18 @@ SH_PROMPT:
                                ;   run on behalf of a program that owns the screen
                                ;   (e.g. wdesk's SYS_RUNSH); resuming here would let
                                ;   the console echo pollute a card list it's recording
-        LDA  #0                 ; interactive prompt: the console owns the screen
-        STA  GTSUSP             ;   again (a graphics program that ran claimed it)
+        LDA  GCONEN             ; interactive prompt, console ON? then RE-ESTABLISH
+        JZ   SH_NORES           ;   the console's GL ground state EVERY prompt:
+        JSR  GTRESUME           ;   window/viewport/stroke/WHITE pen/native
+        LDA  #0                 ;   projection, NO clear. The console owns its own
+        STA  GTSUSP             ;   state and never trusts what a program left -- and
+                                ;   we can't tell if a RAW-POKE program (one that
+                                ;   never set GTSUSP, e.g. a hand-written `gl` stream)
+                                ;   dirtied the pen or window, so reset unconditionally.
+                                ;   Console OFF (`screen off`, or a byte-exact test):
+                                ;   skip -- leave the card exactly as the program left
+                                ;   it, or GL here would pollute a compared framebuffer.
+SH_NORES:
         JSR  CRLF
         LDP1 #CWDPATH           ; prompt = "<path>> " (drive 1 shows as /d1/...)
         JSR  OPUTS

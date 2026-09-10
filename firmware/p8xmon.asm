@@ -108,6 +108,7 @@ RESET:  JMP  COLD
         JMP  CFSEL          ; $0148 CFSEL     A = drive (0/1) -> route sector/FS I/O to that CF card
         JMP  CFCURDRV       ; $014B CFCURDRV  -> A = current CF drive
         JMP  GTINIT         ; $014E GCLS      clear the glass TTY + home the cursor (no-op path is caller-gated on GFXPRES)
+        JMP  GTSETUP        ; $0151 GTRESUME  re-establish the console's GL ground state, NO clear (the OS calls it when the console takes the screen back from a program)
 
 ;==============================================================================
 ; Monitor body (relocated above the BIOS table; reset vectors here).
@@ -281,84 +282,82 @@ DPUT:   JSR  PUTC
 ; ---------------- display bring-up --------------------------------------------
 ; A cold SDRAM powers up as NOISE and the scanout shows it faithfully, so the
 ; first thing a fitted panel does after power-on is alarm whoever just flipped
-; the switch. If the card answers the graphics-language presence probe ('G'
-; at GLID -- an absent card floats $FF), it is cleared and given a small
-; splash: a white full-screen border and three colour swatches. That is a
-; welcome, a self-check (all three channels, both pen bytes, the full-screen
-; extremes), and the first write pass through a freshly initialised SDRAM --
-; all before the prompt appears. No display: silently skipped, which is also
-; what the no-panel builds see ($FF reads).
+; the switch. DISPINIT is the two-mode selector (docs/p8x-two-mode-design.md):
+; probe the GL card (GLID reads 'G' at $FF54 when fitted -- an absent card
+; floats $FF) and record the answer in the resident GFXPRES byte, which the OS
+; and every GL program gate on.
 ;
-; Table-driven: DSPTAB is a flat GL byte program, streamed into the command
-; FIFO with GLSTAT bit7 (FIFO full) as the only handshake -- the FIFO
-; serializes, so no busy dance is needed between primitives. The program
-; opens by establishing the identity window/viewport (the port powers up
-; DEGENERATE) and closes back in outline fill mode. This is the worked
-; example of driving the GL port from machine code.
-; Probe the GL card (GLID reads 'G' at $FF54 when fitted) and record the result
-; in the resident GFXPRES byte -- the two-mode selector read by the OS and every
-; GL program. When a card is present, show the boot splash. The glass TTY (the
-; on-screen text console) is OPT-IN, OFF by default (GCONEN=0): CONOUT stays
-; serial-only until `screen on` enables it, so the graphics ecosystem is
-; unaffected by default (see docs/p8x-two-mode-design.md). The serial message
-; reports the mode either way.
-DISPINIT: LDA  #0
-        STA  GCONEN         ; glass TTY console off by default (opt-in)
-        LDA  GLID
+; With a card: the glass TTY (the on-screen text console behind CONOUT) is
+; switched ON (GCONEN=1) -- the screen IS the text display for the monitor and,
+; later, the booted OS, mirrored to serial as always. MONFONT installs the
+; stroke font from the CF root so the monitor can draw pre-boot; GTINIT blanks
+; the noise and homes the cursor (the first write pass through fresh SDRAM);
+; then the "GRAPHICS AVAILABLE" banner is the first text on the LCD. `screen
+; off` disables the mirror for a session.
+; Without a card: GFXPRES=GCONEN=0, "NO GRAPHICS" on serial, and everything
+; stays serial-only -- exactly what the no-panel builds see ($FF reads).
+DISPINIT: LDA  GLID
         LDB  #'G'
         CMP
         JNZ  dsp_no         ; no card fitted -> headless serial console
         LDA  #1             ; GL card present
         STA  GFXPRES
-        LDP1 #DSPTAB        ; the boot splash (proof the card + all 3 channels work)
-        LDA  #DSPLEN
-        STA  TMP
-dsp_lp: LDA  GLSTAT         ; FIFO backpressure
-        LDB  #$80
-        AND
-        JNZ  dsp_lp
-        LDA  (P1)+
-        STA  GLDATA
-        LDA  TMP
-        LDB  #1
-        SUB
-        STA  TMP
-        JNZ  dsp_lp
-        LDP1 #MHASGFX
+        STA  GCONEN         ; glass TTY console ON: CONOUT mirrors every byte to the LCD
+        JSR  MONFONT        ; install /FONT.GL in the card's glyph bank (if CF + file exist)
+        JSR  GTINIT         ; blank screen + home the text cursor: the console's clean start
+        LDP1 #MHASGFX       ; the first text ON THE LCD (and on serial, as always)
         JSR  PUTS
         RTS
 dsp_no: LDA  #0             ; no display -> serial-only mode
         STA  GFXPRES
+        STA  GCONEN
         LDP1 #MNOGFX
         JSR  PUTS
         RTS
 
-; The boot splash as GL bytes (window coords, y UP): identity window/viewport,
-; a filled black RECT (the clear), a white outline RECT (the border), then three
-; filled 40x24 red/green/blue swatches -- proof of both pen bytes and all three
-; channels at a glance. (The glass TTY console, when enabled, clears this.)
-DSPLEN  = 96
-DSPTAB: .byte $B3, $00,$00, $DF,$01, $00,$00, $0F,$01   ; WINDOW 0 479 0 271
-        .byte $B2, $00,$00, $DF,$01, $00,$00, $0F,$01   ; VWPORT 0 479 0 271
-        .byte $E0, $01                                  ; PRMFIL 1 (fill)
-        .byte $06, $00,$00,$00                          ; COLOR black
-        .byte $10, $00,$00, $00,$00                     ; MOVE 0,0
-        .byte $34, $DF,$01, $0F,$01                     ; RECT 479,271: the clear
-        .byte $E0, $00                                  ; PRMFIL 0 (outline)
-        .byte $06, $1F,$3F,$1F                          ; COLOR white
-        .byte $10, $00,$00, $00,$00                     ; MOVE 0,0
-        .byte $34, $DF,$01, $0F,$01                     ; RECT: the border
-        .byte $E0, $01                                  ; PRMFIL 1
-        .byte $06, $1F,$00,$00                          ; COLOR red
-        .byte $10, $B4,$00, $7C,$00                     ; MOVE 180,124
-        .byte $34, $DB,$00, $93,$00                     ; RECT 219,147
-        .byte $06, $00,$3F,$00                          ; COLOR green
-        .byte $10, $DC,$00, $7C,$00                     ; MOVE 220,124
-        .byte $34, $03,$01, $93,$00                     ; RECT 259,147
-        .byte $06, $00,$00,$1F                          ; COLOR blue
-        .byte $10, $04,$01, $7C,$00                     ; MOVE 260,124
-        .byte $34, $2B,$01, $93,$00                     ; RECT 299,147
-        .byte $E0, $00                                  ; PRMFIL 0 again
+; MONFONT - install /FONT.GL from the CF root into the card's glyph bank at
+; wake, so the MONITOR ITSELF can draw text on the LCD before any OS is booted
+; (two-mode "monitor on screen"). The stroke font is 5.3 KB -- too big for the
+; ~3 KB of free ROM -- so it lives on disk and is streamed in here; the card
+; keeps it ("a font is installed, not drawn": the glyph bank survives RESETF),
+; so one load per power-on serves the monitor, the OS and every program. Ported
+; from the OS's FONTLD, which still runs at OS boot as the guarantee (idempotent).
+; Skips silently -- text then renders once the OS installs the font -- when:
+;   - no CF is fitted (the task file floats $FF, like any absent card: checked
+;     BEFORE CFINIT, so an absent drive costs nothing rather than two bounded
+;     BSY waits),
+;   - CFINIT fails, or
+;   - there is no /FONT.GL.
+; The root directory extent is already the default after COLD (no CWD setup).
+MONFONT: LDA  CFSTAT
+        LDB  #$FF
+        CMP
+        JZ   mf_rts         ; absent CF
+        JSR  CFINIT
+        JC   mf_rts         ; no usable card
+        LDP1 #MFONTN
+        JSR  FNORM          ; FNAME = FONT.GL
+        LDP1 #IBUF          ; a free 512-byte sector buffer (OS space, unused pre-boot)
+        JSR  FOPEN
+        JC   mf_rts         ; no font file
+mf_lp:  JSR  FGETB          ; -> A, C=1 at EOF (clobbers P1/P2: fine here)
+        JC   mf_rts
+        STA  TMP
+mf_w:   LDA  GLSTAT         ; FIFO full? wait it out
+        LDB  #$80
+        AND
+        JNZ  mf_w
+        LDA  TMP
+        STA  GLDATA
+        JMP  mf_lp
+mf_rts: RTS
+MFONTN: .ascii "FONT.GL"
+        .byte 0
+
+; (The colour-swatch boot splash that used to live here was RETIRED when the
+; glass TTY went always-on: the console's blank screen + "GRAPHICS AVAILABLE"
+; banner replaced it, per the two-mode notes. The channel/pen self-check it
+; gave lives on in the tri/gl commands.)
 
 ;==============================================================================
 ; Glass TTY (two-mode P2): the on-screen text console behind BIOS CONOUT.
@@ -424,6 +423,19 @@ GTINIT: LDA  #0
         JSR  GTHOME
         RTS
 
+; GTSETUP - re-establish the console's GL ground state WITHOUT clearing: full-
+; screen WINDOW/VWPORT, PRMFIL 0 (stroke text), white pen, native projection.
+; BIOS GTRESUME ($0151): the OS calls it when the console takes the screen back
+; from a program (GTSUSP 1->0), because whatever that program left -- its own
+; window (tri: +-120), fill mode, pen -- would clip or hide the console's text.
+; This is "the screen-owner configures from scratch" applied to the console
+; itself. The program's last frame is left on screen (no clear); GL state does
+; not survive the hand-over -- only the card's command lists do, by design.
+GTSETUP: LDP1 #GTSETT
+        LDA  #27            ; GTPOST-GTSETT
+        JSR  GTSTREAM
+        RTS
+
 ; GTDRAW - draw the glyph in GTCH at the cursor pixel (GTX,GTY). Emits the GTEXT
 ; recipe: PROJCT 0 / MDIDEN / TSIZE 1.0 / MDTRAN x,y,0 / MOVE3 0,0,0 / TEXT 1,ch.
 GTDRAW: LDP1 #GTPRE
@@ -442,9 +454,11 @@ GTDRAW: LDP1 #GTPRE
         JSR  GTSTREAM
         LDA  GTCH
         JSR  GTPB
-        LDA  #$90           ; MDIDEN: leave the model matrix at identity so the
-        JSR  GTPB           ;   glass TTY doesn't pollute it for the next GL user
-        RTS                 ;   (e.g. BASIC's raw MOVE3/TEXT assumes identity)
+        LDP1 #GTPOST        ; state hygiene for the NEXT GL user: MDIDEN (model
+        LDA  #4             ;   matrix back to identity -- BASIC's raw MOVE3/TEXT
+        JSR  GTSTREAM       ;   assumes it) and PROJCT -1 (back to the NATIVE focal
+        RTS                 ;   camera: our PROJCT 0 is sticky otherwise, and a
+                            ;   program trusting the power-up camera projects flat)
 
 ; GTNL - newline: column 0, next row, drop the baseline; clear-on-full at bottom.
 GTNL:   LDA  #0
@@ -541,6 +555,14 @@ GTCLST: .byte $B3, $00,$00, $DF,$01, $00,$00, $0F,$01   ; WINDOW 0 479 0 271
 GTPRE:  .byte $B0,$00,$00, $90, $81,$00,$01, $96        ; PROJCT 0; MDIDEN; TSIZE 1.0; MDTRAN...
 GTMID:  .byte $00,$00, $12, $00,$00,$00,$00,$00,$00, $80,$01  ; ...z=0; MOVE3 0,0,0; TEXT count 1
 GTEND:
+; GTSETT - the console's ground state (GTSETUP / BIOS GTRESUME), no clear.
+GTSETT: .byte $B3, $00,$00, $DF,$01, $00,$00, $0F,$01   ; WINDOW 0 479 0 271
+        .byte $B2, $00,$00, $DF,$01, $00,$00, $0F,$01   ; VWPORT 0 479 0 271
+        .byte $E0, $00                                  ; PRMFIL 0 (stroke)
+        .byte $06, $1F,$3F,$1F                          ; COLOR white
+        .byte $B0, $FF,$FF                              ; PROJCT -1: native focal
+; GTPOST - the per-glyph tail GTDRAW streams after TEXT: leave the card clean.
+GTPOST: .byte $90, $B0,$FF,$FF                          ; MDIDEN; PROJCT -1
 
 ; ---------------- I : init CF + identify -------------------------------------
 CMD_I:  JSR  CFINIT
@@ -2069,7 +2091,7 @@ PUTC1:  LDA  ACIAS
         STA  TTYLST         ; A = the transmitted byte
         ; --- glass TTY mirror (two-mode P2): also draw it on the GL screen ---
         LDB  GCONEN
-        JZ   pctx_rt        ; console off (default, opt-in) -> serial only
+        JZ   pctx_rt        ; console mirror off (`screen off`) -> serial only
         LDB  GFXPRES
         JZ   pctx_rt        ; no display -> serial only
         LDB  GTSUSP

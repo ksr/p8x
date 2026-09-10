@@ -164,7 +164,8 @@ static uint16_t *gfbd = gfbmem[0];         /* display page */
    the cold-boot stripes. Model that with a fixed (deterministic: PPM
    diffs between runs must stay meaningful) garbage pattern on BOTH pages,
    so software that forgets to clear a page it shows fails HERE, not just
-   on the panel. The boot splash clears page 0; page 1 is software's job
+   on the panel. The monitor's wake-up blank (GTINIT, the console taking the
+   screen) clears page 0; page 1 is software's job
    (see man cube / STAGE8B-DESIGN on flipping). */
 static void gfb_poweron(void){
     for(size_t i=0;i<2*(size_t)GW_MAX*GH_MAX;i++)
@@ -1224,7 +1225,20 @@ static int gl_exec2(const uint8_t *p, int n){
         return 1;
     case 0xB0: NEED(3);                                   /* PROJCT */
         { int16_t ang=gl_i16(p+1);
-          if(ang<0 || ang>179) gl_err(2);
+          if(ang<0) { glpmode=0; gep[12]=256; gl_recompose(); } /* PROJCT -1 (any
+                                                             negative): back to the
+                                                             NATIVE focal camera, the
+                                                             power-up state (focal 256,
+                                                             FLAGRD 3 reports -1). MUST
+                                                             restore gep[12]: a prior
+                                                             PROJCT 0 set it to 0 (ortho)
+                                                             and the glpmode=0 recompose
+                                                             leaves it as-is. The glass
+                                                             TTY emits this after every
+                                                             glyph so its PROJCT 0 never
+                                                             leaks into a program that
+                                                             trusts the default focal. */
+          else if(ang>179) gl_err(2);
           else { glproj=ang; glpmode=1; gl_recompose(); } }
         return 3;
     case 0xB1: NEED(3); gldist=gl_i16(p+1); gl_recompose(); return 3;
