@@ -20,7 +20,9 @@
       "Bash(python3 ../../compiler/p8cc.py *)",
       "Bash(python3 tools/clib.py *)",
       "Bash(python3 ../../tools/clib.py *)",
-      "Bash(python3 generators/gen_memmap.py)"
+      "Bash(python3 generators/gen_memmap.py)",
+      "Bash(python3 generators/gen_eagle.py *)",
+      "Bash(python3 ../generators/gen_eagle.py *)"
     ]
   }
 }
