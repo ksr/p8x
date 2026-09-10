@@ -40,6 +40,24 @@ remainder is why it is still here.
   - (**Kermit shipped 2026-09-10** — `kermit send|recv /path` over the P3 second
     port ($FF08/$FF09), P5's last app; P5 is now complete. Term, Write, and the
     Paint/Image frame adaptation had already shipped. See the asm-twin note below.)
+  - **Interactive serial terminal command** (gap vs the original two-mode notes,
+    2026-09-10). The notes call for a pass-through *terminal* on the 2nd port —
+    keystrokes out `$FF09`, port-2 bytes onto the console — for talking to another
+    machine from inside Term, with file-transfer apps like kermit *running over it*.
+    Only the transfer half shipped (`kermit`); there is no dumb-terminal command
+    yet. Needs a poll loop over both ACIAs (console RDRF + port-2 RDRF) and an
+    escape key to exit; C + asm twins per the /bin rule.
+  - **Real Kermit protocol interop.** `kermit` is a fire-and-forward `SEQ LEN data
+    CHK` stream with no ACK/NAK, so it only talks to itself (P8X↔P8X, or the
+    emulator's -2i/-2o loopback). Talking to a *host* Kermit (Mac `kermit`,
+    C-Kermit) needs the real protocol: SOH-framed packets, the S/F/D/Z/B packet
+    types, ACK/NAK + retransmit, the char-encoding (`tochar`/`ctl`/`unchar`) and
+    the init-parameter negotiation. Decide whether that interop is wanted before
+    building it; the current framing is fine for P8X-to-P8X.
+  - **Finder File menu.** The bar has an Apps dropdown (`a`) but no *File* menu;
+    the notes want one (open / duplicate / rename / move / quit) — pairs with the
+    rename/duplicate/move file ops above. Apps likewise should take over the bar
+    with a real File/Quit dropdown rather than the key-hint strip Write/Term draw.
   - **Retire the tiled `desk`/`wdesk`** once Finder covers their use; their FILES/
     launch logic carried forward, the tiling did not.
   - Real-serial arrow-key timing: `finder`'s ESC-sequence decode uses a bounded
