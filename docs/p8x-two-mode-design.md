@@ -198,8 +198,9 @@ command. Independent of the graphics work; needed before the transfer app.
   sequences itself (no WM kernel). Verified by `c_finder_test.sh`. **Auto-return** works: launching an app hands the shell a `run <app>` /
   `run /bin/finder.bin <dir>` script (`SYS_RUNSH`), so the app quitting flows on to
   re-launch Finder in the same dir -- no per-app flag (the WM-TERM mechanism);
-  `c_finder_ret_test.sh` proves it. Deferred to BACKLOG: the **Apps menu**,
-  **mouse**, the file ops (**rename/duplicate/move**), the **Term** and **Write**
+  `c_finder_ret_test.sh` proves it. An **Apps menu** (press `a`) launches Paint/Term/Write/... by letter
+  (`c_finder_apps_test.sh`). Deferred to BACKLOG: **mouse**, the file ops
+  (**rename/duplicate/move**), the **Term** and **Write**
   apps, and **retiring the tiled `desk`/`wdesk`**.
 - **P5 — Apps.** Adapt Paint/Image; the Term app; **Write** (new); the
   serial-terminal / Kermit command.

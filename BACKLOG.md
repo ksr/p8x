@@ -34,9 +34,9 @@ remainder is why it is still here.
 
 - **Finder desktop (two-mode P4) — the rest of the app frame.** `finder.c` shipped
   a full-screen file browser + full-screen launch (`SYS_EXEC`). Still to do:
-  - **Apps menu** (a dropdown to launch Paint/Term/... without hunting for the
-    `.bin`), **mouse** support (via lib_ptr, keyboard-only today), and the file
-    ops **rename / duplicate / move** (grow from cp/mv/mkdir/del).
+  - **Mouse** support (via lib_ptr, keyboard-only today) and the file ops
+    **rename / duplicate / move** (grow from cp/mv/mkdir/del). (The Apps menu
+    -- press `a` -- shipped.)
   - The **Term** app (the glass TTY in an app frame -- runs any /bin command,
     output on-screen) and **Write** (a new text editor) -- P5.
   - **Retire the tiled `desk`/`wdesk`** once Finder covers their use; their FILES/

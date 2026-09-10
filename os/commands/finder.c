@@ -153,7 +153,7 @@ int draw() {
     gtext(4, 261, "FINDER");
     gtext(72, 261, cpath);
     pen(0);
-    gtext(300, 261, "ENTER OPEN  BKSP UP  Q QUIT");
+    gtext(250, 261, "A APPS  ENTER OPEN  BKSP UP  Q QUIT");
     /* file list, top-down from just below the bar */
     r = ftop; y = 244;
     while (r < fcnt && y > 6) {
@@ -192,6 +192,14 @@ int write_launch(char *app) {
     return 0;
 }
 
+/* launch an app full-screen with auto-return: write the script + run it (no
+ * return -- the shell re-launches us via the script's second line). */
+int launch(char *app) {
+    write_launch(app);
+    bios(SYS_RUNSH, "/FINDER.SCR", 0);
+    return 0;
+}
+
 /* open the selected entry: a directory navigates in; a .BIN launches. */
 int open_sel() {
     char *nm;
@@ -205,10 +213,35 @@ int open_sel() {
     }
     if (isbin(nm)) {                               /* a program: launch full-screen */
         pjoin(vpath, cpath, nm);
-        write_launch(vpath);
-        bios(SYS_RUNSH, "/FINDER.SCR", 0);         /* run app, then re-launch us; no return */
+        launch(vpath);                             /* no return on success */
     }
     return 0;                                      /* other files: ignored for now */
+}
+
+/* the APPS menu: a dropdown of the desktop's apps, launched by their letter.
+ * Drawn as an overlay; one keystroke picks an app (and launches it -- no return)
+ * or closes the menu. Reuses the launch/auto-return chain. */
+int apps_menu() {
+    int k;
+    pen(65535); fillrect(58, 138, 250, 256);       /* white panel */
+    pen(0);     fillrect(60, 240, 248, 254);       /* dark title band */
+    pen(65535); gtext(66, 244, "APPS");
+    pen(0);
+    gtext(66, 226, "P  PAINT");
+    gtext(66, 214, "T  TERM");
+    gtext(66, 202, "W  WRITE");
+    gtext(66, 190, "C  CUBE");
+    gtext(66, 178, "H  HOUSE");
+    gtext(66, 166, "G  GL");
+    gtext(66, 150, "ESC CANCEL");
+    k = getkey();
+    if (k == 'p' || k == 'P') { launch("/bin/paint.bin"); }
+    if (k == 't' || k == 'T') { launch("/bin/term.bin"); }
+    if (k == 'w' || k == 'W') { launch("/bin/write.bin"); }
+    if (k == 'c' || k == 'C') { launch("/bin/cube.bin"); }
+    if (k == 'h' || k == 'H') { launch("/bin/house.bin"); }
+    if (k == 'g' || k == 'G') { launch("/bin/gl.bin"); }
+    return 0;                                       /* ESC/other: caller redraws, menu gone */
 }
 
 int main() {
@@ -238,6 +271,7 @@ int main() {
         else if (k == 128 || k == 'k') { if (fsel > 0) { fsel = fsel - 1; } }          /* up */
         else if (k == 13 || k == 10) { open_sel(); }                                   /* open */
         else if (k == 8 || k == 127 || k == 130) { pup(); fscan(); }                   /* up dir */
+        else if (k == 'a' || k == 'A') { apps_menu(); }                                /* APPS menu */
         if (going) { reveal(); draw(); }
     }
     poke(GTSUSP, 0);                               /* release the console */
