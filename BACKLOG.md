@@ -34,9 +34,6 @@ remainder is why it is still here.
 
 - **Finder desktop (two-mode P4) — the rest of the app frame.** `finder.c` shipped
   a full-screen file browser + full-screen launch (`SYS_EXEC`). Still to do:
-  - **Auto-return chain:** launching an app should re-exec `/bin/finder.bin` on the
-    app's quit (generalise the `-d` "chain back to desk" / `-w` resume flags).
-    Right now an app launched from Finder returns to the SHELL, not the desktop.
   - **Apps menu** (a dropdown to launch Paint/Term/... without hunting for the
     `.bin`), **mouse** support (via lib_ptr, keyboard-only today), and the file
     ops **rename / duplicate / move** (grow from cp/mv/mkdir/del).

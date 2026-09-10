@@ -7,13 +7,16 @@
  *
  *   Up / Down (or k / j)   move the selection
  *   ENTER                  open -- a directory navigates INTO it; a .BIN LAUNCHES
- *                          full-screen (SYS_EXEC: this program BECOMES the app)
+ *                          full-screen and AUTO-RETURNS here when it quits
  *   Backspace / Left       go UP a directory
  *   q  or  ESC             quit the desktop -> back to the command-line OS
  *
- * Launching an app is a full-screen program swap (SYS_EXEC). Auto-return to the
- * desktop on the app's quit (the -d/-w resume chain), an Apps menu, mouse, and
- * the file ops (rename/duplicate/move) are follow-ups -- see BACKLOG.md. Grows
+ * Launching an app is a full-screen swap that comes back: Finder writes a two-line
+ * script -- "run <app>" then "run /bin/finder.bin <dir>" -- and hands it to the
+ * shell (SYS_RUNSH). The app quitting is a plain return to the shell, which flows
+ * straight on to the second line, re-launching Finder in the same directory. No
+ * per-app flag is needed (the mechanism the WM TERM used). An Apps menu, mouse,
+ * and the file ops (rename/duplicate/move) are follow-ups -- see BACKLOG.md. Grows
  * out of desk.c's FILES logic, made full-screen (docs/p8x-two-mode-design.md).
  */
 
@@ -171,6 +174,24 @@ int reveal() {
     return 0;
 }
 
+/* emit one string to the open write stream */
+int putstr(char *s) { int i; i = 0; while (s[i]) { bios(FPUTB, 0, s[i]); i = i + 1; } return 0; }
+
+/* write /FINDER.SCR = "run <app>\nrun /bin/finder.bin <cpath>\n": run the app,
+ * then RE-LAUNCH the desktop in the same directory. Handed to the shell with
+ * SYS_RUNSH, so the app quitting (a plain return to the shell) flows straight on
+ * to the second line -- auto-return to Finder, no per-app flag needed. */
+int write_launch(char *app) {
+    bios(FRESOLVE, "/FINDER.SCR", 0);
+    bios(FDELETE, "/FINDER.SCR", 0);               /* replace any old one */
+    bios(FRESOLVE, "/FINDER.SCR", 0);
+    bios(FWOPEN, 0, 0);
+    putstr("run "); putstr(app); bios(FPUTB, 0, 10);
+    putstr("run /bin/finder.bin "); putstr(cpath); bios(FPUTB, 0, 10);
+    bios(FCLOSE, 0, 0);
+    return 0;
+}
+
 /* open the selected entry: a directory navigates in; a .BIN launches. */
 int open_sel() {
     char *nm;
@@ -184,19 +205,28 @@ int open_sel() {
     }
     if (isbin(nm)) {                               /* a program: launch full-screen */
         pjoin(vpath, cpath, nm);
-        poke(GTSUSP, 0);                           /* release the screen for the app */
-        bios(SYS_EXEC, vpath, 0);                  /* BECOME it (no return on success) */
-        poke(GTSUSP, 1);                           /* only here if exec failed */
+        write_launch(vpath);
+        bios(SYS_RUNSH, "/FINDER.SCR", 0);         /* run app, then re-launch us; no return */
     }
     return 0;                                      /* other files: ignored for now */
 }
 
 int main() {
-    int k; int going;
+    int k; int going; int i; char *a;
     if (peek(GFXPRES) == 0) { puts("?No display"); return 1; }
     poke(GTSUSP, 1);                               /* claim the screen */
     gsetup();                                      /* port + text projection */
-    bios(SYS_GETCWD, cpath, 0);                    /* start where we were launched */
+    /* an absolute-path arg means we were RE-LAUNCHED by the auto-return script:
+     * resume in that directory. Otherwise start at the CWD. */
+    a = argstr();
+    while (*a == 32) { a = a + 1; }
+    if (*a == '/') {
+        i = 0;
+        while (a[i] != 0 && a[i] != 13 && a[i] != 10 && a[i] != 32 && i < 60) { cpath[i] = a[i]; i = i + 1; }
+        cpath[i] = 0;
+    } else {
+        bios(SYS_GETCWD, cpath, 0);
+    }
     if (cpath[0] == 0) { cpath[0] = '/'; cpath[1] = 0; }
     fscan();
     draw();

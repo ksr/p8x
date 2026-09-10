@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 6ffcfef7-73ca-445b-bcdb-f57735fdc98f
-  modified: 2026-09-10T00:36:36.640Z
+  modified: 2026-09-10T01:42:37.918Z
 ---
 
 **BIG DIRECTION CHANGE, user, 2026-09-09.** Full design in
@@ -54,11 +54,15 @@ it) else TEXT near-clips invisible. Decodes arrow ESC-seqs ITSELF (rawkey is RAW
 returns bytes; the 128-131 arrow codes came from the WM kernel which finder
 doesn't use). p8cc GOTCHAS hit: NO `break` (use a `going` flag); array size must
 be a LITERAL (char fnam[312], not [NN*13]). Reuses desk's fscan/pjoin/pup/ftype.
-In run.sh's 3 GUI build lists + man page (os/man/finder, auto-installs) + test
-c_finder_test.sh (test-gfx). C-ONLY (like desk/wdesk/paint, no asm twin). DEFER
--> BACKLOG: auto-return chain (apps re-exec finder on quit; today they return to
-SHELL), Apps menu, mouse, rename/dup/move, Term+Write apps (P5), retire
-desk/wdesk.
+In run.sh's 3 GUI build lists + man page (os/man/finder, auto-installs) + tests
+c_finder_test.sh + c_finder_ret_test.sh (test-gfx). C-ONLY (no asm twin).
+AUTO-RETURN DONE: launching a .BIN writes /FINDER.SCR = "run <app>\nrun
+/bin/finder.bin <cpath>" and SYS_RUNSH's it (NOT SYS_EXEC) -- app quits (plain RTS
+to shell) flows to the re-launch line, no per-app flag (the wdesk-TERM trick).
+finder takes an optional dir arg (argstr) to resume where it was. FSCAN GOTCHA:
+the dir list includes ".." FIRST (even at root), so the selected .BIN is usually
+NOT index 0 -- a launch test must DOWN past "..". DEFER -> BACKLOG: Apps menu,
+mouse, rename/dup/move, Term+Write apps (P5), retire desk/wdesk.
 
 **P3 emulator DONE (2026-09-09), on graphics-card:** 2nd serial port = 2nd ACIA
 at ACIA2S $FF08 / ACIA2D $FF09 (memmap), register-identical to the console ACIA

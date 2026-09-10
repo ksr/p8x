@@ -28,11 +28,13 @@ KEYS
     yellow bar.
 
 NOTES
-    Launching an app is a full-screen program swap (SYS_EXEC). Automatic
-    return to the desktop when the app quits (the -d/-w resume chain), an
-    Apps menu, mouse support, and the file operations (rename, duplicate,
-    move) are not yet wired -- see the project backlog. Grows out of the
-    older tiled `desk`, made full-screen.
+    Launching an app is a full-screen swap that AUTO-RETURNS: Finder hands
+    the shell a two-line script ("run <app>" then "run /bin/finder.bin
+    <dir>") via SYS_RUNSH, so when the app quits, the desktop comes back in
+    the same directory -- no per-app flag needed. An Apps menu, mouse
+    support, and the file operations (rename, duplicate, move) are not yet
+    wired -- see the project backlog. Grows out of the older tiled `desk`,
+    made full-screen.
 
 SEE ALSO
     desk, paint, screen

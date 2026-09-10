@@ -195,9 +195,10 @@ command. Independent of the graphics work; needed before the transfer app.
   ENTER opens a dir or LAUNCHES a `.BIN` full-screen via `SYS_EXEC`, Backspace
   goes up, `q` quits to the shell). It claims the screen (`GTSUSP`) and draws its
   own UI + text (sets `PROJCT 0` etc. from scratch); decodes arrow escape
-  sequences itself (no WM kernel). Verified by `c_finder_test.sh`. Deferred to
-  BACKLOG: the **auto-return chain** (apps re-exec the desktop on quit -- the
-  `-d`/`-w` mechanism, currently apps return to the shell), the **Apps menu**,
+  sequences itself (no WM kernel). Verified by `c_finder_test.sh`. **Auto-return** works: launching an app hands the shell a `run <app>` /
+  `run /bin/finder.bin <dir>` script (`SYS_RUNSH`), so the app quitting flows on to
+  re-launch Finder in the same dir -- no per-app flag (the WM-TERM mechanism);
+  `c_finder_ret_test.sh` proves it. Deferred to BACKLOG: the **Apps menu**,
   **mouse**, the file ops (**rename/duplicate/move**), the **Term** and **Write**
   apps, and **retiring the tiled `desk`/`wdesk`**.
 - **P5 — Apps.** Adapt Paint/Image; the Term app; **Write** (new); the
