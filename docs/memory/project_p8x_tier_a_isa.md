@@ -36,9 +36,14 @@ Tier A shapes in `HOST_ONLY`); `generators/gen_p8xdis.py` (shape codes 10–21) 
 `emulator/test/os_asm_test.sh` cover generator skips host-only shapes by table
 membership; `c_disasm_test.sh` decodes one of each form; `test_isa.asm` C1–D1.
 
-**Still open:** the p8cc emitters (constants via `LDW a,#`, `INCW`/`DECW`/`ADDW`
-on globals, `CMPW` in conditions, `LPW1` for bios/puts pointer loads; then the
-frame model — SP-relative on P3 vs a Tier B P4, the user's open question);
+**p8cc emitters DONE (same day):** `LDW a,#` constants/addresses, in-place
+`INCW`/`DECW`/`ADDW`/`SUBW` for statement-level `g = g ± k` on global words
+(`gen_assign(want=False)` from gen_stmt), `CMPW g,__t` for orderings in
+`gen_cond`, `LPW1` in bios()/puts(), `LDW __t,#k ; ADDW __ax,__t` for offsets /
+`-e` / `~e` / arg drop. 532,728 → 428,320 (−19.6%; −31.7% vs 627,172 baseline).
+**Still open:** the frame model (locals/args still on the software C-stack —
+SP-relative on P3 vs a Tier B P4 is the user's open question; a P3 frame needs
+args little-endian on the stack, i.e. PHW/PLW byte order flipped);
 self-hosting compilers (`p8cc.c`, `p8xcc.asm`); native assembler parsing of the
 compiler-only shapes; control-store EPROM reburn for the TTL machine (FPGA and
 emulator need nothing). Related: [[p8cc-runtime-order-gate]], [[p8cc-int-is-unsigned]].

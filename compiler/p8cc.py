@@ -52,6 +52,23 @@ Codegen size levers (2026-09-11, -15.1% across the 45 /bin commands):
   * Runtime helpers are only emitted if named in emit_runtime's `order` list.
   Measure with `sh tools/p8cc_sizes.sh` (per-command bytes + TOTAL).
 
+Tier A instructions (2026-09-11, a further -19.6%; -31.7% vs the pre-campaign
+baseline; see docs/p8x-isa-c-extensions.md):
+  * set_word_const / set_word_label: every 16-bit constant, string or global
+    address is one `LDW a,#n` (4-5 bytes, was 10). The assembler picks imm8 vs
+    imm16 from the literal's text, so emit plain decimals / labels.
+  * gen_assign(want=False) from a statement-level `g = g +/- k` on a GLOBAL
+    word (global_update_const): INCW / DECW / ADDW / SUBW on the variable in
+    place -- no load, no helper, no store; pointers scale k by element size.
+  * gen_cond: an ORDERING of a global word against a leaf is `CMPW g,__t` and
+    one branch (C = g >= __t, the same sense as __cmp16). Never for == / != :
+    CMPW's Z reflects the high byte only.
+  * LPW1 for the P1 setup in bios() / puts(); `LDW __t,#k ; ADDW __ax,__t` for
+    member offsets, -e, ~e (65535-e) and the post-call argument drop.
+  * NOT changed: the frame model. Locals/args still live on the software
+    C-stack through __ldw/__stw/__entf; frames on P3 via SUBP3 + LDW/STW (P3+d)
+    is the next, separate step (and needs PHW/PLW's stack byte order flipped).
+
 Usage:  p8cc.py prog.c [-o prog.asm]   then  p8xasm.py prog.asm -o prog.bin --base 0x6A00
 """
 import sys, os
@@ -440,10 +457,15 @@ class Gen:
         self.need("__lea")
         self.emit("        JSR __lea", "        .word %d" % (off & 0xFFFF))
 
-    def set_ax_const(self, v):
-        v &= 0xFFFF
-        self.emit("        LDA #%d" % (v & 0xFF), "        STA __ax",
-                  "        LDA #%d" % (v >> 8), "        STA __ax+1")
+    # Tier A: a 16-bit constant into a memory word is ONE instruction -- `LDW a,#n`
+    # (4 bytes for 0..255, zero-extended; 5 bytes otherwise; the assembler picks
+    # the width from the literal's text). Was LDA #lo/STA/LDA #hi/STA: 10 bytes,
+    # and the single most frequent idiom in compiled code.
+    def set_word_const(self, dst, v):
+        self.emit("        LDW %s,#%d" % (dst, v & 0xFFFF))
+    def set_word_label(self, dst, lab):                  # a 16-bit address constant
+        self.emit("        LDW %s,#%s" % (dst, lab))
+    def set_ax_const(self, v): self.set_word_const("__ax", v)
 
     def mov16(self, dst, src):                          # 16-bit mem->mem (was LDA/STA x2)
         self.emit("        MOVW %s,%s" % (dst, src))
@@ -468,19 +490,14 @@ class Gen:
     def gen_leaf_t(self, e):                          # __t = value of a leaf
         k = e[0]
         if k == "num":
-            v = e[1] & 0xFFFF
-            self.emit("        LDA #%d" % (v & 0xFF), "        STA __t",
-                      "        LDA #%d" % (v >> 8), "        STA __t+1")
+            self.set_word_const("__t", e[1])
         elif k == "str":
-            lab = self.string(e[1])
-            self.emit("        LDA #<%s" % lab, "        STA __t",
-                      "        LDA #>%s" % lab, "        STA __t+1")
+            self.set_word_label("__t", self.string(e[1]))
         else:
             kind = self.vinfo(e[1])
             base, ptr, count = kind[2], kind[3], kind[4]
             if count:                                  # a global array: its address
-                self.emit("        LDA #<%s" % kind[1], "        STA __t",
-                          "        LDA #>%s" % kind[1], "        STA __t+1")
+                self.set_word_label("__t", kind[1])
             elif kind[0] == "l":                       # scalar local: __ldw/__ldb into __t
                 h = "__ldtw" if sizeof(base, ptr) == 2 else "__ldtb"
                 self.need(h)
@@ -509,12 +526,11 @@ class Gen:
     def add_const_ax(self, off):              # AX += off (16-bit constant)
         off &= 0xFFFF
         if off == 0: return
-        skip = self.lbl("Lac")
-        self.emit("        LDA __ax", "        LDB #%d" % (off & 0xFF), "        ADD",
-                  "        STA __ax", "        LDA #0", "        JNC %s" % skip,
-                  "        LDA #1", "%s:    STA __c" % skip,
-                  "        LDA __ax+1", "        LDB #%d" % (off >> 8), "        ADD",
-                  "        LDB __c", "        ADD", "        STA __ax+1")
+        # Tier A: `LDW __t,#off ; ADDW __ax,__t` (9-10 bytes) replaces a 20-byte
+        # inline carry-propagating add. __t is free here: it is only ever live
+        # between a leaf load and the helper JSR that follows it (gen_operands).
+        self.set_word_const("__t", off)
+        self.emit("        ADDW __ax,__t")
 
     # ---- addresses (lvalues): result address in __ax -----------------------
     def gen_address(self, e):
@@ -526,9 +542,7 @@ class Gen:
                 self.emit("        TPA1L", "        STA __ax",
                           "        TPA1H", "        STA __ax+1")
             else:
-                lab = kind[1]
-                self.emit("        LDA #<%s" % lab, "        STA __ax",
-                          "        LDA #>%s" % lab, "        STA __ax+1")
+                self.set_word_label("__ax", kind[1])
         elif k == "unary" and e[1] == "*":
             self.gen_expr(e[2])                          # AX = pointer value = address
         elif k == "member":                              # &(x.m) = &x + offset
@@ -558,9 +572,7 @@ class Gen:
         k = e[0]
         if k == "num": self.set_ax_const(e[1])
         elif k == "str":
-            lab = self.string(e[1])
-            self.emit("        LDA #<%s" % lab, "        STA __ax",
-                      "        LDA #>%s" % lab, "        STA __ax+1")
+            self.set_word_label("__ax", self.string(e[1]))
         elif k == "id":
             kind = self.vinfo(e[1])
             base, ptr, count = kind[2], kind[3], kind[4]
@@ -586,33 +598,60 @@ class Gen:
                 self.gen_expr(e[2]); self.load_deref(*self.typeof_lval(e))
             elif e[1] == "!":
                 self.gen_expr(e[2]); self.need("__not"); self.emit("        JSR __not")
-            elif e[1] == "~":                                # bitwise NOT: 255-byte each
-                self.gen_expr(e[2])
-                self.emit("        LDA #255", "        LDB __ax", "        SUB",
-                          "        STA __ax", "        LDA #255", "        LDB __ax+1",
-                          "        SUB", "        STA __ax+1")
-            else:  # -e
+            elif e[1] == "~":                                # bitwise NOT = 65535 - e
                 self.gen_expr(e[2]); self.need("__sub")
-                self.emit("        LDA #0", "        STA __t", "        STA __t+1",
-                          "        JSR __sub")
+                self.set_word_const("__t", 0xFFFF)
+                self.emit("        JSR __sub")                 # __ax = __t - __ax
+            else:  # -e = 0 - e
+                self.gen_expr(e[2]); self.need("__sub")
+                self.set_word_const("__t", 0)
+                self.emit("        JSR __sub")
         elif k == "index":
             self.gen_address(e); self.load_deref(*self.typeof_lval(e))
         elif k in ("member", "arrow"):
             mc = self.struct_member(self.member_tag(e), e[2])[3]
             if mc: self.gen_address(e)                   # array member decays to address
             else: self.gen_address(e); self.load_deref(*self.typeof_lval(e))
-        elif k == "assign": self.gen_assign(e[1], e[2])
+        elif k == "assign": self.gen_assign(e[1], e[2], want=True)
         elif k == "logand": self.gen_logand(e[1], e[2])
         elif k == "logor": self.gen_logor(e[1], e[2])
         elif k == "bin": self.gen_bin(e[1], e[2], e[3])
         elif k == "call": self.gen_call(e[1], e[2])
         else: sys.exit("p8cc: cannot generate expr %r" % (k,))
 
-    def gen_assign(self, lhs, rhs):
+    def global_update_const(self, lhs, rhs):
+        """`g = g + k` / `g = g - k` on a GLOBAL word scalar -> the constant the
+        word must change by (element-scaled for pointers), or None if the
+        statement is not of that shape. Tier A turns it into INCW/DECW/ADDW/SUBW
+        on the variable in place: no load, no helper call, no store."""
+        if rhs[0] != "bin" or rhs[1] not in ("+", "-"): return None
+        if rhs[2] != lhs or lhs[0] != "id" or rhs[3][0] != "num": return None
+        kind = self.vinfo(lhs[1])
+        if kind[0] != "g" or kind[4] or sizeof(kind[2], kind[3]) != 2: return None
+        base, ptr = self.typeof(lhs)
+        step = sizeof(base, ptr - 1) if ptr > 0 else 1   # pointer: scale by element
+        k = (rhs[3][1] * step) & 0xFFFF
+        return k if rhs[1] == "+" else (-k) & 0xFFFF
+
+    def gen_assign(self, lhs, rhs, want=True):
+        """Store rhs into lhs. `want`: the assignment's VALUE is needed in __ax
+        (expression context); a statement-level `x = ...;` passes False and can
+        update a global in place with the Tier A memory ops."""
         sz = sizeof(*self.typeof_lval(lhs))
         if sz not in (1, 2):
             sys.exit("p8cc: whole struct/array assignment not supported "
                      "(assign members, or use pointers)")
+        k = self.global_update_const(lhs, rhs)
+        if k is not None:
+            lab = self.vinfo(lhs[1])[1]
+            if k == 1: self.emit("        INCW %s" % lab)
+            elif k == 0xFFFF: self.emit("        DECW %s" % lab)
+            elif k < 0x8000:
+                self.set_word_const("__t", k); self.emit("        ADDW %s,__t" % lab)
+            else:
+                self.set_word_const("__t", (-k) & 0xFFFF); self.emit("        SUBW %s,__t" % lab)
+            if want: self.mov16("__ax", lab)
+            return
         # fast path: `var = expr` for a plain scalar variable (not an array,
         # deref, member or index). Compute the value into AX, then store it with
         # one instruction/helper — AX is left holding the value (assignment result).
@@ -699,6 +738,17 @@ class Gen:
             swap, neg = self.RELOPS[e[1]]
             a, b = e[2], e[3]
             lhs, rhs = (b, a) if swap else (a, b)
+            # Tier A: an ORDERING of a global word against a leaf compares the
+            # variable in place -- `CMPW lab,__t` sets C = lab >= __t exactly as
+            # __cmp16 sets C = lhs >= rhs, with no load of the left side. Not for
+            # == / != : CMPW's Z reflects the high byte only.
+            if (e[1] not in ("==", "!=") and lhs[0] == "id" and self.is_leaf(rhs)
+                    and self.vinfo(lhs[1])[0] == "g" and not self.vinfo(lhs[1])[4]
+                    and sizeof(self.vinfo(lhs[1])[2], self.vinfo(lhs[1])[3]) == 2):
+                self.gen_leaf_t(rhs)
+                self.emit("        CMPW %s,__t" % self.vinfo(lhs[1])[1])
+                self.emit("        %s %s" % ("JC" if neg == when else "JNC", label))
+                return
             self.gen_operands(e[1], lhs, rhs, 0)      # __t = lhs, __ax = rhs
             self.need("__cmp16"); self.emit("        JSR __cmp16")
             if e[1] in ("==", "!="):                  # truth = Z (==) or !Z (!=)
@@ -747,15 +797,14 @@ class Gen:
             self.emit("        JSR $200C", "        STA __ax",
                       "        LDA #0", "        STA __ax+1",
                       "        JNC %s" % skip,             # carry = end of (file) input
-                      "        LDA #255", "        STA __ax", "        STA __ax+1",
-                      "%s:" % skip); return                # __ax = $FFFF (-1)
+                      "        LDW __ax,#65535",           # __ax = $FFFF (-1)
+                      "%s:" % skip); return
         if name == "putchar":                            # OS SYS_PUTC (redirectable)
             self.gen_expr(args[0])
             self.emit("        LDA __ax", "        JSR $2009"); return
         if name == "puts":                               # OS SYS_PUTS + newline
-            self.gen_expr(args[0])
-            self.emit("        LDA __ax", "        TAP1L", "        LDA __ax+1",
-                      "        TAP1H", "        JSR $200F",
+            self.gen_expr(args[0]); self.ax_to_p1()      # P1 = the string (LPW1)
+            self.emit("        JSR $200F",
                       "        LDA #10", "        JSR $2009"); return
         if name == "peek":                               # peek(addr) -> byte at addr
             self.gen_expr(args[0]); self.ax_to_p1()
@@ -776,8 +825,7 @@ class Gen:
             self.gen_expr(args[2])                        # A operand -> __ax
             self.pop_t()                                  # __t = P1 operand
             skip = self.lbl("Lbc")
-            self.emit("        LDA __t", "        TAP1L", "        LDA __t+1",
-                      "        TAP1H",                     # P1 = arg1
+            self.emit("        LPW1 __t",                  # P1 = arg1
                       "        LDA __ax", "        JSR $%04X" % (args[0][1] & 0xFFFF),
                       "        STA __ax",                  # returned A -> low byte
                       "        LDA #0", "        JNC %s" % skip, "        LDA #1",
@@ -785,12 +833,9 @@ class Gen:
         for a in reversed(args):
             self.gen_expr(a); self.need("__push"); self.emit("        JSR __push")
         self.emit("        JSR _f_%s" % name)
-        if args:
-            n = 2 * len(args); skip = self.lbl("Lcl")
-            self.emit("        LDA __csp", "        LDB #%d" % n, "        ADD",
-                      "        STA __csp", "        JNC %s" % skip,
-                      "        LDA __csp+1", "        INC", "        STA __csp+1",
-                      "%s:" % skip)
+        if args:                                         # drop the args: __csp += 2n
+            self.set_word_const("__t", 2 * len(args))    # (Tier A: 9 bytes, was 14;
+            self.emit("        ADDW __csp,__t")          #  __t is dead after a call)
 
     # ---- statements ---------------------------------------------------------
     def gen_stmt(self, s):
@@ -800,7 +845,10 @@ class Gen:
         elif k == "decl":
             if s[3] is not None:
                 self.gen_assign(("id", s[2]), s[3])
-        elif k == "expr": self.gen_expr(s[1])
+        elif k == "expr":
+            if s[1][0] == "assign":                      # statement: value unused
+                self.gen_assign(s[1][1], s[1][2], want=False)
+            else: self.gen_expr(s[1])
         elif k == "empty": pass
         elif k == "return":
             if s[1] is not None: self.gen_expr(s[1])

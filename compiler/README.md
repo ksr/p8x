@@ -84,6 +84,19 @@ directly on the flags** of a 16-bit compare (`__cmp16`, unsigned like the value
 helpers) rather than materialising a 0/1 and re-testing it. Measure any codegen
 change with `sh tools/p8cc_sizes.sh`.
 
+**Tier A instructions (2026-09-11, a further −19.6% across `/bin`; −31.7% from
+the pre-campaign baseline).** With the Tier A opcodes in the ISA (see
+`docs/p8x-isa-c-extensions.md`) the generator emits: `LDW a,#n` for every 16-bit
+constant, string or global address (4–5 bytes, was 10 — the single biggest
+item); `INCW`/`DECW`/`ADDW`/`SUBW` **in place** for a statement-level
+`g = g ± k` on a global word (no load, helper or store; pointers scale `k` by the
+element size); `CMPW g,__t` for an ordering of a global word against a leaf in a
+condition (not `==`/`!=`, whose Z would be high-byte-only); `LPW1` for the
+pointer setup in `bios()` and `puts()`; `LDW __t,#off ; ADDW __ax,__t` for
+member offsets, negation, bitwise NOT and the argument drop after a call.
+Frames and locals are unchanged (still the software C-stack); moving them onto
+the hardware stack with `SUBP3` and `LDW/STW (P3+d)` is the next, separate step.
+
 **Calling convention / frames.** A separate **software C-stack** (`__csp`, grows
 down from `$F800`) holds call frames; `__fp` is the frame pointer. A caller
 pushes arguments right-to-left, `JSR`s, then pops them; the callee (`__enter`)

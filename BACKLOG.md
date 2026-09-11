@@ -967,9 +967,25 @@ Nothing below has been built or measured.
       chosen from the operand TEXT (pass-stable); byte stream = address word
       first, then disp/imm, for both LDW and STW. Disassembler (C + asm twin)
       decodes all shapes (codes 10–21); `test_isa.asm` C1–D1 prove each op on its
-      carry-plane case; ISA card + programmer's guide regenerated. **Still open:**
-      the p8cc emitters (§5 of the doc), the self-hosting compilers, the native
-      assembler parsing the compiler-only shapes, EPROM reburn for the TTL build.
+      carry-plane case; ISA card + programmer's guide regenerated.
+
+      **p8cc emitters for Tier A DONE (2026-09-11):** `LDW a,#n` for every
+      16-bit constant / string / global address; statement-level `g = g ± k` on
+      a global word → `INCW`/`DECW`/`ADDW`/`SUBW` in place; orderings of a global
+      word vs a leaf in a condition → `CMPW g,__t` + one branch; `LPW1` for the
+      `bios()`/`puts()` pointer setup; `LDW __t,#k ; ADDW __ax,__t` for member
+      offsets, `-e`, `~e` and the post-call argument drop. Measured over all 45
+      /bin C commands: **532,728 → 428,320 bytes (−104,408, −19.6%)**; from the
+      pre-campaign 627,172 that is **−31.7%**; `finder` 32,630 → 16,311 (−50%).
+      **Still open:** the FRAME MODEL — locals/args still live on the software
+      C-stack via `__ldw`/`__stw`/`__entf`; moving frames onto P3 with `SUBP3` +
+      `LDW/STW (P3+d)` (SP-relative, delta tracked at compile time) or a Tier B
+      P4 frame pointer is the user's open design question and the next size
+      step. Note `PHW` leaves a pushed word BIG-endian on the stack, so args
+      pushed with PHW are not `LDW (P3+d)`-readable without flipping PHW/PLW's
+      byte order (they are only ever used as pairs). Also open: the self-hosting
+      compilers (`p8cc.c`, `p8xcc.asm`) emitting Tier A, the native assembler
+      parsing the compiler-only shapes, EPROM reburn for the TTL build.
 
       **Data-driven priority (measured on 5 compiled commands, 19,897 instrs):**
         - **Done — the move idioms (the big win):** `PHW`/`PLW` + `LPW1`/`LPW2`
