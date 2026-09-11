@@ -31,7 +31,13 @@ import sys
 from genucode import OPC
 ops={'':'', '#':' #1', 'a':' $1234', '#w':' #$1234',
      '(P1)':' (P1)','(P1)+':' (P1)+','(P2)':' (P2)','(P2)+':' (P2)+',
-     '(P3)':' (P3)','(P3)+':' (P3)+'}
+     '(P3)':' (P3)','(P3)+':' (P3)+',
+     # two-operand / displacement forms (os-rewrite step 0: the native parser
+     # grew them; the host reorders STW's operands into the byte stream)
+     'a,a':' $1234,$5678', 'a,#':' $1234,#7', 'a,#w':' $1234,#$1234',
+     '(P1+d)':' (P1+3)','(P2+d)':' (P2+$10)','(P3+d)':' (P3+VAL-$1230)',
+     'a,(P1+d)':' $1234,(P1+3)','a,(P2+d)':' $1234,(P2+4)','a,(P3+d)':' $1234,(P3+5)',
+     '(P1+d),a':' (P1+3),$1234','(P2+d),a':' (P2+4),$1234','(P3+d),a':' (P3+5),$1234'}
 L=["VAL = $1234", "CH  = 'Q'", "        .org $6A00", "begin:"]
 for k in sorted(OPC):                       # every opcode/shape exactly as defined
     if k[1] not in ops: continue            # two-operand / displacement ops (MOVW, the
