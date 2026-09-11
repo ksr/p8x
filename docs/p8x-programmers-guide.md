@@ -128,11 +128,12 @@ Instruction set rev 1 — generated from the microcode source (`genucode.py`); o
 
 | Op | Mnemonic | Bytes | Cycles | Flags | Description |
 |---|---|---|---|---|---|
-| $74 | `PHW addr` | 3 | 10 | - | Push the 16-bit word at addr onto the P3 stack (low byte first, high on top). |
-| $75 | `PLW addr` | 3 | 12 | - | Pop a 16-bit word from the P3 stack into addr (high then low). |
+| $74 | `PHW addr` | 3 | 10 | - | Push the 16-bit word at addr onto the P3 stack: high byte first, then low, so the word lies LITTLE-ENDIAN at P3+1..P3+2 (readable with LDW a,(P3+d); same layout as a JSR return address). |
+| $75 | `PLW addr` | 3 | 12 | - | Pop a 16-bit word from the P3 stack into addr (low then high). |
 | $76 | `LPW1 addr` | 3 | 9 | - | P1 (16-bit) := the word at addr. |
 | $77 | `LPW2 addr` | 3 | 9 | - | P2 (16-bit) := the word at addr. |
 | $78 | `MOVW dst,src` | 5 | 13 | - | 16-bit memory->memory move: the word at src -> dst (via the PT/PT2 scratch pointers). |
+| $79 | `LPW3 addr` | 3 | 9 | - | P3 (16-bit) := the word at addr -- restore a saved stack pointer. |
 
 ### Tier A: the C-compiler ISA (2026-09; pure microcode. A! = clobbers A; d = unsigned 8-bit displacement)
 
@@ -156,6 +157,12 @@ Instruction set rev 1 — generated from the microcode source (`genucode.py`); o
 | $9C | `CMPW dst,src` | 5 | 15 | C Z N V | Flags from a - b (16-bit), memory unchanged: C = unsigned a >= b; BLT/BGE/BLE/BGT give the signed order. Z high byte only. A! |
 | $9E | `INCW addr` | 3 | 9 | C Z N | Word at addr := word + 1. A!; flags are the low byte's (C = carry out of it). |
 | $9F | `DECW addr` | 3 | 9 | C Z N | Word at addr := word - 1. A!; flags are the low byte's (C=1: no borrow). |
+| $A0 | `ADDW addr,#imm8` | 4 | 11 | C Z N V | Word a := a + imm8 (zero-extended), 16-bit; C = carry out. A! |
+| $A1 | `SUBW addr,#imm8` | 4 | 11 | C Z N V | Word a := a - imm8; C=1 means no borrow (unsigned a >= imm). A! |
+| $A2 | `CMPW addr,#imm8` | 4 | 11 | C Z N V | Flags from a - imm8 (16-bit), memory unchanged: C = unsigned a >= imm; BLT/BGE signed. Z high byte only. A! |
+| $A4 | `LEAW addr,(P1+d)` | 4 | 14 | C Z N | Word at addr := P1 + d -- the ADDRESS of a frame local (arrays, &x). A! |
+| $A5 | `LEAW addr,(P2+d)` | 4 | 14 | C Z N | Word at addr := P2 + d -- the ADDRESS of a frame local (arrays, &x). A! |
+| $A6 | `LEAW addr,(P3+d)` | 4 | 14 | C Z N | Word at addr := P3 + d -- the ADDRESS of a frame local (arrays, &x). A! |
 
 ### Control flow
 

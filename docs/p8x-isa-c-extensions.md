@@ -5,10 +5,19 @@ below are in `microcode/genucode.py` (opcodes as listed; `u0–u3.bin`
 regenerated), the host assembler parses every new operand shape, `LDPn #imm16`
 is a real opcode in both assemblers, the disassembler decodes all of them, and
 `emulator/test/test_isa.asm` proves each one on its carry-plane case (tests
-C1–D1). The ISA card and programmer's guide are regenerated. Not yet done: the
-compiler emitters (§5), the self-hosting compilers, the on-target assembler's
-parsing of the compiler-only shapes, an EPROM reburn for the TTL machine. Tiers
-B and C remain proposals. What follows is the original sketch — a concrete sketch —
+C1–D1). The ISA card and programmer's guide are regenerated. **The compiler
+emitters (§5) are done as well**, in two steps: the Tier A idioms (`LDW a,#`,
+in-place `INCW`/`DECW`/`ADDW`/`SUBW`, `CMPW`, `LPW1`) and then **frames on the
+hardware stack** — `SUBP3 #L`, `LDW`/`STW`/`LEAW (P3+d)`, args pushed with
+`PHW` and dropped with `ADDP3`, the software C-stack and its runtime gone. That
+needed three small additions beyond the sketch: `ADDW`/`SUBW`/`CMPW a,#imm8`
+(`$A0–$A2`), `LEAW a,(Pn+d)` (`$A4–$A6`) and `LPW3` (`$79`), plus `PHW` pushing
+high-byte-first so a pushed word is little-endian on the stack (§7 caveat 4 is
+now moot: the compiler chose SP-relative frames; a Tier B P4 would only simplify
+the depth tracking). Result over all 45 `/bin` C commands: 627,172 → 374,672
+bytes, −40.3%; `finder` 32,630 → 13,909. Not yet done: the self-hosting compilers, the on-target
+assembler's parsing of the compiler-only shapes, an EPROM reburn for the TTL
+machine. Tiers B and C remain proposals. What follows is the original sketch —
 real opcode numbers, real microcode in `genucode.py`'s vocabulary, step counts
 against the 15-step budget — so it can be argued about and then built. The
 motivation, the constraints, three tiers of change, what the compiler does with

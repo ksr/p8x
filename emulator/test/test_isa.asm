@@ -746,6 +746,135 @@ n32b:
         CMP
         JNZ fail
         LDP3 #$FEFF                 ; restore the stack
+; ---- D2: PHW leaves the word LITTLE-ENDIAN on the stack (lo at P3+1), PLW round-trips ----
+        LDA #$D2
+        STA TID
+        LDW $9010,#$BEEF
+        PHW $9010
+        LDA (P3+1)
+        LDB #$EF
+        CMP
+        JNZ fail                    ; low byte on top
+        LDA (P3+2)
+        LDB #$BE
+        CMP
+        JNZ fail
+        LDW $9012,(P3+1)            ; a pushed word IS a frame word
+        LDA $9013
+        LDB #$BE
+        CMP
+        JNZ fail
+        PLW $9014
+        LDA $9014
+        LDB #$EF
+        CMP
+        JNZ fail
+        LDA $9015
+        LDB #$BE
+        CMP
+        JNZ fail
+        TPA3L                       ; stack balanced
+        LDB #$FF
+        CMP
+        JNZ fail
+; ---- D3: ADDW a,#imm8 with carry and 16-bit C ($12FF + 1 = $1300; $FFFF + 1 -> C) ----
+        LDA #$D3
+        STA TID
+        LDW $9010,#$12FF
+        ADDW $9010,#1
+        LDA $9010
+        JNZ fail
+        LDA $9011
+        LDB #$13
+        CMP
+        JNZ fail
+        LDW $9010,#$FFFF
+        ADDW $9010,#1
+        JNC fail
+        LDA $9011
+        JNZ fail
+        LDW $9010,#$0102
+        ADDW $9010,#$FE             ; $0200, no carry out
+        JC  fail
+        LDA $9011
+        LDB #$02
+        CMP
+        JNZ fail
+; ---- D4: SUBW a,#imm8 with borrow ($1300 - 1 = $12FF, C=1); underflow clears C ----
+        LDA #$D4
+        STA TID
+        LDW $9010,#$1300
+        SUBW $9010,#1
+        JNC fail
+        LDA $9010
+        LDB #$FF
+        CMP
+        JNZ fail
+        LDA $9011
+        LDB #$12
+        CMP
+        JNZ fail
+        LDW $9010,#$0001
+        SUBW $9010,#2
+        JC  fail
+        LDA $9011
+        LDB #$FF
+        CMP
+        JNZ fail
+; ---- D5: CMPW a,#imm8: unsigned over the full word, memory kept, signed branches ----
+        LDA #$D5
+        STA TID
+        LDW $9010,#$0100
+        CMPW $9010,#$FF             ; $0100 >= $FF (low byte alone would borrow)
+        JNC fail
+        LDA $9010
+        JNZ fail
+        LDA $9011
+        LDB #$01
+        CMP
+        JNZ fail
+        LDW $9010,#$00FE
+        CMPW $9010,#$FF             ; $FE < $FF
+        JC  fail
+        LDW $9010,#$FFFF
+        CMPW $9010,#1               ; -1 < 1 signed
+        BGE fail
+        LDW $9010,#$0005
+        CMPW $9010,#1
+        BLT fail
+; ---- D6: LEAW a,(Pn+d) takes a frame address (page-crossing); LPW3 restores P3 ----
+        LDA #$D6
+        STA TID
+        LDP1 #$90F8
+        LEAW $9010,(P1+$10)         ; $9108
+        LDA $9010
+        LDB #$08
+        CMP
+        JNZ fail
+        LDA $9011
+        LDB #$91
+        CMP
+        JNZ fail
+        LDP3 #$92F0
+        LEAW $9012,(P3+3)           ; $92F3
+        LDA $9012
+        LDB #$F3
+        CMP
+        JNZ fail
+        LDA $9013
+        LDB #$92
+        CMP
+        JNZ fail
+        LDW $9014,#$FEFF
+        LPW3 $9014                  ; P3 := $FEFF
+        TPA3L
+        LDB #$FF
+        CMP
+        JNZ fail
+        TPA3H
+        LDB #$FE
+        CMP
+        JNZ fail
 ; ---- all passed ----
         LDA #$00
         HLT

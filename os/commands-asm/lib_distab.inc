@@ -173,6 +173,8 @@ DISTAB:
         .asciiz "LPW2"
         .byte $78,9
         .asciiz "MOVW"
+        .byte $79,2
+        .asciiz "LPW3"
         .byte $80,0
         .asciiz "ADDT"
         .byte $81,0
@@ -227,4 +229,16 @@ DISTAB:
         .asciiz "INCW"
         .byte $9F,2
         .asciiz "DECW"
+        .byte $A0,20
+        .asciiz "ADDW"
+        .byte $A1,20
+        .asciiz "SUBW"
+        .byte $A2,20
+        .asciiz "CMPW"
+        .byte $A4,14
+        .asciiz "LEAW"
+        .byte $A5,15
+        .asciiz "LEAW"
+        .byte $A6,16
+        .asciiz "LEAW"
         .byte $FF

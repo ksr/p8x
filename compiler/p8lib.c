@@ -73,7 +73,10 @@ int cwdlba() { return bios(0x2006, 0, 0) & 255; }           /* SYS_CWDLBA -> LBA
 
 int loadfile(char *name, char *dest) {   /* read a file into dest; return its byte length */
     int len;
-    char de[17];
+    char de[18];        /* SYS_DIRENTRY writes 18 bytes: name[12] flag len.lo len.hi
+                           lba.lo lba.hi len.b2 -- de[17] was one short (2026-09-11):
+                           harmless on the old RAM C-stack, but with frames on the
+                           hardware stack the 18th byte hit the return address. */
     bios(0x0136, name, 0);               /* FNORM:   name -> FNAME            */
     bios(0x0118, 0, 0);                  /* FFIND:   FNAME -> LBA + FLEN      */
     bios(0x201B, de, 0);                 /* SYS_DIRENTRY: snapshot LBA/FLEN etc */

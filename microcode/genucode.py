@@ -185,21 +185,25 @@ for p in (1,2,3):
 op(0x70,"PHA","", w(doe="A",dld="MEMW",psel=3,pdec=1,urst=1))          # push A, SP--
 op(0x71,"PLA","", w(psel=3,pinc=1), w(doe="MEM",dld="A",psel=3,ldzn=1,urst=1))  # SP++, A=[SP]
 # 16-bit push/pop of a memory word (collapses the compiler's LDA/PHA/LDA/PHA and
-# PLA/STA/PLA/STA 16-bit-operand idioms into one instruction). PHW a: push mem[a]
-# (lo) then mem[a+1] (hi) so the high byte ends on top; PLW a: pop hi->mem[a+1]
-# then lo->mem[a] — matching p8cc's push_ax / pop_t byte order. Scratch: PT holds
-# the operand address (incremented for the high byte), T/T2 carry the two bytes.
+# PLA/STA/PLA/STA 16-bit-operand idioms into one instruction). Byte order on the
+# stack (2026-09-11, for the Tier A frame model): PHW pushes the HIGH byte first,
+# then the low byte, so the pushed word lies LITTLE-ENDIAN at P3+1..P3+2 -- the
+# same layout JSR/IRQ leave for a return address, and exactly what `LDW a,(P3+d)`
+# reads. A C argument pushed with PHW is therefore a plain frame word to the
+# callee. PLW pops lo (top) then hi. (Before this, PHW pushed lo first; PHW/PLW
+# are only ever used as pairs, so nothing else observed the layout.) Scratch: PT
+# holds the operand address (incremented for the high byte), T/T2 the two bytes.
 op(0x74,"PHW","a", *_ld_pt(),
    w(doe="MEM",dld="T", psel=PT),                 # T  = mem[a]   (lo)
    w(psel=PT,pinc=1),                             # PT = a+1
    w(doe="MEM",dld="T2",psel=PT),                 # T2 = mem[a+1] (hi)
-   w(doe="T", dld="MEMW",psel=3,pdec=1),          # push lo, SP--
-   w(doe="T2",dld="MEMW",psel=3,pdec=1,urst=1))   # push hi, SP--
+   w(doe="T2",dld="MEMW",psel=3,pdec=1),          # push hi, SP--
+   w(doe="T", dld="MEMW",psel=3,pdec=1,urst=1))   # push lo, SP--  (lo ends on top)
 op(0x75,"PLW","a", *_ld_pt(),
    w(psel=3,pinc=1),                              # SP++
-   w(doe="MEM",dld="T2",psel=3),                  # T2 = [SP] (hi, last pushed)
+   w(doe="MEM",dld="T", psel=3),                  # T  = [SP] (lo, last pushed)
    w(psel=3,pinc=1),                              # SP++
-   w(doe="MEM",dld="T", psel=3),                  # T  = [SP] (lo)
+   w(doe="MEM",dld="T2",psel=3),                  # T2 = [SP] (hi)
    w(doe="T", dld="MEMW",psel=PT),                # mem[a]   = lo   (PT = a)
    w(psel=PT,pinc=1),                             # PT = a+1
    w(doe="T2",dld="MEMW",psel=PT,urst=1))         # mem[a+1] = hi
@@ -208,8 +212,8 @@ op(0x75,"PLW","a", *_ld_pt(),
 # or __ax). PT holds the source address (read), Pn is the destination; the read
 # and the pointer-byte write use different PSELs in sequence, so no 2nd scratch
 # pointer is needed (pure microcode, unlike MOVW).
-for p in (1,2):
-    op(0x75+p,"LPW%d"%p,"a", *_ld_pt(),
+for p in (1,2,3):                                 # LPW3 ($79, 2026-09-11): restore a
+    op(0x75+p if p<3 else 0x79,"LPW%d"%p,"a", *_ld_pt(),   # saved stack pointer
        w(doe="MEM",dld="T",psel=PT,pinc=1),       # T = mem[a]   (lo), PT = a+1
        w(doe="T",dld="PTRL",psel=p),              # P%d.lo = T
        w(doe="MEM",dld="T",psel=PT),              # T = mem[a+1] (hi)
@@ -364,6 +368,37 @@ op(0x9F,"DECW","a",
    w(doe="MEM",dld="A",psel=PT,fcond="C"),
    ( alu_mid("DEC",  dld="MEMW",psel=PT,ldf=0,urst=1),             # C=0: borrow -> a.hi--
      alu_mid("PASSA",dld="MEMW",psel=PT,ldf=0,urst=1) ))           # C=1: done
+# A9 (2026-09-11). ADDW/SUBW/CMPW a,#imm8 -- mem[a] op= imm8 zero-extended
+# (4 bytes: op a.lo a.hi imm8; 10 steps). The compiler's `x + k`, pointer
+# stepping and `if (n < k)` without a constant load. Same flag contract as the
+# a,b forms: the high-byte step runs the ALU against T = 0 (ZERO'd after the
+# low byte, flags kept), so C is the 16-bit carry / no-borrow and N^V the signed
+# order; Z high byte only. Clobbers A.
+def _wordimm(code,name,lo,hi_pair,store=True):
+    dst="MEMW" if store else "none"
+    op(code,name,"a,#",
+       *_ld_pt(),                                                  # 1-4  a -> PT
+       w(doe="MEM",dld="T",psel=0,pinc=1),                         # 5    T = imm8
+       w(doe="MEM",dld="A",psel=PT),                               # 6    A = a.lo
+       alu_mid(lo,dld=dst,psel=PT,bsel=1,pinc=1),                  # 7    a.lo op= imm ; latch C ; PT++
+       alu_mid("ZERO",dld="T",ldf=0),                              # 8    T = 0 (flags kept)
+       w(doe="MEM",dld="A",psel=PT,fcond="C"),                     # 9    A = a.hi ; route C
+       ( alu_mid(hi_pair[0],dld=dst,psel=PT,bsel=1,urst=1),        # 10   C=0 plane
+         alu_mid(hi_pair[1],dld=dst,psel=PT,bsel=1,urst=1) ))      #      C=1 plane
+_wordimm(0xA0,"ADDW","ADD",("ADD","ADC1"))
+_wordimm(0xA1,"SUBW","SUB",("SBB","SUB"))
+_wordimm(0xA2,"CMPW","SUB",("SBB","SUB"),store=False)
+# A10 (2026-09-11). LEAW a,(Pn+d) -- mem[a] := Pn + d (the ADDRESS of a frame
+# local: arrays, &x, struct locals). 4 bytes, 13 steps, clobbers A.
+for p in (1,2,3):
+    op(0xA3+p,"LEAW","a,(P%d+d)"%p,
+       *_ld_pt2(),                                                 # 1-4  a -> PT2
+       w(doe="MEM",dld="T",psel=0,pinc=1),                         # 5    T = d8
+       *_pt_disp(p),                                               # 6-9  PT = Pn + d
+       w(doe="PTRL",dld="T",psel=PT),                              # 10   T = PT.lo
+       w(doe="T",dld="MEMW",psel=PT2,pinc=1),                      # 11   mem[a] = lo     PT2++
+       w(doe="PTRH",dld="T",psel=PT),                              # 12   T = PT.hi
+       w(doe="T",dld="MEMW",psel=PT2,urst=1))                      # 13   mem[a+1] = hi
 
 # conditional branches abs: Bcc addr. FCOND emitted while fetching operand;
 # cond plane 1 = take (load P0 from T/T2), plane 0 = fall through.

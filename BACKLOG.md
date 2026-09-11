@@ -977,15 +977,41 @@ Nothing below has been built or measured.
       offsets, `-e`, `~e` and the post-call argument drop. Measured over all 45
       /bin C commands: **532,728 → 428,320 bytes (−104,408, −19.6%)**; from the
       pre-campaign 627,172 that is **−31.7%**; `finder` 32,630 → 16,311 (−50%).
-      **Still open:** the FRAME MODEL — locals/args still live on the software
-      C-stack via `__ldw`/`__stw`/`__entf`; moving frames onto P3 with `SUBP3` +
-      `LDW/STW (P3+d)` (SP-relative, delta tracked at compile time) or a Tier B
-      P4 frame pointer is the user's open design question and the next size
-      step. Note `PHW` leaves a pushed word BIG-endian on the stack, so args
-      pushed with PHW are not `LDW (P3+d)`-readable without flipping PHW/PLW's
-      byte order (they are only ever used as pairs). Also open: the self-hosting
-      compilers (`p8cc.c`, `p8xcc.asm`) emitting Tier A, the native assembler
-      parsing the compiler-only shapes, EPROM reburn for the TTL build.
+      **Frames on P3 DONE (2026-09-11):** locals/args moved from the software
+      C-stack onto the hardware stack — `SUBP3 #L` prologue, `LDW`/`STW`/`LEAW
+      (P3+d)` for every local (scalars laid out first so they stay inside the
+      255-byte window; a far path for bigger displacements), args `PHW`'d and
+      dropped with `ADDP3`, the whole `__push`/`__enter`/`__entf`/`__leave`/
+      `__lea`/`__ldw`/`__ldb`/`__stw`/`__stb` runtime deleted. The program saves
+      the OS's P3 in `__sp0`, runs on P3 = CSTACKTOP-1 (where the C-stack was)
+      and restores it with the new `LPW3`. Char scalars keep a zero-high 2-byte
+      slot (stores write it; char params zeroed at entry) so they load with one
+      LDW. Microcode added for it: `ADDW`/`SUBW`/`CMPW a,#imm8` ($A0–$A2),
+      `LEAW a,(Pn+d)` ($A4–$A6), `LPW3` ($79), and **PHW now pushes hi-first so a
+      pushed word is little-endian on the stack** (PHW/PLW only ever used as
+      pairs). Startup relocates P3 to CSTACKTOP-1 ONLY when the inherited P3 is
+      above CSTACKTOP; a nested launch (shell running a script on a C program's
+      stack, Finder's auto-return) keeps its P3 — relocating up trampled the
+      shell's return addresses. 428,320 → 374,672 (−12.5%); **627,172 → 374,672 =
+      −40.3%** overall; `finder` 32,630 → 13,909 (−57%).
+      **Still open:** the self-hosting compilers (`p8cc.c`, `p8xcc.asm`) emitting
+      **PARKED (user, 2026-09-11): monitor + OS rewrite for the new ISA.** The
+      hand-written monitor/OS/apps were only RE-ASSEMBLED for Tier A (gain: the
+      3-byte `LDPn`, ~156 bytes). A measured idiom count shows the easy
+      substitutions are small (monitor ~50 sites / 150–250 B, OS ~67 sites /
+      250–350 B, p8xcc.asm ~96 sites; LPWn/INCW/ADDW/MOVW/LDW candidates) because
+      hand asm never built the compiler's costly idioms — and each site needs
+      reading, since the Tier A memory ops clobber A + flags unlike the byte
+      sequences they replace. Direction: consider SCRATCH rewrites designed
+      around the new ISA (frames on P3, 16-bit word ops, displacement
+      addressing), starting with the easy replacements; the OS is the one that
+      matters (16 KB ceiling). Revisit after the software-only compiler list.
+      Tier A / the P3 frame model (they still use the software C-stack and work,
+      but their output is ~40% larger), the native assembler parsing the
+      compiler-only shapes, EPROM reburn for the TTL build. Next software-only
+      levers (see the 2026-09-11 histogram): relative branches (microcode, ~2.5%),
+      narrow-value tracking for chars (compiler, ~3%), a peephole pass (~1-2%),
+      an OS-resident shared runtime (~7% of total bytes, OS budget permitting).
 
       **Data-driven priority (measured on 5 compiled commands, 19,897 instrs):**
         - **Done — the move idioms (the big win):** `PHW`/`PLW` + `LPW1`/`LPW2`
@@ -1000,7 +1026,9 @@ Nothing below has been built or measured.
           a fraction of a percent. Not worth it for size; would only help speed in
           arithmetic-heavy code, which the text-tool workload isn't.
         - **PROMOTED — frame-relative addressing for local access (best remaining
-          microcode-only lever).** `LDA __csp` appears **192×** — every local-var
+          microcode-only lever).** *(Historical: DONE 2026-09-11 as Tier A
+          `LDW/STW/LEAW (P3+d)` with frames on P3 — `__csp` no longer exists; the
+          measurement below is the 2026-06 baseline.)* `LDA __csp` appears **192×** — every local-var
           access has the compiler compute `local_addr = __csp + offset` inline
           (`LDA __csp … LDA __csp+1`, then load a pointer) right after each
           `JSR __enter`. Far more frequent than arithmetic. A targeted op —

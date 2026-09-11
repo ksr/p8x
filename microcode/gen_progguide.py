@@ -110,10 +110,11 @@ DESC[("XORT","")]=("C Z N","A := A XOR T. (B preserved.)")
 DESC[("CMPT","")]=("C Z N","Flags from A - T; A and B unchanged.")
 # rev D: 16-bit memory ops — collapse the compiler's byte-by-byte 16-bit moves
 # into one instruction (pure microcode; PT + T/T2 scratch).
-DESC[("PHW","a")]=("-","Push the 16-bit word at addr onto the P3 stack (low byte first, high on top).")
-DESC[("PLW","a")]=("-","Pop a 16-bit word from the P3 stack into addr (high then low).")
+DESC[("PHW","a")]=("-","Push the 16-bit word at addr onto the P3 stack: high byte first, then low, so the word lies LITTLE-ENDIAN at P3+1..P3+2 (readable with LDW a,(P3+d); same layout as a JSR return address).")
+DESC[("PLW","a")]=("-","Pop a 16-bit word from the P3 stack into addr (low then high).")
 DESC[("LPW1","a")]=("-","P1 (16-bit) := the word at addr.")
 DESC[("LPW2","a")]=("-","P2 (16-bit) := the word at addr.")
+DESC[("LPW3","a")]=("-","P3 (16-bit) := the word at addr -- restore a saved stack pointer.")
 DESC[("MOVW","a,a")]=("-","16-bit memory->memory move: the word at src -> dst (via the PT/PT2 scratch pointers).")
 # Tier A (2026-09): the C-compiler ISA -- pure microcode (docs/p8x-isa-c-extensions.md).
 # Carry propagation runs through the condition planes; the memory-to-memory forms
@@ -133,6 +134,11 @@ DESC[("LDW","a,#w")]=("-","Word at addr := imm16 (5 bytes).")
 DESC[("ADDW","a,a")]=("C Z N V","Word a := a + b (16-bit, carry chained). C = carry out; N/V from the high byte; Z from the HIGH byte only. A!")
 DESC[("SUBW","a,a")]=("C Z N V","Word a := a - b (16-bit, borrow chained). C=1 means no borrow (unsigned a >= b). Z high byte only. A!")
 DESC[("CMPW","a,a")]=("C Z N V","Flags from a - b (16-bit), memory unchanged: C = unsigned a >= b; BLT/BGE/BLE/BGT give the signed order. Z high byte only. A!")
+DESC[("ADDW","a,#")]=("C Z N V","Word a := a + imm8 (zero-extended), 16-bit; C = carry out. A!")
+DESC[("SUBW","a,#")]=("C Z N V","Word a := a - imm8; C=1 means no borrow (unsigned a >= imm). A!")
+DESC[("CMPW","a,#")]=("C Z N V","Flags from a - imm8 (16-bit), memory unchanged: C = unsigned a >= imm; BLT/BGE signed. Z high byte only. A!")
+for p in (1,2,3):
+    DESC[("LEAW","a,(P%d+d)"%p)]=("C Z N","Word at addr := P%d + d -- the ADDRESS of a frame local (arrays, &x). A!"%p)
 DESC[("INCW","a")]=("C Z N","Word at addr := word + 1. A!; flags are the low byte's (C = carry out of it).")
 DESC[("DECW","a")]=("C Z N","Word at addr := word - 1. A!; flags are the low byte's (C=1: no borrow).")
 
@@ -153,9 +159,9 @@ GROUPS=[("System",["NOP","HLT","CLC","SEC"]),
   "TAP1L","TAP1H","TAP2L","TAP2H","TAP3L","TAP3H",
   "TPA1L","TPA1H","TPA2L","TPA2H","TPA3L","TPA3H"]),
  ("Stack",["PHA","PLA"]),
- ("16-bit memory ops (rev D; compiler space savers). PHW/PLW/LPW pure-microcode; MOVW adds the PT2 scratch pointer",["PHW","PLW","LPW1","LPW2","MOVW"]),
+ ("16-bit memory ops (rev D; compiler space savers). PHW/PLW/LPW pure-microcode; MOVW adds the PT2 scratch pointer",["PHW","PLW","LPW1","LPW2","LPW3","MOVW"]),
  ("Tier A: the C-compiler ISA (2026-09; pure microcode. A! = clobbers A; d = unsigned 8-bit displacement)",
-  ["LDP1","LDP2","LDP3","ADDP3","SUBP3","LDW","STW","ADDW","SUBW","CMPW","INCW","DECW"]),
+  ["LDP1","LDP2","LDP3","ADDP3","SUBP3","LDW","STW","LEAW","ADDW","SUBW","CMPW","INCW","DECW"]),
  ("Control flow",["JMP","JSR","RTS","BZ","BNZ","BCP","JNC"]),
  ("Signed branches (rev C; after CMP — N^V/Z)",["BLT","BGE","BLE","BGT"])]
 

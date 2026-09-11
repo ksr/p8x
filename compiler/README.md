@@ -94,17 +94,33 @@ element size); `CMPW g,__t` for an ordering of a global word against a leaf in a
 condition (not `==`/`!=`, whose Z would be high-byte-only); `LPW1` for the
 pointer setup in `bios()` and `puts()`; `LDW __t,#off ; ADDW __ax,__t` for
 member offsets, negation, bitwise NOT and the argument drop after a call.
-Frames and locals are unchanged (still the software C-stack); moving them onto
-the hardware stack with `SUBP3` and `LDW/STW (P3+d)` is the next, separate step.
+**Frames on P3 (same day, a further −12.5%; −40.3% from the pre-campaign
+baseline, `finder` −57%):** the frame model above, plus `ADDW`/`SUBW`/`CMPW a,#imm8` and
+`LEAW a,(Pn+d)` in the ISA for it.
 
-**Calling convention / frames.** A separate **software C-stack** (`__csp`, grows
-down from `$F800`) holds call frames; `__fp` is the frame pointer. A caller
-pushes arguments right-to-left, `JSR`s, then pops them; the callee (`__enter`)
-saves the old `__fp`, sets `__fp = __csp`, and reserves space for locals, and
-(`__leave`) unwinds on `return`. So **parameters live at `__fp+2, __fp+4, …`**
-and **locals at `__fp-2, __fp-4, …`** — one frame per call, which makes functions
-reentrant, so **recursion works**. Globals keep static storage. A program returns
-to the OS shell with `RTS` (startup inits `__csp` then `JSR _f_main`).
+**Calling convention / frames (2026-09-11: on the hardware stack).** Call
+frames live on **P3**. A caller pushes the arguments right-to-left with `PHW`
+(each word lies little-endian at `P3+1`), `JSR`s, then drops them with
+`ADDP3 #2n`; the callee reserves its locals with `SUBP3 #L`. Everything is then
+a small positive displacement from `P3`, read and written with one `LDW`/`STW`/
+`LEAW (P3+d)` instruction: **locals at `P3+1 … P3+L`** (scalars first, arrays
+and structs above them), the return address at `P3+L+1,+2`, **parameter *i* at
+`P3+L+3+2i`**. The compiler adds whatever it has pushed itself (spills, pending
+arguments) to every displacement, so a temporary on the stack never moves a
+local; a displacement over 255 takes a slower computed-address path. One frame
+per call, so functions are reentrant and **recursion works**. `char` scalars
+occupy a 2-byte slot whose high byte is kept zero (stores write it, char
+parameters are zeroed at entry), so they load with one `LDW` like an `int`.
+Globals keep static storage. On entry the program saves the caller's `P3` in
+`__sp0` and, if that `P3` is above `CSTACKTOP` (a normal launch from the OS's
+small stack), sets `P3 = CSTACKTOP-1`, so frames grow down from `$F800` into
+the free TPA exactly where the old software C-stack lived. A `P3` already below
+`CSTACKTOP` means a *nested* launch — the shell running a script on a C
+program's stack, as Finder's auto-return chain does — and then `P3` is kept, so
+the new frames grow beneath the caller's pending return addresses instead of
+over them. On exit `LPW3 __sp0` restores `P3` before the final `RTS`. (Before this, frames were a software C-stack `__csp`/
+`__fp` in RAM with a `__ldw`/`__stw`/`__entf`/`__leave` runtime — see git
+history.)
 
 ## Supported subset
 

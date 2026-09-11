@@ -91,11 +91,12 @@ Opcodes, mnemonics and cycle counts generated live from `genucode.py` (the micro
 
 | Op | Mnemonic | By | Cy | Fl | Description |
 |---|---|---|---|---|---|
-| $74 | `PHW addr` | 3 | 10 | - | Push 16-bit word at addr (lo then hi). |
-| $75 | `PLW addr` | 3 | 12 | - | Pop 16-bit word into addr. |
+| $74 | `PHW addr` | 3 | 10 | - | Push 16-bit word at addr (hi then lo: lies little-endian at P3+1). |
+| $75 | `PLW addr` | 3 | 12 | - | Pop 16-bit word into addr (lo then hi). |
 | $76 | `LPW1 addr` | 3 | 9 | - | P1 := 16-bit word at addr. |
 | $77 | `LPW2 addr` | 3 | 9 | - | P2 := 16-bit word at addr. |
 | $78 | `MOVW dst,src` | 5 | 13 | - | 16-bit mem->mem: word at src -> dst. |
+| $79 | `LPW3 addr` | 3 | 9 | - | P3 := 16-bit word at addr (restore a saved SP). |
 
 ## Tier A: C-compiler ISA (2026-09, pure microcode; A! = clobbers A)
 
@@ -119,6 +120,12 @@ Opcodes, mnemonics and cycle counts generated live from `genucode.py` (the micro
 | $9C | `CMPW dst,src` | 5 | 15 | CZNV | flags from a-b (16-bit), memory unchanged: C=unsigned a>=b, BLT/BGE = signed. A! |
 | $9E | `INCW addr` | 3 | 9 | CZN | word at addr += 1. A!; flags from the low byte. |
 | $9F | `DECW addr` | 3 | 9 | CZN | word at addr -= 1. A!; flags from the low byte. |
+| $A0 | `ADDW addr,#imm8` | 4 | 11 | CZNV | word a:=a+imm8 (zero-ext), 16-bit; C=carry out. A! |
+| $A1 | `SUBW addr,#imm8` | 4 | 11 | CZNV | word a:=a-imm8; C=1 no borrow. A! |
+| $A2 | `CMPW addr,#imm8` | 4 | 11 | CZNV | flags from a-imm8 (16-bit), memory unchanged. A! |
+| $A4 | `LEAW addr,(P1+d)` | 4 | 14 | CZN | word at addr:=P1+d (the address of a frame local). A! |
+| $A5 | `LEAW addr,(P2+d)` | 4 | 14 | CZN | word at addr:=P2+d. A! |
+| $A6 | `LEAW addr,(P3+d)` | 4 | 14 | CZN | word at addr:=P3+d (address of a stack local). A! |
 
 ## Control flow
 

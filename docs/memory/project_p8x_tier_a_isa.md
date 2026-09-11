@@ -41,9 +41,30 @@ membership; `c_disasm_test.sh` decodes one of each form; `test_isa.asm` C1–D1.
 (`gen_assign(want=False)` from gen_stmt), `CMPW g,__t` for orderings in
 `gen_cond`, `LPW1` in bios()/puts(), `LDW __t,#k ; ADDW __ax,__t` for offsets /
 `-e` / `~e` / arg drop. 532,728 → 428,320 (−19.6%; −31.7% vs 627,172 baseline).
-**Still open:** the frame model (locals/args still on the software C-stack —
-SP-relative on P3 vs a Tier B P4 is the user's open question; a P3 frame needs
-args little-endian on the stack, i.e. PHW/PLW byte order flipped);
+**Frames on P3 DONE (same day):** `SUBP3 #L` / `ADDP3 #L`, locals at P3+1..L
+(scalars first), ret addr at L+1, param i at L+3+2i; `self.sp` tracks the
+compiler's own pushes and is added to every displacement (assert sp==0 at each
+statement); far path (`__la`/`__lb`, `far_local`) for d>255; char slots keep a
+zero high byte (`st_local(full=char_load(rhs))`, `zero_hi_local` for char
+params); startup saves the caller's P3 in `__sp0`, relocates to CSTACKTOP-1
+ONLY if P3 is above CSTACKTOP (normal launch from the 256-byte OS stack), and
+`LPW3 __sp0` at exit. **Gotcha found the hard way:** a program launched while
+the shell runs a script on a C program's stack (Finder → SYS_RUNSH → `run`)
+inherits P3 ≈ $F7E3; relocating UP to $F7FF tramples the shell's pending return
+addresses (reset to $0000 at exit). Two latent bugs surfaced because locals now
+sit right below the return address: `p8lib.c loadfile` had `char de[17]` for an
+18-byte SYS_DIRENTRY (fixed), and any local-array overrun now jumps to garbage
+instead of silently scribbling RAM — trace with `p8xemu -t` and grep `DLD=7`
+writes into the return slot / `P0=0000` fetches. Added opcodes: `ADDW/SUBW/CMPW a,#imm8` $A0-$A2 (T ZERO'd for the high
+step), `LEAW a,(Pn+d)` $A4-$A6, `LPW3` $79 (119 opcodes total); **PHW flipped to
+push hi-first** (word little-endian at P3+1). 627,172 → 374,672 = −40.3%
+(finder 32,630 → 13,909).
+User's direction (2026-09-11): do ALL remaining software-only items — next:
+relative branches (microcode), narrow-value chars, peephole, OS-resident runtime,
+self-hosting compilers. PARKED by the user, to revisit after those: scratch
+rewrites of the monitor/OS around the new ISA, easy replacements first (they
+were only re-assembled so far; idiom counts in BACKLOG — small wins, OS matters
+because of its 16 KB ceiling). **Still open:**
 self-hosting compilers (`p8cc.c`, `p8xcc.asm`); native assembler parsing of the
 compiler-only shapes; control-store EPROM reburn for the TTL machine (FPGA and
 emulator need nothing). Related: [[p8cc-runtime-order-gate]], [[p8cc-int-is-unsigned]].

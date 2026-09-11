@@ -348,13 +348,23 @@ No new register, no new bus line; the emulator and the FPGA run the regenerated
 | LDW a,#imm8 / #imm16 (`$98`/`$99`) | a 16-bit constant into a memory word (the compiler's most frequent idiom, 10 → 4 bytes) |
 | ADDW / SUBW / CMPW a,b (`$9A–$9C`) | 16-bit memory-word arithmetic, carry chained; CMPW sets flags only |
 | INCW / DECW a (`$9E`/`$9F`) | 16-bit increment / decrement in memory |
+| ADDW / SUBW / CMPW a,#imm8 (`$A0–$A2`) | the same with an 8-bit immediate (zero-extended): `x + k`, pointer stepping, `if (n < k)` |
+| LEAW a,(Pn+d) (`$A4–$A6`) | word at a := Pn + d — the address of a frame local (arrays, `&x`) |
+| LPW3 a (`$79`) | P3 := word at a — restore a saved stack pointer |
 
 Contracts: the memory-to-memory forms clobber A (it is the ALU's only A input)
 and latch the flags; `d` is unsigned; after `ADDW`/`SUBW`/`CMPW`, C is the
 16-bit carry / no-borrow and N^V the signed order, but Z reflects the high byte
 only. The rev-D upgrade of PT/PT2 to 74169 counters covers these too.
 
-Opcode space: 256 slots, 112 used.
+**`PHW` byte order (changed 2026-09-11):** `PHW` now pushes the high byte first,
+so the pushed word lies little-endian at P3+1..P3+2 — the same layout `JSR`
+leaves for a return address, and what `LDW a,(P3+d)` reads. That is what lets
+the C compiler keep its call frames on the hardware stack: arguments pushed with
+`PHW` are plain frame words to the callee. `PHW`/`PLW` were only ever used as a
+pair, so nothing else observed the order.
+
+Opcode space: 256 slots, 119 used.
 
 ---
 

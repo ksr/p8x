@@ -29,11 +29,29 @@ Supported now:
 Execution model
   * 16-bit pseudo-accumulator AX (memory word __ax) holds every expression
     result (the machine has no 16-bit accumulator).
-  * Hardware stack (P3) holds expression temporaries (PHA/PLA) + return addrs.
-  * Software C-stack (__csp, grows down from $F800) holds call frames: args, the
-    saved frame pointer, and locals. __fp points at the saved FP, so params are
-    at __fp+2,+4,... and locals at __fp-2,-4,... -> reentrant -> recursion works.
-    Globals keep static storage.
+  * Call frames live on the HARDWARE stack P3 (2026-09-11; before that a
+    software C-stack __csp/__fp in RAM). The caller pushes the arguments right
+    to left with PHW (each lies little-endian at P3+1), JSRs, then drops them
+    with ADDP3. The callee reserves its locals with `SUBP3 #L`. Everything is
+    then a small positive displacement from P3:
+        locals   at P3+1 .. P3+L          (scalars first, arrays/structs above)
+        return address at P3+L+1, +2
+        param i  at P3+L+3+2i
+    and is read/written with LDW/STW/LEAW (P3+d). The compiler tracks the
+    stack depth it has pushed itself (self.sp: PHW spills, pushed args) and
+    adds it to every displacement, so an expression temporary on the stack
+    never moves a local. A displacement over 255 (huge local arrays) takes a
+    slower computed-address path (far_local). Reentrant -> recursion works.
+    On entry the program saves the caller's P3 in __sp0 and, if that P3 is
+    above CSTACKTOP (a normal launch from the OS's small stack), sets P3 =
+    CSTACKTOP-1 so frames grow down from $F800 into the free TPA exactly as
+    the old C-stack did. A P3 already below CSTACKTOP means a NESTED launch
+    (the shell running a script on a C program's stack, e.g. Finder's
+    auto-return chain): then P3 is kept, so the new frames grow beneath the
+    caller's instead of over it. On exit LPW3 __sp0 restores P3 before RTS.
+  * char scalars occupy a 2-byte slot whose high byte is kept ZERO (stores
+    write it, char params are zeroed at entry), so a char local is read with
+    one LDW like an int. Globals keep static storage.
   Types are tracked so pointer arithmetic scales by element size and a
   dereference loads/stores the right width (int/pointer = 2 bytes, char = 1).
 
@@ -65,9 +83,10 @@ baseline; see docs/p8x-isa-c-extensions.md):
     CMPW's Z reflects the high byte only.
   * LPW1 for the P1 setup in bios() / puts(); `LDW __t,#k ; ADDW __ax,__t` for
     member offsets, -e, ~e (65535-e) and the post-call argument drop.
-  * NOT changed: the frame model. Locals/args still live on the software
-    C-stack through __ldw/__stw/__entf; frames on P3 via SUBP3 + LDW/STW (P3+d)
-    is the next, separate step (and needs PHW/PLW's stack byte order flipped).
+  * Frames on P3 (same day, -12.5% more; -40.3% overall): see "Execution
+    model" above -- SUBP3/ADDP3 prologue/epilogue, LDW/STW/LEAW (P3+d) for
+    every local, args PHW'd (little-endian on the stack since the PHW flip)
+    and dropped with ADDP3; the software-frame runtime is gone.
 
 Usage:  p8cc.py prog.c [-o prog.asm]   then  p8xasm.py prog.asm -o prog.bin --base 0x6A00
 """
@@ -386,6 +405,9 @@ class Gen:
         self.used = set()
         self.nl = 0
         self.func = None
+        self.sp = 0           # bytes the compiler has pushed on P3 in the current expression
+        self.frame = 0        # L: bytes of locals reserved by SUBP3 in the current function
+        self.uses_la = False  # far_local scratch words __la/__lb needed
 
     def lbl(self, b="L"): self.nl += 1; return "%s%d" % (b, self.nl)
     def emit(self, *l): self.code.extend(l)
@@ -453,9 +475,51 @@ class Gen:
         sys.exit("p8cc: not an lvalue")
 
     # ---- helpers ------------------------------------------------------------
-    def lea(self, off):                       # P1 = __fp + off (offset inline after JSR)
-        self.need("__lea")
-        self.emit("        JSR __lea", "        .word %d" % (off & 0xFFFF))
+    # ---- frame locals on the hardware stack ---------------------------------
+    # A local's frame offset is fixed; its DISPLACEMENT from P3 right now is that
+    # plus whatever the compiler has pushed since the prologue (self.sp).
+    def local_disp(self, off): return off + self.sp
+    def far_local(self, d):                   # __la = P3 + d, for d > 255 (rare)
+        self.uses_la = True
+        self.emit("        TPA3L", "        STA __la", "        TPA3H", "        STA __la+1")
+        if d <= 255: self.emit("        ADDW __la,#%d" % d)
+        else: self.emit("        LDW __lb,#%d" % d, "        ADDW __la,__lb")
+    def ld_local(self, dst, off):             # dst (word) = the frame slot (chars: zero-high slot)
+        d = self.local_disp(off)
+        if d <= 255: self.emit("        LDW %s,(P3+%d)" % (dst, d)); return
+        self.far_local(d)
+        self.emit("        LPW1 __la", "        LDA (P1)+", "        STA %s" % dst,
+                  "        LDA (P1)", "        STA %s+1" % dst)
+    def st_local(self, off, full):            # frame slot = __ax; full=False: low byte + zero high
+        d = self.local_disp(off)
+        if full:
+            if d <= 255: self.emit("        STW (P3+%d),__ax" % d); return
+            self.far_local(d)
+            self.emit("        LPW1 __la", "        LDA __ax", "        STA (P1)+",
+                      "        LDA __ax+1", "        STA (P1)"); return
+        if d <= 254:
+            self.emit("        LDA __ax", "        STA (P3+%d)" % d,
+                      "        LDA #0", "        STA (P3+%d)" % (d + 1)); return
+        self.far_local(d)
+        self.emit("        LPW1 __la", "        LDA __ax", "        STA (P1)+",
+                  "        LDA #0", "        STA (P1)")
+    def lea_local(self, off):                 # __ax = address of the frame slot
+        d = self.local_disp(off)
+        if d <= 255: self.emit("        LEAW __ax,(P3+%d)" % d); return
+        self.far_local(d); self.mov16("__ax", "__la")
+    def zero_hi_local(self, off):             # slot's high byte := 0 (char params at entry)
+        d = self.local_disp(off) + 1
+        if d <= 255: self.emit("        LDA #0", "        STA (P3+%d)" % d); return
+        self.far_local(d); self.emit("        LPW1 __la", "        LDA #0", "        STA (P1)")
+    def adj_sp(self, n, up):                  # P3 += n (drop) / -= n (reserve), in imm8 chunks
+        self.sp -= n if up else -n
+        while n > 0:
+            k = min(n, 255); n -= k
+            self.emit("        %s #%d" % ("ADDP3" if up else "SUBP3", k))
+    def char_load(self, e):                   # e is a LOAD of a char: its high byte is 0
+        return (self.typeof(e) == ("char", 0) and
+                (e[0] in ("id", "index", "member", "arrow") or
+                 (e[0] == "unary" and e[1] == "*")))
 
     # Tier A: a 16-bit constant into a memory word is ONE instruction -- `LDW a,#n`
     # (4 bytes for 0..255, zero-extended; 5 bytes otherwise; the assembler picks
@@ -469,8 +533,8 @@ class Gen:
 
     def mov16(self, dst, src):                          # 16-bit mem->mem (was LDA/STA x2)
         self.emit("        MOVW %s,%s" % (dst, src))
-    def push_ax(self): self.emit("        PHW __ax")   # 16-bit push (was LDA/PHA/LDA/PHA)
-    def pop_t(self): self.emit("        PLW __t")       # 16-bit pop  (was PLA/STA/PLA/STA)
+    def push_ax(self): self.emit("        PHW __ax"); self.sp += 2   # 16-bit push (tracked)
+    def pop_t(self): self.emit("        PLW __t"); self.sp -= 2       # 16-bit pop
 
     def ax_to_p1(self): self.emit("        LPW1 __ax")   # P1 = word @ __ax (was LDA/TAP1L/LDA/TAP1H)
 
@@ -498,10 +562,8 @@ class Gen:
             base, ptr, count = kind[2], kind[3], kind[4]
             if count:                                  # a global array: its address
                 self.set_word_label("__t", kind[1])
-            elif kind[0] == "l":                       # scalar local: __ldw/__ldb into __t
-                h = "__ldtw" if sizeof(base, ptr) == 2 else "__ldtb"
-                self.need(h)
-                self.emit("        JSR %s" % h, "        .word %d" % (kind[1] & 0xFFFF))
+            elif kind[0] == "l":                       # scalar local: one LDW (P3+d)
+                self.ld_local("__t", kind[1])
             elif sizeof(base, ptr) == 2:
                 self.mov16("__t", kind[1])
             else:
@@ -537,12 +599,8 @@ class Gen:
         k = e[0]
         if k == "id":
             kind = self.vinfo(e[1])
-            if kind[0] == "l":
-                self.lea(kind[1])                       # P1 = __fp+off
-                self.emit("        TPA1L", "        STA __ax",
-                          "        TPA1H", "        STA __ax+1")
-            else:
-                self.set_word_label("__ax", kind[1])
+            if kind[0] == "l": self.lea_local(kind[1])   # __ax = P3 + d (LEAW)
+            else: self.set_word_label("__ax", kind[1])
         elif k == "unary" and e[1] == "*":
             self.gen_expr(e[2])                          # AX = pointer value = address
         elif k == "member":                              # &(x.m) = &x + offset
@@ -578,13 +636,10 @@ class Gen:
             base, ptr, count = kind[2], kind[3], kind[4]
             if count:                                    # array decays to its address
                 self.gen_address(e)
-            elif kind[0] == "l":
-                if sizeof(base, ptr) == 2:               # load local word into AX
-                    self.need("__ldw")
-                    self.emit("        JSR __ldw", "        .word %d" % (kind[1] & 0xFFFF))
-                else:                                    # load local byte (zero-extend)
-                    self.need("__ldb")
-                    self.emit("        JSR __ldb", "        .word %d" % (kind[1] & 0xFFFF))
+            elif kind[0] == "l":                         # local word, or a char's
+                if sizeof(base, ptr) not in (1, 2):      # zero-high 2-byte slot
+                    sys.exit("p8cc: struct/union %r used as a value" % e[1])
+                self.ld_local("__ax", kind[1])
             else:
                 lab = kind[1]
                 if sizeof(base, ptr) == 2:
@@ -659,10 +714,8 @@ class Gen:
             kind = self.vinfo(lhs[1])
             if not kind[4]:                              # count==0: not an array
                 self.gen_expr(rhs)                       # AX = value
-                if kind[0] == "l":                       # local -> __fp+off
-                    h = "__stw" if sz == 2 else "__stb"
-                    self.need(h)
-                    self.emit("        JSR %s" % h, "        .word %d" % (kind[1] & 0xFFFF))
+                if kind[0] == "l":                       # local -> (P3+d); a char slot
+                    self.st_local(kind[1], sz == 2 or self.char_load(rhs))   # keeps hi=0
                 elif sz == 2:                            # global word -> fixed label
                     self.mov16(kind[1], "__ax")          # MOVW lab,__ax
                 else:                                    # global byte
@@ -830,16 +883,15 @@ class Gen:
                       "        STA __ax",                  # returned A -> low byte
                       "        LDA #0", "        JNC %s" % skip, "        LDA #1",
                       "%s:    STA __ax+1" % skip); return  # carry -> bit 8
-        for a in reversed(args):
-            self.gen_expr(a); self.need("__push"); self.emit("        JSR __push")
+        for a in reversed(args):                         # args right to left onto P3:
+            self.gen_expr(a); self.push_ax()             # the leftmost ends nearest SP
         self.emit("        JSR _f_%s" % name)
-        if args:                                         # drop the args: __csp += 2n
-            self.set_word_const("__t", 2 * len(args))    # (Tier A: 9 bytes, was 14;
-            self.emit("        ADDW __csp,__t")          #  __t is dead after a call)
+        if args: self.adj_sp(2 * len(args), up=True)     # drop them: ADDP3 #2n
 
     # ---- statements ---------------------------------------------------------
     def gen_stmt(self, s):
         k = s[0]
+        assert self.sp == 0, "p8cc: unbalanced stack depth %d before a statement" % self.sp
         if k == "block":
             for st in s[1]: self.gen_stmt(st)
         elif k == "decl":
@@ -907,28 +959,39 @@ class Gen:
         return 2                                # scalar/pointer: one 2-byte slot
 
     def compile_func(self, name, params, body):
-        self.func = name; self.locals = {}
-        for i, ((base, ptr, _), pnm) in enumerate(params):
+        self.func = name; self.locals = {}; self.sp = 0
+        pnames = set()
+        for (base, ptr, _), pnm in params:
             if ptr == 0 and base in STRUCTS:
                 sys.exit("p8cc: struct/union passed by value (%r) not supported; "
                          "pass a pointer" % pnm)
-            self.locals[pnm] = (2 + 2 * i, base, ptr, 0)   # params: 2-byte slots
-        loff = 0
+            pnames.add(pnm)
+        # Frame layout (see the header): locals at P3+1.., SCALARS FIRST so the
+        # hot variables always sit inside the 255-byte displacement window and
+        # arrays/structs stack above them; then the return address; then params.
+        seen = set(); scalars = []; aggregates = []
         for d in self.collect_decls(body):
             (base, ptr, count), nm = d[1], d[2]
-            if nm in self.locals: continue
-            loff -= self.local_size(base, ptr, count)
-            self.locals[nm] = (loff, base, ptr, count)
-        localsize = -loff
+            if nm in pnames or nm in seen: continue         # first declaration wins
+            seen.add(nm)
+            (aggregates if (count or (ptr == 0 and base in STRUCTS)) else scalars) \
+                .append((nm, base, ptr, count))
+        off = 1
+        for nm, base, ptr, count in scalars + aggregates:
+            self.locals[nm] = (off, base, ptr, count)
+            off += self.local_size(base, ptr, count)
+        L = off - 1; self.frame = L
+        for i, ((base, ptr, _), pnm) in enumerate(params):
+            self.locals[pnm] = (L + 3 + 2 * i, base, ptr, 0)   # above the return address
         self.emit("_f_%s:" % name)
-        if localsize:                                    # enter + reserve frame
-            self.need("__entf")
-            self.emit("        JSR __entf", "        .word %d" % (localsize & 0xFFFF))
-        else:                                            # no locals -> plain enter
-            self.need("__enter"); self.emit("        JSR __enter")
+        if L: self.adj_sp(L, up=False); self.sp = 0     # SUBP3 #L reserves the locals
+        for (base, ptr, _), pnm in params:               # char params: the caller pushed a
+            if sizeof(base, ptr) == 1:                    # full int -> keep the slot's high
+                self.zero_hi_local(self.locals[pnm][0])  # byte 0 (char semantics)
         self.gen_stmt(body)
         self.emit("_ret_%s:" % name)
-        self.need("__leave"); self.emit("        JSR __leave", "        RTS")
+        if L: self.adj_sp(L, up=True); self.sp = 0       # ADDP3 #L frees them
+        self.emit("        RTS")
 
     def declare_global(self, base, ptr, arr, count, name, init):
         lab = "_g_" + name; esz = sizeof(base, ptr)
@@ -1000,16 +1063,27 @@ class Gen:
             if d[0] == "gvar":
                 _, base, ptr, arr, count, name, init = d
                 self.declare_global(base, ptr, arr, count, name, init)
+        # Startup: keep the caller's stack pointer, run main on a stack growing
+        # down from CSTACKTOP (where the old software C-stack lived), restore, RTS.
+        # Relocate ONLY when the inherited P3 is above CSTACKTOP, i.e. a normal
+        # launch from the OS's 256-byte stack. A program launched while the shell
+        # is already running on a C program's stack (Finder -> SYS_RUNSH -> `run`)
+        # inherits a P3 BELOW CSTACKTOP; moving it up to CSTACKTOP-1 would put our
+        # frames on top of the caller's pending return addresses -- so keep it and
+        # grow down from there instead.
         self.emit("        .org $%04X" % TPA_BASE,
-                  "        LDA #%d" % (CSTACK_TOP & 0xFF), "        STA __csp",
-                  "        LDA #%d" % (CSTACK_TOP >> 8), "        STA __csp+1",
-                  "        JSR _f_main", "        RTS")
+                  "        TPA3L", "        STA __sp0", "        TPA3H", "        STA __sp0+1",
+                  "        LDB #%d" % (CSTACK_TOP >> 8), "        CMP",   # A = P3.hi
+                  "        JNC __sk0",                                    # P3 < CSTACKTOP: nested launch, keep
+                  "        LDP3 #%d" % ((CSTACK_TOP - 1) & 0xFFFF),
+                  "__sk0:  JSR _f_main",
+                  "        LPW3 __sp0", "        RTS")
         for d in decls:
             if d[0] == "func": self.compile_func(d[2], d[3], d[4])
         self.emit_runtime()
         self.emit("__ax:   .fill 2", "__t:    .fill 2", "__c:    .fill 1",
-                  "__fp:   .fill 2", "__csp:  .fill 2", "__off:  .fill 2",
-                  "__ra:   .fill 2")
+                  "__sp0:  .fill 2")
+        if self.uses_la: self.emit("__la:   .fill 2", "__lb:   .fill 2")
         if "__mul" in self.used:
             self.emit("__r:    .fill 2")
         if {"__mul", "__div", "__mod", "__shl", "__shr"} & self.used:
@@ -1091,129 +1165,9 @@ class Gen:
                      "__lt1:  LDA #1", "        JMP __lts",
                      "__lt0:  LDA #0", "__lts:  STA __ax", "        LDA #0",
                      "        STA __ax+1", "        RTS"]
-        R["__push"] = ["__push: LDA __csp", "        LDB #2", "        SUB",
-                       "        STA __csp", "        JC __pu1", "        LDA __csp+1",
-                       "        LDB #1", "        SUB", "        STA __csp+1",
-                       "__pu1:  LDA __csp", "        TAP1L", "        LDA __csp+1",
-                       "        TAP1H", "        LDA __ax", "        STA (P1)+",
-                       "        LDA __ax+1", "        STA (P1)", "        RTS"]
-        R["__enter"] = ["__enter: LDA __csp", "        LDB #2", "        SUB",
-                        "        STA __csp", "        JC __en1", "        LDA __csp+1",
-                        "        LDB #1", "        SUB", "        STA __csp+1",
-                        "__en1:  LDA __csp", "        TAP1L", "        LDA __csp+1",
-                        "        TAP1H", "        LDA __fp", "        STA (P1)+",
-                        "        LDA __fp+1", "        STA (P1)",
-                        "        MOVW __fp,__csp", "        RTS"]
-        # __entf: __enter, then reserve an inline-.word frame of locals (csp -=
-        # size). Folds a function prologue's ~10-instruction inline frame alloc
-        # into `JSR __entf ; .word localsize`. (localsize < 256, as before.)
-        R["__entf"] = ["__entf: PLA", "        TAP1L", "        PLA", "        TAP1H",
-                       "        LDA (P1)+", "        STA __off",
-                       "        LDA (P1)+", "        STA __off+1",
-                       "        TPA1L", "        STA __ra",
-                       "        TPA1H", "        STA __ra+1",
-                       "        LDA __csp", "        LDB #2", "        SUB",
-                       "        STA __csp", "        JC __ef1", "        LDA __csp+1",
-                       "        LDB #1", "        SUB", "        STA __csp+1",
-                       "__ef1:  LDA __csp", "        TAP1L", "        LDA __csp+1",
-                       "        TAP1H", "        LDA __fp", "        STA (P1)+",
-                       "        LDA __fp+1", "        STA (P1)",
-                       "        MOVW __fp,__csp",
-                       "        LDA __csp", "        LDB __off", "        SUB",
-                       "        STA __csp", "        JC __ef2", "        LDA __csp+1",
-                       "        LDB #1", "        SUB", "        STA __csp+1",
-                       "__ef2:  LDA __ra+1", "        PHA", "        LDA __ra", "        PHA",
-                       "        RTS"]
-        R["__leave"] = ["__leave: MOVW __csp,__fp",
-                        "        LDA __csp", "        TAP1L",
-                        "        LDA __csp+1", "        TAP1H", "        LDA (P1)+",
-                        "        STA __fp", "        LDA (P1)", "        STA __fp+1",
-                        "        LDA __csp", "        LDB #2", "        ADD",
-                        "        STA __csp", "        JNC __lv1", "        LDA __csp+1",
-                        "        INC", "        STA __csp+1", "__lv1:  RTS"]
-        # P1 = __fp + (inline .word offset after the JSR). Pop the return PC into
-        # P1, read the 2-byte offset there into __off, save retPC+2 in __ra, do the
-        # 16-bit add into P1, then push retPC+2 back so RTS skips the inline word.
-        R["__lea"] = ["__lea:  PLA", "        TAP1L", "        PLA", "        TAP1H",
-                      "        LDA (P1)+", "        STA __off",
-                      "        LDA (P1)+", "        STA __off+1",
-                      "        TPA1L", "        STA __ra",
-                      "        TPA1H", "        STA __ra+1",
-                      "        LDA __fp", "        LDB __off", "        ADD",
-                      "        STA __t", "        LDA #0", "        JNC __la1",
-                      "        LDA #1", "__la1:  STA __c", "        LDA __fp+1",
-                      "        LDB __off+1", "        ADD", "        LDB __c",
-                      "        ADD", "        STA __t+1", "        LDA __t",
-                      "        TAP1L", "        LDA __t+1", "        TAP1H",
-                      "        LDA __ra+1", "        PHA", "        LDA __ra", "        PHA",
-                      "        RTS"]
-        # __ldw/__ldb: like __lea (P1 = __fp + inline offset), but then load the
-        # word/byte at P1 into __ax — folding the 4-instruction load into the call
-        # so a local read is one `JSR __ldw ; .word off` instead of lea + 4 loads.
-        R["__ldw"] = ["__ldw:  PLA", "        TAP1L", "        PLA", "        TAP1H",
-                      "        LDA (P1)+", "        STA __off",
-                      "        LDA (P1)+", "        STA __off+1",
-                      "        TPA1L", "        STA __ra",
-                      "        TPA1H", "        STA __ra+1",
-                      "        LDA __fp", "        LDB __off", "        ADD",
-                      "        STA __t", "        LDA #0", "        JNC __ldw1",
-                      "        LDA #1", "__ldw1: STA __c", "        LDA __fp+1",
-                      "        LDB __off+1", "        ADD", "        LDB __c",
-                      "        ADD", "        STA __t+1", "        LDA __t",
-                      "        TAP1L", "        LDA __t+1", "        TAP1H",
-                      "        LDA (P1)+", "        STA __ax",
-                      "        LDA (P1)", "        STA __ax+1",
-                      "        LDA __ra+1", "        PHA", "        LDA __ra", "        PHA",
-                      "        RTS"]
-        R["__ldb"] = ["__ldb:  PLA", "        TAP1L", "        PLA", "        TAP1H",
-                      "        LDA (P1)+", "        STA __off",
-                      "        LDA (P1)+", "        STA __off+1",
-                      "        TPA1L", "        STA __ra",
-                      "        TPA1H", "        STA __ra+1",
-                      "        LDA __fp", "        LDB __off", "        ADD",
-                      "        STA __t", "        LDA #0", "        JNC __ldb1",
-                      "        LDA #1", "__ldb1: STA __c", "        LDA __fp+1",
-                      "        LDB __off+1", "        ADD", "        LDB __c",
-                      "        ADD", "        STA __t+1", "        LDA __t",
-                      "        TAP1L", "        LDA __t+1", "        TAP1H",
-                      "        LDA (P1)", "        STA __ax",
-                      "        LDA #0", "        STA __ax+1",
-                      "        LDA __ra+1", "        PHA", "        LDA __ra", "        PHA",
-                      "        RTS"]
-        # __ldtw/__ldtb: __ldw/__ldb but the value lands in __t, __ax untouched. For
-        # a leaf LEFT operand loaded AFTER the right side is already in __ax
-        # (gen_operands) -- the thing that removes the PHW/PLW spill. __t is the
-        # address scratch first, then takes the value (P1 holds the address by then).
-        R["__ldtw"] = ["__ldtw: PLA", "        TAP1L", "        PLA", "        TAP1H",
-                       "        LDA (P1)+", "        STA __off",
-                       "        LDA (P1)+", "        STA __off+1",
-                       "        TPA1L", "        STA __ra",
-                       "        TPA1H", "        STA __ra+1",
-                       "        LDA __fp", "        LDB __off", "        ADD",
-                       "        STA __t", "        LDA #0", "        JNC __ldtw1",
-                       "        LDA #1", "__ldtw1: STA __c", "        LDA __fp+1",
-                       "        LDB __off+1", "        ADD", "        LDB __c",
-                       "        ADD", "        STA __t+1", "        LDA __t",
-                       "        TAP1L", "        LDA __t+1", "        TAP1H",
-                       "        LDA (P1)+", "        STA __t",
-                       "        LDA (P1)", "        STA __t+1",
-                       "        LDA __ra+1", "        PHA", "        LDA __ra", "        PHA",
-                       "        RTS"]
-        R["__ldtb"] = ["__ldtb: PLA", "        TAP1L", "        PLA", "        TAP1H",
-                       "        LDA (P1)+", "        STA __off",
-                       "        LDA (P1)+", "        STA __off+1",
-                       "        TPA1L", "        STA __ra",
-                       "        TPA1H", "        STA __ra+1",
-                       "        LDA __fp", "        LDB __off", "        ADD",
-                       "        STA __t", "        LDA #0", "        JNC __ldtb1",
-                       "        LDA #1", "__ldtb1: STA __c", "        LDA __fp+1",
-                       "        LDB __off+1", "        ADD", "        LDB __c",
-                       "        ADD", "        STA __t+1", "        LDA __t",
-                       "        TAP1L", "        LDA __t+1", "        TAP1H",
-                       "        LDA (P1)", "        STA __t",
-                       "        LDA #0", "        STA __t+1",
-                       "        LDA __ra+1", "        PHA", "        LDA __ra", "        PHA",
-                       "        RTS"]
+        # (The software-frame runtime -- __push/__enter/__entf/__leave/__lea/
+        # __ldw/__ldb/__ldtw/__ldtb/__stw/__stb -- is gone: frames live on P3 and
+        # every local access is one LDW/STW/LEAW (P3+d) instruction, 2026-09-11.)
         # __cmp16: compare __t (left) with __ax (right) as 16-bit UNSIGNED and leave
         # the FLAGS for a direct branch: C = left>=right, Z = left==right. High bytes
         # first; only when they are equal does the low-byte compare decide -- so C
@@ -1222,38 +1176,6 @@ class Gen:
         R["__cmp16"] = ["__cmp16: LDA __t+1", "        LDB __ax+1", "        CMP",
                         "        JNZ __cmp16r", "        LDA __t", "        LDB __ax",
                         "        CMP", "__cmp16r: RTS"]
-        # __stw/__stb: like __lea, then store __ax (the value) at __fp+off. __ax is
-        # left intact so `a = b` yields the value. Turns a local store from
-        # gen_address+ax_to_p1+pop into one `JSR __stw ; .word off`.
-        R["__stw"] = ["__stw:  PLA", "        TAP1L", "        PLA", "        TAP1H",
-                      "        LDA (P1)+", "        STA __off",
-                      "        LDA (P1)+", "        STA __off+1",
-                      "        TPA1L", "        STA __ra",
-                      "        TPA1H", "        STA __ra+1",
-                      "        LDA __fp", "        LDB __off", "        ADD",
-                      "        STA __t", "        LDA #0", "        JNC __stw1",
-                      "        LDA #1", "__stw1: STA __c", "        LDA __fp+1",
-                      "        LDB __off+1", "        ADD", "        LDB __c",
-                      "        ADD", "        STA __t+1", "        LDA __t",
-                      "        TAP1L", "        LDA __t+1", "        TAP1H",
-                      "        LDA __ax", "        STA (P1)+",
-                      "        LDA __ax+1", "        STA (P1)",
-                      "        LDA __ra+1", "        PHA", "        LDA __ra", "        PHA",
-                      "        RTS"]
-        R["__stb"] = ["__stb:  PLA", "        TAP1L", "        PLA", "        TAP1H",
-                      "        LDA (P1)+", "        STA __off",
-                      "        LDA (P1)+", "        STA __off+1",
-                      "        TPA1L", "        STA __ra",
-                      "        TPA1H", "        STA __ra+1",
-                      "        LDA __fp", "        LDB __off", "        ADD",
-                      "        STA __t", "        LDA #0", "        JNC __stb1",
-                      "        LDA #1", "__stb1: STA __c", "        LDA __fp+1",
-                      "        LDB __off+1", "        ADD", "        LDB __c",
-                      "        ADD", "        STA __t+1", "        LDA __t",
-                      "        TAP1L", "        LDA __t+1", "        TAP1H",
-                      "        LDA __ax", "        STA (P1)",
-                      "        LDA __ra+1", "        PHA", "        LDA __ra", "        PHA",
-                      "        RTS"]
         R["__and"] = ["__and:  LDA __t", "        LDB __ax", "        AND",
                       "        STA __ax", "        LDA __t+1", "        LDB __ax+1",
                       "        AND", "        STA __ax+1", "        RTS"]
@@ -1280,8 +1202,7 @@ class Gen:
                       "        JMP __shr_l", "__shr_e: RTS"]
         order = ["__add", "__sub", "__mul", "__div", "__mod", "__divmod",
                  "__and", "__or", "__xor", "__shl", "__shr",
-                 "__not", "__eq", "__lt", "__cmp16", "__push", "__enter", "__entf", "__leave",
-                 "__lea", "__ldw", "__ldb", "__ldtw", "__ldtb", "__stw", "__stb"]
+                 "__not", "__eq", "__lt", "__cmp16"]
         want = set(self.used)
         if {"__div", "__mod"} & want: want.add("__divmod")
         for h in order:
