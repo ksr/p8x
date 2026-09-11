@@ -76,7 +76,13 @@ pseudo-accumulator `AX`** (the memory word `__ax`). The hardware stack (`P3`)
 holds expression temporaries (`PHA`/`PLA`) and call return addresses
 (`JSR`/`RTS`). Binary operators compile to small **runtime helper calls**
 (`__add`, `__sub`, `__mul`, `__eq`, `__lt`, `__not`) so the generated code stays
-compact; only the helpers a program actually uses are emitted.
+compact; only the helpers a program actually uses are emitted. Two size levers
+(2026-09-11, −15.1% across `/bin`): a **leaf operand** (constant, string, global,
+scalar local) on one side of a binary op is loaded straight into the helper's
+`__t` input instead of being spilled through the stack, and **conditions branch
+directly on the flags** of a 16-bit compare (`__cmp16`, unsigned like the value
+helpers) rather than materialising a 0/1 and re-testing it. Measure any codegen
+change with `sh tools/p8cc_sizes.sh`.
 
 **Calling convention / frames.** A separate **software C-stack** (`__csp`, grows
 down from `$F800`) holds call frames; `__fp` is the frame pointer. A caller

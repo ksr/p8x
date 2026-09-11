@@ -36,4 +36,5 @@
 - [ASM is the /bin default](feedback_p8x_bin_layout.md) — since 2026-08-20: /bin = asm twins (PATH default), /binc = C builds, /bina gone; new commands follow this split
 - [XT card is a separate project](feedback_xt_card_separate.md) — own git repo; first use targets a DIFFERENT computer, not P8X; never commit/sweep its files in p8x work
 - [De-built-in commands → /bin](project_p8x_debuiltin.md) — moving self-contained shell built-ins out of the OS to free budget; del+help DONE (~1.5KB, C+asm twins); mkdir tried+REVERTED (bootstrap primitive); no clean candidates left; per-move checklist + gotchas inside
+- [p8cc runtime `order` gate](reference_p8cc_runtime_order.md) — emit_runtime only emits helpers listed in `order`; new __helper missing from it = "undefined symbol" in every /bin command; size benchmark = `sh tools/p8cc_sizes.sh`; __cmp16 compares stay UNSIGNED on purpose
 - [Rename = repo-wide doc grep](feedback_p8x_rename_doc_sweep.md) — before committing any rename/retirement, grep the WHOLE repo for the old name; distant READMEs/GLOSSARY drift silently (dated design-history notes exempt)

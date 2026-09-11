@@ -942,6 +942,21 @@ Nothing below has been built or measured.
       a `genucode.OPC` entry). Complements the codegen-improvement and asm-rewrite
       items — an ISA-level win that helps every compiled program at once.
 
+      **Compiler-only wins DONE first (2026-09-11, `p8cc.py`, full suite green):**
+      before touching the ISA, the two biggest codegen idioms were fixed in the
+      compiler alone — (a) **leaf operands load straight into `__t`**
+      (`gen_operands`/`gen_leaf_t`: a constant/global/scalar-local on one side
+      of a binary op no longer costs a `PHW`/`PLW` spill pair), (b) **conditions
+      branch directly on compare flags** (`gen_cond` + `__cmp16`: one
+      `JC/JNC/JZ/JNZ` per relation in `if`/`while`/`for`/`&&`/`||`/`!`, no 0/1
+      materialised then re-tested; global scalars tested in place). Measured
+      with the new `tools/p8cc_sizes.sh` over ALL 45 /bin C commands:
+      **627,172 → 532,728 bytes (−94,444, −15.1%)**, best `del`/`awk` −23.6%,
+      `finder` −18%. Compares stay UNSIGNED on purpose (see docs/memory).
+      **Remaining:** port both levers to the self-hosting compilers
+      (`compiler/p8cc.c`, `apps/p8xcc.asm`) so on-target `cc` builds shrink too;
+      the ISA sketch that follows is in `docs/p8x-isa-c-extensions.md` (PROPOSAL).
+
       **Data-driven priority (measured on 5 compiled commands, 19,897 instrs):**
         - **Done — the move idioms (the big win):** `PHW`/`PLW` + `LPW1`/`LPW2`
           (pure microcode, −15.3%) and now **`MOVW`** (the mem→mem move, adds the

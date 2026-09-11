@@ -37,6 +37,21 @@ Execution model
   Types are tracked so pointer arithmetic scales by element size and a
   dereference loads/stores the right width (int/pointer = 2 bytes, char = 1).
 
+Codegen size levers (2026-09-11, -15.1% across the 45 /bin commands):
+  * gen_operands: a binary op whose left operand is a LEAF (constant, string,
+    global, scalar local) evaluates the RIGHT side into __ax first, then loads
+    the leaf straight into __t (gen_leaf_t) -- no PHW/PLW spill pair. For a
+    commutative op (+ * & | ^ == !=) with no pointer scaling a leaf on the
+    right is loaded the same way; the general case still spills through P3.
+  * gen_cond: if/while/for/&&/||/! conditions branch DIRECTLY on the flags of
+    a 16-bit compare (__cmp16: high bytes, then low) instead of materialising
+    a 0/1 in __ax and testing it: one JC/JNC/JZ/JNZ per relation, with the
+    polarity folded (RELOPS table). Compares are UNSIGNED, as the value-
+    producing __lt/__gt helpers always were (int is used as unsigned; see
+    docs/memory). A global scalar in a condition is tested in place.
+  * Runtime helpers are only emitted if named in emit_runtime's `order` list.
+  Measure with `sh tools/p8cc_sizes.sh` (per-command bytes + TOTAL).
+
 Usage:  p8cc.py prog.c [-o prog.asm]   then  p8xasm.py prog.asm -o prog.bin --base 0x6A00
 """
 import sys, os
@@ -437,6 +452,60 @@ class Gen:
 
     def ax_to_p1(self): self.emit("        LPW1 __ax")   # P1 = word @ __ax (was LDA/TAP1L/LDA/TAP1H)
 
+    # ---- leaf operands: straight into __t, skipping the PHW/PLW spill -----------
+    # Every binary helper computes  __t OP __ax  (left in __t, right in __ax). The
+    # old idiom evaluated the left into __ax, PUSHED it, evaluated the right, then
+    # POPPED the left into __t: 6 bytes and two stack round-trips per operator. When
+    # a side is a LEAF (a constant, a string, a scalar variable, a global array's
+    # address) it can be loaded into __t directly, after the other side is already
+    # sitting in __ax -- so: right side first (it may clobber __t), leaf last.
+    COMMUTATIVE = ("+", "*", "&", "|", "^", "==", "!=")
+    def is_leaf(self, e):
+        if e[0] in ("num", "str"): return True
+        if e[0] != "id": return False
+        kind = self.vinfo(e[1])
+        return kind[0] == "g" or not kind[4]      # any global; a local only if scalar
+    def gen_leaf_t(self, e):                          # __t = value of a leaf
+        k = e[0]
+        if k == "num":
+            v = e[1] & 0xFFFF
+            self.emit("        LDA #%d" % (v & 0xFF), "        STA __t",
+                      "        LDA #%d" % (v >> 8), "        STA __t+1")
+        elif k == "str":
+            lab = self.string(e[1])
+            self.emit("        LDA #<%s" % lab, "        STA __t",
+                      "        LDA #>%s" % lab, "        STA __t+1")
+        else:
+            kind = self.vinfo(e[1])
+            base, ptr, count = kind[2], kind[3], kind[4]
+            if count:                                  # a global array: its address
+                self.emit("        LDA #<%s" % kind[1], "        STA __t",
+                          "        LDA #>%s" % kind[1], "        STA __t+1")
+            elif kind[0] == "l":                       # scalar local: __ldw/__ldb into __t
+                h = "__ldtw" if sizeof(base, ptr) == 2 else "__ldtb"
+                self.need(h)
+                self.emit("        JSR %s" % h, "        .word %d" % (kind[1] & 0xFFFF))
+            elif sizeof(base, ptr) == 2:
+                self.mov16("__t", kind[1])
+            else:
+                self.emit("        LDA %s" % kind[1], "        STA __t",
+                          "        LDA #0", "        STA __t+1")
+    def gen_operands(self, op, lhs, rhs, scale=0):
+        """Leave lhs in __t and rhs (scaled by `scale` if 2) in __ax for a helper.
+        Uses the direct-leaf path when it can; the push/pop spill only otherwise."""
+        def scale_ax():
+            if scale == 2:
+                self.emit("        LDA __ax", "        SHL", "        STA __ax",
+                          "        LDA __ax+1", "        ROL", "        STA __ax+1")
+        if self.is_leaf(lhs):                         # right first, leaf into __t last
+            self.gen_expr(rhs); scale_ax(); self.gen_leaf_t(lhs)
+        elif scale == 0 and op in self.COMMUTATIVE and self.is_leaf(rhs):
+            self.gen_expr(lhs); self.gen_leaf_t(rhs)  # operands swapped: op commutes
+        else:
+            self.gen_expr(lhs); self.push_ax()
+            self.gen_expr(rhs); scale_ax()
+            self.pop_t()
+
     def add_const_ax(self, off):              # AX += off (16-bit constant)
         off &= 0xFFFF
         if off == 0: return
@@ -468,16 +537,9 @@ class Gen:
         elif k == "arrow":                               # &(p->m) = p + offset
             off = self.struct_member(self.member_tag(e), e[2])[0]
             self.gen_expr(e[1]); self.add_const_ax(off)
-        elif k == "index":
-            self.gen_expr(e[1]); self.push_ax()          # base address
-            self.gen_expr(e[2])                          # index
-            esz = sizeof(*self.typeof(e[1]))             # element size (sizeof of decayed-pointer? )
-            # typeof(e[1]) is a pointer (b,p); element size = sizeof(b, p-1)
-            b, p = self.typeof(e[1]); esz = sizeof(b, p - 1)
-            if esz == 2:
-                self.emit("        LDA __ax", "        SHL", "        STA __ax",
-                          "        LDA __ax+1", "        ROL", "        STA __ax+1")
-            self.pop_t()                                 # __t = base
+        elif k == "index":                               # &a[i] = base + i*elemsize
+            b, p = self.typeof(e[1]); esz = sizeof(b, p - 1)   # typeof is the decayed ptr
+            self.gen_operands("+", e[1], e[2], 2 if esz == 2 else 0)   # __t=base __ax=i
             self.need("__add"); self.emit("        JSR __add")
         else:
             sys.exit("p8cc: not an lvalue")
@@ -599,41 +661,85 @@ class Gen:
                 a, b = b, a                               # commute so pointer is left
                 scale = sizeof(rt[0], rt[1] - 1)
         lhs, rhs = (b, a) if swap else (a, b)
-        self.gen_expr(lhs); self.push_ax()
-        self.gen_expr(rhs)
-        if scale == 2:                                    # scale the right (int) operand
-            self.emit("        LDA __ax", "        SHL", "        STA __ax",
-                      "        LDA __ax+1", "        ROL", "        STA __ax+1")
-        self.pop_t()
+        self.gen_operands(op, lhs, rhs, scale)            # __t = lhs, __ax = rhs (scaled)
         self.need(helper); self.emit("        JSR %s" % helper)
         if neg:
             self.need("__not"); self.emit("        JSR __not")
 
-    def gen_logand(self, a, b):                          # short-circuit && -> 0/1
-        false = self.lbl("Land0"); end = self.lbl("Lande")
-        self.gen_expr(a)
-        self.emit("        LDA __ax", "        LDB __ax+1", "        OR",
-                  "        JZ %s" % false)
-        self.gen_expr(b)
-        self.emit("        LDA __ax", "        LDB __ax+1", "        OR",
-                  "        JZ %s" % false,
-                  "        LDA #1", "        STA __ax", "        LDA #0",
+    def gen_logand(self, a, b):                          # && as a 0/1 VALUE
+        f = self.lbl("Land0"); end = self.lbl("Lande")
+        self.gen_cond(a, f, False); self.gen_cond(b, f, False)
+        self.emit("        LDA #1", "        STA __ax", "        LDA #0",
                   "        STA __ax+1", "        JMP %s" % end,
-                  "%s:    LDA #0" % false, "        STA __ax", "        STA __ax+1",
+                  "%s:    LDA #0" % f, "        STA __ax", "        STA __ax+1",
                   "%s:" % end)
 
-    def gen_logor(self, a, b):                           # short-circuit || -> 0/1
-        true = self.lbl("Lor1"); end = self.lbl("Lore")
-        self.gen_expr(a)
-        self.emit("        LDA __ax", "        LDB __ax+1", "        OR",
-                  "        JNZ %s" % true)
-        self.gen_expr(b)
-        self.emit("        LDA __ax", "        LDB __ax+1", "        OR",
-                  "        JNZ %s" % true,
-                  "        LDA #0", "        STA __ax", "        STA __ax+1",
+    def gen_logor(self, a, b):                           # || as a 0/1 VALUE
+        t = self.lbl("Lor1"); end = self.lbl("Lore")
+        self.gen_cond(a, t, True); self.gen_cond(b, t, True)
+        self.emit("        LDA #0", "        STA __ax", "        STA __ax+1",
                   "        JMP %s" % end,
-                  "%s:    LDA #1" % true, "        STA __ax", "        LDA #0",
+                  "%s:    LDA #1" % t, "        STA __ax", "        LDA #0",
                   "        STA __ax+1", "%s:" % end)
+
+    # ---- conditions: branch on the truth of an expression, no 0/1 in __ax --------
+    # `if (a < b)` used to be: spill, JSR __lt (builds a 0/1 word), OR, JZ -- 16
+    # bytes and a runtime call. A comparison in CONDITION context now emits its two
+    # operands (leaf path when possible), `JSR __cmp16` (which leaves the FLAGS:
+    # C = left>=right unsigned, Z = left==right) and ONE direct branch: 6 bytes.
+    # `<` stays UNSIGNED, exactly as __lt was -- p8cc's int is used as unsigned and
+    # that ordering is load-bearing (a signed `<` once shipped a buffer overflow).
+    # && / || / ! short-circuit through the same path.
+    RELOPS = {"<": (False, False), ">": (True, False), "<=": (True, True),
+              ">=": (False, True), "==": (False, False), "!=": (False, True)}
+    def gen_cond(self, e, label, when):
+        """Jump to label if (truth of e) == when, else fall through."""
+        k = e[0]
+        if k == "bin" and e[1] in self.RELOPS:
+            swap, neg = self.RELOPS[e[1]]
+            a, b = e[2], e[3]
+            lhs, rhs = (b, a) if swap else (a, b)
+            self.gen_operands(e[1], lhs, rhs, 0)      # __t = lhs, __ax = rhs
+            self.need("__cmp16"); self.emit("        JSR __cmp16")
+            if e[1] in ("==", "!="):                  # truth = Z (==) or !Z (!=)
+                jz = ((e[1] == "==") == when)
+                self.emit("        %s %s" % ("JZ" if jz else "JNZ", label))
+            else:                                     # truth = (lhs<rhs) xor neg = (C==neg)
+                jc = (neg == when)
+                self.emit("        %s %s" % ("JC" if jc else "JNC", label))
+            return
+        if k == "unary" and e[1] == "!":
+            self.gen_cond(e[2], label, not when); return
+        if k == "logand":
+            if not when:
+                self.gen_cond(e[1], label, False); self.gen_cond(e[2], label, False)
+            else:
+                f = self.lbl("Lca")
+                self.gen_cond(e[1], f, False); self.gen_cond(e[2], label, True)
+                self.emit("%s:" % f)
+            return
+        if k == "logor":
+            if when:
+                self.gen_cond(e[1], label, True); self.gen_cond(e[2], label, True)
+            else:
+                t = self.lbl("Lco")
+                self.gen_cond(e[1], t, True); self.gen_cond(e[2], label, False)
+                self.emit("%s:" % t)
+            return
+        if k == "id":                                     # a global scalar: test in place
+            kind = self.vinfo(e[1])
+            base, ptr, count = kind[2], kind[3], kind[4]
+            if kind[0] == "g" and not count:
+                j = "JNZ" if when else "JZ"
+                if sizeof(base, ptr) == 2:
+                    self.emit("        LDA %s" % kind[1], "        LDB %s+1" % kind[1],
+                              "        OR", "        %s %s" % (j, label))
+                else:
+                    self.emit("        LDA %s" % kind[1], "        %s %s" % (j, label))
+                return
+        self.gen_expr(e)                                  # general case: value, then test
+        self.emit("        LDA __ax", "        LDB __ax+1", "        OR",
+                  "        %s %s" % ("JNZ" if when else "JZ", label))
 
     def gen_call(self, name, args):
         if name == "getchar":                            # OS SYS_GETC -> char, or -1 at EOF
@@ -701,9 +807,7 @@ class Gen:
             self.emit("        JMP _ret_%s" % self.func)
         elif k == "if":
             els = self.lbl("Lelse"); end = self.lbl("Lend")
-            self.gen_expr(s[1])
-            self.emit("        LDA __ax", "        LDB __ax+1", "        OR",
-                      "        JZ %s" % (els if s[3] else end))
+            self.gen_cond(s[1], els if s[3] else end, False)
             self.gen_stmt(s[2])
             if s[3]:
                 self.emit("        JMP %s" % end, "%s:" % els)
@@ -712,9 +816,7 @@ class Gen:
         elif k == "while":
             top = self.lbl("Ltop"); end = self.lbl("Lend")
             self.emit("%s:" % top)
-            self.gen_expr(s[1])
-            self.emit("        LDA __ax", "        LDB __ax+1", "        OR",
-                      "        JZ %s" % end)
+            self.gen_cond(s[1], end, False)
             self.gen_stmt(s[2])
             self.emit("        JMP %s" % top, "%s:" % end)
         elif k == "for":                                  # for(init; cond; post) body
@@ -722,10 +824,7 @@ class Gen:
             top = self.lbl("Ltop"); end = self.lbl("Lend")
             if init is not None: self.gen_expr(init)
             self.emit("%s:" % top)
-            if cond is not None:
-                self.gen_expr(cond)
-                self.emit("        LDA __ax", "        LDB __ax+1", "        OR",
-                          "        JZ %s" % end)
+            if cond is not None: self.gen_cond(cond, end, False)
             self.gen_stmt(body)
             if post is not None: self.gen_expr(post)
             self.emit("        JMP %s" % top, "%s:" % end)
@@ -1033,6 +1132,48 @@ class Gen:
                       "        LDA #0", "        STA __ax+1",
                       "        LDA __ra+1", "        PHA", "        LDA __ra", "        PHA",
                       "        RTS"]
+        # __ldtw/__ldtb: __ldw/__ldb but the value lands in __t, __ax untouched. For
+        # a leaf LEFT operand loaded AFTER the right side is already in __ax
+        # (gen_operands) -- the thing that removes the PHW/PLW spill. __t is the
+        # address scratch first, then takes the value (P1 holds the address by then).
+        R["__ldtw"] = ["__ldtw: PLA", "        TAP1L", "        PLA", "        TAP1H",
+                       "        LDA (P1)+", "        STA __off",
+                       "        LDA (P1)+", "        STA __off+1",
+                       "        TPA1L", "        STA __ra",
+                       "        TPA1H", "        STA __ra+1",
+                       "        LDA __fp", "        LDB __off", "        ADD",
+                       "        STA __t", "        LDA #0", "        JNC __ldtw1",
+                       "        LDA #1", "__ldtw1: STA __c", "        LDA __fp+1",
+                       "        LDB __off+1", "        ADD", "        LDB __c",
+                       "        ADD", "        STA __t+1", "        LDA __t",
+                       "        TAP1L", "        LDA __t+1", "        TAP1H",
+                       "        LDA (P1)+", "        STA __t",
+                       "        LDA (P1)", "        STA __t+1",
+                       "        LDA __ra+1", "        PHA", "        LDA __ra", "        PHA",
+                       "        RTS"]
+        R["__ldtb"] = ["__ldtb: PLA", "        TAP1L", "        PLA", "        TAP1H",
+                       "        LDA (P1)+", "        STA __off",
+                       "        LDA (P1)+", "        STA __off+1",
+                       "        TPA1L", "        STA __ra",
+                       "        TPA1H", "        STA __ra+1",
+                       "        LDA __fp", "        LDB __off", "        ADD",
+                       "        STA __t", "        LDA #0", "        JNC __ldtb1",
+                       "        LDA #1", "__ldtb1: STA __c", "        LDA __fp+1",
+                       "        LDB __off+1", "        ADD", "        LDB __c",
+                       "        ADD", "        STA __t+1", "        LDA __t",
+                       "        TAP1L", "        LDA __t+1", "        TAP1H",
+                       "        LDA (P1)", "        STA __t",
+                       "        LDA #0", "        STA __t+1",
+                       "        LDA __ra+1", "        PHA", "        LDA __ra", "        PHA",
+                       "        RTS"]
+        # __cmp16: compare __t (left) with __ax (right) as 16-bit UNSIGNED and leave
+        # the FLAGS for a direct branch: C = left>=right, Z = left==right. High bytes
+        # first; only when they are equal does the low-byte compare decide -- so C
+        # and Z are both right for the full 16 bits. Replaces __lt + __not + OR/JZ in
+        # condition context (gen_cond). Unsigned on purpose, matching __lt.
+        R["__cmp16"] = ["__cmp16: LDA __t+1", "        LDB __ax+1", "        CMP",
+                        "        JNZ __cmp16r", "        LDA __t", "        LDB __ax",
+                        "        CMP", "__cmp16r: RTS"]
         # __stw/__stb: like __lea, then store __ax (the value) at __fp+off. __ax is
         # left intact so `a = b` yields the value. Turns a local store from
         # gen_address+ax_to_p1+pop into one `JSR __stw ; .word off`.
@@ -1091,8 +1232,8 @@ class Gen:
                       "        JMP __shr_l", "__shr_e: RTS"]
         order = ["__add", "__sub", "__mul", "__div", "__mod", "__divmod",
                  "__and", "__or", "__xor", "__shl", "__shr",
-                 "__not", "__eq", "__lt", "__push", "__enter", "__entf", "__leave",
-                 "__lea", "__ldw", "__ldb", "__stw", "__stb"]
+                 "__not", "__eq", "__lt", "__cmp16", "__push", "__enter", "__entf", "__leave",
+                 "__lea", "__ldw", "__ldb", "__ldtw", "__ldtb", "__stw", "__stb"]
         want = set(self.used)
         if {"__div", "__mod"} & want: want.add("__divmod")
         for h in order:
