@@ -87,6 +87,15 @@ baseline; see docs/p8x-isa-c-extensions.md):
     model" above -- SUBP3/ADDP3 prologue/epilogue, LDW/STW/LEAW (P3+d) for
     every local, args PHW'd (little-endian on the stack since the PHW flip)
     and dropped with ADDP3; the software-frame runtime is gone.
+  * Relative branches (same day, -1.5% more): the output starts with `.relax`
+    so the assembler encodes every in-range JMP/Jcc as the 2-byte form.
+  * Narrow values + peephole (same day, -7.6% more; -45.6% overall): a char
+    load or byte constant (is_narrow) goes straight into A (gen_byte_a) for
+    putchar, bios()'s A operand, byte stores, truth tests and 8-bit CMP
+    compares between two narrow operands (same C/Z sense as __cmp16); __b is
+    the scratch byte when the source needs the address scratch. peephole()
+    then drops reload-after-store, jump-to-next-line and shortens `LDW #k` +
+    `LDA __ax`, looking only at adjacent lines with no label between.
 
 Usage:  p8cc.py prog.c [-o prog.asm]   then  p8xasm.py prog.asm -o prog.bin --base 0x6A00
 """
@@ -408,6 +417,7 @@ class Gen:
         self.sp = 0           # bytes the compiler has pushed on P3 in the current expression
         self.frame = 0        # L: bytes of locals reserved by SUBP3 in the current function
         self.uses_la = False  # far_local scratch words __la/__lb needed
+        self.uses_b = False   # narrow-value scratch byte __b needed
 
     def lbl(self, b="L"): self.nl += 1; return "%s%d" % (b, self.nl)
     def emit(self, *l): self.code.extend(l)
@@ -520,6 +530,43 @@ class Gen:
         return (self.typeof(e) == ("char", 0) and
                 (e[0] in ("id", "index", "member", "arrow") or
                  (e[0] == "unary" and e[1] == "*")))
+
+    # ---- narrow (8-bit) values --------------------------------------------------
+    # A char load or a byte-sized constant does not need the 16-bit pseudo-
+    # accumulator when its consumer only wants a byte: putchar, the A operand of
+    # bios(), a byte store, a truth test, or a compare against another narrow
+    # value. Those consumers take the value in A straight from a 1-3 byte load
+    # and skip the `STA __ax / LDA #0 / STA __ax+1` zero-extension (and, for a
+    # compare, the __t load and the 16-bit helper). An 8-bit unsigned CMP of two
+    # zero-extended bytes orders exactly like the 16-bit compare, so the branch
+    # polarity is the same as after __cmp16.
+    def is_narrow(self, e):
+        if e[0] == "num": return 0 <= (e[1] & 0xFFFF) <= 255
+        return self.char_load(e)
+    def simple_narrow(self, e):               # loadable into A without touching P1/__ax
+        return e[0] == "num" or (e[0] == "id" and self.char_load(e))
+    def gen_byte_a(self, e):
+        """A = the byte value of a narrow expression (Z/N set by the load).
+        May use P1 and __ax as scratch for the address of an indexed/member/
+        dereferenced char; a simple_narrow() source touches neither."""
+        k = e[0]
+        if k == "num": self.emit("        LDA #%d" % (e[1] & 0xFF)); return
+        if k == "id":
+            kind = self.vinfo(e[1])
+            if kind[0] == "g": self.emit("        LDA %s" % kind[1]); return
+            d = self.local_disp(kind[1])
+            if d <= 255: self.emit("        LDA (P3+%d)" % d); return
+            self.far_local(d); self.emit("        LPW1 __la", "        LDA (P1)"); return
+        if k == "unary": self.gen_expr(e[2])           # *p: the pointer value
+        else: self.gen_address(e)                     # a[i], x.m, p->m: the address
+        self.ax_to_p1(); self.emit("        LDA (P1)")
+    def byte_a_via_b(self, e):
+        """A = narrow e, computed FIRST and parked in __b when it needs the
+        address scratch, so a following address computation can't disturb it.
+        Returns the lines that reload it into A afterwards."""
+        if self.simple_narrow(e): return None
+        self.gen_byte_a(e); self.uses_b = True
+        self.emit("        STA __b"); return "        LDA __b"
 
     # Tier A: a 16-bit constant into a memory word is ONE instruction -- `LDW a,#n`
     # (4 bytes for 0..255, zero-extended; 5 bytes otherwise; the assembler picks
@@ -712,6 +759,20 @@ class Gen:
         # one instruction/helper — AX is left holding the value (assignment result).
         if lhs[0] == "id":
             kind = self.vinfo(lhs[1])
+            if (not kind[4] and sz == 1 and self.is_narrow(rhs)
+                    and not (kind[0] == "l" and rhs[0] == "id")       # (LDW/STW is as short there)
+                    and (kind[0] == "g" or self.local_disp(kind[1]) <= 254)):   # far: wide path
+                self.gen_byte_a(rhs)                     # byte -> the char variable, no __ax
+                if kind[0] == "g":
+                    self.emit("        STA %s" % kind[1])
+                    if want: self.emit("        STA __ax", "        LDA #0", "        STA __ax+1")
+                else:                                    # local slot: byte + zero high
+                    d = self.local_disp(kind[1])
+                    self.emit("        STA (P3+%d)" % d)
+                    if want: self.emit("        STA __ax")
+                    self.emit("        LDA #0", "        STA (P3+%d)" % (d + 1))
+                    if want: self.emit("        STA __ax+1")
+                return
             if not kind[4]:                              # count==0: not an array
                 self.gen_expr(rhs)                       # AX = value
                 if kind[0] == "l":                       # local -> (P3+d); a char slot
@@ -721,6 +782,14 @@ class Gen:
                 else:                                    # global byte
                     self.emit("        LDA __ax", "        STA %s" % kind[1])
                 return
+        if sz == 1 and self.is_narrow(rhs):              # byte through a pointer: no spill
+            reload = self.byte_a_via_b(rhs)
+            self.gen_address(lhs); self.ax_to_p1()       # P1 = dest
+            if reload: self.emit(reload)
+            else: self.gen_byte_a(rhs)
+            self.emit("        STA (P1)")
+            if want: self.emit("        STA __ax", "        LDA #0", "        STA __ax+1")
+            return
         self.gen_expr(rhs); self.push_ax()               # value on P3
         self.gen_address(lhs)                            # AX = dest address
         self.ax_to_p1()                                  # P1 = dest
@@ -802,6 +871,24 @@ class Gen:
                 self.emit("        CMPW %s,__t" % self.vinfo(lhs[1])[1])
                 self.emit("        %s %s" % ("JC" if neg == when else "JNC", label))
                 return
+            # Two NARROW operands: one 8-bit CMP (A = lhs, B = rhs) sets the same
+            # C/Z as __cmp16 on the zero-extended values -- same branches below.
+            if (self.is_narrow(lhs) and self.is_narrow(rhs)
+                    and not (lhs[0] == "num" and rhs[0] == "num")):
+                if rhs[0] == "num":
+                    self.gen_byte_a(lhs); self.emit("        LDB #%d" % (rhs[1] & 0xFF))
+                elif rhs[0] == "id" and self.vinfo(rhs[1])[0] == "g":
+                    self.gen_byte_a(lhs); self.emit("        LDB %s" % self.vinfo(rhs[1])[1])
+                else:
+                    self.gen_byte_a(rhs); self.uses_b = True; self.emit("        STA __b")
+                    self.gen_byte_a(lhs); self.emit("        LDB __b")
+                self.emit("        CMP")
+                if e[1] in ("==", "!="):
+                    jz = ((e[1] == "==") == when)
+                    self.emit("        %s %s" % ("JZ" if jz else "JNZ", label))
+                else:
+                    self.emit("        %s %s" % ("JC" if neg == when else "JNC", label))
+                return
             self.gen_operands(e[1], lhs, rhs, 0)      # __t = lhs, __ax = rhs
             self.need("__cmp16"); self.emit("        JSR __cmp16")
             if e[1] in ("==", "!="):                  # truth = Z (==) or !Z (!=)
@@ -840,6 +927,9 @@ class Gen:
                 else:
                     self.emit("        LDA %s" % kind[1], "        %s %s" % (j, label))
                 return
+        if self.is_narrow(e) and e[0] != "num":           # a char: the load sets Z itself
+            self.gen_byte_a(e)
+            self.emit("        %s %s" % ("JNZ" if when else "JZ", label)); return
         self.gen_expr(e)                                  # general case: value, then test
         self.emit("        LDA __ax", "        LDB __ax+1", "        OR",
                   "        %s %s" % ("JNZ" if when else "JZ", label))
@@ -853,8 +943,9 @@ class Gen:
                       "        LDW __ax,#65535",           # __ax = $FFFF (-1)
                       "%s:" % skip); return
         if name == "putchar":                            # OS SYS_PUTC (redirectable)
-            self.gen_expr(args[0])
-            self.emit("        LDA __ax", "        JSR $2009"); return
+            if self.is_narrow(args[0]): self.gen_byte_a(args[0])   # byte straight to A
+            else: self.gen_expr(args[0]); self.emit("        LDA __ax")
+            self.emit("        JSR $2009"); return
         if name == "puts":                               # OS SYS_PUTS + newline
             self.gen_expr(args[0]); self.ax_to_p1()      # P1 = the string (LPW1)
             self.emit("        JSR $200F",
@@ -864,6 +955,12 @@ class Gen:
             self.emit("        LDA (P1)", "        STA __ax",
                       "        LDA #0", "        STA __ax+1"); return
         if name == "poke":                               # poke(addr, val)
+            if self.is_narrow(args[1]):                  # byte value: no spill
+                reload = self.byte_a_via_b(args[1])
+                self.gen_expr(args[0]); self.ax_to_p1()
+                if reload: self.emit(reload)
+                else: self.gen_byte_a(args[1])
+                self.emit("        STA (P1)"); return
             self.gen_expr(args[1]); self.push_ax()
             self.gen_expr(args[0]); self.ax_to_p1()
             self.pop_t()
@@ -874,12 +971,18 @@ class Gen:
         if name == "bios":                               # bios(addr, p1, a) -> A | carry<<8
             if args[0][0] != "num":
                 sys.exit("p8cc: bios() address must be a constant")
-            self.gen_expr(args[1]); self.push_ax()       # P1 operand
-            self.gen_expr(args[2])                        # A operand -> __ax
-            self.pop_t()                                  # __t = P1 operand
             skip = self.lbl("Lbc")
-            self.emit("        LPW1 __t",                  # P1 = arg1
-                      "        LDA __ax", "        JSR $%04X" % (args[0][1] & 0xFFFF),
+            if self.is_narrow(args[2]):                   # byte A operand: no spill
+                reload = self.byte_a_via_b(args[2])
+                self.gen_expr(args[1]); self.ax_to_p1()   # P1 = arg1
+                if reload: self.emit(reload)
+                else: self.gen_byte_a(args[2])
+            else:
+                self.gen_expr(args[1]); self.push_ax()   # P1 operand
+                self.gen_expr(args[2])                    # A operand -> __ax
+                self.pop_t()                              # __t = P1 operand
+                self.emit("        LPW1 __t", "        LDA __ax")
+            self.emit("        JSR $%04X" % (args[0][1] & 0xFFFF),
                       "        STA __ax",                  # returned A -> low byte
                       "        LDA #0", "        JNC %s" % skip, "        LDA #1",
                       "%s:    STA __ax+1" % skip); return  # carry -> bit 8
@@ -1083,15 +1186,60 @@ class Gen:
                   "        LPW3 __sp0", "        RTS")
         for d in decls:
             if d[0] == "func": self.compile_func(d[2], d[3], d[4])
+        self.code = self.peephole(self.code)
         self.emit_runtime()
         self.emit("__ax:   .fill 2", "__t:    .fill 2", "__c:    .fill 1",
                   "__sp0:  .fill 2")
         if self.uses_la: self.emit("__la:   .fill 2", "__lb:   .fill 2")
+        if self.uses_b: self.emit("__b:    .fill 1")
         if "__mul" in self.used:
             self.emit("__r:    .fill 2")
         if {"__mul", "__div", "__mod", "__shl", "__shr"} & self.used:
             self.emit("__n:    .fill 1")
         self.code.extend(self.data)
+
+    # ---- peephole --------------------------------------------------------------
+    # Local rewrites on ADJACENT emitted lines (a label between two lines is a
+    # jump target, so it breaks adjacency; the rewrites never look across one):
+    #   STW (P3+d),__ax  /  LDW __ax,(P3+d)   -> drop the reload (same slot)
+    #   MOVW X,__ax      /  MOVW __ax,X       -> drop the reload
+    #   STA X            /  LDA X             -> drop the reload, unless the next
+    #                                            line is a conditional branch that
+    #                                            wanted the LDA's Z/N
+    #   LDW __ax,#k      /  LDA __ax          -> LDA #k&255 (2 bytes, not 3)
+    #   JMP L            /  L:                -> drop the jump
+    COND_BRANCH = ("JZ", "JNZ", "JC", "JNC", "BLT", "BGE", "BLE", "BGT", "BZ", "BNZ", "BCP")
+    def peephole(self, code):
+        def ins(l): return l.startswith("        ") and l.strip()
+        def parts(l): s = l.strip().split(None, 1); return (s[0], s[1] if len(s) > 1 else "")
+        changed = True
+        while changed:
+            changed = False; out = []; i = 0
+            while i < len(code):
+                a = code[i]; b = code[i + 1] if i + 1 < len(code) else None
+                c = code[i + 2] if i + 2 < len(code) else None
+                if b is not None and ins(a):
+                    ma, aa = parts(a)
+                    if ins(b):
+                        mb, ab = parts(b)
+                        if ma == "STW" and mb == "LDW" and aa.startswith("(P3+") and \
+                                ab == "__ax," + aa.split(",")[0] and aa.endswith(",__ax"):
+                            out.append(a); i += 2; changed = True; continue
+                        if ma == "MOVW" and mb == "MOVW" and aa.endswith(",__ax") and \
+                                ab == "__ax," + aa[:-5]:
+                            out.append(a); i += 2; changed = True; continue
+                        if ma == "STA" and mb == "LDA" and aa == ab and not aa.startswith("(") and \
+                                not (c is not None and ins(c) and parts(c)[0] in self.COND_BRANCH):
+                            out.append(a); i += 2; changed = True; continue
+                        if ma == "LDW" and aa.startswith("__ax,#") and mb == "LDA" and ab == "__ax" \
+                                and aa[6:].isdigit():
+                            out.append(a); out.append("        LDA #%d" % (int(aa[6:]) & 0xFF))
+                            i += 2; changed = True; continue
+                    elif ma == "JMP" and b.strip().startswith(aa + ":") and not b.startswith(" "):
+                        i += 1; changed = True; continue          # jump to the next line
+                out.append(a); i += 1
+            code = out
+        return code
 
     # ---- runtime helpers ----------------------------------------------------
     def emit_runtime(self):

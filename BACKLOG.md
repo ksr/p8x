@@ -1022,8 +1022,16 @@ Nothing below has been built or measured.
       the native assembler (verified). Disassembler (C + asm twin) prints the
       resolved target (shape 22). 374,672 → 369,209 (−1.5%; only branches within
       ±127 bytes shrink, about half). **627,172 → 369,209 = −41.1%** overall.
-      Next software-only levers: narrow-value tracking for chars (compiler,
-      ~3%), a peephole pass (~1-2%), an OS-resident shared runtime (~7% of total
+      **Narrow values + peephole DONE (2026-09-11):** `is_narrow` (char loads,
+      byte constants) → `gen_byte_a` straight into A for putchar, bios()'s A
+      operand, byte stores (through pointers and to char variables), truth
+      tests and 8-bit `CMP` compares in conditions (same C/Z sense as __cmp16
+      on zero-extended values); `__b` scratch byte when the source needs the
+      address scratch. Peephole: drop reload-after-store (STW/LDW, MOVW,
+      STA/LDA unless a branch follows), jump-to-next-line, `LDW #k`+`LDA __ax`
+      → `LDA #k`. 369,209 → 341,137 (−7.6%; the estimate was ~3-5%).
+      **627,172 → 341,137 = −45.6%** overall.
+      Next software-only levers: an OS-resident shared runtime (~7% of total
       bytes, OS budget permitting), the self-hosting compilers.
 
       **Data-driven priority (measured on 5 compiled commands, 19,897 instrs):**

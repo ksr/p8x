@@ -64,9 +64,11 @@ FLAGS→T2, A=d8 ldzn for the sign plane, DEC hi if negative, ADD lo, carry
 plane, restore FLAGS). Assembler `.relax` (shrink-only iterative relaxation,
 `relax_round`) + forced `.R` suffix; p8cc emits `.relax` first; hand sources
 unchanged (byte-identical check vs the committed assembler). 369,209 total
-(−41.1% overall). User's direction (2026-09-11): do ALL remaining software-only
-items — next: narrow-value chars, peephole, OS-resident runtime, self-hosting
-compilers. PARKED by the user, to revisit after those: scratch
+(−41.1% overall). **Narrow values + peephole DONE:** `is_narrow`/`gen_byte_a`/
+`byte_a_via_b` (+`__b` scratch) feed putchar, bios A operand, byte stores,
+truth tests, 8-bit CMP compares; `peephole()` on adjacent lines. 341,137 total
+(−45.6% overall). User's direction (2026-09-11): do ALL remaining software-only
+items — next: OS-resident runtime, self-hosting compilers. PARKED by the user, to revisit after those: scratch
 rewrites of the monitor/OS around the new ISA, easy replacements first (they
 were only re-assembled so far; idiom counts in BACKLOG — small wins, OS matters
 because of its 16 KB ceiling). **Still open:**

@@ -104,6 +104,18 @@ target lies within ±127 bytes as the 2-byte relative opcode (shrink-only
 iterative relaxation, so both passes agree). Hand-written sources carry no
 `.relax` and stay byte-identical with the native assembler's output.
 
+**Narrow values + peephole (same day, −7.6% more; −45.6% overall).** A `char`
+load or a byte-sized constant is a *narrow* value: when its consumer only wants
+a byte — `putchar`, the A operand of `bios()`, a byte store (`buf[i] = c`,
+`*p = c`, `c = ...`), a truth test (`while (*s)`), or a compare against another
+narrow value — it goes straight into A from a 1–3 byte load and skips the
+16-bit zero-extension, the spill and the helper: `if (c == 'x')` is now
+`LDA (P3+d) / LDB #120 / CMP / JNZ`. An 8-bit unsigned compare of two
+zero-extended bytes orders exactly like the 16-bit one, so the branch sense is
+unchanged. A small peephole pass then removes a reload right after the matching
+store, a jump to the very next line, and shortens a byte reload of a constant
+just written; it only ever looks at adjacent lines with no label between them.
+
 **Calling convention / frames (2026-09-11: on the hardware stack).** Call
 frames live on **P3**. A caller pushes the arguments right-to-left with `PHW`
 (each word lies little-endian at `P3+1`), `JSR`s, then drops them with
