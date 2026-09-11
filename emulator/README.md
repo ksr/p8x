@@ -68,6 +68,11 @@ passed" in the self-checking suites).
 
 ```sh
 make test        # everything below
+make test-quick  # representative ~3 min subset: ISA, compiler core + self-host
+                 #   differential + BIOS-file library, a command pipeline, host/native
+                 #   assembler identity, disassembler twins, nested launch, glass TTY.
+                 #   After every change; the full `make test` before committing a
+                 #   compiler/microcode/assembler/OS change and before a sync.
 make test-isa    # per-instruction self-check (halts A=00 on success)
 make test-cf     # monitor format/boot against the CF model
 make test-os     # P8X/OS boot + shell on flat and v2 volumes

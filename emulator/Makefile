@@ -97,6 +97,29 @@ test-full: p8xemu ucode
 
 # Per-instruction self-checking regression: halts with A=00 on success,
 # or A=<test id> at the first failing check.
+# test-quick: a representative subset (~3 min instead of ~25 for `test`).
+# Run it after every change; run the full `test` before committing a change to
+# the compiler, microcode, assembler or OS, and before a sync. Chosen from what
+# has actually caught bugs: the ISA self-check and word ops; the compiler core
+# with the self-host differential and the BIOS-file library (which exposed the
+# frame-layout bug); one real multi-command pipeline; host/native assembler
+# identity; the disassembler's C/asm twins (which exposed the relative-branch
+# bug); a nested program launch (which exposed the startup relocation bug); and
+# the glass-TTY console path. The long soak tests (os_bigfile, c_desk's eight
+# runs, c_textutils, c_findiff, wm_*) are deliberately left to `test`.
+test-quick: p8xemu ucode
+	$(MAKE) test-isa
+	sh test/c_compile_test.sh
+	sh test/c_struct_test.sh
+	sh test/c_bios_test.sh
+	sh test/c_libfile_test.sh
+	sh test/c_filters_test.sh
+	sh test/asm_selfhost_test.sh
+	sh test/c_disasm_test.sh
+	sh test/c_finder_ret_test.sh
+	sh test/c_glasstty_test.sh
+	@echo "TEST-QUICK: PASS (representative subset; run the full 'make test' before committing compiler/microcode/assembler/OS changes)"
+
 test-isa: p8xemu ucode
 	cd test && cp ../$(UC)/u?.bin . && \
 	python3 ../../assembler/p8xasm.py test_isa.asm -o tisa.bin && \
@@ -228,4 +251,4 @@ test-mem: p8xemu ucode
 	../p8xemu -l 200000 tmem.bin 2>/dev/null | tr -d '\0' | grep -q Y && \
 	  echo "MEM48 TEST: PASS" || { echo "MEM48 TEST: FAIL"; exit 1; }
 
-.PHONY: all ucode rom test test-isa test-cf test-os test-basic test-io test-mem test-c test-asm-selfhost test-asm-os test-cmdbuild test-sysbuild test-full
+.PHONY: all ucode rom test test-quick test-isa test-cf test-os test-basic test-io test-mem test-c test-asm-selfhost test-asm-os test-cmdbuild test-sysbuild test-full

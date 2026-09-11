@@ -8,7 +8,7 @@
 - [Keep /docs on the SD disk current](feedback_p8x_disk_docs_current.md) — shipped MD docs live at /docs (run.sh _mddoc list, read via `md`); every doc change updates the list + rebuilds/clones the disk
 - [Docs before sync](feedback_p8x_docs_before_sync.md) — before asking to sync, verify ALL docs current (comments, HELP, READMEs, theory docs, tables, PDFs, BACKLOG)
 - [P8X test streaming](feedback_p8x_test_streaming.md) — run `make test` raw to a logfile, not through grep, so progress streams live
-- [P8X test-quick](feedback_p8x_test_quick.md) — `make test-quick` (~8-10 min: test-isa, c_test, c_struct, c_bios, c_libfile, c_filters, asm_selfhost, c_disasm, c_finder_ret, c_glasstty) after every change; full `make test` only before commits touching compiler/microcode/assembler/OS and before sync
+- [P8X test-quick](feedback_p8x_test_quick.md) — `make test-quick` (~3 min: test-isa, c_test, c_struct, c_bios, c_libfile, c_filters, asm_selfhost, c_disasm, c_finder_ret, c_glasstty) after every change; full `make test` only before commits touching compiler/microcode/assembler/OS and before sync
 - [P8X test scope](feedback_p8x_test_scope.md) — run only the relevant test(s); full `make test` only for broad changes (compiler/microcode/firmware/shared libs) or on request
 - [P8X self-host multipass](project_p8x_selfhost_multipass.md) — milestone B compiler likely splits into separate /BIN pass binaries; clib.py prototypes the preprocessor pass
 - [P8X sed/diff buffer](project_p8x_sed_diff_buffer.md) — the "p8cc.c miscompile" was an $E000 read-buffer collision; fixed by moving to $FC00

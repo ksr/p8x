@@ -7,7 +7,7 @@ metadata:
 
 The user asked (2026-09-11) for "a representative set of tests that gives a high
 degree of confidence without running such a large suite". Agreed set, added as
-`make test-quick` in emulator/Makefile (~8-10 min vs ~25-30 for `make test`):
+`make test-quick` in emulator/Makefile (measured 3 min 10 s vs ~25 for `make test`):
 test-isa (ISA + wordops + include), c_test, c_struct, c_bios (self-host
 differential), c_libfile (caught the P3-frame buffer bug), c_filters (real
 commands piped), asm_selfhost (host = native assembler), c_disasm (C/asm twin;
