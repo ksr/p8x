@@ -95,3 +95,8 @@ Byte-identity check for the native build: `sh emulator/test/os_asm_test.sh`.
   but `r`; `os_asm_test`'s cover source has one line per new shape.
   asm_selfhost + os_asm green. The OS may now use every Tier A instruction
   except relative branches.
+- 2026-09-11 **module 1, pass 1 (mechanical):** `wordmoves.py` on
+  `wmkernel_body.asm`: 85 `MOVW` + 21 `LDW a,#`. OS 14,681 → **13,965 bytes
+  (−716, −4.9%)**. All 8 `wm_*` tests + c_wdesk + c_wtermout pass; test-quick
+  and the on-target system build (native assembler on the new instructions)
+  run before the commit.

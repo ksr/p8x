@@ -391,15 +391,9 @@ wk_sink: LDB  #255
         STA  ka+1
         LDA  (P1)                       ; list id (offset 8)
         STA  sinklst
-        LDA  #29                        ; homeY = h - 29 (top line, y-up local)
-        STA  kb
-        LDA  #0
-        STA  kb+1
+        LDW kb,#29                    ; homeY = h - 29 (top line, y-up local)
         JSR  k16sub                     ; kw = h - 29
-        LDA  kw
-        STA  sinky
-        LDA  kw+1
-        STA  sinky+1
+        MOVW sinky,kw
         LDA  #112                       ; CLBEG sinklst  (fresh recording)
         JSR  kput
         LDA  sinklst
@@ -426,15 +420,9 @@ wks_off:LDA  #113                       ; CLEND -> close the list
 sink_home:
         LDA  #18                        ; MOVE3
         JSR  kput
-        LDA  #4                         ; x = 4 (left margin)
-        STA  kw
-        LDA  #0
-        STA  kw+1
+        LDW kw,#4                     ; x = 4 (left margin)
         JSR  ksw
-        LDA  sinky                      ; y = sinky
-        STA  kw
-        LDA  sinky+1
-        STA  kw+1
+        MOVW kw,sinky                 ; y = sinky
         JSR  ksw
         LDA  #0                         ; z = 0
         STA  kw
@@ -466,19 +454,10 @@ OUTWIN: LDA  RCH
         LDA  RCH
         JSR  kput
 ow_ret: RTS
-ow_lf:  LDA  sinky                      ; sinky -= 13
-        STA  ka
-        LDA  sinky+1
-        STA  ka+1
-        LDA  #13
-        STA  kb
-        LDA  #0
-        STA  kb+1
+ow_lf:  MOVW ka,sinky                 ; sinky -= 13
+        LDW kb,#13
         JSR  k16sub
-        LDA  kw
-        STA  sinky
-        LDA  kw+1
-        STA  sinky+1
+        MOVW sinky,kw
         JSR  sink_home
         RTS
 ow_cr:  JSR  sink_home
@@ -508,28 +487,16 @@ wru_esc:JSR  $0100                      ; expect '['
         CMP
         JZ   wru_lf
         JMP  wev_h1
-wru_up: LDA  #8
-        STA  kdxy
-        LDA  #0
-        STA  kdxy+1
+wru_up: LDW kdxy,#8
         LDA  #2                         ; field = y
         JMP  wru_mv
-wru_dn: LDA  #$F8                       ; -8, two's complement
-        STA  kdxy
-        LDA  #$FF
-        STA  kdxy+1
+wru_dn: LDW kdxy,#65528               ; -8, two's complement
         LDA  #2
         JMP  wru_mv
-wru_rt: LDA  #8
-        STA  kdxy
-        LDA  #0
-        STA  kdxy+1
+wru_rt: LDW kdxy,#8
         LDA  #0                         ; field = x
         JMP  wru_mv
-wru_lf: LDA  #$F8
-        STA  kdxy
-        LDA  #$FF
-        STA  kdxy+1
+wru_lf: LDW kdxy,#65528
         LDA  #0
 wru_mv: JSR  k_movetop
         JSR  wk_repaint
@@ -561,37 +528,19 @@ wru_mouse:
         LDA  knum                       ; save the x CELL (menu-bar click column)
         STA  kcellx
         JSR  k_dec1n                    ; ka = knum - 1
-        LDA  #6
-        STA  kb
-        LDA  #0
-        STA  kb+1
+        LDW kb,#6
         JSR  k_mul                      ; kw = (x-1)*6
-        LDA  kw
-        STA  kmx
-        LDA  kw+1
-        STA  kmx+1
+        MOVW kmx,kw
         JSR  k_rdnum                    ; y -> knum ; term M/m
         LDA  knum                       ; save the y CELL (menu-bar test)
         STA  kcelly
         JSR  k_dec1n                    ; ka = knum - 1
-        LDA  #11
-        STA  kb
-        LDA  #0
-        STA  kb+1
+        LDW kb,#11
         JSR  k_mul                      ; kw = (y-1)*11
-        LDA  #15                        ; kmy = 271 - kw   (271 = $010F)
-        STA  ka
-        LDA  #1
-        STA  ka+1
-        LDA  kw
-        STA  kb
-        LDA  kw+1
-        STA  kb+1
+        LDW ka,#271                   ; kmy = 271 - kw   (271 = $010F)
+        MOVW kb,kw
         JSR  k16sub
-        LDA  kw
-        STA  kmy
-        LDA  kw+1
-        STA  kmy+1
+        MOVW kmy,kw
         ; ---- dispatch: release (m), or press/drag (M) -----------------------
         LDA  kterm
         LDB  #$6D                       ; 'm' -> release: end any drag
@@ -631,68 +580,29 @@ wmp_win:JSR  k_hit                      ; which window is under the cursor?
         JSR  k_raise                    ; focus it: its record moves to the top
         ; the CLOSE BOX? in the title bar (kmy >= ky+kch-14) and within
         ; kx+3..kx+11 -- desk's box. k_inwin left the rect in kx,ky,kcw,kch.
-        LDA  ky                         ; kw = ky + kch - 14  (the bar's bottom)
-        STA  ka
-        LDA  ky+1
-        STA  ka+1
-        LDA  kch
-        STA  kb
-        LDA  kch+1
-        STA  kb+1
+        MOVW ka,ky                    ; kw = ky + kch - 14  (the bar's bottom)
+        MOVW kb,kch
         JSR  k16add
-        LDA  kw
-        STA  ka
-        LDA  kw+1
-        STA  ka+1
-        LDA  #14
-        STA  kb
-        LDA  #0
-        STA  kb+1
+        MOVW ka,kw
+        LDW kb,#14
         JSR  k16sub
-        LDA  kmy                        ; kmy >= bar bottom ?
-        STA  ka
-        LDA  kmy+1
-        STA  ka+1
-        LDA  kw
-        STA  kb
-        LDA  kw+1
-        STA  kb+1
+        MOVW ka,kmy                   ; kmy >= bar bottom ?
+        MOVW kb,kw
         JSR  k_ge
         JZ   wru_grab                   ; a body press: just grab
-        LDA  kx                         ; kmx2 = kx+3, kmy2 = kx+11 (as temps)
-        STA  ka
-        LDA  kx+1
-        STA  ka+1
+        MOVW ka,kx                    ; kmx2 = kx+3, kmy2 = kx+11 (as temps)
         LDA  #3
         JSR  k_off16
-        LDA  kw
-        STA  kmx2
-        LDA  kw+1
-        STA  kmx2+1
+        MOVW kmx2,kw
         LDA  #11
         JSR  k_off16                    ; ka is still kx
-        LDA  kw
-        STA  kmy2
-        LDA  kw+1
-        STA  kmy2+1
-        LDA  kmx                        ; kmx >= kx+3 ?
-        STA  ka
-        LDA  kmx+1
-        STA  ka+1
-        LDA  kmx2
-        STA  kb
-        LDA  kmx2+1
-        STA  kb+1
+        MOVW kmy2,kw
+        MOVW ka,kmx                   ; kmx >= kx+3 ?
+        MOVW kb,kmx2
         JSR  k_ge
         JZ   wru_grab                   ; left of the box
-        LDA  kmy2                       ; kx+11 >= kmx ?
-        STA  ka
-        LDA  kmy2+1
-        STA  ka+1
-        LDA  kmx
-        STA  kb
-        LDA  kmx+1
-        STA  kb+1
+        MOVW ka,kmy2                  ; kx+11 >= kmx ?
+        MOVW kb,kmx
         JSR  k_ge
         JZ   wru_grab                   ; right of the box
         ; CLOSE: the window is the top record now, so closing it = pop
@@ -710,32 +620,14 @@ wru_grab:
         LDB  #1
         SUB
         STA  kdragw
-        LDA  kmx                        ; kgx = kmx - kx  (kx/ky loaded by k_intop)
-        STA  ka
-        LDA  kmx+1
-        STA  ka+1
-        LDA  kx
-        STA  kb
-        LDA  kx+1
-        STA  kb+1
+        MOVW ka,kmx                   ; kgx = kmx - kx  (kx/ky loaded by k_intop)
+        MOVW kb,kx
         JSR  k16sub
-        LDA  kw
-        STA  kgx
-        LDA  kw+1
-        STA  kgx+1
-        LDA  kmy                        ; kgy = kmy - ky
-        STA  ka
-        LDA  kmy+1
-        STA  ka+1
-        LDA  ky
-        STA  kb
-        LDA  ky+1
-        STA  kb+1
+        MOVW kgx,kw
+        MOVW ka,kmy                   ; kgy = kmy - ky
+        MOVW kb,ky
         JSR  k16sub
-        LDA  kw
-        STA  kgy
-        LDA  kw+1
-        STA  kgy+1
+        MOVW kgy,kw
         JMP  wev_h1
 wru_mnohit:
         LDA  #99                        ; press missed: no drag target
@@ -802,65 +694,29 @@ k_inwin:JSR  koff
         LDA  (P1)+
         STA  kch+1
         ; kmx >= kx ?
-        LDA  kmx
-        STA  ka
-        LDA  kmx+1
-        STA  ka+1
-        LDA  kx
-        STA  kb
-        LDA  kx+1
-        STA  kb+1
+        MOVW ka,kmx
+        MOVW kb,kx
         JSR  k_ge
         JZ   kit_no
         ; kmx < kx+kcw ?  (reject if kmx >= kx+kcw)
-        LDA  kx
-        STA  ka
-        LDA  kx+1
-        STA  ka+1
-        LDA  kcw
-        STA  kb
-        LDA  kcw+1
-        STA  kb+1
+        MOVW ka,kx
+        MOVW kb,kcw
         JSR  k16add                     ; kw = kx+kcw
-        LDA  kmx
-        STA  ka
-        LDA  kmx+1
-        STA  ka+1
-        LDA  kw
-        STA  kb
-        LDA  kw+1
-        STA  kb+1
+        MOVW ka,kmx
+        MOVW kb,kw
         JSR  k_ge
         JNZ  kit_no                     ; kmx >= kx+kcw -> outside
         ; kmy >= ky ?
-        LDA  kmy
-        STA  ka
-        LDA  kmy+1
-        STA  ka+1
-        LDA  ky
-        STA  kb
-        LDA  ky+1
-        STA  kb+1
+        MOVW ka,kmy
+        MOVW kb,ky
         JSR  k_ge
         JZ   kit_no
         ; kmy < ky+kch ?
-        LDA  ky
-        STA  ka
-        LDA  ky+1
-        STA  ka+1
-        LDA  kch
-        STA  kb
-        LDA  kch+1
-        STA  kb+1
+        MOVW ka,ky
+        MOVW kb,kch
         JSR  k16add
-        LDA  kmy
-        STA  ka
-        LDA  kmy+1
-        STA  ka+1
-        LDA  kw
-        STA  kb
-        LDA  kw+1
-        STA  kb+1
+        MOVW ka,kmy
+        MOVW kb,kw
         JSR  k_ge
         JNZ  kit_no                     ; kmy >= ky+kch -> outside
         LDA  #1                         ; inside
@@ -870,32 +726,14 @@ kit_no: LDA  #0
 
 ; k_dragmove: the grabbed window's origin := cursor - grab-offset.
 k_dragmove:
-        LDA  kmx                        ; x = kmx - kgx
-        STA  ka
-        LDA  kmx+1
-        STA  ka+1
-        LDA  kgx
-        STA  kb
-        LDA  kgx+1
-        STA  kb+1
+        MOVW ka,kmx                   ; x = kmx - kgx
+        MOVW kb,kgx
         JSR  k16sub
-        LDA  kw
-        STA  kmx2
-        LDA  kw+1
-        STA  kmx2+1
-        LDA  kmy                        ; y = kmy - kgy
-        STA  ka
-        LDA  kmy+1
-        STA  ka+1
-        LDA  kgy
-        STA  kb
-        LDA  kgy+1
-        STA  kb+1
+        MOVW kmx2,kw
+        MOVW ka,kmy                   ; y = kmy - kgy
+        MOVW kb,kgy
         JSR  k16sub
-        LDA  kw
-        STA  kmy2
-        LDA  kw+1
-        STA  kmy2+1
+        MOVW kmy2,kw
         ; write (kmx2,kmy2) into the grabbed window's origin
         LDA  kdragw
         STA  ki
@@ -927,28 +765,16 @@ krn_lp: JSR  $0100
         LDB  #$30                       ; digit value
         SUB
         STA  kt                         ; kt = 0..9
-        LDA  knum                       ; knum *= 10
-        STA  ka
-        LDA  knum+1
-        STA  ka+1
-        LDA  #10
-        STA  kb
-        LDA  #0
-        STA  kb+1
+        MOVW ka,knum                  ; knum *= 10
+        LDW kb,#10
         JSR  k_mul                      ; kw = knum*10
-        LDA  kw                         ; knum = kw + digit
-        STA  ka
-        LDA  kw+1
-        STA  ka+1
+        MOVW ka,kw                    ; knum = kw + digit
         LDA  kt
         STA  kb
         LDA  #0
         STA  kb+1
         JSR  k16add
-        LDA  kw
-        STA  knum
-        LDA  kw+1
-        STA  knum+1
+        MOVW knum,kw
         JMP  krn_lp
 krn_ret:RTS
 
@@ -1025,10 +851,7 @@ k_movetop:
         INP1
         LDA  (P1)
         STA  ka+1
-        LDA  kdxy                       ; kb = delta
-        STA  kb
-        LDA  kdxy+1
-        STA  kb+1
+        MOVW kb,kdxy                  ; kb = delta
         JSR  k16add                     ; kw = field + delta
         LDA  kw+1                        ; P1 is at field+1 -> write high
         STA  (P1)
@@ -1134,34 +957,16 @@ wk_draw:JSR  koff                       ; A = 24*ki
         LDA  (P1)                       ; tlen
         STA  ktlen
         ; x1 = kx + kcw - 1 ; y1 = ky + kch - 1  -> kx1/ky1
-        LDA  kx
-        STA  ka
-        LDA  kx+1
-        STA  ka+1
-        LDA  kcw
-        STA  kb
-        LDA  kcw+1
-        STA  kb+1
+        MOVW ka,kx
+        MOVW kb,kcw
         JSR  k16add                     ; kw = kx+kcw
         JSR  kw_dec1                    ; kw -= 1
-        LDA  kw
-        STA  kx1
-        LDA  kw+1
-        STA  kx1+1
-        LDA  ky
-        STA  ka
-        LDA  ky+1
-        STA  ka+1
-        LDA  kch
-        STA  kb
-        LDA  kch+1
-        STA  kb+1
+        MOVW kx1,kw
+        MOVW ka,ky
+        MOVW kb,kch
         JSR  k16add
         JSR  kw_dec1
-        LDA  kw
-        STA  ky1
-        LDA  kw+1
-        STA  ky1+1
+        MOVW ky1,kw
         ; body: PRMFIL 1, COLOR black, MOVE(kx,ky), RECT(kx1,ky1)
         LDA  #$E0
         JSR  kput
@@ -1172,28 +977,13 @@ wk_draw:JSR  koff                       ; A = 24*ki
         JSR  krect_11                   ; RECT(kx1,ky1)
         ; title bar: the top 14 rows, WHITE for the focused (top) window and
         ; GREY for the rest -- desk's look (lib_wm wm_chrome). Still PRMFIL 1.
-        LDA  ky                         ; kty = ky + kch - 14  (the bar's bottom)
-        STA  ka
-        LDA  ky+1
-        STA  ka+1
-        LDA  kch
-        STA  kb
-        LDA  kch+1
-        STA  kb+1
+        MOVW ka,ky                    ; kty = ky + kch - 14  (the bar's bottom)
+        MOVW kb,kch
         JSR  k16add
-        LDA  kw
-        STA  ka
-        LDA  kw+1
-        STA  ka+1
-        LDA  #14
-        STA  kb
-        LDA  #0
-        STA  kb+1
+        MOVW ka,kw
+        LDW kb,#14
         JSR  k16sub
-        LDA  kw
-        STA  kty
-        LDA  kw+1
-        STA  kty+1
+        MOVW kty,kw
         LDA  ki                         ; focused <=> ki == wcnt-1
         INC
         LDB  wcnt
@@ -1211,15 +1001,9 @@ wk_draw:JSR  koff                       ; A = 24*ki
 wkd_fw: JSR  kcol_wht
 wkd_bar:LDA  #$10                       ; MOVE(kx, kty)
         JSR  kput
-        LDA  kx
-        STA  kw
-        LDA  kx+1
-        STA  kw+1
+        MOVW kw,kx
         JSR  ksw
-        LDA  kty
-        STA  kw
-        LDA  kty+1
-        STA  kw+1
+        MOVW kw,kty
         JSR  ksw
         JSR  krect_11                   ; RECT(kx1,ky1): the bar
         ; close box: a black 9x9 on the bar at (kx+3,kty+2)..(kx+11,kty+10)
@@ -1227,33 +1011,21 @@ wkd_bar:LDA  #$10                       ; MOVE(kx, kty)
         JSR  kcol_blk
         LDA  #$10                       ; MOVE(kx+3, kty+2)
         JSR  kput
-        LDA  kx
-        STA  ka
-        LDA  kx+1
-        STA  ka+1
+        MOVW ka,kx
         LDA  #3
         JSR  k_off16
         JSR  ksw
-        LDA  kty
-        STA  ka
-        LDA  kty+1
-        STA  ka+1
+        MOVW ka,kty
         LDA  #2
         JSR  k_off16
         JSR  ksw
         LDA  #$34                       ; RECT(kx+11, kty+10)
         JSR  kput
-        LDA  kx
-        STA  ka
-        LDA  kx+1
-        STA  ka+1
+        MOVW ka,kx
         LDA  #11
         JSR  k_off16
         JSR  ksw
-        LDA  kty
-        STA  ka
-        LDA  kty+1
-        STA  ka+1
+        MOVW ka,kty
         LDA  #10
         JSR  k_off16
         JSR  ksw
@@ -1269,54 +1041,24 @@ wkd_bar:LDA  #$10                       ; MOVE(kx, kty)
         ; close box at kx+3..kx+11 -- then TEXT ktlen chars (desk's placement)
         JSR  kcol_blk
         ; anchor x = kx + 16
-        LDA  kx
-        STA  ka
-        LDA  kx+1
-        STA  ka+1
-        LDA  #16
-        STA  kb
-        LDA  #0
-        STA  kb+1
+        MOVW ka,kx
+        LDW kb,#16
         JSR  k16add
-        LDA  kw
-        STA  ktx
-        LDA  kw+1
-        STA  ktx+1
+        MOVW ktx,kw
         ; anchor y = ky + kch - 11
-        LDA  ky
-        STA  ka
-        LDA  ky+1
-        STA  ka+1
-        LDA  kch
-        STA  kb
-        LDA  kch+1
-        STA  kb+1
+        MOVW ka,ky
+        MOVW kb,kch
         JSR  k16add                     ; ky+kch
-        LDA  kw
-        STA  ka
-        LDA  kw+1
-        STA  ka+1
-        LDA  #11
-        STA  kb
-        LDA  #0
-        STA  kb+1
+        MOVW ka,kw
+        LDW kb,#11
         JSR  k16sub                     ; ky+kch-11
-        LDA  kw
-        STA  kty
-        LDA  kw+1
-        STA  kty+1
+        MOVW kty,kw
         ; MOVE3 ktx kty 0
         LDA  #$12
         JSR  kput
-        LDA  ktx
-        STA  kw
-        LDA  ktx+1
-        STA  kw+1
+        MOVW kw,ktx
         JSR  ksw
-        LDA  kty
-        STA  kw
-        LDA  kty+1
-        STA  kw+1
+        MOVW kw,kty
         JSR  ksw
         LDA  #0
         STA  kw
@@ -1364,88 +1106,40 @@ k_content:
         STA  kw
         STA  kw+1
         JSR  ksw
-        LDA  kcw                        ; x2 = kcw - 3
-        STA  ka
-        LDA  kcw+1
-        STA  ka+1
-        LDA  #3
-        STA  kb
-        LDA  #0
-        STA  kb+1
+        MOVW ka,kcw                   ; x2 = kcw - 3
+        LDW kb,#3
         JSR  k16sub
         JSR  ksw
         LDA  #0                         ; y1 = 0
         STA  kw
         STA  kw+1
         JSR  ksw
-        LDA  kch                        ; y2 = kch - 16
-        STA  ka
-        LDA  kch+1
-        STA  ka+1
-        LDA  #16
-        STA  kb
-        LDA  #0
-        STA  kb+1
+        MOVW ka,kch                   ; y2 = kch - 16
+        LDW kb,#16
         JSR  k16sub
         JSR  ksw
         LDA  #$B2                       ; VWPORT vx1 vx2 vy1 vy2
         JSR  kput
-        LDA  kx                         ; vx1 = kx + 1
-        STA  ka
-        LDA  kx+1
-        STA  ka+1
-        LDA  #1
-        STA  kb
-        LDA  #0
-        STA  kb+1
+        MOVW ka,kx                    ; vx1 = kx + 1
+        LDW kb,#1
         JSR  k16add
         JSR  ksw
-        LDA  kx                         ; vx2 = kx + kcw - 2
-        STA  ka
-        LDA  kx+1
-        STA  ka+1
-        LDA  kcw
-        STA  kb
-        LDA  kcw+1
-        STA  kb+1
+        MOVW ka,kx                    ; vx2 = kx + kcw - 2
+        MOVW kb,kcw
         JSR  k16add
-        LDA  kw
-        STA  ka
-        LDA  kw+1
-        STA  ka+1
-        LDA  #2
-        STA  kb
-        LDA  #0
-        STA  kb+1
+        MOVW ka,kw
+        LDW kb,#2
         JSR  k16sub
         JSR  ksw
-        LDA  #30                        ; vy1 = 286 - ky - kch   (286 = $011E)
-        STA  ka
-        LDA  #1
-        STA  ka+1
-        LDA  ky
-        STA  kb
-        LDA  ky+1
-        STA  kb+1
+        LDW ka,#286                   ; vy1 = 286 - ky - kch   (286 = $011E)
+        MOVW kb,ky
         JSR  k16sub                     ; 286 - ky
-        LDA  kw
-        STA  ka
-        LDA  kw+1
-        STA  ka+1
-        LDA  kch
-        STA  kb
-        LDA  kch+1
-        STA  kb+1
+        MOVW ka,kw
+        MOVW kb,kch
         JSR  k16sub                     ; - kch
         JSR  ksw
-        LDA  #14                        ; vy2 = 270 - ky   (270 = $010E)
-        STA  ka
-        LDA  #1
-        STA  ka+1
-        LDA  ky
-        STA  kb
-        LDA  ky+1
-        STA  kb+1
+        LDW ka,#270                   ; vy2 = 270 - ky   (270 = $010E)
+        MOVW kb,ky
         JSR  k16sub
         JSR  ksw
         RTS
@@ -1454,30 +1148,18 @@ k_content:
 kmove_xy:
         LDA  #$10
         JSR  kput
-        LDA  kx
-        STA  kw
-        LDA  kx+1
-        STA  kw+1
+        MOVW kw,kx
         JSR  ksw
-        LDA  ky
-        STA  kw
-        LDA  ky+1
-        STA  kw+1
+        MOVW kw,ky
         JSR  ksw
         RTS
 ; RECT(kx1,ky1)
 krect_11:
         LDA  #$34
         JSR  kput
-        LDA  kx1
-        STA  kw
-        LDA  kx1+1
-        STA  kw+1
+        MOVW kw,kx1
         JSR  ksw
-        LDA  ky1
-        STA  kw
-        LDA  ky1+1
-        STA  kw+1
+        MOVW kw,ky1
         JSR  ksw
         RTS
 
