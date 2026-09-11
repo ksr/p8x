@@ -18,11 +18,18 @@ shapecode encodes the operand form (must match the native parse_operand):
     9 "#w" -- a 16-bit immediate. The native parser never produces 9 from
       syntax; DO_LDP sets SHAPE=9 itself to look up the LDPn opcode (Tier A:
       LDPn #imm16 is a real 3-byte instruction, no longer an LPLn/LPHn pair).
-The remaining Tier A shapes -- (Pn+d), a,(Pn+d), (Pn+d),a, a,# and a,#w --
-are emitted by the HOST toolchain only (the compiler's idioms) and are skipped
-here until the native operand parser grows them (backlog: ASM two-operand /
-displacement support). NOTE: this numbering is the ASSEMBLER's; the
-disassembler table (gen_p8xdis.py) has its own, where 9 is "a,a".
+   10 "a,a"      MOVW/ADDW/SUBW/CMPW dst,src      (op a.lo a.hi b.lo b.hi)
+   11 "a,#"      LDW/ADDW/SUBW/CMPW a,#imm8       (op a.lo a.hi imm8)
+   12 "a,#w"     LDW a,#imm16                     (op a.lo a.hi imm.lo imm.hi)
+   13 14 15      (P1+d) (P2+d) (P3+d)             (op d8)         LDA/STA
+   16 17 18      a,(P1+d) a,(P2+d) a,(P3+d)       (op a.lo a.hi d8) LDW/LEAW
+   19 20 21      (P1+d),a (P2+d),a (P3+d),a       (op a.lo a.hi d8) STW
+   (2026-09-11, os-rewrite step 0: the native PARSEOP grew a second operand
+   and the displacement form; imm8 vs imm16 for shape 11/12 is decided from
+   the operand TEXT exactly as the host's lit8() does, so the two assemblers
+   stay byte-identical.) Only "r" (relative branches: host-side relaxation)
+   remains host-only. NOTE: this numbering is the ASSEMBLER's; the
+   disassembler table (gen_p8xdis.py) has its own, where 9 is "a,a".
 
 Usage: gen_p8xopc.py [out.asm]   (defaults to stdout)
 """
@@ -34,12 +41,12 @@ from genucode import OPC
 
 SHAPE = {"": 0, "#": 1, "a": 2,
          "(P1)": 3, "(P1)+": 4, "(P2)": 5, "(P2)+": 6, "(P3)": 7, "(P3)+": 8,
-         "#w": 9}
+         "#w": 9, "a,a": 10, "a,#": 11, "a,#w": 12,
+         "(P1+d)": 13, "(P2+d)": 14, "(P3+d)": 15,
+         "a,(P1+d)": 16, "a,(P2+d)": 17, "a,(P3+d)": 18,
+         "(P1+d),a": 19, "(P2+d),a": 20, "(P3+d),a": 21}
 # host-only shapes (see the docstring): skipped, not an error
-HOST_ONLY = {"a,a", "a,#", "a,#w", "r",
-             "(P1+d)", "(P2+d)", "(P3+d)",
-             "a,(P1+d)", "a,(P2+d)", "a,(P3+d)",
-             "(P1+d),a", "(P2+d),a", "(P3+d),a"}
+HOST_ONLY = {"r"}
 
 
 def main():

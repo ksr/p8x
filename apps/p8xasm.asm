@@ -99,6 +99,10 @@ MTL     = $C820
 MTH     = $C821
 SP0     = $C822   ; saved system SP for error abort
 LDPN    = $C824   ; LDPn pointer digit (survives EVAL, which trashes TMP/MNBUF)
+OP1P    = $C826   ; PARSEOP: line cursor at operand 1's expression (2)
+OP2P    = $C828   ; PARSEOP: line cursor at operand 2's expression (2)
+DISPP   = $C82A   ; PARSEOP: line cursor at a (Pn+d) displacement expression (2)
+SHAPE2  = $C82C   ; PARSEOP: operand 1's shape while operand 2 is classified
 MNBUF   = $C830   ; upcased mnemonic/directive (8)
 NAMBUF  = $C840   ; identifier as written (16, 12 used)
 OUTNAME = $C850   ; output file name (12, legacy — unused since paths went in)
@@ -341,7 +345,26 @@ DI_OK:  LDA  OPCB
         LDB  #2
         CMP
         JZ   DI_ABS
-        RTS                     ; implied / (Pn): no operand bytes
+        LDB  #10
+        CMP
+        JZ   DI_AA
+        LDB  #11
+        CMP
+        JZ   DI_AI8
+        LDB  #12
+        CMP
+        JZ   DI_AI16
+        LDB  #13
+        CMP
+        JNC  DI_NONE            ; < 13: implied / (Pn) / (Pn)+ -> no operand bytes
+        LDB  #16
+        CMP
+        JNC  DI_PD              ; 13..15  (Pn+d)     -> d8
+        LDB  #19
+        CMP
+        JNC  DI_APD             ; 16..18  a,(Pn+d)   -> a.lo a.hi d8
+        JMP  DI_PDA             ; 19..21  (Pn+d),a   -> a.lo a.hi d8 (address first)
+DI_NONE:RTS
 DI_IMM: JSR  EVAL
         LDA  VAL
         JSR  EMIT
@@ -351,6 +374,39 @@ DI_ABS: JSR  EVAL
         JSR  EMIT
         LDA  VAL+1
         JSR  EMIT
+        RTS
+; ---- two-operand / displacement forms (os-rewrite step 0, 2026-09-11). The
+; byte stream is the HOST's: every 16-bit address first, then the imm8/imm16
+; or the displacement -- so `STW (P3+d),a` emits a before d exactly like the
+; host assembler, and both builds stay byte-identical. P1 is at operand 1's
+; expression on entry; OP2P/DISPP were noted by PARSEOP.
+DI_AA:  JSR  DI_ABS             ; a,a : operand 1 word
+        JSR  DI_P2
+        JMP  DI_ABS             ;       operand 2 word
+DI_AI8: JSR  DI_ABS             ; a,#  : address, imm8
+        JSR  DI_P2
+        JMP  DI_IMM
+DI_AI16:JSR  DI_ABS             ; a,#w : address, imm16
+        JSR  DI_P2
+        JMP  DI_ABS
+DI_PD:  JSR  DI_PD1             ; (Pn+d) : d8
+        JMP  DI_IMM
+DI_APD: JSR  DI_ABS             ; a,(Pn+d) : address, then d8
+        JSR  DI_PD1
+        JMP  DI_IMM
+DI_PDA: JSR  DI_P2              ; (Pn+d),a : the ADDRESS (operand 2) first...
+        JSR  DI_ABS
+        JSR  DI_PD1             ; ...then d8
+        JMP  DI_IMM
+DI_P2:  LDA  OP2P               ; P1 := operand 2's expression
+        TAP1L
+        LDA  OP2P+1
+        TAP1H
+        RTS
+DI_PD1: LDA  DISPP              ; P1 := the displacement expression
+        TAP1L
+        LDA  DISPP+1
+        TAP1H
         RTS
 
 ; ---- LDPn #imm16 -> the LDPn opcode + imm16 (lo, hi) ----
@@ -533,7 +589,113 @@ DA_ERR: LDP1 #EBADOP
 ; =============================================================================
 ; Operand shape parse -> SHAPE (0 imp,1 #,2 abs,3..8 (Pn)/(Pn)+)
 ; =============================================================================
-PARSEOP:LDA  (P1)
+; PARSEOP (os-rewrite step 0, 2026-09-11): classify operand 1 (CLASSOP), then
+; look for a comma and classify operand 2; combine into one shape code:
+;   10 a,a   11 a,#imm8   12 a,#imm16   16..18 a,(Pn+d)   19..21 (Pn+d),a
+; (13..15 is a lone (Pn+d)). imm8 vs imm16 follows the HOST's lit8() rule on
+; the operand TEXT (LIT8 below), never the value, so both assemblers agree.
+; On return P1 is back at operand 1's expression; OP2P / DISPP hold the
+; cursors of operand 2 / the displacement for the emitter (DI_AA.. above).
+PARSEOP:JSR  CLASSOP            ; operand 1 -> SHAPE, P1 at its expression
+        TPA1L
+        STA  OP1P
+        TPA1H
+        STA  OP1P+1
+        LDA  SHAPE
+        STA  SHAPE2             ; SHAPE2 = operand 1's shape while op2 is classified
+PO_SCN: LDA  (P1)               ; scan operand 1 for a comma
+        JZ   PO_ONE
+        LDB  #CR
+        CMP
+        JZ   PO_ONE
+        LDB  #LF
+        CMP
+        JZ   PO_ONE
+        LDB  #$3B               ; ';'
+        CMP
+        JZ   PO_ONE
+        LDB  #TICK              ; 'c' literal: the c may be ',' -- step over it
+        CMP
+        JNZ  PO_SC2
+        INP1
+        INP1
+        JMP  PO_SC3
+PO_SC2: LDB  #','
+        CMP
+        JZ   PO_TWO
+PO_SC3: INP1
+        JMP  PO_SCN
+PO_TWO: INP1                    ; past ','
+        JSR  SKIPSP
+        JSR  CLASSOP            ; operand 2 -> SHAPE, P1 at its expression
+        TPA1L
+        STA  OP2P
+        TPA1H
+        STA  OP2P+1
+        LDA  SHAPE2             ; operand 1 ...
+        LDB  #2
+        CMP
+        JNZ  PO_C2              ; ... not abs: must be (Pn+d),a
+        LDA  SHAPE              ; operand 2:
+        LDB  #2
+        CMP
+        JZ   PO_AA              ;   abs      -> a,a
+        LDB  #1
+        CMP
+        JZ   PO_AI              ;   #        -> a,#imm8 / a,#imm16
+        LDB  #13
+        CMP
+        JNC  PO_ERR2            ;   < 13
+        LDB  #16
+        CMP
+        JC   PO_ERR2            ;   > 15
+        LDA  SHAPE              ;   (Pn+d)   -> 16..18
+        LDB  #3
+        ADD
+        STA  SHAPE
+        JMP  PO_ONE
+PO_AA:  LDA  #10
+        STA  SHAPE
+        JMP  PO_ONE
+PO_AI:  LDA  OP2P               ; byte literal? (host lit8 rule on the text)
+        TAP1L
+        LDA  OP2P+1
+        TAP1H
+        JSR  LIT8
+        JZ   PO_AI16
+        LDA  #11
+        STA  SHAPE
+        JMP  PO_ONE
+PO_AI16:LDA  #12
+        STA  SHAPE
+        JMP  PO_ONE
+PO_C2:  LDA  SHAPE2             ; (Pn+d),a : operand 1 in 13..15, operand 2 abs
+        LDB  #13
+        CMP
+        JNC  PO_ERR2
+        LDB  #16
+        CMP
+        JC   PO_ERR2
+        LDA  SHAPE
+        LDB  #2
+        CMP
+        JNZ  PO_ERR2
+        LDA  SHAPE2
+        LDB  #6                 ; 13..15 -> 19..21
+        ADD
+        STA  SHAPE
+PO_ONE: LDA  OP1P               ; P1 back at operand 1's expression
+        TAP1L
+        LDA  OP1P+1
+        TAP1H
+        RTS
+PO_ERR2:LDP1 #EBADOP
+        JMP  ASM_ERR
+
+; CLASSOP - classify ONE operand at P1 -> SHAPE (0 imp, 1 #, 2 abs, 3..8
+; (Pn)/(Pn)+, 13..15 (Pn+d) with DISPP at the displacement expression). Leaves
+; P1 at the expression for #/abs, after the ')' / '+' otherwise.
+CLASSOP:LDA  (P1)
         JZ   PO_IMP
         LDB  #CR
         CMP
@@ -567,8 +729,11 @@ PO_PTR: INP1                    ; '('
         SUB
         STA  TMP                ; n
         INP1
-        LDA  (P1)               ; ')'
-        LDB  #')'
+        LDA  (P1)
+        LDB  #'+'
+        CMP
+        JZ   PO_DISP            ; (Pn+d)
+        LDB  #')'               ; ')'
         CMP
         JNZ  PO_ERR
         INP1
@@ -593,8 +758,197 @@ PO_PLUS:INP1
         ADD
         STA  SHAPE
         RTS
+PO_DISP:INP1                    ; past '+': the displacement expression
+        TPA1L
+        STA  DISPP
+        TPA1H
+        STA  DISPP+1
+PO_DSK: LDA  (P1)               ; skip to the closing ')'
+        JZ   PO_ERR
+        LDB  #')'
+        CMP
+        JZ   PO_DEND
+        INP1
+        JMP  PO_DSK
+PO_DEND:INP1                    ; past ')'
+        LDA  TMP                ; shape = 13 + (n-1)
+        LDB  #12
+        ADD
+        STA  SHAPE
+        RTS
 PO_ERR: LDP1 #EBADOP
         JMP  ASM_ERR
+
+; LIT8 - is the immediate text at P1 a BYTE-SIZED LITERAL by the host's rule?
+;   <expr / >expr ; $h / $hh ; 0xh / 0xhh ; 'c' ; a decimal 0..255 -- followed
+;   only by blanks and the end of the operand (NUL / CR / LF / ';'). Labels,
+;   longer literals and expressions are 16-bit. Returns A=1 yes / A=0 no (Z set
+;   accordingly). Advances P1 (the caller restores it). Uses VAL, CNTL, TMP2.
+LIT8:   LDA  (P1)
+        LDB  #'<'
+        CMP
+        JZ   L8_YES
+        LDB  #'>'
+        CMP
+        JZ   L8_YES
+        LDB  #TICK
+        CMP
+        JZ   L8_CHR
+        LDB  #'$'
+        CMP
+        JZ   L8_HEX
+        LDB  #'0'
+        CMP
+        JNC  L8_NO              ; < '0'
+        LDB  #$3A               ; '9'+1
+        CMP
+        JC   L8_NO              ; > '9'
+        LDB  #'0'
+        CMP
+        JNZ  L8_DEC             ; 1..9: decimal
+        INP1                    ; '0': 0x.. hex, or a decimal with a leading 0
+        LDA  (P1)
+        LDB  #'x'
+        CMP
+        JZ   L8_HEX
+        LDB  #'X'
+        CMP
+        JZ   L8_HEX
+        DEP1
+L8_DEC: LDA  #0                 ; VAL = value (16-bit), CNTL = digit count
+        STA  VAL
+        STA  VAL+1
+        STA  CNTL
+L8_DL:  LDA  (P1)
+        LDB  #'0'
+        CMP
+        JNC  L8_DEND
+        LDB  #$3A
+        CMP
+        JC   L8_DEND
+        LDB  #'0'
+        SUB
+        STA  TMP2               ; digit
+        LDA  CNTL
+        LDB  #5
+        CMP
+        JC   L8_NO              ; > 5 digits: not a byte
+        INC
+        STA  CNTL
+        LDA  VAL                ; VAL = VAL*10 + digit  (x2 -> keep, x8, add)
+        SHL
+        STA  CNTH
+        LDA  VAL+1
+        ROL
+        STA  TMP
+        LDA  CNTH               ; (VAL*2 in CNTH:TMP)
+        SHL
+        STA  VAL
+        LDA  TMP
+        ROL
+        STA  VAL+1
+        LDA  VAL
+        SHL
+        STA  VAL
+        LDA  VAL+1
+        ROL
+        STA  VAL+1              ; VAL*8
+        LDA  VAL
+        LDB  CNTH
+        ADD
+        STA  VAL
+        LDA  VAL+1
+        JNC  L8_D2
+        INC                     ; carry of the low add
+L8_D2:  LDB  TMP
+        ADD
+        STA  VAL+1              ; VAL*10
+        LDA  VAL
+        LDB  TMP2
+        ADD
+        STA  VAL
+        LDA  VAL+1
+        JNC  L8_D3
+        INC
+        STA  VAL+1
+L8_D3:  INP1
+        JMP  L8_DL
+L8_DEND:LDA  VAL+1
+        JNZ  L8_NO              ; > 255
+        JMP  L8_TERM
+L8_HEX: INP1                    ; past '$' / 'x'
+        LDA  #0
+        STA  CNTL
+L8_HL:  LDA  (P1)
+        JSR  ISHEXD
+        JZ   L8_HEND
+        LDA  CNTL
+        INC
+        STA  CNTL
+        INP1
+        JMP  L8_HL
+L8_HEND:LDA  CNTL
+        JZ   L8_NO              ; no digits
+        LDB  #3
+        CMP
+        JC   L8_NO              ; 3+ digits: 16-bit
+        JMP  L8_TERM
+L8_CHR: INP1                    ; TICK, char, TICK
+        INP1
+        LDA  (P1)
+        LDB  #TICK
+        CMP
+        JNZ  L8_NO
+        INP1
+L8_TERM:LDA  (P1)               ; only blanks may follow
+        LDB  #' '
+        CMP
+        JZ   L8_TSK
+        LDB  #$09
+        CMP
+        JZ   L8_TSK
+        LDA  (P1)
+        JZ   L8_YES
+        LDB  #CR
+        CMP
+        JZ   L8_YES
+        LDB  #LF
+        CMP
+        JZ   L8_YES
+        LDB  #$3B
+        CMP
+        JZ   L8_YES
+L8_NO:  LDA  #0
+        RTS
+L8_TSK: INP1
+        JMP  L8_TERM
+L8_YES: LDA  #1
+        RTS
+
+; ISHEXD - A = a hex digit? returns A=1 / A=0 (Z accordingly). Clobbers B.
+ISHEXD: STA  TMP2
+        LDB  #'0'
+        CMP
+        JNC  IH_NO
+        LDB  #$3A
+        CMP
+        JNC  IH_YES             ; '0'..'9'
+        LDB  #'A'
+        CMP
+        JNC  IH_NO
+        LDB  #'G'
+        CMP
+        JNC  IH_YES             ; 'A'..'F'
+        LDB  #'a'
+        CMP
+        JNC  IH_NO
+        LDB  #'g'
+        CMP
+        JNC  IH_YES             ; 'a'..'f'
+IH_NO:  LDA  #0
+        RTS
+IH_YES: LDA  #1
+        RTS
 
 ; =============================================================================
 ; OPCFIND - scan OPCTAB for (MNBUF, SHAPE) -> OPCB, FOUND

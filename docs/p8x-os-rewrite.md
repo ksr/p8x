@@ -52,6 +52,31 @@ output later.
 Each module: rewrite → `make test-quick` → size delta noted here → next.
 Milestones (full `make test`): after 1, after 4, at the end.
 
+## The mechanical pass (module 1, WM kernel)
+
+`wordmoves.py` (a one-off aid, kept out of the repo) collapses the two
+four-instruction idioms into one instruction each:
+
+    LDA x / STA y / LDA x+1 / STA y+1    ->  MOVW y,x        (12 -> 5 bytes)
+    LDA #lo / STA y / LDA #hi / STA y+1  ->  LDW y,#n        (10 -> 4/5 bytes)
+
+**Safety rule.** The old form leaves A = the high byte and Z/N from it; the
+new ops touch neither A nor the flags. A site is rewritten only when the next
+instruction cannot depend on that: a load into A/B/Pn, a JSR/JMP/RTS, another
+word op, INPn/DEPn, PHW/PLW, or a label (a jump target). Anything else — STA,
+an ALU op, TAPn, a conditional branch — keeps the original bytes. The 49
+candidate sites followed by a JSR were reviewed by hand: every callee
+(`k16add`, `k16sub`, `k_mul`, `k_ge`, `ksw`, `k_rdnum`, `sink_home`) takes its
+operands from the `ka`/`kb`/`kw` words, never from A. Dry run on the kernel:
+85 word moves + 21 constants, ~700 bytes. The OS proper has only 5 such sites
+(its style is byte-oriented); its gains come from the manual passes below.
+
+**Manual passes after it** (per section, with `test-quick` + the `wm_*` tests):
+`ka := X ; kb := Y ; JSR k16add ; Z := kw` chains become `MOVW Z,X ; ADDW Z,Y`
+(42 -> 10 bytes for the `x1 = x + w - 1` pattern with `DECW`); the 22-byte
+record unpack in `wk_draw` becomes four `LDW field,(P1+d)`; `k_off16`
+becomes `ADDW a,#imm8`.
+
 ## Measuring
 
 `python3 assembler/p8xasm.py os/p8xos.asm -o /dev/null --base 0x2000` prints
@@ -61,3 +86,12 @@ Byte-identity check for the native build: `sh emulator/test/os_asm_test.sh`.
 ## Log
 
 - 2026-09-11 branch created; reference copies made; plan written.
+- 2026-09-11 **step 0 done:** `apps/p8xasm.asm` PARSEOP now classifies a second
+  operand (`CLASSOP`, comma scan that steps over `'c'` literals) and the
+  `(Pn+d)` form (`DISPP`), combining into OPCTAB shapes 10–21; `LIT8` applies
+  the host's byte-literal rule to choose `a,#imm8` vs `a,#imm16`; the emitter
+  (`DI_AA`..`DI_PDA`) writes the address word first like the host, so
+  `STW (P3+d),a` matches byte for byte. `gen_p8xopc.py` exports every shape
+  but `r`; `os_asm_test`'s cover source has one line per new shape.
+  asm_selfhost + os_asm green. The OS may now use every Tier A instruction
+  except relative branches.
