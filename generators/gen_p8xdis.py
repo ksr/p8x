@@ -13,9 +13,18 @@ shape -> operand form and instruction length:
     0 ""     len 1      6 (P2)+  len 1
     1 "#"    len 2      7 (P3)   len 1
     2 "a"    len 3      8 (P3)+  len 1
-    3 (P1)   len 1      9 "a,a"  len 5   (MOVW dst,src — the compiler emits it)
+    3 (P1)   len 1      9 "a,a"  len 5   (MOVW dst,src / ADDW SUBW CMPW a,b)
     4 (P1)+  len 1
     5 (P2)   len 1
+  Tier A (2026-09-11; byte stream = address word first, then imm/disp):
+   10 "#w"        len 3   LDPn #imm16
+   11..13 (Pn+d)  len 2   LDA/STA (Pn+d): op d8          (11=P1 12=P2 13=P3)
+   14..16 a,(Pn+d) len 4  LDW a,(Pn+d):   op a.lo a.hi d8 (14=P1 15=P2 16=P3)
+   17..19 (Pn+d),a len 4  STW (Pn+d),a:   op a.lo a.hi d8 (17=P1 18=P2 19=P3)
+   20 "a,#"       len 4   LDW a,#imm8:    op a.lo a.hi imm8
+   21 "a,#w"      len 5   LDW a,#imm16:   op a.lo a.hi imm.lo imm.hi
+  (This numbering is the DISASSEMBLER's; the native assembler's opcode table
+  from gen_p8xopc.py has its own, where 9 is "#w".)
 
 Usage: gen_p8xdis.py [out.c]   (defaults to os/commands/lib_distab.c)
 """
@@ -26,7 +35,11 @@ sys.path.insert(0, os.path.join(HERE, "..", "microcode"))
 from genucode import OPC
 
 SHAPE = {"": 0, "#": 1, "a": 2, "(P1)": 3, "(P1)+": 4, "(P2)": 5,
-         "(P2)+": 6, "(P3)": 7, "(P3)+": 8, "a,a": 9}
+         "(P2)+": 6, "(P3)": 7, "(P3)+": 8, "a,a": 9,
+         "#w": 10, "(P1+d)": 11, "(P2+d)": 12, "(P3+d)": 13,
+         "a,(P1+d)": 14, "a,(P2+d)": 15, "a,(P3+d)": 16,
+         "(P1+d),a": 17, "(P2+d),a": 18, "(P3+d),a": 19,
+         "a,#": 20, "a,#w": 21}
 
 
 def main():

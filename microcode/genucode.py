@@ -46,13 +46,21 @@ FETCH=w(doe="MEM",dld="IR",psel=0,pinc=1)
 # ALU helper: (S, M, CINpin). CIN pin is ACTIVE-LOW carry on the 74181.
 ALU=dict(ADD=(0b1001,0,1), ADC1=(0b1001,0,0), SUB=(0b0110,0,0),
          AND=(0b1011,1,1), OR=(0b1110,1,1), XOR=(0b0110,1,1),
-         PASSA=(0b1111,1,1), INC=(0b0000,0,0), DEC=(0b1111,0,1))
+         PASSA=(0b1111,1,1), INC=(0b0000,0,0), DEC=(0b1111,0,1),
+         SBB=(0b0110,0,1),    # subtract WITH borrow: CIN pin high = carry-in 0 = A-B-1
+         ZERO=(0b0011,1,1))   # 74181 logic mode S=0011: F=0 -- a bus-able zero (zero-extend)
 def alu(op,dld="A",ldf=1,**kw):
     s,m,c=ALU[op]; return w(doe="ALU",dld=dld,alus=s,m=m,cin=c,ldf=ldf,urst=1,**kw)
+def alu_mid(op,dld,psel=0,ldf=1,**kw):   # an ALU step that does NOT end the opcode
+    s,m,c=ALU[op]; return w(doe="ALU",dld=dld,psel=psel,alus=s,m=m,cin=c,ldf=ldf,**kw)
 
 U={}     # opcode -> list of (cond0_word, cond1_word) per step (after fetch)
 OPC={}   # (BASE_MNEMONIC, shape) -> opcode    -- shared with the assembler
 def op(code,name,shape,*steps):
+    # 16 steps per opcode, step 0 is the fetch: 15 usable. A 16th step would
+    # alias into the condition plane (A12), so refuse it here, not on silicon.
+    assert len(steps)<=15, "%s %s: %d steps (max 15)"%(name,shape,len(steps))
+    assert code not in U, "opcode $%02X defined twice (%s)"%(code,name)
     U[code]=[(s,s) if not isinstance(s,tuple) else s for s in steps]
     OPC[(name,shape)]=code
 
@@ -227,6 +235,135 @@ op(0x78,"MOVW","a,a",
 
 op(0x72,"CLC","", w(clrc=1,urst=1))    # C := 0
 op(0x73,"SEC","", w(setc=1,urst=1))    # C := 1
+
+# ---- Tier A: the C-compiler ISA (2026-09-11, docs/p8x-isa-c-extensions.md) ----
+# Pure microcode: no new register, no new bus path. Everything below is built
+# from the existing datapath -- PT/PT2 as address scratch, T as the ALU's second
+# operand (BSEL), and the condition planes for CARRY PROPAGATION: an ALU step
+# latches C (LDF); the NEXT step carries fcond="C" so the plane mux samples a
+# settled flag; the step after that is a (C=0, C=1) plane pair. That two-step
+# lag is the hardware pipeline (flag register -> mux -> ROM address), not an
+# emulator artefact: do not "optimise" the fcond onto the ALU step.
+# Contracts (on the ISA card):
+#   * the (Pn+d) forms, ADDP3/SUBP3, LDW/STW (Pn+d), ADDW/SUBW/CMPW, INCW/DECW
+#     CLOBBER A (it is the ALU's only A input) and LATCH THE FLAGS -- unlike
+#     LDA/STA abs. p8cc holds nothing live in A or the flags across statements.
+#   * d8 is UNSIGNED 0..255 (frames use positive offsets).
+#   * ADDW/SUBW/CMPW: C = 16-bit carry / no-borrow (unsigned a>=b); N and V are
+#     the high byte's, so BLT/BGE after CMPW is a correct SIGNED 16-bit compare;
+#     Z reflects the high byte only (equality needs a separate test).
+#   * INCW/DECW/ADDP3/SUBP3: flags are the LOW byte's (C = carry/no-borrow out).
+#   * LDW a,# / LDW a,#w / LDPn #w: no A clobber, no flags.
+# Byte-stream order for the two-operand forms: the 16-bit address FIRST, then
+# the displacement / immediate -- for BOTH `LDW a,(Pn+d)` and `STW (Pn+d),a`, so
+# one microcode skeleton serves both (the assembler reorders `STW`'s operands).
+def _ld_pt2():    # steps 1-4: read 16-bit operand into PT2 (the MOVW dst loader)
+    return ( w(doe="MEM",dld="T", psel=0,pinc=1),
+             w(doe="MEM",dld="T2",psel=0,pinc=1),
+             w(doe="T", dld="PTRL",psel=PT2),
+             w(doe="T2",dld="PTRH",psel=PT2) )
+def _pt_disp(p):  # PT = Pn + T(d8), carry-correct. 4 steps; clobbers A; latches flags.
+    return ( w(doe="PTRL",dld="A",psel=p),                        # A = Pn.lo
+             alu_mid("ADD",dld="PTRL",psel=PT,bsel=1),             # PT.lo = Pn.lo + d8 ; latch C
+             w(doe="PTRH",dld="A",psel=p,fcond="C"),               # A = Pn.hi ; route C -> mux
+             ( alu_mid("PASSA",dld="PTRH",psel=PT,ldf=0),          # C=0: PT.hi = Pn.hi
+               alu_mid("INC",  dld="PTRH",psel=PT,ldf=0) ) )       # C=1: PT.hi = Pn.hi + 1
+# A1. LDPn #imm16 -- a real 3-byte opcode (was the 4-byte LPLn/LPHn macro).
+for p in (1,2,3):
+    op(0x37+p,"LDP%d"%p,"#w",
+       w(doe="MEM",dld="T", psel=0,pinc=1),                        # T  = imm.lo
+       w(doe="MEM",dld="T2",psel=0,pinc=1),                        # T2 = imm.hi
+       w(doe="T", dld="PTRL",psel=p),
+       w(doe="T2",dld="PTRH",psel=p,urst=1))
+# A2. ADDP3/SUBP3 #imm8 -- frame allocate / free on the hardware stack.
+op(0x3C,"ADDP3","#",
+   w(doe="MEM",dld="T",psel=0,pinc=1),                             # T = imm8
+   w(doe="PTRL",dld="A",psel=3),                                   # A = P3.lo
+   alu_mid("ADD",dld="PTRL",psel=3,bsel=1),                        # P3.lo = A+T ; latch C
+   w(doe="PTRH",dld="A",psel=3,fcond="C"),                         # A = P3.hi ; route C
+   ( alu_mid("PASSA",dld="PTRH",psel=3,ldf=0,urst=1),              # C=0: P3.hi unchanged
+     alu_mid("INC",  dld="PTRH",psel=3,ldf=0,urst=1) ))            # C=1: P3.hi + 1
+op(0x3D,"SUBP3","#",
+   w(doe="MEM",dld="T",psel=0,pinc=1),
+   w(doe="PTRL",dld="A",psel=3),
+   alu_mid("SUB",dld="PTRL",psel=3,bsel=1),                        # P3.lo = A-T ; C=1: no borrow
+   w(doe="PTRH",dld="A",psel=3,fcond="C"),
+   ( alu_mid("DEC",  dld="PTRH",psel=3,ldf=0,urst=1),              # C=0: borrow -> P3.hi - 1
+     alu_mid("PASSA",dld="PTRH",psel=3,ldf=0,urst=1) ))            # C=1: unchanged
+# A3. LDA/STA (Pn+d8) -- displacement addressing (2 bytes: op d8).
+for p in (1,2,3):
+    op(0x87+p,"LDA","(P%d+d)"%p,                                    # 6 steps
+       w(doe="MEM",dld="T",psel=0,pinc=1),                         # T = d8
+       *_pt_disp(p),
+       w(doe="MEM",dld="A",psel=PT,ldzn=1,urst=1))                 # A = mem[PT]
+    op(0x8B+p,"STA","(P%d+d)"%p,                                    # 8 steps
+       w(doe="MEM",dld="T",psel=0,pinc=1),                         # T = d8
+       w(doe="A",dld="T2"),                                        # T2 = A (the ALU needs A)
+       *_pt_disp(p),
+       w(doe="T2",dld="MEMW",psel=PT),                             # mem[PT] = saved A
+       w(doe="T2",dld="A",urst=1))                                 # restore A: STA leaves A intact
+# A4. LDW a,(Pn+d8) / STW (Pn+d8),a -- a 16-bit local <-> a memory word (4 bytes:
+# op a.lo a.hi d8; 13 steps). The direct replacement for p8cc's JSR __ldw/__stw.
+for p in (1,2,3):
+    op(0x8F+p,"LDW","a,(P%d+d)"%p,
+       *_ld_pt2(),                                                 # 1-4  a -> PT2 (dest)
+       w(doe="MEM",dld="T",psel=0,pinc=1),                         # 5    T = d8
+       *_pt_disp(p),                                               # 6-9  PT = Pn + d8
+       w(doe="MEM",dld="T",psel=PT,pinc=1),                        # 10   T = mem[Pn+d]    PT++
+       w(doe="T",dld="MEMW",psel=PT2,pinc=1),                      # 11   mem[a] = T       PT2++
+       w(doe="MEM",dld="T",psel=PT),                               # 12   T = mem[Pn+d+1]
+       w(doe="T",dld="MEMW",psel=PT2,urst=1))                      # 13   mem[a+1] = T
+    op(0x93+p,"STW","(P%d+d),a"%p,
+       *_ld_pt2(),                                                 # 1-4  a -> PT2 (source)
+       w(doe="MEM",dld="T",psel=0,pinc=1),                         # 5    T = d8
+       *_pt_disp(p),                                               # 6-9  PT = Pn + d8 (dest)
+       w(doe="MEM",dld="T",psel=PT2,pinc=1),                       # 10   T = mem[a]       PT2++
+       w(doe="T",dld="MEMW",psel=PT,pinc=1),                       # 11   mem[Pn+d] = T    PT++
+       w(doe="MEM",dld="T",psel=PT2),                              # 12   T = mem[a+1]
+       w(doe="T",dld="MEMW",psel=PT,urst=1))                       # 13   mem[Pn+d+1] = T
+# A5. LDW a,#imm8 (zero-extended, 4 bytes) / LDW a,#imm16 (5 bytes) -- a 16-bit
+# constant into a memory word. p8cc's single most frequent idiom (was 10 bytes).
+op(0x98,"LDW","a,#",
+   *_ld_pt(),                                                      # 1-4  a -> PT
+   w(doe="MEM",dld="T",psel=0,pinc=1),                             # 5    T = imm8
+   w(doe="T",dld="MEMW",psel=PT,pinc=1),                           # 6    mem[a] = imm8    PT++
+   alu_mid("ZERO",dld="MEMW",psel=PT,ldf=0,urst=1))                # 7    mem[a+1] = 0
+op(0x99,"LDW","a,#w",
+   *_ld_pt(),
+   w(doe="MEM",dld="T",psel=0,pinc=1), w(doe="T",dld="MEMW",psel=PT,pinc=1),
+   w(doe="MEM",dld="T",psel=0,pinc=1), w(doe="T",dld="MEMW",psel=PT,urst=1))
+# A6. ADDW/SUBW/CMPW a,b -- mem[a] op= mem[b], carry/borrow through the C plane
+# (5 bytes: op a.lo a.hi b.lo b.hi; 14 steps). CMPW = SUBW with the writes off.
+def _wordop(code,name,lo,hi_pair,store=True):
+    dst="MEMW" if store else "none"
+    op(code,name,"a,a",
+       *_ld_pt2(),                                                 # 1-4  a -> PT2
+       *_ld_pt(),                                                  # 5-8  b -> PT
+       w(doe="MEM",dld="T",psel=PT,pinc=1),                        # 9    T = b.lo         PT++
+       w(doe="MEM",dld="A",psel=PT2),                              # 10   A = a.lo
+       alu_mid(lo,dld=dst,psel=PT2,bsel=1,pinc=1),                 # 11   a.lo = A op T ; latch C ; PT2++
+       w(doe="MEM",dld="T",psel=PT),                               # 12   T = b.hi
+       w(doe="MEM",dld="A",psel=PT2,fcond="C"),                    # 13   A = a.hi ; route C
+       ( alu_mid(hi_pair[0],dld=dst,psel=PT2,bsel=1,urst=1),       # 14   C=0 plane
+         alu_mid(hi_pair[1],dld=dst,psel=PT2,bsel=1,urst=1) ))     #      C=1 plane
+_wordop(0x9A,"ADDW","ADD",("ADD","ADC1"))          # C=1 from the low byte: carry in
+_wordop(0x9B,"SUBW","SUB",("SBB","SUB"))           # C=0 from the low byte: borrow in
+_wordop(0x9C,"CMPW","SUB",("SBB","SUB"),store=False)
+# A7. INCW/DECW a -- 16-bit increment/decrement in memory (3 bytes, 8 steps).
+op(0x9E,"INCW","a",
+   *_ld_pt(),                                                      # 1-4  a -> PT
+   w(doe="MEM",dld="A",psel=PT),                                   # 5    A = a.lo
+   alu_mid("INC",dld="MEMW",psel=PT,pinc=1),                       # 6    a.lo++ ; latch C ; PT++
+   w(doe="MEM",dld="A",psel=PT,fcond="C"),                         # 7    A = a.hi ; route C
+   ( alu_mid("PASSA",dld="MEMW",psel=PT,ldf=0,urst=1),             # 8    C=0: done
+     alu_mid("INC",  dld="MEMW",psel=PT,ldf=0,urst=1) ))           #      C=1: a.hi++
+op(0x9F,"DECW","a",
+   *_ld_pt(),
+   w(doe="MEM",dld="A",psel=PT),
+   alu_mid("DEC",dld="MEMW",psel=PT,pinc=1),                       # a.lo-- ; C=1: no borrow
+   w(doe="MEM",dld="A",psel=PT,fcond="C"),
+   ( alu_mid("DEC",  dld="MEMW",psel=PT,ldf=0,urst=1),             # C=0: borrow -> a.hi--
+     alu_mid("PASSA",dld="MEMW",psel=PT,ldf=0,urst=1) ))           # C=1: done
 
 # conditional branches abs: Bcc addr. FCOND emitted while fetching operand;
 # cond plane 1 = take (load P0 from T/T2), plane 0 = fall through.

@@ -329,7 +329,32 @@ work on real hardware also requires upgrading `PT` from load-only 74377 latches 
 requirement the earlier "pure-microcode" ops introduced but the regbank card has
 not yet been revised for. See the register-bank card theory (rev D).
 
-Opcode space is still wide open (256 slots, 88 used).
+**Tier A — the C-compiler ISA (2026-09, pure microcode, 24 opcodes).** The next
+step after rev D, from the measured cost breakdown of compiled programs (see
+[p8x-isa-c-extensions.md](p8x-isa-c-extensions.md)): a real 16-bit pointer load,
+displacement addressing, and 16-bit memory-word arithmetic. Every one is built
+from the existing datapath — PT/PT2 as address scratch, T as the ALU's second
+operand, and the **condition planes as the carry chain** (an ALU step latches C,
+the next step routes it to the plane mux, the step after is a C=0/C=1 pair).
+No new register, no new bus line; the emulator and the FPGA run the regenerated
+`u0–u3.bin` unchanged; the TTL machine needs its control-store EPROMs reburned.
+
+| Mnemonic | Operation |
+|---|---|
+| LDPn #imm16 (`$38–$3A`) | Pn := imm16 in one 3-byte instruction (was the LPLn/LPHn pair, 4 bytes) |
+| ADDP3 / SUBP3 #imm8 (`$3C`/`$3D`) | P3 ± imm8 — allocate / free a stack frame |
+| LDA / STA (Pn+d) (`$88–$8A` / `$8C–$8E`) | byte at Pn + d, d an unsigned 8-bit displacement (computed into PT) |
+| LDW a,(Pn+d) / STW (Pn+d),a (`$90–$92` / `$94–$96`) | a 16-bit frame local to / from a memory word |
+| LDW a,#imm8 / #imm16 (`$98`/`$99`) | a 16-bit constant into a memory word (the compiler's most frequent idiom, 10 → 4 bytes) |
+| ADDW / SUBW / CMPW a,b (`$9A–$9C`) | 16-bit memory-word arithmetic, carry chained; CMPW sets flags only |
+| INCW / DECW a (`$9E`/`$9F`) | 16-bit increment / decrement in memory |
+
+Contracts: the memory-to-memory forms clobber A (it is the ALU's only A input)
+and latch the flags; `d` is unsigned; after `ADDW`/`SUBW`/`CMPW`, C is the
+16-bit carry / no-borrow and N^V the signed order, but Z reflects the high byte
+only. The rev-D upgrade of PT/PT2 to 74169 counters covers these too.
+
+Opcode space: 256 slots, 112 used.
 
 ---
 

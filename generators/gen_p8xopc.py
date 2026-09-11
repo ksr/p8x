@@ -15,6 +15,14 @@ A trailing .byte $FF terminates the table.
 shapecode encodes the operand form (must match the native parse_operand):
     0 ""   1 "#"   2 "a"
     3 (P1) 4 (P1)+ 5 (P2) 6 (P2)+ 7 (P3) 8 (P3)+
+    9 "#w" -- a 16-bit immediate. The native parser never produces 9 from
+      syntax; DO_LDP sets SHAPE=9 itself to look up the LDPn opcode (Tier A:
+      LDPn #imm16 is a real 3-byte instruction, no longer an LPLn/LPHn pair).
+The remaining Tier A shapes -- (Pn+d), a,(Pn+d), (Pn+d),a, a,# and a,#w --
+are emitted by the HOST toolchain only (the compiler's idioms) and are skipped
+here until the native operand parser grows them (backlog: ASM two-operand /
+displacement support). NOTE: this numbering is the ASSEMBLER's; the
+disassembler table (gen_p8xdis.py) has its own, where 9 is "a,a".
 
 Usage: gen_p8xopc.py [out.asm]   (defaults to stdout)
 """
@@ -25,7 +33,13 @@ sys.path.insert(0, os.path.join(HERE, "..", "microcode"))
 from genucode import OPC
 
 SHAPE = {"": 0, "#": 1, "a": 2,
-         "(P1)": 3, "(P1)+": 4, "(P2)": 5, "(P2)+": 6, "(P3)": 7, "(P3)+": 8}
+         "(P1)": 3, "(P1)+": 4, "(P2)": 5, "(P2)+": 6, "(P3)": 7, "(P3)+": 8,
+         "#w": 9}
+# host-only shapes (see the docstring): skipped, not an error
+HOST_ONLY = {"a,a", "a,#", "a,#w",
+             "(P1+d)", "(P2+d)", "(P3+d)",
+             "a,(P1+d)", "a,(P2+d)", "a,(P3+d)",
+             "(P1+d),a", "(P2+d),a", "(P3+d),a"}
 
 
 def main():
@@ -38,11 +52,11 @@ def main():
     w("OPCTAB:\n")
     # stable order: by mnemonic then shape, for readable diffs
     for (mn, sh), op in sorted(OPC.items()):
-        if "," in sh:
-            # Two-operand ops (e.g. MOVW dst,src) — the on-target assembler's
-            # parse_operand handles only single-operand shapes, so they're
-            # emitted by the HOST toolchain only. Skip until the native parser
-            # grows a two-absolute form (backlog: ASM two-operand support).
+        if sh in HOST_ONLY:
+            # Two-operand / displacement ops (MOVW dst,src, the Tier A forms) —
+            # the on-target assembler's parse_operand handles only the
+            # single-operand shapes, so these are emitted by the HOST toolchain
+            # only. Skip until the native parser grows them.
             continue
         if sh not in SHAPE:
             sys.exit("gen_p8xopc: unknown shape %r for %s" % (sh, mn))

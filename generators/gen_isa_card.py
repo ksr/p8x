@@ -42,9 +42,17 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle  # noqa: E4
 # ---- operand-shape rendering + byte counts (same as gen_progguide.py) -------
 SHN = {"": "", "#": " #imm", "a": " addr", "a,a": " dst,src",
        "(P1)": " (P1)", "(P2)": " (P2)",
-       "(P3)": " (P3)", "(P1)+": " (P1)+", "(P2)+": " (P2)+", "(P3)+": " (P3)+"}
+       "(P3)": " (P3)", "(P1)+": " (P1)+", "(P2)+": " (P2)+", "(P3)+": " (P3)+",
+       # Tier A (2026-09): d = unsigned 8-bit displacement
+       "#w": " #imm16", "(P1+d)": " (P1+d)", "(P2+d)": " (P2+d)", "(P3+d)": " (P3+d)",
+       "a,(P1+d)": " addr,(P1+d)", "a,(P2+d)": " addr,(P2+d)", "a,(P3+d)": " addr,(P3+d)",
+       "(P1+d),a": " (P1+d),addr", "(P2+d),a": " (P2+d),addr", "(P3+d),a": " (P3+d),addr",
+       "a,#": " addr,#imm8", "a,#w": " addr,#imm16"}
 BYTES = {"": 1, "#": 2, "a": 3, "a,a": 5, "(P1)": 1, "(P2)": 1, "(P3)": 1,
-         "(P1)+": 1, "(P2)+": 1, "(P3)+": 1}
+         "(P1)+": 1, "(P2)+": 1, "(P3)+": 1,
+         "#w": 3, "(P1+d)": 2, "(P2+d)": 2, "(P3+d)": 2,
+         "a,(P1+d)": 4, "a,(P2+d)": 4, "a,(P3+d)": 4,
+         "(P1+d),a": 4, "(P2+d),a": 4, "(P3+d),a": 4, "a,#": 4, "a,#w": 5}
 
 # (mnemonic, shape) -> (flags, one-line description). Authored prose only.
 DESC = {
@@ -88,6 +96,31 @@ DESC = {
     ("LPW1", "a"): ("-", "P1 := 16-bit word at addr."),
     ("LPW2", "a"): ("-", "P2 := 16-bit word at addr."),
     ("MOVW", "a,a"): ("-", "16-bit mem->mem: word at src -> dst."),
+    # Tier A -- the C-compiler ISA (pure microcode). "A!" = clobbers A.
+    ("LDP1", "#w"): ("-", "P1:=imm16 (3 bytes; was the LPL1/LPH1 pair)."),
+    ("LDP2", "#w"): ("-", "P2:=imm16."),
+    ("LDP3", "#w"): ("-", "P3:=imm16."),
+    ("ADDP3", "#"): ("CZN", "P3:=P3+imm8 (free a frame). A!; flags from the low byte."),
+    ("SUBP3", "#"): ("CZN", "P3:=P3-imm8 (allocate a frame). A!; flags from the low byte."),
+    ("LDA", "(P1+d)"): ("CZN", "A:=byte at P1+d (d unsigned 0..255). C from the address add, Z/N from A."),
+    ("LDA", "(P2+d)"): ("CZN", "A:=byte at P2+d."),
+    ("LDA", "(P3+d)"): ("CZN", "A:=byte at P3+d (a stack local)."),
+    ("STA", "(P1+d)"): ("CZN", "byte at P1+d:=A. A kept; flags clobbered by the address add."),
+    ("STA", "(P2+d)"): ("CZN", "byte at P2+d:=A."),
+    ("STA", "(P3+d)"): ("CZN", "byte at P3+d:=A (a stack local)."),
+    ("LDW", "a,(P1+d)"): ("CZN", "word at addr:=word at P1+d. A!"),
+    ("LDW", "a,(P2+d)"): ("CZN", "word at addr:=word at P2+d. A!"),
+    ("LDW", "a,(P3+d)"): ("CZN", "word at addr:=word at P3+d (local -> memory word). A!"),
+    ("STW", "(P1+d),a"): ("CZN", "word at P1+d:=word at addr. A!"),
+    ("STW", "(P2+d),a"): ("CZN", "word at P2+d:=word at addr. A!"),
+    ("STW", "(P3+d),a"): ("CZN", "word at P3+d:=word at addr (memory word -> local). A!"),
+    ("LDW", "a,#"): ("-", "word at addr:=imm8 zero-extended (4 bytes)."),
+    ("LDW", "a,#w"): ("-", "word at addr:=imm16 (5 bytes)."),
+    ("ADDW", "a,a"): ("CZNV", "word a:=a+b, 16-bit; C=carry out. A!; Z from the high byte only."),
+    ("SUBW", "a,a"): ("CZNV", "word a:=a-b, 16-bit; C=1 no borrow (a>=b unsigned). A!; Z high byte only."),
+    ("CMPW", "a,a"): ("CZNV", "flags from a-b (16-bit), memory unchanged: C=unsigned a>=b, BLT/BGE = signed. A!"),
+    ("INCW", "a"): ("CZN", "word at addr += 1. A!; flags from the low byte."),
+    ("DECW", "a"): ("CZN", "word at addr -= 1. A!; flags from the low byte."),
     ("JMP", "a"): ("-", "P0(PC):=addr."),
     ("JSR", "(P1)"): ("-", "Push return addr, P0:=P1."),
     ("JSR", "a"): ("-", "Push return addr, P0:=addr."),
@@ -126,6 +159,9 @@ GROUPS = [
      ["LDT", "ADDT", "SUBT", "ANDT", "ORT", "XORT", "CMPT"]),
     ("Stack", ["PHA", "PLA"]),
     ("16-bit memory (rev D)", ["PHW", "PLW", "LPW1", "LPW2", "MOVW"]),
+    ("Tier A: C-compiler ISA (2026-09, pure microcode; A! = clobbers A)",
+     ["LDP1", "LDP2", "LDP3", "ADDP3", "SUBP3", "LDW", "STW",
+      "ADDW", "SUBW", "CMPW", "INCW", "DECW"]),
     ("Control flow", ["JMP", "JSR", "RTS", "BZ", "BNZ", "BCP", "JNC"]),
     ("Signed branches (rev C; after CMP)", ["BLT", "BGE", "BLE", "BGT"]),
     ("Pointer registers", ["LPL1", "LPH1", "LPL2", "LPH2", "LPL3", "LPH3",

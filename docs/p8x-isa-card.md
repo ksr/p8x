@@ -43,6 +43,12 @@ Opcodes, mnemonics and cycle counts generated live from `genucode.py` (the micro
 | $51 | `LDA (P1)` | 1 | 2 | ZN | A:=[P1] (P1 kept). |
 | $52 | `LDA (P2)` | 1 | 2 | ZN | A:=[P2] (P2 kept). |
 | $53 | `LDA (P3)` | 1 | 2 | ZN | A:=[P3] (P3 kept). |
+| $88 | `LDA (P1+d)` | 2 | 7 | CZN | A:=byte at P1+d (d unsigned 0..255). C from the address add, Z/N from A. |
+| $89 | `LDA (P2+d)` | 2 | 7 | CZN | A:=byte at P2+d. |
+| $8A | `LDA (P3+d)` | 2 | 7 | CZN | A:=byte at P3+d (a stack local). |
+| $8C | `STA (P1+d)` | 2 | 9 | CZN | byte at P1+d:=A. A kept; flags clobbered by the address add. |
+| $8D | `STA (P2+d)` | 2 | 9 | CZN | byte at P2+d:=A. |
+| $8E | `STA (P3+d)` | 2 | 9 | CZN | byte at P3+d:=A (a stack local). |
 
 ## ALU (A,B -> A)
 
@@ -90,6 +96,29 @@ Opcodes, mnemonics and cycle counts generated live from `genucode.py` (the micro
 | $76 | `LPW1 addr` | 3 | 9 | - | P1 := 16-bit word at addr. |
 | $77 | `LPW2 addr` | 3 | 9 | - | P2 := 16-bit word at addr. |
 | $78 | `MOVW dst,src` | 5 | 13 | - | 16-bit mem->mem: word at src -> dst. |
+
+## Tier A: C-compiler ISA (2026-09, pure microcode; A! = clobbers A)
+
+| Op | Mnemonic | By | Cy | Fl | Description |
+|---|---|---|---|---|---|
+| $38 | `LDP1 #imm16` | 3 | 5 | - | P1:=imm16 (3 bytes; was the LPL1/LPH1 pair). |
+| $39 | `LDP2 #imm16` | 3 | 5 | - | P2:=imm16. |
+| $3A | `LDP3 #imm16` | 3 | 5 | - | P3:=imm16. |
+| $3C | `ADDP3 #imm` | 2 | 6 | CZN | P3:=P3+imm8 (free a frame). A!; flags from the low byte. |
+| $3D | `SUBP3 #imm` | 2 | 6 | CZN | P3:=P3-imm8 (allocate a frame). A!; flags from the low byte. |
+| $90 | `LDW addr,(P1+d)` | 4 | 14 | CZN | word at addr:=word at P1+d. A! |
+| $91 | `LDW addr,(P2+d)` | 4 | 14 | CZN | word at addr:=word at P2+d. A! |
+| $92 | `LDW addr,(P3+d)` | 4 | 14 | CZN | word at addr:=word at P3+d (local -> memory word). A! |
+| $94 | `STW (P1+d),addr` | 4 | 14 | CZN | word at P1+d:=word at addr. A! |
+| $95 | `STW (P2+d),addr` | 4 | 14 | CZN | word at P2+d:=word at addr. A! |
+| $96 | `STW (P3+d),addr` | 4 | 14 | CZN | word at P3+d:=word at addr (memory word -> local). A! |
+| $98 | `LDW addr,#imm8` | 4 | 8 | - | word at addr:=imm8 zero-extended (4 bytes). |
+| $99 | `LDW addr,#imm16` | 5 | 9 | - | word at addr:=imm16 (5 bytes). |
+| $9A | `ADDW dst,src` | 5 | 15 | CZNV | word a:=a+b, 16-bit; C=carry out. A!; Z from the high byte only. |
+| $9B | `SUBW dst,src` | 5 | 15 | CZNV | word a:=a-b, 16-bit; C=1 no borrow (a>=b unsigned). A!; Z high byte only. |
+| $9C | `CMPW dst,src` | 5 | 15 | CZNV | flags from a-b (16-bit), memory unchanged: C=unsigned a>=b, BLT/BGE = signed. A! |
+| $9E | `INCW addr` | 3 | 9 | CZN | word at addr += 1. A!; flags from the low byte. |
+| $9F | `DECW addr` | 3 | 9 | CZN | word at addr -= 1. A!; flags from the low byte. |
 
 ## Control flow
 

@@ -16,7 +16,7 @@
 ;                          mem->mem word move, encoded op + dst16 + src16 (5 B).
 ;                          Handled as a special case before the ordinary
 ;                          one-operand path (as the host assembler does).
-;   LDPn #expr16           pseudo -> LPLn #<expr ; LPHn #>expr
+;   LDPn #expr16           the 3-byte LDPn opcode + imm16 (Tier A; was LPLn/LPHn)
 ;   .org .byte .word .ascii .asciiz .fill
 ;   .include "path"        at line start: append the file (resolved relative to
 ;                          THIS source's directory, so `.include "../x/y.inc"`
@@ -353,7 +353,10 @@ DI_ABS: JSR  EVAL
         JSR  EMIT
         RTS
 
-; ---- LDPn #imm16 -> LPLn #<imm ; LPHn #>imm ----
+; ---- LDPn #imm16 -> the LDPn opcode + imm16 (lo, hi) ----
+; Tier A (2026-09-11): LDPn is a real 3-byte instruction (opcodes $38-$3A), no
+; longer the LPLn/LPHn pair. Its OPCTAB record carries shape 9 ("#w", a 16-bit
+; immediate) -- a shape PARSEOP never produces, so this path sets SHAPE itself.
 DO_LDP: LDA  MNBUF+3
         STA  LDPN               ; pointer digit char (survives EVAL)
         JSR  SKIPSP
@@ -363,17 +366,17 @@ DO_LDP: LDA  MNBUF+3
         JNZ  DL_ERR
         INP1
         JSR  EVAL               ; VAL = imm16 (clobbers MNBUF/TMP)
-        LDA  #'L'               ; MNBUF = "LPLn"
+        LDA  #'L'               ; MNBUF = "LDPn" again (EVAL trashed it)
         STA  MNBUF
-        LDA  #'P'
+        LDA  #'D'
         STA  MNBUF+1
-        LDA  #'L'
+        LDA  #'P'
         STA  MNBUF+2
         LDA  LDPN
         STA  MNBUF+3
         LDA  #0
         STA  MNBUF+4
-        LDA  #1
+        LDA  #9                 ; shape 9 = "#w"
         STA  SHAPE
         JSR  OPCFIND
         LDA  FOUND
@@ -381,15 +384,6 @@ DO_LDP: LDA  MNBUF+3
         LDA  OPCB
         JSR  EMIT
         LDA  VAL
-        JSR  EMIT
-        LDA  #'H'               ; MNBUF = "LPHn"
-        STA  MNBUF+2
-        LDA  #1
-        STA  SHAPE
-        JSR  OPCFIND
-        LDA  FOUND
-        JZ   DL_ERR
-        LDA  OPCB
         JSR  EMIT
         LDA  VAL+1
         JSR  EMIT

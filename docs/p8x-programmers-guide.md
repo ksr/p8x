@@ -51,6 +51,12 @@ Instruction set rev 1 — generated from the microcode source (`genucode.py`); o
 | $51 | `LDA (P1)` | 1 | 2 | Z N | A := memory at P1 (P1 unchanged). |
 | $52 | `LDA (P2)` | 1 | 2 | Z N | A := memory at P2 (P2 unchanged). |
 | $53 | `LDA (P3)` | 1 | 2 | Z N | A := memory at P3 (P3 unchanged). |
+| $88 | `LDA (P1+d)` | 2 | 7 | C Z N | A := byte at P1 + d (d unsigned 0..255). C/V from the address add, then Z/N from A. P1 unchanged. |
+| $89 | `LDA (P2+d)` | 2 | 7 | C Z N | A := byte at P2 + d (d unsigned 0..255). C/V from the address add, then Z/N from A. P2 unchanged. |
+| $8A | `LDA (P3+d)` | 2 | 7 | C Z N | A := byte at P3 + d (d unsigned 0..255). C/V from the address add, then Z/N from A. P3 unchanged. |
+| $8C | `STA (P1+d)` | 2 | 9 | C Z N | Byte at P1 + d := A. A preserved; flags clobbered by the address add. |
+| $8D | `STA (P2+d)` | 2 | 9 | C Z N | Byte at P2 + d := A. A preserved; flags clobbered by the address add. |
+| $8E | `STA (P3+d)` | 2 | 9 | C Z N | Byte at P3 + d := A. A preserved; flags clobbered by the address add. |
 
 ### ALU  (operands A,B; result to A unless noted)
 
@@ -128,6 +134,29 @@ Instruction set rev 1 — generated from the microcode source (`genucode.py`); o
 | $77 | `LPW2 addr` | 3 | 9 | - | P2 (16-bit) := the word at addr. |
 | $78 | `MOVW dst,src` | 5 | 13 | - | 16-bit memory->memory move: the word at src -> dst (via the PT/PT2 scratch pointers). |
 
+### Tier A: the C-compiler ISA (2026-09; pure microcode. A! = clobbers A; d = unsigned 8-bit displacement)
+
+| Op | Mnemonic | Bytes | Cycles | Flags | Description |
+|---|---|---|---|---|---|
+| $38 | `LDP1 #imm16` | 3 | 5 | - | P1 := imm16. A real 3-byte instruction (was the LPL1/LPH1 pseudo-op pair). |
+| $39 | `LDP2 #imm16` | 3 | 5 | - | P2 := imm16. |
+| $3A | `LDP3 #imm16` | 3 | 5 | - | P3 := imm16. |
+| $3C | `ADDP3 #imm` | 2 | 6 | C Z N | P3 := P3 + imm8 (free a stack frame). A!; flags are the low byte's. |
+| $3D | `SUBP3 #imm` | 2 | 6 | C Z N | P3 := P3 - imm8 (allocate a stack frame). A!; flags are the low byte's. |
+| $90 | `LDW addr,(P1+d)` | 4 | 14 | C Z N | Word at addr := the word at P1 + d (a frame local into a memory word). A! |
+| $91 | `LDW addr,(P2+d)` | 4 | 14 | C Z N | Word at addr := the word at P2 + d (a frame local into a memory word). A! |
+| $92 | `LDW addr,(P3+d)` | 4 | 14 | C Z N | Word at addr := the word at P3 + d (a frame local into a memory word). A! |
+| $94 | `STW (P1+d),addr` | 4 | 14 | C Z N | Word at P1 + d := the word at addr (a memory word into a frame local). A! |
+| $95 | `STW (P2+d),addr` | 4 | 14 | C Z N | Word at P2 + d := the word at addr (a memory word into a frame local). A! |
+| $96 | `STW (P3+d),addr` | 4 | 14 | C Z N | Word at P3 + d := the word at addr (a memory word into a frame local). A! |
+| $98 | `LDW addr,#imm8` | 4 | 8 | - | Word at addr := imm8 zero-extended (4 bytes; the compiler's constant idiom). |
+| $99 | `LDW addr,#imm16` | 5 | 9 | - | Word at addr := imm16 (5 bytes). |
+| $9A | `ADDW dst,src` | 5 | 15 | C Z N V | Word a := a + b (16-bit, carry chained). C = carry out; N/V from the high byte; Z from the HIGH byte only. A! |
+| $9B | `SUBW dst,src` | 5 | 15 | C Z N V | Word a := a - b (16-bit, borrow chained). C=1 means no borrow (unsigned a >= b). Z high byte only. A! |
+| $9C | `CMPW dst,src` | 5 | 15 | C Z N V | Flags from a - b (16-bit), memory unchanged: C = unsigned a >= b; BLT/BGE/BLE/BGT give the signed order. Z high byte only. A! |
+| $9E | `INCW addr` | 3 | 9 | C Z N | Word at addr := word + 1. A!; flags are the low byte's (C = carry out of it). |
+| $9F | `DECW addr` | 3 | 9 | C Z N | Word at addr := word - 1. A!; flags are the low byte's (C=1: no borrow). |
+
 ### Control flow
 
 | Op | Mnemonic | Bytes | Cycles | Flags | Description |
@@ -149,8 +178,6 @@ Instruction set rev 1 — generated from the microcode source (`genucode.py`); o
 | $45 | `BGE addr` | 3 | 5 | - | Branch if signed A >= B (N^V=0). Use after CMP. |
 | $46 | `BLE addr` | 3 | 5 | - | Branch if signed A <= B ((N^V)\|Z). Use after CMP. |
 | $47 | `BGT addr` | 3 | 5 | - | Branch if signed A >  B (not (N^V)\|Z). Use after CMP. |
-
-| — | `LDPn #imm16` | 4 | 6 | - | Assembler pseudo-op: LPLn + LPHn pair. Pn := imm16. |
 
 ## Notes
 

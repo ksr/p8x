@@ -467,6 +467,285 @@ n32b:
         LDB #$AA
         CMP
         JNZ fail
+; =============================================================================
+; Tier A -- the C-compiler ISA (docs/p8x-isa-c-extensions.md), pure microcode.
+; Each op is checked on the case that exercises its CARRY PLANE (a byte
+; boundary crossing) as well as the plain case. Scratch words at $9010.., a
+; page-crossing displacement target at $9110, P2/P3 frames at $92xx.
+; =============================================================================
+; ---- C1: LDP1 #imm16 is a real 3-byte opcode ----
+        LDA #$C1
+        STA TID
+        LDP1 #$9010
+        LDA #$5A
+        STA (P1)
+        LDA $9010
+        LDB #$5A
+        CMP
+        JNZ fail
+; ---- C2: LDW a,#imm8 zero-extends into the high byte ----
+        LDA #$C2
+        STA TID
+        LDA #$FF
+        STA $9011                   ; pre-dirty the high byte
+        LDW $9010,#$7B
+        LDA $9010
+        LDB #$7B
+        CMP
+        JNZ fail
+        LDA $9011
+        JNZ fail                    ; high byte must be 0
+; ---- C3: LDW a,#imm16 ----
+        LDA #$C3
+        STA TID
+        LDW $9010,#$BEEF
+        LDA $9010
+        LDB #$EF
+        CMP
+        JNZ fail
+        LDA $9011
+        LDB #$BE
+        CMP
+        JNZ fail
+; ---- C4: INCW carries into the high byte ($00FF -> $0100) ----
+        LDA #$C4
+        STA TID
+        LDW $9010,#$FF
+        INCW $9010
+        LDA $9010
+        JNZ fail
+        LDA $9011
+        LDB #$01
+        CMP
+        JNZ fail
+; ---- C5: INCW without carry ($0100 -> $0101) ----
+        LDA #$C5
+        STA TID
+        INCW $9010
+        LDA $9010
+        LDB #$01
+        CMP
+        JNZ fail
+        LDA $9011
+        LDB #$01
+        CMP
+        JNZ fail
+; ---- C6: DECW borrows from the high byte ($0100 -> $00FF) ----
+        LDA #$C6
+        STA TID
+        LDW $9010,#$0100
+        DECW $9010
+        LDA $9010
+        LDB #$FF
+        CMP
+        JNZ fail
+        LDA $9011
+        JNZ fail
+; ---- C7: DECW without borrow ($00FF -> $00FE) ----
+        LDA #$C7
+        STA TID
+        DECW $9010
+        LDA $9010
+        LDB #$FE
+        CMP
+        JNZ fail
+        LDA $9011
+        JNZ fail
+; ---- C8: ADDW with a low-byte carry: $12FF + $0101 = $1400, source intact ----
+        LDA #$C8
+        STA TID
+        LDW $9010,#$12FF
+        LDW $9012,#$0101
+        ADDW $9010,$9012
+        LDA $9010
+        JNZ fail
+        LDA $9011
+        LDB #$14
+        CMP
+        JNZ fail
+        LDA $9012
+        LDB #$01
+        CMP
+        JNZ fail                    ; b untouched
+; ---- C9: ADDW 16-bit carry-out sets C: $FFFF + $0001 = $0000, C=1 ----
+        LDA #$C9
+        STA TID
+        LDW $9010,#$FFFF
+        LDW $9012,#$0001
+        ADDW $9010,$9012
+        JNC fail
+        LDA $9010
+        JNZ fail
+        LDA $9011
+        JNZ fail
+; ---- CA: ADDW without carry-out clears C: $0102 + $0203 = $0305 ----
+        LDA #$CA
+        STA TID
+        LDW $9010,#$0102
+        LDW $9012,#$0203
+        ADDW $9010,$9012
+        JC  fail
+        LDA $9010
+        LDB #$05
+        CMP
+        JNZ fail
+        LDA $9011
+        LDB #$03
+        CMP
+        JNZ fail
+; ---- CB: SUBW with a low-byte borrow: $1400 - $0101 = $12FF, C=1 (no borrow out) ----
+        LDA #$CB
+        STA TID
+        LDW $9010,#$1400
+        LDW $9012,#$0101
+        SUBW $9010,$9012
+        JNC fail
+        LDA $9010
+        LDB #$FF
+        CMP
+        JNZ fail
+        LDA $9011
+        LDB #$12
+        CMP
+        JNZ fail
+; ---- CC: SUBW unsigned underflow: $0001 - $0002 = $FFFF, C=0 ----
+        LDA #$CC
+        STA TID
+        LDW $9010,#$0001
+        LDW $9012,#$0002
+        SUBW $9010,$9012
+        JC  fail
+        LDA $9010
+        LDB #$FF
+        CMP
+        JNZ fail
+        LDA $9011
+        LDB #$FF
+        CMP
+        JNZ fail
+; ---- CD: CMPW: flags only, C = unsigned a>=b over the full word ----
+        LDA #$CD
+        STA TID
+        LDW $9010,#$0200
+        LDW $9012,#$01FF
+        CMPW $9010,$9012            ; $0200 >= $01FF -> C=1 (low byte alone would say borrow)
+        JNC fail
+        LDA $9010
+        JNZ fail                    ; memory untouched
+        LDA $9011
+        LDB #$02
+        CMP
+        JNZ fail
+        CMPW $9012,$9010            ; $01FF < $0200 -> C=0
+        JC  fail
+; ---- CE: CMPW signed: $FFFF (-1) < $0001, so BGE falls through and BLT takes ----
+        LDA #$CE
+        STA TID
+        LDW $9010,#$FFFF
+        LDW $9012,#$0001
+        CMPW $9010,$9012
+        BGE fail                    ; -1 >= 1 would be wrong
+        CMPW $9012,$9010
+        BLT fail                    ; 1 < -1 would be wrong
+; ---- CF: LDA/STA (P1+d) with a page-crossing displacement; STA keeps A, P1 ----
+        LDA #$CF
+        STA TID
+        LDP1 #$90F0
+        LDA #$3C
+        STA (P1+$20)                ; -> $9110 (crosses into page $91)
+        LDA $9110
+        LDB #$3C
+        CMP
+        JNZ fail
+        LDA #$00
+        LDA (P1+$20)
+        LDB #$3C
+        CMP
+        JNZ fail
+        LDA #$77
+        STA (P1+2)                  ; -> $90F2, and A must survive
+        LDB #$77
+        CMP
+        JNZ fail
+        LDA $90F2
+        LDB #$77
+        CMP
+        JNZ fail
+        TPA1L                       ; P1 itself unchanged
+        LDB #$F0
+        CMP
+        JNZ fail
+        TPA1H
+        LDB #$90
+        CMP
+        JNZ fail
+; ---- D0: LDW a,(P2+d) / STW (P2+d),a, then a page-crossing P3 frame ----
+        LDA #$D0
+        STA TID
+        LDW $9010,#$ABCD
+        LDP2 #$9200
+        STW (P2+$10),$9010          ; mem[$9210] := $ABCD
+        LDA $9210
+        LDB #$CD
+        CMP
+        JNZ fail
+        LDA $9211
+        LDB #$AB
+        CMP
+        JNZ fail
+        LDW $9012,(P2+$10)          ; $9012 := mem[$9210]
+        LDA $9012
+        LDB #$CD
+        CMP
+        JNZ fail
+        LDA $9013
+        LDB #$AB
+        CMP
+        JNZ fail
+        LDP3 #$92F8
+        STW (P3+$0A),$9010          ; -> $9302 (crosses the page)
+        LDA $9302
+        LDB #$CD
+        CMP
+        JNZ fail
+        LDA $9303
+        LDB #$AB
+        CMP
+        JNZ fail
+        LDW $9014,(P3+$0A)
+        LDA $9015
+        LDB #$AB
+        CMP
+        JNZ fail
+        LDP3 #$FEFF                 ; restore the stack
+; ---- D1: ADDP3 / SUBP3 across a page boundary ----
+        LDA #$D1
+        STA TID
+        LDP3 #$80FE
+        ADDP3 #4                    ; $8102
+        TPA3L
+        LDB #$02
+        CMP
+        JNZ fail
+        TPA3H
+        LDB #$81
+        CMP
+        JNZ fail
+        SUBP3 #4                    ; back to $80FE
+        TPA3L
+        LDB #$FE
+        CMP
+        JNZ fail
+        TPA3H
+        LDB #$80
+        CMP
+        JNZ fail
+        ADDP3 #1                    ; no carry: $80FF
+        TPA3H
+        LDB #$80
+        CMP
+        JNZ fail
+        LDP3 #$FEFF                 ; restore the stack
 ; ---- all passed ----
         LDA #$00
         HLT

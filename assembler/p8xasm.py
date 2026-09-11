@@ -2,12 +2,19 @@
 """P8X two-pass assembler. Mnemonics/encodings come from genucode.OPC --
 the same table that generates the microcode ROMs (single source of truth).
 
-Syntax:  label:  MNEMONIC operand   ; comment
-  operands:  #expr (imm8) | (Pn) | (Pn)+ | expr (abs16) | none
+Syntax:  label:  MNEMONIC operand[,operand]   ; comment
+  operands:  #expr (imm8, or imm16 where the opcode takes one: LDPn #, LDW a,#)
+             | (Pn) | (Pn)+ | (Pn+d) (d = unsigned 0..255) | expr (abs16) | none
+             two-operand forms: MOVW dst,src  ADDW/SUBW/CMPW a,b  LDW a,(Pn+d)
+             STW (Pn+d),a  LDW a,#imm
   exprs:     $1F 0x1F 31 'c' label  with + -  and <expr (lo) >expr (hi)
   directives: .org e | .byte e,... | .word e,... | .ascii "s" | .asciiz "s"
               .fill n[,v] | NAME = expr  (or .equ NAME, expr)
-  pseudo:    LDPn #expr16  ->  LPLn #<expr, LPHn #>expr
+  immediates: where an opcode exists in BOTH an imm8 and an imm16 form (LDW a,#)
+             the width is chosen from the operand's TEXT -- a literal that fits a
+             byte ($xx, 0xXX, 0..255, 'c', <e, >e) is imm8, anything else (a
+             label, a wider literal, an expression) is imm16 -- so pass 1 and
+             pass 2 always agree on the instruction size.
 
 Usage: p8xasm.py src.asm [-o out] [-l listing] [--base ADDR] [-D NAME=VAL ...]
   default    -> 8K ROM image from $0000 (cap $2000)
@@ -35,7 +42,10 @@ def _find_genucode():
 UCODE_DIR=_find_genucode()
 from genucode import OPC
 
-SIZE={"":1,"#":2,"a":3}
+# Operand components and the bytes each one contributes after the opcode.
+# "#w" is a 16-bit immediate (lo,hi); "(Pn+d)" is the unsigned 8-bit displacement.
+COMP_BYTES={"":0,"#":1,"#w":2,"a":2,"(P1+d)":1,"(P2+d)":1,"(P3+d)":1,
+            "(P1)":0,"(P2)":0,"(P3)":0,"(P1)+":0,"(P2)+":0,"(P3)+":0}
 
 def err(ln,line,msg):
     sys.exit("p8xasm: line %d: %s\n  %s"%(ln,msg,line))
@@ -72,14 +82,63 @@ def expand_includes(path,_stack=None):
             out.append(raw)
     return "\n".join(out)
 
-def parse_operand(opnd):
-    """-> (shape, exprtext or None)"""
+def split_top(s):
+    """Split an operand field on commas that are outside parentheses and outside
+    a 'c' character literal (so `LDA #','` and `(P1+2),x` both survive)."""
+    parts=[]; cur=""; depth=0; i=0
+    while i<len(s):
+        c=s[i]
+        if c=="'" and i+2<len(s) and s[i+2]=="'":       # 'c' literal, any c
+            cur+=s[i:i+3]; i+=3; continue
+        if c=="(": depth+=1
+        elif c==")": depth-=1
+        if c=="," and depth==0: parts.append(cur); cur=""
+        else: cur+=c
+        i+=1
+    parts.append(cur)
+    return parts
+
+def parse_one(opnd):
+    """one operand -> (component shape, exprtext or None)"""
     opnd=opnd.strip()
-    if not opnd: return "",None
     m=re.fullmatch(r"\(\s*P([123])\s*\)(\+?)",opnd,re.I)
     if m: return "(P%s)%s"%(m.group(1),m.group(2)),None
+    m=re.fullmatch(r"\(\s*P([123])\s*\+\s*(.+?)\s*\)",opnd,re.I)   # (Pn+d)
+    if m: return "(P%s+d)"%m.group(1),m.group(2)
     if opnd.startswith("#"): return "#",opnd[1:].strip()
     return "a",opnd
+
+def parse_operand(opnd):
+    """-> (shape, [(component, exprtext)]) -- a two-operand form joins its
+    component shapes with ',' in TEXTUAL order, e.g. 'STW (P3+d),a'."""
+    opnd=opnd.strip()
+    if not opnd: return "",[]
+    comps=[parse_one(p) for p in split_top(opnd)]
+    return ",".join(c for c,_ in comps),comps
+
+def lit8(text):
+    """True when an immediate's TEXT is a byte-sized literal: $xx, 0xXX, 0..255,
+    'c', or a <lo / >hi byte selector. Decides imm8 vs imm16 for opcodes that
+    have both forms; it depends only on the text so both passes agree."""
+    t=text.strip()
+    if t.startswith("<") or t.startswith(">"): return True
+    if re.fullmatch(r"\$[0-9A-Fa-f]{1,2}",t): return True
+    if re.fullmatch(r"0[xX][0-9A-Fa-f]{1,2}",t): return True
+    if t.isdigit(): return int(t)<=255
+    if len(t)==3 and t[0]=="'" and t[2]=="'": return True
+    return False
+
+def resolve_shape(mn,shape,comps):
+    """Pick the OPC key for (mnemonic, textual shape). A '#' component may stand
+    for an imm16 ('#w') when only that form exists (LDPn #), or when both exist
+    and the text is not a byte literal (LDW a,#)."""
+    if (mn,shape) in OPC and not any(c=="#" for c,_ in comps): return shape
+    narrow=shape; wide=",".join("#w" if c=="#" else c for c in shape.split(","))
+    have=[s for s in (narrow,wide) if (mn,s) in OPC]
+    if not have: return None
+    if len(have)==1: return have[0]
+    imm=[e for c,e in comps if c=="#"][0]
+    return narrow if lit8(imm) else wide
 
 class Asm:
     def __init__(self,base=0,cap=0x2000,defines=None):
@@ -162,26 +221,26 @@ class Asm:
                 es=opnd.split(","); n=self.expr(es[0],ln,line,pass2)
                 v=self.expr(es[1],ln,line,pass2) if len(es)>1 else 0
                 emit(*([v]*n))
-            elif mn=="MOVW":                              # MOVW dst,src (two abs16)
-                if "," not in opnd: err(ln,line,"MOVW needs dst,src")
-                d,s=opnd.split(",",1)
-                dv=self.expr(d,ln,line,pass2); sv=self.expr(s,ln,line,pass2)
-                emit(OPC[("MOVW","a,a")], dv&0xFF,dv>>8, sv&0xFF,sv>>8)
-            elif re.fullmatch(r"LDP[123]",mn):           # pseudo: 16-bit ptr load
-                shape,etext=parse_operand(opnd)
-                if shape!="#": err(ln,line,"LDPn needs #imm16")
-                p=mn[-1]; v=self.expr(etext,ln,line,pass2)
-                emit(OPC[("LPL%s"%p,"#")],v&0xFF)
-                emit(OPC[("LPH%s"%p,"#")],v>>8)
             else:
-                shape,etext=parse_operand(opnd)
-                key=(mn,shape)
-                if key not in OPC:
+                shape,comps=parse_operand(opnd)
+                key=resolve_shape(mn,shape,comps)
+                if key is None:
                     err(ln,line,"unknown instruction '%s %s'"%(mn,opnd))
-                emit(OPC[key])
-                if shape=="#": emit(self.expr(etext,ln,line,pass2))
-                elif shape=="a":
-                    v=self.expr(etext,ln,line,pass2); emit(v&0xFF,v>>8)
+                emit(OPC[(mn,key)])
+                # Byte-stream order: every 16-bit ADDRESS component first (in
+                # textual order), then the immediate / displacement bytes. This
+                # is what lets `LDW a,(Pn+d)` and `STW (Pn+d),a` share one
+                # microcode skeleton (op a.lo a.hi d8) and keeps MOVW dst,src.
+                rcomps=[(c,e) for c,e in zip(key.split(","),[e for _,e in comps])]
+                for c,e in sorted(rcomps,key=lambda ce: 0 if ce[0]=="a" else 1):
+                    n=COMP_BYTES[c]
+                    if n==0: continue
+                    v=self.expr(e,ln,line,pass2)
+                    if n==1:
+                        if pass2 and c.startswith("(P") and not 0<=v<=255:
+                            err(ln,line,"displacement %d out of range 0..255"%v)
+                        emit(v&0xFF)
+                    else: emit(v&0xFF,(v>>8)&0xFF)
             if pass2: self.lst.append((pc-len(emitted),emitted,raw))
 def main():
     a=sys.argv[1:]

@@ -1,6 +1,14 @@
 # P8X ISA extensions for C — design sketch
 
-**Status: PROPOSAL (2026-09-11). Nothing here is implemented.** A concrete sketch —
+**Status (2026-09-11): Tier A is IMPLEMENTED on the emulator** — the 24 opcodes
+below are in `microcode/genucode.py` (opcodes as listed; `u0–u3.bin`
+regenerated), the host assembler parses every new operand shape, `LDPn #imm16`
+is a real opcode in both assemblers, the disassembler decodes all of them, and
+`emulator/test/test_isa.asm` proves each one on its carry-plane case (tests
+C1–D1). The ISA card and programmer's guide are regenerated. Not yet done: the
+compiler emitters (§5), the self-hosting compilers, the on-target assembler's
+parsing of the compiler-only shapes, an EPROM reburn for the TTL machine. Tiers
+B and C remain proposals. What follows is the original sketch — a concrete sketch —
 real opcode numbers, real microcode in `genucode.py`'s vocabulary, step counts
 against the 15-step budget — so it can be argued about and then built. The
 motivation, the constraints, three tiers of change, what the compiler does with

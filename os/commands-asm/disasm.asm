@@ -185,7 +185,8 @@ d_eputs:LDA #0                       ; PUTS: P1 = the string, A = 0 flags
         JSR CONOUT                   ; the newline must follow the text's sink
         RTS
 
-; CALC_LN: LN = ilen(SHAPE): sh1->2, sh2->3, sh9->5, else 1.
+; CALC_LN: LN = ilen(SHAPE) -- mirrors disasm.c: 1->2, 2->3, 9->5, 10->3 (#imm16),
+; 11..13->2 ((Pn+d)), 14..20->4 (addr16 + d8/imm8), 21->5 (addr16 + imm16), else 1.
 CALC_LN:LDA SHAPE                     ; CMP preserves A, so SHAPE stays live in A
         LDB #1                        ; across the whole compare chain
         CMP
@@ -196,13 +197,29 @@ CALC_LN:LDA SHAPE                     ; CMP preserves A, so SHAPE stays live in 
         LDB #9
         CMP
         JZ cl_5
-        LDA #1
+        LDB #10
+        CMP
+        JZ cl_3                       ; LDPn #imm16
+        LDB #21
+        CMP
+        JZ cl_5                       ; LDW addr,#imm16
+        LDB #11
+        CMP
+        JNC cl_1                      ; < 11: implied / (Pn) / (Pn)+
+        LDB #14
+        CMP
+        JNC cl_2                      ; 11..13: (Pn+d)
+        JMP cl_4                      ; 14..20: addr16 + d8 / imm8
+cl_1:   LDA #1
         STA LN
         RTS
 cl_2:   LDA #2
         STA LN
         RTS
 cl_3:   LDA #3
+        STA LN
+        RTS
+cl_4:   LDA #4
         STA LN
         RTS
 cl_5:   LDA #5
@@ -220,13 +237,28 @@ DS_OPER:LDA SHAPE                     ; CMP preserves A: SHAPE stays live throug
         LDB #9
         CMP
         JZ do_mvw
-        LDB #3                        ; 3..8 -> (Pn) ; else nothing
+        LDB #10
         CMP
-        JNC do_non
+        JZ do_imw                     ; 10: #imm16 (LDPn)
+        LDB #20
+        CMP
+        JZ do_ai                      ; 20: addr,#imm8
+        LDB #21
+        CMP
+        JZ do_aiw                     ; 21: addr,#imm16
+        LDB #3
+        CMP
+        JNC do_non                    ; < 3: implied, nothing to print
         LDB #9
         CMP
-        JC do_non
-        JMP do_preg
+        JNC do_preg                   ; 3..8: (Pn) / (Pn)+
+        LDB #14
+        CMP
+        JNC do_pd                     ; 11..13: (Pn+d)
+        LDB #17
+        CMP
+        JNC do_apd                    ; 14..16: addr,(Pn+d)
+        JMP do_pda                    ; 17..19: (Pn+d),addr
 do_non: RTS
 do_imm: LDA #32                       ; " #$" + ph2(peek(addr+1))
         JSR SYS_PUTC
@@ -298,6 +330,110 @@ dp_d:   JSR $2009                      ; SYS_PUTC (hard address; same as the lab
         LDA #'+'
         JSR SYS_PUTC
 dp_e:   RTS
+
+; ---- Tier A operand forms (mirror disasm.c). In the byte stream the ADDRESS
+; word is always at ADDR+1; the d8 / imm8 / imm16 of the 4- and 5-byte forms is
+; at ADDR+3. DSN holds the pointer digit (1..3) for the (Pn+d) printer.
+do_imw: LDA #32                       ; " #$" + ph4(w16(addr+1))   LDPn #imm16
+        JSR SYS_PUTC
+        LDA #'#'
+        JSR SYS_PUTC
+        JSR PR_W1
+        RTS
+do_pd:  LDA SHAPE                     ; 11..13 -> P1..P3 ; d8 at offset 1
+        LDB #10
+        SUB
+        STA DSN
+        LDA #32
+        JSR SYS_PUTC
+        LDA #1
+        JSR PR_PD
+        RTS
+do_apd: LDA SHAPE                     ; 14..16: " $aaaa,(Pn+$dd)" ; d8 at offset 3
+        LDB #13
+        SUB
+        STA DSN
+        LDA #32
+        JSR SYS_PUTC
+        JSR PR_W1
+        LDA #','
+        JSR SYS_PUTC
+        LDA #3
+        JSR PR_PD
+        RTS
+do_pda: LDA SHAPE                     ; 17..19: " (Pn+$dd),$aaaa" ; d8 at offset 3
+        LDB #16
+        SUB
+        STA DSN
+        LDA #32
+        JSR SYS_PUTC
+        LDA #3
+        JSR PR_PD
+        LDA #','
+        JSR SYS_PUTC
+        JSR PR_W1
+        RTS
+do_ai:  LDA #32                       ; 20: " $aaaa,#$ii"
+        JSR SYS_PUTC
+        JSR PR_W1
+        LDA #','
+        JSR SYS_PUTC
+        LDA #'#'
+        JSR SYS_PUTC
+        LDA #'$'
+        JSR SYS_PUTC
+        LDA #3
+        JSR PEEKAT
+        JSR OPH8
+        RTS
+do_aiw: LDA #32                       ; 21: " $aaaa,#$iiii"
+        JSR SYS_PUTC
+        JSR PR_W1
+        LDA #','
+        JSR SYS_PUTC
+        LDA #'#'
+        JSR SYS_PUTC
+        LDA #'$'
+        JSR SYS_PUTC
+        LDA #3
+        JSR W16OFF
+        LDA WH
+        JSR OPH8
+        LDA WL
+        JSR OPH8
+        RTS
+; PR_W1: print "$" + the 16-bit word at ADDR+1, high byte first.
+PR_W1:  LDA #'$'
+        JSR SYS_PUTC
+        LDA #1
+        JSR W16OFF
+        LDA WH
+        JSR OPH8
+        LDA WL
+        JSR OPH8
+        RTS
+; PR_PD: print "(Pn+$dd)" -- n = DSN (1..3), dd = peek(ADDR + A). Uses TMPB to
+; hold the offset across the PUTC calls (W16OFF, the other TMPB user, is not
+; called here). Clobbers P1, TMPA, TMPB.
+PR_PD:  STA TMPB
+        LDA #'('
+        JSR SYS_PUTC
+        LDA #'P'
+        JSR SYS_PUTC
+        LDA DSN
+        LDB #'0'
+        ADD
+        JSR SYS_PUTC
+        LDA #'+'
+        JSR SYS_PUTC
+        LDA #'$'
+        JSR SYS_PUTC
+        LDA TMPB
+        JSR PEEKAT
+        JSR OPH8
+        LDA #')'
+        JSR SYS_PUTC
+        RTS
 
 ; PEEKAT: A = offset (0..4) -> A = peek(ADDR + offset). Clobbers P1, TMPA.
 PEEKAT: STA TMPA
@@ -519,6 +655,7 @@ WL:     .fill 1
 WH:     .fill 1
 TMPA:   .fill 1
 TMPB:   .fill 1
+DSN:    .fill 1                        ; Tier A: pointer digit for (Pn+d) printing
 RHX:    .fill 1
 PSL:    .fill 1
 PSH:    .fill 1

@@ -79,6 +79,16 @@ DISTAB:
         .asciiz "LPH2"
         .byte $37,1
         .asciiz "LPH3"
+        .byte $38,10
+        .asciiz "LDP1"
+        .byte $39,10
+        .asciiz "LDP2"
+        .byte $3A,10
+        .asciiz "LDP3"
+        .byte $3C,1
+        .asciiz "ADDP3"
+        .byte $3D,1
+        .asciiz "SUBP3"
         .byte $40,2
         .asciiz "JMP"
         .byte $41,3
@@ -179,4 +189,42 @@ DISTAB:
         .asciiz "LDT"
         .byte $87,2
         .asciiz "LDT"
+        .byte $88,11
+        .asciiz "LDA"
+        .byte $89,12
+        .asciiz "LDA"
+        .byte $8A,13
+        .asciiz "LDA"
+        .byte $8C,11
+        .asciiz "STA"
+        .byte $8D,12
+        .asciiz "STA"
+        .byte $8E,13
+        .asciiz "STA"
+        .byte $90,14
+        .asciiz "LDW"
+        .byte $91,15
+        .asciiz "LDW"
+        .byte $92,16
+        .asciiz "LDW"
+        .byte $94,17
+        .asciiz "STW"
+        .byte $95,18
+        .asciiz "STW"
+        .byte $96,19
+        .asciiz "STW"
+        .byte $98,20
+        .asciiz "LDW"
+        .byte $99,21
+        .asciiz "LDW"
+        .byte $9A,9
+        .asciiz "ADDW"
+        .byte $9B,9
+        .asciiz "SUBW"
+        .byte $9C,9
+        .asciiz "CMPW"
+        .byte $9E,2
+        .asciiz "INCW"
+        .byte $9F,2
+        .asciiz "DECW"
         .byte $FF

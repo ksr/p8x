@@ -36,8 +36,15 @@ NOTE=ParagraphStyle("n",parent=B,backColor=colors.Color(1,0.97,0.88),
                     borderPadding=4,leftIndent=2)
 
 SHN={"":"","#":" #imm","a":" addr","a,a":" dst,src","(P1)":" (P1)","(P2)":" (P2)","(P3)":" (P3)",
-     "(P1)+":" (P1)+","(P2)+":" (P2)+","(P3)+":" (P3)+"}
-BYTES={"":1,"#":2,"a":3,"a,a":5,"(P1)":1,"(P2)":1,"(P3)":1,"(P1)+":1,"(P2)+":1,"(P3)+":1}
+     "(P1)+":" (P1)+","(P2)+":" (P2)+","(P3)+":" (P3)+",
+     # Tier A (2026-09): d = unsigned 8-bit displacement
+     "#w":" #imm16","(P1+d)":" (P1+d)","(P2+d)":" (P2+d)","(P3+d)":" (P3+d)",
+     "a,(P1+d)":" addr,(P1+d)","a,(P2+d)":" addr,(P2+d)","a,(P3+d)":" addr,(P3+d)",
+     "(P1+d),a":" (P1+d),addr","(P2+d),a":" (P2+d),addr","(P3+d),a":" (P3+d),addr",
+     "a,#":" addr,#imm8","a,#w":" addr,#imm16"}
+BYTES={"":1,"#":2,"a":3,"a,a":5,"(P1)":1,"(P2)":1,"(P3)":1,"(P1)+":1,"(P2)+":1,"(P3)+":1,
+       "#w":3,"(P1+d)":2,"(P2+d)":2,"(P3+d)":2,"a,(P1+d)":4,"a,(P2+d)":4,"a,(P3+d)":4,
+       "(P1+d),a":4,"(P2+d),a":4,"(P3+d),a":4,"a,#":4,"a,#w":5}
 DESC={
  ("NOP",""):("-","No operation."),
  ("HLT",""):("-","Halt the clock. Resume only by reset (or emulator exit)."),
@@ -108,6 +115,26 @@ DESC[("PLW","a")]=("-","Pop a 16-bit word from the P3 stack into addr (high then
 DESC[("LPW1","a")]=("-","P1 (16-bit) := the word at addr.")
 DESC[("LPW2","a")]=("-","P2 (16-bit) := the word at addr.")
 DESC[("MOVW","a,a")]=("-","16-bit memory->memory move: the word at src -> dst (via the PT/PT2 scratch pointers).")
+# Tier A (2026-09): the C-compiler ISA -- pure microcode (docs/p8x-isa-c-extensions.md).
+# Carry propagation runs through the condition planes; the memory-to-memory forms
+# use A as the ALU input and so CLOBBER A ("A!") and latch the flags.
+DESC[("LDP1","#w")]=("-","P1 := imm16. A real 3-byte instruction (was the LPL1/LPH1 pseudo-op pair).")
+DESC[("LDP2","#w")]=("-","P2 := imm16.")
+DESC[("LDP3","#w")]=("-","P3 := imm16.")
+DESC[("ADDP3","#")]=("C Z N","P3 := P3 + imm8 (free a stack frame). A!; flags are the low byte's.")
+DESC[("SUBP3","#")]=("C Z N","P3 := P3 - imm8 (allocate a stack frame). A!; flags are the low byte's.")
+for p in (1,2,3):
+    DESC[("LDA","(P%d+d)"%p)]=("C Z N","A := byte at P%d + d (d unsigned 0..255). C/V from the address add, then Z/N from A. P%d unchanged."%(p,p))
+    DESC[("STA","(P%d+d)"%p)]=("C Z N","Byte at P%d + d := A. A preserved; flags clobbered by the address add."%p)
+    DESC[("LDW","a,(P%d+d)"%p)]=("C Z N","Word at addr := the word at P%d + d (a frame local into a memory word). A!"%p)
+    DESC[("STW","(P%d+d),a"%p)]=("C Z N","Word at P%d + d := the word at addr (a memory word into a frame local). A!"%p)
+DESC[("LDW","a,#")]=("-","Word at addr := imm8 zero-extended (4 bytes; the compiler's constant idiom).")
+DESC[("LDW","a,#w")]=("-","Word at addr := imm16 (5 bytes).")
+DESC[("ADDW","a,a")]=("C Z N V","Word a := a + b (16-bit, carry chained). C = carry out; N/V from the high byte; Z from the HIGH byte only. A!")
+DESC[("SUBW","a,a")]=("C Z N V","Word a := a - b (16-bit, borrow chained). C=1 means no borrow (unsigned a >= b). Z high byte only. A!")
+DESC[("CMPW","a,a")]=("C Z N V","Flags from a - b (16-bit), memory unchanged: C = unsigned a >= b; BLT/BGE/BLE/BGT give the signed order. Z high byte only. A!")
+DESC[("INCW","a")]=("C Z N","Word at addr := word + 1. A!; flags are the low byte's (C = carry out of it).")
+DESC[("DECW","a")]=("C Z N","Word at addr := word - 1. A!; flags are the low byte's (C=1: no borrow).")
 
 DESC[("EI","")]=("-","Enable maskable interrupts (IE := 1).")
 DESC[("DI","")]=("-","Disable maskable interrupts (IE := 0).")
@@ -127,6 +154,8 @@ GROUPS=[("System",["NOP","HLT","CLC","SEC"]),
   "TPA1L","TPA1H","TPA2L","TPA2H","TPA3L","TPA3H"]),
  ("Stack",["PHA","PLA"]),
  ("16-bit memory ops (rev D; compiler space savers). PHW/PLW/LPW pure-microcode; MOVW adds the PT2 scratch pointer",["PHW","PLW","LPW1","LPW2","MOVW"]),
+ ("Tier A: the C-compiler ISA (2026-09; pure microcode. A! = clobbers A; d = unsigned 8-bit displacement)",
+  ["LDP1","LDP2","LDP3","ADDP3","SUBP3","LDW","STW","ADDW","SUBW","CMPW","INCW","DECW"]),
  ("Control flow",["JMP","JSR","RTS","BZ","BNZ","BCP","JNC"]),
  ("Signed branches (rev C; after CMP — N^V/Z)",["BLT","BGE","BLE","BGT"])]
 
@@ -168,8 +197,6 @@ for gname,mns in GROUPS:
         rows.append(["$%02X"%code, mn+SHN[sh], str(BYTES[sh]), str(cyc), fl,
                      Paragraph(ds,B)])
         r+=1
-rows.append(["-","LDPn #imm16","4","6","-",
-             Paragraph("Assembler pseudo-op: LPLn + LPHn pair. P<i>n</i> := imm16.",B)])
 t=Table(rows,colWidths=[11*mm,26*mm,12*mm,13*mm,14*mm,100*mm],repeatRows=1)
 st=[("FONT",(0,0),(-1,-1),"Helvetica",8),
     ("FONT",(0,0),(-1,0),"Helvetica-Bold",8.5),
@@ -289,7 +316,6 @@ for gname, mns in GROUPS:
         _md.append("| $%02X | `%s` | %d | %d | %s | %s |"
                    % (code, mn + SHN[sh], BYTES[sh], cyc, fl, _mdesc(ds)))
     _md.append("")
-_md.append("| — | `LDPn #imm16` | 4 | 6 | - | Assembler pseudo-op: LPLn + LPHn pair. Pn := imm16. |\n")
 _md.append("## Notes\n")
 _md.append("1. **Shifts & rotates:** SHL/SHR shift in 0 and latch the "
            "shifted-out bit into C. ROL/ROR rotate through C (the shifted-in "

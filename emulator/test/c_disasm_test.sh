@@ -42,4 +42,21 @@ for a in '^C000:' '^C002:' '^C005:' '^C006:' '^C007:'; do
     grep -qE "$a" disasm_out.txt || fail "wrong instruction length: no line at $a"
 done
 
-echo "C-DISASM TEST: PASS"
+# Tier A shapes (2026-09): LDP3 #$9000 (3A 00 90), LDW $1234,#$7B (98 34 12 7B),
+# LDA (P1+$05) (88 05), LDW $9010,(P3+$20) (92 10 90 20), STW (P3+$0A),$9010
+# (96 10 90 0A), CMPW $9010,$9012 (9C 10 90 12 90) -- one of each new operand
+# form, so both the lengths (C010 C013 C017 C019 C01D C021 -> end C026) and the
+# operand rendering are checked. The address word is always first in the bytes.
+# (two dep lines: the shell's input line is shorter than one 22-byte deposit)
+printf 'B\rdep C010 3A 00 90 98 34 12 7B 88 05 92 10 90 20\rdep C01D 96 10 90 0A 9C 10 90 12 90\rdisasm C010 C026\r' \
+    | ../p8xemu -l 900000000 -c disasm.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r' > disasm_out2.txt
+for want in 'LDP3 #\$9000' 'LDW \$1234,#\$7B' 'LDA \(P1\+\$05\)' 'LDW \$9010,\(P3\+\$20\)' \
+            'STW \(P3\+\$0A\),\$9010' 'CMPW \$9010,\$9012'; do
+    grep -qE "$want" disasm_out2.txt || { echo "--- output ---"; sed -n '/disasm C010/,$p' disasm_out2.txt | head; \
+        fail "Tier A disassembly missing expected line: $want"; }
+done
+for a in '^C010:' '^C013:' '^C017:' '^C019:' '^C01D:' '^C021:'; do
+    grep -qE "$a" disasm_out2.txt || fail "Tier A: wrong instruction length: no line at $a"
+done
+
+echo "C-DISASM TEST: PASS (incl. Tier A operand forms)"

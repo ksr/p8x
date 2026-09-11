@@ -955,7 +955,21 @@ Nothing below has been built or measured.
       `finder` −18%. Compares stay UNSIGNED on purpose (see docs/memory).
       **Remaining:** port both levers to the self-hosting compilers
       (`compiler/p8cc.c`, `apps/p8xcc.asm`) so on-target `cc` builds shrink too;
-      the ISA sketch that follows is in `docs/p8x-isa-c-extensions.md` (PROPOSAL).
+      the ISA sketch that follows is in `docs/p8x-isa-c-extensions.md`.
+
+      **Tier A ISA DONE on the emulator (2026-09-11, 24 pure-microcode opcodes,
+      88 → 112 defined):** `LDPn #imm16` ($38–$3A, a real 3-byte op in BOTH
+      assemblers — every `LDPn` site in the monitor/OS/apps shrank a byte),
+      `ADDP3`/`SUBP3 #imm8`, `LDA`/`STA (Pn+d)`, `LDW a,(Pn+d)`/`STW (Pn+d),a`,
+      `LDW a,#imm8`/`#imm16`, `ADDW`/`SUBW`/`CMPW a,b`, `INCW`/`DECW a`. Carry
+      propagation runs through the condition planes (ALU step latches C → next
+      step routes it → C=0/C=1 plane pair). Host assembler: new shapes, imm8/imm16
+      chosen from the operand TEXT (pass-stable); byte stream = address word
+      first, then disp/imm, for both LDW and STW. Disassembler (C + asm twin)
+      decodes all shapes (codes 10–21); `test_isa.asm` C1–D1 prove each op on its
+      carry-plane case; ISA card + programmer's guide regenerated. **Still open:**
+      the p8cc emitters (§5 of the doc), the self-hosting compilers, the native
+      assembler parsing the compiler-only shapes, EPROM reburn for the TTL build.
 
       **Data-driven priority (measured on 5 compiled commands, 19,897 instrs):**
         - **Done — the move idioms (the big win):** `PHW`/`PLW` + `LPW1`/`LPW2`

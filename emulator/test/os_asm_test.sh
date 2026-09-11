@@ -29,13 +29,14 @@ python3 $ROOT/assembler/p8xasm.py asmfull.asm -o asm.bin --base 0x6A00 >/dev/nul
 PYTHONPATH=$UC python3 - cover.asm <<'PYEOF'
 import sys
 from genucode import OPC
-ops={'':'', '#':' #1', 'a':' $1234',
+ops={'':'', '#':' #1', 'a':' $1234', '#w':' #$1234',
      '(P1)':' (P1)','(P1)+':' (P1)+','(P2)':' (P2)','(P2)+':' (P2)+',
      '(P3)':' (P3)','(P3)+':' (P3)+'}
 L=["VAL = $1234", "CH  = 'Q'", "        .org $6A00", "begin:"]
 for k in sorted(OPC):                       # every opcode/shape exactly as defined
-    if ',' in k[1]: continue                # two-operand ops (MOVW) are host-only:
-    L.append("        %s%s"%(k[0],ops[k[1]]))  # not in the on-target OPCTAB (gen_p8xopc)
+    if k[1] not in ops: continue            # two-operand / displacement ops (MOVW, the
+    L.append("        %s%s"%(k[0],ops[k[1]]))  # Tier A compiler forms) are host-only:
+                                            # not in the on-target OPCTAB (gen_p8xopc)
 for n in (1,2,3):
     L.append("        LDP%d #fwd"%n)         # LDPn pseudo, all pointers
 L += ["        LDA #<VAL","        LDB #>VAL","        LDA #CH",

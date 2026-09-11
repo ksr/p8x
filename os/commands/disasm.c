@@ -11,7 +11,11 @@
  * redirects and pipes like any filter.  A loadable /BIN/DISASM.BIN program.
  *
  * Operand shapes (dt_sh): 0 none, 1 #imm8, 2 addr16, 3..8 (Pn)/(Pn)+, 9 a,a
- * (MOVW dst,src). Instruction length follows from the shape (1/2/3/5 bytes).
+ * (MOVW dst,src, ADDW/SUBW/CMPW a,b); Tier A: 10 #imm16 (LDPn), 11..13 (Pn+d)
+ * (LDA/STA, n=1..3), 14..16 a,(Pn+d) (LDW), 17..19 (Pn+d),a (STW), 20 a,#imm8
+ * and 21 a,#imm16 (LDW). Instruction length follows from the shape. The
+ * two-operand forms carry the ADDRESS word first in the byte stream, then the
+ * displacement / immediate — whatever the textual operand order.
  *
  * Within the native p8cc.c subset (no ++/--, decls at top).
  */
@@ -42,6 +46,10 @@ int ilen(int sh) {
     if (sh == 1) { return 2; }        /* opcode + imm8   */
     if (sh == 2) { return 3; }        /* opcode + addr16 */
     if (sh == 9) { return 5; }        /* opcode + a,a    */
+    if (sh == 10) { return 3; }       /* opcode + imm16  (LDPn)          */
+    if (sh >= 11 && sh <= 13) { return 2; }   /* opcode + d8   (Pn+d)    */
+    if (sh >= 14 && sh <= 20) { return 4; }   /* opcode + addr16 + d8/imm8 */
+    if (sh == 21) { return 5; }       /* opcode + addr16 + imm16 (LDW a,#w) */
     return 1;                         /* none / (Pn) / (Pn)+ */
 }
 
@@ -60,6 +68,14 @@ int preg(int sh) {
     if (sh == 7 || sh == 8) { putchar('3'); }
     putchar(')');
     if (sh == 4 || sh == 6 || sh == 8) { putchar('+'); }
+    return 0;
+}
+
+/* pdisp: print a displacement operand "(Pn+$dd)" for pointer digit n (1..3)
+ * and displacement byte d. No leading space: the callers place it. */
+int pdisp(int n, int d) {
+    putchar('('); putchar('P'); putchar('0' + n); putchar('+'); putchar('$');
+    ph2(d & 255); putchar(')');
     return 0;
 }
 
@@ -121,6 +137,18 @@ int main() {
             if (sh == 2) { prs(" $"); ph4(w16(addr + 1)); }
             if (sh >= 3 && sh <= 8) { preg(sh); }
             if (sh == 9) { prs(" $"); ph4(w16(addr + 1)); prs(",$"); ph4(w16(addr + 3)); }
+            /* Tier A shapes. The address word is always at addr+1; the d8 /
+             * imm8 of the 4-byte forms at addr+3, the imm16 of shape 21 too. */
+            if (sh == 10) { prs(" #$"); ph4(w16(addr + 1)); }
+            if (sh >= 11 && sh <= 13) { putchar(32); pdisp(sh - 10, peek(addr + 1)); }
+            if (sh >= 14 && sh <= 16) {
+                prs(" $"); ph4(w16(addr + 1)); putchar(','); pdisp(sh - 13, peek(addr + 3));
+            }
+            if (sh >= 17 && sh <= 19) {
+                putchar(32); pdisp(sh - 16, peek(addr + 3)); prs(",$"); ph4(w16(addr + 1));
+            }
+            if (sh == 20) { prs(" $"); ph4(w16(addr + 1)); prs(",#$"); ph2(peek(addr + 3) & 255); }
+            if (sh == 21) { prs(" $"); ph4(w16(addr + 1)); prs(",#$"); ph4(w16(addr + 3)); }
             putchar(13); putchar(10);
             addr = addr + ln;
         }
