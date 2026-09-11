@@ -47,12 +47,12 @@ SHN = {"": "", "#": " #imm", "a": " addr", "a,a": " dst,src",
        "#w": " #imm16", "(P1+d)": " (P1+d)", "(P2+d)": " (P2+d)", "(P3+d)": " (P3+d)",
        "a,(P1+d)": " addr,(P1+d)", "a,(P2+d)": " addr,(P2+d)", "a,(P3+d)": " addr,(P3+d)",
        "(P1+d),a": " (P1+d),addr", "(P2+d),a": " (P2+d),addr", "(P3+d),a": " (P3+d),addr",
-       "a,#": " addr,#imm8", "a,#w": " addr,#imm16"}
+       "a,#": " addr,#imm8", "a,#w": " addr,#imm16", "r": " rel8"}
 BYTES = {"": 1, "#": 2, "a": 3, "a,a": 5, "(P1)": 1, "(P2)": 1, "(P3)": 1,
          "(P1)+": 1, "(P2)+": 1, "(P3)+": 1,
          "#w": 3, "(P1+d)": 2, "(P2+d)": 2, "(P3+d)": 2,
          "a,(P1+d)": 4, "a,(P2+d)": 4, "a,(P3+d)": 4,
-         "(P1+d),a": 4, "(P2+d),a": 4, "(P3+d),a": 4, "a,#": 4, "a,#w": 5}
+         "(P1+d),a": 4, "(P2+d),a": 4, "(P3+d),a": 4, "a,#": 4, "a,#w": 5, "r": 2}
 
 # (mnemonic, shape) -> (flags, one-line description). Authored prose only.
 DESC = {
@@ -100,6 +100,16 @@ DESC = {
     ("LEAW", "a,(P1+d)"): ("CZN", "word at addr:=P1+d (the address of a frame local). A!"),
     ("LEAW", "a,(P2+d)"): ("CZN", "word at addr:=P2+d. A!"),
     ("LEAW", "a,(P3+d)"): ("CZN", "word at addr:=P3+d (address of a stack local). A!"),
+    # relative branches: 2 bytes; signed d8 from the next instruction; A and flags preserved
+    ("JMP", "r"): ("-", "P0:=P0+rel8 (2-byte jump; A/flags kept; assembler .relax / JMP.R)."),
+    ("BZ", "r"): ("-", "Branch rel8 if Z=1. (JZ.R alias.)"),
+    ("BNZ", "r"): ("-", "Branch rel8 if Z=0. (JNZ.R alias.)"),
+    ("BCP", "r"): ("-", "Branch rel8 if C=1. (JC.R alias.)"),
+    ("JNC", "r"): ("-", "Branch rel8 if C=0."),
+    ("BLT", "r"): ("-", "Branch rel8 if signed A<B (N^V)."),
+    ("BGE", "r"): ("-", "Branch rel8 if signed A>=B."),
+    ("BLE", "r"): ("-", "Branch rel8 if signed A<=B."),
+    ("BGT", "r"): ("-", "Branch rel8 if signed A>B."),
     ("LPW1", "a"): ("-", "P1 := 16-bit word at addr."),
     ("LPW2", "a"): ("-", "P2 := 16-bit word at addr."),
     ("MOVW", "a,a"): ("-", "16-bit mem->mem: word at src -> dst."),

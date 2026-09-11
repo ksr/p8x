@@ -388,6 +388,45 @@ def _wordimm(code,name,lo,hi_pair,store=True):
 _wordimm(0xA0,"ADDW","ADD",("ADD","ADC1"))
 _wordimm(0xA1,"SUBW","SUB",("SBB","SUB"))
 _wordimm(0xA2,"CMPW","SUB",("SBB","SUB"),store=False)
+# A11 (2026-09-11). RELATIVE BRANCHES: Jcc rel8 -- 2 bytes instead of 3. The
+# displacement is SIGNED, relative to the following instruction (P0 after the
+# operand fetch). Taken path: PUSH A (the ALU's only A input -- the absolute
+# branches never touch A and code like `LDA #0 / JNC skip / LDA #1 / skip: STA`
+# relies on that), save FLAGS in T2, A := d8 with LDZN so N = its sign,
+# sign-extend into P0.hi through the N plane (DEC when negative), add d8 into
+# P0.lo, propagate the carry through the C plane, restore FLAGS, pop A (without
+# LDZN) -- so a taken relative branch leaves A, B and the flags exactly as the
+# absolute one does. 14 steps taken, 2 not taken. The push uses P3 like an
+# interrupt would; P3 is valid from the monitor's first instruction on.
+# The assembler emits these only for sources that opt in (`.relax`, which the
+# C compiler writes at the top of its output) or an explicit `.R` suffix, so
+# the hand-written OS/monitor stay byte-identical with the native assembler.
+def _rel_taken():
+    return ( w(doe="A",dld="MEMW",psel=3,pdec=1),                    # push A
+             w(doe="FLAGS",dld="T2"),                                # save flags
+             w(doe="T",dld="A",ldzn=1),                              # A = d8 ; N = sign(d8)
+             w(doe="PTRH",dld="A",psel=0,fcond="N"),                 # A = P0.hi ; route N
+             ( alu_mid("PASSA",dld="PTRH",psel=0,ldf=0),             # d8 >= 0: unchanged
+               alu_mid("DEC",  dld="PTRH",psel=0,ldf=0) ),           # d8 <  0: P0.hi - 1
+             w(doe="PTRL",dld="A",psel=0),                           # A = P0.lo
+             alu_mid("ADD",dld="PTRL",psel=0,bsel=1),                # P0.lo += d8 ; latch C
+             w(doe="PTRH",dld="A",psel=0,fcond="C"),                 # A = P0.hi ; route C
+             ( alu_mid("PASSA",dld="PTRH",psel=0,ldf=0),
+               alu_mid("INC",  dld="PTRH",psel=0,ldf=0) ),
+             w(doe="T2",dld="FLAGS"),                                # restore flags
+             w(psel=3,pinc=1),                                       # pop A: SP++,
+             w(doe="MEM",dld="A",psel=3,urst=1) )                    #   A = [SP] (no LDZN)
+op(0xA8,"JMP","r", w(doe="MEM",dld="T",psel=0,pinc=1), *_rel_taken())
+def rbranch(code,name,flag,inv=False):
+    taken=_rel_taken(); nt=w(urst=1)
+    first=(nt,taken[0]) if not inv else (taken[0],nt)                 # plane by `flag`
+    op(code,name,"r", w(doe="MEM",dld="T",psel=0,pinc=1,fcond=flag), first, *taken[1:])
+rbranch(0xA9,"BZ","Z");        OPC[("JZ","r")]=0xA9
+rbranch(0xAA,"BNZ","Z",True);  OPC[("JNZ","r")]=0xAA
+rbranch(0xAB,"BCP","C");       OPC[("JC","r")]=0xAB
+rbranch(0xAC,"JNC","C",True)
+rbranch(0xAD,"BLT","LT");      rbranch(0xAE,"BGE","LT",True)
+rbranch(0xAF,"BLE","LE");      rbranch(0xB0,"BGT","LE",True)
 # A10 (2026-09-11). LEAW a,(Pn+d) -- mem[a] := Pn + d (the ADDRESS of a frame
 # local: arrays, &x, struct locals). 4 bytes, 13 steps, clobbers A.
 for p in (1,2,3):

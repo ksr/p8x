@@ -14,8 +14,11 @@ needed three small additions beyond the sketch: `ADDW`/`SUBW`/`CMPW a,#imm8`
 (`$A0–$A2`), `LEAW a,(Pn+d)` (`$A4–$A6`) and `LPW3` (`$79`), plus `PHW` pushing
 high-byte-first so a pushed word is little-endian on the stack (§7 caveat 4 is
 now moot: the compiler chose SP-relative frames; a Tier B P4 would only simplify
-the depth tracking). Result over all 45 `/bin` C commands: 627,172 → 374,672
-bytes, −40.3%; `finder` 32,630 → 13,909. Not yet done: the self-hosting compilers, the on-target
+the depth tracking). Then **relative branches** (`$A8–$B0`, 2 bytes, signed
+displacement, flags preserved on the taken path) with shrink-only relaxation
+in the assembler, opted into by the compiler's `.relax` line so hand sources
+stay byte-identical with the native assembler. Result over all 45 `/bin` C
+commands: 627,172 → 369,209 bytes, −41.1%; `finder` 32,630 → 13,592. Not yet done: the self-hosting compilers, the on-target
 assembler's parsing of the compiler-only shapes, an EPROM reburn for the TTL
 machine. Tiers B and C remain proposals. What follows is the original sketch —
 real opcode numbers, real microcode in `genucode.py`'s vocabulary, step counts

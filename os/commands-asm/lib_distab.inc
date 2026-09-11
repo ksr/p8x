@@ -241,4 +241,22 @@ DISTAB:
         .asciiz "LEAW"
         .byte $A6,16
         .asciiz "LEAW"
+        .byte $A8,22
+        .asciiz "JMP"
+        .byte $A9,22
+        .asciiz "JZ"
+        .byte $AA,22
+        .asciiz "JNZ"
+        .byte $AB,22
+        .asciiz "JC"
+        .byte $AC,22
+        .asciiz "JNC"
+        .byte $AD,22
+        .asciiz "BLT"
+        .byte $AE,22
+        .asciiz "BGE"
+        .byte $AF,22
+        .asciiz "BLE"
+        .byte $B0,22
+        .asciiz "BGT"
         .byte $FF

@@ -351,6 +351,7 @@ No new register, no new bus line; the emulator and the FPGA run the regenerated
 | ADDW / SUBW / CMPW a,#imm8 (`$A0–$A2`) | the same with an 8-bit immediate (zero-extended): `x + k`, pointer stepping, `if (n < k)` |
 | LEAW a,(Pn+d) (`$A4–$A6`) | word at a := Pn + d — the address of a frame local (arrays, `&x`) |
 | LPW3 a (`$79`) | P3 := word at a — restore a saved stack pointer |
+| JMP / BZ / BNZ / BCP / JNC / BLT / BGE / BLE / BGT rel8 (`$A8–$B0`) | 2-byte relative branches, signed displacement from the next instruction; the taken path pushes A and saves the flags, then restores both, so A, B and the flags survive exactly as with the absolute forms. The assembler emits them for `.relax` sources (compiler output) or an explicit `.R` suffix |
 
 Contracts: the memory-to-memory forms clobber A (it is the ALU's only A input)
 and latch the flags; `d` is unsigned; after `ADDW`/`SUBW`/`CMPW`, C is the
@@ -364,7 +365,7 @@ the C compiler keep its call frames on the hardware stack: arguments pushed with
 `PHW` are plain frame words to the callee. `PHW`/`PLW` were only ever used as a
 pair, so nothing else observed the order.
 
-Opcode space: 256 slots, 119 used.
+Opcode space: 256 slots, 128 used.
 
 ---
 

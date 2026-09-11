@@ -59,9 +59,14 @@ writes into the return slot / `P0=0000` fetches. Added opcodes: `ADDW/SUBW/CMPW 
 step), `LEAW a,(Pn+d)` $A4-$A6, `LPW3` $79 (119 opcodes total); **PHW flipped to
 push hi-first** (word little-endian at P3+1). 627,172 → 374,672 = −40.3%
 (finder 32,630 → 13,909).
-User's direction (2026-09-11): do ALL remaining software-only items — next:
-relative branches (microcode), narrow-value chars, peephole, OS-resident runtime,
-self-hosting compilers. PARKED by the user, to revisit after those: scratch
+**Relative branches DONE:** `Jcc r` $A8-$B0 (128 opcodes; `_rel_taken`: save
+FLAGS→T2, A=d8 ldzn for the sign plane, DEC hi if negative, ADD lo, carry
+plane, restore FLAGS). Assembler `.relax` (shrink-only iterative relaxation,
+`relax_round`) + forced `.R` suffix; p8cc emits `.relax` first; hand sources
+unchanged (byte-identical check vs the committed assembler). 369,209 total
+(−41.1% overall). User's direction (2026-09-11): do ALL remaining software-only
+items — next: narrow-value chars, peephole, OS-resident runtime, self-hosting
+compilers. PARKED by the user, to revisit after those: scratch
 rewrites of the monitor/OS around the new ISA, easy replacements first (they
 were only re-assembled so far; idiom counts in BACKLOG — small wins, OS matters
 because of its 16 KB ceiling). **Still open:**

@@ -176,6 +176,11 @@ Instruction set rev 1 — generated from the microcode source (`genucode.py`); o
 | $49 | `BNZ addr` | 3 | 5 | - | Branch to addr if Z=0. |
 | $4A | `BCP addr` | 3 | 5 | - | Branch if C=1, i.e. the RAW 74181 Cn+4 pin is high. Pin high means NO carry out - see note (2). |
 | $4C | `JNC addr` | 3 | 5 | - | Branch to addr if C=0. (JC/JZ/JNZ are aliases of BCP/BZ/BNZ.) |
+| $A8 | `JMP rel8` | 2 | 14 | - | P0 := P0 + rel8 (signed, from the next instruction). 2 bytes; A and flags preserved; via .relax or JMP.R. |
+| $A9 | `BZ rel8` | 2 | 14 | - | Branch rel8 if Z=1. (JZ.R alias.) |
+| $AA | `BNZ rel8` | 2 | 14 | - | Branch rel8 if Z=0. (JNZ.R alias.) |
+| $AB | `BCP rel8` | 2 | 14 | - | Branch rel8 if C=1. (JC.R alias.) |
+| $AC | `JNC rel8` | 2 | 14 | - | Branch rel8 if C=0. |
 
 ### Signed branches (rev C; after CMP — N^V/Z)
 
@@ -185,6 +190,10 @@ Instruction set rev 1 — generated from the microcode source (`genucode.py`); o
 | $45 | `BGE addr` | 3 | 5 | - | Branch if signed A >= B (N^V=0). Use after CMP. |
 | $46 | `BLE addr` | 3 | 5 | - | Branch if signed A <= B ((N^V)\|Z). Use after CMP. |
 | $47 | `BGT addr` | 3 | 5 | - | Branch if signed A >  B (not (N^V)\|Z). Use after CMP. |
+| $AD | `BLT rel8` | 2 | 14 | - | Branch rel8 if signed A < B (N^V=1). Use after CMP. |
+| $AE | `BGE rel8` | 2 | 14 | - | Branch rel8 if signed A >= B (N^V=0). |
+| $AF | `BLE rel8` | 2 | 14 | - | Branch rel8 if signed A <= B ((N^V)\|Z). |
+| $B0 | `BGT rel8` | 2 | 14 | - | Branch rel8 if signed A > B. |
 
 ## Notes
 

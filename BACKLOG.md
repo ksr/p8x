@@ -1008,10 +1008,23 @@ Nothing below has been built or measured.
       matters (16 KB ceiling). Revisit after the software-only compiler list.
       Tier A / the P3 frame model (they still use the software C-stack and work,
       but their output is ~40% larger), the native assembler parsing the
-      compiler-only shapes, EPROM reburn for the TTL build. Next software-only
-      levers (see the 2026-09-11 histogram): relative branches (microcode, ~2.5%),
-      narrow-value tracking for chars (compiler, ~3%), a peephole pass (~1-2%),
-      an OS-resident shared runtime (~7% of total bytes, OS budget permitting).
+      compiler-only shapes, EPROM reburn for the TTL build.
+
+      **Relative branches DONE (2026-09-11):** `JMP/BZ/BNZ/BCP/JNC/BLT/BGE/BLE/
+      BGT rel8` ($A8–$B0, 128 opcodes), 2 bytes, signed d8 from the next
+      instruction; the taken path pushes A and saves FLAGS in T2, then restores
+      both (A is the ALU's only input — the first cut clobbered it and broke
+      `LDA #0 / JNC skip / LDA #1` in `__add`; caught by c_disasm), so they are
+      drop-in for the absolute forms (14 steps; 2 when not taken). Assembler:
+      `.relax` directive + iterative shrink-only relaxation (converges because
+      sizes only shrink) and a forced `MNEMONIC.R` form; the compiler writes
+      `.relax` at the top of its output, hand sources stay byte-identical with
+      the native assembler (verified). Disassembler (C + asm twin) prints the
+      resolved target (shape 22). 374,672 → 369,209 (−1.5%; only branches within
+      ±127 bytes shrink, about half). **627,172 → 369,209 = −41.1%** overall.
+      Next software-only levers: narrow-value tracking for chars (compiler,
+      ~3%), a peephole pass (~1-2%), an OS-resident shared runtime (~7% of total
+      bytes, OS budget permitting), the self-hosting compilers.
 
       **Data-driven priority (measured on 5 compiled commands, 19,897 instrs):**
         - **Done — the move idioms (the big win):** `PHW`/`PLW` + `LPW1`/`LPW2`

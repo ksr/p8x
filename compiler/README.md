@@ -98,6 +98,12 @@ member offsets, negation, bitwise NOT and the argument drop after a call.
 baseline, `finder` −57%):** the frame model above, plus `ADDW`/`SUBW`/`CMPW a,#imm8` and
 `LEAW a,(Pn+d)` in the ISA for it.
 
+**Relative branches (same day, −1.5% more; −41.1% overall):** the compiler's
+output starts with `.relax`, so the assembler encodes every `JMP`/`Jcc` whose
+target lies within ±127 bytes as the 2-byte relative opcode (shrink-only
+iterative relaxation, so both passes agree). Hand-written sources carry no
+`.relax` and stay byte-identical with the native assembler's output.
+
 **Calling convention / frames (2026-09-11: on the hardware stack).** Call
 frames live on **P3**. A caller pushes the arguments right-to-left with `PHW`
 (each word lies little-endian at `P3+1`), `JSR`s, then drops them with

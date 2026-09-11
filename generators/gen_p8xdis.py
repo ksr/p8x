@@ -23,6 +23,7 @@ shape -> operand form and instruction length:
    17..19 (Pn+d),a len 4  STW (Pn+d),a:   op a.lo a.hi d8 (17=P1 18=P2 19=P3)
    20 "a,#"       len 4   LDW a,#imm8:    op a.lo a.hi imm8
    21 "a,#w"      len 5   LDW a,#imm16:   op a.lo a.hi imm.lo imm.hi
+   22 "r"         len 2   Jcc rel8: op d8 (signed, from the next instruction)
   (This numbering is the DISASSEMBLER's; the native assembler's opcode table
   from gen_p8xopc.py has its own, where 9 is "#w".)
 
@@ -39,7 +40,7 @@ SHAPE = {"": 0, "#": 1, "a": 2, "(P1)": 3, "(P1)+": 4, "(P2)": 5,
          "#w": 10, "(P1+d)": 11, "(P2+d)": 12, "(P3+d)": 13,
          "a,(P1+d)": 14, "a,(P2+d)": 15, "a,(P3+d)": 16,
          "(P1+d),a": 17, "(P2+d),a": 18, "(P3+d),a": 19,
-         "a,#": 20, "a,#w": 21}
+         "a,#": 20, "a,#w": 21, "r": 22}
 
 
 def main():

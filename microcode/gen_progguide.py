@@ -41,10 +41,10 @@ SHN={"":"","#":" #imm","a":" addr","a,a":" dst,src","(P1)":" (P1)","(P2)":" (P2)
      "#w":" #imm16","(P1+d)":" (P1+d)","(P2+d)":" (P2+d)","(P3+d)":" (P3+d)",
      "a,(P1+d)":" addr,(P1+d)","a,(P2+d)":" addr,(P2+d)","a,(P3+d)":" addr,(P3+d)",
      "(P1+d),a":" (P1+d),addr","(P2+d),a":" (P2+d),addr","(P3+d),a":" (P3+d),addr",
-     "a,#":" addr,#imm8","a,#w":" addr,#imm16"}
+     "a,#":" addr,#imm8","a,#w":" addr,#imm16","r":" rel8"}
 BYTES={"":1,"#":2,"a":3,"a,a":5,"(P1)":1,"(P2)":1,"(P3)":1,"(P1)+":1,"(P2)+":1,"(P3)+":1,
        "#w":3,"(P1+d)":2,"(P2+d)":2,"(P3+d)":2,"a,(P1+d)":4,"a,(P2+d)":4,"a,(P3+d)":4,
-       "(P1+d),a":4,"(P2+d),a":4,"(P3+d),a":4,"a,#":4,"a,#w":5}
+       "(P1+d),a":4,"(P2+d),a":4,"(P3+d),a":4,"a,#":4,"a,#w":5,"r":2}
 DESC={
  ("NOP",""):("-","No operation."),
  ("HLT",""):("-","Halt the clock. Resume only by reset (or emulator exit)."),
@@ -140,6 +140,19 @@ DESC[("CMPW","a,#")]=("C Z N V","Flags from a - imm8 (16-bit), memory unchanged:
 for p in (1,2,3):
     DESC[("LEAW","a,(P%d+d)"%p)]=("C Z N","Word at addr := P%d + d -- the ADDRESS of a frame local (arrays, &x). A!"%p)
 DESC[("INCW","a")]=("C Z N","Word at addr := word + 1. A!; flags are the low byte's (C = carry out of it).")
+# Relative branches (2026-09): 2 bytes, signed d8 relative to the NEXT instruction. The taken
+# path pushes A and saves FLAGS, then restores both, so they are drop-in for the absolute
+# forms (A, B and the flags survive). Emitted by the assembler for `.relax` sources (the C
+# compiler's output) or an explicit `.R` suffix.
+DESC[("JMP","r")]=("-","P0 := P0 + rel8 (signed, from the next instruction). 2 bytes; A and flags preserved; via .relax or JMP.R.")
+DESC[("BZ","r")]=("-","Branch rel8 if Z=1. (JZ.R alias.)")
+DESC[("BNZ","r")]=("-","Branch rel8 if Z=0. (JNZ.R alias.)")
+DESC[("BCP","r")]=("-","Branch rel8 if C=1. (JC.R alias.)")
+DESC[("JNC","r")]=("-","Branch rel8 if C=0.")
+DESC[("BLT","r")]=("-","Branch rel8 if signed A < B (N^V=1). Use after CMP.")
+DESC[("BGE","r")]=("-","Branch rel8 if signed A >= B (N^V=0).")
+DESC[("BLE","r")]=("-","Branch rel8 if signed A <= B ((N^V)|Z).")
+DESC[("BGT","r")]=("-","Branch rel8 if signed A > B.")
 DESC[("DECW","a")]=("C Z N","Word at addr := word - 1. A!; flags are the low byte's (C=1: no borrow).")
 
 DESC[("EI","")]=("-","Enable maskable interrupts (IE := 1).")

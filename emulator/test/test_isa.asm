@@ -875,6 +875,87 @@ n32b:
         LDB #$FE
         CMP
         JNZ fail
+; ---- D7: relative JMP forward and backward (forced .R), flags untouched ----
+        LDA #$D7
+        STA TID
+        SEC
+        JMP.R d7_f                  ; forward
+        LDA #$01                    ; skipped
+        STA TID
+d7_b:   JNC fail                    ; C must still be set after the taken branch
+        JMP.R d7_ok
+d7_f:   JNC fail
+        JMP.R d7_b                  ; backward
+        HLT                         ; never
+d7_ok:  LDA #$00
+        LDB #$00
+        CMP                         ; Z=1
+        JNZ fail
+; ---- D8: conditional relative branches: taken, not taken, flags kept ----
+        LDA #$D8
+        STA TID
+        LDA #$05
+        LDB #$05
+        CMP                         ; Z=1, C=1
+        JNZ.R fail_r                ; not taken
+        JZ.R d8_a                   ; taken
+        JMP fail
+d8_a:   JNC fail                    ; C survived the taken JZ.R
+        JNZ fail                    ; Z survived too
+        LDA #$03
+        LDB #$07
+        CMP                         ; A<B: C=0, Z=0
+        JC.R fail_r                 ; not taken
+        JNC.R d8_b                  ; taken
+        JMP fail
+d8_b:   JC fail
+        JZ fail
+        JMP.R d8_c
+fail_r: JMP fail
+; ---- D9: signed relative branches after CMP ----
+d8_c:   LDA #$D9
+        STA TID
+        LDA #$FE                    ; -2
+        LDB #$01
+        CMP
+        BGE.R fail_r                ; -2 >= 1 is false
+        BLT.R d9_a
+        JMP fail
+d9_a:   LDA #$01
+        LDB #$FE
+        CMP                         ; 1 > -2
+        BLE.R fail_r
+        BGT.R d9_b
+        JMP fail
+d9_b:
+; ---- DA: a taken relative branch preserves A and B (the __add carry idiom) ----
+        LDA #$DA
+        STA TID
+        LDA #$5A
+        LDB #$A5
+        SEC
+        JMP.R da_1
+        HLT
+da_1:   STA VAL                     ; A must still be $5A
+        LDA VAL
+        LDB #$5A
+        CMP
+        JNZ fail
+        LDA #$5A                    ; B must still be $A5
+        LDB #$A5
+        CMP                         ; $5A - $A5: not equal, C=0
+        JZ  fail
+        JNC.R da_2                  ; taken (C=0): A stays $5A
+        HLT
+da_2:   STA VAL
+        LDA VAL
+        LDB #$5A
+        CMP
+        JNZ fail
+        TPA3L                       ; stack balanced after the pushes/pops
+        LDB #$FF
+        CMP
+        JNZ fail
 ; ---- all passed ----
         LDA #$00
         HLT

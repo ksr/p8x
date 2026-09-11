@@ -13,7 +13,8 @@
  * Operand shapes (dt_sh): 0 none, 1 #imm8, 2 addr16, 3..8 (Pn)/(Pn)+, 9 a,a
  * (MOVW dst,src, ADDW/SUBW/CMPW a,b); Tier A: 10 #imm16 (LDPn), 11..13 (Pn+d)
  * (LDA/STA, n=1..3), 14..16 a,(Pn+d) (LDW), 17..19 (Pn+d),a (STW), 20 a,#imm8
- * and 21 a,#imm16 (LDW). Instruction length follows from the shape. The
+ * and 21 a,#imm16 (LDW), 22 rel8 (relative Jcc: the resolved target is
+ * printed). Instruction length follows from the shape. The
  * two-operand forms carry the ADDRESS word first in the byte stream, then the
  * displacement / immediate — whatever the textual operand order.
  *
@@ -50,6 +51,7 @@ int ilen(int sh) {
     if (sh >= 11 && sh <= 13) { return 2; }   /* opcode + d8   (Pn+d)    */
     if (sh >= 14 && sh <= 20) { return 4; }   /* opcode + addr16 + d8/imm8 */
     if (sh == 21) { return 5; }       /* opcode + addr16 + imm16 (LDW a,#w) */
+    if (sh == 22) { return 2; }       /* opcode + signed d8 (relative branch) */
     return 1;                         /* none / (Pn) / (Pn)+ */
 }
 
@@ -149,6 +151,11 @@ int main() {
             }
             if (sh == 20) { prs(" $"); ph4(w16(addr + 1)); prs(",#$"); ph2(peek(addr + 3) & 255); }
             if (sh == 21) { prs(" $"); ph4(w16(addr + 1)); prs(",#$"); ph4(w16(addr + 3)); }
+            if (sh == 22) {           /* relative: print the resolved target */
+                d = peek(addr + 1) & 255;
+                if (d >= 128) { d = d - 256; }      /* sign-extend (wraps mod 64K) */
+                prs(" $"); ph4(addr + 2 + d);
+            }
             putchar(13); putchar(10);
             addr = addr + ln;
         }

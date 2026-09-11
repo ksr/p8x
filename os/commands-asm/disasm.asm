@@ -203,6 +203,9 @@ CALC_LN:LDA SHAPE                     ; CMP preserves A, so SHAPE stays live in 
         LDB #21
         CMP
         JZ cl_5                       ; LDW addr,#imm16
+        LDB #22
+        CMP
+        JZ cl_2                       ; relative branch: op + d8
         LDB #11
         CMP
         JNC cl_1                      ; < 11: implied / (Pn) / (Pn)+
@@ -246,6 +249,9 @@ DS_OPER:LDA SHAPE                     ; CMP preserves A: SHAPE stays live throug
         LDB #21
         CMP
         JZ do_aiw                     ; 21: addr,#imm16
+        LDB #22
+        CMP
+        JZ do_rel                     ; 22: relative branch -> resolved target
         LDB #3
         CMP
         JNC do_non                    ; < 3: implied, nothing to print
@@ -402,6 +408,42 @@ do_aiw: LDA #32                       ; 21: " $aaaa,#$iiii"
         LDA WL
         JSR OPH8
         RTS
+do_rel: LDA #32                       ; 22: " $tttt" where tttt = ADDR + 2 + signext(d8)
+        JSR SYS_PUTC
+        LDA #'$'
+        JSR SYS_PUTC
+        LDA #1
+        JSR PEEKAT                    ; A = d8
+        STA TMPB
+        LDA ADDR                      ; lo = ADDR.lo + 2 + d8, carrying into hi
+        LDB #2
+        ADD
+        STA WL
+        LDA ADDR+1
+        JNC dr_1
+        INC
+dr_1:   STA WH
+        LDA WL
+        LDB TMPB
+        ADD
+        STA WL
+        LDA WH
+        JNC dr_2
+        INC
+dr_2:   STA WH
+        LDA TMPB                      ; negative d8: hi -= 1 (sign extension)
+        LDB #$80
+        AND
+        JZ dr_3
+        LDA WH
+        DEC
+        STA WH
+dr_3:   LDA WH
+        JSR OPH8
+        LDA WL
+        JSR OPH8
+        RTS
+
 ; PR_W1: print "$" + the 16-bit word at ADDR+1, high byte first.
 PR_W1:  LDA #'$'
         JSR SYS_PUTC

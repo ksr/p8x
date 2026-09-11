@@ -1071,7 +1071,10 @@ class Gen:
         # inherits a P3 BELOW CSTACKTOP; moving it up to CSTACKTOP-1 would put our
         # frames on top of the caller's pending return addresses -- so keep it and
         # grow down from there instead.
-        self.emit("        .org $%04X" % TPA_BASE,
+        # `.relax`: the assembler encodes every in-range JMP/Jcc as the 2-byte
+        # relative form. Compiler output opts in here; hand sources don't.
+        self.emit("        .relax",
+                  "        .org $%04X" % TPA_BASE,
                   "        TPA3L", "        STA __sp0", "        TPA3H", "        STA __sp0+1",
                   "        LDB #%d" % (CSTACK_TOP >> 8), "        CMP",   # A = P3.hi
                   "        JNC __sk0",                                    # P3 < CSTACKTOP: nested launch, keep

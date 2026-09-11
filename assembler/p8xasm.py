@@ -10,6 +10,13 @@ Syntax:  label:  MNEMONIC operand[,operand]   ; comment
   exprs:     $1F 0x1F 31 'c' label  with + -  and <expr (lo) >expr (hi)
   directives: .org e | .byte e,... | .word e,... | .ascii "s" | .asciiz "s"
               .fill n[,v] | NAME = expr  (or .equ NAME, expr)
+              .relax  -> from here on, JMP/JZ/JNZ/JC/JNC/BLT/BGE/BLE/BGT whose
+                         target is within -128..+127 of the next instruction
+                         are encoded as the 2-byte RELATIVE opcodes (shape "r").
+                         Iterative, shrink-only, so both passes agree. The C
+                         compiler writes it at the top of its output; hand
+                         sources that must match the native assembler don't.
+              MNEMONIC.R label  -> force the relative form (error if out of range)
   immediates: where an opcode exists in BOTH an imm8 and an imm16 form (LDW a,#)
              the width is chosen from the operand's TEXT -- a literal that fits a
              byte ($xx, 0xXX, 0..255, 'c', <e, >e) is imm8, anything else (a
@@ -45,7 +52,9 @@ from genucode import OPC
 # Operand components and the bytes each one contributes after the opcode.
 # "#w" is a 16-bit immediate (lo,hi); "(Pn+d)" is the unsigned 8-bit displacement.
 COMP_BYTES={"":0,"#":1,"#w":2,"a":2,"(P1+d)":1,"(P2+d)":1,"(P3+d)":1,
-            "(P1)":0,"(P2)":0,"(P3)":0,"(P1)+":0,"(P2)+":0,"(P3)+":0}
+            "(P1)":0,"(P2)":0,"(P3)":0,"(P1)+":0,"(P2)+":0,"(P3)+":0,
+            "r":1}                                   # relative branch: signed d8
+RELAXABLE={mn for (mn,sh) in OPC if sh=="r"}         # mnemonics with a relative form
 
 def err(ln,line,msg):
     sys.exit("p8xasm: line %d: %s\n  %s"%(ln,msg,line))
@@ -153,6 +162,20 @@ class Asm:
         self.locked=set()
         for nm,val in (defines or {}).items():
             self.sym[nm]=val; self.locked.add(nm)
+        # Relaxation (.relax): `short` = line numbers whose branch is encoded as
+        # the 2-byte relative form; `cands` = (ln, pc, target-expr) of every
+        # relaxable branch seen in the latest pass, for the next decision round.
+        self.relax=False; self.short=set(); self.cands=[]
+    def relax_round(self):
+        """After a sizing pass: mark every relaxable branch whose displacement
+        fits as short. Returns True if the set grew (then size again). Sizes
+        only ever shrink, so distances only shrink and this converges."""
+        grew=False
+        for ln,pc,et,line in self.cands:
+            if ln in self.short: continue
+            v=self.expr(et,ln,line,True)
+            if -128<=v-(pc+2)<=127: self.short.add(ln); grew=True
+        return grew
     def expr(self,e,ln,line,pass2):
         e=e.strip()
         if e.startswith("<"): return self.expr(e[1:],ln,line,pass2)&0xFF
@@ -171,7 +194,7 @@ class Asm:
             tot+=sign*v; sign=1
         return tot&0xFFFF
     def run(self,lines,pass2):
-        pc=0
+        pc=0; self.cands=[]; self.relax=False
         for ln,raw,line in lines:
             emitted=[]
             m=re.match(r"^\s*(\w+)\s*:\s*(.*)$",line)
@@ -204,6 +227,19 @@ class Asm:
                     pc+=1
             if mn==".ORG":
                 pc=self.expr(opnd,ln,line,pass2)
+            elif mn==".RELAX":
+                self.relax=True
+            elif (mn.endswith(".R") and mn[:-2] in RELAXABLE) or \
+                 (self.relax and mn in RELAXABLE and ln in self.short):
+                # relative branch: opcode + signed d8 from the NEXT instruction
+                base=mn[:-2] if mn.endswith(".R") else mn
+                shape,comps=parse_operand(opnd)
+                if shape!="a": err(ln,line,"%s needs a label/address"%mn)
+                start=pc; emit(OPC[(base,"r")])
+                v=self.expr(comps[0][1],ln,line,pass2); d=v-(start+2)
+                if pass2 and not -128<=d<=127:
+                    err(ln,line,"relative branch out of range (%d bytes)"%d)
+                emit(d&0xFF)
             elif mn==".EQU":
                 nm,e=opnd.split(",",1); self.sym[nm.strip()]=self.expr(e,ln,line,pass2)
             elif mn==".BYTE":
@@ -226,6 +262,8 @@ class Asm:
                 key=resolve_shape(mn,shape,comps)
                 if key is None:
                     err(ln,line,"unknown instruction '%s %s'"%(mn,opnd))
+                if self.relax and mn in RELAXABLE and key=="a" and not pass2:
+                    self.cands.append((ln,pc,comps[0][1],line))   # a relaxation candidate
                 emit(OPC[(mn,key)])
                 # Byte-stream order: every 16-bit ADDRESS component first (in
                 # textual order), then the immediate / displacement bytes. This
@@ -258,12 +296,20 @@ def main():
     lines=tokenize(expand_includes(src))
     # --base: RAM-resident blob (e.g. an OS loaded to $2000); emit only the
     # bytes from base..hi. No --base: 8K ROM image from $0000.
+    def assemble(A):
+        # pass 1 sizes; with .relax, repeat while more branches turn short
+        A.run(lines,False)
+        for _ in range(32):
+            if not A.relax_round(): break
+            A.sym={k:v for k,v in A.sym.items() if k in A.locked}   # re-derive labels
+            A.run(lines,False)
+        A.run(lines,True)
     if base is not None:
-        A=Asm(base=base,cap=0x10000,defines=defs); A.run(lines,False); A.run(lines,True)
+        A=Asm(base=base,cap=0x10000,defines=defs); assemble(A)
         open(out,"wb").write(A.img[base:A.hi])
         size="%d bytes @ $%04X"%(A.hi-base,base)
     else:
-        A=Asm(defines=defs); A.run(lines,False); A.run(lines,True)
+        A=Asm(defines=defs); assemble(A)
         open(out,"wb").write(A.img[:0x2000])
         size="8K"
     if lstf:

@@ -36,7 +36,7 @@ SHAPE = {"": 0, "#": 1, "a": 2,
          "(P1)": 3, "(P1)+": 4, "(P2)": 5, "(P2)+": 6, "(P3)": 7, "(P3)+": 8,
          "#w": 9}
 # host-only shapes (see the docstring): skipped, not an error
-HOST_ONLY = {"a,a", "a,#", "a,#w",
+HOST_ONLY = {"a,a", "a,#", "a,#w", "r",
              "(P1+d)", "(P2+d)", "(P3+d)",
              "a,(P1+d)", "a,(P2+d)", "a,(P3+d)",
              "(P1+d),a", "(P2+d),a", "(P3+d),a"}
