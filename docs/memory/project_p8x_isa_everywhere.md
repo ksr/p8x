@@ -74,6 +74,13 @@ checked by the differential tests.
 os_mk + full suite. The user's order after this: OS + WM kernel, then monitor.
 C libraries need NO change (spliced source, recompiled with the new tools).
 
+**OS + WM kernel DONE (2026-09-12):** 24 + 109 sites; OS 14,681 -> 13,798 B;
+os_asm + wm_* + desktop tests green. Still to do in stage 4: monitor (17 sites,
+allow FW_ZBUF; CFRDSEC not), apps/p8xedit.asm, basic/p8xbasic.asm (both shipped
+hand asm). **p8cc.c fit check:** code+small data 35,468 B vs TPA 36,352 B; the
+266 KB of host-sized tables are the blocker (stream the source, cut tables,
+multi-pass) -- see BACKLOG.
+
 **Next stages:** (2) C libs `os/commands/lib_*.c` + `compiler/p8lib.c` and asm
 libs `os/commands-asm/*.inc` review; (3) rebuild /binc + disk via run.sh, full
 suite; (4) hand-asm rewrite (the native assembler now has the two-operand shapes; no

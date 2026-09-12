@@ -597,10 +597,7 @@ RUNGO:  LDA  #0                 ; clear any pending console LF from a prior prog
         STA  APLBA
         LDA  LBA1
         STA  APLBA+1
-        LDA  FLEN
-        STA  APREM
-        LDA  FLEN+1
-        STA  APREM+1
+        MOVW APREM,FLEN                ; <- tierA: word move (next: LDA)
         LDA  #1
         STA  APHAVE
 DR_BIND:LDA  INARM              ; stdin "< name": bind it (its FFIND runs BEFORE any
@@ -850,10 +847,7 @@ DOBOOTLOAD:
         STA  BLSRC
         LDA  STARTHI
         STA  BLSRC+1
-        LDA  #1                ; dst = LBA 1
-        STA  BLDST
-        LDA  #0
-        STA  BLDST+1
+        LDW BLDST,#1                ; <- tierA: word constant (next: LDA)
         LDA  SECCNT
         STA  BLCNT
 BL_LP:  LDA  BLCNT
@@ -873,23 +867,9 @@ BL_LP:  LDA  BLCNT
         LDA  #0
         STA  LBA2
         JSR  CFWRITE
-        LDA  BLSRC             ; src++ (16-bit)
-        LDB  #1
-        ADD
-        STA  BLSRC
-        JNC  BL_S2
-        LDA  BLSRC+1
-        INC
-        STA  BLSRC+1
-BL_S2:  LDA  BLDST             ; dst++ (16-bit)
-        LDB  #1
-        ADD
-        STA  BLDST
-        JNC  BL_D2
-        LDA  BLDST+1
-        INC
-        STA  BLDST+1
-BL_D2:  LDA  BLCNT
+        INCW BLSRC                ; <- tierA: 16-bit INCW chain, skip label BL_S2 dropped (next: LDA)
+BL_S2:  INCW BLDST                ; <- tierA: 16-bit INCW chain, skip label BL_D2 dropped (next: LDA)
+        LDA  BLCNT
         DEC
         STA  BLCNT
         JMP  BL_LP
@@ -937,13 +917,8 @@ SH_RUN: LDA  STARTLO            ; point a read stream at the script's extent (IB
         STA  ROREM
         LDA  LENHI
         STA  ROREM+1
-        LDA  #<IBUF
-        STA  ROBUF
-        LDA  #>IBUF
-        STA  ROBUF+1
-        LDA  #0                 ; ROCNT=0 -> the first FGETB refills IBUF
-        STA  ROCNT
-        STA  ROCNT+1
+        LDW ROBUF,#IBUF                ; <- tierA: address constant (next: LDA)
+        LDW ROCNT,#0                ; <- tierA: zero word (next: LDA)
         LDA  DRVSEL
         STA  ROSDRV
         JSR  SAVESCR            ; SCRSAVE <- this fresh stream state
@@ -1009,10 +984,7 @@ DOMAKE: JSR  MKL_LOAD           ; slurp CWD Makefile -> MKSRC
         JNZ  dm_go
         JSR  MKD_FIRST          ; no arg -> first target in the file
         JC   MKE_NOM
-dm_go:  LDA  #<MKPLAN           ; plan = empty
-        STA  MKPP
-        LDA  #>MKPLAN
-        STA  MKPP+1
+dm_go:  LDW MKPP,#MKPLAN                ; <- tierA: address constant (next: LDP1)
         LDP1 #MKPLAN
         LDA  #0
         STA  (P1)
@@ -1037,17 +1009,11 @@ MKL_LOAD: JSR SETCWDDIR
         LDP1 #IBUF
         JSR  FOPEN
         JC   mkl_no
-        LDA  #<MKSRC            ; cursor in MKSP (FGETB clobbers P1/P2)
-        STA  MKSP
-        LDA  #>MKSRC
-        STA  MKSP+1
+        LDW MKSP,#MKSRC                ; <- tierA: address constant (next: JSR FGETB)
 mkl_lp: JSR  FGETB              ; -> A, C=1 at EOF; clobbers P1/P2
         JC   mkl_end
         STA  MKWORD
-        LDA  MKSP
-        TAP1L
-        LDA  MKSP+1
-        TAP1H
+        LPW1 MKSP                ; <- tierA: pointer load (next: LDA)
         LDA  MKWORD
         STA  (P1)
         INP1
@@ -1058,10 +1024,7 @@ mkl_lp: JSR  FGETB              ; -> A, C=1 at EOF; clobbers P1/P2
         LDB  #>MKSRCE
         CMP
         JNC  mkl_lp
-mkl_end: LDA MKSP
-        TAP1L
-        LDA  MKSP+1
-        TAP1H
+mkl_end:LPW1 MKSP                ; <- tierA: pointer load (next: LDA)
         LDA  #0
         STA  (P1)
         CLC
@@ -1336,10 +1299,7 @@ MKD_EMIT: JSR MKD_FRP
         INP1
         LDA  (P1)
         TAP2H
-        LDA  MKPP               ; P1 = MKPP
-        TAP1L
-        LDA  MKPP+1
-        TAP1H
+        LPW1 MKPP                ; <- tierA: pointer load (next: LDA)
 mke_cp: LDA (P2)                ; copy target token until ':'/space, then a NUL
         LDB  #':'
         CMP
@@ -1433,10 +1393,7 @@ mkp_cyc: LDP1 #MK_ECYC
         RTS
 
 ; ---- MKF_FLAT: for each planned target, copy its TAB recipe lines -> MKFLATB -
-MKF_FLAT: LDA #<MKFLATB
-        STA  MKFP
-        LDA  #>MKFLATB
-        STA  MKFP+1
+MKF_FLAT:LDW MKFP,#MKFLATB                ; <- tierA: address constant (next: LDP2)
         LDP2 #MKPLAN
 mkfl_e: LDA (P2)
         JZ   mkfl_dn
@@ -1478,16 +1435,10 @@ mkfl_ch: LDA (P1)
 mkfl_wlf: LDA #LF
         STA  MKWORD
         JSR  MKF_PUT
-mkfl_nx: LDA MKT1
-        TAP2L
-        LDA  MKT1+1
-        TAP2H
+mkfl_nx:LPW2 MKT1                ; <- tierA: pointer load (next: JMP mkfl_e -> LDA)
         JMP  mkfl_e
 mkfl_dn: RTS
-MKF_PUT: LDA MKFP               ; append MKWORD to MKFLATB via P2 (P1 = caller's cursor)
-        TAP2L
-        LDA  MKFP+1
-        TAP2H
+MKF_PUT:LPW2 MKFP                ; <- tierA: pointer load (next: LDA)
         LDA  MKWORD
         STA  (P2)
         INP2
@@ -1503,10 +1454,7 @@ MKF_WRITE: JSR SETCWDDIR
         JSR  FNORM
         JSR  FDELETE            ; remove a previous MK.RUN (ignore if absent)
         JSR  FWOPEN
-        LDA  #<MKFLATB          ; cursor in MKSP (FPUTB clobbers P1/P2)
-        STA  MKSP
-        LDA  #>MKFLATB
-        STA  MKSP+1
+        LDW MKSP,#MKFLATB                ; <- tierA: address constant (next: LDA)
 mkw_lp: LDA MKSP                ; cursor == MKFP (end)?
         LDB  MKFP
         CMP
@@ -1515,16 +1463,10 @@ mkw_lp: LDA MKSP                ; cursor == MKFP (end)?
         LDB  MKFP+1
         CMP
         JZ   mkw_dn
-mkw_go: LDA MKSP                ; P1 = cursor; fetch + write the byte
-        TAP1L
-        LDA  MKSP+1
-        TAP1H
+mkw_go: LPW1 MKSP                ; <- tierA: pointer load (next: LDA)
         LDA  (P1)
         JSR  FPUTB
-        LDA  MKSP               ; advance cursor
-        TAP1L
-        LDA  MKSP+1
-        TAP1H
+        LPW1 MKSP                ; <- tierA: pointer load (next: INP1)
         INP1
         TPA1L
         STA  MKSP
@@ -1708,10 +1650,7 @@ mp_yes: LDA  #1                 ; it is the mount: route to drive 1, C=1
         JSR  CFSEL
         SEC
         RTS
-mp_no:  LDA  MPSAV              ; restore P2 (first component wasn't "d1"); C=0,
-        TAP2L                   ;   leave the drive to the caller
-        LDA  MPSAV+1
-        TAP2H
+mp_no:  LPW2 MPSAV                ; <- tierA: pointer load (next: LDA)
         LDA  #0
         JSR  CFSEL
         RTS
@@ -4308,10 +4247,7 @@ dtt_put: JSR OUTCH
 dtt_ret: RTS
 
 ; DT_REDRAW - reprint LINEBUF[0..CMPCUR); leaves P2 = cursor.
-DT_REDRAW: LDA #<LINEBUF
-        TAP1L
-        LDA  #>LINEBUF
-        TAP1H
+DT_REDRAW:LDP1 #LINEBUF                ; <- tierA: pointer constant (next: LDA)
         LDA  #0
         STA  TMP
 drl_lp: LDA  TMP
@@ -4583,22 +4519,13 @@ ds_ent: JSR  RDENT            ; NAMEBUF + FLAGS; P2 advances by 32
         JMP  ds_cand
 ds_isd: LDA  #1
 ds_cand: JSR DT_CAND2
-        LDA  CMPSAV
-        TAP2L
-        LDA  CMPSAV+1
-        TAP2H
+        LPW2 CMPSAV                ; <- tierA: pointer load (next: LDA)
 ds_nx:  LDA  ECNT
         DEC
         STA  ECNT
         JNZ  ds_ent
-        LDA  CMPWLB           ; next sector (16-bit)
-        INC
-        STA  CMPWLB
-        JNZ  ds_snc
-        LDA  CMPWLB+1
-        INC
-        STA  CMPWLB+1
-ds_snc: LDA  CMPWSC
+        INCW CMPWLB                ; <- tierA: 16-bit INCW chain, skip label ds_snc dropped (next: LDA)
+        LDA  CMPWSC
         DEC
         STA  CMPWSC
         JMP  ds_sec
@@ -5028,15 +4955,9 @@ APCOPY: LDA  APREM              ; bytes left to copy?
         LDB  #2
         CMP                     ; C=1 when APREM hi >= 2 (i.e. APREM >= 512)
         JNC  APC_PART
-        LDA  #0
-        STA  APCHK
-        LDA  #2
-        STA  APCHK+1            ; chunk = 512
+        LDW APCHK,#512                ; <- tierA: word constant (next: JMP APC_BYT -> LDP2)
         JMP  APC_BYT
-APC_PART:LDA APREM
-        STA  APCHK
-        LDA  APREM+1
-        STA  APCHK+1            ; chunk = APREM (< 512)
+APC_PART:MOVW APCHK,APREM                ; <- tierA: word move (next: LDP2)
 APC_BYT:LDP2 #APBUF
 APC_B1: LDA  APCHK              ; sector chunk emitted?
         LDB  APCHK+1
@@ -5061,13 +4982,7 @@ APC_R1: LDA  APREM
         DEC
         STA  APREM
         JMP  APC_B1
-APC_NXT:LDA  APLBA              ; APLBA++ (16-bit), next sector
-        INC
-        STA  APLBA
-        JNZ  APCOPY
-        LDA  APLBA+1
-        INC
-        STA  APLBA+1
+APC_NXT:INCW APLBA                ; <- tierA: 16-bit INCW chain before JMP APCOPY (next: JMP APCOPY -> LDA)
         JMP  APCOPY
 APC_RET:RTS
 

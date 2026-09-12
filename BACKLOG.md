@@ -68,8 +68,22 @@ remainder is why it is still here.
       142,115 B (−4.5%; the twins were already byte-oriented, so the gain is
       mostly pointer loads and word moves); cmdbuild's on-board asm-match for
       vi and c_image's pixel-identical twin check hold. What remains is 8-bit
-      character compares. Next: OS + WM kernel, then the monitor (user's
-      order).
+      character compares.
+      **OS + WM kernel rewritten (2026-09-12):** `os/p8xos.asm` 24 sites
+      (allow FGETB), `os/wmkernel_body.asm` 109 (allow the k16add/k16sub/
+      k_ge/k_mul/k_rdnum/ksw/sink_home helpers, which read ka/kb/kw, not A);
+      OS 14,681 → 13,798 B (−6.0%); os_asm (native assembles the OS
+      byte-identically), all 8 wm_*, c_wdesk/c_wsink/c_wterm/c_wtermout,
+      sysbuild PASS. Remaining after this: the monitor (17 sites), then the
+      two other shipped hand-asm programs `apps/p8xedit.asm` and
+      `basic/p8xbasic.asm`.
+      **p8cc.c on the machine -- re-measured (2026-09-12):** compiled for the
+      target with the new codegen, code + small data = 35,468 B (was ~82 KB);
+      the TPA incl. the C stack is 36,352 B. What does not fit is the DATA:
+      266,189 B of host-sized tables (src[131072], spool 32K, pools 8K...).
+      A fit needs streaming source input (as p8xcc.asm does), target-sized
+      table limits, and ~10-15 KB less code (the multi-pass split). Milestone B
+      via p8cc.c: impossible before, plausible-with-work now.
 
 > **THE BOARD HAS TWO STALENESS SURFACES; A FEATURE MAY NEED BOTH.** The
 > BITSTREAM carries the CPU, microcode, monitor ROM and graphics RTL
@@ -612,6 +626,24 @@ Nothing below has been built or measured.
 ---
 
 ## IDEAS
+
+- [ ] **A C-written BASIC (user, 2026-09-12).** `basic/p8xbasic.asm` is 5,574
+      lines of hand assembly (11,887 bytes as the shipped `/bin/basic.bin`,
+      data at `$C500`, rebuild scratch `$E000`). Now that compiled C lands
+      within ~1.1× of hand asm on size, a `basic.c` twin in the p8cc subset
+      becomes reasonable: far easier to extend (the GL statements could sit on
+      `lib_gfx`/`lib_g3d` instead of the generated `glkwtab.inc`/`glvtab.inc`
+      tables), testable by the same differential method as the command twins,
+      and a second large program for the compiler to prove itself on.
+      Constraints to design around: p8cc's `int` is 16-bit and used as
+      unsigned (BASIC is 16-bit integer already, fine); the interpreter loop
+      and expression evaluator are the hot paths, so measure cycles against
+      the asm version (`p8xemu -L` LED stamps) before shipping it as the
+      default; program storage + scratch must stay in the same RAM budget
+      (`$C500..$F7FF` minus the C stack); the 16 `basic_*`/`c_gl_*` tests are
+      the acceptance suite. Start with a subset (lines, LET/PRINT/IF/GOTO/GOSUB/
+      FOR, expressions) and grow to parity, keeping the asm build shipping
+      until the C one passes every test.
 
 - [ ] **imgsend: VERIFY pass (2026-08-21, from a real corruption).** A clone
       delivered trit.bin with the right SIZE but corrupt content — "acked
