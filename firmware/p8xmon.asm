@@ -1056,10 +1056,7 @@ FRESOLVE:
         STA  DIRLBA1
         LDA  #4
         STA  DIRN
-        LDA  RPATH          ; skip a leading '/'
-        TAP2L
-        LDA  RPATH+1
-        TAP2H
+        LPW2 RPATH                ; <- tierA: pointer load (next: LDA)
         LDA  (P2)
         LDB  #'/'
         CMP
@@ -1076,10 +1073,7 @@ RS_SAVE:TPA2L
 ; a longer name like "D1FOO") resolves on drive 0. This is the ONE place drive
 ; selection happens — every FRESOLVE (files via FOPEN/FFIND, dirs via FOPENDIR)
 ; is mount-aware for free, so no caller ever parses a drive prefix.
-        LDA  RPATH
-        TAP2L
-        LDA  RPATH+1
-        TAP2H
+        LPW2 RPATH                ; <- tierA: pointer load (next: LDA)
         LDA  (P2)           ; [0] == 'd' ?
         LDB  #'d'
         CMP
@@ -1115,10 +1109,7 @@ RS_PAD: LDA  #' '
         STA  HEXL
         JNZ  RS_PAD
         LDP1 #FNAME         ; copy a component into FNAME (<=12), advancing P2
-        LDA  RPATH
-        TAP2L
-        LDA  RPATH+1
-        TAP2H
+        LPW2 RPATH                ; <- tierA: pointer load (next: LDA)
         LDA  #12
         STA  HEXL
 RS_CP:  LDA  (P2)
@@ -1353,18 +1344,12 @@ FCREATE:JSR  FCRE_CORE      ; create in the current directory (FRESOLVE-set or r
         JSR  FRESET         ; revert to root (LDA/STA preserve C)
         RTS
 FCRE_CORE:
-        LDA  FLEN           ; FSCAN clobbers FLEN while scanning — save the
-        STA  FSAV           ; caller's requested length and restore it after
-        LDA  FLEN+1
-        STA  FSAV+1
+        MOVW FSAV,FLEN                ; <- tierA: word move (next: LDA)
         LDA  FLEN+2
         STA  FSAV+2
         JSR  FSCAN          ; name already present (file or dir) in this dir?
         JNC  FC_ERR         ; yes -> error
-        LDA  FSAV
-        STA  FLEN
-        LDA  FSAV+1
-        STA  FLEN+1
+        MOVW FLEN,FSAV                ; <- tierA: word move (next: LDA)
         LDA  FSAV+2
         STA  FLEN+2
         LDA  #0             ; read boot block -> SBUF (free pointer at +4/+5)
@@ -1381,10 +1366,7 @@ FCRE_CORE:
         STA  LBA1
         LDA  #0
         STA  LBA2
-        LDA  FSRC           ; P1 = data source
-        TAP1L
-        LDA  FSRC+1
-        TAP1H
+        LPW1 FSRC                ; <- tierA: pointer load (next: LDA)
         LDA  #0
         STA  CNT            ; sectors written
         LDA  FLEN
@@ -1486,10 +1468,7 @@ FC_DNC: LDA  CNT
         JNZ  FC_DSEC
         SEC                 ; root directory full
         RTS
-FC_SLOT:LDA  FSRC           ; re-point P2 at the slot start
-        TAP2L
-        LDA  FSRC+1
-        TAP2H
+FC_SLOT:LPW2 FSRC                ; <- tierA: pointer load (next: LDP1)
         LDP1 #FNAME         ; name (12)
         LDA  #12
         STA  HEXH
@@ -1551,13 +1530,8 @@ FCOMMIT:JSR  FCOM_CORE      ; register in the current directory (FRESOLVE-set or
         JSR  FRESET
         RTS
 FCOM_CORE:
-        LDA  #0            ; CNTW = ceil(FLEN/512), 16-bit; REMW = 24-bit remaining
-        STA  CNTW
-        STA  CNTW+1
-        LDA  FLEN
-        STA  REMW
-        LDA  FLEN+1
-        STA  REMW+1
+        LDW CNTW,#0                ; <- tierA: zero word (next: LDA)
+        MOVW REMW,FLEN                ; <- tierA: word move (next: LDA)
         LDA  FLEN+2
         STA  REMW+2
 FCM_CL: LDA  REMW
@@ -1566,15 +1540,8 @@ FCM_CL: LDA  REMW
         LDB  REMW+2
         OR
         JZ   FCM_DN
-        LDA  CNTW          ; CNTW++
-        LDB  #1
-        ADD
-        STA  CNTW
-        JNC  FCM_C1
-        LDA  CNTW+1
-        INC
-        STA  CNTW+1
-FCM_C1: LDA  REMW+1        ; REMW -= 512 (24-bit, floor 0)
+        INCW CNTW                ; <- tierA: 16-bit INCW chain, skip label FCM_C1 dropped (next: LDA)
+        LDA  REMW+1        ; REMW -= 512 (24-bit, floor 0)
         LDB  #2
         SUB
         STA  REMW+1
@@ -1641,10 +1608,7 @@ FOPEN:  LDA  DRVSEL         ; the read stream remembers its drive (dual-volume)
         STA  ROLBA+1
         LDA  LBA2
         STA  ROLBA+2
-        LDA  FLEN
-        STA  ROREM
-        LDA  FLEN+1
-        STA  ROREM+1
+        MOVW ROREM,FLEN                ; <- tierA: word move (next: LDA)
         LDA  FLEN+2
         STA  ROREM+2
         LDA  #0            ; force a refill on the first FGETB
@@ -1671,10 +1635,7 @@ FG_GO:  LDA  ROCNT
         OR
         JNZ  FG_RD
         JSR  FG_FILL       ; buffer empty -> read next sector
-FG_RD:  LDA  ROPTR
-        TAP1L
-        LDA  ROPTR+1
-        TAP1H
+FG_RD:  LPW1 ROPTR                ; <- tierA: pointer load (next: LDA)
         LDA  (P1)+
         STA  TMP
         TPA1L
@@ -1732,10 +1693,7 @@ FG_FILL:LDA  ROSDRV        ; re-assert the read stream's drive before the disk r
         LDA  ROLBA+2
         INC
         STA  ROLBA+2
-FF_1:   LDA  ROBUF
-        STA  ROPTR
-        LDA  ROBUF+1
-        STA  ROPTR+1
+FF_1:   MOVW ROPTR,ROBUF                ; <- tierA: word move (next: LDA)
         LDA  ROREM+2       ; ROCNT = min(512, ROREM); any high byte -> >= 64K >> 512
         LDB  #0
         CMP
@@ -1744,25 +1702,16 @@ FF_1:   LDA  ROBUF
         LDB  #2
         CMP
         JC   FF_FULL       ; ROREM mid >= 2 -> >= 512
-        LDA  ROREM
-        STA  ROCNT
-        LDA  ROREM+1
-        STA  ROCNT+1
+        MOVW ROCNT,ROREM                ; <- tierA: word move (next: RTS)
         RTS
-FF_FULL:LDA  #0
-        STA  ROCNT
-        LDA  #2
-        STA  ROCNT+1       ; 512
+FF_FULL:LDW ROCNT,#512                ; <- tierA: word constant (next: RTS)
         RTS
 
 ; FLOADAT - bulk-read FLEN bytes starting at sector LBA straight into (P1),
 ;   a whole sector at a time (P1 advances by 512 each). The fast "slurp a file"
 ;   primitive shared by EDIT's load and the OS loader; the byte-at-a-time reader
 ;   is FOPEN/FGETB. LBA is advanced; FLEN is preserved (counts down in TMP/TMP2).
-FLOADAT:LDA  FLEN           ; FLAREM = remaining bytes (24-bit; TMP would be
-        STA  FLAREM         ; clobbered by CFRDSEC, so use a dedicated counter)
-        LDA  FLEN+1
-        STA  FLAREM+1
+FLOADAT:MOVW FLAREM,FLEN                ; <- tierA: word move (next: LDA)
         LDA  FLEN+2
         STA  FLAREM+2
 FLA_LP: LDA  FLAREM
@@ -1874,10 +1823,7 @@ FCLOSE: LDA  WOPOS
         JSR  FW_FLUSH
 FCL_R:  LDA  WOSDRV        ; commit (dir write + free pointer) on the write drive
         STA  DRVSEL
-        LDA  WOTOT
-        STA  FLEN
-        LDA  WOTOT+1
-        STA  FLEN+1
+        MOVW FLEN,WOTOT                ; <- tierA: word move (next: LDA)
         LDA  WOTOT+2
         STA  FLEN+2
         JSR  FDEL_CORE     ; drop any old version in the current dir (no revert)
@@ -1906,9 +1852,7 @@ FW_FLUSH:
         LDA  WOLBA+2
         INC
         STA  WOLBA+2
-FWF_1:  LDA  #0
-        STA  WOPOS
-        STA  WOPOS+1
+FWF_1:  LDW WOPOS,#0                ; <- tierA: zero word (next: JSR FW_ZBUF)
         JSR  FW_ZBUF
         RTS
 ; FW_ZBUF - zero the 512-byte SBUF write buffer.

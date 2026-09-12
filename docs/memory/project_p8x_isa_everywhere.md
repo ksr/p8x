@@ -75,9 +75,12 @@ os_mk + full suite. The user's order after this: OS + WM kernel, then monitor.
 C libraries need NO change (spliced source, recompiled with the new tools).
 
 **OS + WM kernel DONE (2026-09-12):** 24 + 109 sites; OS 14,681 -> 13,798 B;
-os_asm + wm_* + desktop tests green. Still to do in stage 4: monitor (17 sites,
-allow FW_ZBUF; CFRDSEC not), apps/p8xedit.asm, basic/p8xbasic.asm (both shipped
-hand asm). **p8cc.c fit check:** code+small data 35,468 B vs TPA 36,352 B; the
+os_asm + wm_* + desktop tests green. Monitor DONE (18 sites, ROM used 5,297 -> 5,184 B, `make rom` regenerated).
+Still to do in stage 4: apps/p8xedit.asm (1 site) and basic/p8xbasic.asm (93 + 38
+with allow ADD16,CMP16,DIV16,HEXDIG,MUL16,PRDEC,RANDOM,SAPP,SHL16,SKIPSP,SMOVE,
+SUB16,SARG,SCPYLIT). The disk build assembles both at test time, so apply them
+only between suite runs. p8xbasic.asm needs -D BASORG/BASRAM/PBUF/MONITOR to
+assemble standalone (see os/run.sh line ~215). **p8cc.c fit check:** code+small data 35,468 B vs TPA 36,352 B; the
 266 KB of host-sized tables are the blocker (stream the source, cut tables,
 multi-pass) -- see BACKLOG.
 

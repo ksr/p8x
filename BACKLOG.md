@@ -74,9 +74,14 @@ remainder is why it is still here.
       k_ge/k_mul/k_rdnum/ksw/sink_home helpers, which read ka/kb/kw, not A);
       OS 14,681 → 13,798 B (−6.0%); os_asm (native assembles the OS
       byte-identically), all 8 wm_*, c_wdesk/c_wsink/c_wterm/c_wtermout,
-      sysbuild PASS. Remaining after this: the monitor (17 sites), then the
-      two other shipped hand-asm programs `apps/p8xedit.asm` and
-      `basic/p8xbasic.asm`.
+      sysbuild PASS.
+      **Monitor rewritten (2026-09-12):** `firmware/p8xmon.asm` 18 sites
+      (allow FW_ZBUF; CFRDSEC kept -- its first act is a call chain that
+      may read A); ROM used 5,297 → 5,184 B (ends $1440, 3,008 B free of 8 K);
+      `rom/` burn set regenerated. Remaining: `apps/p8xedit.asm` (1 site) and
+      `basic/p8xbasic.asm` (93 sites + 38 behind its 16-bit helpers
+      ADD16/CMP16/DIV16/HEXDIG/MUL16/PRDEC/RANDOM/SAPP/SHL16/SKIPSP/SMOVE/SUB16,
+      SARG, SCPYLIT -- all clear to allow; EXPR and FCREATE not).
       **p8cc.c on the machine -- re-measured (2026-09-12):** compiled for the
       target with the new codegen, code + small data = 35,468 B (was ~82 KB);
       the TPA incl. the C stack is 36,352 B. What does not fit is the DATA:
