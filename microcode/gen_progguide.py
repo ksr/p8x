@@ -160,19 +160,22 @@ DESC[("XORW","a,#w")]=("Z N","Word a := a XOR imm16; #$FFFF is a 16-bit bitwise 
 for p in (1,2,3):
     DESC[("LEAW","a,(P%d+d)"%p)]=("C Z N","Word at addr := P%d + d -- the ADDRESS of a frame local (arrays, &x). A!"%p)
 DESC[("INCW","a")]=("C Z N","Word at addr := word + 1. A!; flags are the low byte's (C = carry out of it).")
-# Relative branches (2026-09): 2 bytes, signed d8 relative to the NEXT instruction. The taken
-# path pushes A and saves FLAGS, then restores both, so they are drop-in for the absolute
-# forms (A, B and the flags survive). Emitted by the assembler for `.relax` sources (the C
-# compiler's output) or an explicit `.R` suffix.
-DESC[("JMP","r")]=("-","P0 := P0 + rel8 (signed, from the next instruction). 2 bytes; A and flags preserved; via .relax or JMP.R.")
-DESC[("BZ","r")]=("-","Branch rel8 if Z=1. (JZ.R alias.)")
-DESC[("BNZ","r")]=("-","Branch rel8 if Z=0. (JNZ.R alias.)")
-DESC[("BCP","r")]=("-","Branch rel8 if C=1. (JC.R alias.)")
-DESC[("JNC","r")]=("-","Branch rel8 if C=0.")
-DESC[("BLT","r")]=("-","Branch rel8 if signed A < B (N^V=1). Use after CMP.")
-DESC[("BGE","r")]=("-","Branch rel8 if signed A >= B (N^V=0).")
-DESC[("BLE","r")]=("-","Branch rel8 if signed A <= B ((N^V)|Z).")
-DESC[("BGT","r")]=("-","Branch rel8 if signed A > B.")
+# Relative branches (2026-09): 2 bytes, signed d8 relative to the NEXT instruction. The TAKEN
+# path CLOBBERS A and the flags (8 steps: A = d8 for the sign, A = P0 bytes for the add); the
+# not-taken path is 2 steps and touches nothing. (Until the 2026-09-11 speed audit the taken
+# path saved and restored both in 14 steps -- 11 cycles per taken branch against the 3-step
+# absolute JMP, 6.5% of a compiled program's time.) Emitted by the assembler for `.relax`
+# sources (the C compiler's output) or an explicit `.R` suffix; `.A` forces the absolute form.
+_RB="Taken: A and the flags are clobbered (8 steps); not taken: 2 steps, nothing changes."
+DESC[("JMP","r")]=("C Z N V","P0 := P0 + rel8 (signed, from the next instruction). 2 bytes; A! flags!; via .relax or JMP.R. An always-taken jump is cheaper as the 3-step absolute JMP (JMP.A), which the compiler emits.")
+DESC[("BZ","r")]=("C Z N V","Branch rel8 if Z=1. "+_RB+" (JZ.R alias.)")
+DESC[("BNZ","r")]=("C Z N V","Branch rel8 if Z=0. "+_RB+" (JNZ.R alias.)")
+DESC[("BCP","r")]=("C Z N V","Branch rel8 if C=1. "+_RB+" (JC.R alias.)")
+DESC[("JNC","r")]=("C Z N V","Branch rel8 if C=0. "+_RB)
+DESC[("BLT","r")]=("C Z N V","Branch rel8 if signed A < B (N^V=1). Use after CMP. "+_RB)
+DESC[("BGE","r")]=("C Z N V","Branch rel8 if signed A >= B (N^V=0). "+_RB)
+DESC[("BLE","r")]=("C Z N V","Branch rel8 if signed A <= B ((N^V)|Z). "+_RB)
+DESC[("BGT","r")]=("C Z N V","Branch rel8 if signed A > B. "+_RB)
 DESC[("DECW","a")]=("C Z N","Word at addr := word - 1. A!; flags are the low byte's (C=1: no borrow).")
 
 DESC[("EI","")]=("-","Enable maskable interrupts (IE := 1).")

@@ -92,7 +92,12 @@ baseline; see docs/p8x-isa-c-extensions.md):
     every local, args PHW'd (little-endian on the stack since the PHW flip)
     and dropped with ADDP3; the software-frame runtime is gone.
   * Relative branches (same day, -1.5% more): the output starts with `.relax`
-    so the assembler encodes every in-range JMP/Jcc as the 2-byte form.
+    so the assembler encodes every in-range Jcc as the 2-byte form. Speed
+    (2026-09-12): a TAKEN relative branch is 8 steps vs 3 absolute and, since
+    the speed audit, clobbers A and the flags -- so nothing the compiler emits
+    reads A/flags after a taken branch (bios()/__mul/__divmod use `LDA #0 /
+    ROL` for carry -> 0/1; __cmp16 is branch-free), and every unconditional
+    jump (always taken) is emitted `JMP.A`, the forced absolute form.
   * Narrow values + peephole (same day, -7.6% more; -45.6% overall): a char
     load or byte constant (is_narrow) goes straight into A (gen_byte_a) for
     putchar, bios()'s A operand, byte stores, truth tests and 8-bit CMP
@@ -892,7 +897,7 @@ class Gen:
     def materialize(self, e):                            # a condition as a 0/1 VALUE
         t = self.lbl("Lt1"); end = self.lbl("Lte")       # (relop, !, &&, || in value context)
         self.gen_cond(e, t, True)
-        self.emit("        LDW __ax,#0", "        JMP %s" % end,
+        self.emit("        LDW __ax,#0", "        JMP.A %s" % end,
                   "%s:    LDW __ax,#1" % t, "%s:" % end)
 
     # ---- conditions: branch on the truth of an expression, no 0/1 in __ax --------
@@ -957,7 +962,7 @@ class Gen:
             k = L[1] & 0xFFFF
             if k == 0xFFFF:                                # always true: C = 1
                 self.gen_expr(R)                           # (side effects only)
-                if want_c == when: self.emit("        JMP %s" % label)
+                if want_c == when: self.emit("        JMP.A %s" % label)
                 return
             g = self.gword(R)
             if g: self.emit("        CMPW %s,#%d" % (g, k + 1))
@@ -1050,7 +1055,6 @@ class Gen:
         if name == "bios":                               # bios(addr, p1, a) -> A | carry<<8
             if args[0][0] != "num":
                 sys.exit("p8cc: bios() address must be a constant")
-            skip = self.lbl("Lbc")
             if self.is_narrow(args[2]):                   # byte A operand: no spill
                 reload = self.byte_a_via_b(args[2])
                 self.gen_expr(args[1]); self.ax_to_p1()   # P1 = arg1
@@ -1063,8 +1067,8 @@ class Gen:
                 self.emit("        LPW1 __t", "        LDA __ax")
             self.emit("        JSR $%04X" % (args[0][1] & 0xFFFF),
                       "        STA __ax",                  # returned A -> low byte
-                      "        LDA #0", "        JNC %s" % skip, "        LDA #1",
-                      "%s:    STA __ax+1" % skip); return  # carry -> bit 8
+                      "        LDA #0", "        ROL",     # A = the carry flag (0/1):
+                      "        STA __ax+1"); return        #   -> bit 8, no branch
         # Calling convention (2026-09-11): the FIRST argument travels in __ax
         # and is never pushed (the callee stores it into its own frame slot);
         # the others go onto P3 right to left, so argument 1 ends nearest SP.
@@ -1103,13 +1107,13 @@ class Gen:
         elif k == "empty": pass
         elif k == "return":
             if s[1] is not None: self.gen_expr(s[1])
-            self.emit("        JMP _ret_%s" % self.func)
+            self.emit("        JMP.A _ret_%s" % self.func)
         elif k == "if":
             els = self.lbl("Lelse"); end = self.lbl("Lend")
             self.gen_cond(s[1], els if s[3] else end, False)
             self.gen_stmt(s[2])
             if s[3]:
-                self.emit("        JMP %s" % end, "%s:" % els)
+                self.emit("        JMP.A %s" % end, "%s:" % els)
                 self.gen_stmt(s[3])
             self.emit("%s:" % end)
         elif k == "while":
@@ -1117,7 +1121,7 @@ class Gen:
             self.emit("%s:" % top)
             self.gen_cond(s[1], end, False)
             self.gen_stmt(s[2])
-            self.emit("        JMP %s" % top, "%s:" % end)
+            self.emit("        JMP.A %s" % top, "%s:" % end)
         elif k == "for":                                  # for(init; cond; post) body
             init, cond, post, body = s[1], s[2], s[3], s[4]
             top = self.lbl("Ltop"); end = self.lbl("Lend")
@@ -1126,7 +1130,7 @@ class Gen:
             if cond is not None: self.gen_cond(cond, end, False)
             self.gen_stmt(body)
             if post is not None: self.gen_expr(post)
-            self.emit("        JMP %s" % top, "%s:" % end)
+            self.emit("        JMP.A %s" % top, "%s:" % end)
         else: sys.exit("p8cc: cannot generate stmt %r" % (k,))
 
     # ---- functions / top level ---------------------------------------------
@@ -1370,7 +1374,7 @@ class Gen:
                                 and aa[6:].isdigit():
                             out.append(a); out.append("        LDA #%d" % (int(aa[6:]) & 0xFF))
                             i += 2; changed = True; continue
-                    elif ma == "JMP" and b.strip().startswith(aa + ":") and not b.startswith(" "):
+                    elif ma in ("JMP", "JMP.A") and b.strip().startswith(aa + ":") and not b.startswith(" "):
                         i += 1; changed = True; continue          # jump to the next line
                 out.append(a); i += 1
             code = out
@@ -1388,8 +1392,8 @@ class Gen:
                       "__mul_l: LDA __ax", "        LDB #1", "        AND",
                       "        JZ __mul_s",
                       "        LDA __r", "        LDB __t", "        ADD",
-                      "        STA __r", "        LDA #0", "        JNC __mul_a",
-                      "        LDA #1", "__mul_a: STA __c", "        LDA __r+1",
+                      "        STA __r", "        LDA #0", "        ROL",   # __c = carry
+                      "        STA __c", "        LDA __r+1",
                       "        LDB __t+1", "        ADD", "        LDB __c",
                       "        ADD", "        STA __r+1",
                       "__mul_s: LDA __t", "        SHL", "        STA __t",
@@ -1412,12 +1416,13 @@ class Gen:
                          "        LDA __dr+1", "        ROL", "        STA __dr+1",
                          # if remainder >= divisor: subtract it, set quotient bit 0
                          "        LDA __dr+1", "        LDB __ax+1", "        CMP",
-                         "        JZ __dm_lo", "        JC __dm_ge", "        JMP __dm_no",
+                         "        JZ __dm_lo", "        JC __dm_ge", "        JMP.A __dm_no",
                          "__dm_lo: LDA __dr", "        LDB __ax", "        CMP",
                          "        JNC __dm_no",
                          "__dm_ge: LDA __dr", "        LDB __ax", "        SUB",
-                         "        STA __dr", "        LDA #0", "        JC __dm_b",
-                         "        LDA #1", "__dm_b: STA __c", "        LDA __dr+1",
+                         "        STA __dr", "        LDA #0", "        ROL",     # A = C (no borrow)
+                         "        LDB #1", "        XOR", "        STA __c",       # __c = borrow = !C
+                         "        LDA __dr+1",
                          "        LDB __ax+1", "        SUB", "        LDB __c",
                          "        SUB", "        STA __dr+1",
                          "        LDA __t", "        LDB #1", "        OR",
@@ -1430,14 +1435,13 @@ class Gen:
         # (The software-frame runtime -- __push/__enter/__entf/__leave/__lea/
         # __ldw/__ldb/__ldtw/__ldtb/__stw/__stb -- is gone: frames live on P3 and
         # every local access is one LDW/STW/LEAW (P3+d) instruction, 2026-09-11.)
-        # __cmp16: compare __t (left) with __ax (right) as 16-bit UNSIGNED and leave
-        # the FLAGS for a direct branch: C = left>=right, Z = left==right. High bytes
-        # first; only when they are equal does the low-byte compare decide -- so C
-        # and Z are both right for the full 16 bits. Still used for `x == y` of two
-        # variables: CMPW a,b has a high-byte-only Z (no room in 15 microsteps).
-        R["__cmp16"] = ["__cmp16: LDA __t+1", "        LDB __ax+1", "        CMP",
-                        "        JNZ __cmp16r", "        LDA __t", "        LDB __ax",
-                        "        CMP", "__cmp16r: RTS"]
+        # __cmp16: 16-bit EQUALITY of __t and __ax, Z = (both bytes equal), for the
+        # `x == y` of two variables (CMPW a,b has a high-byte-only Z). Branch-free
+        # on purpose: a taken relative branch clobbers the flags (2026-09-11), so
+        # the old `CMP ; JNZ done ; CMP ; done: RTS` could not hand Z back.
+        R["__cmp16"] = ["__cmp16: LDA __t", "        LDB __ax", "        SUB",
+                        "        STA __c", "        LDA __t+1", "        LDB __ax+1",
+                        "        SUB", "        LDB __c", "        OR", "        RTS"]
         # __shl/__shr: shift value __t left/right by (__ax low byte) bits -> __ax.
         R["__shl"] = ["__shl:  LDA __ax", "        STA __n", "        LDA __t",
                       "        STA __ax", "        LDA __t+1", "        STA __ax+1",
@@ -1445,14 +1449,14 @@ class Gen:
                       "        LDA __ax", "        SHL", "        STA __ax",
                       "        LDA __ax+1", "        ROL", "        STA __ax+1",
                       "        LDA __n", "        DEC", "        STA __n",
-                      "        JMP __shl_l", "__shl_e: RTS"]
+                      "        JMP.A __shl_l", "__shl_e: RTS"]
         R["__shr"] = ["__shr:  LDA __ax", "        STA __n", "        LDA __t",
                       "        STA __ax", "        LDA __t+1", "        STA __ax+1",
                       "__shr_l: LDA __n", "        JZ __shr_e",
                       "        LDA __ax+1", "        SHR", "        STA __ax+1",
                       "        LDA __ax", "        ROR", "        STA __ax",
                       "        LDA __n", "        DEC", "        STA __n",
-                      "        JMP __shr_l", "__shr_e: RTS"]
+                      "        JMP.A __shr_l", "__shr_e: RTS"]
         order = ["__mul", "__div", "__mod", "__divmod", "__shl", "__shr", "__cmp16"]
         want = set(self.used)
         if {"__div", "__mod"} & want: want.add("__divmod")

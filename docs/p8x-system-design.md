@@ -354,7 +354,7 @@ No new register, no new bus line; the emulator and the FPGA run the regenerated
 | PHW (Pn+d) (`$BD–$BF`) | push the word at Pn + d (high byte first) — a C argument straight from its frame slot, 2 bytes |
 | LEAW a,(Pn+d) (`$A4–$A6`) | word at a := Pn + d — the address of a frame local (arrays, `&x`) |
 | LPW3 a (`$79`) | P3 := word at a — restore a saved stack pointer |
-| JMP / BZ / BNZ / BCP / JNC / BLT / BGE / BLE / BGT rel8 (`$A8–$B0`) | 2-byte relative branches, signed displacement from the next instruction; the taken path pushes A and saves the flags, then restores both, so A, B and the flags survive exactly as with the absolute forms. The assembler emits them for `.relax` sources (compiler output) or an explicit `.R` suffix |
+| JMP / BZ / BNZ / BCP / JNC / BLT / BGE / BLE / BGT rel8 (`$A8–$B0`) | 2-byte relative branches, signed displacement from the next instruction. **Taken: 8 steps, A and the flags are clobbered** (B kept); not taken: 2 steps, nothing touched. Until the 2026-09-11 speed audit the taken path saved and restored A and the flags (14 steps) — 11 cycles per taken branch against the 3-step absolute form, 6.5% of a compiled program's time — so that was dropped and the compiler's dependent idioms rewritten. The assembler emits them for `.relax` sources (compiler output) or an explicit `.R` suffix; `.A` forces the absolute form, which the compiler uses for every always-taken jump |
 
 Contracts: the memory-to-memory forms clobber A (it is the ALU's only A input)
 and latch the flags; `d` is unsigned; after `ADDW`/`SUBW`/`CMPW`, C is the

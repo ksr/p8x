@@ -941,34 +941,38 @@ d9_a:   LDA #$01
         BGT.R d9_b
         JMP fail
 d9_b:
-; ---- DA: a taken relative branch preserves A and B (the __add carry idiom) ----
+; ---- DA: a taken relative branch preserves B and the stack (A and the flags are
+;          CLOBBERED since the 2026-09-11 speed audit: 8 steps instead of 14) ----
         LDA #$DA
         STA TID
-        LDA #$5A
         LDB #$A5
         SEC
         JMP.R da_1
         HLT
-da_1:   STA VAL                     ; A must still be $5A
-        LDA VAL
-        LDB #$5A
+da_1:   LDA #$A5                    ; B must still be $A5
         CMP
         JNZ fail
-        LDA #$5A                    ; B must still be $A5
+        LDA #$5A
         LDB #$A5
         CMP                         ; $5A - $A5: not equal, C=0
         JZ  fail
-        JNC.R da_2                  ; taken (C=0): A stays $5A
+        JNC.R da_2                  ; taken (C=0)
         HLT
-da_2:   STA VAL
-        LDA VAL
-        LDB #$5A
+da_2:   LDA #$A5                    ; B survived the second taken branch too
         CMP
         JNZ fail
-        TPA3L                       ; stack balanced after the pushes/pops
+        TPA3L                       ; nothing left on the stack
         LDB #$FF
         CMP
         JNZ fail
+        LDA #0                      ; the NOT-taken path leaves the flags alone:
+        LDB #0
+        CMP                         ; Z=1
+        JNZ.R fail                  ; not taken ...
+        JNZ fail                    ; ... and Z is still 1 here
+        JZ.R da_3                   ; (taken: fine, nothing tested after it)
+        HLT
+da_3:
 ; ---- E1: ADDW/SUBW a,#imm16 -- 16-bit immediate, carry/borrow chained, 16-bit C ----
         LDA #$E1
         STA TID

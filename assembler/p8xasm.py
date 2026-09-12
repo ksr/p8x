@@ -17,6 +17,9 @@ Syntax:  label:  MNEMONIC operand[,operand]   ; comment
                          compiler writes it at the top of its output; hand
                          sources that must match the native assembler don't.
               MNEMONIC.R label  -> force the relative form (error if out of range)
+              MNEMONIC.A label  -> force the 3-byte ABSOLUTE form even under .relax
+                         (the compiler uses it for always-taken jumps: a taken
+                         relative branch costs 8 steps against 3 absolute)
   immediates: where an opcode exists in BOTH an imm8 and an imm16 form (LDW a,#)
              the width is chosen from the operand's TEXT -- a literal that fits a
              byte ($xx, 0xXX, 0..255, 'c', <e, >e) is imm8, anything else (a
@@ -258,11 +261,13 @@ class Asm:
                 v=self.expr(es[1],ln,line,pass2) if len(es)>1 else 0
                 emit(*([v]*n))
             else:
+                force_abs=mn.endswith(".A") and mn[:-2] in RELAXABLE   # JMP.A: never relax
+                if force_abs: mn=mn[:-2]
                 shape,comps=parse_operand(opnd)
                 key=resolve_shape(mn,shape,comps)
                 if key is None:
                     err(ln,line,"unknown instruction '%s %s'"%(mn,opnd))
-                if self.relax and mn in RELAXABLE and key=="a" and not pass2:
+                if self.relax and mn in RELAXABLE and key=="a" and not pass2 and not force_abs:
                     self.cands.append((ln,pc,comps[0][1],line))   # a relaxation candidate
                 emit(OPC[(mn,key)])
                 # Byte-stream order: every 16-bit ADDRESS component first (in

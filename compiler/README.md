@@ -102,10 +102,20 @@ baseline, `finder` −57%):** the frame model above, plus `ADDW`/`SUBW`/`CMPW a,
 `LEAW a,(Pn+d)` in the ISA for it.
 
 **Relative branches (same day, −1.5% more; −41.1% overall):** the compiler's
-output starts with `.relax`, so the assembler encodes every `JMP`/`Jcc` whose
+output starts with `.relax`, so the assembler encodes every `Jcc` whose
 target lies within ±127 bytes as the 2-byte relative opcode (shrink-only
 iterative relaxation, so both passes agree). Hand-written sources carry no
 `.relax` and stay byte-identical with the native assembler's output.
+**Speed note (2026-09-12):** a *taken* relative branch costs 8 microsteps
+against 3 for the absolute form (it used to cost 14, saving and restoring A
+and the flags; that preservation was dropped in the speed audit, so code
+after a taken relaxed branch must not read A or the flags — the compiler's
+own four such idioms became branch-free: `LDA #0 / ROL` turns the carry into
+0/1, and `__cmp16` computes its Z without branching). Every **unconditional**
+jump the compiler emits — loop back-edges, else-skips, `return`, the 0/1
+materialisation — is always taken, so it is written `JMP.A` and stays the
+3-byte absolute form: one byte more per jump, five cycles less every time it
+runs. Conditional branches stay relaxed.
 
 **Narrow values + peephole (same day, −7.6% more; −45.6% overall).** A `char`
 load or a byte-sized constant is a *narrow* value: when its consumer only wants

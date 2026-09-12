@@ -1091,9 +1091,33 @@ Nothing below has been built or measured.
       path that ended with A=00. The body now starts above the vector
       (`JMP start`), and all E-tests were re-verified under both the previous
       and the new microcode (both HALT clean with A=00).
-      Next software-only levers: the relative-branch decision above, an
-      OS-resident shared runtime (~150 B/program: __mul/__divmod/__shl/__shr/
-      __cmp16), the self-hosting compilers.
+      **Relative-branch decision DONE (2026-09-12, both (a) and (b)):** the
+      taken relative path no longer saves/restores A and the flags (14 → 8
+      steps; B kept; not-taken still 2 and untouched) — an ISA contract change,
+      documented on the card/guide/design doc; test DA now asserts B + stack
+      + not-taken flags. The compiler's four dependent idioms went branch-free
+      (`bios()` carry → `LDA #0 / ROL / STA`, `__mul` carry the same,
+      `__divmod` borrow = `ROL / XOR #1`, `__cmp16` = SUB/SUB/OR with no
+      branch), and every unconditional jump it emits is `JMP.A` — a new
+      forced-absolute assembler suffix (3 steps vs 8 taken; +1 byte). Only
+      conditional branches stay relaxed. Benchmark workload 783,637 → 735,142
+      cycles (−6.2%, within 0.3% of an all-absolute build) for +3 bytes; /bin
+      total 285,072 → **284,835** (the ROL idioms are shorter than the old
+      skip-branches). Compiled code is now ~6% faster than before the audit
+      and OS/monitor code ~5%.
+      Next software-only levers: the self-hosting compilers (the on-target
+      cc/asm still build old-ISA binaries); the OS-resident shared runtime is
+      PARKED (see the item below).
+
+- [ ] **OS-resident shared C runtime — PARKED (user, 2026-09-12).** After the
+      inlining work each compiled program carries only `__mul`, `__div`/`__mod`/
+      `__divmod`, `__shl`/`__shr` and `__cmp16`, ~150 bytes, ≈6.7 KB across
+      the 45 /bin commands (2.4%). Moving them into the OS would need a fixed
+      entry table (programs bind by address), a version byte so a stale binary
+      fails cleanly, and OS space (1,703 B free on graphics-card, ~2,400 on
+      os-rewrite); speed is unchanged (a JSR into the OS costs the same).
+      Judged the smallest lever on the list; revisit if the OS budget allows
+      or if more helpers return (e.g. a 32-bit or signed runtime).
 
       **Data-driven priority (measured on 5 compiled commands, 19,897 instrs):**
         - **Done — the move idioms (the big win):** `PHW`/`PLW` + `LPW1`/`LPW2`

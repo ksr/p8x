@@ -15,9 +15,11 @@ needed three small additions beyond the sketch: `ADDW`/`SUBW`/`CMPW a,#imm8`
 high-byte-first so a pushed word is little-endian on the stack (§7 caveat 4 is
 now moot: the compiler chose SP-relative frames; a Tier B P4 would only simplify
 the depth tracking). Then **relative branches** (`$A8–$B0`, 2 bytes, signed
-displacement, flags preserved on the taken path) with shrink-only relaxation
-in the assembler, opted into by the compiler's `.relax` line so hand sources
-stay byte-identical with the native assembler. Then **narrow (8-bit) values
+displacement; since the 2026-09-11 speed audit the taken path clobbers A and
+the flags in 8 steps — it used to save and restore them in 14) with
+shrink-only relaxation in the assembler, opted into by the compiler's `.relax`
+line so hand sources stay byte-identical with the native assembler; the
+compiler emits every always-taken jump absolute (`JMP.A`, 3 steps). Then **narrow (8-bit) values
 and a peephole pass**, and finally (same day) the **arithmetic helpers were
 retired**: `+ - & | ^` and every comparison are one word instruction, which
 took twelve more pure-microcode opcodes — `ADDW`/`SUBW`/`CMPW a,#imm16`

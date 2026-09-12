@@ -465,21 +465,25 @@ _wordlogic_imm(0xBC,"XORW","a,#w","XOR")
 # The assembler emits these only for sources that opt in (`.relax`, which the
 # C compiler writes at the top of its output) or an explicit `.R` suffix, so
 # the hand-written OS/monitor stay byte-identical with the native assembler.
+# CONTRACT CHANGE (2026-09-11, speed audit): the taken path used to push A and
+# save FLAGS in T2, then restore both (14 steps) so it was a drop-in for the
+# absolute form. That cost 11 cycles on every taken branch against the 3-step
+# absolute JMP -- 6.5% of a compiled program's run time -- so it now simply
+# CLOBBERS A and the flags (8 steps taken; the NOT-taken path is still 2 steps
+# and touches nothing). B is preserved. The only code that relaxes to these
+# opcodes is the C compiler's output, whose four idioms that read A or the
+# flags after a taken branch were rewritten (`LDA #0 / ROL` for carry -> 0/1,
+# a branch-free __cmp16); `.R` in hand sources must respect the new contract.
 def _rel_taken():
-    return ( w(doe="A",dld="MEMW",psel=3,pdec=1),                    # push A
-             w(doe="FLAGS",dld="T2"),                                # save flags
-             w(doe="T",dld="A",ldzn=1),                              # A = d8 ; N = sign(d8)
+    return ( w(doe="T",dld="A",ldzn=1),                              # A = d8 ; N = sign(d8)
              w(doe="PTRH",dld="A",psel=0,fcond="N"),                 # A = P0.hi ; route N
              ( alu_mid("PASSA",dld="PTRH",psel=0,ldf=0),             # d8 >= 0: unchanged
                alu_mid("DEC",  dld="PTRH",psel=0,ldf=0) ),           # d8 <  0: P0.hi - 1
              w(doe="PTRL",dld="A",psel=0),                           # A = P0.lo
              alu_mid("ADD",dld="PTRL",psel=0,bsel=1),                # P0.lo += d8 ; latch C
              w(doe="PTRH",dld="A",psel=0,fcond="C"),                 # A = P0.hi ; route C
-             ( alu_mid("PASSA",dld="PTRH",psel=0,ldf=0),
-               alu_mid("INC",  dld="PTRH",psel=0,ldf=0) ),
-             w(doe="T2",dld="FLAGS"),                                # restore flags
-             w(psel=3,pinc=1),                                       # pop A: SP++,
-             w(doe="MEM",dld="A",psel=3,urst=1) )                    #   A = [SP] (no LDZN)
+             ( alu_mid("PASSA",dld="PTRH",psel=0,ldf=0,urst=1),
+               alu_mid("INC",  dld="PTRH",psel=0,ldf=0,urst=1) ) )
 op(0xA8,"JMP","r", w(doe="MEM",dld="T",psel=0,pinc=1), *_rel_taken())
 def rbranch(code,name,flag,inv=False):
     taken=_rel_taken(); nt=w(urst=1)

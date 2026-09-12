@@ -154,11 +154,11 @@ Opcodes, mnemonics and cycle counts generated live from `genucode.py` (the micro
 | $49 | `BNZ addr` | 3 | 4 | - | Branch if Z=0. (JNZ alias.) |
 | $4A | `BCP addr` | 3 | 4 | - | Branch if C=1 / A>=B unsigned. (JC alias.) |
 | $4C | `JNC addr` | 3 | 4 | - | Branch if C=0 / A<B unsigned. |
-| $A8 | `JMP rel8` | 2 | 14 | - | P0:=P0+rel8 (2-byte jump; A/flags kept; assembler .relax / JMP.R). |
-| $A9 | `BZ rel8` | 2 | 14 | - | Branch rel8 if Z=1. (JZ.R alias.) |
-| $AA | `BNZ rel8` | 2 | 14 | - | Branch rel8 if Z=0. (JNZ.R alias.) |
-| $AB | `BCP rel8` | 2 | 14 | - | Branch rel8 if C=1. (JC.R alias.) |
-| $AC | `JNC rel8` | 2 | 14 | - | Branch rel8 if C=0. |
+| $A8 | `JMP rel8` | 2 | 9 | CZNV | P0:=P0+rel8 (2-byte jump). A! flags!; assembler .relax / JMP.R. Always-taken jumps are cheaper absolute (JMP.A, 3 steps). |
+| $A9 | `BZ rel8` | 2 | 9 | CZNV | Branch rel8 if Z=1. Taken: A! flags!. (JZ.R alias.) |
+| $AA | `BNZ rel8` | 2 | 9 | CZNV | Branch rel8 if Z=0. Taken: A! flags!. (JNZ.R alias.) |
+| $AB | `BCP rel8` | 2 | 9 | CZNV | Branch rel8 if C=1. Taken: A! flags!. (JC.R alias.) |
+| $AC | `JNC rel8` | 2 | 9 | CZNV | Branch rel8 if C=0. Taken: A! flags!. |
 
 ## Signed branches (rev C; after CMP)
 
@@ -168,10 +168,10 @@ Opcodes, mnemonics and cycle counts generated live from `genucode.py` (the micro
 | $45 | `BGE addr` | 3 | 4 | - | Branch if signed A>=B (N^V=0). After CMP. |
 | $46 | `BLE addr` | 3 | 4 | - | Branch if signed A<=B ((N^V)\|Z). After CMP. |
 | $47 | `BGT addr` | 3 | 4 | - | Branch if signed A>B. After CMP. |
-| $AD | `BLT rel8` | 2 | 14 | - | Branch rel8 if signed A<B (N^V). |
-| $AE | `BGE rel8` | 2 | 14 | - | Branch rel8 if signed A>=B. |
-| $AF | `BLE rel8` | 2 | 14 | - | Branch rel8 if signed A<=B. |
-| $B0 | `BGT rel8` | 2 | 14 | - | Branch rel8 if signed A>B. |
+| $AD | `BLT rel8` | 2 | 9 | CZNV | Branch rel8 if signed A<B (N^V). Taken: A! flags!. |
+| $AE | `BGE rel8` | 2 | 9 | CZNV | Branch rel8 if signed A>=B. Taken: A! flags!. |
+| $AF | `BLE rel8` | 2 | 9 | CZNV | Branch rel8 if signed A<=B. Taken: A! flags!. |
+| $B0 | `BGT rel8` | 2 | 9 | CZNV | Branch rel8 if signed A>B. Taken: A! flags!. |
 
 ## Pointer registers
 

@@ -1,6 +1,6 @@
 ---
 name: p8x-cycle-bench
-description: how to measure P8X speed in cycles (p8xemu -L LED stamps bracketing poke(65282,n)), the 2026-09-11 control-flow microstep results, and the finding that relaxed relative branches cost ~6% in compiled code; plus the test_isa $0808 vector layout gotcha
+description: how to measure P8X speed in cycles (p8xemu -L LED stamps bracketing poke(65282,n)); the 2026-09-11/12 control-flow microstep results; taken relative branches now clobber A+flags (8 steps) and the compiler emits JMP.A for always-taken jumps; the test_isa $0808 vector layout gotcha
 metadata:
   type: reference
 ---
@@ -21,13 +21,16 @@ a branch-heavy micro-benchmark on its own.
 (the first SP++ of a pop cannot merge). `JSR (P1)` and the relative branches
 have no slack. Result: test_isa −5%, OS boot −5.3%, compiled workload −0.4%.
 
-**Finding:** in compiled code the cost is the RELATIVE branches — a taken
-`Jcc rel8` is 14 steps (push A, save FLAGS, sign-extend, add, carry-plane,
-restore) vs 3 absolute. Removing `.relax` from a benchmark: −6.5% cycles for
-+2.7% bytes. Decision pending (BACKLOG ISA item): absolute always-taken JMPs via
-a `.A` suffix, and/or dropping A/flags preservation on the taken path (14 → 8)
-with the compiler's four dependent idioms rewritten (`LDA #0 / ROL` for carry
-→ 0/1; branch-free `__cmp16`).
+**Finding + decision (2026-09-12):** in compiled code the cost was the RELATIVE
+branches — a taken `Jcc rel8` was 14 steps (push A, save FLAGS, sign-extend,
+add, carry-plane, restore) vs 3 absolute. DONE: the taken path now CLOBBERS A
+and the flags (8 steps; B kept; not-taken 2 steps, untouched) — an ISA contract
+change — and the compiler emits every unconditional jump as `JMP.A` (forced
+absolute, new assembler suffix); its four idioms that read A/flags after a taken
+branch are branch-free (`LDA #0 / ROL` = carry as 0/1; `ROL / XOR #1` = borrow;
+`__cmp16` = SUB/SUB/OR). Workload 783,637 → 735,142 cycles (−6.2%); /bin total
+even shrank (284,835). RULE: never read A or the flags after a taken relaxed
+branch; hand asm using `.R` must respect it.
 
 **Gotcha:** `emulator/test/test_isa.asm` must keep its body ABOVE the IRQ
 vector `$0808` (the handler sits there; `JMP start` at the top hops over it).
