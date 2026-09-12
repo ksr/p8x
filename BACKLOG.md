@@ -1061,9 +1061,39 @@ Nothing below has been built or measured.
       293,890 → 285,072 (−3.0%); **627,172 → 285,072 = −54.5%** overall;
       `finder` 8,903; 143 opcodes. Tests: test_isa E6, c_compile ARG-OK,
       c_disasm decodes PHW (P3+d).
-      Next software-only levers: an OS-resident shared runtime (~150 B/
-      program: __mul/__divmod/__shl/__shr/__cmp16), microstep audit of
-      JSR/RTS/branches, the self-hosting compilers.
+      **Microstep audit of control flow DONE (2026-09-11, minimal testing
+      by the user's choice: test-isa + test-quick, no full suite):** two
+      datapath facts shorten every absolute transfer — a pointer can be
+      loaded FROM THE BYTE IT ADDRESSES in one step (`doe=MEM, dld=PTRH,
+      psel=0` reads mem[P0] into P0.hi; same timing as the fetch), and a pop's
+      `SP++ ; read` merges into one post-increment read. `JMP a` 4→3 steps,
+      absolute `Jcc` 4→3 taken / 3→2 not taken, `JSR a` 12→9 (return pushed
+      through T2 while the target low byte waits in T; P0 steps back onto the
+      high operand byte and loads P0.hi from it), `RTS` 6→5, `RTI` 9→7, `PLW`
+      11→9, `PHW` 9→8, `PHW (Pn+d)` 10→9. `JSR (P1)` (8) and the relative
+      branches have no slack without new hardware. test_isa 4,615 → 4,382
+      cycles (−5%); OS boot to a program's first instruction −5.3%.
+      **Finding — the relative branches are the speed cost in compiled code:**
+      a taken `Jcc rel8` is 14 steps (push A, save FLAGS, sign-extend, add,
+      carry, restore) against 3 for the absolute form, so `.relax` trades 1
+      byte for 11 cycles on every taken branch. A compiled benchmark
+      (`poke(65282,n)` LED stamps under `p8xemu -L`; fib(12) + 200 string
+      sums) ran only −0.4% faster from the audit but **−6.5% with `.relax`
+      removed (+8 bytes of 287)**. Options, to decide: (a) compiler emits
+      always-taken `JMP` (loop back-edges, else-skips) as absolute via a new
+      forced `.A` suffix, relaxing only conditional branches; (b) ISA: drop
+      the A/flags preservation from the taken relative path (14 → 8 steps)
+      and free the compiler of the four idioms that rely on it (`LDA #0 /
+      JNC skip / LDA #1` → `LDA #0 / ROL`, branch-free `__cmp16`); (c) both.
+      **Also fixed here:** `test_isa.asm`'s body had grown past the IRQ
+      vector at $0808 (the E-series), ran into the handler bytes and hit an
+      RTI on garbage; it "passed" only because the stray RTI landed on a
+      path that ended with A=00. The body now starts above the vector
+      (`JMP start`), and all E-tests were re-verified under both the previous
+      and the new microcode (both HALT clean with A=00).
+      Next software-only levers: the relative-branch decision above, an
+      OS-resident shared runtime (~150 B/program: __mul/__divmod/__shl/__shr/
+      __cmp16), the self-hosting compilers.
 
       **Data-driven priority (measured on 5 compiled commands, 19,897 instrs):**
         - **Done — the move idioms (the big win):** `PHW`/`PLW` + `LPW1`/`LPW2`

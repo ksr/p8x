@@ -27,7 +27,7 @@ Instruction set rev 1 — generated from the microcode source (`genucode.py`); o
 |---|---|---|---|---|---|
 | $02 | `EI` | 1 | 2 | - | Enable maskable interrupts (IE := 1). |
 | $03 | `DI` | 1 | 2 | - | Disable maskable interrupts (IE := 0). |
-| $04 | `RTI` | 1 | 10 | - | Return from interrupt: pop flags then PC; re-enables IE. |
+| $04 | `RTI` | 1 | 8 | - | Return from interrupt: pop flags then PC; re-enables IE. |
 | $08 | `IRQ` | 1 | 10 | - | Software interrupt: push PC+flags, vector to $0808. Also the opcode the hardware forcing buffer injects on a maskable IRQ. |
 
 ### Load / store
@@ -128,15 +128,15 @@ Instruction set rev 1 — generated from the microcode source (`genucode.py`); o
 
 | Op | Mnemonic | Bytes | Cycles | Flags | Description |
 |---|---|---|---|---|---|
-| $74 | `PHW addr` | 3 | 10 | - | Push the 16-bit word at addr onto the P3 stack: high byte first, then low, so the word lies LITTLE-ENDIAN at P3+1..P3+2 (readable with LDW a,(P3+d); same layout as a JSR return address). |
-| $75 | `PLW addr` | 3 | 12 | - | Pop a 16-bit word from the P3 stack into addr (low then high). |
+| $74 | `PHW addr` | 3 | 9 | - | Push the 16-bit word at addr onto the P3 stack: high byte first, then low, so the word lies LITTLE-ENDIAN at P3+1..P3+2 (readable with LDW a,(P3+d); same layout as a JSR return address). |
+| $75 | `PLW addr` | 3 | 10 | - | Pop a 16-bit word from the P3 stack into addr (low then high). |
 | $76 | `LPW1 addr` | 3 | 9 | - | P1 (16-bit) := the word at addr. |
 | $77 | `LPW2 addr` | 3 | 9 | - | P2 (16-bit) := the word at addr. |
 | $78 | `MOVW dst,src` | 5 | 13 | - | 16-bit memory->memory move: the word at src -> dst (via the PT/PT2 scratch pointers). |
 | $79 | `LPW3 addr` | 3 | 9 | - | P3 (16-bit) := the word at addr -- restore a saved stack pointer. |
-| $BD | `PHW (P1+d)` | 2 | 11 | C Z N | Push the 16-bit word at P1 + d onto the P3 stack, high byte first (little-endian at the new P3+1) -- the C compiler's argument push straight from a frame slot. A! (the address add); flags from that add. |
-| $BE | `PHW (P2+d)` | 2 | 11 | C Z N | Push the 16-bit word at P2 + d onto the P3 stack, high byte first (little-endian at the new P3+1) -- the C compiler's argument push straight from a frame slot. A! (the address add); flags from that add. |
-| $BF | `PHW (P3+d)` | 2 | 11 | C Z N | Push the 16-bit word at P3 + d onto the P3 stack, high byte first (little-endian at the new P3+1) -- the C compiler's argument push straight from a frame slot; d is measured BEFORE the push. A! (the address add); flags from that add. |
+| $BD | `PHW (P1+d)` | 2 | 10 | C Z N | Push the 16-bit word at P1 + d onto the P3 stack, high byte first (little-endian at the new P3+1) -- the C compiler's argument push straight from a frame slot. A! (the address add); flags from that add. |
+| $BE | `PHW (P2+d)` | 2 | 10 | C Z N | Push the 16-bit word at P2 + d onto the P3 stack, high byte first (little-endian at the new P3+1) -- the C compiler's argument push straight from a frame slot. A! (the address add); flags from that add. |
+| $BF | `PHW (P3+d)` | 2 | 10 | C Z N | Push the 16-bit word at P3 + d onto the P3 stack, high byte first (little-endian at the new P3+1) -- the C compiler's argument push straight from a frame slot; d is measured BEFORE the push. A! (the address add); flags from that add. |
 
 ### Tier A: the C-compiler ISA (2026-09; pure microcode. A! = clobbers A; d = unsigned 8-bit displacement)
 
@@ -183,14 +183,14 @@ Instruction set rev 1 — generated from the microcode source (`genucode.py`); o
 
 | Op | Mnemonic | Bytes | Cycles | Flags | Description |
 |---|---|---|---|---|---|
-| $40 | `JMP addr` | 3 | 5 | - | P0 (PC) := addr. |
+| $40 | `JMP addr` | 3 | 4 | - | P0 (PC) := addr. |
 | $41 | `JSR (P1)` | 1 | 9 | - | Push return address (high byte first) onto P3 stack, then P0 := P1. Target must already be in P1. |
-| $42 | `RTS` | 1 | 7 | - | Pop return address from P3 stack into P0. |
-| $43 | `JSR addr` | 3 | 13 | - | Push return address, then P0 := addr (absolute call). |
-| $48 | `BZ addr` | 3 | 5 | - | Branch to addr if Z=1. |
-| $49 | `BNZ addr` | 3 | 5 | - | Branch to addr if Z=0. |
-| $4A | `BCP addr` | 3 | 5 | - | Branch if C=1, i.e. the RAW 74181 Cn+4 pin is high. Pin high means NO carry out - see note (2). |
-| $4C | `JNC addr` | 3 | 5 | - | Branch to addr if C=0. (JC/JZ/JNZ are aliases of BCP/BZ/BNZ.) |
+| $42 | `RTS` | 1 | 6 | - | Pop return address from P3 stack into P0. |
+| $43 | `JSR addr` | 3 | 10 | - | Push return address, then P0 := addr (absolute call). |
+| $48 | `BZ addr` | 3 | 4 | - | Branch to addr if Z=1. |
+| $49 | `BNZ addr` | 3 | 4 | - | Branch to addr if Z=0. |
+| $4A | `BCP addr` | 3 | 4 | - | Branch if C=1, i.e. the RAW 74181 Cn+4 pin is high. Pin high means NO carry out - see note (2). |
+| $4C | `JNC addr` | 3 | 4 | - | Branch to addr if C=0. (JC/JZ/JNZ are aliases of BCP/BZ/BNZ.) |
 | $A8 | `JMP rel8` | 2 | 14 | - | P0 := P0 + rel8 (signed, from the next instruction). 2 bytes; A and flags preserved; via .relax or JMP.R. |
 | $A9 | `BZ rel8` | 2 | 14 | - | Branch rel8 if Z=1. (JZ.R alias.) |
 | $AA | `BNZ rel8` | 2 | 14 | - | Branch rel8 if Z=0. (JNZ.R alias.) |
@@ -201,10 +201,10 @@ Instruction set rev 1 — generated from the microcode source (`genucode.py`); o
 
 | Op | Mnemonic | Bytes | Cycles | Flags | Description |
 |---|---|---|---|---|---|
-| $44 | `BLT addr` | 3 | 5 | - | Branch if signed A <  B (N^V=1). Use after CMP. |
-| $45 | `BGE addr` | 3 | 5 | - | Branch if signed A >= B (N^V=0). Use after CMP. |
-| $46 | `BLE addr` | 3 | 5 | - | Branch if signed A <= B ((N^V)\|Z). Use after CMP. |
-| $47 | `BGT addr` | 3 | 5 | - | Branch if signed A >  B (not (N^V)\|Z). Use after CMP. |
+| $44 | `BLT addr` | 3 | 4 | - | Branch if signed A <  B (N^V=1). Use after CMP. |
+| $45 | `BGE addr` | 3 | 4 | - | Branch if signed A >= B (N^V=0). Use after CMP. |
+| $46 | `BLE addr` | 3 | 4 | - | Branch if signed A <= B ((N^V)\|Z). Use after CMP. |
+| $47 | `BGT addr` | 3 | 4 | - | Branch if signed A >  B (not (N^V)\|Z). Use after CMP. |
 | $AD | `BLT rel8` | 2 | 14 | - | Branch rel8 if signed A < B (N^V=1). Use after CMP. |
 | $AE | `BGE rel8` | 2 | 14 | - | Branch rel8 if signed A >= B (N^V=0). |
 | $AF | `BLE rel8` | 2 | 14 | - | Branch rel8 if signed A <= B ((N^V)\|Z). |

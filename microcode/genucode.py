@@ -87,13 +87,11 @@ op(0x08,"IRQ","",
    w(doe="idle",dld="PTRH",psel=0),               # P0.hi = $08 (forcing buffer)
    w(doe="idle",dld="PTRL",psel=0,urst=1))        # P0.lo = $08 -> P0 = $0808
 # RTI: pop flags then return PC; re-enables interrupts (IE set by opcode decode).
-op(0x04,"RTI","",
+op(0x04,"RTI","",                                 # 7 steps (was 9): pops post-increment
    w(psel=3,pinc=1),
-   w(doe="MEM",dld="T",psel=3),                   # T = saved flags
+   w(doe="MEM",dld="T",psel=3,pinc=1),            # T = saved flags, SP++
    w(doe="T",dld="FLAGS",psel=0),                 # restore C/Z/N/V
-   w(psel=3,pinc=1),
-   w(doe="MEM",dld="T",psel=3),                   # T = return lo
-   w(psel=3,pinc=1),
+   w(doe="MEM",dld="T",psel=3,pinc=1),            # T = return lo, SP++
    w(doe="MEM",dld="T2",psel=3),                  # T2 = return hi
    w(doe="T",dld="PTRL",psel=0),
    w(doe="T2",dld="PTRH",psel=0,urst=1))
@@ -141,10 +139,20 @@ for p in (1,2,3):
     op(0x34+p,"LPH%d"%p,"#", w(doe="MEM",dld="T",psel=0,pinc=1),
                w(doe="T",dld="PTRH",psel=p,urst=1))
 # JMP abs: operand lo,hi -> T,T2 -> P0
-op(0x40,"JMP","a", w(doe="MEM",dld="T",psel=0,pinc=1),
-         w(doe="MEM",dld="T2",psel=0,pinc=1),
-         w(doe="T",dld="PTRL",psel=0),
-         w(doe="T2",dld="PTRH",psel=0,urst=1))
+# Control flow (microstep audit 2026-09-11). Two facts drive the shorter
+# sequences below:
+#  * A pointer can be LOADED FROM THE BYTE IT ADDRESSES in one step -- `doe=MEM,
+#    dld=PTRH, psel=0` reads mem[P0] onto the bus and latches it into P0.hi at
+#    the clock edge (the 74169 load is synchronous; the address is stable until
+#    the edge, exactly as the fetch step reads mem[P0] into IR while P0 counts).
+#    So an absolute target's HIGH byte never needs T2: read the low byte into T
+#    (P0++), load P0.hi straight from the high byte, then P0.lo := T.
+#  * A stack pop's "SP++ then read [SP]" is one step when the increment rides on
+#    the PREVIOUS read (post-increment, like LDA (Pn)+): SP++ ; T=[SP],SP++ ;
+#    T2=[SP]. (The very first SP++ cannot merge: it must precede the read.)
+op(0x40,"JMP","a", w(doe="MEM",dld="T",psel=0,pinc=1),        # T = target lo ; P0 -> hi byte
+         w(doe="MEM",dld="PTRH",psel=0),                     # P0.hi = target hi (direct)
+         w(doe="T",dld="PTRL",psel=0,urst=1))                # P0.lo = T          (3 steps, was 4)
 # JSR (P1): push PC (H then L, write-then-dec) onto P3, then P1 -> P0 via T
 op(0x41,"JSR","(P1)", w(doe="PTRH",dld="T",psel=0),
          w(doe="T",dld="MEMW",psel=3,pdec=1),
@@ -154,24 +162,22 @@ op(0x41,"JSR","(P1)", w(doe="PTRH",dld="T",psel=0),
          w(doe="T",dld="PTRL",psel=0),
          w(doe="PTRH",dld="T",psel=1),
          w(doe="T",dld="PTRH",psel=0,urst=1))
-# JSR abs: read target -> PT, push return P0 (H then L) onto P3, then PT -> P0
-op(0x43,"JSR","a", w(doe="MEM",dld="T", psel=0,pinc=1),   # target lo -> T
-         w(doe="MEM",dld="T2",psel=0,pinc=1),             # target hi -> T2 (P0 = return)
-         w(doe="T", dld="PTRL",psel=PT),                  # PT.lo = target lo
-         w(doe="T2",dld="PTRH",psel=PT),                  # PT.hi = target hi
-         w(doe="PTRH",dld="T",psel=0),                    # T = return hi
-         w(doe="T",dld="MEMW",psel=3,pdec=1),             # push hi
-         w(doe="PTRL",dld="T",psel=0),                    # T = return lo
-         w(doe="T",dld="MEMW",psel=3,pdec=1),             # push lo
-         w(doe="PTRL",dld="T",psel=PT),                   # T = target lo
-         w(doe="T",dld="PTRL",psel=0),                    # P0.lo = target lo
-         w(doe="PTRH",dld="T",psel=PT),                   # T = target hi
-         w(doe="T",dld="PTRH",psel=0,urst=1))             # P0.hi = target hi
-# RTS: inc-then-read L,H from P3 -> P0
+# JSR abs (9 steps, was 12): the target's low byte waits in T while the return
+# address (P0 after both operand bytes) is pushed through T2; then P0 steps back
+# onto the high operand byte, loads P0.hi from it directly, and P0.lo := T.
+op(0x43,"JSR","a", w(doe="MEM",dld="T",psel=0,pinc=1),    # 1  T = target lo ; P0 -> hi byte
+         w(psel=0,pinc=1),                                # 2  P0 = return address
+         w(doe="PTRH",dld="T2",psel=0),                   # 3  T2 = return hi
+         w(doe="T2",dld="MEMW",psel=3,pdec=1),            # 4  push hi
+         w(doe="PTRL",dld="T2",psel=0),                   # 5  T2 = return lo
+         w(doe="T2",dld="MEMW",psel=3,pdec=1),            # 6  push lo
+         w(psel=0,pdec=1),                                # 7  P0 -> the high operand byte
+         w(doe="MEM",dld="PTRH",psel=0),                  # 8  P0.hi = target hi (direct)
+         w(doe="T",dld="PTRL",psel=0,urst=1))             # 9  P0.lo = target lo
+# RTS (5 steps, was 6): SP++ ; T=[SP],SP++ ; T2=[SP] ; -> P0
 op(0x42,"RTS","", w(psel=3,pinc=1),
-         w(doe="MEM",dld="T",psel=3),
-         w(psel=3,pinc=1),
-         w(doe="MEM",dld="T2",psel=3),
+         w(doe="MEM",dld="T",psel=3,pinc=1),              # T = return lo, SP++
+         w(doe="MEM",dld="T2",psel=3),                    # T2 = return hi
          w(doe="T",dld="PTRL",psel=0),
          w(doe="T2",dld="PTRH",psel=0,urst=1))
 # pointer inc/dec by opcode, A<->pointer-byte transfers, push/pop A
@@ -193,19 +199,16 @@ op(0x71,"PLA","", w(psel=3,pinc=1), w(doe="MEM",dld="A",psel=3,ldzn=1,urst=1))  
 # callee. PLW pops lo (top) then hi. (Before this, PHW pushed lo first; PHW/PLW
 # are only ever used as pairs, so nothing else observed the layout.) Scratch: PT
 # holds the operand address (incremented for the high byte), T/T2 the two bytes.
-op(0x74,"PHW","a", *_ld_pt(),
-   w(doe="MEM",dld="T", psel=PT),                 # T  = mem[a]   (lo)
-   w(psel=PT,pinc=1),                             # PT = a+1
+op(0x74,"PHW","a", *_ld_pt(),                     # 8 steps (was 9)
+   w(doe="MEM",dld="T", psel=PT,pinc=1),          # T  = mem[a]   (lo), PT = a+1
    w(doe="MEM",dld="T2",psel=PT),                 # T2 = mem[a+1] (hi)
    w(doe="T2",dld="MEMW",psel=3,pdec=1),          # push hi, SP--
    w(doe="T", dld="MEMW",psel=3,pdec=1,urst=1))   # push lo, SP--  (lo ends on top)
-op(0x75,"PLW","a", *_ld_pt(),
+op(0x75,"PLW","a", *_ld_pt(),                     # 9 steps (was 11)
    w(psel=3,pinc=1),                              # SP++
-   w(doe="MEM",dld="T", psel=3),                  # T  = [SP] (lo, last pushed)
-   w(psel=3,pinc=1),                              # SP++
+   w(doe="MEM",dld="T", psel=3,pinc=1),           # T  = [SP] (lo, last pushed), SP++
    w(doe="MEM",dld="T2",psel=3),                  # T2 = [SP] (hi)
-   w(doe="T", dld="MEMW",psel=PT),                # mem[a]   = lo   (PT = a)
-   w(psel=PT,pinc=1),                             # PT = a+1
+   w(doe="T", dld="MEMW",psel=PT,pinc=1),         # mem[a]   = lo, PT = a+1
    w(doe="T2",dld="MEMW",psel=PT,urst=1))         # mem[a+1] = hi
 # Load a 16-bit pointer (P1/P2) from a memory word — collapses the compiler's
 # LDA a / TAP1L / LDA a+1 / TAP1H idiom (set a pointer from a C pointer variable
@@ -509,25 +512,27 @@ for p in (1,2,3):
     op(0xBC+p,"PHW","(P%d+d)"%p,
        w(doe="MEM",dld="T",psel=0,pinc=1),                         # 1    T = d8
        *_pt_disp(p),                                               # 2-5  PT = Pn + d
-       w(doe="MEM",dld="T",psel=PT),                               # 6    T  = lo
-       w(psel=PT,pinc=1),                                          # 7    PT++
-       w(doe="MEM",dld="T2",psel=PT),                              # 8    T2 = hi
-       w(doe="T2",dld="MEMW",psel=3,pdec=1),                       # 9    push hi, SP--
-       w(doe="T",dld="MEMW",psel=3,pdec=1,urst=1))                 # 10   push lo, SP--
+       w(doe="MEM",dld="T",psel=PT,pinc=1),                        # 6    T  = lo, PT++
+       w(doe="MEM",dld="T2",psel=PT),                              # 7    T2 = hi
+       w(doe="T2",dld="MEMW",psel=3,pdec=1),                       # 8    push hi, SP--
+       w(doe="T",dld="MEMW",psel=3,pdec=1,urst=1))                 # 9    push lo, SP--
 
 # conditional branches abs: Bcc addr. FCOND emitted while fetching operand;
 # cond plane 1 = take (load P0 from T/T2), plane 0 = fall through.
-def branch(code,name,flag):
-    op(code,name,"a", w(doe="MEM",dld="T",psel=0,pinc=1),
-             w(doe="MEM",dld="T2",psel=0,pinc=1,fcond=flag),
-             ( w(urst=1,fcond=flag),                 # not taken
-               w(doe="T",dld="PTRL",psel=0,fcond=flag) ),
-             ( NOP, w(doe="T2",dld="PTRH",psel=0,urst=1) ))
-def branch_inv(code,name,flag):   # taken when flag==0 (plane swap)
-    op(code,name,"a", w(doe="MEM",dld="T",psel=0,pinc=1),
-             w(doe="MEM",dld="T2",psel=0,pinc=1,fcond=flag),
-             ( w(doe="T",dld="PTRL",psel=0,fcond=flag), w(urst=1,fcond=flag) ),
-             ( w(doe="T2",dld="PTRH",psel=0,urst=1), NOP ))
+# Absolute Jcc (audit 2026-09-11): 3 steps taken / 2 not taken (were 4 / 3).
+# The flag is routed on the operand-low fetch (no ALU step precedes it, so the
+# flags are settled), the plane pair at step 2 either skips the high byte
+# (P0++, done) or loads P0.hi straight from it, and step 3 sets P0.lo from T.
+def _bcc(code,name,flag,taken_plane):
+    take=( w(doe="MEM",dld="PTRH",psel=0,fcond=flag),   # P0.hi = target hi (direct)
+           w(doe="T",dld="PTRL",psel=0,urst=1) )        # P0.lo = target lo
+    skip=( w(psel=0,pinc=1,urst=1),                     # step over the high byte
+           NOP )                                        # (unreachable plane)
+    s2=(skip[0],take[0]) if taken_plane==1 else (take[0],skip[0])
+    s3=(skip[1],take[1]) if taken_plane==1 else (take[1],skip[1])
+    op(code,name,"a", w(doe="MEM",dld="T",psel=0,pinc=1,fcond=flag), s2, s3)
+def branch(code,name,flag):     _bcc(code,name,flag,1)   # taken when flag==1
+def branch_inv(code,name,flag): _bcc(code,name,flag,0)   # taken when flag==0 (plane swap)
 branch(0x48,"BZ","Z")
 branch(0x4A,"BCP","C")  # branch if carry set (rev B: C is conventional active-high)
 branch_inv(0x49,"BNZ","Z")

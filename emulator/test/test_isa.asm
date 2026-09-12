@@ -13,7 +13,20 @@ MARK = $9003        ; written by the instruction that was preempted by the IRQ
 
         .org 0
         LDP3 #$FEFF                 ; stack
+        JMP  start                  ; hop over the interrupt vector below
 
+; rev C interrupt handler — the forcing buffer vectors here ($0808, fixed by the
+; hardware). It sets a flag and returns; RTI pops flags+PC so the interrupted
+; program resumes intact. It sits INSIDE the first page, so the test body must
+; start above it: a body that grew past $0808 would run straight into these
+; bytes and execute an RTI on garbage (that happened once, 2026-09-11, when the
+; E-series tests were appended -- the JMP above is the guard).
+        .org $0808
+IRQH:   LDA #$55
+        STA IRQFLAG
+        RTI
+
+start:
 ; ---- 01: LDA # value ----
         LDA #$01
         STA TID
@@ -1176,10 +1189,4 @@ subr:   LDA #$99
         RTS
 subr2:  LDA #$77
         RTS
-
-; rev C interrupt handler — the forcing buffer vectors here ($0808). It sets a
-; flag and returns; RTI pops flags+PC so the interrupted program resumes intact.
-        .org $0808
-IRQH:   LDA #$55
-        STA IRQFLAG
-        RTI
+; (the IRQ handler at $0808 is at the top of the file, before `start:`)

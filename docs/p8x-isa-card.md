@@ -19,7 +19,7 @@ Opcodes, mnemonics and cycle counts generated live from `genucode.py` (the micro
 |---|---|---|---|---|---|
 | $02 | `EI` | 1 | 2 | - | Enable maskable interrupts (IE:=1). |
 | $03 | `DI` | 1 | 2 | - | Disable maskable interrupts (IE:=0). |
-| $04 | `RTI` | 1 | 10 | - | Return from interrupt: pop flags then PC; re-enable IE. |
+| $04 | `RTI` | 1 | 8 | - | Return from interrupt: pop flags then PC; re-enable IE. |
 | $08 | `IRQ` | 1 | 10 | - | SW interrupt: push PC+flags, vector to $0808. |
 
 ## Load / store
@@ -91,15 +91,15 @@ Opcodes, mnemonics and cycle counts generated live from `genucode.py` (the micro
 
 | Op | Mnemonic | By | Cy | Fl | Description |
 |---|---|---|---|---|---|
-| $74 | `PHW addr` | 3 | 10 | - | Push 16-bit word at addr (hi then lo: lies little-endian at P3+1). |
-| $75 | `PLW addr` | 3 | 12 | - | Pop 16-bit word into addr (lo then hi). |
+| $74 | `PHW addr` | 3 | 9 | - | Push 16-bit word at addr (hi then lo: lies little-endian at P3+1). |
+| $75 | `PLW addr` | 3 | 10 | - | Pop 16-bit word into addr (lo then hi). |
 | $76 | `LPW1 addr` | 3 | 9 | - | P1 := 16-bit word at addr. |
 | $77 | `LPW2 addr` | 3 | 9 | - | P2 := 16-bit word at addr. |
 | $78 | `MOVW dst,src` | 5 | 13 | - | 16-bit mem->mem: word at src -> dst. |
 | $79 | `LPW3 addr` | 3 | 9 | - | P3 := 16-bit word at addr (restore a saved SP). |
-| $BD | `PHW (P1+d)` | 2 | 11 | CZN | Push the word at P1+d (hi then lo). A!; flags from the address add. |
-| $BE | `PHW (P2+d)` | 2 | 11 | CZN | Push the word at P2+d. A! |
-| $BF | `PHW (P3+d)` | 2 | 11 | CZN | Push the word at P3+d, d measured before the push (a local/arg onto the stack). A! |
+| $BD | `PHW (P1+d)` | 2 | 10 | CZN | Push the word at P1+d (hi then lo). A!; flags from the address add. |
+| $BE | `PHW (P2+d)` | 2 | 10 | CZN | Push the word at P2+d. A! |
+| $BF | `PHW (P3+d)` | 2 | 10 | CZN | Push the word at P3+d, d measured before the push (a local/arg onto the stack). A! |
 
 ## Tier A: C-compiler ISA (2026-09, pure microcode; A! = clobbers A)
 
@@ -146,14 +146,14 @@ Opcodes, mnemonics and cycle counts generated live from `genucode.py` (the micro
 
 | Op | Mnemonic | By | Cy | Fl | Description |
 |---|---|---|---|---|---|
-| $40 | `JMP addr` | 3 | 5 | - | P0(PC):=addr. |
+| $40 | `JMP addr` | 3 | 4 | - | P0(PC):=addr. |
 | $41 | `JSR (P1)` | 1 | 9 | - | Push return addr, P0:=P1. |
-| $42 | `RTS` | 1 | 7 | - | Pop return addr from P3 into P0. |
-| $43 | `JSR addr` | 3 | 13 | - | Push return addr, P0:=addr. |
-| $48 | `BZ addr` | 3 | 5 | - | Branch if Z=1. (JZ alias.) |
-| $49 | `BNZ addr` | 3 | 5 | - | Branch if Z=0. (JNZ alias.) |
-| $4A | `BCP addr` | 3 | 5 | - | Branch if C=1 / A>=B unsigned. (JC alias.) |
-| $4C | `JNC addr` | 3 | 5 | - | Branch if C=0 / A<B unsigned. |
+| $42 | `RTS` | 1 | 6 | - | Pop return addr from P3 into P0. |
+| $43 | `JSR addr` | 3 | 10 | - | Push return addr, P0:=addr. |
+| $48 | `BZ addr` | 3 | 4 | - | Branch if Z=1. (JZ alias.) |
+| $49 | `BNZ addr` | 3 | 4 | - | Branch if Z=0. (JNZ alias.) |
+| $4A | `BCP addr` | 3 | 4 | - | Branch if C=1 / A>=B unsigned. (JC alias.) |
+| $4C | `JNC addr` | 3 | 4 | - | Branch if C=0 / A<B unsigned. |
 | $A8 | `JMP rel8` | 2 | 14 | - | P0:=P0+rel8 (2-byte jump; A/flags kept; assembler .relax / JMP.R). |
 | $A9 | `BZ rel8` | 2 | 14 | - | Branch rel8 if Z=1. (JZ.R alias.) |
 | $AA | `BNZ rel8` | 2 | 14 | - | Branch rel8 if Z=0. (JNZ.R alias.) |
@@ -164,10 +164,10 @@ Opcodes, mnemonics and cycle counts generated live from `genucode.py` (the micro
 
 | Op | Mnemonic | By | Cy | Fl | Description |
 |---|---|---|---|---|---|
-| $44 | `BLT addr` | 3 | 5 | - | Branch if signed A<B (N^V=1). After CMP. |
-| $45 | `BGE addr` | 3 | 5 | - | Branch if signed A>=B (N^V=0). After CMP. |
-| $46 | `BLE addr` | 3 | 5 | - | Branch if signed A<=B ((N^V)\|Z). After CMP. |
-| $47 | `BGT addr` | 3 | 5 | - | Branch if signed A>B. After CMP. |
+| $44 | `BLT addr` | 3 | 4 | - | Branch if signed A<B (N^V=1). After CMP. |
+| $45 | `BGE addr` | 3 | 4 | - | Branch if signed A>=B (N^V=0). After CMP. |
+| $46 | `BLE addr` | 3 | 4 | - | Branch if signed A<=B ((N^V)\|Z). After CMP. |
+| $47 | `BGT addr` | 3 | 4 | - | Branch if signed A>B. After CMP. |
 | $AD | `BLT rel8` | 2 | 14 | - | Branch rel8 if signed A<B (N^V). |
 | $AE | `BGE rel8` | 2 | 14 | - | Branch rel8 if signed A>=B. |
 | $AF | `BLE rel8` | 2 | 14 | - | Branch rel8 if signed A<=B. |
