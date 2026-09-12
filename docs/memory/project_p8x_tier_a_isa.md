@@ -94,5 +94,6 @@ rewrites of the monitor/OS around the new ISA, easy replacements first (they
 were only re-assembled so far; idiom counts in BACKLOG — small wins, OS matters
 because of its 16 KB ceiling). **Still open:**
 self-hosting compilers (`p8cc.c`, `p8xcc.asm`); native assembler parsing of the
-compiler-only shapes; control-store EPROM reburn for the TTL machine (FPGA and
+compiler-only shapes (DONE once on the dropped os-rewrite branch, commit 3e0e3c8,
+kept as tag `archive/os-rewrite-2026-09-11` -- cherry-pick it, ASK first); control-store EPROM reburn for the TTL machine (FPGA and
 emulator need nothing). Related: [[p8cc-runtime-order-gate]], [[p8cc-int-is-unsigned]].

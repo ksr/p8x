@@ -1006,6 +1006,13 @@ Nothing below has been built or measured.
       around the new ISA (frames on P3, 16-bit word ops, displacement
       addressing), starting with the easy replacements; the OS is the one that
       matters (16 KB ceiling). Revisit after the software-only compiler list.
+      **2026-09-12: the `os-rewrite` branch (in-place rewrite with -ref
+      copies, step 0 = native assembler two-operand/(Pn+d) shapes, WM kernel
+      pass 1: 14,681 → 13,965 B) was DROPPED by the user — the rewrite will
+      restart from scratch. Its tip is kept as the tag
+      `archive/os-rewrite-2026-09-11`; the native-assembler step 0 (commit
+      3e0e3c8 there) is still worth cherry-picking when the on-target
+      toolchain is next touched.**
       Tier A / the P3 frame model (they still use the software C-stack and work,
       but their output is ~40% larger), the native assembler parsing the
       compiler-only shapes, EPROM reburn for the TTL build.
