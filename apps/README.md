@@ -141,9 +141,21 @@ arguments and are discarded rather than restored when an argument took an
 address. Programs start like `p8cc`'s: the caller's `P3` is kept in `__sp0` and
 the program runs on a stack below `CSTACKTOP` unless launched nested. The
 `__add`/`__sub`/`__and`/`__or`/`__xor`/`__neg`/`__pusharg`/`__pop` runtime texts
-are gone; `cc.bin` itself shrank 22,924 → 21,100 bytes, and a compiled test
-program 5,546 → 2,458 bytes (−56%) with identical output. The compiler's own
-body is still old-ISA hand assembly (the general asm rewrite covers it).
+are gone. **Condition mode:** `if`/`while`/`for` hand `GEXPR` a false-label
+(`CONDF`/`CONDLBL`); a relational that ends the condition emits its compare and
+ONE branch to that label (`EMITCF`) instead of a 0/1 value and a re-test, and
+the statement skips its own `CMPW #0`/`JZ` (`CONDDONE`). A nested `GEXPR`
+(call arguments, parentheses, an index) sees the flag cleared and still
+produces a value. A statement-level `NAME++`/`NAME--` is one `INCW`/`DECW` on
+the slot. Results on the same test program compiled and run on the board:
+5,546 → 2,041 bytes (−63%), identical output; `vi.c` built on the board
+26,632 → 25,228 bytes. For scale, the Python compiler makes 1,066 bytes of the
+same (subset) program and the C-written host compiler 1,107: the on-board
+compiler's static-slot model and single pass cost about 2× in size, by design.
+**The compiler's own body** went through `tools/tierA_rewrite.py` too (88 word
+moves / pointer loads / carry chains → one instruction each; `cc.bin`
+22,924 → 20,905 bytes including the new condition-mode code), as did the
+assembler's (36 sites; verified byte-identical by `asm_selfhost_test`).
 
 **Language (through v0.28):** functions, direct **and mutual** recursion (via a
 forward prototype), pointers + pass-by-reference, `int`/`char`, arrays with `[]`

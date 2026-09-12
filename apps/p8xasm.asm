@@ -191,10 +191,7 @@ START:  TPA3L                   ; save SP so an error can long-jump back to OS
         STA  ORGSET
         STA  ORGBASE
         STA  ORGBASE+1
-        LDA  #<SYMTAB
-        STA  SYMP
-        LDA  #>SYMTAB
-        STA  SYMP+1
+        LDW SYMP,#SYMTAB                ; <- tierA: address constant (next: JSR INITPC)
         JSR  INITPC
         JSR  ASSEMBLE
         ; ---- pass 2: emit (streamed to disk) ----
@@ -260,10 +257,7 @@ PL_LABEL:
         INP1                    ; consume ':'
         LDA  PASS
         JNZ  PL_LBSK            ; pass 2: labels already known
-        LDA  PC
-        STA  VAL
-        LDA  PC+1
-        STA  VAL+1
+        MOVW VAL,PC                ; <- tierA: word move (next: JSR SYMDEFVAL)
         JSR  SYMDEFVAL
 PL_LBSK:JSR  SKIPSP
         LDA  (P1)
@@ -398,15 +392,9 @@ DI_PDA: JSR  DI_P2              ; (Pn+d),a : the ADDRESS (operand 2) first...
         JSR  DI_ABS
         JSR  DI_PD1             ; ...then d8
         JMP  DI_IMM
-DI_P2:  LDA  OP2P               ; P1 := operand 2's expression
-        TAP1L
-        LDA  OP2P+1
-        TAP1H
+DI_P2:  LPW1 OP2P                ; <- tierA: pointer load (next: RTS)
         RTS
-DI_PD1: LDA  DISPP              ; P1 := the displacement expression
-        TAP1L
-        LDA  DISPP+1
-        TAP1H
+DI_PD1: LPW1 DISPP                ; <- tierA: pointer load (next: RTS)
         RTS
 
 ; ---- LDPn #imm16 -> the LDPn opcode + imm16 (lo, hi) ----
@@ -422,10 +410,7 @@ DO_LDP: LDA  MNBUF+3
         JNZ  DL_ERR
         INP1
         JSR  EVAL               ; VAL = imm16 (clobbers MNBUF/TMP)
-        LDA  #'L'               ; MNBUF = "LDPn" again (EVAL trashed it)
-        STA  MNBUF
-        LDA  #'D'
-        STA  MNBUF+1
+        LDW MNBUF,#17484                ; <- tierA: word constant (next: LDA)
         LDA  #'P'
         STA  MNBUF+2
         LDA  LDPN
@@ -490,16 +475,10 @@ DO_DIR: LDA  MNBUF+1
         LDP1 #EBADOP
         JMP  ASM_ERR
 DD_ORG: JSR  EVAL
-        LDA  VAL
-        STA  PC
-        LDA  VAL+1
-        STA  PC+1
+        MOVW PC,VAL                ; <- tierA: word move (next: LDA)
         LDA  ORGSET
         JNZ  DD_RET
-        LDA  VAL
-        STA  ORGBASE
-        LDA  VAL+1
-        STA  ORGBASE+1
+        MOVW ORGBASE,VAL                ; <- tierA: word move (next: LDA)
         LDA  #1
         STA  ORGSET
 DD_RET: RTS
@@ -528,10 +507,7 @@ DD_WORD:JSR  EVAL
         JSR  SKIPSP
         JMP  DD_WORD
 DD_FILL:JSR  EVAL
-        LDA  VAL                ; count -> SAVP
-        STA  SAVP
-        LDA  VAL+1
-        STA  SAVP+1
+        MOVW SAVP,VAL                ; <- tierA: word move (next: LDA)
         LDA  #0
         STA  FVAL               ; fill value default 0 (TMP is clobbered by EMIT)
         JSR  SKIPSP
@@ -657,10 +633,7 @@ PO_TWO: INP1                    ; past ','
 PO_AA:  LDA  #10
         STA  SHAPE
         JMP  PO_ONE
-PO_AI:  LDA  OP2P               ; byte literal? (host lit8 rule on the text)
-        TAP1L
-        LDA  OP2P+1
-        TAP1H
+PO_AI:  LPW1 OP2P                ; <- tierA: pointer load (next: JSR LIT8)
         JSR  LIT8
         JZ   PO_AI16
         LDA  #11
@@ -684,10 +657,7 @@ PO_C2:  LDA  SHAPE2             ; (Pn+d),a : operand 1 in 13..15, operand 2 abs
         LDB  #6                 ; 13..15 -> 19..21
         ADD
         STA  SHAPE
-PO_ONE: LDA  OP1P               ; P1 back at operand 1's expression
-        TAP1L
-        LDA  OP1P+1
-        TAP1H
+PO_ONE: LPW1 OP1P                ; <- tierA: pointer load (next: RTS)
         RTS
 PO_ERR2:LDP1 #EBADOP
         JMP  ASM_ERR
@@ -996,17 +966,11 @@ OF_CHK: LDA  FOUND
         LDB  SHAPE
         CMP
         JNZ  OF_LP
-        LDA  SAVP              ; hit
-        TAP1L
-        LDA  SAVP+1
-        TAP1H
+        LPW1 SAVP                ; <- tierA: pointer load (next: RTS)
         RTS
 OF_NF:  LDA  #0
         STA  FOUND
-        LDA  SAVP
-        TAP1L
-        LDA  SAVP+1
-        TAP1H
+        LPW1 SAVP                ; <- tierA: pointer load (next: RTS)
         RTS
 
 ; =============================================================================
@@ -1019,10 +983,7 @@ SYMFIND:TPA1L
         STA  SAVP+1
         LDA  #0
         STA  FOUND
-        LDA  #<SYMTAB
-        TAP2L
-        LDA  #>SYMTAB
-        TAP2H
+        LDP2 #SYMTAB                ; <- tierA: pointer constant (next: TPA2L)
 SF_LP:  TPA2L
         LDB  SYMP
         CMP
@@ -1062,10 +1023,7 @@ SF_CEQ: LDA  DIG
         STA  CNTL
         LDA  (P2)
         STA  CNTH
-        LDA  SAVP
-        TAP1L
-        LDA  SAVP+1
-        TAP1H
+        LPW1 SAVP                ; <- tierA: pointer load (next: RTS)
         RTS
 SF_NEXT:LDA  TMP                ; entry start + 14
         LDB  #14
@@ -1078,10 +1036,7 @@ SF_N1:  TAP2H
         JMP  SF_LP
 SF_NF:  LDA  #0
         STA  FOUND
-        LDA  SAVP
-        TAP1L
-        LDA  SAVP+1
-        TAP1H
+        LPW1 SAVP                ; <- tierA: pointer load (next: RTS)
         RTS
 
 ; SYMDEFVAL - define/update NAMBUF = VAL
@@ -1102,10 +1057,7 @@ SYMDEFVAL:
         LDB  SYMP
         CMP                   ; C=1 when $F2 >= SYMP lo (room)
         JNC  SD_FULL          ; $F2 < SYMP lo -> full
-SD_RM:  LDA  SYMP
-        TAP2L
-        LDA  SYMP+1
-        TAP2H
+SD_RM:  LPW2 SYMP                ; <- tierA: pointer load (next: LDP1)
         LDP1 #NAMBUF
         LDA  #12
         STA  DIG
@@ -1127,15 +1079,9 @@ SD_NM:  LDA  (P1)+
         JNC  SD_RET
         INC
         STA  SYMP+1
-SD_RET: LDA  SAVP2
-        TAP1L
-        LDA  SAVP2+1
-        TAP1H
+SD_RET: LPW1 SAVP2                ; <- tierA: pointer load (next: RTS)
         RTS
-SD_UPD: LDA  EADDR
-        TAP2L
-        LDA  EADDR+1
-        TAP2H
+SD_UPD: LPW2 EADDR                ; <- tierA: pointer load (next: LDA)
         LDA  VAL
         STA  (P2)+
         LDA  VAL+1
@@ -1164,9 +1110,7 @@ EV_GT:  LDA  (P1)
         LDA  #2
         STA  HILO
         INP1
-EV_INIT:LDA  #0
-        STA  VAL
-        STA  VAL+1
+EV_INIT:LDW VAL,#0                ; <- tierA: zero word (next: LDA)
         LDA  #1
         STA  SIGN
 EV_TERM:JSR  RDTERM            ; term -> CNTL/CNTH
@@ -1445,14 +1389,8 @@ EM_PADZ:LDA  #0
         JMP  EM_PAD
 EM_PUT: LDA  SB2
         JSR  EMITB
-EM_ADV: LDA  PC                 ; PC++
-        INC
-        STA  PC
-        JNZ  EM_HW
-        LDA  PC+1
-        INC
-        STA  PC+1
-EM_HW:  LDA  PC+1               ; HIWAT = max(HIWAT, PC)
+EM_ADV: INCW PC                ; <- tierA: 16-bit INCW chain, skip label EM_HW dropped (next: LDA)
+        LDA  PC+1               ; HIWAT = max(HIWAT, PC)
         LDB  HIWAT+1
         CMP
         JNZ  EM_HD
@@ -1461,14 +1399,8 @@ EM_HW:  LDA  PC+1               ; HIWAT = max(HIWAT, PC)
         CMP
 EM_HD:  JC   EM_SET
         JMP  EM_RET
-EM_SET: LDA  PC
-        STA  HIWAT
-        LDA  PC+1
-        STA  HIWAT+1
-EM_RET: LDA  SAVPE              ; restore the line cursor
-        TAP1L
-        LDA  SAVPE+1
-        TAP1H
+EM_SET: MOVW HIWAT,PC                ; <- tierA: word move (next: LDA)
+EM_RET: LPW1 SAVPE                ; <- tierA: pointer load (next: RTS)
         RTS
 EM_BACK:LDP1 #EBACK
         JMP  ASM_ERR
@@ -1515,9 +1447,7 @@ OI_FN:  LDA  (P1)+
         ; DIRLBA/FNAME still hold the FRESOLVE'd parent + leaf. C=1 (absent) is fine.
         JSR  FDELETE
         JSR  FWOPEN
-        LDA  #0
-        STA  OUTPOS
-        STA  OUTPOS+1
+        LDW OUTPOS,#0                ; <- tierA: zero word (next: RTS)
         RTS
 
 ; FINISHOUT - register the assembled file (FCLOSE flushes + writes the entry +
@@ -1619,10 +1549,7 @@ SRCGET: JSR  FGETB
 SG_EOF: JSR  RESTP2           ; none left: restore P2, re-assert EOF
         SEC
 SG_RET: RTS
-RESTP2: LDA  P2SAV
-        TAP2L
-        LDA  P2SAV+1
-        TAP2H
+RESTP2: LPW2 P2SAV                ; <- tierA: pointer load (next: RTS)
         RTS
 
 ; NEXTUSE - if a recorded include is still unread, open /lib/<name>.inc on SECBUF
@@ -1858,14 +1785,8 @@ CI_Q:   LDA  (P1)             ; expect a '"'
         JZ   CI_ABS
         JSR  CI_PREFIX        ; else INCPATH = the source dir; P2 = append point
         JMP  CI_APP
-CI_ABS: LDA  #<INCPATH
-        TAP2L
-        LDA  #>INCPATH
-        TAP2H
-CI_APP: LDA  PATHSAV          ; restore the path cursor
-        TAP1L
-        LDA  PATHSAV+1
-        TAP1H
+CI_ABS: LDP2 #INCPATH                ; <- tierA: pointer constant (next: LDA)
+CI_APP: LPW1 PATHSAV                ; <- tierA: pointer load (next: LDA)
 CI_CP:  LDA  (P1)             ; append the path until '"' / NUL
         JZ   CI_CPD
         LDB  #34
@@ -1909,10 +1830,7 @@ CP_LS:  STA  LSPOS+1
 CP_NS:  INP1
         INP2
         JMP  CP_LP
-CP_DONE: LDA LSPOS            ; P2 = append point
-        TAP2L
-        LDA  LSPOS+1
-        TAP2H
+CP_DONE:LPW2 LSPOS                ; <- tierA: pointer load (next: RTS)
         RTS
 
 ; ADDUSE - P1 = NAME cursor in LINEBUF. Append the name (NUL-terminated) to
@@ -2151,21 +2069,12 @@ PARSEARGS:
         STA  ACSAV
         TPA2H
         STA  ACSAV+1
-        LDA  #<SRCPATH         ; SRCPATH = abspath(ARGTMP)  [SRC]
-        STA  ABDST
-        LDA  #>SRCPATH
-        STA  ABDST+1
+        LDW ABDST,#SRCPATH                ; <- tierA: address constant (next: JSR ABSPATH)
         JSR  ABSPATH
-        LDA  ACSAV             ; restore the arg cursor -> OUT token
-        TAP2L
-        LDA  ACSAV+1
-        TAP2H
+        LPW2 ACSAV                ; <- tierA: pointer load (next: LDP1)
         LDP1 #ARGTMP           ; raw OUT token -> ARGTMP
         JSR  PATHCOPY
-        LDA  #<OUTPATH         ; OUTPATH = abspath(ARGTMP)  [OUT]
-        STA  ABDST
-        LDA  #>OUTPATH
-        STA  ABDST+1
+        LDW ABDST,#OUTPATH                ; <- tierA: address constant (next: JSR ABSPATH)
         JSR  ABSPATH
         RTS
 
@@ -2178,10 +2087,7 @@ ABSPATH:LDA  ARGTMP
         LDB  #0
         CMP
         JNZ  AB_NE
-        LDA  ABDST             ; empty arg -> empty dest
-        TAP1L
-        LDA  ABDST+1
-        TAP1H
+        LPW1 ABDST                ; <- tierA: pointer load (next: LDA)
         LDA  #0
         STA  (P1)
         RTS
@@ -2189,16 +2095,10 @@ AB_NE:  LDA  ARGTMP
         LDB  #'/'
         CMP
         JZ   AB_ABS
-        LDA  ABDST             ; relative: CWD -> (ABDST)
-        TAP1L
-        LDA  ABDST+1
-        TAP1H
+        LPW1 ABDST                ; <- tierA: pointer load (next: LDA)
         LDA  #0
         JSR  SYS_GETCWD
-        LDA  ABDST             ; walk to the end of the CWD string
-        TAP1L
-        LDA  ABDST+1
-        TAP1H
+        LPW1 ABDST                ; <- tierA: pointer load (next: LDA)
 AB_EN:  LDA  (P1)
         JZ   AB_TSL
         INP1
@@ -2211,24 +2111,15 @@ AB_TSL: DEP1                   ; last char == '/'? (root CWD "/" already ends in
         JZ   AB_CAT
         LDA  #'/'              ; else append a separator
         STA  (P1)+
-AB_CAT: LDA  #<ARGTMP          ; append the relative arg (P2) at P1
-        TAP2L
-        LDA  #>ARGTMP
-        TAP2H
+AB_CAT: LDP2 #ARGTMP                ; <- tierA: pointer constant (next: LDA)
 AB_CL:  LDA  (P2)
         STA  (P1)+
         JZ   AB_RT
         INP2
         JMP  AB_CL
 AB_RT:  RTS
-AB_ABS: LDA  ABDST             ; absolute: copy ARGTMP -> (ABDST)
-        TAP1L
-        LDA  ABDST+1
-        TAP1H
-        LDA  #<ARGTMP
-        TAP2L
-        LDA  #>ARGTMP
-        TAP2H
+AB_ABS: LPW1 ABDST                ; <- tierA: pointer load (next: LDA)
+        LDP2 #ARGTMP                ; <- tierA: pointer constant (next: LDA)
 AB_AL:  LDA  (P2)
         STA  (P1)+
         JZ   AB_RT

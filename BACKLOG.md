@@ -47,8 +47,20 @@ remainder is why it is still here.
       p8cc-style startup; the software arg stack and the __add/__sub/__and/
       __or/__xor/__neg runtime texts are gone). cc.bin 22,924 → 21,100 B; a
       compiled test program 5,546 → 2,458 B (−56%), same output; os_asm,
-      asm_selfhost, os_cc, os_cc_bigcmd, cmdbuild, os_mk all PASS. Both
-      tools' own BODIES are still old-ISA asm (stage 4).
+      asm_selfhost, os_cc, os_cc_bigcmd, cmdbuild, os_mk all PASS.
+      **Both tools' bodies rewritten (2026-09-12):** `tools/tierA_rewrite.py`
+      (new; the mechanical pass with the next-instruction safety rule and a
+      callee allow-list) applied to `apps/p8xasm.asm` (36 sites) and
+      `apps/p8xcc.asm` (88); the remaining idioms in both are 8-bit character
+      compares, which the ISA has no better form for. `cc`'s OUTPUT also gained
+      a condition mode (a relational ending an if/while/for condition is one
+      CMPW + one branch; `CONDF/CONDCUR/CONDLBL/CONDDONE`, `EMITCF`) and a
+      statement-level `x++`/`x--` → `INCW`/`DECW`. Same test program on the
+      board 5,546 → 2,041 B (−63%); vi.c on the board 26,632 → 25,228 B;
+      cc.bin 22,924 → 20,905 B; the same subset program: p8cc.py 1,066 B,
+      p8cc.c 1,107 B, on-board 2,146 B (static slots + single pass ≈ 2×, by
+      design; equivalence is behavioural). Stage 4 continues with the command
+      twins, asm libraries, OS/WM kernel and monitor.
 
 > **THE BOARD HAS TWO STALENESS SURFACES; A FEATURE MAY NEED BOTH.** The
 > BITSTREAM carries the CPU, microcode, monitor ROM and graphics RTL

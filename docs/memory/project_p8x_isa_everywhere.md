@@ -52,6 +52,21 @@ output uses absolute branches only, so the old flag/A idioms stay valid there.
 Test program 5,546 -> 2,458 B. Gotcha: gen_p8xopc.py imports genucode via
 HERE/../microcode -- run an archived copy with PYTHONPATH=<repo>/microcode.
 
+**Tool bodies + cc output (2026-09-12):** `tools/tierA_rewrite.py` written
+(patterns: word move, word/address constant, zero word, LPWn/LDPn pointer
+loads, INC/ADD #k/DEC carry chains with a dropped skip-label or a `JMP loop`
+tail; safety = next executed instruction in SAFE_NEXT, JSR only via --allow,
+JMP followed one hop; internal labels must be referenced once). p8xasm.asm 36
+sites, p8xcc.asm 88 sites, tests green. p8xcc.asm output: condition mode
+(GEXPR copies CONDF->CONDCUR and clears it; GREL branches via EMITCF when the
+relop is followed by ')' or ';'; statements pre-allocate the false label) and
+statement-level ++/-- as INCW/DECW. Test program on the board 5,546 -> 2,041 B;
+same subset program p8cc.py 1,066 / p8cc.c 1,107 / on-board 2,146 B. Remaining
+idioms in both tools are LDA/LDB #k/CMP byte compares -- no better form exists.
+The three compilers will never emit identical code (P3 frames + AST
+optimisations vs static slots vs single-pass): equivalence is BEHAVIOURAL,
+checked by the differential tests.
+
 **Next stages:** (2) C libs `os/commands/lib_*.c` + `compiler/p8lib.c` and asm
 libs `os/commands-asm/*.inc` review; (3) rebuild /binc + disk via run.sh, full
 suite; (4) hand-asm rewrite (the native assembler now has the two-operand shapes; no

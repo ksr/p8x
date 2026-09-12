@@ -86,16 +86,10 @@ START:  TPA3L
         LDA  #$E0                    ; FSDIRBUF: move the directory-scan buffer to
         JSR  FSDIRBUF                ;   $E000 so FRESOLVE's scan doesn't clobber a
                                      ;   redirected write stream's SBUF partial
-        LDA  #<APATHB                ; FRESOLVE(APATHB)
-        TAP1L
-        LDA  #>APATHB
-        TAP1H
+        LDP1 #APATHB                ; <- tierA: pointer constant (next: LDA)
         LDA  #0
         JSR  FRESOLVE
-        LDA  #<RDBUF                 ; FOPEN(read buffer)
-        TAP1L
-        LDA  #>RDBUF
-        TAP1H
+        LDP1 #RDBUF                ; <- tierA: pointer constant (next: LDA)
         LDA  #0
         JSR  FOPEN
         JC   OPENERR
@@ -112,6 +106,8 @@ START:  TPA3L
         STA  USENOT
         STA  CURBRK
         STA  CURCONT
+        STA  CONDF
+        STA  CONDDONE
         STA  GSYMCNT
         STA  USESP
         STA  USEDN
@@ -141,10 +137,7 @@ ga_ss:  LDA  (P2)                    ; skip leading spaces
         JNZ  ga_cp
         INP2
         JMP  ga_ss
-ga_cp:  LDA  #<PATH
-        TAP1L
-        LDA  #>PATH
-        TAP1H
+ga_cp:  LDP1 #PATH                ; <- tierA: pointer constant (next: LDA)
 ga_l:   LDA  (P2)
         JZ   ga_end
         LDB  #CR
@@ -169,16 +162,10 @@ ABSPFX: LDA  PATH
         LDB  #'/'
         CMP
         JZ   ap_abs
-        LDA  #<APATHB                ; relative: APATHB = CWD
-        TAP1L
-        LDA  #>APATHB
-        TAP1H
+        LDP1 #APATHB                ; <- tierA: pointer constant (next: LDA)
         LDA  #0
         JSR  SYS_GETCWD
-        LDA  #<APATHB                ; walk to the end of the CWD string
-        TAP1L
-        LDA  #>APATHB
-        TAP1H
+        LDP1 #APATHB                ; <- tierA: pointer constant (next: LDA)
 ap_en:  LDA  (P1)
         JZ   ap_sl
         INP1
@@ -192,24 +179,15 @@ ap_sl:  DEP1                        ; last char == '/'? (root "/" already ends i
         LDA  #'/'                    ; else append a separator
         STA  (P1)
         INP1
-ap_cat: LDA  #<PATH                  ; append PATH (the relative arg)
-        TAP2L
-        LDA  #>PATH
-        TAP2H
+ap_cat: LDP2 #PATH                ; <- tierA: pointer constant (next: LDA)
 ap_cl:  LDA  (P2)
         STA  (P1)
         JZ   ap_ret
         INP1
         INP2
         JMP  ap_cl
-ap_abs: LDA  #<PATH                  ; absolute: APATHB = PATH
-        TAP2L
-        LDA  #>PATH
-        TAP2H
-        LDA  #<APATHB
-        TAP1L
-        LDA  #>APATHB
-        TAP1H
+ap_abs: LDP2 #PATH                ; <- tierA: pointer constant (next: LDA)
+        LDP1 #APATHB                ; <- tierA: pointer constant (next: LDA)
 ap_al:  LDA  (P2)
         STA  (P1)
         JZ   ap_ret
@@ -227,21 +205,11 @@ EMIT:   TPA1L
         STA  EMP
         TPA1H
         STA  EMP+1
-em_l:   LDA  EMP
-        TAP1L
-        LDA  EMP+1
-        TAP1H
+em_l:   LPW1 EMP                ; <- tierA: pointer load (next: LDA)
         LDA  (P1)
         JZ   em_d
         JSR  SYS_PUTC
-        LDA  EMP
-        LDB  #1
-        ADD
-        STA  EMP
-        JNC  em_l
-        LDA  EMP+1
-        INC
-        STA  EMP+1
+        INCW EMP                ; <- tierA: 16-bit INCW chain before JMP em_l (next: JMP em_l -> LDA)
         JMP  em_l
 em_d:   RTS
 
@@ -356,15 +324,9 @@ emsl_nb: LDB SREL+1
         STA  VN+1
         JMP  EMITNUM16
 ; EMSY: emit V<SLOTBASE + SYMIDX>   EMLH: ... + LHSIDX   EMSB: ... + A (0..255).
-EMSY:   LDA  SYMIDX
-        STA  SREL
-        LDA  SYMIDX+1
-        STA  SREL+1
+EMSY:   MOVW SREL,SYMIDX                ; <- tierA: word move (next: JMP EMSLOT -> LDA)
         JMP  EMSLOT
-EMLH:   LDA  LHSIDX
-        STA  SREL
-        LDA  LHSIDX+1
-        STA  SREL+1
+EMLH:   MOVW SREL,LHSIDX                ; <- tierA: word move (next: JMP EMSLOT -> LDA)
         JMP  EMSLOT
 EMSB:   STA  SREL
         LDA  #0
@@ -386,10 +348,7 @@ sav1:   LDB  VN+1
 ; ---- 16-bit accumulator emit helpers ----
 EM_LDIMM: LDP1 #MLDWAXI              ; __ax = CURV (16-bit literal): LDW __ax,#n
         JSR  EMIT                    ;   (was LDA/STA x2, 10 bytes -> 4-5)
-        LDA  CURV
-        STA  VN
-        LDA  CURV+1
-        STA  VN+1
+        MOVW VN,CURV                ; <- tierA: word move (next: JSR EMITNUM16)
         JSR  EMITNUM16
         LDP1 #MNL
         JSR  EMIT
@@ -667,10 +626,7 @@ tu_sp:  JSR  GC                       ; skip spaces before the name
         LDB  #' '
         CMP
         JZ   tu_sp
-        LDA  #<NAMEBUF                ; read the library name into NAMEBUF (via P2)
-        TAP2L
-        LDA  #>NAMEBUF
-        TAP2H
+        LDP2 #NAMEBUF                ; <- tierA: pointer constant (next: LDA)
 tu_nm:  LDA  TMPB
         JSR  ISALP
         JC   tu_put
@@ -717,10 +673,7 @@ DOUSE:  JSR USED_HAS
         JSR  USED_ADD
         JSR  BUILDLIBPATH
         JSR  SAVESTATE
-        LDA  #<LIBPATH
-        TAP1L
-        LDA  #>LIBPATH
-        TAP1H
+        LDP1 #LIBPATH                ; <- tierA: pointer constant (next: LDA)
         LDA  #0
         JSR  FRESOLVE
         JSR  LIBBUFPTR                ; P1 = USEBUF + USESP*512
@@ -735,10 +688,7 @@ du_fail: JSR RESTORESTATE             ; not found -> restore parent, continue
 du_done: RTS
 
 ; USED_HAS: USEDF = 1 if NAMEBUF is already in the USED pool.
-USED_HAS: LDA #<USED
-        TAP1L
-        LDA  #>USED
-        TAP1H
+USED_HAS:LDP1 #USED                ; <- tierA: pointer constant (next: LDA)
         LDA  #0
         STA  TMPB
         STA  USEDF
@@ -746,10 +696,7 @@ uh_e:   LDA  TMPB
         LDB  USEDN
         CMP
         JC   uh_ret
-        LDA  #<NAMEBUF
-        TAP2L
-        LDA  #>NAMEBUF
-        TAP2H
+        LDP2 #NAMEBUF                ; <- tierA: pointer constant (next: LDA)
 uh_c:   LDA  (P1)
         STA  TMPC
         LDA  (P2)
@@ -775,10 +722,7 @@ uh_yes: LDA #1
 uh_ret: RTS
 
 ; USED_ADD: append NAMEBUF to the USED pool.
-USED_ADD: LDA #<USED
-        TAP1L
-        LDA  #>USED
-        TAP1H
+USED_ADD:LDP1 #USED                ; <- tierA: pointer constant (next: LDA)
         LDA  #0
         STA  TMPB
 ua_e:   LDA  TMPB
@@ -794,10 +738,7 @@ ua_np:  INP1
         INC
         STA  TMPB
         JMP  ua_e
-ua_ap:  LDA #<NAMEBUF
-        TAP2L
-        LDA  #>NAMEBUF
-        TAP2H
+ua_ap:  LDP2 #NAMEBUF                ; <- tierA: pointer constant (next: LDA)
 ua_cp:  LDA  (P2)
         STA  (P1)
         JZ   ua_dn
@@ -848,10 +789,7 @@ td_sp:  JSR GC                        ; skip spaces before NAME
         LDB #' '
         CMP
         JZ  td_sp
-        LDA #<NAMEBUF                  ; read NAME into NAMEBUF (via P2)
-        TAP2L
-        LDA #>NAMEBUF
-        TAP2H
+        LDP2 #NAMEBUF                ; <- tierA: pointer constant (next: LDA)
 td_nm:  LDA TMPB
         JSR ISALP
         JC  td_nput
@@ -908,10 +846,7 @@ MAC_ADD: LDA MACCNT                    ; capacity guard: MACVALS holds 64. Past
         LDA STK0+1
         TAP3H
         RTS                           ; returns straight to the OS, not the parser
-ma_room:LDA #<MACNAMES               ; walk past the MACCNT names already packed
-        TAP1L
-        LDA #>MACNAMES
-        TAP1H
+ma_room:LDP1 #MACNAMES                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         STA TMPB
 ma_e:   LDA TMPB
@@ -927,10 +862,7 @@ ma_np:  INP1
         INC
         STA TMPB
         JMP ma_e
-ma_ap:  LDA #<NAMEBUF                  ; copy NAMEBUF (incl NUL) into the pool
-        TAP2L
-        LDA #>NAMEBUF
-        TAP2H
+ma_ap:  LDP2 #NAMEBUF                ; <- tierA: pointer constant (next: LDA)
 ma_cp:  LDA (P2)
         STA (P1)
         JZ  ma_val
@@ -961,20 +893,14 @@ ma_nc:  TAP1H
 ; MACLOOKUP: TID a defined macro? -> MACF=1, MACVAL=value ; else MACF=0.
 MACLOOKUP: LDA #0
         STA MACF
-        LDA #<MACNAMES
-        TAP1L
-        LDA #>MACNAMES
-        TAP1H
+        LDP1 #MACNAMES                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         STA TMPB                       ; index k
 ml_e:   LDA TMPB
         LDB MACCNT
         CMP
         JC  ml_ret                     ; k >= MACCNT -> not found
-        LDA #<TID
-        TAP2L
-        LDA #>TID
-        TAP2H
+        LDP2 #TID                ; <- tierA: pointer constant (next: LDA)
 ml_c:   LDA (P1)
         STA TMPC
         LDA (P2)
@@ -1016,34 +942,22 @@ ml_nc:  TAP1H
 ml_ret: RTS
 
 ; BUILDLIBPATH: LIBPATH = "/lib/lib_" + NAMEBUF + ".c"
-BUILDLIBPATH: LDA #<LIBPATH
-        TAP2L
-        LDA  #>LIBPATH
-        TAP2H
-        LDA  #<M_LIBPFX
-        TAP1L
-        LDA  #>M_LIBPFX
-        TAP1H
+BUILDLIBPATH:LDP2 #LIBPATH                ; <- tierA: pointer constant (next: LDA)
+        LDP1 #M_LIBPFX                ; <- tierA: pointer constant (next: LDA)
 blp_p:  LDA  (P1)
         JZ   blp_nm
         STA  (P2)
         INP1
         INP2
         JMP  blp_p
-blp_nm: LDA  #<NAMEBUF
-        TAP1L
-        LDA  #>NAMEBUF
-        TAP1H
+blp_nm: LDP1 #NAMEBUF                ; <- tierA: pointer constant (next: LDA)
 blp_n:  LDA  (P1)
         JZ   blp_x
         STA  (P2)
         INP1
         INP2
         JMP  blp_n
-blp_x:  LDA  #<M_DOTC
-        TAP1L
-        LDA  #>M_DOTC
-        TAP1H
+blp_x:  LDP1 #M_DOTC                ; <- tierA: pointer constant (next: LDA)
 blp_e:  LDA  (P1)
         STA  (P2)
         JZ   blp_d
@@ -1091,10 +1005,7 @@ SAVESTATE: JSR USEOFF
         JNC  ss0
         INC
 ss0:    TAP2H
-        LDA  #<ROSTATE
-        TAP1L
-        LDA  #>ROSTATE
-        TAP1H
+        LDP1 #ROSTATE                ; <- tierA: pointer constant (next: LDA)
         LDA  #13
         STA  USECNT
 ss_l:   LDA  (P1)
@@ -1120,10 +1031,7 @@ RESTORESTATE: JSR USEOFF
         JNC  rs0
         INC
 rs0:    TAP1H
-        LDA  #<ROSTATE
-        TAP2L
-        LDA  #>ROSTATE
-        TAP2H
+        LDP2 #ROSTATE                ; <- tierA: pointer constant (next: LDA)
         LDA  #13
         STA  USECNT
 rs_l:   LDA  (P1)
@@ -1354,10 +1262,7 @@ esc3:   LDA TMPB
         RTS
 esc_d:  LDA TMPB                       ; default (\\ \' \") : the char itself
         RTS
-adv_stl: LDA #<STRBUF                  ; "..." -> STRING (kind 4); built via P2
-        TAP2L                         ;   (GC/FGETB clobbers P1, preserves P2)
-        LDA  #>STRBUF
-        TAP2H
+adv_stl:LDP2 #STRBUF                ; <- tierA: pointer constant (next: JSR GC)
 asl_l:  JSR  GC
         JC   asl_e                    ; EOF ends it
         STA  TMPB
@@ -1489,9 +1394,7 @@ hv_lo:  LDA TMPC
 hv_no:  CLC
         RTS
 
-adv_num: LDA #0                      ; number -> CURV (decimal, or 0x.. hex)
-        STA  NACC
-        STA  NACC+1
+adv_num:LDW NACC,#0                ; <- tierA: zero word (next: LDA)
         LDA  TMPB
         LDB  #'0'
         CMP
@@ -1604,15 +1507,9 @@ an_c1:  JSR  GC
         JSR  UNGC
 an_done: LDA #1
         STA  CURK
-        LDA  NACC
-        STA  CURV
-        LDA  NACC+1
-        STA  CURV+1
+        MOVW CURV,NACC                ; <- tierA: word move (next: RTS)
         RTS
-adv_id: LDA #<TID                    ; identifier -> TID  (built via P2, which
-        TAP2L                        ;   FGETB preserves; P1 is clobbered by it)
-        LDA  #>TID
-        TAP2H
+adv_id: LDP2 #TID                ; <- tierA: pointer constant (next: LDA)
         LDA  TMPB
         STA  (P2)
         INP2
@@ -1641,10 +1538,7 @@ ai_done: LDA #0
         RTS
 ai_mac: LDA #1                        ; substitute the macro's value (NUMBER token)
         STA  CURK
-        LDA  MACVAL
-        STA  CURV
-        LDA  MACVAL+1
-        STA  CURV+1
+        MOVW CURV,MACVAL                ; <- tierA: word move (next: RTS)
         RTS
 
 ; =============================================================================
@@ -1856,10 +1750,7 @@ sls_end: JSR ADVANCE                  ; past NAME
         RTS
 
 ; STAGADD: record tag CURFN with size STOFF
-STAGADD: LDA #<STAGPOOL
-        TAP1L
-        LDA  #>STAGPOOL
-        TAP1H
+STAGADD:LDP1 #STAGPOOL                ; <- tierA: pointer constant (next: LDA)
         LDA  #0
         STA  TMPB
 sga_e:  LDA  TMPB
@@ -1875,10 +1766,7 @@ sga_np: INP1
         INC
         STA  TMPB
         JMP  sga_e
-sga_ap: LDA #<CURFN
-        TAP2L
-        LDA  #>CURFN
-        TAP2H
+sga_ap: LDP2 #CURFN                ; <- tierA: pointer constant (next: LDA)
 sga_cp: LDA  (P2)
         STA  (P1)
         JZ   sga_dn
@@ -1901,19 +1789,10 @@ sga1:   TAP1H
         RTS
 
 ; STAGFIND_CURFN / STAGFIND_CURTID: tag name -> TAGSIZE (by name in CURFN or TID)
-STAGFIND_CURFN: LDA #<CURFN
-        STA  STFNP
-        LDA  #>CURFN
-        STA  STFNP+1
+STAGFIND_CURFN:LDW STFNP,#CURFN                ; <- tierA: address constant (next: JMP stf_go -> LDA)
         JMP  stf_go
-STAGFIND_CURTID: LDA #<TID
-        STA  STFNP
-        LDA  #>TID
-        STA  STFNP+1
-stf_go: LDA #<STAGPOOL
-        TAP1L
-        LDA  #>STAGPOOL
-        TAP1H
+STAGFIND_CURTID:LDW STFNP,#TID                ; <- tierA: address constant (next: LDA)
+stf_go: LDP1 #STAGPOOL                ; <- tierA: pointer constant (next: LDA)
         LDA  #0
         STA  TMPB
         STA  TAGSIZE
@@ -1921,10 +1800,7 @@ stf_e:  LDA  TMPB
         LDB  STAGCNT
         CMP
         JC   stf_no
-        LDA  STFNP
-        TAP2L
-        LDA  STFNP+1
-        TAP2H
+        LPW2 STFNP                ; <- tierA: pointer load (next: LDA)
 stf_c:  LDA  (P1)
         STA  TMPC
         LDA  (P2)
@@ -1958,10 +1834,7 @@ sty1:   TAP1H
 stf_no: RTS
 
 ; STMADD_M: add member TID @ STOFF (char DCLCHAR) to the global member table
-STMADD_M: LDA #<STMPOOL
-        TAP1L
-        LDA  #>STMPOOL
-        TAP1H
+STMADD_M:LDP1 #STMPOOL                ; <- tierA: pointer constant (next: LDA)
         LDA  #0
         STA  TMPB
 smm_e:  LDA  TMPB
@@ -1977,10 +1850,7 @@ smm_np: INP1
         INC
         STA  TMPB
         JMP  smm_e
-smm_ap: LDA #<TID
-        TAP2L
-        LDA  #>TID
-        TAP2H
+smm_ap: LDP2 #TID                ; <- tierA: pointer constant (next: LDA)
 smm_cp: LDA  (P2)
         STA  (P1)
         JZ   smm_dn
@@ -2013,10 +1883,7 @@ smm2:   TAP1H
         RTS
 
 ; STMFIND: member name TID -> STMEMOFF, STMEMCH (STMEMOK=1 if found)
-STMFIND: LDA #<STMPOOL
-        TAP1L
-        LDA  #>STMPOOL
-        TAP1H
+STMFIND:LDP1 #STMPOOL                ; <- tierA: pointer constant (next: LDA)
         LDA  #0
         STA  TMPB
         STA  STMEMOK
@@ -2024,10 +1891,7 @@ smf_e:  LDA  TMPB
         LDB  STMCNT
         CMP
         JC   smf_no
-        LDA  #<TID
-        TAP2L
-        LDA  #>TID
-        TAP2H
+        LDP2 #TID                ; <- tierA: pointer constant (next: LDA)
 smf_c:  LDA  (P1)
         STA  TMPC
         LDA  (P2)
@@ -2094,13 +1958,7 @@ fd_glob: JSR GSYMADD                 ; record CURFN @ slot SLOTCNT (char = DCLCH
         LDB  #'['
         CMP
         JZ   fdg_arr
-fdg_scal: LDA SLOTCNT                ; scalar global: one word slot (SLOTCNT += 1)
-        INC
-        STA  SLOTCNT
-        JNZ  fdg_end
-        LDA  SLOTCNT+1
-        INC
-        STA  SLOTCNT+1
+fdg_scal:INCW SLOTCNT                ; <- tierA: 16-bit INCW chain before JMP fdg_end (next: JMP fdg_end -> LDA)
         JMP  fdg_end
 fdg_arr: JSR GSYMMARKARR             ; mark it an array
         JSR  ADVANCE                 ; past '['
@@ -2122,10 +1980,7 @@ fca1:   STA  VN+1
         STA  VN
         JSR  SLOTADD_VN              ;   SLOTCNT += VN
         JMP  fdg_asz
-fdg_aint: LDA CURV                   ; int array: N word slots (SLOTCNT += CURV)
-        STA  VN
-        LDA  CURV+1
-        STA  VN+1
+fdg_aint:MOVW VN,CURV                ; <- tierA: word move (next: JSR SLOTADD_VN)
         JSR  SLOTADD_VN
 fdg_asz: JSR ADVANCE                 ; past size
         LDA  #']'
@@ -2167,10 +2022,7 @@ fdt_ns: JSR  CPCURFN                 ; CURFN <- NAME (function or global)
         LDB  #'('
         CMP
         JNZ  fd_glob
-        LDA  SLOTCNT                 ; ---- function definition ----
-        STA  SLOTBASE                ; SLOTBASE = SLOTCNT (16-bit)
-        LDA  SLOTCNT+1
-        STA  SLOTBASE+1
+        MOVW SLOTBASE,SLOTCNT                ; <- tierA: word move (next: LDA)
         LDA  #0
         STA  SYMCNT
         STA  NLSLOT
@@ -2268,19 +2120,10 @@ fd_end: LDA  #'}'
 fde_nc: STA  SLOTCNT+1
         RTS
 ; CPCURFN / CPIDNAME: copy the current id (TID) into CURFN / IDNAME.
-CPCURFN: LDA #<CURFN
-        TAP2L
-        LDA  #>CURFN
-        TAP2H
+CPCURFN:LDP2 #CURFN                ; <- tierA: pointer constant (next: JMP cpn_go -> LDA)
         JMP  cpn_go
-CPIDNAME: LDA #<IDNAME
-        TAP2L
-        LDA  #>IDNAME
-        TAP2H
-cpn_go: LDA #<TID
-        TAP1L
-        LDA  #>TID
-        TAP1H
+CPIDNAME:LDP2 #IDNAME                ; <- tierA: pointer constant (next: LDA)
+cpn_go: LDP1 #TID                ; <- tierA: pointer constant (next: LDA)
 cpn_l:  LDA  (P1)
         STA  (P2)
         JZ   cpn_d
@@ -2304,10 +2147,7 @@ FADD:   LDA  FCNT
         LDA  STK0+1
         TAP3H
         RTS                          ; returns straight to the OS, not the parser
-fa_ok:  LDA #<FPOOL
-        TAP1L
-        LDA  #>FPOOL
-        TAP1H
+fa_ok:  LDP1 #FPOOL                ; <- tierA: pointer constant (next: LDA)
         LDA  #0
         STA  TMPC
 fa_e:   LDA  TMPC
@@ -2323,10 +2163,7 @@ fa_np:  INP1
         INC
         STA  TMPC
         JMP  fa_e
-fa_ap:  LDA #<CURFN
-        TAP2L
-        LDA  #>CURFN
-        TAP2H
+fa_ap:  LDP2 #CURFN                ; <- tierA: pointer constant (next: LDA)
 fa_cp:  LDA  (P2)
         STA  (P1)
         JZ   fa_dn
@@ -2364,20 +2201,14 @@ fad2:   TAP1H
 ; FFIND_ID: look up IDNAME in the function table -> FFB (base slot), FOK.
 FFIND_ID: LDA #0
         STA  FOK
-        LDA  #<FPOOL
-        TAP1L
-        LDA  #>FPOOL
-        TAP1H
+        LDP1 #FPOOL                ; <- tierA: pointer constant (next: LDA)
         LDA  #0
         STA  FI
 ff_e:   LDA  FI
         LDB  FCNT
         CMP
         JC   ff_no
-        LDA  #<IDNAME
-        TAP2L
-        LDA  #>IDNAME
-        TAP2H
+        LDP2 #IDNAME                ; <- tierA: pointer constant (next: LDA)
 ff_c:   LDA  (P1)
         STA  TMPC
         LDA  (P2)
@@ -2423,10 +2254,7 @@ EM_STSLOT: LDP1 #MLDAX
         JSR  EMIT
         LDP1 #MSTAV
         JSR  EMIT
-        LDA  ARGSLOT
-        STA  VN
-        LDA  ARGSLOT+1
-        STA  VN+1
+        MOVW VN,ARGSLOT                ; <- tierA: word move (next: JSR EMITNUM16)
         JSR  EMITNUM16
         LDP1 #MNL
         JSR  EMIT
@@ -2434,10 +2262,7 @@ EM_STSLOT: LDP1 #MLDAX
         JSR  EMIT
         LDP1 #MSTAV
         JSR  EMIT
-        LDA  ARGSLOT
-        STA  VN
-        LDA  ARGSLOT+1
-        STA  VN+1
+        MOVW VN,ARGSLOT                ; <- tierA: word move (next: JSR EMITNUM16)
         JSR  EMITNUM16
         LDP1 #MP1
         JSR  EMIT
@@ -2535,17 +2360,22 @@ sb_end: LDA  #'}'
 st_if:  JSR  ADVANCE                 ; past "if"
         LDA  #'('
         JSR  EXPECTP
-        JSR  GEXPR                   ; condition -> __ax
-        LDA  #')'
-        JSR  EXPECTP
-        JSR  EM_TESTAX               ; set Z from __ax for the branch
         JSR  NEWLBL                  ; la = false-branch target
         PHA
+        STA  CONDLBL                 ; condition mode: a top-level relop branches to la
+        LDA  #1
+        STA  CONDF
+        JSR  GEXPR                   ; condition -> __ax, or already branched (CONDDONE)
+        LDA  #')'
+        JSR  EXPECTP
+        LDA  CONDDONE
+        JNZ  if_body
+        JSR  EM_TESTAX               ; set Z from __ax for the branch
         LDP1 #MJZ
         PLA
         PHA
         JSR  EMITJ                   ; JZ L<la>
-        JSR  STMT                    ; then-branch
+if_body: JSR STMT                    ; then-branch
         LDA  CURK                    ; an "else"?
         LDB  #2
         CMP
@@ -2619,7 +2449,13 @@ st_for: JSR  ADVANCE                  ; past "for"
         LDB  #$3B
         CMP
         JZ   sf_nocond
-sf_cond: JSR  GEXPR                    ; cond -> __ax
+sf_cond: LDA  LFE
+        STA  CONDLBL                   ; condition mode (see GEXPR); ends at ';'
+        LDA  #1
+        STA  CONDF
+        JSR  GEXPR                     ; cond -> __ax, or already branched
+        LDA  CONDDONE
+        JNZ  sf_nocond
         JSR  EM_TESTAX
         LDP1 #MJZ
         LDA  LFE
@@ -2675,10 +2511,7 @@ FORCLAUSE: LDA CURK
         JSR  SYMFIND
         LDA  SYMOK
         JZ   fc_ret                    ; undeclared -> stop quietly
-        LDA  SYMIDX
-        STA  LHSIDX
-        LDA  SYMIDX+1
-        STA  LHSIDX+1
+        MOVW LHSIDX,SYMIDX                ; <- tierA: word move (next: JSR ADVANCE)
         JSR  ADVANCE                   ; past NAME
         LDA  #'='
         JSR  EXPECTP
@@ -2695,14 +2528,20 @@ st_while: JSR ADVANCE                ; past "while"
         JSR  EMITLBL                 ; L<ltop>:
         LDA  #'('
         JSR  EXPECTP
-        JSR  GEXPR                   ; condition -> __ax
+        LDA  WHE
+        STA  CONDLBL                 ; condition mode (see GEXPR)
+        LDA  #1
+        STA  CONDF
+        JSR  GEXPR                   ; condition -> __ax, or already branched
         LDA  #')'
         JSR  EXPECTP
+        LDA  CONDDONE
+        JNZ  wh_body
         JSR  EM_TESTAX               ; set Z from __ax for the branch
         LDP1 #MJZ
         LDA  WHE
         JSR  EMITJ                   ; JZ L<lend>
-        LDA  CURBRK                  ; enter loop: save enclosing break/continue
+wh_body: LDA CURBRK                  ; enter loop: save enclosing break/continue
         PHA
         LDA  CURCONT
         PHA
@@ -2747,10 +2586,7 @@ sd_star: LDA CURK                    ; skip pointer stars: int *p, int **p
         JSR  ADVANCE
         JMP  sd_star
 sd_nostar: JSR SYMADD                ; add NAME (current id) -> SYMIDX
-        LDA  SYMIDX
-        STA  LHSIDX
-        LDA  SYMIDX+1
-        STA  LHSIDX+1
+        MOVW LHSIDX,SYMIDX                ; <- tierA: word move (next: JSR SETSYMCHAR)
         JSR  SETSYMCHAR              ; SYMCHAR[slot] = DCLCHAR
         JSR  ADVANCE                 ; past NAME
         LDA  CURK                    ; array?  int NAME [ N ]
@@ -2820,10 +2656,7 @@ st_exprstmt: JSR GEXPR
         JSR  EXPECTP
         RTS
 st_asg2:
-        LDA  SYMIDX
-        STA  LHSIDX
-        LDA  SYMIDX+1
-        STA  LHSIDX+1
+        MOVW LHSIDX,SYMIDX                ; <- tierA: word move (next: LDA)
         LDA  SYMRCH
         STA  LHSCH
         LDA  SYMRAR
@@ -2853,16 +2686,10 @@ sa_ck_arrow: LDA CURV
         CMP
         JZ   sa_memarrow
         JMP  sa_scalar
-sa_memdot: LDA LHSIDX             ; &NAME + offset
-        STA  SYMIDX
-        LDA  LHSIDX+1
-        STA  SYMIDX+1
+sa_memdot:MOVW SYMIDX,LHSIDX                ; <- tierA: word move (next: JSR EM_ADDROF)
         JSR  EM_ADDROF
         JMP  sa_memcommon
-sa_memarrow: LDA LHSIDX           ; value(NAME) + offset
-        STA  SYMIDX
-        LDA  LHSIDX+1
-        STA  SYMIDX+1
+sa_memarrow:MOVW SYMIDX,LHSIDX                ; <- tierA: word move (next: JSR EM_LDVAR)
         JSR  EM_LDVAR
 sa_memcommon: JSR ADVANCE         ; past '.' or '->'
         JSR  STMFIND
@@ -2901,23 +2728,38 @@ sa_asg: LDA #'='
         LDA  #$3B
         JSR  EXPECTP
         RTS
-sa_cadd: JSR SA_CLOAD               ; NAME += rhs
+sa_cadd: LDA CUR2                   ; NAME++ ?  (CUR2 == CURV for ++ / --)
+        LDB  CURV
+        CMP
+        JZ   sa_inc
+        JSR  SA_CLOAD               ; NAME += rhs
         LDP1 #MADD
         JSR  EMIT
         JMP  sa_cst
-sa_csub: JSR SA_CLOAD               ; NAME -= rhs
+sa_csub: LDA CUR2                   ; NAME-- ?
+        LDB  CURV
+        CMP
+        JZ   sa_dec
+        JSR  SA_CLOAD               ; NAME -= rhs
         LDP1 #MSUB
         JSR  EMIT
 sa_cst: JSR EMITSTV
-        LDA  #$3B
+sa_semi: LDA #$3B
         JSR  EXPECTP
+        RTS
+sa_inc: JSR  SA_LHSSYM              ; statement-level NAME++ : one INCW in place
+        JSR  EM_INCVAR              ;   (was load / push / LDW #1 / pop / ADDW / store)
+        JMP  sa_semi
+sa_dec: JSR  SA_LHSSYM
+        JSR  EM_DECVAR
+        JMP  sa_semi
+; SA_LHSSYM: SYMIDX = LHSIDX (the variable being updated); consume the ++ / --.
+SA_LHSSYM: MOVW SYMIDX,LHSIDX
+        JSR  ADVANCE
         RTS
 ; SA_CLOAD: __ax = old NAME (pushed), then RHS -> __ax, then __t0 = old NAME.
 ;   rhs = 1 for ++/-- (CUR2 == CURV), or an expression for += / -= (CUR2 == '=').
-SA_CLOAD: LDA LHSIDX
-        STA  SYMIDX
-        LDA  LHSIDX+1
-        STA  SYMIDX+1
+SA_CLOAD:MOVW SYMIDX,LHSIDX                ; <- tierA: word move (next: JSR EM_LDVAR)
         JSR  EM_LDVAR
         JSR  EM_PUSH
         LDA  CUR2
@@ -2931,10 +2773,7 @@ scl_e:  JSR ADVANCE                  ; past += / -=
         JSR  GEXPR
 scl_p:  JSR EM_POP                   ; __t0 = old NAME
         RTS
-sa_arrstore: LDA LHSIDX
-        STA  SYMIDX
-        LDA  LHSIDX+1
-        STA  SYMIDX+1
+sa_arrstore:MOVW SYMIDX,LHSIDX                ; <- tierA: word move (next: LDA)
         LDA  LHSCH
         STA  ELCHAR
         LDA  LHSAR
@@ -3028,12 +2867,67 @@ grl_sw: LDP1 #MCMPWAT
         JMP  grl_em
 grl_eq: LDP1 #MCMP
 grl_em: JSR  EMIT
-        JSR  EMITCMP                 ; emit the 0/1 sequence for RELOP
+        LDA  CONDCUR                 ; condition context, and the relop ends it?
+        JZ   grl_val
+        LDA  CURK
+        LDB  #3
+        CMP
+        JNZ  grl_val
+        LDA  CURV
+        LDB  #')'
+        CMP
+        JZ   grl_cond
+        LDB  #$3B                    ; ';' -- a for-loop condition
+        CMP
+        JNZ  grl_val
+grl_cond: JSR EMITCF                 ; branch to L<CONDLBL> when the relation is FALSE
+        LDA  #1
+        STA  CONDDONE
+        RTS
+grl_val: JSR  EMITCMP                ; else the 0/1 VALUE sequence for RELOP
 grx:    RTS
+
+; EMITCF: after GREL's compare, jump to L<CONDLBL> when the relation is FALSE.
+;   <  : C = left>=right, false when C=1 -> JC      >= : false when C=0 -> JNC
+;   >  : swapped compare, C = right>=left, true when C=0 -> false JC
+;   <= : true when C=1 -> false JNC     == : false when Z=0 -> JNZ    != : JZ
+EMITCF: LDA  RELOP
+        JZ   ecf_jc                  ; 0: <
+        LDB  #2
+        CMP
+        JZ   ecf_jc                  ; 2: >
+        LDB  #4
+        CMP
+        JZ   ecf_jnz                 ; 4: ==
+        LDB  #5
+        CMP
+        JZ   ecf_jz                  ; 5: !=
+        LDP1 #MJNC                   ; 1: <=   3: >=
+        JMP  ecf_e
+ecf_jc: LDP1 #MJC
+        JMP  ecf_e
+ecf_jnz: LDP1 #MJNZ
+        JMP  ecf_e
+ecf_jz: LDP1 #MJZ
+ecf_e:  LDA  CONDLBL
+        JSR  EMITJ
+        RTS
 
 ; expr: logical-or  ->  land ('||' land)*   (short-circuit, yields 0/1)
 ; expr : cond  ->  a ? b : c   (ternary; wraps the || level GLOR)
-GEXPR:  JSR  GLOR
+; Condition mode (2026-09-12): if/while/for set CONDF=1 and CONDLBL before their
+; GEXPR. GEXPR takes the flag into CONDCUR and clears CONDF, so any NESTED GEXPR
+; (call arguments, parentheses, an index) sees 0 and produces a value. When the
+; relational at the top of the condition is followed by ')' or ';' -- nothing
+; else consumes its result -- GREL emits its compare and ONE branch to CONDLBL
+; on the false case (EMITCF) and sets CONDDONE, and the statement skips its own
+; test-and-JZ. Same trick as p8cc.c's cond mode: `if (a < b)` is CMPW + Jcc.
+GEXPR:  LDA  CONDF
+        STA  CONDCUR
+        LDA  #0
+        STA  CONDF
+        STA  CONDDONE
+        JSR  GLOR
         LDA  CURK
         LDB  #3
         CMP
@@ -3421,10 +3315,7 @@ gu_addr: LDA #1
         JSR  SYMFIND                  ; the NAME (TID) -> SYMIDX (slot)
         LDA  SYMOK
         JZ   gu_ad_e
-        LDA  SYMIDX
-        STA  IDVARIDX
-        LDA  SYMIDX+1
-        STA  IDVARIDX+1                 ; save the slot across ADVANCE
+        MOVW IDVARIDX,SYMIDX                ; <- tierA: word move (next: LDA)
         LDA  SYMRCH
         STA  IDVARCH
         LDA  SYMRAR
@@ -3438,16 +3329,10 @@ gu_addr: LDA #1
         LDB  #'['
         CMP
         JZ   gu_ad_ix
-gu_ad_pl: LDA IDVARIDX                ; &NAME  -> address of the variable
-        STA  SYMIDX
-        LDA  IDVARIDX+1
-        STA  SYMIDX+1
+gu_ad_pl:MOVW SYMIDX,IDVARIDX                ; <- tierA: word move (next: JSR EM_ADDROF)
         JSR  EM_ADDROF
         RTS
-gu_ad_ix: LDA IDVARIDX                ; &NAME[i] -> address of the element
-        STA  SYMIDX
-        LDA  IDVARIDX+1
-        STA  SYMIDX+1
+gu_ad_ix:MOVW SYMIDX,IDVARIDX                ; <- tierA: word move (next: LDA)
         LDA  IDVARCH
         STA  ELCHAR
         LDA  IDVARAR
@@ -3551,10 +3436,7 @@ gf_id:  JSR  CPIDNAME                ; save the id; it may be a call or a variab
         JSR  SYMFIND                 ; variable candidate (from TID)
         LDA  SYMOK
         STA  IDVAROK
-        LDA  SYMIDX
-        STA  IDVARIDX
-        LDA  SYMIDX+1
-        STA  IDVARIDX+1
+        MOVW IDVARIDX,SYMIDX                ; <- tierA: word move (next: LDA)
         LDA  SYMRCH
         STA  IDVARCH
         LDA  SYMRAR
@@ -3599,10 +3481,7 @@ gfi_ckpp: LDA CUR2                   ; NAME++ / NAME-- (postfix, simple var)
         JZ   gfi_pdec
 gfi_var: LDA IDVAROK
         JZ   gf_err
-        LDA  IDVARIDX
-        STA  SYMIDX
-        LDA  IDVARIDX+1
-        STA  SYMIDX+1
+        MOVW SYMIDX,IDVARIDX                ; <- tierA: word move (next: LDA)
         LDA  IDVARCH
         STA  EXPRCHAR
         LDA  IDVARAR                 ; a bare array name decays to &name[0]
@@ -3613,16 +3492,10 @@ gfv_arr: LDA #1
         STA  SAWADDRG                 ; array decay passes an address (pass-by-ref)
         JSR  EM_ADDROF
         RTS
-gfi_dot: LDA IDVARIDX               ; NAME.member : &NAME + offset
-        STA  SYMIDX
-        LDA  IDVARIDX+1
-        STA  SYMIDX+1
+gfi_dot:MOVW SYMIDX,IDVARIDX                ; <- tierA: word move (next: JSR EM_ADDROF)
         JSR  EM_ADDROF
         JMP  gfi_memld
-gfi_arrow: LDA IDVARIDX              ; NAME->member : value(NAME) + offset
-        STA  SYMIDX
-        LDA  IDVARIDX+1
-        STA  SYMIDX+1
+gfi_arrow:MOVW SYMIDX,IDVARIDX                ; <- tierA: word move (next: JSR EM_LDVAR)
         JSR  EM_LDVAR
 gfi_memld: JSR ADVANCE               ; past '.' or '->'
         JSR  STMFIND
@@ -3637,28 +3510,19 @@ gfi_memb: JSR EM_LOADB
         RTS
 gfi_pinc: LDA IDVAROK               ; NAME++ : value = old NAME, then NAME += 1
         JZ   gf_err
-        LDA  IDVARIDX
-        STA  SYMIDX
-        LDA  IDVARIDX+1
-        STA  SYMIDX+1
+        MOVW SYMIDX,IDVARIDX                ; <- tierA: word move (next: JSR EM_LDVAR)
         JSR  EM_LDVAR                 ; __ax = old NAME
         JSR  EM_INCVAR                ; NAME += 1 (in place, __ax kept)
         JSR  ADVANCE
         RTS
 gfi_pdec: LDA IDVAROK
         JZ   gf_err
-        LDA  IDVARIDX
-        STA  SYMIDX
-        LDA  IDVARIDX+1
-        STA  SYMIDX+1
+        MOVW SYMIDX,IDVARIDX                ; <- tierA: word move (next: JSR EM_LDVAR)
         JSR  EM_LDVAR
         JSR  EM_DECVAR
         JSR  ADVANCE
         RTS
-gfi_index: LDA IDVARIDX               ; NAME[index] rvalue
-        STA  SYMIDX
-        LDA  IDVARIDX+1
-        STA  SYMIDX+1
+gfi_index:MOVW SYMIDX,IDVARIDX                ; <- tierA: word move (next: LDA)
         LDA  IDVARCH
         STA  ELCHAR
         LDA  IDVARAR
@@ -3731,10 +3595,7 @@ gc_argstr: JSR ADVANCE
 
 ; gc_bios: bios(ADDR, p1, a) -> A | carry<<8 in __ax.  ADDR is a constant.
 gc_bios: JSR ADVANCE                 ; past '('
-        LDA  CURV                    ; arg0 = the constant BIOS/OS address
-        STA  BIOSAD
-        LDA  CURV+1
-        STA  BIOSAD+1
+        MOVW BIOSAD,CURV                ; <- tierA: word move (next: JSR ADVANCE)
         JSR  ADVANCE                 ; past the address number
         LDA  #','
         JSR  EXPECTP
@@ -3776,10 +3637,7 @@ gc_bios: JSR ADVANCE                 ; past '('
         RTS
 
 ; IDNAMEEQ: P1 = a NUL-terminated string -> TMPB = 1 if it equals IDNAME.
-IDNAMEEQ: LDA #<IDNAME
-        TAP2L
-        LDA  #>IDNAME
-        TAP2H
+IDNAMEEQ:LDP2 #IDNAME                ; <- tierA: pointer constant (next: LDA)
 ine_l:  LDA  (P1)
         STA  TMPC
         LDA  (P2)
@@ -3965,14 +3823,8 @@ gc_norest: RTS
 gf_err: RTS
 
 ; CHKSELFREC: SELFREC = 1 if IDNAME (callee) equals CURFN (current function).
-CHKSELFREC: LDA #<IDNAME
-        TAP1L
-        LDA  #>IDNAME
-        TAP1H
-        LDA  #<CURFN
-        TAP2L
-        LDA  #>CURFN
-        TAP2H
+CHKSELFREC:LDP1 #IDNAME                ; <- tierA: pointer constant (next: LDA)
+        LDP2 #CURFN                ; <- tierA: pointer constant (next: LDA)
         LDA  #1
         STA  SELFREC
 csr_l:  LDA  (P1)
@@ -3991,10 +3843,7 @@ csr_no: LDA  #0
 csr_d:  RTS
 
 ; EMITFNAME: emit the FI-th NUL-terminated name from the packed FPOOL.
-EMITFNAME: LDA #<FPOOL
-        TAP1L
-        LDA  #>FPOOL
-        TAP1H
+EMITFNAME:LDP1 #FPOOL                ; <- tierA: pointer constant (next: LDA)
         LDA  FI
         STA  VITER2                  ; names to skip
 efn_sk: LDA  VITER2
@@ -4071,18 +3920,12 @@ EM_POPSLOT: STA VITER2
 SYMFIND: LDA #0
         STA  SYMIDX
         STA  SYMOK
-        LDA  #<SYMPOOL
-        TAP1L
-        LDA  #>SYMPOOL
-        TAP1H
+        LDP1 #SYMPOOL                ; <- tierA: pointer constant (next: LDA)
 sf_e:   LDA  SYMIDX
         LDB  SYMCNT
         CMP
         JC   sf_no                   ; SYMIDX >= SYMCNT -> not found
-        LDA  #<TID
-        TAP2L
-        LDA  #>TID
-        TAP2H
+        LDP2 #TID                ; <- tierA: pointer constant (next: LDA)
 sf_c:   LDA  (P1)                    ; pool char vs TID char
         STA  TMPC
         LDA  (P2)
@@ -4119,10 +3962,7 @@ sf_yes: LDA  #1
 sf_no:  JMP  GSYMFIND                 ; not a local -> try the globals
 
 ; SYMADD: append the current id (TID) to SYMPOOL; SYMIDX = its (new) index.
-SYMADD: LDA #<SYMPOOL
-        TAP1L
-        LDA  #>SYMPOOL
-        TAP1H
+SYMADD: LDP1 #SYMPOOL                ; <- tierA: pointer constant (next: LDA)
         LDA  #0
         STA  TMPB                    ; names skipped
 sa_e:   LDA  TMPB
@@ -4138,10 +3978,7 @@ sa_np:  INP1
         INC
         STA  TMPB
         JMP  sa_e
-sa_ap:  LDA  #<TID                   ; copy TID (+ its NUL) into the pool
-        TAP2L
-        LDA  #>TID
-        TAP2H
+sa_ap:  LDP2 #TID                ; <- tierA: pointer constant (next: LDA)
 sa_cp:  LDA  (P2)
         STA  (P1)
         JZ   sa_dn
@@ -4183,20 +4020,14 @@ sad2:   TAP1H
 ; GSYMFIND: search the GLOBAL table for TID. Sets SYMOK; on a hit, SYMIDX =
 ;   (global slot - SLOTBASE) so V<SLOTBASE+SYMIDX> lands on the fixed slot, and
 ;   SYMRCH/SYMRAR carry its char/array flags.
-GSYMFIND: LDA #<GSYMPOOL
-        TAP1L
-        LDA  #>GSYMPOOL
-        TAP1H
+GSYMFIND:LDP1 #GSYMPOOL                ; <- tierA: pointer constant (next: LDA)
         LDA  #0
         STA  TMPB
 gsf_e:  LDA  TMPB
         LDB  GSYMCNT
         CMP
         JC   gsf_no
-        LDA  #<TID
-        TAP2L
-        LDA  #>TID
-        TAP2H
+        LDP2 #TID                ; <- tierA: pointer constant (next: LDA)
 gsf_c:  LDA  (P1)
         STA  TMPC
         LDA  (P2)
@@ -4270,10 +4101,7 @@ gsf_no: LDA #0
         RTS
 
 ; GSYMADD: append CURFN to the global table at slot SLOTCNT (char = DCLCHAR).
-GSYMADD: LDA #<GSYMPOOL
-        TAP1L
-        LDA  #>GSYMPOOL
-        TAP1H
+GSYMADD:LDP1 #GSYMPOOL                ; <- tierA: pointer constant (next: LDA)
         LDA  #0
         STA  TMPB
 gA_e:   LDA  TMPB
@@ -4289,10 +4117,7 @@ gA_np:  INP1
         INC
         STA  TMPB
         JMP  gA_e
-gA_ap:  LDA #<CURFN
-        TAP2L
-        LDA  #>CURFN
-        TAP2H
+gA_ap:  LDP2 #CURFN                ; <- tierA: pointer constant (next: LDA)
 gA_cp:  LDA  (P2)
         STA  (P1)
         JZ   gA_dn
@@ -4577,10 +4402,7 @@ IDEQ:   LDA  CURK
         TAP2L
         TPA1H
         TAP2H
-        LDA  #<TID
-        TAP1L
-        LDA  #>TID
-        TAP1H
+        LDP1 #TID                ; <- tierA: pointer constant (next: LDA)
 id_l:   LDA  (P1)                    ; TID char -> scratch
         STA  TMPC
         LDA  (P2)                    ; compare-string char
@@ -5328,6 +5150,10 @@ ELCHAR: .fill 1    ; ELEMADDR: 1 if the indexed base is char-typed
 CUR2:   .fill 1    ; second char of a two-char punct (== != <= >=), else 0
 RELOP:  .fill 1    ; relational op code: 0 LT 1 LE 2 GT 3 GE 4 EQ 5 NE
 RELF:   .fill 1    ; RELDET: 1 if the current token is a relational op
+CONDF:  .fill 1    ; 1: the statement parser wants the next GEXPR as a CONDITION
+CONDCUR: .fill 1   ; GEXPR's copy of CONDF (a nested GEXPR -- args, parens -- sees 0)
+CONDLBL: .fill 1   ; the label a top-level relational branches to when FALSE
+CONDDONE: .fill 1  ; 1: GREL emitted that branch itself (no 0/1 value in __ax)
 LBLCNT: .fill 1    ; next codegen label number
 LBLA:   .fill 1    ; comparison branch-target label (EMITCMP)
 LBLB:   .fill 1    ; comparison end label (EMITCMP)
