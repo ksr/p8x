@@ -259,4 +259,28 @@ DISTAB:
         .asciiz "BLE"
         .byte $B0,22
         .asciiz "BGT"
+        .byte $B1,21
+        .asciiz "ADDW"
+        .byte $B2,21
+        .asciiz "SUBW"
+        .byte $B3,21
+        .asciiz "CMPW"
+        .byte $B4,9
+        .asciiz "ANDW"
+        .byte $B5,9
+        .asciiz "ORW"
+        .byte $B6,9
+        .asciiz "XORW"
+        .byte $B7,20
+        .asciiz "ANDW"
+        .byte $B8,20
+        .asciiz "ORW"
+        .byte $B9,20
+        .asciiz "XORW"
+        .byte $BA,21
+        .asciiz "ANDW"
+        .byte $BB,21
+        .asciiz "ORW"
+        .byte $BC,21
+        .asciiz "XORW"
         .byte $FF

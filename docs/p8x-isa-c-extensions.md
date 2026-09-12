@@ -17,10 +17,21 @@ now moot: the compiler chose SP-relative frames; a Tier B P4 would only simplify
 the depth tracking). Then **relative branches** (`$A8–$B0`, 2 bytes, signed
 displacement, flags preserved on the taken path) with shrink-only relaxation
 in the assembler, opted into by the compiler's `.relax` line so hand sources
-stay byte-identical with the native assembler. Result over all 45 `/bin` C
-commands: 627,172 → 369,209 bytes, −41.1%; `finder` 32,630 → 13,592. Not yet done: the self-hosting compilers, the on-target
-assembler's parsing of the compiler-only shapes, an EPROM reburn for the TTL
-machine. Tiers B and C remain proposals. What follows is the original sketch —
+stay byte-identical with the native assembler. Then **narrow (8-bit) values
+and a peephole pass**, and finally (same day) the **arithmetic helpers were
+retired**: `+ - & | ^` and every comparison are one word instruction, which
+took twelve more pure-microcode opcodes — `ADDW`/`SUBW`/`CMPW a,#imm16`
+(`$B1–$B3`) and `ANDW`/`ORW`/`XORW` in the `a,b` / `a,#imm8` / `a,#imm16`
+shapes (`$B4–$BC`); **every immediate form carries a full 16-bit Z** (a 0/1
+marker of the low byte's Z kept in T2 and re-latched through the Z plane when
+the high byte is zero — 14 steps), so `x == k`, `if (x & m)` and `if (x)` are a
+single compare/branch pair, while the `a,b` forms stay high-byte-only for lack
+of steps. Functions `main` never reaches are no longer compiled. Result over
+all 45 `/bin` C commands: **627,172 → 293,890 bytes, −53.1%**; `finder` 32,630
+→ 9,508; 140 opcodes in use. Not yet done: the self-hosting compilers, the
+on-target assembler's parsing of the compiler-only shapes (done on the
+`os-rewrite` branch), an EPROM reburn for the TTL machine. Tiers B and C
+remain proposals. What follows is the original sketch —
 real opcode numbers, real microcode in `genucode.py`'s vocabulary, step counts
 against the 15-step budget — so it can be argued about and then built. The
 motivation, the constraints, three tiers of change, what the compiler does with

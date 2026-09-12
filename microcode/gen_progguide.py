@@ -134,9 +134,27 @@ DESC[("LDW","a,#w")]=("-","Word at addr := imm16 (5 bytes).")
 DESC[("ADDW","a,a")]=("C Z N V","Word a := a + b (16-bit, carry chained). C = carry out; N/V from the high byte; Z from the HIGH byte only. A!")
 DESC[("SUBW","a,a")]=("C Z N V","Word a := a - b (16-bit, borrow chained). C=1 means no borrow (unsigned a >= b). Z high byte only. A!")
 DESC[("CMPW","a,a")]=("C Z N V","Flags from a - b (16-bit), memory unchanged: C = unsigned a >= b; BLT/BGE/BLE/BGT give the signed order. Z high byte only. A!")
-DESC[("ADDW","a,#")]=("C Z N V","Word a := a + imm8 (zero-extended), 16-bit; C = carry out. A!")
-DESC[("SUBW","a,#")]=("C Z N V","Word a := a - imm8; C=1 means no borrow (unsigned a >= imm). A!")
-DESC[("CMPW","a,#")]=("C Z N V","Flags from a - imm8 (16-bit), memory unchanged: C = unsigned a >= imm; BLT/BGE signed. Z high byte only. A!")
+# The IMMEDIATE forms (a,#imm8 / a,#imm16) have a FULL 16-bit Z: after the low byte the
+# microcode keeps a 0/1 marker of its Z in T2 and, when the high byte comes out zero,
+# re-latches Z (and N := 0, which is then correct) from that marker -- 14 of the 15
+# steps. The a,b forms have no room for it and keep the high-byte-only Z.
+DESC[("ADDW","a,#")]=("C Z N V","Word a := a + imm8 (zero-extended), 16-bit; C = carry out; Z of the FULL word. A!")
+DESC[("SUBW","a,#")]=("C Z N V","Word a := a - imm8; C=1 means no borrow (unsigned a >= imm); Z of the full word. A!")
+DESC[("CMPW","a,#")]=("C Z N V","Flags from a - imm8 (16-bit), memory unchanged: C = unsigned a >= imm; Z = (a == imm) over the full word; BLT/BGE signed. A!")
+DESC[("ADDW","a,#w")]=("C Z N V","Word a := a + imm16; C = carry out; Z of the full word. A! (5 bytes: `x + &table`.)")
+DESC[("SUBW","a,#w")]=("C Z N V","Word a := a - imm16; C=1 means no borrow; Z of the full word. A!")
+DESC[("CMPW","a,#w")]=("C Z N V","Flags from a - imm16, memory unchanged: C = unsigned a >= imm; Z = (a == imm); BLT/BGE/BLE/BGT signed. A!")
+# 16-bit bitwise ops (2026-09-11): same three shapes as ADDW. No carry, so no planes;
+# Z 16-bit on the immediate forms (marker trick), high byte only on a,b.
+DESC[("ANDW","a,a")]=("Z N","Word a := a AND b (16-bit). Z from the high byte only. A!")
+DESC[("ORW","a,a")] =("Z N","Word a := a OR b (16-bit). Z high byte only. A!")
+DESC[("XORW","a,a")]=("Z N","Word a := a XOR b (16-bit). Z high byte only. A!")
+DESC[("ANDW","a,#")]=("Z N","Word a := a AND imm8 -- the high byte is ANDed with 0, i.e. cleared (a mask is a mask). Z of the full word, so `ANDW x,#1 ; JZ` tests a bit of a word. A!")
+DESC[("ORW","a,#")] =("Z N","Word a := a OR imm8 (high byte kept). Z of the full word. A!")
+DESC[("XORW","a,#")]=("Z N","Word a := a XOR imm8 (high byte kept). Z of the full word. A!")
+DESC[("ANDW","a,#w")]=("Z N","Word a := a AND imm16. Z of the full word. A!")
+DESC[("ORW","a,#w")] =("Z N","Word a := a OR imm16. Z of the full word. A!")
+DESC[("XORW","a,#w")]=("Z N","Word a := a XOR imm16; #$FFFF is a 16-bit bitwise NOT (the compiler's ~x, and -x with INCW). Z of the full word. A!")
 for p in (1,2,3):
     DESC[("LEAW","a,(P%d+d)"%p)]=("C Z N","Word at addr := P%d + d -- the ADDRESS of a frame local (arrays, &x). A!"%p)
 DESC[("INCW","a")]=("C Z N","Word at addr := word + 1. A!; flags are the low byte's (C = carry out of it).")
@@ -174,7 +192,7 @@ GROUPS=[("System",["NOP","HLT","CLC","SEC"]),
  ("Stack",["PHA","PLA"]),
  ("16-bit memory ops (rev D; compiler space savers). PHW/PLW/LPW pure-microcode; MOVW adds the PT2 scratch pointer",["PHW","PLW","LPW1","LPW2","LPW3","MOVW"]),
  ("Tier A: the C-compiler ISA (2026-09; pure microcode. A! = clobbers A; d = unsigned 8-bit displacement)",
-  ["LDP1","LDP2","LDP3","ADDP3","SUBP3","LDW","STW","LEAW","ADDW","SUBW","CMPW","INCW","DECW"]),
+  ["LDP1","LDP2","LDP3","ADDP3","SUBP3","LDW","STW","LEAW","ADDW","SUBW","CMPW","ANDW","ORW","XORW","INCW","DECW"]),
  ("Control flow",["JMP","JSR","RTS","BZ","BNZ","BCP","JNC"]),
  ("Signed branches (rev C; after CMP — N^V/Z)",["BLT","BGE","BLE","BGT"])]
 

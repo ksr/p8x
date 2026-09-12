@@ -956,6 +956,172 @@ da_2:   STA VAL
         LDB #$FF
         CMP
         JNZ fail
+; ---- E1: ADDW/SUBW a,#imm16 -- 16-bit immediate, carry/borrow chained, 16-bit C ----
+        LDA #$E1
+        STA TID
+        LDW $9010,#$1234
+        ADDW $9010,#$F0F0           ; $1234 + $F0F0 = $10324 -> $0324, C=1
+        JNC fail
+        LDA $9010
+        LDB #$24
+        CMP
+        JNZ fail
+        LDA $9011
+        LDB #$03
+        CMP
+        JNZ fail
+        LDW $9010,#$1000
+        SUBW $9010,#$0FFF           ; $1000 - $0FFF = 1, no borrow (C=1)
+        JNC fail
+        LDA $9010
+        LDB #1
+        CMP
+        JNZ fail
+        LDA $9011
+        JNZ fail
+        LDW $9010,#$0000
+        SUBW $9010,#$0001           ; 0 - 1 = $FFFF, borrow (C=0)
+        JC  fail
+        LDA $9011
+        LDB #$FF
+        CMP
+        JNZ fail
+; ---- E2: CMPW a,#imm16 -- unsigned C, signed BLT/BGE, memory unchanged ----
+        LDA #$E2
+        STA TID
+        LDW $9010,#$8000
+        CMPW $9010,#$7FFF           ; $8000 >= $7FFF unsigned (C=1) but -32768 < 32767 signed
+        JNC fail
+        BGE fail
+        LDA $9010
+        JNZ fail
+        LDA $9011
+        LDB #$80
+        CMP
+        JNZ fail
+        LDW $9010,#$1233
+        CMPW $9010,#$1234           ; $1233 < $1234: C=0
+        JC  fail
+; ---- E3: the immediate forms have a FULL 16-bit Z (a,b forms: high byte only) ----
+        LDA #$E3
+        STA TID
+        LDW $9010,#$1235
+        CMPW $9010,#$1234           ; high bytes equal, low differ by 1: Z must be 0 ...
+        JZ  fail
+        BLT fail                    ; ... and N must be 0 (the marker is 0/1, never bit 7)
+        LDW $9010,#$1234
+        CMPW $9010,#$1234           ; equal: Z=1
+        JNZ fail
+        LDW $9010,#$0006
+        CMPW $9010,#5               ; imm8 form, same trick: 6 != 5
+        JZ  fail
+        BLT fail
+        LDW $9010,#$0105
+        CMPW $9010,#5               ; low bytes equal, high differ: Z=0
+        JZ  fail
+        LDW $9010,#$0005
+        CMPW $9010,#5
+        JNZ fail
+        LDW $9010,#$FFFF
+        ADDW $9010,#1               ; $FFFF + 1 = $0000: Z=1 and C=1 together
+        JNZ fail
+        JNC fail
+        LDW $9010,#$00FF
+        ADDW $9010,#1               ; $0100: low byte 0 but the word is not -> Z=0
+        JZ  fail
+        LDW $9010,#$0001
+        SUBW $9010,#1               ; 1 - 1 = 0: Z=1, no borrow
+        JNZ fail
+        JNC fail
+; ---- E4: ANDW/ORW/XORW a,b -- 16-bit bitwise on memory words (Z high byte only) ----
+        LDA #$E4
+        STA TID
+        LDW $9010,#$F0F0
+        LDW $9012,#$3C3C
+        ANDW $9010,$9012            ; $3030
+        LDA $9010
+        LDB #$30
+        CMP
+        JNZ fail
+        LDA $9011
+        LDB #$30
+        CMP
+        JNZ fail
+        LDA $9012                   ; source intact
+        LDB #$3C
+        CMP
+        JNZ fail
+        LDW $9010,#$1200
+        LDW $9012,#$0034
+        ORW  $9010,$9012            ; $1234
+        LDA $9010
+        LDB #$34
+        CMP
+        JNZ fail
+        LDA $9011
+        LDB #$12
+        CMP
+        JNZ fail
+        LDW $9010,#$FFFF
+        LDW $9012,#$0F0F
+        XORW $9010,$9012            ; $F0F0
+        LDA $9010
+        LDB #$F0
+        CMP
+        JNZ fail
+        LDA $9011
+        LDB #$F0
+        CMP
+        JNZ fail
+; ---- E5: ANDW/ORW/XORW a,#imm8 / #imm16 -- masks with a 16-bit Z, B preserved ----
+        LDA #$E5
+        STA TID
+        LDB #$A5                    ; B must survive every word op
+        LDW $9010,#$12FF
+        ANDW $9010,#$0F             ; imm8 AND clears the high byte: $000F
+        JZ  fail
+        LDA #$A5
+        CMP                         ; B still $A5?
+        JNZ fail
+        LDA $9010
+        LDB #$0F
+        CMP
+        JNZ fail
+        LDA $9011
+        JNZ fail
+        LDW $9010,#$0100
+        ANDW $9010,#1               ; bit 0 of $0100 is clear -> 0, Z=1
+        JNZ fail
+        LDW $9010,#$0101
+        ANDW $9010,#1               ; -> 1, Z=0 (low byte non-zero, high byte 0)
+        JZ  fail
+        LDW $9010,#$1200
+        ORW  $9010,#$34             ; imm8 OR leaves the high byte: $1234
+        LDA $9011
+        LDB #$12
+        CMP
+        JNZ fail
+        LDA $9010
+        LDB #$34
+        CMP
+        JNZ fail
+        LDW $9010,#$0001
+        ORW  $9010,#$8000           ; imm16: $8001
+        LDA $9011
+        LDB #$80
+        CMP
+        JNZ fail
+        LDW $9010,#$1234
+        XORW $9010,#$1234           ; a ^ a = 0: 16-bit Z=1
+        JNZ fail
+        LDW $9010,#$1234
+        XORW $9010,#$1200           ; $0034: high byte 0, low not -> Z=0
+        JZ  fail
+        LDW $9010,#$FFFF
+        ANDW $9010,#$FF00           ; $FF00: N=1 from the high byte
+        JZ  fail
+        LDA $9010
+        JNZ fail
 ; ---- all passed ----
         LDA #$00
         HLT

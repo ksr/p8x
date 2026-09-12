@@ -1,6 +1,6 @@
 ---
 name: p8x-tier-a-isa
-description: Tier A C-compiler ISA (24 pure-microcode opcodes) implemented on the emulator 2026-09-11; what is done, the contracts, the consumers that must follow, and what is still open (p8cc emitters, self-hosting, TTL reburn)
+description: Tier A C-compiler ISA (36 pure-microcode opcodes, 140 total) implemented on the emulator 2026-09-11 with all p8cc emitter stages (-53.1% across /bin); the contracts (16-bit Z on immediate forms only), the consumers that must follow any new opcode, and what is still open (PHW (Pn+d), arg in __ax, shared runtime, self-hosting, TTL reburn)
 metadata:
   type: project
 ---
@@ -67,8 +67,24 @@ unchanged (byte-identical check vs the committed assembler). 369,209 total
 (−41.1% overall). **Narrow values + peephole DONE:** `is_narrow`/`gen_byte_a`/
 `byte_a_via_b` (+`__b` scratch) feed putchar, bios A operand, byte stores,
 truth tests, 8-bit CMP compares; `peephole()` on adjacent lines. 341,137 total
-(−45.6% overall). User's direction (2026-09-11): do ALL remaining software-only
-items — next: OS-resident runtime, self-hosting compilers. PARKED by the user, to revisit after those: scratch
+(−45.6% overall). **Inline word ops + flag conditions + dead functions DONE
+(2026-09-11, user approved microcode-only ISA additions, "no hardware changes
+yet"):** `gen_wordop` (+ - & | ^ → ADDW/SUBW/ANDW/ORW/XORW on __ax; immediate
+right side with pointer scale folded, ±1 → INCW/DECW, leaf → __t, `k - x`
+parks x via MOVW), `gen_relcond` (C = (L >= R) normalisation, `k < x` → `x >=
+k+1`, `CMPW g,#k` in place, `x == k` on the imm form's 16-bit Z, var==var keeps
+__cmp16), `gen_value_z` (branch on ANDW's Z), `materialize()` for relops/!/&&/||
+as values, `reachable()` drops uncalled functions. New opcodes $B1-$B3 (ADDW/
+SUBW/CMPW a,#w) and $B4-$BC (ANDW/ORW/XORW a,b / a,# / a,#w) → 140 total.
+**16-bit Z marker trick (immediate forms only, 14 steps):** after the low op,
+`ZERO→A` + fcond Z, plane pair INC→T2 / ZERO→T2 (T2 = 0/1), high op latches,
+fcond Z, plane pair (nothing / `doe=T2, ldzn`) — N := 0 there is correct since
+the high result is 0. The a,b forms are at 14 steps already and keep Z =
+high-byte-only; INCW/DECW flags = low byte's. 293,890 total (−53.1% overall,
+finder 9,508); runtime now only __mul/__div/__mod/__divmod/__shl/__shr/__cmp16.
+Next software-only levers: `PHW (Pn+d)` (~70 sites/program × 4 bytes), first
+arg in __ax, OS-resident runtime (~150 B/program), JSR/RTS/branch microstep
+audit, self-hosting. PARKED by the user, to revisit after those: scratch
 rewrites of the monitor/OS around the new ISA, easy replacements first (they
 were only re-assembled so far; idiom counts in BACKLOG — small wins, OS matters
 because of its 16 KB ceiling). **Still open:**

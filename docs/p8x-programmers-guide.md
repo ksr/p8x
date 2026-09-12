@@ -157,12 +157,24 @@ Instruction set rev 1 — generated from the microcode source (`genucode.py`); o
 | $9C | `CMPW dst,src` | 5 | 15 | C Z N V | Flags from a - b (16-bit), memory unchanged: C = unsigned a >= b; BLT/BGE/BLE/BGT give the signed order. Z high byte only. A! |
 | $9E | `INCW addr` | 3 | 9 | C Z N | Word at addr := word + 1. A!; flags are the low byte's (C = carry out of it). |
 | $9F | `DECW addr` | 3 | 9 | C Z N | Word at addr := word - 1. A!; flags are the low byte's (C=1: no borrow). |
-| $A0 | `ADDW addr,#imm8` | 4 | 11 | C Z N V | Word a := a + imm8 (zero-extended), 16-bit; C = carry out. A! |
-| $A1 | `SUBW addr,#imm8` | 4 | 11 | C Z N V | Word a := a - imm8; C=1 means no borrow (unsigned a >= imm). A! |
-| $A2 | `CMPW addr,#imm8` | 4 | 11 | C Z N V | Flags from a - imm8 (16-bit), memory unchanged: C = unsigned a >= imm; BLT/BGE signed. Z high byte only. A! |
+| $A0 | `ADDW addr,#imm8` | 4 | 15 | C Z N V | Word a := a + imm8 (zero-extended), 16-bit; C = carry out; Z of the FULL word. A! |
+| $A1 | `SUBW addr,#imm8` | 4 | 15 | C Z N V | Word a := a - imm8; C=1 means no borrow (unsigned a >= imm); Z of the full word. A! |
+| $A2 | `CMPW addr,#imm8` | 4 | 15 | C Z N V | Flags from a - imm8 (16-bit), memory unchanged: C = unsigned a >= imm; Z = (a == imm) over the full word; BLT/BGE signed. A! |
 | $A4 | `LEAW addr,(P1+d)` | 4 | 14 | C Z N | Word at addr := P1 + d -- the ADDRESS of a frame local (arrays, &x). A! |
 | $A5 | `LEAW addr,(P2+d)` | 4 | 14 | C Z N | Word at addr := P2 + d -- the ADDRESS of a frame local (arrays, &x). A! |
 | $A6 | `LEAW addr,(P3+d)` | 4 | 14 | C Z N | Word at addr := P3 + d -- the ADDRESS of a frame local (arrays, &x). A! |
+| $B1 | `ADDW addr,#imm16` | 5 | 15 | C Z N V | Word a := a + imm16; C = carry out; Z of the full word. A! (5 bytes: `x + &table`.) |
+| $B2 | `SUBW addr,#imm16` | 5 | 15 | C Z N V | Word a := a - imm16; C=1 means no borrow; Z of the full word. A! |
+| $B3 | `CMPW addr,#imm16` | 5 | 15 | C Z N V | Flags from a - imm16, memory unchanged: C = unsigned a >= imm; Z = (a == imm); BLT/BGE/BLE/BGT signed. A! |
+| $B4 | `ANDW dst,src` | 5 | 15 | Z N | Word a := a AND b (16-bit). Z from the high byte only. A! |
+| $B5 | `ORW dst,src` | 5 | 15 | Z N | Word a := a OR b (16-bit). Z high byte only. A! |
+| $B6 | `XORW dst,src` | 5 | 15 | Z N | Word a := a XOR b (16-bit). Z high byte only. A! |
+| $B7 | `ANDW addr,#imm8` | 4 | 15 | Z N | Word a := a AND imm8 -- the high byte is ANDed with 0, i.e. cleared (a mask is a mask). Z of the full word, so `ANDW x,#1 ; JZ` tests a bit of a word. A! |
+| $B8 | `ORW addr,#imm8` | 4 | 15 | Z N | Word a := a OR imm8 (high byte kept). Z of the full word. A! |
+| $B9 | `XORW addr,#imm8` | 4 | 15 | Z N | Word a := a XOR imm8 (high byte kept). Z of the full word. A! |
+| $BA | `ANDW addr,#imm16` | 5 | 15 | Z N | Word a := a AND imm16. Z of the full word. A! |
+| $BB | `ORW addr,#imm16` | 5 | 15 | Z N | Word a := a OR imm16. Z of the full word. A! |
+| $BC | `XORW addr,#imm16` | 5 | 15 | Z N | Word a := a XOR imm16; #$FFFF is a 16-bit bitwise NOT (the compiler's ~x, and -x with INCW). Z of the full word. A! |
 
 ### Control flow
 

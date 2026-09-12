@@ -73,10 +73,13 @@ There are two implementations of the same compiler:
 
 The P8X has no 16-bit accumulator, so expression results live in a **16-bit
 pseudo-accumulator `AX`** (the memory word `__ax`). The hardware stack (`P3`)
-holds expression temporaries (`PHA`/`PLA`) and call return addresses
-(`JSR`/`RTS`). Binary operators compile to small **runtime helper calls**
-(`__add`, `__sub`, `__mul`, `__eq`, `__lt`, `__not`) so the generated code stays
-compact; only the helpers a program actually uses are emitted. Two size levers
+holds expression temporaries (`PHW`/`PLW`) and call return addresses
+(`JSR`/`RTS`). `+ - & | ^` and every comparison are **one Tier A word
+instruction** on `AX` (`ADDW`/`SUBW`/`ANDW`/`ORW`/`XORW`/`CMPW`, see the last
+stage below); only multiply, divide, the shifts and the 16-bit equality of two
+variables still go through small **runtime helpers** (`__mul`, `__divmod`,
+`__shl`, `__shr`, `__cmp16`), and only the helpers a program actually uses are
+emitted. Two size levers
 (2026-09-11, −15.1% across `/bin`): a **leaf operand** (constant, string, global,
 scalar local) on one side of a binary op is loaded straight into the helper's
 `__t` input instead of being spilled through the stack, and **conditions branch
@@ -115,6 +118,32 @@ zero-extended bytes orders exactly like the 16-bit one, so the branch sense is
 unchanged. A small peephole pass then removes a reload right after the matching
 store, a jump to the very next line, and shortens a byte reload of a constant
 just written; it only ever looks at adjacent lines with no label between them.
+
+**Inline word ops, flag conditions, dead-function elimination (2026-09-11,
+−13.9% more; −53.1% overall: 627,172 → 293,890 bytes, `finder` 32,630 →
+9,508).** The arithmetic helpers are gone: `+ - & | ^` compile to
+`ADDW`/`SUBW`/`ANDW`/`ORW`/`XORW` on `__ax` — with an **immediate** when the
+right side is a constant (folded with the pointer scale: `p + 2` on an `int *`
+is `ADDW __ax,#4`; `x + 1` is `INCW __ax`), a direct `__t` load when it is a
+leaf, the stack spill only in the general case; `k - x` computes `x` first and
+parks it in `__t` with `MOVW`. `-x` is `XORW __ax,#65535 ; INCW __ax`, `~x` the
+`XORW` alone. That needed twelve more pure-microcode opcodes: `ADDW`/`SUBW`/
+`CMPW a,#imm16` and `ANDW`/`ORW`/`XORW` in the `a,b`, `a,#imm8`, `a,#imm16`
+shapes (140 opcodes now). Every **immediate form has a full 16-bit Z** (the
+microcode keeps a 0/1 marker of the low byte's Z in `T2` and re-latches Z from
+it when the high byte comes out zero), so conditions are one `CMPW` and one
+branch: orderings are normalised to `L < R` / `L >= R` with `C = (L >= R)`
+(`a > b` is `b < a`; `k < x` is `x >= k+1`), `x == k` is `CMPW __ax,#k ; JZ`,
+`if (x & m)` branches straight on the `ANDW`'s Z, a plain `if (x)` is
+`CMPW __ax,#0`, and a global word is compared **in place** (`CMPW g,#k`). Only
+`x == y` of two variables keeps `__cmp16`, because the `a,b` forms' Z is still
+high-byte only (no room in 15 microsteps). Relational and logical operators
+used as *values* (`ok = a < b`) materialise 0/1 through the same condition
+code instead of the old `__lt`/`__eq`/`__not` helpers. Finally, functions
+`main` never reaches through a call are not compiled at all (`//#use` splices
+whole library files, so small programs carried unused directory helpers); the
+output notes each dropped one. Speed: an `int` add or compare is now one
+instruction (14 microsteps) instead of a `JSR` into a 15-instruction loop.
 
 **Calling convention / frames (2026-09-11: on the hardware stack).** Call
 frames live on **P3**. A caller pushes the arguments right-to-left with `PHW`

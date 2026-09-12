@@ -1031,8 +1031,29 @@ Nothing below has been built or measured.
       STA/LDA unless a branch follows), jump-to-next-line, `LDW #k`+`LDA __ax`
       → `LDA #k`. 369,209 → 341,137 (−7.6%; the estimate was ~3-5%).
       **627,172 → 341,137 = −45.6%** overall.
-      Next software-only levers: an OS-resident shared runtime (~7% of total
-      bytes, OS budget permitting), the self-hosting compilers.
+      **Inline word ops + flag conditions + dead functions DONE (2026-09-11):**
+      the arithmetic helpers are retired — `+ - & | ^` are `ADDW/SUBW/ANDW/ORW/
+      XORW` on `__ax` (immediate right side, pointer scale folded, ±1 =
+      INCW/DECW, leaf into `__t`, `k - x` parks x with MOVW), `-x`/`~x` are
+      `XORW #65535` (+ INCW). Twelve more pure-microcode opcodes for it:
+      `ADDW/SUBW/CMPW a,#imm16` ($B1–$B3), `ANDW/ORW/XORW` a,b / a,# / a,#w
+      ($B4–$BC); **every immediate form has a full 16-bit Z** (0/1 marker of
+      the low byte's Z in T2, re-latched via the Z plane when the high byte is
+      0; 14 steps — the a,b forms have no room and stay high-byte-only). So a
+      condition is one `CMPW` + one branch: orderings normalised to C = (L>=R)
+      (a>b is b<a, k<x is x>=k+1), `x == k` → `CMPW #k ; JZ`, `if (x & m)` on
+      ANDW's Z, `if (x)` → `CMPW #0`, globals compared in place; only var==var
+      keeps `__cmp16`. Relops/!/&&/|| as values materialise 0/1 via gen_cond.
+      Functions main() never reaches are not compiled (dead //#use library
+      code). 341,137 → 293,890 (−13.9%); **627,172 → 293,890 = −53.1%**
+      overall; `finder` 9,508. Speed: an int add/compare is one 14-step
+      instruction instead of a JSR into a 15-instruction loop. 140 opcodes.
+      Tests: test_isa E1–E5, c_compile WORD-OK + dead-function check, c_disasm
+      decodes ANDW a,# / ADDW a,#w.
+      Next software-only levers: `PHW (Pn+d)` (arg push 7 → 3 bytes, ~70
+      sites/program), first argument in `__ax`, an OS-resident shared runtime
+      (now ~150 B/program: __mul/__divmod/__shl/__shr/__cmp16), microstep
+      audit of JSR/RTS/branches, the self-hosting compilers.
 
       **Data-driven priority (measured on 5 compiled commands, 19,897 instrs):**
         - **Done — the move idioms (the big win):** `PHW`/`PLW` + `LPW1`/`LPW2`

@@ -369,25 +369,86 @@ op(0x9F,"DECW","a",
    ( alu_mid("DEC",  dld="MEMW",psel=PT,ldf=0,urst=1),             # C=0: borrow -> a.hi--
      alu_mid("PASSA",dld="MEMW",psel=PT,ldf=0,urst=1) ))           # C=1: done
 # A9 (2026-09-11). ADDW/SUBW/CMPW a,#imm8 -- mem[a] op= imm8 zero-extended
-# (4 bytes: op a.lo a.hi imm8; 10 steps). The compiler's `x + k`, pointer
-# stepping and `if (n < k)` without a constant load. Same flag contract as the
-# a,b forms: the high-byte step runs the ALU against T = 0 (ZERO'd after the
-# low byte, flags kept), so C is the 16-bit carry / no-borrow and N^V the signed
-# order; Z high byte only. Clobbers A.
-def _wordimm(code,name,lo,hi_pair,store=True):
+# (4 bytes: op a.lo a.hi imm8) -- and, since the same day's compiler work,
+# a,#imm16 (5 bytes: op a.lo a.hi imm.lo imm.hi). The compiler's `x + k`,
+# `p + &table`, pointer stepping and `if (n < k)` / `if (n == k)` without a
+# constant load. C is the 16-bit carry / no-borrow and N^V the signed order,
+# exactly as in the a,b forms; unlike them the immediate forms have room (14 of
+# 15 steps) for a FULL 16-BIT Z:
+#   * after the low-byte op the Z it latched (Z.lo) is routed to the planes and
+#     T2 := (Z.lo ? 0 : 1) -- built as ALU ZERO into A, then INC into T2, so the
+#     marker is 0 or 1 and never has bit 7 set;
+#   * after the high-byte op (which latches C/N/V and Z.hi) Z.hi is routed; on
+#     the Z.hi=1 plane (high result 0, so the true N is 0) an LDZN from T2
+#     re-latches Z := (T2 == 0) = Z.lo and N := bit 7 of T2 = 0. C and V are
+#     untouched by LDZN. On the Z.hi=0 plane Z is already 0 and stays.
+# Clobbers A (and T/T2, which are microcode scratch). B preserved.
+def _wordimm(code,name,shape,lo,hi_pair,store=True):
     dst="MEMW" if store else "none"
-    op(code,name,"a,#",
+    hi_src=(w(doe="MEM",dld="T",psel=0,pinc=1) if shape=="a,#w"       # imm.hi
+            else alu_mid("ZERO",dld="T",ldf=0))                        # or T = 0
+    op(code,name,shape,
        *_ld_pt(),                                                  # 1-4  a -> PT
-       w(doe="MEM",dld="T",psel=0,pinc=1),                         # 5    T = imm8
+       w(doe="MEM",dld="T",psel=0,pinc=1),                         # 5    T = imm.lo
        w(doe="MEM",dld="A",psel=PT),                               # 6    A = a.lo
-       alu_mid(lo,dld=dst,psel=PT,bsel=1,pinc=1),                  # 7    a.lo op= imm ; latch C ; PT++
-       alu_mid("ZERO",dld="T",ldf=0),                              # 8    T = 0 (flags kept)
-       w(doe="MEM",dld="A",psel=PT,fcond="C"),                     # 9    A = a.hi ; route C
-       ( alu_mid(hi_pair[0],dld=dst,psel=PT,bsel=1,urst=1),        # 10   C=0 plane
-         alu_mid(hi_pair[1],dld=dst,psel=PT,bsel=1,urst=1) ))      #      C=1 plane
-_wordimm(0xA0,"ADDW","ADD",("ADD","ADC1"))
-_wordimm(0xA1,"SUBW","SUB",("SBB","SUB"))
-_wordimm(0xA2,"CMPW","SUB",("SBB","SUB"),store=False)
+       alu_mid(lo,dld=dst,psel=PT,bsel=1,pinc=1),                  # 7    a.lo op= imm ; latch C,Z.lo ; PT++
+       alu_mid("ZERO",dld="A",ldf=0,fcond="Z"),                    # 8    A = 0 ; route Z.lo
+       ( alu_mid("INC", dld="T2",ldf=0),                           # 9    Z.lo=0: T2 = 1
+         alu_mid("ZERO",dld="T2",ldf=0) ),                         #      Z.lo=1: T2 = 0
+       hi_src,                                                     # 10   T = imm.hi / 0
+       w(doe="MEM",dld="A",psel=PT,fcond="C"),                     # 11   A = a.hi ; route C
+       ( alu_mid(hi_pair[0],dld=dst,psel=PT,bsel=1),               # 12   C=0 plane ; latch C,Z.hi,N,V
+         alu_mid(hi_pair[1],dld=dst,psel=PT,bsel=1) ),             #      C=1 plane
+       w(fcond="Z"),                                               # 13   route Z.hi
+       ( w(urst=1),                                                # 14   Z.hi=0: Z already 0
+         w(doe="T2",ldzn=1,urst=1) ))                              #      Z.hi=1: Z := Z.lo, N := 0
+_wordimm(0xA0,"ADDW","a,#","ADD",("ADD","ADC1"))
+_wordimm(0xA1,"SUBW","a,#","SUB",("SBB","SUB"))
+_wordimm(0xA2,"CMPW","a,#","SUB",("SBB","SUB"),store=False)
+_wordimm(0xB1,"ADDW","a,#w","ADD",("ADD","ADC1"))
+_wordimm(0xB2,"SUBW","a,#w","SUB",("SBB","SUB"))
+_wordimm(0xB3,"CMPW","a,#w","SUB",("SBB","SUB"),store=False)
+# A12 (2026-09-11). ANDW/ORW/XORW -- 16-bit bitwise ops on a memory word, the
+# same three shapes as ADDW: a,b (5 bytes, 14 steps, no carry so no planes; Z
+# from the high byte only, like ADDW a,b) and a,#imm8 / a,#imm16 (4 / 5 bytes,
+# 14 steps, FULL 16-bit Z by the marker trick above -- so `ANDW x,#1 ; JZ`
+# tests a bit of a word). With imm8 the high byte is op'd against 0: AND
+# clears it (a mask is a mask), OR/XOR leave it. Replaces the compiler's
+# __and/__or/__xor helpers. Clobbers A; B preserved.
+def _wordlogic(code,name,alu_op):
+    op(code,name,"a,a",
+       *_ld_pt2(),                                                 # 1-4  a -> PT2
+       *_ld_pt(),                                                  # 5-8  b -> PT
+       w(doe="MEM",dld="T",psel=PT,pinc=1),                        # 9    T = b.lo         PT++
+       w(doe="MEM",dld="A",psel=PT2),                              # 10   A = a.lo
+       alu_mid(alu_op,dld="MEMW",psel=PT2,bsel=1,pinc=1),          # 11   a.lo op= b.lo    PT2++
+       w(doe="MEM",dld="T",psel=PT),                               # 12   T = b.hi
+       w(doe="MEM",dld="A",psel=PT2),                              # 13   A = a.hi
+       alu_mid(alu_op,dld="MEMW",psel=PT2,bsel=1,urst=1))          # 14   a.hi op= b.hi ; flags
+def _wordlogic_imm(code,name,shape,alu_op):
+    hi_src=(w(doe="MEM",dld="T",psel=0,pinc=1) if shape=="a,#w"
+            else alu_mid("ZERO",dld="T",ldf=0))
+    op(code,name,shape,
+       *_ld_pt(),                                                  # 1-4  a -> PT
+       w(doe="MEM",dld="T",psel=0,pinc=1),                         # 5    T = imm.lo
+       w(doe="MEM",dld="A",psel=PT),                               # 6    A = a.lo
+       alu_mid(alu_op,dld="MEMW",psel=PT,bsel=1,pinc=1),           # 7    a.lo op= imm.lo ; Z.lo ; PT++
+       alu_mid("ZERO",dld="A",ldf=0,fcond="Z"),                    # 8    A = 0 ; route Z.lo
+       ( alu_mid("INC", dld="T2",ldf=0),                           # 9    T2 = Z.lo ? 0 : 1
+         alu_mid("ZERO",dld="T2",ldf=0) ),
+       hi_src,                                                     # 10   T = imm.hi / 0
+       w(doe="MEM",dld="A",psel=PT),                               # 11   A = a.hi
+       alu_mid(alu_op,dld="MEMW",psel=PT,bsel=1),                  # 12   a.hi op= T ; latch flags
+       w(fcond="Z"),                                               # 13   route Z.hi
+       ( w(urst=1),                                                # 14   Z := Z.lo when the
+         w(doe="T2",ldzn=1,urst=1) ))                              #      high byte came out 0
+_wordlogic(0xB4,"ANDW","AND"); _wordlogic(0xB5,"ORW","OR"); _wordlogic(0xB6,"XORW","XOR")
+_wordlogic_imm(0xB7,"ANDW","a,#","AND")
+_wordlogic_imm(0xB8,"ORW","a,#","OR")
+_wordlogic_imm(0xB9,"XORW","a,#","XOR")
+_wordlogic_imm(0xBA,"ANDW","a,#w","AND")
+_wordlogic_imm(0xBB,"ORW","a,#w","OR")
+_wordlogic_imm(0xBC,"XORW","a,#w","XOR")
 # A11 (2026-09-11). RELATIVE BRANCHES: Jcc rel8 -- 2 bytes instead of 3. The
 # displacement is SIGNED, relative to the following instruction (P0 after the
 # operand fetch). Taken path: PUSH A (the ALU's only A input -- the absolute

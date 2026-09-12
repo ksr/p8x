@@ -15,6 +15,12 @@ silently and then fails at ASSEMBLY of every command that references it:
 `undefined symbol '__cmp16'` across 44/45 /bin commands (2026-09-05, the
 compiler-only size wins: `__cmp16`, `__ldtw`, `__ldtb` all needed `order` entries).
 
+Since 2026-09-11 the runtime is only `__mul`, `__div`/`__mod`/`__divmod`,
+`__shl`/`__shr` and `__cmp16` (var==var equality); `+ - & | ^` and every other
+compare are inline word instructions (`gen_wordop`/`gen_relcond`), and the
+`__add/__sub/__and/__or/__xor/__eq/__lt/__not` helpers no longer exist — do not
+re-add them, emit the instruction.
+
 **How to apply:** any new p8cc runtime helper = two edits (R[...] AND `order`).
 Measure size with `sh tools/p8cc_sizes.sh` (compiles all /bin C commands via the
 run.sh pipeline, prints per-command bytes + TOTAL, FAIL rows for regressions);

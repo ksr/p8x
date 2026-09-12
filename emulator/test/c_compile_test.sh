@@ -46,9 +46,75 @@ int main() {
     if ((1 << 4) == 16) { if ((64 >> 3) == 8) { if ((255 & ~240) == 15) puts("SHIFT-OK"); } }
     ia[0] = 1; ia[1] = 2; ia[2] = 3;
     if (*(idp(ia) + 2) == 3) puts("RET-OK");            /* call result int*: +2 scales by 2 */
+    wordops(ia);
     return 0;
 }
+int gw;                                   /* a global word: compared/updated in place */
+int never_called(int q) { return q * 3; } /* dead-function elimination drops this */
+int wordops(int *ia) {                    /* the inline word ops + CMPW conditions */
+    int x; int y; int *ip; int ok;
+    ok = 1;
+    x = 300; y = 44;                      /* low bytes equal: a byte-wide == would lie */
+    if (x == y) ok = 0;
+    if (x == 44) ok = 0;
+    if (x != 300) ok = 0;
+    if ((x & 255) != 44) ok = 0;          /* ANDW a,# keeps the low byte, clears the high */
+    if (x & 256) ok = ok + 1;             /* bit 8 of 300 is set: Z from ANDW a,# is 16-bit */
+    if (x > 299) ok = ok + 1;             /* CMPW __ax,#300 (k+1 rule), C */
+    if (x >= 301) ok = 0;
+    if (x <= 300) ok = ok + 1;
+    if (x < 300) ok = 0;
+    if (299 < x) ok = ok + 1;             /* constant on the LEFT: k < x == x >= k+1 */
+    if (300 < x) ok = 0;
+    if (65535 >= x) ok = ok + 1;          /* always true (folded) */
+    x = 65535;                            /* unsigned: 65535 > 0 */
+    if (x > 0) ok = ok + 1;
+    if (x < 1) ok = 0;
+    x = 20 - 5;                           /* leaf - leaf */
+    if (x != 15) ok = 0;
+    y = 7;
+    x = 100 - y;                          /* constant - variable: MOVW park path */
+    if (x != 93) ok = 0;
+    x = y - 10;                           /* wraps: 65533 */
+    if (x != 65533) ok = 0;
+    x = -y;                               /* negate: XORW #65535 + INCW */
+    if (x + y != 0) ok = 0;
+    x = ~y;
+    if ((x & 15) != 8) ok = 0;            /* ~7 = ...11111000 */
+    x = (y < 10);                         /* relop as a VALUE */
+    if (x != 1) ok = 0;
+    x = (y > 10) + (y == 7) + !y + !0;    /* 0 + 1 + 0 + 1 */
+    if (x != 2) ok = 0;
+    x = (y && 0) + (y || 0);              /* && / || as values: 0 + 1 */
+    if (x != 1) ok = 0;
+    ip = ia + 2;                          /* int pointer arithmetic, both directions */
+    ip = ip - 1;                          /* &ia[1] */
+    if (*ip != 2) ok = 0;
+    if (ip - ia != 2) ok = 0;             /* pointer difference is in bytes */
+    x = 1;
+    if (*(ip - x) != 1) ok = 0;           /* p - i with a scaled variable */
+    if (*(ia + x) != 2) ok = 0;
+    gw = 1000;
+    gw = gw + 300;                        /* in place: ADDW _g_gw,#300 (imm16) */
+    if (gw != 1300) ok = 0;
+    if (gw < 1300) ok = 0;                /* CMPW _g_gw,#1300 in place */
+    if (1299 < gw) ok = ok + 1;           /* CMPW _g_gw,#1300, flipped */
+    if (gw == 1300) ok = ok + 1;
+    if (gw) ok = ok + 1;                  /* CMPW _g_gw,#0 */
+    x = y & 1;                            /* 7 & 1 */
+    if ((y & 8) == 0) ok = ok + 1;        /* Z straight from ANDW a,# */
+    if (y & 8) ok = 0;
+    if (y & 4) ok = ok + 1;
+    if (x != 1) ok = 0;
+    x = y | 256;
+    if (x != 263) ok = 0;
+    x = y ^ 65535;
+    if (x != 65528) ok = 0;
+    if (ok == 12) puts("WORD-OK");
+    return ok;
+}
 EOF
+grep -q '_f_never_called:' ctest.asm && { echo "C-COMPILE TEST: FAIL — dead function was compiled"; exit 1; }
 python3 $ROOT/compiler/p8cc.py ctest.c -o ctest.asm >/dev/null
 python3 $ROOT/assembler/p8xasm.py ctest.asm -o ctest.bin --base 0x6A00 >/dev/null
 

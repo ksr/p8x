@@ -67,7 +67,7 @@ Accepted syntax is a subset of the host assembler, with identical encodings:
 | label | `loop:` |
 | equate | `COUNT = 3` |
 | instruction | `LDA #COUNT` · `STA $C000` · `LDA (P1)+` · `JSR done` |
-| `MOVW dst,src` | `MOVW __ax,__V+4` — the ISA's first two-operand instruction (`$78`), a 16-bit mem→mem word move (Tier A, 2026-09, added `ADDW`/`SUBW`/`CMPW a,b`, `LDW`/`STW` with `(Pn+d)` and `LDW addr,#imm` — host-toolchain only until the native parser grows them) |
+| `MOVW dst,src` | `MOVW __ax,__V+4` — the ISA's first two-operand instruction (`$78`), a 16-bit mem→mem word move (Tier A, 2026-09, added `ADDW`/`SUBW`/`CMPW`/`ANDW`/`ORW`/`XORW` in the `a,b`, `a,#imm8` and `a,#imm16` shapes, `LDW`/`STW` with `(Pn+d)` and `LDW addr,#imm` — host-toolchain only until the native parser grows them) |
 | `LDPn #imm16` | `LDP1 #msg` → the 3-byte `LDPn` opcode (`$38`–`$3A`) + imm16 (Tier A; was the `LPLn`/`LPHn` pair) |
 | directives | `.org .byte .word .ascii .asciiz .fill` |
 | expressions | `$hex` · decimal · `'c'` · symbol, joined with `+`/`-`, optional `<`/`>` prefix |
