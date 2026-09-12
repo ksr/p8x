@@ -30,13 +30,17 @@ Execution model
   * 16-bit pseudo-accumulator AX (memory word __ax) holds every expression
     result (the machine has no 16-bit accumulator).
   * Call frames live on the HARDWARE stack P3 (2026-09-11; before that a
-    software C-stack __csp/__fp in RAM). The caller pushes the arguments right
-    to left with PHW (each lies little-endian at P3+1), JSRs, then drops them
-    with ADDP3. The callee reserves its locals with `SUBP3 #L`. Everything is
-    then a small positive displacement from P3:
-        locals   at P3+1 .. P3+L          (scalars first, arrays/structs above)
+    software C-stack __csp/__fp in RAM). The caller pushes arguments 1..n-1
+    right to left with PHW (each lies little-endian at P3+1; a scalar
+    variable straight from its slot with `PHW (P3+d)` / `PHW label`), leaves
+    ARGUMENT 0 IN __ax, JSRs, then drops the pushed ones with ADDP3. The
+    callee reserves its locals with `SUBP3 #L` and stores __ax into param 0's
+    slot (skipped when the body never names it). Everything is then a small
+    positive displacement from P3:
+        param 0  at P3+1                  (the first local slot)
+        locals   at P3+3 .. P3+L          (scalars first, arrays/structs above)
         return address at P3+L+1, +2
-        param i  at P3+L+3+2i
+        param i  at P3+L+3+2(i-1)         (i >= 1)
     and is read/written with LDW/STW/LEAW (P3+d). The compiler tracks the
     stack depth it has pushed itself (self.sp: PHW spills, pushed args) and
     adds it to every displacement, so an expression temporary on the stack
@@ -111,6 +115,13 @@ baseline; see docs/p8x-isa-c-extensions.md):
     the __add/__sub/__and/__or/__xor/__eq/__lt/__not helpers are gone.
     reachable(): functions main() never calls are not compiled (dead library
     code from //#use); each is noted in the output as a comment.
+  * PHW (Pn+d) + first argument in __ax (same day, -3.0% more; -54.5%
+    overall): push_arg pushes a scalar local/param with `PHW (P3+d)` (2 bytes,
+    was LDW+PHW = 7) and a global word with `PHW label`; argument 0 is
+    evaluated last into __ax and never pushed, so a one-argument call has no
+    push and no ADDP3. compile_func gives param 0 the slot at P3+1 and stores
+    __ax there in the prologue (names_used: not at all if the body never
+    reads it); params 1.. sit above the return address as before.
 
 Usage:  p8cc.py prog.c [-o prog.asm]   then  p8xasm.py prog.asm -o prog.bin --base 0x6A00
 """
@@ -1054,10 +1065,27 @@ class Gen:
                       "        STA __ax",                  # returned A -> low byte
                       "        LDA #0", "        JNC %s" % skip, "        LDA #1",
                       "%s:    STA __ax+1" % skip); return  # carry -> bit 8
-        for a in reversed(args):                         # args right to left onto P3:
-            self.gen_expr(a); self.push_ax()             # the leftmost ends nearest SP
+        # Calling convention (2026-09-11): the FIRST argument travels in __ax
+        # and is never pushed (the callee stores it into its own frame slot);
+        # the others go onto P3 right to left, so argument 1 ends nearest SP.
+        # A scalar variable is pushed straight from its home with PHW (P3+d) /
+        # PHW label instead of a load into __ax and PHW __ax (7 bytes -> 2-3).
+        for a in reversed(args[1:]):
+            self.push_arg(a)
+        if args: self.gen_expr(args[0])                  # last, so nothing clobbers it
         self.emit("        JSR _f_%s" % name)
-        if args: self.adj_sp(2 * len(args), up=True)     # drop them: ADDP3 #2n
+        if len(args) > 1: self.adj_sp(2 * (len(args) - 1), up=True)   # ADDP3 #2(n-1)
+
+    def push_arg(self, a):                               # push the 16-bit value of a
+        if a[0] == "id":
+            kind = self.vinfo(a[1])
+            if not kind[4] and sizeof(kind[2], kind[3]) in (1, 2):
+                if kind[0] == "l" and self.local_disp(kind[1]) <= 255:   # a local's slot
+                    self.emit("        PHW (P3+%d)" % self.local_disp(kind[1]))
+                    self.sp += 2; return                 # (char slots keep a zero high byte)
+                if kind[0] == "g" and sizeof(kind[2], kind[3]) == 2:     # a global word
+                    self.emit("        PHW %s" % kind[1]); self.sp += 2; return
+        self.gen_expr(a); self.push_ax()
 
     # ---- statements ---------------------------------------------------------
     def gen_stmt(self, s):
@@ -1148,17 +1176,28 @@ class Gen:
             (aggregates if (count or (ptr == 0 and base in STRUCTS)) else scalars) \
                 .append((nm, base, ptr, count))
         off = 1
+        # Parameter 0 arrives in __ax (see gen_call): it gets the FIRST local
+        # slot, P3+1, and the prologue stores it there -- unless the body never
+        # names it, in which case neither the slot nor the store is needed.
+        p0 = None
+        if params:
+            (b0, q0, _), p0 = params[0]
+            if self.names_used(body, p0):
+                self.locals[p0] = (off, b0, q0, 0); off += 2
+            else: p0 = None
         for nm, base, ptr, count in scalars + aggregates:
             self.locals[nm] = (off, base, ptr, count)
             off += self.local_size(base, ptr, count)
         L = off - 1; self.frame = L
-        for i, ((base, ptr, _), pnm) in enumerate(params):
+        for i, ((base, ptr, _), pnm) in enumerate(params[1:]):
             self.locals[pnm] = (L + 3 + 2 * i, base, ptr, 0)   # above the return address
         self.emit("_f_%s:" % name)
         if L: self.adj_sp(L, up=False); self.sp = 0     # SUBP3 #L reserves the locals
-        for (base, ptr, _), pnm in params:               # char params: the caller pushed a
-            if sizeof(base, ptr) == 1:                    # full int -> keep the slot's high
-                self.zero_hi_local(self.locals[pnm][0])  # byte 0 (char semantics)
+        if p0 is not None:
+            self.emit("        STW (P3+1),__ax")         # param 0: __ax -> its slot
+        for (base, ptr, _), pnm in params:               # char params: the caller passed a
+            if sizeof(base, ptr) == 1 and pnm in self.locals:   # full int -> keep the slot's
+                self.zero_hi_local(self.locals[pnm][0])  # high byte 0 (char semantics)
         self.gen_stmt(body)
         self.emit("_ret_%s:" % name)
         if L: self.adj_sp(L, up=True); self.sp = 0       # ADDP3 #L frees them
@@ -1222,6 +1261,12 @@ class Gen:
             if kind == "union": size = max(size, sz)
             else: off += sz
         STRUCTS[tag] = {"size": (size if kind == "union" else off), "members": m}
+
+    def names_used(self, node, name):         # does the AST mention identifier `name`?
+        if isinstance(node, (list, tuple)):
+            if len(node) >= 2 and node[0] == "id" and node[1] == name: return True
+            return any(self.names_used(x, name) for x in node)
+        return False
 
     def reachable(self, decls):               # names of the functions main() can call
         bodies = {d[2]: d[4] for d in decls if d[0] == "func"}

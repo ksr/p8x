@@ -134,6 +134,9 @@ Instruction set rev 1 — generated from the microcode source (`genucode.py`); o
 | $77 | `LPW2 addr` | 3 | 9 | - | P2 (16-bit) := the word at addr. |
 | $78 | `MOVW dst,src` | 5 | 13 | - | 16-bit memory->memory move: the word at src -> dst (via the PT/PT2 scratch pointers). |
 | $79 | `LPW3 addr` | 3 | 9 | - | P3 (16-bit) := the word at addr -- restore a saved stack pointer. |
+| $BD | `PHW (P1+d)` | 2 | 11 | C Z N | Push the 16-bit word at P1 + d onto the P3 stack, high byte first (little-endian at the new P3+1) -- the C compiler's argument push straight from a frame slot. A! (the address add); flags from that add. |
+| $BE | `PHW (P2+d)` | 2 | 11 | C Z N | Push the 16-bit word at P2 + d onto the P3 stack, high byte first (little-endian at the new P3+1) -- the C compiler's argument push straight from a frame slot. A! (the address add); flags from that add. |
+| $BF | `PHW (P3+d)` | 2 | 11 | C Z N | Push the 16-bit word at P3 + d onto the P3 stack, high byte first (little-endian at the new P3+1) -- the C compiler's argument push straight from a frame slot; d is measured BEFORE the push. A! (the address add); flags from that add. |
 
 ### Tier A: the C-compiler ISA (2026-09; pure microcode. A! = clobbers A; d = unsigned 8-bit displacement)
 

@@ -329,7 +329,7 @@ work on real hardware also requires upgrading `PT` from load-only 74377 latches 
 requirement the earlier "pure-microcode" ops introduced but the regbank card has
 not yet been revised for. See the register-bank card theory (rev D).
 
-**Tier A — the C-compiler ISA (2026-09, pure microcode, 36 opcodes).** The next
+**Tier A — the C-compiler ISA (2026-09, pure microcode, 39 opcodes).** The next
 step after rev D, from the measured cost breakdown of compiled programs (see
 [p8x-isa-c-extensions.md](p8x-isa-c-extensions.md)): a real 16-bit pointer load,
 displacement addressing, and 16-bit memory-word arithmetic. Every one is built
@@ -351,6 +351,7 @@ No new register, no new bus line; the emulator and the FPGA run the regenerated
 | ADDW / SUBW / CMPW a,#imm8 (`$A0–$A2`) | the same with an 8-bit immediate (zero-extended): `x + k`, pointer stepping, `if (n < k)` |
 | ADDW / SUBW / CMPW a,#imm16 (`$B1–$B3`) | 16-bit immediate: `x + &table`, `if (n == 1300)` |
 | ANDW / ORW / XORW a,b (`$B4–$B6`), a,#imm8 (`$B7–$B9`), a,#imm16 (`$BA–$BC`) | 16-bit bitwise on a memory word; `ANDW x,#1 / JZ` tests a bit, `XORW x,#$FFFF` is bitwise NOT |
+| PHW (Pn+d) (`$BD–$BF`) | push the word at Pn + d (high byte first) — a C argument straight from its frame slot, 2 bytes |
 | LEAW a,(Pn+d) (`$A4–$A6`) | word at a := Pn + d — the address of a frame local (arrays, `&x`) |
 | LPW3 a (`$79`) | P3 := word at a — restore a saved stack pointer |
 | JMP / BZ / BNZ / BCP / JNC / BLT / BGE / BLE / BGT rel8 (`$A8–$B0`) | 2-byte relative branches, signed displacement from the next instruction; the taken path pushes A and saves the flags, then restores both, so A, B and the flags survive exactly as with the absolute forms. The assembler emits them for `.relax` sources (compiler output) or an explicit `.R` suffix |
@@ -372,7 +373,7 @@ the C compiler keep its call frames on the hardware stack: arguments pushed with
 `PHW` are plain frame words to the callee. `PHW`/`PLW` were only ever used as a
 pair, so nothing else observed the order.
 
-Opcode space: 256 slots, 140 used.
+Opcode space: 256 slots, 143 used.
 
 ---
 

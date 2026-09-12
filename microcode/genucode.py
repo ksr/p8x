@@ -499,6 +499,21 @@ for p in (1,2,3):
        w(doe="T",dld="MEMW",psel=PT2,pinc=1),                      # 11   mem[a] = lo     PT2++
        w(doe="PTRH",dld="T",psel=PT),                              # 12   T = PT.hi
        w(doe="T",dld="MEMW",psel=PT2,urst=1))                      # 13   mem[a+1] = hi
+# A13 (2026-09-11). PHW (Pn+d) -- push the word at Pn + d (2 bytes, 10 steps).
+# The compiler's argument push: a local or a parameter goes onto the stack
+# without the `LDW __ax,(P3+d) ; PHW __ax` detour (7 bytes -> 2). Same byte
+# order as PHW a (high first, so the word lies little-endian at the new P3+1).
+# For (P3+d) the displacement is measured BEFORE the push (PT is computed
+# first). Clobbers A (the address add) and latches its flags; B preserved.
+for p in (1,2,3):
+    op(0xBC+p,"PHW","(P%d+d)"%p,
+       w(doe="MEM",dld="T",psel=0,pinc=1),                         # 1    T = d8
+       *_pt_disp(p),                                               # 2-5  PT = Pn + d
+       w(doe="MEM",dld="T",psel=PT),                               # 6    T  = lo
+       w(psel=PT,pinc=1),                                          # 7    PT++
+       w(doe="MEM",dld="T2",psel=PT),                              # 8    T2 = hi
+       w(doe="T2",dld="MEMW",psel=3,pdec=1),                       # 9    push hi, SP--
+       w(doe="T",dld="MEMW",psel=3,pdec=1,urst=1))                 # 10   push lo, SP--
 
 # conditional branches abs: Bcc addr. FCOND emitted while fetching operand;
 # cond plane 1 = take (load P0 from T/T2), plane 0 = fall through.

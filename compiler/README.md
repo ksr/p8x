@@ -145,14 +145,27 @@ whole library files, so small programs carried unused directory helpers); the
 output notes each dropped one. Speed: an `int` add or compare is now one
 instruction (14 microsteps) instead of a `JSR` into a 15-instruction loop.
 
+**`PHW (Pn+d)` and the first argument in `AX` (2026-09-11, −3.0% more; −54.5%
+overall: 293,890 → 285,072 bytes, `finder` 8,903).** One more pure-microcode
+opcode group, `PHW (Pn+d)` (`$BD–$BF`, 2 bytes, 10 steps): push the word at
+`Pn+d`, so a local or parameter goes onto the stack straight from its slot
+instead of `LDW __ax,(P3+d) ; PHW __ax` (7 bytes); a global word is `PHW label`.
+And the **first argument is no longer pushed at all**: the caller evaluates it
+last into `AX`, so a one-argument call is just the value and a `JSR` with no
+push and no `ADDP3`. The callee stores `AX` into the first local slot in its
+prologue (`STW (P3+1),__ax`), or not at all when the body never names that
+parameter. Fewer stack round-trips per call as well as fewer bytes.
+
 **Calling convention / frames (2026-09-11: on the hardware stack).** Call
-frames live on **P3**. A caller pushes the arguments right-to-left with `PHW`
-(each word lies little-endian at `P3+1`), `JSR`s, then drops them with
-`ADDP3 #2n`; the callee reserves its locals with `SUBP3 #L`. Everything is then
+frames live on **P3**. A caller pushes arguments 1…n−1 right-to-left with `PHW`
+(each word lies little-endian at `P3+1`), leaves **argument 0 in `AX`**, `JSR`s,
+then drops the pushed ones with `ADDP3 #2(n−1)`; the callee reserves its locals
+with `SUBP3 #L` and stores `AX` into parameter 0's slot. Everything is then
 a small positive displacement from `P3`, read and written with one `LDW`/`STW`/
-`LEAW (P3+d)` instruction: **locals at `P3+1 … P3+L`** (scalars first, arrays
-and structs above them), the return address at `P3+L+1,+2`, **parameter *i* at
-`P3+L+3+2i`**. The compiler adds whatever it has pushed itself (spills, pending
+`LEAW (P3+d)` instruction: **parameter 0 at `P3+1`, the other locals at
+`P3+3 … P3+L`** (scalars first, arrays and structs above them), the return
+address at `P3+L+1,+2`, **parameter *i* ≥ 1 at `P3+L+3+2(i−1)`**. The compiler
+adds whatever it has pushed itself (spills, pending
 arguments) to every displacement, so a temporary on the stack never moves a
 local; a displacement over 255 takes a slower computed-address path. One frame
 per call, so functions are reentrant and **recursion works**. `char` scalars

@@ -51,16 +51,17 @@ done
 # ...plus the relative branches: JMP rel8 (A8 FE -> back to C026 itself) and
 # JZ rel8 (A9 05 -> C02A+5 = C02F): the disassembler prints the resolved target.
 # ...plus the 2026-09-11 word ops: ANDW $9010,#$01 (B7 10 90 01, the a,# shape on
-# a new mnemonic) and ADDW $9010,#$1234 (B1 10 90 34 12, the a,#w shape).
-printf 'B\rdep C010 3A 00 90 98 34 12 7B 88 05 92 10 90 20\rdep C01D 96 10 90 0A 9C 10 90 12 90\rdep C026 A8 FE A9 05 B7 10 90 01 B1 10 90 34 12\rdisasm C010 C032\r' \
+# a new mnemonic) and ADDW $9010,#$1234 (B1 10 90 34 12, the a,#w shape), and
+# PHW (P3+$05) (BF 05, the argument push).
+printf 'B\rdep C010 3A 00 90 98 34 12 7B 88 05 92 10 90 20\rdep C01D 96 10 90 0A 9C 10 90 12 90\rdep C026 A8 FE A9 05 B7 10 90 01 B1 10 90 34 12 BF 05\rdisasm C010 C034\r' \
     | ../p8xemu -l 900000000 -c disasm.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r' > disasm_out2.txt
 for want in 'LDP3 #\$9000' 'LDW \$1234,#\$7B' 'LDA \(P1\+\$05\)' 'LDW \$9010,\(P3\+\$20\)' \
             'STW \(P3\+\$0A\),\$9010' 'CMPW \$9010,\$9012' 'JMP \$C026' 'JZ \$C02F' \
-            'ANDW \$9010,#\$01' 'ADDW \$9010,#\$1234'; do
-    grep -qE "$want" disasm_out2.txt || { echo "--- output ---"; sed -n '/disasm C010/,$p' disasm_out2.txt | head -14; \
+            'ANDW \$9010,#\$01' 'ADDW \$9010,#\$1234' 'PHW \(P3\+\$05\)'; do
+    grep -qE "$want" disasm_out2.txt || { echo "--- output ---"; sed -n '/disasm C010/,$p' disasm_out2.txt | head -16; \
         fail "Tier A disassembly missing expected line: $want"; }
 done
-for a in '^C010:' '^C013:' '^C017:' '^C019:' '^C01D:' '^C021:' '^C026:' '^C028:' '^C02A:' '^C02E:'; do
+for a in '^C010:' '^C013:' '^C017:' '^C019:' '^C01D:' '^C021:' '^C026:' '^C028:' '^C02A:' '^C02E:' '^C033:'; do
     grep -qE "$a" disasm_out2.txt || fail "Tier A: wrong instruction length: no line at $a"
 done
 

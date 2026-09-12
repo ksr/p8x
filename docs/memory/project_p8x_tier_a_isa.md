@@ -1,6 +1,6 @@
 ---
 name: p8x-tier-a-isa
-description: Tier A C-compiler ISA (36 pure-microcode opcodes, 140 total) implemented on the emulator 2026-09-11 with all p8cc emitter stages (-53.1% across /bin); the contracts (16-bit Z on immediate forms only), the consumers that must follow any new opcode, and what is still open (PHW (Pn+d), arg in __ax, shared runtime, self-hosting, TTL reburn)
+description: Tier A C-compiler ISA (39 pure-microcode opcodes, 143 total) implemented on the emulator 2026-09-11 with all p8cc emitter stages (-54.5% across /bin); the contracts (16-bit Z on immediate forms only), the consumers that must follow any new opcode, and what is still open (shared runtime, self-hosting, TTL reburn)
 metadata:
   type: project
 ---
@@ -82,9 +82,13 @@ fcond Z, plane pair (nothing / `doe=T2, ldzn`) — N := 0 there is correct since
 the high result is 0. The a,b forms are at 14 steps already and keep Z =
 high-byte-only; INCW/DECW flags = low byte's. 293,890 total (−53.1% overall,
 finder 9,508); runtime now only __mul/__div/__mod/__divmod/__shl/__shr/__cmp16.
-Next software-only levers: `PHW (Pn+d)` (~70 sites/program × 4 bytes), first
-arg in __ax, OS-resident runtime (~150 B/program), JSR/RTS/branch microstep
-audit, self-hosting. PARKED by the user, to revisit after those: scratch
+**PHW (Pn+d) + first arg in __ax DONE (same day):** `PHW (Pn+d)` $BD-$BF
+(143 opcodes); `push_arg` (PHW (P3+d) / PHW label for scalars), arg 0 evaluated
+LAST into __ax, callee `STW (P3+1),__ax` unless `names_used` says the param is
+never read; param i>=1 at L+3+2(i-1). 285,072 total (-54.5%; finder 8,903).
+Frame layout is in the p8cc docstring + compiler/README. Next software-only
+levers: OS-resident runtime (~150 B/program), JSR/RTS/branch microstep audit,
+self-hosting. PARKED by the user, to revisit after those: scratch
 rewrites of the monitor/OS around the new ISA, easy replacements first (they
 were only re-assembled so far; idiom counts in BACKLOG — small wins, OS matters
 because of its 16 KB ceiling). **Still open:**

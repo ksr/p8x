@@ -47,8 +47,12 @@ int main() {
     ia[0] = 1; ia[1] = 2; ia[2] = 3;
     if (*(idp(ia) + 2) == 3) puts("RET-OK");            /* call result int*: +2 scales by 2 */
     wordops(ia);
+    x = 4;
+    if (f3(99, x, 2) == 42) { if (cf(365, 1) == 110) puts("ARG-OK"); }
     return 0;
 }
+int f3(int a, int b, int c) { return b * 10 + c; }   /* param 0 unused: no slot, no store */
+int cf(char c, int n) { return c + n; }               /* char param 0 in __ax: high byte dropped */
 int gw;                                   /* a global word: compared/updated in place */
 int never_called(int q) { return q * 3; } /* dead-function elimination drops this */
 int wordops(int *ia) {                    /* the inline word ops + CMPW conditions */
@@ -137,4 +141,6 @@ echo "$out" | grep -qx 'LOG-OK'  || fail "short-circuit && / || failed"
 echo "$out" | grep -qx 'BIT-OK'  || fail "bitwise & | ^ failed"
 echo "$out" | grep -qx 'SHIFT-OK' || fail "shifts << >> or ~ failed"
 echo "$out" | grep -qx 'RET-OK'  || fail "function return-type tracking (int* scaling) failed"
+echo "$out" | grep -qx 'WORD-OK' || fail "inline word ops / CMPW conditions failed"
+echo "$out" | grep -qx 'ARG-OK'  || fail "first-argument-in-__ax calling convention failed"
 echo "C-COMPILE TEST: PASS"

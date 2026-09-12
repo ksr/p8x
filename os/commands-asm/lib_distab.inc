@@ -283,4 +283,10 @@ DISTAB:
         .asciiz "ORW"
         .byte $BC,21
         .asciiz "XORW"
+        .byte $BD,11
+        .asciiz "PHW"
+        .byte $BE,12
+        .asciiz "PHW"
+        .byte $BF,13
+        .asciiz "PHW"
         .byte $FF

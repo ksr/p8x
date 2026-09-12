@@ -112,6 +112,8 @@ DESC[("CMPT","")]=("C Z N","Flags from A - T; A and B unchanged.")
 # into one instruction (pure microcode; PT + T/T2 scratch).
 DESC[("PHW","a")]=("-","Push the 16-bit word at addr onto the P3 stack: high byte first, then low, so the word lies LITTLE-ENDIAN at P3+1..P3+2 (readable with LDW a,(P3+d); same layout as a JSR return address).")
 DESC[("PLW","a")]=("-","Pop a 16-bit word from the P3 stack into addr (low then high).")
+for p in (1,2,3):
+    DESC[("PHW","(P%d+d)"%p)]=("C Z N","Push the 16-bit word at P%d + d onto the P3 stack, high byte first (little-endian at the new P3+1) -- the C compiler's argument push straight from a frame slot%s. A! (the address add); flags from that add."%(p, "; d is measured BEFORE the push" if p==3 else ""))
 DESC[("LPW1","a")]=("-","P1 (16-bit) := the word at addr.")
 DESC[("LPW2","a")]=("-","P2 (16-bit) := the word at addr.")
 DESC[("LPW3","a")]=("-","P3 (16-bit) := the word at addr -- restore a saved stack pointer.")

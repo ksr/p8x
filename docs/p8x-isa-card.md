@@ -97,6 +97,9 @@ Opcodes, mnemonics and cycle counts generated live from `genucode.py` (the micro
 | $77 | `LPW2 addr` | 3 | 9 | - | P2 := 16-bit word at addr. |
 | $78 | `MOVW dst,src` | 5 | 13 | - | 16-bit mem->mem: word at src -> dst. |
 | $79 | `LPW3 addr` | 3 | 9 | - | P3 := 16-bit word at addr (restore a saved SP). |
+| $BD | `PHW (P1+d)` | 2 | 11 | CZN | Push the word at P1+d (hi then lo). A!; flags from the address add. |
+| $BE | `PHW (P2+d)` | 2 | 11 | CZN | Push the word at P2+d. A! |
+| $BF | `PHW (P3+d)` | 2 | 11 | CZN | Push the word at P3+d, d measured before the push (a local/arg onto the stack). A! |
 
 ## Tier A: C-compiler ISA (2026-09, pure microcode; A! = clobbers A)
 

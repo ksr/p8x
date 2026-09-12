@@ -1050,10 +1050,20 @@ Nothing below has been built or measured.
       instruction instead of a JSR into a 15-instruction loop. 140 opcodes.
       Tests: test_isa E1–E5, c_compile WORD-OK + dead-function check, c_disasm
       decodes ANDW a,# / ADDW a,#w.
-      Next software-only levers: `PHW (Pn+d)` (arg push 7 → 3 bytes, ~70
-      sites/program), first argument in `__ax`, an OS-resident shared runtime
-      (now ~150 B/program: __mul/__divmod/__shl/__shr/__cmp16), microstep
-      audit of JSR/RTS/branches, the self-hosting compilers.
+      **PHW (Pn+d) + first argument in __ax DONE (2026-09-11):** `PHW
+      (Pn+d)` $BD–$BF (2 bytes, 10 steps, pushes hi-first like PHW a; d
+      measured before the push; A!) — `push_arg` pushes a scalar local/param
+      straight from its slot and a global word with `PHW label`; argument 0
+      is evaluated last into `__ax` and never pushed (one-arg calls: no push,
+      no ADDP3); the callee stores `__ax` into the slot at P3+1 in its
+      prologue (`STW (P3+1),__ax`), skipped when the body never names the
+      parameter; params 1.. sit above the return address at L+3+2(i-1).
+      293,890 → 285,072 (−3.0%); **627,172 → 285,072 = −54.5%** overall;
+      `finder` 8,903; 143 opcodes. Tests: test_isa E6, c_compile ARG-OK,
+      c_disasm decodes PHW (P3+d).
+      Next software-only levers: an OS-resident shared runtime (~150 B/
+      program: __mul/__divmod/__shl/__shr/__cmp16), microstep audit of
+      JSR/RTS/branches, the self-hosting compilers.
 
       **Data-driven priority (measured on 5 compiled commands, 19,897 instrs):**
         - **Done — the move idioms (the big win):** `PHW`/`PLW` + `LPW1`/`LPW2`

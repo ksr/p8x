@@ -26,9 +26,12 @@ shapes (`$B4–$BC`); **every immediate form carries a full 16-bit Z** (a 0/1
 marker of the low byte's Z kept in T2 and re-latched through the Z plane when
 the high byte is zero — 14 steps), so `x == k`, `if (x & m)` and `if (x)` are a
 single compare/branch pair, while the `a,b` forms stay high-byte-only for lack
-of steps. Functions `main` never reaches are no longer compiled. Result over
-all 45 `/bin` C commands: **627,172 → 293,890 bytes, −53.1%**; `finder` 32,630
-→ 9,508; 140 opcodes in use. Not yet done: the self-hosting compilers, the
+of steps. Functions `main` never reaches are no longer compiled. Then
+**`PHW (Pn+d)`** (`$BD–$BF`: push a frame word straight from its slot) and
+the **first argument passed in `__ax`** rather than on the stack (the callee
+stores it into its first local slot). Result over all 45 `/bin` C commands:
+**627,172 → 285,072 bytes, −54.5%**; `finder` 32,630 → 8,903; 143 opcodes in
+use. Not yet done: the self-hosting compilers, the
 on-target assembler's parsing of the compiler-only shapes (done on the
 `os-rewrite` branch), an EPROM reburn for the TTL machine. Tiers B and C
 remain proposals. What follows is the original sketch —

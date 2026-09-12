@@ -1122,6 +1122,49 @@ da_2:   STA VAL
         JZ  fail
         LDA $9010
         JNZ fail
+; ---- E6: PHW (Pn+d) pushes the word at Pn+d, high byte first; B preserved ----
+        LDA #$E6
+        STA TID
+        LDB #$5C
+        LDP1 #$90F8
+        LDW $9108,#$1234
+        PHW (P1+$10)                ; page-crossing address add, then push
+        LDA #$5C
+        CMP                         ; B survived
+        JNZ fail
+        PLW $9010                   ; pop it back: word intact, stack balanced
+        LDA $9010
+        LDB #$34
+        CMP
+        JNZ fail
+        LDA $9011
+        LDB #$12
+        CMP
+        JNZ fail
+        TPA3L                       ; stack pointer back where it was
+        STA $9020
+        TPA3H
+        STA $9021                   ; (save P3 for the P3-relative case)
+        LDP3 #$92F0
+        LDW $92F5,#$BEEF
+        PHW (P3+5)                  ; d is measured BEFORE the push
+        LDA $92EF                   ; lo lands at the new P3+1
+        LDB #$EF
+        CMP
+        JNZ fail
+        LDA $92F0                   ; hi at the new P3+2
+        LDB #$BE
+        CMP
+        JNZ fail
+        TPA3L
+        LDB #$EE                    ; P3 = $92EE
+        CMP
+        JNZ fail
+        LPW3 $9020                  ; restore the test's stack
+        TPA3L
+        LDB #$FF
+        CMP
+        JNZ fail
 ; ---- all passed ----
         LDA #$00
         HLT
