@@ -146,8 +146,8 @@ ensure_src() {
     _mkcmds="awk cat cmp cp dep diff dir disasm dump examine find grep head image man more mv pwd sed sort tail touch tree uniq vi wc"
     # C-only commands (no hand-asm twin yet) — they appear in the C Makefile only.
     # cube: the stage-7 wireframe-3D demo (lib_gfx + lib_g3d); its sine/edge
-    # tables are brace-initialized arrays, fine for p8cc.py and the on-target cc
-    # (the lib_distab/disasm precedent) but outside the p8cc.c self-host subset.
+    # tables are brace-initialized arrays — accepted by p8cc.py, the on-target cc
+    # and (since 2026-09-12) the p8cc.c host build as well.
     _ccmds="cube tri rotate page camera gl md house clsave paint desk wdesk finder term write kermit screen"
     # --- /src/commands/c/Makefile : cc <cmd>.c >T.ASM ; asm T.ASM bin/<cmd>.bin
     mf="$build/Makefile.c"

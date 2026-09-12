@@ -1,0 +1,47 @@
+---
+name: p8x-isa-everywhere
+description: the 2026-09-12 four-stage program to put the whole toolchain and all shipped code on the Tier A ISA -- stage 1 (Mac tools) done via the p8cc.c codegen rewrite; stages 2-4 (C/asm library review, recompile everything, hand-asm rewrite incl. OS/monitor/apps) pending; the p8cc.c design choices and gotchas
+metadata:
+  type: project
+---
+
+**User request (2026-09-12):** "be sure all Mac hosted tools emit latest ISA;
+look at all C and asm libraries to rewrite with latest tools; compile all C
+source with updated tools; update all asm code taking advantage of latest ISA."
+Tracked as the `[~]` item at the top of BACKLOG NEXT.
+
+**Stage 1 DONE — `compiler/p8cc.c` codegen rewrite.** Same Tier A model as
+p8cc.py (P3 frames, ADDW/SUBW/ANDW/ORW/XORW on __ax, CMPW + one branch, JMP.A,
+`.relax`, runtime __mul/__divmod/__shl/__shr/branch-free __cmp16). It is
+SINGLE-PASS, so: leaf operands are PENDING (`pk` 1 const / 2 variable / 3 string
+/ 4 array address; `flush_val`, `flush_addr`, `leaf_t`, `byte_a`, `push_val`),
+`peek_leaf(level)` looks one token ahead to avoid spilling the left operand,
+conditions run in a jump-if-false mode (`cmode/clabel/cdone`; `cond_has_or`
+pre-scan falls back to a value test; parens/call args/index/assignment rhs reset
+cmode), `binexpr(level)` is ONE table-driven function for all 8 binary levels,
+and the LAST argument travels in __ax (args parsed left to right; callee slot
+P3+1 via `body_uses`; params i<n-1 at L+3+2(n-2-i)). Locals get slots from a
+pre-scan (`count_locals` -> `pre_*` table, scalars first, first declaration
+wins); far path (`far_la`/`far_p1`, `__la`) for displacements > 255. Not ported:
+dead-function elimination, most narrow paths. Gaps fixed on the way (they broke
+disasm/cube/house/finder before too): brace + string global initializers
+(`gil_*` pool, `intern_str`), plain `#define`, function return types
+(`addfunc`/`functype`). Results: all 45 /bin commands compile, 342,372 B
+(p8cc.py 284,835); c_selfhost PASS; the compiler test program prints all 13
+markers under both compilers.
+
+**Gotchas met:** a `char op[3]` buffer got "ORW"/"XORW" copied into it and
+smashed the neighbouring locals -- symptoms were wild parse errors ("bad
+factor", "expected ;") far from the cause; keep mnemonic scratch buffers >= 8.
+`z16` (Z valid after an immediate word op) is cleared inside `emitstr` so any
+emitted text invalidates it. The self-compile of p8cc.c cannot be ASSEMBLED
+(host-sized tables > 64 KB), only compiled -- as before. Test scripts must be
+run FROM `emulator/test` (a background batch launched after a `cd` elsewhere
+silently produced no results).
+
+**Next stages:** (2) C libs `os/commands/lib_*.c` + `compiler/p8lib.c` and asm
+libs `os/commands-asm/*.inc` review; (3) rebuild /binc + disk via run.sh, full
+suite; (4) hand-asm rewrite (needs the native assembler's two-operand shapes:
+cherry-pick 3e0e3c8 from `archive/os-rewrite-2026-09-11`, ASK first; no
+`.relax` natively, so hand asm uses absolute branches only). Related:
+[[p8x-tier-a-isa]], [[p8x-cycle-bench]], [[p8cc-runtime-order-gate]].

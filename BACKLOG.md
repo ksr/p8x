@@ -20,6 +20,27 @@ remainder is why it is still here.
 
 ## NEXT
 
+- [~] **Whole toolchain and all shipped code on the latest ISA (user, 2026-09-12).**
+      Four stages, in order: (1) every Mac-hosted tool emits the Tier A ISA;
+      (2) review the C and asm libraries for what the new tools make
+      unnecessary; (3) recompile every C source with the updated tools
+      (rebuild /binc and the disk); (4) rewrite the hand-written asm — 28
+      command twins (15.3k lines), 7 asm libraries (2k), the apps incl.
+      `p8xcc.asm` (8.4k), the OS + WM kernel (6.8k), the monitor (2.4k) — to
+      use the new instructions, module by module with its tests, keeping
+      native/host byte-identity (so first cherry-pick the native assembler's
+      two-operand shapes from tag `archive/os-rewrite-2026-09-11`, ASK).
+      **Stage 1 DONE:** `compiler/p8cc.c`'s code generator rewritten to the
+      Tier A model (P3 frames, word ops, CMPW conditions, JMP.A, same runtime);
+      single-pass differences: deferred leaf operands + one-token peek, the
+      LAST argument in __ax (params i<n-1 at L+3+2(n-2-i)), no dead-function
+      elimination, narrow paths only for putchar/bios/byte stores. Also fixed
+      three pre-existing gaps (brace/string global initializers, plain
+      `#define`, function return types) so all 45 /bin commands compile:
+      342,372 B vs p8cc.py's 284,835 (+20%). `p8xasm.py`/`p8cc.py`/`clib.py`
+      were already current. The on-target `cc`/`asm` (apps/p8xcc.asm,
+      p8xasm.asm) remain old-ISA: that is stage 4 territory.
+
 > **THE BOARD HAS TWO STALENESS SURFACES; A FEATURE MAY NEED BOTH.** The
 > BITSTREAM carries the CPU, microcode, monitor ROM and graphics RTL
 > (`build.sh lcd load`); the SD CARD carries the OS, `/bin` and BASIC
@@ -1201,7 +1222,10 @@ Nothing below has been built or measured.
         with the `$EA00` (-r) / `$FA00` (glob) FNEXT pages. Unblocked by the same
         codegen-size work, or by restructuring grep (e.g. splitting `-r` content
         search into its own command to free grep's globals). vi's `/` search is
-        literal and would also benefit.
+        literal and would also benefit. **2026-09-12: the size blocker is gone** —
+        the p8cc.c host build of grep is 12,704 bytes (p8cc.py 10,953) after the
+        Tier A codegen rewrite, roughly half the old figure, so the classes can
+        be attempted whenever regex is next touched.
       - **`find` enhancements — small, in-budget, just not done.** `-type f|d`,
         `-name`, `-exec`, and **a path argument**: `find` and `tree` are the two
         commands that take no path at all (`FIND pattern` / `TREE` walk the CWD

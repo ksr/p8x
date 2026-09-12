@@ -41,7 +41,31 @@ There are two implementations of the same compiler:
   (`emulator/test/c_selfhost_test.sh`): a sample compiled by *both* `p8cc.c` and
   `p8cc.py` runs to identical output on the P8X. (The two emit *behaviourally*
   equivalent asm — same program output — not byte-identical text; they differ in
-  label names and argument-push order.)
+  label names and argument order.)
+
+  **Same ISA from both compilers (2026-09-12).** `p8cc.c`'s code generator was
+  rewritten to emit exactly the Tier A model described below: frames on `P3`
+  with `SUBP3`/`LDW`/`STW`/`LEAW (P3+d)` and `PHW` pushes, `ADDW`/`SUBW`/
+  `ANDW`/`ORW`/`XORW` on the accumulator word, `CMPW` plus one branch for
+  conditions, `JMP.A` for always-taken jumps, `.relax` for the rest, the same
+  runtime helpers (`__mul`, `__divmod`, `__shl`/`__shr`, the branch-free
+  `__cmp16`). Because it is **single-pass** — it emits while it parses — two
+  things differ from the Python compiler: a leaf operand (constant, variable,
+  string, array address) is *deferred* until its use is known and the right
+  operand of a binary op is classified by a one-token peek, so `x + 3` still
+  becomes `LDW __ax,(P3+d) / ADDW __ax,#3`; and arguments are parsed left to
+  right, so the **last** argument travels in `__ax` (the Python compiler passes
+  the first) with the others pushed left to right — each compiler's callees
+  match its own callers, so programs are self-consistent. Not ported: the
+  narrow 8-bit paths beyond `putchar`/`bios`/byte stores, and dead-function
+  elimination (a single pass cannot know reachability). Over the 45 `/bin`
+  commands the C-written compiler produces 342,372 bytes against the Python
+  compiler's 284,835 (+20%), all on the new ISA; the compiler test program
+  passes every case under both. The same rewrite closed three old gaps in
+  `p8cc.c`: brace initializer lists and string initializers for globals
+  (`int tab[] = {…}`, `char *s = "…"`, `char b[8] = "…"`), plain `#define
+  NAME value`, and function return-type tracking (an `int *` result now
+  scales pointer arithmetic), so every `/bin` command compiles with it.
 
   **As a fast native tool.** Build `p8cc.c` with the host `cc` for a fast
   (~no startup) alternative to the Python tool — it is literally the C codebase
