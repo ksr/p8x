@@ -21,10 +21,7 @@
         LDA #0
         STA sepc
 ; skip leading spaces
-a_sk:   LDA aarg
-        TAP2L
-        LDA aarg+1
-        TAP2H
+a_sk:   LPW2 aarg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #32
         CMP
@@ -43,10 +40,7 @@ a_h:    LDA (P2)                     ; -h / -H -> usage
         LDB #'H'
         CMP
         JZ a_use
-a_F:    LDA aarg                     ; -F c ?
-        TAP2L
-        LDA aarg+1
-        TAP2H
+a_F:    LPW2 aarg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #'-'
         CMP
@@ -65,10 +59,7 @@ a_F:    LDA aarg                     ; -F c ?
         LDA aarg+1
         INC
         STA aarg+1
-a_F1:   LDA aarg                     ; skip spaces
-        TAP2L
-        LDA aarg+1
-        TAP2H
+a_F1:   LPW2 aarg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #32
         CMP
@@ -81,10 +72,7 @@ a_Fc:   LDA (P2)
         CMP
         JZ a_Fsk
         JSR aarg_inc
-a_Fsk:  LDA aarg                     ; skip spaces after the separator
-        TAP2L
-        LDA aarg+1
-        TAP2H
+a_Fsk:  LPW2 aarg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #32
         CMP
@@ -92,10 +80,7 @@ a_Fsk:  LDA aarg                     ; skip spaces after the separator
         JSR aarg_inc
         JMP a_Fsk
 ; ---- extract the program (quoted, else up to a space) ----
-a_prog: LDA aarg
-        TAP2L
-        LDA aarg+1
-        TAP2H
+a_prog: LPW2 aarg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #39                      ; single quote
         CMP
@@ -149,53 +134,32 @@ a_pn:   TAP1H
         STA (P1)
         JSR parse_prog
         ; ---- rest = input file, else stdin ----
-a_rest: LDA aarg
-        TAP2L
-        LDA aarg+1
-        TAP2H
+a_rest: LPW2 aarg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #32
         CMP
         JNZ a_open
         JSR aarg_inc
         JMP a_rest
-a_open: LDA aarg
-        STA oa_a
-        LDA aarg+1
-        STA oa_a+1
+a_open: MOVW oa_a,aarg                ; <- tierA: word move (next: JSR openarg)
         JSR openarg                  ; openarg returns 2 in A on "file not found"
         LDB #2
         CMP
         JZ a_nf
         ; ---- main loop ----
-        LDA #0
-        STA nr
-        STA nr+1
+        LDW nr,#0                ; <- tierA: zero word (next: JSR readrec)
 a_lp:   JSR readrec
         LDB #0
         CMP
         JZ a_end
-        LDA nr                       ; nr++ (16-bit)
-        LDB #1
-        ADD
-        STA nr
-        JNC a_l1
-        LDA nr+1
-        INC
-        STA nr+1
-a_l1:   JSR split
+        INCW nr                ; <- tierA: 16-bit INCW chain, skip label a_l1 dropped (next: JSR split)
+        JSR split
         LDA hasre                    ; pattern?
         LDB #0
         CMP
         JZ a_run                     ; no pattern -> always
-        LDA #<re
-        STA rx_re
-        LDA #>re
-        STA rx_re+1
-        LDA #<line
-        STA rx_t
-        LDA #>line
-        STA rx_t+1
+        LDW rx_re,#re                ; <- tierA: address constant (next: LDA)
+        LDW rx_t,#line                ; <- tierA: address constant (next: JSR match)
         JSR match
         LDB #0
         CMP
@@ -208,19 +172,13 @@ a_end:  RTS
 ; stdout may be a redirect or a pipe, so `awk '{print}' missing >F` would else
 ; write the message INTO F. Matches awk.c's eputs(). a_use is NOT an error (the
 ; user asked with -h), so it stays on stdout and `awk -h >notes` still captures it.
-a_nf:   LDA #<m_nf
-        TAP1L
-        LDA #>m_nf
-        TAP1H
+a_nf:   LDP1 #m_nf                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR PUTS
         LDA #10
         JSR CONOUT
         RTS
-a_use:  LDA #<m_use
-        TAP1L
-        LDA #>m_use
-        TAP1H
+a_use:  LDP1 #m_use                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS
         LDA #10
@@ -228,15 +186,8 @@ a_use:  LDA #<m_use
         RTS
 
 ; aarg_inc: aarg += 1
-aarg_inc: LDA aarg
-        LDB #1
-        ADD
-        STA aarg
-        JNC aai_r
-        LDA aarg+1
-        INC
-        STA aarg+1
-aai_r:  RTS
+aarg_inc:INCW aarg                ; <- tierA: 16-bit INCW chain, skip label aai_r dropped (next: RTS)
+        RTS
 
 ; prog_put: append A to prog[pl++] (cap 127)
 prog_put: STA pptmp
@@ -644,30 +595,15 @@ pf_r:   RTS
 ; the ones digit so a value of 0 still prints "0".  dv is destroyed. Uses A/B.
 pnum:   LDA #0
         STA pd_any
-        LDA #$10
-        STA pv
-        LDA #$27
-        STA pv+1
+        LDW pv,#10000                ; <- tierA: word constant (next: JSR pd_dig)
         JSR pd_dig                   ; 10000
-        LDA #$E8
-        STA pv
-        LDA #$03
-        STA pv+1
+        LDW pv,#1000                ; <- tierA: word constant (next: JSR pd_dig)
         JSR pd_dig                   ; 1000
-        LDA #100
-        STA pv
-        LDA #0
-        STA pv+1
+        LDW pv,#100                ; <- tierA: word constant (next: JSR pd_dig)
         JSR pd_dig                   ; 100
-        LDA #10
-        STA pv
-        LDA #0
-        STA pv+1
+        LDW pv,#10                ; <- tierA: word constant (next: JSR pd_dig)
         JSR pd_dig                   ; 10
-        LDA #1
-        STA pv
-        LDA #0
-        STA pv+1
+        LDW pv,#1                ; <- tierA: word constant (next: LDA)
         LDA #1
         STA pd_any                   ; ones always print
         JSR pd_dig
@@ -874,10 +810,7 @@ ra_N:   ; NR or NF
         LDB #2
         ADD
         STA aci
-        LDA nr
-        STA dv
-        LDA nr+1
-        STA dv+1
+        MOVW dv,nr                ; <- tierA: word move (next: JSR pnum)
         JSR pnum
         JMP ra_lp
 ra_NF:  LDB #'F'

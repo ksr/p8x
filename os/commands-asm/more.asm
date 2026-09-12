@@ -15,22 +15,12 @@
         STA m_arg+1
 ; m_sk: skip leading spaces in the arg tail. Reload P2 from m_arg each pass
 ; (INP2 isn't used here because m_arg is bumped as a 16-bit value with carry).
-m_sk:   LDA m_arg
-        TAP2L
-        LDA m_arg+1
-        TAP2H
+m_sk:   LPW2 m_arg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #32                      ; 32 = ASCII space
         CMP
         JNZ m_chk                    ; first non-space -> done skipping
-        LDA m_arg                    ; m_arg++ (16-bit, propagate carry to hi)
-        LDB #1
-        ADD
-        STA m_arg
-        JNC m_sk
-        LDA m_arg+1
-        INC
-        STA m_arg+1
+        INCW m_arg                ; <- tierA: 16-bit INCW chain before JMP m_sk (next: JMP m_sk -> LDA)
         JMP m_sk
 ; m_chk: detect the "-h"/"-H" help flag; anything else is treated as a filename.
 m_chk:  LDA (P2)
@@ -47,17 +37,12 @@ m_chk:  LDA (P2)
         JZ m_usage
 ; m_open: open the file named at m_arg (or fall through to stdin). openarg reads
 ; oa_a as the name pointer; returns status in A (2 = not found, via CMP #2).
-m_open: LDA m_arg
-        STA oa_a
-        LDA m_arg+1
-        STA oa_a+1
+m_open: MOVW oa_a,m_arg                ; <- tierA: word move (next: JSR openarg)
         JSR openarg
         LDB #2
         CMP
         JZ m_nf                      ; status 2 -> file not found
-        LDA #0                       ; lines printed on this screen = 0
-        STA lines
-        STA lines+1
+        LDW lines,#0                ; <- tierA: zero word (next: JSR nextc)
 ; m_loop: copy input to output one char at a time; count newlines; page at 23.
 ; nextc (from stdin engine) returns C=1 at EOF, else next byte in A.
 m_loop: JSR nextc
@@ -68,15 +53,8 @@ m_loop: JSR nextc
         LDB #10                      ; 10 = LF; only newlines advance the count
         CMP
         JNZ m_loop
-        LDA lines                    ; lines++
-        LDB #1
-        ADD
-        STA lines
-        JNC m_lc
-        LDA lines+1
-        INC
-        STA lines+1
-m_lc:   LDA lines+1                  ; if lines >= 23 (16-bit; hi!=0 or lo>=23)
+        INCW lines                ; <- tierA: 16-bit INCW chain, skip label m_lc dropped (next: LDA)
+        LDA lines+1                  ; if lines >= 23 (16-bit; hi!=0 or lo>=23)
         LDB #0
         CMP
         JNZ m_page
@@ -96,14 +74,9 @@ m_page: JSR prompt                   ; A = key on return; CMP leaves A intact, s
         LDB #13
         CMP
         JNZ m_full
-        LDA #22                      ; Enter -> preset count to 22 so 1 more line
-        STA lines                    ;   (23rd) triggers the next prompt
-        LDA #0
-        STA lines+1
+        LDW lines,#22                ; <- tierA: word constant (next: JMP m_loop -> JSR nextc)
         JMP m_loop
-m_full: LDA #0                       ; space/other -> reset count, show full page
-        STA lines
-        STA lines+1
+m_full: LDW lines,#0                ; <- tierA: zero word (next: JMP m_loop -> JSR nextc)
         JMP m_loop
 m_done: RTS
 ; m_nf / m_usage: print a message (P1 = string ptr), add a newline, and return.
@@ -113,19 +86,13 @@ m_done: RTS
 ; message INTO F, and `more missing | wc` would feed it to wc as data. Matches
 ; more.c's eputs(). m_usage below is NOT an error (the user asked with -h), so it
 ; stays on stdout and `more -h >notes` still captures it.
-m_nf:   LDA #<u_nf
-        TAP1L
-        LDA #>u_nf
-        TAP1H
+m_nf:   LDP1 #u_nf                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR PUTS
         LDA #10
         JSR CONOUT
         RTS
-m_usage:LDA #<u_use
-        TAP1L
-        LDA #>u_use
-        TAP1H
+m_usage:LDP1 #u_use                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS
         LDA #10
@@ -133,10 +100,7 @@ m_usage:LDA #<u_use
         RTS
 
 ; prompt: print "--More--", read a CONIN key -> mkey (and A), erase the prompt.
-prompt: LDA #<s_more
-        TAP1L
-        LDA #>s_more
-        TAP1H
+prompt: LDP1 #s_more                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS                 ; SYS_PUTS "--More--"
         LDA #0
@@ -145,10 +109,7 @@ prompt: LDA #<s_more
         LDA #0
         JSR CONIN                    ; CONIN -> A
         STA mkey
-        LDA #<s_erase
-        TAP1L
-        LDA #>s_erase
-        TAP1H
+        LDP1 #s_erase                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS                 ; erase: "\r        \r"
         LDA mkey

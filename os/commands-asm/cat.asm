@@ -24,23 +24,13 @@
         LDA #$FA
         JSR FSDIRBUF
 ; c_sk: skip leading spaces (ASCII 32) in the arg tail, advancing c_arg past them.
-c_sk:   LDA c_arg
-        TAP2L
-        LDA c_arg+1
-        TAP2H
+c_sk:   LPW2 c_arg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)                     ; A = current char
         LDB #32
         CMP
         JNZ c_chk                    ; not a space -> done skipping
 ; advance c_arg by 1 (16-bit); carry out of the low byte bumps the high byte
-        LDA c_arg
-        LDB #1
-        ADD
-        STA c_arg
-        JNC c_sk                     ; no carry -> low byte only
-        LDA c_arg+1
-        INC
-        STA c_arg+1
+        INCW c_arg                ; <- tierA: 16-bit INCW chain before JMP c_sk (next: JMP c_sk -> LDA)
         JMP c_sk
 ; c_chk: first non-space char reached. Handle the "-h"/"-H" help flag. Only the
 ; single char after '-' is tested, so any "-h..." word ("-help") also prints
@@ -60,10 +50,7 @@ c_chk:  LDA (P2)
         ; '-' but not -h: fall through and treat as a filename (from c_arg)
 ; c_noarg: reload c_arg into P2 and test the first char. NUL or CR (13) means
 ; there was no filename, so fall through to the stdin filter.
-c_noarg:LDA c_arg                    ; empty arg -> filter stdin
-        TAP2L
-        LDA c_arg+1
-        TAP2H
+c_noarg:LPW2 c_arg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #0
         CMP
@@ -76,10 +63,7 @@ c_noarg:LDA c_arg                    ; empty arg -> filter stdin
 ; scan the word for a glob metachar ('*' or '?'); c_g = 1 if found, else 0
 c_next: LDA #0
         STA c_g
-        LDA c_arg
-        TAP2L
-        LDA c_arg+1
-        TAP2H
+        LPW2 c_arg                ; <- tierA: pointer load (next: LDA)
 ; c_scl: scan loop. Word terminates at NUL, CR (13), or space (32).
 c_scl:  LDA (P2)
         LDB #0
@@ -111,14 +95,8 @@ c_scd:  LDA c_g
         JZ c_single
 ; glob path: fill glob_expand's ABI vars (pattern, output buf, max count),
 ; then cat each returned match. gfiles is a 24 x 64-byte name buffer.
-        LDA c_arg
-        STA ge_pat
-        LDA c_arg+1
-        STA ge_pat+1
-        LDA #<gfiles
-        STA ge_out
-        LDA #>gfiles
-        STA ge_out+1
+        MOVW ge_pat,c_arg                ; <- tierA: word move (next: LDA)
+        LDW ge_out,#gfiles                ; <- tierA: address constant (next: LDA)
         LDA #24
         STA ge_max
         JSR glob_expand              ; ge_cnt = number of matches
@@ -140,10 +118,7 @@ cg_d:   JMP c_adv                     ; this glob token done -> next token
 ; c_single: no glob chars -> cat the one named file. catpath returns A=1 if
 ; the file was not found, in which case we print the not-found message.
 c_single:
-        LDA c_arg
-        STA op_a
-        LDA c_arg+1
-        STA op_a+1
+        MOVW op_a,c_arg                ; <- tierA: word move (next: JSR catpath)
         JSR catpath
         LDB #1
         CMP
@@ -151,10 +126,7 @@ c_single:
         ; fall through to c_adv: this single-file token done -> next token
 ; c_adv: advance c_arg past the token just consumed, then past trailing spaces.
 ; If the next char is NUL or CR all arguments are done -> RTS; else -> c_next.
-c_adv:  LDA c_arg
-        TAP2L
-        LDA c_arg+1
-        TAP2H
+c_adv:  LPW2 c_arg                ; <- tierA: pointer load (next: LDA)
 ca_tok: LDA (P2)                     ; skip the rest of this token
         LDB #0
         CMP
@@ -200,19 +172,13 @@ cs_d:   RTS
 ; message INTO F, and `cat missing | wc` would feed it to wc as data. Matches
 ; cat.c's eputs(). c_usage below is NOT an error (the user asked with -h), so it
 ; stays on stdout and `cat -h >notes` still captures it.
-c_nf:   LDA #<m_nf
-        TAP1L
-        LDA #>m_nf
-        TAP1H
+c_nf:   LDP1 #m_nf                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR PUTS
         LDA #10
         JSR CONOUT
         RTS
-c_usage:LDA #<m_use
-        TAP1L
-        LDA #>m_use
-        TAP1H
+c_usage:LDP1 #m_use                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS
         LDA #10

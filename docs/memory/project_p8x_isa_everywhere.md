@@ -67,6 +67,13 @@ The three compilers will never emit identical code (P3 frames + AST
 optimisations vs static slots vs single-pass): equivalence is BEHAVIOURAL,
 checked by the differential tests.
 
+**Twins + asm libs DONE (2026-09-12):** apply script per file with allow-lists
+(scratchpad apply_twins.sh; the allow-lists are in BACKLOG's item); 662 sites /
+32 files; /bin 148,744 -> 142,115 B (-4.5%). Tests: os_asm_use, cmdbuild
+(asm-match), os_cmp, os_awk, os_examine, c_image (twin identical), c_vi_relpath,
+os_mk + full suite. The user's order after this: OS + WM kernel, then monitor.
+C libraries need NO change (spliced source, recompiled with the new tools).
+
 **Next stages:** (2) C libs `os/commands/lib_*.c` + `compiler/p8lib.c` and asm
 libs `os/commands-asm/*.inc` review; (3) rebuild /binc + disk via run.sh, full
 suite; (4) hand-asm rewrite (the native assembler now has the two-operand shapes; no

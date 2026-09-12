@@ -49,10 +49,7 @@ d_go:   JSR GETHEX                   ; start address
         STA END
         LDA HXHI
         STA END+1
-        LDA START                    ; addr = start
-        STA ADDR
-        LDA START+1
-        STA ADDR+1
+        MOVW ADDR,START                ; <- tierA: word move (next: LDA)
 
         ; ---- main loop: while (addr < end) ----------------------------------
 d_loop: LDA ADDR+1                   ; unsigned 16-bit  addr < end ?
@@ -64,10 +61,7 @@ d_loop: LDA ADDR+1                   ; unsigned 16-bit  addr < end ?
         LDB END
         CMP
         JC d_ret                     ; addr_lo >= end_lo -> done
-d_body: LDA ADDR                     ; op = peek(addr)
-        TAP1L
-        LDA ADDR+1
-        TAP1H
+d_body: LPW1 ADDR                ; <- tierA: pointer load (next: LDA)
         LDA (P1)
         STA OP
         JSR DIS_FIND                 ; -> FOUNDF, SHAPE, MNL/MNH
@@ -135,10 +129,7 @@ d_rpd:  LDA #32                      ; the extra space before the mnemonic
         JMP d_loop
 d_unk:  LDA OP                       ; unknown byte: op + pad + "???"
         JSR OPH8
-        LDA #<M_UNK
-        TAP1L
-        LDA #>M_UNK
-        TAP1H
+        LDP1 #M_UNK                ; <- tierA: pointer constant (next: JSR PRS)
         JSR PRS
         LDA #13
         JSR SYS_PUTC
@@ -162,23 +153,14 @@ d_ret:  RTS
 ; to a pipe stage as if it were disassembly. Matches disasm.c's eputs().
 ; d_use is NOT an error — it also answers "-h", and returns 0 either way — so it
 ; keeps SYS_PUTS/SYS_PUTC and `disasm -h >notes` still captures it.
-d_use:  LDA #<M_USE
-        TAP1L
-        LDA #>M_USE
-        TAP1H
+d_use:  LDP1 #M_USE                ; <- tierA: pointer constant (next: JSR SYS_PUTS)
         JSR SYS_PUTS                 ; P1 = the string; SYS_PUTS takes no A arg
         LDA #10
         JSR SYS_PUTC
         RTS
-d_bads: LDA #<M_BADS
-        TAP1L
-        LDA #>M_BADS
-        TAP1H
+d_bads: LDP1 #M_BADS                ; <- tierA: pointer constant (next: JMP d_eputs -> LDA)
         JMP d_eputs
-d_nend: LDA #<M_NEND
-        TAP1L
-        LDA #>M_NEND
-        TAP1H
+d_nend: LDP1 #M_NEND                ; <- tierA: pointer constant (next: LDA)
 d_eputs:LDA #0                       ; PUTS: P1 = the string, A = 0 flags
         JSR PUTS
         LDA #10
@@ -502,10 +484,7 @@ W16OFF: STA TMPB                      ; STA leaves A = the offset
         RTS
 
 ; DIS_FIND: OP -> FOUNDF (1/0), SHAPE, MNL/MNH. Scans DISTAB. Clobbers P1, TMPA.
-DIS_FIND:LDA #<DISTAB
-        TAP1L
-        LDA #>DISTAB
-        TAP1H
+DIS_FIND:LDP1 #DISTAB                ; <- tierA: pointer constant (next: LDA)
 df_lp:  LDA (P1)                      ; record opcode byte
         LDB #$FF
         CMP

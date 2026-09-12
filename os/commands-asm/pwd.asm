@@ -46,24 +46,15 @@ _chk:   LDA (P1)                             ; first non-space char
 ; P1 must be reloaded with &_buf before each syscall: SYS_GETCWD (and any
 ; syscall) may clobber P1/P2, so the pointer set up for GETCWD cannot be
 ; reused for PUTS.
-_pwd:   LDA #<_buf                   ; P1 = &_buf (dest for GETCWD)
-        TAP1L
-        LDA #>_buf
-        TAP1H
+_pwd:   LDP1 #_buf                ; <- tierA: pointer constant (next: JSR SYS_GETCWD)
         JSR SYS_GETCWD               ; copy CWD string (incl. NUL) into _buf
-        LDA #<_buf                   ; reload P1 = &_buf; GETCWD may have trashed it
-        TAP1L
-        LDA #>_buf
-        TAP1H
+        LDP1 #_buf                ; <- tierA: pointer constant (next: JSR SYS_PUTS)
         JSR SYS_PUTS                 ; print CWD (no trailing newline)
         LDA #10                      ; 10 = '\n'
         JSR SYS_PUTC                 ; emit the newline
         RTS
 ; ---- -h usage --------------------------------------------------------------
-_usage: LDA #<_msg
-        TAP1L
-        LDA #>_msg
-        TAP1H
+_usage: LDP1 #_msg                ; <- tierA: pointer constant (next: JSR SYS_PUTS)
         JSR SYS_PUTS
         LDA #10
         JSR SYS_PUTC

@@ -15,22 +15,12 @@
         STA v_arg
         TPA2H
         STA v_arg+1
-v_sk:   LDA v_arg
-        TAP2L
-        LDA v_arg+1
-        TAP2H
+v_sk:   LPW2 v_arg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #32
         CMP
         JNZ v_chk
-        LDA v_arg
-        LDB #1
-        ADD
-        STA v_arg
-        JNC v_sk
-        LDA v_arg+1
-        INC
-        STA v_arg+1
+        INCW v_arg                ; <- tierA: 16-bit INCW chain before JMP v_sk (next: JMP v_sk -> LDA)
         JMP v_sk
 ; No path, a bare CR, or a "-h"/"-H" flag all fall through to v_usage.
 v_chk:  LDA (P2)
@@ -51,23 +41,11 @@ v_chk:  LDA (P2)
         LDB #'H'
         CMP
         JZ v_usage
-        LDA v_arg                     ; restore P2 to the '-' start
-        TAP2L
-        LDA v_arg+1
-        TAP2H
-v_path: LDA v_arg                     ; abspath(path, v_arg) — CWD-prefix if relative
-        STA ap_a
-        LDA v_arg+1
-        STA ap_a+1
-        LDA #<path
-        STA ap_out
-        LDA #>path
-        STA ap_out+1
+        LPW2 v_arg                ; <- tierA: pointer load (next: LDA)
+v_path: MOVW ap_a,v_arg                ; <- tierA: word move (next: LDA)
+        LDW ap_out,#path                ; <- tierA: address constant (next: JSR abspath)
         JSR abspath
-        LDA #<path
-        STA ld_p
-        LDA #>path
-        STA ld_p+1
+        LDW ld_p,#path                ; <- tierA: address constant (next: JSR load)
         JSR load
         LDA #0
         STA mode
@@ -98,10 +76,7 @@ vi_quit:JSR clrscr
         STA g_c
         JSR gotoxy
         RTS
-v_usage:LDA #<u_use
-        TAP1L
-        LDA #>u_use
-        TAP1H
+v_usage:LDP1 #u_use                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS
         LDA #10
@@ -435,10 +410,7 @@ nm_sl:  LDA key
         JMP nm_end
 nm_sl_nf:
         JSR redraw
-        LDA #<s_nf
-        STA os_p
-        LDA #>s_nf
-        STA os_p+1
+        LDW os_p,#s_nf                ; <- tierA: address constant (next: JSR msg24)
         JSR msg24
         JSR placecur
         JMP nm_end
@@ -460,10 +432,7 @@ nm_n:   LDA key
         JSR scroll                   ; recenter viewport on the match before repaint
         JSR redraw
         JMP nm_end
-nm_n_nf:LDA #<s_nf
-        STA os_p
-        LDA #>s_nf
-        STA os_p+1
+nm_n_nf:LDW os_p,#s_nf                ; <- tierA: address constant (next: JSR msg24)
         JSR msg24
         JSR placecur
         JMP nm_end
@@ -604,24 +573,15 @@ msg24:  LDA #24
 ; P1. Address = line + va_i*80 + va_c. va_i*80 is built by repeated +80 into the
 ; 16-bit accumulator vat (va_ml loop), then va_c and the base label `line` are
 ; added; vacar carries the low-byte overflow into the high byte. Clobbers A/B/P1.
-laddr:  LDA #0
-        STA vat
-        STA vat+1
+laddr:  LDW vat,#0                ; <- tierA: zero word (next: LDA)
         LDA va_i
         STA van
 va_ml:  LDA van
         LDB #0
         CMP
         JZ va_md
-        LDA vat
-        LDB #80
-        ADD
-        STA vat
-        JNC va_1
-        LDA vat+1
-        INC
-        STA vat+1
-va_1:   LDA van
+        ADDW vat,#80                ; <- tierA: 16-bit ADDW chain, skip label va_1 dropped (next: LDA)
+        LDA van
         DEC
         STA van
         JMP va_ml
@@ -647,10 +607,7 @@ va_3:   STA vacar
         LDB vacar
         ADD
         STA vat+1
-        LDA vat
-        TAP1L
-        LDA vat+1
-        TAP1H
+        LPW1 vat                ; <- tierA: pointer load (next: RTS)
         RTS
 ; llen: return in A the length (chars before the NUL) of line ll_i. Clobbers P1.
 llen:   LDA ll_i
@@ -695,10 +652,7 @@ cx_ok:  RTS
 ; stored (79 chars, leaving the NUL at 79) and the rest of the line is dropped;
 ; the buffer holds at most 110 lines. Trailing partial line and the
 ; empty-file case are normalized so nlines >= 1 on return.
-load:   LDA ld_p
-        TAP1L
-        LDA ld_p+1
-        TAP1H
+load:   LPW1 ld_p                ; <- tierA: pointer load (next: LDA)
         LDA #0
         JSR FRESOLVE
         LDA #0
@@ -805,10 +759,7 @@ ld_ret0:LDA #0
 ; Each line's chars are emitted up to its NUL, then a single LF (Unix newline).
 ; Clears dirty on success. sv_p2 is a working copy of the line pointer because
 ; FPUTB clobbers P1/P2, so it is reloaded before every byte.
-save:   LDA sv_p
-        TAP1L
-        LDA sv_p+1
-        TAP1H
+save:   LPW1 sv_p                ; <- tierA: pointer load (next: LDA)
         LDA #0
         JSR FRESOLVE
         LDA #0
@@ -828,10 +779,7 @@ sv_il:  LDA sv_i
         STA sv_p2
         TPA1H
         STA sv_p2+1
-sv_cl:  LDA sv_p2
-        TAP1L
-        LDA sv_p2+1
-        TAP1H
+sv_cl:  LPW1 sv_p2                ; <- tierA: pointer load (next: LDA)
         LDA (P1)
         LDB #0
         CMP
@@ -842,15 +790,8 @@ sv_cl:  LDA sv_p2
         TAP1H
         LDA sv_c
         JSR FPUTB
-        LDA sv_p2
-        LDB #1
-        ADD
-        STA sv_p2
-        JNC sv_c1
-        LDA sv_p2+1
-        INC
-        STA sv_p2+1
-sv_c1:  JMP sv_cl
+        INCW sv_p2                ; <- tierA: 16-bit INCW chain, skip label sv_c1 dropped (next: JMP sv_cl -> LDA)
+        JMP sv_cl
 sv_eol: LDA #0
         TAP1L
         TAP1H
@@ -893,24 +834,14 @@ drawrow:LDA dr_r
         STA dptr
         TPA1H
         STA dptr+1
-dr_pl:  LDA dptr
-        TAP1L
-        LDA dptr+1
-        TAP1H
+dr_pl:  LPW1 dptr                ; <- tierA: pointer load (next: LDA)
         LDA (P1)
         LDB #0
         CMP
         JZ dr_eol
         JSR outc
-        LDA dptr
-        LDB #1
-        ADD
-        STA dptr
-        JNC dr_p1
-        LDA dptr+1
-        INC
-        STA dptr+1
-dr_p1:  JMP dr_pl
+        INCW dptr                ; <- tierA: 16-bit INCW chain, skip label dr_p1 dropped (next: JMP dr_pl -> LDA)
+        JMP dr_pl
 dr_tilde:
         LDA #'~'
         JSR outc
@@ -927,30 +858,18 @@ status: LDA #24
         LDB #1
         CMP
         JNZ st_norm
-        LDA #<s_ins
-        STA os_p
-        LDA #>s_ins
-        STA os_p+1
+        LDW os_p,#s_ins                ; <- tierA: address constant (next: JSR outs)
         JSR outs
         JMP st_path
-st_norm:LDA #<s_blank
-        STA os_p
-        LDA #>s_blank
-        STA os_p+1
+st_norm:LDW os_p,#s_blank                ; <- tierA: address constant (next: JSR outs)
         JSR outs
-st_path:LDA #<path
-        STA os_p
-        LDA #>path
-        STA os_p+1
+st_path:LDW os_p,#path                ; <- tierA: address constant (next: JSR outs)
         JSR outs
         LDA dirty
         LDB #0
         CMP
         JZ st_eol
-        LDA #<s_plus
-        STA os_p
-        LDA #>s_plus
-        STA os_p+1
+        LDW os_p,#s_plus                ; <- tierA: address constant (next: JSR outs)
         JSR outs
 st_eol: JSR clreol
         RTS
@@ -1142,39 +1061,19 @@ copyline:
         STA cl_dp
         TPA1H
         STA cl_dp+1
-cl_l:   LDA cl_sp
-        TAP1L
-        LDA cl_sp+1
-        TAP1H
+cl_l:   LPW1 cl_sp                ; <- tierA: pointer load (next: LDA)
         LDA (P1)
         STA cl_c
-        LDA cl_dp
-        TAP1L
-        LDA cl_dp+1
-        TAP1H
+        LPW1 cl_dp                ; <- tierA: pointer load (next: LDA)
         LDA cl_c
         STA (P1)
         LDA cl_c
         LDB #0
         CMP
         JZ cl_d
-        LDA cl_sp
-        LDB #1
-        ADD
-        STA cl_sp
-        JNC cl_s1
-        LDA cl_sp+1
-        INC
-        STA cl_sp+1
-cl_s1:  LDA cl_dp
-        LDB #1
-        ADD
-        STA cl_dp
-        JNC cl_d1
-        LDA cl_dp+1
-        INC
-        STA cl_dp+1
-cl_d1:  JMP cl_l
+        INCW cl_sp                ; <- tierA: 16-bit INCW chain, skip label cl_s1 dropped (next: LDA)
+cl_s1:  INCW cl_dp                ; <- tierA: 16-bit INCW chain, skip label cl_d1 dropped (next: JMP cl_l -> LDA)
+        JMP cl_l
 cl_d:   RTS
 ; opendown: open a new empty line below cy (vi 'o'). Shifts lines cy+1..end down
 ; one slot, blanks the new line, bumps nlines, moves the cursor onto it, cx=0.
@@ -1384,14 +1283,8 @@ saveline:
         STA sl_p
         TPA1H
         STA sl_p+1
-        LDA sl_p
-        TAP2L
-        LDA sl_p+1
-        TAP2H
-        LDA #<usave
-        TAP1L
-        LDA #>usave
-        TAP1H
+        LPW2 sl_p                ; <- tierA: pointer load (next: LDA)
+        LDP1 #usave                ; <- tierA: pointer constant (next: LDA)
 sl_l:   LDA (P2)
         STA (P1)+
         LDB #0
@@ -1444,14 +1337,8 @@ il_set: LDA in_y
         STA sl_p
         TPA1H
         STA sl_p+1
-        LDA #<usave
-        TAP2L
-        LDA #>usave
-        TAP2H
-        LDA sl_p
-        TAP1L
-        LDA sl_p+1
-        TAP1H
+        LDP2 #usave                ; <- tierA: pointer constant (next: LDA)
+        LPW1 sl_p                ; <- tierA: pointer load (next: LDA)
 ils_l:  LDA (P2)
         STA (P1)+
         LDB #0
@@ -1470,10 +1357,7 @@ undo:   LDA uop
         LDB #0
         CMP
         JNZ un_go
-        LDA #<s_noundo
-        STA os_p
-        LDA #>s_noundo
-        STA os_p+1
+        LDW os_p,#s_noundo                ; <- tierA: address constant (next: JSR msg24)
         JSR msg24
         JSR placecur
         RTS
@@ -1494,14 +1378,8 @@ un_go:  LDA uop
         STA sl_p
         TPA1H
         STA sl_p+1
-        LDA #<usave
-        TAP2L
-        LDA #>usave
-        TAP2H
-        LDA sl_p
-        TAP1L
-        LDA sl_p+1
-        TAP1H
+        LDP2 #usave                ; <- tierA: pointer constant (next: LDA)
+        LPW1 sl_p                ; <- tierA: pointer load (next: LDA)
 un1_l:  LDA (P2)
         STA (P1)+
         LDB #0
@@ -1861,10 +1739,7 @@ dc_q0:  LDA dirty
         LDB #0
         CMP
         JZ dc_qquit
-        LDA #<s_nowrite
-        STA os_p
-        LDA #>s_nowrite
-        STA os_p+1
+        LDW os_p,#s_nowrite                ; <- tierA: address constant (next: JSR msg24)
         JSR msg24
         RTS
 dc_qquit:
@@ -1889,17 +1764,11 @@ dc_w:   LDA cmd
         JZ dc_wqsave
         JMP dc_unk
 dc_wsave:
-        LDA #<path
-        STA sv_p
-        LDA #>path
-        STA sv_p+1
+        LDW sv_p,#path                ; <- tierA: address constant (next: JSR save)
         JSR save
         RTS
 dc_wqsave:
-        LDA #<path
-        STA sv_p
-        LDA #>path
-        STA sv_p+1
+        LDW sv_p,#path                ; <- tierA: address constant (next: JSR save)
         JSR save
         LDA #1
         STA done
@@ -1912,18 +1781,12 @@ dc_x:   LDA cmd
         LDB #0
         CMP
         JNZ dc_unk
-        LDA #<path
-        STA sv_p
-        LDA #>path
-        STA sv_p+1
+        LDW sv_p,#path                ; <- tierA: address constant (next: JSR save)
         JSR save
         LDA #1
         STA done
         RTS
-dc_unk: LDA #<s_unknown
-        STA os_p
-        LDA #>s_unknown
-        STA os_p+1
+dc_unk: LDW os_p,#s_unknown                ; <- tierA: address constant (next: JSR msg24)
         JSR msg24
         RTS
 
@@ -1932,24 +1795,15 @@ dc_unk: LDA #<s_unknown
 ; FRESOLVE starts at root. P2 = source cursor, P1 = dest. (Ported from dir.asm.)
 abspath:LDA #0
         STA ap_n
-        LDA ap_a
-        TAP2L
-        LDA ap_a+1
-        TAP2H
+        LPW2 ap_a                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #'/'
         CMP
         JZ ab_abs
-        LDA ap_out
-        TAP1L
-        LDA ap_out+1
-        TAP1H
+        LPW1 ap_out                ; <- tierA: pointer load (next: LDA)
         LDA #0
         JSR SYS_GETCWD               ; SYS_GETCWD -> out
-        LDA ap_out
-        TAP1L
-        LDA ap_out+1
-        TAP1H
+        LPW1 ap_out                ; <- tierA: pointer load (next: LDA)
 ab_sl:  LDA (P1)
         LDB #0
         CMP
@@ -1965,14 +1819,8 @@ ab_sld: DEP1
         LDA #'/'
         STA (P1)+
         JMP ab_setp
-ab_abs: LDA ap_out
-        TAP1L
-        LDA ap_out+1
-        TAP1H
-ab_setp:LDA ap_a
-        TAP2L
-        LDA ap_a+1
-        TAP2H
+ab_abs: LPW1 ap_out                ; <- tierA: pointer load (next: LDA)
+ab_setp:LPW2 ap_a                ; <- tierA: pointer load (next: LDA)
 ab_cp:  LDA (P2)
         LDB #0
         CMP

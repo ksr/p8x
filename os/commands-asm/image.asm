@@ -44,10 +44,7 @@ i_disp: LDA GLID                ; the GL engine's probe ('G'), the ONE
         LDB #'G'                ;   presence signal since the device
         CMP                     ;   door closed
         JNZ i_nodisp
-        LDA #<i_gs              ; ground state: the port powers up with a
-        TAP1L                   ;   DEGENERATE window, so establish the
-        LDA #>i_gs              ;   identity window/viewport, outline
-        TAP1H                   ;   fill and a white pen -- the same
+        LDP1 #i_gs                ; <- tierA: pointer constant (next: LDA)
         LDA #24                 ;   bytes the C twin's gpresent() emits
         STA i_gn
 i_gsl:  LDA (P1)
@@ -86,19 +83,13 @@ i_args: JSR anum                ; x / x0
         LDB #0
         CMP
         JZ  i_use1
-        LDA i_num
-        STA v_x
-        LDA i_num+1
-        STA v_x+1
+        MOVW v_x,i_num                ; <- tierA: word move (next: JSR anum)
         JSR anum                ; y / y0
         LDA i_ok
         LDB #0
         CMP
         JZ  i_use1
-        LDA i_num
-        STA v_y
-        LDA i_num+1
-        STA v_y+1
+        MOVW v_y,i_num                ; <- tierA: word move (next: LDA)
         LDA i_rd
         LDB #0
         CMP
@@ -108,28 +99,16 @@ i_args: JSR anum                ; x / x0
         LDB #0
         CMP
         JZ  i_use1
-        LDA i_num
-        STA v_x1
-        LDA i_num+1
-        STA v_x1+1
+        MOVW v_x1,i_num                ; <- tierA: word move (next: JSR anum)
         JSR anum                ; y1
         LDA i_ok
         LDB #0
         CMP
         JZ  i_use1
-        LDA i_num
-        STA v_y1
-        LDA i_num+1
-        STA v_y1+1
+        MOVW v_y1,i_num                ; <- tierA: word move (next: JSR skipsp)
 i_path: JSR skipsp
-        LDA #<path              ; abspath(path, arg)
-        STA ap_out
-        LDA #>path
-        STA ap_out+1
-        LDA i_arg
-        STA ap_a
-        LDA i_arg+1
-        STA ap_a+1
+        LDW ap_out,#path                ; <- tierA: address constant (next: LDA)
+        MOVW ap_a,i_arg                ; <- tierA: word move (next: JSR abspath)
         JSR abspath
         LDA ap_n
         LDB #0
@@ -146,10 +125,7 @@ i_use0: JSR usage
 i_use1: JSR usage
         RTS
 i_nodisp:
-        LDA #<m_nod
-        TAP1L
-        LDA #>m_nod
-        TAP1H
+        LDP1 #m_nod                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS
         LDA #10
@@ -157,10 +133,7 @@ i_nodisp:
         RTS
 
 ; ---- DRAW: open, validate the 10-byte header, then the pixel loop ----------
-draw:   LDA #<path
-        TAP1L
-        LDA #>path
-        TAP1H
+draw:   LDP1 #path                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR FRESOLVE
         LDA #$00
@@ -170,10 +143,7 @@ draw:   LDA #<path
         LDA #0
         JSR FOPEN               ; C=1 -> not found
         JNC d_hdr
-        LDA #<m_nof
-        TAP1L
-        LDA #>m_nof
-        TAP1H
+        LDP1 #m_nof                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS
         LDA #10
@@ -264,10 +234,7 @@ d_ye:   LDA v_y+1               ; ye = y + h
         LDA v_ye+1
         INC
         STA v_ye+1
-d_py0:  LDA v_y
-        STA v_py
-        LDA v_y+1
-        STA v_py+1
+d_py0:  MOVW v_py,v_y                ; <- tierA: word move (next: LDA)
 ; --- row loop: write the Y pair once (nothing below touches GY0) ------------
 d_row:  LDA v_py
         LDB v_ye
@@ -320,14 +287,7 @@ d_pl:   LDA v_n
         LDB v_n+1
         OR
         JNZ d_pb
-        LDA v_py                ; row done: py += 1
-        LDB #1
-        ADD
-        STA v_py
-        JNC d_row
-        LDA v_py+1
-        INC
-        STA v_py+1
+        INCW v_py                ; <- tierA: 16-bit INCW chain before JMP d_row (next: JMP d_row -> LDA)
         JMP d_row
 d_pb:   LDA #0
         JSR FGETB               ; one payload byte (C=1 -> truncated)
@@ -342,10 +302,7 @@ d_pad:  LDA #0                  ; short file: the walker is owed the rest
         LDB v_n+1
         OR
         JNZ d_pad
-d_bad:  LDA #<m_bad
-        TAP1L
-        LDA #>m_bad
-        TAP1H
+d_bad:  LDP1 #m_bad                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS
         LDA #10
@@ -407,15 +364,8 @@ g_dim:  LDA v_x1                ; w = x1 - x0 + 1  (16-bit subtract: two's
         JMP g_d2
 g_d1:   SUB
         STA v_w+1
-g_d2:   LDA v_w
-        LDB #1
-        ADD
-        STA v_w
-        JNC g_d3
-        LDA v_w+1
-        INC
-        STA v_w+1
-g_d3:   LDA v_y1                ; h = y1 - y0 + 1
+g_d2:   INCW v_w                ; <- tierA: 16-bit INCW chain, skip label g_d3 dropped (next: LDA)
+        LDA v_y1                ; h = y1 - y0 + 1
         LDB v_y
         SUB
         STA v_h
@@ -429,15 +379,8 @@ g_d3:   LDA v_y1                ; h = y1 - y0 + 1
         JMP g_d5
 g_d4:   SUB
         STA v_h+1
-g_d5:   LDA v_h
-        LDB #1
-        ADD
-        STA v_h
-        JNC g_sync
-        LDA v_h+1
-        INC
-        STA v_h+1
-g_sync: LDA GLID               ; GL engine fitted? PGSYNC first, so
+g_d5:   INCW v_h                ; <- tierA: 16-bit INCW chain, skip label g_sync dropped (next: LDA)
+        LDA GLID               ; GL engine fitted? PGSYNC first, so
         LDB #'G'                ;   the grab reads what the panel shows
         CMP
         JNZ g_open
@@ -447,18 +390,12 @@ g_syw:  LDA GLSTAT             ; wait the verb out before grabbing
         LDB #64
         AND
         JNZ g_syw
-g_open: LDA #<path              ; replace an existing file: resolve, delete,
-        TAP1L                   ;   re-resolve (FDELETE walked the dir)
-        LDA #>path
-        TAP1H
+g_open: LDP1 #path                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR FRESOLVE
         LDA #0
         JSR FDELETE
-        LDA #<path
-        TAP1L
-        LDA #>path
-        TAP1H
+        LDP1 #path                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR FRESOLVE
         LDA #0
@@ -499,10 +436,7 @@ g_e1:   STA v_xe+1
         JNC g_e2
         INC
 g_e2:   STA v_ye+1
-        LDA v_y
-        STA v_py
-        LDA v_y+1
-        STA v_py+1
+        MOVW v_py,v_y                ; <- tierA: word move (next: LDA)
 g_row:  LDA v_py
         LDB v_ye
         CMP
@@ -514,10 +448,7 @@ g_row:  LDA v_py
         LDA #0                  ; done: close (C=1 -> ?Disk full)
         JSR FCLOSE
         JNC g_ok
-        LDA #<m_ful
-        TAP1L
-        LDA #>m_ful
-        TAP1H
+        LDP1 #m_ful                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS
         LDA #10
@@ -537,10 +468,7 @@ g_wyh:  STA v_t
         LDB v_py+1
         SUB
         STA v_wy+1
-        LDA v_x
-        STA v_px
-        LDA v_x+1
-        STA v_px+1
+        MOVW v_px,v_x                ; <- tierA: word move (next: LDA)
 g_px:   LDA v_px
         LDB v_xe
         CMP
@@ -549,14 +477,7 @@ g_px:   LDA v_px
         LDB v_xe+1
         CMP
         JNZ g_px1
-        LDA v_py                ; row done: py += 1
-        LDB #1
-        ADD
-        STA v_py
-        JNC g_row
-        LDA v_py+1
-        INC
-        STA v_py+1
+        INCW v_py                ; <- tierA: 16-bit INCW chain before JMP g_row (next: JMP g_row -> LDA)
         JMP g_row
 g_px1:  LDA #$63                ; PIXRD px wy -> the RB FIFO
         JSR glput
@@ -584,22 +505,12 @@ g_w2:   LDA GLSTAT
         JZ  g_w2
         LDA GLRB
         JSR FPUTB
-        LDA v_px
-        LDB #1
-        ADD
-        STA v_px
-        JNC g_px
-        LDA v_px+1
-        INC
-        STA v_px+1
+        INCW v_px                ; <- tierA: 16-bit INCW chain before JMP g_px (next: JMP g_px -> LDA)
         JMP g_px
 
 ; ---- helpers ---------------------------------------------------------------
 ; skipsp: advance i_arg past spaces; leaves P2 on the first non-space
-skipsp: LDA i_arg
-        TAP2L
-        LDA i_arg+1
-        TAP2H
+skipsp: LPW2 i_arg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #32
         CMP
@@ -609,15 +520,8 @@ skipsp: LDA i_arg
 sk_d:   RTS
 ; arginc: i_arg += 1 AND step P2 (caller keeps using P2)
 arginc: INP2
-argincm:LDA i_arg
-        LDB #1
-        ADD
-        STA i_arg
-        JNC ai_d
-        LDA i_arg+1
-        INC
-        STA i_arg+1
-ai_d:   RTS
+argincm:INCW i_arg                ; <- tierA: 16-bit INCW chain, skip label ai_d dropped (next: RTS)
+        RTS
 ; anum: parse a signed decimal at i_arg -> i_num; i_ok = saw digits.
 ; num*10 = (num<<3) + (num<<1), 16-bit shifts as SHL/ROL pairs.
 anum:   JSR skipsp
@@ -633,10 +537,7 @@ anum:   JSR skipsp
         LDA #1
         STA i_neg
         JSR arginc
-an_lp:  LDA i_arg
-        TAP2L
-        LDA i_arg+1
-        TAP2H
+an_lp:  LPW2 i_arg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #'0'
         CMP
@@ -709,18 +610,12 @@ an_end: LDA i_neg
         INC
         STA i_num+1
 an_rts: RTS
-usage:  LDA #<m_us1
-        TAP1L
-        LDA #>m_us1
-        TAP1H
+usage:  LDP1 #m_us1                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS
         LDA #10
         JSR SYS_PUTC
-        LDA #<m_us2
-        TAP1L
-        LDA #>m_us2
-        TAP1H
+        LDP1 #m_us2                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS
         LDA #10
@@ -731,24 +626,15 @@ usage:  LDA #<m_us1
 ; ap_n = chars consumed. Clobbers A, B, P1, P2.
 abspath:LDA #0
         STA ap_n
-        LDA ap_a
-        TAP2L
-        LDA ap_a+1
-        TAP2H
+        LPW2 ap_a                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #'/'
         CMP
         JZ ab_abs
-        LDA ap_out
-        TAP1L
-        LDA ap_out+1
-        TAP1H
+        LPW1 ap_out                ; <- tierA: pointer load (next: LDA)
         LDA #0
         JSR SYS_GETCWD
-        LDA ap_out
-        TAP1L
-        LDA ap_out+1
-        TAP1H
+        LPW1 ap_out                ; <- tierA: pointer load (next: LDA)
 ab_sl:  LDA (P1)
         LDB #0
         CMP
@@ -764,14 +650,8 @@ ab_sld: DEP1
         LDA #'/'
         STA (P1)+
         JMP ab_setp
-ab_abs: LDA ap_out
-        TAP1L
-        LDA ap_out+1
-        TAP1H
-ab_setp:LDA ap_a
-        TAP2L
-        LDA ap_a+1
-        TAP2H
+ab_abs: LPW1 ap_out                ; <- tierA: pointer load (next: LDA)
+ab_setp:LPW2 ap_a                ; <- tierA: pointer load (next: LDA)
 ab_cp:  LDA (P2)
         LDB #0
         CMP

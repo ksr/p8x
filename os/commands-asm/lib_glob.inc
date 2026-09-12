@@ -14,10 +14,7 @@
 ; compare case-insensitively (via gupper). Clobbers A, B, P1, P2 and the
 ; scratch vars gpc/gsc/gmr/guch. Recurses through gm_star (uses the SP stack
 ; to save/restore gp/gs across the trial call).
-gmatch: LDA gp                  ; load *gp (current pattern char) into gpc
-        TAP1L
-        LDA gp+1
-        TAP1H
+gmatch: LPW1 gp                ; <- tierA: pointer load (next: LDA)
         LDA (P1)
         STA gpc
         LDB #'*'
@@ -26,10 +23,7 @@ gmatch: LDA gp                  ; load *gp (current pattern char) into gpc
         LDB #0
         CMP
         JZ gm_pend             ; pattern exhausted -> match iff string also ends
-        LDA gs
-        TAP2L
-        LDA gs+1
-        TAP2H
+        LPW2 gs                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         STA gsc                ; gsc = *gs (current string char)
         LDB #0
@@ -51,29 +45,12 @@ gmatch: LDA gp                  ; load *gp (current pattern char) into gpc
         RTS
 ; gm_adv: gp++, gs++ (16-bit increments with carry into hi byte), then re-enter
 ; gmatch as a tail loop for the next char pair.
-gm_adv: LDA gp
-        LDB #1
-        ADD
-        STA gp
-        JNC gm_a1
-        LDA gp+1
-        INC
-        STA gp+1
-gm_a1:  LDA gs
-        LDB #1
-        ADD
-        STA gs
-        JNC gm_a2
-        LDA gs+1
-        INC
-        STA gs+1
-gm_a2:  JMP gmatch
+gm_adv: INCW gp                ; <- tierA: 16-bit INCW chain, skip label gm_a1 dropped (next: LDA)
+gm_a1:  INCW gs                ; <- tierA: 16-bit INCW chain, skip label gm_a2 dropped (next: JMP gmatch -> LDA)
+        JMP gmatch
 ; gm_pend: pattern is at its NUL terminator. Match succeeds only if the string
 ; is also at its terminator (no trailing chars left unmatched).
-gm_pend:LDA gs
-        TAP2L
-        LDA gs+1
-        TAP2H
+gm_pend:LPW2 gs                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #0
         CMP
@@ -121,22 +98,12 @@ gm_s0:  LDA gp
         LDB #0
         CMP
         JNZ gm_r1              ; trial matched -> '*' succeeds
-        LDA gs                 ; else: if *gs == 0 the string is exhausted -> fail
-        TAP2L
-        LDA gs+1
-        TAP2H
+        LPW2 gs                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #0
         CMP
         JZ gm_r0
-        LDA gs                 ; consume one string char (gs++), then retry gm_s0
-        LDB #1
-        ADD
-        STA gs
-        JNC gm_s0
-        LDA gs+1
-        INC
-        STA gs+1
+        INCW gs                ; <- tierA: 16-bit INCW chain before JMP gm_s0 (next: JMP gm_s0 -> LDA)
         JMP gm_s0
 ; gupper — fold a lowercase ASCII letter to uppercase (used for case-insensitive
 ; matching). In: A = char. Out: A = uppercased char. Clobbers B and guch.

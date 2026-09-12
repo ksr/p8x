@@ -16,22 +16,12 @@
         STA w_arg+1
 ; w_sk: skip leading spaces in the arg tail. Reload P2 from w_arg each pass
 ; because the byte fetch below is via (P2), then advance the 16-bit w_arg.
-w_sk:   LDA w_arg
-        TAP2L
-        LDA w_arg+1
-        TAP2H
+w_sk:   LPW2 w_arg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #32
         CMP
         JNZ w_chk
-        LDA w_arg
-        LDB #1
-        ADD
-        STA w_arg
-        JNC w_sk
-        LDA w_arg+1
-        INC
-        STA w_arg+1
+        INCW w_arg                ; <- tierA: 16-bit INCW chain before JMP w_sk (next: JMP w_sk -> LDA)
         JMP w_sk
 ; w_chk: first non-space char. If it is '-', peek the next char for a -h/-H
 ; help flag; anything else (including a bare '-') falls through to open.
@@ -47,10 +37,7 @@ w_chk:  LDA (P2)
         LDB #'H'
         CMP
         JZ w_usage
-w_open: LDA w_arg                     ; openarg(arg)
-        STA oa_a
-        LDA w_arg+1
-        STA oa_a+1
+w_open: MOVW oa_a,w_arg                ; <- tierA: word move (next: JSR openarg)
         JSR openarg                   ; open file/glob (or stdin if empty)
         LDB #2                        ; openarg returns 2 = not found
         CMP
@@ -138,28 +125,19 @@ w_wi:   LDA #1
 w_ws:   LDA #0
         STA inword
         JMP w_loop
-w_done: LDA lines                     ; print lines words bytes
-        STA pn
-        LDA lines+1
-        STA pn+1
+w_done: MOVW pn,lines                ; <- tierA: word move (next: LDA)
         LDA lines+2
         STA pn+2
         JSR put24
         LDA #32
         JSR SYS_PUTC
-        LDA words
-        STA pn
-        LDA words+1
-        STA pn+1
+        MOVW pn,words                ; <- tierA: word move (next: LDA)
         LDA words+2
         STA pn+2
         JSR put24
         LDA #32
         JSR SYS_PUTC
-        LDA bytes
-        STA pn
-        LDA bytes+1
-        STA pn+1
+        MOVW pn,bytes                ; <- tierA: word move (next: LDA)
         LDA bytes+2
         STA pn+2
         JSR put24
@@ -171,19 +149,13 @@ w_done: LDA lines                     ; print lines words bytes
 ; message INTO F, and `wc missing | cmd` would hand it downstream as data.
 ; Matches wc.c's eputs(). w_usage below is NOT an error (the user asked with -h),
 ; so it stays on stdout and `wc -h >notes` still captures it.
-w_nf:   LDA #<u_nf
-        TAP1L
-        LDA #>u_nf
-        TAP1H
+w_nf:   LDP1 #u_nf                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR PUTS
         LDA #10
         JSR CONOUT
         RTS
-w_usage:LDA #<u_use
-        TAP1L
-        LDA #>u_use
-        TAP1H
+w_usage:LDP1 #u_use                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS
         LDA #10
@@ -197,10 +169,7 @@ w_usage:LDA #<u_use
 ;   psnd) and replayed in reverse. The first dm10 runs unconditionally so a
 ;   zero value still prints "0". Uses P1; clobbers A/B, num24, dg, psnd,
 ;   pstmp (via pu_push) and dm10's scratch (dmrem, dmi, dv, dvq, dvr).
-put24:  LDA pn
-        STA num24
-        LDA pn+1
-        STA num24+1
+put24:  MOVW num24,pn                ; <- tierA: word move (next: LDA)
         LDA pn+2
         STA num24+2
         LDA #0
@@ -315,9 +284,7 @@ nz_y:   LDA #1
 
 ; divmod10: dv (word) -> dvq=dv/10, dvr=dv%10  (P1 preserved)
 divmod10:
-        LDA #0
-        STA dvq
-        STA dvq+1
+        LDW dvq,#0                ; <- tierA: zero word (next: LDA)
 dv_l:   LDA dv+1
         LDB #0
         CMP
@@ -337,14 +304,7 @@ dv_sub: LDA dv
         LDA dv+1
         DEC
         STA dv+1
-dv_nc:  LDA dvq
-        LDB #1
-        ADD
-        STA dvq
-        JNC dv_l
-        LDA dvq+1
-        INC
-        STA dvq+1
+dv_nc:  INCW dvq                ; <- tierA: 16-bit INCW chain before JMP dv_l (next: JMP dv_l -> LDA)
         JMP dv_l
 
 u_nf:   .asciiz "wc: not found"

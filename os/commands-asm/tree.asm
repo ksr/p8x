@@ -51,10 +51,7 @@ tr_run: LDA #0                        ; SYS_OPENCWD
         JSR walk
         RTS
 tr_usage:
-        LDA #<u_use
-        TAP1L
-        LDA #>u_use
-        TAP1H
+        LDP1 #u_use                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS
         LDA #10
@@ -77,10 +74,7 @@ tw_next:
         LDA #0
         JSR FNEXT                    ; advance BIOS dir cursor; clobbers P1/P2
         JC tw_desc                    ; carry = end of directory -> go descend
-        LDA #<de                      ; de_read: SYS_DIRENTRY -> de
-        TAP1L
-        LDA #>de
-        TAP1H
+        LDP1 #de                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_DIRENTRY
         LDA de                        ; skip '.' / '..' (any name starting '.')
@@ -104,10 +98,7 @@ tw_ind: LDA cnt
         JMP tw_ind
 ; putname: de[0..11], skip spaces
 tw_name:
-        LDA #<de
-        TAP1L
-        LDA #>de
-        TAP1H
+        LDP1 #de                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         STA cnt                       ; index 0..11
 tw_nl:  LDA cnt
@@ -171,10 +162,7 @@ tw_dl:  JSR idx_addr
         STA lba
         LDA (P1)
         STA lba+1
-        LDA lba
-        TAP1L
-        LDA lba+1
-        TAP1H
+        LPW1 lba                ; <- tierA: pointer load (next: LDA)
         LDA #0
         JSR SYS_OPENDIR              ; SYS_OPENDIR
         LDA #0                        ; FSDIRBUF page $EA
@@ -229,24 +217,15 @@ ia1:    TAP1H
 ;   (48 = 24 entries * 2 bytes/LBA per level; each LBA is 16-bit lo,hi).
 ;   caddr is a 16-bit scratch accumulator; clobbers P1, A, B, cnt, caddr.
 csub_addr:
-        LDA #0
-        STA caddr
-        STA caddr+1
+        LDW caddr,#0                ; <- tierA: zero word (next: LDA)
         LDA w_depth                   ; caddr = w_depth * 48
         STA cnt
 ca_ml:  LDA cnt
         LDB #0
         CMP
         JZ ca_md
-        LDA caddr
-        LDB #48
-        ADD
-        STA caddr
-        JNC ca_m1
-        LDA caddr+1
-        INC
-        STA caddr+1
-ca_m1:  LDA cnt
+        ADDW caddr,#48                ; <- tierA: 16-bit ADDW chain, skip label ca_m1 dropped (next: LDA)
+        LDA cnt
         DEC
         STA cnt
         JMP ca_ml
@@ -269,10 +248,7 @@ ca_k1:  LDA caddr                     ; caddr += csub base
         JNC ca_b1
         INC
 ca_b1:  STA caddr+1
-        LDA caddr
-        TAP1L
-        LDA caddr+1
-        TAP1H
+        LPW1 caddr                ; <- tierA: pointer load (next: RTS)
         RTS
 
 u_use:  .asciiz "usage: TREE   depth-first indented listing of the CWD tree"

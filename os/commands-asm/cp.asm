@@ -19,22 +19,12 @@
         STA c_arg+1
         LDA #0
         STA rec
-c_sk:   LDA c_arg
-        TAP2L
-        LDA c_arg+1
-        TAP2H
+c_sk:   LPW2 c_arg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #32
         CMP
         JNZ c_opt
-        LDA c_arg
-        LDB #1
-        ADD
-        STA c_arg
-        JNC c_sk
-        LDA c_arg+1
-        INC
-        STA c_arg+1
+        INCW c_arg                ; <- tierA: 16-bit INCW chain before JMP c_sk (next: JMP c_sk -> LDA)
         JMP c_sk
 c_opt:  LDA (P2)
         LDB #'-'
@@ -65,27 +55,14 @@ c_setr: LDA #1
         LDA c_arg+1
         INC
         STA c_arg+1
-csr_s:  LDA c_arg
-        TAP2L
-        LDA c_arg+1
-        TAP2H
+csr_s:  LPW2 c_arg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #32
         CMP
         JNZ c_args
-        LDA c_arg
-        LDB #1
-        ADD
-        STA c_arg
-        JNC csr_s
-        LDA c_arg+1
-        INC
-        STA c_arg+1
+        INCW c_arg                ; <- tierA: 16-bit INCW chain before JMP csr_s (next: JMP csr_s -> LDA)
         JMP csr_s
-c_args: LDA c_arg
-        TAP2L
-        LDA c_arg+1
-        TAP2H
+c_args: LPW2 c_arg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #0
         CMP
@@ -95,14 +72,8 @@ c_args: LDA c_arg
         JZ c_usage2
         LDA #0                       ; copy src WORD into patw, note glob (cg)
         STA cg
-        LDA #<patw
-        TAP1L
-        LDA #>patw
-        TAP1H
-        LDA c_arg
-        TAP2L
-        LDA c_arg+1
-        TAP2H
+        LDP1 #patw                ; <- tierA: pointer constant (next: LDA)
+        LPW2 c_arg                ; <- tierA: pointer load (next: LDA)
         LDA #0
         STA cpw
 cpw_l:  LDA (P2)
@@ -141,22 +112,12 @@ cpw_d:  LDA #0
         LDA c_arg+1
         INC
         STA c_arg+1
-ca_sk:  LDA c_arg
-        TAP2L
-        LDA c_arg+1
-        TAP2H
+ca_sk:  LPW2 c_arg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #32
         CMP
         JNZ ca_d
-        LDA c_arg
-        LDB #1
-        ADD
-        STA c_arg
-        JNC ca_sk
-        LDA c_arg+1
-        INC
-        STA c_arg+1
+        INCW c_arg                ; <- tierA: 16-bit INCW chain before JMP ca_sk (next: JMP ca_sk -> LDA)
         JMP ca_sk
 ca_d:   LDA (P2)
         LDB #0
@@ -165,83 +126,47 @@ ca_d:   LDA (P2)
         LDB #13
         CMP
         JZ c_usage2
-        LDA #<dst
-        STA ap_out
-        LDA #>dst
-        STA ap_out+1
-        LDA c_arg
-        STA ap_a
-        LDA c_arg+1
-        STA ap_a+1
+        LDW ap_out,#dst                ; <- tierA: address constant (next: LDA)
+        MOVW ap_a,c_arg                ; <- tierA: word move (next: JSR abspath)
         JSR abspath                  ; abspath(dst, arg)
         LDA cg                       ; glob source? -> c_glob
         LDB #0
         CMP
         JNZ c_glob
-        LDA #<src                    ; single: abspath(src, patw)
-        STA ap_out
-        LDA #>src
-        STA ap_out+1
-        LDA #<patw
-        STA ap_a
-        LDA #>patw
-        STA ap_a+1
+        LDW ap_out,#src                ; <- tierA: address constant (next: LDA)
+        LDW ap_a,#patw                ; <- tierA: address constant (next: JSR abspath)
         JSR abspath
         LDA rec
         LDB #0
         CMP
         JZ c_dofile
-        LDA #<src
-        STA id_p
-        LDA #>src
-        STA id_p+1
+        LDW id_p,#src                ; <- tierA: address constant (next: JSR isdir)
         JSR isdir
         LDB #0
         CMP
         JZ c_dofile
-        LDA #<src
-        STA ct_s
-        LDA #>src
-        STA ct_s+1
-        LDA #<dst
-        STA ct_d
-        LDA #>dst
-        STA ct_d+1
+        LDW ct_s,#src                ; <- tierA: address constant (next: LDA)
+        LDW ct_d,#dst                ; <- tierA: address constant (next: LDA)
         LDA #0
         STA w_depth
         JSR copy_tree
         RTS
 c_dofile:
-        LDA #<src
-        STA cf_s
-        LDA #>src
-        STA cf_s+1
-        LDA #<dst
-        STA cf_d
-        LDA #>dst
-        STA cf_d+1
+        LDW cf_s,#src                ; <- tierA: address constant (next: LDA)
+        LDW cf_d,#dst                ; <- tierA: address constant (next: JSR copy_file)
         JSR copy_file
         LDB #1
         CMP
         JZ c_srcnf
         RTS
 ; --- glob: dst must be a dir; copy each match into it -----------------------
-c_glob: LDA #<dst
-        STA id_p
-        LDA #>dst
-        STA id_p+1
+c_glob: LDW id_p,#dst                ; <- tierA: address constant (next: JSR isdir)
         JSR isdir
         LDB #0
         CMP
         JZ c_notdir
-        LDA #<patw
-        STA ge_pat
-        LDA #>patw
-        STA ge_pat+1
-        LDA #<gfiles
-        STA ge_out
-        LDA #>gfiles
-        STA ge_out+1
+        LDW ge_pat,#patw                ; <- tierA: address constant (next: LDA)
+        LDW ge_out,#gfiles                ; <- tierA: address constant (next: LDA)
         LDA #24
         STA ge_max
         JSR glob_expand
@@ -256,61 +181,31 @@ cg_l:   LDA cgi
         CMP
         JC cg_done                   ; i >= cnt
         JSR cg_ptr                   ; cgp = gfiles + cgi*64
-        LDA #<src                    ; abspath(src, cgp)
-        STA ap_out
-        LDA #>src
-        STA ap_out+1
-        LDA cgp
-        STA ap_a
-        LDA cgp+1
-        STA ap_a+1
+        LDW ap_out,#src                ; <- tierA: address constant (next: LDA)
+        MOVW ap_a,cgp                ; <- tierA: word move (next: JSR abspath)
         JSR abspath
         JSR cg_base                  ; cgbp = basename of the match
-        LDA #<jdst                   ; joinp(jdst, dst, basename)
-        STA jp_out
-        LDA #>jdst
-        STA jp_out+1
-        LDA #<dst
-        STA jp_dir
-        LDA #>dst
-        STA jp_dir+1
-        LDA cgbp
-        STA jp_name
-        LDA cgbp+1
-        STA jp_name+1
+        LDW jp_out,#jdst                ; <- tierA: address constant (next: LDA)
+        LDW jp_dir,#dst                ; <- tierA: address constant (next: LDA)
+        MOVW jp_name,cgbp                ; <- tierA: word move (next: JSR joinp)
         JSR joinp
         LDA rec                      ; -r && dir -> copy_tree, else copy_file
         LDB #0
         CMP
         JZ cg_file
-        LDA #<src
-        STA id_p
-        LDA #>src
-        STA id_p+1
+        LDW id_p,#src                ; <- tierA: address constant (next: JSR isdir)
         JSR isdir
         LDB #0
         CMP
         JZ cg_file
-        LDA #<src
-        STA ct_s
-        LDA #>src
-        STA ct_s+1
-        LDA #<jdst
-        STA ct_d
-        LDA #>jdst
-        STA ct_d+1
+        LDW ct_s,#src                ; <- tierA: address constant (next: LDA)
+        LDW ct_d,#jdst                ; <- tierA: address constant (next: LDA)
         LDA #0
         STA w_depth
         JSR copy_tree
         JMP cg_next
-cg_file:LDA #<src
-        STA cf_s
-        LDA #>src
-        STA cf_s+1
-        LDA #<jdst
-        STA cf_d
-        LDA #>jdst
-        STA cf_d+1
+cg_file:LDW cf_s,#src                ; <- tierA: address constant (next: LDA)
+        LDW cf_d,#jdst                ; <- tierA: address constant (next: JSR copy_file)
         JSR copy_file
 cg_next:LDA cgi
         INC
@@ -318,36 +213,21 @@ cg_next:LDA cgi
         JMP cg_l
 cg_done:RTS
 c_notdir:
-        LDA #<u_notdir
-        TAP1L
-        LDA #>u_notdir
-        TAP1H
+        LDP1 #u_notdir                ; <- tierA: pointer constant (next: JMP c_eput -> LDA)
         JMP c_eput
 c_nomatch:
-        LDA #<u_nomat
-        TAP1L
-        LDA #>u_nomat
-        TAP1H
+        LDP1 #u_nomat                ; <- tierA: pointer constant (next: JMP c_eput -> LDA)
         JMP c_eput
 ; cg_ptr: cgp = gfiles + cgi*64
-cg_ptr: LDA #0
-        STA cgp
-        STA cgp+1
+cg_ptr: LDW cgp,#0                ; <- tierA: zero word (next: LDA)
         LDA cgi
         STA cgt
 cgp_l:  LDA cgt
         LDB #0
         CMP
         JZ cgp_d
-        LDA cgp
-        LDB #64
-        ADD
-        STA cgp
-        JNC cgp_1
-        LDA cgp+1
-        INC
-        STA cgp+1
-cgp_1:  LDA cgt
+        ADDW cgp,#64                ; <- tierA: 16-bit ADDW chain, skip label cgp_1 dropped (next: LDA)
+        LDA cgt
         DEC
         STA cgt
         JMP cgp_l
@@ -367,14 +247,8 @@ cgp_2:  STA cgcar
         STA cgp+1
         RTS
 ; cg_base: cgbp = cgp advanced past the last '/', else cgp
-cg_base:LDA cgp
-        STA cgbp
-        LDA cgp+1
-        STA cgbp+1
-        LDA cgp
-        TAP1L
-        LDA cgp+1
-        TAP1H
+cg_base:MOVW cgbp,cgp                ; <- tierA: word move (next: LDA)
+        LPW1 cgp                ; <- tierA: pointer load (next: LDA)
         LDA #0
         STA cgk
 cgb_l:  LDA (P1)
@@ -406,21 +280,12 @@ cgb_d:  RTS
 ; c_usage: -h was asked for, so this is requested OUTPUT: it stays on stdout via
 ; SYS_PUTS/SYS_PUTC and `cp -h >notes` still captures it. Everything below it is
 ; on a failure path and takes the c_eput tail instead.
-c_usage:LDA #<u_use
-        TAP1L
-        LDA #>u_use
-        TAP1H
+c_usage:LDP1 #u_use                ; <- tierA: pointer constant (next: JMP c_put -> LDA)
         JMP c_put
 c_usage2:
-        LDA #<u_use2
-        TAP1L
-        LDA #>u_use2
-        TAP1H
+        LDP1 #u_use2                ; <- tierA: pointer constant (next: JMP c_eput -> LDA)
         JMP c_eput
-c_srcnf:LDA #<u_nf
-        TAP1L
-        LDA #>u_nf
-        TAP1H
+c_srcnf:LDP1 #u_nf                ; <- tierA: pointer constant (next: LDA)
 ; c_eput: ERROR tail — print P1's string on the raw console (PUTS/CONOUT), never
 ; to stdout, which may be a redirect or a pipe: `cp x y >F` would otherwise write
 ; the message INTO F and `cp x y | wc` would feed it to wc as data. The newline
@@ -444,10 +309,7 @@ c_put:  LDA #0
 ;   FGETB/FPUTB clobber P1/P2, so cfch stashes each byte between the two calls.
 ;   Returns A=0 on success, A=1 if the source could not be opened (cf_nf).
 copy_file:
-        LDA cf_s
-        TAP1L
-        LDA cf_s+1
-        TAP1H
+        LPW1 cf_s                ; <- tierA: pointer load (next: LDA)
         LDA #0
         JSR FRESOLVE
         LDA #$00
@@ -457,10 +319,7 @@ copy_file:
         LDA #0
         JSR FOPEN
         JC cf_nf
-        LDA cf_d
-        TAP1L
-        LDA cf_d+1
-        TAP1H
+        LPW1 cf_d                ; <- tierA: pointer load (next: LDA)
         LDA #0
         JSR FRESOLVE
         LDA #0
@@ -483,10 +342,7 @@ cf_nf:  LDA #1
         RTS
 ; isdir: return A=1 if the path at id_p is a directory (FOPENDIR succeeds,
 ;   C clear), else A=0. FOPENDIR sets C on failure.
-isdir:  LDA id_p
-        TAP1L
-        LDA id_p+1
-        TAP1H
+isdir:  LPW1 id_p                ; <- tierA: pointer load (next: LDA)
         LDA #0
         JSR FOPENDIR
         JC id_no
@@ -514,20 +370,14 @@ copy_tree:
         STA sc_d
         TPA1H
         STA sc_d+1
-        LDA ct_s
-        STA sc_s
-        LDA ct_s+1
-        STA sc_s+1
+        MOVW sc_s,ct_s                ; <- tierA: word move (next: JSR scopy)
         JSR scopy
         JSR dpd_a                    ; dp[d] = *ct_d
         TPA1L
         STA sc_d
         TPA1H
         STA sc_d+1
-        LDA ct_d
-        STA sc_s
-        LDA ct_d+1
-        STA sc_s+1
+        MOVW sc_s,ct_d                ; <- tierA: word move (next: JSR scopy)
         JSR scopy
         JSR dpd_a                    ; SYS_MKDIR(dp[d])
         LDA #0
@@ -549,10 +399,7 @@ ct_nl:  LDA #0
         LDA #0
         JSR FNEXT
         JC ct_proc
-        LDA #<de
-        TAP1L
-        LDA #>de
-        TAP1H
+        LDP1 #de                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_DIRENTRY
         LDA de
@@ -634,10 +481,7 @@ ct_pl:  JSR idx_a
         LDB cti
         CMP
         JZ ct_ret
-        LDA #<jsrc                   ; joinp(jsrc, sp[d], names[d][cti])
-        STA jp_out
-        LDA #>jsrc
-        STA jp_out+1
+        LDW jp_out,#jsrc                ; <- tierA: address constant (next: JSR spd_a)
         JSR spd_a
         TPA1L
         STA jp_dir
@@ -651,10 +495,7 @@ ct_pl:  JSR idx_a
         TPA1H
         STA jp_name+1
         JSR joinp
-        LDA #<jdst                   ; joinp(jdst, dp[d], names[d][cti])
-        STA jp_out
-        LDA #>jdst
-        STA jp_out+1
+        LDW jp_out,#jdst                ; <- tierA: address constant (next: JSR dpd_a)
         JSR dpd_a
         TPA1L
         STA jp_dir
@@ -673,14 +514,8 @@ ct_pl:  JSR idx_a
         LDB #0
         CMP
         JZ ct_file
-        LDA #<jsrc                   ; recurse: copy_tree(jsrc,jdst)
-        STA ct_s
-        LDA #>jsrc
-        STA ct_s+1
-        LDA #<jdst
-        STA ct_d
-        LDA #>jdst
-        STA ct_d+1
+        LDW ct_s,#jsrc                ; <- tierA: address constant (next: LDA)
+        LDW ct_d,#jdst                ; <- tierA: address constant (next: LDA)
 ; Depth cap: the per-level arrays hold exactly 8 levels (sp/dp 8*80, names 8*312,
 ; isd 8*24), so descending at w_depth==8 would make spd_a run off sp into dp and
 ; names_a/isd_a into their neighbours. Skip the subtree instead of corrupting it.
@@ -695,14 +530,8 @@ ct_pl:  JSR idx_a
         DEC
         STA w_depth
         JMP ct_pinc
-ct_file:LDA #<jsrc
-        STA cf_s
-        LDA #>jsrc
-        STA cf_s+1
-        LDA #<jdst
-        STA cf_d
-        LDA #>jdst
-        STA cf_d+1
+ct_file:LDW cf_s,#jsrc                ; <- tierA: address constant (next: LDA)
+        LDW cf_d,#jdst                ; <- tierA: address constant (next: JSR copy_file)
         JSR copy_file
 ct_pinc:JSR idx_a
         LDA (P1)
@@ -714,14 +543,8 @@ ct_ret: RTS
 ; ======================= scopy / joinp =====================================
 ; scopy: strcpy from sc_s to sc_d (NUL-terminated). Returns A = length copied
 ;   (not counting the terminator). Clobbers P1/P2.
-scopy:  LDA sc_d
-        TAP1L
-        LDA sc_d+1
-        TAP1H
-        LDA sc_s
-        TAP2L
-        LDA sc_s+1
-        TAP2H
+scopy:  LPW1 sc_d                ; <- tierA: pointer load (next: LDA)
+        LPW2 sc_s                ; <- tierA: pointer load (next: LDA)
         LDA #0
         STA sc_n
 sc_l:   LDA (P2)
@@ -740,14 +563,8 @@ sc_dn:  LDA #0
         RTS
 ; joinp: build jp_out = jp_dir + "/" + jp_name, inserting a single '/' only if
 ;   jp_dir does not already end in one. Returns A = total length. Clobbers P1/P2.
-joinp:  LDA jp_out
-        STA sc_d
-        LDA jp_out+1
-        STA sc_d+1
-        LDA jp_dir
-        STA sc_s
-        LDA jp_dir+1
-        STA sc_s+1
+joinp:  MOVW sc_d,jp_out                ; <- tierA: word move (next: LDA)
+        MOVW sc_s,jp_dir                ; <- tierA: word move (next: JSR scopy)
         JSR scopy
         STA jp_i
         LDB #0
@@ -780,10 +597,7 @@ jp2:    TAP1H
         LDA jp_i
         INC
         STA jp_i
-jp_cn:  LDA jp_name
-        TAP2L
-        LDA jp_name+1
-        TAP2H
+jp_cn:  LPW2 jp_name                ; <- tierA: pointer load (next: LDA)
         LDA jp_out
         LDB jp_i
         ADD
@@ -814,24 +628,15 @@ jp_nd:  LDA #0
 ;   so a trailing arg on the command line is not included.
 abspath:LDA #0
         STA ap_n
-        LDA ap_a
-        TAP2L
-        LDA ap_a+1
-        TAP2H
+        LPW2 ap_a                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #'/'
         CMP
         JZ ab_abs
-        LDA ap_out
-        TAP1L
-        LDA ap_out+1
-        TAP1H
+        LPW1 ap_out                ; <- tierA: pointer load (next: LDA)
         LDA #0
         JSR SYS_GETCWD
-        LDA ap_out
-        TAP1L
-        LDA ap_out+1
-        TAP1H
+        LPW1 ap_out                ; <- tierA: pointer load (next: LDA)
 ab_sl:  LDA (P1)
         LDB #0
         CMP
@@ -847,14 +652,8 @@ ab_sld: DEP1
         LDA #'/'
         STA (P1)+
         JMP ab_setp
-ab_abs: LDA ap_out
-        TAP1L
-        LDA ap_out+1
-        TAP1H
-ab_setp:LDA ap_a
-        TAP2L
-        LDA ap_a+1
-        TAP2H
+ab_abs: LPW1 ap_out                ; <- tierA: pointer load (next: LDA)
+ab_setp:LPW2 ap_a                ; <- tierA: pointer load (next: LDA)
 ab_cp:  LDA (P2)
         LDB #0
         CMP
@@ -902,34 +701,19 @@ idx_a:  LDA #<cidx
 ixa1:   TAP1H
         RTS
 ; spd_a: P1 = sp + w_depth*80
-spd_a:  LDA #<sp
-        STA ha
-        LDA #>sp
-        STA ha+1
+spd_a:  LDW ha,#sp                ; <- tierA: address constant (next: JMP mul80 -> LDA)
         JMP mul80
 ; dpd_a: P1 = dp + w_depth*80
-dpd_a:  LDA #<dp
-        STA ha
-        LDA #>dp
-        STA ha+1
-mul80:  LDA #0
-        STA ht
-        STA ht+1
+dpd_a:  LDW ha,#dp                ; <- tierA: address constant (next: LDA)
+mul80:  LDW ht,#0                ; <- tierA: zero word (next: LDA)
         LDA w_depth
         STA hn
 m80l:   LDA hn
         LDB #0
         CMP
         JZ m80d
-        LDA ht
-        LDB #80
-        ADD
-        STA ht
-        JNC m801
-        LDA ht+1
-        INC
-        STA ht+1
-m801:   LDA hn
+        ADDW ht,#80                ; <- tierA: 16-bit ADDW chain, skip label m801 dropped (next: LDA)
+        LDA hn
         DEC
         STA hn
         JMP m80l
@@ -947,30 +731,18 @@ m80b:   STA hcar
         LDB hcar
         ADD
         STA ht+1
-        LDA ht
-        TAP1L
-        LDA ht+1
-        TAP1H
+        LPW1 ht                ; <- tierA: pointer load (next: RTS)
         RTS
 ; isd_a: P1 = isd + w_depth*24 + cti
-isd_a:  LDA #0
-        STA ht
-        STA ht+1
+isd_a:  LDW ht,#0                ; <- tierA: zero word (next: LDA)
         LDA w_depth
         STA hn
 isa_m:  LDA hn
         LDB #0
         CMP
         JZ isa_md
-        LDA ht
-        LDB #24
-        ADD
-        STA ht
-        JNC isa_1
-        LDA ht+1
-        INC
-        STA ht+1
-isa_1:  LDA hn
+        ADDW ht,#24                ; <- tierA: 16-bit ADDW chain, skip label isa_1 dropped (next: LDA)
+        LDA hn
         DEC
         STA hn
         JMP isa_m
@@ -996,17 +768,12 @@ isa_b:  STA hcar
         LDB hcar
         ADD
         STA ht+1
-        LDA ht
-        TAP1L
-        LDA ht+1
-        TAP1H
+        LPW1 ht                ; <- tierA: pointer load (next: RTS)
         RTS
 ; names_a: P1 = names + w_depth*312 + cti*13 + ctk
 ;   Slot stride is 13, not 12: de[0..11] is a 12-byte space-padded name field, so
 ;   a full 12-char name has no pad -- byte 12 of the slot is the forced NUL.
-names_a:LDA #0
-        STA ht
-        STA ht+1
+names_a:LDW ht,#0                ; <- tierA: zero word (next: LDA)
         LDA w_depth
         STA hn
 na_m:   LDA hn
@@ -1016,15 +783,8 @@ na_m:   LDA hn
         LDA ht+1                     ; +312 = +256 +56
         INC
         STA ht+1
-        LDA ht
-        LDB #56
-        ADD
-        STA ht
-        JNC na_1
-        LDA ht+1
-        INC
-        STA ht+1
-na_1:   LDA hn
+        ADDW ht,#56                ; <- tierA: 16-bit ADDW chain, skip label na_1 dropped (next: LDA)
+        LDA hn
         DEC
         STA hn
         JMP na_m
@@ -1034,15 +794,8 @@ na_cl:  LDA hk
         LDB #0
         CMP
         JZ na_cd
-        LDA ht
-        LDB #13
-        ADD
-        STA ht
-        JNC na_c1
-        LDA ht+1
-        INC
-        STA ht+1
-na_c1:  LDA hk
+        ADDW ht,#13                ; <- tierA: 16-bit ADDW chain, skip label na_c1 dropped (next: LDA)
+        LDA hk
         DEC
         STA hk
         JMP na_cl
@@ -1068,10 +821,7 @@ na_b:   STA hcar
         LDB hcar
         ADD
         STA ht+1
-        LDA ht
-        TAP1L
-        LDA ht+1
-        TAP1H
+        LPW1 ht                ; <- tierA: pointer load (next: RTS)
         RTS
 
 u_use:  .asciiz "usage: CP [-r] src dst   copy a file/glob, or -r a directory tree"

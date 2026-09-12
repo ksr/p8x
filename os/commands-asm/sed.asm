@@ -40,10 +40,7 @@ sed_c0: LDA (P2)                     ; empty/CR arg -> print usage
         LDB #'H'
         CMP
         JZ sed_usage
-        LDA s_sav                    ; not -h: restore P2, fall through to expr
-        TAP2L
-        LDA s_sav+1
-        TAP2H
+        LPW2 s_sav                ; <- tierA: pointer load (next: LDA)
 sed_s:  LDA (P2)                     ; require leading 's' of s/re/new/
         LDB #'s'
         CMP
@@ -58,10 +55,7 @@ sed_s:  LDA (P2)                     ; require leading 's' of s/re/new/
         CMP
         JNZ sed_only
         INP2
-        LDA #<pat                    ; parse pattern up to '/'
-        TAP1L
-        LDA #>pat
-        TAP1H
+        LDP1 #pat                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         STA si                       ; si = count of pattern chars copied
 sp_l:   LDA si
@@ -88,10 +82,7 @@ sp_d:   LDA #0                        ; NUL-terminate pat
 ; with carry into the high byte).
         LDA #0
         STA anchored
-        LDA #<pat
-        STA rpat
-        LDA #>pat
-        STA rpat+1
+        LDW rpat,#pat                ; <- tierA: address constant (next: LDA)
         LDA pat
         LDB #'^'
         CMP
@@ -114,10 +105,7 @@ sp_nosl:LDA (P2)                     ; second '/' required after the pattern
         CMP
         JNZ sed_nosl
         INP2
-        LDA #<rep                    ; parse replacement up to '/'
-        TAP1L
-        LDA #>rep
-        TAP1H
+        LDP1 #rep                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         STA sj                       ; sj = count of replacement chars copied
 srp_l:  LDA sj
@@ -179,10 +167,7 @@ sof_d:  TPA2L                        ; openarg: P2 -> filename (empty = stdin)
 ; Address math is 16-bit (base + index with carry into the high byte) because
 ; line/out can straddle a page boundary.
 sed_loop:
-        LDA #<line
-        STA rl_buf
-        LDA #>line
-        STA rl_buf+1
+        LDW rl_buf,#line                ; <- tierA: address constant (next: JSR readline)
         JSR readline
         LDB #0                        ; readline -> 0 = EOF, done
         CMP
@@ -312,10 +297,7 @@ sl_end: LDA #<out                    ; NUL-terminate out at [sn]
 sle1:   TAP1H
         LDA #0
         STA (P1)
-        LDA #<out                     ; print the rewritten line + newline
-        TAP1L
-        LDA #>out
-        TAP1H
+        LDP1 #out                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS
         LDA #10
@@ -326,10 +308,7 @@ sed_end:RTS
 ; sed_usage is NOT an error: the user asked for it with -h (or gave no argument
 ; at all), so it stays on SYS_PUTS/SYS_PUTC and `sed -h >notes` still captures it.
 sed_usage:
-        LDA #<u_use
-        TAP1L
-        LDA #>u_use
-        TAP1H
+        LDP1 #u_use                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS
         LDA #10
@@ -337,21 +316,12 @@ sed_usage:
         RTS
 ; Error exits: point P1 at a message, fall into sed_pm to print it.
 sed_only:
-        LDA #<u_only
-        TAP1L
-        LDA #>u_only
-        TAP1H
+        LDP1 #u_only                ; <- tierA: pointer constant (next: JMP sed_pm -> LDA)
         JMP sed_pm
 sed_nosl:
-        LDA #<u_nosl
-        TAP1L
-        LDA #>u_nosl
-        TAP1H
+        LDP1 #u_nosl                ; <- tierA: pointer constant (next: JMP sed_pm -> LDA)
         JMP sed_pm
-sed_nf: LDA #<u_nf
-        TAP1L
-        LDA #>u_nf
-        TAP1H
+sed_nf: LDP1 #u_nf                ; <- tierA: pointer constant (next: LDA)
 ; sed_pm: print the error in P1 + newline on the RAW CONSOLE (PUTS/CONOUT), never
 ; on stdout — stdout may be a redirect or a pipe, so `sed s/x/y/ missing >F` would
 ; otherwise write the message INTO F, and `sed bogus | wc` would feed it to wc as
@@ -382,14 +352,8 @@ ra_go:  LDA #<line                   ; ra_lp = &line[ra_i] (16-bit)
         JNC ra1
         INC
 ra1:    STA ra_lp+1
-        LDA rpat                     ; matchhere inputs: rx_re = pattern ptr,
-        STA rx_re
-        LDA rpat+1
-        STA rx_re+1
-        LDA ra_lp                    ; rx_t = text ptr; sets rend past the match
-        STA rx_t
-        LDA ra_lp+1
-        STA rx_t+1
+        MOVW rx_re,rpat                ; <- tierA: word move (next: LDA)
+        MOVW rx_t,ra_lp                ; <- tierA: word move (next: JSR matchhere)
         JSR matchhere
         LDB #0
         CMP
@@ -404,10 +368,7 @@ ra_no:  LDA #0
 ; readline: rl_buf -> A=1 line read / 0 EOF (cursor rlp reloaded per store,
 ; since nextc clobbers P1/P2).
 readline:
-        LDA rl_buf
-        STA rlp
-        LDA rl_buf+1
-        STA rlp+1
+        MOVW rlp,rl_buf                ; <- tierA: word move (next: LDA)
         LDA #0
         STA rln
         JSR nextc                     ; nextc: A = next char, C=1 at EOF
@@ -424,30 +385,17 @@ rl_l:   STA rlc
         LDB #255                       ; ignore chars past 255 (buffer cap)
         CMP
         JC rl_skip
-        LDA rlp
-        TAP1L
-        LDA rlp+1
-        TAP1H
+        LPW1 rlp                ; <- tierA: pointer load (next: LDA)
         LDA rlc
         STA (P1)
-        LDA rlp
-        LDB #1
-        ADD
-        STA rlp
-        JNC rl_s1
-        LDA rlp+1
-        INC
-        STA rlp+1
-rl_s1:  LDA rln
+        INCW rlp                ; <- tierA: 16-bit INCW chain, skip label rl_s1 dropped (next: LDA)
+        LDA rln
         INC
         STA rln
 rl_skip:JSR nextc
         JC rl_done
         JMP rl_l
-rl_done:LDA rlp
-        TAP1L
-        LDA rlp+1
-        TAP1H
+rl_done:LPW1 rlp                ; <- tierA: pointer load (next: LDA)
         LDA #0
         STA (P1)
         LDA #1

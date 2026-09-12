@@ -18,22 +18,12 @@
         TPA2H
         STA d_arg+1
 ; d_sk: advance d_arg past leading spaces (ASCII 32) in the arg tail.
-d_sk:   LDA d_arg
-        TAP2L
-        LDA d_arg+1
-        TAP2H
+d_sk:   LPW2 d_arg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #32
         CMP
         JNZ d_chk
-        LDA d_arg
-        LDB #1
-        ADD
-        STA d_arg
-        JNC d_sk
-        LDA d_arg+1
-        INC
-        STA d_arg+1
+        INCW d_arg                ; <- tierA: 16-bit INCW chain before JMP d_sk (next: JMP d_sk -> LDA)
         JMP d_sk
 ; d_chk: first non-space char. NUL or CR (13) = empty tail -> usage. A leading
 ; '-' means an option; the only options accepted are -h / -H, both print usage.
@@ -55,14 +45,8 @@ d_chk:  LDA (P2)
         LDB #'H'
         CMP
         JZ d_usage
-d_f1:   LDA #<path                   ; abspath(path, arg) - file 1
-        STA ap_out
-        LDA #>path
-        STA ap_out+1
-        LDA d_arg
-        STA ap_a
-        LDA d_arg+1
-        STA ap_a+1
+d_f1:   LDW ap_out,#path                ; <- tierA: address constant (next: LDA)
+        MOVW ap_a,d_arg                ; <- tierA: word move (next: JSR abspath)
         JSR abspath
         LDA d_arg                    ; advance d_arg past the token just consumed
         LDB ap_n                     ; ap_n = char count abspath copied from arg
@@ -73,22 +57,12 @@ d_f1:   LDA #<path                   ; abspath(path, arg) - file 1
         INC
         STA d_arg+1
 ; d_f1s: skip spaces between file1 and file2 tokens in the arg tail.
-d_f1s:  LDA d_arg
-        TAP2L
-        LDA d_arg+1
-        TAP2H
+d_f1s:  LPW2 d_arg                ; <- tierA: pointer load (next: LDA)
 d_f1sk: LDA (P2)
         LDB #32
         CMP
         JNZ d_open1
-        LDA d_arg
-        LDB #1
-        ADD
-        STA d_arg
-        JNC d_f1s
-        LDA d_arg+1
-        INC
-        STA d_arg+1
+        INCW d_arg                ; <- tierA: 16-bit INCW chain before JMP d_f1s (next: JMP d_f1s -> LDA)
         JMP d_f1s
 ; d_open1: open file1; openf returns A=0 on not-found. Load its lines into
 ; alines and record the count in na.
@@ -96,16 +70,10 @@ d_open1:JSR openf
         LDB #0
         CMP
         JZ d_nf1
-        LDA #<alines
-        STA ll_buf
-        LDA #>alines
-        STA ll_buf+1
+        LDW ll_buf,#alines                ; <- tierA: address constant (next: JSR loadlines)
         JSR loadlines
         STA na
-        LDA d_arg                    ; file 2 must be present
-        TAP2L
-        LDA d_arg+1
-        TAP2H
+        LPW2 d_arg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #0
         CMP
@@ -113,23 +81,14 @@ d_open1:JSR openf
         LDB #13
         CMP
         JZ d_usage2
-        LDA #<path
-        STA ap_out
-        LDA #>path
-        STA ap_out+1
-        LDA d_arg
-        STA ap_a
-        LDA d_arg+1
-        STA ap_a+1
+        LDW ap_out,#path                ; <- tierA: address constant (next: LDA)
+        MOVW ap_a,d_arg                ; <- tierA: word move (next: JSR abspath)
         JSR abspath
         JSR openf
         LDB #0
         CMP
         JZ d_nf2
-        LDA #<blines
-        STA ll_buf
-        LDA #>blines
-        STA ll_buf+1
+        LDW ll_buf,#blines                ; <- tierA: address constant (next: JSR loadlines)
         JSR loadlines
         STA nb
 ; ---- common prefix --------------------------------------------------------
@@ -144,16 +103,10 @@ pfx_l:  LDA dp
         LDB nb                        ; CMP left A = dp
         CMP
         JC pfx_d                      ; dp >= nb -> ran off file2
-        LDA #<alines
-        STA le_x
-        LDA #>alines
-        STA le_x+1
+        LDW le_x,#alines                ; <- tierA: address constant (next: LDA)
         LDA dp
         STA le_xi
-        LDA #<blines
-        STA le_y
-        LDA #>blines
-        STA le_y+1
+        LDW le_y,#blines                ; <- tierA: address constant (next: LDA)
         LDA dp
         STA le_yi
         JSR leq                       ; leq -> A=1 if the two lines are equal
@@ -184,18 +137,12 @@ sfx_l:  LDA dsa
         LDB #1
         SUB
         STA le_xi
-        LDA #<alines
-        STA le_x
-        LDA #>alines
-        STA le_x+1
+        LDW le_x,#alines                ; <- tierA: address constant (next: LDA)
         LDA dsb
         LDB #1
         SUB
         STA le_yi
-        LDA #<blines
-        STA le_y
-        LDA #>blines
-        STA le_y+1
+        LDW le_y,#blines                ; <- tierA: address constant (next: JSR leq)
         JSR leq
         LDB #0
         CMP
@@ -224,14 +171,8 @@ de_a:   LDA di
         LDB dsa
         CMP
         JC de_ad                      ; di >= dsa -> file1 region done
-        LDA #<tag_lt
-        STA em_tag
-        LDA #>tag_lt
-        STA em_tag+1
-        LDA #<alines
-        STA em_buf
-        LDA #>alines
-        STA em_buf+1
+        LDW em_tag,#tag_lt                ; <- tierA: address constant (next: LDA)
+        LDW em_buf,#alines                ; <- tierA: address constant (next: LDA)
         LDA di
         STA em_li
         JSR emit
@@ -245,14 +186,8 @@ de_b:   LDA di
         LDB dsb
         CMP
         JC de_bd                      ; di >= dsb -> file2 region done
-        LDA #<tag_gt
-        STA em_tag
-        LDA #>tag_gt
-        STA em_tag+1
-        LDA #<blines
-        STA em_buf
-        LDA #>blines
-        STA em_buf+1
+        LDW em_tag,#tag_gt                ; <- tierA: address constant (next: LDA)
+        LDW em_buf,#blines                ; <- tierA: address constant (next: LDA)
         LDA di
         STA em_li
         JSR emit
@@ -270,29 +205,17 @@ de_bd:  RTS
 ;
 ; d_usage is reached from -h/-H *and* from an empty arg tail, and returns 0
 ; either way — it is requested output, so `diff -h >notes` still captures it.
-d_usage:LDA #<u_use
-        TAP1L
-        LDA #>u_use
-        TAP1H
+d_usage:LDP1 #u_use                ; <- tierA: pointer constant (next: JMP d_pm -> LDA)
         JMP d_pm
 ; d_usage2/d_nf1/d_nf2 are failure exits (diff.c returns 1) -> console.
 ; d_usage2 is a usage line printed *because* file2 was missing, so it is an
 ; error like the not-found pair, not a request.
 d_usage2:
-        LDA #<u_use2
-        TAP1L
-        LDA #>u_use2
-        TAP1H
+        LDP1 #u_use2                ; <- tierA: pointer constant (next: JMP d_perr -> LDA)
         JMP d_perr
-d_nf1:  LDA #<u_nf1
-        TAP1L
-        LDA #>u_nf1
-        TAP1H
+d_nf1:  LDP1 #u_nf1                ; <- tierA: pointer constant (next: JMP d_perr -> LDA)
         JMP d_perr
-d_nf2:  LDA #<u_nf2
-        TAP1L
-        LDA #>u_nf2
-        TAP1H
+d_nf2:  LDP1 #u_nf2                ; <- tierA: pointer constant (next: LDA)
 d_perr: LDA #0                       ; error message -> raw console
         JSR PUTS
         LDA #10
@@ -308,10 +231,7 @@ d_pm:   LDA #0                       ; requested output -> stdout
 ; caller-supplied file-handle/descriptor buffer; $FC00 is the fixed scratch
 ; page this command uses for it. FOPEN sets carry on failure.
 ; Out: A = 1 opened / 0 not found. Clobbers P1 (and P1/P2 via FRESOLVE/FOPEN).
-openf:  LDA #<path
-        TAP1L
-        LDA #>path
-        TAP1H
+openf:  LDP1 #path                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR FRESOLVE
         LDA #$00                     ; P1 = $FC00 = FOPEN handle buffer
@@ -354,10 +274,7 @@ ll_rd:  LDA #0
         LDB #79
         CMP
         JC ll_rd                      ; col >= 79 -> line full, drop char
-        LDA ll_buf
-        STA la_base
-        LDA ll_buf+1
-        STA la_base+1
+        MOVW la_base,ll_buf                ; <- tierA: word move (next: LDA)
         LDA lln
         STA la_s
         LDA llcol
@@ -370,10 +287,7 @@ ll_rd:  LDA #0
         STA llcol
         JMP ll_rd
 ; ll_nl: end of line - write the NUL terminator, bump line index, reset column.
-ll_nl:  LDA ll_buf
-        STA la_base
-        LDA ll_buf+1
-        STA la_base+1
+ll_nl:  MOVW la_base,ll_buf                ; <- tierA: word move (next: LDA)
         LDA lln
         STA la_s
         LDA llcol
@@ -397,10 +311,7 @@ ll_fin: LDA llcol
         LDB #96
         CMP
         JC ll_ret                     ; no room for the partial line -> drop it
-        LDA ll_buf
-        STA la_base
-        LDA ll_buf+1
-        STA la_base+1
+        MOVW la_base,ll_buf                ; <- tierA: word move (next: LDA)
         LDA lln
         STA la_s
         LDA llcol
@@ -421,23 +332,14 @@ ll_ret: LDA lln
 ; Each row base is computed once (laddr's line*80 is a repeated add, so calling
 ; it per byte would cost O(line) adds per byte); P1/P2 then walk the two rows.
 ; Both rows are always NUL-terminated within their 80 bytes, so the walk ends.
-leq:    LDA le_y
-        STA la_base
-        LDA le_y+1
-        STA la_base+1
+leq:    MOVW la_base,le_y                ; <- tierA: word move (next: LDA)
         LDA le_yi
         STA la_s
         LDA #0
         STA la_c
         JSR laddr                     ; P1 = &Y[le_yi][0]; lat holds the same addr
-        LDA lat
-        TAP2L
-        LDA lat+1
-        TAP2H                         ; P2 walks row Y (laddr never touches P2)
-        LDA le_x
-        STA la_base
-        LDA le_x+1
-        STA la_base+1
+        LPW2 lat                ; <- tierA: pointer load (next: LDA)
+        MOVW la_base,le_x                ; <- tierA: word move (next: LDA)
         LDA le_xi
         STA la_s
         LDA #0
@@ -463,10 +365,7 @@ le_yes: LDA #1
 
 ; emit: print the NUL-terminated tag at em_tag, then line em_li of grid em_buf,
 ; then a newline (LF, 10). Clobbers P1 and the la* scratch vars.
-emit:   LDA em_tag
-        TAP1L
-        LDA em_tag+1
-        TAP1H
+emit:   LPW1 em_tag                ; <- tierA: pointer load (next: LDA)
 et_l:   LDA (P1)
         LDB #0
         CMP
@@ -474,10 +373,7 @@ et_l:   LDA (P1)
         JSR SYS_PUTC
         INP1
         JMP et_l
-et_ln:  LDA em_buf
-        STA la_base
-        LDA em_buf+1
-        STA la_base+1
+et_ln:  MOVW la_base,em_buf                ; <- tierA: word move (next: LDA)
         LDA em_li
         STA la_s
         LDA #0
@@ -499,24 +395,15 @@ el_d:   LDA #10
 ; Out: P1 = la_base + la_s*80 + la_c. la_s*80 done by repeated 16-bit add of 80
 ; (lat is the running 16-bit accumulator; lacar carries into the high byte on
 ; the final base add). Clobbers A/B, P1, lat/lan/lacar.
-laddr:  LDA #0
-        STA lat
-        STA lat+1
+laddr:  LDW lat,#0                ; <- tierA: zero word (next: LDA)
         LDA la_s
         STA lan
 lad_m:  LDA lan
         LDB #0
         CMP
         JZ lad_md
-        LDA lat
-        LDB #80
-        ADD
-        STA lat
-        JNC lad_1
-        LDA lat+1
-        INC
-        STA lat+1
-lad_1:  LDA lan
+        ADDW lat,#80                ; <- tierA: 16-bit ADDW chain, skip label lad_1 dropped (next: LDA)
+        LDA lan
         DEC
         STA lan
         JMP lad_m
@@ -542,10 +429,7 @@ lad_3:  STA lacar
         LDB lacar
         ADD
         STA lat+1
-        LDA lat
-        TAP1L
-        LDA lat+1
-        TAP1H
+        LPW1 lat                ; <- tierA: pointer load (next: RTS)
         RTS
 
 ; abspath: build an absolute path in the buffer at ap_out from the arg token
@@ -556,24 +440,15 @@ lad_3:  STA lacar
 ; the token; dest is NUL-terminated. Clobbers A/B, P1, P2.
 abspath:LDA #0
         STA ap_n
-        LDA ap_a
-        TAP2L
-        LDA ap_a+1
-        TAP2H
+        LPW2 ap_a                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #'/'
         CMP
         JZ ab_abs                     ; leading '/' -> already absolute
-        LDA ap_out
-        TAP1L
-        LDA ap_out+1
-        TAP1H
+        LPW1 ap_out                ; <- tierA: pointer load (next: LDA)
         LDA #0
         JSR SYS_GETCWD
-        LDA ap_out
-        TAP1L
-        LDA ap_out+1
-        TAP1H
+        LPW1 ap_out                ; <- tierA: pointer load (next: LDA)
 ; ab_sl: advance P1 to the NUL at the end of the copied CWD string.
 ab_sl:  LDA (P1)
         LDB #0
@@ -592,16 +467,10 @@ ab_sld: DEP1
         LDA #'/'
         STA (P1)+
         JMP ab_setp
-ab_abs: LDA ap_out
-        TAP1L
-        LDA ap_out+1
-        TAP1H
+ab_abs: LPW1 ap_out                ; <- tierA: pointer load (next: LDA)
 ; ab_setp: point P2 back at the token and append it to dest (P1), counting
 ; chars in ap_n and stopping at NUL / CR / space.
-ab_setp:LDA ap_a
-        TAP2L
-        LDA ap_a+1
-        TAP2H
+ab_setp:LPW2 ap_a                ; <- tierA: pointer load (next: LDA)
 ab_cp:  LDA (P2)
         LDB #0
         CMP

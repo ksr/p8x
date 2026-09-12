@@ -59,8 +59,17 @@ remainder is why it is still here.
       board 5,546 → 2,041 B (−63%); vi.c on the board 26,632 → 25,228 B;
       cc.bin 22,924 → 20,905 B; the same subset program: p8cc.py 1,066 B,
       p8cc.c 1,107 B, on-board 2,146 B (static slots + single pass ≈ 2×, by
-      design; equivalence is behavioural). Stage 4 continues with the command
-      twins, asm libraries, OS/WM kernel and monitor.
+      design; equivalence is behavioural).
+      **Command twins + asm libraries rewritten (2026-09-12):** the pass run
+      over all 28 `os/commands-asm/*.asm` and 7 `lib_*.inc` with per-file
+      callee allow-lists (each callee's entry inspected: SYS_PUTS/SYS_GETCWD
+      take P1; wrappers whose first act is a cleared call are cleared too):
+      662 sites, 32 files. Every twin assembles; /bin total 148,744 →
+      142,115 B (−4.5%; the twins were already byte-oriented, so the gain is
+      mostly pointer loads and word moves); cmdbuild's on-board asm-match for
+      vi and c_image's pixel-identical twin check hold. What remains is 8-bit
+      character compares. Next: OS + WM kernel, then the monitor (user's
+      order).
 
 > **THE BOARD HAS TWO STALENESS SURFACES; A FEATURE MAY NEED BOTH.** The
 > BITSTREAM carries the CPU, microcode, monitor ROM and graphics RTL

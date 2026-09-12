@@ -21,22 +21,12 @@
         TPA2H
         STA s_arg+1
 ; skip leading spaces (ASCII 32) in the arg tail so s_arg points at first token
-s_sk:   LDA s_arg
-        TAP2L
-        LDA s_arg+1
-        TAP2H
+s_sk:   LPW2 s_arg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #32
         CMP
         JNZ s_chk
-        LDA s_arg
-        LDB #1
-        ADD
-        STA s_arg
-        JNC s_sk                     ; no carry from low byte -> loop
-        LDA s_arg+1                  ; propagate carry into high byte
-        INC
-        STA s_arg+1
+        INCW s_arg                ; <- tierA: 16-bit INCW chain before JMP s_sk (next: JMP s_sk -> LDA)
         JMP s_sk
 ; if the token starts with '-', treat "-h"/"-H" as a request for usage text
 s_chk:  LDA (P2)
@@ -52,10 +42,7 @@ s_chk:  LDA (P2)
         CMP
         JZ s_usage
 ; open the source: openarg picks the file at s_arg, or stdin if the tail is empty
-s_open: LDA s_arg
-        STA oa_a
-        LDA s_arg+1
-        STA oa_a+1
+s_open: MOVW oa_a,s_arg                ; <- tierA: word move (next: JSR openarg)
         JSR openarg
         LDB #2                       ; openarg returns 2 = file-not-found
         CMP
@@ -188,28 +175,16 @@ sw_l:   LDA k                        ; for k in 0..79
         STA am
         TPA1H
         STA am+1
-        LDA ai                       ; swt = *ai (save si's byte)
-        TAP1L
-        LDA ai+1
-        TAP1H
+        LPW1 ai                ; <- tierA: pointer load (next: LDA)
         LDA (P1)
         STA swt
-        LDA am                       ; swu = *am (save smin's byte)
-        TAP1L
-        LDA am+1
-        TAP1H
+        LPW1 am                ; <- tierA: pointer load (next: LDA)
         LDA (P1)
         STA swu
-        LDA ai                       ; *ai = swu
-        TAP1L
-        LDA ai+1
-        TAP1H
+        LPW1 ai                ; <- tierA: pointer load (next: LDA)
         LDA swu
         STA (P1)
-        LDA am                       ; *am = swt
-        TAP1L
-        LDA am+1
-        TAP1H
+        LPW1 am                ; <- tierA: pointer load (next: LDA)
         LDA swt
         STA (P1)
         LDA k
@@ -253,19 +228,13 @@ sp_done:RTS
 ; SYS_PUTC: those are stdout, which the shell may have aimed at a file or a pipe,
 ; and a diagnostic must never land in the redirect or be read as data downstream.
 ; s_usage below is output the user asked for with -h, so it stays on stdout.
-s_nf:   LDA #<u_nf
-        TAP1L
-        LDA #>u_nf
-        TAP1H
+s_nf:   LDP1 #u_nf                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR PUTS
         LDA #10
         JSR CONOUT
         RTS
-s_usage:LDA #<u_use
-        TAP1L
-        LDA #>u_use
-        TAP1H
+s_usage:LDP1 #u_use                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS
         LDA #10
@@ -311,10 +280,7 @@ laddr:  LDA la_s                      ; la_t (16-bit accumulator) = row
         LDA la_t+1
         ROL
         STA la_t+1
-        LDA la_t                      ; la_u = row*16 (saved for the final add)
-        STA la_u
-        LDA la_t+1
-        STA la_u+1
+        MOVW la_u,la_t                ; <- tierA: word move (next: LDA)
         LDA la_t                      ; la_t <<= 1  (row*32)
         SHL
         STA la_t
@@ -363,10 +329,7 @@ la_b1:  STA la_car
         LDB la_car
         ADD
         STA la_t+1
-        LDA la_t                      ; move result into P1
-        TAP1L
-        LDA la_t+1
-        TAP1H
+        LPW1 la_t                ; <- tierA: pointer load (next: RTS)
         RTS
 
 ; lless: A = 1 if line ll_x sorts before line ll_y (unsigned bytes), else 0.

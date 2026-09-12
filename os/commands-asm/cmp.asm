@@ -12,10 +12,7 @@
         STA carg
         TPA2H
         STA carg+1
-c_sk:   LDA carg                     ; skip leading spaces
-        TAP2L
-        LDA carg+1
-        TAP2H
+c_sk:   LPW2 carg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #32
         CMP
@@ -50,10 +47,7 @@ c_f1:   JSR set_ap                   ; abspath(path, carg) — file 1
         LDA carg+1
         INC
         STA carg+1
-c_f1s:  LDA carg                     ; skip spaces before file 2
-        TAP2L
-        LDA carg+1
-        TAP2H
+c_f1s:  LPW2 carg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #32
         CMP
@@ -65,13 +59,8 @@ c_op1:  JSR openf
         CMP
         JZ c_nf1
         ; ---- slurp file 1 into b1 (cap 8192) ----
-        LDA #0
-        STA n1                       ; n1 = 16-bit count of bytes read from file1
-        STA n1+1
-        LDA #<b1                     ; sp = write cursor, starts at buffer b1
-        STA sp
-        LDA #>b1
-        STA sp+1
+        LDW n1,#0                ; <- tierA: zero word (next: LDA)
+        LDW sp,#b1                ; <- tierA: address constant (next: LDA)
 c_rd1:  LDA #0
         JSR FGETB
         JC c_rd1e
@@ -80,10 +69,7 @@ c_rd1:  LDA #0
         LDB #$20
         CMP
         JC c_rd1n                    ; n1.hi >= $20 -> at cap, skip store
-        LDA sp
-        TAP1L
-        LDA sp+1
-        TAP1H
+        LPW1 sp                ; <- tierA: pointer load (next: LDA)
         LDA rb
         STA (P1)
         LDA sp                       ; sp++
@@ -94,14 +80,7 @@ c_rd1:  LDA #0
         LDA sp+1
         INC
         STA sp+1
-c_rd1n: LDA n1                       ; n1++
-        LDB #1
-        ADD
-        STA n1
-        JNC c_rd1
-        LDA n1+1
-        INC
-        STA n1+1
+c_rd1n: INCW n1                ; <- tierA: 16-bit INCW chain before JMP c_rd1 (next: JMP c_rd1 -> LDA)
         JMP c_rd1
 c_rd1e: LDA n1+1                     ; n1 > 8192 -> too large
         LDB #$20
@@ -112,10 +91,7 @@ c_rd1e: LDA n1+1                     ; n1 > 8192 -> too large
         LDB #0
         CMP
         JNZ c_big
-c_f2:   LDA carg                     ; file 2 must be present
-        TAP2L
-        LDA carg+1
-        TAP2H
+c_f2:   LPW2 carg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #0
         CMP
@@ -130,13 +106,8 @@ c_f2:   LDA carg                     ; file 2 must be present
         CMP
         JZ c_nf2
         ; ---- stream file 2, compare against b1 ----
-        LDA #0
-        STA off
-        STA off+1
-        LDA #1
-        STA line
-        LDA #0
-        STA line+1
+        LDW off,#0                ; <- tierA: zero word (next: LDA)
+        LDW line,#1                ; <- tierA: word constant (next: LDA)
 c_rd2:  LDA #0
         JSR FGETB
         JC c_rd2e
@@ -176,10 +147,7 @@ ce_lo:  LDA off
         JNC c_eof2                   ; off.lo < n1.lo -> off < n1
 c_eq:   RTS                          ; identical -> silent
 ; ---- outcomes ----
-c_diff: LDA #<m_diff
-        TAP1L
-        LDA #>m_diff
-        TAP1H
+c_diff: LDP1 #m_diff                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS
         LDA off                      ; byte = off + 1
@@ -191,16 +159,10 @@ c_diff: LDA #<m_diff
         INC
 c_d1:   STA dv+1
         JSR pnum
-        LDA #<m_line
-        TAP1L
-        LDA #>m_line
-        TAP1H
+        LDP1 #m_line                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS
-        LDA line
-        STA dv
-        LDA line+1
-        STA dv+1
+        MOVW dv,line                ; <- tierA: word move (next: JSR pnum)
         JSR pnum
         LDA #10
         JSR SYS_PUTC
@@ -209,36 +171,18 @@ c_d1:   STA dv+1
 ; through c_epln -> the raw console. stdout may be a redirect or a pipe:
 ; `cmp a b >OUT` would otherwise write "cmp: file2 not found" INTO OUT, and
 ; `cmp a b | wc` would hand it to wc as data. Mirrors cmp.c's eputs().
-c_eof1: LDA #<m_eof1
-        TAP1L
-        LDA #>m_eof1
-        TAP1H
+c_eof1: LDP1 #m_eof1                ; <- tierA: pointer constant (next: JMP c_epln -> LDA)
         JMP c_epln
-c_eof2: LDA #<m_eof2
-        TAP1L
-        LDA #>m_eof2
-        TAP1H
+c_eof2: LDP1 #m_eof2                ; <- tierA: pointer constant (next: JMP c_epln -> LDA)
         JMP c_epln
-c_nf1:  LDA #<m_nf1
-        TAP1L
-        LDA #>m_nf1
-        TAP1H
+c_nf1:  LDP1 #m_nf1                ; <- tierA: pointer constant (next: JMP c_epln -> LDA)
         JMP c_epln
-c_nf2:  LDA #<m_nf2
-        TAP1L
-        LDA #>m_nf2
-        TAP1H
+c_nf2:  LDP1 #m_nf2                ; <- tierA: pointer constant (next: JMP c_epln -> LDA)
         JMP c_epln
-c_big:  LDA #<m_big
-        TAP1L
-        LDA #>m_big
-        TAP1H
+c_big:  LDP1 #m_big                ; <- tierA: pointer constant (next: JMP c_epln -> LDA)
         JMP c_epln
 ; m_use2 is usage printed *because* file2 was missing — a failure, so console.
-c_use2: LDA #<m_use2
-        TAP1L
-        LDA #>m_use2
-        TAP1H
+c_use2: LDP1 #m_use2                ; <- tierA: pointer constant (next: LDA)
 c_epln: LDA #0
         JSR PUTS                     ; $0112: console, bypassing stdout
         LDA #10
@@ -246,10 +190,7 @@ c_epln: LDA #0
         RTS
 ; c_use is NOT an error: the user asked for it with -h (or bare CMP) and it exits
 ; 0, so it stays on stdout and `CMP -h >notes` still captures it.
-c_use:  LDA #<m_use
-        TAP1L
-        LDA #>m_use
-        TAP1H
+c_use:  LDP1 #m_use                ; <- tierA: pointer constant (next: LDA)
 c_pln:  LDA #0
         JSR SYS_PUTS
         LDA #10
@@ -276,50 +217,20 @@ bp_nc:  STA bcar
 ; carg_inc / off_inc / line_inc: 16-bit ++ of the named var, low byte first,
 ;   carry into the high byte only when the low byte wraps 255->0. No outputs;
 ;   clobbers A/B. (P8X has no INC-with-carry, hence the JNC/INC hi pattern.)
-carg_inc: LDA carg
-        LDB #1
-        ADD
-        STA carg
-        JNC ci_r
-        LDA carg+1
-        INC
-        STA carg+1
-ci_r:   RTS
-off_inc: LDA off
-        LDB #1
-        ADD
-        STA off
-        JNC oi_r
-        LDA off+1
-        INC
-        STA off+1
-oi_r:   RTS
-line_inc: LDA line
-        LDB #1
-        ADD
-        STA line
-        JNC li_r
-        LDA line+1
-        INC
-        STA line+1
-li_r:   RTS
+carg_inc:INCW carg                ; <- tierA: 16-bit INCW chain, skip label ci_r dropped (next: RTS)
+        RTS
+off_inc:INCW off                ; <- tierA: 16-bit INCW chain, skip label oi_r dropped (next: RTS)
+        RTS
+line_inc:INCW line                ; <- tierA: 16-bit INCW chain, skip label li_r dropped (next: RTS)
+        RTS
 ; set_ap: point abspath at its buffers before each JSR abspath — dest ap_out =
 ;   the shared 'path' buffer, source ap_a = current carg word. Clobbers A.
-set_ap: LDA #<path
-        STA ap_out
-        LDA #>path
-        STA ap_out+1
-        LDA carg
-        STA ap_a
-        LDA carg+1
-        STA ap_a+1
+set_ap: LDW ap_out,#path                ; <- tierA: address constant (next: LDA)
+        MOVW ap_a,carg                ; <- tierA: word move (next: RTS)
         RTS
 
 ; openf: FRESOLVE(path)+FOPEN($FC00) -> A = 1 ok / 0 not found
-openf:  LDA #<path
-        TAP1L
-        LDA #>path
-        TAP1H
+openf:  LDP1 #path                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR FRESOLVE
         LDA #$00
@@ -337,30 +248,15 @@ of_no:  LDA #0
 ; pnum: print the 16-bit value in dv as decimal (no leading zeros). (from awk.asm)
 pnum:   LDA #0
         STA pd_any
-        LDA #$10
-        STA pv
-        LDA #$27
-        STA pv+1
+        LDW pv,#10000                ; <- tierA: word constant (next: JSR pd_dig)
         JSR pd_dig
-        LDA #$E8
-        STA pv
-        LDA #$03
-        STA pv+1
+        LDW pv,#1000                ; <- tierA: word constant (next: JSR pd_dig)
         JSR pd_dig
-        LDA #100
-        STA pv
-        LDA #0
-        STA pv+1
+        LDW pv,#100                ; <- tierA: word constant (next: JSR pd_dig)
         JSR pd_dig
-        LDA #10
-        STA pv
-        LDA #0
-        STA pv+1
+        LDW pv,#10                ; <- tierA: word constant (next: JSR pd_dig)
         JSR pd_dig
-        LDA #1
-        STA pv
-        LDA #0
-        STA pv+1
+        LDW pv,#1                ; <- tierA: word constant (next: LDA)
         LDA #1
         STA pd_any
         JSR pd_dig
@@ -415,24 +311,15 @@ pd_r:   RTS
 ; abspath (ap_a source, ap_out dest); ap_n = chars copied. (from diff.asm)
 abspath:LDA #0
         STA ap_n
-        LDA ap_a
-        TAP2L
-        LDA ap_a+1
-        TAP2H
+        LPW2 ap_a                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #'/'
         CMP
         JZ ab_abs
-        LDA ap_out
-        TAP1L
-        LDA ap_out+1
-        TAP1H
+        LPW1 ap_out                ; <- tierA: pointer load (next: LDA)
         LDA #0
         JSR SYS_GETCWD
-        LDA ap_out
-        TAP1L
-        LDA ap_out+1
-        TAP1H
+        LPW1 ap_out                ; <- tierA: pointer load (next: LDA)
 ab_sl:  LDA (P1)
         LDB #0
         CMP
@@ -448,14 +335,8 @@ ab_sld: DEP1
         LDA #'/'
         STA (P1)+
         JMP ab_setp
-ab_abs: LDA ap_out
-        TAP1L
-        LDA ap_out+1
-        TAP1H
-ab_setp:LDA ap_a
-        TAP2L
-        LDA ap_a+1
-        TAP2H
+ab_abs: LPW1 ap_out                ; <- tierA: pointer load (next: LDA)
+ab_setp:LPW2 ap_a                ; <- tierA: pointer load (next: LDA)
 ab_cp:  LDA (P2)
         LDB #0
         CMP

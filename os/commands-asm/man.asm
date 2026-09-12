@@ -38,10 +38,7 @@ m_save: TPA2L                        ; m_arg = start of the name word
         LDB #'H'
         CMP
         JZ m_usage
-        LDA m_arg                    ; '-' but not -h: rewind P2 to m_arg and
-        TAP2L                        ;   treat the whole word (dash included) as name
-        LDA m_arg+1
-        TAP2H
+        LPW2 m_arg                ; <- tierA: pointer load (next: LDP1)
 ; --- Build "/man/" + name into the path buffer via P1, then open and stream it.
 m_build: LDP1 #path                  ; path = "/man/" + name (prefix written inline)
         LDA #'/'
@@ -100,10 +97,7 @@ mo_d:   RTS
 ; it to wc as data. Matches man.c's eputs(). CONOUT preserves P1, so the name
 ; loop below can keep its cursor across the call. m_usage is NOT an error (the
 ; user asked for it), so it stays on stdout.
-m_nf:   LDA #<m_msg                  ; "no manual entry for " (no newline)
-        TAP1L
-        LDA #>m_msg
-        TAP1H
+m_nf:   LDP1 #m_msg                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR PUTS
         LDP1 #path                   ; then the name: skip the 5-char "/man/"
@@ -123,10 +117,7 @@ mn_d:   LDA #10
         JSR CONOUT
         RTS
 ; --- Usage: emit the one-line help string plus a trailing newline.
-m_usage: LDA #<m_use
-        TAP1L
-        LDA #>m_use
-        TAP1H
+m_usage:LDP1 #m_use                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS
         LDA #10

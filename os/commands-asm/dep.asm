@@ -68,18 +68,12 @@ d_done: RTS
 ; message INTO F, and `dep zz | wc` would feed it to wc as data. Matches dep.c's
 ; eputs(). d_use below is NOT an error (the user asked with -h), so it stays on
 ; stdout and `dep -h >notes` still captures it.
-d_bad:  LDA #<m_bad
-        TAP1L
-        LDA #>m_bad
-        TAP1H
+d_bad:  LDP1 #m_bad                ; <- tierA: pointer constant (next: JSR PUTS)
         JSR PUTS
         LDA #10
         JSR CONOUT
         RTS
-d_use:  LDA #<m_use
-        TAP1L
-        LDA #>m_use
-        TAP1H
+d_use:  LDP1 #m_use                ; <- tierA: pointer constant (next: JSR SYS_PUTS)
         JSR SYS_PUTS
         LDA #10
         JSR SYS_PUTC

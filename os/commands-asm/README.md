@@ -39,54 +39,64 @@ size table with the ratio. Ported commands only in the TOTAL.
 
 ## Scoreboard (fill-binary bytes)
 
+Regenerated 2026-09-12, after the Tier A ISA work: **both** columns moved. The
+compiled column shrank by more than half (frames on P3, word instructions,
+`CMPW` conditions, relaxed branches), and the hand-asm column shrank ~4.5%
+(`tools/tierA_rewrite.py` replaced its byte-wise word moves, pointer loads
+and carry chains with single instructions).
+
 | command | p8cc | hand-asm | ratio |
 |---------|-----:|---------:|------:|
-| touch   | 3420 |      524 | 6.5×  |
-| pwd     |  939 |      174 | 5.4×  |
-| del     | 2623 |      508 | 5.2×  |
-| mkdir   | 2614 |      547 | 4.8×  |
-| help    | 2257 |     1544 | 1.5×  |
-| more    |13542 |     3418 | 4.0×  |
-| sed     |21491 |     5430 | 4.0×  |
-| mv      |15526 |     4089 | 3.8×  |
-| head    |13358 |     3536 | 3.8×  |
-| wc      |13739 |     3655 | 3.8×  |
-| uniq    |14589 |     4026 | 3.6×  |
-| cat     |11906 |     3428 | 3.5×  |
-| dir     |10195 |     4021 | 2.5×  |
-| tree    | 3440 |     1358 | 2.5×  |
-| vi      |32871 |    13460 | 2.4×  |
-| grep    |26959 |    12507 | 2.2×  |
-| cp      |18010 |     9032 | 2.0×  |
-| tail    |25624 |    14125 | 1.8×  |
-| sort    |25844 |    14117 | 1.8×  |
-| find    | 9415 |     6413 | 1.5×  |
-| diff    |23080 |    16858 | 1.4×  |
-| **TOTAL** |**291442** | **122770** | **2.4×** |
+| touch   |  877 |      431 | 2.0×  |
+| pwd     |  282 |      164 | 1.7×  |
+| wc      | 5715 |     3580 | 1.6×  |
+| more    | 4760 |     3169 | 1.5×  |
+| mv      | 5678 |     3786 | 1.5×  |
+| uniq    | 5475 |     3746 | 1.5×  |
+| cat     | 4498 |     3265 | 1.4×  |
+| head    | 4711 |     3261 | 1.4×  |
+| sed     | 7031 |     4953 | 1.4×  |
+| dir     | 7339 |     6352 | 1.2×  |
+| vi      |15837 |    13358 | 1.2×  |
+| diff    |17516 |    16608 | 1.1×  |
+| sort    |15619 |    13961 | 1.1×  |
+| tail    |15450 |    13843 | 1.1×  |
+| grep    |10953 |    11932 | 0.9×  |
+| cp      | 6556 |     8728 | 0.8×  |
+| tree    | 1031 |     1318 | 0.8×  |
+| find    | 3001 |     6172 | 0.5×  |
+| **TOTAL** |**132329** | **118627** | **1.1×** |
 
 (Regenerate with `compare.sh`; the C sizes include the `//#use` shared libs
 spliced by `clib.py`, and each hand-asm binary that declares `;#use` likewise
-counts its include, so the comparison is apples-to-apples.)
+counts its include, so the comparison is apples-to-apples. The 2026-08 table
+this replaces read 2.4× overall, 291,442 vs 122,770 bytes.)
 
 ## Takeaways
 
-All 21 `/bin` commands are ported and verified **byte-identical** to their p8cc
-twin by `verify.sh` (diff of emulator transcripts) — so the sizes compare
-equivalent behavior, not a cut-down reimplementation. The overall win is **2.4×**
-(284 KB → 120 KB), but it splits cleanly by what a command's binary is *made of*:
+All `/bin` twins are verified **behaviourally identical** to their C version by
+`verify.sh` (diff of emulator transcripts), so the sizes compare equivalent
+behavior. The 2026-08 finding -- hand asm 2.4× smaller, up to 5.8× on
+code-dominated commands -- was a measurement of the OLD compiler: its software
+C-stack, byte-by-byte word moves and helper calls for every operator. With the
+Tier A ISA and the compiler emitting it, that overhead is gone and the gap
+closed to **1.1× overall**:
 
-- **Code-dominated → 3.5–5.8×** (pwd, mv, more, sed, head, wc, uniq, cat). This
-  is the real result: p8cc's stack-machine codegen — every subexpression pushed
-  and popped through the `__csp` software stack — is pure overhead that
-  straight-line register asm erases. `sed` (a full regex substitutor) at 4.0×
-  and `more`/`head`/`wc` near 4× are the headline numbers.
-- **Big-fixed-data → 1.4–2.0×** (diff, tail, sort, cp, find). These carry large
-  buffers that are *identical bytes in both builds* — diff's two 7.7 KB line
-  arrays, tail's 10 KB ring, sort's 10 KB, cp/find's per-level recursion arrays.
-  The data dominates the binary, so the code shrink barely moves the total. The
-  code portion still shrank ~3–5×; the ratio just measures data too.
-- **Middle (2.2–2.5×)**: dir/tree (small C already, hand asm pays for manual
-  16-bit index math), and grep/vi (large programs with a mix of code and buffers).
+- **Code-dominated commands (1.4–2.0×)**: hand asm still wins where a routine
+  is a tight byte loop the compiler cannot see through (`wc`, `more`, `uniq`,
+  `sed`), but the margin is now bytes, not multiples.
+- **Data-dominated and recursive commands (0.5–1.1×)**: the compiler now
+  WINS. `find` is half the size of its twin, `cp` and `tree` 0.8×, `grep` 0.9×:
+  the twins pay for depth-indexed recursion arrays and manual 16-bit index
+  math, while the compiled version keeps its locals in P3 frames and lets
+  `LDW (P3+d)` do the indexing. `diff`/`sort`/`tail` are large buffers in both
+  builds, so they sit at 1.1×.
+
+So the reason this directory exists -- size -- has largely evaporated. What the
+twins still offer is speed in hand-tuned inner loops and a second,
+independently written implementation that the differential tests check the
+compiler against. Whether to keep porting new commands to asm is now a judgment
+per command, not a rule; see the BACKLOG discussion.
 
 Shared hand-asm includes mirror the C `//#use` model (spliced by `mkasm.sh`):
 `lib_stdin.inc` (open/read/glob engine), `lib_glob.inc` (gmatch + de[]),

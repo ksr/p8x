@@ -17,19 +17,13 @@
 ; ---------------------------------------------------------------------------
 
         .org $6A00
-        LDA #10                          ; default: last 10 lines
-        STA n
-        LDA #0
-        STA n+1
+        LDW n,#10                ; <- tierA: word constant (next: TPA2L)
         TPA2L                            ; capture P2 (arg tail) into t_arg
         STA t_arg
         TPA2H
         STA t_arg+1
 ; Skip leading spaces before any option/filename. LDB #32 = ' '.
-t_sk:   LDA t_arg
-        TAP2L
-        LDA t_arg+1
-        TAP2H
+t_sk:   LPW2 t_arg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #32
         CMP
@@ -51,13 +45,8 @@ t_chk:  LDA (P2)
         CMP
         JZ t_usage
         JSR t_ainc                   ; skip '-'
-        LDA #0
-        STA n                            ; restart n at 0 to accumulate digits
-        STA n+1
-        LDA t_arg
-        TAP2L
-        LDA t_arg+1
-        TAP2H
+        LDW n,#0                ; <- tierA: zero word (next: LDA)
+        LPW2 t_arg                ; <- tierA: pointer load (next: LDA)
 ; Decimal parse loop: for each char in '0'..'9', n = n*10 + digit.
 ; CMP sets C=1 when A>=B, so C after "CMP #'0'" tells us c>='0', and
 ; C after "CMP #':'" (58, one past '9') tells us c>='9'+1 i.e. non-digit.
@@ -80,25 +69,16 @@ t_dl:   LDA (P2)
         INC
         STA n+1
 t_d1:   JSR t_ainc
-        LDA t_arg
-        TAP2L
-        LDA t_arg+1
-        TAP2H
+        LPW2 t_arg                ; <- tierA: pointer load (next: JMP t_dl -> LDA)
         JMP t_dl
 ; Digits done. Skip any spaces between the -N option and the filename.
-t_dd:   LDA t_arg
-        TAP2L
-        LDA t_arg+1
-        TAP2H
+t_dd:   LPW2 t_arg                ; <- tierA: pointer load (next: LDA)
 t_dsk:  LDA (P2)
         LDB #32
         CMP
         JNZ t_clamp
         JSR t_ainc
-        LDA t_arg
-        TAP2L
-        LDA t_arg+1
-        TAP2H
+        LPW2 t_arg                ; <- tierA: pointer load (next: JMP t_dsk -> LDA)
         JMP t_dsk
 ; Clamp n to 1..40 (the ring only has 40 slots). n+1 nonzero => n>=256 => clamp
 ; high to 40. Otherwise: 0 -> 1, and anything >=41 -> 40.
@@ -117,16 +97,10 @@ t_clamp:LDA n+1
 t_c1:   LDA #1
         STA n
         JMP t_open
-t_c40:  LDA #40
-        STA n
-        LDA #0
-        STA n+1
+t_c40:  LDW n,#40                ; <- tierA: word constant (next: LDA)
 ; Open the file named at t_arg (or stdin if none). openarg returns a status in
 ; A; status 2 means "not found" -> error out. (openarg lives in the stdin lib.)
-t_open: LDA t_arg
-        STA oa_a
-        LDA t_arg+1
-        STA oa_a+1
+t_open: MOVW oa_a,t_arg                ; <- tierA: word move (next: JSR openarg)
         JSR openarg
         LDB #2
         CMP
@@ -178,15 +152,8 @@ t_nl:   LDA slot                     ; close line: buf[slot*256+col]=0
         JMP t_nlt
 t_nlw:  LDA #0
         STA slot
-t_nlt:  LDA total                    ; total++ (16-bit)
-        LDB #1
-        ADD
-        STA total
-        JNC t_nlc
-        LDA total+1
-        INC
-        STA total+1
-t_nlc:  LDA #0
+t_nlt:  INCW total                ; <- tierA: 16-bit INCW chain, skip label t_nlc dropped (next: LDA)
+        LDA #0
         STA col
         JMP t_fl
 ; EOF. If col>0 there is a final unterminated line to commit (same close/advance
@@ -289,19 +256,13 @@ t_end:  RTS
 ; message INTO F, and `tail missing | wc` would feed it to wc as data. Matches
 ; tail.c's eputs(). t_usage below is NOT an error (the user asked with -h), so it
 ; stays on stdout and `tail -h >notes` still captures it.
-t_nf:   LDA #<u_nf
-        TAP1L
-        LDA #>u_nf
-        TAP1H
+t_nf:   LDP1 #u_nf                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR PUTS
         LDA #10
         JSR CONOUT
         RTS
-t_usage:LDA #<u_use
-        TAP1L
-        LDA #>u_use
-        TAP1H
+t_usage:LDP1 #u_use                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS
         LDA #10
@@ -310,15 +271,8 @@ t_usage:LDA #<u_use
 
 ; t_ainc: advance the 16-bit t_arg pointer by one byte. Clobbers A/B.
 ; Note it does NOT reload P2; callers that need P2 in sync re-TAP2 from t_arg.
-t_ainc: LDA t_arg
-        LDB #1
-        ADD
-        STA t_arg
-        JNC tai1                         ; carry -> bump high byte
-        LDA t_arg+1
-        INC
-        STA t_arg+1
-tai1:   RTS
+t_ainc: INCW t_arg                ; <- tierA: 16-bit INCW chain, skip label tai1 dropped (next: RTS)
+        RTS
 
 ; tbuf_addr: P1 = buf + tb_slot*256 + tb_col.
 ; Because slots are exactly 256 bytes, slot*256 is just "add slot to the high
@@ -340,22 +294,14 @@ tba1:   STA tbcar
         LDB tbcar
         ADD
         STA taddr+1
-        LDA taddr
-        TAP1L
-        LDA taddr+1
-        TAP1H
+        LPW1 taddr                ; <- tierA: pointer load (next: RTS)
         RTS
 
 ; mul10n: n = n*10, done as 10 repeated 16-bit adds of the original n (saved in
 ; mt) since the ISA has no multiply. Inputs/output: n (16-bit). Clobbers A/B,
 ; mt, mcnt, mcar.
-mul10n: LDA n
-        STA mt
-        LDA n+1
-        STA mt+1
-        LDA #0
-        STA n
-        STA n+1
+mul10n: MOVW mt,n                ; <- tierA: word move (next: LDA)
+        LDW n,#0                ; <- tierA: zero word (next: LDA)
         LDA #10
         STA mcnt
 m10l:   LDA mcnt

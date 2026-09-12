@@ -16,22 +16,12 @@
 ; u_sk: skip leading spaces (ASCII 32) in the arg tail, advancing u_arg. The
 ; ADD/JNC/INC dance is a 16-bit pointer increment: bump the low byte, and only
 ; ripple into the high byte when the low-byte add carried (JNC skips the INC).
-u_sk:   LDA u_arg
-        TAP2L
-        LDA u_arg+1
-        TAP2H
+u_sk:   LPW2 u_arg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #32
         CMP
         JNZ u_chk
-        LDA u_arg
-        LDB #1
-        ADD
-        STA u_arg
-        JNC u_sk
-        LDA u_arg+1
-        INC
-        STA u_arg+1
+        INCW u_arg                ; <- tierA: 16-bit INCW chain before JMP u_sk (next: JMP u_sk -> LDA)
         JMP u_sk
 ; u_chk: first non-space char, still in A from u_sk's compare (CMP preserves A).
 ; If it is '-', peek the next char for the -h/-H help flag and jump to the usage
@@ -50,10 +40,7 @@ u_chk:  LDB #'-'
 ; u_open: hand u_arg to the shared stdin engine's openarg (via ;#use stdin).
 ; openarg returns A=2 when the named file was not found -> u_nf error path.
 ; With no filename it selects stdin. Then first=1 marks the initial line.
-u_open: LDA u_arg
-        STA oa_a
-        LDA u_arg+1
-        STA oa_a+1
+u_open: MOVW oa_a,u_arg                ; <- tierA: word move (next: JSR openarg)
         JSR openarg
         LDB #2
         CMP
@@ -61,10 +48,7 @@ u_open: LDA u_arg
         LDA #1
         STA first
 ; u_loop: read next line into cur[]. readline returns A=0 at EOF -> done.
-u_loop: LDA #<cur
-        STA rl_buf
-        LDA #>cur
-        STA rl_buf+1
+u_loop: LDW rl_buf,#cur                ; <- tierA: address constant (next: JSR readline)
         JSR readline
         LDB #0
         CMP
@@ -73,37 +57,22 @@ u_loop: LDA #<cur
         LDB #0
         CMP
         JNZ u_put                    ; first line -> always print (no prev yet)
-        LDA #<cur
-        STA se_p
-        LDA #>cur
-        STA se_p+1
-        LDA #<prev
-        STA se_q
-        LDA #>prev
-        STA se_q+1
+        LDW se_p,#cur                ; <- tierA: address constant (next: LDA)
+        LDW se_q,#prev                ; <- tierA: address constant (next: JSR streq)
         JSR streq
         LDB #0
         CMP
         JNZ u_copy                   ; equal to prev -> skip print, just refresh prev
 ; u_put: emit cur[] followed by a newline (LF=10). SYS_PUTS' A=0 arg selects
 ; stdout. Falls through into u_copy to update prev.
-u_put:  LDA #<cur
-        TAP1L
-        LDA #>cur
-        TAP1H
+u_put:  LDP1 #cur                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS
         LDA #10
         JSR SYS_PUTC
 ; u_copy: prev = cur (byte copy P2=cur -> P1=prev until NUL), clear first, loop.
-u_copy: LDA #<cur                    ; prev = cur
-        TAP2L
-        LDA #>cur
-        TAP2H
-        LDA #<prev
-        TAP1L
-        LDA #>prev
-        TAP1H
+u_copy: LDP2 #cur                ; <- tierA: pointer constant (next: LDA)
+        LDP1 #prev                ; <- tierA: pointer constant (next: LDA)
 uc_l:   LDA (P2)
         LDB #0
         CMP
@@ -122,19 +91,13 @@ u_end:  RTS                          ; EOF reached, normal exit
 ; message INTO F, and `uniq missing | wc` would count it as data. Matches uniq.c's
 ; eputs(). u_usage is NOT an error (the user asked with -h), so it stays on stdout
 ; and `uniq -h >notes` still captures it.
-u_nf:   LDA #<m_nf
-        TAP1L
-        LDA #>m_nf
-        TAP1H
+u_nf:   LDP1 #m_nf                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR PUTS
         LDA #10
         JSR CONOUT
         RTS
-u_usage:LDA #<m_use
-        TAP1L
-        LDA #>m_use
-        TAP1H
+u_usage:LDP1 #m_use                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS
         LDA #10
@@ -144,10 +107,7 @@ u_usage:LDA #<m_use
 ; readline: rl_buf (word) = dest. Returns A=1 line read / 0 EOF. Because nextc
 ; clobbers P1/P2, the write cursor is a memory word (rlp) reloaded per store.
 readline:
-        LDA rl_buf
-        STA rlp
-        LDA rl_buf+1
-        STA rlp+1
+        MOVW rlp,rl_buf                ; <- tierA: word move (next: LDA)
         LDA #0
         STA rln
         JSR nextc
@@ -163,31 +123,18 @@ rl_l:   STA rlc                      ; rlc = current char from nextc
         LDB #255
         CMP
         JC rl_skip                   ; buffer full (len>=255): swallow rest of line
-        LDA rlp
-        TAP1L
-        LDA rlp+1
-        TAP1H
+        LPW1 rlp                ; <- tierA: pointer load (next: LDA)
         LDA rlc
         STA (P1)                     ; store char at rlp
-        LDA rlp                      ; 16-bit rlp++ (ripple carry into high byte)
-        LDB #1
-        ADD
-        STA rlp
-        JNC rl_s1
-        LDA rlp+1
-        INC
-        STA rlp+1
-rl_s1:  LDA rln
+        INCW rlp                ; <- tierA: 16-bit INCW chain, skip label rl_s1 dropped (next: LDA)
+        LDA rln
         INC
         STA rln                      ; rln++ (bytes stored this line)
 rl_skip:JSR nextc                    ; fetch next char; C set = EOF
         JC rl_done
         JMP rl_l
 ; rl_done: NUL-terminate at rlp and return A=1 (a line, possibly empty, was read)
-rl_done:LDA rlp
-        TAP1L
-        LDA rlp+1
-        TAP1H
+rl_done:LPW1 rlp                ; <- tierA: pointer load (next: LDA)
         LDA #0
         STA (P1)
         LDA #1
@@ -196,14 +143,8 @@ rl_eof0:LDA #0                        ; EOF hit before any char -> A=0, no line
         RTS
 
 ; streq: A = 1 if strings at se_p and se_q are equal, else 0.
-streq:  LDA se_p
-        TAP1L
-        LDA se_p+1
-        TAP1H
-        LDA se_q
-        TAP2L
-        LDA se_q+1
-        TAP2H
+streq:  LPW1 se_p                ; <- tierA: pointer load (next: LDA)
+        LPW2 se_q                ; <- tierA: pointer load (next: LDA)
 ; Compare byte-by-byte until a mismatch or a shared terminating NUL.
 se_l:   LDA (P1)
         STA se_c                      ; se_c = *P1 (needed: (P2) load clobbers regs)

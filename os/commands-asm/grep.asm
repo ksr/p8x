@@ -21,22 +21,12 @@
         LDA #0
         STA recurse
 ; g_sk: skip spaces (ASCII 32) at the front of the arg tail.
-g_sk:   LDA g_arg
-        TAP2L
-        LDA g_arg+1
-        TAP2H
+g_sk:   LPW2 g_arg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #32
         CMP
         JNZ g_chk
-        LDA g_arg
-        LDB #1
-        ADD
-        STA g_arg
-        JNC g_sk
-        LDA g_arg+1
-        INC
-        STA g_arg+1
+        INCW g_arg                ; <- tierA: 16-bit INCW chain before JMP g_sk (next: JMP g_sk -> LDA)
         JMP g_sk
 ; g_chk: first non-space char. Empty (NUL) or CR => print usage. A leading '-'
 ; means an option: -h/-H show usage, -r enables recursion; any other '-...' is
@@ -73,33 +63,17 @@ g_chk:  LDA (P2)
         LDA g_arg+1
         INC
         STA g_arg+1
-grs:    LDA g_arg
-        TAP2L
-        LDA g_arg+1
-        TAP2H
+grs:    LPW2 g_arg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #32
         CMP
         JNZ g_re
-        LDA g_arg
-        LDB #1
-        ADD
-        STA g_arg
-        JNC grs
-        LDA g_arg+1
-        INC
-        STA g_arg+1
+        INCW g_arg                ; <- tierA: 16-bit INCW chain before JMP grs (next: JMP grs -> LDA)
         JMP grs
 ; g_re: copy the regex word (up to first space/CR/NUL, max 63 chars) into re[],
 ; NUL-terminated. fi counts chars copied so g_arg can be advanced past it.
-g_re:   LDA g_arg
-        TAP2L
-        LDA g_arg+1
-        TAP2H
-        LDA #<re
-        TAP1L
-        LDA #>re
-        TAP1H
+g_re:   LPW2 g_arg                ; <- tierA: pointer load (next: LDA)
+        LDP1 #re                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         STA fi
 gre_l:  LDA fi                        ; stop at 63 chars (leave room for NUL in 64-byte re[])
@@ -135,26 +109,13 @@ gre_d:  LDA #0
         INC
         STA g_arg+1
 ; gad_s: skip spaces after the regex, leaving g_arg at the optional file/glob arg.
-gad:    LDA g_arg
-        TAP2L
-        LDA g_arg+1
-        TAP2H
+gad:    LPW2 g_arg                ; <- tierA: pointer load (next: LDA)
 gad_s:  LDA (P2)
         LDB #32
         CMP
         JNZ g_go
-        LDA g_arg
-        LDB #1
-        ADD
-        STA g_arg
-        JNC gad_s2
-        LDA g_arg+1
-        INC
-        STA g_arg+1
-gad_s2: LDA g_arg
-        TAP2L
-        LDA g_arg+1
-        TAP2H
+        INCW g_arg                ; <- tierA: 16-bit INCW chain, skip label gad_s2 dropped (next: LDA)
+gad_s2: LPW2 g_arg                ; <- tierA: pointer load (next: JMP gad_s -> LDA)
         JMP gad_s
 ; g_go: dispatch. recurse==0 -> non-recursive path; else the -r tree walk.
 g_go:   LDA recurse
@@ -166,16 +127,10 @@ g_go:   LDA recurse
         ; Phase 2: grep each collected path, prefixing output with "path:".
         LDA #0
         STA nrf                       ; nrf = count of collected files
-        LDA #<cur
-        TAP1L
-        LDA #>cur
-        TAP1H
+        LDP1 #cur                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_GETCWD               ; cur[] = absolute CWD string (path prefix base)
-        LDA #<cur
-        TAP1L
-        LDA #>cur
-        TAP1H
+        LDP1 #cur                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         STA fi
 gcl:    LDA (P1)
@@ -217,20 +172,14 @@ gp2_l:  LDA gi
         JSR rf_addr                   ; rfp -> rfiles[gi] (the path string)
         LDA #0
         STA fromfile
-        LDA rfp
-        STA op_a
-        LDA rfp+1
-        STA op_a+1
+        MOVW op_a,rfp                ; <- tierA: word move (next: JSR open_path)
         JSR open_path                 ; returns A: 1 = opened OK
         LDB #1
         CMP
         JNZ gp2_n                      ; open failed -> skip this path
         LDA #1
         STA fromfile
-        LDA rfp
-        STA gs_pfx
-        LDA rfp+1
-        STA gs_pfx+1
+        MOVW gs_pfx,rfp                ; <- tierA: word move (next: JSR grep_stream)
         JSR grep_stream
 gp2_n:  LDA gi
         INC
@@ -240,17 +189,12 @@ gp2_d:  RTS
 ; ---- non-recursive: file/glob/stdin ----------------------------------------
 ; openarg opens the file/glob at g_arg, or falls back to stdin if no arg.
 ; Return A: 2 = "not found" -> print error; otherwise the stream is ready.
-g_plain:LDA g_arg
-        STA oa_a
-        LDA g_arg+1
-        STA oa_a+1
+g_plain:MOVW oa_a,g_arg                ; <- tierA: word move (next: JSR openarg)
         JSR openarg
         LDB #2
         CMP
         JZ g_nf
-        LDA #0
-        STA gs_pfx
-        STA gs_pfx+1
+        LDW gs_pfx,#0                ; <- tierA: zero word (next: JSR grep_stream)
         JSR grep_stream
         RTS
 ; g_nf is an ERROR: print it to the raw console (PUTS/CONOUT), never to stdout.
@@ -259,19 +203,13 @@ g_plain:LDA g_arg
 ; Matches grep.c's eputs(). g_usage below is NOT an error (it returns 0, whether
 ; asked for with -h or reached with no args), so it stays on stdout and
 ; `grep -h >notes` still captures it.
-g_nf:   LDA #<u_nf
-        TAP1L
-        LDA #>u_nf
-        TAP1H
+g_nf:   LDP1 #u_nf                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR PUTS
         LDA #10
         JSR CONOUT
         RTS
-g_usage:LDA #<u_use
-        TAP1L
-        LDA #>u_use
-        TAP1H
+g_usage:LDP1 #u_use                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS
         LDA #10
@@ -360,14 +298,8 @@ gst_ret:RTS
 ; (OUTCH preserves both on every path), which is why dmp_l may hold the prefix
 ; pointer in P1 across the call.
 do_match:
-        LDA #<re
-        STA rx_re
-        LDA #>re
-        STA rx_re+1
-        LDA #<line
-        STA rx_t
-        LDA #>line
-        STA rx_t+1
+        LDW rx_re,#re                ; <- tierA: address constant (next: LDA)
+        LDW rx_t,#line                ; <- tierA: address constant (next: JSR match)
         JSR match
         LDB #0
         CMP
@@ -381,10 +313,7 @@ do_match:
         LDB #0
         CMP
         JZ dm_line
-dm_pfx: LDA gs_pfx
-        TAP1L
-        LDA gs_pfx+1
-        TAP1H
+dm_pfx: LPW1 gs_pfx                ; <- tierA: pointer load (next: LDA)
 dmp_l:  LDA (P1)
         LDB #0
         CMP
@@ -394,10 +323,7 @@ dmp_l:  LDA (P1)
         JMP dmp_l
 dmp_d:  LDA #':'
         JSR SYS_PUTC
-dm_line:LDA #<line
-        TAP1L
-        LDA #>line
-        TAP1H
+dm_line:LDP1 #line                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS
         LDA #10
@@ -425,10 +351,7 @@ c_next: LDA #0
         LDA #0
         JSR FNEXT
         JC c_desc
-        LDA #<de
-        TAP1L
-        LDA #>de
-        TAP1H
+        LDP1 #de                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_DIRENTRY
         LDA de                        ; skip entries beginning with '.' (., .., hidden)
@@ -510,10 +433,7 @@ c_dl:   JSR idx_a
         STA flba
         LDA (P1)
         STA flba+1
-        LDA flba
-        TAP1L
-        LDA flba+1
-        TAP1H
+        LPW1 flba                ; <- tierA: pointer load (next: LDA)
         LDA #0
         JSR SYS_OPENDIR
         LDA #0
@@ -687,21 +607,11 @@ af_cl:  LDA afk
 af1:    TAP2H
         LDA (P2)
         STA afc
-        LDA rfp
-        TAP1L
-        LDA rfp+1
-        TAP1H
+        LPW1 rfp                ; <- tierA: pointer load (next: LDA)
         LDA afc
         STA (P1)
-        LDA rfp
-        LDB #1
-        ADD
-        STA rfp
-        JNC af2
-        LDA rfp+1
-        INC
-        STA rfp+1
-af2:    LDA afk
+        INCW rfp                ; <- tierA: 16-bit INCW chain, skip label af2 dropped (next: LDA)
+        LDA afk
         INC
         STA afk
         JMP af_cl
@@ -714,10 +624,7 @@ af_sep: LDA fpl
         CMP
         JZ af_name
 af_slash:
-        LDA rfp
-        TAP1L
-        LDA rfp+1
-        TAP1H
+        LPW1 rfp                ; <- tierA: pointer load (next: LDA)
         LDA #'/'
         STA (P1)
         LDA rfp
@@ -743,28 +650,15 @@ afn1:   TAP2H
         LDB #0
         CMP
         JZ af_nd
-        LDA rfp
-        TAP1L
-        LDA rfp+1
-        TAP1H
+        LPW1 rfp                ; <- tierA: pointer load (next: LDA)
         LDA afc
         STA (P1)
-        LDA rfp
-        LDB #1
-        ADD
-        STA rfp
-        JNC afn2
-        LDA rfp+1
-        INC
-        STA rfp+1
-afn2:   LDA afk
+        INCW rfp                ; <- tierA: 16-bit INCW chain, skip label afn2 dropped (next: LDA)
+        LDA afk
         INC
         STA afk
         JMP af_nl
-af_nd:  LDA rfp
-        TAP1L
-        LDA rfp+1
-        TAP1H
+af_nd:  LPW1 rfp                ; <- tierA: pointer load (next: LDA)
         LDA #0
         STA (P1)
         LDA nrf
@@ -775,24 +669,15 @@ af_skip:RTS
 ; rf_addr: rfp (word) = rfiles + rfi*80. rfiles[] holds up to 36 collected
 ; paths, each in an 80-byte fixed slot. Multiply is done by repeated add of 80
 ; (rfn counts down), then the rfiles base is added with an explicit carry.
-rf_addr:LDA #0
-        STA rfp
-        STA rfp+1
+rf_addr:LDW rfp,#0                ; <- tierA: zero word (next: LDA)
         LDA rfi
         STA rfn
 rfa_l:  LDA rfn
         LDB #0
         CMP
         JZ rfa_d
-        LDA rfp
-        LDB #80
-        ADD
-        STA rfp
-        JNC rfa1
-        LDA rfp+1
-        INC
-        STA rfp+1
-rfa1:   LDA rfn
+        ADDW rfp,#80                ; <- tierA: 16-bit ADDW chain, skip label rfa1 dropped (next: LDA)
+        LDA rfn
         DEC
         STA rfn
         JMP rfa_l
@@ -813,14 +698,8 @@ rfa2:   STA rfcar
         RTS
 
 ; rdname: de[0..11] (non-space) -> nm
-rdname: LDA #<nm
-        TAP1L
-        LDA #>nm
-        TAP1H
-        LDA #<de
-        TAP2L
-        LDA #>de
-        TAP2H
+rdname: LDP1 #nm                ; <- tierA: pointer constant (next: LDA)
+        LDP2 #de                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         STA fk
 rd_l:   LDA fk
@@ -877,24 +756,15 @@ parr_a: LDA #<parr
         INC
 pra1:   TAP1H
         RTS
-clba_a: LDA #0
-        STA ft
-        STA ft+1
+clba_a: LDW ft,#0                ; <- tierA: zero word (next: LDA)
         LDA w_depth
         STA fn
 cla_m:  LDA fn
         LDB #0
         CMP
         JZ cla_md
-        LDA ft
-        LDB #48
-        ADD
-        STA ft
-        JNC cla_1
-        LDA ft+1
-        INC
-        STA ft+1
-cla_1:  LDA fn
+        ADDW ft,#48                ; <- tierA: 16-bit ADDW chain, skip label cla_1 dropped (next: LDA)
+        LDA fn
         DEC
         STA fn
         JMP cla_m
@@ -921,14 +791,9 @@ cla_3:  STA fcar
         LDB fcar
         ADD
         STA ft+1
-        LDA ft
-        TAP1L
-        LDA ft+1
-        TAP1H
+        LPW1 ft                ; <- tierA: pointer load (next: RTS)
         RTS
-cn_a:   LDA #0
-        STA ft
-        STA ft+1
+cn_a:   LDW ft,#0                ; <- tierA: zero word (next: LDA)
         LDA w_depth
         STA fn
 cna_m:  LDA fn
@@ -938,15 +803,8 @@ cna_m:  LDA fn
         LDA ft+1
         INC
         STA ft+1
-        LDA ft
-        LDB #128             ; cn per-depth stride = 24*16 = 384 (256 hi + 128 lo);
-        ADD                  ;   was 32 (=288), which overlapped the parent depth's
-        STA ft               ;   name table for subdir indices >= 19
-        JNC cna_1
-        LDA ft+1
-        INC
-        STA ft+1
-cna_1:  LDA fn
+        ADDW ft,#128                ; <- tierA: 16-bit ADDW chain, skip label cna_1 dropped (next: LDA)
+        LDA fn
         DEC
         STA fn
         JMP cna_m
@@ -956,15 +814,8 @@ cna_fl: LDA fk2
         LDB #0
         CMP
         JZ cna_fd
-        LDA ft
-        LDB #16
-        ADD
-        STA ft
-        JNC cna_f1
-        LDA ft+1
-        INC
-        STA ft+1
-cna_f1: LDA fk2
+        ADDW ft,#16                ; <- tierA: 16-bit ADDW chain, skip label cna_f1 dropped (next: LDA)
+        LDA fk2
         DEC
         STA fk2
         JMP cna_fl
@@ -990,10 +841,7 @@ cna_b:  STA fcar
         LDB fcar
         ADD
         STA ft+1
-        LDA ft
-        TAP1L
-        LDA ft+1
-        TAP1H
+        LPW1 ft                ; <- tierA: pointer load (next: RTS)
         RTS
 
 ; ======================= strings & RAM scratch =============================

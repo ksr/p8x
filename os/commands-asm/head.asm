@@ -18,19 +18,13 @@
 
         .org $6A00                   ; TPA load address for /BIN commands
         ; --- entry: default line count, then snapshot the arg pointer ---
-        LDA #10                      ; n = 10 (default line count)
-        STA n
-        LDA #0
-        STA n+1
+        LDW n,#10                ; <- tierA: word constant (next: TPA2L)
         TPA2L                        ; copy entry P2 (arg tail) into h_arg word
         STA h_arg
         TPA2H
         STA h_arg+1
         ; --- skip leading spaces before the first token ---
-h_sk:   LDA h_arg                    ; reload P2 <- h_arg (nextc etc. clobber P2)
-        TAP2L
-        LDA h_arg+1
-        TAP2H
+h_sk:   LPW2 h_arg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #32                      ; ' '
         CMP
@@ -52,13 +46,8 @@ h_chk:  LDA (P2)
         JZ h_usage                   ; -H -> print usage and exit
         ; -N : parse a line count. advance arg past '-', read digits.
         JSR h_ainc                   ; skip '-'
-        LDA #0
-        STA n
-        STA n+1
-        LDA h_arg
-        TAP2L
-        LDA h_arg+1
-        TAP2H
+        LDW n,#0                ; <- tierA: zero word (next: LDA)
+        LPW2 h_arg                ; <- tierA: pointer load (next: LDA)
         ; CMP sets C=1 when A>=B (unsigned). A digit is '0'(48)..'9'(57):
         ; require c >= 48 AND c < 58 (i.e. NOT c >= 58).
 h_dl:   LDA (P2)                     ; while digit: n = n*10 + d
@@ -83,38 +72,24 @@ h_d0:   LDA (P2)
         INC
         STA n+1
 h_d1:   JSR h_ainc
-        LDA h_arg
-        TAP2L
-        LDA h_arg+1
-        TAP2H
+        LPW2 h_arg                ; <- tierA: pointer load (next: JMP h_dl -> LDA)
         JMP h_dl
-h_dd:   LDA h_arg                    ; skip spaces after the count
-        TAP2L
-        LDA h_arg+1
-        TAP2H
+h_dd:   LPW2 h_arg                ; <- tierA: pointer load (next: LDA)
 h_ds:   LDA (P2)
         LDB #32                      ; ' '
         CMP
         JNZ h_open                   ; first non-space -> filename (or EOL)
         JSR h_ainc
-        LDA h_arg
-        TAP2L
-        LDA h_arg+1
-        TAP2H
+        LPW2 h_arg                ; <- tierA: pointer load (next: JMP h_ds -> LDA)
         JMP h_ds
         ; --- open the source: pass h_arg (points at filename or EOL) to openarg ---
-h_open: LDA h_arg
-        STA oa_a                     ; oa_a = openarg's filename argument
-        LDA h_arg+1
-        STA oa_a+1
+h_open: MOVW oa_a,h_arg                ; <- tierA: word move (next: JSR openarg)
         JSR openarg
         LDB #2
         CMP
         JZ h_nf                      ; status 2 -> file not found
         ; --- copy loop: emit chars until we have printed n lines ---
-        LDA #0                       ; lines = 0
-        STA lines
-        STA lines+1
+        LDW lines,#0                ; <- tierA: zero word (next: JSR less)
 h_loop: JSR less                     ; A = (lines < n) ? 1 : 0
         LDB #0
         CMP
@@ -127,14 +102,7 @@ h_loop: JSR less                     ; A = (lines < n) ? 1 : 0
         LDB #10                      ; '\n' — count a completed line
         CMP
         JNZ h_loop
-        LDA lines                    ; lines++ (16-bit, carry low->high)
-        LDB #1
-        ADD
-        STA lines
-        JNC h_loop
-        LDA lines+1
-        INC
-        STA lines+1
+        INCW lines                ; <- tierA: 16-bit INCW chain before JMP h_loop (next: JMP h_loop -> JSR less)
         JMP h_loop
 h_done: RTS
         ; --- error/usage exits: print message + newline, then return ---
@@ -143,19 +111,13 @@ h_done: RTS
 ; message INTO F, and `head missing | wc` would feed it to wc as data. Matches
 ; head.c's eputs(). h_usage below is NOT an error (the user asked with -h), so it
 ; stays on stdout and `head -h >notes` still captures it.
-h_nf:   LDA #<u_nf
-        TAP1L
-        LDA #>u_nf
-        TAP1H
+h_nf:   LDP1 #u_nf                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR PUTS
         LDA #10
         JSR CONOUT
         RTS
-h_usage:LDA #<u_use
-        TAP1L
-        LDA #>u_use
-        TAP1H
+h_usage:LDP1 #u_use                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS
         LDA #10
@@ -163,26 +125,14 @@ h_usage:LDA #<u_use
         RTS
 
 ; h_ainc: advance the 16-bit arg pointer (h_arg += 1). Clobbers A,B.
-h_ainc: LDA h_arg                    ; h_arg++
-        LDB #1
-        ADD
-        STA h_arg
-        JNC hai1                     ; no low-byte carry -> done
-        LDA h_arg+1
-        INC
-        STA h_arg+1
-hai1:   RTS
+h_ainc: INCW h_arg                ; <- tierA: 16-bit INCW chain, skip label hai1 dropped (next: RTS)
+        RTS
 
 ; mul10n: n = n * 10  (16-bit, via repeated addition — obviously correct).
 ;   No multiply instruction exists; add the saved value mt (=old n) to n ten
 ;   times. Clobbers A,B and scratch mt/mcnt/mcar.
-mul10n: LDA n                        ; mt = n (the addend); then zero n
-        STA mt
-        LDA n+1
-        STA mt+1
-        LDA #0
-        STA n
-        STA n+1
+mul10n: MOVW mt,n                ; <- tierA: word move (next: LDA)
+        LDW n,#0                ; <- tierA: zero word (next: LDA)
         LDA #10                      ; mcnt = 10 (loop count)
         STA mcnt
 m10l:   LDA mcnt

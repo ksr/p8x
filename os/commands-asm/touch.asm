@@ -15,22 +15,12 @@
         TPA2H
         STA t_arg+1
 ; t_sk: skip leading spaces so t_chk sees the first real char of the tail.
-t_sk:   LDA t_arg
-        TAP2L
-        LDA t_arg+1
-        TAP2H
+t_sk:   LPW2 t_arg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #32
         CMP
         JNZ t_chk
-        LDA t_arg
-        LDB #1
-        ADD
-        STA t_arg
-        JNC t_sk
-        LDA t_arg+1
-        INC
-        STA t_arg+1
+        INCW t_arg                ; <- tierA: 16-bit INCW chain before JMP t_sk (next: JMP t_sk -> LDA)
         JMP t_sk
 ; t_chk: no operand (NUL or CR) prints usage; a leading '-' is inspected for the
 ; -h / -H help flag, which also prints usage. Anything else falls to t_loop.
@@ -53,10 +43,7 @@ t_chk:  LDA (P2)
         CMP
         JZ t_usage
 ; --- process each whitespace-separated name --------------------------------
-t_loop: LDA t_arg                    ; *arg == 0/13 -> done
-        TAP2L
-        LDA t_arg+1
-        TAP2H
+t_loop: LPW2 t_arg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #0
         CMP
@@ -64,14 +51,8 @@ t_loop: LDA t_arg                    ; *arg == 0/13 -> done
         LDB #13
         CMP
         JZ t_done
-        LDA #<path                   ; abspath(path, arg)
-        STA ap_out
-        LDA #>path
-        STA ap_out+1
-        LDA t_arg
-        STA ap_a
-        LDA t_arg+1
-        STA ap_a+1
+        LDW ap_out,#path                ; <- tierA: address constant (next: LDA)
+        MOVW ap_a,t_arg                ; <- tierA: word move (next: JSR abspath)
         JSR abspath
         LDA ap_n
         LDB #0
@@ -85,28 +66,15 @@ t_loop: LDA t_arg                    ; *arg == 0/13 -> done
         LDA t_arg+1
         INC
         STA t_arg+1
-t_ns:   LDA t_arg                    ; skip spaces before the next name
-        TAP2L
-        LDA t_arg+1
-        TAP2H
+t_ns:   LPW2 t_arg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)                     ; each iteration re-enters at t_ns to reload P2
         LDB #32
         CMP
         JNZ t_ex
-        LDA t_arg
-        LDB #1
-        ADD
-        STA t_arg
-        JNC t_ns
-        LDA t_arg+1
-        INC
-        STA t_arg+1
+        INCW t_arg                ; <- tierA: 16-bit INCW chain before JMP t_ns (next: JMP t_ns -> LDA)
         JMP t_ns
 ; --- exists? (FRESOLVE + FOPEN) --------------------------------------------
-t_ex:   LDA #<path
-        TAP1L
-        LDA #>path
-        TAP1H
+t_ex:   LDP1 #path                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR FRESOLVE                 ; FRESOLVE
         LDA #$00                     ; P1 = $FC00 read-buffer for FOPEN's use
@@ -117,10 +85,7 @@ t_ex:   LDA #<path
         JSR FOPEN                    ; FOPEN $FC00 (C=0 -> file exists)
         JNC t_loop                   ; carry clear -> exists -> leave it, next name
 ; --- create empty (FRESOLVE + FWOPEN + FCLOSE) -----------------------------
-        LDA #<path
-        TAP1L
-        LDA #>path
-        TAP1H
+        LDP1 #path                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR FRESOLVE                 ; FRESOLVE
         LDA #0
@@ -129,10 +94,7 @@ t_ex:   LDA #<path
         JSR FCLOSE                   ; FCLOSE -> zero-byte file
         JMP t_loop
 t_done: RTS
-t_usage:LDA #<u_use
-        TAP1L
-        LDA #>u_use
-        TAP1H
+t_usage:LDP1 #u_use                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS
         LDA #10
@@ -145,24 +107,15 @@ t_usage:LDA #<u_use
 ; is copied verbatim. Copy stops at NUL, CR, or space. Clobbers A, B, P1, P2.
 abspath:LDA #0
         STA ap_n
-        LDA ap_a
-        TAP2L
-        LDA ap_a+1
-        TAP2H
+        LPW2 ap_a                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #'/'
         CMP
         JZ ab_abs
-        LDA ap_out
-        TAP1L
-        LDA ap_out+1
-        TAP1H
+        LPW1 ap_out                ; <- tierA: pointer load (next: LDA)
         LDA #0
         JSR SYS_GETCWD               ; SYS_GETCWD -> out
-        LDA ap_out
-        TAP1L
-        LDA ap_out+1
-        TAP1H
+        LPW1 ap_out                ; <- tierA: pointer load (next: LDA)
 ab_sl:  LDA (P1)
         LDB #0
         CMP
@@ -181,14 +134,8 @@ ab_sld: DEP1
         LDA #'/'
         STA (P1)+
         JMP ab_setp
-ab_abs: LDA ap_out
-        TAP1L
-        LDA ap_out+1
-        TAP1H
-ab_setp:LDA ap_a
-        TAP2L
-        LDA ap_a+1
-        TAP2H
+ab_abs: LPW1 ap_out                ; <- tierA: pointer load (next: LDA)
+ab_setp:LPW2 ap_a                ; <- tierA: pointer load (next: LDA)
 ab_cp:  LDA (P2)
         LDB #0
         CMP

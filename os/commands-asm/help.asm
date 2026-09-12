@@ -6,38 +6,22 @@
 ;#use abi
 
         .org $6A00
-        LDA #<htab
-        STA hp
-        LDA #>htab
-        STA hp+1
-h_lp:   LDA hp                       ; P2 = &htab[i]
-        TAP2L
-        LDA hp+1
-        TAP2H
+        LDW hp,#htab                ; <- tierA: address constant (next: LDA)
+h_lp:   LPW2 hp                ; <- tierA: pointer load (next: LDA)
         LDA (P2)                     ; string ptr, low byte
         STA sp
         INP2
         LDA (P2)                     ; string ptr, high byte
         STA sp+1
-        LDA hp                       ; hp += 2
-        LDB #2
-        ADD
-        STA hp
-        JNC h_ck
-        LDA hp+1
-        INC
-        STA hp+1
-h_ck:   LDA sp                       ; ptr == 0 (both bytes) -> done
+        ADDW hp,#2                ; <- tierA: 16-bit ADDW chain, skip label h_ck dropped (next: LDA)
+        LDA sp                       ; ptr == 0 (both bytes) -> done
         LDB #0
         CMP
         JNZ h_pr
         LDA sp+1
         CMP
         JZ h_done
-h_pr:   LDA sp                       ; SYS_PUTS(sp) + newline
-        TAP1L
-        LDA sp+1
-        TAP1H
+h_pr:   LPW1 sp                ; <- tierA: pointer load (next: LDA)
         LDA #0
         JSR SYS_PUTS
         LDA #10

@@ -21,10 +21,7 @@ glob_expand:
         STA ge_hs                     ; has-slash flag = 0
         STA ge_sp                     ; slash position
         STA ge_pl                     ; pattern length
-        LDA ge_pat
-        TAP2L
-        LDA ge_pat+1
-        TAP2H
+        LPW2 ge_pat                ; <- tierA: pointer load (next: LDA)
 ge_scl: LDA (P2)
         LDB #0
         CMP
@@ -67,14 +64,8 @@ ge_scd: LDA #0
 ge_dok: LDA ge_sp
         INC
         STA ge_ls                     ; leaf starts just past the slash
-        LDA ge_pat                    ; ge_dir = pat[0..slashpos]
-        TAP2L
-        LDA ge_pat+1
-        TAP2H
-        LDA #<ge_dir
-        TAP1L
-        LDA #>ge_dir
-        TAP1H
+        LPW2 ge_pat                ; <- tierA: pointer load (next: LDA)
+        LDP1 #ge_dir                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         STA ge_j
 ; Copy chars 0..ge_sp inclusive (the slash itself) from pat (P2) to ge_dir (P1).
@@ -101,10 +92,7 @@ ge_leaf0:
         JNC ge_l0
         INC
 ge_l0:  TAP2H
-        LDA #<ge_leaf
-        TAP1L
-        LDA #>ge_leaf
-        TAP1H
+        LDP1 #ge_leaf                ; <- tierA: pointer constant (next: LDA)
         LDA ge_ls
         STA ge_j                      ; source index runs ge_ls..ge_pl
         LDA #0
@@ -136,10 +124,7 @@ ge_lle: LDA #0
         LDB #0
         CMP
         JZ ge_ocwd
-        LDA #<ge_dir
-        TAP1L
-        LDA #>ge_dir
-        TAP1H
+        LDP1 #ge_dir                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR $0139                     ; FOPENDIR(dir)
         JMP ge_fsd
@@ -162,10 +147,7 @@ ge_nl:  LDA #0
         LDA #0
         JSR $013C                     ; FNEXT: next raw dir entry
         JC ge_gdone                   ; carry -> no more entries
-        LDA #<de
-        TAP1L
-        LDA #>de
-        TAP1H
+        LDP1 #de                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR $201B                     ; SYS_DIRENTRY: parse entry into de[]
         LDA de
@@ -176,14 +158,8 @@ ge_nl:  LDA #0
         LDB #1
         CMP
         JNZ ge_nl                     ; type 1 = regular file; skip others
-        LDA #<de                      ; trim 12-char padded name -> ge_nm
-        TAP2L
-        LDA #>de
-        TAP2H
-        LDA #<ge_nm
-        TAP1L
-        LDA #>ge_nm
-        TAP1H
+        LDP2 #de                ; <- tierA: pointer constant (next: LDA)
+        LDP1 #ge_nm                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         STA ge_j
 ; Copy up to 12 name chars, stopping early at the first space (name padding).
@@ -204,14 +180,8 @@ ge_tl:  LDA ge_j
 ge_tld: LDA #0
         STA (P1)                      ; NUL-terminate ge_nm
 ; Match name against the leaf glob: gmatch(gp=ge_leaf pattern, gs=ge_nm name).
-        LDA #<ge_leaf
-        STA gp
-        LDA #>ge_leaf
-        STA gp+1
-        LDA #<ge_nm
-        STA gs
-        LDA #>ge_nm
-        STA gs+1
+        LDW gp,#ge_leaf                ; <- tierA: address constant (next: LDA)
+        LDW gs,#ge_nm                ; <- tierA: address constant (next: JSR gmatch)
         JSR gmatch                    ; A=0 no match, nonzero match
         LDB #0
         CMP
@@ -224,10 +194,7 @@ ge_tld: LDA #0
         JSR ge_slot                   ; P1 = ge_out + cnt*64
         LDA #0
         STA ge_k                      ; a slot is 64 bytes: 63 chars + NUL
-        LDA #<ge_dir
-        TAP2L
-        LDA #>ge_dir
-        TAP2H
+        LDP2 #ge_dir                ; <- tierA: pointer constant (next: LDA)
 ge_od:  LDA (P2)                      ; append dir prefix (stops at its NUL)
         LDB #0
         CMP
@@ -243,10 +210,7 @@ ge_od:  LDA (P2)                      ; append dir prefix (stops at its NUL)
         STA ge_k
         INP2
         JMP ge_od
-ge_odn: LDA #<ge_nm                    ; then append the trimmed name
-        TAP2L
-        LDA #>ge_nm
-        TAP2H
+ge_odn: LDP2 #ge_nm                ; <- tierA: pointer constant (next: LDA)
 ge_onl: LDA (P2)
         LDB #0
         CMP
@@ -275,24 +239,15 @@ ge_gdone:
 ;   No multiply instruction, so getmp = 64*ge_cnt is built by repeated 16-bit
 ;   +64 adds, then ge_out is added. Clobbers A, B, P1, getmp, gecar, ge_j2.
 ge_slot:
-        LDA #0
-        STA getmp                     ; getmp (16-bit) = 0
-        STA getmp+1
+        LDW getmp,#0                ; <- tierA: zero word (next: LDA)
         LDA ge_cnt
         STA ge_j2                     ; loop counter = ge_cnt
 ges_l:  LDA ge_j2
         LDB #0
         CMP
         JZ ges_d                      ; counter hit 0 -> getmp = 64*ge_cnt
-        LDA getmp                     ; getmp += 64 (16-bit, carry to hi byte)
-        LDB #64
-        ADD
-        STA getmp
-        JNC ges_1                     ; no carry-out -> skip hi-byte bump
-        LDA getmp+1
-        INC
-        STA getmp+1
-ges_1:  LDA ge_j2
+        ADDW getmp,#64                ; <- tierA: 16-bit ADDW chain, skip label ges_1 dropped (next: LDA)
+        LDA ge_j2
         DEC
         STA ge_j2
         JMP ges_l
@@ -310,10 +265,7 @@ ges_2:  STA gecar
         LDB gecar
         ADD
         STA getmp+1
-        LDA getmp
-        TAP1L
-        LDA getmp+1
-        TAP1H                         ; P1 = getmp
+        LPW1 getmp                ; <- tierA: pointer load (next: RTS)
         RTS
 
 ; ---- data (gmatch/de/gp/gs live in lib_glob.inc; gfiles is caller-provided) --

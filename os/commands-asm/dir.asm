@@ -36,10 +36,7 @@
         STA filemode                 ; not listing a single file (yet)
         STA gpat                     ; gpat[0]=0 (no filter)
 ; skip spaces (advance m_arg)
-d_sk:   LDA m_arg
-        TAP2L
-        LDA m_arg+1
-        TAP2H
+d_sk:   LPW2 m_arg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #32
         CMP
@@ -61,10 +58,7 @@ d_hchk: LDA (P2)
         CMP
         JZ d_usage
 ; flag loop: -R/-r recurse, -S/-s size sort (each its own '-x' token, any order)
-d_opt:  LDA m_arg
-        TAP2L
-        LDA m_arg+1
-        TAP2H
+d_opt:  LPW2 m_arg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #'-'
         CMP
@@ -91,10 +85,7 @@ d_sets: LDA #1
         STA szmode
 d_oadv: JSR arg_inc                  ; skip '-'
         JSR arg_inc                  ; skip flag char
-d_osk:  LDA m_arg
-        TAP2L
-        LDA m_arg+1
-        TAP2H
+d_osk:  LPW2 m_arg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #32
         CMP
@@ -107,10 +98,7 @@ d_scan: LDA #0
         STA slashpos
         STA gflag
         STA plen
-        LDA m_arg
-        TAP2L
-        LDA m_arg+1
-        TAP2H
+        LPW2 m_arg                ; <- tierA: pointer load (next: LDA)
 d_scl:  LDA (P2)
         LDB #0
         CMP
@@ -150,10 +138,7 @@ d_scd:  LDA #0
         CMP
         JNZ d_glob
         ; not glob: empty -> OPENCWD, else FOPENDIR(arg)
-        LDA m_arg
-        TAP2L
-        LDA m_arg+1
-        TAP2H
+        LPW2 m_arg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #0
         CMP
@@ -161,19 +146,10 @@ d_scd:  LDA #0
         LDB #13
         CMP
         JZ d_cwd
-        LDA m_arg                    ; abspath(apath, m_arg) — CWD-prefix if relative
-        STA ap_a
-        LDA m_arg+1
-        STA ap_a+1
-        LDA #<apath
-        STA ap_out
-        LDA #>apath
-        STA ap_out+1
+        MOVW ap_a,m_arg                ; <- tierA: word move (next: LDA)
+        LDW ap_out,#apath                ; <- tierA: address constant (next: JSR abspath)
         JSR abspath
-        LDA #<apath                  ; FOPENDIR(apath)
-        TAP1L
-        LDA #>apath
-        TAP1H
+        LDP1 #apath                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR FOPENDIR
         JNC d_ok
@@ -211,10 +187,7 @@ d_gp:   ; P2 = arg + ls ; copy to gpat until index==plen
         JNC d_gp0
         INC
 d_gp0:  TAP2H
-        LDA #<gpat
-        TAP1L
-        LDA #>gpat
-        TAP1H
+        LDP1 #gpat                ; <- tierA: pointer constant (next: LDA)
         LDA ls
         STA cnt                      ; index runs ls..plen
         LDA #0
@@ -244,14 +217,8 @@ d_gpe:  LDA #0
         LDB #0
         CMP
         JZ d_gcwd
-        LDA m_arg
-        TAP2L
-        LDA m_arg+1
-        TAP2H
-        LDA #<dbuf
-        TAP1L
-        LDA #>dbuf
-        TAP1H
+        LPW2 m_arg                ; <- tierA: pointer load (next: LDA)
+        LDP1 #dbuf                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         STA cnt                      ; j 0..slashpos inclusive
 d_gdl:  LDA (P2)
@@ -267,19 +234,10 @@ d_gdl:  LDA (P2)
         JMP d_gdl
 d_gde:  LDA #0
         STA (P1)
-        LDA #<dbuf                    ; abspath(apath, dbuf) — CWD-prefix if relative
-        STA ap_a
-        LDA #>dbuf
-        STA ap_a+1
-        LDA #<apath
-        STA ap_out
-        LDA #>apath
-        STA ap_out+1
+        LDW ap_a,#dbuf                ; <- tierA: address constant (next: LDA)
+        LDW ap_out,#apath                ; <- tierA: address constant (next: JSR abspath)
         JSR abspath
-        LDA #<apath                  ; FOPENDIR(apath)
-        TAP1L
-        LDA #>apath
-        TAP1H
+        LDP1 #apath                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR FOPENDIR                 ; FOPENDIR(dbuf via apath)
         JNC d_ok
@@ -301,10 +259,7 @@ d_ok:   LDA notf
 ; and `dir bogus | wc` would feed it to wc as if it were a listing. Matches
 ; dir.c's eputs(). d_usage below is NOT an error (the user asked with -h), so it
 ; stays on stdout and `dir -h >notes` still captures it.
-        LDA #<u_nf                   ; "dir: not found"
-        TAP1L
-        LDA #>u_nf
-        TAP1H
+        LDP1 #u_nf                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR PUTS
         LDA #10
@@ -353,19 +308,13 @@ d_fdone:LDA filemode                 ; a single-file arg that matched nothing?
         LDB #0
         CMP
         JNZ df_ok
-        LDA #<u_nf                    ; "dir: not found" — ERROR, console only
-        TAP1L
-        LDA #>u_nf
-        TAP1H
+        LDP1 #u_nf                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR PUTS
         LDA #10
         JSR CONOUT
 df_ok:  RTS
-d_usage:LDA #<u_use
-        TAP1L
-        LDA #>u_use
-        TAP1H
+d_usage:LDP1 #u_use                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS
         LDA #10
@@ -374,15 +323,8 @@ d_usage:LDA #<u_use
 
 ; arg_inc: m_arg += 1
 arg_inc:
-        LDA m_arg
-        LDB #1
-        ADD
-        STA m_arg
-        JNC ai1
-        LDA m_arg+1
-        INC
-        STA m_arg+1
-ai1:    RTS
+        INCW m_arg                ; <- tierA: 16-bit INCW chain, skip label ai1 dropped (next: RTS)
+        RTS
 
 ; ======================= walk (recursive, like tree) =======================
 ; collect+sort this level, print it (recording child LBAs into csub[depth] in
@@ -431,10 +373,7 @@ w_pl:   LDA pri
         INP2
         LDA (P2)
         STA lba+1
-        LDA cdst                     ; store lba into csub slot
-        TAP1L
-        LDA cdst+1
-        TAP1H
+        LPW1 cdst                ; <- tierA: pointer load (next: LDA)
         LDA lba
         STA (P1)+
         LDA lba+1
@@ -463,10 +402,7 @@ w_dl:   JSR idx_addr
         STA lba
         LDA (P1)
         STA lba+1
-        LDA lba
-        TAP1L
-        LDA lba+1
-        TAP1H
+        LPW1 lba                ; <- tierA: pointer load (next: LDA)
         LDA #0
         JSR SYS_OPENDIR              ; SYS_OPENDIR
         LDA #0
@@ -505,10 +441,7 @@ col_nx: LDA #0
         LDA #0
         JSR FNEXT                    ; FNEXT
         JC col_srt
-        LDA #<de
-        TAP1L
-        LDA #>de
-        TAP1H
+        LDP1 #de                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_DIRENTRY             ; de_read
         LDA de                       ; skip any leading-dot name (mirrors de_isdot:
@@ -524,14 +457,8 @@ col_nx: LDA #0
         LDA ecnt
         STA mi
         JSR enam_ptr                 ; dptr = enam + ecnt*12
-        LDA dptr
-        TAP1L
-        LDA dptr+1
-        TAP1H
-        LDA #<de
-        TAP2L
-        LDA #>de
-        TAP2H
+        LPW1 dptr                ; <- tierA: pointer load (next: LDA)
+        LDP2 #de                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         STA cnt
 col_cp: LDA cnt
@@ -710,19 +637,13 @@ before: LDA szmode
         LDA bA                       ; keyA = skey(bA)
         STA em2
         JSR skey
-        LDA keyw
-        STA keyA
-        LDA keyw+1
-        STA keyA+1
+        MOVW keyA,keyw                ; <- tierA: word move (next: LDA)
         LDA keyw+2
         STA keyA+2
         LDA bB                       ; keyB = skey(bB)
         STA em2
         JSR skey
-        LDA keyw
-        STA keyB
-        LDA keyw+1
-        STA keyB+1
+        MOVW keyB,keyw                ; <- tierA: word move (next: LDA)
         LDA keyw+2
         STA keyB+2
         LDA keyA+2                   ; 24-bit compare, byte 2 (hi) first (unsigned)
@@ -757,17 +678,11 @@ name_before:
         LDA bA
         STA mi
         JSR enam_ptr
-        LDA dptr
-        STA naddrA
-        LDA dptr+1
-        STA naddrA+1
+        MOVW naddrA,dptr                ; <- tierA: word move (next: LDA)
         LDA bB
         STA mi
         JSR enam_ptr
-        LDA dptr
-        STA naddrB
-        LDA dptr+1
-        STA naddrB+1
+        MOVW naddrB,dptr                ; <- tierA: word move (next: LDA)
         LDA #0
         STA cnt
 nb_l:   LDA cnt
@@ -838,14 +753,8 @@ sk_file:LDA em2
 nameat: LDA em
         STA mi
         JSR enam_ptr
-        LDA dptr
-        TAP2L
-        LDA dptr+1
-        TAP2H
-        LDA #<nbuf
-        TAP1L
-        LDA #>nbuf
-        TAP1H
+        LPW2 dptr                ; <- tierA: pointer load (next: LDA)
+        LDP1 #nbuf                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         STA cnt
 na_l:   LDA cnt
@@ -965,24 +874,15 @@ eb_1:   TAP2H
         RTS
 
 ; amul12: macc (word) = mi * 12  (repeated add; no 16-bit multiply on the CPU)
-amul12: LDA #0
-        STA macc
-        STA macc+1
+amul12: LDW macc,#0                ; <- tierA: zero word (next: LDA)
         LDA mi
         STA cnt
 am_l:   LDA cnt
         LDB #0
         CMP
         JZ am_d
-        LDA macc
-        LDB #12
-        ADD
-        STA macc
-        JNC am_n
-        LDA macc+1
-        INC
-        STA macc+1
-am_n:   LDA cnt
+        ADDW macc,#12                ; <- tierA: 16-bit ADDW chain, skip label am_n dropped (next: LDA)
+        LDA cnt
         DEC
         STA cnt
         JMP am_l
@@ -994,14 +894,8 @@ show:   LDA gpat
         LDB #0
         CMP
         JZ sh_show
-        LDA #<gpat
-        STA gp
-        LDA #>gpat
-        STA gp+1
-        LDA #<nbuf
-        STA gs
-        LDA #>nbuf
-        STA gs+1
+        LDW gp,#gpat                ; <- tierA: address constant (next: LDA)
+        LDW gs,#nbuf                ; <- tierA: address constant (next: JSR gmatch)
         JSR gmatch
         LDB #0
         CMP
@@ -1028,10 +922,7 @@ sh_il:  LDA cnt
         DEC
         STA cnt
         JMP sh_il
-sh_pn:  LDA #<nbuf
-        TAP1L
-        LDA #>nbuf
-        TAP1H
+sh_pn:  LDP1 #nbuf                ; <- tierA: pointer constant (next: LDA)
 sh_nl:  LDA (P1)
         LDB #0
         CMP
@@ -1070,10 +961,7 @@ ps_dl:  LDA cnt
 ps_ret: RTS
 ; 24-bit size print (mirrors dir.c putsize24): num24 = sh_sz2:sh_sz+1:sh_sz,
 ; extract decimal digits LS-first into dg[], pad to 6, print reversed.
-ps_file:LDA sh_sz
-        STA num24
-        LDA sh_sz+1
-        STA num24+1
+ps_file:MOVW num24,sh_sz                ; <- tierA: word move (next: LDA)
         LDA sh_sz2
         STA num24+2
         LDA #0
@@ -1196,9 +1084,7 @@ nz_y:   LDA #1
 
 ; divmod10: dv (word) -> dvq (word)=dv/10, dvr (byte)=dv%10 (destroys dv)
 divmod10:
-        LDA #0
-        STA dvq
-        STA dvq+1
+        LDW dvq,#0                ; <- tierA: zero word (next: LDA)
 dm_l:   LDA dv+1
         LDB #0
         CMP
@@ -1218,22 +1104,12 @@ dm_sub: LDA dv
         LDA dv+1
         DEC
         STA dv+1
-dm_nc:  LDA dvq
-        LDB #1
-        ADD
-        STA dvq
-        JNC dm_l
-        LDA dvq+1
-        INC
-        STA dvq+1
+dm_nc:  INCW dvq                ; <- tierA: 16-bit INCW chain before JMP dm_l (next: JMP dm_l -> LDA)
         JMP dm_l
 
 ; ======================= gmatch / upper ====================================
 ; gmatch: gp, gs (word ptrs) -> A = 1 if pattern gp matches string gs else 0.
-gmatch: LDA gp
-        TAP1L
-        LDA gp+1
-        TAP1H
+gmatch: LPW1 gp                ; <- tierA: pointer load (next: LDA)
         LDA (P1)
         STA gpc
         LDB #'*'
@@ -1242,10 +1118,7 @@ gmatch: LDA gp
         LDB #0
         CMP
         JZ gm_pend
-        LDA gs
-        TAP2L
-        LDA gs+1
-        TAP2H
+        LPW2 gs                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         STA gsc
         LDB #0
@@ -1265,27 +1138,10 @@ gmatch: LDA gp
         JZ gm_adv
         LDA #0
         RTS
-gm_adv: LDA gp                       ; gp++, gs++, tail-call
-        LDB #1
-        ADD
-        STA gp
-        JNC gm_a1
-        LDA gp+1
-        INC
-        STA gp+1
-gm_a1:  LDA gs
-        LDB #1
-        ADD
-        STA gs
-        JNC gm_a2
-        LDA gs+1
-        INC
-        STA gs+1
-gm_a2:  JMP gmatch
-gm_pend:LDA gs
-        TAP2L
-        LDA gs+1
-        TAP2H
+gm_adv: INCW gp                ; <- tierA: 16-bit INCW chain, skip label gm_a1 dropped (next: LDA)
+gm_a1:  INCW gs                ; <- tierA: 16-bit INCW chain, skip label gm_a2 dropped (next: JMP gmatch -> LDA)
+        JMP gmatch
+gm_pend:LPW2 gs                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #0
         CMP
@@ -1326,22 +1182,12 @@ gm_s0:  LDA gp                       ; save gp,gs ; recurse ; restore
         LDB #0
         CMP
         JNZ gm_r1
-        LDA gs
-        TAP2L
-        LDA gs+1
-        TAP2H
+        LPW2 gs                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #0
         CMP
         JZ gm_r0
-        LDA gs
-        LDB #1
-        ADD
-        STA gs
-        JNC gm_s0
-        LDA gs+1
-        INC
-        STA gs+1
+        INCW gs                ; <- tierA: 16-bit INCW chain before JMP gm_s0 (next: JMP gm_s0 -> LDA)
         JMP gm_s0
 
 ; upper: A -> uppercase(A)
@@ -1383,24 +1229,15 @@ ia1:    TAP1H
         RTS
 ; csub_addr: P1 = csub + w_depth*128 + kk*2  (64 entries x 2 bytes per level)
 csub_addr:
-        LDA #0
-        STA caddr
-        STA caddr+1
+        LDW caddr,#0                ; <- tierA: zero word (next: LDA)
         LDA w_depth
         STA cnt
 ca_ml:  LDA cnt
         LDB #0
         CMP
         JZ ca_md
-        LDA caddr
-        LDB #128
-        ADD
-        STA caddr
-        JNC ca_m1
-        LDA caddr+1
-        INC
-        STA caddr+1
-ca_m1:  LDA cnt
+        ADDW caddr,#128                ; <- tierA: 16-bit ADDW chain, skip label ca_m1 dropped (next: LDA)
+        LDA cnt
         DEC
         STA cnt
         JMP ca_ml
@@ -1423,10 +1260,7 @@ ca_k1:  LDA caddr
         JNC ca_b1
         INC
 ca_b1:  STA caddr+1
-        LDA caddr
-        TAP1L
-        LDA caddr+1
-        TAP1H
+        LPW1 caddr                ; <- tierA: pointer load (next: RTS)
         RTS
 
 ; abspath (mirrors os/commands/lib_apath.c): ap_out <- absolute path of the word
@@ -1435,24 +1269,15 @@ ca_b1:  STA caddr+1
 ; P2 is the source cursor and P1 the dest. (Ported from touch.asm/mv.asm.)
 abspath:LDA #0
         STA ap_n
-        LDA ap_a
-        TAP2L
-        LDA ap_a+1
-        TAP2H
+        LPW2 ap_a                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #'/'
         CMP
         JZ ab_abs
-        LDA ap_out
-        TAP1L
-        LDA ap_out+1
-        TAP1H
+        LPW1 ap_out                ; <- tierA: pointer load (next: LDA)
         LDA #0
         JSR SYS_GETCWD               ; SYS_GETCWD -> out
-        LDA ap_out
-        TAP1L
-        LDA ap_out+1
-        TAP1H
+        LPW1 ap_out                ; <- tierA: pointer load (next: LDA)
 ab_sl:  LDA (P1)
         LDB #0
         CMP
@@ -1468,14 +1293,8 @@ ab_sld: DEP1
         LDA #'/'
         STA (P1)+
         JMP ab_setp
-ab_abs: LDA ap_out
-        TAP1L
-        LDA ap_out+1
-        TAP1H
-ab_setp:LDA ap_a
-        TAP2L
-        LDA ap_a+1
-        TAP2H
+ab_abs: LPW1 ap_out                ; <- tierA: pointer load (next: LDA)
+ab_setp:LPW2 ap_a                ; <- tierA: pointer load (next: LDA)
 ab_cp:  LDA (P2)
         LDB #0
         CMP

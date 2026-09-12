@@ -12,61 +12,29 @@ rend:   .fill 2                       ; ptr one past the last char matched (set 
 ; If re starts with '^' it only tries at t's start; otherwise it slides the
 ; start point right one char at a time until a match or end-of-text.
 ; Clobbers A/B/P1; uses rx_* scratch. mre/mct hold the saved re/t across the slide.
-match:  LDA rx_re                    ; P1 <- rx_re, then peek first regex char
-        TAP1L
-        LDA rx_re+1
-        TAP1H
+match:  LPW1 rx_re                ; <- tierA: pointer load (next: LDA)
         LDA (P1)
         LDB #'^'
         CMP
         JNZ m_loop
-        LDA rx_re                    ; anchored '^': advance re past it, then matchhere(re+1, t)
-        LDB #1
-        ADD
-        STA rx_re
-        JNC m_a
-        LDA rx_re+1
-        INC
-        STA rx_re+1
-m_a:    JMP matchhere                ; tail call; its RTS returns to match's caller
+        INCW rx_re                ; <- tierA: 16-bit INCW chain, skip label m_a dropped (next: JMP matchhere -> LDA)
+        JMP matchhere                ; tail call; its RTS returns to match's caller
 ; Unanchored: save the working re/t in mre/mct, then try each start position.
-m_loop: LDA rx_re
-        STA mre
-        LDA rx_re+1
-        STA mre+1
-        LDA rx_t
-        STA mct
-        LDA rx_t+1
-        STA mct+1
+m_loop: MOVW mre,rx_re                ; <- tierA: word move (next: LDA)
+        MOVW mct,rx_t                ; <- tierA: word move (next: LDA)
 ; Loop: restore re/t from the saved copies (matchhere mutates rx_re/rx_t) and try.
-m_pl:   LDA mre
-        STA rx_re
-        LDA mre+1
-        STA rx_re+1
-        LDA mct
-        STA rx_t
-        LDA mct+1
-        STA rx_t+1
+m_pl:   MOVW rx_re,mre                ; <- tierA: word move (next: LDA)
+        MOVW rx_t,mct                ; <- tierA: word move (next: JSR matchhere)
         JSR matchhere
         LDB #0
         CMP
         JNZ m_yes                     ; matched at this start position -> done
-        LDA mct                       ; else: if *mct == 0 we've exhausted the text
-        TAP1L
-        LDA mct+1
-        TAP1H
+        LPW1 mct                ; <- tierA: pointer load (next: LDA)
         LDA (P1)
         LDB #0
         CMP
         JZ m_no
-        LDA mct                       ; advance saved text ptr and retry one char over
-        LDB #1
-        ADD
-        STA mct
-        JNC m_pl
-        LDA mct+1
-        INC
-        STA mct+1
+        INCW mct                ; <- tierA: 16-bit INCW chain before JMP m_pl (next: JMP m_pl -> LDA)
         JMP m_pl
 m_yes:  LDA #1
         RTS
@@ -79,10 +47,7 @@ m_no:   LDA #0
 ; their loop state on the hardware stack (P3) across the call.
 ; rx_c = re[0] (the char being matched), rx_r1 = re[1] (possible quantifier).
 matchhere:
-        LDA rx_re
-        TAP1L
-        LDA rx_re+1
-        TAP1H
+        LPW1 rx_re                ; <- tierA: pointer load (next: LDA)
         LDA (P1)
         STA rx_c                      ; rx_c = re[0]
         INP1
@@ -109,10 +74,7 @@ mh_chk0:LDA rx_c
         LDB #0
         CMP
         JNZ mh_dollar
-        LDA rx_t
-        STA rend
-        LDA rx_t+1
-        STA rend+1
+        MOVW rend,rx_t                ; <- tierA: word move (next: LDA)
         LDA #1
         RTS
 ; '$' end-anchor, only special when it is the last pattern char (re[1]==0).
@@ -125,25 +87,16 @@ mh_dollar:
         LDB #0
         CMP
         JNZ mh_lit                    ; '$' not at end of pattern -> treat as literal
-        LDA rx_t
-        TAP1L
-        LDA rx_t+1
-        TAP1H
+        LPW1 rx_t                ; <- tierA: pointer load (next: LDA)
         LDA (P1)
         LDB #0
         CMP
         JNZ mh_r0
-        LDA rx_t
-        STA rend
-        LDA rx_t+1
-        STA rend+1
+        MOVW rend,rx_t                ; <- tierA: word move (next: LDA)
         LDA #1                        ; '$' matched: at end of text -> success
         RTS
 ; Single literal char (or '.'): must match one text char, then advance both.
-mh_lit: LDA rx_t
-        TAP1L
-        LDA rx_t+1
-        TAP1H
+mh_lit: LPW1 rx_t                ; <- tierA: pointer load (next: LDA)
         LDA (P1)
         STA rx_tc                     ; rx_tc = current text char
         LDB #0
@@ -159,23 +112,9 @@ mh_lit: LDA rx_t
         JZ mh_adv                     ; exact char match
 mh_r0:  LDA #0                        ; common failure exit
         RTS
-mh_adv: LDA rx_re                     ; re++ , t++ , then tail-recurse into matchhere
-        LDB #1
-        ADD
-        STA rx_re
-        JNC mha1
-        LDA rx_re+1
-        INC
-        STA rx_re+1
-mha1:   LDA rx_t
-        LDB #1
-        ADD
-        STA rx_t
-        JNC mha2
-        LDA rx_t+1
-        INC
-        STA rx_t+1
-mha2:   JMP matchhere
+mh_adv: INCW rx_re                ; <- tierA: 16-bit INCW chain, skip label mha1 dropped (next: LDA)
+mha1:   INCW rx_t                ; <- tierA: 16-bit INCW chain, skip label mha2 dropped (next: JMP matchhere -> LDA)
+        JMP matchhere
 mh_r1:  LDA #1                        ; common success exit
         RTS
 
@@ -185,20 +124,14 @@ mh_r1:  LDA #1                        ; common success exit
 mh_star:LDA rx_c
         STA rx_cc
         JSR re2                       ; rx_re2 = rx_re + 2
-        LDA rx_t
-        STA rx_ct
-        LDA rx_t+1
-        STA rx_ct+1
+        MOVW rx_ct,rx_t                ; <- tierA: word move (next: JMP mstar_l -> LDA)
         JMP mstar_l
 ; --- c+ : one or more ---------------------------------------------------
 ; c+ : like c* but requires at least one 'c'. Verify t[0] matches c, then enter
 ; the shared loop starting at ct=t+1 (one char already consumed).
 mh_plus:LDA rx_c
         STA rx_cc
-        LDA rx_t
-        TAP1L
-        LDA rx_t+1
-        TAP1H
+        LPW1 rx_t                ; <- tierA: pointer load (next: LDA)
         LDA (P1)
         STA rx_tc
         LDB #0
@@ -227,14 +160,8 @@ mp1:    STA rx_ct+1
 ; on the tail. Because matchhere clobbers rx_re/rx_t/rx_re2/rx_ct/rx_cc (and
 ; recursion nests), save cc/re2/ct on the hardware stack around the JSR and
 ; restore after. On success -> mh_r1; else consume one more 'c' and loop.
-mstar_l:LDA rx_re2
-        STA rx_re
-        LDA rx_re2+1
-        STA rx_re+1
-        LDA rx_ct
-        STA rx_t
-        LDA rx_ct+1
-        STA rx_t+1
+mstar_l:MOVW rx_re,rx_re2                ; <- tierA: word move (next: LDA)
+        MOVW rx_t,rx_ct                ; <- tierA: word move (next: LDA)
         LDA rx_cc                     ; push loop state (pulled back in reverse order)
         PHA
         LDA rx_re2
@@ -261,10 +188,7 @@ mstar_l:LDA rx_re2
         LDB #0
         CMP
         JNZ mh_r1                     ; tail matched -> whole quantifier matched
-        LDA rx_ct                     ; tail failed: can we consume one more 'c'?
-        TAP1L
-        LDA rx_ct+1
-        TAP1H
+        LPW1 rx_ct                ; <- tierA: pointer load (next: LDA)
         LDA (P1)
         STA rx_tc
         LDB #0
@@ -279,24 +203,14 @@ mstar_l:LDA rx_re2
         CMP
         JNZ mh_r0                     ; next char isn't 'c' -> can't extend -> fail
 mstar_adv:                            ; ct++ and loop for another try
-        LDA rx_ct
-        LDB #1
-        ADD
-        STA rx_ct
-        JNC mstar_l
-        LDA rx_ct+1
-        INC
-        STA rx_ct+1
+        INCW rx_ct                ; <- tierA: 16-bit INCW chain before JMP mstar_l (next: JMP mstar_l -> LDA)
         JMP mstar_l
 ; --- c? : zero or one ---------------------------------------------------
 ; c? : zero or one 'c'. Non-greedy would try zero first, but here the "one"
 ; branch is attempted first only when the char actually matches; on failure it
 ; falls through to mq_zero (the zero-width tail). If t[0] can't match c, skip
 ; straight to mq_zero.
-mh_ques:LDA rx_t
-        TAP1L
-        LDA rx_t+1
-        TAP1H
+mh_ques:LPW1 rx_t                ; <- tierA: pointer load (next: LDA)
         LDA (P1)
         STA rx_tc
         LDB #0
@@ -321,19 +235,9 @@ mq_one: LDA rx_re                     ; try matchhere(re+2, t+1)
         LDA rx_t+1
         PHA
         JSR re2
-        LDA rx_re2
-        STA rx_re
-        LDA rx_re2+1
-        STA rx_re+1
-        LDA rx_t
-        LDB #1
-        ADD
-        STA rx_t
-        JNC mq1
-        LDA rx_t+1
-        INC
-        STA rx_t+1
-mq1:    JSR matchhere
+        MOVW rx_re,rx_re2                ; <- tierA: word move (next: LDA)
+        INCW rx_t                ; <- tierA: 16-bit INCW chain, skip label mq1 dropped (next: JSR matchhere)
+        JSR matchhere
         STA rx_res
         PLA
         STA rx_t+1
@@ -348,10 +252,7 @@ mq1:    JSR matchhere
         CMP
         JNZ mh_r1                     ; the "one" branch matched -> success
 mq_zero:JSR re2                       ; tail: matchhere(re+2, t)  (skip 'c?' entirely)
-        LDA rx_re2
-        STA rx_re
-        LDA rx_re2+1
-        STA rx_re+1
+        MOVW rx_re,rx_re2                ; <- tierA: word move (next: JMP matchhere -> LDA)
         JMP matchhere
 
 ; re2: helper computing rx_re2 = rx_re + 2 (skip a char and its quantifier).

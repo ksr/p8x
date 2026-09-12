@@ -118,19 +118,13 @@ u_end:  RTS
 ; so SYS_PUTS would drop the message into the dump file or feed it to the next
 ; stage as data. Matches dump.c's eputs(). u_use below is NOT an error — the user
 ; asked for it with -h — so it stays on stdout and `dump -h >notes` captures it.
-u_bad:  LDA #<m_bad
-        TAP1L
-        LDA #>m_bad
-        TAP1H
+u_bad:  LDP1 #m_bad                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR PUTS
         LDA #10
         JSR CONOUT
         RTS
-u_use:  LDA #<m_use
-        TAP1L
-        LDA #>m_use
-        TAP1H
+u_use:  LDP1 #m_use                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS
         LDA #10

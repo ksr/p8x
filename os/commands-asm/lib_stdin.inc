@@ -30,10 +30,7 @@ openarg:
         STA fromfile
         STA gnf
         STA gidx
-        LDA oa_a
-        TAP2L
-        LDA oa_a+1
-        TAP2H
+        LPW2 oa_a                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #0
         CMP
@@ -43,10 +40,7 @@ openarg:
         JZ oa_stdin
         LDA #0
         STA oa_g
-        LDA oa_a
-        TAP2L
-        LDA oa_a+1
-        TAP2H
+        LPW2 oa_a                ; <- tierA: pointer load (next: LDA)
 oa_scl: LDA (P2)                       ; scan arg for a '*' or '?' -> oa_g (is-glob)
         LDB #0
         CMP
@@ -73,14 +67,8 @@ oa_scd: LDA oa_g
         LDB #0
         CMP
         JZ oa_single
-        LDA oa_a                      ; glob: ge = glob_expand(arg, gfiles, 24)
-        STA ge_pat
-        LDA oa_a+1
-        STA ge_pat+1
-        LDA #<gfiles
-        STA ge_out
-        LDA #>gfiles
-        STA ge_out+1
+        MOVW ge_pat,oa_a                ; <- tierA: word move (next: LDA)
+        LDW ge_out,#gfiles                ; <- tierA: address constant (next: LDA)
         LDA #24
         STA ge_max
         JSR glob_expand
@@ -91,19 +79,13 @@ oa_scd: LDA oa_g
         JZ oa_nf
         LDA #1
         STA fromfile
-        LDA #<gfiles
-        STA op_a
-        LDA #>gfiles
-        STA op_a+1
+        LDW op_a,#gfiles                ; <- tierA: address constant (next: JSR open_path)
         JSR open_path
         RTS
 oa_single:
         LDA #1
         STA fromfile
-        LDA oa_a
-        STA op_a
-        LDA oa_a+1
-        STA op_a+1
+        MOVW op_a,oa_a                ; <- tierA: word move (next: JSR open_path)
         JSR open_path
         RTS
 oa_stdin:
@@ -155,24 +137,15 @@ nc_eof: SEC
 ; Computes gidx*64 by repeated add (no MUL), then adds the gfiles base as a
 ; 16-bit sum via gcarry. In: gidx. Out: op_a word. Clobbers A/B, gtmp2, gcarry.
 gfile_ptr:
-        LDA #0
-        STA op_a
-        STA op_a+1
+        LDW op_a,#0                ; <- tierA: zero word (next: LDA)
         LDA gidx
         STA gtmp2
 gfp_l:  LDA gtmp2
         LDB #0
         CMP
         JZ gfp_d
-        LDA op_a
-        LDB #64
-        ADD
-        STA op_a
-        JNC gfp_1
-        LDA op_a+1
-        INC
-        STA op_a+1
-gfp_1:  LDA gtmp2
+        ADDW op_a,#64                ; <- tierA: 16-bit ADDW chain, skip label gfp_1 dropped (next: LDA)
+        LDA gtmp2
         DEC
         STA gtmp2
         JMP gfp_l
@@ -204,24 +177,15 @@ gfp_2:  STA gcarry
 open_path:
         LDA #0
         STA op_n
-        LDA op_a
-        TAP2L
-        LDA op_a+1
-        TAP2H
+        LPW2 op_a                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #'/'
         CMP
         JZ opa_abs
-        LDA #<spath                   ; relative -> SYS_GETCWD(spath)
-        TAP1L
-        LDA #>spath
-        TAP1H
+        LDP1 #spath                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR $2003
-        LDA #<spath
-        TAP1L
-        LDA #>spath
-        TAP1H
+        LDP1 #spath                ; <- tierA: pointer constant (next: LDA)
 opa_sl: LDA (P1)
         LDB #0
         CMP
@@ -243,14 +207,8 @@ opa_sld:DEP1
         INC
         STA op_n
         JMP opa_cp
-opa_abs:LDA #<spath
-        TAP1L
-        LDA #>spath
-        TAP1H
-opa_cp: LDA op_a                      ; reload source (SYS_GETCWD clobbered P2)
-        TAP2L
-        LDA op_a+1
-        TAP2H
+opa_abs:LDP1 #spath                ; <- tierA: pointer constant (next: LDA)
+opa_cp: LPW2 op_a                ; <- tierA: pointer load (next: LDA)
 opa_cl: LDA (P2)
         LDB #0
         CMP
@@ -274,10 +232,7 @@ opa_cl: LDA (P2)
         JMP opa_cl
 opa_end:LDA #0
         STA (P1)
-        LDA #<spath
-        TAP1L
-        LDA #>spath
-        TAP1H
+        LDP1 #spath                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR $0133                     ; FRESOLVE
         LDA #$00
@@ -306,10 +261,7 @@ glob_expand:
         STA ge_hs
         STA ge_sp
         STA ge_pl
-        LDA ge_pat
-        TAP2L
-        LDA ge_pat+1
-        TAP2H
+        LPW2 ge_pat                ; <- tierA: pointer load (next: LDA)
 ge_scl: LDA (P2)                       ; scan pattern; ge_sp=last '/' index, ge_hs=has-slash
         LDB #0
         CMP
@@ -342,14 +294,8 @@ ge_scd: LDA #0
         LDA ge_sp
         INC
         STA ge_ls
-        LDA ge_pat                    ; ge_dir = pat[0..slashpos]
-        TAP2L
-        LDA ge_pat+1
-        TAP2H
-        LDA #<ge_dir
-        TAP1L
-        LDA #>ge_dir
-        TAP1H
+        LPW2 ge_pat                ; <- tierA: pointer load (next: LDA)
+        LDP1 #ge_dir                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         STA ge_j
 ge_dl:  LDA (P2)
@@ -374,10 +320,7 @@ ge_leaf0:
         JNC ge_l0
         INC
 ge_l0:  TAP2H
-        LDA #<ge_leaf
-        TAP1L
-        LDA #>ge_leaf
-        TAP1H
+        LDP1 #ge_leaf                ; <- tierA: pointer constant (next: LDA)
         LDA ge_ls
         STA ge_j
 ge_ll:  LDA ge_j
@@ -397,10 +340,7 @@ ge_lle: LDA #0
         LDB #0
         CMP
         JZ ge_ocwd
-        LDA #<ge_dir
-        TAP1L
-        LDA #>ge_dir
-        TAP1H
+        LDP1 #ge_dir                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR $0139                     ; FOPENDIR(dir)
         JMP ge_fsd
@@ -422,10 +362,7 @@ ge_nl:  LDA #0
         LDA #0
         JSR $013C                     ; FNEXT
         JC ge_gdone
-        LDA #<de
-        TAP1L
-        LDA #>de
-        TAP1H
+        LDP1 #de                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR $201B                     ; de_read
         LDA de
@@ -436,14 +373,8 @@ ge_nl:  LDA #0
         LDB #1
         CMP
         JNZ ge_nl                     ; files only
-        LDA #<de                      ; trim name -> ge_nm
-        TAP2L
-        LDA #>de
-        TAP2H
-        LDA #<ge_nm
-        TAP1L
-        LDA #>ge_nm
-        TAP1H
+        LDP2 #de                ; <- tierA: pointer constant (next: LDA)
+        LDP1 #ge_nm                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         STA ge_j
 ge_tl:  LDA ge_j
@@ -462,14 +393,8 @@ ge_tl:  LDA ge_j
         JMP ge_tl
 ge_tld: LDA #0
         STA (P1)
-        LDA #<ge_leaf
-        STA gp
-        LDA #>ge_leaf
-        STA gp+1
-        LDA #<ge_nm
-        STA gs
-        LDA #>ge_nm
-        STA gs+1
+        LDW gp,#ge_leaf                ; <- tierA: address constant (next: LDA)
+        LDW gs,#ge_nm                ; <- tierA: address constant (next: JSR gmatch)
         JSR gmatch
         LDB #0
         CMP
@@ -479,10 +404,7 @@ ge_tld: LDA #0
         CMP
         JC ge_nl                      ; cnt >= max -> drop
         JSR ge_slot                   ; P1 = ge_out + cnt*64
-        LDA #<ge_dir
-        TAP2L
-        LDA #>ge_dir
-        TAP2H
+        LDP2 #ge_dir                ; <- tierA: pointer constant (next: LDA)
 ge_od:  LDA (P2)
         LDB #0
         CMP
@@ -490,10 +412,7 @@ ge_od:  LDA (P2)
         STA (P1)+
         INP2
         JMP ge_od
-ge_odn: LDA #<ge_nm
-        TAP2L
-        LDA #>ge_nm
-        TAP2H
+ge_odn: LDP2 #ge_nm                ; <- tierA: pointer constant (next: LDA)
 ge_onl: LDA (P2)
         LDB #0
         CMP
@@ -513,24 +432,15 @@ ge_gdone:
 ; ge_slot: P1 = &ge_out[ge_cnt]  (ge_out + ge_cnt*64, same stride as gfile_ptr)
 ; In: ge_cnt, ge_out. Out: P1. Clobbers A/B, getmp, ge_j2, gecar.
 ge_slot:
-        LDA #0
-        STA getmp
-        STA getmp+1
+        LDW getmp,#0                ; <- tierA: zero word (next: LDA)
         LDA ge_cnt
         STA ge_j2
 ges_l:  LDA ge_j2
         LDB #0
         CMP
         JZ ges_d
-        LDA getmp
-        LDB #64
-        ADD
-        STA getmp
-        JNC ges_1
-        LDA getmp+1
-        INC
-        STA getmp+1
-ges_1:  LDA ge_j2
+        ADDW getmp,#64                ; <- tierA: 16-bit ADDW chain, skip label ges_1 dropped (next: LDA)
+        LDA ge_j2
         DEC
         STA ge_j2
         JMP ges_l
@@ -548,10 +458,7 @@ ges_2:  STA gecar
         LDB gecar
         ADD
         STA getmp+1
-        LDA getmp
-        TAP1L
-        LDA getmp+1
-        TAP1H
+        LPW1 getmp                ; <- tierA: pointer load (next: RTS)
         RTS
 
 ; ---- gmatch / upper (case-insensitive * ? whole-string matcher) -----------
@@ -562,10 +469,7 @@ ges_2:  STA gecar
 ; gp/gs on the stack, tries matching the tail here, and on failure advances gs
 ; and retries (classic backtracking). Recurses through JSR gmatch, so it leans
 ; on the return stack. Clobbers A/B/P1/P2 and gpc/gsc/gmr.
-gmatch: LDA gp
-        TAP1L
-        LDA gp+1
-        TAP1H
+gmatch: LPW1 gp                ; <- tierA: pointer load (next: LDA)
         LDA (P1)
         STA gpc
         LDB #'*'
@@ -574,10 +478,7 @@ gmatch: LDA gp
         LDB #0
         CMP
         JZ gm_pend
-        LDA gs
-        TAP2L
-        LDA gs+1
-        TAP2H
+        LPW2 gs                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         STA gsc
         LDB #0
@@ -597,27 +498,10 @@ gmatch: LDA gp
         JZ gm_adv
         LDA #0
         RTS
-gm_adv: LDA gp
-        LDB #1
-        ADD
-        STA gp
-        JNC gm_a1
-        LDA gp+1
-        INC
-        STA gp+1
-gm_a1:  LDA gs
-        LDB #1
-        ADD
-        STA gs
-        JNC gm_a2
-        LDA gs+1
-        INC
-        STA gs+1
-gm_a2:  JMP gmatch
-gm_pend:LDA gs
-        TAP2L
-        LDA gs+1
-        TAP2H
+gm_adv: INCW gp                ; <- tierA: 16-bit INCW chain, skip label gm_a1 dropped (next: LDA)
+gm_a1:  INCW gs                ; <- tierA: 16-bit INCW chain, skip label gm_a2 dropped (next: JMP gmatch -> LDA)
+        JMP gmatch
+gm_pend:LPW2 gs                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #0
         CMP
@@ -658,22 +542,12 @@ gm_s0:  LDA gp
         LDB #0
         CMP
         JNZ gm_r1
-        LDA gs
-        TAP2L
-        LDA gs+1
-        TAP2H
+        LPW2 gs                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #0
         CMP
         JZ gm_r0
-        LDA gs
-        LDB #1
-        ADD
-        STA gs
-        JNC gm_s0
-        LDA gs+1
-        INC
-        STA gs+1
+        INCW gs                ; <- tierA: 16-bit INCW chain before JMP gm_s0 (next: JMP gm_s0 -> LDA)
         JMP gm_s0
 ; upper: fold A to upper-case (ASCII), leave other bytes unchanged.
 ; In: A = char. Out: A = folded char. Clobbers B, uch.

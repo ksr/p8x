@@ -118,19 +118,13 @@ e_crlf: LDA #13
 ; e_bad: the failure path. PUTS/CONOUT, not SYS_PUTS/SYS_PUTC: an error must go to
 ; the raw console, never into a redirect or a pipe (`examine zz >F` would file the
 ; diagnostic away as output, and `examine zz | wc` would feed it downstream as data).
-e_bad:  LDA #<m_bad
-        TAP1L
-        LDA #>m_bad
-        TAP1H
+e_bad:  LDP1 #m_bad                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR PUTS
         LDA #10
         JSR CONOUT
         RTS
-e_use:  LDA #<m_use
-        TAP1L
-        LDA #>m_use
-        TAP1H
+e_use:  LDP1 #m_use                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS
         LDA #10

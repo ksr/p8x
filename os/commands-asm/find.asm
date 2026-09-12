@@ -16,22 +16,12 @@
         STA f_arg
         TPA2H
         STA f_arg+1
-f_sk:   LDA f_arg                    ; reload P2 from f_arg each pass (16-bit incr below)
-        TAP2L
-        LDA f_arg+1
-        TAP2H
+f_sk:   LPW2 f_arg                ; <- tierA: pointer load (next: LDA)
         LDA (P2)
         LDB #32                       ; space?
         CMP
         JNZ f_chk
-        LDA f_arg                     ; yes: f_arg++ (16-bit, carry into high byte)
-        LDB #1
-        ADD
-        STA f_arg
-        JNC f_sk
-        LDA f_arg+1
-        INC
-        STA f_arg+1
+        INCW f_arg                ; <- tierA: 16-bit INCW chain before JMP f_sk (next: JMP f_sk -> LDA)
         JMP f_sk
 ; f_chk: reject empty arg (NUL/CR) or a -h/-H help flag -> usage.
 f_chk:  LDA (P2)
@@ -55,14 +45,8 @@ f_chk:  LDA (P2)
 ; build pat[] from the arg word, note glob chars
 f_pat:  LDA #0
         STA isglob
-        LDA f_arg
-        TAP2L
-        LDA f_arg+1
-        TAP2H
-        LDA #<pat
-        TAP1L
-        LDA #>pat
-        TAP1H
+        LPW2 f_arg                ; <- tierA: pointer load (next: LDA)
+        LDP1 #pat                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         STA fi
 ; Copy chars into pat[] (cap 63 + NUL = 64-byte buffer) until NUL/space/CR.
@@ -100,16 +84,10 @@ f_ps:   LDA (P2)
 f_pd:   LDA #0
         STA (P1)                     ; pat NUL
 ; cur = CWD path ; plen at level 0
-        LDA #<cur
-        TAP1L
-        LDA #>cur
-        TAP1H
+        LDP1 #cur                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_GETCWD               ; SYS_GETCWD -> cur
-        LDA #<cur
-        TAP1L
-        LDA #>cur
-        TAP1H
+        LDP1 #cur                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         STA fi
 ; f_len: measure strlen(cur) into fi -> stored as parr[0], the level-0 path length.
@@ -139,10 +117,7 @@ f_len0: LDA #0                        ; w_depth=0; parr[0]=plen
         JSR FSDIRBUF                 ; point FS at the $EA00 sector/dir buffer page
         JSR walk
         RTS
-f_usage:LDA #<u_use
-        TAP1L
-        LDA #>u_use
-        TAP1H
+f_usage:LDP1 #u_use                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_PUTS
         LDA #10
@@ -173,10 +148,7 @@ w_next: LDA #0
         LDA #0
         JSR FNEXT                    ; FNEXT
         JC w_desc
-        LDA #<de
-        TAP1L
-        LDA #>de
-        TAP1H
+        LDP1 #de                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         JSR SYS_DIRENTRY             ; de_read
         LDA de                       ; skip entries whose name starts with '.'
@@ -184,10 +156,7 @@ w_next: LDA #0
         CMP
         JZ w_next
         JSR rdname
-        LDA #<nm
-        STA nm_p
-        LDA #>nm
-        STA nm_p+1
+        LDW nm_p,#nm                ; <- tierA: address constant (next: JSR nmatch)
         JSR nmatch
         LDB #0
         CMP
@@ -254,10 +223,7 @@ w_dl:   JSR idx_a
         STA flba
         LDA (P1)
         STA flba+1
-        LDA flba
-        TAP1L
-        LDA flba+1
-        TAP1H
+        LPW1 flba                ; <- tierA: pointer load (next: LDA)
         LDA #0
         JSR SYS_OPENDIR              ; SYS_OPENDIR
         LDA #0
@@ -378,10 +344,7 @@ w_ret:  RTS
 ; pm_l/pm_nl loops hold P1 live across it); only A is clobbered. Unlike the FS
 ; syscalls, no pointer reload is needed after a PUTC.
 print_match:
-        LDA #<cur
-        TAP1L
-        LDA #>cur
-        TAP1H
+        LDP1 #cur                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         STA pcnt
 pm_l:   LDA pcnt
@@ -406,10 +369,7 @@ pm_sep: LDA fpl
 pm_slash:
         LDA #'/'
         JSR SYS_PUTC
-pm_name:LDA #<nm
-        TAP1L
-        LDA #>nm
-        TAP1H
+pm_name:LDP1 #nm                ; <- tierA: pointer constant (next: LDA)
 pm_nl:  LDA (P1)
         LDB #0
         CMP
@@ -424,14 +384,8 @@ pm_eol: LDA #10
 ; ======================= rdname / nmatch / contains ========================
 ; rdname: copy the 12-byte fixed-width name field de[0..11] into NUL-terminated
 ; nm[], dropping embedded spaces (name is space-padded on disk). Clobbers P1/P2.
-rdname: LDA #<nm
-        TAP1L
-        LDA #>nm
-        TAP1H
-        LDA #<de
-        TAP2L
-        LDA #>de
-        TAP2H
+rdname: LDP1 #nm                ; <- tierA: pointer constant (next: LDA)
+        LDP2 #de                ; <- tierA: pointer constant (next: LDA)
         LDA #0
         STA fi2
 rd_l:   LDA fi2
@@ -458,24 +412,12 @@ nmatch: LDA isglob
         LDB #0
         CMP
         JZ nm_sub
-        LDA #<pat
-        STA gp
-        LDA #>pat
-        STA gp+1
-        LDA nm_p
-        STA gs
-        LDA nm_p+1
-        STA gs+1
+        LDW gp,#pat                ; <- tierA: address constant (next: LDA)
+        MOVW gs,nm_p                ; <- tierA: word move (next: JSR gmatch)
         JSR gmatch
         RTS
-nm_sub: LDA nm_p
-        STA cn_h
-        LDA nm_p+1
-        STA cn_h+1
-        LDA #<pat
-        STA cn_n
-        LDA #>pat
-        STA cn_n+1
+nm_sub: MOVW cn_h,nm_p                ; <- tierA: word move (next: LDA)
+        LDW cn_n,#pat                ; <- tierA: address constant (next: JSR contains)
         JSR contains
         RTS
 
@@ -579,24 +521,15 @@ pra1:   TAP1H
 ; clba_a: P1 = &clba[w_depth][fi] (child start-LBA, 2 bytes). Stride 48 = 24*2.
 ; No MUL opcode, so w_depth*48 is done by adding 48 in a loop (cla_m), then fi*2
 ; via SHL, then the 16-bit base &clba. ft holds the running 16-bit offset/address.
-clba_a: LDA #0
-        STA ft
-        STA ft+1
+clba_a: LDW ft,#0                ; <- tierA: zero word (next: LDA)
         LDA w_depth
         STA fn
 cla_m:  LDA fn
         LDB #0
         CMP
         JZ cla_md
-        LDA ft
-        LDB #48
-        ADD
-        STA ft
-        JNC cla_1
-        LDA ft+1
-        INC
-        STA ft+1
-cla_1:  LDA fn
+        ADDW ft,#48                ; <- tierA: 16-bit ADDW chain, skip label cla_1 dropped (next: LDA)
+        LDA fn
         DEC
         STA fn
         JMP cla_m
@@ -623,48 +556,22 @@ cla_3:  STA fcar
         LDB fcar
         ADD
         STA ft+1
-        LDA ft
-        TAP1L
-        LDA ft+1
-        TAP1H
+        LPW1 ft                ; <- tierA: pointer load (next: RTS)
         RTS
 ; cn_a: P1 = &cn[w_depth][fi][fk] (child name char). Level stride 384 = 24*16 is
 ; summed as 3 x 128 per level (cna_1/2/3); the fi*16 term as 16 added fi times
 ; (cna_fl); then + fk + 16-bit base &cn. Again no MUL, all repeated 8-bit adds.
-cn_a:   LDA #0
-        STA ft
-        STA ft+1
+cn_a:   LDW ft,#0                ; <- tierA: zero word (next: LDA)
         LDA w_depth
         STA fn
 cna_m:  LDA fn
         LDB #0
         CMP
         JZ cna_md
-        LDA ft
-        LDB #128
-        ADD
-        STA ft
-        JNC cna_1
-        LDA ft+1
-        INC
-        STA ft+1
-cna_1:  LDA ft
-        LDB #128
-        ADD
-        STA ft
-        JNC cna_2
-        LDA ft+1
-        INC
-        STA ft+1
-cna_2:  LDA ft
-        LDB #128
-        ADD
-        STA ft
-        JNC cna_3
-        LDA ft+1
-        INC
-        STA ft+1
-cna_3:  LDA fn
+        ADDW ft,#128                ; <- tierA: 16-bit ADDW chain, skip label cna_1 dropped (next: LDA)
+cna_1:  ADDW ft,#128                ; <- tierA: 16-bit ADDW chain, skip label cna_2 dropped (next: LDA)
+cna_2:  ADDW ft,#128                ; <- tierA: 16-bit ADDW chain, skip label cna_3 dropped (next: LDA)
+        LDA fn
         DEC
         STA fn
         JMP cna_m
@@ -674,15 +581,8 @@ cna_fl: LDA fk2
         LDB #0
         CMP
         JZ cna_fd
-        LDA ft
-        LDB #16
-        ADD
-        STA ft
-        JNC cna_f1
-        LDA ft+1
-        INC
-        STA ft+1
-cna_f1: LDA fk2
+        ADDW ft,#16                ; <- tierA: 16-bit ADDW chain, skip label cna_f1 dropped (next: LDA)
+        LDA fk2
         DEC
         STA fk2
         JMP cna_fl
@@ -708,10 +608,7 @@ cna_b:  STA fcar
         LDB fcar
         ADD
         STA ft+1
-        LDA ft
-        TAP1L
-        LDA ft+1
-        TAP1H
+        LPW1 ft                ; <- tierA: pointer load (next: RTS)
         RTS
 
 u_use:  .asciiz "usage: FIND pattern   CWD paths matching pattern (glob if * or ?, else substring)"
