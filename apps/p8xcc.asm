@@ -26,17 +26,23 @@
 ;              builtins: putchar/puts/getchar/peek/poke/argstr/bios | '(' e ')'
 ;     (a bare array NAME decays to &NAME[0])
 ; Values are 16-bit int. Codegen uses a MEMORY accumulator __ax (every
-; expression's value) + a temp __t0; binary ops route through runtime helpers
-; (__add/__sub/__mul/__cmp/__div) emitted at the end of the program. putchar
-; takes __ax's low byte. FUNCTIONS: each is _f_NAME (call = JSR, return value in
+; expression's value) + a temp __t0. TIER A ISA (2026-09-12): + - & | ^ are
+; ADDW/SUBW/ANDW/ORW/XORW on those words, a literal is LDW __ax,#n, a struct
+; offset ADDW __ax,#k, ++/-- INCW/DECW in place, a condition test CMPW __ax,#0,
+; an ordering CMPW + one branch (only == / != still call the 16-bit __cmp); the
+; 8-bit multiply/divide and the shifts stay runtime helpers. putchar takes
+; __ax's low byte. FUNCTIONS: each is _f_NAME (call = JSR, return value in
 ; __ax); params/locals use STATIC per-function slots (a global slot counter);
-; args are passed on a runtime ARG STACK (__sp): the caller pushes them
-; (EM_PUSHARG), the callee's prologue pops them into its own static slots
-; (EM_POPPARAMS) -- so a callee's storage is never needed at the call site and
-; FORWARD calls / MUTUAL RECURSION work (a prototype just registers the name).
-; Re-entrancy: before a call a function pushes its own live slots (EM_SAVESLOTS)
-; and restores them after -- SKIPPED when an argument took an address (SAWADDRG)
-; so pass-by-reference still works. POINTERS: & (EM_ADDROF), * deref (EM_LOADW),
+; args are pushed LEFT TO RIGHT onto the P3 stack with PHW (EM_PUSHARG), the
+; callee's prologue copies them into its slots with LDW __V+2s,(P3+d)
+; (EM_POPPARAMS; arg i at P3+3+2*(n-1-i)) and the caller drops them with ADDP3
+; -- so a callee's storage is never needed at the call site and FORWARD calls /
+; MUTUAL RECURSION work (a prototype just registers the name). Re-entrancy:
+; before the args a function pushes its own live slots (EM_SAVESLOTS) and
+; restores them after the call -- or DISCARDS the copies (ADDP3) when an
+; argument took an address (SAWADDRG), so pass-by-reference still works. The
+; program starts like p8cc's output: it keeps the caller's P3 in __sp0 and runs
+; on a stack below CSTACKTOP unless launched nested. POINTERS: & (EM_ADDROF), * deref (EM_LOADW),
 ; *p = e (EM_STOREW) via P1. Ver.
 ; behavioural (compile on-target, run, diff output vs p8cc.py). Grows one tested
 ; feature at a time (char/pointers, ...) toward the p8cc subset.
@@ -378,21 +384,14 @@ sav1:   LDB  VN+1
         RTS
 
 ; ---- 16-bit accumulator emit helpers ----
-EM_LDIMM: LDP1 #MLDAI                ; __ax = CURV (16-bit literal)
-        JSR  EMIT
+EM_LDIMM: LDP1 #MLDWAXI              ; __ax = CURV (16-bit literal): LDW __ax,#n
+        JSR  EMIT                    ;   (was LDA/STA x2, 10 bytes -> 4-5)
         LDA  CURV
-        JSR  EMITNUM
-        LDP1 #MNL
-        JSR  EMIT
-        LDP1 #MSTAX
-        JSR  EMIT
-        LDP1 #MLDAI
-        JSR  EMIT
+        STA  VN
         LDA  CURV+1
-        JSR  EMITNUM
+        STA  VN+1
+        JSR  EMITNUM16
         LDP1 #MNL
-        JSR  EMIT
-        LDP1 #MSTAXH
         JSR  EMIT
         RTS
 EM_LDVAR: LDP1 #MMVAXV               ; __ax = V<SYMIDX>  ->  MOVW __ax,__V+<2*n>
@@ -547,132 +546,73 @@ EM_POP: LDP1 #MPLW                   ; pop -> __t0 (16-bit) -> one PLW instructi
 ; EM_INCVAR / EM_DECVAR: V<SLOTBASE+SYMIDX> += / -= 1 (16-bit, in place; __ax kept)
 EM_VADDR: LDP1 #MSTAV                 ; helper: emit "STA V<slot>" (slot in A? no) -- unused
         RTS
-EM_INCVAR: JSR NEWLBL
-        STA  INCLBL
-        LDP1 #MLDAV
+EM_INCVAR: LDP1 #MINCWV               ; INCW __V+<2n>  (was a 12-instruction carry chain)
         JSR  EMIT
         JSR  EMSY
         LDP1 #MNL
         JSR  EMIT
-        LDP1 #MLDB1
-        JSR  EMIT
-        LDP1 #MADDOP
-        JSR  EMIT
-        LDP1 #MSTAV
-        JSR  EMIT
-        JSR  EMSY
-        LDP1 #MNL
-        JSR  EMIT
-        LDP1 #MJNC
-        LDA  INCLBL
-        JSR  EMITJ
-        LDP1 #MLDAV
-        JSR  EMIT
-        JSR  EMSY
-        LDP1 #MP1
-        JSR  EMIT
-        LDP1 #MINCOP
-        JSR  EMIT
-        LDP1 #MSTAV
-        JSR  EMIT
-        JSR  EMSY
-        LDP1 #MP1
-        JSR  EMIT
-        LDA  INCLBL
-        JSR  EMITLBL
         RTS
-EM_DECVAR: JSR NEWLBL
-        STA  INCLBL
-        LDP1 #MLDAV
+EM_DECVAR: LDP1 #MDECWV               ; DECW __V+<2n>
         JSR  EMIT
         JSR  EMSY
         LDP1 #MNL
-        JSR  EMIT
-        LDP1 #MLDB1
-        JSR  EMIT
-        LDP1 #MSUBOP
-        JSR  EMIT
-        LDP1 #MSTAV
-        JSR  EMIT
-        JSR  EMSY
-        LDP1 #MNL
-        JSR  EMIT
-        LDP1 #MJC
-        LDA  INCLBL
-        JSR  EMITJ
-        LDP1 #MLDAV
-        JSR  EMIT
-        JSR  EMSY
-        LDP1 #MP1
-        JSR  EMIT
-        LDP1 #MDECOP
-        JSR  EMIT
-        LDP1 #MSTAV
-        JSR  EMIT
-        JSR  EMSY
-        LDP1 #MP1
-        JSR  EMIT
-        LDA  INCLBL
-        JSR  EMITLBL
-        RTS
-
-; EM_PUSHARG: emit "JSR __pusharg" (push __ax onto the runtime arg stack)
-EM_PUSHARG: LDP1 #MPUSHARG
         JSR  EMIT
         RTS
 
-; EM_POPPARAMS: prologue - pop NPARAMS args (pushed left-to-right by the caller)
-;   into this function's param slots V<SLOTBASE+i>, i = NPARAMS-1 .. 0.
+; EM_PUSHARG: emit "PHW __ax" -- arguments go onto the P3 stack (2026-09-12; the
+;   software arg stack __sp/__pusharg/__pop is gone). The caller drops them
+;   with ADDP3 after the JSR; the callee reads them with LDW (P3+d).
+EM_PUSHARG: LDP1 #MPHW
+        JSR  EMIT
+        RTS
+; EM_ADDP3 (A = n): emit  ADDP3 #n
+EM_ADDP3: STA MEMTMP
+        LDP1 #MADDP3
+        JSR  EMIT
+        LDA  MEMTMP
+        JSR  EMITNUM
+        LDP1 #MNL
+        JSR  EMIT
+        RTS
+
+; EM_POPPARAMS: prologue - copy the NPARAMS args (pushed left-to-right by the
+;   caller, so arg 0 is deepest) from the stack into this function's param slots
+;   V<SLOTBASE+i>:  LDW __V+2*slot(i),(P3+3+2*(NPARAMS-1-i)).  The return address
+;   sits at P3+1..2; the caller frees the args with ADDP3 after the call.
 EM_POPPARAMS: LDA NPARAMS
         JZ   epp_d
         STA  VITER
 epp_l:  LDA  VITER
         DEC
         STA  VITER
-        LDP1 #MPOP                    ; JSR __pop  (-> __ax)
-        JSR  EMIT
-        LDP1 #MLDAX
-        JSR  EMIT
-        LDP1 #MSTAV
+        LDP1 #MLDWV                  ; "LDW __V+"
         JSR  EMIT
         LDA  VITER
-        JSR  EMSB
-        LDP1 #MNL
+        JSR  EMSB                    ; + 2*slot
+        LDP1 #MCP3                   ; ",(P3+"
         JSR  EMIT
-        LDP1 #MLDAXH
-        JSR  EMIT
-        LDP1 #MSTAV
-        JSR  EMIT
-        LDA  VITER
-        JSR  EMSB
-        LDP1 #MP1
+        LDA  NPARAMS                 ; d = 3 + 2*(NPARAMS-1-VITER)
+        LDB  VITER
+        SUB
+        DEC
+        SHL
+        LDB  #3
+        ADD
+        JSR  EMITNUM
+        LDP1 #MCLNL                  ; ")" + newline
         JSR  EMIT
         LDA  VITER
         JZ   epp_d
         JMP  epp_l
 epp_d:  RTS
 
-EM_AX0: LDP1 #MLDA0                  ; __ax = 0
-        JSR  EMIT
-        LDP1 #MSTAX
-        JSR  EMIT
-        LDP1 #MSTAXH
+EM_AX0: LDP1 #MLDW0                  ; __ax = 0  (LDW __ax,#0)
         JSR  EMIT
         RTS
-EM_AX1: LDP1 #MLDA1                  ; __ax = 1
-        JSR  EMIT
-        LDP1 #MSTAX
-        JSR  EMIT
-        LDP1 #MLDA0
-        JSR  EMIT
-        LDP1 #MSTAXH
+EM_AX1: LDP1 #MLDW1                  ; __ax = 1
         JSR  EMIT
         RTS
-EM_TESTAX: LDP1 #MLDAX                ; set Z=1 iff __ax==0  (LDA __ax; LDB __ax+1; OR)
-        JSR  EMIT
-        LDP1 #MLDBXH
-        JSR  EMIT
-        LDP1 #MOR
+EM_TESTAX: LDP1 #MCMPAX0              ; set Z=1 iff __ax==0  (CMPW __ax,#0: 16-bit Z)
         JSR  EMIT
         RTS
 
@@ -1720,12 +1660,8 @@ co_s:   LDA  CURK                    ; a sequence of function definitions
         JZ   co_end
         JSR  FUNCDEF
         JMP  co_s
-co_end: LDP1 #MADD_DEF                ; 16-bit runtime helpers (always emitted)
-        JSR  EMIT
-        LDP1 #MSUB_DEF
-        JSR  EMIT
-        LDP1 #MCMP_DEF
-        JSR  EMIT
+co_end: LDP1 #MCMP_DEF                ; the 16-bit equality compare (always emitted;
+        JSR  EMIT                    ;   + - & | ^ are ADDW/SUBW/ANDW/ORW/XORW inline)
         LDA  USEMUL                  ; the multiply helper, if the program used '*'
         JZ   ce_nomul
         LDP1 #MMULDEF
@@ -1734,27 +1670,11 @@ ce_nomul: LDA USEDIV                 ; the divide/modulo helper, if '/' or '%' u
         JZ   ce_nodiv
         LDP1 #MDMDEF
         JSR  EMIT
-ce_nodiv: LDA USENEG                 ; unary-minus helper, if '-' used as a prefix
-        JZ   ce_noneg
-        LDP1 #MNEG_DEF
-        JSR  EMIT
-ce_noneg: LDA USENOT                 ; logical-not helper, if '!' used
+ce_nodiv: LDA USENOT                 ; logical-not helper, if '!' used
         JZ   ce_nonot
         LDP1 #MLNOT_DEF
         JSR  EMIT
-ce_nonot: LDA USEAND
-        JZ   ce_noand
-        LDP1 #MANDDEF
-        JSR  EMIT
-ce_noand: LDA USEOR
-        JZ   ce_noor
-        LDP1 #MORDEF
-        JSR  EMIT
-ce_noor: LDA USEXOR
-        JZ   ce_noxor
-        LDP1 #MXORDEF
-        JSR  EMIT
-ce_noxor: LDA USESHL
+ce_nonot: LDA USESHL
         JZ   ce_noshl
         LDP1 #MSHLDEF
         JSR  EMIT
@@ -1762,9 +1682,7 @@ ce_noshl: LDA USESHR
         JZ   ce_noshr
         LDP1 #MSHRDEF
         JSR  EMIT
-ce_noshr: LDP1 #MTEMP                ; the codegen temp
-        JSR  EMIT
-        LDP1 #MFRAMEDEF              ; arg-stack runtime: __pusharg/__pop/__sp/__cstack
+ce_noshr: LDP1 #MTEMP                ; the codegen temps (__t0, __sp0, __ax, __c, __sc)
         JSR  EMIT
         LDP1 #MVBASE                 ; all variable storage in ONE array __V; a
         JSR  EMIT                    ;   slot n is __V+2*n (see EMSLOT / MLDAV). One
@@ -2156,21 +2074,15 @@ smf_no: RTS
 
 ; EM_ADDOFF (A = offset): emit __ax += offset  (via __t0 + __add)
 EM_ADDOFF: STA MEMTMP
-        LDP1 #MLDAI
+        LDA  MEMTMP
+        JZ   eao_d                   ; += 0: nothing to emit
+        LDP1 #MADDWAXI               ; ADDW __ax,#off  (one instruction)
         JSR  EMIT
         LDA  MEMTMP
         JSR  EMITNUM
         LDP1 #MNL
         JSR  EMIT
-        LDP1 #MSTAT
-        JSR  EMIT
-        LDP1 #MLDA0
-        JSR  EMIT
-        LDP1 #MSTT0H
-        JSR  EMIT
-        LDP1 #MADD
-        JSR  EMIT
-        RTS
+eao_d:  RTS
 
 ; fd_glob: a top-level global declaration  type [*]NAME [ [N] ] ;
 fd_glob: JSR GSYMADD                 ; record CURFN @ slot SLOTCNT (char = DCLCHAR)
@@ -3098,8 +3010,24 @@ GREL:   JSR  GSHIFT
         PLA
         STA  RELOP
         JSR  EM_POP                  ; pop left -> __t0
-        LDP1 #MCMP                   ; JSR __cmp  (C=left>=right, Z=eq)
-        JSR  EMIT
+        LDA  RELOP                   ; == / != (4/5) need a 16-bit Z: JSR __cmp
+        LDB  #4
+        CMP
+        JC   grl_eq
+        LDA  RELOP                   ; < (0) / >= (3): CMPW __t0,__ax, C = left>=right
+        LDB  #1                      ; <= (1) / > (2): CMPW __ax,__t0, C = right>=left
+        CMP
+        JZ   grl_sw
+        LDA  RELOP
+        LDB  #2
+        CMP
+        JZ   grl_sw
+        LDP1 #MCMPWTA
+        JMP  grl_em
+grl_sw: LDP1 #MCMPWAT
+        JMP  grl_em
+grl_eq: LDP1 #MCMP
+grl_em: JSR  EMIT
         JSR  EMITCMP                 ; emit the 0/1 sequence for RELOP
 grx:    RTS
 
@@ -3982,8 +3910,9 @@ gfi_call: LDP1 #M_BIOS             ; builtins: bios / puts / getchar / peek /
         LDA  #0
         STA  SAWADDRG                ; did any argument take an address? (pass-by-ref)
         JSR  ADVANCE                 ; past '('
-        LDA  #0
-        STA  ARGI
+        JSR  EM_SAVESLOTS            ; caller-save the live slots (re-entrancy) FIRST:
+        LDA  #0                      ;   the args must lie directly under the return
+        STA  ARGI                    ;   address for the callee's LDW (P3+d)
         LDA  CURK
         LDB  #3
         CMP
@@ -4013,19 +3942,25 @@ ga_loop: LDA ARGI                    ; save ARGI across GEXPR (nested calls reus
         JMP  ga_loop
 ga_done: LDA #')'
         JSR  EXPECTP
-        LDA  SAWADDRG                ; caller-save the live slots (re-entrancy) unless
-        JNZ  gc_nosave               ; a &local was passed (then the callee writes it)
-        JSR  EM_SAVESLOTS
-gc_nosave: LDP1 #MJSRF               ; JSR _f_NAME   (result -> __ax)
+        LDP1 #MJSRF                  ; JSR _f_NAME   (result -> __ax)
         JSR  EMIT
         PLA                          ; restore callee index
         STA  FI
         JSR  EMITFNAME               ; emit the callee's name from FPOOL[FI]
         LDP1 #MNL
         JSR  EMIT
-        LDA  SAWADDRG
-        JNZ  gc_norest
-        JSR  EM_RESTSLOTS            ; restore caller's slots (result stays in __ax)
+        LDA  ARGI                    ; drop the pushed arguments: ADDP3 #2n
+        JZ   gc_noargs
+        SHL
+        JSR  EM_ADDP3
+gc_noargs: LDA SAWADDRG              ; a &local was passed: the callee wrote the REAL
+        JZ   gc_rest                 ;   slot, so discard the saved copies (ADDP3)
+        LDA  NLSLOT                  ;   instead of restoring them over it
+        JZ   gc_norest
+        SHL
+        JSR  EM_ADDP3
+        JMP  gc_norest
+gc_rest: JSR EM_RESTSLOTS            ; restore caller's slots (result stays in __ax)
 gc_norest: RTS
 gf_err: RTS
 
@@ -4501,8 +4436,9 @@ rd_ok:  LDA  #1
         STA  RELF
 rd_no:  RTS
 
-; EMITCMP: given a preceding CMP (left-right, setting C=left>=right and Z=equal),
-;          emit code leaving 0/1 in A per RELOP.  The conditional branch must come
+; EMITCMP: after the compare GREL emitted (CMPW __t0,__ax for < >=, the swapped
+;          CMPW __ax,__t0 for > <=, JSR __cmp for == !=), emit code leaving 0/1
+;          in __ax per RELOP: one conditional branch each.  The conditional branch must come
 ;          BEFORE any LDA — an LDA clobbers Z (though not C), which would destroy
 ;          the comparison result.  Two fresh labels: la (branch target), lb (end).
 EMITCMP: JSR NEWLBL
@@ -4551,33 +4487,14 @@ ec_t:   JSR  EM_AX0                  ; false path, then jump over the true value
         JSR  EMITLBL
         JSR  EM_AX1
         JMP  ec_end
-ec_gt:  LDP1 #MJZ                    ; a>b : false when Z=1 (eq) or C=0 (a<b)
+ec_gt:  LDP1 #MJNC                   ; a>b : CMPW __ax,__t0 gave C = b>=a; true when C=0
         LDA  LBLA
         JSR  EMITJ
-        LDP1 #MJNC
+        JMP  ec_t
+ec_le:  LDP1 #MJC                    ; a<=b : C = b>=a; true when C=1
         LDA  LBLA
         JSR  EMITJ
-        JSR  EM_AX1                  ; a>b -> true
-        LDP1 #MJMP
-        LDA  LBLB
-        JSR  EMITJ
-        LDA  LBLA                    ; la: (false)
-        JSR  EMITLBL
-        JSR  EM_AX0
-        JMP  ec_end
-ec_le:  LDP1 #MJZ                    ; a<=b : true when Z=1 (eq) or C=0 (a<b)
-        LDA  LBLA
-        JSR  EMITJ
-        LDP1 #MJNC
-        LDA  LBLA
-        JSR  EMITJ
-        JSR  EM_AX0                  ; a>b -> false
-        LDP1 #MJMP
-        LDA  LBLB
-        JSR  EMITJ
-        LDA  LBLA                    ; la: (true)
-        JSR  EMITLBL
-        JSR  EM_AX1
+        JMP  ec_t
 ec_end: LDA  LBLB                    ; lb: (end)
         JSR  EMITLBL
         RTS
@@ -4718,29 +4635,37 @@ MPHWV:  .byte $20,$20,$20,$20,$20,$20,$20,$20   ; "PHW __V+" + 2*slot + MNL
         .asciiz "PHW __V+"
 MPLWV:  .byte $20,$20,$20,$20,$20,$20,$20,$20   ; "PLW __V+" + 2*slot + MNL
         .asciiz "PLW __V+"
-MBOOT:  .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "LDA #<__cstktop"
+MBOOT:  .byte $20,$20,$20,$20,$20,$20,$20,$20   ; startup (mirrors p8cc.py): keep the
+        .ascii "TPA3L"                              ;   caller's P3 in __sp0, run on a stack
+        .byte LF                                    ;   growing down from CSTACKTOP unless
+        .byte $20,$20,$20,$20,$20,$20,$20,$20       ;   the inherited P3 is already below it
+        .ascii "STA __sp0"                          ;   (a nested launch keeps its stack)
         .byte LF
         .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "STA __sp"
+        .ascii "TPA3H"
         .byte LF
         .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "LDA #>__cstktop"
+        .ascii "STA __sp0+1"
         .byte LF
         .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "STA __sp+1"
+        .ascii "LDB #248"
         .byte LF
         .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "JSR _f_main"
+        .ascii "CMP"
+        .byte LF
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "JNC __sk0"
+        .byte LF
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "LDP3 #63487"
+        .byte LF
+        .ascii "__sk0:  JSR _f_main"
+        .byte LF
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "LPW3 __sp0"
         .byte LF
         .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "RTS"
-        .byte LF,0
-MPUSHARG: .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "JSR __pusharg"
-        .byte LF,0
-MPOP:   .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "JSR __pop"
         .byte LF,0
 MFPFX:  .asciiz "_f_"
 MEPFX:  .asciiz "_e_"
@@ -4825,20 +4750,55 @@ MJSHL:  .byte $20,$20,$20,$20,$20,$20,$20,$20
 MJSHR:  .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "JSR __shr"
         .byte LF,0
+; Tier A word ops (2026-09-12): one instruction each on the __ax/__t0 words,
+; replacing the JSR __add/__sub/__and/__or/__xor runtime helpers.
 MJAND:  .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "JSR __and"
+        .ascii "ANDW __ax,__t0"
         .byte LF,0
 MJOR:   .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "JSR __or"
+        .ascii "ORW __ax,__t0"
         .byte LF,0
 MJXOR:  .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "JSR __xor"
+        .ascii "XORW __ax,__t0"
         .byte LF,0
 MADD:   .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "JSR __add"
+        .ascii "ADDW __ax,__t0"
         .byte LF,0
-MSUB:   .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "JSR __sub"
+MSUB:   .byte $20,$20,$20,$20,$20,$20,$20,$20     ; __ax = __t0 - __ax
+        .ascii "SUBW __t0,__ax"
+        .byte LF
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "MOVW __ax,__t0"
+        .byte LF,0
+MLDWAXI: .byte $20,$20,$20,$20,$20,$20,$20,$20    ; prefix: "LDW __ax,#" + n16 + MNL
+        .asciiz "LDW __ax,#"
+MADDWAXI: .byte $20,$20,$20,$20,$20,$20,$20,$20   ; prefix: "ADDW __ax,#" + n + MNL
+        .asciiz "ADDW __ax,#"
+MCMPWTA: .byte $20,$20,$20,$20,$20,$20,$20,$20    ; C = left(__t0) >= right(__ax)
+        .ascii "CMPW __t0,__ax"
+        .byte LF,0
+MCMPWAT: .byte $20,$20,$20,$20,$20,$20,$20,$20    ; C = right >= left  (for > and <=)
+        .ascii "CMPW __ax,__t0"
+        .byte LF,0
+MINCWV: .byte $20,$20,$20,$20,$20,$20,$20,$20     ; prefix: "INCW __V+" + 2*slot + MNL
+        .asciiz "INCW __V+"
+MDECWV: .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .asciiz "DECW __V+"
+MLDWV:  .byte $20,$20,$20,$20,$20,$20,$20,$20     ; prefix: "LDW __V+" + 2*slot + MCP3 ...
+        .asciiz "LDW __V+"
+MCP3:   .asciiz ",(P3+"                          ; ... + d + MCLNL
+MCLNL:  .ascii ")"
+        .byte LF,0
+MADDP3: .byte $20,$20,$20,$20,$20,$20,$20,$20     ; prefix: "ADDP3 #" + n + MNL
+        .asciiz "ADDP3 #"
+MCMPAX0: .byte $20,$20,$20,$20,$20,$20,$20,$20    ; Z := (__ax == 0), 16-bit
+        .ascii "CMPW __ax,#0"
+        .byte LF,0
+MLDW0:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "LDW __ax,#0"
+        .byte LF,0
+MLDW1:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "LDW __ax,#1"
         .byte LF,0
 MPUTC:  .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "LDA __ax"
@@ -5078,68 +5038,13 @@ MLBC:   .ascii ":"
         .byte LF,0
 MTEMP:  .ascii "__t0:   .fill 2"
         .byte LF
+        .ascii "__sp0:  .fill 2"
+        .byte LF
         .ascii "__ax:   .fill 2"
         .byte LF
         .ascii "__c:    .fill 1"
         .byte LF
         .ascii "__sc:   .fill 1"
-        .byte LF,0
-MANDDEF:
-        .ascii "__and:  LDA __ax"
-        .byte LF
-        .ascii "        LDB __t0"
-        .byte LF
-        .ascii "        AND"
-        .byte LF
-        .ascii "        STA __ax"
-        .byte LF
-        .ascii "        LDA __ax+1"
-        .byte LF
-        .ascii "        LDB __t0+1"
-        .byte LF
-        .ascii "        AND"
-        .byte LF
-        .ascii "        STA __ax+1"
-        .byte LF
-        .ascii "        RTS"
-        .byte LF,0
-MORDEF:
-        .ascii "__or:  LDA __ax"
-        .byte LF
-        .ascii "        LDB __t0"
-        .byte LF
-        .ascii "        OR"
-        .byte LF
-        .ascii "        STA __ax"
-        .byte LF
-        .ascii "        LDA __ax+1"
-        .byte LF
-        .ascii "        LDB __t0+1"
-        .byte LF
-        .ascii "        OR"
-        .byte LF
-        .ascii "        STA __ax+1"
-        .byte LF
-        .ascii "        RTS"
-        .byte LF,0
-MXORDEF:
-        .ascii "__xor:  LDA __ax"
-        .byte LF
-        .ascii "        LDB __t0"
-        .byte LF
-        .ascii "        XOR"
-        .byte LF
-        .ascii "        STA __ax"
-        .byte LF
-        .ascii "        LDA __ax+1"
-        .byte LF
-        .ascii "        LDB __t0+1"
-        .byte LF
-        .ascii "        XOR"
-        .byte LF
-        .ascii "        STA __ax+1"
-        .byte LF
-        .ascii "        RTS"
         .byte LF,0
 MSHLDEF:
         .ascii "__shl:  LDA __ax"
@@ -5219,74 +5124,6 @@ MSHRDEF:
         .byte LF
         .ascii "        RTS"
         .byte LF,0
-MADD_DEF:
-        .ascii "__add:  LDA __ax"
-        .byte LF
-        .ascii "        LDB __t0"
-        .byte LF
-        .ascii "        ADD"
-        .byte LF
-        .ascii "        STA __ax"
-        .byte LF
-        .ascii "        LDA #0"
-        .byte LF
-        .ascii "        JNC __ad0"
-        .byte LF
-        .ascii "        LDA #1"
-        .byte LF
-        .ascii "__ad0:  STA __c"
-        .byte LF
-        .ascii "        LDA __ax+1"
-        .byte LF
-        .ascii "        LDB __t0+1"
-        .byte LF
-        .ascii "        ADD"
-        .byte LF
-        .ascii "        LDB __c"
-        .byte LF
-        .ascii "        ADD"
-        .byte LF
-        .ascii "        STA __ax+1"
-        .byte LF
-        .ascii "        RTS"
-        .byte LF,0
-MSUB_DEF:
-        .ascii "__sub:  LDA __t0"
-        .byte LF
-        .ascii "        LDB __ax"
-        .byte LF
-        .ascii "        SUB"
-        .byte LF
-        .ascii "        STA __ax"
-        .byte LF
-        .ascii "        LDA #0"
-        .byte LF
-        .ascii "        JC __sb0"
-        .byte LF
-        .ascii "        LDA #1"
-        .byte LF
-        .ascii "__sb0:  STA __c"
-        .byte LF
-        .ascii "        LDA __t0+1"
-        .byte LF
-        .ascii "        LDB __ax+1"
-        .byte LF
-        .ascii "        SUB"
-        .byte LF
-        .ascii "        STA __ax+1"
-        .byte LF
-        .ascii "        LDA __c"
-        .byte LF
-        .ascii "        JZ __sb1"
-        .byte LF
-        .ascii "        LDA __ax+1"
-        .byte LF
-        .ascii "        DEC"
-        .byte LF
-        .ascii "        STA __ax+1"
-        .byte LF
-        .ascii "__sb1:  RTS"
-        .byte LF,0
 MCMP_DEF:
         .ascii "__cmp:  LDA __t0+1"
         .byte LF
@@ -5321,46 +5158,14 @@ MSHL:   .byte $20,$20,$20,$20,$20,$20,$20,$20
 MROL:   .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "ROL"
         .byte LF,0
-MNEG:   .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "JSR __neg"
+MNEG:   .byte $20,$20,$20,$20,$20,$20,$20,$20     ; -__ax = ~__ax + 1, inline
+        .ascii "XORW __ax,#65535"
+        .byte LF
+        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "INCW __ax"
         .byte LF,0
 MLNOT:  .byte $20,$20,$20,$20,$20,$20,$20,$20
         .ascii "JSR __lnot"
-        .byte LF,0
-MNEG_DEF:
-        .ascii "__neg:  LDA __ax"
-        .byte LF
-        .ascii "        LDB #$FF"
-        .byte LF
-        .ascii "        XOR"
-        .byte LF
-        .ascii "        STA __ax"
-        .byte LF
-        .ascii "        LDA __ax+1"
-        .byte LF
-        .ascii "        LDB #$FF"
-        .byte LF
-        .ascii "        XOR"
-        .byte LF
-        .ascii "        STA __ax+1"
-        .byte LF
-        .ascii "        LDA __ax"
-        .byte LF
-        .ascii "        LDB #1"
-        .byte LF
-        .ascii "        ADD"
-        .byte LF
-        .ascii "        STA __ax"
-        .byte LF
-        .ascii "        JNC __ng0"
-        .byte LF
-        .ascii "        LDA __ax+1"
-        .byte LF
-        .ascii "        INC"
-        .byte LF
-        .ascii "        STA __ax+1"
-        .byte LF
-        .ascii "__ng0:  RTS"
         .byte LF,0
 MLNOT_DEF:
         .ascii "__lnot: LDA __ax"
@@ -5421,85 +5226,6 @@ MLDALV: .byte $20,$20,$20,$20,$20,$20,$20,$20
         .asciiz "LDA #<__V+"
 MLDAHV: .byte $20,$20,$20,$20,$20,$20,$20,$20
         .asciiz "LDA #>__V+"
-MFRAMEDEF:
-        .ascii "__pusharg: LDA __sp"
-        .byte LF
-        .ascii "        LDB #2"
-        .byte LF
-        .ascii "        SUB"
-        .byte LF
-        .ascii "        STA __sp"
-        .byte LF
-        .ascii "        JC __pa1"
-        .byte LF
-        .ascii "        LDA __sp+1"
-        .byte LF
-        .ascii "        DEC"
-        .byte LF
-        .ascii "        STA __sp+1"
-        .byte LF
-        .ascii "__pa1:  LDA __sp"
-        .byte LF
-        .ascii "        TAP1L"
-        .byte LF
-        .ascii "        LDA __sp+1"
-        .byte LF
-        .ascii "        TAP1H"
-        .byte LF
-        .ascii "        LDA __ax"
-        .byte LF
-        .ascii "        STA (P1)"
-        .byte LF
-        .ascii "        INP1"
-        .byte LF
-        .ascii "        LDA __ax+1"
-        .byte LF
-        .ascii "        STA (P1)"
-        .byte LF
-        .ascii "        RTS"
-        .byte LF
-        .ascii "__pop:  LDA __sp"
-        .byte LF
-        .ascii "        TAP1L"
-        .byte LF
-        .ascii "        LDA __sp+1"
-        .byte LF
-        .ascii "        TAP1H"
-        .byte LF
-        .ascii "        LDA (P1)"
-        .byte LF
-        .ascii "        STA __ax"
-        .byte LF
-        .ascii "        INP1"
-        .byte LF
-        .ascii "        LDA (P1)"
-        .byte LF
-        .ascii "        STA __ax+1"
-        .byte LF
-        .ascii "        LDA __sp"
-        .byte LF
-        .ascii "        LDB #2"
-        .byte LF
-        .ascii "        ADD"
-        .byte LF
-        .ascii "        STA __sp"
-        .byte LF
-        .ascii "        JNC __pp1"
-        .byte LF
-        .ascii "        LDA __sp+1"
-        .byte LF
-        .ascii "        INC"
-        .byte LF
-        .ascii "        STA __sp+1"
-        .byte LF
-        .ascii "__pp1:  RTS"
-        .byte LF
-        .ascii "__sp:   .word 0"
-        .byte LF
-        .ascii "__cstack: .fill 2048"
-        .byte LF
-        .ascii "__cstktop:"
-        .byte LF,0
 MUSAGE: .asciiz "usage: cc src.c >out.asm"
 MNOSRC: .asciiz "cc: cannot open source"
 MTOOFUN: .asciiz "cc: too many functions"

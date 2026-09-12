@@ -39,9 +39,22 @@ emitted text invalidates it. The self-compile of p8cc.c cannot be ASSEMBLED
 run FROM `emulator/test` (a background batch launched after a `cd` elsewhere
 silently produced no results).
 
+**On-target toolchain DONE (2026-09-12, user asked to start it):** step 0 of
+the archived os-rewrite cherry-picked (389eb76 on graphics-card; conflict = the
+deleted plan doc, resolved by `git rm`), then `apps/p8xcc.asm` ported at the
+TEMPLATE level, keeping its static-slot model: LDW #n literals, ADDW/SUBW/ANDW/
+ORW/XORW __ax,__t0 (MSUB = `SUBW __t0,__ax ; MOVW __ax,__t0`), ADDW #k offsets,
+INCW/DECW slots, CMPW #0 tests, `CMPW __t0,__ax` for < >= and the SWAPPED
+`CMPW __ax,__t0` for > <= (single branch; == != keep JSR __cmp for a 16-bit Z),
+args on P3 (PHW; callee `LDW __V+2s,(P3+3+2(n-1-i))`; caller ADDP3), slot saves
+BEFORE the args and DISCARDED (ADDP3) when SAWADDRG, p8cc startup. Native
+output uses absolute branches only, so the old flag/A idioms stay valid there.
+Test program 5,546 -> 2,458 B. Gotcha: gen_p8xopc.py imports genucode via
+HERE/../microcode -- run an archived copy with PYTHONPATH=<repo>/microcode.
+
 **Next stages:** (2) C libs `os/commands/lib_*.c` + `compiler/p8lib.c` and asm
 libs `os/commands-asm/*.inc` review; (3) rebuild /binc + disk via run.sh, full
-suite; (4) hand-asm rewrite (needs the native assembler's two-operand shapes:
-cherry-pick 3e0e3c8 from `archive/os-rewrite-2026-09-11`, ASK first; no
-`.relax` natively, so hand asm uses absolute branches only). Related:
+suite; (4) hand-asm rewrite (the native assembler now has the two-operand shapes; no
+`.relax` natively, so hand asm uses absolute branches only) -- incl. the bodies
+of p8xcc.asm / p8xasm.asm themselves. Related:
 [[p8x-tier-a-isa]], [[p8x-cycle-bench]], [[p8cc-runtime-order-gate]].

@@ -38,8 +38,17 @@ remainder is why it is still here.
       three pre-existing gaps (brace/string global initializers, plain
       `#define`, function return types) so all 45 /bin commands compile:
       342,372 B vs p8cc.py's 284,835 (+20%). `p8xasm.py`/`p8cc.py`/`clib.py`
-      were already current. The on-target `cc`/`asm` (apps/p8xcc.asm,
-      p8xasm.asm) remain old-ISA: that is stage 4 territory.
+      were already current. **On-target toolchain DONE (2026-09-12):** the
+      native assembler's two-operand/(Pn+d) parsing cherry-picked from the
+      archived os-rewrite branch (389eb76; only `.relax`/`.R` stay host-only),
+      and `apps/p8xcc.asm`'s templates ported to Tier A (LDW #n, ADDW/SUBW/
+      ANDW/ORW/XORW on __ax/__t0, ADDW #k offsets, INCW/DECW in place, CMPW
+      conditions and orderings, args on P3 via PHW / LDW (P3+d) / ADDP3, the
+      p8cc-style startup; the software arg stack and the __add/__sub/__and/
+      __or/__xor/__neg runtime texts are gone). cc.bin 22,924 → 21,100 B; a
+      compiled test program 5,546 → 2,458 B (−56%), same output; os_asm,
+      asm_selfhost, os_cc, os_cc_bigcmd, cmdbuild, os_mk all PASS. Both
+      tools' own BODIES are still old-ISA asm (stage 4).
 
 > **THE BOARD HAS TWO STALENESS SURFACES; A FEATURE MAY NEED BOTH.** The
 > BITSTREAM carries the CPU, microcode, monitor ROM and graphics RTL
@@ -1015,7 +1024,10 @@ Nothing below has been built or measured.
       stack, Finder's auto-return) keeps its P3 — relocating up trampled the
       shell's return addresses. 428,320 → 374,672 (−12.5%); **627,172 → 374,672 =
       −40.3%** overall; `finder` 32,630 → 13,909 (−57%).
-      **Still open:** the self-hosting compilers (`p8cc.c`, `p8xcc.asm`) emitting
+            **(2026-09-12: the self-hosting compilers now emit Tier A too — p8cc.c
+      rewritten, p8xcc.asm's templates ported, native asm parses the shapes;
+      only the TTL EPROM reburn remains from the list below.)**
+      **Still open (historical):** the self-hosting compilers (`p8cc.c`, `p8xcc.asm`) emitting
       **PARKED (user, 2026-09-11): monitor + OS rewrite for the new ISA.** The
       hand-written monitor/OS/apps were only RE-ASSEMBLED for Tier A (gain: the
       3-byte `LDPn`, ~156 bytes). A measured idiom count shows the easy

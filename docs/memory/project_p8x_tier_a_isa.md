@@ -89,7 +89,9 @@ never read; param i>=1 at L+3+2(i-1). 285,072 total (-54.5%; finder 8,903).
 Frame layout is in the p8cc docstring + compiler/README. Speed audit DONE 2026-09-11/12 (see
 [[p8x-cycle-bench]]): JMP 3 / Jcc 3-2 / JSR 9 / RTS 5 steps; taken relative
 branches CLOBBER A+flags (8 steps) and the compiler emits JMP.A for always-taken
-jumps. OS-resident runtime PARKED by the user (BACKLOG item). Next: self-hosting. PARKED by the user, to revisit after those: scratch
+jumps. OS-resident runtime PARKED by the user (BACKLOG item). Next: self-hosting -- DONE 2026-09-12 for emission (p8cc.c rewritten, p8xcc.asm
+templates ported, native asm shapes cherry-picked as 389eb76); see
+[[p8x-isa-everywhere]]. PARKED by the user, to revisit after those: scratch
 rewrites of the monitor/OS around the new ISA, easy replacements first (they
 were only re-assembled so far; idiom counts in BACKLOG — small wins, OS matters
 because of its 16 KB ceiling). **Still open:**

@@ -67,7 +67,7 @@ Accepted syntax is a subset of the host assembler, with identical encodings:
 | label | `loop:` |
 | equate | `COUNT = 3` |
 | instruction | `LDA #COUNT` · `STA $C000` · `LDA (P1)+` · `JSR done` |
-| `MOVW dst,src` | `MOVW __ax,__V+4` — the ISA's first two-operand instruction (`$78`), a 16-bit mem→mem word move (Tier A, 2026-09, added `ADDW`/`SUBW`/`CMPW`/`ANDW`/`ORW`/`XORW` in the `a,b`, `a,#imm8` and `a,#imm16` shapes, `LDW`/`STW` with `(Pn+d)` and `LDW addr,#imm` — host-toolchain only until the native parser grows them) |
+| two-operand forms | `MOVW __ax,__V+4` · `ADDW __ax,__t0` · `CMPW __ax,#300` · `LDW __V+2,(P3+3)` · `STW (P3+1),__ax` — since 2026-09-12 the native parser handles every Tier A shape the host assembler does (`a,b`, `a,#imm8`, `a,#imm16`, `(Pn+d)`, `a,(Pn+d)`, `(Pn+d),a`; `PARSEOP`/`CLASSOP`, byte-literal rule `LIT8` = the host's), so `cc`'s output and hand sources assemble byte-identically on both. Only the relative branches (`.relax`/`.R`) stay host-only |
 | `LDPn #imm16` | `LDP1 #msg` → the 3-byte `LDPn` opcode (`$38`–`$3A`) + imm16 (Tier A; was the `LPLn`/`LPHn` pair) |
 | directives | `.org .byte .word .ascii .asciiz .fill` |
 | expressions | `$hex` · decimal · `'c'` · symbol, joined with `+`/`-`, optional `<`/`>` prefix |
@@ -123,9 +123,27 @@ asm hello.asm HELLO.BIN    # native assembler
 run HELLO.BIN
 ```
 
-This is **Milestone B** (the native route) — the optimizing host `p8cc.c`
-codegen is ~82 KB, larger than the whole 64 KB address space, so it can't run on
-the machine; `cc` uses a deliberately small hardware-stack codegen instead.
+This is **Milestone B** (the native route) — the host `p8cc.c` codegen compiles
+to far more than the 64 KB address space (its tables are host-sized), so it
+can't run on the machine; `cc` uses a deliberately small static-slot codegen
+instead.
+
+**Tier A output (2026-09-12).** `cc` now emits the new instructions: a literal is
+`LDW __ax,#n`, `+ - & | ^` are `ADDW`/`SUBW`/`ANDW`/`ORW`/`XORW` on the `__ax`/`__t0`
+words, a struct offset is `ADDW __ax,#k`, `++`/`--` are `INCW`/`DECW` in place, a
+condition test is `CMPW __ax,#0`, an ordering is one `CMPW` and one branch (only
+`==`/`!=` still call the 16-bit `__cmp`), unary minus is `XORW #65535`/`INCW`.
+Arguments no longer go through the software arg stack: the caller pushes them
+left to right with `PHW`, the callee copies them into its static slots with
+`LDW __V+2s,(P3+d)` (arg *i* at `P3+3+2(n-1-i)`), and the caller drops them
+with `ADDP3`; the caller's live-slot saves (re-entrancy) now precede the
+arguments and are discarded rather than restored when an argument took an
+address. Programs start like `p8cc`'s: the caller's `P3` is kept in `__sp0` and
+the program runs on a stack below `CSTACKTOP` unless launched nested. The
+`__add`/`__sub`/`__and`/`__or`/`__xor`/`__neg`/`__pusharg`/`__pop` runtime texts
+are gone; `cc.bin` itself shrank 22,924 → 21,100 bytes, and a compiled test
+program 5,546 → 2,458 bytes (−56%) with identical output. The compiler's own
+body is still old-ISA hand assembly (the general asm rewrite covers it).
 
 **Language (through v0.28):** functions, direct **and mutual** recursion (via a
 forward prototype), pointers + pass-by-reference, `int`/`char`, arrays with `[]`
