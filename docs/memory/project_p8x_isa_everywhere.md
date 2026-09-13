@@ -129,3 +129,11 @@ MATCHKW/ISLETTER); a shared WORD holding an operator template across a
 RECURSIVE operand parse (keep it on the stack: PHW/PLW); testing a flag right
 after a JSR that clobbers A (reload it); docs/memory/* are HARD LINKS of the
 user memory dir (write once).
+
+**C-vs-asm comparison, step 1 (2026-09-13): BASIC in C** (`basic/basic.c`,
+`/binc/basic.bin`, `basic_c_test.sh`): identical behaviour on the differential
+session; 2.3x the size and 3.6-4.9x the cycles of the from-scratch asm even
+after tuning for the compiler (see [[reference_p8x_c_subset_gotchas]]). The
+user's plan: next the assembler in C, then the compiler in C (a self-compiling
+C compiler on the machine is the prize); `edit` to be retired (vi.c exists).
+OS/WM kernel and monitor: asm rewrites, last.

@@ -194,6 +194,41 @@ These paths are covered by `make test-basic` (in `emulator/`): disk BASIC via
 `RUN BASIC.BIN` from the OS. Code is ~8.9 KB, so in every layout it clears its
 data base with room to spare.
 
+## The C version (`basic.c`) — size and speed against the asm one
+
+`basic/basic.c` is the same interpreter written in C (2026-09-13): same
+language, tokens (the `.BAS` format), messages, prompts, limits and GL byte
+streams, and it keeps its big tables in the same raw memory the asm build uses
+(`$C600` variables … `$CA80` program, `$E000` rebuild scratch), so both binaries
+are code plus a little data. It is built by the host toolchain — the generated
+GL verb tables (`glkwtab.c`, from `generators/gen_glkw.py`) concatenated ahead
+of the source, `//#use abi` spliced by `clib.py`, compiled by `p8cc.py` — and
+installed as **`/binc/basic.bin`**; the asm build stays the `/bin` default.
+`emulator/test/basic_c_test.sh` (in `make test-basic`) runs the same programs
+the asm tests use against it, and a 250-line scripted session diffs identically
+between the two.
+
+| | asm `p8xbasic.asm` | C `basic.c` | ratio |
+|---|---|---|---|
+| binary | 9,124 B | 21,393 B | 2.3× |
+| 2,000-iteration arithmetic loop (`S=S+I*3-I/2`) | 16.5 M cycles | 59.6 M | 3.6× |
+| 400 iterations of GOSUB + 12 variables + IF | 18.9 M | 76.1 M | 4.0× |
+| 300 iterations of string concat / LEFT$ / MID$ / compare | 5.8 M | 28.2 M | 4.9× |
+
+(Cycle stamps: `POKE 65282,n` at the start and end of the program, read with
+`p8xemu -L`.) The C source is written the way this compiler wants it — it has no
+`break`/`continue`, `int` compares and divides unsigned (a signed BASIC compare
+flips the sign bit of both sides; a `while (n >= 0)` on an int never ends),
+there is no `longjmp` (an error sets a flag every parse level returns through),
+and a multiply by a constant is a 16-step `__mul` loop, so the hot paths use
+int-pointer loads, shifts and adds instead (`vget`/`vset`, `recnum`,
+`parsedec`), and the name compare and blank skipping are inlined in the
+expression path. That tuning took it from 8–13× slower to the 3.6–4.9× above;
+what remains is the call overhead of the recursive-descent parser (a frame per
+call) and the byte-at-a-time pointer walks the compiler emits. Note for anyone
+running the two side by side: the C image reaches `$BD00`, so a BASIC program
+that `POKE`s into `$A000`–`$BC00` (free under the 9 KB asm build) corrupts it.
+
 ## Planned layout (proposed — see open decisions)
 
 | Region | Use |

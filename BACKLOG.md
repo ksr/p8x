@@ -611,24 +611,22 @@ Nothing below has been built or measured.
 
 ## IDEAS
 
-- [ ] **A C-written BASIC (user, 2026-09-12).** `basic/p8xbasic.asm` is 5,574
-      lines of hand assembly (11,887 bytes as the shipped `/bin/basic.bin`,
-      data at `$C500`, rebuild scratch `$E000`). Now that compiled C lands
-      within ~1.1× of hand asm on size, a `basic.c` twin in the p8cc subset
-      becomes reasonable: far easier to extend (the GL statements could sit on
-      `lib_gfx`/`lib_g3d` instead of the generated `glkwtab.inc`/`glvtab.inc`
-      tables), testable by the same differential method as the command twins,
-      and a second large program for the compiler to prove itself on.
-      Constraints to design around: p8cc's `int` is 16-bit and used as
-      unsigned (BASIC is 16-bit integer already, fine); the interpreter loop
-      and expression evaluator are the hot paths, so measure cycles against
-      the asm version (`p8xemu -L` LED stamps) before shipping it as the
-      default; program storage + scratch must stay in the same RAM budget
-      (`$C500..$F7FF` minus the C stack); the 16 `basic_*`/`c_gl_*` tests are
-      the acceptance suite. Start with a subset (lines, LET/PRINT/IF/GOTO/GOSUB/
-      FOR, expressions) and grow to parity, keeping the asm build shipping
-      until the C one passes every test.
-
+- [x] **A C-written BASIC (user, 2026-09-12) — DONE 2026-09-13.** `basic/basic.c`
+      (~1,000 lines) is the same interpreter in the p8cc subset: same tokens,
+      messages, GL streams and memory layout as the asm one; built by the host
+      toolchain (`glkwtab.c` from gen_glkw.py + source → clib → p8cc.py) as
+      `/binc/basic.bin`, tested by `basic_c_test.sh` (the asm tests' programs)
+      and a 250-line differential session that matches the asm build exactly.
+      THE COMPARISON (basic/README.md "The C version"): 21,393 vs 9,124 B (2.3×);
+      arithmetic loop 59.6 M vs 16.5 M cycles (3.6×), GOSUB + variables 76.1 M
+      vs 18.9 M (4.0×), strings 28.2 M vs 5.8 M (4.9×) — after tuning the C for
+      this compiler (int-pointer loads, shifts instead of constant multiplies,
+      inlined name compare / blank skip; it started at 8–13×). What remains is
+      call-frame overhead and byte-at-a-time pointer walks. Verdict for the
+      "retire asm where C wins" question: for the interpreter, asm wins on
+      both axes by a wide margin; the C twin stays as the reference/comparison
+      build. Gotchas learned are in docs/memory/reference_p8x_c_subset_gotchas.md
+      (no break/continue in p8cc.py, unsigned int, no longjmp, `*` const cost).
 - [ ] **imgsend: VERIFY pass (2026-08-21, from a real corruption).** A clone
       delivered trit.bin with the right SIZE but corrupt content — "acked
       every sector, finished with 'K'" certifies transport, not bytes — and

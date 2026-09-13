@@ -216,6 +216,17 @@ if [ ! -f "$disk" ]; then
         --base 0x6A00 -D BASORG=0x6A00 -D BASRAM=0xC500 -D PBUF=0xE000 -D MONITOR=0x2000 >/dev/null
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/basicrun.bin" \
         --name /bin/basic.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+    # The C-written BASIC (basic/basic.c, the size/speed twin of the asm one):
+    # the generated GL verb tables + the source, //#use spliced, host-compiled
+    # with p8cc.py -> /binc/basic.bin (the asm build stays the /bin default).
+    python3 "$root/generators/gen_glkw.py" >/dev/null
+    cat "$root/basic/glkwtab.c" "$root/basic/basic.c" > "$build/basicc_src.c"
+    cp "$root/os/commands/lib_abi.c" "$build/"
+    python3 "$root/tools/clib.py" "$build/basicc_src.c" -o "$build/basicc_pp.c" >/dev/null
+    python3 "$root/compiler/p8cc.py" "$build/basicc_pp.c" -o "$build/basicc.asm" >/dev/null
+    python3 "$root/assembler/p8xasm.py" "$build/basicc.asm" -o "$build/basicc.bin" --base 0x6A00 >/dev/null
+    python3 "$root/tools/p8xfs.py" put "$disk" "$build/basicc.bin" \
+        --name /binc/basic.bin --load 0x6A00 --exec 0x6A00 >/dev/null
     # EDIT: line-oriented text editor (TPA program) -> RUN /bin/edit.bin NAME
     python3 "$root/assembler/p8xasm.py" "$root/apps/p8xedit.asm" -o "$build/edit.bin" \
         --base 0x6A00 >/dev/null
