@@ -9,8 +9,10 @@
       asm twins 148,744 → 142,115, OS 14,681 → 13,798, monitor ROM used
       5,297 → 5,184, BASIC 11,887 → 11,151, cc.bin 22,924 → 20,905. The
       compiled column is now within 1.1× of the hand asm (find/cp/tree/grep:
-      the C build is smaller). Hardware follow-ups: reburn the program EPROM
-      AND the four control-store EPROMs (rom/), re-clone the SD card.
+      the C build is smaller). Board follow-ups (no TTL machine exists yet, so no EPROM burn): rebuild
+      the FPGA bitstream (it carries the changed microcode + monitor ROM) and
+      re-clone the SD card (OS, /bin, BASIC); rom/ stays current for a future
+      TTL build.
       Original plan and per-stage log:
       Four stages, in order: (1) every Mac-hosted tool emits the Tier A ISA;
       (2) review the C and asm libraries for what the new tools make
