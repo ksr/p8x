@@ -37,8 +37,21 @@ remainder is why it is still here.
             unchanged (a backward `.org` is now reported on the `.org` line).
             Layout note: code + OPCTAB must stay below `$8000`; INCBUF moved to
             `$CC00`, the BIOS dir-scan page to `$CE00`, path buffers to `$D000`.
+      - [x] **`basic/p8xbasic.asm` DONE 2026-09-12** (the user moved it ahead of
+            the compiler) — drop-in rewrite: token-indexed STMTTAB/FACTAB
+            dispatch (CHECKLINE reads STMTTAB for legal leaders), PHW/PLW
+            around the evaluator, one CMPW + a relation mask for every
+            compare, `(P1+d)` variable / FOR / GOSUB records, early-exit
+            sorted line search, keyword matching only on letters. 11,151 →
+            9,124 B; arithmetic loop 1.6×, GOSUB+variables 2.0×, strings 2.8×
+            faster. Verified by all 12 `make test-basic` tests plus a
+            differential scripted session against the old binary (the only
+            diffs are fixes: no stray `?` before a lowercase-keyword error, no
+            `?SYNTAX ERROR IN 0` after RUN, immediate FOR prints). FOR nests
+            3 deep (was 2, unchecked); a 4th GOSUB / 33rd variable / 17th
+            string variable is `?SYNTAX ERROR`; division stays UNSIGNED as
+            before. Same -D build knobs; PROG moved to BASRAM+$580 unchanged.
       - [ ] `apps/p8xcc.asm` — a redesigned frame model is on the table.
-      - [ ] `basic/p8xbasic.asm` — tokenizer / expression loop.
       - [ ] `os/p8xos.asm` + `os/wmkernel_body.asm`, `firmware/p8xmon.asm` (last).
       Measure with `p8xemu -L` cycle stamps (scratch copies with `STA $FF02` at
       entry and before the final message); each module with its own tests.

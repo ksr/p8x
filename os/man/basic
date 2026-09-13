@@ -353,7 +353,7 @@ ERRORS
     A running program stops and returns to the prompt on any error.
 
 LIMITS
-    Integers only (no floating point). FOR loops nest 2 deep, GOSUB 3
+    Integers only (no floating point). FOR loops nest 3 deep, GOSUB 3
     deep. Data files: one channel, one value per record (EOF(n) tests for
     end). No DATA/READ, DIM, DEF FN, ON..GOTO, or WHILE.
 

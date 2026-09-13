@@ -1,22 +1,45 @@
 ;==============================================================================
-; P8X BASIC — interpreter for the P8X TTL computer
+; P8X BASIC -- interpreter for the P8X computer, Tier A edition (2026-09-12)
 ;
-; 6850 ACIA console at $FF04/05. Self-contained (own console + RAM), so it can
-; run standalone, from ROM (launched by the monitor), or be booted from disk.
+; Integer BASIC with strings, data files and the GL graphics language. This is
+; the from-scratch rewrite for the Tier A ISA. It is a DROP-IN for the original:
+; same tokens (the token values are the on-disk .BAS format), same KWTAB text,
+; same messages, HELP and prompts, same GL byte streams, same -D build knobs.
+; What changed is the machinery:
+;
+;   * Statements and functions dispatch through TABLES indexed by the token
+;     (STMTTAB / FACTAB): `LDW CUR,(P1+0) / LPW1 CUR / JSR (P1)` replaces a
+;     chain of thirty compares. CHECKLINE derives "legal statement leader"
+;     from the same table, so the two can never disagree.
+;   * All 16-bit arithmetic is on word variables with ADDW/SUBW/CMPW/INCW/
+;     DECW/XORW; the recursive-descent evaluator pushes the running value
+;     with PHW and pops it with PLW. Signed comparison is one CMPW + BLT.
+;   * A comparison produces a relation byte (LT=1 EQ=2 GT=4) and the operator
+;     a mask; the result is `rel AND mask <> 0`. Numeric and string compares
+;     share it.
+;   * Records are addressed with (Pn+d): a variable's value is (P1+6) of its
+;     table entry, a FOR frame's fields are (P1+1..8), a GOSUB frame's (P1+0/2),
+;     a GL verb's opcode/meta (P1+0/1), a program line's number (P1+0).
+;   * Name compares (variables, string variables) are unrolled against the
+;     fixed NMBUF, so the table walk never needs a second pointer or a stack
+;     save; the program-line search stops as soon as the sorted list passes
+;     the target.
+;   * The tokenizer only tries the keyword table on a letter.
 ;
 ; Build targets differ only in their -D symbols (see basic/README.md):
-;   BASORG  code origin   ($0000 standalone, $2000 in monitor ROM, $6A00 in the TPA)
-;   BASRAM  data base      ($8000 standalone, $C500 for the TPA build)
+;   BASORG  code origin   ($0000 standalone, $2000 disk boot, $6A00 in the TPA)
+;   BASRAM  data base      ($8000 standalone, $A000 disk boot, $C500 for the TPA)
 ;   PBUF    rebuild scratch ($C000 default; the TPA build moves it to $E000)
-;   MONITOR where BYE returns ($2000 = the OS cold start for the TPA build)
-; The defaults below give the standalone $0000/$8000 build; the disk/ROM builds
-; pass all four on the command line -- see os/run.sh for the canonical invocation.
+;   MONITOR where BYE returns ($2000 = the OS for the TPA build)
 ;
 ; Program storage (PROG): a sorted sequence of records
 ;     [num-lo][num-hi][text bytes ...][00]
 ; terminated by a 00,00 line-number marker (line 0 is invalid in BASIC).
-; Edits are done by rebuilding into a scratch buffer (PBUF) then copying back —
-; simplest correct approach for variable-length records on this ISA.
+; Edits rebuild into the scratch buffer (PBUF) and copy back.
+;
+; Conventions: P2 is the PARSE CURSOR (statement text); every routine that
+; borrows P2 saves it. P1 is scratch. P3 is the stack. Word ops clobber A.
+; Numbers are signed 16-bit; division and modulus are UNSIGNED (as before).
 ;==============================================================================
 
 BASORG = $0000          ; code origin (override with -D BASORG=...)
@@ -24,195 +47,146 @@ BASRAM = $8000          ; data base   (override with -D BASRAM=...)
 
 ACIAS  = $FF04
 ACIAD  = $FF05
-; Graphics: the GL port ($FF50) is the ONLY interface since the 2026-09-01
-; single-interface migration ($FF20 device door closed). The canonical
-; definitions live in generators/gen_memmap.py; they are repeated here because
-; this file predates that generator and still hand-declares its I/O addresses,
-; as ACIAS/ACIAD above.
-GLDATAR = $FF50          ; GL command FIFO (stage 10d): one byte at a time
-GLSTATR = $FF51          ; bit7 = FIFO full (wait before pushing)
-GLRBR   = $FF52          ; read-back FIFO pop (stage 10e; GLSTAT bit0 = has byte)
+GLDATAR = $FF50          ; GL command FIFO: one byte at a time
+GLSTATR = $FF51          ; bit7 FIFO full, bit6 busy, bit0 read-back byte ready
+GLRBR   = $FF52          ; read-back FIFO pop
 GLIDR   = $FF54          ; reads 'G' when the GL engine is fitted
 GTSUSP  = $60A7          ; glass TTY suspend flag: 1 = BASIC owns the GL screen
-                         ;   (two-mode P2; the OS shell clears it on return)
 CR     = $0D
 LF     = $0A
 BS     = $08
 
-; BIOS filesystem calls (monitor ROM at $0100). Available in the ROM-in-monitor
-; and disk builds, where the monitor is resident; NOT in the standalone build.
+; BIOS filesystem calls (monitor ROM at $0100).
 FLOADAT = $013F          ; bulk-read FLEN bytes from LBA into (P1)
-; Files are found/created in the FRESOLVE-set directory (root if no FRESOLVE),
-; so SAVE/LOAD and data files reach subdirectories by FRESOLVE-ing a path first.
 FFIND   = $0118          ; find file FNAME in the resolved dir -> LBA + FLEN; C=1 if not found
 FCREATE = $011B          ; create file FNAME (FSRC/FLEN) in the resolved dir; C=1 on error
 FRESOLVE= $0133          ; resolve NUL-terminated path (P1) -> dir extent + leaf FNAME; C=1 bad path
 SYS_GETCWD = $2003       ; OS: copy the CWD path string -> (P1), incl NUL (clobbers P2)
-; sequential byte streams (for BASIC data files):
 FOPEN   = $0124          ; open file FNAME for reading (P1=512-byte buf); C=1 missing
-FGETB   = $0127          ; next byte -> A; C=1 at end of file
-FWOPEN  = $012A          ; open a write stream at the free pointer (uses SBUF)
-FPUTB   = $012D          ; append byte A to the write stream
+FGETB   = $0127          ; next byte -> A; C=1 at end of file. Clobbers P1 (and P2 on a refill)
+FWOPEN  = $012A          ; open a write stream at the free pointer
+FPUTB   = $012D          ; append byte A to the write stream. Clobbers P1
 FCLOSE  = $0130          ; flush + register file FNAME (len = bytes written); C=1 if full
-FNORM   = $0136          ; copy string (P1) -> FNAME, case-preserved, space-padded to 12
-LBA     = $6047          ; CFREAD target LBA (byte 0); LBA1 = byte 1
-LBA1    = $6048
 FNAME   = $604A          ; 12-byte filename (space-padded)
 FSRC    = $6056          ; FCREATE source address
-FLEN    = $6058          ; file length in bytes
+FLEN    = $6058          ; file length in bytes (24-bit)
 
-LBUF   = BASRAM+$00          ; input line buffer
-NUM1   = BASRAM+$60          ; 16-bit math operands / results
-NUM2   = BASRAM+$62
-LNUM   = BASRAM+$64          ; entered/printed line number
-RNUM   = BASRAM+$66          ; record line number during scan
-TSRC   = BASRAM+$68          ; address of entered line text (in LBUF)
-SAVE1  = BASRAM+$6A          ; pointer save slots
-SAVE2  = BASRAM+$6C
-DIG    = BASRAM+$6E
-LZ     = BASRAM+$6F
-PCNT   = BASRAM+$70
-CYTMP  = BASRAM+$71
-INSF   = BASRAM+$72          ; 1 once the new line has been emitted
-TXTMT  = BASRAM+$73          ; 1 if entered line has empty text (delete)
-WP     = BASRAM+$74          ; crunch write pointer
-RP     = BASRAM+$76          ; pointer save (match / uncrunch)
-TOKEN  = BASRAM+$78          ; token matched by MATCHKW
-MATCHF = BASRAM+$79          ; 1 if MATCHKW found a keyword
-TMPC   = BASRAM+$7A          ; byte scratch
-TOKW   = BASRAM+$7B          ; token being uncrunched
-RESULT = BASRAM+$7C          ; 16-bit expression result
-ACC    = BASRAM+$7E          ; 16-bit mul/div accumulator
-MCNT   = BASRAM+$80          ; mul/div bit counter
-REM    = BASRAM+$82          ; 16-bit division remainder
-CURLINE= BASRAM+$84          ; RUN: pointer to current program line record
-BRANCHF= BASRAM+$86          ; RUN: 1 if a GOTO target is pending
-ENDF   = BASRAM+$87          ; RUN: 1 to stop the program
-BRANCHN= BASRAM+$88          ; RUN: pending GOTO target line number
-RELOP  = BASRAM+$8A          ; comparison operator code (0..5)
-GEF    = BASRAM+$8B          ; compare: left >= right
-EQF    = BASRAM+$8C          ; compare: left == right
-LFT    = BASRAM+$8D          ; comparison left operand (2)
-FNDF   = BASRAM+$8F          ; FINDLINE: 1 if line found
-GSTK   = BASRAM+$90          ; GOSUB return stack (3 x 4 bytes: line record + text ptr)
-GSP    = BASRAM+$9C          ; GOSUB stack depth
-CKDEP  = BASRAM+$9E          ; CHECKLINE: running parenthesis-nesting depth
-CKREM  = BASRAM+$9F          ; CHECKLINE: 1 once a REM is seen (rest is a comment)
-JUMPF  = BASRAM+$E3          ; RUN: 1 -> set CURLINE = JUMPADDR directly (was $70,
-JUMPADDR= BASRAM+$E4         ;   which ALIASED PCNT — VARFIND's counter clobbered it,
-                             ;   so any var past the first broke RUN's jump handling)
-GTMP   = BASRAM+$A0          ; scratch (2)
-FSP    = BASRAM+$A2          ; FOR stack depth
-FFP    = BASRAM+$A3          ; pointer to top FOR frame (2)
-FSTK   = BASRAM+$A5          ; FOR frames (2 x 9): var-index, limit(2), step(2), LR(2), TP(2)
-FORIDX = BASRAM+$B7          ; FOR: loop variable's table index (saved across EVAL)
-FLIM   = BASRAM+$B8          ; FOR/NEXT scratch: limit (2)
-FSTEP  = BASRAM+$BA          ; FOR/NEXT scratch: step (2)
-FLR    = BASRAM+$BC          ; FOR/NEXT scratch: loop-back line record (2)
-FTP    = BASRAM+$BE          ; FOR/NEXT scratch: loop-back text pointer (2)
-; variables are a name->value symbol table (replaces the old 26-letter array):
-VARCNT = BASRAM+$C0          ; number of variables defined (0..NVARS)
-VARIDX = BASRAM+$C1          ; VARGET result: the variable's table index
-NMBUF  = BASRAM+$C2          ; parsed variable name, NAMLEN chars, space-padded
-; string-variable scratch (all one-byte unless noted):
+MONITOR = $0000          ; reset vector -- BYE returns here
+CONIN   = $0100          ; BIOS: wait for a key -> A
+CONOUT  = $0103          ; BIOS: A -> console (expands a bare LF to CR LF)
+
+; ---- variables (one page at BASRAM) ----
+LBUF   = BASRAM+$00          ; input line buffer (96)
+; word variables
+RESULT = BASRAM+$60          ; expression result
+NUM1   = BASRAM+$62          ; 16-bit math operands / results
+NUM2   = BASRAM+$64
+REM    = BASRAM+$66          ; division remainder
+ACC    = BASRAM+$68          ; multiply accumulator
+LNUM   = BASRAM+$6A          ; entered / printed line number, number being printed
+RNUM   = BASRAM+$6C          ; record line number during a scan
+TSRC   = BASRAM+$6E          ; address of the entered line's text (in LBUF)
+SAVE1  = BASRAM+$70          ; pointer save slots
+SAVE2  = BASRAM+$72
+GTMP   = BASRAM+$74
+RP     = BASRAM+$76
+WP     = BASRAM+$78          ; crunch write pointer
+CURLINE= BASRAM+$7A          ; RUN: pointer to the current program line record
+BRANCHN= BASRAM+$7C          ; pending GOTO target line number
+JUMPADDR= BASRAM+$7E         ; RUN: JUMPF 1 = next line record, 2 = resume text pointer
+LFT    = BASRAM+$80          ; comparison left operand
+FLIM   = BASRAM+$82          ; FOR/NEXT scratch: limit
+FSTEP  = BASRAM+$84          ;   step
+FLR    = BASRAM+$86          ;   loop-back line record
+FTP    = BASRAM+$88          ;   loop-back text pointer
+FFP    = BASRAM+$8A          ; pointer to the top FOR frame
+SPA    = BASRAM+$8C          ; string source pointer
+SPD    = BASRAM+$8E          ; string destination pointer
+STRSP  = BASRAM+$90          ; string-sink append pointer (STR$)
+SEED   = BASRAM+$92          ; RND state
+POKEA  = BASRAM+$94          ; POKE address
+SPSAV  = BASRAM+$96          ; stack pointer to return to (the caller's under the OS)
+CUR    = BASRAM+$98          ; dispatch vector / scan cursor
+IMX    = BASRAM+$9A          ; IMAGE: left edge
+IMYC   = BASRAM+$9C          ;   current row y
+IMW    = BASRAM+$9E          ;   width
+IMH    = BASRAM+$A0          ;   rows remaining
+IMCX   = BASRAM+$A2          ;   payload bytes remaining in the row
+BXS    = BASRAM+$A4          ; BOX/CIRCLE/GTEXT argument shadow: 4 int16 (8)
+; byte variables
+DIG    = BASRAM+$B0
+LZ     = BASRAM+$B1          ; PRDECU: still suppressing leading zeros
+PCNT   = BASRAM+$B2
+CYTMP  = BASRAM+$B3
+INSF   = BASRAM+$B4          ; EDIT: 1 once the new line has been emitted
+TXTMT  = BASRAM+$B5          ; EDIT: 1 if the entered line has empty text (delete)
+TOKEN  = BASRAM+$B6          ; token matched by MATCHKW
+MATCHF = BASRAM+$B7          ; 1 if the last match / parse succeeded
+TMPC   = BASRAM+$B8          ; byte scratch
+TOKW   = BASRAM+$B9          ; token being uncrunched
+MCNT   = BASRAM+$BA          ; mul/div bit counter
+BRANCHF= BASRAM+$BB          ; RUN: 1 if a GOTO target is pending
+ENDF   = BASRAM+$BC          ; RUN: 1 to stop the program
+RELM   = BASRAM+$BD          ; comparison operator as a relation mask (LT=1 EQ=2 GT=4)
+REL    = BASRAM+$BE          ; the relation of the last compare (LT / EQ / GT)
+FNDF   = BASRAM+$BF          ; FINDLINE: 1 if the line was found
+GSP    = BASRAM+$C0          ; GOSUB stack depth
+CKDEP  = BASRAM+$C1          ; CHECKLINE: parenthesis depth
+CKREM  = BASRAM+$C2          ; CHECKLINE: 1 once a REM is seen
+JUMPF  = BASRAM+$C3          ; RUN: 1 = CURLINE := JUMPADDR, 2 = resume at text JUMPADDR
+FSP    = BASRAM+$C4          ; FOR stack depth
+FORIDX = BASRAM+$C5          ; FOR: loop variable's table index
+VARCNT = BASRAM+$C6          ; number of variables defined (0..NVARS)
+VARIDX = BASRAM+$C7          ; VARGET result: the variable's table index
 SVARCNT= BASRAM+$C8          ; number of string variables defined (0..NSVARS)
 SVIDX  = BASRAM+$C9          ; SVARFIND result index
 SLENV  = BASRAM+$CA          ; string length scratch
-SI     = BASRAM+$CB          ; string byte-index / count scratch
-SJ     = BASRAM+$CC          ; string byte-count scratch
+SI     = BASRAM+$CB          ; string index / count scratch
+SJ     = BASRAM+$CC          ; string count scratch
 FMODE  = BASRAM+$CD          ; data file: 0 closed, 1 open for input, 2 for output
-OUTFILE= BASRAM+$CE          ; 1 while PRINT emits to the data file (via PUTCH)
-SPA    = BASRAM+$D0          ; string source pointer (2)
-SPD    = BASRAM+$D2          ; string dest pointer (2)
-STRSINK= BASRAM+$D4          ; 1 while PUTCH captures into a string buffer (STR$)
-STRSP  = BASRAM+$D5          ; string-sink append pointer (2)
-STRSN  = BASRAM+$D7          ; string-sink char count
-FLOOK  = BASRAM+$D8          ; input-file 1-byte lookahead (for EOF)
-FLOOKC = BASRAM+$D9          ; 1 if the lookahead position is end-of-file
-RUNNING= BASRAM+$DA          ; 1 while a program is RUNning (else immediate mode)
-SEED   = BASRAM+$F4          ; RND state (2)
-SPSAV  = BASRAM+$F8          ; stack pointer to return to (2). Under the OS this
-                             ; is the caller's SP, captured at entry; standalone
-                             ; it is just STKTOP. See the entry code and DOBYE.
-POKEA  = BASRAM+$F6          ; POKE address (2)
-; Graphics scratch. $DB-$E2 was the only run in this page with no references at
-; all -- note the JUMPADDR comment above for what happens when a "free" byte
-; turns out to alias something.
-                             ; ($DB/$DC free: were GSADR/GSTGT, the device
-                             ;   register-write helpers' scratch -- gone with
-                             ;   the single-interface migration. $FA free:
-                             ;   was GPENH, the device-pen shadow, gone
-                             ;   2026-09-01 with GTEXT, its last consumer;
-                             ;   the pen is pure GL state now)
-PRMSH  = BASRAM+$FB          ; shadow of the GL PRMFIL flag (write-only on the
-                             ;   card): the native PRMFIL statement records it,
-                             ;   RESETF clears it, and BOX/CIRCLE restore it
-                             ;   after forcing their own fill mode. A GL "PF 1"
-                             ;   STRING bypasses the shadow -- documented.
-RGBH   = BASRAM+$F3          ; RGB(): the packed high byte, held across the
-                             ;   green and blue argument expressions --
-                             ;   scratch here is safe: nothing else can run
-                             ;   inside an RGB() argument expression.
-                             ; ($DE free: was GCTMP, GEXEC's scratch, gone
-                             ;   with the single-interface migration; $DF
-                             ;   free: was GELL, gone with CIRCLE's
-                             ;   2026-08-30 migration onto GL ELIPSE)
-; (GTEXT's working set, $E0-$F2, left with it 2026-09-01: the whole run
-; $E0-$E2, $E6-$F2 is transient scratch again -- $E3/$E4 JUMPF/JUMPADDR
-; and $F4+ SEED are still the live bytes to respect. Re-read the
-; JUMPADDR note above before claiming any of it.)
+OUTFILE= BASRAM+$CE          ; 1 while PRINT# emits to the data file (via PUTCH)
+STRSINK= BASRAM+$CF          ; 1 while PUTCH captures into a string buffer (STR$)
+STRSN  = BASRAM+$D0          ; string-sink char count
+FLOOK  = BASRAM+$D1          ; input-file 1-byte lookahead
+FLOOKC = BASRAM+$D2          ; 1 if the lookahead position is end-of-file
+RUNNING= BASRAM+$D3          ; 1 while a program is RUNning (else immediate mode)
+PRMSH  = BASRAM+$D4          ; shadow of the GL PRMFIL flag (BOX/CIRCLE restore it)
+RGBH   = BASRAM+$D5          ; RGB(): the packed high byte across the g/b arguments
+GLN    = BASRAM+$D6          ; GL: bytes / vertices left to send
+GLTMP  = BASRAM+$D7          ; GLPUT's byte
+GLOP   = BASRAM+$D8          ; GL verb: opcode
+GLMETA = BASRAM+$D9          ;   meta byte {var<<7 | bcnt<<4 | word-arity}
+GLCNT  = BASRAM+$DA          ;   loop count
+GLDIM  = BASRAM+$DB          ;   POLY*: words per vertex (2 or 3)
+GLFST  = BASRAM+$DC          ;   1 until the first argument is parsed
+NMBUF  = BASRAM+$E0          ; parsed variable name, NAMLEN chars, upcased, space-padded (6)
+; tables
 NAMLEN = 6                   ; significant variable-name length
-NVARS  = 32                  ; symbol-table capacity (entry = NAMLEN+2 = 8 bytes)
-VARTAB = BASRAM+$100         ; NVARS x 8 = 256 bytes ($x100..$x1FF)
-; string values are [len byte][data...]; length is capped at SLEN. Four fixed
-; work buffers live below the string-variable table, which lives below PROG.
+NVARS  = 32                  ; numeric variables: entry = name[6] + value[2]
+VARTAB = BASRAM+$100         ; NVARS x 8 = 256 bytes (one page)
+; a string value is [len byte][data...], length capped at SLEN. The four work
+; buffers are 64 bytes apart; a value uses at most 33, so each buffer's tail is
+; free -- the GOSUB and FOR stacks live there.
 SLEN   = 32                  ; maximum stored string length
 SVENT  = 40                  ; string-var entry: NAMLEN name + 1 len + 32 data + pad
 NSVARS = 16                  ; string-variable table capacity
-STRACC = BASRAM+$200         ; SEVAL result accumulator (64 bytes)
-STRACCD= BASRAM+$201         ; STRACC data area (past the length byte)
-STRTMP = BASRAM+$240         ; current term being produced (64)
-STRTMPD= BASRAM+$241         ; STRTMP data area (past the length byte)
-STRARG = BASRAM+$280         ; a string function's string argument (64)
-STRCMP = BASRAM+$2C0         ; saved left operand during a string comparison (64)
-SVARTAB= BASRAM+$300         ; NSVARS x SVENT = 640 bytes ($x300..$x57F)
+STRACC = BASRAM+$200         ; SEVAL result accumulator
+STRACCD= BASRAM+$201         ;   its data
+STRTMP = BASRAM+$240         ; the string term being produced
+STRTMPD= BASRAM+$241
+STRARG = BASRAM+$280         ; a string function's string argument
+STRCMP = BASRAM+$2C0         ; saved left operand of a string comparison
+GSTK   = BASRAM+$268         ; GOSUB return stack: GSMAX x 4 (line record, text ptr)
+GSMAX  = 3
+FSTK   = BASRAM+$2E4         ; FOR frames: FSMAX x 9 (var index, limit, step, LR, TP)
+FSMAX  = 3
+SVARTAB= BASRAM+$300         ; NSVARS x SVENT = 640 bytes
+PROG   = BASRAM+$580         ; program storage
+PBUF   = $C000               ; rebuild scratch buffer
+APBUF  = PBUF+128            ; absolute-path scratch (APATH; paths are <= 47 chars)
+STKTOP = $FEFF
 
-; IMAGE working set. Shares GTEXT's scratch run deliberately: two statements
-; never execute at once, and this page has no free run left. (IMAGE's own
-; sixteen bits of x survive the row loop in IMX; everything else is per-row.)
-IMX    = BASRAM+$DD          ; left edge (2) -- NOT $E6: IMAGE emits
-                             ;   through GLPUT now, whose GLTMP is $E7,
-                             ;   and $E6/$E7 would put the anchor's high
-                             ;   byte UNDER every byte sent (found as an
-                             ;   image that vanished off-window with no
-                             ;   errors). $DD/$DE = the freed GPEN and
-                             ;   GCTMP slots.
-IMYC   = BASRAM+$E8          ; current row y (2)
-IMW    = BASRAM+$EA          ; image width (2)
-IMH    = BASRAM+$EC          ; rows remaining (2)
-IMXC   = BASRAM+$EE          ; current column x (2)
-IMCX   = BASRAM+$F0          ; columns remaining in this row (2)
-GLN    = BASRAM+$E6          ; GL: bytes left to send (shares IMAGE's run --
-GLTMP  = BASRAM+$E7          ;   two statements never execute at once)
-GLOP   = BASRAM+$E0          ; GL verb statements: opcode, meta, loop count
-GLMETA = BASRAM+$E1          ;   (GTEXT's scratch block -- a GL verb and a
-GLCNT  = BASRAM+$E2          ;   GTEXT never execute at once)
-GLDIM  = BASRAM+$E8          ;   POLY*: words per vertex (2 or 3)
-GLFST  = BASRAM+$E9          ;   1 until the first argument is parsed
-BXS    = BASRAM+$EA          ; BOX/CIRCLE argument shadow: 4 int16 lo/hi
-                             ;   (8 bytes, $EA..$F1) -- buffered because
-                             ;   the PRMFIL byte must be emitted before
-                             ;   them. SHARES GTEXT/IMAGE's transient run:
-                             ;   one statement at a time, nothing live
-                             ;   between statements. NOT $E6: the migrated
-                             ;   emission runs GLPUT/GLVSEP, whose GLTMP
-                             ;   ($E7) and GLFST ($E9) are LIVE during the
-                             ;   statement -- and never $F2+ (the first
-                             ;   home ALIASED SEED/POKEA/SPSAV: every LINE
-                             ;   wiped the saved SP and BYE reset the
-                             ;   machine).
-
-; keyword tokens (>= $80 so they never collide with text or the 00 terminator)
+; keyword tokens (>= $80; the values are the .BAS file format -- append only)
 TOK_PRINT = $80
 TOK_LET  = $81
 TOK_IF   = $82
@@ -238,143 +212,115 @@ TOK_BYE  = $95
 TOK_HELP = $96
 TOK_SAVE = $97
 TOK_LOAD = $98
-; string tokens
 TOK_CHRS  = $99          ; CHR$
 TOK_LEFTS = $9A          ; LEFT$
 TOK_RIGHTS= $9B          ; RIGHT$
 TOK_MIDS  = $9C          ; MID$
-TOK_LEN   = $9D          ; LEN   (numeric result)
-TOK_ASC   = $9E          ; ASC   (numeric result)
-; data-file tokens
-TOK_OPEN  = $9F          ; OPEN
-TOK_CLOSE = $A0          ; CLOSE
-TOK_OUTPUT= $A1          ; OUTPUT (OPEN ... FOR OUTPUT)
-TOK_STRS  = $A2          ; STR$  (number -> string)
-TOK_VAL   = $A3          ; VAL   (string -> number)
-TOK_EOF   = $A4          ; EOF   (input channel at end -> 1/0)
-; graphics tokens
-TOK_LINE  = $A5          ; LINE x0,y0,x1,y1
-TOK_COLOR = $A6          ; COLOR pen
-TOK_BOX   = $A7          ; BOX x0,y0,x1,y1[,FILL|,NOFILL]
-TOK_FILL  = $A8          ; BOX modifier -- NOT a statement leader (see CKLEAD)
-TOK_NOFILL= $A9          ; ... the default, spelled out
-TOK_CLS   = $AA          ; CLS
-TOK_PIXELW= $AB          ; PIXELW x,y -- device pixel write (was PLOT)
-TOK_CIRCLE= $AC          ; CIRCLE x,y,r[,FILL|,NOFILL]
-                         ; $AD was PALETTE, removed with the palette. Like
-                         ; $B0, it stays unassigned: saved .BAS files are
-                         ; tokenised and old programs on disk still carry it.
-TOK_PIXELR= $AE          ; PIXELR(x,y) -- a FUNCTION, not a statement
-                         ;   (device pixel read; was POINT, renamed so
-                         ;   the name belongs to the PGC drawing verb)
-TOK_GTEXT = $AF          ; GTEXT x,y,size,s$ -- REBORN 2026-09-01 as the
-                         ;   easy 2D text sugar (the old software
-                         ;   rasterizer's token, so old programs' GTEXT
-                         ;   lines dispatch again): pure GL emission
-TOK_RGB   = $B1          ; RGB(r,g,b) -- a FUNCTION: pack r,b 0-31, g 0-63 into 565
-TOK_IMAGE = $B2          ; IMAGE x,y,name$ -- draw a P8I file
-TOK_GL    = $B3          ; GL string$ -- one ASCII graphics-language line
-                         ; $B4.. are the GENERATED native GL verbs (glvtab.inc);
-                         ; $FB-$FF reserved for hand tokens so the verb table
-                         ; can keep growing underneath them
-TOK_GLRD  = $FB          ; GLRD -- pop one read-back byte (-1 empty); a bare
-                         ; factor like a variable, no parens (stage 10e)
-                         ; $B4..$E6 are the NATIVE GL VERB block (FLIP,
-                         ; DRAW3, MDROTY, CLBEG ... 51 statements), all
-                         ; dispatched to DOGLV through GLVTAB. Names,
-                         ; tokens and encodings are GENERATED by
-                         ; generators/gen_glkw.py (glkwtab.inc spliced at
-                         ; the head of KWTAB, glvtab.inc after it) -- the
-                         ; token ORDER is ABI, append-only, like $AD/$B0.
-                         ; $B0 was SCREEN, removed with the display modes. Do
-                         ; not reuse it casually: a saved .BAS is tokenised, so
-                         ; an old program on disk still has $B0 in it and would
-                         ; run as whatever takes the number.
+TOK_LEN   = $9D
+TOK_ASC   = $9E
+TOK_OPEN  = $9F
+TOK_CLOSE = $A0
+TOK_OUTPUT= $A1
+TOK_STRS  = $A2          ; STR$
+TOK_VAL   = $A3
+TOK_EOF   = $A4
+TOK_LINE  = $A5
+TOK_COLOR = $A6
+TOK_BOX   = $A7
+TOK_FILL  = $A8
+TOK_NOFILL= $A9
+TOK_CLS   = $AA
+TOK_PIXELW= $AB
+TOK_CIRCLE= $AC
+TOK_PIXELR= $AE          ; ($AD was PALETTE: unassigned, kept so old files still load)
+TOK_GTEXT = $AF
+TOK_RGB   = $B1          ; ($B0 was SCREEN: unassigned)
+TOK_IMAGE = $B2
+TOK_GL    = $B3
+TOK_GLRD  = $FB          ; GLRD: a bare factor; $B4.. are the GL verbs (glvtab.inc)
+NTOK      = 52           ; tokens $80..$B3 have STMTTAB / FACTAB entries
 
-MONITOR = $0000          ; reset vector — BYE returns here
-CONIN   = $0100          ; BIOS: wait for a key -> A
-CONOUT  = $0103          ; BIOS: A -> console (expands a bare LF to CR LF)
-
-PROG   = BASRAM+$580          ; program storage (string table occupies $300..$57F)
-PBUF   = $C000          ; rebuild scratch buffer
-APBUF  = PBUF+128       ; absolute-path scratch (see APATH). Safe to overlay the
-                        ; rebuild buffer: GETPATH caps a path at 47 chars, and
-                        ; APATH only ever runs during SAVE/LOAD/OPEN, never
-                        ; during an edit rebuild.
-STKTOP = $FEFF
+; relation bits (REL) and operator masks (RELM)
+R_LT   = 1
+R_EQ   = 2
+R_GT   = 4
 
 ;==============================================================================
         .org BASORG
-; Stack: when P8X/OS launched us we were reached with `JSR (P1)` and the shell
-; expects an RTS back (that is how every /bin program returns). Resetting the
-; stack to STKTOP would overwrite the caller's frame -- including that return
-; address -- so under the OS we ADOPT the caller's stack and remember where it
-; was. Standalone/disk-boot there is no caller, so we own the whole stack.
-; MONITOR is $2000 for the run-from-OS build and $0000 otherwise, so this costs
-; two instructions in the build that does not need it.
+; Under P8X/OS we were reached with `JSR (P1)` and the shell expects an RTS
+; back, so we ADOPT the caller's stack and remember where it was (SPSAV); BYE
+; and every error unwind to it. Standalone / disk-boot there is no caller.
         LDA  #>MONITOR
         JZ   bs_own
-        TPA3L                        ; running under the OS: keep its stack
+        TPA3L
         STA  SPSAV
         TPA3H
         STA  SPSAV+1
         JMP  bs_go
-bs_own: LDP3 #STKTOP                 ; no OS underneath: the stack is ours
-        LDW SPSAV,#STKTOP                ; <- tierA: address constant (next: LDA)
-bs_go:
-        LDA  #$03            ; ACIA master reset
+bs_own: LDP3 #STKTOP
+        LDW  SPSAV,#STKTOP
+bs_go:  LDA  #$03            ; ACIA master reset
         STA  ACIAS
         LDA  #$15            ; /16 clock, 8N1
         STA  ACIAS
-        JSR  NEWPROG         ; empty program
-        LDA  #0              ; no data file open
-        STA  FMODE
+        JSR  NEWPROG
+        LDA  #0
+        STA  FMODE           ; no data file open
         STA  OUTFILE
-        STA  STRSINK         ; PUTCH not capturing into a string
-        LDW SEED,#44257                ; <- tierA: word constant (next: LDA)
-        LDA  #0              ; PRMFIL shadow: the card powers up outline
-        STA  PRMSH
-        LDA  GLIDR           ; a GL engine? establish BASIC's full-screen
-        LDB  #'G'            ;   window -- the raw port powers up with a
-        CMP                  ;   DEGENERATE one that draws nothing (glwin)
+        STA  STRSINK
+        STA  PRMSH           ; the card powers up outline
+        LDW  SEED,#44257
+        LDA  GLIDR           ; a GL engine? establish BASIC's full-screen window
+        LDB  #'G'            ;   (the raw port powers up DEGENERATE) and claim
+        CMP                  ;   the screen from the glass TTY
         JNZ  bnr_ng
         JSR  glwin
-        LDA  #1              ; claim the GL screen: suspend the glass TTY so the
-        STA  GTSUSP          ;   on-screen console + clear-on-full don't corrupt
-                            ;   BASIC's graphics (the OS shell clears it on BYE)
-        LDA  #$B0            ; COLD START ONLY: PROJCT 0 -- BASIC is
-        JSR  GLPUT           ;   2D-first, and TEXT strokes live at z=0,
-        LDA  #0              ;   which the native camera NEAR-CLIPS (the
-        JSR  GLPUT           ;   stage-9 z>=16 rule). RESETF deliberately
-        JSR  GLPUT           ;   restores the native camera for 3D work.
-bnr_ng:
-        LDP1 #BANNER
+        LDA  #1
+        STA  GTSUSP
+        LDA  #$B0            ; PROJCT 0: 2D first; TEXT strokes live at z=0,
+        JSR  GLPUT           ;   which the native camera would near-clip
+        LDA  #0
+        JSR  GLPUT
+        JSR  GLPUT
+bnr_ng: LDP1 #BANNER
         JSR  PUTS
 
 ; ---------------- REPL -------------------------------------------------------
-REPL:   LDA  #0              ; back at the prompt: not running a program
-        STA  RUNNING
+REPL:   LDA  #0
+        STA  RUNNING         ; at the prompt: not running a program
         JSR  GETLINE         ; line -> LBUF
-        JSR  CRUNCH          ; tokenize keywords in place
-        JSR  CHECKLINE       ; reject malformed lines at entry (C=1 -> reported)
+        JSR  CRUNCH          ; keywords -> tokens, in place
+        JSR  CHECKLINE       ; reject a malformed line at entry (C=1 reported)
         JC   REPL
         LDP2 #LBUF
         JSR  SKIPSP
         LDA  (P2)
         JZ   REPL            ; blank line
-        LDB  #'0'            ; leading digit -> line entry
-        SUB
-        JNC  RSTMT           ; ch < '0'
-        LDB  #10
-        CMP
-        JC   RSTMT           ; ch > '9'
-        JMP  DOLINE
-RSTMT:  JSR  STMTLINE        ; immediate statement(s)
+        JSR  ISDIGIT
+        JC   DOLINE          ; leading digit -> a numbered line
+        LDA  #0              ; a fresh statement line: no pending end / branch
+        STA  ENDF
+        STA  BRANCHF
+        STA  JUMPF
+        JSR  STMTLINE        ; immediate statement(s)
         JMP  REPL
 
-; STMTLINE — execute a line: ':'-separated statements until end-of-line or a
-; pending branch/jump/end. Used by RUN and immediate mode.
-STMTLINE: JSR STMT
+; ISDIGIT - C=1 if A is '0'..'9'. A preserved.
+ISDIGIT:LDB  #'0'
+        CMP
+        JNC  isd_no
+        LDB  #$3A
+        CMP
+        JC   isd_no
+        SEC
+        RTS
+isd_no: CLC
+        RTS
+
+; STMTLINE - execute ':'-separated statements until the end of the line or a
+;   pending branch / jump / end. Used by RUN and immediate mode.
+STMTLINE:
+        JSR  STMT
         LDA  ENDF
         JNZ  sl_d
         LDA  BRANCHF
@@ -383,522 +329,384 @@ STMTLINE: JSR STMT
         JNZ  sl_d
         JSR  SKIPSP
         LDA  (P2)
-        JZ   sl_d                   ; end of line -> done
+        JZ   sl_d            ; end of line
         LDB  #':'
         CMP
-        JNZ  sl_err                 ; not ':' and not EOL -> leftover garbage
+        JNZ  SYNERR          ; leftover text (an unsupported operator, say)
         INP2
         JMP  STMTLINE
-sl_err: JMP  SYNERR                 ; e.g. an unsupported operator like '^'
 sl_d:   RTS
 
-; STMT — execute the statement at (P2).  RTS when done.
+; STMT - execute the statement at (P2), P2 left after it. A statement keyword
+;   dispatches through STMTTAB; a GL verb token goes to DOGLV with its index; a
+;   letter is an implicit LET; anything else prints "?".
 STMT:   JSR  SKIPSP
         LDA  (P2)
-        JZ   stmt_nop               ; empty statement (end of line / after ':')
-        LDA  (P2)
-        LDB  #TOK_PRINT
-        CMP
-        JZ   DOPRINT
-        LDA  (P2)
-        LDB  #TOK_LET
-        CMP
-        JZ   DOLET
-        LDA  (P2)
-        LDB  #TOK_RUN
-        CMP
-        JZ   DORUN
-        LDA  (P2)
-        LDB  #TOK_GOTO
-        CMP
-        JZ   DOGOTO
-        LDA  (P2)
-        LDB  #TOK_GOSUB
-        CMP
-        JZ   DOGOSUB
-        LDA  (P2)
-        LDB  #TOK_RETURN
-        CMP
-        JZ   DORET
-        LDA  (P2)
-        LDB  #TOK_FOR
-        CMP
-        JZ   DOFOR
-        LDA  (P2)
-        LDB  #TOK_NEXT
-        CMP
-        JZ   DONEXT
-        LDA  (P2)
-        LDB  #TOK_INPUT
-        CMP
-        JZ   DOINPUT
-        LDA  (P2)
-        LDB  #TOK_POKE
-        CMP
-        JZ   DOPOKE
-        LDA  (P2)
-        LDB  #TOK_LINE
-        CMP
-        JZ   DOGLINE
-        LDA  (P2)
-        LDB  #TOK_COLOR
-        CMP
-        JZ   DOCOLOR
-        LDA  (P2)
-        LDB  #TOK_BOX
-        CMP
-        JZ   DOBOX
-        LDA  (P2)
-        LDB  #TOK_CLS
-        CMP
-        JZ   DOCLS
-        LDA  (P2)
-        LDB  #TOK_PIXELW
-        CMP
-        JZ   DOPIXW
-        LDA  (P2)
-        LDB  #TOK_CIRCLE
-        CMP
-        JZ   DOCIRC
-        LDA  (P2)
-        LDB  #TOK_IMAGE
-        CMP
-        JZ   DOIMAGE
-        LDA  (P2)
-        LDB  #TOK_GTEXT
-        CMP
-        JZ   DOGTEXT
-        LDA  (P2)
-        LDB  #TOK_GL
-        CMP
-        JZ   DOGL
-        LDA  (P2)
-        LDB  #TOK_REM
-        CMP
-        JZ   DOREM
-        LDA  (P2)
-        LDB  #TOK_IF
-        CMP
-        JZ   DOIF
-        LDA  (P2)
-        LDB  #TOK_END
-        CMP
-        JZ   DOEND
-        LDA  (P2)
-        LDB  #TOK_LIST
-        CMP
-        JZ   st_list
-        LDA  (P2)
-        LDB  #TOK_NEW
-        CMP
-        JZ   st_new
-        LDA  (P2)
-        LDB  #TOK_BYE
-        CMP
-        JZ   DOBYE
-        LDA  (P2)
-        LDB  #TOK_HELP
-        CMP
-        JZ   st_help
-        LDA  (P2)
-        LDB  #TOK_SAVE
-        CMP
-        JZ   st_save
-        LDA  (P2)
-        LDB  #TOK_LOAD
-        CMP
-        JZ   st_load
-        LDA  (P2)
-        LDB  #TOK_OPEN
-        CMP
-        JZ   DOOPEN
-        LDA  (P2)
-        LDB  #TOK_CLOSE
-        CMP
-        JZ   DOCLOSE
-        LDA  (P2)            ; a native GL verb? one range check covers
-        LDB  #GLV0           ;   all 51 -- the verb index rides to DOGLV
-        SUB                  ;   in A (CMP preserves it)
-        JNC  st_nglv         ; below the block
+        JZ   st_rts          ; empty statement
+        LDB  #GLV0
+        SUB                  ; A = token - GLV0
+        JNC  st_low
         LDB  #GLVN
         CMP
-        JC   st_nglv         ; past it
-        JMP  DOGLV
-st_nglv:
-        LDA  (P2)            ; bare variable -> implicit LET
-        LDB  #'A'
+        JC   st_what         ; past the verb block (GLRD, unassigned)
+        JMP  DOGLV           ; verb index in A
+st_low: LDA  (P2)
+        LDB  #$80
         SUB
-        JNC  st_err
-        LDB  #26
+        JNC  st_text         ; not a token
+        SHL                  ; P1 = &STMTTAB[token]
+        LDB  #<STMTTAB
+        ADD
+        TAP1L
+        LDA  #0
+        ROL
+        LDB  #>STMTTAB
+        ADD
+        TAP1H
+        LDW  CUR,(P1+0)
+        LPW1 CUR
+        JSR  (P1)
+st_rts: RTS
+st_text:LDA  (P2)
+        JSR  ISLETTER
+        JC   DOLET           ; bare variable -> implicit LET
+st_what:LDP1 #MWHAT          ; "?"
+        JMP  PUTS
+
+; ISLETTER - C=1 if A (either case) is a letter. A and every variable preserved
+;   (MATCHKW relies on TMPC surviving this).
+ISLETTER:
+        LDB  #'a'
         CMP
-        JC   st_err
-        JMP  DOLET
-st_list: INP2               ; consume the LIST token (so STMTLINE sees end-of-line)
+        JNC  isl_up          ; below 'a': try the upper-case range
+        LDB  #$7B            ; 'z'+1
+        CMP
+        JNC  isl_yes
+        CLC
+        RTS
+isl_up: LDB  #'A'
+        CMP
+        JNC  isl_no
+        LDB  #$5B            ; 'Z'+1
+        CMP
+        JNC  isl_yes
+isl_no: CLC
+        RTS
+isl_yes:SEC
+        RTS
+
+; Statement handlers by token ($80..$B3). A function / modifier keyword at the
+; head of a statement is st_what ("?"), which CKLEAD also reads as "illegal".
+STMTTAB:.word DOPRINT,DOLET,DOIF,st_what              ; $80 PRINT LET IF THEN
+        .word DOFOR,st_what,DONEXT,DOGOTO             ; $84 FOR TO NEXT GOTO
+        .word DOGOSUB,DORET,DOINPUT,DOREM             ; $88 GOSUB RETURN INPUT REM
+        .word DOEND,DORUN,st_list,st_new              ; $8C END RUN LIST NEW
+        .word st_what,st_what,st_what,DOPOKE          ; $90 ABS RND PEEK POKE
+        .word st_what,DOBYE,st_help,st_save           ; $94 STEP BYE HELP SAVE
+        .word st_load,st_what,st_what,st_what         ; $98 LOAD CHR$ LEFT$ RIGHT$
+        .word st_what,st_what,st_what,DOOPEN          ; $9C MID$ LEN ASC OPEN
+        .word DOCLOSE,st_what,st_what,st_what         ; $A0 CLOSE OUTPUT STR$ VAL
+        .word st_what,DOGLINE,DOCOLOR,DOBOX           ; $A4 EOF LINE COLOR BOX
+        .word st_what,st_what,DOCLS,DOPIXW            ; $A8 FILL NOFILL CLS PIXELW
+        .word DOCIRC,st_what,st_what,DOGTEXT          ; $AC CIRCLE (PALETTE) PIXELR GTEXT
+        .word st_what,st_what,DOIMAGE,DOGL            ; $B0 (SCREEN) RGB IMAGE GL
+
+st_list:INP2                 ; consume the token so STMTLINE sees the line end
         JSR  LIST
-        LDP1 #MOK
-        JSR  PUTS
-        RTS
-st_new: INP2                ; consume the NEW token
+        JMP  st_ok
+st_new: INP2
         JSR  NEWPROG
-        LDP1 #MOK
-        JSR  PUTS
-        RTS
-st_help: INP2               ; consume the HELP token
+st_ok:  LDP1 #MOK
+        JMP  PUTS
+st_help:INP2
         LDP1 #MHELP
-        JSR  PUTS
-        RTS
-; BYE — leave BASIC.
-;
-; Under P8X/OS: restore the entry stack and RTS, so we return to the shell that
-; ran us with the CWD, redirection and everything else intact. This used to
-; `JMP MONITOR`, which for the TPA build is $2000 = the OS's COLD entry -- a full
-; reboot, so it reprinted the banner and dropped you back in the root directory
-; however deep you had cd'd.
-;
-; Disk-boot/standalone: there is no caller, so jump to the reset vector as before.
+        JMP  PUTS
+
+; BYE - leave BASIC. Under P8X/OS: back to the shell that ran us, stack
+; restored, CWD and redirection intact. Disk boot / standalone: the reset vector.
 DOBYE:  LDA  #>MONITOR
         JZ   by_rst
-        LDA  SPSAV                   ; back to the shell
-        TAP3L
-        LDA  SPSAV+1
-        TAP3H
+        LPW3 SPSAV
         RTS
 by_rst: JMP  MONITOR
 
-; ---------------------------------------------------------------------------
-; SAVE "name" / LOAD "name" — persist the program to a P8XFS v2 file via the
-; monitor's BIOS FS calls. Paths are relative to the OS current directory (see
-; APATH); a leading '/' is absolute. Works in the ROM-in-monitor and disk builds;
-; the retired standalone build had no resident monitor/BIOS.
-; ---------------------------------------------------------------------------
-; APATH — turn the path at (P1) into an ABSOLUTE path, honouring the OS's
-; current directory.
-;
-;   in : P1 -> NUL-terminated path
-;   out: P1 -> NUL-terminated ABSOLUTE path (the input itself, or APBUF)
-;
-; Why: the BIOS resolvers (FRESOLVE/FOPEN/FOPENDIR) always start at the ROOT, so
-; a bare "T1" saved from /src used to land in /T1. The /bin commands avoid this
-; by prefixing the CWD before any BIOS open (lib_apath.c's abspath); BASIC did
-; not, because it made no OS calls at all. This is that same step.
-;
-; Only meaningful when an OS is underneath: MONITOR is $2000 for the run-from-OS
-; build and $0000 for the disk-boot build, where there is no OS and the BIOS root
-; is already the right base — so the constant test below compiles to a cheap
-; runtime no-op in that build rather than needing conditional assembly.
-;
-; Preserves P2 (the parse cursor); SYS_GETCWD clobbers it, hence the save.
+; SYNERR - abort the current statement to the prompt: unwind the stack to our
+;   entry SP, cancel any output redirection, report (with the line number when
+;   a program is running).
+SYNERR: LPW3 SPSAV
+        LDA  #0
+        STA  OUTFILE
+        STA  STRSINK
+        LDA  RUNNING
+        JZ   syn_imm
+        LDP1 #MSYNIN         ; "?SYNTAX ERROR IN "
+        JSR  PUTS
+        LPW1 CURLINE
+        LDW  LNUM,(P1+0)
+        JSR  PRDECU
+        JSR  CRLF
+        JMP  REPL
+syn_imm:LDP1 #MSYN
+        JSR  PUTS
+        JMP  REPL
+
+;==============================================================================
+; SAVE "path" / LOAD "path" -- the program as a P8XFS file, relative to the OS
+; current directory (APATH); a leading '/' is absolute.
+;==============================================================================
+; APATH - make the path at (P1) absolute, honouring the OS CWD: the BIOS
+;   resolvers start at the ROOT. Returns P1 -> the absolute path (the input
+;   itself, or APBUF). No OS underneath (MONITOR = 0): the path is left alone.
+;   Preserves P2 (SYS_GETCWD clobbers it).
 APATH:  LDA  #>MONITOR
-        JZ   ap_ret                  ; no OS underneath -> leave the path alone
+        JZ   ap_ret
         LDA  (P1)
         LDB  #'/'
         CMP
-        JZ   ap_ret                  ; already absolute
+        JZ   ap_ret          ; already absolute
+        TPA1L
+        STA  RP              ; the relative path
+        TPA1H
+        STA  RP+1
         TPA2L
-        PHA                          ; save the caller's parse cursor
+        PHA                  ; keep the parse cursor
         TPA2H
         PHA
-        TPA1L
-        PHA                          ; save the source path pointer
-        TPA1H
-        PHA
         LDP1 #APBUF
-        JSR  SYS_GETCWD              ; APBUF <- CWD (clobbers P2)
-        LDP1 #APBUF                  ; walk to the NUL
-ap_f:   LDA  (P1)
-        JZ   ap_f2
-        INP1
-        JMP  ap_f
-ap_f2:  DEP1                         ; look at the last CWD character
-        LDA  (P1)
+        JSR  SYS_GETCWD      ; APBUF <- CWD (clobbers P2)
+        LDP1 #APBUF
+ap_f:   LDA  (P1)+           ; to the NUL
+        JNZ  ap_f
+        DEP1
+        DEP1                 ; the last CWD character
+        LDA  (P1)+
         LDB  #'/'
         CMP
-        INP1                         ; back to the NUL slot either way
-        JZ   ap_c                    ; CWD is "/" (or ends in one): no separator
+        JZ   ap_c            ; CWD is "/" (or ends in one): no separator
         LDA  #'/'
         STA  (P1)+
-ap_c:   PLA
-        TAP2H                        ; source path -> P2 as the read cursor
-        PLA
-        TAP2L
-ap_c1:  LDA  (P2)+                   ; append the relative path, NUL included
+ap_c:   LPW2 RP
+ap_c1:  LDA  (P2)+           ; append the relative path, NUL included
         STA  (P1)+
-        LDB  #0
-        CMP
         JNZ  ap_c1
         PLA
-        TAP2H                        ; restore the caller's parse cursor
+        TAP2H
         PLA
         TAP2L
         LDP1 #APBUF
 ap_ret: RTS
 
-st_save:INP2                        ; consume the SAVE token
-        JSR  GETPATH                ; "path" -> PBUF ; C set = syntax error
-        JC   fs_serr
-        LDP1 #PBUF                   ; resolve it: subdir path or bare name
-        JSR  APATH                   ; ... relative to the OS CWD, not the root
-        JSR  FRESOLVE                ; -> DIRLBA + leaf FNAME ; C=1 bad path
+st_save:INP2
+        JSR  GETPATH         ; "path" -> PBUF; C=1 syntax error
+        JC   SYNERR
+        LEAW GTMP,(P2+0)     ; the BIOS calls may clobber the parse cursor
+        LDP1 #PBUF
+        JSR  APATH
+        JSR  FRESOLVE        ; -> dir + leaf FNAME
         JC   sv_ferr
-        JSR  PROGLEN                 ; FLEN = program length (incl 00,00 marker)
-        LDA  #<PROG
-        STA  FSRC
-        LDA  #>PROG
-        STA  FSRC+1
+        JSR  PROGLEN         ; FLEN = program length (incl. the 00,00 marker)
+        LDW  FSRC,#PROG
         JSR  FCREATE
         JC   sv_ferr
         LDP1 #MSAVED
-        JSR  PUTS
+fs_msg: JSR  PUTS
+        LPW2 GTMP
         RTS
-sv_ferr:LDP1 #MFSERR                 ; ?SAVE FAILED (exists or disk full)
-        JSR  PUTS
-        RTS
-fs_serr:JMP  SYNERR
+sv_ferr:LDP1 #MFSERR         ; ?Save failed (exists or disk full)
+        JMP  fs_msg
 
-st_load:INP2                        ; consume the LOAD token
+st_load:INP2
         JSR  GETPATH
-        JC   fs_serr
+        JC   SYNERR
+        LEAW GTMP,(P2+0)
         LDP1 #PBUF
-        JSR  APATH                   ; relative to the OS CWD, not the root
-        JSR  FRESOLVE                ; -> DIRLBA + leaf FNAME ; C=1 bad path
+        JSR  APATH
+        JSR  FRESOLVE
         JC   ld_nf
-        JSR  FFIND                   ; -> LBA + FLEN, or C set if missing
+        JSR  FFIND           ; -> LBA + FLEN
         JC   ld_nf
-        LDP1 #PROG                   ; bulk-read the whole file into PROG
-        JSR  FLOADAT
+        LDP1 #PROG
+        JSR  FLOADAT         ; the whole file into PROG
         LDP1 #MLOADED
-        JSR  PUTS
-        RTS
+        JMP  fs_msg
 ld_nf:  LDP1 #MNOFILE
-        JSR  PUTS
-        RTS
+        JMP  fs_msg
 
-; GETPATH — parse a quoted "path" at (P2) into PBUF as a NUL-terminated string,
-;   CASE-PRESERVED (slashes kept), P2 past the closing quote. C set on syntax
-;   error (no opening quote). The caller runs it through APATH and then FRESOLVE,
-;   so a bare "NAME" resolves in the CURRENT directory and "/SUB/NAME" is
-;   absolute — SAVE/LOAD reach subdirectories either way.
-;   PBUF (the edit scratch) is free during immediate SAVE/LOAD; a path >47 chars
-;   is truncated. Case-preserving matches the case-sensitive filesystem.
-GETPATH: JSR  SKIPSP
+; GETPATH - parse a quoted "path" at (P2) into PBUF, NUL-terminated, case
+;   preserved, at most 47 chars; P2 past the closing quote. C=1 if no quote.
+GETPATH:JSR  SKIPSP
         LDA  (P2)
         LDB  #'"'
         CMP
-        JNZ  gf_err
-        INP2                         ; past opening quote
-        LDP1 #PBUF                ; <- tierA: pointer constant (next: LDA)
+        JNZ  gp_err
+        INP2
+        LDP1 #PBUF
         LDA  #47
-        STA  RP                      ; chars of room left
-gf_lp:  LDA  (P2)
-        JZ   gf_ok                   ; line ended before the quote -> accept
+        STA  RP              ; room left
+gp_lp:  LDA  (P2)
+        JZ   gp_ok           ; line ended before the quote: accept
         LDB  #'"'
         CMP
-        JZ   gf_cl
+        JZ   gp_cl
         LDA  RP
-        JZ   gf_adv                  ; full: consume but don't store
-        LDA  (P2)                    ; store the char as typed (case preserved)
-        STA  (P1)+
-        LDA  RP
+        JZ   gp_adv          ; full: consume, don't store
         DEC
         STA  RP
-gf_adv: INP2
-        JMP  gf_lp
-gf_cl:  INP2                         ; past closing quote
-gf_ok:  LDA  #0
-        STA  (P1)                    ; NUL-terminate the path
+        LDA  (P2)
+        STA  (P1)+
+gp_adv: INP2
+        JMP  gp_lp
+gp_cl:  INP2
+gp_ok:  LDA  #0
+        STA  (P1)
         CLC
         RTS
-gf_err: SEC
+gp_err: SEC
         RTS
 
-; PROGLEN — FLEN = byte length of the program (PROG .. past the 00,00 marker).
-PROGLEN:LDP1 #PROG                ; <- tierA: pointer constant (next: LDA)
-pl_l:   LDA  (P1)+                   ; line# lo
-        STA  TOKW
-        LDA  (P1)+                   ; line# hi
-        LDB  TOKW
+; PROGLEN - FLEN = byte length of the program (PROG up to and including 00,00).
+PROGLEN:LDP1 #PROG
+pl_l:   LDA  (P1)+           ; line number, or the 00,00 marker
+        STA  TMPC
+        LDA  (P1)+
+        LDB  TMPC
         OR
-        JZ   pl_end                  ; 00,00 marker -> end (P1 just past it)
-pl_sk:  LDA  (P1)+                   ; skip the text to its 00 terminator
+        JZ   pl_end
+pl_sk:  LDA  (P1)+           ; skip the text and its terminator
         JNZ  pl_sk
         JMP  pl_l
-pl_end: TPA1L                        ; NUM1 = end pointer
-        STA  NUM1
-        TPA1H
-        STA  NUM1+1
-        LDW NUM2,#PROG                ; <- tierA: address constant (next: JSR SUB16)
-        JSR  SUB16                   ; NUM1 = end - PROG = length
-        MOVW FLEN,NUM1                ; <- tierA: word move (next: LDA)
-        LDA  #0                      ; FLEN is 24-bit now; a BASIC program is <64 KB
-        STA  FLEN+2
+pl_end: LEAW FLEN,(P1+0)     ; end pointer ...
+        SUBW FLEN,#PROG      ; ... minus the start
+        LDA  #0
+        STA  FLEN+2          ; FLEN is 24-bit
         RTS
-st_err: LDP1 #MWHAT
-        JSR  PUTS
-stmt_nop: RTS
-
-; SYNERR — abort current statement to the prompt (resets the stack). When a
-; program is RUNning, report the offending line ("?SYNTAX ERROR IN 100"); in
-; immediate mode there is no line, so just "?SYNTAX ERROR".
-SYNERR: LDA  SPSAV                   ; unwind to our entry SP, not STKTOP: under
-        TAP3L                        ;   the OS that would eat the caller's frame
-        LDA  SPSAV+1
-        TAP3H
-        LDA  #0                      ; a PRINT# aborted mid-record must not leave
-        STA  OUTFILE                 ; console output redirected to the file
-        STA  STRSINK                 ; nor an interrupted STR$ capture
-        LDA  RUNNING
-        JZ   syn_imm
-        LDP1 #MSYNIN                 ; "?SYNTAX ERROR IN "
-        JSR  PUTS
-        LPW1 CURLINE                ; <- tierA: pointer load (next: LDA)
-        LDA  (P1)+
-        STA  LNUM
-        LDA  (P1)
-        STA  LNUM+1
-        JSR  PRDECU                  ; unsigned decimal line number
-        JSR  CRLF
-        JMP  REPL
-syn_imm: LDP1 #MSYN
-        JSR  PUTS
-        JMP  REPL
 
 ;==============================================================================
 ; STATEMENTS
 ;==============================================================================
-; PRINT <expr> | PRINT "string" | PRINT
-DOPRINT: INP2                       ; skip PRINT token
+; PRINT [# ] item {; | , item} [; | ,]   -- ';' no gap, ',' one space, a
+; trailing separator suppresses the newline.
+DOPRINT:INP2
         JSR  SKIPSP
-        LDA  (P2)                    ; PRINT# writes one value + CR to the data file
+        LDA  (P2)
         LDB  #'#'
         CMP
-        JZ   DOPRINTF
-dp_item: JSR  SKIPSP
+        JZ   DOPRINTF        ; PRINT# -> the data file
+dp_item:JSR  SKIPSP
         LDA  (P2)
-        JZ   dp_nl                  ; end of statement -> newline
+        JZ   dp_nl           ; end of statement -> newline
         LDB  #':'
         CMP
         JZ   dp_nl
-        JSR  SPEEK                  ; string item (literal / var / concat / function)?
+        JSR  SPEEK           ; a string item?
         LDA  MATCHF
         JNZ  dp_pstr
-        JSR  EVAL                   ; numeric item
-        MOVW LNUM,RESULT                ; <- tierA: word move (next: JSR PRDEC)
+        JSR  EVAL            ; numeric item
+        MOVW LNUM,RESULT
         JSR  PRDEC
         JMP  dp_sep
-dp_pstr: JSR  SEVAL                  ; string item -> STRACC
+dp_pstr:JSR  SEVAL           ; string item -> STRACC
         JSR  SPUT
 dp_sep: JSR  SKIPSP
         LDA  (P2)
-        LDB  #$3B                   ; ';' (byte value: ';' can't be a char literal here)
+        LDB  #$3B            ; ';'
         CMP
         JZ   dp_semi
         LDB  #','
         CMP
-        JZ   dp_comma
-        JMP  dp_nl                  ; no separator -> newline
-dp_semi: INP2
-        JMP  dp_more
-dp_comma: INP2
+        JNZ  dp_nl           ; no separator -> newline
+        INP2
         LDA  #' '
         JSR  PUTC
-dp_more: JSR  SKIPSP
+        JMP  dp_more
+dp_semi:INP2
+dp_more:JSR  SKIPSP
         LDA  (P2)
-        JZ   dp_done                ; trailing separator -> suppress newline
+        JZ   dp_done         ; trailing separator: no newline
         LDB  #':'
         CMP
         JZ   dp_done
         JMP  dp_item
-dp_nl:  JSR  CRLF
-dp_done: RTS
+dp_nl:  JMP  CRLF
+dp_done:RTS
 
-; LET [LET] <var> = <expr>   (LET token optional -> implicit assignment)
+; LET [LET] var = expr  |  var$ = string expr   (the LET token is optional)
 DOLET:  LDA  (P2)
         LDB  #TOK_LET
         CMP
         JNZ  dl_chk
-        INP2                        ; skip LET token
+        INP2
         JSR  SKIPSP
-dl_chk: JSR  SPEEK                   ; string target (NAME$)?  -> string assignment
+dl_chk: JSR  SPEEK           ; string target (NAME$)?
         LDA  MATCHF
         JNZ  dl_str
-dl_var: JSR  VARGET                  ; parse name, look up/create -> P1 = &value
+        JSR  VARGET          ; P1 = the variable's entry
         LDA  MATCHF
-        JZ   dl_err
-        TPA1L                       ; save var address across EXPR (uses P1)
-        STA  SAVE1
-        TPA1H
-        STA  SAVE1+1
+        JZ   SYNERR
+        LEAW SAVE1,(P1+6)    ; &value, kept across the expression
+        JSR  EXPECTEQ
+        JSR  EVAL
+        LPW1 SAVE1
+        STW  (P1+0),RESULT
+        RTS
+dl_str: JSR  SVARGET         ; P1 = the string variable's entry
+        LDA  MATCHF
+        JZ   SYNERR
+        LEAW SAVE1,(P1+6)    ; its value ([len][data]) is the assignment target
+        JSR  EXPECTEQ
+        JSR  SEVAL           ; STRACC = the value (SEVAL uses SPA/SPD itself)
+        LDW  SPA,#STRACC
+        MOVW SPD,SAVE1
+        JMP  SMOVE
+
+; EXPECTEQ - skip blanks, consume '=' or SYNERR.
+EXPECTEQ:
         JSR  SKIPSP
         LDA  (P2)
         LDB  #'='
         CMP
-        JNZ  dl_err
+        JNZ  SYNERR
         INP2
-        JSR  EVAL                   ; RESULT = value (expr, optional comparison)
-        LPW1 SAVE1                ; <- tierA: pointer load (next: LDA)
-        LDA  RESULT
-        STA  (P1)
-        INP1
-        LDA  RESULT+1
-        STA  (P1)
         RTS
-; string assignment: NAME$ = <string expr>
-dl_str: JSR  SVARGET                 ; parse NAME$, look up/create -> P1 = &entry
-        LDA  MATCHF
-        JZ   dl_err
-        TPA1L                        ; save entry address across SEVAL
-        STA  SAVE1
-        TPA1H
-        STA  SAVE1+1
+
+; EXPECTCOMMA - skip blanks, consume ',' or SYNERR.
+EXPECTCOMMA:
         JSR  SKIPSP
         LDA  (P2)
-        LDB  #'='
+        LDB  #','
         CMP
-        JNZ  dl_err
+        JNZ  SYNERR
         INP2
-        JSR  SEVAL                   ; STRACC = string value
-        LDW SPA,#STRACC                ; <- tierA: address constant (next: LDA)
-        LDA  SAVE1                   ; SPD = entry + NAMLEN (the len byte)
-        LDB  #NAMLEN
-        ADD
-        STA  SPD
-        LDA  SAVE1+1
-        JNC  dls1
-        INC
-dls1:   STA  SPD+1
-        JSR  SMOVE
         RTS
-dl_err: JMP  SYNERR
 
 ;==============================================================================
-; PROGRAM EXECUTION (RUN, GOTO, IF/THEN, END)
+; PROGRAM EXECUTION: RUN, GOTO, GOSUB/RETURN, IF/THEN, END, FOR/NEXT
 ;==============================================================================
-; RUN — execute the stored program from the lowest line number
-DORUN:  LDA  #0
-        STA  ENDF
-        STA  GSP                    ; reset GOSUB and FOR stacks
+DORUN:  INP2
+        LDA  #0
+        STA  GSP             ; reset the GOSUB and FOR stacks
         STA  FSP
-        STA  FMODE                  ; abandon any data file left open by a prior run
+        STA  FMODE           ; abandon any data file a previous run left open
         STA  OUTFILE
-        LDA  #1                      ; a runtime error now reports its line number
-        STA  RUNNING
-        LDW CURLINE,#PROG                ; <- tierA: address constant (next: LDA)
-run_l:  LPW1 CURLINE                ; <- tierA: pointer load (next: LDA)
+        LDA  #1
+        STA  RUNNING         ; errors now report their line number
+        LDW  CURLINE,#PROG
+run_l:  LPW1 CURLINE
         LDA  (P1)+
-        STA  NUM1
+        STA  TMPC
         LDA  (P1)+
-        STA  NUM1+1
-        LDA  NUM1
-        LDB  NUM1+1
+        LDB  TMPC
         OR
-        JZ   run_done               ; 00,00 marker = end of program
-        TPA1L                       ; P2 = P1 (line text)
+        JZ   run_done        ; 00,00 marker: end of the program
+        TPA1L                ; P2 = the line text
         TAP2L
         TPA1H
         TAP2H
-run_exec: LDA #0                    ; entry point with P2 already positioned
+run_exec:
+        LDA  #0
         STA  BRANCHF
         STA  JUMPF
+        STA  ENDF
         JSR  STMTLINE
         LDA  ENDF
         JNZ  run_done
@@ -906,167 +714,150 @@ run_exec: LDA #0                    ; entry point with P2 already positioned
         JNZ  run_jump
         LDA  BRANCHF
         JNZ  run_goto
-        LPW1 CURLINE                ; <- tierA: pointer load (next: INP1)
+        LPW1 CURLINE         ; next line: past the number and the text
         INP1
         INP1
 rn_sk:  LDA  (P1)+
         JNZ  rn_sk
-        TPA1L
-        STA  CURLINE
-        TPA1H
-        STA  CURLINE+1
+        LEAW CURLINE,(P1+0)
         JMP  run_l
-run_goto: JSR FINDLINE
+run_goto:
+        JSR  FINDLINE        ; BRANCHN -> P1 = its record
         LDA  FNDF
         JZ   run_undef
-        TPA1L
-        STA  CURLINE
-        TPA1H
-        STA  CURLINE+1
+        LEAW CURLINE,(P1+0)
         JMP  run_l
-run_jump: LDA JUMPF                ; 1 = jump to line record; 2 = resume at text ptr
+run_jump:
+        LDA  JUMPF           ; 1 = jump to a line record; 2 = resume at a text pointer
         LDB  #2
         CMP
         JZ   run_resume
-        MOVW CURLINE,JUMPADDR                ; <- tierA: word move (next: JMP run_l -> LDA)
+        MOVW CURLINE,JUMPADDR
         JMP  run_l
-run_resume:LPW2 JUMPADDR                ; <- tierA: pointer load (next: JMP run_exec -> LDA)
+run_resume:
+        LPW2 JUMPADDR
         JMP  run_exec
-run_undef: LDP1 #MUNDEF
+run_undef:
+        LDP1 #MUNDEF
         JSR  PUTS
-        RTS
-run_done: LDP1 #MOK
-        JSR  PUTS
-        RTS
+run_done:
+        LDA  #1              ; stop STMTLINE (RUN consumed the rest of its line)
+        STA  ENDF
+        LDP1 #MOK
+        JMP  PUTS
 
-; FINDLINE — find the program line numbered BRANCHN; FNDF=1, P1=record start
-FINDLINE:LDP1 #PROG                ; <- tierA: pointer constant (next: TPA1L)
-fl_l:   TPA1L
-        STA  RP
-        TPA1H
-        STA  RP+1
-        LDA  (P1)+
-        STA  NUM1
-        LDA  (P1)+
-        STA  NUM1+1
-        LDA  NUM1
-        LDB  NUM1+1
+; FINDLINE - find the program line numbered BRANCHN: FNDF=1 and P1 = its
+;   record. The list is sorted, so the scan stops once it passes the target.
+FINDLINE:
+        LDP1 #PROG
+fl_l:   LDW  RNUM,(P1+0)
+        LDA  RNUM
+        LDB  RNUM+1
         OR
-        JZ   fl_no
-        MOVW NUM2,BRANCHN                ; <- tierA: word move (next: JSR CMP16)
-        JSR  CMP16
-        JZ   fl_found
-fl_sk:  LDA  (P1)+
-        JNZ  fl_sk
-        JMP  fl_l
-fl_found:LPW1 RP                ; <- tierA: pointer load (next: LDA)
+        JZ   fl_no           ; end marker
+        CMPW RNUM,BRANCHN
+        JNC  fl_sk           ; RNUM < target: keep going
+        JNZ  fl_no           ; high bytes differ, so RNUM > target
+        LDA  RNUM
+        LDB  BRANCHN
+        CMP
+        JNZ  fl_no           ; low bytes differ: passed it
         LDA  #1
         STA  FNDF
         RTS
+fl_sk:  INP1
+        INP1
+fl_s1:  LDA  (P1)+
+        JNZ  fl_s1
+        JMP  fl_l
 fl_no:  LDA  #0
         STA  FNDF
         RTS
 
-; GOTO <line>
+; GOTO line
 DOGOTO: INP2
         JSR  SKIPSP
-DOGOTON: JSR PARSEDEC
-        MOVW BRANCHN,LNUM                ; <- tierA: word move (next: LDA)
+DOGOTON:JSR  PARSEDEC        ; LNUM = the target
+        MOVW BRANCHN,LNUM
         LDA  #1
         STA  BRANCHF
         RTS
 
-; IF <expr> THEN <statement | line-number>
+; IF expr THEN statement(s) | line-number
 DOIF:   INP2
         JSR  EVAL
         JSR  SKIPSP
         LDA  (P2)
         LDB  #TOK_THEN
         CMP
-        JNZ  if_err
+        JNZ  SYNERR
         INP2
         LDA  RESULT
         LDB  RESULT+1
         OR
-        JZ   if_false               ; false -> skip rest of line
+        JZ   if_false
         JSR  SKIPSP
-        LDA  (P2)                   ; digit after THEN -> implicit GOTO
-        LDB  #'0'
-        SUB
-        JNC  if_stmt
-        LDB  #10
-        CMP
-        JC   if_stmt
-        JMP  DOGOTON
-if_stmt: JMP  STMTLINE        ; THEN clause = rest of the line
-if_false: LDA (P2)            ; false: skip the whole THEN clause (to end of line)
+        LDA  (P2)
+        JSR  ISDIGIT
+        JC   DOGOTON         ; THEN 100 -> implicit GOTO
+        JMP  STMTLINE        ; THEN clause = the rest of the line
+if_false:                    ; false: skip the whole rest of the line
+        LDA  (P2)
         JZ   iff_d
         INP2
         JMP  if_false
 iff_d:  RTS
-if_err: JMP  SYNERR
 
-; END — stop the running program
+; END
 DOEND:  INP2
         LDA  #1
         STA  ENDF
         RTS
 
-; INPUT <var> — prompt "? ", read a number from the console into <var>
-DOINPUT: INP2
+; REM - the rest of the line is a comment
+DOREM:  LDA  (P2)
+        JZ   rem_d
+        INP2
+        JMP  DOREM
+rem_d:  RTS
+
+; POKE addr,val
+DOPOKE: INP2
+        JSR  EVAL
+        MOVW POKEA,RESULT
+        JSR  EXPECTCOMMA
+        JSR  EVAL
+        LPW1 POKEA
+        LDA  RESULT
+        STA  (P1)
+        RTS
+
+; INPUT [# ] var | var$   -- prompt "? " and read a line
+DOINPUT:INP2
         JSR  SKIPSP
-        LDA  (P2)                    ; INPUT# reads one record from the data file
+        LDA  (P2)
         LDB  #'#'
         CMP
-        JZ   DOINPUTF
-        JSR  SPEEK                   ; string variable (NAME$)?  -> read a string
+        JZ   DOINPUTF        ; INPUT# -> one record from the data file
+        JSR  SPEEK
         LDA  MATCHF
         JNZ  in_str
-        JSR  VARGET                 ; parse name, look up/create -> P1 = &value
+        JSR  VARGET
         LDA  MATCHF
-        JZ   in_err
-        TPA1L
-        STA  SAVE1
-        TPA1H
-        STA  SAVE1+1
-        TPA2L                       ; save program text pointer
-        STA  GTMP
-        TPA2H
-        STA  GTMP+1
-        LDA  #'?'
-        JSR  PUTC
-        LDA  #' '
-        JSR  PUTC
-        JSR  GETLINE                ; read reply -> LBUF
-        LDP2 #LBUF
-        JSR  SKIPSP
-        JSR  PARSEDEC               ; LNUM = entered value
-        LPW1 SAVE1                ; <- tierA: pointer load (next: LDA)
-        LDA  LNUM
-        STA  (P1)
-        INP1
-        LDA  LNUM+1
-        STA  (P1)
-        LPW2 GTMP                ; <- tierA: pointer load (next: RTS)
+        JZ   SYNERR
+        LEAW SAVE1,(P1+6)
+        JSR  in_ask          ; GTMP = parse cursor, LBUF = the reply, P2 -> LBUF
+        JSR  PARSEDEC        ; LNUM = the number
+        LPW1 SAVE1
+        STW  (P1+0),LNUM
+        LPW2 GTMP
         RTS
-; INPUT into a string variable: read a whole line into NAME$ (capped at SLEN)
-in_str: JSR  SVARGET                 ; P1 = &entry
-        TPA1L
-        STA  SAVE1
-        TPA1H
-        STA  SAVE1+1
-        TPA2L                        ; save program text pointer
-        STA  GTMP
-        TPA2H
-        STA  GTMP+1
-        LDA  #'?'
-        JSR  PUTC
-        LDA  #' '
-        JSR  PUTC
-        JSR  GETLINE                 ; reply -> LBUF
-        LDP2 #LBUF                    ; copy LBUF -> STRACC (len+data, capped)
-        LDP1 #STRACC
-        INP1
+in_str: JSR  SVARGET
+        LDA  MATCHF
+        JZ   SYNERR
+        LEAW SPD,(P1+6)      ; the string variable's value
+        JSR  in_ask
+        LDP1 #STRACCD        ; LBUF -> STRACC (len + data, capped at SLEN)
         LDA  #0
         STA  SI
 ins_cl: LDA  (P2)
@@ -1075,75 +866,217 @@ ins_cl: LDA  (P2)
         LDB  #SLEN
         CMP
         JC   ins_ce
-        LDA  (P2)
-        STA  (P1)
-        INP1
-        INP2
-        LDA  SI
         INC
         STA  SI
+        LDA  (P2)+
+        STA  (P1)+
         JMP  ins_cl
-ins_ce: LDP1 #STRACC
-        LDA  SI
-        STA  (P1)
-        LDW SPA,#STRACC                ; <- tierA: address constant (next: LDA)
-        LDA  SAVE1
-        LDB  #NAMLEN
-        ADD
-        STA  SPD
-        LDA  SAVE1+1
-        JNC  ins_s1
-        INC
-ins_s1: STA  SPD+1
+ins_ce: LDA  SI
+        STA  STRACC
+        LDW  SPA,#STRACC
         JSR  SMOVE
-        LPW2 GTMP                ; <- tierA: pointer load (next: RTS)
+        LPW2 GTMP
         RTS
-in_err: JMP  SYNERR
+; in_ask - save the parse cursor, prompt, read the reply into LBUF; P2 -> LBUF
+;   at the first non-blank.
+in_ask: TPA2L
+        STA  GTMP
+        TPA2H
+        STA  GTMP+1
+        LDA  #'?'
+        JSR  PUTC
+        LDA  #' '
+        JSR  PUTC
+        JSR  GETLINE
+        LDP2 #LBUF
+        JMP  SKIPSP
 
-; POKE <addr>, <val> — write the low byte of val to memory (I/O via memory map)
-DOPOKE: INP2
-        JSR  EVAL
-        MOVW POKEA,RESULT                ; <- tierA: word move (next: JSR SKIPSP)
+; GOSUB line - push (this line record, the text after the GOSUB), then branch
+DOGOSUB:INP2
+        JSR  SKIPSP
+        JSR  DOGOTON         ; target -> BRANCHN / BRANCHF; P2 past the number
+        JSR  SKIPSP          ; the return point is the next statement
+        LDA  (P2)
+        LDB  #':'
+        CMP
+        JNZ  gs_tp
+        INP2
+gs_tp:  LEAW GTMP,(P2+0)
+        LDA  GSP
+        LDB  #GSMAX
+        CMP
+        JC   SYNERR          ; too deep
+        SHL                  ; P1 = &GSTK[GSP] (4-byte frames, one page)
+        SHL
+        LDB  #<GSTK
+        ADD
+        TAP1L
+        LDA  #>GSTK
+        TAP1H
+        STW  (P1+0),CURLINE
+        STW  (P1+2),GTMP
+        LDA  GSP
+        INC
+        STA  GSP
+        RTS
+
+; RETURN - pop a return point and resume just after its GOSUB
+DORET:  INP2
+        LDA  GSP
+        JZ   ret_err
+        DEC
+        STA  GSP
+        SHL
+        SHL
+        LDB  #<GSTK
+        ADD
+        TAP1L
+        LDA  #>GSTK
+        TAP1H
+        LDW  CURLINE,(P1+0)
+        LDW  JUMPADDR,(P1+2)
+        LDA  #2
+        STA  JUMPF
+        RTS
+ret_err:LDP1 #MRG            ; ?RETURN WITHOUT GOSUB
+        JSR  PUTS
+        LDA  #1
+        STA  ENDF
+        RTS
+
+; FOR var = start TO limit [STEP n]
+; frame (9 bytes at FFP): [0] var index, [1..2] limit, [3..4] step,
+;   [5..6] loop-back line record, [7..8] loop-back text pointer
+DOFOR:  INP2
+        JSR  SKIPSP
+        JSR  VARGET          ; P1 = the loop variable's entry
+        LDA  MATCHF
+        JZ   SYNERR
+        LDA  VARIDX
+        STA  FORIDX          ; (EVAL below may call VARGET and clobber VARIDX)
+        LEAW SAVE1,(P1+6)
+        JSR  EXPECTEQ
+        JSR  EVAL            ; start value
+        LPW1 SAVE1
+        STW  (P1+0),RESULT
         JSR  SKIPSP
         LDA  (P2)
-        LDB  #','
+        LDB  #TOK_TO
         CMP
-        JNZ  pk_err
+        JNZ  SYNERR
+        INP2
+        JSR  EVAL            ; limit
+        MOVW FLIM,RESULT
+        LDW  FSTEP,#1
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #TOK_STEP
+        CMP
+        JNZ  for_push
         INP2
         JSR  EVAL
-        LPW1 POKEA                ; <- tierA: pointer load (next: LDA)
-        LDA  RESULT
+        MOVW FSTEP,RESULT
+for_push:
+        JSR  SKIPSP          ; loop-back point = the statement after the FOR
+        LDA  (P2)
+        LDB  #':'
+        CMP
+        JZ   fp_same
+        LPW1 CURLINE         ; FOR ends the line: loop back to the next line
+        INP1
+        INP1
+fp_sk:  LDA  (P1)+
+        JNZ  fp_sk
+        LEAW FLR,(P1+0)      ; the next record ...
+        LEAW FTP,(P1+2)      ; ... and its text
+        JMP  fp_alloc
+fp_same:LEAW FTP,(P2+1)      ; loop back to just after the ':' (P2 stays on it,
+        MOVW FLR,CURLINE     ;   so STMTLINE carries on now)
+fp_alloc:
+        LDA  FSP
+        JNZ  fp_adv
+        LDW  FFP,#FSTK       ; first frame
+        JMP  fp_w
+fp_adv: LDB  #FSMAX
+        CMP
+        JC   SYNERR          ; nested too deep
+        ADDW FFP,#9
+fp_w:   LPW1 FFP
+        LDA  FORIDX
         STA  (P1)
+        STW  (P1+1),FLIM
+        STW  (P1+3),FSTEP
+        STW  (P1+5),FLR
+        STW  (P1+7),FTP
+        LDA  FSP
+        INC
+        STA  FSP
         RTS
-pk_err: JMP  SYNERR
+
+; NEXT [var] - step the innermost FOR; loop back or pop the frame
+DONEXT: INP2
+        JSR  SKIPSP
+        LDA  (P2)            ; an optional variable name is consumed, not checked
+        JSR  ISLETTER
+        JNC  nx_go
+        JSR  VARGET
+nx_go:  LDA  FSP
+        JZ   SYNERR          ; NEXT without FOR
+        LPW1 FFP
+        LDA  (P1)
+        STA  VARIDX
+        LDW  FLIM,(P1+1)
+        LDW  FSTEP,(P1+3)
+        LDW  FLR,(P1+5)
+        LDW  FTP,(P1+7)
+        JSR  IDXADDR         ; P1 = the loop variable's entry
+        LDW  NUM1,(P1+6)
+        ADDW NUM1,FSTEP      ; var += step
+        STW  (P1+6),NUM1
+        CMPW NUM1,FLIM       ; signed: BLT = var < limit
+        BLT  nx_below
+        JNZ  nx_above        ; high bytes differ and not below: above
+        LDA  NUM1
+        LDB  FLIM
+        CMP
+        JZ   nx_loop         ; var == limit: the limit is inclusive
+nx_above:                    ; var > limit: an UP loop is finished
+        LDA  FSTEP+1
+        LDB  #$80
+        AND
+        JZ   nx_done
+        JMP  nx_loop
+nx_below:                    ; var < limit: a DOWN loop is finished
+        LDA  FSTEP+1
+        LDB  #$80
+        AND
+        JNZ  nx_done
+nx_loop:MOVW CURLINE,FLR
+        MOVW JUMPADDR,FTP
+        LDA  #2
+        STA  JUMPF
+        RTS
+nx_done:LDA  FSP             ; pop the frame
+        DEC
+        STA  FSP
+        JZ   nx_ret
+        SUBW FFP,#9
+nx_ret: RTS
 
 ;==============================================================================
-; GRAPHICS -- the classic statements (window space, like everything else
-; since 2026-08-30): COLOR / CLS / PIXELW / LINE / BOX / CIRCLE (and its
-; ellipse form), plus the PIXELR() function. All of them EMIT GL bytes
-; through GLPUT -- convenience spellings of the same verbs the PGC
-; statements in glkwtab.inc expose directly. The drawing engine is in the
-; card: there is no Bresenham here and no pixel masking -- which is the
-; whole reason the engine was put in hardware, since a filled box would
-; otherwise be 32640 read-modify-write cycles through a data port.
+; GRAPHICS -- everything EMITS GL bytes through GLPUT: the classic statements
+; (COLOR / CLS / PIXELW / LINE / BOX / CIRCLE, PIXELR()) are spellings of the
+; same verbs the generated PGC statements expose directly. The drawing engine
+; is in the card. Window space, y UP, 480x272 RGB565.
 ;==============================================================================
-
-; GCHECK — is a display actually there? An absent card floats the bus to $FF,
-; so 'G' at GLID is the ONE presence signal (the device door and its "PG"
-; signature closed with the single-interface migration). Without this, LINE on
-; a machine with no card would silently do nothing at all, which is the worst
-; possible failure for a graphics statement.
+; GCHECK - a display fitted? An absent card floats the bus to $FF; 'G' at GLID
+;   is the one presence signal. Without one, abandon the statement.
 GCHECK: LDA  GLIDR
         LDB  #'G'
         CMP
         JNZ  GNODEV
         RTS
-; No display: abandon the statement. Same unwind as SYNERR -- we are giving up
-; part-way through, so the stack has to go back to our entry SP.
-GNODEV: LDA  SPSAV
-        TAP3L
-        LDA  SPSAV+1
-        TAP3H
+GNODEV: LPW3 SPSAV           ; same unwind as SYNERR
         LDA  #0
         STA  OUTFILE
         STA  STRSINK
@@ -1151,31 +1084,15 @@ GNODEV: LDA  SPSAV
         JSR  PUTS
         JMP  REPL
 
-; ---- the MIGRATED drawing statements (2026-08-30) -----------------------
-; LINE/BOX/CIRCLE/CLS/PIXELW EMIT GL: window space (y up), transformed
-; by WINDOW/VWPORT, honouring LINPAT/LINFUN, RECORDING inside CLBEG/CLEND
-; like every GL statement, synchronous via the glv_dn drain. Every other
-; graphics statement followed: IMAGE rides the GL BLIT verb, PIXELR() is
-; the GL PIXRD verb (2026-08-31), and GTEXT is pure-GL 2D sugar over PGC
-; TEXT with the boot-loaded font (2026-09-01). Nothing here touches $FF20
-; any more -- the door itself closed with the single-interface migration.
-; PIXELR() stays a SCREEN-space read -- under the default window, screen
-; y is 271 - window y.
-
-; glchk -- graphics present, the DOGLV way (GNODEV restores SP itself, so
-; jumping there from inside a JSR is safe). Also primes GLFST for the
-; GLVSEP argument walk.
+; glchk - graphics present, and prime GLFST for the GLVSEP argument walk
 glchk:  JSR  GCHECK
         LDA  #1
         STA  GLFST
         RTS
 
-; glwin -- establish the FULL-SCREEN window and viewport. The raw port
-; powers up (and RESETF resets to) a DEGENERATE all-zero window that
-; draws nothing until a program speaks up -- correct for the PGC
-; stream, wrong for "10 CLS : 20 LINE ...". BASIC therefore emits this
-; pair at cold start and again after the native RESETF statement. A GL
-; "RF" STRING keeps the raw semantics -- documented in man basic.
+; glwin - the FULL-SCREEN window + viewport and a white pen. The raw port
+;   powers up (and RESETF resets to) a degenerate all-zero window that draws
+;   nothing; BASIC emits this at cold start and after the native RESETF.
 glwin:  LDP1 #glwtab
         LDA  #22
         STA  GLCNT
@@ -1188,413 +1105,10 @@ glw_l:  LDA  (P1)+
         RTS
 glwtab: .byte $B3,$00,$00,$DF,$01,$00,$00,$0F,$01   ; WINDOW 0,479,0,271
         .byte $B2,$00,$00,$DF,$01,$00,$00,$0F,$01   ; VWPORT 0,479,0,271
-        .byte $06,$1F,$3F,$1F                       ; COLOR 31,63,31: the pen
-                                                    ;   starts WHITE, not
-                                                    ;   whatever a previous
-                                                    ;   session left on the card
+        .byte $06,$1F,$3F,$1F                       ; COLOR 31,63,31
 
-; GLPW -- one int16 argument from RESULT to the GL FIFO, little-endian
-GLPW:   LDA  RESULT
-        JSR  GLPUT
-        LDA  RESULT+1
-        JMP  GLPUT
-
-; bxw -- one shadowed int16 (P1 -> lo,hi, both consumed) to the FIFO
-bxw:    LDA  (P1)+
-        JSR  GLPUT
-        LDA  (P1)+
-        JMP  GLPUT
-
-; bx_pf -- emit PRMFIL <A>, RAW: deliberately not through the PRMSH
-; capture, because BOX/CIRCLE's temporary flips are not the program's
-; setting (bx_rs puts the program's PRMSH back afterwards)
-bx_pf:  STA  GLDIM
-        LDA  #$E0
-        JSR  GLPUT
-        LDA  GLDIM
-        JMP  GLPUT
-
-; wflip -- window y to device row for the DEVICE-implemented statements
-; (2026-08-31: ONE coordinate system, the user's rule -- everything
-; counts y UP like the PGC). NUM1 = window y, NUM2 = the shape's extent
-; in device rows; returns NUM1 = 272 - (y + extent) = the device TOP
-; row. Extent 1 flips a single row (PIXELR), 7*size a glyph column
-; (once GTEXT's glyph column too -- gone 2026-09-01), the image height an
-; IMAGE (anchored at its BOTTOM-left). This is the fixed full-screen
-; mapping: unlike the drawing statements, these do NOT transform under
-; a program's WINDOW/VWPORT.
-wflip:  JSR  ADD16
-        JSR  n2n1
-        LDW NUM1,#272                ; <- tierA: word constant (next: JMP SUB16 -> LDA)
-        JMP  SUB16
-n2n1:   MOVW NUM2,NUM1                ; <- tierA: word move (next: RTS)
-        RTS
-
-; gxsh0/2/4 -- one parsed coordinate into its BXS shadow slot
-gxsh0:  MOVW BXS,RESULT                ; <- tierA: word move (next: RTS)
-        RTS
-gxsh2:  LDA  RESULT
-        STA  BXS+2
-        LDA  RESULT+1
-        STA  BXS+3
-        RTS
-gxsh4:  LDA  RESULT
-        STA  BXS+4
-        LDA  RESULT+1
-        STA  BXS+5
-        RTS
-
-; LINE x0,y0,x1,y1 -- GL: MOVE then DRAW. Nothing needs buffering, so
-; the bytes go out as the arguments parse.
-; Named DOGLINE, not DOLINE: DOLINE is already the program-line parser.
-DOGLINE: INP2                       ; consume the LINE token
-        JSR  glchk
-        LDA  #$10                   ; MOVE
-        JSR  GLPUT
-        JSR  GLVSEP
-        JSR  GLPW                   ; x0
-        JSR  GLVSEP
-        JSR  GLPW                   ; y0
-        LDA  #$28                   ; DRAW
-        JSR  GLPUT
-        JSR  GLVSEP
-        JSR  GLPW                   ; x1
-        JSR  GLVSEP
-        JSR  GLPW                   ; y1
-        JMP  glv_dn
-
-; COLOR c  |  COLOR r,g,b -- the pen is a whole RGB565 colour. One number is
-; a PACKED colour (RGB() builds one, and POINT returns one, so C=POINT(X,Y):
-; COLOR C round-trips); three numbers are r,b 0-31, g 0-63, packed here by
-; the same RGBTAIL the RGB() function uses. The comma decides, the same way
-; CIRCLE's optional second radius does.
-DOCOLOR: INP2
-        JSR  GCHECK
-        JSR  EVAL
-        JSR  SKIPSP
-        LDA  (P2)
-        LDB  #','
-        CMP
-        JNZ  dc_st                  ; no comma: RESULT is the packed colour
-        JSR  RGBTAIL                ; comma: RESULT was r; parse ,g,b and pack
-dc_st:  LDA  GLIDR                  ; the pen is PURE GL now (2026-09-01:
-                                    ;   GTEXT died and took the GPEN shadow
-                                    ;   with it -- IMAGE writes its own
-                                    ;   colours; nothing reads a pen back)
-        LDB  #'G'                   ;   both paths: unpack the 565 back to
-        CMP                         ;   r g b and set the card's pen too
-        JNZ  dc_rts                 ;   (and it records, inside a list)
-        LDA  #$06                   ; GL COLOR
-        JSR  GLPUT
-        LDA  RESULT+1               ; r = pen[15:11]
-        SHR
-        SHR
-        SHR
-        JSR  GLPUT
-        LDA  RESULT+1               ; g = pen[10:8] over pen[7:5]
-        LDB  #$07
-        AND
-        SHL
-        SHL
-        SHL
-        STA  GLCNT                  ; (GLPUT owns GLTMP)
-        LDA  RESULT
-        SHR
-        SHR
-        SHR
-        SHR
-        SHR
-        LDB  GLCNT
-        OR
-        JSR  GLPUT
-        LDA  RESULT                 ; b = pen[4:0]
-        LDB  #$1F
-        AND
-        JSR  GLPUT
-dc_rts: RTS
-
-; BOX x0,y0,x1,y1 [,FILL | ,NOFILL]   -- outline unless FILL is given.
-; GL: PRMFIL, MOVE, RECT, PRMFIL restored from PRMSH. The coordinates
-; buffer in BXS because the PRMFIL byte must precede them and the
-; FILL/NOFILL decision arrives last.
-; NOFILL has to be a real keyword, not just the default: with FILL tokenised and
-; NOFILL not, CRUNCH would match FILL *inside* the word NOFILL and a request for
-; an outline would silently draw a solid box.
-DOBOX:  INP2
-        JSR  glchk
-        JSR  GLVSEP
-        JSR  gxsh0                  ; x0
-        JSR  GLVSEP
-        JSR  gxsh2                  ; y0
-        JSR  GLVSEP
-        JSR  gxsh4                  ; x1
-        JSR  GLVSEP
-        LDA  RESULT                 ; y1
-        STA  BXS+6
-        LDA  RESULT+1
-        STA  BXS+7
-        JSR  SKIPSP
-        LDA  (P2)
-        LDB  #','
-        CMP
-        JNZ  bx_out                 ; no fifth argument -> outline
-        INP2
-        JSR  SKIPSP
-        LDA  (P2)
-        LDB  #TOK_FILL
-        CMP                         ; CMP preserves A, so the next test is valid
-        JZ   bx_fill
-        LDB  #TOK_NOFILL
-        CMP
-        JNZ  bx_err
-        INP2
-bx_out: LDA  #0                     ; PRMFIL 0: outline
-        JMP  bx_go
-bx_fill: INP2
-        LDA  #1                     ; PRMFIL 1: filled
-bx_go:  JSR  bx_pf
-        LDA  #$10                   ; MOVE x0 y0
-        JSR  GLPUT
-        LDP1 #BXS
-        JSR  bxw
-        JSR  bxw
-        LDA  #$34                   ; RECT x1 y1
-        JSR  GLPUT
-        JSR  bxw
-        JSR  bxw
-bx_rs:  LDA  #$E0                   ; PRMFIL back to the program's setting
-        JSR  GLPUT
-        LDA  PRMSH
-        JSR  GLPUT
-        JMP  glv_dn
-bx_err: JMP  SYNERR
-
-; CLS — clear to the BACKGROUND, which is what anyone typing CLS expects.
-; GL: FLOOD 0,0,0 erases the DRAW page across the current viewport (the
-; full screen by default). FLOOD carries its own colour, so the old
-; write-only-GCOL pen save/restore dance is gone with the device path.
-DOCLS:  INP2
-        JSR  glchk
-        LDA  #$07                   ; FLOOD r g b
-        JSR  GLPUT
-        LDA  #0
-        JSR  GLPUT
-        LDA  #0
-        JSR  GLPUT
-        LDA  #0
-        JSR  GLPUT
-        JMP  glv_dn
-
-; PIXELW x,y -- GL: MOVE then POINT, window space, current pen. (The
-; read twin PIXELR() stays a device SCREEN-space read: under the
-; default window, screen y = 271 - window y.)
-DOPIXW: INP2
-        JSR  glchk
-        LDA  #$10                   ; MOVE
-        JSR  GLPUT
-        JSR  GLVSEP
-        JSR  GLPW                   ; x
-        JSR  GLVSEP
-        JSR  GLPW                   ; y
-        LDA  #$08                   ; POINT
-        JSR  GLPUT
-        JMP  glv_dn
-
-; CIRCLE x,y,r [,ry] [,FILL | ,NOFILL] — centre and radius, outline unless
-; filled. GL: PRMFIL, MOVE, ELIPSE (rx=ry unless a second radius arrives),
-; PRMFIL restored from PRMSH. The radii map through the window->viewport
-; scale like every GL curve; a negative radius is GL error 2.
-DOCIRC: INP2
-        JSR  glchk
-        JSR  GLVSEP
-        JSR  gxsh0                  ; x
-        JSR  GLVSEP
-        JSR  gxsh2                  ; y
-        JSR  GLVSEP
-        JSR  gxsh4                  ; r -> rx, and ry until a second
-        LDA  RESULT                 ;   radius says otherwise
-        STA  BXS+6
-        LDA  RESULT+1
-        STA  BXS+7
-; What follows a comma here is EITHER the modifier or a second radius, and the
-; token tells them apart: FILL/NOFILL are keywords (>= $80), anything else starts
-; an expression. That is why NOFILL had to be a real keyword rather than merely
-; the default -- without it, `CIRCLE x,y,r,NOFILL` would try to EVAL "NOFILL".
-        JSR  SKIPSP
-        LDA  (P2)
-        LDB  #','
-        CMP
-        JNZ  ci_out                 ; nothing more: outline circle
-        INP2
-        JSR  SKIPSP
-        LDA  (P2)
-        LDB  #TOK_FILL
-        CMP
-        JZ   ci_fill
-        LDB  #TOK_NOFILL
-        CMP
-        JZ   ci_nof
-        JSR  EVAL                   ; a second radius -> ellipse
-        LDA  RESULT
-        STA  BXS+6
-        LDA  RESULT+1
-        STA  BXS+7
-        JSR  SKIPSP                 ; ... and it may still take a modifier
-        LDA  (P2)
-        LDB  #','
-        CMP
-        JNZ  ci_out
-        INP2
-        JSR  SKIPSP
-        LDA  (P2)
-        LDB  #TOK_FILL
-        CMP
-        JZ   ci_fill
-        LDB  #TOK_NOFILL
-        CMP
-        JNZ  ci_err
-ci_nof: INP2
-ci_out: LDA  #0                     ; PRMFIL 0: outline
-        JMP  ci_go
-ci_fill: INP2
-        LDA  #1                     ; PRMFIL 1: filled
-ci_go:  JSR  bx_pf
-        LDA  #$10                   ; MOVE x y
-        JSR  GLPUT
-        LDP1 #BXS
-        JSR  bxw
-        JSR  bxw
-        LDA  #$39                   ; ELIPSE rx ry
-        JSR  GLPUT
-        JSR  bxw
-        JSR  bxw
-        JMP  bx_rs                  ; PRMFIL restore + the drain
-ci_err: JMP  SYNERR
-
-; PALETTE is gone: there is no palette to write. An old tokenised program's
-; $AD byte no longer dispatches, so it falls through to the implicit-LET path
-; and reports ?SYNTAX ERROR -- the honest outcome for a statement whose
-; hardware left. RGB(r,g,b) is the forward path: colours are packed, not
-; installed.
-
-;==============================================================================
-; GTEXT x,y,size,s$ -- REBORN 2026-09-01 as the easy 2D text sugar, by
-; user demand (retired the same morning as the software rasterizer; back
-; as pure GL emission). Window coords, baseline-left anchor, ABSOLUTE
-; size in the old multiplier (1 = 1x, 2 = 2x ... = TSIZE size*256, low
-; byte, 0 clamps to 1), and it works in ANY session state: the emission
-; is PROJCT 0, MDIDEN, TSIZE, MDTRAN x y 0 (translation composes AFTER
-; the scale, so the anchor lands UNSCALED at window x,y), MOVE3 0 0 0,
-; then the string through glv_str (count + chars + the synchronous
-; drain). The DELIBERATE cost: the modeling matrix and the camera are
-; reset every call -- exactly what 2D programs want; 3D work keeps the
-; raw TEXT/TSIZE/TANGLE/TJUST verbs and their composing semantics.
-DOGTEXT: INP2
-        JSR  glchk                  ; GL engine + GLFST for GLVSEP
-        JSR  GLVSEP                 ; x
-        JSR  gxsh0
-        JSR  GLVSEP                 ; y
-        JSR  gxsh2
-        JSR  GLVSEP                 ; size: the old multiplier
-        LDA  RESULT
-        JNZ  gt_sz
-        LDA  #1                     ; size 0 would draw nothing at all
-gt_sz:  STA  BXS+4                  ; -> TSIZE's HIGH byte (= *256)
-        JSR  SKIPSP                 ; ',' then the string
-        LDA  (P2)
-        LDB  #','
-        CMP
-        JNZ  gt_err
-        INP2
-        LDA  #$B0                   ; PROJCT 0: text lives at z=0, which
-        JSR  GLPUT                  ;   the native camera near-clips
-        LDA  #0
-        JSR  GLPUT
-        LDA  #0
-        JSR  GLPUT
-        LDA  #$90                   ; MDIDEN
-        JSR  GLPUT
-        LDA  #$81                   ; TSIZE 0,size = size*256
-        JSR  GLPUT
-        LDA  #0
-        JSR  GLPUT
-        LDA  BXS+4
-        JSR  GLPUT
-        LDA  #$96                   ; MDTRAN x y 0
-        JSR  GLPUT
-        LDP1 #BXS
-        JSR  bxw                    ; x
-        JSR  bxw                    ; y
-        LDA  #0
-        JSR  GLPUT
-        LDA  #0
-        JSR  GLPUT
-        LDA  #$12                   ; MOVE3 0 0 0
-        JSR  GLPUT
-        LDA  #0
-        JSR  GLPUT
-        JSR  GLPUT
-        JSR  GLPUT
-        JSR  GLPUT
-        JSR  GLPUT
-        JSR  GLPUT
-        LDA  #$80                   ; TEXT, then glv_str does the string
-        JSR  GLPUT
-        JMP  glv_str
-gt_err: JMP  SYNERR
-
-;==============================================================================
-; (the OLD GTEXT, the software rasterizer, is GONE: text is the
-; PGC's own -- MOVE x,y : TEXT s$ (TSIZE/TANGLE/TJUST scale, rotate and
-; justify), drawn card-side from the stroke font the OS streams from
-; /FONT.GL at boot (the glyph bank survives RESETF by design). The old
-; token $AF no longer dispatches, so a saved program's GTEXT line reports
-; ?SYNTAX ERROR -- the PALETTE precedent. With it went the software
-; rasterizer, the font57 bitmap table, its BASRAM working set, and the
-; GPEN device-pen shadow (GTEXT was its last consumer).
-;==============================================================================
-
-;------------------------------------------------------------------------------
-; GL string$ — send one ASCII graphics-language line to the GL engine
-; (stage 10d, man gl). The string is wrapped "CA " ... CR "CX " so the
-; card is back in HEX mode afterwards (every other tool assumes hex).
-; Build fly-throughs with string arithmetic:  GL "VWY "+STR$(A)+" CR 0".
-; No display or no GL engine abandons the statement, the GNODEV way.
-DOGL:   INP2                        ; consume the GL token
-        JSR  GCHECK
-        LDA  GLIDR
-        LDB  #'G'
-        CMP
-        JNZ  GNODEV
-        JSR  SEVAL                  ; string -> STRACC=[len], data at STRACCD
-        LDA  #'C'
-        JSR  GLPUT
-        LDA  #'A'
-        JSR  GLPUT
-        LDA  #' '
-        JSR  GLPUT
-        LDP1 #STRACCD                ; <- tierA: pointer constant (next: LDA)
-        LDA  STRACC
-        STA  GLN
-gl_ch:  LDA  GLN
-        JZ   gl_end
-        DEC
-        STA  GLN
-        LDA  (P1)
-        JSR  GLPUT
-        INP1
-        JMP  gl_ch
-gl_end: LDA  #13                    ; a CR finishes the last token
-        JSR  GLPUT
-        LDA  #'C'
-        JSR  GLPUT
-        LDA  #'X'
-        JSR  GLPUT
-        LDA  #' '
-        JSR  GLPUT
-        RTS
-
-; one byte to the GL FIFO, honouring the full bit (GLSTAT bit 7)
+; GLPUT - one byte to the GL FIFO, honouring the full bit (GLSTAT bit 7).
+;   Preserves nothing but the byte's meaning; A is clobbered.
 GLPUT:  STA  GLTMP
 glp_w:  LDA  GLSTATR
         LDB  #$80
@@ -1604,64 +1118,352 @@ glp_w:  LDA  GLSTATR
         STA  GLDATAR
         RTS
 
-; ---- the native GL verb statements (tokens GLV0..GLV0+GLVN-1) ---------
-; ONE handler for all 51. The verb index (in A from the dispatcher)
-; picks the GLVTAB entry gen_glkw.py wrote: the GL opcode and a meta
-; byte {var<<7 | bcnt<<4 | word-arity}. The opcode goes to the FIFO,
-; then bcnt byte-width params, then the int16 params little-endian --
-; every argument a full expression, comma-separated, the first bare:
-;     MDROTY A*2       DRAW3 90,-90,300     CLOOP 0,72
-; POLY/POLYR/POLY3/POLYR3 (var) take a count, then count vertices of 2
-; or 3 coordinates (3 when opcode bit 1 -- the 3D forms):
-;     POLY3 3,-80,-80,300,80,-80,300,0,40,420
-; The card is in HEX mode by invariant -- power-up default, and every
-; tool that switches away switches back -- so the bytes go raw, no
-; CA/CX. Inside CLBEG/CLEND these statements RECORD instead of draw,
-; so a BASIC loop can build a command list. No display or no GL engine
-; abandons the statement, the GNODEV way.
-DOGLV:  STA  GLTMP                  ; the verb index
-        INP2                        ; consume the token
+; GLPW - RESULT to the FIFO as an int16, little-endian
+GLPW:   LDA  RESULT
+        JSR  GLPUT
+        LDA  RESULT+1
+        JMP  GLPUT
+
+; bxw - one shadowed int16 at (P1) to the FIFO (P1 advanced)
+bxw:    LDA  (P1)+
+        JSR  GLPUT
+        LDA  (P1)+
+        JMP  GLPUT
+
+; bx_pf - emit PRMFIL <A> raw (BOX/CIRCLE's temporary flip is not the program's
+;   setting; bx_rs restores PRMSH afterwards)
+bx_pf:  STA  GLDIM
+        LDA  #$E0
+        JSR  GLPUT
+        LDA  GLDIM
+        JMP  GLPUT
+
+; glarg0/1/2/3 - one comma-separated argument into BXS slot 0..3
+glarg0: JSR  GLVSEP
+        MOVW BXS,RESULT
+        RTS
+glarg1: JSR  GLVSEP
+        MOVW BXS+2,RESULT
+        RTS
+glarg2: JSR  GLVSEP
+        MOVW BXS+4,RESULT
+        RTS
+glarg3: JSR  GLVSEP
+        MOVW BXS+6,RESULT
+        RTS
+
+; LINE x0,y0,x1,y1 -- GL: MOVE x0 y0, DRAW x1 y1 (streamed as the arguments parse)
+DOGLINE:INP2
+        JSR  glchk
+        LDA  #$10            ; MOVE
+        JSR  GLPUT
+        JSR  GLVSEP
+        JSR  GLPW
+        JSR  GLVSEP
+        JSR  GLPW
+        LDA  #$28            ; DRAW
+        JSR  GLPUT
+        JSR  GLVSEP
+        JSR  GLPW
+        JSR  GLVSEP
+        JSR  GLPW
+        JMP  glv_dn
+
+; COLOR c  |  COLOR r,g,b -- the pen is a whole RGB565 colour: one number is a
+; PACKED colour (RGB() builds one, PIXELR() returns one), three are r,b 0-31 and
+; g 0-63 packed by RGBTAIL. Emitted as GL COLOR r g b.
+DOCOLOR:INP2
         JSR  GCHECK
-        LDA  GLIDR
+        JSR  EVAL
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #','
+        CMP
+        JNZ  dc_st
+        JSR  RGBTAIL         ; RESULT was r; parse ,g,b and pack
+dc_st:  LDA  GLIDR
         LDB  #'G'
         CMP
-        JNZ  GNODEV
-        LDA  GLTMP                  ; P1 = GLVTAB + index*2
+        JNZ  dc_rts
+        LDA  #$06            ; GL COLOR
+        JSR  GLPUT
+        LDA  RESULT+1        ; r = pen[15:11]
+        SHR
+        SHR
+        SHR
+        JSR  GLPUT
+        LDA  RESULT+1        ; g = pen[10:8] over pen[7:5]
+        LDB  #$07
+        AND
+        SHL
+        SHL
+        SHL
+        STA  GLCNT
+        LDA  RESULT
+        SHR
+        SHR
+        SHR
+        SHR
+        SHR
+        LDB  GLCNT
+        OR
+        JSR  GLPUT
+        LDA  RESULT          ; b = pen[4:0]
+        LDB  #$1F
+        AND
+        JMP  GLPUT
+dc_rts: RTS
+
+; BOX x0,y0,x1,y1 [,FILL | ,NOFILL] -- GL: PRMFIL, MOVE, RECT, PRMFIL restored.
+; The coordinates buffer in BXS because the PRMFIL byte must precede them and
+; the FILL/NOFILL decision arrives last. (NOFILL is a real keyword: otherwise
+; CRUNCH would match FILL inside the word and draw a solid box.)
+DOBOX:  INP2
+        JSR  glchk
+        JSR  glarg0
+        JSR  glarg1
+        JSR  glarg2
+        JSR  glarg3
+        JSR  FILLMOD         ; A = 0 outline / 1 filled
+        JSR  bx_pf
+        LDA  #$10            ; MOVE x0 y0
+        JSR  GLPUT
+        LDP1 #BXS
+        JSR  bxw
+        JSR  bxw
+        LDA  #$34            ; RECT x1 y1
+        JSR  GLPUT
+        JSR  bxw
+        JSR  bxw
+bx_rs:  LDA  #$E0            ; PRMFIL back to the program's setting
+        JSR  GLPUT
+        LDA  PRMSH
+        JSR  GLPUT
+        JMP  glv_dn
+
+; FILLMOD - an optional ",FILL" / ",NOFILL" at (P2): A = 1 / 0 (0 if absent),
+;   consumed. Anything else after the comma is a syntax error.
+FILLMOD:JSR  SKIPSP
+        LDA  (P2)
+        LDB  #','
+        CMP
+        JNZ  fm_out
+        INP2
+        JSR  SKIPSP
+        JSR  FILLKW          ; C=1: FILL/NOFILL consumed, A = 1/0
+        JNC  SYNERR
+        RTS
+fm_out: LDA  #0
+        RTS
+
+; FILLKW - is (P2) the FILL or NOFILL token? C=1 and A = 1 / 0 with it consumed;
+;   C=0 (P2 unchanged) otherwise.
+FILLKW: LDA  (P2)
+        LDB  #TOK_FILL
+        CMP
+        JZ   fk_fill
+        LDB  #TOK_NOFILL
+        CMP
+        JNZ  fk_no
+        INP2
+        LDA  #0
+        SEC
+        RTS
+fk_fill:INP2
+        LDA  #1
+        SEC
+        RTS
+fk_no:  CLC
+        RTS
+
+; CLS -- GL FLOOD 0,0,0: clear to the background across the current viewport
+DOCLS:  INP2
+        JSR  glchk
+        LDA  #$07            ; FLOOD r g b
+        JSR  GLPUT
+        LDA  #0
+        JSR  GLPUT
+        LDA  #0
+        JSR  GLPUT
+        LDA  #0
+        JSR  GLPUT
+        JMP  glv_dn
+
+; PIXELW x,y -- GL: MOVE then POINT, current pen
+DOPIXW: INP2
+        JSR  glchk
+        LDA  #$10            ; MOVE
+        JSR  GLPUT
+        JSR  GLVSEP
+        JSR  GLPW
+        JSR  GLVSEP
+        JSR  GLPW
+        LDA  #$08            ; POINT
+        JSR  GLPUT
+        JMP  glv_dn
+
+; CIRCLE x,y,r [,ry] [,FILL | ,NOFILL] -- GL: PRMFIL, MOVE, ELIPSE rx ry,
+; PRMFIL restored. After a comma the TOKEN decides: FILL/NOFILL is a keyword
+; (>= $80), anything else starts the second radius's expression.
+DOCIRC: INP2
+        JSR  glchk
+        JSR  glarg0          ; x
+        JSR  glarg1          ; y
+        JSR  glarg2          ; r -> rx ...
+        MOVW BXS+6,RESULT    ; ... and ry until a second radius says otherwise
+        JSR  SKIPSP
+        LDA  (P2)
+        LDB  #','
+        CMP
+        JNZ  ci_out
+        INP2
+        JSR  SKIPSP
+        JSR  FILLKW
+        JC   ci_go
+        JSR  EVAL            ; a second radius -> ellipse
+        MOVW BXS+6,RESULT
+        JSR  FILLMOD         ; ... and it may still take a modifier
+        JMP  ci_go
+ci_out: LDA  #0
+ci_go:  JSR  bx_pf
+        LDA  #$10            ; MOVE x y
+        JSR  GLPUT
+        LDP1 #BXS
+        JSR  bxw
+        JSR  bxw
+        LDA  #$39            ; ELIPSE rx ry
+        JSR  GLPUT
+        JSR  bxw
+        JSR  bxw
+        JMP  bx_rs
+
+; GTEXT x,y,size,s$ -- easy 2D text: PROJCT 0, MDIDEN, TSIZE size*256,
+; MDTRAN x y 0, MOVE3 0 0 0, TEXT s$. Window coords, baseline-left anchor,
+; absolute size (0 clamps to 1); the modeling matrix and camera are reset on
+; purpose -- 3D work uses the raw TEXT/TSIZE/TANGLE/TJUST verbs.
+DOGTEXT:INP2
+        JSR  glchk
+        JSR  glarg0          ; x
+        JSR  glarg1          ; y
+        JSR  GLVSEP          ; size
+        LDA  RESULT
+        JNZ  gt_sz
+        LDA  #1
+gt_sz:  STA  BXS+4           ; TSIZE's high byte (= *256)
+        JSR  EXPECTCOMMA
+        LDP1 #gttab          ; PROJCT 0 ; MDIDEN ; TSIZE 0,
+        LDA  #6
+        STA  GLCNT
+gt_l:   LDA  (P1)+
+        JSR  GLPUT
+        LDA  GLCNT
+        DEC
+        STA  GLCNT
+        JNZ  gt_l
+        LDA  BXS+4
+        JSR  GLPUT
+        LDA  #$96            ; MDTRAN x y 0
+        JSR  GLPUT
+        LDP1 #BXS
+        JSR  bxw
+        JSR  bxw
+        LDA  #0
+        JSR  GLPUT
+        LDA  #0
+        JSR  GLPUT
+        LDA  #$12            ; MOVE3 0 0 0
+        JSR  GLPUT
+        LDA  #6
+        STA  GLCNT
+gt_z:   LDA  #0
+        JSR  GLPUT
+        LDA  GLCNT
+        DEC
+        STA  GLCNT
+        JNZ  gt_z
+        LDA  #$80            ; TEXT, then glv_str sends the string
+        JSR  GLPUT
+        JMP  glv_str
+gttab:  .byte $B0,$00,$00,$90,$81,$00
+
+; GL string$ -- one ASCII graphics-language line, wrapped "CA " ... CR "CX "
+; so the card is back in HEX mode afterwards. Asynchronous (no drain).
+DOGL:   INP2
+        JSR  GCHECK
+        JSR  SEVAL           ; STRACC = the line
+        LDA  #'C'
+        JSR  GLPUT
+        LDA  #'A'
+        JSR  GLPUT
+        LDA  #' '
+        JSR  GLPUT
+        JSR  glsend          ; the characters
+        LDA  #13             ; a CR finishes the last token
+        JSR  GLPUT
+        LDA  #'C'
+        JSR  GLPUT
+        LDA  #'X'
+        JSR  GLPUT
+        LDA  #' '
+        JMP  GLPUT
+
+; glsend - the STRACC characters to the FIFO
+glsend: LDP1 #STRACCD
+        LDA  STRACC
+        STA  GLN
+gls_l:  LDA  GLN
+        JZ   gls_d
+        DEC
+        STA  GLN
+        LDA  (P1)+
+        JSR  GLPUT
+        JMP  gls_l
+gls_d:  RTS
+
+; ---- the native GL verb statements (tokens GLV0..GLV0+GLVN-1) ---------------
+; ONE handler for all of them. The verb index (in A from STMT) picks the GLVTAB
+; entry gen_glkw.py wrote: the GL opcode and a meta byte {var<<7 | bcnt<<4 |
+; word-arity}. The opcode goes to the FIFO, then bcnt byte-width params, then
+; the int16 params little-endian -- every argument an expression, the first
+; bare, the rest after commas. POLY* (var) take a count then count vertices of
+; 2 or 3 words (3 when opcode bit 1). Synchronous: glv_dn drains busy.
+DOGLV:  STA  GLTMP
+        INP2
+        JSR  GCHECK
+        LDA  GLTMP           ; P1 = &GLVTAB[index]
         SHL
         LDB  #<GLVTAB
         ADD
         TAP1L
-        LDA  #0                     ; capture the carry (LDA leaves C alone)
-        JNC  glv_hi
-        LDA  #1
-glv_hi: LDB  #>GLVTAB
+        LDA  #0
+        ROL
+        LDB  #>GLVTAB
         ADD
         TAP1H
-        LDA  (P1)                   ; opcode, meta -- read BEFORE any EVAL
-        STA  GLOP                   ;   (expressions are licensed to walk P1)
-        INP1
-        LDA  (P1)
+        LDA  (P1)            ; read BEFORE any EVAL (expressions walk P1)
+        STA  GLOP
+        LDA  (P1+1)
         STA  GLMETA
         LDA  GLOP
-        JSR  GLPUT                  ; the opcode
+        JSR  GLPUT           ; the opcode
         LDA  GLOP
-        LDB  #$04                   ; RESETF: the card's PRMFIL goes home,
-        CMP                         ;   so the shadow follows it -- and the
-        JNZ  glv_nr                 ;   full-screen window comes back (the
-        LDA  #0                     ;   card resets it DEGENERATE; see glwin)
+        LDB  #$04            ; RESETF: the card's PRMFIL goes home and the
+        CMP                  ;   window comes back degenerate -- follow it
+        JNZ  glv_nr
+        LDA  #0
         STA  PRMSH
         JSR  glwin
 glv_nr: LDA  GLMETA
-        LDB  #$FF                   ; meta $FF: the string statement (TEXT)
-        CMP                         ;   -- gen_glkw marks it; the hex shape
-        JZ   glv_str                ;   is opcode, count, then the chars
+        LDB  #$FF            ; meta $FF: the string statement (TEXT)
+        CMP
+        JZ   glv_str
         LDA  #1
         STA  GLFST
         LDA  GLMETA
         LDB  #$80
         AND
-        JNZ  glv_var                ; POLY* go the count-then-vertices way
-        LDA  GLMETA                 ; bcnt: byte-width params first
+        JNZ  glv_var         ; POLY*: count then vertices
+        LDA  GLMETA          ; bcnt byte params first
         SHR
         SHR
         SHR
@@ -1673,15 +1475,15 @@ glv_bl: LDA  GLCNT
         STA  GLCNT
         JSR  GLVSEP
         LDA  GLOP
-        LDB  #$E0                   ; PRMFIL: shadow the program's setting
-        CMP                         ;   (BOX/CIRCLE restore from it)
+        LDB  #$E0            ; PRMFIL: shadow the program's setting
+        CMP
         JNZ  glv_np
         LDA  RESULT
         STA  PRMSH
 glv_np: LDA  RESULT
-        JSR  GLPUT                  ; byte param: the low byte only
+        JSR  GLPUT           ; the low byte only
         JMP  glv_bl
-glv_w0: LDA  GLMETA                 ; then the int16 params
+glv_w0: LDA  GLMETA          ; then the int16 params
         LDB  #$0F
         AND
         STA  GLCNT
@@ -1690,122 +1492,81 @@ glv_wl: LDA  GLCNT
         DEC
         STA  GLCNT
         JSR  GLVSEP
-        LDA  RESULT
-        JSR  GLPUT                  ; little-endian, low then high
-        LDA  RESULT+1
-        JSR  GLPUT
+        JSR  GLPW
         JMP  glv_wl
-glv_dn: LDA  GLSTATR                ; native statements are SYNCHRONOUS:
-        LDB  #$40                   ;   drain busy (bit 6) so a POINT()
-        AND                         ;   right after a draw reads finished
-        JNZ  glv_dn                 ;   pixels on silicon, exactly as it
-        RTS                         ;   does in the emulator. GL s$ stays
-                                    ;   the async path (fly-throughs).
+glv_dn: LDA  GLSTATR         ; drain busy (bit 6): a PIXELR right after a draw
+        LDB  #$40            ;   reads finished pixels, on silicon as in the emulator
+        AND
+        JNZ  glv_dn
+        RTS
 
-glv_str: JSR  SEVAL                 ; TEXT s$: any string expression
+glv_str:JSR  SEVAL           ; TEXT s$: count byte, the chars, then the drain
         LDA  STRACC
-        JSR  GLPUT                  ; the count byte
-        LDP1 #STRACCD                ; <- tierA: pointer constant (next: LDA)
-        LDA  STRACC
-        STA  GLN
-glv_sc: LDA  GLN
-        JZ   glv_dn                 ; then drain busy: synchronous, like
-        DEC                         ;   every native GL statement
-        STA  GLN
-        LDA  (P1)
         JSR  GLPUT
-        INP1
-        JMP  glv_sc
+        JSR  glsend
+        JMP  glv_dn
 
-glv_var: JSR GLVSEP                 ; the vertex count
+glv_var:JSR  GLVSEP          ; the vertex count, to the FIFO as a byte
         LDA  RESULT
         STA  GLN
-        JSR  GLPUT                  ; ... goes to the FIFO as a byte
+        JSR  GLPUT
         LDA  #2
         STA  GLDIM
-        LDA  GLOP                   ; opcode bit 1 -> 3D, three words each
+        LDA  GLOP            ; opcode bit 1 -> 3D: three words per vertex
         LDB  #2
         AND
         JZ   glv_vl
         LDA  #3
         STA  GLDIM
-glv_vl: LDA  GLN                    ; per vertex ...
+glv_vl: LDA  GLN
         JZ   glv_dn
         DEC
         STA  GLN
         LDA  GLDIM
         STA  GLCNT
-glv_vw: LDA  GLCNT                  ; ... per coordinate
+glv_vw: LDA  GLCNT
         JZ   glv_vl
         DEC
         STA  GLCNT
         JSR  GLVSEP
-        LDA  RESULT
-        JSR  GLPUT
-        LDA  RESULT+1
-        JSR  GLPUT
+        JSR  GLPW
         JMP  glv_vw
 
-; comma rule + expression: the first argument follows the keyword bare,
-; every later one needs its comma. Result in RESULT.
+; GLVSEP - the comma rule + an expression: the first argument follows the
+;   keyword bare, every later one needs its comma. Result in RESULT.
 GLVSEP: LDA  GLFST
         JZ   glvs_c
         LDA  #0
         STA  GLFST
-        JMP  glvs_e
-glvs_c: JSR  SKIPSP
-        LDA  (P2)
-        LDB  #','
-        CMP
-        JNZ  glvs_x
-        INP2
-glvs_e: JMP  EVAL
-glvs_x: JMP  SYNERR
+        JMP  EVAL
+glvs_c: JSR  EXPECTCOMMA
+        JMP  EVAL
 
-; IMAGE x,y,name$ — draw a P8I image file with its top-left corner at (x,y).
-;
-; The file describes itself — magic, version, geometry, depth (see
-; tools/p8img.py and STAGE6-DESIGN.md) — so this statement cannot be lied to
-; about the size: geometry in the arguments would let a wrong guess SHEAR the
-; picture into plausible garbage. The payload is little-endian RGB565, which is
-; exactly the order BLIT's payload wants, so the inner loop is two file bytes
-; pushed verbatim. Off-screen pixels are CLIPPED by the engine, so an image at
-; the edge clips for free, the same rule everything else follows.
-;
-; Uses the one data channel's machinery (SETFNAME, FOPEN into PBUF, FGETB), so
-; a file OPEN'd for INPUT is closed by IMAGE — same licence SAVE/LOAD take.
-; A file that is not P8I, the wrong version or depth, or that ends early says
-; ?NOT P8I; whatever pixels arrived before a truncation stay drawn.
-DOIMAGE: INP2
+; IMAGE x,y,name$ -- draw a P8I file, bottom-left at (x,y): one GL BLIT per
+; row -- header (x, row y, w, 1) then 2*w raw file bytes straight to the FIFO
+; (P8I rows are top-down RGB565 little-endian, the BLIT payload verbatim). A
+; short file pads the row in flight with zeros (the walker must get every byte
+; it is owed) and stops with ?NOT P8I. Uses the data channel's machinery, so an
+; OPEN file is closed by IMAGE.
+DOIMAGE:INP2
         JSR  GCHECK
-        JSR  EVAL                   ; x
-        MOVW IMX,RESULT                ; <- tierA: word move (next: JSR SKIPSP)
-        JSR  SKIPSP
-        LDA  (P2)
-        LDB  #','
-        CMP
-        JNZ  img_syn
-        INP2
-        JSR  EVAL                   ; y
-        MOVW IMYC,RESULT                ; <- tierA: word move (next: JSR SKIPSP)
-        JSR  SKIPSP
-        LDA  (P2)
-        LDB  #','
-        CMP
-        JNZ  img_syn
-        INP2
-        JSR  SETFNAME               ; DIRLBA + FNAME = the resolved path
-        TPA2L                       ; the parse cursor sleeps through the file
-        PHA                         ; phase: FGETB CLOBBERS P1 *AND* P2 on its
-        TPA2H                       ; refill path -- the OS says so at MKSP,
-        PHA                         ; and the claim here that it spares P2 was
-                                    ; wrong past the first buffer-load
+        JSR  EVAL            ; x
+        MOVW IMX,RESULT
+        JSR  EXPECTCOMMA
+        JSR  EVAL            ; y
+        MOVW IMYC,RESULT
+        JSR  EXPECTCOMMA
+        JSR  SETFNAME        ; dir + FNAME = the resolved path
+        TPA2L                ; the parse cursor sleeps through the file phase
+        PHA                  ;   (FGETB clobbers P1 AND P2 on a refill)
+        TPA2H
+        PHA
         LDP1 #PBUF
         JSR  FOPEN
         JC   img_nf
         LDA  #0
-        STA  FMODE                  ; the channel is ours; it stays closed after
-        JSR  IMGB                   ; ---- the header owns the next ten bytes
+        STA  FMODE           ; the channel is ours; it stays closed after
+        JSR  IMGB            ; ---- header: "P8I", version 1
         LDB  #'P'
         CMP
         JNZ  img_bad
@@ -1818,23 +1579,23 @@ DOIMAGE: INP2
         CMP
         JNZ  img_bad
         JSR  IMGB
-        LDB  #1                     ; version 1 or nothing
+        LDB  #1
         CMP
         JNZ  img_bad
         JSR  IMGB
-        STA  IMW                    ; width, little-endian
+        STA  IMW             ; width, little-endian
         JSR  IMGB
         STA  IMW+1
         JSR  IMGB
-        STA  IMH                    ; height
+        STA  IMH             ; height
         JSR  IMGB
         STA  IMH+1
         JSR  IMGB
-        LDB  #16                    ; depth: RGB565 or nothing
+        LDB  #16             ; depth: RGB565 or nothing
         CMP
         JNZ  img_bad
-        JSR  IMGB                   ; reserved, ignored
-        LDA  IMW                    ; a zero dimension is legal and draws nothing
+        JSR  IMGB            ; reserved
+        LDA  IMW             ; a zero dimension draws nothing
         LDB  IMW+1
         OR
         JZ   img_done
@@ -1842,586 +1603,164 @@ DOIMAGE: INP2
         LDB  IMH+1
         OR
         JZ   img_done
-        ; ---- SINGLE-INTERFACE (2026-09-01): the drawing is ONE GL BLIT
-        ; per row -- header (x, row-y, w, 1) then 2*w raw file bytes
-        ; STRAIGHT to the FIFO (P8I rows are already top-down RGB565
-        ; little-endian, the BLIT payload verbatim). BLIT maps the
-        ; anchor through the CURRENT window like every verb, so IMAGE's
-        ; old fixed-mapping caveat is GONE -- and so is BASIC's last
-        ; device-door write. Per-row headers keep every count 16-bit
-        ; and bound the damage of a SHORT file: the row in flight is
-        ; padded with zeros (the walker must get every byte it is owed
-        ; -- underfeeding wedges the stream), then the statement stops.
-        ; IMYC = the current row's window y, starting at y + h - 1
-        ; (the file's first row is the image's TOP); IMCX counts the
-        ; row's payload bytes; IMH counts rows.
-        MOVW NUM2,IMH                ; <- tierA: word move (next: LDA)
-        MOVW NUM1,IMYC                ; <- tierA: word move (next: JSR ADD16)
-        JSR  ADD16
-        LDA  NUM1
-        LDB  #1
-        SUB
-        STA  IMYC
-        LDA  #0
-        JC   img_tc
-        LDA  #1
-img_tc: STA  GLCNT                  ; borrow into the high byte
-        LDA  NUM1+1
-        LDB  GLCNT
-        SUB
-        STA  IMYC+1
-img_row: LDA #$64                   ; BLIT header: opcode
+        ADDW IMYC,IMH        ; the first file row is the image's TOP: y + h - 1
+        DECW IMYC
+img_row:LDA  #$64            ; BLIT x y w 1
         JSR  GLPUT
-        LDA  IMX                    ; x (bottom-left of THIS row)
+        LDA  IMX
         JSR  GLPUT
         LDA  IMX+1
         JSR  GLPUT
-        LDA  IMYC                   ; the row's window y
+        LDA  IMYC
         JSR  GLPUT
         LDA  IMYC+1
         JSR  GLPUT
-        LDA  IMW                    ; w
+        LDA  IMW
         JSR  GLPUT
         LDA  IMW+1
         JSR  GLPUT
-        LDA  #1                     ; h = 1
+        LDA  #1
         JSR  GLPUT
         LDA  #0
         JSR  GLPUT
-        LDA  IMW                    ; IMCX = 2*w payload bytes
-        SHL
-        STA  IMCX
-        LDA  IMW+1
-        ROL
-        STA  IMCX+1
-img_px: JSR  IMGB                   ; one payload byte...
-        JC   img_pad                ; short file: pad + abort
-        JSR  GLPUT                  ; ...straight to the FIFO
-img_nx: LDA  IMCX                   ; bytes--
-        LDB  #1
-        SUB
-        STA  IMCX
-        JC   img_c1
-        LDA  IMCX+1
-        LDB  #1
-        SUB
-        STA  IMCX+1
-img_c1: LDA  IMCX
+        MOVW IMCX,IMW        ; 2*w payload bytes
+        ADDW IMCX,IMCX
+img_px: JSR  IMGB
+        JC   img_pad         ; short file: pad the row, then abort
+        JSR  GLPUT
+img_nx: DECW IMCX
+        LDA  IMCX
         LDB  IMCX+1
         OR
         JNZ  img_px
-        LDA  IMYC                   ; row done: y-- (down the screen)
-        LDB  #1
-        SUB
-        STA  IMYC
-        JC   img_y1
-        LDA  IMYC+1
-        LDB  #1
-        SUB
-        STA  IMYC+1
-img_y1: LDA  IMH                    ; rows--
-        LDB  #1
-        SUB
-        STA  IMH
-        JC   img_h1
-        LDA  IMH+1
-        LDB  #1
-        SUB
-        STA  IMH+1
-img_h1: LDA  IMH
+        DECW IMYC            ; next row, down the screen
+        DECW IMH
+        LDA  IMH
         LDB  IMH+1
         OR
         JNZ  img_row
         JMP  img_done
-img_pad: LDA #0                     ; the walker is owed the rest of the
-        JSR  GLPUT                  ;   row: zeros keep the stream in
-        LDA  IMCX                   ;   sync, then the statement aborts
-        LDB  #1                     ;   the NOT-P8I way
-        SUB
-        STA  IMCX
-        JC   img_p1
-        LDA  IMCX+1
-        LDB  #1
-        SUB
-        STA  IMCX+1
-img_p1: LDA  IMCX
+img_pad:LDA  #0
+        JSR  GLPUT
+        DECW IMCX
+        LDA  IMCX
         LDB  IMCX+1
         OR
         JNZ  img_pad
         JMP  img_bad
-
-img_done: PLA                     ; the parse cursor, back from before the file
+img_done:
+        PLA                  ; the parse cursor, back from before the file
         TAP2H
         PLA
         TAP2L
         RTS
-img_syn: JMP  SYNERR                ; pre-push: SYNERR unwinds SP itself
 img_nf: LDA  #0
         STA  FMODE
         LDP1 #MNOFILE
         JSR  PUTS
         JMP  img_done
-img_bad: LDP1 #MNOTIMG
+img_bad:LDP1 #MNOTIMG
         JSR  PUTS
         JMP  img_done
 
-; IMGB — the next file byte -> A. On EOF it ABANDONS the statement: the two
-; return-address bytes JSR pushed are popped and control goes to the ?NOT P8I
-; report, so a truncated file cannot hang the pixel loop waiting for data.
+; IMGB - the next file byte -> A (C=0). At EOF it ABANDONS the statement: its
+;   own return address is popped and control goes to the ?NOT P8I report.
 IMGB:   JSR  FGETB
         JC   imgb_e
         RTS
-imgb_e: PLA                         ; drop IMGB's own return address...
+imgb_e: PLA
         PLA
-        JMP  img_bad                ; ...and report from the statement's level
-
-
-; (GTADVX/GTBLK, GTEXT's advance and block plotter, left with it 2026-09-01)
-
-; REM — comment: ignore the rest of the line
-DOREM:  LDA  (P2)
-        JZ   rem_d
-        INP2
-        JMP  DOREM
-rem_d:  RTS
-
-; GOSUB <line> — push return (line after this one), then branch to <line>
-DOGOSUB: INP2
-        JSR  SKIPSP
-        JSR  DOGOTON                ; target -> BRANCHN, BRANCHF; P2 past number
-        JSR  SKIPSP                 ; return point = next statement after GOSUB
-        LDA  (P2)
-        LDB  #':'
-        CMP
-        JNZ  gs_tp
-        INP2                        ; skip ':' so resume lands on the next statement
-gs_tp:  TPA2L
-        STA  GTMP
-        TPA2H
-        STA  GTMP+1
-        LDA  GSP                    ; GSTK entry addr = GSTK + GSP*4 -> P2
-        SHL
-        SHL
-        LDB  #<GSTK
-        ADD
-        TAP2L
-        LDA  #>GSTK
-        TAP2H
-        LDA  CURLINE                ; entry = (CURLINE, return-text-ptr)
-        STA  (P2)
-        INP2
-        LDA  CURLINE+1
-        STA  (P2)
-        INP2
-        LDA  GTMP
-        STA  (P2)
-        INP2
-        LDA  GTMP+1
-        STA  (P2)
-        LDA  GSP
-        INC
-        STA  GSP
-        RTS
-
-; RETURN — pop a return point and resume just after the GOSUB
-DORET:  INP2
-        LDA  GSP
-        JZ   ret_err
-        DEC
-        STA  GSP
-        SHL
-        SHL
-        LDB  #<GSTK
-        ADD
-        TAP2L
-        LDA  #>GSTK
-        TAP2H
-        LDA  (P2)
-        STA  CURLINE
-        INP2
-        LDA  (P2)
-        STA  CURLINE+1
-        INP2
-        LDA  (P2)
-        STA  JUMPADDR
-        INP2
-        LDA  (P2)
-        STA  JUMPADDR+1
-        LDA  #2
-        STA  JUMPF
-        RTS
-ret_err: LDP1 #MRG
-        JSR  PUTS
-        LDA  #1
-        STA  ENDF
-        RTS
-
-; FOR <var> = <start> TO <limit> [STEP <n>]
-DOFOR:  INP2
-        JSR  SKIPSP
-        JSR  VARGET                 ; loop variable -> P1 = &value, VARIDX
-        LDA  MATCHF
-        JZ   for_err
-        LDA  VARIDX                 ; save its index for the frame (EVAL below
-        STA  FORIDX                 ;   calls VARGET again and clobbers VARIDX)
-        TPA1L
-        STA  SAVE1
-        TPA1H
-        STA  SAVE1+1
-        JSR  SKIPSP
-        LDA  (P2)
-        LDB  #'='
-        CMP
-        JNZ  for_err
-        INP2
-        JSR  EVAL                   ; start value
-        LPW1 SAVE1                ; <- tierA: pointer load (next: LDA)
-        LDA  RESULT
-        STA  (P1)
-        INP1
-        LDA  RESULT+1
-        STA  (P1)
-        JSR  SKIPSP
-        LDA  (P2)
-        LDB  #TOK_TO
-        CMP
-        JNZ  for_err
-        INP2
-        JSR  EVAL                   ; limit
-        MOVW FLIM,RESULT                ; <- tierA: word move (next: LDA)
-        LDW FSTEP,#1                ; <- tierA: word constant (next: JSR SKIPSP)
-        JSR  SKIPSP
-        LDA  (P2)
-        LDB  #TOK_STEP
-        CMP
-        JNZ  for_push
-        INP2
-        JSR  EVAL
-        MOVW FSTEP,RESULT                ; <- tierA: word move (next: JSR SKIPSP)
-for_push: JSR SKIPSP                ; loop-back = the statement after FOR
-        LDA  (P2)
-        LDB  #':'
-        CMP
-        JZ   fp_same                ; more on this line -> loop back mid-line
-        ; FOR ends the line -> loop back to the next line
-        LPW1 CURLINE                ; <- tierA: pointer load (next: INP1)
-        INP1
-        INP1
-fp_sk:  LDA  (P1)+
-        JNZ  fp_sk
-        TPA1L                       ; P1 = next line record
-        STA  FLR
-        TPA1H
-        STA  FLR+1
-        INP1
-        INP1
-        TPA1L                       ; TP = its text
-        STA  FTP
-        TPA1H
-        STA  FTP+1
-        JMP  fp_alloc
-fp_same: INP2                       ; advance past ':'
-        TPA2L                       ; loop-back text = right after the ':'
-        STA  FTP
-        TPA2H
-        STA  FTP+1
-        DEP2                        ; leave P2 on the ':' so STMTLINE keeps going now
-        MOVW FLR,CURLINE                ; <- tierA: word move (next: LDA)
-fp_alloc: LDA FSP                   ; advance FFP to a fresh frame
-        JNZ  fp_adv
-        LDW FFP,#FSTK                ; <- tierA: address constant (next: JMP fp_w -> LDA)
-        JMP  fp_w
-fp_adv: LDA  FFP
-        LDB  #9
-        ADD
-        STA  FFP
-        JNC  fp_w
-        LDA  FFP+1
-        INC
-        STA  FFP+1
-fp_w:   LPW1 FFP                ; <- tierA: pointer load (next: LDA)
-        LDA  FORIDX                 ; frame[0] = loop variable's table index
-        STA  (P1)
-        INP1
-        LDA  FLIM
-        STA  (P1)
-        INP1
-        LDA  FLIM+1
-        STA  (P1)
-        INP1
-        LDA  FSTEP
-        STA  (P1)
-        INP1
-        LDA  FSTEP+1
-        STA  (P1)
-        INP1
-        LDA  FLR
-        STA  (P1)
-        INP1
-        LDA  FLR+1
-        STA  (P1)
-        INP1
-        LDA  FTP
-        STA  (P1)
-        INP1
-        LDA  FTP+1
-        STA  (P1)
-        LDA  FSP
-        INC
-        STA  FSP
-        RTS
-for_err: JMP  SYNERR
-
-; NEXT [<var>] — step the top FOR loop; loop back or pop the frame
-DONEXT: INP2
-        JSR  SKIPSP
-        LDA  (P2)                   ; optional variable name -> consume it
-        JSR  UPCHAR
-        LDB  #'A'
-        SUB
-        JNC  nx_go
-        LDB  #26
-        CMP
-        JC   nx_go
-        JSR  VARGET                 ; consume the whole name (result ignored)
-nx_go:  LDA  FSP
-        JZ   nx_err
-        LPW1 FFP                ; <- tierA: pointer load (next: LDA)
-        LDA  (P1)
-        STA  VARIDX                 ; frame[0] = loop variable's index
-        INP1
-        LDA  (P1)
-        STA  FLIM
-        INP1
-        LDA  (P1)
-        STA  FLIM+1
-        INP1
-        LDA  (P1)
-        STA  FSTEP
-        INP1
-        LDA  (P1)
-        STA  FSTEP+1
-        INP1
-        LDA  (P1)
-        STA  FLR
-        INP1
-        LDA  (P1)
-        STA  FLR+1
-        INP1
-        LDA  (P1)
-        STA  FTP
-        INP1
-        LDA  (P1)
-        STA  FTP+1
-        JSR  IDXADDR                ; var = var + step (P1 = &value, from VARIDX)
-        TPA1L
-        STA  SAVE1
-        TPA1H
-        STA  SAVE1+1
-        LDA  (P1)
-        STA  NUM1
-        INP1
-        LDA  (P1)
-        STA  NUM1+1
-        MOVW NUM2,FSTEP                ; <- tierA: word move (next: JSR ADD16)
-        JSR  ADD16
-        LPW1 SAVE1                ; <- tierA: pointer load (next: LDA)
-        LDA  NUM1
-        STA  (P1)
-        INP1
-        LDA  NUM1+1
-        STA  (P1)
-        MOVW NUM2,FLIM                ; <- tierA: word move (next: LDA)
-        LDA  NUM1+1
-        LDB  #$80
-        XOR
-        STA  NUM1+1
-        LDA  NUM2+1
-        LDB  #$80
-        XOR
-        STA  NUM2+1
-        JSR  CMP16                  ; Z=equal, C=var>=limit
-        JZ   nx_loop                ; var == limit -> loop once more (limit inclusive)
-; Which side of the limit ends the loop depends on the SIGN of STEP: an up-loop
-; ends once var > limit, a down-loop once var < limit. Consume C from CMP16 FIRST
-; and branch — the sign test below is an AND, which loads flags and would destroy
-; the carry we still need.
-        JC   nx_gt                  ; var > limit
-        LDA  FSTEP+1                ; var < limit: only a DOWN loop finishes here
-        LDB  #$80
-        AND
-        JNZ  nx_done                ; STEP < 0 -> counted past the limit -> finished
-        JMP  nx_loop                ; STEP >= 0 -> still climbing toward it -> loop
-nx_gt:  LDA  FSTEP+1                ; var > limit: only an UP loop finishes here
-        LDB  #$80
-        AND
-        JNZ  nx_loop                ; STEP < 0 -> still above the limit -> loop
-        JMP  nx_done                ; STEP >= 0 -> passed the limit -> finished
-nx_loop:MOVW CURLINE,FLR                ; <- tierA: word move (next: LDA)
-        MOVW JUMPADDR,FTP                ; <- tierA: word move (next: LDA)
-        LDA  #2
-        STA  JUMPF
-        RTS
-nx_done: LDA FSP                    ; pop the frame
-        DEC
-        STA  FSP
-        JZ   nx_ret
-        LDA  FFP
-        LDB  #9
-        SUB
-        STA  FFP
-        JC   nx_ret
-        LDA  FFP+1
-        DEC
-        STA  FFP+1
-nx_ret: RTS
-nx_err: JMP  SYNERR
+        JMP  img_bad
 
 ;==============================================================================
-; EXPRESSION EVALUATOR (recursive descent) — result -> RESULT
-;   EXPR   = TERM   (('+'|'-') TERM)*
-;   TERM   = FACTOR (('*'|'/') FACTOR)*
-;   FACTOR = number | variable | '(' EXPR ')'
-; The running left value is pushed (lo,hi) across the recursive call.
+; EXPRESSIONS (recursive descent) -> RESULT
+;   EVAL   = EXPR [relop EXPR]          -> value, or 1/0 for a comparison
+;   EXPR   = TERM   {(+|-) TERM}
+;   TERM   = FACTOR {(*|/|%) FACTOR}
+;   FACTOR = [-|+] number | 0xhex | variable | function(...) | GLRD | ( EXPR )
+; The running left value rides the P3 stack (PHW/PLW) across the recursion.
+; A string-valued operand (SPEEK) routes EVAL to EVALSTR: a string comparison.
 ;==============================================================================
-; EVAL — an arithmetic EXPR, then an optional comparison -> RESULT (1=true/0=false).
-; A string-valued operand (detected by SPEEK) routes to EVALSTR, which requires a
-; relational operator and yields 1/0 just like the numeric comparison below.
 EVAL:   JSR  SPEEK
         LDA  MATCHF
         JNZ  EVALSTR
         JSR  EXPR
-        JSR  SKIPSP
+        JSR  RELOPP          ; an optional relational operator -> RELM
+        JC   ev_ret
+        MOVW LFT,RESULT
+        JSR  EXPR
+        JSR  CMPLR           ; REL = LFT vs RESULT, signed
+ev_res: LDA  REL             ; RESULT = (REL AND RELM) <> 0
+        LDB  RELM
+        AND
+        JZ   ev_z
+        LDA  #1
+ev_z:   STA  RESULT
+        LDA  #0
+        STA  RESULT+1
+ev_ret: RTS
+
+; RELOPP - parse a relational operator at (P2) into RELM (a relation mask);
+;   C=1 if there is none (P2 unchanged).
+RELOPP: JSR  SKIPSP
         LDA  (P2)
         LDB  #'='
         CMP
-        JZ   ev_eq
-        LDA  (P2)
+        JZ   ro_eq
         LDB  #'<'
         CMP
-        JZ   ev_lt
-        LDA  (P2)
+        JZ   ro_lt
         LDB  #'>'
         CMP
-        JZ   ev_gt
-        RTS                         ; no comparison: RESULT is the arithmetic value
-ev_eq:  INP2
-        LDA  #0
-        STA  RELOP
-        JMP  ev_rhs
-ev_lt:  INP2
-        LDA  (P2)
+        JZ   ro_gt
+        SEC
+        RTS
+ro_eq:  LDA  #R_EQ
+ro_set: INP2
+        STA  RELM
+        CLC
+        RTS
+ro_lt:  LDA  (P2+1)
         LDB  #'='
         CMP
-        JZ   ev_le
-        LDA  (P2)
+        JZ   ro_le
         LDB  #'>'
         CMP
-        JZ   ev_ne
-        LDA  #1
-        STA  RELOP
-        JMP  ev_rhs
-ev_le:  INP2
-        LDA  #3
-        STA  RELOP
-        JMP  ev_rhs
-ev_ne:  INP2
-        LDA  #5
-        STA  RELOP
-        JMP  ev_rhs
-ev_gt:  INP2
-        LDA  (P2)
+        JZ   ro_ne
+        LDA  #R_LT
+        JMP  ro_set
+ro_le:  INP2
+        LDA  #R_LT+R_EQ
+        JMP  ro_set
+ro_ne:  INP2
+        LDA  #R_LT+R_GT
+        JMP  ro_set
+ro_gt:  LDA  (P2+1)
         LDB  #'='
         CMP
-        JZ   ev_ge
-        LDA  #2
-        STA  RELOP
-        JMP  ev_rhs
-ev_ge:  INP2
-        LDA  #4
-        STA  RELOP
-ev_rhs: LDA  RESULT                 ; left operand
-        STA  LFT
-        LDA  RESULT+1
-        STA  LFT+1
-        JSR  EXPR                   ; right -> RESULT
-        MOVW NUM1,LFT                ; <- tierA: word move (next: LDA)
-        MOVW NUM2,RESULT                ; <- tierA: word move (next: LDA)
-        LDA  NUM1+1                  ; bias by $8000 -> signed ordering
-        LDB  #$80
-        XOR
-        STA  NUM1+1
-        LDA  NUM2+1
-        LDB  #$80
-        XOR
-        STA  NUM2+1
-        JSR  CMP16                  ; Z=equal, C=left>=right (signed)
-        JZ   ev_ceq
-        JC   ev_cgt
-        LDA  #0                     ; left < right
-        STA  GEF
-        STA  EQF
-        JMP  ev_disp
-ev_cgt: LDA  #1
-        STA  GEF
-        LDA  #0
-        STA  EQF
-        JMP  ev_disp
-ev_ceq: LDA  #1
-        STA  GEF
-        STA  EQF
-ev_disp: LDA #0
-        STA  RESULT+1
-        LDA  RELOP
-        JZ   ev_req                 ; '='  -> EQF
-        LDB  #1
+        JZ   ro_ge
+        LDA  #R_GT
+        JMP  ro_set
+ro_ge:  INP2
+        LDA  #R_GT+R_EQ
+        JMP  ro_set
+
+; CMPLR - REL = the SIGNED relation of LFT to RESULT (R_LT / R_EQ / R_GT)
+CMPLR:  CMPW LFT,RESULT
+        BLT  cl_lt
+        JNZ  cl_gt           ; high bytes differ and not below: above
+        LDA  LFT
+        LDB  RESULT
         CMP
-        JZ   ev_rlt                 ; '<'  -> !GEF
-        LDA  RELOP
-        LDB  #2
-        CMP
-        JZ   ev_rgt                 ; '>'  -> GEF & !EQF
-        LDA  RELOP
-        LDB  #3
-        CMP
-        JZ   ev_rle                 ; '<=' -> !GEF | EQF
-        LDA  RELOP
-        LDB  #4
-        CMP
-        JZ   ev_rge                 ; '>=' -> GEF
-        LDA  EQF                    ; '<>' -> !EQF
-        LDB  #1
-        XOR
-        STA  RESULT
+        JNZ  cl_gt
+        LDA  #R_EQ
+        STA  REL
         RTS
-ev_req: LDA  EQF
-        STA  RESULT
+cl_lt:  LDA  #R_LT
+        STA  REL
         RTS
-ev_rge: LDA  GEF
-        STA  RESULT
-        RTS
-ev_rlt: LDA  GEF
-        LDB  #1
-        XOR
-        STA  RESULT
-        RTS
-ev_rgt: LDA  EQF
-        LDB  #1
-        XOR
-        STA  TMPC
-        LDA  GEF
-        LDB  TMPC
-        AND
-        STA  RESULT
-        RTS
-ev_rle: LDA  GEF
-        LDB  #1
-        XOR
-        STA  TMPC
-        LDA  EQF
-        LDB  TMPC
-        OR
-        STA  RESULT
+cl_gt:  LDA  #R_GT
+        STA  REL
         RTS
 
 EXPR:   JSR  TERM
@@ -2430,37 +1769,22 @@ ex_l:   JSR  SKIPSP
         LDB  #'+'
         CMP
         JZ   ex_add
-        LDA  (P2)
         LDB  #'-'
         CMP
         JZ   ex_sub
         RTS
 ex_add: INP2
-        LDA  RESULT
-        PHA
-        LDA  RESULT+1
-        PHA
+        PHW  RESULT
         JSR  TERM
-        PLA
-        STA  NUM1+1
-        PLA
-        STA  NUM1
-        MOVW NUM2,RESULT                ; <- tierA: word move (next: JSR ADD16)
-        JSR  ADD16
-        JMP  ex_store
+        PLW  NUM1
+        ADDW RESULT,NUM1
+        JMP  ex_l
 ex_sub: INP2
-        LDA  RESULT
-        PHA
-        LDA  RESULT+1
-        PHA
+        PHW  RESULT
         JSR  TERM
-        PLA
-        STA  NUM1+1
-        PLA
-        STA  NUM1
-        MOVW NUM2,RESULT                ; <- tierA: word move (next: JSR SUB16)
-        JSR  SUB16
-ex_store:MOVW RESULT,NUM1                ; <- tierA: word move (next: JMP ex_l -> JSR SKIPSP)
+        PLW  NUM1
+        SUBW NUM1,RESULT
+        MOVW RESULT,NUM1
         JMP  ex_l
 
 TERM:   JSR  FACTOR
@@ -2469,263 +1793,209 @@ tm_l:   JSR  SKIPSP
         LDB  #'*'
         CMP
         JZ   tm_mul
-        LDA  (P2)
         LDB  #'/'
         CMP
         JZ   tm_div
-        LDA  (P2)
         LDB  #'%'
         CMP
         JZ   tm_mod
         RTS
 tm_mul: INP2
-        LDA  RESULT
-        PHA
-        LDA  RESULT+1
-        PHA
+        PHW  RESULT
         JSR  FACTOR
-        PLA
-        STA  NUM1+1
-        PLA
-        STA  NUM1
-        MOVW NUM2,RESULT                ; <- tierA: word move (next: JSR MUL16)
+        PLW  NUM1
+        MOVW NUM2,RESULT
         JSR  MUL16
-        JMP  tm_store
+        MOVW RESULT,NUM1
+        JMP  tm_l
 tm_div: INP2
-        LDA  RESULT
-        PHA
-        LDA  RESULT+1
-        PHA
-        JSR  FACTOR
-        PLA
-        STA  NUM1+1
-        PLA
-        STA  NUM1
-        MOVW NUM2,RESULT                ; <- tierA: word move (next: JSR DIV16)
-        JSR  DIV16
-tm_store:MOVW RESULT,NUM1                ; <- tierA: word move (next: JMP tm_l -> JSR SKIPSP)
+        JSR  tm_dv
+        MOVW RESULT,NUM1     ; the quotient
         JMP  tm_l
-tm_mod: INP2                    ; '%' modulus: RESULT = left mod right (DIV16 REM)
-        LDA  RESULT
-        PHA
-        LDA  RESULT+1
-        PHA
-        JSR  FACTOR
-        PLA
-        STA  NUM1+1
-        PLA
-        STA  NUM1
-        MOVW NUM2,RESULT                ; <- tierA: word move (next: JSR DIV16)
-        JSR  DIV16
-        MOVW RESULT,REM                ; <- tierA: word move (next: JMP tm_l -> JSR SKIPSP)
+tm_mod: INP2
+        JSR  tm_dv
+        MOVW RESULT,REM      ; the remainder
         JMP  tm_l
+tm_dv:  PHW  RESULT          ; left / right -> NUM1, REM (unsigned)
+        JSR  FACTOR
+        PLW  NUM1
+        MOVW NUM2,RESULT
+        JMP  DIV16
 
 FACTOR: JSR  SKIPSP
         LDA  (P2)
-        LDB  #'-'                ; unary minus
+        LDB  #'-'
         CMP
         JZ   fa_neg
-        LDA  (P2)
-        LDB  #'+'                ; unary plus (no-op)
+        LDB  #'+'
         CMP
         JZ   fa_plus
-        LDA  (P2)
-        LDB  #TOK_ABS
-        CMP
-        JZ   fa_abs
-        LDA  (P2)
-        LDB  #TOK_RND
-        CMP
-        JZ   fa_rnd
-        LDA  (P2)
-        LDB  #TOK_PEEK
-        CMP
-        JZ   fa_peek
-        LDA  (P2)
-        LDB  #TOK_PIXELR
-        CMP
-        JZ   fa_point
-        LDA  (P2)
-        LDB  #TOK_RGB
-        CMP
-        JZ   fa_rgb
-        LDA  (P2)
-        LDB  #TOK_GLRD
-        CMP
-        JZ   fa_glrd
-        LDA  (P2)
-        LDB  #TOK_LEN
-        CMP
-        JZ   fa_len
-        LDA  (P2)
-        LDB  #TOK_ASC
-        CMP
-        JZ   fa_asc
-        LDA  (P2)
-        LDB  #TOK_VAL
-        CMP
-        JZ   fa_val
-        LDA  (P2)
-        LDB  #TOK_EOF
-        CMP
-        JZ   fa_eof
-        LDA  (P2)
         LDB  #'('
         CMP
         JZ   fa_par
-        LDA  (P2)               ; digit?
-        LDB  #'0'
-        SUB
-        JNC  fa_var
-        LDB  #10
+        LDB  #TOK_GLRD
         CMP
-        JC   fa_var
-        LDA  (P2)               ; leading '0' -> maybe "0x" hex
-        LDB  #'0'
+        JZ   fa_glrd
+        LDB  #$80
+        SUB
+        JNC  fa_text         ; a number or a variable
+        LDB  #NTOK
+        CMP
+        JC   SYNERR          ; a GL verb / unassigned token in an expression
+        SHL                  ; P1 = &FACTAB[token]
+        LDB  #<FACTAB
+        ADD
+        TAP1L
+        LDA  #0
+        ROL
+        LDB  #>FACTAB
+        ADD
+        TAP1H
+        LDW  CUR,(P1+0)
+        LPW1 CUR
+        INP2                 ; consume the function token
+        JSR  (P1)
+        RTS
+fa_text:LDA  (P2)
+        JSR  ISDIGIT
+        JNC  fa_var
+        LDB  #'0'            ; "0x" hex?
         CMP
         JNZ  fa_dec
-        TPA2L                   ; peek the char after '0' (save P2 on the stack)
-        PHA
-        TPA2H
-        PHA
-        INP2
-        LDA  (P2)
+        LDA  (P2+1)
         LDB  #'x'
         CMP
         JZ   fa_hex
         LDB  #'X'
         CMP
         JZ   fa_hex
-        PLA                     ; not hex: restore P2 to the '0', parse decimal
-        TAP2H
-        PLA
-        TAP2L
-        JMP  fa_dec
-fa_hex: PLA                     ; keep the advanced P2; drop the saved copy
-        PLA
-        INP2                    ; consume the 'x'
-        JSR  PARSEHEX           ; hex digits -> RESULT
+fa_dec: JSR  PARSEDEC
+        MOVW RESULT,LNUM
         RTS
-fa_dec: JSR  PARSEDEC           ; number -> LNUM
-        MOVW RESULT,LNUM                ; <- tierA: word move (next: RTS)
-        RTS
-fa_var: JSR  VARGET            ; parse name, look up/create -> P1 = &value
+fa_hex: INP2
+        INP2
+        JMP  PARSEHEX        ; -> RESULT
+fa_var: JSR  VARGET          ; P1 = the variable's entry
         LDA  MATCHF
-        JZ   fa_err
-        LDA  (P1)
-        STA  RESULT
-        INP1
-        LDA  (P1)
-        STA  RESULT+1
+        JZ   SYNERR
+        LDW  RESULT,(P1+6)
         RTS
-fa_par: INP2                    ; '('
+fa_par: INP2
         JSR  EXPR
+        JMP  EXPECTRP
+fa_plus:INP2
+        JMP  FACTOR
+fa_neg: INP2
+        JSR  FACTOR
+NEGRES: XORW RESULT,#$FFFF   ; RESULT = -RESULT
+        INCW RESULT
+        RTS
+
+; Function handlers by token ($80..$B3), entered with the token consumed.
+; Anything that is not a numeric function is a syntax error.
+FACTAB: .word SYNERR,SYNERR,SYNERR,SYNERR             ; $80
+        .word SYNERR,SYNERR,SYNERR,SYNERR             ; $84
+        .word SYNERR,SYNERR,SYNERR,SYNERR             ; $88
+        .word SYNERR,SYNERR,SYNERR,SYNERR             ; $8C
+        .word fa_abs,fa_rnd,fa_peek,SYNERR            ; $90 ABS RND PEEK
+        .word SYNERR,SYNERR,SYNERR,SYNERR             ; $94
+        .word SYNERR,SYNERR,SYNERR,SYNERR             ; $98
+        .word SYNERR,fa_len,fa_asc,SYNERR             ; $9C LEN ASC
+        .word SYNERR,SYNERR,SYNERR,fa_val             ; $A0 VAL
+        .word fa_eof,SYNERR,SYNERR,SYNERR             ; $A4 EOF
+        .word SYNERR,SYNERR,SYNERR,SYNERR             ; $A8
+        .word SYNERR,SYNERR,fa_point,SYNERR           ; $AC PIXELR
+        .word SYNERR,fa_rgb,SYNERR,SYNERR             ; $B0 RGB
+
+; PARGET - '(' EXPR ')' -> RESULT
+PARGET: JSR  EXPECTLP
+        JSR  EXPR
+; EXPECTRP - skip blanks, consume ')' or SYNERR
+EXPECTRP:
         JSR  SKIPSP
         LDA  (P2)
         LDB  #')'
         CMP
-        JNZ  fa_err
+        JNZ  SYNERR
         INP2
         RTS
-fa_plus: INP2                   ; unary plus: skip and parse the factor
-        JMP  FACTOR
-fa_neg: INP2                    ; unary minus: parse factor, negate RESULT
-        JSR  FACTOR
-        LDA  RESULT
-        LDB  #$FF
-        XOR
-        STA  RESULT
-        LDA  RESULT+1
-        LDB  #$FF
-        XOR
-        STA  RESULT+1
-        INCW RESULT                ; <- tierA: 16-bit INCW chain, skip label fa_nd dropped (next: RTS)
-        RTS
-fa_err: JMP  SYNERR
-
-; functions: ABS(x), RND(n), PEEK(addr) — RESULT set
-fa_abs: INP2
-        JSR  PARGET
-        LDA  RESULT+1
-        LDB  #$80
-        AND
-        JZ   fa_abd              ; non-negative
-        LDA  RESULT
-        LDB  #$FF
-        XOR
-        STA  RESULT
-        LDA  RESULT+1
-        LDB  #$FF
-        XOR
-        STA  RESULT+1
-        LDA  RESULT
-        LDB  #1
-        ADD
-        STA  RESULT
-        JNC  fa_abd
-        LDA  RESULT+1
-        INC
-        STA  RESULT+1
-fa_abd: RTS
-; PIXELR(x,y) -- the colour at a pixel; 0 for anything off-screen, matching
-; the write side's "off-screen simply is not there" rule. Two arguments, so
-; PARGET (which parses exactly one) does not fit and the parens are handled
-; here. SINGLE-INTERFACE (2026-08-31): the read is the GL verb PIXRD, which
-; takes window coordinates natively (no wflip) and answers through the
-; read-back FIFO (GLRB, GLSTAT bit0). The RGB565 colour, 0 off-screen.
-fa_point: INP2
-        JSR  glchk                  ; GL engine + GLFST for GLVSEP-free
-        JSR  SKIPSP                 ;   parsing (the parens are ours)
+; EXPECTLP - skip blanks, consume '(' or SYNERR
+EXPECTLP:
+        JSR  SKIPSP
         LDA  (P2)
         LDB  #'('
         CMP
-        JNZ  pt_err
+        JNZ  SYNERR
         INP2
-        LDA  #$63                   ; PIXRD
-        JSR  GLPUT
-        JSR  EXPR
-        JSR  GLPW                   ; x
-        JSR  SKIPSP
-        LDA  (P2)
-        LDB  #','
-        CMP
-        JNZ  pt_err
-        INP2
-        JSR  EXPR
-        JSR  GLPW                   ; y
-        JSR  SKIPSP
-        LDA  (P2)
-        LDB  #')'
-        CMP
-        JNZ  pt_err
-        INP2
-pt_rb:  LDA  GLSTATR                ; wait for the colour (bit0: RB byte)
-        LDB  #$01
+        RTS
+
+fa_abs: JSR  PARGET
+        LDA  RESULT+1
+        LDB  #$80
         AND
-        JZ   pt_rb
-        LDA  GLRBR                  ; low byte...
+        JZ   fa_abd
+        JMP  NEGRES
+fa_abd: RTS
+
+fa_peek:JSR  PARGET
+        LPW1 RESULT
+        LDA  (P1)            ; I/O is memory-mapped, so PEEK reaches it too
         STA  RESULT
-pt_rb2: LDA  GLSTATR                ; ...then the high byte's own wait
-        LDB  #$01
-        AND
-        JZ   pt_rb2
-        LDA  GLRBR
+        LDA  #0
         STA  RESULT+1
         RTS
-pt_err: JMP  SYNERR
 
-; RGB(r,g,b) -- pack a 565 colour: r,b are 0-31, g is 0-63 (its extra bit is
-; real: green gets six). Pure arithmetic, so no GCHECK -- RGB() works with no
-; display fitted, and COLOR stores whatever it is given either way. Arguments
-; are MASKED to their fields, the same forgiveness PEEK's address gets.
-; RGBH is not preserved across a nested RGB() in an argument -- the same class
-; of limitation POINT has with the coordinate registers, and as pointless to
-; hit. The (g&7)<<5 half rides the STACK across the blue argument instead;
-; SYNERR unwinds SP, so an error mid-argument cannot leak the push.
-; GLRD -- pop one byte of the GL read-back FIFO (FLAGRD/MATXRD/CLRD data).
-; No parens: reads like a variable. Empty FIFO -> -1, so a drain loop is
-; simply  V=GLRD : IF V>=0 THEN ...
-fa_glrd: INP2
+; RND(n) = 1..n  (RND(0) = 0)
+fa_rnd: JSR  PARGET
+        LDA  RESULT
+        LDB  RESULT+1
+        OR
+        JZ   fa_rz
+        PHW  RESULT          ; n
+        JSR  RANDOM          ; NUM1 = a random 16-bit value
+        PLW  NUM2
+        JSR  DIV16           ; REM = random mod n
+        MOVW RESULT,REM
+        INCW RESULT
+fa_rz:  RTS
+
+; RANDOM - LCG: SEED = SEED*25173 + 13849; result in NUM1
+RANDOM: MOVW NUM1,SEED
+        LDW  NUM2,#25173
+        JSR  MUL16
+        ADDW NUM1,#13849
+        MOVW SEED,NUM1
+        RTS
+
+; PIXELR(x,y) -- the GL PIXRD verb: the colour at a window pixel via the
+; read-back FIFO (0 off-screen), through BASIC's signed integers.
+fa_point:
+        JSR  glchk
+        JSR  EXPECTLP
+        LDA  #$63            ; PIXRD
+        JSR  GLPUT
+        JSR  EXPR
+        JSR  GLPW            ; x
+        JSR  EXPECTCOMMA
+        JSR  EXPR
+        JSR  GLPW            ; y
+        JSR  EXPECTRP
+        JSR  GLRDW           ; low byte ...
+        STA  RESULT
+        JSR  GLRDW           ; ... then the high byte
+        STA  RESULT+1
+        RTS
+; GLRDW - wait for a read-back byte (GLSTAT bit 0) and pop it
+GLRDW:  LDA  GLSTATR
+        LDB  #$01
+        AND
+        JZ   GLRDW
+        LDA  GLRBR
+        RTS
+
+; GLRD -- pop one read-back byte (0..255), -1 when the FIFO is empty. A bare
+; factor, no parens, so `V=GLRD : IF V>=0 THEN ...` drains it.
+fa_glrd:INP2
         LDA  GLSTATR
         LDB  #1
         AND
@@ -2735,59 +2005,37 @@ fa_glrd: INP2
         LDA  #0
         STA  RESULT+1
         RTS
-fg_emp: LDA  #$FF
-        STA  RESULT
-        STA  RESULT+1
+fg_emp: LDW  RESULT,#$FFFF
         RTS
 
-fa_rgb: INP2
-        JSR  SKIPSP
-        LDA  (P2)
-        LDB  #'('
-        CMP
-        JNZ  rgb_err
-        INP2
-        JSR  EXPR                   ; red
-        JSR  RGBTAIL                ; ,green ,blue -> RESULT packed
-        JSR  SKIPSP
-        LDA  (P2)
-        LDB  #')'
-        CMP
-        JNZ  rgb_err
-        INP2
-        RTS
-rgb_err: JMP SYNERR
+; RGB(r,g,b) -- pack a 565 colour: r,b 0-31, g 0-63 (masked to their fields)
+fa_rgb: JSR  EXPECTLP
+        JSR  EXPR            ; red
+        JSR  RGBTAIL
+        JMP  EXPECTRP
 
-; RGBTAIL -- RESULT holds r; parse ",g,b" and pack (r<<11)|(g<<5)|b into
-; RESULT. Shared by the RGB() function and COLOR's three-number form, so the
-; two can never drift. Arguments are MASKED to their fields. RGBH is not
-; preserved across a nested RGB() in an argument -- the same class of
-; limitation POINT has -- and the (g&7)<<5 half rides the STACK across the
-; blue argument; SYNERR unwinds SP, so an error mid-argument cannot leak it.
-RGBTAIL: LDA RESULT
+; RGBTAIL - RESULT holds r; parse ",g,b" and pack (r<<11)|(g<<5)|b into RESULT.
+;   Shared with COLOR r,g,b. The (g&7)<<5 half rides the stack across the blue
+;   argument (SYNERR unwinds SP, so an error cannot leak it).
+RGBTAIL:LDA  RESULT
         LDB  #$1F
         AND
         SHL
         SHL
-        SHL                         ; (r&31)<<3: the high byte's top five bits
+        SHL                  ; (r&31)<<3: the high byte's top five bits
         STA  RGBH
-        JSR  SKIPSP
-        LDA  (P2)
-        LDB  #','
-        CMP
-        JNZ  rgt_err
-        INP2
-        JSR  EXPR                   ; green
+        JSR  EXPECTCOMMA
+        JSR  EXPR            ; green
         LDA  RESULT
         LDB  #$3F
         AND
-        STA  RESULT                 ; masked g, parked while both halves pack
+        STA  RESULT
         SHR
         SHR
-        SHR                         ; g>>3: the high byte's low three bits
+        SHR                  ; g>>3: the high byte's low three bits
         LDB  RGBH
         OR
-        STA  RGBH                   ; high byte complete
+        STA  RGBH
         LDA  RESULT
         LDB  #$07
         AND
@@ -2795,171 +2043,59 @@ RGBTAIL: LDA RESULT
         SHL
         SHL
         SHL
-        SHL                         ; (g&7)<<5: the low byte's top three bits
-        PHA                         ; parked across the blue argument
-        JSR  SKIPSP
-        LDA  (P2)
-        LDB  #','
-        CMP
-        JNZ  rgt_err
-        INP2
-        JSR  EXPR                   ; blue
+        SHL                  ; (g&7)<<5: the low byte's top three bits
+        PHA
+        JSR  EXPECTCOMMA
+        JSR  EXPR            ; blue
         LDA  RESULT
         LDB  #$1F
         AND
-        STA  RESULT                 ; b5
-        PLA                         ; the green low bits, back off the stack
+        STA  RESULT
+        PLA
         LDB  RESULT
         OR
         STA  RESULT
         LDA  RGBH
         STA  RESULT+1
         RTS
-rgt_err: JMP SYNERR
 
-fa_peek: INP2
-        JSR  PARGET              ; RESULT = address
-        LPW1 RESULT                ; <- tierA: pointer load (next: LDA)
-        LDA  (P1)                ; read byte (I/O handled by memory map)
-        STA  RESULT
-        LDA  #0
-        STA  RESULT+1
-        RTS
-fa_rnd: INP2
-        JSR  PARGET              ; RESULT = n
-        LDA  RESULT
-        LDB  RESULT+1
-        OR
-        JZ   fa_rz               ; RND(0) -> 0
-        MOVW LFT,RESULT                ; <- tierA: word move (next: JSR RANDOM)
-        JSR  RANDOM              ; NUM1 = random 16-bit
-        MOVW NUM2,LFT                ; <- tierA: word move (next: JSR DIV16)
-        JSR  DIV16               ; REM = random mod n
-        LDA  REM                 ; RESULT = REM + 1  (range 1..n)
-        LDB  #1
-        ADD
-        STA  RESULT
-        LDA  REM+1
-        STA  RESULT+1
-        JNC  fa_rd
-        LDA  RESULT+1
-        INC
-        STA  RESULT+1
-fa_rd:  RTS
-fa_rz:  LDW RESULT,#0                ; <- tierA: zero word (next: RTS)
-        RTS
-
-; PARGET — parse '(' EXPR ')' into RESULT
-PARGET: JSR  SKIPSP
-        LDA  (P2)
-        LDB  #'('
-        CMP
-        JNZ  pg_err
-        INP2
-        JSR  EXPR
-        JSR  SKIPSP
-        LDA  (P2)
-        LDB  #')'
-        CMP
-        JNZ  pg_err
-        INP2
-        RTS
-pg_err: JMP  SYNERR
-
-; RANDOM — LCG: SEED = SEED*25173 + 13849; result in NUM1
-RANDOM: MOVW NUM1,SEED                ; <- tierA: word move (next: LDA)
-        LDW NUM2,#25173                ; <- tierA: word constant (next: JSR MUL16)
-        JSR  MUL16
-        LDW NUM2,#13849                ; <- tierA: word constant (next: JSR ADD16)
-        JSR  ADD16
-        MOVW SEED,NUM1                ; <- tierA: word move (next: RTS)
-        RTS
-
-; UPCHAR — A: if 'a'..'z', clear bit 5 to uppercase; else leave A.
-UPCHAR: LDB  #'a'
-        CMP                     ; C=1 if A >= 'a'
-        JNC  uc_ret
-        LDB  #$7B               ; 'z' + 1
-        CMP                     ; C=1 if A > 'z'
-        JC   uc_ret
-        LDB  #$DF
-        AND
-uc_ret: RTS
-
-; ISALNUM — MATCHF=1 if A (upcased) is a letter A-Z or digit 0-9, else 0.
-; Uses only A (preserved by CMP) and B.
-ISALNUM: JSR UPCHAR
-        LDB  #'0'
-        CMP                     ; A >= '0' ?
-        JNC  ia_no
-        LDB  #$3A               ; '9' + 1
-        CMP
-        JNC  ia_yes             ; '0'..'9'
-        LDB  #'A'
-        CMP                     ; A >= 'A' ?
-        JNC  ia_no
-        LDB  #$5B               ; 'Z' + 1
-        CMP
-        JC   ia_no              ; > 'Z'
-ia_yes: LDA  #1
-        STA  MATCHF
-        RTS
-ia_no:  LDA  #0
-        STA  MATCHF
-        RTS
-
-; VARGET — parse a variable name at (P2) (consuming it), look it up (creating a
-; new zeroed entry on first use), and set P1 = &value and VARIDX = its index.
-; MATCHF=1 if (P2) started a valid name (letter), else 0 (P2 unchanged).
-VARGET: JSR  PARSENAME          ; NMBUF = name; MATCHF=1 if it started with a letter
+;==============================================================================
+; VARIABLES: a name -> value table, entry = name[6] (upcased, space-padded)
+; + value[2]; the value is (entry+6). Names are significant to 6 characters.
+;==============================================================================
+; VARGET - parse a variable name at (P2), find or create it: P1 = its entry,
+;   VARIDX = its index, MATCHF = 1. MATCHF = 0 if (P2) is not a name (P2 kept).
+VARGET: JSR  PARSENAME
         LDA  MATCHF
-        JZ   vg_bad
-        JSR  VARFIND           ; P1 = &value, VARIDX = index
+        JZ   vg_ret
+        JSR  VARFIND
         LDA  #1
         STA  MATCHF
-        RTS
-vg_bad: LDA  #0
-        STA  MATCHF
-        RTS
+vg_ret: RTS
 
-; PARSENAME — parse an identifier at (P2) into NMBUF (NAMLEN chars, upcased,
-; space-padded), consuming it. MATCHF=1 if (P2) began with a letter (a name was
-; read), else 0 with P2 unchanged. Shared by VARGET (numeric) and SVARGET (string).
-PARSENAME: LDA (P2)             ; first char must be a letter
-        JSR  UPCHAR
-        LDB  #'A'
-        SUB
+; PARSENAME - an identifier at (P2) -> NMBUF (NAMLEN chars, upcased, space-
+;   padded), consumed. MATCHF = 1 if it began with a letter, else 0 (P2 kept).
+PARSENAME:
+        LDA  (P2)
+        JSR  ISLETTER
         JNC  pn_bad
-        LDB  #26
-        CMP
-        JC   pn_bad
-        LDP1 #NMBUF             ; blank the name field
-        LDA  #NAMLEN
-        STA  TMPC
-pn_fz:  LDA  #' '
-        STA  (P1)
-        INP1
-        LDA  TMPC
-        DEC
-        STA  TMPC
-        JNZ  pn_fz
-        LDP1 #NMBUF            ; copy identifier chars (letters/digits), upcased
+        LDW  NMBUF,#$2020    ; blank the name field
+        LDW  NMBUF+2,#$2020
+        LDW  NMBUF+4,#$2020
+        LDP1 #NMBUF
         LDA  #NAMLEN
         STA  TMPC
 pn_cp:  LDA  (P2)
         JSR  ISALNUM
-        LDA  MATCHF
-        JZ   pn_end            ; non-alnum -> end of name
+        JNC  pn_end
         LDA  TMPC
-        JZ   pn_skip           ; name field full -> consume but don't store
-        LDA  (P2)
-        JSR  UPCHAR
-        STA  (P1)
-        INP1
-        LDA  TMPC
+        JZ   pn_skip         ; the field is full: consume, don't store
         DEC
         STA  TMPC
-pn_skip: INP2                  ; consume the char
+        LDA  (P2)
+        JSR  UPCHAR
+        STA  (P1)+
+pn_skip:INP2
         JMP  pn_cp
 pn_end: LDA  #1
         STA  MATCHF
@@ -2968,531 +2104,219 @@ pn_bad: LDA  #0
         STA  MATCHF
         RTS
 
-; VARFIND — look up NMBUF in VARTAB; on a match P1 = &value, VARIDX = index.
-; If absent, append a new entry (name = NMBUF, value = 0) and return its &value.
-; Saves the input cursor (P2) on the stack while it walks the table with P2.
-VARFIND: TPA2L
-        PHA
-        TPA2H
-        PHA
-        LDA  #0
-        STA  PCNT               ; i = 0
-vf_lp:  LDA  PCNT
+; ISALNUM - C=1 if A is a letter or a digit. A preserved.
+ISALNUM:JSR  ISDIGIT
+        JC   ian_r
+        JMP  ISLETTER
+ian_r:  RTS
+
+; VARFIND - look NMBUF up in VARTAB: P1 = its entry, VARIDX = its index. An
+;   absent name gets a new zeroed entry.
+VARFIND:LDA  #0
+        STA  VARIDX
+        LDP1 #VARTAB
+vf_lp:  LDA  VARIDX
         LDB  VARCNT
         CMP
-        JZ   vf_new             ; i == VARCNT -> not found
-        LDA  PCNT               ; P1 = VARTAB + i*8
-        SHL
-        SHL
-        SHL
-        TAP1L
-        LDA  #>VARTAB
-        TAP1H
-        LDP2 #NMBUF             ; compare NAMLEN name bytes
-        LDA  #NAMLEN
-        STA  TMPC
-        LDA  #1
-        STA  MATCHF
-vf_cmp: LDA  (P1)
-        STA  CYTMP
-        LDA  (P2)
-        LDB  CYTMP
+        JZ   vf_new
+        LDA  (P1)
+        LDB  NMBUF
         CMP
-        JZ   vf_c1
-        LDA  #0
-        STA  MATCHF
-vf_c1:  INP1
-        INP2
-        LDA  TMPC
-        DEC
-        STA  TMPC
-        JNZ  vf_cmp
-        LDA  MATCHF
-        JNZ  vf_hit             ; P1 now at &value (entry+NAMLEN)
-        LDA  PCNT
+        JNZ  vf_nx
+        LDA  (P1+1)
+        LDB  NMBUF+1
+        CMP
+        JNZ  vf_nx
+        LDA  (P1+2)
+        LDB  NMBUF+2
+        CMP
+        JNZ  vf_nx
+        LDA  (P1+3)
+        LDB  NMBUF+3
+        CMP
+        JNZ  vf_nx
+        LDA  (P1+4)
+        LDB  NMBUF+4
+        CMP
+        JNZ  vf_nx
+        LDA  (P1+5)
+        LDB  NMBUF+5
+        CMP
+        JNZ  vf_nx
+        RTS                  ; found
+vf_nx:  LDA  VARIDX
         INC
-        STA  PCNT
+        STA  VARIDX
+        LEAW CUR,(P1+8)
+        LPW1 CUR
         JMP  vf_lp
-vf_hit: LDA  PCNT
-        STA  VARIDX
-        JMP  vf_done
-vf_new: LDA  VARCNT             ; create entry at index VARCNT
-        STA  VARIDX
-        SHL
-        SHL
-        SHL
-        TAP1L
-        LDA  #>VARTAB
-        TAP1H
-        LDP2 #NMBUF             ; copy the name in
-        LDA  #NAMLEN
-        STA  TMPC
-vf_cp:  LDA  (P2)
-        STA  (P1)
-        INP1
-        INP2
-        LDA  TMPC
-        DEC
-        STA  TMPC
-        JNZ  vf_cp
-        LDA  #0                 ; zero the value (P1 now at &value)
-        STA  (P1)
-        TPA1L                   ; remember &value across the second store
-        STA  RP
-        TPA1H
-        STA  RP+1
-        INP1
+vf_new: LDA  VARCNT          ; append (P1 is already the slot)
+        LDB  #NVARS
+        CMP
+        JC   SYNERR          ; table full
+        STW  (P1+0),NMBUF
+        STW  (P1+2),NMBUF+2
+        STW  (P1+4),NMBUF+4
         LDA  #0
-        STA  (P1)
+        STA  (P1+6)
+        STA  (P1+7)
         LDA  VARCNT
         INC
         STA  VARCNT
-        LPW1 RP                ; <- tierA: pointer load (next: PLA)
-vf_done: PLA                    ; restore the input cursor
-        TAP2H
-        PLA
-        TAP2L
         RTS
 
-; IDXADDR — VARIDX -> P1 = &value of that variable (VARTAB + VARIDX*8 + NAMLEN).
-IDXADDR: LDA  VARIDX
+; IDXADDR - VARIDX -> P1 = that variable's entry
+IDXADDR:LDA  VARIDX
         SHL
         SHL
         SHL
-        LDB  #NAMLEN
-        ADD
         TAP1L
         LDA  #>VARTAB
         TAP1H
         RTS
 
 ;==============================================================================
-; 16-bit multiply / divide (shift-add / restoring) — operands NUM1,NUM2
+; 16-bit multiply / divide (shift-add / restoring) -- operands NUM1, NUM2
 ;==============================================================================
-; MUL16 — NUM1 = NUM1 * NUM2 (low 16 bits)
-MUL16:  LDW ACC,#0                ; <- tierA: zero word (next: LDA)
+; MUL16 - NUM1 = NUM1 * NUM2 (low 16 bits). NUM2 is consumed.
+MUL16:  LDW  ACC,#0
         LDA  #16
         STA  MCNT
-mu_l:   LDA  NUM2
-        LDB  #1
-        AND
-        JZ   mu_sk
-        LDA  ACC                ; ACC += NUM1
-        LDB  NUM1
-        ADD
-        STA  ACC
-        LDA  #0
-        JNC  mu_c0
-        LDA  #1
-mu_c0:  STA  CYTMP
-        LDA  ACC+1
-        LDB  NUM1+1
-        ADD
-        LDB  CYTMP
-        ADD
-        STA  ACC+1
-mu_sk:  JSR  SHL16              ; NUM1 <<= 1
-        LDA  NUM2+1             ; NUM2 >>= 1
-        SHR
-        STA  NUM2+1
-        LDA  NUM2
-        ROR
-        STA  NUM2
-        LDA  MCNT
+mu_l:   ADDW ACC,ACC         ; result <<= 1
+        ADDW NUM2,NUM2       ; the next multiplier bit, MSB first -> C
+        JNC  mu_sk
+        ADDW ACC,NUM1
+mu_sk:  LDA  MCNT
         DEC
         STA  MCNT
         JNZ  mu_l
-        MOVW NUM1,ACC                ; <- tierA: word move (next: RTS)
+        MOVW NUM1,ACC
         RTS
 
-; DIV16 — NUM1 = NUM1 / NUM2 (quotient); remainder left in REM. /0 -> 0
-DIV16:  LDA  NUM2
+; DIV16 - NUM1 = NUM1 / NUM2 (unsigned quotient), REM = the remainder. /0 -> 0.
+DIV16:  LDW  REM,#0
+        LDA  NUM2
         LDB  NUM2+1
         OR
         JNZ  dv_ok
-        LDW NUM1,#0                ; <- tierA: zero word (next: RTS)
+        LDW  NUM1,#0
         RTS
-dv_ok:  LDW REM,#0                ; <- tierA: zero word (next: LDA)
-        LDA  #16
+dv_ok:  LDA  #16
         STA  MCNT
-dv_l:   LDA  NUM1               ; dividend <<= 1, MSB -> C
-        SHL
-        STA  NUM1
-        LDA  NUM1+1
-        ROL
-        STA  NUM1+1
-        LDA  REM                ; REM = (REM<<1) | C
-        ROL
-        STA  REM
-        LDA  REM+1
-        ROL
-        STA  REM+1
-        LDA  REM+1              ; compare REM vs NUM2
-        LDB  NUM2+1
-        CMP
-        JNZ  dv_hi
-        LDA  REM
-        LDB  NUM2
-        CMP
-        JC   dv_ge
-        JMP  dv_lt
-dv_hi:  JC   dv_ge
-        JMP  dv_lt
-dv_ge:  LDA  REM                ; REM -= NUM2
-        LDB  NUM2
-        SUB
-        STA  REM
+dv_l:   ADDW NUM1,NUM1       ; dividend MSB -> C (bit 0 becomes the quotient bit)
         LDA  #0
-        JC   dv_g0
-        LDA  #1
-dv_g0:  STA  CYTMP
-        LDA  REM+1
-        LDB  NUM2+1
-        SUB
-        STA  REM+1
-        LDA  CYTMP
-        JZ   dv_g1
-        LDA  REM+1
-        DEC
-        STA  REM+1
-dv_g1:  LDA  NUM1               ; set quotient bit 0
-        LDB  #1
+        ROL
+        STA  CYTMP           ; that bit
+        ADDW REM,REM
+        LDA  REM
+        LDB  CYTMP
         OR
-        STA  NUM1
+        STA  REM             ; REM = REM*2 + bit
+        CMPW REM,NUM2
+        JNC  dv_lt
+        SUBW REM,NUM2
+        INCW NUM1            ; quotient bit
 dv_lt:  LDA  MCNT
         DEC
         STA  MCNT
         JNZ  dv_l
         RTS
 
-; ---- enter / replace / delete a numbered line ----
-DOLINE: JSR  PARSEDEC        ; LNUM = number (P2 advanced past digits)
-        JSR  SKIPSP
-        TPA2L                ; TSRC = current text pointer
-        STA  TSRC
-        TPA2H
-        STA  TSRC+1
-        LDA  #0
-        STA  TXTMT
-        LDA  (P2)            ; empty text -> delete
-        JNZ  dl1
-        LDA  #1
-        STA  TXTMT
-dl1:    JSR  EDIT
-        JMP  REPL
-
 ;==============================================================================
-; EDIT — rebuild PROG into PBUF inserting/replacing/deleting LNUM, then copy back
+; Numbers: decimal / hex in, decimal out
 ;==============================================================================
-EDIT:   LDA  #0
-        STA  INSF
-        LDP1 #PROG           ; src
-        LDP2 #PBUF           ; dst
-ed_loop:
-        LDA  (P1)+           ; read record number
-        STA  RNUM
-        LDA  (P1)+
-        STA  RNUM+1
-        LDA  RNUM            ; end marker? (num == 0)
-        LDB  RNUM+1
-        OR
-        JZ   ed_end
-        LDA  INSF
-        JNZ  ed_copy         ; new line already placed -> just copy rest
-        MOVW NUM1,RNUM                ; <- tierA: word move (next: LDA)
-        MOVW NUM2,LNUM                ; <- tierA: word move (next: JSR CMP16)
-        JSR  CMP16           ; Z=equal, C=RNUM>=LNUM
-        JZ   ed_repl
-        JC   ed_ins
-        JMP  ed_copy         ; RNUM < LNUM -> keep this record
-ed_ins: JSR  EMITNEW         ; RNUM > LNUM -> insert new before this
-        LDA  #1
-        STA  INSF
-        JMP  ed_copy
-ed_repl: JSR EMITNEW         ; same number -> emit new, drop the old
-        LDA  #1
-        STA  INSF
-ed_skip: LDA (P1)+           ; skip old text incl terminator
-        JNZ  ed_skip
-        JMP  ed_loop
-ed_copy: LDA RNUM            ; write number then copy text incl terminator
-        STA  (P2)+
-        LDA  RNUM+1
-        STA  (P2)+
-ed_ct:  LDA  (P1)+
-        STA  (P2)+
-        JNZ  ed_ct
-        JMP  ed_loop
-ed_end: LDA  INSF            ; src done; append new if not yet placed
-        JNZ  ed_wm
-        JSR  EMITNEW
-ed_wm:  LDA  #0              ; write end marker 00,00
-        STA  (P2)+
-        LDA  #0
-        STA  (P2)+
-        JMP  PB2PROG         ; copy PBUF back to PROG (tail call)
-
-; EMITNEW — write the entered line (LNUM + text) to dst (P2); nothing if deleting
-EMITNEW: LDA TXTMT
-        JNZ  en_done
-        LDA  LNUM
-        STA  (P2)+
-        LDA  LNUM+1
-        STA  (P2)+
-        TPA1L                ; save src pointer
-        STA  SAVE1
-        TPA1H
-        STA  SAVE1+1
-        LPW1 TSRC                ; <- tierA: pointer load (next: LDA)
-en_ct:  LDA  (P1)+
-        STA  (P2)+
-        JNZ  en_ct           ; copy text incl terminator
-        LPW1 SAVE1                ; <- tierA: pointer load (next: RTS)
-en_done: RTS
-
-; PB2PROG — copy PBUF back to PROG up to and including the 00,00 marker
-PB2PROG: LDP1 #PBUF
-        LDP2 #PROG
-pp_l:   LDA  (P1)+
-        STA  (P2)+
-        STA  RNUM
-        LDA  (P1)+
-        STA  (P2)+
-        STA  RNUM+1
-        LDA  RNUM
-        LDB  RNUM+1
-        OR
-        JZ   pp_done         ; marker copied -> done
-pp_t:   LDA  (P1)+
-        STA  (P2)+
-        JNZ  pp_t
-        JMP  pp_l
-pp_done: RTS
-
-NEWPROG: LDA #0              ; empty program = bare 00,00 marker at PROG
-        STA  PROG
-        STA  PROG+1
-        STA  VARCNT          ; and no variables defined
-        STA  SVARCNT         ; and no string variables defined
-        RTS
-
-;==============================================================================
-; LIST — print every stored line in order
-;==============================================================================
-LIST:   LDP1 #PROG
-ls_l:   LDA  (P1)+
-        STA  LNUM
-        LDA  (P1)+
-        STA  LNUM+1
-        LDA  LNUM
-        LDB  LNUM+1
-        OR
-        JZ   ls_done
-        TPA1L                ; PRDEC uses P1 -> save/restore
-        STA  SAVE1
-        TPA1H
-        STA  SAVE1+1
-        JSR  PRDECU          ; line numbers are unsigned
-        LPW1 SAVE1                ; <- tierA: pointer load (next: LDA)
-        LDA  #' '
-        JSR  PUTC
-        JSR  PRTEXT          ; print tokenized text; leaves P1 at next record
-        JSR  CRLF
-        JMP  ls_l
-ls_done: RTS
-
-; PRTEXT — print tokenized text at (P1), expanding token bytes back to keywords;
-;          leaves P1 just past the 00 terminator.
-PRTEXT: LDA  (P1)+
-        JZ   pt_done
-        STA  TMPC
-        LDB  #$80
-        AND
-        JZ   pt_lit
-        TPA1L                ; token: save program ptr, print keyword, restore
-        STA  SAVE2
-        TPA1H
-        STA  SAVE2+1
-        LDA  TMPC
-        JSR  PRKW
-        LPW1 SAVE2                ; <- tierA: pointer load (next: JMP PRTEXT -> LDA)
-        JMP  PRTEXT
-pt_lit: LDA  TMPC
-        JSR  PUTC
-        JMP  PRTEXT
-pt_done: RTS
-
-;==============================================================================
-; 16-bit helpers — operands NUM1/NUM2 (lo,hi); results in NUM1
-;==============================================================================
-ADD16:  LDA  NUM1
-        LDB  NUM2
-        ADD
-        STA  NUM1
-        LDA  #0
-        JNC  a16nc
-        LDA  #1
-a16nc:  STA  CYTMP
-        LDA  NUM1+1
-        LDB  NUM2+1
-        ADD
-        LDB  CYTMP
-        ADD
-        STA  NUM1+1
-        RTS
-SUB16:  LDA  NUM1
-        LDB  NUM2
-        SUB
-        STA  NUM1
-        LDA  #0
-        JC   s16nb
-        LDA  #1
-s16nb:  STA  CYTMP
-        LDA  NUM1+1
-        LDB  NUM2+1
-        SUB
-        STA  NUM1+1
-        LDA  CYTMP
-        JZ   s16d
-        LDA  NUM1+1
-        DEC
-        STA  NUM1+1
-s16d:   RTS
-CMP16:  LDA  NUM1+1          ; Z=equal, C=NUM1>=NUM2
-        LDB  NUM2+1
-        CMP
-        JNZ  c16d
-        LDA  NUM1
-        LDB  NUM2
-        CMP
-c16d:   RTS
-SHL16:  LDA  NUM1
-        SHL
-        STA  NUM1
-        LDA  NUM1+1
-        ROL
-        STA  NUM1+1
-        RTS
-
-; PARSEDEC — digits at (P2) -> LNUM (P2 left at first non-digit)
-PARSEDEC:LDW LNUM,#0                ; <- tierA: zero word (next: LDA)
-pd1:    LDA  (P2)
+; PARSEDEC - digits at (P2) -> LNUM (P2 left at the first non-digit). Uses NUM2.
+PARSEDEC:
+        LDW  LNUM,#0
+pd_l:   LDA  (P2)
+        JSR  ISDIGIT
+        JNC  pd_d
         LDB  #'0'
         SUB
-        JNC  pdd
-        LDB  #10
-        CMP
-        JC   pdd
         STA  DIG
         INP2
-        MOVW NUM1,LNUM                ; <- tierA: word move (next: JSR SHL16)
-        JSR  SHL16           ; x2
-        MOVW NUM2,NUM1                ; <- tierA: word move (next: JSR SHL16)
-        JSR  SHL16           ; x4
-        JSR  SHL16           ; x8
-        JSR  ADD16           ; x8 + x2 = x10
-        LDA  DIG             ; + digit
-        STA  NUM2
-        LDA  #0
-        STA  NUM2+1
-        JSR  ADD16
-        MOVW LNUM,NUM1                ; <- tierA: word move (next: JMP pd1 -> LDA)
-        JMP  pd1
-pdd:    RTS
-
-; PARSEHEX — parse hex digits at (P2) (after the "0x") -> RESULT. Accumulates
-; LNUM = LNUM*16 + digit (16-bit, wraps past 4 digits). Stops at a non-hex char.
-PARSEHEX:LDW LNUM,#0                ; <- tierA: zero word (next: JSR HEXDIG)
-px1:    JSR  HEXDIG             ; (P2) -> DIG, MATCHF=1 if a hex digit
-        LDA  MATCHF
-        JZ   pxd
-        MOVW NUM1,LNUM                ; <- tierA: word move (next: JSR SHL16)
-        JSR  SHL16
-        JSR  SHL16
-        JSR  SHL16
-        JSR  SHL16
-        LDA  DIG                ; NUM2 = digit
-        STA  NUM2
-        LDA  #0
-        STA  NUM2+1
-        JSR  ADD16              ; NUM1 = NUM1 + digit
-        MOVW LNUM,NUM1                ; <- tierA: word move (next: INP2)
-        INP2                    ; consume the hex digit
-        JMP  px1
-pxd:    MOVW RESULT,LNUM                ; <- tierA: word move (next: RTS)
-        RTS
-
-; HEXDIG — classify the char at (P2) (not consumed). If a hex digit, DIG = its
-; value 0..15 and MATCHF=1; else MATCHF=0. Accepts 0-9, A-F, a-f.
-HEXDIG: LDA  (P2)
-        LDB  #'0'
-        SUB                     ; A = c - '0'; C=1 if c >= '0'
-        JNC  hd_bad
-        LDB  #10
-        CMP                     ; C=1 if A >= 10 (letter range)
-        JC   hd_alpha
-        STA  DIG                ; 0-9
-        LDA  #1
-        STA  MATCHF
-        RTS
-hd_alpha: LDA (P2)
-        LDB  #$DF
-        AND                     ; upcase a letter
-        LDB  #'A'
-        SUB                     ; A = upc - 'A'
-        JNC  hd_bad
-        LDB  #6
-        CMP                     ; C=1 if A >= 6 -> not A..F
-        JC   hd_bad
-        LDB  #10                ; digit = (upc-'A') + 10
-        ADD
-        STA  DIG
-        LDA  #1
-        STA  MATCHF
-        RTS
-hd_bad: LDA  #0
-        STA  MATCHF
-        RTS
-
-; PRDEC — print LNUM as SIGNED decimal ('-' for negatives), then magnitude
-PRDEC:  LDA  LNUM+1
-        LDB  #$80
-        AND
-        JZ   PRDECU                 ; positive -> just print
-        LDA  #'-'
-        JSR  PUTCH
-        LDA  LNUM                   ; LNUM = -LNUM (two's complement)
-        LDB  #$FF
-        XOR
-        STA  LNUM
-        LDA  LNUM+1
-        LDB  #$FF
-        XOR
-        STA  LNUM+1
+        ADDW LNUM,LNUM       ; x2
+        MOVW NUM2,LNUM
+        ADDW LNUM,LNUM       ; x4
+        ADDW LNUM,LNUM       ; x8
+        ADDW LNUM,NUM2       ; x10
         LDA  LNUM
-        LDB  #1
+        LDB  DIG
         ADD
         STA  LNUM
-        JNC  PRDECU
+        JNC  pd_l
         LDA  LNUM+1
         INC
         STA  LNUM+1
-; PRDECU — print LNUM as UNSIGNED decimal (no leading zeros)
-PRDECU: MOVW NUM1,LNUM                ; <- tierA: word move (next: LDA)
-        LDA  #1
+        JMP  pd_l
+pd_d:   RTS
+
+; PARSEHEX - hex digits at (P2) (after the "0x") -> RESULT; wraps past 4 digits.
+PARSEHEX:
+        LDW  LNUM,#0
+px_l:   LDA  (P2)
+        JSR  HEXVAL
+        JNC  px_d
+        STA  DIG
+        INP2
+        ADDW LNUM,LNUM
+        ADDW LNUM,LNUM
+        ADDW LNUM,LNUM
+        ADDW LNUM,LNUM
+        LDA  LNUM
+        LDB  DIG
+        OR
+        STA  LNUM
+        JMP  px_l
+px_d:   MOVW RESULT,LNUM
+        RTS
+
+; HEXVAL - A = character -> A = its hex value with C=1; C=0 if not a hex digit.
+HEXVAL: LDB  #'0'
+        CMP
+        JNC  hv_no
+        LDB  #$3A
+        CMP
+        JNC  hv_dig          ; '0'..'9'
+        JSR  UPCHAR
+        LDB  #'A'
+        CMP
+        JNC  hv_no
+        LDB  #'G'
+        CMP
+        JC   hv_no
+        LDB  #$37            ; 'A' - 10
+        SUB                  ; leaves C=1
+        RTS
+hv_dig: LDB  #'0'
+        SUB                  ; leaves C=1
+        RTS
+hv_no:  CLC
+        RTS
+
+; PRDEC - print LNUM as SIGNED decimal through PUTCH (LNUM is consumed)
+PRDEC:  LDA  LNUM+1
+        LDB  #$80
+        AND
+        JZ   PRDECU
+        LDA  #'-'
+        JSR  PUTCH
+        XORW LNUM,#$FFFF
+        INCW LNUM
+; PRDECU - print LNUM as UNSIGNED decimal, no leading zeros
+PRDECU: LDA  #1
         STA  LZ
         LDP1 #POW10
         LDA  #5
         STA  PCNT
-prl:    LDA  (P1)+
-        STA  NUM2
-        LDA  (P1)+
-        STA  NUM2+1
+prl:    LDW  NUM2,(P1+0)     ; the next power of ten
+        INP1
+        INP1
         LDA  #0
         STA  DIG
-prs:    JSR  CMP16
+prs:    CMPW LNUM,NUM2
         JNC  pre
-        JSR  SUB16
+        SUBW LNUM,NUM2
         LDA  DIG
         INC
         STA  DIG
@@ -3500,11 +2324,11 @@ prs:    JSR  CMP16
 pre:    LDA  PCNT
         LDB  #1
         CMP
-        JZ   prf             ; units: always print
+        JZ   prf             ; the units digit always prints
         LDA  DIG
         JNZ  prsh
         LDA  LZ
-        JNZ  prsk            ; suppress leading zero
+        JNZ  prsk            ; a leading zero
 prsh:   LDA  #0
         STA  LZ
 prf:    LDA  DIG
@@ -3519,248 +2343,404 @@ prsk:   LDA  PCNT
 POW10:  .word 10000,1000,100,10,1
 
 ;==============================================================================
-; TOKENIZER
+; PROGRAM TEXT: enter a line, LIST, tokenize
 ;==============================================================================
-; CRUNCH — tokenize LBUF in place: keywords -> single token bytes, strings and
-; everything else left literal. (Output never overtakes input since tokens
-; shrink, so in-place is safe.)
-CRUNCH: LDP1 #LBUF                  ; read pointer
-        LDW WP,#LBUF                ; <- tierA: address constant (next: LDA)
-cr_lp:  LDA  (P1)
-        JZ   cr_end
-        LDB  #'"'
-        CMP
-        JZ   cr_str
-        JSR  MATCHKW                ; keyword at (P1)?
-        LDA  MATCHF
-        JZ   cr_chr
-        LDA  TOKEN                  ; yes: emit token byte
-        JSR  CR_PUTW
-        JMP  cr_lp
-cr_chr: LDA  (P1)+                  ; no: copy one char
-        JSR  CR_PUTW
-        JMP  cr_lp
-cr_str: LDA  (P1)+                  ; copy opening quote
-        JSR  CR_PUTW
-cr_s1:  LDA  (P1)
-        JZ   cr_end
-        LDB  #'"'                   ; closing quote? test BEFORE CR_PUTW clobbers A
-        CMP
-        JZ   cr_sx
-        LDA  (P1)+
-        JSR  CR_PUTW
-        JMP  cr_s1
-cr_sx:  LDA  (P1)+                  ; copy the closing quote and resume tokenizing
-        JSR  CR_PUTW
-        JMP  cr_lp
-cr_end: LDA  #0                     ; terminator
-        JSR  CR_PUTW
-        RTS
+; DOLINE - a numbered line: LNUM = the number, then insert / replace / delete
+DOLINE: JSR  PARSEDEC
+        JSR  SKIPSP
+        LEAW TSRC,(P2+0)     ; the text
+        LDA  #0
+        STA  TXTMT
+        LDA  (P2)
+        JNZ  dl1
+        LDA  #1
+        STA  TXTMT           ; empty text: delete the line
+dl1:    JSR  EDIT
+        JMP  REPL
 
-CR_PUTW: STA TMPC                   ; write A to (WP), WP++
-        LPW2 WP                ; <- tierA: pointer load (next: LDA)
-        LDA  TMPC
+; EDIT - rebuild PROG into PBUF inserting / replacing / deleting LNUM, copy back
+EDIT:   LDA  #0
+        STA  INSF
+        LDP1 #PROG
+        LDP2 #PBUF
+ed_loop:LDW  RNUM,(P1+0)
+        INP1
+        INP1
+        LDA  RNUM
+        LDB  RNUM+1
+        OR
+        JZ   ed_end          ; end marker
+        LDA  INSF
+        JNZ  ed_copy         ; the new line is already placed: copy the rest
+        CMPW RNUM,LNUM
+        JNC  ed_copy         ; RNUM < LNUM: keep this record
+        JNZ  ed_ins          ; RNUM > LNUM (high bytes differ)
+        LDA  RNUM
+        LDB  LNUM
+        CMP
+        JZ   ed_repl
+ed_ins: JSR  EMITNEW         ; RNUM > LNUM: the new line goes before this one
+        LDA  #1
+        STA  INSF
+        JMP  ed_copy
+ed_repl:JSR  EMITNEW         ; same number: the new text replaces the old
+        LDA  #1
+        STA  INSF
+ed_skip:LDA  (P1)+           ; drop the old text
+        JNZ  ed_skip
+        JMP  ed_loop
+ed_copy:STW  (P2+0),RNUM
+        INP2
+        INP2
+ed_ct:  LDA  (P1)+
+        STA  (P2)+
+        JNZ  ed_ct
+        JMP  ed_loop
+ed_end: LDA  INSF
+        JNZ  ed_wm
+        JSR  EMITNEW         ; append it
+ed_wm:  LDA  #0
+        STA  (P2)+
         STA  (P2)
+        JMP  PB2PROG
+
+; EMITNEW - write the entered line (LNUM + text) at (P2); nothing if deleting
+EMITNEW:LDA  TXTMT
+        JNZ  en_done
+        STW  (P2+0),LNUM
         INP2
-        TPA2L
-        STA  WP
-        TPA2H
-        STA  WP+1
-        RTS
-
-;==============================================================================
-; STRING SUPPORT
-;
-; A string value is [len byte][data...], length capped at SLEN. String variables
-; (NAME$) live in SVARTAB (SVENT-byte entries: NAMLEN name + len + data). Four
-; fixed buffers carry values around: STRACC (SEVAL result), STRTMP (one term),
-; STRARG (a function's string arg), STRCMP (saved LHS of a comparison).
-;==============================================================================
-
-; SPEEK — does (P2) begin a STRING-valued expression? MATCHF=1/0; P2 unchanged.
-; Yes for a "literal", a string function (CHR$/LEFT$/RIGHT$/MID$), or an
-; identifier immediately followed by '$'.
-SPEEK:  JSR  SKIPSP                   ; leading spaces are insignificant
-        LDA  #0
-        STA  MATCHF
-        LDA  (P2)
-        LDB  #'"'
-        CMP
-        JZ   sp_yes
-        LDA  (P2)
-        LDB  #TOK_CHRS
-        CMP
-        JZ   sp_yes
-        LDA  (P2)
-        LDB  #TOK_LEFTS
-        CMP
-        JZ   sp_yes
-        LDA  (P2)
-        LDB  #TOK_RIGHTS
-        CMP
-        JZ   sp_yes
-        LDA  (P2)
-        LDB  #TOK_MIDS
-        CMP
-        JZ   sp_yes
-        LDA  (P2)
-        LDB  #TOK_STRS
-        CMP
-        JZ   sp_yes
-        LDA  (P2)                    ; a letter? then look for a trailing '$'
-        JSR  UPCHAR
-        LDB  #'A'
-        CMP                          ; C=1 if >= 'A'
-        JNC  sp_no
-        LDB  #$5B                    ; 'Z' + 1
-        CMP                          ; C=1 if > 'Z'
-        JC   sp_no
-        TPA2L                         ; walk a copy of P2 over the identifier
-        TAP1L
-        TPA2H
-        TAP1H
-sp_w:   LDA  (P1)
-        JSR  ISALNUM
-        LDA  MATCHF
-        JZ   sp_chk
-        INP1
-        JMP  sp_w
-sp_chk: LDA  (P1)
-        LDB  #'$'
-        CMP
-        JZ   sp_yes
-        LDA  #0
-        STA  MATCHF
-        RTS
-sp_yes: LDA  #1
-        STA  MATCHF
-        RTS
-sp_no:  LDA  #0
-        STA  MATCHF
-        RTS
-
-; SVARGET — parse NAME$ at (P2) (consuming it, including the '$'), find/create the
-; string variable, and set P1 = &entry (start of name) with MATCHF=1. If the name
-; is not followed by '$', MATCHF=0.
-SVARGET: JSR PARSENAME
-        LDA  MATCHF
-        JZ   svg_bad
-        LDA  (P2)
-        LDB  #'$'
-        CMP
-        JNZ  svg_bad
-        INP2                         ; consume '$'
-        JSR  SVARFIND                ; P1 = &entry
-        LDA  #1
-        STA  MATCHF
-        RTS
-svg_bad: LDA #0
-        STA  MATCHF
-        RTS
-
-; SVENTADDR — P1 = SVARTAB + SI*SVENT  (SI = string-var index)
-SVENTADDR: LDA SI
-        STA  NUM1
-        LDA  #0
-        STA  NUM1+1
-        LDA  #SVENT
-        STA  NUM2
-        LDA  #0
-        STA  NUM2+1
-        JSR  MUL16                   ; NUM1 = SI*SVENT
-        LDW NUM2,#SVARTAB                ; <- tierA: address constant (next: JSR ADD16)
-        JSR  ADD16                   ; NUM1 += SVARTAB
-        LPW1 NUM1                ; <- tierA: pointer load (next: RTS)
-        RTS
-
-; SVARFIND — look up NMBUF in SVARTAB. On a hit or after creating a new (empty)
-; entry, P1 = &entry, SVIDX = index. Saves the input cursor (P2) on the stack.
-SVARFIND: TPA2L
-        PHA
-        TPA2H
-        PHA
-        LDA  #0
-        STA  SI                       ; i = 0
-svf2lp: LDA  SI
-        LDB  SVARCNT
-        CMP
-        JZ   svf2new                  ; i == SVARCNT -> not found
-        JSR  SVENTADDR                ; P1 = &entry i
-        LDP2 #NMBUF
-        LDA  #NAMLEN
-        STA  TMPC
-        LDA  #1
-        STA  MATCHF
-svf2cm: LDA  (P1)
-        STA  CYTMP
-        LDA  (P2)
-        LDB  CYTMP
-        CMP
-        JZ   svf2c1
-        LDA  #0
-        STA  MATCHF
-svf2c1: INP1
         INP2
-        LDA  TMPC
-        DEC
+        LEAW SAVE1,(P1+0)
+        LPW1 TSRC
+en_ct:  LDA  (P1)+
+        STA  (P2)+
+        JNZ  en_ct
+        LPW1 SAVE1
+en_done:RTS
+
+; PB2PROG - copy PBUF back to PROG up to and including the 00,00 marker
+PB2PROG:LDP1 #PBUF
+        LDP2 #PROG
+pp_l:   LDA  (P1)+
+        STA  (P2)+
         STA  TMPC
-        JNZ  svf2cm
-        LDA  MATCHF
-        JNZ  svf2hit
-        LDA  SI
-        INC
-        STA  SI
-        JMP  svf2lp
-svf2hit: LDA SI
-        STA  SVIDX
-        JSR  SVENTADDR                ; P1 = &entry
-        JMP  svf2done
-svf2new: LDA SVARCNT                  ; append a new entry
-        STA  SVIDX
-        STA  SI
-        JSR  SVENTADDR                ; P1 = &entry
-        LDP2 #NMBUF                    ; copy the name in
-        LDA  #NAMLEN
-        STA  TMPC
-svf2cp: LDA  (P2)
-        STA  (P1)
-        INP1
-        INP2
-        LDA  TMPC
-        DEC
-        STA  TMPC
-        JNZ  svf2cp
-        LDA  #0                        ; empty value (P1 now at the len byte)
-        STA  (P1)
-        LDA  SVARCNT
-        INC
+        LDA  (P1)+
+        STA  (P2)+
+        LDB  TMPC
+        OR
+        JZ   pp_done
+pp_t:   LDA  (P1)+
+        STA  (P2)+
+        JNZ  pp_t
+        JMP  pp_l
+pp_done:RTS
+
+; NEWPROG - an empty program (the bare 00,00 marker) and no variables
+NEWPROG:LDW  PROG,#0
+        LDA  #0
+        STA  VARCNT
         STA  SVARCNT
-        JSR  SVENTADDR                ; reset P1 = &entry for the caller
-svf2done: PLA
+        RTS
+
+; LIST - print every stored line. PRKW walks the keyword table with P2, so the
+;   parse cursor is kept on the stack.
+LIST:   TPA2L
+        PHA
+        TPA2H
+        PHA
+        LDP1 #PROG
+ls_l:   LDW  LNUM,(P1+0)
+        INP1
+        INP1
+        LDA  LNUM
+        LDB  LNUM+1
+        OR
+        JZ   ls_done
+        LEAW SAVE1,(P1+0)    ; PRDECU uses P1
+        JSR  PRDECU          ; line numbers are unsigned
+        LDA  #' '
+        JSR  PUTC
+        LPW1 SAVE1
+        JSR  PRTEXT          ; P1 -> the next record
+        JSR  CRLF
+        JMP  ls_l
+ls_done:PLA
         TAP2H
         PLA
         TAP2L
         RTS
 
-; SMOVE — copy the string at (SPA) to (SPD) (len byte + data). Uses P2 internally
-; as the destination walker, so it saves and restores the parse cursor.
+; PRTEXT - print the tokenized text at (P1), expanding tokens to keywords;
+;   leaves P1 just past the 00 terminator.
+PRTEXT: LDA  (P1)+
+        JZ   pt_done
+        STA  TMPC
+        LDB  #$80
+        AND
+        JZ   pt_lit
+        LDA  TMPC
+        JSR  PRKW
+        JMP  PRTEXT
+pt_lit: LDA  TMPC
+        JSR  PUTC
+        JMP  PRTEXT
+pt_done:RTS
+
+; PRKW - print the keyword whose token is A. Walks KWTAB with P2.
+PRKW:   STA  TOKW
+        LDP2 #KWTAB
+pk_e:   LEAW RP,(P2+0)       ; this entry's letters
+pk_sc:  LDA  (P2)+
+        STA  TMPC
+        LDB  #$80
+        AND
+        JZ   pk_sc           ; skip the letters to the token byte
+        LDA  TMPC
+        LDB  TOKW
+        CMP
+        JZ   pk_pr
+        LDA  (P2)
+        JZ   pk_d            ; table end
+        JMP  pk_e
+pk_pr:  LPW2 RP
+pk_pl:  LDA  (P2)+
+        STA  TMPC
+        LDB  #$80
+        AND
+        JNZ  pk_d            ; the token byte ends the word
+        LDA  TMPC
+        JSR  PUTC
+        JMP  pk_pl
+pk_d:   RTS
+
+; CRUNCH - tokenize LBUF in place: keywords -> token bytes, strings and
+;   everything else literal. Only a letter can start a keyword.
+CRUNCH: LDP1 #LBUF           ; read cursor
+        LDW  WP,#LBUF        ; write cursor (tokens shrink, so in place is safe)
+cr_lp:  LDA  (P1)
+        JZ   cr_end
+        LDB  #'"'
+        CMP
+        JZ   cr_str
+        JSR  ISLETTER
+        JNC  cr_chr
+        JSR  MATCHKW         ; a keyword at (P1)? (P1 past it if so)
+        LDA  MATCHF
+        JZ   cr_chr
+        LDA  TOKEN
+        JSR  CR_PUTW
+        JMP  cr_lp
+cr_chr: LDA  (P1)+
+        JSR  CR_PUTW
+        JMP  cr_lp
+cr_str: LDA  (P1)+           ; the opening quote
+        JSR  CR_PUTW
+cr_s1:  LDA  (P1)
+        JZ   cr_end
+        LDB  #'"'
+        CMP
+        JZ   cr_sx
+        LDA  (P1)+
+        JSR  CR_PUTW
+        JMP  cr_s1
+cr_sx:  LDA  (P1)+           ; the closing quote, then tokenizing resumes
+        JSR  CR_PUTW
+        JMP  cr_lp
+cr_end: LDA  #0              ; the terminator, then CR_PUTW returns for CRUNCH
+CR_PUTW:LPW2 WP              ; write A at (WP), WP++
+        STA  (P2)+
+        LEAW WP,(P2+0)
+        RTS
+
+; MATCHKW - a keyword at (P1)? MATCHF=1 + TOKEN with P1 past it; else MATCHF=0
+;   and P1 unchanged. A letter or digit right after the letters means a longer
+;   identifier (TOTAL, FORK), not a keyword. Walks KWTAB with P2.
+MATCHKW:LEAW RP,(P1+0)
+        LDP2 #KWTAB
+mk_e:   LDA  (P2)
+        JZ   mk_no           ; end of table
+mk_in:  LDA  (P2)
+        STA  TMPC
+        LDB  #$80
+        AND
+        JNZ  mk_hit          ; the token byte: every letter matched
+        LDA  (P1)
+        LDB  TMPC
+        CMP
+        JNZ  mk_sk
+        INP1
+        INP2
+        JMP  mk_in
+mk_hit: LDA  (P1)
+        JSR  ISALNUM
+        JC   mk_no
+        LDA  TMPC
+        STA  TOKEN
+        LDA  #1
+        STA  MATCHF
+        RTS
+mk_sk:  LDA  (P2)+           ; skip the rest of this entry (letters + token)
+        LDB  #$80
+        AND
+        JZ   mk_sk
+        LPW1 RP
+        JMP  mk_e
+mk_no:  LDA  #0
+        STA  MATCHF
+        LPW1 RP
+        RTS
+
+;==============================================================================
+; STRINGS -- a value is [len byte][data...], length <= SLEN. String variables
+; (NAME$) live in SVARTAB (SVENT-byte entries: name[6] + len + data); their
+; value is (entry+6). Work buffers: STRACC (SEVAL's result), STRTMP (one term),
+; STRARG (a function's string argument), STRCMP (a comparison's left side).
+;==============================================================================
+; SPEEK - does (P2) begin a STRING-valued expression? MATCHF=1/0; P2 unchanged.
+;   Yes for a "literal", a string function, or an identifier followed by '$'.
+SPEEK:  JSR  SKIPSP
+        LDA  #0
+        STA  MATCHF
+        LDA  (P2)
+        LDB  #'"'
+        CMP
+        JZ   sp_yes
+        LDB  #TOK_CHRS
+        CMP
+        JZ   sp_yes
+        LDB  #TOK_LEFTS
+        CMP
+        JZ   sp_yes
+        LDB  #TOK_RIGHTS
+        CMP
+        JZ   sp_yes
+        LDB  #TOK_MIDS
+        CMP
+        JZ   sp_yes
+        LDB  #TOK_STRS
+        CMP
+        JZ   sp_yes
+        JSR  ISLETTER
+        JNC  sp_no
+        TPA2L                ; walk a copy of P2 over the identifier
+        TAP1L
+        TPA2H
+        TAP1H
+sp_w:   LDA  (P1)+
+        JSR  ISALNUM
+        JC   sp_w
+        LDB  #'$'            ; the first non-alphanumeric character
+        CMP
+        JNZ  sp_no
+sp_yes: LDA  #1
+        STA  MATCHF
+sp_no:  RTS
+
+; SVARGET - parse NAME$ at (P2) (consumed, '$' included), find / create the
+;   string variable: P1 = its entry, MATCHF=1. MATCHF=0 if not NAME$.
+SVARGET:JSR  PARSENAME
+        LDA  MATCHF
+        JZ   svg_ret
+        LDA  (P2)
+        LDB  #'$'
+        CMP
+        JNZ  svg_bad
+        INP2
+        JSR  SVARFIND
+        LDA  #1
+        STA  MATCHF
+        RTS
+svg_bad:LDA  #0
+        STA  MATCHF
+svg_ret:RTS
+
+; SVENTADDR - P1 = SVARTAB + SI*SVENT (40 = 32 + 8). Uses NUM1/NUM2.
+SVENTADDR:
+        LDA  SI
+        SHL
+        SHL
+        SHL                  ; SI*8 (SI < 16)
+        STA  NUM1
+        LDA  #0
+        STA  NUM1+1
+        MOVW NUM2,NUM1
+        ADDW NUM1,NUM1       ; *16
+        ADDW NUM1,NUM1       ; *32
+        ADDW NUM1,NUM2       ; *40
+        ADDW NUM1,#SVARTAB
+        LPW1 NUM1
+        RTS
+
+; SVARFIND - look NMBUF up in SVARTAB: P1 = its entry, SVIDX = its index. An
+;   absent name gets a new empty entry.
+SVARFIND:
+        LDA  #0
+        STA  SI
+svf_lp: LDA  SI
+        LDB  SVARCNT
+        CMP
+        JZ   svf_new
+        JSR  SVENTADDR
+        LDA  (P1)
+        LDB  NMBUF
+        CMP
+        JNZ  svf_nx
+        LDA  (P1+1)
+        LDB  NMBUF+1
+        CMP
+        JNZ  svf_nx
+        LDA  (P1+2)
+        LDB  NMBUF+2
+        CMP
+        JNZ  svf_nx
+        LDA  (P1+3)
+        LDB  NMBUF+3
+        CMP
+        JNZ  svf_nx
+        LDA  (P1+4)
+        LDB  NMBUF+4
+        CMP
+        JNZ  svf_nx
+        LDA  (P1+5)
+        LDB  NMBUF+5
+        CMP
+        JNZ  svf_nx
+        LDA  SI
+        STA  SVIDX
+        RTS
+svf_nx: LDA  SI
+        INC
+        STA  SI
+        JMP  svf_lp
+svf_new:LDA  SVARCNT
+        LDB  #NSVARS
+        CMP
+        JC   SYNERR          ; table full
+        STA  SVIDX
+        JSR  SVENTADDR       ; (SI = SVARCNT)
+        STW  (P1+0),NMBUF
+        STW  (P1+2),NMBUF+2
+        STW  (P1+4),NMBUF+4
+        LDA  #0
+        STA  (P1+6)          ; empty value
+        LDA  SVARCNT
+        INC
+        STA  SVARCNT
+        RTS
+
+; SMOVE - copy the string at (SPA) to (SPD), len byte + data. Preserves P2.
 SMOVE:  TPA2L
         PHA
         TPA2H
         PHA
-        LPW1 SPA                ; <- tierA: pointer load (next: LDA)
-        LPW2 SPD                ; <- tierA: pointer load (next: LDA)
-        LDA  (P1)
-        STA  SLENV
-        STA  (P2)
-        INP1
-        INP2
-        LDA  SLENV
-        JZ   smv_d
+        LPW1 SPA
+        LPW2 SPD
+        LDA  (P1)+
+        STA  (P2)+
         STA  TMPC
+        JZ   smv_d           ; (Z from the load: an empty string)
 smv_l:  LDA  (P1)+
-        STA  (P2)
-        INP2
+        STA  (P2)+
         LDA  TMPC
         DEC
         STA  TMPC
@@ -3771,11 +2751,11 @@ smv_d:  PLA
         TAP2L
         RTS
 
-; SCPYLIT — copy the "..." literal at (P2) (P2 at the opening quote) into (SPD),
-; capping at SLEN and consuming through the closing quote.
-SCPYLIT: INP2
-        LPW1 SPD                ; <- tierA: pointer load (next: INP1)
-        INP1                          ; skip the len byte -> data
+; SCPYLIT - copy the "..." literal at (P2) (P2 at the opening quote) into
+;   (SPD), capped at SLEN, consuming through the closing quote.
+SCPYLIT:INP2
+        LPW1 SPD
+        INP1                 ; past the len byte
         LDA  #0
         STA  SI
 scl_l:  LDA  (P2)
@@ -3786,41 +2766,35 @@ scl_l:  LDA  (P2)
         LDA  SI
         LDB  #SLEN
         CMP
-        JC   scl_sk                   ; full -> consume but don't store
-        LDA  (P2)
-        STA  (P1)
-        INP1
-        LDA  SI
+        JC   scl_sk          ; full: consume, don't store
         INC
         STA  SI
+        LDA  (P2)
+        STA  (P1)+
 scl_sk: INP2
         JMP  scl_l
 scl_cl: INP2
-scl_end:LPW1 SPD                ; <- tierA: pointer load (next: LDA)
+scl_end:LPW1 SPD
         LDA  SI
         STA  (P1)
         RTS
 
-; SAPP — append the string at (SPA) onto (SPD), capping the result at SLEN.
-; Uses P2 as the destination walker, so it preserves the parse cursor.
+; SAPP - append the string at (SPA) onto (SPD), capping the result at SLEN.
+;   Preserves P2.
 SAPP:   TPA2L
         PHA
         TPA2H
         PHA
-        LPW1 SPA                ; <- tierA: pointer load (next: LDA)
-        LDA  (P1)
-        STA  SJ                        ; src length
-        INP1
-        LPW2 SPD                ; <- tierA: pointer load (next: LDA)
-        LDA  (P2)
-        STA  SI                        ; dst length
-        INP2
-        LDA  SI                        ; advance P2 past existing data
+        LPW1 SPA
+        LDA  (P1)+
+        STA  SJ              ; source length
+        LPW2 SPD
+        LDA  (P2)+
+        STA  SI              ; destination length ...
         STA  TMPC
-sap_ad: LDA  TMPC
+sap_ad: LDA  TMPC            ; ... advance P2 past its data
         JZ   sap_go
         INP2
-        LDA  TMPC
         DEC
         STA  TMPC
         JMP  sap_ad
@@ -3829,18 +2803,16 @@ sap_go: LDA  SJ
         LDA  SI
         LDB  #SLEN
         CMP
-        JC   sap_fin                   ; dst full
-        LDA  (P1)+
-        STA  (P2)
-        INP2
-        LDA  SI
+        JC   sap_fin         ; destination full
         INC
         STA  SI
+        LDA  (P1)+
+        STA  (P2)+
         LDA  SJ
         DEC
         STA  SJ
         JMP  sap_go
-sap_fin:LPW1 SPD                ; <- tierA: pointer load (next: LDA)
+sap_fin:LPW1 SPD
         LDA  SI
         STA  (P1)
         PLA
@@ -3849,88 +2821,86 @@ sap_fin:LPW1 SPD                ; <- tierA: pointer load (next: LDA)
         TAP2L
         RTS
 
-; SPUT — print the string in STRACC.
+; SPUT - print the string in STRACC (through PUTCH: console, file or STR$ sink)
 SPUT:   LDP1 #STRACC
-        LDA  (P1)
+        LDA  (P1)+
         STA  TMPC
-        INP1
 spt_l:  LDA  TMPC
         JZ   spt_d
-        LDA  (P1)+
-        JSR  PUTCH
-        LDA  TMPC
         DEC
         STA  TMPC
+        LDA  (P1)+
+        JSR  PUTCH
         JMP  spt_l
 spt_d:  RTS
 
-; SUBSTR — STRTMP = substring of STRARG starting at 0-based SI, length SJ, both
-; clamped to the source. Used by LEFT$/RIGHT$/MID$.
+; P1ADDA - P1 = P1 + A (unsigned byte)
+P1ADDA: STA  TMPC
+        TPA1L
+        LDB  TMPC
+        ADD
+        TAP1L
+        TPA1H
+        JNC  p1a_r
+        INC
+        TAP1H
+p1a_r:  RTS
+
+; SUBSTR - STRTMP = SJ characters of STRARG from 0-based SI, both clamped to
+;   the source. Used by LEFT$/RIGHT$/MID$. Preserves P2.
 SUBSTR: TPA2L
         PHA
         TPA2H
         PHA
-        LDP1 #STRARG
-        LDA  (P1)
-        STA  SLENV                     ; L
+        LDA  STRARG          ; L
+        STA  SLENV
         LDA  SI
         LDB  SLENV
-        CMP                            ; SI >= L ?
-        JC   sub_empty
-        LDA  SLENV                     ; avail = L - SI
+        CMP
+        JC   sub_empty       ; SI >= L
+        LDA  SLENV           ; available = L - SI
         LDB  SI
         SUB
         STA  SLENV
-        LDA  SJ                        ; count = min(SJ, avail)
+        LDA  SJ
         LDB  SLENV
-        CMP                            ; C=1 if SJ >= avail
-        JNC  sub_pos
+        CMP
+        JNC  sub_pos         ; SJ < available
         LDA  SLENV
         STA  SJ
-sub_pos: LDP1 #STRARG                  ; P1 = STRARG + 1 + SI
-        INP1
+sub_pos:LDP1 #STRARG+1
         LDA  SI
-        STA  TMPC
-sub_ad: LDA  TMPC
-        JZ   sub_go
-        INP1
-        LDA  TMPC
-        DEC
-        STA  TMPC
-        JMP  sub_ad
-sub_go: LDP2 #STRTMP                   ; P2 = STRTMP data
-        INP2
+        JSR  P1ADDA
+        LDP2 #STRTMP+1
         LDA  SJ
         STA  TMPC
 sub_cp: LDA  TMPC
         JZ   sub_fin
-        LDA  (P1)+
-        STA  (P2)
-        INP2
-        LDA  TMPC
         DEC
         STA  TMPC
+        LDA  (P1)+
+        STA  (P2)+
         JMP  sub_cp
-sub_fin: LDP2 #STRTMP
-        LDA  SJ
-        STA  (P2)
+sub_fin:LDA  SJ
+        STA  STRTMP
         JMP  sub_done
-sub_empty: LDP2 #STRTMP
+sub_empty:
         LDA  #0
-        STA  (P2)
-sub_done: PLA
+        STA  STRTMP
+sub_done:
+        PLA
         TAP2H
         PLA
         TAP2L
         RTS
 
-; CLAMPN — SJ = RESULT clamped to 0..SLEN (negative -> 0, >255 -> SLEN).
+; CLAMPN - SJ = RESULT clamped to 0..SLEN (negative -> 0, > 255 -> SLEN)
 CLAMPN: LDA  RESULT+1
         JZ   cn_lo
         LDB  #$80
         AND
         JZ   cn_big
-        LDA  #0                        ; negative
+        LDA  #0
         STA  SJ
         RTS
 cn_big: LDA  #SLEN
@@ -3940,191 +2910,137 @@ cn_lo:  LDA  RESULT
         STA  SJ
         RTS
 
-; SARG — read a string variable or literal at (P2) into (SPD).
+; SARG - a string variable or literal at (P2) -> (SPD)
 SARG:   JSR  SKIPSP
         LDA  (P2)
         LDB  #'"'
         CMP
-        JZ   SCPYLIT                   ; literal -> (SPD); returns
+        JZ   SCPYLIT
         JSR  SVARGET
         LDA  MATCHF
-        JZ   sarg_err
-        TPA1L                          ; SPA = &entry + NAMLEN
-        LDB  #NAMLEN
-        ADD
-        STA  SPA
-        TPA1H
-        JNC  sarg_v1
-        INC
-sarg_v1: STA SPA+1
-        JSR  SMOVE
-        RTS
-sarg_err: JMP SYNERR
+        JZ   SYNERR
+        LEAW SPA,(P1+6)
+        JMP  SMOVE
 
-; STERM — produce one string term at (P2) into STRTMP.
+; STERM - one string term at (P2) -> STRTMP
 STERM:  JSR  SKIPSP
+        LDW  SPD,#STRTMP
         LDA  (P2)
         LDB  #'"'
         CMP
-        JZ   stm_lit
-        LDA  (P2)
+        JZ   SCPYLIT
         LDB  #TOK_CHRS
         CMP
         JZ   stm_chr
-        LDA  (P2)
         LDB  #TOK_LEFTS
         CMP
         JZ   stm_left
-        LDA  (P2)
         LDB  #TOK_RIGHTS
         CMP
         JZ   stm_right
-        LDA  (P2)
         LDB  #TOK_MIDS
         CMP
         JZ   stm_mid
-        LDA  (P2)
         LDB  #TOK_STRS
         CMP
         JZ   stm_strs
-        JSR  SVARGET                   ; else: a string variable -> copy its data
-        LDA  MATCHF
-        JZ   stm_err
-        TPA1L                          ; SPA = &entry + NAMLEN
-        LDB  #NAMLEN
-        ADD
-        STA  SPA
-        TPA1H
-        JNC  stm_v1
-        INC
-stm_v1: STA  SPA+1
-        LDW SPD,#STRTMP                ; <- tierA: address constant (next: JSR SMOVE)
-        JSR  SMOVE
-        RTS
-stm_lit:LDW SPD,#STRTMP                ; <- tierA: address constant (next: JSR SCPYLIT)
-        JSR  SCPYLIT
-        RTS
-stm_chr: INP2
-        JSR  PARGET                    ; RESULT = code
-        LDP1 #STRTMP
+        JMP  SARG            ; a string variable
+stm_chr:INP2                 ; CHR$(n)
+        JSR  PARGET
         LDA  #1
-        STA  (P1)
-        INP1
+        STA  STRTMP
         LDA  RESULT
-        STA  (P1)
+        STA  STRTMPD
         RTS
-; STR$(n) — render the number as decimal text into STRTMP. Reuses PRDEC by
-; routing its PUTCH output into a string sink (STRSINK) aimed at STRTMP's data.
-stm_strs: INP2
-        JSR  PARGET                    ; RESULT = number
-        MOVW LNUM,RESULT                ; <- tierA: word move (next: LDA)
-        LDW STRSP,#STRTMPD                ; <- tierA: address constant (next: LDA)
+stm_strs:                    ; STR$(n): PRDEC into the string sink
+        INP2
+        JSR  PARGET
+        MOVW LNUM,RESULT
+        LDW  STRSP,#STRTMPD
         LDA  #0
         STA  STRSN
         LDA  #1
         STA  STRSINK
-        JSR  PRDEC                      ; number text -> string sink
+        JSR  PRDEC
         LDA  #0
         STA  STRSINK
-        LDP1 #STRTMP
         LDA  STRSN
-        STA  (P1)                       ; length byte
+        STA  STRTMP
         RTS
-stm_err: JMP  SYNERR
-
-; STM_OPEN — for LEFT$/RIGHT$/MID$: consume '(' , read the string arg into STRARG,
-; consume ',' , evaluate the first numeric arg -> RESULT.
-STM_OPEN: JSR SKIPSP
-        LDA  (P2)
-        LDB  #'('
-        CMP
-        JNZ  stm_err
+; STM_OPEN - LEFT$/RIGHT$/MID$: consume the token and '(', the string argument
+;   -> STRARG, ',', then the first numeric argument -> RESULT
+STM_OPEN:
         INP2
-        LDW SPD,#STRARG                ; <- tierA: address constant (next: JSR SARG)
+        JSR  EXPECTLP
+        LDW  SPD,#STRARG
         JSR  SARG
-        JSR  SKIPSP
-        LDA  (P2)
-        LDB  #','
-        CMP
-        JNZ  stm_err
-        INP2
-        JSR  EXPR
-        RTS
-; STM_CLOSE — build the substring (STRARG[SI..], SJ chars) into STRTMP, consume ')'.
-STM_CLOSE: JSR SUBSTR
-        JSR  SKIPSP
-        LDA  (P2)
-        LDB  #')'
-        CMP
-        JNZ  stm_err
-        INP2
-        RTS
-stm_left: INP2
-        JSR  STM_OPEN                  ; STRARG set, RESULT = n
-        JSR  CLAMPN                    ; SJ = n
+        JSR  EXPECTCOMMA
+        JMP  EXPR
+; STM_CLOSE - the substring (STRARG[SI..], SJ chars) -> STRTMP, then ')'
+STM_CLOSE:
+        JSR  SUBSTR
+        JMP  EXPECTRP
+stm_left:
+        JSR  STM_OPEN
+        JSR  CLAMPN          ; SJ = n
         LDA  #0
         STA  SI
-        JSR  STM_CLOSE
-        RTS
-stm_right: INP2
+        JMP  STM_CLOSE
+stm_right:
         JSR  STM_OPEN
-        JSR  CLAMPN                    ; SJ = n
-        LDP1 #STRARG
-        LDA  (P1)
-        STA  SLENV                     ; L
+        JSR  CLAMPN          ; SJ = n
+        LDA  STRARG          ; L
+        STA  SLENV
         LDA  SJ
         LDB  SLENV
-        CMP                            ; n >= L ?
-        JC   str_all
-        LDA  SLENV                     ; SI = L - n
+        CMP
+        JC   str_all         ; n >= L: the whole string
+        LDA  SLENV           ; SI = L - n
         LDB  SJ
         SUB
         STA  SI
-        JMP  str_sub
-str_all: LDA #0
+        JMP  STM_CLOSE
+str_all:LDA  #0
         STA  SI
-str_sub: JSR STM_CLOSE
-        RTS
-stm_mid: INP2
-        JSR  STM_OPEN                  ; STRARG set, RESULT = i (1-based)
+        JMP  STM_CLOSE
+stm_mid:JSR  STM_OPEN        ; RESULT = i (1-based)
         LDA  RESULT+1
         JNZ  mid_hi
         LDA  RESULT
-        JZ   mid_zero                  ; i = 0 -> treat as 1
-        LDB  #1
-        SUB                            ; SI = i - 1
+        JZ   mid_zero        ; i = 0 counts as 1
+        DEC
         STA  SI
         JMP  mid_len
-mid_zero: LDA #0
+mid_zero:
+        LDA  #0
         STA  SI
         JMP  mid_len
 mid_hi: LDB  #$80
         AND
-        JZ   mid_big                   ; large positive start -> past end
-        LDA  #0                        ; negative -> start 0
+        JZ   mid_big
+        LDA  #0              ; negative -> from the start
         STA  SI
         JMP  mid_len
-mid_big: LDA  #SLEN
+mid_big:LDA  #SLEN           ; a large start -> past the end
         STA  SI
-mid_len: JSR SKIPSP                    ; optional length argument
+mid_len:JSR  SKIPSP          ; optional length
         LDA  (P2)
         LDB  #','
         CMP
         JZ   mid_hasl
-        LDA  #SLEN                      ; no length -> to end
+        LDA  #SLEN           ; none: to the end
         STA  SJ
-        JMP  mid_cl
-mid_hasl: INP2
+        JMP  STM_CLOSE
+mid_hasl:
+        INP2
         JSR  EXPR
-        JSR  CLAMPN                     ; SJ = n
-mid_cl: JSR  STM_CLOSE
-        RTS
+        JSR  CLAMPN
+        JMP  STM_CLOSE
 
-; SEVAL — evaluate a string expression at (P2): STERM { '+' STERM } -> STRACC.
-SEVAL:  LDP1 #STRACC                   ; start empty
-        LDA  #0
-        STA  (P1)
-        JSR  STERM                     ; first term -> STRTMP
+; SEVAL - a string expression at (P2): STERM { '+' STERM } -> STRACC
+SEVAL:  LDA  #0
+        STA  STRACC
+        JSR  STERM
         JSR  sev_app
 sev_l:  JSR  SKIPSP
         LDA  (P2)
@@ -4136,227 +3052,107 @@ sev_l:  JSR  SKIPSP
         JSR  sev_app
         JMP  sev_l
 sev_d:  RTS
-sev_app:LDW SPA,#STRTMP                ; <- tierA: address constant (next: LDA)
-        LDW SPD,#STRACC                ; <- tierA: address constant (next: JSR SAPP)
-        JSR  SAPP
-        RTS
+sev_app:LDW  SPA,#STRTMP
+        LDW  SPD,#STRACC
+        JMP  SAPP
 
-; EVALSTR — string comparison in a numeric context: SEVAL relop SEVAL -> RESULT
-; (1/0). Reached from EVAL when SPEEK sees a string operand.
-EVALSTR: JSR SEVAL                      ; LHS -> STRACC
-        LDW SPA,#STRACC                ; <- tierA: address constant (next: LDA)
-        LDW SPD,#STRCMP                ; <- tierA: address constant (next: JSR SMOVE)
+; EVALSTR - a string comparison in a numeric context: SEVAL relop SEVAL -> 1/0
+EVALSTR:JSR  SEVAL           ; left -> STRACC -> STRCMP
+        LDW  SPA,#STRACC
+        LDW  SPD,#STRCMP
         JSR  SMOVE
-        JSR  SRELOP                     ; RELOP set; C=1 if no operator
-        JC   es_err
-        JSR  SEVAL                      ; RHS -> STRACC
-        TPA2L                            ; SCMP walks P2; preserve the cursor
+        JSR  RELOPP
+        JC   SYNERR          ; a string needs an operator here
+        JSR  SEVAL           ; right -> STRACC
+        JSR  SCMP
+        JMP  ev_res
+
+; SCMP - REL = the relation of STRCMP to STRACC (lexicographic; with an equal
+;   prefix the shorter string is less). Preserves P2.
+SCMP:   TPA2L
         PHA
         TPA2H
         PHA
-        JSR  SCMP                        ; GEF,EQF from STRCMP vs STRACC
+        LDP1 #STRCMP+1
+        LDP2 #STRACC+1
+        LDA  STRCMP
+        STA  SLENV           ; La
+        LDA  STRACC
+        STA  SI              ; Lb
+        LDB  SLENV
+        CMP
+        JC   sc_mina         ; Lb >= La: the common length is La
+        STA  SJ
+        JMP  sc_lp
+sc_mina:LDA  SLENV
+        STA  SJ
+sc_lp:  LDA  SJ
+        JZ   sc_leneq
+        DEC
+        STA  SJ
+        LDA  (P2)+
+        STA  TMPC            ; b
+        LDA  (P1)+           ; a
+        LDB  TMPC
+        CMP
+        JZ   sc_lp
+        JC   sc_gt           ; a > b
+sc_lt:  LDA  #R_LT
+        JMP  sc_set
+sc_gt:  LDA  #R_GT
+        JMP  sc_set
+sc_leneq:
+        LDA  SLENV
+        LDB  SI
+        CMP
+        JZ   sc_eq
+        JC   sc_gt
+        JMP  sc_lt
+sc_eq:  LDA  #R_EQ
+sc_set: STA  REL
         PLA
         TAP2H
         PLA
         TAP2L
-        JMP  ev_disp                     ; reuse numeric relop dispatch
-es_err: JMP  SYNERR
-
-; SRELOP — parse a relational operator at (P2) into RELOP (0..5); C=1 if none.
-SRELOP: JSR  SKIPSP
-        LDA  (P2)
-        LDB  #'='
-        CMP
-        JZ   srl_eq
-        LDA  (P2)
-        LDB  #'<'
-        CMP
-        JZ   srl_lt
-        LDA  (P2)
-        LDB  #'>'
-        CMP
-        JZ   srl_gt
-        SEC
-        RTS
-srl_eq: INP2
-        LDA  #0
-        STA  RELOP
-        CLC
-        RTS
-srl_lt: INP2
-        LDA  (P2)
-        LDB  #'='
-        CMP
-        JZ   srl_le
-        LDA  (P2)
-        LDB  #'>'
-        CMP
-        JZ   srl_ne
-        LDA  #1
-        STA  RELOP
-        CLC
-        RTS
-srl_le: INP2
-        LDA  #3
-        STA  RELOP
-        CLC
-        RTS
-srl_ne: INP2
-        LDA  #5
-        STA  RELOP
-        CLC
-        RTS
-srl_gt: INP2
-        LDA  (P2)
-        LDB  #'='
-        CMP
-        JZ   srl_ge
-        LDA  #2
-        STA  RELOP
-        CLC
-        RTS
-srl_ge: INP2
-        LDA  #4
-        STA  RELOP
-        CLC
         RTS
 
-; SCMP — lexicographic compare STRCMP vs STRACC; sets GEF (>=), EQF (==).
-SCMP:   LDP1 #STRCMP
-        LDA  (P1)
-        STA  SLENV                      ; La
-        LDP2 #STRACC
-        LDA  (P2)
-        STA  SI                         ; Lb
-        INP1
-        INP2
-        LDA  SLENV                       ; min(La,Lb) -> SJ
-        LDB  SI
-        CMP
-        JC   sc_minb
-        LDA  SLENV
-        STA  SJ
-        JMP  sc_lp
-sc_minb: LDA SI
-        STA  SJ
-sc_lp:  LDA  SJ
-        JZ   sc_leneq
-        LDA  (P1)
-        STA  CYTMP                        ; a
-        LDA  (P2)
-        STA  TMPC                         ; b
-        LDA  CYTMP
-        LDB  TMPC
-        CMP                              ; Z if a==b, C if a>=b
-        JZ   sc_next
-        JC   sc_gt
-        LDA  #0                           ; a < b
-        STA  GEF
-        STA  EQF
-        RTS
-sc_gt:  LDA  #1
-        STA  GEF
-        LDA  #0
-        STA  EQF
-        RTS
-sc_next: INP1
-        INP2
-        LDA  SJ
-        DEC
-        STA  SJ
-        JMP  sc_lp
-sc_leneq: LDA SLENV                       ; equal prefix -> shorter is less
-        LDB  SI
-        CMP
-        JZ   sc_eq
-        JC   sc_gt2
-        LDA  #0
-        STA  GEF
-        STA  EQF
-        RTS
-sc_gt2: LDA  #1
-        STA  GEF
-        LDA  #0
-        STA  EQF
-        RTS
-sc_eq:  LDA  #1
-        STA  GEF
-        STA  EQF
-        RTS
-
-; FN_SARG — for LEN/ASC: consume '(' , read the string arg into STRARG, consume ')'.
-FN_SARG: JSR SKIPSP
-        LDA  (P2)
-        LDB  #'('
-        CMP
-        JNZ  fn_err
-        INP2
-        LDW SPD,#STRARG                ; <- tierA: address constant (next: JSR SARG)
+; FN_SARG - LEN/ASC: '(' string argument -> STRARG ')'
+FN_SARG:JSR  EXPECTLP
+        LDW  SPD,#STRARG
         JSR  SARG
-        JSR  SKIPSP
-        LDA  (P2)
-        LDB  #')'
-        CMP
-        JNZ  fn_err
-        INP2
-        RTS
-fn_err: JMP  SYNERR
+        JMP  EXPECTRP
 
-; fa_len / fa_asc — numeric string functions, called from FACTOR.
-fa_len: INP2
-        JSR  FN_SARG
-        LDP1 #STRARG
-        LDA  (P1)
+fa_len: JSR  FN_SARG
+        LDA  STRARG
         STA  RESULT
         LDA  #0
         STA  RESULT+1
         RTS
-fa_asc: INP2
-        JSR  FN_SARG
-        LDP1 #STRARG
-        LDA  (P1)
-        JZ   fa_asc0
-        INP1
-        LDA  (P1)
-        STA  RESULT
+fa_asc: JSR  FN_SARG
+        LDA  STRARG
+        JZ   fa_asc0         ; empty -> 0
+        LDA  STRARG+1
+fa_asc0:STA  RESULT
         LDA  #0
         STA  RESULT+1
         RTS
-fa_asc0:LDW RESULT,#0                ; <- tierA: zero word (next: RTS)
-        RTS
 
-; fa_val — VAL(string$): parse a signed decimal from the string arg -> RESULT.
-; Stops at the first non-digit; a non-numeric string yields 0.
-fa_val: INP2
-        JSR  FN_SARG                    ; STRARG = [len][data]
-        LDP1 #STRARG
-        LDA  (P1)                       ; len -> counter, walk P1 past the data
-        STA  SI
-        INP1                            ; P1 -> data[0]
-fv_nt:  LDA  SI
-        JZ   fv_nt0
-        INP1
-        LDA  SI
-        DEC
-        STA  SI
-        JMP  fv_nt
-fv_nt0: LDA  #0
-        STA  (P1)                       ; NUL-terminate the data so PARSEDEC stops
-        TPA2L                           ; save the program cursor (repoint P2)
+; VAL(s$) - a signed decimal parsed from the start of the string; stops at the
+;   first non-digit; 0 if none.
+fa_val: JSR  FN_SARG
+        LDP1 #STRARG+1
+        LDA  STRARG
+        JSR  P1ADDA
+        LDA  #0
+        STA  (P1)            ; NUL after the data so PARSEDEC stops
+        TPA2L
         STA  GTMP
         TPA2H
         STA  GTMP+1
-        LDA  #<STRARG                    ; repoint P2 at STRARG's data (STRARG+1)
-        LDB  #1
-        ADD
-        TAP2L
-        LDA  #>STRARG
-        JNC  fv_p2
-        INC
-fv_p2:  TAP2H
+        LDP2 #STRARG+1
         JSR  SKIPSP
         LDA  #0
-        STA  TMPC                        ; sign flag
+        STA  TMPC            ; sign
         LDA  (P2)
         LDB  #'-'
         CMP
@@ -4365,319 +3161,259 @@ fv_p2:  TAP2H
         STA  TMPC
         INP2
         JMP  fv_pd
-fv_ns:  LDA  (P2)
-        LDB  #'+'
+fv_ns:  LDB  #'+'
         CMP
         JNZ  fv_pd
         INP2
-fv_pd:  JSR  PARSEDEC                    ; LNUM = value
+fv_pd:  JSR  PARSEDEC
+        MOVW RESULT,LNUM
         LDA  TMPC
         JZ   fv_pos
-        LDA  LNUM                         ; negate LNUM
-        LDB  #$FF
-        XOR
-        STA  LNUM
-        LDA  LNUM+1
-        LDB  #$FF
-        XOR
-        STA  LNUM+1
-        LDA  LNUM
-        LDB  #1
-        ADD
-        STA  LNUM
-        JNC  fv_pos
-        LDA  LNUM+1
-        INC
-        STA  LNUM+1
-fv_pos: LPW2 GTMP                ; <- tierA: pointer load (next: LDA)
-        MOVW RESULT,LNUM                ; <- tierA: word move (next: RTS)
+        JSR  NEGRES
+fv_pos: LPW2 GTMP
         RTS
 
-; fa_eof — EOF(n): 1 if the input channel is at end (or not open for input),
-; else 0. The channel number is parsed and ignored (one channel).
-fa_eof: INP2
-        JSR  PARGET                       ; consume '(n)'
+; EOF(n) - 1 if the input channel is at its end (or not open for input)
+fa_eof: JSR  PARGET          ; the channel number is parsed and ignored
         LDA  FMODE
         LDB  #1
         CMP
-        JNZ  fe_true                      ; not open for input -> EOF
+        JNZ  fe_true
         LDA  FLOOKC
         JZ   fe_false
-fe_true:LDW RESULT,#1                ; <- tierA: word constant (next: RTS)
+fe_true:LDW  RESULT,#1
         RTS
-fe_false:LDW RESULT,#0                ; <- tierA: zero word (next: RTS)
+fe_false:
+        LDW  RESULT,#0
         RTS
 
 ;==============================================================================
-; DATA FILES — one sequential channel over the BIOS byte streams (FOPEN/FGETB and
-; FWOPEN/FPUTB/FCLOSE). Root files only; PRINT# writes one value + CR per record,
-; INPUT# reads one CR-delimited record. Available in the disk / run-from-OS builds
-; (the standalone whole-ROM build has no resident BIOS), like SAVE/LOAD.
+; DATA FILES -- one sequential channel over the BIOS byte streams. PRINT#
+; writes one value + CR per record, INPUT# reads one CR-delimited record.
 ;==============================================================================
-
-; SETFNAME — evaluate the filename string expression at (P2) and resolve it into
-; a target directory + leaf FNAME (via the BIOS FRESOLVE), so a data file can
-; name a subdirectory ("/LOGS/A") as well as a bare root name. NUL-terminates
-; STRACC's data in place and resolves that, avoiding a second buffer. Preserves
-; the parse cursor (FRESOLVE clobbers P2).
-SETFNAME: JSR SEVAL                   ; STRACC = filename ([len][data])
+; SETFNAME - evaluate the file name string at (P2) and resolve it (relative
+;   to the OS CWD) into a directory + leaf FNAME. Preserves P2.
+SETFNAME:
+        JSR  SEVAL           ; STRACC = the name
         TPA2L
         PHA
         TPA2H
         PHA
-        LDP1 #STRACC                   ; NUL-terminate the data in place
-        LDA  (P1)
-        STA  TMPC                      ; len
-        INP1                           ; -> data[0]
-sfn_a:  LDA  TMPC
-        JZ   sfn_z
-        INP1
-        LDA  TMPC
-        DEC
-        STA  TMPC
-        JMP  sfn_a
-sfn_z:  LDA  #0
-        STA  (P1)                      ; NUL after the data
-        LDP1 #STRACC                   ; FRESOLVE the path string (STRACC+1)
-        INP1
-        JSR  APATH                     ; relative to the OS CWD, not the root
-        JSR  FRESOLVE                  ; -> DIRLBA + leaf FNAME
+        LDP1 #STRACC+1
+        LDA  STRACC
+        JSR  P1ADDA
+        LDA  #0
+        STA  (P1)            ; NUL-terminate the data in place
+        LDP1 #STRACC+1
+        JSR  APATH
+        JSR  FRESOLVE
         PLA
         TAP2H
         PLA
         TAP2L
         RTS
 
-; OPEN <name$> [FOR] OUTPUT|INPUT — open the one data channel.
-DOOPEN: INP2                           ; skip OPEN token
-        JSR  SETFNAME                  ; FNAME = the name
+; OPEN name$ [FOR] OUTPUT|INPUT
+DOOPEN: INP2
+        JSR  SETFNAME
         JSR  SKIPSP
-        LDA  (P2)                      ; an optional FOR is accepted
+        LDA  (P2)
         LDB  #TOK_FOR
         CMP
         JNZ  dop_mode
         INP2
         JSR  SKIPSP
-dop_mode: LDA (P2)
+dop_mode:
+        LDA  (P2)
         LDB  #TOK_OUTPUT
         CMP
         JZ   dop_out
-        LDA  (P2)
         LDB  #TOK_INPUT
         CMP
-        JZ   dop_in
-        JMP  SYNERR
-dop_out: INP2
-        JSR  FWOPEN                     ; write stream at the free pointer
-        LDA  #2
-        STA  FMODE
-        RTS
-dop_in: INP2
-        LDP1 #PBUF                      ; read stream needs a 512-byte buffer
+        JNZ  SYNERR
+        INP2
+        LEAW GTMP,(P2+0)
+        LDP1 #PBUF           ; the read stream's 512-byte buffer
         JSR  FOPEN
         JC   dop_nf
         LDA  #1
         STA  FMODE
-        JSR  FPRIME                     ; prime the EOF lookahead
+        JSR  FPRIME          ; prime the EOF lookahead
+        LPW2 GTMP
+        RTS
+dop_out:INP2
+        LEAW GTMP,(P2+0)
+        JSR  FWOPEN
+        LDA  #2
+        STA  FMODE
+        LPW2 GTMP
         RTS
 dop_nf: LDA  #0
         STA  FMODE
         LDP1 #MNOFILE
         JSR  PUTS
+        LPW2 GTMP
         RTS
 
-; CLOSE — commit a write channel (FCLOSE) / drop a read channel.
-DOCLOSE: INP2
+; CLOSE - commit a write channel / drop a read channel
+DOCLOSE:INP2
         LDA  FMODE
         LDB  #2
         CMP
-        JNZ  dcl_ni                     ; only a write channel needs committing
+        JNZ  dcl_ni
+        LEAW GTMP,(P2+0)
         JSR  FCLOSE
+        LPW2 GTMP
 dcl_ni: LDA  #0
         STA  FMODE
         RTS
 
-; PRINT# <expr> — write one value (its text form) plus a CR record terminator.
-; Entered from DOPRINT with P2 at the '#'.
-DOPRINTF: LDA FMODE
+; PRINT# value - one record: the value's text and a CR. Entered at the '#'.
+DOPRINTF:
+        LDA  FMODE
         LDB  #2
         CMP
-        JNZ  dpf_err                    ; not open for output
-        INP2                            ; consume '#'
+        JNZ  SYNERR          ; not open for output
+        INP2
         LDA  #1
         STA  OUTFILE
         JSR  SKIPSP
         LDA  (P2)
-        JZ   dpf_cr                     ; bare PRINT# -> a blank record
+        JZ   dpf_cr          ; a bare PRINT#: an empty record
         JSR  SPEEK
         LDA  MATCHF
         JNZ  dpf_str
-        JSR  EVAL                       ; numeric value -> decimal text (via PUTCH)
-        MOVW LNUM,RESULT                ; <- tierA: word move (next: JSR PRDEC)
+        JSR  EVAL
+        MOVW LNUM,RESULT
         JSR  PRDEC
         JMP  dpf_cr
-dpf_str: JSR SEVAL                       ; string value (via PUTCH)
+dpf_str:JSR  SEVAL
         JSR  SPUT
-dpf_cr: LDA  #$0D                        ; record terminator
+dpf_cr: LDA  #$0D
         JSR  FPUTB
         LDA  #0
         STA  OUTFILE
         RTS
-dpf_err: JMP  SYNERR
 
-; INPUT# <var> — read one CR-delimited record into a numeric or string variable.
-; Entered from DOINPUT with P2 at the '#'.
-DOINPUTF: LDA FMODE
+; INPUT# var | var$ - one CR-delimited record. Entered at the '#'.
+DOINPUTF:
+        LDA  FMODE
         LDB  #1
         CMP
-        JNZ  dif_err                    ; not open for input
-        INP2                            ; consume '#'
+        JNZ  SYNERR          ; not open for input
+        INP2
         JSR  SKIPSP
         JSR  SPEEK
         LDA  MATCHF
         JNZ  dif_str
-        JSR  VARGET                     ; numeric variable -> P1 = &value
+        JSR  VARGET
         LDA  MATCHF
-        JZ   dif_err
-        TPA1L
-        STA  SAVE1
-        TPA1H
-        STA  SAVE1+1
-        TPA2L                           ; save cursor (FREADREC clobbers P2)
-        STA  GTMP
-        TPA2H
-        STA  GTMP+1
-        JSR  FREADREC                   ; STRACC = record text (NUL-terminated)
-        LDP2 #STRACC                    ; parse it as a decimal number
-        INP2
+        JZ   SYNERR
+        LEAW SAVE1,(P1+6)
+        LEAW GTMP,(P2+0)
+        JSR  FREADREC        ; STRACC = the record, NUL-terminated
+        LDP2 #STRACC+1
         JSR  SKIPSP
-        JSR  PARSEDEC                   ; LNUM = value
-        LPW2 GTMP                ; <- tierA: pointer load (next: LDA)
-        LPW1 SAVE1                ; <- tierA: pointer load (next: LDA)
-        LDA  LNUM
-        STA  (P1)
-        INP1
-        LDA  LNUM+1
-        STA  (P1)
+        JSR  PARSEDEC
+        LPW1 SAVE1
+        STW  (P1+0),LNUM
+        LPW2 GTMP
         RTS
-dif_str: JSR SVARGET                     ; string variable -> P1 = &entry
+dif_str:JSR  SVARGET
         LDA  MATCHF
-        JZ   dif_err
-        TPA1L
-        STA  SAVE1
-        TPA1H
-        STA  SAVE1+1
-        TPA2L                            ; save cursor (FREADREC clobbers P2)
-        STA  GTMP
-        TPA2H
-        STA  GTMP+1
-        JSR  FREADREC                    ; STRACC = record
-        LDW SPA,#STRACC                ; <- tierA: address constant (next: LDA)
-        LDA  SAVE1
-        LDB  #NAMLEN
-        ADD
-        STA  SPD
-        LDA  SAVE1+1
-        JNC  dif_s1
-        INC
-dif_s1: STA  SPD+1
+        JZ   SYNERR
+        LEAW SPD,(P1+6)
+        LEAW GTMP,(P2+0)
+        JSR  FREADREC
+        LDW  SPA,#STRACC
         JSR  SMOVE
-        LPW2 GTMP                ; <- tierA: pointer load (next: RTS)
+        LPW2 GTMP
         RTS
-dif_err: JMP  SYNERR
 
-; FPRIME — prime the 1-byte read-ahead when a channel is opened for input, so
-; EOF() can report end-of-file BEFORE the read that would hit it.
+; FPRIME - prime the one-byte read-ahead when a channel opens for input, so
+;   EOF() can report the end BEFORE the read that would hit it.
 FPRIME: LDA  #0
         STA  FLOOKC
         JSR  FGETB
         JC   fpr_eof
         STA  FLOOK
         RTS
-fpr_eof: LDA #1
+fpr_eof:LDA  #1
         STA  FLOOKC
         RTS
 
-; GNB — get next byte from the input stream via the lookahead: return FLOOK and
-; refill it from FGETB. A = byte, C=1 at EOF. FLOOKC records whether the byte now
-; sitting in FLOOK is really end-of-file, which is exactly what EOF() reports.
+; GNB - the next input byte via the lookahead: A = byte, C=1 at EOF.
 GNB:    LDA  FLOOKC
         JNZ  gnb_eof
-        LDA  FLOOK                       ; byte to deliver
+        LDA  FLOOK
         STA  TMPC
-        JSR  FGETB                       ; refill lookahead
+        JSR  FGETB           ; refill the lookahead
         JC   gnb_reof
         STA  FLOOK
         LDA  TMPC
         CLC
         RTS
-gnb_reof: LDA #1
+gnb_reof:
+        LDA  #1
         STA  FLOOKC
         LDA  TMPC
         CLC
         RTS
-gnb_eof: SEC
+gnb_eof:SEC
         RTS
 
-; FREADREC — read the next CR-delimited record from the open read stream into
-; STRACC (len + data, capped at SLEN, and NUL-terminated after the data so the
-; numeric path can PARSEDEC it). Uses P2 as the walker (FGETB clobbers P1, not P2).
-FREADREC: LDP2 #STRACC
-        INP2                            ; data pointer
+; FREADREC - the next CR-delimited record -> STRACC (len + data, capped at
+;   SLEN, NUL-terminated after the data). The write cursor lives in CUR:
+;   FGETB may clobber both pointers on a sector refill.
+FREADREC:
+        LDW  CUR,#STRACC+1
         LDA  #0
         STA  SI
-frr_l:  JSR  GNB                         ; A = byte, C=1 at EOF (via lookahead)
+frr_l:  JSR  GNB
         JC   frr_end
-        STA  TMPC
         LDB  #$0D
         CMP
-        JZ   frr_end                     ; end of this record
+        JZ   frr_end         ; end of the record
+        STA  TMPC
         LDA  SI
         LDB  #SLEN
         CMP
-        JC   frr_l                       ; record too long -> discard the overflow
-        LDA  TMPC
-        STA  (P2)
-        INP2
-        LDA  SI
+        JC   frr_l           ; too long: discard the overflow
         INC
         STA  SI
+        LPW2 CUR
+        LDA  TMPC
+        STA  (P2)+
+        LEAW CUR,(P2+0)
         JMP  frr_l
-frr_end: LDA #0                          ; NUL-terminate after the data
+frr_end:LPW2 CUR
+        LDA  #0
         STA  (P2)
-        LDP2 #STRACC
         LDA  SI
-        STA  (P2)
+        STA  STRACC
         RTS
 
-; ---------------------------------------------------------------------------
-; CHECKLINE — structural syntax check of the just-crunched line in LBUF, run at
-; entry so a malformed line is rejected immediately (with the program unchanged)
-; instead of only blowing up later at RUN. Skips a leading line number, then for
-; each ':'-separated statement validates: a legal statement leader, balanced
-; parentheses, and a terminated string literal. A REM ends checking (its tail is
-; a free-form comment). Forward references (GOTO/GOSUB to a not-yet-entered line)
-; are deliberately NOT checked here — those stay legal and are caught at RUN.
-; Prints ?SYNTAX ERROR and returns C=1 on failure; C=0 (silent) on success.
+;==============================================================================
+; CHECKLINE - structural check of the just-crunched line in LBUF: for each
+; ':'-separated statement a legal leader, balanced parentheses and terminated
+; strings. A REM ends the check. Forward references are NOT checked (RUN
+; reports them). C=1 and "?SYNTAX ERROR" on failure, C=0 silent on success.
+;==============================================================================
 CHECKLINE:
         LDP2 #LBUF
         JSR  SKIPSP
-ckl_dg: LDA  (P2)                   ; skip a leading decimal line number, if any
-        LDB  #'0'
-        CMP                         ; C=1 if A >= '0'
+ckl_dg: LDA  (P2)            ; skip a leading line number
+        JSR  ISDIGIT
         JNC  ckl_st
-        LDB  #$3A                   ; '9' + 1
-        CMP                         ; C=1 if A >= ':' (i.e. past '9')
-        JC   ckl_st
-        INP2                        ; it's a digit -> consume
+        INP2
         JMP  ckl_dg
-ckl_st: LDA  #0                     ; start of a statement: parens balance here
+ckl_st: LDA  #0              ; a statement: parentheses balance within it
         STA  CKDEP
         JSR  SKIPSP
-        JSR  CKLEAD                 ; legal statement leader?
+        JSR  CKLEAD
         JC   ckl_bad
-        LDA  CKREM                  ; REM -> rest of line is a comment, accept
-        JNZ  ckl_ok
+        LDA  CKREM
+        JNZ  ckl_ok          ; REM: the rest is free-form
 ckl_lp: LDA  (P2)
         JZ   ckl_eol
         LDB  #'"'
@@ -4692,223 +3428,94 @@ ckl_lp: LDA  (P2)
         LDB  #':'
         CMP
         JZ   ckl_col
-        INP2
+ckl_nx: INP2
         JMP  ckl_lp
-ckl_op: LDA  CKDEP                  ; '(' -> deeper
+ckl_op: LDA  CKDEP
         INC
         STA  CKDEP
-        INP2
-        JMP  ckl_lp
-ckl_cp: LDA  CKDEP                  ; ')' with no matching '(' -> error
-        JZ   ckl_bad
+        JMP  ckl_nx
+ckl_cp: LDA  CKDEP
+        JZ   ckl_bad         ; ')' with nothing open
         DEC
         STA  CKDEP
+        JMP  ckl_nx
+ckl_col:LDA  CKDEP
+        JNZ  ckl_bad         ; ':' with a '(' still open
         INP2
-        JMP  ckl_lp
-ckl_col: LDA CKDEP                  ; ':' with a paren still open -> error
-        JNZ  ckl_bad
-        INP2
-        JMP  ckl_st                 ; next statement: re-check its leader
-ckl_str: INP2                       ; opening quote
+        JMP  ckl_st
+ckl_str:INP2
 cks_l:  LDA  (P2)
-        JZ   ckl_bad                ; ran off the end -> unterminated string
+        JZ   ckl_bad         ; unterminated string
         LDB  #'"'
         CMP
-        JZ   cks_e
+        JZ   ckl_nx          ; past the closing quote
         INP2
         JMP  cks_l
-cks_e:  INP2
-        JMP  ckl_lp
-ckl_eol: LDA CKDEP                  ; end of line: any '(' left open -> error
+ckl_eol:LDA  CKDEP
         JNZ  ckl_bad
 ckl_ok: CLC
         RTS
-ckl_bad: LDP1 #MSYN
+ckl_bad:LDP1 #MSYN
         JSR  PUTS
         SEC
         RTS
 
-; CKLEAD — is the token/char at (P2) a legal way to START a statement? A letter
-; begins an implicit LET; the statement keywords are all legal; the "operator"
-; keywords THEN/TO/STEP and the function keywords ABS/RND/PEEK are not. Anything
-; else (a digit, an operator, a ')') is illegal. Sets CKREM=1 for REM so the
-; caller stops scanning. C=1 if the leader is illegal; P2 is left unchanged.
+; CKLEAD - may the token / character at (P2) START a statement? A statement
+;   keyword (its STMTTAB entry is a handler, not st_what), a GL verb, or a
+;   letter (implicit LET) may; a function / modifier keyword, a digit or an
+;   operator may not. CKREM=1 for REM. C=1 if illegal; P2 unchanged.
 CKLEAD: LDA  #0
         STA  CKREM
         LDA  (P2)
-        JNZ  ckd_1
-        CLC                         ; empty statement (end of line / after ':')
-        RTS
-ckd_1:  LDB  #TOK_REM
+        JZ   ckd_ok          ; an empty statement
+        LDB  #TOK_REM
         CMP
         JZ   ckd_rem
-        LDA  (P2)                   ; is it a keyword token (bit 7 set)?
-        LDB  #$80
-        AND
-        JZ   ckd_alpha
-        LDA  (P2)                   ; a token: reject the non-statement ones
-        LDB  #TOK_THEN
+        LDB  #GLV0
+        SUB
+        JNC  ckd_low
+        LDB  #GLVN
         CMP
-        JZ   ckd_bad
-        LDB  #TOK_TO
-        CMP
-        JZ   ckd_bad
-        LDB  #TOK_STEP
-        CMP
-        JZ   ckd_bad
-        LDB  #TOK_ABS
-        CMP
-        JZ   ckd_bad
-        LDB  #TOK_RND
-        CMP
-        JZ   ckd_bad
-        LDB  #TOK_PEEK
-        CMP
-        JZ   ckd_bad
-        LDB  #TOK_CHRS
-        CMP
-        JZ   ckd_bad
-        LDB  #TOK_LEFTS
-        CMP
-        JZ   ckd_bad
-        LDB  #TOK_RIGHTS
-        CMP
-        JZ   ckd_bad
-        LDB  #TOK_MIDS
-        CMP
-        JZ   ckd_bad
-        LDB  #TOK_LEN
-        CMP
-        JZ   ckd_bad
-        LDB  #TOK_ASC
-        CMP
-        JZ   ckd_bad
-        LDB  #TOK_STRS
-        CMP
-        JZ   ckd_bad
-        LDB  #TOK_VAL
-        CMP
-        JZ   ckd_bad
-        LDB  #TOK_EOF
-        CMP
-        JZ   ckd_bad
-        LDB  #TOK_PIXELR
-        CMP
-        JZ   ckd_bad
-        LDB  #TOK_RGB
-        CMP
-        JZ   ckd_bad
-        LDB  #TOK_GLRD
-        CMP
-        JZ   ckd_bad
-        LDB  #TOK_FILL
-        CMP
-        JZ   ckd_bad
-        LDB  #TOK_NOFILL
-        CMP
-        JZ   ckd_bad
-        LDB  #TOK_OUTPUT
-        CMP
-        JZ   ckd_bad
-        CLC                         ; a statement keyword -> ok
+        JC   ckd_bad         ; GLRD / unassigned
+ckd_ok: CLC                  ; a GL verb
         RTS
-ckd_rem: LDA  #1
+ckd_low:LDA  (P2)
+        LDB  #$80
+        SUB
+        JNC  ckd_alpha
+        SHL                  ; the statement table decides
+        LDB  #<STMTTAB
+        ADD
+        TAP1L
+        LDA  #0
+        ROL
+        LDB  #>STMTTAB
+        ADD
+        TAP1H
+        LDW  CUR,(P1+0)
+        CMPW CUR,#st_what
+        JZ   ckd_bad
+        CLC
+        RTS
+ckd_rem:LDA  #1
         STA  CKREM
         CLC
         RTS
-ckd_alpha: LDA (P2)                 ; not a token: must be a letter (implicit LET)
-        JSR  UPCHAR
-        LDB  #'A'
-        CMP                         ; C=1 if A >= 'A'
+ckd_alpha:
+        LDA  (P2)
+        JSR  ISLETTER
         JNC  ckd_bad
-        LDB  #$5B                   ; 'Z' + 1
-        CMP                         ; C=1 if A > 'Z'
-        JC   ckd_bad
         CLC
         RTS
-ckd_bad: SEC
+ckd_bad:SEC
         RTS
 
-; MATCHKW — keyword at (P1)? sets MATCHF=1 + TOKEN and advances P1 past it,
-;           else MATCHF=0 and P1 unchanged.  Uses P2 to walk KWTAB.
-MATCHKW: TPA1L                      ; save input position
-        STA  RP
-        TPA1H
-        STA  RP+1
-        LDP2 #KWTAB                ; <- tierA: pointer constant (next: LDA)
-mk_e:   LDA  (P2)
-        JZ   mk_no                  ; end of table
-mk_in:  LDA  (P2)
-        STA  TMPC
-        LDB  #$80
-        AND
-        JNZ  mk_hit                 ; reached token byte -> all letters matched
-        LDA  (P1)                   ; compare input vs table letter
-        LDB  TMPC
-        CMP
-        JNZ  mk_sk
-        INP1
-        INP2
-        JMP  mk_in
-mk_hit: LDA  (P1)                   ; char right after the matched keyword
-        JSR  ISALNUM                ; if a letter/digit, this is really a longer
-        LDA  MATCHF                 ;   identifier (e.g. TOTAL, FORK) -> not a kw
-        JNZ  mk_no
-        LDA  TMPC
-        STA  TOKEN
-        LDA  #1
-        STA  MATCHF
-        RTS
-mk_sk:  LDA  (P2)                   ; skip rest of this entry (letters + token)
-        STA  TMPC
-        INP2
-        LDB  #$80
-        AND
-        JZ   mk_sk
-        LPW1 RP                ; <- tierA: pointer load (next: JMP mk_e -> LDA)
-        JMP  mk_e
-mk_no:  LDA  #0
-        STA  MATCHF
-        LPW1 RP                ; <- tierA: pointer load (next: RTS)
-        RTS
-
-; PRKW — print the keyword whose token == A (>= $80).  Uses P1 to walk KWTAB.
-PRKW:   STA  TOKW
-        LDP1 #KWTAB                ; <- tierA: pointer constant (next: TPA1L)
-pk_e:   TPA1L                       ; remember this entry's letter start
-        STA  RP
-        TPA1H
-        STA  RP+1
-pk_sc:  LDA  (P1)+
-        STA  TMPC
-        LDB  #$80
-        AND
-        JZ   pk_sc                  ; skip letters to the token byte
-        LDA  TMPC
-        LDB  TOKW
-        CMP
-        JZ   pk_pr                  ; this entry's token matches
-        LDA  (P1)
-        JZ   pk_d                   ; table end
-        JMP  pk_e
-pk_pr:  LPW1 RP                ; <- tierA: pointer load (next: LDA)
-pk_pl:  LDA  (P1)+
-        STA  TMPC
-        LDB  #$80
-        AND
-        JNZ  pk_d                   ; reached token -> done
-        LDA  TMPC
-        JSR  PUTC
-        JMP  pk_pl
-pk_d:   RTS
-
-; keyword table: each entry = ASCII letters then the token byte (>= $80);
-; a 00 ends the table.  (Token byte doubles as the entry's end marker.)
-
+;==============================================================================
+; Keyword table: each entry = ASCII letters then the token byte (>= $80);
+; a 00 ends the table. The GL verbs come first (generated, longest-first)
+; so POINT3 / CLEARS are matched before POINT / CLS.
+;==============================================================================
 KWTAB:
-        ; the GL verbs come FIRST: the fragment is longest-first inside
-        ; itself, and ahead of the main table so POINT3 and CLEARS are
-        ; matched before POINT and CLS ever get a look
         .include "glkwtab.inc"
         .ascii "PRINT"
         .byte $80
@@ -4979,7 +3586,7 @@ KWTAB:
         .ascii "OUTPUT"
         .byte $A1
         .ascii "STR"
-        .byte $24,$A2               ; '$' then token: STR$
+        .byte $24,$A2               ; STR$
         .ascii "VAL"
         .byte $A3
         .ascii "EOF"
@@ -5019,8 +3626,7 @@ KWTAB:
 ;==============================================================================
 ; Console
 ;==============================================================================
-; SKIPSP — advance the parse cursor P2 past ASCII spaces. Stops on the first
-; non-space (including the 00 line terminator). Clobbers A/B only.
+; SKIPSP - advance the parse cursor P2 past spaces
 SKIPSP: LDA  (P2)
         LDB  #' '
         CMP
@@ -5028,71 +3634,63 @@ SKIPSP: LDA  (P2)
         INP2
         JMP  SKIPSP
 sks:    RTS
-; PUTC — emit the byte in A to the console through the BIOS (CONOUT, $0103).
-;
-; This used to drive the ACIA directly, a leftover from when BASIC could be built
-; as the whole ROM with no monitor underneath it. Nothing builds that variant any
-; more (every target passes -D BASORG=$2000 or $6A00, and the monitor ROM is
-; always present at $0000-$1FFF), so going through the BIOS costs nothing and
-; means BASIC inherits the console behaviour every other program gets — in
-; particular PUTC's bare-LF -> CR LF expansion, without which BASIC's output
-; staircases on a real serial terminal. Preserves A, as CONOUT does.
-PUTC:   JMP  CONOUT                  ; tail call: CONOUT RTSs to PUTC's caller
 
-; PUTCH — emit A to the current sink: the open data file when OUTFILE is set
-; (PRINT#), otherwise the console. Lets PRDEC/SPUT serve both PRINT and PRINT#.
-PUTCH:  PHA                          ; preserve the char (and TMPC, used by SPUT)
-        LDA  STRSINK                 ; STR$ capture takes priority over the file
+; UPCHAR - A -> upper case if 'a'..'z', else unchanged
+UPCHAR: LDB  #'a'
+        CMP
+        JNC  uc_ret
+        LDB  #$7B
+        CMP
+        JC   uc_ret
+        LDB  #$DF
+        AND
+uc_ret: RTS
+
+; PUTC - A to the console through the BIOS (preserves A and P1, as CONOUT does)
+PUTC:   JMP  CONOUT
+
+; PUTCH - A to the current sink: the STR$ capture, the open data file (PRINT#),
+;   or the console. Preserves P1.
+PUTCH:  PHA
+        LDA  STRSINK
         JNZ  pch_str
         LDA  OUTFILE
         JZ   pch_con
-        TPA1L                        ; FPUTB clobbers P1; PRDECU/SPUT walk it
-        STA  SAVE2
-        TPA1H
-        STA  SAVE2+1
+        LEAW SAVE2,(P1+0)    ; FPUTB clobbers P1
         PLA
         JSR  FPUTB
-        LPW1 SAVE2                ; <- tierA: pointer load (next: RTS)
+        LPW1 SAVE2
         RTS
-pch_con: PLA
-        JSR  PUTC
-        RTS
-pch_str: TPA1L                        ; string sink: append A to (STRSP), inc STRSN
-        STA  SAVE2
-        TPA1H
-        STA  SAVE2+1
-        LPW1 STRSP                ; <- tierA: pointer load (next: PLA)
+pch_con:PLA
+        JMP  CONOUT
+pch_str:LEAW SAVE2,(P1+0)
+        LPW1 STRSP
         PLA
         STA  (P1)
-        INCW STRSP                ; <- tierA: 16-bit INCW chain, skip label pst_1 dropped (next: LDA)
+        INCW STRSP
         LDA  STRSN
         INC
         STA  STRSN
-        LPW1 SAVE2                ; <- tierA: pointer load (next: RTS)
+        LPW1 SAVE2
         RTS
-; GETC — block until a key arrives, then return it in A. Through the BIOS
-; (CONIN, $0100) for the same reason as PUTC above: one console implementation,
-; shared by the monitor, the OS and BASIC.
-GETC:   JMP  CONIN                   ; tail call: CONIN RTSs to GETC's caller
-; PUTS — print the NUL-terminated string at (P1) to the console. Advances P1 past
-; the terminator; uses PUTC (console only, never the data-file sink).
+
+; PUTS - print the NUL-terminated string at (P1) (console only)
 PUTS:   LDA  (P1)+
         JZ   putsx
-        JSR  PUTC
+        JSR  CONOUT
         JMP  PUTS
 putsx:  RTS
-; CRLF — emit a carriage return + line feed to the console.
+
+; CRLF
 CRLF:   LDA  #CR
-        JSR  PUTC
+        JSR  CONOUT
         LDA  #LF
-        JSR  PUTC
-        RTS
-; GETLINE — read one console line into LBUF, echoing as typed. CR ends the line;
-; backspace/DEL erase the last char (and rub it out on screen) but not past the
-; start of LBUF. NUL-terminates the buffer and prints a trailing CRLF. Uses P2 as
-; the write cursor. No length cap here — callers rely on LBUF being large enough.
-GETLINE: LDP2 #LBUF
-gl1:    JSR  GETC
+        JMP  CONOUT
+
+; GETLINE - read one console line into LBUF, echoing; CR ends it, BS / DEL
+;   erase (not past the start). NUL-terminated; a CRLF is echoed at the end.
+GETLINE:LDP2 #LBUF
+gl1:    JSR  CONIN
         LDB  #CR
         CMP
         JZ   gldone
@@ -5102,25 +3700,21 @@ gl1:    JSR  GETC
         LDB  #$7F
         CMP
         JZ   glbs
-        JSR  PUTC
+        JSR  CONOUT
         STA  (P2)+
         JMP  gl1
 glbs:   TPA2L
         LDB  #<LBUF
         CMP
-        JZ   gl1
+        JZ   gl1             ; nothing to erase
         DEP2
-        LDA  #BS
-        JSR  PUTC
-        LDA  #' '
-        JSR  PUTC
-        LDA  #BS
-        JSR  PUTC
+        LDP1 #MBS
+        JSR  PUTS
         JMP  gl1
 gldone: LDA  #0
         STA  (P2)
-        JSR  CRLF
-        RTS
+        JMP  CRLF
+MBS:    .byte BS,$20,BS,0
 
 ;==============================================================================
 BANNER: .byte CR,LF

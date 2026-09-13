@@ -684,7 +684,8 @@ so `10 REM (unbalanced "quotes` is accepted.
 - Numeric variables: names ≤ 6 significant chars, up to 32; no arrays.
 - String variables (`A$`): up to 16, each holding up to 32 characters; longer
   values are truncated. Not arrays. (`STR$`/`VAL` convert number↔string.)
-- `FOR` loops nest **2 deep**; `GOSUB` nests **3 deep**.
+- `FOR` loops nest **3 deep**; `GOSUB` nests **3 deep** (one more of either is a
+  `?SYNTAX ERROR`).
 - Data files: one channel open at a time, one value per record; `EOF(n)` tests
   for end of file — see *Data files*.
 - No `DATA`/`READ`, `DIM`, `DEF FN`, `ON…GOTO`, or `WHILE`.

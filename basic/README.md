@@ -65,7 +65,25 @@ README covers build internals and milestones.
 > Lines are **syntax-checked on entry** (balanced parens, terminated strings,
 > legal statement leader), so typos are caught as you type, not at RUN.
 >
-> Limits: FOR nesting 2 deep, GOSUB 3 deep; one data file open at a time.
+> Limits: FOR nesting 3 deep, GOSUB 3 deep; one data file open at a time.
+>
+> **Rewritten for the Tier A ISA (2026-09-12).** `p8xbasic.asm` was redone from
+> scratch as a drop-in (same tokens — the `.BAS` format — same keyword table,
+> messages, HELP and GL byte streams; every `make test-basic` test passes
+> unchanged): statements and functions dispatch through tables indexed by the
+> token (`STMTTAB`/`FACTAB`, and `CHECKLINE` reads the same table to decide what
+> may start a statement), the evaluator pushes its running value with `PHW`/`PLW`
+> and does its arithmetic with the word ops, a comparison is one `CMPW` plus a
+> relation mask shared by numeric and string compares, variables and FOR/GOSUB
+> frames are records addressed with `(P1+d)`, and the line search stops as soon
+> as the sorted program passes the target. 11,151 → 9,124 bytes; cycles
+> (`POKE 65282,n` stamps, `p8xemu -L`): a 2,000-iteration arithmetic loop
+> 26.2 M → 16.5 M, a GOSUB/12-variable loop 37.7 M → 18.9 M, a string
+> concat/compare loop 16.3 M → 5.8 M. Behaviour changes, all deliberate: FOR
+> nests 3 deep (was 2, unchecked), a 4th GOSUB or a 33rd variable is a
+> `?SYNTAX ERROR` instead of silent corruption, lowercase variable names work
+> at the start of a statement, and a statement after `RUN` on the same line is
+> no longer misparsed.
 
 ## Direction
 
@@ -168,12 +186,12 @@ python3 tools/p8xfs.py put disk.img basicrun.bin --name BASIC.BIN --load 0x6A00 
 # boot the OS (B), then:  RUN BASIC.BIN   ... use BASIC ...   BYE   (-> back at /> )
 ```
 
-Layout: code `$6A00`–`$8E8x` (~5.2 KB), data `$C500` (`PROG` at `$C700`), rebuild
+Layout: code `$6A00`–`$8DAx` (~8.9 KB), data `$C500` (`PROG` at `$CA80`), rebuild
 buffer `$E000`; the stack stays at `$FEFF`. Covered by `os_basic_test.sh`.
 
 These paths are covered by `make test-basic` (in `emulator/`): disk BASIC via
 `B`, `SAVE`/`LOAD` round-trip, string variables/functions, data-file I/O, and
-`RUN BASIC.BIN` from the OS. Code is ~7.9 KB, so in every layout it clears its
+`RUN BASIC.BIN` from the OS. Code is ~8.9 KB, so in every layout it clears its
 data base with room to spare.
 
 ## Planned layout (proposed — see open decisions)

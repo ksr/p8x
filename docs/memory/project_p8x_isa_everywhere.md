@@ -107,24 +107,21 @@ of p8xcc.asm / p8xasm.asm themselves. Related:
 
 **Stage 5 (2026-09-12, user request after the mechanical pass): from-scratch
 redesigns in assembly**, in the order assembler -> compiler -> BASIC -> OS/WM
-kernel -> monitor; asm twins of C commands left alone (C versions to be compared
-later, asm retired where C wins). Done: `apps/p8xasm.asm` (drop-in; hashed
-symbol table, first-letter opcode index, DISPTAB dispatch; 5,178 -> 4,065 B;
-2.4x / 5.7x / >30x faster on cover / self-host / 1,000-symbol sources). Method
-that worked: read the old source as the SPEC, list the test contracts
-(os_asm_test, asm_selfhost, os_asm_inc, os_asm_use), write the new file in one
-go, benchmark old vs new with LED-stamped scratch copies (`STA $FF02` at entry
-and before the OK message, `p8xemu -L`). Gotcha: `#>LABEL+2` is the high byte
-of (LABEL+2), not (>LABEL)+2. Tracked as the `[~]` item at the top of BACKLOG NEXT.
-
-**Stage 5 (2026-09-12, user request after the mechanical pass): from-scratch
-redesigns in assembly**, in the order assembler -> compiler -> BASIC -> OS/WM
-kernel -> monitor; asm twins of C commands left alone (C versions to be compared
-later, asm retired where C wins). Done: `apps/p8xasm.asm` (drop-in; hashed
-symbol table, first-letter opcode index, DISPTAB dispatch; 5,178 -> 4,065 B;
-2.4x / 5.7x / >30x faster on cover / self-host / 1,000-symbol sources). Method
-that worked: read the old source as the SPEC, list the test contracts
-(os_asm_test, asm_selfhost, os_asm_inc, os_asm_use), write the new file in one
-go, benchmark old vs new with LED-stamped scratch copies (`STA $FF02` at entry
-and before the OK message, `p8xemu -L`). Gotcha: `#>LABEL+2` is the high byte
-of (LABEL+2), not (>LABEL)+2. Tracked as the `[~]` item at the top of BACKLOG NEXT.
+kernel -> monitor (the user then asked for BASIC before the compiler); asm twins
+of C commands left alone (C versions to be compared later, asm retired where C
+wins). DONE: `apps/p8xasm.asm` (hashed symbol table, first-letter opcode index,
+DISPTAB dispatch; 5,178 -> 4,065 B; 2.4x / 5.7x / >30x faster on cover /
+self-host / 1,000-symbol sources; commit eb59828) and `basic/p8xbasic.asm`
+(STMTTAB/FACTAB token dispatch, CKLEAD reads STMTTAB, PHW/PLW around the
+evaluator, relation-mask compares REL/RELM, (P1+d) records for variables and
+FOR/GOSUB frames, early-exit sorted line search; 11,151 -> 9,124 B; 1.6x / 2.0x
+/ 2.8x faster on arithmetic-loop / GOSUB+variables / string benchmarks; FOR
+nests 3 deep now, lowercase names work, table-full = ?SYNTAX ERROR). NEXT:
+`apps/p8xcc.asm`, then OS/WM kernel and monitor. Method that worked: read the
+old source as the SPEC, list the test contracts, write the new file in parts,
+DIFFERENTIAL-test a long scripted session against the OLD binary (found the one
+real bug each time), benchmark old vs new with LED stamps (`STA $FF02` /
+`POKE 65282,n`, `p8xemu -L`). Gotchas: `#>LABEL+2` is the high byte of
+(LABEL+2); a shared scratch byte (TMPC) used by a helper that a caller also
+relies on (ISLETTER inside MATCHKW) -- keep character-class helpers register-only;
+docs/memory/* are HARD LINKS of the user memory dir (write once, not twice).
