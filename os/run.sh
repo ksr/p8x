@@ -257,6 +257,14 @@ if [ ! -f "$disk" ]; then
     python3 "$root/assembler/p8xasm.py" "$build/asmc.asm" -o "$build/asmc.bin" --base 0x6A00 >/dev/null
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/asmc.bin" \
         --name /binc/asm.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+    # The C-written C compiler (apps/cc.c, the twin of apps/p8xcc.asm; it
+    # generates the same text): //#use abi spliced, p8cc.py -> /binc/cc.bin.
+    cp "$root/apps/cc.c" "$build/"
+    python3 "$root/tools/clib.py" "$build/cc.c" -o "$build/ccc_pp.c" >/dev/null
+    python3 "$root/compiler/p8cc.py" "$build/ccc_pp.c" -o "$build/ccc.asm" >/dev/null
+    python3 "$root/assembler/p8xasm.py" "$build/ccc.asm" -o "$build/ccc.bin" --base 0x6A00 >/dev/null
+    python3 "$root/tools/p8xfs.py" put "$disk" "$build/ccc.bin" \
+        --name /binc/cc.bin --load 0x6A00 --exec 0x6A00 >/dev/null
     # The native `cc` (apps/p8xcc.asm) does the WHOLE compile on-target, so the
     # older split front end (cpp | lex | cc1) was retired (2026-07-14). The
     # //#use splicing that cpp performed lives host-side as tools/clib.py (used

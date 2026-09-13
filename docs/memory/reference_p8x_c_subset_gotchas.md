@@ -33,6 +33,25 @@ Writing a big program in the P8X C subset (basic/basic.c, 1,000 lines):
 - A C TPA image is big (basic.c: 21 KB, reaching $BD00): test programs that
   POKE "free" memory around $A000 corrupt it.
 
+Writing for BOTH compilers (apps/cc.c, 2026-09-13, so the on-board cc can
+compile it too):
+
+- The on-board cc stores a WORD through `*p = v` even for `char *p` (it has
+  no type for the deref store): write byte stores as `p[0] = v` or `poke`.
+  Reads `*p` are typed correctly.
+- String literals <= 127 raw chars (the on-board STRBUF is unchecked) and the
+  native assembler's line is 127 chars: split long templates across `emit()`
+  calls.
+- `if (a && b == c)` was MISCOMPILED by the on-board cc until 2026-09-13 (the
+  trailing relational took the condition-mode branch alone); `||` was fine.
+  Fixed, but parenthesise if a build with an older cc.bin matters.
+- Both accept forward prototypes, `?:`, `!`, `d[-1]` (65535 wraps), `int *h;
+  h = 0xB800; h[k]` (scaled), `char *p; p = e;` from an int.
+- The on-board cc's per-call cost is 2 x (slots of the CALLER) PHW/PLW: a
+  function with 6 locals pays 36 bytes per call it makes. That is why cc.c
+  compiled on-board is 35 KB against 18 KB from p8cc.py.
+
 Result for BASIC: C is 2.3x the size and 3.6-4.9x the cycles of the from-
-scratch asm (see basic/README.md "The C version"). Related:
+scratch asm (see basic/README.md "The C version"); for the assembler 2.4x /
+3.9-4.2x; for the compiler 1.8x / 1.8-2.2x. Related:
 [[project_p8x_isa_everywhere]], [[reference_p8x_int_is_unsigned]].

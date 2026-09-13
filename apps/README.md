@@ -69,7 +69,7 @@ Accepted syntax is a subset of the host assembler, with identical encodings:
 | instruction | `LDA #COUNT` · `STA $C000` · `LDA (P1)+` · `JSR done` |
 | two-operand forms | `MOVW __ax,__V+4` · `ADDW __ax,__t0` · `CMPW __ax,#300` · `LDW __V+2,(P3+3)` · `STW (P3+1),__ax` — since 2026-09-12 the native parser handles every Tier A shape the host assembler does (`a,b`, `a,#imm8`, `a,#imm16`, `(Pn+d)`, `a,(Pn+d)`, `(Pn+d),a`; `PARSEOP`/`CLASSOP`, byte-literal rule `LIT8` = the host's), so `cc`'s output and hand sources assemble byte-identically on both. Only the relative branches (`.relax`/`.R`) stay host-only |
 | `LDPn #imm16` | `LDP1 #msg` → the 3-byte `LDPn` opcode (`$38`–`$3A`) + imm16 (Tier A; was the `LPLn`/`LPHn` pair) |
-| directives | `.org .byte .word .ascii .asciiz .fill` |
+| directives | `.org .byte .word .ascii .asciiz .fill` — a string decodes `\n \t \r \0` and `\\ \" \'` as the host assembler does (since 2026-09-13; the on-board `cc` emits C escapes raw for the assembler to decode) |
 | expressions | `$hex` · decimal · `'c'` · symbol, joined with `+`/`-`, optional `<`/`>` prefix |
 
 A `;#use NAME` line (at column 0) appends the shared include `/lib/NAME.inc`
@@ -138,7 +138,7 @@ source with it, all byte-identical to the host.
 
 | | asm `p8xasm.asm` | C `asm.c` | ratio |
 |---|---|---|---|
-| binary | 4,065 B | 9,795 B | 2.4× |
+| binary | 4,116 B | 9,945 B | 2.4× |
 | the all-opcode coverage source | 2.62 M cycles | 11.0 M | 4.2× |
 | its own 71 KB source (self-host) | 49.5 M | 194 M | 3.9× |
 | symbol capacity | 1,120 | 480 (the table starts above the larger image, at `$A800`) | |
@@ -223,9 +223,51 @@ the same function was compiled with word elements (the differential run caught
 it in `grep.c`'s `collect`; `puts` of such an array printed one character),
 a call to a function not yet declared now emits its name (the assembler resolves
 it) instead of a garbage label, and a syntax error stops with `cc: syntax
-error` instead of looping. Limits unchanged: 64 functions, 64 `//#define`s, 5
-nested `//#use`; the arenas hold ~3 KB of global names and 768 bytes of locals
-per function (`cc: symbol table full` past that).
+error` instead of looping. Limits (raised later the same day, for the C twin
+below): 250 functions, 250 `//#define`s, 5 nested `//#use`; the arenas hold
+11.5 KB of global names (the tables now start at `$A000`) and 768 bytes of
+locals per function (`cc: symbol table full` past that).
+
+**Three more fixes (2026-09-13, found by diffing the C twin's output against
+this compiler's on the machine):** the right operand of `&&` now leaves
+condition mode — `if (a && b == c)` emitted the relational's single branch and
+then fell into the body when `a` was false (`||` was always right; the `&&`
+form is what real sources use, e.g. `while (*a && *a == *b)`); label numbers
+are 16-bit — the byte counter wrapped at 256, so any on-board build of
+`grep.c` (600 labels) or `vi.c` (353) got duplicate labels; and a local
+array's size is 16-bit arithmetic — `char b[300]` was given 21 slots instead
+of 150. `cc.bin` 10,075 → 10,182 bytes. `cc_c_test.sh` guards all three.
+
+**The C version (`cc.c`, 2026-09-13) — size and speed against the asm one.**
+`apps/cc.c` is the same compiler in the p8cc subset, mirroring `p8xcc.asm`
+routine for routine: the same static-slot codegen, the same name-table
+mechanism (arena entries chained from first-letter heads, as raw memory above
+the image from `$B800`), the same messages and — the point — the same emitted
+text. `emulator/test/cc_c_test.sh` compiles six sources with both compilers on
+the machine and diffs the text (that differential is what found the three
+bugs above); compiling `cc.c` itself with both gives 136,032 identical bytes.
+Built by the host toolchain (`//#use abi` spliced, `p8cc.py`) as `/binc/cc.bin`.
+
+| | asm `p8xcc.asm` | C `cc.c` | ratio |
+|---|---|---|---|
+| binary | 10,182 B | 18,089 B | 1.8× |
+| `pwd.c` | 2.09 M cycles | 4.54 M | 2.2× |
+| `wc.c` | 20.6 M | 37.7 M | 1.8× |
+| `vi.c` | 30.2 M | 54.4 M | 1.8× |
+| `cc.c` (its own source) | 68.0 M | 130.2 M | 1.9× |
+
+The gap is the smallest of the three twins (BASIC 3.6–4.9×, the assembler
+3.9–4.2×) because both compilers spend most of their cycles in the BIOS byte
+stream and `SYS_PUTC`. The source keeps to the subset BOTH compilers accept
+(no `break`/`continue`, no initialised globals, no string literal over 127
+characters, byte stores through pointers written `p[0] = v` because the
+on-board compiler stores a word through `*p =`), so the on-board compiler
+compiles it — but **the self-hosting round trip does not fit**: `cc.c`
+compiled by the static-slot compiler is 35,057 bytes (the host compiler's
+frame model makes 18,089), ending at `$F2F1` with no room left for the
+compiler's own tables; 906 of its lines are slot saves around calls. A
+self-compiling C compiler on the machine needs the frame-model codegen (the
+deferred item in [`BACKLOG.md`](../BACKLOG.md)), not a smaller source.
 
 **Language (through v0.28):** functions, direct **and mutual** recursion (via a
 forward prototype), pointers + pass-by-reference, `int`/`char`, arrays with `[]`

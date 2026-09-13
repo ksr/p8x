@@ -37,6 +37,9 @@ remainder is why it is still here.
             unchanged (a backward `.org` is now reported on the `.org` line).
             Layout note: code + OPCTAB must stay below `$8000`; INCBUF moved to
             `$CC00`, the BIOS dir-scan page to `$CE00`, path buffers to `$D000`.
+            2026-09-13: `.ascii`/`.asciiz` decode `\n \t \r \0 \\ \"` as the
+            host assembler does (it copied bytes verbatim and a `\"` ended the
+            string — the on-board cc emits C escapes raw); `asm.c` too; 4,116 B.
       - [x] **`basic/p8xbasic.asm` DONE 2026-09-12** (the user moved it ahead of
             the compiler) — drop-in rewrite: token-indexed STMTTAB/FACTAB
             dispatch (CHECKLINE reads STMTTAB for legal leaders), PHW/PLW
@@ -65,6 +68,13 @@ remainder is why it is still here.
             undeclared functions now emit the name; syntax errors bail. The
             frame model (P3 frames instead of static slots) stays a separate,
             later item — it changes the generated code and needs its own tests.
+            **Later the same day, from the C twin's differential:** the right
+            operand of `&&` leaves condition mode (`if (a && b == c)` fell into
+            the body when a was false), 16-bit label numbers (a byte counter
+            wrapped at 256: grep/vi got duplicate labels), 16-bit local-array
+            sizing (`char b[300]` got 21 slots); caps 250 functions / 250
+            macros, an 11.5 KB name arena at `$A000`. 10,182 B. `cc_c_test.sh`
+            guards all three.
       - [ ] `os/p8xos.asm` + `os/wmkernel_body.asm`, `firmware/p8xmon.asm` (last).
       Measure with `p8xemu -L` cycle stamps (scratch copies with `STA $FF02` at
       entry and before the final message); each module with its own tests.
@@ -635,6 +645,23 @@ Nothing below has been built or measured.
       self-host 194 M vs 49.5 M (3.9×); 480 vs 1,120 symbols (the table sits
       above the larger image). Same verdict as BASIC: the from-scratch asm wins
       both axes; the C twin is the reference build. Next: the compiler in C.
+- [x] **A C-written C compiler — DONE 2026-09-13.** `apps/cc.c`, `/binc/cc.bin`,
+      tested by `cc_c_test.sh` (six sources compiled by both compilers on the
+      machine, text-identical; two of them assembled natively and run; cc.c
+      itself compiled by both: 136,032 identical bytes). THE COMPARISON
+      (apps/README.md "The C version"): 18,089 vs 10,182 B (1.8×); pwd 4.54 M
+      vs 2.09 M cycles (2.2×), wc 37.7 vs 20.6 M, vi 54.4 vs 30.2 M, its own
+      source 130.2 vs 68.0 M (1.8–1.9×) — the closest of the three twins, both
+      compilers being bound by the BIOS byte stream and SYS_PUTC. The
+      differential found three bugs in the asm compiler (`a && b == c`, byte
+      label counter, byte local-array size), all fixed. THE PRIZE — a
+      self-compiling compiler on the machine — is BLOCKED by codegen size:
+      cc.c compiled by the static-slot compiler is 35,057 B (host frame model
+      18,089), ending at $F2F1 with no room for its tables; 906 of its lines
+      are slot saves around calls. It needs the frame-model codegen (the
+      hand-asm item's deferred follow-up), not a smaller source. Verdict: asm
+      wins both axes by the smallest margin yet; the C twin is the reference
+      build and the self-host candidate once the codegen changes.
 - [ ] **imgsend: VERIFY pass (2026-08-21, from a real corruption).** A clone
       delivered trit.bin with the right SIZE but corrupt content — "acked
       every sector, finished with 'K'" certifies transport, not bytes — and

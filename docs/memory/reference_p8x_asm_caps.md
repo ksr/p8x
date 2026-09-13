@@ -17,7 +17,7 @@ green while an on-target `make os`/`make p8xasm` fails -- always reproduce
 toolchain-capacity bugs on-target (emulator).
 
 **Layout constraint:** the assembler binary (code + generated OPCTAB) loads at
-`$6A00` and MUST end below `$8000` (5,632 bytes; it is ~4,065). `os_asm_test.sh`
+`$6A00` and MUST end below `$8000` (5,632 bytes; it is 4,116). `os_asm_test.sh`
 asserts the size. Its other buffers: INCBUF `$CC00`, BIOS dir-scan page `$CE00`
 (`FSDIRBUF`), path buffers `$D000-$D1FF`; the TPA is free up to CSTACKTOP `$F800`.
 
@@ -29,7 +29,15 @@ Guards: `make test-asm-os` (os_asmos_test.sh -- assemble the OS on-target ==
 host; it splices every `.include` of p8xos.asm into one file, since the native
 asm allows ONE .include per file), `make test-cmdbuild` (os_cmdbuild_test.sh).
 Both in `test-full`, on-demand (slow under emulation). See
-[[reference_p8x_cc_caps]] for the C-compiler caps (MAXFUNC=64, code SIZE ceiling).
+[[reference_p8x_cc_caps]] for the C-compiler caps (250 functions/macros since
+2026-09-13, code SIZE ceiling).
+
+**String escapes (2026-09-13):** `.ascii`/`.asciiz` decode `\n \t \r \0` and
+`\\ \" \'` (the char itself) like the host's `unicode_escape`; before that the
+native assembler copied bytes verbatim and a `\"` ENDED the string, so anything
+the on-board cc compiled with C escapes in a literal (it emits them raw) was
+wrong when assembled natively. `asm.c` mirrors it. A source line is still at
+most 127 chars (LINEBUF), so a compiled `.asciiz` line = 10 + the literal.
 
 Trap: `?undefined: OPCTAB` building p8xasm on-target. Root cause (2026-07-16):
 the Makefile recipe `cat p8xasm.asm opctab.asm >T.ASM` -- the on-target `cat`

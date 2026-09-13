@@ -1,6 +1,6 @@
 ---
 name: reference_p8x_cc_caps
-description: On-target C compiler (apps/p8xcc.asm) fixed table caps and the next ceiling
+description: On-target C compiler (apps/p8xcc.asm) table caps (250 functions/macros, 11.5 KB arena at $A000, 16-bit labels/slots), the bugs the C twin found, and why the self-host does not fit (static-slot codegen 2x)
 metadata: 
   node_type: memory
   type: reference
@@ -66,3 +66,24 @@ is unchanged (tab-indented text), so the SIZE ceiling of a compiled command is
 the same as before. The old compiler compiled a `char` array declared AFTER an
 `int` array with word elements -- any on-target build of grep -r before this
 date had that latent bug (the shipped /bin twins are host-built and unaffected).
+
+**2026-09-13, later (the C twin apps/cc.c):** MAXFUNC and MAXMAC are 250, BSS
+moved to `$A000` (the binary ends ~$9200) so the global arena is `$B200-$DFFF`
+= 11.5 KB (cc.c's ~330 names need ~4.3 KB); prototypes count as functions
+(FADD twice for a prototyped function). Label numbers are 16-bit words (`LBLW`
+block at BSS+$460, NEWLBL -> NEWL, EMITJ/EMITLBL take JLBL) -- the byte
+counter wrapped at 256 and grep (600 labels) / vi (353) got duplicate labels
+from every on-board build. Local array sizes are computed in 16 bits (`char
+b[300]` was 21 slots). `a && b == c` in a condition fell into the body when a
+was false (GLAND now clears CONDCUR before the right operand). All three were
+found by diffing cc.c's output against the asm compiler's on the machine
+(`cc_c_test.sh`), which is the way to find the next one.
+
+**Self-host does NOT fit:** cc.c compiled by the on-board static-slot compiler
+is 35,057 B (host p8cc.py frame model: 18,089), ending at $F2F1 -- no room for
+its tables (~7 KB). 906 lines are `PHW __V+n` slot saves around calls. The
+native assembler also ran out of symbols on it (1,188 needed, 1,120 available)
+before the size was even measured. Only the frame-model codegen (BACKLOG) can
+change this; shrinking the source cannot. The on-board cc's other limits that
+cc.c had to respect: string literals <= 127 raw chars (STRBUF, unchecked),
+`*p = v` is a WORD store, the native assembler's 127-char line.

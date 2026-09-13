@@ -142,3 +142,16 @@ OS/WM kernel and monitor: asm rewrites, last.
 `gen_p8xopc.py --c`, `/binc/asm.bin`, `asm_c_test.sh`): byte-identical on all
 five checks incl. self-host; 2.4x the size and 3.9-4.2x the cycles of the
 from-scratch asm after the same kind of tuning. Next: the compiler in C.
+
+**Step 3 (2026-09-13): the compiler in C** (`apps/cc.c`, `/binc/cc.bin`,
+`cc_c_test.sh`): text-identical output to the asm compiler on six sources and
+on cc.c itself; 1.8x the size (18,089 vs 10,182 B) and 1.8-2.2x the cycles --
+the closest twin (both are SYS_PUTC/byte-stream bound). The differential found
+three asm-compiler bugs (`a && b == c`, byte label counter, byte local-array
+size) and the native assembler's missing string-escape decoding; all fixed.
+The self-host prize is BLOCKED: cc.c compiled by the on-board static-slot
+codegen is 35 KB (no room for its tables) -- the frame-model codegen is the
+prerequisite, see [[reference_p8x_cc_caps]]. Verdict across the three twins:
+asm wins size and speed every time; the C twins are reference builds. The
+user's plan continues: retire `edit` (vi.c exists), then OS/WM kernel and
+monitor asm rewrites.

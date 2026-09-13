@@ -179,6 +179,7 @@ test-os: p8xemu ucode
 	sh test/os_depdump_test.sh
 	sh test/os_cc_test.sh
 	sh test/os_cc_bigcmd_test.sh
+	sh test/cc_c_test.sh
 	sh test/os_mount_test.sh
 
 # Monitor smoke test (D/?, no card), plus disk BASIC (boot via B) and SAVE/LOAD.
