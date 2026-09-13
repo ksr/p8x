@@ -462,7 +462,31 @@ DA_LP:  LDA  (P1)+
         LDB  #QUOTE
         CMP
         JZ   DA_CLOSE
-        JSR  EMIT
+        LDB  #$5C               ; a backslash escape, as the host assembler
+        CMP                     ;   decodes them: \n \t \r \0, else the char
+        JNZ  DA_EM              ;   itself (\\ \" \')
+        LDA  (P1)+
+        JZ   DI_ERR
+        LDB  #'n'
+        CMP
+        JNZ  DA_E1
+        LDA  #$0A
+        JMP  DA_EM
+DA_E1:  LDB  #'t'
+        CMP
+        JNZ  DA_E2
+        LDA  #$09
+        JMP  DA_EM
+DA_E2:  LDB  #'r'
+        CMP
+        JNZ  DA_E3
+        LDA  #$0D
+        JMP  DA_EM
+DA_E3:  LDB  #'0'
+        CMP
+        JNZ  DA_EM
+        LDA  #0
+DA_EM:  JSR  EMIT
         JMP  DA_LP
 DA_CLOSE:
         LDA  MNBUF+6            ; .ASCIIZ -> trailing NUL

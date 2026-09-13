@@ -25,9 +25,17 @@
 ;     word ops; the decimal emitter is CMPW/SUBW against the powers of ten.
 ;   * emitted text is walked with one pointer (the OS's SYS_PUTC preserves
 ;     P1/P2), one instruction per character instead of a reload each time.
-;   * the variables and tables live at BSS ($B000-$DFFF, free TPA while the
+;   * the variables and tables live at BSS ($A000-$DFFF, free TPA while the
 ;     compiler runs) and are cleared at start, so the binary is code only.
 ;   * a syntax error stops the compile with a message instead of looping.
+;   * (2026-09-13, later the same day, found by writing the C twin apps/cc.c
+;     and diffing the two compilers' output) three fixes: the right operand of
+;     '&&' leaves condition mode (`if (a && b == c)` used to branch on the
+;     relational alone and fall into the body when `a` was false); label
+;     numbers are 16-bit (a byte counter wrapped at 256 and grep got duplicate
+;     labels); a local array's size is 16-bit arithmetic (`char b[300]` got 21
+;     slots instead of 150). Function and macro caps 250 (were 64), the global
+;     arena 11.5 KB (was 3.5): enough to compile apps/cc.c on the machine.
 ;
 ; Language (unchanged): type = int (16-bit) | char (1-byte elements)
 ;     program : (func | global | struct-def)*   global : type [*]NAME [[N]] ;
@@ -72,8 +80,8 @@ ROSDRV   = $6085   ; BIOS read-stream drive (1 byte)
 CR       = $0D
 LF       = $0A
 TAB      = $09
-MAXFUNC  = 64      ; function-table capacity (the "too many functions" message)
-MAXMAC   = 64      ; //#define capacity
+MAXFUNC  = 250     ; function-table capacity (the "too many functions" message)
+MAXMAC   = 250     ; //#define capacity
 USELEVELS= 5       ; //#use nesting depth
 
 ; keyword codes (CURKW after an identifier token; 0 = not a keyword)
@@ -104,11 +112,12 @@ R_EQ = 4
 R_NE = 5
 
 ; =============================================================================
-; BSS: $B000-$DFFF is free TPA while the compiler runs (the OS captures a
-; built-in's output into the TPA, but a RUN program's output streams through
-; FPUTB; FSDIRBUF is moved to $E000 below; RDBUF is $FC00). Cleared at start.
+; BSS: $A000-$DFFF is free TPA while the compiler runs (the binary ends near
+; $9200; the OS captures a built-in's output into the TPA, but a RUN program's
+; output streams through FPUTB; FSDIRBUF is moved to $E000 below; RDBUF is
+; $FC00). Cleared at start.
 ; =============================================================================
-BSS     = $B000
+BSS     = $A000
 ; -- word variables --
 STK0    = BSS+$00   ; entry SP (a bail returns straight to the OS)
 CURV    = BSS+$02   ; current token value (NUM value / PUNCT char)
@@ -161,15 +170,11 @@ NLSLOT  = BSS+$48   ; the current function's slot count
 NPARAMS = BSS+$49   ; parameters of the function being defined
 FCNT    = BSS+$4A   ; number of functions
 MACCNT  = BSS+$4B   ; number of macros
-LBLCNT  = BSS+$4C   ; next label number
 RELOP   = BSS+$4D   ; relational operator code
 RELF    = BSS+$4E   ; RELDET: it was a relational
 CONDF   = BSS+$4F   ; the next GEXPR is a condition
 CONDCUR = BSS+$50   ; GEXPR's copy of CONDF
-CONDLBL = BSS+$51   ; the false label of the condition
 CONDDONE= BSS+$52   ; GREL emitted the branch itself
-CURBRK  = BSS+$53   ; innermost loop: break label
-CURCONT = BSS+$54   ;   continue label
 USEMUL  = BSS+$55   ; runtime helpers needed
 USEDIV  = BSS+$56
 USENOT  = BSS+$57
@@ -186,24 +191,6 @@ SAWADDRG= BSS+$61   ; an argument took an address
 ARGI    = BSS+$62   ; call: argument count
 VITER   = BSS+$63   ; slot loop counters
 VITER2  = BSS+$64
-JLBL    = BSS+$65   ; label scratch
-LBLA    = BSS+$66
-LBLB    = BSS+$67
-IFTMP   = BSS+$68
-STRDL   = BSS+$69
-STRSL   = BSS+$6A
-TERNF   = BSS+$6B
-TERNE   = BSS+$6C
-LORT    = BSS+$6D
-LORE    = BSS+$6E
-LANDF   = BSS+$6F
-LANDE   = BSS+$70
-LFT     = BSS+$71
-LFB     = BSS+$72
-LFP     = BSS+$73
-LFE     = BSS+$74
-WHT     = BSS+$75
-WHE     = BSS+$76
 ISCHARTYPE = BSS+$77
 CURFNL  = BSS+$78   ; length of CURFN
 IDNAMEL = BSS+$79   ; length of IDNAME
@@ -230,12 +217,38 @@ HMEM    = HEADS+$140 ; struct members
 HUSED   = HEADS+$180 ; spliced libraries
 HEADSEND= HEADS+$1C0
 USESTATE= BSS+$400  ; saved read-stream state, 14 bytes x USELEVELS (70)
+; label words -- 16-bit: a big program has more than 256 labels (grep has 600,
+; the compiler's own C twin 900); a byte counter wrapped to duplicate labels
+LBLW    = BSS+$460
+CONDLBL = LBLW+$00  ; the false label of the condition
+CURBRK  = LBLW+$02  ; innermost loop: break label
+CURCONT = LBLW+$04  ;   continue label
+JLBL    = LBLW+$06  ; EMITJ / EMITLBL: the label to print
+NEWL    = LBLW+$08  ; NEWLBL's result
+LBLCNT  = LBLW+$0A  ; next label number
+LBLA    = LBLW+$0C
+LBLB    = LBLW+$0E
+IFTMP   = LBLW+$10
+STRDL   = LBLW+$12
+STRSL   = LBLW+$14
+TERNF   = LBLW+$16
+TERNE   = LBLW+$18
+LORT    = LBLW+$1A
+LORE    = LBLW+$1C
+LANDF   = LBLW+$1E
+LANDE   = LBLW+$20
+LFT     = LBLW+$22
+LFB     = LBLW+$24
+LFP     = LBLW+$26
+LFE     = LBLW+$28
+WHT     = LBLW+$2A
+WHE     = LBLW+$2C
 USEBUF  = BSS+$500  ; per-level 512-byte read buffers (5 x 512 = $A00)
 LARENA  = BSS+$F00  ; local-variable entries (reset per function) (768)
 LARENAEND = BSS+$1200
 ARENA   = BSS+$1200 ; global entries: globals, functions, macros, tags, members
-ARENAEND= BSS+$2000
-BSSEND  = BSS+$2000
+ARENAEND= BSS+$4000 ; ($DFFF: 11.5 KB of names)
+BSSEND  = BSS+$4000
 ; name-entry layout (relative to the entry pointer)
 NT_NEXT = 0
 NT_LEN  = 2
@@ -275,16 +288,17 @@ BAIL:   JSR  EMIT
         LPW3 STK0
         RTS
 
-; CLEARBSS - zero everything after STK0 up to the end of the head arrays (the
-;   arenas need no clearing: the heads are the roots)
+; CLEARBSS - zero everything after STK0 up to the //#use buffers: the head
+;   arrays, the stream states and the label words (the arenas need no clearing:
+;   the heads are the roots)
 CLEARBSS:
         LDP1 #BSS+2
 cb_l:   LDA  #0
         STA  (P1)+
         TPA1H
-        LDB  #>HEADSEND
+        LDB  #>USEBUF
         CMP
-        JNZ  cb_l                ; until P1 reaches the page after the heads
+        JNZ  cb_l                ; until P1 reaches the //#use buffers
         RTS
 
 ; GETARG - copy the first blank-delimited word of the argument tail (P2 at
@@ -1922,10 +1936,9 @@ sb_l:   LDA  #'}'
 sb_end: LDA  #'}'
         JMP  EXPECTP
 
-; COND - '(' condition ')' in condition mode: the false label is A. Emits the
-;   test-and-branch unless GREL already branched.
-COND:   STA  CONDLBL
-        LDA  #'('
+; COND - '(' condition ')' in condition mode: the false label is CONDLBL (set
+;   by the caller). Emits the test-and-branch unless GREL already branched.
+COND:   LDA  #'('
         JSR  EXPECTP
         LDA  #1
         STA  CONDF
@@ -1935,15 +1948,16 @@ COND:   STA  CONDLBL
         LDA  CONDDONE
         JNZ  cnd_d
         JSR  EM_TESTAX
+        MOVW JLBL,CONDLBL
         LDP1 #MJZ
-        LDA  CONDLBL
         JMP  EMITJ
 cnd_d:  RTS
 
 ; if ( expr ) stmt [ else stmt ]
 st_if:  JSR  ADVANCE
         JSR  NEWLBL              ; la = the false target
-        PHA
+        MOVW CONDLBL,NEWL
+        PHW  NEWL
         JSR  COND
         JSR  STMT                ; then
         LDA  CURK
@@ -1955,32 +1969,32 @@ st_if:  JSR  ADVANCE
         CMP
         JNZ  if_ne
         JSR  ADVANCE
-        PLA                      ; la
-        STA  IFTMP
+        PLW  IFTMP               ; la
         JSR  NEWLBL              ; lb = the end
-        PHA
+        PHW  NEWL
+        MOVW JLBL,NEWL
         LDP1 #MJMP
         JSR  EMITJ               ; JMP lb
-        LDA  IFTMP
+        MOVW JLBL,IFTMP
         JSR  EMITLBL             ; la:
         JSR  STMT                ; else
-        PLA
+        PLW  JLBL
         JMP  EMITLBL             ; lb:
-if_ne:  PLA
+if_ne:  PLW  JLBL
         JMP  EMITLBL             ; la:
 
 ; break ; / continue ;
 st_break:
         JSR  ADVANCE
+        MOVW JLBL,CURBRK
         LDP1 #MJMP
-        LDA  CURBRK
         JSR  EMITJ
         LDA  #$3B
         JMP  EXPECTP
 st_continue:
         JSR  ADVANCE
+        MOVW JLBL,CURCONT
         LDP1 #MJMP
-        LDA  CURCONT
         JSR  EMITJ
         LDA  #$3B
         JMP  EXPECTP
@@ -1992,72 +2006,62 @@ st_for: JSR  ADVANCE
         LDA  #'('
         JSR  EXPECTP
         JSR  NEWLBL
-        STA  LFT
+        MOVW LFT,NEWL
         JSR  NEWLBL
-        STA  LFB
+        MOVW LFB,NEWL
         JSR  NEWLBL
-        STA  LFP
+        MOVW LFP,NEWL
         JSR  NEWLBL
-        STA  LFE
+        MOVW LFE,NEWL
         JSR  FORCLAUSE           ; init
         LDA  #$3B
         JSR  EXPECTP
-        LDA  LFT
+        MOVW JLBL,LFT
         JSR  EMITLBL             ; Ltop:
         LDA  #$3B                ; an empty condition?
         JSR  ISPUNCT
         JC   sf_nocond
-        LDA  LFE
-        STA  CONDLBL
+        MOVW CONDLBL,LFE
         LDA  #1
         STA  CONDF
         JSR  GEXPR
         LDA  CONDDONE
         JNZ  sf_nocond
         JSR  EM_TESTAX
+        MOVW JLBL,LFE
         LDP1 #MJZ
-        LDA  LFE
         JSR  EMITJ               ; JZ Lend
 sf_nocond:
         LDA  #$3B
         JSR  EXPECTP
+        MOVW JLBL,LFB
         LDP1 #MJMP
-        LDA  LFB
         JSR  EMITJ               ; JMP Lbody
-        LDA  LFP
+        MOVW JLBL,LFP
         JSR  EMITLBL             ; Lpost:
         JSR  FORCLAUSE           ; post
         LDA  #')'
         JSR  EXPECTP
+        MOVW JLBL,LFT
         LDP1 #MJMP
-        LDA  LFT
         JSR  EMITJ               ; JMP Ltop
-        LDA  LFB
+        MOVW JLBL,LFB
         JSR  EMITLBL             ; Lbody:
-        LDA  CURBRK              ; save the enclosing targets and our labels
-        PHA
-        LDA  CURCONT
-        PHA
-        LDA  LFP
-        PHA
-        LDA  LFE
-        PHA
-        STA  CURBRK              ; break -> Lend
-        LDA  LFP
-        STA  CURCONT             ; continue -> Lpost
+        PHW  CURBRK              ; save the enclosing targets and our labels
+        PHW  CURCONT
+        PHW  LFP
+        PHW  LFE
+        MOVW CURBRK,LFE          ; break -> Lend
+        MOVW CURCONT,LFP         ; continue -> Lpost
         JSR  STMT
-        PLA
-        STA  LFE
-        PLA
-        STA  LFP
-        PLA
-        STA  CURCONT
-        PLA
-        STA  CURBRK
+        PLW  LFE
+        PLW  LFP
+        PLW  CURCONT
+        PLW  CURBRK
+        MOVW JLBL,LFP
         LDP1 #MJMP
-        LDA  LFP
         JSR  EMITJ               ; JMP Lpost
-        LDA  LFE
+        MOVW JLBL,LFE
         JMP  EMITLBL             ; Lend:
 
 ; FORCLAUSE - an optional NAME = expr
@@ -2081,37 +2085,28 @@ fc_ret: RTS
 st_while:
         JSR  ADVANCE
         JSR  NEWLBL
-        STA  WHT
+        MOVW WHT,NEWL
         JSR  NEWLBL
-        STA  WHE
-        LDA  WHT
+        MOVW WHE,NEWL
+        MOVW JLBL,WHT
         JSR  EMITLBL             ; Ltop:
-        LDA  WHE
+        MOVW CONDLBL,WHE
         JSR  COND                ; JZ Lend unless branched
-        LDA  CURBRK
-        PHA
-        LDA  CURCONT
-        PHA
-        LDA  WHT
-        PHA
-        LDA  WHE
-        PHA
-        STA  CURBRK              ; break -> Lend
-        LDA  WHT
-        STA  CURCONT             ; continue -> Ltop
+        PHW  CURBRK
+        PHW  CURCONT
+        PHW  WHT
+        PHW  WHE
+        MOVW CURBRK,WHE          ; break -> Lend
+        MOVW CURCONT,WHT         ; continue -> Ltop
         JSR  STMT
-        PLA
-        STA  WHE
-        PLA
-        STA  WHT
-        PLA
-        STA  CURCONT
-        PLA
-        STA  CURBRK
+        PLW  WHE
+        PLW  WHT
+        PLW  CURCONT
+        PLW  CURBRK
+        MOVW JLBL,WHT
         LDP1 #MJMP
-        LDA  WHT
         JSR  EMITJ               ; JMP Ltop
-        LDA  WHE
+        MOVW JLBL,WHE
         JMP  EMITLBL             ; Lend:
 
 ; type [*]NAME [= expr] ;  |  type NAME[N] ;
@@ -2140,14 +2135,18 @@ sd_adv: JSR  ADVANCE
         JSR  EM_STVAR
         JMP  sd_semi
 sd_arr: JSR  ADVANCE             ; past '['
-        LDA  DCLCHAR
-        JZ   sd_arri
-        LDA  CURV                ; char: (N+1)/2 words
-        INC
+        MOVW VN,CURV             ; (16-bit: a local char[300] is 150 slots --
+        LDA  DCLCHAR             ;   the byte arithmetic gave it 21)
+        JZ   sd_arrm
+        INCW VN                  ; char: (N+1)/2 words
+        LDA  VN+1
         SHR
-        JMP  sd_arrm
-sd_arri:LDA  CURV
-sd_arrm:DEC                      ; the base slot is already counted
+        STA  VN+1
+        LDA  VN
+        ROR
+        STA  VN
+sd_arrm:LDA  VN
+        DEC                      ; the base slot is already counted
         LDB  NLSLOT
         ADD
         STA  NLSLOT
@@ -2324,32 +2323,27 @@ GEXPR:  LDA  CONDF
         JSR  ADVANCE
         JSR  EM_TESTAX
         JSR  NEWLBL
-        STA  TERNF
+        MOVW TERNF,NEWL
         JSR  NEWLBL
-        STA  TERNE
+        MOVW TERNE,NEWL
+        MOVW JLBL,TERNF
         LDP1 #MJZ
-        LDA  TERNF
         JSR  EMITJ               ; JZ Lfalse
-        LDA  TERNF
-        PHA
-        LDA  TERNE
-        PHA
+        PHW  TERNF
+        PHW  TERNE
         JSR  GEXPR               ; the true value
-        PLA
-        STA  TERNE
-        PLA
-        STA  TERNF
+        PLW  TERNE
+        PLW  TERNF
         LDA  #':'
         JSR  EXPECTP
+        MOVW JLBL,TERNE
         LDP1 #MJMP
-        LDA  TERNE
         JSR  EMITJ               ; JMP Lend
-        LDA  TERNF
+        MOVW JLBL,TERNF
         JSR  EMITLBL             ; Lfalse:
-        LDA  TERNE
-        PHA
+        PHW  TERNE
         JSR  GEXPR               ; the false value
-        PLA
+        PLW  JLBL
         JMP  EMITLBL             ; Lend:
 ge_condd:
         RTS
@@ -2378,74 +2372,70 @@ ge_orl: LDA  #'|'
         JSR  ISTWO
         JNC  ge_ord
         JSR  NEWLBL
-        STA  LORT
+        MOVW LORT,NEWL
         JSR  NEWLBL
-        STA  LORE
+        MOVW LORE,NEWL
         JSR  EM_TESTAX
+        MOVW JLBL,LORT
         LDP1 #MJNZ
-        LDA  LORT
         JSR  EMITJ               ; JNZ Ltrue
         JSR  ADVANCE
-        LDA  LORT
-        PHA
-        LDA  LORE
-        PHA
+        PHW  LORT
+        PHW  LORE
         JSR  GLAND
-        PLA
-        STA  LORE
-        PLA
-        STA  LORT
+        PLW  LORE
+        PLW  LORT
         JSR  EM_TESTAX
+        MOVW JLBL,LORT
         LDP1 #MJNZ
-        LDA  LORT
         JSR  EMITJ               ; JNZ Ltrue
         JSR  EM_AX0
+        MOVW JLBL,LORE
         LDP1 #MJMP
-        LDA  LORE
         JSR  EMITJ               ; JMP Lend
-        LDA  LORT
+        MOVW JLBL,LORT
         JSR  EMITLBL             ; Ltrue:
         JSR  EM_AX1
-        LDA  LORE
+        MOVW JLBL,LORE
         JSR  EMITLBL             ; Lend:
         JMP  ge_orl
 ge_ord: RTS
 
-; bor ( '&&' bor )*
+; bor ( '&&' bor )*   -- the right operand is a VALUE (tested below), so a
+;   trailing relational must not take the condition-mode branch: with it,
+;   `if (a && b == c)` fell into the body when a was false
 GLAND:  JSR  GBOR
 ga_andl:LDA  #'&'
         JSR  ISTWO
         JNC  ga_andd
+        LDA  #0
+        STA  CONDCUR
         JSR  NEWLBL
-        STA  LANDF
+        MOVW LANDF,NEWL
         JSR  NEWLBL
-        STA  LANDE
+        MOVW LANDE,NEWL
         JSR  EM_TESTAX
+        MOVW JLBL,LANDF
         LDP1 #MJZ
-        LDA  LANDF
         JSR  EMITJ               ; JZ Lfalse
         JSR  ADVANCE
-        LDA  LANDF
-        PHA
-        LDA  LANDE
-        PHA
+        PHW  LANDF
+        PHW  LANDE
         JSR  GBOR
-        PLA
-        STA  LANDE
-        PLA
-        STA  LANDF
+        PLW  LANDE
+        PLW  LANDF
         JSR  EM_TESTAX
+        MOVW JLBL,LANDF
         LDP1 #MJZ
-        LDA  LANDF
         JSR  EMITJ               ; JZ Lfalse
         JSR  EM_AX1
+        MOVW JLBL,LANDE
         LDP1 #MJMP
-        LDA  LANDE
         JSR  EMITJ               ; JMP Lend
-        LDA  LANDF
+        MOVW JLBL,LANDF
         JSR  EMITLBL             ; Lfalse:
         JSR  EM_AX0
-        LDA  LANDE
+        MOVW JLBL,LANDE
         JSR  EMITLBL             ; Lend:
         JMP  ga_andl
 ga_andd:RTS
@@ -2545,7 +2535,8 @@ grx:    RTS
 ;   <  C=1 (left>=right) -> JC      >= false when C=0 -> JNC
 ;   >  (swapped) true when C=0 -> JC     <= true when C=1 -> JNC
 ;   == false when Z=0 -> JNZ       != -> JZ
-EMITCF: LDA  RELOP
+EMITCF: MOVW JLBL,CONDLBL
+        LDA  RELOP
         JZ   ecf_jc
         LDB  #R_GT
         CMP
@@ -2557,21 +2548,21 @@ EMITCF: LDA  RELOP
         CMP
         JZ   ecf_jz
         LDP1 #MJNC
-        JMP  ecf_e
+        JMP  EMITJ
 ecf_jc: LDP1 #MJC
-        JMP  ecf_e
+        JMP  EMITJ
 ecf_jnz:LDP1 #MJNZ
-        JMP  ecf_e
+        JMP  EMITJ
 ecf_jz: LDP1 #MJZ
-ecf_e:  LDA  CONDLBL
         JMP  EMITJ
 
 ; EMITCMP - the 0/1 value of the relation: one conditional jump to la (true),
 ;   the false path 0, la: 1, lb:
 EMITCMP:JSR  NEWLBL
-        STA  LBLA
+        MOVW LBLA,NEWL
         JSR  NEWLBL
-        STA  LBLB
+        MOVW LBLB,NEWL
+        MOVW JLBL,LBLA
         LDA  RELOP
         JZ   ec_jnc              ; <  : C=0
         LDB  #R_GE
@@ -2593,16 +2584,15 @@ ec_jz:  LDP1 #MJZ
 ec_jnc: LDP1 #MJNC
         JMP  ec_e
 ec_jc:  LDP1 #MJC
-ec_e:   LDA  LBLA
-        JSR  EMITJ
+ec_e:   JSR  EMITJ               ; (JLBL = la)
         JSR  EM_AX0
+        MOVW JLBL,LBLB
         LDP1 #MJMP
-        LDA  LBLB
         JSR  EMITJ
-        LDA  LBLA
+        MOVW JLBL,LBLA
         JSR  EMITLBL
         JSR  EM_AX1
-        LDA  LBLB
+        MOVW JLBL,LBLB
         JMP  EMITLBL
 
 ; RELDET - is the current punct a relational? RELF, RELOP
@@ -2850,13 +2840,13 @@ gf_num: LDP1 #MLDWAXI            ; LDW __ax,#n
 gf_str: LDA  #1
         STA  EXPRCHAR
         JSR  NEWLBL
-        STA  STRDL
+        MOVW STRDL,NEWL
         JSR  NEWLBL
-        STA  STRSL
+        MOVW STRSL,NEWL
+        MOVW JLBL,STRSL
         LDP1 #MJMP
-        LDA  STRSL
         JSR  EMITJ               ; JMP Lskip
-        LDA  STRDL
+        MOVW JLBL,STRDL
         JSR  EMITLBL             ; Ldata:
         LDP1 #MDQASC             ; .asciiz "
         JSR  EMIT
@@ -2866,19 +2856,19 @@ gf_str: LDA  #1
         JSR  EMIT
         LDP1 #MBYTE0             ; .byte 0 (a word load at the NUL reads 0)
         JSR  EMIT
-        LDA  STRSL
+        MOVW JLBL,STRSL
         JSR  EMITLBL             ; Lskip:
         LDP1 #MLDALL             ; LDA #<Ldata / STA __ax / LDA #>Ldata / STA __ax+1
         JSR  EMIT
-        LDA  STRDL
-        JSR  EMITNUM
+        MOVW VN,STRDL
+        JSR  EMITNUM16
         JSR  EMITNL
         LDP1 #MSTAX
         JSR  EMIT
         LDP1 #MLDAHL
         JSR  EMIT
-        LDA  STRDL
-        JSR  EMITNUM
+        MOVW VN,STRDL
+        JSR  EMITNUM16
         JSR  EMITNL
         LDP1 #MSTAXH
         JSR  EMIT
@@ -3030,16 +3020,14 @@ gc_bios:JSR  ADVANCE             ; past 'bios'
         LDP1 #MSTAX              ; A -> __ax, the carry -> __ax+1
         JSR  EMIT
         JSR  NEWLBL
-        STA  JLBL
+        MOVW JLBL,NEWL
         LDP1 #MLDA0
         JSR  EMIT
         LDP1 #MJNC
-        LDA  JLBL
         JSR  EMITJ
         LDP1 #MLDA1
         JSR  EMIT
-        LDA  JLBL
-        JSR  EMITLBL
+        JSR  EMITLBL             ; (JLBL kept by EMITJ)
         LDP1 #MSTAXH
         JMP  EMIT
 ; puts(s)
@@ -3062,13 +3050,11 @@ gc_getc:JSR  ADVANCE
         LDP1 #MGETC
         JSR  EMIT
         JSR  NEWLBL
-        STA  JLBL
+        MOVW JLBL,NEWL
         LDP1 #MJNC
-        LDA  JLBL
         JSR  EMITJ
         LDP1 #MGETCEOF
         JSR  EMIT
-        LDA  JLBL
         JMP  EMITLBL
 ; peek(addr)
 gc_peek:JSR  ADVANCE
@@ -3211,24 +3197,20 @@ ela_nos:JSR  EM_POP
         LDP1 #MADD
         JMP  EMIT
 
-; NEWLBL - A = a fresh label number
-NEWLBL: LDA  LBLCNT
-        INC
-        STA  LBLCNT
-        DEC
+; NEWLBL - NEWL = a fresh label number (16-bit)
+NEWLBL: MOVW NEWL,LBLCNT
+        INCW LBLCNT
         RTS
-; EMITJ - the jump at P1 ("...L") to label A, newline
-EMITJ:  STA  JLBL
-        JSR  EMIT
-        LDA  JLBL
-        JSR  EMITNUM
+; EMITJ - the jump at P1 ("...L") to the label JLBL, newline (JLBL is kept)
+EMITJ:  JSR  EMIT
+        MOVW VN,JLBL
+        JSR  EMITNUM16
         JMP  EMITNL
-; EMITLBL - "L<A>:" newline
-EMITLBL:STA  JLBL
-        LDA  #'L'
+; EMITLBL - "L<JLBL>:" newline
+EMITLBL:LDA  #'L'
         JSR  SYS_PUTC
-        LDA  JLBL
-        JSR  EMITNUM
+        MOVW VN,JLBL
+        JSR  EMITNUM16
         LDP1 #MLBC
         JMP  EMIT
 

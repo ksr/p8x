@@ -349,7 +349,16 @@ int dodir() {
         skipsp();
         if (*tp != '"') { asmerr("?syntax: "); return 0; }
         tp = tp + 1;
-        while (*tp != '"') { if (*tp == 0) { asmerr("?syntax: "); return 0; } emit(*tp & 255); tp = tp + 1; }
+        while (*tp != '"') {
+            if (*tp == 0) { asmerr("?syntax: "); return 0; }
+            c = *tp & 255; tp = tp + 1;
+            if (c == 92) {                       /* a backslash escape, as the host assembler decodes them */
+                c = *tp & 255; if (c == 0) { asmerr("?syntax: "); return 0; }
+                tp = tp + 1;
+                if (c == 'n') c = 10; else if (c == 't') c = 9; else if (c == 'r') c = 13; else if (c == '0') c = 0;
+            }
+            emit(c);
+        }
         tp = tp + 1;
         if (mnbuf[6] == 'Z') emit(0);
         return 0;

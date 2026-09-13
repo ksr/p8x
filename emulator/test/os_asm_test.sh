@@ -74,6 +74,7 @@ done:   LDA  #<msg
         RTS
 msg:    .asciiz "HELLO-ASM"
         .byte CR,LF
+esc:    .asciiz "T\tQ\"B\\N\n"
 EOF
 python3 $ROOT/assembler/p8xasm.py prog.asm -o golden.bin --base 0x6A00 >/dev/null
 
