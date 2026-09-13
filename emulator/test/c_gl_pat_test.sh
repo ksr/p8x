@@ -68,13 +68,13 @@ int main() {
 }
 EOF
 python3 $ROOT/compiler/p8cc.py gl_pt.c -o gl_pt.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py gl_pt.asm -o gl_pt.bin --base 0x6300 >/dev/null
+python3 $ROOT/assembler/p8xasm.py gl_pt.asm -o gl_pt.bin --base 0x6100 >/dev/null
 
 rm -f gl_pt.img
 python3 $ROOT/tools/p8xfs.py create gl_pt.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   gl_pt.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  gl_pt.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    gl_pt.img gl_pt.bin --name /bin/glpt.bin --load 0x6300 --exec 0x6300 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    gl_pt.img gl_pt.bin --name /bin/glpt.bin --load 0x6100 --exec 0x6100 >/dev/null
 # console OFF from the monitor for the RTL-compared grab (the RTL bench renders
 # the pure scene, no always-on console): E 60AF->00 (GCONEN off) -> . ; G 014E (GCLS).
 printf 'E 60AF\r00.G 014E\rB\rrun /bin/glpt.bin\r' > gl_pt.in

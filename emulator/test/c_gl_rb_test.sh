@@ -83,13 +83,13 @@ int main() {
 }
 EOF
 python3 $ROOT/compiler/p8cc.py gl_rb.c -o gl_rb.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py gl_rb.asm -o gl_rb.bin --base 0x6300 >/dev/null
+python3 $ROOT/assembler/p8xasm.py gl_rb.asm -o gl_rb.bin --base 0x6100 >/dev/null
 
 rm -f gl_rb.img
 python3 $ROOT/tools/p8xfs.py create gl_rb.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   gl_rb.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  gl_rb.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    gl_rb.img gl_rb.bin --name /bin/glrb.bin --load 0x6300 --exec 0x6300 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    gl_rb.img gl_rb.bin --name /bin/glrb.bin --load 0x6100 --exec 0x6100 >/dev/null
 printf 'B\rrun /bin/glrb.bin\r' > gl_rb.in
 ../p8xemu -N -i gl_rb.in -c gl_rb.img -l 400000000 eeprom.bin > gl_rb.out 2>/dev/null || true
 grep -q "RBDONE" gl_rb.out || fail "harness did not finish"

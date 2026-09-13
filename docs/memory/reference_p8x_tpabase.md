@@ -1,11 +1,11 @@
 ---
 name: reference_p8x_tpabase
-description: Every place that must change when TPABASE (the TPA base / default program load address) moves — it is NOT truly single-sourced; ~all of it is hardcoded. Checklist from the 2026-09-13 $6A00->$6300 flag-day.
+description: Every place that must change when TPABASE (the TPA base / default program load address) moves — it is NOT truly single-sourced; ~all of it is hardcoded. Checklist from the 2026-09-13 $6A00->$6300->$6100 flag-days (OS scratch, then SBUF).
 metadata: 
   node_type: memory
   type: reference
   originSessionId: 6ffcfef7-73ca-445b-bcdb-f57735fdc98f
-  modified: 2026-09-13T18:27:57.269Z
+  modified: 2026-09-13T19:15:54.677Z
 ---
 
 TPABASE is the base of the transient program area = the default load/exec/`.org`
@@ -57,9 +57,34 @@ else hardcodes the literal. Changing it is a flag-day. On 2026-09-13 it dropped
   relocated band), the p8xos.asm header comment, the six live README build
   examples. Dated design docs / GLOSSARY / BACKLOG-DONE are historical, exempt.
 
-**What does NOT change:** programs built at the OLD base still run (they load
-in-TPA); the emulator/p8xfs have no default base; `p8cc.py`.
+**2026-09-13 step 2 ($6300 -> $6100): moving SBUF (the monitor sector buffer).**
+To drop TPABASE past $6300, `SBUF` (was $6100) moved DOWN to $5E00, below the
+BIOS scratch; OS scratch shifted another -$200 to $5700-$5DFF. Extra touch
+points beyond the step-1 checklist:
+- **The BIOS scratch $6000-$60FF MUST NOT MOVE.** FNAME/LBA/LBA1/DIRLBA/FLEN
+  etc. are the stable ABI that commands `//#define` (lib_abi.c / lib_abi.inc)
+  and low-level fixtures hardcode. I moved it once by mistake -> every command
+  and hilba (LBA=$6047) broke. Only `SBUF` and the OS scratch may move; the
+  BIOS scratch stays. So TPABASE's floor is the BIOS scratch top ($60FF) ->
+  min TPABASE $6100 without a monitor rewrite of the BIOS-scratch region.
+- `SBUF` must stay PAGE-ALIGNED (monitor sets the dir-buffer page via `#>SBUF`);
+  shift it by whole pages only.
+- Monitor `firmware/p8xmon.asm`: the dir-buffer-page default was a hardcoded
+  `#$61` (SBUF page) in 3 spots -> `#>SBUF`. (Same bare-page-byte class as
+  DEFADDR's `#$6A`.) Moving SBUF = a monitor ROM change = FPGA bitstream reburn
+  for real hardware (emulator rebuilds eeprom; board reburn already pending).
+- `SBUF` is NOT in the command //#define ABI (commands use FWOPEN/FPUTB streams,
+  never raw SBUF), so shipped commands were unaffected. But raw-CFWRITE TEST
+  FIXTURES stage SBUF at its literal: `emulator/test/hilba.asm` (SBUF equate)
+  and `emulator/test/cf2_test.sh` (heredoc that REGENERATES cf2.asm — edit the
+  heredoc, not the stale .asm). Grep `STA \$<sbuf>` in test .sh/.asm.
+- Docs claim "SBUF $6100 fixed by the BIOS" (os README / generated osfull.asm
+  comment) — update. A real monitor rewrite would redesign this region.
 
-Related: [[reference_p8x_memory_map]] (layout after the drop: OS scratch
-$5900-$5FFF, SBUF $6100 the remaining floor — the monitor rewrite can reclaim it
+**What does NOT change:** programs built at the OLD base still run (they load
+in-TPA); the emulator/p8xfs have no default base; `p8cc.py`; the BIOS scratch
+$6000-$60FF (stable //#define ABI).
+
+Related: [[reference_p8x_memory_map]] (layout after the drops: OS scratch
+$5700-$5DFF, SBUF $5E00, BIOS scratch $6000-$60FF the floor — a monitor rewrite of the BIOS-scratch region could reclaim more
 for ~768 B more), [[project_p8x_isa_everywhere]].

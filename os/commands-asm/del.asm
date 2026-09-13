@@ -6,7 +6,7 @@
 ; SYS_GETCWD $2003 (via abspath). Entry: P2 = arg tail.
 ;#use abi
 
-        .org $6300
+        .org $6100
         TPA2L
         STA t_arg
         TPA2H

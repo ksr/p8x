@@ -14,14 +14,14 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osawk.bin --base 0x2000 
 for c in awk cat; do
     python3 $ROOT/tools/clib.py $ROOT/os/commands/$c.c -o $c.pp.c
     python3 $ROOT/compiler/p8cc.py $c.pp.c -o $c.a2.asm >/dev/null
-    python3 $ROOT/assembler/p8xasm.py $c.a2.asm -o $c.a2.bin --base 0x6300 >/dev/null
+    python3 $ROOT/assembler/p8xasm.py $c.a2.asm -o $c.a2.bin --base 0x6100 >/dev/null
 done
 rm -f awk.img
 python3 $ROOT/tools/p8xfs.py create awk.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   awk.img osawk.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  awk.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    awk.img awk.a2.bin --name /bin/awk.bin --load 0x6300 --exec 0x6300 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    awk.img cat.a2.bin --name /bin/cat.bin --load 0x6300 --exec 0x6300 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    awk.img awk.a2.bin --name /bin/awk.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    awk.img cat.a2.bin --name /bin/cat.bin --load 0x6100 --exec 0x6100 >/dev/null
 printf 'one two three\nfoo bar\nalpha beta gamma delta\n' > d.txt
 python3 $ROOT/tools/p8xfs.py put    awk.img d.txt --name /D.TXT >/dev/null
 printf 'root:x:0\nken:y:1000\n' > p.txt
@@ -59,13 +59,13 @@ printf '%s\n' "$out" | grep -qx '12' || fail "NR did not reach a correct 2-digit
 
 # --- C vs hand-asm twin: identical output on the same program set ---
 sh $ROOT/os/commands-asm/mkasm.sh awk > awk.a.asm
-python3 $ROOT/assembler/p8xasm.py awk.a.asm -o awk.a.bin --base 0x6300 >/dev/null
+python3 $ROOT/assembler/p8xasm.py awk.a.asm -o awk.a.bin --base 0x6100 >/dev/null
 rm -f awka.img
 python3 $ROOT/tools/p8xfs.py create awka.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   awka.img osawk.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  awka.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    awka.img awk.a.bin --name /bin/awk.bin --load 0x6300 --exec 0x6300 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    awka.img cat.a2.bin --name /bin/cat.bin --load 0x6300 --exec 0x6300 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    awka.img awk.a.bin --name /bin/awk.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    awka.img cat.a2.bin --name /bin/cat.bin --load 0x6100 --exec 0x6100 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    awka.img d.txt --name /D.TXT >/dev/null
 python3 $ROOT/tools/p8xfs.py put    awka.img p.txt --name /P.TXT >/dev/null
 TSEQ="B\rawk '{print \$2}' D.TXT\rawk '/foo/{print}' D.TXT\rawk '{print \$1, \$NF}' D.TXT\rawk -F: '{print \$1}' P.TXT\rawk '{print NR, NF}' D.TXT\rawk '/alpha/' D.TXT\r"

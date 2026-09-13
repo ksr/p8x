@@ -13,11 +13,11 @@ fail() { echo "ASM-INCLUDE TEST: FAIL — $1"; exit 1; }
 
 # (1)+(2) nested includes: main -> a.inc -> b.inc, symbols used across levels.
 printf 'BVAL = $42\n'          > "$W/b.inc"
-printf '.include "b.inc"\nAADDR = $6300\n' > "$W/a.inc"
+printf '.include "b.inc"\nAADDR = $6100\n' > "$W/a.inc"
 printf '.include "a.inc"\n        .org $2000\n        LDA #BVAL\n        STA AADDR\n        HLT\n' > "$W/main.asm"
 $ASM "$W/main.asm" -o "$W/main.bin" --base 0x2000 >/dev/null 2>&1 \
     || fail "assembling a program with nested .include failed"
-# LDA #$42 = 10 42 ; STA $6300 = 14 00 6A ; HLT = 01  -> 6 bytes
+# LDA #$42 = 10 42 ; STA $6100 = 14 00 6A ; HLT = 01  -> 6 bytes
 sz=$(wc -c < "$W/main.bin" | tr -d ' ')
 [ "$sz" = "6" ] || fail "expected 6 bytes, got $sz"
 od -An -tx1 "$W/main.bin" | tr -d ' \n' | grep -qi '^1042140' \

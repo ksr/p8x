@@ -26,7 +26,7 @@ int main() {
 PEOF
 python3 $ROOT/tools/clib.py runsh_probe.c -o rp.c
 python3 $ROOT/compiler/p8cc.py rp.c -o rp.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py rp.asm -o rp.bin --base 0x6300 >/dev/null
+python3 $ROOT/assembler/p8xasm.py rp.asm -o rp.bin --base 0x6100 >/dev/null
 
 printf 'mkdir PROOFDIR\n' > scr.txt
 
@@ -34,7 +34,7 @@ rm -f rs.img
 python3 $ROOT/tools/p8xfs.py create rs.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   rs.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  rs.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    rs.img rp.bin  --name /bin/probe.bin --load 0x6300 --exec 0x6300 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    rs.img rp.bin  --name /bin/probe.bin --load 0x6100 --exec 0x6100 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    rs.img scr.txt --name /SCR.TXT >/dev/null
 
 printf 'B\rrun /bin/probe.bin\r' > rs.in

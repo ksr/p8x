@@ -256,7 +256,7 @@ NT_FLAG = 3
 NT_VAL  = 4
 NT_CHARS= 6
 
-        .org $6300               ; = TPABASE
+        .org $6100               ; = TPABASE
 START:  TPA3L
         STA  STK0
         TPA3H
@@ -1505,7 +1505,7 @@ smf_no: RTS
 ; =============================================================================
 ; Parser + codegen (single pass; emits as it parses)
 ; =============================================================================
-COMPILE:LDP1 #MORG               ; .org $6300
+COMPILE:LDP1 #MORG               ; .org $6100
         JSR  EMIT
         LDP1 #MBOOT              ; the startup: JSR _f_main on a fresh stack
         JSR  EMIT
@@ -3332,7 +3332,7 @@ EM_SCALE2:                       ; __ax <<= 1
 ; a number is appended. Every instruction line starts with one TAB.
 ; =============================================================================
 MORG:   .byte TAB
-        .ascii ".org $6300"
+        .ascii ".org $6100"
         .byte LF,0
 MBOOT:  .byte TAB                ; the startup, as p8cc's: keep the caller's P3
         .ascii "TPA3L"           ;   in __sp0 and run on a stack below CSTACKTOP

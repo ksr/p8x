@@ -5,7 +5,7 @@
 ; of the C /BIN commands, to compare fill-binary size against the p8cc output.
 ;
 ; ABI (same as a p8cc-compiled command):
-;   entry at $6300; P2 = pointer to the command-argument tail (NUL-terminated).
+;   entry at $6100; P2 = pointer to the command-argument tail (NUL-terminated).
 ;   SYS_GETCWD = $2003 (P1 = dest buffer, copies CWD incl. NUL).
 ;   SYS_PUTS   = $200F (P1 = string) prints the string (no newline).
 ;   SYS_PUTC   = $2009 (A = char).  puts() = SYS_PUTS then SYS_PUTC(10).
@@ -14,7 +14,7 @@
 ;   python3 assembler/p8xasm.py os/commands-asm/pwd.asm -o pwd.bin --base 0x6A00
 ;#use abi
 
-        .org $6300
+        .org $6100
 ; ---- skip leading spaces in the arg tail, then look for -h / -H ------------
 ; Copy the arg pointer P2 into P1 (16-bit, low then high byte) so we can walk
 ; the tail with LDA (P1)+ without clobbering the OS-supplied P2. There is no

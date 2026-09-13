@@ -13,7 +13,7 @@
 ;#use globx
 ;#use abi
 
-        .org $6300
+        .org $6100
 ; Entry: the shell passes the argument tail (everything after "MV ") in P2.
 ; Stash that pointer in the m_arg word so we can walk it byte-by-byte and
 ; advance it by adding to the low/high halves (P8X has no 16-bit add).

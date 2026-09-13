@@ -21,7 +21,7 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/
 
 python3 $ROOT/tools/clib.py $ROOT/os/commands/wdesk.c -o wf_wdesk.c
 python3 $ROOT/compiler/p8cc.py wf_wdesk.c -o wf_wdesk.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py wf_wdesk.asm -o wf_wdesk.bin --base 0x6300 >/dev/null
+python3 $ROOT/assembler/p8xasm.py wf_wdesk.asm -o wf_wdesk.bin --base 0x6100 >/dev/null
 
 rm -f wf.img
 python3 $ROOT/tools/p8xfs.py create wf.img >/dev/null
@@ -29,7 +29,7 @@ python3 $ROOT/tools/p8xfs.py boot   wf.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  wf.img /bin >/dev/null
 # a couple of known entries so the listing has real names to draw
 python3 $ROOT/tools/p8xfs.py mkdir  wf.img /docs >/dev/null
-python3 $ROOT/tools/p8xfs.py put    wf.img wf_wdesk.bin --name /bin/wdesk.bin --load 0x6300 --exec 0x6300 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    wf.img wf_wdesk.bin --name /bin/wdesk.bin --load 0x6100 --exec 0x6100 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    wf.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
 
 # boot wdesk fresh; no input after -> it idles with the desktop up (FILES on top)

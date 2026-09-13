@@ -134,7 +134,7 @@ COLD:   LDP3 #STKTOP        ; stack
         LDA  #0             ; CF sector I/O defaults to drive 0
         STA  DRVSEL
         STA  CFIMASK        ; no drive CFINIT'd yet
-        LDA  #$61           ; FSCAN/FNEXT directory-buffer page defaults to SBUF;
+        LDA  #>SBUF         ; FSCAN/FNEXT directory-buffer page defaults to SBUF;
         STA  DIBUFH         ;   a program repoints it (FSDIRBUF) to run a dir walk
                             ;   alongside an open write stream without clobbering it
         JSR  DISPINIT       ; detect the display, set GFXPRES, init the glass TTY
@@ -1231,7 +1231,7 @@ FOPENDIRAT:
         STA  DICNT
         LDA  #0
         STA  DIIDX
-        LDA  #$61           ; default the iteration buffer to SBUF; a caller that
+        LDA  #>SBUF         ; default the iteration buffer to SBUF; a caller that
         STA  DIBUFH         ;   redirects/pipes calls FSDIRBUF after this to move it
         RTS
 
@@ -1782,7 +1782,7 @@ FWOPEN: LDA  DRVSEL        ; the write stream remembers its drive (dual-volume)
 FPUTB:  STA  TMP
         LDA  WOPOS         ; P1 = SBUF + WOPOS (SBUF low byte = 0)
         TAP1L
-        LDA  #$61
+        LDA  #>SBUF
         LDB  WOPOS+1
         ADD
         TAP1H

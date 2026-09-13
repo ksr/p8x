@@ -159,14 +159,14 @@ EOF
 
 for n in la lb lc ld; do
     python3 $ROOT/compiler/p8cc.py gl_$n.c -o gl_$n.asm >/dev/null
-    python3 $ROOT/assembler/p8xasm.py gl_$n.asm -o gl_$n.bin --base 0x6300 >/dev/null
+    python3 $ROOT/assembler/p8xasm.py gl_$n.asm -o gl_$n.bin --base 0x6100 >/dev/null
 done
 rm -f gll.img
 python3 $ROOT/tools/p8xfs.py create gll.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   gll.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  gll.img /bin >/dev/null
 for n in la lb lc ld; do
-    python3 $ROOT/tools/p8xfs.py put gll.img gl_$n.bin --name /bin/$n.bin --load 0x6300 --exec 0x6300 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put gll.img gl_$n.bin --name /bin/$n.bin --load 0x6100 --exec 0x6100 >/dev/null
 done
 
 run() {  # $1 prog, $2 out ppm, $3 args

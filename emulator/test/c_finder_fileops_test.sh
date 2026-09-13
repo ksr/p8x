@@ -25,7 +25,7 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o fos.bin --base 0x2000 >/
 build() {  # compile a C command to bin/<name>
     python3 $ROOT/tools/clib.py $ROOT/os/commands/$1.c -o $1.pp.c >/dev/null
     python3 $ROOT/compiler/p8cc.py $1.pp.c -o $1.asm >/dev/null
-    python3 $ROOT/assembler/p8xasm.py $1.asm -o $1.bin --base 0x6300 >/dev/null
+    python3 $ROOT/assembler/p8xasm.py $1.asm -o $1.bin --base 0x6100 >/dev/null
 }
 build finder; build del; build mv; build cp
 
@@ -36,7 +36,7 @@ mkdisk() {
     python3 $ROOT/tools/p8xfs.py boot   fo.img fos.bin >/dev/null
     python3 $ROOT/tools/p8xfs.py mkdir  fo.img /bin >/dev/null
     for c in finder del mv cp; do
-        python3 $ROOT/tools/p8xfs.py put fo.img $c.bin --name /bin/$c.bin --load 0x6300 --exec 0x6300 >/dev/null
+        python3 $ROOT/tools/p8xfs.py put fo.img $c.bin --name /bin/$c.bin --load 0x6100 --exec 0x6100 >/dev/null
     done
     python3 $ROOT/tools/p8xfs.py put fo.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
     printf 'hello finder\n' > z.dat

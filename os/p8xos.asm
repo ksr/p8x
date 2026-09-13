@@ -36,16 +36,18 @@
 ; (start LBA + sector count), so CWD and resolved paths share one code path.
 ; The prompt shows the current path. Verify a volume with p8xfs.py fsck.
 ; RAM layout: OS image $2000..~$55E5 -- INCLUDING the resident WM kernel
-; (wmkernel_body.asm, syscalls $2027-$204E) | OS scratch $5900..$5FFF (LINEBUF,
-; the FS/shell/PACK/FSCK variables, IBUF, PATHBUF, APBUF -- RELOCATED here
-; 2026-09-13 from $6300..$69FF so TPABASE could drop to $6300, growing the TPA
-; by 1,792 B for the self-host fit; see gen_memmap.py) | firmware/BIOS scratch
-; $6000..$60FF, SBUF $6100..$62FF (monitor-owned) | TPA (programs / RUN / ">"
-; capture) $6300..CSTACKTOP $F800 | shell command-history ring $F800..$F9FF
-; (HISTN=8 x 64) | FSDIRBUF dir/glob sector page $FA00..$FBFF and RDBUF file-read
-; buffer $FC00..$FDFF (the C commands' fixed scratch, lib_*.c) | stack (P3)
-; $FE00..$FEFF, grows down from $FEFF. (rev E: OS at $2000. 2026-09-13: TPABASE
-; $6A00 -> $6300; programs built at the old $6A00 still run, in-TPA.)
+; (wmkernel_body.asm, syscalls $2027-$204E) | OS scratch $5700..$5DFF (LINEBUF,
+; the FS/shell/PACK/FSCK variables, IBUF, PATHBUF, APBUF -- relocated here from
+; $6300..$69FF, 2026-09-13) | SBUF sector buffer $5E00..$5FFF (moved down from
+; $6100 the same day; it is monitor-owned but not part of the command //#define
+; ABI, so only raw-CFWRITE fixtures cared) | firmware/BIOS scratch $6000..$60FF
+; (UNCHANGED: FNAME/LBA/DIRLBA/FLEN are the stable ABI commands //#define) | TPA
+; (programs / RUN / ">" capture) $6100..CSTACKTOP $F800 | shell command-history
+; ring $F800..$F9FF (HISTN=8 x 64) | FSDIRBUF dir/glob sector page $FA00..$FBFF
+; and RDBUF file-read buffer $FC00..$FDFF (the C commands' fixed scratch,
+; lib_*.c) | stack (P3) $FE00..$FEFF, grows down from $FEFF. (rev E: OS at $2000.
+; 2026-09-13: TPABASE $6A00 -> $6300 (OS scratch moved) -> $6100 (SBUF moved);
+; programs built at an old base still run, in-TPA.)
 
 ; ---- BIOS jump table (stable ABI, in ROM) ----------------------------------
 CONIN   = $0100          ; wait for key, char -> A
@@ -88,9 +90,9 @@ SUBSECS = 4              ; sectors allocated for a new subdirectory (64 entries)
 ; ---- OS RAM variables (relocated 2026-09-13 with the OS scratch band from
 ;      $6360 to $5960: the band moved to $5900-$5FFF free RAM so TPABASE could
 ;      drop to $6300, giving the TPA ~1.75 KB more; see gen_memmap.py) --------
-TMP     = $5960
-TMP2    = $5961
-CNT     = $5962
+TMP     = $5760
+TMP2    = $5761
+CNT     = $5762
 ; ---- SAVE working set ----
 ; ---- PACK working set ----
 ; ---- directory / path working set ----
@@ -957,7 +959,7 @@ srsh_no:LDA  #0
 ; the same engine as `sh`.  Deep nesting (> MKMAXD) is reported as a cycle.
 MKSRC   = $C000    ; slurped Makefile text (NUL-terminated); cap MKSRCE
 MKSRCE  = $EF00    ; slurp stops here (a larger Makefile truncates)
-MKFLATB = $6300    ; flattened recipe out (grows up); becomes MK.RUN
+MKFLATB = $6100    ; flattened recipe out (grows up); becomes MK.RUN
 MKPLAN  = $F000    ; packed built-target names (NUL-term each; lone NUL = end)
 MKFRAME = $F400    ; DFS frames, 4B each: [0..1] dep-scan ptr, [2..3] rule-start ptr
 MKMAXD  = 15       ; max prerequisite nesting (cycle guard)

@@ -15,7 +15,7 @@
 ;#use stdin
 ;#use abi
 
-        .org $6300
+        .org $6100
         TPA2L                        ; save P2 (arg tail) into 16-bit s_arg
         STA s_arg
         TPA2H

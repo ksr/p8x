@@ -12,7 +12,7 @@
 ; count. dp = length of common prefix; dsa/dsb = end index of each file's
 ; differing region (everything from dsa..na / dsb..nb is the common suffix).
 
-        .org $6300
+        .org $6100
         TPA2L                        ; stash arg-tail pointer (P2) into d_arg
         STA d_arg
         TPA2H

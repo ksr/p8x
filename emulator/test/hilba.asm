@@ -13,7 +13,7 @@ CFWRITE = $010F
 CONOUT  = $0103
 LBA     = $6047
 LBA1    = $6048
-SBUF    = $6100
+SBUF    = $5E00
 RBUF    = $8400
 
         JSR  CFINIT          ; resets LBA1/LBA2 to 0

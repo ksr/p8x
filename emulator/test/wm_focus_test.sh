@@ -52,13 +52,13 @@ int main() {
 }
 EOF
 python3 $ROOT/compiler/p8cc.py fc_run.c -o fc_run.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py fc_run.asm -o fc_run.bin --base 0x6300 >/dev/null
+python3 $ROOT/assembler/p8xasm.py fc_run.asm -o fc_run.bin --base 0x6100 >/dev/null
 
 rm -f fc.img
 python3 $ROOT/tools/p8xfs.py create fc.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   fc.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  fc.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    fc.img fc_run.bin --name /bin/fc.bin --load 0x6300 --exec 0x6300 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    fc.img fc_run.bin --name /bin/fc.bin --load 0x6100 --exec 0x6100 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    fc.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
 
 # run 1: TAB (raise A over B), then ^D

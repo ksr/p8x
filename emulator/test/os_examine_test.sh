@@ -16,26 +16,26 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osex.bin --base 0x2000 >
 # C twin: examine + dump
 python3 $ROOT/tools/clib.py $ROOT/os/commands/examine.c -o examine.pp.c
 python3 $ROOT/compiler/p8cc.py examine.pp.c -o examine.c.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py examine.c.asm -o examine.c.bin --base 0x6300 >/dev/null
+python3 $ROOT/assembler/p8xasm.py examine.c.asm -o examine.c.bin --base 0x6100 >/dev/null
 python3 $ROOT/tools/clib.py $ROOT/os/commands/dump.c -o dump.pp.c
 python3 $ROOT/compiler/p8cc.py dump.pp.c -o dump.x.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py dump.x.asm -o dump.x.bin --base 0x6300 >/dev/null
+python3 $ROOT/assembler/p8xasm.py dump.x.asm -o dump.x.bin --base 0x6100 >/dev/null
 # asm twin: mkasm splices ;#use, then assemble
 sh $ROOT/os/commands-asm/mkasm.sh examine > examine.a.asm
-python3 $ROOT/assembler/p8xasm.py examine.a.asm -o examine.a.bin --base 0x6300 >/dev/null
+python3 $ROOT/assembler/p8xasm.py examine.a.asm -o examine.a.bin --base 0x6100 >/dev/null
 
 mkdisk() { # mkdisk <img> <examine.bin>
     rm -f "$1"
     python3 $ROOT/tools/p8xfs.py create "$1" >/dev/null
     python3 $ROOT/tools/p8xfs.py boot   "$1" osex.bin >/dev/null
     python3 $ROOT/tools/p8xfs.py mkdir  "$1" /bin >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    "$1" "$2"        --name /bin/examine.bin --load 0x6300 --exec 0x6300 >/dev/null
-    python3 $ROOT/tools/p8xfs.py put    "$1" dump.x.bin  --name /bin/dump.bin    --load 0x6300 --exec 0x6300 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    "$1" "$2"        --name /bin/examine.bin --load 0x6100 --exec 0x6100 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put    "$1" dump.x.bin  --name /bin/dump.bin    --load 0x6100 --exec 0x6100 >/dev/null
 }
 mkdisk exc.img examine.c.bin
 mkdisk exa.img examine.a.bin
 
-# $C000 is clear of the program at $6300. examine auto-advances after each pair
+# $C000 is clear of the program at $6100. examine auto-advances after each pair
 # of hex digits, so AB5C writes AB at C000 and 5C at C001; '.' quits. Then dump
 # reads them back. (A bare Enter would instead skip a byte -- not exercised here.)
 SEQ='B\rexamine C000\rAB5C.\rdump C000\r.\r'

@@ -1,7 +1,7 @@
 ; =============================================================================
 ; P8X EDIT - line-oriented text editor (standalone TPA program)
 ; =============================================================================
-; Built for the transient program area ($6300), launched from P8X/OS:
+; Built for the transient program area ($6100), launched from P8X/OS:
 ;     RUN EDIT NAME.EXT
 ; On entry P2 -> the argument tail (the OS program-arg ABI); EDIT copies it to
 ; FNAME and, if that file exists, loads it. Commands operate on a flat text
@@ -65,7 +65,7 @@ KLEN    = $BF0D         ; bytes to insert (line length + 1 for LF)
 DIGIT   = $BF0E         ; DECOUT tens scratch
 CMDCH   = $BF0F         ; current command letter
 
-        .org $6300
+        .org $6100
 ; =============================================================================
 ; Entry
 ; =============================================================================

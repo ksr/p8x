@@ -27,7 +27,7 @@
 ;   * The tokenizer only tries the keyword table on a letter.
 ;
 ; Build targets differ only in their -D symbols (see basic/README.md):
-;   BASORG  code origin   ($0000 standalone, $2000 disk boot, $6300 in the TPA)
+;   BASORG  code origin   ($0000 standalone, $2000 disk boot, $6100 in the TPA)
 ;   BASRAM  data base      ($8000 standalone, $A000 disk boot, $C500 for the TPA)
 ;   PBUF    rebuild scratch ($C000 default; the TPA build moves it to $E000)
 ;   MONITOR where BYE returns ($2000 = the OS for the TPA build)

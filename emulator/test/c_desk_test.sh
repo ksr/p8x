@@ -33,13 +33,13 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/
 
 python3 $ROOT/tools/clib.py $ROOT/os/commands/desk.c > cd_desk.c
 python3 $ROOT/compiler/p8cc.py cd_desk.c -o cd_desk.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py cd_desk.asm -o cd_desk.bin --base 0x6300 >/dev/null
+python3 $ROOT/assembler/p8xasm.py cd_desk.asm -o cd_desk.bin --base 0x6100 >/dev/null
 
 rm -f cd.img
 python3 $ROOT/tools/p8xfs.py create cd.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   cd.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  cd.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    cd.img cd_desk.bin --name /bin/desk.bin --load 0x6300 --exec 0x6300 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    cd.img cd_desk.bin --name /bin/desk.bin --load 0x6100 --exec 0x6100 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    cd.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
 python3 - <<'EOF2'
 import struct
@@ -85,8 +85,8 @@ grep -q "bye" cd6.out || fail "navigation session did not quit cleanly"
 
 python3 $ROOT/tools/clib.py $ROOT/os/commands/paint.c > cd_paint.c
 python3 $ROOT/compiler/p8cc.py cd_paint.c -o cd_paint.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py cd_paint.asm -o cd_paint.bin --base 0x6300 >/dev/null
-python3 $ROOT/tools/p8xfs.py put cd.img cd_paint.bin --name /bin/paint.bin --load 0x6300 --exec 0x6300 >/dev/null
+python3 $ROOT/assembler/p8xasm.py cd_paint.asm -o cd_paint.bin --base 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put cd.img cd_paint.bin --name /bin/paint.bin --load 0x6100 --exec 0x6100 >/dev/null
 # 7b (same disk): the LIVE TERM -- a typed invocation launches too
 printf 'B\rdesk\r/bin/paint.bin\rq\004' > cd8.in
 ../p8xemu -N -i cd8.in -c cd.img -l 2500000000 eeprom.bin > cd8.out 2>/dev/null || true

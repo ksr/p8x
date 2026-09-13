@@ -31,8 +31,8 @@ ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$(dirname "$0")"
 fail() { echo "BASIC-GFX TEST: FAIL — $1"; exit 1; }
 
-python3 "$ROOT/assembler/p8xasm.py" "$ROOT/basic/p8xbasic.asm" -o bgfx.bin --base 0x6300 \
-    -D BASORG=0x6300 -D BASRAM=0xC500 -D PBUF=0xE000 -D MONITOR=0x2000 >/dev/null \
+python3 "$ROOT/assembler/p8xasm.py" "$ROOT/basic/p8xbasic.asm" -o bgfx.bin --base 0x6100 \
+    -D BASORG=0x6100 -D BASRAM=0xC500 -D PBUF=0xE000 -D MONITOR=0x2000 >/dev/null \
     || fail "BASIC (TPA build) did not assemble"
 
 # A fresh disk copy each run: p8xfs put does NOT replace an existing file, so
@@ -43,7 +43,7 @@ python3 "$ROOT/assembler/p8xasm.py" "$ROOT/os/p8xos.asm" -o bgfx_os.bin --base 0
 python3 "$ROOT/tools/p8xfs.py" boot bgfx.img bgfx_os.bin >/dev/null \
     || fail "could not install the fresh OS (part 4 needs its boot font load)"
 python3 "$ROOT/tools/p8xfs.py" put bgfx.img bgfx.bin --name /bin/bgfx.bin \
-    --load 0x6300 --exec 0x6300 >/dev/null || fail "could not install the test BASIC"
+    --load 0x6100 --exec 0x6100 >/dev/null || fail "could not install the test BASIC"
 
 # COLOR RGB(0,63,0) then CLS: if CLS clobbered the pen, the filled box would
 # come out black and vanish. The NOFILL box is checked in its middle; the LINE

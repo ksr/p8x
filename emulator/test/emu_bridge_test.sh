@@ -18,13 +18,13 @@ cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/dev/null
 python3 $ROOT/assembler/p8xasm.py $ROOT/basic/p8xbasic.asm -o eb_basic.bin \
-        --base 0x6300 -D BASORG=0x6300 -D BASRAM=0xC500 -D PBUF=0xE000 -D MONITOR=0x2000 >/dev/null
+        --base 0x6100 -D BASORG=0x6100 -D BASRAM=0xC500 -D PBUF=0xE000 -D MONITOR=0x2000 >/dev/null
 
 rm -f eb.img
 python3 $ROOT/tools/p8xfs.py create eb.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   eb.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  eb.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    eb.img eb_basic.bin --name /bin/basic.bin --load 0x6300 --exec 0x6300 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    eb.img eb_basic.bin --name /bin/basic.bin --load 0x6100 --exec 0x6100 >/dev/null
 
 python3 - <<'EOF' || exit 1
 import os, pty, sys, subprocess, threading, time

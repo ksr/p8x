@@ -16,21 +16,21 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o aos.bin --base 0x2000 >/dev/null
 python3 $ROOT/tools/clib.py $ROOT/os/commands/finder.c -o fnd.pp.c >/dev/null
 python3 $ROOT/compiler/p8cc.py fnd.pp.c -o fnd.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py fnd.asm -o fnd.bin --base 0x6300 >/dev/null
+python3 $ROOT/assembler/p8xasm.py fnd.asm -o fnd.bin --base 0x6100 >/dev/null
 
 # a stub standing in for /bin/cube.bin (the menu's C entry)
 cat > c_stub.c <<'EOF'
 int main() { puts("CUBERAN"); return 0; }
 EOF
 python3 $ROOT/compiler/p8cc.py c_stub.c -o c_stub.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py c_stub.asm -o c_stub.bin --base 0x6300 >/dev/null
+python3 $ROOT/assembler/p8xasm.py c_stub.asm -o c_stub.bin --base 0x6100 >/dev/null
 
 rm -f a.img
 python3 $ROOT/tools/p8xfs.py create a.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   a.img aos.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  a.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    a.img fnd.bin --name /bin/finder.bin --load 0x6300 --exec 0x6300 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    a.img c_stub.bin --name /bin/cube.bin --load 0x6300 --exec 0x6300 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    a.img fnd.bin --name /bin/finder.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    a.img c_stub.bin --name /bin/cube.bin --load 0x6100 --exec 0x6100 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    a.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
 
 # run 1: open finder, press 'a' -> the dropdown (getkey then blocks; grab it)

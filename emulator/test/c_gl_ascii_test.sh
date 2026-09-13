@@ -125,14 +125,14 @@ EOF
 
 for n in 1 2 3 4; do
     python3 $ROOT/compiler/p8cc.py gl_as$n.c -o gl_as$n.asm >/dev/null
-    python3 $ROOT/assembler/p8xasm.py gl_as$n.asm -o gl_as$n.bin --base 0x6300 >/dev/null
+    python3 $ROOT/assembler/p8xasm.py gl_as$n.asm -o gl_as$n.bin --base 0x6100 >/dev/null
 done
 rm -f gla.img
 python3 $ROOT/tools/p8xfs.py create gla.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   gla.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  gla.img /bin >/dev/null
 for n in 1 2 3 4; do
-    python3 $ROOT/tools/p8xfs.py put gla.img gl_as$n.bin --name /bin/as$n.bin --load 0x6300 --exec 0x6300 >/dev/null
+    python3 $ROOT/tools/p8xfs.py put gla.img gl_as$n.bin --name /bin/as$n.bin --load 0x6100 --exec 0x6100 >/dev/null
 done
 
 run() {

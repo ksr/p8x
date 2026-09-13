@@ -12,7 +12,7 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osa.bin --base 0x2000 >/dev/null
 # echo the arg string at (P2), then RTS to the OS
 cat > argv.asm <<'EOF'
-        .org $6300
+        .org $6100
 ae_lp:  LDA  (P2)
         JZ   ae_end
         JSR  $0103
@@ -20,12 +20,12 @@ ae_lp:  LDA  (P2)
         JMP  ae_lp
 ae_end: RTS
 EOF
-python3 $ROOT/assembler/p8xasm.py argv.asm -o argv.bin --base 0x6300 >/dev/null
+python3 $ROOT/assembler/p8xasm.py argv.asm -o argv.bin --base 0x6100 >/dev/null
 
 rm -f av.img
 python3 $ROOT/tools/p8xfs.py create av.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   av.img osa.bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    av.img argv.bin --name AE.bin --load 0x6300 --exec 0x6300 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    av.img argv.bin --name AE.bin --load 0x6100 --exec 0x6100 >/dev/null
 
 out=$(printf 'B\rrun AE.bin HELLO-ARG\rmkdir /Z\r' | \
       ../p8xemu -l 60000000 -c av.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r')

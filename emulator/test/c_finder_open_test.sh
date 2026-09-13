@@ -19,7 +19,7 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o ios.bin --base 0x2000 >/
 for c in finder image paint; do
     python3 $ROOT/tools/clib.py $ROOT/os/commands/$c.c -o $c.pp.c >/dev/null
     python3 $ROOT/compiler/p8cc.py $c.pp.c -o $c.a.asm >/dev/null
-    python3 $ROOT/assembler/p8xasm.py $c.a.asm -o $c.a.bin --base 0x6300 >/dev/null
+    python3 $ROOT/assembler/p8xasm.py $c.a.asm -o $c.a.bin --base 0x6100 >/dev/null
 done
 
 python3 - <<'PY'
@@ -36,9 +36,9 @@ python3 $ROOT/tools/p8xfs.py boot   i.img ios.bin >/dev/null
 # AAA.P8I created FIRST at root so it is Finder's index 1 (right after "..")
 python3 $ROOT/tools/p8xfs.py put    i.img pic.p8i --name /AAA.P8I >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  i.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    i.img finder.a.bin --name /bin/finder.bin --load 0x6300 --exec 0x6300 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    i.img image.a.bin  --name /bin/image.bin  --load 0x6300 --exec 0x6300 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    i.img paint.a.bin  --name /bin/paint.bin  --load 0x6300 --exec 0x6300 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    i.img finder.a.bin --name /bin/finder.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    i.img image.a.bin  --name /bin/image.bin  --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    i.img paint.a.bin  --name /bin/paint.bin  --load 0x6100 --exec 0x6100 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    i.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
 
 # ---- IMAGE via Finder: open the .p8i (DOWN to it, ENTER), any key, then q ----

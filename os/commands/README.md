@@ -2,7 +2,7 @@
 
 Userland commands for P8X/OS, written in C and compiled with
 [`p8cc`](../../compiler/README.md) to loadable `/bin/*.bin` programs. They run
-in the transient program area (`$6300`) under `run`, reach OS/BIOS services
+in the transient program area (`$6100`) under `run`, reach OS/BIOS services
 through the `bios()`/`peek`/`poke`/`argstr()` builtins and the OS syscall table
 (see [../README.md](../README.md)), and read/write the standard streams via
 `getchar`/`putchar`/`puts` — so the shell can redirect (`<`/`>`) and pipe (`|`)
@@ -68,11 +68,11 @@ print a one-line usage summary and exit.
 > `cd`/`path`, `exit`/`mon`, `mount`/`umount`, `bootload`; (2) deep-FS-internal
 > ops with no syscall surface — `rmdir`/`pack`/`fsck`/`format` (moving them would
 > *add* OS code, not save it); (3) memory tools that would overwrite themselves
-> in the `$6300` TPA — `save`/`dep`; (4) filesystem BOOTSTRAP — `mkdir` (you need
+> in the `$6100` TPA — `save`/`dep`; (4) filesystem BOOTSTRAP — `mkdir` (you need
 > it to create `/bin` on a freshly-`format`ted card, which has no `/bin` to run a
 > `/bin` program from). **`dump` stays native** for that same
 > group-(3) reason — as a `/bin`
-> program it would load into the `$6300` TPA and overwrite the very memory it
+> program it would load into the `$6100` TPA and overwrite the very memory it
 > dumps. Consequence: a freshly-`format`ted card (no `/bin`) can't `dir`/`cat`
 > until `/bin` is repopulated (from the host, or a future master CF — backlog).
 
@@ -103,10 +103,10 @@ print a one-line usage summary and exit.
 | [`vi.c`](vi.c) | `vi name [-h]` | Minimal modal **VT100 screen editor**. Reads keys raw (CONIN, no echo) and drives the cursor with ANSI escapes, so it needs a VT100-compatible terminal. `h j k l` move, `i`/`a`/`A`/`o` insert, `x` delete char, `dd` delete line, `0`/`$`/`G`, **`u` undo** (single-level), **`/`pat + `n`** search (literal, forward, wraps), `:w`/`:q`/`:wq`/`:q!`. Selective redraw (one line per edit, full only on scroll) keeps it usable at serial baud. Flat 110×80 line buffer. Complements the line-oriented [`EDIT`](../../apps/README.md) app. |
 | [`man.c`](man.c) | `man name [-h]` | Print the manual page for a command: streams `/man/<name>` to stdout (a `cat` with a fixed `/man/` prefix, so it is CWD-independent). Works for both `/bin` commands and OS built-ins; an unknown name prints `no manual entry for NAME`. Pages are plain text authored in [`os/man/`](../man/) and installed to `/man` by `run.sh`. |
 | [`dump.c`](dump.c) | `dump addr [-h]` | Hex-dump 256 bytes from hex `addr` (16 rows of hex + ASCII); a console key pages, `.` exits. Memory-only (`peek` + CONIN). Formerly an OS built-in — moved out of the kernel (it needs no shell/FS state). |
-| [`dep.c`](dep.c) | `dep addr b b ... [-h]` | Deposit hex byte values into memory starting at hex `addr` (`poke`); quiet on success. The counterpart to `dump`. Formerly an OS built-in. Note both live in the TPA at `$6300`, so don't `dep` over that region. |
+| [`dep.c`](dep.c) | `dep addr b b ... [-h]` | Deposit hex byte values into memory starting at hex `addr` (`poke`); quiet on success. The counterpart to `dump`. Formerly an OS built-in. Note both live in the TPA at `$6100`, so don't `dep` over that region. |
 | [`cmp.c`](cmp.c) | `cmp file1 file2 [-h]` | Byte-for-byte file compare — silent if identical, else `cmp: files differ: byte N, line M`, or `cmp: EOF on fileX` when one is a prefix. Reads file1 into an 8 KB buffer, streams file2 (both via the single BIOS read stream, like diff). Hand-asm twin [`../commands-asm/cmp.asm`](../commands-asm/cmp.asm) (identical output). The byte-level companion to diff. |
-| [`examine.c`](examine.c) | `examine addr [-h]` | Interactive examine/modify from hex `addr` (`peek`/`poke`) — the shell counterpart of the monitor's `E`: shows `aaaa: vv`, then Enter advances, two hex digits write + advance, `.` quits. Console input via `getchar` (`SYS_GETC`). Runs in the `$6300` TPA, so don't examine over that region. |
-| [`disasm.c`](disasm.c) | `disasm start end [-h]` | Disassemble the hex range `[start,end)` — one instruction per line (`AAAA: bb bb.. MNEMONIC operand`), unknown bytes print `???`. Memory-only (`peek`). The opcode table [`lib_distab.c`](lib_distab.c) is **generated** from `genucode.OPC` by [`generators/gen_p8xdis.py`](../../generators/gen_p8xdis.py) (spliced via `//#use distab`), so it never drifts from the ISA. Runs in the `$6300` TPA, so don't disassemble that range. |
+| [`examine.c`](examine.c) | `examine addr [-h]` | Interactive examine/modify from hex `addr` (`peek`/`poke`) — the shell counterpart of the monitor's `E`: shows `aaaa: vv`, then Enter advances, two hex digits write + advance, `.` quits. Console input via `getchar` (`SYS_GETC`). Runs in the `$6100` TPA, so don't examine over that region. |
+| [`disasm.c`](disasm.c) | `disasm start end [-h]` | Disassemble the hex range `[start,end)` — one instruction per line (`AAAA: bb bb.. MNEMONIC operand`), unknown bytes print `???`. Memory-only (`peek`). The opcode table [`lib_distab.c`](lib_distab.c) is **generated** from `genucode.OPC` by [`generators/gen_p8xdis.py`](../../generators/gen_p8xdis.py) (spliced via `//#use distab`), so it never drifts from the ISA. Runs in the `$6100` TPA, so don't disassemble that range. |
 | [`cube.c`](cube.c) | `cube [frames]` | Spinning perspective **wireframe cube** — the 3D demo and first client of `lib_g3d` (`//#use gfx` + `//#use g3d`). 64 frames (one full turn) by default. With the stage-8b geometry engine it uploads the static cube once and renders per frame with a matrix write (~3 ms of CPU, vsync-paced page flip, tear-free); `cube N s` forces the stage-7 software path (~72 ms/frame), which is also the automatic fallback without an engine. Rebuilt from constants each frame so it never accumulates rounding error. Needs the display (`?No display` without). C-only, and (like `disasm`) outside the `p8cc.c` self-host subset: its sine/edge tables are brace-initialized arrays. |
 | [`tri.c`](tri.c) | `tri x0 y0 z0 x1 y1 z1 x2 y2 z2 [f] [k] [r g b]` | Draw one **3D triangle** from the shell — the stage-9 `g3tri` primitive as a command: nine world coordinates, `f` fills, `k` keeps the screen so triangles stack into scenes, optional `r g b` colour (white default). House frame (window ±120, centred viewport, focal 256); engine when fitted, software otherwise, same pixels; POINT-friendly (no flip). C-only. |
 | [`paint.c`](paint.c) | `paint` | Keyboard-driven **vector paint**: an on-screen palette (8 colours, line/box/circle/fill tools), a LINFUN-complement crosshair and rubber-band, AREABC drops whose boundary colour is probed by a PIXELR ray, and shape-at-a-time erase — the drawing is a display list that replays. Works with the **mouse** too, via [`lib_ptr.c`](lib_ptr.c) — console keyboard + xterm SGR mouse events (press-drag-release draws; click the palette to select). The palette strip is protected by the card itself (WINDOW/VWPORT clamped to the canvas). `man paint` for the keys. C-only. |
@@ -225,8 +225,8 @@ three into `/bin` on a fresh disk):
 
 ```sh
 python3 compiler/p8cc.py os/commands/dir.c -o dir.asm
-python3 assembler/p8xasm.py dir.asm -o dir.bin --base 0x6300
-python3 tools/p8xfs.py put disk.img dir.bin --name /bin/dir.bin --load 0x6300 --exec 0x6300
+python3 assembler/p8xasm.py dir.asm -o dir.bin --base 0x6100
+python3 tools/p8xfs.py put disk.img dir.bin --name /bin/dir.bin --load 0x6100 --exec 0x6100
 # on the P8X:   DIR /bin        (bare name via PATH)   or   RUN /bin/dir.bin /bin
 ```
 
@@ -309,7 +309,7 @@ commands inside these limits, especially for `p8cc.c` parity):
   at its top, so they precede the command's own globals after splicing).
 - **TPA size limit (not a compiler bug):** the shared file read buffer lives at
   `$FC00` (just under the stack), so a command's code+globals must stay below
-  `$FC00` (~37.9 KB from the `$6300` base). This bit `sed`/`diff` built with the
+  `$FC00` (~37.9 KB from the `$6100` base). This bit `sed`/`diff` built with the
   *native* `p8cc.c`, whose codegen is larger than `p8cc.py`'s: with the old
   `$E000` buffer they overran it and read file data into their own code. Moving
   the buffer to `$FC00` fixed it — both build on **both** compilers now. (Was

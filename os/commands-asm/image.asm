@@ -15,7 +15,7 @@
 
 ; (the GL port equates come from ;#use gfx -- lib_gfx.inc)
 
-        .org $6300
+        .org $6100
         TPA2L
         STA i_arg
         TPA2H

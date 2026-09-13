@@ -76,13 +76,13 @@ int main() {
 }
 EOF
 python3 $ROOT/compiler/p8cc.py gl_pr.c -o gl_pr.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py gl_pr.asm -o gl_pr.bin --base 0x6300 >/dev/null
+python3 $ROOT/assembler/p8xasm.py gl_pr.asm -o gl_pr.bin --base 0x6100 >/dev/null
 
 rm -f gl_pr.img
 python3 $ROOT/tools/p8xfs.py create gl_pr.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   gl_pr.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  gl_pr.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    gl_pr.img gl_pr.bin --name /bin/glpr.bin --load 0x6300 --exec 0x6300 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    gl_pr.img gl_pr.bin --name /bin/glpr.bin --load 0x6100 --exec 0x6100 >/dev/null
 printf 'B\rrun /bin/glpr.bin\r' > gl_pr.in
 ../p8xemu -N -i gl_pr.in -c gl_pr.img -l 600000000 eeprom.bin > gl_pr.out 2>/dev/null || true
 grep -q "PRDONE" gl_pr.out || fail "harness did not finish"

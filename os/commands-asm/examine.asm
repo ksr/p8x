@@ -8,7 +8,7 @@
 ; nothing and swallow the queued LF after an Enter. SYS_PUTC=$2009, SYS_PUTS=$200F.
 ;#use abi
 
-        .org $6300
+        .org $6100
 e_sk:   LDA (P2)                     ; skip leading spaces
         LDB #32
         CMP
