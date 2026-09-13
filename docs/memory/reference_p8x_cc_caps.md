@@ -57,3 +57,12 @@ overflows went uncaught for so long.
 Related: [[project_p8x_sed_diff_buffer]] (the separate SBUF read/write collision
 that truncated cc output, fixed earlier by moving cc's read buffer to $FC00),
 [[project_p8x_selfhost_multipass]].
+
+**2026-09-13 rewrite (apps/p8xcc.asm, Tier A edition):** MAXFUNC stays 64 and
+`//#define` stays 64, `//#use` nests 5 deep; the name tables are now arenas at
+BSS `$B000-$DFFF` (global names ~3 KB, locals 768 B per function; overflow =
+`cc: symbol table full`), so cc.bin is code only (10,075 B). The generated code
+is unchanged (tab-indented text), so the SIZE ceiling of a compiled command is
+the same as before. The old compiler compiled a `char` array declared AFTER an
+`int` array with word elements -- any on-target build of grep -r before this
+date had that latent bug (the shipped /bin twins are host-built and unaffected).

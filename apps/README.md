@@ -129,7 +129,7 @@ stay below `$8000` (the table start); `os_asm_test.sh` asserts it.
 ## CC — native C compiler (`p8xcc.asm`)
 
 A from-scratch, single-pass C compiler written directly in assembly — small
-enough (~21 KB) to compile C **entirely on the machine**, front and back end.
+enough (~10 KB) to compile C **entirely on the machine**, front and back end.
 It streams the source in (BIOS `FOPEN`/`FGETB`, one-char pushback) and emits P8X
 assembly to stdout (`SYS_PUTC`, shell-redirectable), which the native `asm`
 turns into a RUNnable binary — so C is compiled, assembled, and run on-target:
@@ -173,6 +173,36 @@ compiler's static-slot model and single pass cost about 2× in size, by design.
 moves / pointer loads / carry chains → one instruction each; `cc.bin`
 22,924 → 20,905 bytes including the new condition-mode code), as did the
 assembler's (36 sites; verified byte-identical by `asm_selfhost_test`).
+
+**Rewritten from scratch for the Tier A ISA (2026-09-13).** `p8xcc.asm` is a
+drop-in: the code it GENERATES is the same instruction for instruction (checked
+by compiling the spliced `pwd`, `wc`, `grep` and `vi` sources with the old and
+the new compiler on the machine and diffing the text; only the indentation of
+the emitted lines changed, from eight spaces to one tab, which makes the output
+about 35% smaller and the following `asm` step correspondingly quicker). What
+changed inside: every name table (locals, globals, functions, macros, struct
+tags and members, spliced libraries) is one mechanism — arena entries
+`[next][len][flag][value][chars]` chained from a 32-way first-letter head
+array, read and written through `(P1+d)`, an entry rejected on its length
+before a character is compared (the old packed pools walked every name byte by
+byte, and every identifier paid that for the macro table alone); the lexer
+classifies keywords once (`KWFIND` → `CURKW`) instead of the parser running up
+to ten string compares per statement; slot numbers, literals and the decimal
+emitter use the word ops; emitted text is walked with one pointer (the OS's
+`SYS_PUTC` preserves it); the tables live at `$B000`–`$DFFF` (free TPA while the
+compiler runs, cleared at start) so the binary is code only. `cc.bin` 20,915 →
+10,075 bytes (the old file carried 7.6 KB of tables as zeros; code alone
+13.3 KB → 10.1 KB). Compile cycles on the machine: `pwd.c` 2.60 M → 2.10 M,
+`wc.c` 30.8 M → 20.6 M, `grep.c` 55.8 M → 36.1 M, `vi.c` 48.8 M → 30.0 M (1.2–1.6×,
+the rest being the BIOS byte stream and `SYS_PUTC` themselves). Three
+behaviour changes, all fixes: a `char` array declared after an `int` array in
+the same function was compiled with word elements (the differential run caught
+it in `grep.c`'s `collect`; `puts` of such an array printed one character),
+a call to a function not yet declared now emits its name (the assembler resolves
+it) instead of a garbage label, and a syntax error stops with `cc: syntax
+error` instead of looping. Limits unchanged: 64 functions, 64 `//#define`s, 5
+nested `//#use`; the arenas hold ~3 KB of global names and 768 bytes of locals
+per function (`cc: symbol table full` past that).
 
 **Language (through v0.28):** functions, direct **and mutual** recursion (via a
 forward prototype), pointers + pass-by-reference, `int`/`char`, arrays with `[]`

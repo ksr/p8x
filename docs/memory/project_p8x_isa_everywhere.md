@@ -105,23 +105,27 @@ suite; (4) hand-asm rewrite (the native assembler now has the two-operand shapes
 of p8xcc.asm / p8xasm.asm themselves. Related:
 [[p8x-tier-a-isa]], [[p8x-cycle-bench]], [[p8cc-runtime-order-gate]].
 
-**Stage 5 (2026-09-12, user request after the mechanical pass): from-scratch
-redesigns in assembly**, in the order assembler -> compiler -> BASIC -> OS/WM
-kernel -> monitor (the user then asked for BASIC before the compiler); asm twins
-of C commands left alone (C versions to be compared later, asm retired where C
-wins). DONE: `apps/p8xasm.asm` (hashed symbol table, first-letter opcode index,
-DISPTAB dispatch; 5,178 -> 4,065 B; 2.4x / 5.7x / >30x faster on cover /
-self-host / 1,000-symbol sources; commit eb59828) and `basic/p8xbasic.asm`
-(STMTTAB/FACTAB token dispatch, CKLEAD reads STMTTAB, PHW/PLW around the
-evaluator, relation-mask compares REL/RELM, (P1+d) records for variables and
-FOR/GOSUB frames, early-exit sorted line search; 11,151 -> 9,124 B; 1.6x / 2.0x
-/ 2.8x faster on arithmetic-loop / GOSUB+variables / string benchmarks; FOR
-nests 3 deep now, lowercase names work, table-full = ?SYNTAX ERROR). NEXT:
-`apps/p8xcc.asm`, then OS/WM kernel and monitor. Method that worked: read the
-old source as the SPEC, list the test contracts, write the new file in parts,
-DIFFERENTIAL-test a long scripted session against the OLD binary (found the one
-real bug each time), benchmark old vs new with LED stamps (`STA $FF02` /
-`POKE 65282,n`, `p8xemu -L`). Gotchas: `#>LABEL+2` is the high byte of
-(LABEL+2); a shared scratch byte (TMPC) used by a helper that a caller also
-relies on (ISLETTER inside MATCHKW) -- keep character-class helpers register-only;
-docs/memory/* are HARD LINKS of the user memory dir (write once, not twice).
+**Stage 5 (2026-09-12/13, user request after the mechanical pass): from-scratch
+redesigns in assembly**, in the order assembler -> BASIC -> compiler (the user
+moved BASIC ahead), then OS/WM kernel and monitor; asm twins of C commands left
+alone (C versions to be compared later, asm retired where C wins). DONE:
+`apps/p8xasm.asm` (hashed symbol table, first-letter opcode index, DISPTAB;
+5,178 -> 4,065 B; 2.4x / 5.7x / >30x faster; eb59828), `basic/p8xbasic.asm`
+(token-indexed STMTTAB/FACTAB, PHW/PLW evaluator, relation masks, (P1+d)
+records; 11,151 -> 9,124 B; 1.6-2.8x faster; 9c1bee8), `apps/p8xcc.asm`
+(one arena + first-letter-chain name-table mechanism for all tables, KWFIND
+keyword codes, word ops, tables at $B000 so the binary is code only;
+20,915 -> 10,075 B; compiles 1.2-1.6x faster; GENERATES THE SAME CODE --
+verified by a differential compile of pwd/wc/grep/vi on the machine, tab
+indent aside -- and fixed an old bug: a char array declared after an int
+array got word elements). NEXT: OS/WM kernel, then the monitor. Method that
+worked every time: read the old source as the SPEC, list the test contracts,
+write the new file in parts, DIFFERENTIAL-test against the OLD binary on the
+emulator (a scripted session for interpreters, compile-and-diff-the-text for
+the compiler), benchmark old vs new with LED stamps (`STA $FF02` at entry and
+exit, `p8xemu -L`). Gotchas: `#>LABEL+2` is the high byte of (LABEL+2); a
+shared scratch byte used by a helper the caller also relies on (TMPC in
+MATCHKW/ISLETTER); a shared WORD holding an operator template across a
+RECURSIVE operand parse (keep it on the stack: PHW/PLW); testing a flag right
+after a JSR that clobbers A (reload it); docs/memory/* are HARD LINKS of the
+user memory dir (write once).

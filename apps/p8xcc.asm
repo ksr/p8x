@@ -1,55 +1,61 @@
 ; =============================================================================
-; P8X CC - native C compiler (standalone TPA program) - MILESTONE B, path B
+; P8X CC - native C compiler (standalone TPA program), Tier A edition
 ; =============================================================================
 ;     RUN CC.BIN SRC.C >OUT.ASM      (then: ASM OUT.ASM  ->  a RUNnable .BIN)
 ;
-; A from-scratch, single-pass C compiler written directly in assembly, small and
-; dense enough to run ON the P8X (unlike the p8cc.c codegen, which compiles to
-; ~82 KB). It streams the source through the BIOS read stream (FOPEN/FGETB) and
-; emits assembly text to stdout via SYS_PUTC, so `>OUT.ASM` captures it and the
-; program's own I/O stays shell-redirectable.
+; A single-pass C compiler written directly in assembly, small enough to run ON
+; the P8X. It streams the source through the BIOS read stream (FOPEN/FGETB) and
+; emits assembly text to stdout via SYS_PUTC, so `>OUT.ASM` captures it.
 ;
-; EARLY (v0.28). Supported so far:  (type = int (16-bit) | char (1-byte elem))
+; This is the 2026-09-13 from-scratch rewrite for the Tier A ISA. The CODE IT
+; GENERATES is the same as before, instruction for instruction (only the
+; indentation of the emitted text changed from eight spaces to one tab), so
+; every compiled command behaves exactly as it did; what changed is the
+; compiler itself:
+;   * every name table (locals, globals, functions, macros, struct tags and
+;     members, spliced libraries) is ONE mechanism: entries in an arena, chained
+;     from a 32-way first-letter head array, read and written through (P1+d):
+;     [next:2][len:1][flag:1][value:2][chars]. A lookup walks one chain and
+;     rejects an entry on its length before touching a character; the old
+;     packed pools walked every name byte by byte, and every identifier paid
+;     that for the macro table alone.
+;   * the lexer classifies keywords once (KWFIND -> CURKW) instead of the
+;     parser running up to ten string compares per statement.
+;   * all 16-bit arithmetic (slot numbers, literals, decimal output) uses the
+;     word ops; the decimal emitter is CMPW/SUBW against the powers of ten.
+;   * emitted text is walked with one pointer (the OS's SYS_PUTC preserves
+;     P1/P2), one instruction per character instead of a reload each time.
+;   * the variables and tables live at BSS ($B000-$DFFF, free TPA while the
+;     compiler runs) and are cleared at start, so the binary is code only.
+;   * a syntax error stops the compile with a message instead of looping.
+;
+; Language (unchanged): type = int (16-bit) | char (1-byte elements)
 ;     program : (func | global | struct-def)*   global : type [*]NAME [[N]] ;
 ;     struct-def : struct TAG { (type [*]member;)* } ;   access: v.m  p->m
-;     func : type NAME([type [*]P,...]) { <stmt>* }
+;     func : type NAME([type [*]P,...]) { <stmt>* }    (prototype: ... ) ;)
 ;     stmt : type [*]NAME [= expr]; | type NAME[N]; | NAME = expr; |
 ;            NAME++; | NAME--; | NAME+=e; | NAME-=e; |
-;            NAME[i] = expr; | *expr = expr; | expr; | if(e) s [else s] |
-;            while(e) s | for([asg];[e];[asg]) s | break; | continue; |
-;            { s* } | putchar(e); | return [e];
-;     expr : land ('||' land)*   land : bor ('&&' bor)*   (short-circuit)
+;            NAME[i] = expr; | NAME.m = e; | NAME->m = e; | *expr = expr; |
+;            expr; | if(e) s [else s] | while(e) s | for([asg];[e];[asg]) s |
+;            break; | continue; | { s* } | putchar(e); | return [e];
+;     expr : cond ? expr : expr | land ('||' land)*   land : bor ('&&' bor)*
 ;     bor : bxor ('|' bxor)*   bxor : band ('^' band)*   band : rel ('&' rel)*
-;     rel  : sh [relop sh]   sh : add (('<<'|'>>') add)*   add : term(...)
-;     term : unary (('*'|'/'|'%') unary)*   unary : ('-'|'!'|'*'|'&') unary | factor
+;     rel  : sh [relop sh]   sh : add (('<<'|'>>') add)*   add : term (('+'|'-') term)*
+;     term : unary (('*'|'/'|'%') unary)*
+;     unary : ('-'|'!'|'*'|'&'|'++'|'--') unary | factor
 ;     factor : NUM(dec/0xhex) | 'c' | "str" | NAME | NAME[i] | NAME(args) |
+;              NAME.m | NAME->m | NAME++ | NAME-- |
 ;              builtins: putchar/puts/getchar/peek/poke/argstr/bios | '(' e ')'
-;     (a bare array NAME decays to &NAME[0])
-; Values are 16-bit int. Codegen uses a MEMORY accumulator __ax (every
-; expression's value) + a temp __t0. TIER A ISA (2026-09-12): + - & | ^ are
-; ADDW/SUBW/ANDW/ORW/XORW on those words, a literal is LDW __ax,#n, a struct
-; offset ADDW __ax,#k, ++/-- INCW/DECW in place, a condition test CMPW __ax,#0,
-; an ordering CMPW + one branch (only == / != still call the 16-bit __cmp); the
-; 8-bit multiply/divide and the shifts stay runtime helpers. putchar takes
-; __ax's low byte. FUNCTIONS: each is _f_NAME (call = JSR, return value in
-; __ax); params/locals use STATIC per-function slots (a global slot counter);
-; args are pushed LEFT TO RIGHT onto the P3 stack with PHW (EM_PUSHARG), the
-; callee's prologue copies them into its slots with LDW __V+2s,(P3+d)
-; (EM_POPPARAMS; arg i at P3+3+2*(n-1-i)) and the caller drops them with ADDP3
-; -- so a callee's storage is never needed at the call site and FORWARD calls /
-; MUTUAL RECURSION work (a prototype just registers the name). Re-entrancy:
-; before the args a function pushes its own live slots (EM_SAVESLOTS) and
-; restores them after the call -- or DISCARDS the copies (ADDP3) when an
-; argument took an address (SAWADDRG), so pass-by-reference still works. The
-; program starts like p8cc's output: it keeps the caller's P3 in __sp0 and runs
-; on a stack below CSTACKTOP unless launched nested. POINTERS: & (EM_ADDROF), * deref (EM_LOADW),
-; *p = e (EM_STOREW) via P1. Ver.
-; behavioural (compile on-target, run, diff output vs p8cc.py). Grows one tested
-; feature at a time (char/pointers, ...) toward the p8cc subset.
+;     //#use NAME       splices /lib/lib_NAME.c (once); //#define NAME value
+; Codegen model (unchanged): a memory accumulator __ax and a temp __t0; every
+; variable is a word slot in one array __V (slot n at __V+2n); each function's
+; locals get STATIC slots from a global counter; arguments travel on the P3
+; stack (PHW / LDW (P3+d) / ADDP3); a function saves its live slots around a
+; call (re-entrancy); condition mode turns a top-level relational into one
+; CMPW + one branch.
 ;
-; Conventions: source is the BIOS read stream (no cursor pointer); output is
-; SYS_PUTC. P3 is the system stack. Emit walks strings via EMP (survives any
-; SYS_PUTC register clobber).
+; Conventions: the source is the BIOS read stream (no cursor pointer); output
+; is SYS_PUTC. P1/P2 are scratch everywhere. P3 is the stack. Word ops clobber A.
 ; =============================================================================
 
 ; ---- BIOS / OS ----
@@ -58,87 +64,239 @@ FRESOLVE = $0133   ; resolve a path -> dir extent + leaf FNAME (P1 = path)
 SYS_GETCWD = $2003 ; OS: write the CWD path (NUL-terminated) to (P1)
 FOPEN    = $0124   ; open the resolved file for reading (P1 = 512-byte buffer)
 FGETB    = $0127   ; next source byte -> A; C=1 at EOF
-SYS_PUTC = $2009   ; emit A to stdout (redirectable by the shell)
-RDBUF    = $FC00   ; FOPEN read buffer
-ROSTATE  = $605E   ; BIOS read-stream state (ROLBA..ROCNT, 13 contiguous bytes)
+SYS_PUTC = $2009   ; emit A to stdout (redirectable by the shell); preserves P1/P2
+RDBUF    = $FC00   ; FOPEN read buffer for the main source
+ROSTATE  = $605E   ; BIOS read-stream state (13 contiguous bytes)
 ROSDRV   = $6085   ; BIOS read-stream drive (1 byte)
 
 CR       = $0D
 LF       = $0A
-MAXFUNC  = 64        ; capacity of FNPAR/FSLOT/FPOOL (see the BSS at end)
+TAB      = $09
+MAXFUNC  = 64      ; function-table capacity (the "too many functions" message)
+MAXMAC   = 64      ; //#define capacity
+USELEVELS= 5       ; //#use nesting depth
 
-; Variables live in this program's OWN space (the BSS labelled at the end), NOT
-; a fixed high page — a high page collides with the OS/shell scratch used by the
-; SYS_PUTC output-redirect path, corrupting state between calls.
+; keyword codes (CURKW after an identifier token; 0 = not a keyword)
+K_INT   = 1
+K_CHAR  = 2
+K_STRUCT= 3
+K_IF    = 4
+K_WHILE = 5
+K_PUTC  = 6
+K_RET   = 7
+K_FOR   = 8
+K_BRK   = 9
+K_CONT  = 10
+K_ELSE  = 11
+K_BIOS  = 12
+K_PUTS  = 13
+K_GETC  = 14
+K_PEEK  = 15
+K_POKE  = 16
+K_ARGSTR= 17
 
-        .org $6A00               ; = TPABASE (generators/gen_memmap.py). NOT .include'd:
-                                 ; memmap.inc's OS-scratch names (NAMEBUF, ...) collide
-                                 ; with this program's own TPA buffers. Keep in sync by hand.
+; relational operator codes (RELOP): the emitted compare / branch depend on it
+R_LT = 0
+R_LE = 1
+R_GT = 2
+R_GE = 3
+R_EQ = 4
+R_NE = 5
+
+; =============================================================================
+; BSS: $B000-$DFFF is free TPA while the compiler runs (the OS captures a
+; built-in's output into the TPA, but a RUN program's output streams through
+; FPUTB; FSDIRBUF is moved to $E000 below; RDBUF is $FC00). Cleared at start.
+; =============================================================================
+BSS     = $B000
+; -- word variables --
+STK0    = BSS+$00   ; entry SP (a bail returns straight to the OS)
+CURV    = BSS+$02   ; current token value (NUM value / PUNCT char)
+NACC    = BSS+$04   ; lexer number accumulator
+NTMP    = BSS+$06   ; scratch word (x10)
+VN      = BSS+$08   ; number being emitted
+SREL    = BSS+$0A   ; EMSLOT: 16-bit SLOTBASE-relative slot
+SYMIDX  = BSS+$0C   ; SYMFIND/SYMADD result: slot relative to SLOTBASE (signed for globals)
+LHSIDX  = BSS+$0E   ; assignment / declaration target slot
+IDVARIDX= BSS+$10   ; gf_id: the variable's slot
+SLOTCNT = BSS+$12   ; total variable slots so far (16-bit)
+SLOTBASE= BSS+$14   ; the current function's first slot
+CUR     = BSS+$16   ; table walk cursor
+NTH     = BSS+$18   ; name tables: the head array in use
+NTNAME  = BSS+$1A   ;   the name to find / add (NUL-terminated)
+NTVAL   = BSS+$1C   ;   value field to store (NTADD)
+ARENAP  = BSS+$1E   ;   global arena append pointer
+LARENAP = BSS+$20   ;   local arena append pointer
+MACVAL  = BSS+$22   ; MACLOOKUP result
+BIOSAD  = BSS+$24   ; bios() intrinsic: the constant call address
+TERM    = BSS+$26   ; scratch word
+FENT    = BSS+$28   ; gfi_call: the callee's table entry
+LASTENT = BSS+$2A   ; the variable entry most recently added (for an array mark)
+; -- byte variables (cleared at start) --
+PBF     = BSS+$30   ; pushback flag
+PBC     = BSS+$31   ; pushback char
+CURK    = BSS+$32   ; token kind: 0 EOF, 1 NUM, 2 ID, 3 PUNCT, 4 STRING
+CUR2    = BSS+$33   ; second char of a two-char punct, else 0
+CURKW   = BSS+$34   ; keyword code of an ID token (0 = plain identifier)
+TIDLEN  = BSS+$35   ; length of TID
+NTNLEN  = BSS+$36   ; length of the name at NTNAME
+NTFLAG  = BSS+$37   ; flag byte to store (NTADD)
+NTLOC   = BSS+$38   ; NTADD: 1 = append to the local arena
+TMPB    = BSS+$39   ; byte scratch
+TMPC    = BSS+$3A   ; byte scratch
+TMPD    = BSS+$3B   ; byte scratch
+SYMOK   = BSS+$3C   ; SYMFIND: found
+SYMRCH  = BSS+$3D   ; SYMFIND result: char-typed
+SYMRAR  = BSS+$3E   ; SYMFIND result: array
+IDVAROK = BSS+$3F   ; gf_id: the id is a known variable
+IDVARCH = BSS+$40
+IDVARAR = BSS+$41
+ELCHAR  = BSS+$42   ; ELEMADDR: char-typed base
+ELARR   = BSS+$43   ; ELEMADDR: array (else pointer) base
+LHSCH   = BSS+$44
+LHSAR   = BSS+$45
+EXPRCHAR= BSS+$46   ; the last factor loaded a char-typed value (for *p)
+DCLCHAR = BSS+$47   ; the declaration being parsed is char-typed
+NLSLOT  = BSS+$48   ; the current function's slot count
+NPARAMS = BSS+$49   ; parameters of the function being defined
+FCNT    = BSS+$4A   ; number of functions
+MACCNT  = BSS+$4B   ; number of macros
+LBLCNT  = BSS+$4C   ; next label number
+RELOP   = BSS+$4D   ; relational operator code
+RELF    = BSS+$4E   ; RELDET: it was a relational
+CONDF   = BSS+$4F   ; the next GEXPR is a condition
+CONDCUR = BSS+$50   ; GEXPR's copy of CONDF
+CONDLBL = BSS+$51   ; the false label of the condition
+CONDDONE= BSS+$52   ; GREL emitted the branch itself
+CURBRK  = BSS+$53   ; innermost loop: break label
+CURCONT = BSS+$54   ;   continue label
+USEMUL  = BSS+$55   ; runtime helpers needed
+USEDIV  = BSS+$56
+USENOT  = BSS+$57
+USESHL  = BSS+$58
+USESHR  = BSS+$59
+USESP   = BSS+$5A   ; //#use nesting depth
+STOFF   = BSS+$5B   ; struct being defined: running offset
+TAGSIZE = BSS+$5C   ; STAGFIND result
+STMEMOK = BSS+$5D   ; STMFIND result
+STMEMOFF= BSS+$5E
+STMEMCH = BSS+$5F
+MEMTMP  = BSS+$60   ; member store width across an RHS
+SAWADDRG= BSS+$61   ; an argument took an address
+ARGI    = BSS+$62   ; call: argument count
+VITER   = BSS+$63   ; slot loop counters
+VITER2  = BSS+$64
+JLBL    = BSS+$65   ; label scratch
+LBLA    = BSS+$66
+LBLB    = BSS+$67
+IFTMP   = BSS+$68
+STRDL   = BSS+$69
+STRSL   = BSS+$6A
+TERNF   = BSS+$6B
+TERNE   = BSS+$6C
+LORT    = BSS+$6D
+LORE    = BSS+$6E
+LANDF   = BSS+$6F
+LANDE   = BSS+$70
+LFT     = BSS+$71
+LFB     = BSS+$72
+LFP     = BSS+$73
+LFE     = BSS+$74
+WHT     = BSS+$75
+WHE     = BSS+$76
+ISCHARTYPE = BSS+$77
+CURFNL  = BSS+$78   ; length of CURFN
+IDNAMEL = BSS+$79   ; length of IDNAME
+DQ      = BSS+$7A   ; decimal digit
+HADH    = BSS+$7B   ; a digit was printed
+USECNT  = BSS+$7C
+; -- buffers --
+TID     = BSS+$80   ; identifier text, NUL-terminated (24)
+CURFN   = BSS+$A0   ; current function name (24)
+IDNAME  = BSS+$C0   ; a factor's identifier (24)
+NAMEBUF = BSS+$E0   ; //#use / //#define name (24)
+PATH    = BSS+$100  ; raw source path argument (64)
+APATHB  = BSS+$140  ; PATH made absolute (80)
+LIBPATH = BSS+$190  ; "/lib/lib_<name>.c" (48)
+STRBUF  = BSS+$1C0  ; current string literal (128)
+; name-table heads: 32 words each (first char & 31), contiguous for the clear
+HEADS   = BSS+$240
+HLOC    = HEADS+$00  ; local variables of the current function
+HGLOB   = HEADS+$40  ; globals
+HFUNC   = HEADS+$80  ; functions
+HMAC    = HEADS+$C0  ; //#define macros
+HTAG    = HEADS+$100 ; struct tags
+HMEM    = HEADS+$140 ; struct members
+HUSED   = HEADS+$180 ; spliced libraries
+HEADSEND= HEADS+$1C0
+USESTATE= BSS+$400  ; saved read-stream state, 14 bytes x USELEVELS (70)
+USEBUF  = BSS+$500  ; per-level 512-byte read buffers (5 x 512 = $A00)
+LARENA  = BSS+$F00  ; local-variable entries (reset per function) (768)
+LARENAEND = BSS+$1200
+ARENA   = BSS+$1200 ; global entries: globals, functions, macros, tags, members
+ARENAEND= BSS+$2000
+BSSEND  = BSS+$2000
+; name-entry layout (relative to the entry pointer)
+NT_NEXT = 0
+NT_LEN  = 2
+NT_FLAG = 3
+NT_VAL  = 4
+NT_CHARS= 6
+
+        .org $6A00               ; = TPABASE
 START:  TPA3L
         STA  STK0
         TPA3H
         STA  STK0+1
-        JSR  GETARG                  ; PATH <- first arg word (the source path)
+        JSR  CLEARBSS            ; (keeps STK0)
+        JSR  GETARG              ; PATH <- the first argument word
         LDA  PATH
-        JZ   USAGE                   ; no arg -> usage
-        JSR  ABSPFX                  ; APATHB <- PATH made absolute (CWD-prefix if
-                                     ;   relative — FRESOLVE starts at root)
-        LDA  #$E0                    ; FSDIRBUF: move the directory-scan buffer to
-        JSR  FSDIRBUF                ;   $E000 so FRESOLVE's scan doesn't clobber a
-                                     ;   redirected write stream's SBUF partial
-        LDP1 #APATHB                ; <- tierA: pointer constant (next: LDA)
+        JZ   USAGE
+        JSR  ABSPFX              ; APATHB <- PATH made absolute
+        LDA  #$E0                ; move the directory-scan buffer to $E000 so
+        JSR  FSDIRBUF            ;   FRESOLVE cannot clobber a redirected stream
+        LDP1 #APATHB
         LDA  #0
         JSR  FRESOLVE
-        LDP1 #RDBUF                ; <- tierA: pointer constant (next: LDA)
+        LDP1 #RDBUF
         LDA  #0
         JSR  FOPEN
         JC   OPENERR
-        LDA  #0                      ; reset the lexer + symbol table + labels
-        STA  PBF
-        STA  SYMCNT
-        STA  LBLCNT
-        STA  USEMUL
-        STA  USEDIV
-        STA  SLOTCNT
-        STA  SLOTCNT+1               ; 16-bit slot counter
-        STA  FCNT
-        STA  USENEG
-        STA  USENOT
-        STA  CURBRK
-        STA  CURCONT
-        STA  CONDF
-        STA  CONDDONE
-        STA  GSYMCNT
-        STA  USESP
-        STA  USEDN
-        STA  USEAND
-        STA  USEOR
-        STA  USEXOR
-        STA  USESHL
-        STA  USESHR
-        STA  STAGCNT
-        STA  STMCNT
+        LDW  ARENAP,#ARENA
         JSR  COMPILE
         RTS
 USAGE:  LDP1 #MUSAGE
-        JSR  EMIT
-        RTS
+        JMP  EMIT
 OPENERR:LDP1 #MNOSRC
-        JSR  EMIT
+        JMP  EMIT
+
+; BAIL - P1 -> message: print it and return to the OS with the entry stack.
+BAIL:   JSR  EMIT
+        LPW3 STK0
         RTS
 
-; --- GETARG: copy the first whitespace-delimited word of the arg tail (P2 at
-;     entry) into PATH, NUL-terminated. Leaves PATH[0]=0 if there is no arg. ---
-GETARG: LDA  #0
-        STA  PATH
-ga_ss:  LDA  (P2)                    ; skip leading spaces
+; CLEARBSS - zero everything after STK0 up to the end of the head arrays (the
+;   arenas need no clearing: the heads are the roots)
+CLEARBSS:
+        LDP1 #BSS+2
+cb_l:   LDA  #0
+        STA  (P1)+
+        TPA1H
+        LDB  #>HEADSEND
+        CMP
+        JNZ  cb_l                ; until P1 reaches the page after the heads
+        RTS
+
+; GETARG - copy the first blank-delimited word of the argument tail (P2 at
+;   entry) into PATH, NUL-terminated (empty if there is no argument)
+GETARG: LDP1 #PATH
+ga_ss:  LDA  (P2)
         LDB  #' '
         CMP
-        JNZ  ga_cp
+        JNZ  ga_l
         INP2
         JMP  ga_ss
-ga_cp:  LDP1 #PATH                ; <- tierA: pointer constant (next: LDA)
-ga_l:   LDA  (P2)
+ga_l:   LDA  (P2)+
         JZ   ga_end
         LDB  #CR
         CMP
@@ -146,126 +304,87 @@ ga_l:   LDA  (P2)
         LDB  #' '
         CMP
         JZ   ga_end
-        STA  (P1)
-        INP1
-        INP2
+        STA  (P1)+
         JMP  ga_l
 ga_end: LDA  #0
         STA  (P1)
         RTS
 
-; ABSPFX: APATHB <- PATH made absolute. An absolute PATH (leading '/') is copied
-; as-is; a relative one is CWD-prefixed (SYS_GETCWD + '/'), because FRESOLVE starts
-; at root, not the CWD. Lets `cc x.c` read a source from any working directory
-; (matches asm). PATH itself is left as the raw arg.
-ABSPFX: LDA  PATH
-        LDB  #'/'
-        CMP
-        JZ   ap_abs
-        LDP1 #APATHB                ; <- tierA: pointer constant (next: LDA)
-        LDA  #0
-        JSR  SYS_GETCWD
-        LDP1 #APATHB                ; <- tierA: pointer constant (next: LDA)
-ap_en:  LDA  (P1)
-        JZ   ap_sl
-        INP1
-        JMP  ap_en
-ap_sl:  DEP1                        ; last char == '/'? (root "/" already ends in one)
-        LDA  (P1)
-        INP1
+; ABSPFX - APATHB <- PATH made absolute: a leading '/' is copied as-is, a
+;   relative path is prefixed with the CWD + '/' (FRESOLVE starts at root).
+ABSPFX: LDP1 #APATHB
+        LDA  PATH
         LDB  #'/'
         CMP
         JZ   ap_cat
-        LDA  #'/'                    ; else append a separator
-        STA  (P1)
-        INP1
-ap_cat: LDP2 #PATH                ; <- tierA: pointer constant (next: LDA)
-ap_cl:  LDA  (P2)
-        STA  (P1)
-        JZ   ap_ret
-        INP1
-        INP2
-        JMP  ap_cl
-ap_abs: LDP2 #PATH                ; <- tierA: pointer constant (next: LDA)
-        LDP1 #APATHB                ; <- tierA: pointer constant (next: LDA)
-ap_al:  LDA  (P2)
-        STA  (P1)
-        JZ   ap_ret
-        INP1
-        INP2
-        JMP  ap_al
-ap_ret: RTS
+        LDA  #0
+        JSR  SYS_GETCWD          ; APATHB <- CWD
+        LDP1 #APATHB
+ap_en:  LDA  (P1)+
+        JNZ  ap_en
+        DEP1
+        DEP1                     ; the last CWD character
+        LDA  (P1)+
+        LDB  #'/'
+        CMP
+        JZ   ap_cat              ; root "/" already ends in one
+        LDA  #'/'
+        STA  (P1)+
+ap_cat: LDP2 #PATH
+ap_cl:  LDA  (P2)+
+        STA  (P1)+
+        JNZ  ap_cl
+        RTS
 
 ; =============================================================================
-; Output (emit assembly text via SYS_PUTC)
+; Output: assembly text via SYS_PUTC
 ; =============================================================================
-; EMIT: P1 -> NUL-terminated string. Walks via EMP so a SYS_PUTC clobber of P1
-;       is harmless.
-EMIT:   TPA1L
-        STA  EMP
-        TPA1H
-        STA  EMP+1
-em_l:   LPW1 EMP                ; <- tierA: pointer load (next: LDA)
-        LDA  (P1)
+; EMIT - print the NUL-terminated string at P1 (SYS_PUTC preserves P1)
+EMIT:   LDA  (P1)+
         JZ   em_d
         JSR  SYS_PUTC
-        INCW EMP                ; <- tierA: 16-bit INCW chain before JMP em_l (next: JMP em_l -> LDA)
-        JMP  em_l
+        JMP  EMIT
 em_d:   RTS
 
-; EMITNUM: emit A (0..255) as decimal, no leading zeros.
-; EMITNUM16: emit the 16-bit value in VN:VN+1 (0..65535) as decimal. Slot numbers
-;   can now exceed 255 (a program may use >255 variable slots), so the number
-;   emitter is 16-bit: strip ten-thousands..tens by 16-bit subtract, then ones.
-EMITNUM: STA VN
+; EMITN - print A characters from P1
+EMITN:  STA  TMPD
+emn_l:  LDA  TMPD
+        JZ   em_d
+        DEC
+        STA  TMPD
+        LDA  (P1)+
+        JSR  SYS_PUTC
+        JMP  emn_l
+
+; EMITNL - a newline
+EMITNL: LDA  #LF
+        JMP  SYS_PUTC
+
+; EMITNUM - emit A (0..255) as decimal; EMITNUM16 - the word VN (no leading 0s)
+EMITNUM:STA  VN
         LDA  #0
         STA  VN+1
-EMITNUM16: LDA #0
+EMITNUM16:
+        LDA  #0
         STA  HADH
-        LDA  #$10                    ; 10000 = $2710
-        STA  DVLO
-        LDA  #$27
-        STA  DVHI
+        LDW  NTMP,#10000
         JSR  EN_DIG
-        LDA  #$E8                    ; 1000 = $03E8
-        STA  DVLO
-        LDA  #$03
-        STA  DVHI
+        LDW  NTMP,#1000
         JSR  EN_DIG
-        LDA  #100                    ; 100
-        STA  DVLO
-        LDA  #0
-        STA  DVHI
+        LDW  NTMP,#100
         JSR  EN_DIG
-        LDA  #10                     ; 10
-        STA  DVLO
-        LDA  #0
-        STA  DVHI
+        LDW  NTMP,#10
         JSR  EN_DIG
-        LDA  VN                      ; ones (always printed)
+        LDA  VN                  ; the ones digit always prints
         LDB  #'0'
         ADD
-        JSR  SYS_PUTC
-        RTS
-; EN_DIG: DQ = count of times DVLO:DVHI fits in VN:VN+1; VN -= DQ*DV; emit the
-;   digit unless it's a leading zero (HADH tracks "a digit was already printed").
+        JMP  SYS_PUTC
+; EN_DIG - one digit: how many times NTMP fits in VN; printed unless a leading 0
 EN_DIG: LDA  #0
         STA  DQ
-end_lp: JSR  EN_GE                   ; C=1 iff VN >= DV
+end_lp: CMPW VN,NTMP
         JNC  end_em
-        LDA  VN                      ; VN -= DV (16-bit)
-        LDB  DVLO
-        SUB
-        STA  VN
-        JC   end_nb                  ; C=1 -> no borrow out of the low byte
-        LDA  VN+1
-        LDB  #1
-        SUB
-        STA  VN+1
-end_nb: LDA  VN+1
-        LDB  DVHI
-        SUB
-        STA  VN+1
+        SUBW VN,NTMP
         LDA  DQ
         INC
         STA  DQ
@@ -273,312 +392,180 @@ end_nb: LDA  VN+1
 end_em: LDA  DQ
         JNZ  end_pr
         LDA  HADH
-        JZ   end_ret                 ; suppressed leading zero
+        JZ   end_ret
 end_pr: LDA  DQ
         LDB  #'0'
         ADD
         JSR  SYS_PUTC
         LDA  #1
         STA  HADH
-end_ret: RTS
-; EN_GE: C=1 iff VN:VN+1 >= DVLO:DVHI, else C=0.
-EN_GE:  LDA  VN+1
-        LDB  DVHI
-        CMP
-        JNC  eng_lt                  ; VN_hi < DV_hi
-        LDA  DVHI
-        LDB  VN+1
-        CMP
-        JNC  eng_ge                  ; VN_hi > DV_hi
-        LDA  VN                      ; hi equal -> compare lo
-        LDB  DVLO
-        CMP
-        RTS
-eng_ge: LDA  #1
-        LDB  #0
-        CMP
-        RTS
-eng_lt: LDA  #0
-        LDB  #1
-        CMP
-        RTS
+end_ret:RTS
 
-; EMSLOT: emit the decimal of the ABSOLUTE slot = SLOTBASE + SREL:SREL+1, where
-;   SREL is a 16-bit SLOTBASE-relative index (signed: globals resolve to
-;   G-SLOTBASE, which may be negative). 16-bit two's-complement add.
-EMSLOT: LDA  SLOTBASE
-        LDB  SREL
-        ADD
-        STA  VN
-        LDA  SLOTBASE+1
-        JNC  emsl_nb
-        INC                          ; carry from the low byte
-emsl_nb: LDB SREL+1
-        ADD
-        STA  VN+1
-        LDA  VN                      ; byte offset into __V = 2 * slot (word cells)
-        SHL
-        STA  VN
-        LDA  VN+1
-        ROL
-        STA  VN+1
+; EMSLOT - emit the byte offset of the ABSOLUTE slot SLOTBASE + SREL (a 16-bit
+;   two's-complement add: a global's SREL is negative) = 2 * slot.
+EMSLOT: MOVW VN,SREL
+        ADDW VN,SLOTBASE
+        ADDW VN,VN
         JMP  EMITNUM16
-; EMSY: emit V<SLOTBASE + SYMIDX>   EMLH: ... + LHSIDX   EMSB: ... + A (0..255).
-EMSY:   MOVW SREL,SYMIDX                ; <- tierA: word move (next: JMP EMSLOT -> LDA)
+EMSY:   MOVW SREL,SYMIDX         ; ... of slot SYMIDX
         JMP  EMSLOT
-EMLH:   MOVW SREL,LHSIDX                ; <- tierA: word move (next: JMP EMSLOT -> LDA)
+EMLH:   MOVW SREL,LHSIDX         ; ... of slot LHSIDX
         JMP  EMSLOT
-EMSB:   STA  SREL
+EMSB:   STA  SREL                ; ... of slot A (0..255)
         LDA  #0
         STA  SREL+1
         JMP  EMSLOT
-; SLOTADD_VN: SLOTCNT += VN:VN+1 (16-bit) — used by array declarations.
-SLOTADD_VN: LDA SLOTCNT
-        LDB  VN
+
+; EMHEX - emit A as two hex digits
+EMHEX:  STA  TMPD
+        SHR
+        SHR
+        SHR
+        SHR
+        JSR  EMNIB
+        LDA  TMPD
+        LDB  #$0F
+        AND
+EMNIB:  LDB  #10
+        CMP
+        JC   en_af
+        LDB  #'0'
         ADD
-        STA  SLOTCNT
-        LDA  SLOTCNT+1
-        JNC  sav1
-        INC
-sav1:   LDB  VN+1
+        JMP  SYS_PUTC
+en_af:  LDB  #$37                ; 'A' - 10
         ADD
-        STA  SLOTCNT+1
-        RTS
+        JMP  SYS_PUTC
 
-; ---- 16-bit accumulator emit helpers ----
-EM_LDIMM: LDP1 #MLDWAXI              ; __ax = CURV (16-bit literal): LDW __ax,#n
-        JSR  EMIT                    ;   (was LDA/STA x2, 10 bytes -> 4-5)
-        MOVW VN,CURV                ; <- tierA: word move (next: JSR EMITNUM16)
-        JSR  EMITNUM16
-        LDP1 #MNL
-        JSR  EMIT
-        RTS
-EM_LDVAR: LDP1 #MMVAXV               ; __ax = V<SYMIDX>  ->  MOVW __ax,__V+<2*n>
-        JSR  EMIT                    ;   (was LDA/STA x2 — one mem->mem word move)
-        JSR  EMSY
-        LDP1 #MNL
-        JSR  EMIT
-        RTS
-; GSYMCHAR (A = slot) -> A = 1 if that slot is char-typed
-GSYMCHAR: STA TMPC
-        LDA  #<SYMCHAR
-        LDB  TMPC
-        ADD
-        TAP1L
-        LDA  #>SYMCHAR
-        JNC  gsc1
-        INC
-gsc1:   TAP1H
-        LDA  (P1)
-        RTS
-
-; SETSYMCHAR: SYMCHAR[SYMIDX] = DCLCHAR
-SETSYMCHAR: LDA #<SYMCHAR
-        LDB  SYMIDX
-        ADD
-        TAP1L
-        LDA  #>SYMCHAR
-        JNC  ssc1
-        INC
-ssc1:   TAP1H
-        LDA  DCLCHAR
-        STA  (P1)
-        RTS
-
-; EM_LOADB: __ax = (byte)*(__ax)   (byte deref; high byte 0)
-EM_LOADB: LDP1 #MLPWAX               ; P1 = word @ __ax (was LDA/TAP1L/LDA/TAP1H)
-        JSR  EMIT
-        LDP1 #MLDP1
-        JSR  EMIT
-        LDP1 #MSTAX
-        JSR  EMIT
-        LDP1 #MLDA0
-        JSR  EMIT
-        LDP1 #MSTAXH
-        JSR  EMIT
-        RTS
-
-; EM_STOREB: *(__t0) = (byte)__ax   (store the low byte)
-EM_STOREB: LDP1 #MLPWT0              ; P1 = word @ __t0 (was LDA/TAP1L/LDA/TAP1H)
-        JSR  EMIT
-        LDP1 #MLDAX
-        JSR  EMIT
-        LDP1 #MSTP1
-        JSR  EMIT
-        RTS
-
-; EM_SCALE2: __ax <<= 1  (scale an int index to a byte offset)
-EM_SCALE2: LDP1 #MLDAX
-        JSR  EMIT
-        LDP1 #MSHL
-        JSR  EMIT
-        LDP1 #MSTAX
-        JSR  EMIT
-        LDP1 #MLDAXH
-        JSR  EMIT
-        LDP1 #MROL
-        JSR  EMIT
-        LDP1 #MSTAXH
-        JSR  EMIT
-        RTS
-
-; ELEMADDR: SYMIDX = an array/pointer variable's slot; current token '['.
-;   Emits code leaving the element ADDRESS in __ax.  Consumes  [ index ] .
-ELEMADDR: LDA ELARR                 ; caller pre-set ELCHAR + ELARR
-        JZ   ela_ptr
-        JSR  EM_ADDROF               ; array: base = &V<slot>
-        JMP  ela_base
-ela_ptr: JSR EM_LDVAR                ; pointer: base = its value
-ela_base: JSR EM_PUSH                ; push base
-        JSR  ADVANCE                 ; past '['
-        JSR  GEXPR                   ; index -> __ax
-        LDA  #']'
-        JSR  EXPECTP
-        LDA  ELCHAR                  ; char: scale 1 (no shift); int: scale 2
-        JNZ  ela_nos
-        JSR  EM_SCALE2
-ela_nos: JSR EM_POP                  ; base -> __t0
-        LDP1 #MADD                   ; JSR __add -> __ax = index*(1|2) + base
-        JSR  EMIT
-        RTS
-
-; --- pointer helpers (v0.13) ---
-; EM_ADDROF: __ax = &V<SLOTBASE+SYMIDX>   (address-of a scalar variable)
-EM_ADDROF: LDP1 #MLDALV
-        JSR  EMIT
-        JSR  EMSY
-        LDP1 #MNL
-        JSR  EMIT
-        LDP1 #MSTAX
-        JSR  EMIT
-        LDP1 #MLDAHV
-        JSR  EMIT
-        JSR  EMSY
-        LDP1 #MNL
-        JSR  EMIT
-        LDP1 #MSTAXH
-        JSR  EMIT
-        RTS
-
-; EM_LOADW: __ax = *(__ax)   (deref: load a word from the address in __ax)
-EM_LOADW: LDP1 #MLPWAX               ; P1 = word @ __ax (was LDA/TAP1L/LDA/TAP1H)
-        JSR  EMIT
-        LDP1 #MLDP1
-        JSR  EMIT
-        LDP1 #MSTAX
-        JSR  EMIT
-        LDP1 #MINP1
-        JSR  EMIT
-        LDP1 #MLDP1
-        JSR  EMIT
-        LDP1 #MSTAXH
-        JSR  EMIT
-        RTS
-
-; EM_STOREW: *(__t0) = __ax   (store the word in __ax to the address in __t0)
-EM_STOREW: LDP1 #MLPWT0              ; P1 = word @ __t0 (was LDA/TAP1L/LDA/TAP1H)
-        JSR  EMIT
-        LDP1 #MLDAX
-        JSR  EMIT
-        LDP1 #MSTP1
-        JSR  EMIT
-        LDP1 #MINP1
-        JSR  EMIT
-        LDP1 #MLDAXH
-        JSR  EMIT
-        LDP1 #MSTP1
-        JSR  EMIT
-        RTS
-
-EM_STVAR: LDP1 #MMVV                 ; V<LHSIDX> = __ax  ->  MOVW __V+<2*n>,__ax
-        JSR  EMIT                    ;   (was LDA/STA x2 — one mem->mem word move)
-        JSR  EMLH
-        LDP1 #MCAX
-        JSR  EMIT
-        RTS
-EM_PUSH: LDP1 #MPHW                  ; push __ax (16-bit) -> one PHW instruction
-        JSR  EMIT                    ;   (was LDA/PHA/LDA/PHA)
-        RTS
-EM_POP: LDP1 #MPLW                   ; pop -> __t0 (16-bit) -> one PLW instruction
-        JSR  EMIT                    ;   (was PLA/STA/PLA/STA)
-        RTS
-; EM_INCVAR / EM_DECVAR: V<SLOTBASE+SYMIDX> += / -= 1 (16-bit, in place; __ax kept)
-EM_VADDR: LDP1 #MSTAV                 ; helper: emit "STA V<slot>" (slot in A? no) -- unused
-        RTS
-EM_INCVAR: LDP1 #MINCWV               ; INCW __V+<2n>  (was a 12-instruction carry chain)
-        JSR  EMIT
-        JSR  EMSY
-        LDP1 #MNL
-        JSR  EMIT
-        RTS
-EM_DECVAR: LDP1 #MDECWV               ; DECW __V+<2n>
-        JSR  EMIT
-        JSR  EMSY
-        LDP1 #MNL
-        JSR  EMIT
-        RTS
-
-; EM_PUSHARG: emit "PHW __ax" -- arguments go onto the P3 stack (2026-09-12; the
-;   software arg stack __sp/__pusharg/__pop is gone). The caller drops them
-;   with ADDP3 after the JSR; the callee reads them with LDW (P3+d).
-EM_PUSHARG: LDP1 #MPHW
-        JSR  EMIT
-        RTS
-; EM_ADDP3 (A = n): emit  ADDP3 #n
-EM_ADDP3: STA MEMTMP
-        LDP1 #MADDP3
-        JSR  EMIT
-        LDA  MEMTMP
-        JSR  EMITNUM
-        LDP1 #MNL
-        JSR  EMIT
-        RTS
-
-; EM_POPPARAMS: prologue - copy the NPARAMS args (pushed left-to-right by the
-;   caller, so arg 0 is deepest) from the stack into this function's param slots
-;   V<SLOTBASE+i>:  LDW __V+2*slot(i),(P3+3+2*(NPARAMS-1-i)).  The return address
-;   sits at P3+1..2; the caller frees the args with ADDP3 after the call.
-EM_POPPARAMS: LDA NPARAMS
-        JZ   epp_d
-        STA  VITER
-epp_l:  LDA  VITER
-        DEC
-        STA  VITER
-        LDP1 #MLDWV                  ; "LDW __V+"
-        JSR  EMIT
-        LDA  VITER
-        JSR  EMSB                    ; + 2*slot
-        LDP1 #MCP3                   ; ",(P3+"
-        JSR  EMIT
-        LDA  NPARAMS                 ; d = 3 + 2*(NPARAMS-1-VITER)
-        LDB  VITER
-        SUB
-        DEC
+; =============================================================================
+; Name tables: [next:2][len:1][flag:1][val:2][chars] entries in an arena,
+; chained from a 32-word head array by the name's first character (& 31).
+;   NTH    = the head array          NTNAME / NTNLEN = the name
+;   NTFIND -> C=1 and P1 = the entry, else C=0
+;   NTADD  -> a new entry (flag NTFLAG, value NTVAL) in the global arena, or
+;             the local one when NTLOC=1; P1 = the entry
+; =============================================================================
+; NTHEAD - P2 = &heads[first char & 31]
+NTHEAD: LPW2 NTNAME
+        LDA  (P2)
+        LDB  #$1F
+        AND
         SHL
-        LDB  #3
+        LDB  NTH
         ADD
-        JSR  EMITNUM
-        LDP1 #MCLNL                  ; ")" + newline
-        JSR  EMIT
-        LDA  VITER
-        JZ   epp_d
-        JMP  epp_l
-epp_d:  RTS
+        TAP2L
+        LDA  #0
+        ROL
+        LDB  NTH+1
+        ADD
+        TAP2H
+        RTS
 
-EM_AX0: LDP1 #MLDW0                  ; __ax = 0  (LDW __ax,#0)
-        JSR  EMIT
+NTFIND: JSR  NTHEAD
+        LDW  CUR,(P2+0)          ; the chain's first entry
+ntf_l:  LDA  CUR+1
+        JZ   ntf_no              ; end of chain (entries live above $B000)
+        LPW1 CUR
+        LDA  (P1+2)              ; the length first
+        LDB  NTNLEN
+        CMP
+        JNZ  ntf_nx
+        LPW2 NTNAME
+        INP1                     ; P1 -> the entry's characters
+        INP1
+        INP1
+        INP1
+        INP1
+        INP1
+        LDA  NTNLEN
+        STA  TMPD
+ntf_c:  LDA  TMPD
+        JZ   ntf_yes
+        DEC
+        STA  TMPD
+        LDA  (P1)+
+        STA  TMPC
+        LDA  (P2)+
+        LDB  TMPC
+        CMP
+        JZ   ntf_c
+        LPW1 CUR
+ntf_nx: LDW  CUR,(P1+0)          ; next in chain
+        JMP  ntf_l
+ntf_yes:LPW1 CUR
+        SEC
         RTS
-EM_AX1: LDP1 #MLDW1                  ; __ax = 1
-        JSR  EMIT
+ntf_no: CLC
         RTS
-EM_TESTAX: LDP1 #MCMPAX0              ; set Z=1 iff __ax==0  (CMPW __ax,#0: 16-bit Z)
-        JSR  EMIT
+
+NTADD:  LDA  NTLOC
+        JNZ  nta_loc
+        MOVW CUR,ARENAP          ; the new entry
+        LDA  NTNLEN
+        STA  TMPD
+        LDA  ARENAP+1            ; room? (entry <= 6+23 bytes; keep 32 spare)
+        LDB  #>ARENAEND-32
+        CMP
+        JC   nta_full
+        JMP  nta_go
+nta_loc:MOVW CUR,LARENAP
+        LDA  LARENAP+1
+        LDB  #>LARENAEND-32
+        CMP
+        JNC  nta_go
+        LDA  LARENAP
+        LDB  #<LARENAEND-32
+        CMP
+        JC   nta_full
+nta_go: JSR  NTHEAD              ; P2 = the head word
+        LPW1 CUR
+        LDW  TERM,(P2+0)         ; entry.next = old head
+        STW  (P1+0),TERM
+        STW  (P2+0),CUR          ; head = entry
+        LDA  NTNLEN
+        STA  (P1+2)
+        LDA  NTFLAG
+        STA  (P1+3)
+        STW  (P1+4),NTVAL
+        INP1
+        INP1
+        INP1
+        INP1
+        INP1
+        INP1
+        LPW2 NTNAME              ; the characters
+        LDA  NTNLEN
+        STA  TMPD
+nta_c:  LDA  TMPD
+        JZ   nta_e
+        DEC
+        STA  TMPD
+        LDA  (P2)+
+        STA  (P1)+
+        JMP  nta_c
+nta_e:  LDA  NTLOC
+        JNZ  nta_le
+        LEAW ARENAP,(P1+0)
+        LPW1 CUR
+        RTS
+nta_le: LEAW LARENAP,(P1+0)
+        LPW1 CUR
+        RTS
+nta_full:
+        LDP1 #MTOOSYM
+        JMP  BAIL
+
+; NTSETTID - the name to look up / add is TID
+NTSETTID:
+        LDW  NTNAME,#TID
+        LDA  TIDLEN
+        STA  NTNLEN
         RTS
 
 ; =============================================================================
-; Lexer  (source via the BIOS read stream; one-char pushback)
+; Lexer (the BIOS read stream; one-char pushback)
 ; =============================================================================
-; GC: next source char -> A, or A=0 with C=1 at EOF.
+; GC - the next source char -> A (C=0), or C=1 at the end of the source. At a
+;   spliced library's end the parent stream resumes.
 GC:     LDA  PBF
         JZ   gc_rd
         LDA  #0
@@ -586,502 +573,43 @@ GC:     LDA  PBF
         LDA  PBC
         CLC
         RTS
-gc_rd:  JSR  FGETB                   ; C=1 at EOF
-        JNC  gc_ok                   ; got a byte
-        LDA  USESP                   ; EOF: inside a spliced lib? pop and continue
+gc_rd:  JSR  FGETB
+        JNC  gc_ok
+        LDA  USESP
         JZ   gc_reof
         JSR  USEPOP
         JMP  gc_rd
-gc_reof: SEC
+gc_reof:SEC
         RTS
 gc_ok:  CLC
         RTS
-
-; =============================================================================
-; //#use NAME  -- recursive source splicer (native counterpart of clib.py).
-;   On "//#use NAME" the current read stream is saved, /lib/lib_NAME.c is opened
-;   into a fresh buffer, and lexing continues from it; at its EOF (GC) the parent
-;   stream is restored. Nesting is a stack (USESTATE + USEBUF per level); each
-;   library is spliced at most once (USED dedup).
-; =============================================================================
-; TRYUSE: we have consumed "//#". Expect "use NAME" -> splice; else skip the line.
-TRYUSE: JSR GC
-        JC   tu_ret
-        LDB  #'u'
-        CMP
-        JNZ  tu_skipl
-        JSR  GC
-        JC   tu_ret
-        LDB  #'s'
-        CMP
-        JNZ  tu_skipl
-        JSR  GC
-        JC   tu_ret
-        LDB  #'e'
-        CMP
-        JNZ  tu_skipl
-tu_sp:  JSR  GC                       ; skip spaces before the name
-        JC   tu_ret
-        STA  TMPB
-        LDB  #' '
-        CMP
-        JZ   tu_sp
-        LDP2 #NAMEBUF                ; <- tierA: pointer constant (next: LDA)
-tu_nm:  LDA  TMPB
-        JSR  ISALP
-        JC   tu_put
-        LDA  TMPB
-        JSR  ISDIG
-        JC   tu_put
-        JMP  tu_nend
-tu_put: LDA  TMPB
-        STA  (P2)
-        INP2
-        JSR  GC
-        JC   tu_nend0
-        STA  TMPB
-        JMP  tu_nm
-tu_nend0: LDA #LF
-        STA  TMPB
-tu_nend: LDA #0
-        STA  (P2)                     ; NUL-terminate the name
-        LDA  TMPB                     ; skip to end of line
-        LDB  #LF
-        CMP
-        JZ   tu_do
-tu_es:  JSR  GC
-        JC   tu_do
-        LDB  #LF
-        CMP
-        JNZ  tu_es
-tu_do:  JSR  DOUSE
-        RTS
-tu_skipl: LDB #LF                     ; not "use": skip the rest of the line
-        CMP
-        JZ   tu_ret
-tu_sl:  JSR  GC
-        JC   tu_ret
-        LDB  #LF
-        CMP
-        JNZ  tu_sl
-tu_ret: RTS
-
-; DOUSE: dedup NAMEBUF, then save state + open /lib/lib_NAME.c into a new buffer.
-DOUSE:  JSR USED_HAS
-        LDA  USEDF
-        JNZ  du_done                  ; already spliced -> skip
-        JSR  USED_ADD
-        JSR  BUILDLIBPATH
-        JSR  SAVESTATE
-        LDP1 #LIBPATH                ; <- tierA: pointer constant (next: LDA)
-        LDA  #0
-        JSR  FRESOLVE
-        JSR  LIBBUFPTR                ; P1 = USEBUF + USESP*512
-        LDA  #0
-        JSR  FOPEN
-        JC   du_fail
-        LDA  USESP                    ; success: descend one level
-        INC
-        STA  USESP
-        RTS
-du_fail: JSR RESTORESTATE             ; not found -> restore parent, continue
-du_done: RTS
-
-; USED_HAS: USEDF = 1 if NAMEBUF is already in the USED pool.
-USED_HAS:LDP1 #USED                ; <- tierA: pointer constant (next: LDA)
-        LDA  #0
-        STA  TMPB
-        STA  USEDF
-uh_e:   LDA  TMPB
-        LDB  USEDN
-        CMP
-        JC   uh_ret
-        LDP2 #NAMEBUF                ; <- tierA: pointer constant (next: LDA)
-uh_c:   LDA  (P1)
-        STA  TMPC
-        LDA  (P2)
-        LDB  TMPC
-        CMP
-        JNZ  uh_nx
-        LDA  (P1)
-        JZ   uh_yes
-        INP1
-        INP2
-        JMP  uh_c
-uh_nx:  LDA  (P1)
-        JZ   uh_np
-        INP1
-        JMP  uh_nx
-uh_np:  INP1
-        LDA  TMPB
-        INC
-        STA  TMPB
-        JMP  uh_e
-uh_yes: LDA #1
-        STA  USEDF
-uh_ret: RTS
-
-; USED_ADD: append NAMEBUF to the USED pool.
-USED_ADD:LDP1 #USED                ; <- tierA: pointer constant (next: LDA)
-        LDA  #0
-        STA  TMPB
-ua_e:   LDA  TMPB
-        LDB  USEDN
-        CMP
-        JC   ua_ap
-ua_sk:  LDA  (P1)
-        JZ   ua_np
-        INP1
-        JMP  ua_sk
-ua_np:  INP1
-        LDA  TMPB
-        INC
-        STA  TMPB
-        JMP  ua_e
-ua_ap:  LDP2 #NAMEBUF                ; <- tierA: pointer constant (next: LDA)
-ua_cp:  LDA  (P2)
-        STA  (P1)
-        JZ   ua_dn
-        INP1
-        INP2
-        JMP  ua_cp
-ua_dn:  LDA USEDN
-        INC
-        STA  USEDN
-        RTS
-
-; =============================================================================
-; //#define NAME value  -- object-like macros (native counterpart of the host
-;   preprocessor's #define). NAME is added to a packed pool (MACNAMES) with its
-;   16-bit value in MACVALS; every identifier the lexer then reads is looked up
-;   (MACLOOKUP) and, if defined, replaced by a NUMBER token. Values may be decimal
-;   or 0x hex (parsed by reusing the number lexer, adv_num).
-; =============================================================================
-; TRYDEF: we have consumed "//#d". Expect "efine NAME value".
-TRYDEF: JSR GC
-        JC  td_ret
-        LDB #'e'
-        CMP
-        JNZ td_skipl
-        JSR GC
-        JC  td_ret
-        LDB #'f'
-        CMP
-        JNZ td_skipl
-        JSR GC
-        JC  td_ret
-        LDB #'i'
-        CMP
-        JNZ td_skipl
-        JSR GC
-        JC  td_ret
-        LDB #'n'
-        CMP
-        JNZ td_skipl
-        JSR GC
-        JC  td_ret
-        LDB #'e'
-        CMP
-        JNZ td_skipl
-td_sp:  JSR GC                        ; skip spaces before NAME
-        JC  td_ret
-        STA TMPB
-        LDB #' '
-        CMP
-        JZ  td_sp
-        LDP2 #NAMEBUF                ; <- tierA: pointer constant (next: LDA)
-td_nm:  LDA TMPB
-        JSR ISALP
-        JC  td_nput
-        LDA TMPB
-        JSR ISDIG
-        JC  td_nput
-        JMP td_nend
-td_nput: LDA TMPB
-        STA (P2)
-        INP2
-        JSR GC
-        JC  td_nend0
-        STA TMPB
-        JMP td_nm
-td_nend0: LDA #' '                     ; EOF right after the name
-        STA TMPB
-td_nend: LDA #0
-        STA (P2)                       ; NUL-terminate NAME
-td_vs:  LDA TMPB                       ; skip spaces between NAME and value
-        LDB #' '
-        CMP
-        JNZ td_val
-        JSR GC
-        JC  td_ret
-        STA TMPB
-        JMP td_vs
-td_val: JSR adv_num                    ; first value char in TMPB -> CURV (dec/hex)
-        JSR MAC_ADD                    ; store NAMEBUF -> value
-td_eol: JSR GC                         ; skip to end of line
-        JC  td_ret
-        LDB #LF
-        CMP
-        JNZ td_eol
-td_ret: RTS
-td_skipl: LDB #LF                       ; malformed //#d... -> skip the line
-        CMP
-        JZ  td_ret
-td_sl:  JSR GC
-        JC  td_ret
-        LDB #LF
-        CMP
-        JNZ td_sl
-        RTS
-
-; MAC_ADD: append NAMEBUF to MACNAMES, store CURV in MACVALS[MACCNT], MACCNT++.
-MAC_ADD: LDA MACCNT                    ; capacity guard: MACVALS holds 64. Past
-        LDB #64                       ; that, appending corrupts USESTATE below
-        CMP                           ; and resets the machine -- error instead.
-        JNC ma_room                   ; MACCNT < 64 -> room, proceed
-        LDP1 #MTOOMAC                 ; else: print error and bail to the OS
-        JSR EMIT
-        LDA STK0                      ; restore the entry SP (P3) saved by START
-        TAP3L
-        LDA STK0+1
-        TAP3H
-        RTS                           ; returns straight to the OS, not the parser
-ma_room:LDP1 #MACNAMES                ; <- tierA: pointer constant (next: LDA)
-        LDA #0
-        STA TMPB
-ma_e:   LDA TMPB
-        LDB MACCNT
-        CMP
-        JC  ma_ap                     ; TMPB >= MACCNT -> append point
-ma_sk:  LDA (P1)
-        JZ  ma_np
-        INP1
-        JMP ma_sk
-ma_np:  INP1
-        LDA TMPB
-        INC
-        STA TMPB
-        JMP ma_e
-ma_ap:  LDP2 #NAMEBUF                ; <- tierA: pointer constant (next: LDA)
-ma_cp:  LDA (P2)
-        STA (P1)
-        JZ  ma_val
-        INP1
-        INP2
-        JMP ma_cp
-ma_val: LDA MACCNT                     ; P1 = MACVALS + MACCNT*2
-        SHL
-        STA TMPC
-        LDA #<MACVALS
-        LDB TMPC
-        ADD
-        TAP1L
-        LDA #>MACVALS
-        JNC ma_nc
-        INC
-ma_nc:  TAP1H
-        LDA CURV
-        STA (P1)
-        INP1
-        LDA CURV+1
-        STA (P1)
-        LDA MACCNT
-        INC
-        STA MACCNT
-        RTS
-
-; MACLOOKUP: TID a defined macro? -> MACF=1, MACVAL=value ; else MACF=0.
-MACLOOKUP: LDA #0
-        STA MACF
-        LDP1 #MACNAMES                ; <- tierA: pointer constant (next: LDA)
-        LDA #0
-        STA TMPB                       ; index k
-ml_e:   LDA TMPB
-        LDB MACCNT
-        CMP
-        JC  ml_ret                     ; k >= MACCNT -> not found
-        LDP2 #TID                ; <- tierA: pointer constant (next: LDA)
-ml_c:   LDA (P1)
-        STA TMPC
-        LDA (P2)
-        LDB TMPC
-        CMP
-        JNZ ml_nx
-        LDA (P1)
-        JZ  ml_yes                     ; both NUL -> match
-        INP1
-        INP2
-        JMP ml_c
-ml_nx:  LDA (P1)                        ; advance P1 past this name
-        JZ  ml_np
-        INP1
-        JMP ml_nx
-ml_np:  INP1
-        LDA TMPB
-        INC
-        STA TMPB
-        JMP ml_e
-ml_yes: LDA TMPB                        ; value = MACVALS[k*2]
-        SHL
-        STA TMPC
-        LDA #<MACVALS
-        LDB TMPC
-        ADD
-        TAP1L
-        LDA #>MACVALS
-        JNC ml_nc
-        INC
-ml_nc:  TAP1H
-        LDA (P1)
-        STA MACVAL
-        INP1
-        LDA (P1)
-        STA MACVAL+1
-        LDA #1
-        STA MACF
-ml_ret: RTS
-
-; BUILDLIBPATH: LIBPATH = "/lib/lib_" + NAMEBUF + ".c"
-BUILDLIBPATH:LDP2 #LIBPATH                ; <- tierA: pointer constant (next: LDA)
-        LDP1 #M_LIBPFX                ; <- tierA: pointer constant (next: LDA)
-blp_p:  LDA  (P1)
-        JZ   blp_nm
-        STA  (P2)
-        INP1
-        INP2
-        JMP  blp_p
-blp_nm: LDP1 #NAMEBUF                ; <- tierA: pointer constant (next: LDA)
-blp_n:  LDA  (P1)
-        JZ   blp_x
-        STA  (P2)
-        INP1
-        INP2
-        JMP  blp_n
-blp_x:  LDP1 #M_DOTC                ; <- tierA: pointer constant (next: LDA)
-blp_e:  LDA  (P1)
-        STA  (P2)
-        JZ   blp_d
-        INP1
-        INP2
-        JMP  blp_e
-blp_d:  RTS
-
-; LIBBUFPTR: P1 = USEBUF + USESP*512
-LIBBUFPTR: LDA #<USEBUF
-        TAP1L
-        LDA  USESP
-        SHL
-        STA  TMPC
-        LDA  #>USEBUF
-        LDB  TMPC
-        ADD
-        TAP1H
-        RTS
-
-; USEOFF -> A = USESP*14  (index into USESTATE)
-USEOFF: LDA USESP
-        SHL             ; x*2
-        STA  TMPC       ; TMPC = x*2
-        SHL             ; x*4
-        LDB  TMPC
-        ADD             ; x*6
-        STA  TMPC       ; TMPC = x*6
-        LDA  USESP
-        SHL
-        SHL
-        SHL             ; x*8
-        LDB  TMPC
-        ADD             ; x*8 + x*6 = x*14
-        RTS
-
-; SAVESTATE: USESTATE[USESP] = the 13-byte read state + ROSDRV
-SAVESTATE: JSR USEOFF
-        STA  TMPC
-        LDA  #<USESTATE
-        LDB  TMPC
-        ADD
-        TAP2L
-        LDA  #>USESTATE
-        JNC  ss0
-        INC
-ss0:    TAP2H
-        LDP1 #ROSTATE                ; <- tierA: pointer constant (next: LDA)
-        LDA  #13
-        STA  USECNT
-ss_l:   LDA  (P1)
-        STA  (P2)
-        INP1
-        INP2
-        LDA  USECNT
-        DEC
-        STA  USECNT
-        JNZ  ss_l
-        LDA  ROSDRV
-        STA  (P2)
-        RTS
-
-; RESTORESTATE: BIOS read state <- USESTATE[USESP]
-RESTORESTATE: JSR USEOFF
-        STA  TMPC
-        LDA  #<USESTATE
-        LDB  TMPC
-        ADD
-        TAP1L
-        LDA  #>USESTATE
-        JNC  rs0
-        INC
-rs0:    TAP1H
-        LDP2 #ROSTATE                ; <- tierA: pointer constant (next: LDA)
-        LDA  #13
-        STA  USECNT
-rs_l:   LDA  (P1)
-        STA  (P2)
-        INP1
-        INP2
-        LDA  USECNT
-        DEC
-        STA  USECNT
-        JNZ  rs_l
-        LDA  (P1)
-        STA  ROSDRV
-        RTS
-
-; USEPOP: a spliced library reached EOF -> restore the parent stream
-USEPOP: LDA USESP
-        DEC
-        STA  USESP
-        JSR  RESTORESTATE
-        RTS
-
-M_LIBPFX: .asciiz "/lib/lib_"
-M_DOTC:   .asciiz ".c"
-
-
-UNGC:   STA  PBC                     ; push A back
+; UNGC - push A back
+UNGC:   STA  PBC
         LDA  #1
         STA  PBF
         RTS
 
-ISDIG:  LDB  #'0'                    ; C=1 if A is a digit
+; ISDIG - C=1 if A is a digit; ISALP - C=1 if A is a letter or '_'. A kept.
+ISDIG:  LDB  #'0'
         CMP
         JNC  isd_no
-        LDB  #':'                    ; '9'+1
+        LDB  #$3A
         CMP
         JC   isd_no
         SEC
         RTS
 isd_no: CLC
         RTS
-ISALP:  LDB  #'A'                    ; C=1 if A is a letter or '_'
+ISALP:  LDB  #'A'
         CMP
         JNC  isa_us
-        LDB  #'['                    ; 'Z'+1
+        LDB  #$5B                ; 'Z'+1
         CMP
         JNC  isa_yes
         LDB  #'a'
         CMP
         JNC  isa_us
-        LDB  #'{'                    ; 'z'+1
+        LDB  #$7B                ; 'z'+1
         CMP
         JNC  isa_yes
 isa_us: LDB  #'_'
@@ -1089,12 +617,49 @@ isa_us: LDB  #'_'
         JZ   isa_yes
         CLC
         RTS
-isa_yes: SEC
+isa_yes:SEC
+        RTS
+; HEXVAL - A = char -> A = 0..15 with C=1, else C=0
+HEXVAL: LDB  #'0'
+        CMP
+        JNC  hv_no
+        LDB  #$3A
+        CMP
+        JNC  hv_dig
+        LDB  #'a'
+        CMP
+        JNC  hv_up
+        LDB  #$20
+        SUB
+hv_up:  LDB  #'A'
+        CMP
+        JNC  hv_no
+        LDB  #'G'
+        CMP
+        JC   hv_no
+        LDB  #$37                ; 'A'-10
+        SUB
+        RTS                      ; (SUB left C=1)
+hv_dig: LDB  #'0'
+        SUB
+        RTS
+hv_no:  CLC
         RTS
 
-; ADVANCE: read the next token into CURK/CURV/TID.
+; SKIPLINE - consume the rest of the line (the LF included)
+SKIPLINE:
+        JSR  GC
+        JC   skl_r
+        LDB  #LF
+        CMP
+        JNZ  SKIPLINE
+skl_r:  RTS
+
+; ADVANCE - read the next token: CURK (0 EOF, 1 NUM, 2 ID, 3 PUNCT, 4 STRING),
+;   CURV (value / punct char), CUR2 (second char of a two-char punct), TID +
+;   TIDLEN + CURKW (an identifier and its keyword code), STRBUF (a string).
 ADVANCE:
-adv_ws: JSR  GC                      ; skip whitespace
+adv_ws: JSR  GC
         JC   adv_eof
         LDB  #' '
         CMP
@@ -1105,234 +670,205 @@ adv_ws: JSR  GC                      ; skip whitespace
         LDB  #CR
         CMP
         JZ   adv_ws
-        LDB  #$09
+        LDB  #TAB
         CMP
         JZ   adv_ws
-        LDB  #'/'                     ; '/' may start a comment
+        LDB  #'/'
         CMP
-        JZ   adv_slash
-        STA  TMPB
-adv_cls: JSR ISDIG                    ; classify the first non-ws char
+        JZ   adv_slash           ; a comment, a directive, or the divide
+adv_cls:STA  TMPB
+        JSR  ISDIG
         JC   adv_num
         LDA  TMPB
         JSR  ISALP
         JC   adv_id
-        LDA  TMPB                     ; char literal  'x'
-        LDB  #$27
+        LDB  #$27                ; 'c'
         CMP
         JZ   adv_chl
-        LDA  TMPB                     ; string literal  "..."
-        LDB  #$22
+        LDB  #$22                ; "string"
         CMP
         JZ   adv_stl
-        LDA  #3                      ; punctuation
+        LDA  #3                  ; punctuation
         STA  CURK
         LDA  TMPB
         STA  CURV
         LDA  #0
-        STA  CUR2                    ; default: single-char op
-        LDA  TMPB                    ; a two-char op?  == != <= >=  (c2 is '=')
+        STA  CUR2
+        LDA  TMPB
         LDB  #'='
         CMP
-        JZ   adv_2ck
+        JZ   adv_2ck             ; ==
         LDB  #'!'
         CMP
-        JZ   adv_2ck
+        JZ   adv_2ck             ; !=
         LDB  #'<'
         CMP
-        JZ   adv_ltgt
+        JZ   adv_ltgt            ; <= <<
         LDB  #'>'
         CMP
-        JZ   adv_ltgt
-        LDB  #'&'                    ; '&&' and '||' : combine only if doubled
+        JZ   adv_ltgt            ; >= >>
+        LDB  #'&'
         CMP
-        JZ   adv_2same
+        JZ   adv_2same           ; &&
         LDB  #'|'
         CMP
-        JZ   adv_2same
+        JZ   adv_2same           ; ||
         LDB  #'+'
         CMP
-        JZ   adv_pm
+        JZ   adv_pm              ; ++ +=
         LDB  #'-'
         CMP
-        JZ   adv_pm
+        JZ   adv_pm              ; -- -= ->
         RTS
-adv_pm: JSR GC                       ; '+'/'-' : += -= ++ -- or -> or single
+adv_pm: JSR  GC
         JC   adv_pd
         STA  TMPC
         LDB  #'='
         CMP
         JZ   adv_2set
-        LDA  TMPC
         LDB  CURV
         CMP
         JZ   adv_2sset
-        LDA  TMPC
         LDB  #'>'
         CMP
         JZ   adv_arrow
-        LDA  TMPC
-        JSR  UNGC
-        RTS
-adv_arrow: LDA #'>'                   ; '->' : CURV='-', CUR2='>'
+        JMP  UNGC
+adv_arrow:
+        LDA  #'>'                ; '->' : CURV='-', CUR2='>'
         STA  CUR2
         RTS
-adv_ltgt: JSR GC                     ; '<'/'>' : peek for '=' (<=,>=) or doubling (<<,>>)
+adv_ltgt:
+        JSR  GC
         JC   adv_pd
         STA  TMPC
         LDB  #'='
         CMP
         JZ   adv_2set
-        LDA  TMPC
         LDB  CURV
         CMP
         JZ   adv_2sset
-        LDA  TMPC
-        JSR  UNGC
-        RTS
-adv_2same: JSR GC                    ; peek c2
+        JMP  UNGC
+adv_2same:
+        JSR  GC
         JC   adv_pd
         STA  TMPC
-        LDB  CURV                    ; c1
-        CMP                          ; c2 == c1 ?
+        LDB  CURV
+        CMP
         JZ   adv_2sset
-        LDA  TMPC                    ; not doubled -> push back, stay single
-        JSR  UNGC
-        RTS
-adv_2sset: LDA CURV                  ; CUR2 = the doubled char ('&' or '|')
+        JMP  UNGC
+adv_2sset:
+        LDA  CURV                ; the doubled char
         STA  CUR2
         RTS
-adv_2ck: JSR GC                      ; peek the next char
-        JC   adv_pd                  ; EOF -> single
+adv_2ck:JSR  GC
+        JC   adv_pd
         STA  TMPC
         LDB  #'='
         CMP
         JZ   adv_2set
-        LDA  TMPC                    ; not '=' -> push back, stay single
-        JSR  UNGC
-        RTS
-adv_2set: LDA #'='
+        JMP  UNGC
+adv_2set:
+        LDA  #'='
         STA  CUR2
-        RTS
 adv_pd: RTS
-adv_eof: LDA #0
+adv_eof:LDA  #0
         STA  CURK
         RTS
-adv_chl: JSR GC                       ; 'x' or '\x' -> NUMBER token
+; 'x' or '\x' -> a NUMBER token
+adv_chl:JSR  GC
         STA  TMPB
         LDB  #$5C
         CMP
         JNZ  ach_v
-        JSR  GC                       ; the escaped char
-        JSR  ESCMAP                   ; -> byte value
+        JSR  GC
+        JSR  ESCMAP
         JMP  ach_set
 ach_v:  LDA  TMPB
-ach_set: STA CURV
+ach_set:STA  CURV
         LDA  #0
         STA  CURV+1
         LDA  #1
         STA  CURK
-        JSR  GC                       ; closing quote
-        RTS
-
-; ESCMAP: A = char after a backslash -> A = the byte it denotes.
-ESCMAP: STA TMPB
-        LDB  #'n'
+        JMP  GC                  ; the closing quote
+; ESCMAP - the char after a backslash -> the byte it denotes
+ESCMAP: LDB  #'n'
         CMP
         JNZ  esc1
         LDA  #10
         RTS
-esc1:   LDA TMPB
-        LDB  #'t'
+esc1:   LDB  #'t'
         CMP
         JNZ  esc2
         LDA  #9
         RTS
-esc2:   LDA TMPB
-        LDB  #'r'
+esc2:   LDB  #'r'
         CMP
         JNZ  esc3
         LDA  #13
         RTS
-esc3:   LDA TMPB
-        LDB  #'0'
+esc3:   LDB  #'0'
         CMP
         JNZ  esc_d
         LDA  #0
-        RTS
-esc_d:  LDA TMPB                       ; default (\\ \' \") : the char itself
-        RTS
-adv_stl:LDP2 #STRBUF                ; <- tierA: pointer constant (next: JSR GC)
+esc_d:  RTS                      ; \\ \' \" : the char itself
+; "..." -> STRBUF (escapes kept raw: the assembler decodes them)
+adv_stl:LDP2 #STRBUF
 asl_l:  JSR  GC
-        JC   asl_e                    ; EOF ends it
-        STA  TMPB
+        JC   asl_e
         LDB  #$22
         CMP
-        JZ   asl_e                    ; closing quote
-        LDA  TMPB
-        LDB  #$5C                     ; backslash: keep it + the next char raw
+        JZ   asl_e
+        STA  (P2)+
+        LDB  #$5C
         CMP
-        JNZ  asl_st                   ; (the assembler decodes the escape)
-        LDA  #$5C
-        STA  (P2)
-        INP2
-        JSR  GC
+        JNZ  asl_l
+        JSR  GC                  ; the escaped char, raw
         JC   asl_e
-        STA  (P2)
-        INP2
-        JMP  asl_l
-asl_st: LDA  TMPB
-        STA  (P2)
-        INP2
+        STA  (P2)+
         JMP  asl_l
 asl_e:  LDA  #0
-        STA  (P2)                     ; NUL-terminate
+        STA  (P2)
         LDA  #4
         STA  CURK
         RTS
-; '/' seen: peek next -> // line comment, /* block comment, or lone '/' (divide)
-adv_slash: JSR GC
-        JC   adv_slp                  ; EOF after '/' -> lone '/'
+; '/' seen: // line comment (maybe a //# directive), /* block */, or divide
+adv_slash:
+        JSR  GC
+        JC   adv_slp
         STA  TMPC
         LDB  #'/'
         CMP
         JZ   adv_linec
-        LDA  TMPC
         LDB  #'*'
         CMP
         JZ   adv_blockc
-        LDA  TMPC                     ; lone '/' : push back the peeked char
         JSR  UNGC
-adv_slp: LDA #'/'
-        STA  TMPB
-        JMP  adv_cls                  ; classify as the '/' punct
-adv_linec: JSR GC                     ; first char after '//'
+adv_slp:LDA  #'/'
+        JMP  adv_cls
+adv_linec:
+        JSR  GC
         JC   adv_eof
         LDB  #LF
         CMP
-        JZ   alc_end
+        JZ   adv_ws
         LDB  #'#'
         CMP
-        JNZ  alc_skip                 ; ordinary comment
-        JSR  GC                        ; char after '//#': 'd'efine or 'u'se ?
+        JNZ  alc_skip
+        JSR  GC                  ; //#d(efine) or //#u(se)
         JC   adv_ws
-        STA  TMPC
         LDB  #'d'
         CMP
         JZ   adv_def
-        LDA  TMPC                      ; not 'd' -> push back; TRYUSE reads "use"
         JSR  UNGC
-        JSR  TRYUSE                   ; "//#use NAME" -> splice the library
+        JSR  TRYUSE
         JMP  adv_ws
-adv_def: JSR TRYDEF                    ; "//#define NAME value" -> macro table
+adv_def:JSR  TRYDEF
         JMP  adv_ws
-alc_skip: JSR GC                       ; skip the rest of an ordinary comment line
-        JC   adv_eof
-        LDB  #LF
-        CMP
-        JNZ  alc_skip
-alc_end: JMP  adv_ws
-adv_blockc: JSR GC                    ; skip to '*/'
+alc_skip:
+        JSR  SKIPLINE
+        JMP  adv_ws
+adv_blockc:
+        JSR  GC
         JC   adv_eof
         LDB  #'*'
         CMP
@@ -1341,156 +877,57 @@ abc_st: JSR  GC
         JC   adv_eof
         LDB  #'/'
         CMP
-        JZ   adv_ws                   ; '*/' -> comment ends
+        JZ   adv_ws
         LDB  #'*'
         CMP
-        JZ   abc_st                   ; another '*' -> re-check
+        JZ   abc_st
         JMP  adv_blockc
 
-; HEXVAL: A = char -> A = 0..15, C=1 if a hex digit, else C=0
-HEXVAL: STA TMPC
-        LDB  #'0'
-        CMP
-        JNC  hv_no
-        LDA  TMPC
-        LDB  #':'
-        CMP
-        JC   hv_hi
-        LDA  TMPC
-        LDB  #'0'
-        SUB
-        SEC
-        RTS
-hv_hi:  LDA TMPC
-        LDB  #'A'
-        CMP
-        JNC  hv_no
-        LDA  TMPC
-        LDB  #'G'
-        CMP
-        JC   hv_lo
-        LDA  TMPC
-        LDB  #'A'
-        SUB
-        LDB  #10
-        ADD
-        SEC
-        RTS
-hv_lo:  LDA TMPC
-        LDB  #'a'
-        CMP
-        JNC  hv_no
-        LDA  TMPC
-        LDB  #'g'
-        CMP
-        JC   hv_no
-        LDA  TMPC
-        LDB  #'a'
-        SUB
-        LDB  #10
-        ADD
-        SEC
-        RTS
-hv_no:  CLC
-        RTS
-
-adv_num:LDW NACC,#0                ; <- tierA: zero word (next: LDA)
+; a number: decimal, or 0x hex. First char in TMPB.
+adv_num:LDW  NACC,#0
         LDA  TMPB
         LDB  #'0'
         CMP
-        JNZ  an_l                    ; not '0' -> decimal
-        JSR  GC                      ; peek after '0'
+        JNZ  an_l
+        JSR  GC                  ; after a '0': x/X -> hex
         JC   an_done
         STA  TMPC
         LDB  #'x'
         CMP
         JZ   an_hex
-        LDA  TMPC
         LDB  #'X'
         CMP
         JZ   an_hex
-        LDA  TMPC                    ; "0" not followed by x -> decimal
         JSR  UNGC
         JMP  an_l
-an_hex: JSR GC                       ; hex digits after 0x
+an_hex: JSR  GC
         JC   an_done
         STA  TMPB
         JSR  HEXVAL
-        JC   ah_put
-        LDA  TMPB
-        JSR  UNGC
-        JMP  an_done
-ah_put: STA DQ                       ; NACC = NACC*16 + digit
-        LDA  NACC
-        SHL
-        STA  NACC
-        LDA  NACC+1
-        ROL
-        STA  NACC+1
-        LDA  NACC
-        SHL
-        STA  NACC
-        LDA  NACC+1
-        ROL
-        STA  NACC+1
-        LDA  NACC
-        SHL
-        STA  NACC
-        LDA  NACC+1
-        ROL
-        STA  NACC+1
-        LDA  NACC
-        SHL
-        STA  NACC
-        LDA  NACC+1
-        ROL
-        STA  NACC+1
+        JNC  an_hx
+        STA  DQ
+        ADDW NACC,NACC
+        ADDW NACC,NACC
+        ADDW NACC,NACC
+        ADDW NACC,NACC
         LDA  NACC
         LDB  DQ
-        ADD
+        OR
         STA  NACC
-        JNC  ah_nc
-        LDA  NACC+1
-        INC
-        STA  NACC+1
-ah_nc:  JMP an_hex
-an_l:   LDA  TMPB                    ; digit -> DQ; NACC = NACC*10 + digit (16-bit)
+        JMP  an_hex
+an_hx:  LDA  TMPB
+        JSR  UNGC
+        JMP  an_done
+an_l:   LDA  TMPB                ; NACC = NACC*10 + digit
         LDB  #'0'
         SUB
         STA  DQ
-        LDA  NACC                    ; MULT2 = NACC << 1
-        SHL
-        STA  MULT2
-        LDA  NACC+1
-        ROL
-        STA  MULT2+1
-        LDA  MULT2                   ; NACC = MULT2 << 2  (= NACC*8)
-        SHL
-        STA  NACC
-        LDA  MULT2+1
-        ROL
-        STA  NACC+1
+        ADDW NACC,NACC
+        MOVW NTMP,NACC
+        ADDW NACC,NACC
+        ADDW NACC,NACC
+        ADDW NACC,NTMP
         LDA  NACC
-        SHL
-        STA  NACC
-        LDA  NACC+1
-        ROL
-        STA  NACC+1
-        LDA  NACC                    ; NACC = NACC + MULT2  (= NACC*10)
-        LDB  MULT2
-        ADD
-        STA  NACC
-        LDA  #0
-        JNC  an_c0
-        LDA  #1
-an_c0:  STA  CARRY
-        LDA  NACC+1
-        LDB  MULT2+1
-        ADD
-        LDB  CARRY
-        ADD
-        STA  NACC+1
-        LDA  NACC                    ; NACC += digit
         LDB  DQ
         ADD
         STA  NACC
@@ -1503,606 +940,861 @@ an_c1:  JSR  GC
         STA  TMPB
         JSR  ISDIG
         JC   an_l
-        LDA  TMPB
         JSR  UNGC
-an_done: LDA #1
+an_done:LDA  #1
         STA  CURK
-        MOVW CURV,NACC                ; <- tierA: word move (next: RTS)
+        MOVW CURV,NACC
         RTS
-adv_id: LDP2 #TID                ; <- tierA: pointer constant (next: LDA)
+
+; an identifier -> TID / TIDLEN; a keyword code or a macro substitution
+adv_id: LDP2 #TID
         LDA  TMPB
-        STA  (P2)
-        INP2
+        STA  (P2)+
+        LDA  #1
+        STA  TIDLEN
 ai_l:   JSR  GC
         JC   ai_done
         STA  TMPB
         JSR  ISDIG
         JC   ai_put
-        LDA  TMPB
         JSR  ISALP
         JC   ai_put
-        LDA  TMPB                    ; not alnum -> push back, done
         JSR  UNGC
         JMP  ai_done
-ai_put: LDA  TMPB
-        STA  (P2)
-        INP2
+ai_put: LDA  TIDLEN
+        LDB  #23
+        CMP
+        JC   ai_l                ; overlong: keep reading, stop storing
+        INC
+        STA  TIDLEN
+        LDA  TMPB
+        STA  (P2)+
         JMP  ai_l
-ai_done: LDA #0
-        STA  (P2)                    ; NUL-terminate
-        JSR  MACLOOKUP               ; a //#define object-like macro? -> NUMBER
-        LDA  MACF
-        JNZ  ai_mac
-        LDA  #2                      ; ordinary identifier
+ai_done:LDA  #0
+        STA  (P2)
+        LDA  MACCNT              ; a //#define macro? -> NUMBER token
+        JZ   ai_kw
+        JSR  NTSETTID
+        LDW  NTH,#HMAC
+        JSR  NTFIND
+        JNC  ai_kw
+        LDA  #1
+        STA  CURK
+        LDW  CURV,(P1+4)
+        RTS
+ai_kw:  JSR  KWFIND              ; CURKW = keyword code (0 = plain identifier)
+        LDA  #2
         STA  CURK
         RTS
-ai_mac: LDA #1                        ; substitute the macro's value (NUMBER token)
-        STA  CURK
-        MOVW CURV,MACVAL                ; <- tierA: word move (next: RTS)
+
+; KWFIND - CURKW = the keyword code of TID, 0 if none. KWTAB: [len][chars][code]
+KWFIND: LDA  #0
+        STA  CURKW
+        LDP2 #KWTAB
+kw_e:   LDA  (P2)+
+        JZ   kw_d                ; table end
+        STA  TMPD
+        LDB  TIDLEN
+        CMP
+        JNZ  kw_sk
+        LDP1 #TID
+kw_c:   LDA  (P2)+
+        STA  TMPC
+        LDA  (P1)+
+        LDB  TMPC
+        CMP
+        JNZ  kw_sk1
+        LDA  TMPD
+        DEC
+        STA  TMPD
+        JNZ  kw_c
+        LDA  (P2)                ; the code
+        STA  CURKW
+kw_d:   RTS
+kw_sk1: LDA  TMPD                ; skip the rest of the chars (TMPD-1 more) + the code
+        DEC
+        STA  TMPD
+        JZ   kw_sk0
+kw_sk:  LDA  TMPD                ; skip TMPD chars + the code
+        JZ   kw_sk0
+        DEC
+        STA  TMPD
+        INP2
+        JMP  kw_sk
+kw_sk0: INP2                     ; the code byte
+        JMP  kw_e
+KWTAB:  .byte 3
+        .ascii "int"
+        .byte K_INT
+        .byte 4
+        .ascii "char"
+        .byte K_CHAR
+        .byte 6
+        .ascii "struct"
+        .byte K_STRUCT
+        .byte 2
+        .ascii "if"
+        .byte K_IF
+        .byte 5
+        .ascii "while"
+        .byte K_WHILE
+        .byte 7
+        .ascii "putchar"
+        .byte K_PUTC
+        .byte 6
+        .ascii "return"
+        .byte K_RET
+        .byte 3
+        .ascii "for"
+        .byte K_FOR
+        .byte 5
+        .ascii "break"
+        .byte K_BRK
+        .byte 8
+        .ascii "continue"
+        .byte K_CONT
+        .byte 4
+        .ascii "else"
+        .byte K_ELSE
+        .byte 4
+        .ascii "bios"
+        .byte K_BIOS
+        .byte 4
+        .ascii "puts"
+        .byte K_PUTS
+        .byte 7
+        .ascii "getchar"
+        .byte K_GETC
+        .byte 4
+        .ascii "peek"
+        .byte K_PEEK
+        .byte 4
+        .ascii "poke"
+        .byte K_POKE
+        .byte 6
+        .ascii "argstr"
+        .byte K_ARGSTR
+        .byte 0
+
+; =============================================================================
+; //#use NAME - splice /lib/lib_NAME.c (once); //#define NAME value
+; =============================================================================
+; RDNAME - skip blanks, read an identifier into NAMEBUF (NUL-terminated,
+;   NTNLEN = its length); TMPB = the char after it (LF at EOF)
+RDNAME: JSR  GC
+        JC   rn_eof
+        STA  TMPB
+        LDB  #' '
+        CMP
+        JZ   RDNAME
+        LDP2 #NAMEBUF
+        LDA  #0
+        STA  NTNLEN
+rn_nm:  LDA  TMPB
+        JSR  ISALP
+        JC   rn_put
+        JSR  ISDIG
+        JC   rn_put
+        JMP  rn_end
+rn_put: STA  (P2)+
+        LDA  NTNLEN
+        INC
+        STA  NTNLEN
+        JSR  GC
+        JC   rn_eof
+        STA  TMPB
+        JMP  rn_nm
+rn_eof: LDA  #LF
+        STA  TMPB
+rn_end: LDA  #0
+        STA  (P2)
+        LDW  NTNAME,#NAMEBUF
         RTS
+
+; TRYUSE - "//#" consumed: expect "use NAME" -> splice; else skip the line
+TRYUSE: LDP2 #MUSEKW            ; "use"
+        JSR  MATCHKW
+        JNC  KWBAD
+        JSR  RDNAME
+        LDA  NTNLEN
+        JZ   tu_eol
+        LDA  TMPB                ; to the end of the line
+        LDB  #LF
+        CMP
+        JZ   tu_do
+        JSR  SKIPLINE
+tu_do:  JMP  DOUSE
+tu_eol: LDA  TMPB
+        LDB  #LF
+        CMP
+        JZ   tu_r
+        JMP  SKIPLINE
+tu_r:   RTS
+
+; MATCHKW - do the next source chars spell the string at P2? C=1 yes (consumed)
+;   / C=0 no (the mismatching char is in A; the line is then skipped by callers)
+MATCHKW:LDA  (P2)+
+        JZ   mkw_yes
+        STA  TMPC
+        JSR  GC
+        JC   mkw_no
+        LDB  TMPC
+        CMP
+        JZ   MATCHKW
+mkw_no: CLC
+        RTS
+mkw_yes:SEC
+        RTS
+; KWBAD - a directive that did not match: skip the rest of its line, unless
+;   the mismatching char (A) already was the newline
+KWBAD:  LDB  #LF
+        CMP
+        JZ   kwb_r
+        JMP  SKIPLINE
+kwb_r:  RTS
+MUSEKW: .asciiz "use"
+MDEFKW: .asciiz "efine"
+
+; TRYDEF - "//#d" consumed: expect "efine NAME value"
+TRYDEF: LDP2 #MDEFKW
+        JSR  MATCHKW
+        JNC  KWBAD
+        JSR  RDNAME
+td_vs:  LDA  TMPB                ; blanks between the name and the value
+        LDB  #' '
+        CMP
+        JNZ  td_val
+        JSR  GC
+        JC   td_ret
+        STA  TMPB
+        JMP  td_vs
+td_val: JSR  adv_num             ; the value (dec / 0x) -> CURV
+        LDA  MACCNT
+        LDB  #MAXMAC
+        CMP
+        JNC  td_add
+        LDP1 #MTOOMAC
+        JMP  BAIL
+td_add: INC
+        STA  MACCNT
+        LDW  NTH,#HMAC
+        MOVW NTVAL,CURV
+        LDA  #0
+        STA  NTFLAG
+        STA  NTLOC
+        JSR  NTADD
+        JSR  SKIPLINE
+td_ret: RTS
+
+; DOUSE - NAMEBUF: once only; save the stream state, open /lib/lib_NAME.c
+DOUSE:  LDW  NTH,#HUSED
+        JSR  NTFIND
+        JC   du_done             ; already spliced
+        LDA  #0
+        STA  NTFLAG
+        STA  NTLOC
+        JSR  NTADD
+        LDA  USESP
+        LDB  #USELEVELS
+        CMP
+        JC   du_done             ; nested too deep: ignore
+        JSR  BUILDLIBPATH
+        JSR  SAVESTATE
+        LDP1 #LIBPATH
+        LDA  #0
+        JSR  FRESOLVE
+        JSR  LIBBUFPTR           ; P1 = USEBUF + USESP*512
+        LDA  #0
+        JSR  FOPEN
+        JC   du_fail
+        LDA  USESP
+        INC
+        STA  USESP
+        RTS
+du_fail:JMP  RESTORESTATE        ; not found: the parent stream continues
+du_done:RTS
+
+; BUILDLIBPATH - LIBPATH = "/lib/lib_" + NAMEBUF + ".c"
+BUILDLIBPATH:
+        LDP2 #LIBPATH
+        LDP1 #M_LIBPFX
+        JSR  STRCAT
+        LDP1 #NAMEBUF
+        JSR  STRCAT
+        LDP1 #M_DOTC
+        JSR  STRCAT
+        LDA  #0
+        STA  (P2)
+        RTS
+; STRCAT - copy the string at P1 to P2 (without its NUL); P2 left after it
+STRCAT: LDA  (P1)+
+        JZ   sc_d
+        STA  (P2)+
+        JMP  STRCAT
+sc_d:   RTS
+M_LIBPFX: .asciiz "/lib/lib_"
+M_DOTC:   .asciiz ".c"
+
+; LIBBUFPTR - P1 = USEBUF + USESP*512
+LIBBUFPTR:
+        LDA  USESP
+        SHL
+        LDB  #>USEBUF
+        ADD
+        TAP1H
+        LDA  #<USEBUF
+        TAP1L
+        RTS
+; USESTP - P2 = USESTATE + USESP*14
+USESTP: LDA  USESP
+        SHL
+        STA  TMPC                ; x2
+        SHL
+        SHL                      ; x8
+        LDB  TMPC
+        ADD                      ; x10
+        LDB  TMPC
+        ADD                      ; x12
+        LDB  TMPC
+        ADD                      ; x14
+        LDB  #<USESTATE
+        ADD
+        TAP2L
+        LDA  #>USESTATE
+        TAP2H
+        RTS
+; SAVESTATE - USESTATE[USESP] <- the 13-byte read state + the drive
+SAVESTATE:
+        JSR  USESTP
+        LDP1 #ROSTATE
+        LDA  #13
+        STA  USECNT
+ss_l:   LDA  (P1)+
+        STA  (P2)+
+        LDA  USECNT
+        DEC
+        STA  USECNT
+        JNZ  ss_l
+        LDA  ROSDRV
+        STA  (P2)
+        RTS
+; RESTORESTATE - the BIOS read state <- USESTATE[USESP]
+RESTORESTATE:
+        JSR  USESTP
+        LDP1 #ROSTATE
+        LDA  #13
+        STA  USECNT
+rs_l:   LDA  (P2)+
+        STA  (P1)+
+        LDA  USECNT
+        DEC
+        STA  USECNT
+        JNZ  rs_l
+        LDA  (P2)
+        STA  ROSDRV
+        RTS
+; USEPOP - a spliced library ended: back to the parent stream
+USEPOP: LDA  USESP
+        DEC
+        STA  USESP
+        JMP  RESTORESTATE
+
+; =============================================================================
+; Symbols: locals (HLOC, per function), globals (HGLOB), functions (HFUNC),
+; struct tags (HTAG) and members (HMEM). Entry flag: bit0 char, bit1 array
+; (functions: the parameter count); value: the slot / size / offset / base.
+; =============================================================================
+; SYMFIND - the identifier TID: a local, else a global. SYMOK; SYMIDX = its slot
+;   relative to SLOTBASE (a global's is negative, 16-bit); SYMRCH / SYMRAR.
+SYMFIND:JSR  NTSETTID
+        LDW  NTH,#HLOC
+        JSR  NTFIND
+        JNC  sf_glob
+        LDA  (P1+4)              ; a local: the slot (< 256)
+        STA  SYMIDX
+        LDA  #0
+        STA  SYMIDX+1
+sf_fl:  LDA  (P1+3)              ; the flags
+        STA  TMPC
+        LDB  #1
+        AND
+        STA  SYMRCH
+        LDA  TMPC
+        SHR
+        STA  SYMRAR
+        LDA  #1
+        STA  SYMOK
+        RTS
+sf_glob:LDW  NTH,#HGLOB
+        JSR  NTFIND
+        JNC  sf_no
+        LDW  SYMIDX,(P1+4)       ; a global: absolute slot - SLOTBASE
+        SUBW SYMIDX,SLOTBASE
+        JMP  sf_fl
+sf_no:  LDA  #0
+        STA  SYMOK
+        RTS
+
+; SYMADD - a new local named TID (char-ness DCLCHAR) at slot NLSLOT; SYMIDX =
+;   that slot; LASTENT = the entry (for an array mark)
+SYMADD: JSR  NTSETTID
+        LDW  NTH,#HLOC
+        LDA  DCLCHAR
+        STA  NTFLAG
+        LDA  NLSLOT
+        STA  NTVAL
+        STA  SYMIDX
+        LDA  #0
+        STA  NTVAL+1
+        STA  SYMIDX+1
+        LDA  #1
+        STA  NTLOC
+        JSR  NTADD
+        LEAW LASTENT,(P1+0)
+        LDA  NLSLOT
+        INC
+        STA  NLSLOT
+        RTS
+
+; GSYMADD - a new global named CURFN (char-ness DCLCHAR) at slot SLOTCNT
+GSYMADD:LDW  NTNAME,#CURFN
+        LDA  CURFNL
+        STA  NTNLEN
+        LDW  NTH,#HGLOB
+        LDA  DCLCHAR
+        STA  NTFLAG
+        MOVW NTVAL,SLOTCNT
+        LDA  #0
+        STA  NTLOC
+        JSR  NTADD
+        LEAW LASTENT,(P1+0)
+        RTS
+
+; MARKARR - the most recently added variable is an array
+MARKARR:LPW1 LASTENT
+        LDA  (P1+3)
+        LDB  #2
+        OR
+        STA  (P1+3)
+        RTS
+
+; CPCURFN / CPIDNAME - copy TID (+ length) into CURFN / IDNAME
+CPCURFN:LDP2 #CURFN
+        LDA  TIDLEN
+        STA  CURFNL
+        JMP  cpn_go
+CPIDNAME:
+        LDP2 #IDNAME
+        LDA  TIDLEN
+        STA  IDNAMEL
+cpn_go: LDP1 #TID
+cpn_l:  LDA  (P1)+
+        STA  (P2)+
+        JNZ  cpn_l
+        RTS
+
+; FADD - record the function CURFN: NPARAMS params, base slot SLOTBASE
+FADD:   LDA  FCNT
+        LDB  #MAXFUNC
+        CMP
+        JNC  fa_ok
+        LDP1 #MTOOFUN
+        JMP  BAIL
+fa_ok:  INC
+        STA  FCNT
+        LDW  NTNAME,#CURFN
+        LDA  CURFNL
+        STA  NTNLEN
+        LDW  NTH,#HFUNC
+        LDA  NPARAMS
+        STA  NTFLAG
+        MOVW NTVAL,SLOTBASE
+        LDA  #0
+        STA  NTLOC
+        JMP  NTADD
+
+; EMITFNAME - emit the callee's name: its table entry FENT, or the identifier
+;   itself for a function not (yet) declared -- the assembler resolves the label
+EMITFNAME:
+        LDA  FENT+1
+        JZ   efn_id
+        LPW1 FENT
+        LDA  (P1+2)
+        STA  TMPD
+        INP1
+        INP1
+        INP1
+        INP1
+        INP1
+        INP1
+        LDA  TMPD
+        JMP  EMITN
+efn_id: LDP1 #IDNAME
+        JMP  EMIT
+
+; STAGADD - the struct tag CURFN has size STOFF
+STAGADD:LDW  NTNAME,#CURFN
+        LDA  CURFNL
+        STA  NTNLEN
+        LDW  NTH,#HTAG
+        LDA  STOFF
+        STA  NTVAL
+        LDA  #0
+        STA  NTVAL+1
+        STA  NTFLAG
+        STA  NTLOC
+        JMP  NTADD
+; STAGFIND_CURFN / STAGFIND_CURTID - TAGSIZE = the size of that tag (0 if unknown)
+STAGFIND_CURFN:
+        LDW  NTNAME,#CURFN
+        LDA  CURFNL
+        STA  NTNLEN
+        JMP  stf_go
+STAGFIND_CURTID:
+        JSR  NTSETTID
+stf_go: LDA  #0
+        STA  TAGSIZE
+        LDW  NTH,#HTAG
+        JSR  NTFIND
+        JNC  stf_no
+        LDA  (P1+4)
+        STA  TAGSIZE
+stf_no: RTS
+
+; STMADD_M - the member TID at offset STOFF, char-ness DCLCHAR
+STMADD_M:
+        JSR  NTSETTID
+        LDW  NTH,#HMEM
+        LDA  DCLCHAR
+        STA  NTFLAG
+        LDA  STOFF
+        STA  NTVAL
+        LDA  #0
+        STA  NTVAL+1
+        STA  NTLOC
+        JMP  NTADD
+; STMFIND - the member TID -> STMEMOK, STMEMOFF, STMEMCH
+STMFIND:LDA  #0
+        STA  STMEMOK
+        JSR  NTSETTID
+        LDW  NTH,#HMEM
+        JSR  NTFIND
+        JNC  smf_no
+        LDA  (P1+4)
+        STA  STMEMOFF
+        LDA  (P1+3)
+        STA  STMEMCH
+        LDA  #1
+        STA  STMEMOK
+smf_no: RTS
 
 ; =============================================================================
 ; Parser + codegen (single pass; emits as it parses)
 ; =============================================================================
-COMPILE:
-        LDP1 #MORG                   ; .org $6A00
+COMPILE:LDP1 #MORG               ; .org $6A00
         JSR  EMIT
-        LDP1 #MBOOT                  ; JSR _f_main ; RTS
+        LDP1 #MBOOT              ; the startup: JSR _f_main on a fresh stack
         JSR  EMIT
         JSR  ADVANCE
-co_s:   LDA  CURK                    ; a sequence of function definitions
+co_s:   LDA  CURK
         JZ   co_end
         JSR  FUNCDEF
         JMP  co_s
-co_end: LDP1 #MCMP_DEF                ; the 16-bit equality compare (always emitted;
-        JSR  EMIT                    ;   + - & | ^ are ADDW/SUBW/ANDW/ORW/XORW inline)
-        LDA  USEMUL                  ; the multiply helper, if the program used '*'
+co_end: LDP1 #MCMP_DEF           ; the 16-bit equality compare (always)
+        JSR  EMIT
+        LDA  USEMUL
         JZ   ce_nomul
         LDP1 #MMULDEF
         JSR  EMIT
-ce_nomul: LDA USEDIV                 ; the divide/modulo helper, if '/' or '%' used
+ce_nomul:
+        LDA  USEDIV
         JZ   ce_nodiv
         LDP1 #MDMDEF
         JSR  EMIT
-ce_nodiv: LDA USENOT                 ; logical-not helper, if '!' used
+ce_nodiv:
+        LDA  USENOT
         JZ   ce_nonot
         LDP1 #MLNOT_DEF
         JSR  EMIT
-ce_nonot: LDA USESHL
+ce_nonot:
+        LDA  USESHL
         JZ   ce_noshl
         LDP1 #MSHLDEF
         JSR  EMIT
-ce_noshl: LDA USESHR
+ce_noshl:
+        LDA  USESHR
         JZ   ce_noshr
         LDP1 #MSHRDEF
         JSR  EMIT
-ce_noshr: LDP1 #MTEMP                ; the codegen temps (__t0, __sp0, __ax, __c, __sc)
+ce_noshr:
+        LDP1 #MTEMP              ; __t0 __sp0 __ax __c __sc
         JSR  EMIT
-        LDP1 #MVBASE                 ; all variable storage in ONE array __V; a
-        JSR  EMIT                    ;   slot n is __V+2*n (see EMSLOT / MLDAV). One
-        LDA  SLOTCNT                 ;   assembler symbol instead of SLOTCNT of them,
-        SHL                          ;   so large programs don't blow asm's symtab.
-        STA  VN                      ;   __V:   .fill <2*SLOTCNT>   (zero-filled)
-        LDA  SLOTCNT+1
-        ROL
-        STA  VN+1
+        LDP1 #MVBASE             ; __V: .fill 2*SLOTCNT
+        JSR  EMIT
+        MOVW VN,SLOTCNT
+        ADDW VN,VN
         JSR  EMITNUM16
-        LDP1 #MNL
-        JSR  EMIT
+        JMP  EMITNL
+
+; ISPUNCT - C=1 if the current token is the single-char punct A
+ISPUNCT:STA  TMPD
+        LDA  CURK
+        LDB  #3
+        CMP
+        JNZ  isp_no
+        LDA  CUR2
+        JNZ  isp_no
+        LDA  CURV
+        LDB  TMPD
+        CMP
+        JNZ  isp_no
+        SEC
+        RTS
+isp_no: CLC
         RTS
 
-; (The FUNCDEF routine itself is below, past the struct helpers, at label
-;  FUNCDEF. It now handles parameters, prototypes, and globals — not just the
-;  parameterless Stage-A form this note originally described.)
+; EXPECTP - the current token must be the punct A, then ADVANCE
+EXPECTP:JSR  ISPUNCT
+        JNC  SYNTAXERR
+        JMP  ADVANCE
+SYNTAXERR:
+        LDP1 #MSYNERR
+        JMP  BAIL
 
-; =============================================================================
-; structs (minimal): a tag -> size table, and a GLOBAL member -> offset table
-;   (member names are assumed unique across structs). `.`/`->` add the member
-;   offset to the base (&var for '.', value(var) for '->') and load/store a
-;   word (int/ptr member) or byte (char member).
-; =============================================================================
-; STRUCTDEF: current = tag name; parse  { type [*]m ; ... } ;  and record it.
-STRUCTDEF: JSR CPCURFN                ; CURFN = tag name
-        JSR  ADVANCE                  ; past tag
+; SKIPSTARS - skip pointer stars
+SKIPSTARS:
+        LDA  #'*'
+        JSR  ISPUNCT
+        JNC  sks_r
+        JSR  ADVANCE
+        JMP  SKIPSTARS
+sks_r:  RTS
+
+; EXPECTTYPE - int / char (ISCHARTYPE), advance past it
+EXPECTTYPE:
+        LDA  #0
+        STA  ISCHARTYPE
+        LDA  CURK
+        LDB  #2
+        CMP
+        JNZ  SYNTAXERR
+        LDA  CURKW
+        LDB  #K_INT
+        CMP
+        JZ   ADVANCE
+        LDB  #K_CHAR
+        CMP
+        JNZ  SYNTAXERR
+        LDA  #1
+        STA  ISCHARTYPE
+        JMP  ADVANCE
+
+; ---- structs: tag -> size, global member -> offset (member names unique) ----
+; sdf_body - CURFN = the tag; current token '{'. Parse the members, record the tag.
+sdf_body:
         LDA  #'{'
         JSR  EXPECTP
         LDA  #0
         STA  STOFF
-sdf_l:  LDA  CURK                     ; '}' ends the member list
-        LDB  #3
-        CMP
-        JNZ  sdf_m
-        LDA  CURV
-        LDB  #'}'
-        CMP
-        JZ   sdf_end
-sdf_m:  JSR  EXPECTTYPE               ; member type (int/char)
+sdf_l:  LDA  #'}'
+        JSR  ISPUNCT
+        JC   sdf_end
+        JSR  EXPECTTYPE
         LDA  ISCHARTYPE
         STA  DCLCHAR
-sdf_st: LDA  CURK                     ; pointer member -> word (DCLCHAR=0)
-        LDB  #3
-        CMP
-        JNZ  sdf_ns
-        LDA  CURV
-        LDB  #'*'
-        CMP
-        JNZ  sdf_ns
+        LDA  #'*'                ; a pointer member is a word
+        JSR  ISPUNCT
+        JNC  sdf_ns
         LDA  #0
         STA  DCLCHAR
-        JSR  ADVANCE
-        JMP  sdf_st
-sdf_ns: JSR  STMADD_M                 ; member name (TID) @ STOFF, char DCLCHAR
-        JSR  ADVANCE                  ; past member name
-        LDA  DCLCHAR                  ; STOFF += (char ? 1 : 2)
+        JSR  SKIPSTARS
+sdf_ns: JSR  STMADD_M
+        JSR  ADVANCE             ; past the member name
+        LDA  DCLCHAR             ; STOFF += 1 (char) or 2
         JNZ  sdf_c1
         LDA  STOFF
-        LDB  #2
-        ADD
-        STA  STOFF
-        JMP  sdf_semi
-sdf_c1: LDA STOFF
         INC
         STA  STOFF
-sdf_semi: LDA #$3B
-        JSR  EXPECTP
-        JMP  sdf_l
-sdf_end: LDA #'}'
-        JSR  EXPECTP
-        JSR  STAGADD                  ; record tag CURFN with size STOFF
+sdf_c1: LDA  STOFF
+        INC
+        STA  STOFF
         LDA  #$3B
         JSR  EXPECTP
-        RTS
-
-; fd_struct: top-level 'struct' -> a definition (Tag {...}) or a global var.
-fd_struct: JSR ADVANCE                ; past 'struct'
-        JSR  CPCURFN                  ; CURFN = tag name (for a possible def)
-        JSR  ADVANCE                  ; past tag; peek
-        LDA  CURK
-        LDB  #3
-        CMP
-        JNZ  fds_var
-        LDA  CURV
-        LDB  #'{'
-        CMP
-        JNZ  fds_var
-        ; a definition: CURFN=tag, current='{'.  Re-enter STRUCTDEF's body.
-        LDA  #'{'
+        JMP  sdf_l
+sdf_end:LDA  #'}'
         JSR  EXPECTP
-        LDA  #0
-        STA  STOFF
-        JMP  sdf_l                    ; (CURFN already = tag)
-fds_var: ; global 'struct Tag [*]NAME ;'  -> reserve storage
-        JSR  STAGFIND_CURFN           ; TAGSIZE from the tag (still in CURFN)
+        JSR  STAGADD
+        LDA  #$3B
+        JMP  EXPECTP
+
+; fd_struct - top level 'struct': a definition, or a global struct variable
+fd_struct:
+        JSR  ADVANCE             ; past 'struct'
+        JSR  CPCURFN             ; the tag
+        JSR  ADVANCE
+        LDA  #'{'
+        JSR  ISPUNCT
+        JC   sdf_body
+        JSR  STAGFIND_CURFN      ; a global: struct Tag [*]NAME ;
         LDA  #0
         STA  DCLCHAR
-        LDA  #0
-        STA  MEMTMP2                  ; is-pointer flag
-        LDA  CURK
-        LDB  #3
-        CMP
-        JNZ  fdsv_nm
-        LDA  CURV
-        LDB  #'*'
-        CMP
-        JNZ  fdsv_nm
-        JSR  ADVANCE                  ; past '*'
+        STA  MEMTMP              ; pointer?
+        LDA  #'*'
+        JSR  ISPUNCT
+        JNC  fdsv_nm
+        JSR  SKIPSTARS
         LDA  #1
-        STA  MEMTMP2
-fdsv_nm: JSR CPCURFN                  ; CURFN = the VARIABLE name (not the tag)
+        STA  MEMTMP
+fdsv_nm:JSR  CPCURFN             ; the variable name
         JSR  GSYMADD
-        LDA  MEMTMP2
+        LDA  MEMTMP
         JNZ  fdsv_ptr
-        LDA  TAGSIZE                  ; struct value: ceil(size/2) slots (SLOTCNT
-        INC                           ;   += (TAGSIZE+1)/2, 16-bit; TAGSIZE < 256)
+        LDA  TAGSIZE             ; a value: ceil(size/2) slots
+        INC
         SHR
         STA  VN
         LDA  #0
         STA  VN+1
-        JSR  SLOTADD_VN
+        ADDW SLOTCNT,VN
         JMP  fdsv_end
-fdsv_ptr: LDA SLOTCNT                 ; pointer: 1 slot (SLOTCNT += 1, 16-bit)
-        INC
-        STA  SLOTCNT
-        JNZ  fdsv_end
-        LDA  SLOTCNT+1
-        INC
-        STA  SLOTCNT+1
-fdsv_end: JSR ADVANCE                 ; past NAME
+fdsv_ptr:
+        INCW SLOTCNT
+fdsv_end:
+        JSR  ADVANCE             ; past NAME
         LDA  #$3B
-        JSR  EXPECTP
-        RTS
+        JMP  EXPECTP
 
-; st_lstruct: local 'struct Tag [*]NAME ;'
-st_lstruct: JSR ADVANCE               ; past 'struct'
-        JSR  STAGFIND_CURTID          ; TAGSIZE = size (tag = current TID)
-        JSR  ADVANCE                  ; past tag
+; st_lstruct - local 'struct Tag [*]NAME ;'
+st_lstruct:
+        JSR  ADVANCE
+        JSR  STAGFIND_CURTID
+        JSR  ADVANCE             ; past the tag
         LDA  #0
         STA  DCLCHAR
-        LDA  CURK                     ; pointer?
-        LDB  #3
-        CMP
-        JNZ  sls_val
-        LDA  CURV
-        LDB  #'*'
-        CMP
-        JNZ  sls_val
-        JSR  ADVANCE                  ; '*' -> pointer (1 slot)
-        JSR  SYMADD
-        JSR  SETSYMCHAR
+        LDA  #'*'
+        JSR  ISPUNCT
+        JNC  sls_val
+        JSR  SKIPSTARS
+        JSR  SYMADD              ; a pointer: one slot
         JMP  sls_end
-sls_val: JSR SYMADD                   ; struct value: ceil(size/2) slots
-        JSR  SETSYMCHAR
-        LDA  TAGSIZE                  ; NLSLOT += ceil(size/2) - 1  (base already 1)
+sls_val:JSR  SYMADD              ; a value: ceil(size/2) slots (one counted)
+        LDA  TAGSIZE
         INC
         SHR
-        STA  TMPC
-        LDA  NLSLOT
-        LDB  TMPC
+        DEC
+        LDB  NLSLOT
         ADD
         STA  NLSLOT
-        LDA  NLSLOT
-        LDB  #1
-        SUB
-        STA  NLSLOT
-sls_end: JSR ADVANCE                  ; past NAME
+sls_end:JSR  ADVANCE             ; past NAME
         LDA  #$3B
-        JSR  EXPECTP
-        RTS
+        JMP  EXPECTP
 
-; STAGADD: record tag CURFN with size STOFF
-STAGADD:LDP1 #STAGPOOL                ; <- tierA: pointer constant (next: LDA)
-        LDA  #0
-        STA  TMPB
-sga_e:  LDA  TMPB
-        LDB  STAGCNT
+; EM_ADDOFF (A = offset) - emit __ax += offset (nothing for 0)
+EM_ADDOFF:
+        STA  MEMTMP
+        LDB  #0
         CMP
-        JC   sga_ap
-sga_sk: LDA  (P1)
-        JZ   sga_np
-        INP1
-        JMP  sga_sk
-sga_np: INP1
-        LDA  TMPB
-        INC
-        STA  TMPB
-        JMP  sga_e
-sga_ap: LDP2 #CURFN                ; <- tierA: pointer constant (next: LDA)
-sga_cp: LDA  (P2)
-        STA  (P1)
-        JZ   sga_dn
-        INP1
-        INP2
-        JMP  sga_cp
-sga_dn: LDA #<STAGSIZE
-        LDB  STAGCNT
-        ADD
-        TAP1L
-        LDA  #>STAGSIZE
-        JNC  sga1
-        INC
-sga1:   TAP1H
-        LDA  STOFF
-        STA  (P1)
-        LDA  STAGCNT
-        INC
-        STA  STAGCNT
-        RTS
-
-; STAGFIND_CURFN / STAGFIND_CURTID: tag name -> TAGSIZE (by name in CURFN or TID)
-STAGFIND_CURFN:LDW STFNP,#CURFN                ; <- tierA: address constant (next: JMP stf_go -> LDA)
-        JMP  stf_go
-STAGFIND_CURTID:LDW STFNP,#TID                ; <- tierA: address constant (next: LDA)
-stf_go: LDP1 #STAGPOOL                ; <- tierA: pointer constant (next: LDA)
-        LDA  #0
-        STA  TMPB
-        STA  TAGSIZE
-stf_e:  LDA  TMPB
-        LDB  STAGCNT
-        CMP
-        JC   stf_no
-        LPW2 STFNP                ; <- tierA: pointer load (next: LDA)
-stf_c:  LDA  (P1)
-        STA  TMPC
-        LDA  (P2)
-        LDB  TMPC
-        CMP
-        JNZ  stf_nx
-        LDA  (P1)
-        JZ   stf_yes
-        INP1
-        INP2
-        JMP  stf_c
-stf_nx: LDA  (P1)
-        JZ   stf_np
-        INP1
-        JMP  stf_nx
-stf_np: INP1
-        LDA  TMPB
-        INC
-        STA  TMPB
-        JMP  stf_e
-stf_yes: LDA #<STAGSIZE
-        LDB  TMPB
-        ADD
-        TAP1L
-        LDA  #>STAGSIZE
-        JNC  sty1
-        INC
-sty1:   TAP1H
-        LDA  (P1)
-        STA  TAGSIZE
-stf_no: RTS
-
-; STMADD_M: add member TID @ STOFF (char DCLCHAR) to the global member table
-STMADD_M:LDP1 #STMPOOL                ; <- tierA: pointer constant (next: LDA)
-        LDA  #0
-        STA  TMPB
-smm_e:  LDA  TMPB
-        LDB  STMCNT
-        CMP
-        JC   smm_ap
-smm_sk: LDA  (P1)
-        JZ   smm_np
-        INP1
-        JMP  smm_sk
-smm_np: INP1
-        LDA  TMPB
-        INC
-        STA  TMPB
-        JMP  smm_e
-smm_ap: LDP2 #TID                ; <- tierA: pointer constant (next: LDA)
-smm_cp: LDA  (P2)
-        STA  (P1)
-        JZ   smm_dn
-        INP1
-        INP2
-        JMP  smm_cp
-smm_dn: LDA #<STMOFF
-        LDB  STMCNT
-        ADD
-        TAP1L
-        LDA  #>STMOFF
-        JNC  smm1
-        INC
-smm1:   TAP1H
-        LDA  STOFF
-        STA  (P1)
-        LDA  #<STMCH
-        LDB  STMCNT
-        ADD
-        TAP1L
-        LDA  #>STMCH
-        JNC  smm2
-        INC
-smm2:   TAP1H
-        LDA  DCLCHAR
-        STA  (P1)
-        LDA  STMCNT
-        INC
-        STA  STMCNT
-        RTS
-
-; STMFIND: member name TID -> STMEMOFF, STMEMCH (STMEMOK=1 if found)
-STMFIND:LDP1 #STMPOOL                ; <- tierA: pointer constant (next: LDA)
-        LDA  #0
-        STA  TMPB
-        STA  STMEMOK
-smf_e:  LDA  TMPB
-        LDB  STMCNT
-        CMP
-        JC   smf_no
-        LDP2 #TID                ; <- tierA: pointer constant (next: LDA)
-smf_c:  LDA  (P1)
-        STA  TMPC
-        LDA  (P2)
-        LDB  TMPC
-        CMP
-        JNZ  smf_nx
-        LDA  (P1)
-        JZ   smf_yes
-        INP1
-        INP2
-        JMP  smf_c
-smf_nx: LDA  (P1)
-        JZ   smf_np
-        INP1
-        JMP  smf_nx
-smf_np: INP1
-        LDA  TMPB
-        INC
-        STA  TMPB
-        JMP  smf_e
-smf_yes: LDA #1
-        STA  STMEMOK
-        LDA  #<STMOFF
-        LDB  TMPB
-        ADD
-        TAP1L
-        LDA  #>STMOFF
-        JNC  smy1
-        INC
-smy1:   TAP1H
-        LDA  (P1)
-        STA  STMEMOFF
-        LDA  #<STMCH
-        LDB  TMPB
-        ADD
-        TAP1L
-        LDA  #>STMCH
-        JNC  smy2
-        INC
-smy2:   TAP1H
-        LDA  (P1)
-        STA  STMEMCH
-smf_no: RTS
-
-; EM_ADDOFF (A = offset): emit __ax += offset  (via __t0 + __add)
-EM_ADDOFF: STA MEMTMP
-        LDA  MEMTMP
-        JZ   eao_d                   ; += 0: nothing to emit
-        LDP1 #MADDWAXI               ; ADDW __ax,#off  (one instruction)
+        JZ   eao_d
+        LDP1 #MADDWAXI
         JSR  EMIT
         LDA  MEMTMP
         JSR  EMITNUM
-        LDP1 #MNL
-        JSR  EMIT
+        JMP  EMITNL
 eao_d:  RTS
 
-; fd_glob: a top-level global declaration  type [*]NAME [ [N] ] ;
-fd_glob: JSR GSYMADD                 ; record CURFN @ slot SLOTCNT (char = DCLCHAR)
-        LDA  CURK
-        LDB  #3
-        CMP
-        JNZ  fdg_scal
-        LDA  CURV
-        LDB  #'['
-        CMP
-        JZ   fdg_arr
-fdg_scal:INCW SLOTCNT                ; <- tierA: 16-bit INCW chain before JMP fdg_end (next: JMP fdg_end -> LDA)
+; fd_glob - a global: type [*]NAME [ [N] ] ;  (CURFN = NAME, DCLCHAR set)
+fd_glob:JSR  GSYMADD
+        LDA  #'['
+        JSR  ISPUNCT
+        JC   fdg_arr
+        INCW SLOTCNT
         JMP  fdg_end
-fdg_arr: JSR GSYMMARKARR             ; mark it an array
-        JSR  ADVANCE                 ; past '['
+fdg_arr:JSR  MARKARR
+        JSR  ADVANCE             ; past '['
+        MOVW VN,CURV
         LDA  DCLCHAR
         JZ   fdg_aint
-        LDA  CURV                    ; char array: ceil(N/2) word slots, N 16-bit
-        LDB  #1                      ;   VN = CURV + 1 (16-bit)
-        ADD
-        STA  VN
-        LDA  CURV+1
-        JNC  fca1
-        INC
-fca1:   STA  VN+1
-        LDA  VN+1                    ;   VN >>= 1 (16-bit logical)
+        INCW VN                  ; char array: ceil(N/2) words
+        LDA  VN+1
         SHR
         STA  VN+1
         LDA  VN
         ROR
         STA  VN
-        JSR  SLOTADD_VN              ;   SLOTCNT += VN
-        JMP  fdg_asz
-fdg_aint:MOVW VN,CURV                ; <- tierA: word move (next: JSR SLOTADD_VN)
-        JSR  SLOTADD_VN
-fdg_asz: JSR ADVANCE                 ; past size
+fdg_aint:
+        ADDW SLOTCNT,VN
+        JSR  ADVANCE             ; past the size
         LDA  #']'
         JSR  EXPECTP
-fdg_end: LDA #$3B
-        JSR  EXPECTP
-        RTS
+fdg_end:LDA  #$3B
+        JMP  EXPECTP
 
-; FUNCDEF: parse one top-level item and dispatch. First a 'struct' keyword ->
-;   fd_struct (a struct def or a global struct var). Otherwise a type, optional
-;   '*'s, and a NAME: if '(' follows it is a function (params, then either a
-;   ';' prototype via FADD or a '{...}' body); if not, it is a global -> fd_glob.
-;   For a function, SLOTBASE is pinned to SLOTCNT so this function's slots occupy
-;   a fresh range, and SYMCNT/NLSLOT reset for its local symbol table.
-FUNCDEF: LDP1 #KW_STRUCT
-        JSR  IDEQ
-        LDA  TMPB
-        JNZ  fd_struct
+; FUNCDEF - one top-level item: a struct, a global, a prototype or a function
+FUNCDEF:LDA  CURK
+        LDB  #2
+        CMP
+        JNZ  SYNTAXERR
+        LDA  CURKW
+        LDB  #K_STRUCT
+        CMP
+        JZ   fd_struct
         JSR  EXPECTTYPE
-        LDA  ISCHARTYPE              ; remember char-ness for a possible global
-        STA  DCLCHAR
-fdt_star: LDA CURK                   ; skip pointer stars (ret-type / global ptr)
-        LDB  #3
-        CMP
-        JNZ  fdt_ns
-        LDA  CURV
-        LDB  #'*'
-        CMP
-        JNZ  fdt_ns
-        JSR  ADVANCE
-        JMP  fdt_star
-fdt_ns: JSR  CPCURFN                 ; CURFN <- NAME (function or global)
-        JSR  ADVANCE                 ; past NAME; peek what follows
-        LDA  CURK
-        LDB  #3
-        CMP
-        JNZ  fd_glob                 ; not '(' -> a global declaration
-        LDA  CURV
-        LDB  #'('
-        CMP
-        JNZ  fd_glob
-        MOVW SLOTBASE,SLOTCNT                ; <- tierA: word move (next: LDA)
-        LDA  #0
-        STA  SYMCNT
-        STA  NLSLOT
-        LDA  #'('
-        JSR  EXPECTP                 ; consume '(' (current)
-        LDA  #0
-        STA  NPARAMS                 ; parameters: int P, int P, ...
-        LDA  CURK
-        LDB  #3
-        CMP
-        JNZ  fp_loop
-        LDA  CURV
-        LDB  #')'
-        CMP
-        JZ   fp_done
-fp_loop: JSR EXPECTTYPE
         LDA  ISCHARTYPE
         STA  DCLCHAR
-fp_star: LDA CURK                    ; skip pointer stars on the param
-        LDB  #3
-        CMP
-        JNZ  fp_nostar
-        LDA  CURV
-        LDB  #'*'
-        CMP
-        JNZ  fp_nostar
+        JSR  SKIPSTARS           ; a pointer return type / global
+        JSR  CPCURFN             ; NAME
         JSR  ADVANCE
-        JMP  fp_star
-fp_nostar: JSR SYMADD                ; the param is a local variable (slots 0..n-1)
-        JSR  SETSYMCHAR              ; record a char-typed parameter
-        JSR  ADVANCE                 ; past the param name
+        LDA  #'('
+        JSR  ISPUNCT
+        JNC  fd_glob
+        MOVW SLOTBASE,SLOTCNT    ; a function: fresh slots, fresh local table
+        LDA  #0
+        STA  NLSLOT
+        STA  NPARAMS
+        JSR  CLEARLOC
+        JSR  ADVANCE             ; past '('
+        LDA  #')'
+        JSR  ISPUNCT
+        JC   fp_done
+fp_loop:JSR  EXPECTTYPE
+        LDA  ISCHARTYPE
+        STA  DCLCHAR
+        JSR  SKIPSTARS
+        JSR  SYMADD              ; the parameter: slots 0..n-1
+        JSR  ADVANCE
         LDA  NPARAMS
         INC
         STA  NPARAMS
-        LDA  CURK
-        LDB  #3
-        CMP
-        JNZ  fp_done
-        LDA  CURV
-        LDB  #','
-        CMP
-        JNZ  fp_done
-        JSR  ADVANCE                 ; past ','
+        LDA  #','
+        JSR  ISPUNCT
+        JNC  fp_done
+        JSR  ADVANCE
         JMP  fp_loop
-fp_done: LDA #')'
+fp_done:LDA  #')'
         JSR  EXPECTP
-        LDA  CURK                    ; prototype?  int NAME(params) ;
-        LDB  #3
-        CMP
-        JNZ  fd_def
-        LDA  CURV
-        LDB  #$3B
-        CMP
-        JNZ  fd_def
-        JSR  FADD                    ; a prototype still registers the name
-        JSR  ADVANCE                 ; consume ';' (forward calls can now resolve it)
-        RTS
-fd_def: JSR  FADD                    ; record CURFN -> NPARAMS, SLOTBASE
-        LDP1 #MFPFX                  ; "_f_" NAME ":"
+        LDA  #$3B                ; a prototype registers the name
+        JSR  ISPUNCT
+        JNC  fd_def
+        JSR  FADD
+        JMP  ADVANCE
+fd_def: JSR  FADD
+        LDP1 #MFPFX              ; _f_NAME:
         JSR  EMIT
         LDP1 #CURFN
         JSR  EMIT
         LDP1 #MCOLON
         JSR  EMIT
-        JSR  EM_POPPARAMS            ; prologue: pop args into param slots
+        JSR  EM_POPPARAMS
         LDA  #'{'
         JSR  EXPECTP
-fd_s:   LDA  CURK
-        LDB  #3
-        CMP
-        JNZ  fd_st
-        LDA  CURV
-        LDB  #'}'
-        CMP
-        JZ   fd_end
-fd_st:  JSR  STMT
+fd_s:   LDA  #'}'
+        JSR  ISPUNCT
+        JC   fd_end
+        JSR  STMT
         JMP  fd_s
 fd_end: LDA  #'}'
         JSR  EXPECTP
-        LDP1 #MEPFX                  ; "_e_" NAME ":"  (return target)
+        LDP1 #MEPFX              ; _e_NAME: RTS
         JSR  EMIT
         LDP1 #CURFN
         JSR  EMIT
@@ -2110,384 +1802,250 @@ fd_end: LDA  #'}'
         JSR  EMIT
         LDP1 #MRTS
         JSR  EMIT
-        LDA  SLOTBASE                ; advance the global slot counter (16-bit):
-        LDB  NLSLOT                  ;   SLOTCNT = SLOTBASE + NLSLOT
-        ADD
-        STA  SLOTCNT
-        LDA  SLOTBASE+1
-        JNC  fde_nc
-        INC
-fde_nc: STA  SLOTCNT+1
-        RTS
-; CPCURFN / CPIDNAME: copy the current id (TID) into CURFN / IDNAME.
-CPCURFN:LDP2 #CURFN                ; <- tierA: pointer constant (next: JMP cpn_go -> LDA)
-        JMP  cpn_go
-CPIDNAME:LDP2 #IDNAME                ; <- tierA: pointer constant (next: LDA)
-cpn_go: LDP1 #TID                ; <- tierA: pointer constant (next: LDA)
-cpn_l:  LDA  (P1)
-        STA  (P2)
-        JZ   cpn_d
-        INP1
-        INP2
-        JMP  cpn_l
-cpn_d:  RTS
-
-; FADD: record the current function -> FPOOL name, FNPAR[], FSLOT[].
-; Guard: FNPAR/FSLOT hold MAXFUNC entries and FPOOL is sized for their names;
-; a 17th-plus function used to overrun them (silent corruption -> a blank
-; `JSR _f_`). Bail cleanly if a source exceeds MAXFUNC functions.
-FADD:   LDA  FCNT
-        LDB  #MAXFUNC
-        CMP                          ; C=1 (JC) when FCNT >= MAXFUNC: no room
-        JNC  fa_ok                   ; FCNT < MAXFUNC -> room, proceed
-        LDP1 #MTOOFUN                ; else: print error and bail to OS
-        JSR  EMIT
-        LDA  STK0                    ; restore the entry SP (P3) saved by START
-        TAP3L
-        LDA  STK0+1
-        TAP3H
-        RTS                          ; returns straight to the OS, not the parser
-fa_ok:  LDP1 #FPOOL                ; <- tierA: pointer constant (next: LDA)
+        LDA  NLSLOT              ; SLOTCNT = SLOTBASE + NLSLOT
+        STA  VN
         LDA  #0
-        STA  TMPC
-fa_e:   LDA  TMPC
-        LDB  FCNT
-        CMP
-        JC   fa_ap
-fa_sk:  LDA  (P1)
-        JZ   fa_np
-        INP1
-        JMP  fa_sk
-fa_np:  INP1
-        LDA  TMPC
-        INC
-        STA  TMPC
-        JMP  fa_e
-fa_ap:  LDP2 #CURFN                ; <- tierA: pointer constant (next: LDA)
-fa_cp:  LDA  (P2)
-        STA  (P1)
-        JZ   fa_dn
-        INP1
-        INP2
-        JMP  fa_cp
-fa_dn:  LDA #<FNPAR
-        LDB  FCNT
-        ADD
-        TAP1L
-        LDA  #>FNPAR
-        JNC  fad1
-        INC
-fad1:   TAP1H
+        STA  VN+1
+        MOVW SLOTCNT,SLOTBASE
+        ADDW SLOTCNT,VN
+        RTS
+
+; CLEARLOC - empty the local table
+CLEARLOC:
+        LDW  LARENAP,#LARENA
+        LDP1 #HLOC
+        LDA  #32
+        STA  TMPD
+cl_l:   LDA  #0
+        STA  (P1)+
+        STA  (P1)+
+        LDA  TMPD
+        DEC
+        STA  TMPD
+        JNZ  cl_l
+        RTS
+
+; EM_POPPARAMS - the prologue: LDW __V+2*slot(i),(P3+3+2*(NPARAMS-1-i))
+EM_POPPARAMS:
         LDA  NPARAMS
-        STA  (P1)
-        LDA  FCNT                    ; FSLOT[FCNT] = SLOTBASE (16-bit cell)
+        JZ   epp_d
+        STA  VITER
+epp_l:  LDA  VITER
+        DEC
+        STA  VITER
+        LDP1 #MLDWV
+        JSR  EMIT
+        LDA  VITER
+        JSR  EMSB
+        LDP1 #MCP3
+        JSR  EMIT
+        LDA  NPARAMS
+        LDB  VITER
+        SUB
+        DEC
         SHL
-        LDB  #<FSLOT
+        LDB  #3
         ADD
-        TAP1L
-        LDA  #>FSLOT
-        JNC  fad2
-        INC
-fad2:   TAP1H
-        LDA  SLOTBASE
-        STA  (P1)
-        INP1
-        LDA  SLOTBASE+1
-        STA  (P1)
-        LDA  FCNT
-        INC
-        STA  FCNT
-        RTS
-; FFIND_ID: look up IDNAME in the function table -> FFB (base slot), FOK.
-FFIND_ID: LDA #0
-        STA  FOK
-        LDP1 #FPOOL                ; <- tierA: pointer constant (next: LDA)
-        LDA  #0
-        STA  FI
-ff_e:   LDA  FI
-        LDB  FCNT
-        CMP
-        JC   ff_no
-        LDP2 #IDNAME                ; <- tierA: pointer constant (next: LDA)
-ff_c:   LDA  (P1)
-        STA  TMPC
-        LDA  (P2)
-        LDB  TMPC
-        CMP
-        JNZ  ff_nx
-        LDA  (P1)
-        JZ   ff_yes
-        INP1
-        INP2
-        JMP  ff_c
-ff_nx:  LDA  (P1)
-        JZ   ff_np
-        INP1
-        JMP  ff_nx
-ff_np:  INP1
-        LDA  FI
-        INC
-        STA  FI
-        JMP  ff_e
-ff_yes: LDA FI                       ; FFB = FSLOT[FI] (16-bit cell)
-        SHL
-        LDB  #<FSLOT
-        ADD
-        TAP1L
-        LDA  #>FSLOT
-        JNC  ffy1
-        INC
-ffy1:   TAP1H
-        LDA  (P1)
-        STA  FFB
-        INP1
-        LDA  (P1)
-        STA  FFB+1
-        LDA  #1
-        STA  FOK
-        RTS
-ff_no:  LDA #0
-        STA  FOK
-        RTS
-; EM_STSLOT: store __ax into the absolute variable slot in ARGSLOT.
-EM_STSLOT: LDP1 #MLDAX
+        JSR  EMITNUM
+        LDP1 #MCLNL
         JSR  EMIT
-        LDP1 #MSTAV
-        JSR  EMIT
-        MOVW VN,ARGSLOT                ; <- tierA: word move (next: JSR EMITNUM16)
-        JSR  EMITNUM16
-        LDP1 #MNL
-        JSR  EMIT
-        LDP1 #MLDAXH
-        JSR  EMIT
-        LDP1 #MSTAV
-        JSR  EMIT
-        MOVW VN,ARGSLOT                ; <- tierA: word move (next: JSR EMITNUM16)
-        JSR  EMITNUM16
-        LDP1 #MP1
-        JSR  EMIT
-        RTS
+        LDA  VITER
+        JNZ  epp_l
+epp_d:  RTS
 
-; one statement
+; ---- statements ----
 STMT:   LDA  CURK
         LDB  #3
         CMP
-        JZ   st_punct                ; '{' -> block
+        JZ   st_punct
         LDB  #2
         CMP
-        JNZ  st_err
-        LDP1 #KW_INT
-        JSR  IDEQ
-        LDA  TMPB
-        JNZ  st_decl
-        LDP1 #KW_CHAR
-        JSR  IDEQ
-        LDA  TMPB
-        JNZ  st_decl
-        LDP1 #KW_STRUCT
-        JSR  IDEQ
-        LDA  TMPB
-        JNZ  st_lstruct
-        LDP1 #KW_IF
-        JSR  IDEQ
-        LDA  TMPB
-        JNZ  st_if
-        LDP1 #KW_WHILE
-        JSR  IDEQ
-        LDA  TMPB
-        JNZ  st_while
-        LDP1 #KW_PUTC
-        JSR  IDEQ
-        LDA  TMPB
-        JNZ  st_putc
-        LDP1 #KW_RET
-        JSR  IDEQ
-        LDA  TMPB
-        JNZ  st_ret
-        LDP1 #KW_FOR
-        JSR  IDEQ
-        LDA  TMPB
-        JNZ  st_for
-        LDP1 #KW_BRK
-        JSR  IDEQ
-        LDA  TMPB
-        JNZ  st_break
-        LDP1 #KW_CONT
-        JSR  IDEQ
-        LDA  TMPB
-        JNZ  st_continue
-        JMP  st_assign               ; an identifier LHS -> assignment
-st_punct: LDA CURV
+        JNZ  SYNTAXERR
+        LDA  CURKW
+        JZ   st_assign           ; an identifier: assignment / expression
+        LDB  #K_BIOS
+        CMP
+        JC   st_assign           ; a builtin call: an expression statement
+        SHL                      ; P1 = &STMTTAB[CURKW-1]
+        LDB  #<STMTTAB-2
+        ADD
+        TAP1L
+        LDA  #0
+        ROL
+        LDB  #>STMTTAB-2
+        ADD
+        TAP1H
+        LDW  CUR,(P1+0)
+        LPW1 CUR
+        JSR  (P1)
+        RTS
+STMTTAB:.word st_decl,st_decl,st_lstruct,st_if       ; int char struct if
+        .word st_while,st_putc,st_ret,st_for         ; while putchar return for
+        .word st_break,st_continue,SYNTAXERR         ; break continue else
+st_punct:
+        LDA  CUR2
+        JNZ  SYNTAXERR
+        LDA  CURV
         LDB  #'{'
         CMP
         JZ   st_block
-        LDA  CURV
         LDB  #'*'
         CMP
         JZ   st_derefasg
-st_err: RTS                          ; (unknown statement -> stop quietly)
-; *ptr = expr ;   -> store a word through a pointer
-st_derefasg: JSR ADVANCE             ; past '*'
-        JSR  GUNARY                  ; address -> __ax
-        JSR  EM_PUSH                 ; save address
+        LDB  #$3B
+        CMP
+        JNZ  SYNTAXERR
+        JMP  ADVANCE             ; an empty statement
+
+; *ptr = expr ;
+st_derefasg:
+        JSR  ADVANCE
+        JSR  GUNARY              ; the address -> __ax
+        JSR  EM_PUSH
         LDA  #'='
         JSR  EXPECTP
-        JSR  GEXPR                   ; RHS -> __ax
-        JSR  EM_POP                  ; address -> __t0
-        JSR  EM_STOREW               ; *(__t0) = __ax
+        JSR  GEXPR
+        JSR  EM_POP
+        JSR  EM_STOREW
         LDA  #$3B
-        JSR  EXPECTP
-        RTS
+        JMP  EXPECTP
 
-; { <stmt>* }
-st_block: LDA #'{'
+; { stmt* }
+st_block:
+        LDA  #'{'
         JSR  EXPECTP
-sb_l:   LDA  CURK
-        LDB  #3
-        CMP
-        JNZ  sb_st
-        LDA  CURV
-        LDB  #'}'
-        CMP
-        JZ   sb_end
-sb_st:  JSR  STMT
+sb_l:   LDA  #'}'
+        JSR  ISPUNCT
+        JC   sb_end
+        JSR  STMT
         JMP  sb_l
 sb_end: LDA  #'}'
-        JSR  EXPECTP
-        RTS
+        JMP  EXPECTP
 
-; if ( <expr> ) <stmt> [ else <stmt> ]
-st_if:  JSR  ADVANCE                 ; past "if"
+; COND - '(' condition ')' in condition mode: the false label is A. Emits the
+;   test-and-branch unless GREL already branched.
+COND:   STA  CONDLBL
         LDA  #'('
         JSR  EXPECTP
-        JSR  NEWLBL                  ; la = false-branch target
-        PHA
-        STA  CONDLBL                 ; condition mode: a top-level relop branches to la
         LDA  #1
         STA  CONDF
-        JSR  GEXPR                   ; condition -> __ax, or already branched (CONDDONE)
+        JSR  GEXPR
         LDA  #')'
         JSR  EXPECTP
         LDA  CONDDONE
-        JNZ  if_body
-        JSR  EM_TESTAX               ; set Z from __ax for the branch
+        JNZ  cnd_d
+        JSR  EM_TESTAX
         LDP1 #MJZ
-        PLA
+        LDA  CONDLBL
+        JMP  EMITJ
+cnd_d:  RTS
+
+; if ( expr ) stmt [ else stmt ]
+st_if:  JSR  ADVANCE
+        JSR  NEWLBL              ; la = the false target
         PHA
-        JSR  EMITJ                   ; JZ L<la>
-if_body: JSR STMT                    ; then-branch
-        LDA  CURK                    ; an "else"?
+        JSR  COND
+        JSR  STMT                ; then
+        LDA  CURK
         LDB  #2
         CMP
         JNZ  if_ne
-        LDP1 #KW_ELSE
-        JSR  IDEQ
-        LDA  TMPB
-        JZ   if_ne
-        JSR  ADVANCE                 ; past "else"
-        PLA                          ; la
+        LDA  CURKW
+        LDB  #K_ELSE
+        CMP
+        JNZ  if_ne
+        JSR  ADVANCE
+        PLA                      ; la
         STA  IFTMP
-        JSR  NEWLBL                  ; lb = end target
+        JSR  NEWLBL              ; lb = the end
         PHA
         LDP1 #MJMP
-        PLA
-        PHA
-        JSR  EMITJ                   ; JMP L<lb>
+        JSR  EMITJ               ; JMP lb
         LDA  IFTMP
-        JSR  EMITLBL                 ; L<la>:
-        JSR  STMT                    ; else-branch
+        JSR  EMITLBL             ; la:
+        JSR  STMT                ; else
         PLA
-        JSR  EMITLBL                 ; L<lb>:
-        RTS
-if_ne:  PLA                          ; la
-        JSR  EMITLBL                 ; L<la>:
-        RTS
+        JMP  EMITLBL             ; lb:
+if_ne:  PLA
+        JMP  EMITLBL             ; la:
 
-; while ( <expr> ) <stmt>
-; break ;   -> jump to the innermost loop's end label
-st_break: JSR ADVANCE
+; break ; / continue ;
+st_break:
+        JSR  ADVANCE
         LDP1 #MJMP
         LDA  CURBRK
         JSR  EMITJ
         LDA  #$3B
-        JSR  EXPECTP
-        RTS
-
-; continue ;   -> jump to the innermost loop's continue label
-st_continue: JSR ADVANCE
+        JMP  EXPECTP
+st_continue:
+        JSR  ADVANCE
         LDP1 #MJMP
         LDA  CURCONT
         JSR  EMITJ
         LDA  #$3B
-        JSR  EXPECTP
-        RTS
+        JMP  EXPECTP
 
-; for ( [init] ; [cond] ; [post] ) <stmt>
-; single-pass jump threading:  init ; Ltop: cond?JZ Lend ; JMP Lbody ;
-;   Lpost: post ; JMP Ltop ; Lbody: <body> ; JMP Lpost ; Lend:
-st_for: JSR  ADVANCE                  ; past "for"
+; for ( [init] ; [cond] ; [post] ) stmt
+;   init ; Ltop: cond ? JZ Lend ; JMP Lbody ; Lpost: post ; JMP Ltop ;
+;   Lbody: body ; JMP Lpost ; Lend:
+st_for: JSR  ADVANCE
         LDA  #'('
         JSR  EXPECTP
-        JSR  NEWLBL                   ; Ltop (cond)
+        JSR  NEWLBL
         STA  LFT
-        JSR  NEWLBL                   ; Lbody
+        JSR  NEWLBL
         STA  LFB
-        JSR  NEWLBL                   ; Lpost
+        JSR  NEWLBL
         STA  LFP
-        JSR  NEWLBL                   ; Lend
+        JSR  NEWLBL
         STA  LFE
-        JSR  FORCLAUSE                 ; init (optional assignment)
-        LDA  #$3B                      ; ';'
+        JSR  FORCLAUSE           ; init
+        LDA  #$3B
         JSR  EXPECTP
-        LDA  LFT                       ; Ltop:
-        JSR  EMITLBL
-        LDA  CURK                      ; empty condition?  (next token is ';')
-        LDB  #3
-        CMP
-        JNZ  sf_cond
-        LDA  CURV
-        LDB  #$3B
-        CMP
-        JZ   sf_nocond
-sf_cond: LDA  LFE
-        STA  CONDLBL                   ; condition mode (see GEXPR); ends at ';'
+        LDA  LFT
+        JSR  EMITLBL             ; Ltop:
+        LDA  #$3B                ; an empty condition?
+        JSR  ISPUNCT
+        JC   sf_nocond
+        LDA  LFE
+        STA  CONDLBL
         LDA  #1
         STA  CONDF
-        JSR  GEXPR                     ; cond -> __ax, or already branched
+        JSR  GEXPR
         LDA  CONDDONE
         JNZ  sf_nocond
         JSR  EM_TESTAX
         LDP1 #MJZ
         LDA  LFE
-        JSR  EMITJ                     ; JZ Lend
-sf_nocond: LDA #$3B
+        JSR  EMITJ               ; JZ Lend
+sf_nocond:
+        LDA  #$3B
         JSR  EXPECTP
-        LDP1 #MJMP                     ; JMP Lbody
+        LDP1 #MJMP
         LDA  LFB
-        JSR  EMITJ
-        LDA  LFP                       ; Lpost:
-        JSR  EMITLBL
-        JSR  FORCLAUSE                  ; post (optional assignment)
+        JSR  EMITJ               ; JMP Lbody
+        LDA  LFP
+        JSR  EMITLBL             ; Lpost:
+        JSR  FORCLAUSE           ; post
         LDA  #')'
         JSR  EXPECTP
-        LDP1 #MJMP                     ; JMP Ltop
+        LDP1 #MJMP
         LDA  LFT
-        JSR  EMITJ
-        LDA  LFB                       ; Lbody:
-        JSR  EMITLBL
-        LDA  CURBRK                    ; save enclosing break/continue
+        JSR  EMITJ               ; JMP Ltop
+        LDA  LFB
+        JSR  EMITLBL             ; Lbody:
+        LDA  CURBRK              ; save the enclosing targets and our labels
         PHA
         LDA  CURCONT
         PHA
-        LDA  LFP                       ; save Lpost/Lend across the body (may nest)
-        PHA
-        LDA  LFE
-        PHA
-        LDA  LFE
-        STA  CURBRK                    ; break -> Lend
         LDA  LFP
-        STA  CURCONT                   ; continue -> Lpost (run post, re-test)
-        JSR  STMT                      ; body
+        PHA
+        LDA  LFE
+        PHA
+        STA  CURBRK              ; break -> Lend
+        LDA  LFP
+        STA  CURCONT             ; continue -> Lpost
+        JSR  STMT
         PLA
         STA  LFE
         PLA
@@ -2496,64 +2054,52 @@ sf_nocond: LDA #$3B
         STA  CURCONT
         PLA
         STA  CURBRK
-        LDP1 #MJMP                     ; JMP Lpost
+        LDP1 #MJMP
         LDA  LFP
-        JSR  EMITJ
-        LDA  LFE                       ; Lend:
-        JSR  EMITLBL
-        RTS
+        JSR  EMITJ               ; JMP Lpost
+        LDA  LFE
+        JMP  EMITLBL             ; Lend:
 
-; FORCLAUSE: optional  NAME = expr  (for-loop init/post; consumes no terminator)
-FORCLAUSE: LDA CURK
-        LDB  #2                        ; an identifier LHS?
+; FORCLAUSE - an optional NAME = expr
+FORCLAUSE:
+        LDA  CURK
+        LDB  #2
         CMP
-        JNZ  fc_ret                    ; else empty clause
+        JNZ  fc_ret
         JSR  SYMFIND
         LDA  SYMOK
-        JZ   fc_ret                    ; undeclared -> stop quietly
-        MOVW LHSIDX,SYMIDX                ; <- tierA: word move (next: JSR ADVANCE)
-        JSR  ADVANCE                   ; past NAME
+        JZ   fc_ret
+        MOVW LHSIDX,SYMIDX
+        JSR  ADVANCE
         LDA  #'='
         JSR  EXPECTP
         JSR  GEXPR
-        JSR  EMITSTV                   ; STA V<LHSIDX>
+        JMP  EM_STVAR
 fc_ret: RTS
 
-st_while: JSR ADVANCE                ; past "while"
-        JSR  NEWLBL                  ; ltop
+; while ( expr ) stmt
+st_while:
+        JSR  ADVANCE
+        JSR  NEWLBL
         STA  WHT
-        JSR  NEWLBL                  ; lend
+        JSR  NEWLBL
         STA  WHE
         LDA  WHT
-        JSR  EMITLBL                 ; L<ltop>:
-        LDA  #'('
-        JSR  EXPECTP
+        JSR  EMITLBL             ; Ltop:
         LDA  WHE
-        STA  CONDLBL                 ; condition mode (see GEXPR)
-        LDA  #1
-        STA  CONDF
-        JSR  GEXPR                   ; condition -> __ax, or already branched
-        LDA  #')'
-        JSR  EXPECTP
-        LDA  CONDDONE
-        JNZ  wh_body
-        JSR  EM_TESTAX               ; set Z from __ax for the branch
-        LDP1 #MJZ
-        LDA  WHE
-        JSR  EMITJ                   ; JZ L<lend>
-wh_body: LDA CURBRK                  ; enter loop: save enclosing break/continue
+        JSR  COND                ; JZ Lend unless branched
+        LDA  CURBRK
         PHA
         LDA  CURCONT
         PHA
-        LDA  WHT                     ; and this loop's labels (nesting)
-        PHA
-        LDA  WHE
-        PHA
-        LDA  WHE
-        STA  CURBRK                  ; break -> lend
         LDA  WHT
-        STA  CURCONT                 ; continue -> ltop (re-test)
-        JSR  STMT                    ; body
+        PHA
+        LDA  WHE
+        PHA
+        STA  CURBRK              ; break -> Lend
+        LDA  WHT
+        STA  CURCONT             ; continue -> Ltop
+        JSR  STMT
         PLA
         STA  WHE
         PLA
@@ -2564,379 +2110,218 @@ wh_body: LDA CURBRK                  ; enter loop: save enclosing break/continue
         STA  CURBRK
         LDP1 #MJMP
         LDA  WHT
-        JSR  EMITJ                   ; JMP L<ltop>
+        JSR  EMITJ               ; JMP Ltop
         LDA  WHE
-        JSR  EMITLBL                 ; L<lend>:
-        RTS
+        JMP  EMITLBL             ; Lend:
 
-; int NAME [ = expr ] ;   -> reserve a variable, optionally initialise it
-st_decl: LDP1 #KW_CHAR              ; int or char ?
-        JSR  IDEQ
-        LDA  TMPB
+; type [*]NAME [= expr] ;  |  type NAME[N] ;
+st_decl:LDA  CURKW
+        LDB  #K_CHAR
+        CMP
+        JNZ  sd_int
+        LDA  #1
         STA  DCLCHAR
-        JSR  ADVANCE                 ; past the type keyword
-sd_star: LDA CURK                    ; skip pointer stars: int *p, int **p
-        LDB  #3
-        CMP
-        JNZ  sd_nostar
-        LDA  CURV
-        LDB  #'*'
-        CMP
-        JNZ  sd_nostar
+        JMP  sd_adv
+sd_int: LDA  #0
+        STA  DCLCHAR
+sd_adv: JSR  ADVANCE
+        JSR  SKIPSTARS
+        JSR  SYMADD
+        MOVW LHSIDX,SYMIDX
+        JSR  ADVANCE             ; past NAME
+        LDA  #'['
+        JSR  ISPUNCT
+        JC   sd_arr
+        LDA  #'='
+        JSR  ISPUNCT
+        JNC  sd_semi
         JSR  ADVANCE
-        JMP  sd_star
-sd_nostar: JSR SYMADD                ; add NAME (current id) -> SYMIDX
-        MOVW LHSIDX,SYMIDX                ; <- tierA: word move (next: JSR SETSYMCHAR)
-        JSR  SETSYMCHAR              ; SYMCHAR[slot] = DCLCHAR
-        JSR  ADVANCE                 ; past NAME
-        LDA  CURK                    ; array?  int NAME [ N ]
-        LDB  #3
-        CMP
-        JNZ  sd_chkeq
-        LDA  CURV
-        LDB  #'['
-        CMP
-        JZ   sd_arr
-sd_chkeq: LDA CURK                   ; optional  = expr
-        LDB  #3
-        CMP
-        JNZ  sd_semi
-        LDA  CURV
-        LDB  #'='
-        CMP
-        JNZ  sd_semi
-        JSR  ADVANCE                 ; past '='
         JSR  GEXPR
-        JSR  EMITSTV                 ; STA V<LHSIDX>
-        JMP  sd_semi                 ; initialized scalar is done; do NOT fall into
-                                     ; the array path (which would eat the ';')
-sd_arr: JSR ADVANCE                  ; past '['
-        LDA  DCLCHAR                  ; char array: ceil(N/2) words; int array: N
-        JNZ  sd_arrc
-        LDA  NLSLOT
-        LDB  CURV
-        ADD
-        STA  NLSLOT
-        JMP  sd_arrm
-sd_arrc: LDA CURV                     ; (N + 1) / 2
+        JSR  EM_STVAR
+        JMP  sd_semi
+sd_arr: JSR  ADVANCE             ; past '['
+        LDA  DCLCHAR
+        JZ   sd_arri
+        LDA  CURV                ; char: (N+1)/2 words
         INC
         SHR
+        JMP  sd_arrm
+sd_arri:LDA  CURV
+sd_arrm:DEC                      ; the base slot is already counted
         LDB  NLSLOT
         ADD
         STA  NLSLOT
-sd_arrm: LDA NLSLOT                   ; the base slot was already counted -> -1
-        LDB  #1
-        SUB
-        STA  NLSLOT
-        LDA  #<SYMARR                 ; SYMARR[base slot] = 1
-        LDB  LHSIDX
-        ADD
-        TAP1L
-        LDA  #>SYMARR
-        JNC  sd_a1
-        INC
-sd_a1:  TAP1H
-        LDA  #1
-        STA  (P1)
-        JSR  ADVANCE                  ; past size
+        JSR  MARKARR
+        JSR  ADVANCE             ; past the size
         LDA  #']'
         JSR  EXPECTP
-sd_semi: LDA #$3B
-        JSR  EXPECTP
-        RTS
+sd_semi:LDA  #$3B
+        JMP  EXPECTP
 
-; NAME = expr ;   -> assignment to an existing variable
-st_assign: JSR SYMFIND              ; look up NAME (current id) -> SYMIDX/SYMOK
+; NAME = e; NAME[i] = e; NAME.m = e; NAME->m = e; NAME++; NAME--; NAME += e;
+; NAME -= e;  or an expression statement (a call)
+st_assign:
+        JSR  SYMFIND
         LDA  SYMOK
-        JZ   st_exprstmt             ; not a variable (a function call etc.)
-        JMP  st_asg2
-; expression statement:  foo(args) ;   (evaluate for side effects, discard result)
-st_exprstmt: JSR GEXPR
+        JNZ  st_asg2
+        JSR  GEXPR               ; not a variable: evaluate for the side effects
         LDA  #$3B
-        JSR  EXPECTP
-        RTS
-st_asg2:
-        MOVW LHSIDX,SYMIDX                ; <- tierA: word move (next: LDA)
+        JMP  EXPECTP
+st_asg2:MOVW LHSIDX,SYMIDX
         LDA  SYMRCH
         STA  LHSCH
         LDA  SYMRAR
         STA  LHSAR
-        JSR  ADVANCE                 ; past NAME
-        LDA  CURK                    ; NAME[index] = e ?
+        JSR  ADVANCE             ; past NAME
+        LDA  CURK
         LDB  #3
         CMP
-        JNZ  sa_scalar
+        JNZ  SYNTAXERR
+        LDA  CUR2
+        JNZ  sa_two
         LDA  CURV
         LDB  #'['
         CMP
         JZ   sa_arrstore
-        LDA  CUR2                 ; NAME.m = e  or  NAME->m = e ?
-        JNZ  sa_ck_arrow
-        LDA  CURV
         LDB  #'.'
         CMP
         JZ   sa_memdot
-        JMP  sa_scalar
-sa_ck_arrow: LDA CURV
+sa_asg: LDA  #'='                ; NAME = expr
+        JSR  EXPECTP
+        JSR  GEXPR
+        JSR  EM_STVAR
+sa_semi:LDA  #$3B
+        JMP  EXPECTP
+sa_two: LDA  CURV                ; a two-char op: -> ++ -- += -=
         LDB  #'-'
         CMP
-        JNZ  sa_scalar
+        JNZ  sa_plus
         LDA  CUR2
         LDB  #'>'
         CMP
         JZ   sa_memarrow
-        JMP  sa_scalar
-sa_memdot:MOVW SYMIDX,LHSIDX                ; <- tierA: word move (next: JSR EM_ADDROF)
+        LDB  #'-'
+        CMP
+        JZ   sa_dec              ; NAME--
+        JSR  SA_CLOAD            ; NAME -= e
+        LDP1 #MSUB
+        JMP  sa_cst
+sa_plus:LDB  #'+'
+        CMP
+        JNZ  SYNTAXERR
+        LDA  CUR2
+        LDB  #'+'
+        CMP
+        JZ   sa_inc              ; NAME++
+        JSR  SA_CLOAD            ; NAME += e
+        LDP1 #MADD
+sa_cst: JSR  EMIT
+        JSR  EM_STVAR
+        JMP  sa_semi
+sa_inc: MOVW SYMIDX,LHSIDX       ; one INCW / DECW in place
+        JSR  ADVANCE
+        JSR  EM_INCVAR
+        JMP  sa_semi
+sa_dec: MOVW SYMIDX,LHSIDX
+        JSR  ADVANCE
+        JSR  EM_DECVAR
+        JMP  sa_semi
+; SA_CLOAD - push the old NAME, the rhs -> __ax, __t0 = old NAME
+SA_CLOAD:
+        MOVW SYMIDX,LHSIDX
+        JSR  EM_LDVAR
+        JSR  EM_PUSH
+        JSR  ADVANCE             ; past += / -=
+        JSR  GEXPR
+        JMP  EM_POP
+sa_memdot:
+        MOVW SYMIDX,LHSIDX
         JSR  EM_ADDROF
         JMP  sa_memcommon
-sa_memarrow:MOVW SYMIDX,LHSIDX                ; <- tierA: word move (next: JSR EM_LDVAR)
+sa_memarrow:
+        MOVW SYMIDX,LHSIDX
         JSR  EM_LDVAR
-sa_memcommon: JSR ADVANCE         ; past '.' or '->'
+sa_memcommon:
+        JSR  ADVANCE             ; past . / ->
         JSR  STMFIND
         LDA  STMEMOFF
         JSR  EM_ADDOFF
-        JSR  ADVANCE              ; past member name
+        JSR  ADVANCE             ; past the member
         LDA  STMEMCH
-        STA  MEMTMP2              ; remember member width across the RHS
-        JSR  EM_PUSH              ; save address
+        STA  MEMTMP
+        JSR  EM_PUSH
         LDA  #'='
         JSR  EXPECTP
-        JSR  GEXPR                ; RHS -> __ax
-        JSR  EM_POP               ; address -> __t0
-        LDA  MEMTMP2
+        JSR  GEXPR
+        JSR  EM_POP
+        LDA  MEMTMP
         JNZ  sa_memb
         JSR  EM_STOREW
-        JMP  sa_memsemi
-sa_memb: JSR EM_STOREB
-sa_memsemi: LDA #$3B
-        JSR  EXPECTP
-        RTS
-sa_scalar: LDA CUR2               ; ++ / -- / += / -= ?
-        JZ   sa_asg
-        LDA  CURV
-        LDB  #'+'
-        CMP
-        JZ   sa_cadd
-        LDA  CURV
-        LDB  #'-'
-        CMP
-        JZ   sa_csub
-sa_asg: LDA #'='
-        JSR  EXPECTP
-        JSR  GEXPR
-        JSR  EMITSTV                 ; STA V<LHSIDX>
-        LDA  #$3B
-        JSR  EXPECTP
-        RTS
-sa_cadd: LDA CUR2                   ; NAME++ ?  (CUR2 == CURV for ++ / --)
-        LDB  CURV
-        CMP
-        JZ   sa_inc
-        JSR  SA_CLOAD               ; NAME += rhs
-        LDP1 #MADD
-        JSR  EMIT
-        JMP  sa_cst
-sa_csub: LDA CUR2                   ; NAME-- ?
-        LDB  CURV
-        CMP
-        JZ   sa_dec
-        JSR  SA_CLOAD               ; NAME -= rhs
-        LDP1 #MSUB
-        JSR  EMIT
-sa_cst: JSR EMITSTV
-sa_semi: LDA #$3B
-        JSR  EXPECTP
-        RTS
-sa_inc: JSR  SA_LHSSYM              ; statement-level NAME++ : one INCW in place
-        JSR  EM_INCVAR              ;   (was load / push / LDW #1 / pop / ADDW / store)
         JMP  sa_semi
-sa_dec: JSR  SA_LHSSYM
-        JSR  EM_DECVAR
+sa_memb:JSR  EM_STOREB
         JMP  sa_semi
-; SA_LHSSYM: SYMIDX = LHSIDX (the variable being updated); consume the ++ / --.
-SA_LHSSYM: MOVW SYMIDX,LHSIDX
-        JSR  ADVANCE
-        RTS
-; SA_CLOAD: __ax = old NAME (pushed), then RHS -> __ax, then __t0 = old NAME.
-;   rhs = 1 for ++/-- (CUR2 == CURV), or an expression for += / -= (CUR2 == '=').
-SA_CLOAD:MOVW SYMIDX,LHSIDX                ; <- tierA: word move (next: JSR EM_LDVAR)
-        JSR  EM_LDVAR
-        JSR  EM_PUSH
-        LDA  CUR2
-        LDB  #'='
-        CMP
-        JZ   scl_e
-        JSR  ADVANCE                 ; past ++ / --
-        JSR  EM_AX1                  ; rhs = 1
-        JMP  scl_p
-scl_e:  JSR ADVANCE                  ; past += / -=
-        JSR  GEXPR
-scl_p:  JSR EM_POP                   ; __t0 = old NAME
-        RTS
-sa_arrstore:MOVW SYMIDX,LHSIDX                ; <- tierA: word move (next: LDA)
+sa_arrstore:
+        MOVW SYMIDX,LHSIDX
         LDA  LHSCH
         STA  ELCHAR
         LDA  LHSAR
         STA  ELARR
-        JSR  ELEMADDR                ; __ax = element address (consumes [i])
-        LDA  ELCHAR                  ; save char-ness across the RHS parse
+        JSR  ELEMADDR            ; __ax = the element address
+        LDA  ELCHAR
         PHA
-        JSR  EM_PUSH                 ; save address
+        JSR  EM_PUSH
         LDA  #'='
         JSR  EXPECTP
-        JSR  GEXPR                   ; RHS -> __ax
-        JSR  EM_POP                  ; address -> __t0
+        JSR  GEXPR
+        JSR  EM_POP
         PLA
-        STA  ELCHAR
-        LDA  ELCHAR
         JNZ  sas_b
         JSR  EM_STOREW
-        JMP  sas_semi
+        JMP  sa_semi
 sas_b:  JSR  EM_STOREB
-sas_semi: LDA #$3B
-        JSR  EXPECTP
-        RTS
-; EMITSTV: emit  "        STA V<LHSIDX>" + newline
-EMITSTV: JSR EM_STVAR                 ; V<LHSIDX> = __ax
-        RTS
-st_putc: JSR ADVANCE
+        JMP  sa_semi
+
+; putchar ( expr ) ;
+st_putc:JSR  ADVANCE
         LDA  #'('
         JSR  EXPECTP
-        JSR  GEXPR                   ; result in A at runtime
+        JSR  GEXPR
         LDA  #')'
         JSR  EXPECTP
         LDA  #$3B
         JSR  EXPECTP
         LDP1 #MPUTC
-        JSR  EMIT
-        RTS
+        JMP  EMIT
+
+; return [expr] ;
 st_ret: JSR  ADVANCE
-        LDA  CURK                    ; return ; | return expr ;
-        LDB  #3
-        CMP
-        JNZ  sr_e
-        LDA  CURV
-        LDB  #$3B
-        CMP
-        JZ   sr_semi
-sr_e:   JSR  GEXPR
-sr_semi: LDA #$3B
+        LDA  #$3B
+        JSR  ISPUNCT
+        JC   sr_semi
+        JSR  GEXPR
+sr_semi:LDA  #$3B
         JSR  EXPECTP
-        LDP1 #MJMPE                  ; JMP _e_<CURFN>  (function epilogue)
+        LDP1 #MJMPE              ; JMP _e_NAME
         JSR  EMIT
         LDP1 #CURFN
         JSR  EMIT
-        LDP1 #MNL
-        JSR  EMIT
-        RTS
+        JMP  EMITNL
 
-; expression: GADD [ relop GADD ]  -> result in the runtime A register.
-; A relational compares two additive expressions, yielding 0/1 (single, non-
-; associative). Assignment/putchar/return/conditions all call GEXPR.
-GREL:   JSR  GSHIFT
-        LDA  CURK
-        LDB  #3
-        CMP
-        JNZ  grx
-        JSR  RELDET                  ; is the current punct a relop? -> RELOP/RELF
-        LDA  RELF
-        JZ   grx
-        JSR  EM_PUSH                 ; push the left operand
-        LDA  RELOP                   ; save RELOP across GADD (parens may recurse)
-        PHA
-        JSR  ADVANCE                 ; past the operator
-        JSR  GSHIFT                  ; right operand -> __ax
-        PLA
-        STA  RELOP
-        JSR  EM_POP                  ; pop left -> __t0
-        LDA  RELOP                   ; == / != (4/5) need a 16-bit Z: JSR __cmp
-        LDB  #4
-        CMP
-        JC   grl_eq
-        LDA  RELOP                   ; < (0) / >= (3): CMPW __t0,__ax, C = left>=right
-        LDB  #1                      ; <= (1) / > (2): CMPW __ax,__t0, C = right>=left
-        CMP
-        JZ   grl_sw
-        LDA  RELOP
-        LDB  #2
-        CMP
-        JZ   grl_sw
-        LDP1 #MCMPWTA
-        JMP  grl_em
-grl_sw: LDP1 #MCMPWAT
-        JMP  grl_em
-grl_eq: LDP1 #MCMP
-grl_em: JSR  EMIT
-        LDA  CONDCUR                 ; condition context, and the relop ends it?
-        JZ   grl_val
-        LDA  CURK
-        LDB  #3
-        CMP
-        JNZ  grl_val
-        LDA  CURV
-        LDB  #')'
-        CMP
-        JZ   grl_cond
-        LDB  #$3B                    ; ';' -- a for-loop condition
-        CMP
-        JNZ  grl_val
-grl_cond: JSR EMITCF                 ; branch to L<CONDLBL> when the relation is FALSE
-        LDA  #1
-        STA  CONDDONE
-        RTS
-grl_val: JSR  EMITCMP                ; else the 0/1 VALUE sequence for RELOP
-grx:    RTS
-
-; EMITCF: after GREL's compare, jump to L<CONDLBL> when the relation is FALSE.
-;   <  : C = left>=right, false when C=1 -> JC      >= : false when C=0 -> JNC
-;   >  : swapped compare, C = right>=left, true when C=0 -> false JC
-;   <= : true when C=1 -> false JNC     == : false when Z=0 -> JNZ    != : JZ
-EMITCF: LDA  RELOP
-        JZ   ecf_jc                  ; 0: <
-        LDB  #2
-        CMP
-        JZ   ecf_jc                  ; 2: >
-        LDB  #4
-        CMP
-        JZ   ecf_jnz                 ; 4: ==
-        LDB  #5
-        CMP
-        JZ   ecf_jz                  ; 5: !=
-        LDP1 #MJNC                   ; 1: <=   3: >=
-        JMP  ecf_e
-ecf_jc: LDP1 #MJC
-        JMP  ecf_e
-ecf_jnz: LDP1 #MJNZ
-        JMP  ecf_e
-ecf_jz: LDP1 #MJZ
-ecf_e:  LDA  CONDLBL
-        JSR  EMITJ
-        RTS
-
-; expr: logical-or  ->  land ('||' land)*   (short-circuit, yields 0/1)
-; expr : cond  ->  a ? b : c   (ternary; wraps the || level GLOR)
-; Condition mode (2026-09-12): if/while/for set CONDF=1 and CONDLBL before their
-; GEXPR. GEXPR takes the flag into CONDCUR and clears CONDF, so any NESTED GEXPR
-; (call arguments, parentheses, an index) sees 0 and produces a value. When the
-; relational at the top of the condition is followed by ')' or ';' -- nothing
-; else consumes its result -- GREL emits its compare and ONE branch to CONDLBL
-; on the false case (EMITCF) and sets CONDDONE, and the statement skips its own
-; test-and-JZ. Same trick as p8cc.c's cond mode: `if (a < b)` is CMPW + Jcc.
+; =============================================================================
+; Expressions -> __ax
+; =============================================================================
+; GEXPR - the top: condition mode is consumed here (a nested GEXPR sees 0), then
+;   GLOR and an optional ternary
 GEXPR:  LDA  CONDF
         STA  CONDCUR
         LDA  #0
         STA  CONDF
         STA  CONDDONE
         JSR  GLOR
-        LDA  CURK
-        LDB  #3
-        CMP
-        JNZ  ge_condd
-        LDA  CURV
-        LDB  #'?'
-        CMP
-        JNZ  ge_condd
-        JSR  ADVANCE                 ; past '?'
+        LDA  #'?'
+        JSR  ISPUNCT
+        JNC  ge_condd
+        JSR  ADVANCE
         JSR  EM_TESTAX
         JSR  NEWLBL
         STA  TERNF
@@ -2944,12 +2329,12 @@ GEXPR:  LDA  CONDF
         STA  TERNE
         LDP1 #MJZ
         LDA  TERNF
-        JSR  EMITJ                   ; JZ Lfalse
-        LDA  TERNF                   ; save labels across the true branch (may nest)
+        JSR  EMITJ               ; JZ Lfalse
+        LDA  TERNF
         PHA
         LDA  TERNE
         PHA
-        JSR  GEXPR                   ; b (true branch)
+        JSR  GEXPR               ; the true value
         PLA
         STA  TERNE
         PLA
@@ -2958,1257 +2343,270 @@ GEXPR:  LDA  CONDF
         JSR  EXPECTP
         LDP1 #MJMP
         LDA  TERNE
-        JSR  EMITJ                   ; JMP Lend
+        JSR  EMITJ               ; JMP Lend
         LDA  TERNF
-        JSR  EMITLBL                 ; Lfalse:
+        JSR  EMITLBL             ; Lfalse:
         LDA  TERNE
         PHA
-        JSR  GEXPR                   ; c (false branch)
+        JSR  GEXPR               ; the false value
         PLA
-        STA  TERNE
-        LDA  TERNE
-        JSR  EMITLBL                 ; Lend:
-ge_condd: RTS
-
-GLOR:   JSR  GLAND
-ge_orl: LDA  CURK
-        LDB  #3
-        CMP
-        JNZ  ge_ord
-        LDA  CURV
-        LDB  #'|'
-        CMP
-        JNZ  ge_ord
-        LDA  CUR2
-        LDB  #'|'
-        CMP
-        JNZ  ge_ord
-        JSR  NEWLBL                  ; Ltrue
-        STA  LORT
-        JSR  NEWLBL                  ; Lend
-        STA  LORE
-        JSR  EM_TESTAX               ; left in __ax
-        LDP1 #MJNZ
-        LDA  LORT
-        JSR  EMITJ                   ; JNZ Ltrue  (left true -> whole true)
-        JSR  ADVANCE                 ; past '||'
-        LDA  LORT
-        PHA
-        LDA  LORE
-        PHA
-        JSR  GLAND                   ; right -> __ax  (labels saved on stack)
-        PLA
-        STA  LORE
-        PLA
-        STA  LORT
-        JSR  EM_TESTAX
-        LDP1 #MJNZ
-        LDA  LORT
-        JSR  EMITJ                   ; JNZ Ltrue
-        JSR  EM_AX0                  ; both false -> 0
-        LDP1 #MJMP
-        LDA  LORE
-        JSR  EMITJ                   ; JMP Lend
-        LDA  LORT
-        JSR  EMITLBL                 ; Ltrue:
-        JSR  EM_AX1                  ; -> 1
-        LDA  LORE
-        JSR  EMITLBL                 ; Lend:
-        JMP  ge_orl                  ; chained '||'
-ge_ord: RTS
-
-; logical-and  ->  rel ('&&' rel)*   (short-circuit, yields 0/1)
-GLAND:  JSR  GBOR
-ga_andl: LDA CURK
-        LDB  #3
-        CMP
-        JNZ  ga_andd
-        LDA  CURV
-        LDB  #'&'
-        CMP
-        JNZ  ga_andd
-        LDA  CUR2
-        LDB  #'&'
-        CMP
-        JNZ  ga_andd
-        JSR  NEWLBL                  ; Lfalse
-        STA  LANDF
-        JSR  NEWLBL                  ; Lend
-        STA  LANDE
-        JSR  EM_TESTAX
-        LDP1 #MJZ
-        LDA  LANDF
-        JSR  EMITJ                   ; JZ Lfalse  (left false -> whole false)
-        JSR  ADVANCE                 ; past '&&'
-        LDA  LANDF
-        PHA
-        LDA  LANDE
-        PHA
-        JSR  GBOR                    ; right -> __ax
-        PLA
-        STA  LANDE
-        PLA
-        STA  LANDF
-        JSR  EM_TESTAX
-        LDP1 #MJZ
-        LDA  LANDF
-        JSR  EMITJ                   ; JZ Lfalse
-        JSR  EM_AX1                  ; both true -> 1
-        LDP1 #MJMP
-        LDA  LANDE
-        JSR  EMITJ                   ; JMP Lend
-        LDA  LANDF
-        JSR  EMITLBL                 ; Lfalse:
-        JSR  EM_AX0                  ; -> 0
-        LDA  LANDE
-        JSR  EMITLBL                 ; Lend:
-        JMP  ga_andl                 ; chained '&&'
-ga_andd: RTS
-
-; term: factor (('*'|'/'|'%') factor)*   (8-bit, via __mul8/__divmod8 helpers)
-GTERM:  JSR  GUNARY
-gt_l:   LDA  CURK
-        LDB  #3
-        CMP
-        JNZ  gt_d
-        LDA  CURV
-        LDB  #'*'
-        CMP
-        JZ   gt_mul
-        LDA  CURV
-        LDB  #'/'
-        CMP
-        JZ   gt_div
-        LDA  CURV
-        LDB  #'%'
-        CMP
-        JZ   gt_mod
-        JMP  gt_d
-gt_mul: JSR  ADVANCE
-        LDA  #1
-        STA  USEMUL
-        JSR  GT_COMB
-        LDP1 #MMUL                   ; JSR __mul8 -> A = left * right
-        JSR  EMIT
-        JMP  gt_l
-gt_div: JSR  ADVANCE
-        LDA  #1
-        STA  USEDIV
-        JSR  GT_COMB
-        LDP1 #MDIV                   ; JSR __divmod8 ; LDA __d1  (quotient)
-        JSR  EMIT
-        JMP  gt_l
-gt_mod: JSR  ADVANCE
-        LDA  #1
-        STA  USEDIV
-        JSR  GT_COMB
-        LDP1 #MMOD                   ; JSR __divmod8 ; LDA __d0  (remainder)
-        JSR  EMIT
-        JMP  gt_l
-gt_d:   RTS
-; GT_COMB: emit  push-left ; <right factor> ; STA __t0 ; PLA  (left in A, right in __t0)
-GT_COMB: JSR EM_PUSH                  ; left
-        JSR  GUNARY                   ; right -> __ax
-        JSR  EM_POP                   ; left -> __t0
+        JMP  EMITLBL             ; Lend:
+ge_condd:
         RTS
 
-; additive: term (('+'|'-') term)*
-; bitwise: GBOR (|) -> GBXOR (^) -> GBAND (&) -> GREL   (C precedence)
-GBOR:   JSR  GBXOR
-gbo_l:  LDA  CURK
+; ISTWO - C=1 if the current token is the two-char punct A A (&& || << >>)
+ISTWO:  STA  TMPD
+        LDA  CURK
         LDB  #3
         CMP
-        JNZ  gbo_d
-        LDA  CUR2
-        JNZ  gbo_d
+        JNZ  it_no
         LDA  CURV
-        LDB  #'|'
+        LDB  TMPD
         CMP
-        JNZ  gbo_d
+        JNZ  it_no
+        LDA  CUR2
+        CMP
+        JNZ  it_no
+        SEC
+        RTS
+it_no:  CLC
+        RTS
+
+; land ( '||' land )*   short-circuit, 0/1
+GLOR:   JSR  GLAND
+ge_orl: LDA  #'|'
+        JSR  ISTWO
+        JNC  ge_ord
+        JSR  NEWLBL
+        STA  LORT
+        JSR  NEWLBL
+        STA  LORE
+        JSR  EM_TESTAX
+        LDP1 #MJNZ
+        LDA  LORT
+        JSR  EMITJ               ; JNZ Ltrue
+        JSR  ADVANCE
+        LDA  LORT
+        PHA
+        LDA  LORE
+        PHA
+        JSR  GLAND
+        PLA
+        STA  LORE
+        PLA
+        STA  LORT
+        JSR  EM_TESTAX
+        LDP1 #MJNZ
+        LDA  LORT
+        JSR  EMITJ               ; JNZ Ltrue
+        JSR  EM_AX0
+        LDP1 #MJMP
+        LDA  LORE
+        JSR  EMITJ               ; JMP Lend
+        LDA  LORT
+        JSR  EMITLBL             ; Ltrue:
+        JSR  EM_AX1
+        LDA  LORE
+        JSR  EMITLBL             ; Lend:
+        JMP  ge_orl
+ge_ord: RTS
+
+; bor ( '&&' bor )*
+GLAND:  JSR  GBOR
+ga_andl:LDA  #'&'
+        JSR  ISTWO
+        JNC  ga_andd
+        JSR  NEWLBL
+        STA  LANDF
+        JSR  NEWLBL
+        STA  LANDE
+        JSR  EM_TESTAX
+        LDP1 #MJZ
+        LDA  LANDF
+        JSR  EMITJ               ; JZ Lfalse
+        JSR  ADVANCE
+        LDA  LANDF
+        PHA
+        LDA  LANDE
+        PHA
+        JSR  GBOR
+        PLA
+        STA  LANDE
+        PLA
+        STA  LANDF
+        JSR  EM_TESTAX
+        LDP1 #MJZ
+        LDA  LANDF
+        JSR  EMITJ               ; JZ Lfalse
+        JSR  EM_AX1
+        LDP1 #MJMP
+        LDA  LANDE
+        JSR  EMITJ               ; JMP Lend
+        LDA  LANDF
+        JSR  EMITLBL             ; Lfalse:
+        JSR  EM_AX0
+        LDA  LANDE
+        JSR  EMITLBL             ; Lend:
+        JMP  ga_andl
+ga_andd:RTS
+
+; BINOP - the right operand by the routine at CUR, then the word op at P1:
+;   push left, right -> __ax, pop left -> __t0, emit. (P1 is kept in TERM.)
+; bxor ( '|' bxor )*
+GBOR:   JSR  GBXOR
+gbo_l:  LDA  #'|'
+        JSR  ISPUNCT
+        JNC  gbo_d
         JSR  ADVANCE
         JSR  EM_PUSH
         JSR  GBXOR
         JSR  EM_POP
-        LDA  #1
-        STA  USEOR
         LDP1 #MJOR
         JSR  EMIT
         JMP  gbo_l
 gbo_d:  RTS
-
+; band ( '^' band )*
 GBXOR:  JSR  GBAND
-gbx_l:  LDA  CURK
-        LDB  #3
-        CMP
-        JNZ  gbx_d
-        LDA  CUR2
-        JNZ  gbx_d
-        LDA  CURV
-        LDB  #'^'
-        CMP
-        JNZ  gbx_d
+gbx_l:  LDA  #'^'
+        JSR  ISPUNCT
+        JNC  gbx_d
         JSR  ADVANCE
         JSR  EM_PUSH
         JSR  GBAND
         JSR  EM_POP
-        LDA  #1
-        STA  USEXOR
         LDP1 #MJXOR
         JSR  EMIT
         JMP  gbx_l
 gbx_d:  RTS
-
+; rel ( '&' rel )*
 GBAND:  JSR  GREL
-gba_l:  LDA  CURK
-        LDB  #3
-        CMP
-        JNZ  gba_d
-        LDA  CUR2                    ; single '&' (binary AND), not '&&'
-        JNZ  gba_d
-        LDA  CURV
-        LDB  #'&'
-        CMP
-        JNZ  gba_d
+gba_l:  LDA  #'&'
+        JSR  ISPUNCT
+        JNC  gba_d
         JSR  ADVANCE
         JSR  EM_PUSH
         JSR  GREL
         JSR  EM_POP
-        LDA  #1
-        STA  USEAND
         LDP1 #MJAND
         JSR  EMIT
         JMP  gba_l
 gba_d:  RTS
 
-; shift: GSHIFT (<< >>) between relational and additive
-GSHIFT: JSR  GADD
-gsh_l:  LDA  CURK
-        LDB  #3
-        CMP
-        JNZ  gsh_d
-        LDA  CURV
-        LDB  #'<'
-        CMP
-        JZ   gsh_ml
-        LDA  CURV
-        LDB  #'>'
-        CMP
-        JZ   gsh_mr
-        JMP  gsh_d
-gsh_ml: LDA CUR2
-        LDB  #'<'
-        CMP
-        JNZ  gsh_d
-        JSR  ADVANCE
-        JSR  EM_PUSH
-        JSR  GADD
-        JSR  EM_POP
-        LDA  #1
-        STA  USESHL
-        LDP1 #MJSHL
-        JSR  EMIT
-        JMP  gsh_l
-gsh_mr: LDA CUR2
-        LDB  #'>'
-        CMP
-        JNZ  gsh_d
-        JSR  ADVANCE
-        JSR  EM_PUSH
-        JSR  GADD
-        JSR  EM_POP
-        LDA  #1
-        STA  USESHR
-        LDP1 #MJSHR
-        JSR  EMIT
-        JMP  gsh_l
-gsh_d:  RTS
-
-GADD:   JSR  GTERM
-ge_l:   LDA  CURK
-        LDB  #3
-        CMP
-        JNZ  ge_d
-        LDA  CURV
-        LDB  #'+'
-        CMP
-        JZ   ge_add
-        LDA  CURV
-        LDB  #'-'
-        CMP
-        JZ   ge_sub
-        JMP  ge_d
-ge_add: JSR  ADVANCE
-        JSR  EM_PUSH                  ; left
-        JSR  GTERM                    ; right -> __ax
-        JSR  EM_POP                   ; left -> __t0
-        LDP1 #MADD                    ; JSR __add  (__ax = __t0 + __ax)
-        JSR  EMIT
-        JMP  ge_l
-ge_sub: JSR  ADVANCE
-        JSR  EM_PUSH                  ; left
-        JSR  GTERM                    ; right -> __ax
-        JSR  EM_POP                   ; left -> __t0
-        LDP1 #MSUB                    ; JSR __sub  (__ax = __t0 - __ax)
-        JSR  EMIT
-        JMP  ge_l
-ge_d:   RTS
-
-; unary: ('-' | '!') unary | factor
-GUNARY: LDA  CURK
-        LDB  #3
-        CMP
-        JNZ  gu_fact
-        LDA  CUR2                    ; prefix ++ / -- (CUR2 == CURV)
-        LDB  #'+'
-        CMP
-        JNZ  gu_np1
-        LDA  CURV
-        LDB  #'+'
-        CMP
-        JZ   gu_pinc
-gu_np1: LDA  CUR2
-        LDB  #'-'
-        CMP
-        JNZ  gu_np2
-        LDA  CURV
-        LDB  #'-'
-        CMP
-        JZ   gu_pdec
-gu_np2: LDA  CUR2                    ; other two-char op -> factor
-        JNZ  gu_fact
-        LDA  CURV
-        LDB  #'-'
-        CMP
-        JZ   gu_neg
-        LDA  CURV
-        LDB  #'!'
-        CMP
-        JZ   gu_not
-        LDA  CURV
-        LDB  #'&'
-        CMP
-        JZ   gu_addr
-        LDA  CURV
-        LDB  #'*'
-        CMP
-        JZ   gu_deref
-gu_fact: JMP  GFACT
-gu_pinc: JSR ADVANCE
-        JSR  SYMFIND
-        LDA  SYMOK
-        JZ   gu_fact
-        JSR  EM_INCVAR
-        JSR  EM_LDVAR
-        JSR  ADVANCE
-        RTS
-gu_pdec: JSR ADVANCE
-        JSR  SYMFIND
-        LDA  SYMOK
-        JZ   gu_fact
-        JSR  EM_DECVAR
-        JSR  EM_LDVAR
-        JSR  ADVANCE
-        RTS
-gu_addr: LDA #1
-        STA  SAWADDRG                 ; an argument took an address (pass-by-ref)
-        JSR  ADVANCE                 ; past '&'
-        JSR  SYMFIND                  ; the NAME (TID) -> SYMIDX (slot)
-        LDA  SYMOK
-        JZ   gu_ad_e
-        MOVW IDVARIDX,SYMIDX                ; <- tierA: word move (next: LDA)
-        LDA  SYMRCH
-        STA  IDVARCH
-        LDA  SYMRAR
-        STA  IDVARAR
-        JSR  ADVANCE                  ; past NAME
-        LDA  CURK                     ; &NAME[i] ?
-        LDB  #3
-        CMP
-        JNZ  gu_ad_pl
-        LDA  CURV
-        LDB  #'['
-        CMP
-        JZ   gu_ad_ix
-gu_ad_pl:MOVW SYMIDX,IDVARIDX                ; <- tierA: word move (next: JSR EM_ADDROF)
-        JSR  EM_ADDROF
-        RTS
-gu_ad_ix:MOVW SYMIDX,IDVARIDX                ; <- tierA: word move (next: LDA)
-        LDA  IDVARCH
-        STA  ELCHAR
-        LDA  IDVARAR
-        STA  ELARR
-        JSR  ELEMADDR
-        RTS
-gu_ad_e: RTS
-gu_deref: JSR ADVANCE                 ; past '*'
-        JSR  GUNARY                   ; the address expression -> __ax
-        LDA  EXPRCHAR                 ; char* -> byte load, else word
-        JNZ  gud_b
-        JSR  EM_LOADW
-        RTS
-gud_b:  JSR  EM_LOADB
-        RTS
-gu_neg: JSR  ADVANCE
-        JSR  GUNARY
-        LDA  #1
-        STA  USENEG
-        LDP1 #MNEG                   ; JSR __neg  (__ax = -__ax)
-        JSR  EMIT
-        RTS
-gu_not: JSR  ADVANCE
-        JSR  GUNARY
-        LDA  #1
-        STA  USENOT
-        LDP1 #MLNOT                  ; JSR __lnot (__ax = !__ax -> 0/1)
-        JSR  EMIT
-        RTS
-
-; factor: NUMBER | IDENT | '(' expr ')'
-GFACT:  LDA  CURK
-        LDB  #1
-        CMP
-        JZ   gf_num
-        LDB  #2
-        CMP
-        JZ   gf_id
-        LDB  #4
-        CMP
-        JZ   gf_str
-        LDB  #3
-        CMP
-        JNZ  gf_err
-        LDA  CURV
-        LDB  #'('
-        CMP
-        JNZ  gf_err
-        JSR  ADVANCE
-        JSR  GEXPR
-        LDA  #')'
-        JSR  EXPECTP
-        RTS
-gf_num: JSR  EM_LDIMM                ; __ax = the 16-bit literal
-        LDA  #0
-        STA  EXPRCHAR
-        JSR  ADVANCE
-        RTS
-; a string literal: emit its bytes inline (jumped over), __ax = its address.
-; Padded with an extra 0 so a WORD load at the terminating NUL reads 0.
-gf_str: LDA #1                       ; a string literal is a char*
-        STA  EXPRCHAR
-        JSR  NEWLBL
-        STA  STRDL                    ; data label
-        JSR  NEWLBL
-        STA  STRSL                    ; skip label
-        LDP1 #MJMP                    ; JMP L<skip>
-        LDA  STRSL
-        JSR  EMITJ
-        LDA  STRDL                    ; L<data>:
-        JSR  EMITLBL
-        LDP1 #MDQASC                  ; "        .asciiz \""
-        JSR  EMIT
-        LDP1 #STRBUF                  ; the text
-        JSR  EMIT
-        LDP1 #MDQCL                   ; closing quote + LF
-        JSR  EMIT
-        LDP1 #MBYTE0                  ; extra pad 0
-        JSR  EMIT
-        LDA  STRSL                    ; L<skip>:
-        JSR  EMITLBL
-        LDP1 #MLDALL                  ; __ax = &L<data>
-        JSR  EMIT
-        LDA  STRDL
-        JSR  EMITNUM
-        LDP1 #MNL
-        JSR  EMIT
-        LDP1 #MSTAX
-        JSR  EMIT
-        LDP1 #MLDAHL
-        JSR  EMIT
-        LDA  STRDL
-        JSR  EMITNUM
-        LDP1 #MNL
-        JSR  EMIT
-        LDP1 #MSTAXH
-        JSR  EMIT
-        JSR  ADVANCE
-        RTS
-gf_id:  JSR  CPIDNAME                ; save the id; it may be a call or a variable
-        JSR  SYMFIND                 ; variable candidate (from TID)
-        LDA  SYMOK
-        STA  IDVAROK
-        MOVW IDVARIDX,SYMIDX                ; <- tierA: word move (next: LDA)
-        LDA  SYMRCH
-        STA  IDVARCH
-        LDA  SYMRAR
-        STA  IDVARAR
-        JSR  ADVANCE                 ; past the id
+; rel: sh [relop sh] -> 0/1, or in condition mode one branch to CONDLBL
+GREL:   JSR  GSHIFT
         LDA  CURK
         LDB  #3
         CMP
-        JNZ  gfi_var
-        LDA  CURV
-        LDB  #'('
-        CMP
-        JZ   gfi_call
-        LDA  CURV
-        LDB  #'['
-        CMP
-        JZ   gfi_index
-        LDA  CUR2                    ; NAME.m ?
-        JNZ  gfi_ck_arrow
-        LDA  CURV
-        LDB  #'.'
-        CMP
-        JZ   gfi_dot
-        JMP  gfi_ckpp
-gfi_ck_arrow: LDA CURV               ; NAME->m ?  (CURV='-', CUR2='>')
-        LDB  #'-'
-        CMP
-        JNZ  gfi_ckpp
-        LDA  CUR2
-        LDB  #'>'
-        CMP
-        JZ   gfi_arrow
-gfi_ckpp: LDA CUR2                   ; NAME++ / NAME-- (postfix, simple var)
-        JZ   gfi_var
-        LDA  CURV
-        LDB  #'+'
-        CMP
-        JZ   gfi_pinc
-        LDA  CURV
-        LDB  #'-'
-        CMP
-        JZ   gfi_pdec
-gfi_var: LDA IDVAROK
-        JZ   gf_err
-        MOVW SYMIDX,IDVARIDX                ; <- tierA: word move (next: LDA)
-        LDA  IDVARCH
-        STA  EXPRCHAR
-        LDA  IDVARAR                 ; a bare array name decays to &name[0]
-        JNZ  gfv_arr
-        JSR  EM_LDVAR
-        RTS
-gfv_arr: LDA #1
-        STA  SAWADDRG                 ; array decay passes an address (pass-by-ref)
-        JSR  EM_ADDROF
-        RTS
-gfi_dot:MOVW SYMIDX,IDVARIDX                ; <- tierA: word move (next: JSR EM_ADDROF)
-        JSR  EM_ADDROF
-        JMP  gfi_memld
-gfi_arrow:MOVW SYMIDX,IDVARIDX                ; <- tierA: word move (next: JSR EM_LDVAR)
-        JSR  EM_LDVAR
-gfi_memld: JSR ADVANCE               ; past '.' or '->'
-        JSR  STMFIND
-        LDA  STMEMOFF
-        JSR  EM_ADDOFF
-        JSR  ADVANCE                 ; past member name
-        LDA  STMEMCH
-        JNZ  gfi_memb
-        JSR  EM_LOADW
-        RTS
-gfi_memb: JSR EM_LOADB
-        RTS
-gfi_pinc: LDA IDVAROK               ; NAME++ : value = old NAME, then NAME += 1
-        JZ   gf_err
-        MOVW SYMIDX,IDVARIDX                ; <- tierA: word move (next: JSR EM_LDVAR)
-        JSR  EM_LDVAR                 ; __ax = old NAME
-        JSR  EM_INCVAR                ; NAME += 1 (in place, __ax kept)
-        JSR  ADVANCE
-        RTS
-gfi_pdec: LDA IDVAROK
-        JZ   gf_err
-        MOVW SYMIDX,IDVARIDX                ; <- tierA: word move (next: JSR EM_LDVAR)
-        JSR  EM_LDVAR
-        JSR  EM_DECVAR
-        JSR  ADVANCE
-        RTS
-gfi_index:MOVW SYMIDX,IDVARIDX                ; <- tierA: word move (next: LDA)
-        LDA  IDVARCH
-        STA  ELCHAR
-        LDA  IDVARAR
-        STA  ELARR
-        JSR  ELEMADDR                 ; __ax = element address
-        LDA  ELCHAR
-        JNZ  gfx_b
-        JSR  EM_LOADW
-        RTS
-gfx_b:  JSR  EM_LOADB
-        RTS
-; puts(s): print the string + a newline
-gc_puts: JSR ADVANCE
-        JSR  GEXPR
-        LDA  #')'
-        JSR  EXPECTP
-        LDP1 #MLPWAX                 ; P1 = word @ __ax (was LDA/TAP1L/LDA/TAP1H)
-        JSR  EMIT
-        LDP1 #MPUTS
-        JSR  EMIT
-        LDP1 #MPUTNL
-        JSR  EMIT
-        RTS
-
-; getchar(): next stdin byte -> __ax, or 0xFFFF at EOF
-gc_getc: JSR ADVANCE
-        LDA  #')'
-        JSR  EXPECTP
-        LDP1 #MGETC
-        JSR  EMIT
-        JSR  NEWLBL
-        STA  JLBL
-        LDP1 #MJNC
-        LDA  JLBL
-        JSR  EMITJ
-        LDP1 #MGETCEOF
-        JSR  EMIT
-        LDA  JLBL
-        JSR  EMITLBL
-        RTS
-
-; peek(addr): byte at addr -> __ax
-gc_peek: JSR ADVANCE
-        JSR  GEXPR
-        LDA  #')'
-        JSR  EXPECTP
-        JSR  EM_LOADB
-        RTS
-
-; poke(addr, val): store val's low byte at addr
-gc_poke: JSR ADVANCE
-        JSR  GEXPR
-        JSR  EM_PUSH
-        LDA  #','
-        JSR  EXPECTP
-        JSR  GEXPR
-        JSR  EM_POP
-        JSR  EM_STOREB
-        LDA  #')'
-        JSR  EXPECTP
-        RTS
-
-; argstr(): the program's argument tail (P2) -> __ax  (a char*)
-gc_argstr: JSR ADVANCE
-        LDA  #')'
-        JSR  EXPECTP
-        LDP1 #MARGSTR
-        JSR  EMIT
-        RTS
-
-; gc_bios: bios(ADDR, p1, a) -> A | carry<<8 in __ax.  ADDR is a constant.
-gc_bios: JSR ADVANCE                 ; past '('
-        MOVW BIOSAD,CURV                ; <- tierA: word move (next: JSR ADVANCE)
-        JSR  ADVANCE                 ; past the address number
-        LDA  #','
-        JSR  EXPECTP
-        JSR  GEXPR                   ; arg1 (P1 operand) -> __ax
-        JSR  EM_PUSH
-        LDA  #','
-        JSR  EXPECTP
-        JSR  GEXPR                   ; arg2 (A operand) -> __ax
-        LDA  #')'
-        JSR  EXPECTP
-        JSR  EM_POP                  ; __t0 = the P1 operand
-        LDP1 #MLPWT0                 ; P1 = word @ __t0 (was LDA/TAP1L/LDA/TAP1H)
-        JSR  EMIT
-        LDP1 #MLDAX
-        JSR  EMIT
-        LDP1 #MJSRHEX                ; "        JSR $"
-        JSR  EMIT
-        LDA  BIOSAD+1
-        JSR  EMHEX
-        LDA  BIOSAD
-        JSR  EMHEX
-        LDP1 #MNL
-        JSR  EMIT
-        LDP1 #MSTAX                  ; returned A -> __ax low
-        JSR  EMIT
-        JSR  NEWLBL
-        STA  JLBL
-        LDP1 #MLDA0                  ; carry -> __ax high  (LDA keeps C)
-        JSR  EMIT
-        LDP1 #MJNC
-        LDA  JLBL
-        JSR  EMITJ
-        LDP1 #MLDA1
-        JSR  EMIT
-        LDA  JLBL
-        JSR  EMITLBL
-        LDP1 #MSTAXH
-        JSR  EMIT
-        RTS
-
-; IDNAMEEQ: P1 = a NUL-terminated string -> TMPB = 1 if it equals IDNAME.
-IDNAMEEQ:LDP2 #IDNAME                ; <- tierA: pointer constant (next: LDA)
-ine_l:  LDA  (P1)
-        STA  TMPC
-        LDA  (P2)
-        LDB  TMPC
-        CMP
-        JNZ  ine_no
-        LDA  (P1)
-        JZ   ine_yes
-        INP1
-        INP2
-        JMP  ine_l
-ine_no: LDA #0
-        STA  TMPB
-        RTS
-ine_yes: LDA #1
-        STA  TMPB
-        RTS
-
-; EMNIB / EMHEX: emit a nibble / byte as hex digit(s)
-EMNIB:  LDB #10
-        CMP
-        JC   en_af
-        LDB  #'0'
-        ADD
-        JSR  SYS_PUTC
-        RTS
-en_af:  LDB #10
-        SUB
-        LDB  #'A'
-        ADD
-        JSR  SYS_PUTC
-        RTS
-EMHEX:  STA TMPC
-        SHR
-        SHR
-        SHR
-        SHR
-        JSR  EMNIB
-        LDA  TMPC
-        LDB  #$0F
-        AND
-        JSR  EMNIB
-        RTS
-
-M_BIOS:  .asciiz "bios"
-M_PUTS:  .asciiz "puts"
-M_GETC:  .asciiz "getchar"
-M_PEEK:  .asciiz "peek"
-M_POKE:  .asciiz "poke"
-M_ARGSTR: .asciiz "argstr"
-MPUTS:
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "JSR $200F"
-        .byte LF,0
-MPUTNL:
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "LDA #10"
-        .byte LF
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "JSR $2009"
-        .byte LF,0
-MGETC:
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "JSR $200C"
-        .byte LF
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "STA __ax"
-        .byte LF
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "LDA #0"
-        .byte LF
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "STA __ax+1"
-        .byte LF,0
-MGETCEOF:
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "LDA #255"
-        .byte LF
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "STA __ax"
-        .byte LF
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "STA __ax+1"
-        .byte LF,0
-MARGSTR:
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "TPA2L"
-        .byte LF
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "STA __ax"
-        .byte LF
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "TPA2H"
-        .byte LF
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "STA __ax+1"
-        .byte LF,0
-MJSRHEX: .byte $20,$20,$20,$20,$20,$20,$20,$20
-         .asciiz "JSR $"
-
-gfi_call: LDP1 #M_BIOS             ; builtins: bios / puts / getchar / peek /
-        JSR  IDNAMEEQ                ;   poke / argstr
-        LDA  TMPB
-        JNZ  gc_bios
-        LDP1 #M_PUTS
-        JSR  IDNAMEEQ
-        LDA  TMPB
-        JNZ  gc_puts
-        LDP1 #M_GETC
-        JSR  IDNAMEEQ
-        LDA  TMPB
-        JNZ  gc_getc
-        LDP1 #M_PEEK
-        JSR  IDNAMEEQ
-        LDA  TMPB
-        JNZ  gc_peek
-        LDP1 #M_POKE
-        JSR  IDNAMEEQ
-        LDA  TMPB
-        JNZ  gc_poke
-        LDP1 #M_ARGSTR
-        JSR  IDNAMEEQ
-        LDA  TMPB
-        JNZ  gc_argstr
-        JSR  FFIND_ID              ; FI = callee index (name for the JSR)
-        LDA  FI                      ; save across arg parsing (FI/IDNAME get reused)
+        JNZ  grx
+        JSR  RELDET
+        LDA  RELF
+        JZ   grx
+        JSR  EM_PUSH             ; the left operand
+        LDA  RELOP
         PHA
-        LDA  #0
-        STA  SAWADDRG                ; did any argument take an address? (pass-by-ref)
-        JSR  ADVANCE                 ; past '('
-        JSR  EM_SAVESLOTS            ; caller-save the live slots (re-entrancy) FIRST:
-        LDA  #0                      ;   the args must lie directly under the return
-        STA  ARGI                    ;   address for the callee's LDW (P3+d)
-        LDA  CURK
-        LDB  #3
-        CMP
-        JNZ  ga_loop
-        LDA  CURV
-        LDB  #')'
-        CMP
-        JZ   ga_done
-ga_loop: LDA ARGI                    ; save ARGI across GEXPR (nested calls reuse it)
-        PHA
-        JSR  GEXPR                   ; arg value -> __ax
+        JSR  ADVANCE
+        JSR  GSHIFT              ; the right -> __ax
         PLA
-        STA  ARGI
-        JSR  EM_PUSHARG              ; push __ax onto the runtime arg stack
-        LDA  ARGI
-        INC
-        STA  ARGI
-        LDA  CURK
-        LDB  #3
+        STA  RELOP
+        JSR  EM_POP              ; left -> __t0
+        LDA  RELOP
+        LDB  #R_EQ
         CMP
-        JNZ  ga_done
-        LDA  CURV
-        LDB  #','
+        JC   grl_eq              ; == != : JSR __cmp (a 16-bit Z)
+        LDB  #R_LE
         CMP
-        JNZ  ga_done
-        JSR  ADVANCE                 ; past ','
-        JMP  ga_loop
-ga_done: LDA #')'
-        JSR  EXPECTP
-        LDP1 #MJSRF                  ; JSR _f_NAME   (result -> __ax)
-        JSR  EMIT
-        PLA                          ; restore callee index
-        STA  FI
-        JSR  EMITFNAME               ; emit the callee's name from FPOOL[FI]
-        LDP1 #MNL
-        JSR  EMIT
-        LDA  ARGI                    ; drop the pushed arguments: ADDP3 #2n
-        JZ   gc_noargs
-        SHL
-        JSR  EM_ADDP3
-gc_noargs: LDA SAWADDRG              ; a &local was passed: the callee wrote the REAL
-        JZ   gc_rest                 ;   slot, so discard the saved copies (ADDP3)
-        LDA  NLSLOT                  ;   instead of restoring them over it
-        JZ   gc_norest
-        SHL
-        JSR  EM_ADDP3
-        JMP  gc_norest
-gc_rest: JSR EM_RESTSLOTS            ; restore caller's slots (result stays in __ax)
-gc_norest: RTS
-gf_err: RTS
-
-; CHKSELFREC: SELFREC = 1 if IDNAME (callee) equals CURFN (current function).
-CHKSELFREC:LDP1 #IDNAME                ; <- tierA: pointer constant (next: LDA)
-        LDP2 #CURFN                ; <- tierA: pointer constant (next: LDA)
+        JZ   grl_sw
+        LDB  #R_GT
+        CMP
+        JZ   grl_sw
+        LDP1 #MCMPWTA            ; < >= : CMPW __t0,__ax  (C = left >= right)
+        JMP  grl_em
+grl_sw: LDP1 #MCMPWAT            ; <= > : CMPW __ax,__t0  (C = right >= left)
+        JMP  grl_em
+grl_eq: LDP1 #MCMP
+grl_em: JSR  EMIT
+        LDA  CONDCUR             ; a condition, and this relational ends it?
+        JZ   grl_val
+        LDA  #')'
+        JSR  ISPUNCT
+        JC   grl_cond
+        LDA  #$3B
+        JSR  ISPUNCT
+        JNC  grl_val
+grl_cond:
+        JSR  EMITCF              ; one branch to CONDLBL when FALSE
         LDA  #1
-        STA  SELFREC
-csr_l:  LDA  (P1)
-        STA  TMPC
-        LDA  (P2)
-        LDB  TMPC
+        STA  CONDDONE
+        RTS
+grl_val:JMP  EMITCMP             ; the 0/1 value
+grx:    RTS
+
+; EMITCF - after GREL's compare, jump to CONDLBL when the relation is FALSE:
+;   <  C=1 (left>=right) -> JC      >= false when C=0 -> JNC
+;   >  (swapped) true when C=0 -> JC     <= true when C=1 -> JNC
+;   == false when Z=0 -> JNZ       != -> JZ
+EMITCF: LDA  RELOP
+        JZ   ecf_jc
+        LDB  #R_GT
         CMP
-        JNZ  csr_no
-        LDA  (P1)
-        JZ   csr_d
-        INP1
-        INP2
-        JMP  csr_l
-csr_no: LDA  #0
-        STA  SELFREC
-csr_d:  RTS
-
-; EMITFNAME: emit the FI-th NUL-terminated name from the packed FPOOL.
-EMITFNAME:LDP1 #FPOOL                ; <- tierA: pointer constant (next: LDA)
-        LDA  FI
-        STA  VITER2                  ; names to skip
-efn_sk: LDA  VITER2
-        JZ   efn_go
-efn_s1: LDA  (P1)                    ; walk past one name + its NUL
-        INP1
-        JNZ  efn_s1
-        LDA  VITER2
-        DEC
-        STA  VITER2
-        JMP  efn_sk
-efn_go: JSR  EMIT                    ; P1 -> the FI-th name; emit it
-        RTS
-
-; --- caller-saved slots: make static local storage re-entrant (recursion) ---
-; EM_SAVESLOTS: emit runtime pushes of the current function's live slots
-;   V<SLOTBASE .. SLOTBASE+SYMCNT-1>, low then high, in ascending order.
-EM_SAVESLOTS: LDA #0
-        STA  VITER3
-ess_l:  LDA  VITER3
-        LDB  NLSLOT
+        JZ   ecf_jc
+        LDB  #R_EQ
         CMP
-        JC   ess_d                   ; VITER3 >= SYMCNT -> done
-        LDA  VITER3
-        JSR  EM_PUSHSLOT
-        LDA  VITER3
-        INC
-        STA  VITER3
-        JMP  ess_l
-ess_d:  RTS
-
-; EM_RESTSLOTS: emit runtime pops in reverse (slot SYMCNT-1 .. 0).
-EM_RESTSLOTS: LDA NLSLOT
-        JZ   ers_d
-        STA  VITER3
-ers_l:  LDA  VITER3
-        DEC
-        STA  VITER3
-        LDA  VITER3
-        JSR  EM_POPSLOT
-        LDA  VITER3
-        JZ   ers_d                   ; just handled slot 0
-        JMP  ers_l
-ers_d:  RTS
-
-; EM_PUSHSLOT (A = slot number): emit  PHW __V+<2n>  (one wide push, 2 bytes of
-; stack — same footprint as the LDA/PHA/LDA/PHA pair it replaces, so the LIFO
-; nesting with EM_POPSLOT is unchanged).
-EM_PUSHSLOT: STA VITER2
-        LDP1 #MPHWV
-        JSR  EMIT
-        LDA  VITER2
-        JSR  EMSB
-        LDP1 #MNL
-        JSR  EMIT
-        RTS
-
-; EM_POPSLOT (A = slot number): emit  PLW __V+<2n>  (mirror of EM_PUSHSLOT)
-EM_POPSLOT: STA VITER2
-        LDP1 #MPLWV
-        JSR  EMIT
-        LDA  VITER2
-        JSR  EMSB
-        LDP1 #MNL
-        JSR  EMIT
-        RTS
-
-; =============================================================================
-; Symbol table - each declared variable maps to an index (emitted as V<index>).
-; Names are packed NUL-terminated in SYMPOOL; SYMCNT counts them.
-; =============================================================================
-; SYMFIND: search SYMPOOL for the current id (TID). SYMOK=1 & SYMIDX=index if
-;          found, else SYMOK=0.
-SYMFIND: LDA #0
-        STA  SYMIDX
-        STA  SYMOK
-        LDP1 #SYMPOOL                ; <- tierA: pointer constant (next: LDA)
-sf_e:   LDA  SYMIDX
-        LDB  SYMCNT
+        JZ   ecf_jnz
+        LDB  #R_NE
         CMP
-        JC   sf_no                   ; SYMIDX >= SYMCNT -> not found
-        LDP2 #TID                ; <- tierA: pointer constant (next: LDA)
-sf_c:   LDA  (P1)                    ; pool char vs TID char
-        STA  TMPC
-        LDA  (P2)
-        LDB  TMPC
+        JZ   ecf_jz
+        LDP1 #MJNC
+        JMP  ecf_e
+ecf_jc: LDP1 #MJC
+        JMP  ecf_e
+ecf_jnz:LDP1 #MJNZ
+        JMP  ecf_e
+ecf_jz: LDP1 #MJZ
+ecf_e:  LDA  CONDLBL
+        JMP  EMITJ
+
+; EMITCMP - the 0/1 value of the relation: one conditional jump to la (true),
+;   the false path 0, la: 1, lb:
+EMITCMP:JSR  NEWLBL
+        STA  LBLA
+        JSR  NEWLBL
+        STA  LBLB
+        LDA  RELOP
+        JZ   ec_jnc              ; <  : C=0
+        LDB  #R_GE
         CMP
-        JNZ  sf_nx
-        LDA  (P1)
-        JZ   sf_yes                  ; equal and both at NUL -> match
-        INP1
-        INP2
-        JMP  sf_c
-sf_nx:  LDA  (P1)                    ; skip the rest of this pool name + its NUL
-        JZ   sf_np
-        INP1
-        JMP  sf_nx
-sf_np:  INP1
-        LDA  SYMIDX
-        INC
-        STA  SYMIDX
-        JMP  sf_e
-sf_yes: LDA  #1
-        STA  SYMOK
-        LDA  SYMIDX                   ; SYMIDX walked as the name index; map -> slot
-        JSR  GSYMSLOT
-        STA  SYMIDX                    ; a local's slot is relative (<255) -> hi=0
-        LDA  #0
-        STA  SYMIDX+1
-        JSR  GSYMCHAR                 ; resolve the char/array flags for the caller
-        STA  SYMRCH
-        LDA  SYMIDX
-        JSR  GSYMARR
-        STA  SYMRAR
-        RTS
-sf_no:  JMP  GSYMFIND                 ; not a local -> try the globals
-
-; SYMADD: append the current id (TID) to SYMPOOL; SYMIDX = its (new) index.
-SYMADD: LDP1 #SYMPOOL                ; <- tierA: pointer constant (next: LDA)
-        LDA  #0
-        STA  TMPB                    ; names skipped
-sa_e:   LDA  TMPB
-        LDB  SYMCNT
+        JZ   ec_jc               ; >= : C=1
+        LDB  #R_GT
         CMP
-        JC   sa_ap                   ; skipped SYMCNT names -> at the append point
-sa_sk:  LDA  (P1)
-        JZ   sa_np
-        INP1
-        JMP  sa_sk
-sa_np:  INP1
-        LDA  TMPB
-        INC
-        STA  TMPB
-        JMP  sa_e
-sa_ap:  LDP2 #TID                ; <- tierA: pointer constant (next: LDA)
-sa_cp:  LDA  (P2)
-        STA  (P1)
-        JZ   sa_dn
-        INP1
-        INP2
-        JMP  sa_cp
-sa_dn:  LDA  #<SYMSLOT                ; SYMSLOT[SYMCNT] = NLSLOT (name -> slot)
-        LDB  SYMCNT
-        ADD
-        TAP1L
-        LDA  #>SYMSLOT
-        JNC  sad1
-        INC
-sad1:   TAP1H
-        LDA  NLSLOT
-        STA  (P1)
-        LDA  #<SYMARR                 ; SYMARR[NLSLOT] = 0 (scalar by default)
-        LDB  NLSLOT
-        ADD
-        TAP1L
-        LDA  #>SYMARR
-        JNC  sad2
-        INC
-sad2:   TAP1H
-        LDA  #0
-        STA  (P1)
-        LDA  NLSLOT                   ; SYMIDX = the slot (local: relative, hi=0);
-        STA  SYMIDX                    ;   bump slot + name counts
-        LDA  #0
-        STA  SYMIDX+1
-        LDA  NLSLOT
-        INC
-        STA  NLSLOT
-        LDA  SYMCNT
-        INC
-        STA  SYMCNT
-        RTS
-
-; GSYMFIND: search the GLOBAL table for TID. Sets SYMOK; on a hit, SYMIDX =
-;   (global slot - SLOTBASE) so V<SLOTBASE+SYMIDX> lands on the fixed slot, and
-;   SYMRCH/SYMRAR carry its char/array flags.
-GSYMFIND:LDP1 #GSYMPOOL                ; <- tierA: pointer constant (next: LDA)
-        LDA  #0
-        STA  TMPB
-gsf_e:  LDA  TMPB
-        LDB  GSYMCNT
+        JZ   ec_jnc              ; >  : (swapped) C=0
+        LDB  #R_LE
         CMP
-        JC   gsf_no
-        LDP2 #TID                ; <- tierA: pointer constant (next: LDA)
-gsf_c:  LDA  (P1)
-        STA  TMPC
-        LDA  (P2)
-        LDB  TMPC
+        JZ   ec_jc               ; <= : C=1
+        LDB  #R_EQ
         CMP
-        JNZ  gsf_nx
-        LDA  (P1)
-        JZ   gsf_yes
-        INP1
-        INP2
-        JMP  gsf_c
-gsf_nx: LDA  (P1)
-        JZ   gsf_np
-        INP1
-        JMP  gsf_nx
-gsf_np: INP1
-        LDA  TMPB
-        INC
-        STA  TMPB
-        JMP  gsf_e
-gsf_yes: LDA #1
-        STA  SYMOK
-        LDA  TMPB                     ; read GVSLOT[TMPB] (16-bit) -> VN
-        SHL
-        LDB  #<GVSLOT
-        ADD
-        TAP1L
-        LDA  #>GVSLOT
-        JNC  gsy1
-        INC
-gsy1:   TAP1H
-        LDA  (P1)
-        STA  VN
-        INP1
-        LDA  (P1)
-        STA  VN+1
-        LDA  VN                       ; SYMIDX = global slot - SLOTBASE (16-bit,
-        LDB  SLOTBASE                 ;   signed: emit re-adds SLOTBASE -> abs slot)
-        SUB
-        STA  SYMIDX
-        LDA  VN+1
-        JC   gsy_nb
-        LDB  #1
-        SUB
-gsy_nb: LDB  SLOTBASE+1
-        SUB
-        STA  SYMIDX+1
-        LDA  #<GSYMCH
-        LDB  TMPB
-        ADD
-        TAP1L
-        LDA  #>GSYMCH
-        JNC  gsy2
-        INC
-gsy2:   TAP1H
-        LDA  (P1)
-        STA  SYMRCH
-        LDA  #<GSYMAR
-        LDB  TMPB
-        ADD
-        TAP1L
-        LDA  #>GSYMAR
-        JNC  gsy3
-        INC
-gsy3:   TAP1H
-        LDA  (P1)
-        STA  SYMRAR
-        RTS
-gsf_no: LDA #0
-        STA  SYMOK
-        RTS
+        JZ   ec_jz
+        LDP1 #MJNZ               ; !=
+        JMP  ec_e
+ec_jz:  LDP1 #MJZ
+        JMP  ec_e
+ec_jnc: LDP1 #MJNC
+        JMP  ec_e
+ec_jc:  LDP1 #MJC
+ec_e:   LDA  LBLA
+        JSR  EMITJ
+        JSR  EM_AX0
+        LDP1 #MJMP
+        LDA  LBLB
+        JSR  EMITJ
+        LDA  LBLA
+        JSR  EMITLBL
+        JSR  EM_AX1
+        LDA  LBLB
+        JMP  EMITLBL
 
-; GSYMADD: append CURFN to the global table at slot SLOTCNT (char = DCLCHAR).
-GSYMADD:LDP1 #GSYMPOOL                ; <- tierA: pointer constant (next: LDA)
-        LDA  #0
-        STA  TMPB
-gA_e:   LDA  TMPB
-        LDB  GSYMCNT
-        CMP
-        JC   gA_ap
-gA_sk:  LDA  (P1)
-        JZ   gA_np
-        INP1
-        JMP  gA_sk
-gA_np:  INP1
-        LDA  TMPB
-        INC
-        STA  TMPB
-        JMP  gA_e
-gA_ap:  LDP2 #CURFN                ; <- tierA: pointer constant (next: LDA)
-gA_cp:  LDA  (P2)
-        STA  (P1)
-        JZ   gA_dn
-        INP1
-        INP2
-        JMP  gA_cp
-gA_dn:  LDA GSYMCNT                  ; GVSLOT[GSYMCNT] = SLOTCNT (16-bit cell)
-        SHL
-        LDB  #<GVSLOT
-        ADD
-        TAP1L
-        LDA  #>GVSLOT
-        JNC  gAd1
-        INC
-gAd1:   TAP1H
-        LDA  SLOTCNT
-        STA  (P1)
-        INP1
-        LDA  SLOTCNT+1
-        STA  (P1)
-        LDA  #<GSYMCH
-        LDB  GSYMCNT
-        ADD
-        TAP1L
-        LDA  #>GSYMCH
-        JNC  gAd2
-        INC
-gAd2:   TAP1H
-        LDA  DCLCHAR
-        STA  (P1)
-        LDA  #<GSYMAR
-        LDB  GSYMCNT
-        ADD
-        TAP1L
-        LDA  #>GSYMAR
-        JNC  gAd3
-        INC
-gAd3:   TAP1H
-        LDA  #0
-        STA  (P1)
-        LDA  GSYMCNT
-        INC
-        STA  GSYMCNT
-        RTS
-
-; GSYMMARKARR: mark the most-recently-added global (GSYMCNT-1) as an array.
-GSYMMARKARR: LDA #<GSYMAR
-        LDB  GSYMCNT
-        ADD
-        TAP1L
-        LDA  #>GSYMAR
-        JNC  gma1
-        INC
-gma1:   TAP1H
-        DEP1
-        LDA  #1
-        STA  (P1)
-        RTS
-
-; GSYMSLOT (A = name index) -> A = that name's slot (SYMSLOT[A])
-GSYMSLOT: STA TMPC
-        LDA  #<SYMSLOT
-        LDB  TMPC
-        ADD
-        TAP1L
-        LDA  #>SYMSLOT
-        JNC  gss1
-        INC
-gss1:   TAP1H
-        LDA  (P1)
-        RTS
-
-; GSYMARR (A = slot) -> A = 1 if that slot is an array base, else 0
-GSYMARR: STA TMPC
-        LDA  #<SYMARR
-        LDB  TMPC
-        ADD
-        TAP1L
-        LDA  #>SYMARR
-        JNC  gsa1
-        INC
-gsa1:   TAP1H
-        LDA  (P1)
-        RTS
-
-; =============================================================================
-; Comparisons + labels (for relational operators and if/while)
-; =============================================================================
-; RELDET: is the current punct token a relational operator? RELF=1 and RELOP set
-;         (0 LT, 1 LE, 2 GT, 3 GE, 4 EQ, 5 NE), else RELF=0. Does not advance.
-RELDET: LDA #0
+; RELDET - is the current punct a relational? RELF, RELOP
+RELDET: LDA  #0
         STA  RELF
         LDA  CURV
         LDB  #'<'
@@ -4224,640 +2622,969 @@ RELDET: LDA #0
         CMP
         JZ   rd_x
         RTS
-rd_l:   LDA  CUR2                    ; '<' or '<='
-        LDB  #'='
+rd_l:   LDA  CUR2
+        JNZ  rd_l2
+        LDA  #R_LT
+        JMP  rd_ok
+rd_l2:  LDB  #'='
         CMP
-        JZ   rd_le
-        LDA  #0
-        STA  RELOP
+        JNZ  rd_no               ; '<<' is a shift
+        LDA  #R_LE
         JMP  rd_ok
-rd_le:  LDA  #1
-        STA  RELOP
+rd_g:   LDA  CUR2
+        JNZ  rd_g2
+        LDA  #R_GT
         JMP  rd_ok
-rd_g:   LDA  CUR2                    ; '>' or '>='
-        LDB  #'='
+rd_g2:  LDB  #'='
         CMP
-        JZ   rd_ge
-        LDA  #2
-        STA  RELOP
+        JNZ  rd_no
+        LDA  #R_GE
         JMP  rd_ok
-rd_ge:  LDA  #3
-        STA  RELOP
-        JMP  rd_ok
-rd_e:   LDA  CUR2                    ; only '==' is relational ('=' is assignment)
+rd_e:   LDA  CUR2
         LDB  #'='
         CMP
         JNZ  rd_no
-        LDA  #4
-        STA  RELOP
+        LDA  #R_EQ
         JMP  rd_ok
-rd_x:   LDA  CUR2                    ; '!='
+rd_x:   LDA  CUR2
         LDB  #'='
         CMP
         JNZ  rd_no
-        LDA  #5
-        STA  RELOP
-rd_ok:  LDA  #1
+        LDA  #R_NE
+rd_ok:  STA  RELOP
+        LDA  #1
         STA  RELF
 rd_no:  RTS
 
-; EMITCMP: after the compare GREL emitted (CMPW __t0,__ax for < >=, the swapped
-;          CMPW __ax,__t0 for > <=, JSR __cmp for == !=), emit code leaving 0/1
-;          in __ax per RELOP: one conditional branch each.  The conditional branch must come
-;          BEFORE any LDA — an LDA clobbers Z (though not C), which would destroy
-;          the comparison result.  Two fresh labels: la (branch target), lb (end).
-EMITCMP: JSR NEWLBL
-        STA  LBLA
-        JSR  NEWLBL
-        STA  LBLB
-        LDA  RELOP
-        LDB  #0
-        CMP
-        JZ   ec_lt
-        LDB  #1
-        CMP
-        JZ   ec_le
-        LDB  #2
-        CMP
-        JZ   ec_gt
+; sh: add ( ('<<'|'>>') add )*
+GSHIFT: JSR  GADD
+gsh_l:  LDA  #'<'
+        JSR  ISTWO
+        JC   gsh_ml
+        LDA  #'>'
+        JSR  ISTWO
+        JNC  gsh_d
+        LDA  #1
+        STA  USESHR
+        LDW  TERM,#MJSHR
+        JMP  gsh_go
+gsh_ml: LDA  #1
+        STA  USESHL
+        LDW  TERM,#MJSHL
+gsh_go: JSR  ADVANCE
+        JSR  EM_PUSH
+        PHW  TERM                ; (the operand may nest another operator)
+        JSR  GADD
+        PLW  TERM
+        JSR  EM_POP
+        LPW1 TERM
+        JSR  EMIT
+        JMP  gsh_l
+gsh_d:  RTS
+
+; add: term ( ('+'|'-') term )*
+GADD:   JSR  GTERM
+ge_l:   LDA  #'+'
+        JSR  ISPUNCT
+        JC   ge_add
+        LDA  #'-'
+        JSR  ISPUNCT
+        JNC  ge_d
+        LDW  TERM,#MSUB
+        JMP  ge_go
+ge_add: LDW  TERM,#MADD
+ge_go:  JSR  ADVANCE
+        JSR  EM_PUSH
+        PHW  TERM
+        JSR  GTERM
+        PLW  TERM
+        JSR  EM_POP
+        LPW1 TERM
+        JSR  EMIT
+        JMP  ge_l
+ge_d:   RTS
+
+; term: unary ( ('*'|'/'|'%') unary )*
+GTERM:  JSR  GUNARY
+gt_l:   LDA  #'*'
+        JSR  ISPUNCT
+        JC   gt_mul
+        LDA  #'/'
+        JSR  ISPUNCT
+        JC   gt_div
+        LDA  #'%'
+        JSR  ISPUNCT
+        JNC  gt_d
+        LDW  TERM,#MMOD
+        JMP  gt_dv
+gt_div: LDW  TERM,#MDIV
+gt_dv:  LDA  #1
+        STA  USEDIV
+        JMP  gt_go
+gt_mul: LDA  #1
+        STA  USEMUL
+        LDW  TERM,#MMUL
+gt_go:  JSR  ADVANCE
+        JSR  EM_PUSH
+        PHW  TERM
+        JSR  GUNARY
+        PLW  TERM
+        JSR  EM_POP
+        LPW1 TERM
+        JSR  EMIT
+        JMP  gt_l
+gt_d:   RTS
+
+; unary: ('-' | '!' | '&' | '*' | '++' | '--') unary | factor
+GUNARY: LDA  CURK
         LDB  #3
         CMP
-        JZ   ec_ge
+        JNZ  GFACT
+        LDA  CUR2
+        JNZ  gu_two
+        LDA  CURV
+        LDB  #'-'
+        CMP
+        JZ   gu_neg
+        LDB  #'!'
+        CMP
+        JZ   gu_not
+        LDB  #'&'
+        CMP
+        JZ   gu_addr
+        LDB  #'*'
+        CMP
+        JZ   gu_deref
+        JMP  GFACT
+gu_two: LDA  #'+'                ; prefix ++ / --
+        JSR  ISTWO
+        JC   gu_pinc
+        LDA  #'-'
+        JSR  ISTWO
+        JC   gu_pdec
+        JMP  GFACT
+gu_pinc:JSR  ADVANCE
+        JSR  SYMFIND
+        LDA  SYMOK
+        JZ   GFACT
+        JSR  EM_INCVAR
+        JSR  EM_LDVAR
+        JMP  ADVANCE
+gu_pdec:JSR  ADVANCE
+        JSR  SYMFIND
+        LDA  SYMOK
+        JZ   GFACT
+        JSR  EM_DECVAR
+        JSR  EM_LDVAR
+        JMP  ADVANCE
+gu_addr:LDA  #1
+        STA  SAWADDRG            ; an argument took an address (pass by reference)
+        JSR  ADVANCE
+        JSR  SYMFIND
+        LDA  SYMOK
+        JZ   gu_ret
+        MOVW IDVARIDX,SYMIDX
+        LDA  SYMRCH
+        STA  IDVARCH
+        LDA  SYMRAR
+        STA  IDVARAR
+        JSR  ADVANCE             ; past NAME
+        LDA  #'['
+        JSR  ISPUNCT
+        JC   gu_ad_ix
+        MOVW SYMIDX,IDVARIDX
+        JMP  EM_ADDROF
+gu_ad_ix:
+        MOVW SYMIDX,IDVARIDX
+        LDA  IDVARCH
+        STA  ELCHAR
+        LDA  IDVARAR
+        STA  ELARR
+        JMP  ELEMADDR
+gu_ret: RTS
+gu_deref:
+        JSR  ADVANCE
+        JSR  GUNARY              ; the address -> __ax
+        LDA  EXPRCHAR
+        JNZ  EM_LOADB            ; char*: a byte
+        JMP  EM_LOADW
+gu_neg: JSR  ADVANCE
+        JSR  GUNARY
+        LDP1 #MNEG
+        JMP  EMIT
+gu_not: JSR  ADVANCE
+        JSR  GUNARY
+        LDA  #1
+        STA  USENOT
+        LDP1 #MLNOT
+        JMP  EMIT
+
+; factor: NUMBER | "string" | ( expr ) | NAME ...
+GFACT:  LDA  CURK
+        LDB  #1
+        CMP
+        JZ   gf_num
+        LDB  #2
+        CMP
+        JZ   gf_id
         LDB  #4
         CMP
-        JZ   ec_eq
-        JMP  ec_ne
-; simple ops: one conditional jump (on the CMP flags) to la=TRUE, else fall to 0.
-ec_lt:  LDP1 #MJNC                   ; a<b : true when C=0
-        LDA  LBLA
-        JSR  EMITJ
-        JMP  ec_t
-ec_ge:  LDP1 #MJC                    ; a>=b : true when C=1
-        LDA  LBLA
-        JSR  EMITJ
-        JMP  ec_t
-ec_eq:  LDP1 #MJZ                    ; a==b : true when Z=1
-        LDA  LBLA
-        JSR  EMITJ
-        JMP  ec_t
-ec_ne:  LDP1 #MJNZ                   ; a!=b : true when Z=0
-        LDA  LBLA
-        JSR  EMITJ
-        JMP  ec_t
-ec_t:   JSR  EM_AX0                  ; false path, then jump over the true value
+        JZ   gf_str
+        LDA  #'('
+        JSR  ISPUNCT
+        JNC  gf_err
+        JSR  ADVANCE
+        JSR  GEXPR
+        LDA  #')'
+        JMP  EXPECTP
+gf_err: RTS                      ; (an empty expression: nothing emitted)
+gf_num: LDP1 #MLDWAXI            ; LDW __ax,#n
+        JSR  EMIT
+        MOVW VN,CURV
+        JSR  EMITNUM16
+        JSR  EMITNL
+        LDA  #0
+        STA  EXPRCHAR
+        JMP  ADVANCE
+; a string literal: its bytes inline (jumped over), __ax = its address
+gf_str: LDA  #1
+        STA  EXPRCHAR
+        JSR  NEWLBL
+        STA  STRDL
+        JSR  NEWLBL
+        STA  STRSL
         LDP1 #MJMP
-        LDA  LBLB
-        JSR  EMITJ
-        LDA  LBLA                    ; la: (true)
-        JSR  EMITLBL
-        JSR  EM_AX1
-        JMP  ec_end
-ec_gt:  LDP1 #MJNC                   ; a>b : CMPW __ax,__t0 gave C = b>=a; true when C=0
-        LDA  LBLA
-        JSR  EMITJ
-        JMP  ec_t
-ec_le:  LDP1 #MJC                    ; a<=b : C = b>=a; true when C=1
-        LDA  LBLA
-        JSR  EMITJ
-        JMP  ec_t
-ec_end: LDA  LBLB                    ; lb: (end)
-        JSR  EMITLBL
-        RTS
-
-; NEWLBL: A = a fresh label number; bump the counter.
-NEWLBL: LDA LBLCNT
-        STA  TMPC
-        INC
-        STA  LBLCNT
-        LDA  TMPC
-        RTS
-; EMITJ: emit a jump (P1 = "... L" prefix) to the label number in A + newline.
-EMITJ:  STA JLBL
+        LDA  STRSL
+        JSR  EMITJ               ; JMP Lskip
+        LDA  STRDL
+        JSR  EMITLBL             ; Ldata:
+        LDP1 #MDQASC             ; .asciiz "
         JSR  EMIT
-        LDA  JLBL
+        LDP1 #STRBUF
+        JSR  EMIT
+        LDP1 #MDQCL              ; " LF
+        JSR  EMIT
+        LDP1 #MBYTE0             ; .byte 0 (a word load at the NUL reads 0)
+        JSR  EMIT
+        LDA  STRSL
+        JSR  EMITLBL             ; Lskip:
+        LDP1 #MLDALL             ; LDA #<Ldata / STA __ax / LDA #>Ldata / STA __ax+1
+        JSR  EMIT
+        LDA  STRDL
         JSR  EMITNUM
-        LDP1 #MNL
+        JSR  EMITNL
+        LDP1 #MSTAX
         JSR  EMIT
-        RTS
-; EMITLBL: emit  "L<A>:"  + newline (a label definition at column 0).
-EMITLBL: STA JLBL
-        LDP1 #MLBP
+        LDP1 #MLDAHL
         JSR  EMIT
-        LDA  JLBL
+        LDA  STRDL
         JSR  EMITNUM
-        LDP1 #MLBC
+        JSR  EMITNL
+        LDP1 #MSTAXH
         JSR  EMIT
-        RTS
-
-; EXPECTP: current token must be punct char A, else quietly stop; then ADVANCE.
-EXPECTP: STA TMPB
+        JMP  ADVANCE
+; an identifier: a builtin, a call, a variable, an element, a member, a postfix
+gf_id:  LDA  CURKW
+        LDB  #K_BIOS
+        CMP
+        JC   gf_builtin
+        JSR  CPIDNAME
+        JSR  SYMFIND
+        LDA  SYMOK
+        STA  IDVAROK
+        MOVW IDVARIDX,SYMIDX
+        LDA  SYMRCH
+        STA  IDVARCH
+        LDA  SYMRAR
+        STA  IDVARAR
+        JSR  ADVANCE             ; past the id
         LDA  CURK
         LDB  #3
         CMP
-        JNZ  ep_ret
-        LDA  CUR2                    ; a single-char punct only (not ==, <=, ...)
-        JNZ  ep_ret
+        JNZ  gfi_var
+        LDA  CUR2
+        JNZ  gfi_two
         LDA  CURV
-        LDB  TMPB
+        LDB  #'('
         CMP
-        JNZ  ep_ret
-        JSR  ADVANCE
-ep_ret: RTS
+        JZ   gfi_call
+        LDB  #'['
+        CMP
+        JZ   gfi_index
+        LDB  #'.'
+        CMP
+        JZ   gfi_dot
+gfi_var:LDA  IDVAROK
+        JZ   gf_err
+        MOVW SYMIDX,IDVARIDX
+        LDA  IDVARCH
+        STA  EXPRCHAR
+        LDA  IDVARAR
+        JZ   EM_LDVAR            ; the value
+        LDA  #1                  ; a bare array name decays to its address
+        STA  SAWADDRG
+        JMP  EM_ADDROF
+gfi_two:LDA  CURV
+        LDB  #'-'
+        CMP
+        JNZ  gfi_pl
+        LDA  CUR2
+        LDB  #'>'
+        CMP
+        JZ   gfi_arrow
+        LDB  #'-'
+        CMP
+        JNZ  gfi_var
+        LDA  IDVAROK             ; NAME-- : the old value, then DECW
+        JZ   gf_err
+        MOVW SYMIDX,IDVARIDX
+        JSR  EM_LDVAR
+        JSR  EM_DECVAR
+        JMP  ADVANCE
+gfi_pl: LDB  #'+'
+        CMP
+        JNZ  gfi_var
+        LDA  CUR2
+        LDB  #'+'
+        CMP
+        JNZ  gfi_var
+        LDA  IDVAROK             ; NAME++
+        JZ   gf_err
+        MOVW SYMIDX,IDVARIDX
+        JSR  EM_LDVAR
+        JSR  EM_INCVAR
+        JMP  ADVANCE
+gfi_dot:MOVW SYMIDX,IDVARIDX
+        JSR  EM_ADDROF
+        JMP  gfi_memld
+gfi_arrow:
+        MOVW SYMIDX,IDVARIDX
+        JSR  EM_LDVAR
+gfi_memld:
+        JSR  ADVANCE             ; past . / ->
+        JSR  STMFIND
+        LDA  STMEMOFF
+        JSR  EM_ADDOFF
+        JSR  ADVANCE             ; past the member
+        LDA  STMEMCH
+        JNZ  EM_LOADB
+        JMP  EM_LOADW
+gfi_index:
+        MOVW SYMIDX,IDVARIDX
+        LDA  IDVARCH
+        STA  ELCHAR
+        LDA  IDVARAR
+        STA  ELARR
+        JSR  ELEMADDR
+        LDA  ELCHAR
+        JNZ  EM_LOADB
+        JMP  EM_LOADW
 
-; EXPECTID: current token must be the identifier at P1, then ADVANCE.
-; EXPECTTYPE: accept the type keyword 'int' or 'char' (advance past it).
-EXPECTTYPE: LDP1 #KW_INT
-        JSR  IDEQ
-        LDA  TMPB
-        JZ   ett_c
+; the builtins: bios / puts / getchar / peek / poke / argstr
+gf_builtin:
+        LDB  #K_PUTS
+        CMP
+        JZ   gc_puts
+        LDB  #K_GETC
+        CMP
+        JZ   gc_getc
+        LDB  #K_PEEK
+        CMP
+        JZ   gc_peek
+        LDB  #K_POKE
+        CMP
+        JZ   gc_poke
+        LDB  #K_ARGSTR
+        CMP
+        JZ   gc_argstr
+        LDB  #K_BIOS
+        CMP
+        JNZ  SYNTAXERR
+; bios(ADDR, p1, a) -> A | carry<<8 in __ax; ADDR is a constant
+gc_bios:JSR  ADVANCE             ; past 'bios'
+        LDA  #'('
+        JSR  EXPECTP
+        MOVW BIOSAD,CURV
+        JSR  ADVANCE             ; past the address
+        LDA  #','
+        JSR  EXPECTP
+        JSR  GEXPR               ; the P1 operand
+        JSR  EM_PUSH
+        LDA  #','
+        JSR  EXPECTP
+        JSR  GEXPR               ; the A operand
+        LDA  #')'
+        JSR  EXPECTP
+        JSR  EM_POP
+        LDP1 #MLPWT0
+        JSR  EMIT
+        LDP1 #MLDAX
+        JSR  EMIT
+        LDP1 #MJSRHEX            ; JSR $hhhh
+        JSR  EMIT
+        LDA  BIOSAD+1
+        JSR  EMHEX
+        LDA  BIOSAD
+        JSR  EMHEX
+        JSR  EMITNL
+        LDP1 #MSTAX              ; A -> __ax, the carry -> __ax+1
+        JSR  EMIT
+        JSR  NEWLBL
+        STA  JLBL
+        LDP1 #MLDA0
+        JSR  EMIT
+        LDP1 #MJNC
+        LDA  JLBL
+        JSR  EMITJ
+        LDP1 #MLDA1
+        JSR  EMIT
+        LDA  JLBL
+        JSR  EMITLBL
+        LDP1 #MSTAXH
+        JMP  EMIT
+; puts(s)
+gc_puts:JSR  ADVANCE
+        LDA  #'('
+        JSR  EXPECTP
+        JSR  GEXPR
+        LDA  #')'
+        JSR  EXPECTP
+        LDP1 #MLPWAX
+        JSR  EMIT
+        LDP1 #MPUTS
+        JMP  EMIT
+; getchar() -> __ax, or 0xFFFF at EOF
+gc_getc:JSR  ADVANCE
+        LDA  #'('
+        JSR  EXPECTP
+        LDA  #')'
+        JSR  EXPECTP
+        LDP1 #MGETC
+        JSR  EMIT
+        JSR  NEWLBL
+        STA  JLBL
+        LDP1 #MJNC
+        LDA  JLBL
+        JSR  EMITJ
+        LDP1 #MGETCEOF
+        JSR  EMIT
+        LDA  JLBL
+        JMP  EMITLBL
+; peek(addr)
+gc_peek:JSR  ADVANCE
+        LDA  #'('
+        JSR  EXPECTP
+        JSR  GEXPR
+        LDA  #')'
+        JSR  EXPECTP
+        JMP  EM_LOADB
+; poke(addr, val)
+gc_poke:JSR  ADVANCE
+        LDA  #'('
+        JSR  EXPECTP
+        JSR  GEXPR
+        JSR  EM_PUSH
+        LDA  #','
+        JSR  EXPECTP
+        JSR  GEXPR
+        JSR  EM_POP
+        JSR  EM_STOREB
+        LDA  #')'
+        JMP  EXPECTP
+; argstr() -> the argument tail (P2)
+gc_argstr:
+        JSR  ADVANCE
+        LDA  #'('
+        JSR  EXPECTP
+        LDA  #')'
+        JSR  EXPECTP
+        LDP1 #MARGSTR
+        JMP  EMIT
+
+; a call: NAME ( args )  -- IDNAME is the callee; the current token is '('
+gfi_call:
+        LDW  NTNAME,#IDNAME
+        LDA  IDNAMEL
+        STA  NTNLEN
+        LDW  NTH,#HFUNC
+        LDW  FENT,#0
+        JSR  NTFIND
+        JNC  gc_nf
+        LEAW FENT,(P1+0)
+gc_nf:  PHW  FENT                ; kept across the arguments (calls nest)
         LDA  #0
-        STA  ISCHARTYPE
-        JMP  ett_ok
-ett_c:  LDP1 #KW_CHAR
-        JSR  IDEQ
-        LDA  TMPB
-        JZ   ett_no
-        LDA  #1
-        STA  ISCHARTYPE
-ett_ok: JSR  ADVANCE
-        LDA  #1
-        STA  TMPB
-        RTS
-ett_no: LDA  #0
-        STA  TMPB
-        RTS
-
-EXPECTID: JSR IDEQ
-        LDA  TMPB
-        JZ   ei_ret
+        STA  SAWADDRG
+        JSR  ADVANCE             ; past '('
+        JSR  EM_SAVESLOTS        ; the caller's live slots FIRST, then the args
+        LDA  #0
+        STA  ARGI
+        LDA  #')'
+        JSR  ISPUNCT
+        JC   ga_done
+ga_loop:LDA  ARGI
+        PHA
+        JSR  GEXPR
+        PLA
+        STA  ARGI
+        LDP1 #MPHW               ; PHW __ax
+        JSR  EMIT
+        LDA  ARGI
+        INC
+        STA  ARGI
+        LDA  #','
+        JSR  ISPUNCT
+        JNC  ga_done
         JSR  ADVANCE
-ei_ret: RTS
-
-; IDEQ: TMPB=1 if CURK==ID and TID==string at P1, else 0.  P1 preserved-ish.
-IDEQ:   LDA  CURK
-        LDB  #2
-        CMP
-        JNZ  id_no
-        TPA1L                        ; P2 = the compare string; walk TID vs it
-        TAP2L
-        TPA1H
-        TAP2H
-        LDP1 #TID                ; <- tierA: pointer constant (next: LDA)
-id_l:   LDA  (P1)                    ; TID char -> scratch
-        STA  TMPC
-        LDA  (P2)                    ; compare-string char
-        LDB  TMPC
-        CMP
-        JNZ  id_no
-        LDA  (P1)
-        JZ   id_yes                  ; equal AND both at NUL -> match
-        INP1
-        INP2
-        JMP  id_l
-id_yes: LDA  #1
-        STA  TMPB
-        RTS
-id_no:  LDA  #0
-        STA  TMPB
+        JMP  ga_loop
+ga_done:LDA  #')'
+        JSR  EXPECTP
+        LDP1 #MJSRF              ; JSR _f_NAME
+        JSR  EMIT
+        PLW  FENT
+        JSR  EMITFNAME
+        JSR  EMITNL
+        LDA  ARGI                ; drop the arguments: ADDP3 #2n
+        JZ   gc_noargs
+        SHL
+        JSR  EM_ADDP3
+gc_noargs:
+        LDA  SAWADDRG            ; an address was passed: the callee wrote the
+        JZ   EM_RESTSLOTS        ;   real slot -- discard the copies instead
+        LDA  NLSLOT
+        JZ   gc_norest
+        SHL
+        JMP  EM_ADDP3
+gc_norest:
         RTS
 
-; =============================================================================
-; Strings
-; =============================================================================
-KW_INT:  .asciiz "int"
-KW_CHAR: .asciiz "char"
-KW_MAIN: .asciiz "main"
-KW_PUTC: .asciiz "putchar"
-KW_RET:  .asciiz "return"
-KW_IF:   .asciiz "if"
-KW_WHILE: .asciiz "while"
-KW_ELSE: .asciiz "else"
-KW_FOR:  .asciiz "for"
-KW_STRUCT: .asciiz "struct"
-KW_BRK:  .asciiz "break"
-KW_CONT: .asciiz "continue"
+; EM_SAVESLOTS / EM_RESTSLOTS - PHW / PLW the current function's slots
+EM_SAVESLOTS:
+        LDA  #0
+        STA  VITER2
+ess_l:  LDA  VITER2
+        LDB  NLSLOT
+        CMP
+        JC   ess_d
+        LDP1 #MPHWV
+        JSR  EMIT
+        LDA  VITER2
+        JSR  EMSB
+        JSR  EMITNL
+        LDA  VITER2
+        INC
+        STA  VITER2
+        JMP  ess_l
+ess_d:  RTS
+EM_RESTSLOTS:
+        LDA  NLSLOT
+        STA  VITER2
+ers_l:  LDA  VITER2
+        JZ   ers_d
+        DEC
+        STA  VITER2
+        LDP1 #MPLWV
+        JSR  EMIT
+        LDA  VITER2
+        JSR  EMSB
+        JSR  EMITNL
+        JMP  ers_l
+ers_d:  RTS
 
-; whole-line mnemonics end with LF (8-space indent + text + newline)
-MORG:   .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii ".org $6A00"      ; emitted for every compiled program = TPABASE (gen_memmap.py)
+; ELEMADDR - SYMIDX = an array / pointer; the current token '['. Emits the
+;   element ADDRESS into __ax; consumes [ index ].
+ELEMADDR:
+        LDA  ELARR
+        JZ   ela_ptr
+        JSR  EM_ADDROF           ; an array: its base address
+        JMP  ela_base
+ela_ptr:JSR  EM_LDVAR            ; a pointer: its value
+ela_base:
+        JSR  EM_PUSH
+        JSR  ADVANCE             ; past '['
+        JSR  GEXPR               ; the index -> __ax
+        LDA  #']'
+        JSR  EXPECTP
+        LDA  ELCHAR
+        JNZ  ela_nos
+        JSR  EM_SCALE2           ; int elements: index * 2
+ela_nos:JSR  EM_POP
+        LDP1 #MADD
+        JMP  EMIT
+
+; NEWLBL - A = a fresh label number
+NEWLBL: LDA  LBLCNT
+        INC
+        STA  LBLCNT
+        DEC
+        RTS
+; EMITJ - the jump at P1 ("...L") to label A, newline
+EMITJ:  STA  JLBL
+        JSR  EMIT
+        LDA  JLBL
+        JSR  EMITNUM
+        JMP  EMITNL
+; EMITLBL - "L<A>:" newline
+EMITLBL:STA  JLBL
+        LDA  #'L'
+        JSR  SYS_PUTC
+        LDA  JLBL
+        JSR  EMITNUM
+        LDP1 #MLBC
+        JMP  EMIT
+
+; =============================================================================
+; Emit helpers: the code shapes
+; =============================================================================
+EM_LDVAR:                        ; __ax = V<SYMIDX>
+        LDP1 #MMVAXV
+        JSR  EMIT
+        JSR  EMSY
+        JMP  EMITNL
+EM_STVAR:                        ; V<LHSIDX> = __ax
+        LDP1 #MMVV
+        JSR  EMIT
+        JSR  EMLH
+        LDP1 #MCAX
+        JMP  EMIT
+EM_ADDROF:                       ; __ax = &V<SYMIDX>
+        LDP1 #MLDALV
+        JSR  EMIT
+        JSR  EMSY
+        JSR  EMITNL
+        LDP1 #MSTAX
+        JSR  EMIT
+        LDP1 #MLDAHV
+        JSR  EMIT
+        JSR  EMSY
+        JSR  EMITNL
+        LDP1 #MSTAXH
+        JMP  EMIT
+EM_INCVAR:                       ; INCW V<SYMIDX>
+        LDP1 #MINCWV
+        JSR  EMIT
+        JSR  EMSY
+        JMP  EMITNL
+EM_DECVAR:
+        LDP1 #MDECWV
+        JSR  EMIT
+        JSR  EMSY
+        JMP  EMITNL
+EM_PUSH:LDP1 #MPHW               ; PHW __ax
+        JMP  EMIT
+EM_POP: LDP1 #MPLW               ; PLW __t0
+        JMP  EMIT
+EM_AX0: LDP1 #MLDW0
+        JMP  EMIT
+EM_AX1: LDP1 #MLDW1
+        JMP  EMIT
+EM_TESTAX:
+        LDP1 #MCMPAX0
+        JMP  EMIT
+EM_ADDP3:                        ; ADDP3 #A
+        STA  MEMTMP
+        LDP1 #MADDP3
+        JSR  EMIT
+        LDA  MEMTMP
+        JSR  EMITNUM
+        JMP  EMITNL
+EM_LOADB:                        ; __ax = (byte) *__ax
+        LDP1 #MLPWAX
+        JSR  EMIT
+        LDP1 #MLDP1
+        JSR  EMIT
+        LDP1 #MSTAX
+        JSR  EMIT
+        LDP1 #MLDA0
+        JSR  EMIT
+        LDP1 #MSTAXH
+        JMP  EMIT
+EM_STOREB:                       ; *(__t0) = (byte) __ax
+        LDP1 #MLPWT0
+        JSR  EMIT
+        LDP1 #MLDAX
+        JSR  EMIT
+        LDP1 #MSTP1
+        JMP  EMIT
+EM_LOADW:                        ; __ax = *(__ax)
+        LDP1 #MLPWAX
+        JSR  EMIT
+        LDP1 #MLDP1
+        JSR  EMIT
+        LDP1 #MSTAX
+        JSR  EMIT
+        LDP1 #MINP1
+        JSR  EMIT
+        LDP1 #MLDP1
+        JSR  EMIT
+        LDP1 #MSTAXH
+        JMP  EMIT
+EM_STOREW:                       ; *(__t0) = __ax
+        LDP1 #MLPWT0
+        JSR  EMIT
+        LDP1 #MLDAX
+        JSR  EMIT
+        LDP1 #MSTP1
+        JSR  EMIT
+        LDP1 #MINP1
+        JSR  EMIT
+        LDP1 #MLDAXH
+        JSR  EMIT
+        LDP1 #MSTP1
+        JMP  EMIT
+EM_SCALE2:                       ; __ax <<= 1
+        LDP1 #MLDAX
+        JSR  EMIT
+        LDP1 #MSHL
+        JSR  EMIT
+        LDP1 #MSTAX
+        JSR  EMIT
+        LDP1 #MLDAXH
+        JSR  EMIT
+        LDP1 #MROL
+        JSR  EMIT
+        LDP1 #MSTAXH
+        JMP  EMIT
+
+; =============================================================================
+; Emitted text. A whole-line template ends with LF; a prefix ends at the point
+; a number is appended. Every instruction line starts with one TAB.
+; =============================================================================
+MORG:   .byte TAB
+        .ascii ".org $6A00"
         .byte LF,0
-MLDAI:  .byte $20,$20,$20,$20,$20,$20,$20,$20   ; prefix: a number + MNL follow
-        .asciiz "LDA #"
-MLDAV:  .byte $20,$20,$20,$20,$20,$20,$20,$20   ; prefix: "LDA __V+" + 2*slot + MNL
-        .asciiz "LDA __V+"
-MSTAV:  .byte $20,$20,$20,$20,$20,$20,$20,$20   ; prefix: "STA __V+" + 2*slot + MNL
-        .asciiz "STA __V+"
-MMVAXV: .byte $20,$20,$20,$20,$20,$20,$20,$20   ; "MOVW __ax,__V+" + 2*slot + MNL
-        .asciiz "MOVW __ax,__V+"
-MMVV:   .byte $20,$20,$20,$20,$20,$20,$20,$20   ; "MOVW __V+" + 2*slot + MCAX
-        .asciiz "MOVW __V+"
-MCAX:   .ascii ",__ax"
-        .byte LF,0
-MPHWV:  .byte $20,$20,$20,$20,$20,$20,$20,$20   ; "PHW __V+" + 2*slot + MNL
-        .asciiz "PHW __V+"
-MPLWV:  .byte $20,$20,$20,$20,$20,$20,$20,$20   ; "PLW __V+" + 2*slot + MNL
-        .asciiz "PLW __V+"
-MBOOT:  .byte $20,$20,$20,$20,$20,$20,$20,$20   ; startup (mirrors p8cc.py): keep the
-        .ascii "TPA3L"                              ;   caller's P3 in __sp0, run on a stack
-        .byte LF                                    ;   growing down from CSTACKTOP unless
-        .byte $20,$20,$20,$20,$20,$20,$20,$20       ;   the inherited P3 is already below it
-        .ascii "STA __sp0"                          ;   (a nested launch keeps its stack)
-        .byte LF
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
+MBOOT:  .byte TAB                ; the startup, as p8cc's: keep the caller's P3
+        .ascii "TPA3L"           ;   in __sp0 and run on a stack below CSTACKTOP
+        .byte LF,TAB             ;   unless the inherited P3 is already below it
+        .ascii "STA __sp0"
+        .byte LF,TAB
         .ascii "TPA3H"
-        .byte LF
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .byte LF,TAB
         .ascii "STA __sp0+1"
-        .byte LF
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .byte LF,TAB
         .ascii "LDB #248"
-        .byte LF
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .byte LF,TAB
         .ascii "CMP"
-        .byte LF
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .byte LF,TAB
         .ascii "JNC __sk0"
-        .byte LF
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .byte LF,TAB
         .ascii "LDP3 #63487"
         .byte LF
-        .ascii "__sk0:  JSR _f_main"
-        .byte LF
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .ascii "__sk0:"
+        .byte TAB
+        .ascii "JSR _f_main"
+        .byte LF,TAB
         .ascii "LPW3 __sp0"
-        .byte LF
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .byte LF,TAB
         .ascii "RTS"
         .byte LF,0
 MFPFX:  .asciiz "_f_"
 MEPFX:  .asciiz "_e_"
-MJSRF:  .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .asciiz "JSR _f_"
-MJMPE:  .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .asciiz "JMP _e_"
 MCOLON: .ascii ":"
         .byte LF,0
-MVBASE: .asciiz "__V:   .fill "                  ; single variable-storage array
-MVL:    .asciiz "V"                             ; (unused now) legacy per-slot prefix
-MVF:    .ascii ":   .word 0"
-        .byte LF,0
-MNL:    .byte LF,0
-MSTAX:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+MJSRF:  .byte TAB
+        .asciiz "JSR _f_"
+MJMPE:  .byte TAB
+        .asciiz "JMP _e_"
+MVBASE: .asciiz "__V:   .fill "
+MSTAX:  .byte TAB
         .ascii "STA __ax"
         .byte LF,0
-MSTAXH: .byte $20,$20,$20,$20,$20,$20,$20,$20
+MSTAXH: .byte TAB
         .ascii "STA __ax+1"
         .byte LF,0
-MLDAX:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+MLDAX:  .byte TAB
         .ascii "LDA __ax"
         .byte LF,0
-MLDAXH: .byte $20,$20,$20,$20,$20,$20,$20,$20
+MLDAXH: .byte TAB
         .ascii "LDA __ax+1"
         .byte LF,0
-MLDBXH: .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "LDB __ax+1"
-        .byte LF,0
-MOR:    .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "OR"
-        .byte LF,0
-MSTT0H: .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "STA __t0+1"
-        .byte LF,0
-MP1:    .ascii "+1"
-        .byte LF,0
-MVWORD: .ascii ":   .word 0"
-        .byte LF,0
-MPHA:   .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "PHA"
-        .byte LF,0
-MPLA:   .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "PLA"
-        .byte LF,0
-MSTAT:  .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "STA __t0"
-        .byte LF,0
-MPHW:   .byte $20,$20,$20,$20,$20,$20,$20,$20     ; wide 16-bit ops: 1 instr each
+MPHW:   .byte TAB
         .ascii "PHW __ax"
         .byte LF,0
-MPLW:   .byte $20,$20,$20,$20,$20,$20,$20,$20
+MPLW:   .byte TAB
         .ascii "PLW __t0"
         .byte LF,0
-MLPWAX: .byte $20,$20,$20,$20,$20,$20,$20,$20
+MLPWAX: .byte TAB
         .ascii "LPW1 __ax"
         .byte LF,0
-MLPWT0: .byte $20,$20,$20,$20,$20,$20,$20,$20
+MLPWT0: .byte TAB
         .ascii "LPW1 __t0"
         .byte LF,0
-MLDBT:  .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "LDB __t0"
-        .byte LF,0
-MLDB1:  .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "LDB #1"
-        .byte LF,0
-MADDOP:  .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "ADD"
-        .byte LF,0
-MSUBOP:  .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "SUB"
-        .byte LF,0
-MINCOP:  .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "INC"
-        .byte LF,0
-MDECOP:  .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "DEC"
-        .byte LF,0
-MJSHL:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+MJSHL:  .byte TAB
         .ascii "JSR __shl"
         .byte LF,0
-MJSHR:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+MJSHR:  .byte TAB
         .ascii "JSR __shr"
         .byte LF,0
-; Tier A word ops (2026-09-12): one instruction each on the __ax/__t0 words,
-; replacing the JSR __add/__sub/__and/__or/__xor runtime helpers.
-MJAND:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+MJAND:  .byte TAB
         .ascii "ANDW __ax,__t0"
         .byte LF,0
-MJOR:   .byte $20,$20,$20,$20,$20,$20,$20,$20
+MJOR:   .byte TAB
         .ascii "ORW __ax,__t0"
         .byte LF,0
-MJXOR:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+MJXOR:  .byte TAB
         .ascii "XORW __ax,__t0"
         .byte LF,0
-MADD:   .byte $20,$20,$20,$20,$20,$20,$20,$20
+MADD:   .byte TAB
         .ascii "ADDW __ax,__t0"
         .byte LF,0
-MSUB:   .byte $20,$20,$20,$20,$20,$20,$20,$20     ; __ax = __t0 - __ax
+MSUB:   .byte TAB                ; __ax = __t0 - __ax
         .ascii "SUBW __t0,__ax"
-        .byte LF
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .byte LF,TAB
         .ascii "MOVW __ax,__t0"
         .byte LF,0
-MLDWAXI: .byte $20,$20,$20,$20,$20,$20,$20,$20    ; prefix: "LDW __ax,#" + n16 + MNL
+MLDWAXI:.byte TAB
         .asciiz "LDW __ax,#"
-MADDWAXI: .byte $20,$20,$20,$20,$20,$20,$20,$20   ; prefix: "ADDW __ax,#" + n + MNL
+MADDWAXI:
+        .byte TAB
         .asciiz "ADDW __ax,#"
-MCMPWTA: .byte $20,$20,$20,$20,$20,$20,$20,$20    ; C = left(__t0) >= right(__ax)
+MCMPWTA:.byte TAB                ; C = left(__t0) >= right(__ax)
         .ascii "CMPW __t0,__ax"
         .byte LF,0
-MCMPWAT: .byte $20,$20,$20,$20,$20,$20,$20,$20    ; C = right >= left  (for > and <=)
+MCMPWAT:.byte TAB                ; C = right >= left  (for > and <=)
         .ascii "CMPW __ax,__t0"
         .byte LF,0
-MINCWV: .byte $20,$20,$20,$20,$20,$20,$20,$20     ; prefix: "INCW __V+" + 2*slot + MNL
+MINCWV: .byte TAB
         .asciiz "INCW __V+"
-MDECWV: .byte $20,$20,$20,$20,$20,$20,$20,$20
+MDECWV: .byte TAB
         .asciiz "DECW __V+"
-MLDWV:  .byte $20,$20,$20,$20,$20,$20,$20,$20     ; prefix: "LDW __V+" + 2*slot + MCP3 ...
+MLDWV:  .byte TAB
         .asciiz "LDW __V+"
-MCP3:   .asciiz ",(P3+"                          ; ... + d + MCLNL
+MCP3:   .asciiz ",(P3+"
 MCLNL:  .ascii ")"
         .byte LF,0
-MADDP3: .byte $20,$20,$20,$20,$20,$20,$20,$20     ; prefix: "ADDP3 #" + n + MNL
+MADDP3: .byte TAB
         .asciiz "ADDP3 #"
-MCMPAX0: .byte $20,$20,$20,$20,$20,$20,$20,$20    ; Z := (__ax == 0), 16-bit
+MCMPAX0:.byte TAB
         .ascii "CMPW __ax,#0"
         .byte LF,0
-MLDW0:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+MLDW0:  .byte TAB
         .ascii "LDW __ax,#0"
         .byte LF,0
-MLDW1:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+MLDW1:  .byte TAB
         .ascii "LDW __ax,#1"
         .byte LF,0
-MPUTC:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+MPUTC:  .byte TAB
         .ascii "LDA __ax"
-        .byte LF
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .byte LF,TAB
         .ascii "JSR $2009"
         .byte LF,0
-MRTS:   .byte $20,$20,$20,$20,$20,$20,$20,$20
+MRTS:   .byte TAB
         .ascii "RTS"
         .byte LF,0
-MCMP:   .byte $20,$20,$20,$20,$20,$20,$20,$20
+MCMP:   .byte TAB
         .ascii "JSR __cmp"
         .byte LF,0
-MMUL:   .byte $20,$20,$20,$20,$20,$20,$20,$20
+MMUL:   .byte TAB
         .ascii "JSR __mul"
         .byte LF,0
-; the 8-bit multiply runtime helper (A * __t0 -> A), emitted once if '*' is used
-MMULDEF:
-        .ascii "__mul:  LDA #0"
-        .byte LF
-        .ascii "        STA __mr"
-        .byte LF
-        .ascii "        STA __mr+1"
-        .byte LF
-        .ascii "__mu0:  LDA __ax"
-        .byte LF
-        .ascii "        LDB __ax+1"
-        .byte LF
-        .ascii "        OR"
-        .byte LF
-        .ascii "        JZ __mu2"
-        .byte LF
-        .ascii "        LDA __mr"
-        .byte LF
-        .ascii "        LDB __t0"
-        .byte LF
-        .ascii "        ADD"
-        .byte LF
-        .ascii "        STA __mr"
-        .byte LF
-        .ascii "        LDA #0"
-        .byte LF
-        .ascii "        JNC __mu1"
-        .byte LF
-        .ascii "        LDA #1"
-        .byte LF
-        .ascii "__mu1:  STA __c"
-        .byte LF
-        .ascii "        LDA __mr+1"
-        .byte LF
-        .ascii "        LDB __t0+1"
-        .byte LF
-        .ascii "        ADD"
-        .byte LF
-        .ascii "        LDB __c"
-        .byte LF
-        .ascii "        ADD"
-        .byte LF
-        .ascii "        STA __mr+1"
-        .byte LF
-        .ascii "        LDA __ax"
-        .byte LF
-        .ascii "        LDB #1"
-        .byte LF
-        .ascii "        SUB"
-        .byte LF
-        .ascii "        STA __ax"
-        .byte LF
-        .ascii "        JC __mu0"
-        .byte LF
-        .ascii "        LDA __ax+1"
-        .byte LF
-        .ascii "        DEC"
-        .byte LF
-        .ascii "        STA __ax+1"
-        .byte LF
-        .ascii "        JMP __mu0"
-        .byte LF
-        .ascii "__mu2:  LDA __mr"
-        .byte LF
-        .ascii "        STA __ax"
-        .byte LF
-        .ascii "        LDA __mr+1"
-        .byte LF
-        .ascii "        STA __ax+1"
-        .byte LF
-        .ascii "        RTS"
-        .byte LF
-        .ascii "__mr:   .fill 2"
-        .byte LF,0
-MDIV:   .byte $20,$20,$20,$20,$20,$20,$20,$20
+MDIV:   .byte TAB
         .ascii "JSR __div"
         .byte LF,0
-MMOD:   .byte $20,$20,$20,$20,$20,$20,$20,$20
+MMOD:   .byte TAB
         .ascii "JSR __mod"
         .byte LF,0
-; the 8-bit divide/modulo helper (A / __t0 -> __d1 quotient, __d0 remainder)
-MDMDEF:
-        .ascii "__div:  JSR __divmod"
-        .byte LF
-        .ascii "        LDA __dq"
-        .byte LF
-        .ascii "        STA __ax"
-        .byte LF
-        .ascii "        LDA __dq+1"
-        .byte LF
-        .ascii "        STA __ax+1"
-        .byte LF
-        .ascii "        RTS"
-        .byte LF
-        .ascii "__mod:  JSR __divmod"
-        .byte LF
-        .ascii "        LDA __dr"
-        .byte LF
-        .ascii "        STA __ax"
-        .byte LF
-        .ascii "        LDA __dr+1"
-        .byte LF
-        .ascii "        STA __ax+1"
-        .byte LF
-        .ascii "        RTS"
-        .byte LF
-        .ascii "__divmod: LDA __t0"
-        .byte LF
-        .ascii "        STA __dr"
-        .byte LF
-        .ascii "        LDA __t0+1"
-        .byte LF
-        .ascii "        STA __dr+1"
-        .byte LF
-        .ascii "        LDA #0"
-        .byte LF
-        .ascii "        STA __dq"
-        .byte LF
-        .ascii "        STA __dq+1"
-        .byte LF
-        .ascii "        LDA __ax"
-        .byte LF
-        .ascii "        LDB __ax+1"
-        .byte LF
-        .ascii "        OR"
-        .byte LF
-        .ascii "        JZ __dm2"
-        .byte LF
-        .ascii "__dm0:  LDA __dr+1"
-        .byte LF
-        .ascii "        LDB __ax+1"
-        .byte LF
-        .ascii "        CMP"
-        .byte LF
-        .ascii "        JNZ __dm3"
-        .byte LF
-        .ascii "        LDA __dr"
-        .byte LF
-        .ascii "        LDB __ax"
-        .byte LF
-        .ascii "        CMP"
-        .byte LF
-        .ascii "__dm3:  JNC __dm2"
-        .byte LF
-        .ascii "        LDA __dr"
-        .byte LF
-        .ascii "        LDB __ax"
-        .byte LF
-        .ascii "        SUB"
-        .byte LF
-        .ascii "        STA __dr"
-        .byte LF
-        .ascii "        LDA #0"
-        .byte LF
-        .ascii "        JC __dm1"
-        .byte LF
-        .ascii "        LDA #1"
-        .byte LF
-        .ascii "__dm1:  STA __c"
-        .byte LF
-        .ascii "        LDA __dr+1"
-        .byte LF
-        .ascii "        LDB __ax+1"
-        .byte LF
-        .ascii "        SUB"
-        .byte LF
-        .ascii "        STA __dr+1"
-        .byte LF
-        .ascii "        LDA __c"
-        .byte LF
-        .ascii "        JZ __dm4"
-        .byte LF
-        .ascii "        LDA __dr+1"
-        .byte LF
-        .ascii "        DEC"
-        .byte LF
-        .ascii "        STA __dr+1"
-        .byte LF
-        .ascii "__dm4:  LDA __dq"
-        .byte LF
-        .ascii "        LDB #1"
-        .byte LF
-        .ascii "        ADD"
-        .byte LF
-        .ascii "        STA __dq"
-        .byte LF
-        .ascii "        JNC __dm0"
-        .byte LF
-        .ascii "        LDA __dq+1"
-        .byte LF
-        .ascii "        INC"
-        .byte LF
-        .ascii "        STA __dq+1"
-        .byte LF
-        .ascii "        JMP __dm0"
-        .byte LF
-        .ascii "__dm2:  RTS"
-        .byte LF
-        .ascii "__dq:   .fill 2"
-        .byte LF
-        .ascii "__dr:   .fill 2"
-        .byte LF,0
-MLDA0:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+MLDA0:  .byte TAB
         .ascii "LDA #0"
         .byte LF,0
-MLDA1:  .byte $20,$20,$20,$20,$20,$20,$20,$20
+MLDA1:  .byte TAB
         .ascii "LDA #1"
         .byte LF,0
-MJC:    .byte $20,$20,$20,$20,$20,$20,$20,$20     ; jump prefixes: "JXX L" + num
+MJC:    .byte TAB
         .asciiz "JC L"
-MJNC:   .byte $20,$20,$20,$20,$20,$20,$20,$20
+MJNC:   .byte TAB
         .asciiz "JNC L"
-MJZ:    .byte $20,$20,$20,$20,$20,$20,$20,$20
+MJZ:    .byte TAB
         .asciiz "JZ L"
-MJNZ:   .byte $20,$20,$20,$20,$20,$20,$20,$20
+MJNZ:   .byte TAB
         .asciiz "JNZ L"
-MJMP:   .byte $20,$20,$20,$20,$20,$20,$20,$20
+MJMP:   .byte TAB
         .asciiz "JMP L"
-MLBP:   .asciiz "L"                              ; a label def: "L" + num + MLBC
 MLBC:   .ascii ":"
         .byte LF,0
+MDQASC: .byte TAB
+        .byte $2E,$61,$73,$63,$69,$69,$7A,$20,$22   ; .asciiz "
+        .byte 0
+MDQCL:  .byte $22,LF,0
+MBYTE0: .byte TAB
+        .ascii ".byte 0"
+        .byte LF,0
+MLDALL: .byte TAB
+        .asciiz "LDA #<L"
+MLDAHL: .byte TAB
+        .asciiz "LDA #>L"
+MSHL:   .byte TAB
+        .ascii "SHL"
+        .byte LF,0
+MROL:   .byte TAB
+        .ascii "ROL"
+        .byte LF,0
+MNEG:   .byte TAB                ; -__ax = ~__ax + 1
+        .ascii "XORW __ax,#65535"
+        .byte LF,TAB
+        .ascii "INCW __ax"
+        .byte LF,0
+MLNOT:  .byte TAB
+        .ascii "JSR __lnot"
+        .byte LF,0
+MINP1:  .byte TAB
+        .ascii "INP1"
+        .byte LF,0
+MLDP1:  .byte TAB
+        .ascii "LDA (P1)"
+        .byte LF,0
+MSTP1:  .byte TAB
+        .ascii "STA (P1)"
+        .byte LF,0
+MLDALV: .byte TAB
+        .asciiz "LDA #<__V+"
+MLDAHV: .byte TAB
+        .asciiz "LDA #>__V+"
+MMVAXV: .byte TAB
+        .asciiz "MOVW __ax,__V+"
+MMVV:   .byte TAB
+        .asciiz "MOVW __V+"
+MCAX:   .ascii ",__ax"
+        .byte LF,0
+MPHWV:  .byte TAB
+        .asciiz "PHW __V+"
+MPLWV:  .byte TAB
+        .asciiz "PLW __V+"
+MPUTS:  .byte TAB                ; puts: the string at P1, then a newline
+        .ascii "JSR $200F"
+        .byte LF,TAB
+        .ascii "LDA #10"
+        .byte LF,TAB
+        .ascii "JSR $2009"
+        .byte LF,0
+MGETC:  .byte TAB
+        .ascii "JSR $200C"
+        .byte LF,TAB
+        .ascii "STA __ax"
+        .byte LF,TAB
+        .ascii "LDA #0"
+        .byte LF,TAB
+        .ascii "STA __ax+1"
+        .byte LF,0
+MGETCEOF:
+        .byte TAB
+        .ascii "LDA #255"
+        .byte LF,TAB
+        .ascii "STA __ax"
+        .byte LF,TAB
+        .ascii "STA __ax+1"
+        .byte LF,0
+MARGSTR:.byte TAB
+        .ascii "TPA2L"
+        .byte LF,TAB
+        .ascii "STA __ax"
+        .byte LF,TAB
+        .ascii "TPA2H"
+        .byte LF,TAB
+        .ascii "STA __ax+1"
+        .byte LF,0
+MJSRHEX:.byte TAB
+        .asciiz "JSR $"
 MTEMP:  .ascii "__t0:   .fill 2"
         .byte LF
         .ascii "__sp0:  .fill 2"
@@ -4868,329 +3595,367 @@ MTEMP:  .ascii "__t0:   .fill 2"
         .byte LF
         .ascii "__sc:   .fill 1"
         .byte LF,0
-MSHLDEF:
-        .ascii "__shl:  LDA __ax"
-        .byte LF
-        .ascii "        STA __sc"
-        .byte LF
-        .ascii "__shl0:  LDA __sc"
-        .byte LF
-        .ascii "        JZ __shld"
-        .byte LF
-        .ascii "        LDA __t0"
-        .byte LF
-        .ascii "        SHL"
-        .byte LF
-        .ascii "        STA __t0"
-        .byte LF
-        .ascii "        LDA __t0+1"
-        .byte LF
-        .ascii "        ROL"
-        .byte LF
-        .ascii "        STA __t0+1"
-        .byte LF
-        .ascii "        LDA __sc"
-        .byte LF
-        .ascii "        DEC"
-        .byte LF
-        .ascii "        STA __sc"
-        .byte LF
-        .ascii "        JMP __shl0"
-        .byte LF
-        .ascii "__shld:  LDA __t0"
-        .byte LF
-        .ascii "        STA __ax"
-        .byte LF
-        .ascii "        LDA __t0+1"
-        .byte LF
-        .ascii "        STA __ax+1"
-        .byte LF
-        .ascii "        RTS"
-        .byte LF,0
-MSHRDEF:
-        .ascii "__shr:  LDA __ax"
-        .byte LF
-        .ascii "        STA __sc"
-        .byte LF
-        .ascii "__shr0:  LDA __sc"
-        .byte LF
-        .ascii "        JZ __shrd"
-        .byte LF
-        .ascii "        LDA __t0+1"
-        .byte LF
-        .ascii "        SHR"
-        .byte LF
-        .ascii "        STA __t0+1"
-        .byte LF
-        .ascii "        LDA __t0"
-        .byte LF
-        .ascii "        ROR"
-        .byte LF
-        .ascii "        STA __t0"
-        .byte LF
-        .ascii "        LDA __sc"
-        .byte LF
-        .ascii "        DEC"
-        .byte LF
-        .ascii "        STA __sc"
-        .byte LF
-        .ascii "        JMP __shr0"
-        .byte LF
-        .ascii "__shrd:  LDA __t0"
-        .byte LF
-        .ascii "        STA __ax"
-        .byte LF
-        .ascii "        LDA __t0+1"
-        .byte LF
-        .ascii "        STA __ax+1"
-        .byte LF
-        .ascii "        RTS"
-        .byte LF,0
+; the runtime helpers, emitted once each when the program needs them
 MCMP_DEF:
-        .ascii "__cmp:  LDA __t0+1"
+        .ascii "__cmp:"
+        .byte TAB
+        .ascii "LDA __t0+1"
+        .byte LF,TAB
+        .ascii "LDB __ax+1"
+        .byte LF,TAB
+        .ascii "CMP"
+        .byte LF,TAB
+        .ascii "JNZ __cm0"
+        .byte LF,TAB
+        .ascii "LDA __t0"
+        .byte LF,TAB
+        .ascii "LDB __ax"
+        .byte LF,TAB
+        .ascii "CMP"
         .byte LF
-        .ascii "        LDB __ax+1"
-        .byte LF
-        .ascii "        CMP"
-        .byte LF
-        .ascii "        JNZ __cm0"
-        .byte LF
-        .ascii "        LDA __t0"
-        .byte LF
-        .ascii "        LDB __ax"
-        .byte LF
-        .ascii "        CMP"
-        .byte LF
-        .ascii "__cm0:  RTS"
+        .ascii "__cm0:"
+        .byte TAB
+        .ascii "RTS"
         .byte LF,0
-MDQASC: .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .byte $2E,$61,$73,$63,$69,$69,$7A,$20,$22   ; .asciiz (space) "
-        .byte 0
-MDQCL:  .byte $22,LF,0                              ; closing quote + newline
-MBYTE0: .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii ".byte 0"
+MMULDEF:.ascii "__mul:"          ; __ax = __ax * __t0 (repeated add)
+        .byte TAB
+        .ascii "LDA #0"
+        .byte LF,TAB
+        .ascii "STA __mr"
+        .byte LF,TAB
+        .ascii "STA __mr+1"
+        .byte LF
+        .ascii "__mu0:"
+        .byte TAB
+        .ascii "LDA __ax"
+        .byte LF,TAB
+        .ascii "LDB __ax+1"
+        .byte LF,TAB
+        .ascii "OR"
+        .byte LF,TAB
+        .ascii "JZ __mu2"
+        .byte LF,TAB
+        .ascii "LDA __mr"
+        .byte LF,TAB
+        .ascii "LDB __t0"
+        .byte LF,TAB
+        .ascii "ADD"
+        .byte LF,TAB
+        .ascii "STA __mr"
+        .byte LF,TAB
+        .ascii "LDA #0"
+        .byte LF,TAB
+        .ascii "JNC __mu1"
+        .byte LF,TAB
+        .ascii "LDA #1"
+        .byte LF
+        .ascii "__mu1:"
+        .byte TAB
+        .ascii "STA __c"
+        .byte LF,TAB
+        .ascii "LDA __mr+1"
+        .byte LF,TAB
+        .ascii "LDB __t0+1"
+        .byte LF,TAB
+        .ascii "ADD"
+        .byte LF,TAB
+        .ascii "LDB __c"
+        .byte LF,TAB
+        .ascii "ADD"
+        .byte LF,TAB
+        .ascii "STA __mr+1"
+        .byte LF,TAB
+        .ascii "LDA __ax"
+        .byte LF,TAB
+        .ascii "LDB #1"
+        .byte LF,TAB
+        .ascii "SUB"
+        .byte LF,TAB
+        .ascii "STA __ax"
+        .byte LF,TAB
+        .ascii "JC __mu0"
+        .byte LF,TAB
+        .ascii "LDA __ax+1"
+        .byte LF,TAB
+        .ascii "DEC"
+        .byte LF,TAB
+        .ascii "STA __ax+1"
+        .byte LF,TAB
+        .ascii "JMP __mu0"
+        .byte LF
+        .ascii "__mu2:"
+        .byte TAB
+        .ascii "LDA __mr"
+        .byte LF,TAB
+        .ascii "STA __ax"
+        .byte LF,TAB
+        .ascii "LDA __mr+1"
+        .byte LF,TAB
+        .ascii "STA __ax+1"
+        .byte LF,TAB
+        .ascii "RTS"
+        .byte LF
+        .ascii "__mr:   .fill 2"
         .byte LF,0
-MLDALL: .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .asciiz "LDA #<L"
-MLDAHL: .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .asciiz "LDA #>L"
-MSHL:   .byte $20,$20,$20,$20,$20,$20,$20,$20
+MDMDEF: .ascii "__div:"          ; __ax = __t0 / __ax ; __mod: the remainder
+        .byte TAB
+        .ascii "JSR __divmod"
+        .byte LF,TAB
+        .ascii "LDA __dq"
+        .byte LF,TAB
+        .ascii "STA __ax"
+        .byte LF,TAB
+        .ascii "LDA __dq+1"
+        .byte LF,TAB
+        .ascii "STA __ax+1"
+        .byte LF,TAB
+        .ascii "RTS"
+        .byte LF
+        .ascii "__mod:"
+        .byte TAB
+        .ascii "JSR __divmod"
+        .byte LF,TAB
+        .ascii "LDA __dr"
+        .byte LF,TAB
+        .ascii "STA __ax"
+        .byte LF,TAB
+        .ascii "LDA __dr+1"
+        .byte LF,TAB
+        .ascii "STA __ax+1"
+        .byte LF,TAB
+        .ascii "RTS"
+        .byte LF
+        .ascii "__divmod:"
+        .byte TAB
+        .ascii "LDA __t0"
+        .byte LF,TAB
+        .ascii "STA __dr"
+        .byte LF,TAB
+        .ascii "LDA __t0+1"
+        .byte LF,TAB
+        .ascii "STA __dr+1"
+        .byte LF,TAB
+        .ascii "LDA #0"
+        .byte LF,TAB
+        .ascii "STA __dq"
+        .byte LF,TAB
+        .ascii "STA __dq+1"
+        .byte LF,TAB
+        .ascii "LDA __ax"
+        .byte LF,TAB
+        .ascii "LDB __ax+1"
+        .byte LF,TAB
+        .ascii "OR"
+        .byte LF,TAB
+        .ascii "JZ __dm2"
+        .byte LF
+        .ascii "__dm0:"
+        .byte TAB
+        .ascii "LDA __dr+1"
+        .byte LF,TAB
+        .ascii "LDB __ax+1"
+        .byte LF,TAB
+        .ascii "CMP"
+        .byte LF,TAB
+        .ascii "JNZ __dm3"
+        .byte LF,TAB
+        .ascii "LDA __dr"
+        .byte LF,TAB
+        .ascii "LDB __ax"
+        .byte LF,TAB
+        .ascii "CMP"
+        .byte LF
+        .ascii "__dm3:"
+        .byte TAB
+        .ascii "JNC __dm2"
+        .byte LF,TAB
+        .ascii "LDA __dr"
+        .byte LF,TAB
+        .ascii "LDB __ax"
+        .byte LF,TAB
+        .ascii "SUB"
+        .byte LF,TAB
+        .ascii "STA __dr"
+        .byte LF,TAB
+        .ascii "LDA #0"
+        .byte LF,TAB
+        .ascii "JC __dm1"
+        .byte LF,TAB
+        .ascii "LDA #1"
+        .byte LF
+        .ascii "__dm1:"
+        .byte TAB
+        .ascii "STA __c"
+        .byte LF,TAB
+        .ascii "LDA __dr+1"
+        .byte LF,TAB
+        .ascii "LDB __ax+1"
+        .byte LF,TAB
+        .ascii "SUB"
+        .byte LF,TAB
+        .ascii "STA __dr+1"
+        .byte LF,TAB
+        .ascii "LDA __c"
+        .byte LF,TAB
+        .ascii "JZ __dm4"
+        .byte LF,TAB
+        .ascii "LDA __dr+1"
+        .byte LF,TAB
+        .ascii "DEC"
+        .byte LF,TAB
+        .ascii "STA __dr+1"
+        .byte LF
+        .ascii "__dm4:"
+        .byte TAB
+        .ascii "LDA __dq"
+        .byte LF,TAB
+        .ascii "LDB #1"
+        .byte LF,TAB
+        .ascii "ADD"
+        .byte LF,TAB
+        .ascii "STA __dq"
+        .byte LF,TAB
+        .ascii "JNC __dm0"
+        .byte LF,TAB
+        .ascii "LDA __dq+1"
+        .byte LF,TAB
+        .ascii "INC"
+        .byte LF,TAB
+        .ascii "STA __dq+1"
+        .byte LF,TAB
+        .ascii "JMP __dm0"
+        .byte LF
+        .ascii "__dm2:"
+        .byte TAB
+        .ascii "RTS"
+        .byte LF
+        .ascii "__dq:   .fill 2"
+        .byte LF
+        .ascii "__dr:   .fill 2"
+        .byte LF,0
+MSHLDEF:.ascii "__shl:"          ; __ax = __t0 << __ax
+        .byte TAB
+        .ascii "LDA __ax"
+        .byte LF,TAB
+        .ascii "STA __sc"
+        .byte LF
+        .ascii "__shl0:"
+        .byte TAB
+        .ascii "LDA __sc"
+        .byte LF,TAB
+        .ascii "JZ __shld"
+        .byte LF,TAB
+        .ascii "LDA __t0"
+        .byte LF,TAB
         .ascii "SHL"
-        .byte LF,0
-MROL:   .byte $20,$20,$20,$20,$20,$20,$20,$20
+        .byte LF,TAB
+        .ascii "STA __t0"
+        .byte LF,TAB
+        .ascii "LDA __t0+1"
+        .byte LF,TAB
         .ascii "ROL"
-        .byte LF,0
-MNEG:   .byte $20,$20,$20,$20,$20,$20,$20,$20     ; -__ax = ~__ax + 1, inline
-        .ascii "XORW __ax,#65535"
+        .byte LF,TAB
+        .ascii "STA __t0+1"
+        .byte LF,TAB
+        .ascii "LDA __sc"
+        .byte LF,TAB
+        .ascii "DEC"
+        .byte LF,TAB
+        .ascii "STA __sc"
+        .byte LF,TAB
+        .ascii "JMP __shl0"
         .byte LF
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "INCW __ax"
+        .ascii "__shld:"
+        .byte TAB
+        .ascii "LDA __t0"
+        .byte LF,TAB
+        .ascii "STA __ax"
+        .byte LF,TAB
+        .ascii "LDA __t0+1"
+        .byte LF,TAB
+        .ascii "STA __ax+1"
+        .byte LF,TAB
+        .ascii "RTS"
         .byte LF,0
-MLNOT:  .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "JSR __lnot"
+MSHRDEF:.ascii "__shr:"          ; __ax = __t0 >> __ax
+        .byte TAB
+        .ascii "LDA __ax"
+        .byte LF,TAB
+        .ascii "STA __sc"
+        .byte LF
+        .ascii "__shr0:"
+        .byte TAB
+        .ascii "LDA __sc"
+        .byte LF,TAB
+        .ascii "JZ __shrd"
+        .byte LF,TAB
+        .ascii "LDA __t0+1"
+        .byte LF,TAB
+        .ascii "SHR"
+        .byte LF,TAB
+        .ascii "STA __t0+1"
+        .byte LF,TAB
+        .ascii "LDA __t0"
+        .byte LF,TAB
+        .ascii "ROR"
+        .byte LF,TAB
+        .ascii "STA __t0"
+        .byte LF,TAB
+        .ascii "LDA __sc"
+        .byte LF,TAB
+        .ascii "DEC"
+        .byte LF,TAB
+        .ascii "STA __sc"
+        .byte LF,TAB
+        .ascii "JMP __shr0"
+        .byte LF
+        .ascii "__shrd:"
+        .byte TAB
+        .ascii "LDA __t0"
+        .byte LF,TAB
+        .ascii "STA __ax"
+        .byte LF,TAB
+        .ascii "LDA __t0+1"
+        .byte LF,TAB
+        .ascii "STA __ax+1"
+        .byte LF,TAB
+        .ascii "RTS"
         .byte LF,0
 MLNOT_DEF:
-        .ascii "__lnot: LDA __ax"
+        .ascii "__lnot:"         ; __ax = !__ax
+        .byte TAB
+        .ascii "LDA __ax"
+        .byte LF,TAB
+        .ascii "LDB __ax+1"
+        .byte LF,TAB
+        .ascii "OR"
+        .byte LF,TAB
+        .ascii "JZ __ln1"
+        .byte LF,TAB
+        .ascii "LDA #0"
+        .byte LF,TAB
+        .ascii "STA __ax"
+        .byte LF,TAB
+        .ascii "STA __ax+1"
+        .byte LF,TAB
+        .ascii "RTS"
         .byte LF
-        .ascii "        LDB __ax+1"
-        .byte LF
-        .ascii "        OR"
-        .byte LF
-        .ascii "        JZ __ln1"
-        .byte LF
-        .ascii "        LDA #0"
-        .byte LF
-        .ascii "        STA __ax"
-        .byte LF
-        .ascii "        STA __ax+1"
-        .byte LF
-        .ascii "        RTS"
-        .byte LF
-        .ascii "__ln1:  LDA #1"
-        .byte LF
-        .ascii "        STA __ax"
-        .byte LF
-        .ascii "        LDA #0"
-        .byte LF
-        .ascii "        STA __ax+1"
-        .byte LF
-        .ascii "        RTS"
+        .ascii "__ln1:"
+        .byte TAB
+        .ascii "LDA #1"
+        .byte LF,TAB
+        .ascii "STA __ax"
+        .byte LF,TAB
+        .ascii "LDA #0"
+        .byte LF,TAB
+        .ascii "STA __ax+1"
+        .byte LF,TAB
+        .ascii "RTS"
         .byte LF,0
-MTAP1L:
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "TAP1L"
-        .byte LF,0
-MTAP1H:
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "TAP1H"
-        .byte LF,0
-MINP1:
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "INP1"
-        .byte LF,0
-MLDP1:
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "LDA (P1)"
-        .byte LF,0
-MSTP1:
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "STA (P1)"
-        .byte LF,0
-MLDT0:
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "LDA __t0"
-        .byte LF,0
-MLDT0H:
-        .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .ascii "LDA __t0+1"
-        .byte LF,0
-MLDALV: .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .asciiz "LDA #<__V+"
-MLDAHV: .byte $20,$20,$20,$20,$20,$20,$20,$20
-        .asciiz "LDA #>__V+"
+; messages
 MUSAGE: .asciiz "usage: cc src.c >out.asm"
 MNOSRC: .asciiz "cc: cannot open source"
-MTOOFUN: .asciiz "cc: too many functions"
-MTOOMAC: .asciiz "cc: too many //#define macros"
-
-; =============================================================================
-; BSS - in this program's own space (safe from OS scratch)
-; =============================================================================
-PBF:    .fill 1    ; pushback flag (1 = PBC holds a char)
-PBC:    .fill 1    ; pushback char
-CURK:   .fill 1    ; current token kind: 0 EOF, 1 NUM, 2 ID, 3 PUNCT
-CURV:   .fill 2    ; current token value (NUM value / PUNCT char)
-TID:    .fill 24   ; identifier text, NUL-terminated
-PATH:   .fill 64   ; source path buffer (raw arg)
-APATHB: .fill 80   ; PATH made absolute (CWD-prefixed) for FRESOLVE
-EMP:    .fill 2    ; emit walk pointer
-VN:     .fill 2    ; emitnum working value (16-bit: slot numbers can exceed 255)
-DVLO:   .fill 1    ; emitnum: current power-of-ten divisor, low byte
-DVHI:   .fill 1    ; emitnum: current power-of-ten divisor, high byte
-DQ:     .fill 1    ; emitnum digit counter
-HADH:   .fill 1    ; emitnum: a higher digit was already printed
-SREL:   .fill 2    ; EMSLOT: 16-bit relative slot index (SLOTBASE-relative)
-NACC:   .fill 2    ; lexer number accumulator
-STK0:   .fill 2    ; saved SP for a clean bail on error
-TMPB:   .fill 1    ; byte scratch (also IDEQ / EXPECT* result flag)
-TMPC:   .fill 1    ; byte scratch (IDEQ char compare)
-SYMCNT: .fill 1    ; number of declared variables
-SYMIDX: .fill 2    ; SYMFIND/SYMADD result index (16-bit: >255 slots; signed for globals)
-SYMOK:  .fill 1    ; SYMFIND: 1 if found
-LHSIDX: .fill 2    ; index of an assignment/decl target variable (16-bit)
-VITER:  .fill 2    ; loop counter emitting variable storage (16-bit)
-VITER2: .fill 1    ; EM_PUSHSLOT/EM_POPSLOT: slot number being emitted
-VITER3: .fill 1    ; EM_SAVESLOTS/EM_RESTSLOTS: slot loop counter
-SELFREC: .fill 1   ; (unused since frames) was: direct self-recursion flag
-SAWADDRG: .fill 1   ; 1 if an argument in the current call took an address
-GSYMPOOL: .fill 256 ; packed global variable names
-GVSLOT: .fill 96   ; per-global: its (absolute) storage slot (16-bit cells)
-GSYMCH: .fill 48    ; per-global: char-typed flag
-GSYMAR: .fill 48    ; per-global: array flag
-GSYMCNT: .fill 1    ; number of globals
-SYMRCH: .fill 1     ; SYMFIND/GSYMFIND result: char flag
-SYMRAR: .fill 1     ; SYMFIND/GSYMFIND result: array flag
-IDVARCH: .fill 1    ; gf_id: the variable's char flag
-IDVARAR: .fill 1    ; gf_id: the variable's array flag
-ELARR: .fill 1      ; ELEMADDR: 1 if the indexed base is an array (else pointer)
-LHSCH: .fill 1      ; assignment target char flag
-LHSAR: .fill 1      ; assignment target array flag
-USESP:  .fill 1     ; //#use nesting depth (0 = main source)
-USEDF:  .fill 1     ; USED_HAS result
-USEDN:  .fill 1     ; number of spliced library names (dedup)
-USECNT: .fill 1     ; save/restore byte counter
-NAMEBUF: .fill 24   ; the current //#use library name
-LIBPATH: .fill 40   ; "/lib/lib_<name>.c"
-USED:   .fill 128   ; packed names of already-spliced libraries
-MACCNT:  .fill 1    ; number of object-like //#define macros
-MACF:    .fill 1    ; MACLOOKUP result: 1 if TID is a macro
-MACVAL:  .fill 2    ; MACLOOKUP result: the macro's 16-bit value
-MACNAMES: .fill 768 ; packed NUL-terminated macro names (was 384 -- lib_abi.c
-                    ; alone is ~370 bytes / 37 //#defines; overflow corrupted
-                    ; USESTATE below and reset the machine when splicing it)
-MACVALS:  .fill 128 ; parallel 16-bit values (64 macros max; was 64 = 32 max,
-                    ; which lib_abi.c's 37 //#defines overflowed -> reset)
-USESTATE: .fill 70  ; saved read-stream state, 14 bytes x 5 levels
-USEBUF: .fill 2560  ; per-level 512-byte read buffers (5 levels)
-BIOSAD: .fill 2    ; bios() intrinsic: the constant call address
-USEAND: .fill 1    ; 1 if binary & used
-USEOR:  .fill 1    ; 1 if binary | used
-USEXOR: .fill 1    ; 1 if binary ^ used
-USESHL: .fill 1    ; 1 if << used
-USESHR: .fill 1    ; 1 if >> used
-TERNF:  .fill 1    ; ternary ?: false label
-TERNE:  .fill 1    ; ternary ?: end label
-INCLBL: .fill 1    ; ++/-- carry-skip label
-STAGPOOL: .fill 128 ; struct tag names
-STAGSIZE: .fill 16  ; per-tag size in bytes
-STAGCNT: .fill 1
-STMPOOL: .fill 256  ; struct member names (global, unique)
-STMOFF: .fill 64    ; per-member byte offset
-STMCH:  .fill 64    ; per-member char flag
-STMCNT: .fill 1
-STOFF:  .fill 1     ; running offset while defining a struct
-TAGSIZE: .fill 1    ; STAGFIND result: tag size
-STFNP:  .fill 2     ; STAGFIND name pointer
-STMEMOK: .fill 1    ; STMFIND: found
-STMEMOFF: .fill 1   ; STMFIND: member offset
-STMEMCH: .fill 1    ; STMFIND: member char flag
-MEMTMP: .fill 1     ; EM_ADDOFF scratch
-MEMTMP2: .fill 1    ; member-store width across RHS
-NLSLOT: .fill 1    ; current function's slot count (>= name count, arrays add N)
-SYMSLOT: .fill 48  ; per-name -> first slot (relative to SLOTBASE)
-SYMARR: .fill 256  ; per-slot: 1 if this slot is an array base
-STRBUF: .fill 128  ; current string-literal text
-STRDL:  .fill 1    ; string literal: data label
-STRSL:  .fill 1    ; string literal: skip label
-SYMCHAR: .fill 256 ; per-slot: 1 if the variable is char-typed (byte elements)
-DCLCHAR: .fill 1   ; current declaration is char-typed
-ISCHARTYPE: .fill 1 ; EXPECTTYPE: 1 if the type just parsed was 'char'
-EXPRCHAR: .fill 1  ; last factor loaded a char-typed value (for *p byte deref)
-ELCHAR: .fill 1    ; ELEMADDR: 1 if the indexed base is char-typed
-CUR2:   .fill 1    ; second char of a two-char punct (== != <= >=), else 0
-RELOP:  .fill 1    ; relational op code: 0 LT 1 LE 2 GT 3 GE 4 EQ 5 NE
-RELF:   .fill 1    ; RELDET: 1 if the current token is a relational op
-CONDF:  .fill 1    ; 1: the statement parser wants the next GEXPR as a CONDITION
-CONDCUR: .fill 1   ; GEXPR's copy of CONDF (a nested GEXPR -- args, parens -- sees 0)
-CONDLBL: .fill 1   ; the label a top-level relational branches to when FALSE
-CONDDONE: .fill 1  ; 1: GREL emitted that branch itself (no 0/1 value in __ax)
-LBLCNT: .fill 1    ; next codegen label number
-LBLA:   .fill 1    ; comparison branch-target label (EMITCMP)
-LBLB:   .fill 1    ; comparison end label (EMITCMP)
-JLBL:   .fill 1    ; label number scratch for EMITJ/EMITLBL
-IFTMP:  .fill 1    ; a label held briefly (non-recursively) in if/while
-USEMUL: .fill 1    ; 1 if the program uses '*' (emit the __mul8 helper)
-USEDIV: .fill 1    ; 1 if the program uses '/' or '%'
-MULT2:  .fill 2    ; lexer: NACC<<1 scratch for *10
-CARRY:  .fill 1    ; lexer: 16-bit add carry
-SLOTCNT: .fill 2   ; total variable slots across all functions (global, 16-bit)
-SLOTBASE: .fill 2  ; the current function's first slot (16-bit)
-CURFN:  .fill 16   ; current function name
-IDNAME: .fill 16   ; a factor's identifier (call name / var name)
-IDVAROK: .fill 1   ; gf_id: the id is a known variable
-IDVARIDX: .fill 2  ; gf_id: that variable's local index (16-bit)
-FCNT:   .fill 1    ; number of defined functions
-FI:     .fill 1    ; FFIND function index
-FFB:    .fill 2    ; FFIND result: the function's param base slot (16-bit)
-FOK:    .fill 1    ; FFIND: 1 if found
-NPARAMS: .fill 1   ; FUNCDEF: parameter count being parsed
-ARGI:   .fill 1    ; call: current argument index
-ARGSLOT: .fill 2   ; call: absolute slot for the current argument (16-bit)
-FNPAR:  .fill 64   ; per-function parameter count (cap: MAXFUNC functions)
-FSLOT:  .fill 128  ; per-function param base slot (16-bit cells; cap: MAXFUNC functions)
-FPOOL:  .fill 384  ; packed function names (NUL-separated; cap: MAXFUNC funcs)
-USENEG: .fill 1    ; 1 if unary '-' is used (emit __neg)
-USENOT: .fill 1    ; 1 if '!' is used (emit __lnot)
-LORT:   .fill 1    ; '||' short-circuit: Ltrue label
-LORE:   .fill 1    ; '||' end label
-LANDF:  .fill 1    ; '&&' short-circuit: Lfalse label
-LANDE:  .fill 1    ; '&&' end label
-LFT:    .fill 1    ; for-loop: cond (top) label
-LFB:    .fill 1    ; for-loop: body label
-LFP:    .fill 1    ; for-loop: post label
-LFE:    .fill 1    ; for-loop: end label
-WHT:    .fill 1    ; while-loop: top (cond) label
-WHE:    .fill 1    ; while-loop: end label
-CURBRK: .fill 1    ; innermost loop's break target (0 outside any loop)
-CURCONT: .fill 1   ; innermost loop's continue target
-SYMPOOL: .fill 256 ; packed NUL-terminated variable names
+MTOOFUN:.asciiz "cc: too many functions"
+MTOOMAC:.asciiz "cc: too many //#define macros"
+MTOOSYM:.asciiz "cc: symbol table full"
+MSYNERR:.asciiz "cc: syntax error"

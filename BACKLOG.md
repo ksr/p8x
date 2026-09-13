@@ -51,7 +51,20 @@ remainder is why it is still here.
             3 deep (was 2, unchecked); a 4th GOSUB / 33rd variable / 17th
             string variable is `?SYNTAX ERROR`; division stays UNSIGNED as
             before. Same -D build knobs; PROG moved to BASRAM+$580 unchanged.
-      - [ ] `apps/p8xcc.asm` — a redesigned frame model is on the table.
+      - [x] **`apps/p8xcc.asm` DONE 2026-09-13** — drop-in rewrite that GENERATES
+            the same code (differential compile of pwd/wc/grep/vi on the machine:
+            text-identical apart from the tab indent): one arena/first-letter-
+            chain name-table mechanism for all seven tables with (P1+d) access
+            and length-first rejection, keyword codes from the lexer, word ops
+            for slots/literals/decimal, single-pointer emit, tables at $B000
+            (code-only binary). cc.bin 20,915 → 10,075 B (code 13.3 → 10.1 KB);
+            compiles 1.2–1.6× faster (pwd 2.60 → 2.10 M, wc 30.8 → 20.6 M,
+            grep 55.8 → 36.1 M, vi 48.8 → 30.0 M cycles); emitted text ~35%
+            smaller. Found and fixed an OLD bug: a `char` array declared after
+            an `int` array got word elements (grep.c `collect`). Calls to
+            undeclared functions now emit the name; syntax errors bail. The
+            frame model (P3 frames instead of static slots) stays a separate,
+            later item — it changes the generated code and needs its own tests.
       - [ ] `os/p8xos.asm` + `os/wmkernel_body.asm`, `firmware/p8xmon.asm` (last).
       Measure with `p8xemu -L` cycle stamps (scratch copies with `STA $FF02` at
       entry and before the final message); each module with its own tests.
