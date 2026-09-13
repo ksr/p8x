@@ -21,7 +21,8 @@
 - [P8X asm caps](reference_p8x_asm_caps.md) — on-target asm.bin: hashed symbol table 1,120 symbols ($8000..$C5FF, 16-byte entries), binary must stay below $8000 (4,116 B); 127-char lines; `.ascii` escapes decoded since 2026-09-13; `?undefined: OPCTAB` / `;#use` host-vs-native traps
 - [P8X FDELETE 16-bit fix](reference_p8x_fdelete_16bit.md) — FDELETE was 8-bit on dir LBA; `make` in /src/os-bios "built everything" (stale MK.RUN); only bites subdirs past LBA 255; trust the on-hardware symptom over "stale disk"
 - [P8X run.sh reuses disks](reference_p8x_runsh_disk_reuse.md) — run.sh only creates/populates a disk `if [ ! -f ]`; a true rebuild needs `rm` of the img first (else the on-disk OS stays stale; eeprom always rebuilds)
-- [P8X memory map (rev E)](reference_p8x_memory_map.md) — 8K ROM $0000-$1FFF, RAM+OS at $2000, syscall ABI $20xx; scratch $6000-$69FF, TPA $6A00 (~37.9K)
+- [P8X memory map (rev E)](reference_p8x_memory_map.md) — 8K ROM $0000-$1FFF, RAM+OS at $2000, syscall ABI $20xx; TPA base dropped to $6300 (2026-09-13), OS scratch relocated to $5900-$5FFF, SBUF $6100 the remaining floor
+- [P8X TPABASE change checklist](reference_p8x_tpabase.md) — TPABASE is NOT single-sourced (only p8cc.py derives it; p8xcc.asm/cc.c/p8cc.c/all asm commands + run.sh + ~109 tests hardcode it); every touch point to edit when it moves, incl. DEFADDR's bare `#$6A` page byte and the run-disk rebuild
 - [P8X named BIOS/OS addresses](reference_p8x_fs_wrappers.md) — both compilers support //#define; commands //#use abi (lib_abi.c #defines / lib_abi.inc equates) and write bios(FOPEN,...), never raw hex
 - [CODE_REVIEW.md is unreliable](reference_p8x_code_review_unreliable.md) — plausible claims, not verified defects; ~half get rejected on inspection, verify before acting
 - [p8cc int is used AS unsigned](reference_p8x_int_is_unsigned.md) — no unsigned type; unsigned compare/div is load-bearing, making `<` signed shipped a buffer overflow
