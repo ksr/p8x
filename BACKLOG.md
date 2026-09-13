@@ -185,7 +185,7 @@ remainder is why it is still here.
   - **Proper scrollback.** The MVP is **clear-on-full**: when the cursor passes
     the bottom row it clears the screen and homes to the top (zero CPU RAM). A
     real console scrolls. There is NO free RAM block for a text framebuffer (high
-    RAM is fully allocated — TPA `$6A00`, history `$F800`, FSDIRBUF `$FA00`, RDBUF
+    RAM is fully allocated — TPA `$6100`, history `$F800`, FSDIRBUF `$FA00`, RDBUF
     `$FC00`, stack `$FE00`), so the intended design is **card-list scrollback**:
     store text on the card as GL command lists (the WM-sink pattern), keep a ring
     of line-lists, and `CLRUN` the visible window on scroll (drop the oldest).

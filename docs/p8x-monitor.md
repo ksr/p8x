@@ -133,10 +133,11 @@ correctly.)
 | Range | Use |
 |-------|-----|
 | `$0000–$1FFF` | EEPROM (8 KB, rev E; 28C64 or low 8 KB of a 28C256) — monitor + BIOS at `$0000` (~4.7 KB used). BASIC is no longer ROM-resident; it ships as `/BIN/BASIC.BIN` on disk. |
-| `$2000–$5FFF` | RAM — **P8X/OS image** loads here (`$2000`, ~15.7 KB **including the resident window-manager kernel**, ending ~`$5ED7`, with growth room to `$5F00`; `$5F00–$5FFF` is the shell's tab-complete scratch; the 16 KB cap = the on-disk LBA 1–32 boot region). |
-| `$6000–$62FF` | RAM — **firmware/BIOS scratch** (fixed by the BIOS): monitor line buffer `$6000` (64 bytes, so an input line is capped at **63 characters** — further input is ignored rather than echoed, since the parameter block below would otherwise be overwritten), the parameter block + read/write/dir-iteration state `$6040` (CF `LBA` `$6047–$6049`, `FNAME` `$604A`, `FSRC`/`FLEN`, `FFLAG` `$6075`, `DIBUFH` `$607E`), and the sector buffer `SBUF` at `$6100`. |
-| `$6300–$69FF` | RAM — **OS data**: variables `$6300`, the stdin read buffer `IBUF` `$6500`, search `PATH` `$6700`, the `>>` prepend buffer `APBUF` `$6800`. |
-| `$6A00–$FDFF` | RAM — **TPA**: user programs + data (`RUN` loads at `$6A00`, ~37.9 KB; the C stack grows down from `CSTACKTOP $F800`). Above `$F800` sit the fixed scratch pages: the shell's **8-line command-history ring at `$F800–$F9FF`**, commands' glob/dir-iteration page (FSDIRBUF) at `$FA00`, and the file-read buffer (RDBUF) at `$FC00`. |
+| `$2000–$56FF` | RAM — **P8X/OS image** loads here (`$2000`, ~13.8 KB **including the resident window-manager kernel**, ending ~`$55E6`; the 16 KB cap = the on-disk LBA 1–32 boot region). |
+| `$5700–$5DFF` | RAM — **OS data** (relocated here 2026-09-13 to free TPA): shell variables + FS/PACK/FSCK state `$5700`, the stdin read buffer `IBUF`, search `PATH`, the `>>` prepend buffer `APBUF`. |
+| `$5E00–$5FFF` | RAM — **`SBUF`** sector buffer (moved down from `$6100` the same day; monitor-owned, but not part of the command `//#define` ABI). |
+| `$6000–$60FF` | RAM — **firmware/BIOS scratch** (fixed ABI — commands `//#define` these): monitor line buffer `$6000` (64 bytes, so an input line is capped at **63 characters**), the parameter block + read/write/dir-iteration state `$6040` (CF `LBA` `$6047–$6049`, `FNAME` `$604A`, `FSRC`/`FLEN`, `FFLAG` `$6075`, `DIBUFH` `$607E`). This block did **not** move. |
+| `$6100–$FDFF` | RAM — **TPA**: user programs + data (`RUN` loads at `$6100`, ~40.1 KB; the C stack grows down from `CSTACKTOP $F800`). Above `$F800` sit the fixed scratch pages: the shell's **8-line command-history ring at `$F800–$F9FF`**, commands' glob/dir-iteration page (FSDIRBUF) at `$FA00`, and the file-read buffer (RDBUF) at `$FC00`. |
 | `$FE00–$FEFF` | RAM — stack (P3 grows down from `$FEFF`). |
 | `$FF00` | switch input port (read) |
 | `$FF02` | LED output port (write) |

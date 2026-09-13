@@ -40,7 +40,7 @@ boot, reached through the OS syscall table.
   $5ED7            end of the OS+kernel image (~41 B growth room)
   $5F00            tab-complete scratch (256 B)
   $6000            OS/BIOS scratch
-  $6A00  TPABASE   ── full TPA for apps ($6A00..CSTACKTOP, ~37.9 KB) ──
+  $6100  TPABASE   ── full TPA for apps ($6100..CSTACKTOP, ~40.1 KB) ──
   $F800  CSTACKTOP  apps' C stack top
   $F800..$F9FF     shell command-history ring (8 × 64 B)
   $FA00..$FBFF     FSDIRBUF: the C commands' dir/glob sector page (dir, cat, glob_expand)
