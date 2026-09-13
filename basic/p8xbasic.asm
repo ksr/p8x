@@ -320,10 +320,7 @@ STKTOP = $FEFF
         STA  SPSAV+1
         JMP  bs_go
 bs_own: LDP3 #STKTOP                 ; no OS underneath: the stack is ours
-        LDA  #<STKTOP
-        STA  SPSAV
-        LDA  #>STKTOP
-        STA  SPSAV+1
+        LDW SPSAV,#STKTOP                ; <- tierA: address constant (next: LDA)
 bs_go:
         LDA  #$03            ; ACIA master reset
         STA  ACIAS
@@ -334,10 +331,7 @@ bs_go:
         STA  FMODE
         STA  OUTFILE
         STA  STRSINK         ; PUTCH not capturing into a string
-        LDA  #$E1            ; seed the RNG
-        STA  SEED
-        LDA  #$AC
-        STA  SEED+1
+        LDW SEED,#44257                ; <- tierA: word constant (next: LDA)
         LDA  #0              ; PRMFIL shadow: the card powers up outline
         STA  PRMSH
         LDA  GLIDR           ; a GL engine? establish BASIC's full-screen
@@ -692,10 +686,7 @@ GETPATH: JSR  SKIPSP
         CMP
         JNZ  gf_err
         INP2                         ; past opening quote
-        LDA  #<PBUF
-        TAP1L
-        LDA  #>PBUF
-        TAP1H
+        LDP1 #PBUF                ; <- tierA: pointer constant (next: LDA)
         LDA  #47
         STA  RP                      ; chars of room left
 gf_lp:  LDA  (P2)
@@ -721,10 +712,7 @@ gf_err: SEC
         RTS
 
 ; PROGLEN — FLEN = byte length of the program (PROG .. past the 00,00 marker).
-PROGLEN:LDA  #<PROG
-        TAP1L
-        LDA  #>PROG
-        TAP1H
+PROGLEN:LDP1 #PROG                ; <- tierA: pointer constant (next: LDA)
 pl_l:   LDA  (P1)+                   ; line# lo
         STA  TOKW
         LDA  (P1)+                   ; line# hi
@@ -738,15 +726,9 @@ pl_end: TPA1L                        ; NUM1 = end pointer
         STA  NUM1
         TPA1H
         STA  NUM1+1
-        LDA  #<PROG                  ; NUM2 = PROG
-        STA  NUM2
-        LDA  #>PROG
-        STA  NUM2+1
+        LDW NUM2,#PROG                ; <- tierA: address constant (next: JSR SUB16)
         JSR  SUB16                   ; NUM1 = end - PROG = length
-        LDA  NUM1
-        STA  FLEN
-        LDA  NUM1+1
-        STA  FLEN+1
+        MOVW FLEN,NUM1                ; <- tierA: word move (next: LDA)
         LDA  #0                      ; FLEN is 24-bit now; a BASIC program is <64 KB
         STA  FLEN+2
         RTS
@@ -768,10 +750,7 @@ SYNERR: LDA  SPSAV                   ; unwind to our entry SP, not STKTOP: under
         JZ   syn_imm
         LDP1 #MSYNIN                 ; "?SYNTAX ERROR IN "
         JSR  PUTS
-        LDA  CURLINE                 ; line number = the word at CURLINE
-        TAP1L
-        LDA  CURLINE+1
-        TAP1H
+        LPW1 CURLINE                ; <- tierA: pointer load (next: LDA)
         LDA  (P1)+
         STA  LNUM
         LDA  (P1)
@@ -803,10 +782,7 @@ dp_item: JSR  SKIPSP
         LDA  MATCHF
         JNZ  dp_pstr
         JSR  EVAL                   ; numeric item
-        LDA  RESULT
-        STA  LNUM
-        LDA  RESULT+1
-        STA  LNUM+1
+        MOVW LNUM,RESULT                ; <- tierA: word move (next: JSR PRDEC)
         JSR  PRDEC
         JMP  dp_sep
 dp_pstr: JSR  SEVAL                  ; string item -> STRACC
@@ -859,10 +835,7 @@ dl_var: JSR  VARGET                  ; parse name, look up/create -> P1 = &value
         JNZ  dl_err
         INP2
         JSR  EVAL                   ; RESULT = value (expr, optional comparison)
-        LDA  SAVE1
-        TAP1L
-        LDA  SAVE1+1
-        TAP1H
+        LPW1 SAVE1                ; <- tierA: pointer load (next: LDA)
         LDA  RESULT
         STA  (P1)
         INP1
@@ -884,10 +857,7 @@ dl_str: JSR  SVARGET                 ; parse NAME$, look up/create -> P1 = &entr
         JNZ  dl_err
         INP2
         JSR  SEVAL                   ; STRACC = string value
-        LDA  #<STRACC                ; store STRACC into the variable's data field
-        STA  SPA
-        LDA  #>STRACC
-        STA  SPA+1
+        LDW SPA,#STRACC                ; <- tierA: address constant (next: LDA)
         LDA  SAVE1                   ; SPD = entry + NAMLEN (the len byte)
         LDB  #NAMLEN
         ADD
@@ -912,14 +882,8 @@ DORUN:  LDA  #0
         STA  OUTFILE
         LDA  #1                      ; a runtime error now reports its line number
         STA  RUNNING
-        LDA  #<PROG
-        STA  CURLINE
-        LDA  #>PROG
-        STA  CURLINE+1
-run_l:  LDA  CURLINE
-        TAP1L
-        LDA  CURLINE+1
-        TAP1H
+        LDW CURLINE,#PROG                ; <- tierA: address constant (next: LDA)
+run_l:  LPW1 CURLINE                ; <- tierA: pointer load (next: LDA)
         LDA  (P1)+
         STA  NUM1
         LDA  (P1)+
@@ -942,10 +906,7 @@ run_exec: LDA #0                    ; entry point with P2 already positioned
         JNZ  run_jump
         LDA  BRANCHF
         JNZ  run_goto
-        LDA  CURLINE                ; advance to next record
-        TAP1L
-        LDA  CURLINE+1
-        TAP1H
+        LPW1 CURLINE                ; <- tierA: pointer load (next: INP1)
         INP1
         INP1
 rn_sk:  LDA  (P1)+
@@ -967,15 +928,9 @@ run_jump: LDA JUMPF                ; 1 = jump to line record; 2 = resume at text
         LDB  #2
         CMP
         JZ   run_resume
-        LDA  JUMPADDR               ; mode 1 (RETURN): CURLINE = JUMPADDR
-        STA  CURLINE
-        LDA  JUMPADDR+1
-        STA  CURLINE+1
+        MOVW CURLINE,JUMPADDR                ; <- tierA: word move (next: JMP run_l -> LDA)
         JMP  run_l
-run_resume: LDA JUMPADDR            ; mode 2 (FOR loop-back): P2 = TP, CURLINE preset
-        TAP2L
-        LDA  JUMPADDR+1
-        TAP2H
+run_resume:LPW2 JUMPADDR                ; <- tierA: pointer load (next: JMP run_exec -> LDA)
         JMP  run_exec
 run_undef: LDP1 #MUNDEF
         JSR  PUTS
@@ -985,10 +940,7 @@ run_done: LDP1 #MOK
         RTS
 
 ; FINDLINE — find the program line numbered BRANCHN; FNDF=1, P1=record start
-FINDLINE: LDA #<PROG
-        TAP1L
-        LDA  #>PROG
-        TAP1H
+FINDLINE:LDP1 #PROG                ; <- tierA: pointer constant (next: TPA1L)
 fl_l:   TPA1L
         STA  RP
         TPA1H
@@ -1001,19 +953,13 @@ fl_l:   TPA1L
         LDB  NUM1+1
         OR
         JZ   fl_no
-        LDA  BRANCHN
-        STA  NUM2
-        LDA  BRANCHN+1
-        STA  NUM2+1
+        MOVW NUM2,BRANCHN                ; <- tierA: word move (next: JSR CMP16)
         JSR  CMP16
         JZ   fl_found
 fl_sk:  LDA  (P1)+
         JNZ  fl_sk
         JMP  fl_l
-fl_found: LDA RP
-        TAP1L
-        LDA  RP+1
-        TAP1H
+fl_found:LPW1 RP                ; <- tierA: pointer load (next: LDA)
         LDA  #1
         STA  FNDF
         RTS
@@ -1025,10 +971,7 @@ fl_no:  LDA  #0
 DOGOTO: INP2
         JSR  SKIPSP
 DOGOTON: JSR PARSEDEC
-        LDA  LNUM
-        STA  BRANCHN
-        LDA  LNUM+1
-        STA  BRANCHN+1
+        MOVW BRANCHN,LNUM                ; <- tierA: word move (next: LDA)
         LDA  #1
         STA  BRANCHF
         RTS
@@ -1098,19 +1041,13 @@ DOINPUT: INP2
         LDP2 #LBUF
         JSR  SKIPSP
         JSR  PARSEDEC               ; LNUM = entered value
-        LDA  SAVE1
-        TAP1L
-        LDA  SAVE1+1
-        TAP1H
+        LPW1 SAVE1                ; <- tierA: pointer load (next: LDA)
         LDA  LNUM
         STA  (P1)
         INP1
         LDA  LNUM+1
         STA  (P1)
-        LDA  GTMP                   ; restore program text pointer
-        TAP2L
-        LDA  GTMP+1
-        TAP2H
+        LPW2 GTMP                ; <- tierA: pointer load (next: RTS)
         RTS
 ; INPUT into a string variable: read a whole line into NAME$ (capped at SLEN)
 in_str: JSR  SVARGET                 ; P1 = &entry
@@ -1149,10 +1086,7 @@ ins_cl: LDA  (P2)
 ins_ce: LDP1 #STRACC
         LDA  SI
         STA  (P1)
-        LDA  #<STRACC                ; store STRACC -> variable data
-        STA  SPA
-        LDA  #>STRACC
-        STA  SPA+1
+        LDW SPA,#STRACC                ; <- tierA: address constant (next: LDA)
         LDA  SAVE1
         LDB  #NAMLEN
         ADD
@@ -1162,20 +1096,14 @@ ins_ce: LDP1 #STRACC
         INC
 ins_s1: STA  SPD+1
         JSR  SMOVE
-        LDA  GTMP                    ; restore program text pointer
-        TAP2L
-        LDA  GTMP+1
-        TAP2H
+        LPW2 GTMP                ; <- tierA: pointer load (next: RTS)
         RTS
 in_err: JMP  SYNERR
 
 ; POKE <addr>, <val> — write the low byte of val to memory (I/O via memory map)
 DOPOKE: INP2
         JSR  EVAL
-        LDA  RESULT
-        STA  POKEA
-        LDA  RESULT+1
-        STA  POKEA+1
+        MOVW POKEA,RESULT                ; <- tierA: word move (next: JSR SKIPSP)
         JSR  SKIPSP
         LDA  (P2)
         LDB  #','
@@ -1183,10 +1111,7 @@ DOPOKE: INP2
         JNZ  pk_err
         INP2
         JSR  EVAL
-        LDA  POKEA
-        TAP1L
-        LDA  POKEA+1
-        TAP1H
+        LPW1 POKEA                ; <- tierA: pointer load (next: LDA)
         LDA  RESULT
         STA  (P1)
         RTS
@@ -1300,22 +1225,13 @@ bx_pf:  STA  GLDIM
 ; a program's WINDOW/VWPORT.
 wflip:  JSR  ADD16
         JSR  n2n1
-        LDA  #$10                   ; 272 = $0110
-        STA  NUM1
-        LDA  #$01
-        STA  NUM1+1
+        LDW NUM1,#272                ; <- tierA: word constant (next: JMP SUB16 -> LDA)
         JMP  SUB16
-n2n1:   LDA  NUM1                   ; NUM1 -> NUM2
-        STA  NUM2
-        LDA  NUM1+1
-        STA  NUM2+1
+n2n1:   MOVW NUM2,NUM1                ; <- tierA: word move (next: RTS)
         RTS
 
 ; gxsh0/2/4 -- one parsed coordinate into its BXS shadow slot
-gxsh0:  LDA  RESULT
-        STA  BXS
-        LDA  RESULT+1
-        STA  BXS+1
+gxsh0:  MOVW BXS,RESULT                ; <- tierA: word move (next: RTS)
         RTS
 gxsh2:  LDA  RESULT
         STA  BXS+2
@@ -1657,10 +1573,7 @@ DOGL:   INP2                        ; consume the GL token
         JSR  GLPUT
         LDA  #' '
         JSR  GLPUT
-        LDA  #<STRACCD
-        TAP1L
-        LDA  #>STRACCD
-        TAP1H
+        LDP1 #STRACCD                ; <- tierA: pointer constant (next: LDA)
         LDA  STRACC
         STA  GLN
 gl_ch:  LDA  GLN
@@ -1792,10 +1705,7 @@ glv_dn: LDA  GLSTATR                ; native statements are SYNCHRONOUS:
 glv_str: JSR  SEVAL                 ; TEXT s$: any string expression
         LDA  STRACC
         JSR  GLPUT                  ; the count byte
-        LDA  #<STRACCD
-        TAP1L
-        LDA  #>STRACCD
-        TAP1H
+        LDP1 #STRACCD                ; <- tierA: pointer constant (next: LDA)
         LDA  STRACC
         STA  GLN
 glv_sc: LDA  GLN
@@ -1869,10 +1779,7 @@ glvs_x: JMP  SYNERR
 DOIMAGE: INP2
         JSR  GCHECK
         JSR  EVAL                   ; x
-        LDA  RESULT
-        STA  IMX
-        LDA  RESULT+1
-        STA  IMX+1
+        MOVW IMX,RESULT                ; <- tierA: word move (next: JSR SKIPSP)
         JSR  SKIPSP
         LDA  (P2)
         LDB  #','
@@ -1880,10 +1787,7 @@ DOIMAGE: INP2
         JNZ  img_syn
         INP2
         JSR  EVAL                   ; y
-        LDA  RESULT
-        STA  IMYC
-        LDA  RESULT+1
-        STA  IMYC+1
+        MOVW IMYC,RESULT                ; <- tierA: word move (next: JSR SKIPSP)
         JSR  SKIPSP
         LDA  (P2)
         LDB  #','
@@ -1951,14 +1855,8 @@ DOIMAGE: INP2
         ; IMYC = the current row's window y, starting at y + h - 1
         ; (the file's first row is the image's TOP); IMCX counts the
         ; row's payload bytes; IMH counts rows.
-        LDA  IMH                    ; IMYC = y + (h-1): the top row
-        STA  NUM2
-        LDA  IMH+1
-        STA  NUM2+1
-        LDA  IMYC
-        STA  NUM1
-        LDA  IMYC+1
-        STA  NUM1+1
+        MOVW NUM2,IMH                ; <- tierA: word move (next: LDA)
+        MOVW NUM1,IMYC                ; <- tierA: word move (next: JSR ADD16)
         JSR  ADD16
         LDA  NUM1
         LDB  #1
@@ -2177,10 +2075,7 @@ DOFOR:  INP2
         JNZ  for_err
         INP2
         JSR  EVAL                   ; start value
-        LDA  SAVE1
-        TAP1L
-        LDA  SAVE1+1
-        TAP1H
+        LPW1 SAVE1                ; <- tierA: pointer load (next: LDA)
         LDA  RESULT
         STA  (P1)
         INP1
@@ -2193,14 +2088,8 @@ DOFOR:  INP2
         JNZ  for_err
         INP2
         JSR  EVAL                   ; limit
-        LDA  RESULT
-        STA  FLIM
-        LDA  RESULT+1
-        STA  FLIM+1
-        LDA  #1                     ; default STEP 1
-        STA  FSTEP
-        LDA  #0
-        STA  FSTEP+1
+        MOVW FLIM,RESULT                ; <- tierA: word move (next: LDA)
+        LDW FSTEP,#1                ; <- tierA: word constant (next: JSR SKIPSP)
         JSR  SKIPSP
         LDA  (P2)
         LDB  #TOK_STEP
@@ -2208,20 +2097,14 @@ DOFOR:  INP2
         JNZ  for_push
         INP2
         JSR  EVAL
-        LDA  RESULT
-        STA  FSTEP
-        LDA  RESULT+1
-        STA  FSTEP+1
+        MOVW FSTEP,RESULT                ; <- tierA: word move (next: JSR SKIPSP)
 for_push: JSR SKIPSP                ; loop-back = the statement after FOR
         LDA  (P2)
         LDB  #':'
         CMP
         JZ   fp_same                ; more on this line -> loop back mid-line
         ; FOR ends the line -> loop back to the next line
-        LDA  CURLINE
-        TAP1L
-        LDA  CURLINE+1
-        TAP1H
+        LPW1 CURLINE                ; <- tierA: pointer load (next: INP1)
         INP1
         INP1
 fp_sk:  LDA  (P1)+
@@ -2243,16 +2126,10 @@ fp_same: INP2                       ; advance past ':'
         TPA2H
         STA  FTP+1
         DEP2                        ; leave P2 on the ':' so STMTLINE keeps going now
-        LDA  CURLINE
-        STA  FLR
-        LDA  CURLINE+1
-        STA  FLR+1
+        MOVW FLR,CURLINE                ; <- tierA: word move (next: LDA)
 fp_alloc: LDA FSP                   ; advance FFP to a fresh frame
         JNZ  fp_adv
-        LDA  #<FSTK
-        STA  FFP
-        LDA  #>FSTK
-        STA  FFP+1
+        LDW FFP,#FSTK                ; <- tierA: address constant (next: JMP fp_w -> LDA)
         JMP  fp_w
 fp_adv: LDA  FFP
         LDB  #9
@@ -2262,10 +2139,7 @@ fp_adv: LDA  FFP
         LDA  FFP+1
         INC
         STA  FFP+1
-fp_w:   LDA  FFP                    ; write the 9-byte frame
-        TAP1L
-        LDA  FFP+1
-        TAP1H
+fp_w:   LPW1 FFP                ; <- tierA: pointer load (next: LDA)
         LDA  FORIDX                 ; frame[0] = loop variable's table index
         STA  (P1)
         INP1
@@ -2312,10 +2186,7 @@ DONEXT: INP2
         JSR  VARGET                 ; consume the whole name (result ignored)
 nx_go:  LDA  FSP
         JZ   nx_err
-        LDA  FFP                    ; read frame fields
-        TAP1L
-        LDA  FFP+1
-        TAP1H
+        LPW1 FFP                ; <- tierA: pointer load (next: LDA)
         LDA  (P1)
         STA  VARIDX                 ; frame[0] = loop variable's index
         INP1
@@ -2352,24 +2223,15 @@ nx_go:  LDA  FSP
         INP1
         LDA  (P1)
         STA  NUM1+1
-        LDA  FSTEP
-        STA  NUM2
-        LDA  FSTEP+1
-        STA  NUM2+1
+        MOVW NUM2,FSTEP                ; <- tierA: word move (next: JSR ADD16)
         JSR  ADD16
-        LDA  SAVE1
-        TAP1L
-        LDA  SAVE1+1
-        TAP1H
+        LPW1 SAVE1                ; <- tierA: pointer load (next: LDA)
         LDA  NUM1
         STA  (P1)
         INP1
         LDA  NUM1+1
         STA  (P1)
-        LDA  FLIM                   ; compare var (NUM1) vs limit (signed)
-        STA  NUM2
-        LDA  FLIM+1
-        STA  NUM2+1
+        MOVW NUM2,FLIM                ; <- tierA: word move (next: LDA)
         LDA  NUM1+1
         LDB  #$80
         XOR
@@ -2395,14 +2257,8 @@ nx_gt:  LDA  FSTEP+1                ; var > limit: only an UP loop finishes here
         AND
         JNZ  nx_loop                ; STEP < 0 -> still above the limit -> loop
         JMP  nx_done                ; STEP >= 0 -> passed the limit -> finished
-nx_loop: LDA FLR                    ; resume at loop-back (CURLINE=LR, P2=TP)
-        STA  CURLINE
-        LDA  FLR+1
-        STA  CURLINE+1
-        LDA  FTP
-        STA  JUMPADDR
-        LDA  FTP+1
-        STA  JUMPADDR+1
+nx_loop:MOVW CURLINE,FLR                ; <- tierA: word move (next: LDA)
+        MOVW JUMPADDR,FTP                ; <- tierA: word move (next: LDA)
         LDA  #2
         STA  JUMPF
         RTS
@@ -2489,14 +2345,8 @@ ev_rhs: LDA  RESULT                 ; left operand
         LDA  RESULT+1
         STA  LFT+1
         JSR  EXPR                   ; right -> RESULT
-        LDA  LFT
-        STA  NUM1
-        LDA  LFT+1
-        STA  NUM1+1
-        LDA  RESULT
-        STA  NUM2
-        LDA  RESULT+1
-        STA  NUM2+1
+        MOVW NUM1,LFT                ; <- tierA: word move (next: LDA)
+        MOVW NUM2,RESULT                ; <- tierA: word move (next: LDA)
         LDA  NUM1+1                  ; bias by $8000 -> signed ordering
         LDB  #$80
         XOR
@@ -2595,10 +2445,7 @@ ex_add: INP2
         STA  NUM1+1
         PLA
         STA  NUM1
-        LDA  RESULT
-        STA  NUM2
-        LDA  RESULT+1
-        STA  NUM2+1
+        MOVW NUM2,RESULT                ; <- tierA: word move (next: JSR ADD16)
         JSR  ADD16
         JMP  ex_store
 ex_sub: INP2
@@ -2611,15 +2458,9 @@ ex_sub: INP2
         STA  NUM1+1
         PLA
         STA  NUM1
-        LDA  RESULT
-        STA  NUM2
-        LDA  RESULT+1
-        STA  NUM2+1
+        MOVW NUM2,RESULT                ; <- tierA: word move (next: JSR SUB16)
         JSR  SUB16
-ex_store: LDA NUM1
-        STA  RESULT
-        LDA  NUM1+1
-        STA  RESULT+1
+ex_store:MOVW RESULT,NUM1                ; <- tierA: word move (next: JMP ex_l -> JSR SKIPSP)
         JMP  ex_l
 
 TERM:   JSR  FACTOR
@@ -2647,10 +2488,7 @@ tm_mul: INP2
         STA  NUM1+1
         PLA
         STA  NUM1
-        LDA  RESULT
-        STA  NUM2
-        LDA  RESULT+1
-        STA  NUM2+1
+        MOVW NUM2,RESULT                ; <- tierA: word move (next: JSR MUL16)
         JSR  MUL16
         JMP  tm_store
 tm_div: INP2
@@ -2663,15 +2501,9 @@ tm_div: INP2
         STA  NUM1+1
         PLA
         STA  NUM1
-        LDA  RESULT
-        STA  NUM2
-        LDA  RESULT+1
-        STA  NUM2+1
+        MOVW NUM2,RESULT                ; <- tierA: word move (next: JSR DIV16)
         JSR  DIV16
-tm_store: LDA NUM1
-        STA  RESULT
-        LDA  NUM1+1
-        STA  RESULT+1
+tm_store:MOVW RESULT,NUM1                ; <- tierA: word move (next: JMP tm_l -> JSR SKIPSP)
         JMP  tm_l
 tm_mod: INP2                    ; '%' modulus: RESULT = left mod right (DIV16 REM)
         LDA  RESULT
@@ -2683,15 +2515,9 @@ tm_mod: INP2                    ; '%' modulus: RESULT = left mod right (DIV16 RE
         STA  NUM1+1
         PLA
         STA  NUM1
-        LDA  RESULT
-        STA  NUM2
-        LDA  RESULT+1
-        STA  NUM2+1
+        MOVW NUM2,RESULT                ; <- tierA: word move (next: JSR DIV16)
         JSR  DIV16
-        LDA  REM
-        STA  RESULT
-        LDA  REM+1
-        STA  RESULT+1
+        MOVW RESULT,REM                ; <- tierA: word move (next: JMP tm_l -> JSR SKIPSP)
         JMP  tm_l
 
 FACTOR: JSR  SKIPSP
@@ -2781,10 +2607,7 @@ fa_hex: PLA                     ; keep the advanced P2; drop the saved copy
         JSR  PARSEHEX           ; hex digits -> RESULT
         RTS
 fa_dec: JSR  PARSEDEC           ; number -> LNUM
-        LDA  LNUM
-        STA  RESULT
-        LDA  LNUM+1
-        STA  RESULT+1
+        MOVW RESULT,LNUM                ; <- tierA: word move (next: RTS)
         RTS
 fa_var: JSR  VARGET            ; parse name, look up/create -> P1 = &value
         LDA  MATCHF
@@ -2816,15 +2639,8 @@ fa_neg: INP2                    ; unary minus: parse factor, negate RESULT
         LDB  #$FF
         XOR
         STA  RESULT+1
-        LDA  RESULT
-        LDB  #1
-        ADD
-        STA  RESULT
-        JNC  fa_nd
-        LDA  RESULT+1
-        INC
-        STA  RESULT+1
-fa_nd:  RTS
+        INCW RESULT                ; <- tierA: 16-bit INCW chain, skip label fa_nd dropped (next: RTS)
+        RTS
 fa_err: JMP  SYNERR
 
 ; functions: ABS(x), RND(n), PEEK(addr) — RESULT set
@@ -3003,10 +2819,7 @@ rgt_err: JMP SYNERR
 
 fa_peek: INP2
         JSR  PARGET              ; RESULT = address
-        LDA  RESULT
-        TAP1L
-        LDA  RESULT+1
-        TAP1H
+        LPW1 RESULT                ; <- tierA: pointer load (next: LDA)
         LDA  (P1)                ; read byte (I/O handled by memory map)
         STA  RESULT
         LDA  #0
@@ -3018,15 +2831,9 @@ fa_rnd: INP2
         LDB  RESULT+1
         OR
         JZ   fa_rz               ; RND(0) -> 0
-        LDA  RESULT
-        STA  LFT
-        LDA  RESULT+1
-        STA  LFT+1
+        MOVW LFT,RESULT                ; <- tierA: word move (next: JSR RANDOM)
         JSR  RANDOM              ; NUM1 = random 16-bit
-        LDA  LFT
-        STA  NUM2
-        LDA  LFT+1
-        STA  NUM2+1
+        MOVW NUM2,LFT                ; <- tierA: word move (next: JSR DIV16)
         JSR  DIV16               ; REM = random mod n
         LDA  REM                 ; RESULT = REM + 1  (range 1..n)
         LDB  #1
@@ -3039,9 +2846,7 @@ fa_rnd: INP2
         INC
         STA  RESULT+1
 fa_rd:  RTS
-fa_rz:  LDA  #0
-        STA  RESULT
-        STA  RESULT+1
+fa_rz:  LDW RESULT,#0                ; <- tierA: zero word (next: RTS)
         RTS
 
 ; PARGET — parse '(' EXPR ')' into RESULT
@@ -3062,24 +2867,12 @@ PARGET: JSR  SKIPSP
 pg_err: JMP  SYNERR
 
 ; RANDOM — LCG: SEED = SEED*25173 + 13849; result in NUM1
-RANDOM: LDA  SEED
-        STA  NUM1
-        LDA  SEED+1
-        STA  NUM1+1
-        LDA  #$55               ; 25173 = $6255
-        STA  NUM2
-        LDA  #$62
-        STA  NUM2+1
+RANDOM: MOVW NUM1,SEED                ; <- tierA: word move (next: LDA)
+        LDW NUM2,#25173                ; <- tierA: word constant (next: JSR MUL16)
         JSR  MUL16
-        LDA  #$19               ; 13849 = $3619
-        STA  NUM2
-        LDA  #$36
-        STA  NUM2+1
+        LDW NUM2,#13849                ; <- tierA: word constant (next: JSR ADD16)
         JSR  ADD16
-        LDA  NUM1
-        STA  SEED
-        LDA  NUM1+1
-        STA  SEED+1
+        MOVW SEED,NUM1                ; <- tierA: word move (next: RTS)
         RTS
 
 ; UPCHAR — A: if 'a'..'z', clear bit 5 to uppercase; else leave A.
@@ -3254,10 +3047,7 @@ vf_cp:  LDA  (P2)
         LDA  VARCNT
         INC
         STA  VARCNT
-        LDA  RP                 ; P1 = &value
-        TAP1L
-        LDA  RP+1
-        TAP1H
+        LPW1 RP                ; <- tierA: pointer load (next: PLA)
 vf_done: PLA                    ; restore the input cursor
         TAP2H
         PLA
@@ -3280,9 +3070,7 @@ IDXADDR: LDA  VARIDX
 ; 16-bit multiply / divide (shift-add / restoring) — operands NUM1,NUM2
 ;==============================================================================
 ; MUL16 — NUM1 = NUM1 * NUM2 (low 16 bits)
-MUL16:  LDA  #0
-        STA  ACC
-        STA  ACC+1
+MUL16:  LDW ACC,#0                ; <- tierA: zero word (next: LDA)
         LDA  #16
         STA  MCNT
 mu_l:   LDA  NUM2
@@ -3314,10 +3102,7 @@ mu_sk:  JSR  SHL16              ; NUM1 <<= 1
         DEC
         STA  MCNT
         JNZ  mu_l
-        LDA  ACC
-        STA  NUM1
-        LDA  ACC+1
-        STA  NUM1+1
+        MOVW NUM1,ACC                ; <- tierA: word move (next: RTS)
         RTS
 
 ; DIV16 — NUM1 = NUM1 / NUM2 (quotient); remainder left in REM. /0 -> 0
@@ -3325,13 +3110,9 @@ DIV16:  LDA  NUM2
         LDB  NUM2+1
         OR
         JNZ  dv_ok
-        LDA  #0
-        STA  NUM1
-        STA  NUM1+1
+        LDW NUM1,#0                ; <- tierA: zero word (next: RTS)
         RTS
-dv_ok:  LDA  #0
-        STA  REM
-        STA  REM+1
+dv_ok:  LDW REM,#0                ; <- tierA: zero word (next: LDA)
         LDA  #16
         STA  MCNT
 dv_l:   LDA  NUM1               ; dividend <<= 1, MSB -> C
@@ -3418,14 +3199,8 @@ ed_loop:
         JZ   ed_end
         LDA  INSF
         JNZ  ed_copy         ; new line already placed -> just copy rest
-        LDA  RNUM            ; compare RNUM vs LNUM
-        STA  NUM1
-        LDA  RNUM+1
-        STA  NUM1+1
-        LDA  LNUM
-        STA  NUM2
-        LDA  LNUM+1
-        STA  NUM2+1
+        MOVW NUM1,RNUM                ; <- tierA: word move (next: LDA)
+        MOVW NUM2,LNUM                ; <- tierA: word move (next: JSR CMP16)
         JSR  CMP16           ; Z=equal, C=RNUM>=LNUM
         JZ   ed_repl
         JC   ed_ins
@@ -3468,17 +3243,11 @@ EMITNEW: LDA TXTMT
         STA  SAVE1
         TPA1H
         STA  SAVE1+1
-        LDA  TSRC            ; P1 = text source in LBUF
-        TAP1L
-        LDA  TSRC+1
-        TAP1H
+        LPW1 TSRC                ; <- tierA: pointer load (next: LDA)
 en_ct:  LDA  (P1)+
         STA  (P2)+
         JNZ  en_ct           ; copy text incl terminator
-        LDA  SAVE1           ; restore src pointer
-        TAP1L
-        LDA  SAVE1+1
-        TAP1H
+        LPW1 SAVE1                ; <- tierA: pointer load (next: RTS)
 en_done: RTS
 
 ; PB2PROG — copy PBUF back to PROG up to and including the 00,00 marker
@@ -3524,10 +3293,7 @@ ls_l:   LDA  (P1)+
         TPA1H
         STA  SAVE1+1
         JSR  PRDECU          ; line numbers are unsigned
-        LDA  SAVE1
-        TAP1L
-        LDA  SAVE1+1
-        TAP1H
+        LPW1 SAVE1                ; <- tierA: pointer load (next: LDA)
         LDA  #' '
         JSR  PUTC
         JSR  PRTEXT          ; print tokenized text; leaves P1 at next record
@@ -3549,10 +3315,7 @@ PRTEXT: LDA  (P1)+
         STA  SAVE2+1
         LDA  TMPC
         JSR  PRKW
-        LDA  SAVE2
-        TAP1L
-        LDA  SAVE2+1
-        TAP1H
+        LPW1 SAVE2                ; <- tierA: pointer load (next: JMP PRTEXT -> LDA)
         JMP  PRTEXT
 pt_lit: LDA  TMPC
         JSR  PUTC
@@ -3612,9 +3375,7 @@ SHL16:  LDA  NUM1
         RTS
 
 ; PARSEDEC — digits at (P2) -> LNUM (P2 left at first non-digit)
-PARSEDEC: LDA #0
-        STA  LNUM
-        STA  LNUM+1
+PARSEDEC:LDW LNUM,#0                ; <- tierA: zero word (next: LDA)
 pd1:    LDA  (P2)
         LDB  #'0'
         SUB
@@ -3624,15 +3385,9 @@ pd1:    LDA  (P2)
         JC   pdd
         STA  DIG
         INP2
-        LDA  LNUM            ; NUM1 = LNUM
-        STA  NUM1
-        LDA  LNUM+1
-        STA  NUM1+1
+        MOVW NUM1,LNUM                ; <- tierA: word move (next: JSR SHL16)
         JSR  SHL16           ; x2
-        LDA  NUM1            ; NUM2 = x2
-        STA  NUM2
-        LDA  NUM1+1
-        STA  NUM2+1
+        MOVW NUM2,NUM1                ; <- tierA: word move (next: JSR SHL16)
         JSR  SHL16           ; x4
         JSR  SHL16           ; x8
         JSR  ADD16           ; x8 + x2 = x10
@@ -3641,25 +3396,17 @@ pd1:    LDA  (P2)
         LDA  #0
         STA  NUM2+1
         JSR  ADD16
-        LDA  NUM1
-        STA  LNUM
-        LDA  NUM1+1
-        STA  LNUM+1
+        MOVW LNUM,NUM1                ; <- tierA: word move (next: JMP pd1 -> LDA)
         JMP  pd1
 pdd:    RTS
 
 ; PARSEHEX — parse hex digits at (P2) (after the "0x") -> RESULT. Accumulates
 ; LNUM = LNUM*16 + digit (16-bit, wraps past 4 digits). Stops at a non-hex char.
-PARSEHEX: LDA #0
-        STA  LNUM
-        STA  LNUM+1
+PARSEHEX:LDW LNUM,#0                ; <- tierA: zero word (next: JSR HEXDIG)
 px1:    JSR  HEXDIG             ; (P2) -> DIG, MATCHF=1 if a hex digit
         LDA  MATCHF
         JZ   pxd
-        LDA  LNUM               ; NUM1 = LNUM, then x16 (four left shifts)
-        STA  NUM1
-        LDA  LNUM+1
-        STA  NUM1+1
+        MOVW NUM1,LNUM                ; <- tierA: word move (next: JSR SHL16)
         JSR  SHL16
         JSR  SHL16
         JSR  SHL16
@@ -3669,16 +3416,10 @@ px1:    JSR  HEXDIG             ; (P2) -> DIG, MATCHF=1 if a hex digit
         LDA  #0
         STA  NUM2+1
         JSR  ADD16              ; NUM1 = NUM1 + digit
-        LDA  NUM1
-        STA  LNUM
-        LDA  NUM1+1
-        STA  LNUM+1
+        MOVW LNUM,NUM1                ; <- tierA: word move (next: INP2)
         INP2                    ; consume the hex digit
         JMP  px1
-pxd:    LDA  LNUM
-        STA  RESULT
-        LDA  LNUM+1
-        STA  RESULT+1
+pxd:    MOVW RESULT,LNUM                ; <- tierA: word move (next: RTS)
         RTS
 
 ; HEXDIG — classify the char at (P2) (not consumed). If a hex digit, DIG = its
@@ -3737,10 +3478,7 @@ PRDEC:  LDA  LNUM+1
         INC
         STA  LNUM+1
 ; PRDECU — print LNUM as UNSIGNED decimal (no leading zeros)
-PRDECU: LDA  LNUM
-        STA  NUM1
-        LDA  LNUM+1
-        STA  NUM1+1
+PRDECU: MOVW NUM1,LNUM                ; <- tierA: word move (next: LDA)
         LDA  #1
         STA  LZ
         LDP1 #POW10
@@ -3787,10 +3525,7 @@ POW10:  .word 10000,1000,100,10,1
 ; everything else left literal. (Output never overtakes input since tokens
 ; shrink, so in-place is safe.)
 CRUNCH: LDP1 #LBUF                  ; read pointer
-        LDA  #<LBUF
-        STA  WP                     ; write pointer
-        LDA  #>LBUF
-        STA  WP+1
+        LDW WP,#LBUF                ; <- tierA: address constant (next: LDA)
 cr_lp:  LDA  (P1)
         JZ   cr_end
         LDB  #'"'
@@ -3823,10 +3558,7 @@ cr_end: LDA  #0                     ; terminator
         RTS
 
 CR_PUTW: STA TMPC                   ; write A to (WP), WP++
-        LDA  WP
-        TAP2L
-        LDA  WP+1
-        TAP2H
+        LPW2 WP                ; <- tierA: pointer load (next: LDA)
         LDA  TMPC
         STA  (P2)
         INP2
@@ -3936,15 +3668,9 @@ SVENTADDR: LDA SI
         LDA  #0
         STA  NUM2+1
         JSR  MUL16                   ; NUM1 = SI*SVENT
-        LDA  #<SVARTAB
-        STA  NUM2
-        LDA  #>SVARTAB
-        STA  NUM2+1
+        LDW NUM2,#SVARTAB                ; <- tierA: address constant (next: JSR ADD16)
         JSR  ADD16                   ; NUM1 += SVARTAB
-        LDA  NUM1
-        TAP1L
-        LDA  NUM1+1
-        TAP1H
+        LPW1 NUM1                ; <- tierA: pointer load (next: RTS)
         RTS
 
 ; SVARFIND — look up NMBUF in SVARTAB. On a hit or after creating a new (empty)
@@ -4022,14 +3748,8 @@ SMOVE:  TPA2L
         PHA
         TPA2H
         PHA
-        LDA  SPA
-        TAP1L
-        LDA  SPA+1
-        TAP1H
-        LDA  SPD
-        TAP2L
-        LDA  SPD+1
-        TAP2H
+        LPW1 SPA                ; <- tierA: pointer load (next: LDA)
+        LPW2 SPD                ; <- tierA: pointer load (next: LDA)
         LDA  (P1)
         STA  SLENV
         STA  (P2)
@@ -4054,10 +3774,7 @@ smv_d:  PLA
 ; SCPYLIT — copy the "..." literal at (P2) (P2 at the opening quote) into (SPD),
 ; capping at SLEN and consuming through the closing quote.
 SCPYLIT: INP2
-        LDA  SPD
-        TAP1L
-        LDA  SPD+1
-        TAP1H
+        LPW1 SPD                ; <- tierA: pointer load (next: INP1)
         INP1                          ; skip the len byte -> data
         LDA  #0
         STA  SI
@@ -4079,10 +3796,7 @@ scl_l:  LDA  (P2)
 scl_sk: INP2
         JMP  scl_l
 scl_cl: INP2
-scl_end: LDA SPD
-        TAP1L
-        LDA  SPD+1
-        TAP1H
+scl_end:LPW1 SPD                ; <- tierA: pointer load (next: LDA)
         LDA  SI
         STA  (P1)
         RTS
@@ -4093,17 +3807,11 @@ SAPP:   TPA2L
         PHA
         TPA2H
         PHA
-        LDA  SPA
-        TAP1L
-        LDA  SPA+1
-        TAP1H
+        LPW1 SPA                ; <- tierA: pointer load (next: LDA)
         LDA  (P1)
         STA  SJ                        ; src length
         INP1
-        LDA  SPD
-        TAP2L
-        LDA  SPD+1
-        TAP2H
+        LPW2 SPD                ; <- tierA: pointer load (next: LDA)
         LDA  (P2)
         STA  SI                        ; dst length
         INP2
@@ -4132,10 +3840,7 @@ sap_go: LDA  SJ
         DEC
         STA  SJ
         JMP  sap_go
-sap_fin: LDA SPD
-        TAP1L
-        LDA  SPD+1
-        TAP1H
+sap_fin:LPW1 SPD                ; <- tierA: pointer load (next: LDA)
         LDA  SI
         STA  (P1)
         PLA
@@ -4293,16 +3998,10 @@ STERM:  JSR  SKIPSP
         JNC  stm_v1
         INC
 stm_v1: STA  SPA+1
-        LDA  #<STRTMP
-        STA  SPD
-        LDA  #>STRTMP
-        STA  SPD+1
+        LDW SPD,#STRTMP                ; <- tierA: address constant (next: JSR SMOVE)
         JSR  SMOVE
         RTS
-stm_lit: LDA #<STRTMP
-        STA  SPD
-        LDA  #>STRTMP
-        STA  SPD+1
+stm_lit:LDW SPD,#STRTMP                ; <- tierA: address constant (next: JSR SCPYLIT)
         JSR  SCPYLIT
         RTS
 stm_chr: INP2
@@ -4318,14 +4017,8 @@ stm_chr: INP2
 ; routing its PUTCH output into a string sink (STRSINK) aimed at STRTMP's data.
 stm_strs: INP2
         JSR  PARGET                    ; RESULT = number
-        LDA  RESULT
-        STA  LNUM
-        LDA  RESULT+1
-        STA  LNUM+1
-        LDA  #<STRTMPD                  ; capture digits after the length byte
-        STA  STRSP
-        LDA  #>STRTMPD
-        STA  STRSP+1
+        MOVW LNUM,RESULT                ; <- tierA: word move (next: LDA)
+        LDW STRSP,#STRTMPD                ; <- tierA: address constant (next: LDA)
         LDA  #0
         STA  STRSN
         LDA  #1
@@ -4347,10 +4040,7 @@ STM_OPEN: JSR SKIPSP
         CMP
         JNZ  stm_err
         INP2
-        LDA  #<STRARG
-        STA  SPD
-        LDA  #>STRARG
-        STA  SPD+1
+        LDW SPD,#STRARG                ; <- tierA: address constant (next: JSR SARG)
         JSR  SARG
         JSR  SKIPSP
         LDA  (P2)
@@ -4446,28 +4136,16 @@ sev_l:  JSR  SKIPSP
         JSR  sev_app
         JMP  sev_l
 sev_d:  RTS
-sev_app: LDA #<STRTMP                   ; STRACC += STRTMP
-        STA  SPA
-        LDA  #>STRTMP
-        STA  SPA+1
-        LDA  #<STRACC
-        STA  SPD
-        LDA  #>STRACC
-        STA  SPD+1
+sev_app:LDW SPA,#STRTMP                ; <- tierA: address constant (next: LDA)
+        LDW SPD,#STRACC                ; <- tierA: address constant (next: JSR SAPP)
         JSR  SAPP
         RTS
 
 ; EVALSTR — string comparison in a numeric context: SEVAL relop SEVAL -> RESULT
 ; (1/0). Reached from EVAL when SPEEK sees a string operand.
 EVALSTR: JSR SEVAL                      ; LHS -> STRACC
-        LDA  #<STRACC                   ; save LHS in STRCMP
-        STA  SPA
-        LDA  #>STRACC
-        STA  SPA+1
-        LDA  #<STRCMP
-        STA  SPD
-        LDA  #>STRCMP
-        STA  SPD+1
+        LDW SPA,#STRACC                ; <- tierA: address constant (next: LDA)
+        LDW SPD,#STRCMP                ; <- tierA: address constant (next: JSR SMOVE)
         JSR  SMOVE
         JSR  SRELOP                     ; RELOP set; C=1 if no operator
         JC   es_err
@@ -4613,10 +4291,7 @@ FN_SARG: JSR SKIPSP
         CMP
         JNZ  fn_err
         INP2
-        LDA  #<STRARG
-        STA  SPD
-        LDA  #>STRARG
-        STA  SPD+1
+        LDW SPD,#STRARG                ; <- tierA: address constant (next: JSR SARG)
         JSR  SARG
         JSR  SKIPSP
         LDA  (P2)
@@ -4647,9 +4322,7 @@ fa_asc: INP2
         LDA  #0
         STA  RESULT+1
         RTS
-fa_asc0: LDA #0
-        STA  RESULT
-        STA  RESULT+1
+fa_asc0:LDW RESULT,#0                ; <- tierA: zero word (next: RTS)
         RTS
 
 ; fa_val — VAL(string$): parse a signed decimal from the string arg -> RESULT.
@@ -4716,14 +4389,8 @@ fv_pd:  JSR  PARSEDEC                    ; LNUM = value
         LDA  LNUM+1
         INC
         STA  LNUM+1
-fv_pos: LDA  GTMP                         ; restore the program cursor
-        TAP2L
-        LDA  GTMP+1
-        TAP2H
-        LDA  LNUM
-        STA  RESULT
-        LDA  LNUM+1
-        STA  RESULT+1
+fv_pos: LPW2 GTMP                ; <- tierA: pointer load (next: LDA)
+        MOVW RESULT,LNUM                ; <- tierA: word move (next: RTS)
         RTS
 
 ; fa_eof — EOF(n): 1 if the input channel is at end (or not open for input),
@@ -4736,14 +4403,9 @@ fa_eof: INP2
         JNZ  fe_true                      ; not open for input -> EOF
         LDA  FLOOKC
         JZ   fe_false
-fe_true: LDA #1
-        STA  RESULT
-        LDA  #0
-        STA  RESULT+1
+fe_true:LDW RESULT,#1                ; <- tierA: word constant (next: RTS)
         RTS
-fe_false: LDA #0
-        STA  RESULT
-        STA  RESULT+1
+fe_false:LDW RESULT,#0                ; <- tierA: zero word (next: RTS)
         RTS
 
 ;==============================================================================
@@ -4851,10 +4513,7 @@ DOPRINTF: LDA FMODE
         LDA  MATCHF
         JNZ  dpf_str
         JSR  EVAL                       ; numeric value -> decimal text (via PUTCH)
-        LDA  RESULT
-        STA  LNUM
-        LDA  RESULT+1
-        STA  LNUM+1
+        MOVW LNUM,RESULT                ; <- tierA: word move (next: JSR PRDEC)
         JSR  PRDEC
         JMP  dpf_cr
 dpf_str: JSR SEVAL                       ; string value (via PUTCH)
@@ -4893,14 +4552,8 @@ DOINPUTF: LDA FMODE
         INP2
         JSR  SKIPSP
         JSR  PARSEDEC                   ; LNUM = value
-        LDA  GTMP
-        TAP2L
-        LDA  GTMP+1
-        TAP2H
-        LDA  SAVE1
-        TAP1L
-        LDA  SAVE1+1
-        TAP1H
+        LPW2 GTMP                ; <- tierA: pointer load (next: LDA)
+        LPW1 SAVE1                ; <- tierA: pointer load (next: LDA)
         LDA  LNUM
         STA  (P1)
         INP1
@@ -4919,10 +4572,7 @@ dif_str: JSR SVARGET                     ; string variable -> P1 = &entry
         TPA2H
         STA  GTMP+1
         JSR  FREADREC                    ; STRACC = record
-        LDA  #<STRACC
-        STA  SPA
-        LDA  #>STRACC
-        STA  SPA+1
+        LDW SPA,#STRACC                ; <- tierA: address constant (next: LDA)
         LDA  SAVE1
         LDB  #NAMLEN
         ADD
@@ -4932,10 +4582,7 @@ dif_str: JSR SVARGET                     ; string variable -> P1 = &entry
         INC
 dif_s1: STA  SPD+1
         JSR  SMOVE
-        LDA  GTMP                        ; restore the parse cursor
-        TAP2L
-        LDA  GTMP+1
-        TAP2H
+        LPW2 GTMP                ; <- tierA: pointer load (next: RTS)
         RTS
 dif_err: JMP  SYNERR
 
@@ -5188,10 +4835,7 @@ MATCHKW: TPA1L                      ; save input position
         STA  RP
         TPA1H
         STA  RP+1
-        LDA  #<KWTAB
-        TAP2L
-        LDA  #>KWTAB
-        TAP2H
+        LDP2 #KWTAB                ; <- tierA: pointer constant (next: LDA)
 mk_e:   LDA  (P2)
         JZ   mk_no                  ; end of table
 mk_in:  LDA  (P2)
@@ -5221,25 +4865,16 @@ mk_sk:  LDA  (P2)                   ; skip rest of this entry (letters + token)
         LDB  #$80
         AND
         JZ   mk_sk
-        LDA  RP                     ; restore input, try next entry
-        TAP1L
-        LDA  RP+1
-        TAP1H
+        LPW1 RP                ; <- tierA: pointer load (next: JMP mk_e -> LDA)
         JMP  mk_e
 mk_no:  LDA  #0
         STA  MATCHF
-        LDA  RP
-        TAP1L
-        LDA  RP+1
-        TAP1H
+        LPW1 RP                ; <- tierA: pointer load (next: RTS)
         RTS
 
 ; PRKW — print the keyword whose token == A (>= $80).  Uses P1 to walk KWTAB.
 PRKW:   STA  TOKW
-        LDA  #<KWTAB
-        TAP1L
-        LDA  #>KWTAB
-        TAP1H
+        LDP1 #KWTAB                ; <- tierA: pointer constant (next: TPA1L)
 pk_e:   TPA1L                       ; remember this entry's letter start
         STA  RP
         TPA1H
@@ -5256,10 +4891,7 @@ pk_sc:  LDA  (P1)+
         LDA  (P1)
         JZ   pk_d                   ; table end
         JMP  pk_e
-pk_pr:  LDA  RP                     ; re-walk letters from start, printing
-        TAP1L
-        LDA  RP+1
-        TAP1H
+pk_pr:  LPW1 RP                ; <- tierA: pointer load (next: LDA)
 pk_pl:  LDA  (P1)+
         STA  TMPC
         LDB  #$80
@@ -5420,10 +5052,7 @@ PUTCH:  PHA                          ; preserve the char (and TMPC, used by SPUT
         STA  SAVE2+1
         PLA
         JSR  FPUTB
-        LDA  SAVE2
-        TAP1L
-        LDA  SAVE2+1
-        TAP1H
+        LPW1 SAVE2                ; <- tierA: pointer load (next: RTS)
         RTS
 pch_con: PLA
         JSR  PUTC
@@ -5432,27 +5061,14 @@ pch_str: TPA1L                        ; string sink: append A to (STRSP), inc ST
         STA  SAVE2
         TPA1H
         STA  SAVE2+1
-        LDA  STRSP
-        TAP1L
-        LDA  STRSP+1
-        TAP1H
+        LPW1 STRSP                ; <- tierA: pointer load (next: PLA)
         PLA
         STA  (P1)
-        LDA  STRSP
-        LDB  #1
-        ADD
-        STA  STRSP
-        JNC  pst_1
-        LDA  STRSP+1
-        INC
-        STA  STRSP+1
-pst_1:  LDA  STRSN
+        INCW STRSP                ; <- tierA: 16-bit INCW chain, skip label pst_1 dropped (next: LDA)
+        LDA  STRSN
         INC
         STA  STRSN
-        LDA  SAVE2
-        TAP1L
-        LDA  SAVE2+1
-        TAP1H
+        LPW1 SAVE2                ; <- tierA: pointer load (next: RTS)
         RTS
 ; GETC — block until a key arrives, then return it in A. Through the BIOS
 ; (CONIN, $0100) for the same reason as PUTC above: one console implementation,

@@ -1,5 +1,86 @@
 # P8X Backlog — Completed
 
+- [x] **Whole toolchain and all shipped code on the latest ISA (user, 2026-09-12; DONE the same day).**
+      Closing summary: every tool emits Tier A (p8cc.py, p8xasm.py, p8cc.c,
+      on-board asm + cc), every C source is recompiled on each disk build,
+      and every shipped hand-asm source went through tools/tierA_rewrite.py:
+      asm 36 sites, cc 88, 28 twins + 7 libs 662, OS + WM 133, monitor 18,
+      editor 1, BASIC 128. Sizes: /bin C total 627,172 → 284,835 (−54.6%),
+      asm twins 148,744 → 142,115, OS 14,681 → 13,798, monitor ROM used
+      5,297 → 5,184, BASIC 11,887 → 11,151, cc.bin 22,924 → 20,905. The
+      compiled column is now within 1.1× of the hand asm (find/cp/tree/grep:
+      the C build is smaller). Hardware follow-ups: reburn the program EPROM
+      AND the four control-store EPROMs (rom/), re-clone the SD card.
+      Original plan and per-stage log:
+      Four stages, in order: (1) every Mac-hosted tool emits the Tier A ISA;
+      (2) review the C and asm libraries for what the new tools make
+      unnecessary; (3) recompile every C source with the updated tools
+      (rebuild /binc and the disk); (4) rewrite the hand-written asm — 28
+      command twins (15.3k lines), 7 asm libraries (2k), the apps incl.
+      `p8xcc.asm` (8.4k), the OS + WM kernel (6.8k), the monitor (2.4k) — to
+      use the new instructions, module by module with its tests, keeping
+      native/host byte-identity (so first cherry-pick the native assembler's
+      two-operand shapes from tag `archive/os-rewrite-2026-09-11`, ASK).
+      **Stage 1 DONE:** `compiler/p8cc.c`'s code generator rewritten to the
+      Tier A model (P3 frames, word ops, CMPW conditions, JMP.A, same runtime);
+      single-pass differences: deferred leaf operands + one-token peek, the
+      LAST argument in __ax (params i<n-1 at L+3+2(n-2-i)), no dead-function
+      elimination, narrow paths only for putchar/bios/byte stores. Also fixed
+      three pre-existing gaps (brace/string global initializers, plain
+      `#define`, function return types) so all 45 /bin commands compile:
+      342,372 B vs p8cc.py's 284,835 (+20%). `p8xasm.py`/`p8cc.py`/`clib.py`
+      were already current. **On-target toolchain DONE (2026-09-12):** the
+      native assembler's two-operand/(Pn+d) parsing cherry-picked from the
+      archived os-rewrite branch (389eb76; only `.relax`/`.R` stay host-only),
+      and `apps/p8xcc.asm`'s templates ported to Tier A (LDW #n, ADDW/SUBW/
+      ANDW/ORW/XORW on __ax/__t0, ADDW #k offsets, INCW/DECW in place, CMPW
+      conditions and orderings, args on P3 via PHW / LDW (P3+d) / ADDP3, the
+      p8cc-style startup; the software arg stack and the __add/__sub/__and/
+      __or/__xor/__neg runtime texts are gone). cc.bin 22,924 → 21,100 B; a
+      compiled test program 5,546 → 2,458 B (−56%), same output; os_asm,
+      asm_selfhost, os_cc, os_cc_bigcmd, cmdbuild, os_mk all PASS.
+      **Both tools' bodies rewritten (2026-09-12):** `tools/tierA_rewrite.py`
+      (new; the mechanical pass with the next-instruction safety rule and a
+      callee allow-list) applied to `apps/p8xasm.asm` (36 sites) and
+      `apps/p8xcc.asm` (88); the remaining idioms in both are 8-bit character
+      compares, which the ISA has no better form for. `cc`'s OUTPUT also gained
+      a condition mode (a relational ending an if/while/for condition is one
+      CMPW + one branch; `CONDF/CONDCUR/CONDLBL/CONDDONE`, `EMITCF`) and a
+      statement-level `x++`/`x--` → `INCW`/`DECW`. Same test program on the
+      board 5,546 → 2,041 B (−63%); vi.c on the board 26,632 → 25,228 B;
+      cc.bin 22,924 → 20,905 B; the same subset program: p8cc.py 1,066 B,
+      p8cc.c 1,107 B, on-board 2,146 B (static slots + single pass ≈ 2×, by
+      design; equivalence is behavioural).
+      **Command twins + asm libraries rewritten (2026-09-12):** the pass run
+      over all 28 `os/commands-asm/*.asm` and 7 `lib_*.inc` with per-file
+      callee allow-lists (each callee's entry inspected: SYS_PUTS/SYS_GETCWD
+      take P1; wrappers whose first act is a cleared call are cleared too):
+      662 sites, 32 files. Every twin assembles; /bin total 148,744 →
+      142,115 B (−4.5%; the twins were already byte-oriented, so the gain is
+      mostly pointer loads and word moves); cmdbuild's on-board asm-match for
+      vi and c_image's pixel-identical twin check hold. What remains is 8-bit
+      character compares.
+      **OS + WM kernel rewritten (2026-09-12):** `os/p8xos.asm` 24 sites
+      (allow FGETB), `os/wmkernel_body.asm` 109 (allow the k16add/k16sub/
+      k_ge/k_mul/k_rdnum/ksw/sink_home helpers, which read ka/kb/kw, not A);
+      OS 14,681 → 13,798 B (−6.0%); os_asm (native assembles the OS
+      byte-identically), all 8 wm_*, c_wdesk/c_wsink/c_wterm/c_wtermout,
+      sysbuild PASS.
+      **Monitor rewritten (2026-09-12):** `firmware/p8xmon.asm` 18 sites
+      (allow FW_ZBUF; CFRDSEC kept -- its first act is a call chain that
+      may read A); ROM used 5,297 → 5,184 B (ends $1440, 3,008 B free of 8 K);
+      `rom/` burn set regenerated. Remaining: `apps/p8xedit.asm` (1 site) and
+      `basic/p8xbasic.asm` (93 sites + 38 behind its 16-bit helpers
+      ADD16/CMP16/DIV16/HEXDIG/MUL16/PRDEC/RANDOM/SAPP/SHL16/SKIPSP/SMOVE/SUB16,
+      SARG, SCPYLIT -- all clear to allow; EXPR and FCREATE not).
+      **p8cc.c on the machine -- re-measured (2026-09-12):** compiled for the
+      target with the new codegen, code + small data = 35,468 B (was ~82 KB);
+      the TPA incl. the C stack is 36,352 B. What does not fit is the DATA:
+      266,189 B of host-sized tables (src[131072], spool 32K, pools 8K...).
+      A fit needs streaming source input (as p8xcc.asm does), target-sized
+      table limits, and ~10-15 KB less code (the multi-pass split). Milestone B
+      via p8cc.c: impossible before, plausible-with-work now.
+
 - [x] **g3cam / camera — the look-at eye+aim camera (requested and DONE
       2026-08-21, stage 9d).** lib_g3cam (own spliced lib; i3sqrt 32-bit
       integer sqrt; basis right/up/forward, T=-M*eye) + the `camera`

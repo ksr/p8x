@@ -1,6 +1,6 @@
 ---
 name: p8x-isa-everywhere
-description: the 2026-09-12 four-stage program to put the whole toolchain and all shipped code on the Tier A ISA -- stage 1 (Mac tools) done via the p8cc.c codegen rewrite; stages 2-4 (C/asm library review, recompile everything, hand-asm rewrite incl. OS/monitor/apps) pending; the p8cc.c design choices and gotchas
+description: the 2026-09-12 program that put the whole toolchain and ALL shipped code on the Tier A ISA -- DONE the same day (p8cc.c codegen rewrite; on-board asm/cc; twins+libs; OS+WM; monitor; editor; BASIC via tools/tierA_rewrite.py); numbers, design choices, gotchas, and the hardware follow-ups (reburn program + control-store EPROMs, re-clone SD)
 metadata:
   type: project
 ---
@@ -84,7 +84,14 @@ assemble standalone (see os/run.sh line ~215). **p8cc.c fit check:** code+small 
 266 KB of host-sized tables are the blocker (stream the source, cut tables,
 multi-pass) -- see BACKLOG.
 
-**Next stages:** (2) C libs `os/commands/lib_*.c` + `compiler/p8lib.c` and asm
+**Editor + BASIC DONE (2026-09-12):** p8xedit 1 site (1,607 -> 1,602 B), BASIC
+128 sites (11,887 -> 11,151 B; allow list as planned). PROGRAM COMPLETE -- the
+item moved to BACKLOG-DONE; the follow-up is the optional manual hot-loop pass.
+HARDWARE: the TTL machine needs its program EPROM and all four control-store
+EPROMs reburned (rom/) and the SD card re-cloned; the FPGA rebuilds from the
+same files.
+
+**(historical) Next stages:** (2) C libs `os/commands/lib_*.c` + `compiler/p8lib.c` and asm
 libs `os/commands-asm/*.inc` review; (3) rebuild /binc + disk via run.sh, full
 suite; (4) hand-asm rewrite (the native assembler now has the two-operand shapes; no
 `.relax` natively, so hand asm uses absolute branches only) -- incl. the bodies

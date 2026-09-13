@@ -323,10 +323,7 @@ CI_FULL:LDP1 #MFULL
 ; ---- W: write file -----------------------------------------------------------
 CMD_W:  LDA  HASNAME
         JZ   CW_NON
-        LDA  #<TBUF             ; FSRC = TBUF
-        STA  FSRC
-        LDA  #>TBUF
-        STA  FSRC+1
+        LDW FSRC,#TBUF                ; <- tierA: address constant (next: LDA)
         LDA  TENDL              ; FLEN = TEND - TBUF (TBUF low byte = 0)
         STA  FLEN
         LDA  TENDH
