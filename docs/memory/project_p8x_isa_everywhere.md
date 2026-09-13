@@ -137,3 +137,8 @@ after tuning for the compiler (see [[reference_p8x_c_subset_gotchas]]). The
 user's plan: next the assembler in C, then the compiler in C (a self-compiling
 C compiler on the machine is the prize); `edit` to be retired (vi.c exists).
 OS/WM kernel and monitor: asm rewrites, last.
+
+**Step 2 (2026-09-13): the assembler in C** (`apps/asm.c` + `opctab.c` from
+`gen_p8xopc.py --c`, `/binc/asm.bin`, `asm_c_test.sh`): byte-identical on all
+five checks incl. self-host; 2.4x the size and 3.9-4.2x the cycles of the
+from-scratch asm after the same kind of tuning. Next: the compiler in C.

@@ -246,6 +246,17 @@ if [ ! -f "$disk" ]; then
         --base 0x6A00 >/dev/null
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/cc.bin" \
         --name /bin/cc.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+    # The C-written assembler (apps/asm.c, the size/speed twin of apps/p8xasm.asm):
+    # the generated opcode table as C + the source, //#use spliced, p8cc.py ->
+    # /binc/asm.bin (the asm build stays the /bin default).
+    python3 "$root/generators/gen_p8xopc.py" --c >/dev/null
+    cat "$root/apps/opctab.c" "$root/apps/asm.c" > "$build/asmc_src.c"
+    cp "$root/os/commands/lib_abi.c" "$build/"
+    python3 "$root/tools/clib.py" "$build/asmc_src.c" -o "$build/asmc_pp.c" >/dev/null
+    python3 "$root/compiler/p8cc.py" "$build/asmc_pp.c" -o "$build/asmc.asm" >/dev/null
+    python3 "$root/assembler/p8xasm.py" "$build/asmc.asm" -o "$build/asmc.bin" --base 0x6A00 >/dev/null
+    python3 "$root/tools/p8xfs.py" put "$disk" "$build/asmc.bin" \
+        --name /binc/asm.bin --load 0x6A00 --exec 0x6A00 >/dev/null
     # The native `cc` (apps/p8xcc.asm) does the WHOLE compile on-target, so the
     # older split front end (cpp | lex | cc1) was retired (2026-07-14). The
     # //#use splicing that cpp performed lives host-side as tools/clib.py (used

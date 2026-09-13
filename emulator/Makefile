@@ -161,6 +161,7 @@ test-os: p8xemu ucode
 	sh test/os_edit_test.sh
 	sh test/os_asm_test.sh
 	sh test/os_asm_use_test.sh
+	sh test/asm_c_test.sh
 	sh test/os_asm_inc_test.sh
 	sh test/os_sh_test.sh
 	sh test/os_hist_test.sh

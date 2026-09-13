@@ -126,6 +126,29 @@ runs. Binary 5,178 → 4,065 B. Cycles (`p8xemu -L`): the coverage source 6.40 M
 stress source > 900 M (did not finish) → 29 M. The code + opcode table must
 stay below `$8000` (the table start); `os_asm_test.sh` asserts it.
 
+**The C version (`asm.c`, 2026-09-13) — size and speed against the asm one.**
+`apps/asm.c` is the same assembler in the p8cc subset: same syntax, error
+messages and output, the same raw-memory map above the image (source and
+include sectors, path buffers, chain heads). Built by the host toolchain — the
+opcode table as C (`opctab.c`, from `gen_p8xopc.py --c`) concatenated ahead of
+the source, `//#use abi` spliced, `p8cc.py` — and installed as `/binc/asm.bin`;
+`emulator/test/asm_c_test.sh` assembles the coverage source, the feature
+program, a `;#use` command, a relative `.include` and the asm assembler's own
+source with it, all byte-identical to the host.
+
+| | asm `p8xasm.asm` | C `asm.c` | ratio |
+|---|---|---|---|
+| binary | 4,065 B | 9,795 B | 2.4× |
+| the all-opcode coverage source | 2.62 M cycles | 11.0 M | 4.2× |
+| its own 71 KB source (self-host) | 49.5 M | 194 M | 3.9× |
+| symbol capacity | 1,120 | 480 (the table starts above the larger image, at `$A800`) | |
+
+Tuned for the compiler like the C BASIC (an add-only hash instead of a 7-step
+shift per character, the identifier scan and the byte loop inlined), which
+took it from 4.7× to the figures above. The remaining gap is the per-call frame
+and the byte-at-a-time pointer walks the compiler emits around every `bios`
+byte in and out.
+
 ## CC — native C compiler (`p8xcc.asm`)
 
 A from-scratch, single-pass C compiler written directly in assembly — small
