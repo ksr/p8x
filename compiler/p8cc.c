@@ -2157,7 +2157,7 @@ int main() {
        growing down from CSTACKTOP ($F800) unless the inherited P3 is already
        below it (a nested launch keeps its stack); restore and RTS. */
     line("        .relax");
-    line("        .org $6A00");   /* = TPABASE (gen_memmap.py); this subset twin emits it as
+    line("        .org $6300");   /* = TPABASE (gen_memmap.py); this subset twin emits it as
                                     a literal (no #include; kept in sync with p8cc.py by hand) */
     line("        TPA3L"); line("        STA __sp0"); line("        TPA3H"); line("        STA __sp0+1");
     line("        LDB #248"); line("        CMP");

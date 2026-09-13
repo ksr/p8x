@@ -13,7 +13,7 @@
 ; order:  [spaces] [-h|-H] [-F c] 'program' [file].  After parsing we open the
 ; file arg (or stdin) and run the record loop.  No stack frame; all state lives
 ; in the .fill scratch vars at the bottom of the file.
-        .org $6A00
+        .org $6300
         TPA2L
         STA aarg
         TPA2H

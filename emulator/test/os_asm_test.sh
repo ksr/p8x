@@ -21,10 +21,10 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osa.bin --base 0x2000 >/
 # Build the native ASM program: assembler logic + generated opcode table.
 python3 $ROOT/generators/gen_p8xopc.py opctab.asm
 cat $ROOT/apps/p8xasm.asm opctab.asm > asmfull.asm
-python3 $ROOT/assembler/p8xasm.py asmfull.asm -o asm.bin --base 0x6A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py asmfull.asm -o asm.bin --base 0x6300 >/dev/null
 # The code + opcode table must end below SYMTAB ($8000): the assembler parks its
-# hashed symbol table right after itself. 0x8000-0x6A00 = 5632 bytes.
-[ "$(wc -c < asm.bin)" -le 5632 ] || { echo "OS-ASM TEST: FAIL — asm.bin is $(wc -c < asm.bin) bytes, overlaps SYMTAB at \$8000"; exit 1; }
+# hashed symbol table right after itself. 0x8000-0x6300 = 7424 bytes.
+[ "$(wc -c < asm.bin)" -le 7424 ] || { echo "OS-ASM TEST: FAIL — asm.bin is $(wc -c < asm.bin) bytes, overlaps SYMTAB at \$8000"; exit 1; }
 
 # COVER source: one line per (mnemonic,shape) from genucode.OPC, plus LDPn,
 # every directive, and every expression form. Deterministic (sorted) so the
@@ -41,7 +41,7 @@ ops={'':'', '#':' #1', 'a':' $1234', '#w':' #$1234',
      '(P1+d)':' (P1+3)','(P2+d)':' (P2+$10)','(P3+d)':' (P3+VAL-$1230)',
      'a,(P1+d)':' $1234,(P1+3)','a,(P2+d)':' $1234,(P2+4)','a,(P3+d)':' $1234,(P3+5)',
      '(P1+d),a':' (P1+3),$1234','(P2+d),a':' (P2+4),$1234','(P3+d),a':' (P3+5),$1234'}
-L=["VAL = $1234", "CH  = 'Q'", "        .org $6A00", "begin:"]
+L=["VAL = $1234", "CH  = 'Q'", "        .org $6300", "begin:"]
 for k in sorted(OPC):                       # every opcode/shape exactly as defined
     if k[1] not in ops: continue            # two-operand / displacement ops (MOVW, the
     L.append("        %s%s"%(k[0],ops[k[1]]))  # Tier A compiler forms) are host-only:
@@ -56,13 +56,13 @@ L += ["        LDA #<VAL","        LDB #>VAL","        LDA #CH",
       "        .fill 5,$AA","        .fill 3","fwd:    RTS","CR = $0D"]
 open(sys.argv[1],"w").write("\n".join(L)+"\n")
 PYEOF
-python3 $ROOT/assembler/p8xasm.py cover.asm -o covgold.bin --base 0x6A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py cover.asm -o covgold.bin --base 0x6300 >/dev/null
 
 # A small program that exercises forward refs / pointer modes / strings AND runs.
 cat > prog.asm <<'EOF'
 CR = $0D
 LF = $0A
-        .org $6A00
+        .org $6300
         LDP1 #msg
 lp:     LDA (P1)+
         JZ   done
@@ -76,12 +76,12 @@ msg:    .asciiz "HELLO-ASM"
         .byte CR,LF
 esc:    .asciiz "T\tQ\"B\\N\n"
 EOF
-python3 $ROOT/assembler/p8xasm.py prog.asm -o golden.bin --base 0x6A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py prog.asm -o golden.bin --base 0x6300 >/dev/null
 
 rm -f as.img
 python3 $ROOT/tools/p8xfs.py create as.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   as.img osa.bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    as.img asm.bin --name ASM.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    as.img asm.bin --name ASM.bin --load 0x6300 --exec 0x6300 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    as.img cover.asm --name COVER.ASM >/dev/null
 python3 $ROOT/tools/p8xfs.py put    as.img prog.asm  --name PROG.ASM  >/dev/null
 

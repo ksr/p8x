@@ -38,13 +38,13 @@ PROBEEOF
 cp $ROOT/os/commands/lib_gfx.c .          # clib resolves //#use from the source's dir
 python3 $ROOT/tools/clib.py gp_probe.c -o gp_probe_x.c
 python3 $ROOT/compiler/p8cc.py gp_probe_x.c -o gp_probe.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py gp_probe.asm -o gp_probe.bin --base 0x6A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py gp_probe.asm -o gp_probe.bin --base 0x6300 >/dev/null
 
 rm -f gp.img
 python3 $ROOT/tools/p8xfs.py create gp.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   gp.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  gp.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    gp.img gp_probe.bin --name /bin/gp.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    gp.img gp_probe.bin --name /bin/gp.bin --load 0x6300 --exec 0x6300 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    gp.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
 
 printf 'B\rrun /bin/gp.bin\r' > gp.in

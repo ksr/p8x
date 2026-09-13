@@ -12,7 +12,7 @@
 ;#use globx
 ;#use abi
 
-        .org $6A00
+        .org $6300
         TPA2L
         STA c_arg
         TPA2H

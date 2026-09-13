@@ -30,10 +30,10 @@ for p in cube tri rotate page camera gl md house clsave paint desk image; do
         || fail "$p: clib.py splice failed"
     python3 $ROOT/compiler/p8cc.py dm_$p.c -o dm_$p.asm >/dev/null \
         || fail "$p: p8cc.py failed"
-    python3 $ROOT/assembler/p8xasm.py dm_$p.asm -o dm_$p.bin --base 0x6A00 >/dev/null \
+    python3 $ROOT/assembler/p8xasm.py dm_$p.asm -o dm_$p.bin --base 0x6300 >/dev/null \
         || fail "$p: did not assemble"
     sz=$(wc -c < dm_$p.bin | tr -d ' ')
-    end=$((0x6A00 + sz))
+    end=$((0x6300 + sz))
     [ "$end" -lt "$CTOP" ] \
         || fail "$p: end \$$(printf %X $end) is past CSTACKTOP \$$(printf %X $CTOP)"
 done
@@ -46,7 +46,7 @@ python3 $ROOT/tools/p8xfs.py boot   dm.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  dm.img /bin >/dev/null
 for p in house tri rotate page camera; do
     python3 $ROOT/tools/p8xfs.py put dm.img dm_$p.bin \
-        --name /bin/$p.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+        --name /bin/$p.bin --load 0x6300 --exec 0x6300 >/dev/null
 done
 
 # house: the animated demo's single frame, then DONE

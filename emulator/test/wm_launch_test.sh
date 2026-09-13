@@ -68,15 +68,15 @@ EOF
 
 for p in wl_run wl_app; do
     python3 $ROOT/compiler/p8cc.py $p.c -o $p.asm >/dev/null
-    python3 $ROOT/assembler/p8xasm.py $p.asm -o $p.bin --base 0x6A00 >/dev/null
+    python3 $ROOT/assembler/p8xasm.py $p.asm -o $p.bin --base 0x6300 >/dev/null
 done
 
 rm -f wl.img
 python3 $ROOT/tools/p8xfs.py create wl.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   wl.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  wl.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    wl.img wl_run.bin --name /bin/wl.bin --load 0x6A00 --exec 0x6A00 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    wl.img wl_app.bin --name /bin/wapp.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    wl.img wl_run.bin --name /bin/wl.bin --load 0x6300 --exec 0x6300 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    wl.img wl_app.bin --name /bin/wapp.bin --load 0x6300 --exec 0x6300 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    wl.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
 
 # run the launcher; press 'l' (launch wapp) inside the loop; then ^D

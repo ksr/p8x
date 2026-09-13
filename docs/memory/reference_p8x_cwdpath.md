@@ -1,13 +1,13 @@
 ---
 name: reference_p8x_cwdpath
-description: CWDPATH is 48 bytes at $6400 and is NOT just prompt text — it feeds SYS_GETCWD and DERIVEDRV; overflow lands on INMODE/INARM/CWDLH
+description: CWDPATH is 48 bytes at $5A00 (was $6400 before the 2026-09-13 TPABASE drop) and is NOT just prompt text — it feeds SYS_GETCWD and DERIVEDRV; overflow lands on INMODE/INARM/CWDLH
 metadata: 
   node_type: memory
   type: reference
   originSessionId: df90e3f3-8668-416d-bc7b-83f2952ba723
 ---
 
-`CWDPATH` ($6400, **48 bytes**) is not "the prompt string", despite what the code
+`CWDPATH` ($5A00, **48 bytes**) is not "the prompt string", despite what the code
 and GLOSSARY used to say. It also feeds **`SYS_GETCWD`** (programs resolve relative
 paths with it) and **`DERIVEDRV`** (picks the *drive* by string-matching a leading
 `/d1`). A wrong CWDPATH is a correctness bug, not a cosmetic one.

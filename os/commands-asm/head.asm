@@ -16,7 +16,7 @@
 ;#use stdin
 ;#use abi
 
-        .org $6A00                   ; TPA load address for /BIN commands
+        .org $6300                   ; TPA load address for /BIN commands
         ; --- entry: default line count, then snapshot the arg pointer ---
         LDW n,#10                ; <- tierA: word constant (next: TPA2L)
         TPA2L                        ; copy entry P2 (arg tail) into h_arg word

@@ -16,7 +16,7 @@
 ; The ring keeps only the most recent n lines; at EOF we replay them in order.
 ; ---------------------------------------------------------------------------
 
-        .org $6A00
+        .org $6300
         LDW n,#10                ; <- tierA: word constant (next: TPA2L)
         TPA2L                            ; capture P2 (arg tail) into t_arg
         STA t_arg

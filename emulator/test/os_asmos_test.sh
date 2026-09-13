@@ -18,7 +18,7 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o ossh.bin --base 0x2000 >
 # The fixed native assembler (host-built = the ASM.bin we run on-target).
 python3 $ROOT/generators/gen_p8xopc.py aoopc.asm
 cat $ROOT/apps/p8xasm.asm aoopc.asm > aofull.asm
-python3 $ROOT/assembler/p8xasm.py aofull.asm -o asmgold.bin --base 0x6A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py aofull.asm -o asmgold.bin --base 0x6300 >/dev/null
 
 # Splice every .include (memmap.inc, wmkernel_body.asm) into the OS source so it is a single self-contained file
 # (avoids reproducing the /src/os-bios/{asm,generators} include layout on disk).
@@ -45,7 +45,7 @@ python3 $ROOT/assembler/p8xasm.py osfull.asm -o osgold.bin --base 0x2000 >/dev/n
 rm -f ao.img
 python3 $ROOT/tools/p8xfs.py create ao.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   ao.img ossh.bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    ao.img asmgold.bin --name ASM.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    ao.img asmgold.bin --name ASM.bin --load 0x6300 --exec 0x6300 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    ao.img osfull.asm  --name OSF.ASM >/dev/null
 
 out=$(printf 'B\rrun ASM.bin OSF.ASM OSF.bin\r' | \

@@ -22,12 +22,12 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o oscb.bin --base 0x2000 >
 # Native toolchain binaries (host-built = what we run on-target).
 python3 $ROOT/generators/gen_p8xopc.py cbopc.asm
 cat $ROOT/apps/p8xasm.asm cbopc.asm > cbfull.asm
-python3 $ROOT/assembler/p8xasm.py cbfull.asm -o cbasm.bin --base 0x6A00 >/dev/null
-python3 $ROOT/assembler/p8xasm.py $ROOT/apps/p8xcc.asm -o cbcc.bin --base 0x6A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py cbfull.asm -o cbasm.bin --base 0x6300 >/dev/null
+python3 $ROOT/assembler/p8xasm.py $ROOT/apps/p8xcc.asm -o cbcc.bin --base 0x6300 >/dev/null
 
 # --- asm path: the vi twin, spliced host-side (mkasm) so the disk is self-contained
 sh $ROOT/os/commands-asm/mkasm.sh vi > vitwin.asm
-python3 $ROOT/assembler/p8xasm.py vitwin.asm -o vigold.bin --base 0x6A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py vitwin.asm -o vigold.bin --base 0x6300 >/dev/null
 
 # --- c path: the vi C command, //#use spliced host-side (clib) into one source
 python3 $ROOT/tools/clib.py $ROOT/os/commands/vi.c -o vicmd.c >/dev/null
@@ -35,8 +35,8 @@ python3 $ROOT/tools/clib.py $ROOT/os/commands/vi.c -o vicmd.c >/dev/null
 rm -f cb.img
 python3 $ROOT/tools/p8xfs.py create cb.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   cb.img oscb.bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    cb.img cbasm.bin --name ASM.bin --load 0x6A00 --exec 0x6A00 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    cb.img cbcc.bin  --name CC.bin  --load 0x6A00 --exec 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    cb.img cbasm.bin --name ASM.bin --load 0x6300 --exec 0x6300 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    cb.img cbcc.bin  --name CC.bin  --load 0x6300 --exec 0x6300 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    cb.img vitwin.asm --name VIT.ASM >/dev/null
 python3 $ROOT/tools/p8xfs.py put    cb.img vicmd.c    --name VI.C    >/dev/null
 

@@ -21,22 +21,22 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o fos.bin --base 0x2000 >/dev/null
 python3 $ROOT/tools/clib.py $ROOT/os/commands/finder.c -o fnd.pp.c >/dev/null
 python3 $ROOT/compiler/p8cc.py fnd.pp.c -o fnd.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py fnd.asm -o fnd.bin --base 0x6A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py fnd.asm -o fnd.bin --base 0x6300 >/dev/null
 
 # the trivial return-app
 cat > r_app.c <<'EOF'
 int main() { puts("APPRAN"); return 0; }
 EOF
 python3 $ROOT/compiler/p8cc.py r_app.c -o r_app.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py r_app.asm -o r_app.bin --base 0x6A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py r_app.asm -o r_app.bin --base 0x6300 >/dev/null
 
 rm -f fr.img
 python3 $ROOT/tools/p8xfs.py create fr.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   fr.img fos.bin >/dev/null
 # R.BIN created FIRST -> it is Finder's first (selected) entry at root
-python3 $ROOT/tools/p8xfs.py put    fr.img r_app.bin --name /R.BIN --load 0x6A00 --exec 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    fr.img r_app.bin --name /R.BIN --load 0x6300 --exec 0x6300 >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  fr.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    fr.img fnd.bin --name /bin/finder.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    fr.img fnd.bin --name /bin/finder.bin --load 0x6300 --exec 0x6300 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    fr.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
 
 # boot; run finder; DOWN (select R.BIN, index 1 after ".."); ENTER (launch it); q

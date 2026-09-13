@@ -15,16 +15,16 @@ fail() { echo "CC-C TEST: FAIL — $1"; [ -f "$2" ] && { echo "--- transcript --
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osccc.bin --base 0x2000 >/dev/null
-python3 $ROOT/assembler/p8xasm.py $ROOT/apps/p8xcc.asm -o ccca.bin --base 0x6A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py $ROOT/apps/p8xcc.asm -o ccca.bin --base 0x6300 >/dev/null
 python3 $ROOT/generators/gen_p8xopc.py > opctab.asm
 cat $ROOT/apps/p8xasm.asm opctab.asm > asmfull.asm
-python3 $ROOT/assembler/p8xasm.py asmfull.asm -o cccasm.bin --base 0x6A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py asmfull.asm -o cccasm.bin --base 0x6300 >/dev/null
 # the C build: //#use abi spliced by clib.py, p8cc.py, the host assembler
 cp $ROOT/apps/cc.c $ROOT/os/commands/lib_abi.c .
 python3 $ROOT/tools/clib.py cc.c -o ccc_pp.c >/dev/null
 python3 $ROOT/compiler/p8cc.py ccc_pp.c -o ccc.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py ccc.asm -o ccc.bin --base 0x6A00 >/dev/null
-[ "$(wc -c < ccc.bin)" -le 19968 ] || fail "ccc.bin is $(wc -c < ccc.bin) bytes, overlaps its tables at \$B800"
+python3 $ROOT/assembler/p8xasm.py ccc.asm -o ccc.bin --base 0x6300 >/dev/null
+[ "$(wc -c < ccc.bin)" -le 21760 ] || fail "ccc.bin is $(wc -c < ccc.bin) bytes, overlaps its tables at \$B800"
 # the sources
 printf 'int odd(int n); int even(int n) { if (n == 0) return 1; return odd(n - 1); } int odd(int n) { if (n == 0) return 0; return even(n - 1); } int main() { puts("P8"); if (even(10)) putchar(65); else putchar(66); }\n' > cct.c
 {
@@ -58,9 +58,9 @@ python3 $ROOT/tools/p8xfs.py create ccc.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   ccc.img osccc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  ccc.img /bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  ccc.img /binc >/dev/null
-python3 $ROOT/tools/p8xfs.py put ccc.img ccca.bin   --name /bin/cc.bin   --load 0x6A00 --exec 0x6A00 >/dev/null
-python3 $ROOT/tools/p8xfs.py put ccc.img cccasm.bin --name /bin/asm.bin  --load 0x6A00 --exec 0x6A00 >/dev/null
-python3 $ROOT/tools/p8xfs.py put ccc.img ccc.bin    --name /binc/cc.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put ccc.img ccca.bin   --name /bin/cc.bin   --load 0x6300 --exec 0x6300 >/dev/null
+python3 $ROOT/tools/p8xfs.py put ccc.img cccasm.bin --name /bin/asm.bin  --load 0x6300 --exec 0x6300 >/dev/null
+python3 $ROOT/tools/p8xfs.py put ccc.img ccc.bin    --name /binc/cc.bin --load 0x6300 --exec 0x6300 >/dev/null
 for s in t bigf slots and lbl grep; do python3 $ROOT/tools/p8xfs.py put ccc.img cc$s.c --name /$s.c >/dev/null; done
 cmds='B\r'
 for s in t bigf slots and lbl grep; do cmds="${cmds}cc /$s.c >A$s.ASM\rrun /binc/cc.bin /$s.c >C$s.ASM\r"; done

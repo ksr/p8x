@@ -9,7 +9,7 @@
 
 ; Entry: P2 points at the raw argument tail. Stash it in w_arg (a 16-bit
 ; pointer we can advance byte-by-byte, since P2 gets clobbered by nextc/syscalls).
-        .org $6A00
+        .org $6300
         TPA2L
         STA w_arg
         TPA2H

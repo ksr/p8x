@@ -26,13 +26,13 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/
 
 python3 $ROOT/tools/clib.py $ROOT/os/commands/wdesk.c -o wt_wdesk.c
 python3 $ROOT/compiler/p8cc.py wt_wdesk.c -o wt_wdesk.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py wt_wdesk.asm -o wt_wdesk.bin --base 0x6A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py wt_wdesk.asm -o wt_wdesk.bin --base 0x6300 >/dev/null
 
 rm -f wt.img
 python3 $ROOT/tools/p8xfs.py create wt.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   wt.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  wt.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    wt.img wt_wdesk.bin --name /bin/wdesk.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    wt.img wt_wdesk.bin --name /bin/wdesk.bin --load 0x6300 --exec 0x6300 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    wt.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
 
 run() {  # $1 = input tail after "run wdesk", $2 = ppm out

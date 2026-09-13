@@ -6,7 +6,7 @@
 ;#use stdin
 ;#use abi
 
-        .org $6A00                   ; loads into TPA (transient program area)
+        .org $6300                   ; loads into TPA (transient program area)
 ; Save the incoming arg-tail pointer (P2) into the 16-bit var m_arg so it can
 ; be advanced and re-loaded across the leading-space skip loop below.
         TPA2L

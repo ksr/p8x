@@ -10,7 +10,7 @@
 ; Entry: P2 holds the argument tail (first char after the command name). The
 ; block below saves it to v_arg, then v_sk skips leading spaces so v_arg points
 ; at the first non-space char of the path argument.
-        .org $6A00
+        .org $6300
         TPA2L
         STA v_arg
         TPA2H

@@ -13,12 +13,21 @@ P8X **rev E** memory map (2026-07-13, commit 6cadf38):
   Assembler emits an 8K ROM image (cap $2000).
 - **RAM $2000–$FEFF (56K)** — 2× 62256. **OS loads at $2000** (was $4000 in rev D).
 - **I/O $FF00–$FFFF**.
-- Scratch block **$6000–$69FF** (firmware/BIOS scratch $6000-$60xx, **SBUF $6100**,
-  OS shell scratch $6300, IBUF/PATHBUF/RUNPATH/APBUF $6500-$69FF) — moved -$1000 from
-  rev D's $7000-$79FF. **TPA (programs) = $6A00** (was $7A00); stack down from $FEFF.
-- **TPA is ~37.9K ($6A00–$FE00)**, +4K vs rev D. OS reserve $2000–$5FFF (16K = disk
-  LBA 1..32 cap). Program `--base`/`--load`/`--exec`, cc/asm `.org`, RBUF, DEFADDR
-  all = $6A00. (commit 37dd09f)
+- **TPA base dropped $6A00 → $6300 (2026-09-13)** to enlarge the TPA by 1,792 B
+  for the self-host fit. The OS's own scratch band (LINEBUF, the FS/shell/PACK/
+  FSCK variables, IBUF, PATHBUF, APBUF, ~1.75 KB) was **relocated from
+  $6300–$69FF up to $5900–$5FFF** — free RAM just past the OS code (which ends
+  ~$55E6, well below the $6000 BIOS scratch). So the scratch that pinned the TPA
+  base moved down, and the TPA floor followed.
+- Scratch block now: OS scratch **$5900–$5FFF** (relocated), firmware/BIOS
+  scratch **$6000–$60FF**, **SBUF $6100–$62FF** (monitor-owned; the last thing
+  below the TPA — reclaiming it needs the monitor rewrite). **TPA = $6300**;
+  stack down from $FEFF.
+- **TPA is ~39.6K ($6300–$FE00)**. Program `--base`/`--load`/`--exec`, cc/asm
+  `.org` (p8cc.py via memmap.TPABASE; p8xcc.asm/cc.c/asm commands hardcoded,
+  all shifted), RBUF, MKFLATB, and DEFADDR (`#<TPABASE`/`#>TPABASE`, was a
+  hardcoded `#$6A`) all = $6300. Programs built at the old $6A00 still run
+  (in-TPA). TPABASE is single-sourced in gen_memmap.py.
 
 **Syscall ABI moved with the OS: $40xx → $20xx.** The OS jump table is at the
 front of the OS image, so it now starts at $2000: SYS_GETCWD $2003, SYS_CWDLBA

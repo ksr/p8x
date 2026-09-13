@@ -8,7 +8,7 @@
 ;#use distab
 ;#use abi
 
-        .org $6A00
+        .org $6300
         ; ---- parse "start end" ------------------------------------------------
 d_sk:   LDA (P2)                     ; skip leading spaces
         LDB #32

@@ -78,13 +78,13 @@ EOF
 cp $ROOT/os/commands/lib_abi.c .
 python3 $ROOT/tools/clib.py gl_t2.c -o gl_t2.pp.c
 python3 $ROOT/compiler/p8cc.py gl_t2.pp.c -o gl_t2.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py gl_t2.asm -o gl_t2.bin --base 0x6A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py gl_t2.asm -o gl_t2.bin --base 0x6300 >/dev/null
 
 rm -f gl_t2.img
 python3 $ROOT/tools/p8xfs.py create gl_t2.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   gl_t2.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  gl_t2.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    gl_t2.img gl_t2.bin --name /bin/glt2.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    gl_t2.img gl_t2.bin --name /bin/glt2.bin --load 0x6300 --exec 0x6300 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    gl_t2.img $ROOT/os/font.gl --name /FONT.GL >/dev/null
 python3 $ROOT/tools/p8xfs.py put    gl_t2.img gl_t2.gl --name /GLT2.GL >/dev/null
 # console OFF from the monitor for the RTL-compared grab (the RTL bench renders

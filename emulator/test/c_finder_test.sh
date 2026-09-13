@@ -19,13 +19,13 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o fos.bin --base 0x2000 >/dev/null
 python3 $ROOT/tools/clib.py $ROOT/os/commands/finder.c -o fnd.pp.c >/dev/null
 python3 $ROOT/compiler/p8cc.py fnd.pp.c -o fnd.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py fnd.asm -o fnd.bin --base 0x6A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py fnd.asm -o fnd.bin --base 0x6300 >/dev/null
 
 rm -f fnd.img
 python3 $ROOT/tools/p8xfs.py create fnd.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   fnd.img fos.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  fnd.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    fnd.img fnd.bin --name /bin/finder.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    fnd.img fnd.bin --name /bin/finder.bin --load 0x6300 --exec 0x6300 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    fnd.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  fnd.img /APPS >/dev/null
 printf 'hi' > f_tmp.dat

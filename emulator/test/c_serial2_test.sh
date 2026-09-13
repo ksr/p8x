@@ -38,13 +38,13 @@ int main() {
 PROBEEOF
 
 python3 $ROOT/compiler/p8cc.py s2_probe.c -o s2_probe.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py s2_probe.asm -o s2_probe.bin --base 0x6A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py s2_probe.asm -o s2_probe.bin --base 0x6300 >/dev/null
 
 rm -f s2.img
 python3 $ROOT/tools/p8xfs.py create s2.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   s2.img s2os.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  s2.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    s2.img s2_probe.bin --name /bin/s2.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    s2.img s2_probe.bin --name /bin/s2.bin --load 0x6300 --exec 0x6300 >/dev/null
 
 printf 'HELLO-P3' > s2_in.dat            # the payload arriving on the 2nd port
 printf 'B\rrun /bin/s2.bin\r' > s2.in

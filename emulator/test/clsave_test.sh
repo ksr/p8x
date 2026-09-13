@@ -16,17 +16,17 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/dev/null
 python3 $ROOT/tools/clib.py $ROOT/os/commands/clsave.c -o cs.c
 python3 $ROOT/compiler/p8cc.py cs.c -o cs.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py cs.asm -o cs.bin --base 0x6A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py cs.asm -o cs.bin --base 0x6300 >/dev/null
 python3 $ROOT/tools/clib.py $ROOT/os/commands/gl.c -o csgl.c
 python3 $ROOT/compiler/p8cc.py csgl.c -o csgl.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py csgl.asm -o csgl.bin --base 0x6A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py csgl.asm -o csgl.bin --base 0x6300 >/dev/null
 
 rm -f cs.img
 python3 $ROOT/tools/p8xfs.py create cs.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   cs.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  cs.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    cs.img cs.bin  --name /bin/clsave.bin --load 0x6A00 --exec 0x6A00 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    cs.img csgl.bin --name /bin/gl.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    cs.img cs.bin  --name /bin/clsave.bin --load 0x6300 --exec 0x6300 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    cs.img csgl.bin --name /bin/gl.bin --load 0x6300 --exec 0x6300 >/dev/null
 
 # record a small list (a MOVE3+DRAW3 pair), save it, delete it from the
 # card, replay the FILE, and probe. Window==viewport => screen coords.

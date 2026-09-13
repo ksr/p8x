@@ -16,7 +16,7 @@
 ; OS: SYS_OPENCWD $2012, SYS_PUTC $2009, SYS_PUTS $200F. Entry: P2 = arg tail.
 ;#use abi
 
-        .org $6A00
+        .org $6300
 ; --- -h check (P2 = arg) ---------------------------------------------------
 tr_sk:  LDA (P2)                      ; skip leading spaces (32) in arg tail
         LDB #32

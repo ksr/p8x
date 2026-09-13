@@ -19,7 +19,7 @@
  * (the on-board lexer's buffer), and no `*p = v` store through a char pointer
  * (the on-board cc stores a word there: byte stores are written `p[0] = v`).
  *
- * Layout: the image at $6A00 must end below HEADS; the tables live above it
+ * Layout: the image at $6300 must end below HEADS; the tables live above it
  * (chain heads, //#use stream states + 512-byte buffers, the local arena, the
  * global arena), the BIOS directory-scan page at DIRPAGE, the source read
  * buffer at $FC00, the C stack down from $F7FF.
@@ -989,7 +989,7 @@ int rt_lnot() {
     return emit("__ln1:\tLDA #1\n\tSTA __ax\n\tLDA #0\n\tSTA __ax+1\n\tRTS\n");
 }
 int compile() {
-    emit("\t.org $6A00\n\tTPA3L\n\tSTA __sp0\n\tTPA3H\n\tSTA __sp0+1\n\tLDB #248\n\tCMP\n\tJNC __sk0\n");
+    emit("\t.org $6300\n\tTPA3L\n\tSTA __sp0\n\tTPA3H\n\tSTA __sp0+1\n\tLDB #248\n\tCMP\n\tJNC __sk0\n");
     emit("\tLDP3 #63487\n__sk0:\tJSR _f_main\n\tLPW3 __sp0\n\tRTS\n");
     advance();
     while (curk) { if (bailed) return 0; funcdef(); }

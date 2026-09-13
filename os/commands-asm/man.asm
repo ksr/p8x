@@ -7,7 +7,7 @@
 ; PUTS=$0112, CONOUT=$0103 (raw console — used for the not-found error).
 ;#use abi
 
-        .org $6A00
+        .org $6300
 ; --- Parse the argument: skip spaces, reject empty/usage, find the name word.
 ;     P2 walks the arg tail; m_arg saves the name's start for the '-' rewind.
 m_sk:   LDA (P2)                     ; skip leading spaces

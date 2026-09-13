@@ -15,27 +15,27 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osinc.bin --base 0x2000 >/dev/null
 python3 $ROOT/generators/gen_p8xopc.py opc.asm
 cat $ROOT/apps/p8xasm.asm opc.asm > asmfull.asm
-python3 $ROOT/assembler/p8xasm.py asmfull.asm -o asm.bin --base 0x6A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py asmfull.asm -o asm.bin --base 0x6300 >/dev/null
 
 rm -f inc.img
 python3 $ROOT/tools/p8xfs.py create inc.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   inc.img osinc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  inc.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    inc.img asm.bin --name /bin/asm.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    inc.img asm.bin --name /bin/asm.bin --load 0x6300 --exec 0x6300 >/dev/null
 # a source under work/asm that includes ../inc/eq.inc (relative to the source dir)
 python3 $ROOT/tools/p8xfs.py mkdir inc.img /work >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir inc.img /work/asm >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir inc.img /work/inc >/dev/null
 printf 'FOO = $41\n' > eq.inc
 python3 $ROOT/tools/p8xfs.py put inc.img eq.inc --name /work/inc/eq.inc >/dev/null
-printf '        .include "../inc/eq.inc"\n        .org $6A00\n        LDA #FOO\n        JSR $0103\n        LDA #$0D\n        JSR $0103\n        LDA #$0A\n        JSR $0103\n        RTS\n' > t.asm
+printf '        .include "../inc/eq.inc"\n        .org $6300\n        LDA #FOO\n        JSR $0103\n        LDA #$0D\n        JSR $0103\n        LDA #$0A\n        JSR $0103\n        RTS\n' > t.asm
 python3 $ROOT/tools/p8xfs.py put inc.img t.asm --name /work/asm/t.asm >/dev/null
 # a full-memmap include in an os-bios-shaped layout, built from the parent CWD
 python3 $ROOT/tools/p8xfs.py mkdir inc.img /so >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir inc.img /so/asm >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir inc.img /so/generators >/dev/null
 python3 $ROOT/tools/p8xfs.py put inc.img $ROOT/generators/memmap.inc --name /so/generators/memmap.inc >/dev/null
-printf '        .include "../generators/memmap.inc"\n        .org $6A00\n        LDP1 #TPABASE\n        RTS\n' > mm.asm
+printf '        .include "../generators/memmap.inc"\n        .org $6300\n        LDP1 #TPABASE\n        RTS\n' > mm.asm
 python3 $ROOT/tools/p8xfs.py put inc.img mm.asm --name /so/asm/mm.asm >/dev/null
 
 out=$(printf 'B\rcd /work/asm\rasm t.asm out.bin\rrun out.bin\rcd /so\rasm asm/mm.asm o2.bin\r' | \

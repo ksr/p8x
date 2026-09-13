@@ -19,12 +19,12 @@ cat $ROOT/basic/glkwtab.c $ROOT/basic/basic.c > basicc_src.c
 cp $ROOT/os/commands/lib_abi.c .
 python3 $ROOT/tools/clib.py basicc_src.c -o basicc_pp.c >/dev/null
 python3 $ROOT/compiler/p8cc.py basicc_pp.c -o basicc.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py basicc.asm -o basicc.bin --base 0x6A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py basicc.asm -o basicc.bin --base 0x6300 >/dev/null
 rm -f bcc.img
 python3 $ROOT/tools/p8xfs.py create bcc.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   bcc.img osbc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  bcc.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    bcc.img basicc.bin --name /bin/basicc.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    bcc.img basicc.bin --name /bin/basicc.bin --load 0x6300 --exec 0x6300 >/dev/null
 run() { printf "B\rbasicc\r$1" | ../p8xemu -l 400000000 -c bcc.img eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r'; }
 # --- 1. strings (basic_string_test's program) + BYE back to the shell ---------
 prog='10 A$="HELLO"\r20 B$="WORLD"\r30 PRINT A$;" ";B$\r40 PRINT LEN(A$)\r'

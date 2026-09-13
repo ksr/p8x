@@ -6,7 +6,7 @@
 ;#use stdin
 ;#use abi
 
-        .org $6A00                   ; loads at TPA base (see memory-map: $6A00)
+        .org $6300                   ; loads at TPA base (see memory-map: $6300)
 ; Save the incoming arg-tail pointer (P2) into the c_arg 16-bit variable so we
 ; can freely reload/advance it while scanning. TPA2L/TPA2H read P2's low/high.
         TPA2L

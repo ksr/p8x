@@ -8,7 +8,7 @@ IOBASE      = $FF00              ; memory-mapped I/O page
 ROMSIZE     = $2000              ; 8K firmware ROM $0000-$1FFF
 RAMSIZE     = $DF00              ; RAM span $2000-$FEFF (IOBASE-RAMBASE)
 OSORG       = $2000              ; OS load/link address (= RAMBASE)
-TPABASE     = $6A00              ; transient program area base (RUNnable programs load here)
+TPABASE     = $6300              ; transient program area base (RUNnable programs load here)
 CSTACKTOP   = $F800              ; compiler C-stack top (grows down; p8cc __csp init)
 
 ; I/O ports ($FF00-$FFFF)
@@ -93,148 +93,148 @@ STKTOP      = $FEFF
 ; BIOS / FS scratch ($6000-$60FF)
 ROSTAT      = $605E              ; read-stream state base (ROLBA..ROCNT, 11 bytes)
 
-; OS scratch ($6300-$69FF)
-LINEBUF     = $6300              ; shell input line (64 bytes)
-CMDBUF      = $6340              ; parsed command word (16 bytes)
-NAMEBUF     = $6350              ; 12-byte filename (search key / DIR scratch)
-ECNT        = $6363              ; entries-left-in-sector counter
-FLAGS       = $6364              ; current entry flag byte
-MATCH       = $6365              ; 1 = name matched / strings equal
-LENLO       = $6366              ; entry length, low 16 bits
-LENHI       = $6367
-STARTLO     = $6368              ; entry start LBA (low byte)
-LOADLO      = $6369              ; entry load address
-LOADHI      = $636A
-EXECLO      = $636B              ; entry exec address
-EXECHI      = $636C
-DLBA        = $636D              ; directory sector being scanned
-SECCNT      = $636E              ; sectors left to transfer
-CURLBA      = $636F              ; current data LBA
-ENTPL       = $6370              ; pointer to a directory entry (in SBUF):
-ENTPH       = $6371              ; flag byte for DEL, entry start for SAVE
-ARGPL       = $6372              ; saved arg position in LINEBUF
-ARGPH       = $6373
-HXLO        = $6374              ; GETHEX result
-HXHI        = $6375
-DIGIT       = $6376              ; HEXVAL digit value
-SHCNT       = $6377              ; shift counter
-SVSTLO      = $6378              ; SAVE source start address
-SVSTHI      = $6379
-FREELO      = $637A              ; boot-block free pointer (next data LBA)
-FREEHI      = $637B
-SRCLO       = $637C              ; running source pointer during the copy
-SRCHI       = $637D
-REM         = $637E              ; sectors remaining in the SAVE write loop
-NF          = $6380              ; running next-free LBA
-PFOUND      = $6381              ; 1 if this pass found an unpacked extent
-MINSTRT     = $6382              ; smallest start LBA >= NF this pass
-MINSEC      = $6383              ; that extent's sector count
-MINPL       = $6384              ; pointer to that entry's start-LBA field (in SBUF)
-MINPH       = $6385
-MINDL       = $6386              ; that entry's directory sector LBA
-ESTART      = $6387              ; current entry start LBA (low byte)
-SRCL        = $6388              ; copy source LBA
-DSTL        = $6389              ; copy dest LBA
-CPYN        = $638A              ; sectors left to copy
-CANDL       = $638B              ; current entry's start-field pointer
-CANDH       = $638C
-ROOTN       = $638D              ; root directory sector count (4)
-DATABASE    = $638E              ; first data LBA (37)
-CWDL        = $638F              ; current directory: start LBA
-CWDN        = $6390              ; sector count
-SDIRL       = $6391              ; directory being scanned this op (start LBA)
-SDIRN       = $6392              ; sector count
-SCNT        = $6393              ; sectors-left counter while scanning a directory
-LSL         = $6394              ; SETPATH: pointer to the last '/' in CWDPATH
-LSH         = $6395
-PATHL       = $6396              ; saved path cursor across DESCEND (FINDENT clobbers P2)
-PATHH       = $6397
-NEWLBA      = $6398              ; MKDIR: LBA of the new directory extent
-PSL         = $6399              ; MKDIR: parent dir start LBA / sector count
-PSN         = $639A
-EFLAG       = $639B              ; flag byte WRENT stamps (F_FILE for SAVE, F_DIR for MKDIR)
-RMDL        = $639C              ; RMDIR: parent directory sector holding the entry
-CDST        = $639D              ; current directory: start LBA / sectors / entry index
-CDSC        = $639E
-CIDX        = $639F
-REDIRF      = $63A0              ; 0 = console, 1 = capturing to RBUF
-RCH         = $63A1              ; OUTCH: byte being emitted
-RS2L        = $63A2              ; OUTCH: saved caller P2
-RS2H        = $63A3
-RPTRL       = $63A4              ; OUTCH: next free byte in the capture buffer
-RPTRH       = $63A5
-RHX         = $63A6              ; OPHEX8 scratch
-REDNAME     = $63A7              ; redirect target filename (null-terminated, <=48): $63A7..$63D6
-FNDIR       = $63D7              ; directories counted
-FNFIL       = $63D8              ; files counted
-FNDEL       = $63D9              ; deleted slots counted
-FMAXE       = $63DA              ; highest extent end LBA seen (data area only)
-FUSED       = $63DB              ; data sectors occupied by live extents
-FERR        = $63DC              ; problems found (0 = clean)
-FCHILD      = $63DD              ; CHKDD: directory whose '..' is being checked
-FEXP        = $63DE              ; CHKDD: expected parent LBA
+; OS scratch ($5900-$5FFF)
+LINEBUF     = $5900              ; shell input line (64 bytes)
+CMDBUF      = $5940              ; parsed command word (16 bytes)
+NAMEBUF     = $5950              ; 12-byte filename (search key / DIR scratch)
+ECNT        = $5963              ; entries-left-in-sector counter
+FLAGS       = $5964              ; current entry flag byte
+MATCH       = $5965              ; 1 = name matched / strings equal
+LENLO       = $5966              ; entry length, low 16 bits
+LENHI       = $5967
+STARTLO     = $5968              ; entry start LBA (low byte)
+LOADLO      = $5969              ; entry load address
+LOADHI      = $596A
+EXECLO      = $596B              ; entry exec address
+EXECHI      = $596C
+DLBA        = $596D              ; directory sector being scanned
+SECCNT      = $596E              ; sectors left to transfer
+CURLBA      = $596F              ; current data LBA
+ENTPL       = $5970              ; pointer to a directory entry (in SBUF):
+ENTPH       = $5971              ; flag byte for DEL, entry start for SAVE
+ARGPL       = $5972              ; saved arg position in LINEBUF
+ARGPH       = $5973
+HXLO        = $5974              ; GETHEX result
+HXHI        = $5975
+DIGIT       = $5976              ; HEXVAL digit value
+SHCNT       = $5977              ; shift counter
+SVSTLO      = $5978              ; SAVE source start address
+SVSTHI      = $5979
+FREELO      = $597A              ; boot-block free pointer (next data LBA)
+FREEHI      = $597B
+SRCLO       = $597C              ; running source pointer during the copy
+SRCHI       = $597D
+REM         = $597E              ; sectors remaining in the SAVE write loop
+NF          = $5980              ; running next-free LBA
+PFOUND      = $5981              ; 1 if this pass found an unpacked extent
+MINSTRT     = $5982              ; smallest start LBA >= NF this pass
+MINSEC      = $5983              ; that extent's sector count
+MINPL       = $5984              ; pointer to that entry's start-LBA field (in SBUF)
+MINPH       = $5985
+MINDL       = $5986              ; that entry's directory sector LBA
+ESTART      = $5987              ; current entry start LBA (low byte)
+SRCL        = $5988              ; copy source LBA
+DSTL        = $5989              ; copy dest LBA
+CPYN        = $598A              ; sectors left to copy
+CANDL       = $598B              ; current entry's start-field pointer
+CANDH       = $598C
+ROOTN       = $598D              ; root directory sector count (4)
+DATABASE    = $598E              ; first data LBA (37)
+CWDL        = $598F              ; current directory: start LBA
+CWDN        = $5990              ; sector count
+SDIRL       = $5991              ; directory being scanned this op (start LBA)
+SDIRN       = $5992              ; sector count
+SCNT        = $5993              ; sectors-left counter while scanning a directory
+LSL         = $5994              ; SETPATH: pointer to the last '/' in CWDPATH
+LSH         = $5995
+PATHL       = $5996              ; saved path cursor across DESCEND (FINDENT clobbers P2)
+PATHH       = $5997
+NEWLBA      = $5998              ; MKDIR: LBA of the new directory extent
+PSL         = $5999              ; MKDIR: parent dir start LBA / sector count
+PSN         = $599A
+EFLAG       = $599B              ; flag byte WRENT stamps (F_FILE for SAVE, F_DIR for MKDIR)
+RMDL        = $599C              ; RMDIR: parent directory sector holding the entry
+CDST        = $599D              ; current directory: start LBA / sectors / entry index
+CDSC        = $599E
+CIDX        = $599F
+REDIRF      = $59A0              ; 0 = console, 1 = capturing to RBUF
+RCH         = $59A1              ; OUTCH: byte being emitted
+RS2L        = $59A2              ; OUTCH: saved caller P2
+RS2H        = $59A3
+RPTRL       = $59A4              ; OUTCH: next free byte in the capture buffer
+RPTRH       = $59A5
+RHX         = $59A6              ; OPHEX8 scratch
+REDNAME     = $59A7              ; redirect target filename (null-terminated, <=48): $63A7..$63D6
+FNDIR       = $59D7              ; directories counted
+FNFIL       = $59D8              ; files counted
+FNDEL       = $59D9              ; deleted slots counted
+FMAXE       = $59DA              ; highest extent end LBA seen (data area only)
+FUSED       = $59DB              ; data sectors occupied by live extents
+FERR        = $59DC              ; problems found (0 = clean)
+FCHILD      = $59DD              ; CHKDD: directory whose '..' is being checked
+FEXP        = $59DE              ; CHKDD: expected parent LBA
 
 ; TPA (transient programs)
-RBUF        = $6A00              ; capture buffer = the TPA (free during a built-in cmd)
+RBUF        = $6300              ; capture buffer = the TPA (free during a built-in cmd)
 
-; OS scratch ($6300-$69FF)
-TSP         = $63E0              ; tree stack depth (0 = at root level)
-TI          = $63E1              ; scratch loop counter for the frame stack
-LENHI2      = $63E2              ; entry length, bits 16..23 (the BIOS FLEN 3rd byte)
-SECCH       = $63E3              ; SECCOUNT sector-count high byte (files >255 sectors)
-MINSECH     = $63E4              ; PACK: chosen extent's sector count, high byte
-CPYNH       = $63E5              ; PK2MOVE: sectors-to-copy counter, high byte
-TFRAME      = $64B7              ; 8 frames x 4 bytes (dst_lo,dst_hi,dsc,idx): $64B7..$64D6
-PPSEC       = $63FA              ; chosen extent's parent-entry: dir sector LBA / slot
-PPSLOT      = $63FB
-CANDSEC     = $63FC              ; candidate entry's location during the find walk
-CANDSLOT    = $63FD
-PARST       = $63FE              ; PK2FIX: parent directory start LBA (for '..')
-CWDPATH     = $6400              ; textual CWD path for the prompt (up to 48 bytes)
-INMODE      = $6430              ; SYS_GETC source: 0 = console, 1 = the read stream
-INARM       = $6431              ; shell armed a '< file' for the next RUN
-INNAME      = $6432              ; '< file' name (null-terminated, <=48): $6432..$6461
-PIPEF       = $6462              ; pipe stage: 0 none, 1 left ran, 2 right ran
-PIPEBUF     = $6463              ; saved right-hand command of a 'cmd | cmd' ($6463..$64A2)
-CWDLH       = $64A3              ; CWDL high byte (current working directory start LBA)
-SDIRLH      = $64A4              ; SDIRL high byte (directory being scanned this op)
-STARTHI     = $64A5              ; STARTLO high byte (entry start LBA from FINDENT)
-DLBAH       = $64A6              ; DLBA high byte (directory-sector scan cursor)
-NEWLBAH     = $64A7              ; NEWLBA high byte (MKDIR new extent)
-PSLH        = $64A8              ; PSL high byte (MKDIR parent extent)
-PARSTH      = $64A9              ; PARST high byte (PACK '..' parent fix)
-RMDLH       = $64AA              ; RMDL high byte (RMDIR parent sector)
-CURLBAH     = $64AB              ; CURLBA high byte (SAVE data-write LBA, 16-bit)
-NFH         = $64AC              ; NF high byte (PACK next-free target)
-MINSTRTH    = $64AD              ; MINSTRT high byte (smallest start LBA this pass)
-CDSTH       = $64AE              ; CDST high byte (current directory in the walk)
-CANDSECH    = $64AF              ; CANDSEC high byte (candidate entry's dir sector)
-PPSECH      = $64B0              ; PPSEC high byte (chosen extent's parent-entry sector)
-SRCH        = $64B1              ; SRCL high byte (PK2MOVE copy source)
-DSTH        = $64B2              ; DSTL high byte (PK2MOVE copy dest)
-FCHILDH     = $64B3              ; FCHILD high byte (CHKDD child dir)
-FEXPH       = $64B4              ; FEXP high byte (CHKDD expected parent)
-FMAXEH      = $64B5              ; FMAXE high byte (FSCK highest extent end)
-FUSEDH      = $64B6              ; FUSED high byte (FSCK live data sectors)
-REDAPP      = $64D7              ; >> append redirect: 1 = prepend the existing file
-APHAVE      = $64D8              ; >> : 1 = an existing file to prepend was found
-APLBA       = $64D9              ; >> : old file's start LBA (2 bytes)
-APREM       = $64DB              ; >> : old file bytes left to copy (2 bytes)
-APCHK       = $64DD              ; >> : bytes to emit from the current sector (2 bytes)
-SCRIPTM     = $64E0              ; 1 = the shell is running lines from a `sh` script
-SCRSAVE     = $64E1              ; saved script read-stream state (ROSTATE 13 + ROSDRV = 14: $64E1..$64EE)
-SCRCNT      = $64EF              ; byte counter for SAVESCR/RESTSCR (1)
-APBUF       = $6800              ; >> prepend sector buffer (512B, below the TPA); also the
-IBUF        = $6500              ; 512-byte buffer for the stdin read stream
-PATHBUF     = $6700              ; search path, ';'-separated dirs; default '/BIN' ($6700..$673F)
-RUNPATH     = $6740              ; scratch: candidate program path built during a lookup ($6740..$679F)
-RUNSKIP     = $67A0              ; DORUN: 1 = skip the program-name word for the arg pointer
-PSCANL      = $67A1              ; PATH search cursor into PATHBUF (low)
-PSCANH      = $67A2              ; PATH search cursor into PATHBUF (high)
-GPLF        = $67A3              ; SYS_GETC console: 1 = a LF is pending after a CR keypress
-CURDRIVE    = $67A4              ; derived: 1 if the CWD is under /d1 (drive 1), else 0
-DRVINIT     = $67A5              ; bitmask: bit N set = drive N has been CFINIT'd this session
-MPSAV       = $67A6              ; MNTPFX: saved P2 (2 bytes) while sniffing a 'd1' prefix
+; OS scratch ($5900-$5FFF)
+TSP         = $59E0              ; tree stack depth (0 = at root level)
+TI          = $59E1              ; scratch loop counter for the frame stack
+LENHI2      = $59E2              ; entry length, bits 16..23 (the BIOS FLEN 3rd byte)
+SECCH       = $59E3              ; SECCOUNT sector-count high byte (files >255 sectors)
+MINSECH     = $59E4              ; PACK: chosen extent's sector count, high byte
+CPYNH       = $59E5              ; PK2MOVE: sectors-to-copy counter, high byte
+TFRAME      = $5AB7              ; 8 frames x 4 bytes (dst_lo,dst_hi,dsc,idx): $64B7..$64D6
+PPSEC       = $59FA              ; chosen extent's parent-entry: dir sector LBA / slot
+PPSLOT      = $59FB
+CANDSEC     = $59FC              ; candidate entry's location during the find walk
+CANDSLOT    = $59FD
+PARST       = $59FE              ; PK2FIX: parent directory start LBA (for '..')
+CWDPATH     = $5A00              ; textual CWD path for the prompt (up to 48 bytes)
+INMODE      = $5A30              ; SYS_GETC source: 0 = console, 1 = the read stream
+INARM       = $5A31              ; shell armed a '< file' for the next RUN
+INNAME      = $5A32              ; '< file' name (null-terminated, <=48): $6432..$6461
+PIPEF       = $5A62              ; pipe stage: 0 none, 1 left ran, 2 right ran
+PIPEBUF     = $5A63              ; saved right-hand command of a 'cmd | cmd' ($6463..$64A2)
+CWDLH       = $5AA3              ; CWDL high byte (current working directory start LBA)
+SDIRLH      = $5AA4              ; SDIRL high byte (directory being scanned this op)
+STARTHI     = $5AA5              ; STARTLO high byte (entry start LBA from FINDENT)
+DLBAH       = $5AA6              ; DLBA high byte (directory-sector scan cursor)
+NEWLBAH     = $5AA7              ; NEWLBA high byte (MKDIR new extent)
+PSLH        = $5AA8              ; PSL high byte (MKDIR parent extent)
+PARSTH      = $5AA9              ; PARST high byte (PACK '..' parent fix)
+RMDLH       = $5AAA              ; RMDL high byte (RMDIR parent sector)
+CURLBAH     = $5AAB              ; CURLBA high byte (SAVE data-write LBA, 16-bit)
+NFH         = $5AAC              ; NF high byte (PACK next-free target)
+MINSTRTH    = $5AAD              ; MINSTRT high byte (smallest start LBA this pass)
+CDSTH       = $5AAE              ; CDST high byte (current directory in the walk)
+CANDSECH    = $5AAF              ; CANDSEC high byte (candidate entry's dir sector)
+PPSECH      = $5AB0              ; PPSEC high byte (chosen extent's parent-entry sector)
+SRCH        = $5AB1              ; SRCL high byte (PK2MOVE copy source)
+DSTH        = $5AB2              ; DSTL high byte (PK2MOVE copy dest)
+FCHILDH     = $5AB3              ; FCHILD high byte (CHKDD child dir)
+FEXPH       = $5AB4              ; FEXP high byte (CHKDD expected parent)
+FMAXEH      = $5AB5              ; FMAXE high byte (FSCK highest extent end)
+FUSEDH      = $5AB6              ; FUSED high byte (FSCK live data sectors)
+REDAPP      = $5AD7              ; >> append redirect: 1 = prepend the existing file
+APHAVE      = $5AD8              ; >> : 1 = an existing file to prepend was found
+APLBA       = $5AD9              ; >> : old file's start LBA (2 bytes)
+APREM       = $5ADB              ; >> : old file bytes left to copy (2 bytes)
+APCHK       = $5ADD              ; >> : bytes to emit from the current sector (2 bytes)
+SCRIPTM     = $5AE0              ; 1 = the shell is running lines from a `sh` script
+SCRSAVE     = $5AE1              ; saved script read-stream state (ROSTATE 13 + ROSDRV = 14: $64E1..$64EE)
+SCRCNT      = $5AEF              ; byte counter for SAVESCR/RESTSCR (1)
+APBUF       = $5E00              ; >> prepend sector buffer (512B, below the TPA); also the
+IBUF        = $5B00              ; 512-byte buffer for the stdin read stream
+PATHBUF     = $5D00              ; search path, ';'-separated dirs; default '/BIN' ($6700..$673F)
+RUNPATH     = $5D40              ; scratch: candidate program path built during a lookup ($6740..$679F)
+RUNSKIP     = $5DA0              ; DORUN: 1 = skip the program-name word for the arg pointer
+PSCANL      = $5DA1              ; PATH search cursor into PATHBUF (low)
+PSCANH      = $5DA2              ; PATH search cursor into PATHBUF (high)
+GPLF        = $5DA3              ; SYS_GETC console: 1 = a LF is pending after a CR keypress
+CURDRIVE    = $5DA4              ; derived: 1 if the CWD is under /d1 (drive 1), else 0
+DRVINIT     = $5DA5              ; bitmask: bit N set = drive N has been CFINIT'd this session
+MPSAV       = $5DA6              ; MNTPFX: saved P2 (2 bytes) while sniffing a 'd1' prefix
 
 ; shell history
 HISTST      = $608E              ; history ring: index where the next entry is written (0..HISTN-1)
@@ -243,9 +243,9 @@ HISTNV      = $6090              ; history ring: recall cursor (0 = not navigati
 HISTRING    = $F800              ; history ring buffer base: HISTN x HISTLEN bytes ($F800..$F9FF, the free 512 B above CSTACKTOP; $FA00 = glob page, $FC00 = RDBUF, $FE00 = stack)
 
 ; shell completion
-CMPPFX      = $6800              ; tab-complete: leaf prefix being completed (NUL-term, 64; aliases APBUF)
-CMPLCP      = $6840              ; tab-complete: longest common prefix of the matches (NUL-term, 16; aliases APBUF)
-CMPDIR      = $6850              ; tab-complete: directory-part path string, for CDPATH (NUL-term, 64; aliases APBUF)
+CMPPFX      = $5E00              ; tab-complete: leaf prefix being completed (NUL-term, 64; aliases APBUF)
+CMPLCP      = $5E40              ; tab-complete: longest common prefix of the matches (NUL-term, 16; aliases APBUF)
+CMPDIR      = $5E50              ; tab-complete: directory-part path string, for CDPATH (NUL-term, 64; aliases APBUF)
 CMPPL       = $6091              ; tab-complete: length of the typed leaf prefix
 CMPCNT      = $6092              ; tab-complete: number of matches (saturates at 255)
 CMPFW       = $6093              ; tab-complete: 1 = completing the command word (first word)

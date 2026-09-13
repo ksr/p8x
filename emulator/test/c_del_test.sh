@@ -16,14 +16,14 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/dev/null
 python3 $ROOT/tools/clib.py $ROOT/os/commands/del.c -o del.pp.c
 python3 $ROOT/compiler/p8cc.py del.pp.c -o del.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py del.asm -o del.bin --base 0x6A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py del.asm -o del.bin --base 0x6300 >/dev/null
 
 rm -f dlt.img
 python3 $ROOT/tools/p8xfs.py create dlt.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   dlt.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  dlt.img /bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  dlt.img /sub >/dev/null
-python3 $ROOT/tools/p8xfs.py put    dlt.img del.bin --name /bin/del.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    dlt.img del.bin --name /bin/del.bin --load 0x6300 --exec 0x6300 >/dev/null
 printf 'x\n' > f.txt
 python3 $ROOT/tools/p8xfs.py put dlt.img f.txt --name /A.TXT >/dev/null
 python3 $ROOT/tools/p8xfs.py put dlt.img f.txt --name /B.TXT >/dev/null

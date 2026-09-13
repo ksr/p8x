@@ -9,7 +9,7 @@
 #define ROMSIZE     0x2000       /* 8K firmware ROM $0000-$1FFF */
 #define RAMSIZE     0xDF00       /* RAM span $2000-$FEFF (IOBASE-RAMBASE) */
 #define OSORG       0x2000       /* OS load/link address (= RAMBASE) */
-#define TPABASE     0x6A00       /* transient program area base (RUNnable programs load here) */
+#define TPABASE     0x6300       /* transient program area base (RUNnable programs load here) */
 #define CSTACKTOP   0xF800       /* compiler C-stack top (grows down; p8cc __csp init) */
 
 /* I/O ports ($FF00-$FFFF) */
@@ -94,148 +94,148 @@
 /* BIOS / FS scratch ($6000-$60FF) */
 #define ROSTAT      0x605E       /* read-stream state base (ROLBA..ROCNT, 11 bytes) */
 
-/* OS scratch ($6300-$69FF) */
-#define LINEBUF     0x6300       /* shell input line (64 bytes) */
-#define CMDBUF      0x6340       /* parsed command word (16 bytes) */
-#define NAMEBUF     0x6350       /* 12-byte filename (search key / DIR scratch) */
-#define ECNT        0x6363       /* entries-left-in-sector counter */
-#define FLAGS       0x6364       /* current entry flag byte */
-#define MATCH       0x6365       /* 1 = name matched / strings equal */
-#define LENLO       0x6366       /* entry length, low 16 bits */
-#define LENHI       0x6367
-#define STARTLO     0x6368       /* entry start LBA (low byte) */
-#define LOADLO      0x6369       /* entry load address */
-#define LOADHI      0x636A
-#define EXECLO      0x636B       /* entry exec address */
-#define EXECHI      0x636C
-#define DLBA        0x636D       /* directory sector being scanned */
-#define SECCNT      0x636E       /* sectors left to transfer */
-#define CURLBA      0x636F       /* current data LBA */
-#define ENTPL       0x6370       /* pointer to a directory entry (in SBUF): */
-#define ENTPH       0x6371       /* flag byte for DEL, entry start for SAVE */
-#define ARGPL       0x6372       /* saved arg position in LINEBUF */
-#define ARGPH       0x6373
-#define HXLO        0x6374       /* GETHEX result */
-#define HXHI        0x6375
-#define DIGIT       0x6376       /* HEXVAL digit value */
-#define SHCNT       0x6377       /* shift counter */
-#define SVSTLO      0x6378       /* SAVE source start address */
-#define SVSTHI      0x6379
-#define FREELO      0x637A       /* boot-block free pointer (next data LBA) */
-#define FREEHI      0x637B
-#define SRCLO       0x637C       /* running source pointer during the copy */
-#define SRCHI       0x637D
-#define REM         0x637E       /* sectors remaining in the SAVE write loop */
-#define NF          0x6380       /* running next-free LBA */
-#define PFOUND      0x6381       /* 1 if this pass found an unpacked extent */
-#define MINSTRT     0x6382       /* smallest start LBA >= NF this pass */
-#define MINSEC      0x6383       /* that extent's sector count */
-#define MINPL       0x6384       /* pointer to that entry's start-LBA field (in SBUF) */
-#define MINPH       0x6385
-#define MINDL       0x6386       /* that entry's directory sector LBA */
-#define ESTART      0x6387       /* current entry start LBA (low byte) */
-#define SRCL        0x6388       /* copy source LBA */
-#define DSTL        0x6389       /* copy dest LBA */
-#define CPYN        0x638A       /* sectors left to copy */
-#define CANDL       0x638B       /* current entry's start-field pointer */
-#define CANDH       0x638C
-#define ROOTN       0x638D       /* root directory sector count (4) */
-#define DATABASE    0x638E       /* first data LBA (37) */
-#define CWDL        0x638F       /* current directory: start LBA */
-#define CWDN        0x6390       /* sector count */
-#define SDIRL       0x6391       /* directory being scanned this op (start LBA) */
-#define SDIRN       0x6392       /* sector count */
-#define SCNT        0x6393       /* sectors-left counter while scanning a directory */
-#define LSL         0x6394       /* SETPATH: pointer to the last '/' in CWDPATH */
-#define LSH         0x6395
-#define PATHL       0x6396       /* saved path cursor across DESCEND (FINDENT clobbers P2) */
-#define PATHH       0x6397
-#define NEWLBA      0x6398       /* MKDIR: LBA of the new directory extent */
-#define PSL         0x6399       /* MKDIR: parent dir start LBA / sector count */
-#define PSN         0x639A
-#define EFLAG       0x639B       /* flag byte WRENT stamps (F_FILE for SAVE, F_DIR for MKDIR) */
-#define RMDL        0x639C       /* RMDIR: parent directory sector holding the entry */
-#define CDST        0x639D       /* current directory: start LBA / sectors / entry index */
-#define CDSC        0x639E
-#define CIDX        0x639F
-#define REDIRF      0x63A0       /* 0 = console, 1 = capturing to RBUF */
-#define RCH         0x63A1       /* OUTCH: byte being emitted */
-#define RS2L        0x63A2       /* OUTCH: saved caller P2 */
-#define RS2H        0x63A3
-#define RPTRL       0x63A4       /* OUTCH: next free byte in the capture buffer */
-#define RPTRH       0x63A5
-#define RHX         0x63A6       /* OPHEX8 scratch */
-#define REDNAME     0x63A7       /* redirect target filename (null-terminated, <=48): $63A7..$63D6 */
-#define FNDIR       0x63D7       /* directories counted */
-#define FNFIL       0x63D8       /* files counted */
-#define FNDEL       0x63D9       /* deleted slots counted */
-#define FMAXE       0x63DA       /* highest extent end LBA seen (data area only) */
-#define FUSED       0x63DB       /* data sectors occupied by live extents */
-#define FERR        0x63DC       /* problems found (0 = clean) */
-#define FCHILD      0x63DD       /* CHKDD: directory whose '..' is being checked */
-#define FEXP        0x63DE       /* CHKDD: expected parent LBA */
+/* OS scratch ($5900-$5FFF) */
+#define LINEBUF     0x5900       /* shell input line (64 bytes) */
+#define CMDBUF      0x5940       /* parsed command word (16 bytes) */
+#define NAMEBUF     0x5950       /* 12-byte filename (search key / DIR scratch) */
+#define ECNT        0x5963       /* entries-left-in-sector counter */
+#define FLAGS       0x5964       /* current entry flag byte */
+#define MATCH       0x5965       /* 1 = name matched / strings equal */
+#define LENLO       0x5966       /* entry length, low 16 bits */
+#define LENHI       0x5967
+#define STARTLO     0x5968       /* entry start LBA (low byte) */
+#define LOADLO      0x5969       /* entry load address */
+#define LOADHI      0x596A
+#define EXECLO      0x596B       /* entry exec address */
+#define EXECHI      0x596C
+#define DLBA        0x596D       /* directory sector being scanned */
+#define SECCNT      0x596E       /* sectors left to transfer */
+#define CURLBA      0x596F       /* current data LBA */
+#define ENTPL       0x5970       /* pointer to a directory entry (in SBUF): */
+#define ENTPH       0x5971       /* flag byte for DEL, entry start for SAVE */
+#define ARGPL       0x5972       /* saved arg position in LINEBUF */
+#define ARGPH       0x5973
+#define HXLO        0x5974       /* GETHEX result */
+#define HXHI        0x5975
+#define DIGIT       0x5976       /* HEXVAL digit value */
+#define SHCNT       0x5977       /* shift counter */
+#define SVSTLO      0x5978       /* SAVE source start address */
+#define SVSTHI      0x5979
+#define FREELO      0x597A       /* boot-block free pointer (next data LBA) */
+#define FREEHI      0x597B
+#define SRCLO       0x597C       /* running source pointer during the copy */
+#define SRCHI       0x597D
+#define REM         0x597E       /* sectors remaining in the SAVE write loop */
+#define NF          0x5980       /* running next-free LBA */
+#define PFOUND      0x5981       /* 1 if this pass found an unpacked extent */
+#define MINSTRT     0x5982       /* smallest start LBA >= NF this pass */
+#define MINSEC      0x5983       /* that extent's sector count */
+#define MINPL       0x5984       /* pointer to that entry's start-LBA field (in SBUF) */
+#define MINPH       0x5985
+#define MINDL       0x5986       /* that entry's directory sector LBA */
+#define ESTART      0x5987       /* current entry start LBA (low byte) */
+#define SRCL        0x5988       /* copy source LBA */
+#define DSTL        0x5989       /* copy dest LBA */
+#define CPYN        0x598A       /* sectors left to copy */
+#define CANDL       0x598B       /* current entry's start-field pointer */
+#define CANDH       0x598C
+#define ROOTN       0x598D       /* root directory sector count (4) */
+#define DATABASE    0x598E       /* first data LBA (37) */
+#define CWDL        0x598F       /* current directory: start LBA */
+#define CWDN        0x5990       /* sector count */
+#define SDIRL       0x5991       /* directory being scanned this op (start LBA) */
+#define SDIRN       0x5992       /* sector count */
+#define SCNT        0x5993       /* sectors-left counter while scanning a directory */
+#define LSL         0x5994       /* SETPATH: pointer to the last '/' in CWDPATH */
+#define LSH         0x5995
+#define PATHL       0x5996       /* saved path cursor across DESCEND (FINDENT clobbers P2) */
+#define PATHH       0x5997
+#define NEWLBA      0x5998       /* MKDIR: LBA of the new directory extent */
+#define PSL         0x5999       /* MKDIR: parent dir start LBA / sector count */
+#define PSN         0x599A
+#define EFLAG       0x599B       /* flag byte WRENT stamps (F_FILE for SAVE, F_DIR for MKDIR) */
+#define RMDL        0x599C       /* RMDIR: parent directory sector holding the entry */
+#define CDST        0x599D       /* current directory: start LBA / sectors / entry index */
+#define CDSC        0x599E
+#define CIDX        0x599F
+#define REDIRF      0x59A0       /* 0 = console, 1 = capturing to RBUF */
+#define RCH         0x59A1       /* OUTCH: byte being emitted */
+#define RS2L        0x59A2       /* OUTCH: saved caller P2 */
+#define RS2H        0x59A3
+#define RPTRL       0x59A4       /* OUTCH: next free byte in the capture buffer */
+#define RPTRH       0x59A5
+#define RHX         0x59A6       /* OPHEX8 scratch */
+#define REDNAME     0x59A7       /* redirect target filename (null-terminated, <=48): $63A7..$63D6 */
+#define FNDIR       0x59D7       /* directories counted */
+#define FNFIL       0x59D8       /* files counted */
+#define FNDEL       0x59D9       /* deleted slots counted */
+#define FMAXE       0x59DA       /* highest extent end LBA seen (data area only) */
+#define FUSED       0x59DB       /* data sectors occupied by live extents */
+#define FERR        0x59DC       /* problems found (0 = clean) */
+#define FCHILD      0x59DD       /* CHKDD: directory whose '..' is being checked */
+#define FEXP        0x59DE       /* CHKDD: expected parent LBA */
 
 /* TPA (transient programs) */
-#define RBUF        0x6A00       /* capture buffer = the TPA (free during a built-in cmd) */
+#define RBUF        0x6300       /* capture buffer = the TPA (free during a built-in cmd) */
 
-/* OS scratch ($6300-$69FF) */
-#define TSP         0x63E0       /* tree stack depth (0 = at root level) */
-#define TI          0x63E1       /* scratch loop counter for the frame stack */
-#define LENHI2      0x63E2       /* entry length, bits 16..23 (the BIOS FLEN 3rd byte) */
-#define SECCH       0x63E3       /* SECCOUNT sector-count high byte (files >255 sectors) */
-#define MINSECH     0x63E4       /* PACK: chosen extent's sector count, high byte */
-#define CPYNH       0x63E5       /* PK2MOVE: sectors-to-copy counter, high byte */
-#define TFRAME      0x64B7       /* 8 frames x 4 bytes (dst_lo,dst_hi,dsc,idx): $64B7..$64D6 */
-#define PPSEC       0x63FA       /* chosen extent's parent-entry: dir sector LBA / slot */
-#define PPSLOT      0x63FB
-#define CANDSEC     0x63FC       /* candidate entry's location during the find walk */
-#define CANDSLOT    0x63FD
-#define PARST       0x63FE       /* PK2FIX: parent directory start LBA (for '..') */
-#define CWDPATH     0x6400       /* textual CWD path for the prompt (up to 48 bytes) */
-#define INMODE      0x6430       /* SYS_GETC source: 0 = console, 1 = the read stream */
-#define INARM       0x6431       /* shell armed a '< file' for the next RUN */
-#define INNAME      0x6432       /* '< file' name (null-terminated, <=48): $6432..$6461 */
-#define PIPEF       0x6462       /* pipe stage: 0 none, 1 left ran, 2 right ran */
-#define PIPEBUF     0x6463       /* saved right-hand command of a 'cmd | cmd' ($6463..$64A2) */
-#define CWDLH       0x64A3       /* CWDL high byte (current working directory start LBA) */
-#define SDIRLH      0x64A4       /* SDIRL high byte (directory being scanned this op) */
-#define STARTHI     0x64A5       /* STARTLO high byte (entry start LBA from FINDENT) */
-#define DLBAH       0x64A6       /* DLBA high byte (directory-sector scan cursor) */
-#define NEWLBAH     0x64A7       /* NEWLBA high byte (MKDIR new extent) */
-#define PSLH        0x64A8       /* PSL high byte (MKDIR parent extent) */
-#define PARSTH      0x64A9       /* PARST high byte (PACK '..' parent fix) */
-#define RMDLH       0x64AA       /* RMDL high byte (RMDIR parent sector) */
-#define CURLBAH     0x64AB       /* CURLBA high byte (SAVE data-write LBA, 16-bit) */
-#define NFH         0x64AC       /* NF high byte (PACK next-free target) */
-#define MINSTRTH    0x64AD       /* MINSTRT high byte (smallest start LBA this pass) */
-#define CDSTH       0x64AE       /* CDST high byte (current directory in the walk) */
-#define CANDSECH    0x64AF       /* CANDSEC high byte (candidate entry's dir sector) */
-#define PPSECH      0x64B0       /* PPSEC high byte (chosen extent's parent-entry sector) */
-#define SRCH        0x64B1       /* SRCL high byte (PK2MOVE copy source) */
-#define DSTH        0x64B2       /* DSTL high byte (PK2MOVE copy dest) */
-#define FCHILDH     0x64B3       /* FCHILD high byte (CHKDD child dir) */
-#define FEXPH       0x64B4       /* FEXP high byte (CHKDD expected parent) */
-#define FMAXEH      0x64B5       /* FMAXE high byte (FSCK highest extent end) */
-#define FUSEDH      0x64B6       /* FUSED high byte (FSCK live data sectors) */
-#define REDAPP      0x64D7       /* >> append redirect: 1 = prepend the existing file */
-#define APHAVE      0x64D8       /* >> : 1 = an existing file to prepend was found */
-#define APLBA       0x64D9       /* >> : old file's start LBA (2 bytes) */
-#define APREM       0x64DB       /* >> : old file bytes left to copy (2 bytes) */
-#define APCHK       0x64DD       /* >> : bytes to emit from the current sector (2 bytes) */
-#define SCRIPTM     0x64E0       /* 1 = the shell is running lines from a `sh` script */
-#define SCRSAVE     0x64E1       /* saved script read-stream state (ROSTATE 13 + ROSDRV = 14: $64E1..$64EE) */
-#define SCRCNT      0x64EF       /* byte counter for SAVESCR/RESTSCR (1) */
-#define APBUF       0x6800       /* >> prepend sector buffer (512B, below the TPA); also the */
-#define IBUF        0x6500       /* 512-byte buffer for the stdin read stream */
-#define PATHBUF     0x6700       /* search path, ';'-separated dirs; default '/BIN' ($6700..$673F) */
-#define RUNPATH     0x6740       /* scratch: candidate program path built during a lookup ($6740..$679F) */
-#define RUNSKIP     0x67A0       /* DORUN: 1 = skip the program-name word for the arg pointer */
-#define PSCANL      0x67A1       /* PATH search cursor into PATHBUF (low) */
-#define PSCANH      0x67A2       /* PATH search cursor into PATHBUF (high) */
-#define GPLF        0x67A3       /* SYS_GETC console: 1 = a LF is pending after a CR keypress */
-#define CURDRIVE    0x67A4       /* derived: 1 if the CWD is under /d1 (drive 1), else 0 */
-#define DRVINIT     0x67A5       /* bitmask: bit N set = drive N has been CFINIT'd this session */
-#define MPSAV       0x67A6       /* MNTPFX: saved P2 (2 bytes) while sniffing a 'd1' prefix */
+/* OS scratch ($5900-$5FFF) */
+#define TSP         0x59E0       /* tree stack depth (0 = at root level) */
+#define TI          0x59E1       /* scratch loop counter for the frame stack */
+#define LENHI2      0x59E2       /* entry length, bits 16..23 (the BIOS FLEN 3rd byte) */
+#define SECCH       0x59E3       /* SECCOUNT sector-count high byte (files >255 sectors) */
+#define MINSECH     0x59E4       /* PACK: chosen extent's sector count, high byte */
+#define CPYNH       0x59E5       /* PK2MOVE: sectors-to-copy counter, high byte */
+#define TFRAME      0x5AB7       /* 8 frames x 4 bytes (dst_lo,dst_hi,dsc,idx): $64B7..$64D6 */
+#define PPSEC       0x59FA       /* chosen extent's parent-entry: dir sector LBA / slot */
+#define PPSLOT      0x59FB
+#define CANDSEC     0x59FC       /* candidate entry's location during the find walk */
+#define CANDSLOT    0x59FD
+#define PARST       0x59FE       /* PK2FIX: parent directory start LBA (for '..') */
+#define CWDPATH     0x5A00       /* textual CWD path for the prompt (up to 48 bytes) */
+#define INMODE      0x5A30       /* SYS_GETC source: 0 = console, 1 = the read stream */
+#define INARM       0x5A31       /* shell armed a '< file' for the next RUN */
+#define INNAME      0x5A32       /* '< file' name (null-terminated, <=48): $6432..$6461 */
+#define PIPEF       0x5A62       /* pipe stage: 0 none, 1 left ran, 2 right ran */
+#define PIPEBUF     0x5A63       /* saved right-hand command of a 'cmd | cmd' ($6463..$64A2) */
+#define CWDLH       0x5AA3       /* CWDL high byte (current working directory start LBA) */
+#define SDIRLH      0x5AA4       /* SDIRL high byte (directory being scanned this op) */
+#define STARTHI     0x5AA5       /* STARTLO high byte (entry start LBA from FINDENT) */
+#define DLBAH       0x5AA6       /* DLBA high byte (directory-sector scan cursor) */
+#define NEWLBAH     0x5AA7       /* NEWLBA high byte (MKDIR new extent) */
+#define PSLH        0x5AA8       /* PSL high byte (MKDIR parent extent) */
+#define PARSTH      0x5AA9       /* PARST high byte (PACK '..' parent fix) */
+#define RMDLH       0x5AAA       /* RMDL high byte (RMDIR parent sector) */
+#define CURLBAH     0x5AAB       /* CURLBA high byte (SAVE data-write LBA, 16-bit) */
+#define NFH         0x5AAC       /* NF high byte (PACK next-free target) */
+#define MINSTRTH    0x5AAD       /* MINSTRT high byte (smallest start LBA this pass) */
+#define CDSTH       0x5AAE       /* CDST high byte (current directory in the walk) */
+#define CANDSECH    0x5AAF       /* CANDSEC high byte (candidate entry's dir sector) */
+#define PPSECH      0x5AB0       /* PPSEC high byte (chosen extent's parent-entry sector) */
+#define SRCH        0x5AB1       /* SRCL high byte (PK2MOVE copy source) */
+#define DSTH        0x5AB2       /* DSTL high byte (PK2MOVE copy dest) */
+#define FCHILDH     0x5AB3       /* FCHILD high byte (CHKDD child dir) */
+#define FEXPH       0x5AB4       /* FEXP high byte (CHKDD expected parent) */
+#define FMAXEH      0x5AB5       /* FMAXE high byte (FSCK highest extent end) */
+#define FUSEDH      0x5AB6       /* FUSED high byte (FSCK live data sectors) */
+#define REDAPP      0x5AD7       /* >> append redirect: 1 = prepend the existing file */
+#define APHAVE      0x5AD8       /* >> : 1 = an existing file to prepend was found */
+#define APLBA       0x5AD9       /* >> : old file's start LBA (2 bytes) */
+#define APREM       0x5ADB       /* >> : old file bytes left to copy (2 bytes) */
+#define APCHK       0x5ADD       /* >> : bytes to emit from the current sector (2 bytes) */
+#define SCRIPTM     0x5AE0       /* 1 = the shell is running lines from a `sh` script */
+#define SCRSAVE     0x5AE1       /* saved script read-stream state (ROSTATE 13 + ROSDRV = 14: $64E1..$64EE) */
+#define SCRCNT      0x5AEF       /* byte counter for SAVESCR/RESTSCR (1) */
+#define APBUF       0x5E00       /* >> prepend sector buffer (512B, below the TPA); also the */
+#define IBUF        0x5B00       /* 512-byte buffer for the stdin read stream */
+#define PATHBUF     0x5D00       /* search path, ';'-separated dirs; default '/BIN' ($6700..$673F) */
+#define RUNPATH     0x5D40       /* scratch: candidate program path built during a lookup ($6740..$679F) */
+#define RUNSKIP     0x5DA0       /* DORUN: 1 = skip the program-name word for the arg pointer */
+#define PSCANL      0x5DA1       /* PATH search cursor into PATHBUF (low) */
+#define PSCANH      0x5DA2       /* PATH search cursor into PATHBUF (high) */
+#define GPLF        0x5DA3       /* SYS_GETC console: 1 = a LF is pending after a CR keypress */
+#define CURDRIVE    0x5DA4       /* derived: 1 if the CWD is under /d1 (drive 1), else 0 */
+#define DRVINIT     0x5DA5       /* bitmask: bit N set = drive N has been CFINIT'd this session */
+#define MPSAV       0x5DA6       /* MNTPFX: saved P2 (2 bytes) while sniffing a 'd1' prefix */
 
 /* shell history */
 #define HISTST      0x608E       /* history ring: index where the next entry is written (0..HISTN-1) */
@@ -244,9 +244,9 @@
 #define HISTRING    0xF800       /* history ring buffer base: HISTN x HISTLEN bytes ($F800..$F9FF, the free 512 B above CSTACKTOP; $FA00 = glob page, $FC00 = RDBUF, $FE00 = stack) */
 
 /* shell completion */
-#define CMPPFX      0x6800       /* tab-complete: leaf prefix being completed (NUL-term, 64; aliases APBUF) */
-#define CMPLCP      0x6840       /* tab-complete: longest common prefix of the matches (NUL-term, 16; aliases APBUF) */
-#define CMPDIR      0x6850       /* tab-complete: directory-part path string, for CDPATH (NUL-term, 64; aliases APBUF) */
+#define CMPPFX      0x5E00       /* tab-complete: leaf prefix being completed (NUL-term, 64; aliases APBUF) */
+#define CMPLCP      0x5E40       /* tab-complete: longest common prefix of the matches (NUL-term, 16; aliases APBUF) */
+#define CMPDIR      0x5E50       /* tab-complete: directory-part path string, for CDPATH (NUL-term, 64; aliases APBUF) */
 #define CMPPL       0x6091       /* tab-complete: length of the typed leaf prefix */
 #define CMPCNT      0x6092       /* tab-complete: number of matches (saturates at 255) */
 #define CMPFW       0x6093       /* tab-complete: 1 = completing the command word (first word) */

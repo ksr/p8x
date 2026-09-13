@@ -5,10 +5,10 @@
 ;#use stdin
 ;#use abi
 
-; Main entry (TPA load address $6A00). On entry P2 points at the raw argument
+; Main entry (TPA load address $6300). On entry P2 points at the raw argument
 ; tail. Stash it as a 16-bit pointer word (u_arg) so we can walk it with plain
 ; 8-bit adds even though (P2) dereferences clobber-prone pointer registers.
-        .org $6A00
+        .org $6300
         TPA2L
         STA u_arg
         TPA2H

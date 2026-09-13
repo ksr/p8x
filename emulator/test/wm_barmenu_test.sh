@@ -63,13 +63,13 @@ int main() {
 }
 EOF
 python3 $ROOT/compiler/p8cc.py bm_run.c -o bm_run.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py bm_run.asm -o bm_run.bin --base 0x6A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py bm_run.asm -o bm_run.bin --base 0x6300 >/dev/null
 
 rm -f bm.img
 python3 $ROOT/tools/p8xfs.py create bm.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   bm.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  bm.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    bm.img bm_run.bin --name /bin/bm.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    bm.img bm_run.bin --name /bin/bm.bin --load 0x6300 --exec 0x6300 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    bm.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
 
 # mouse press + release in the top row (cell y=1), column 26 = the CLOSE zone,

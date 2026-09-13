@@ -13,7 +13,7 @@
 ; g_arg (word) = a moving cursor into the arg tail (P2 on entry). We keep the
 ; pointer in the g_arg RAM word and reload P2 from it whenever we dereference,
 ; since match()/syscalls clobber P1/P2.
-        .org $6A00
+        .org $6300
         TPA2L
         STA g_arg
         TPA2H

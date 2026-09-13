@@ -80,16 +80,16 @@ EOF
 
 for p in sw_run sw_app sw_chk; do
     python3 $ROOT/compiler/p8cc.py $p.c -o $p.asm >/dev/null
-    python3 $ROOT/assembler/p8xasm.py $p.asm -o $p.bin --base 0x6A00 >/dev/null
+    python3 $ROOT/assembler/p8xasm.py $p.asm -o $p.bin --base 0x6300 >/dev/null
 done
 
 rm -f sw.img
 python3 $ROOT/tools/p8xfs.py create sw.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   sw.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  sw.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    sw.img sw_run.bin --name /bin/sw.bin --load 0x6A00 --exec 0x6A00 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    sw.img sw_app.bin --name /bin/wapp.bin --load 0x6A00 --exec 0x6A00 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    sw.img sw_chk.bin --name /bin/chk.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    sw.img sw_run.bin --name /bin/sw.bin --load 0x6300 --exec 0x6300 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    sw.img sw_app.bin --name /bin/wapp.bin --load 0x6300 --exec 0x6300 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    sw.img sw_chk.bin --name /bin/chk.bin --load 0x6300 --exec 0x6300 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    sw.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
 
 # launch the app THREE times (l l l) from inside the resident loop, ^D to

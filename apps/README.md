@@ -1,6 +1,6 @@
 # P8X applications
 
-Standalone **TPA programs** — assembled to load and execute at `$6A00` (the
+Standalone **TPA programs** — assembled to load and execute at `$6300` (the
 transient program area), launched from P8X/OS with `RUN`. Each is built entirely
 on the BIOS jump table (`$0100..`); none depend on OS internals, so they return
 to the shell with a plain `RTS`.
@@ -8,8 +8,8 @@ to the shell with a plain `RTS`.
 Build one with the host assembler and place it on a disk:
 
 ```sh
-python3 assembler/p8xasm.py apps/p8xedit.asm -o edit.bin --base 0x6A00
-python3 tools/p8xfs.py put disk.img edit.bin --name /BIN/EDIT.BIN --load 0x6A00 --exec 0x6A00
+python3 assembler/p8xasm.py apps/p8xedit.asm -o edit.bin --base 0x6300
+python3 tools/p8xfs.py put disk.img edit.bin --name /BIN/EDIT.BIN --load 0x6300 --exec 0x6300
 ```
 
 `os/run.sh` already builds and installs these into a fresh demo disk under
@@ -56,7 +56,7 @@ RUN ASM.BIN SRC.ASM OUT.BIN
 
 Assembles `SRC.ASM` (read from the disk) and writes the binary `OUT.BIN`. The
 output carries `load/exec = 0` from `FCREATE`, which the OS reads as the TPA
-base `$6A00` — so a program written `.org $6A00` is **directly RUNnable** right
+base `$6300` — so a program written `.org $6300` is **directly RUNnable** right
 after assembling it. Pair with `EDIT` for a complete on-target edit → assemble →
 run loop.
 
@@ -107,7 +107,7 @@ its own source** on-target, producing a binary byte-identical to the host build
 Correctness is checked by assembling a feature source both on-target and with
 the host assembler and comparing the bytes (`emulator/test/os_asm_test.sh`).
 Limits: 1,120 symbols, 12-char names, 127-char source lines, single `.org`
-(use `.org $6A00`; a backward `.org` is rejected).
+(use `.org $6300`; a backward `.org` is rejected).
 
 **Redesigned for the Tier A ISA (2026-09-12).** `p8xasm.asm` was rewritten
 from scratch as a drop-in (same syntax, same error messages, byte-identical

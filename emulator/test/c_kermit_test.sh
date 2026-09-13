@@ -20,7 +20,7 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o kos.bin --base 0x2000 >/dev/null
 python3 $ROOT/tools/clib.py $ROOT/os/commands/kermit.c -o km.pp.c >/dev/null
 python3 $ROOT/compiler/p8cc.py km.pp.c -o km.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py km.asm -o km.bin --base 0x6A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py km.asm -o km.bin --base 0x6300 >/dev/null
 
 # a payload that spans several 64-byte packets (171 bytes)
 python3 -c "open('adat.bin','wb').write((b'The quick brown fox jumps over the lazy dog. 0123456789. ')*3)"
@@ -29,7 +29,7 @@ rm -f k.img
 python3 $ROOT/tools/p8xfs.py create k.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   k.img kos.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  k.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    k.img km.bin   --name /bin/kermit.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    k.img km.bin   --name /bin/kermit.bin --load 0x6300 --exec 0x6300 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    k.img adat.bin --name /A.DAT >/dev/null
 
 # send: /A.DAT -> port 2 TX (captured to cap.dat)

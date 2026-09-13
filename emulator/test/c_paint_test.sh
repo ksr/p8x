@@ -25,13 +25,13 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/
 
 python3 $ROOT/tools/clib.py $ROOT/os/commands/paint.c > cp_paint.c
 python3 $ROOT/compiler/p8cc.py cp_paint.c -o cp_paint.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py cp_paint.asm -o cp_paint.bin --base 0x6A00 >/dev/null
+python3 $ROOT/assembler/p8xasm.py cp_paint.asm -o cp_paint.bin --base 0x6300 >/dev/null
 
 rm -f cp.img
 python3 $ROOT/tools/p8xfs.py create cp.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   cp.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  cp.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    cp.img cp_paint.bin --name /bin/paint.bin --load 0x6A00 --exec 0x6A00 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    cp.img cp_paint.bin --name /bin/paint.bin --load 0x6300 --exec 0x6300 >/dev/null
 
 # session 1: red box, yellow fill inside, white line drawn then erased
 printf 'B\rpaint\r2b DDDWW fAS5 l1SS AAA eq' > cp1.in

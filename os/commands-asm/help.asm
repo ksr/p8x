@@ -5,7 +5,7 @@
 ; $2009. No args. Entry: nothing needed.
 ;#use abi
 
-        .org $6A00
+        .org $6300
         LDW hp,#htab                ; <- tierA: address constant (next: LDA)
 h_lp:   LPW2 hp                ; <- tierA: pointer load (next: LDA)
         LDA (P2)                     ; string ptr, low byte
