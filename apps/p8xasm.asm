@@ -1,249 +1,286 @@
 ; =============================================================================
-; P8X ASM - native two-pass assembler (standalone TPA program)
+; P8X ASM - native two-pass assembler (standalone TPA program), Tier A edition
 ; =============================================================================
 ;     RUN ASM.BIN SRC.ASM OUT.BIN
 ; Reads SRC.ASM from disk and writes the binary OUT, both through the BIOS
 ; file streams (FOPEN/FGETB for input, FWOPEN/FPUTB/FCLOSE for output), so
-; neither is bounded by RAM — the assembler even assembles its own source.
-; Output carries load/exec 0, which the OS treats as the TPA base $6A00 — so a
+; neither is bounded by RAM -- the assembler even assembles its own source.
+; Output carries load/exec 0, which the OS treats as the TPA base $6A00 -- so a
 ; program written `.org $6A00` is directly RUNnable after assembly.
+;
+; This is the 2026-09-12 from-scratch rewrite for the Tier A ISA. It is a
+; drop-in for the original: same syntax, same error messages, and its output
+; is byte-identical to the host assembler's (assembler/p8xasm.py) -- the test
+; suite checks all three. What changed is HOW it works:
+;
+;   * 16-bit values live in word variables and are handled with the word ops
+;     (ADDW/SUBW/CMPW/INCW/DECW/MOVW/LDW), not byte pairs with carry chains.
+;   * The symbol table is a 256-bucket chained hash: an entry is name[12] +
+;     value[2] + next[2] (16 bytes) and is read/written through (P2+d) --
+;     `LDW CNT,(P2+12)` fetches a symbol's value in one instruction. A lookup
+;     hashes the name (~200 cycles) and walks a chain of ~4 entries; the old
+;     table scanned every entry, comparing all 12 bytes of each (~25,000
+;     cycles per lookup on a 1,000-symbol source).
+;   * The opcode table is indexed by first letter at startup (LETIDX), so a
+;     mnemonic lookup scans only its letter group (35 entries at worst, for
+;     'L') instead of all ~140; the shape byte is compared before the name.
+;   * Operand emission is table-driven: DISPTAB maps the operand shape to its
+;     emitter, entered with `LPW1 CUR / JSR (P1)` -- no compare chain.
+;   * MOVW and LDPn no longer need special cases: PARSEOP classifies two
+;     operands generically, and a lone `#` immediate that fails as imm8 is
+;     retried as the imm16 shape (that is how LDPn #w resolves).
+;   * `.org` does the forward zero-padding itself (and reports a backward .org
+;     on the .org line); EMIT is a plain "write one byte, PC++".
+;   * Fixed-size copies are MOVW/STW sequences, not byte loops; the 32-byte
+;     token buffers are cleared with 16 LDW #0.
 ;
 ; Supported syntax (a subset of the host assembler, same encodings):
 ;   label:                 define label = PC
 ;   NAME = expr            equate
-;   MNEMONIC [operand]     operand: #expr | (Pn) | (Pn)+ | expr | none
-;   MOVW dst,src           the ISA's only TWO-operand instruction ($78): a 16-bit
-;                          mem->mem word move, encoded op + dst16 + src16 (5 B).
-;                          Handled as a special case before the ordinary
-;                          one-operand path (as the host assembler does).
-;   LDPn #expr16           the 3-byte LDPn opcode + imm16 (Tier A; was LPLn/LPHn)
+;   MNEMONIC operands      operand: #expr | (Pn) | (Pn)+ | (Pn+d) | expr | none;
+;                          two-operand forms a,a  a,#imm  a,(Pn+d)  (Pn+d),a
+;                          (imm8 vs imm16 follows the host's lit8() text rule)
+;   LDPn #expr16           the 3-byte LDPn opcode + imm16
 ;   .org .byte .word .ascii .asciiz .fill
 ;   .include "path"        at line start: append the file (resolved relative to
 ;                          THIS source's directory, so `.include "../x/y.inc"`
 ;                          works) after the source. Equates are order-independent
 ;                          (two-pass), so an EOF-append matches an inline splice.
-;                          One per file. Mirrors the host assembler's .include and
-;                          lets /src/os-bios build the OS/monitor on-target (they
-;                          .include "../generators/memmap.inc").
-;   ;#use NAME             at line start: append /lib/NAME.inc after the source,
-;                          so a command shares helpers (stdin/glob/regex) just as
-;                          the host mkasm.sh splices lib_NAME.inc. Up to 4 per file,
-;                          read in the order declared (each command lists each once).
+;                          One per file.
+;   ;#use NAME  (at line start) append /lib/NAME.inc after the source, so a
+;                          command shares helpers (stdin/glob/regex) just as
+;                          the host mkasm.sh splices lib_NAME.inc. Up to 4 per
+;                          file, read in the order declared.
 ;   expr: $hex | decimal | 'c' | symbol, joined with + / -, optional </> prefix
 ;
 ; The opcode table (OPCTAB) is generated from genucode.OPC by
 ; generators/gen_p8xopc.py and concatenated after this source at build time.
+; Record: .byte shape,opcode / .ascii "MNEMONIC" / .byte 0; $FF ends the table.
+; It is sorted by mnemonic, which the first-letter index relies on.
 ;
-; Conventions: P1 is the source cursor (preserved across helper calls); P3 is
-; the system stack (never touched); helpers needing a 2nd pointer save P1 first.
-; Limits: ~1097 symbols, 12-char names, 127-char source lines, single .org.
+; Conventions: P1 is the line cursor while a line is being parsed; routines
+; that borrow P1 (OPCFIND, the emitters) reload it from OP1P/OP2P/DISPP, the
+; cursors PARSEOP recorded. P2 is scratch everywhere. P3 is the system stack.
+; EMIT preserves P1 (FPUTB clobbers it). Word ops clobber A ("A!" on the ISA
+; card) -- never keep a value in A across one.
+;
+; Memory (code + OPCTAB must stay below SYMTAB = $8000; os_asm_test checks):
+;   $6A00-$7FFF code + opcode table       $C900-$CAFF SECBUF (source sector)
+;   $8000-$C5FF SYMTAB 1120 x 16 bytes    $CB00-$CB7F LINEBUF (<=127 chars)
+;   $C600-$C7FF HEADS  256 chain heads    $CC00-$CDFF INCBUF (include sector)
+;   $C800-$C8FF variables                 $CE00-$CFFF BIOS directory-scan page
+;   $D000-$D1FF path buffers              $D200-      free up to the stack
+; Limits: 1120 symbols, 12-char names, 127-char source lines, single .org,
+; 4 ;#use + 1 .include per file.
 ; =============================================================================
 
-; ---- BIOS ---- (file I/O now goes entirely through the read/write streams)
-CONIN   = $0100
+; ---- BIOS / OS ----
 CONOUT  = $0103
 PUTS    = $0112
-PHEX8   = $0115
-FFIND   = $0118   ; used once at startup to report a missing source
-FOPEN   = $0124   ; open source for reading (P1 = 512-byte buffer)
-FGETB   = $0127   ; next source byte -> A; C=1 at EOF
-FDELETE = $011E   ; tombstone an existing file FNAME in DIRLBA (overwrite: del then create)
+FFIND   = $0118   ; confirm the source exists (reports a missing source)
+FDELETE = $011E   ; tombstone an existing output file (overwrite = delete + create)
+FOPEN   = $0124   ; open the read stream on FNAME in DIRLBA (P1 = 512-byte buffer)
+FGETB   = $0127   ; next byte of the read stream -> A; C=1 at EOF. Clobbers P1
 FWOPEN  = $012A   ; open the output write stream
-FPUTB   = $012D   ; append a byte to the output stream
-FCLOSE  = $0130   ; flush + register the output file FNAME; C=1 if full
-FRESOLVE= $0133   ; resolve a path (P1) -> dir extent + leaf FNAME (for ;#use)
+FPUTB   = $012D   ; append A to the write stream. Clobbers P1
+FCLOSE  = $0130   ; flush + register the output file FNAME; C=1 if the volume is full
+FRESOLVE= $0133   ; resolve a path (P1) -> DIRLBA/DIRN/DIRLBA1 + leaf FNAME; C=1 if no dir
 FSDIRBUF= $0145   ; repoint directory scans (FSCAN/FFIND/FNEXT) at page A
 SYS_GETCWD = $2003 ; OS: write the CWD path (NUL-terminated) to (P1)
-LBA     = $6047
-LBA1    = $6048
-LBA2    = $6049
-FNAME   = $604A
-FSRC    = $6056
-FLEN    = $6058
-; Directory context — saved at startup, restored each pass so PASSINIT re-opens
-; the source even after a ;#use has re-resolved FNAME/DIRLBA to an include.
-DIRLBA  = $6073   ; current directory start LBA low
-DIRN    = $6074   ; current directory sector count
-DIRLBA1 = $6080   ; current directory start LBA high
+FNAME   = $604A   ; BIOS: current file name (12)
+DIRLBA  = $6073   ; BIOS: current directory start LBA low
+DIRN    = $6074   ; BIOS: current directory sector count (DIRLBA+1)
+DIRLBA1 = $6080   ; BIOS: current directory start LBA high
 
 CR      = $0D
 LF      = $0A
 QUOTE   = $22
 TICK    = $27
 
-; ---- variables ($C800 page) ----
-SRCP    = $C800   ; source scan cursor mirror
-PC      = $C802   ; current program counter
-ORGBASE = $C804   ; address of output byte 0
-HIWAT   = $C806   ; highest PC reached (+1)
-SYMP    = $C808   ; symbol-table append pointer
-VAL     = $C80A   ; expression result
-PASS    = $C80C
-SHAPE   = $C80D
-OPCB    = $C80E   ; resolved opcode byte
-TMP     = $C80F
-TMP2    = $C810
-CNTL    = $C811
-CNTH    = $C812
-SIGN    = $C813   ; 1=+, 0=-
-HILO    = $C814   ; 0 none, 1 <low, 2 >high
-ORGSET  = $C815
-FOUND   = $C816
-LINEPL  = $C817
-LINEPH  = $C818
-DIG     = $C819
-SAVP    = $C81A   ; P1 save (SYMFIND/OPCFIND)
-SAVP2   = $C81C   ; P1 save (SYMDEFVAL)
-EADDR   = $C81E   ; matched symbol value-field address
-MTL     = $C820
-MTH     = $C821
-SP0     = $C822   ; saved system SP for error abort
-LDPN    = $C824   ; LDPn pointer digit (survives EVAL, which trashes TMP/MNBUF)
-OP1P    = $C826   ; PARSEOP: line cursor at operand 1's expression (2)
-OP2P    = $C828   ; PARSEOP: line cursor at operand 2's expression (2)
-DISPP   = $C82A   ; PARSEOP: line cursor at a (Pn+d) displacement expression (2)
-SHAPE2  = $C82C   ; PARSEOP: operand 1's shape while operand 2 is classified
-MNBUF   = $C830   ; upcased mnemonic/directive (8)
-NAMBUF  = $C840   ; identifier as written (16, 12 used)
-OUTNAME = $C850   ; output file name (12, legacy — unused since paths went in)
-SRCPATH = $C000   ; full SRC path arg (NUL-terminated, path-aware via FRESOLVE)
-OUTPATH = $C030   ; full OUT path arg (NUL-terminated, path-aware via FRESOLVE)
-OUTDIR  = $C060   ; output parent dir stashed at OUTINIT: DIRLBA, DIRLBA1, DIRN (3)
-OUTFN   = $C063   ; output leaf name stashed at OUTINIT (12)
-ARGTMP  = $C070   ; raw path arg before abspath (48)
-ABDST   = $C0A0   ; abspath destination pointer (2)
-ACSAV   = $C0A2   ; PARSEARGS: saved arg cursor across ABSPATH (2)
-LEOF    = $C86A   ; 1 when NEXTLINE hits end of source
-SB      = $C86B   ; current source byte from FGETB
-LCNT    = $C86C   ; chars in the current line
-SB2     = $C872   ; EMIT: byte being emitted
-OUTPOS  = $C87A   ; total output bytes emitted (mirrors the write stream length)
-OFFL    = $C87C   ; PC-ORGBASE low
-OFFH    = $C87D   ; PC-ORGBASE high
-SAVPE   = $C87F   ; EMIT P1 save (2)
-FVAL    = $C881   ; .fill byte value (EMIT clobbers TMP, so .fill can't use it)
+; ---- word variables ($C800 page; pairs are little-endian words) ----
+PC      = $C800   ; current program counter
+ORGBASE = $C802   ; address of output byte 0 (the first .org)
+VAL     = $C804   ; expression result
+CNT     = $C806   ; term value (RDTERM) / symbol value (SYMFIND)
+TERM    = $C808   ; scratch word (decimal x10)
+SYMP    = $C80A   ; symbol-table append pointer
+CUR     = $C80C   ; chain / table cursor, dispatch vector
+HEADP   = $C80E   ; address of the chain head the last SYMFIND used
+HEAD0   = $C810   ; the value that head held (first entry of the chain)
+SAVP    = $C812   ; EMIT: P1 save around FPUTB
+SP0     = $C814   ; system SP at entry (error abort long-jumps back to the OS)
+OP1P    = $C816   ; PARSEOP: line cursor at operand 1's expression
+OP2P    = $C818   ; PARSEOP: line cursor at operand 2's expression
+DISPP   = $C81A   ; PARSEOP: line cursor at a (Pn+d) displacement expression
+FILLN   = $C81C   ; .fill count
+P2SAV   = $C81E   ; SRCGET: NEXTLINE's P2 across NEXTUSE
+ABDST   = $C820   ; ABSPATH destination
+ACSAV   = $C822   ; PARSEARGS: arg cursor across ABSPATH
+PATHSAV = $C824   ; CHKINC: LINEBUF path cursor across CI_PREFIX
+LSPOS   = $C826   ; CHKINC: INCPATH position just after the source dir's last '/'
+; ---- byte variables ----
+PASS    = $C830   ; 0 = pass 1 (symbols), 1 = pass 2 (emit)
+SHAPE   = $C831   ; operand shape code (see PARSEOP)
+SHAPE2  = $C832   ; PARSEOP: operand 1's shape while operand 2 is classified
+OPCB    = $C833   ; resolved opcode byte
+TMP     = $C834
+SIGN    = $C835   ; EVAL: 1 = add the next term, 0 = subtract
+HILO    = $C836   ; EVAL: 0 none, 1 '<' low byte, 2 '>' high byte
+ORGSET  = $C837   ; 1 once the first .org fixed ORGBASE
+HASH    = $C838   ; SYMHASH result
+LEOF    = $C839   ; 1 when NEXTLINE hit the end of the source (+ includes)
+SB2     = $C83A   ; EMIT: the byte being written
+FVAL    = $C83B   ; .fill byte value
+USECOUNT= $C83C   ; ;#use names recorded this pass
+USEDONE = $C83D   ; how many of them have been opened
+INCHAVE = $C83E   ; 1 = a .include was recorded this pass
+INCDONE = $C83F   ; 1 = it has been opened
+DIG     = $C840   ; small counter
+LASTC   = $C841   ; OPCINDEX: letter of the group being indexed
+NAMBUF  = $C850   ; identifier as written (16; 12 used, NUL-padded)
+MNBUF   = $C860   ; the same, upcased (16) -- NAMBUF+16, so READTOK fills both
+                  ; through one pointer: STA (P2) / STA (P2+16)
+LETIDX  = $C880   ; 26 words: first OPCTAB record per initial letter, 0 = none
+OUTDIR  = $C8C0   ; output parent dir stashed by OUTINIT: DIRLBA, DIRN, DIRLBA1 (3)
+SRCDIR  = $C8C4   ; the source's dir context: DIRLBA, DIRN, DIRLBA1 (3)
+OUTFN   = $C8D0   ; output leaf name stashed by OUTINIT (12)
+SRCFN   = $C8E0   ; the source's own FNAME (12), so PASSINIT re-opens it each pass
 
 ; ---- buffers ----
-; The source is streamed a line at a time from disk (no whole-file buffer), so
-; source size is bounded by the disk, not RAM. That frees the old 6.5 KB source
-; buffer for a much larger symbol table.
-; Output is streamed to disk a sector at a time (via the BIOS SBUF), so there is
-; no output RAM buffer — output size is bounded by the disk too.
-SECBUF  = $C900   ; one streamed source sector (512)
+SYMTAB  = $8000   ; 16-byte entries: name[12] + value[2] + next[2]
+SYMEND  = $C600   ; symbol-table limit
+HEADS   = $C600   ; 256 chain heads (words), indexed by SYMHASH
+SECBUF  = $C900   ; source read-stream sector (512)
 LINEBUF = $CB00   ; current source line (NUL-terminated, <=127 chars)
-; Symbol table: the assembler binary loads at $6A00 and is only ~4.3 KB, so the
-; whole gap from there up to the $C000 variable block is free. Parking the table
-; there ($8400..$C000 = ~1097 symbols) gives far more room than the old slot
-; above the buffers ($CC00..$FB00 = ~850), which a growing OS had outgrown — and
-; it leaves $CC00..$FEFF entirely to the descending hardware stack.
-SYMTAB  = $8400   ; 14-byte entries: name[12] + value[2]  (~1097 symbols)
-SYMEND  = $C000   ; symbol-table limit (= start of the variable block above)
-; ---- ;#use include support (sequential append, mirroring mkasm.sh) ----
-; A ;#use line records a name; at the source's EOF the recorded includes are read
-; in turn (over the same SECBUF — the source is done), so their code lands AFTER
-; the program body, exactly like the host `cat SRC ; cat lib_*.inc`.
-USECOUNT= $CB80   ; number of ;#use names recorded this pass
-USEDONE = $CB81   ; how many recorded includes have been opened so far
-UCNT    = $CB82   ; byte-copy counter for the helpers (1)
-P2SAV   = $CB83   ; SRCGET saves NEXTLINE's P2 (line cursor) across NEXTUSE (2)
-INCBUF  = $C400   ; include read buffer — a fresh 512-byte page, NOT the source's
-                  ; SECBUF (reusing it leaves stale stream state), and clear of
-                  ; the $C600 dir-scan page and SECBUF ($C900)
-SRCFN   = $CB90   ; the source's own FNAME (12), so PASSINIT re-opens it each pass
-SRCDIR  = $CB9C   ; the source's dir context: DIRLBA, DIRLBA1, DIRN (3)
-UPATH   = $CBA0   ; built include path "/lib/NAME.inc" (24)
-USELIST = $CBC0   ; up to 4 include names, 12 bytes each (NUL-terminated)
-; .include "path" support: one per file, resolved relative to the source's dir
-; (SRCPATH minus its leaf) and appended at EOF like ;#use. INCPATH lives in the
-; free RAM window between the path args ($C0A4) and INCBUF ($C400).
-INCPATH = $C100   ; resolved absolute include path (NUL-terminated, <=128)
-INCHAVE = $C1A0   ; 1 = a .include was recorded this pass
-INCDONE = $C1A1   ; 1 = the .include has been opened (spliced) this pass
-PATHSAV = $C1A2   ; CHKINC: saved LINEBUF path cursor (2)
-LSPOS   = $C1A4   ; CHKINC: INCPATH position just after the source dir's last '/' (2)
+INCBUF  = $CC00   ; include read-stream sector (512) -- its own page, so the
+                  ; source stream's state in SECBUF is untouched
+DIRPAGE = $CE     ; BIOS directory-scan page ($CE00-$CFFF), off the shared SBUF
+                  ; so a ;#use FOPEN in pass 2 cannot clobber the write stream
+SRCPATH = $D000   ; full SRC path (NUL-terminated, absolute)
+OUTPATH = $D030   ; full OUT path
+ARGTMP  = $D060   ; raw path argument before ABSPATH
+INCPATH = $D090   ; resolved absolute .include path (<=128)
+UPATH   = $D110   ; built ;#use path "/lib/NAME.inc"
+USELIST = $D140   ; 4 x 16: the ;#use names (NUL-terminated)
 
         .org $6A00
 ; =============================================================================
-START:  TPA3L                   ; save SP so an error can long-jump back to OS
+; Main
+; =============================================================================
+START:  TPA3L                   ; remember SP: an error long-jumps back to the OS
         STA  SP0
         TPA3H
         STA  SP0+1
-        LDA  #$C6               ; repoint directory scans (FFIND) off SBUF, so a
-        JSR  FSDIRBUF           ; ;#use FOPEN in pass 2 can't clobber the write
-                                ; stream's partial output sector (shared SBUF)
-        JSR  PARSEARGS          ; SRCPATH <- SRC, OUTPATH <- OUT (full paths)
-        LDA  OUTPATH            ; no output path given -> show usage
+        LDA  #DIRPAGE
+        JSR  FSDIRBUF
+        JSR  PARSEARGS          ; SRCPATH / OUTPATH <- the two arguments
+        LDA  OUTPATH
         JZ   ST_USAGE
-        LDP1 #SRCPATH           ; resolve the source path -> DIRLBA + FNAME(leaf)
-        JSR  FRESOLVE
+        LDP1 #SRCPATH
+        JSR  FRESOLVE           ; DIRLBA.. = the source's directory, FNAME = its leaf
         JC   ST_NOSRC
-        JSR  SAVESRC            ; remember the source's FNAME + dir BEFORE FFIND,
-                                ; because FFIND ends in FRESET (reverts DIRLBA to
-                                ; root). PASSINIT re-opens each pass from SRCDIR, so
-                                ; a subdir source (e.g. /src/os-bios/asm/x.asm) must
-                                ; save its true parent dir, not root. (FRESOLVE also
-                                ; sets FNAME=leaf, which a later ;#use would clobber.)
-        JSR  FFIND              ; confirm the leaf exists in the resolved dir
+        JSR  SAVESRC            ; keep them: FFIND ends in FRESET (back to root),
+        JSR  FFIND              ;   and a ;#use re-resolves FNAME/DIRLBA
         JC   ST_NOSRC
-        ; ---- pass 1: build symbol table ----
-        LDA  #0
+        JSR  OPCINDEX           ; first-letter index over OPCTAB
+        JSR  SYMINIT            ; empty symbol table
+        LDA  #0                 ; ---- pass 1: define every symbol ----
         STA  PASS
         STA  ORGSET
-        STA  ORGBASE
-        STA  ORGBASE+1
-        LDW SYMP,#SYMTAB                ; <- tierA: address constant (next: JSR INITPC)
-        JSR  INITPC
+        LDW  ORGBASE,#0
         JSR  ASSEMBLE
-        ; ---- pass 2: emit (streamed to disk) ----
-        JSR  OUTINIT            ; output LBA = free pointer; clear the sector buffer
+        JSR  OUTINIT            ; ---- pass 2: emit, streamed to disk ----
         LDA  #1
         STA  PASS
-        JSR  INITPC
         JSR  ASSEMBLE
-        JSR  FINISHOUT          ; flush + register the file (dir entry + free bump)
+        JSR  FINISHOUT
         JC   ST_WERR
         LDP1 #MOK
         JSR  PUTS
         RTS
-ST_USAGE:LDP1 #MUSAGE          ; balanced stack here -> plain RTS to the shell
+ST_USAGE:
+        LDP1 #MUSAGE            ; balanced stack here: plain RTS to the shell
         JSR  PUTS
         RTS
-ST_NOSRC:LDP1 #ENOSRC
+ST_NOSRC:
+        LDP1 #ENOSRC
         JMP  ASM_ERR
 ST_WERR:LDP1 #EWRITE
         JMP  ASM_ERR
 
-; INITPC - reset PC and HIWAT to 0 at the start of each pass (ORGBASE/ORGSET are
-;   cleared once, before pass 1, so a single .org fixes the load address).
-INITPC: LDA  #0
-        STA  PC
-        STA  PC+1
-        STA  HIWAT
-        STA  HIWAT+1
+; SYMINIT - empty the symbol table: all 256 chain heads = 0, append pointer at
+;   the start. (Pass 2 keeps the table and only updates values.)
+SYMINIT:LDW  SYMP,#SYMTAB
+        LDP2 #HEADS
+SI_LP:  LDA  #0
+        STA  (P2)+
+        TPA2H
+        LDB  #>HEADS+512        ; the page after the two HEADS pages ($C8)
+        CMP
+        JNZ  SI_LP
         RTS
+
+; OPCINDEX - LETIDX[c-'A'] = address of the first OPCTAB record whose mnemonic
+;   starts with c (the table is sorted, so each letter's records are contiguous).
+OPCINDEX:
+        LDP2 #LETIDX
+        LDA  #52
+        STA  DIG
+OI_Z:   LDA  #0
+        STA  (P2)+
+        LDA  DIG
+        DEC
+        STA  DIG
+        JNZ  OI_Z
+        LDA  #0
+        STA  LASTC
+        LDP2 #OPCTAB
+OI_LP:  LDA  (P2)               ; shape byte; $FF = end of table
+        LDB  #$FF
+        CMP
+        JZ   OI_RET
+        LDA  (P2+2)             ; first letter of the mnemonic
+        LDB  LASTC
+        CMP
+        JZ   OI_SKIP            ; same group as the previous record
+        STA  LASTC
+        LDB  #'A'
+        SUB
+        SHL                     ; word index -> byte offset (LETIDX is in one page)
+        LDB  #<LETIDX
+        ADD
+        TAP1L
+        LDA  #>LETIDX
+        TAP1H
+        TPA2L
+        STA  (P1)+
+        TPA2H
+        STA  (P1)
+OI_SKIP:INP2                    ; skip shape, opcode, name, NUL
+        INP2
+OI_NM:  LDA  (P2)+
+        JNZ  OI_NM
+        JMP  OI_LP
+OI_RET: RTS
 
 ; =============================================================================
 ; Line driver
 ; =============================================================================
 ASSEMBLE:
-        JSR  PASSINIT           ; (re)start the source stream at the first sector
+        MOVW PC,ORGBASE         ; pass 1: 0 until the first .org; pass 2: the origin
+        JSR  PASSINIT
 PROCLINE:
-        JSR  NEXTLINE           ; LINEBUF <- next source line (NUL-terminated)
+        JSR  NEXTLINE           ; LINEBUF <- next source line
         LDA  LEOF
         JNZ  ASM_RET
-        LDA  #<LINEBUF          ; P1 = line cursor; LINEP = line start (for errors)
-        TAP1L
-        STA  LINEPL
-        LDA  #>LINEBUF
-        TAP1H
-        STA  LINEPH
+        LDP1 #LINEBUF
 PL_SOL: JSR  SKIPSP
         LDA  (P1)
         JZ   PROCLINE           ; blank line
-        LDB  #$3B            ; ';'
+        LDB  #$3B               ; ';' comment-only line
         CMP
-        JZ   PROCLINE           ; comment-only line
-PL_TOK: JSR  READTOK
+        JZ   PROCLINE
+PL_TOK: JSR  READTOK            ; NAMBUF / MNBUF <- identifier
         JSR  SKIPSP
         LDA  (P1)
         LDB  #':'
@@ -252,208 +289,99 @@ PL_TOK: JSR  READTOK
         LDB  #'='
         CMP
         JZ   PL_EQU
-        JMP  PL_INSTR
+        JSR  DOINSTR
+        JMP  PROCLINE           ; the rest of the line (a comment) is discarded
 PL_LABEL:
-        INP1                    ; consume ':'
+        INP1                    ; ':'
         LDA  PASS
-        JNZ  PL_LBSK            ; pass 2: labels already known
-        MOVW VAL,PC                ; <- tierA: word move (next: JSR SYMDEFVAL)
-        JSR  SYMDEFVAL
+        JNZ  PL_LBSK            ; pass 2: labels are already defined
+        MOVW VAL,PC
+        JSR  SYMDEF
 PL_LBSK:JSR  SKIPSP
         LDA  (P1)
         JZ   PROCLINE
-        LDB  #$3B            ; ';'
+        LDB  #$3B
         CMP
         JZ   PROCLINE
-        JMP  PL_TOK             ; trailing instruction after label
-PL_EQU: INP1                    ; consume '='
+        JMP  PL_TOK             ; an instruction after the label
+PL_EQU: INP1                    ; '='
         JSR  SKIPSP
         JSR  EVAL
-        JSR  SYMDEFVAL
+        JSR  SYMDEF
         JMP  PROCLINE
-PL_INSTR:
-        JSR  DOINSTR
-        JMP  PROCLINE           ; rest of line (incl. comment) is discarded
 ASM_RET:RTS
 
 ; =============================================================================
 ; Instruction / directive dispatch
 ; =============================================================================
-DOINSTR:
-        LDA  MNBUF              ; MOVW dst,src ? (the only two-operand instruction;
-        LDB  #'M'              ;   handled inline since the rest is single-operand)
-        CMP
-        JNZ  DI_LDPQ
-        LDA  MNBUF+1
-        LDB  #'O'
-        CMP
-        JNZ  DI_LDPQ
-        LDA  MNBUF+2
-        LDB  #'V'
-        CMP
-        JNZ  DI_LDPQ
-        LDA  MNBUF+3
-        LDB  #'W'
-        CMP
-        JNZ  DI_LDPQ
-        LDA  MNBUF+4
-        JNZ  DI_LDPQ           ; exactly "MOVW"
-        JMP  DO_MOVW
-DI_LDPQ:LDA  MNBUF             ; LDPn pseudo?
-        LDB  #'L'
-        CMP
-        JNZ  DI_NORM
-        LDA  MNBUF+1
-        LDB  #'D'
-        CMP
-        JNZ  DI_NORM
-        LDA  MNBUF+2
-        LDB  #'P'
-        CMP
-        JNZ  DI_NORM
-        LDA  MNBUF+3
-        LDB  #'1'
-        CMP
-        JNC  DI_NORM            ; < '1'
-        LDA  #'3'
-        LDB  MNBUF+3
-        CMP
-        JNC  DI_NORM            ; > '3'
-        JMP  DO_LDP
-DI_NORM:LDA  MNBUF
+DOINSTR:LDA  MNBUF
         LDB  #'.'
         CMP
         JZ   DO_DIR
-        JSR  PARSEOP            ; -> SHAPE (P1 at expr for #/abs)
-        JSR  OPCFIND            ; MNBUF+SHAPE -> OPCB, FOUND
-        LDA  FOUND
+        JSR  PARSEOP            ; SHAPE + operand cursors
+        JSR  OPCFIND            ; (MNBUF, SHAPE) -> OPCB
         JNZ  DI_OK
-        LDP1 #EBADOP
-        JMP  ASM_ERR
-DI_OK:  LDA  OPCB
-        JSR  EMIT
-        LDA  SHAPE
-        LDB  #1
+        LDA  SHAPE              ; a lone #imm that has no imm8 form: try imm16
+        LDB  #1                 ;   (this is how LDPn #w resolves)
         CMP
-        JZ   DI_IMM
-        LDB  #2
-        CMP
-        JZ   DI_ABS
-        LDB  #10
-        CMP
-        JZ   DI_AA
-        LDB  #11
-        CMP
-        JZ   DI_AI8
-        LDB  #12
-        CMP
-        JZ   DI_AI16
-        LDB  #13
-        CMP
-        JNC  DI_NONE            ; < 13: implied / (Pn) / (Pn)+ -> no operand bytes
-        LDB  #16
-        CMP
-        JNC  DI_PD              ; 13..15  (Pn+d)     -> d8
-        LDB  #19
-        CMP
-        JNC  DI_APD             ; 16..18  a,(Pn+d)   -> a.lo a.hi d8
-        JMP  DI_PDA             ; 19..21  (Pn+d),a   -> a.lo a.hi d8 (address first)
-DI_NONE:RTS
-DI_IMM: JSR  EVAL
-        LDA  VAL
-        JSR  EMIT
-        RTS
-DI_ABS: JSR  EVAL
-        LDA  VAL
-        JSR  EMIT
-        LDA  VAL+1
-        JSR  EMIT
-        RTS
-; ---- two-operand / displacement forms (os-rewrite step 0, 2026-09-11). The
-; byte stream is the HOST's: every 16-bit address first, then the imm8/imm16
-; or the displacement -- so `STW (P3+d),a` emits a before d exactly like the
-; host assembler, and both builds stay byte-identical. P1 is at operand 1's
-; expression on entry; OP2P/DISPP were noted by PARSEOP.
-DI_AA:  JSR  DI_ABS             ; a,a : operand 1 word
-        JSR  DI_P2
-        JMP  DI_ABS             ;       operand 2 word
-DI_AI8: JSR  DI_ABS             ; a,#  : address, imm8
-        JSR  DI_P2
-        JMP  DI_IMM
-DI_AI16:JSR  DI_ABS             ; a,#w : address, imm16
-        JSR  DI_P2
-        JMP  DI_ABS
-DI_PD:  JSR  DI_PD1             ; (Pn+d) : d8
-        JMP  DI_IMM
-DI_APD: JSR  DI_ABS             ; a,(Pn+d) : address, then d8
-        JSR  DI_PD1
-        JMP  DI_IMM
-DI_PDA: JSR  DI_P2              ; (Pn+d),a : the ADDRESS (operand 2) first...
-        JSR  DI_ABS
-        JSR  DI_PD1             ; ...then d8
-        JMP  DI_IMM
-DI_P2:  LPW1 OP2P                ; <- tierA: pointer load (next: RTS)
-        RTS
-DI_PD1: LPW1 DISPP                ; <- tierA: pointer load (next: RTS)
-        RTS
-
-; ---- LDPn #imm16 -> the LDPn opcode + imm16 (lo, hi) ----
-; Tier A (2026-09-11): LDPn is a real 3-byte instruction (opcodes $38-$3A), no
-; longer the LPLn/LPHn pair. Its OPCTAB record carries shape 9 ("#w", a 16-bit
-; immediate) -- a shape PARSEOP never produces, so this path sets SHAPE itself.
-DO_LDP: LDA  MNBUF+3
-        STA  LDPN               ; pointer digit char (survives EVAL)
-        JSR  SKIPSP
-        LDA  (P1)
-        LDB  #'#'
-        CMP
-        JNZ  DL_ERR
-        INP1
-        JSR  EVAL               ; VAL = imm16 (clobbers MNBUF/TMP)
-        LDW MNBUF,#17484                ; <- tierA: word constant (next: LDA)
-        LDA  #'P'
-        STA  MNBUF+2
-        LDA  LDPN
-        STA  MNBUF+3
-        LDA  #0
-        STA  MNBUF+4
-        LDA  #9                 ; shape 9 = "#w"
+        JNZ  DI_ERR
+        LDA  #9
         STA  SHAPE
         JSR  OPCFIND
-        LDA  FOUND
-        JZ   DL_ERR
-        LDA  OPCB
+        JZ   DI_ERR
+DI_OK:  LDA  OPCB
         JSR  EMIT
-        LDA  VAL
-        JSR  EMIT
-        LDA  VAL+1
-        JSR  EMIT
+        LDA  SHAPE              ; P2 = &DISPTAB[SHAPE]
+        SHL
+        LDB  #<DISPTAB
+        ADD
+        TAP2L
+        LDA  #0
+        ROL                     ; the carry of that add
+        LDB  #>DISPTAB
+        ADD
+        TAP2H
+        LDW  CUR,(P2+0)
+        LPW1 CUR
+        JSR  (P1)               ; emit the operand bytes for this shape
         RTS
-DL_ERR: LDP1 #EBADOP
+DI_ERR: LDP1 #EBADOP
         JMP  ASM_ERR
 
-; ---- MOVW dst,src -> opcode $78 + dst16 + src16 (two abs16 operands) ----
-DO_MOVW:LDA  #$78
-        JSR  EMIT               ; opcode
-        JSR  SKIPSP
-        JSR  EVAL               ; VAL = dst address
+; Operand emitters, by shape. Each reloads P1 from the cursor it needs. The
+; byte order is the host's: every 16-bit address first, then the imm8/imm16 or
+; the displacement -- so `STW (P3+d),a` emits a before d like the host does.
+DISPTAB:.word DI_NONE,DI_IMM,DI_ABS               ; 0 implied, 1 #imm8, 2 abs
+        .word DI_NONE,DI_NONE,DI_NONE             ; 3..5 (P1) (P1)+ (P2)
+        .word DI_NONE,DI_NONE,DI_NONE             ; 6..8 (P2)+ (P3) (P3)+
+        .word DI_ABS                              ; 9  #imm16
+        .word DI_AA,DI_AI8,DI_AA                  ; 10 a,a  11 a,#imm8  12 a,#imm16
+        .word DI_PD,DI_PD,DI_PD                   ; 13..15 (Pn+d)
+        .word DI_APD,DI_APD,DI_APD                ; 16..18 a,(Pn+d)
+        .word DI_PDA,DI_PDA,DI_PDA                ; 19..21 (Pn+d),a
+DI_NONE:RTS
+DI_IMM: LPW1 OP1P               ; imm8 at operand 1
+DI_IMM1:JSR  EVAL
+        LDA  VAL
+        JMP  EMIT
+DI_ABS: LPW1 OP1P               ; 16-bit at operand 1
+DI_ABS1:JSR  EVAL
         LDA  VAL
         JSR  EMIT
         LDA  VAL+1
-        JSR  EMIT
-        JSR  SKIPSP
-        LDA  (P1)
-        LDB  #','
-        CMP
-        JNZ  DL_ERR             ; need a comma between dst and src
-        INP1
-        JSR  SKIPSP
-        JSR  EVAL               ; VAL = src address
-        LDA  VAL
-        JSR  EMIT
-        LDA  VAL+1
-        JSR  EMIT
-        RTS
+        JMP  EMIT
+DI_AA:  JSR  DI_ABS             ; operand 1 word, operand 2 word
+DI_ABS2:LPW1 OP2P
+        JMP  DI_ABS1
+DI_AI8: JSR  DI_ABS             ; operand 1 word, operand 2 imm8
+        LPW1 OP2P
+        JMP  DI_IMM1
+DI_PD:  LPW1 DISPP              ; the displacement byte
+        JMP  DI_IMM1
+DI_APD: JSR  DI_ABS             ; a,(Pn+d): address, then d
+        JMP  DI_PD
+DI_PDA: JSR  DI_ABS2            ; (Pn+d),a: the address (operand 2) first, then d
+        JMP  DI_PD
 
 ; ---- directives ----
 DO_DIR: LDA  MNBUF+1
@@ -472,128 +400,126 @@ DO_DIR: LDA  MNBUF+1
         LDB  #'F'
         CMP
         JZ   DD_FILL
-        LDP1 #EBADOP
-        JMP  ASM_ERR
+        JMP  DI_ERR
+; .org: pass 1 fixes ORGBASE on the first one; pass 2 zero-pads forward to the
+; new origin (a backward .org cannot be represented in a streamed output).
 DD_ORG: JSR  EVAL
-        MOVW PC,VAL                ; <- tierA: word move (next: LDA)
+        LDA  PASS
+        JNZ  DO_ORG2
         LDA  ORGSET
-        JNZ  DD_RET
-        MOVW ORGBASE,VAL                ; <- tierA: word move (next: LDA)
+        JNZ  DO_SET
+        MOVW ORGBASE,VAL
         LDA  #1
         STA  ORGSET
-DD_RET: RTS
+DO_SET: MOVW PC,VAL
+        RTS
+DO_ORG2:CMPW VAL,PC
+        JNC  DO_BACK            ; VAL < PC
+DO_PAD: CMPW PC,VAL
+        JC   DD_RET             ; PC >= VAL: there
+        LDA  #0
+        JSR  EMIT
+        JMP  DO_PAD
+DO_BACK:LDP1 #EBACK
+        JMP  ASM_ERR
 DD_BYTE:JSR  EVAL
         LDA  VAL
         JSR  EMIT
-        JSR  SKIPSP
-        LDA  (P1)
-        LDB  #','
-        CMP
-        JNZ  DD_RET
-        INP1
-        JSR  SKIPSP
-        JMP  DD_BYTE
+        JSR  COMMA
+        JC   DD_BYTE
+DD_RET: RTS
 DD_WORD:JSR  EVAL
         LDA  VAL
         JSR  EMIT
         LDA  VAL+1
         JSR  EMIT
-        JSR  SKIPSP
-        LDA  (P1)
-        LDB  #','
-        CMP
-        JNZ  DD_RET
-        INP1
-        JSR  SKIPSP
-        JMP  DD_WORD
+        JSR  COMMA
+        JC   DD_WORD
+        RTS
 DD_FILL:JSR  EVAL
-        MOVW SAVP,VAL                ; <- tierA: word move (next: LDA)
+        MOVW FILLN,VAL
         LDA  #0
-        STA  FVAL               ; fill value default 0 (TMP is clobbered by EMIT)
-        JSR  SKIPSP
-        LDA  (P1)
-        LDB  #','
-        CMP
-        JNZ  DF_GO
-        INP1
-        JSR  SKIPSP
+        STA  FVAL               ; fill value defaults to 0
+        JSR  COMMA
+        JNC  DF_GO
         JSR  EVAL
         LDA  VAL
         STA  FVAL
-DF_GO:  LDA  SAVP
-        LDB  SAVP+1
-        OR
+DF_GO:  CMPW FILLN,#0
         JZ   DD_RET
         LDA  FVAL
         JSR  EMIT
-        LDA  SAVP
-        LDB  #1
-        SUB
-        STA  SAVP
-        JC   DF_GO
-        LDA  SAVP+1
-        LDB  #1
-        SUB
-        STA  SAVP+1
+        DECW FILLN
         JMP  DF_GO
 DD_ASC: JSR  SKIPSP
         LDA  (P1)
         LDB  #QUOTE
         CMP
-        JNZ  DA_ERR
+        JNZ  DI_ERR
         INP1
-DA_LP:  LDA  (P1)
-        JZ   DA_ERR
+DA_LP:  LDA  (P1)+
+        JZ   DI_ERR             ; unterminated string
         LDB  #QUOTE
         CMP
         JZ   DA_CLOSE
         JSR  EMIT
-        INP1
         JMP  DA_LP
 DA_CLOSE:
-        INP1
-        LDA  MNBUF+6            ; .ASCIIZ -> trailing 0
+        LDA  MNBUF+6            ; .ASCIIZ -> trailing NUL
         LDB  #'Z'
         CMP
         JNZ  DD_RET
         LDA  #0
-        JSR  EMIT
+        JMP  EMIT
+
+; COMMA - skip blanks; at a ',' step over it and the blanks after it, C=1;
+;   otherwise C=0 with P1 on the non-blank.
+COMMA:  JSR  SKIPSP
+        LDA  (P1)
+        LDB  #','
+        CMP
+        JNZ  CM_NO
+        INP1
+        JSR  SKIPSP
+        SEC
         RTS
-DA_ERR: LDP1 #EBADOP
-        JMP  ASM_ERR
+CM_NO:  CLC
+        RTS
 
 ; =============================================================================
-; Operand shape parse -> SHAPE (0 imp,1 #,2 abs,3..8 (Pn)/(Pn)+)
+; Operand shapes
 ; =============================================================================
-; PARSEOP (os-rewrite step 0, 2026-09-11): classify operand 1 (CLASSOP), then
-; look for a comma and classify operand 2; combine into one shape code:
-;   10 a,a   11 a,#imm8   12 a,#imm16   16..18 a,(Pn+d)   19..21 (Pn+d),a
-; (13..15 is a lone (Pn+d)). imm8 vs imm16 follows the HOST's lit8() rule on
-; the operand TEXT (LIT8 below), never the value, so both assemblers agree.
-; On return P1 is back at operand 1's expression; OP2P / DISPP hold the
-; cursors of operand 2 / the displacement for the emitter (DI_AA.. above).
-PARSEOP:JSR  CLASSOP            ; operand 1 -> SHAPE, P1 at its expression
+; PARSEOP - classify the operand field at P1 -> SHAPE, recording the line
+;   cursors OP1P (operand 1's expression), OP2P (operand 2's) and DISPP (a
+;   (Pn+d) displacement). Shape codes (the OPCTAB's, from gen_p8xopc.py):
+;     0 none  1 #  2 abs  3..8 (Pn)/(Pn)+  9 #imm16 (never from syntax)
+;     10 a,a  11 a,#imm8  12 a,#imm16  13..15 (Pn+d)  16..18 a,(Pn+d)
+;     19..21 (Pn+d),a
+;   imm8 vs imm16 (11 vs 12) follows the host's lit8() rule on the operand
+;   TEXT, never the value, so both assemblers agree. P1 is left wherever the
+;   classification stopped; the emitters reload the cursor they need.
+PARSEOP:JSR  CLASSOP            ; operand 1
         TPA1L
         STA  OP1P
         TPA1H
         STA  OP1P+1
         LDA  SHAPE
-        STA  SHAPE2             ; SHAPE2 = operand 1's shape while op2 is classified
-PO_SCN: LDA  (P1)               ; scan operand 1 for a comma
-        JZ   PO_ONE
+        STA  SHAPE2
+PO_SCN: LDA  (P1)               ; scan operand 1 for a ',' (a 'c' literal may be ',')
+        JZ   PO_RET
         LDB  #CR
         CMP
-        JZ   PO_ONE
+        JZ   PO_RET
         LDB  #LF
         CMP
-        JZ   PO_ONE
-        LDB  #$3B               ; ';'
+        JZ   PO_RET
+        LDB  #$3B
         CMP
-        JZ   PO_ONE
-        LDB  #TICK              ; 'c' literal: the c may be ',' -- step over it
+        JZ   PO_RET
+        LDB  #TICK
         CMP
         JNZ  PO_SC2
-        INP1
+        INP1                    ; step over the quoted character
         INP1
         JMP  PO_SC3
 PO_SC2: LDB  #','
@@ -601,159 +527,159 @@ PO_SC2: LDB  #','
         JZ   PO_TWO
 PO_SC3: INP1
         JMP  PO_SCN
-PO_TWO: INP1                    ; past ','
+PO_TWO: INP1                    ; ','
         JSR  SKIPSP
-        JSR  CLASSOP            ; operand 2 -> SHAPE, P1 at its expression
+        JSR  CLASSOP            ; operand 2
         TPA1L
         STA  OP2P
         TPA1H
         STA  OP2P+1
-        LDA  SHAPE2             ; operand 1 ...
+        LDA  SHAPE2
         LDB  #2
         CMP
-        JNZ  PO_C2              ; ... not abs: must be (Pn+d),a
-        LDA  SHAPE              ; operand 2:
+        JNZ  PO_C2              ; operand 1 not abs: must be (Pn+d),a
+        LDA  SHAPE              ; operand 1 abs; operand 2:
         LDB  #2
         CMP
         JZ   PO_AA              ;   abs      -> a,a
         LDB  #1
         CMP
         JZ   PO_AI              ;   #        -> a,#imm8 / a,#imm16
-        LDB  #13
-        CMP
-        JNC  PO_ERR2            ;   < 13
-        LDB  #16
-        CMP
-        JC   PO_ERR2            ;   > 15
+        JSR  ISPD
+        JNC  DI_ERR
         LDA  SHAPE              ;   (Pn+d)   -> 16..18
         LDB  #3
         ADD
         STA  SHAPE
-        JMP  PO_ONE
+        RTS
 PO_AA:  LDA  #10
         STA  SHAPE
-        JMP  PO_ONE
-PO_AI:  LPW1 OP2P                ; <- tierA: pointer load (next: JSR LIT8)
-        JSR  LIT8
-        JZ   PO_AI16
-        LDA  #11
+        RTS
+PO_AI:  LPW1 OP2P
+        JSR  LIT8               ; A = 1 byte literal / 0 not
+        STA  TMP
+        LDA  #12
+        LDB  TMP
+        SUB                     ; 11 if a byte literal, else 12
         STA  SHAPE
-        JMP  PO_ONE
-PO_AI16:LDA  #12
-        STA  SHAPE
-        JMP  PO_ONE
-PO_C2:  LDA  SHAPE2             ; (Pn+d),a : operand 1 in 13..15, operand 2 abs
-        LDB  #13
-        CMP
-        JNC  PO_ERR2
-        LDB  #16
-        CMP
-        JC   PO_ERR2
-        LDA  SHAPE
+        RTS
+PO_C2:  LDA  SHAPE2             ; (Pn+d),a: operand 1 in 13..15 ...
+        JSR  ISPD
+        JNC  DI_ERR
+        LDA  SHAPE              ; ... operand 2 abs
         LDB  #2
         CMP
-        JNZ  PO_ERR2
+        JNZ  DI_ERR
         LDA  SHAPE2
         LDB  #6                 ; 13..15 -> 19..21
         ADD
         STA  SHAPE
-PO_ONE: LPW1 OP1P                ; <- tierA: pointer load (next: RTS)
-        RTS
-PO_ERR2:LDP1 #EBADOP
-        JMP  ASM_ERR
+PO_RET: RTS
 
-; CLASSOP - classify ONE operand at P1 -> SHAPE (0 imp, 1 #, 2 abs, 3..8
-; (Pn)/(Pn)+, 13..15 (Pn+d) with DISPP at the displacement expression). Leaves
-; P1 at the expression for #/abs, after the ')' / '+' otherwise.
+; ISPD - C=1 if A is a (Pn+d) shape (13..15).
+ISPD:   LDB  #13
+        CMP
+        JNC  IP_NO
+        LDB  #16
+        CMP
+        JC   IP_NO
+        SEC
+        RTS
+IP_NO:  CLC
+        RTS
+
+; CLASSOP - classify ONE operand at P1 -> SHAPE: 0 none, 1 #, 2 abs, 3..8
+;   (Pn)/(Pn)+, 13..15 (Pn+d) (DISPP = its displacement expression). Leaves P1
+;   at the expression for # / abs, after the ')' / '+' otherwise.
 CLASSOP:LDA  (P1)
-        JZ   PO_IMP
+        JZ   CO_IMP
         LDB  #CR
         CMP
-        JZ   PO_IMP
+        JZ   CO_IMP
         LDB  #LF
         CMP
-        JZ   PO_IMP
-        LDB  #$3B            ; ';'
+        JZ   CO_IMP
+        LDB  #$3B
         CMP
-        JZ   PO_IMP
+        JZ   CO_IMP
         LDB  #'#'
         CMP
-        JZ   PO_IMM
+        JZ   CO_IMM
         LDB  #'('
         CMP
-        JZ   PO_PTR
+        JZ   CO_PTR
         LDA  #2
         STA  SHAPE
         RTS
-PO_IMP: LDA  #0
+CO_IMP: LDA  #0
         STA  SHAPE
         RTS
-PO_IMM: INP1
+CO_IMM: INP1
         LDA  #1
         STA  SHAPE
         RTS
-PO_PTR: INP1                    ; '('
-        INP1                    ; 'P'
-        LDA  (P1)
+CO_PTR: LDA  (P1+2)             ; "(Pn": the pointer digit
         LDB  #'0'
         SUB
         STA  TMP                ; n
-        INP1
-        LDA  (P1)
+        LDA  (P1+3)
         LDB  #'+'
         CMP
-        JZ   PO_DISP            ; (Pn+d)
-        LDB  #')'               ; ')'
+        JZ   CO_DISP            ; (Pn+d)
+        LDB  #')'
         CMP
-        JNZ  PO_ERR
-        INP1
-        LDA  (P1)
+        JNZ  DI_ERR
+        LDA  (P1+4)
         LDB  #'+'
         CMP
-        JZ   PO_PLUS
+        JZ   CO_PLUS            ; (Pn)+
+        INP1                    ; past "(Pn)"
+        INP1
+        INP1
+        INP1
         LDA  TMP                ; shape = 3 + (n-1)*2
-        LDB  #1
-        SUB
+        DEC
         SHL
         LDB  #3
         ADD
         STA  SHAPE
         RTS
-PO_PLUS:INP1
-        LDA  TMP
-        LDB  #1
-        SUB
+CO_PLUS:INP1                    ; past "(Pn)+"
+        INP1
+        INP1
+        INP1
+        INP1
+        LDA  TMP                ; shape = 4 + (n-1)*2
+        DEC
         SHL
         LDB  #4
         ADD
         STA  SHAPE
         RTS
-PO_DISP:INP1                    ; past '+': the displacement expression
+CO_DISP:INP1                    ; past "(Pn+": the displacement expression
+        INP1
+        INP1
+        INP1
         TPA1L
         STA  DISPP
         TPA1H
         STA  DISPP+1
-PO_DSK: LDA  (P1)               ; skip to the closing ')'
-        JZ   PO_ERR
+CO_DSK: LDA  (P1)+              ; skip to just past the closing ')'
+        JZ   DI_ERR
         LDB  #')'
         CMP
-        JZ   PO_DEND
-        INP1
-        JMP  PO_DSK
-PO_DEND:INP1                    ; past ')'
+        JNZ  CO_DSK
         LDA  TMP                ; shape = 13 + (n-1)
         LDB  #12
         ADD
         STA  SHAPE
         RTS
-PO_ERR: LDP1 #EBADOP
-        JMP  ASM_ERR
 
-; LIT8 - is the immediate text at P1 a BYTE-SIZED LITERAL by the host's rule?
-;   <expr / >expr ; $h / $hh ; 0xh / 0xhh ; 'c' ; a decimal 0..255 -- followed
-;   only by blanks and the end of the operand (NUL / CR / LF / ';'). Labels,
-;   longer literals and expressions are 16-bit. Returns A=1 yes / A=0 no (Z set
-;   accordingly). Advances P1 (the caller restores it). Uses VAL, CNTL, TMP2.
+; LIT8 - is the immediate TEXT at P1 a byte-sized literal by the host's lit8()
+;   rule?  <x  >x  $h $hh  0xh 0xhh  'c'  decimal 0..255 -- followed only by
+;   blanks up to the end of the operand (NUL / CR / LF / ';'). Labels, longer
+;   literals and expressions are 16-bit. A=1 yes / A=0 no (Z accordingly).
+;   Advances P1 (the caller reloads it).
 LIT8:   LDA  (P1)
         LDB  #'<'
         CMP
@@ -770,113 +696,49 @@ LIT8:   LDA  (P1)
         LDB  #'0'
         CMP
         JNC  L8_NO              ; < '0'
-        LDB  #$3A               ; '9'+1
+        LDB  #$3A
         CMP
         JC   L8_NO              ; > '9'
         LDB  #'0'
         CMP
         JNZ  L8_DEC             ; 1..9: decimal
-        INP1                    ; '0': 0x.. hex, or a decimal with a leading 0
-        LDA  (P1)
+        LDA  (P1+1)             ; "0x" hex, or a decimal with a leading 0
         LDB  #'x'
         CMP
-        JZ   L8_HEX
+        JZ   L8_0X
         LDB  #'X'
         CMP
-        JZ   L8_HEX
-        DEP1
-L8_DEC: LDA  #0                 ; VAL = value (16-bit), CNTL = digit count
-        STA  VAL
-        STA  VAL+1
-        STA  CNTL
-L8_DL:  LDA  (P1)
-        LDB  #'0'
-        CMP
-        JNC  L8_DEND
-        LDB  #$3A
-        CMP
-        JC   L8_DEND
-        LDB  #'0'
-        SUB
-        STA  TMP2               ; digit
-        LDA  CNTL
-        LDB  #5
-        CMP
-        JC   L8_NO              ; > 5 digits: not a byte
-        INC
-        STA  CNTL
-        LDA  VAL                ; VAL = VAL*10 + digit  (x2 -> keep, x8, add)
-        SHL
-        STA  CNTH
-        LDA  VAL+1
-        ROL
-        STA  TMP
-        LDA  CNTH               ; (VAL*2 in CNTH:TMP)
-        SHL
-        STA  VAL
-        LDA  TMP
-        ROL
-        STA  VAL+1
-        LDA  VAL
-        SHL
-        STA  VAL
-        LDA  VAL+1
-        ROL
-        STA  VAL+1              ; VAL*8
-        LDA  VAL
-        LDB  CNTH
-        ADD
-        STA  VAL
-        LDA  VAL+1
-        JNC  L8_D2
-        INC                     ; carry of the low add
-L8_D2:  LDB  TMP
-        ADD
-        STA  VAL+1              ; VAL*10
-        LDA  VAL
-        LDB  TMP2
-        ADD
-        STA  VAL
-        LDA  VAL+1
-        JNC  L8_D3
-        INC
-        STA  VAL+1
-L8_D3:  INP1
-        JMP  L8_DL
-L8_DEND:LDA  VAL+1
+        JZ   L8_0X
+L8_DEC: JSR  RDDEC              ; CNT = the value, P1 past the digits
+        LDA  CNT+1
         JNZ  L8_NO              ; > 255
         JMP  L8_TERM
+L8_0X:  INP1
 L8_HEX: INP1                    ; past '$' / 'x'
         LDA  #0
-        STA  CNTL
+        STA  DIG
 L8_HL:  LDA  (P1)
-        JSR  ISHEXD
-        JZ   L8_HEND
-        LDA  CNTL
+        JSR  HEXVAL
+        JNC  L8_HEND
+        LDA  DIG
         INC
-        STA  CNTL
+        STA  DIG
         INP1
         JMP  L8_HL
-L8_HEND:LDA  CNTL
+L8_HEND:LDA  DIG
         JZ   L8_NO              ; no digits
         LDB  #3
         CMP
         JC   L8_NO              ; 3+ digits: 16-bit
         JMP  L8_TERM
-L8_CHR: INP1                    ; TICK, char, TICK
-        INP1
-        LDA  (P1)
+L8_CHR: LDA  (P1+2)             ; 'c': the closing tick
         LDB  #TICK
         CMP
         JNZ  L8_NO
         INP1
-L8_TERM:LDA  (P1)               ; only blanks may follow
-        LDB  #' '
-        CMP
-        JZ   L8_TSK
-        LDB  #$09
-        CMP
-        JZ   L8_TSK
+        INP1
+        INP1
+L8_TERM:JSR  SKIPSP             ; only blanks may follow
         LDA  (P1)
         JZ   L8_YES
         LDB  #CR
@@ -890,209 +752,205 @@ L8_TERM:LDA  (P1)               ; only blanks may follow
         JZ   L8_YES
 L8_NO:  LDA  #0
         RTS
-L8_TSK: INP1
-        JMP  L8_TERM
 L8_YES: LDA  #1
         RTS
 
-; ISHEXD - A = a hex digit? returns A=1 / A=0 (Z accordingly). Clobbers B.
-ISHEXD: STA  TMP2
-        LDB  #'0'
-        CMP
-        JNC  IH_NO
-        LDB  #$3A
-        CMP
-        JNC  IH_YES             ; '0'..'9'
+; =============================================================================
+; OPCFIND - (MNBUF, SHAPE) -> OPCB. A=1 found / A=0 not (Z accordingly).
+;   Scans only the mnemonic's first-letter group (LETIDX), shape byte first.
+;   Clobbers P1 and P2.
+; =============================================================================
+OPCFIND:LDA  MNBUF
         LDB  #'A'
+        SUB
+        JNC  OF_NF              ; below 'A'
+        LDB  #26
         CMP
-        JNC  IH_NO
-        LDB  #'G'
-        CMP
-        JNC  IH_YES             ; 'A'..'F'
-        LDB  #'a'
-        CMP
-        JNC  IH_NO
-        LDB  #'g'
-        CMP
-        JNC  IH_YES             ; 'a'..'f'
-IH_NO:  LDA  #0
-        RTS
-IH_YES: LDA  #1
-        RTS
-
-; =============================================================================
-; OPCFIND - scan OPCTAB for (MNBUF, SHAPE) -> OPCB, FOUND
-; =============================================================================
-OPCFIND:TPA1L
-        STA  SAVP
-        TPA1H
-        STA  SAVP+1
-        LDA  #0
-        STA  FOUND
-        LDP2 #OPCTAB
-OF_LP:  LDA  (P2)
+        JC   OF_NF              ; past 'Z'
+        SHL
+        LDB  #<LETIDX
+        ADD
+        TAP1L
+        LDA  #>LETIDX
+        TAP1H
+        LDW  CUR,(P1+0)
+        LDA  CUR+1
+        JZ   OF_NF              ; no mnemonic starts with this letter
+        LPW2 CUR
+OF_LP:  LDA  (P2)               ; shape byte; $FF = end of table
         LDB  #$FF
         CMP
-        JZ   OF_NF              ; sentinel
-        LDA  (P2)+
-        STA  TMP                ; shapecode
-        LDA  (P2)+
-        STA  OPCB               ; opcode
-        LDP1 #MNBUF
-        LDA  #1
-        STA  FOUND              ; tentative match
-OF_NM:  LDA  (P2)+
-        STA  TMP2
-        JZ   OF_NMEND
-        LDA  FOUND
-        JZ   OF_NM             ; already mismatched: consume rest
-        LDA  (P1)+
-        LDB  TMP2
+        JZ   OF_NF
+        LDA  (P2+2)
+        LDB  MNBUF
         CMP
-        JZ   OF_NM
-        LDA  #0
-        STA  FOUND
-        JMP  OF_NM
-OF_NMEND:
-        LDA  FOUND
-        JZ   OF_CHK
-        LDA  (P1)              ; both must end -> full match
-        JZ   OF_CHK
-        LDA  #0
-        STA  FOUND
-OF_CHK: LDA  FOUND
-        JZ   OF_LP
-        LDA  TMP
+        JNZ  OF_NF              ; left the letter group
+        LDA  (P2)
         LDB  SHAPE
         CMP
-        JNZ  OF_LP
-        LPW1 SAVP                ; <- tierA: pointer load (next: RTS)
+        JNZ  OF_NEXT
+        LDA  (P2+3)             ; the name, up to and including its NUL (<= 5
+        LDB  MNBUF+1            ;   letters). After an equal CMP, A AND B = A,
+        CMP                     ;   so `AND / JZ` asks "was that the NUL?"
+        JNZ  OF_NEXT
+        AND
+        JZ   OF_HIT
+        LDA  (P2+4)
+        LDB  MNBUF+2
+        CMP
+        JNZ  OF_NEXT
+        AND
+        JZ   OF_HIT
+        LDA  (P2+5)
+        LDB  MNBUF+3
+        CMP
+        JNZ  OF_NEXT
+        AND
+        JZ   OF_HIT
+        LDA  (P2+6)
+        LDB  MNBUF+4
+        CMP
+        JNZ  OF_NEXT
+        AND
+        JZ   OF_HIT
+        LDA  (P2+7)
+        LDB  MNBUF+5
+        CMP
+        JNZ  OF_NEXT
+        AND
+        JZ   OF_HIT
+OF_NEXT:INP2                    ; next record: past shape, opcode, name, NUL
+        INP2
+        INP2
+OF_SK:  LDA  (P2)+
+        JNZ  OF_SK
+        JMP  OF_LP
+OF_HIT: LDA  (P2+1)
+        STA  OPCB
+        LDA  #1
         RTS
 OF_NF:  LDA  #0
-        STA  FOUND
-        LPW1 SAVP                ; <- tierA: pointer load (next: RTS)
         RTS
 
 ; =============================================================================
-; Symbol table
+; Symbol table: 256 chains through 16-byte entries name[12] value[2] next[2]
 ; =============================================================================
-; SYMFIND - look up NAMBUF; FOUND=1/0, value -> CNTL/CNTH, addr -> EADDR
-SYMFIND:TPA1L
-        STA  SAVP
-        TPA1H
-        STA  SAVP+1
+; SYMHASH - HASH = hash of NAMBUF (rotate-add over its bytes up to the NUL);
+;   P2 = &HEADS[HASH]. Clobbers A, B.
+SYMHASH:LDP2 #NAMBUF
         LDA  #0
-        STA  FOUND
-        LDP2 #SYMTAB                ; <- tierA: pointer constant (next: TPA2L)
-SF_LP:  TPA2L
-        LDB  SYMP
-        CMP
-        JNZ  SF_GO
-        TPA2H
-        LDB  SYMP+1
-        CMP
-        JZ   SF_NF             ; reached append pointer
-SF_GO:  TPA2L                   ; remember entry start
-        STA  TMP
-        TPA2H
-        STA  TMP2
-        LDP1 #NAMBUF
-        LDA  #12
-        STA  DIG
-        LDA  #1
-        STA  FOUND
-SF_CMP: LDA  (P2)+
-        STA  CNTL
-        LDA  (P1)+
-        LDB  CNTL
-        CMP
-        JZ   SF_CEQ
-        LDA  #0
-        STA  FOUND
-SF_CEQ: LDA  DIG
-        DEC
-        STA  DIG
-        JNZ  SF_CMP
-        LDA  FOUND
-        JZ   SF_NEXT
-        TPA2L                   ; P2 at entry+12 = value field
-        STA  EADDR
-        TPA2H
-        STA  EADDR+1
-        LDA  (P2)+
-        STA  CNTL
-        LDA  (P2)
-        STA  CNTH
-        LPW1 SAVP                ; <- tierA: pointer load (next: RTS)
-        RTS
-SF_NEXT:LDA  TMP                ; entry start + 14
-        LDB  #14
+        STA  HASH
+SH_LP:  LDA  (P2)+
+        JZ   SH_D
+        LDB  HASH
         ADD
+        ROL                     ; rotate the sum left through the add's carry
+        STA  HASH
+        JMP  SH_LP
+SH_D:   LDA  HASH
+        SHL                     ; word index -> byte offset ...
         TAP2L
-        LDA  TMP2
-        JNC  SF_N1
-        INC
-SF_N1:  TAP2H
+        LDA  #0
+        ROL                     ; ... whose carry selects the second page
+        LDB  #>HEADS
+        ADD
+        TAP2H
+        RTS
+
+; SYMFIND - look up NAMBUF. A=1 found (P2 = the entry, CNT = its value) or
+;   A=0 (Z accordingly). HEADP/HEAD0 remember the chain head for SYMDEF.
+SYMFIND:JSR  SYMHASH
+        LEAW HEADP,(P2+0)
+        LDW  HEAD0,(P2+0)
+        MOVW CUR,HEAD0
+SF_LP:  LDA  CUR+1
+        JZ   SF_NF              ; end of chain (entries live above $8000)
+        LPW2 CUR
+        LDA  (P2)               ; 12 name bytes, first mismatch moves on
+        LDB  NAMBUF
+        CMP
+        JNZ  SF_NX
+        LDA  (P2+1)
+        LDB  NAMBUF+1
+        CMP
+        JNZ  SF_NX
+        LDA  (P2+2)
+        LDB  NAMBUF+2
+        CMP
+        JNZ  SF_NX
+        LDA  (P2+3)
+        LDB  NAMBUF+3
+        CMP
+        JNZ  SF_NX
+        LDA  (P2+4)
+        LDB  NAMBUF+4
+        CMP
+        JNZ  SF_NX
+        LDA  (P2+5)
+        LDB  NAMBUF+5
+        CMP
+        JNZ  SF_NX
+        LDA  (P2+6)
+        LDB  NAMBUF+6
+        CMP
+        JNZ  SF_NX
+        LDA  (P2+7)
+        LDB  NAMBUF+7
+        CMP
+        JNZ  SF_NX
+        LDA  (P2+8)
+        LDB  NAMBUF+8
+        CMP
+        JNZ  SF_NX
+        LDA  (P2+9)
+        LDB  NAMBUF+9
+        CMP
+        JNZ  SF_NX
+        LDA  (P2+10)
+        LDB  NAMBUF+10
+        CMP
+        JNZ  SF_NX
+        LDA  (P2+11)
+        LDB  NAMBUF+11
+        CMP
+        JNZ  SF_NX
+        LDW  CNT,(P2+12)        ; found: the value
+        LDA  #1
+        RTS
+SF_NX:  LDW  CUR,(P2+14)        ; next in chain
         JMP  SF_LP
 SF_NF:  LDA  #0
-        STA  FOUND
-        LPW1 SAVP                ; <- tierA: pointer load (next: RTS)
         RTS
 
-; SYMDEFVAL - define/update NAMBUF = VAL
-SYMDEFVAL:
-        TPA1L
-        STA  SAVP2
-        TPA1H
-        STA  SAVP2+1
-        JSR  SYMFIND
-        LDA  FOUND
+; SYMDEF - define or update NAMBUF = VAL. A new entry is appended to the table
+;   and pushed on the front of its chain. Preserves P1.
+SYMDEF: JSR  SYMFIND
         JNZ  SD_UPD
-        LDA  SYMP+1            ; table full?  A 14-byte entry must fit below SYMEND
-        LDB  #$BF             ; ($C000), so it is full when SYMP > SYMEND-14 = $BFF2.
-        CMP                   ; full 16-bit test (the old hi-byte-only check let an
-        JNC  SD_RM            ;   entry at $BFxx write up to 12 bytes past SYMEND).
-        JNZ  SD_FULL          ; SYMP hi > $BF -> full
-        LDA  #$F2            ; SYMP hi == $BF -> full iff SYMP lo > $F2
-        LDB  SYMP
-        CMP                   ; C=1 when $F2 >= SYMP lo (room)
-        JNC  SD_FULL          ; $F2 < SYMP lo -> full
-SD_RM:  LPW2 SYMP                ; <- tierA: pointer load (next: LDP1)
-        LDP1 #NAMBUF
-        LDA  #12
-        STA  DIG
-SD_NM:  LDA  (P1)+
-        STA  (P2)+
-        LDA  DIG
-        DEC
-        STA  DIG
-        JNZ  SD_NM
-        LDA  VAL
-        STA  (P2)+
-        LDA  VAL+1
-        STA  (P2)+
-        LDA  SYMP
-        LDB  #14
-        ADD
-        STA  SYMP
-        LDA  SYMP+1
-        JNC  SD_RET
-        INC
-        STA  SYMP+1
-SD_RET: LPW1 SAVP2                ; <- tierA: pointer load (next: RTS)
+        CMPW SYMP,#SYMEND-15    ; room for one more 16-byte entry?
+        JC   SD_FULL
+        LPW2 SYMP
+        STW  (P2+0),NAMBUF      ; name (12 bytes, NUL-padded)
+        STW  (P2+2),NAMBUF+2
+        STW  (P2+4),NAMBUF+4
+        STW  (P2+6),NAMBUF+6
+        STW  (P2+8),NAMBUF+8
+        STW  (P2+10),NAMBUF+10
+        STW  (P2+12),VAL        ; value
+        STW  (P2+14),HEAD0      ; next = the chain's old first entry
+        LPW2 HEADP
+        STW  (P2+0),SYMP        ; head = this entry
+        ADDW SYMP,#16
         RTS
-SD_UPD: LPW2 EADDR                ; <- tierA: pointer load (next: LDA)
-        LDA  VAL
-        STA  (P2)+
-        LDA  VAL+1
-        STA  (P2)
-        JMP  SD_RET
+SD_UPD: STW  (P2+12),VAL
+        RTS
 SD_FULL:LDP1 #ESYMS
         JMP  ASM_ERR
 
 ; =============================================================================
-; Expression evaluator -> VAL ; advances P1
+; Expressions
 ; =============================================================================
+; EVAL - expression at P1 -> VAL; P1 advanced past it.
+;   [<|>] term { (+|-) term }   with term = $hex | decimal | 'c' | symbol
 EVAL:   LDA  #0
         STA  HILO
         LDA  (P1)
@@ -1103,87 +961,54 @@ EVAL:   LDA  #0
         STA  HILO
         INP1
         JMP  EV_INIT
-EV_GT:  LDA  (P1)
-        LDB  #'>'
+EV_GT:  LDB  #'>'
         CMP
         JNZ  EV_INIT
         LDA  #2
         STA  HILO
         INP1
-EV_INIT:LDW VAL,#0                ; <- tierA: zero word (next: LDA)
+EV_INIT:LDW  VAL,#0
         LDA  #1
         STA  SIGN
-EV_TERM:JSR  RDTERM            ; term -> CNTL/CNTH
+EV_TERM:JSR  RDTERM             ; CNT = term
         LDA  SIGN
         JZ   EV_SUB
-        LDA  VAL               ; VAL += term
-        LDB  CNTL
-        ADD
-        STA  VAL
-        LDA  #0
-        JNC  EV_A1
-        LDA  #1
-EV_A1:  STA  TMP
-        LDA  VAL+1
-        LDB  CNTH
-        ADD
-        LDB  TMP
-        ADD
-        STA  VAL+1
+        ADDW VAL,CNT
         JMP  EV_OP
-EV_SUB: LDA  VAL               ; VAL -= term
-        LDB  CNTL
-        SUB
-        STA  VAL
-        LDA  #0
-        JC   EV_S1
-        LDA  #1
-EV_S1:  STA  TMP
-        LDA  VAL+1
-        LDB  CNTH
-        SUB
-        STA  VAL+1
-        LDA  TMP
-        JZ   EV_OP
-        LDA  VAL+1
-        LDB  #1
-        SUB
-        STA  VAL+1
+EV_SUB: SUBW VAL,CNT
 EV_OP:  LDA  (P1)
         LDB  #'+'
         CMP
         JZ   EV_PLUS
-        LDA  (P1)
         LDB  #'-'
         CMP
         JZ   EV_MINUS
-        JMP  EV_FIN
-EV_PLUS:LDA  #1
-        STA  SIGN
-        INP1
-        JMP  EV_TERM
-EV_MINUS:LDA #0
-        STA  SIGN
-        INP1
-        JMP  EV_TERM
-EV_FIN: LDA  HILO
+        LDA  HILO
         JZ   EV_DONE
         LDB  #1
         CMP
         JNZ  EV_HI
-        LDA  #0                ; low byte
+        LDA  #0                 ; '<' low byte
         STA  VAL+1
-        JMP  EV_DONE
-EV_HI:  LDA  VAL+1             ; high byte
+        RTS
+EV_HI:  LDA  VAL+1              ; '>' high byte
         STA  VAL
         LDA  #0
         STA  VAL+1
 EV_DONE:RTS
+EV_PLUS:LDA  #1
+        STA  SIGN
+        INP1
+        JMP  EV_TERM
+EV_MINUS:
+        LDA  #0
+        STA  SIGN
+        INP1
+        JMP  EV_TERM
 
-; RDTERM - one term at P1 -> CNTL/CNTH ; advances P1
-RDTERM: LDA  #0
-        STA  CNTL
-        STA  CNTH
+; RDTERM - one term at P1 -> CNT; P1 advanced. An unknown symbol is 0 in pass
+;   1 (a forward reference) and "?undefined" in pass 2.
+RDTERM: LDW  CNT,#0
         LDA  (P1)
         LDB  #'$'
         CMP
@@ -1191,661 +1016,417 @@ RDTERM: LDA  #0
         LDB  #TICK
         CMP
         JZ   RT_CHR
-        STA  TMP2
         LDB  #'0'
         CMP
-        JNC  RT_SYM            ; < '0'
-        LDA  #'9'
-        LDB  TMP2
+        JNC  RT_SYM             ; < '0'
+        LDB  #$3A
         CMP
-        JC   RT_DEC            ; '0'..'9'
+        JNC  RD_LP              ; '0'..'9': decimal
 RT_SYM: JSR  READTOK
-        JSR  SYMFIND           ; value -> CNTL/CNTH, FOUND
-        LDA  FOUND
+        JSR  SYMFIND            ; CNT = value when found
         JNZ  RT_RET
         LDA  PASS
-        JZ   RT_RET            ; pass1: undefined -> 0
+        JZ   RT_RET
         LDP1 #EUNDEF
         JMP  ASM_ERR
-RT_RET: RTS
 RT_HEX: INP1
 RH_LP:  LDA  (P1)
-        STA  TMP2
-        LDB  #'0'
-        CMP
-        JNC  RT_RET            ; not hex
-        LDA  #'9'
-        LDB  TMP2
-        CMP
-        JNC  RH_AZ             ; > '9' maybe A-F
-        LDA  TMP2              ; digit 0-9
-        LDB  #'0'
-        SUB
-        JMP  RH_ACC
-RH_AZ:  LDA  TMP2
-        JSR  UPCASE
-        STA  TMP2
-        LDB  #'A'
-        CMP
-        JNC  RT_RET            ; < 'A'
-        LDA  #'F'
-        LDB  TMP2
-        CMP
-        JNC  RT_RET            ; > 'F'
-        LDA  TMP2
-        LDB  #'A'
-        SUB
-        LDB  #10
-        ADD
-RH_ACC: STA  TMP               ; nibble
-        LDA  #4
-        STA  DIG
-RH_SH:  LDA  CNTL
-        SHL
-        STA  CNTL
-        LDA  CNTH
-        ROL
-        STA  CNTH
-        LDA  DIG
-        DEC
-        STA  DIG
-        JNZ  RH_SH
-        LDA  CNTL
+        JSR  HEXVAL
+        JNC  RT_RET             ; not a hex digit: done
+        STA  TMP
+        ADDW CNT,CNT            ; CNT = CNT*16 + nibble
+        ADDW CNT,CNT
+        ADDW CNT,CNT
+        ADDW CNT,CNT
+        LDA  CNT
         LDB  TMP
         OR
-        STA  CNTL
+        STA  CNT
         INP1
         JMP  RH_LP
-RT_DEC: LDA  (P1)
-        STA  TMP2
-        LDB  #'0'
-        CMP
-        JNC  RT_RET
-        LDA  #'9'
-        LDB  TMP2
-        CMP
-        JNC  RT_RET
-        JSR  MUL10
-        LDA  TMP2
-        LDB  #'0'
-        SUB
-        STA  TMP
-        LDA  CNTL
-        LDB  TMP
-        ADD
-        STA  CNTL
-        LDA  CNTH
-        JNC  RD_NC
-        INC
-        STA  CNTH
-RD_NC:  INP1
-        JMP  RT_DEC
-RT_CHR: INP1                    ; opening '
+RT_CHR: INP1                    ; 'c'
         LDA  (P1)
-        STA  CNTL
-        LDA  #0
-        STA  CNTH
+        STA  CNT
         INP1
-        LDA  (P1)               ; closing '
+        LDA  (P1)
         LDB  #TICK
         CMP
         JNZ  RT_RET
         INP1
-        RTS
+RT_RET: RTS
 
-; MUL10 - CNT = CNT * 10
-MUL10:  LDA  CNTL
-        STA  MTL
-        LDA  CNTH
-        STA  MTH
-        LDA  CNTL              ; CNT *= 2
-        SHL
-        STA  CNTL
-        LDA  CNTH
-        ROL
-        STA  CNTH
-        LDA  MTL               ; MT *= 8
-        SHL
-        STA  MTL
-        LDA  MTH
-        ROL
-        STA  MTH
-        LDA  MTL
-        SHL
-        STA  MTL
-        LDA  MTH
-        ROL
-        STA  MTH
-        LDA  MTL
-        SHL
-        STA  MTL
-        LDA  MTH
-        ROL
-        STA  MTH
-        LDA  CNTL              ; CNT = CNT*2 + MT(=orig*8)
-        LDB  MTL
-        ADD
-        STA  CNTL
-        LDA  #0
-        JNC  M_NC
-        LDA  #1
-M_NC:   STA  TMP
-        LDA  CNTH
-        LDB  MTH
-        ADD
+; RDDEC - decimal digits at P1 -> CNT (16-bit, wraps); P1 advanced.
+RDDEC:  LDW  CNT,#0
+RD_LP:  LDA  (P1)
+        LDB  #'0'
+        CMP
+        JNC  RT_RET
+        LDB  #$3A
+        CMP
+        JC   RT_RET             ; > '9'
+        LDB  #'0'
+        SUB
+        STA  TMP                ; the digit
+        ADDW CNT,CNT            ; x2
+        MOVW TERM,CNT
+        ADDW CNT,CNT            ; x4
+        ADDW CNT,CNT            ; x8
+        ADDW CNT,TERM           ; x10
+        LDA  CNT
         LDB  TMP
         ADD
-        STA  CNTH
+        STA  CNT
+        JNC  RD_NC
+        LDA  CNT+1
+        INC
+        STA  CNT+1
+RD_NC:  INP1
+        JMP  RD_LP
+
+; HEXVAL - A = character -> A = its hex value with C=1; C=0 if not a hex digit.
+HEXVAL: LDB  #'0'
+        CMP
+        JNC  HV_NO              ; < '0'
+        LDB  #$3A
+        CMP
+        JNC  HV_DIG             ; '0'..'9'
+        LDB  #'a'
+        CMP
+        JNC  HV_UP              ; already upper case
+        LDB  #$20
+        SUB                     ; a..z -> A..Z
+HV_UP:  LDB  #'A'
+        CMP
+        JNC  HV_NO
+        LDB  #'G'
+        CMP
+        JC   HV_NO              ; > 'F'
+        LDB  #$37               ; 'A' - 10
+        SUB                     ; leaves C=1 (no borrow)
+        RTS
+HV_DIG: LDB  #'0'
+        SUB                     ; leaves C=1
+        RTS
+HV_NO:  CLC
         RTS
 
 ; =============================================================================
-; EMIT - append A to output at PC-ORGBASE (pass2); advance PC; track HIWAT
+; Tokens
 ; =============================================================================
-; EMIT - append byte A to the output. Pass 1 only advances PC and tracks HIWAT;
-; pass 2 streams the byte to disk, zero-padding any gap left by a forward .org.
-; P1 (the line cursor) is saved for the whole routine, so OUTBYTE/FLUSHOUT may
-; use it freely.
+; READTOK - identifier at P1 -> NAMBUF (as written) and MNBUF (upcased), both
+;   NUL-padded to 16; the first 12 characters are kept, the rest skipped.
+READTOK:LDW  NAMBUF,#0          ; clear both buffers (32 bytes)
+        LDW  NAMBUF+2,#0
+        LDW  NAMBUF+4,#0
+        LDW  NAMBUF+6,#0
+        LDW  NAMBUF+8,#0
+        LDW  NAMBUF+10,#0
+        LDW  NAMBUF+12,#0
+        LDW  NAMBUF+14,#0
+        LDW  MNBUF,#0
+        LDW  MNBUF+2,#0
+        LDW  MNBUF+4,#0
+        LDW  MNBUF+6,#0
+        LDW  MNBUF+8,#0
+        LDW  MNBUF+10,#0
+        LDW  MNBUF+12,#0
+        LDW  MNBUF+14,#0
+        LDP2 #NAMBUF
+        LDA  #12
+        STA  DIG
+RK_LP:  LDA  (P1)
+        JSR  ISIDCH
+        JNZ  RK_DONE
+        LDA  DIG
+        JZ   RK_NEXT            ; 12 stored: skip the rest of the name
+        DEC
+        STA  DIG
+        LDA  (P1)
+        STA  (P2)               ; as written ...
+        JSR  UPCASE
+        STA  (P2+16)            ; ... and upcased, 16 bytes along
+        INP2
+RK_NEXT:INP1
+        JMP  RK_LP
+RK_DONE:RTS
+
+; ISIDCH - Z=1 if A is an identifier character [A-Za-z0-9_.]. A clobbered.
+ISIDCH: LDB  #'.'
+        CMP
+        JZ   IC_YES
+        LDB  #'_'
+        CMP
+        JZ   IC_YES
+        LDB  #'0'
+        CMP
+        JNC  IC_NO
+        LDB  #$3A
+        CMP
+        JNC  IC_YES             ; '0'..'9'
+        LDB  #'A'
+        CMP
+        JNC  IC_NO
+        LDB  #$5B
+        CMP
+        JNC  IC_YES             ; 'A'..'Z'
+        LDB  #'a'
+        CMP
+        JNC  IC_NO
+        LDB  #$7B
+        CMP
+        JNC  IC_YES             ; 'a'..'z'
+IC_NO:  LDA  #1
+        RTS
+IC_YES: LDA  #0
+        RTS
+
+; UPCASE - A -> upper case if 'a'..'z', else unchanged.
+UPCASE: LDB  #'a'
+        CMP
+        JNC  UC_R
+        LDB  #$7B
+        CMP
+        JC   UC_R
+        LDB  #$20
+        SUB
+UC_R:   RTS
+
+; SKIPSP - advance P1 over blanks and tabs.
+SKIPSP: LDA  (P1)
+        LDB  #' '
+        CMP
+        JZ   SK_A
+        LDB  #$09
+        CMP
+        JZ   SK_A
+        RTS
+SK_A:   INP1
+        JMP  SKIPSP
+
+; MATCH - does the text at P1 start with the NUL-terminated string at P2?
+;   Z=1 yes (P1 just past it) / Z=0 no.
+MATCH:  LDA  (P2)+
+        JZ   MA_RET             ; pattern exhausted: match
+        STA  TMP
+        LDA  (P1)+
+        LDB  TMP
+        CMP
+        JZ   MATCH
+MA_RET: RTS
+
+; =============================================================================
+; Output
+; =============================================================================
+; EMIT - emit byte A: pass 1 only advances PC; pass 2 also writes it to the
+;   output stream. Preserves P1 (FPUTB clobbers it).
 EMIT:   STA  SB2
-        TPA1L
-        STA  SAVPE
-        TPA1H
-        STA  SAVPE+1
         LDA  PASS
         JZ   EM_ADV
-        LDA  PC                 ; off = PC - ORGBASE
-        LDB  ORGBASE
-        SUB
-        STA  OFFL
-        LDA  #0
-        JC   EM_NB
-        LDA  #1
-EM_NB:  STA  TMP
-        LDA  PC+1
-        LDB  ORGBASE+1
-        SUB
-        LDB  TMP
-        SUB
-        STA  OFFH
-EM_PAD: LDA  OUTPOS             ; while OUTPOS != off, pad a zero
-        LDB  OFFL
-        CMP
-        JNZ  EM_PCHK
-        LDA  OUTPOS+1
-        LDB  OFFH
-        CMP
-        JZ   EM_PUT             ; OUTPOS == off -> emit the real byte
-EM_PCHK:LDA  OFFH               ; off < OUTPOS would loop forever -> backward .org
-        LDB  OUTPOS+1
-        CMP                     ; C = OFFH >= OUTPOS+1
-        JNZ  EM_PHI
-        LDA  OFFL
-        LDB  OUTPOS
-        CMP                     ; high equal -> compare low: C = OFFL >= OUTPOS
-        JNC  EM_BACK
-        JMP  EM_PADZ
-EM_PHI: JNC  EM_BACK            ; OFFH < OUTPOS+1 -> off < OUTPOS
-EM_PADZ:LDA  #0
-        JSR  EMITB
-        JMP  EM_PAD
-EM_PUT: LDA  SB2
-        JSR  EMITB
-EM_ADV: INCW PC                ; <- tierA: 16-bit INCW chain, skip label EM_HW dropped (next: LDA)
-        LDA  PC+1               ; HIWAT = max(HIWAT, PC)
-        LDB  HIWAT+1
-        CMP
-        JNZ  EM_HD
-        LDA  PC
-        LDB  HIWAT
-        CMP
-EM_HD:  JC   EM_SET
-        JMP  EM_RET
-EM_SET: MOVW HIWAT,PC                ; <- tierA: word move (next: LDA)
-EM_RET: LPW1 SAVPE                ; <- tierA: pointer load (next: RTS)
+        TPA1L
+        STA  SAVP
+        TPA1H
+        STA  SAVP+1
+        LDA  SB2
+        JSR  FPUTB
+        LPW1 SAVP
+EM_ADV: INCW PC
         RTS
-EM_BACK:LDP1 #EBACK
-        JMP  ASM_ERR
 
-; EMITB - emit one output byte through the BIOS write stream (FPUTB) and track
-; OUTPOS so EMIT can zero-pad forward .org gaps. FPUTB handles the sector buffer,
-; flushing, and the running file length itself.
-EMITB:  JSR  FPUTB
-        LDA  OUTPOS
-        LDB  #1
-        ADD
-        STA  OUTPOS
-        LDA  OUTPOS+1
-        JNC  EB_1
-        INC
-        STA  OUTPOS+1
-EB_1:   RTS
-
-; OUTINIT - begin streamed output (BIOS write stream at the volume free pointer).
-; OUTINIT - resolve the output path's parent dir + leaf NOW, BEFORE opening the
-;   write stream (a FRESOLVE while the stream is live corrupts its pending SBUF /
-;   length). Stash them; FINISHOUT restores them for FCLOSE.
+; OUTINIT - resolve the output path's parent dir + leaf NOW, before the write
+;   stream is opened (a FRESOLVE while it is live would disturb its state),
+;   stash them for FINISHOUT, delete any old file of that name, open the stream.
 OUTINIT:LDP1 #OUTPATH
-        JSR  FRESOLVE          ; DIRLBA = parent (exists), FNAME = leaf (may be new)
-        LDA  DIRLBA
-        STA  OUTDIR
+        JSR  FRESOLVE           ; parent must exist; the leaf may be new
+        MOVW OUTDIR,DIRLBA      ; DIRLBA + DIRN
         LDA  DIRLBA1
-        STA  OUTDIR+1
-        LDA  DIRN
         STA  OUTDIR+2
-        LDP1 #FNAME            ; OUTFN <- FNAME (12)
-        LDP2 #OUTFN
-        LDA  #12
-        STA  DIG
-OI_FN:  LDA  (P1)+
-        STA  (P2)+
-        LDA  DIG
-        DEC
-        STA  DIG
-        JNZ  OI_FN
-        ; overwrite semantics: tombstone any existing output file BEFORE opening
-        ; the write stream (FDELETE scans the directory via SBUF, which the open
-        ; stream also uses — so it must run first, not between FWOPEN and FCLOSE).
-        ; DIRLBA/FNAME still hold the FRESOLVE'd parent + leaf. C=1 (absent) is fine.
-        JSR  FDELETE
-        JSR  FWOPEN
-        LDW OUTPOS,#0                ; <- tierA: zero word (next: RTS)
-        RTS
+        MOVW OUTFN,FNAME        ; the leaf (12)
+        MOVW OUTFN+2,FNAME+2
+        MOVW OUTFN+4,FNAME+4
+        MOVW OUTFN+6,FNAME+6
+        MOVW OUTFN+8,FNAME+8
+        MOVW OUTFN+10,FNAME+10
+        JSR  FDELETE            ; overwrite semantics (C=1 "absent" is fine)
+        JMP  FWOPEN
 
-; FINISHOUT - register the assembled file (FCLOSE flushes + writes the entry +
-; bumps the free pointer; its length comes from the bytes written). C=1 if full.
+; FINISHOUT - restore the stashed dir + leaf and FCLOSE: flushes, writes the
+;   directory entry (length = bytes written), bumps the free pointer. C=1 full.
 FINISHOUT:
-        LDA  OUTDIR            ; restore the stashed output dir + leaf (pass 2 / a
-        STA  DIRLBA            ;   ;#use moved DIRLBA/FNAME); no FRESOLVE here, so the
-        LDA  OUTDIR+1          ;   live write stream is untouched. FCLOSE flushes and
-        STA  DIRLBA1           ;   registers FNAME in DIRLBA, then reverts to root.
+        MOVW DIRLBA,OUTDIR
         LDA  OUTDIR+2
-        STA  DIRN
-        LDP1 #OUTFN
-        LDP2 #FNAME
-        LDA  #12
-        STA  DIG
-FO_FN:  LDA  (P1)+
-        STA  (P2)+
-        LDA  DIG
-        DEC
-        STA  DIG
-        JNZ  FO_FN
+        STA  DIRLBA1
+        MOVW FNAME,OUTFN
+        MOVW FNAME+2,OUTFN+2
+        MOVW FNAME+4,OUTFN+4
+        MOVW FNAME+6,OUTFN+6
+        MOVW FNAME+8,OUTFN+8
+        MOVW FNAME+10,OUTFN+10
         JMP  FCLOSE
 
 ; =============================================================================
-; Source load + scanning helpers
+; Source input: lines over the BIOS read stream, plus the ;#use / .include
+; appends (read after the source is exhausted, so their code lands AFTER the
+; program body -- exactly like the host `cat SRC lib_*.inc`).
 ; =============================================================================
-; ---- source reader: a line at a time, over the BIOS read stream ------------
-; The byte-level streaming (sector reads, refill, EOF) lives in the BIOS now
-; (FOPEN/FGETB); the assembler just re-opens the source each pass and assembles
-; lines into LINEBUF. SECBUF is the 512-byte buffer FOPEN/FGETB use.
-; PASSINIT - (re)open the source for a pass. FNAME is still the source name
-;            (SETFNOUT only runs at FINISHOUT, after both passes).
+; PASSINIT - (re)open the source for a pass and forget last pass's includes.
 PASSINIT:
-        JSR  RESTSRC           ; FNAME + dir context <- source (undo any ;#use)
+        JSR  RESTSRC            ; FNAME + dir context <- the source
         LDA  #0
-        STA  USECOUNT          ; re-scan ;#use directives fresh each pass
+        STA  USECOUNT
         STA  USEDONE
-        STA  INCHAVE           ; ...and re-scan .include fresh each pass
+        STA  INCHAVE
         STA  INCDONE
         LDP1 #SECBUF
-        JSR  FOPEN             ; source existence already checked at startup
-        LDA  #0
-        STA  LEOF
-        RTS
-; NEXTLINE - read one line into LINEBUF (NUL-terminated, newline stripped).
-;            LEOF=1 when the source is exhausted.
+        JMP  FOPEN              ; existence was checked at startup
+
+; NEXTLINE - LINEBUF <- the next line (NUL-terminated, newline stripped, at
+;   most 127 chars kept). LEOF=1 when the source and its includes are exhausted.
+;   ;#use / .include lines are recorded here and skipped.
 NEXTLINE:
         LDP2 #LINEBUF
-        LDA  #0
-        STA  LCNT
 NL_LP:  JSR  SRCGET
-        JC   NL_EOF           ; C=1 -> end of file
-        STA  SB
+        JC   NL_EOF
         LDB  #LF
         CMP
         JZ   NL_DONE
         LDB  #CR
         CMP
-        JZ   NL_LP            ; drop CR (CRLF)
-        LDA  LCNT
+        JZ   NL_LP              ; CR of a CRLF
+        STA  (P2)               ; store; only advance while the line has room
+        TPA2L                   ;   (LINEBUF is page-aligned: low byte = length)
         LDB  #127
         CMP
-        JC   NL_LP            ; line full -> consume but don't store
-        LDA  SB
-        STA  (P2)+
-        LDA  LCNT
-        INC
-        STA  LCNT
+        JC   NL_LP
+        INP2
         JMP  NL_LP
-NL_EOF: LDA  LCNT             ; EOF: process a final line with no trailing newline
-        JZ   NL_END
-NL_DONE:LDA  #0
+NL_EOF: TPA2L
+        JZ   NL_END             ; nothing read: the end
+NL_DONE:LDA  #0                 ; a last line without a newline still counts
         STA  (P2)
-        LDA  #0
         STA  LEOF
-        JSR  CHKUSE           ; ";#use NAME"? -> splice the include, read next line
+        JSR  CHKUSE
         JC   NEXTLINE
-        JSR  CHKINC           ; '.include "path"'? -> record it, read next line
+        JSR  CHKINC
         JC   NEXTLINE
         RTS
 NL_END: LDA  #1
         STA  LEOF
         RTS
 
-; ---- ;#use include machinery (sequential append) ----------------------------
-; SRCGET - like FGETB, but at a file's EOF opens the next recorded ;#use include
-;   (over SECBUF — the source is done) and keeps reading. C=1 only when the
-;   source AND all its includes are exhausted.
+; SRCGET - FGETB, but at a file's EOF opens the next recorded include and
+;   keeps reading. C=1 only when the source AND all includes are exhausted.
+;   Preserves P2 (NEXTLINE's line cursor).
 SRCGET: JSR  FGETB
-        JNC  SG_RET           ; got a byte (FGETB preserves P2)
-        TPA2L                 ; EOF: NEXTUSE clobbers P2, but the caller (NEXTLINE)
-        STA  P2SAV            ; uses P2 as its LINEBUF write cursor — save/restore it
+        JNC  SG_RET
+        TPA2L
+        STA  P2SAV
         TPA2H
         STA  P2SAV+1
-        JSR  NEXTUSE          ; open the next include?
-        JC   SG_EOF           ; test carry BEFORE the P2 restore can disturb it
-        JSR  RESTP2           ; opened one: restore P2 and read from it
+        JSR  NEXTUSE
+        JC   SG_EOF
+        LPW2 P2SAV
         JMP  SRCGET
-SG_EOF: JSR  RESTP2           ; none left: restore P2, re-assert EOF
+SG_EOF: LPW2 P2SAV
         SEC
 SG_RET: RTS
-RESTP2: LPW2 P2SAV                ; <- tierA: pointer load (next: RTS)
-        RTS
 
-; NEXTUSE - if a recorded include is still unread, open /lib/<name>.inc on SECBUF
-;   and return C=0 (advancing USEDONE); else C=1.
+; NEXTUSE - open the next unread include (the ;#use names in order, then the
+;   .include) on INCBUF: C=0 opened / C=1 none left.
 NEXTUSE:LDA  USEDONE
         LDB  USECOUNT
-        CMP                   ; C=1 if USEDONE >= USECOUNT
-        JC   NU_INC           ; ;#use exhausted -> try the .include
-        LDA  USEDONE          ; P1 = USELIST + USEDONE*12  (page-local)
-        JSR  SLOTLO
+        CMP
+        JC   NU_INC             ; all ;#use done -> the .include
+        JSR  USESLOT            ; A = low byte of USELIST[USEDONE]
         TAP1L
         LDA  #>USELIST
         TAP1H
-        JSR  BUILDINC         ; UPATH = "/lib/<name>.inc"
+        JSR  BUILDINC           ; UPATH = "/lib/NAME.inc"
         LDA  USEDONE
         INC
         STA  USEDONE
         LDP1 #UPATH
-        JSR  FRESOLVE
-        JC   NU_ERR
-        LDP1 #INCBUF          ; include streams on its own buffer
-        JSR  FOPEN
-        JC   NU_ERR
-        CLC
-        RTS
-NU_INC: LDA  INCDONE          ; a recorded .include still unopened?
-        LDB  INCHAVE
-        CMP                   ; C=1 if INCDONE >= INCHAVE (none left)
-        JC   NU_END
-        LDA  #1
-        STA  INCDONE
-        LDP1 #INCPATH         ; the pre-resolved absolute include path
-        JSR  FRESOLVE
+NU_OPEN:JSR  FRESOLVE
         JC   NU_ERR
         LDP1 #INCBUF
         JSR  FOPEN
         JC   NU_ERR
         CLC
         RTS
+NU_INC: LDA  INCDONE
+        LDB  INCHAVE
+        CMP
+        JC   NU_END             ; none recorded, or already opened
+        LDA  #1
+        STA  INCDONE
+        LDP1 #INCPATH
+        JMP  NU_OPEN
 NU_END: SEC
         RTS
 NU_ERR: LDP1 #EUSE
         JMP  ASM_ERR
 
-; SLOTLO - A = index -> A = low byte of USELIST + index*12 (all within one page).
-SLOTLO: STA  UCNT
-        LDA  #0
-        STA  TMP
-SL_LP:  LDA  UCNT
-        JZ   SL_D
-        LDA  TMP
-        LDB  #12
-        ADD
-        STA  TMP
-        LDA  UCNT
-        DEC
-        STA  UCNT
-        JMP  SL_LP
-SL_D:   LDA  #<USELIST
-        LDB  TMP
+; USESLOT - A = index -> A = low byte of USELIST + index*16 (one page).
+USESLOT:SHL
+        SHL
+        SHL
+        SHL
+        LDB  #<USELIST
         ADD
         RTS
 
-; BUILDINC - P1 = NUL-terminated name -> UPATH = "/lib/NAME.inc".
-BUILDINC:LDP2 #UPATH
-        LDA  #'/'
-        STA  (P2)+
-        LDA  #'l'
-        STA  (P2)+
-        LDA  #'i'
-        STA  (P2)+
-        LDA  #'b'
-        STA  (P2)+
-        LDA  #'/'
-        STA  (P2)+
-BI_CP:  LDA  (P1)
+; BUILDINC - UPATH = "/lib/" + name at P1 + ".inc".
+BUILDINC:
+        MOVW UPATH,SLIB         ; "/lib/"
+        MOVW UPATH+2,SLIB+2
+        LDA  SLIB+4
+        STA  UPATH+4
+        LDP2 #UPATH+5
+BI_CP:  LDA  (P1)+
         JZ   BI_EXT
         STA  (P2)+
-        INP1
         JMP  BI_CP
-BI_EXT: LDA  #'.'
-        STA  (P2)+
-        LDA  #'i'
-        STA  (P2)+
-        LDA  #'n'
-        STA  (P2)+
-        LDA  #'c'
-        STA  (P2)+
+BI_EXT: STW  (P2+0),SINC        ; ".inc" + NUL
+        STW  (P2+2),SINC+2
         LDA  #0
-        STA  (P2)
+        STA  (P2+4)
         RTS
 
-; CHKUSE - if LINEBUF is ";#use NAME", record the include and return C=1 (so the
-;   line is skipped); else C=0. Includes are read at the source's EOF (NEXTUSE).
+; CHKUSE - LINEBUF = ";#use NAME"? record the name, C=1 (skip the line); else C=0.
 CHKUSE: LDP1 #LINEBUF
-CU_SK:  LDA  (P1)            ; skip leading spaces / tabs
-        LDB  #' '
-        CMP
-        JZ   CU_SKA
-        LDB  #$09
-        CMP
-        JNZ  CU_S1
-CU_SKA: INP1
-        JMP  CU_SK
-CU_S1:  LDB  #59             ; ';'  (literal, not written '  ;  ' — that starts a comment)
-        CMP
-        JNZ  CU_NO
-        INP1
-        LDA  (P1)
-        LDB  #'#'
-        CMP
-        JNZ  CU_NO
-        INP1
-        LDA  (P1)
-        LDB  #'u'
-        CMP
-        JNZ  CU_NO
-        INP1
-        LDA  (P1)
-        LDB  #'s'
-        CMP
-        JNZ  CU_NO
-        INP1
-        LDA  (P1)
-        LDB  #'e'
-        CMP
-        JNZ  CU_NO
-        INP1
-        LDA  (P1)            ; require whitespace after "use"
+        JSR  SKIPSP
+        LDP2 #SUSE
+        JSR  MATCH
+        JNZ  CK_NO
+        LDA  (P1)               ; a blank must follow "use"
         LDB  #' '
         CMP
         JZ   CU_SP
         LDB  #$09
         CMP
-        JNZ  CU_NO
-CU_SP:  LDA  (P1)            ; skip spaces to the NAME
-        LDB  #' '
-        CMP
-        JZ   CU_SPA
-        LDB  #$09
-        CMP
-        JNZ  CU_GO
-CU_SPA: INP1
-        JMP  CU_SP
-CU_GO:  LDA  (P1)            ; P1 at NAME; empty -> ignore
-        JZ   CU_NO
+        JNZ  CK_NO
+CU_SP:  JSR  SKIPSP
+        LDA  (P1)               ; the NAME; empty -> ignore
+        JZ   CK_NO
         LDB  #CR
         CMP
-        JZ   CU_NO
-        JSR  ADDUSE          ; record the name (P1 = NAME cursor)
+        JZ   CK_NO
+        JSR  ADDUSE
         SEC
         RTS
-CU_NO:  CLC
+CK_NO:  CLC
         RTS
 
-; CHKINC - if LINEBUF is '.include "path"', resolve it (relative to the source's
-;   directory) into INCPATH, mark INCHAVE, and return C=1 (the line is skipped);
-;   else C=0. One .include per file; opened at the source's EOF (NU_INC). Since
-;   equates are order-independent (two-pass), EOF-append matches an inline splice.
-CHKINC: LDA  INCHAVE          ; only one .include per file
-        JNZ  CI_NO
-        LDP1 #LINEBUF
-CI_SK:  LDA  (P1)             ; skip leading spaces / tabs
-        LDB  #' '
-        CMP
-        JZ   CI_SKA
-        LDB  #$09
-        CMP
-        JNZ  CI_M
-CI_SKA: INP1
-        JMP  CI_SK
-CI_M:   LDA  (P1)             ; match ".include"
-        LDB  #'.'
-        CMP
-        JNZ  CI_NO
-        INP1
-        LDA  (P1)
-        LDB  #'i'
-        CMP
-        JNZ  CI_NO
-        INP1
-        LDA  (P1)
-        LDB  #'n'
-        CMP
-        JNZ  CI_NO
-        INP1
-        LDA  (P1)
-        LDB  #'c'
-        CMP
-        JNZ  CI_NO
-        INP1
-        LDA  (P1)
-        LDB  #'l'
-        CMP
-        JNZ  CI_NO
-        INP1
-        LDA  (P1)
-        LDB  #'u'
-        CMP
-        JNZ  CI_NO
-        INP1
-        LDA  (P1)
-        LDB  #'d'
-        CMP
-        JNZ  CI_NO
-        INP1
-        LDA  (P1)
-        LDB  #'e'
-        CMP
-        JNZ  CI_NO
-        INP1
-CI_SP:  LDA  (P1)             ; skip spaces to the opening quote
-        LDB  #' '
-        CMP
-        JZ   CI_SPA
-        LDB  #$09
-        CMP
-        JNZ  CI_Q
-CI_SPA: INP1
-        JMP  CI_SP
-CI_Q:   LDA  (P1)             ; expect a '"'
-        LDB  #34
-        CMP
-        JNZ  CI_NO
-        INP1                  ; P1 at the path text
-        TPA1L                 ; save the path cursor (CI_PREFIX uses P1)
-        STA  PATHSAV
-        TPA1H
-        STA  PATHSAV+1
-        LDA  (P1)             ; absolute path -> INCPATH from the start
-        LDB  #'/'
-        CMP
-        JZ   CI_ABS
-        JSR  CI_PREFIX        ; else INCPATH = the source dir; P2 = append point
-        JMP  CI_APP
-CI_ABS: LDP2 #INCPATH                ; <- tierA: pointer constant (next: LDA)
-CI_APP: LPW1 PATHSAV                ; <- tierA: pointer load (next: LDA)
-CI_CP:  LDA  (P1)             ; append the path until '"' / NUL
-        JZ   CI_CPD
-        LDB  #34
-        CMP
-        JZ   CI_CPD
-        STA  (P2)+
-        INP1
-        JMP  CI_CP
-CI_CPD: LDA  #0
-        STA  (P2)
-        LDA  #1
-        STA  INCHAVE
-        SEC
-        RTS
-CI_NO:  CLC
-        RTS
-
-; CI_PREFIX - INCPATH = SRCPATH truncated after its last '/'; leaves P2 at the
-;   append point (just past that '/'). Copies all of SRCPATH, tracking LSPOS.
-CI_PREFIX: LDP1 #SRCPATH
-        LDA  #<INCPATH
-        TAP2L
-        STA  LSPOS
-        LDA  #>INCPATH
-        TAP2H
-        STA  LSPOS+1
-CP_LP:  LDA  (P1)
-        JZ   CP_DONE
-        STA  (P2)
-        LDB  #'/'
-        CMP
-        JNZ  CP_NS
-        TPA2L                 ; LSPOS = P2 + 1 (just past this '/')
-        LDB  #1
-        ADD
-        STA  LSPOS
-        TPA2H
-        JNC  CP_LS
-        INC
-CP_LS:  STA  LSPOS+1
-CP_NS:  INP1
-        INP2
-        JMP  CP_LP
-CP_DONE:LPW2 LSPOS                ; <- tierA: pointer load (next: RTS)
-        RTS
-
-; ADDUSE - P1 = NAME cursor in LINEBUF. Append the name (NUL-terminated) to
-;   USELIST[USECOUNT] and bump USECOUNT (capped at 4). Duplicates are not
-;   dedup'd — each command declares each ;#use once (matches the shipped set).
+; ADDUSE - append the name at P1 (to a blank / CR / NUL) to USELIST[USECOUNT];
+;   at most 4 are kept.
 ADDUSE: LDA  USECOUNT
         LDB  #4
         CMP
-        JC   AU_RET          ; USECOUNT >= 4 -> ignore extra (won't happen)
-        LDA  USECOUNT        ; P2 = USELIST + USECOUNT*12
-        JSR  SLOTLO
+        JC   AU_RET
+        JSR  USESLOT
         TAP2L
         LDA  #>USELIST
         TAP2H
-AU_CP:  LDA  (P1)            ; copy name up to a delimiter
+AU_CP:  LDA  (P1)
         JZ   AU_END
         LDB  #' '
         CMP
@@ -1860,276 +1441,150 @@ AU_CP:  LDA  (P1)            ; copy name up to a delimiter
         INP1
         JMP  AU_CP
 AU_END: LDA  #0
-        STA  (P2)            ; NUL-terminate the slot
+        STA  (P2)
         LDA  USECOUNT
         INC
         STA  USECOUNT
 AU_RET: RTS
 
-; SAVESRC / RESTSRC - the source's FNAME + dir context, so PASSINIT re-opens the
-;   source each pass regardless of a ;#use having re-resolved FNAME/DIRLBA.
-SAVESRC:LDP1 #FNAME
-        LDP2 #SRCFN
-        LDA  #12
-        STA  UCNT
-SR_LP:  LDA  (P1)+
+; CHKINC - LINEBUF = '.include "path"'? resolve the path (relative to the
+;   source's directory) into INCPATH, C=1 (skip the line); else C=0. One per file.
+CHKINC: LDA  INCHAVE
+        JNZ  CK_NO
+        LDP1 #LINEBUF
+        JSR  SKIPSP
+        LDP2 #SINCL
+        JSR  MATCH
+        JNZ  CK_NO
+        JSR  SKIPSP
+        LDA  (P1)
+        LDB  #QUOTE
+        CMP
+        JNZ  CK_NO
+        INP1                    ; the path text
+        LDA  (P1)
+        LDB  #'/'
+        CMP
+        JZ   CI_ABS             ; absolute: INCPATH from its start
+        TPA1L
+        STA  PATHSAV
+        TPA1H
+        STA  PATHSAV+1
+        JSR  CI_PREFIX          ; INCPATH = the source's dir; P2 = append point
+        LPW1 PATHSAV
+        JMP  CI_CP
+CI_ABS: LDP2 #INCPATH
+CI_CP:  LDA  (P1)+              ; append the path up to the closing quote
+        JZ   CI_END
+        LDB  #QUOTE
+        CMP
+        JZ   CI_END
         STA  (P2)+
-        LDA  UCNT
-        DEC
-        STA  UCNT
-        JNZ  SR_LP
-        LDA  DIRLBA
-        STA  SRCDIR
+        JMP  CI_CP
+CI_END: LDA  #0
+        STA  (P2)
+        LDA  #1
+        STA  INCHAVE
+        SEC
+        RTS
+
+; CI_PREFIX - INCPATH = SRCPATH up to and including its last '/'; P2 = the
+;   position after it.
+CI_PREFIX:
+        LDP1 #SRCPATH
+        LDP2 #INCPATH
+        LDW  LSPOS,#INCPATH
+CP_LP:  LDA  (P1)+
+        JZ   CP_DONE
+        STA  (P2)+
+        LDB  #'/'
+        CMP
+        JNZ  CP_LP
+        LEAW LSPOS,(P2+0)       ; just past this '/'
+        JMP  CP_LP
+CP_DONE:LPW2 LSPOS
+        RTS
+
+; SAVESRC / RESTSRC - the source's FNAME + directory context, so PASSINIT can
+;   re-open it each pass whatever a ;#use / FFIND did to the BIOS state.
+SAVESRC:MOVW SRCFN,FNAME
+        MOVW SRCFN+2,FNAME+2
+        MOVW SRCFN+4,FNAME+4
+        MOVW SRCFN+6,FNAME+6
+        MOVW SRCFN+8,FNAME+8
+        MOVW SRCFN+10,FNAME+10
+        MOVW SRCDIR,DIRLBA      ; DIRLBA + DIRN
         LDA  DIRLBA1
-        STA  SRCDIR+1
-        LDA  DIRN
         STA  SRCDIR+2
         RTS
-RESTSRC:LDP1 #SRCFN
-        LDP2 #FNAME
-        LDA  #12
-        STA  UCNT
-RT_LP:  LDA  (P1)+
-        STA  (P2)+
-        LDA  UCNT
-        DEC
-        STA  UCNT
-        JNZ  RT_LP
-        LDA  SRCDIR
-        STA  DIRLBA
-        LDA  SRCDIR+1
-        STA  DIRLBA1
+RESTSRC:MOVW FNAME,SRCFN
+        MOVW FNAME+2,SRCFN+2
+        MOVW FNAME+4,SRCFN+4
+        MOVW FNAME+6,SRCFN+6
+        MOVW FNAME+8,SRCFN+8
+        MOVW FNAME+10,SRCFN+10
+        MOVW DIRLBA,SRCDIR
         LDA  SRCDIR+2
-        STA  DIRN
-        RTS
-
-; SKIPSP - advance P1 over spaces and tabs; returns with (P1) on the first
-;   non-blank (or the terminating NUL). Only P1 moves; A/B are scratch.
-SKIPSP: LDA  (P1)
-        LDB  #' '
-        CMP
-        JZ   SK_A
-        LDB  #$09
-        CMP
-        JZ   SK_A
-        RTS
-SK_A:   INP1
-        JMP  SKIPSP
-
-; SKIPTOEOL - advance P1 to the end of the line (stops on NUL, CR, or LF).
-SKIPTOEOL:
-        LDA  (P1)
-        JZ   STE_D
-        LDB  #CR
-        CMP
-        JZ   STE_D
-        LDB  #LF
-        CMP
-        JZ   STE_D
-        INP1
-        JMP  SKIPTOEOL
-STE_D:  RTS
-
-; EATNL - consume one optional CR then one optional LF at P1 (a CRLF or bare LF).
-EATNL:  LDA  (P1)
-        LDB  #CR
-        CMP
-        JNZ  EN_1
-        INP1
-EN_1:   LDA  (P1)
-        LDB  #LF
-        CMP
-        JNZ  EN_2
-        INP1
-EN_2:   RTS
-
-; READTOK - read identifier at P1 into NAMBUF (as-is) + MNBUF (upcased); advance
-READTOK:LDP2 #NAMBUF
-        LDA  #16
-        STA  TMP2
-RT_Z1:  LDA  #0
-        STA  (P2)+
-        LDA  TMP2
-        DEC
-        STA  TMP2
-        JNZ  RT_Z1
-        LDP2 #MNBUF
-        LDA  #8
-        STA  TMP2
-RT_Z2:  LDA  #0
-        STA  (P2)+
-        LDA  TMP2
-        DEC
-        STA  TMP2
-        JNZ  RT_Z2
-        LDA  #0
-        STA  TMP                ; index
-RK_LP:  LDA  (P1)
-        JSR  ISIDCH
-        JNZ  RK_DONE
-        LDA  TMP
-        LDB  #12
-        CMP
-        JC   RK_NEXT            ; index >= 12: stop storing
-        LDA  #<NAMBUF
-        LDB  TMP
-        ADD
-        TAP2L
-        LDA  #>NAMBUF
-        JNC  RK_N1
-        INC
-RK_N1:  TAP2H
-        LDA  (P1)
-        STA  (P2)
-        LDA  TMP
-        LDB  #8
-        CMP
-        JC   RK_NEXT
-        LDA  #<MNBUF
-        LDB  TMP
-        ADD
-        TAP2L
-        LDA  #>MNBUF
-        JNC  RK_M1
-        INC
-RK_M1:  TAP2H
-        LDA  (P1)
-        JSR  UPCASE
-        STA  (P2)
-RK_NEXT:INP1
-        LDA  TMP
-        INC
-        STA  TMP
-        JMP  RK_LP
-RK_DONE:RTS
-
-; ISIDCH - Z=1 if A is [A-Za-z0-9_.]
-ISIDCH: STA  TMP2
-        LDB  #'.'
-        CMP
-        JZ   IC_YES
-        LDA  TMP2
-        LDB  #'_'
-        CMP
-        JZ   IC_YES
-        LDA  TMP2
-        LDB  #'0'
-        CMP
-        JNC  IC_AZ
-        LDA  #'9'
-        LDB  TMP2
-        CMP
-        JC   IC_YES
-IC_AZ:  LDA  TMP2
-        LDB  #'A'
-        CMP
-        JNC  IC_LZ
-        LDA  #'Z'
-        LDB  TMP2
-        CMP
-        JC   IC_YES
-IC_LZ:  LDA  TMP2
-        LDB  #'a'
-        CMP
-        JNC  IC_NO
-        LDA  #'z'
-        LDB  TMP2
-        CMP
-        JC   IC_YES
-IC_NO:  LDA  #1
-        RTS
-IC_YES: LDA  #0
-        RTS
-
-; UPCASE - A -> uppercase if it is 'a'..'z', else A unchanged. Clobbers B/TMP2.
-UPCASE: STA  TMP2
-        LDB  #'a'
-        CMP
-        JNC  UC_NO
-        LDA  #'z'
-        LDB  TMP2
-        CMP
-        JNC  UC_NO
-        LDA  TMP2
-        LDB  #$20
-        SUB
-        RTS
-UC_NO:  LDA  TMP2
+        STA  DIRLBA1
         RTS
 
 ; =============================================================================
-; Argument parsing + filename helpers
+; Arguments
 ; =============================================================================
+; PARSEARGS - P2 = the command tail "SRC OUT": SRCPATH / OUTPATH <- the two
+;   words, made absolute.
 PARSEARGS:
-        JSR  ASKIPSP2
-        LDP1 #ARGTMP           ; raw SRC token -> ARGTMP
+        JSR  ASKIP
+        LDP1 #ARGTMP            ; raw SRC word
         JSR  PATHCOPY
-        JSR  ASKIPSP2          ; advance the arg cursor to the OUT token first...
-        TPA2L                  ; ...then save it: ABSPATH clobbers P2
+        JSR  ASKIP
+        TPA2L                   ; ABSPATH clobbers P2: keep the arg cursor
         STA  ACSAV
         TPA2H
         STA  ACSAV+1
-        LDW ABDST,#SRCPATH                ; <- tierA: address constant (next: JSR ABSPATH)
+        LDW  ABDST,#SRCPATH
         JSR  ABSPATH
-        LPW2 ACSAV                ; <- tierA: pointer load (next: LDP1)
-        LDP1 #ARGTMP           ; raw OUT token -> ARGTMP
+        LPW2 ACSAV
+        LDP1 #ARGTMP            ; raw OUT word
         JSR  PATHCOPY
-        LDW ABDST,#OUTPATH                ; <- tierA: address constant (next: JSR ABSPATH)
-        JSR  ABSPATH
-        RTS
+        LDW  ABDST,#OUTPATH
+        JMP  ABSPATH
 
-; ABSPATH: (ABDST) <- ARGTMP made absolute. An absolute arg (leading '/') is copied
-; as-is; a relative one is CWD-prefixed (SYS_GETCWD + '/') — because FRESOLVE starts
-; at root, not the CWD. This makes `asm T.ASM` read a redirect's T.ASM from ANY
-; directory (the redirect registers it in the CWD), so a build script needs no
-; `cd /`. An empty arg stays empty (preserves the "no arg -> usage" check).
-ABSPATH:LDA  ARGTMP
-        LDB  #0
-        CMP
-        JNZ  AB_NE
-        LPW1 ABDST                ; <- tierA: pointer load (next: LDA)
-        LDA  #0
-        STA  (P1)
-        RTS
-AB_NE:  LDA  ARGTMP
-        LDB  #'/'
-        CMP
-        JZ   AB_ABS
-        LPW1 ABDST                ; <- tierA: pointer load (next: LDA)
-        LDA  #0
-        JSR  SYS_GETCWD
-        LPW1 ABDST                ; <- tierA: pointer load (next: LDA)
-AB_EN:  LDA  (P1)
-        JZ   AB_TSL
-        INP1
-        JMP  AB_EN
-AB_TSL: DEP1                   ; last char == '/'? (root CWD "/" already ends in one)
-        LDA  (P1)
-        INP1
+; ABSPATH - (ABDST) <- ARGTMP made absolute: a leading '/' is copied as-is, a
+;   relative path is prefixed with the CWD + '/' (FRESOLVE starts at root, not
+;   the CWD). An empty argument stays empty (the "no arg -> usage" check).
+ABSPATH:LPW1 ABDST
+        LDA  ARGTMP
+        JZ   AB_EMPTY
         LDB  #'/'
         CMP
         JZ   AB_CAT
-        LDA  #'/'              ; else append a separator
+        LDA  #0
+        JSR  SYS_GETCWD         ; (P1) <- CWD, NUL-terminated
+        LPW1 ABDST
+AB_EN:  LDA  (P1)+              ; to the NUL
+        JNZ  AB_EN
+        DEP1
+        DEP1                    ; the last CWD character
+        LDA  (P1)+
+        LDB  #'/'
+        CMP
+        JZ   AB_CAT             ; root "/" already ends in one
+        LDA  #'/'
         STA  (P1)+
-AB_CAT: LDP2 #ARGTMP                ; <- tierA: pointer constant (next: LDA)
-AB_CL:  LDA  (P2)
+AB_CAT: LDP2 #ARGTMP
+AB_CL:  LDA  (P2)+              ; append the argument, NUL included
         STA  (P1)+
-        JZ   AB_RT
-        INP2
-        JMP  AB_CL
-AB_RT:  RTS
-AB_ABS: LPW1 ABDST                ; <- tierA: pointer load (next: LDA)
-        LDP2 #ARGTMP                ; <- tierA: pointer constant (next: LDA)
-AB_AL:  LDA  (P2)
-        STA  (P1)+
-        JZ   AB_RT
-        INP2
-        JMP  AB_AL
-; PATHCOPY - copy the path word at P2 into (P1), NUL-terminated, case preserved,
-;   stopping at a space / CR / NUL. Advances P2. (Unlike WORDCOPY: no 12-char cap,
-;   no upcasing — so SRC/OUT can be sub-directory paths like /src/commands/c/x.c.)
+        JNZ  AB_CL
+        RTS
+AB_EMPTY:
+        STA  (P1)               ; A = 0
+        RTS
+
+; PATHCOPY - copy the word at P2 to (P1), NUL-terminated, up to a blank / CR /
+;   NUL (case kept: the file system is case-sensitive). P2 stops on the delimiter.
 PATHCOPY:
-PC_CP:  LDA  (P2)
+        LDA  (P2)
         JZ   PC_END
         LDB  #' '
         CMP
@@ -2137,80 +1592,28 @@ PC_CP:  LDA  (P2)
         LDB  #CR
         CMP
         JZ   PC_END
-        LDA  (P2)
         STA  (P1)+
         INP2
-        JMP  PC_CP
+        JMP  PATHCOPY
 PC_END: LDA  #0
         STA  (P1)
         RTS
-ASKIPSP2:
-        LDA  (P2)
+
+; ASKIP - advance P2 over blanks.
+ASKIP:  LDA  (P2)
         LDB  #' '
         CMP
         JNZ  AS_D
         INP2
-        JMP  ASKIPSP2
+        JMP  ASKIP
 AS_D:   RTS
-; WORDCOPY - P1=dest (12, space-padded, upcased), P2=src word; advance P2
-WORDCOPY:
-        TPA1L
-        STA  TMP
-        TPA1H
-        STA  TMP2
-        LDA  #12
-        STA  DIG
-WC_PAD: LDA  #' '
-        STA  (P1)+
-        LDA  DIG
-        DEC
-        STA  DIG
-        JNZ  WC_PAD
-        LDA  TMP
-        TAP1L
-        LDA  TMP2
-        TAP1H
-        LDA  #12
-        STA  DIG
-WC_CP:  LDA  (P2)
-        JZ   WC_DONE
-        LDB  #' '
-        CMP
-        JZ   WC_DONE
-        LDA  DIG
-        JZ   WC_DONE
-        LDA  (P2)               ; filename copied as typed (case-sensitive FS)
-        STA  (P1)+
-        INP2
-        LDA  DIG
-        DEC
-        STA  DIG
-        JMP  WC_CP
-WC_DONE:RTS
-; SETFNOUT - copy the legacy OUTNAME (12) into FNAME. Superseded by the OUTFN /
-;   FRESOLVE path handling (OUTINIT/FINISHOUT); kept for reference, not called.
-SETFNOUT:
-        LDP1 #OUTNAME
-        LDP2 #FNAME
-        LDA  #12
-        STA  DIG
-SF2:    LDA  (P1)+
-        STA  (P2)+
-        LDA  DIG
-        DEC
-        STA  DIG
-        JNZ  SF2
-        RTS
 
 ; =============================================================================
-; Error abort: print message at P1 + the offending line, long-jump to OS
+; Error abort: message at P1, the offending line, CRLF; unwind to the shell
 ; =============================================================================
-ASM_ERR:JSR  PUTS               ; message (P1)+
-        LDA  LINEPL
-        TAP1L
-        LDA  LINEPH
-        TAP1H
-AE_PL:  LDA  (P1)
+ASM_ERR:JSR  PUTS
+        LDP1 #LINEBUF
+AE_PL:  LDA  (P1)+
         JZ   AE_DONE
         LDB  #CR
         CMP
@@ -2219,20 +1622,16 @@ AE_PL:  LDA  (P1)
         CMP
         JZ   AE_DONE
         JSR  CONOUT
-        INP1
         JMP  AE_PL
 AE_DONE:LDA  #CR
         JSR  CONOUT
         LDA  #LF
         JSR  CONOUT
-        LDA  SP0                ; restore SP and RTS to the OS shell
-        TAP3L
-        LDA  SP0+1
-        TAP3H
+        LPW3 SP0                ; SP as it was at entry: RTS returns to the OS
         RTS
 
 ; =============================================================================
-; Messages
+; Strings
 ; =============================================================================
 MOK:    .ascii "OK"
         .byte CR,LF,0
@@ -2245,3 +1644,9 @@ EUNDEF: .asciiz "?undefined: "
 EBACK:  .asciiz "?backward .org: "
 ESYMS:  .asciiz "?too many symbols: "
 EUSE:   .asciiz "?missing #use include: "
+SUSE:   .byte $3B               ; ";#use"  (the ';' as a byte: not a comment)
+        .asciiz "#use"
+SINCL:  .asciiz ".include"
+SLIB:   .asciiz "/lib/"
+SINC:   .asciiz ".inc"
+; OPCTAB (generators/gen_p8xopc.py) is concatenated here at build time.

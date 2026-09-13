@@ -104,3 +104,27 @@ suite; (4) hand-asm rewrite (the native assembler now has the two-operand shapes
 `.relax` natively, so hand asm uses absolute branches only) -- incl. the bodies
 of p8xcc.asm / p8xasm.asm themselves. Related:
 [[p8x-tier-a-isa]], [[p8x-cycle-bench]], [[p8cc-runtime-order-gate]].
+
+**Stage 5 (2026-09-12, user request after the mechanical pass): from-scratch
+redesigns in assembly**, in the order assembler -> compiler -> BASIC -> OS/WM
+kernel -> monitor; asm twins of C commands left alone (C versions to be compared
+later, asm retired where C wins). Done: `apps/p8xasm.asm` (drop-in; hashed
+symbol table, first-letter opcode index, DISPTAB dispatch; 5,178 -> 4,065 B;
+2.4x / 5.7x / >30x faster on cover / self-host / 1,000-symbol sources). Method
+that worked: read the old source as the SPEC, list the test contracts
+(os_asm_test, asm_selfhost, os_asm_inc, os_asm_use), write the new file in one
+go, benchmark old vs new with LED-stamped scratch copies (`STA $FF02` at entry
+and before the OK message, `p8xemu -L`). Gotcha: `#>LABEL+2` is the high byte
+of (LABEL+2), not (>LABEL)+2. Tracked as the `[~]` item at the top of BACKLOG NEXT.
+
+**Stage 5 (2026-09-12, user request after the mechanical pass): from-scratch
+redesigns in assembly**, in the order assembler -> compiler -> BASIC -> OS/WM
+kernel -> monitor; asm twins of C commands left alone (C versions to be compared
+later, asm retired where C wins). Done: `apps/p8xasm.asm` (drop-in; hashed
+symbol table, first-letter opcode index, DISPTAB dispatch; 5,178 -> 4,065 B;
+2.4x / 5.7x / >30x faster on cover / self-host / 1,000-symbol sources). Method
+that worked: read the old source as the SPEC, list the test contracts
+(os_asm_test, asm_selfhost, os_asm_inc, os_asm_use), write the new file in one
+go, benchmark old vs new with LED-stamped scratch copies (`STA $FF02` at entry
+and before the OK message, `p8xemu -L`). Gotcha: `#>LABEL+2` is the high byte
+of (LABEL+2), not (>LABEL)+2. Tracked as the `[~]` item at the top of BACKLOG NEXT.

@@ -18,7 +18,7 @@
 - [P8X relative-path gotcha](reference_p8x_relpath_gotcha.md) — /bin commands must abspath() a relative path arg; FRESOLVE/FOPENDIR start at root, not CWD
 - [Keep /src tree + build scripts current](feedback_p8x_src_tree_upkeep.md) — any shipped-source change must update os/run.sh ensure_src (/src tree) AND /src/mk build scripts; /src is a real on-target rebuild deliverable
 - [P8X cc caps](reference_p8x_cc_caps.md) — on-target cc: MAXFUNC=64 functions; SLOTCNT now 16-bit; next ceiling is code SIZE (dir too big for TPA); build tests need a >16-func + >255-slot command
-- [P8X asm caps](reference_p8x_asm_caps.md) — on-target asm.bin symbol table ~1097 (SYMTAB $8400..$C000); `?too many symbols` self-hosting OS; `?undefined: OPCTAB` = empty/missing shipped opctab.asm (rebuild disk)
+- [P8X asm caps](reference_p8x_asm_caps.md) — on-target asm.bin: hashed symbol table 1,120 symbols ($8000..$C5FF, 16-byte entries), binary must stay below $8000; `?undefined: OPCTAB` / `;#use` host-vs-native traps
 - [P8X FDELETE 16-bit fix](reference_p8x_fdelete_16bit.md) — FDELETE was 8-bit on dir LBA; `make` in /src/os-bios "built everything" (stale MK.RUN); only bites subdirs past LBA 255; trust the on-hardware symptom over "stale disk"
 - [P8X run.sh reuses disks](reference_p8x_runsh_disk_reuse.md) — run.sh only creates/populates a disk `if [ ! -f ]`; a true rebuild needs `rm` of the img first (else the on-disk OS stays stale; eeprom always rebuilds)
 - [P8X memory map (rev E)](reference_p8x_memory_map.md) — 8K ROM $0000-$1FFF, RAM+OS at $2000, syscall ABI $20xx; scratch $6000-$69FF, TPA $6A00 (~37.9K)

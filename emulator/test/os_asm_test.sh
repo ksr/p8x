@@ -22,6 +22,9 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osa.bin --base 0x2000 >/
 python3 $ROOT/generators/gen_p8xopc.py opctab.asm
 cat $ROOT/apps/p8xasm.asm opctab.asm > asmfull.asm
 python3 $ROOT/assembler/p8xasm.py asmfull.asm -o asm.bin --base 0x6A00 >/dev/null
+# The code + opcode table must end below SYMTAB ($8000): the assembler parks its
+# hashed symbol table right after itself. 0x8000-0x6A00 = 5632 bytes.
+[ "$(wc -c < asm.bin)" -le 5632 ] || { echo "OS-ASM TEST: FAIL — asm.bin is $(wc -c < asm.bin) bytes, overlaps SYMTAB at \$8000"; exit 1; }
 
 # COVER source: one line per (mnemonic,shape) from genucode.OPC, plus LDPn,
 # every directive, and every expression form. Deterministic (sorted) so the

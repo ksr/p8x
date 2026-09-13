@@ -20,14 +20,28 @@ remainder is why it is still here.
 
 ## NEXT
 
-- [ ] **Hand-asm: the manual pass after the mechanical one (2026-09-12).**
-      `tools/tierA_rewrite.py` covered the idioms it can prove safe; what is
-      left in every hand-asm source is 8-bit character compares (no better
-      form) and the hot loops that only a human restructures: e.g. the on-board
-      cc's push/pop around every binary operator when the right operand is a
-      leaf, the assembler's symbol search, BASIC's tokenizer/expression loop.
-      Measure first with `p8xemu -L` cycle stamps; do it per module with the
-      module's tests. Low priority: the size story is told, this is speed.
+- [~] **Hand-asm: from-scratch redesigns on the Tier A ISA (2026-09-12).**
+      `tools/tierA_rewrite.py` only covered the idioms it could prove safe;
+      the user asked for genuine rewrites that use the ISA's shape (word
+      variables, `(Pn+d)` records, `LEAW`, `PHW (Pn+d)`, table dispatch) —
+      order: assembler, compiler, BASIC, then the OS/WM kernel and monitor
+      last; the asm twins of the C commands are left alone (C versions will be
+      compared against them later, and asm retired where C wins).
+      - [x] **`apps/p8xasm.asm` DONE 2026-09-12** — drop-in rewrite: chained-hash
+            symbol table (256 buckets, 16-byte entries at `$8000`–`$C5FF`, 1,120
+            symbols), first-letter opcode index, `DISPTAB` operand dispatch,
+            generic two-operand path (no MOVW/LDPn special cases), `.org` pads
+            itself. 5,178 → 4,065 B; cover source 2.4× faster, self-host 5.7×,
+            a 1,000-symbol source > 30× (the old scan did not finish in 900 M
+            cycles). Byte-identical to the host on every test; error messages
+            unchanged (a backward `.org` is now reported on the `.org` line).
+            Layout note: code + OPCTAB must stay below `$8000`; INCBUF moved to
+            `$CC00`, the BIOS dir-scan page to `$CE00`, path buffers to `$D000`.
+      - [ ] `apps/p8xcc.asm` — a redesigned frame model is on the table.
+      - [ ] `basic/p8xbasic.asm` — tokenizer / expression loop.
+      - [ ] `os/p8xos.asm` + `os/wmkernel_body.asm`, `firmware/p8xmon.asm` (last).
+      Measure with `p8xemu -L` cycle stamps (scratch copies with `STA $FF02` at
+      entry and before the final message); each module with its own tests.
 
 > **THE BOARD HAS TWO STALENESS SURFACES; A FEATURE MAY NEED BOTH.** The
 > BITSTREAM carries the CPU, microcode, monitor ROM and graphics RTL

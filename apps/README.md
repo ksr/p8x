@@ -99,15 +99,32 @@ time, so the mnemonic/encoding map can never drift from the microcode.
 Source and output are both **streamed to/from disk** through the BIOS file
 streams — input via `FOPEN`/`FGETB` (a line at a time), output via
 `FWOPEN`/`FPUTB`/`FCLOSE` (a sector at a time). So source and output size are
-bounded by the disk, not RAM, and the freed RAM gives a large (~850-entry)
-symbol table. As a result the assembler can **assemble its own
-source** on-target, producing a binary byte-identical to the host build
+bounded by the disk, not RAM, and the freed RAM gives a large symbol table
+(1,120 entries at `$8000`–`$C5FF`). As a result the assembler can **assemble
+its own source** on-target, producing a binary byte-identical to the host build
 (`emulator/test/asm_selfhost_test.sh`, `make test-asm-selfhost`).
 
 Correctness is checked by assembling a feature source both on-target and with
 the host assembler and comparing the bytes (`emulator/test/os_asm_test.sh`).
-Limits: ~850 symbols, 12-char names, 127-char source lines, single `.org`
+Limits: 1,120 symbols, 12-char names, 127-char source lines, single `.org`
 (use `.org $6A00`; a backward `.org` is rejected).
+
+**Redesigned for the Tier A ISA (2026-09-12).** `p8xasm.asm` was rewritten
+from scratch as a drop-in (same syntax, same error messages, byte-identical
+output; the four `os_asm*`/`asm_selfhost` tests lock it to the host): 16-bit
+values are word variables handled with `ADDW`/`SUBW`/`CMPW`/`INCW`/`MOVW`; the
+symbol table is a 256-bucket **chained hash** of 16-byte entries (`name[12]
+value[2] next[2]`) read and written through `(P2+d)` — `LDW CNT,(P2+12)` fetches
+a value in one instruction — instead of a linear scan comparing all 12 bytes of
+every entry; the opcode table gets a first-letter index at startup so a mnemonic
+lookup scans only its letter group, shape byte first; operand emission is a
+jump table (`DISPTAB` + `LPW1`/`JSR (P1)`); `MOVW` and `LDPn` need no special
+cases (a lone `#` that fails as imm8 is retried as imm16); `.org` pads forward
+itself so `EMIT` is a plain write-and-`INCW`; fixed-size copies are `MOVW`/`STW`
+runs. Binary 5,178 → 4,065 B. Cycles (`p8xemu -L`): the coverage source 6.40 M →
+2.62 M (2.4×), assembling its own source 282 M → 49.5 M (5.7×), a 1,000-symbol
+stress source > 900 M (did not finish) → 29 M. The code + opcode table must
+stay below `$8000` (the table start); `os_asm_test.sh` asserts it.
 
 ## CC — native C compiler (`p8xcc.asm`)
 

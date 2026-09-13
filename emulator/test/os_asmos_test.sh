@@ -20,22 +20,24 @@ python3 $ROOT/generators/gen_p8xopc.py aoopc.asm
 cat $ROOT/apps/p8xasm.asm aoopc.asm > aofull.asm
 python3 $ROOT/assembler/p8xasm.py aofull.asm -o asmgold.bin --base 0x6A00 >/dev/null
 
-# Splice memmap.inc into the OS source so it's a single self-contained file
+# Splice every .include (memmap.inc, wmkernel_body.asm) into the OS source so it is a single self-contained file
 # (avoids reproducing the /src/os-bios/{asm,generators} include layout on disk).
 # Symbol count is identical to the real .include, which is what we're stressing.
 python3 - "$ROOT" > osfull.asm <<'PY'
-import sys
+import sys, os, re
 root = sys.argv[1]
-mm = open(root + "/generators/memmap.inc").read()
-out = []
-for line in open(root + "/os/p8xos.asm"):
-    if ".include" in line and "memmap.inc" in line:
-        out.append("; ---- memmap.inc spliced in for the on-target self-host test ----\n")
-        out.append(mm)
-    else:
-        out.append(line)
-open("osfull.asm", "w").write("".join(out))  # noop; we print below
-sys.stdout.write("".join(out))
+def splice(path):
+    out = []
+    for line in open(path):
+        m = re.match(r'\s*\.include\s+"([^"]+)"', line)
+        if m:
+            inc = os.path.normpath(os.path.join(os.path.dirname(path), m.group(1)))
+            out.append("; ---- %s spliced in for the on-target self-host test ----\n" % m.group(1))
+            out.extend(splice(inc))
+        else:
+            out.append(line)
+    return out
+sys.stdout.write("".join(splice(root + "/os/p8xos.asm")))
 PY
 # Golden on-target result = host-assembling the very same spliced source.
 python3 $ROOT/assembler/p8xasm.py osfull.asm -o osgold.bin --base 0x2000 >/dev/null
