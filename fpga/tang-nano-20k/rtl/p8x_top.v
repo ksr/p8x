@@ -105,27 +105,36 @@ module p8x_top(
   // ---- microcode ROM: COMPACTED to 4096 x 32 ----
   //
   // The CPU addresses microcode as {cond, stp, IR} -- 8192 words, 15 BSRAM
-  // blocks -- but only 88 of the 256 opcode encodings exist and all 168 undefined
-  // ones hold the same word. So IR is squeezed through a combinational map into a
-  // 7-bit index (88 opcodes + one shared undefined slot) and the ROM halves to
-  // 4096 words, ~8 blocks. That is what buys back the full 64K memory map.
+  // blocks -- more than the chip has left once the 64K main memory takes 32.
+  // The opcode axis is sparse and the step axis is short, so the ROM is halved
+  // by SLOTS of 16 words (8 steps x 2 condition planes), addressed as
+  // {slot, stp[2:0], cond}: a defined opcode's steps 0..7 live in slot IR (its
+  // own encoding, no map at all); the steps 8..15 of a LONG opcode live in a
+  // second slot borrowed from the pool of undefined encodings; every undefined
+  // opcode maps to one shared UNDEF slot, and the steps 8..15 of everything
+  // else to one shared RAIL slot. (Until 2026-09-12 a 7-bit index map did this
+  // with room for 127 opcodes; the Tier A ISA has 143, so this scheme replaced
+  // it -- it needs a 256x1 "defined" table and a ~54-entry second-slot table,
+  // less logic than the old 256x7 map, and holds ~250 opcodes.)
   //
-  // mk_compact_ucode.py generates both files and refuses to emit anything unless
-  // the compact image reproduces the original for all 8192 addresses.
-  //
-  // The map must be LUT logic, not a BRAM: it has to resolve inside phase 0,
-  // before the microcode read is issued.
+  // mk_compact_ucode.py generates irmap.vh and ucode_c.hex and refuses to emit
+  // anything unless the compact image reproduces the original for all 8192
+  // addresses. The map must be LUT logic, not a BRAM: it has to resolve inside
+  // phase 0, before the microcode read is issued.
   wire       uc_cond = uc_addr[12];
   wire [3:0] uc_stp  = uc_addr[11:8];
   wire [7:0] ir      = uc_addr[7:0];
-  reg  [6:0] idx;
+  reg        ir_def;                  // IR is a defined opcode
+  reg  [7:0] ir_hi;                   // slot holding its steps 8..15
+  reg  [7:0] ir_undef;                // the shared slot for undefined opcodes
   always @* begin
 `include "irmap.vh"
   end
+  wire [7:0] uc_slot = uc_stp[3] ? ir_hi : (ir_def ? ir : ir_undef);
   reg [31:0] ucode [0:4095];
   initial $readmemh("ucode_c.hex", ucode);
   reg [31:0] uc_q;
-  always @(posedge clk) if (ph == 2'd0) uc_q <= ucode[{uc_cond, uc_stp, idx}];
+  always @(posedge clk) if (ph == 2'd0) uc_q <= ucode[{uc_slot, uc_stp[2:0], uc_cond}];
   assign uc_data = uc_q;
 
   // ---- main memory: the FULL 64K ----

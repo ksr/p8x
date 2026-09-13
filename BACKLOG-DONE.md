@@ -12,7 +12,16 @@
       the C build is smaller). Board follow-ups (no TTL machine exists yet, so no EPROM burn): rebuild
       the FPGA bitstream (it carries the changed microcode + monitor ROM) and
       re-clone the SD card (OS, /bin, BASIC); rom/ stays current for a future
-      TTL build.
+      TTL build. **FPGA consequence found on the rebuild (2026-09-12):** the
+      board's compacted microcode ROM indexed opcodes with 7 bits (127 max);
+      143 opcodes aborted `mk_compact_ucode.py`. Replaced by a SLOT scheme in
+      `p8x_top.v` + the generator: 16-word slots addressed {slot, stp[2:0],
+      cond}, a defined opcode's steps 0..7 in slot IR itself, steps 8..15 of
+      the 54 long opcodes in slots borrowed from the 113 undefined encodings,
+      one shared UNDEF and one RAIL slot -- 198 of 256 slots used, the ROM
+      stays 4096 x 32, less map logic than before (256x1 + 54 entries vs
+      256x7), room for ~250 opcodes; the generator still proves all 8192
+      original addresses reproduce. CPU core and ISA untouched.
       Original plan and per-stage log:
       Four stages, in order: (1) every Mac-hosted tool emits the Tier A ISA;
       (2) review the C and asm libraries for what the new tools make

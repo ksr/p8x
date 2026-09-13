@@ -87,6 +87,12 @@ multi-pass) -- see BACKLOG.
 **Editor + BASIC DONE (2026-09-12):** p8xedit 1 site (1,607 -> 1,602 B), BASIC
 128 sites (11,887 -> 11,151 B; allow list as planned). PROGRAM COMPLETE -- the
 item moved to BACKLOG-DONE; the follow-up is the optional manual hot-loop pass.
+FPGA: the `lcd` bitstream rebuild first ABORTED in mk_compact_ucode.py (7-bit
+opcode index, 143 opcodes) -> rewritten as a slot scheme (slot = IR for steps
+0..7; long opcodes' steps 8..15 in slots borrowed from undefined encodings; UNDEF
++ RAIL shared slots), generator self-check over all 8192 addresses; p8x_top.v
+mapping changed accordingly. The board's pnr.log in the tree was the CARD build
+(BSRAM 5/46) -- do not read it as the lcd build's utilisation.
 BOARD: there is NO TTL machine yet (user, 2026-09-12) -- nothing to burn; the
 FPGA bitstream must be rebuilt (it carries microcode + monitor ROM, both changed)
 and the SD card re-cloned (OS, /bin, BASIC). rom/ stays current for a future TTL

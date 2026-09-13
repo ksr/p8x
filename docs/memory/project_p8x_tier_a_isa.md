@@ -25,7 +25,10 @@ PHW'd word sits BIG-endian on the stack — `LDW (P3+d)` cannot read pushed args
 without either a byte swap or flipping PHW/PLW order (only used as pairs: p8cc.py,
 p8xcc.asm, 2 sites in commands-asm; nothing peeks the layout).
 
-**Consumers that changed with it (all must follow any future opcode):** host
+**Consumers that changed with it (all must follow any future opcode):** the FPGA
+board top's microcode compaction (`fpga/tang-nano-20k/mk_compact_ucode.py` +
+`rtl/p8x_top.v`; slot scheme since 2026-09-12, ~250-opcode capacity -- the old
+7-bit index aborted at 128); host
 assembler (`COMP_BYTES`, `split_top`/`parse_one`/`resolve_shape`; imm8 vs imm16
 chosen from the operand TEXT via `lit8` so both passes agree; byte stream =
 address word first, then disp/imm — the assembler reorders `STW (Pn+d),a`);
