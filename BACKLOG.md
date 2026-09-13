@@ -79,6 +79,33 @@ remainder is why it is still here.
       Measure with `p8xemu -L` cycle stamps (scratch copies with `STA $FF02` at
       entry and before the final message); each module with its own tests.
 
+- [ ] **Frame-model on-board compiler — PROTOTYPED, landing BLOCKED (2026-09-13).**
+      Built a full P3-frame version of the on-board C compiler (scratch
+      `ccc/ccf.c`, host-built ~21 KB; design/results in
+      `scratchpad/FRAME_PLAN.md`): `SUBP3 #_fr_NAME` frames, locals at `(P3+d)`,
+      params read in place, NO slot-saves, plus constant-immediate and
+      variable-leaf optimizations (one-token lexer lookahead). Streaming-safe
+      via an **assembler symbol for the frame size** (`SUBP3 #_fr_NAME`,
+      `_fr_NAME = L` at function end; both assemblers evaluate `(Pn+d)` and
+      `#imm` as pass-2 expressions). VERIFIED correct on the emulator: recursion
+      (fib, mutual even/odd), params, multi-arg calls, local arrays, for-loops,
+      all comparison orderings (vtest = 1001010104), `&&`/`||`, `wc`, `pwd`, and
+      it compiles its own source. Cuts static-slot 35,057 → ~30 KB self-compile
+      (recursion-correct, faster).
+      **BLOCKER for a drop-in landing:** a recursive function with a big local
+      array — grep `collect`/find `walk`/cp `copy_tree` all recurse with a
+      312–384-byte local — cannot be compiled correctly. In-frame overflows the
+      8-bit `(P3+d)` displacement AND the `SUBP3` imm8; the symbolic frame size
+      makes the param displacement `(P3+_fr+K)` undecidable for a far path;
+      routing big arrays to static `__V` breaks their recursion (that is exactly
+      what the static-slot compiler's slot-saves handle). Fully general needs a
+      far-path + frame-pointer (or pre-scan) design — a real project. Held: the
+      shipped `apps/cc.c` stays static-slot. **Self-host** (the original goal)
+      is separately ~2–3 KB over the TPA fit and RAM-bound (a string pool
+      backfires: -1.4 KB output, +4.8 KB RAM); it needs narrow-byte codegen +
+      tight layout, or a smaller OS lowering the TPA base. Revisit after the
+      OS/monitor/WM rewrites (which may free TPA). See [[reference_p8x_cc_caps]].
+
 > **THE BOARD HAS TWO STALENESS SURFACES; A FEATURE MAY NEED BOTH.** The
 > BITSTREAM carries the CPU, microcode, monitor ROM and graphics RTL
 > (`build.sh lcd load`); the SD CARD carries the OS, `/bin` and BASIC

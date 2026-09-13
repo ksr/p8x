@@ -79,6 +79,20 @@ was false (GLAND now clears CONDCUR before the right operand). All three were
 found by diffing cc.c's output against the asm compiler's on the machine
 (`cc_c_test.sh`), which is the way to find the next one.
 
+**2026-09-13 (later): frame-model prototype, landing BLOCKED.** A full P3-frame
+version of the on-board compiler (scratch `ccc/ccf.c`; `scratchpad/FRAME_PLAN.md`)
+works and is recursion-correct + smaller output, streaming-safe via an assembler
+symbol for the frame size (`SUBP3 #_fr_NAME` / `_fr_NAME = L`). But it cannot be
+a DROP-IN: a recursive function with a big local array (grep `collect`, find
+`walk`, cp `copy_tree` all recurse with a 312–384 B local) overflows the 8-bit
+`(P3+d)` displacement and `SUBP3` imm8; the symbolic frame size makes the param
+far-path undecidable; static-routing the array breaks recursion (which is
+exactly what the static-slot slot-saves handle). So the shipped `apps/cc.c`
+stays static-slot; a general frame model needs a far-path + frame-pointer (or
+pre-scan) design. Self-host is separately ~2–3 KB over the TPA and RAM-bound (a
+string pool costs more RAM than it saves output). Revisit after the OS/WM/monitor
+rewrites possibly lower the TPA base.
+
 **Self-host does NOT fit:** cc.c compiled by the on-board static-slot compiler
 is 35,057 B (host p8cc.py frame model: 18,089), ending at $F2F1 -- no room for
 its tables (~7 KB). 906 lines are `PHW __V+n` slot saves around calls. The
