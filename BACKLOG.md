@@ -121,18 +121,22 @@ remainder is why it is still here.
       prologue + add the leaf lookahead) restores the twin diff AND gives the
       DEFAULT on-board compiler the recursion-correctness + ~13% size win. Large,
       differential-tested against cc.c's output. Not on the self-host path.
-- [ ] **Self-host of `cc.c` — gated on TPA, not codegen (2026-09-13).**
-      The frame self-compile is ~30.6 KB and overruns its tables at `$C800`/
-      collides with the stack; codegen tweaks yield only hundreds of bytes each
-      (leaf ~400 B net ceiling; a global-collapse peephole is +742 B net because
-      the compiler compiles its own optimization code).
-      **The TPA reclaim is DONE (2026-09-14, +2,048 B):** ROM shrunk 8K→6K and the
-      TPA-floor scratch moved into the $1800–$1FFF island, dropping TPABASE
-      $6100→$5900. What remains for the on-board round-trip: the self-compiled
-      compiler still needs its HEADS/table layout to clear the 30.6 KB image at
-      the lower base, and the native assembler symbol table (~1,120) must grow to
-      ~1,188. Re-run the fit check at $5900 before more codegen work. See
-      [[reference_p8x_cc_caps]], `scratchpad/FRAME_PLAN.md`.
+- [x] **Self-host of `cc.c` — ACHIEVED on-board (2026-09-14).** Milestone B: the
+      frame-model `apps/cc.c` (built by the host into `/binc/cc.bin`) compiles its
+      OWN source on the machine, the native assembler assembles that into a
+      30,843 B binary, and that self-compiled compiler RUNS -- it compiles a
+      program correctly and recompiles cc.c to BYTE-IDENTICAL output (a fixed
+      point). Regression test: `cc_selfhost_test.sh`. It took four pieces landing
+      together: (1) the P3-frame codegen (recursion-correct, ~13% smaller so the
+      image is 30.8 KB not 35 KB); (2) +2,048 B TPA (ROM 8K→6K, TPABASE $6100→
+      $5900); (3) cc.c's table layout raised (HEADS $B800→$D400, USELEVELS 3→2,
+      arena ~4.9 KB) so the 30.8 KB self-compile clears its own tables under the
+      C-stack/RDBUF; (4) the assembler symbol table grown 1,120→1,664 for the
+      1,548-symbol self-compile (plus the DIRPAGE bare-page-byte fix). Codegen
+      tweaks were the WRONG lever (leaf ~400 B net; a peephole +742 B net because
+      the compiler compiles its own optimization code) -- TPA + layout + assembler
+      capacity were what mattered. See [[reference_p8x_cc_caps]],
+      `scratchpad/FRAME_PLAN.md`.
 
 > **THE BOARD HAS TWO STALENESS SURFACES; A FEATURE MAY NEED BOTH.** The
 > BITSTREAM carries the CPU, microcode, monitor ROM and graphics RTL

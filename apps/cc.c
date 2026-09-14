@@ -32,17 +32,17 @@
 //#use abi
 //#define ROSTATE  0x1F5E
 //#define ROSDRV   0x1F85
-//#define HEADS    0xB800
-//#define USESTATE 0xB9C0
-//#define USEBUF   0xBA00
-//#define LARENA   0xC000
-//#define LARENAEND 0xC300
-//#define ARENA    0xC300
-//#define ARENAEND 0xEC00
-//#define DIRPAGE  0xEC
+//#define HEADS    0xD400
+//#define USESTATE 0xD5C0
+//#define USEBUF   0xD600
+//#define LARENA   0xDA00
+//#define LARENAEND 0xDD00
+//#define ARENA    0xDD00
+//#define ARENAEND 0xF000
+//#define DIRPAGE  0xF0
 //#define MAXFUNC 250
 //#define MAXMAC 250
-//#define USELEVELS 3
+//#define USELEVELS 2
 /* keyword codes */
 //#define K_INT 1
 //#define K_CHAR 2

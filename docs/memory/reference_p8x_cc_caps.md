@@ -95,11 +95,17 @@ is suspended). Design/data: `scratchpad/FRAME_PLAN.md`.
   compilers diverge and the `cc_c_test` twin byte-DIFF is SUSPENDED (see BACKLOG:
   "Port the frame model into p8xcc.asm"). Each compiler is independently tested.
 
-**Self-host still does NOT fit — but it is a TPA problem now, not codegen.** The
-frame self-compile is ~30.6 KB and overruns its tables at `$C800` / collides
-with the P3 stack. Codegen tweaks are marginal (leaf ~400 B net; a global-collapse
-peephole is +742 B net because the compiler compiles its own optimization code).
-The lever is more TPA (monitor ROM 8K→6K reclaim, +2 KB). The native assembler
-also needs ~1,188 symbols vs 1,120 for the on-board round-trip. Other on-board cc
-limits cc.c respects: string literals ≤127 raw chars (STRBUF, unchecked),
-`*p = v` is a WORD store, the assembler's 127-char line.
+**Self-host ACHIEVED on-board (2026-09-14).** cc.c self-compiles to a 30,843 B
+binary that RUNS and reproduces its own output byte-for-byte (fixed point);
+`cc_selfhost_test.sh`. It needed four things together, none of them the "obvious"
+codegen tweaks (leaf ~400 B net, a peephole +742 B net -- the compiler compiles
+its own optimization code, so those backfire): (1) the P3-frame codegen (30.8 KB
+not 35 KB); (2) +2 KB TPA (ROM 8K→6K, TPABASE $5900); (3) cc.c's table layout
+raised so the 30.8 KB image clears its own tables -- **HEADS $B800→$D400,
+USELEVELS 3→2, ARENA→$F000/DIRPAGE $F0** (arena ~4.9 KB, still fits cc.c's
+~4.3 KB of names, verified by cc_c_test); (4) the assembler symtab grown
+1,120→1,664 (the self-compile has 1,548 symbols) + the DIRPAGE bare-page-byte
+fix ([[reference_p8x_asm_caps]]). Other on-board cc limits cc.c respects: string
+literals ≤127 raw chars (STRBUF, unchecked), `*p = v` is a WORD store, the
+assembler's 127-char line, and a function's frame locals must stay ≤255 bytes
+(the frame guard -- big recursive-array programs use /bin/cc instead).
