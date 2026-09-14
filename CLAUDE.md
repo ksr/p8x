@@ -13,9 +13,14 @@ memory, I/O, CF-IDE.
   load) fields, decoded per card. DOE: 0 idle, 1 A, 2 B, 3 T, 4 T2,
   5 ALU, 6 FLAGS, 7 MEM, 8 PTRL, 9 PTRH. DLD: 1-5 A/B/T/T2/FLAGS-restore,
   6 IR, 7 MEMW, 8/9 PTRL/PTRH.
-- Memory map (rev E): $0000-1FFF ROM (8K), $2000-FEFF RAM (56K, 2x 62256),
-  $FF00-FFFF I/O (switches $FF00, LEDs $FF02, ACIA $FF04/05, CF-IDE $FF10-17).
-  The OS loads at $2000. P8XFS is v2-only (hierarchical).
+- Memory map (rev E; single source `generators/gen_memmap.py`): $0000-$17FF ROM
+  (6K — shrunk from 8K on 2026-09-14; monitor+BIOS use ~5.2K), $1800-$FEFF RAM
+  (2x 62256), $FF00-$FFFF I/O (switches $FF00, LEDs $FF02, ACIA $FF04/05,
+  CF-IDE $FF10-17). The $1800-$1FFF low island freed by the ROM shrink holds
+  relocated OS/BIOS scratch (IBUF/PATHBUF/APBUF, SBUF $1D00, BIOS scratch $1F00).
+  The OS still loads at $2000; its syscall jump table moved to $20xx. Transient
+  programs load at TPABASE $5900 (~39.8K TPA up to $F7FF; the C stack grows down
+  from $F7FF, fixed system buffers sit above $F800). P8XFS is v2-only (hierarchical).
 - Microcode: ROM address = IR | step<<8 | cond<<12. Step 0 of every opcode
   is the fetch cycle. The FCOND field of the executing word selects the
   flag driving A12 for the NEXT lookup (pipeline timing).
