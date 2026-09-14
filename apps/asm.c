@@ -10,7 +10,7 @@
  * Layout: the C image (about 14 KB) ends below $A800; the hashed symbol table
  * lives at $A800-$C5FF (16-byte entries: name[12] value[2] next[2], 480
  * symbols -- the asm build parks its table right after its 4 KB of code, at
- * $8000, and holds 1,120), the 256 chain heads at $C600, the source sector at
+ * $8000, and holds 1,664 since 2026-09-14), the 256 chain heads at $C600, the source sector at
  * $C900, the include sector at $CC00, the BIOS directory-scan page at $CE00
  * and the path buffers at $D000: the asm build's map above the image.
  *
