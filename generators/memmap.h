@@ -4,11 +4,11 @@
 
 
 /* memory-region anchors */
-#define RAMBASE     0x2000       /* first RAM address (OS + scratch + TPA live here) */
+#define RAMBASE     0x1800       /* first RAM address (ROM shrunk 8K->6K 2026-09-13; $1800-$1FFF is a low RAM island) */
 #define IOBASE      0xFF00       /* memory-mapped I/O page */
-#define ROMSIZE     0x2000       /* 8K firmware ROM $0000-$1FFF */
-#define RAMSIZE     0xDF00       /* RAM span $2000-$FEFF (IOBASE-RAMBASE) */
-#define OSORG       0x2000       /* OS load/link address (= RAMBASE) */
+#define ROMSIZE     0x1800       /* 6K firmware ROM $0000-$17FF (monitor uses ~5.2K) */
+#define RAMSIZE     0xE700       /* RAM span $1800-$FEFF (IOBASE-RAMBASE) */
+#define OSORG       0x2000       /* OS load/link address (still $2000; the $1800-$1FFF RAM island holds relocated scratch) */
 #define TPABASE     0x6100       /* transient program area base (RUNnable programs load here) */
 #define CSTACKTOP   0xF800       /* compiler C-stack top (grows down; p8cc __csp init) */
 

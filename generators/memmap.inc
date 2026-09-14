@@ -3,11 +3,11 @@
 
 
 ; memory-region anchors
-RAMBASE     = $2000              ; first RAM address (OS + scratch + TPA live here)
+RAMBASE     = $1800              ; first RAM address (ROM shrunk 8K->6K 2026-09-13; $1800-$1FFF is a low RAM island)
 IOBASE      = $FF00              ; memory-mapped I/O page
-ROMSIZE     = $2000              ; 8K firmware ROM $0000-$1FFF
-RAMSIZE     = $DF00              ; RAM span $2000-$FEFF (IOBASE-RAMBASE)
-OSORG       = $2000              ; OS load/link address (= RAMBASE)
+ROMSIZE     = $1800              ; 6K firmware ROM $0000-$17FF (monitor uses ~5.2K)
+RAMSIZE     = $E700              ; RAM span $1800-$FEFF (IOBASE-RAMBASE)
+OSORG       = $2000              ; OS load/link address (still $2000; the $1800-$1FFF RAM island holds relocated scratch)
 TPABASE     = $6100              ; transient program area base (RUNnable programs load here)
 CSTACKTOP   = $F800              ; compiler C-stack top (grows down; p8cc __csp init)
 
