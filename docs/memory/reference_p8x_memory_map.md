@@ -36,6 +36,21 @@ P8X **rev E** memory map (2026-07-13, commit 6cadf38):
   shifted), RBUF, MKFLATB, DEFADDR (`#<TPABASE`/`#>TPABASE`), and the monitor's
   dir-buffer default (`#>SBUF`) all track the base. Programs at an old base still
   run (in-TPA). See [[reference_p8x_tpabase]] for the full change checklist.
+- **Top of RAM ($F800–$FEFF)** — four fixed blocks sit just above the TPA that a
+  running program must not overrun (high → low): **$FE00–$FEFF** the OS/shell
+  return stack (`STKTOP $FEFF`); **$FC00–$FDFF `RDBUF`**, the **shared** file-read
+  buffer every C command hands to `bios(FOPEN, RDBUF, 0)` (`cat`, `grep`, `cp`,
+  `diff`, `cc`, …) — one open file at a time, **not compiler-specific**;
+  **$FA00–$FBFF `FSDIRBUF`**, the directory/glob sector page (`dir`, `find`,
+  glob); **$F800–$F9FF `HISTRING`**, the shell history ring (8 × 64 B). The line
+  **`CSTACKTOP = $F800`** is the boundary: a launched frame-model C program sets
+  **P3 = $F7FF** and its C stack/frames grow **down** from there into the free
+  TPA (`p8cc.py` relocates P3 only when the inherited P3 is above `CSTACKTOP`, i.e.
+  a normal launch). `HISTRING`/`CSTACKTOP` are `gen_memmap.py` anchors;
+  `RDBUF`/`FSDIRBUF`/stack are `lib_abi` `#define`s, which is why they don't
+  appear as generated-map rows despite being fixed. The `$FE00–$FEFF` "P3 stack"
+  is the OS's own small return stack — distinct from the program's C stack at
+  `$F7FF` and below.
 
 **Syscall ABI moved with the OS: $40xx → $20xx.** The OS jump table is at the
 front of the OS image, so it now starts at $2000: SYS_GETCWD $2003, SYS_CWDLBA
