@@ -6,7 +6,7 @@ Instruction set rev 1 — generated from the microcode source (`genucode.py`); o
 
 **A, B** — 8-bit ALU operand registers; results land in A. **P0-P3** — four 16-bit pointer registers; the address bus is always driven by one of them. **P0** is the program counter. **P3** is the stack pointer (empty-descending: push writes then decrements; initialise it early — see note 3). P1 and P2 are general pointers used by the (Pn) addressing modes. **FLAGS** — C, Z, N, V, latched only by instructions marked in the Flags column.
 
-**Memory map (rev E):** $0000-$1FFF ROM (8K) | $2000-$FEFF RAM (56K) | $FF00-$FFFF I/O: $FF00 switches (r), $FF02 LEDs (w), $FF04 ACIA status (bit0 RX ready, bit1 TX ready), $FF05 ACIA data.
+**Memory map** (single-sourced in generators/gen_memmap.py): $0000-$17FF ROM (6K) | $1800-$FEFF RAM ($1800-$1FFF scratch island) | $FF00-$FFFF I/O: $FF00 switches (r), $FF02 LEDs (w), $FF04 ACIA status (bit0 RX ready, bit1 TX ready), $FF05 ACIA data.
 
 **Reset:** P0 is forced to $0000; execution begins there. All other registers (including P3) are undefined on real hardware.
 
@@ -249,4 +249,4 @@ msg:    .asciiz "P8X lives!\r\n"
 
 ## Writing a program for P8X/OS
 
-Programs launched by the OS **RUN** command load into the transient program area at **$6100** and run via a **JSR** to their exec address. The program ABI: **return to the shell with RTS** (P3, the stack, is the OS's — leave it balanced); on entry **P2 points at the argument tail** — the command text after the program name, NUL-terminated (so `RUN EDIT FOO.ASM` enters with P2 -> `"FOO.ASM"`); programs that take no arguments ignore P2. Build with `.org $6100` and the host assembler's `--base 0x6100`, or assemble on-target with ASM. A file created on-target carries load/exec 0, which the OS maps to $6100, so it is directly RUNnable. The BIOS jump table at $0100 (console + CF, the FFIND/FCREATE/FDELETE/FCOMMIT file calls, the FOPEN/FGETB and FWOPEN/FPUTB/FCLOSE byte streams, and FRESOLVE/FNORM/FOPENDIR/FNEXT) is the only entry point a program needs — it must not call into OS internals.
+Programs launched by the OS **RUN** command load into the transient program area at **$5900** and run via a **JSR** to their exec address. The program ABI: **return to the shell with RTS** (P3, the stack, is the OS's — leave it balanced); on entry **P2 points at the argument tail** — the command text after the program name, NUL-terminated (so `RUN EDIT FOO.ASM` enters with P2 -> `"FOO.ASM"`); programs that take no arguments ignore P2. Build with `.org $5900` and the host assembler's `--base 0x5900`, or assemble on-target with ASM. A file created on-target carries load/exec 0, which the OS maps to $5900, so it is directly RUNnable. The BIOS jump table at $0100 (console + CF, the FFIND/FCREATE/FDELETE/FCOMMIT file calls, the FOPEN/FGETB and FWOPEN/FPUTB/FCLOSE byte streams, and FRESOLVE/FNORM/FOPENDIR/FNEXT) is the only entry point a program needs — it must not call into OS internals.

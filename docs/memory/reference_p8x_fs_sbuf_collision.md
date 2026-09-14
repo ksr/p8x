@@ -8,7 +8,7 @@ metadata:
 ---
 
 The P8XFS write stream (used by shell `>`/`>>` redirects, via FWOPEN/FPUTB/FCLOSE)
-buffers pending output in **SBUF ($6100)** (offset tracked in `WOPOS $1F6E`,
+buffers pending output in **SBUF ($1D00)** (offset tracked in `WOPOS $1F6E`,
 flushed every 512 B). Directory scans (`FSCAN`, used by `FFIND`/`FRESOLVE`) read
 sectors into the **DIBUFH page**, which **also defaults to SBUF $1D00**. So if a
 program does a directory operation (FRESOLVE/FOPEN of a file) *while a redirect

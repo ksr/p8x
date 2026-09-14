@@ -2,12 +2,12 @@
 
 A tiny C compiler that runs on the host and emits P8X assembly for
 [`assembler/p8xasm.py`](../assembler/p8xasm.py). Output targets the OS transient
-program area (`$6100`), so a compiled program is a RUNnable `.BIN`.
+program area (`$5900`), so a compiled program is a RUNnable `.BIN`.
 
 ```sh
 python3 compiler/p8cc.py prog.c -o prog.asm
-python3 assembler/p8xasm.py prog.asm -o prog.bin --base 0x6100
-python3 tools/p8xfs.py put disk.img prog.bin --name /PROG.BIN --load 0x6100 --exec 0x6100
+python3 assembler/p8xasm.py prog.asm -o prog.bin --base 0x5900
+python3 tools/p8xfs.py put disk.img prog.bin --name /PROG.BIN --load 0x5900 --exec 0x5900
 # then on the P8X:  RUN /PROG.BIN
 ```
 
@@ -79,15 +79,18 @@ There are two implementations of the same compiler:
   The test suite builds it exactly this way to differentially cross-check every
   command against `p8cc.py` (see `emulator/test/c_*` and `c_selfhost_test`).
 
-  **Milestone B** (run the compiler *on the P8X*) is **partially achieved**: the
-  C **front end** is self-hosted (see below), but the **back end stays on the
-  host**. This is not a language gap — it is a hard size wall: `p8cc.c` compiles
-  to ~82 KB, which is *larger than the machine's entire 64 KB address space* (it
-  won't even assemble to one image), and ~2.2× the ~37.9 KB program area. The
-  codegen's ~55 KB of symbol-table/type-analysis/emit machinery is shared across
-  every part, so it can't be sharded into TPA-sized passes. A true on-target back
-  end would need a *new*, deliberately-small code generator (a filed stretch
-  goal), not a port of this one. See `BACKLOG.md` for the measurements.
+  **Milestone B** (a C compiler that runs *on the P8X* and compiles its own
+  source) is **ACHIEVED — by the lean twin, not this compiler.** `p8cc.c` here is
+  the two-pass HOST bootstrap: it compiles to ~82 KB, *larger than the machine's
+  entire 64 KB address space*, so it cannot run on-board and its back end stays on
+  the host. The on-board self-host was reached instead by **`apps/cc.c`** — the
+  single-pass twin of `apps/p8xcc.asm`, written in the subset both accept — once
+  it got the P3-stack-frame codegen (~13% smaller output) and the +2 KB of TPA
+  from the ROM reclaim (`TPABASE` $5900). It self-compiles to 30,843 bytes,
+  assembles and runs on the machine, and reproduces itself byte-for-byte (a fixed
+  point; `emulator/test/cc_selfhost_test.sh`). A back end small enough for *this*
+  compiler to run on-board would still need a new, deliberately-small code
+  generator. See `BACKLOG.md`.
 
   `p8cc.c` is single-pass and so requires **declare-before-use** (function
   prototypes for mutual recursion, globals/structs before reference); `p8cc.py`

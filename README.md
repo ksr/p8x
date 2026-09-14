@@ -22,7 +22,7 @@ New to the abbreviations and signal names? See [GLOSSARY.md](GLOSSARY.md).
 - **Registers:** A, B (ALU operands), T/T2 (hidden microcode temporaries), FLAGS (C, Z, N, V)
 - **ALU:** 2 × 74181 + 74182 carry-lookahead, with a post-ALU shifter
 - **Microcoded control:** 4 × 28C64 EEPROMs; ROM address = IR | step<<8 | cond<<12
-- **Memory map (rev E):** `$0000–$1FFF` ROM (8 KB), `$2000–$FEFF` RAM (56 KB, 2× 62256), `$FF00–$FFFF` I/O
+- **Memory map (rev E):** `$0000–$17FF` ROM (6 KB; shrunk from 8 KB 2026-09-14), `$1800–$FEFF` RAM (2× 62256; $1800–$1FFF is a scratch island), `$FF00–$FFFF` I/O (every data address is single-sourced in [`generators/gen_memmap.py`](generators/gen_memmap.py) → `memmap.inc`/`.h`/`.py`; commands pull the scratch/graphics/TPA-base symbols via `//#use mem`)
 
 ## Cards (6)
 

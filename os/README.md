@@ -81,7 +81,7 @@ assembly ([`p8xos.asm`](p8xos.asm)) and assembled by
 ## Programs (the program ABI)
 
 The OS ships only a shell + built-ins; bigger tools are **standalone programs**
-that load into the transient program area (TPA, `$6100`) and are launched with
+that load into the transient program area (TPA, `$5900`) and are launched with
 `run`. A fresh `os/run.sh` disk carries the three big interpreters/tools below
 under `/bin`, **plus the userland C commands** (`dir`, `pwd`, `tree`, `cat`,
 `wc`, `grep`, … — see [commands/README.md](commands/README.md)):
@@ -117,7 +117,7 @@ e.g. `path /bin;/UTIL` — but does not persist across reboots.)
   program name, NUL-terminated (e.g. `run EDIT FOO.ASM` enters with `P2` → `"FOO.ASM"`);
   programs that take no arguments just ignore `P2`;
 - a program built on-target (its entry's load/exec are `0`, as `FCREATE` writes)
-  is loaded at the TPA base `$6100`, so assemble with `.org $6100`. Host-installed
+  is loaded at the TPA base `$5900`, so assemble with `.org $5900`. Host-installed
   programs set explicit non-zero load/exec and load there instead.
 
 ## How it fits together
@@ -131,12 +131,14 @@ place. Those addresses are an ABI — see the full table in
 [docs/p8x-monitor.md](../docs/p8x-monitor.md).
 
 ```
-ROM (EEPROM 28C64 $0000-$1FFF, 8K, rev E)     RAM ($2000-$FEFF, 56K)
-  $0000 reset -> $0160 monitor        $2000 P8X/OS kernel + shell  (from CF, rev E)
-  $0100 BIOS jump table  <------------ JSR CONOUT / CFREAD / ...
-  $0160 monitor body                   $6100 sector buffer (shared ABI)
-                                       $6100 OS variables
+ROM (EEPROM $0000-$17FF, 6K)                 RAM ($1800-$FEFF)
+  $0000 reset -> $0160 monitor        $1800 scratch island: IBUF, PATHBUF, APBUF,
+  $0100 BIOS jump table  <----------          SBUF $1D00, BIOS/FS scratch $1F00 (ABI)
+  $0160 monitor body                  $2000 P8X/OS kernel + shell  (from CF)
+                                      $5700 OS scratch  |  $5900 TPA (programs)
 ```
+(ROM shrunk 8K→6K on 2026-09-14; the top 2K became the $1800-$1FFF RAM island,
+which let the TPA base drop $5900→$5900. See [docs/p8x-monitor.md](../docs/p8x-monitor.md).)
 
 Boot path: monitor `B` reads the boot block (LBA 0), checks the `P8`
 signature + `OSCNT`, loads `OSCNT` sectors from LBA 1 to `$2000`, and `JMP`s

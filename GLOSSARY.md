@@ -24,7 +24,7 @@ across the P8X project. Authoritative sources where a term has one:
 | **ABI** | Application Binary Interface — the fixed binary contracts (entry addresses, layouts, conventions) that let separately-built code interoperate. See the BIOS jump table, the TPA, SBUF/LBA. |
 | **API** | Application Programming Interface — the *source*-level contract (vs ABI, the binary one). |
 | **BIOS** | The monitor's published service routines (jump table at `$0100`). |
-| **TPA** | Transient Program Area — RAM where `run`-loaded programs and the OS's `>`-redirect buffer live. `$6100` (was `$6A00`; dropped 2026-09-13). |
+| **TPA** | Transient Program Area — RAM where `run`-loaded programs and the OS's `>`-redirect buffer live. `$5900`–`$F7FF` (~39.8 KB; base dropped `$6A00` → `$6300` → `$6100` → `$5900` over 2026-09-13/14 as scratch relocated, most recently into the $1800–$1FFF island the 6 KB ROM freed). |
 | **BOM** | Bill of Materials — the orderable parts list (`hardware/p8x-bom.csv`). |
 | **DNP** | Do Not Populate — a footprint laid down on the board but left unstuffed (provisioned for later). |
 | **DRC** | Design Rule Check — the EDA tool's electrical/clearance verification of a routed board. |
@@ -119,11 +119,11 @@ The word burned to the 4× 28C64 EPROMs and interpreted by the emulator. Bit map
 
 | Term | Meaning |
 |------|---------|
-| **EEPROM** | `$0000–$1FFF` (8 KB, rev E) — monitor + BIOS at `$0000` (~4.7 KB used). BASIC is no longer ROM-resident; it runs as the disk program `/bin/basic.bin`. |
+| **EEPROM** | `$0000–$17FF` (6 KB; shrunk from 8 KB 2026-09-14 to free the $1800–$1FFF RAM island) — monitor + BIOS at `$0000` (~5.2 KB used). BASIC is no longer ROM-resident; it runs as the disk program `/bin/basic.bin`. |
 | **SRAM / RAM** | `$2000–$FEFF` (56 KB, rev E — 2× 62256). |
-| **SBUF** | 512-byte sector buffer at `$6100` (fixed by the BIOS — `CFWRITE` reads from it). |
+| **SBUF** | 512-byte sector buffer at `$1D00` (in the $1800–$1FFF RAM island; was `$6100`, then `$5E00`). Fixed by the BIOS — `CFWRITE` reads from it. |
 | **LBA** | Logical Block Address — the CF sector number; the BIOS reads the target LBA byte from a fixed `$6047`. |
-| **RBUF** | The OS's `>`-redirect capture buffer (= the TPA, `$6100`). |
+| **RBUF** | The OS's `>`-redirect capture buffer (= the TPA base, `$5900`). |
 | **CONIN / CONOUT / CONST** | BIOS console in / out / status (`$0100/$0103/$0106`). |
 | **CFINIT / CFREAD / CFWRITE** | BIOS CompactFlash init / read-sector / write-sector (`$0109/$010C/$010F`). |
 | **CFSEL / CFCURDRV / DRVSEL** | Dual-volume drive select: `CFSEL` (`$0148`, `A`=0/1) routes sector/FS I/O to that CF card via the `DRVSEL` byte (ORed into `CFHEAD` as the ATA device-select bit); `CFCURDRV` (`$014B`) reads the current drive. Two cards share the `$FF10` task-file port. |

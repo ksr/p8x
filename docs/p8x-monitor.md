@@ -132,12 +132,12 @@ correctly.)
 
 | Range | Use |
 |-------|-----|
-| `$0000–$1FFF` | EEPROM (8 KB, rev E; 28C64 or low 8 KB of a 28C256) — monitor + BIOS at `$0000` (~4.7 KB used). BASIC is no longer ROM-resident; it ships as `/BIN/BASIC.BIN` on disk. |
+| `$0000–$17FF` | EEPROM (6 KB; shrunk from 8 KB 2026-09-14 to free the $1800-$1FFF RAM island) — monitor + BIOS at `$0000` (~5.2 KB used). BASIC is no longer ROM-resident; it ships as `/BIN/BASIC.BIN` on disk. |
 | `$2000–$56FF` | RAM — **P8X/OS image** loads here (`$2000`, ~13.8 KB **including the resident window-manager kernel**, ending ~`$55E6`; the 16 KB cap = the on-disk LBA 1–32 boot region). |
 | `$5700–$5DFF` | RAM — **OS data** (relocated here 2026-09-13 to free TPA): shell variables + FS/PACK/FSCK state `$5700`, the stdin read buffer `IBUF`, search `PATH`, the `>>` prepend buffer `APBUF`. |
-| `$5E00–$5FFF` | RAM — **`SBUF`** sector buffer (moved down from `$6100` the same day; monitor-owned, but not part of the command `//#define` ABI). |
+| `$1D00–$1EFF` | RAM — **`SBUF`** sector buffer (in the $1800-$1FFF island; was `$6100`, then `$5E00`; monitor-owned, but not part of the command `//#define` ABI). |
 | `$6000–$60FF` | RAM — **firmware/BIOS scratch** (fixed ABI — commands `//#define` these): monitor line buffer `$6000` (64 bytes, so an input line is capped at **63 characters**), the parameter block + read/write/dir-iteration state `$6040` (CF `LBA` `$6047–$6049`, `FNAME` `$604A`, `FSRC`/`FLEN`, `FFLAG` `$6075`, `DIBUFH` `$607E`). This block did **not** move. |
-| `$6100–$FDFF` | RAM — **TPA**: user programs + data (`RUN` loads at `$6100`, ~40.1 KB; the C stack grows down from `CSTACKTOP $F800`). Above `$F800` sit the fixed scratch pages: the shell's **8-line command-history ring at `$F800–$F9FF`**, commands' glob/dir-iteration page (FSDIRBUF) at `$FA00`, and the file-read buffer (RDBUF) at `$FC00`. |
+| `$5900–$F7FF` | RAM — **TPA**: user programs + data (`RUN` loads at `$5900`, ~39.8 KB; the C stack grows down from `CSTACKTOP $F800`). Above `$F800` sit the fixed scratch pages: the shell's **8-line command-history ring at `$F800–$F9FF`**, commands' glob/dir-iteration page (FSDIRBUF) at `$FA00`, and the file-read buffer (RDBUF) at `$FC00`. |
 | `$FE00–$FEFF` | RAM — stack (P3 grows down from `$FEFF`). |
 | `$FF00` | switch input port (read) |
 | `$FF02` | LED output port (write) |
@@ -145,6 +145,12 @@ correctly.)
 | `$FF08 / $FF09` | **second** 6850 ACIA status / data — the 2nd serial port added for **two-mode operation** (register-identical to the console ACIA: status bit0 RDRF, bit1 TDRE). Drives host file transfer via the `kermit` command while the console keeps `$FF04`. Modelled by `p8xemu` (`-2i`/`-2o` file-backed RX/TX). |
 | `$FF10–$FF17` | CF-IDE task-file registers |
 | `$FF20–$FF2F` | retired — was the graphics display's DEVICE door (register pokes drew immediately). Closed by the single-interface migration: reads float `$FF` like any absent card, and the register file survives only as the GL walker's internal property. The GL/PGC port at `$FF50` is the one graphics interface — see [p8x-graphics-theory.md](p8x-graphics-theory.md). Modelled by `p8xemu` — see [emulator/README.md](../emulator/README.md#the-graphics-display) |
+
+> Every data address above is single-sourced in `generators/gen_memmap.py`
+> (which emits `memmap.inc` for the OS/monitor to `.include`, plus `memmap.h`,
+> `memmap.py`, and the command-facing `lib_mem`). This table is a hand-maintained
+> mirror — regenerate the map and update it together. (Generating the table
+> itself from `gen_memmap.py` is a tracked BACKLOG item.)
 
 Reset clears the PC to `$0000`; the stack pointer (P3) is initialised to the top
 of RAM.

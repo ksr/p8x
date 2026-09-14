@@ -1344,6 +1344,9 @@ for i in range(16):
 mnet("-IOPG",("U4","Y"),("U7","1B"))
 mnet("-RAMCE",("U7","1Y"),("U2","!CE"))
 # rev E memory map: 8K ROM ($0000-$1FFF) + 56K RAM ($2000-$FEFF) across two 62256.
+# NOTE (2026-09-14): the EMULATOR/FPGA now treat $1800-$1FFF as RAM (a 6K ROM
+#   window, TPABASE dropped to $5900); this TTL schematic still decodes the full
+#   8K ROM below and would need a decode mod ($1800-$1FFF -> RAM) to match.
 #   U1  ROM(8K)  !CE = OR(A13|A14, A15)        -> $0000-$1FFF  (8K window; A13 added)
 #   U10 62256    !CE = NAND(!A15, A13|A14)     -> $2000-$7FFF  (low 24K used; deselected
 #                                                              in the $0000-$1FFF ROM page)

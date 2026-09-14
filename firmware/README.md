@@ -15,7 +15,7 @@ EEPROM at reset (origin `$0000`).
 
 ## Build
 
-Assembled by [`../assembler/p8xasm.py`](../assembler/) into an 8 KB ROM image (`$0000–$1FFF`)
+Assembled by [`../assembler/p8xasm.py`](../assembler/) into a 6 KB ROM image (`$0000–$17FF`; shrunk from 8 KB 2026-09-14)
 (the monitor + BIOS use ~4.3 KB; the rest is erased). The burnable image (and its
 Intel HEX) is built into [`../rom/`](../rom/) by:
 

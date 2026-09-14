@@ -1,6 +1,6 @@
 ---
 name: reference_p8x_memory_map
-description: "P8X rev E memory map — 8K ROM, OS at $2000, syscall ABI at $20xx"
+description: "P8X memory map — 6K ROM $0000-$17FF (reclaim 2026-09-14), OS at $2000, TPABASE $5900, syscall ABI $20xx"
 metadata: 
   node_type: memory
   type: reference
@@ -30,7 +30,8 @@ P8X **rev E** memory map (2026-07-13, commit 6cadf38):
   and the graphics flags (GFXPRES/GTSUSP/GCONEN) + ROSTATE/ROSDRV are hardcoded
   in ~28 command/app/fixture sources, all shifted −$4100 in lockstep. `SBUF`
   (not in the //#define ABI) only touched raw-CFWRITE fixtures.
-- **TPA is ~41.7K ($5900–$FE00)**. Program `--base`/`--load`/`--exec`, cc/asm
+- **TPA is ~39.8 KB ($5900–$F7FF** = 40,704 B; a program's image + its P3 stack
+  which grows down from $F7FF, below the system buffers at $F800+**)**. Program `--base`/`--load`/`--exec`, cc/asm
   `.org` (p8cc.py via memmap.TPABASE; p8xcc.asm/cc.c/asm commands hardcoded, all
   shifted), RBUF, MKFLATB, DEFADDR (`#<TPABASE`/`#>TPABASE`), and the monitor's
   dir-buffer default (`#>SBUF`) all track the base. Programs at an old base still

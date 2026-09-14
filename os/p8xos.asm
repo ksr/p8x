@@ -5,7 +5,7 @@
 ; carry its own drivers: it calls the BIOS jump table the monitor publishes at
 ; $0100 (see firmware/p8xmon.asm), so console + CF access stay in one place.
 ;
-; rev E memory map (8K ROM / 56K RAM) puts RAM at $2000, so the OS loads there.
+; The memory map puts RAM/OS at $2000, so the OS loads there. (ROM window shrunk 8K->6K on 2026-09-14; $1800-$1FFF is a reclaimed RAM island -- see generators/gen_memmap.py.)
 ; The on-disk OS region (LBA 1..32) caps the OS image at 32 sectors / 16K.
 ; Firmware scratch $1F00-$1FFF + SBUF $1D00 (in the $1800-$1FFF RAM island opened
 ; by shrinking the ROM to 6K, 2026-09-14) are fixed by the BIOS.
@@ -571,7 +571,7 @@ DORUN:  JSR  FINDARG
         STA  RUNSKIP            ;   the program sees the tail after its own name
 RUNGO:  LDA  #0                 ; clear any pending console LF from a prior program
         STA  GPLF
-        JSR  DEFADDR            ; load/exec 0 -> TPA base $6A00 (on-target-built
+        JSR  DEFADDR            ; load/exec 0 -> TPA base $5900 (on-target-built
         JSR  LOADF              ; programs, e.g. ASM output, carry 0 from FCREATE)
         ; Redirection for programs. KEY CONSTRAINT: FFIND scans through SBUF, but
         ; FWOPEN then keeps the write stream's partial (unflushed) sector in SBUF —
@@ -652,7 +652,7 @@ DR_NOOUT:LDA #0                 ; restore console stdin for the next command
         STA  INARM
 DR_DONE:JMP  SHELL
 ; DEFADDR - a directory entry with load/exec == 0 (the value FCREATE writes for
-; files built on-target) is taken to mean "load at the TPA base $6A00". Programs
+; files built on-target) is taken to mean "load at the TPA base $5900". Programs
 ; installed from the host set explicit non-zero load/exec, so they are untouched.
 DEFADDR:LDA  LOADLO
         LDB  LOADHI
@@ -4825,7 +4825,7 @@ RDS_CL: LDA  (P1)+
         JNZ  RDS_CL
         LDA  #1
         STA  REDIRF
-        LDA  #<RBUF            ; capture pointer = RBUF ($6A00)
+        LDA  #<RBUF            ; capture pointer = RBUF ($5900)
         STA  RPTRL
         LDA  #>RBUF
         STA  RPTRH

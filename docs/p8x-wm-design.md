@@ -36,11 +36,12 @@ kernel needs **no loading at all**: it is part of the OS image, resident from
 boot, reached through the OS syscall table.
 
 ```
+  $1800..$1FFF     RAM island (freed by the 6K ROM 2026-09-14): IBUF, PATHBUF,
+                     APBUF, SBUF $1D00, BIOS/FS scratch $1F00 — see gen_memmap.py
   $2000            OS (resident) — INCLUDING the WM kernel (syscalls $2027-$204B)
-  $5ED7            end of the OS+kernel image (~41 B growth room)
-  $5F00            tab-complete scratch (256 B)
-  $6000            OS/BIOS scratch
-  $6100  TPABASE   ── full TPA for apps ($6100..CSTACKTOP, ~40.1 KB) ──
+  ~$5586           end of the OS+kernel image
+  $5700..$58FF     OS scratch (LINEBUF, CWDPATH, FS/shell/make vars)
+  $5900  TPABASE   ── full TPA for apps ($5900..CSTACKTOP, ~39.8 KB) ──
   $F800  CSTACKTOP  apps' C stack top
   $F800..$F9FF     shell command-history ring (8 × 64 B)
   $FA00..$FBFF     FSDIRBUF: the C commands' dir/glob sector page (dir, cat, glob_expand)

@@ -141,13 +141,13 @@ origin), `BASRAM` (data base), `PBUF` (rebuild scratch), and `MONITOR` (where
 |-------|-----------------|-----------------|------------|
 | ~~Standalone~~ | `$0000` | `$8000` | **RETIRED (2026-08-13)** — see the note below |
 | Disk | `$2000` | `$A000` | installed on a P8XFS image, booted by the monitor `B` command (rev E: loads at `$2000`) |
-| Run-from-OS | `$6100` | `$C500` | a TPA program (`PBUF=$E000`, `MONITOR=$2000`) installed as `BASIC.BIN`; `RUN` it from the OS, `BYE` returns to the OS (see below) |
+| Run-from-OS | `$5900` | `$C500` | a TPA program (`PBUF=$E000`, `MONITOR=$2000`) installed as `BASIC.BIN`; `RUN` it from the OS, `BYE` returns to the OS (see below) |
 
 > **The standalone build no longer works.** BASIC's `PUTC`/`GETC` now tail-call the
 > BIOS (`CONOUT` `$0103` / `CONIN` `$0100`) instead of driving the ACIA directly,
 > so it needs the monitor resident at `$0000-$1FFF` — which the `$0000` build
 > replaces. Nothing had built that variant for some time (every target passes
-> `-D BASORG=$2000` or `$6100`, and `build_rom.sh` states BASIC is no longer
+> `-D BASORG=$2000` or `$5900`, and `build_rom.sh` states BASIC is no longer
 > ROM-resident), so this formalises an existing state rather than removing a
 > capability. The source defaults are still the `$0000` values; restoring the
 > target would mean giving BASIC back its own console routines.
@@ -175,18 +175,18 @@ python3 tools/p8xfs.py boot   disk.img basicdisk.bin
 
 **Run from P8X/OS** — the primary way to use BASIC: install it as a regular OS
 program so you can `RUN BASIC.BIN` from the OS shell and `BYE` back to it. No source change —
-just relocate everything into the **TPA** (`$6100+`, clear of the OS at
+just relocate everything into the **TPA** (`$5900+`, clear of the OS at
 `$2000–$AFFF`) and point `MONITOR` at the OS cold-start so `BYE` re-enters the OS
 (which stays resident) instead of the ROM monitor:
 
 ```sh
 python3 assembler/p8xasm.py basic/p8xbasic.asm -o basicrun.bin \
-        --base 0x6100 -D BASORG=0x6100 -D BASRAM=0xC500 -D PBUF=0xE000 -D MONITOR=0x2000
-python3 tools/p8xfs.py put disk.img basicrun.bin --name BASIC.BIN --load 0x6100 --exec 0x6100
+        --base 0x5900 -D BASORG=0x5900 -D BASRAM=0xC500 -D PBUF=0xE000 -D MONITOR=0x2000
+python3 tools/p8xfs.py put disk.img basicrun.bin --name BASIC.BIN --load 0x5900 --exec 0x5900
 # boot the OS (B), then:  RUN BASIC.BIN   ... use BASIC ...   BYE   (-> back at /> )
 ```
 
-Layout: code `$6100`–`$8DAx` (~8.9 KB), data `$C500` (`PROG` at `$CA80`), rebuild
+Layout: code `$5900`–`$8DAx` (~8.9 KB), data `$C500` (`PROG` at `$CA80`), rebuild
 buffer `$E000`; the stack stays at `$FEFF`. Covered by `os_basic_test.sh`.
 
 These paths are covered by `make test-basic` (in `emulator/`): disk BASIC via
@@ -233,7 +233,7 @@ that `POKE`s into `$A000`–`$BC00` (free under the 9 KB asm build) corrupts it.
 
 | Region | Use |
 |--------|-----|
-| `$0000-$1FFF` | interpreter code (EEPROM, 8 KB rev E) |
+| `$0000-$1FFF` | interpreter code (EEPROM, 6 KB) |
 | `$2000-$7FFF` | RAM (rev E) — unused by the standalone build |
 | `$8000-…`     | tokenized program text (standalone `BASRAM=$8000`) |
 | `…-$FDFF`     | named numeric vars (32) + string-var table + string/eval scratch |

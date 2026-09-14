@@ -11,7 +11,7 @@
 ;   SYS_PUTC   = $2009 (A = char).  puts() = SYS_PUTS then SYS_PUTC(10).
 ;   return to the OS with RTS.
 ;
-;   python3 assembler/p8xasm.py os/commands-asm/pwd.asm -o pwd.bin --base 0x6A00
+;   python3 assembler/p8xasm.py os/commands-asm/pwd.asm -o pwd.bin --base 0x5900
 ;#use abi
 
         .org $5900

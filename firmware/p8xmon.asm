@@ -716,7 +716,7 @@ CMD_B:  JSR  CFINIT
         STA  CNT
         LDA  #1
         STA  LBA
-        LDP1 #$2000         ; OS load address (rev E: 8K ROM, RAM starts at $2000)
+        LDP1 #$2000         ; OS load address (OS/RAM at $2000; ROM window is 6K $0000-$17FF, $1800-$1FFF reclaimed RAM)
 BLOOP:  JSR  CFRDSEC        ; reads 512 bytes, advances P1
         LDA  LBA
         INC

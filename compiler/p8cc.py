@@ -2,7 +2,7 @@
 """p8cc - a tiny C cross-compiler for the P8X.
 
 Emits P8X assembly (for assembler/p8xasm.py) targeting the OS transient program
-area ($6A00), so the output is a RUNnable program. Grown in phases.
+area ($5900), so the output is a RUNnable program. Grown in phases.
 
 Supported now:
   types        int (16-bit), char (8-bit), pointers (T *), arrays (T a[N]),
@@ -128,7 +128,7 @@ baseline; see docs/p8x-isa-c-extensions.md):
     __ax there in the prologue (names_used: not at all if the body never
     reads it); params 1.. sit above the return address as before.
 
-Usage:  p8cc.py prog.c [-o prog.asm]   then  p8xasm.py prog.asm -o prog.bin --base 0x6A00
+Usage:  p8cc.py prog.c [-o prog.asm]   then  p8xasm.py prog.asm -o prog.bin --base 0x5900
 """
 import sys, os
 # Single-source memory map: pull the TPA base + C-stack top from the generated

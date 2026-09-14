@@ -1,5 +1,155 @@
 # P8X Backlog — Completed
 
+<!-- migrated from BACKLOG.md 2026-09-14 (category review: [x] done items belong here) -->
+
+- [x] **Frame-model on-board C compiler — LANDED in `apps/cc.c` (2026-09-13).**
+      `apps/cc.c` now uses the P3-stack-frame codegen: globals stay in static
+      `__V` slots, locals + params live in a `SUBP3 #_fr_NAME` frame (`(P3+d)`,
+      params read in place, NO slot-saves), streaming-safe via an **assembler
+      symbol for the frame size** (`_fr_NAME = L` at the function end; both
+      assemblers evaluate `(Pn+d)`/`#imm` as pass-2 expressions). Plus the
+      one-token-lookahead leaf optimization (a bare constant/scalar right
+      operand skips the push/pop) — ~13% smaller output on real programs
+      (grep 54,171 → 47,255 B). Recursion-correct (fib, mutual even/odd), all
+      comparison orderings, `&&`/`||`, arrays, params, for-loops verified by
+      running the compiled output (`cc_c_test`, now behavioural). Binary 21,306 B.
+      Design/measurements: `scratchpad/FRAME_PLAN.md`.
+      **Known limitation (guarded, not silent):** a function with >255 bytes of
+      locals (grep `collect` cn[384], cp `copy_tree` names[312]) cannot be
+      addressed by the 8-bit `(P3+d)` displacement, so `cc.c` now **bails loudly**
+      ("frame ... over 255 bytes (use /bin/cc)") instead of truncating. The
+      static-slot `/bin/cc` (p8xcc.asm) still compiles those on-board. A general
+      far-path (frame pointer / 16-bit disp) is future work.
+
+- [x] **Self-host of `cc.c` — ACHIEVED on-board (2026-09-14).** Milestone B: the
+      frame-model `apps/cc.c` (built by the host into `/binc/cc.bin`) compiles its
+      OWN source on the machine, the native assembler assembles that into a
+      30,843 B binary, and that self-compiled compiler RUNS -- it compiles a
+      program correctly and recompiles cc.c to BYTE-IDENTICAL output (a fixed
+      point). Regression test: `cc_selfhost_test.sh`. It took four pieces landing
+      together: (1) the P3-frame codegen (recursion-correct, ~13% smaller so the
+      image is 30.8 KB not 35 KB); (2) +2,048 B TPA (ROM 8K→6K, TPABASE $6100→
+      $5900); (3) cc.c's table layout raised (HEADS $B800→$D400, USELEVELS 3→2,
+      arena ~4.9 KB) so the 30.8 KB self-compile clears its own tables under the
+      C-stack/RDBUF; (4) the assembler symbol table grown 1,120→1,664 for the
+      1,548-symbol self-compile (plus the DIRPAGE bare-page-byte fix). Codegen
+      tweaks were the WRONG lever (leaf ~400 B net; a peephole +742 B net because
+      the compiler compiles its own optimization code) -- TPA + layout + assembler
+      capacity were what mattered. See [[reference_p8x_cc_caps]],
+      `scratchpad/FRAME_PLAN.md`.
+
+- [x] **BASIC now honours the OS current directory (fixed 2026-08-13).** From the
+      OS shell, `cd src` then `basic` then `SAVE "T"` used to write `/T`; it now
+      writes `/src/T`.
+      - **Cause:** the BIOS resolvers (`FRESOLVE`/`FOPEN`/`FOPENDIR`) always start
+        at the **root**. `/bin` commands prefix the CWD first (`lib_apath.c`'s
+        `abspath`); BASIC made no OS calls at all, so every name resolved from `/`.
+      - **Fix:** `APATH` in `basic/p8xbasic.asm` — prefixes `SYS_GETCWD` ($2003)
+        onto any path not starting with `/`, wired into `SAVE`, `LOAD` and the
+        `OPEN` data-file path. Gated on `MONITOR` being non-zero, so the disk-boot
+        build (no OS underneath, root already correct) compiles it to a no-op
+        without needing conditional assembly.
+      - **Also fixed the same day: `BYE` no longer reboots the OS.** It did
+        `JMP MONITOR` = `$2000` = the OS COLD entry, so leaving BASIC reprinted
+        the banner and reset the CWD to the root. It now restores the entry stack
+        and `RTS`es to the shell, as every `/bin` program does. `os_basic_test.sh`
+        had been asserting the banner appeared *twice*, i.e. encoding the reboot
+        as the pass condition; that expectation is inverted now.
+      - **Regression test:** `emulator/test/basic_cwd_test.sh`, in `make test-basic`.
+        It checks the file lands in the subdirectory, does **not** also land in the
+        root, and that an absolute path still works — and was confirmed to FAIL
+        against the unfixed BASIC, so it actually detects the bug.
+
+- [x] **A C-written BASIC (user, 2026-09-12) — DONE 2026-09-13.** `basic/basic.c`
+      (~1,000 lines) is the same interpreter in the p8cc subset: same tokens,
+      messages, GL streams and memory layout as the asm one; built by the host
+      toolchain (`glkwtab.c` from gen_glkw.py + source → clib → p8cc.py) as
+      `/binc/basic.bin`, tested by `basic_c_test.sh` (the asm tests' programs)
+      and a 250-line differential session that matches the asm build exactly.
+      THE COMPARISON (basic/README.md "The C version"): 21,393 vs 9,124 B (2.3×);
+      arithmetic loop 59.6 M vs 16.5 M cycles (3.6×), GOSUB + variables 76.1 M
+      vs 18.9 M (4.0×), strings 28.2 M vs 5.8 M (4.9×) — after tuning the C for
+      this compiler (int-pointer loads, shifts instead of constant multiplies,
+      inlined name compare / blank skip; it started at 8–13×). What remains is
+      call-frame overhead and byte-at-a-time pointer walks. Verdict for the
+      "retire asm where C wins" question: for the interpreter, asm wins on
+      both axes by a wide margin; the C twin stays as the reference/comparison
+      build. Gotchas learned are in docs/memory/reference_p8x_c_subset_gotchas.md
+      (no break/continue in p8cc.py, unsigned int, no longjmp, `*` const cost).
+
+- [x] **A C-written assembler — DONE 2026-09-13.** `apps/asm.c` (~450 lines;
+      `opctab.c` generated by `gen_p8xopc.py --c`), `/binc/asm.bin`, tested by
+      `asm_c_test.sh` (coverage, program, ;#use, .include and self-host all
+      byte-identical to the host assembler). THE COMPARISON (apps/README.md):
+      9,795 vs 4,065 B (2.4×); coverage source 11.0 M vs 2.62 M cycles (4.2×),
+      self-host 194 M vs 49.5 M (3.9×); 480 vs 1,120 symbols (the table sits
+      above the larger image). Same verdict as BASIC: the from-scratch asm wins
+      both axes; the C twin is the reference build. Next: the compiler in C.
+
+- [x] **A C-written C compiler — DONE 2026-09-13.** `apps/cc.c`, `/binc/cc.bin`,
+      tested by `cc_c_test.sh` (six sources compiled by both compilers on the
+      machine, text-identical; two of them assembled natively and run; cc.c
+      itself compiled by both: 136,032 identical bytes). THE COMPARISON
+      (apps/README.md "The C version"): 18,089 vs 10,182 B (1.8×); pwd 4.54 M
+      vs 2.09 M cycles (2.2×), wc 37.7 vs 20.6 M, vi 54.4 vs 30.2 M, its own
+      source 130.2 vs 68.0 M (1.8–1.9×) — the closest of the three twins, both
+      compilers being bound by the BIOS byte stream and SYS_PUTC. The
+      differential found three bugs in the asm compiler (`a && b == c`, byte
+      label counter, byte local-array size), all fixed. THE PRIZE — a
+      self-compiling compiler on the machine — is BLOCKED by codegen size:
+      cc.c compiled by the static-slot compiler is 35,057 B (host frame model
+      18,089), ending at $F2F1 with no room for its tables; 906 of its lines
+      are slot saves around calls. It needs the frame-model codegen (the
+      hand-asm item's deferred follow-up), not a smaller source. Verdict: asm
+      wins both axes by the smallest margin yet; the C twin is the reference
+      build and the self-host candidate once the codegen changes.
+
+- [x] **Mouse-type input, door one -- DELIVERED 2026-09-04 (496bca1),
+      simpler than the 2026-08-29 sketch imagined.** No protocol v2,
+      no bridge change: the TERMINAL forwards the host mouse as xterm
+      SGR escape sequences on the console it already has, and paint
+      parses them off CONIN next to the arrow keys (press/drag/release
+      + palette clicks; ESC[18t size query, CONST-probed and strict,
+      80x24 fallback; cell resolution -- a bigger terminal window is a
+      finer brush; SGR-Pixels 1016 is the upgrade for terminals that
+      speak it). CONST joined the C/asm ABI books. Still open from the
+      sketch: a shared pointer ABSTRACTION (SYS_PTR or a lib) once a
+      second client wants events, and BASIC's PTR() trio. Door two --
+      real pointer hardware -- is the PS/2 card entry below.
+
+- [x] **Simple graphics editor -- SHIPPED 2026-09-04 as `paint`
+      (4bb1487 + 496bca1; the 2026-08-29 sketch, delivered).** Vector
+      display list (erase pops + replays), 8-colour palette + tool
+      cells drawn with the primitives themselves, LINFUN-COMPLEMENT
+      crosshair and rubber-band (mode 1 beats the sketched XOR: it
+      restores ANY background), AREABC fills with the boundary colour
+      probed by a PIXELR ray, and the MOUSE through the console's
+      xterm SGR reports -- press-drag-release, palette clicks. The
+      palette strip is guarded by the card (WINDOW+VWPORT moved
+      TOGETHER = identity-with-clip; a viewport alone REMAPS -- the
+      build's recorded lesson). c_paint_test pins it pixel-exact,
+      keyboard and mouse sessions both. Remaining from the sketch,
+      still open: SAVE/LOAD -- as P8I via the grab path, or the
+      deluxe save-as-GL-scene (the display list IS a command list).
+
+- [x] **Stage 10h subset — SHIPPED 2026-08-29 (TEXT/TSIZE/TANGLE +
+      TDEFIN; the card split paid for it). Remaining from the sketch:
+      TEXT-inside-lists (needs a second replay context, ~+100), TJUST,
+      TEXTP. Original costing (2026-08-27):** A fabric TEXT verb is ~260 LUT4 against ~100 of
+      headroom plus ~150-200 of remaining verifiable diet (the ellipse
+      INITIALIZER adds and the Bresenham setup subtracts, both now
+      bench-covered) -- borderline reachable. The design that makes it
+      cheap: a glyph IS a command list (strokes as MOVER3/DRAWR3, so
+      MDSCAL/MDROTZ give TSIZE/TANGLE through the existing compose
+      path; a trailing MOVER3 advance walks the baseline in model
+      space for free); glyphs live in a SECOND 64-slot SDRAM bank at
+      $140000; the genuinely new fabric is the counted-string
+      parameter shape (~120). First version defers TEXT-inside-lists
+      (needs a second replay context, ~+100). Tier 0 (zero fabric:
+      FONT.GL records glyphs into slots, a host `text` command emits
+      CLRUNs) ships any time and proves the glyph format first.
+
+
 - [x] **Whole toolchain and all shipped code on the latest ISA (user, 2026-09-12; DONE the same day).**
       Closing summary: every tool emits Tier A (p8cc.py, p8xasm.py, p8cc.c,
       on-board asm + cc), every C source is recompiled on each disk build,

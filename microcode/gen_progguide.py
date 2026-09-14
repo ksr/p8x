@@ -218,7 +218,7 @@ E.append(Paragraph(
  "P1 and P2 are general pointers used by the (Pn) addressing modes. "
  "<b>FLAGS</b> - C, Z, N, V, latched only by instructions marked in the Flags column.",B))
 E.append(Paragraph(
- "<b>Memory map (rev E):</b> $0000-$1FFF ROM (8K) &nbsp;|&nbsp; $2000-$FEFF RAM (56K) &nbsp;|&nbsp; "
+ "<b>Memory map</b> (single-sourced in generators/gen_memmap.py)<b>:</b> $0000-$17FF ROM (6K) &nbsp;|&nbsp; $1800-$FEFF RAM ($1800-$1FFF scratch island) &nbsp;|&nbsp; "
  "$FF00-$FFFF I/O: $FF00 switches (r), $FF02 LEDs (w), $FF04 ACIA status "
  "(bit0 RX ready, bit1 TX ready), $FF05 ACIA data.",B))
 E.append(Paragraph(
@@ -302,16 +302,16 @@ msg:    .asciiz "P8X lives!\\r\\n" """,MONO))
 E.append(Paragraph("Writing a program for P8X/OS",H2))
 E.append(Paragraph(
  "Programs launched by the OS <b>RUN</b> command load into the transient "
- "program area at <b>$6A00</b> and run via a <b>JSR</b> to their exec address. "
+ "program area at <b>$5900</b> and run via a <b>JSR</b> to their exec address. "
  "The program ABI: <b>return to the shell with RTS</b> (P3, the stack, is the "
  "OS's - leave it balanced); on entry <b>P2 points at the argument tail</b> - "
  "the command text after the program name, NUL-terminated (so "
  "<font face='Courier'>RUN EDIT FOO.ASM</font> enters with P2 -> "
  "<font face='Courier'>\"FOO.ASM\"</font>); programs that take no arguments "
- "ignore P2. Build with <font face='Courier'>.org $6A00</font> and the host "
- "assembler's <font face='Courier'>--base 0x6A00</font>, or assemble on-target "
+ "ignore P2. Build with <font face='Courier'>.org $5900</font> and the host "
+ "assembler's <font face='Courier'>--base 0x5900</font>, or assemble on-target "
  "with ASM. A file created on-target carries load/exec 0, which the OS maps to "
- "$6A00, so it is directly RUNnable. The BIOS jump table at $0100 "
+ "$5900, so it is directly RUNnable. The BIOS jump table at $0100 "
  "(console + CF, the FFIND/FCREATE/FDELETE/FCOMMIT file calls, the FOPEN/FGETB "
  "and FWOPEN/FPUTB/FCLOSE byte streams, and FRESOLVE/FNORM/FOPENDIR/FNEXT) "
  "is the only entry point a program needs - it must not call into OS internals.",B))
@@ -341,7 +341,7 @@ _md.append("**A, B** — 8-bit ALU operand registers; results land in A. "
            "initialise it early — see note 3). P1 and P2 are general pointers "
            "used by the (Pn) addressing modes. **FLAGS** — C, Z, N, V, latched "
            "only by instructions marked in the Flags column.\n")
-_md.append("**Memory map (rev E):** $0000-$1FFF ROM (8K) | $2000-$FEFF RAM (56K) "
+_md.append("**Memory map** (single-sourced in generators/gen_memmap.py): $0000-$17FF ROM (6K) | $1800-$FEFF RAM ($1800-$1FFF scratch island) "
            "| $FF00-$FFFF I/O: $FF00 switches (r), $FF02 LEDs (w), $FF04 ACIA "
            "status (bit0 RX ready, bit1 TX ready), $FF05 ACIA data.\n")
 _md.append("**Reset:** P0 is forced to $0000; execution begins there. All other "
@@ -401,15 +401,15 @@ msg:    .asciiz "P8X lives!\\r\\n" """)
 _md.append("```\n")
 _md.append("## Writing a program for P8X/OS\n")
 _md.append("Programs launched by the OS **RUN** command load into the transient "
-           "program area at **$6A00** and run via a **JSR** to their exec "
+           "program area at **$5900** and run via a **JSR** to their exec "
            "address. The program ABI: **return to the shell with RTS** (P3, the "
            "stack, is the OS's — leave it balanced); on entry **P2 points at "
            "the argument tail** — the command text after the program name, "
            "NUL-terminated (so `RUN EDIT FOO.ASM` enters with P2 -> "
            "`\"FOO.ASM\"`); programs that take no arguments ignore P2. Build "
-           "with `.org $6A00` and the host assembler's `--base 0x6A00`, or "
+           "with `.org $5900` and the host assembler's `--base 0x5900`, or "
            "assemble on-target with ASM. A file created on-target carries "
-           "load/exec 0, which the OS maps to $6A00, so it is directly "
+           "load/exec 0, which the OS maps to $5900, so it is directly "
            "RUNnable. The BIOS jump table at $0100 (console + CF, the "
            "FFIND/FCREATE/FDELETE/FCOMMIT file calls, the FOPEN/FGETB and "
            "FWOPEN/FPUTB/FCLOSE byte streams, and FRESOLVE/FNORM/FOPENDIR/"

@@ -1,6 +1,6 @@
 # P8X applications
 
-Standalone **TPA programs** — assembled to load and execute at `$6100` (the
+Standalone **TPA programs** — assembled to load and execute at `$5900` (the
 transient program area), launched from P8X/OS with `RUN`. Each is built entirely
 on the BIOS jump table (`$0100..`); none depend on OS internals, so they return
 to the shell with a plain `RTS`.
@@ -8,8 +8,8 @@ to the shell with a plain `RTS`.
 Build one with the host assembler and place it on a disk:
 
 ```sh
-python3 assembler/p8xasm.py apps/p8xedit.asm -o edit.bin --base 0x6100
-python3 tools/p8xfs.py put disk.img edit.bin --name /BIN/EDIT.BIN --load 0x6100 --exec 0x6100
+python3 assembler/p8xasm.py apps/p8xedit.asm -o edit.bin --base 0x5900
+python3 tools/p8xfs.py put disk.img edit.bin --name /BIN/EDIT.BIN --load 0x5900 --exec 0x5900
 ```
 
 `os/run.sh` already builds and installs these into a fresh demo disk under
@@ -56,7 +56,7 @@ RUN ASM.BIN SRC.ASM OUT.BIN
 
 Assembles `SRC.ASM` (read from the disk) and writes the binary `OUT.BIN`. The
 output carries `load/exec = 0` from `FCREATE`, which the OS reads as the TPA
-base `$6100` — so a program written `.org $6100` is **directly RUNnable** right
+base `$5900` — so a program written `.org $5900` is **directly RUNnable** right
 after assembling it. Pair with `EDIT` for a complete on-target edit → assemble →
 run loop.
 
@@ -100,14 +100,14 @@ Source and output are both **streamed to/from disk** through the BIOS file
 streams — input via `FOPEN`/`FGETB` (a line at a time), output via
 `FWOPEN`/`FPUTB`/`FCLOSE` (a sector at a time). So source and output size are
 bounded by the disk, not RAM, and the freed RAM gives a large symbol table
-(1,120 entries at `$8000`–`$C5FF`). As a result the assembler can **assemble
+(1,664 entries at `$8000`–`$E7FF`). As a result the assembler can **assemble
 its own source** on-target, producing a binary byte-identical to the host build
 (`emulator/test/asm_selfhost_test.sh`, `make test-asm-selfhost`).
 
 Correctness is checked by assembling a feature source both on-target and with
 the host assembler and comparing the bytes (`emulator/test/os_asm_test.sh`).
-Limits: 1,120 symbols, 12-char names, 127-char source lines, single `.org`
-(use `.org $6100`; a backward `.org` is rejected).
+Limits: 1,664 symbols, 12-char names, 127-char source lines, single `.org`
+(use `.org $5900`; a backward `.org` is rejected).
 
 **Redesigned for the Tier A ISA (2026-09-12).** `p8xasm.asm` was rewritten
 from scratch as a drop-in (same syntax, same error messages, byte-identical
@@ -141,7 +141,7 @@ source with it, all byte-identical to the host.
 | binary | 4,116 B | 9,945 B | 2.4× |
 | the all-opcode coverage source | 2.62 M cycles | 11.0 M | 4.2× |
 | its own 71 KB source (self-host) | 49.5 M | 194 M | 3.9× |
-| symbol capacity | 1,120 | 480 (the table starts above the larger image, at `$A800`) | |
+| symbol capacity | 1,664 | 480 (the table starts above the larger image, at `$A800`) | |
 
 Tuned for the compiler like the C BASIC (an add-only hash instead of a 7-step
 shift per character, the identifier scan and the byte loop inlined), which
@@ -262,12 +262,14 @@ stream and `SYS_PUTC`. The source keeps to the subset BOTH compilers accept
 (no `break`/`continue`, no initialised globals, no string literal over 127
 characters, byte stores through pointers written `p[0] = v` because the
 on-board compiler stores a word through `*p =`), so the on-board compiler
-compiles it — but **the self-hosting round trip does not fit**: `cc.c`
-compiled by the static-slot compiler is 35,057 bytes (the host compiler's
-frame model makes 18,089), ending at `$F2F1` with no room left for the
-compiler's own tables; 906 of its lines are slot saves around calls. A
-self-compiling C compiler on the machine needs the frame-model codegen (the
-deferred item in [`BACKLOG.md`](../BACKLOG.md)), not a smaller source.
+compiles it — and **the self-hosting round trip now WORKS** (2026-09-14): `cc.c`
+uses the P3-stack-frame codegen (recursion-correct, ~13% smaller), which brings
+its self-compile to 30,843 bytes; the native assembler assembles that (its
+symbol table grew 1,120 → 1,664 for the 1,548-symbol output), and the
+self-compiled compiler **runs and reproduces its own output byte-for-byte** — a
+fixed point. It took the frame model plus the +2 KB of TPA (the ROM 8K → 6K
+reclaim dropped `TPABASE` to `$5900`) plus a raised table layout so the 30.8 KB
+image clears its own tables. Regression test: `emulator/test/cc_selfhost_test.sh`.
 
 **Language (through v0.28):** functions, direct **and mutual** recursion (via a
 forward prototype), pointers + pass-by-reference, `int`/`char`, arrays with `[]`
