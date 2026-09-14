@@ -7,11 +7,11 @@ metadata:
   originSessionId: df90e3f3-8668-416d-bc7b-83f2952ba723
 ---
 
-P8X is a hand-built 8-bit microcoded CPU using ~130 74HCT chips (per generators/gen_bom.py — the old "~75" estimate was low; the register bank alone is 44 ICs) on a 10-slot DIN41612 backplane. Project lives at ~/Documents/Projects/p8x.
+P8X is a hand-built 8-bit microcoded CPU using ~130 74HCT chips (per generators/gen_bom.py — the old "~75" estimate was low; the register bank alone is 44 ICs) on a 10-slot DIN41612 backplane. Project lives at ~/Developer/p8x.
 
 **Why:** Personal homebrew CPU project, hardware is being fabricated.
 
-**How to apply:** Always work from ~/Documents/Projects/p8x. Follow the hard rules in CLAUDE.md — generators are canon, never hand-edit Eagle files or ROM binaries. Check BACKLOG.md before/after work.
+**How to apply:** Always work from ~/Developer/p8x. Follow the hard rules in CLAUDE.md — generators are canon, never hand-edit Eagle files or ROM binaries. Check BACKLOG.md before/after work.
 
 ## Key architecture facts
 - 8-bit data, 16-bit address; address bus driven by 4×16-bit pointer registers (P0=PC, P1/P2=general, P3=SP)

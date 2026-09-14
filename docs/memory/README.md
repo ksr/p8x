@@ -14,17 +14,21 @@ a single untracked home directory.
 Claude Code derives its memory directory from the flattened path of the
 directory it was launched in:
 
-    ~/Documents/Projects/p8x   ->  ~/.claude/projects/-Users-ksr77-Documents-Projects-p8x/memory/
-    ~/Documents/claude test    ->  ~/.claude/projects/-Users-ksr77-Documents-claude-test/memory/
+    ~/Developer/p8x        ->  ~/.claude/projects/-Users-ksr77-Developer-p8x/memory/
+    ~/Documents/claude test ->  ~/.claude/projects/-Users-ksr77-Documents-claude-test/memory/
 
-Both of those paths are symlinks to this directory, so either launch point sees
-the same memories and writes land here, in the repo.
+Those paths are symlinks to this directory, so either launch point sees the same
+memories and writes land here, in the repo. (The repo moved from
+`~/Documents/Projects/p8x` on 2026-09-14 to escape a Documents sync client that
+was spawning conflict copies; the legacy `-Users-ksr77-Documents-Projects-p8x`
+key is still linked here too, so old session transcripts keep resolving.)
 
 To re-create the links (after a reinstall, or on another machine):
 
     cd ~/.claude/projects
-    ln -s ~/Documents/Projects/p8x/docs/memory ./-Users-ksr77-Documents-Projects-p8x/memory
-    ln -s ~/Documents/Projects/p8x/docs/memory ./-Users-ksr77-Documents-claude-test/memory
+    ln -s ~/Developer/p8x/docs/memory ./-Users-ksr77-Developer-p8x/memory
+    ln -s ~/Developer/p8x/docs/memory ./-Users-ksr77-Documents-claude-test/memory
+    ln -s ~/Developer/p8x/docs/memory ./-Users-ksr77-Documents-Projects-p8x/memory   # legacy launch point
 
 Those directory names begin with `-`, so prefix paths with `./` or `ls` and
 friends will read them as command-line flags.

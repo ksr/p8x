@@ -8,8 +8,8 @@ metadata:
   modified: 2026-08-17T16:41:40.398Z
 ---
 
-Invoke git by changing into the repo first — `cd ~/Documents/Projects/p8x && git status` —
-rather than `git -C ~/Documents/Projects/p8x status`.
+Invoke git by changing into the repo first — `cd ~/Developer/p8x && git status` —
+rather than `git -C ~/Developer/p8x status`.
 
 **Why:** Claude Code auto-allows read-only git subcommands (`status`, `log`, `diff`,
 `show`, `branch`, `rev-parse`, …) without prompting, but the `-C <path>` form is not

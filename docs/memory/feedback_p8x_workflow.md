@@ -13,7 +13,7 @@ open pull requests **for ordinary work**.
 
 **Why:** Solo project, PRs are unnecessary overhead.
 
-**How to apply:** After making changes in ~/Documents/Projects/p8x, stage and
+**How to apply:** After making changes in ~/Developer/p8x, stage and
 commit straight to main and push. Skip any PR creation step.
 
 **Exception, added 2026-08-17:** the user *asked* for a branch for the SDRAM

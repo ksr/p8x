@@ -4,8 +4,7 @@ migration's first verb. Draws with GL, reads back with PIXRD through
 the RB FIFO, and cross-checks against the device PIXELR the bridge
 helper still speaks."""
 import sys, os, time
-sys.path.insert(0, os.path.expanduser(
-    "~/Documents/Projects/p8x/fpga/tang-nano-20k/tools"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from glbridge import Bridge, SerialXport
 
 IDX_GLSTAT, IDX_GLRB = 0x31, 0x32
