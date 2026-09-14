@@ -1,6 +1,6 @@
 ---
 name: reference_p8x_cc_caps
-description: On-target C compiler (apps/p8xcc.asm) table caps (250 functions/macros, 11.5 KB arena at $A000, 16-bit labels/slots), the bugs the C twin found, and why the self-host does not fit (static-slot codegen 2x)
+description: On-target C compiler table caps (250 funcs/macros, 16-bit labels/slots), the bugs the C twin found; apps/cc.c is now the P3-FRAME model (recursion-correct, ~13% smaller, >255-byte-local guard) while p8xcc.asm stays static-slot; self-host is now a TPA problem not codegen
 metadata: 
   node_type: memory
   type: reference
@@ -79,25 +79,27 @@ was false (GLAND now clears CONDCUR before the right operand). All three were
 found by diffing cc.c's output against the asm compiler's on the machine
 (`cc_c_test.sh`), which is the way to find the next one.
 
-**2026-09-13 (later): frame-model prototype, landing BLOCKED.** A full P3-frame
-version of the on-board compiler (scratch `ccc/ccf.c`; `scratchpad/FRAME_PLAN.md`)
-works and is recursion-correct + smaller output, streaming-safe via an assembler
-symbol for the frame size (`SUBP3 #_fr_NAME` / `_fr_NAME = L`). But it cannot be
-a DROP-IN: a recursive function with a big local array (grep `collect`, find
-`walk`, cp `copy_tree` all recurse with a 312–384 B local) overflows the 8-bit
-`(P3+d)` displacement and `SUBP3` imm8; the symbolic frame size makes the param
-far-path undecidable; static-routing the array breaks recursion (which is
-exactly what the static-slot slot-saves handle). So the shipped `apps/cc.c`
-stays static-slot; a general frame model needs a far-path + frame-pointer (or
-pre-scan) design. Self-host is separately ~2–3 KB over the TPA and RAM-bound (a
-string pool costs more RAM than it saves output). Revisit after the OS/WM/monitor
-rewrites possibly lower the TPA base.
+**2026-09-13 (later): frame model LANDED in `apps/cc.c`.** `apps/cc.c` is now
+the P3-frame codegen (globals in static `__V`, locals+params in a `SUBP3
+#_fr_NAME` frame, `(P3+d)`, no slot-saves, recursion-correct), plus a one-token
+leaf optimization (bare const/scalar right operand skips push/pop). ~13% smaller
+output on real programs (grep 54,171 → 47,255 B). Binary 21,306 B. Verified by
+RUNNING its output (`cc_c_test.sh`, reworked to behavioural since the twin diff
+is suspended). Design/data: `scratchpad/FRAME_PLAN.md`.
+- **Guarded limit, NOT silent:** a function with >255 bytes of locals overflows
+  the 8-bit `(P3+d)` displacement, so cc.c BAILS ("frame ... over 255 bytes (use
+  /bin/cc)") — `emfp` checks locals, the epilogue checks `nloff + 2*nparams`.
+  grep `collect` cn[384], cp `copy_tree` names[312] hit this; the static-slot
+  `/bin/cc` (p8xcc.asm) still compiles them. A general far-path is future work.
+- **`apps/p8xcc.asm` is still static-slot** (the default `/bin/cc`), so the two
+  compilers diverge and the `cc_c_test` twin byte-DIFF is SUSPENDED (see BACKLOG:
+  "Port the frame model into p8xcc.asm"). Each compiler is independently tested.
 
-**Self-host does NOT fit:** cc.c compiled by the on-board static-slot compiler
-is 35,057 B (host p8cc.py frame model: 18,089), ending at $F2F1 -- no room for
-its tables (~7 KB). 906 lines are `PHW __V+n` slot saves around calls. The
-native assembler also ran out of symbols on it (1,188 needed, 1,120 available)
-before the size was even measured. Only the frame-model codegen (BACKLOG) can
-change this; shrinking the source cannot. The on-board cc's other limits that
-cc.c had to respect: string literals <= 127 raw chars (STRBUF, unchecked),
-`*p = v` is a WORD store, the native assembler's 127-char line.
+**Self-host still does NOT fit — but it is a TPA problem now, not codegen.** The
+frame self-compile is ~30.6 KB and overruns its tables at `$C800` / collides
+with the P3 stack. Codegen tweaks are marginal (leaf ~400 B net; a global-collapse
+peephole is +742 B net because the compiler compiles its own optimization code).
+The lever is more TPA (monitor ROM 8K→6K reclaim, +2 KB). The native assembler
+also needs ~1,188 symbols vs 1,120 for the on-board round-trip. Other on-board cc
+limits cc.c respects: string literals ≤127 raw chars (STRBUF, unchecked),
+`*p = v` is a WORD store, the assembler's 127-char line.

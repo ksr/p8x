@@ -6,10 +6,15 @@
  *
  * It generates the SAME text the asm compiler does (verified by compiling the
  * same sources with both on the machine and diffing), so the codegen model is
- * the asm compiler's: a memory accumulator __ax and a temp __t0, static
- * per-function word slots in one array __V, arguments on the P3 stack, live-
- * slot saves around calls, condition mode for if/while/for. Read the asm
- * source for the model; this file mirrors it routine for routine.
+ * the asm compiler's: a memory accumulator __ax and a temp __t0, GLOBALS in
+ * static word slots in one array __V, and LOCALS + PARAMS in a P3 stack frame
+ * (SUBP3 #_fr_NAME at entry / ADDP3 at exit; the frame size _fr_NAME is an
+ * assembler symbol defined at the function end, so the single streaming pass
+ * addresses locals before it knows the frame size). No live-slot saves: each
+ * call is self-contained, so recursion is correct. A one-token lookahead lets
+ * a bare constant or scalar-variable right operand skip the push/pop (the leaf
+ * optimization). Condition mode for if/while/for. Read the asm source for the
+ * model; this file mirrors it routine for routine.
  *
  * Common-subset rules this source obeys (host p8cc.py AND the on-board cc):
  * no break / continue, no initialised globals (tables are filled at start),
@@ -96,15 +101,20 @@ int ntloc;                  /* add to the local arena */
 int arenap; int larenap;
 int lastent;                /* the variable entry added last (array mark) */
 int fent;                   /* a call's callee entry, 0 = undeclared */
-int symidx;                 /* SYMFIND: slot relative to slotbase (a global's wraps) */
+int symidx;                 /* SYMFIND: a global slot, or a local's frame byte offset / a param's K */
 int symok; int symrch; int symrar;
-int lhsidx; int lhsch; int lhsar;
-int idvarok; int idvaridx; int idvarch; int idvarar;
+int symloc;                 /* 1 = the found symbol is a frame local or param, 0 = a global */
+int symparam;               /* 1 = a parameter: its displacement is _fr_<curfn> + symidx */
+int lhsidx; int lhsch; int lhsar; int lhsloc; int lhsparam;
+int idvarok; int idvaridx; int idvarch; int idvarar; int idvarloc; int idvarparam;
 int elchar; int elarr;
 int exprchar;               /* the last factor loaded a char-typed value */
 int dclchar;
 int ischartype;
-int slotcnt; int slotbase; int nlslot;
+int slotcnt;                /* GLOBAL slot counter (locals now live in the P3 frame) */
+int nloff;                  /* the current function's frame byte offset (next free local) */
+int cursp;                  /* bytes pushed on P3 in the current expression (added to (P3+d)) */
+int pent[16];               /* the current function's parameter entries (K patched once nparams is known) */
 int nparams;
 int fcnt; int maccnt;
 int lblcnt;
@@ -386,8 +396,17 @@ int advtok(int c) {                      /* the token starting with the non-blan
     }
     return 0;
 }
+/* one-token pushback, for the single lookahead the constant-leaf optimization
+   needs: peeknextk() reports the token after the current one and buffers it so
+   the very next advance() re-yields it, leaving the current token unchanged. */
+int havetk; int tkk; int tkv; int tk2; int tkkw; int tklen; char tkid[24];
+int sck; int scv; int sc2; int sckw; int sclen; char scid[24];
+int pk_k; int pk_v; int pk_2; int pk_kw;   /* the peeked token, exposed to oplevel_peek */
+int savecur() { sck = curk; scv = curv; sc2 = cur2; sckw = curkw; sclen = tidlen; strcpy_(scid, tid); return 0; }
+int restorecur() { curk = sck; curv = scv; cur2 = sc2; curkw = sckw; tidlen = sclen; strcpy_(tid, scid); return 0; }
 int advance() {                          /* the next token: skips blanks, comments, directives */
     int c; int c2;
+    if (havetk) { havetk = 0; curk = tkk; curv = tkv; cur2 = tk2; curkw = tkkw; tidlen = tklen; strcpy_(tid, tkid); return 0; }
     if (bailed) { curk = 0; return 0; }
     c = gc();
     while (1) {
@@ -409,26 +428,86 @@ int advance() {                          /* the next token: skips blanks, commen
     }
 }
 
+int crk;                                 /* constright: the constant value */
+int peeknextk() {                        /* the token AFTER the current one, into pk_*; current preserved */
+    savecur();
+    advance();
+    pk_k = curk; pk_v = curv; pk_2 = cur2; pk_kw = curkw;
+    havetk = 1; tkk = curk; tkv = curv; tk2 = cur2; tkkw = curkw; tklen = tidlen; strcpy_(tkid, tid);
+    restorecur();
+    return 0;
+}
+int oplevel_peek() {                     /* precedence of the peeked punct (higher binds tighter), 0 if not a binary op */
+    int v; int t;
+    if (pk_k != 3) return 0;
+    v = pk_v; t = pk_2;
+    if (v == '*' || v == '/' || v == '%') { if (t == 0) return 8; return 0; }
+    if (v == '+' || v == '-') { if (t == 0) return 7; return 0; }
+    if (v == '<') { if (t == '<') return 6; if (t == 0 || t == '=') return 5; return 0; }
+    if (v == '>') { if (t == '>') return 6; if (t == 0 || t == '=') return 5; return 0; }
+    if (v == '=') { if (t == '=') return 4; return 0; }
+    if (v == '!') { if (t == '=') return 4; return 0; }
+    if (v == '&') { if (t == 0) return 3; return 1; }
+    if (v == '^') { if (t == 0) return 2; return 0; }
+    if (v == '|') return 1;
+    return 0;
+}
+int isleaf_next(int level) {             /* is the peeked token an operand boundary (not tighter, not postfix)? */
+    int v; int t;
+    if (pk_k != 3) return 1;             /* id / num / eof after the operand -> a boundary */
+    v = pk_v; t = pk_2;
+    if (v == '[' || v == '(' || v == '.') return 0;         /* index / call / member: tighter */
+    if (v == '-' && t == '>') return 0;                     /* -> */
+    if (v == '+' && t == '+') return 0;                     /* ++ */
+    if (v == '-' && t == '-') return 0;                     /* -- */
+    if (oplevel_peek() > level) return 0;                   /* a tighter binary operator */
+    return 1;
+}
+int constright(int level) {              /* current is the first token of an operand: a bare constant leaf? */
+    if (curk != 1) return 0;             /* not a NUMBER */
+    if (curv == 65535) return 0;         /* -1: skip (the k+1 relational form would wrap) */
+    peeknextk();
+    if (!isleaf_next(level)) return 0;
+    crk = curv;
+    advance();                           /* consume the constant; current -> the peeked token */
+    return 1;
+}
+int varright(int level) {                /* current is an operand: a bare SCALAR variable leaf? sym* describes it */
+    if (curk != 2) return 0;             /* not an identifier */
+    if (curkw != 0) return 0;            /* a keyword / builtin */
+    symfind();
+    if (symok == 0) return 0;            /* undeclared: let the normal path emit the error */
+    if (symrar) return 0;                /* an array name decays to an address: not this path */
+    peeknextk();
+    if (!isleaf_next(level)) return 0;
+    advance();                           /* consume the identifier; sym* is the leaf */
+    return 1;
+}
+
 /* ---- symbols: locals (HLOC, per function), globals, functions, struct tags
    and members. Entry flag: bit0 char, bit1 array (functions: the parameter
    count); value: the slot / size / offset / base slot. ---- */
-int symfind() {                          /* tid: a local, else a global */
+int symfind() {                          /* tid: a local/param, else a global */
     int e; int f;
     ntsettid(); nth = HLOC; e = ntfind();
-    if (e) symidx = entval(e);
-    else {
+    if (e) {
+        symidx = entval(e); symloc = 1;
+        f = entflag(e); symparam = (f >> 2) & 1;
+    } else {
         nth = HGLOB; e = ntfind();
         if (e == 0) { symok = 0; return 0; }
-        symidx = entval(e) - slotbase;
+        symidx = entval(e); symloc = 0; symparam = 0;
+        f = entflag(e);
     }
-    f = entflag(e); symrch = f & 1; symrar = f >> 1; symok = 1;
+    symrch = f & 1; symrar = (f >> 1) & 1; symok = 1;
     return 0;
 }
-int symadd() {                           /* a local named tid at slot nlslot */
-    ntsettid(); nth = HLOC; ntflag = dclchar; ntval = nlslot; ntloc = 1;
-    lastent = ntadd(); symidx = nlslot; nlslot = nlslot + 1;
+int symadd() {                           /* a local named tid at the current frame offset nloff (bytes) */
+    ntsettid(); nth = HLOC; ntflag = dclchar; ntval = nloff; ntloc = 1;
+    lastent = ntadd(); symidx = nloff; symloc = 1; symparam = 0;
     return 0;
 }
+int setentval(int e, int v) { int *w; w = e + 4; *w = v; return 0; }
 int gsymadd() { ntsetcurfn(); nth = HGLOB; ntflag = dclchar; ntval = slotcnt; ntloc = 0; lastent = ntadd(); return 0; }
 int markarr() { char *p; p = lastent; p[3] = p[3] | 2; return 0; }
 int cpcurfn() { strcpy_(curfn, tid); curfnl = tidlen; return 0; }
@@ -436,7 +515,7 @@ int cpidname() { strcpy_(idname, tid); idnamel = tidlen; return 0; }
 int fadd() {
     if (fcnt >= MAXFUNC) return bail("cc: too many functions");
     fcnt = fcnt + 1;
-    ntsetcurfn(); nth = HFUNC; ntflag = nparams; ntval = slotbase; ntloc = 0; ntadd();
+    ntsetcurfn(); nth = HFUNC; ntflag = nparams; ntval = 0; ntloc = 0; ntadd();
     return 0;
 }
 int emitfname() {                        /* the callee: its entry's name, or the identifier itself */
@@ -457,13 +536,41 @@ int stmfind() {
 int clearloc() { int *h; int k; larenap = LARENA; h = HEADS + HLOC; k = 0; while (k < 32) { h[k] = 0; k = k + 1; } return 0; }
 
 /* ---- emit helpers: the code shapes ---- */
-int em_ldvar() { emit("\tMOVW __ax,__V+"); emslot(symidx); return emitnl(); }
-int em_stvar() { emit("\tMOVW __V+"); emslot(lhsidx); return emit(",__ax\n"); }
-int em_addrof() { emit("\tLDA #<__V+"); emslot(symidx); emit("\n\tSTA __ax\n\tLDA #>__V+"); emslot(symidx); return emit("\n\tSTA __ax+1\n"); }
-int em_incvar() { emit("\tINCW __V+"); emslot(symidx); return emitnl(); }
-int em_decvar() { emit("\tDECW __V+"); emslot(symidx); return emitnl(); }
-int em_push() { return emit("\tPHW __ax\n"); }
-int em_pop() { return emit("\tPLW __t0\n"); }
+/* emfp: "(P3+<disp>)" for the current symbol -- a frame local (disp = offset +
+   cursp) or a parameter (disp = _fr_<curfn> + K + cursp). emgb: a global's
+   byte offset in __V (slot * 2). Both read the sym* fields. */
+int emfp() {                             /* a frame local past disp 255 would silently truncate: bail loudly */
+    if (symparam == 0) { if (symidx + cursp > 255) return bail("cc: frame local over 255 bytes (recursion+big array: use /bin/cc)"); }
+    emit("(P3+"); if (symparam) { emit("_fr_"); emit(curfn); emit("+"); } emitnum(symidx + cursp); return emit(")");
+}
+int emgb() { return emitnum(symidx + symidx); }
+int em_ldvar() {
+    if (symloc) { emit("\tLDW __ax,"); emfp(); return emitnl(); }
+    emit("\tMOVW __ax,__V+"); emgb(); return emitnl();
+}
+int em_stvar() {                          /* store __ax -> the LHS (lhsidx/lhsloc/lhsparam) */
+    int sl; int sp; int si;
+    sl = symloc; sp = symparam; si = symidx;
+    symloc = lhsloc; symparam = lhsparam; symidx = lhsidx;
+    if (symloc) { emit("\tSTW "); emfp(); emit(",__ax\n"); }
+    else { emit("\tMOVW __V+"); emgb(); emit(",__ax\n"); }
+    symloc = sl; symparam = sp; symidx = si;
+    return 0;
+}
+int em_addrof() {
+    if (symloc) { emit("\tLEAW __ax,"); emfp(); return emitnl(); }
+    emit("\tLDA #<__V+"); emgb(); emit("\n\tSTA __ax\n\tLDA #>__V+"); emgb(); return emit("\n\tSTA __ax+1\n");
+}
+int em_incvar() {                         /* ++ the variable in place; a frame slot goes via __t0 (INCW is abs-only) */
+    if (symloc) { emit("\tLDW __t0,"); emfp(); emit("\n\tINCW __t0\n\tSTW "); emfp(); return emit(",__t0\n"); }
+    emit("\tINCW __V+"); emgb(); return emitnl();
+}
+int em_decvar() {
+    if (symloc) { emit("\tLDW __t0,"); emfp(); emit("\n\tDECW __t0\n\tSTW "); emfp(); return emit(",__t0\n"); }
+    emit("\tDECW __V+"); emgb(); return emitnl();
+}
+int em_push() { cursp = cursp + 2; return emit("\tPHW __ax\n"); }
+int em_pop() { cursp = cursp - 2; return emit("\tPLW __t0\n"); }
 int em_ax0() { return emit("\tLDW __ax,#0\n"); }
 int em_ax1() { return emit("\tLDW __ax,#1\n"); }
 int em_testax() { return emit("\tCMPW __ax,#0\n"); }
@@ -474,20 +581,16 @@ int em_loadw() { return emit("\tLPW1 __ax\n\tLDA (P1)\n\tSTA __ax\n\tINP1\n\tLDA
 int em_storew() { return emit("\tLPW1 __t0\n\tLDA __ax\n\tSTA (P1)\n\tINP1\n\tLDA __ax+1\n\tSTA (P1)\n"); }
 int em_scale2() { return emit("\tLDA __ax\n\tSHL\n\tSTA __ax\n\tLDA __ax+1\n\tROL\n\tSTA __ax+1\n"); }
 int em_addoff(int off) { if (off == 0) return 0; emit("\tADDW __ax,#"); emitnum(off); return emitnl(); }
+int em_addimm(int k) { k = k & 65535; if (k == 0) return 0; if (k == 1) return emit("\tINCW __ax\n"); emit("\tADDW __ax,#"); emitnum(k); return emitnl(); }
+int em_subimm(int k) { k = k & 65535; if (k == 0) return 0; if (k == 1) return emit("\tDECW __ax\n"); emit("\tSUBW __ax,#"); emitnum(k); return emitnl(); }
+int em_wimm(char *mn, int k) { emit("\t"); emit(mn); emit(" __ax,#"); emitnum(k & 65535); return emitnl(); }
+int leaf_t() {                           /* __t0 = value of the sym* leaf variable (from varright) */
+    if (symloc) { emit("\tLDW __t0,"); emfp(); return emitnl(); }
+    emit("\tMOVW __t0,__V+"); emgb(); return emitnl();
+}
 int newlbl() { lblcnt = lblcnt + 1; return lblcnt - 1; }
 int emitj(char *j, int l) { emit(j); emitnum(l); return emitnl(); }
 int emitlbl(int l) { if (bailed) return 0; putchar('L'); emitnum(l); return emit(":\n"); }
-int em_saveslots() { int i; i = 0; while (i < nlslot) { emit("\tPHW __V+"); emslot(i); emitnl(); i = i + 1; } return 0; }
-int em_restslots() { int i; i = nlslot; while (i) { i = i - 1; emit("\tPLW __V+"); emslot(i); emitnl(); } return 0; }
-int em_popparams() {                     /* the prologue: LDW __V+2*slot(i),(P3+3+2*(n-1-i)) */
-    int i; int d;
-    i = nparams;
-    while (i) {
-        i = i - 1; d = nparams - 1 - i;
-        emit("\tLDW __V+"); emslot(i); emit(",(P3+"); emitnum(3 + d + d); emit(")\n");
-    }
-    return 0;
-}
 
 /* ---- the parser (single pass; emits as it parses) ---- */
 int ispunct(int c) { return curk == 3 && cur2 == 0 && curv == c; }
@@ -539,18 +642,30 @@ int emitcmp() {                          /* the 0/1 value of the relation */
     return 0;
 }
 int grel() {                             /* sh [relop sh] -> 0/1, or in condition mode one branch */
-    int r;
+    int r; int rr; int kk;
     gshift();
     if (curk != 3) return 0;
     reldet();
     if (relf == 0) return 0;
-    em_push(); r = relop;
-    advance(); gshift();
-    relop = r;
-    em_pop();
-    if (relop >= R_EQ) emit("\tJSR __cmp\n");
-    else if (relop == R_LE || relop == R_GT) emit("\tCMPW __ax,__t0\n");
-    else emit("\tCMPW __t0,__ax\n");
+    r = relop;
+    advance();                           /* past the relop; current = the right operand */
+    if (constright(5)) {                 /* right is a constant: CMPW __ax,#k (>,<= compare against k+1) */
+        rr = r; kk = crk;
+        if (r == R_GT) { rr = R_GE; kk = crk + 1; }
+        else if (r == R_LE) { rr = R_LT; kk = crk + 1; }
+        emit("\tCMPW __ax,#"); emitnum(kk); emitnl();
+        relop = rr;
+    } else if (varright(5)) {            /* right is a scalar variable: L in __ax, R in __t0 */
+        leaf_t(); relop = r;
+        if (relop >= R_EQ) emit("\tJSR __cmp\n");
+        else if (relop == R_LE || relop == R_GT) emit("\tCMPW __t0,__ax\n");   /* C = (R >= L) */
+        else emit("\tCMPW __ax,__t0\n");                                       /* C = (L >= R) */
+    } else {                             /* the general two-operand compare: __t0 = L, __ax = R */
+        em_push(); gshift(); relop = r; em_pop();
+        if (relop >= R_EQ) emit("\tJSR __cmp\n");
+        else if (relop == R_LE || relop == R_GT) emit("\tCMPW __ax,__t0\n");
+        else emit("\tCMPW __t0,__ax\n");
+    }
     if (condcur) { if (ispunct(')') || ispunct(';')) { emitcf(); conddone = 1; return 0; } }
     return emitcmp();
 }
@@ -563,10 +678,14 @@ int gshift() {
     return 0;
 }
 int gadd() {
+    int plus;
     gterm();
     while (ispunct('+') || ispunct('-')) {
-        if (curv == '+') { advance(); em_push(); gterm(); em_pop(); emit("\tADDW __ax,__t0\n"); }
-        else { advance(); em_push(); gterm(); em_pop(); emit("\tSUBW __t0,__ax\n\tMOVW __ax,__t0\n"); }
+        plus = (curv == '+'); advance();
+        if (constright(7)) { if (plus) em_addimm(crk); else em_subimm(crk); }
+        else if (varright(7)) { leaf_t(); if (plus) emit("\tADDW __ax,__t0\n"); else emit("\tSUBW __ax,__t0\n"); }
+        else if (plus) { em_push(); gterm(); em_pop(); emit("\tADDW __ax,__t0\n"); }
+        else { em_push(); gterm(); em_pop(); emit("\tSUBW __t0,__ax\n\tMOVW __ax,__t0\n"); }
     }
     return 0;
 }
@@ -593,9 +712,9 @@ int gunary() {                           /* ('-' | '!' | '&' | '*' | '++' | '--'
         sawaddrg = 1;
         advance(); symfind();
         if (symok == 0) return 0;
-        idvaridx = symidx; idvarch = symrch; idvarar = symrar;
+        idvaridx = symidx; idvarch = symrch; idvarar = symrar; idvarloc = symloc; idvarparam = symparam;
         advance();
-        symidx = idvaridx;
+        symidx = idvaridx; symloc = idvarloc; symparam = idvarparam;
         if (ispunct('[')) { elchar = idvarch; elarr = idvarar; return elemaddr(); }
         return em_addrof();
     }
@@ -628,24 +747,24 @@ int gfact() {
         if (curkw >= K_BIOS) return gc_builtin();
         cpidname();
         symfind();
-        idvarok = symok; idvaridx = symidx; idvarch = symrch; idvarar = symrar;
+        idvarok = symok; idvaridx = symidx; idvarch = symrch; idvarar = symrar; idvarloc = symloc; idvarparam = symparam;
         advance();
         if (curk == 3) {
             if (cur2 == 0) {
                 if (curv == '(') return gfi_call();
-                if (curv == '[') { symidx = idvaridx; elchar = idvarch; elarr = idvarar; elemaddr(); if (elchar) return em_loadb(); return em_loadw(); }
-                if (curv == '.') { symidx = idvaridx; em_addrof(); return gfi_memld(); }
+                if (curv == '[') { symidx = idvaridx; symloc = idvarloc; symparam = idvarparam; elchar = idvarch; elarr = idvarar; elemaddr(); if (elchar) return em_loadb(); return em_loadw(); }
+                if (curv == '.') { symidx = idvaridx; symloc = idvarloc; symparam = idvarparam; em_addrof(); return gfi_memld(); }
             }
             else if (curv == '-') {
-                if (cur2 == '>') { symidx = idvaridx; em_ldvar(); return gfi_memld(); }
-                if (cur2 == '-') { if (idvarok == 0) return 0; symidx = idvaridx; em_ldvar(); em_decvar(); return advance(); }
+                if (cur2 == '>') { symidx = idvaridx; symloc = idvarloc; symparam = idvarparam; em_ldvar(); return gfi_memld(); }
+                if (cur2 == '-') { if (idvarok == 0) return 0; symidx = idvaridx; symloc = idvarloc; symparam = idvarparam; em_ldvar(); em_decvar(); return advance(); }
             }
             else if (curv == '+') {
-                if (cur2 == '+') { if (idvarok == 0) return 0; symidx = idvaridx; em_ldvar(); em_incvar(); return advance(); }
+                if (cur2 == '+') { if (idvarok == 0) return 0; symidx = idvaridx; symloc = idvarloc; symparam = idvarparam; em_ldvar(); em_incvar(); return advance(); }
             }
         }
         if (idvarok == 0) return 0;
-        symidx = idvaridx; exprchar = idvarch;
+        symidx = idvaridx; symloc = idvarloc; symparam = idvarparam; exprchar = idvarch;
         if (idvarar) { sawaddrg = 1; return em_addrof(); }   /* a bare array name decays to its address */
         return em_ldvar();
     }
@@ -678,21 +797,17 @@ int gc_builtin() {                       /* bios / puts / getchar / peek / poke 
     return emit("\tSTA __ax+1\n");
 }
 int gfi_call() {                         /* idname ( args ): the current token is '(' */
-    int e; int n;
+    int e; int n;                        /* frames make each call self-contained: no slot saves */
     ntname = idname; ntnlen = idnamel; nth = HFUNC; e = ntfind();
-    sawaddrg = 0;
     advance();
-    em_saveslots();                      /* the caller's live slots first, then the args */
     n = 0;
-    if (!ispunct(')')) {
+    if (!ispunct(')')) {                  /* args left to right; each PHW deepens cursp */
         gexpr(); em_push(); n = 1;
         while (ispunct(',')) { advance(); gexpr(); em_push(); n = n + 1; }
     }
     expectp(')');
     emit("\tJSR _f_"); fent = e; emitfname(); emitnl();
-    if (n) em_addp3(n + n);
-    if (sawaddrg) { if (nlslot) em_addp3(nlslot + nlslot); }   /* an address was passed: keep the callee's writes */
-    else em_restslots();
+    if (n) { em_addp3(n + n); cursp = cursp - (n + n); }   /* drop the pushed args */
     return 0;
 }
 int gexpr() {                            /* condition mode is consumed here (a nested gexpr sees 0) */
@@ -734,9 +849,9 @@ int gland() {
     }
     return 0;
 }
-int gbor() { gbxor(); while (ispunct('|')) { advance(); em_push(); gbxor(); em_pop(); emit("\tORW __ax,__t0\n"); } return 0; }
-int gbxor() { gband(); while (ispunct('^')) { advance(); em_push(); gband(); em_pop(); emit("\tXORW __ax,__t0\n"); } return 0; }
-int gband() { grel(); while (ispunct('&')) { advance(); em_push(); grel(); em_pop(); emit("\tANDW __ax,__t0\n"); } return 0; }
+int gbor() { gbxor(); while (ispunct('|')) { advance(); if (constright(1)) em_wimm("ORW", crk); else if (varright(1)) { leaf_t(); emit("\tORW __ax,__t0\n"); } else { em_push(); gbxor(); em_pop(); emit("\tORW __ax,__t0\n"); } } return 0; }
+int gbxor() { gband(); while (ispunct('^')) { advance(); if (constright(2)) em_wimm("XORW", crk); else if (varright(2)) { leaf_t(); emit("\tXORW __ax,__t0\n"); } else { em_push(); gband(); em_pop(); emit("\tXORW __ax,__t0\n"); } } return 0; }
+int gband() { grel(); while (ispunct('&')) { advance(); if (constright(3)) em_wimm("ANDW", crk); else if (varright(3)) { leaf_t(); emit("\tANDW __ax,__t0\n"); } else { em_push(); grel(); em_pop(); emit("\tANDW __ax,__t0\n"); } } return 0; }
 
 /* ---- statements ---- */
 int cond(int lbl) {                      /* ( condition ) in condition mode; the false label */
@@ -775,7 +890,7 @@ int st_while() {
 int forclause() {                        /* an optional NAME = expr */
     if (curk != 2) return 0;
     symfind(); if (symok == 0) return 0;
-    lhsidx = symidx;
+    lhsidx = symidx; lhsloc = symloc; lhsparam = symparam;
     advance(); expectp('='); gexpr();
     return em_stvar();
 }
@@ -799,31 +914,39 @@ int st_for() {                           /* init; Ltop: cond JZ Lend; JMP Lbody;
     emitj("\tJMP L", lp);
     return emitlbl(le);
 }
-int st_decl() {                          /* type [*]NAME [= expr] ;  |  type NAME[N] ; */
+int st_decl() {                          /* type [*]NAME [= expr] ;  |  type NAME[N] ; -- a frame local */
     int n;
     dclchar = 0; if (curkw == K_CHAR) dclchar = 1;
     advance(); skipstars();
-    symadd(); lhsidx = symidx;
+    symadd(); lhsidx = symidx; lhsloc = 1; lhsparam = 0;    /* the base frame offset */
     advance();
-    if (ispunct('[')) {
+    if (ispunct('[')) {                  /* an array: char[n] = n bytes, int[n] = 2n bytes */
         advance();
-        n = curv; if (dclchar) n = (n + 1) >> 1;
-        nlslot = nlslot + n - 1;         /* (the base slot is already counted) */
+        n = curv;
+        if (dclchar) nloff = nloff + n; else nloff = nloff + n + n;
         markarr();
         advance(); expectp(']');
     }
-    else if (ispunct('=')) { advance(); gexpr(); em_stvar(); }
+    else {
+        nloff = nloff + 2;               /* a scalar / pointer: one 2-byte frame slot */
+        if (ispunct('=')) { advance(); gexpr(); em_stvar(); }
+    }
     return expectp(';');
 }
-int st_lstruct() {                       /* struct Tag [*]NAME ; */
+int st_lstruct() {                       /* struct Tag [*]NAME ; -- a frame local */
     advance(); ntsettid(); stagfind(); advance();
     dclchar = 0;
-    if (ispunct('*')) { skipstars(); symadd(); }
-    else { symadd(); nlslot = nlslot + ((tagsize + 1) >> 1) - 1; }
+    if (ispunct('*')) {                  /* a pointer: skip the stars, then the name is one 2-byte slot */
+        skipstars();
+        symadd(); nloff = nloff + 2;
+    }
+    else {                               /* a value: the struct's bytes */
+        symadd(); nloff = nloff + tagsize;
+    }
     advance();
     return expectp(';');
 }
-int sa_cload() { symidx = lhsidx; em_ldvar(); em_push(); advance(); gexpr(); return em_pop(); }
+int sa_cload() { symidx = lhsidx; symloc = lhsloc; symparam = lhsparam; em_ldvar(); em_push(); advance(); gexpr(); return em_pop(); }
 int sa_memst() {                         /* the member store: . or -> consumed next, __ax = the base */
     int w;
     advance(); stmfind(); em_addoff(stmemoff); advance();
@@ -836,31 +959,32 @@ int st_assign() {                        /* NAME = e; [i] = e; .m = e; ->m = e; 
     int w;
     symfind();
     if (symok == 0) { gexpr(); return expectp(';'); }
-    lhsidx = symidx; lhsch = symrch; lhsar = symrar;
+    lhsidx = symidx; lhsch = symrch; lhsar = symrar; lhsloc = symloc; lhsparam = symparam;
     advance();
     if (curk != 3) return synerr();
     if (cur2) {
         if (curv == '-') {
-            if (cur2 == '>') { symidx = lhsidx; em_ldvar(); return sa_memst(); }
-            if (cur2 == '-') { symidx = lhsidx; advance(); em_decvar(); return expectp(';'); }
+            if (cur2 == '>') { symidx = lhsidx; symloc = lhsloc; symparam = lhsparam; em_ldvar(); return sa_memst(); }
+            if (cur2 == '-') { symidx = lhsidx; symloc = lhsloc; symparam = lhsparam; advance(); em_decvar(); return expectp(';'); }
             sa_cload(); emit("\tSUBW __t0,__ax\n\tMOVW __ax,__t0\n"); em_stvar(); return expectp(';');
         }
         if (curv != '+') return synerr();
-        if (cur2 == '+') { symidx = lhsidx; advance(); em_incvar(); return expectp(';'); }
+        if (cur2 == '+') { symidx = lhsidx; symloc = lhsloc; symparam = lhsparam; advance(); em_incvar(); return expectp(';'); }
         sa_cload(); emit("\tADDW __ax,__t0\n"); em_stvar(); return expectp(';');
     }
     if (curv == '[') {
-        symidx = lhsidx; elchar = lhsch; elarr = lhsar;
+        symidx = lhsidx; symloc = lhsloc; symparam = lhsparam; elchar = lhsch; elarr = lhsar;
         elemaddr(); w = elchar;
         em_push(); expectp('='); gexpr(); em_pop();
         if (w) em_storeb(); else em_storew();
         return expectp(';');
     }
-    if (curv == '.') { symidx = lhsidx; em_addrof(); return sa_memst(); }
+    if (curv == '.') { symidx = lhsidx; symloc = lhsloc; symparam = lhsparam; em_addrof(); return sa_memst(); }
     expectp('='); gexpr(); em_stvar();
     return expectp(';');
 }
 int stmt() {
+    cursp = 0;                           /* each statement's expressions balance the P3 pushes */
     if (curk == 3) {
         if (cur2) return synerr();
         if (curv == '{') {
@@ -929,29 +1053,41 @@ int fd_glob() {                          /* a global: type [*]NAME [ [N] ] ; */
     else slotcnt = slotcnt + 1;
     return expectp(';');
 }
+int paramadd() {                         /* add the parameter TID to the frame table (K patched later) */
+    ntsettid(); nth = HLOC; ntflag = dclchar | 4; ntval = 0; ntloc = 1;
+    pent[nparams] = ntadd();
+    return 0;
+}
 int funcdef() {                          /* one top-level item */
+    int i;
     if (curk != 2) return synerr();
     if (curkw == K_STRUCT) return fd_struct();
     expecttype(); dclchar = ischartype;
     skipstars();
     cpcurfn(); advance();
     if (!ispunct('(')) return fd_glob();
-    slotbase = slotcnt; nlslot = 0; nparams = 0; clearloc();
+    nloff = 1; nparams = 0; cursp = 0; clearloc();   /* first local at P3+1 (P3+0 is the boundary; ret at P3+1..2 grows over it) */
     advance();
     if (!ispunct(')')) {
-        expecttype(); dclchar = ischartype; skipstars(); symadd(); advance(); nparams = nparams + 1;
-        while (ispunct(',')) { advance(); expecttype(); dclchar = ischartype; skipstars(); symadd(); advance(); nparams = nparams + 1; }
+        expecttype(); dclchar = ischartype; skipstars(); paramadd(); advance(); nparams = nparams + 1;
+        while (ispunct(',')) { advance(); expecttype(); dclchar = ischartype; skipstars(); paramadd(); advance(); nparams = nparams + 1; }
     }
     expectp(')');
     fadd();
     if (ispunct(';')) return advance();  /* a prototype only registers the name */
-    emit("_f_"); emit(curfn); emit(":\n");
-    em_popparams();
+    /* nparams is known now: the return area is 3 bytes (boundary + 2-byte
+       return address), so param i lives at (P3 + _fr_<fn> + 3 + 2*(nparams-1-i)) */
+    i = 0;
+    while (i < nparams) { setentval(pent[i], 3 + 2 * (nparams - 1 - i)); i = i + 1; }
+    emit("_f_"); emit(curfn); emit(":\n\tSUBP3 #_fr_"); emit(curfn); emitnl();   /* reserve the frame */
     expectp('{');
     while (!ispunct('}')) { if (curk == 0) return synerr(); stmt(); }
     expectp('}');
-    emit("_e_"); emit(curfn); emit(":\n\tRTS\n");
-    slotcnt = slotbase + nlslot;
+    /* params sit above the locals at _fr + 3 + 2*(nparams-1-i); if the whole
+       frame + param area nears the 255 disp limit it would truncate: bail */
+    if (nloff + nparams + nparams > 231) return bail("cc: frame + params over 255 bytes (use /bin/cc)");
+    emit("_e_"); emit(curfn); emit(":\n\tADDP3 #_fr_"); emit(curfn); emit("\n\tRTS\n");
+    emit("_fr_"); emit(curfn); emit(" = "); emitnum(nloff & 65534); emitnl();   /* the frame size = (nloff-1) rounded up to even */
     return 0;
 }
 /* the runtime helpers, emitted once each when the program needs them (in
