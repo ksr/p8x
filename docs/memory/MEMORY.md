@@ -7,6 +7,7 @@
 - [Keep p8cc.py](project_p8cc_keep_python.md) — self-hosting the C compiler ADDS a C version alongside; never delete the Python bootstrap
 - [Keep /docs on the SD disk current](feedback_p8x_disk_docs_current.md) — shipped MD docs live at /docs (run.sh _mddoc list, read via `md`); every doc change updates the list + rebuilds/clones the disk
 - [Docs before sync](feedback_p8x_docs_before_sync.md) — before asking to sync, verify ALL docs current (comments, HELP, READMEs, theory docs, tables, PDFs, BACKLOG)
+- [PDF timestamp per page](feedback_pdf_timestamp_per_page.md) — documentation-type PDFs stamp date AND time on every page (in the per-page footer/header), not just a title-page subtitle
 - [P8X test streaming](feedback_p8x_test_streaming.md) — run `make test` raw to a logfile, not through grep, so progress streams live
 - [P8X test-quick](feedback_p8x_test_quick.md) — `make test-quick` (~3 min: test-isa, c_test, c_struct, c_bios, c_libfile, c_filters, asm_selfhost, c_disasm, c_finder_ret, c_glasstty) after every change; full `make test` only before commits touching compiler/microcode/assembler/OS and before sync
 - [P8X test scope](feedback_p8x_test_scope.md) — run only the relevant test(s); full `make test` only for broad changes (compiler/microcode/firmware/shared libs) or on request
