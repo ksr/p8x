@@ -26,6 +26,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 OUT = ROOT / "GITIGNORE-TREE.pdf"
+STAMP = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")  # per-page footer
 
 def git(*args):
     return subprocess.run(["git", *args], cwd=ROOT, text=True,
@@ -58,8 +59,7 @@ RULEM = ParagraphStyle("r", parent=MONO, fontSize=7.6, leading=9.4, backColor=co
 flow = []
 flow.append(Paragraph("P8X &mdash; Git-Ignored Files", TITLE))
 flow.append(Paragraph("The complete tree of everything git ignores, plus the "
-                      "rules that ignore it. Generated %s."
-                      % datetime.date.today().isoformat(), SUB))
+                      "rules that ignore it. Generated %s." % STAMP, SUB))
 flow.append(HRFlowable(width="100%", thickness=0.8, color=ACC, spaceBefore=5, spaceAfter=7))
 
 # ---- summary counts ------------------------------------------------------
@@ -138,6 +138,7 @@ def furniture(canvas, doc):
     canvas.saveState()
     canvas.setFont("Helvetica", 7.5); canvas.setFillColor(MUTED)
     canvas.drawString(16 * mm, 10 * mm, "P8X - Git-Ignored Files")
+    canvas.drawCentredString(doc.pagesize[0] / 2, 10 * mm, "Generated " + STAMP)
     canvas.drawRightString(doc.pagesize[0] - 16 * mm, 10 * mm, "page %d" % doc.page)
     canvas.setStrokeColor(colors.HexColor("#d7dee6")); canvas.setLineWidth(0.4)
     canvas.line(16 * mm, 12 * mm, doc.pagesize[0] - 16 * mm, 12 * mm)

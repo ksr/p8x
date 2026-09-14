@@ -30,6 +30,7 @@ from reportlab.lib.enums import TA_LEFT
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SRC = ROOT / "BACKLOG.md"
 OUT = ROOT / "BACKLOG.pdf"
+STAMP = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")  # per-page footer
 
 # ---- palette -------------------------------------------------------------
 INK    = colors.HexColor("#1a1a1a")
@@ -228,6 +229,7 @@ def furniture(canvas, doc):
     canvas.setFont("Helvetica", 7.5)
     canvas.setFillColor(MUTED)
     canvas.drawString(16 * mm, 10 * mm, "P8X Project Backlog")
+    canvas.drawCentredString(doc.pagesize[0] / 2, 10 * mm, "Generated " + STAMP)
     canvas.drawRightString(doc.pagesize[0] - 16 * mm, 10 * mm, "page %d" % doc.page)
     canvas.setStrokeColor(colors.HexColor("#d7dee6"))
     canvas.setLineWidth(0.4)
