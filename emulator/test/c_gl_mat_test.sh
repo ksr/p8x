@@ -71,7 +71,7 @@ int main() {
 }
 EOF
 python3 $ROOT/compiler/p8cc.py gl_m.c -o gl_m.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py gl_m.asm -o gl_m.bin --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py gl_m.asm -o gl_m.bin --base 0x5900 >/dev/null
 
 # the RESETF-replay program: matrix chaos, RESETF, then the EXACT 10a scene
 cat > gl_r.c <<'EOF'
@@ -123,14 +123,14 @@ int main() {
 }
 EOF
 python3 $ROOT/compiler/p8cc.py gl_r.c -o gl_r.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py gl_r.asm -o gl_r.bin --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py gl_r.asm -o gl_r.bin --base 0x5900 >/dev/null
 
 rm -f glm.img
 python3 $ROOT/tools/p8xfs.py create glm.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   glm.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  glm.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    glm.img gl_m.bin --name /bin/glm.bin --load 0x6100 --exec 0x6100 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    glm.img gl_r.bin --name /bin/glr.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    glm.img gl_m.bin --name /bin/glm.bin --load 0x5900 --exec 0x5900 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    glm.img gl_r.bin --name /bin/glr.bin --load 0x5900 --exec 0x5900 >/dev/null
 
 # ---- 1: matrix semantics vs the host replica --------------------------------
 # Console OFF from the monitor for every framebuffer grab (the always-on glass TTY

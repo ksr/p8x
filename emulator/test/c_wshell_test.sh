@@ -58,7 +58,7 @@ SEOF
 build() {   # $1 = source, $2 = out.bin
     python3 $ROOT/tools/clib.py "$1" -o t.pp.c
     python3 $ROOT/compiler/p8cc.py t.pp.c -o t.asm >/dev/null
-    python3 $ROOT/assembler/p8xasm.py t.asm -o "$2" --base 0x6100 >/dev/null
+    python3 $ROOT/assembler/p8xasm.py t.asm -o "$2" --base 0x5900 >/dev/null
 }
 build armwin.c            armwin.bin
 build showwin.c           showwin.bin
@@ -68,9 +68,9 @@ rm -f wsh.img
 python3 $ROOT/tools/p8xfs.py create wsh.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   wsh.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  wsh.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    wsh.img armwin.bin  --name /bin/armwin.bin  --load 0x6100 --exec 0x6100 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    wsh.img showwin.bin --name /bin/showwin.bin --load 0x6100 --exec 0x6100 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    wsh.img pwd.bin     --name /bin/pwd.bin     --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    wsh.img armwin.bin  --name /bin/armwin.bin  --load 0x5900 --exec 0x5900 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    wsh.img showwin.bin --name /bin/showwin.bin --load 0x5900 --exec 0x5900 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    wsh.img pwd.bin     --name /bin/pwd.bin     --load 0x5900 --exec 0x5900 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    wsh.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
 
 printf 'B\rmkdir WTDIR\rcd WTDIR\rrun /bin/armwin.bin\rpwd\rrun /bin/showwin.bin\r' > wsh.in

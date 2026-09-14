@@ -1,7 +1,7 @@
 #!/bin/sh
 # P1 of the two-mode design (docs/p8x-two-mode-design.md): the graphics_present
 # flag. The monitor probes GLID at wake, records the result in the resident
-# GFXPRES byte ($60A4), and prints "GRAPHICS AVAILABLE" / "NO GRAPHICS" on serial;
+# GFXPRES byte ($1FA4), and prints "GRAPHICS AVAILABLE" / "NO GRAPHICS" on serial;
 # the OS re-affirms GFXPRES at boot; every GL program reads it via has_graphics()
 # (and gpresent(), which now sources presence from the flag rather than a fresh
 # GLID probe). The emulator's -ng flag floats GLID to $FF, so BOTH modes are
@@ -38,13 +38,13 @@ PROBEEOF
 cp $ROOT/os/commands/lib_gfx.c .          # clib resolves //#use from the source's dir
 python3 $ROOT/tools/clib.py gp_probe.c -o gp_probe_x.c
 python3 $ROOT/compiler/p8cc.py gp_probe_x.c -o gp_probe.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py gp_probe.asm -o gp_probe.bin --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py gp_probe.asm -o gp_probe.bin --base 0x5900 >/dev/null
 
 rm -f gp.img
 python3 $ROOT/tools/p8xfs.py create gp.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   gp.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  gp.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    gp.img gp_probe.bin --name /bin/gp.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    gp.img gp_probe.bin --name /bin/gp.bin --load 0x5900 --exec 0x5900 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    gp.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
 
 printf 'B\rrun /bin/gp.bin\r' > gp.in

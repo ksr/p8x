@@ -6,9 +6,9 @@
 ; $0100 (see firmware/p8xmon.asm), so console + CF access stay in one place.
 ;
 ; rev E memory map (8K ROM / 56K RAM) puts RAM at $2000, so the OS loads there.
-; The code can span $2000..$6FFF (~20K) before the firmware/BIOS scratch at $7000,
-; giving the OS ~20K of growth room. The on-disk OS region (LBA 1..32) caps it at
-; 32 sectors / 16K. Firmware scratch $6000-$60xx + SBUF $6100 are fixed by the BIOS.
+; The on-disk OS region (LBA 1..32) caps the OS image at 32 sectors / 16K.
+; Firmware scratch $1F00-$1FFF + SBUF $1D00 (in the $1800-$1FFF RAM island opened
+; by shrinking the ROM to 6K, 2026-09-14) are fixed by the BIOS.
 ;
 ; Build (RAM image, assembled to run at $2000):
 ;   python3 assembler/p8xasm.py os/p8xos.asm -o p8xos.bin --base 0x2000
@@ -35,18 +35,18 @@
 ; A file/dir argument may be a path; directory scanning works on any extent
 ; (start LBA + sector count), so CWD and resolved paths share one code path.
 ; The prompt shows the current path. Verify a volume with p8xfs.py fsck.
-; RAM layout: OS image $2000..~$55E5 -- INCLUDING the resident WM kernel
-; (wmkernel_body.asm, syscalls $2027-$204E) | OS scratch $5700..$5DFF (LINEBUF,
-; the FS/shell/PACK/FSCK variables, IBUF, PATHBUF, APBUF -- relocated here from
-; $6300..$69FF, 2026-09-13) | SBUF sector buffer $5E00..$5FFF (moved down from
-; $6100 the same day; it is monitor-owned but not part of the command //#define
-; ABI, so only raw-CFWRITE fixtures cared) | firmware/BIOS scratch $6000..$60FF
-; (UNCHANGED: FNAME/LBA/DIRLBA/FLEN are the stable ABI commands //#define) | TPA
-; (programs / RUN / ">" capture) $6100..CSTACKTOP $F800 | shell command-history
+; RAM layout: firmware/BIOS scratch + SBUF + the top of the OS scratch band all
+; live in the $1800..$1FFF RAM island (freed by the 6K ROM): IBUF $1800, PATHBUF
+; $1A00, APBUF $1B00, SBUF sector buffer $1D00..$1EFF, firmware/BIOS scratch
+; $1F00..$1FFF (FNAME/LBA/DIRLBA/FLEN -- the stable ABI commands //#define) |
+; OS image $2000..~$55E5 INCLUDING the resident WM kernel (wmkernel_body.asm,
+; syscalls $2027-$204E) | OS scratch $5700..$58FF (LINEBUF, CWDPATH, the
+; FS/shell/PACK/FSCK variables) | TPA $5900..
+; (programs / RUN / ">" capture) $5900..CSTACKTOP $F800 | shell command-history
 ; ring $F800..$F9FF (HISTN=8 x 64) | FSDIRBUF dir/glob sector page $FA00..$FBFF
 ; and RDBUF file-read buffer $FC00..$FDFF (the C commands' fixed scratch,
 ; lib_*.c) | stack (P3) $FE00..$FEFF, grows down from $FEFF. (rev E: OS at $2000.
-; 2026-09-13: TPABASE $6A00 -> $6300 (OS scratch moved) -> $6100 (SBUF moved);
+; 2026-09-13: TPABASE $6A00 -> $6300 (OS scratch moved) -> $5900 (SBUF moved);
 ; programs built at an old base still run, in-TPA.)
 
 ; ---- BIOS jump table (stable ABI, in ROM) ----------------------------------
@@ -87,9 +87,9 @@ F_DIR   = $02            ; subdirectory (its extent holds entries)
 F_DEL   = $FF            ; deleted
 SUBSECS = 4              ; sectors allocated for a new subdirectory (64 entries)
 
-; ---- OS RAM variables (relocated 2026-09-13 with the OS scratch band from
-;      $6360 to $5960: the band moved to $5900-$5FFF free RAM so TPABASE could
-;      drop to $6300, giving the TPA ~1.75 KB more; see gen_memmap.py) --------
+; ---- OS RAM variables. The band's top half (IBUF/PATHBUF/APBUF/SBUF/BIOS
+;      scratch) relocated 2026-09-14 into the $1800-$1FFF island freed by the 6K
+;      ROM, dropping TPABASE $6100 -> $5900 (+2 KB TPA); see gen_memmap.py -----
 TMP     = $5760
 TMP2    = $5761
 CNT     = $5762
@@ -959,7 +959,7 @@ srsh_no:LDA  #0
 ; the same engine as `sh`.  Deep nesting (> MKMAXD) is reported as a cycle.
 MKSRC   = $C000    ; slurped Makefile text (NUL-terminated); cap MKSRCE
 MKSRCE  = $EF00    ; slurp stops here (a larger Makefile truncates)
-MKFLATB = $6100    ; flattened recipe out (grows up); becomes MK.RUN
+MKFLATB = $5900    ; flattened recipe out (grows up); becomes MK.RUN
 MKPLAN  = $F000    ; packed built-target names (NUL-term each; lone NUL = end)
 MKFRAME = $F400    ; DFS frames, 4B each: [0..1] dep-scan ptr, [2..3] rule-start ptr
 MKMAXD  = 15       ; max prerequisite nesting (cycle guard)

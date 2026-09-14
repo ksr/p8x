@@ -74,8 +74,8 @@ FOPEN    = $0124   ; open the resolved file for reading (P1 = 512-byte buffer)
 FGETB    = $0127   ; next source byte -> A; C=1 at EOF
 SYS_PUTC = $2009   ; emit A to stdout (redirectable by the shell); preserves P1/P2
 RDBUF    = $FC00   ; FOPEN read buffer for the main source
-ROSTATE  = $605E   ; BIOS read-stream state (13 contiguous bytes)
-ROSDRV   = $6085   ; BIOS read-stream drive (1 byte)
+ROSTATE  = $1F5E   ; BIOS read-stream state (13 contiguous bytes)
+ROSDRV   = $1F85   ; BIOS read-stream drive (1 byte)
 
 CR       = $0D
 LF       = $0A
@@ -256,7 +256,7 @@ NT_FLAG = 3
 NT_VAL  = 4
 NT_CHARS= 6
 
-        .org $6100               ; = TPABASE
+        .org $5900               ; = TPABASE
 START:  TPA3L
         STA  STK0
         TPA3H
@@ -1505,7 +1505,7 @@ smf_no: RTS
 ; =============================================================================
 ; Parser + codegen (single pass; emits as it parses)
 ; =============================================================================
-COMPILE:LDP1 #MORG               ; .org $6100
+COMPILE:LDP1 #MORG               ; .org $5900
         JSR  EMIT
         LDP1 #MBOOT              ; the startup: JSR _f_main on a fresh stack
         JSR  EMIT
@@ -3332,7 +3332,7 @@ EM_SCALE2:                       ; __ax <<= 1
 ; a number is appended. Every instruction line starts with one TAB.
 ; =============================================================================
 MORG:   .byte TAB
-        .ascii ".org $6100"
+        .ascii ".org $5900"
         .byte LF,0
 MBOOT:  .byte TAB                ; the startup, as p8cc's: keep the caller's P3
         .ascii "TPA3L"           ;   in __sp0 and run on a stack below CSTACKTOP

@@ -20,10 +20,10 @@ CONIN   = $0100
 CONOUT  = $0103
 CFWRITE = $010F
 
-LBA0    = $6047                 ; 24-bit LBA, little-endian
-LBA1    = $6048
-LBA2    = $6049
-SBUF    = $6100
+LBA0    = $1F47                 ; 24-bit LBA, little-endian
+LBA1    = $1F48
+LBA2    = $1F49
+SBUF    = $5900
 
 NLO     = $3300                 ; sectors remaining, 16-bit
 NHI     = $3301

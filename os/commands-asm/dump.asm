@@ -11,7 +11,7 @@
 ;   dump address, HXLO/HXHI = parsed hex, MATCH/DIGIT = parser outputs, etc.).
 ;#use abi
 
-        .org $6100
+        .org $5900
 u_sk:   LDA (P2)                     ; skip leading spaces
         LDB #32
         CMP

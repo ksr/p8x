@@ -31,8 +31,8 @@
 
 //#define GLDATA  0xFF50
 //#define GLSTAT  0xFF51
-//#define GFXPRES 0x60A4  /* 1 = GL card fitted */
-//#define GTSUSP  0x60A7  /* 1 = this app owns the screen (suspend the glass console) */
+//#define GFXPRES 0x1FA4  /* 1 = GL card fitted */
+//#define GTSUSP  0x1FA7  /* 1 = this app owns the screen (suspend the glass console) */
 
 #define NN 24            /* max entries cached / rows shown */
 

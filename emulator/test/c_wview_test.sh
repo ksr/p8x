@@ -22,7 +22,7 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/
 
 python3 $ROOT/tools/clib.py $ROOT/os/commands/wdesk.c -o wv_wdesk.c
 python3 $ROOT/compiler/p8cc.py wv_wdesk.c -o wv_wdesk.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py wv_wdesk.asm -o wv_wdesk.bin --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py wv_wdesk.asm -o wv_wdesk.bin --base 0x5900 >/dev/null
 
 # a 40x30 solid-green P8I (magic P8I, ver 1, w LE, h LE, depth 16, pad; then
 # w*h little-endian RGB565 pixels -- 0x07E0 = pure green -> bytes E0 07)
@@ -38,7 +38,7 @@ python3 $ROOT/tools/p8xfs.py boot   wv.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  wv.img /bin >/dev/null
 python3 $ROOT/tools/p8xfs.py put    wv.img pic.p8i --name /PIC.P8I --load 0 --exec 0 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    wv.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    wv.img wv_wdesk.bin --name /bin/wdesk.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    wv.img wv_wdesk.bin --name /bin/wdesk.bin --load 0x5900 --exec 0x5900 >/dev/null
 
 # baseline: boot, no open -> VIEW not present, no green
 printf 'B\rrun /bin/wdesk.bin\r' > wv0.in

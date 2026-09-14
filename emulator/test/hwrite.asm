@@ -7,8 +7,8 @@ FGETB   = $0127
 FWOPEN  = $012A
 FPUTB   = $012D
 FCLOSE  = $0130
-HEXL    = $6042
-FNAME   = $604A
+HEXL    = $1F42
+FNAME   = $1F4A
         .org $2000
         JSR  FWOPEN
         LDA  #'H'
@@ -34,7 +34,7 @@ PAD:    LDA  #' '
         JNZ  PAD
         JSR  FCLOSE
         JC   ERR
-        LDP1 #$6000         ; read it back through the read stream
+        LDP1 #$8000         ; read it back through the read stream
         JSR  FOPEN
         JC   ERR
 LP:     JSR  FGETB

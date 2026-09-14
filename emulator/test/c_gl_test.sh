@@ -65,7 +65,7 @@ cp gl_a_src.c $ROOT/os/commands/zz_gla.c
 python3 $ROOT/tools/clib.py $ROOT/os/commands/zz_gla.c > gl_a.c
 rm $ROOT/os/commands/zz_gla.c
 python3 $ROOT/compiler/p8cc.py gl_a.c -o gl_a.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py gl_a.asm -o gl_a.bin --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py gl_a.asm -o gl_a.bin --base 0x5900 >/dev/null
 
 # ---- the SAME scene as a GL hex stream (no lib_g3d at all) ------------------
 cat > gl_b.c <<'EOF'
@@ -104,7 +104,7 @@ int main() {
 }
 EOF
 python3 $ROOT/compiler/p8cc.py gl_b.c -o gl_b.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py gl_b.asm -o gl_b.bin --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py gl_b.asm -o gl_b.bin --base 0x5900 >/dev/null
 
 # ---- probe/error program ----------------------------------------------------
 cat > gl_e.c <<'EOF'
@@ -136,7 +136,7 @@ int main() {
 }
 EOF
 python3 $ROOT/compiler/p8cc.py gl_e.c -o gl_e.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py gl_e.asm -o gl_e.bin --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py gl_e.asm -o gl_e.bin --base 0x5900 >/dev/null
 
 # ---- 2D verbs program -------------------------------------------------------
 cat > gl_2.c <<'EOF'
@@ -162,16 +162,16 @@ int main() {
 }
 EOF
 python3 $ROOT/compiler/p8cc.py gl_2.c -o gl_2.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py gl_2.asm -o gl_2.bin --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py gl_2.asm -o gl_2.bin --base 0x5900 >/dev/null
 
 rm -f gl.img
 python3 $ROOT/tools/p8xfs.py create gl.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   gl.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  gl.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    gl.img gl_a.bin --name /bin/gla.bin --load 0x6100 --exec 0x6100 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    gl.img gl_b.bin --name /bin/glb.bin --load 0x6100 --exec 0x6100 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    gl.img gl_e.bin --name /bin/gle.bin --load 0x6100 --exec 0x6100 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    gl.img gl_2.bin --name /bin/gl2.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    gl.img gl_a.bin --name /bin/gla.bin --load 0x5900 --exec 0x5900 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    gl.img gl_b.bin --name /bin/glb.bin --load 0x5900 --exec 0x5900 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    gl.img gl_e.bin --name /bin/gle.bin --load 0x5900 --exec 0x5900 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    gl.img gl_2.bin --name /bin/gl2.bin --load 0x5900 --exec 0x5900 >/dev/null
 
 # ---- 1: probe + errors ------------------------------------------------------
 printf 'B\rrun /bin/gle.bin\r' > gl_e.in
@@ -261,8 +261,8 @@ int main() {
 }
 EOF
 python3 $ROOT/compiler/p8cc.py gl_f.c -o gl_f.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py gl_f.asm -o gl_f.bin --base 0x6100 >/dev/null
-python3 $ROOT/tools/p8xfs.py put gl.img gl_f.bin --name /bin/glf.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py gl_f.asm -o gl_f.bin --base 0x5900 >/dev/null
+python3 $ROOT/tools/p8xfs.py put gl.img gl_f.bin --name /bin/glf.bin --load 0x5900 --exec 0x5900 >/dev/null
 
 glf_check() {   # $1 = mode, $2 = visible rows, $3 = hidden rows
     printf "${LAB}B\rrun /bin/glf.bin %s\r" "$1" > gl_f.in

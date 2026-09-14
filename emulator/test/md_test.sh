@@ -16,7 +16,7 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/dev/null
 python3 $ROOT/tools/clib.py $ROOT/os/commands/md.c -o md_t.c
 python3 $ROOT/compiler/p8cc.py md_t.c -o md_t.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py md_t.asm -o md_t.bin --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py md_t.asm -o md_t.bin --base 0x5900 >/dev/null
 
 cat > sample.md <<'EOF'
 # Title One
@@ -48,7 +48,7 @@ rm -f md.img
 python3 $ROOT/tools/p8xfs.py create md.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   md.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  md.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    md.img md_t.bin --name /bin/md.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    md.img md_t.bin --name /bin/md.bin --load 0x5900 --exec 0x5900 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    md.img sample.md --name /SAMPLE.MD >/dev/null
 
 # pager keys: feed spaces after the run line so --More-- always advances

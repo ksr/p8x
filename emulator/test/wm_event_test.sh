@@ -57,13 +57,13 @@ int main() {
 }
 EOF
 python3 $ROOT/compiler/p8cc.py ep_run.c -o ep_run.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py ep_run.asm -o ep_run.bin --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py ep_run.asm -o ep_run.bin --base 0x5900 >/dev/null
 
 rm -f ep.img
 python3 $ROOT/tools/p8xfs.py create ep.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   ep.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  ep.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    ep.img ep_run.bin --name /bin/ep.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    ep.img ep_run.bin --name /bin/ep.bin --load 0x5900 --exec 0x5900 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    ep.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
 
 # right-arrow (kernel: move the window +8) ; 'x' (unowned: client echoes) ; ^D

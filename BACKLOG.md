@@ -97,6 +97,21 @@ remainder is why it is still here.
       ("frame ... over 255 bytes (use /bin/cc)") instead of truncating. The
       static-slot `/bin/cc` (p8xcc.asm) still compiles those on-board. A general
       far-path (frame pointer / 16-bit disp) is future work.
+- [ ] **Generate the ABI/scratch includes from the single source (2026-09-14).**
+      The $6100→$5900 flag-day had to touch ~28 command/app/fixture sources because
+      each HARDCODES BIOS-scratch + graphics-flag addresses: `//#define GFXPRES
+      0x60A4` / `GTSUSP` / `GCONEN` in ~8 graphics commands, `FNAME`/`FSRC`/`FLEN`
+      in basic.c + p8xbasic.asm, `ROSTATE`/`ROSDRV` in cc.c, `LBA` in p8xedit +
+      the fpga tools, `TMP/TMP2/CNT` in the monitor. `gen_memmap.py` is already
+      THE single source (emits memmap.inc/.h/.py), but commands re-copy the
+      literals instead of pulling them. Fix: have `gen_memmap.py` also emit the
+      ABI include that `//#use` splices (a generated `lib_abi.c`/`lib_abi.inc`, or
+      a new `lib_mem`), so a memory-map change is one regen, not a repo-wide sweep.
+      Same idea for the memory-map DOC (`reference_p8x_memory_map.md`) and the
+      p8xos/p8xmon header layout comments — generate them from the table. Then the
+      hand-maintained caps (test size limits = symtab − TPABASE) could derive too.
+      Audit first: which `//#define`s are genuinely map-derived vs command-local.
+
 - [ ] **Port the frame model into `apps/p8xcc.asm` — the deferred half (2026-09-13).**
       `apps/cc.c` is frame-model but `apps/p8xcc.asm` (the default `/bin/cc`) is
       still static-slot, so the two compilers no longer emit byte-identical text
@@ -110,11 +125,14 @@ remainder is why it is still here.
       The frame self-compile is ~30.6 KB and overruns its tables at `$C800`/
       collides with the stack; codegen tweaks yield only hundreds of bytes each
       (leaf ~400 B net ceiling; a global-collapse peephole is +742 B net because
-      the compiler compiles its own optimization code). The real lever is more
-      TPA: reclaim the top 2 KB of the monitor ROM window ($1800–$1FFF, ROM 8K→6K,
-      the monitor already fits 6K) as RAM and relocate the TPA-floor scratch down,
-      dropping TPABASE ~$6100 → ~$5900 (+2 KB). See [[reference_p8x_cc_caps]],
-      `scratchpad/FRAME_PLAN.md`.
+      the compiler compiles its own optimization code).
+      **The TPA reclaim is DONE (2026-09-14, +2,048 B):** ROM shrunk 8K→6K and the
+      TPA-floor scratch moved into the $1800–$1FFF island, dropping TPABASE
+      $6100→$5900. What remains for the on-board round-trip: the self-compiled
+      compiler still needs its HEADS/table layout to clear the 30.6 KB image at
+      the lower base, and the native assembler symbol table (~1,120) must grow to
+      ~1,188. Re-run the fit check at $5900 before more codegen work. See
+      [[reference_p8x_cc_caps]], `scratchpad/FRAME_PLAN.md`.
 
 > **THE BOARD HAS TWO STALENESS SURFACES; A FEATURE MAY NEED BOTH.** The
 > BITSTREAM carries the CPU, microcode, monitor ROM and graphics RTL

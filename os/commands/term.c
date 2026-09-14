@@ -18,9 +18,9 @@
 //#use abi     /* GCLS BIOS, SYS_RUNSH/SYS_EXEC, FRESOLVE/FWOPEN..., argstr, CONOUT */
 //#use ptr     /* rawkey / outc / outs */
 
-//#define GFXPRES 0x60A4  /* 1 = GL card fitted */
-//#define GTSUSP  0x60A7  /* 1 = a full-screen GL app owns the screen (console off) */
-//#define GCONEN  0x60AF  /* 1 = glass TTY console enabled */
+//#define GFXPRES 0x1FA4  /* 1 = GL card fitted */
+//#define GTSUSP  0x1FA7  /* 1 = a full-screen GL app owns the screen (console off) */
+//#define GCONEN  0x1FAF  /* 1 = glass TTY console enabled */
 //#define GCLS    0x014E  /* BIOS: clear the glass TTY + home */
 
 char cmd[64];

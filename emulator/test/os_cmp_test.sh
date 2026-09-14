@@ -12,12 +12,12 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o oscmp.bin --base 0x2000 >/dev/null
 python3 $ROOT/tools/clib.py $ROOT/os/commands/cmp.c -o cmp.pp.c
 python3 $ROOT/compiler/p8cc.py cmp.pp.c -o cmp.t.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py cmp.t.asm -o cmp.t.bin --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py cmp.t.asm -o cmp.t.bin --base 0x5900 >/dev/null
 rm -f cmp.img
 python3 $ROOT/tools/p8xfs.py create cmp.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   cmp.img oscmp.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  cmp.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    cmp.img cmp.t.bin --name /bin/cmp.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    cmp.img cmp.t.bin --name /bin/cmp.bin --load 0x5900 --exec 0x5900 >/dev/null
 printf 'hello world\nsecond line\n' > A.TXT
 printf 'hello world\nsecond line\n' > B.TXT
 printf 'hello worle\nsecond line\n' > C.TXT
@@ -44,12 +44,12 @@ R 'cmp E.TXT F.TXT' 'cmp E.TXT F' | grep -q 'byte 18, line 1' || fail "2-digit b
 
 # --- C vs hand-asm twin: identical output ---
 sh $ROOT/os/commands-asm/mkasm.sh cmp > cmp.a.asm
-python3 $ROOT/assembler/p8xasm.py cmp.a.asm -o cmp.a.bin --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py cmp.a.asm -o cmp.a.bin --base 0x5900 >/dev/null
 rm -f cmpa.img
 python3 $ROOT/tools/p8xfs.py create cmpa.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   cmpa.img oscmp.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  cmpa.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    cmpa.img cmp.a.bin --name /bin/cmp.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    cmpa.img cmp.a.bin --name /bin/cmp.bin --load 0x5900 --exec 0x5900 >/dev/null
 for f in A B C D E F; do python3 $ROOT/tools/p8xfs.py put cmpa.img $f.TXT --name /$f.TXT >/dev/null; done
 TSEQ='B\rcmp A.TXT B.TXT\rcmp A.TXT C.TXT\rcmp A.TXT D.TXT\rcmp D.TXT A.TXT\rcmp E.TXT F.TXT\r'
 tw() { printf "$TSEQ" | ../p8xemu -l 300000000 -c "$1" eeprom.bin 2>/dev/null | LC_ALL=C tr -d '\0\r' | sed -n '/cmp A.TXT B/,$p'; }

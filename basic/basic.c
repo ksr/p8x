@@ -19,10 +19,10 @@
 //#define FFIND    0x0118
 //#define FCREATE  0x011B
 //#define FLOADAT  0x013F
-//#define FNAME    0x604A
-//#define FSRC     0x6056
-//#define FLEN     0x6058
-//#define GTSUSP   0x60A7
+//#define FNAME    0x1F4A
+//#define FSRC     0x1F56
+//#define FLEN     0x1F58
+//#define GTSUSP   0x1FA7
 //#define GLDATA   0xFF50
 //#define GLSTAT   0xFF51
 //#define GLRBR    0xFF52

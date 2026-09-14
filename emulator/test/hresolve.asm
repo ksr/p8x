@@ -10,7 +10,7 @@ FRESOLVE= $0133
         LDP1 #PATHSTR
         JSR  FRESOLVE       ; DIRLBA/DIRN -> /SUB, FNAME -> "T"
         JC   ERR
-        LDP1 #$6000         ; 512-byte read buffer
+        LDP1 #$8000         ; 512-byte read buffer
         JSR  FOPEN          ; opens /SUB/T (FFIND runs in /SUB)
         JC   ERR
 LP:     JSR  FGETB

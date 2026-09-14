@@ -28,9 +28,9 @@ python3 $ROOT/tools/p8xfs.py put   hl.img f.txt --name /sub/F.TXT >/dev/null
 # `del` is now a /bin program (not a shell built-in) -> put it on the disk
 python3 $ROOT/tools/clib.py $ROOT/os/commands/del.c -o dlw.pp.c
 python3 $ROOT/compiler/p8cc.py dlw.pp.c -o dlw.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py dlw.asm -o dlw.bin --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py dlw.asm -o dlw.bin --base 0x5900 >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir hl.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put   hl.img dlw.bin --name /bin/del.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put   hl.img dlw.bin --name /bin/del.bin --load 0x5900 --exec 0x5900 >/dev/null
 
 # sanity: the subdir's extent really is beyond LBA 255 (else the test proves nothing)
 lba=$(python3 - <<'PY'

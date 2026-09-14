@@ -22,8 +22,8 @@
 
 //#define GLDATA  0xFF50
 //#define GLSTAT  0xFF51
-//#define GFXPRES 0x60A4
-//#define GTSUSP  0x60A7
+//#define GFXPRES 0x1FA4
+//#define GTSUSP  0x1FA7
 
 char buf[2000];          /* the text */
 int  blen;               /* length */

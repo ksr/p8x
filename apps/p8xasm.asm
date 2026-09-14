@@ -5,8 +5,8 @@
 ; Reads SRC.ASM from disk and writes the binary OUT, both through the BIOS
 ; file streams (FOPEN/FGETB for input, FWOPEN/FPUTB/FCLOSE for output), so
 ; neither is bounded by RAM -- the assembler even assembles its own source.
-; Output carries load/exec 0, which the OS treats as the TPA base $6100 -- so a
-; program written `.org $6100` is directly RUNnable after assembly.
+; Output carries load/exec 0, which the OS treats as the TPA base $5900 -- so a
+; program written `.org $5900` is directly RUNnable after assembly.
 ;
 ; This is the 2026-09-12 from-scratch rewrite for the Tier A ISA. It is a
 ; drop-in for the original: same syntax, same error messages, and its output
@@ -65,7 +65,7 @@
 ; card) -- never keep a value in A across one.
 ;
 ; Memory (code + OPCTAB must stay below SYMTAB = $8000; os_asm_test checks):
-;   $6100-$7FFF code + opcode table       $C900-$CAFF SECBUF (source sector)
+;   $5900-$7FFF code + opcode table       $C900-$CAFF SECBUF (source sector)
 ;   $8000-$C5FF SYMTAB 1120 x 16 bytes    $CB00-$CB7F LINEBUF (<=127 chars)
 ;   $C600-$C7FF HEADS  256 chain heads    $CC00-$CDFF INCBUF (include sector)
 ;   $C800-$C8FF variables                 $CE00-$CFFF BIOS directory-scan page
@@ -87,10 +87,10 @@ FCLOSE  = $0130   ; flush + register the output file FNAME; C=1 if the volume is
 FRESOLVE= $0133   ; resolve a path (P1) -> DIRLBA/DIRN/DIRLBA1 + leaf FNAME; C=1 if no dir
 FSDIRBUF= $0145   ; repoint directory scans (FSCAN/FFIND/FNEXT) at page A
 SYS_GETCWD = $2003 ; OS: write the CWD path (NUL-terminated) to (P1)
-FNAME   = $604A   ; BIOS: current file name (12)
-DIRLBA  = $6073   ; BIOS: current directory start LBA low
-DIRN    = $6074   ; BIOS: current directory sector count (DIRLBA+1)
-DIRLBA1 = $6080   ; BIOS: current directory start LBA high
+FNAME   = $1F4A   ; BIOS: current file name (12)
+DIRLBA  = $1F73   ; BIOS: current directory start LBA low
+DIRN    = $1F74   ; BIOS: current directory sector count (DIRLBA+1)
+DIRLBA1 = $1F80   ; BIOS: current directory start LBA high
 
 CR      = $0D
 LF      = $0A
@@ -163,7 +163,7 @@ INCPATH = $D090   ; resolved absolute .include path (<=128)
 UPATH   = $D110   ; built ;#use path "/lib/NAME.inc"
 USELIST = $D140   ; 4 x 16: the ;#use names (NUL-terminated)
 
-        .org $6100
+        .org $5900
 ; =============================================================================
 ; Main
 ; =============================================================================

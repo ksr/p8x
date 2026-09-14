@@ -22,15 +22,15 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/
 for p in wdesk paint; do
     python3 $ROOT/tools/clib.py $ROOT/os/commands/$p.c -o wd_$p.c
     python3 $ROOT/compiler/p8cc.py wd_$p.c -o wd_$p.asm >/dev/null
-    python3 $ROOT/assembler/p8xasm.py wd_$p.asm -o wd_$p.bin --base 0x6100 >/dev/null
+    python3 $ROOT/assembler/p8xasm.py wd_$p.asm -o wd_$p.bin --base 0x5900 >/dev/null
 done
 
 rm -f wd.img
 python3 $ROOT/tools/p8xfs.py create wd.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   wd.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  wd.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    wd.img wd_wdesk.bin --name /bin/wdesk.bin --load 0x6100 --exec 0x6100 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    wd.img wd_paint.bin --name /bin/paint.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    wd.img wd_wdesk.bin --name /bin/wdesk.bin --load 0x5900 --exec 0x5900 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    wd.img wd_paint.bin --name /bin/paint.bin --load 0x5900 --exec 0x5900 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    wd.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
 
 # wdesk -> 'l' (kernel launches paint -w over wdesk) -> 'q' (paint quits and

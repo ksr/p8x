@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: reference
   originSessionId: 6ffcfef7-73ca-445b-bcdb-f57735fdc98f
-  modified: 2026-09-13T19:15:54.677Z
+  modified: 2026-09-14T11:33:29.193Z
 ---
 
 TPABASE is the base of the transient program area = the default load/exec/`.org`
@@ -56,6 +56,27 @@ else hardcodes the literal. Changing it is a flag-day. On 2026-09-13 it dropped
 - Docs: `reference_p8x_memory_map`, `reference_p8x_cwdpath` (CWDPATH is in the
   relocated band), the p8xos.asm header comment, the six live README build
   examples. Dated design docs / GLOSSARY / BACKLOG-DONE are historical, exempt.
+
+**2026-09-14 step 3 ($6100 -> $5900, +2,048 B): the ROM reclaim + BIOS-scratch
+move.** Shrank the firmware ROM 8K->6K (ROMSIZE/RAMBASE $2000->$1800 in
+gen_memmap; the monitor uses ~5.2K and the emulator reads only ROMSIZE bytes of
+the still-8K image), opening **$1800-$1FFF as a RAM island**. Then moved the top
+half of the scratch band DOWN by -$4100 into the island: IBUF $1800, PATHBUF
+$1A00, APBUF $1B00, SBUF $1D00, and **the BIOS scratch $6000-$60FF -> $1F00-$1FFF**.
+TPABASE dropped to $5900. **This overturns the old "BIOS scratch MUST NOT MOVE"
+rule below** — it CAN move, but its addresses are hardcoded in ~28 sources, so
+every $60xx shifts -$4100 in lockstep: the graphics flags GFXPRES/GTSUSP/GCONEN
+($60A4/$60A7/$60AF) in ~8 command .c files (screen/term/desk/finder/paint/wdesk/
+write/lib_gfx), FNAME/FSRC/FLEN/GTSUSP in basic.c + p8xbasic.asm, LBA/FNAME/etc.
+in p8xedit.asm, ROSTATE/ROSDRV in cc.c, LBA0/1/2 in the fpga osload/imgload
+tools, TMP/TMP2/CNT ($6044-46) in p8xmon.asm, and the raw h*.asm CFWRITE
+fixtures. The OS + monitor .include memmap.inc so their symbol uses auto-follow;
+lib_abi.c/.inc define only CALL vectors (ROM, unchanged), NOT the scratch data
+addresses. GOTCHA that bit: a raw fixture's private 512-byte read buffer that
+happened to sit at $6000 got swept to $1F00 by the uniform $60->$1F replace, and
+a 512-byte sector read there overflowed the island into the fixture's code at
+$2000 -> RESET; fix = point such buffers at free TPA ($8000), NOT the scratch.
+Also update the size caps (symtab - TPABASE): os_asm 9984, asm_c 20224, cc_c 24320.
 
 **2026-09-13 step 2 ($6300 -> $6100): moving SBUF (the monitor sector buffer).**
 To drop TPABASE past $6300, `SBUF` (was $6100) moved DOWN to $5E00, below the

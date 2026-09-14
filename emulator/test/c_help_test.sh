@@ -14,13 +14,13 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/dev/null
 python3 $ROOT/tools/clib.py $ROOT/os/commands/help.c -o help.pp.c
 python3 $ROOT/compiler/p8cc.py help.pp.c -o help.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py help.asm -o help.bin --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py help.asm -o help.bin --base 0x5900 >/dev/null
 
 rm -f hlp.img
 python3 $ROOT/tools/p8xfs.py create hlp.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   hlp.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  hlp.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    hlp.img help.bin --name /bin/help.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    hlp.img help.bin --name /bin/help.bin --load 0x5900 --exec 0x5900 >/dev/null
 
 printf 'B\rhelp\r' > hlp.in      # BARE help (implicit run, not "run /bin/...")
 ../p8xemu -N -i hlp.in -c hlp.img -l 200000000 eeprom.bin > hlp.out 2>/dev/null || true

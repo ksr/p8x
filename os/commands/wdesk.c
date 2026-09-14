@@ -48,8 +48,8 @@
 
 //#define GLDATA 0xFF50
 //#define GLSTAT 0xFF51
-//#define GFXPRES 0x60A4  /* two-mode flag: 1 = GL card fitted (monitor/OS set it) */
-//#define GTSUSP  0x60A7  /* glass TTY suspend: 1 = this app owns the screen */
+//#define GFXPRES 0x1FA4  /* two-mode flag: 1 = GL card fitted (monitor/OS set it) */
+//#define GTSUSP  0x1FA7  /* glass TTY suspend: 1 = this app owns the screen */
 
 char param[22];
 char frec[22];                     /* a window's record, read via SYS_WKGET */

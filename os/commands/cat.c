@@ -68,7 +68,7 @@ int main() {
     int g;
     int n;
 
-    /* Move directory scans off SBUF ($6100). catpath()'s FRESOLVE reads directory
+    /* Move directory scans off SBUF ($5900). catpath()'s FRESOLVE reads directory
      * sectors into the DIBUFH page, which defaults to SBUF — the very buffer the
      * shell's redirect write-stream (`cat a b >OUT`) uses to hold pending output.
      * Without this, the SECOND file's FRESOLVE overwrites the first file's

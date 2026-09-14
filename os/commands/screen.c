@@ -19,8 +19,8 @@
 
 //#use abi     /* argstr, and the console flag address */
 
-//#define GFXPRES 0x60A4  /* 1 = GL card fitted */
-//#define GCONEN  0x60AF  /* 1 = glass TTY console enabled */
+//#define GFXPRES 0x1FA4  /* 1 = GL card fitted */
+//#define GCONEN  0x1FAF  /* 1 = glass TTY console enabled */
 //#define GCLS    0x014E  /* BIOS: clear the glass TTY + home the cursor */
 
 int main() {

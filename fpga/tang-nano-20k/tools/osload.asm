@@ -20,10 +20,10 @@ CONOUT  = $0103                 ; A -> serial
 CFREAD  = $010C                 ; sector LBA -> (P1); P1 += 512
 CFWRITE = $010F                 ; SBUF -> sector LBA
 
-LBA0    = $6047                 ; 24-bit LBA, little-endian
-LBA1    = $6048
-LBA2    = $6049
-SBUF    = $6100                 ; 512-byte sector buffer
+LBA0    = $1F47                 ; 24-bit LBA, little-endian
+LBA1    = $1F48
+LBA2    = $1F49
+SBUF    = $5900                 ; 512-byte sector buffer
 
 NSEC    = $3300                 ; sectors left to write
 NTOT    = $3301                 ; total, for the OSCNT patch

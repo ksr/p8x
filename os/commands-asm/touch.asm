@@ -9,7 +9,7 @@
 
 ; Entry: TPA points P2 at the raw argument tail. Stash it in t_arg (a 16-bit
 ; RAM cursor) since P2 gets reused for every dereference below.
-        .org $6100
+        .org $5900
         TPA2L
         STA t_arg
         TPA2H

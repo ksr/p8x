@@ -2,12 +2,12 @@
 
 
 # memory-region anchors
-RAMBASE     = 0x1800             # first RAM address (ROM shrunk 8K->6K 2026-09-13; $1800-$1FFF is a low RAM island)
+RAMBASE     = 0x1800             # first RAM address (ROM shrunk 8K->6K 2026-09-14; $1800-$1FFF is a low RAM island)
 IOBASE      = 0xFF00             # memory-mapped I/O page
 ROMSIZE     = 0x1800             # 6K firmware ROM $0000-$17FF (monitor uses ~5.2K)
 RAMSIZE     = 0xE700             # RAM span $1800-$FEFF (IOBASE-RAMBASE)
 OSORG       = 0x2000             # OS load/link address (still $2000; the $1800-$1FFF RAM island holds relocated scratch)
-TPABASE     = 0x6100             # transient program area base (RUNnable programs load here)
+TPABASE     = 0x5900             # transient program area base (RUNnable programs load here)
 CSTACKTOP   = 0xF800             # compiler C-stack top (grows down; p8cc __csp init)
 
 # I/O ports ($FF00-$FFFF)
@@ -41,58 +41,58 @@ MDBH        = 0xFF3A             # MDU operand b, high byte
 MDCH        = 0xFF3B             # MDU divisor c, high byte
 MDQH        = 0xFF3C             # read: MDU result, high byte
 
-# BIOS / FS scratch ($6000-$60FF)
-LBUF        = 0x6000             # input line buffer
-ADDRL       = 0x6040             # parsed address
-ADDRH       = 0x6041
-HEXL        = 0x6042             # hex accumulator
-HEXH        = 0x6043
-LBA         = 0x6047             # current LBA, byte 0 (bits 7:0)
-LBA1        = 0x6048             # LBA byte 1 (bits 15:8)  — 0 after CFINIT unless set
-LBA2        = 0x6049             # LBA byte 2 (bits 23:16) — 0 after CFINIT unless set
-FNAME       = 0x604A             # 12-byte filename (space-padded) — in for both calls
-FSRC        = 0x6056             # FCREATE: source address of the file data (2 bytes)
-FLEN        = 0x6058             # file length in bytes (3 bytes): FCREATE in, FFIND out
-FSAV        = 0x605B             # FCREATE scratch: requested length saved across FFIND (3)
-ROLBA       = 0x605E             # next sector LBA to read (3)
-ROREM       = 0x6061             # bytes remaining in the file (3)
-ROBUF       = 0x6064             # caller's 512-byte sector buffer address (2)
-ROPTR       = 0x6066             # read cursor within ROBUF (2)
-ROCNT       = 0x6068             # bytes left in ROBUF; 0 -> refill (3)
-WOLBA       = 0x606B             # current output sector LBA (3)
-WOPOS       = 0x606E             # byte offset within SBUF; 512 -> flush (2)
-WOTOT       = 0x6070             # total bytes written (-> FLEN at close) (3)
-DIRLBA      = 0x6073             # current directory start LBA, low byte (16-bit: +DIRLBA1)
-DIRN        = 0x6074             # current directory sector count (1)
-FFLAG       = 0x6075             # flag of the entry FSCAN matched (file $01 / dir $02)
-RPATH       = 0x6076             # FRESOLVE path cursor (2)
-DILBA       = 0x6078             # iteration: current directory sector LBA (1)
-DICNT       = 0x6079             # iteration: sectors remaining (1)
-DIIDX       = 0x607A             # iteration: entry index within the sector (0..15)
-FLAREM      = 0x607B             # FLOADAT remaining-bytes counter (CFRDSEC clobbers TMP) (3)
-DIBUFH      = 0x607E             # FNEXT directory-buffer page (high byte; low byte 0).
-DILBA1      = 0x607F             # FNEXT iteration sector LBA, high byte
-DIRLBA1     = 0x6080             # current directory start LBA, high byte (pairs DIRLBA)
-FCDH        = 0x6081             # FCREATE directory-sector scan cursor, high byte (HEXL)
-DRVSEL      = 0x6082             # current CF drive for sector I/O (0/1); ORed into CFHEAD
-CFTOL       = 0x6083             # CF bounded-wait timeout counter, low byte
-CFTOH       = 0x6084             # CF bounded-wait timeout counter, high byte
-ROSDRV      = 0x6085             # read-stream drive (captured by FOPEN, re-asserted by FG_FILL)
-WOSDRV      = 0x6086             # write-stream drive (captured by FWOPEN, re-asserted by FW_FLUSH)
-CFIMASK     = 0x6087             # bit N set = drive N has been CFINIT'd this session
-REMW        = 0x6088             # FCOM_CORE ceil(FLEN/512): 24-bit remaining counter (3)
-CNTW        = 0x608B             # FCOM_CORE sector count, 16-bit (files may span >255 sectors)
+# BIOS / FS scratch (moved to $1F00-$1FFF island)
+LBUF        = 0x1F00             # input line buffer
+ADDRL       = 0x1F40             # parsed address
+ADDRH       = 0x1F41
+HEXL        = 0x1F42             # hex accumulator
+HEXH        = 0x1F43
+LBA         = 0x1F47             # current LBA, byte 0 (bits 7:0)
+LBA1        = 0x1F48             # LBA byte 1 (bits 15:8)  — 0 after CFINIT unless set
+LBA2        = 0x1F49             # LBA byte 2 (bits 23:16) — 0 after CFINIT unless set
+FNAME       = 0x1F4A             # 12-byte filename (space-padded) — in for both calls
+FSRC        = 0x1F56             # FCREATE: source address of the file data (2 bytes)
+FLEN        = 0x1F58             # file length in bytes (3 bytes): FCREATE in, FFIND out
+FSAV        = 0x1F5B             # FCREATE scratch: requested length saved across FFIND (3)
+ROLBA       = 0x1F5E             # next sector LBA to read (3)
+ROREM       = 0x1F61             # bytes remaining in the file (3)
+ROBUF       = 0x1F64             # caller's 512-byte sector buffer address (2)
+ROPTR       = 0x1F66             # read cursor within ROBUF (2)
+ROCNT       = 0x1F68             # bytes left in ROBUF; 0 -> refill (3)
+WOLBA       = 0x1F6B             # current output sector LBA (3)
+WOPOS       = 0x1F6E             # byte offset within SBUF; 512 -> flush (2)
+WOTOT       = 0x1F70             # total bytes written (-> FLEN at close) (3)
+DIRLBA      = 0x1F73             # current directory start LBA, low byte (16-bit: +DIRLBA1)
+DIRN        = 0x1F74             # current directory sector count (1)
+FFLAG       = 0x1F75             # flag of the entry FSCAN matched (file $01 / dir $02)
+RPATH       = 0x1F76             # FRESOLVE path cursor (2)
+DILBA       = 0x1F78             # iteration: current directory sector LBA (1)
+DICNT       = 0x1F79             # iteration: sectors remaining (1)
+DIIDX       = 0x1F7A             # iteration: entry index within the sector (0..15)
+FLAREM      = 0x1F7B             # FLOADAT remaining-bytes counter (CFRDSEC clobbers TMP) (3)
+DIBUFH      = 0x1F7E             # FNEXT directory-buffer page (high byte; low byte 0).
+DILBA1      = 0x1F7F             # FNEXT iteration sector LBA, high byte
+DIRLBA1     = 0x1F80             # current directory start LBA, high byte (pairs DIRLBA)
+FCDH        = 0x1F81             # FCREATE directory-sector scan cursor, high byte (HEXL)
+DRVSEL      = 0x1F82             # current CF drive for sector I/O (0/1); ORed into CFHEAD
+CFTOL       = 0x1F83             # CF bounded-wait timeout counter, low byte
+CFTOH       = 0x1F84             # CF bounded-wait timeout counter, high byte
+ROSDRV      = 0x1F85             # read-stream drive (captured by FOPEN, re-asserted by FG_FILL)
+WOSDRV      = 0x1F86             # write-stream drive (captured by FWOPEN, re-asserted by FW_FLUSH)
+CFIMASK     = 0x1F87             # bit N set = drive N has been CFINIT'd this session
+REMW        = 0x1F88             # FCOM_CORE ceil(FLEN/512): 24-bit remaining counter (3)
+CNTW        = 0x1F8B             # FCOM_CORE sector count, 16-bit (files may span >255 sectors)
 
 # shared sector buffer
-SBUF        = 0x5E00             # sector buffer
+SBUF        = 0x1D00             # sector buffer
 
 # hardware stack
 STKTOP      = 0xFEFF
 
-# BIOS / FS scratch ($6000-$60FF)
-ROSTAT      = 0x605E             # read-stream state base (ROLBA..ROCNT, 11 bytes)
+# BIOS / FS scratch (moved to $1F00-$1FFF island)
+ROSTAT      = 0x1F5E             # read-stream state base (ROLBA..ROCNT, 11 bytes)
 
-# OS scratch ($5900-$5FFF)
+# OS scratch (top moved to the $1800-$1FFF island)
 LINEBUF     = 0x5700             # shell input line (64 bytes)
 CMDBUF      = 0x5740             # parsed command word (16 bytes)
 NAMEBUF     = 0x5750             # 12-byte filename (search key / DIR scratch)
@@ -174,9 +174,9 @@ FCHILD      = 0x57DD             # CHKDD: directory whose '..' is being checked
 FEXP        = 0x57DE             # CHKDD: expected parent LBA
 
 # TPA (transient programs)
-RBUF        = 0x6100             # capture buffer = the TPA (free during a built-in cmd)
+RBUF        = 0x5900             # capture buffer = the TPA (free during a built-in cmd)
 
-# OS scratch ($5900-$5FFF)
+# OS scratch (top moved to the $1800-$1FFF island)
 TSP         = 0x57E0             # tree stack depth (0 = at root level)
 TI          = 0x57E1             # scratch loop counter for the frame stack
 LENHI2      = 0x57E2             # entry length, bits 16..23 (the BIOS FLEN 3rd byte)
@@ -223,60 +223,60 @@ APCHK       = 0x58DD             # >> : bytes to emit from the current sector (2
 SCRIPTM     = 0x58E0             # 1 = the shell is running lines from a `sh` script
 SCRSAVE     = 0x58E1             # saved script read-stream state (ROSTATE 13 + ROSDRV = 14: $64E1..$64EE)
 SCRCNT      = 0x58EF             # byte counter for SAVESCR/RESTSCR (1)
-APBUF       = 0x5C00             # >> prepend sector buffer (512B, below the TPA); also the
-IBUF        = 0x5900             # 512-byte buffer for the stdin read stream
-PATHBUF     = 0x5B00             # search path, ';'-separated dirs; default '/BIN' ($6700..$673F)
-RUNPATH     = 0x5B40             # scratch: candidate program path built during a lookup ($6740..$679F)
-RUNSKIP     = 0x5BA0             # DORUN: 1 = skip the program-name word for the arg pointer
-PSCANL      = 0x5BA1             # PATH search cursor into PATHBUF (low)
-PSCANH      = 0x5BA2             # PATH search cursor into PATHBUF (high)
-GPLF        = 0x5BA3             # SYS_GETC console: 1 = a LF is pending after a CR keypress
-CURDRIVE    = 0x5BA4             # derived: 1 if the CWD is under /d1 (drive 1), else 0
-DRVINIT     = 0x5BA5             # bitmask: bit N set = drive N has been CFINIT'd this session
-MPSAV       = 0x5BA6             # MNTPFX: saved P2 (2 bytes) while sniffing a 'd1' prefix
+APBUF       = 0x1B00             # >> prepend sector buffer (512B, below the TPA); also the
+IBUF        = 0x1800             # 512-byte buffer for the stdin read stream
+PATHBUF     = 0x1A00             # search path, ';'-separated dirs; default '/BIN' ($6700..$673F)
+RUNPATH     = 0x1A40             # scratch: candidate program path built during a lookup ($6740..$679F)
+RUNSKIP     = 0x1AA0             # DORUN: 1 = skip the program-name word for the arg pointer
+PSCANL      = 0x1AA1             # PATH search cursor into PATHBUF (low)
+PSCANH      = 0x1AA2             # PATH search cursor into PATHBUF (high)
+GPLF        = 0x1AA3             # SYS_GETC console: 1 = a LF is pending after a CR keypress
+CURDRIVE    = 0x1AA4             # derived: 1 if the CWD is under /d1 (drive 1), else 0
+DRVINIT     = 0x1AA5             # bitmask: bit N set = drive N has been CFINIT'd this session
+MPSAV       = 0x1AA6             # MNTPFX: saved P2 (2 bytes) while sniffing a 'd1' prefix
 
 # shell history
-HISTST      = 0x608E             # history ring: index where the next entry is written (0..HISTN-1)
-HISTCT      = 0x608F             # history ring: number of stored entries (0..HISTN)
-HISTNV      = 0x6090             # history ring: recall cursor (0 = not navigating; N = N lines back)
+HISTST      = 0x1F8E             # history ring: index where the next entry is written (0..HISTN-1)
+HISTCT      = 0x1F8F             # history ring: number of stored entries (0..HISTN)
+HISTNV      = 0x1F90             # history ring: recall cursor (0 = not navigating; N = N lines back)
 HISTRING    = 0xF800             # history ring buffer base: HISTN x HISTLEN bytes ($F800..$F9FF, the free 512 B above CSTACKTOP; $FA00 = glob page, $FC00 = RDBUF, $FE00 = stack)
 
 # shell completion
-CMPPFX      = 0x5C00             # tab-complete: leaf prefix being completed (NUL-term, 64; aliases APBUF)
-CMPLCP      = 0x5C40             # tab-complete: longest common prefix of the matches (NUL-term, 16; aliases APBUF)
-CMPDIR      = 0x5C50             # tab-complete: directory-part path string, for CDPATH (NUL-term, 64; aliases APBUF)
-CMPPL       = 0x6091             # tab-complete: length of the typed leaf prefix
-CMPCNT      = 0x6092             # tab-complete: number of matches (saturates at 255)
-CMPFW       = 0x6093             # tab-complete: 1 = completing the command word (first word)
-CMPTABF     = 0x6094             # tab-complete: 1 = the previous key was a no-progress Tab
-CMPISD      = 0x6095             # tab-complete: 1 = the sole match is a directory
-CMPLM       = 0x6096             # tab-complete: 1 = scan in list mode (print matches)
-CMPDL       = 0x6097             # tab-complete: target directory start LBA, low byte
-CMPDLH      = 0x6098             # tab-complete: target directory start LBA, high byte
-CMPDN       = 0x6099             # tab-complete: target directory sector count
-CMPCUR      = 0x609A             # tab-complete: saved line length (cursor) across the scan
-CMPSAV      = 0x609B             # tab-complete: saved SBUF entry cursor across a candidate (2)
-CMPWLB      = 0x609D             # tab-complete: directory-walk running sector LBA (2)
-CMPWSC      = 0x609F             # tab-complete: directory-walk sectors remaining
-CMPIX       = 0x60A0             # tab-complete: KWTAB index during the built-in scan
+CMPPFX      = 0x1B00             # tab-complete: leaf prefix being completed (NUL-term, 64; aliases APBUF)
+CMPLCP      = 0x1B40             # tab-complete: longest common prefix of the matches (NUL-term, 16; aliases APBUF)
+CMPDIR      = 0x1B50             # tab-complete: directory-part path string, for CDPATH (NUL-term, 64; aliases APBUF)
+CMPPL       = 0x1F91             # tab-complete: length of the typed leaf prefix
+CMPCNT      = 0x1F92             # tab-complete: number of matches (saturates at 255)
+CMPFW       = 0x1F93             # tab-complete: 1 = completing the command word (first word)
+CMPTABF     = 0x1F94             # tab-complete: 1 = the previous key was a no-progress Tab
+CMPISD      = 0x1F95             # tab-complete: 1 = the sole match is a directory
+CMPLM       = 0x1F96             # tab-complete: 1 = scan in list mode (print matches)
+CMPDL       = 0x1F97             # tab-complete: target directory start LBA, low byte
+CMPDLH      = 0x1F98             # tab-complete: target directory start LBA, high byte
+CMPDN       = 0x1F99             # tab-complete: target directory sector count
+CMPCUR      = 0x1F9A             # tab-complete: saved line length (cursor) across the scan
+CMPSAV      = 0x1F9B             # tab-complete: saved SBUF entry cursor across a candidate (2)
+CMPWLB      = 0x1F9D             # tab-complete: directory-walk running sector LBA (2)
+CMPWSC      = 0x1F9F             # tab-complete: directory-walk sectors remaining
+CMPIX       = 0x1FA0             # tab-complete: KWTAB index during the built-in scan
 
 # console tty state
-TTYRAW      = 0x60A1             # 0 = expand a bare LF to CR LF on console output; nonzero = pass bytes through untouched (for binary over the serial link, like stty raw)
-TTYLST      = 0x60A2             # last byte PUTC transmitted, so an LF that already follows a CR is not doubled
-TTYCH       = 0x60A3             # PUTC's saved character (PUTC must preserve A)
+TTYRAW      = 0x1FA1             # 0 = expand a bare LF to CR LF on console output; nonzero = pass bytes through untouched (for binary over the serial link, like stty raw)
+TTYLST      = 0x1FA2             # last byte PUTC transmitted, so an LF that already follows a CR is not doubled
+TTYCH       = 0x1FA3             # PUTC's saved character (PUTC must preserve A)
 
 # graphics presence
-GFXPRES     = 0x60A4             # 1 = GL card fitted (screen is the display); 0 = headless serial console
+GFXPRES     = 0x1FA4             # 1 = GL card fitted (screen is the display); 0 = headless serial console
 
 # glass tty
-GTCOL       = 0x60A5             # glass TTY cursor column (0..GTCOLS-1)
-GTROW       = 0x60A6             # glass TTY cursor row (0..GTROWS-1)
-GTSUSP      = 0x60A7             # nonzero = glass TTY suspended (a full-screen GL app owns the screen; CONOUT is serial-only)
-GCONEN      = 0x60AF             # 1 = glass TTY console ENABLED (CONOUT mirrors to the GL screen); 0 = off (serial-only, the default -- `screen on` enables it)
-GTXL        = 0x60A8             # glass TTY cursor pixel x, low byte (0..474, step 6)
-GTXH        = 0x60A9             # glass TTY cursor pixel x, high byte
-GTYL        = 0x60AA             # glass TTY text-baseline pixel y (window, y-up), low byte
-GTYH        = 0x60AB             # glass TTY text-baseline pixel y, high byte
-GTCH        = 0x60AC             # glass TTY: the byte currently being drawn
-GTTMP       = 0x60AD             # glass TTY: FIFO-push scratch (holds the byte across the backpressure wait)
-GTCNT       = 0x60AE             # glass TTY: table-stream byte counter
+GTCOL       = 0x1FA5             # glass TTY cursor column (0..GTCOLS-1)
+GTROW       = 0x1FA6             # glass TTY cursor row (0..GTROWS-1)
+GTSUSP      = 0x1FA7             # nonzero = glass TTY suspended (a full-screen GL app owns the screen; CONOUT is serial-only)
+GCONEN      = 0x1FAF             # 1 = glass TTY console ENABLED (CONOUT mirrors to the GL screen); 0 = off (serial-only, the default -- `screen on` enables it)
+GTXL        = 0x1FA8             # glass TTY cursor pixel x, low byte (0..474, step 6)
+GTXH        = 0x1FA9             # glass TTY cursor pixel x, high byte
+GTYL        = 0x1FAA             # glass TTY text-baseline pixel y (window, y-up), low byte
+GTYH        = 0x1FAB             # glass TTY text-baseline pixel y, high byte
+GTCH        = 0x1FAC             # glass TTY: the byte currently being drawn
+GTTMP       = 0x1FAD             # glass TTY: FIFO-push scratch (holds the byte across the backpressure wait)
+GTCNT       = 0x1FAE             # glass TTY: table-stream byte counter

@@ -27,7 +27,7 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/
 # ---- build cube.bin (p8cc.py) and the muldiv vector program -----------------
 python3 $ROOT/tools/clib.py $ROOT/os/commands/cube.c > g3_cube.c
 python3 $ROOT/compiler/p8cc.py g3_cube.c -o g3_cube.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py g3_cube.asm -o g3_cube.bin --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py g3_cube.asm -o g3_cube.bin --base 0x5900 >/dev/null
 
 cat > g3_md_src.c <<'EOF'
 //#use gfx
@@ -73,14 +73,14 @@ cp g3_md_src.c $ROOT/os/commands/zz_g3md.c        # clib resolves libs by dir
 python3 $ROOT/tools/clib.py $ROOT/os/commands/zz_g3md.c > g3_md.c
 rm $ROOT/os/commands/zz_g3md.c
 python3 $ROOT/compiler/p8cc.py g3_md.c -o g3_md.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py g3_md.asm -o g3_md.bin --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py g3_md.asm -o g3_md.bin --base 0x5900 >/dev/null
 
 rm -f g3d.img
 python3 $ROOT/tools/p8xfs.py create g3d.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   g3d.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  g3d.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    g3d.img g3_cube.bin --name /bin/cube.bin --load 0x6100 --exec 0x6100 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    g3d.img g3_md.bin   --name /bin/g3md.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    g3d.img g3_cube.bin --name /bin/cube.bin --load 0x5900 --exec 0x5900 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    g3d.img g3_md.bin   --name /bin/g3md.bin --load 0x5900 --exec 0x5900 >/dev/null
 
 # ---- 1: muldiv vectors ------------------------------------------------------
 python3 - > g3_md_want.txt <<'EOF'

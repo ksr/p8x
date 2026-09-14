@@ -45,13 +45,13 @@ int main() {
 }
 EOF
 python3 $ROOT/compiler/p8cc.py ev_run.c -o ev_run.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py ev_run.asm -o ev_run.bin --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py ev_run.asm -o ev_run.bin --base 0x5900 >/dev/null
 
 rm -f ev.img
 python3 $ROOT/tools/p8xfs.py create ev.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   ev.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  ev.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    ev.img ev_run.bin --name /bin/ev.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    ev.img ev_run.bin --name /bin/ev.bin --load 0x5900 --exec 0x5900 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    ev.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
 
 # run the app; then FOUR right-arrows (ESC [ C) into the resident loop, then ^D

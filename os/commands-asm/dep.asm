@@ -7,8 +7,8 @@
 ; Entry: P2 = arg tail.  SYS_PUTS=$200F, SYS_PUTC=$2009.
 ;#use abi
 
-        .org $6100
-; Main entry (loaded/run at $6100, the TPA). Walks the arg tail at (P2):
+        .org $5900
+; Main entry (loaded/run at $5900, the TPA). Walks the arg tail at (P2):
 ;   parse the address, then loop parsing byte values and poking them into
 ;   ascending memory. Clobbers A/B, P1 (poke target), P2 (advanced past args)
 ;   and the scratch cells at file end (HXLO..ADHI). Falls through to RTS.

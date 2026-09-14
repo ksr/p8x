@@ -19,8 +19,8 @@ ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$(dirname "$0")"
 fail() { echo "BASIC-CWD TEST: FAIL — $1"; exit 1; }
 
-python3 "$ROOT/assembler/p8xasm.py" "$ROOT/basic/p8xbasic.asm" -o bcwd.bin --base 0x6100 \
-    -D BASORG=0x6100 -D BASRAM=0xC500 -D PBUF=0xE000 -D MONITOR=0x2000 >/dev/null \
+python3 "$ROOT/assembler/p8xasm.py" "$ROOT/basic/p8xbasic.asm" -o bcwd.bin --base 0x5900 \
+    -D BASORG=0x5900 -D BASRAM=0xC500 -D PBUF=0xE000 -D MONITOR=0x2000 >/dev/null \
     || fail "BASIC (TPA build) did not assemble"
 
 # A disk with the OS, a subdirectory, and this BASIC build. Installed under a
@@ -28,7 +28,7 @@ python3 "$ROOT/assembler/p8xasm.py" "$ROOT/basic/p8xbasic.asm" -o bcwd.bin --bas
 # exactly what made an earlier run of this fix look broken.
 cp "$ROOT/os/run-disk.img" bcwd.img 2>/dev/null || fail "need os/run-disk.img (run os/run.sh once)"
 python3 "$ROOT/tools/p8xfs.py" put bcwd.img bcwd.bin --name /bin/bcwd.bin \
-    --load 0x6100 --exec 0x6100 >/dev/null || fail "could not install the test BASIC"
+    --load 0x5900 --exec 0x5900 >/dev/null || fail "could not install the test BASIC"
 
 printf 'B\rcd src\rbcwd\r10 PRINT "C"\rSAVE "CWDT"\rBYE\rpwd\rcd /\rbcwd\rLOAD "/src/CWDT"\rLIST\rBYE\r' \
     > bcwd.in

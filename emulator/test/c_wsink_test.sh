@@ -55,13 +55,13 @@ PROBEEOF
 cp $ROOT/os/commands/lib_abi.c .          # clib resolves //#use from the source's dir
 python3 $ROOT/tools/clib.py sink_probe.c -o ws_probe.c
 python3 $ROOT/compiler/p8cc.py ws_probe.c -o ws_probe.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py ws_probe.asm -o ws_probe.bin --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py ws_probe.asm -o ws_probe.bin --base 0x5900 >/dev/null
 
 rm -f ws.img
 python3 $ROOT/tools/p8xfs.py create ws.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   ws.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  ws.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    ws.img ws_probe.bin --name /bin/sink.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    ws.img ws_probe.bin --name /bin/sink.bin --load 0x5900 --exec 0x5900 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    ws.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
 
 printf 'B\rrun /bin/sink.bin\r' > ws.in

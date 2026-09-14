@@ -86,13 +86,13 @@ EOF
 cp $ROOT/os/commands/lib_abi.c .        # clib resolves //#use beside the source
 python3 $ROOT/tools/clib.py gl_tx.c -o gl_tx.pp.c
 python3 $ROOT/compiler/p8cc.py gl_tx.pp.c -o gl_tx.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py gl_tx.asm -o gl_tx.bin --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py gl_tx.asm -o gl_tx.bin --base 0x5900 >/dev/null
 
 rm -f gl_tx.img
 python3 $ROOT/tools/p8xfs.py create gl_tx.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   gl_tx.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  gl_tx.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    gl_tx.img gl_tx.bin --name /bin/gltx.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    gl_tx.img gl_tx.bin --name /bin/gltx.bin --load 0x5900 --exec 0x5900 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    gl_tx.img $ROOT/os/font.gl --name /FONT.GL >/dev/null
 python3 $ROOT/tools/p8xfs.py put    gl_tx.img gl_tx.gl --name /GLTX.GL >/dev/null
 # Console OFF from the monitor before the grab: the always-on glass TTY would draw

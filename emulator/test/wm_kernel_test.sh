@@ -75,15 +75,15 @@ EOF
 
 for p in wk_stub wk_redraw; do
     python3 $ROOT/compiler/p8cc.py $p.c -o $p.asm >/dev/null
-    python3 $ROOT/assembler/p8xasm.py $p.asm -o $p.bin --base 0x6100 >/dev/null
+    python3 $ROOT/assembler/p8xasm.py $p.asm -o $p.bin --base 0x5900 >/dev/null
 done
 
 rm -f wk.img
 python3 $ROOT/tools/p8xfs.py create wk.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   wk.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  wk.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    wk.img wk_stub.bin --name /bin/st.bin --load 0x6100 --exec 0x6100 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    wk.img wk_redraw.bin --name /bin/rd.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    wk.img wk_stub.bin --name /bin/st.bin --load 0x5900 --exec 0x5900 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    wk.img wk_redraw.bin --name /bin/rd.bin --load 0x5900 --exec 0x5900 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    wk.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
 
 # frame 1: the stub draws two windows, then exits

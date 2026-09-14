@@ -6,10 +6,10 @@ CONOUT  = $0103
 FCREATE = $011B
 FOPEN   = $0124
 FGETB   = $0127
-HEXL    = $6042
-FNAME   = $604A
-FSRC    = $6056
-FLEN    = $6058
+HEXL    = $1F42
+FNAME   = $1F4A
+FSRC    = $1F56
+FLEN    = $1F58
         .org $2000
         LDP1 #FNAME         ; FNAME = "T" + 11 spaces
         LDA  #'T'
@@ -40,7 +40,7 @@ PAD:    LDA  #' '
         STA  FLEN+1
         JSR  FCREATE
         JC   ERR
-        LDP1 #$6000         ; FOPEN with a 512-byte buffer at $6000
+        LDP1 #$8000         ; FOPEN with a 512-byte buffer at $8000
         JSR  FOPEN
         JC   ERR
 LP:     JSR  FGETB

@@ -28,13 +28,13 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o gtos.bin --base 0x2000 >
 # is ON by default -- this test deliberately does NOT run `screen on`.
 python3 $ROOT/tools/clib.py $ROOT/os/commands/screen.c -o sc.pp.c >/dev/null
 python3 $ROOT/compiler/p8cc.py sc.pp.c -o sc.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py sc.asm -o sc.bin --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py sc.asm -o sc.bin --base 0x5900 >/dev/null
 
 rm -f gt.img
 python3 $ROOT/tools/p8xfs.py create gt.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   gt.img gtos.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  gt.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    gt.img sc.bin --name /bin/screen.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    gt.img sc.bin --name /bin/screen.bin --load 0x5900 --exec 0x5900 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    gt.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
 
 # ---- console enabled: text must render on the GL screen --------------------

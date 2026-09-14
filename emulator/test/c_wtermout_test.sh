@@ -18,7 +18,7 @@ cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/dev/null
 
-build() { python3 $ROOT/tools/clib.py "$1" -o t.pp.c && python3 $ROOT/compiler/p8cc.py t.pp.c -o t.asm >/dev/null && python3 $ROOT/assembler/p8xasm.py t.asm -o "$2" --base 0x6100 >/dev/null; }
+build() { python3 $ROOT/tools/clib.py "$1" -o t.pp.c && python3 $ROOT/compiler/p8cc.py t.pp.c -o t.asm >/dev/null && python3 $ROOT/assembler/p8xasm.py t.asm -o "$2" --base 0x5900 >/dev/null; }
 build $ROOT/os/commands/wdesk.c wto_wd.bin
 build $ROOT/os/commands/pwd.c   wto_pwd.bin
 
@@ -26,8 +26,8 @@ rm -f wto.img
 python3 $ROOT/tools/p8xfs.py create wto.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   wto.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  wto.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    wto.img wto_wd.bin  --name /bin/wdesk.bin --load 0x6100 --exec 0x6100 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    wto.img wto_pwd.bin --name /bin/pwd.bin   --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    wto.img wto_wd.bin  --name /bin/wdesk.bin --load 0x5900 --exec 0x5900 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    wto.img wto_pwd.bin --name /bin/pwd.bin   --load 0x5900 --exec 0x5900 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    wto.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
 
 # A: focus TERM, no command. B: focus TERM, run `pwd`.
@@ -37,8 +37,8 @@ printf 'B\rmkdir WTERM\rcd WTERM\rrun /bin/wdesk.bin\r\t\tpwd\r' > b.in
 python3 $ROOT/tools/p8xfs.py create wtob.img >/dev/null   # fresh disk (A created WTERM already)
 python3 $ROOT/tools/p8xfs.py boot   wtob.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  wtob.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    wtob.img wto_wd.bin  --name /bin/wdesk.bin --load 0x6100 --exec 0x6100 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    wtob.img wto_pwd.bin --name /bin/pwd.bin   --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    wtob.img wto_wd.bin  --name /bin/wdesk.bin --load 0x5900 --exec 0x5900 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    wtob.img wto_pwd.bin --name /bin/pwd.bin   --load 0x5900 --exec 0x5900 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    wtob.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
 ../p8xemu -N -i b.in -c wtob.img -l 1500000000 -g b.ppm eeprom.bin > b.out 2>/dev/null || true
 grep -q "WDESK" b.out || fail "wdesk did not start"

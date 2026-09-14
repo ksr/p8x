@@ -207,15 +207,15 @@ if [ ! -f "$disk" ]; then
     # empty placeholder is ever read — it is just a signpost.
     python3 "$root/tools/p8xfs.py" mkdir  "$disk" /d1 >/dev/null
     # a tiny program (prints "HI") so RUN /bin/hi.bin works
-    printf '        .org $6100\n        LDA #%cH%c\n        JSR $0103\n        LDA #%cI%c\n        JSR $0103\n        LDA #$0D\n        JSR $0103\n        LDA #$0A\n        JSR $0103\n        RTS\n' "'" "'" "'" "'" > "$build/hi.asm"
-    python3 "$root/assembler/p8xasm.py" "$build/hi.asm" -o "$build/hi.bin" --base 0x6100 >/dev/null
+    printf '        .org $5900\n        LDA #%cH%c\n        JSR $0103\n        LDA #%cI%c\n        JSR $0103\n        LDA #$0D\n        JSR $0103\n        LDA #$0A\n        JSR $0103\n        RTS\n' "'" "'" "'" "'" > "$build/hi.asm"
+    python3 "$root/assembler/p8xasm.py" "$build/hi.asm" -o "$build/hi.bin" --base 0x5900 >/dev/null
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/hi.bin" --name /bin/hi.bin >/dev/null
     # OS-runnable BASIC: TPA build (code+data+scratch in $B000.., clear of the OS)
     # whose BYE returns to the OS cold start -> RUN /bin/basic.bin, then BYE.
     python3 "$root/assembler/p8xasm.py" "$root/basic/p8xbasic.asm" -o "$build/basicrun.bin" \
-        --base 0x6100 -D BASORG=0x6100 -D BASRAM=0xC500 -D PBUF=0xE000 -D MONITOR=0x2000 >/dev/null
+        --base 0x5900 -D BASORG=0x5900 -D BASRAM=0xC500 -D PBUF=0xE000 -D MONITOR=0x2000 >/dev/null
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/basicrun.bin" \
-        --name /bin/basic.bin --load 0x6100 --exec 0x6100 >/dev/null
+        --name /bin/basic.bin --load 0x5900 --exec 0x5900 >/dev/null
     # The C-written BASIC (basic/basic.c, the size/speed twin of the asm one):
     # the generated GL verb tables + the source, //#use spliced, host-compiled
     # with p8cc.py -> /binc/basic.bin (the asm build stays the /bin default).
@@ -224,28 +224,28 @@ if [ ! -f "$disk" ]; then
     cp "$root/os/commands/lib_abi.c" "$build/"
     python3 "$root/tools/clib.py" "$build/basicc_src.c" -o "$build/basicc_pp.c" >/dev/null
     python3 "$root/compiler/p8cc.py" "$build/basicc_pp.c" -o "$build/basicc.asm" >/dev/null
-    python3 "$root/assembler/p8xasm.py" "$build/basicc.asm" -o "$build/basicc.bin" --base 0x6100 >/dev/null
+    python3 "$root/assembler/p8xasm.py" "$build/basicc.asm" -o "$build/basicc.bin" --base 0x5900 >/dev/null
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/basicc.bin" \
-        --name /binc/basic.bin --load 0x6100 --exec 0x6100 >/dev/null
+        --name /binc/basic.bin --load 0x5900 --exec 0x5900 >/dev/null
     # EDIT: line-oriented text editor (TPA program) -> RUN /bin/edit.bin NAME
     python3 "$root/assembler/p8xasm.py" "$root/apps/p8xedit.asm" -o "$build/edit.bin" \
-        --base 0x6100 >/dev/null
+        --base 0x5900 >/dev/null
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/edit.bin" \
-        --name /bin/edit.bin --load 0x6100 --exec 0x6100 >/dev/null
+        --name /bin/edit.bin --load 0x5900 --exec 0x5900 >/dev/null
     # ASM: native two-pass assembler (logic + generated opcode table) -> RUN
     # /bin/asm.bin SRC.ASM OUT.BIN.  Pair with EDIT for an on-target toolchain.
     python3 "$root/generators/gen_p8xopc.py" "$build/opctab.asm"
     cat "$root/apps/p8xasm.asm" "$build/opctab.asm" > "$build/asmfull.asm"
     python3 "$root/assembler/p8xasm.py" "$build/asmfull.asm" -o "$build/asm.bin" \
-        --base 0x6100 >/dev/null
+        --base 0x5900 >/dev/null
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/asm.bin" \
-        --name /bin/asm.bin --load 0x6100 --exec 0x6100 >/dev/null
+        --name /bin/asm.bin --load 0x5900 --exec 0x5900 >/dev/null
     # CC: the native C compiler, hand-written in asm (Milestone B, path B) -> RUN
     # /bin/cc.bin SRC.C >OUT.ASM.  Chains with asm to compile C entirely on-target.
     python3 "$root/assembler/p8xasm.py" "$root/apps/p8xcc.asm" -o "$build/cc.bin" \
-        --base 0x6100 >/dev/null
+        --base 0x5900 >/dev/null
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/cc.bin" \
-        --name /bin/cc.bin --load 0x6100 --exec 0x6100 >/dev/null
+        --name /bin/cc.bin --load 0x5900 --exec 0x5900 >/dev/null
     # The C-written assembler (apps/asm.c, the size/speed twin of apps/p8xasm.asm):
     # the generated opcode table as C + the source, //#use spliced, p8cc.py ->
     # /binc/asm.bin (the asm build stays the /bin default).
@@ -254,17 +254,17 @@ if [ ! -f "$disk" ]; then
     cp "$root/os/commands/lib_abi.c" "$build/"
     python3 "$root/tools/clib.py" "$build/asmc_src.c" -o "$build/asmc_pp.c" >/dev/null
     python3 "$root/compiler/p8cc.py" "$build/asmc_pp.c" -o "$build/asmc.asm" >/dev/null
-    python3 "$root/assembler/p8xasm.py" "$build/asmc.asm" -o "$build/asmc.bin" --base 0x6100 >/dev/null
+    python3 "$root/assembler/p8xasm.py" "$build/asmc.asm" -o "$build/asmc.bin" --base 0x5900 >/dev/null
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/asmc.bin" \
-        --name /binc/asm.bin --load 0x6100 --exec 0x6100 >/dev/null
+        --name /binc/asm.bin --load 0x5900 --exec 0x5900 >/dev/null
     # The C-written C compiler (apps/cc.c, the twin of apps/p8xcc.asm; it
     # generates the same text): //#use abi spliced, p8cc.py -> /binc/cc.bin.
     cp "$root/apps/cc.c" "$build/"
     python3 "$root/tools/clib.py" "$build/cc.c" -o "$build/ccc_pp.c" >/dev/null
     python3 "$root/compiler/p8cc.py" "$build/ccc_pp.c" -o "$build/ccc.asm" >/dev/null
-    python3 "$root/assembler/p8xasm.py" "$build/ccc.asm" -o "$build/ccc.bin" --base 0x6100 >/dev/null
+    python3 "$root/assembler/p8xasm.py" "$build/ccc.asm" -o "$build/ccc.bin" --base 0x5900 >/dev/null
     python3 "$root/tools/p8xfs.py" put "$disk" "$build/ccc.bin" \
-        --name /binc/cc.bin --load 0x6100 --exec 0x6100 >/dev/null
+        --name /binc/cc.bin --load 0x5900 --exec 0x5900 >/dev/null
     # The native `cc` (apps/p8xcc.asm) does the WHOLE compile on-target, so the
     # older split front end (cpp | lex | cc1) was retired (2026-07-14). The
     # //#use splicing that cpp performed lives host-side as tools/clib.py (used
@@ -279,22 +279,22 @@ if [ ! -f "$disk" ]; then
         # a no-op passthrough for commands with no //#use directive.
         python3 "$root/tools/clib.py" "$root/os/commands/$ex.c" -o "$build/$ex.c"
         python3 "$root/compiler/p8cc.py" "$build/$ex.c" -o "$build/$ex.asm" >/dev/null
-        python3 "$root/assembler/p8xasm.py" "$build/$ex.asm" -o "$build/$ex.bin" --base 0x6100 >/dev/null
+        python3 "$root/assembler/p8xasm.py" "$build/$ex.asm" -o "$build/$ex.bin" --base 0x5900 >/dev/null
         python3 "$root/tools/p8xfs.py" put "$disk" "$build/$ex.bin" \
-            --name "/binc/$ex.bin" --load 0x6100 --exec 0x6100 >/dev/null
+            --name "/binc/$ex.bin" --load 0x5900 --exec 0x5900 >/dev/null
     done
     # C-only commands (no asm twin): their C build IS the /bin binary.
     for ex in cube tri rotate page camera gl md house clsave paint desk wdesk finder term write kermit screen; do
         python3 "$root/tools/p8xfs.py" put "$disk" "$build/$ex.bin" \
-            --name "/bin/$ex.bin" --load 0x6100 --exec 0x6100 >/dev/null
+            --name "/bin/$ex.bin" --load 0x5900 --exec 0x5900 >/dev/null
     done
     # Hand-assembled commands -> /bin, THE DEFAULT the shell's PATH finds.
     # mkasm.sh splices ;#use includes just like clib.py does for C.
     for ex in dir pwd cat wc grep cp mv head tail more sort uniq sed find diff tree vi touch man dep dump examine disasm awk cmp image del help; do
         sh "$root/os/commands-asm/mkasm.sh" "$ex" > "$build/$ex.a.asm"
-        python3 "$root/assembler/p8xasm.py" "$build/$ex.a.asm" -o "$build/$ex.a.bin" --base 0x6100 >/dev/null
+        python3 "$root/assembler/p8xasm.py" "$build/$ex.a.asm" -o "$build/$ex.a.bin" --base 0x5900 >/dev/null
         python3 "$root/tools/p8xfs.py" put "$disk" "$build/$ex.a.bin" \
-            --name "/bin/$ex.bin" --load 0x6100 --exec 0x6100 >/dev/null
+            --name "/bin/$ex.bin" --load 0x5900 --exec 0x5900 >/dev/null
     done
     # /man: a Unix-style manual page per command (plain text in os/man/). The
     # `man` command (installed above) reads /man/<name>, so `man dir` works.
@@ -368,7 +368,7 @@ if [ ! -f "$disk" ]; then
     # asm hello.asm hello.bin, then run hello.bin -> prints HELLO.
     cat > "$build/hello.asm" <<'ASMEOF'
 ; sample program -- assemble with: run /bin/asm.bin hello.asm hello.bin
-        .org $6100
+        .org $5900
         LDP1 #msg
 lp:     LDA  (P1)+
         JZ   done

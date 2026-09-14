@@ -26,8 +26,8 @@
 //#define GLSTAT 0xFF51  /* bit7 FIFO full, bit6 busy, bit0 read-back   */
 //#define GLRB   0xFF52  /* pop one read-back byte (PIXRD's reply)      */
 //#define GLID   0xFF54  /* reads 'G' (71) when the engine is fitted    */
-//#define GFXPRES 0x60A4 /* RAM: 1 = GL card fitted; two-mode selector  */
-//#define GTSUSP  0x60A7 /* RAM: 1 = glass TTY suspended (this app owns screen) */
+//#define GFXPRES 0x1FA4 /* RAM: 1 = GL card fitted; two-mode selector  */
+//#define GTSUSP  0x1FA7 /* RAM: 1 = glass TTY suspended (this app owns screen) */
 
 int __gfxpen;
 int __gfxini;

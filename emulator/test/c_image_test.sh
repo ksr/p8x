@@ -21,7 +21,7 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/
 
 python3 $ROOT/tools/clib.py $ROOT/os/commands/image.c > ci_image.c
 python3 $ROOT/compiler/p8cc.py ci_image.c -o ci_image.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py ci_image.asm -o ci_image.bin --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py ci_image.asm -o ci_image.bin --base 0x5900 >/dev/null
 
 # a tiny P8I with distinct, bit-patterned colours (row-major, little-endian)
 python3 - <<'EOF'
@@ -38,7 +38,7 @@ rm -f ci.img
 python3 $ROOT/tools/p8xfs.py create ci.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   ci.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  ci.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    ci.img ci_image.bin --name /bin/image.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    ci.img ci_image.bin --name /bin/image.bin --load 0x5900 --exec 0x5900 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    ci.img ci_t.p8i --name /T.P8I --load 0 --exec 0 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    ci.img ci_bad.txt --name /T.TXT --load 0 --exec 0 >/dev/null
 
@@ -76,13 +76,13 @@ cmp ci_t.p8i ci_g.p8i || fail "grab is not byte-identical to the drawn file"
 
 # ---- the hand-asm twin: SAME sequence, identical pixels, identical file ----
 sh $ROOT/os/commands-asm/mkasm.sh image > ci_image_a.asm
-python3 $ROOT/assembler/p8xasm.py ci_image_a.asm -o ci_image_a.bin --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py ci_image_a.asm -o ci_image_a.bin --base 0x5900 >/dev/null
 
 rm -f cia.img
 python3 $ROOT/tools/p8xfs.py create cia.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   cia.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  cia.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    cia.img ci_image_a.bin --name /bin/image.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    cia.img ci_image_a.bin --name /bin/image.bin --load 0x5900 --exec 0x5900 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    cia.img ci_t.p8i --name /T.P8I --load 0 --exec 0 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    cia.img ci_bad.txt --name /T.TXT --load 0 --exec 0 >/dev/null
 

@@ -19,17 +19,17 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o tos.bin --base 0x2000 >/dev/null
 python3 $ROOT/tools/clib.py $ROOT/os/commands/term.c   -o tm.pp.c  >/dev/null
 python3 $ROOT/compiler/p8cc.py tm.pp.c  -o tm.asm  >/dev/null
-python3 $ROOT/assembler/p8xasm.py tm.asm  -o tm.bin  --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py tm.asm  -o tm.bin  --base 0x5900 >/dev/null
 python3 $ROOT/tools/clib.py $ROOT/os/commands/finder.c -o fnd.pp.c >/dev/null
 python3 $ROOT/compiler/p8cc.py fnd.pp.c -o fnd.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py fnd.asm -o fnd.bin --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py fnd.asm -o fnd.bin --base 0x5900 >/dev/null
 
 rm -f t.img
 python3 $ROOT/tools/p8xfs.py create t.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   t.img tos.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  t.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    t.img tm.bin  --name /bin/term.bin   --load 0x6100 --exec 0x6100 >/dev/null
-python3 $ROOT/tools/p8xfs.py put    t.img fnd.bin --name /bin/finder.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    t.img tm.bin  --name /bin/term.bin   --load 0x5900 --exec 0x5900 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    t.img fnd.bin --name /bin/finder.bin --load 0x5900 --exec 0x5900 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    t.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
 
 # run a command in Term: its output on screen, and Term re-launches (-c)

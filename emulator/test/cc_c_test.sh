@@ -23,13 +23,13 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osccc.bin --base 0x2000 >/dev/null
 python3 $ROOT/generators/gen_p8xopc.py > opctab.asm
 cat $ROOT/apps/p8xasm.asm opctab.asm > asmfull.asm
-python3 $ROOT/assembler/p8xasm.py asmfull.asm -o cccasm.bin --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py asmfull.asm -o cccasm.bin --base 0x5900 >/dev/null
 # the C build: //#use abi spliced by clib.py, p8cc.py, the host assembler
 cp $ROOT/apps/cc.c $ROOT/os/commands/lib_abi.c .
 python3 $ROOT/tools/clib.py cc.c -o ccc_pp.c >/dev/null
 python3 $ROOT/compiler/p8cc.py ccc_pp.c -o ccc.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py ccc.asm -o ccc.bin --base 0x6100 >/dev/null
-[ "$(wc -c < ccc.bin)" -le 22272 ] || fail "ccc.bin is $(wc -c < ccc.bin) bytes, overlaps its tables at \$B800"
+python3 $ROOT/assembler/p8xasm.py ccc.asm -o ccc.bin --base 0x5900 >/dev/null
+[ "$(wc -c < ccc.bin)" -le 24320 ] || fail "ccc.bin is $(wc -c < ccc.bin) bytes, overlaps its tables at \$B800"
 # the sources (each prints a distinct, checkable marker when run)
 printf 'int odd(int n); int even(int n) { if (n == 0) return 1; return odd(n - 1); } int odd(int n) { if (n == 0) return 0; return even(n - 1); } int main() { puts("P8"); if (even(10)) putchar(65); else putchar(66); putchar(10); return 0; }\n' > cct.c
 {
@@ -66,8 +66,8 @@ python3 $ROOT/tools/p8xfs.py create ccc.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   ccc.img osccc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  ccc.img /bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  ccc.img /binc >/dev/null
-python3 $ROOT/tools/p8xfs.py put ccc.img cccasm.bin --name /bin/asm.bin  --load 0x6100 --exec 0x6100 >/dev/null
-python3 $ROOT/tools/p8xfs.py put ccc.img ccc.bin    --name /binc/cc.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put ccc.img cccasm.bin --name /bin/asm.bin  --load 0x5900 --exec 0x5900 >/dev/null
+python3 $ROOT/tools/p8xfs.py put ccc.img ccc.bin    --name /binc/cc.bin --load 0x5900 --exec 0x5900 >/dev/null
 for s in t bigf slots and lbl grep; do python3 $ROOT/tools/p8xfs.py put ccc.img cc$s.c --name /$s.c >/dev/null; done
 # compile each with the frame C compiler, assemble, and run it; grep has a
 # recursive 384-byte local array -> the frame model's 8-bit (P3+d) displacement

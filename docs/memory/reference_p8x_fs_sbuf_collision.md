@@ -1,6 +1,6 @@
 ---
 name: reference_p8x_fs_sbuf_collision
-description: "P8XFS write-stream (redirect) and FRESOLVE/FSCAN dir-scan both default to SBUF $6100 — a program that reads a 2nd file while stdout is redirected corrupts the first file's buffered output"
+description: "P8XFS write-stream (redirect) and FRESOLVE/FSCAN dir-scan both default to SBUF $1D00 — a program that reads a 2nd file while stdout is redirected corrupts the first file's buffered output"
 metadata: 
   node_type: memory
   type: reference
@@ -8,9 +8,9 @@ metadata:
 ---
 
 The P8XFS write stream (used by shell `>`/`>>` redirects, via FWOPEN/FPUTB/FCLOSE)
-buffers pending output in **SBUF ($6100)** (offset tracked in `WOPOS $606E`,
+buffers pending output in **SBUF ($6100)** (offset tracked in `WOPOS $1F6E`,
 flushed every 512 B). Directory scans (`FSCAN`, used by `FFIND`/`FRESOLVE`) read
-sectors into the **DIBUFH page**, which **also defaults to SBUF $6100**. So if a
+sectors into the **DIBUFH page**, which **also defaults to SBUF $1D00**. So if a
 program does a directory operation (FRESOLVE/FOPEN of a file) *while a redirect
 write-stream has unflushed data*, the dir sector overwrites the buffered output.
 

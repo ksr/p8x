@@ -16,11 +16,11 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osu.bin --base 0x2000 >/
 # the on-target assembler itself (logic + generated opcode table)
 python3 $ROOT/generators/gen_p8xopc.py > opctab.asm
 cat $ROOT/apps/p8xasm.asm opctab.asm > asmfull.asm
-python3 $ROOT/assembler/p8xasm.py asmfull.asm -o asm.bin --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py asmfull.asm -o asm.bin --base 0x5900 >/dev/null
 
 # host reference: what mkasm.sh + the host assembler produce for cat (= /bina/cat.bin)
 sh $ROOT/os/commands-asm/mkasm.sh cat > cat.full.asm
-python3 $ROOT/assembler/p8xasm.py cat.full.asm -o cat.ref.bin --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py cat.full.asm -o cat.ref.bin --base 0x5900 >/dev/null
 
 # on-target disk: asm.bin in /bin, includes at /lib/stdin.inc + /lib/abi.inc
 # (cat.asm now `;#use abi` for its named BIOS/OS addresses), raw cat.asm at /
@@ -28,7 +28,7 @@ rm -f use.img
 python3 $ROOT/tools/p8xfs.py create use.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   use.img osu.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  use.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    use.img asm.bin --name /bin/asm.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    use.img asm.bin --name /bin/asm.bin --load 0x5900 --exec 0x5900 >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  use.img /lib >/dev/null
 python3 $ROOT/tools/p8xfs.py put    use.img $ROOT/os/commands-asm/lib_stdin.inc --name /lib/stdin.inc >/dev/null
 python3 $ROOT/tools/p8xfs.py put    use.img $ROOT/os/commands-asm/lib_abi.inc   --name /lib/abi.inc >/dev/null

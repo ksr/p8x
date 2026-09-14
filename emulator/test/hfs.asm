@@ -6,9 +6,9 @@ CONOUT  = $0103
 CFREAD  = $010C
 FFIND   = $0118
 FCREATE = $011B
-FNAME   = $604A
-FSRC    = $6056
-FLEN    = $6058
+FNAME   = $1F4A
+FSRC    = $1F56
+FLEN    = $1F58
         .org $2000          ; booted to $2000 (has internal labels -> not PIC)
         LDA  #'T'           ; FNAME = "TEST" + 8 spaces
         STA  FNAME
@@ -53,21 +53,21 @@ FC_OK:  JSR  FFIND          ; FNAME still "TEST" -> sets LBA + FLEN
         LDA  #'N'
         JSR  CONOUT
         HLT
-FN_OK:  LDP1 #$6000         ; read the file's first sector into $6000
+FN_OK:  LDP1 #$8000         ; read the file's first sector into $8000
         JSR  CFREAD
-        LDA  $6000
+        LDA  $8000
         LDB  #'F'
         CMP
         JNZ  BAD
-        LDA  $6001
+        LDA  $8001
         LDB  #'S'
         CMP
         JNZ  BAD
-        LDA  $6002
+        LDA  $8002
         LDB  #'O'
         CMP
         JNZ  BAD
-        LDA  $6003
+        LDA  $8003
         LDB  #'K'
         CMP
         JNZ  BAD

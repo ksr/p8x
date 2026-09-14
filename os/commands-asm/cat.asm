@@ -6,14 +6,14 @@
 ;#use stdin
 ;#use abi
 
-        .org $6100                   ; loads at TPA base (see memory-map: $6100)
+        .org $5900                   ; loads at TPA base (see memory-map: $5900)
 ; Save the incoming arg-tail pointer (P2) into the c_arg 16-bit variable so we
 ; can freely reload/advance it while scanning. TPA2L/TPA2H read P2's low/high.
         TPA2L
         STA c_arg
         TPA2H
         STA c_arg+1
-; Move directory scans off SBUF ($6100): catpath's FRESOLVE reads dir sectors into
+; Move directory scans off SBUF ($5900): catpath's FRESOLVE reads dir sectors into
 ; the DIBUFH page, which defaults to SBUF — the same buffer the shell's redirect
 ; write-stream (`cat a b >OUT`) holds pending output in. Without this the second
 ; file's FRESOLVE overwrites the first file's buffered bytes with a dir sector.

@@ -1,5 +1,5 @@
 ; High-LBA BIOS exerciser — planted as the "OS" at LBA 1 and booted to $2000.
-; Proves the multi-byte LBA ABI: CFSETL must honour LBA1 ($6048), so a sector
+; Proves the multi-byte LBA ABI: CFSETL must honour LBA1 ($1F48), so a sector
 ; number >255 reaches the right place instead of wrapping mod 256.
 ;   1. read sector 300 ($012C) — host seeds it with "LBAHI!" — and echo 6 bytes.
 ;      (if LBA1 were ignored it would read sector 44 = zeros, printing nothing.)
@@ -11,9 +11,9 @@ CFINIT  = $0109
 CFREAD  = $010C
 CFWRITE = $010F
 CONOUT  = $0103
-LBA     = $6047
-LBA1    = $6048
-SBUF    = $5E00
+LBA     = $1F47
+LBA1    = $1F48
+SBUF    = $1D00
 RBUF    = $8400
 
         JSR  CFINIT          ; resets LBA1/LBA2 to 0

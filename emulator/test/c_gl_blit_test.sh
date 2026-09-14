@@ -105,13 +105,13 @@ int main() {
 }
 EOF
 python3 $ROOT/compiler/p8cc.py gl_bl.c -o gl_bl.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py gl_bl.asm -o gl_bl.bin --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py gl_bl.asm -o gl_bl.bin --base 0x5900 >/dev/null
 
 rm -f gl_bl.img
 python3 $ROOT/tools/p8xfs.py create gl_bl.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   gl_bl.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  gl_bl.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    gl_bl.img gl_bl.bin --name /bin/glbl.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    gl_bl.img gl_bl.bin --name /bin/glbl.bin --load 0x5900 --exec 0x5900 >/dev/null
 # console OFF from the monitor for the RTL-compared grab (the RTL bench renders
 # the pure scene, no always-on console): E 60AF->00 (GCONEN off) -> . ; G 014E (GCLS).
 printf 'E 60AF\r00.G 014E\rB\rrun /bin/glbl.bin\r' > gl_bl.in

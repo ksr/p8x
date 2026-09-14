@@ -27,7 +27,7 @@
 ;   * The tokenizer only tries the keyword table on a letter.
 ;
 ; Build targets differ only in their -D symbols (see basic/README.md):
-;   BASORG  code origin   ($0000 standalone, $2000 disk boot, $6100 in the TPA)
+;   BASORG  code origin   ($0000 standalone, $2000 disk boot, $5900 in the TPA)
 ;   BASRAM  data base      ($8000 standalone, $A000 disk boot, $C500 for the TPA)
 ;   PBUF    rebuild scratch ($C000 default; the TPA build moves it to $E000)
 ;   MONITOR where BYE returns ($2000 = the OS for the TPA build)
@@ -51,7 +51,7 @@ GLDATAR = $FF50          ; GL command FIFO: one byte at a time
 GLSTATR = $FF51          ; bit7 FIFO full, bit6 busy, bit0 read-back byte ready
 GLRBR   = $FF52          ; read-back FIFO pop
 GLIDR   = $FF54          ; reads 'G' when the GL engine is fitted
-GTSUSP  = $60A7          ; glass TTY suspend flag: 1 = BASIC owns the GL screen
+GTSUSP  = $1FA7          ; glass TTY suspend flag: 1 = BASIC owns the GL screen
 CR     = $0D
 LF     = $0A
 BS     = $08
@@ -67,9 +67,9 @@ FGETB   = $0127          ; next byte -> A; C=1 at end of file. Clobbers P1 (and 
 FWOPEN  = $012A          ; open a write stream at the free pointer
 FPUTB   = $012D          ; append byte A to the write stream. Clobbers P1
 FCLOSE  = $0130          ; flush + register file FNAME (len = bytes written); C=1 if full
-FNAME   = $604A          ; 12-byte filename (space-padded)
-FSRC    = $6056          ; FCREATE source address
-FLEN    = $6058          ; file length in bytes (24-bit)
+FNAME   = $1F4A          ; 12-byte filename (space-padded)
+FSRC    = $1F56          ; FCREATE source address
+FLEN    = $1F58          ; file length in bytes (24-bit)
 
 MONITOR = $0000          ; reset vector -- BYE returns here
 CONIN   = $0100          ; BIOS: wait for a key -> A

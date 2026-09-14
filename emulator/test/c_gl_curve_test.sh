@@ -78,13 +78,13 @@ int main() {
 }
 EOF
 python3 $ROOT/compiler/p8cc.py gl_cv.c -o gl_cv.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py gl_cv.asm -o gl_cv.bin --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py gl_cv.asm -o gl_cv.bin --base 0x5900 >/dev/null
 
 rm -f gl_cv.img
 python3 $ROOT/tools/p8xfs.py create gl_cv.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   gl_cv.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  gl_cv.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    gl_cv.img gl_cv.bin --name /bin/glcv.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    gl_cv.img gl_cv.bin --name /bin/glcv.bin --load 0x5900 --exec 0x5900 >/dev/null
 # console OFF from the monitor for the RTL-compared grab (the RTL bench renders
 # the pure scene, no always-on console): E 60AF->00 (GCONEN off) -> . ; G 014E (GCLS).
 printf 'E 60AF\r00.G 014E\rB\rrun /bin/glcv.bin\r' > gl_cv.in

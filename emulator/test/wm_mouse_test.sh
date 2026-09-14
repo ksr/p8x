@@ -45,13 +45,13 @@ int main() {
 }
 EOF
 python3 $ROOT/compiler/p8cc.py ms_run.c -o ms_run.asm >/dev/null
-python3 $ROOT/assembler/p8xasm.py ms_run.asm -o ms_run.bin --base 0x6100 >/dev/null
+python3 $ROOT/assembler/p8xasm.py ms_run.asm -o ms_run.bin --base 0x5900 >/dev/null
 
 rm -f ms.img
 python3 $ROOT/tools/p8xfs.py create ms.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   ms.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  ms.img /bin >/dev/null
-python3 $ROOT/tools/p8xfs.py put    ms.img ms_run.bin --name /bin/ms.bin --load 0x6100 --exec 0x6100 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    ms.img ms_run.bin --name /bin/ms.bin --load 0x5900 --exec 0x5900 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    ms.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
 
 # grab-relative DRAG: press INSIDE the window at cell (22,12) -> panel

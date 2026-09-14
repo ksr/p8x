@@ -42,8 +42,8 @@
 //#define GLDATA 0xFF50
 //#define GLSTAT 0xFF51
 //#define GLRB   0xFF52
-//#define GFXPRES 0x60A4  /* two-mode flag: 1 = GL card fitted (monitor/OS set it) */
-//#define GTSUSP  0x60A7  /* glass TTY suspend: 1 = this app owns the screen */
+//#define GFXPRES 0x1FA4  /* two-mode flag: 1 = GL card fitted (monitor/OS set it) */
+//#define GTSUSP  0x1FA7  /* glass TTY suspend: 1 = this app owns the screen */
 
 /* ---- the display list: 6 ints per shape, flat ------------------------------
  * [tool, x0, y0, x1, y1, colour]; tool 0=line 1=box 2=circle 3=fill.

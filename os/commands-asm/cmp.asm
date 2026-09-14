@@ -7,7 +7,7 @@
 ; OS: SYS_GETCWD $2003, SYS_PUTC $2009, SYS_PUTS $200F (stdout, for output).
 ;#use abi
 
-        .org $6100
+        .org $5900
         TPA2L
         STA carg
         TPA2H

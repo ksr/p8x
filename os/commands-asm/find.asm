@@ -11,7 +11,7 @@
 
 ; Save the arg-tail pointer (arrives in P2) into f_arg, then skip any leading
 ; spaces so f_arg points at the first non-blank char of the pattern.
-        .org $6100
+        .org $5900
         TPA2L
         STA f_arg
         TPA2H

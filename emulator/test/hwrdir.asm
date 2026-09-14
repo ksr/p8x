@@ -23,7 +23,7 @@ FRESOLVE= $0133
         LDP1 #PATHSTR       ; resolve again for the read
         JSR  FRESOLVE
         JC   ERR
-        LDP1 #$6000
+        LDP1 #$8000
         JSR  FOPEN
         JC   ERR
 LP:     JSR  FGETB
