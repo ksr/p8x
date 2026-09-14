@@ -7,7 +7,7 @@
 #   sh tools/p8cc_sizes.sh | diff base.txt -   compare after a compiler change
 #
 # Uses exactly the run.sh pipeline (clib.py //#use splice -> p8cc.py -> p8xasm.py
-# --base 0x6A00) on os/commands/*.c minus the lib_*.c helpers. A command that
+# --base 0x5900) on os/commands/*.c minus the lib_*.c helpers. A command that
 # fails to compile is reported as FAIL (and counted as 0) so a compiler regression
 # is visible in the table, not hidden.
 set -e
@@ -21,7 +21,7 @@ for src in os/commands/*.c; do
     case "$base" in lib_*) continue;; esac
     if python3 tools/clib.py "$src" -o "$build/$base.c" >/dev/null 2>&1 \
        && python3 compiler/p8cc.py "$build/$base.c" -o "$build/$base.asm" >/dev/null 2>&1 \
-       && python3 assembler/p8xasm.py "$build/$base.asm" -o "$build/$base.bin" --base 0x6A00 >/dev/null 2>&1; then
+       && python3 assembler/p8xasm.py "$build/$base.asm" -o "$build/$base.bin" --base 0x5900 >/dev/null 2>&1; then
         sz=$(wc -c < "$build/$base.bin" | tr -d ' ')
         printf '%-10s %7d\n' "$base" "$sz"
         total=$((total + sz)); n=$((n + 1))

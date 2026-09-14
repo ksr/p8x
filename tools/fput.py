@@ -3,7 +3,7 @@
 
     ./fput.py notes.txt game.bas                 -> / of os/run-disk.img
     ./fput.py pics/*.p8i --to /PIC               -> into /PIC (--mkdir creates it)
-    ./fput.py cmd.bin --as /BIN/CMD --load 0x6A00 --exec 0x6A00
+    ./fput.py cmd.bin --as /BIN/CMD --load 0x5900 --exec 0x5900
     ./fput.py photo.p8i --board                  -> update image, then clone to
                                                     the FPGA's card via imgsend
 
@@ -21,7 +21,7 @@ directories must exist (or pass --mkdir). Images (PNG/JPEG/...) are NOT
 converted -- run p8img.py first; this tool copies bytes verbatim.
 
 --load/--exec matter only for binaries run by the OS (`run /BIN/X` loads at
---load, jumps to --exec; commands live at $6A00, the TPA). Data files ignore
+--load, jumps to --exec; commands live at $5900, the TPA). Data files ignore
 them.
 """
 

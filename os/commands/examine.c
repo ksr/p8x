@@ -1,6 +1,6 @@
 /* examine.c — interactively examine and modify memory: EXAMINE addr
  *
- *     EXAMINE 6A00     show  6A00: vv  then read a key:
+ *     EXAMINE 5900     show  5900: vv  then read a key:
  *                        Enter        keep the byte, advance to the next
  *                        two hex digits  write that byte, then advance
  *                        .            quit to the shell
