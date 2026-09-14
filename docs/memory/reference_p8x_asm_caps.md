@@ -1,6 +1,6 @@
 ---
 name: reference_p8x_asm_caps
-description: On-target native assembler (asm.bin) capacity + error signatures -- hashed symbol table (1,120 symbols, $8000-$C5FF, code must stay below $8000), opctab trap, ;#use host/native asymmetry
+description: On-target native assembler (asm.bin) capacity + error signatures -- hashed symbol table (1,664 symbols since 2026-09-14, $8000-$E7FF, code must stay below $8000), the DIRPAGE bare-page-byte bug, opctab trap, ;#use host/native asymmetry
 metadata:
   type: reference
 ---
@@ -8,8 +8,20 @@ metadata:
 The on-target native assembler (`apps/p8xasm.asm`, run as `asm`/`/bin/asm.bin`)
 has a fixed symbol table. Since the 2026-09-12 Tier A rewrite it is a 256-bucket
 CHAINED HASH of 16-byte entries (name[12] + value[2] + next[2]) at
-`SYMTAB=$8000..SYMEND=$C600` = **1,120 symbols** (`?too many symbols` on the
-1,121st), with the chain heads at `$C600-$C7FF`. Before that it was a linear
+`SYMTAB=$8000..SYMEND=$E800` = **1,664 symbols** (`?too many symbols` past it),
+with the chain heads at `$E800-$E9FF`. **Grown from 1,120 ($C600) on 2026-09-14**
+to self-assemble the 1,548-symbol self-compiled `cc.c`: the buffer block
+($C600-$D1FF: HEADS, variables, SECBUF, LINEBUF, INCBUF, the BIOS dir-scan page,
+path buffers) moved up +$2200 into room the larger TPA opened. GOTCHA that bit:
+`DIRPAGE = $CE` is a bare 2-hex PAGE byte, so a 4-digit-address sweep MISSES it
+(same class as DEFADDR `#$6A` / the monitor `#$61`); it stayed $CE while the
+buffers moved, and once the symtab grew past $CE00 a pass-2 directory scan wrote
+a sector over the symtab entries there, breaking chains -> `?undefined:` on an
+EARLY label (a later entry in that label's hash chain was clobbered). Fixed
+DIRPAGE->$F0. The C twin `apps/asm.c` stays at 480 symbols ($A800..$C600): its
+C-compiled binary is ~5 KB bigger, so it can't reach 1,664 and doesn't need to
+(the self-host uses the leaner hand-written /bin/asm.bin). Before the hash it was
+a linear
 14-byte-entry table at `$8400..$C000` (~1,097), and before 2026-07-14
 `$CC00..$FB00` (~859), which overflowed once `p8xos.asm` reached 872 symbols.
 The host `assembler/p8xasm.py` has NO such limit, so host builds/tests stay

@@ -65,12 +65,15 @@
 ; card) -- never keep a value in A across one.
 ;
 ; Memory (code + OPCTAB must stay below SYMTAB = $8000; os_asm_test checks):
-;   $5900-$7FFF code + opcode table       $C900-$CAFF SECBUF (source sector)
-;   $8000-$C5FF SYMTAB 1120 x 16 bytes    $CB00-$CB7F LINEBUF (<=127 chars)
-;   $C600-$C7FF HEADS  256 chain heads    $CC00-$CDFF INCBUF (include sector)
-;   $C800-$C8FF variables                 $CE00-$CFFF BIOS directory-scan page
-;   $D000-$D1FF path buffers              $D200-      free up to the stack
-; Limits: 1120 symbols, 12-char names, 127-char source lines, single .org,
+;   $5900-$7FFF code + opcode table       $EB00-$ECFF SECBUF (source sector)
+;   $8000-$E7FF SYMTAB 1664 x 16 bytes    $ED00-$ED7F LINEBUF (<=127 chars)
+;   $E800-$E9FF HEADS  256 chain heads    $EE00-$EFFF INCBUF (include sector)
+;   $EA00-$EAFF variables                 $F000-$F1FF BIOS directory-scan page
+;   $F200-$F3FF path buffers              $F400-      free up to the P3 stack
+; The symbol table grew 1120->1664 (2026-09-14): the buffer block moved up +$2200
+; into room the larger TPA opened, so on-board self-assembly of the 1,548-symbol
+; self-compiled compiler fits (was "?too many symbols").
+; Limits: 1664 symbols, 12-char names, 127-char source lines, single .org,
 ; 4 ;#use + 1 .include per file.
 ; =============================================================================
 
@@ -97,71 +100,71 @@ LF      = $0A
 QUOTE   = $22
 TICK    = $27
 
-; ---- word variables ($C800 page; pairs are little-endian words) ----
-PC      = $C800   ; current program counter
-ORGBASE = $C802   ; address of output byte 0 (the first .org)
-VAL     = $C804   ; expression result
-CNT     = $C806   ; term value (RDTERM) / symbol value (SYMFIND)
-TERM    = $C808   ; scratch word (decimal x10)
-SYMP    = $C80A   ; symbol-table append pointer
-CUR     = $C80C   ; chain / table cursor, dispatch vector
-HEADP   = $C80E   ; address of the chain head the last SYMFIND used
-HEAD0   = $C810   ; the value that head held (first entry of the chain)
-SAVP    = $C812   ; EMIT: P1 save around FPUTB
-SP0     = $C814   ; system SP at entry (error abort long-jumps back to the OS)
-OP1P    = $C816   ; PARSEOP: line cursor at operand 1's expression
-OP2P    = $C818   ; PARSEOP: line cursor at operand 2's expression
-DISPP   = $C81A   ; PARSEOP: line cursor at a (Pn+d) displacement expression
-FILLN   = $C81C   ; .fill count
-P2SAV   = $C81E   ; SRCGET: NEXTLINE's P2 across NEXTUSE
-ABDST   = $C820   ; ABSPATH destination
-ACSAV   = $C822   ; PARSEARGS: arg cursor across ABSPATH
-PATHSAV = $C824   ; CHKINC: LINEBUF path cursor across CI_PREFIX
-LSPOS   = $C826   ; CHKINC: INCPATH position just after the source dir's last '/'
+; ---- word variables ($EA00 page; pairs are little-endian words) ----
+PC      = $EA00   ; current program counter
+ORGBASE = $EA02   ; address of output byte 0 (the first .org)
+VAL     = $EA04   ; expression result
+CNT     = $EA06   ; term value (RDTERM) / symbol value (SYMFIND)
+TERM    = $EA08   ; scratch word (decimal x10)
+SYMP    = $EA0A   ; symbol-table append pointer
+CUR     = $EA0C   ; chain / table cursor, dispatch vector
+HEADP   = $EA0E   ; address of the chain head the last SYMFIND used
+HEAD0   = $EA10   ; the value that head held (first entry of the chain)
+SAVP    = $EA12   ; EMIT: P1 save around FPUTB
+SP0     = $EA14   ; system SP at entry (error abort long-jumps back to the OS)
+OP1P    = $EA16   ; PARSEOP: line cursor at operand 1's expression
+OP2P    = $EA18   ; PARSEOP: line cursor at operand 2's expression
+DISPP   = $EA1A   ; PARSEOP: line cursor at a (Pn+d) displacement expression
+FILLN   = $EA1C   ; .fill count
+P2SAV   = $EA1E   ; SRCGET: NEXTLINE's P2 across NEXTUSE
+ABDST   = $EA20   ; ABSPATH destination
+ACSAV   = $EA22   ; PARSEARGS: arg cursor across ABSPATH
+PATHSAV = $EA24   ; CHKINC: LINEBUF path cursor across CI_PREFIX
+LSPOS   = $EA26   ; CHKINC: INCPATH position just after the source dir's last '/'
 ; ---- byte variables ----
-PASS    = $C830   ; 0 = pass 1 (symbols), 1 = pass 2 (emit)
-SHAPE   = $C831   ; operand shape code (see PARSEOP)
-SHAPE2  = $C832   ; PARSEOP: operand 1's shape while operand 2 is classified
-OPCB    = $C833   ; resolved opcode byte
-TMP     = $C834
-SIGN    = $C835   ; EVAL: 1 = add the next term, 0 = subtract
-HILO    = $C836   ; EVAL: 0 none, 1 '<' low byte, 2 '>' high byte
-ORGSET  = $C837   ; 1 once the first .org fixed ORGBASE
-HASH    = $C838   ; SYMHASH result
-LEOF    = $C839   ; 1 when NEXTLINE hit the end of the source (+ includes)
-SB2     = $C83A   ; EMIT: the byte being written
-FVAL    = $C83B   ; .fill byte value
-USECOUNT= $C83C   ; ;#use names recorded this pass
-USEDONE = $C83D   ; how many of them have been opened
-INCHAVE = $C83E   ; 1 = a .include was recorded this pass
-INCDONE = $C83F   ; 1 = it has been opened
-DIG     = $C840   ; small counter
-LASTC   = $C841   ; OPCINDEX: letter of the group being indexed
-NAMBUF  = $C850   ; identifier as written (16; 12 used, NUL-padded)
-MNBUF   = $C860   ; the same, upcased (16) -- NAMBUF+16, so READTOK fills both
+PASS    = $EA30   ; 0 = pass 1 (symbols), 1 = pass 2 (emit)
+SHAPE   = $EA31   ; operand shape code (see PARSEOP)
+SHAPE2  = $EA32   ; PARSEOP: operand 1's shape while operand 2 is classified
+OPCB    = $EA33   ; resolved opcode byte
+TMP     = $EA34
+SIGN    = $EA35   ; EVAL: 1 = add the next term, 0 = subtract
+HILO    = $EA36   ; EVAL: 0 none, 1 '<' low byte, 2 '>' high byte
+ORGSET  = $EA37   ; 1 once the first .org fixed ORGBASE
+HASH    = $EA38   ; SYMHASH result
+LEOF    = $EA39   ; 1 when NEXTLINE hit the end of the source (+ includes)
+SB2     = $EA3A   ; EMIT: the byte being written
+FVAL    = $EA3B   ; .fill byte value
+USECOUNT= $EA3C   ; ;#use names recorded this pass
+USEDONE = $EA3D   ; how many of them have been opened
+INCHAVE = $EA3E   ; 1 = a .include was recorded this pass
+INCDONE = $EA3F   ; 1 = it has been opened
+DIG     = $EA40   ; small counter
+LASTC   = $EA41   ; OPCINDEX: letter of the group being indexed
+NAMBUF  = $EA50   ; identifier as written (16; 12 used, NUL-padded)
+MNBUF   = $EA60   ; the same, upcased (16) -- NAMBUF+16, so READTOK fills both
                   ; through one pointer: STA (P2) / STA (P2+16)
-LETIDX  = $C880   ; 26 words: first OPCTAB record per initial letter, 0 = none
-OUTDIR  = $C8C0   ; output parent dir stashed by OUTINIT: DIRLBA, DIRN, DIRLBA1 (3)
-SRCDIR  = $C8C4   ; the source's dir context: DIRLBA, DIRN, DIRLBA1 (3)
-OUTFN   = $C8D0   ; output leaf name stashed by OUTINIT (12)
-SRCFN   = $C8E0   ; the source's own FNAME (12), so PASSINIT re-opens it each pass
+LETIDX  = $EA80   ; 26 words: first OPCTAB record per initial letter, 0 = none
+OUTDIR  = $EAC0   ; output parent dir stashed by OUTINIT: DIRLBA, DIRN, DIRLBA1 (3)
+SRCDIR  = $EAC4   ; the source's dir context: DIRLBA, DIRN, DIRLBA1 (3)
+OUTFN   = $EAD0   ; output leaf name stashed by OUTINIT (12)
+SRCFN   = $EAE0   ; the source's own FNAME (12), so PASSINIT re-opens it each pass
 
 ; ---- buffers ----
 SYMTAB  = $8000   ; 16-byte entries: name[12] + value[2] + next[2]
-SYMEND  = $C600   ; symbol-table limit
-HEADS   = $C600   ; 256 chain heads (words), indexed by SYMHASH
-SECBUF  = $C900   ; source read-stream sector (512)
-LINEBUF = $CB00   ; current source line (NUL-terminated, <=127 chars)
-INCBUF  = $CC00   ; include read-stream sector (512) -- its own page, so the
+SYMEND  = $E800   ; symbol-table limit
+HEADS   = $E800   ; 256 chain heads (words), indexed by SYMHASH
+SECBUF  = $EB00   ; source read-stream sector (512)
+LINEBUF = $ED00   ; current source line (NUL-terminated, <=127 chars)
+INCBUF  = $EE00   ; include read-stream sector (512) -- its own page, so the
                   ; source stream's state in SECBUF is untouched
-DIRPAGE = $CE     ; BIOS directory-scan page ($CE00-$CFFF), off the shared SBUF
+DIRPAGE = $F0     ; BIOS directory-scan page ($F000-$F1FF), off the shared SBUF
                   ; so a ;#use FOPEN in pass 2 cannot clobber the write stream
-SRCPATH = $D000   ; full SRC path (NUL-terminated, absolute)
-OUTPATH = $D030   ; full OUT path
-ARGTMP  = $D060   ; raw path argument before ABSPATH
-INCPATH = $D090   ; resolved absolute .include path (<=128)
-UPATH   = $D110   ; built ;#use path "/lib/NAME.inc"
-USELIST = $D140   ; 4 x 16: the ;#use names (NUL-terminated)
+SRCPATH = $F200   ; full SRC path (NUL-terminated, absolute)
+OUTPATH = $F230   ; full OUT path
+ARGTMP  = $F260   ; raw path argument before ABSPATH
+INCPATH = $F290   ; resolved absolute .include path (<=128)
+UPATH   = $F310   ; built ;#use path "/lib/NAME.inc"
+USELIST = $F340   ; 4 x 16: the ;#use names (NUL-terminated)
 
         .org $5900
 ; =============================================================================
