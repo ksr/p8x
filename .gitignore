@@ -1,5 +1,10 @@
 .DS_Store
 
+# Cloud-sync / Finder conflict copies ("name 2.ext" .. "name 9.ext"). A sync
+# client (Box/Google Drive/OneDrive) mirroring ~/Documents spawns these; the
+# real fix is keeping the repo out of a synced folder, this is belt-and-braces.
+* [2-9].*
+
 # Eagle auto-backups
 *.s#?
 *.b#?
@@ -65,10 +70,8 @@ emulator/test/*
 !emulator/test/hwrite.asm
 !emulator/test/Makefile.A
 !emulator/test/Makefile.S
-# Orphan: matches no test and is referenced nowhere — looks like an accidental
-# Finder duplicate of the generated prog.asm. Kept tracked only so this change
-# is behaviour-preserving; safe to delete.
-!emulator/test/prog 2.asm
+# ...but never a conflict copy, even of an allow-listed *.sh
+emulator/test/* [2-9].*
 __pycache__/
 
 # compiled p8mouse host helper (build from tools/p8mouse.c)
