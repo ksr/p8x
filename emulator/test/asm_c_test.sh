@@ -16,7 +16,7 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osac.bin --base 0x2000 >
 # the C build: the generated opcode table + the source, //#use spliced, p8cc.py
 python3 $ROOT/generators/gen_p8xopc.py acopc.asm >/dev/null
 cat $ROOT/apps/opctab.c $ROOT/apps/asm.c > asmc_src.c
-cp $ROOT/os/commands/lib_abi.c .
+cp $ROOT/os/commands/lib_abi.c $ROOT/os/commands/lib_mem.c .
 python3 $ROOT/tools/clib.py asmc_src.c -o asmc_pp.c >/dev/null
 python3 $ROOT/compiler/p8cc.py asmc_pp.c -o asmc.asm >/dev/null
 python3 $ROOT/assembler/p8xasm.py asmc.asm -o asmc.bin --base 0x5900 >/dev/null

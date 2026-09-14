@@ -18,12 +18,11 @@
  */
 
 //#use abi     /* FOPEN/FGETB/FWOPEN/FPUTB/FCLOSE/FRESOLVE/FDELETE, RDBUF, SYS_EXEC, argstr */
+//#use mem     /* GFXPRES/GTSUSP/GCONEN -- the graphics/console flags, from the memory map */
 //#use ptr     /* rawkey */
 
 //#define GLDATA  0xFF50
 //#define GLSTAT  0xFF51
-//#define GFXPRES 0x1FA4
-//#define GTSUSP  0x1FA7
 
 char buf[2000];          /* the text */
 int  blen;               /* length */

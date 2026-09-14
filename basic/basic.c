@@ -16,13 +16,10 @@
  * so an error sets `err` and every parse level returns through it.
  */
 //#use abi
+//#use mem     /* FNAME/FSRC/FLEN/GTSUSP from the memory map */
 //#define FFIND    0x0118
 //#define FCREATE  0x011B
 //#define FLOADAT  0x013F
-//#define FNAME    0x1F4A
-//#define FSRC     0x1F56
-//#define FLEN     0x1F58
-//#define GTSUSP   0x1FA7
 //#define GLDATA   0xFF50
 //#define GLSTAT   0xFF51
 //#define GLRBR    0xFF52

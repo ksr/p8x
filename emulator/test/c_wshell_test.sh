@@ -17,7 +17,7 @@ fail() { echo "C-WSHELL TEST: FAIL — $1"; exit 1; }
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/dev/null
-cp $ROOT/os/commands/lib_abi.c .          # clib resolves //#use from the source's dir
+cp $ROOT/os/commands/lib_abi.c $ROOT/os/commands/lib_mem.c .          # clib resolves //#use from the source's dir
 
 cat > armwin.c <<'AEOF'
 //#use abi

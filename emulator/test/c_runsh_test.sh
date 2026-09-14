@@ -14,7 +14,7 @@ fail() { echo "C-RUNSH TEST: FAIL — $1"; exit 1; }
 cp $UC/u?.bin .
 python3 $ROOT/assembler/p8xasm.py $ROOT/firmware/p8xmon.asm -o eeprom.bin >/dev/null
 python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osc.bin --base 0x2000 >/dev/null
-cp $ROOT/os/commands/lib_abi.c .
+cp $ROOT/os/commands/lib_abi.c $ROOT/os/commands/lib_mem.c .
 
 cat > runsh_probe.c <<'PEOF'
 //#use abi

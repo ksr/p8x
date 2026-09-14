@@ -25,7 +25,7 @@ python3 $ROOT/generators/gen_p8xopc.py > opctab.asm
 cat $ROOT/apps/p8xasm.asm opctab.asm > asmfull.asm
 python3 $ROOT/assembler/p8xasm.py asmfull.asm -o cccasm.bin --base 0x5900 >/dev/null
 # the C build: //#use abi spliced by clib.py, p8cc.py, the host assembler
-cp $ROOT/apps/cc.c $ROOT/os/commands/lib_abi.c .
+cp $ROOT/apps/cc.c $ROOT/os/commands/lib_abi.c $ROOT/os/commands/lib_mem.c .
 python3 $ROOT/tools/clib.py cc.c -o ccc_pp.c >/dev/null
 python3 $ROOT/compiler/p8cc.py ccc_pp.c -o ccc.asm >/dev/null
 python3 $ROOT/assembler/p8xasm.py ccc.asm -o ccc.bin --base 0x5900 >/dev/null

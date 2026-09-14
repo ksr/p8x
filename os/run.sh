@@ -221,7 +221,7 @@ if [ ! -f "$disk" ]; then
     # with p8cc.py -> /binc/basic.bin (the asm build stays the /bin default).
     python3 "$root/generators/gen_glkw.py" >/dev/null
     cat "$root/basic/glkwtab.c" "$root/basic/basic.c" > "$build/basicc_src.c"
-    cp "$root/os/commands/lib_abi.c" "$build/"
+    cp "$root/os/commands/lib_abi.c" "$root/os/commands/lib_mem.c" "$build/"
     python3 "$root/tools/clib.py" "$build/basicc_src.c" -o "$build/basicc_pp.c" >/dev/null
     python3 "$root/compiler/p8cc.py" "$build/basicc_pp.c" -o "$build/basicc.asm" >/dev/null
     python3 "$root/assembler/p8xasm.py" "$build/basicc.asm" -o "$build/basicc.bin" --base 0x5900 >/dev/null
@@ -251,7 +251,7 @@ if [ ! -f "$disk" ]; then
     # /binc/asm.bin (the asm build stays the /bin default).
     python3 "$root/generators/gen_p8xopc.py" --c >/dev/null
     cat "$root/apps/opctab.c" "$root/apps/asm.c" > "$build/asmc_src.c"
-    cp "$root/os/commands/lib_abi.c" "$build/"
+    cp "$root/os/commands/lib_abi.c" "$root/os/commands/lib_mem.c" "$build/"
     python3 "$root/tools/clib.py" "$build/asmc_src.c" -o "$build/asmc_pp.c" >/dev/null
     python3 "$root/compiler/p8cc.py" "$build/asmc_pp.c" -o "$build/asmc.asm" >/dev/null
     python3 "$root/assembler/p8xasm.py" "$build/asmc.asm" -o "$build/asmc.bin" --base 0x5900 >/dev/null

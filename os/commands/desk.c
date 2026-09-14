@@ -16,11 +16,10 @@
  */
 
 //#use abi
+//#use mem     /* GFXPRES/GTSUSP/GCONEN -- the graphics/console flags, from the memory map */
 
 //#define GLDATA 0xFF50
 //#define GLSTAT 0xFF51
-//#define GFXPRES 0x1FA4  /* two-mode flag: 1 = GL card fitted (monitor/OS set it) */
-//#define GTSUSP  0x1FA7  /* glass TTY suspend: 1 = this app owns the screen */
 
 //#use ptr
 //#use wm

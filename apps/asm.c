@@ -18,11 +18,8 @@
  * error prints its message + the line and sets `err`; the pass loop stops.
  */
 //#use abi
+//#use mem     /* FNAME/DIRLBA/DIRN/DIRLBA1 from the memory map */
 //#define FFIND    0x0118
-//#define FNAME    0x1F4A
-//#define DIRLBA   0x1F73
-//#define DIRN     0x1F74
-//#define DIRLBA1  0x1F80
 //#define SYMTAB   0xA800
 //#define SYMEND   0xC600
 //#define HEADS    0xC600

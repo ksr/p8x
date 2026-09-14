@@ -75,7 +75,7 @@ int main() {
     return 0;
 }
 EOF
-cp $ROOT/os/commands/lib_abi.c .
+cp $ROOT/os/commands/lib_abi.c $ROOT/os/commands/lib_mem.c .
 python3 $ROOT/tools/clib.py gl_t2.c -o gl_t2.pp.c
 python3 $ROOT/compiler/p8cc.py gl_t2.pp.c -o gl_t2.asm >/dev/null
 python3 $ROOT/assembler/p8xasm.py gl_t2.asm -o gl_t2.bin --base 0x5900 >/dev/null

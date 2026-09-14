@@ -18,10 +18,9 @@
  */
 
 //#use abi     /* argstr, and the console flag address */
+//#use mem     /* GFXPRES / GCONEN (the graphics/console flags, from the memory map) */
 
-//#define GFXPRES 0x1FA4  /* 1 = GL card fitted */
-//#define GCONEN  0x1FAF  /* 1 = glass TTY console enabled */
-//#define GCLS    0x014E  /* BIOS: clear the glass TTY + home the cursor */
+//#define GCLS    0x014E  /* BIOS: clear the glass TTY + home the cursor (call vector) */
 
 int main() {
     char *a;

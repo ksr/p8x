@@ -30,8 +30,7 @@
  * buffer at $FC00, the C stack down from $F7FF.
  */
 //#use abi
-//#define ROSTATE  0x1F5E
-//#define ROSDRV   0x1F85
+//#use mem     /* ROSTAT / ROSDRV -- the read-stream state saved across //#use, from the memory map */
 //#define HEADS    0xD400
 //#define USESTATE 0xD5C0
 //#define USEBUF   0xD600
@@ -217,14 +216,14 @@ int entflag(int e) { char *p; p = e; return p[3]; }
 int usestate(int lvl) { return USESTATE + (lvl << 4) - lvl - lvl; }   /* 14 bytes per level */
 int savestate() {
     char *s; char *d; int k;
-    s = ROSTATE; d = usestate(usesp); k = 0;
+    s = ROSTAT; d = usestate(usesp); k = 0;
     while (k < 13) { d[k] = s[k]; k = k + 1; }
     d[13] = peek(ROSDRV);
     return 0;
 }
 int restorestate() {
     char *s; char *d; int k;
-    d = ROSTATE; s = usestate(usesp); k = 0;
+    d = ROSTAT; s = usestate(usesp); k = 0;
     while (k < 13) { d[k] = s[k]; k = k + 1; }
     poke(ROSDRV, s[13]);
     return 0;

@@ -97,20 +97,21 @@ remainder is why it is still here.
       ("frame ... over 255 bytes (use /bin/cc)") instead of truncating. The
       static-slot `/bin/cc` (p8xcc.asm) still compiles those on-board. A general
       far-path (frame pointer / 16-bit disp) is future work.
-- [ ] **Generate the ABI/scratch includes from the single source (2026-09-14).**
-      The $6100→$5900 flag-day had to touch ~28 command/app/fixture sources because
-      each HARDCODES BIOS-scratch + graphics-flag addresses: `//#define GFXPRES
-      0x60A4` / `GTSUSP` / `GCONEN` in ~8 graphics commands, `FNAME`/`FSRC`/`FLEN`
-      in basic.c + p8xbasic.asm, `ROSTATE`/`ROSDRV` in cc.c, `LBA` in p8xedit +
-      the fpga tools, `TMP/TMP2/CNT` in the monitor. `gen_memmap.py` is already
-      THE single source (emits memmap.inc/.h/.py), but commands re-copy the
-      literals instead of pulling them. Fix: have `gen_memmap.py` also emit the
-      ABI include that `//#use` splices (a generated `lib_abi.c`/`lib_abi.inc`, or
-      a new `lib_mem`), so a memory-map change is one regen, not a repo-wide sweep.
-      Same idea for the memory-map DOC (`reference_p8x_memory_map.md`) and the
-      p8xos/p8xmon header layout comments — generate them from the table. Then the
-      hand-maintained caps (test size limits = symtab − TPABASE) could derive too.
-      Audit first: which `//#define`s are genuinely map-derived vs command-local.
+- [~] **Generate the ABI/scratch includes from the single source — C HALF DONE
+      (2026-09-14).** `gen_memmap.py` now also emits `os/commands/lib_mem.c` +
+      `os/commands-asm/lib_mem.inc` (COMMAND_SYMS: the scratch/graphics/TPABASE
+      addresses commands name). The C consumers are converted: the graphics
+      commands (screen/term/desk/finder/paint/wdesk/write + lib_gfx), basic.c, and
+      apps/cc.c + apps/asm.c `//#use mem` instead of hand-`//#define`ing; a
+      memory-map move of those is now one `python3 generators/gen_memmap.py`.
+      REMAINING (documented as intentionally-hardcoded in
+      [[reference_p8x_memmap_singlesource]], NOT started): the 28 asm command
+      `.org $5900`, ~111 test/run.sh `--base`, the asm-app equates (p8xasm/
+      p8xbasic/p8xedit), and the fpga loaders -- `;#use mem` there hits the
+      `;#use`(4)/`.include`(1) limits or has no build-context path, and the
+      TPABASE literals are a uniform greppable sweep anyway. Also still open (nice
+      to have): generate the memory-map DOC and the p8xos/p8xmon header layout
+      comments from the table, and derive the test size caps (symtab − TPABASE).
 
 - [ ] **Port the frame model into `apps/p8xcc.asm` — the deferred half (2026-09-13).**
       `apps/cc.c` is frame-model but `apps/p8xcc.asm` (the default `/bin/cc`) is

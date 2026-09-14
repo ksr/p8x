@@ -26,13 +26,12 @@
  */
 
 //#use abi        /* SYS_GETCWD / SYS_EXEC, FOPENDIR/FNEXT, CONIN */
+//#use mem     /* GFXPRES/GTSUSP/GCONEN -- the graphics/console flags, from the memory map */
 //#use dirent     /* de_read / de_isdir / de_isfile / de_isdot, de[] */
 //#use ptr        /* rawkey() -- arrow-decoded console keys */
 
 //#define GLDATA  0xFF50
 //#define GLSTAT  0xFF51
-//#define GFXPRES 0x1FA4  /* 1 = GL card fitted */
-//#define GTSUSP  0x1FA7  /* 1 = this app owns the screen (suspend the glass console) */
 
 #define NN 24            /* max entries cached / rows shown */
 

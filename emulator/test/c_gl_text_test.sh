@@ -83,7 +83,7 @@ int main() {
     return 0;
 }
 EOF
-cp $ROOT/os/commands/lib_abi.c .        # clib resolves //#use beside the source
+cp $ROOT/os/commands/lib_abi.c $ROOT/os/commands/lib_mem.c .        # clib resolves //#use beside the source
 python3 $ROOT/tools/clib.py gl_tx.c -o gl_tx.pp.c
 python3 $ROOT/compiler/p8cc.py gl_tx.pp.c -o gl_tx.asm >/dev/null
 python3 $ROOT/assembler/p8xasm.py gl_tx.asm -o gl_tx.bin --base 0x5900 >/dev/null

@@ -44,12 +44,11 @@
  */
 
 //#use abi
+//#use mem     /* GFXPRES/GTSUSP/GCONEN -- the graphics/console flags, from the memory map */
 //#use dirent
 
 //#define GLDATA 0xFF50
 //#define GLSTAT 0xFF51
-//#define GFXPRES 0x1FA4  /* two-mode flag: 1 = GL card fitted (monitor/OS set it) */
-//#define GTSUSP  0x1FA7  /* glass TTY suspend: 1 = this app owns the screen */
 
 char param[22];
 char frec[22];                     /* a window's record, read via SYS_WKGET */

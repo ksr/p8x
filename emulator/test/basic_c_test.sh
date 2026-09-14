@@ -16,7 +16,7 @@ python3 $ROOT/assembler/p8xasm.py $ROOT/os/p8xos.asm -o osbc.bin --base 0x2000 >
 # the C build: the generated GL verb tables + the source, //#use spliced, p8cc.py
 python3 $ROOT/generators/gen_glkw.py >/dev/null
 cat $ROOT/basic/glkwtab.c $ROOT/basic/basic.c > basicc_src.c
-cp $ROOT/os/commands/lib_abi.c .
+cp $ROOT/os/commands/lib_abi.c $ROOT/os/commands/lib_mem.c .
 python3 $ROOT/tools/clib.py basicc_src.c -o basicc_pp.c >/dev/null
 python3 $ROOT/compiler/p8cc.py basicc_pp.c -o basicc.asm >/dev/null
 python3 $ROOT/assembler/p8xasm.py basicc.asm -o basicc.bin --base 0x5900 >/dev/null

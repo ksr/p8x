@@ -52,7 +52,7 @@ int main() {
 }
 PROBEEOF
 
-cp $ROOT/os/commands/lib_abi.c .          # clib resolves //#use from the source's dir
+cp $ROOT/os/commands/lib_abi.c $ROOT/os/commands/lib_mem.c .          # clib resolves //#use from the source's dir
 python3 $ROOT/tools/clib.py sink_probe.c -o ws_probe.c
 python3 $ROOT/compiler/p8cc.py ws_probe.c -o ws_probe.asm >/dev/null
 python3 $ROOT/assembler/p8xasm.py ws_probe.asm -o ws_probe.bin --base 0x5900 >/dev/null

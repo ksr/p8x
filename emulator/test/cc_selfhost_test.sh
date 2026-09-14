@@ -21,7 +21,7 @@ python3 $ROOT/generators/gen_p8xopc.py > opctab.asm
 cat $ROOT/apps/p8xasm.asm opctab.asm > asmfull.asm
 python3 $ROOT/assembler/p8xasm.py asmfull.asm -o hbasm.bin --base 0x5900 >/dev/null
 # the frame compiler /binc/cc.bin from apps/cc.c (host-built)
-cp $ROOT/apps/cc.c $ROOT/os/commands/lib_abi.c .
+cp $ROOT/apps/cc.c $ROOT/os/commands/lib_abi.c $ROOT/os/commands/lib_mem.c .
 python3 $ROOT/tools/clib.py cc.c -o hbcc_pp.c >/dev/null
 python3 $ROOT/compiler/p8cc.py hbcc_pp.c -o hbcc.asm >/dev/null
 python3 $ROOT/assembler/p8xasm.py hbcc.asm -o hbcc.bin --base 0x5900 >/dev/null
