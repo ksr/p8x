@@ -30,7 +30,7 @@ h_pr:   LPW1 sp                ; <- tierA: pointer load (next: LDA)
 h_done: RTS
 
 
-htab:   .word s0,s1,s2,s3,s4,s5,s6,s7,s8,s9,s10,s11,s12,s13,s14,s15,s16,s17,s18,s19,s20,s21,s22,s23,s24,s25,s26,s27,0
+htab:   .word s0,s1,s2,s3,s4,s5,s6,s7,s8,s9,s10,s11,s12,s28,s13,s29,s30,s14,s15,s16,s17,s18,s19,s20,s21,s22,s23,s24,s25,s26,s27,0
 
 s0 :    .asciiz "P8X/OS COMMANDS:"
 s1 :    .asciiz "/d1           drive 1 is mounted here (cd /d1, cat /d1/FILE)"
@@ -45,7 +45,7 @@ s9 :    .asciiz "load path     read a file to its load address"
 s10:    .asciiz "make [target] build a target from the Makefile in the CWD"
 s11:    .asciiz "man name      show a command's manual page (/man)"
 s12:    .asciiz "graphics      tri/rotate/camera/cube/gl in /bin -- man gl, man basic"
-s13:    .asciiz "desk / wdesk  the windowed GUI -- man wdesk"
+s13:    .asciiz "desk / wdesk  the older tiled GUI (finder supersedes) -- man wdesk"
 s14:    .asciiz "mkdir path    create a subdirectory"
 s15:    .asciiz "name args     run a program by bare name, found on PATH (/bin)"
 s16:    .asciiz "pack          reclaim deleted space"
@@ -60,6 +60,9 @@ s24:    .asciiz "cmd <FILE     take input from FILE instead of the keyboard"
 s25:    .asciiz "a | b         pipe a's output into b's input"
 s26:    .asciiz "programs:     run /bin/basic.bin | edit.bin f | asm.bin s o"
 s27:    .asciiz "  path=file/dir (drive 1 at /d1), s e a=hex, b=byte"
+s28:    .asciiz "finder        two-mode GUI desktop: files + apps -- man finder"
+s29:    .asciiz "screen on|off mirror the console onto the GL screen -- man screen"
+s30:    .asciiz "kermit s|r f  file transfer over the 2nd serial port -- man kermit"
 
 hp:     .fill 2
 sp:     .fill 2
