@@ -16,6 +16,7 @@ set -o pipefail
 cd "$(dirname "$0")"
 ROOT=../..
 UC=../../microcode
+GCONEN=$(python3 $ROOT/tools/memaddr.py GCONEN)  # single-sourced from gen_memmap.py
 
 fail() { echo "C-GL-LIST TEST: FAIL — $1"; exit 1; }
 
@@ -171,8 +172,8 @@ done
 
 run() {  # $1 prog, $2 out ppm, $3 args
 # console OFF from the monitor for the RTL-compared grab (the RTL bench renders
-# the pure scene, no always-on console): E 60AF->00 (GCONEN off) -> . ; G 014E (GCLS).
-    printf 'E 60AF\r00.G 014E\rB\rrun /bin/%s.bin %s\r' "$1" "$3" > gl_l.in
+# the pure scene, no always-on console): GCONEN -> 00 (console off) -> . ; G 014E (GCLS).
+    printf "E ${GCONEN}\r00.G 014E\rB\rrun /bin/%s.bin %s\r" "$1" "$3" > gl_l.in
     ../p8xemu -N -i gl_l.in -c gll.img -l 400000000 -g "$2" eeprom.bin > gl_l.out 2>/dev/null || true
     grep -q LDONE gl_l.out || fail "$1 did not finish"
 }

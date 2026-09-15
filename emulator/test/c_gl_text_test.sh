@@ -16,6 +16,7 @@ set -o pipefail
 cd "$(dirname "$0")"
 ROOT=../..
 UC=../../microcode
+GCONEN=$(python3 $ROOT/tools/memaddr.py GCONEN)  # single-sourced from gen_memmap.py
 
 fail() { echo "C-GL-TEXT TEST: FAIL — $1"; exit 1; }
 
@@ -97,8 +98,8 @@ python3 $ROOT/tools/p8xfs.py put    gl_tx.img $ROOT/os/font.gl --name /FONT.GL >
 python3 $ROOT/tools/p8xfs.py put    gl_tx.img gl_tx.gl --name /GLTX.GL >/dev/null
 # Console OFF from the monitor before the grab: the always-on glass TTY would draw
 # the shell prompt onto the shared screen, which the RTL bench (pure scene) has no
-# console for. E 60AF -> 00 (GCONEN off) -> . ; then G 014E (GCLS) blanks the echo.
-printf 'E 60AF\r00.G 014E\rB\rrun /bin/gltx.bin\r' > gl_tx.in
+# console for. GCONEN -> 00 (console off) -> . ; then G 014E (GCLS) blanks the echo.
+printf "E ${GCONEN}\r00.G 014E\rB\rrun /bin/gltx.bin\r" > gl_tx.in
 ../p8xemu -N -i gl_tx.in -c gl_tx.img -l 900000000 -g gl_tx.ppm eeprom.bin > gl_tx.out 2>/dev/null || true
 grep -q "TXDONE" gl_tx.out || fail "streamer did not finish"
 

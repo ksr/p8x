@@ -9,6 +9,7 @@ set -o pipefail
 cd "$(dirname "$0")"
 ROOT=../..
 UC=../../microcode
+GCONEN=$(python3 $ROOT/tools/memaddr.py GCONEN)  # single-sourced from gen_memmap.py
 
 fail() { echo "C-GL-CURVE TEST: FAIL — $1"; exit 1; }
 
@@ -86,8 +87,8 @@ python3 $ROOT/tools/p8xfs.py boot   gl_cv.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  gl_cv.img /bin >/dev/null
 python3 $ROOT/tools/p8xfs.py put    gl_cv.img gl_cv.bin --name /bin/glcv.bin --load 0x5900 --exec 0x5900 >/dev/null
 # console OFF from the monitor for the RTL-compared grab (the RTL bench renders
-# the pure scene, no always-on console): E 60AF->00 (GCONEN off) -> . ; G 014E (GCLS).
-printf 'E 60AF\r00.G 014E\rB\rrun /bin/glcv.bin\r' > gl_cv.in
+# the pure scene, no always-on console): GCONEN -> 00 (console off) -> . ; G 014E (GCLS).
+printf "E ${GCONEN}\r00.G 014E\rB\rrun /bin/glcv.bin\r" > gl_cv.in
 ../p8xemu -N -i gl_cv.in -c gl_cv.img -l 600000000 -g gl_cv.ppm eeprom.bin > gl_cv.out 2>/dev/null || true
 grep -q "CVDONE" gl_cv.out || fail "harness did not finish"
 got=$(LC_ALL=C tr -d '\0\r' < gl_cv.out | grep -E '^[0-9]+$' | head -4 | tr '\n' ' ' | sed 's/ $//')

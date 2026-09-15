@@ -15,6 +15,7 @@ set -o pipefail
 cd "$(dirname "$0")"
 ROOT=../..
 UC=../../microcode
+GCONEN=$(python3 $ROOT/tools/memaddr.py GCONEN)  # single-sourced from gen_memmap.py
 
 fail() { echo "C-GL-ASCII TEST: FAIL — $1"; exit 1; }
 
@@ -136,7 +137,10 @@ for n in 1 2 3 4; do
 done
 
 run() {
-    printf 'B\rrun /bin/as%s.bin\r' "$1" > gl_as.in
+    # console OFF before the run, exactly like c_gl_test generates gl_b.ppm
+    # (GCONEN -> 00, then GCLS), so the always-on glass TTY's command echo
+    # does not pollute the byte-exact compare against gl_b.ppm.
+    printf "E ${GCONEN}\r00.G 014E\rB\rrun /bin/as%s.bin\r" "$1" > gl_as.in
     ../p8xemu -N -i gl_as.in -c gla.img -l 400000000 -g "$2" eeprom.bin > gl_as.out 2>/dev/null || true
     grep -q "A${1}DONE" gl_as.out || fail "program $1 did not finish"
 }

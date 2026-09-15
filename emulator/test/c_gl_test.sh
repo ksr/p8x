@@ -19,6 +19,7 @@ set -o pipefail
 cd "$(dirname "$0")"
 ROOT=../..
 UC=../../microcode
+GCONEN=$(python3 $ROOT/tools/memaddr.py GCONEN)  # single-sourced from gen_memmap.py
 
 fail() { echo "C-GL TEST: FAIL — $1"; exit 1; }
 
@@ -187,10 +188,11 @@ echo "GLID probe + error FIFO OK"
 # TTY echoes each command line onto the shared screen (top-left, OUTSIDE these
 # programs' x 104-375 viewport, so their own clear cannot remove it) -- "gla" vs
 # "glb" alone would make the byte-exact compare differ. Done from the MONITOR so no
-# test disk needs screen.bin: E 60AF -> 00 (GCONEN off) -> . ; then G 014E (GCLS)
+# test disk needs screen.bin: GCONEN -> 00 (console off) -> . ; then G 014E (GCLS)
 # blanks the E-echo itself. A measurement control, not a workaround: the echo is an
 # independent variable in a rendering comparison.
-LAB='E 60AF\r00.G 014E\r'
+# (GCONEN lives at $1FAF since the 6K-ROM flag-day moved it off the old $1FAF.)
+LAB="E ${GCONEN}\r00.G 014E\r"
 printf "${LAB}B\rrun /bin/gla.bin\r" > gl_a.in
 ../p8xemu -N -i gl_a.in -c gl.img -l 300000000 -g gl_a.ppm eeprom.bin > gl_a.out 2>/dev/null || true
 grep -q ADONE gl_a.out || fail "software-lib scene did not finish"

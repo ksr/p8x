@@ -10,6 +10,7 @@ set -o pipefail
 cd "$(dirname "$0")"
 ROOT=../..
 UC=../../microcode
+GCONEN=$(python3 $ROOT/tools/memaddr.py GCONEN)  # single-sourced from gen_memmap.py
 
 fail() { echo "C-GL-MAT TEST: FAIL — $1"; exit 1; }
 
@@ -135,9 +136,9 @@ python3 $ROOT/tools/p8xfs.py put    glm.img gl_r.bin --name /bin/glr.bin --load 
 # ---- 1: matrix semantics vs the host replica --------------------------------
 # Console OFF from the monitor for every framebuffer grab (the always-on glass TTY
 # would echo the command line onto the shared screen). Matches c_gl_test, whose
-# gl_b.ppm this test compares against below. E 60AF -> 00 (GCONEN off) -> . ; then
+# gl_b.ppm this test compares against below. GCONEN -> 00 (console off) -> . ; then
 # G 014E (GCLS) blanks the E-echo.
-LAB='E 60AF\r00.G 014E\r'
+LAB="E ${GCONEN}\r00.G 014E\r"
 printf "${LAB}B\rrun /bin/glm.bin\r" > gl_m.in
 ../p8xemu -N -i gl_m.in -c glm.img -l 300000000 -g gl_m.ppm eeprom.bin > gl_m.out 2>/dev/null || true
 grep -q MDONE gl_m.out || fail "matrix program did not finish"
