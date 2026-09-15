@@ -1806,7 +1806,18 @@ static uint8_t memrd(uint16_t ad){
     if(bridge_fd>=0 && bridge_card(ad)) return bridge_rd(ad);
     switch(ad){
     case 0xFF00: return switches;                             /* switches (-s) */
-    case 0xFF04: return 0x02 | (rx_ready()?0x01:0x00);        /* TDRE|RDRF */
+    case 0xFF04:                                              /* ACIA status */
+        /* The idle console poll (the prompt spins reading this) is the ONE
+           place a GL burst tail can strand over the bridge: no GLSTAT read
+           comes to age it out (the CPU is waiting on the console, not the GL
+           port), so the overlay lags the serial by the last partial burst
+           until the next GL output. Flush an aged pending burst here too --
+           young bursts (mid-output, chars < BRIDGE_FLUSH_AGE apart) are left
+           to batch as before. */
+        if(bridge_fd>=0 && bridge_bn &&
+           cycles_now()-bridge_bage >= BRIDGE_FLUSH_AGE)
+            bridge_flush();
+        return 0x02 | (rx_ready()?0x01:0x00);                 /* TDRE|RDRF */
     case 0xFF05: return rx_char();
     case 0xFF08: return 0x02 | (s2rxpos<s2rxlen?0x01:0x00);   /* 2nd ACIA: TDRE|RDRF */
     case 0xFF09: return s2rxpos<s2rxlen ? s2rx[s2rxpos++] : 0;/* 2nd ACIA data (RX) */
