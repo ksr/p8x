@@ -39,8 +39,8 @@ python3 $ROOT/tools/p8xfs.py mkdir  fr.img /bin >/dev/null
 python3 $ROOT/tools/p8xfs.py put    fr.img fnd.bin --name /bin/finder.bin --load 0x5900 --exec 0x5900 >/dev/null
 python3 $ROOT/tools/p8xfs.py put    fr.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
 
-# boot; run finder; DOWN (select R.BIN, index 1 after ".."); ENTER (launch it); q
-printf 'B\rrun /bin/finder.bin\r\033[B\rq' > fr.in
+# boot; run finder; RIGHT (icon grid: nav to R.BIN, index 1 after ".."); ENTER (launch it); q
+printf 'B\rrun /bin/finder.bin\r\033[C\rq' > fr.in
 ../p8xemu -N -i fr.in -c fr.img -l 500000000 -g fr.ppm eeprom.bin > fr.out 2>/dev/null || true
 
 # the app ran (launched via the script)

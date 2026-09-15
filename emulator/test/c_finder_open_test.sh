@@ -42,8 +42,8 @@ python3 $ROOT/tools/p8xfs.py put    i.img paint.a.bin  --name /bin/paint.bin  --
 python3 $ROOT/tools/p8xfs.py put    i.img $ROOT/os/font.gl --name /FONT.GL --load 0 --exec 0 >/dev/null
 
 # ---- IMAGE via Finder: open the .p8i (DOWN to it, ENTER), any key, then q ----
-# root list: ".." AAA.P8I bin FONT.GL  -> DOWN once selects AAA.P8I
-printf 'B\rrun /bin/finder.bin\r\033[B\r q' > o.in
+# icon grid: ".." AAA.P8I bin FONT.GL  -> RIGHT once selects AAA.P8I (index 1)
+printf 'B\rrun /bin/finder.bin\r\033[C\r q' > o.in
 ../p8xemu -N -i o.in -c i.img -l 400000000 -g o.ppm eeprom.bin > o.out 2>/dev/null || true
 tr -d '\0' < o.out | grep -q 'run /bin/image.bin /AAA.P8I' || { echo "--- serial ---"; tr -d '\0'<o.out|tail; fail "opening the .p8i did not launch image with it"; }
 # after the key, Finder is back (menu bar). (The image drew earlier; its return is

@@ -75,26 +75,56 @@ int gsetup() {
     return 0;
 }
 
-/* read a key, decoding arrow escape sequences (ESC [ A/B/C/D) that arrive as raw
- * bytes on the serial console (rawkey is raw -- the WM kernel used to decode these,
- * but the full-screen desktop has no kernel). Returns 128 up / 129 down / 130 left
- * / 131 right; a lone ESC returns 27 (quit); otherwise the byte. A bounded spin
- * after ESC lets the [X bytes catch up over a slow serial link. */
+/* block for the next KEY, letting lib_ptr consume (and discard) any mouse SGR
+ * reports that arrive meanwhile -- used by the menus and text dialogs, which are
+ * keyboard-only. ptr_ev() returns 0 for a key (in ptr_key: arrows are 128..131),
+ * 1..4 for pointer events. The main loop calls ptr_ev() directly so it can act on
+ * the mouse; the dialogs just want keys. */
 int getkey() {
-    int k; int i;
-    k = rawkey();
-    if (k != 27) { return k; }
-    i = 0; while (i < 20000 && keyrdy() == 0) { i = i + 1; }
-    if (keyrdy() == 0) { return 27; }              /* lone ESC */
-    k = rawkey();
-    if (k != '[') { return 27; }                   /* not an arrow: treat as ESC */
-    i = 0; while (i < 20000 && keyrdy() == 0) { i = i + 1; }
-    k = rawkey();
-    if (k == 'A') { return 128; }                  /* up    */
-    if (k == 'B') { return 129; }                  /* down  */
-    if (k == 'D') { return 130; }                  /* left  */
-    if (k == 'C') { return 131; }                  /* right */
-    return 0;                                       /* unknown sequence: ignore */
+    while (1) { if (ptr_ev() == 0) { return ptr_key; } }
+    return 0;
+}
+
+/* ---- icons (vector, drawn from GL rects; no image assets) ------------------ *
+ * Each icon is ~40x34, drawn from an origin (ix,iy) = its bottom-left in window
+ * coords (y up). Four kinds: a manila folder, a white document, a cyan "program"
+ * page, and a document with a colour chip for a picture. */
+int penrgb(int r, int g, int b) { gp(6); gp(r); gp(g); gp(b); return 0; }
+int rectline(int x0, int y0, int x1, int y1) {   /* outline rect (leaves PRMFIL 0) */
+    gp(224); gp(0); gp(16); gw(x0); gw(y0); gp(52); gw(x1); gw(y1);
+    return 0;
+}
+int icon_folder(int ix, int iy) {
+    penrgb(24, 34, 6);  fillrect(ix + 2, iy + 24, ix + 18, iy + 31);   /* tab   */
+    penrgb(30, 48, 12); fillrect(ix, iy, ix + 40, iy + 26);            /* body  */
+    penrgb(8, 14, 2);   rectline(ix, iy, ix + 40, iy + 26);
+    return 0;
+}
+int icon_doc(int ix, int iy, int tint) {          /* tint 0=white 1=cyan program */
+    if (tint) { penrgb(8, 44, 34); } else { penrgb(31, 63, 31); }
+    fillrect(ix + 6, iy, ix + 34, iy + 34);                            /* page  */
+    penrgb(12, 24, 12);
+    fillrect(ix + 11, iy + 27, ix + 29, iy + 28);                      /* lines */
+    fillrect(ix + 11, iy + 22, ix + 29, iy + 23);
+    fillrect(ix + 11, iy + 17, ix + 25, iy + 18);
+    penrgb(6, 12, 6); rectline(ix + 6, iy, ix + 34, iy + 34);
+    return 0;
+}
+int icon_pic(int ix, int iy) {
+    penrgb(31, 63, 31); fillrect(ix + 6, iy, ix + 34, iy + 34);        /* page  */
+    penrgb(6, 40, 28);  fillrect(ix + 11, iy + 6, ix + 29, iy + 24);   /* image */
+    penrgb(31, 50, 0);  fillrect(ix + 14, iy + 9, ix + 20, iy + 15);   /* a mark*/
+    penrgb(6, 12, 6);   rectline(ix + 6, iy, ix + 34, iy + 34);
+    return 0;
+}
+/* which icon an entry gets: 1 folder, 2 program (.BIN), 3 picture (.P8I), 0 doc */
+int etype(int i) {
+    char *nm;
+    if (fdir[i]) { return 1; }
+    nm = fnam + i * 13;
+    if (isbin(nm)) { return 2; }
+    if (isp8i(nm)) { return 3; }
+    return 0;
 }
 
 /* ---- path helpers (from desk.c) -------------------------------------------- */
@@ -158,36 +188,73 @@ int fscan() {
     return 0;
 }
 
-/* ---- draw the whole desktop ------------------------------------------------ */
+/* ---- the icon grid --------------------------------------------------------- *
+ * Entries are drawn as icons in a 5-column grid (20 per page), each with its name
+ * beneath. The selected cell gets a highlight box. PGCOLS/PGROWS below and the
+ * hit test in cell_at() must agree. */
+#define PGCOLS 5
+#define PGROWS 4
+#define PGN    20            /* PGCOLS*PGROWS -- p8cc wants a literal */
+#define COLW   96            /* 480 / PGCOLS */
+#define ROWH   60
+
+/* the cell top edge (window y, y up) for page-row r (0 = top) */
+int cell_top(int r) { return 246 - ROWH * r; }
+
 int draw() {
-    int r; int y;
-    pen(0); gp(7); gp(0); gp(0); gp(0);            /* FLOOD black: the desktop */
+    int s; int idx; int row; int col; int ix; int ct; int t; char *nm;
+    gp(7); gp(2); gp(8); gp(12);                   /* FLOOD: a blue-grey desktop */
     /* menu bar: a white strip across the top with black labels */
     pen(65535); fillrect(0, 258, 479, 271);
     pen(0);
     gtext(4, 261, "FINDER");
     gtext(72, 261, cpath);
-    pen(0);
-    gtext(206, 261, "F FILE  A APPS  ENTER OPEN  BKSP UP  Q QUIT");
-    /* file list, top-down from just below the bar */
-    r = ftop; y = 244;
-    while (r < fcnt && y > 6) {
-        if (r == fsel) { pen(65504); fillrect(0, y - 2, 479, y + 8); pen(0); }  /* selection: yellow bar */
-        else if (fdir[r]) { pen(2047); }          /* directory: cyan */
-        else { pen(65535); }                      /* file: white */
-        gtext(8, y, fnam + r * 13);
-        if (fdir[r]) { gtext(2, y, "/"); }
-        r = r + 1; y = y - 10;
+    gtext(206, 261, "F FILE  A APPS  R-CLICK MENU  Q QUIT");
+    /* the icons */
+    s = 0;
+    while (s < PGN && ftop + s < fcnt) {
+        idx = ftop + s;
+        row = s / PGCOLS; col = s - row * PGCOLS;
+        ix = col * COLW + 28;
+        ct = cell_top(row);
+        if (idx == fsel) {                         /* selection highlight box */
+            penrgb(6, 18, 28); fillrect(col * COLW + 2, ct - 58, col * COLW + 94, ct - 2);
+        }
+        t = etype(idx);
+        if (t == 1) { icon_folder(ix, ct - 42); }
+        else if (t == 2) { icon_doc(ix, ct - 42, 1); }
+        else if (t == 3) { icon_pic(ix, ct - 42); }
+        else { icon_doc(ix, ct - 42, 0); }
+        nm = fnam + idx * 13;                       /* name (<=12 chars) fits the column */
+        pen(65535); gtext(col * COLW + 6, ct - 54, nm);
+        s = s + 1;
     }
     return 0;
 }
 
-/* keep the selection on screen (adjust the scroll window) */
-int reveal() {
-    if (fsel < ftop) { ftop = fsel; }
-    if (fsel >= ftop + NN) { ftop = fsel - (NN - 1); }
-    return 0;
+/* which entry index is at window point (px,py). Sets the global cell_ok to 1 and
+ * returns the index on a hit, else cell_ok=0. A flag (not a sentinel return)
+ * because p8cc compares ints UNSIGNED -- a -1 "none" would test >= 0 as true, and
+ * an out-of-range sentinel is fragile; a 0/1 flag sidesteps all of that. Inverse
+ * of the grid layout in draw(). */
+int cell_ok;
+int cell_at(int px, int py) {
+    int col; int row; int s; int r;
+    cell_ok = 0; r = 0;                              /* SINGLE return path (early
+                                                       returns tripped a codegen bug) */
+    if (py <= 256) {                                 /* below the menu bar */
+        row = (246 - py) / ROWH;                     /* py 247..256 -> huge (unsigned) */
+        if (row < PGROWS) {
+            col = px / COLW; if (col >= PGCOLS) { col = PGCOLS - 1; }
+            s = row * PGCOLS + col;
+            if (ftop + s < fcnt) { cell_ok = 1; r = ftop + s; }
+        }
+    }
+    return r;
 }
+
+/* put the selection on the visible page (page-aligned scrolling) */
+int reveal() { ftop = (fsel / PGN) * PGN; return 0; }
 
 /* emit one string to the open write stream */
 int putstr(char *s) { int i; i = 0; while (s[i]) { bios(FPUTB, 0, s[i]); i = i + 1; } return 0; }
@@ -340,68 +407,33 @@ int op_target(char **nmp) {
     return 1;
 }
 
-/* rename the selected entry (mv within the same directory) */
-int op_rename() {
+/* do one file operation, all five folded into a single builder to keep the
+ * binary small. kind: 1 rename, 2 duplicate (files only), 3 move (to a typed
+ * dir), 4 new folder (no target), 5 delete. On confirm it does NOT return -- it
+ * re-launches via run_op; a cancel returns so the caller repaints. */
+int do_op(int kind) {
     char *nm; int p;
-    if (op_target(&nm) == 0) { return 0; }
-    if (prompt_input("RENAME TO:", nbuf) == 0) { return 0; }
+    if (kind == 4) {                                    /* new folder: no target */
+        if (prompt_input("NEW FOLDER:", nbuf) == 0) { return 0; }
+        pjoin(dpath, cpath, nbuf);
+        p = apnd(0, "mkdir "); p = apnd(p, dpath); run_op(); return 0;
+    }
+    if (op_target(&nm) == 0) { return 0; }              /* the selected entry, not ".." */
+    if (kind == 2 && fdir[fsel]) { return 0; }          /* duplicate: files only */
+    if (kind == 5) {                                    /* delete */
+        if (confirm("DELETE THIS ITEM?") == 0) { return 0; }
+        pjoin(vpath, cpath, nm);
+        if (fdir[fsel]) { p = apnd(0, "rmdir "); } else { p = apnd(0, "del "); }
+        p = apnd(p, vpath); run_op(); return 0;
+    }
+    if (kind == 1) { if (prompt_input("RENAME TO:", nbuf) == 0) { return 0; } }
+    if (kind == 2) { if (prompt_input("DUPLICATE AS:", nbuf) == 0) { return 0; } }
+    if (kind == 3) { if (prompt_input("MOVE TO DIR:", nbuf) == 0) { return 0; } }
     pjoin(vpath, cpath, nm);                            /* source */
-    pjoin(dpath, cpath, nbuf);                          /* dest (same dir) */
-    p = apnd(0, "mv "); p = apnd(p, vpath);
-    cmdbuf[p] = 32; p = p + 1; cmdbuf[p] = 0;
-    p = apnd(p, dpath);
-    run_op();
-    return 0;
-}
-
-/* duplicate the selected FILE (cp to a new name in the same directory) */
-int op_dup() {
-    char *nm; int p;
-    if (op_target(&nm) == 0) { return 0; }
-    if (fdir[fsel]) { return 0; }                       /* files only (cp -r is heavy) */
-    if (prompt_input("DUPLICATE AS:", nbuf) == 0) { return 0; }
-    pjoin(vpath, cpath, nm);
-    pjoin(dpath, cpath, nbuf);
-    p = apnd(0, "cp "); p = apnd(p, vpath);
-    cmdbuf[p] = 32; p = p + 1; cmdbuf[p] = 0;
-    p = apnd(p, dpath);
-    run_op();
-    return 0;
-}
-
-/* move the selected entry into another directory (an absolute dir path typed in) */
-int op_move() {
-    char *nm; int p;
-    if (op_target(&nm) == 0) { return 0; }
-    if (prompt_input("MOVE TO DIR:", nbuf) == 0) { return 0; }
-    pjoin(vpath, cpath, nm);                            /* source */
-    pjoin(dpath, nbuf, nm);                             /* dest = <typed dir>/<name> */
-    p = apnd(0, "mv "); p = apnd(p, vpath);
-    cmdbuf[p] = 32; p = p + 1; cmdbuf[p] = 0;
-    p = apnd(p, dpath);
-    run_op();
-    return 0;
-}
-
-/* make a new folder in the current directory */
-int op_newdir() {
-    int p;
-    if (prompt_input("NEW FOLDER:", nbuf) == 0) { return 0; }
-    pjoin(dpath, cpath, nbuf);
-    p = apnd(0, "mkdir "); p = apnd(p, dpath);
-    run_op();
-    return 0;
-}
-
-/* delete the selected entry (del for a file, rmdir for an empty directory) */
-int op_delete() {
-    char *nm; int p;
-    if (op_target(&nm) == 0) { return 0; }
-    if (confirm("DELETE THIS ITEM?") == 0) { return 0; }
-    pjoin(vpath, cpath, nm);
-    if (fdir[fsel]) { p = apnd(0, "rmdir "); }          /* directory: must be empty */
-    else { p = apnd(0, "del "); }                       /* file */
-    p = apnd(p, vpath);
+    if (kind == 3) { pjoin(dpath, nbuf, nm); }          /* move: <typed dir>/<name> */
+    else { pjoin(dpath, cpath, nbuf); }                 /* rename/dup: same dir, new name */
+    if (kind == 2) { p = apnd(0, "cp "); } else { p = apnd(0, "mv "); }
+    p = apnd(p, vpath); cmdbuf[p] = 32; p = p + 1; cmdbuf[p] = 0; p = apnd(p, dpath);
     run_op();
     return 0;
 }
@@ -422,16 +454,57 @@ int file_menu() {
     gtext(66, 178, "X  DELETE");
     gtext(66, 162, "ESC CANCEL");
     k = getkey();
-    if (k == 'r' || k == 'R') { op_rename(); }
-    if (k == 'd' || k == 'D') { op_dup(); }
-    if (k == 'm' || k == 'M') { op_move(); }
-    if (k == 'n' || k == 'N') { op_newdir(); }
-    if (k == 'x' || k == 'X') { op_delete(); }
+    if (k == 'r' || k == 'R') { do_op(1); }
+    if (k == 'd' || k == 'D') { do_op(2); }
+    if (k == 'm' || k == 'M') { do_op(3); }
+    if (k == 'n' || k == 'N') { do_op(4); }
+    if (k == 'x' || k == 'X') { do_op(5); }
+    return 0;
+}
+
+/* the right-click context menu: a popup at the cursor. has_item = a file/folder
+ * was under the cursor (Open/Rename/Duplicate/Move/Delete on the selection);
+ * otherwise the empty-desktop menu (New Folder). A click on a row runs that op
+ * (which may not return -- it re-launches via run_op); a click outside, or any
+ * key, dismisses. */
+int ctx_menu(int mx, int my, int has_item) {
+    int k; int row;
+    if (mx > 340) { mx = 340; }                    /* keep the popup on screen */
+    if (my < 90) { my = 90; }
+    if (has_item) {
+        pen(65535); fillrect(mx, my - 62, mx + 132, my);
+        pen(0);
+        gtext(mx + 6, my - 11, "OPEN");
+        gtext(mx + 6, my - 23, "RENAME");
+        gtext(mx + 6, my - 35, "DUPLICATE");
+        gtext(mx + 6, my - 47, "MOVE");
+        gtext(mx + 6, my - 59, "DELETE");
+    } else {
+        pen(65535); fillrect(mx, my - 14, mx + 132, my);
+        pen(0);
+        gtext(mx + 6, my - 11, "NEW FOLDER");
+    }
+    while (1) {
+        k = ptr_ev();
+        if (k == 1 || k == 4) {                    /* a click: on a row, or outside? */
+            if (ptr_x >= mx && ptr_x <= mx + 132 && ptr_y <= my && ptr_y > my - 62) {
+                row = (my - ptr_y) / 12;
+                if (has_item == 0) { do_op(4); }       /* new folder */
+                else if (row <= 0) { open_sel(); }
+                else if (row == 1) { do_op(1); }       /* rename    */
+                else if (row == 2) { do_op(2); }       /* duplicate */
+                else if (row == 3) { do_op(3); }       /* move      */
+                else { do_op(5); }                     /* delete    */
+            }
+            return 0;                              /* click (row or outside): dismiss */
+        }
+        if (k == 0) { return 0; }                  /* any key dismisses */
+    }
     return 0;
 }
 
 int main() {
-    int k; int going; int i; char *a;
+    int k; int going; int i; int ev; char *a;
     if (peek(GFXPRES) == 0) { puts("?No display"); return 1; }
     poke(GTSUSP, 1);                               /* claim the screen */
     gsetup();                                      /* port + text projection */
@@ -447,20 +520,37 @@ int main() {
         bios(SYS_GETCWD, cpath, 0);
     }
     if (cpath[0] == 0) { cpath[0] = '/'; cpath[1] = 0; }
+    ptr_init();                                    /* keys + mouse on the console */
     fscan();
     draw();
     going = 1;
     while (going) {
-        k = getkey();
-        if (k == 'q' || k == 'Q' || k == 27) { going = 0; }
-        else if (k == 129 || k == 'j') { if (fsel < fcnt - 1) { fsel = fsel + 1; } }   /* down */
-        else if (k == 128 || k == 'k') { if (fsel > 0) { fsel = fsel - 1; } }          /* up */
-        else if (k == 13 || k == 10) { open_sel(); }                                   /* open */
-        else if (k == 8 || k == 127 || k == 130) { pup(); fscan(); }                   /* up dir */
-        else if (k == 'a' || k == 'A') { apps_menu(); }                                /* APPS menu */
-        else if (k == 'f' || k == 'F') { file_menu(); }                                /* FILE menu */
+        ev = ptr_ev();
+        if (ev == 1) {                             /* LEFT click: select, or open if
+                                                      the click is on the selection */
+            i = cell_at(ptr_x, ptr_y);
+            if (cell_ok) { if (i == fsel) { open_sel(); } else { fsel = i; } }
+        }
+        else if (ev == 4) {                        /* RIGHT click: context menu */
+            i = cell_at(ptr_x, ptr_y);
+            if (cell_ok) { fsel = i; reveal(); draw(); ctx_menu(ptr_x, ptr_y, 1); }
+            else { ctx_menu(ptr_x, ptr_y, 0); }
+        }
+        else if (ev == 0) {                        /* a key */
+            k = ptr_key;
+            if (k == 'q' || k == 'Q' || k == 27) { going = 0; }
+            else if (k == 129 || k == 'j') { if (fsel + PGCOLS < fcnt) { fsel = fsel + PGCOLS; } } /* down a row */
+            else if (k == 128 || k == 'k') { if (fsel >= PGCOLS) { fsel = fsel - PGCOLS; } }       /* up a row  */
+            else if (k == 130 || k == 'l') { if (fsel < fcnt - 1) { fsel = fsel + 1; } }           /* right (lib_ptr: ESC[C=130) */
+            else if (k == 131 || k == 'h') { if (fsel > 0) { fsel = fsel - 1; } }                  /* left  (lib_ptr: ESC[D=131) */
+            else if (k == 13 || k == 10) { open_sel(); }                                           /* open      */
+            else if (k == 8 || k == 127) { pup(); fscan(); }                                       /* up dir    */
+            else if (k == 'a' || k == 'A') { apps_menu(); }
+            else if (k == 'f' || k == 'F') { file_menu(); }
+        }
         if (going) { reveal(); draw(); }
     }
+    ptr_done();
     poke(GTSUSP, 0);                               /* release the console */
     return 0;
 }

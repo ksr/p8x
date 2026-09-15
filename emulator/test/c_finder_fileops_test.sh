@@ -15,7 +15,7 @@ set -e
 cd "$(dirname "$0")"
 ROOT=../..
 UC=../../microcode
-DOWN='\033[B'
+RIGHT='\033[C'   # icon grid: RIGHT moves +1 within the row
 
 fail() { echo "C-FINDER-FILEOPS TEST: FAIL — $1"; exit 1; }
 
@@ -53,7 +53,7 @@ echo "  new folder: /TESTDIR created"
 
 # ---- duplicate: select Z.TXT (3 Downs), f d ZED.TXT ENTER ------------------
 mkdisk
-printf "B\rrun /bin/finder.bin\r${DOWN}${DOWN}${DOWN}fdZED.TXT\r" > fo.in
+printf "B\rrun /bin/finder.bin\r${RIGHT}${RIGHT}${RIGHT}fdZED.TXT\r" > fo.in
 ../p8xemu -N -i fo.in -c fo.img -l 400000000 eeprom.bin > fo.out 2>/dev/null || true
 ls_root | grep -q '^ZED.TXT$' || { echo "root:"; ls_root; fail "duplicate did not create /ZED.TXT"; }
 ls_root | grep -q '^Z.TXT$'   || fail "duplicate removed the original /Z.TXT"
@@ -63,7 +63,7 @@ echo "  duplicate: /ZED.TXT is a copy, original intact"
 
 # ---- rename: select Z.TXT, f r RENAMED.TXT ENTER --------------------------
 mkdisk
-printf "B\rrun /bin/finder.bin\r${DOWN}${DOWN}${DOWN}frRENAMED.TXT\r" > fo.in
+printf "B\rrun /bin/finder.bin\r${RIGHT}${RIGHT}${RIGHT}frRENAMED.TXT\r" > fo.in
 ../p8xemu -N -i fo.in -c fo.img -l 400000000 eeprom.bin > fo.out 2>/dev/null || true
 ls_root | grep -q '^RENAMED.TXT$' || { echo "root:"; ls_root; fail "rename did not create /RENAMED.TXT"; }
 ls_root | grep -q '^Z.TXT$' && fail "rename left the old name /Z.TXT behind"
@@ -71,14 +71,14 @@ echo "  rename: /Z.TXT -> /RENAMED.TXT"
 
 # ---- delete: select Z.TXT, f x y (confirm) --------------------------------
 mkdisk
-printf "B\rrun /bin/finder.bin\r${DOWN}${DOWN}${DOWN}fxy" > fo.in
+printf "B\rrun /bin/finder.bin\r${RIGHT}${RIGHT}${RIGHT}fxy" > fo.in
 ../p8xemu -N -i fo.in -c fo.img -l 400000000 eeprom.bin > fo.out 2>/dev/null || true
 ls_root | grep -q '^Z.TXT$' && { echo "root:"; ls_root; fail "delete did not remove /Z.TXT"; }
 echo "  delete: /Z.TXT removed (after Y confirm)"
 
 # ---- move: select Z.TXT, f m /bin ENTER -> /bin/Z.TXT --------------------
 mkdisk
-printf "B\rrun /bin/finder.bin\r${DOWN}${DOWN}${DOWN}fm/bin\r" > fo.in
+printf "B\rrun /bin/finder.bin\r${RIGHT}${RIGHT}${RIGHT}fm/bin\r" > fo.in
 ../p8xemu -N -i fo.in -c fo.img -l 400000000 eeprom.bin > fo.out 2>/dev/null || true
 python3 $ROOT/tools/p8xfs.py ls fo.img /bin 2>/dev/null | awk '{print $1}' | grep -q '^Z.TXT$' \
     || fail "move did not place /bin/Z.TXT"
@@ -87,7 +87,7 @@ echo "  move: /Z.TXT -> /bin/Z.TXT"
 
 # ---- delete CANCEL: f x n keeps the file ----------------------------------
 mkdisk
-printf "B\rrun /bin/finder.bin\r${DOWN}${DOWN}${DOWN}fxn" > fo.in
+printf "B\rrun /bin/finder.bin\r${RIGHT}${RIGHT}${RIGHT}fxn" > fo.in
 ../p8xemu -N -i fo.in -c fo.img -l 400000000 eeprom.bin > fo.out 2>/dev/null || true
 ls_root | grep -q '^Z.TXT$' || fail "delete-cancel (N) still removed /Z.TXT"
 echo "  delete cancel: N kept /Z.TXT"
