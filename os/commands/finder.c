@@ -507,6 +507,7 @@ int main() {
     int k; int going; int i; int ev; char *a;
     if (peek(GFXPRES) == 0) { puts("?No display"); return 1; }
     poke(GTSUSP, 1);                               /* claim the screen */
+    gp(0x50); gp(0);                               /* TXEN 0: hide the text overlay */
     gsetup();                                      /* port + text projection */
     /* an absolute-path arg means we were RE-LAUNCHED by the auto-return script:
      * resume in that directory. Otherwise start at the CWD. */

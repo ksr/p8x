@@ -339,6 +339,7 @@ int main() {
     char *ap;
     if (peek(GFXPRES) == 0) { puts("?No display"); return 1; }
     poke(GTSUSP, 1);   /* claim the screen: suspend the glass TTY console (P2) */
+    gput(0x50); gput(0);  /* TXEN 0: hide the text overlay while we own the screen */
     ap = argstr();
     while (*ap == 32) { ap = ap + 1; }
     fromdesk = 0; fromwm = 0;

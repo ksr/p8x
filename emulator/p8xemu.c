@@ -50,6 +50,7 @@
 #include "../generators/memmap.h"   /* RAMBASE/IOBASE/ROMSIZE/RAMSIZE — single-source memory map */
 #include "../generators/trigtab.h"  /* SIN8/TANH8 — stage-10b GL trig, shared with the RTL */
 #include "../generators/glkwtab.h"  /* GL ASCII keywords — stage 10d, shared with the RTL */
+#include "../generators/chargen.h"  /* text-overlay character generator — shared with the RTL */
 
 static int interactive=0;             /* stdin is a TTY: raw + blocking console */
 static int norx=0;                    /* -N: console RX always empty (see rx_ready) */
@@ -188,6 +189,58 @@ static const size_t gfpix=(size_t)480*272;      /* PIXELS, not bytes */
    arguments and reads pixels directly.) */
 static uint16_t gcol;
 static uint8_t  gmode;                 /* 10f LINFUN pixel-write mode */
+
+/* ---- text-overlay plane (classic char-gen composited at scanout) ----------
+   A grid of ASCII cells laid OVER the GL bitmap. The CPU never draws these
+   pixels: it writes character CODES into txram via the TX* GL opcodes, and the
+   scanout (here gpu_writeppm; in the RTL the video fetch) turns each cell into
+   pixels through CHARGEN[] on the fly. This is the free-scroll, flash-free path
+   the terminal uses -- the graphics buffer underneath is never touched.
+
+   v1 is monochrome: one foreground colour, TRANSPARENT background (the GL
+   picture shows through wherever a glyph bit is 0). A clip window bounds what
+   is shown AND what TXSCR scrolls, so a GL-drawn frame around the window is
+   never disturbed. Cell 6x8 (from chargen.h) -> 80 cols x 34 rows on the panel.
+   The overlay is card state, driven ONLY through the $FF50 command stream, so
+   nothing here changes the MMIO decode. gpu_tx_sample() below is the exact
+   compositing spec the Verilog scanout must reproduce for the co-sim. */
+#define TXCOLS  (GW_MAX / CHARGEN_CW)      /* 80 */
+#define TXROWS  (GH_MAX / CHARGEN_CH)      /* 34 */
+static uint8_t  txram[TXROWS * TXCOLS];    /* one ASCII code per cell (0 = blank) */
+static int      tx_en;                     /* overlay enabled (TXEN) */
+static int      tx_c0, tx_r0, tx_cw, tx_ch;/* clip/scroll window, in cells (TXWIN) */
+static uint16_t tx_fg = 0xFFFF;            /* glyph colour, RGB565 (TXCOL) */
+static int      tx_cx, tx_cy;              /* write cursor, absolute cell (TXAT) */
+
+/* scroll the clip window up one row and blank the exposed bottom row (TXSCR).
+   Pure char-RAM move -- no pixels touched, so no flash. */
+static void gpu_tx_scroll(void){
+    int r, c, br;
+    if(tx_cw <= 0 || tx_ch <= 0) return;
+    for(r = tx_r0; r < tx_r0 + tx_ch - 1; r++)
+        for(c = tx_c0; c < tx_c0 + tx_cw; c++)
+            if(r >= 0 && r + 1 < TXROWS && c >= 0 && c < TXCOLS)
+                txram[r*TXCOLS + c] = txram[(r+1)*TXCOLS + c];
+    br = tx_r0 + tx_ch - 1;                 /* newly exposed bottom row */
+    for(c = tx_c0; c < tx_c0 + tx_cw; c++)
+        if(br >= 0 && br < TXROWS && c >= 0 && c < TXCOLS)
+            txram[br*TXCOLS + c] = 0;
+}
+
+/* the composite: given panel pixel (x,y) and the bitmap pixel under it, return
+   what the panel actually shows -- the glyph colour where an enabled, in-window
+   cell has an inked pixel, else the bitmap pixel unchanged. THE co-sim spec. */
+static uint16_t gpu_tx_sample(int x, int y, uint16_t base){
+    int col, row; uint8_t ch, bits;
+    if(!tx_en) return base;
+    col = x / CHARGEN_CW; row = y / CHARGEN_CH;
+    if(col < tx_c0 || col >= tx_c0 + tx_cw ||
+       row < tx_r0 || row >= tx_r0 + tx_ch) return base;
+    ch = txram[row*TXCOLS + col];
+    if(ch < CHARGEN_LO || ch >= CHARGEN_LO + CHARGEN_N) return base;   /* blank */
+    bits = CHARGEN[(ch - CHARGEN_LO)*CHARGEN_CH + (y % CHARGEN_CH)];
+    return (bits & (1 << (5 - (x % CHARGEN_CW)))) ? tx_fg : base;
+}
 
 /* Stage 8a MDU ($FF30-$FF3F): hardware muldiv, bit-exact to lib_g3d's
    software contract (STAGE8-DESIGN.md). Operands follow the gfx pair rules
@@ -790,6 +843,13 @@ static int gl_cmdlen(const uint8_t *p, int n){
         if(n < 2) return 0;
         k = p[1];
         return 2 + k * ((p[0] & 2) ? 6 : 4);
+    /* text-overlay plane (hex-only; deliberately NOT in gen_glkw, so it stays
+       out of BASIC's token ABI and the RTL keyword ROM -- see gpu_tx_sample) */
+    case 0x55: case 0x56: return 1;        /* TXCLR / TXSCR */
+    case 0x50: case 0x54: return 2;        /* TXEN en / TXPUT ch */
+    case 0x53: return 3;                    /* TXAT col row */
+    case 0x52: return 4;                    /* TXCOL r g b */
+    case 0x51: return 5;                    /* TXWIN c0 r0 cw ch */
     default: return -1;
     }
 }
@@ -889,6 +949,22 @@ static int gl_exec2(const uint8_t *p, int n){
     case 0x74: NEED(2);                    /* CLDEL */
         if(p[1] >= CLNUM){ gl_err(2); return 2; }
         cldef[p[1]] = 0; return 2;
+    /* ---- text-overlay plane (hex-only; composited at scanout by
+       gpu_tx_sample). Card state only -- no bitmap pixel is touched, which is
+       the whole point: the terminal scrolls here without flashing the graphics
+       underneath it. ---- */
+    case 0x50: NEED(2); tx_en = p[1] ? 1 : 0; return 2;           /* TXEN en */
+    case 0x51: NEED(5);                                           /* TXWIN c0 r0 cw ch */
+        tx_c0 = p[1]; tx_r0 = p[2]; tx_cw = p[3]; tx_ch = p[4]; return 5;
+    case 0x52: NEED(4); tx_fg = gl_rgb(p[1],p[2],p[3]); return 4; /* TXCOL r g b */
+    case 0x53: NEED(3); tx_cx = p[1]; tx_cy = p[2]; return 3;     /* TXAT col row */
+    case 0x54: NEED(2);                                           /* TXPUT ch */
+        if(tx_cx >= 0 && tx_cx < TXCOLS && tx_cy >= 0 && tx_cy < TXROWS)
+            txram[tx_cy*TXCOLS + tx_cx] = p[1];
+        if(tx_cx < TXCOLS - 1) tx_cx++;   /* advance one cell, clamp at right edge */
+        return 2;
+    case 0x55: memset(txram, 0, sizeof txram); return 1;          /* TXCLR */
+    case 0x56: gpu_tx_scroll(); return 1;                         /* TXSCR window up 1 */
     /* ---- stage 10e: read-back ---- */
     case 0x61: NEED(2);                    /* FLAGRD n -> RB (man gl table) */
         switch(p[1]){
@@ -1500,8 +1576,9 @@ static void gpu_writeppm(const char*fn){
     for(int y=0;y<gh;y++)
         for(int x=0;x<gw;x++){
             /* the DISPLAY page: the dump shows what the panel shows, which
-               matters once the geometry engine has flipped */
-            uint16_t p=gfbd[y*gstride+x];
+               matters once the geometry engine has flipped -- with the text
+               overlay composited on top exactly as the RTL scanout will */
+            uint16_t p=gpu_tx_sample(x,y,gfbd[y*gstride+x]);
             uint8_t r5=(p>>11)&31, g6=(p>>5)&63, b5=p&31;
             /* 565 -> 888 by bit replication, so full scale really is 255 */
             uint8_t rgb[3]={ (uint8_t)((r5<<3)|(r5>>2)),
@@ -1532,7 +1609,8 @@ static void gpu_writeascii(void){
             int best=0;
             for(int dy=0;dy<4;dy++) for(int dx=0;dx<2;dx++)
                 if(x+dx<gw && y+dy<gh){
-                    uint16_t p=gfbd[(y+dy)*gstride+(x+dx)];  /* display page */
+                    uint16_t p=gpu_tx_sample(x+dx,y+dy,             /* + overlay */
+                                             gfbd[(y+dy)*gstride+(x+dx)]);
                     int v=2*((p>>11)&31)+3*((p>>5)&63)/2+((p)&31);  /* ~0..218 */
                     if(v>best) best=v;
                 }

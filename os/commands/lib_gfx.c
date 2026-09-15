@@ -78,9 +78,11 @@ int has_graphics() {
 int gpresent() {
     if (!has_graphics()) { return 0; }
     /* claim the screen: suspend the glass TTY (the on-screen text console) so its
-     * output and clear-on-full don't corrupt this program's graphics. The shell
-     * releases it (GTSUSP=0) at the next prompt when we return (two-mode P2). */
+     * output doesn't mirror onto this program's graphics, AND hide the text
+     * overlay plane (TXEN 0) so its existing text stops compositing over us. The
+     * shell re-enables both (GTSUSP=0, GTRESUME -> TXEN 1) at the next prompt. */
     poke(GTSUSP, 1);
+    glbyt(80); glbyt(0);     /* TXEN 0: hide the console overlay while we own the screen */
     gcolor(65535);           /* triggers the lazy init + a known pen */
     return 1;
 }

@@ -46,6 +46,16 @@ module sdram_video #(
                                     //   engine, which changes it only at
                                     //   frame_tick, so no fetch straddles it
 
+  // text-overlay command channel from p8x_geom (the TX* GL opcodes); composited
+  // over the bitmap at scanout inside the gtxt instance below
+  input             tx_stb,
+  input      [2:0]  tx_op,
+  input      [7:0]  tx_p0,
+  input      [7:0]  tx_p1,
+  input      [7:0]  tx_p2,
+  input      [7:0]  tx_p3,
+  output            tx_busy,
+
   // p8x_sdram stream port (this module only ever reads). One st_go per line;
   // issuing the next line's st_go while the previous fetch is still running is
   // the ABORT the controller defines for exactly this client: the panel has
@@ -112,6 +122,23 @@ module sdram_video #(
   wire [5:0] px_g = pixel[10:5];
   wire [4:0] px_b = pixel[4:0];
 
+  // ---- text overlay -------------------------------------------------------
+  // Query gtxt for the SAME fetch column lb_q uses (ax), one cycle ahead of the
+  // shown pixel, and for that pixel's display row: gtxt's one registered stage
+  // then lines its result up with px_r/px_g/px_b at the nxt_* latch below.
+  wire [9:0] ov_ey  = (px == H_TOT-1) ? ((py == V_TOT-1) ? 10'd0 : py + 10'd1)
+                                      : py;                 // display row of ax
+  wire [6:0] ovq_col = ax / 10'd6;                          // cell column 0..79
+  wire [2:0] ovq_ph  = ax % 10'd6;                          // pixel phase 0..5
+  wire        ov_on;
+  wire [15:0] ov_rgb;
+  gtxt OVL(.clk(clk), .rst(rst),
+    .tx_stb(tx_stb), .tx_op(tx_op),
+    .tx_p0(tx_p0), .tx_p1(tx_p1), .tx_p2(tx_p2), .tx_p3(tx_p3),
+    .tx_busy(tx_busy),
+    .q_ce(1'b1), .q_col(ovq_col), .q_y(ov_ey), .q_ph(ovq_ph),
+    .ov_on(ov_on), .ov_col(ov_rgb));
+
   reg        nxt_de;
   reg [4:0]  nxt_r, nxt_b;
   reg [5:0]  nxt_g;
@@ -130,7 +157,10 @@ module sdram_video #(
       2'd1: begin
         ph <= 2'd2;
         nxt_de <= (nx < H_ACT) && ((px == H_TOT-1 ? (py == V_TOT-1 ? 10'd0 : py+10'd1) : py) < V_ACT);
-        nxt_r <= px_r; nxt_g <= px_g; nxt_b <= px_b;
+        // composite the text overlay over the bitmap pixel
+        nxt_r <= ov_on ? ov_rgb[15:11] : px_r;
+        nxt_g <= ov_on ? ov_rgb[10:5]  : px_g;
+        nxt_b <= ov_on ? ov_rgb[4:0]   : px_b;
       end
       // Data has been stable two cycles (~74 ns); clock it into the panel now.
       // Raising pclk in the same cycle the RGB lines change is the bug that

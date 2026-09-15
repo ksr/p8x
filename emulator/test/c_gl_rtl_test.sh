@@ -23,9 +23,9 @@ sh c_gl_test.sh > /dev/null || fail "emulator GL suite failed"
 
 # 2: the RTL's frame, through the real pixel stack
 ( cd $SD && iverilog -g2012 -I../../rtl -o tbglp tb_gl_pix.v ../../rtl/p8x_geom.v \
-      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v gfx_mem.v \
+      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v ../../rtl/gtxt.v gfx_mem.v \
       gfx_span.v sdram_arb.v p8x_sdram.v sdram_video.v sdram_chip.v \
-  && ./tbglp | grep -q "TB-GL-PIX: DONE" ) || fail "tb_gl_pix did not finish"
+  && vvp tbglp | grep -q "TB-GL-PIX: DONE" ) || fail "tb_gl_pix did not finish"
 
 # 3: every pixel, both implementations
 cmp gl_b.ppm $SD/tb_gl_pix.ppm || fail "RTL frame differs from emulator frame"
@@ -33,42 +33,42 @@ cmp gl_b.ppm $SD/tb_gl_pix.ppm || fail "RTL frame differs from emulator frame"
 # 4: the stage-10b matrix scene, the same way (needs gl_m.ppm)
 sh c_gl_mat_test.sh > /dev/null || fail "emulator matrix suite failed"
 ( cd $SD && iverilog -g2012 -I../../rtl -o tbglm tb_gl_mpx.v ../../rtl/p8x_geom.v \
-      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v gfx_mem.v \
+      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v ../../rtl/gtxt.v gfx_mem.v \
       gfx_span.v sdram_arb.v p8x_sdram.v sdram_video.v sdram_chip.v \
-  && ./tbglm | grep -q "TB-GL-MPX: DONE" ) || fail "tb_gl_mpx did not finish"
+  && vvp tbglm | grep -q "TB-GL-MPX: DONE" ) || fail "tb_gl_mpx did not finish"
 cmp gl_m.ppm $SD/tb_gl_mpx.ppm || fail "RTL matrix frame differs from emulator frame"
 
 # 5: the stage-10c fly-through -- record + CLOOP through the real stack
 sh c_gl_list_test.sh > /dev/null || fail "emulator list suite failed"
 ( cd $SD && iverilog -g2012 -I../../rtl -o tbglx tb_gl_lpx.v ../../rtl/p8x_geom.v \
-      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v gfx_mem.v \
+      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v ../../rtl/gtxt.v gfx_mem.v \
       gfx_span.v sdram_arb.v p8x_sdram.v sdram_video.v sdram_chip.v \
-  && ./tbglx | grep -q "TB-GL-LPX: DONE" ) || fail "tb_gl_lpx did not finish"
+  && vvp tbglx | grep -q "TB-GL-LPX: DONE" ) || fail "tb_gl_lpx did not finish"
 cmp gl_lc_l.ppm $SD/tb_gl_lpx.ppm || fail "RTL fly-through frame differs from emulator frame"
 
 # 6: the stage-10d ASCII scene -- translator in fabric, frame == hex frame
 ( cd $SD && iverilog -g2012 -I../../rtl -o tbgla tb_gl_apx.v ../../rtl/p8x_geom.v \
-      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v gfx_mem.v \
+      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v ../../rtl/gtxt.v gfx_mem.v \
       gfx_span.v sdram_arb.v p8x_sdram.v sdram_video.v sdram_chip.v \
-  && ./tbgla | grep -q "TB-GL-APX: DONE" ) || fail "tb_gl_apx did not finish"
+  && vvp tbgla | grep -q "TB-GL-APX: DONE" ) || fail "tb_gl_apx did not finish"
 cmp gl_b.ppm $SD/tb_gl_apx.ppm || fail "RTL ASCII frame differs from the hex frame"
 
 # 7: the stage-10f LINFUN scene -- XOR/complement/OR through the real
 #    read-modify-write pixel path (needs gl_lf.ppm)
 sh c_gl_lf_test.sh > /dev/null || fail "emulator LINFUN suite failed"
 ( cd $SD && iverilog -g2012 -I../../rtl -o tbglf tb_gl_fpx.v ../../rtl/p8x_geom.v \
-      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v gfx_mem.v \
+      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v ../../rtl/gtxt.v gfx_mem.v \
       gfx_span.v sdram_arb.v p8x_sdram.v sdram_video.v sdram_chip.v \
-  && ./tbglf | grep -q "TB-GL-FPX: DONE" ) || fail "tb_gl_fpx did not finish"
+  && vvp tbglf | grep -q "TB-GL-FPX: DONE" ) || fail "tb_gl_fpx did not finish"
 cmp gl_lf.ppm $SD/tb_gl_fpx.ppm || fail "RTL LINFUN frame differs from emulator frame"
 
 # 8: the stage-10g AREA scene -- the fill walker (gm POINT probes, gm LINE
 #    paints, SDRAM seed stack) against gl_afill (needs gl_ar.ppm)
 sh c_gl_area_test.sh > /dev/null || fail "emulator AREA suite failed"
 ( cd $SD && iverilog -g2012 -I../../rtl -o tbglar tb_gl_arx.v ../../rtl/p8x_geom.v \
-      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v gfx_mem.v \
+      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v ../../rtl/gtxt.v gfx_mem.v \
       gfx_span.v sdram_arb.v p8x_sdram.v sdram_video.v sdram_chip.v \
-  && ./tbglar | grep -q "TB-GL-ARX: DONE" ) || fail "tb_gl_arx did not finish"
+  && vvp tbglar | grep -q "TB-GL-ARX: DONE" ) || fail "tb_gl_arx did not finish"
 cmp gl_ar.ppm $SD/tb_gl_arx.ppm || fail "RTL AREA frame differs from emulator frame"
 
 # 9: the stage-10h TEXT scene -- the generated font TDEFIN'd into the
@@ -76,36 +76,36 @@ cmp gl_ar.ppm $SD/tb_gl_arx.ppm || fail "RTL AREA frame differs from emulator fr
 #    strings and the per-char glyph replay (needs gl_tx.ppm + os/font.gl)
 sh c_gl_text_test.sh > /dev/null || fail "emulator TEXT suite failed"
 ( cd $SD && iverilog -g2012 -I../../rtl -o tbgltx tb_gl_txx.v ../../rtl/p8x_geom.v \
-      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v gfx_mem.v \
+      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v ../../rtl/gtxt.v gfx_mem.v \
       gfx_span.v sdram_arb.v p8x_sdram.v sdram_video.v sdram_chip.v \
-  && ./tbgltx | grep -q "TB-GL-TXX: DONE" ) || fail "tb_gl_txx did not finish"
+  && vvp tbgltx | grep -q "TB-GL-TXX: DONE" ) || fail "tb_gl_txx did not finish"
 cmp gl_tx.ppm $SD/tb_gl_txx.ppm || fail "RTL TEXT frame differs from emulator frame"
 
 # 10: the stage-10i CURVES -- circle/ellipse via the device (mapped radii),
 #     plus the retired ARC/SECTOR err1 skips (needs gl_cv.ppm)
 sh c_gl_curve_test.sh > /dev/null || fail "emulator curve suite failed"
 ( cd $SD && iverilog -g2012 -I../../rtl -o tbglcv tb_gl_cvx.v ../../rtl/p8x_geom.v \
-      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v gfx_mem.v \
+      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v ../../rtl/gtxt.v gfx_mem.v \
       gfx_span.v sdram_arb.v p8x_sdram.v sdram_video.v sdram_chip.v \
-  && ./tbglcv | grep -q "TB-GL-CVX: DONE" ) || fail "tb_gl_cvx did not finish"
+  && vvp tbglcv | grep -q "TB-GL-CVX: DONE" ) || fail "tb_gl_cvx did not finish"
 cmp gl_cv.ppm $SD/tb_gl_cvx.ppm || fail "RTL curve frame differs from emulator frame"
 
 # 11: the stage-10j PATTERNS -- LINPAT in the device line engine, plus
 #     the retired-E7 err1 skip (needs gl_pt.ppm)
 sh c_gl_pat_test.sh > /dev/null || fail "emulator pattern suite failed"
 ( cd $SD && iverilog -g2012 -I../../rtl -o tbglpt tb_gl_ptx.v ../../rtl/p8x_geom.v \
-      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v gfx_mem.v \
+      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v ../../rtl/gtxt.v gfx_mem.v \
       gfx_span.v sdram_arb.v p8x_sdram.v sdram_video.v sdram_chip.v \
-  && ./tbglpt | grep -q "TB-GL-PTX: DONE" ) || fail "tb_gl_ptx did not finish"
+  && vvp tbglpt | grep -q "TB-GL-PTX: DONE" ) || fail "tb_gl_ptx did not finish"
 cmp gl_pt.ppm $SD/tb_gl_ptx.ppm || fail "RTL pattern frame differs from emulator frame"
 
 # 12: the stage-10k TEXT COMPLETION -- TJUST through the counted-string
 #     translator, TEXTP, TEXT replayed from a list (needs gl_t2.ppm)
 sh c_gl_text2_test.sh > /dev/null || fail "emulator text2 suite failed"
 ( cd $SD && iverilog -g2012 -I../../rtl -o tbglt2 tb_gl_t2x.v ../../rtl/p8x_geom.v \
-      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v gfx_mem.v \
+      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v ../../rtl/gtxt.v gfx_mem.v \
       gfx_span.v sdram_arb.v p8x_sdram.v sdram_video.v sdram_chip.v \
-  && ./tbglt2 | grep -q "TB-GL-T2X: DONE" ) || fail "tb_gl_t2x did not finish"
+  && vvp tbglt2 | grep -q "TB-GL-T2X: DONE" ) || fail "tb_gl_t2x did not finish"
 cmp gl_t2.ppm $SD/tb_gl_t2x.ppm || fail "RTL text2 frame differs from emulator frame"
 
 # 13: PIXRD (the single-interface migration's first verb) -- SELF-checking:
@@ -114,18 +114,18 @@ cmp gl_t2.ppm $SD/tb_gl_t2x.ppm || fail "RTL text2 frame differs from emulator f
 #     no frame to compare -- but the emulator suite must agree first
 sh c_gl_pixrd_test.sh > /dev/null || fail "emulator PIXRD suite failed"
 ( cd $SD && iverilog -g2012 -I../../rtl -o tbglprx tb_gl_prx.v ../../rtl/p8x_geom.v \
-      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v gfx_mem.v \
+      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v ../../rtl/gtxt.v gfx_mem.v \
       gfx_span.v sdram_arb.v p8x_sdram.v sdram_video.v sdram_chip.v \
-  && ./tbglprx | grep -q "TB-GL-PRX: PASS" ) || fail "tb_gl_prx failed"
+  && vvp tbglprx | grep -q "TB-GL-PRX: PASS" ) || fail "tb_gl_prx failed"
 
 # 14: BLIT (the single-interface DMA verb) -- the bench replays the
 #     emulator suite's whole scene, checks every PIXRD reply, and the
 #     frames must byte-match
 sh c_gl_blit_test.sh > /dev/null || fail "emulator BLIT suite failed"
 ( cd $SD && iverilog -g2012 -I../../rtl -o tbglblx tb_gl_blx.v ../../rtl/p8x_geom.v \
-      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v gfx_mem.v \
+      ../../rtl/mdu_core.v ../../rtl/trigtab.v ../../rtl/gfx.v ../../rtl/gtxt.v gfx_mem.v \
       gfx_span.v sdram_arb.v p8x_sdram.v sdram_video.v sdram_chip.v \
-  && ./tbglblx | grep -q "TB-GL-BLX: DONE" ) || fail "tb_gl_blx failed"
+  && vvp tbglblx | grep -q "TB-GL-BLX: DONE" ) || fail "tb_gl_blx failed"
 cmp gl_bl.ppm $SD/tb_gl_blx.ppm || fail "RTL BLIT frame differs from emulator frame"
 
 echo "C-GL-RTL TEST: PASS (RTL and emulator framebuffers byte-identical: 10a scene, 10b matrix, 10c fly-through, 10d ASCII, 10f LINFUN, 10g AREA, 10h TEXT, 10i curves, 10j patterns, 10k text2, PIXRD read-backs, BLIT)"

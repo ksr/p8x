@@ -2,6 +2,41 @@
 
 <!-- migrated from BACKLOG.md 2026-09-14 (category review: [x] done items belong here) -->
 
+- [x] **Glass-TTY text overlay — the console is now a hardware char-gen plane
+      (2026-09-15).** The glass TTY was retired as a *bitmap* console (per-glyph
+      GTEXT programs drawn into the framebuffer, clear-on-full, no per-cell erase)
+      and replaced by a **text OVERLAY plane** composited over the GL bitmap at
+      scanout — a classic 6845-style character generator. This gave the whole
+      system console (behind BIOS `CONOUT`, system-wide) three things the MVP
+      lacked: **scrollback** (`TXSCR` scrolls the window instead of clearing),
+      **per-cell erase** (a space overwrites a cell — `BS` no longer ghosts), and
+      the per-glyph matrix dance is **gone** (firmware just writes ASCII codes).
+      - **Opcodes (hex-only, not in gen_glkw so no BASIC-token-ABI / RTL-keyword-ROM
+        cost):** `TXEN 0x50`, `TXWIN 0x51` (clip + scroll window, cells), `TXCOL
+        0x52` (RGB565), `TXAT 0x53`, `TXPUT 0x54`, `TXCLR 0x55`, `TXSCR 0x56`. Cell
+        6×8 → 80×34. Font rasterised from the *existing* stroke font
+        (`generators/gen_chargen.py`, from `gen_font.py`'s `F`), so overlay text
+        and GL text are the same letterforms.
+      - **Emulator (golden model):** `p8xemu.c` — char-RAM plane + `gpu_tx_sample`
+        composite into the `-g` PPM (and `-G` ascii). `chargen.h`.
+      - **Firmware:** `p8xmon.asm` glass TTY rewritten to drive `TX*`; clear-on-full
+        → `TXSCR`; `GTRESUME` gives a fresh console after a full-screen app but
+        keeps scrollback for ordinary commands (the `GTSUSP`-was-set test). Suspend
+        hides the overlay (`TXEN 0`) via `lib_gfx` `gpresent` / `finder` / `paint`;
+        `image.asm` twin claims the screen to match. `make rom` re-burned.
+      - **RTL (co-sim byte-identical to the emulator, `c_gl_ovl_rtl_test`):** a new
+        `fpga/rtl/gtxt.v` (char RAM + char-gen ROM + clip/scroll FSM + compositor,
+        one registered read stage matching `lb_q`); `p8x_geom` decodes `TX*` and
+        drives a one-cycle command channel (stalls on `tx_busy` so a TXPUT can't
+        race a TXCLR/TXSCR); `sdram_video` queries `gtxt` and muxes the composite;
+        top levels wire geom↔video. `gtxt` proven bit-exact standalone
+        (`tb_gtxt.v`) and through the full scanout stack (`tb_gl_ovx.v`).
+      - **Superseded:** the planned "card-list scrollback" (a ring of GL command
+        lists replayed with `CLRUN`) — the overlay does it in silicon instead, at
+        ~zero CPU RAM and no TPA cost. The overlay is a text plane *over* the
+        bitmap, so `CLEARS` deliberately does NOT touch it (HUD-over-graphics
+        stays possible); the bitmap GL plane never gained a scroll.
+
 - [x] **Frame-model on-board C compiler — LANDED in `apps/cc.c` (2026-09-13).**
       `apps/cc.c` now uses the P3-stack-frame codegen: globals stay in static
       `__V` slots, locals + params live in a `SUBP3 #_fr_NAME` frame (`(P3+d)`,

@@ -156,48 +156,23 @@ remainder is why it is still here.
     keyrdy() spin; over a slow link a lone ESC vs an arrow may still race -- revisit
     if it misbehaves on hardware.
 
-- **Glass TTY (two-mode P2) — proper scroll, per-cell erase, asm twins.**
-  The glass TTY behind BIOS `CONOUT` is **ALWAYS-ON (2026-09-10)**: the monitor's
-  `DISPINIT` enables it whenever a card is fitted, installs `/FONT.GL` from the CF
-  root (`MONFONT`), blanks the screen and puts its own banner on the LCD — so the
-  **pre-boot monitor is on screen** too (both once listed here; done). `screen
-  off` disables it for a session. Still open:
-  - (**Always-on coexistence — RESOLVED 2026-09-10** by settling the console model:
-    the console clears on TAKEOVER (wake/`exit`) but NOT on RESUME at the prompt, so
-    a program's frame and incremental `gl`/`tri …k` drawing survive; `SH_PROMPT`
-    doesn't resume during a script, so the OUTCH→window sink never records the
-    echo; byte-exact framebuffer tests switch the console off first — from the `-i`
-    script via the monitor, `E 60AF` → `00` → `.` then `G 014E` (GCLS), no per-disk
-    `screen.bin` needed — because the echo is an independent variable in a
-    measurement, and programs only clear their own viewport. Retiring the boot
-    splash also exposed `c_demo` asserting on the splash's pixels after `exit`
-    instead of the program's frame; fixed by grabbing while the program owns the
-    screen.)
+- **Glass TTY (two-mode P2) — `screen`/`kermit` asm twins.**
+  The glass TTY behind BIOS `CONOUT` is **ALWAYS-ON (2026-09-10)** and is now a
+  **hardware text OVERLAY** (a char-gen plane composited over the GL bitmap at
+  scanout, `gtxt.v`): proper **scrollback**, **per-cell erase**, and the
+  per-glyph-GTEXT-program **speed** cut all shipped with it — see BACKLOG-DONE
+  "Glass-TTY text overlay". `screen off` still disables the mirror for a session.
+  Still open:
   - **`screen` and `kermit` command asm twins.** `os/commands/screen.c` and
     `os/commands/kermit.c` both shipped C-only; per the /bin dual-twin rule each
     needs an `os/commands-asm/*.asm` twin (and the run.sh build lists updated) —
     see [[feedback_p8x_new_command_dual]]. kermit's twin needs the 2nd-ACIA poll
     ($FF08/$FF09) plus the FS wrappers it already uses.
-  - Two deliberate cuts remain deferred here (the third once listed, **pre-boot
-    "monitor on screen"**, shipped 2026-09-10 as `MONFONT` — the monitor loads
-    `/FONT.GL` from the CF root at cold start, degrading gracefully with no disk):
-  - **Proper scrollback.** The MVP is **clear-on-full**: when the cursor passes
-    the bottom row it clears the screen and homes to the top (zero CPU RAM). A
-    real console scrolls. There is NO free RAM block for a text framebuffer (high
-    RAM is fully allocated — TPA `$6100`, history `$F800`, FSDIRBUF `$FA00`, RDBUF
-    `$FC00`, stack `$FE00`), so the intended design is **card-list scrollback**:
-    store text on the card as GL command lists (the WM-sink pattern), keep a ring
-    of line-lists, and `CLRUN` the visible window on scroll (drop the oldest).
-    ~zero CPU RAM, no TPA cost; the work is the list-ring management in ROM.
-  - **Per-cell erase / backspace.** The MVP draws glyphs forward on a black
-    screen and does NOT clear a cell before drawing. `BS` moves the cursor back
-    but leaves the old glyph on screen (a ghost), and re-typing after `BS`
-    overlaps. Fix: clear the target cell (a black `BOXFILL` at the cell rect, pen
-    toggled black then back to white) before each glyph, or at least on `BS`/space.
-    Deferred to keep the first cut small; the char stream / cursor logic is
-    already correct, only the on-screen erase is missing.
-  - Speed: batching / set-projection-once (vs. the per-char PROJCT/MDIDEN/TSIZE/
-    MDTRAN/MOVE3/TEXT program) is a win once scroll and erase land.
+  - **VERIFY (RTL fit):** the overlay char RAM is 80×34×8 = 2,720 bytes ≈ 2 Gowin
+    BSRAMs, and `sdram_video`'s `ax/6` / `ax%6` are constant-divisor divides;
+    confirm placement + timing on the next `card`/`lcd` synth run. The co-sim is
+    clean (`c_gl_ovl_rtl_test` is byte-identical to the emulator), and the ROM's
+    per-glyph GTEXT machinery is gone, so there is headroom on both sides.
 
 - [~] **FPGA build (Tang Nano 20K) — MILESTONES 0-4 DONE (2026-08-12); clock-up
       and IRQ remain.** A standalone FPGA P8X running the same microcode and the
@@ -758,19 +733,23 @@ Nothing below has been built or measured.
       EMULATOR: model the window (PSID 'K', script-fed FIFOs) so
       lib_ps2 and its tests run before any solder melts -- the
       golden-model discipline, as ever.
-- [ ] **LCD as a terminal (2026-08-29, user).** Let the console live
-      on the panel: mirror BIOS CONOUT to the display so the machine
-      is usable head-down, serial only for file transfer. With 10h the
-      card can already draw text (TEXT via the glyph bank -- ~60x33
-      chars at TSIZE 256), so the missing pieces are a console state
-      machine (cursor, CR/LF, backspace) and SCROLL, which the card
-      cannot do today (no blitter). Scroll options: (a) redraw the
+- [x] **LCD as a terminal (2026-08-29, user) — SHIPPED as the text overlay
+      (2026-09-15).** Both missing pieces landed: the console state machine (the
+      glass TTY, always-on 2026-09-10) and SCROLL. Scroll took a fourth option
+      beyond the (a)/(b)/(c) below — a **char-gen overlay plane** (`gtxt.v`): the
+      console is a grid of ASCII cells composited over the bitmap at scanout, and
+      `TXSCR` scrolls the cells (a char-RAM move on the card), so no scanout
+      base-offset register and no fabric blitter were needed. See BACKLOG-DONE
+      "Glass-TTY text overlay". Original notes kept for the record:
+      mirror BIOS CONOUT to the display so the machine
+      is usable head-down, serial only for file transfer. Scroll options once
+      weighed: (a) redraw the
       whole screen from a line ring (TEXT is fast enough for a demo,
       not for `dir` spam); (b) a scanout base-offset register --
       vertical scroll becomes one register write, the classic
       terminal trick, ~30 LUT in sdram_video + a wrap rule; (c) a
       fabric copy-rect (a real blitter rung, also what image GRAB
-      wants). (b) is the cheap win. Keyboard stays the serial RX.
+      wants). Keyboard stays the serial RX.
       Fits the FPGA-CPU era (idea 2): CPU and console on one board.
 - [ ] **Single-interface card: what remains after the BASIC migration
       (2026-08-31).** DONE: the category-2 statements (LINE, BOX,

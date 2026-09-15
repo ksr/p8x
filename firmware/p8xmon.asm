@@ -366,14 +366,24 @@ MFONTN: .ascii "FONT.GL"
 ; every program appear on-screen with NO change to their output code. Glyphs
 ; come from the card's glyph bank (the OS streams /FONT.GL at boot), so text
 ; renders once that is loaded; undefined glyphs are silently skipped card-side.
-; MVP: 80x30 cells (6px advance x 9px line), CLEAR-ON-FULL (no scrollback), and
-; forward-draw only (no per-cell erase yet) -- both deferred to BACKLOG.md.
+; The console is a HARDWARE TEXT OVERLAY (a char-gen plane composited over the
+; GL bitmap at scanout): the driver writes ASCII CODES into the card's char RAM
+; via the TX* GL opcodes and the card turns each cell into pixels. So the whole
+; per-glyph GTEXT machinery (a matrix + stroke-text program per character) is
+; gone; this driver is now just cursor bookkeeping + TX opcodes. It gains
+; SCROLLBACK (GTNL scrolls the overlay instead of clearing) and per-cell erase
+; (TXPUT of a space overwrites a cell) for free, and never touches the bitmap.
 ;==============================================================================
-GTCOLS = 80            ; 480 / 6px advance
-GTROWS = 30            ; 272 / 9px line
-GTADV  = 6             ; pixel advance per column
-GTLH   = 9             ; pixel line height
-GTY0   = 264           ; window-y (y-up) baseline of the top row (271 - 7)
+GTCOLS = 80            ; 480 / 6px cell -> 80 columns
+GTROWS = 34            ; 272 / 8px cell -> 34 rows
+; text-overlay GL opcodes (hex-only; see p8xemu gl_exec2 + gen_chargen.py)
+TXEN   = $50           ; TXEN  en           enable/disable the overlay
+TXWIN  = $51           ; TXWIN c0 r0 cw ch  clip + scroll window, in cells
+TXCOL  = $52           ; TXCOL r g b        glyph colour (5-6-5 components)
+TXAT   = $53           ; TXAT  col row      set the write-cursor cell
+TXPUT  = $54           ; TXPUT ch           write a glyph, advance one cell
+TXCLR  = $55           ; TXCLR              clear the char RAM
+TXSCR  = $56           ; TXSCR              scroll the window up one row
 
 ; GTPB - push A into the GL command FIFO, honouring backpressure (GLSTAT bit7).
 GTPB:   STA  GTTMP
@@ -397,10 +407,11 @@ gts1:   LDA  GTCNT
         JMP  gts1
 gtsx:   RTS
 
-; GTCLS - set the port (window/viewport), clear the screen to black, and leave a
-; white pen for glyphs. Run at init and on clear-on-full.
-GTCLS:  LDP1 #GTCLST
-        LDA  #40            ; GTPRE-GTCLST (port setup + clear + outline mode)
+; GTCLS - configure the overlay for the console and clear it: black the bitmap
+; (the transparent text sits on black), set the full-screen text window and a
+; white pen, enable the overlay, and clear the char RAM. Run at GTINIT.
+GTCLS:  LDP1 #GTINITT
+        LDA  #16            ; GTINITE-GTINITT
         JSR  GTSTREAM
         RTS
 
@@ -408,12 +419,6 @@ GTCLS:  LDP1 #GTCLST
 GTHOME: LDA  #0
         STA  GTCOL
         STA  GTROW
-        STA  GTXL
-        STA  GTXH
-        LDA  #<GTY0
-        STA  GTYL
-        LDA  #>GTY0
-        STA  GTYH
         RTS
 
 ; GTINIT - clear + home + un-suspend (a fitted display becomes a blank console).
@@ -423,84 +428,69 @@ GTINIT: LDA  #0
         JSR  GTHOME
         RTS
 
-; GTSETUP - re-establish the console's GL ground state WITHOUT clearing: full-
-; screen WINDOW/VWPORT, PRMFIL 0 (stroke text), white pen, native projection.
-; BIOS GTRESUME ($0151): the OS calls it when the console takes the screen back
-; from a program (GTSUSP 1->0), because whatever that program left -- its own
-; window (tri: +-120), fill mode, pen -- would clip or hide the console's text.
-; This is "the screen-owner configures from scratch" applied to the console
-; itself. The program's last frame is left on screen (no clear); GL state does
-; not survive the hand-over -- only the card's command lists do, by design.
-GTSETUP: LDP1 #GTSETT
-        LDA  #27            ; GTPOST-GTSETT
+; GTSETUP - re-enable the console overlay. BIOS GTRESUME ($0151): the OS calls
+; it at the prompt as the console takes the screen back, BEFORE it clears GTSUSP
+; -- so GTSUSP still says whether a program had claimed the screen:
+;   GTSUSP=0  a normal command just ran (its output mirrored to the console):
+;             KEEP the overlay so the scrollback is continuous.
+;   GTSUSP!=0 a full-screen GL program owned the screen (it set TXEN 0): give the
+;             console a FRESH start (TXCLR + home) -- its pre-program scrollback is
+;             not continuous with what the program left, like a terminal dropping
+;             the alternate screen. The bitmap the program drew is left untouched.
+; Either way the window and pen are re-asserted and TXEN 1 brings the overlay back.
+GTSETUP: LDA  GTSUSP
+        JZ   gtsu_keep
+        LDA  #TXCLR         ; returning from a full-screen program: fresh console
+        JSR  GTPB
+        JSR  GTHOME
+gtsu_keep: LDP1 #GTSETT
+        LDA  #11            ; GTSETE-GTSETT
         JSR  GTSTREAM
         RTS
 
-; GTDRAW - draw the glyph in GTCH at the cursor pixel (GTX,GTY). Emits the GTEXT
-; recipe: PROJCT 0 / MDIDEN / TSIZE 1.0 / MDTRAN x,y,0 / MOVE3 0,0,0 / TEXT 1,ch.
-GTDRAW: LDP1 #GTPRE
-        LDA  #8             ; GTMID-GTPRE (GTEXT program head)
-        JSR  GTSTREAM
-        LDA  GTXL
+; GTDRAW - place the glyph in GTCH at the cursor cell (GTCOL,GTROW); the card
+; does the pixel work. TXAT col row / TXPUT ch. (TXPUT also advances the card's
+; own cursor, but we re-issue TXAT before every char, so the two never disagree.)
+GTDRAW: LDA  #TXAT
         JSR  GTPB
-        LDA  GTXH
+        LDA  GTCOL
         JSR  GTPB
-        LDA  GTYL
+        LDA  GTROW
         JSR  GTPB
-        LDA  GTYH
+        LDA  #TXPUT
         JSR  GTPB
-        LDP1 #GTMID
-        LDA  #11            ; GTEND-GTMID (GTEXT program tail)
-        JSR  GTSTREAM
         LDA  GTCH
         JSR  GTPB
-        LDP1 #GTPOST        ; state hygiene for the NEXT GL user: MDIDEN (model
-        LDA  #4             ;   matrix back to identity -- BASIC's raw MOVE3/TEXT
-        JSR  GTSTREAM       ;   assumes it) and PROJCT -1 (back to the NATIVE focal
-        RTS                 ;   camera: our PROJCT 0 is sticky otherwise, and a
-                            ;   program trusting the power-up camera projects flat)
+        RTS
 
-; GTNL - newline: column 0, next row, drop the baseline; clear-on-full at bottom.
+; GTNL - newline: column 0, next row. At the bottom, SCROLL the overlay up one
+; row (the scrollback the old clear-on-full never had) and hold the last row.
 GTNL:   LDA  #0
         STA  GTCOL
-        STA  GTXL
-        STA  GTXH
-        LDA  GTYL           ; baseline -= line height
-        LDB  #GTLH
-        SUB
-        STA  GTYL
-        JC   gtnl_row       ; C=1 -> no borrow
-        LDA  GTYH
-        DEC
-        STA  GTYH
-gtnl_row: LDA GTROW
+        LDA  GTROW
         INC
         STA  GTROW
         LDB  #GTROWS
-        CMP                 ; C=1 -> GTROW >= GTROWS: full
-        JC   GTINIT         ; clear-on-full: clear + home (tail)
-        RTS
+        CMP                 ; C=1 -> GTROW >= GTROWS: past the bottom
+        JNC  gtnlx
+        LDA  #TXSCR         ; scroll the window up one; the card blanks the
+        JSR  GTPB           ;   exposed bottom row
+        LDA  #33            ; GTROWS-1: hold the cursor on the last row
+        STA  GTROW
+gtnlx:  RTS
 
 ; GTCR - carriage return: back to column 0 on this line.
 GTCR:   LDA  #0
         STA  GTCOL
-        STA  GTXL
-        STA  GTXH
         RTS
 
-; GTBS - backspace: step the cursor left one cell (no on-screen erase yet).
+; GTBS - backspace: step the cursor left one cell. On-screen erase is free now:
+; the line editor follows BS with a space, and TXPUT of a space overwrites the
+; cell (the old stroke console could never blank a glyph it had already drawn).
 GTBS:   LDA  GTCOL
         JZ   gtbsx
         DEC
         STA  GTCOL
-        LDA  GTXL
-        LDB  #GTADV
-        SUB
-        STA  GTXL
-        JC   gtbsx
-        LDA  GTXH
-        DEC
-        STA  GTXH
 gtbsx:  RTS
 
 ; GTPUT - the CONOUT mirror entry: draw byte A on the glass TTY. Interprets
@@ -522,15 +512,7 @@ GTPUT:  STA  GTCH
         CMP                 ; C=1 -> byte >= $20 (printable)
         JNC  gtputx         ; an unhandled control char -> ignore
         JSR  GTDRAW
-        LDA  GTXL           ; advance one column
-        LDB  #GTADV
-        ADD
-        STA  GTXL
-        JNC  gtp_col
-        LDA  GTXH
-        INC
-        STA  GTXH
-gtp_col: LDA GTCOL
+        LDA  GTCOL          ; advance one column
         INC
         STA  GTCOL
         LDB  #GTCOLS
@@ -538,31 +520,22 @@ gtp_col: LDA GTCOL
         JC   GTNL           ; wrap = newline (tail)
 gtputx: RTS
 
-; GTCLST - port setup + full-screen black clear + white glyph pen (window coords,
-; y UP). GTPRE/GTMID are the fixed halves of the per-glyph GTEXT program, split
-; where the variable x,y (then the char) are spliced in by GTDRAW.
-GTCLST: .byte $B3, $00,$00, $DF,$01, $00,$00, $0F,$01   ; WINDOW 0 479 0 271
-        .byte $B2, $00,$00, $DF,$01, $00,$00, $0F,$01   ; VWPORT 0 479 0 271
-        .byte $E0, $01                                  ; PRMFIL 1 (fill)
-        .byte $06, $00,$00,$00                          ; COLOR black
-        .byte $10, $00,$00, $00,$00                     ; MOVE 0,0
-        .byte $34, $DF,$01, $0F,$01                     ; RECT 479,271: the clear
-        .byte $E0, $00                                  ; PRMFIL 0 (outline): leave
-                                                        ;   stroke mode so glyph TEXT
-                                                        ;   -- ours AND a later GL
-                                                        ;   client's (BASIC) -- draws
-        .byte $06, $1F,$3F,$1F                          ; COLOR white (glyph pen)
-GTPRE:  .byte $B0,$00,$00, $90, $81,$00,$01, $96        ; PROJCT 0; MDIDEN; TSIZE 1.0; MDTRAN...
-GTMID:  .byte $00,$00, $12, $00,$00,$00,$00,$00,$00, $80,$01  ; ...z=0; MOVE3 0,0,0; TEXT count 1
-GTEND:
-; GTSETT - the console's ground state (GTSETUP / BIOS GTRESUME), no clear.
-GTSETT: .byte $B3, $00,$00, $DF,$01, $00,$00, $0F,$01   ; WINDOW 0 479 0 271
-        .byte $B2, $00,$00, $DF,$01, $00,$00, $0F,$01   ; VWPORT 0 479 0 271
-        .byte $E0, $00                                  ; PRMFIL 0 (stroke)
-        .byte $06, $1F,$3F,$1F                          ; COLOR white
-        .byte $B0, $FF,$FF                              ; PROJCT -1: native focal
-; GTPOST - the per-glyph tail GTDRAW streams after TEXT: leave the card clean.
-GTPOST: .byte $90, $B0,$FF,$FF                          ; MDIDEN; PROJCT -1
+; GTINITT - the console's overlay setup + clear (GTCLS, run at GTINIT): black the
+; bitmap so the transparent text sits on black, set the full-screen text window
+; and a white pen, enable the overlay, and clear the char RAM. 16 bytes.
+GTINITT: .byte $0F, $00,$00,$00        ; CLEARS black (both bitmap pages)
+         .byte $51, $00,$00, $50,$22   ; TXWIN 0,0,80,34 (full screen, in cells)
+         .byte $52, $1F,$3F,$1F        ; TXCOL white (5-6-5 components)
+         .byte $50, $01                ; TXEN 1 (overlay visible)
+         .byte $55                     ; TXCLR (blank the char RAM)
+GTINITE:
+; GTSETT - re-enable the overlay WITHOUT clearing (GTSETUP / BIOS GTRESUME): the
+; window and pen are re-asserted in case a program changed them, then TXEN 1
+; brings the console's existing text back over whatever frame it left. 11 bytes.
+GTSETT:  .byte $51, $00,$00, $50,$22   ; TXWIN 0,0,80,34
+         .byte $52, $1F,$3F,$1F        ; TXCOL white
+         .byte $50, $01                ; TXEN 1
+GTSETE:
 
 ; ---------------- I : init CF + identify -------------------------------------
 CMD_I:  JSR  CFINIT

@@ -285,6 +285,8 @@ module p8x_top(
   wire [7:0]  gm_wdata;
   wire [7:0]  geom_rdata;
   wire        draw_pg, disp_pg, frame_tick;
+  wire        tx_stb, tx_busy; wire [2:0] tx_op;   // text-overlay command channel
+  wire [7:0]  tx_p0, tx_p1, tx_p2, tx_p3;
 
   p8x_geom GEOM(.clk(clk), .rst(rst),
           .a(mem_addr[3:0]),
@@ -296,7 +298,10 @@ module p8x_top(
           .wdata(mem_dout), .rdata(geom_rdata),
           .gm_own(gm_own), .gm_wr(gm_wr), .gm_rd(gm_rd), .gm_a(gm_a), .gm_wdata(gm_wdata),
           .gm_rdata(gfx_rdata),
-          .frame_tick(frame_tick), .draw_pg(draw_pg), .disp_pg(disp_pg));
+          .frame_tick(frame_tick), .draw_pg(draw_pg), .disp_pg(disp_pg),
+          .tx_stb(tx_stb), .tx_op(tx_op),
+          .tx_p0(tx_p0), .tx_p1(tx_p1), .tx_p2(tx_p2), .tx_p3(tx_p3),
+          .tx_busy(tx_busy));
 
   gfx GFX(.clk(clk), .rst(rst), .draw_pg(draw_pg),
           .sel(gm_own),
@@ -308,6 +313,9 @@ module p8x_top(
           .e_din(e_din), .e_ack(e_ack), .e_ready(e_ready), .e_dout(sd_dout));
 
   sdram_video VID(.clk(clk), .rst(rst), .disp_pg(disp_pg),
+          .tx_stb(tx_stb), .tx_op(tx_op),
+          .tx_p0(tx_p0), .tx_p1(tx_p1), .tx_p2(tx_p2), .tx_p3(tx_p3),
+          .tx_busy(tx_busy),
           .st_go(v_go), .st_addr(v_addr), .st_words(v_words),
           .st_valid(v_valid), .st_data(v_data), .st_done(v_done),
           .pclk(lcd_clk), .de(lcd_de), .r(lcd_r), .g(lcd_g), .b(lcd_b),

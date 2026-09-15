@@ -12,8 +12,9 @@
 ; RAM words; the ×10 of the decimal parser is shift-and-add (SHL/ROL pairs).
 ;#use abi
 ;#use gfx
+;#use mem
 
-; (the GL port equates come from ;#use gfx -- lib_gfx.inc)
+; (the GL port equates come from ;#use gfx -- lib_gfx.inc; GTSUSP from lib_mem.inc)
 
         .org $5900
         TPA2L
@@ -44,8 +45,10 @@ i_disp: LDA GLID                ; the GL engine's probe ('G'), the ONE
         LDB #'G'                ;   presence signal since the device
         CMP                     ;   door closed
         JNZ i_nodisp
+        LDA #1                  ; claim the screen -- the C twin's gpresent()
+        STA GTSUSP              ;   pokes GTSUSP=1 before streaming i_gs; match it
         LDP1 #i_gs                ; <- tierA: pointer constant (next: LDA)
-        LDA #24                 ;   bytes the C twin's gpresent() emits
+        LDA #26                 ;   bytes the C twin's gpresent() emits
         STA i_gn
 i_gsl:  LDA (P1)
         JSR glput
@@ -703,10 +706,12 @@ v_t:    .fill 1
 i_gn:   .fill 1
 
 ; the ground-state GL bytes (see i_disp): WINDOW + VWPORT identity,
-; PRMFIL 0, COLOR white
+; PRMFIL 0, TXEN 0 (hide the console overlay), COLOR white -- byte-identical to
+; the C twin's gpresent() output (lib_gfx.c)
 i_gs:   .byte $B3, 0, 0, $DF, 1, 0, 0, $0F, 1
         .byte $B2, 0, 0, $DF, 1, 0, 0, $0F, 1
         .byte $E0, 0
+        .byte $50, 0
         .byte $06, 31, 63, 31
 
 ; glput: one GL byte with FIFO backpressure (A = the byte; preserved)

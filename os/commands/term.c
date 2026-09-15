@@ -19,7 +19,8 @@
 //#use mem     /* GFXPRES/GTSUSP/GCONEN -- the graphics/console flags, from the memory map */
 //#use ptr     /* rawkey / outc / outs */
 
-//#define GCLS    0x014E  /* BIOS: clear the glass TTY + home */
+//#define GCLS     0x014E  /* BIOS: clear the glass TTY + home */
+//#define GTRESUME 0x0151  /* BIOS: re-enable the console overlay (TXEN 1), no clear */
 
 char cmd[64];
 
@@ -64,6 +65,8 @@ int main() {
     if (peek(GFXPRES) == 0) { puts("?No display"); return 1; }
     poke(GTSUSP, 0);                               /* the console owns the screen */
     poke(GCONEN, 1);                               /* enable the on-screen console */
+    bios(GTRESUME, 0, 0);                          /* re-assert the overlay (TXEN 1) in
+                                                      case a graphics command hid it */
     a = argstr();
     while (*a == 32) { a = a + 1; }
     cont = (*a == '-' && *(a + 1) == 'c');

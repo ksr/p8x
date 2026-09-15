@@ -6,7 +6,7 @@ UC=../microcode
 
 all: p8xemu ucode
 
-p8xemu: p8xemu.c ../generators/glkwtab.h ../generators/trigtab.h
+p8xemu: p8xemu.c ../generators/glkwtab.h ../generators/trigtab.h ../generators/chargen.h
 	$(CC) $(CFLAGS) -o $@ p8xemu.c
 
 ucode:
@@ -225,6 +225,7 @@ test-gfx: p8xemu ucode
 	sh test/c_wtermout_test.sh
 	sh test/c_gfxpres_test.sh
 	sh test/c_glasstty_test.sh
+	sh test/c_scrollback_test.sh
 	sh test/c_finder_test.sh
 	sh test/c_finder_ret_test.sh
 	sh test/c_finder_apps_test.sh
@@ -246,8 +247,9 @@ test-gfx: p8xemu ucode
 	sh test/c_gl_mat_test.sh
 	sh test/c_gl_list_test.sh
 	sh test/c_gl_ascii_test.sh
-# (c_gl_rtl_test.sh — the emulator-vs-RTL frame compare — needs iverilog;
-#  run it by hand or from the fpga flow, not from make test.)
+# (c_gl_rtl_test.sh — the emulator-vs-RTL frame compare — and c_gl_ovl_rtl_test.sh
+#  — the text-overlay scanout compare — both need iverilog; run them by hand or
+#  from the fpga flow, not from make test.)
 
 # rev E memory map: $2000-$FEFF is RAM (OS at $2000). Write+readback -> 'Y'.
 test-mem: p8xemu ucode

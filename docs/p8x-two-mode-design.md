@@ -188,12 +188,16 @@ command. Independent of the graphics work; needed before the transfer app.
   - **ROM budget resolved:** the driver + `MONFONT` fit in the 8 KB with room to
     spare; the font itself lives on disk (5.3 KB), which is what made "monitor on
     screen" viable without a font in ROM.
-  - **Deferred to BACKLOG (deliberate cuts):** proper **scrollback** (the console
-    is clear-on-full — there is NO free RAM for a text framebuffer, so the
-    intended fix is card-list scrollback); **per-cell erase** (`BS` moves the
-    cursor but leaves a ghost); and a speed pass (batching /
-    set-projection-once). (Pre-boot monitor-on-screen, once listed here, shipped
-    with `MONFONT` on 2026-09-10.)
+  - **SHIPPED (2026-09-15) — the text overlay:** proper **scrollback**,
+    **per-cell erase**, and the per-char-GTEXT **speed** cut all landed together by
+    rebuilding the console as a hardware CHARACTER-GENERATOR OVERLAY (`gtxt.v`: a
+    char-gen plane the card composites over the GL bitmap at scanout) instead of
+    drawing glyphs into the framebuffer. The once-intended card-list scrollback is
+    superseded — the overlay scrolls its own on-card char RAM (`TXSCR`), ~zero CPU
+    RAM; the firmware just writes ASCII codes. RTL co-sim byte-identical to the
+    emulator; fits the card at 89% LUT4. See BACKLOG-DONE "Glass-TTY text overlay".
+    (Pre-boot monitor-on-screen, once listed here, shipped with `MONFONT` on
+    2026-09-10.)
 - **P3 — Second serial port. Emulator DONE (2026-09-09).** A 2nd ACIA at
   `ACIA2S $FF08` / `ACIA2D $FF09`, register-identical to the console ACIA
   (`$FF04`/`$FF05`): status bit0 RDRF, bit1 TDRE; data read = RX, write = TX. The

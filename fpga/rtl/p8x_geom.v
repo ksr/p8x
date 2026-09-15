@@ -63,7 +63,18 @@ module p8x_geom (
   // page state + the scanout's frame pulse
   input             frame_tick,
   output reg        draw_pg,
-  output reg        disp_pg
+  output reg        disp_pg,
+
+  // text-overlay command channel to sdram_video's gtxt: one-cycle tx_stb with
+  // op + up to 4 param bytes; tx_busy (from gtxt) stalls a TX op that would
+  // race an in-flight TXCLR/TXSCR (backpressures the FIFO the usual way).
+  output reg        tx_stb,
+  output reg [2:0]  tx_op,
+  output reg [7:0]  tx_p0,
+  output reg [7:0]  tx_p1,
+  output reg [7:0]  tx_p2,
+  output reg [7:0]  tx_p3,
+  input             tx_busy
 );
 
   // ---- parameter file ------------------------------------------------------
@@ -462,6 +473,11 @@ module p8x_geom (
       8'hA7: opn = 5'd18;
       8'h97: opn = 5'd24;
       8'h30,8'h31,8'h32,8'h33: opn = 5'd1;
+      8'h55,8'h56: opn = 5'd0;         // TXCLR / TXSCR (text overlay)
+      8'h50,8'h54: opn = 5'd1;         // TXEN en / TXPUT ch
+      8'h53:       opn = 5'd2;         // TXAT col row
+      8'h52:       opn = 5'd3;         // TXCOL r g b
+      8'h51:       opn = 5'd4;         // TXWIN c0 r0 cw ch
       default: opok = 1'b0;
     endcase
   end
@@ -631,6 +647,7 @@ module p8x_geom (
     gm_wr <= 1'b0;
     gm_rd <= 1'b0;
     cm_we <= 1'b0;
+    tx_stb <= 1'b0;                       // text-overlay command strobe: 1 cycle
     if (rst) begin
       state <= S_IDLE;
       draw_pg <= 0; disp_pg <= 0; flip_pend <= 0;
@@ -649,6 +666,7 @@ module p8x_geom (
       t_str <= 0; t_sn <= 0;
       t_ent <= 0; t_k <= 0;
       fst <= 0; sd_busy <= 0; g_req <= 0; g_we <= 0;
+      tx_op <= 0; tx_p0 <= 0; tx_p1 <= 0; tx_p2 <= 0; tx_p3 <= 0;
       rec_len <= 0; rp_off <= 0; rp_len <= 0; rp_cnt <= 0;
       glpoly3 <= 0; glpfill <= 0; glph <= 0; gred <= 0;
       c2x <= 0; c2y <= 0; c3x <= 0; c3y <= 0; c3z <= 0;
@@ -2117,6 +2135,18 @@ module p8x_geom (
           glst <= G_OP;                                   // default: done
           case (glop)
             8'h01: ;                                      // NOOP
+            // text-overlay TX* ops -> hand to sdram_video's gtxt as one command.
+            // op = glop[2:0] maps 0x50..0x56 -> 0..6. If a TXCLR/TXSCR is still
+            // running (tx_busy), stall in G_RUN so a following TXPUT can't race
+            // it -- this backpressures the FIFO the ordinary way.
+            8'h50,8'h51,8'h52,8'h53,8'h54,8'h55,8'h56: begin
+              if (tx_busy) glst <= G_RUN;
+              else begin
+                tx_stb <= 1'b1; tx_op <= glop[2:0];
+                tx_p0 <= pbuf[0]; tx_p1 <= pbuf[1];
+                tx_p2 <= pbuf[2]; tx_p3 <= pbuf[3];
+              end
+            end
             8'h02: begin flip_pend <= 1; state <= S_FLIP; end   // FLIP
             8'h03: draw_pg <= disp_pg;                    // PGSYNC
             8'h04: begin                                  // RESETF

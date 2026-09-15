@@ -12,9 +12,11 @@ DESCRIPTION
     and every program appear on the display -- the "glass TTY" of two-mode
     operation (see the two-mode design). The mirror is ON BY DEFAULT
     whenever a card is present: the monitor switches it on at wake
-    (GCONEN=1), installs the stroke font from /FONT.GL on the CF root, and
-    blanks the screen, so the very first banner is already on the LCD.
-    Serial always carries the same output, and input stays on serial.
+    (GCONEN=1) and blanks the screen, so the very first banner is already
+    on the LCD. Serial always carries the same output, and input stays on
+    serial. (Console text uses the card's built-in character generator, not
+    /FONT.GL -- the monitor still installs /FONT.GL from the CF root for GL
+    TEXT, the stroke font graphics programs draw with.)
 
     screen is the switch. `screen off` clears the GCONEN flag and the
     console goes back to serial only -- use it when you want a program's
@@ -35,9 +37,11 @@ DESCRIPTION
     On a machine with no display, `screen on` is a no-op and prints
     "screen: no display fitted".
 
-    Deferred: proper scrollback -- the console currently CLEARS and homes
-    when it fills the bottom row -- and per-cell erase (backspace leaves
-    the old glyph).
+    The console is a hardware TEXT OVERLAY -- a character-generator plane
+    the card composites over the GL bitmap at scanout. So it SCROLLS when
+    it fills the bottom row (older lines roll up; no clear-and-home), and
+    backspace ERASES the cell (no leftover glyph). Its text floats over
+    whatever the bitmap holds and never touches it.
 
 EXAMPLES
     screen off      keep the GL screen for graphics; console on serial only
