@@ -129,10 +129,20 @@ remainder is why it is still here.
     -> pixel 1:1), injected into the console while `ESC[?1002h` tracking is on --
     NO P8X-side change (lib_ptr already speaks the protocol). Only LEFT-drag emits
     a drag code (lib_ptr decodes `(b&3)==2` as right-press before the drag bit);
-    the packet->SGR core is unit-tested (`serialmouse.py --selftest`). **BLOCKED on
-    hardware:** the MS Serial Mouse 2.0A on hand IDs cleanly ('M') but streams no
-    movement (dirty encoder / marginal power); live verification waits on a mouse
-    that actually reports motion, then it is plug-and-play. This is the WITH-Mac
+    the packet->SGR core is unit-tested (`serialmouse.py --selftest`), and the
+    BRIDGE itself is proven -- Finder came up over the card on port 171 with the
+    shim passing keystrokes through. **BLOCKED on hardware (2026-09-15 bench):** no
+    serial mouse tested streams movement, and it is the ADAPTER, not the mice. The
+    USB-DB9 adapter's DATA path is good -- a pin-2/3 loopback echoes byte-perfect
+    and it asserts DTR/RTS on command -- but two different serial mice on it send
+    only floating-line noise (4 or 0 bytes over a 10 s move window; the stray byte,
+    e.g. 0x80, has bit 7 set in 7-bit mode = noise, not data). Read: the adapter
+    drives DTR/RTS at LOGIC level (~3.3-5 V), enough to loop data back to itself but
+    too weak to POWER a vintage RS-232 mouse, which wants +5..12 V on those lines
+    for its optics + logic. Fix: a MAX232-class / powered RS-232 adapter (or confirm
+    the mice power up on another machine). Then plug-and-play, no software change.
+    Diagnostic probes: scratch mouseprobe.py (reset + decode) and a pin-2/3
+    loopback send/echo. This is the WITH-Mac
     (bridge) input path; the native no-Mac path is the PS/2 card sketch in IDEAS.
     (The Apps menu -- press
     `a` -- and the **FILE menu** -- press `f`: rename / duplicate / move / new
