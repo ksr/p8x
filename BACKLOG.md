@@ -1,7 +1,7 @@
 # P8X Project Backlog
 
 Add ideas as they come; move items between sections as they progress.
-Last updated: 2026-07-22
+Last updated: 2026-09-16
 
 ## How to use
 - **NEXT** — committed, in rough priority order
@@ -733,6 +733,63 @@ Nothing below has been built or measured.
       EMULATOR: model the window (PSID 'K', script-fed FIFOs) so
       lib_ps2 and its tests run before any solder melts -- the
       golden-model discipline, as ever.
+      PACKAGING -- three homes, weighed 2026-09-16:
+        1. Standalone TTL backplane card -- RECOMMENDED for the eventual
+           TTL machine. The receive path is ~12 ICs (a full Eurocard),
+           too much to graft onto the working IO card without a risky
+           re-place/re-route, and the 10-slot backplane has ~3 free slots
+           (6 cards + the planned IRQ card). One card per function.
+        2. Fold into the IO card -- only argument is slot economy, which
+           we do not need; rejected (respin risk + no room for a dozen
+           ICs beside the two ACIAs + CF buffers).
+        3. On the GRAPHICS FPGA CARD -- the FASTEST path to a working
+           mouse + keyboard, because that card and its bridge already
+           exist. Two PS/2 receivers in fabric (a shift register clocked
+           by the device clock + a small FIFO -- the RTL mirror of the
+           164/161/574) on spare GPIO, level-shifted 3.3V<->5V (PS/2 is
+           5V open-collector). Fit is the caveat: the card sat at
+           18,537/20,736 LUT4 (89%) near the ~19,150 placement cliff, so
+           two receivers (~a few hundred LUT4 + FIFOs) must be measured
+           and may cost a GL feature. Payoff: the runcard daily-driver
+           (CPU in the emulator, card = display) becomes a COMPLETE
+           head-down machine on hardware we already have -- display +
+           mouse + keyboard on one card.
+      BRIDGE REVERSE CHANNEL (option 3 / the card personality): the
+      bridge is today mostly emulator->card (GL writes) + the PING. Add
+      card->emulator EVENT packets -- the fabric receiver captures a PS/2
+      byte and ships it back tagged port A/B; the emulator drops it into
+      the matching $FF58 FIFO. The SAME $FF58 model then serves the lcd
+      personality (on-chip register read straight off the bus) AND the
+      card personality (fed over the wire), and lib_ps2 is written once
+      against the emulator regardless of where the bytes originate.
+      MOUSE -> POINTER: no app change -- Finder is ALREADY pointer-driven
+      via lib_ptr (ptr_ev/ptr_x/ptr_y, click + right-click menu; d9f8280).
+      lib_ps2 decodes the 3-byte mouse packet to (dx,dy,buttons) and feeds
+      the same pointer abstraction. Decide: grow lib_ptr a second backend
+      (PS/2 packets vs console SGR), or have lib_ps2 synthesise the same
+      events. Either way the app layer is untouched -- this is the native
+      replacement for the backed-out serial-mouse shim (which died on
+      adapter power, not on the software).
+      EMULATOR PLAN (golden-model-first, the concrete first step):
+        a. Add the $FF58-$FF5F window to p8xemu: PSADAT/PSAST/PSBDAT/
+           PSBST/PSLINE/PSID('K'), two device FIFOs, the ready + overrun
+           + parity bits, and the write-side CLOCK/DATA drive bits for the
+           bit-banged transmit.
+        b. Feed the FIFOs three ways, all landing in the same window:
+           - SCRIPTED (tests): -ps2a/-ps2b raw-byte files (or a console
+             escape) -- the minimum for lib_ps2 unit tests: Set-2
+             make/break, the $F4 mouse init dance, 3-byte assembly,
+             overrun.
+           - HOST-TERMINAL (interactively "attach" devices): translate the
+             emulator TTY's keystrokes -> Set-2 scan codes -> port A, and
+             its xterm mouse SGR -> PS/2 3-byte packets -> port B. Drives
+             the EMULATED PS/2 ports from the Mac's own keyboard/mouse --
+             the inverse of the old shim, exercising the REAL native path.
+           - CARD-BRIDGED: the reverse-channel bytes above, once the
+             fabric receiver exists.
+        c. Tests: c_ps2_kbd / c_ps2_mouse (scripted), then Finder driven
+           by the host-terminal mouse through lib_ps2 instead of
+           lib_ptr/SGR.
 - [x] **LCD as a terminal (2026-08-29, user) — SHIPPED as the text overlay
       (2026-09-15).** Both missing pieces landed: the console state machine (the
       glass TTY, always-on 2026-09-10) and SCROLL. Scroll took a fourth option
