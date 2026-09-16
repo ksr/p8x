@@ -95,6 +95,21 @@ MAP = [
     ('I/O ports ($FF00-$FFFF)', 'GLERR', 0xFF53, 'read: pop one error FIFO byte (0 = empty)'),
     ('I/O ports ($FF00-$FFFF)', 'GLID', 0xFF54, "read: $47 'G' -- graphics-language presence probe"),
 
+    # PS/2 keyboard + mouse window ($FF58-$FF5F) -- the human-interface corner of
+    # the I/O page, adjacent to the GL port. Two dumb receivers (port A keyboard,
+    # port B mouse); scan-code / packet decode and the transmit dance live in
+    # lib_ps2, the P8X way. See the "PS/2 keyboard + mouse card" backlog item.
+    # PSxDAT read: the last completed byte, ready-flag cleared on read. PSxST:
+    # bit0 ready, bit1 overrun (a byte completed while the last sat unread),
+    # bit2 parity; write bit0 forces CLOCK low, bit1 drives DATA low (the
+    # host->device transmit is bit-banged, hardware does only the receive shift).
+    ('I/O ports ($FF00-$FFFF)', 'PSADAT', 0xFF58, 'read: port A (keyboard) byte, ready cleared on read (raw Set-2)'),
+    ('I/O ports ($FF00-$FFFF)', 'PSAST', 0xFF59, 'port A status: r bit0 ready/bit1 overrun/bit2 parity; w bit0 CLK-low/bit1 DATA-low'),
+    ('I/O ports ($FF00-$FFFF)', 'PSBDAT', 0xFF5A, 'read: port B (mouse) byte, ready cleared on read'),
+    ('I/O ports ($FF00-$FFFF)', 'PSBST', 0xFF5B, 'port B status: as PSAST'),
+    ('I/O ports ($FF00-$FFFF)', 'PSLINE', 0xFF5C, 'read: live line states (bit0 Aclk/bit1 Adat/bit2 Bclk/bit3 Bdat) for the bit-banged transmit'),
+    ('I/O ports ($FF00-$FFFF)', 'PSID', 0xFF5E, "read: $4B 'K' -- PS/2-card presence probe (absent floats $FF)"),
+
     ('I/O ports ($FF00-$FFFF)', 'MDAH', 0xFF39, 'MDU operand a, high byte (write AFTER MDA)'),
     ('I/O ports ($FF00-$FFFF)', 'MDBH', 0xFF3A, 'MDU operand b, high byte'),
     ('I/O ports ($FF00-$FFFF)', 'MDCH', 0xFF3B, 'MDU divisor c, high byte'),

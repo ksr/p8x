@@ -37,6 +37,12 @@ GLSTAT      = $FF51              ; read: bit7 FIFO full, bit6 busy, bit1 error p
 GLRB        = $FF52              ; read: pop one read-back FIFO byte
 GLERR       = $FF53              ; read: pop one error FIFO byte (0 = empty)
 GLID        = $FF54              ; read: $47 'G' -- graphics-language presence probe
+PSADAT      = $FF58              ; read: port A (keyboard) byte, ready cleared on read (raw Set-2)
+PSAST       = $FF59              ; port A status: r bit0 ready/bit1 overrun/bit2 parity; w bit0 CLK-low/bit1 DATA-low
+PSBDAT      = $FF5A              ; read: port B (mouse) byte, ready cleared on read
+PSBST       = $FF5B              ; port B status: as PSAST
+PSLINE      = $FF5C              ; read: live line states (bit0 Aclk/bit1 Adat/bit2 Bclk/bit3 Bdat) for the bit-banged transmit
+PSID        = $FF5E              ; read: $4B 'K' -- PS/2-card presence probe (absent floats $FF)
 MDAH        = $FF39              ; MDU operand a, high byte (write AFTER MDA)
 MDBH        = $FF3A              ; MDU operand b, high byte
 MDCH        = $FF3B              ; MDU divisor c, high byte

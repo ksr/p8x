@@ -60,6 +60,19 @@ static long scrlen=0, scrpos=0;
 static uint8_t *s2rx=0;               /* -2i FILE: 2nd-ACIA RX bytes (the Kermit/serial-terminal port, $FF08/$FF09) */
 static long s2rxlen=0, s2rxpos=0;
 static FILE *s2tx=0;                  /* -2o FILE: 2nd-ACIA TX sink */
+/* PS/2 window ($FF58-$FF5F): the golden model of the two dumb receivers (port A
+   = keyboard, port B = mouse) for the planned PS/2 card / the FPGA-card fabric
+   receivers. RX is fed like the 2nd ACIA -- a byte buffer + read pointer, ready
+   = pos<len -- from -ps2a/-ps2b files, so lib_ps2 (Set-2 make/break, 3-byte
+   mouse assembly) can be developed and tested before any hardware. The transmit
+   dance (the CLK/DATA drive bits, the $F4 mouse-enable handshake) is a stub for
+   now; overrun/parity read 0 until the cycle-paced drip model lands. A device is
+   "attached" (PSID -> 'K') only when -ps2/-ps2a/-ps2b is given, else the window
+   floats $FF like an absent card. */
+static uint8_t *ps2a=0, *ps2b=0;      /* -ps2a/-ps2b FILE: port A/B RX byte streams */
+static long ps2alen=0, ps2apos=0, ps2blen=0, ps2bpos=0;
+static int  ps2_present=0;            /* a PS/2 card is attached (PSID reads 'K') */
+static uint8_t ps2a_drv=0, ps2b_drv=0;/* last status write: bit0 forces CLK low, bit1 DATA low */
 static int peeked=-1;                 /* one-char lookahead for ACIA status/data */
 static struct termios g_orig;
 static int g_raw=0;
@@ -1845,6 +1858,26 @@ static uint8_t memrd(uint16_t ad){
                               return e; }
                  return 0;
     case GLID:   return nogfx ? 0xFF : 0x47;       /* 'G' -- presence probe (-ng: absent) */
+    /* PS/2 window ($FF58-$FF5F): golden model of the two receivers. Absent card
+       (no -ps2*) floats $FF, like any unfitted card. RX is buffer-fed (the 2nd
+       ACIA idiom): ready = bytes remain; PSxDAT read pops one, clearing ready. */
+    case PSADAT: return (uint8_t)(!ps2_present ? 0xFF :
+                                  (ps2apos<ps2alen ? ps2a[ps2apos++] : 0));
+    case PSAST:  return (uint8_t)(!ps2_present ? 0xFF :
+                                  (ps2apos<ps2alen ? 0x01 : 0x00)); /* bit1 overrun/bit2 parity: 0 (buffer model) */
+    case PSBDAT: return (uint8_t)(!ps2_present ? 0xFF :
+                                  (ps2bpos<ps2blen ? ps2b[ps2bpos++] : 0));
+    case PSBST:  return (uint8_t)(!ps2_present ? 0xFF :
+                                  (ps2bpos<ps2blen ? 0x01 : 0x00));
+    case PSLINE: { uint8_t l;                       /* lines idle HIGH; a drive bit forces its line low */
+                   if(!ps2_present) return 0xFF;
+                   l = 0x0F;
+                   if(ps2a_drv&0x01) l&=(uint8_t)~0x01; /* Aclk */
+                   if(ps2a_drv&0x02) l&=(uint8_t)~0x02; /* Adat */
+                   if(ps2b_drv&0x01) l&=(uint8_t)~0x04; /* Bclk */
+                   if(ps2b_drv&0x02) l&=(uint8_t)~0x08; /* Bdat */
+                   return l; }
+    case PSID:   return ps2_present ? 0x4B : 0xFF;  /* 'K' -- presence probe */
     default: return 0xFF;
     }
 }
@@ -1864,6 +1897,12 @@ static void memwr(uint16_t ad,uint8_t v){
     if(ad==0xFF05){ putchar(v); fflush(stdout); rx_misses=0; return; }
     if(ad==0xFF09){ if(s2tx){ putc(v,s2tx); fflush(s2tx); } return; }  /* 2nd ACIA TX */
     if(ad==0xFF08){ return; }                  /* 2nd ACIA control write: ignored (as $FF04) */
+    /* PS/2 status writes latch the host->device transmit drive bits (bit0 CLK
+       low, bit1 DATA low). The bit-banged transmit + device command/response
+       ($F4 enable, $FF reset) is a STUB for now -- the drive bits are recorded so
+       PSLINE reflects them, but no device answers yet; RX is scripted meanwhile. */
+    if(ad==PSAST){ ps2a_drv=v&0x03; return; }
+    if(ad==PSBST){ ps2b_drv=v&0x03; return; }
     if(ad==0xFF16){ cf_active=v&1; return; }  /* CFHEAD: ATA device select (bit 0) */
     /* The $FF20-$FF2F device door is CLOSED: writes fall through to nothing,
        like any absent card. */
@@ -2011,6 +2050,23 @@ int main(int argc,char**argv){
             s2tx=fopen(argv[++i],"wb");
             if(!s2tx){ fprintf(stderr,"p8xemu: cannot open 2nd-serial output %s\n",argv[i]); return 1; }
         }
+        else if(!strcmp(argv[i],"-ps2a")){         /* PS/2 port A (keyboard) RX byte stream */
+            FILE*sf=fopen(argv[++i],"rb");
+            if(!sf){ fprintf(stderr,"p8xemu: cannot open ps2a input %s\n",argv[i]); return 1; }
+            fseek(sf,0,SEEK_END); ps2alen=ftell(sf); fseek(sf,0,SEEK_SET);
+            ps2a=malloc(ps2alen?ps2alen:1);
+            if(ps2alen && fread(ps2a,1,ps2alen,sf)!=(size_t)ps2alen){ fprintf(stderr,"p8xemu: short read on ps2a\n"); return 1; }
+            fclose(sf); ps2_present=1;
+        }
+        else if(!strcmp(argv[i],"-ps2b")){         /* PS/2 port B (mouse) RX byte stream */
+            FILE*sf=fopen(argv[++i],"rb");
+            if(!sf){ fprintf(stderr,"p8xemu: cannot open ps2b input %s\n",argv[i]); return 1; }
+            fseek(sf,0,SEEK_END); ps2blen=ftell(sf); fseek(sf,0,SEEK_SET);
+            ps2b=malloc(ps2blen?ps2blen:1);
+            if(ps2blen && fread(ps2b,1,ps2blen,sf)!=(size_t)ps2blen){ fprintf(stderr,"p8xemu: short read on ps2b\n"); return 1; }
+            fclose(sf); ps2_present=1;
+        }
+        else if(!strcmp(argv[i],"-ps2")) ps2_present=1;  /* PS/2 card present, empty streams (PSID -> 'K') */
         else if(!strcmp(argv[i],"-h")||!strcmp(argv[i],"--help")){
             fprintf(stderr,"usage: p8xemu [-t] [-T] [-N] [-ng] [-l cycles] [-c disk.img] [-c2 disk2.img] "
                 "[-s switches] [-L] [-g out.ppm] [-G] [rom.bin]\n"
@@ -2019,6 +2075,8 @@ int main(int argc,char**argv){
                 "  -ng    no GL card fitted: GLID floats $FF (test headless-console mode)\n"
                 "  -2i F  2nd serial port ($FF08/$FF09) RX from file F (the Kermit/serial-term port)\n"
                 "  -2o F  2nd serial port TX to file F\n"
+                "  -ps2 / -ps2a F / -ps2b F  attach the PS/2 card (PSID $FF5E -> 'K'); feed port A\n"
+                "         (keyboard, $FF58) / port B (mouse, $FF5A) RX bytes from file F\n"
                 "  -i F   scripted console input from file F (RDRF = bytes remain)\n"
                 "  -s NN  value read at $FF00 (e.g. -s 0xA5); default 0\n"
                 "  -L     print $FF02 LED writes to stderr as they change\n"
