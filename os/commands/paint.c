@@ -283,15 +283,29 @@ int mvcur(int dx, int dy) {
     return 0;
 }
 
-int jumpcur(int nx, int ny) {                 /* mouse: absolute move */
+int jumpcur(int nx, int ny) {                 /* mouse: absolute move, clamped to the CANVAS */
     cross();
     if (armed && tool != 3) { ghost(); }
     cx = nx; cy = ny;
     if (cx < 2) { cx = 2; }
     if (cx > 477) { cx = 477; }
     if (cy < 2) { cy = 2; }
-    if (cy > 242) { cy = 242; }
+    if (cy > 242) { cy = 242; }               /* keep drawing off the palette strip */
     if (armed && tool != 3) { ghost(); }
+    cross();
+    return 0;
+}
+/* free-motion cursor: track the FULL panel height (up over the palette too) so
+ * the crosshair never "sticks" near the top -- it is only a visual move, so the
+ * canvas clamp above does not apply. Drawing still goes through jumpcur/m_press,
+ * which clamp, and strokes are viewport-clipped to the canvas regardless. */
+int curmove(int nx, int ny) {
+    cross();
+    cx = nx; cy = ny;
+    if (cx < 2) { cx = 2; }
+    if (cx > 477) { cx = 477; }
+    if (cy < 2) { cy = 2; }
+    if (cy > 270) { cy = 270; }
     cross();
     return 0;
 }
@@ -375,7 +389,7 @@ int main() {
         else if (step == 4) {
             if (armed) { cross(); ghost(); cross(); armed = 0; mdown = 0; status(); }
         }
-        else if (step == 5) { jumpcur(ptr_x, ptr_y); }   /* FREE move: crosshair follows the mouse */
+        else if (step == 5) { curmove(ptr_x, ptr_y); }   /* FREE move: crosshair follows the mouse (full height) */
         else if (ptr_key == 'q') { k = 0; }
         else {
             k = ptr_key;
