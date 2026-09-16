@@ -1,7 +1,7 @@
 # P8X Project Backlog
 
 Add ideas as they come; move items between sections as they progress.
-Last updated: 2026-09-15
+Last updated: 2026-07-22
 
 ## How to use
 - **NEXT** — committed, in rough priority order
@@ -119,32 +119,7 @@ remainder is why it is still here.
 
 - **Finder desktop (two-mode P4) — the rest of the app frame.** `finder.c` shipped
   a full-screen file browser + full-screen launch (`SYS_EXEC`). Still to do:
-  - **Mouse** — `finder.c` IS mouse-capable via lib_ptr (ptr_ev / ptr_x / ptr_y:
-    click-to-select, double-click launch, right-click context menu); the gap was a
-    MOUSE SOURCE over the card bridge, where the emulator console has no xterm
-    mouse to speak SGR. **Host-side shim SHIPPED 2026-09-15** (`tools/serialmouse.py`
-    + `os/runcard-mouse.sh`): a real Microsoft serial mouse on a USB-DB9 adapter is
-    read (1200 7N1, powered off DTR+RTS), its 3-byte packets become xterm SGR
-    reports advertised at a 480x272 grid (so lib_ptr's `_pmapx`/`_pmapwy` map cell
-    -> pixel 1:1), injected into the console while `ESC[?1002h` tracking is on --
-    NO P8X-side change (lib_ptr already speaks the protocol). Only LEFT-drag emits
-    a drag code (lib_ptr decodes `(b&3)==2` as right-press before the drag bit);
-    the packet->SGR core is unit-tested (`serialmouse.py --selftest`), and the
-    BRIDGE itself is proven -- Finder came up over the card on port 171 with the
-    shim passing keystrokes through. **BLOCKED on hardware (2026-09-15 bench):** no
-    serial mouse tested streams movement, and it is the ADAPTER, not the mice. The
-    USB-DB9 adapter's DATA path is good -- a pin-2/3 loopback echoes byte-perfect
-    and it asserts DTR/RTS on command -- but two different serial mice on it send
-    only floating-line noise (4 or 0 bytes over a 10 s move window; the stray byte,
-    e.g. 0x80, has bit 7 set in 7-bit mode = noise, not data). Read: the adapter
-    drives DTR/RTS at LOGIC level (~3.3-5 V), enough to loop data back to itself but
-    too weak to POWER a vintage RS-232 mouse, which wants +5..12 V on those lines
-    for its optics + logic. Fix: a MAX232-class / powered RS-232 adapter (or confirm
-    the mice power up on another machine). Then plug-and-play, no software change.
-    Diagnostic probes: scratch mouseprobe.py (reset + decode) and a pin-2/3
-    loopback send/echo. This is the WITH-Mac
-    (bridge) input path; the native no-Mac path is the PS/2 card sketch in IDEAS.
-    (The Apps menu -- press
+  - **Mouse** support (via lib_ptr, keyboard-only today). (The Apps menu -- press
     `a` -- and the **FILE menu** -- press `f`: rename / duplicate / move / new
     folder / delete -- both shipped 2026-09-10. The file ops delegate to
     mv/cp/del/rmdir/mkdir through the launch-and-return chain, so P8XFS needs no
