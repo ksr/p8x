@@ -2,6 +2,7 @@
 
 - [P8X Project](project_p8x.md) — Hand-built 8-bit TTL homebrew CPU at ~/Developer/p8x; architecture, conventions, current backlog
 - [P8X FPGA plan](project_p8x_fpga.md) — planned standalone FPGA P8X (same microarch, emulator = golden ref); TTL bus build continues but delayed
+- [P8X FPGA flashing](reference_p8x_fpga_flash.md) — openFPGALoader IS in oss-cad-suite (belief it wasn't = wrong); build.sh card build + `openFPGALoader -b tangnano20k -f p8x_card.fs` flashes the Tang Nano from this Mac
 - [P8X Workflow](feedback_p8x_workflow.md) — Commit directly to main, no PRs; branches only when the user asks; ASK before merging any branch to main ("sync"/"push" ≠ merge approval)
 - [P8X Decoupling Caps](feedback_p8x_decoupling_caps.md) — every new card needs per-IC 100nF caps; all through-hole, no SMD
 - [Keep p8cc.py](project_p8cc_keep_python.md) — self-hosting the C compiler ADDS a C version alongside; never delete the Python bootstrap
