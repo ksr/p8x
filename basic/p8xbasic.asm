@@ -271,12 +271,10 @@ bs_go:  LDA  #$03            ; ACIA master reset
         STA  PRMSH           ; the card powers up outline
         LDW  SEED,#44257
         LDA  GLIDR           ; a GL engine? establish BASIC's full-screen window
-        LDB  #'G'            ;   (the raw port powers up DEGENERATE) and claim
-        CMP                  ;   the screen from the glass TTY
-        JNZ  bnr_ng
+        LDB  #'G'            ;   (the raw port powers up DEGENERATE). The console
+        CMP                  ;   overlay STAYS on: PRINT shows on the panel over
+        JNZ  bnr_ng          ;   BASIC's graphics (the two planes compose)
         JSR  glwin
-        LDA  #1
-        STA  GTSUSP
         LDA  #$B0            ; PROJCT 0: 2D first; TEXT strokes live at z=0,
         JSR  GLPUT           ;   which the native camera would near-clip
         LDA  #0

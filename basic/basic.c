@@ -1116,7 +1116,10 @@ int main() {
     newprog();
     fmode = 0; outfile = 0; strsink = 0; prmsh = 0; seed = 44257;
     if (peek(GLIDR) == 'G') {
-        glwin(); poke(GTSUSP, 1);
+        glwin();                                    /* GL window for graphics; the
+                                                       console overlay STAYS on, so
+                                                       PRINT shows on the panel over
+                                                       BASIC's graphics (two planes) */
         glput(0xB0); glput(0); glput(0);            /* PROJCT 0 */
     }
     outs("\r\nP8X BASIC V0\r\n");

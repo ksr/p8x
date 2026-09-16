@@ -50,7 +50,12 @@ python3 "$ROOT/tools/p8xfs.py" put bgfx.img bgfx.bin --name /bin/bgfx.bin \
 # at its ends. Colours go through RGB(), which also proves BASIC hands all 16
 # pen bits to GCOL+GCOLH -- an interpreter that dropped the high byte draws
 # these primaries as near-black and fails every pixel check.
-printf 'B\rbgfx\r10 COLOR 0,63,0\r20 CLS\r30 BOX 20,20,120,120,FILL\r40 COLOR RGB(31,0,0)\r50 BOX 200,20,300,120,NOFILL\r60 COLOR 0,0,31\r70 LINE 20,240,458,240\r80 END\rRUN\rLIST\rFILL\rBYE\r' \
+# console OFF at the monitor (GCONEN=0 + GCLS clears the overlay char RAM) so the
+# text overlay -- BASIC now keeps it on to PRINT over graphics -- does not
+# composite over the framebuffer these pixel probes check.
+GCONEN=$(python3 "$ROOT/tools/memaddr.py" GCONEN)
+LAB=$(printf 'E %s\r00.G 014E\r' "$GCONEN")
+printf '%sB\rbgfx\r10 COLOR 0,63,0\r20 CLS\r30 BOX 20,20,120,120,FILL\r40 COLOR RGB(31,0,0)\r50 BOX 200,20,300,120,NOFILL\r60 COLOR 0,0,31\r70 LINE 20,240,458,240\r80 END\rRUN\rLIST\rFILL\rBYE\r' "$LAB" \
     > bgfx.in
 ../p8xemu -N -i bgfx.in -c bgfx.img -l 120000000 -g bgfx.ppm eeprom.bin > bgfx.out 2>/dev/null || true
 
@@ -111,7 +116,7 @@ PY
 # hands them back THROUGH BASIC'S SIGNED INTEGERS -- $F81F magenta prints as
 # -2017, which is the documented wart (STAGE6-DESIGN.md), asserted here so it
 # stays a wart and not a surprise.
-printf 'B\rbgfx\r10 CLS\r20 COLOR RGB(31,0,0)\r40 BOX 10,10,80,80,FILL\r50 COLOR RGB(31,0,31)\r60 CIRCLE 240,136,100,FILL\r70 COLOR RGB(0,63,0)\r80 CIRCLE 240,136,120\r90 PIXELW 400,40\r100 PRINT PIXELR(240,136)\r110 PRINT PIXELR(400,40)\r120 PRINT PIXELR(0,271)\r130 PRINT PIXELR(14,14)\r140 END\rRUN\rLIST\rBYE\r' \
+printf '%sB\rbgfx\r10 CLS\r20 COLOR RGB(31,0,0)\r40 BOX 10,10,80,80,FILL\r50 COLOR RGB(31,0,31)\r60 CIRCLE 240,136,100,FILL\r70 COLOR RGB(0,63,0)\r80 CIRCLE 240,136,120\r90 PIXELW 400,40\r100 PRINT PIXELR(240,136)\r110 PRINT PIXELR(400,40)\r120 PRINT PIXELR(0,271)\r130 PRINT PIXELR(14,14)\r140 END\rRUN\rLIST\rBYE\r' "$LAB" \
     > bgfx2.in
 ../p8xemu -N -i bgfx2.in -c bgfx.img -l 120000000 -g bgfx2.ppm eeprom.bin > bgfx2.out 2>/dev/null || true
 
@@ -172,7 +177,7 @@ PY
 # The parser has to tell a second radius from the FILL modifier by TOKEN: a
 # keyword is >= $80, anything else starts an expression. That is also why NOFILL
 # must be a real keyword -- otherwise `CIRCLE x,y,r,NOFILL` would try to EVAL it.
-printf 'B\rbgfx\r10 CLS\r20 COLOR 1\r30 CIRCLE 60,68,30\r40 COLOR 2\r50 CIRCLE 170,68,60,20\r60 COLOR 3\r70 CIRCLE 170,110,15,20,FILL\r80 PRINT "A";PIXELR(90,68);PIXELR(60,68);PIXELR(230,68);PIXELR(10,130);PIXELR(170,110)\r90 END\rRUN\rBYE\r' \
+printf '%sB\rbgfx\r10 CLS\r20 COLOR 1\r30 CIRCLE 60,68,30\r40 COLOR 2\r50 CIRCLE 170,68,60,20\r60 COLOR 3\r70 CIRCLE 170,110,15,20,FILL\r80 PRINT "A";PIXELR(90,68);PIXELR(60,68);PIXELR(230,68);PIXELR(10,130);PIXELR(170,110)\r90 END\rRUN\rBYE\r' "$LAB" \
     > bgfx3.in
 ../p8xemu -N -i bgfx3.in -c bgfx.img -l 120000000 eeprom.bin > bgfx3.out 2>/dev/null || true
 
@@ -209,7 +214,7 @@ PY
 # pure GL emission) -- must place text EXACTLY even after hostile state
 # (a stale TSIZE/TANGLE and a RESETF), because it resets the matrix and
 # camera itself.
-printf 'B\rbgfx\r10 CLS\r20 COLOR RGB(31,0,0)\r30 MOVE3 10,10,0 : TEXT "A"\r40 COLOR RGB(0,63,0)\r50 MOVE3 40,10,0 : TEXT "a"\r60 COLOR RGB(0,0,31)\r70 TSIZE 512\r80 MOVE3 30,20,0 : TEXT "A"\r90 MDIDEN\r100 COLOR RGB(31,0,0)\r110 MOVE3 470,80,0 : TEXT "WW"\r120 MOVE3 5,110,0 : TEXT ""\r122 TSIZE 20 : TANGLE 45 : RESETF\r124 COLOR RGB(31,0,31)\r126 GTEXT 200,150,1,"A"\r128 GTEXT 260,140,2,"A"\r130 END\rRUN\rLIST\rBYE\r' \
+printf '%sB\rbgfx\r10 CLS\r20 COLOR RGB(31,0,0)\r30 MOVE3 10,10,0 : TEXT "A"\r40 COLOR RGB(0,63,0)\r50 MOVE3 40,10,0 : TEXT "a"\r60 COLOR RGB(0,0,31)\r70 TSIZE 512\r80 MOVE3 30,20,0 : TEXT "A"\r90 MDIDEN\r100 COLOR RGB(31,0,0)\r110 MOVE3 470,80,0 : TEXT "WW"\r120 MOVE3 5,110,0 : TEXT ""\r122 TSIZE 20 : TANGLE 45 : RESETF\r124 COLOR RGB(31,0,31)\r126 GTEXT 200,150,1,"A"\r128 GTEXT 260,140,2,"A"\r130 END\rRUN\rLIST\rBYE\r' "$LAB" \
     > bgfx4.in
 ../p8xemu -N -i bgfx4.in -c bgfx.img -l 400000000 -g bgfx4.ppm eeprom.bin > bgfx4.out 2>/dev/null || true
 
@@ -341,7 +346,7 @@ MKPIC
 python3 "$ROOT/tools/p8xfs.py" put bgfx.img pic.p8i  --name /PIC.P8I  >/dev/null
 python3 "$ROOT/tools/p8xfs.py" put bgfx.img junk.bin --name /JUNK.BIN >/dev/null
 
-printf 'B\rbgfx\r10 CLS\r20 IMAGE 100,217,"/PIC.P8I"\r30 IMAGE 476,-2,"/PIC.P8I"\r40 IMAGE 0,0,"/JUNK.BIN"\r50 IMAGE 0,0,"/NOPE"\r60 END\rRUN\rLIST\rBYE\r' \
+printf '%sB\rbgfx\r10 CLS\r20 IMAGE 100,217,"/PIC.P8I"\r30 IMAGE 476,-2,"/PIC.P8I"\r40 IMAGE 0,0,"/JUNK.BIN"\r50 IMAGE 0,0,"/NOPE"\r60 END\rRUN\rLIST\rBYE\r' "$LAB" \
     > bgfx8.in
 ../p8xemu -N -i bgfx8.in -c bgfx.img -l 200000000 -g bgfx8.ppm eeprom.bin > bgfx8.out 2>/dev/null || true
 
