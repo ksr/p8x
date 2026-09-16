@@ -1,7 +1,7 @@
 # P8X Project Backlog
 
 Add ideas as they come; move items between sections as they progress.
-Last updated: 2026-07-22
+Last updated: 2026-09-15
 
 ## How to use
 - **NEXT** — committed, in rough priority order
@@ -119,7 +119,22 @@ remainder is why it is still here.
 
 - **Finder desktop (two-mode P4) — the rest of the app frame.** `finder.c` shipped
   a full-screen file browser + full-screen launch (`SYS_EXEC`). Still to do:
-  - **Mouse** support (via lib_ptr, keyboard-only today). (The Apps menu -- press
+  - **Mouse** — `finder.c` IS mouse-capable via lib_ptr (ptr_ev / ptr_x / ptr_y:
+    click-to-select, double-click launch, right-click context menu); the gap was a
+    MOUSE SOURCE over the card bridge, where the emulator console has no xterm
+    mouse to speak SGR. **Host-side shim SHIPPED 2026-09-15** (`tools/serialmouse.py`
+    + `os/runcard-mouse.sh`): a real Microsoft serial mouse on a USB-DB9 adapter is
+    read (1200 7N1, powered off DTR+RTS), its 3-byte packets become xterm SGR
+    reports advertised at a 480x272 grid (so lib_ptr's `_pmapx`/`_pmapwy` map cell
+    -> pixel 1:1), injected into the console while `ESC[?1002h` tracking is on --
+    NO P8X-side change (lib_ptr already speaks the protocol). Only LEFT-drag emits
+    a drag code (lib_ptr decodes `(b&3)==2` as right-press before the drag bit);
+    the packet->SGR core is unit-tested (`serialmouse.py --selftest`). **BLOCKED on
+    hardware:** the MS Serial Mouse 2.0A on hand IDs cleanly ('M') but streams no
+    movement (dirty encoder / marginal power); live verification waits on a mouse
+    that actually reports motion, then it is plug-and-play. This is the WITH-Mac
+    (bridge) input path; the native no-Mac path is the PS/2 card sketch in IDEAS.
+    (The Apps menu -- press
     `a` -- and the **FILE menu** -- press `f`: rename / duplicate / move / new
     folder / delete -- both shipped 2026-09-10. The file ops delegate to
     mv/cp/del/rmdir/mkdir through the launch-and-return chain, so P8XFS needs no
