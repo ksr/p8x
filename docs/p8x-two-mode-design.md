@@ -224,8 +224,13 @@ command. Independent of the graphics work; needed before the transfer app.
   builds a shell command (mv/cp/del/rmdir/mkdir) and runs it through the same
   launch-and-return chain, so P8XFS needs no rename/rmdir primitive of its own;
   a modal text box takes the typed name, delete asks Y/N. Verified by
-  `c_finder_fileops_test.sh` (checks the filesystem after each op). Deferred to
-  BACKLOG: **mouse**, real **pull-down menus** (vs the key-hint bar), and
+  `c_finder_fileops_test.sh` (checks the filesystem after each op). **Mouse DONE:**
+  Finder is pointer-driven via `lib_ptr` (click to select, click the selected cell
+  to open, right-click for the context menu) -- pointer events arrive as xterm SGR
+  reports on the console, so the same UI works from a terminal mouse or, over the
+  graphics-card bridge, from a real Microsoft serial mouse via the host shim
+  `os/runcard-mouse.sh` + `tools/serialmouse.py` (2026-09-15; no on-target change).
+  Still deferred to BACKLOG: real **pull-down menus** (vs the key-hint bar) and
   **retiring the tiled `desk`/`wdesk`**.
 - **P5 — Apps. Term DONE (2026-09-10).** `os/commands/term.c` -- an on-screen
   console in the app frame: enables the glass TTY, each typed command runs with
@@ -261,5 +266,6 @@ command. Independent of the graphics work; needed before the transfer app.
   is a later input source that feeds the same `CONIN`.
 - **Write app scope** — plain text editor vs. richer "word processor"; likely
   starts as a screen editor (evolve `vi`/`edit`, or new).
-- **Desktop file ops UX** — modal dialogs vs. menu-driven for rename/duplicate/
-  move on a no-mouse-yet machine (keyboard-driven selection like current FILES).
+- **Desktop file ops UX** — RESOLVED: menu-driven with a modal text box (the FILE
+  menu, press `f`, and the right-click context menu). Works keyboard-only and,
+  now that the pointer is wired (`lib_ptr` + the serial-mouse shim), with a mouse.
