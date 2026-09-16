@@ -362,6 +362,7 @@ int main() {
     outs("mouse: press-drag-release draws; click the palette to select");
     outc(13); outc(10);
     ptr_init();
+    ptr_motion();                                /* 1003: crosshair follows the mouse (free motion) */
     status();
     cross();
 
@@ -374,6 +375,7 @@ int main() {
         else if (step == 4) {
             if (armed) { cross(); ghost(); cross(); armed = 0; mdown = 0; status(); }
         }
+        else if (step == 5) { jumpcur(ptr_x, ptr_y); }   /* FREE move: crosshair follows the mouse */
         else if (ptr_key == 'q') { k = 0; }
         else {
             k = ptr_key;
