@@ -21,7 +21,7 @@ cc -O2 -o "$build/p8xemu" "$root/emulator/p8xemu.c"
 
 sock="$build/p8x.sock"
 # the window listens first; the emulator retries the connect for ~5s
-python3 "$root/tools/p8xwindow.py" --sock "$sock" --scale "$scale" &
+python3 -u "$root/tools/p8xwindow.py" --sock "$sock" --scale "$scale" &
 winpid=$!
 cleanup(){ kill "$winpid" 2>/dev/null; rm -f "$sock"; }
 trap cleanup EXIT INT TERM

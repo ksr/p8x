@@ -85,6 +85,7 @@ static int peeked=-1;                 /* one-char lookahead for ACIA status/data
    input (keyboard/console stay on the terminal). Pure POSIX -- no windowing lib
    here, inert unless -W is given. */
 static int win_mode=0, win_fd=-1, mouse_track=0;
+static int bridge_fd = -1;            /* -B card-edge bridge fd (declared early: win_frame tests it) */
 static const char *win_path=0;
 static unsigned char inj[1024]; static int inj_h=0, inj_t=0;   /* console-input inject ring */
 static int win_lx=0, win_ly=0, win_lb=0;      /* last mouse x,y,buttons for SGR transitions */
@@ -1637,7 +1638,10 @@ static int win_connect(const char*path){
     memset(&a,0,sizeof a); a.sun_family=AF_UNIX;
     strncpy(a.sun_path,path,sizeof(a.sun_path)-1);
     for(i=0;i<50;i++){                     /* the window listens first; retry ~5s */
-        if(connect(fd,(struct sockaddr*)&a,sizeof a)==0) return fd;
+        if(connect(fd,(struct sockaddr*)&a,sizeof a)==0){
+            fcntl(fd,F_SETFL,O_NONBLOCK);  /* never block the CPU on the window */
+            return fd;
+        }
         usleep(100000);
     }
     fprintf(stderr,"p8xemu: -W: could not connect to window %s\n",path);
@@ -1685,14 +1689,32 @@ static void win_out(int c){
     }
 }
 
-/* stream the framebuffer to the window (throttled, only when it changed) */
+/* stream the framebuffer to the window: NON-BLOCKING with partial-write
+   continuation, so a busy/slow window never stalls the CPU and a frame is never
+   restarted mid-stream (which would desync the reader). A new frame is built
+   only once the previous one has fully drained. */
 static unsigned char winfb[5 + 480*272*3];
+static int winfb_len=0, winfb_sent=0;                /* the in-flight frame */
+static int win_flush(void){                          /* 1 = idle (nothing pending), 0 = more to send */
+    while(winfb_sent<winfb_len){
+        ssize_t w=write(win_fd,winfb+winfb_sent,winfb_len-winfb_sent);
+        if(w>0){ winfb_sent+=w; continue; }
+        if(w<0 && errno==EINTR) continue;
+        if(w<0 && (errno==EAGAIN||errno==EWOULDBLOCK)) return 0;   /* rest next pump */
+        win_fd=-1; winfb_len=winfb_sent=0; return 1;               /* window gone */
+    }
+    winfb_len=winfb_sent=0;
+    return 1;
+}
 static void win_frame(void){
-    int x,y,off,total,sent; long t; unsigned h;
+    int x,y,off; long t; unsigned h;
     if(win_fd<0) return;
-    t=now_ms(); if(t-win_last_ms<45) return;         /* ~22 fps cap */
+    if(bridge_fd>=0) return;                           /* card owns the display (-B): -W is a
+                                                          mouse PAD only, no local framebuffer to send */
+    if(!win_flush()) return;                          /* still draining the last frame */
+    t=now_ms(); if(t-win_last_ms<45) return;          /* ~22 fps cap on NEW frames */
     win_last_ms=t;
-    h=2166136261u;                                   /* FNV-1a over the frame: skip if unchanged */
+    h=2166136261u;                                    /* FNV-1a: skip if the frame is unchanged */
     for(off=0; off<gw*gh; off++) h=(h ^ gfbd[off]) * 16777619u;
     if(h==win_last_hash) return;
     win_last_hash=h;
@@ -1705,13 +1727,8 @@ static void win_frame(void){
         winfb[off++]=(uint8_t)((g6<<2)|(g6>>4));
         winfb[off++]=(uint8_t)((b5<<3)|(b5>>2));
     }
-    total=off; sent=0;
-    while(sent<total){                               /* whole frame, so the stream never desyncs */
-        ssize_t w=write(win_fd,winfb+sent,total-sent);
-        if(w>0){ sent+=w; continue; }
-        if(w<0 && errno==EINTR) continue;
-        win_fd=-1; return;                           /* window gone (EPIPE etc.) */
-    }
+    winfb_len=off; winfb_sent=0;
+    win_flush();                                      /* send what fits now; rest next pump */
 }
 
 /* drain pending mouse messages from the window (non-blocking via select) */
@@ -1859,6 +1876,22 @@ static int rx_ready(void){
     if(++rx_misses < RX_SPIN) return 0;  /* report "no key" and keep polling */
     rx_misses=0;                         /* idle: block for a key (no spin) */
     unsigned char c;
+    if(win_mode){
+        /* Window mode: a bare blocking read here would freeze the whole loop
+           while idle at a prompt, starving the display (no frames) and the mouse.
+           Instead wait cooperatively -- pump the window every ~15 ms, return the
+           moment a key arrives OR a mouse SGR lands in the inject queue. */
+        for(;;){
+            fd_set rd; struct timeval tv={0,15000};
+            win_pump();
+            if(inj_avail()) return 1;
+            FD_ZERO(&rd); FD_SET(0,&rd);
+            if(select(1,&rd,0,0,&tv)>0){
+                if(read(0,&c,1)==1){ peeked=c; return 1; }
+                term_restore(); exit(0);
+            }
+        }
+    }
     if(read(0,&c,1)==1){ peeked=c; return 1; }
     term_restore(); exit(0);
 }
@@ -1882,7 +1915,7 @@ static int rx_char(void){
    come back over the wire, and -g dumps stay black by design.
    GLDATA writes go as single WRITEs -- the running P8X software already
    polls GLSTAT bit7, exactly as it would on the real bus. */
-static int bridge_fd = -1;
+/* bridge_fd is declared up top (win_frame tests it) */
 /* GLDATA write batching: the running software polls GLSTAT bit7 before
    every byte (correct against the real bus, ruinous over serial -- two
    round trips per payload byte). The client buffers GLDATA writes and
