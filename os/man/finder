@@ -71,8 +71,21 @@ NOTES
     the same directory -- no per-app flag needed. Pointer events (select,
     click-to-open, the right-click menu) arrive as xterm SGR reports on the
     console via lib_ptr, so the same UI works from a terminal mouse or a
-    real serial mouse. Grows out of the older tiled `desk`, made
-    full-screen.
+    real serial mouse.
+
+    Getting a real mouse working: when P8X runs over the graphics-card
+    bridge, the emulator console has no mouse of its own. Start it from the
+    host Mac with
+
+        os/runcard-mouse.sh <mouse-device> [card-device]
+
+    instead of runcard.sh. That wraps the emulator in tools/serialmouse.py,
+    which reads a Microsoft serial mouse on a USB-to-DB9 adapter (1200 7N1,
+    powered off DTR+RTS), turns its 3-byte packets into the SGR reports
+    lib_ptr reads, and answers the ESC[18t size query with the panel's
+    480x272 grid so the pointer maps cell-to-pixel 1:1. Nothing on-target
+    changes -- Finder sees the same pointer events either way. Grows out of
+    the older tiled `desk`, made full-screen.
 
 SEE ALSO
     desk, paint, screen
