@@ -235,6 +235,7 @@ test-gfx: p8xemu ucode
 	sh test/c_finder_fileops_test.sh
 	sh test/c_finder_icons_test.sh
 	sh test/c_ps2_test.sh
+	sh test/c_window_test.sh
 	sh test/wm_kernel_test.sh
 	sh test/wm_events_test.sh
 	sh test/wm_mouse_test.sh

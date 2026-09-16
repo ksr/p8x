@@ -47,6 +47,11 @@
 #include <termios.h>
 #include <signal.h>
 #include <time.h>
+#include <sys/socket.h>          /* -W window front-end: Unix-socket display/mouse link */
+#include <sys/un.h>
+#include <sys/select.h>
+#include <sys/time.h>
+#include <errno.h>
 #include "../generators/memmap.h"   /* RAMBASE/IOBASE/ROMSIZE/RAMSIZE — single-source memory map */
 #include "../generators/trigtab.h"  /* SIN8/TANH8 — stage-10b GL trig, shared with the RTL */
 #include "../generators/glkwtab.h"  /* GL ASCII keywords — stage 10d, shared with the RTL */
@@ -74,6 +79,17 @@ static long ps2alen=0, ps2apos=0, ps2blen=0, ps2bpos=0;
 static int  ps2_present=0;            /* a PS/2 card is attached (PSID reads 'K') */
 static uint8_t ps2a_drv=0, ps2b_drv=0;/* last status write: bit0 forces CLK low, bit1 DATA low */
 static int peeked=-1;                 /* one-char lookahead for ACIA status/data */
+/* window front-end (-W <unix-socket>): a Mac-side viewer (tools/p8xwindow.py)
+   owns a live P8X display window + the pointer; this binary streams the rendered
+   framebuffer to it and takes mouse events back as xterm SGR into the console
+   input (keyboard/console stay on the terminal). Pure POSIX -- no windowing lib
+   here, inert unless -W is given. */
+static int win_mode=0, win_fd=-1, mouse_track=0;
+static const char *win_path=0;
+static unsigned char inj[1024]; static int inj_h=0, inj_t=0;   /* console-input inject ring */
+static int win_lx=0, win_ly=0, win_lb=0;      /* last mouse x,y,buttons for SGR transitions */
+static int oesc=0, ocn=0; static char oc[16]; /* console-output CSI parser state */
+static unsigned win_last_hash=0; static long win_last_ms=0;
 static struct termios g_orig;
 static int g_raw=0;
 
@@ -1601,6 +1617,127 @@ static void gpu_writeppm(const char*fn){
         }
     fclose(f);
 }
+
+/* ---- window front-end (-W) ------------------------------------------------
+   Connects to tools/p8xwindow.py over a Unix socket. Streams the rendered
+   framebuffer ('F' w16 h16, then gw*gh*3 RGB, ~22 fps, only on change) and
+   reads mouse messages ('M' x16 y16 btn8) back, turning them into the xterm SGR
+   reports lib_ptr reads. The console answers ESC[18t with the panel's 480x272
+   so lib_ptr maps cells 1:1 to pixels. Bridge (-B) mode has no local
+   framebuffer, so -W is a pure-emulator (cardless) display. */
+static void inj_put(int c){ int n=(inj_h+1)&1023; if(n!=inj_t){ inj[inj_h]=(unsigned char)c; inj_h=n; } }
+static int  inj_avail(void){ return inj_h!=inj_t; }
+static int  inj_get(void){ int c=inj[inj_t]; inj_t=(inj_t+1)&1023; return c; }
+static long now_ms(void){ struct timeval t; gettimeofday(&t,0); return t.tv_sec*1000L + t.tv_usec/1000; }
+
+static int win_connect(const char*path){
+    struct sockaddr_un a; int fd, i;
+    fd=socket(AF_UNIX,SOCK_STREAM,0);
+    if(fd<0){ perror("p8xemu -W socket"); return -1; }
+    memset(&a,0,sizeof a); a.sun_family=AF_UNIX;
+    strncpy(a.sun_path,path,sizeof(a.sun_path)-1);
+    for(i=0;i<50;i++){                     /* the window listens first; retry ~5s */
+        if(connect(fd,(struct sockaddr*)&a,sizeof a)==0) return fd;
+        usleep(100000);
+    }
+    fprintf(stderr,"p8xemu: -W: could not connect to window %s\n",path);
+    close(fd); return -1;
+}
+
+/* one SGR mouse report into the console-input queue */
+static void win_sgr(int b,int press,int col,int row){
+    char s[32]; int i,n=snprintf(s,sizeof s,"\033[<%d;%d;%d%c",b,col,row,press?'M':'m');
+    for(i=0;i<n;i++) inj_put((unsigned char)s[i]);
+}
+/* a mouse update from the window: absolute pixel x,y + button mask (bit0 left,
+   bit1 right). Emit SGR transitions while tracking is on; only LEFT-drag reports
+   motion (lib_ptr decodes (b&3)==2 as right-press before the drag bit). */
+static void win_mouse(int x,int y,int btn){
+    int col,row,lb,rb,moved;
+    if(x<0)x=0; if(x>gw-1)x=gw-1; if(y<0)y=0; if(y>gh-1)y=gh-1;
+    lb=btn&1; rb=(btn>>1)&1; moved=(x!=win_lx||y!=win_ly); col=x+1; row=y+1;
+    if(mouse_track){
+        if(lb && !(win_lb&1)) win_sgr(0,1,col,row);
+        if(rb && !(win_lb&2)) win_sgr(2,1,col,row);
+        if(!lb && (win_lb&1)) win_sgr(0,0,col,row);
+        if(!rb && (win_lb&2)) win_sgr(2,0,col,row);
+        if(moved && lb)       win_sgr(32,1,col,row);
+    }
+    win_lx=x; win_ly=y; win_lb=btn;
+}
+
+/* watch the CPU's console OUTPUT for the sequences the window must own:
+   ESC[?100{0,2,3}h/l (mouse tracking on/off) and ESC[18t (size query, answered
+   with rows;cols = the panel, so lib_ptr's cell->pixel map is 1:1). */
+static void win_out(int c){
+    if(oesc==0){ if(c==0x1B){ oesc=1; ocn=0; } return; }
+    if(oesc==1){ if(c=='['){ oesc=2; ocn=0; } else oesc=0; return; }
+    if(ocn<15) oc[ocn++]=(char)c;
+    if(c>=0x40 && c<=0x7E){                 /* CSI final byte */
+        oc[ocn]=0; oesc=0;
+        if((c=='h'||c=='l') && oc[0]=='?'){
+            if(strstr(oc,"1002")||strstr(oc,"1000")||strstr(oc,"1003"))
+                mouse_track=(c=='h');
+        } else if(!strcmp(oc,"18t")){
+            char r[24]; int i,n=snprintf(r,sizeof r,"\033[8;%d;%dt",gh,gw);
+            for(i=0;i<n;i++) inj_put((unsigned char)r[i]);
+        }
+    }
+}
+
+/* stream the framebuffer to the window (throttled, only when it changed) */
+static unsigned char winfb[5 + 480*272*3];
+static void win_frame(void){
+    int x,y,off,total,sent; long t; unsigned h;
+    if(win_fd<0) return;
+    t=now_ms(); if(t-win_last_ms<45) return;         /* ~22 fps cap */
+    win_last_ms=t;
+    h=2166136261u;                                   /* FNV-1a over the frame: skip if unchanged */
+    for(off=0; off<gw*gh; off++) h=(h ^ gfbd[off]) * 16777619u;
+    if(h==win_last_hash) return;
+    win_last_hash=h;
+    winfb[0]='F'; winfb[1]=(gw>>8)&255; winfb[2]=gw&255; winfb[3]=(gh>>8)&255; winfb[4]=gh&255;
+    off=5;
+    for(y=0;y<gh;y++) for(x=0;x<gw;x++){
+        uint16_t p=gpu_tx_sample(x,y,gfbd[y*gstride+x]);
+        uint8_t r5=(p>>11)&31,g6=(p>>5)&63,b5=p&31;
+        winfb[off++]=(uint8_t)((r5<<3)|(r5>>2));
+        winfb[off++]=(uint8_t)((g6<<2)|(g6>>4));
+        winfb[off++]=(uint8_t)((b5<<3)|(b5>>2));
+    }
+    total=off; sent=0;
+    while(sent<total){                               /* whole frame, so the stream never desyncs */
+        ssize_t w=write(win_fd,winfb+sent,total-sent);
+        if(w>0){ sent+=w; continue; }
+        if(w<0 && errno==EINTR) continue;
+        win_fd=-1; return;                           /* window gone (EPIPE etc.) */
+    }
+}
+
+/* drain pending mouse messages from the window (non-blocking via select) */
+static void win_input(void){
+    static unsigned char b[64]; static int n=0;
+    if(win_fd<0) return;
+    for(;;){
+        fd_set rd; struct timeval tv={0,0}; ssize_t r; int i;
+        FD_ZERO(&rd); FD_SET(win_fd,&rd);
+        if(select(win_fd+1,&rd,0,0,&tv)<=0) break;
+        r=read(win_fd,b+n,sizeof(b)-n);
+        if(r<=0){ if(r==0) win_fd=-1; break; }
+        n+=r;
+        i=0;
+        while(n-i>=1){
+            if(b[i]!='M'){ i++; continue; }          /* resync on the tag */
+            if(n-i<6) break;
+            win_mouse((b[i+1]<<8)|b[i+2],(b[i+3]<<8)|b[i+4],b[i+5]);
+            i+=6;
+        }
+        if(i>0){ memmove(b,b+i,n-i); n-=i; }
+        if(n>=(int)sizeof(b)) n=0;                    /* overflow guard */
+    }
+}
+
+static void win_pump(void){ win_input(); win_frame(); }
 /* Quick eyeball with no image viewer in the loop. Each character covers a 2x4
    block of pixels, which comes out about square once a character cell's own 1:2
    aspect is allowed for, and shows the HIGHEST pen in that block.
@@ -1701,6 +1838,7 @@ static void on_sig(int s){
 #define RX_SPIN 4000
 static long rx_misses=0;
 static int rx_ready(void){
+    if(inj_avail()) return 1;               /* -W: injected SGR mouse/answer bytes first */
     /* -N: report "no key, ever". The FPGA co-sim needs this: p8x_soc.v models
        $FF04 as a constant 0x02 (TDRE set, RDRF clear), and without -N the golden
        trace depends on what stdin happens to be. A TTY with no keystrokes reports
@@ -1725,6 +1863,7 @@ static int rx_ready(void){
     term_restore(); exit(0);
 }
 static int rx_char(void){
+    if(inj_avail()) return inj_get();                   /* -W: injected bytes first */
     if(scr) return scrpos<scrlen ? scr[scrpos++] : 0;   /* -i: consume one byte */
     if(norx) return 0;                  /* -N: never any data behind RDRF */
     if(peeked>=0){ int c=peeked; peeked=-1; return c; }
@@ -1894,7 +2033,7 @@ static void memwr(uint16_t ad,uint8_t v){
         leds=v; return;
     }
     if(ad==0xFF06){ irq_pending=1; return; }   /* rev C: raise a maskable IRQ (models a device) */
-    if(ad==0xFF05){ putchar(v); fflush(stdout); rx_misses=0; return; }
+    if(ad==0xFF05){ putchar(v); fflush(stdout); rx_misses=0; if(win_mode) win_out(v); return; }
     if(ad==0xFF09){ if(s2tx){ putc(v,s2tx); fflush(s2tx); } return; }  /* 2nd ACIA TX */
     if(ad==0xFF08){ return; }                  /* 2nd ACIA control write: ignored (as $FF04) */
     /* PS/2 status writes latch the host->device transmit drive bits (bit0 CLK
@@ -1972,6 +2111,7 @@ int main(int argc,char**argv){
         else if(!strcmp(argv[i],"-L")) led_trace=1;                               /* trace $FF02 writes */
         else if(!strcmp(argv[i],"-N")) norx=1;     /* console RX always empty (FPGA co-sim) */
         else if(!strcmp(argv[i],"-ng")) nogfx=1;   /* no GL card fitted: GLID floats $FF (headless-mode test) */
+        else if(!strcmp(argv[i],"-W")){ win_mode=1; win_path=argv[++i]; }  /* live display + mouse window */
         else if(!strcmp(argv[i],"-B")){            /* card-edge bridge client */
             const char *bdev=argv[++i];
             struct termios bt;
@@ -2077,6 +2217,8 @@ int main(int argc,char**argv){
                 "  -2o F  2nd serial port TX to file F\n"
                 "  -ps2 / -ps2a F / -ps2b F  attach the PS/2 card (PSID $FF5E -> 'K'); feed port A\n"
                 "         (keyboard, $FF58) / port B (mouse, $FF5A) RX bytes from file F\n"
+                "  -W S   live display + mouse window over Unix socket S (run tools/p8xwindow.py\n"
+                "         first; keyboard/console stay on the terminal). Cardless -- not with -B.\n"
                 "  -i F   scripted console input from file F (RDRF = bytes remain)\n"
                 "  -s NN  value read at $FF00 (e.g. -s 0xA5); default 0\n"
                 "  -L     print $FF02 LED writes to stderr as they change\n"
@@ -2110,8 +2252,15 @@ int main(int argc,char**argv){
         signal(SIGINT,on_sig); signal(SIGTERM,on_sig);
         if(!lim_set) lim=~0ULL;   /* no cycle cap while typing -- unless -l was asked for */
     }
+    if(win_mode){                       /* -W: connect to the display/mouse window */
+        signal(SIGPIPE,SIG_IGN);        /* a closed window must not kill the emulator */
+        win_fd=win_connect(win_path);
+        if(win_fd<0) win_mode=0;
+        else if(!lim_set) lim=~0ULL;    /* interactive: run until quit */
+    }
     P[0]=0; P[1]=P[2]=0; P[3]=0xFEFF; P[4]=P[5]=0; stp=0; IR=0;   /* reset: P0 forced 0 */
     while(!halted && cycles<lim){
+        if(win_mode && (cycles & 0x3FFF)==0) win_pump();   /* service the window ~every 16k cycles */
         /* condition mux: FCOND of the word currently in the pipeline */
         int cond;
         switch(prev_fcond){
