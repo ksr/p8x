@@ -75,6 +75,24 @@ int gsetup() {
     return 0;
 }
 
+/* ---- following mouse cursor (1003 free-motion) --------------------------- *
+ * An XOR crosshair on the bitmap: drawing it twice erases it (no read-back).
+ * LINFUN 4 = XOR and applies to OUTLINES only, so the arms are degenerate
+ * rectlines (a box with zero height/width = a line). Left at LINFUN 0 after;
+ * the pen is left white, which is fine -- every draw() sets its own pens. */
+int _curx; int _cury; int _curon;
+int cur_xdraw() {
+    gp(235); gp(4);                                  /* LINFUN XOR */
+    penrgb(31, 63, 31);                              /* white inverts under XOR, visible anywhere */
+    rectline(_curx - 4, _cury, _curx + 4, _cury);    /* horizontal arm */
+    rectline(_curx, _cury - 4, _curx, _cury + 4);    /* vertical arm   */
+    gp(235); gp(0);                                  /* LINFUN replace */
+    return 0;
+}
+int cur_show() { if (_curon == 0) { cur_xdraw(); _curon = 1; } return 0; }
+int cur_hide() { if (_curon) { cur_xdraw(); _curon = 0; } return 0; }
+int cur_to(int x, int y) { cur_hide(); _curx = x; _cury = y; cur_show(); return 0; }
+
 /* block for the next KEY, letting lib_ptr consume (and discard) any mouse SGR
  * reports that arrive meanwhile -- used by the menus and text dialogs, which are
  * keyboard-only. ptr_ev() returns 0 for a key (in ptr_key: arrows are 128..131),
@@ -204,6 +222,7 @@ int cell_top(int r) { return 246 - ROWH * r; }
 int draw() {
     int s; int idx; int row; int col; int ix; int ct; int t; char *nm;
     gp(7); gp(2); gp(8); gp(12);                   /* FLOOD: a blue-grey desktop */
+    _curon = 0;                                    /* the flood wiped the XOR cursor */
     /* menu bar: a white strip across the top with black labels */
     pen(65535); fillrect(0, 258, 479, 271);
     pen(0);
@@ -229,6 +248,7 @@ int draw() {
         pen(65535); gtext(col * COLW + 6, ct - 54, nm);
         s = s + 1;
     }
+    cur_show();                                     /* the mouse cursor sits on top */
     return 0;
 }
 
@@ -522,6 +542,8 @@ int main() {
     }
     if (cpath[0] == 0) { cpath[0] = '/'; cpath[1] = 0; }
     ptr_init();                                    /* keys + mouse on the console */
+    ptr_motion();                                  /* 1003: free motion, for a following cursor */
+    _curx = 240; _cury = 136; _curon = 0;          /* cursor starts centred */
     fscan();
     draw();
     going = 1;
@@ -537,6 +559,9 @@ int main() {
             if (cell_ok) { fsel = i; reveal(); draw(); ctx_menu(ptr_x, ptr_y, 1); }
             else { ctx_menu(ptr_x, ptr_y, 0); }
         }
+        else if (ev == 5) {                        /* FREE move: just glide the cursor, no redraw */
+            cur_to(ptr_x, ptr_y);
+        }
         else if (ev == 0) {                        /* a key */
             k = ptr_key;
             if (k == 'q' || k == 'Q' || k == 27) { going = 0; }
@@ -549,7 +574,7 @@ int main() {
             else if (k == 'a' || k == 'A') { apps_menu(); }
             else if (k == 'f' || k == 'F') { file_menu(); }
         }
-        if (going) { reveal(); draw(); }
+        if (going && ev != 5) { reveal(); draw(); }   /* a free move never triggers a full redraw */
     }
     ptr_done();
     poke(GTSUSP, 0);                               /* release the console */

@@ -15,6 +15,7 @@
  *   2 drag     (button held)
  *   3 release
  *   4 right-click press
+ *   5 free move (no button) -- only after ptr_motion() enables 1003 tracking
  * Wheel and other buttons are ignored. The scripted-input trap is
  * handled: the size query never eats a real keystroke (a non-ESC
  * first byte is pushed back), so `p8xemu -i` sessions can drive a
@@ -92,9 +93,15 @@ int ptr_init() {
     return 0;
 }
 int ptr_done() {
-    outc(27); outs("[?1006l"); outc(27); outs("[?1002l");
+    outc(27); outs("[?1003l"); outc(27); outs("[?1006l"); outc(27); outs("[?1002l");
     return 0;
 }
+/* ANY-MOTION tracking (xterm 1003): report free mouse motion (no button held),
+ * not just clicks/drags -- so a client can move a cursor that FOLLOWS the mouse.
+ * ptr_ev() then returns 5 for a free move (ptr_x/ptr_y updated). Opt-in: only a
+ * client that wants a following cursor calls this (after ptr_init). */
+int ptr_motion() { outc(27); outs("[?1003h"); return 0; }
+int ptr_motion_off() { outc(27); outs("[?1003l"); return 0; }
 
 /* one SGR report, after ESC [ < is consumed: b;x;y then M/m.
  * Returns the event type, or 0 with ptr_key=0 for ignored buttons. */
@@ -113,10 +120,13 @@ int _pmouse() {
     ptr_key = 0;
     if (b >= 64) { return 0; }                 /* wheel: ignored */
     ptr_x = _pmapx(x); ptr_y = _pmapwy(y);
-    if (fin == 'm') { return 3; }
+    if (fin == 'm') { return 3; }              /* release */
+    if (b & 32) {                              /* motion (drag or free move) */
+        if ((b & 3) == 3) { return 5; }        /* FREE move, no button -- 1003 mode */
+        return 2;                              /* drag (a button is held) */
+    }
     if ((b & 3) == 2) { return 4; }            /* right press */
-    if (b & 32) { return 2; }                  /* drag */
-    return 1;                                  /* press */
+    return 1;                                  /* left press */
 }
 
 int ptr_ev() {

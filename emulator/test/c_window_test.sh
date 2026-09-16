@@ -67,7 +67,17 @@ try:
         except socket.timeout:
             break
     if n<1: raise SystemExit("no frames streamed (display path)")
-    # 2) MOUSE: click column 1 -> finder moves the selection -> it redraws
+    # 2) CURSOR: a free move (no button) must draw the following cursor (1003)
+    conn.sendall(b'M'+struct.pack(">HHB",200,150,0))
+    curdrawn=False; conn.settimeout(4.0)
+    try:
+        for _ in range(3):
+            f=frame(conn)
+            if f is None: break
+            if f!=last: curdrawn=True; last=f; break
+    except socket.timeout: pass
+    if not curdrawn: raise SystemExit("free move drew no cursor (1003 motion path)")
+    # 3) MOUSE: click column 1 -> finder moves the selection -> it redraws
     conn.sendall(b'M'+struct.pack(">HHB",144,30,0))   # move there
     conn.sendall(b'M'+struct.pack(">HHB",144,30,1))   # left press
     conn.sendall(b'M'+struct.pack(">HHB",144,30,0))   # release
@@ -80,7 +90,7 @@ try:
     except socket.timeout:
         pass
     if not changed: raise SystemExit("click produced no redraw (mouse path)")
-    print("  display: %d frames streamed; mouse: click reached finder" % n)
+    print("  display: %d frames; free-move cursor drawn; click reached finder" % n)
     rc=0
 finally:
     p.terminate()

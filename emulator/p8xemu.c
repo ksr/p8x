@@ -84,7 +84,8 @@ static int peeked=-1;                 /* one-char lookahead for ACIA status/data
    framebuffer to it and takes mouse events back as xterm SGR into the console
    input (keyboard/console stay on the terminal). Pure POSIX -- no windowing lib
    here, inert unless -W is given. */
-static int win_mode=0, win_fd=-1, mouse_track=0;
+static int win_mode=0, win_fd=-1, mouse_track=0, motion_track=0;   /* motion_track: 1003 free-motion on */
+static long win_motion_ms=0;          /* throttle free-motion SGR (~22/s) */
 static int bridge_fd = -1;            /* -B card-edge bridge fd (declared early: win_frame tests it) */
 static const char *win_path=0;
 static unsigned char inj[1024]; static int inj_h=0, inj_t=0;   /* console-input inject ring */
@@ -1666,6 +1667,10 @@ static void win_mouse(int x,int y,int btn){
         if(!lb && (win_lb&1)) win_sgr(0,0,col,row);
         if(!rb && (win_lb&2)) win_sgr(2,0,col,row);
         if(moved && lb)       win_sgr(32,1,col,row);
+        if(moved && !lb && !rb && motion_track){       /* free motion -> a following cursor (1003) */
+            long t=now_ms();
+            if(t-win_motion_ms>=45){ win_sgr(35,1,col,row); win_motion_ms=t; }
+        }
     }
     win_lx=x; win_ly=y; win_lb=btn;
 }
@@ -1682,6 +1687,7 @@ static void win_out(int c){
         if((c=='h'||c=='l') && oc[0]=='?'){
             if(strstr(oc,"1002")||strstr(oc,"1000")||strstr(oc,"1003"))
                 mouse_track=(c=='h');
+            if(strstr(oc,"1003")) motion_track=(c=='h');   /* free-motion (following cursor) */
         } else if(!strcmp(oc,"18t")){
             char r[24]; int i,n=snprintf(r,sizeof r,"\033[8;%d;%dt",gh,gw);
             for(i=0;i<n;i++) inj_put((unsigned char)r[i]);
