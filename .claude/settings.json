@@ -10,6 +10,8 @@
       "Bash(xxd *)",
       "Bash(nextpnr-himbaechel *)",
       "Bash(vvp *)",
+      "Bash(yosys *)",
+      "Bash(gowin_pack *)",
       "Bash(python3 generators/gen_glkw.py)",
       "Bash(python3 generators/gen_font.py)",
       "Bash(python3 assembler/p8xasm.py *)",
