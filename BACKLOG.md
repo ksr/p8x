@@ -754,6 +754,12 @@ Nothing below has been built or measured.
            (CPU in the emulator, card = display) becomes a COMPLETE
            head-down machine on hardware we already have -- display +
            mouse + keyboard on one card.
+      WIRING/PARTS (option 3, 2026-09-16): the breadboard interface is designed --
+      two TXS0102 auto-direction level translators (one per port, 5V<->3.3V,
+      internal pull-ups, no externals), the four lines to free Nano GPIO
+      (example 76/75/74/73). Full pinout/BOM/.cst/open-drain rule in
+      fpga/tang-nano-20k/PS2-INTERFACE.md (+ .pdf diagram). Hardware not wired yet
+      (a few days out); software continues on the emulator/lib_ps2 path meanwhile.
       BRIDGE REVERSE CHANNEL (option 3 / the card personality): the
       bridge is today mostly emulator->card (GL writes) + the PING. Add
       card->emulator EVENT packets -- the fabric receiver captures a PS/2
