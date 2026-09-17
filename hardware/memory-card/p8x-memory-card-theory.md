@@ -16,13 +16,20 @@ and includes a jumper to write-protect the ROM.
 | RAM | `$8000–$FEFF` | 32 KB | U2 62256 | `NAND(A15, -IOPG)` |
 | I/O | `$FF00–$FFFF` | — | (other cards) | — |
 
-> **⚠ DESIGN NOT YET REGENERATED (2026-09-17).** The 2026-09-14 ROM shrink (8 KB
-> → 6 KB) is reflected in the emulator, `generators/gen_memmap.py` and the OS, but
-> the CAD/`.sch` for this card still carries the OLDER 8 KB decode
-> (`ROM !CE = A13 OR A14 OR A15`, ROM = `$0000–$1FFF`). That decode maps
-> `$1800–$1FFF` to the ROM chip — **unwritable** — which would break the OS/BIOS
-> the moment it touches its scratch there. Before building this card the decode
-> must change:
+> **⚠ EAGLE CAD NOT YET REGENERATED (2026-09-17) — but a buildable KiCad rev F
+> exists.** The 2026-09-14 ROM shrink (8 KB → 6 KB) is reflected in the emulator,
+> `generators/gen_memmap.py` and the OS, but the **Eagle** CAD/`.sch` for this
+> card still carries the OLDER 8 KB decode (`ROM !CE = A13 OR A14 OR A15`,
+> ROM = `$0000–$1FFF`). That decode maps `$1800–$1FFF` to the ROM chip —
+> **unwritable** — which would break the OS/BIOS the moment it touches its
+> scratch there.
+>
+> **The corrected 6 KB decode IS implemented** in the KiCad board at
+> [`kicad/`](kicad/README.md) (rev F, 4-layer, fully routed, orderable gerbers) —
+> `kicad/gen_mem.py` applies the decode change below to the imported netlist,
+> adding **no new chips** (it rewires spare gates U9.4 = `A11·A12`, U11.2 =
+> ROM `!CE`, U11.3, and moves U7.3's input). Build from `kicad/` until the Eagle
+> generator is brought to rev F. The decode change:
 > - **ROM `!CE`** gains an `(A11·A12)` deselect term (one AND gate), so the ROM
 >   answers only `$0000–$17FF`; within the `$0000–$1FFF` page, `A11·A12` picks the
 >   top 2 KB (`$1800–$1FFF`), which is now RAM.
