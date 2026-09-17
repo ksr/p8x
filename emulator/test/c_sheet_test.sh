@@ -33,8 +33,12 @@ python3 $ROOT/tools/p8xfs.py put    cs.img cs_sheet.bin --name /bin/sheet.bin --
 # B1, then 's' to SAVE. Reading the saved file back verifies data entry + the save
 # path exactly (raw cell text), where reading rendered glyphs could not.
 printf 'B\rsheet\r5\r=A1+A1\r7\r' > cs.in            # fills A1,A2,A3 (cursor -> A4)
-printf '\033[<0;19;5M\033[<0;19;5m' >> cs.in         # click cell B1 (col45,row1 = B1 region top)
-printf '=SUM(A1:A3)\rs' >> cs.in                     # B1 formula, then save
+printf '\033[<0;19;5M\033[<0;19;5m' >> cs.in         # click cell B1 (window ~226 -> row 5)
+printf '=SUM(A1:A3)\r' >> cs.in                      # B1 formula
+printf 's\r' >> cs.in                                # SAVE: prompt prefilled /SHEET.SS, Enter
+# then SAVE AS a different name: 's' opens the prompt on "/SHEET.SS" (9 chars);
+# nine DELs clear it, type /X.SS, Enter -- proving the filename prompt takes input.
+printf 's\177\177\177\177\177\177\177\177\177/X.SS\r' >> cs.in
 ../p8xemu -N -i cs.in -c cs.img -l 600000000 -g cs.ppm eeprom.bin > cs.out 2>/dev/null || true
 
 # grid rendered? (the column-header band drew A..H)
@@ -69,11 +73,17 @@ if bad:
 print("C-SHEET TEST: data entry ok (A1..A3 + B1 SUM saved exactly; keyboard + mouse-select)")
 PY
 
+# the "save as" prompt wrote the same data to /X.SS (proves the filename prompt)
+python3 $ROOT/tools/p8xfs.py get cs.img /X.SS --out cs.x 2>/dev/null || fail "Save-As prompt did not write /X.SS"
+sort cs.ss > cs.ss.s; sort cs.x > cs.x.s
+diff cs.ss.s cs.x.s >/dev/null 2>&1 || fail "/X.SS (save-as) differs from /SHEET.SS"
+echo "C-SHEET TEST: save-as filename prompt ok (/X.SS written with the same cells)"
+
 # load round-trip: run sheet again (it auto-loads /SHEET.SS, the default file),
 # press 's' to re-save. If load() populated the cells, the file is unchanged; if
 # load did nothing, the re-save would be empty.
 cp cs.ss cs.ss.orig
-printf 'B\rsheet\rs' > cl.in
+printf 'B\rsheet\rs\r' > cl.in                        # auto-load /SHEET.SS, then SAVE (prompt, Enter)
 ../p8xemu -N -i cl.in -c cs.img -l 400000000 eeprom.bin > cl.out 2>/dev/null || true
 python3 $ROOT/tools/p8xfs.py get cs.img /SHEET.SS --out cs.ss2 2>/dev/null || fail "re-save produced no file"
 python3 - <<'PY' || exit 1

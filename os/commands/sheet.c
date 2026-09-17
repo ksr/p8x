@@ -38,9 +38,12 @@ char raw[3072];               /* NCELL * RL, the raw text of each cell */
 int  val[96];                 /* computed integer value */
 int  cerr[96];                /* 1 = this cell is in error (#ERR) */
 int  selc; int selr;          /* selected column / row */
-char ebuf[34]; int elen;      /* edit buffer while typing a cell */
+int  editing;                 /* 1 = typing into the selected cell */
+int  pmode;                   /* 0 none, 1 = Save filename prompt, 2 = Load prompt */
+char ebuf[68]; int elen;      /* edit buffer (a cell, or a filename in a prompt) */
 char fpath[64];               /* the sheet file */
 int  fromdesk; int fromwm;
+int  _curx; int _cury; int _curon;   /* following mouse crosshair (XOR on the bitmap) */
 
 /* evaluator scan state */
 char *fp;                     /* formula scan pointer */
@@ -75,6 +78,20 @@ int gsetup() {
     gp(129); gw(256);                         /* TSIZE 1.0 */
     return 0;
 }
+/* following mouse crosshair: an XOR plus on the bitmap (self-erasing, no read-
+ * back). Single MOVE+DRAW lines per arm, NOT rectlines (a zero-size box outline
+ * XOR-cancels to four dots). Draw twice to erase. */
+int cur_xdraw() {
+    gp(235); gp(4);                           /* LINFUN XOR */
+    pen(65535);                               /* white inverts anywhere */
+    gp(16); gw(_curx - 4); gw(_cury); gp(40); gw(_curx + 4); gw(_cury);
+    gp(16); gw(_curx); gw(_cury - 4); gp(40); gw(_curx); gw(_cury + 4);
+    gp(235); gp(0);                           /* LINFUN replace */
+    return 0;
+}
+int cur_show() { if (_curon == 0) { cur_xdraw(); _curon = 1; } return 0; }
+int cur_hide() { if (_curon) { cur_xdraw(); _curon = 0; } return 0; }
+int cur_to(int x, int y) { cur_hide(); _curx = x; _cury = y; cur_show(); return 0; }
 
 /* ---- small integer utilities (p8cc / and < are UNSIGNED) ------------------- */
 int isdig(int c) { return (c >= '0') && (c <= '9'); }
@@ -327,29 +344,38 @@ int draw_sel() {                              /* highlight the selected cell */
     gline(x0 + 1, y1 - 1, x0 + 1, y1 - CH + 1); gline(x0 + CW - 1, y1 - 1, x0 + CW - 1, y1 - CH + 1);
     return 0;
 }
-int draw_bar(int editing) {                   /* menu + formula bar (top) */
+int draw_bar() {                              /* menu + formula bar (top) */
     char ref[8]; char *r;
     pen(6 << 5); fillrect(0, GTOP + 17, 479, 271);   /* bar background */
     pen(65535);
-    refstr(selc, selr, ref);
-    gtext(4, 261, ref);
-    gp(6); gp(31); gp(63); gp(0);                    /* yellow content */
-    if (editing) { gtext(40, 261, ebuf); }
-    else { r = raw + (selr * NC + selc) * RL; if (r[0]) { gtext(40, 261, r); } }
+    if (pmode) {                                     /* a Save/Load filename prompt */
+        if (pmode == 1) { gtext(4, 261, "Save:"); } else { gtext(4, 261, "Load:"); }
+        gp(6); gp(31); gp(63); gp(0);                /* yellow: the filename */
+        gtext(52, 261, ebuf);
+    } else {
+        refstr(selc, selr, ref);
+        gtext(4, 261, ref);
+        gp(6); gp(31); gp(63); gp(0);                /* yellow content */
+        if (editing) { gtext(40, 261, ebuf); }
+        else { r = raw + (selr * NC + selc) * RL; if (r[0]) { gtext(40, 261, r); } }
+    }
     pen(31 << 6);                                    /* green menu buttons */
     gtext(330, 261, "SAVE");
     gtext(378, 261, "LOAD");
     gtext(426, 261, "QUIT");
     return 0;
 }
-int draw_all(int editing) {
+int draw_all() {
     int i;
     draw_grid();
     draw_sel();
     i = 0; while (i < NCELL) { draw_cellval(i); i = i + 1; }
-    draw_bar(editing);
+    draw_bar();
+    _curon = 0;                               /* the repaint wiped the XOR cursor */
+    cur_show();
     return 0;
 }
+int refbar() { cur_hide(); draw_bar(); cur_show(); return 0; }   /* bar-only update */
 
 /* ---- file save / load ------------------------------------------------------ */
 int putbytes(char *s) { int i; i = 0; while (s[i]) { bios(FPUTB, 0, s[i]); i = i + 1; } return 0; }
@@ -415,6 +441,21 @@ int commit_edit() {                           /* ebuf -> selected cell */
 }
 int clear_cell() { char *r; r = raw + (selr * NC + selc) * RL; r[0] = 0; return 0; }
 
+/* filename prompt (Save/Load): prefill the edit buffer with the current path */
+int begin_prompt(int mode) {
+    int i;
+    pmode = mode; editing = 0;
+    i = 0; while (fpath[i] && (i < 62)) { ebuf[i] = fpath[i]; i = i + 1; }
+    ebuf[i] = 0; elen = i;
+    return 0;
+}
+int commit_prompt() {                         /* the typed name becomes the file */
+    int i;
+    i = 0; while (i < elen) { fpath[i] = ebuf[i]; i = i + 1; }
+    fpath[i] = 0;
+    return 0;
+}
+
 /* mouse hit test: panel (x,y) -> select a cell, or a bar button (1 save / 2 load
  * / 3 quit / 0 none). */
 int hit(int x, int y) {
@@ -434,7 +475,7 @@ int hit(int x, int y) {
 }
 
 int main() {
-    int ev; int k; int going; int editing; int h; char *a; int i;
+    int ev; int k; int going; int h; char *a; int i;
     if (peek(GFXPRES) == 0) { puts("?No display"); return 1; }
     a = argstr();
     while (*a == 32) { a = a + 1; }
@@ -453,40 +494,49 @@ int main() {
                                                 grid; GTSUSP=1 -> the OS restores it
                                                 (TXEN 1) when we quit */
     gsetup();
-    selc = 0; selr = 0; editing = 0;
+    selc = 0; selr = 0; editing = 0; pmode = 0;
+    _curx = 240; _cury = 136; _curon = 0;
     load();
     recalc();
     ptr_init();
-    draw_all(0);
+    ptr_motion();                             /* 1003: the crosshair follows the mouse */
+    draw_all();
     going = 1;
     while (going) {
         ev = ptr_ev();
-        if (ev == 0) {
+        if (ev == 5) { cur_to(ptr_x, ptr_y); }          /* free move: track the pointer */
+        else if (ev == 0) {
             k = ptr_key;
-            if (editing) {
-                if ((k == 13) || (k == 10)) { commit_edit(); editing = 0; recalc(); if (selr < NR - 1) { selr = selr + 1; } draw_all(0); }
-                else if (k == 27) { editing = 0; draw_all(0); }
-                else if ((k == 8) || (k == 127)) { if (elen > 0) { elen = elen - 1; ebuf[elen] = 0; } draw_bar(1); }
-                else if ((k >= 32) && (k < 127) && (elen < RL - 2)) { ebuf[elen] = k; elen = elen + 1; ebuf[elen] = 0; draw_bar(1); }
-            } else {
-                if (k == 128) { if (selr > 0) { selr = selr - 1; } draw_all(0); }
-                else if (k == 129) { if (selr < NR - 1) { selr = selr + 1; } draw_all(0); }
-                else if (k == 130) { if (selc < NC - 1) { selc = selc + 1; } draw_all(0); }
-                else if (k == 131) { if (selc > 0) { selc = selc - 1; } draw_all(0); }
+            if (pmode) {                                /* --- Save/Load filename prompt --- */
+                if ((k == 13) || (k == 10)) { commit_prompt(); if (pmode == 1) { save(); } else { load(); recalc(); } pmode = 0; draw_all(); }
+                else if (k == 27) { pmode = 0; draw_all(); }
+                else if ((k == 8) || (k == 127)) { if (elen > 0) { elen = elen - 1; ebuf[elen] = 0; } refbar(); }
+                else if ((k >= 32) && (k < 127) && (elen < 62)) { ebuf[elen] = k; elen = elen + 1; ebuf[elen] = 0; refbar(); }
+            } else if (editing) {                       /* --- cell edit --- */
+                if ((k == 13) || (k == 10)) { commit_edit(); editing = 0; recalc(); if (selr < NR - 1) { selr = selr + 1; } draw_all(); }
+                else if (k == 27) { editing = 0; draw_all(); }
+                else if ((k == 8) || (k == 127)) { if (elen > 0) { elen = elen - 1; ebuf[elen] = 0; } refbar(); }
+                else if ((k >= 32) && (k < 127) && (elen < RL - 2)) { ebuf[elen] = k; elen = elen + 1; ebuf[elen] = 0; refbar(); }
+            } else {                                    /* --- navigation --- */
+                if (k == 128) { if (selr > 0) { selr = selr - 1; } draw_all(); }
+                else if (k == 129) { if (selr < NR - 1) { selr = selr + 1; } draw_all(); }
+                else if (k == 130) { if (selc < NC - 1) { selc = selc + 1; } draw_all(); }
+                else if (k == 131) { if (selc > 0) { selc = selc - 1; } draw_all(); }
                 else if ((k == 'q') || (k == 'Q') || (k == 24)) { going = 0; }
-                else if ((k == 's') || (k == 'S') || (k == 19)) { save(); }
-                else if ((k == 'o') || (k == 'O') || (k == 15)) { load(); recalc(); draw_all(0); }
-                else if ((k == 8) || (k == 127)) { clear_cell(); recalc(); draw_all(0); }
-                else if (k == 13) { begin_edit(); editing = 1; draw_bar(1); }
-                else if (isdig(k) || (k == '-') || (k == '+') || (k == '=') || (k == '.')) { begin_fresh(k); editing = 1; draw_bar(1); }
+                else if ((k == 's') || (k == 'S') || (k == 19)) { begin_prompt(1); draw_all(); }
+                else if ((k == 'o') || (k == 'O') || (k == 15)) { begin_prompt(2); draw_all(); }
+                else if ((k == 8) || (k == 127)) { clear_cell(); recalc(); draw_all(); }
+                else if (k == 13) { begin_edit(); editing = 1; refbar(); }
+                else if (isdig(k) || (k == '-') || (k == '+') || (k == '=') || (k == '.')) { begin_fresh(k); editing = 1; refbar(); }
             }
         } else if (ev == 1) {                 /* a mouse press */
             if (editing) { commit_edit(); editing = 0; recalc(); }
+            if (pmode) { pmode = 0; }                   /* a click cancels a prompt */
             h = hit(ptr_x, ptr_y);
-            if (h == 1) { save(); }
-            else if (h == 2) { load(); recalc(); draw_all(0); }
+            if (h == 1) { begin_prompt(1); draw_all(); }    /* SAVE -> filename prompt */
+            else if (h == 2) { begin_prompt(2); draw_all(); }  /* LOAD -> filename prompt */
             else if (h == 3) { going = 0; }
-            else { draw_all(0); }             /* h==4 selected, or a miss: repaint */
+            else { draw_all(); }              /* h==4 selected, or a miss: repaint */
         }
     }
     ptr_done();

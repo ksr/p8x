@@ -42,14 +42,20 @@ KEYS
     Enter           commit the edit and move down
     Esc             cancel the edit
     Backspace       clear the selected cell
-    s               SAVE the sheet to its file
-    o               OPEN (reload) the file, discarding edits
+    s               SAVE -- prompts for a filename (Enter keeps the shown
+                    one; edit it to "save as")
+    o               OPEN a file -- prompts for a filename, then loads it
     q               quit
 
+    The Save/Load prompt shows in the bar, pre-filled with the current
+    file. Type over it (Backspace edits), Enter confirms, Esc cancels.
+
 MOUSE
-    Click a cell to select it. Click SAVE / LOAD / QUIT in the bar at the
-    top-right. The pointer arrives as xterm SGR (a terminal with mouse
-    reporting, the emulator's -W browser pad, or a real PS/2 mouse).
+    A crosshair follows the pointer. Click a cell to select it; click
+    SAVE / LOAD / QUIT in the bar at the top-right (SAVE and LOAD open the
+    same filename prompt as the keys). The pointer arrives as xterm SGR (a
+    terminal with mouse reporting, the emulator's -W browser pad, or a
+    real PS/2 mouse).
 
 FILE
     sheet loads and saves a line-based file, one "REF raw" per non-empty
