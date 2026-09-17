@@ -266,7 +266,7 @@ legend = Paragraph(
     "<b>By</b>=bytes, <b>Cy</b>=cycles (incl. fetch). &nbsp; "
     "<b>Flags (Fl):</b> C carry (active-high: ADD carry-out / SUB,CMP no-borrow A>=B), "
     "Z zero, N negative (bit7), V overflow. '-' = none. Signed branches test N^V / Z. &nbsp; "
-    "<b>Memory (rev E):</b> $0000-1FFF ROM | $2000-FEFF RAM | $FF00-FFFF I/O. "
+    "<b>Memory (rev E):</b> $0000-17FF ROM (6K) | $1800-FEFF RAM | $FF00-FFFF I/O. "
     "P0=PC, P3=stack (empty-descending). JZ/JNZ/JC are aliases of BZ/BNZ/BCP.",
     SUB)
 
@@ -304,7 +304,7 @@ _md.append("**Operands:** `#imm` immediate | `addr` 16-bit absolute | `(Pn)` "
            "**By**=bytes, **Cy**=cycles (incl. fetch). **Flags:** C carry "
            "(active-high: ADD carry-out / SUB,CMP no-borrow A>=B), Z zero, N "
            "negative (bit7), V overflow; `-` = none. Signed branches test "
-           "N^V / Z. **Memory (rev E):** $0000-1FFF ROM | $2000-FEFF RAM | "
+           "N^V / Z. **Memory (rev E):** $0000-17FF ROM (6K) | $1800-FEFF RAM | "
            "$FF00-FFFF I/O. P0=PC, P3=stack (empty-descending). JZ/JNZ/JC are "
            "aliases of BZ/BNZ/BCP.\n")
 for _g, _mns in GROUPS:
