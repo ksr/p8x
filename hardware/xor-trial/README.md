@@ -74,11 +74,15 @@ means).
   If you later clock this into a flip-flop, add a small cap (e.g. 100 nF) across
   each button or an RC/Schmitt debounce — a bare button bounces for a few ms.
 
-## If you want it as a real board
+## As a real board — DONE (KiCad)
 
-This is written for a breadboard. To turn it into a PCB in the P8X flow, say the
-word and I'll add a `gen_eagle.py` entry (a small 1-IC board) so it generates a
-`.sch`/`.brd` like the other cards — same generators-are-canon rule applies.
+This has been taken all the way to an **orderable PCB** — see
+[`kicad/`](kicad/README.md). A `pcbnew` generator (`kicad/gen_xor.py`) builds a
+62 × 44 mm 2-layer board from this circuit; it passes KiCad DRC clean (0
+violations, 0 unconnected) and exports Gerbers. To order, upload
+[`kicad/xor_trial_gerbers.zip`](kicad/xor_trial_gerbers.zip) to any fab and stuff
+it with the BOM above.
 
-See `hardware/arduino-scratch/` for the existing scratch/experimental board and
-the ECAD round-trip notes.
+This is the project's first KiCad board (the CPU cards use the Eagle flow in
+`generators/gen_eagle.py`); see also `hardware/arduino-scratch/` for the earlier
+ECAD scratch board.
