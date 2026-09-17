@@ -645,6 +645,28 @@ Nothing below has been built or measured.
 
 ## IDEAS
 
+- [ ] **BASIC graphics cursor (2026-09-17, user).** A software crosshair/pointer
+      for BASIC programs, matching what finder/paint already draw client-side.
+      Three primitives to add (statements + maybe function forms):
+      - **turn the cursor ON / OFF** -- e.g. `CURSORON` / `CURSOROFF`, an XOR/
+        complement crosshair the interpreter tracks and redraws (self-inverse, no
+        read-back, the finder `cur_xdraw` idiom -- draw single LINES per arm, NOT
+        degenerate rectlines, or you get the "four compass dots" bug just fixed in
+        finder).
+      - **read the cursor position** -- `CURSORX` / `CURSORY` functions (or one
+        `CURSOR(0/1)`), returning the current window coords so a program can react
+        to where the pointer is.
+      - Move source: the pointer already arrives as xterm SGR on the console
+        (lib_ptr), and on hardware via lib_ps2 / the PS/2 mouse. BASIC would run a
+        poll/event hook (a `MOUSE`-style read, or fold into INPUT) to advance the
+        cursor. Decide whether motion is polled by the program or tracked live by
+        the interpreter's input loop.
+      - Both twins (basic.c + p8xbasic.asm) share the token ABI; free tokens after
+        the layer keywords are below $FC (the GL verbs fill $B4..$F5, GLRD $FB,
+        TEXTON..GRAPHICSOFF $FC..$FF) -- so this needs a token-space plan (reclaim
+        an unassigned slot, or a `MOUSE`/`CURSOR` sub-keyword scheme). See the GXEN
+        layer work for the pattern.
+
 - [ ] **imgsend: VERIFY pass (2026-08-21, from a real corruption).** A clone
       delivered trit.bin with the right SIZE but corrupt content — "acked
       every sector, finished with 'K'" certifies transport, not bytes — and

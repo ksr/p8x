@@ -61,6 +61,7 @@ int armed;                         /* anchor placed, ghost live */
 int pal[8];
 
 int mdown;                         /* a mouse press is being dragged */
+int quitf;                         /* the QUIT button in the palette was clicked */
 int fromdesk;                      /* launched by desk (-d): chain back */
 int fromwm;                        /* launched by the resident WM (-w): on quit,
                                       resume it via SYS_WKRUN -- its windows
@@ -134,10 +135,16 @@ int status() {
 /* ---- the crosshair and ghosts (all complement mode) ------------------------ */
 int cross() {                                 /* self-inverse: call to draw,
                                                  call again to erase */
+    vp_all();                                 /* draw over the WHOLE panel (incl.
+                                                 the palette strip) so the cursor
+                                                 stays visible in the menu area --
+                                                 the canvas viewport would clip it
+                                                 above window-y 244 */
     mode(1);
     mov(cx - 4, cy); gput(40); gw(cx + 4); gw(cy);
     mov(cx, cy - 4); gput(40); gw(cx); gw(cy + 4);
     mode(0);
+    vp_canvas();                              /* restore the canvas clip for drawing */
     return 0;
 }
 
@@ -214,6 +221,13 @@ int palette() {
     fillm(1);                                                   /* fill: */
     mov(tcx(3) + 12, 258); gput(56); gw(4);                     /*  drop */
     fillm(0);
+    /* the QUIT button at the right end of the strip: a red close-box + white X */
+    pen(63488); fillm(1);
+    mov(432, 250); gput(52); gw(476); gw(268);
+    fillm(0);
+    pen(65535);
+    mov(438, 253); gput(40); gw(470); gw(265);
+    mov(438, 265); gput(40); gw(470); gw(253);
     selbox(swx(col), 20, 1);
     selbox(tcx(tool), 24, 1);
     vp_canvas();
@@ -268,21 +282,6 @@ int commit() {
 }
 
 /* ---- cursor movement (clamped inside the canvas) --------------------------- */
-int mvcur(int dx, int dy) {
-    cross();                                  /* erase */
-    if (armed && tool != 3) { ghost(); }      /* erase the old ghost */
-    cx = cx + dx; cy = cy + dy;
-    if (cx > 30000) { cx = 2; }               /* wrapped negative (unsigned) */
-    if (cx < 2) { cx = 2; }
-    if (cx > 477) { cx = 477; }
-    if (cy > 30000) { cy = 2; }
-    if (cy < 2) { cy = 2; }
-    if (cy > 242) { cy = 242; }
-    if (armed && tool != 3) { ghost(); }      /* draw the new one */
-    cross();                                  /* redraw */
-    return 0;
-}
-
 int jumpcur(int nx, int ny) {                 /* mouse: absolute move, clamped to the CANVAS */
     cross();
     if (armed && tool != 3) { ghost(); }
@@ -314,6 +313,7 @@ int curmove(int nx, int ny) {
 int at_palette(int x, int y) {
     int i;
     if (y < 246) { return 0; }
+    if (x >= 432 && x <= 476) { quitf = 1; return 1; }   /* the QUIT close-box */
     i = 0;
     while (i < 8) {
         if (x >= swx(i) && x <= swx(i) + 20) { pick_col(i); }
@@ -361,7 +361,7 @@ int main() {
     if (ap[0] == '-' && ap[1] == 'w') { fromwm = 1; }
     pal[0] = 65535;  pal[1] = 63488; pal[2] = 2016;  pal[3] = 31;
     pal[4] = 65504;  pal[5] = 2047;  pal[6] = 63519; pal[7] = 64512;
-    nsh = 0; tool = 0; col = 0; armed = 0; mdown = 0;
+    nsh = 0; tool = 0; col = 0; armed = 0; mdown = 0; quitf = 0;
     cx = 240; cy = 120;
 
     vp_all();
@@ -369,11 +369,11 @@ int main() {
     mov(0, 0); gput(52); gw(479); gw(271);
     fillm(0);
     palette();                                   /* leaves the canvas viewport */
-    outs("PAINT - wasd/WASD/arrows move, l b c f tools, 1-8 colours,");
+    outs("PAINT - mouse: press-drag-release draws; click a swatch/tool");
     outc(13); outc(10);
-    outs("SPACE anchor/commit, x cancel, e erase last, n new, q quit");
+    outs("to select, click the red X to quit.");
     outc(13); outc(10);
-    outs("mouse: press-drag-release draws; click the palette to select");
+    outs("keys: SPACE anchor/commit, x cancel, e erase last, n new, q quit");
     outc(13); outc(10);
     ptr_init();
     ptr_motion();                                /* 1003: crosshair follows the mouse (free motion) */
@@ -393,23 +393,10 @@ int main() {
         else if (ptr_key == 'q') { k = 0; }
         else {
             k = ptr_key;
-            if (k == 128) { mvcur(0, 4); }           /* arrows */
-            if (k == 129) { mvcur(0, 0 - 4); }
-            if (k == 130) { mvcur(4, 0); }
-            if (k == 131) { mvcur(0 - 4, 0); }
-            if (k == 'w') { mvcur(0, 1); }           /* window y is UP */
-            if (k == 's') { mvcur(0, 0 - 1); }
-            if (k == 'a') { mvcur(0 - 1, 0); }
-            if (k == 'd') { mvcur(1, 0); }
-            if (k == 'W') { mvcur(0, 8); }
-            if (k == 'S') { mvcur(0, 0 - 8); }
-            if (k == 'A') { mvcur(0 - 8, 0); }
-            if (k == 'D') { mvcur(8, 0); }
-            if (k >= '1' && k <= '8') { pick_col(k - '1'); }
-            if (k == 'l') { pick_tool(0); }
-            if (k == 'b') { pick_tool(1); }
-            if (k == 'c') { pick_tool(2); }
-            if (k == 'f') { pick_tool(3); }
+            /* Movement and tool/colour SELECTION are the mouse's job now (move the
+             * crosshair, click a swatch/tool, click the QUIT box) -- the old
+             * arrow/wasd move keys and the l/b/c/f + 1-8 select keys are gone. The
+             * keys that remain are editing actions with no palette equivalent. */
             if (k == 32) {
                 cross();
                 if (tool == 3) { drop(); }
@@ -431,6 +418,7 @@ int main() {
             }
             k = 1;                               /* keep running */
         }
+        if (quitf) { k = 0; }                    /* the QUIT close-box was clicked */
     }
     cross();                                     /* leave a clean screen */
     if (armed) { ghost(); }

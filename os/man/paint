@@ -1,5 +1,5 @@
 NAME
-    paint - keyboard-driven vector paint on the graphics card
+    paint - mouse-driven vector paint on the graphics card
 
 SYNOPSIS
     paint [-d | -w]
@@ -10,8 +10,9 @@ DESCRIPTION
     into closed outlines, and erase mistakes one shape at a time. The
     drawing is a DISPLAY LIST -- shapes, not pixels -- which is what
     makes erase possible: the last shape is popped and the canvas
-    replays. All input is the console keyboard (this machine has no
-    mouse); all output is the panel.
+    replays. It is driven by the MOUSE: move the crosshair, click a
+    swatch or tool in the palette strip, press-drag-release to draw, and
+    click the red X to quit. The keyboard keeps only editing shortcuts.
 
     With -d (how desk launches it), quitting chains back to desk via
     SYS_EXEC instead of exiting to the shell. With -w (how wdesk, the
@@ -19,35 +20,35 @@ DESCRIPTION
     resuming that desktop with its windows intact. With neither flag,
     quitting returns to the shell.
 
-KEYS
-    w a s d           move the crosshair 1 px (window sense: w is UP)
-    W A S D           move 8 px
-    arrow keys        move 4 px
-    l b c f           tool: Line, Box, Circle, Fill (drop)
-    1 .. 8            colour: white red green blue yellow cyan
-                      magenta orange
+MOUSE
+    The mouse arrives as xterm SGR reports on the console (from a
+    terminal with mouse reporting, from the emulator's -W browser
+    mouse-pad, or from a real PS/2 mouse). The crosshair follows the
+    pointer everywhere -- including up over the palette strip, so you
+    can see what you are about to click. Then:
+
+    move              the crosshair follows the pointer
+    press-drag-release  draw the current tool (Line/Box/Circle); for
+                      Fill, a press drops at the pointer
+    click a swatch    select that colour
+    click a tool cell select Line / Box / Circle / Fill
+    click the red X   quit (the close-box at the right of the strip)
+    right-click       cancel a rubber-band in progress
+
+    Line and box rubber-band from the press point to the release. Circle
+    presses at the CENTRE; the radius is the larger of the drag's x/y
+    distance. Position lands at terminal-CELL resolution, mapped through
+    the size the terminal reports (80x24 assumed if it stays silent).
+    The current tool and colour are bracketed in the palette strip and
+    echoed on the console.
+
+KEYS (editing shortcuts; movement and selection are the mouse's job)
     SPACE             anchor the shape, then (second press) commit it;
                       for Fill: drop at the crosshair
     x                 cancel a rubber-band in progress
     e (or u)          erase the LAST shape and replay the rest
     n                 new drawing (clear the canvas)
     q                 quit
-
-    Line and box rubber-band from the anchor to the crosshair. Circle
-    anchors at the CENTRE; the radius is the larger of the crosshair's
-    x/y distance. The current tool and colour are bracketed in the
-    palette strip and echoed on the console.
-
-MOUSE
-    In a terminal with xterm mouse reporting (iTerm2, Terminal.app,
-    xterm...), the mouse works through the SAME serial console: press
-    moves the crosshair and anchors (or drops, for Fill), dragging
-    rubber-bands live, release commits; a click on the palette strip
-    selects a swatch or tool; right-click cancels. Position lands at
-    terminal-CELL resolution, mapped through the size the terminal
-    reports (80x24 assumed if it stays silent) -- a larger terminal
-    window gives finer strokes. The keyboard always works regardless;
-    a terminal without mouse reporting simply ignores the feature.
 
 FILL
     The drop must land on background inside a CLOSED outline. paint

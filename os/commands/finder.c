@@ -77,15 +77,20 @@ int gsetup() {
 
 /* ---- following mouse cursor (1003 free-motion) --------------------------- *
  * An XOR crosshair on the bitmap: drawing it twice erases it (no read-back).
- * LINFUN 4 = XOR and applies to OUTLINES only, so the arms are degenerate
- * rectlines (a box with zero height/width = a line). Left at LINFUN 0 after;
- * the pen is left white, which is fine -- every draw() sets its own pens. */
+ * LINFUN 4 = XOR. The arms are single LINES (MOVE 16 + DRAW 40), NOT degenerate
+ * rectlines: a zero-height box outline draws its top and bottom edges over the
+ * same pixels, which XOR-cancel each other and leave only the two end corners --
+ * that was the "four compass dots" bug. A single DRAW per arm makes a proper
+ * plus. Left at LINFUN 0 after; the pen is left white, which is fine -- every
+ * draw() sets its own pens. */
 int _curx; int _cury; int _curon;
 int cur_xdraw() {
     gp(235); gp(4);                                  /* LINFUN XOR */
     penrgb(31, 63, 31);                              /* white inverts under XOR, visible anywhere */
-    rectline(_curx - 4, _cury, _curx + 4, _cury);    /* horizontal arm */
-    rectline(_curx, _cury - 4, _curx, _cury + 4);    /* vertical arm   */
+    gp(16); gw(_curx - 4); gw(_cury);                /* MOVE, then DRAW the horizontal arm */
+    gp(40); gw(_curx + 4); gw(_cury);
+    gp(16); gw(_curx); gw(_cury - 4);                /* MOVE, then DRAW the vertical arm */
+    gp(40); gw(_curx); gw(_cury + 4);
     gp(235); gp(0);                                  /* LINFUN replace */
     return 0;
 }
