@@ -198,6 +198,16 @@ command. Independent of the graphics work; needed before the transfer app.
     emulator; fits the card at 89% LUT4. See BACKLOG-DONE "Glass-TTY text overlay".
     (Pre-boot monitor-on-screen, once listed here, shipped with `MONFONT` on
     2026-09-10.)
+  - **The scanout composites TWO layers (2026-09-17):** the drawing bitmap
+    below and the char-gen text overlay on top, each with its own visibility
+    switch -- `TXEN` (opcode `$50`) for the overlay and the new `GXEN` (opcode
+    `$57`) for the bitmap. Visibility is SCANOUT-ONLY: hiding the bitmap composites
+    black where no glyph sits, but the framebuffer keeps its content and still
+    accepts draws, so a program can compose off-screen and reveal in one write.
+    The emulator's `gpu_tx_sample` is the golden spec (`bg = gx_en ? base : 0`,
+    overlay on top); the RTL mirrors it in `gtxt.v` (a `gx_en` register) and
+    `sdram_video.v` (the final mux), co-sim byte-identical. BASIC exposes both
+    pairs as `TEXTON`/`TEXTOFF` and `GRAPHICSON`/`GRAPHICSOFF` (man basic).
 - **P3 — Second serial port. Emulator DONE (2026-09-09).** A 2nd ACIA at
   `ACIA2S $FF08` / `ACIA2D $FF09`, register-identical to the console ACIA
   (`$FF04`/`$FF05`): status bit0 RDRF, bit1 TDRE; data read = RX, write = TX. The
@@ -224,8 +234,12 @@ command. Independent of the graphics work; needed before the transfer app.
   builds a shell command (mv/cp/del/rmdir/mkdir) and runs it through the same
   launch-and-return chain, so P8XFS needs no rename/rmdir primitive of its own;
   a modal text box takes the typed name, delete asks Y/N. Verified by
-  `c_finder_fileops_test.sh` (checks the filesystem after each op). Deferred to
-  BACKLOG: **mouse**, real **pull-down menus** (vs the key-hint bar), and
+  `c_finder_fileops_test.sh` (checks the filesystem after each op). **Mouse DONE
+  (2026-09-16):** Finder tracks a following crosshair cursor, opens a file on a
+  single click, and drives the FILE menu by click -- pointer events arrive through
+  `lib_ptr` (xterm SGR on the console; see man ptr), so the emulator's `-W`
+  browser mouse-pad and, later, a real PS/2 mouse both feed the same events.
+  Still deferred to BACKLOG: real **pull-down menus** (vs the key-hint bar) and
   **retiring the tiled `desk`/`wdesk`**.
 - **P5 — Apps. Term DONE (2026-09-10).** `os/commands/term.c` -- an on-screen
   console in the app frame: enables the glass TTY, each typed command runs with
@@ -257,9 +271,13 @@ command. Independent of the graphics work; needed before the transfer app.
   cost.
 - **Scroll method** — CPU-side text-buffer repaint vs. a card blit/scroll (faster
   if the card supports it).
-- **Keyboard** — input stays serial for now; a real PS/2 keyboard (backlog card)
-  is a later input source that feeds the same `CONIN`.
+- **Keyboard** — input stays serial for the console; a PS/2 keyboard + mouse are
+  now MODELLED (emulator `$FF58-$FF5F` window + `lib_ps2` Set-2/packet decode, man
+  ps2) and a standalone TTL receiver card + the FPGA-fabric option are designed
+  (see the PS/2 interface doc and `hardware/ps2-card/`). The hardware is not wired
+  yet; a real PS/2 device feeds the same `CONIN`/pointer path the SGR pad uses.
 - **Write app scope** — plain text editor vs. richer "word processor"; likely
   starts as a screen editor (evolve `vi`/`edit`, or new).
 - **Desktop file ops UX** — modal dialogs vs. menu-driven for rename/duplicate/
-  move on a no-mouse-yet machine (keyboard-driven selection like current FILES).
+  move. Finder now has a mouse (following cursor + click), so the FILE menu can
+  be clicked as well as keyed; the typed-name step still uses a modal text box.

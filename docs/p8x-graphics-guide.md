@@ -218,7 +218,7 @@ Every GL verb is a native statement (no quotes, expressions allowed):
     60 POLY3 3,-80,-80,300,80,-80,300,0,40,420
     70 NEXT A
 
-`COLOR` is the GL pen, nothing else (GTEXT and its GPEN shadow retired 2026-09-01); `GL s$` sends a raw ASCII line when you need
+`COLOR` is the GL pen, nothing else (GTEXT's old GPEN colour shadow retired 2026-09-01 -- GTEXT itself lives on as pure-GL 2D sugar that draws with the COLOR pen); `GL s$` sends a raw ASCII line when you need
 string-building (`GL "MDY "+STR$(A)`); native list verbs
 (CLBEG/CLEND/CLRUN) are synchronous, `GL "CLOOP 1 72"` is the
 non-blocking spin. PIXELR(x,y) reads pixels through the GL `PIXRD` verb (single-interface, 2026-08-31): window coordinates through the CURRENT window map, fully symmetric with PIXELW in any window. The full
