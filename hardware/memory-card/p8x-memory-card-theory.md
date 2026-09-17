@@ -1,24 +1,39 @@
 # Memory Card — Theory of Operation
 
-The memory card is the P8X's address space. **Rev E** map: an 8 KB ROM window
-(`$0000–$1FFF`, holding the monitor + BIOS) and **56 KB of SRAM**
-(`$2000–$FEFF`) across two 62256 chips. It decodes the address bus to decide which
-chip — if any — responds, steers a bidirectional data buffer the right way for
-reads vs writes, and includes a jumper to write-protect the ROM.
+The memory card is the P8X's address space. **Rev E** map (as of the 2026-09-14
+ROM shrink): a **6 KB ROM window** (`$0000–$17FF`, holding the monitor + BIOS) and
+**58 KB of SRAM** (`$1800–$FEFF`) across two 62256 chips. The `$1800–$1FFF` island
+that the shrink freed is **RAM** — it holds written OS/BIOS scratch (IBUF/PATHBUF/
+APBUF, the sector buffer `SBUF $1D00`, and BIOS scratch at `$1F00`), so it must be
+writable. The card decodes the address bus to decide which chip — if any —
+responds, steers a bidirectional data buffer the right way for reads vs writes,
+and includes a jumper to write-protect the ROM.
 
 | Region | Range | Size | Chip | `!CE` decode |
 |--------|-------|------|------|--------------|
-| ROM | `$0000–$1FFF` | 8 KB | U1 28C64 (or low 8 K of a 28C256) | `A13 OR A14 OR A15` |
-| RAM | `$2000–$7FFF` | 24 KB | U10 62256 (low 24 K used) | `A15 OR NOR(A13, A14)` |
+| ROM | `$0000–$17FF` | 6 KB | U1 28C64 (or low 6 K of a 28C256) | `A13 OR A14 OR A15 OR (A11·A12)` |
+| RAM | `$1800–$7FFF` | 26 KB | U10 62256 | `A15 OR NOT(A13 OR A14 OR (A11·A12))` |
 | RAM | `$8000–$FEFF` | 32 KB | U2 62256 | `NAND(A15, -IOPG)` |
 | I/O | `$FF00–$FFFF` | — | (other cards) | — |
 
-> Rev E shrank the ROM window to 8 KB (`$0000–$1FFF`) and moved the RAM floor down
-> to `$2000`, growing usable RAM to 56 KB and freeing `$2000–$3FFF` (formerly the
-> upper ROM window) for the OS — which now loads at `$2000`. U10 covers the low
-> 32 K address space; ROM overlays its bottom 8 K, so only `$2000–$7FFF` (24 K) of
-> U10 is reachable. The ROM decode gains A13 (an 8 K, not 16 K, window); the RAM-low
-> decode deselects U10 in the ROM region (`NOR(A13,A14)` = the `$0000–$1FFF` page).
+> **⚠ DESIGN NOT YET REGENERATED (2026-09-17).** The 2026-09-14 ROM shrink (8 KB
+> → 6 KB) is reflected in the emulator, `generators/gen_memmap.py` and the OS, but
+> the CAD/`.sch` for this card still carries the OLDER 8 KB decode
+> (`ROM !CE = A13 OR A14 OR A15`, ROM = `$0000–$1FFF`). That decode maps
+> `$1800–$1FFF` to the ROM chip — **unwritable** — which would break the OS/BIOS
+> the moment it touches its scratch there. Before building this card the decode
+> must change:
+> - **ROM `!CE`** gains an `(A11·A12)` deselect term (one AND gate), so the ROM
+>   answers only `$0000–$17FF`; within the `$0000–$1FFF` page, `A11·A12` picks the
+>   top 2 KB (`$1800–$1FFF`), which is now RAM.
+> - **Low-RAM `!CE` (U10)** is widened to cover `$1800–$7FFF` (26 KB, was 24 KB):
+>   it is selected whenever `A15=0` and the address is NOT in the `$0000–$17FF`
+>   ROM window.
+>
+> Rev E also moved the RAM floor and freed `$2000–$3FFF` (formerly the upper ROM
+> window) for the OS, which loads at `$2000`. U10 covers the low 32 K address
+> space; ROM overlays only its bottom 6 KB now, so `$1800–$7FFF` (26 K) of U10 is
+> reachable. High RAM (U2, `$8000–$FEFF`) is unchanged.
 
 > Source of truth: the `# MEMORY CARD rev E` section of
 > [`../../generators/gen_eagle.py`](../../generators/gen_eagle.py). Like every
@@ -81,22 +96,32 @@ reads vs writes, and includes a jumper to write-protect the ROM.
 ## 3. How it works
 
 ### 3.1 Address decode — who responds (rev E)
+> The block diagram and this section describe the CAD **as currently generated**
+> (the pre-2026-09-14 8 KB decode). The 6 KB shrink needs the decode change in the
+> ⚠ note at the top of this doc before a board is built; the target logic is given
+> there and in the region table. What follows is the as-built 8 KB decode plus, in
+> brackets, the 6 KB target.
+
 The top three address bits, **A15/A14/A13**, pick the region:
 
-- **ROM** (`U1`, 8 KB): `!CE = A13 OR A14 OR A15`. Active-low only when all three
-  are 0, so the ROM responds for `$0000–$1FFF` (8 KB). A 28C64 fits exactly; a
-  28C256 works too with only its low 8 KB reachable.
-- **Low SRAM** (`U10` 62256): `!CE = A15 OR NOR(A13, A14)` — active-low when A15=0
-  **and** (A13 or A14)=1, i.e. `$2000–$7FFF`. The `NOR(A13,A14)` term deselects U10
-  across the `$0000–$1FFF` ROM page so ROM and RAM never both drive the bus.
+- **ROM** (`U1`): as built, `!CE = A13 OR A14 OR A15`, active-low only when all
+  three are 0 → `$0000–$1FFF` (8 KB). **6 KB target:** add an `(A11·A12)` term,
+  `!CE = A13 OR A14 OR A15 OR (A11·A12)`, so the ROM answers only `$0000–$17FF`
+  and the top 2 KB of the page (`$1800–$1FFF`, where `A11·A12`) belongs to RAM.
+  A 28C64 fits (low 6 KB used); a 28C256 works too.
+- **Low SRAM** (`U10` 62256): as built, `!CE = A15 OR NOR(A13, A14)` → `$2000–
+  $7FFF`. **6 KB target:** widen it to `$1800–$7FFF` by selecting U10 whenever
+  `A15=0` and the address is not in the `$0000–$17FF` ROM window
+  (`!CE = A15 OR NOT(A13 OR A14 OR (A11·A12))`), so the `$1800–$1FFF` scratch
+  island is writable RAM.
 - **Main SRAM** (`U2` 62256): `!CE = -RAMCE = NAND(A15, -IOPG)`, unchanged. `U4`
   (a 7430 8-input NAND) asserts `-IOPG` low for an `$FFxx` address (A8–A15 all
   high); the RAM responds when A15 = 1 **and** it is not the I/O page. That
   carve-out keeps the RAM from fighting the I/O and CF cards at `$FF00–$FFFF`.
 
-So the decode yields four regions:
-- `$0000–$1FFF` → ROM (8 KB)
-- `$2000–$7FFF` → SRAM U10 ($2000–$7FFF, 24 KB, rev E)
+So the decode yields (6 KB target in brackets):
+- `$0000–$1FFF` → ROM (8 KB)  [`$0000–$17FF` → ROM, 6 KB]
+- `$2000–$7FFF` → SRAM U10 (24 KB)  [`$1800–$7FFF` → SRAM U10, 26 KB]
 - `$8000–$FEFF` → SRAM U2 (32 KB)
 - `$FF00–$FFFF` → neither responds here (the I/O and CF cards do)
 

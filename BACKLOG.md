@@ -20,6 +20,20 @@ remainder is why it is still here.
 
 ## NEXT
 
+- [ ] **Memory-card ROM decode revision (BUILD-BLOCKER, found 2026-09-17).** The
+      memory card's `.sch` + theory still carry the pre-2026-09-14 **8 KB ROM
+      window `$0000-$1FFF`** (`ROM !CE = A13 OR A14 OR A15`). The current map is
+      **6 KB ROM `$0000-$17FF`** with **`$1800-$1FFF` a RAM scratch island** (IBUF/
+      SBUF `$1D00`/BIOS scratch `$1F00`), which the OS/BIOS WRITES -- so as drawn,
+      that scratch lands in unwritable ROM and a real board fails. Change: ROM
+      `!CE` gains an `(A11·A12)` deselect term (one AND gate) so ROM answers only
+      `$0000-$17FF`; low-RAM U10 widens to `$1800-$7FFF`. Docs corrected 2026-09-17
+      (memory-card theory + README, RECONCILIATION.md); REMAINING is the CAD:
+      update the decode in `generators/gen_eagle.py` (or the live Fusion `-a`
+      files) and regenerate the memory-card `.sch`. The overnight hardware pass
+      MISSED this (inventory + I/O-port level only; the doc says "Rev E" but is an
+      earlier Rev E). See [[reference_p8x_memory_map]].
+
 - [ ] **OVERNIGHT BATCH (2026-09-16, user asleep -- do as much as possible without
       input; all on `graphics-card`, no merge to main beyond the current one).**
       Clarified answers locked with the user before they slept:

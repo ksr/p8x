@@ -7,28 +7,45 @@ the source of truth and `.brd` placement is the user's Fusion work).
 
 ## TL;DR
 
-The six built CPU cards (control, register bank, ALU, memory, I/O, CF-IDE) plus
-the LED display and backplane are **current** — the ISA has grown a lot since
-they were laid out, but that growth is **entirely in the microcode ROM**, which
-is data burned into the control card's existing EPROMs, not a change to any
-card's logic. What is missing is **I/O expansion cards** for subsystems that so
-far live only in the emulator and/or on the FPGA graphics card.
+Most of the built CPU cards (control, register bank, ALU, I/O, CF-IDE) plus the
+LED display and backplane are **current** — the ISA has grown a lot since they
+were laid out, but that growth is **entirely in the microcode ROM**, which is
+data burned into the control card's existing EPROMs, not a change to any card's
+logic. **Two things need attention before a build:** (1) the **memory card's ROM
+decode is stale** — it still maps 8 KB ROM `$0000-$1FFF`, but the 2026-09-14
+shrink made it 6 KB ROM with `$1800-$1FFF` a *writable* RAM scratch island, so the
+decode must change or the OS breaks (see "Needs a decode change" below); and (2)
+the missing **I/O expansion cards** for subsystems that so far live only in the
+emulator and/or on the FPGA graphics card.
 
 ## What is current (no board change needed)
 
-- **Control / microcode card.** The Tier A ISA growth (143 opcodes now, up from
+- **Control / microcode card.** The Tier A ISA growth (~149 opcodes now, up from
   88) is microcode: `microcode/genucode.py` → `u0-u3.bin` burned to the card's
-  microcode EPROMs. The microcode-ROM address map (`IR | step<<8 | cond<<12`) and
-  the card's sequencer are unchanged; a wider instruction set is just a fuller
-  ROM. Reburn the EPROMs from the current `genucode.py`; no rewire.
-- **Register bank, ALU, memory cards.** No architectural change. The rev-E memory
-  map (6K ROM `$0000-$17FF`, RAM from `$1800`) is a decode/strapping detail the
-  memory card already reflects; the bus-definition memory map is now current
-  (`p8x-bus-definition.md` §5).
+  four microcode EPROMs. Those are **28C64 (8 KB) each** and `u0-u3.bin` are 8 KB,
+  so the full 256-opcode IR space is already there — 149 opcodes fit with room.
+  The address map (`IR | step | cond`) and sequencer are unchanged; a wider ISA is
+  just fuller EPROM contents. Reburn from the current `genucode.py`; no rewire, no
+  bigger part. (The CPU address space is still 16-bit/64 KB; word ops use it too.)
+- **Register bank, ALU cards.** No architectural change.
 - **I/O card.** `$FF00` switches / `$FF02` LEDs / `$FF04-05` ACIA unchanged. These
   ports are now named in the single-source memory map (`SWITCHES`, `LEDS`).
 - **CF-IDE card.** `$FF10-$FF17`, unchanged.
 - **Backplane, LED display.** Unchanged.
+
+## Needs a decode change before building
+
+- **Memory card — STALE, must be revised (found 2026-09-17).** The card's decode
+  (`.sch` + `p8x-memory-card-theory.md`) still carries the pre-2026-09-14 **8 KB
+  ROM window `$0000-$1FFF`** (`ROM !CE = A13 OR A14 OR A15`). The current map is
+  **6 KB ROM `$0000-$17FF`** with **`$1800-$1FFF` a RAM scratch island** (IBUF/
+  SBUF `$1D00`/BIOS scratch `$1F00`) — those are *written*, so `$1800-$1FFF` must
+  be RAM. As drawn, that scratch lands in unwritable ROM and the OS/BIOS breaks on
+  a real board. **Change:** ROM `!CE` gains an `(A11·A12)` deselect term (one AND
+  gate) so ROM answers only `$0000-$17FF`; low-RAM U10 widens to `$1800-$7FFF`.
+  Docs corrected 2026-09-17; the `.sch` regen is a CAD/Fusion step. (The overnight
+  reconciliation missed this — it was an inventory + I/O-port pass, and the doc
+  says "Rev E" while carrying an *earlier* Rev E decode.)
 
 ## Gaps — subsystems with no TTL board yet
 
@@ -56,8 +73,10 @@ addition to the I/O card or a second I/O card strapped to `$FF08`. Low priority.
 ## Suggested build order
 
 1. **Backplane first** (everything plugs into it; a fab error there blocks all).
-2. The six core cards as already laid out; **reburn the microcode EPROMs** from
-   the current `genucode.py` before bring-up.
+2. The core cards as laid out — but **revise the memory-card ROM decode first**
+   (6 KB ROM + the `$1800-$1FFF` RAM island; see above) and regenerate its `.sch`,
+   and **reburn the microcode EPROMs** from the current `genucode.py`, before
+   bring-up.
 3. **PS/2 card** once its CAD is generated and DRC-clean — it is the one new card
    with a finished design and a working emulator/`lib_ps2` counterpart to test
    against.

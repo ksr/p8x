@@ -6,14 +6,24 @@ Provides the system's ROM and RAM and gates them onto the data bus. It decodes t
 address bus to pick ROM vs RAM, keeps both off the data bus during I/O accesses,
 and generates a clean write strobe.
 
+> **⚠ Decode not yet regenerated (2026-09-17).** The tables below and the `.sch`
+> still carry the OLD 8 KB ROM decode (`$0000–$1FFF`). The 2026-09-14 ROM shrink
+> made the map **6 KB ROM `$0000–$17FF`** with **`$1800–$1FFF` a RAM scratch
+> island** (written by the OS/BIOS, so it must be RAM). Building this card as-is
+> would put that scratch in unwritable ROM and break the OS. See the ⚠ note in
+> [p8x-memory-card-theory.md](p8x-memory-card-theory.md) for the required decode
+> change (ROM `!CE` gains an `A11·A12` term; low-RAM U10 widens to `$1800–$7FFF`).
+
 | Region | Device | Size |
 |--------|--------|------|
-| `$0000–$1FFF` | 28C64 ROM (U1, 8 KB) | 8 KB — monitor + BIOS (~4.3 KB used; BASIC is a disk program) |
-| `$2000–$7FFF` | 62256 SRAM (U10, rev E) | 24 KB ($2000–$7FFF) |
+| `$0000–$17FF` | 28C64 ROM (U1) | 6 KB — monitor + BIOS (BASIC is a disk program) |
+| `$1800–$1FFF` | 62256 SRAM (U10) | 2 KB scratch island (IBUF/SBUF/BIOS scratch) |
+| `$2000–$7FFF` | 62256 SRAM (U10) | 24 KB |
 | `$8000–$FEFF` | 62256 SRAM (U2) | 32 KB (minus the I/O page) |
 | `$FF00–$FFFF` | — (I/O page) | RAM inhibited; handled by I/O & CF cards |
 
-(Rev E: 8 KB ROM at $0000–$1FFF; two 62256 cover $2000–$FEFF = 56 KB; OS loads at $2000.)
+(Rev E after the 2026-09-14 shrink: 6 KB ROM at `$0000–$17FF`; two 62256 cover
+`$1800–$FEFF` = 58 KB; OS loads at `$2000`.)
 
 > This README describes the circuit as actually built in
 > [`generators/gen_eagle.py`](../../generators/gen_eagle.py). See
