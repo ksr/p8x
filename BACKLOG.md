@@ -722,6 +722,28 @@ Nothing below has been built or measured.
       GTEXT 2D-text notes; the `md` panel-renderer idea wants the same size/colour
       plumbing.
 
+- [ ] **Shared app frame / consistent UI chrome (2026-09-17, user).** paint,
+      write, sheet, term (and finder) each hand-draw their own chrome -- menu bar,
+      title, close/quit box, mouse cursor, status line -- with subtly different
+      geometry and behaviour (the recent cursor + menu fixes had to be applied app
+      by app). Factor a **common full-screen app frame** into a lib so every app
+      gets the same look and input handling for free:
+      - a standard **menu bar** (title at left, menu items, consistent height/
+        colours) with mouse hit-testing + keyboard access;
+      - the **window frame / title** and a **close box** in the same spot every
+        time (the paint red-X quit convention);
+      - one **mouse cursor** implementation (the XOR crosshair `cur_xdraw` idiom --
+        single LINES per arm, not degenerate rectlines) shared, not re-coded;
+      - an optional **status line** and, once the scrolling idea lands, standard
+        **scroll bars** -- so all of this composes.
+      Design it as a small retained-mode helper (draw frame, register menus +
+      handlers, run the event loop, call back into the app for the content area)
+      so an app supplies only its canvas + commands. Big consistency payoff and it
+      collapses the per-app chrome duplication. Pairs with the scrolling/scroll-bar
+      and BASIC-cursor ideas above. See paint.c, write.c, sheet.c, term.c,
+      finder.c, and lib_gfx; the resident WM kernel already does chrome for its
+      windows -- decide whether the full-screen apps share that or a lighter lib.
+
 - [ ] **imgsend: VERIFY pass (2026-08-21, from a real corruption).** A clone
       delivered trit.bin with the right SIZE but corrupt content — "acked
       every sector, finished with 'K'" certifies transport, not bytes — and
