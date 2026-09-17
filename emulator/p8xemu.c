@@ -90,7 +90,7 @@ static int bridge_fd = -1;            /* -B card-edge bridge fd (declared early:
 static const char *win_path=0;
 static unsigned char inj[1024]; static int inj_h=0, inj_t=0;   /* console-input inject ring */
 static int win_lx=0, win_ly=0, win_lb=0;      /* last mouse x,y,buttons for SGR transitions */
-static int oesc=0, ocn=0; static char oc[16]; /* console-output CSI parser state */
+static int oesc=0, ocn=0; static char oc[64]; /* console-output CSI filter state */
 static unsigned win_last_hash=0; static long win_last_ms=0;
 static struct termios g_orig;
 static int g_raw=0;
@@ -1675,23 +1675,46 @@ static void win_mouse(int x,int y,int btn){
     win_lx=x; win_ly=y; win_lb=btn;
 }
 
-/* watch the CPU's console OUTPUT for the sequences the window must own:
-   ESC[?100{0,2,3}h/l (mouse tracking on/off) and ESC[18t (size query, answered
-   with rows;cols = the panel, so lib_ptr's cell->pixel map is 1:1). */
+/* FILTER the CPU's console output to the terminal. The window/-W owns the mouse,
+   so the mouse-mode control sequences the app emits -- ESC[?100{0,2,3}h/l and the
+   ESC[?1006h/l encoding switch -- must be SWALLOWED here, or the real terminal
+   turns on ITS own mouse reporting and every mouse move spews SGR characters at
+   the shell. ESC[18t is swallowed and answered (into the console-input queue) with
+   the panel size. Everything else passes straight through to stdout. */
 static void win_out(int c){
-    if(oesc==0){ if(c==0x1B){ oesc=1; ocn=0; } return; }
-    if(oesc==1){ if(c=='['){ oesc=2; ocn=0; } else oesc=0; return; }
-    if(ocn<15) oc[ocn++]=(char)c;
-    if(c>=0x40 && c<=0x7E){                 /* CSI final byte */
+    int i;
+    if(oesc==0){
+        if(c==0x1B){ oesc=1; ocn=0; }
+        else { putchar(c); fflush(stdout); }
+        return;
+    }
+    if(oesc==1){
+        if(c=='['){ oesc=2; ocn=0; }
+        else { putchar(0x1B); putchar(c); fflush(stdout); oesc=0; }  /* lone ESC, not a CSI */
+        return;
+    }
+    if(ocn < (int)sizeof(oc)-1) oc[ocn++]=(char)c;
+    if(c>=0x40 && c<=0x7E){                 /* CSI final byte -> decide */
+        int swallow=0;
         oc[ocn]=0; oesc=0;
         if((c=='h'||c=='l') && oc[0]=='?'){
-            if(strstr(oc,"1002")||strstr(oc,"1000")||strstr(oc,"1003"))
-                mouse_track=(c=='h');
+            if(strstr(oc,"1002")||strstr(oc,"1000")||strstr(oc,"1003")){ mouse_track=(c=='h'); swallow=1; }
             if(strstr(oc,"1003")) motion_track=(c=='h');   /* free-motion (following cursor) */
+            if(strstr(oc,"1006")||strstr(oc,"1015")) swallow=1;   /* mouse-report encoding modes */
         } else if(!strcmp(oc,"18t")){
-            char r[24]; int i,n=snprintf(r,sizeof r,"\033[8;%d;%dt",gh,gw);
+            char r[24]; int n=snprintf(r,sizeof r,"\033[8;%d;%dt",gh,gw);
             for(i=0;i<n;i++) inj_put((unsigned char)r[i]);
+            swallow=1;
         }
+        if(!swallow){                       /* pass the whole sequence through */
+            putchar(0x1B); putchar('[');
+            for(i=0;i<ocn;i++) putchar((unsigned char)oc[i]);
+            fflush(stdout);
+        }
+    } else if(ocn >= (int)sizeof(oc)-1){     /* overflow: flush what we held, resume raw */
+        putchar(0x1B); putchar('[');
+        for(i=0;i<ocn;i++) putchar((unsigned char)oc[i]);
+        fflush(stdout); oesc=0;
     }
 }
 
@@ -2072,7 +2095,10 @@ static void memwr(uint16_t ad,uint8_t v){
         leds=v; return;
     }
     if(ad==0xFF06){ irq_pending=1; return; }   /* rev C: raise a maskable IRQ (models a device) */
-    if(ad==0xFF05){ putchar(v); fflush(stdout); rx_misses=0; if(win_mode) win_out(v); return; }
+    if(ad==0xFF05){ rx_misses=0;
+        if(win_mode) win_out(v);            /* filters mouse-mode seqs off the terminal */
+        else { putchar(v); fflush(stdout); }
+        return; }
     if(ad==0xFF09){ if(s2tx){ putc(v,s2tx); fflush(s2tx); } return; }  /* 2nd ACIA TX */
     if(ad==0xFF08){ return; }                  /* 2nd ACIA control write: ignored (as $FF04) */
     /* PS/2 status writes latch the host->device transmit drive bits (bit0 CLK
