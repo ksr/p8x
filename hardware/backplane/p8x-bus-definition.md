@@ -271,18 +271,29 @@ FCOND encoding: 0=C, 1=Z, 2=N, 3=V (selects which flag pin drives A12).
 
 ## 5. Memory Map
 
-| Range | Device | Notes |
-|-------|--------|-------|
-| $0000–$1FFF | EEPROM (28C64, or low 8 KB of a 28C256) | ROM monitor + BIOS (rev E; BASIC is a disk program) |
-| $2000–$FEFF | SRAM (2× 62256) | General RAM, 56 KB (rev E) |
-| $FF00 | I/O: switches | Read |
-| $FF02 | I/O: LEDs | Write |
-| $FF04–$FF05 | I/O: ACIA (6850) | $FF04=control/status, $FF05=data |
-| $FF10–$FF17 | I/O: CF-IDE | 8-bit mode, memory-mapped |
+| Range | Device | Card | Notes |
+|-------|--------|------|-------|
+| $0000–$17FF | EEPROM (28C64, or low 6 KB of a 28C256) | memory | ROM monitor + BIOS (rev E; BASIC is a disk program) |
+| $1800–$FEFF | SRAM (2× 62256) | memory | General RAM (rev E; $1800–$1FFF is a low RAM island) |
+| $FF00 | I/O: switches | I/O | Read (`SWITCHES`) |
+| $FF02 | I/O: LEDs | LED / I/O | Write (`LEDS`) |
+| $FF04–$FF05 | I/O: ACIA (6850) | I/O | `$FF04`=control/status, `$FF05`=data (`ACIAS`/`ACIAD`) |
+| $FF06 | device-IRQ model | — | Emulator only: a write asserts a maskable IRQ (`IRQGEN`). On the TTL build the IRQ comes from the planned IRQ-controller card, not a store here. |
+| $FF08–$FF09 | I/O: 2nd ACIA | I/O | The Kermit / serial-terminal port (`ACIA2S`/`ACIA2D`) |
+| $FF10–$FF17 | CF-IDE | CF | 8-bit True IDE, memory-mapped task file |
+| $FF30–$FF3F | MDU (multiply/divide) | *(FPGA / emulator; no TTL card yet)* | `$FF30–$FF36` low regs + `$FF39–$FF3C` highs; `MDID`=`'M'` |
+| $FF50–$FF54 | GL graphics-language port | *(FPGA graphics card / emulator)* | `GLDATA/GLSTAT/GLRB/GLERR/GLID`; `GLID`=`'G'` |
+| $FF58–$FF5F | PS/2 keyboard + mouse | **PS/2 (design)** | `PSADAT/PSAST/PSBDAT/PSBST/PSLINE/PSID`; `PSID`=`'K'`. See [ps2-card/](../ps2-card/README.md). |
 
-I/O decode: address bits A8–A15 all high ($FFxx). Sub-decoded by 74138 on
-the I/O card. Cards must register their I/O address allocation in this
-document before building.
+$FF20–$FF2F (old graphics device door) and $FF40–$FF4F (old geometry-engine
+window) are RETIRED — the single-interface migration made the GL port the one
+graphics interface; both windows float `$FF`.
+
+I/O decode: address bits A8–A15 all high ($FFxx). Sub-decoded by a 74138 on each
+I/O-bearing card (the I/O card owns `$FF00–$FF0F`; a card at a higher window such
+as the PS/2 card adds its own window compare + register decode). The canonical
+source for every symbol above is `generators/gen_memmap.py`. Cards must register
+their I/O address allocation in this document before building.
 
 ---
 

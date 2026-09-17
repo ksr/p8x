@@ -214,6 +214,14 @@ Decodes the $FFxx page (same 7430 trick) plus A1–A2 via a 74138 → up to 8 po
 
 **BOM:** 6850, MAX232, 74244 (switches), 74374+LEDs, 7430, 74138, baud divider, 3× 74244 monitors ≈ **10 chips**
 
+> **Expansion I/O beyond this card.** The I/O card owns only `$FF00–$FF0F`.
+> Later ports live on their own cards / on the FPGA graphics card and are
+> recorded in [p8x-bus-definition.md §5](../hardware/backplane/p8x-bus-definition.md):
+> the 2nd ACIA (`$FF08`), the MDU (`$FF30–$FF3F`), the GL graphics port
+> (`$FF50–$FF54`), and the PS/2 keyboard+mouse window (`$FF58–$FF5F`, see
+> [ps2-card/](../hardware/ps2-card/README.md) — a standalone design). Every I/O
+> symbol is single-sourced in `generators/gen_memmap.py`.
+
 ---
 
 ## 8. Microcode Examples
