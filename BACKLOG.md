@@ -20,6 +20,46 @@ remainder is why it is still here.
 
 ## NEXT
 
+- [ ] **OVERNIGHT BATCH (2026-09-16, user asleep -- do as much as possible without
+      input; all on `graphics-card`, no merge to main beyond the current one).**
+      Clarified answers locked with the user before they slept:
+      1. **BASIC layer commands (graphics available):** TEXTON / TEXTOFF (default ON)
+         toggle the ALPHANUMERIC text overlay; GRAPHICSON / GRAPHICSOFF (default
+         OFF) toggle the DRAWING-AREA (bitmap) VISIBILITY. Key point: GRAPHICSOFF
+         hides the bitmap at scanout but YOU CAN STILL DRAW INTO IT (draws always
+         land; the enable bit is display-only). Real 2-layer COMPOSITOR: text over
+         bitmap. States: text-on/gfx-off = text console (default); both on = bitmap
+         + text on top; text-off/gfx-on = bitmap only; both off = black.
+         - TEXTON/OFF -> the overlay TXEN (opcode 0x50, already exists).
+         - GRAPHICSON/OFF -> a NEW bitmap-visibility enable: add a control opcode
+           (a TX-style verb, e.g. "GXEN"), model it in p8xemu gpu_tx_sample (mux
+           black when the bitmap layer is hidden, but the framebuffer keeps its
+           content and still accepts writes), mirror in RTL gtxt.v / sdram_video.v
+           compositor (a bitmap-enable input, byte-identical co-sim), and 4 BASIC
+           keywords (C basic.c AND asm p8xbasic.asm twins + the tokenizer). Add a
+           co-sim + a basic_*_test. Default at BASIC start (gfx present): text ON,
+           graphics OFF.
+      2. **VERY complete doc sweep (content-driven PDFs):** fix/refresh all
+         MD/README/HELP/MAN/theory/programmer docs; ADD man pages for EVERY C
+         (os/commands/lib_*.c) and ASM (os/commands-asm/lib_*.inc) LIBRARY plus any
+         missing command pages; add anything missing. Regenerate a PDF ONLY when its
+         underlying content actually changed (per-page date+time stamp per
+         [[feedback_pdf_timestamp_per_page]]). Keep the /docs disk list + disk
+         rebuild current ([[feedback_p8x_disk_docs_current]]).
+      3. **Hardware reconciliation (docs + bus defs only -- NO CAD/.brd gen; .sch is
+         source of truth and .brd placement is the user's Fusion work):** audit the
+         current hardware/ board designs vs the emulator + FPGA CPU (ISA/microcode
+         has grown -- Tier A opcodes etc.); write up what needs to change to make the
+         boards current for a real build. Add the STANDALONE PS/2 keyboard+mouse
+         card (new backplane card; discrete 74HC164 shifter / 74HC161 counter /
+         74HC574 latch+ready / 7407 OC per port; window $FF58-$FF5F; 5V TTL so NO
+         level-shifting on the bus -- the TXS0102 shifting is only for the 3.3V FPGA
+         card). Update signal/bus definitions, docs/p8x-card-standards.md, the
+         memory-map doc, and per-card READMEs. See [[reference_p8x_memmap_singlesource]].
+      Pre-req (in progress): full `make test` green, then merge graphics-card ->
+      main (fast-forward, includes the -W console mouse-mode SWALLOW fix so the
+      terminal stops spewing SGR chars on mouse move), then start task 1.
+
 - [~] **Hand-asm: from-scratch redesigns on the Tier A ISA (2026-09-12).**
       `tools/tierA_rewrite.py` only covered the idioms it could prove safe;
       the user asked for genuine rewrites that use the ISA's shape (word
