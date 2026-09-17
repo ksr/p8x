@@ -1,0 +1,65 @@
+NAME
+    sheet - a basic spreadsheet on the graphics card
+
+SYNOPSIS
+    sheet [file] [-d | -w]
+
+DESCRIPTION
+    A grid of cells (A..H across, 1..12 down) with a menu/formula bar,
+    drawn full-screen on the GL card. A cell holds a NUMBER or a FORMULA;
+    a cell whose text starts with '=' is a formula, otherwise it is a
+    number. Everything is 16-bit INTEGER -- this machine has no floating
+    point -- so division and AVG truncate toward zero.
+
+    Move the selection with the arrow keys or by CLICKING a cell. Start
+    typing a number or '=' to edit the selected cell; the bar shows what
+    you type. Enter commits (and steps down a row); Esc cancels;
+    Backspace clears the selected cell. Any change recomputes the whole
+    sheet, so formulas that depend on other cells update live.
+
+FORMULAS
+    A formula is an integer expression after the '=':
+      + - * /        the usual precedence, with ( ) to group
+      A1 .. H12      a cell reference -- its current value
+      SUM(A1:A5)     sum of a range
+      AVG(A1:A5)     average of a range (integer, truncated)
+      MAX(A1:A5)     largest in a range
+      MIN(A1:A5)     smallest in a range
+    A range is two references separated by ':' and may run in any
+    direction. Division by zero, a bad reference, or trailing junk shows
+    #ERR, and a formula that reads an #ERR cell is #ERR too.
+
+    Examples:
+      =1+2*3         -> 7
+      =(1+2)*3       -> 9
+      =A1+B2         -> the two cells added
+      =SUM(A1:A10)   -> a column total
+      =MAX(A1:H1)    -> the biggest in a row
+
+KEYS
+    arrows          move the selection
+    0-9 - + = .     start editing the cell with that first character
+    Enter           commit the edit and move down
+    Esc             cancel the edit
+    Backspace       clear the selected cell
+    s               SAVE the sheet to its file
+    o               OPEN (reload) the file, discarding edits
+    q               quit
+
+MOUSE
+    Click a cell to select it. Click SAVE / LOAD / QUIT in the bar at the
+    top-right. The pointer arrives as xterm SGR (a terminal with mouse
+    reporting, the emulator's -W browser pad, or a real PS/2 mouse).
+
+FILE
+    sheet loads and saves a line-based file, one "REF raw" per non-empty
+    cell (e.g. "A1 5", "B1 =SUM(A1:A5)"). With no argument the file is
+    /SHEET.SS; pass a path to use another. -d chains back to desk on
+    quit, -w to the resident wdesk; otherwise quit returns to finder.
+
+NOTES
+    The sheet is one screen -- no scrolling past A1..H12 yet. Values are
+    16-bit signed, so a SUM that exceeds +/-32767 wraps.
+
+SEE ALSO
+    basic (GRAPHICS), gfx, finder, write, paint

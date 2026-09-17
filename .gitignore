@@ -55,6 +55,7 @@ emulator/test/*
 !emulator/test/*.sh
 !emulator/test/test*.asm
 !emulator/test/eq.inc
+!emulator/test/sheet_host.c
 # The BIOS/FS hand-written probes. Named individually on purpose: `h*.asm` also
 # matches the GENERATED head.asm (the head-command twin), and `Makefile.*` also
 # matches the generated Makefile.C.

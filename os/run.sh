@@ -148,7 +148,7 @@ ensure_src() {
     # cube: the stage-7 wireframe-3D demo (lib_gfx + lib_g3d); its sine/edge
     # tables are brace-initialized arrays — accepted by p8cc.py, the on-target cc
     # and (since 2026-09-12) the p8cc.c host build as well.
-    _ccmds="cube tri rotate page camera gl md house clsave paint desk wdesk finder term write kermit screen"
+    _ccmds="cube tri rotate page camera gl md house clsave paint desk wdesk finder term write kermit screen sheet"
     # --- /src/commands/c/Makefile : cc <cmd>.c >T.ASM ; asm T.ASM bin/<cmd>.bin
     mf="$build/Makefile.c"
     printf 'all:' > "$mf"; for c in $_mkcmds $_ccmds; do printf ' %s' "$c" >> "$mf"; done; printf '\n' >> "$mf"
@@ -274,7 +274,7 @@ if [ ! -f "$disk" ]; then
     # e.g.  dir /bin ,  cat README.TXT ,  cat README.TXT | grep hello | wc ,
     # cp README.TXT COPY.TXT ,  mv COPY.TXT MOVED.TXT .
     echo "==> $disk: compiling the C commands (the slow part, ~15 s)" >&2
-    for ex in dir pwd cat wc grep cp mv del help head tail more sort uniq sed find diff tree vi touch man dep dump examine disasm awk cmp cube tri rotate page camera gl md house clsave paint desk wdesk finder term write kermit screen image; do
+    for ex in dir pwd cat wc grep cp mv del help head tail more sort uniq sed find diff tree vi touch man dep dump examine disasm awk cmp cube tri rotate page camera gl md house clsave paint desk wdesk finder term write kermit screen sheet image; do
         # clib.py splices any //#use lib_*.c (shared helpers) into the source first;
         # a no-op passthrough for commands with no //#use directive.
         python3 "$root/tools/clib.py" "$root/os/commands/$ex.c" -o "$build/$ex.c"
@@ -284,7 +284,7 @@ if [ ! -f "$disk" ]; then
             --name "/binc/$ex.bin" --load 0x5900 --exec 0x5900 >/dev/null
     done
     # C-only commands (no asm twin): their C build IS the /bin binary.
-    for ex in cube tri rotate page camera gl md house clsave paint desk wdesk finder term write kermit screen; do
+    for ex in cube tri rotate page camera gl md house clsave paint desk wdesk finder term write kermit screen sheet; do
         python3 "$root/tools/p8xfs.py" put "$disk" "$build/$ex.bin" \
             --name "/bin/$ex.bin" --load 0x5900 --exec 0x5900 >/dev/null
     done

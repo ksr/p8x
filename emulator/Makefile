@@ -214,6 +214,7 @@ test-gfx: p8xemu ucode
 	sh test/c_g3d_test.sh
 	sh test/c_demo_test.sh
 	sh test/c_paint_test.sh
+	sh test/c_sheet_test.sh
 	sh test/c_desk_test.sh
 	sh test/c_wdesk_test.sh
 	sh test/c_wfiles_test.sh
