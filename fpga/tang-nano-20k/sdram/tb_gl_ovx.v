@@ -155,6 +155,10 @@ module tb;
     // a second row + a scroll, to exercise TXSCR
     gtxt_at(8'd2, 8'd4); gtxt_put("Y"); gtxt_put("Z");
     glb(8'h56);                                       // TXSCR (window up one)
+    // GXEN 0: hide the drawing bitmap. The blue CLEARS ground vanishes to black
+    // at scanout (it is still in bitmap RAM -- visibility is scanout-only), while
+    // the white overlay text stays on top. This proves BOTH scanout layers.
+    glb(8'h57); glb(8'd0);                            // GXEN 0
     gl_wait_idle;
 
     if (CHIP.protocol_errors != 0) begin

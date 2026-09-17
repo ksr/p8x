@@ -474,7 +474,7 @@ module p8x_geom (
       8'h97: opn = 5'd24;
       8'h30,8'h31,8'h32,8'h33: opn = 5'd1;
       8'h55,8'h56: opn = 5'd0;         // TXCLR / TXSCR (text overlay)
-      8'h50,8'h54: opn = 5'd1;         // TXEN en / TXPUT ch
+      8'h50,8'h54,8'h57: opn = 5'd1;   // TXEN en / TXPUT ch / GXEN en (bitmap vis)
       8'h53:       opn = 5'd2;         // TXAT col row
       8'h52:       opn = 5'd3;         // TXCOL r g b
       8'h51:       opn = 5'd4;         // TXWIN c0 r0 cw ch
@@ -2135,11 +2135,12 @@ module p8x_geom (
           glst <= G_OP;                                   // default: done
           case (glop)
             8'h01: ;                                      // NOOP
-            // text-overlay TX* ops -> hand to sdram_video's gtxt as one command.
-            // op = glop[2:0] maps 0x50..0x56 -> 0..6. If a TXCLR/TXSCR is still
-            // running (tx_busy), stall in G_RUN so a following TXPUT can't race
-            // it -- this backpressures the FIFO the ordinary way.
-            8'h50,8'h51,8'h52,8'h53,8'h54,8'h55,8'h56: begin
+            // text-overlay TX* ops + the GXEN bitmap-visibility mux -> hand to
+            // sdram_video's gtxt as one command. op = glop[2:0] maps 0x50..0x57
+            // -> 0..7 (7 = GXEN). If a TXCLR/TXSCR is still running (tx_busy),
+            // stall in G_RUN so a following op can't race it -- backpressures the
+            // FIFO the ordinary way.
+            8'h50,8'h51,8'h52,8'h53,8'h54,8'h55,8'h56,8'h57: begin
               if (tx_busy) glst <= G_RUN;
               else begin
                 tx_stb <= 1'b1; tx_op <= glop[2:0];

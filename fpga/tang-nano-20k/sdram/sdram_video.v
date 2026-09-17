@@ -132,12 +132,13 @@ module sdram_video #(
   wire [2:0] ovq_ph  = ax % 10'd6;                          // pixel phase 0..5
   wire        ov_on;
   wire [15:0] ov_rgb;
+  wire        gx_en;                                        // GXEN: bitmap visible
   gtxt OVL(.clk(clk), .rst(rst),
     .tx_stb(tx_stb), .tx_op(tx_op),
     .tx_p0(tx_p0), .tx_p1(tx_p1), .tx_p2(tx_p2), .tx_p3(tx_p3),
     .tx_busy(tx_busy),
     .q_ce(1'b1), .q_col(ovq_col), .q_y(ov_ey), .q_ph(ovq_ph),
-    .ov_on(ov_on), .ov_col(ov_rgb));
+    .ov_on(ov_on), .ov_col(ov_rgb), .gx_en(gx_en));
 
   reg        nxt_de;
   reg [4:0]  nxt_r, nxt_b;
@@ -157,10 +158,12 @@ module sdram_video #(
       2'd1: begin
         ph <= 2'd2;
         nxt_de <= (nx < H_ACT) && ((px == H_TOT-1 ? (py == V_TOT-1 ? 10'd0 : py+10'd1) : py) < V_ACT);
-        // composite the text overlay over the bitmap pixel
-        nxt_r <= ov_on ? ov_rgb[15:11] : px_r;
-        nxt_g <= ov_on ? ov_rgb[10:5]  : px_g;
-        nxt_b <= ov_on ? ov_rgb[4:0]   : px_b;
+        // composite the text overlay over the bitmap pixel; GXEN gates the
+        // bitmap layer (black when hidden), exactly like gpu_tx_sample's
+        // bg = gx_en ? base : 0, then the overlay on top.
+        nxt_r <= ov_on ? ov_rgb[15:11] : (gx_en ? px_r : 5'd0);
+        nxt_g <= ov_on ? ov_rgb[10:5]  : (gx_en ? px_g : 6'd0);
+        nxt_b <= ov_on ? ov_rgb[4:0]   : (gx_en ? px_b : 5'd0);
       end
       // Data has been stable two cycles (~74 ns); clock it into the panel now.
       // Raising pclk in the same cycle the RGB lines change is the bug that

@@ -41,7 +41,12 @@ module gtxt (
   input      [9:0]  q_y,        // panel row 0..271 (row = q_y>>3, grow = q_y&7)
   input      [2:0]  q_ph,       // pixel phase 0..5 (which of the 6 cell columns)
   output            ov_on,      // inked overlay pixel here (combinational)
-  output     [15:0] ov_col      // overlay colour, RGB565 (combinational)
+  output     [15:0] ov_col,     // overlay colour, RGB565 (combinational)
+
+  // ---- GXEN: drawing-bitmap visibility (scanout mux, in sdram_video) --------
+  // Not part of the overlay itself, but the other half of the scanout compositor
+  // (see the emulator's gpu_tx_sample), so it lives with the overlay state here.
+  output reg        gx_en       // 1 = the GL bitmap is shown; 0 = black at scanout
 );
   localparam integer NCELL = 80*34;    // 2720 cells
 
@@ -101,9 +106,11 @@ module gtxt (
       tx_en <= 1'b0; tx_fg <= 16'hFFFF;
       c0 <= 7'd0; r0 <= 6'd0; cw <= 7'd80; ch <= 6'd34;
       cx <= 7'd0; cy <= 6'd0; st <= S_IDLE;
+      gx_en <= 1'b1;              // power-on: the drawing bitmap is VISIBLE (OS/apps)
     end else case (st)
       S_IDLE: if (tx_stb) case (tx_op)
         3'd0: tx_en <= tx_p0[0];                             // TXEN
+        3'd7: gx_en <= tx_p0[0];                             // GXEN (bitmap vis)
         3'd1: begin c0 <= tx_p0[6:0]; r0 <= tx_p1[5:0];      // TXWIN
                     cw <= tx_p2[6:0]; ch <= tx_p3[5:0]; end
         3'd2: tx_fg <= {tx_p0[4:0], tx_p1[5:0], tx_p2[4:0]}; // TXCOL (RGB565)
