@@ -77,11 +77,17 @@ means).
 ## As a real board — DONE (KiCad)
 
 This has been taken all the way to an **orderable PCB** — see
-[`kicad/`](kicad/README.md). A `pcbnew` generator (`kicad/gen_xor.py`) builds a
-62 × 44 mm 2-layer board from this circuit; it passes KiCad DRC clean (0
-violations, 0 unconnected) and exports Gerbers. To order, upload
-[`kicad/xor_trial_gerbers.zip`](kicad/xor_trial_gerbers.zip) to any fab and stuff
-it with the BOM above.
+[`kicad/`](kicad/README.md). Two generators build it from this circuit:
+
+- `kicad/gen_sch.py` emits the **schematic** ([`xor_trial.kicad_sch`](kicad/xor_trial.kicad_sch),
+  PDF at [`xor_trial_sch.pdf`](kicad/xor_trial_sch.pdf)) — it passes KiCad **ERC
+  clean** (0 violations).
+- `kicad/gen_xor.py` emits the **board** — a 62 × 44 mm 2-layer PCB that passes
+  KiCad **DRC clean** (0 violations, 0 unconnected) and exports Gerbers. The
+  power header carries `+` / `-` silk labels.
+
+To order, upload [`kicad/xor_trial_gerbers.zip`](kicad/xor_trial_gerbers.zip) to
+any fab and stuff it with the BOM above.
 
 This is the project's first KiCad board (the CPU cards use the Eagle flow in
 `generators/gen_eagle.py`); see also `hardware/arduino-scratch/` for the earlier

@@ -138,6 +138,16 @@ trk(nets["N1Y"], B, padpos("U1","3"), P(24,20.1), P(24,32), P(40,32), padpos("R3
 # NLED (top): R3.2 -> LED1.2 (anode), routed around LED1.1 (=GND) at (56,24)
 trk(nets["NLED"], F, padpos("R3","2"), P(53,24), P(53,21.5), padpos("LED1","2"))
 
+# ---- silkscreen + / - by the power header (J1.1 = +5V, J1.2 = GND) --------
+def silk(s, x, y, size=1.4):
+    t = pcbnew.PCB_TEXT(board)
+    t.SetText(s); t.SetPosition(P(x, y)); t.SetLayer(pcbnew.F_SilkS)
+    t.SetTextThickness(mm(0.25))
+    t.SetTextSize(pcbnew.VECTOR2I(mm(size), mm(size)))
+    board.Add(t)
+silk("+", 9.5, 20.0)      # next to J1 pin 1 (VCC)
+silk("-", 9.5, 22.5)      # next to J1 pin 2 (GND)
+
 # ---- ground pour: a bottom-layer zone over the whole board ----------------
 zone = pcbnew.ZONE(board)
 zone.SetLayer(pcbnew.B_Cu)

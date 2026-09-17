@@ -6,14 +6,30 @@ don't hand-edit the `.kicad_pcb`). 62 × 44 mm, 2-layer, all through-hole.
 
 | File | What it is |
 |------|-----------|
-| `gen_xor.py` | the generator — builds the board with `pcbnew`: footprints, nets, routing, a bottom-layer GND pour, and the Edge.Cuts outline |
+| `gen_sch.py` | the **schematic** generator — emits `xor_trial.kicad_sch` (symbols, wires, net labels, power symbols); written to pass ERC clean |
+| `xor_trial.kicad_sch` | the generated schematic (open it in KiCad Eeschema) |
+| `xor_trial_sch.pdf` | the schematic as a PDF |
+| `gen_xor.py` | the **board** generator — builds the PCB with `pcbnew`: footprints, nets, routing, a bottom-layer GND pour, the Edge.Cuts outline, and `+`/`-` silk labels on the power header |
 | `xor_trial.kicad_pcb` | the generated board (open it in KiCad Pcbnew) |
 | `xor_trial.kicad_pro` | project file so it opens as a project |
 | `xor_trial_gerbers.zip` | **the orderable output** — Gerbers + Excellon drill |
 
+Two generators, one circuit: `gen_sch.py` builds the schematic and `gen_xor.py`
+builds the board, and they hand-code the **same netlist** independently (this
+tiny board is not big enough to justify a full schematic-driven-layout netlist
+import). The schematic passes ERC and the board passes DRC, both clean.
+
 ## Regenerate
 
-KiCad's own Python has `pcbnew`, so use it (not the system python):
+The **schematic** generator runs under the *system* python3 (it needs
+`kiutils` — `pip3 install kiutils` — a pure-Python KiCad file library):
+
+```sh
+python3 hardware/xor-trial/kicad/gen_sch.py
+```
+
+The **board** generator needs KiCad's own Python (for `pcbnew`), not the system
+python:
 
 ```sh
 PYK=/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3
@@ -24,13 +40,46 @@ PYK=/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/
 
 ```sh
 CLI=/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli
+# schematic: ERC + PDF
+"$CLI" sch erc xor_trial.kicad_sch                       # 0 violations
+"$CLI" sch export pdf -o xor_trial_sch.pdf xor_trial.kicad_sch
+# board: DRC + Gerbers + drill
 "$CLI" pcb drc xor_trial.kicad_pcb                       # 0 violations, 0 unconnected
 "$CLI" pcb export gerbers --no-protel-ext -o gerbers/ xor_trial.kicad_pcb
 "$CLI" pcb export drill --format excellon --excellon-units mm -o gerbers/ xor_trial.kicad_pcb
 ( cd gerbers && zip ../xor_trial_gerbers.zip *.gbr *.gbrjob *.drl )
 ```
 
-The committed board passes DRC clean (0 violations, 0 unconnected).
+The committed schematic passes ERC clean (0 violations) and the board passes
+DRC clean (0 violations, 0 unconnected).
+
+## How the schematic is built (and why the s-expression is hand-emitted)
+
+`gen_sch.py` lifts the full symbol definitions (R, C, LED, SW_Push, the
+connector, the 74xx gate, the power ports) straight out of the installed
+`.kicad_sym` libraries with `kiutils`, so no symbol geometry is hand-copied. It
+then writes the modern (KiCad 8, `version 20231120`) schematic body itself —
+placing each symbol with its own `(instances (project …))` block, drawing net
+labels + short stubs for the signals, and dropping `+5V` / `GND` power symbols
+on the rails with one `PWR_FLAG` each so ERC knows power enters at J1.
+
+Two details are load-bearing:
+
+- **Not the old kiutils file format.** `kiutils` writes the KiCad-6 format
+  (`20211014`). KiCad 10 opens it, but its net/ERC engine does not pick up
+  symbols placed in that older per-schematic `symbol_instances` style — a
+  netlist export comes back with *zero* components and ERC then "passes" on an
+  empty sheet (a false clean). The per-symbol `instances` block in the newer
+  format is what actually registers components and nets.
+- **The XOR symbol is `74xx:74LS86`, valued `74HC86`.** In KiCad `74HC86` is a
+  *derived* symbol (`extends 74LS86`, identical body). A hand-flattened copy of
+  a derived symbol never byte-matches KiCad's internal form, so ERC's
+  `lib_symbol_mismatch` check flags it. Placing the concrete base symbol and
+  carrying the real part number in the Value field avoids that with no loss of
+  fidelity (same pinout, same footprint).
+
+Everything is placed on the 1.27 mm (50 mil) connection grid so no pin lands
+off-grid.
 
 ## How it's routed
 
