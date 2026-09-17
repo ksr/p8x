@@ -1669,7 +1669,7 @@ static void win_mouse(int x,int y,int btn){
         if(moved && lb)       win_sgr(32,1,col,row);
         if(moved && !lb && !rb && motion_track){       /* free motion -> a following cursor (1003) */
             long t=now_ms();
-            if(t-win_motion_ms>=45){ win_sgr(35,1,col,row); win_motion_ms=t; }
+            if(t-win_motion_ms>=22){ win_sgr(35,1,col,row); win_motion_ms=t; }  /* ~45/s: smoother, smaller steps */
         }
     }
     win_lx=x; win_ly=y; win_lb=btn;

@@ -491,6 +491,7 @@ int ctx_menu(int mx, int my, int has_item) {
     int k; int row;
     if (mx > 340) { mx = 340; }                    /* keep the popup on screen */
     if (my < 90) { my = 90; }
+    cur_hide();                                    /* erase the cursor before the popup paints over it */
     if (has_item) {
         pen(65535); fillrect(mx, my - 62, mx + 132, my);
         pen(0);
@@ -504,9 +505,11 @@ int ctx_menu(int mx, int my, int has_item) {
         pen(0);
         gtext(mx + 6, my - 11, "NEW FOLDER");
     }
+    cur_show();                                    /* keep the cursor visible over the popup */
     while (1) {
         k = ptr_ev();
-        if (k == 1 || k == 4) {                    /* a click: on a row, or outside? */
+        if (k == 5) { cur_to(ptr_x, ptr_y); }      /* the cursor follows the mouse in the menu */
+        else if (k == 1 || k == 4) {               /* a click: on a row, or outside? */
             if (ptr_x >= mx && ptr_x <= mx + 132 && ptr_y <= my && ptr_y > my - 62) {
                 row = (my - ptr_y) / 12;
                 if (has_item == 0) { do_op(4); }       /* new folder */
@@ -518,7 +521,7 @@ int ctx_menu(int mx, int my, int has_item) {
             }
             return 0;                              /* click (row or outside): dismiss */
         }
-        if (k == 0) { return 0; }                  /* any key dismisses */
+        else if (k == 0) { return 0; }             /* any key dismisses */
     }
     return 0;
 }
@@ -549,10 +552,10 @@ int main() {
     going = 1;
     while (going) {
         ev = ptr_ev();
-        if (ev == 1) {                             /* LEFT click: select, or open if
-                                                      the click is on the selection */
+        if (ev == 1) {                             /* LEFT click: select AND open in one click
+                                                      (enter a dir / launch / view) */
             i = cell_at(ptr_x, ptr_y);
-            if (cell_ok) { if (i == fsel) { open_sel(); } else { fsel = i; } }
+            if (cell_ok) { fsel = i; open_sel(); }
         }
         else if (ev == 4) {                        /* RIGHT click: context menu */
             i = cell_at(ptr_x, ptr_y);
