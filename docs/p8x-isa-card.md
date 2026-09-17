@@ -2,7 +2,7 @@
 
 Opcodes, mnemonics and cycle counts generated live from `genucode.py` (the microcode source of truth) — cannot drift from the hardware.
 
-**Operands:** `#imm` immediate | `addr` 16-bit absolute | `(Pn)` ptr indirect | `(Pn)+` post-increment | (no operand) implied. **By**=bytes, **Cy**=cycles (incl. fetch). **Flags:** C carry (active-high: ADD carry-out / SUB,CMP no-borrow A>=B), Z zero, N negative (bit7), V overflow; `-` = none. Signed branches test N^V / Z. **Memory (rev E):** $0000-1FFF ROM | $2000-FEFF RAM | $FF00-FFFF I/O. P0=PC, P3=stack (empty-descending). JZ/JNZ/JC are aliases of BZ/BNZ/BCP.
+**Operands:** `#imm` immediate | `addr` 16-bit absolute | `(Pn)` ptr indirect | `(Pn)+` post-increment | (no operand) implied. **By**=bytes, **Cy**=cycles (incl. fetch). **Flags:** C carry (active-high: ADD carry-out / SUB,CMP no-borrow A>=B), Z zero, N negative (bit7), V overflow; `-` = none. Signed branches test N^V / Z. **Memory (rev E):** $0000-17FF ROM (6K) | $1800-FEFF RAM | $FF00-FFFF I/O. P0=PC, P3=stack (empty-descending). JZ/JNZ/JC are aliases of BZ/BNZ/BCP.
 
 ## System
 

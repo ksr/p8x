@@ -34,23 +34,33 @@ remainder is why it is still here.
          hidden verified (PIXELR reads RAM while scanout is black). basic_gfx part 7
          + basic_gl updated; man basic + README + HELP updated. Both twins build
          (asm 9330 B, C 21761 B); basic_gfx/basic_gl/basic_c green.
-      2. **VERY complete doc sweep (content-driven PDFs):** fix/refresh all
-         MD/README/HELP/MAN/theory/programmer docs; ADD man pages for EVERY C
-         (os/commands/lib_*.c) and ASM (os/commands-asm/lib_*.inc) LIBRARY plus any
-         missing command pages; add anything missing. Regenerate a PDF ONLY when its
-         underlying content actually changed (per-page date+time stamp per
-         [[feedback_pdf_timestamp_per_page]]). Keep the /docs disk list + disk
-         rebuild current ([[feedback_p8x_disk_docs_current]]).
-      3. **Hardware reconciliation (docs + bus defs only -- NO CAD/.brd gen; .sch is
-         source of truth and .brd placement is the user's Fusion work):** audit the
-         current hardware/ board designs vs the emulator + FPGA CPU (ISA/microcode
-         has grown -- Tier A opcodes etc.); write up what needs to change to make the
-         boards current for a real build. Add the STANDALONE PS/2 keyboard+mouse
-         card (new backplane card; discrete 74HC164 shifter / 74HC161 counter /
-         74HC574 latch+ready / 7407 OC per port; window $FF58-$FF5F; 5V TTL so NO
-         level-shifting on the bus -- the TXS0102 shifting is only for the 3.3V FPGA
-         card). Update signal/bus definitions, docs/p8x-card-standards.md, the
-         memory-map doc, and per-card READMEs. See [[reference_p8x_memmap_singlesource]].
+      2. [~] **Doc sweep IN PROGRESS 2026-09-17.** DONE: man pages for all 16
+         shared //#use / ;#use LIBRARIES (abi mem ptr ps2 wm g3cam stdin rdline
+         glob globx regex dirent apath streq err distab -- commit 12e6f22; only
+         gfx+g3d had one before); man basic + BASIC README + HELP for the layer
+         commands (a77b867); graphics-guide GTEXT-retired confusion fixed +
+         two-mode compositor/mouse currency (0328b56); isa-card rev-E memory line
+         fixed. REMAINING: rebuild the /docs SD disk to install the new man pages
+         + changed docs; regenerate the PDFs whose CONTENT changed (graphics-guide,
+         system-design, card-standards? bus-definition, isa-card) with per-page
+         date+time stamps [[feedback_pdf_timestamp_per_page]]; a final pass over
+         the remaining theory/programmer docs for other stale "retired" notes.
+      3. [~] **Hardware reconciliation IN PROGRESS 2026-09-17** (docs + bus defs
+         only -- NO CAD/.brd gen). DONE: STANDALONE PS/2 card designed --
+         hardware/ps2-card/ (README + theory: 74HC164/161/574 + 7407 per port,
+         $FF58-$FF5F, 5V TTL no bus level-shift, receive path + software-owned
+         bit-banged TX + 'K' probe; DESIGN/PROPOSAL, no CAD per scope). Bus defs
+         brought current: gen_memmap.py now names SWITCHES/LEDS/IRQGEN (0fa7ad5);
+         p8x-bus-definition.md sec5 memory map completed (2nd ACIA, MDU, GL, PS/2,
+         retired doors) + PS/2 allocation registered; hardware/README "not yet
+         realised as TTL boards" table (PS/2 design, MDU/GL on FPGA, IRQ planned);
+         system-design expansion-I/O pointer (all commit 97e3d4c). REMAINING: a
+         short board-vs-emulator/FPGA reconciliation writeup (ISA growth is
+         microcode-only, cards unchanged; the real gaps are the unbuilt IRQ card +
+         no TTL MDU/GL board -- captured in hardware/README but could be its own
+         doc); confirm docs/p8x-card-standards.md needs no PS/2-specific edit (it
+         states the rule; the allocation lives in the bus-definition, done).
+         See [[reference_p8x_memmap_singlesource]].
       Pre-req (in progress): full `make test` green, then merge graphics-card ->
       main (fast-forward, includes the -W console mouse-mode SWALLOW fix so the
       terminal stops spewing SGR chars on mouse move), then start task 1.
