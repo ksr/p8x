@@ -33,6 +33,18 @@ MAP = [
     # needs no loading. Apps keep the FULL TPA $6A00..CSTACKTOP. (History: a
     # standalone blob lived at $D800 above the TPA, then at $5600 -- both retired;
     # $5600 sat inside the shell history ring, which is why the ring moved.)
+    # I/O-card ports 0/1 (A1-A3 decode within the $FF00 page): the DIP switches
+    # in, the LED latch out. Both are real backplane registers -- switches on the
+    # I/O card ($FF00-$FF01), LEDs on the LED card ($FF02-$FF03). The emulator
+    # backs the switches with -s and stamps the LED writes with -L.
+    ('I/O ports ($FF00-$FFFF)', 'SWITCHES', 0xFF00, 'read: DIP/switch input (I/O card port 0; emulator -s)'),
+    ('I/O ports ($FF00-$FFFF)', 'LEDS', 0xFF02, 'write: LED output latch (LED card port 1; emulator -L stamps)'),
+    # $FF06: the emulator's DEVICE-IRQ model -- a write asserts a maskable IRQ so
+    # test code can exercise the interrupt path. It is NOT a decoded board
+    # register: on the TTL build the IRQ is raised by the (planned) IRQ-controller
+    # card, not by a store to this address. Recorded here so the address is not
+    # silently reused.
+    ('I/O ports ($FF00-$FFFF)', 'IRQGEN', 0xFF06, 'write (any value): assert a maskable IRQ (emulator device-IRQ model; hardware IRQ comes from the IRQ-controller card)'),
     ('I/O ports ($FF00-$FFFF)', 'ACIAS', 0xFF04, 'ACIA status (rd) / control (wr)'),
     ('I/O ports ($FF00-$FFFF)', 'ACIAD', 0xFF05, 'ACIA data'),
     # Second serial port (two-mode P3): a 2nd ACIA, register-identical to the

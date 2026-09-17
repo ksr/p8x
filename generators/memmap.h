@@ -13,6 +13,9 @@
 #define CSTACKTOP   0xF800       /* compiler C-stack top (grows down; p8cc __csp init) */
 
 /* I/O ports ($FF00-$FFFF) */
+#define SWITCHES    0xFF00       /* read: DIP/switch input (I/O card port 0; emulator -s) */
+#define LEDS        0xFF02       /* write: LED output latch (LED card port 1; emulator -L stamps) */
+#define IRQGEN      0xFF06       /* write (any value): assert a maskable IRQ (emulator device-IRQ model; hardware IRQ comes from the IRQ-controller card) */
 #define ACIAS       0xFF04       /* ACIA status (rd) / control (wr) */
 #define ACIAD       0xFF05       /* ACIA data */
 #define ACIA2S      0xFF08       /* 2nd ACIA status (rd) / control (wr) -- the Kermit/serial-terminal port */
