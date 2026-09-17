@@ -52,11 +52,16 @@ README covers build internals and milestones.
 > `CLS`, `PIXELW x,y`, `LINE x0,y0,x1,y1`,
 > `BOX x0,y0,x1,y1[,FILL|,NOFILL]`, `CIRCLE x,y,r[,ry][,FILL|,NOFILL]`
 > (a second radius makes it an ellipse), PGC stroke TEXT out of the box
-> (`MOVE3 x,y,0 : TEXT s$` -- the OS boot-loads /FONT.GL; GTEXT retired
-> 2026-09-01), `IMAGE x,y,name$` (P8I file, bottom-left at x,y), the functions
-> `PIXELR(x,y)` (read a pixel back) and `RGB(r,g,b)` (pack a colour) --
-> and the whole PGC graphics language as native statements (man basic,
-> GRAPHICS). No display modes, no `SCREEN`, no palette -- one geometry,
+> (`MOVE3 x,y,0 : TEXT s$` -- the OS boot-loads /FONT.GL), the easy 2D
+> `GTEXT x,y,size,s$`, `IMAGE x,y,name$` (P8I file, bottom-left at x,y),
+> the functions `PIXELR(x,y)` (read a pixel back) and `RGB(r,g,b)` (pack a
+> colour) -- and the whole PGC graphics language as native statements (man
+> basic, GRAPHICS). Two scanout layers compose (drawing bitmap below, the
+> alphanumeric text overlay on top): `GRAPHICSON`/`GRAPHICSOFF` and
+> `TEXTON`/`TEXTOFF` flip each independently. BASIC cold-starts with GRAPHICS
+> OFF (a fresh interpreter shows only its text); visibility is scanout-only,
+> so drawing while hidden still lands in bitmap RAM and `GRAPHICSON` reveals
+> it. No display modes, no `SCREEN`, no palette -- one geometry,
 > and a pixel is its colour.
 > The drawing is done by the DEVICE, so a filled box costs the same few
 > instructions as an empty one. With no display fitted they print `?No display`

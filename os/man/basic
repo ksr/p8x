@@ -110,6 +110,10 @@ GRAPHICS
         CIRCLE x,y,r,FILL         ... solid
         CIRCLE x,y,rx,ry          ELLIPSE: separate x and y radii
         CIRCLE x,y,rx,ry,FILL     ... solid
+        GRAPHICSON / GRAPHICSOFF  show / hide the drawing bitmap
+                                  (default OFF in BASIC)
+        TEXTON / TEXTOFF          show / hide the alphanumeric text
+                                  overlay (the console char plane)
     BOX and CIRCLE force their own fill mode and then restore the
     program's PRMFIL from a shadow the native PRMFIL/RESETF statements
     keep -- a GL "PF 1" STRING bypasses that shadow.
@@ -122,6 +126,22 @@ GRAPHICS
     it BASIC's last device-door write. The pixels themselves stay
     1:1 device pixels (no scaling). On the card this replaces ~14
     wire bytes and a round-trip poll per pixel with 2 streamed bytes.
+
+    LAYERS. The panel composites two planes at scanout: the drawing
+    bitmap (everything the statements above draw) and an alphanumeric
+    TEXT overlay (the console character plane) on top of it. Each has
+    its own visibility switch, and both may be on at once:
+
+        GRAPHICSON / GRAPHICSOFF  the drawing bitmap
+        TEXTON / TEXTOFF          the text overlay
+
+    BASIC cold-starts with GRAPHICS OFF, so a fresh interpreter shows
+    only its text; a program that draws issues GRAPHICSON to reveal the
+    bitmap. Visibility is SCANOUT-ONLY: GRAPHICSOFF hides the bitmap
+    without erasing it, and drawing while hidden still lands in bitmap
+    RAM (PIXELR reads it back) -- so you can compose a whole scene
+    off-screen and reveal it in one GRAPHICSON. BYE restores GRAPHICSON
+    on the way out, so the shell and other apps get the bitmap back.
 
     TEXT is the PGC's own stroke text, drawn card-side from the font
     the OS streams from /FONT.GL at boot (the glyph bank survives
