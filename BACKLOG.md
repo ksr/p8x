@@ -659,6 +659,24 @@ Nothing below has been built or measured.
 
 ## IDEAS
 
+- [ ] **Off-screen content: scrolling / scroll bars (2026-09-17, user).** How to
+      handle content that doesn't fit one 480x272 screen -- the immediate case is
+      a DIRECTORY in finder with more entries than the icon grid holds, but the
+      same problem hits the spreadsheet (sheets past A1..H12, deferred at its
+      first cut) and any long list (man/scrollback already scroll their own way).
+      Options to weigh:
+      - a scroll BAR (a thumb on the right/bottom edge, draggable with the mouse,
+        page on click above/below the thumb) -- the most discoverable, and the
+        mouse + following cursor now exist to drive it;
+      - keyboard paging (PgUp/PgDn, or arrows past the edge auto-scroll) -- cheap,
+        already how finder's selection could grow;
+      - a viewport model shared by finder + sheet: a first-visible-row/col offset,
+        clamp the selection to scroll the window, redraw the visible slice. Both
+        apps draw a fixed grid today, so this is a real refactor (draw cell/icon
+        at (index - offset)).
+      Decide the interaction once and apply it to finder AND sheet so they feel
+      the same. See finder.c (icon grid) and sheet.c (cell grid).
+
 - [ ] **BASIC graphics cursor (2026-09-17, user).** A software crosshair/pointer
       for BASIC programs, matching what finder/paint already draw client-side.
       Three primitives to add (statements + maybe function forms):

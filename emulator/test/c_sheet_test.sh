@@ -28,6 +28,7 @@ python3 $ROOT/tools/p8xfs.py create cs.img >/dev/null
 python3 $ROOT/tools/p8xfs.py boot   cs.img osc.bin >/dev/null
 python3 $ROOT/tools/p8xfs.py mkdir  cs.img /bin >/dev/null
 python3 $ROOT/tools/p8xfs.py put    cs.img cs_sheet.bin --name /bin/sheet.bin --load 0x5900 --exec 0x5900 >/dev/null
+python3 $ROOT/tools/p8xfs.py put    cs.img $ROOT/os/font.gl --name /FONT.GL >/dev/null  # the OS streams it at boot; gtext needs it
 
 # Drive by keyboard: A1="5" Enter, A2="=A1+A1" Enter, A3="7" Enter, then a SUM in
 # B1, then 's' to SAVE. Reading the saved file back verifies data entry + the save
@@ -41,13 +42,24 @@ printf 's\r' >> cs.in                                # SAVE: prompt prefilled /S
 printf 's\177\177\177\177\177\177\177\177\177/X.SS\r' >> cs.in
 ../p8xemu -N -i cs.in -c cs.img -l 600000000 -g cs.ppm eeprom.bin > cs.out 2>/dev/null || true
 
-# grid rendered? (the column-header band drew A..H)
+# grid + TEXT rendered? number cells draw WHITE, formula cells draw RED, headers
+# GREEN -- with /FONT.GL streamed, the stroke glyphs actually appear.
 python3 - <<'PY' || exit 1
 import sys
 d=open("cs.ppm","rb").read(); px=d.split(b"\n",3)[3]; W=480
-def lit(x,wy): i=((271-wy)*W+x)*3; return px[i:i+3]!=b"\x00\x00\x00"
-n=sum(1 for wy in range(241,256) for x in range(32,462) if lit(x,wy))
-if n < 20: print("C-SHEET TEST: FAIL"); print("  header band empty (%d lit) -- grid did not render"%n); sys.exit(1)
+def rgb(x,wy): i=((271-wy)*W+x)*3; return tuple(px[i:i+3])
+white=red=0
+for wy in range(24,240):
+    for x in range(32,462):
+        c=rgb(x,wy)
+        if c==(255,255,255): white+=1
+        elif c==(255,0,0): red+=1
+bad=[]
+if white < 10: bad.append("no white number text rendered (%d px) -- font/gtext?"%white)
+if red   < 10: bad.append("no RED formula text rendered (%d px) -- =formula colouring?"%red)
+if bad:
+    print("C-SHEET TEST: FAIL"); [print("  "+b) for b in bad]; sys.exit(1)
+print("C-SHEET TEST: text renders (white numbers %d px, red formulas %d px)"%(white,red))
 PY
 
 # read the saved sheet back and check the raw cell contents

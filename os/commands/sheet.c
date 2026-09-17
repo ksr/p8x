@@ -295,14 +295,18 @@ int refstr(int c, int r, char *out) {         /* e.g. "B3" */
     return 0;
 }
 int draw_cellval(int ci) {                    /* the value text of one cell */
-    char s[10]; char *r; int cc; int rr;
+    char s[10]; char *r; int cc; int rr; int n; int x;
     r = raw + ci * RL;
     if (r[0] == 0) { return 0; }              /* empty: nothing */
     rr = ci / NC; cc = ci - rr * NC;
     if (cerr[ci]) { s[0] = '#'; s[1] = 'E'; s[2] = 'R'; s[3] = 'R'; s[4] = 0; }
     else { itoa(val[ci], s); }
-    pen(65535);
-    gtext(cellx(cc) + 3, rtop(rr) - 13, s);
+    if (r[0] == '=') { pen(63488); }          /* a formula's value: RED */
+    else { pen(65535); }                      /* a plain number: white */
+    n = 0; while (s[n]) { n = n + 1; }        /* right-justify: 6 px per glyph */
+    x = cellx(cc) + CW - 3 - n * 6;
+    if (x < cellx(cc) + 2) { x = cellx(cc) + 2; }
+    gtext(x, rtop(rr) - 13, s);
     return 0;
 }
 int draw_grid() {
