@@ -1,0 +1,53 @@
+NAME
+    wm - window-manager core: windows, z-order, focus, menu (//#use wm)
+
+SYNOPSIS
+    //#use abi
+    //#use ptr
+    //#use wm           cc splices /lib/lib_wm.c
+    //#define GLDATA .. //#define GLSTAT ..   (the library pokes them raw)
+
+DESCRIPTION
+    Up to four windows with visibility, z-order, focus, title-bar drag,
+    close boxes, and a Mac-style press-drag-release MENU along the top of
+    the screen. The library owns the CHROME (frames, title bars, close
+    boxes, the drag outline, the menu, the painter's repaint, hit
+    testing); the client owns CONTENT and the event pump.
+
+    Each window's content draws under its own WINDOW/VWPORT pair, so the
+    app paints in LOCAL coordinates with hardware clipping and
+    paint-order occlusion. The client must provide two callbacks:
+
+        int   wm_content(int i);   draw window i's content (local coords;
+                                   the library has set the mapping)
+        char *wm_title(int i);     window i's title string
+
+THE EVENT PUMP
+    Drive it from ptr_ev() (man ptr):
+
+        t = ptr_ev();
+        if      (t == 1) { r = wm_press(ptr_x, ptr_y); ... }
+        else if (t == 2) { wm_dragm(ptr_x, ptr_y); }
+        else if (t == 3) { wm_drop(ptr_x, ptr_y); }
+
+    wm_press returns: 0 miss, 1 handled (raise / drag-arm), 2 a menu item
+    was chosen (index in wm_msel), 3 a window was closed (index in
+    wm_closed). The menu tracks its own press-drag-release inside
+    wm_press.
+
+KEY GLOBALS
+    wm_n                number of windows (<= 4)
+    wmx/wmy wmw/wmh     each window's bottom-left + outer size (window coords)
+    wmvis[i]            1 = shown
+    wmz[i]              stacking order, bottom first
+    wm_mtitle wm_mitems wm_mcount   the menu (up to 6 x 16-char rows)
+    wm_msel             wm_press result 2: the chosen item
+    wm_closed           wm_press result 3: the closed window
+
+NOTES
+    This is the client-side window kernel used by the full-screen desk /
+    finder programs; the resident WM kernel folded into the OS is a
+    separate path (see docs/p8x-wm-design.md). Content lives in the app.
+
+SEE ALSO
+    ptr, gfx, finder, desk, wdesk

@@ -1,0 +1,38 @@
+NAME
+    mem - BIOS/FS scratch, graphics-flag and TPA-base addresses
+          (//#use mem, ;#use mem)
+
+SYNOPSIS
+    //#use mem          C:   cc splices /lib/lib_mem.c
+    ;#use mem           asm: mkasm.sh appends /lib/lib_mem.inc
+
+DESCRIPTION
+    The command-facing memory addresses -- BIOS/FS scratch, the
+    graphics-present flag, and the TPA base -- named as #defines (asm:
+    equates) so a command writes a symbol instead of a raw hex address.
+
+    GENERATED. Both lib_mem.c and lib_mem.inc are emitted by
+    `generators/gen_memmap.py` from the single-source memory map; do NOT
+    edit them by hand. A memory-map move is then one command:
+
+        python3 generators/gen_memmap.py
+
+    and every consumer picks up the new address on its next build.
+
+SELECTED SYMBOLS
+    TPABASE   transient program area base (RUNnable programs load here)
+    SBUF      sector buffer
+    FNAME     12-byte filename (space-padded), for FFIND/FCREATE
+    FSRC      FCREATE source address of the file data
+    FLEN      file length in bytes (FCREATE in, FFIND out)
+    LBA/LBA1/LBA2, DIRLBA   current + directory LBAs
+    (plus the graphics-present flag and the other FS scratch cells)
+
+    The exact list is whatever the generator currently emits -- read
+    /lib/lib_mem.c (or generators/memmap.h) for the authoritative set.
+    I/O port addresses (ACIA, CF-IDE, GL, MDU, PS/2) come from the same
+    generator into generators/memmap.h / memmap.inc; BIOS/OS entry points
+    are named separately -- see man abi.
+
+SEE ALSO
+    abi, dirent

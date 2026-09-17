@@ -1,0 +1,39 @@
+NAME
+    g3cam - the look-at 3D camera + 32-bit isqrt (//#use g3cam)
+
+SYNOPSIS
+    //#use gfx
+    //#use g3d
+    //#use g3cam        cc splices /lib/lib_g3cam.c (AFTER gfx and g3d)
+
+DESCRIPTION
+    The look-at camera (stage 9d): given an eye point and a target, it
+    builds the orthonormal view basis (forward/right/up, 8.8 fixed
+    point) the g3d viewer needs to place a model in front of the camera.
+    Split out of lib_g3d so the ~6K of square-root and basis math is
+    paid for ONLY by camera-using programs -- folding it into the shared
+    library pushed every g3d client past the 64K address space.
+
+    It builds on g3d's muldiv / m3mul machinery, so it MUST be used after
+    //#use gfx and //#use g3d.
+
+FUNCTIONS
+    i3sqrt()            isqrt of a 32-bit value in q3hi:q3lo (unsigned)
+                        -> 16-bit root, by the classic try-a-bit method
+                        (~15 slow multiplies -- tenths of a second on
+                        target; fine per-command, not per-frame)
+    s3acc(a)            accumulate a*a into q3hi:q3lo (squares the
+                        MAGNITUDE, since m3mul is unsigned)
+    n3orm(v)            normalise vector v[3] to unit length (8.8)
+    c3ross(a,b,o)       o = a x b (cross product)
+    g3bas(p,m)          build the look-at basis into c3f/c3r/c3u from
+                        eye/target in p and the model matrix m
+
+NOTES
+    Because isqrt and the basis math are slow, drive the camera once per
+    command (rotate, cube, house, tri) and cache the basis -- these are
+    per-view tools, not a per-frame pipeline. See man g3d for the
+    wireframe engine this sits on, and man gfx for the 2D veneer.
+
+SEE ALSO
+    g3d, gfx, gl, camera, rotate, cube

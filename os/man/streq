@@ -1,0 +1,20 @@
+NAME
+    streq - NUL-terminated string equality for /BIN commands (//#use streq)
+
+SYNOPSIS
+    //#use streq        cc splices /lib/lib_streq.c
+
+DESCRIPTION
+    One helper: streq(p, q) returns 1 if the two NUL-terminated strings
+    are equal (both reach NUL together), else 0.
+
+        while (p[i] != 0 && p[i] == q[i]) i = i + 1;
+        return p[i] == q[i];        /* both reached NUL together */
+
+    Stays within the native p8cc.c subset (no ++/--, decls at top) and
+    touches only its own locals, so callers keep their pointer registers.
+    Used wherever a command matches an option word or a fixed keyword and
+    wants to keep the intent obvious.
+
+SEE ALSO
+    glob, regex

@@ -1,0 +1,41 @@
+NAME
+    stdin - file(s)-or-stdin input helper for /BIN commands
+            (//#use stdin, ;#use stdin)
+
+SYNOPSIS
+    //#use stdin        C:   cc splices /lib/lib_stdin.c
+    ;#use stdin         asm: mkasm.sh appends /lib/lib_stdin.inc
+
+DESCRIPTION
+    The canonical "open the optional file argument, else read stdin"
+    pair, shared by grep, head, tail, more, sort, uniq, sed and wc.
+    There is no linker in p8cc: reusable helpers are shared by
+    CONCATENATION -- a `//#use stdin` line splices this file in ahead of
+    the command before compiling (the asm twin does the same via
+    `;#use stdin`).
+
+FUNCTIONS / GLOBALS
+    openarg(a)          open the file word `a` (CWD-relative or absolute):
+                          0 = none given (read stdin)
+                          1 = opened (read stream at $FC00)
+                          2 = not found
+    nextc()             next input byte, or 65535 at EOF (file or stdin)
+    path[80]            absolute path of the file currently open
+    fromfile            1 = reading the file stream, 0 = stdin
+
+GLOB
+    If `a` contains * or ?, openarg EXPANDS it (via globx's glob_expand)
+    into every matching file, and nextc() reads them back-to-back as ONE
+    stream -- so `GREP foo *.C`, `SORT *.TXT`, `WC *.LOG` behave exactly
+    like `CAT *.X | cmd` with no per-command logic. The expansion points
+    FSDIRBUF at page $FA (clear of an open write stream's SBUF, so
+    `SORT *.TXT >OUT` works). An empty match set returns "not found" (2).
+
+NOTES
+    The C twin folds in glob + globx; the asm twin lib_stdin.inc bundles
+    the open/read/glob logic in one include (so each binary counts it and
+    the size comparison stays fair). A command that also reads whole
+    lines uses rdline on top of nextc() -- see man rdline.
+
+SEE ALSO
+    rdline, glob, globx, grep, sort, wc

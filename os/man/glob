@@ -1,0 +1,28 @@
+NAME
+    glob - filename glob matcher (//#use glob, ;#use glob)
+
+SYNOPSIS
+    //#use glob         C:   cc splices /lib/lib_glob.c
+    ;#use glob          asm: mkasm.sh appends /lib/lib_glob.inc
+
+DESCRIPTION
+    Whole-string, case-insensitive match of a name against a pattern:
+
+        *   matches any run of characters (including none)
+        ?   matches exactly one character
+        (any other char matches itself, case-insensitively -- P8XFS
+         names are upper-cased)
+
+    gmatch(p, s) returns 1 on a full-string match, else 0. It is
+    self-recursive (modelled on grep's matchhere), stays in the native
+    p8cc.c subset, and touches only its own locals/args -- no globals,
+    no I/O -- so callers keep P1/P2 etc.
+
+    To turn a pattern into a LIST of matching paths (scanning a
+    directory), use globx on top of glob -- see man globx. The asm twin
+    lib_glob.inc also carries the directory-entry buffer de[] for
+    commands that do their own walk (find); do not combine it with
+    lib_stdin.inc, which defines gmatch/de too.
+
+SEE ALSO
+    globx, stdin, dirent, find, grep

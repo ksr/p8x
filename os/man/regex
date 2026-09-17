@@ -1,0 +1,39 @@
+NAME
+    regex - basic-regex matcher for grep and sed (//#use regex, ;#use regex)
+
+SYNOPSIS
+    //#use regex        C:   cc splices /lib/lib_regex.c
+    ;#use regex         asm: mkasm.sh appends /lib/lib_regex.inc
+
+DESCRIPTION
+    The classic tiny Thompson/Pike matcher (Kernighan's "Beautiful Code"
+    dialect) with the cheap single-character quantifiers added:
+
+        .   any single character
+        *   zero or more of the preceding character (or '.')
+        +   one  or more of the preceding character (or '.')
+        ?   zero or one  of the preceding character (or '.')
+        ^   anchor to the start of the line (only as the first char)
+        $   anchor to the end   (only as the last char)
+
+    Everything else is literal.
+
+FUNCTIONS
+    match(re, t)        1 if re matches ANYWHERE in t (honours a leading ^)
+    matchhere(re, t)    1 if re matches a PREFIX of t; on success sets the
+                        global `rend` past the match, so a caller (sed) can
+                        compute the matched length = rend - start
+
+    One self-recursive matchhere() -- deliberately no forward declaration
+    / mutual recursion, since the native p8cc.c bootstrap rejects a
+    standalone prototype. Quantifiers are non-greedy (fewest first) --
+    fine for grep (yes/no) and adequate for sed's s///.
+
+LIMITS
+    Character classes [..] and \ escapes do not fit grep's host build yet
+    -- blocked on the p8cc codegen-size work (see BACKLOG). The asm twin
+    keeps re/t in memory words, saved on the hardware stack across the
+    recursion.
+
+SEE ALSO
+    glob, grep, sed

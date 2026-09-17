@@ -1,0 +1,24 @@
+NAME
+    distab - disassembler opcode table (//#use distab, ;#use distab)
+
+SYNOPSIS
+    //#use distab       C:   cc splices /lib/lib_distab.c into disasm.c
+    ;#use distab        asm: appended to disasm.asm
+
+DESCRIPTION
+    The opcode table the disassembler (man disasm) reads: one record per
+    opcode giving its number, its operand SHAPE, and its mnemonic. The C
+    twin exposes three parallel arrays (dt_op[], dt_sh[], dt_mn[]) plus
+    the count dt_n; the asm twin is a byte table DISTAB scanned by
+    DIS_FIND -- `.byte <opcode>,<shape>` then `.asciiz "MNEMONIC"`, with
+    $FF ending it.
+
+    GENERATED. Both are emitted from the microcode opcode table by
+    `generators/gen_p8xdis.py` (--asm for the include). Do NOT edit them
+    by hand -- they are the disassembler's half of the ONE opcode source
+    of truth (genucode.py's table; see hard rule 3). Add or change an
+    instruction there and regenerate, so the assembler, the emulator and
+    the disassembler never disagree about a mnemonic or encoding.
+
+SEE ALSO
+    disasm, asm, dump

@@ -1,0 +1,53 @@
+NAME
+    ptr - console keyboard + pointer/mouse events (//#use ptr)
+
+SYNOPSIS
+    //#use abi          CONIN/CONOUT/CONST (required alongside ptr)
+    //#use ptr          cc splices /lib/lib_ptr.c
+
+DESCRIPTION
+    One event source for interactive graphics programs: keys AND the
+    mouse, both arriving on the raw console (CONIN). The mouse comes in
+    as xterm SGR reports -- ptr_init() enables tracking (ESC[?1002h +
+    ESC[?1006h) and asks the terminal its size (ESC[18t) so cell
+    positions map onto the 480x272 panel. A terminal that answers
+    neither still delivers every key, mapped as an 80x24 grid.
+
+    Call ptr_init() once at start-up and ptr_done() on exit (it turns
+    tracking back off, so the terminal stops emitting SGR after you
+    quit). Then loop on ptr_ev(), which BLOCKS for the next event and
+    returns its type.
+
+    Coordinates are in PANEL space with the window sense the graphics
+    engine uses: y is UP, 0..271, x 0..479.
+
+EVENTS (ptr_ev return value)
+    0   key         ptr_key = the character. Arrows arrive as 128..131
+                    (up, down, right, left); other CSI reports are
+                    swallowed.
+    1   press       ptr_x / ptr_y = panel coords, left button down
+    2   drag        button held and moved
+    3   release
+    4   right-click press
+    5   free move    no button -- delivered ONLY after ptr_motion()
+                    turns on 1003 tracking (off by default to spare
+                    the console the motion flood)
+    Wheel and other buttons are ignored.
+
+FUNCTIONS
+    ptr_init()          enable mouse tracking + query terminal size
+    ptr_done()          disable tracking (CALL ON EXIT)
+    ptr_ev()            block for the next event; returns the type above
+    ptr_motion()        enable free-move (1003) events (type 5)
+    ptr_motion_off()    disable free-move events
+    ptr_key ptr_x ptr_y globals set by ptr_ev per the table above
+
+NOTES
+    The scripted-input trap is handled: the size query never eats a real
+    keystroke (a non-ESC first byte is pushed back), so `p8xemu -i` runs
+    can drive a client -- mouse included -- as printf'd bytes. On real
+    PS/2 hardware the pointer is decoded by the ps2 library instead and
+    integrated into the same panel coordinates; see man ps2.
+
+SEE ALSO
+    ps2, gfx, finder, paint, basic

@@ -1,0 +1,36 @@
+NAME
+    abi - named BIOS jump-table and OS syscall addresses (//#use abi, ;#use abi)
+
+SYNOPSIS
+    //#use abi          C:   cc splices /lib/lib_abi.c
+    ;#use abi           asm: mkasm.sh appends /lib/lib_abi.inc
+
+DESCRIPTION
+    Object-like #defines that NAME the BIOS jump table ($01xx) and the OS
+    syscall vector ($20xx), so a command writes
+
+        bios(FOPEN, RDBUF, 0)        instead of  bios(0x0124, 0xFC00, 0)
+
+    #define is a compile-time TEXTUAL substitution, so bios()'s "address
+    must be a literal" requirement is still met -- and, unlike a wrapper
+    function, it costs ZERO code space. Each address lives here alone, so
+    the firmware can renumber its jump table / syscall vector by editing
+    this file (and the asm twin lib_abi.inc) alone. The asm equates emit
+    NO bytes, so switching raw `JSR $NNNN` calls to symbolic ones
+    assembles byte-identically.
+
+RETURN CONVENTION
+    bios() returns the routine's A in the low byte with the carry flag in
+    bit 8, so callers keep their `& 256` tests:
+
+        if (bios(FOPEN, RDBUF, 0) & 256) ...        /* carry = not found */
+        c = bios(FGETB, 0, 0);
+        while ((c & 256) == 0) { ... c = bios(FGETB, 0, 0); }  /* carry = EOF */
+
+    Commands should name every BIOS/OS entry through this library rather
+    than hardcode a vector -- see the "named BIOS/OS addresses" note in
+    the programmer docs. Scratch/graphics/TPA addresses come from a
+    separate generated library; see man mem.
+
+SEE ALSO
+    mem, apath, dirent, err

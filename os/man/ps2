@@ -1,0 +1,49 @@
+NAME
+    ps2 - decode the PS/2 keyboard + mouse window (//#use ps2)
+
+SYNOPSIS
+    //#use ps2          cc splices /lib/lib_ps2.c
+
+DESCRIPTION
+    Decodes the PS/2 receiver window at $FF58-$FF5F. The hardware -- the
+    standalone TTL card, or PS/2 receivers in the graphics FPGA-card
+    fabric -- is two DUMB receivers: they shift in the 11-bit frames and
+    latch each byte with a ready flag, nothing more. Everything that
+    turns those bytes into MEANING lives here, the P8X way (hardware
+    receives, software understands):
+
+        Set-2 make/break scan codes -> ASCII, with shift + caps lock
+        3-byte mouse packets         -> (dx, dy, buttons)
+
+    The emulator models the same window (p8xemu -ps2 / -ps2a / -ps2b), so
+    this decodes identically on silicon and against the golden model.
+
+    Call ps2_init() once (like ptr_init) to zero the decoder state.
+    ps2_present() reports whether a card is fitted -- PSID reads 'K' when
+    it is, and floats to $FF (not 'K') when it is not, so CHECK FIRST.
+
+FUNCTIONS
+    ps2_init()          zero the decoder state (call once)
+    ps2_present()       1 if a PS/2 card is fitted (PSID reads 'K')
+    kb_raw()            next raw Set-2 scan code, or -1 if none ready
+    kb_getc()           next decoded ASCII key on a PRESS, or 0
+    ms_poll()           1 when a mouse packet completes; leaves the
+                        result in the globals ms_dx, ms_dy, ms_btn
+    ms_dx ms_dy ms_btn  last packet: X delta, Y delta, button bits
+                        (bit0 left, bit1 right, bit2 middle)
+
+COORDINATES
+    PS/2 device convention: dx > 0 = right, dy > 0 = UP (the device's own
+    axis). ms_poll leaves its result in globals rather than through a
+    pointer (the lib_ptr idiom -- no address-of-local needed). The
+    pointer-integration layer maps the deltas onto the panel; the panel
+    itself uses window coords (y up, 0..271).
+
+HARDWARE
+    Window $FF58-$FF5F: PSADAT/PSAST (port A, keyboard), PSBDAT/PSBST
+    (port B, mouse), PSLINE, and PSID='K' for presence. RX is buffer-fed,
+    like a second ACIA. Transmit (host -> device, e.g. mouse enable) is
+    not wired yet -- ms_enable() is a stub.
+
+SEE ALSO
+    ptr, finder, gfx

@@ -1,0 +1,32 @@
+NAME
+    err - write an error message to the console, never to stdout
+          (//#use err)
+
+SYNOPSIS
+    //#use err          cc splices /lib/lib_err.c
+
+DESCRIPTION
+    eputs(s) writes an error message to the CONSOLE, bypassing stdout.
+
+    WHY IT EXISTS. The puts() builtin compiles to SYS_PUTS + SYS_PUTC,
+    both of which go to *stdout* -- which the shell may have pointed at a
+    file or a pipe. So `cat missing >F` used to put "cat: not found"
+    INSIDE F, and `cat missing | wc` fed the error text to wc as DATA,
+    which counted it and reported a plausible wrong number instead of
+    failing. The OS already prints its own `?...` errors through the BIOS
+    (always the console); eputs() gives /bin commands the same escape
+    hatch, so a diagnostic can never be mistaken for output. Even the
+    trailing newline goes to CONOUT ($0103), not SYS_PUTC, so the message
+    is never split across two sinks.
+
+CONVENTION
+    Use eputs() for anything on a `return 1` (failure) path, INCLUDING a
+    usage message printed because the arguments were wrong. Keep plain
+    puts() for usage the user explicitly asked for with -h -- that is
+    requested output, and `cmd -h >notes.txt` should capture it.
+
+    The asm twins do the same thing inline: `JSR PUTS` + `JSR CONOUT`
+    instead of `JSR SYS_PUTS` + `JSR SYS_PUTC`.
+
+SEE ALSO
+    abi, cat, grep

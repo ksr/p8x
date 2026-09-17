@@ -1,0 +1,31 @@
+NAME
+    rdline - read one input line into a buffer (//#use rdline)
+
+SYNOPSIS
+    //#use stdin        (required ABOVE rdline -- provides nextc())
+    //#use rdline       cc splices /lib/lib_rdline.c
+
+DESCRIPTION
+    Defines readline(), which reads up to the next LF into a caller
+    buffer. (The file is named lib_rdline.c to fit P8XFS's 12-char
+    filename field; the `//#use rdline` token names the FILE, not the
+    function.)
+
+    readline(buf):
+      in   buf -- caller's char buffer, must hold at least 256 bytes
+      out  buf gets the line's bytes (CR stripped) then a NUL
+      ret  1 if a line was read, 0 if input was already at EOF
+
+    CR (13) is dropped, so CRLF and bare-LF sources land the same. Bytes
+    past 255 are discarded but still consumed, so the stream stays
+    aligned to the next LF. LF (10) ends the line and is not stored. A
+    partial final line with no trailing LF still returns 1.
+
+DEPENDS ON
+    lib_stdin's nextc() -- a command that uses rdline must `//#use stdin`
+    ABOVE it (clib.py splices in directive order, so nextc() is defined
+    before this caller). nextc()'s 65535 EOF sentinel never collides with
+    a real 0..255 byte in p8cc's 16-bit int.
+
+SEE ALSO
+    stdin, sort, uniq

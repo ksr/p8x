@@ -1,0 +1,38 @@
+NAME
+    globx - expand a filename glob into a list of paths
+            (//#use globx, ;#use globx)
+
+SYNOPSIS
+    //#use glob         (required ABOVE globx -- provides gmatch())
+    //#use globx        C:   cc splices /lib/lib_globx.c
+    ;#use glob
+    ;#use globx         asm: mkasm.sh appends /lib/lib_globx.inc
+
+DESCRIPTION
+    For multi-file commands (cat *.asm, cp/mv, and the stdin helper's
+    wc/grep/sort): given a pattern whose LAST component may contain * or
+    ?, scan the directory it names (or the CWD) and collect the FILES
+    (not subdirectories) whose name matches, as a list of ready-to-open
+    paths.
+
+    glob_expand(pat, out, maxn) -> count
+      pat    the glob, e.g. "*.ASM" (CWD) or "/BIN/*.BIN" (a named dir)
+      out    caller buffer of maxn fixed 64-byte slots; out[i*64] = the
+             i-th path (the pattern's directory prefix + the matched
+             name, so it opens the same way the bare argument would --
+             relative names resolve in the CWD)
+      maxn   capacity in slots; matches past maxn are dropped
+      ->     number of matches written (0..maxn)
+
+    DEPENDS on glob's gmatch() -- `//#use glob` must appear ABOVE
+    `//#use globx`. It iterates with FNEXT on scratch page $FA (a
+    512-byte sector just below the file read buffer at $FC00 and clear of
+    the code/globals), and finishes building the whole path list before
+    any file is opened -- so sharing the high TPA with the $FC00 read
+    buffer is safe (the two are never live at once).
+
+    Not pulled into dir/find (they only //#use glob), so it does not
+    bloat those size-tight recursive commands.
+
+SEE ALSO
+    glob, stdin, dirent, cat, cp, mv

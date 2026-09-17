@@ -1,0 +1,31 @@
+NAME
+    apath - build an absolute path from a command-line word (//#use apath)
+
+SYNOPSIS
+    //#use abi          (required -- SYS_GETCWD and friends)
+    //#use apath        cc splices /lib/lib_apath.c
+
+DESCRIPTION
+    abspath(out, a) turns a command-line path word into an absolute path
+    the BIOS FRESOLVE can use, prefixing the current directory (via
+    SYS_GETCWD) when the word is relative. (The file is named lib_apath.c
+    to fit P8XFS's 12-char filename field; `//#use apath` names the FILE,
+    not the function.)
+
+    abspath(out, a):
+      in   a   = path word from the command line; scanning STOPS at NUL,
+                 CR (13), or space (32), so a whole argv line may be
+                 passed and only the first word is consumed
+      out  out <- the absolute path string (NUL-terminated)
+      ret  the number of chars consumed from `a`
+
+    Unlike lib_stdin's openarg(), abspath() only BUILDS the string into a
+    caller-supplied buffer -- it opens nothing. That lets a command build
+    two independent paths (e.g. a src and a dst) into separate buffers
+    before it opens either. Relative-path resolution matters because
+    FRESOLVE / FOPENDIR start at the ROOT, not the CWD, so a bare
+    relative argument must be prefixed first (see the relative-path
+    gotcha in the programmer docs).
+
+SEE ALSO
+    abi, dirent, cp, mv

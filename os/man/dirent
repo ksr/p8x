@@ -1,0 +1,42 @@
+NAME
+    dirent - read the current directory entry via syscalls (//#use dirent)
+
+SYNOPSIS
+    //#use dirent       cc splices /lib/lib_dirent.c
+
+DESCRIPTION
+    Reads the current directory entry through OS syscalls instead of
+    poking BIOS scratch addresses directly.
+
+    A BIOS FNEXT leaves the matched entry's metadata in fixed BIOS
+    scratch RAM (FNAME, FFLAG, FLEN, the start LBA). Commands used to
+    peek()/poke() those absolute addresses, which coupled every command
+    to the firmware's scratch layout -- a memory remap had to move ~30
+    hardcoded sites in lockstep. These helpers go through two syscalls:
+
+        SYS_DIRENTRY ($201B)  copy the current entry into a buffer
+        SYS_OPENDIR  ($201E)  begin iterating a subdirectory by its LBA
+
+    so the firmware can relocate its scratch freely without touching a
+    command.
+
+USAGE
+    After each `bios(FNEXT, 0, 0)` that returned "not end", call de_read()
+    once, then query the snapshot:
+
+    de_read()           snapshot the current entry into de[]
+    de_isfile()         1 if the entry is a file
+    de_isdir()          1 if the entry is a directory
+    de_isdot()          1 for "." and ".." (only the first char is tested)
+    de_len()            file length in bytes (little-endian)
+    de_lba()            start LBA (the dir's first block)
+    de_opendir(lba)     open subdirectory `lba` for FNEXT iteration
+    de[0..11]           the entry name, space-padded
+
+    de[] is an 18-byte buffer: [0..11] name, [12] flag (1=file 2=dir),
+    [13..14] length lo/hi, [15..16] start-LBA lo/hi, [17] spare. Accessors
+    mask with &255 because A/B are 8-bit and this is a C subset with no
+    unsigned char.
+
+SEE ALSO
+    apath, glob, globx, dir, find
