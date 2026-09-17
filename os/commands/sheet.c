@@ -448,6 +448,10 @@ int main() {
         fpath[8] = 'S'; fpath[9] = 0;
     }
     poke(GTSUSP, 1);
+    gp(0x50); gp(0);                          /* TXEN 0: hide the console overlay so
+                                                the shell's text is not drawn over the
+                                                grid; GTSUSP=1 -> the OS restores it
+                                                (TXEN 1) when we quit */
     gsetup();
     selc = 0; selr = 0; editing = 0;
     load();
