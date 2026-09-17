@@ -23,22 +23,17 @@ remainder is why it is still here.
 - [ ] **OVERNIGHT BATCH (2026-09-16, user asleep -- do as much as possible without
       input; all on `graphics-card`, no merge to main beyond the current one).**
       Clarified answers locked with the user before they slept:
-      1. **BASIC layer commands (graphics available):** TEXTON / TEXTOFF (default ON)
-         toggle the ALPHANUMERIC text overlay; GRAPHICSON / GRAPHICSOFF (default
-         OFF) toggle the DRAWING-AREA (bitmap) VISIBILITY. Key point: GRAPHICSOFF
-         hides the bitmap at scanout but YOU CAN STILL DRAW INTO IT (draws always
-         land; the enable bit is display-only). Real 2-layer COMPOSITOR: text over
-         bitmap. States: text-on/gfx-off = text console (default); both on = bitmap
-         + text on top; text-off/gfx-on = bitmap only; both off = black.
-         - TEXTON/OFF -> the overlay TXEN (opcode 0x50, already exists).
-         - GRAPHICSON/OFF -> a NEW bitmap-visibility enable: add a control opcode
-           (a TX-style verb, e.g. "GXEN"), model it in p8xemu gpu_tx_sample (mux
-           black when the bitmap layer is hidden, but the framebuffer keeps its
-           content and still accepts writes), mirror in RTL gtxt.v / sdram_video.v
-           compositor (a bitmap-enable input, byte-identical co-sim), and 4 BASIC
-           keywords (C basic.c AND asm p8xbasic.asm twins + the tokenizer). Add a
-           co-sim + a basic_*_test. Default at BASIC start (gfx present): text ON,
-           graphics OFF.
+      1. [x] **BASIC layer commands DONE 2026-09-17** (commits a526116 emulator+BASIC
+         +tests, 8034620 RTL, a77b867 docs). TEXTON/TEXTOFF -> TXEN ($50); the NEW
+         GXEN ($57) bitmap-visibility opcode -> GRAPHICSON/GRAPHICSOFF. Real 2-layer
+         compositor: gpu_tx_sample bg = gx_en?base:0, overlay on top; RTL gtxt.v
+         gx_en reg (reset 1) + sdram_video mux gate, byte-identical co-sim
+         (c_gl_ovl_rtl_test now ends in GXEN 0). Tokens $FC..$FF (NOT $B4..$B7 --
+         those collide with the GL-verb block $B4..$F5; fixed in both twins). BASIC
+         cold-starts GRAPHICS OFF, BYE restores GXEN 1 for the shell. Draw-while-
+         hidden verified (PIXELR reads RAM while scanout is black). basic_gfx part 7
+         + basic_gl updated; man basic + README + HELP updated. Both twins build
+         (asm 9330 B, C 21761 B); basic_gfx/basic_gl/basic_c green.
       2. **VERY complete doc sweep (content-driven PDFs):** fix/refresh all
          MD/README/HELP/MAN/theory/programmer docs; ADD man pages for EVERY C
          (os/commands/lib_*.c) and ASM (os/commands-asm/lib_*.inc) LIBRARY plus any
