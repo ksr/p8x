@@ -699,6 +699,29 @@ Nothing below has been built or measured.
         an unassigned slot, or a `MOUSE`/`CURSOR` sub-keyword scheme). See the GXEN
         layer work for the pattern.
 
+- [ ] **write: rich text -- multiple fonts / sizes / colours (2026-09-17, user).**
+      The `write` editor currently lays one font at one size in one colour. Let a
+      document carry runs with different **fonts**, **sizes**, and **colours**.
+      The GL text layer already has the mechanisms: `TSIZE` scales glyphs, the pen
+      (`GCOL`/pen colour) sets colour, and the stroke font streams from `/FONT.GL`
+      -- so size and colour are nearly free; multiple *fonts* is the real work
+      (either additional `/*.GL` stroke files selectable per run, or the chargen
+      bitmap font as a second face). Design questions to settle:
+      - **Document model:** store runs as (text, font, size, colour) spans, not a
+        flat char buffer -- pick a representation the editor can edit in place and
+        re-flow (insert/delete inside a run splits/merges it).
+      - **Line layout with mixed sizes:** a line's height/baseline follows its
+        tallest run; word-wrap and the cursor must walk variable-width glyphs
+        (GTEXT/TSIZE give advance widths). Today write assumes a fixed cell grid.
+      - **UI to set attributes:** a menu or key/combo to change the font/size/
+        colour of the selection or the next-typed run (mouse selection now exists).
+      - **Save format:** extend the on-disk file to record the spans (or a simple
+        markup) so a reload restores the styling; keep plain `.txt` readable.
+      Start with size + colour (cheap, high payoff) and add font faces after the
+      font-file story is decided. See write.c, lib_gfx (TSIZE/pen/GTEXT), and the
+      GTEXT 2D-text notes; the `md` panel-renderer idea wants the same size/colour
+      plumbing.
+
 - [ ] **imgsend: VERIFY pass (2026-08-21, from a real corruption).** A clone
       delivered trit.bin with the right SIZE but corrupt content — "acked
       every sector, finished with 'K'" certifies transport, not bytes — and
