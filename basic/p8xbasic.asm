@@ -2626,12 +2626,15 @@ mk_in:  LDA  (P2)
         JMP  mk_in
 mk_hit: LDA  (P1)
         JSR  ISALNUM
-        JC   mk_no
-        LDA  TMPC
-        STA  TOKEN
-        LDA  #1
-        STA  MATCHF
+        JC   mk_hnx          ; a longer identifier: this keyword is only a PREFIX
+        LDA  TMPC            ;   (e.g. GL verb TEXT vs TEXTON) -- keep scanning, do
+        STA  TOKEN           ;   NOT abort the whole match the way an early mk_no
+        LDA  #1              ;   did (that swallowed every keyword that is a
+        STA  MATCHF          ;   superstring of an earlier one).
         RTS
+mk_hnx: INP2                 ; step past this entry's token byte, then try the next
+        LPW1 RP              ; entry from the start of the input word
+        JMP  mk_e
 mk_sk:  LDA  (P2)+           ; skip the rest of this entry (letters + token)
         LDB  #$80
         AND

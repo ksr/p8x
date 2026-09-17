@@ -437,11 +437,15 @@ if bad:
 print("BASIC-GFX TEST: default graphics OFF ok (draws into hidden RAM, scanout black)")
 PY
 
-# 7b: the same box WITH GRAPHICSON now shows red; the four layer keywords all
-#     round-trip through LIST (KWTAB entries present). GRAPHICSOFF/GRAPHICSON and
-#     TEXTON/TEXTOFF are toggled mid-program to prove each tokenises and runs; the
-#     program leaves the bitmap visible (last statement is GRAPHICSON).
-printf '%sB\rbgfx\r5 GRAPHICSON\r10 CLS\r20 COLOR RGB(31,0,0)\r30 BOX 40,40,160,160,FILL\r40 TEXTON\r50 TEXTOFF\r60 GRAPHICSOFF\r65 GRAPHICSON\r70 END\rRUN\rLIST\r' "$LAB" \
+# 7b: prove each layer keyword TOKENISES AND EXECUTES, not just lists. There is
+#     NO leading GRAPHICSON here on purpose: the box is drawn while the default is
+#     OFF, and only the CLOSING line 65 GRAPHICSON reveals it -- so the box shows
+#     red at scanout ONLY IF RUN reached line 65, i.e. TEXTON/TEXTOFF/GRAPHICSOFF
+#     at 40/50/60 all executed. (The regression this guards: TEXTON tokenised as
+#     the GL verb TEXT + "ON" and raised ?SYNTAX ERROR mid-RUN, which stopped
+#     before 65 -- yet LIST still round-tripped "TEXTON" because TEXT+ON detokenise
+#     to the same text, so a LIST check alone passed vacuously.)
+printf '%sB\rbgfx\r10 CLS\r20 COLOR RGB(31,0,0)\r30 BOX 40,40,160,160,FILL\r40 TEXTON\r50 TEXTOFF\r60 GRAPHICSOFF\r65 GRAPHICSON\r70 END\rRUN\rLIST\r' "$LAB" \
     > bgfx10.in
 ../p8xemu -N -i bgfx10.in -c bgfx.img -l 60000000 -g bgfx10.ppm eeprom.bin > bgfx10.out 2>/dev/null || true
 
@@ -449,19 +453,23 @@ python3 - <<'PY' || exit 1
 import sys
 bad = []
 out = open("bgfx10.out","rb").read().replace(b"\r", b"")
-for kw in [b"5 GRAPHICSON", b"40 TEXTON", b"50 TEXTOFF", b"60 GRAPHICSOFF", b"65 GRAPHICSON"]:
+# no layer keyword may raise a syntax error (TEXTON/TEXTOFF once mis-tokenised)
+if b"?SYNTAX" in out:
+    bad.append("a layer keyword raised ?SYNTAX ERROR -- mis-tokenised (TEXT-verb prefix?)")
+for kw in [b"40 TEXTON", b"50 TEXTOFF", b"60 GRAPHICSOFF", b"65 GRAPHICSON"]:
     if out.count(kw) < 2:                # once typed, once from LIST
         bad.append("LIST did not round-trip %r" % kw.decode())
 d  = open("bgfx10.ppm","rb").read(); px = d[d.index(b"255\n")+4:]; W = 480
 def fb(x,y): i=(y*W+x)*3; return tuple(px[i:i+3])
-# GRAPHICSON: the same box centre now composites its red to the panel.
+# the box is revealed ONLY by the closing GRAPHICSON, so red here proves RUN
+# ran all the way through TEXTON/TEXTOFF/GRAPHICSOFF without stopping.
 if fb(100,171) != (255,0,0):
-    bad.append("GRAPHICSON but box centre composited as %s, want red - reveal failed" % (fb(100,171),))
+    bad.append("box centre composited as %s, want red - RUN stopped before the closing GRAPHICSON" % (fb(100,171),))
 if bad:
     print("BASIC-GFX TEST: FAIL")
     for b in bad: print("  " + b)
     sys.exit(1)
-print("BASIC-GFX TEST: GRAPHICSON reveal ok (box visible; TEXT*/GRAPHICS* round-trip)")
+print("BASIC-GFX TEST: layer keywords execute (no ?SYNTAX; closing GRAPHICSON reveals the box)")
 PY
 
 echo "BASIC-GFX TEST: PASS (draw, pixelw, circle, ellipse, rgb, pixelr, text, full screen, image, layers)"
