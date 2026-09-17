@@ -18,8 +18,10 @@ board-specific design docs.
 | PS/2 *(design)* | [ps2-card/](ps2-card/README.md) | **Proposal** — standalone PS/2 keyboard + mouse receivers at `$FF58–$FF5F` (5 V TTL, no level shift). Not built yet, no CAD. |
 
 ### Not yet realised as TTL boards
-Three subsystems the emulator and/or the FPGA card already provide have **no
-dedicated TTL card** on the backplane yet — build targets when the machine grows:
+See **[RECONCILIATION.md](RECONCILIATION.md)** for the full board-vs-emulator/FPGA
+build-readiness pass. In short, three subsystems the emulator and/or the FPGA card
+already provide have **no dedicated TTL card** on the backplane yet — build targets
+when the machine grows:
 
 | Subsystem | Where it lives now | TTL board |
 |-----------|--------------------|-----------|
